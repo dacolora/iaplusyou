@@ -144,7 +144,7 @@ def test_grabacion_aac_u_ogg_se_sube_convertida_a_mp3(base_temporal, monkeypatch
         (args,) = conversiones
         origen, salida = args[1], args[-1]
         assert args == ["-i", origen, "-vn", "-ac", "1", "-ar", "44100", "-c:a", "libmp3lame", "-b:a", "128k", salida]
-        assert origen.endswith(ext) and salida.endswith(".mp3") and medidos == [salida]
+        assert origen.endswith(ext) and salida.endswith(".mp3") and medidos == [origen, salida]
         assert key.endswith(".mp3") and ct == "audio/mpeg" and g["bytes"] == len(b"ID3 mp3 convertido")
     else:
         assert conversiones == [] and key.endswith(".m4a") and ct == "audio/mp4"
@@ -179,7 +179,7 @@ def test_crear_disenada_registra_gasto_estrena_y_guarda(base_temporal, r2, fal):
     assert g == [("locucion", 0.0045, "voz_propia_estreno:t9", "fal/minimax"),
                  ("voz_propia", 3.0004, "voz_propia:disenar:t9", "fal/minimax")]
     (gasto_diseno,) = [x for x in _gastos("acme") if x["tipo"] == "voz_propia"]
-    assert gasto_diseno["extra"] == {"voice_id": "mmx_dis"}      # un diseño no lleva consentimiento
+    assert gasto_diseno["extra"]["voice_id"] == "mmx_dis" and "consentimiento" not in gasto_diseno["extra"]      # un diseño no lleva consentimiento
     assert voces_propias.listar("acme") == [voz]
 
 
@@ -198,7 +198,8 @@ def test_crear_clonada_guarda_el_consentimiento_y_la_grabacion(base_temporal, r2
     assert (gasto_clon["usd"], gasto_clon["referencia"]) == (1.5042, "voz_propia:clonar:t3")
     # Revisión final F5: la constancia del permiso viaja con el cobro del clon
     # (sobrevive a borrar la voz y su extra).
-    assert gasto_clon["extra"] == {"voice_id": "mmx_clon", "consentimiento": consentimiento}
+    assert gasto_clon["extra"]["voice_id"] == "mmx_clon" and gasto_clon["extra"]["consentimiento"] == consentimiento
+    assert gasto_clon["extra"]["ficha"]["extra"]["grabacion_id"] == g["id"]
 
 
 def test_crear_clon_sin_consentimiento_no_paga(base_temporal, r2, fal):
@@ -462,3 +463,19 @@ def test_pnd040_borrar_ultima_voz_no_reutiliza_su_id(base_temporal):
     nueva = _voz(voice_id='nueva')
     assert nueva['id'] > vieja['id']
     assert voces_propias.resolver('acme', f"vp:{vieja['id']}") is None
+
+
+@pytest.mark.parametrize("ext", [".ogg", ".aac"])
+def test_pnd095_grabacion_larga_rechazada_antes_de_convertir(base_temporal, monkeypatch, tmp_path, ext):
+    monkeypatch.setattr(voces_propias, "_duracion_ms", lambda ruta: voces_propias.MAX_GRABACION_MS + 1)
+    conversiones = []
+    def convertir(origen, salida):
+        conversiones.append((origen, salida))
+        with open(salida, "wb") as f:
+            f.write(b"mp3 falso")
+    monkeypatch.setattr(voces_propias, "_convertir_a_mp3", convertir)
+    with pytest.raises(voces_propias.EntradaInvalida) as exc:
+        voces_propias.guardar_grabacion("acme", _Archivo("voz" + ext), str(tmp_path / "grabacion"))
+    assert exc.value.args[0] == voces_propias.MENSAJES["larga"]
+    assert conversiones == []
+    assert list((tmp_path / "grabacion").iterdir()) == []

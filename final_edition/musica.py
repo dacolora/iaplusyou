@@ -28,6 +28,14 @@ CARPETA_CACHE_DEFAULT = os.path.join(tipos.BASE_DIR, "data", "musica")
 CARPETA_PROPIA_DEFAULT = os.path.join(CARPETA_CACHE_DEFAULT, "propia")
 
 
+class PistaPagadaError(RuntimeError):
+    """La pista se pagó, pero no quedó conservada; otro intento sin caché puede cobrarla de nuevo."""
+    def __init__(self, error, costo_usd, url):
+        super().__init__(str(error))
+        self.costo_usd = costo_usd
+        self.url = url
+
+
 def obtener_pista(estilo, segundos, carpeta_cache=None, on_progreso=None):
     """Devuelve `({"archivo", "url", "estilo", "generada"}, costo_usd)`.
     `segundos` se redondea hacia arriba al múltiplo de 15 más cercano (máx. 45)."""
@@ -59,19 +67,21 @@ def obtener_pista(estilo, segundos, carpeta_cache=None, on_progreso=None):
         prompt = tipos.ESTILOS_MUSICA[estilo]
         generado = fal_audio.musica(prompt, segundos_norm, on_progreso=on_progreso)
         costo = float(generado.get("costo_usd") or 0.0)
-        _descargar(generado["url"], archivo_local)
+        try:
+            _descargar(generado["url"], archivo_local)
+            r2_key = f"musica/{clave}.wav"
+            url_r2 = r2_uploader.upload_file(archivo_local, r2_key, "audio/wav")
 
-        r2_key = f"musica/{clave}.wav"
-        url_r2 = r2_uploader.upload_file(archivo_local, r2_key, "audio/wav")
-
-        with _bloqueo(os.path.join(carpeta_cache, ".manifest.lock")):
-            manifest = _json_store.cargar(manifest_path, default={})
-            manifest[clave] = {
-                "url": url_r2,
-                "archivo": archivo_local,
-                "creado_en": datetime.now(timezone.utc).isoformat(),
-            }
-            _json_store.guardar(manifest_path, manifest)
+            with _bloqueo(os.path.join(carpeta_cache, ".manifest.lock")):
+                manifest = _json_store.cargar(manifest_path, default={})
+                manifest[clave] = {
+                    "url": url_r2,
+                    "archivo": archivo_local,
+                    "creado_en": datetime.now(timezone.utc).isoformat(),
+                }
+                _json_store.guardar(manifest_path, manifest)
+        except Exception as e:
+            raise PistaPagadaError(e, costo, generado["url"]) from e
 
     resultado = {"archivo": archivo_local, "url": url_r2, "estilo": estilo, "generada": True}
     return resultado, costo

@@ -31,7 +31,11 @@ only for clients with a `corriendo` experiment attributed by store). Orders carr
 `utm_content = experimento_pieza.id` (set by `lanzador.url_destino`; legacy `pieza.id`
 still resolves) and `atribucion.resolver_pendientes` links them; when an experiment's
 `atribucion` is `tienda`, `lanzador.refrescar` overrides purchases/revenue/CPA from the
-store (ROAS forced to 0 when order and account currencies differ, with one evento).
+store, without a Meta fallback; missing store data remains unavailable. The fixed sales source follows the
+experiment's attribution: tienda for store/UTM orders, meta for Pixel, triple_whale only for Triple Whale
+attribution with connected stores (meta if none), ninguna for traffic without sales measurement. With ninguna
+no snapshot marks sales measurable (PND-142 amended, 2026-10-08). Different order/account currencies leave
+ROAS non-comparable with one evento; grouped ROAS excludes that experiment without currency conversion.
 `meta_conexion.estado_pixel` (cached 10 min, computed only by the Configuración button —
 never on page load) feeds `experimentos.atribucion_sugerida`: pixel > tienda > ninguna.
 Since 2026-09-30 (spec `docs/superpowers/specs/2026-09-28-catalogo-por-colores-design.md`, ADR 0005) a **product has
@@ -143,3 +147,5 @@ PND-030 (2026-10-03): una descarga solicitada sin fotos informa qué color falta
 PND-056 (2026-10-05): Shopify público pide stream=True y limita cada respuesta a 8 MB de bytes descomprimidos, antes de parsear JSON. Content-Length puede adelantar el rechazo, pero no sustituye contar los trozos. Cierra respuestas en éxito, error, redirecciones y reintentos HTTP.
 
 PND-056 (revisión de Codex, 2026-10-05): una página de productos que supera 8 MB se pide de nuevo con límite 125→25→5→1, desde la posición equivalente (divisores exactos de 250). El alcance sigue en 250 × MAX_PAGINAS productos; no limita a 40 peticiones pequeñas ni salta productos. Una sola ficha que aun con limit=1 excede el tope informa el error. Pruebas sin red con página grande de variantes y 10 000 ids; 5xx/429 cierran el stream antes del siguiente request.
+
+PND-094/100 (2026-10-07, lote 5 B): el hash valida categorías contra los paneles sin construir selectores CSS desde la URL; la ficha rechaza categoría inválida y segmentos vacíos, `.` o `..`. Flow Plus agrupa los colores por producto manteniendo los valores/selección. Variantes de Admin API y selector bajo demanda requieren alcance. PND-100 (pedido de Daniel, 2026-10-08): mapa_codigo_generar.py produce un inventario AST sin importar módulos solo en --salida aparte, sin sustituir ESTRUCTURA.md ni templates/mapa_codigo.html. El mapa en llano vuelve a ecef5555; actualización o inventario espera su decisión, y cualquier artifact corresponde a Claude.

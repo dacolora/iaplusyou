@@ -68,7 +68,11 @@ def test_elegir_forma_invalida_o_de_otro_sitio(cliente):
 def test_cambiar_forma_con_conexion_propia_viva_exige_nada_en_marcha(cliente, app, monkeypatch):
     _fake_conectada(app, monkeypatch)
     mc.guardar("acme", {"token": TOKEN_FALSO, "ad_account_id": "act_1", "page_id": "p1", "conectado_en": "2026-09-01T00:00:00"})
-    monkeypatch.setattr(cliente["d"].experimentos, "cargar", lambda c: [{"estado": "corriendo"}, {"estado": "cerrado"}])
+    ex = cliente["d"].experimentos
+    vivo = ex.crear("acme", "Vivo", [], "OUTCOME_TRAFFIC", 7, 10, "", "USD", atribucion="ninguna")
+    cerrado = ex.crear("acme", "Cerrado", [], "OUTCOME_TRAFFIC", 7, 10, "", "USD", atribucion="ninguna")
+    ex.actualizar("acme", vivo, estado="corriendo")
+    ex.actualizar("acme", cerrado, estado="cerrado")
     _post(cliente, "/cliente/acme/meta/forma", forma="agencia")
     assert proyectos.meta_forma("acme") is None
     assert any(m.startswith("Termina o cierra primero: 1 experimento vivo") for m in _flashes(cliente["c"]))

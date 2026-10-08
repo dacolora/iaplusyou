@@ -194,11 +194,11 @@ def _usd(milesimas):
     return round(int(milesimas or 0) / 1000, 4)
 
 
-def resumen_mes_cobrado(cliente, ahora_iso=None):
+def resumen_mes_cobrado(cliente, ahora_iso=None, desde=None):
     """Como `gastos.resumen_mes`, con lo cobrado por tipo de gasto (la fecha es
     la del gasto: un reverso descuenta en el mes de su cobro)."""
     hasta = gastos._ahora(ahora_iso)
-    desde = gastos._inicio_mes(hasta)
+    desde = desde or gastos._inicio_mes(hasta)
     m, g, j = _unir()
     neto, n = _neto()
     q = (sa.select(m.c.concepto, neto, n).select_from(j)
@@ -211,6 +211,11 @@ def resumen_mes_cobrado(cliente, ahora_iso=None):
                 por_tipo[concepto] = {"usd": _usd(suma), "n": int(cuantos)}
     return {"desde": desde, "hasta": hasta, "total": round(sum(v["usd"] for v in por_tipo.values()), 4),
             "por_tipo": por_tipo, "n": sum(v["n"] for v in por_tipo.values())}
+
+
+def resumen_todo_cobrado(cliente, ahora_iso=None):
+    """Como `gastos.resumen_todo` (la tabla «Por tipo» desde el inicio, 2026-10-08)."""
+    return resumen_mes_cobrado(cliente, ahora_iso, desde="0001-01-01T00:00:00")
 
 
 def resumen_total_cobrado(cliente, ahora_iso=None):
@@ -334,10 +339,12 @@ def _csv_todo(modo):
     return armar
 
 
-_COBRADO = {"resumen_mes": resumen_mes_cobrado, "resumen_total": resumen_total_cobrado, "por_mes": por_mes_cobrado,
+_COBRADO = {"resumen_mes": resumen_mes_cobrado, "resumen_todo": resumen_todo_cobrado,
+            "resumen_total": resumen_total_cobrado, "por_mes": por_mes_cobrado,
             "historial": historial_cobrado, "total_entre": total_entre_cobrado,
             "csv_mes": _csv_mes("cobrado"), "csv_todo": _csv_todo("cobrado")}
-_COSTO = {"resumen_mes": gastos.resumen_mes, "resumen_total": gastos.resumen_total, "por_mes": gastos.por_mes,
+_COSTO = {"resumen_mes": gastos.resumen_mes, "resumen_todo": gastos.resumen_todo,
+          "resumen_total": gastos.resumen_total, "por_mes": gastos.por_mes,
           "historial": gastos.historial, "total_entre": gastos.total_entre,
           "csv_mes": gastos.csv_mes, "csv_todo": gastos.csv_todo}
 
@@ -360,7 +367,7 @@ def _oculto_mes(cliente, ahora_iso=None):
 
 
 # Lo que ve un cliente cuando no se pudo saber qué mostrarle: ninguna cifra («—»), nunca el costo.
-OCULTO = {"modo": "oculto", "resumen_mes": _oculto_mes,
+OCULTO = {"modo": "oculto", "resumen_mes": _oculto_mes, "resumen_todo": _oculto_mes,
           "resumen_total": lambda cliente, ahora_iso=None: {"total": None, "n": 0, "desde": None, "error": True},
           "por_mes": lambda cliente, ahora_iso=None: {}, "historial": lambda cliente, limite=200, desde=None: [],
           "total_entre": lambda cliente, desde_iso, hasta_iso: {"usd": None, "n": 0}}

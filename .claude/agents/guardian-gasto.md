@@ -39,7 +39,9 @@ persona lo apruebe viendo el precio.** Cada regla de abajo existe porque se romp
 9. **Llamadas a Claude con tope amplio.** `max_tokens` de 4 000 a 16 000 o más, porque el pensamiento adaptativo gasta del
    mismo tope y con topes chicos se paga una respuesta vacía. Un cambio de prompt o tope se mide con la skill
    `eval-claude`.
-10. **Pauta de Meta.** Todo anuncio nace `PAUSED`; lanzar y activar son dos clics; el tope total y el presupuesto por país
+10. **Pauta de Meta.** Todo anuncio nace `PAUSED`; desde 2026-10-08 (pedido de Daniel) el clic de «Lanzar a Meta» con
+    el gasto diario a la vista es la aprobación y la tarea `exp_lanzar` activa (`activar=True`) solo si el lanzamiento
+    salió entero; lo demás que llama a `lanzar` sigue dejando todo en pausa. El tope total y el presupuesto por país
     van en la moneda de la cuenta.
 
 ## Cómo probar lo que dudas

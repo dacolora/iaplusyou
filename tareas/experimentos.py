@@ -1,6 +1,7 @@
 """
-Tareas del worker para Experimentos: lanzar (crea objetos en Meta, en pausa;
-max_intentos=1 y hook de interrupción como meta_publicar), refrescar métricas
+Tareas del worker para Experimentos: lanzar (crea objetos en Meta en pausa y,
+con `activar` en el payload, los activa si todo salió bien — pedido de Daniel
+2026-10-08; max_intentos=1 y hook de interrupción como meta_publicar), refrescar métricas
 de un experimento, decidir (Bloque 4: el decisor dicta un veredicto por pieza
 y pide la acción a acciones.pedir, que respeta el modo y el tope), y las
 periódicas: refrescar todos los que corren, decidir todos los que corren y
@@ -17,6 +18,7 @@ import sqlalchemy as sa
 from flask_babel import gettext
 
 import acciones
+import app_tiendas
 import cola
 import creative_flow
 import db
@@ -60,18 +62,40 @@ def job_id_detalle(cliente, experimento_id):
 
 @al_interrumpir("exp_lanzar")
 def interrumpida(tarea, mensaje):
+    """Una interrupción a mitad (también entre lanzar y activar, que sigue en «lanzando») repausa en Meta lo que haya
+    alcanzado a activarse ANTES de marcar el error: nunca queda gastando con el experimento en error aquí."""
     p = tarea["payload"]
     ex = experimentos.obtener(p["cliente"], p["experimento_id"])
     if ex and ex["estado"] == "lanzando":
-        experimentos.actualizar(p["cliente"], p["experimento_id"], estado="error", error=mensaje)
+        lanzador.dejar_sin_gastar(p["cliente"], p["experimento_id"], "error", mensaje)
 
 
 @registrar("exp_lanzar")
 def exp_lanzar(tarea):
+    """Lanza a Meta (todo nace PAUSED). Con `payload["activar"]` (las dos rutas de la persona: «Nuevo experimento» y
+    «Lanzar a Meta»; Daniel 2026-10-08: ese clic, con el gasto diario a la vista, ya es la aprobación) activa el
+    experimento completo SOLO si el lanzamiento terminó sin error: un `lanzar` que falla sale por excepción antes de
+    llegar aquí. Un fallo al activar no relanza nada (max_intentos=1): queda en pausa con su motivo."""
     p = tarea["payload"]
     job_id = tarea.get("job_id")
-    return lanzador.lanzar(p["cliente"], p["experimento_id"],
-                           on_etapa=lambda nombre: trabajos.reportar(job_id, etapa=nombre))
+    activar = bool(p.get("activar"))
+    if not activar:
+        return lanzador.lanzar(p["cliente"], p["experimento_id"],
+                               on_etapa=lambda nombre: trabajos.reportar(job_id, etapa=nombre))
+    # Con activar, `lanzar` no suelta «lanzando»: lo suelta activar_tras_lanzar (a corriendo o a pausado con motivo).
+    # El finally garantiza que nunca quede en «lanzando» al salir, falle lo que falle en medio (ronda 2 de
+    # guardian-gasto, 2026-10-08): repausa en Meta y lo deja en pausa con el motivo, o en error si no se terminó de crear.
+    motivo = None
+    try:
+        lanzador.lanzar(p["cliente"], p["experimento_id"], soltar=False,
+                        on_etapa=lambda nombre: trabajos.reportar(job_id, etapa=nombre))
+        trabajos.reportar(job_id, etapa=lanzador.ETAPA_ACTIVAR)
+        return lanzador.activar_tras_lanzar(p["cliente"], p["experimento_id"])
+    except Exception as e:
+        motivo = cola.sin_token(str(e))
+        raise
+    finally:
+        lanzador.soltar_lanzando(p["cliente"], p["experimento_id"], motivo)
 
 
 @registrar("exp_refrescar")
@@ -224,6 +248,37 @@ def _anotar_diagnostico(cliente, ex, pz, diagnostico, evento, datos=None):
                     cola.sin_token(str(e))[:200], exc_info=True)
 
 
+def _diagnostico_de_hermana(cliente, ex, pz):
+    """Instalaciones de la app: si la fila de la otra tienda (misma pieza y
+    país) ya se diagnosticó en este experimento, copia ese diagnóstico a esta
+    fila con su evento y SIN gasto nuevo (no hay llamada a Claude). Devuelve
+    el diagnóstico (o None si el reusado era un error), o False si no hay
+    hermana diagnosticada y toca llamar a Claude."""
+    try:
+        hermana = experimentos.diagnostico_hermano(cliente, ex["id"], pz["id"])
+    except Exception as e:  # noqa: BLE001 — sin poder leer, se diagnostica como siempre
+        log.warning("no pude buscar el diagnóstico hermano (%s, ep %s): %s", cliente, pz["id"], type(e).__name__)
+        return False
+    if not hermana:
+        return False
+    otro_id, d = hermana
+    copia = dict(d, usd=0.0, reutilizado_de=otro_id)
+    if d.get("error") or not d.get("causas"):
+        _anotar_diagnostico(cliente, ex, pz, copia,
+                            gettext("%(nombre)s (%(pais)s): diagnóstico no disponible (el mismo de la otra tienda).",
+                                    nombre=pz["nombre"], pais=pz["pais"]),
+                            {"reutilizado_de": otro_id})
+        return None
+    causas = ", ".join(idiomas.traducir(doctrina.CAUSAS_NOMBRE.get(c["codigo"], c["codigo"])) for c in d["causas"])
+    que = (d.get("siguiente") or {}).get("que") or ""
+    _anotar_diagnostico(cliente, ex, pz, copia,
+                        gettext("%(nombre)s (%(pais)s): el mismo diagnóstico de la otra tienda: %(causas)s — "
+                                "siguiente: %(que)s.", nombre=pz["nombre"], pais=pz["pais"], causas=causas,
+                                que=idiomas.traducir(doctrina.SIGUIENTES_NOMBRE.get(que, que))),
+                        {"causas": [c["codigo"] for c in d["causas"]], "siguiente": que, "reutilizado_de": otro_id})
+    return copia
+
+
 def _diagnosticar(cliente, ex, pz, v, snaps, reglas, ctx, tarea):
     """Doctrina, bloque 4 (§3): el diagnóstico de una perdedora, una vez por
     veredicto, con su gasto real (tipo «revision»). Corre DESPUÉS de pedir la
@@ -231,6 +286,10 @@ def _diagnosticar(cliente, ex, pz, v, snaps, reglas, ctx, tarea):
     `extra.diagnostico = {"error", "pistas", "en"}` y el rescate sigue como
     siempre. Devuelve el diagnóstico (dict) o None."""
     ep_id = pz["id"]
+    if ex.get("objetivo_meta") == "OUTCOME_APP_PROMOTION":
+        reusado = _diagnostico_de_hermana(cliente, ex, pz)
+        if reusado is not False:
+            return reusado
     referencia = f"diagnostico:{ep_id}{ref_sufijo(tarea or {})}"
     contexto_pistas = {"es_imagen": pz.get("es_imagen"), "puerta": v.get("puerta")}
     extras = {"revision": pz.get("revision_doctrina"), "dias_transcurridos": (ctx or {}).get("dias_transcurridos")}
@@ -313,6 +372,25 @@ def _aprender(cliente, ex, pz, v, diagnostico):
         log.warning("aprendizaje no guardado (%s): %s", cliente, type(e).__name__)
 
 
+def _hermana_ya_gano(ex, pz):
+    """En un experimento de apps: ¿otra fila de la misma pieza y el mismo país
+    (la otra tienda) ya tiene veredicto `ganador`? Fuera de apps, siempre False."""
+    if ex.get("objetivo_meta") != "OUTCOME_APP_PROMOTION" or not pz.get("pieza_id"):
+        return False
+    return any(o["id"] != pz["id"] and o.get("pieza_id") == pz["pieza_id"] and o.get("pais") == pz["pais"]
+               and o.get("veredicto") == "ganador" for o in ex.get("piezas") or [])
+
+
+def _presupuesto_para_decidir(ex, pais):
+    """El presupuesto diario que juzga el decisor: en apps cada fila vive en el
+    conjunto de su tienda, que recibe solo su parte del país (si se le pasara el
+    del país, el umbral de evidencia se duplicaría con dos tiendas)."""
+    presupuesto = pais.get("presupuesto_dia")
+    if ex.get("objetivo_meta") == "OUTCOME_APP_PROMOTION" and presupuesto:
+        return app_tiendas.parte_presupuesto(presupuesto, len(experimentos.plataformas_de(ex.get("extra"))))
+    return presupuesto
+
+
 def _aplicar_veredicto(cliente, ex, pz, v, resultado, snaps=None, reglas=None, ctx=None, tarea=None):
     """Escribe el veredicto en la pieza + evento `veredicto`, y pide la acción
     que el decisor recomendó (todo gasto pasa por acciones.pedir). Una
@@ -325,6 +403,8 @@ def _aplicar_veredicto(cliente, ex, pz, v, resultado, snaps=None, reglas=None, c
                                   f"{pz['nombre']} ({pz['pais']}): {v['veredicto']} — {v['motivo']}",
                                   {"veredicto": v["veredicto"], "accion": v["accion"], "puerta": v["puerta"],
                                    "numeros": v["numeros"]}, ep_id=ep_id)
+    if v.get("muestra_ventas_insuficiente") or (pz.get("extra") or {}).get("muestra_ventas_insuficiente"):
+        experimentos.marcar_pieza(cliente, ep_id, muestra_ventas_insuficiente=bool(v.get("muestra_ventas_insuficiente")))
     resultado["veredictos"].append((pz, v))
     accion = v["accion"]
     diagnostico, diagnosticado = None, False
@@ -364,6 +444,16 @@ def _aplicar_veredicto(cliente, ex, pz, v, resultado, snaps=None, reglas=None, c
             experimentos.registrar_evento(cliente, ex["id"], "escalado",
                                           gettext("%(nombre)s (%(pais)s): escalado ya pedido en esta pasada.",
                                                   nombre=pz["nombre"], pais=pz["pais"]),
+                                          ep_id=ep_id)
+        elif _hermana_ya_gano(ex, pz):
+            # Apps (revisión final, ola 2, 2026-10-08): la misma pieza tiene una
+            # fila por tienda y escalar sube el presupuesto del PAÍS entero
+            # (todos sus conjuntos). Si la fila de la otra tienda ya ganó en una
+            # pasada anterior, el país ya se escaló por esta pieza: no se pide
+            # otra subida.
+            experimentos.registrar_evento(cliente, ex["id"], "escalado",
+                                          gettext("%(nombre)s (%(pais)s): el país ya se escaló por esta pieza en "
+                                                  "la otra tienda.", nombre=pz["nombre"], pais=pz["pais"]),
                                           ep_id=ep_id)
         else:
             resultado["escalados"].add(pz["pais"])
@@ -528,7 +618,7 @@ def _marcar_decidido(cliente, ex):
     # Una pieza pausada a mano sin veredicto no bloquea: `decidido` es "todas
     # las piezas ACTIVAS tienen veredicto". Sin ninguna activa ni ninguna
     # con veredicto no hay nada decidido (experimento recién activado).
-    if not con_anuncio or any((p.get("veredicto") or "pendiente") == "pendiente" for p in activas):
+    if not con_anuncio or any((p.get("veredicto") or "pendiente") == "pendiente" or (p.get("extra") or {}).get("muestra_ventas_insuficiente") for p in activas):
         return False
     if not any((p.get("veredicto") or "pendiente") != "pendiente" for p in con_anuncio):
         return False
@@ -551,8 +641,11 @@ def exp_decidir(tarea):
         return gettext("Ese experimento no existe.")
     if ex["estado"] != "corriendo":
         return gettext("Experimento en estado %(estado)s: no se decide.", estado=ex["estado"])
+    ahora = datetime.now()
     if acciones.tope_alcanzado(ex):
         return _pausar_por_tope(cliente, ex)
+    if experimentos.datos_viejos(ex, ahora):
+        return gettext("Datos viejos: el decisor no ejecuta nada hasta actualizar las métricas.")
 
     reglas = decisor.reglas_efectivas(proyectos.reglas_defecto(cliente), ex.get("reglas"))
     ahora = datetime.now()
@@ -562,19 +655,29 @@ def exp_decidir(tarea):
     for pais in ex["paises"]:
         piezas_pais = [pz for pz in ex["piezas"] if pz["pais"] == pais["pais"]]
         orden = _ranking(piezas_pais, ex.get("atribucion"))
+        compras_pais = sum(int((pz.get("metricas") or {}).get("compras") or 0)
+                           for pz in piezas_pais if pz["id"] in orden and not (pz.get("metricas") or {}).get("ventas_no_disponibles"))
         for pz in piezas_pais:
-            if not pz.get("meta_ad_id") or pz.get("estado") != "activo" or (pz.get("veredicto") or "pendiente") != "pendiente":
+            if not pz.get("meta_ad_id") or pz.get("estado") != "activo" or ((pz.get("veredicto") or "pendiente") != "pendiente" and not (pz.get("extra") or {}).get("muestra_ventas_insuficiente")):
                 continue
             if _rechazada_por_meta(cliente, ex, pz):
                 continue
+            if experimentos.datos_viejos({"piezas": [pz]}, ahora):
+                continue
             snaps = snaps_por_pieza.setdefault(pz["id"], experimentos.snapshots(pz["id"]))
             dias_transcurridos = _dias_transcurridos(ex, snaps_por_pieza, ahora)
-            ctx = {"horas_activo": _horas_activo(pz, snaps, ahora), "presupuesto_dia": pais.get("presupuesto_dia"),
+            ctx = {"horas_activo": _horas_activo(pz, snaps, ahora), "presupuesto_dia": _presupuesto_para_decidir(ex, pais),
                    "dias_experimento": ex.get("dias"), "dias_transcurridos": dias_transcurridos,
                    "escalon_rescate": pz.get("escalon_rescate") or 0, "atribucion": ex.get("atribucion"),
                    "posicion": (orden.index(pz["id"]) + 1) if pz["id"] in orden else None, "total_pais": len(orden),
-                   "es_imagen": bool(pz.get("es_imagen"))}
+                   "es_imagen": bool(pz.get("es_imagen")), "compras_pais": compras_pais}
             v = decisor.decidir(snaps, reglas, ctx)
+            if (pz.get("metricas") or {}).get("ventas_no_disponibles") and not (
+                    (v["puerta"] == 0 and v["veredicto"] == "inconcluso" and v["accion"] == "pausar")
+                    or (v["puerta"] == 1 and v["veredicto"] == "perdedor")):
+                continue
+            if v.get("muestra_ventas_insuficiente") and (pz.get("extra") or {}).get("muestra_ventas_insuficiente"):
+                continue
             if v["veredicto"] == "pendiente":
                 continue
             _aplicar_veredicto(cliente, ex, pz, v, resultado, snaps=snaps, reglas=reglas, ctx=ctx, tarea=tarea)

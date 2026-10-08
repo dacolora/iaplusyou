@@ -1,11 +1,13 @@
 """cobros: saldo prepagado por proyecto
 
-Revision ID: 0032
-Revises: 0031
+Revision ID: 0033
+Revises: 0032
 Create Date: 2026-10-08 00:00:00.000000
 
 Cobros (spec 2026-10-08-cobros-saldo-prepagado-design.md §2): cinco tablas
-nuevas, sin tocar ninguna existente. Montos en milésimas de dólar, enteros.
+nuevas, sin tocar ninguna existente. Era la 0032 en la rama; se renumeró a
+0033 al mezclar main (2026-10-08), que ya tenía 0032_triple_whale_varias_tiendas.
+Montos en milésimas de dólar, enteros.
 `cuenta_saldo`, `movimiento_saldo` y `reserva_saldo` las escribe solo
 cobros/libro.py; `recarga` y `pago_evento`, solo cobros/recargas.py. Los únicos
 (tipo, gasto_id) y (tipo, recarga_id) hacen que un cobro o una recarga se
@@ -18,8 +20,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision: str = '0032'
-down_revision: Union[str, Sequence[str], None] = '0031'
+revision: str = '0033'
+down_revision: Union[str, Sequence[str], None] = '0032'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

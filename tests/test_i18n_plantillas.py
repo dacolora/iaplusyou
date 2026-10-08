@@ -58,7 +58,7 @@ PLANTILLAS_TRADUCIDAS = [
     "cliente.html", "_etiquetas_estado.html",
     # Merge de main (2026-09-28, PR #1 Triple Whale): la pestaña y su panel ya
     # vienen con _() y su inglés en el catálogo; entran a la guardia al fusionar.
-    "_tab_triple_whale.html", "_tw_panel.html",
+    "_tab_triple_whale.html", "_tw_panel.html", "_tw_resultados.html", "_tw_dia.html",
     "editor.html",   # Fase 6, Task 2: la página del editor
     "_tab_cambiar_calzado.html",   # Fase 6, Task 4: Crear › Cambiar producto
     "admin_meta.html", "admin_referentes.html", "meta_elegir.html",   # Fase 6, Task 5

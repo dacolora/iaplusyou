@@ -19,7 +19,7 @@ for Business config id), registered from the dashboard (FlowMarketing › "Regis
 Meta") into `clientes/<cliente>/meta_app.json` (git-ignored, 0600); only then does
 "Conectar con Meta" (routes in `dashboard.py`, logic in `meta_conexion.py`) open that
 app's login dialog, and the resulting tokens/ad account/Page live in
-`clientes/<cliente>/meta.json` (also git-ignored, 0600). There is no Meta credential in the
+`clientes/<cliente>/meta.json` (also git-ignored, 0600). Don't confuse `meta_app.json` (the app used for **login**) with `meta_app_anunciada.json` (the App ID of the app a project *advertises* in App installs experiments; see the `experimentos` skill). There is no Meta credential in the
 root `.env` — only `META_REDIRECT_URI`, the public callback URL every client registers in
 their own app. That is the **propia** mode (ADR 0001). Since 2026-09-20 there is a second,
 admin-only mode per project, **agencia** (ADR 0002, `meta_agencia.py`): the admin connects
@@ -72,3 +72,8 @@ before each batch) closes it later. TikTok is asynchronous: `check_status` decid
 **Candado común (2026-10-02, PND-114):** la ruta legado `cambiar_estado_ad` opera campaña, conjunto y anuncio mediante `lanzador._con_credenciales`, con `tareas.meta._LOCK`; `_ENV_LOCK` queda para el entorno del flujo viejo, no para configurar las credenciales globales de Meta.
 
 PND-036 (2026-10-03): organico.crear rechaza tipo imagen antes de insertar una publicación; protege también un POST manual. PND-113: la primera activación del lanzador ajusta end_time antes de activar; se conserva el presupuesto y nunca se activa por actualizar fechas. Ver experimentos para reintentos y reanudación.
+
+**Error del legado (2026-10-07, PND-096):** la tarea `meta_publicar` sigue registrada para filas antiguas.
+Su subcódigo 1885183/modo Desarrollo tiene mensaje propio por gettext, separado de permisos (#3), sin prometer
+reutilización que ese camino no implementa. `tests/test_tareas_meta.py` provoca el rechazo con dobles; no cambia
+la publicación ni los reintentos.

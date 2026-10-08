@@ -407,3 +407,28 @@ def test_tabla_diseno_por_nombre_e_idioma_contra_cobro(app, monkeypatch):
         assert precios[1] != precios[2]  # idioma
     finally:
         d._precios_disenar.cache_clear()
+
+
+def test_pnd095_botones_de_muestra_y_borrar_fuera_del_radio(app):
+    from flask import render_template_string
+    from html.parser import HTMLParser
+    with app["dashboard"].app.test_request_context():
+        html = render_template_string("{% from '_voces_galeria.html' import fichas_galeria, voz_propia_item %}{{ fichas_galeria(fichas) }}{{ voz_propia_item(v,'/borrar') }}",\
+            fichas=[{"nombre": "Rachel", "genero": "mujer", "genero_nombre": "Mujer"}],\
+            v={"valor": "vp:7", "nombre": "Mi voz", "forma_nombre": "Clonada", "estrenada": True})
+    class Lector(HTMLParser):
+        def __init__(self):
+            super().__init__(); self.pila = []; self.radios = 0; self.botones = 0
+        def handle_starttag(self, tag, attrs):
+            a = dict(attrs)
+            if tag == "button":
+                assert "radio" not in self.pila, "botón dentro de role=radio"
+                self.botones += 1
+            if a.get("role") == "radio":
+                assert a.get("tabindex") == "0" and "data-voz" in a
+                self.radios += 1
+            self.pila.append(a.get("role"))
+        def handle_endtag(self, tag):
+            self.pila.pop()
+    lector = Lector(); lector.feed(html)
+    assert lector.radios == 2 and lector.botones == 3

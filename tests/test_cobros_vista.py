@@ -137,6 +137,8 @@ def test_el_cliente_ve_lo_cobrado_y_el_admin_las_dos_cifras(libro, pagina):
     assert "1,5000" in csv_todo and "1,0000" not in csv_todo
     admin = _seccion(pagina("admin", "admin", None).get("/cliente/acme").get_data(as_text=True), "config-ap-gasto")
     assert "US$ 1,50" in admin and "US$ 1,00" in admin
+    # Todo desde el inicio (main, 2026-10-08): el admin ve «Cobrado total» al lado del costo; el cliente, solo lo cobrado.
+    assert "Cobrado total" in admin and "Cobrado total" not in gasto and "este mes" not in gasto.lower()
     csv_admin = pagina("admin", "admin", None).get("/cliente/acme/gasto/mes.csv").get_data(as_text=True)
     assert "1,0000" in csv_admin and "1,5000" in csv_admin
 
@@ -251,7 +253,7 @@ def test_sin_cobrar_no_hay_chip_de_saldo_y_queda_el_de_hoy(libro, pagina):
     with dashboard.app.test_request_context("/cliente/acme"):
         assert vista.chip("acme", es_admin=False) is None
     html = pagina().get("/cliente/acme").get_data(as_text=True)
-    assert "Este mes:" in html and "sidebar-saldo" not in html
+    assert "Gasto total:" in html and "sidebar-saldo" not in html
 
 
 def test_el_chip_de_la_barra_lateral_lleva_al_saldo(libro, pagina):
@@ -310,7 +312,7 @@ def test_si_una_lectura_falla_el_cliente_no_ve_el_costo(libro, pagina, monkeypat
     monkeypatch.setattr(vista, roto, falla)
     html = pagina().get("/cliente/acme").get_data(as_text=True)
     assert "US$ 1,00" not in _seccion(html, "config-ap-gasto")
-    assert "Este mes: US$ 1,00" not in html
+    assert "Gasto total: US$ 1,00" not in html
     detalle = pagina().get(f"/cliente/acme/creative_flow/{cf_id}/detalle").get_data(as_text=True)
     assert "US$ 1,00" not in detalle
     # el admin puede seguir viendo el costo
@@ -369,11 +371,11 @@ def test_los_dos_chips_de_la_barra_fallan_por_separado(libro, pagina, monkeypatc
     with monkeypatch.context() as m:
         m.setattr(vista, "chip", falla)
         html = pagina().get(ruta).get_data(as_text=True)
-        assert "Este mes:" in html and "sidebar-saldo" not in html
+        assert "Gasto total:" in html and "sidebar-saldo" not in html
     with monkeypatch.context() as m:
         m.setattr(vista, "gasto_para", falla)
         html = pagina().get(ruta).get_data(as_text=True)
-        assert "sidebar-saldo" in html and "Este mes:" not in html
+        assert "sidebar-saldo" in html and "Gasto total:" not in html
 
 
 def test_el_historial_de_experimentos_muestra_lo_cobrado_con_texto_neutro(libro, pagina):

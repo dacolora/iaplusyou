@@ -172,6 +172,7 @@ def test_numero(valor, esperado):
 
 
 # ------------------------------------------------------------- conexión ---
+# La conexión por tiendas (varias por proyecto, país ocupado, quitar, firma…) se prueba en tests/test_tw_tiendas.py.
 
 @pytest.fixture()
 def base(base_temporal, monkeypatch):
@@ -180,68 +181,86 @@ def base(base_temporal, monkeypatch):
 
 
 def test_conectar_cifra_la_llave_y_obtener_no_la_devuelve(base):
-    tw_id = triple_whale_tiendas.conectar("test", "tw_1234567890", "https://Test.myshopify.com/", moneda="usd",
-                                          modelo_atribucion="Triple Attribution", ventana_atribucion="lifetime")
-    assert tw_id > 0
+    tienda_id = triple_whale_tiendas.conectar("test", "tw_1234567890", "https://Test.myshopify.com/", moneda="usd",
+                                              modelo_atribucion="Triple Attribution", ventana_atribucion="lifetime")
+    assert tienda_id > 0
     config = triple_whale_tiendas.obtener("test")
-    assert config["dominio_tienda"] == "test.myshopify.com" and config["moneda"] == "USD"
-    assert config["estado"] == "conectada" and config["error"] is None and config["extra"] == {}
-    assert "llave" not in config
-    assert triple_whale_tiendas.obtener_llave("test") == "tw_1234567890"
+    assert config["moneda"] == "USD" and config["extra"] == {} and "llave" not in config
+    (tienda,) = config["tiendas"]
+    assert tienda["id"] == tienda_id and tienda["dominio"] == "test.myshopify.com"
+    assert tienda["estado"] == "conectada" and tienda["error"] is None and tienda["extra"] == {}
+    assert "llave" not in tienda
+    assert triple_whale_tiendas.obtener_llave("test", tienda_id) == "tw_1234567890"
     import sqlalchemy as sa
     with db.conectar() as con:
-        cruda = con.execute(sa.select(db.triple_whale.c.llave)).scalar()
+        cruda = con.execute(sa.select(db.tw_tienda.c.llave)).scalar()
     assert "tw_1234567890" not in cruda and cifrado.descifrar(cruda) == "tw_1234567890"
 
 
-def test_obtener_traduce_valores_viejos_guardados(base):
+def test_ajustes_traduce_valores_viejos_guardados(base):
     triple_whale_tiendas.conectar("viejo", "tw_x", "v.myshopify.com")
-    triple_whale_tiendas.actualizar("viejo", modelo_atribucion="First Touch", ventana_atribucion="7")
-    c = triple_whale_tiendas.obtener("viejo")
-    assert (c["modelo_atribucion"], c["ventana_atribucion"]) == ("First Click", "7_days")
+    with db.conectar() as con:
+        con.execute(db.triple_whale.update().values(modelo_atribucion="First Touch", ventana_atribucion="7"))
+    a = triple_whale_tiendas.ajustes("viejo")
+    assert (a["modelo_atribucion"], a["ventana_atribucion"]) == ("First Click", "7_days")
 
 
-def _copiar_algo(cliente):
-    from triple_whale import datos
-    datos.reemplazar_tienda(cliente, "2026-09-01", "2026-09-01", [{"fecha": "2026-09-01", "ingresos": 5}])
-    datos.reemplazar_anuncios_canal(cliente, "2026-09-01", "2026-09-01",
-                                    [{"canal": "facebook-ads", "ad_id": "1", "fecha": "2026-09-01", "gasto": 3}])
+def _copiar_algo(cliente, tienda_id):
+    ahora = db.ahora()
+    with db.conectar() as con:
+        con.execute(db.tw_tienda_dia.insert().values(
+            cliente=cliente, tienda_id=tienda_id, fecha="2026-09-01", ingresos=5, actualizado_en=ahora))
+        con.execute(db.tw_anuncio_dia.insert().values(
+            cliente=cliente, tienda_id=tienda_id, fecha="2026-09-01", canal="facebook-ads", ad_id="1", gasto=3,
+            actualizado_en=ahora))
 
 
-def test_reconectar_con_otra_atribucion_borra_lo_copiado(base):
-    from triple_whale import datos
-    triple_whale_tiendas.conectar("c", "tw_x", "c.myshopify.com")
-    _copiar_algo("c")
-    triple_whale_tiendas.conectar("c", "tw_nueva", "c.myshopify.com")   # misma atribución: se conserva
-    assert datos.hay_tienda("c") and datos.rango("c")["filas"] == 1
-    triple_whale_tiendas.conectar("c", "tw_nueva", "c.myshopify.com", modelo_atribucion="Last Click")
-    assert not datos.hay_tienda("c") and datos.rango("c")["filas"] == 0
+def _filas_copiadas(cliente):
+    import sqlalchemy as sa
+    with db.conectar() as con:
+        return sum(con.execute(sa.select(sa.func.count()).select_from(t).where(t.c.cliente == cliente)).scalar()
+                   for t in (db.tw_tienda_dia, db.tw_anuncio_dia))
 
 
 def test_cambiar_ajustes_solo_borra_si_algo_cambio(base):
-    from triple_whale import datos
-    triple_whale_tiendas.conectar("c", "tw_x", "c.myshopify.com")
-    triple_whale_tiendas.actualizar_extra("c", {"backfill_desde": "2026-07-01"})
-    _copiar_algo("c")
+    tid = triple_whale_tiendas.conectar("c", "tw_x", "c.myshopify.com")
+    triple_whale_tiendas.actualizar_extra_tienda("c", tid, {"backfill_desde": "2026-07-01"})
+    _copiar_algo("c", tid)
     assert triple_whale_tiendas.cambiar_ajustes("c", moneda="USD") is False
-    assert datos.hay_tienda("c")
+    assert _filas_copiadas("c") == 2
     assert triple_whale_tiendas.cambiar_ajustes("c", ventana_atribucion="7_days") is True
     c = triple_whale_tiendas.obtener("c")
-    assert c["ventana_atribucion"] == "7_days" and c["extra"] == {} and not datos.hay_tienda("c")
+    assert c["ventana_atribucion"] == "7_days" and c["tiendas"][0]["extra"] == {} and _filas_copiadas("c") == 0
     assert triple_whale_tiendas.cambiar_ajustes("nadie", moneda="EUR") is False
 
 
 def test_desconectar_borra_copias_y_conserva_evaluaciones(base):
     from triple_whale import datos
-    triple_whale_tiendas.conectar("c", "tw_x", "c.myshopify.com")
-    _copiar_algo("c")
+    tid = triple_whale_tiendas.conectar("c", "tw_x", "c.myshopify.com")
+    _copiar_algo("c", tid)
     eid = datos.crear_evaluacion("c", "2026-09-01", "2026-09-30", "USD", [{"ref": "A1"}])
     triple_whale_tiendas.desconectar("c")
-    assert triple_whale_tiendas.obtener("c") is None and datos.rango("c")["filas"] == 0
+    assert triple_whale_tiendas.obtener("c") is None and _filas_copiadas("c") == 0
     assert datos.evaluacion("c", eid) is not None
 
 
-def test_conectados_lista_solo_proyectos_con_llave(base):
-    triple_whale_tiendas.conectar("b", "tw_x", "b.myshopify.com")
-    triple_whale_tiendas.conectar("a", "tw_y", "a.myshopify.com")
-    assert triple_whale_tiendas.conectados() == ["a", "b"]
+def test_conectadas_lista_las_tiendas_con_llave(base):
+    b = triple_whale_tiendas.conectar("b", "tw_x", "b.myshopify.com")
+    a = triple_whale_tiendas.conectar("a", "tw_y", "a.myshopify.com")
+    assert triple_whale_tiendas.conectadas() == [("a", a), ("b", b)]
+
+
+def test_consultas_usan_las_columnas_reales_de_triple_whale():
+    """PND-150 (2026-10-08): con la tienda real, `products_info` trae product_name, product_sku,
+    product_name_quantity_sold y product_name_price, y `blended_stats_tvf()` no tiene net_profit. Pedir
+    las columnas viejas dejaba la copia sin productos y la tienda en su versión mínima (sin clientes nuevos)."""
+    completa, minima = triple_whale.consultas_productos()
+    for consulta in (completa, minima):
+        for real in ("p.product_name", "p.product_sku", "p.product_name_quantity_sold", "p.product_name_price"):
+            assert real in consulta
+        for vieja in ("products_info.title", "products_info.sku", "products_info.quantity", "products_info.price"):
+            assert vieja not in consulta
+    assert "net_discount_amount_for_product" in completa
+    tienda_completa, _ = triple_whale.consultas_tienda()
+    assert "net_profit" not in tienda_completa
+    assert "new_customer_revenue" in tienda_completa and "new_customer_orders" in tienda_completa

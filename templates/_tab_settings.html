@@ -321,8 +321,9 @@
   {% endfor %}
 </ul>
 
-{# Las reglas por defecto del decisor se movieron a Experimentos › «Reglas del motor». #}
-<p class="vacio" id="config-reglas-enlace" style="padding-top:1rem;">{{ _('Las reglas del decisor están en <a href="#experimentos" onclick="document.querySelector(\'.sidebar-item[data-tab=experimentos]\').click(); document.getElementById(\'reglas-motor\').open = true; return false;">Experimentos →</a>') }}</p>
+{# Las reglas por defecto del decisor se movieron a Experimentos › «Reglas del motor» (sin Meta ni historial esa
+   pestaña no las pinta: el enlace tampoco, 2026-10-08). #}
+{% if not exp_sin_meta %}<p class="vacio" id="config-reglas-enlace" style="padding-top:1rem;">{{ _('Las reglas del decisor están en <a href="#experimentos" onclick="document.querySelector(\'.sidebar-item[data-tab=experimentos]\').click(); document.getElementById(\'reglas-motor\').open = true; return false;">Experimentos →</a>') }}</p>{% endif %}
 </section>
 
 <section class="config-apartado" id="config-ap-marca" data-apartado="marca">
@@ -551,61 +552,54 @@
 </section>
 
 <section class="config-apartado" id="config-ap-gasto" data-apartado="gasto">
-{# ---- Gasto real (Task 3): lo pagado a los proveedores este mes, en USD;
-   la pauta de Meta al lado, en la moneda de la cuenta. Contexto de
-   ver_cliente: gasto_mes, pauta_mes, gastos_por_tipo, gastos_historial. ---- #}
+{# ---- Gasto real: todo lo pagado a los proveedores desde el primer cobro, en
+   USD; la pauta de Meta al lado, en la moneda de la cuenta. Solo totales desde
+   el 2026-10-08 (Daniel: las cifras del mes confundían a sus clientes).
+   Contexto de ver_cliente: gasto_total, gasto_todo, pauta_total,
+   gastos_por_tipo, gastos_historial; en un proyecto que cobra, gasto_modo y
+   gasto_cobrado (cobros, spec 2026-10-08 §7). ---- #}
 <div class="panel-cabecera tb-cabecera" id="config-gasto">
   <div>
     <h2 style="margin-top:0;">{{ _('Gasto') }}</h2>
     <p class="vacio" style="padding-top:0;">
       {% if gasto_modo in ('cobrado', 'oculto') %}
-      {{ _('Lo que se descontó de tu saldo por lo que este proyecto generó, este mes y desde el inicio: cada video,
+      {{ _('Lo que se descontó de tu saldo por todo lo que este proyecto generó desde el inicio: cada video,
       imagen, guion, final o texto con IA deja su cobro aquí al terminar. Lo que falló y no llegó no se cobra.') }}
       {% else %}
-      {{ _('Cuánto costó de verdad lo que este proyecto generó, este mes y desde el inicio: cada video, imagen, guion,
+      {{ _('Cuánto costó de verdad todo lo que este proyecto generó desde el inicio: cada video, imagen, guion,
       final o texto con IA deja su cobro aquí apenas el proveedor lo cobra. Los botones de la app
       muestran el precio aproximado antes de gastar; esta lista es el precio real después.') }}
       {% endif %}
       {% if gasto_modo == 'doble' %}<br><strong>{{ _('Este proyecto cobra: «Costo» es lo que pagó Creatv al proveedor y «Cobrado», lo que se descontó del saldo del proyecto.') }}</strong>{% endif %}
     </p>
   </div>
-  <div class="gasto-descargas">
-    <a class="btn-guardar btn-sm tb-csv" href="{{ url_for('gasto_csv', cliente=cliente) }}" download>{{ _('Descargar CSV del mes') }}</a>
-    <a class="btn-guardar btn-sm tb-csv" href="{{ url_for('gasto_csv_todo', cliente=cliente) }}" download>{{ _('Descargar CSV de todo') }}</a>
-  </div>
+  <a class="btn-guardar btn-sm tb-csv" href="{{ url_for('gasto_csv_todo', cliente=cliente) }}" download>{{ _('Descargar CSV') }}</a>
 </div>
 
 <div class="tb-tiles gasto-tiles">
-  <div class="kpi-tile">
-    <span>{{ _('Generación este mes') }}</span>
-    <strong>{{ (gasto_mes.total if gasto_mes else 0) | usd }}</strong>
-    <small>{% if gasto_mes and gasto_mes.n %}{% if gasto_modo in ('cobrado', 'oculto') %}{{ ngettext('%(num)s cobro', '%(num)s cobros', gasto_mes.n) }}{% else %}{{ ngettext('%(num)s cobro(s) a proveedores', '%(num)s cobro(s) a proveedores', gasto_mes.n) }}{% endif %}{% else %}{{ _('sin generación pagada') }}{% endif %}</small>
-  </div>
-  {# Desde el inicio (2026-10-07): sin esta cifra, el total del proyecto parecía
-     ser solo el del mes en curso. #}
   {% if gasto_modo == 'doble' %}
   <div class="kpi-tile">
-    <span>{{ _('Cobrado este mes') }}</span>
-    <strong>{{ gasto_cobrado.mes.total | usd }}</strong>
-    <small>{{ _('desde el inicio: %(monto)s', monto=(gasto_cobrado.total.total | usd)) }}</small>
+    <span>{{ _('Cobrado total') }}</span>
+    <strong>{{ gasto_cobrado.total.total | usd }}</strong>
+    <small>{{ ngettext('%(num)s cobro', '%(num)s cobros', gasto_cobrado.total.n) }}</small>
   </div>
   {% endif %}
   <div class="kpi-tile" id="gasto-desde-inicio">
-    <span>{{ _('Generación desde el inicio') }}</span>
+    <span>{{ _('Generación total') }}</span>
     <strong>{{ (gasto_total.total if gasto_total else 0) | usd }}</strong>
     <small>{% if gasto_total and gasto_total.n %}{% if gasto_modo in ('cobrado', 'oculto') %}{{ ngettext('%(num)s cobro', '%(num)s cobros', gasto_total.n) }}{% else %}{{ ngettext('%(num)s cobro(s) a proveedores', '%(num)s cobro(s) a proveedores', gasto_total.n) }}{% endif %}{% if gasto_total.desde %} · {{ _('desde el %(fecha)s', fecha=gasto_total.desde[:10]) }}{% endif %}{% else %}{{ _('sin generación pagada') }}{% endif %}</small>
   </div>
-  {% for p in pauta_mes %}
+  {% for p in pauta_total %}
   <div class="kpi-tile">
-    <span>{{ _('Pauta este mes') }}{% if pauta_mes | length > 1 %} · {{ p.moneda }}{% endif %}</span>
+    <span>{{ _('Pauta total') }}{% if pauta_total | length > 1 %} · {{ p.moneda }}{% endif %}</span>
     <strong>{{ p.gasto | dinero(p.moneda) }}</strong>
     <small>{{ _('se cobra en tu cuenta de Meta') }}</small>
   </div>
   {% else %}
   <div class="kpi-tile">
-    <span>{{ _('Pauta este mes') }}</span>
+    <span>{{ _('Pauta total') }}</span>
     <strong class="tb-sin-dato">—</strong>
-    <small>{{ _('sin pauta corriendo') }}</small>
+    <small>{{ _('sin pauta todavía') }}</small>
   </div>
   {% endfor %}
 </div>
@@ -618,20 +612,7 @@
     {% for t in gastos_por_tipo %}
     <tr><td>{{ t.nombre|traducir }}</td><td class="num">{{ t.n }}</td><td class="num">{{ t.usd | usd }}</td>{% if gasto_modo == 'doble' %}<td class="num">{{ t.cobrado | usd }}</td>{% endif %}</tr>
     {% endfor %}
-    <tr class="gasto-total"><td>{{ _('Total') }}</td><td class="num">{{ gasto_mes.n }}</td><td class="num">{{ gasto_mes.total | usd }}</td>{% if gasto_modo == 'doble' %}<td class="num">{{ gasto_cobrado.mes.total | usd }}</td>{% endif %}</tr>
-  </tbody>
-</table>
-{% endif %}
-
-{% if gasto_por_mes and gasto_por_mes | length > 1 %}
-<h3 style="margin-top:1.2rem;">{{ _('Mes a mes') }}</h3>
-<table class="gasto-tabla" id="gasto-por-mes">
-  <thead><tr><th>{{ _('Mes') }}</th><th class="num">{{ _('Cantidad') }}</th><th class="num">{% if gasto_modo == 'doble' %}{{ _('Costo') }}{% else %}US${% endif %}</th>{% if gasto_modo == 'doble' %}<th class="num">{{ _('Cobrado') }}</th>{% endif %}</tr></thead>
-  <tbody>
-    {% for m in gasto_por_mes %}
-    <tr><td>{{ m.mes }}</td><td class="num">{{ m.n }}</td><td class="num">{{ m.usd | usd }}</td>{% if gasto_modo == 'doble' %}<td class="num">{{ m.cobrado | usd }}</td>{% endif %}</tr>
-    {% endfor %}
-    <tr class="gasto-total"><td>{{ _('Total desde el inicio') }}</td><td class="num">{{ gasto_total.n }}</td><td class="num">{{ gasto_total.total | usd }}</td>{% if gasto_modo == 'doble' %}<td class="num">{{ gasto_cobrado.total.total | usd }}</td>{% endif %}</tr>
+    <tr class="gasto-total"><td>{{ _('Total') }}</td><td class="num">{{ gasto_todo.n }}</td><td class="num">{{ gasto_todo.total | usd }}</td>{% if gasto_modo == 'doble' %}<td class="num">{{ gasto_cobrado.todo.total | usd }}</td>{% endif %}</tr>
   </tbody>
 </table>
 {% endif %}
@@ -657,7 +638,7 @@
     </tbody>
   </table>
 </div>
-<p class="vacio" style="padding-top:.3rem;font-size:.74rem;">{{ _('Se muestran los últimos %(n)s cobros', n=gastos_historial | length) }}{% if gastos_historial | length >= 200 %} {{ _('(«Descargar CSV de todo» trae todos los cobros desde el inicio)') }}{% endif %}.</p>
+<p class="vacio" style="padding-top:.3rem;font-size:.74rem;">{{ _('Se muestran los últimos %(n)s cobros', n=gastos_historial | length) }}{% if gastos_historial | length >= 200 %} {{ _('(el CSV trae todos los cobros desde el inicio)') }}{% endif %}.</p>
 {% else %}
 <p class="vacio">{{ _('Todavía no hay cobros registrados. Aparecerán aquí cuando generes algo en Crear.') }}</p>
 {% endif %}
@@ -776,7 +757,7 @@
 <script>
   // Configuración en apartados (spec 2026-09-26): uno a la vez; se recuerda
   // el último por navegador. window.irAConfig(id) abre el apartado que
-  // contiene `id` y lo trae a la vista («Este mes» de la barra lateral,
+  // contiene `id` y lo trae a la vista («Gasto total» de la barra lateral,
   // enlaces #config-tienda, #config-pixel…).
   (function () {
     var raiz = document.getElementById('tab-settings');

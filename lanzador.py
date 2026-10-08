@@ -3,13 +3,17 @@ Lanzador multi-país (spec §4): traduce un experimento a objetos de Meta —
 1 campaña (spend_cap = tope total) → 1 conjunto por país (presupuesto diario
 propio, targeting país + edad) → 1 anuncio por pieza — y guarda cada id apenas
 Meta lo devuelve, así un reintento retoma donde quedó sin duplicar nada. Todo
-nace PAUSED: activar es otro clic (cambiar_estado). Las credenciales se cargan
-y limpian bajo el lock de tareas.meta (mismo motivo que allá).
+nace PAUSED; la tarea exp_lanzar de las rutas de la persona activa al terminar
+(activar_tras_lanzar, 2026-10-08), los demás llamadores activan con cambiar_estado.
+Las credenciales se cargan y limpian bajo el lock de tareas.meta (mismo motivo que allá).
 """
+import logging
+import math
 import time
 
-from flask_babel import gettext
+from flask_babel import gettext, ngettext
 
+import app_tiendas
 import atribucion
 import cola
 import db
@@ -20,16 +24,23 @@ import meta_errores
 import notificaciones
 import triple_whale
 import triple_whale_tiendas
-from triple_whale import datos as tw_datos, sync as tw_sync
+from triple_whale import datos as tw_datos, paises as tw_paises, sync as tw_sync
 from meta_ads import ad as meta_ad, adset as meta_adset, auth as meta_auth, campaign as meta_campaign
 from meta_ads import creative as meta_creative, insights as meta_insights
 from meta_ads.targeting import Targeting
 from tareas.meta import MONEDAS_SIN_DECIMALES, _LOCK, _miniatura_para_ad
 
+log = logging.getLogger("creatv.lanzador")
+
 ETAPAS_LANZAR = [(idiomas.N_("Campaña"), 15), (idiomas.N_("Conjuntos por país"), 25), (idiomas.N_("Anuncios"), 60)]
+# Lanzar crea y activa (2026-10-08): la barra de las rutas de la persona suma la etapa de activar.
+ETAPA_ACTIVAR = idiomas.N_("Activar")
+ETAPAS_LANZAR_Y_ACTIVAR = ETAPAS_LANZAR + [(ETAPA_ACTIVAR, 10)]
+# NOK y SEK: 1 300 ≈ US$120–140 (1 000 NOK ≈ US$94 quedaba bajo el spend_cap mínimo de Meta, 2026-10-08).
 # Meta rechaza spend_cap por debajo de ~100 USD; por debajo no se manda.
 SPEND_CAP_MINIMO_USD = 100.0
-_MIN_POR_MONEDA = {"COP": 400000.0, "MXN": 2000.0, "BRL": 600.0, "EUR": 100.0, "PEN": 400.0, "CLP": 100000.0, "ARS": 100000.0, "USD": 100.0}
+_MIN_POR_MONEDA = {"COP": 400000.0, "MXN": 2000.0, "BRL": 600.0, "EUR": 100.0, "PEN": 400.0, "CLP": 100000.0, "ARS": 100000.0, "USD": 100.0,
+                   "NOK": 1300.0, "SEK": 1300.0}
 _SNAP_DESDE_INSIGHTS = {"impresiones": "impresiones", "alcance": "alcance", "frecuencia": "frecuencia", "clics": "clics",
                         "clics_enlace": "clics_enlace", "ctr": "ctr", "cpc": "cpc", "cpm": "cpm", "thruplay": "thruplay",
                         "thruplay_rate": "thruplay_rate", "gasto_usd": "gasto", "compras": "compras", "ingresos": "ingresos", "roas": "roas",
@@ -91,6 +102,12 @@ def _validar_para_lanzar(cliente, experimento_id):
     if faltan:
         raise ValueError(gettext("Sin piezas para: %(paises)s. Agrega una pieza por país o quita el país.",
                                  paises=", ".join(faltan)))
+    if ex["objetivo_meta"] == "OUTCOME_APP_PROMOTION":
+        # Cada fila tiene que caer en un conjunto de tienda que se va a crear;
+        # si no, el KeyError llegaría después de crear campaña y conjuntos.
+        plataformas = experimentos.plataformas_de(ex.get("extra"))
+        if any((pz.get("extra") or {}).get("plataforma") not in plataformas for pz in ex["piezas"]):
+            raise ValueError(gettext("Una pieza no tiene plataforma de tienda: vuelve a crear el experimento."))
     return ex
 
 
@@ -101,6 +118,22 @@ def _promoted_object_para(cliente, ex):
     no tiene nada vigente, se calcula ahí mismo (bloqueante, una ida a
     Graph) — ANTES de crear campaña o conjuntos, así un Pixel apagado aborta
     con un mensaje claro en vez de una campaña huérfana que Meta rechazaría."""
+    if ex["objetivo_meta"] == "OUTCOME_APP_PROMOTION":
+        # Instalaciones de la app: App ID y URLs de tienda se revisan acá,
+        # antes de crear nada — un rechazo tardío de Meta dejaría una campaña
+        # huérfana (misma lección que el Pixel apagado). La URL de tienda
+        # (`object_store_url`) se completa por conjunto, uno por plataforma.
+        # El App ID es el que se aprobó al crear el experimento (guardado en
+        # extra.app); el del proyecto solo cubre experimentos viejos que no lo
+        # traen — si la persona cambió el App ID después, este experimento
+        # sigue anunciando la app con la que se creó.
+        app = (ex.get("extra") or {}).get("app") or {}
+        app_id = str(app.get("app_id") or "").strip() or meta_conexion.cargar_app_anunciada(cliente)
+        if not app_id:
+            raise ValueError(gettext("Falta el App ID de la app que anuncias: pégalo en Avanzado "
+                                     "(lo encuentras en Meta for Developers)."))
+        app_tiendas.validar_urls(app.get("ios_url"), app.get("android_url"))
+        return {"application_id": app_id}
     if ex["objetivo_meta"] != "OUTCOME_SALES":
         return None
     px = meta_conexion.estado_pixel(cliente, solo_cache=True)
@@ -146,18 +179,30 @@ def _crear_anuncios(cliente, ex, creds, adsets, cache=None):
     # (tw_source / tw_adid). Se fijan al crear: cambiarlos después manda el
     # anuncio otra vez a revisión.
     kw_tags = triple_whale_tiendas.kw_url_tags(cliente)
+    app = (ex.get("extra") or {}).get("app") or {}
     for pz in ex["piezas"]:
         if pz["meta_ad_id"]:
             continue
-        experimentos.actualizar_pieza(cliente, pz["id"], estado="publicando", meta_adset_id=adsets[pz["pais"]])
+        plat = (pz.get("extra") or {}).get("plataforma")
+        adset_id = adsets[_clave_adset(pz["pais"], plat)]
+        if plat:
+            # Instalaciones de la app: el anuncio lleva la URL de la tienda de
+            # su plataforma, sin utm_* ni parámetros de rastreo (la tienda no
+            # los usa; la atribución es por ad_id), y el botón «Instalar».
+            link, extra_creative = app[f"{plat}_url"], {"cta_type": "INSTALL_MOBILE_APP"}
+        else:
+            link, extra_creative = url_destino(ex["destino_url"], pz["id"]), kw_tags
+        # En apps la misma pieza tiene un anuncio por tienda: el sufijo « · iOS» /
+        # « · Android» los distingue en el Administrador de anuncios de Meta.
+        nombre_anuncio = f"{pz['nombre']} — {pz['pais']}" + (f" · {app_tiendas.OS_META[plat]}" if plat else "")
+        experimentos.actualizar_pieza(cliente, pz["id"], estado="publicando", meta_adset_id=adset_id)
         creative_id = pz["meta_creative_id"]
         if not creative_id:
             if pz.get("es_imagen"):
                 # Imagen: ni subida de video ni miniatura; el creative lleva la URL pública.
                 creative_id = meta_creative.crear_creative_imagen(
-                    f"{pz['nombre']} — {pz['pais']}", pz["url_imagen"], ex["nombre"],
-                    url_destino(ex["destino_url"], pz["id"]), instagram_user_id=creds.get("ig_user_id"),
-                    **kw_tags)["id"]
+                    nombre_anuncio, pz["url_imagen"], ex["nombre"],
+                    link, instagram_user_id=creds.get("ig_user_id"), **extra_creative)["id"]
             else:
                 video_id = (pz.get("extra") or {}).get("meta_video_id")
                 if not video_id:
@@ -168,11 +213,10 @@ def _crear_anuncios(cliente, ex, creds, adsets, cache=None):
                     experimentos.marcar_pieza(cliente, pz["id"], meta_video_id=video_id)
                 mini = pz["url_miniatura"] or _miniatura_para_ad(cliente, f"exp{experimento_id}_{pz['id']}", pz["url_video"])
                 creative_id = meta_creative.crear_creative_video(
-                    f"{pz['nombre']} — {pz['pais']}", video_id, mini, ex["nombre"],
-                    url_destino(ex["destino_url"], pz["id"]), instagram_user_id=creds.get("ig_user_id"),
-                    **kw_tags)["id"]
+                    nombre_anuncio, video_id, mini, ex["nombre"],
+                    link, instagram_user_id=creds.get("ig_user_id"), **extra_creative)["id"]
             experimentos.actualizar_pieza(cliente, pz["id"], meta_creative_id=creative_id)
-        ad_id = meta_ad.crear_ad(f"{pz['nombre']} — {pz['pais']}", adsets[pz["pais"]], creative_id)["id"]
+        ad_id = meta_ad.crear_ad(nombre_anuncio, adset_id, creative_id)["id"]
         experimentos.actualizar_pieza(cliente, pz["id"], meta_ad_id=ad_id, estado="pausado",
                                       presupuesto_dia_actual=next(p["presupuesto_dia"] for p in ex["paises"] if p["pais"] == pz["pais"]))
         experimentos.registrar_evento(cliente, experimento_id, "lanzamiento",
@@ -192,7 +236,80 @@ def _avisar_error_lanzamiento(cliente, ex, experimento_id, mensaje):
                                   experimento=ex["nombre"], id=experimento_id, mensaje=mensaje))
 
 
-def lanzar(cliente, experimento_id, on_etapa=None):
+def _clave_adset(pais, plataforma=None):
+    """Llave del conjunto en el dict `adsets` de lanzar(): el país solo, o
+    «país:plataforma» en los experimentos de Instalaciones de la app."""
+    return f"{pais}:{plataforma}" if plataforma else pais
+
+
+def _adsets_de_pais(p):
+    """Ids de los conjuntos de Meta de un país: los de cada plataforma en los
+    experimentos de Instalaciones de la app (`meta_adsets`, orden ios, android)
+    o el único conjunto del país (`meta_adset_id`) en los demás."""
+    if p.get("meta_adsets"):
+        return [i for i in p["meta_adsets"].values() if i]
+    return [p["meta_adset_id"]] if p.get("meta_adset_id") else []
+
+
+def _conjunto_de(cliente, ex, p, plat, n_plataformas, campaign_id, promoted_object, moneda):
+    """Id del conjunto del país `p` (y de la plataforma `plat`, en apps): el
+    guardado si ya existe — así un reintento no lo duplica — o uno nuevo,
+    en pausa, guardado apenas Meta lo devuelve. En apps el presupuesto diario
+    del país se reparte en partes iguales entre sus plataformas (no se
+    duplica) y el conjunto queda en `paises[i]["meta_adsets"][plat]`."""
+    experimento_id = ex["id"]
+    if not plat:
+        adset_id = p.get("meta_adset_id")
+        if adset_id:
+            return adset_id
+        targeting = Targeting().edad(int(ex["edad_min"] or 18), int(ex["edad_max"] or 65)).paises([p["pais"]]).to_dict()
+        adset_id = meta_adset.crear_adset(f"{ex['nombre']} — {p['pais']}", campaign_id, ex["objetivo_meta"], targeting,
+                                          centavos(p["presupuesto_dia"], moneda), int(ex["dias"] or 7),
+                                          promoted_object=promoted_object)["id"]
+        experimentos.actualizar_pais(cliente, experimento_id, p["pais"], meta_adset_id=adset_id, estado="pausado")
+        con_pixel = (gettext(" (optimiza compras con el Pixel %(pixel_id)s)", pixel_id=promoted_object["pixel_id"])
+                     if promoted_object else "")
+        experimentos.registrar_evento(cliente, experimento_id, "lanzamiento",
+                                      gettext("Conjunto %(pais)s creado%(con_pixel)s", pais=p["pais"], con_pixel=con_pixel),
+                                      {"adset_id": adset_id, "presupuesto_dia": p["presupuesto_dia"],
+                                       "pixel_id": promoted_object["pixel_id"] if promoted_object else None})
+        return adset_id
+    ids = dict(p.get("meta_adsets") or {})
+    if ids.get(plat):
+        return ids[plat]
+    sistema = app_tiendas.OS_META[plat]
+    app = (ex.get("extra") or {}).get("app") or {}
+    targeting = (Targeting().edad(int(ex["edad_min"] or 18), int(ex["edad_max"] or 65)).paises([p["pais"]])
+                 .sistema(sistema).to_dict())
+    # Se reparten los centavos del país (una sola conversión) y el resto se
+    # queda sin gastar: redondear cada parte por separado podía sumar más
+    # que el presupuesto del país (CLP 1003 → 502 + 502).
+    centavos_conjunto = centavos(p["presupuesto_dia"], moneda) // max(1, int(n_plataformas))
+    presupuesto = app_tiendas.parte_presupuesto(p["presupuesto_dia"], n_plataformas)
+    adset_id = meta_adset.crear_adset(f"{ex['nombre']} — {p['pais']} · {sistema}", campaign_id, ex["objetivo_meta"],
+                                      targeting, centavos_conjunto, int(ex["dias"] or 7),
+                                      promoted_object={**promoted_object, "object_store_url": app[f"{plat}_url"]})["id"]
+    ids[plat] = adset_id
+    # Copia viva en `p` para la siguiente plataforma del mismo país en esta corrida.
+    p["meta_adsets"] = ids
+    experimentos.actualizar_pais(cliente, experimento_id, p["pais"], meta_adsets=dict(ids), estado="pausado")
+    experimentos.registrar_evento(cliente, experimento_id, "lanzamiento",
+                                  gettext("Conjunto %(pais)s · %(sistema)s creado", pais=p["pais"], sistema=sistema),
+                                  {"adset_id": adset_id, "presupuesto_dia": presupuesto, "plataforma": plat})
+    return adset_id
+
+
+def _fuente_segun_atribucion(cliente, ex):
+    atribucion = ex.get("atribucion")
+    if atribucion == "triple_whale":
+        return "triple_whale" if triple_whale_tiendas.tiendas(cliente) else "meta"
+    return {"tienda": "tienda", "pixel": "meta"}.get(atribucion, "ninguna")
+
+
+def lanzar(cliente, experimento_id, on_etapa=None, soltar=True):
+    """Crea en Meta campaña → conjuntos → anuncios, todo PAUSED. Al terminar pasa a `pausado`; con `soltar=False`
+    (la tarea que después activa, 2026-10-08) se queda en `lanzando`, para que ninguna guarda (barra de progreso,
+    Cerrar, Activar/Pausar, interrupción, reconciliación) lo trate como terminado mientras falta activar."""
     try:
         ex = _validar_para_lanzar(cliente, experimento_id)
         promoted_object = _promoted_object_para(cliente, ex)
@@ -201,6 +318,9 @@ def lanzar(cliente, experimento_id, on_etapa=None):
         if actual and actual["estado"] == "lanzando":
             experimentos.actualizar(cliente, experimento_id, estado="error", error=str(e))
         raise
+    fuente = _fuente_segun_atribucion(cliente, ex)
+    experimentos.actualizar_extra(cliente, experimento_id,
+                                 lambda extra: {"fuente_ventas_fija": fuente, **extra})
     moneda = ex["moneda"] or (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
     etapa = on_etapa or (lambda n: None)
     experimentos.actualizar(cliente, experimento_id, estado="lanzando", error=None)
@@ -216,21 +336,11 @@ def lanzar(cliente, experimento_id, on_etapa=None):
                                           {"campaign_id": campaign_id, "spend_cap": cap})
         etapa(ETAPAS_LANZAR[1][0])
         adsets = {}
+        plataformas = experimentos.plataformas_de(ex.get("extra")) or [None]
         for p in ex["paises"]:
-            adset_id = p.get("meta_adset_id")
-            if not adset_id:
-                targeting = Targeting().edad(int(ex["edad_min"] or 18), int(ex["edad_max"] or 65)).paises([p["pais"]]).to_dict()
-                adset_id = meta_adset.crear_adset(f"{ex['nombre']} — {p['pais']}", campaign_id, ex["objetivo_meta"], targeting,
-                                                  centavos(p["presupuesto_dia"], moneda), int(ex["dias"] or 7),
-                                                  promoted_object=promoted_object)["id"]
-                experimentos.actualizar_pais(cliente, experimento_id, p["pais"], meta_adset_id=adset_id, estado="pausado")
-                con_pixel = (gettext(" (optimiza compras con el Pixel %(pixel_id)s)", pixel_id=promoted_object["pixel_id"])
-                            if promoted_object else "")
-                experimentos.registrar_evento(cliente, experimento_id, "lanzamiento",
-                                              gettext("Conjunto %(pais)s creado%(con_pixel)s", pais=p["pais"], con_pixel=con_pixel),
-                                              {"adset_id": adset_id, "presupuesto_dia": p["presupuesto_dia"],
-                                               "pixel_id": promoted_object["pixel_id"] if promoted_object else None})
-            adsets[p["pais"]] = adset_id
+            for plat in plataformas:
+                adsets[_clave_adset(p["pais"], plat)] = _conjunto_de(cliente, ex, p, plat, len(plataformas),
+                                                                      campaign_id, promoted_object, moneda)
         etapa(ETAPAS_LANZAR[2][0])
         _crear_anuncios(cliente, ex, creds, adsets)
 
@@ -249,6 +359,8 @@ def lanzar(cliente, experimento_id, on_etapa=None):
                                       {"detalle": cola.recortar(crudo)} if mensaje != crudo else None)
         _avisar_error_lanzamiento(cliente, ex, experimento_id, mensaje)
         raise
+    if not soltar:
+        return None
     experimentos.actualizar(cliente, experimento_id, estado="pausado", error=None)
     return gettext("Experimento en Meta, en pausa. Actívalo cuando quieras empezar a gastar.")
 
@@ -272,7 +384,11 @@ def _a_corriendo(cliente, experimento_id):
     el experimento y acá pasaron segundos hablando con Meta, y el worker
     (derivaciones) pudo escribir `extra.derivaciones` en ese intervalo —
     escribir la foto vieja las pisaría."""
-    experimentos.actualizar_extra(cliente, experimento_id, _con_activado, estado="corriendo")
+    # error=None: un «no se pudo activar al lanzar» (activar_tras_lanzar) deja de valer al activar de verdad.
+    # Nunca pisa «cerrado»: un experimento cerrado mientras se hablaba con Meta no vuelve a correr aquí.
+    if (experimentos.obtener(cliente, experimento_id) or {}).get("estado") == "cerrado":
+        return
+    experimentos.actualizar_extra(cliente, experimento_id, _con_activado, estado="corriendo", error=None)
 
 
 # Veredictos con los que una pieza ya no vuelve a entregar sola.
@@ -284,7 +400,8 @@ def pieza_retirada(pz):
     o marcada `archivado`/`rescatado_en_escalon` en `extra`. Estas piezas no
     se reactivan al activar el experimento entero (I-1)."""
     extra = pz.get("extra") or {}
-    return (pz.get("veredicto") in _VEREDICTOS_RETIRADA or bool(extra.get("archivado"))
+    return ((pz.get("veredicto") in _VEREDICTOS_RETIRADA
+             and not (pz.get("veredicto") == "inconcluso" and extra.get("muestra_ventas_insuficiente"))) or bool(extra.get("archivado"))
             or extra.get("rescatado_en_escalon") is not None)
 
 
@@ -321,15 +438,19 @@ def _preparar_fin_primera_activacion(cliente, ex):
         return extra
     extra = experimentos.actualizar_extra(cliente, ex["id"], reservar)
     for p in actual["paises"]:
-        if p.get("meta_adset_id"):
-            meta_auth.llamar("POST", p["meta_adset_id"], payload={"end_time": extra["fin_primera_activacion"]})
+        for adset_id in _adsets_de_pais(p):   # apps: uno por tienda (meta_adsets)
+            meta_auth.llamar("POST", adset_id, payload={"end_time": extra["fin_primera_activacion"]})
 
 
-def cambiar_estado(cliente, experimento_id, status, pais=None):
+def cambiar_estado(cliente, experimento_id, status, pais=None, desde_lanzamiento=False):
+    """`desde_lanzamiento`: solo la tarea `exp_lanzar` (activar al terminar de lanzar, o repausar tras un fallo o una
+    interrupción) puede tocar un experimento en `lanzando`; desde la pantalla, «Espera a que termine el lanzamiento»."""
     if status not in ("ACTIVE", "PAUSED"):
         raise ValueError(gettext("Estado no permitido."))
     ex = experimentos.obtener(cliente, experimento_id)
-    if ex is None or not ex["meta_campaign_id"] or ex["estado"] in ("armando", "lanzando", "error"):
+    if ex is not None and ex["estado"] == "lanzando" and not desde_lanzamiento:
+        raise ValueError(gettext("Espera a que termine el lanzamiento."))
+    if ex is None or not ex["meta_campaign_id"] or ex["estado"] in ("armando", "error"):
         raise ValueError(gettext("Ese experimento todavía no está en Meta."))
     if ex["estado"] == "cerrado":
         raise ValueError(gettext("Ese experimento está cerrado."))
@@ -338,24 +459,28 @@ def cambiar_estado(cliente, experimento_id, status, pais=None):
 
     def _correr(_creds):
         if status == "ACTIVE":
-            if pais is not None and not any(p["pais"] == pais and p.get("meta_adset_id") for p in ex["paises"]):
+            if pais is not None and not any(p["pais"] == pais and _adsets_de_pais(p) for p in ex["paises"]):   # apps: meta_adsets
                 raise ValueError(gettext("Ese país no tiene conjunto en Meta."))
             _preparar_fin_primera_activacion(cliente, ex)
         if pais is None:
             meta_campaign.actualizar_estado(ex["meta_campaign_id"], status)
             for p in ex["paises"]:
-                if p.get("meta_adset_id"):
-                    meta_adset.actualizar_estado(p["meta_adset_id"], status)
+                ids = _adsets_de_pais(p)
+                for adset_id in ids:
+                    meta_adset.actualizar_estado(adset_id, status)
+                if ids:
                     experimentos.actualizar_pais(cliente, experimento_id, p["pais"], estado=local)
         else:
             p = next((p for p in ex["paises"] if p["pais"] == pais), None)
-            if not p or not p.get("meta_adset_id"):
+            ids = _adsets_de_pais(p) if p else []
+            if not ids:
                 raise ValueError(gettext("Ese país no tiene conjunto en Meta."))
             if status == "ACTIVE" and ex["estado"] != "corriendo":
                 # Activar un solo país no sirve de nada si la campaña sigue en pausa
                 # en Meta: sin ella, el conjunto no entrega aunque quede ACTIVE local.
                 meta_campaign.actualizar_estado(ex["meta_campaign_id"], status)
-            meta_adset.actualizar_estado(p["meta_adset_id"], status)
+            for adset_id in ids:
+                meta_adset.actualizar_estado(adset_id, status)
             experimentos.actualizar_pais(cliente, experimento_id, pais, estado=local)
         for pz in _piezas_de(ex, pais):
             if status == "ACTIVE" and pieza_retirada(pz):
@@ -398,6 +523,157 @@ def cambiar_estado(cliente, experimento_id, status, pais=None):
                                   {"saltadas": [p["id"] for p in saltadas]} if saltadas else None)
 
 
+def diario_activable(ex):
+    """Suma de los diarios de los países con conjunto en Meta (apps: `meta_adsets`): lo que empieza a gastar al día
+    «Activar todo», y por eso también lanzar desde «Nuevo experimento» o «Lanzar a Meta»."""
+    return sum(float(p.get("presupuesto_dia") or 0) for p in ex["paises"] if _adsets_de_pais(p))
+
+
+def activar_tras_lanzar(cliente, experimento_id):
+    """Pedido de Daniel (2026-10-08): el clic de «Lanzar a Meta», con el gasto diario a la vista, ES la aprobación;
+    lanzar crea y activa, sin un segundo «Activar». Lo llama la tarea `exp_lanzar` con `activar=True`, después de un
+    `lanzar(..., soltar=False)` que terminó sin error: el experimento sigue en `lanzando` hasta aquí, así ninguna
+    guarda lo da por terminado a mitad (ronda de guardian-gasto: Cerrar o «Activar todo» en esa ventana dejaban
+    anuncios gastando con el experimento cerrado). Activa por el mismo camino que «Activar todo» (`cambiar_estado`:
+    campaña, todos los conjuntos —también los de apps— y los anuncios, con el plazo de PND-113).
+
+    Sale de `lanzando` SIEMPRE: a `corriendo` si activó; a `pausado` con su motivo en `error` si alguna pieza quedó sin
+    anuncio o en error (nada se activa) o si la activación falló (se vuelve a pausar todo: un anuncio activo en Meta con
+    el experimento «en pausa» aquí gastaría sin que el motor lo mida; evento + aviso `error_lanzamiento`; sin
+    reintento). Devuelve el mensaje de la tarea, en el idioma en que corre (el del proyecto)."""
+    import tablero   # perezoso: tablero es una capa de lectura por encima de este módulo
+
+    ex = experimentos.obtener(cliente, experimento_id)
+    if ex["estado"] != "lanzando":
+        # Nadie más debería sacarlo de «lanzando» mientras la tarea corre; si pasó, no se activa nada encima.
+        mensaje = gettext("No se activó: el experimento ya no estaba lanzándose (quedó «%(estado)s»).",
+                          estado=gettext(experimentos.ETIQUETAS_ESTADO.get(ex["estado"], ex["estado"])))
+        experimentos.registrar_evento(cliente, experimento_id, "error", mensaje)
+        return mensaje
+    sin_anuncio = [pz for pz in ex["piezas"] if not pz["meta_ad_id"] or pz["estado"] == "error"]
+    if sin_anuncio:
+        mensaje = ngettext("No se activó: %(num)s pieza quedó sin anuncio en Meta. El experimento sigue en pausa; "
+                           "revísalo y actívalo desde su tarjeta.",
+                           "No se activó: %(num)s piezas quedaron sin anuncio en Meta. El experimento sigue en pausa; "
+                           "revísalo y actívalo desde su tarjeta.", len(sin_anuncio))
+        experimentos.actualizar(cliente, experimento_id, estado="pausado", error=mensaje)
+        experimentos.registrar_evento(cliente, experimento_id, "error", mensaje,
+                                      {"piezas": [pz["id"] for pz in sin_anuncio]})
+        return mensaje
+    moneda = ex["moneda"] or (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
+    diario = tablero.dinero(diario_activable(ex), moneda)
+    try:
+        cambiar_estado(cliente, experimento_id, "ACTIVE", desde_lanzamiento=True)
+    except Exception as e:  # noqa: BLE001 — cualquier fallo deja todo en pausa y en palabras, sin reintento
+        crudo = cola.sin_token(str(e))
+        motivo = crudo if isinstance(e, ValueError) else traducir_error_meta(crudo, meta_conexion.modo(cliente))
+        if repausar(cliente, experimento_id):
+            mensaje = gettext("Se creó en Meta, pero no se pudo activar: %(motivo)s. Quedó en pausa y no gasta; "
+                              "actívalo desde su tarjeta cuando lo revises.", motivo=motivo)
+        else:
+            mensaje = gettext("Se creó en Meta, pero no se pudo activar: %(motivo)s. Tampoco se pudo volver a pausar "
+                              "todo: revisa en el Administrador de anuncios de Meta que no quede nada activo.",
+                              motivo=motivo)
+        experimentos.actualizar(cliente, experimento_id, estado="pausado", error=mensaje)
+        experimentos.registrar_evento(cliente, experimento_id, "error", mensaje,
+                                      {"detalle": cola.recortar(crudo)} if motivo != crudo else None)
+        notificaciones.avisar(cliente, "error_lanzamiento",
+                              gettext("No se pudo activar «%(experimento)s»", experimento=ex["nombre"]),
+                              gettext("El experimento «%(experimento)s» (#%(id)s) se creó en Meta pero no se pudo "
+                                      "activar.\n\n%(mensaje)s", experimento=ex["nombre"], id=experimento_id,
+                                      mensaje=mensaje))
+        return mensaje
+    experimentos.registrar_evento(cliente, experimento_id, "estado",
+                                  gettext("Activado al lanzar: ≈ %(diario)s al día", diario=diario),
+                                  {"diario": diario_activable(ex), "moneda": moneda})
+    return gettext("Experimento en Meta y activo: empieza a gastar ≈ %(diario)s al día.", diario=diario)
+
+
+def _pausar_todo_en_meta(cliente, ex):
+    """PAUSED en Meta a la campaña, a TODOS los conjuntos (también los `meta_adsets` de apps) y a todos los anuncios
+    de un experimento, sin mirar su estado local (cerrar o repausar uno en «error» o «lanzando» tiene que poder
+    pausar lo que haya). Deja en pausa el estado local de países y piezas. Lanza la excepción de Meta si falla."""
+    def _correr(_creds):
+        meta_campaign.actualizar_estado(ex["meta_campaign_id"], "PAUSED")
+        for p in ex["paises"]:
+            ids = _adsets_de_pais(p)
+            for adset_id in ids:
+                meta_adset.actualizar_estado(adset_id, "PAUSED")
+            if ids:
+                experimentos.actualizar_pais(cliente, ex["id"], p["pais"], estado="pausado")
+        for pz in ex["piezas"]:
+            if pz["meta_ad_id"]:
+                meta_ad.actualizar_estado(pz["meta_ad_id"], "PAUSED")
+                experimentos.actualizar_pieza(cliente, pz["id"], estado="pausado")
+    _con_credenciales(cliente, _correr)
+
+
+def repausar(cliente, experimento_id):
+    """Vuelve a poner en pausa en Meta todo lo de un experimento que salió mal a mitad de lanzar o activar (también
+    tras una interrupción del worker o del servidor), sin mirar su estado local. Pausar algo que ya lo está no cuesta
+    ni cambia nada. True si quedó todo pausado (o no había nada en Meta), False si Meta falló (queda un evento).
+    No cambia el estado del experimento: eso lo decide quien llama. Nunca lanza excepción."""
+    ex = experimentos.obtener(cliente, experimento_id)
+    if not ex or not ex["meta_campaign_id"] or ex["estado"] == "cerrado":
+        return True
+    try:
+        _pausar_todo_en_meta(cliente, ex)
+        return True
+    except Exception as e:  # noqa: BLE001
+        log_aviso = cola.sin_token(str(e))
+        try:
+            experimentos.registrar_evento(cliente, experimento_id, "error",
+                                          gettext("No se pudo volver a pausar en Meta: %(motivo)s", motivo=log_aviso))
+        except Exception:  # noqa: BLE001
+            pass
+        return False
+
+
+def dejar_sin_gastar(cliente, experimento_id, estado, mensaje):
+    """Salida de emergencia de un lanzamiento que no terminó (interrupción del worker, reconciliación al arrancar, un
+    fallo inesperado en la tarea): repausa en Meta y deja el experimento en `estado` («error» o «pausado») con
+    `mensaje`. Si el repausado falla, el mensaje lo dice en palabras y llega el aviso `error_lanzamiento`: puede haber
+    anuncios activos y «Cerrar» los vuelve a intentar pausar (ronda 2 de guardian-gasto, 2026-10-08). Nunca lanza."""
+    try:
+        ok = repausar(cliente, experimento_id)
+        if not ok:
+            mensaje = gettext("%(mensaje)s Puede haber anuncios activos en Meta: pulsa Cerrar o revisa el "
+                              "Administrador de anuncios.", mensaje=mensaje)
+        experimentos.actualizar(cliente, experimento_id, estado=estado, error=mensaje)
+        if not ok:
+            ex = experimentos.obtener(cliente, experimento_id) or {}
+            notificaciones.avisar(cliente, "error_lanzamiento",
+                                  gettext("Puede haber anuncios activos en «%(experimento)s»",
+                                          experimento=ex.get("nombre", "")),
+                                  gettext("El experimento «%(experimento)s» (#%(id)s) no terminó de lanzarse y no se "
+                                          "pudo volver a pausar en Meta.\n\n%(mensaje)s",
+                                          experimento=ex.get("nombre", ""), id=experimento_id, mensaje=mensaje))
+    except Exception:  # noqa: BLE001
+        log.exception("No pude dejar sin gastar el experimento %s de %s", experimento_id, cliente)
+
+
+def soltar_lanzando(cliente, experimento_id, motivo=None):
+    """La tarea `exp_lanzar` con `activar` la llama al salir, pase lo que pase: el experimento nunca queda en
+    «lanzando» sin tarea viva. Si ya salió (corriendo, pausado, error) no hace nada. Si quedó en «lanzando»: con todo
+    creado en Meta, a «pausado» con el motivo; si no se terminó de crear, a «error» (se puede reintentar)."""
+    try:
+        ex = experimentos.obtener(cliente, experimento_id)
+    except Exception:  # noqa: BLE001
+        log.exception("No pude leer el experimento %s de %s al soltar «lanzando»", experimento_id, cliente)
+        return
+    if not ex or ex["estado"] != "lanzando":
+        return
+    motivo = motivo or gettext("se detuvo antes de terminar")
+    lanzado = bool(ex["meta_campaign_id"]) and bool(ex["piezas"]) and all(pz["meta_ad_id"] for pz in ex["piezas"])
+    if lanzado:
+        dejar_sin_gastar(cliente, experimento_id, "pausado",
+                         gettext("Se creó en Meta, pero algo falló antes de activarlo: %(motivo)s. Quedó en pausa; "
+                                 "actívalo desde su tarjeta cuando lo revises.", motivo=motivo))
+    else:
+        dejar_sin_gastar(cliente, experimento_id, "error",
+                         gettext("Falló el lanzamiento: %(mensaje)s", mensaje=motivo))
+
+
 def cambiar_presupuesto_pais(cliente, experimento_id, pais, presupuesto_dia):
     if float(presupuesto_dia or 0) <= 0:
         raise ValueError(gettext("El presupuesto diario debe ser mayor que cero."))
@@ -413,10 +689,61 @@ def cambiar_presupuesto_pais(cliente, experimento_id, pais, presupuesto_dia):
         # worker acaba de guardar, y el reintento crearía un segundo adset.
         raise ValueError(gettext("Ese experimento todavía no está en Meta."))
     p = next((p for p in ex.get("paises", []) if p["pais"] == pais), None)
-    if not p or not p.get("meta_adset_id"):
+    ids = _adsets_de_pais(p) if p else []
+    if not ids:
         raise ValueError(gettext("Ese país no tiene conjunto en Meta."))
+    from presupuesto_experimentos import limite_diario
+    from tablero import dinero as _dinero
+    limite = limite_diario(ex, pais)
+    if not math.isfinite(float(presupuesto_dia)) or float(presupuesto_dia) > limite["maximo"]:
+        raise ValueError(gettext("El máximo diario permitido es %(maximo)s por los días restantes.",
+                                 maximo=_dinero(limite["maximo"], ex["moneda"] or "USD")))
     moneda = ex["moneda"] or "USD"
-    _con_credenciales(cliente, lambda _c: meta_adset.actualizar_presupuesto(p["meta_adset_id"], centavos(presupuesto_dia, moneda)))
+    # Con varios conjuntos (una plataforma cada uno, en apps) se reparten los
+    # centavos del país convertidos UNA vez: total // n a cada uno, así la suma
+    # nunca pasa el presupuesto del país (el resto queda sin gastar). Lo
+    # guardado del país sigue siendo el total.
+    centavos_conjunto = centavos(presupuesto_dia, moneda) // len(ids)
+    # Lo que cada conjunto tenía antes, con el mismo reparto: si una llamada
+    # falla a medias, los ya cambiados vuelven a su valor (mejor esfuerzo) —
+    # si no, el panel diría un presupuesto y Meta gastaría otro.
+    centavos_antes = centavos(p.get("presupuesto_dia") or 0, moneda) // len(ids)
+
+    def _correr(_c):
+        cambiados = []
+        try:
+            for adset_id in ids:
+                meta_adset.actualizar_presupuesto(adset_id, centavos_conjunto)
+                cambiados.append(adset_id)
+        except Exception as exc:
+            if len(ids) == 1:
+                # Un solo conjunto (tráfico, compras, apps con una tienda): sale el
+                # error de Meta tal cual, como antes, para que el aviso o la
+                # propuesta pendiente de reintento conserve el motivo real.
+                raise
+            sin_volver = []
+            for adset_id in cambiados:
+                if centavos_antes <= 0:   # sin valor anterior conocido no hay a qué volver
+                    sin_volver.append(adset_id)
+                    continue
+                try:
+                    meta_adset.actualizar_presupuesto(adset_id, centavos_antes)
+                except Exception:  # noqa: BLE001 — mejor esfuerzo: se avisa abajo
+                    sin_volver.append(adset_id)
+            if sin_volver:
+                mensaje = gettext("No se pudo cambiar el presupuesto en todos los conjuntos del país; "
+                                  "quedó a medias: revisa los conjuntos en Meta.")
+            else:
+                mensaje = gettext("No se pudo cambiar el presupuesto en todos los conjuntos del país; "
+                                  "se dejó como estaba.")
+            error = cola.sin_token(str(exc))
+            mensaje = f"{mensaje} {traducir_error_meta(error)}"
+            experimentos.registrar_evento(cliente, experimento_id, "presupuesto", f"{pais}: {mensaje}",
+                                          {"error": error[:300], "cambiados": cambiados, "sin_volver": sin_volver,
+                                           "anterior": p.get("presupuesto_dia"), "intentado": float(presupuesto_dia)})
+            raise ValueError(mensaje) from exc
+
+    _con_credenciales(cliente, _correr)
     experimentos.actualizar_pais(cliente, experimento_id, pais, presupuesto_dia=float(presupuesto_dia))
     for pz in _piezas_de(ex, pais):
         experimentos.actualizar_pieza(cliente, pz["id"], presupuesto_dia_actual=float(presupuesto_dia))
@@ -438,6 +765,9 @@ def lanzar_piezas_nuevas(cliente, experimento_id):
         raise ValueError(gettext("Ese experimento no existe."))
     if ex["estado"] not in ("pausado", "corriendo", "decidido") or not ex["meta_campaign_id"]:
         raise ValueError(gettext("Ese experimento todavía no está en Meta."))
+    if ex["objetivo_meta"] == "OUTCOME_APP_PROMOTION":
+        raise ValueError(gettext("En los experimentos de instalaciones de la app todavía no se agregan piezas nuevas "
+                                 "después de lanzar."))
     adsets = {p["pais"]: p["meta_adset_id"] for p in ex["paises"] if p.get("meta_adset_id")}
     piezas_nuevas = [p for p in ex["piezas"] if p["estado"] == "en_cola" and p["pais"] in adsets]
     if not piezas_nuevas:
@@ -511,7 +841,10 @@ def activar_pieza(cliente, ep_id):
     'pausado' (queda 'corriendo' mientras otro país siga activo). Mirar solo
     ex['estado'] dejaría ese conjunto en PAUSED en Meta con el anuncio ACTIVE
     encima — sin entrega — igual que hace cambiar_estado con pais=, que
-    reactiva el conjunto incondicionalmente dentro de esa rama."""
+    reactiva el conjunto incondicionalmente dentro de esa rama.
+    Excepción, Instalaciones de la app: cada plataforma tiene su propio
+    conjunto, y se reactiva siempre el de la pieza (aunque el país figure
+    «activo» por la pieza de la otra plataforma)."""
     ex, pz = _experimento_de_pieza(cliente, ep_id)
     if ex["estado"] not in ("pausado", "corriendo", "decidido"):
         raise ValueError(gettext("Ese experimento todavía no está en Meta."))
@@ -519,14 +852,24 @@ def activar_pieza(cliente, ep_id):
         raise ValueError(gettext("Esa pieza todavía no tiene anuncio en Meta."))
     pais = next((p for p in ex["paises"] if p["pais"] == pz["pais"]), None)
     campaña_pausada = ex["estado"] == "pausado"
-    pais_pausado = bool(pais) and pais["estado"] != "activo"
+    reactivar_conjunto = bool(pais) and pais["estado"] != "activo"
+    if pais and pais.get("meta_adsets"):
+        # Apps: un conjunto por plataforma; se reactiva solo el de esta pieza,
+        # y siempre (no solo con el país en pausa): el país pudo quedar
+        # «activo» al activar una pieza de la otra plataforma, con este
+        # conjunto todavía en PAUSED, y el anuncio no entregaría.
+        adsets_a_activar = [pz["meta_adset_id"]] if pz.get("meta_adset_id") else _adsets_de_pais(pais)
+        reactivar_conjunto = True
+    else:
+        adsets_a_activar = [pais["meta_adset_id"]] if pais and pais.get("meta_adset_id") else []
 
     def _correr(_creds):
         _preparar_fin_primera_activacion(cliente, ex)
         if campaña_pausada:
             meta_campaign.actualizar_estado(ex["meta_campaign_id"], "ACTIVE")
-        if pais_pausado and pais.get("meta_adset_id"):
-            meta_adset.actualizar_estado(pais["meta_adset_id"], "ACTIVE")
+        if reactivar_conjunto:
+            for adset_id in adsets_a_activar:
+                meta_adset.actualizar_estado(adset_id, "ACTIVE")
         meta_ad.actualizar_estado(pz["meta_ad_id"], "ACTIVE")
 
     _con_credenciales(cliente, _correr)
@@ -558,7 +901,11 @@ def escalar_pais(cliente, experimento_id, pais, pct, tope_dia=None):
     nuevo = round(actual * (1 + float(pct) / 100), 2)
     if tope_dia is not None:
         nuevo = min(nuevo, float(tope_dia))
+    from presupuesto_experimentos import limite_diario
+    nuevo = min(nuevo, limite_diario(ex, pais)["maximo"])
     if nuevo <= actual:
+        experimentos.registrar_evento(cliente, experimento_id, "presupuesto",
+                                      gettext("No hay margen para subir el diario de %(pais)s dentro del saldo aprobado.", pais=pais))
         return actual
     cambiar_presupuesto_pais(cliente, experimento_id, pais, nuevo)
     return nuevo
@@ -575,6 +922,9 @@ def _mezclar_ventas_tienda(cliente, ex, pz, snap):
     que se deja en 0.0 y queda el CPA (gasto/compras, moneda de la cuenta).
     Devuelve el set de monedas ajenas vistas (vacío si todo es comparable)."""
     v = atribucion.ventas_tienda(cliente, pz)
+    if v is None:
+        return set()
+    snap.pop("ventas_no_disponibles", None)
     gasto = float(snap.get("gasto") or 0)
     compras, ingresos = int(v["compras"]), float(v["ingresos"])
     ajenas = {m or "sin moneda" for m in v.get("monedas") or [] if (m or "") != ex["moneda"]}
@@ -601,46 +951,93 @@ def _avisar_moneda_no_comparable(cliente, ex, ajenas):
     experimentos.actualizar_extra(cliente, ex["id"], lambda extra: {**extra, "aviso_moneda": monedas})
 
 
-def _sincronizar_triple_whale(cliente, ex):
-    """Antes de leer ventas de Triple Whale, pone al día su copia
+def _tienda_tw_de(tiendas, pais):
+    """La tienda de Triple Whale que vende para `pais` (ISO-2), o None. Si el proyecto tiene UNA sola
+    tienda SIN país, esa sirve para todos los países (así funcionaba antes de las tiendas por país). Una
+    tienda CON país solo sirve a las piezas de ese país, aunque sea la única: el Pixel de Noruega no
+    sabe nada de los pedidos de Suecia, y leerlo daría 0 compras → «perdedor» → el decisor pausaría la
+    pieza solo (revisión del guardián del gasto, 2026-10-08)."""
+    if len(tiendas) == 1 and not tiendas[0].get("pais"):
+        return tiendas[0]
+    pais = (pais or "").strip().upper()
+    return next((t for t in tiendas if pais and t.get("pais") == pais), None)
+
+
+def _sincronizar_triple_whale(cliente, ex, tienda):
+    """Antes de leer ventas de Triple Whale, pone al día la copia de esa tienda
     (`triple_whale.sync`, solo si tiene más de 30 min). Si Triple Whale
-    falla, queda un evento y se usa lo que ya estaba copiado."""
+    falla, queda un evento que dice de qué tienda era (su país, o su dominio)
+    con la llave de esa tienda tachada (un proveedor puede repetirla sin
+    «key=»; auditoría de seguridad, 2026-10-08) y se usa lo ya copiado."""
     try:
-        tw_sync.sincronizar_si_hace_falta(cliente)
+        tw_sync.sincronizar_si_hace_falta(cliente, tienda["id"])
+        return True
     except Exception as e:  # noqa: BLE001 — la copia vieja sigue sirviendo
+        error = cola.sin_token(triple_whale_tiendas.sin_llave(cliente, tienda["id"], str(e)))
+        nombre = _nombre_pais(tienda["pais"]) if tienda.get("pais") else tienda.get("dominio")
         experimentos.registrar_evento(
             cliente, ex["id"], "error",
-            gettext("Error al traer métricas de Triple Whale: %(error)s", error=cola.sin_token(str(e))))
+            gettext("Error al traer métricas de Triple Whale de %(tienda)s: %(error)s", tienda=nombre, error=error))
+        return False
 
 
-def _mezclar_ventas_triple_whale(cliente, ex, pz, snap, config_tw):
+def _nombre_pais(pais):
+    """El país en palabras, en el idioma de quien mira (o en español sin petición, como en el worker)."""
+    try:
+        from flask_babel import get_locale
+        locale = str(get_locale() or "es")
+    except Exception:  # noqa: BLE001 — sin contexto de Flask
+        locale = "es"
+    return tw_paises.nombre_pais(pais, locale.split("_")[0])
+
+
+def _avisar_sin_tienda_tw(cliente, ex, paises):
+    """Un evento de ventas no comparables por país, separado del aviso viejo de respaldo a Meta.
+    La marca se escribe antes bajo el candado de `extra` (PND-142 enmendada, 2026-10-08)."""
+    nuevos = []
+
+    def _marcar(extra):
+        ya = list(extra.get("aviso_ventas_no_comparables_tw") or [])
+        nuevos[:] = [p for p in paises if p not in ya]
+        return {**extra, "aviso_ventas_no_comparables_tw": ya + nuevos,
+                "aviso_sin_tienda_tw": list(dict.fromkeys(list(extra.get("aviso_sin_tienda_tw") or []) + nuevos))}
+
+    experimentos.actualizar_extra(cliente, ex["id"], _marcar)
+    for pais in nuevos:
+        texto = (gettext("No hay tienda de Triple Whale para %(pais)s: ventas no comparables.", pais=_nombre_pais(pais))
+                 if pais else gettext("Una pieza sin país no tiene tienda de Triple Whale: ventas no comparables."))
+        experimentos.registrar_evento(cliente, ex["id"], "atribucion", texto, {"pais": pais or None})
+
+
+def _mezclar_ventas_triple_whale(cliente, ex, pz, snap, ajustes, tienda_id):
     """Atribución por Triple Whale (spec 2026-09-28 §7): el tráfico, el gasto
     y el estado del anuncio siguen saliendo de Meta (como `tienda`); las
-    compras y los ingresos, de lo que atribuyó el Triple Pixel a ese anuncio
+    compras y los ingresos, de lo que atribuyó el Triple Pixel de LA TIENDA
+    DEL PAÍS de la pieza (`tienda_id`, spec 2026-10-08 §9) a ese anuncio
     desde que se creó la pieza, con el modelo y la ventana del proyecto
-    (`tw_anuncio_dia`, sumado: snapshot ACUMULADO, igual que Meta). Antes se
-    tomaban las `conversions` de ads_table, que son las que reporta Meta, no
-    las del Pixel. Si Triple Whale no tiene ese anuncio o su Pixel no
-    respondió para esos días, el snapshot queda con lo de Meta; si respondió
-    sin pedidos para él, las compras son 0 (eso también es un dato). Los
-    ingresos vienen en la moneda de la conexión: si no es la de la cuenta
-    publicitaria, el ROAS se deja en 0 y queda el CPA (misma regla que la
-    tienda). Devuelve el set de monedas ajenas."""
-    if not config_tw or not pz.get("meta_ad_id"):
+    (`tw_anuncio_dia`, sumado: snapshot ACUMULADO, igual que Meta). Si esa
+    tienda no tiene ese anuncio o su Pixel no respondió para esos días, el
+    snapshot conserva ventas_no_disponibles; si respondió sin pedidos para él, las
+    compras son 0 (eso también es un dato). Los ingresos vienen en la moneda
+    de los ajustes del proyecto: si no es la de la cuenta publicitaria, el
+    ROAS se deja en 0 y queda el CPA (misma regla que la tienda). Devuelve el
+    set de monedas ajenas."""
+    if not ajustes or tienda_id is None or not pz.get("meta_ad_id"):
         return set()
-    tot = tw_datos.totales_anuncio(cliente, triple_whale.CANAL_META, pz["meta_ad_id"],
+    tot = tw_datos.totales_anuncio(cliente, tienda_id, triple_whale.CANAL_META, pz["meta_ad_id"],
                                    (pz.get("creado_en") or db.ahora())[:10])
     if not tot or not tot["con_pixel"]:
         return set()
     gasto = float(snap.get("gasto") or 0)
     compras, ingresos = int(round(tot["pedidos"])), round(float(tot["ingresos"]), 2)
-    moneda_tw = config_tw.get("moneda")
+    moneda_tw = ajustes.get("moneda")
     ajenas = {moneda_tw} if moneda_tw and ex.get("moneda") and moneda_tw != ex["moneda"] else set()
     snap["compras"] = compras
     snap["ingresos"] = ingresos
     snap["roas"] = round(ingresos / gasto, 4) if gasto and not ajenas else 0.0
     snap["cpa"] = round(gasto / compras, 2) if compras else 0.0
-    snap["fuente_ventas"] = "triple_whale" if compras > 0 else "ninguna"
+    snap["fuente_ventas"] = "triple_whale" if compras > 0 or (ex.get("extra") or {}).get("fuente_ventas_fija") else "ninguna"
+    snap.pop("ventas_no_disponibles", None)
     return ajenas
 
 
@@ -650,13 +1047,34 @@ def refrescar(cliente, experimento_id):
     if not piezas:
         return 0
 
+    fija = (ex.get("extra") or {}).get("fuente_ventas_fija")
+    fuente = _fuente_segun_atribucion(cliente, ex)
+    # Corrige las marcas del lote 6A que ignoraban tienda/ninguna/Pixel.
+    if not fija or (ex.get("atribucion") != "triple_whale" and fija != fuente):
+        experimentos.actualizar_extra(cliente, experimento_id, lambda extra: {**extra, "fuente_ventas_fija": fuente})
+        ex = experimentos.obtener(cliente, experimento_id)
     rechazados = []
     monedas_ajenas = set()
-    # Triple Whale: la copia se pone al día FUERA del lock de Meta (son
-    # llamadas a otra API) y una sola vez por experimento, no por pieza.
-    config_tw = triple_whale_tiendas.obtener(cliente) if ex.get("atribucion") == "triple_whale" else None
-    if config_tw:
-        _sincronizar_triple_whale(cliente, ex)
+    # Triple Whale: cada pieza vende en la tienda de su país. Las copias de las tiendas usadas se ponen
+    # al día FUERA del lock de Meta (son llamadas a otra API), una vez por tienda y no por pieza.
+    fija = (ex.get("extra") or {}).get("fuente_ventas_fija")
+    ajustes_tw, tienda_de_pieza = None, {}
+    tiendas_tw = triple_whale_tiendas.tiendas(cliente) if fija == "triple_whale" else []
+    if tiendas_tw:
+        ajustes_tw = triple_whale_tiendas.ajustes(cliente)
+        sin_tienda = []
+        for pz in piezas:
+            tienda = _tienda_tw_de(tiendas_tw, pz.get("pais"))
+            if tienda:
+                tienda_de_pieza[pz["id"]] = tienda["id"]
+            elif (pz.get("pais") or "") not in sin_tienda:
+                sin_tienda.append(pz.get("pais") or "")   # "" = pieza sin país (su propio aviso)
+        por_id = {t["id"]: t for t in tiendas_tw}
+        for tienda_id in sorted(set(tienda_de_pieza.values())):
+            if _sincronizar_triple_whale(cliente, ex, por_id[tienda_id]) is False and fija:
+                tienda_de_pieza = {ep: tid for ep, tid in tienda_de_pieza.items() if tid != tienda_id}
+        if sin_tienda:
+            _avisar_sin_tienda_tw(cliente, ex, sin_tienda)
 
     def _correr(_creds):
         n = 0
@@ -664,11 +1082,18 @@ def refrescar(cliente, experimento_id):
             try:
                 r = meta_insights.obtener_resultados(pz["meta_ad_id"], objetivo=ex["objetivo_meta"])
                 snap = {dest: r.get(src) for src, dest in _SNAP_DESDE_INSIGHTS.items() if src in r}
-                snap["fuente_ventas"] = "meta" if (r.get("compras") or 0) > 0 else "ninguna"
-                if ex["atribucion"] == "tienda":
+                snap["fuente_ventas"] = "meta" if fija != "ninguna" and (r.get("compras") or 0) > 0 else "ninguna"
+                if fija == "meta" and ex["atribucion"] == "pixel":
+                    snap["fuente_ventas"] = "meta"
+                elif fija == "triple_whale":
+                    snap.update(compras=0, ingresos=0.0, roas=0.0, cpa=0.0,
+                                fuente_ventas="triple_whale", ventas_no_disponibles=True)
+                    monedas_ajenas.update(_mezclar_ventas_triple_whale(
+                        cliente, ex, pz, snap, ajustes_tw, tienda_de_pieza.get(pz["id"])))
+                elif fija == "tienda":
+                    snap.update(compras=0, ingresos=0.0, roas=0.0, cpa=0.0,
+                                fuente_ventas="tienda", ventas_no_disponibles=True)
                     monedas_ajenas.update(_mezclar_ventas_tienda(cliente, ex, pz, snap))
-                elif ex["atribucion"] == "triple_whale":
-                    monedas_ajenas.update(_mezclar_ventas_triple_whale(cliente, ex, pz, snap, config_tw))
                 for k in ("resultado_nombre", "resultado", "estado_meta_texto", "motivo_rechazo"):
                     snap[k] = r.get(k)
                 experimentos.snapshot(pz["id"], snap)
@@ -714,8 +1139,11 @@ def _avisar_rechazo_meta(cliente, ex, pz, estado_meta, motivo):
 
 
 def cerrar(cliente, experimento_id):
+    """Pausa en Meta todo lo que tenga (campaña, conjuntos —también de apps— y anuncios) en CUALQUIER estado con
+    campaña, también «error» o un «lanzando» sin tarea viva: un lanzamiento interrumpido pudo dejar algo activo
+    (ronda 2 de guardian-gasto, 2026-10-08). Si Meta falla, lanza y el experimento no se cierra (se puede reintentar)."""
     ex = experimentos.obtener(cliente, experimento_id)
-    if ex and ex["meta_campaign_id"] and ex["estado"] in ("corriendo", "pausado"):
-        cambiar_estado(cliente, experimento_id, "PAUSED")
+    if ex and ex["meta_campaign_id"] and ex["estado"] != "cerrado":
+        _pausar_todo_en_meta(cliente, ex)
     experimentos.actualizar(cliente, experimento_id, estado="cerrado")
     experimentos.registrar_evento(cliente, experimento_id, "estado", gettext("Experimento cerrado"))

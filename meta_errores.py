@@ -62,9 +62,16 @@ def explicar(texto, modo="propia"):
     # La app en modo Desarrollo se reconoce también en el mensaje ya explicado que el
     # lanzador guardó (con «1885183» adentro), para volver a decirlo en el idioma de quien mira.
     app_en_desarrollo = "1885183" in texto or "modo de desarrollo" in texto or "development mode" in texto
-    if not texto or not (es_crudo(texto) or app_en_desarrollo):
+    # Igual con la URL de tienda sin el objetivo «Instalaciones de la app» (2026-10-07).
+    url_de_app = any(x in texto for x in (
+        "Solo puede incluirse la URL de la app", "enlace de tienda con el objetivo",
+        "store link with the \u201cApp installs\u201d objective"))
+    if not texto or not (es_crudo(texto) or app_en_desarrollo or url_de_app):
         return texto
     codigo, subcodigo = _numero(texto, "code"), _numero(texto, "error_subcode")
+    if url_de_app:
+        return gettext("Meta solo acepta un enlace de tienda con el objetivo “Instalaciones de la app”: elige ese "
+                       "objetivo en Avanzado o cambia el destino por una página web.")
     if app_en_desarrollo:
         if modo == "agencia":
             return gettext(

@@ -159,3 +159,25 @@ def test_estaticos_versionados_se_guardan_un_ano(app):
     assert editor.status_code == 200 and editor.headers["Cache-Control"] == "no-cache"
     html = c.get("/cliente/acme")
     assert html.headers["Cache-Control"] == "no-store, must-revalidate"
+
+
+def test_pnd137_pagina_no_arma_contexto_del_fragmento(app, base_temporal, monkeypatch):
+    import creative_flow
+    import experimentos as ex
+    ids = _sembrar(4, con_final=False, con_caption=False)
+    for i in range(2):
+        eid = ex.crear('acme', f'Prueba {i}', [], 'OUTCOME_TRAFFIC', 7, 10, '', 'USD', atribucion='ninguna')
+        for cid in ids[i * 2:i * 2 + 2]:
+            ep = ex.agregar_pieza('acme', eid, creative_flow.pieza_id_por_legado('acme', cid), 'CO')
+            ex.snapshot(ep, {'gasto': 2, 'impresiones': 500, 'clics': 10})
+        assert len(ex.obtener('acme', eid)['piezas']) == 2
+    def cargar_prohibido(*a, **k):
+        raise AssertionError('GET /cliente/acme llamó experimentos.cargar')
+    monkeypatch.setattr(ex, 'cargar', cargar_prohibido)
+    dashboard = app['dashboard']
+    def pesado(*a, **k):
+        raise AssertionError('contexto pesado de Experimentos en pagina del proyecto')
+    monkeypatch.setattr(dashboard, '_contexto_experimentos', pesado)
+    html = app['c'].get('/cliente/acme').get_data(as_text=True)
+    assert 'id="reglas-motor"' in html and 'name="ventana_horas"' in html
+    assert 'name="correo"' in html

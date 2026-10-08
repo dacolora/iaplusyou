@@ -48,7 +48,7 @@ Una alerta es un dict armado por `alertas._alerta` (nunca a mano):
 
 Detalles que ya costaron una duda:
 
-- **Llaves**: una alerta por tarjeta de `llaves.estado()` que no esté `configurada`. Meta no tiene tarjeta aquí (vive en Experimentos; la cubre `tablero:meta_*`, que además sabe si está rota); la fuente igual salta un id `meta` por si vuelve. Solo nombres de variables: `llaves.estado` nunca entrega un valor. `llaves.py` es la lista de tarjetas de Configuración › Puesta a punto (antes `SERVICIOS_LLAVES` en `dashboard.py`, que sigue ahí como alias); una tarjeta `opcional` da una alerta `info` y solo Anthropic, WaveSpeed, fal y R2 dan `bloquea` (las otras ocho son opcionales; Higgsfield desde el 2026-10-02, porque solo lo usa el flujo viejo «Nueva idea»).
+- **Llaves**: una alerta por tarjeta de `llaves.estado()` que no esté `configurada`. Meta no tiene tarjeta aquí (vive en Experimentos; la cubre `tablero:meta_*`, que además sabe si está rota); la fuente igual salta un id `meta` por si vuelve. Solo nombres de variables: `llaves.estado` nunca entrega un valor. `llaves.py` es la lista de tarjetas de Configuración › Puesta a punto (antes `SERVICIOS_LLAVES` en `dashboard.py`, que sigue ahí como alias); una tarjeta `opcional` da una alerta `info` y Anthropic, WaveSpeed, fal, R2 y Gemini dan `bloquea` (las demás son opcionales; Higgsfield desde el 2026-10-02, porque solo lo usa el flujo viejo «Nueva idea»).
 - **Worker**: parado si pasaron más de `MINUTOS_WORKER` (30) sin señal, o nunca. Señal = lo más nuevo entre las marcas `kv` `ultimo_<tipo>` que el bucle del worker escribe al encolar sus periódicas y `MAX(tarea.iniciada_en)` (el worker es de un solo hilo: una render larga lo deja ocupado sin pasar por el bucle). Dos consultas fijas (una por tabla), sin importar cuántas marcas haya.
 - **Saldo**: dos alertas con la misma huella a propósito. La del cliente no dice la cuenta, el proveedor ni el enlace de recarga (la cuenta es de Creatv); la del admin sí. El admin ve las dos (aceptado).
 - **Tablero**: `tablero.alertas()` no se reescribe; solo se le pone clave, nivel (`alta→bloquea`, `media→atencion`, `baja→info`) y grupo. La única lógica de experimentos sigue en `tablero.py`. El texto se acota con `_limpio(texto, 400)`: la guía de Meta en modo Desarrollo ronda los 330 caracteres y su llamado a la acción va al final. Los números de la huella salen del texto ENTERO y limpio (`_limpio(texto, None)`), no del recortado: un texto que se corta en un idioma y en el otro no cambia la huella.
@@ -72,7 +72,7 @@ El context processor `_alertas_sidebar` pinta `alertas_ctx` en TODA página con 
 - `_alertas_calculadas(cliente)` guarda `alertas.calcular` por `(cliente, idiomas.activo())` durante `ALERTAS_TTL_S = 60`: los títulos salen traducidos al calcular, así que cada idioma tiene su entrada. Guarda el cálculo COMPLETO y el rol se filtra al leer; los descartes se leen siempre en vivo (una consulta por página).
 - Se renueva antes del TTL en tres casos, porque 60 s con una alerta ya resuelta se sentía roto (revisión de la tarea 5, 2026-10-02): (1) cambia `_clave_tablero` (un snapshot, una propuesta, una publicación: lo que hace el worker sin pasar por una ruta; la misma clave del Tablero, leída una vez por petición con `_clave_tablero_de_la_peticion`); (2) después de toda escritura que salió bien (`_alertas_tras_escribir`, un `after_request` para POST/PUT/PATCH/DELETE con status < 400 y `<cliente>` en la ruta, y solo si la sesión puede acceder a ese proyecto: el 302 de `_guard_por_cliente` también es < 400 y sin ese chequeo cualquiera mantendría fría la caché ajena); (3) al descartar o restaurar, ANTES de redirigir: la página siguiente se calcula con lo real y no con una lista de hace unos segundos.
 - `invalidar_alertas(cliente)` olvida todos los idiomas; `invalidar_tablero` también la llama.
-- Es por proceso: gunicorn corre UN proceso con hilos (`deploy/gunicorn.conf.py`), pero el worker es otro proceso y no vacía esta caché; lo que cambia el worker FUERA de la clave del Tablero (un error de Crear, una investigación de Nicho) puede tardar hasta 60 s en aparecer o desaparecer. Aceptado, anotado como PND-121.
+- Es por proceso: gunicorn corre UN proceso con hilos (`deploy/gunicorn.conf.py`), pero el worker es otro proceso y no vacía esta caché; lo que cambia el worker FUERA de la clave del Tablero (un error de Crear, una investigación de Nicho) puede tardar hasta 60 s en aparecer o desaparecer. PND-121 sigue como pregunta para Daniel: invalidación compartida sin subir el costo por página (2026-10-07).
 
 ## Descartes por huella
 
@@ -100,8 +100,6 @@ El context processor `_alertas_sidebar` pinta `alertas_ctx` en TODA página con 
 
 ## Pendientes conocidos (`docs/pendientes.md`)
 
-- PND-075: falta la tarjeta de `GEMINI_API_KEY` en Puesta a punto (la de WaveSpeed ya está en `llaves.py`).
-- PND-120: el ancla `cf-<id>` de una alerta de Crear no lleva a ningún lado si esa sesión no está entre las 24 tarjetas pintadas.
 - PND-121: lo que cambia el worker fuera de la clave del Tablero puede tardar hasta 60 s en aparecer o desaparecer.
 - PND-122: una pieza fallida de un Sprint se muestra dos veces, como `sprint:fallos:<sid>` y como `crear:error:<cf_id>` (`_fuente_crear` no excluye las sesiones de Sprints).
 - PND-123 (bloqueado por Daniel): `cuenta:correo:<usuario>` le muestra a cada cuenta del proyecto las cuentas y los correos de sus compañeras y le deja descartarlas; hoy el alta web crea una cuenta por proyecto, así que solo afecta a las agregadas por la línea de comandos. ¿Filtrar por quien mira?
@@ -110,3 +108,9 @@ El context processor `_alertas_sidebar` pinta `alertas_ctx` en TODA página con 
 **Pedidos vencidos (2026-10-02, PND-015):** la fuente Tablero agrega `tablero:pedidos_sin_atribuir:-`, grupo `fallos`, nivel `atencion`, huella del conteo y del plazo fijo. Cuenta pedidos del proyecto con UTM que siguen sin atribución después de 30 días; informa, sin resolverlos ni tocar ventas.
 
 PND-118/119 (2026-10-03): Tablero entrega tienda_id y la fuente lo usa como entidad, clave y parte de la huella. Un descarte no oculta otra tienda. Orgánico excluye un error si existe una publicación posterior (id mayor) de la misma pieza, plataforma y proyecto en en_cola/publicando/publicada; sigue siendo una consulta, y un éxito anterior no tapa un error nuevo.
+
+**Gemini y detalle de Crear (2026-10-07, PND-075/120):** `llaves.py` trae `GEMINI_API_KEY`; la tarjeta es obligatoria
+para ese proveedor porque también se usa en Crear › Cambiar producto con Nano Banana (`tareas/swap.py`), además del
+flujo viejo. Textos por `N_` y catálogo; `estado()` entrega solo presencia, nunca el valor. Alertas de error y prompt
+listo enlazan a `#creativeflowplus?cf=<id>`; el modal carga el detalle aunque no haya tarjeta inicial. El catálogo y
+las pruebas de fuentes, llaves, ruta por proyecto y JS cubren el cambio; la vista real queda para Claude.

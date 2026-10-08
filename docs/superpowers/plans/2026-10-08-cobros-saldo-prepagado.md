@@ -1381,4 +1381,4 @@ def firma_valida(cuerpo, firma):
 
 1. Subagentes de revisión en paralelo sobre `git diff origin/main...cobros`: `guardian-gasto`, `auditor-seguridad` y `revisor` (contra el spec, con las mutaciones del §14). Arreglar lo confirmado (máximo dos rondas por problema).
 2. Prueba real local: base temporal, proyecto que cobra, recarga manual, un trabajo encolado que cobra con un proveedor falso, el webhook firmado con `BOLD_PRUEBAS=1`, capturas.
-3. Mezclar a `main` (sincronizando con `origin/main` antes; catálogo y submódulo según las memorias del repo), desplegar con la skill `despliegue` (migración 0032 ensayada en una copia, cola vacía en su propio ssh, los dos servicios).
+3. Mezclar a `main` (sincronizando con `origin/main` antes; catálogo y submódulo según las memorias del repo), desplegar con la skill `despliegue` (migración 0033 —era 0032, renumerada al mezclar main— ensayada en una copia, cola vacía en su propio ssh, los dos servicios).

@@ -15,6 +15,7 @@ VALORES_FALSOS = {
     "ANTHROPIC_API_KEY": "sk-ant-PRUEBA123",
     "WAVESPEED_API_KEY": "wsp-PRUEBA321",
     "FAL_KEY": "fal-PRUEBA456",
+    "GEMINI_API_KEY": "gemini-llave-de-prueba-987",
     "HF_API_KEY_ID": "hfid-PRUEBA789",
     "HF_API_KEY_SECRET": "hfsecret-PRUEBA000",
     "R2_ACCOUNT_ID": "r2acc-PRUEBA111",
@@ -24,7 +25,7 @@ VALORES_FALSOS = {
     "SMTP_PASS": "smtppass-PRUEBA555",
 }
 TODAS = [
-    "ANTHROPIC_API_KEY", "WAVESPEED_API_KEY", "FAL_KEY", "HF_API_KEY_ID", "HF_API_KEY_SECRET",
+    "ANTHROPIC_API_KEY", "WAVESPEED_API_KEY", "FAL_KEY", "GEMINI_API_KEY", "HF_API_KEY_ID", "HF_API_KEY_SECRET",
     "R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET_NAME", "R2_PUBLIC_BASE_URL",
     "META_APP_ID", "META_APP_SECRET",
     "SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS", "SMTP_FROM", "PLATAFORMA_URL",
@@ -76,7 +77,7 @@ def test_estado_llaves_solo_mira_presencia(app, monkeypatch):
     monkeypatch.setenv("HF_API_KEY_ID", "solo-el-id")          # secreto ausente → parcial
     monkeypatch.setenv("R2_ACCOUNT_ID", "   ")                  # solo espacios = ausente
     llaves = d._estado_llaves()
-    assert [l["id"] for l in llaves] == ["anthropic", "wavespeed", "fal", "higgsfield", "r2", "smtp", "meli", "reddit", "youtube_api", "apify", "atria", "trendtrack"]
+    assert [l["id"] for l in llaves] == ["anthropic", "wavespeed", "fal", "gemini", "higgsfield", "r2", "smtp", "meli", "reddit", "youtube_api", "apify", "atria", "trendtrack"]
     por_id = {l["id"]: l for l in llaves}
     assert por_id["anthropic"]["estado"] == "configurada" and por_id["anthropic"]["faltan"] == []
     assert por_id["higgsfield"]["estado"] == "parcial" and por_id["higgsfield"]["faltan"] == ["HF_API_KEY_SECRET"]
@@ -108,7 +109,7 @@ def test_render_siete_tarjetas_con_badge_y_sin_valores(app, monkeypatch):
     html = app["c"].get("/cliente/acme").data.decode()
     cfg = _config(html)
     assert "Puesta a punto" in cfg
-    esperado = {"anthropic": "configurada", "wavespeed": "configurada", "fal": "configurada", "higgsfield": "configurada",
+    esperado = {"anthropic": "configurada", "wavespeed": "configurada", "fal": "configurada", "gemini": "configurada", "higgsfield": "configurada",
                 "r2": "parcial", "smtp": "parcial", "meli": "falta"}
     for sid, estado in esperado.items():
         t = _tarjeta(cfg, sid)
@@ -116,7 +117,7 @@ def test_render_siete_tarjetas_con_badge_y_sin_valores(app, monkeypatch):
         assert 'target="_blank" rel="noopener"' in t
         assert "Cómo conseguirla" in t
         assert "no se escriben desde aquí" in t
-    assert cfg.count('class="llave-tarjeta') == 12
+    assert cfg.count('class="llave-tarjeta') == 13
     # Orden de las tarjetas: todas las del servidor en «Puesta a punto»;
     # ninguna en «Conexiones».
     pos = [cfg.index(f'id="llave-{sid}"') for sid in ("anthropic", "wavespeed", "fal", "higgsfield", "r2", "smtp", "meli")]
@@ -139,7 +140,7 @@ def test_render_siete_tarjetas_con_badge_y_sin_valores(app, monkeypatch):
 
 def test_render_todo_falta(app):
     cfg = _config(app["c"].get("/cliente/acme").data.decode())
-    for sid in ("anthropic", "wavespeed", "fal", "higgsfield", "r2", "smtp", "meli"):
+    for sid in ("anthropic", "wavespeed", "fal", "gemini", "higgsfield", "r2", "smtp", "meli"):
         assert _badge(_tarjeta(cfg, sid)) == "falta", sid
     assert "configurada</span>" not in cfg.split('id="config-tienda"')[0]
 
@@ -186,7 +187,9 @@ def test_render_tienda_meli_configurado(app, monkeypatch):
     assert "s-PRUEBA" not in html
 
 
-def test_orden_de_secciones_y_enlace_a_reglas(app):
+def test_orden_de_secciones_y_enlace_a_reglas(app, monkeypatch):
+    # Con Meta: sin Meta ni historial Experimentos no pinta las reglas y Configuración no enlaza a ellas (2026-10-08).
+    monkeypatch.setattr(app["dashboard"].meta_conexion, "estado", lambda c: {"estado": "conectado", "verificado": True, "detalle": {}})
     cfg = _config(app["c"].get("/cliente/acme").data.decode())
     # Orden de los apartados (2026-09-26): Puesta a punto (admin) → Conexiones
     # (tienda, Pixel) → Marca (nombre, logos) → Generación (modelos) → Cuenta y
@@ -262,19 +265,22 @@ def test_triple_whale_conectar_guarda_normaliza_y_encola_la_primera_copia(app, m
     _tw_acepta(monkeypatch)
     r = app["c"].post("/cliente/acme/cfg_triple_whale/conectar",
                       data={"llave_api": "tw_prueba123", "dominio_tienda": "https://Acme.myshopify.com/admin",
-                            "moneda": "cop", "modelo_atribucion": "First Touch", "ventana_atribucion": "30"},
+                            "pais": "co", "moneda": "cop", "modelo_atribucion": "First Touch",
+                            "ventana_atribucion": "30"},
                       follow_redirects=False)
     assert r.status_code == 302 and r.headers["Location"].endswith("#triplewhale")
     conectado = triple_whale_tiendas.obtener("acme")
-    assert conectado["dominio_tienda"] == "acme.myshopify.com" and conectado["moneda"] == "COP"
+    [tienda] = conectado["tiendas"]
+    assert tienda["dominio"] == "acme.myshopify.com" and tienda["pais"] == "CO" and conectado["moneda"] == "COP"
     # Los valores viejos del formulario se traducen al vocabulario de Triple Whale.
     assert conectado["modelo_atribucion"] == "First Click" and conectado["ventana_atribucion"] == "28_days"
-    assert triple_whale_tiendas.obtener_llave("acme") == "tw_prueba123"
-    assert _tareas_tw() == [{"tipo": "tw_sincronizar", "job_id": "acme__tw_sync", "payload": {"cliente": "acme"}}]
+    assert triple_whale_tiendas.obtener_llave("acme", tienda["id"]) == "tw_prueba123"
+    assert _tareas_tw() == [{"tipo": "tw_sincronizar", "job_id": f"acme__tw_sync__{tienda['id']}",
+                             "payload": {"cliente": "acme", "tienda_id": tienda["id"]}}]
 
     html = app["c"].get("/cliente/acme").data.decode()
     tw = _pestana_tw(html)
-    assert "acme.myshopify.com" in tw and "conectado" in tw
+    assert "acme.myshopify.com" in tw and "conectada" in tw
     assert "/cliente/acme/cfg_triple_whale/desconectar" in tw and "/cliente/acme/cfg_triple_whale/ajustes" in tw
     cfg = _config(html)
     fin = cfg.find('<section id="tab-', 10)
@@ -300,7 +306,8 @@ def test_triple_whale_conectar_con_tienda_que_la_llave_no_ve_no_guarda(app, monk
         raise triple_whale.ErrorTienda("Triple Whale no reconoce la tienda")
     monkeypatch.setattr(triple_whale, "probar", _no_ve)
     r = app["c"].post("/cliente/acme/cfg_triple_whale/conectar",
-                      data={"llave_api": "tw_ok", "dominio_tienda": "otra.myshopify.com"}, follow_redirects=True)
+                      data={"llave_api": "tw_ok", "dominio_tienda": "otra.myshopify.com", "pais": "CO"},
+                      follow_redirects=True)
     assert triple_whale_tiendas.obtener("acme") is None
     assert "no reconoce la tienda" in r.data.decode()
 
@@ -314,18 +321,43 @@ def test_triple_whale_probar_guarda_el_error_en_el_idioma_del_proyecto(app, monk
     import triple_whale
     import triple_whale_tiendas
     from tests.test_rutas_bloque4 import _flashes
-    triple_whale_tiendas.conectar("acme", "tw_secreto_123", "acme.myshopify.com", moneda="USD")
+    tid = triple_whale_tiendas.agregar("acme", "tw_secreto_123", "acme.myshopify.com", "CO", moneda="USD")
     llamadas = []
     monkeypatch.setattr(triple_whale, "validar_llave", lambda llave: llamadas.append(llave) or False)
     monkeypatch.setattr(idiomas, "de_usuario", lambda usuario: "en")     # quien mira, en inglés
     monkeypatch.setattr(idiomas, "de_proyecto", lambda cliente: "es")    # el proyecto, en español
-    app["c"].post("/cliente/acme/cfg_triple_whale/probar")
+    app["c"].post("/cliente/acme/cfg_triple_whale/probar", data={"tienda_id": tid})
     assert llamadas == ["tw_secreto_123"]
-    config = triple_whale_tiendas.obtener("acme")
+    config = triple_whale_tiendas.tienda("acme", tid)
     assert config["estado"] == "error"
     assert config["error"] == "Triple Whale no reconoce esa llave (revocada o mal copiada)."
     assert _flashes(app["c"]) == ["The Triple Whale connection failed: Triple Whale doesn't recognize that key "
                                   "(revoked or mistyped)."]
+
+
+def test_triple_whale_el_error_que_repite_la_llave_no_la_muestra_ni_la_guarda(app, monkeypatch):
+    """Auditoría de seguridad (2026-10-08): si Triple Whale repite la llave en su error (sin «key=» delante,
+    que `cola.sin_token` no reconoce), ni el flash ni el `error` guardado de la tienda la contienen."""
+    import triple_whale
+    import triple_whale_tiendas
+    from tests.test_rutas_bloque4 import _flashes
+    llave = "twk_9f8e7d6c5b4a"  # llave-de-prueba
+
+    def _probar(ll, dominio, moneda=None):
+        raise triple_whale.ErrorTienda(f"La tienda no acepta {ll} (401: {ll} sin permiso)")
+    monkeypatch.setattr(triple_whale, "validar_llave", lambda ll: True)
+    monkeypatch.setattr(triple_whale, "probar", _probar)
+
+    _conectar_por_ruta(app, "happyflops-norge.myshopify.com", llave=llave)
+    flashes = _flashes(app["c"])
+    assert flashes and all(llave not in f for f in flashes) and "***" in flashes[-1]
+    assert triple_whale_tiendas.obtener("acme") is None
+
+    tid = triple_whale_tiendas.agregar("acme", llave, "happyflops-norge.myshopify.com", "NO")
+    app["c"].post("/cliente/acme/cfg_triple_whale/probar", data={"tienda_id": tid})
+    error = triple_whale_tiendas.tienda("acme", tid)["error"]
+    assert error and llave not in error and "***" in error
+    assert all(llave not in f for f in _flashes(app["c"]))
 
 
 def test_triple_whale_conectar_con_dominio_invalido_no_llama_a_triple_whale(app, monkeypatch):
@@ -341,8 +373,8 @@ def test_triple_whale_ajustes_cambian_la_atribucion_y_vuelven_a_traer(app, monke
     from triple_whale import datos as tw_datos
     _tw_acepta(monkeypatch)
     app["c"].post("/cliente/acme/cfg_triple_whale/conectar",
-                  data={"llave_api": "tw_prueba123", "dominio_tienda": "acme.myshopify.com"})
-    tw_datos.reemplazar_tienda("acme", "2026-09-01", "2026-09-01", [{"fecha": "2026-09-01", "ingresos": 10}])
+                  data={"llave_api": "tw_prueba123", "dominio_tienda": "acme.myshopify.com", "pais": "CO"})
+    tw_datos.reemplazar_tienda("acme", triple_whale_tiendas.tiendas("acme")[0]["id"], "2026-09-01", "2026-09-01", [{"fecha": "2026-09-01", "ingresos": 10}])
     import db
     import sqlalchemy as sa
     with db.conectar() as con:
@@ -360,9 +392,10 @@ def test_triple_whale_desconectar_borra_lo_copiado(app, monkeypatch):
     from triple_whale import datos as tw_datos
     _tw_acepta(monkeypatch)
     app["c"].post("/cliente/acme/cfg_triple_whale/conectar",
-                  data={"llave_api": "tw_prueba123", "dominio_tienda": "acme.myshopify.com"})
-    tw_datos.reemplazar_tienda("acme", "2026-09-01", "2026-09-01", [{"fecha": "2026-09-01", "ingresos": 10}])
-    r = app["c"].post("/cliente/acme/cfg_triple_whale/desconectar", follow_redirects=False)
+                  data={"llave_api": "tw_prueba123", "dominio_tienda": "acme.myshopify.com", "pais": "CO"})
+    tw_datos.reemplazar_tienda("acme", triple_whale_tiendas.tiendas("acme")[0]["id"], "2026-09-01", "2026-09-01", [{"fecha": "2026-09-01", "ingresos": 10}])
+    r = app["c"].post("/cliente/acme/cfg_triple_whale/desconectar",
+                      data={"tienda_id": triple_whale_tiendas.tiendas("acme")[0]["id"]}, follow_redirects=False)
     assert r.status_code == 302
     assert triple_whale_tiendas.obtener("acme") is None and not tw_datos.hay_tienda("acme")
 
@@ -372,6 +405,215 @@ def test_triple_whale_post_de_otro_sitio_se_rechaza(app, monkeypatch):
     r = app["c"].post("/cliente/acme/cfg_triple_whale/conectar", headers={"Sec-Fetch-Site": "cross-site"},
                       data={"llave_api": "tw_prueba123", "dominio_tienda": "acme.myshopify.com"})
     assert r.status_code == 403
+
+
+# ---- Varias tiendas de Triple Whale (spec 2026-10-08 §6.2 y §10) ----
+
+def _conectar_por_ruta(app, dominio, pais="", llave="tw_prueba123", **extra):
+    return app["c"].post("/cliente/acme/cfg_triple_whale/conectar",
+                         data={"llave_api": llave, "dominio_tienda": dominio, "pais": pais, **extra})
+
+
+def _seccion_conexion(html):
+    tw = _pestana_tw(html)
+    ini = tw.index('id="tw-conexion"')
+    return tw[ini:tw.index("</section>", ini)]
+
+
+def _etiqueta_agregar(con):
+    """La etiqueta de apertura del <details> «Agregar otra tienda»."""
+    ini = con.rindex("<details", 0, con.index('id="tw-agregar"'))
+    return con[ini:con.index(">", ini) + 1]
+
+
+def test_triple_whale_segunda_tienda_se_agrega_con_el_pais_adivinado_y_su_copia(app, monkeypatch):
+    import triple_whale_tiendas
+    _tw_acepta(monkeypatch)
+    _conectar_por_ruta(app, "happyflops-norge.myshopify.com", moneda="EUR")
+    _conectar_por_ruta(app, "happyflops-sverige.myshopify.com", moneda="COP")
+    tiendas = triple_whale_tiendas.tiendas("acme")
+    assert [(t["pais"], t["dominio"]) for t in tiendas] == [("NO", "happyflops-norge.myshopify.com"),
+                                                           ("SE", "happyflops-sverige.myshopify.com")]
+    assert triple_whale_tiendas.ajustes("acme")["moneda"] == "EUR"   # la segunda no cambia los ajustes
+    se = tiendas[1]["id"]
+    assert triple_whale_tiendas.obtener_llave("acme", se) == "tw_prueba123"
+    assert [t["payload"] for t in _tareas_tw()] == [{"cliente": "acme", "tienda_id": t["id"]} for t in tiendas]
+
+    con = _seccion_conexion(app["c"].get("/cliente/acme").data.decode())
+    assert con.count('class="tw-tienda ') == 2 and "Noruega" in con and "Suecia" in con
+    agregar = _etiqueta_agregar(con)
+    assert "<details" in agregar and " open" not in agregar        # «Agregar otra tienda» cerrado
+    assert "Agregar otra tienda" in con
+    form = con[con.index('id="form-triple-whale"'):]
+    form = form[:form.index("</form>")]
+    assert 'name="moneda"' not in form and 'name="pais"' in form    # los ajustes viven aparte
+    assert 'id="tw-ajustes"' in con and "Ajustes de atribución (todas las tiendas)" in con
+    primera = form[form.index('name="pais"'):]
+    assert re.search(r'<option value="">Detectar por el dominio</option>', primera)
+
+
+def test_triple_whale_sin_tiendas_el_formulario_esta_abierto_con_los_ajustes(app):
+    con = _seccion_conexion(app["c"].get("/cliente/acme").data.decode())
+    agregar = _etiqueta_agregar(con)
+    assert " open" in agregar
+    form = con[con.index('id="form-triple-whale"'):]
+    assert 'name="moneda"' in form[:form.index("</form>")]
+    assert "/cliente/acme/cfg_triple_whale/adivinar_pais" in _pestana_tw(app["c"].get("/cliente/acme").data.decode())
+
+
+def test_triple_whale_pais_ocupado_no_guarda_nada_y_lo_dice(app, monkeypatch):
+    import triple_whale
+    import triple_whale_tiendas
+    from tests.test_rutas_bloque4 import _flashes
+    _tw_acepta(monkeypatch)
+    _conectar_por_ruta(app, "happyflops-norge.myshopify.com")
+    monkeypatch.setattr(triple_whale, "probar", lambda *a, **k: pytest.fail("no debía llamar a Triple Whale"))
+    _flashes(app["c"])
+    with app["c"].session_transaction() as s:
+        s.pop("_flashes", None)
+    _conectar_por_ruta(app, "otra-tienda.myshopify.com", pais="NO", llave="tw_otra")
+    assert len(triple_whale_tiendas.tiendas("acme")) == 1 and len(_tareas_tw()) == 1
+    [msg] = _flashes(app["c"])
+    assert "Noruega" in msg and "tw_otra" not in msg
+
+
+def test_triple_whale_sin_pais_y_dominio_sin_pista_pide_el_pais(app, monkeypatch):
+    import triple_whale
+    import triple_whale_tiendas
+    from tests.test_rutas_bloque4 import _flashes
+    monkeypatch.setattr(triple_whale, "validar_llave", lambda llave: pytest.fail("no debía llamar"))
+    _conectar_por_ruta(app, "acme.myshopify.com")
+    assert triple_whale_tiendas.obtener("acme") is None and _tareas_tw() == []
+    assert _flashes(app["c"]) == ["Elige el país de la tienda."]
+    _conectar_por_ruta(app, "acme.myshopify.com", pais="XX")        # un código que no es un país
+    assert triple_whale_tiendas.obtener("acme") is None
+
+
+def test_triple_whale_probar_una_tienda_ajena_o_invalida_es_404(app, monkeypatch):
+    import triple_whale
+    import triple_whale_tiendas
+    monkeypatch.setattr(triple_whale, "validar_llave", lambda llave: pytest.fail("no debía llamar"))
+    triple_whale_tiendas.agregar("acme", "tw_mia", "happyflops-norge.myshopify.com")
+    ajena = triple_whale_tiendas.agregar("otro", "tw_ajena", "otro-sverige.myshopify.com")
+    for ruta in ("probar", "pais", "desconectar"):
+        assert app["c"].post(f"/cliente/acme/cfg_triple_whale/{ruta}",
+                             data={"tienda_id": ajena, "pais": "DE"}).status_code == 404
+        assert app["c"].post(f"/cliente/acme/cfg_triple_whale/{ruta}", data={"tienda_id": "x"}).status_code == 404
+        assert app["c"].post(f"/cliente/acme/cfg_triple_whale/{ruta}").status_code == 404
+    assert triple_whale_tiendas.tienda("otro", ajena)["pais"] == "SE"
+
+
+def test_triple_whale_probar_una_tienda_deja_su_estado(app, monkeypatch):
+    import triple_whale_tiendas
+    _tw_acepta(monkeypatch)
+    no = triple_whale_tiendas.agregar("acme", "tw_no", "happyflops-norge.myshopify.com")
+    se = triple_whale_tiendas.agregar("acme", "tw_se", "happyflops-sverige.myshopify.com")
+    triple_whale_tiendas.actualizar_tienda("acme", se, estado="error", error="viejo")
+    vistas = []
+    import triple_whale
+    monkeypatch.setattr(triple_whale, "probar", lambda llave, dominio, moneda=None: vistas.append((llave, dominio)))
+    app["c"].post("/cliente/acme/cfg_triple_whale/probar", data={"tienda_id": se})
+    assert vistas == [("tw_se", "happyflops-sverige.myshopify.com")]
+    assert triple_whale_tiendas.tienda("acme", se)["estado"] == "conectada"
+    assert triple_whale_tiendas.tienda("acme", se)["error"] is None
+    assert triple_whale_tiendas.tienda("acme", no)["estado"] == "conectada"
+
+
+def test_triple_whale_cambiar_pais_conserva_las_cifras(app, monkeypatch):
+    import triple_whale_tiendas
+    from tests.test_rutas_bloque4 import _flashes
+    from triple_whale import datos as tw_datos
+    no = triple_whale_tiendas.agregar("acme", "tw_no", "happyflops-norge.myshopify.com")
+    sin = triple_whale_tiendas.agregar("acme", "tw_x", "acme.myshopify.com")
+    tw_datos.reemplazar_tienda("acme", sin, "2026-09-01", "2026-09-01", [{"fecha": "2026-09-01", "ingresos": 10}])
+    r = app["c"].post("/cliente/acme/cfg_triple_whale/pais", data={"tienda_id": sin, "pais": "dk"})
+    assert r.status_code == 302 and r.headers["Location"].endswith("#triplewhale")
+    assert triple_whale_tiendas.tienda("acme", sin)["pais"] == "DK" and tw_datos.hay_tienda("acme")
+    _flashes(app["c"])
+    with app["c"].session_transaction() as s:
+        s.pop("_flashes", None)
+    app["c"].post("/cliente/acme/cfg_triple_whale/pais", data={"tienda_id": sin, "pais": "NO"})
+    assert triple_whale_tiendas.tienda("acme", sin)["pais"] == "DK"
+    assert "Noruega" in _flashes(app["c"])[0]
+    app["c"].post("/cliente/acme/cfg_triple_whale/pais", data={"tienda_id": sin, "pais": ""})
+    assert triple_whale_tiendas.tienda("acme", sin)["pais"] == "DK"     # vacío no borra el país
+    assert triple_whale_tiendas.tienda("acme", no)["pais"] == "NO"
+
+
+def test_triple_whale_quitar_una_tienda_deja_la_otra_y_sus_cifras(app):
+    import triple_whale_tiendas
+    from triple_whale import datos as tw_datos
+    no = triple_whale_tiendas.agregar("acme", "tw_no", "happyflops-norge.myshopify.com")
+    se = triple_whale_tiendas.agregar("acme", "tw_se", "happyflops-sverige.myshopify.com")
+    for t in (no, se):
+        tw_datos.reemplazar_tienda("acme", t, "2026-09-01", "2026-09-01", [{"fecha": "2026-09-01", "ingresos": 10}])
+    r = app["c"].post("/cliente/acme/cfg_triple_whale/desconectar", data={"tienda_id": no})
+    assert r.status_code == 302
+    assert [t["id"] for t in triple_whale_tiendas.tiendas("acme")] == [se]
+    assert tw_datos.hay_tienda("acme") and triple_whale_tiendas.ajustes("acme") is not None
+    app["c"].post("/cliente/acme/cfg_triple_whale/desconectar", data={"tienda_id": se})
+    assert triple_whale_tiendas.obtener("acme") is None and triple_whale_tiendas.ajustes("acme") is None
+
+
+def test_triple_whale_confirmar_quitar_dice_que_su_pais_pasa_a_las_ventas_de_meta(app):
+    """Revisión del spec (2026-10-08): la confirmación de «Quitar» dice lo que cambia en la plata: los
+    experimentos de ese país pasan a usar las ventas de Meta."""
+    import html as html_mod
+
+    import triple_whale_tiendas
+    triple_whale_tiendas.agregar("acme", "tw_no", "happyflops-norge.myshopify.com")
+    con = html_mod.unescape(_seccion_conexion(app["c"].get("/cliente/acme").data.decode()))
+    confirmar = con[con.index("¿Quitar la tienda"):]
+    confirmar = confirmar[:confirmar.index('"')]
+    assert "Noruega" in confirmar and "pasan a usar las ventas de Meta" in confirmar
+
+
+def test_triple_whale_adivinar_pais_responde_json_sin_llamar_a_nadie(app, monkeypatch):
+    import triple_whale
+    monkeypatch.setattr(triple_whale, "validar_llave", lambda llave: pytest.fail("no debía llamar"))
+    r = app["c"].get("/cliente/acme/cfg_triple_whale/adivinar_pais?dominio=happyflops-norge.myshopify.com")
+    assert r.status_code == 200 and r.get_json() == {"pais": "NO"}
+    assert app["c"].get("/cliente/acme/cfg_triple_whale/adivinar_pais?dominio=acme").get_json() == {"pais": None}
+    assert app["c"].get("/cliente/acme/cfg_triple_whale/adivinar_pais").get_json() == {"pais": None}
+
+
+def test_triple_whale_posts_de_otro_sitio_se_rechazan(app):
+    import triple_whale_tiendas
+    tid = triple_whale_tiendas.agregar("acme", "tw_no", "happyflops-norge.myshopify.com")
+    for ruta in ("probar", "pais", "desconectar", "ajustes"):
+        r = app["c"].post(f"/cliente/acme/cfg_triple_whale/{ruta}", headers={"Sec-Fetch-Site": "cross-site"},
+                          data={"tienda_id": tid, "pais": "DE"})
+        assert r.status_code == 403, ruta
+    assert triple_whale_tiendas.tienda("acme", tid)["pais"] == "NO"
+
+
+def test_triple_whale_tienda_sin_pais_pide_elegirlo_con_su_selector_abierto(app):
+    import triple_whale_tiendas
+    triple_whale_tiendas.agregar("acme", "tw_no", "happyflops-norge.myshopify.com")
+    sin = triple_whale_tiendas.agregar("acme", "tw_x", "acme.myshopify.com")
+    assert triple_whale_tiendas.tienda("acme", sin)["pais"] is None
+    con = _seccion_conexion(app["c"].get("/cliente/acme").data.decode())
+    tarjeta = con[con.index(f'id="tw-tienda-{sin}"'):]
+    tarjeta = tarjeta[:tarjeta.index("</article>")]
+    assert "Elige el país de esta tienda" in tarjeta and "acme.myshopify.com" in tarjeta
+    assert re.search(r"<details[^>]*open[^>]*>\s*<summary[^>]*>[^<]*Cambiar país", tarjeta)
+    otra = con[con.index('id="tw-tienda-'):]
+    otra = otra[:otra.index("</article>")]
+    assert "Elige el país de esta tienda" not in otra and "Noruega" in otra
+
+
+def test_triple_whale_la_clave_del_tablero_cambia_al_agregar_una_tienda(app):
+    import triple_whale_tiendas
+    d = app["dashboard"]
+    antes = d._clave_tablero("acme")
+    tid = triple_whale_tiendas.agregar("acme", "tw_no", "happyflops-norge.myshopify.com")
+    despues = d._clave_tablero("acme")
+    assert antes != despues
+    triple_whale_tiendas.agregar("acme", "tw_se", "happyflops-sverige.myshopify.com")
+    con_dos = d._clave_tablero("acme")
+    assert con_dos != despues
+    triple_whale_tiendas.quitar("acme", tid)
+    assert d._clave_tablero("acme") != con_dos
 
 
 # ---- Gasto real (Task 3): Configuración › Gasto, CSV, sidebar, precios, panel ----
@@ -415,18 +657,19 @@ def test_gasto_seccion_render(app, monkeypatch):
     # Vive en su propio apartado «Gasto» (el último), no mezclado con las conexiones.
     assert 'id="config-gasto"' in _seccion_gasto(html) and 'id="config-tienda"' not in _seccion_gasto(html)
     gasto = _seccion_gasto(html)
-    # Tiles: generación del mes (sin el cobro de agosto ni el de «otro») y pauta.
-    assert "Generación este mes" in gasto and "US$ 0,94" in gasto and "3 cobro(s)" in gasto
-    assert "Pauta este mes" in gasto and "sin pauta corriendo" in gasto
-    # Tabla por tipo con cantidad y US$, ordenada de mayor a menor.
+    # Tiles: solo totales desde el inicio (2026-10-08): agosto entra, «otro» no; nada «este mes».
+    assert "Generación total" in gasto and "US$ 5,94" in gasto and "4 cobro(s)" in gasto
+    assert "Pauta total" in gasto and "sin pauta todavía" in gasto
+    assert "este mes" not in gasto.lower() and "Mes a mes" not in gasto
+    # Tabla por tipo con cantidad y US$ desde el inicio, de mayor a menor.
     assert gasto.index("Videos") < gasto.index("Finales") < gasto.index("Guiones")
-    assert "US$ 0,85" in gasto and "US$ 0,07" in gasto and "US$ 0,02" in gasto
+    assert "US$ 5,85" in gasto and "US$ 0,07" in gasto and "US$ 0,02" in gasto
     # Historial: fecha, tipo, detalle y US$; el más nuevo primero; nada ajeno.
     assert gasto.index("final es_CO") < gasto.index("guion base") < gasto.index("wan3 · 8 s")
     assert "2026-09-12 09:00" in gasto and "del mes pasado" in gasto   # el historial no se limita al mes
     assert "de otro proyecto" not in gasto and "US$ 9,00" not in gasto
-    # Botón CSV y nota.
-    assert "/cliente/acme/gasto/mes.csv" in gasto and "Descargar CSV del mes" in gasto
+    # Un solo botón CSV, con todo, y la nota.
+    assert "/cliente/acme/gasto/todo.csv" in gasto and "/gasto/mes.csv" not in gasto and "Descargar CSV" in gasto
     assert "precios reales de los proveedores" in gasto and "se cobra en tu cuenta de Meta" in gasto
 
 
@@ -465,8 +708,9 @@ def test_sidebar_chip_generacion_sin_pauta(app, monkeypatch):
     _sembrar_gasto(monkeypatch)
     sb = _sidebar(app["c"].get("/cliente/acme").data.decode())
     assert 'class="sidebar-gasto"' in sb
-    chip = sb[sb.index("Este mes:"):sb.index("</a>", sb.index("Este mes:"))]
-    assert chip == "Este mes: US$ 0,94 generación"   # sin pauta no se menciona
+    chip = sb[sb.index("Gasto total:"):sb.index("</a>", sb.index("Gasto total:"))]
+    # Solo el total desde el inicio (2026-10-08); sin pauta no se menciona.
+    assert chip == "Gasto total: US$ 5,94 generación" and "Este mes" not in sb
     assert "/cliente/acme#settings" in sb
 
 
@@ -475,10 +719,10 @@ def test_sidebar_chip_con_pauta(app, monkeypatch):
     _sembrar_gasto(monkeypatch)
     resumen = {"por_moneda": {"COP": {"gasto": 1405157.0, "compras": 0, "ingresos": 0.0, "roas": 0.0}},
                "experimentos_corriendo": 0, "piezas_activas": 0, "propuestas_pendientes": 0, "ganadoras_publicadas": 0}
-    monkeypatch.setattr(tablero, "resumen_mes", lambda c, ahora_iso=None, datos=None: resumen)
+    monkeypatch.setattr(tablero, "resumen_total", lambda c, ahora_iso=None, datos=None: resumen)
     app["dashboard"].invalidar_tablero()
     html = app["c"].get("/cliente/acme").data.decode()
-    assert "Este mes: US$ 0,94 generación · 1.405.157 COP pauta" in _sidebar(html)
+    assert "Gasto total: US$ 5,94 generación · 1.405.157 COP pauta" in _sidebar(html)
     # Configuración › Gasto muestra la misma pauta, en su moneda.
     gasto = _seccion_gasto(html)
     assert "1.405.157 COP" in gasto and "se cobra en tu cuenta de Meta" in gasto
@@ -521,17 +765,17 @@ def test_panel_admin_columna_gasto_del_mes(app, monkeypatch):
     monkeypatch.setattr(estado_mod, "listar_clientes", lambda: ["acme", "otro", "vacio"])
     monkeypatch.setattr(d, "_resumen_cliente", lambda c: {"pendiente": 0, "publicado": 0, "rechazado": 0})
     html = app["c"].get("/panel").data.decode()
-    assert html.count("Gasto del mes (US$)") >= 3
+    assert html.count("Gasto total (US$)") >= 3 and "Gasto del mes" not in html
 
     def tarjeta(cid):
         # La tarjeta (no la fila de la tabla comparativa, que también enlaza al proyecto).
         ini = html.index(f'class="card-cliente" href="/cliente/{cid}"')
         return html[ini:html.index("</a>", ini)]
-    assert "US$ 0,94" in tarjeta("acme")
+    assert "US$ 5,94" in tarjeta("acme")          # desde el inicio: agosto incluido
     assert "US$ 9,02" in tarjeta("otro")
     assert "US$ 0,00" in tarjeta("vacio")
-    # Total en la cabecera: 0,94 + 9,02.
-    assert "US$ 9,96" in html and "generación este mes" in html
+    # Total en la cabecera: 5,94 + 9,02.
+    assert "US$ 14,96" in html and "generación desde el inicio" in html and "generación este mes" not in html
 
 
 def test_llaves_de_nicho_son_opcionales_y_solo_miran_presencia(app, monkeypatch):
@@ -593,7 +837,7 @@ def test_cliente_no_ve_llaves_ni_variables_del_servidor(app, monkeypatch):
     # Ni nombres de variables, ni el .env, ni los pasos para conseguir llaves:
     # eso es del administrador.
     conexiones = _puesta_a_punto(cfg)
-    for texto in ("ANTHROPIC_API_KEY", "SMTP_HOST", ".env", "no se escriben desde aquí", "Cómo conseguirla"):
+    for texto in ("ANTHROPIC_API_KEY", "GEMINI_API_KEY", "llave-gemini", "SMTP_HOST", ".env", "no se escriben desde aquí", "Cómo conseguirla"):
         assert texto not in conexiones, texto
     # Lo que sí le toca: elegir cómo conectar Meta, en Configuración › Conexiones.
     assert "¿Cómo quieres conectar Meta?" in cfg
@@ -602,11 +846,11 @@ def test_cliente_no_ve_llaves_ni_variables_del_servidor(app, monkeypatch):
 
 
 def test_admin_sigue_viendo_todas_las_tarjetas_de_puesta_a_punto(app):
-    # Desde 2026-09-28 las tarjetas del servidor (12 con la de WaveSpeed) van en «Puesta a punto»
+    # Desde 2026-10-07 las tarjetas del servidor (13 con Gemini) van en «Puesta a punto»
     # (solo admin); la de Meta ya no se pinta: la conexión vive en Experimentos.
     cfg = _config(app["c"].get("/cliente/acme").data.decode())
     puesta = cfg[cfg.index('id="config-ap-puesta"'):cfg.index('id="config-ap-conexiones"')]
-    assert puesta.count('class="llave-tarjeta') == 12
+    assert puesta.count('class="llave-tarjeta') == 13
     assert _puesta_a_punto(cfg).count('class="llave-tarjeta') == 0
     assert "no se escriben desde aquí" in _tarjeta(puesta, "anthropic")
 
@@ -622,11 +866,23 @@ def test_gasto_muestra_el_total_desde_el_inicio_y_el_csv_de_todo(app):
     cfg = _config(html)
     inicio = cfg[cfg.index('id="gasto-desde-inicio"'):]
     inicio = inicio[:inicio.index("</div>")]
-    assert "Generación desde el inicio" in inicio and "266,00" in inicio and "desde el 2026-09-15" in inicio
-    assert 'id="gasto-por-mes"' in cfg and "2026-09" in cfg and "200,00" in cfg and "Total desde el inicio" in cfg
-    assert "/cliente/acme/gasto/todo.csv" in cfg and "Descargar CSV de todo" in cfg
+    assert "Generación total" in inicio and "266,00" in inicio and "desde el 2026-09-15" in inicio
+    assert 'id="gasto-por-mes"' not in cfg            # sin «Mes a mes» desde 2026-10-08
+    assert "/cliente/acme/gasto/todo.csv" in cfg
     r = app["c"].get("/cliente/acme/gasto/todo.csv")
     assert r.status_code == 200 and "text/csv" in r.content_type
     filas = r.data.decode().lstrip("\ufeff").splitlines()
     assert [f.split(";")[3] for f in filas[1:]] == ["video:septiembre", "video:ahora"]
     assert 'filename="gasto_acme_todo_' in r.headers["Content-Disposition"]
+
+
+def test_el_chip_del_sidebar_trae_el_total_desde_el_inicio(app):
+    """2026-10-08: «necesito que se vea reflejado el gasto completo». El chip
+    lateral, que sale en todas las páginas del proyecto, solo decía «Este mes»."""
+    import gastos
+    gastos.registrar("acme", "video", 200.0, "video:septiembre", creado_en="2026-09-15T10:00:00")
+    gastos.registrar("acme", "video", 66.0, "video:ahora")
+    html = app["c"].get("/cliente/acme").data.decode()
+    chip = html[html.index('class="sidebar-gasto"'):]
+    chip = chip[:chip.index("</a>")]
+    assert "Gasto total: US$ 266,00 generación" in chip and "Este mes" not in chip

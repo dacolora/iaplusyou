@@ -76,7 +76,7 @@ def resumen(item, eds):
     }
 
 
-def armar(items, ediciones_por_cf):
+def armar(items, ediciones_por_cf, costo_finales=None):
     """{"en_edicion": [(item, resumen)], "finalizados": [(item, final)],
     "elegibles": [(item, resumen)], "cifras": {...}}, cada lista completa
     (la página y «Ver más» recortan)."""
@@ -95,7 +95,7 @@ def armar(items, ediciones_por_cf):
     # del tablero, 2026-10-02). Después, lo último que se movió.
     en_edicion.sort(key=lambda par: (bool(par[1]["trabajos"]), par[1]["actividad"]), reverse=True)
     finalizados.sort(key=lambda par: _fecha_final(par[1]), reverse=True)
-    costo = sum(f.get("costo_usd") or 0 for _, f in finalizados)
+    costo = costo_finales
     cifras = {
         "en_edicion": len(en_edicion),
         "produciendo": sum(r["produciendo"] for _, r in elegibles),

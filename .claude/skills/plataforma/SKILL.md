@@ -133,10 +133,15 @@ guessing. Reads: `resumen_mes` (the month), `resumen_total` (everything since th
 `por_mes`, `historial`, `csv_mes` and `csv_todo` — Configuración › Gasto shows the month AND the total since the start
 with a month-by-month table and «Descargar CSV de todo» (`gasto_csv_todo`), and the admin panel card shows both figures
 (`admin.generacion_total`): on 2026-10-07 the screens only said «este mes» (US$ 66) and the US$ 200 of earlier months
-looked lost. Meta spend is NOT in `gasto` — it comes from `metrica_snapshot` via `tablero` and is
-shown next to generation spend in its own currency. UI: sidebar chip "Este mes: US$ X
-generación · Y pauta" (context processor, template renders only, cached), Configuración ›
-Gasto (by type, history, CSV), Tablero tile, admin panel column.
+looked lost. **Since 2026-10-08 every spend figure is a total since the start, never the month** (Daniel: «quiero que
+todas las métricas aparezcan en la totalidad, no por mes, porque confunden a mis clientes»): the sidebar chip says
+«Gasto total: US$ X generación · Y pauta» (`_chip_gasto(gastos.resumen_total, _pauta_mes(ctx, "total"))`, context processor,
+cached), Configuración › Gasto shows «Generación total», «Pauta total», «Por tipo» since the start (`gastos.resumen_todo`),
+the history and ONE «Descargar CSV» (`gasto_csv_todo`; `/gasto/mes.csv` still answers but nothing links it), and the
+admin panel (`admin.resumen`, `desde=tablero.INICIO`) counts generation, ad spend and pieces since the start; only its
+«Historial» table and its CSV stay per month (bookkeeping for invoices). Meta spend is NOT in `gasto` — it comes from
+`metrica_snapshot` via `tablero` and is shown next to generation spend in its own currency. A new screen with money
+shows the total; do not bring back «este mes».
 
 **Cobros recuperados (2026-10-02, PND-109):** la identidad y la referencia del cobro original viajan en la predicción; una recuperación conserva ese id de tarea. Un gasto nuevo de música pertenece a la tarea que la obtuvo. Ver la regla de recuperación de `crear`.
 
@@ -145,6 +150,14 @@ PND-040/042 (2026-10-03): migración 0031 reconstruye material con AUTOINCREMENT
 PND-125 (2026-10-05): el cierre de Crear registra el video inmediatamente tras descargarlo, antes de la bitácora/mezcla, y la pista apenas recibe su costo, antes de mezclar; el registro final mantiene referencias idempotentes; _registrar_gasto activa conservar_mayor en gastos.registrar_seguro. La condición SQL impide que una recuperación con música de caché reduzca un cobro original con música; las recuperaciones que pagan una pista nueva conservan su referencia de tarea separada.
 
 Revisión de Codex, 2026-10-05, lote 4: conservar_mayor se vigila también en la carrera IntegrityError con SQLite real. Describir referencias y sugerir sonido anotan bajo _creatv el cliente solicitante en extra.cliente. PND-144/145 registran los huecos aún abiertos de pista fallida e imagen cuyo error no se pudo persistir.
+
+PND-144/145 (Codex, 2026-10-07): la imagen registra antes de escribir bitácora/error. Una pista fallida después de generar lleva costo_usd y URL en PistaPagadaError; Crear la registra con la referencia de tarea existente (o :musica de recuperación), conservando el video. No implica recuperación automática ni cubre SIGKILL antes del registro.
+
+PND-072/088 (2026-10-07, lote 5 B): el encolado del director vive en tareas.director.encolar, conserva max_intentos=1 y prioridad del llamador. Una reserva perdida en sprints.produccion.crear_sesion archiva exclusivamente el concepto recién creado; no borra piezas ni la reserva de otro lote. La política de Repetir QA sigue pendiente (no se modifica cuándo cobra).
+
+PND-144 (correcciones de lote 5, 2026-10-08): la referencia :musica de recuperación lleva proveedor fal explícito. Las pruebas provocan PistaPagadaError y fallo de bitácora juntos: generación y recuperación conservan US$ 0,82 sin duplicar la fila de pista. No se amplía la lógica de cobro en esta corrección.
+
+**Lecturas de gasto real (2026-10-08, PND-111/143):** `gastos.total_tipo` suma también finales fallidas/reproducidas; `gastos.costos_sesiones` agrupa referencias de video/imagen por sesión y su `extra.usd_musica`. No se usa el costo del último intento para sustituir lo ya pagado. PND-012 reserva la ficha de voz en kv (gastos.reservar_ficha, no es gasto en cero) antes del proveedor, y con su respuesta la completa en gasto.extra junto al cobro real; la recuperación no llama a fal ni descarga otra vez y omite tareas en_curso (corrección lote 6A, 2026-10-08).
 
 **Cobro al cliente en la puerta del costo (cobros 3/11, 2026-10-08, spec `2026-10-08-cobros-saldo-prepagado-design.md` §3):** `gastos.registrar` llama a `cobros.libro.cobrar_gasto` en un savepoint propio, después del upsert del gasto; si el cobro falla, el gasto queda y a los admins les llega `cobro_no_anotado`. Solo un gasto INSERTADO estrena cobro (`nuevo=True`); corregir uno que ya existía recalcula su cobro si lo tenía y nunca lo crea (prender «Cobrar» no cobra hacia atrás). Un proyecto que no cobra no cambia. **Toda rama de fallo después de pagar donde la pieza no llega a la persona anota con `entregado=False`** (`registrar_seguro(..., entregado=False)`): el costo queda igual y al cliente le queda un `no_cobrado` (o un `reverso` si ya tenía cobro) con su aviso. En una ruta sincrónica a Claude, «entregado» = Claude respondió (spec §3.5): esas no se marcan. Trampa de SQLite en WAL (revisión 2026-10-08): una transacción diferida que lee y después escribe recibe «database is locked» al instante si otro escritor confirmó en medio (SQLITE_BUSY_SNAPSHOT; busy_timeout no aplica), y pysqlite no emite BEGIN antes de un SAVEPOINT. Por eso el cobro corre DENTRO del savepoint del gasto, después del INSERT que ya tomó el candado (o después del UPDATE en la rama que corrige), y `cobros/libro.py` toma el candado antes de leer (`_candado`: `UPDATE kv SET valor=valor`, el truco de `saldo.marcar` y `cuentas.limite_ok`) en `exigir`, `revertir_trabajo`, `cobrar_gasto`, `configurar` y `guardar_margen_global`. Toda función nueva que lea y después escriba en una transacción hace lo mismo; el fixture `escritor_en_medio` de `tests/conftest.py` mete otro escritor justo antes de un statement para probarlo.
 

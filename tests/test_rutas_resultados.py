@@ -64,7 +64,7 @@ def test_resultados_con_experimento_trae_su_gestion(app, base_temporal):
     assert f'id="exp-{eid}"' not in sin_exp
     html = app["c"].get(f"/cliente/acme/experimentos/resultados?exp={eid}", headers=AJAX).get_data(as_text=True)
     assert f'id="exp-{eid}"' in html and "Cojín armando" in html
-    assert f"/cliente/acme/experimentos/{eid}/lanzar" in html and "Lanzar a Meta (en pausa)" in html
+    assert f"/cliente/acme/experimentos/{eid}/lanzar" in html and "Lanzar a Meta</button>" in html and "se activan: empieza a gastar" in html
     assert f"/cliente/acme/experimentos/{eid}/modo" in html and f"/cliente/acme/experimentos/{eid}/reglas" in html
     # En armado se pueden agregar piezas: el formulario trae las elegibles (que salen de ex.elegibles, no de la página).
     assert f"/cliente/acme/experimentos/{eid}/piezas" in html and "Agregar pieza" in html
@@ -141,14 +141,14 @@ def test_nuevo_experimento_tiene_su_ruta_con_la_galeria_y_los_tres_pasos(app, ba
     assert ex.cargar("acme") == []
 
 
-def test_nuevo_experimento_sin_meta_ofrece_conectar_y_no_deja_probar(app, monkeypatch, base_temporal):
+def test_nuevo_experimento_sin_meta_vuelve_a_la_pestana(app, monkeypatch, base_temporal):
+    """Desde 2026-10-08 sin Meta no hay galería (dejaba marcar piezas que no se podían lanzar): la pestaña dice qué
+    falta. El resto del caso está en tests/test_experimentos_sin_meta.py."""
     _pieza(base_temporal)
     monkeypatch.setattr(app["dashboard"].meta_conexion, "estado",
                         lambda c: {"estado": "sin_conectar", "verificado": False, "detalle": {}})
-    html = app["c"].get("/cliente/acme/experimentos/nuevo").get_data(as_text=True)
-    assert 'id="exp-galeria"' in html and "Conecta Meta arriba para probar" in html
-    assert "¿Cómo quieres conectar Meta?" not in html and "Conéctalo en Configuración › Conexiones" in html
-    assert 'action="/cliente/acme/experimentos/probar"' not in html
+    r = app["c"].get("/cliente/acme/experimentos/nuevo")
+    assert r.status_code == 302 and r.headers["Location"].endswith("/cliente/acme#experimentos")
 
 
 def test_nuevo_experimento_prellena_nombre_y_destino_del_catalogo(app, base_temporal):
@@ -312,15 +312,14 @@ def _lecturas(app, base_temporal, eid):
 
 
 def test_el_fragmento_no_hace_mas_consultas_por_pieza_que_experimentos_cargar(app, base_temporal):
-    """`experimentos.cargar` tiene un N+1 por pieza (la última métrica) que ya existía y que se acepta; el fragmento
-    puede crecer SOLO lo que crece esa lectura —una sola vez por petición—, no una por tarjeta ni por sección."""
+    """La última métrica se lee en conjunto: ni cargar ni el fragmento crecen por pieza."""
     eid = _experimento("Muchas piezas", estado="corriendo", meta_campaign_id="cam_1")
     _sembrar_piezas(base_temporal, eid, 0, 3)
     solo3, frag3 = _lecturas(app, base_temporal, eid)
     _sembrar_piezas(base_temporal, eid, 3, 15)
     solo15, frag15 = _lecturas(app, base_temporal, eid)
-    assert solo15 > solo3, "la prueba no mide nada si cargar() no crece con las piezas"
-    assert frag15 - frag3 <= solo15 - solo3, (solo3, solo15, frag3, frag15)
+    assert solo15 == solo3, (solo3, solo15)
+    assert frag15 == frag3, (solo3, solo15, frag3, frag15)
 
 
 def test_experimentos_cargar_memorizado_lee_una_vez_por_peticion(base_temporal):
@@ -641,7 +640,7 @@ def test_pnd140_historial_pixel_sin_ventas_y_gasto_mixto(app, base_temporal):
     html = app["c"].get("/cliente/acme/experimentos/resultados", headers=AJAX).get_data(as_text=True)
     historial = html[html.index('class="tb-tiles"'):]
     assert '<strong>0,0×</strong>' in historial
-    assert '<td class="num">0,0×</td>' in historial
+    assert 'class="tb-meses' not in historial          # sin tabla por mes desde 2026-10-08
     trafico = _experimento("Tráfico")
     _pieza_en(base_temporal, trafico, n=2)
     # Incluso con CPA sin valor (cero compras), ambos KPI explican el gasto de tráfico.
@@ -663,3 +662,91 @@ def test_pnd138_historial_no_presenta_ingresos_de_otra_moneda(app, base_temporal
     html = app["c"].get("/cliente/acme/experimentos/resultados", headers=AJAX).get_data(as_text=True)
     assert 'ROAS no comparable' in html and 'No sumamos ingresos de otra moneda' in html
     assert '400.000' not in html and '4000,0×' not in html
+
+
+@pytest.mark.parametrize("objetivo,metrica", [("OUTCOME_SALES", "roas"), ("OUTCOME_TRAFFIC", "ctr")])
+def test_pnd136_metrica_inicial_coincide_en_centro_y_panel(app, base_temporal, objetivo, metrica):
+    import re
+    import experimentos as ex, db
+    eid = ex.crear("acme", "Objetivo", PAISES, objetivo, 7, 500000.0, "https://t.co/p", "COP")
+    _, ep = _pieza_en(base_temporal, eid)
+    _dia(db, ep, _hoy())
+    for ruta in [f"/cliente/acme/experimentos/resultados?exp={eid}", f"/cliente/acme/experimentos/pieza/{ep}"]:
+        html = app["c"].get(ruta, headers=AJAX).get_data(as_text=True)
+        assert f'data-metrica="{metrica}" role="group"' in html
+        assert re.search(r'class="cr-chip cr-chip-metrica activo" data-cr-metrica="' + metrica + '" aria-pressed="true"', html)
+
+
+def test_pnd136_marcas_del_panel_truncan_sin_recortar_bitacora(app, base_temporal):
+    import experimentos as ex, resultados, json, re
+    eid = _experimento()
+    _, ep = _pieza_en(base_temporal, eid)
+    texto = "M" * (resultados.LARGO_MARCA + 30)
+    ex.registrar_evento("acme", eid, "pausado", texto, ep_id=ep)
+    html = app["c"].get(f"/cliente/acme/experimentos/pieza/{ep}", headers=AJAX).get_data(as_text=True)
+    datos = json.loads(re.search(r'class="cr-datos-pieza">(.*?)</script>', html, re.S).group(1))
+    assert datos["marcas"][0]["texto"] == texto[:resultados.LARGO_MARCA - 1] + "…"
+    assert texto in html  # bitácora conserva el mensaje entero
+
+
+def test_pnd136_panel_memoriza_lecturas_solo_durante_peticion(app, base_temporal, monkeypatch):
+    import experimentos as ex, resultados
+    eid = _experimento()
+    _, ep = _pieza_en(base_temporal, eid)
+    original = ex._leer_todos
+    llamadas = []
+    monkeypatch.setattr(ex, "_leer_todos", lambda cliente: llamadas.append(cliente) or original(cliente))
+    pieza = resultados.pieza
+    def repetida(*args):
+        a = pieza(*args)
+        assert a == pieza(*args)
+        return a
+    monkeypatch.setattr(resultados, "pieza", repetida)
+    for n in (1, 2):
+        assert app["c"].get(f"/cliente/acme/experimentos/pieza/{ep}", headers=AJAX).status_code == 200
+        assert llamadas == ["acme"] * n
+
+
+def test_pnd136_gestion_consulta_propuestas_solo_del_elegido(app, base_temporal, monkeypatch):
+    import propuestas
+    eid, otro = _experimento(), _experimento("Otro")
+    for exid in (eid, otro):
+        propuestas.crear("acme", exid, "pausar", {}, "Revisar")
+    llamadas = []
+    original = propuestas.pendientes
+    monkeypatch.setattr(propuestas, "pendientes", lambda cliente, exid: llamadas.append(exid) or original(cliente, exid))
+    assert app["c"].get(f"/cliente/acme/experimentos/resultados?exp={eid}", headers=AJAX).status_code == 200
+    assert llamadas == [eid]
+
+
+def test_pnd136_volver_org_ignora_ep_id_fuera_del_entero_sqlite(app):
+    dashboard = app["dashboard"]
+    with dashboard.app.test_request_context(method="POST", data={"ep_id": str(2 ** 100)}):
+        assert dashboard._int_form("ep_id") is None
+        assert dashboard._volver_org("acme", 2 ** 100).headers["Location"] == "/cliente/acme#experimentos"
+
+
+def test_pnd136_minimo_se_anuncia_por_region_live(app):
+    from html.parser import HTMLParser
+    html = app["c"].get("/cliente/acme/experimentos/nuevo").get_data(as_text=True)
+    class Lector(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.divs = []
+            self.minimos = 0
+            self.regiones = 0
+        def handle_starttag(self, tag, attrs):
+            a = dict(attrs)
+            if a.get("aria-live") == "polite":
+                self.regiones += 1
+            if tag == "div":
+                self.divs.append(a)
+            if a.get("id") == "exp-minimo":
+                self.minimos += 1
+                assert "aria-live" not in a
+                assert any(d.get("id") == "exp-resumen" and d.get("aria-live") == "polite" for d in self.divs)
+        def handle_endtag(self, tag):
+            if tag == "div":
+                self.divs.pop()
+    lector = Lector(); lector.feed(html)
+    assert lector.minimos == lector.regiones == 1

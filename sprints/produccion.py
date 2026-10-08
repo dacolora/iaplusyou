@@ -34,7 +34,7 @@ SEGUNDOS_VIDEO = 180
 SEGUNDOS_IMAGEN = 60
 MAX_REFERENCIAS = 15
 MAX_IMAGENES_MODELO = 10
-PLATAFORMAS_VERTICALES = {"instagram", "tiktok"}
+from plataformas import PLATAFORMAS_VERTICALES
 
 # Reserva de una idea (placeholder en cf_id) mientras se arma su sesión. El
 # formato y el vencimiento viven en `datos` (dueño de `reclamar_cf`), aquí solo
@@ -278,6 +278,7 @@ def crear_sesion(cliente, sprint, campana, idea, modelo_video, modelo_imagen, re
     if reserva is None:
         datos.actualizar_idea(cliente, idea["id"], cf_id=cf_id)
     elif not datos.reclamar_cf(cliente, idea["id"], cf_id, esperado=reserva):
+        creative_flow.archivar_concepto(cliente, cf_id, "reserva de lote perdida")
         raise datos.ErrorDatos(gettext("Otro lote tomó esta idea mientras se armaba la sesión."))
     return cf_id
 
@@ -290,12 +291,7 @@ def encolar_director(cliente, cf_id, prioridad=PRIORIDAD_LOTE):
     con el prompt determinista que ya tiene guardado en vez de quedar colgada
     en prompt_pendiente."""
     creative_flow.actualizar(cliente, cf_id, estado="prompt_pendiente")
-    ok = trabajos.encolar(
-        tareas_director.job_id(cliente, cf_id), "flowplus_director",
-        {"cliente": cliente, "cf_id": cf_id, "auto_lanzar": True, "prioridad": int(prioridad)},
-        cliente=cliente, duracion_estimada=tareas_director.DURACION_ESTIMADA, etapas=tareas_director.ETAPAS_DIRECTOR,
-        max_intentos=1, prioridad=prioridad,
-    )
+    ok = tareas_director.encolar(cliente, cf_id, auto_lanzar=True, prioridad=prioridad)
     if not ok:
         creative_flow.actualizar(cliente, cf_id, estado="error", error="No se pudo encolar la compilación del prompt.")
     return ok

@@ -327,9 +327,17 @@
       else aviso(raiz, textos.cargando || '…');
       pedir(raiz.getAttribute('data-url') + (query ? '?' + query : ''), 'cr-resultados-fragmento').then(function (html) {
         if (n !== pedido) return;
+        var activo = document.activeElement;
+        var hrefFoco = activo && raiz.contains(activo) && activo.getAttribute ? activo.getAttribute('href') : null;
         raiz.innerHTML = html;          // fragmento del servidor (autoescape de Jinja); los datos de las gráficas van por textContent
         raiz.classList.remove('cr-actualizando');
         raiz.setAttribute('aria-busy', 'false');
+        if (hrefFoco) {
+          var enlaces = raiz.querySelectorAll('[data-cr-filtro]'), destinoFoco = null;
+          enlaces.forEach(function (a) { if (!destinoFoco && a.getAttribute('href') === hrefFoco) destinoFoco = a; });
+          if (!destinoFoco) destinoFoco = raiz.querySelector('.cr-filtros [data-cr-filtro]');
+          if (destinoFoco) destinoFoco.focus();
+        }
         dibujar(raiz);
         if (window.arrancarSondeos) window.arrancarSondeos(raiz);
         if (irArriba) { irArriba = false; raiz.scrollIntoView({ block: 'start', behavior: 'smooth' }); }
@@ -400,7 +408,11 @@
         if (foco && foco.isConnected) foco.focus();
       });
       // Clic en el fondo (fuera del cajón) cierra.
-      panel.addEventListener('click', function (ev) { if (ev.target === panel) panel.close(); });
+      panel.addEventListener('click', function (ev) {
+        if (ev.target !== panel) return;
+        var r = panel.getBoundingClientRect();
+        if (ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom) panel.close();
+      });
     }
     raiz.addEventListener('toggle', function (ev) {
       var d = ev.target;

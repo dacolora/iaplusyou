@@ -88,7 +88,7 @@ def test_pagina_desde_y_listas(app):
 
 def test_contexto_final_edition_tiene_lo_que_usan_los_detalles(app):
     ctx = app["dashboard"]._contexto_final_edition("acme")
-    for clave in ("paises_fe", "voces_fe", "estilos_fe", "presets_mezcla", "precios", "ediciones_por_cf", "mi_musica",
+    for clave in ("paises_fe", "idiomas_fe", "voces_fe", "estilos_fe", "presets_mezcla", "precios", "ediciones_por_cf", "mi_musica",
                   "mis_voces_fe"):
         assert clave in ctx
     assert "guion" in ctx["precios"] and "final_por_pais" in ctx["precios"]
@@ -395,3 +395,42 @@ def test_pnd133_detalle_remoto_rechaza_login_redirigido_en_node(app):
     '''
     r = subprocess.run(['node','-e',codigo],capture_output=True,text=True)
     assert r.returncode == 0, r.stderr
+
+
+def test_pnd120_alerta_abre_detalle_fuera_de_las_24_en_node(app):
+    import json
+    import re
+    import subprocess
+    import alertas
+    import creative_flow
+    ids = _sembrar(30)
+    creative_flow.actualizar('acme', ids[0], estado='error', error='fallo')
+    html = app['c'].get('/cliente/acme').get_data(as_text=True)
+    crear = _pestana(html, 'tab-creativeflowplus', 'tab-final')
+    assert f'id="cf-{ids[0]}"' not in crear
+    a = next(a for a in alertas._fuente_crear('acme', '2026-09-02T00:00:00') if a['entidad'] == ids[0])
+    assert a['url'] == '#creativeflowplus?cf=' + ids[0]
+    script = next(s for s in re.findall(r'<script[^>]*>(.*?)</script>', html, re.S) if "var modal = document.getElementById('generado-modal')" in s)
+    codigo = """
+    const assert = require('node:assert/strict');
+    const pedidos = [], listeners = {};
+    const el = {addEventListener(){}, dataset:{}, close(){}};
+    global.document = {getElementById(){return el}, addEventListener(n, f){listeners[n]=f}};
+    global.window = {addEventListener(n,f){listeners[n]=f}};
+    global.location = {hash: HASH};
+    global.abrirDetalleRemoto = (m,c,u) => pedidos.push(u);
+    global.setTimeout = f => f();
+    SCRIPT
+    listeners.DOMContentLoaded && listeners.DOMContentLoaded();
+    assert.deepEqual(pedidos, [URL]);
+    location.hash = '#settings'; listeners.hashchange && listeners.hashchange();
+    assert.equal(pedidos.length, 1);
+    location.hash = '#creativeflowplus?cf=cf_otro'; listeners.hashchange && listeners.hashchange();
+    assert.equal(pedidos[1], '/cliente/acme/creative_flow/cf_otro/detalle');
+    location.hash = '#creativeflowplus?cf=../../otro'; listeners.hashchange && listeners.hashchange();
+    assert.equal(pedidos.length, 2);
+    """.replace('HASH', json.dumps(a['url'])).replace('URL', json.dumps(f'/cliente/acme/creative_flow/{ids[0]}/detalle')).replace('SCRIPT', script)
+    r = subprocess.run(['node', '-e', codigo], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    assert app['c'].get(f'/cliente/acme/creative_flow/{ids[0]}/detalle').status_code == 200
+    assert app['c'].get('/cliente/otro/creative_flow/' + ids[0] + '/detalle').status_code == 404

@@ -424,7 +424,7 @@ def _contexto_minimo(items, activos_por_categoria=None, categorias=None, product
         fp_prefill=None, activos_por_categoria=activos_por_categoria if activos_por_categoria is not None else {},
         categorias=categorias if categorias is not None else {}, productos=productos if productos is not None else [],
         referencias_bandeja=[], trabajo_link=None, capacidades_meta={},
-        paises_fe=tipos.PAISES, voces_fe=fal_audio.VOCES, estilos_fe=list(tipos.ESTILOS_MUSICA),
+        paises_fe=tipos.PAISES, idiomas_fe=("es", "en", "pt", "sv", "no"), voces_fe=fal_audio.VOCES, estilos_fe=list(tipos.ESTILOS_MUSICA),
         nombres_estilo_musica=tipos.NOMBRES_ESTILO_MUSICA,
         presets_mezcla=["equilibrada", "voz_protagonista", "ambiente_protagonista"],
         duraciones_crear=(5, 8, 10, 12, 15, 20, 25, 30), formatos_nombres={"9:16": "Vertical 9:16"},

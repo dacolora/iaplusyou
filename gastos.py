@@ -16,7 +16,7 @@ tumbar la tarea que ya pagó: los llamadores envuelven en try/except.
 `TARIFAS` y los `estimate_*` de los proveedores; cuando no hay tarifa
 devuelve `usd=None` y el texto "precio no disponible" — nunca se inventa.
 
-Lecturas: `resumen_mes`, `resumen_total`, `total_entre`, `por_mes`, `historial`,
+Lecturas: `resumen_mes`, `resumen_todo`, `resumen_total`, `total_entre`, `por_mes`, `historial`,
 `serie_diaria`, `csv_mes`, `por_proyecto_mes`; `formatear(usd)` -> "US$ 0,07".
 
 Precios que se ven (cobros, spec 2026-10-08 §6): `margen_vigente()`, `precio(usd)`
@@ -632,11 +632,11 @@ def _fila(r):
     return d
 
 
-def resumen_mes(cliente, ahora_iso=None):
+def resumen_mes(cliente, ahora_iso=None, desde=None):
     """{"desde", "hasta", "total", "por_tipo": {tipo: {"usd", "n"}}, "n"} del
-    mes en curso (o del mes de `ahora_iso`)."""
+    mes en curso (o del mes de `ahora_iso`; o desde `desde`)."""
     hasta = _ahora(ahora_iso)
-    desde = _inicio_mes(hasta)
+    desde = desde or _inicio_mes(hasta)
     g = db.gasto
     q = (sa.select(g.c.tipo, sa.func.sum(g.c.usd), sa.func.count())
          .where(g.c.cliente == cliente, g.c.creado_en >= desde, g.c.creado_en <= hasta)
@@ -648,6 +648,12 @@ def resumen_mes(cliente, ahora_iso=None):
     total = round(sum(v["usd"] for v in por_tipo.values()), 4)
     return {"desde": desde, "hasta": hasta, "total": total, "por_tipo": por_tipo,
             "n": sum(v["n"] for v in por_tipo.values())}
+
+
+def resumen_todo(cliente, ahora_iso=None):
+    """Como `resumen_mes` pero con todo lo cobrado desde el primer cobro (la
+    tabla «Por tipo» de Configuración › Gasto desde 2026-10-08)."""
+    return resumen_mes(cliente, ahora_iso, desde="0001-01-01T00:00:00")
 
 
 def resumen_total(cliente, ahora_iso=None):
@@ -847,3 +853,69 @@ def importar_historico(cliente, swaps=None):
         n_swaps += 1
         total += usd
     return {"piezas": n_piezas, "swaps": n_swaps, "usd": round(total, 4)}
+
+
+def total_tipo(cliente, tipo):
+    """Todo el gasto real de un tipo del proyecto, incluidas tareas fallidas."""
+    g = db.gasto
+    with db.conectar() as con:
+        total = con.execute(sa.select(sa.func.coalesce(sa.func.sum(g.c.usd), 0.0)).where(
+            g.c.cliente == cliente, g.c.tipo == tipo)).scalar()
+    return round(float(total), 4)
+
+
+def costos_sesiones(cliente):
+    """Acumulados por sesión de Crear, una consulta para todas las tarjetas."""
+    g = db.gasto
+    with db.conectar() as con:
+        filas = con.execute(sa.select(g.c.referencia, g.c.usd, g.c.extra).where(
+            g.c.cliente == cliente, g.c.tipo.in_(("video", "imagen")))).all()
+    out = {}
+    for ref, usd, extra in filas:
+        partes = ref.split(":")
+        if len(partes) < 2 or partes[0] not in ("video", "imagen"):
+            continue
+        v = out.setdefault(partes[1], {"usd": 0.0, "usd_musica": 0.0})
+        v["usd"] += float(usd)
+        v["usd_musica"] += float((extra or {}).get("usd_musica") or 0)
+    return {cf_id: {k: round(n, 4) for k, n in v.items()} for cf_id, v in out.items()}
+
+
+def por_referencia(cliente, referencia):
+    with db.conectar() as con:
+        fila = con.execute(sa.select(db.gasto).where(db.gasto.c.cliente == cliente,
+                                                   db.gasto.c.referencia == referencia)).first()
+    if fila:
+        return _fila(fila)
+    import json
+    with db.conectar() as con:
+        valor = con.execute(sa.select(db.kv.c.valor).where(db.kv.c.clave == _clave_reserva(cliente, referencia))).scalar()
+    return json.loads(valor) if valor else None
+
+
+def fichas_pendientes(cliente, tipo):
+    with db.conectar() as con:
+        filas = con.execute(sa.select(db.gasto).where(db.gasto.c.cliente == cliente, db.gasto.c.tipo == tipo,
+                 db.gasto.c.extra["ficha_guardada"].as_boolean().isnot(True))).all()
+    return [_fila(f) for f in filas if (f._mapping[db.gasto.c.extra] or {}).get("ficha")]
+
+
+def _clave_reserva(cliente, referencia):
+    import hashlib
+    return "reserva_gasto:" + hashlib.sha256(f"{cliente}\x1f{referencia}".encode()).hexdigest()
+
+
+def reservar_ficha(cliente, tipo, referencia, *, detalle, proveedor, extra):
+    """Reserva previa al proveedor, fuera de Gasto: todavía no hubo cobro."""
+    import json
+    from sqlalchemy.dialects.sqlite import insert
+    try:
+        valor = json.dumps({"cliente": cliente, "tipo": tipo, "referencia": referencia,
+                            "detalle": detalle, "proveedor": proveedor, "extra": extra, "usd": 0})
+        with db.conectar() as con:
+            con.execute(insert(db.kv).values(clave=_clave_reserva(cliente, referencia), valor=valor,
+                        actualizado_en=db.ahora()).on_conflict_do_nothing(index_elements=[db.kv.c.clave]))
+        return True
+    except Exception:
+        log.exception("No se pudo reservar la ficha de voz")
+        return None

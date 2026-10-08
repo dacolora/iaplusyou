@@ -605,6 +605,8 @@ def test_burbuja_tambien_en_una_pagina_de_sprints(app, monkeypatch):
 
 def test_navegacion_con_ancla_vive_una_vez_en_cliente_html(app, monkeypatch):
     _fijas(app, monkeypatch, [])
+    # Con Meta: sin Meta ni historial la pestaña es solo «Conecta Meta», sin el armazón ni su JS (2026-10-08).
+    monkeypatch.setattr(app["dashboard"].meta_conexion, "estado", lambda c: {"estado": "conectado", "verificado": True, "detalle": {}})
     html = _html(app["c"])
     assert "alertas: document.getElementById('tab-alertas')" in html
     assert html.count("#tab-experimentos [data-ir-tab], #tab-alertas [data-ir-tab]") == 1

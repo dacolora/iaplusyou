@@ -13,7 +13,7 @@ from idiomas import N_
 from cobros import vista as vista_cobros
 from sprints import datos, estado
 
-TERMINADAS = ("listo", "degradada")
+TERMINADAS = estado.LISTAS_PARA_REVISION
 
 
 def _pieza(cliente, cp_id):

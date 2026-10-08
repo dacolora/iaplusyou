@@ -131,7 +131,7 @@
     // las respuestas superadas (cambiar 200 por 1000 y enviar antes de que
     // llegue la respuesta, o respuestas que llegan desordenadas) y `ultimo`
     // guarda la última respuesta buena CON su combinación.
-    var pedidas = 0, ultimo = null;
+    var pedidas = 0, ultimo = null, demora = null;
     // Frases con marcadores: el precio y el tope se ponen en JS (función, para que un «$» del precio no cuente como patrón).
     var TXT_ESTIMADO = {{ _('≈ %(texto)s por hasta %(max)s resultados (aprox.)', texto='{texto}', max='{max}')|tojson }};
     var TXT_SIN_ESTIMADO = {{ _('Todavía no hay estimado de Apify; espera un momento y vuelve a intentar.')|tojson }};
@@ -141,6 +141,8 @@
                       .replace('{max}', function () { return String(u.max_resultados); });
     }
     function pintar() {
+      clearTimeout(demora);
+      demora = null;
       var op = sel.options[sel.selectedIndex];
       if (op && ayuda) ayuda.textContent = op.dataset.ayuda || '';
       var clave = sel.value, n = max.value || '1', mia = ++pedidas;
@@ -156,7 +158,13 @@
         .catch(function () { if (mia === pedidas) { ultimo = null; out.textContent = '≈ ?'; } });
     }
     sel.addEventListener('change', pintar);
-    max.addEventListener('input', pintar);
+    max.addEventListener('input', function () {
+      clearTimeout(demora);
+      pedidas++;
+      ultimo = null;
+      out.textContent = '≈ …';
+      demora = setTimeout(pintar, 250);
+    });
     pintar();
     form.addEventListener('submit', function (ev) {
       if (!ultimo || ultimo.clave !== sel.value || ultimo.max !== (max.value || '1')) {

@@ -204,7 +204,7 @@ def test_chip_gasto_aparece_en_paginas_de_sprints(app):
     sid, cid = _sprint(datos, pid, tid)
     gastos.registrar("acme", "guion", 0.02, "guion:t1")
     html = app["c"].get(f"/cliente/acme/sprints/{sid}").data.decode()
-    assert "Este mes:" in html and "generación" in html
+    assert "Gasto total:" in html and "generación" in html and "Este mes:" not in html
 
 
 def test_crear_sprint_persona_inexistente_no_deja_sprint_a_medias(app):
@@ -885,6 +885,8 @@ def test_campana_ver_muestra_candidatos_ia(app, monkeypatch):
     monkeypatch.setattr(referentes_datos, "referente", lambda cliente_, rid: {
         "id": rid, "imagen_url": "https://cdn/5.jpg", "titular": "Candidato IA", "familia": "ugc",
     } if rid == 5 else None)
+    monkeypatch.setattr(referentes_datos, "por_ids", lambda cliente, ids: {rid: ref for rid in ids
+        if (ref := referentes_datos.referente(cliente, rid))})
     r = app["c"].get(f"/cliente/acme/sprints/{sid}/campanas/{cid}")
     assert r.status_code == 200
     assert b"Candidato IA" in r.data
@@ -907,6 +909,8 @@ def test_campana_ver_no_muestra_sugerencia_ia_ya_agregada(app, monkeypatch):
     monkeypatch.setattr(referentes_datos, "familias", lambda cliente_: [])
     datos.agregar_referencia_biblioteca("acme", cid, 5)
     datos.actualizar_campana("acme", cid, extra={"sugerencias_ia": [{"referente_id": 5, "razon": "buena razón"}]})
+    monkeypatch.setattr(referentes_datos, "por_ids", lambda cliente, ids: {rid: ref for rid in ids
+        if (ref := referentes_datos.referente(cliente, rid))})
     r = app["c"].get(f"/cliente/acme/sprints/{sid}/campanas/{cid}")
     assert r.status_code == 200
     assert "buena razón".encode() not in r.data
@@ -1057,3 +1061,43 @@ def test_la_revision_del_lote_muestra_la_doctrina(con_ideas, monkeypatch, tmp_pa
     html = c.get(f"/cliente/acme/sprints/{sid}/revision").data.decode()
     assert "Doctrina: 1 por mejorar" in html
     assert "Doctrina: sin revisar" in html
+
+
+def test_pnd090_consumir_sugerencia_conserva_las_otras_y_extra(app, monkeypatch):
+    from sprints import datos
+    import referentes.datos as rd
+    pid, tid = _base(datos)
+    sid, cid = _sprint(datos, pid, tid)
+    datos.actualizar_campana("acme", cid, extra={"otra": "conservar", "sugerencias_ia": [
+        {"referente_id": 7}, {"referente_id": 8}]})
+    monkeypatch.setattr(rd, "referente", lambda cliente, rid: {"id": rid, "estado_imagen": "ok",
+        "imagen_url": "https://cdn/ref.jpg", "titular": "T", "firma": "", "familia": None})
+    monkeypatch.setattr(rd, "familias", lambda cliente: [])
+    assert app["c"].post(f"/cliente/acme/sprints/campanas/{cid}/referencias_biblioteca",
+        data={"referente_ids": ["7"]}).status_code == 302
+    extra = datos.campana("acme", cid)["extra"]
+    assert extra == {"otra": "conservar", "sugerencias_ia": [{"referente_id": 8}]}
+
+
+@pytest.mark.parametrize("panel", [False, True])
+def test_pnd090_sugerencias_precargadas_sin_una_lectura_por_tarjeta(app, monkeypatch, panel):
+    from sprints import datos
+    import referentes.datos as rd
+    pid, tid = _base(datos)
+    sid, cid = _sprint(datos, pid, tid)
+    ids = list(range(100, 112))
+    datos.actualizar_campana("acme", cid, extra={"sugerencias_ia": [{"referente_id": rid} for rid in ids]})
+    llamadas = []
+    def cargar(cliente, solicitados):
+        llamadas.append((cliente, solicitados))
+        return {rid: {"id": rid, "imagen_url": "https://cdn/x.jpg", "titular": f"Candidato {rid}", "familia": "ugc"} for rid in solicitados}
+    monkeypatch.setattr(rd, "por_ids", cargar)
+    def individual(*args):
+        pytest.fail("una lectura por sugerencia")
+    monkeypatch.setattr(rd, "referente", individual)
+    ruta = f"/cliente/acme/sprints/{sid}/campanas/{cid}" + ("/panel" if panel else "")
+    r = app["c"].get(ruta)
+    assert r.status_code == 200
+    if not panel:
+        assert b"Candidato 111" in r.data
+    assert llamadas == [("acme", ids)]

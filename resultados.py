@@ -36,17 +36,20 @@ from typing import Optional
 import sqlalchemy as sa
 from flask_babel import gettext
 
+import app_tiendas
 import db
 import decisor
 import doctrina
 import gastos
 import idiomas
 import proyectos
+import experimentos
 import tablero
 from idiomas import N_
 
-PERIODOS = (7, 14, 30, 90, 0)
-PERIODO_DEFECTO = 14
+PERIODOS = (0, 7, 14, 30, 90)
+# «Desde el inicio» por defecto (Daniel, 2026-10-08: las cifras por periodo confundían a sus clientes).
+PERIODO_DEFECTO = 0
 DIAS_MAX_INICIO = 180
 TIPOS = ("video", "imagen")
 PUNTOS_CURVA = 14
@@ -319,9 +322,9 @@ def _roas(v):
     """ROAS de `tablero.ventas_medidas` (lo vendido sobre TODO el gasto, redondeado como el Tablero): None si nada
     mide ventas o no hubo gasto (nunca un 0 falso de algo que no mide). Redondea ingresos y gasto antes de dividir,
     como `tablero._resumen_periodo`, para que el decimal que se muestra sea siempre el mismo."""
-    if not v.get("roas_comparable", True) or not (v["mide"] and v["gasto"] > 0):
+    if not v.get("roas_comparable", True) or not (v["mide"] and v.get("gasto_roas", v["gasto"]) > 0):
         return None
-    return round(round(v["ingresos"], 2) / round(v["gasto"], 2), 2) if round(v["gasto"], 2) > 0 else None
+    return round(round(v["ingresos"], 2) / round(v.get("gasto_roas", v["gasto"]), 2), 2) if round(v.get("gasto_roas", v["gasto"]), 2) > 0 else None
 
 
 def _con_ventas(gasto, v):
@@ -329,10 +332,12 @@ def _con_ventas(gasto, v):
     el gasto de todo, y compras, ingresos, ROAS y costo por compra sobre ese mismo gasto mientras algo de lo elegido
     mida ventas. Sin nada que mida, las ventas son None: la pantalla dice «—» y «sin ventas medibles», no 0."""
     mide = v["mide"]
-    return {"gasto": round(gasto, 2), "compras": v["compras"] if mide else None,
+    # La moneda ajena impide comparar ingresos, pero no contar pedidos ni calcular CPA.
+    mide_compras = mide or bool(v.get("excluidos"))
+    return {"gasto": round(gasto, 2), "compras": v["compras"] if mide_compras else None,
             "ingresos": round(v["ingresos"], 2) if mide and v.get("roas_comparable", True) else None,
-            "roas": _roas(v), "roas_comparable": v.get("roas_comparable", True),
-            "cpa": v["gasto"] / v["compras"] if mide and not v.get("ventas_cambiaron") and v["compras"] else None, "mide_ventas": mide,
+            "roas": _roas(v), "excluidos": v.get("excluidos", 0), "roas_comparable": v.get("roas_comparable", True),
+            "cpa": v["gasto"] / v["compras"] if mide_compras and not v.get("ventas_cambiaron") and v["compras"] else None, "mide_ventas": mide,
             "gasto_sin_ventas": v.get("gasto_sin_ventas", 0.0), "ventas_cambiaron": v.get("ventas_cambiaron", False)}
 
 
@@ -440,7 +445,7 @@ def indicadores(carga):
         anterior = None if previo is None else previo[clave]
         out.append({"clave": clave, "etiqueta": gettext(etiqueta), "formato": formato, "valor": actual[clave],
                     "anterior": anterior, "cambio": cambio(actual[clave], anterior, mejor, formato),
-                    "tendencia": curvas[clave],
+                    "tendencia": curvas[clave], "excluidos": actual.get("excluidos", 0) if clave in ("roas", "ingresos") else 0,
                     # «—» por «sin ventas medibles», no por «sin datos» (la plantilla elige la nota)
                     "sin_ventas": clave in _DE_VENTAS and not actual["mide_ventas"],
                     "roas_no_comparable": clave in _DE_VENTAS and (
@@ -469,6 +474,11 @@ def serie(carga):
     return out
 
 
+def _texto_marca(mensaje):
+    texto = mensaje or ""
+    return texto[:LARGO_MARCA - 1] + "…" if len(texto) > LARGO_MARCA else texto
+
+
 def marcas(carga):
     """Los días en que el motor actuó: eventos del periodo de los experimentos de la carga (veredictos,
     acciones, topes, escaladas, pausas…), los últimos MAX_MARCAS, en orden de fecha."""
@@ -483,10 +493,7 @@ def marcas(carga):
             .order_by(ev.c.creado_en.desc(), ev.c.id.desc()).limit(MAX_MARCAS)).all()
     out = []
     for creado_en, mensaje in reversed(filas):
-        texto = mensaje or ""
-        if len(texto) > LARGO_MARCA:
-            texto = texto[:LARGO_MARCA - 1] + "…"
-        out.append({"dia": creado_en[:10], "texto": texto})
+        out.append({"dia": creado_en[:10], "texto": _texto_marca(mensaje)})
     return out
 
 
@@ -991,6 +998,8 @@ def piezas(carga, reglas_cliente):
         escalon = pz.get("escalon_rescate") or 0
         out.append({
             "ep_id": ep_id, "experimento_id": ex["id"], "nombre": pz["nombre"], "pais": pz["pais"], "es_imagen": es_imagen,
+            # Apps: «iOS» / «Android» (la misma pieza tiene una fila por tienda); None en los demás.
+            "plataforma": app_tiendas.OS_META.get((pz.get("extra") or {}).get("plataforma")),
             "url_miniatura": pz.get("url_miniatura"), "url_video": pz.get("url_video"),
             "metrica": metrica, "serie": serie_p, "promedio": promedio,
             "gasto": round(dinero["gasto"], 2), "ctr": detalle["ctr"], "gancho": detalle["gancho"], "cpc": detalle["cpc"],
@@ -1053,6 +1062,7 @@ def experimentos_tarjetas(carga):
         tope, gasto = float(ex.get("tope_total") or 0), float((ex.get("resumen") or {}).get("gasto") or 0)
         out.append({"id": ex["id"], "nombre": ex["nombre"], "estado": ex["estado"], "gasto": gasto, "tope": tope,
                     "pct_tope": min(100.0, gasto / tope * 100) if tope > 0 else None,
+                    "datos_viejos": experimentos.datos_viejos(ex, carga.datos.ahora),
                     "dia": _dia_del_experimento(ex, carga.datos.ahora), "dias": ex.get("dias"),
                     "n_piezas": len(ex.get("piezas") or []), "paises": [p["pais"] for p in ex.get("paises") or []],
                     "ganadoras": sum(1 for pz in ex.get("piezas") or [] if pz.get("veredicto") == "ganador"),
@@ -1104,14 +1114,17 @@ def pieza(cliente, ep_id, filtro, ahora_iso=None):
     pais_ex = next((p for p in ex.get("paises") or [] if p.get("pais") == pz.get("pais")), {})
     acciones = {"pieza_id": pz.get("pieza_id"), "url_imagen": pz.get("url_imagen"), "tipo": pz.get("tipo"),
                 "estado_experimento": ex.get("estado"),
-                "pais_experimento": {k: pais_ex.get(k) for k in ("pais", "estado", "meta_adset_id", "presupuesto_dia")}}
+                "pais_experimento": {k: pais_ex.get(k) for k in ("pais", "estado", "meta_adset_id", "meta_adsets", "presupuesto_dia")}}
+    eventos = _eventos_pieza(cliente, ep_id)
+    marcas_panel = [{"dia": ev["creado_en"][:10], "texto": _texto_marca(ev.get("mensaje"))}
+                    for ev in reversed(eventos[:MAX_MARCAS]) if ev.get("creado_en")]
     return dict(piezas(carga, proyectos.reglas_defecto(cliente))[0], **acciones, moneda=carga.moneda,
                 periodo=_periodo_json(carga.per), indicadores=indicadores(carga),
                 series={k: s[k] for k in ("dias", "gasto", "roas", "ctr", "cpc", "cpm", "frecuencia", "gancho", "moneda")},
                 curva=_curva(carga.dias_act, bool(pz.get("es_imagen"))), desgloses=desgloses(carga),
                 rankings=dict(extra.get("rankings_meta") or {}),
                 diagnostico=extra.get("diagnostico") if isinstance(extra.get("diagnostico"), dict) else None,
-                eventos=_eventos_pieza(cliente, ep_id), experimento={"id": ex["id"], "nombre": ex["nombre"]})
+                eventos=eventos, marcas=marcas_panel, experimento={"id": ex["id"], "nombre": ex["nombre"]})
 
 
 # ---------- todo junto ----------
@@ -1143,6 +1156,7 @@ def contexto(cliente, filtro, ahora_iso=None, total_entre=None):
     return {
         "filtro": filtro, "query": a_query(filtro), "opciones": _opciones(carga), "periodo": _periodo_json(per),
         "moneda": carga.moneda, "indicadores": indic, "serie": serie_dia, "marcas": marcas_dia,
+        "metrica": "roas" if carga.datos.exps and all(_metrica_principal(e) == "roas" for e in carga.datos.exps) else "ctr",
         "embudo": embudo(carga, promedio_embudo(cliente)), "piezas": lista, "evolucion": lista[:EVOLUCION_PIEZAS],
         "desgloses": desglose, "paises": paises(carga), "experimentos": experimentos_tarjetas(carga),
         "generacion": total_entre(cliente, tablero.INICIO if per["es_todo"] else per["desde"], per["hasta"]),

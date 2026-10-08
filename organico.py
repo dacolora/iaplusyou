@@ -91,6 +91,9 @@ _COPY = {
     "es": {"link_bio": "Link en bio.", "cta": "Consíguelo aquí", "escribenos": "Escríbenos para conseguirlo."},
     "en": {"link_bio": "Link in bio.", "cta": "Get it here", "escribenos": "Message us to get it."},
     "pt": {"link_bio": "Link na bio.", "cta": "Garanta o seu", "escribenos": "Fale com a gente para garantir o seu."},
+    # Noruega y Suecia (2026-10-08): contenido por idioma de publicación, no pasa por el catálogo.
+    "sv": {"link_bio": "Länk i bion.", "cta": "Skaffa din här", "escribenos": "Skriv till oss för att få din."},
+    "no": {"link_bio": "Lenke i bio.", "cta": "Skaff din her", "escribenos": "Send oss en melding for å få din."},
 }
 
 

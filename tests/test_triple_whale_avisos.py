@@ -77,3 +77,27 @@ def test_sin_ventas_atribuidas_avisa_una_sola_vez_y_se_rearma_cuando_vuelven(con
 
 def test_sin_conexion_no_hace_nada(base_temporal):
     assert avisos.revisar_y_avisar("nadie") is None
+
+
+def test_revisar_evalua_todas_las_tiendas(conectado, monkeypatch):
+    """Evaluar por tienda daría perdedores falsos con una cuenta compartida: los avisos miran «Todas»."""
+    from triple_whale import panel
+    pedidos = []
+
+    def evaluar(cliente, dias=30, canal=None, tienda_id="no se pasó", hoy=None):
+        pedidos.append((cliente, dias, tienda_id))
+        return _ev(anuncio("g1", pedidos=5, ingresos=400)), "2026-09-01", "2026-09-30"
+    monkeypatch.setattr(panel, "evaluar_periodo", evaluar)
+    assert avisos.revisar_y_avisar("acme") is None
+    assert pedidos == [("acme", avisos.DIAS, None)]
+    # La base queda en los ajustes del proyecto, no en una tienda.
+    assert set(triple_whale_tiendas.ajustes("acme")["extra"]["avisados"]) == {"g1"}
+    assert "avisados" not in triple_whale_tiendas.tiendas("acme")[0]["extra"]
+
+
+def test_con_varias_tiendas_manda_un_solo_correo(conectado, monkeypatch):
+    enviados = conectado
+    triple_whale_tiendas.agregar("acme", "tw_y", "no-acme.myshopify.com", "NO")
+    avisos.revisar_y_avisar("acme", ev=_ev(anuncio("p1", gasto=400)))
+    c = avisos.revisar_y_avisar("acme", ev=_ev(anuncio("p1", gasto=400), anuncio("g2", pedidos=4, ingresos=300)))
+    assert c["avisado"] and len(enviados) == 1

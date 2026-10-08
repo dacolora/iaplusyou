@@ -21,10 +21,10 @@ from sprints.sugerencias import COLORES
 ESTADOS_ESTUDIO = ("armando", "generando", "revisando")
 FUENTES_PLATAFORMA = ("amazon", "meli", "tiktok_shop", "walmart", "aliexpress")   # claves de nicho.fuentes.plataformas (Partes 3 y 4)
 FUENTES = ("texto", "csv", "reddit", "youtube", "apify") + FUENTES_PLATAFORMA
-PAISES_ESTUDIO = ("CO", "MX", "US", "ES", "BR", "AR", "CL", "PE", "UY", "EC", "SE", "GB", "DE", "FR", "IT", "NL", "CA", "AU", "IN", "JP", "AE")
+PAISES_ESTUDIO = ("CO", "MX", "US", "ES", "BR", "AR", "CL", "PE", "UY", "EC", "SE", "NO", "GB", "DE", "FR", "IT", "NL", "CA", "AU", "IN", "JP", "AE")
 NOMBRES_PAIS = {"CO": N_("Colombia"), "MX": N_("México"), "US": N_("Estados Unidos"), "ES": N_("España"), "BR": N_("Brasil"),
                 "AR": N_("Argentina"), "CL": N_("Chile"), "PE": N_("Perú"), "UY": N_("Uruguay"), "EC": N_("Ecuador"),
-                "SE": N_("Suecia"), "GB": N_("Reino Unido"), "DE": N_("Alemania"), "FR": N_("Francia"), "IT": N_("Italia"),
+                "SE": N_("Suecia"), "NO": N_("Noruega"), "GB": N_("Reino Unido"), "DE": N_("Alemania"), "FR": N_("Francia"), "IT": N_("Italia"),
                 "NL": N_("Países Bajos"), "CA": N_("Canadá"), "AU": N_("Australia"), "IN": N_("India"), "JP": N_("Japón"),
                 "AE": N_("Emiratos Árabes Unidos")}
 MAX_INVESTIGACIONES_PREVIAS = 3
@@ -304,10 +304,21 @@ def agregar_comentarios(cliente, estudio_id, fuente, lista):
     with db.conectar() as con:
         if not _fila(con, db.estudio, estudio_id, cliente):
             raise ErrorDatos(gettext("Ese estudio no existe."))
+        historicos = set()
+        if fuente == "reddit":
+            _bloquear(con, db.estudio, estudio_id, cliente)
+            historicos = {(f.fuente_id, f.url) for f in con.execute(
+                sa.select(db.comentario.c.fuente_id, db.comentario.c.url).where(
+                    db.comentario.c.cliente == cliente, db.comentario.c.estudio_id == estudio_id,
+                    db.comentario.c.fuente == "reddit")) if not f.fuente_id.startswith(("t1_", "t3_"))}
         for c in lista or []:
             texto = _texto((c or {}).get("texto"))
             fuente_id = _texto((c or {}).get("fuente_id"), 120)
             if not texto or not fuente_id:
+                continue
+            if (fuente == "reddit" and fuente_id.startswith(("t1_", "t3_"))
+                    and c.get("url") and (fuente_id[3:], _texto(c["url"], 500)) in historicos):
+                repetidos += 1
                 continue
             r = con.execute(db.comentario.insert().prefix_with("OR IGNORE").values(
                 cliente=cliente, creado_en=ahora, actualizado_en=ahora, estudio_id=estudio_id, fuente=fuente,

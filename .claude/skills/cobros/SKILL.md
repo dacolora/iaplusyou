@@ -27,7 +27,7 @@ Esto se suma a la regla 1 del repo (precio antes del cobro, `max_intentos=1`, ga
 | `cobros/rutas.py` | Blueprint: `/cliente/<c>/saldo/…`, `/pagos/bold/webhook`, `/admin/cobros…` | nada directo: llama a los de arriba |
 | `tareas/cobros.py` | `cobros_verificar_recargas`, periódica cada 10 min (`worker.py`) | vía `recargas.verificar_pendientes` |
 
-Tablas (migración `0032_cobros`; main ya tomó otra 0032 el 2026-10-08, así que se renumera a 0033 al sincronizar con main; revisa `alembic heads`): `cuenta_saldo` (cobrar, margen NULL = global, `umbral_aviso`), `movimiento_saldo` (el libro, `UNIQUE(tipo, gasto_id)` y `UNIQUE(tipo, recarga_id)`), `reserva_saldo` (PK `(cliente, job_id)`), `recarga` (`referencia` y `pago_id` únicos), `pago_evento` (cada notificación de Bold, `UNIQUE(proveedor, evento_id)`). Nadie más hace INSERT/UPDATE/DELETE en ellas.
+Tablas (migración `0033_cobros`, `down_revision` 0032 = `0032_triple_whale_varias_tiendas` de main; era la 0032 en la rama y se renumeró al mezclar main el 2026-10-08): `cuenta_saldo` (cobrar, margen NULL = global, `umbral_aviso`), `movimiento_saldo` (el libro, `UNIQUE(tipo, gasto_id)` y `UNIQUE(tipo, recarga_id)`), `reserva_saldo` (PK `(cliente, job_id)`), `recarga` (`referencia` y `pago_id` únicos), `pago_evento` (cada notificación de Bold, `UNIQUE(proveedor, evento_id)`). Nadie más hace INSERT/UPDATE/DELETE en ellas.
 
 **Montos del libro: milésimas de dólar, enteros** (US$ 1,50 = 1500). `libro.precio_milesimas(costo, margen)` = `ceil(round(costo × margen × 1000, 6))`: el `round` evita que `0.01 × 1.5 × 1000 = 15.000000000000002` suba a 16. `movimiento_saldo.concepto` guarda un **código** (el `tipo` del gasto: `video`, `final`…, o `recarga_bold`, `recarga_manual`, `ajuste`, `anulacion_bold`) y se traduce al pintar (`vista.nombre_concepto`). Tipos de movimiento: `recarga`+, `cobro`−, `reverso`+, `no_cobrado` 0, `ajuste`±, `anulacion`−. Saldo = `SUM(milesimas)` por proyecto (no se guarda en caché). Disponible = saldo − reservas vivas.
 
@@ -61,7 +61,7 @@ En un proyecto que cobra **toda persona que lo mira ve precios, no costos** (tam
 
 - `dashboard._margen_de_precio` (before_request) fija `g.cliente_precio` (el `<cliente>` de la URL o el de la sesión); `gastos.margen_vigente()` lee el margen la primera vez que algo pinta un precio y lo deja en `g.margen_precio`. Fuera de una petición, o en un proyecto que no cobra, es 1.
 - `gastos.estimar()["usd"]` **sigue siendo el COSTO** (lo usan reservas, `encolar`, comparaciones); su `texto` y `usd_precio` ya llevan el margen. Plantillas: el filtro `|precio` multiplica por el margen sin formatear (`data-usd-seg="{{ tarifa|precio }}"`); el JS de Crear no cambia. `|cobrado('video:' ~ id)` y `ver_cobrado()` dan lo ya cobrado de una pieza.
-- **Lo ya gastado**: a quien no es admin, en un proyecto que cobra, toda cifra de lo ya gastado es lo **cobrado** (cobro + reverso del libro), nunca el costo ni «costo × margen de hoy» (el margen del cobro queda en el libro). `cobros.vista.gasto_para(cliente, es_admin)` devuelve las funciones de gasto con la misma forma que las de `gastos`: modo `costo` (no cobra), `cobrado` (cliente) o `doble` (admin: costo y cobrado). Toda pantalla nueva que muestre una cifra de la tabla `gasto` a un cliente pasa por ahí.
+- **Lo ya gastado**: a quien no es admin, en un proyecto que cobra, toda cifra de lo ya gastado es lo **cobrado** (cobro + reverso del libro), nunca el costo ni «costo × margen de hoy» (el margen del cobro queda en el libro). `cobros.vista.gasto_para(cliente, es_admin)` devuelve las funciones de gasto con la misma forma que las de `gastos`: modo `costo` (no cobra), `cobrado` (cliente) o `doble` (admin: costo y cobrado). Toda pantalla nueva que muestre una cifra de la tabla `gasto` a un cliente pasa por ahí. Una lectura nueva de `gastos` se suma a `_COSTO`, `_COBRADO` y `OCULTO` a la vez (al mezclar main el 2026-10-08, «todas las métricas desde el inicio» trajo `gastos.resumen_todo`: su par es `resumen_todo_cobrado`; Configuración › Gasto y el chip lateral ya no muestran el mes, y la cifra de Final edition para el cliente es `cobrado_donde(cliente, prefijos=("final:",))`, el mismo alcance que `gastos.total_tipo(cliente, "final")`).
 - **El costo no llega al navegador de un proyecto que cobra**: lo que vuelve (`total_visto`, `precio_visto`) es un precio, y el servidor lo convierte una vez con `gastos.costo_de_precio` antes de compararlo o pasarlo al libro.
 - **Falla cerrado**: si una lectura del libro falla, un cliente (no admin) ve «—», nunca el costo (`vista.puede_ver_costo`, `OCULTO`, `_filtro_cobrado`, `_ver_cobrado`). Si falla la lectura del margen de la petición, `gastos.texto_precio` y el `texto`/`usd_precio` de `gastos.estimar` dicen «precio no disponible» (`gastos._margen_fallido`, `g.margen_precio_fallo`); `margen_vigente()` sigue devolviendo 1,0 para no romper a quien multiplica (revisión final 2026-10-08).
 - Prueba de humo: `tests/test_cobros_precios.py::test_un_proyecto_que_cobra_muestra_precios_y_no_costos` renderiza las pestañas con margen 1,5 y falla si aparece un costo.
@@ -103,16 +103,16 @@ En un proyecto que cobra **toda persona que lo mira ve precios, no costos** (tam
 
 ## Rulings de implementación (2026-10-08, donde difieren del spec)
 
-- Migración 0032 → renumerada si main ya tomó el número (ver arriba).
+- Migración 0032 → renumerada a 0033 al mezclar main el 2026-10-08 (main ya tenía `0032_triple_whale_varias_tiendas`).
 - `movimiento_saldo.concepto` guarda un código, no texto del idioma del proyecto.
 - El respaldo del worker mira el **saldo**, no el disponible, y omite las continuaciones: un trabajo puede arrancar con disponible negativo por otras reservas.
 - `g.margen_precio` se lee perezoso (al primer precio de la petición), no en cada `before_request`.
 - `tienda_sync_productos` sigue sin frenar, pero su paso de pago (la regla de fidelidad con Claude, `importador._regla_si_hay_saldo`) pide saldo y se salta sin él. `exp_decidir` sigue exento (pausar perdedoras nunca se frena), pero su diagnóstico con Claude pide saldo; `sprint_qa_pendientes` encola cada QA con su precio reservado (revisión final 2026-10-08).
-- Los tipos marcados «cobra» exigen saldo positivo aunque una corrida concreta sea gratis (conservador; PND-163).
+- Los tipos marcados «cobra» exigen saldo positivo aunque una corrida concreta sea gratis (conservador; PND-168).
 - Una pieza que falló tras pagar (`no_cobrado`) y se recupera bajo la misma referencia sigue sin cobrarse; el aviso «no se te cobró» sale también en fallos de llamadas automáticas a Claude.
 - La ganancia del mes cuenta como pérdida el costo de un `no_cobrado` igual que el de un cobro revertido; para la lectura literal, quita `"no_cobrado"` de `TIPOS_CON_COSTO` en `cobros/vista.py`.
 - En el catálogo en inglés, «margen» es «markup» y «Cobrar» es «Charge usage» (`docs/i18n/glosario.md`).
 
 ## Pendientes de esta área
 
-`docs/pendientes.md` PND-156 a PND-170: DIAN e IVA, la prueba real con Bold, suscripción y recarga automática, otra pasarela, promociones, y los bordes y la higiene que dejó la revisión de cada tarea.
+`docs/pendientes.md` PND-161 a PND-175: DIAN e IVA, la prueba real con Bold, suscripción y recarga automática, otra pasarela, promociones, y los bordes y la higiene que dejó la revisión de cada tarea.

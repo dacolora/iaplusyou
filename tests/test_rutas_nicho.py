@@ -747,3 +747,36 @@ def test_comentarios_y_citas_de_otro_mercado_llevan_su_pais(app, llaves_inv, mon
     assert pedidos == [[ids["w1"]]]                       # la página solo mira el extra de los comentarios citados (ola final B6)
     html = app["c"].get("/cliente/acme/nicho/avatares").data.decode()
     assert "otro mercado: Estados Unidos" in html.split("«la garrafa pesa demasiado»")[1].split("</blockquote>")[0]
+
+
+def test_pnd092_estimado_agrupa_inputs_y_rechaza_precio_viejo(app, monkeypatch):
+    import json, re, subprocess
+    from nicho import datos
+    monkeypatch.setenv("APIFY_TOKEN", "valor-falso-llave-de-prueba")
+    eid = _estudio(datos)
+    html = app["c"].get(f"/cliente/acme/nicho/{eid}").data.decode()
+    scripts = re.findall(r"<script[^>]*>(.*?)</script>", html, re.S)
+    codigo = next(s for s in scripts if "form-apify" in s)
+    programa = '''
+    const vm = require('vm'), assert = require('assert');
+    const listeners = {}, timers = new Map(); let contador=0, llamados=0;
+    const sel={value:'amazon_resenas', options:[{dataset:{}}],selectedIndex:0,addEventListener:(e,fn)=>listeners['sel:'+e]=fn};
+    const max={value:'100',addEventListener:(e,fn)=>listeners['max:'+e]=fn};
+    const form={addEventListener:(e,fn)=>listeners['form:'+e]=fn};
+    const elems={'form-apify':form,'apify-actor':sel,'apify-max':max,'apify-estimado':{},'apify-ayuda':{}};
+    const context={document:{getElementById:id=>elems[id]},setTimeout:fn=>{timers.set(++contador,fn);return contador},clearTimeout:id=>timers.delete(id),
+       fetch:()=>{llamados++;return Promise.resolve({ok:true,json:()=>Promise.resolve({texto:'USD 1',max_resultados:100})})},alert:()=>{},confirm:()=>true};
+    vm.runInNewContext(CODIGO,context);
+    (async()=>{ await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
+      assert.equal(llamados,1);
+      for(const n of ['200','300','400']){max.value=n;listeners['max:input']();}
+      assert.equal(llamados,1,'una petición por cada input');
+      let bloqueado=false;listeners['form:submit']({preventDefault:()=>bloqueado=true,stopPropagation:()=>{}});
+      assert.equal(bloqueado,true,'precio anterior aceptado');
+      assert.equal(llamados,2); // submit pide el precio actual inmediatamente
+      for(const fn of [...timers.values()])fn();
+      assert.equal(llamados,2,'timer viejo duplica petición tras submit');
+    })().catch(e=>{console.error(e);process.exitCode=1});
+    '''.replace('CODIGO',json.dumps(codigo))
+    r = subprocess.run(["node", "-e", programa], capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout + r.stderr

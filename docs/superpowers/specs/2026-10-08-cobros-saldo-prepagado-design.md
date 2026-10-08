@@ -34,7 +34,7 @@ pasarela, ni un freno previo (hoy «sin saldo» se detecta cuando el proveedor y
 Todo monto del libro se guarda en **milésimas de dólar, entero** (`US$ 1,50 = 1500`). En pantalla se redondea a
 centavos con `gastos.formatear`. Así un cobro de US$ 0,015 no se pierde ni se inventa.
 
-## 2. Datos (migración 0032)
+## 2. Datos (migración 0033; 0032 en el borrador, renumerada al mezclar main el 2026-10-08)
 
 ```
 cuenta_saldo
@@ -432,7 +432,7 @@ Pasada obligatoria del subagente `auditor-seguridad` antes de mezclar. Puntos fi
 
 ## 15. Despliegue
 
-Migración 0032 (tablas nuevas, nada se altera). Reinicio de los dos servicios (cambian el worker y las rutas). Con todo
+Migración 0033 (tablas nuevas, nada se altera; era 0032 antes de mezclar main). Reinicio de los dos servicios (cambian el worker y las rutas). Con todo
 apagado por defecto, el despliegue no cambia lo que ve ni paga ningún proyecto. Después, Daniel: llaves de Bold en el
 `.env` del VPS, la URL del webhook (`https://app.creatvmachine.com/pagos/bold/webhook`) en el panel de Bold, y prender
 «Cobrar» proyecto por proyecto en /admin/cobros.

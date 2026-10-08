@@ -4,7 +4,8 @@
 import { redondearPar } from "./numeros.js";
 import { t } from "./textos.js";
 
-export const SIMBOLOS = { CO: "$", MX: "$", US: "$", ES: "€", BR: "R$", AR: "$", CL: "$", PE: "S/" };
+export const SIMBOLOS = { CO: "$", MX: "$", US: "$", ES: "€", BR: "R$", AR: "$", CL: "$", PE: "S/", NO: "kr", SE: "kr" };
+const CORONAS = new Set(["NO", "SE"]);
 const SIN_DECIMALES = new Set(["CO", "AR", "CL"]);
 
 function miles(digitos, separador) {
@@ -32,6 +33,13 @@ export function formatearPrecio(valor, pais) {
     const entero = redondearPar(valor);
     const signo = entero < 0 ? "-" : "";
     return `${simbolo} ${signo}${miles(String(Math.abs(entero)), ".")}`;
+  }
+  if (CORONAS.has(pais)) {
+    // Coronas: miles con espacio, símbolo detrás; sin decimales si el valor es entero, con coma si no.
+    const neg = valor < 0 ? "-" : "";
+    if (Number.isInteger(valor)) return `${neg}${miles(String(Math.abs(valor)), " ")} ${simbolo}`;
+    const [e, d] = centavos(valor);
+    return `${neg}${miles(e, " ")},${d} ${simbolo}`;
   }
   // Aquí el signo sí sale del valor original (como f"{valor:,.2f}" de Python):
   // -0.001 en US da "$-0.00", con el signo aunque los dígitos sean cero.

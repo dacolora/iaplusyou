@@ -516,9 +516,11 @@ def campana_panel(cliente, sid, cid):
         if archivada:
             personas_.append(archivada)
     ya_ids = {(r.get("extra") or {}).get("referente_id") for r in c["referencias_lista"]} - {None}
+    sugerencias_ia = (c.get("extra") or {}).get("sugerencias_ia") or []
+    referentes_ia = referentes_datos.por_ids(cliente, [s.get("referente_id") for s in sugerencias_ia])
     candidatos_ia = []
-    for item in (c.get("extra") or {}).get("sugerencias_ia") or []:
-        ref = referentes_datos.referente(cliente, item.get("referente_id"))
+    for item in sugerencias_ia:
+        ref = referentes_ia.get(item.get("referente_id"))
         if ref and ref["id"] not in ya_ids:
             candidatos_ia.append({**ref, "razon": item.get("razon") or ""})
     familias = sorted(referentes_datos.familias(cliente), key=lambda f: (-int(f.get("n") or 0), f["nombre"]))
@@ -922,9 +924,10 @@ def campana_ver(cliente, sid, cid):
     palabra_sugerida = (producto or {}).get("nombre") or ""
     pais_sugerido = proyectos.pais(cliente)
     sugerencias_ia_crudas = (c.get("extra") or {}).get("sugerencias_ia") or []
+    referentes_ia = referentes_datos.por_ids(cliente, [s.get("referente_id") for s in sugerencias_ia_crudas])
     candidatos_ia = []
     for item in sugerencias_ia_crudas:
-        ref = referentes_datos.referente(cliente, item.get("referente_id"))
+        ref = referentes_ia.get(item.get("referente_id"))
         if ref and ref["id"] not in ya_ids:
             candidatos_ia.append({**ref, "razon": item.get("razon") or ""})
     job_sugerir_ia = tareas_sprints.job_id_sugerir_biblioteca(cliente, cid)

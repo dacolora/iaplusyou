@@ -676,7 +676,8 @@ def test_crear_un_prompt_listo_reciente_no_molesta_y_uno_de_2_horas_si(base_temp
     x, = alertas._fuente_crear("acme", AHORA)
     assert x["clave"] == "crear:prompt_listo" and x["nivel"] == "atencion" and x["grupo"] == "decision"
     assert x["titulo"] == "1 prompt listo sin generar en Crear" and x["tab"] == "creativeflowplus"
-    assert x["ancla"] == "cf-cf_20261002_080000_000002" and x["url"] is None and x["solo_admin"] is False
+    assert x["ancla"] == "cf-cf_20261002_080000_000002"
+    assert x["url"] == "#creativeflowplus?cf=cf_20261002_080000_000002" and x["solo_admin"] is False
     assert x["huella"] == alertas.huella("cf_20261002_080000_000002")
     assert "generar cuesta lo que dice el botón" in x["detalle"]                    # nada se cobra sin ver el precio
 

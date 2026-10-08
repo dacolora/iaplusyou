@@ -25,6 +25,7 @@
 <div id="tw-panel" data-url="{{ url_for('triple_whale.ver_panel', cliente=cliente) }}">
   <p class="vacio">{{ _('Cargando las métricas de Triple Whale…') }}</p>
 </div>
+<script src="{{ url_for('static', filename='tw_resultados.js') }}" defer></script>
 <script>
   (function () {
     var cont = document.getElementById('tw-panel');
@@ -50,6 +51,8 @@
         .then(function (r) { return r.ok ? r.text() : Promise.reject(r.status); })
         .then(function (html) {
           cont.innerHTML = html;
+          // «Resultados de tu tienda»: la gráfica la dibuja static/tw_resultados.js (los <script> del fragmento no corren).
+          if (window.TwResultados) window.TwResultados.iniciar(cont);
           cont.querySelectorAll('[data-poll-job]').forEach(function (el) {
             if (typeof iniciarPolling === 'function') iniciarPolling(el.dataset.pollJob, el.id);
           });
@@ -92,3 +95,56 @@
   })();
 </script>
 {% endif %}
+<script>
+  /* Conexión (_triple_whale_conectar.html, incluido arriba en los dos estados):
+     confirmar «Quitar» una tienda y, al salir del campo dominio, preseleccionar
+     el país que adivina el servidor. `pais.dataset.auto` recuerda el país que
+     puso este JS: si la persona corrige el dominio y el selector sigue con ese
+     valor, se vuelve a adivinar (norge → sverige pasa de Noruega a Suecia, y un
+     dominio sin pista vuelve a «Detectar por el dominio»); si la persona eligió
+     un país a mano (evento change del selector), no se toca (revisión del spec,
+     2026-10-08). */
+  (function () {
+    var con = document.getElementById('tw-conexion');
+    if (!con) return;
+    con.addEventListener('submit', function (ev) {
+      var f = ev.target.closest('form[data-confirmar]');
+      if (f && !window.confirm(f.dataset.confirmar)) ev.preventDefault();
+    });
+    var form = document.getElementById('form-triple-whale');
+    if (!form) return;
+    var dominio = form.querySelector('[name="dominio_tienda"]');
+    var pais = form.querySelector('select[name="pais"]');
+    if (!dominio || !pais || !form.dataset.adivinar) return;
+    var ultimo = '', pedido = 0;
+    function libre() {
+      // El selector es del JS mientras siga vacío o con el país que el JS puso.
+      return !pais.value || pais.value === pais.dataset.auto;
+    }
+    function adivinar() {
+      var valor = dominio.value.trim();
+      if (!valor || valor === ultimo || !libre()) return;
+      ultimo = valor;
+      var mio = ++pedido;
+      fetch(form.dataset.adivinar + '?dominio=' + encodeURIComponent(valor), { headers: { 'X-Requested-With': 'fetch' } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (!d || mio !== pedido || !libre()) return;
+          if (d.pais && pais.querySelector('option[value="' + d.pais + '"]')) {
+            pais.value = d.pais;
+            pais.dataset.auto = d.pais;
+          } else if (pais.dataset.auto) {
+            pais.value = '';
+            delete pais.dataset.auto;
+          }
+        })
+        .catch(function () { /* sin red: el servidor vuelve a adivinar al enviar */ });
+    }
+    pais.addEventListener('change', function () {
+      delete pais.dataset.auto;   // la persona eligió: el JS ya no lo toca
+      ultimo = '';                // si volvió a «Detectar por el dominio», el próximo blur adivina de nuevo
+    });
+    dominio.addEventListener('change', adivinar);
+    dominio.addEventListener('blur', adivinar);
+  })();
+</script>

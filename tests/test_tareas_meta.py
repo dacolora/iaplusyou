@@ -151,7 +151,7 @@ def test_publicar_crea_campana_y_deja_pausado(base_temporal, monkeypatch):
     monkeypatch.setattr(tm.meta_ad, "crear_ad", lambda nombre, adset_id, creative_id: {"id": "a1"})
     monkeypatch.setattr(tm.bitacora, "registrar", lambda *a, **k: None)
     # Con Triple Whale conectado, el creative lleva sus parámetros de rastreo.
-    monkeypatch.setattr(tm.triple_whale_tiendas, "obtener", lambda cliente: {"dominio_tienda": "acme.myshopify.com"})
+    monkeypatch.setattr(tm.triple_whale_tiendas, "tiendas", lambda cliente: [{"id": 1, "dominio": "acme.myshopify.com"}])
 
     msg = tm.publicar({"payload": {"cliente": "acme", "ad_id": aid, "objetivo": "OUTCOME_TRAFFIC", "presupuesto_diario": 20000.0,
                                    "dias": 3, "pais": "CO", "edad_min": 18, "edad_max": 45,
@@ -300,3 +300,25 @@ def test_plantilla_anuncios_sueltos_compila():
     # del fragmento de resultados y un <script>iniciarPolling…</script> insertado con innerHTML no corre.
     assert "trabajos_ads" in src and 'data-poll-job="{{ trabajo_ad.job_id }}"' in src and "iniciarPolling" not in src
     assert not os.path.exists(os.path.join(raiz, "templates", "_tab_ads.html"))
+
+
+def test_pnd096_error_desarrollo_no_se_confunde_con_permisos(base_temporal, monkeypatch):
+    import ads
+    import tareas.meta as tm
+    aid = ads.crear('acme', 'flowplus', 'cf', 'https://r2/i.png', 'foto', 'P')
+    ads.actualizar('acme', aid, estado='publicando')
+    monkeypatch.setattr(tm.meta_conexion, 'cargar', lambda c: {'moneda': 'USD'})
+    monkeypatch.setattr(tm.meta_conexion, 'credenciales_ads', _creds_falsas)
+    monkeypatch.setattr(tm.meta_auth, 'configurar', lambda *a: None)
+    monkeypatch.setattr(tm.meta_auth, 'limpiar', lambda: None)
+    monkeypatch.setattr(tm.bitacora, 'registrar', lambda *a: None)
+    def falla(*a):
+        raise RuntimeError('Meta Ads (campaigns) respondió 400: {"error":{"code":3,"error_subcode":1885183}}')
+    monkeypatch.setattr(tm.meta_campaign, 'crear_campaign', falla)
+    with pytest.raises(RuntimeError):
+        tm.publicar({'payload': {'cliente': 'acme', 'ad_id': aid, 'objetivo': 'OUTCOME_TRAFFIC',
+                                'presupuesto_diario': 10, 'dias': 3, 'pais': 'CO', 'edad_min': 18,
+                                'edad_max': 65, 'destino_url': 'https://tienda/p'}})
+    error = ads.cargar('acme')[aid]['error']
+    assert 'modo Desarrollo' in error and 'Live' in error
+    assert 'Desconecta' not in error and 'no se duplica' not in error

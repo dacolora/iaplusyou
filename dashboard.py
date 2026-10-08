@@ -8,6 +8,7 @@ Uso:
 
 Solo corre en tu máquina (127.0.0.1), no queda expuesto a internet.
 """
+import hashlib
 import json
 import logging
 import math
@@ -55,6 +56,7 @@ import llaves
 import alertas
 import cuentas
 import meta_conexion
+import app_tiendas
 import meta_agencia
 import meta_errores
 import flowplus_prompt
@@ -96,6 +98,7 @@ import conectores
 import tiendas
 import triple_whale
 import triple_whale_tiendas
+from triple_whale import paises as tw_paises
 import tablero
 import resultados
 import admin
@@ -2001,7 +2004,20 @@ def _etiquetas_exp():
     }
 
 
-def _contexto_experimentos(cliente, con_elegibles=False, con_organico=True):
+def _contexto_motor_experimentos(cliente):
+    """Lo que el armazón y Configuración pintan sin cargar el fragmento."""
+    return {
+        "reglas_defecto_exp": decisor.REGLAS_DEFECTO,
+        "reglas_enteras_exp": decisor.ENTEROS,
+        "reglas_desactivables_exp": decisor.UMBRALES_DESACTIVABLES,
+        "etiquetas_reglas_exp": decisor.ETIQUETAS,
+        "grupos_reglas_exp": decisor.GRUPOS_REGLAS,
+        "reglas_cliente": proyectos.reglas_defecto(cliente),
+        "correo_notificaciones": proyectos.correo_notificaciones(cliente) or "",
+    }
+
+
+def _contexto_experimentos(cliente, con_elegibles=False, con_organico=True, gestion_id=None):
     """Lo que pintan la gestión de un experimento, sus propuestas y reglas, los aprendizajes y los anuncios
     sueltos (`_exp_gestionar.html`, `_exp_probar.html`, `_anuncios_sueltos.html`, `_aprendizajes.html`): el
     contexto de Experimentos que hasta E2 armaba `ver_cliente`, sacado a una función para que lo compartan la
@@ -2028,8 +2044,10 @@ def _contexto_experimentos(cliente, con_elegibles=False, con_organico=True):
     # con campaña ya creada en Meta) — evita 2 queries por cada experimento
     # ya cerrado/armando.
     experimentos_exp = experimentos.cargar(cliente)
+    gestion = experimentos_exp if gestion_id is None else [e for e in experimentos_exp if e["id"] == gestion_id]
     trabajos_exp = {}
-    for e in experimentos_exp:
+    for e in gestion:
+        e["datos_viejos"] = experimentos.datos_viejos(e)
         if e["estado"] == "lanzando":
             jid = tareas_exp.job_id_lanzar(cliente, e["id"])
             if trabajos.en_curso(jid):
@@ -2041,7 +2059,7 @@ def _contexto_experimentos(cliente, con_elegibles=False, con_organico=True):
     moneda_exp = (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
     # Bloque 4: propuestas pendientes por experimento (una consulta por
     # experimento con contador > 0), reglas y modos para los formularios.
-    propuestas_exp = {e["id"]: propuestas.pendientes(cliente, e["id"]) for e in experimentos_exp if e["propuestas_pendientes"]}
+    propuestas_exp = {e["id"]: propuestas.pendientes(cliente, e["id"]) for e in gestion if e["propuestas_pendientes"]}
     reglas_cliente = proyectos.reglas_defecto(cliente)
     # Una sola consulta (solo caché) para atribución y objetivo sugeridos.
     atribucion_sug = experimentos.atribucion_sugerida(cliente)
@@ -2054,6 +2072,9 @@ def _contexto_experimentos(cliente, con_elegibles=False, con_organico=True):
         "objetivos_exp": meta_campaign.OBJETIVOS_VALIDOS_FASE1,
         "objetivo_exp_sugerido": experimentos.objetivo_sugerido(cliente, atribucion_sug),
         "nombres_objetivo_exp": NOMBRES_OBJETIVO_EXP,
+        "app_id_guardado": meta_conexion.cargar_app_anunciada(cliente),
+        "limites_diarios_exp": {e["id"]: {p["pais"]: presupuesto_experimentos.limite_diario(e, p["pais"])
+                                           for p in e["paises"]} for e in gestion},
         "minimo_diario_exp": PRESUPUESTO_MINIMO_DIARIO.get(moneda_exp, 1),
         "tope_campana_min_exp": lanzador.minimo_tope_campana(moneda_exp),
         "moneda_exp": moneda_exp,
@@ -2064,7 +2085,7 @@ def _contexto_experimentos(cliente, con_elegibles=False, con_organico=True):
         "etiquetas_reglas_exp": decisor.ETIQUETAS,
         "grupos_reglas_exp": decisor.GRUPOS_REGLAS,
         "reglas_cliente": reglas_cliente,
-        "reglas_efectivas_exp": {e["id"]: decisor.reglas_efectivas(reglas_cliente, e["reglas"]) for e in experimentos_exp},
+        "reglas_efectivas_exp": {e["id"]: decisor.reglas_efectivas(reglas_cliente, e["reglas"]) for e in gestion},
         "correo_notificaciones": proyectos.correo_notificaciones(cliente) or "",
         "aprendizajes_exp": proyectos.aprendizajes(cliente),
         "precio_diagnostico": gastos.estimar("diagnostico_pieza")["texto"],
@@ -2173,10 +2194,16 @@ def ver_cliente(cliente):
     # «Nuevo experimento» (`exp_nuevo`). Lo orgánico ya viene en `fe_ctx`, y las piezas elegibles (la galería) ya
     # no viajan en esta página: las pide `exp_nuevo`.
     # (El hotfix e8d433a del 2026-10-03 las devolvía mientras la pestaña vieja pintaba la galería; E2 la reemplaza.)
-    ctx_exp = _contexto_experimentos(cliente, con_organico=False)
-    ctx_meta = _contexto_meta(cliente, ctx_exp["experimentos"])
+    ctx_exp = _contexto_motor_experimentos(cliente)
+    ctx_meta = _contexto_meta(cliente)
+    # Sin Meta y sin nada probado, la pestaña es solo «Conecta Meta» (Daniel, 2026-10-08: la tabla vacía y una galería
+    # que dejaba marcar piezas sin poder lanzarlas confundían). Con Meta conectado ni se consulta.
+    ctx_exp["exp_sin_meta"] = not ctx_meta["meta_conectado"] and not experimentos.hay_historial(cliente)
     tiendas_cliente = tiendas.listar(cliente)
     triple_whale_conectado = triple_whale_tiendas.obtener(cliente)
+    # Las tarjetas de tiendas (spec 2026-10-08 §6.2): país y bandera en el idioma de quien mira.
+    tw_tiendas = [dict(t, nombre=triple_whale_panel.nombre_tienda(t), bandera=tw_paises.bandera(t["pais"]))
+                  for t in (triple_whale_conectado or {}).get("tiendas", [])]
     # Catálogo (spec 2026-09-28): la galería y la ficha llegan por fragmento;
     # la página solo trae contadores por categoría y lo que Crear necesita.
     activos_producto = _productos_con_uso(cliente)
@@ -2268,6 +2295,7 @@ def ver_cliente(cliente):
         tiendas_cliente=tiendas_cliente,
         triple_whale_conectado=triple_whale_conectado,
         tw_modelos=triple_whale.MODELOS, tw_ventanas=triple_whale.VENTANAS, tw_monedas=triple_whale.MONEDAS,
+        tw_tiendas=tw_tiendas, tw_paises=tw_paises.paises_opciones(idiomas.activo()),
         trabajos_prod=_trabajos_productos(cliente, tiendas_cliente),
         precio_pedidos=gastos.estimar("pedidos_producto")["texto"],
         cifrado_ok=cifrado.disponible(),
@@ -2297,7 +2325,7 @@ def _llaves_visibles(tarjetas, rol):
     return tarjetas if rol == "admin" else []
 
 
-PLATAFORMAS_VERTICALES = {"instagram", "tiktok"}
+from plataformas import PLATAFORMAS_VERTICALES
 
 
 def _aspect_ratio_para_plataformas(platforms):
@@ -3415,13 +3443,13 @@ def _tablero_final(items, ediciones_por_cf, n=TARJETAS_POR_PAGINA, cliente=None)
     `final_edition.tablero`): las primeras `n` tarjetas de «En edición» y de
     «Finalizados», sus totales y las cifras de la cabecera. Los videos listos
     de Crear no van en la página: los trae el selector «+ Nueva» por fetch."""
-    t = fe_tablero.armar(items, ediciones_por_cf)
+    t = fe_tablero.armar(items, ediciones_por_cf, gastos.total_tipo(cliente, "final") if cliente else None)
     if cliente and t["cifras"].get("costo_usd"):
         try:
             if vista_cobros.ver_cobrado_aqui(cliente):
-                # «Costaron las finales listas»: lo cobrado por esas finales (cobros §7).
-                cobrado = vista_cobros.suma_vista(cliente, [(f"final:{f['id']}", f.get("costo_usd"))
-                                                            for _i, f in t["finalizados"]])
+                # «Costaron las finales»: lo cobrado por las finales (cobros §7), con el
+                # mismo alcance que el costo (todas, también las fallidas, PND-111).
+                cobrado = vista_cobros.cobrado_donde(cliente, prefijos=("final:",))
                 t["cifras"] = {**t["cifras"], "costo_usd": cobrado or None}
         except Exception as e:  # noqa: BLE001 — falla cerrado: sin lo cobrado, sin cifra para quien no ve el costo
             print(f"[aviso] Final edition de {cliente}: no pude leer lo cobrado: {type(e).__name__}")
@@ -3456,6 +3484,7 @@ def _contexto_final_edition(cliente):
     return {
         **_contexto_organico(cliente),
         "paises_fe": fe_tipos.PAISES,
+        "idiomas_fe": IDIOMAS_FE,
         "voces_fe": fal_audio.VOCES,
         "mis_voces_fe": _mis_voces_fe(cliente),
         "estilos_fe": list(fe_tipos.ESTILOS_MUSICA),
@@ -3488,7 +3517,8 @@ PRESUPUESTO_MINIMO_DIARIO = presupuesto_experimentos.PRESUPUESTO_MINIMO_DIARIO
 NOMBRES_OBJETIVO_EXP = {"OUTCOME_SALES": idiomas.N_("Compras (requiere Pixel)"),
                         "OUTCOME_TRAFFIC": idiomas.N_("Tráfico (clics al enlace)"),
                         "OUTCOME_ENGAGEMENT": idiomas.N_("Interacción"),
-                        "OUTCOME_LEADS": idiomas.N_("Clientes potenciales")}
+                        "OUTCOME_LEADS": idiomas.N_("Clientes potenciales"),
+                        "OUTCOME_APP_PROMOTION": idiomas.N_("Instalaciones de la app")}
 
 PROVEEDORES_SWAP_IMAGEN = ("nano_banana", "nano_banana_fal", "qwen_edit", "nano_banana_pro_ultra", "seedream_v5_pro")
 PROVEEDORES_SWAP_VIDEO = (
@@ -4056,8 +4086,8 @@ def _bloqueo_cambio_forma(cliente, experimentos_lista=None):
     ngettext/gettext con %(num)s / %(partes)s para que el inglés salga sin
     perder la concordancia singular/plural — el español (locale por defecto,
     sin catálogo) sale idéntico a como salía con los f-strings de antes."""
-    lista = experimentos.cargar(cliente) if experimentos_lista is None else experimentos_lista
-    vivos = sum(1 for e in lista if e.get("estado") in experimentos.ESTADOS_VIVOS)
+    vivos = (experimentos.contar_vivos(cliente) if experimentos_lista is None else
+             sum(1 for e in experimentos_lista if e.get("estado") in experimentos.ESTADOS_VIVOS))
     en_curso = sum(1 for p in organico.listar(cliente) if p.get("estado") in ("en_cola", "publicando"))
     if not vivos and not en_curso:
         return None
@@ -4779,89 +4809,6 @@ def eliminar_ad(cliente, ad_id):
 
 # ---------- Tablero (Bloque 6) ----------
 
-# Geometría del gráfico de 30 días (viewBox fija; el SVG escala al ancho).
-_TB_ANCHO, _TB_ALTO = 720, 220
-_TB_MARGEN = {"izq": 60, "der": 12, "arriba": 12, "abajo": 26}
-
-
-def _nice_max(valor):
-    """Máximo «bonito» para el eje: el primer 1/2/2,5/5/10 × 10^n que cubre
-    el valor, para que las 4 marcas queden en números redondos."""
-    if valor <= 0:
-        return 1.0
-    exp = 10 ** math.floor(math.log10(valor))
-    for f in (1, 2, 2.5, 5, 10):
-        if f * exp >= valor:
-            return float(f * exp)
-    return float(10 * exp)
-
-
-def _compacto(valor):
-    """Etiqueta corta para el eje: 1,2 M / 250 k / 12 en español; 1.2 M / 250 k /
-    12 en inglés (idiomas.separador_decimal — el recorte de ceros es a medida,
-    así que no usa `idiomas.numero` completo)."""
-    v = float(valor or 0)
-    if v >= 1_000_000:
-        t = f"{v / 1_000_000:.1f}".rstrip("0").rstrip(".") + " M"
-    elif v >= 1_000:
-        t = f"{v / 1_000:.1f}".rstrip("0").rstrip(".") + " k"
-    elif v == int(v):
-        t = str(int(v))
-    else:
-        t = f"{v:.2f}".rstrip("0").rstrip(".")   # 0,5 y 0,25, no 0,50
-    return t.replace(".", idiomas.separador_decimal())
-
-
-def _grafico_tablero(serie):
-    """Coordenadas listas para pintar la serie de 30 días como SVG inline:
-    barras de gasto y línea de ingresos sobre UN solo eje (las dos son dinero
-    en `serie.moneda`, así que comparten escala), 4 marcas + máximo redondeado,
-    etiqueta de fecha cada 5 días y un `titulo` por día para el tooltip nativo.
-    None si no hay días o todo es cero (la plantilla muestra el estado vacío
-    en vez de un gráfico en blanco)."""
-    dias = (serie or {}).get("dias") or []
-    moneda = (serie or {}).get("moneda") or tablero.MONEDA_POR_DEFECTO
-    if not dias:
-        return None
-    tope = max(max(float(d["gasto"] or 0), float(d["ingresos"] or 0)) for d in dias)
-    if tope <= 0:
-        return None
-    maximo = _nice_max(tope)
-    m = _TB_MARGEN
-    ancho_plot = _TB_ANCHO - m["izq"] - m["der"]
-    alto_plot = _TB_ALTO - m["arriba"] - m["abajo"]
-    base_y = m["arriba"] + alto_plot
-    paso = ancho_plot / len(dias)
-    ancho_barra = max(2.0, paso - 2)   # 2px de aire entre barras
-
-    def y_de(v):
-        return round(base_y - (float(v or 0) / maximo) * alto_plot, 2)
-
-    salida = []
-    for i, d in enumerate(dias):
-        dd, mm = d["dia"][8:10], d["dia"][5:7]
-        fecha_dia = date(int(d["dia"][0:4]), int(mm), int(dd))
-        x = m["izq"] + i * paso
-        gasto, ingresos = float(d["gasto"] or 0), float(d["ingresos"] or 0)
-        salida.append({
-            "dia": d["dia"], "gasto": gasto, "ingresos": ingresos, "compras": int(d.get("compras") or 0),
-            "x": round(x, 2), "x_centro": round(x + paso / 2, 2), "ancho": round(ancho_barra, 2),
-            "gasto_y": y_de(gasto), "ingresos_y": y_de(ingresos),
-            "etiqueta": idiomas.dia_mes(fecha_dia) if i % 5 == 0 else "",
-            "titulo": gettext("%(dd)s/%(mm)s · gasto %(gasto)s · ingresos %(ingresos)s",
-                              dd=dd, mm=mm, gasto=tablero.dinero(gasto, moneda),
-                              ingresos=tablero.dinero(ingresos, moneda)),
-        })
-    marcas = [{"valor": maximo * k / 4, "y": y_de(maximo * k / 4), "texto": _compacto(maximo * k / 4)} for k in range(5)]
-    puntos = " ".join(f"{d['x_centro']},{d['ingresos_y']}" for d in salida)
-    return {"ancho": _TB_ANCHO, "alto": _TB_ALTO, "margen": m, "base_y": base_y, "maximo": maximo, "moneda": moneda,
-            "marcas": marcas, "dias": salida, "puntos_linea": puntos}
-
-
-# La pestaña Triple Whale (Blueprint) pinta el mismo gráfico que el Tablero.
-app.extensions["grafico_tablero"] = _grafico_tablero
-
-
 @app.template_filter("dinero")
 def _filtro_dinero(valor, moneda):
     """«1.250.000 COP» / «12,50 USD» (la misma regla que las alertas)."""
@@ -4907,8 +4854,8 @@ def _calcular_tablero(cliente):
     para esa parte y pinta el resto. Si la carga misma falla, cada parte carga
     por su cuenta (más lento, mismo resultado). La serie de 30 días, el top de
     ganadoras y los dos gráficos ya no se calculan: desde E2 no los pinta nadie
-    (revisión final, 2026-10-03; el gráfico de Triple Whale lo arma su pestaña
-    con `app.extensions["grafico_tablero"]`). Las alertas tampoco son una parte:
+    (revisión final, 2026-10-03; la pestaña Triple Whale tiene su propia gráfica
+    desde 2026-10-08, «Resultados de tu tienda»). Las alertas tampoco son una parte:
     las calcula alertas.py (que sigue leyendo `tablero.alertas`) y el centro
     solo pinta su conteo, de `alertas_ctx` (spec alertas §7 y §12.9)."""
     ahora = db.ahora()
@@ -4927,9 +4874,9 @@ def _calcular_tablero(cliente):
         "meses": lambda: tablero.mes_a_mes(cliente, ahora, datos=datos),
         "generacion_total": lambda: gastos.resumen_total(cliente, ahora),
         # La tienda según Triple Whale (copia local, spec 2026-09-28 §13): sin conexión es None.
-        "tienda_tw": lambda: triple_whale_panel.resumen_mes_tienda(cliente),
+        "tienda_tw": lambda: triple_whale_panel.resumen_total_tienda(cliente),
         # El CSV va en el contexto cacheado para que la descarga cuadre con lo que se ve (tab_descargar_csv).
-        "csv": lambda: tablero.csv_mes(cliente, ahora, datos=datos),
+        "csv": lambda: tablero.csv_total(cliente, ahora, datos=datos),
     }
     for nombre, fn in partes.items():
         try:
@@ -4965,7 +4912,7 @@ def _clave_tablero(cliente):
     veredicto tocado por el dueño, publicación orgánica, cobro de un
     proveedor) mueve la clave."""
     ms, ep, pr, ex, pub = db.metrica_snapshot, db.experimento_pieza, db.propuesta, db.experimento, db.publicacion
-    tw, gs = db.triple_whale, db.gasto
+    gs = db.gasto
     with db.conectar() as con:
         ultimo_snap = con.execute(sa.select(sa.func.max(ms.c.id)).select_from(
             ms.join(ep, ep.c.id == ms.c.experimento_pieza_id)).where(ep.c.cliente == cliente)).scalar()
@@ -4977,13 +4924,13 @@ def _clave_tablero(cliente):
         # Bloque 7: una publicación orgánica nueva o que cambió de estado
         # mueve el tile «Ganadoras publicadas» y la alerta de ganadora sin publicar.
         publicaciones = con.execute(sa.select(sa.func.count(), sa.func.max(pub.c.actualizado_en)).where(pub.c.cliente == cliente)).first()
-        # La tienda según Triple Whale (spec 2026-09-28 §13): conectar,
-        # desconectar o una copia nueva mueven sus tiles.
-        triple = con.execute(sa.select(sa.func.max(tw.c.actualizado_en)).where(tw.c.cliente == cliente)).scalar()
         # La generación (tile total y columna del mes a mes): un cobro nuevo
         # o uno que se actualiza (misma referencia, otro usd) mueve la clave.
         cobros = con.execute(sa.select(sa.func.count(), sa.func.max(gs.c.id), sa.func.sum(gs.c.usd))
                              .where(gs.c.cliente == cliente)).first()
+    # La tienda según Triple Whale (spec 2026-09-28 §13 y 2026-10-08 §9): agregar o
+    # quitar una tienda, cambiarle el país, los ajustes o una copia nueva mueven sus tiles.
+    triple = triple_whale_tiendas.firma(cliente)
     return (ultimo_snap, propuestas_n, exps[0], exps[1], piezas, publicaciones[0], publicaciones[1], triple,
             tuple(cobros))
 
@@ -5181,16 +5128,16 @@ def alertas_restaurar(cliente):
 
 @app.route("/cliente/<cliente>/tablero/mes.csv")
 def tab_descargar_csv(cliente):
-    """CSV del mes en curso (una fila por pieza, `;`, BOM) para abrir en
-    Excel. Sale del mismo contexto cacheado que la pestaña; si esa parte
+    """CSV con lo acumulado de cada pieza desde el inicio (una fila por pieza,
+    `;`, BOM) para abrir en Excel. Sale del mismo contexto cacheado que la pestaña; si esa parte
     falló, se vuelve a intentar sola para que el error llegue al navegador."""
     ctx = _contexto_tablero(cliente)
     ahora = ctx["ahora"]
     texto = ctx.get("csv")
     if texto is None:
-        texto = tablero.csv_mes(cliente, ahora)
+        texto = tablero.csv_total(cliente, ahora)
     resp = Response(texto, content_type="text/csv; charset=utf-8")
-    nombre = secure_filename(f"tablero_{cliente}_{ahora[:7]}.csv")
+    nombre = secure_filename(f"tablero_{cliente}_total_{ahora[:10]}.csv")
     resp.headers["Content-Disposition"] = f'attachment; filename="{nombre}"'
     return resp
 
@@ -5273,10 +5220,11 @@ def _filtro_precio(_contexto, usd):
         return usd
 
 
-def _pauta_mes(tablero_ctx):
+def _pauta_mes(tablero_ctx, parte="resumen"):
     """[{"moneda", "gasto"}] con la pauta del mes por moneda (solo > 0), del
-    resumen ya calculado por el tablero. Sin resumen (parte rota) → []."""
-    resumen = (tablero_ctx or {}).get("resumen") or {}
+    resumen ya calculado por el tablero. Sin resumen (parte rota) → [].
+    `parte="total"` da la pauta desde el inicio (`tablero.resumen_total`)."""
+    resumen = (tablero_ctx or {}).get(parte) or {}
     salida = []
     for moneda, g in sorted((resumen.get("por_moneda") or {}).items()):
         gasto = float((g or {}).get("gasto") or 0)
@@ -5297,34 +5245,37 @@ def _precios_pagina():
     }
 
 
-def _chip_gasto(gasto_mes, pauta_mes):
+def _chip_gasto(gasto, pauta):
     """Texto del chip del sidebar: «US$ 12,40 generación · 1.405.157 COP
-    pauta» (la pauta solo si hay; la generación siempre, aunque sea 0).
-    Traducido acá (no en la plantilla, que solo recibe el texto ya armado
-    con `_('Este mes: %(gasto)s', ...)`, ver _sidebar.html). En un proyecto que
-    cobra, `gasto_mes` es lo cobrado del mes (cobros, spec 2026-10-08 §7)."""
-    partes = [gettext("%(monto)s generación", monto=gastos.formatear((gasto_mes or {}).get('total') or 0))]
-    for p in pauta_mes or []:
+    pauta» (la pauta solo si hay; la generación siempre, aunque sea 0), desde
+    el inicio. Traducido acá (no en la plantilla, que solo recibe el texto ya
+    armado con `_('Gasto total: %(gasto)s', ...)`, ver _sidebar.html). En un
+    proyecto que cobra, `gasto` es lo cobrado desde el inicio (cobros, spec
+    2026-10-08 §7)."""
+    partes = [gettext("%(monto)s generación", monto=gastos.formatear((gasto or {}).get('total') or 0))]
+    for p in pauta or []:
         partes.append(gettext("%(monto)s pauta", monto=tablero.dinero(p['gasto'], p['moneda'])))
     return " · ".join(partes)
 
 
-def _mes_del_chip(cliente, fuente):
-    """El mes del chip «Este mes»: lo cobrado si el proyecto cobra (también al
-    admin, que ve el costo del mes en el chip del saldo), si no el costo."""
+def _total_del_chip(cliente, fuente):
+    """El total del chip «Gasto total»: lo cobrado si el proyecto cobra (también
+    al admin, que ve el costo en el chip del saldo), si no el costo."""
     if fuente["modo"] == "doble":
-        return fuente["cobrado"]["resumen_mes"](cliente)
-    return fuente["resumen_mes"](cliente)
+        return fuente["cobrado"]["resumen_total"](cliente)
+    return fuente["resumen_total"](cliente)
 
 
 def _contexto_gasto(cliente, tablero_ctx):
-    """gasto_mes (resumen del mes), pauta_mes (por moneda, del tablero),
-    precios (estimados de los botones), gastos_historial (200 últimos),
-    gastos_por_tipo (tabla), gasto_chip y cobros_chip (sidebar) y
-    cobros_cuenta (si el proyecto cobra). Las cifras salen de
-    `cobros.vista.gasto_para`: a quien no es admin, en un proyecto que cobra,
-    lo cobrado; al admin, el costo y (`gasto_modo` "doble") también lo cobrado.
-    Cada parte en su try/except: el gasto informa, nunca tumba la página."""
+    """Todo desde el inicio (Daniel, 2026-10-08: «todas las métricas en la
+    totalidad, no por mes, porque confunden a mis clientes»): gasto_total
+    (resumen_total), pauta_total (por moneda, del tablero), gastos_por_tipo
+    (resumen_todo), gastos_historial (200 últimos), precios (estimados de los
+    botones), gasto_chip y cobros_chip (sidebar) y cobros_cuenta (si el
+    proyecto cobra). Las cifras salen de `cobros.vista.gasto_para`: a quien no
+    es admin, en un proyecto que cobra, lo cobrado; al admin, el costo y
+    (`gasto_modo` "doble") también lo cobrado. Cada parte en su try/except:
+    el gasto informa, nunca tumba la página."""
     es_admin = session.get("rol") == "admin"
     try:
         fuente = vista_cobros.gasto_para(cliente, es_admin)
@@ -5334,60 +5285,53 @@ def _contexto_gasto(cliente, tablero_ctx):
                   else vista_cobros.OCULTO)
     doble = fuente["modo"] == "doble"
     try:
-        gasto_mes = fuente["resumen_mes"](cliente)
+        gasto_todo = fuente["resumen_todo"](cliente)
     except Exception as e:  # noqa: BLE001 — informativo
-        print(f"[aviso] Gasto de {cliente}: no pude leer el resumen del mes: {type(e).__name__}")
-        gasto_mes = {"desde": None, "hasta": None, "total": 0.0, "por_tipo": {}, "n": 0, "error": True}
+        print(f"[aviso] Gasto de {cliente}: no pude leer el resumen por tipo: {type(e).__name__}")
+        gasto_todo = {"desde": None, "hasta": None, "total": 0.0, "por_tipo": {}, "n": 0, "error": True}
     try:
         historial = fuente["historial"](cliente, limite=200)
     except Exception as e:  # noqa: BLE001 — informativo
         print(f"[aviso] Gasto de {cliente}: no pude leer el historial: {type(e).__name__}")
         historial = []
-    # Desde el inicio y mes a mes (2026-10-07): la pantalla solo decía «este
-    # mes» y los meses anteriores parecían perdidos.
     try:
         gasto_total = fuente["resumen_total"](cliente)
-        gasto_por_mes = [{"mes": m, "usd": v["usd"], "n": v["n"]}
-                         for m, v in sorted(fuente["por_mes"](cliente).items(), reverse=True)]
     except Exception as e:  # noqa: BLE001 — informativo
         print(f"[aviso] Gasto de {cliente}: no pude leer el total desde el inicio: {type(e).__name__}")
-        gasto_total, gasto_por_mes = {"total": 0.0, "n": 0, "desde": None, "error": True}, []
+        gasto_total = {"total": 0.0, "n": 0, "desde": None, "error": True}
     cobrado = {}
     if doble:
         # El admin de un proyecto que cobra ve las dos cifras: el costo y lo cobrado.
         try:
             c = fuente["cobrado"]
-            cobrado = {"mes": c["resumen_mes"](cliente), "total": c["resumen_total"](cliente),
-                       "por_mes": c["por_mes"](cliente),
+            cobrado = {"todo": c["resumen_todo"](cliente), "total": c["resumen_total"](cliente),
                        "por_gasto": vista_cobros.cobrado_por_gasto(cliente, [h["id"] for h in historial])}
         except Exception as e:  # noqa: BLE001 — informativo
             print(f"[aviso] Gasto de {cliente}: no pude leer lo cobrado: {type(e).__name__}")
             doble = False
-    pauta = _pauta_mes(tablero_ctx)
+    pauta = _pauta_mes(tablero_ctx, "total")
     por_tipo = [{"tipo": t, "nombre": NOMBRES_TIPO_GASTO.get(t, t), "n": v["n"], "usd": v["usd"],
-                 "cobrado": ((cobrado.get("mes") or {}).get("por_tipo", {}).get(t) or {}).get("usd", 0.0)}
-                for t, v in sorted(gasto_mes["por_tipo"].items(), key=lambda kv: -kv[1]["usd"])]
-    for m in gasto_por_mes:
-        m["cobrado"] = ((cobrado.get("por_mes") or {}).get(m["mes"]) or {}).get("usd", 0.0)
+                 "cobrado": ((cobrado.get("todo") or {}).get("por_tipo", {}).get(t) or {}).get("usd", 0.0)}
+                for t, v in sorted(gasto_todo["por_tipo"].items(), key=lambda kv: -kv[1]["usd"])]
     try:
-        chip_mes = cobrado["mes"] if doble else gasto_mes
+        chip_total = cobrado["total"] if doble else gasto_total
         cobros_chip = vista_cobros.chip(cliente, es_admin)
         cobros_cuenta = vista_cobros.cuenta(cliente)
     except Exception as e:  # noqa: BLE001 — sin chip de saldo, pero con página
         print(f"[aviso] Saldo de {cliente}: no pude leer la cuenta: {type(e).__name__}")
-        chip_mes, cobros_chip, cobros_cuenta = gasto_mes, None, {"cobrar": False}
+        chip_total, cobros_chip, cobros_cuenta = gasto_total, None, {"cobrar": False}
     return {
-        "gasto_mes": gasto_mes,
-        "pauta_mes": pauta,
+        "gasto_total": gasto_total,
+        "gasto_todo": gasto_todo,
+        "pauta_total": pauta,
         "precios": _precios_pagina(),
         "gastos_historial": historial,
         "gastos_por_tipo": por_tipo,
-        "gasto_total": gasto_total,
-        "gasto_por_mes": gasto_por_mes,
         "nombres_tipo_gasto": NOMBRES_TIPO_GASTO,
         "gasto_modo": "doble" if doble else fuente["modo"],
         "gasto_cobrado": cobrado,
-        "gasto_chip": None if fuente["modo"] == "oculto" else _chip_gasto(chip_mes, pauta),
+        "gasto_chip": (None if fuente["modo"] == "oculto" or (chip_total or {}).get("error")
+                       else _chip_gasto(chip_total, pauta)),
         "cobros_chip": cobros_chip,
         "cobros_cuenta": cobros_cuenta,
     }
@@ -5411,7 +5355,8 @@ def _chip_gasto_sidebar():
     # Dos chips, dos try: si falla uno, el otro sigue (revisión de cobros 8/11).
     try:
         fuente = vista_cobros.gasto_para(cliente, es_admin)
-        out["gasto_chip"] = _chip_gasto(_mes_del_chip(cliente, fuente), _pauta_mes(_contexto_tablero(cliente)))
+        out["gasto_chip"] = _chip_gasto(_total_del_chip(cliente, fuente),
+                                        _pauta_mes(_contexto_tablero(cliente), "total"))
     except Exception as e:  # noqa: BLE001 — sin chip, pero con página (y nunca el costo a quien no debe)
         print(f"[aviso] Gasto de {cliente}: no pude calcular el chip del sidebar: {type(e).__name__}")
     try:
@@ -5479,7 +5424,7 @@ def exp_resultados(cliente):
     filtro = resultados.filtro_de(request.args)
     r = resultados.contexto(cliente, filtro,
                             total_entre=vista_cobros.gasto_para(cliente, session.get("rol") == "admin")["total_entre"])
-    ctx = _contexto_experimentos(cliente)
+    ctx = _contexto_experimentos(cliente, gestion_id=filtro.experimento_id)
     elegido = next((e for e in ctx["experimentos"] if e["id"] == filtro.experimento_id), None)
     # Las piezas elegibles solo viajan cuando algo del fragmento las pinta: el «Agregar pieza» de la gestión de un
     # experimento en armado, o el «Meter en experimento» / «Probar en Meta» de un anuncio suelto que sigue en cola.
@@ -5500,6 +5445,9 @@ def exp_resultados(cliente):
 
 
 @app.route("/cliente/<cliente>/experimentos/pieza/<int:ep_id>")
+@trabajos.con_vivos_precargados
+@experimentos.con_lecturas_memorizadas
+@catalogo_productos.con_lecturas_memorizadas
 def exp_pieza(cliente, ep_id):
     """Panel de una pieza (E2): fragmento que se abre sobre el centro de resultados. Solo busca entre las piezas de
     `cliente`: la de otro proyecto (o una que no existe) es un 404. Solo cuenta el periodo del filtro."""
@@ -5518,10 +5466,15 @@ def exp_pieza(cliente, ep_id):
 def exp_nuevo(cliente):
     """«Nuevo experimento» en su propia ruta (E2): la galería de piezas, la barra y los tres pasos que hasta ahora
     vivían arriba de la lista de experimentos. Misma URL que el POST de `exp_crear`, otro método. Llega con
-    `?piezas=1,2` (las marca), `?exp_nombre=&exp_destino=` (Catálogo) o sin nada."""
+    `?piezas=1,2` (las marca), `?exp_nombre=&exp_destino=` (Catálogo) o sin nada. Sin Meta conectado no hay galería:
+    vuelve a la pestaña, que dice qué falta (2026-10-08: dejaba marcar piezas que después no se podían lanzar)."""
+    if meta_conexion.estado(cliente).get("estado") != "conectado":
+        return _volver_exp(cliente)
     ctx = _contexto_experimentos(cliente, con_elegibles=True, con_organico=False)
+    # token_form: de un solo uso por formulario pintado; exp_probar lo consume (un reenvío no crea ni activa otro).
     return render_template("exp_nuevo.html", cliente=cliente, nombre_proyecto=proyectos.nombre_visible(cliente),
-                           paises_fe=fe_tipos.PAISES, **ctx, **_contexto_meta(cliente, ctx["experimentos"]))
+                           paises_fe=fe_tipos.PAISES, token_form=secrets.token_urlsafe(16), **ctx,
+                           **_contexto_meta(cliente, ctx["experimentos"]))
 
 
 @app.route("/cliente/<cliente>/experimentos/nuevo", methods=["POST"])
@@ -5531,7 +5484,7 @@ def exp_crear(cliente):
     lo pide."""
     volver = _volver_exp(cliente)
     if meta_conexion.estado(cliente).get("estado") != "conectado":
-        flash(gettext("Conecta Meta en Experimentos antes de crear un experimento."), "error")
+        flash(gettext("Conecta Meta en Configuración › Conexiones antes de crear un experimento."), "error")
         return volver
     moneda = (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
     nombre = (request.form.get("nombre") or "").strip()[:200]
@@ -5540,6 +5493,9 @@ def exp_crear(cliente):
     # filas del mismo país y un conjunto huérfano en Meta (revisión final de E2, 2026-10-03).
     codigos = list(dict.fromkeys(p for p in request.form.getlist("paises") if p in fe_tipos.PAISES))
     destino = (request.form.get("destino_url") or "").strip()
+    if objetivo == "OUTCOME_APP_PROMOTION":
+        flash(gettext("Para instalaciones de la app usa «Nuevo experimento»."), "error")
+        return volver
     try:
         dias = int(request.form.get("dias") or 7)
         tope = float(request.form.get("tope_total") or 0)
@@ -5655,15 +5611,16 @@ def _error_de_presupuesto(moneda, codigos, paises, dias):
 @app.route("/cliente/<cliente>/experimentos/probar", methods=["POST"])
 def exp_probar(cliente):
     """La galería primero: un solo POST crea el experimento, reparte las
-    piezas por país y encola el lanzamiento (todo PAUSED en Meta). Valida lo
-    mismo que exp_crear; si algo falla no queda nada creado. Activar sigue
-    siendo un clic aparte. Un error de validación (no queda nada creado) vuelve a «Nuevo experimento», donde está
+    piezas por país y encola el lanzamiento, que crea todo PAUSED en Meta y lo
+    activa si terminó sin error (Daniel 2026-10-08: este clic, con el gasto
+    diario a la vista en Revisar, es la aprobación). Valida lo mismo que
+    exp_crear; si algo falla no queda nada creado. Un error de validación (no queda nada creado) vuelve a «Nuevo experimento», donde está
     el formulario, con las piezas ya marcadas; lo creado lleva al centro de resultados, a ese experimento."""
     marcadas = ",".join(x for x in request.form.getlist("piezas") if x.isascii() and x.isdigit())
     volver = redirect(url_for("exp_nuevo", cliente=cliente, **({"piezas": marcadas} if marcadas else {})))
     if meta_conexion.estado(cliente).get("estado") != "conectado":
-        flash(gettext("Conecta Meta en Experimentos antes de probar piezas."), "error")
-        return volver
+        flash(gettext("Conecta Meta en Configuración › Conexiones antes de probar piezas."), "error")
+        return _volver_exp(cliente)   # «Nuevo experimento» sin Meta ya no pinta la galería
     moneda = (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
     objetivo = request.form.get("objetivo") or ""
     # Sin repetidos y en el orden en que llegan: un POST armado a mano con paises=CO&paises=CO creaba dos
@@ -5700,17 +5657,43 @@ def exp_probar(cliente):
     if not combinaciones:
         flash(gettext("Marca al menos una combinación pieza × país en el paso de revisar."), "error")
         return volver
+    # Instalaciones de la app (spec 2026-10-07): en vez de URL de destino van
+    # las URLs de tienda (al menos una) y el App ID de Meta de la app anunciada.
+    es_app = objetivo == "OUTCOME_APP_PROMOTION"
+    tiendas = {}
+    if es_app:
+        try:
+            tiendas = app_tiendas.validar_urls(request.form.get("app_ios_url"), request.form.get("app_android_url"))
+        except ValueError as e:
+            flash(str(e), "error")
+            return volver
+        destino = next(iter(tiendas.values()))   # solo para que el resto de la app muestre algo
     if (objetivo not in meta_campaign.OBJETIVOS_VALIDOS_FASE1 or not codigos
-            or not destino.startswith(("http://", "https://")) or not (1 <= dias <= 90) or tope <= 0
+            or (not es_app and not destino.startswith(("http://", "https://"))) or not (1 <= dias <= 90) or tope <= 0
             or not (13 <= edad_min <= edad_max <= 65)):
-        flash(gettext("Faltan datos: objetivo, al menos un país, días (1–90), tope, edades (13–65) y una URL de destino http(s)."), "error")
+        if es_app:
+            flash(gettext("Faltan datos: objetivo, al menos un país, días (1–90), tope y edades (13–65)."), "error")
+        else:
+            flash(gettext("Faltan datos: objetivo, al menos un país, días (1–90), tope, edades (13–65) y una URL de destino http(s)."), "error")
         return volver
     minimo = PRESUPUESTO_MINIMO_DIARIO.get(moneda, 1)
-    bajos = [p["pais"] for p in paises if p["presupuesto_dia"] < minimo]
-    if bajos:
-        flash(gettext("El presupuesto diario no alcanza el mínimo de Meta (%(minimo)s %(moneda)s) en: %(paises)s.",
-                      minimo=minimo, moneda=moneda, paises=", ".join(bajos)), "error")
-        return volver
+    if es_app:
+        # Cada país se reparte en partes iguales entre sus tiendas, en centavos
+        # como el lanzador: cada parte (un conjunto en Meta) tiene que alcanzar el mínimo.
+        n_tiendas = len(tiendas)
+        bajos = [p["pais"] for p in paises
+                 if lanzador.centavos(p["presupuesto_dia"], moneda) // n_tiendas < lanzador.centavos(minimo, moneda)]
+        if bajos:
+            flash(gettext("El presupuesto diario de cada país se reparte entre %(n)s tiendas y cada parte tiene que "
+                          "alcanzar el mínimo de Meta (%(minimo)s %(moneda)s) en: %(paises)s.",
+                          n=n_tiendas, minimo=minimo, moneda=moneda, paises=", ".join(bajos)), "error")
+            return volver
+    else:
+        bajos = [p["pais"] for p in paises if p["presupuesto_dia"] < minimo]
+        if bajos:
+            flash(gettext("El presupuesto diario no alcanza el mínimo de Meta (%(minimo)s %(moneda)s) en: %(paises)s.",
+                          minimo=minimo, moneda=moneda, paises=", ".join(bajos)), "error")
+            return volver
     # E2 (R4): el reparto no puede pasar del total (la comprobación es del servidor, no del navegador).
     error = _error_de_presupuesto(moneda, codigos, paises, dias)
     if error:
@@ -5723,6 +5706,17 @@ def exp_probar(cliente):
     if atribucion is not None and atribucion not in experimentos.ATRIBUCIONES:
         flash(gettext("La atribución tiene que ser pixel, tienda o ninguna."), "error")
         return volver
+    datos_app = None
+    if es_app:
+        if atribucion is None:
+            atribucion = "ninguna"   # una instalación no es una compra: nada que atribuir salvo que la persona elija
+        app_id = (request.form.get("app_id") or meta_conexion.cargar_app_anunciada(cliente) or "").strip()
+        try:
+            app_id = meta_conexion.validar_app_anunciada(app_id)   # se guarda solo si la creación sale bien
+        except meta_conexion.MetaConexionError as e:
+            flash(str(e), "error")
+            return volver
+        datos_app = {**{f"{p}_url": u for p, u in tiendas.items()}, "app_id": app_id}
     if objetivo == "OUTCOME_SALES" and (atribucion or experimentos.atribucion_sugerida(cliente)) != "pixel":
         flash(gettext("Optimizar por compras requiere el Pixel activo y atribución pixel: pulsa «Comprobar Pixel» en "
                       "Configuración, o elige el objetivo de tráfico."), "error")
@@ -5730,21 +5724,58 @@ def exp_probar(cliente):
     n_piezas = len({pid for pid, _ in combinaciones})
     nombre = (request.form.get("nombre") or "").strip()[:200] or nombre_experimento_automatico(n_piezas, codigos)
     datos = dict(nombre=nombre, paises=paises, objetivo_meta=objetivo, dias=dias, tope_total=tope, destino_url=destino,
-                 moneda=moneda, edad_min=edad_min, edad_max=edad_max, modo=modo, atribucion=atribucion)
+                 moneda=moneda, edad_min=edad_min, edad_max=edad_max, modo=modo, atribucion=atribucion, app=datos_app)
+    datos["clave_form"] = _clave_formulario_experimento(request.form.get("token_form"), datos, combinaciones)
     try:
         eid = experimentos.crear_con_piezas(cliente, datos, combinaciones)
-    except experimentos.ErrorCombinacion as e:
+    except experimentos.ExperimentoRepetido as e:
+        # Lanzar también activa (2026-10-08): un «¿Reenviar formulario?» o un doble envío no crea ni gasta otra vez.
+        flash(gettext("Ese formulario ya creó un experimento: no se creó otro. Aquí está el que ya existe."), "warn")
+        return _volver_exp(cliente, e.eid)
+    except (experimentos.ErrorCombinacion, ValueError) as e:
         flash(str(e), "error")
         return volver
-    job_id = tareas_exp.job_id_lanzar(cliente, eid)
-    arranco = trabajos.encolar(job_id, "exp_lanzar", {"cliente": cliente, "experimento_id": eid},
-                               cliente=cliente, duracion_estimada=120, etapas=lanzador.ETAPAS_LANZAR, max_intentos=1)
+    if es_app:
+        meta_conexion.guardar_app_anunciada(cliente, datos_app["app_id"])
+    # activar=True: el clic de «Lanzar a Meta», con el gasto diario a la vista, es la aprobación (Daniel, 2026-10-08).
+    arranco = _encolar_lanzamiento(cliente, eid, "armando", None)
     if arranco:
-        experimentos.actualizar(cliente, eid, estado="lanzando", error=None)
-        flash(gettext("«%(nombre)s»: lanzando a Meta en pausa. Cuando termine, actívalo desde su tarjeta.", nombre=nombre), "ok")
+        flash(gettext("«%(nombre)s»: lanzando a Meta. Si todo sale bien, queda activo y empieza a gastar.", nombre=nombre), "ok")
     else:
         flash(gettext("«%(nombre)s» quedó creado; ya se estaba lanzando.", nombre=nombre), "warn")
     return _volver_exp(cliente, eid)
+
+
+def _encolar_lanzamiento(cliente, eid, estado_previo, error_previo):
+    """Marca «lanzando» ANTES de encolar `exp_lanzar` (con `activar`) y, si no arrancó o encolar falló, lo devuelve a
+    como estaba. Al revés (encolar y después escribir «lanzando», el M2 de antes) un worker rápido podía activar y
+    dejarlo «corriendo» antes de que la ruta escribiera, y esa escritura tardía lo pisaba con anuncios gastando (ronda 2
+    de guardian-gasto, 2026-10-08). Lo que M2 cuidaba (quedar en «lanzando» sin tarea) lo cubre la vuelta atrás."""
+    experimentos.actualizar(cliente, eid, estado="lanzando", error=None)
+    try:
+        arranco = trabajos.encolar(tareas_exp.job_id_lanzar(cliente, eid), "exp_lanzar",
+                                   {"cliente": cliente, "experimento_id": eid, "activar": True}, cliente=cliente,
+                                   duracion_estimada=120, etapas=lanzador.ETAPAS_LANZAR_Y_ACTIVAR, max_intentos=1)
+    except Exception:
+        experimentos.actualizar(cliente, eid, estado=estado_previo, error=error_previo)
+        raise
+    if not arranco:
+        experimentos.actualizar(cliente, eid, estado=estado_previo, error=error_previo)
+    return arranco
+
+
+def _clave_formulario_experimento(token, datos, combinaciones):
+    """La clave que hace de «Nuevo experimento» un envío de un solo uso (experimentos.crear_con_piezas la busca):
+    el token oculto del formulario («t:…»), o sin token (un POST armado a mano, una pestaña de antes del cambio) la
+    huella de lo que se pide («h:…»: piezas × países, presupuestos, días, total, objetivo, destino, app)."""
+    token = (token or "").strip()
+    if token and len(token) <= 64 and token.replace("-", "").replace("_", "").isalnum():
+        return "t:" + token
+    huella = {"combinaciones": sorted([int(pid), pais or ""] for pid, pais in combinaciones),
+              "paises": sorted([p["pais"], float(p.get("presupuesto_dia") or 0)] for p in datos["paises"]),
+              "dias": int(datos["dias"]), "tope": float(datos["tope_total"]), "objetivo": datos["objetivo_meta"],
+              "destino": datos["destino_url"], "app": datos.get("app")}
+    return "h:" + hashlib.sha256(json.dumps(huella, sort_keys=True, default=str).encode()).hexdigest()[:32]
 
 
 def _agregar_pieza_validada(cliente, experimento_id, pieza_id, pais):
@@ -5756,6 +5787,8 @@ def _agregar_pieza_validada(cliente, experimento_id, pieza_id, pais):
         return gettext("Ese experimento no existe.")
     if ex["estado"] not in ("armando", "error") or ex["meta_campaign_id"]:
         return gettext("Ese experimento ya no acepta piezas nuevas.")
+    if ex["objetivo_meta"] == "OUTCOME_APP_PROMOTION":
+        return gettext("En un experimento de instalaciones de la app las piezas se eligen al crearlo.")
     candidata = next((p for p in experimentos.elegibles(cliente) if p["pieza_id"] == pieza_id), None)
     if not candidata:
         return gettext("Esa pieza no está disponible (o no está lista).")
@@ -5828,7 +5861,9 @@ def exp_meter_pieza(cliente):
 @app.route("/cliente/<cliente>/experimentos/<int:eid>/lanzar", methods=["POST"])
 def exp_lanzar(cliente, eid):
     """Encola el lanzamiento a Meta (campaña + conjuntos por país + anuncios,
-    todo PAUSED). Valida acá lo mismo que lanzador.lanzar para poder avisar
+    creados PAUSED) y, si termina sin error, la activación de todo (`activar`:
+    Daniel 2026-10-08, este clic con el gasto diario a la vista es la
+    aprobación). Valida acá lo mismo que lanzador.lanzar para poder avisar
     por flash sin gastar un intento de la cola (max_intentos=1: un reintento
     automático a mitad de la cadena crearía objetos huérfanos en Meta)."""
     volver = _volver_exp(cliente, eid)
@@ -5848,16 +5883,9 @@ def exp_lanzar(cliente, eid):
         flash(gettext("Sin piezas para: %(paises)s. Agrega una pieza por país o quita el país.",
                       paises=", ".join(faltan)), "error")
         return volver
-    job_id = tareas_exp.job_id_lanzar(cliente, eid)
-    # M2: encolar primero y solo marcar "lanzando" si de verdad arrancó — si
-    # se pusiera "lanzando" antes y trabajos.encolar fallara (ej. "database is
-    # locked"), el experimento quedaría colgado ahí sin tarea que lo saque
-    # (_reconciliar_huerfanos no corre bajo gunicorn).
-    arranco = trabajos.encolar(job_id, "exp_lanzar", {"cliente": cliente, "experimento_id": eid},
-                               cliente=cliente, duracion_estimada=120, etapas=lanzador.ETAPAS_LANZAR, max_intentos=1)
+    arranco = _encolar_lanzamiento(cliente, eid, ex["estado"], ex["error"])
     if arranco:
-        experimentos.actualizar(cliente, eid, estado="lanzando", error=None)
-        flash(gettext("Lanzando el experimento a Meta (queda en pausa)…"), "ok")
+        flash(gettext("Lanzando el experimento a Meta: si todo sale bien, queda activo y empieza a gastar…"), "ok")
     else:
         flash(gettext("Ya se está lanzando ese experimento."), "warn")
     return volver
@@ -5902,6 +5930,19 @@ def exp_presupuesto(cliente, eid):
     if not math.isfinite(presupuesto_dia) or presupuesto_dia < minimo:
         flash(gettext("El presupuesto diario mínimo es %(minimo)s %(moneda)s.", minimo=minimo, moneda=moneda), "error")
         return _volver_exp(cliente, eid)
+    ex = experimentos.obtener(cliente, eid)
+    if ex and ex["objetivo_meta"] == "OUTCOME_APP_PROMOTION":
+        # Igual que exp_probar: el total del país se reparte entre sus
+        # conjuntos (uno por tienda) y es cada parte la que Meta compara con
+        # su mínimo — validar el total dejaría pasar partes que Meta rechaza.
+        p_ex = next((p for p in ex.get("paises", []) if p["pais"] == pais), None)
+        n_partes = len(lanzador._adsets_de_pais(p_ex)) if p_ex else 0
+        n_partes = n_partes or len(experimentos.plataformas_de(ex.get("extra"))) or 1
+        if lanzador.centavos(presupuesto_dia, moneda) // n_partes < lanzador.centavos(minimo, moneda):
+            flash(gettext("El presupuesto diario de %(pais)s se reparte entre %(n)s tiendas y cada parte tiene que "
+                          "alcanzar el mínimo de Meta (%(minimo)s %(moneda)s).",
+                          pais=pais, n=n_partes, minimo=minimo, moneda=moneda), "error")
+            return _volver_exp(cliente, eid)
     with _ENV_LOCK:
         try:
             with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
@@ -5948,7 +5989,10 @@ def exp_cerrar(cliente, eid):
     # los objetos ya creados en Meta sin que el experimento se entere. Solo
     # se puede cerrar desde armando/error (nunca se lanzó) o pausado/corriendo
     # (ya está en Meta).
-    if ex["estado"] not in ("pausado", "corriendo", "armando", "error"):
+    # Un «lanzando» SIN tarea viva (el worker murió y nadie lo reconcilió todavía) sí se cierra: cerrar pausa en Meta lo
+    # que haya, sin mirar el estado local (ronda 2 de guardian-gasto, 2026-10-08).
+    lanzando_huerfano = ex["estado"] == "lanzando" and not trabajos.en_curso(tareas_exp.job_id_lanzar(cliente, eid))
+    if ex["estado"] not in ("pausado", "corriendo", "armando", "error") and not lanzando_huerfano:
         flash(gettext("Espera a que termine el lanzamiento antes de cerrar."), "error")
         return volver
     with _ENV_LOCK:
@@ -6204,12 +6248,14 @@ def _volver_org(cliente, ep_id=None):
     volver = request.form.get("volver")
     if volver in ("final", "creativeflowplus"):
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor=volver))
-    return _volver_exp(cliente, experimentos.experimento_de_pieza(cliente, ep_id) if ep_id else None)
+    return _volver_exp(cliente, experimentos.experimento_de_pieza(cliente, ep_id)
+                       if isinstance(ep_id, int) and 0 < ep_id <= 2 ** 63 - 1 else None)
 
 
 def _int_form(nombre):
     try:
-        return int(request.form.get(nombre) or 0) or None
+        valor = int(request.form.get(nombre) or 0)
+        return valor if 0 < valor <= 2 ** 63 - 1 else None
     except ValueError:
         return None
 
@@ -7426,7 +7472,9 @@ def cf_descartar(cliente, cf_id):
 
 # ---------------------------------------------------------- Final edition ---
 
-IDIOMAS_FE = ("es", "en", "pt")
+# Idiomas de una final: los de los países de `fe_tipos.PAISES` (noruego y sueco desde el
+# 2026-10-08, spec de Noruega y Suecia §4).
+IDIOMAS_FE = ("es", "en", "pt", "sv", "no")
 
 
 def _volver_final(cliente):
@@ -8563,12 +8611,7 @@ def cf_crear_video(cliente):
 
 def _encolar_director(cliente, cf_id, auto_lanzar=False, prioridad=flowplus_lanzar.PRIORIDAD_NORMAL):
     """Encola la compilación del prompt (gratis, idempotente: max_intentos=1)."""
-    return trabajos.encolar(
-        tareas_director.job_id(cliente, cf_id), "flowplus_director",
-        {"cliente": cliente, "cf_id": cf_id, "auto_lanzar": bool(auto_lanzar), "prioridad": int(prioridad)},
-        cliente=cliente, duracion_estimada=tareas_director.DURACION_ESTIMADA, etapas=tareas_director.ETAPAS_DIRECTOR,
-        max_intentos=1, prioridad=prioridad,
-    )
+    return tareas_director.encolar(cliente, cf_id, auto_lanzar=auto_lanzar, prioridad=prioridad)
 
 
 @app.route("/cliente/<cliente>/creative_flow/<cf_id>/prompt", methods=["POST"])
@@ -8809,8 +8852,10 @@ def _reconciliar_huerfanos():
             if trabajos.en_curso(tareas_exp.job_id_lanzar(cliente, eid)):
                 continue
             with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
-                experimentos.actualizar(cliente, eid, estado="error",
-                                         error=gettext("Se interrumpió el lanzamiento; revisa Ads Manager y vuelve a intentar."))
+                # Lanzar crea y activa (2026-10-08): lo que alcanzó a activarse vuelve a pausa antes del error; si
+                # Meta no deja, el mensaje y un aviso lo dicen (dejar_sin_gastar).
+                lanzador.dejar_sin_gastar(cliente, eid, "error",
+                                          gettext("Se interrumpió el lanzamiento; revisa Ads Manager y vuelve a intentar."))
     except Exception as e:
         print(f"[aviso] No pude reconciliar experimentos lanzando: {e}")
 
@@ -8871,14 +8916,19 @@ def _probar_triple_whale(llave, dominio, moneda):
     try:
         triple_whale.probar(llave, dominio, moneda)
     except triple_whale.ErrorTripleWhale as e:
-        return cola.sin_token(str(e))
+        # Triple Whale puede repetir la llave en su error sin «key=» delante: se tacha su valor exacto
+        # además de lo que reconoce `cola.sin_token` (auditoría de seguridad, 2026-10-08).
+        return cola.sin_token(triple_whale.tachar_llave(str(e), llave))
     return None
 
 
 @app.route("/cliente/<cliente>/cfg_triple_whale/conectar", methods=["POST"])
 def cfg_triple_whale_conectar(cliente):
-    """Prueba la llave contra la tienda (una consulta corta), la guarda
-    cifrada y encola la primera copia: los últimos 90 días de métricas."""
+    """Agrega una tienda (o reconecta la del mismo dominio): prueba la llave
+    contra la tienda (una consulta corta), la guarda cifrada con su país y
+    encola su primera copia, los últimos 90 días de métricas. El país llega
+    del formulario o se adivina por el dominio; sin país no se guarda nada
+    (spec 2026-10-08 §6.2 y §10)."""
     if not _mismo_origen():
         abort(403)
     bloqueo = _requiere_correo_verificado()
@@ -8893,53 +8943,123 @@ def cfg_triple_whale_conectar(cliente):
     if not llave or not dominio:
         flash(gettext("Faltan la llave o el dominio de la tienda (por ejemplo mitienda.myshopify.com)."), "error")
         return _volver_tw(cliente)
-    moneda = triple_whale.normalizar_moneda(request.form.get("moneda"))
+    # El país va siempre explícito a `agregar`: el del formulario o, si llegó
+    # vacío, el que dice el dominio. Sin ninguno no se guarda (una reconexión
+    # tampoco adivina a escondidas).
+    pais = (request.form.get("pais") or "").strip().upper() or tw_paises.adivinar_pais(dominio)
+    if not pais or not tw_paises.es_pais(pais):
+        flash(gettext("Elige el país de la tienda."), "error")
+        return _volver_tw(cliente)
+    ocupada = triple_whale_tiendas.tienda_de_pais(cliente, pais)
+    if ocupada and ocupada["dominio"] != dominio:
+        _flash_pais_ocupado(pais)       # antes de llamar a Triple Whale: no hace falta probar nada
+        return _volver_tw(cliente)
+    ajustes = triple_whale_tiendas.ajustes(cliente)
+    moneda = ajustes["moneda"] if ajustes else triple_whale.normalizar_moneda(request.form.get("moneda"))
     problema = _probar_triple_whale(llave, dominio, moneda)
     if problema:
         flash(gettext("No pude conectar Triple Whale: %(error)s", error=idiomas.traducir(problema)), "error")
         return _volver_tw(cliente)
-    triple_whale_tiendas.conectar(cliente, llave, dominio, moneda=moneda,
-                                  modelo_atribucion=request.form.get("modelo_atribucion"),
-                                  ventana_atribucion=request.form.get("ventana_atribucion"))
-    tareas_tw.encolar_sync(cliente)
-    flash(gettext("Triple Whale conectado. Estamos trayendo los últimos 90 días de métricas; mira la pestaña "
-                  "Triple Whale en unos minutos."), "ok")
+    try:
+        tienda_id = triple_whale_tiendas.agregar(cliente, llave, dominio, pais, moneda=moneda,
+                                                 modelo_atribucion=request.form.get("modelo_atribucion"),
+                                                 ventana_atribucion=request.form.get("ventana_atribucion"))
+    except triple_whale_tiendas.PaisOcupado as e:      # otra pestaña la conectó mientras tanto
+        _flash_pais_ocupado(e.pais)
+        return _volver_tw(cliente)
+    tareas_tw.encolar_sync(cliente, tienda_id)
+    flash(gettext("Tienda de %(pais)s conectada (%(dominio)s). Estamos trayendo sus últimos 90 días de métricas; "
+                  "mira la pestaña Triple Whale en unos minutos.",
+                  pais=tw_paises.nombre_pais(pais, idiomas.activo()), dominio=dominio), "ok")
     return _volver_tw(cliente)
+
+
+def _flash_pais_ocupado(pais):
+    flash(gettext("Ya hay otra tienda de %(pais)s en este proyecto: cámbiale el país o quítala antes.",
+                  pais=tw_paises.nombre_pais(pais, idiomas.activo())), "error")
+
+
+def _tienda_tw_del_form(cliente):
+    """La tienda del `tienda_id` del formulario, verificando que sea de este
+    proyecto (aislamiento); si no es, 404."""
+    try:
+        tienda_id = int(request.form.get("tienda_id") or "")
+    except ValueError:
+        abort(404)
+    tienda = triple_whale_tiendas.tienda(cliente, tienda_id)
+    if not tienda:
+        abort(404)
+    return tienda
+
+
+def _nombre_tienda_tw(tienda):
+    """«Noruega (happyflops-norge.myshopify.com)» en el idioma de quien mira, o
+    solo el dominio si la tienda no tiene país."""
+    if not tienda.get("pais"):
+        return tienda["dominio"]
+    return f'{tw_paises.nombre_pais(tienda["pais"], idiomas.activo())} ({tienda["dominio"]})'
 
 
 @app.route("/cliente/<cliente>/cfg_triple_whale/probar", methods=["POST"])
 def cfg_triple_whale_probar(cliente):
-    """Vuelve a probar la llave guardada contra la tienda y deja el resultado
-    en el estado de la conexión."""
+    """Vuelve a probar la llave guardada de UNA tienda contra Triple Whale y
+    deja el resultado en su estado."""
     if not _mismo_origen():
         abort(403)
-    config = triple_whale_tiendas.obtener(cliente)
-    if not config:
-        flash(gettext("Triple Whale no está conectado en este proyecto."), "error")
-        return _volver_tw(cliente)
+    tienda = _tienda_tw_del_form(cliente)
     try:
-        llave = triple_whale_tiendas.obtener_llave(cliente)
+        llave = triple_whale_tiendas.obtener_llave(cliente, tienda["id"])
     except cifrado.ErrorCifrado:
         llave = None
-    problema = (_probar_triple_whale(llave, config["dominio_tienda"], config["moneda"]) if llave
+    ajustes = triple_whale_tiendas.ajustes(cliente) or {}
+    problema = (_probar_triple_whale(llave, tienda["dominio"], ajustes.get("moneda")) if llave
                 else idiomas.N_("No se pudo leer la llave guardada: vuelve a conectar Triple Whale."))
     if problema:
         # El `error` guardado lo ve cualquiera que abra la pestaña después: idioma
         # del proyecto. El flash es para quien tocó el botón: su idioma.
         with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
             guardado = idiomas.traducir(problema)
-        triple_whale_tiendas.actualizar(cliente, estado="error", error=guardado)
+        triple_whale_tiendas.actualizar_tienda(cliente, tienda["id"], estado="error", error=guardado)
         flash(gettext("La conexión con Triple Whale falló: %(error)s", error=idiomas.traducir(problema)), "error")
     else:
-        triple_whale_tiendas.actualizar(cliente, estado="conectada", error=None)
-        flash(gettext("Conexión con Triple Whale correcta."), "ok")
+        triple_whale_tiendas.actualizar_tienda(cliente, tienda["id"], estado="conectada", error=None)
+        flash(gettext("Conexión con Triple Whale correcta: %(tienda)s.", tienda=_nombre_tienda_tw(tienda)), "ok")
     return _volver_tw(cliente)
+
+
+@app.route("/cliente/<cliente>/cfg_triple_whale/pais", methods=["POST"])
+def cfg_triple_whale_pais(cliente):
+    """Cambia el país de una tienda ya conectada. Sus cifras no se tocan (las
+    copias van por tienda, no por país)."""
+    if not _mismo_origen():
+        abort(403)
+    tienda = _tienda_tw_del_form(cliente)
+    pais = (request.form.get("pais") or "").strip().upper()
+    if not tw_paises.es_pais(pais):
+        flash(gettext("Elige el país de la tienda."), "error")
+        return _volver_tw(cliente)
+    try:
+        triple_whale_tiendas.cambiar_pais(cliente, tienda["id"], pais)
+    except triple_whale_tiendas.PaisOcupado as e:
+        _flash_pais_ocupado(e.pais)
+        return _volver_tw(cliente)
+    flash(gettext("%(dominio)s ahora es la tienda de %(pais)s. Sus métricas no cambian.", dominio=tienda["dominio"],
+                  pais=tw_paises.nombre_pais(pais, idiomas.activo())), "ok")
+    return _volver_tw(cliente)
+
+
+@app.route("/cliente/<cliente>/cfg_triple_whale/adivinar_pais")
+def cfg_triple_whale_adivinar_pais(cliente):
+    """`{"pais": "NO"}` o `{"pais": null}` para el dominio que se está
+    escribiendo en el formulario. Solo lee el texto: no llama a nadie."""
+    return jsonify({"pais": tw_paises.adivinar_pais((request.args.get("dominio") or "")[:300])})
 
 
 @app.route("/cliente/<cliente>/cfg_triple_whale/ajustes", methods=["POST"])
 def cfg_triple_whale_ajustes(cliente):
-    """Cambia moneda, modelo o ventana de atribución sin volver a pegar la
-    llave. Si algo cambió, lo copiado se borra y se vuelve a traer."""
+    """Cambia moneda, modelo o ventana de atribución (del proyecto: valen para
+    todas las tiendas) sin volver a pegar llaves. Si algo cambió, lo copiado
+    de todas se borra y se vuelve a traer."""
     if not _mismo_origen():
         abort(403)
     if not triple_whale_tiendas.obtener(cliente):
@@ -8957,13 +9077,15 @@ def cfg_triple_whale_ajustes(cliente):
 
 @app.route("/cliente/<cliente>/cfg_triple_whale/desconectar", methods=["POST"])
 def cfg_triple_whale_desconectar(cliente):
-    """Quita la conexión y las métricas copiadas (las evaluaciones con IA ya
-    pagadas se conservan)."""
+    """Quita UNA tienda y sus métricas copiadas; las de las otras tiendas no se
+    tocan. Con la última se van también los ajustes. Las evaluaciones con IA
+    ya pagadas se conservan siempre."""
     if not _mismo_origen():
         abort(403)
-    triple_whale_tiendas.desconectar(cliente)
-    flash(gettext("Triple Whale desconectado. Se borraron las métricas copiadas; las evaluaciones con IA se "
-                  "conservan."), "ok")
+    tienda = _tienda_tw_del_form(cliente)
+    triple_whale_tiendas.quitar(cliente, tienda["id"])
+    flash(gettext("Quitamos la tienda %(tienda)s y sus métricas copiadas; las evaluaciones con IA se conservan.",
+                  tienda=_nombre_tienda_tw(tienda)), "ok")
     return _volver_tw(cliente)
 
 

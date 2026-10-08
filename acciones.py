@@ -507,6 +507,17 @@ def pedir(cliente, experimento_id, accion, payload, motivo):
     payload = dict(payload or {})
     payload.setdefault("motivo", motivo)
     ex = _experimento(cliente, experimento_id)
+    if accion in ("derivar", "rescatar") and ex.get("objetivo_meta") == "OUTCOME_APP_PROMOTION":
+        # Spec 2026-10-07: en instalaciones de la app cada pieza tiene una fila por
+        # plataforma; una pieza derivada nacería sin plataforma y el lanzador no
+        # sabría ubicarla. Ganadora: solo escala; perdedora: ya se pidió pausar.
+        mensaje = gettext("Derivar y rescatar no están disponibles en experimentos de instalaciones de la app.")
+        with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+            guardado = gettext("Derivar y rescatar no están disponibles en experimentos de instalaciones de la app.")
+        experimentos.registrar_evento(cliente, experimento_id, "accion", guardado,
+                                      datos={"accion": accion, "payload": payload, "modo": ex["modo"]},
+                                      ep_id=payload.get("ep_id"))
+        return "omitida", mensaje
     if accion in ("derivar", "rescatar") and "precio_estimado" not in payload:
         payload["precio_estimado"] = _precio_estimado(cliente, ex, accion, payload)
     puerta = modos.resolver(ex["modo"], accion)

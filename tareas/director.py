@@ -7,6 +7,7 @@ determinista de `flowplus_prompt.armar` y un aviso: el fallo de Claude nunca
 es un fallo del trabajo ni bloquea a la persona. Con `auto_lanzar` (lotes de
 Sprints, cuyo costo ya se aprobó) encola además la generación.
 """
+import monitoreo
 import creative_flow
 import director
 import gastos
@@ -33,6 +34,16 @@ def job_id(cliente, cf_id):
     return f"{cliente}__{cf_id}__director"
 
 
+def encolar(cliente, cf_id, auto_lanzar=False, prioridad=flowplus_lanzar.PRIORIDAD_NORMAL):
+    """Mismo contrato para Crear y Sprints; no vuelve a generar ni cambia el prompt."""
+    return trabajos.encolar(
+        job_id(cliente, cf_id), "flowplus_director",
+        {"cliente": cliente, "cf_id": cf_id, "auto_lanzar": bool(auto_lanzar), "prioridad": int(prioridad)},
+        cliente=cliente, duracion_estimada=DURACION_ESTIMADA, etapas=ETAPAS_DIRECTOR,
+        max_intentos=1, prioridad=prioridad,
+    )
+
+
 def _fallback(cliente, entry, motivo):
     sesion = creative_flow.datos_para_director(cliente, entry)
     refs = sesion["referencias"]
@@ -45,7 +56,7 @@ def _fallback(cliente, entry, motivo):
         con_sonido=sesion["con_sonido"], cierre_sonido=flowplus_modelos.cierre_sonido(modelo) if modelo else None,
         idioma=idiomas.de_proyecto(cliente),
     )
-    return prompt, {"estado": "fallback", "aviso": motivo, "planos": None, "planos_b": None, "prompt_b": None,
+    return prompt, {"estado": "fallback", "aviso": monitoreo.limpiar_texto(motivo, 300), "planos": None, "planos_b": None, "prompt_b": None,
                     "diferencia_b": None, "modelo_claude": None, "version": director.VERSION, "usd": 0.0}
 
 
