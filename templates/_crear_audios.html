@@ -531,7 +531,7 @@
           var lista = document.querySelector('#au-lista .au-items');
           fragmento.content.querySelectorAll('.au-item').forEach(function (item) { lista.appendChild(item); });
           var siguiente = fragmento.content.querySelector('.au-mas');
-          if (siguiente) mas.replaceWith(siguiente); else mas.remove();
+          if (siguiente) mas.replaceWith(siguiente); else (mas.closest('.acciones') || mas).remove();
         })
         .catch(function () { mas.disabled = false; mostrarError(T.sinConexion); });
       return;

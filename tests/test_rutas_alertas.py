@@ -730,17 +730,17 @@ def test_s4_cuentas_con_nombres_saneados_no_comparten_descartes(app, monkeypatch
     import re, usuarios
     al = app['alertas']
     monkeypatch.setattr(usuarios, 'por_cliente', lambda c: [
-        {'usuario': n, 'correo_verificado': False} for n in ['ana pérez', 'ana_p_rez', 'ana']])
+        {'usuario': n, 'correo_verificado': False} for n in ['ana pérez', 'ana_p_rez', 'ana', 'ana é', 'ana ñ']])
     todas = al._fuente_cuentas('acme', '2026-10-08T12:00:00')
     claves = {a['entidad']: a['clave'] for a in todas}
-    assert len(set(claves.values())) == 3
+    assert len(set(claves.values())) == 5      # «ana é» y «ana ñ» limpian igual: el sufijo sale del nombre exacto
     assert claves['ana_p_rez'] == 'cuenta:correo:ana_p_rez'
     assert claves['ana'] == 'cuenta:correo:ana'
     assert all(re.fullmatch(al.CLAVE_VALIDA, c) for c in claves.values())
     una = next(a for a in todas if a['entidad'] == 'ana pérez')
     al.descartar('acme', una['clave'], una['huella'])
     visibles = al.visibles('acme', rol='admin', calculadas=todas)['visibles']
-    assert {a['entidad'] for a in visibles} == {'ana_p_rez', 'ana'}
+    assert {a['entidad'] for a in visibles} == {'ana_p_rez', 'ana', 'ana é', 'ana ñ'}
 
 
 def test_pnd123_cuentas_filtradas_al_leer_y_post_ajeno_403(app, monkeypatch):

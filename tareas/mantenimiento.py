@@ -131,8 +131,8 @@ def ejecutar_salidas_limpiar(tarea):
 
 @registrar("cola_limpiar")
 def ejecutar_cola_limpiar(tarea):
-    limpiar_limites()
     n = cola.limpiar_terminadas()
+    limpiar_limites()      # después: si falla, la cola ya quedó limpia
     return gettext("%(n)s tareas viejas borradas.", n=n)
 
 
