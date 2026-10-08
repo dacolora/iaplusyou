@@ -45,7 +45,7 @@
       {% for a in d.anuncios %}
       <li>
         <span class="twr-dia-anuncio">
-          <strong>{{ a.nombre }}</strong>
+          <strong title="{{ a.nombre }}">{{ a.nombre }}</strong>
           <small><span class="twr-t-{{ a.canal_clase }}">{{ a.canal_nombre }}</span>{% if a.nuevo %} <span class="twr-chip-nuevo">{{ _('nuevo') }}</span>{% endif %}{% if a.creatv %} · <a href="#experimentos?exp={{ a.creatv.experimento_id }}">{{ _('Hecho en Creatv · %(exp)s', exp=a.creatv.experimento) }}</a>{% endif %}</small>
         </span>
         <span class="twr-dia-valor"><strong>{{ a.ingresos_texto }}</strong><small>{{ a.gasto_texto }} · {{ a.roas_texto }}</small></span>

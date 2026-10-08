@@ -50,8 +50,8 @@ test('formatos: dinero, veces y porcentaje como en Python', () => {
   assert.equal(P.dinero(77.126, 'USD', 'es'), '77,13 USD');
   assert.equal(P.dinero(4000, 'USD', 'en'), '4,000 USD');
   assert.equal(P.veces(2.4249, 'es'), '2,42×');
-  assert.equal(P.pct(0.05, 'es'), '5 %');
-  assert.equal(P.pct(0.008, 'es'), '0,8 %');
+  assert.equal(P.pct(0.05, 'es'), '5\u00a0%');
+  assert.equal(P.pct(0.008, 'es'), '0,8\u00a0%');
   assert.equal(P.dinero(null, 'USD', 'es'), '—');
 });
 

@@ -205,7 +205,7 @@ def _pct(fraccion):
         return "—"
     x = fraccion * 100
     decimales = 1 if abs(x) < 10 and abs(x - round(x)) >= 0.05 else 0
-    return idiomas.numero(x, decimales) + " %"
+    return idiomas.numero(x, decimales) + "\u00a0%"           # sin espacio partible: «8,8 %» nunca queda en dos renglones
 
 
 def _num(v):

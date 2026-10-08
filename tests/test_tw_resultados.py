@@ -55,11 +55,11 @@ def test_variacion_tono_y_bueno():
 
 
 def test_raros_mediana_de_4_semanas_umbral_maximo_3_y_hoy_fuera():
-    # 4 semanas de 100 y luego: un día +50 %, uno −40 %, uno +30 %, uno +26 %, uno +10 % y hoy +300 %.
+    # 4 semanas de 100 y luego: un día +50 %, uno −40 %, uno +30 %, uno +26 %, uno +10 % y hoy +300 %.
     base = [(100, 50, 1)] * 28
     periodo = [(150, 50, 1), (60, 50, 1), (130, 50, 1), (126, 50, 1), (110, 50, 1), (400, 50, 1)]
     raros = r.raros("ventas", _dias(base + periodo), inicio=28)
-    assert raros == {0: pytest.approx(0.5), 1: pytest.approx(-0.4), 2: pytest.approx(0.3)}   # el +26 % no entra
+    assert raros == {0: pytest.approx(0.5), 1: pytest.approx(-0.4), 2: pytest.approx(0.3)}   # el +26 % no entra
 
 
 def test_raros_pide_3_semanas_con_dato():
@@ -76,7 +76,7 @@ def test_mejor_dia_y_costo_por_pedido_al_reves():
 def test_lectura_como_vas_solo_con_comparacion(es):
     a, p = _dias([(110, 50, 2)] * 6), _dias([(100, 50, 2)] * 6)
     frases = r.lectura(a, p, True, {}, {}, "USD", "tienda")
-    assert "10 % más" in frases[0]["texto"] and "1 USD en anuncios" in frases[0]["texto"]
+    assert "10 % más" in frases[0]["texto"] and "1 USD en anuncios" in frases[0]["texto"]
     assert frases[0]["tipo"] == "ok"
     assert all("anteriores" not in f["texto"] for f in r.lectura(a, p, False, {}, {}, "USD", "tienda"))
 
@@ -92,7 +92,7 @@ def test_lectura_aviso_de_anuncios_nuevos(es):
     a = _dias([(100, 100, 1)] * 10)
     nuevos = {d["f"]: 50.0 for d in a[:8]} | {d["f"]: 5.0 for d in a[8:]}
     avisos = [f for f in r.lectura(a, [], False, nuevos, {}, "USD", "tienda") if f["tipo"] == "aviso"]
-    assert avisos and "5 % del gasto" in avisos[0]["texto"]
+    assert avisos and "5 % del gasto" in avisos[0]["texto"]
     assert [x["tipo"] for x in avisos[0]["acciones"]] == ["crear", "evaluar"]
     sin_caida = {d["f"]: 50.0 for d in a}
     assert not [f for f in r.lectura(a, [], False, sin_caida, {}, "USD", "tienda") if f["tipo"] == "aviso"]
@@ -106,7 +106,7 @@ def test_lectura_por_canal_sin_canales_chicos(es):
                            "google-ads": {"gasto": 10.5, "ingresos": 357},
                            "tiktok-ads": {"gasto": 0.5, "ingresos": 1}}}
     frase = [f for f in r.lectura(a, [], False, {}, canales, "USD", "tienda") if f["icono"] == "◎"][0]["texto"]
-    assert frase.startswith("Por canal, según el Pixel: Meta, 89 % del gasto y 2,00× de retorno; Google Ads")
+    assert frase.startswith("Por canal, según el Pixel: Meta, 89 % del gasto y 2,00× de retorno; Google Ads")
     assert "TikTok" not in frase
     assert not [f for f in r.lectura(a, [], False, {}, canales, "USD", "anuncios") if f["icono"] == "◎"]
 
@@ -150,7 +150,7 @@ def test_armar_con_periodo_compara_dias_completos(es):
     out = _armar(serie, dias_periodo=7, inicio=23)
     ventas = out["tarjetas"][0]
     assert ventas["variacion"] == pytest.approx(1.0) and ventas["tono"] == "bueno"   # hoy fuera de la comparación
-    assert ventas["variacion_texto"] == "100 %"
+    assert ventas["variacion_texto"] == "100 %"
     assert len(out["datos"]["previos"]) == 6 and out["datos"]["comparar"] is True
     assert "6 días completos" in out["subtitulo"]
 
@@ -172,7 +172,7 @@ def test_periodo_anterior_antes_de_la_copia_no_se_compara(es):
 
 def test_raros_no_cuentan_semanas_de_antes_de_la_copia():
     # 2 semanas antes de la copia (ceros) + 2 dentro a 100 y un día normal de 100: sin el mínimo, la mediana de
-    # [100, 100, 0, 0] es 50 y el día «sube 100 %»; con el mínimo solo hay 2 semanas previas y no se juzga.
+    # [100, 100, 0, 0] es 50 y el día «sube 100 %»; con el mínimo solo hay 2 semanas previas y no se juzga.
     serie = _dias([(0, 0, 0)] * 14 + [(100, 50, 1)] * 14 + [(100, 50, 1), (1, 1, 1)])
     assert r.raros("ventas", serie, inicio=28, minimo=0) == {0: pytest.approx(1.0)}
     assert r.raros("ventas", serie, inicio=28, minimo=14) == {}
@@ -193,7 +193,7 @@ def test_armar_por_canal_y_clientes_nuevos(es):
     out = _armar(serie, canales=canales)
     assert out["datos"]["dias"][0]["can"] == {"meta": 40, "otros": 10}
     assert [c["clase"] for c in out["datos"]["canales"]] == ["meta", "otros"]
-    assert out["tarjetas"][-1]["clave"] == "clientes_nuevos" and out["tarjetas"][-1]["texto"] == "50 %"
+    assert out["tarjetas"][-1]["clave"] == "clientes_nuevos" and out["tarjetas"][-1]["texto"] == "50 %"
     tt = _armar(serie, fuente="anuncios", canal="tiktok-ads")
     assert tt["titulo"] == "Resultados de TikTok" and tt["tarjetas"][0]["etiqueta"] == "Ventas atribuidas"
     assert "can" not in tt["datos"]["dias"][0]
@@ -210,7 +210,7 @@ def test_detalle_dia(es):
                       "2026-09-16", None)
     assert d["titulo"] == "Qué pasó el jueves 17 de septiembre"
     assert "jueves 10 de septiembre" in d["comparado"]
-    assert d["stats"][0]["variacion_texto"] == "▲ 100 %" and d["stats"][0]["tono"] == "bueno"
+    assert d["stats"][0]["variacion_texto"] == "▲ 100 %" and d["stats"][0]["tono"] == "bueno"
     assert [c["nombre"] for c in d["canales"]] == ["Meta", "Google Ads"]
     assert d["anuncios"][0]["creatv"]["experimento_id"] == 7 and d["anuncios"][1]["nombre"] == "g1"
     assert d["anuncios"][1]["creatv"] is None and d["arrancaron"] == 3

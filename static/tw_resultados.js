@@ -11,6 +11,7 @@
   'use strict';
   if (window.TwResultados) return;
   var NS = 'http://www.w3.org/2000/svg';
+  // El dibujo se arma al ancho real del contenedor (entre 320 y 720 px): en el celular los textos no se encogen.
   var ANCHO = 720, ALTO = 270, M = { izq: 52, der: 16, arriba: 18, abajo: 28 };
 
   // ---------------------------------------------------------------- puro ---
@@ -75,7 +76,7 @@
   function pct(f, lang) {
     if (!numero(f)) return '—';
     var x = f * 100;
-    return fmt(x, Math.abs(x) < 10 && Math.abs(x - Math.round(x)) >= 0.05 ? 1 : 0, lang) + ' %';
+    return fmt(x, Math.abs(x) < 10 && Math.abs(x - Math.round(x)) >= 0.05 ? 1 : 0, lang) + '\u00a0%';
   }
   function entero(v, lang) { return numero(v) ? fmt(Math.round(v), 0, lang) : '—'; }
   function texto(plantilla, valores) {
@@ -134,7 +135,7 @@
     function etiquetaEje(clave, v) {
       var formato = (metas[clave] || {}).formato;
       if (formato === 'veces') return fmt(v, v % 1 ? 1 : 0, LANG) + '×';
-      if (formato === 'pct') return fmt(v * 100, 0, LANG) + ' %';
+      if (formato === 'pct') return fmt(v * 100, 0, LANG) + '\u00a0%';
       if (v >= 1e6) return fmt(v / 1e6, v % 1e6 ? 1 : 0, LANG) + ' M';
       if (v >= 1e3) return fmt(v / 1e3, v % 1e3 ? 1 : 0, LANG) + ' k';
       return fmt(v, v % 1 ? 1 : 0, LANG);
@@ -177,6 +178,10 @@
     }
 
     function dibujar() {
+      ANCHO = Math.round(Math.max(320, Math.min(720, lienzo.clientWidth || caja.clientWidth || 720)));
+      ALTO = ANCHO < 480 ? 240 : 270;
+      M.izq = ANCHO < 480 ? 44 : 52;
+      lienzo.setAttribute('viewBox', '0 0 ' + ANCHO + ' ' + ALTO);
       var clave = st.metrica, esBarras = clave === 'gasto';
       var serie = serieDe(dias, clave, true);
       var previos = st.comparar ? serieDe(datos.previos || [], clave, false) : [];
@@ -276,7 +281,7 @@
         }
       }
 
-      var cada = Math.max(1, Math.ceil(n / 7));
+      var cada = Math.max(1, Math.ceil(n / (ANCHO < 480 ? 4 : 7)));
       for (var i = 0; i < n - 1; i++) {
         if ((n - 1 - i) % cada === 0 && n - 1 - i >= Math.max(2, cada / 2)) {
           svg('text', { x: xc(i), y: ALTO - 8, 'text-anchor': 'middle', 'class': 'twr-eje' }, lienzo, fechaCorta(dias[i].f));
@@ -392,19 +397,22 @@
       st.sel = i;
       dibujar();
       var mio = ++st.pedido;
-      vaciar(detalle);
-      html('p', 'twr-nota', detalle, T.cargando);
+      // Mientras llega el día nuevo se queda el anterior, atenuado (sin saltos de la página).
+      if (detalle.querySelector('.twr-dia-cab')) detalle.classList.add('twr-cargando');
+      else { vaciar(detalle); html('p', 'twr-nota', detalle, T.cargando); }
       var url = datos.url_dia || '';
       url += (url.indexOf('?') >= 0 ? '&' : '?') + 'fecha=' + encodeURIComponent(fecha);
       fetch(url, { headers: { 'X-Requested-With': 'fetch' } })
         .then(function (r) { return r.ok ? r.text() : Promise.reject(r.status); })
         .then(function (fragmento) {
           if (mio !== st.pedido) return;
+          detalle.classList.remove('twr-cargando');
           detalle.innerHTML = fragmento;
           if (conFoco) detalle.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         })
         .catch(function () {
           if (mio !== st.pedido) return;
+          detalle.classList.remove('twr-cargando');
           vaciar(detalle);
           html('p', 'twr-nota', detalle, T.error_dia);
         });
@@ -460,6 +468,7 @@
     });
     lienzo.addEventListener('pointermove', function (ev) { var i = indiceDe(ev); if (i !== null) mostrar(i); });
     lienzo.addEventListener('pointerdown', function (ev) {
+      lienzo.classList.add('twr-con-puntero');       // el contorno de foco es para el teclado, no para el clic
       if (ev.pointerType !== 'mouse') { var i = indiceDe(ev); if (i !== null) mostrar(i); }
     });
     lienzo.addEventListener('pointerleave', function () { if (st.foco === null) ocultar(); });
@@ -468,6 +477,7 @@
       if (i !== null && i < n - 1) abrir(dias[i].f, true);
     });
     lienzo.addEventListener('keydown', function (ev) {
+      lienzo.classList.remove('twr-con-puntero');
       var i = st.foco === null ? (st.sel >= 0 ? st.sel : n - 2) : st.foco;
       if (ev.key === 'ArrowLeft') i = Math.max(0, i - 1);
       else if (ev.key === 'ArrowRight') i = Math.min(n - 1, i + 1);
@@ -481,7 +491,17 @@
       mostrar(i);
     });
     lienzo.addEventListener('blur', function () { st.foco = null; ocultar(); });
-    window.addEventListener('resize', ocultar);
+    var ancho = lienzo.clientWidth, espera = null;
+    window.addEventListener('resize', function () {
+      ocultar();
+      clearTimeout(espera);
+      espera = setTimeout(function () {
+        if (lienzo.isConnected && lienzo.clientWidth && Math.abs(lienzo.clientWidth - ancho) > 8) {
+          ancho = lienzo.clientWidth;
+          dibujar();
+        }
+      }, 150);
+    });
 
     dibujar();
     abrir(datos.dia_inicial, false);
