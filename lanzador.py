@@ -8,6 +8,7 @@ y limpian bajo el lock de tareas.meta (mismo motivo que allá).
 """
 from flask_babel import gettext
 
+import app_tiendas
 import atribucion
 import cola
 import db
@@ -92,6 +93,18 @@ def _promoted_object_para(cliente, ex):
     no tiene nada vigente, se calcula ahí mismo (bloqueante, una ida a
     Graph) — ANTES de crear campaña o conjuntos, así un Pixel apagado aborta
     con un mensaje claro en vez de una campaña huérfana que Meta rechazaría."""
+    if ex["objetivo_meta"] == "OUTCOME_APP_PROMOTION":
+        # Instalaciones de la app: App ID y URLs de tienda se revisan acá,
+        # antes de crear nada — un rechazo tardío de Meta dejaría una campaña
+        # huérfana (misma lección que el Pixel apagado). La URL de tienda
+        # (`object_store_url`) se completa por conjunto, uno por plataforma.
+        app_id = meta_conexion.cargar_app_anunciada(cliente)
+        if not app_id:
+            raise ValueError(gettext("Falta el App ID de la app que anuncias: pégalo en Avanzado "
+                                     "(lo encuentras en Meta for Developers)."))
+        app = (ex.get("extra") or {}).get("app") or {}
+        app_tiendas.validar_urls(app.get("ios_url"), app.get("android_url"))
+        return {"application_id": app_id}
     if ex["objetivo_meta"] != "OUTCOME_SALES":
         return None
     px = meta_conexion.estado_pixel(cliente, solo_cache=True)
@@ -137,18 +150,27 @@ def _crear_anuncios(cliente, ex, creds, adsets, cache=None):
     # (tw_source / tw_adid). Se fijan al crear: cambiarlos después manda el
     # anuncio otra vez a revisión.
     kw_tags = triple_whale_tiendas.kw_url_tags(cliente)
+    app = (ex.get("extra") or {}).get("app") or {}
     for pz in ex["piezas"]:
         if pz["meta_ad_id"]:
             continue
-        experimentos.actualizar_pieza(cliente, pz["id"], estado="publicando", meta_adset_id=adsets[pz["pais"]])
+        plat = (pz.get("extra") or {}).get("plataforma")
+        adset_id = adsets[_clave_adset(pz["pais"], plat)]
+        if plat:
+            # Instalaciones de la app: el anuncio lleva la URL de la tienda de
+            # su plataforma, sin utm_* ni parámetros de rastreo (la tienda no
+            # los usa; la atribución es por ad_id), y el botón «Instalar».
+            link, extra_creative = app[f"{plat}_url"], {"cta_type": "INSTALL_MOBILE_APP"}
+        else:
+            link, extra_creative = url_destino(ex["destino_url"], pz["id"]), kw_tags
+        experimentos.actualizar_pieza(cliente, pz["id"], estado="publicando", meta_adset_id=adset_id)
         creative_id = pz["meta_creative_id"]
         if not creative_id:
             if pz.get("es_imagen"):
                 # Imagen: ni subida de video ni miniatura; el creative lleva la URL pública.
                 creative_id = meta_creative.crear_creative_imagen(
                     f"{pz['nombre']} — {pz['pais']}", pz["url_imagen"], ex["nombre"],
-                    url_destino(ex["destino_url"], pz["id"]), instagram_user_id=creds.get("ig_user_id"),
-                    **kw_tags)["id"]
+                    link, instagram_user_id=creds.get("ig_user_id"), **extra_creative)["id"]
             else:
                 video_id = (pz.get("extra") or {}).get("meta_video_id")
                 if not video_id:
@@ -160,10 +182,9 @@ def _crear_anuncios(cliente, ex, creds, adsets, cache=None):
                 mini = pz["url_miniatura"] or _miniatura_para_ad(cliente, f"exp{experimento_id}_{pz['id']}", pz["url_video"])
                 creative_id = meta_creative.crear_creative_video(
                     f"{pz['nombre']} — {pz['pais']}", video_id, mini, ex["nombre"],
-                    url_destino(ex["destino_url"], pz["id"]), instagram_user_id=creds.get("ig_user_id"),
-                    **kw_tags)["id"]
+                    link, instagram_user_id=creds.get("ig_user_id"), **extra_creative)["id"]
             experimentos.actualizar_pieza(cliente, pz["id"], meta_creative_id=creative_id)
-        ad_id = meta_ad.crear_ad(f"{pz['nombre']} — {pz['pais']}", adsets[pz["pais"]], creative_id)["id"]
+        ad_id = meta_ad.crear_ad(f"{pz['nombre']} — {pz['pais']}", adset_id, creative_id)["id"]
         experimentos.actualizar_pieza(cliente, pz["id"], meta_ad_id=ad_id, estado="pausado",
                                       presupuesto_dia_actual=next(p["presupuesto_dia"] for p in ex["paises"] if p["pais"] == pz["pais"]))
         experimentos.registrar_evento(cliente, experimento_id, "lanzamiento",
@@ -181,6 +202,54 @@ def _avisar_error_lanzamiento(cliente, ex, experimento_id, mensaje):
                           gettext("El experimento «%(experimento)s» (#%(id)s) no se pudo lanzar a Meta.\n\n"
                                   "Motivo: %(mensaje)s\n\nRevísalo en el panel y vuelve a intentar.",
                                   experimento=ex["nombre"], id=experimento_id, mensaje=mensaje))
+
+
+def _clave_adset(pais, plataforma=None):
+    """Llave del conjunto en el dict `adsets` de lanzar(): el país solo, o
+    «país:plataforma» en los experimentos de Instalaciones de la app."""
+    return f"{pais}:{plataforma}" if plataforma else pais
+
+
+def _conjunto_de(cliente, ex, p, plat, n_plataformas, campaign_id, promoted_object, moneda):
+    """Id del conjunto del país `p` (y de la plataforma `plat`, en apps): el
+    guardado si ya existe — así un reintento no lo duplica — o uno nuevo,
+    en pausa, guardado apenas Meta lo devuelve. En apps el presupuesto diario
+    del país se reparte en partes iguales entre sus plataformas (no se
+    duplica) y el conjunto queda en `paises[i]["meta_adsets"][plat]`."""
+    experimento_id = ex["id"]
+    if not plat:
+        adset_id = p.get("meta_adset_id")
+        if adset_id:
+            return adset_id
+        targeting = Targeting().edad(int(ex["edad_min"] or 18), int(ex["edad_max"] or 65)).paises([p["pais"]]).to_dict()
+        adset_id = meta_adset.crear_adset(f"{ex['nombre']} — {p['pais']}", campaign_id, ex["objetivo_meta"], targeting,
+                                          centavos(p["presupuesto_dia"], moneda), int(ex["dias"] or 7),
+                                          promoted_object=promoted_object)["id"]
+        experimentos.actualizar_pais(cliente, experimento_id, p["pais"], meta_adset_id=adset_id, estado="pausado")
+        con_pixel = (gettext(" (optimiza compras con el Pixel %(pixel_id)s)", pixel_id=promoted_object["pixel_id"])
+                     if promoted_object else "")
+        experimentos.registrar_evento(cliente, experimento_id, "lanzamiento",
+                                      gettext("Conjunto %(pais)s creado%(con_pixel)s", pais=p["pais"], con_pixel=con_pixel),
+                                      {"adset_id": adset_id, "presupuesto_dia": p["presupuesto_dia"],
+                                       "pixel_id": promoted_object["pixel_id"] if promoted_object else None})
+        return adset_id
+    ids = p.setdefault("meta_adsets", {})
+    if ids.get(plat):
+        return ids[plat]
+    sistema = app_tiendas.OS_META[plat]
+    app = (ex.get("extra") or {}).get("app") or {}
+    targeting = (Targeting().edad(int(ex["edad_min"] or 18), int(ex["edad_max"] or 65)).paises([p["pais"]])
+                 .sistema(sistema).to_dict())
+    presupuesto = app_tiendas.parte_presupuesto(p["presupuesto_dia"], n_plataformas)
+    adset_id = meta_adset.crear_adset(f"{ex['nombre']} — {p['pais']} · {sistema}", campaign_id, ex["objetivo_meta"],
+                                      targeting, centavos(presupuesto, moneda), int(ex["dias"] or 7),
+                                      promoted_object={**promoted_object, "object_store_url": app[f"{plat}_url"]})["id"]
+    ids[plat] = adset_id
+    experimentos.actualizar_pais(cliente, experimento_id, p["pais"], meta_adsets=dict(ids), estado="pausado")
+    experimentos.registrar_evento(cliente, experimento_id, "lanzamiento",
+                                  gettext("Conjunto %(pais)s · %(sistema)s creado", pais=p["pais"], sistema=sistema),
+                                  {"adset_id": adset_id, "presupuesto_dia": presupuesto, "plataforma": plat})
+    return adset_id
 
 
 def lanzar(cliente, experimento_id, on_etapa=None):
@@ -207,21 +276,11 @@ def lanzar(cliente, experimento_id, on_etapa=None):
                                           {"campaign_id": campaign_id, "spend_cap": cap})
         etapa(ETAPAS_LANZAR[1][0])
         adsets = {}
+        plataformas = experimentos.plataformas_de(ex.get("extra")) or [None]
         for p in ex["paises"]:
-            adset_id = p.get("meta_adset_id")
-            if not adset_id:
-                targeting = Targeting().edad(int(ex["edad_min"] or 18), int(ex["edad_max"] or 65)).paises([p["pais"]]).to_dict()
-                adset_id = meta_adset.crear_adset(f"{ex['nombre']} — {p['pais']}", campaign_id, ex["objetivo_meta"], targeting,
-                                                  centavos(p["presupuesto_dia"], moneda), int(ex["dias"] or 7),
-                                                  promoted_object=promoted_object)["id"]
-                experimentos.actualizar_pais(cliente, experimento_id, p["pais"], meta_adset_id=adset_id, estado="pausado")
-                con_pixel = (gettext(" (optimiza compras con el Pixel %(pixel_id)s)", pixel_id=promoted_object["pixel_id"])
-                            if promoted_object else "")
-                experimentos.registrar_evento(cliente, experimento_id, "lanzamiento",
-                                              gettext("Conjunto %(pais)s creado%(con_pixel)s", pais=p["pais"], con_pixel=con_pixel),
-                                              {"adset_id": adset_id, "presupuesto_dia": p["presupuesto_dia"],
-                                               "pixel_id": promoted_object["pixel_id"] if promoted_object else None})
-            adsets[p["pais"]] = adset_id
+            for plat in plataformas:
+                adsets[_clave_adset(p["pais"], plat)] = _conjunto_de(cliente, ex, p, plat, len(plataformas),
+                                                                      campaign_id, promoted_object, moneda)
         etapa(ETAPAS_LANZAR[2][0])
         _crear_anuncios(cliente, ex, creds, adsets)
 
@@ -388,6 +447,9 @@ def lanzar_piezas_nuevas(cliente, experimento_id):
         raise ValueError(gettext("Ese experimento no existe."))
     if ex["estado"] not in ("pausado", "corriendo", "decidido") or not ex["meta_campaign_id"]:
         raise ValueError(gettext("Ese experimento todavía no está en Meta."))
+    if ex["objetivo_meta"] == "OUTCOME_APP_PROMOTION":
+        raise ValueError(gettext("En los experimentos de instalaciones de la app todavía no se agregan piezas nuevas "
+                                 "después de lanzar."))
     adsets = {p["pais"]: p["meta_adset_id"] for p in ex["paises"] if p.get("meta_adset_id")}
     piezas_nuevas = [p for p in ex["piezas"] if p["estado"] == "en_cola" and p["pais"] in adsets]
     if not piezas_nuevas:

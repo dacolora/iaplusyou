@@ -30,9 +30,9 @@ class MetaFalsa:
                                       actualizar_estado=lambda oid, status, dry_run=False: self._id("estado", oid=oid, status=status))
         creative = types.SimpleNamespace(subir_video=lambda url, titulo="", dry_run=False, esperar_seg=180: "vid_1",
                                          crear_creative_video=lambda nombre, vid, mini, msg, link, cta_type="LEARN_MORE", instagram_user_id=None, dry_run=False, url_tags=None:
-                                         self._id("creative", link=link, url_tags=url_tags),
+                                         self._id("creative", link=link, url_tags=url_tags, cta_type=cta_type),
                                          crear_creative_imagen=lambda nombre, imagen_url, msg, link, cta_type="LEARN_MORE", instagram_user_id=None, dry_run=False, url_tags=None:
-                                         self._id("creative_imagen", link=link, imagen_url=imagen_url, url_tags=url_tags))
+                                         self._id("creative_imagen", link=link, imagen_url=imagen_url, url_tags=url_tags, cta_type=cta_type))
         ad = types.SimpleNamespace(crear_ad=lambda nombre, adset_id, creative_id, dry_run=False: self._id("ad", adset_id=adset_id),
                                    actualizar_estado=lambda oid, status, dry_run=False: self._id("estado", oid=oid, status=status))
         insights = types.SimpleNamespace(obtener_resultados=lambda ad_id, objetivo=None:
@@ -65,6 +65,164 @@ def entorno(base_temporal, monkeypatch):
     ex.agregar_pieza("acme", eid, clon, "CO")
     ex.agregar_pieza("acme", eid, clon, "MX")
     return {"ex": ex, "lanzador": lanzador, "meta": meta, "eid": eid, "monkeypatch": monkeypatch}
+
+
+# Instalaciones de la app (spec 2026-10-07): mismo presupuesto en los dos
+# países para poder comprobar el reparto entre plataformas.
+PRESUPUESTO_PAIS = 20000.0
+PAISES_APP = [{"pais": "CO", "idioma": "es", "presupuesto_dia": PRESUPUESTO_PAIS},
+              {"pais": "MX", "idioma": "es", "presupuesto_dia": PRESUPUESTO_PAIS}]
+URL_IOS = "https://apps.apple.com/co/app/forja/id123"
+URL_ANDROID = "https://play.google.com/store/apps/details?id=com.forja"
+
+
+def _entorno_app(base_temporal, monkeypatch, app):
+    import experimentos as ex
+    import lanzador
+    meta = MetaFalsa()
+    campaign, adset, creative, ad, insights, auth = meta.modulos()
+    monkeypatch.setattr(lanzador, "meta_campaign", campaign)
+    monkeypatch.setattr(lanzador, "meta_adset", adset)
+    monkeypatch.setattr(lanzador, "meta_creative", creative)
+    monkeypatch.setattr(lanzador, "meta_ad", ad)
+    monkeypatch.setattr(lanzador, "meta_insights", insights)
+    monkeypatch.setattr(lanzador, "meta_auth", auth)
+    monkeypatch.setattr(lanzador.meta_conexion, "credenciales_ads", lambda c: {"token": "t", "ad_account_id": "1", "page_id": "2", "ig_user_id": None})
+    monkeypatch.setattr(lanzador.meta_conexion, "cargar", lambda c: {"moneda": "COP"})
+    monkeypatch.setattr(lanzador.meta_conexion, "cargar_app_anunciada", lambda c: "12345")
+    # Triple Whale conectado: sus parámetros NO deben viajar en un anuncio de tienda.
+    monkeypatch.setattr(lanzador.triple_whale_tiendas, "kw_url_tags", lambda c: {"url_tags": "tw_source=meta"})
+    monkeypatch.setattr(lanzador, "_miniatura_para_ad", lambda cliente, ad_id, url: "https://r2/mini.jpg")
+    clon = _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_app")
+    datos = dict(nombre="Forja", paises=PAISES_APP, objetivo_meta="OUTCOME_APP_PROMOTION", dias=7, tope_total=500000.0,
+                 destino_url=app.get("ios_url") or app.get("android_url"), moneda="COP", app=app)
+    eid = ex.crear_con_piezas("acme", datos, [(clon, "CO"), (clon, "MX")])
+    return {"ex": ex, "lanzador": lanzador, "meta": meta, "eid": eid, "monkeypatch": monkeypatch}
+
+
+@pytest.fixture()
+def entorno_app(base_temporal, monkeypatch):
+    return _entorno_app(base_temporal, monkeypatch, {"ios_url": URL_IOS, "android_url": URL_ANDROID})
+
+
+@pytest.fixture()
+def entorno_app_android(base_temporal, monkeypatch):
+    return _entorno_app(base_temporal, monkeypatch, {"android_url": URL_ANDROID})
+
+
+def test_app_dos_plataformas_crea_un_conjunto_por_pais_y_plataforma(entorno_app):
+    e = entorno_app
+    e["lanzador"].lanzar("acme", e["eid"])
+    adsets = [kw for tipo, kw in e["meta"].llamadas if tipo == "adset"]
+    assert len(adsets) == 2 * len(PAISES_APP)          # país × plataforma
+    sistemas = {tuple(a["targeting"]["user_os"]) for a in adsets}
+    assert sistemas == {("iOS",), ("Android",)}
+    assert all(a["targeting"]["device_platforms"] == ["mobile"] for a in adsets)
+    assert sorted((a["targeting"]["geo_locations"]["countries"][0], a["targeting"]["user_os"][0]) for a in adsets) == [
+        ("CO", "Android"), ("CO", "iOS"), ("MX", "Android"), ("MX", "iOS")]
+    for a in adsets:
+        assert a["promoted_object"]["application_id"] == "12345"
+        assert a["promoted_object"]["object_store_url"] == (URL_IOS if a["targeting"]["user_os"] == ["iOS"] else URL_ANDROID)
+        assert a["objetivo"] == "OUTCOME_APP_PROMOTION"
+    # presupuesto del país partido en dos
+    assert all(a["centavos"] == e["lanzador"].centavos(PRESUPUESTO_PAIS / 2, "COP") for a in adsets)
+    ex = e["ex"].obtener("acme", e["eid"])
+    assert ex["estado"] == "pausado"
+    assert all(set(p["meta_adsets"]) == {"ios", "android"} and not p.get("meta_adset_id") for p in ex["paises"])
+    # cada anuncio cae en el conjunto de su país y su plataforma
+    por_pais = {p["pais"]: p["meta_adsets"] for p in ex["paises"]}
+    assert all(pz["meta_adset_id"] == por_pais[pz["pais"]][pz["extra"]["plataforma"]] for pz in ex["piezas"])
+    assert all(pz["estado"] == "pausado" and pz["meta_ad_id"] for pz in ex["piezas"])
+
+
+def test_app_el_anuncio_lleva_la_url_de_tienda_sin_utm(entorno_app):
+    e = entorno_app
+    e["lanzador"].lanzar("acme", e["eid"])
+    creativos = [kw for tipo, kw in e["meta"].llamadas if tipo in ("creative", "creative_imagen")]
+    links = [kw["link"] for kw in creativos]
+    assert len(links) == 4 and all("utm_" not in l and l.startswith("https://") for l in links)
+    assert any("play.google.com" in l for l in links) and any("apps.apple.com" in l for l in links)
+    assert all(kw["cta_type"] == "INSTALL_MOBILE_APP" and kw["url_tags"] is None for kw in creativos)
+    # la misma pieza en dos plataformas comparte la subida del video
+    ex = e["ex"].obtener("acme", e["eid"])
+    assert {(pz.get("extra") or {}).get("meta_video_id") for pz in ex["piezas"]} == {"vid_1"}
+
+
+def test_app_una_sola_plataforma_crea_la_mitad(entorno_app_android):
+    e = entorno_app_android
+    e["lanzador"].lanzar("acme", e["eid"])
+    adsets = [kw for tipo, kw in e["meta"].llamadas if tipo == "adset"]
+    assert len(adsets) == len(PAISES_APP) and all(a["targeting"]["user_os"] == ["Android"] for a in adsets)
+    # una sola plataforma: el presupuesto del país entero
+    assert all(a["centavos"] == e["lanzador"].centavos(PRESUPUESTO_PAIS, "COP") for a in adsets)
+    links = [kw["link"] for tipo, kw in e["meta"].llamadas if tipo == "creative"]
+    assert links == [URL_ANDROID, URL_ANDROID]
+
+
+def test_app_sin_app_id_falla_antes_de_tocar_meta(entorno_app):
+    e = entorno_app
+    e["monkeypatch"].setattr(e["lanzador"].meta_conexion, "cargar_app_anunciada", lambda c: None)
+    with pytest.raises(ValueError):
+        e["lanzador"].lanzar("acme", e["eid"])
+    assert not e["meta"].llamadas
+    assert e["ex"].obtener("acme", e["eid"])["estado"] != "lanzando"
+
+
+def test_app_url_que_no_es_de_tienda_falla_antes_de_tocar_meta(entorno_app):
+    e = entorno_app
+    e["ex"].actualizar_extra("acme", e["eid"], lambda extra: {**extra, "app": {**extra["app"], "ios_url": "https://forja.co"}})
+    with pytest.raises(ValueError):
+        e["lanzador"].lanzar("acme", e["eid"])
+    assert not e["meta"].llamadas
+
+
+def test_app_retoma_sin_duplicar_conjuntos(entorno_app):
+    e = entorno_app
+    e["meta"].fallar_en = "ad"
+    with pytest.raises(Exception):
+        e["lanzador"].lanzar("acme", e["eid"])
+    n = len([1 for t, _ in e["meta"].llamadas if t == "adset"])
+    assert n == 2 * len(PAISES_APP)
+    e["meta"].fallar_en = None
+    e["lanzador"].lanzar("acme", e["eid"])
+    assert len([1 for t, _ in e["meta"].llamadas if t == "adset"]) == n
+    assert len([1 for t, _ in e["meta"].llamadas if t == "campaign"]) == 1
+    ex = e["ex"].obtener("acme", e["eid"])
+    assert ex["estado"] == "pausado" and all(pz["meta_ad_id"] for pz in ex["piezas"])
+
+
+def test_app_retoma_con_un_solo_conjunto_creado(entorno_app):
+    """Falla al crear el segundo conjunto: el reintento crea solo los que faltan."""
+    e = entorno_app
+    meta = e["meta"]
+    original = meta._id
+    def _falla_en_el_segundo_adset(tipo, **kw):
+        if tipo == "adset" and sum(1 for t, _ in meta.llamadas if t == "adset") == 1:
+            meta.llamadas.append((tipo, kw))
+            raise RuntimeError("Meta falló en adset")
+        return original(tipo, **kw)
+    meta._id = _falla_en_el_segundo_adset
+    campaign, adset, creative, ad, insights, auth = meta.modulos()
+    e["monkeypatch"].setattr(e["lanzador"], "meta_adset", adset)
+    with pytest.raises(RuntimeError):
+        e["lanzador"].lanzar("acme", e["eid"])
+    co = next(p for p in e["ex"].obtener("acme", e["eid"])["paises"] if p["pais"] == "CO")
+    assert list(co["meta_adsets"]) == ["ios"]
+    meta._id = original
+    campaign, adset, creative, ad, insights, auth = meta.modulos()
+    e["monkeypatch"].setattr(e["lanzador"], "meta_adset", adset)
+    meta.llamadas.clear()
+    e["lanzador"].lanzar("acme", e["eid"])
+    nuevos = [kw for t, kw in meta.llamadas if t == "adset"]
+    assert len(nuevos) == 3 and ("CO", "iOS") not in {(a["targeting"]["geo_locations"]["countries"][0],
+                                                       a["targeting"]["user_os"][0]) for a in nuevos}
+
+
+def test_app_no_agrega_piezas_nuevas_despues_de_lanzar(entorno_app):
+    e = entorno_app
+    e["lanzador"].lanzar("acme", e["eid"])
+    with pytest.raises(ValueError):
+        e["lanzador"].lanzar_piezas_nuevas("acme", e["eid"])
 
 
 def test_centavos_y_url(base_temporal):
