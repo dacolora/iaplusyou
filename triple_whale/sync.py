@@ -243,7 +243,7 @@ def sincronizar(cliente, tienda_id, desde=None, hasta=None, on_progreso=None, ho
                 datos.reemplazar_anuncios_pixel(cliente, tienda_id, d, h, registros)
                 cuenta["filas_pixel"] += len(registros)
             except triple_whale.ErrorConsulta as e:
-                fallo["pixel"] = str(e)
+                fallo["pixel"] = triple_whale.tachar_llave(str(e), llave)
 
         if fallo["tienda"] is None:
             try:
@@ -253,7 +253,7 @@ def sincronizar(cliente, tienda_id, desde=None, hasta=None, on_progreso=None, ho
                 datos.reemplazar_tienda(cliente, tienda_id, d, h, registros)
                 cuenta["dias_tienda"] += len(registros)
             except triple_whale.ErrorConsulta as e:
-                fallo["tienda"] = str(e)
+                fallo["tienda"] = triple_whale.tachar_llave(str(e), llave)
 
         if fallo["productos"] is None:
             try:
@@ -263,8 +263,10 @@ def sincronizar(cliente, tienda_id, desde=None, hasta=None, on_progreso=None, ho
                 datos.reemplazar_productos(cliente, tienda_id, d, h, registros)
                 cuenta["productos"].update(r["producto_id"] for r in registros)
             except triple_whale.ErrorConsulta as e:
-                fallo["productos"] = str(e)
+                fallo["productos"] = triple_whale.tachar_llave(str(e), llave)
 
+    # Los textos de `fallos` quedan en `extra.ultimo_resumen` y se pintan en la pestaña: van con la llave
+    # tachada (arriba, `tachar_llave`; auditoría de seguridad, 2026-10-08).
     resumen = {
         "desde": desde, "hasta": hasta, "tramos": len(lista), "anuncios": len(cuenta["anuncios"]),
         "filas_pixel": cuenta["filas_pixel"], "dias_tienda": cuenta["dias_tienda"],

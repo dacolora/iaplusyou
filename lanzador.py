@@ -613,16 +613,20 @@ def _tienda_tw_de(tiendas, pais):
     return next((t for t in tiendas if pais and t.get("pais") == pais), None)
 
 
-def _sincronizar_triple_whale(cliente, ex, tienda_id):
+def _sincronizar_triple_whale(cliente, ex, tienda):
     """Antes de leer ventas de Triple Whale, pone al día la copia de esa tienda
     (`triple_whale.sync`, solo si tiene más de 30 min). Si Triple Whale
-    falla, queda un evento y se usa lo que ya estaba copiado."""
+    falla, queda un evento que dice de qué tienda era (su país, o su dominio)
+    con la llave de esa tienda tachada (un proveedor puede repetirla sin
+    «key=»; auditoría de seguridad, 2026-10-08) y se usa lo ya copiado."""
     try:
-        tw_sync.sincronizar_si_hace_falta(cliente, tienda_id)
+        tw_sync.sincronizar_si_hace_falta(cliente, tienda["id"])
     except Exception as e:  # noqa: BLE001 — la copia vieja sigue sirviendo
+        error = cola.sin_token(triple_whale_tiendas.sin_llave(cliente, tienda["id"], str(e)))
+        nombre = _nombre_pais(tienda["pais"]) if tienda.get("pais") else tienda.get("dominio")
         experimentos.registrar_evento(
             cliente, ex["id"], "error",
-            gettext("Error al traer métricas de Triple Whale: %(error)s", error=cola.sin_token(str(e))))
+            gettext("Error al traer métricas de Triple Whale de %(tienda)s: %(error)s", tienda=nombre, error=error))
 
 
 def _nombre_pais(pais):
@@ -710,8 +714,9 @@ def refrescar(cliente, experimento_id):
                 tienda_de_pieza[pz["id"]] = tienda["id"]
             elif (pz.get("pais") or "") not in sin_tienda:
                 sin_tienda.append(pz.get("pais") or "")   # "" = pieza sin país (su propio aviso)
+        por_id = {t["id"]: t for t in tiendas_tw}
         for tienda_id in sorted(set(tienda_de_pieza.values())):
-            _sincronizar_triple_whale(cliente, ex, tienda_id)
+            _sincronizar_triple_whale(cliente, ex, por_id[tienda_id])
         if sin_tienda:
             _avisar_sin_tienda_tw(cliente, ex, sin_tienda)
 

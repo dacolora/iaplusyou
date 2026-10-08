@@ -436,6 +436,9 @@ tw_tienda = Table("tw_tienda", metadata,
     sa.UniqueConstraint("cliente", "dominio", name="uq_tw_tienda_dominio"),
     # una tienda por país; varias sin país se permiten mientras se eligen
     sa.Index("uq_tw_tienda_pais", "cliente", "pais", unique=True, sqlite_where=sa.text("pais IS NOT NULL")),
+    # AUTOINCREMENT: el id de una tienda quitada no se reusa, así una evaluación vieja (tw_evaluacion.extra.
+    # tienda_id) no toma el nombre de la tienda conectada después (auditoría de seguridad, 2026-10-08).
+    sqlite_autoincrement=True,
 )
 
 # --- Triple Whale: métricas copiadas y evaluación (spec 2026-09-28, migraciones 0023 y 0024) ---

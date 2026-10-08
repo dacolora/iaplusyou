@@ -332,6 +332,31 @@ def test_triple_whale_probar_guarda_el_error_en_el_idioma_del_proyecto(app, monk
                                   "(revoked or mistyped)."]
 
 
+def test_triple_whale_el_error_que_repite_la_llave_no_la_muestra_ni_la_guarda(app, monkeypatch):
+    """Auditoría de seguridad (2026-10-08): si Triple Whale repite la llave en su error (sin «key=» delante,
+    que `cola.sin_token` no reconoce), ni el flash ni el `error` guardado de la tienda la contienen."""
+    import triple_whale
+    import triple_whale_tiendas
+    from tests.test_rutas_bloque4 import _flashes
+    llave = "twk_9f8e7d6c5b4a"  # llave-de-prueba
+
+    def _probar(ll, dominio, moneda=None):
+        raise triple_whale.ErrorTienda(f"La tienda no acepta {ll} (401: {ll} sin permiso)")
+    monkeypatch.setattr(triple_whale, "validar_llave", lambda ll: True)
+    monkeypatch.setattr(triple_whale, "probar", _probar)
+
+    _conectar_por_ruta(app, "happyflops-norge.myshopify.com", llave=llave)
+    flashes = _flashes(app["c"])
+    assert flashes and all(llave not in f for f in flashes) and "***" in flashes[-1]
+    assert triple_whale_tiendas.obtener("acme") is None
+
+    tid = triple_whale_tiendas.agregar("acme", llave, "happyflops-norge.myshopify.com", "NO")
+    app["c"].post("/cliente/acme/cfg_triple_whale/probar", data={"tienda_id": tid})
+    error = triple_whale_tiendas.tienda("acme", tid)["error"]
+    assert error and llave not in error and "***" in error
+    assert all(llave not in f for f in _flashes(app["c"]))
+
+
 def test_triple_whale_conectar_con_dominio_invalido_no_llama_a_triple_whale(app, monkeypatch):
     import triple_whale
     import triple_whale_tiendas

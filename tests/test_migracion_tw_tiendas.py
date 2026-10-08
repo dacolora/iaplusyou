@@ -165,3 +165,22 @@ def test_base_sin_datos_sube_y_baja(base):
     command.downgrade(_config(), "0031")
     assert "tw_tienda" not in sa.inspect(db.engine()).get_table_names()
     command.upgrade(_config(), "head")
+
+
+def test_tw_tienda_no_reusa_el_id_de_una_tienda_borrada(base):
+    """Auditoría de seguridad (2026-10-08): `tw_tienda` lleva AUTOINCREMENT. Sin él SQLite reusa el id más
+    alto borrado y una evaluación vieja (`tw_evaluacion.extra.tienda_id`) tomaría el nombre de otra tienda."""
+    from alembic import command
+    db = base
+    command.upgrade(_config(), "0032")
+    with db.engine().begin() as con:
+        assert "AUTOINCREMENT" in con.execute(sa.text(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='tw_tienda'")).scalar().upper()
+        for d in ("a.myshopify.com", "b.myshopify.com"):
+            con.execute(sa.text("INSERT INTO tw_tienda (cliente, creado_en, actualizado_en, dominio) "
+                                "VALUES ('acme', 'x', 'x', :d)"), {"d": d})
+        borrada = con.execute(sa.text("SELECT max(id) FROM tw_tienda")).scalar()
+        con.execute(sa.text("DELETE FROM tw_tienda WHERE id = :i"), {"i": borrada})
+        con.execute(sa.text("INSERT INTO tw_tienda (cliente, creado_en, actualizado_en, dominio) "
+                            "VALUES ('acme', 'x', 'x', 'c.myshopify.com')"))
+        assert con.execute(sa.text("SELECT max(id) FROM tw_tienda")).scalar() > borrada

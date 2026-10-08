@@ -167,6 +167,21 @@ def test_sin_pixel_ni_tienda_los_anuncios_igual_llegan(conectado, monkeypatch):
     assert datos.totales_anuncio("acme", _tienda(), "facebook-ads", "1", "2026-09-01")["gasto"] == 10.0
 
 
+def test_los_fallos_que_quedan_en_el_resumen_no_llevan_la_llave(conectado, monkeypatch):
+    """Auditoría de seguridad (2026-10-08): el texto de un fallo de consulta queda en
+    `extra.ultimo_resumen.fallos` y se pinta en la pestaña; si Triple Whale repite la llave, se tacha."""
+    def responde(llave, shop, consulta, desde, hasta, moneda=None):
+        if "pixel_joined_tvf" in consulta or "blended_stats_tvf" in consulta or "orders_table" in consulta:
+            raise triple_whale.ErrorConsulta(f"consulta rechazada para {llave}")
+        return []
+    monkeypatch.setattr(triple_whale, "sql_query", responde)
+    r = sync.sincronizar("acme", _tienda(), "2026-09-22", "2026-09-28", hoy=HOY)
+    assert set(r["fallos"]) == {"pixel", "tienda", "productos"}
+    guardado = triple_whale_tiendas.tienda("acme", _tienda())["extra"]["ultimo_resumen"]["fallos"]
+    for texto in list(r["fallos"].values()) + list(guardado.values()):
+        assert "tw_secreto" not in texto and "***" in texto
+
+
 def test_normalizar_producto():
     r = sync.normalizar_producto({"event_date": "2026-09-28", "product_id": 8891, "title": "Cojín", "sku": "C-1",
                                   "quantity": "3", "revenue": "89.7", "orders": 2})

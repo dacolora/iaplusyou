@@ -280,3 +280,60 @@ def test_conectar_es_el_agregar_de_la_firma_vieja(base):
                     ventana_atribucion="7_days", zona_horaria="America/Bogota")
     assert tt.tienda("acme", i)["zona_horaria"] == "America/Bogota"
     assert tt.ajustes("acme")["modelo_atribucion"] == "Last Click"
+
+
+def _fila_vieja(cliente):
+    a = db.triple_whale
+    with db.conectar() as con:
+        return con.execute(sa.select(a.c.llave, a.c.dominio_tienda, a.c.moneda, a.c.extra)
+                           .where(a.c.cliente == cliente)).first()
+
+
+def _con_fila_vieja(cliente, llave, dominio):
+    """Como quedó un proyecto tras la migración 0032: la fila de ajustes con las columnas viejas de conexión
+    (la llave cifrada y el dominio de la tienda que estaba conectada) todavía llenas."""
+    a = db.triple_whale
+    with db.conectar() as con:
+        con.execute(a.update().where(a.c.cliente == cliente).values(
+            llave=cifrado.cifrar(llave), dominio_tienda=dominio, extra={"avisados": {"g1": "ganador"}}))
+
+
+def test_quitar_o_reconectar_con_otra_llave_vacia_la_llave_vieja_de_los_ajustes(base):
+    """Auditoría de seguridad (2026-10-08): la fila `triple_whale` guardaba la llave de antes de 0032. Si se
+    quita esa tienda o se reconecta con otra llave, la copia vieja se vacía (llave y dominio_tienda en None)
+    sin borrar la fila: sus ajustes y avisos siguen."""
+    no = tt.agregar("acme", "llave-vieja-no", "happyflops-norge.myshopify.com", moneda="USD")
+    se = tt.agregar("acme", "llave-se-1234", "happyflops-sverige.myshopify.com")
+    _con_fila_vieja("acme", "llave-vieja-no", "happyflops-norge.myshopify.com")
+
+    tt.quitar("acme", se)                                     # otra tienda: la fila vieja no se toca
+    assert _fila_vieja("acme").dominio_tienda == "happyflops-norge.myshopify.com"
+    tt.agregar("acme", "llave-vieja-no", "happyflops-norge.myshopify.com")   # la misma llave: tampoco
+    assert cifrado.descifrar(_fila_vieja("acme").llave) == "llave-vieja-no"
+
+    tt.agregar("acme", "llave-nueva-no", "happyflops-norge.myshopify.com")   # otra llave: se vacía
+    fila = _fila_vieja("acme")
+    assert (fila.llave, fila.dominio_tienda) == (None, None)
+    assert fila.moneda == "USD" and fila.extra == {"avisados": {"g1": "ganador"}}
+    assert tt.obtener_llave("acme", no) == "llave-nueva-no"
+
+
+def test_quitar_la_tienda_de_la_fila_vieja_la_vacia_y_conserva_los_ajustes(base):
+    no = tt.agregar("acme", "llave-vieja-no", "happyflops-norge.myshopify.com", moneda="EUR")
+    tt.agregar("acme", "llave-se-1234", "happyflops-sverige.myshopify.com")
+    _con_fila_vieja("acme", "llave-vieja-no", "https://HappyFlops-Norge.myshopify.com/")   # sin normalizar
+    _con_fila_vieja("otro", "x", "y")                                                      # otro proyecto: nada
+    tt.quitar("acme", no)
+    fila = _fila_vieja("acme")
+    assert (fila.llave, fila.dominio_tienda) == (None, None)
+    assert fila.moneda == "EUR" and fila.extra == {"avisados": {"g1": "ganador"}}
+
+
+def test_una_tienda_quitada_no_deja_su_id_a_la_siguiente(base):
+    """Auditoría de seguridad (2026-10-08): con AUTOINCREMENT el id de una tienda quitada no se reusa, así
+    una evaluación vieja que guarda `tienda_id` no toma el nombre de la tienda conectada después."""
+    tt.agregar("acme", "llave-no-1234", "happyflops-norge.myshopify.com")
+    se = tt.agregar("acme", "llave-se-1234", "happyflops-sverige.myshopify.com")
+    tt.quitar("acme", se)
+    dk = tt.agregar("acme", "llave-dk-1234", "happyflops-danmark.myshopify.com")
+    assert dk > se

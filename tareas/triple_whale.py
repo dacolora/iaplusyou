@@ -82,11 +82,7 @@ def _sin_llave(cliente, tienda_id, texto):
     """Ningún mensaje nuestro lleva la llave, pero uno de un proveedor podría
     repetirla: se tacha el valor exacto de la llave DE ESA TIENDA antes de
     guardarlo o mostrarlo."""
-    try:
-        llave = triple_whale_tiendas.obtener_llave(cliente, tienda_id)
-    except Exception:  # noqa: BLE001 — sin llave legible no hay nada que tachar
-        llave = None
-    return texto.replace(llave, "***") if llave and len(llave) >= 6 else texto
+    return triple_whale_tiendas.sin_llave(cliente, tienda_id, texto)
 
 
 def _nombre_tienda(cliente, tienda):

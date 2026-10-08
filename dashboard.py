@@ -8593,7 +8593,9 @@ def _probar_triple_whale(llave, dominio, moneda):
     try:
         triple_whale.probar(llave, dominio, moneda)
     except triple_whale.ErrorTripleWhale as e:
-        return cola.sin_token(str(e))
+        # Triple Whale puede repetir la llave en su error sin «key=» delante: se tacha su valor exacto
+        # además de lo que reconoce `cola.sin_token` (auditoría de seguridad, 2026-10-08).
+        return cola.sin_token(triple_whale.tachar_llave(str(e), llave))
     return None
 
 

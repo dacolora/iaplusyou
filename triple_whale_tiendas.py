@@ -7,7 +7,9 @@ Dos tablas, un solo escritor (este archivo, regla 5 de CLAUDE.md):
   su sincronización y su `extra` (backfill_desde, ultimo_resumen, gasto_7d).
 * `triple_whale`: los AJUSTES del proyecto, una fila mientras haya al menos una
   tienda: moneda, modelo y ventana de atribución (valen para todas) y su `extra`
-  (avisados, aviso_sin_ventas). Sus columnas viejas de conexión ya no se tocan.
+  (avisados, aviso_sin_ventas). Sus columnas viejas de conexión (de antes de 0032) solo se escriben para
+  vaciarlas: `llave` y `dominio_tienda` pasan a None cuando esa tienda se quita o se reconecta con otra
+  llave (`_vaciar_conexion_vieja`, auditoría de seguridad 2026-10-08).
 
 La llave nunca sale de aquí más que descifrada por `obtener_llave`, para
 `triple_whale.sql_query`; ninguna lectura de este módulo la devuelve.
@@ -131,6 +133,16 @@ def obtener_llave(cliente, tienda_id):
     return cifrado.descifrar(fila[0])
 
 
+def sin_llave(cliente, tienda_id, texto):
+    """`texto` con la llave DE ESA TIENDA tachada (`triple_whale.tachar_llave`). Si la llave no se puede
+    leer (tienda quitada, FLASK_SECRET_KEY cambiada) no hay nada que tachar y el texto vuelve igual."""
+    try:
+        llave = obtener_llave(cliente, tienda_id)
+    except Exception:  # noqa: BLE001 — sin llave legible no hay nada que tachar
+        llave = None
+    return triple_whale.tachar_llave(texto, llave)
+
+
 def conectadas():
     """`[(cliente, tienda_id)]` de las tiendas con llave, para la sincronización periódica."""
     t = db.tw_tienda
@@ -189,6 +201,29 @@ def _pais_libre(con, cliente, pais, salvo_id=None):
         raise PaisOcupado(pais)
 
 
+def _vaciar_conexion_vieja(con, cliente, dominio, llave_nueva=None):
+    """La fila `triple_whale` todavía guarda, en sus columnas de antes de 0032, la llave cifrada y el dominio
+    de la tienda que estaba conectada (se dejaron para que el despliegue anterior siga corriendo). Si esa
+    tienda se quita, o se reconecta con OTRA llave, esa copia vieja ya no debe quedar: se ponen `llave` y
+    `dominio_tienda` en None. La fila nunca se borra aquí (guarda los ajustes y los avisos). Con
+    `llave_nueva` igual a la vieja no se toca. Auditoría de seguridad, 2026-10-08."""
+    a = db.triple_whale
+    fila = con.execute(sa.select(a.c.id, a.c.llave, a.c.dominio_tienda).where(a.c.cliente == cliente)).first()
+    if not fila or not (fila.llave or fila.dominio_tienda):
+        return
+    vieja = triple_whale.normalizar_dominio(fila.dominio_tienda) or (fila.dominio_tienda or "").strip()
+    if vieja != dominio:
+        return
+    if llave_nueva is not None and fila.llave:
+        try:
+            if cifrado.descifrar(fila.llave) == llave_nueva:
+                return
+        except Exception:  # noqa: BLE001 — una llave vieja ilegible tampoco sirve: se vacía
+            pass
+    con.execute(a.update().where(a.c.id == fila.id).values(llave=None, dominio_tienda=None,
+                                                          actualizado_en=db.ahora()))
+
+
 def agregar(cliente, llave, dominio, pais=None, moneda="USD", modelo_atribucion=triple_whale.MODELO_DEFECTO,
             ventana_atribucion=triple_whale.VENTANA_DEFECTO, zona_horaria=""):
     """Conecta una tienda al proyecto y devuelve su id.
@@ -217,6 +252,7 @@ def agregar(cliente, llave, dominio, pais=None, moneda="USD", modelo_atribucion=
             if zona_horaria:
                 valores["zona_horaria"] = zona_horaria
             con.execute(t.update().where(t.c.id == existente.id).values(**valores))
+            _vaciar_conexion_vieja(con, cliente, dom, llave_nueva=llave)
             return existente.id
         return con.execute(t.insert().values(cliente=cliente, creado_en=ahora, extra={},
                                              zona_horaria=zona_horaria, **valores)).inserted_primary_key[0]
@@ -304,13 +340,16 @@ def cambiar_ajustes(cliente, moneda=None, modelo_atribucion=None, ventana_atribu
 
 def quitar(cliente, tienda_id):
     """Quita una tienda y sus copias; si era la última, quita también los ajustes del proyecto. Las
-    evaluaciones con IA (ya pagadas) se conservan. Devuelve si había tienda que quitar."""
+    evaluaciones con IA (ya pagadas) se conservan. Si era la tienda de las columnas viejas de `triple_whale`,
+    las vacía (`_vaciar_conexion_vieja`). Devuelve si había tienda que quitar."""
     t = db.tw_tienda
     with db.conectar() as con:
-        if not con.execute(sa.select(t.c.id).where(t.c.cliente == cliente, t.c.id == tienda_id)).first():
+        fila = con.execute(sa.select(t.c.id, t.c.dominio).where(t.c.cliente == cliente, t.c.id == tienda_id)).first()
+        if not fila:
             return False
         _borrar_copias(con, cliente, tienda_id)
         con.execute(t.delete().where(t.c.id == tienda_id))
+        _vaciar_conexion_vieja(con, cliente, fila.dominio)
         if not con.execute(sa.select(t.c.id).where(t.c.cliente == cliente)).first():
             con.execute(db.triple_whale.delete().where(db.triple_whale.c.cliente == cliente))
     return True

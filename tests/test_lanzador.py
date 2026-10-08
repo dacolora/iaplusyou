@@ -321,6 +321,27 @@ def test_refrescar_con_triple_whale_error_de_sync_registra_evento_y_usa_la_copia
     assert ex.obtener("acme", eid)["piezas"][0]["metricas"]["compras"] == 3
 
 
+@pytest.mark.parametrize("pais, dominio, se_ve", [(None, "acme.myshopify.com", "acme.myshopify.com"),
+                                                  ("CO", "acme-co.myshopify.com", "Colombia")])
+def test_refrescar_error_de_sync_tacha_la_llave_y_dice_la_tienda(entorno, monkeypatch, pais, dominio, se_ve):
+    """Auditoría de seguridad (2026-10-08): el evento «Error al traer métricas de Triple Whale» tacha el
+    valor exacto de la llave de esa tienda (un proveedor puede repetirla sin «key=») y dice de qué tienda
+    era: su país o, sin país, su dominio."""
+    ex, lz, eid = entorno["ex"], entorno["lanzador"], entorno["eid"]
+    ex.actualizar("acme", eid, atribucion="triple_whale")
+    lz.lanzar("acme", eid)
+    _tw_conectado(lz, monkeypatch, dominio=dominio, pais=pais)
+
+    def _revienta(cliente, tienda_id, minutos=30):
+        raise lz.triple_whale.ErrorTripleWhale("401 para la llave tw_secreto en la tienda")
+    monkeypatch.setattr(lz.tw_sync, "sincronizar_si_hace_falta", _revienta)
+
+    lz.refrescar("acme", eid)
+    [evento] = [e for e in ex.eventos("acme", eid) if "Error al traer métricas" in (e.get("mensaje") or "")]
+    assert "tw_secreto" not in evento["mensaje"] and "***" in evento["mensaje"]
+    assert se_ve in evento["mensaje"]
+
+
 def test_refrescar_con_triple_whale_en_otra_moneda_deja_roas_en_cero(entorno, monkeypatch):
     """Ingresos de Triple Whale en USD y cuenta en COP: el ROAS no es
     comparable (queda 0 y un aviso), el CPA sí."""

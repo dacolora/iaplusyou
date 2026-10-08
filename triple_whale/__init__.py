@@ -60,6 +60,15 @@ MONEDAS = ("USD", "EUR", "GBP", "AUD", "CAD", "MXN", "COP", "BRL", "CLP", "PEN",
 _RE_DOMINIO = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$")
 
 
+def tachar_llave(texto, llave):
+    """`texto` con el valor exacto de `llave` tachado («***»). Ningún mensaje nuestro lleva la llave, pero
+    uno de Triple Whale podría repetirla sin «key=» delante (que `cola.sin_token` no reconoce): se tacha
+    antes de mostrarlo, guardarlo o dejarlo en un evento. Una llave de menos de 6 letras no se tacha (se
+    comería palabras sueltas). Auditoría de seguridad, 2026-10-08."""
+    texto = str(texto or "")
+    return texto.replace(llave, "***") if llave and len(llave) >= 6 else texto
+
+
 class ErrorTripleWhale(Exception):
     """Error en la API de Triple Whale. El mensaje se muestra a la persona."""
 

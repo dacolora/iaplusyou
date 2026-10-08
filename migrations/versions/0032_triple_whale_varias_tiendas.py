@@ -68,6 +68,9 @@ def upgrade() -> None:
         sa.Column('ultima_sincronizacion', sa.String(19)),
         sa.Column('extra', sa.JSON()),
         sa.UniqueConstraint('cliente', 'dominio', name='uq_tw_tienda_dominio'),
+        # El id de una tienda quitada no se reusa: una evaluación vieja guarda `tienda_id` y tomaría el nombre
+        # de la siguiente (auditoría de seguridad, 2026-10-08; 0032 aún no estaba desplegada).
+        sqlite_autoincrement=True,
     )
     op.create_index('ix_tw_tienda_cliente', 'tw_tienda', ['cliente'])
     op.create_index('uq_tw_tienda_pais', 'tw_tienda', ['cliente', 'pais'], unique=True,
