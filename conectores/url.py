@@ -169,7 +169,7 @@ def descargar_archivo(url, ruta, max_bytes=MAX_BYTES_VIDEO, tipos=("video/",), t
     """Baja `url` a `ruta` en streaming, con la guarda de SSRF de `abrir` en cada redirección. Exige un
     Content-Type que empiece por alguno de `tipos` y corta al pasar `max_bytes` o cuando la descarga pasa de
     `tiempo_max` segundos. Devuelve los bytes escritos; `ErrorConector` si algo falla (un corte de red o de disco
-    se convierte en uno).
+    se convierte en uno, y si el vigía ya había saltado, cualquier error de la lectura).
 
     El tope de tiempo no se puede revisar «entre trozos»: `iter_content(65536)` espera a juntar los 64 KB, y un
     servidor que suelta un byte cada 0.25 s se queda ahí bloqueado minutos (se vio: 12 s con `tiempo_max=2`). Por
@@ -217,10 +217,17 @@ def descargar_archivo(url, ruta, max_bytes=MAX_BYTES_VIDEO, tipos=("video/",), t
         os.replace(parcial, ruta)
         listo = True
         return total
-    except (requests.RequestException, OSError) as e:
+    except ErrorConector:
+        raise
+    except Exception as e:
+        # Con el vigía ya disparado, la lectura que él despertó puede fallar con cualquier cosa, no solo con un error
+        # de red: al cerrar el socket por debajo, urllib3/http.client a veces dejan escapar un `AttributeError`
+        # («'NoneType' object has no attribute 'close'» / «'readline'»). Todo eso es el corte por tiempo.
         if vencio.is_set():
             raise ErrorConector("La descarga del archivo tardó demasiado.") from None
-        raise ErrorConector(f"Se cortó la descarga del archivo ({type(e).__name__}).") from None
+        if isinstance(e, (requests.RequestException, OSError)):
+            raise ErrorConector(f"Se cortó la descarga del archivo ({type(e).__name__}).") from None
+        raise
     finally:
         if vigia is not None:
             vigia.cancel()

@@ -107,25 +107,44 @@ _HOSTS_REDIRECTOR = ("l.", "lm.")
 _RUTAS_REDIRECTOR = ("/l.php", "/redirect", "/link", "/offsite", "/flx/warn")
 
 
-def _ruta_como_la_lee_el_servidor(ruta):
-    """La ruta de una URL como la resolvería el servidor, para compararla con `_RUTAS_REDIRECTOR`: sin
-    %-codificación (hasta tres vueltas: «/%252e/» también), con «\\» como «/» (así lo hacen los navegadores en
-    https), con los segmentos «.» y «..» resueltos y una sola barra al principio, en minúsculas. «//l.php», «/%6C.php»,
-    «/./l.php», «/a/../l.php» y «/%2e/l.php» salen todas «/l.php». Revisión final de las tarjetas, B8 (2026-10-08):
-    los puntos y los `..` se colaban."""
+def _ruta_decodificada(ruta):
+    """La ruta sin %-codificación (hasta tres vueltas: «/%252e/» también) y con «\\» como «/» (así lo hacen los
+    navegadores en https)."""
     for _ in range(3):
         decodificada = unquote(ruta)
         if decodificada == ruta:
             break
         ruta = decodificada
-    ruta = "/" + ruta.replace("\\", "/").lstrip("/")
+    return ruta.replace("\\", "/")
+
+
+def _ruta_como_la_lee_el_servidor(ruta):
+    """La ruta de una URL como la resolvería el servidor, para compararla con `_RUTAS_REDIRECTOR`: decodificada
+    (`_ruta_decodificada`), con los segmentos «.» y «..» resueltos y una sola barra al principio, en minúsculas.
+    «//l.php», «/%6C.php», «/./l.php», «/a/../l.php» y «/%2e/l.php» salen todas «/l.php». Revisión final de las
+    tarjetas, B8 (2026-10-08): los puntos y los `..` se colaban."""
+    ruta = "/" + _ruta_decodificada(ruta).lstrip("/")
     return posixpath.normpath(ruta).lower()
+
+
+def _ruta_sin_segmentos_raros(ruta):
+    """¿La ruta, ya decodificada, no tiene ningún segmento vacío, «.» ni «..»? Se ignora la barra del principio y la
+    del final («/pin/1/»). Un enlace de anuncio de verdad nunca los lleva, y es justo lo que se usa para disfrazar un
+    redirector: `posixpath.normpath` junta «//» ANTES de resolver «..», pero un navegador no, así que
+    «/link//../v2» lo normaliza a «/v2» (pasa) y el navegador lo manda a «/link/v2», el redirector de TikTok.
+    Revisión de las tarjetas, 2026-10-08."""
+    segmentos = _ruta_decodificada(ruta).split("/")
+    if segmentos and segmentos[0] == "":
+        segmentos = segmentos[1:]
+    if segmentos and segmentos[-1] == "":
+        segmentos = segmentos[:-1]
+    return all(s not in ("", ".", "..") for s in segmentos)
 
 
 def enlace_permitido(url, canal=None):
     """¿Se puede pintar este enlace «Ver en …»? https, sin usuario ni puerto raro, host exacto o subdominio de
-    la plataforma del `canal` del anuncio (canal desconocido: no; sin canal: cualquiera de las conocidas), y nunca
-    un redirector de enlaces."""
+    la plataforma del `canal` del anuncio (canal desconocido: no; sin canal: cualquiera de las conocidas), sin
+    segmentos vacíos, «.» ni «..» en la ruta, y nunca un redirector de enlaces."""
     try:
         p = urlsplit(str(url or "").strip())
         puerto = p.port
@@ -134,7 +153,9 @@ def enlace_permitido(url, canal=None):
     if p.scheme != "https" or not p.hostname or p.username or p.password or puerto not in (None, 443):
         return False
     host = p.hostname.lower()
-    if host.startswith(_HOSTS_REDIRECTOR) or _ruta_como_la_lee_el_servidor(p.path).startswith(_RUTAS_REDIRECTOR):
+    if host.startswith(_HOSTS_REDIRECTOR) or not _ruta_sin_segmentos_raros(p.path):
+        return False
+    if _ruta_como_la_lee_el_servidor(p.path).startswith(_RUTAS_REDIRECTOR):
         return False
     if canal is None:
         dominios = ENLACES_PLATAFORMAS

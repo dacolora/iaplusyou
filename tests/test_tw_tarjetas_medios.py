@@ -229,13 +229,129 @@ def test_descargar_archivo_dentro_del_tiempo_termina(monkeypatch, tmp_path):
     assert conector_url.descargar_archivo("https://files.triplewhale.com/v.mp4", str(tmp_path / "v.mp4")) == 30
 
 
+class _VigiaAlInstante:
+    """Reemplazo de `threading.Timer`: dispara el corte del vigía apenas arranca (sin esperar `tiempo_max`), así que
+    `vencio` ya está puesto cuando empieza la lectura. `dispara=False` lo deja sin disparar (el control)."""
+
+    def __init__(self, dispara=True):
+        self.dispara = dispara
+
+    def __call__(self, intervalo, funcion):
+        self._funcion = funcion
+        self.daemon = False
+        return self
+
+    def start(self):
+        if self.dispara:
+            self._funcion()
+
+    def cancel(self):
+        pass
+
+
+def _vigia(monkeypatch, dispara=True):
+    """Sustituye el vigía de `descargar_archivo` por uno que salta de inmediato (o nunca): sin esperas reales."""
+    monkeypatch.setattr(conector_url.threading, "Timer", _VigiaAlInstante(dispara))
+
+
+@pytest.mark.parametrize("error", [
+    AttributeError("'NoneType' object has no attribute 'close'"),
+    AttributeError("'NoneType' object has no attribute 'readline'"),
+    ValueError("I/O operation on closed file"),
+    RuntimeError("cualquier otra cosa"),
+])
+def test_descargar_archivo_con_el_vigia_disparado_todo_error_de_la_lectura_es_el_corte_por_tiempo(
+        monkeypatch, tmp_path, error):
+    """Revisión de las tarjetas (2026-10-08): al cortar el socket por debajo, urllib3/http.client pueden dejar
+    escapar un `AttributeError` en vez de un error de red. Con `vencio` puesto es el corte por tiempo: un
+    `ErrorConector` (nunca la excepción cruda), sin `.part`, y el archivo bueno que ya estaba sigue intacto."""
+    _vigia(monkeypatch)
+    resp = _RespuestaPorTrozos([b"\x00" * 1000] * 2, corte=error)
+    _fingir(monkeypatch, resp)
+    ruta = tmp_path / "v.mp4"
+    ruta.write_bytes(b"BUENO")
+    with pytest.raises(conector_url.ErrorConector) as ei:
+        conector_url.descargar_archivo("https://files.triplewhale.com/v.mp4", str(ruta))
+    assert "tardó demasiado" in ei.value.usuario
+    assert resp.consumidos == 2                       # sí llegó a leer: el error salió de la lectura
+    assert ruta.read_bytes() == b"BUENO" and _restos(tmp_path) == ["v.mp4"]
+
+
+def test_descargar_archivo_un_error_que_no_es_del_corte_sigue_siendo_ese_error(monkeypatch, tmp_path):
+    """El control: sin el vigía disparado, un `AttributeError` es un fallo nuestro y no se disfraza de timeout
+    (y de todos modos no deja `.part`)."""
+    _vigia(monkeypatch, dispara=False)
+    _fingir(monkeypatch, _RespuestaPorTrozos([b"\x00" * 1000], corte=AttributeError("de verdad")))
+    with pytest.raises(AttributeError):
+        conector_url.descargar_archivo("https://files.triplewhale.com/v.mp4", str(tmp_path / "v.mp4"))
+    assert _restos(tmp_path) == []
+
+
+def test_descargar_archivo_un_error_de_red_sin_vigia_sigue_diciendo_que_se_corto(monkeypatch, tmp_path):
+    _vigia(monkeypatch, dispara=False)
+    _fingir(monkeypatch, _RespuestaPorTrozos([b"\x00" * 10], corte=requests.exceptions.ConnectionError("x")))
+    with pytest.raises(conector_url.ErrorConector) as ei:
+        conector_url.descargar_archivo("https://files.triplewhale.com/v.mp4", str(tmp_path / "v.mp4"))
+    assert "ConnectionError" in ei.value.usuario and "tardó" not in ei.value.usuario
+
+
+def test_descargar_archivo_el_tope_de_tamano_con_el_vigia_disparado_conserva_su_mensaje(monkeypatch, tmp_path):
+    _vigia(monkeypatch)
+    _fingir(monkeypatch, _RespuestaPorTrozos([b"\x00" * 1000] * 5))
+    with pytest.raises(conector_url.ErrorConector) as ei:
+        conector_url.descargar_archivo("https://files.triplewhale.com/v.mp4", str(tmp_path / "v.mp4"), max_bytes=1500)
+    assert "pesa demasiado" in ei.value.usuario
+    assert _restos(tmp_path) == []
+
+
+def test_descargar_archivo_que_termina_limpio_pero_con_el_vigia_disparado_es_un_corte_por_tiempo(monkeypatch, tmp_path):
+    """La rama de después del ciclo: el vigía cortó la conexión y la lectura terminó «limpia» (EOF), o sea, el
+    archivo está truncado. No se entrega como bueno: `ErrorConector`, sin `.part`, el archivo anterior intacto."""
+    _vigia(monkeypatch)
+    resp = _RespuestaPorTrozos([b"\x00" * 1000] * 3)
+    _fingir(monkeypatch, resp)
+    ruta = tmp_path / "v.mp4"
+    ruta.write_bytes(b"BUENO")
+    with pytest.raises(conector_url.ErrorConector) as ei:
+        conector_url.descargar_archivo("https://files.triplewhale.com/v.mp4", str(ruta))
+    assert "tardó demasiado" in ei.value.usuario
+    assert resp.consumidos == 3                       # leyó todo hasta el EOF: salió por la rama de después del ciclo
+    assert ruta.read_bytes() == b"BUENO" and _restos(tmp_path) == ["v.mp4"]
+
+
 def test_enlace_permitido_no_confunde_una_ruta_normal_con_un_redirector():
     assert triple_whale.enlace_permitido("https://www.tiktok.com/@marca/video/1", "tiktok-ads")
     assert triple_whale.enlace_permitido("https://www.pinterest.com/pin/1/", "pinterest-ads")
     assert triple_whale.enlace_permitido("https://www.facebook.com/watch/?v=1", "facebook-ads")
-    # las rutas con puntos que NO terminan en un redirector siguen pasando
-    assert triple_whale.enlace_permitido("https://www.facebook.com/./watch/?v=1", "facebook-ads")
-    assert triple_whale.enlace_permitido("https://www.facebook.com/a/../watch/?v=1", "facebook-ads")
-    assert triple_whale.enlace_permitido("https://www.tiktok.com/@marca/video/1/../2", "tiktok-ads")
+    # la barra del final (arriba, «/pin/1/») y la ruta vacía no son segmentos raros
     assert triple_whale.enlace_permitido("https://www.tiktok.com/", "tiktok-ads")
     assert triple_whale.enlace_permitido("https://www.tiktok.com", "tiktok-ads")
+
+
+@pytest.mark.parametrize("malo", [
+    # Ruling 2026-10-08: ningún enlace de anuncio de verdad lleva segmentos vacíos, «.» ni «..», ni aunque la ruta
+    # resuelta no sea un redirector (antes estos tres pasaban; ahora se rechazan).
+    "https://www.facebook.com/./watch/?v=1",
+    "https://www.facebook.com/a/../watch/?v=1",
+    "https://www.tiktok.com/@marca/video/1/../2",
+    # `normpath` junta «//» antes de resolver «..» («/link//../v2» -> «/v2»), pero el navegador lo manda a /link/v2
+    "https://www.tiktok.com/link//../v2?target=https://evil.test",
+    "https://www.tiktok.com/link//../v2",
+    "https://www.tiktok.com//link/v2",
+    "https://www.tiktok.com/link/./v2",
+    "https://www.tiktok.com/a//b",
+    "https://www.tiktok.com/%2e%2e/link",
+    "https://www.tiktok.com/%2E%2E/link/v2",
+    "https://www.tiktok.com/a%2f%2fb",                    # «//» escondido como %2f%2f
+    "https://www.tiktok.com/a/%252e%252e/b",              # «..» doblemente %-codificado
+    "https://www.tiktok.com/a\\\\b",                          # dos «\» son «//» para el navegador: segmento vacío
+    "https://www.tiktok.com/a/\\..\\b",                       # «\..\» es «/../»
+    "https://www.tiktok.com/embed//v1",
+    "https://www.tiktok.com/embed/v1//",                  # solo se perdona UNA barra al final
+    "https://www.tiktok.com//",
+    "https://www.tiktok.com/embed/v1/..",
+    "https://www.tiktok.com/embed/v1/.",
+])
+def test_enlace_permitido_rechaza_segmentos_vacios_o_con_puntos(malo):
+    assert not triple_whale.enlace_permitido(malo), malo
+    assert not triple_whale.enlace_permitido(malo, "tiktok-ads"), malo
