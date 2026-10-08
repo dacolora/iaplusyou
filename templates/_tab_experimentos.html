@@ -131,7 +131,15 @@
         <label>{{ _('Modo') }}
           <select name="modo">{% for m in modos_exp %}<option value="{{ m }}" {% if m == "manual" %}selected{% endif %}>{{ m }}</option>{% endfor %}</select>
         </label>
-        <label>{{ _('URL de destino') }} <input type="url" name="destino_url" value="{{ request.args.get('exp_destino') or url_for('landing_cliente', cliente=cliente, _external=True) }}" required></label>
+        <label data-solo-no-app>{{ _('URL de destino') }} <input type="url" name="destino_url" value="{{ request.args.get('exp_destino') or url_for('landing_cliente', cliente=cliente, _external=True) }}" required></label>
+      </div>
+      {# Instalaciones de la app: las URLs de tienda reemplazan la de destino (al
+         menos una); el App ID es el de la app que se anuncia, no el de Creatv. #}
+      <div class="fe-opciones exp-solo-app" data-solo-app hidden>
+        <label>{{ _('URL de App Store (iOS)') }} <input type="url" name="app_ios_url" placeholder="https://apps.apple.com/…"></label>
+        <label>{{ _('URL de Google Play (Android)') }} <input type="url" name="app_android_url" placeholder="https://play.google.com/store/apps/details?id=…"></label>
+        <label>{{ _('App ID de Meta de tu app') }} <input name="app_id" inputmode="numeric" value="{{ app_id_guardado or '' }}"></label>
+        <p class="vacio">{{ _('Optimiza por clics a la tienda; las instalaciones reales se miden cuando la app tenga el SDK de Meta o un servicio de atribución. Deja la app en modo Live en Meta for Developers.') }}</p>
       </div>
       <p class="vacio exp-ayuda-modo">{{ _('Manual: el motor solo propone y tú apruebas. Semi: pausar y archivar se hacen solos. Auto: todo solo salvo con el tope alcanzado. Compras exige el Pixel activo y atribución pixel; Tráfico sirve siempre. La atribución sugerida sale de lo conectado en Configuración: pulsa «Comprobar Pixel» allí para que la tenga en cuenta.') }}</p>
     </details>
@@ -259,7 +267,7 @@
     <li class="exp-pais">
       <div class="exp-pais-cab">
         <span>{{ info.bandera }} <strong>{{ info.nombre|traducir if info.nombre else p.pais }}</strong> · {{ _('%(presupuesto)s %(moneda)s/día', presupuesto=p.presupuesto_dia, moneda=e.moneda) }} <span class="tag-estado">{{ etiquetas_exp.pieza.get(p.estado, p.estado)|traducir }}</span></span>
-        {% if p.meta_adset_id and e.estado in ("pausado", "corriendo") %}
+        {% if (p.meta_adset_id or p.meta_adsets) and e.estado in ("pausado", "corriendo") %}
         <form method="post" action="{{ url_for('exp_estado', cliente=cliente, eid=e.id) }}" class="inline">
           <input type="hidden" name="pais" value="{{ p.pais }}">
           {% if p.estado == "activo" %}<input type="hidden" name="estado" value="PAUSED"><button class="btn-rechazar btn-xs">{{ _('Pausar país') }}</button>
@@ -493,7 +501,8 @@
     }
     function refrescarCuenta() {
       var n = marcadas().length, ps = paisesMarcados();
-      var anuncios = cuadricula.querySelectorAll('input[name=combinaciones]:checked').length || combinaciones().length;
+      // En apps cada casilla son tantos anuncios como tiendas (las plataformas se expanden en el servidor).
+      var anuncios = (cuadricula.querySelectorAll('input[name=combinaciones]:checked').length || combinaciones().length) * tiendasApp();
       var dia = 0;
       ps.forEach(function (p) { dia += parseFloat((form.querySelector('[name=presupuesto_' + p + ']') || {}).value || '0'); });
       var tope = parseFloat((form.querySelector('[name=tope_total]') || {}).value || '0');
@@ -565,6 +574,30 @@
       });
     });
     form.querySelectorAll('[name=tope_total], [name=dias], [name^=presupuesto_], .exp-pais-check').forEach(function (i) { i.addEventListener('input', refrescarCuenta); });
+    // Instalaciones de la app: las URLs de tienda reemplazan la de destino y
+    // la atribución arranca en «ninguna» (la persona puede elegir otra).
+    var selObjetivo = form.querySelector('select[name=objetivo]');
+    var selAtribucion = form.querySelector('select[name=atribucion]');
+    var destinoUrl = form.querySelector('[name=destino_url]');
+    var atribucionInicial = selAtribucion ? selAtribucion.value : '';
+    function esApp() { return !!selObjetivo && selObjetivo.value === 'OUTCOME_APP_PROMOTION'; }
+    function tiendasApp() {
+      if (!esApp()) return 1;
+      var n = ['app_ios_url', 'app_android_url'].filter(function (k) { return ((form.querySelector('[name=' + k + ']') || {}).value || '').trim(); }).length;
+      return Math.max(1, n);
+    }
+    function alternarApp(refrescar) {
+      var app = esApp();
+      form.querySelectorAll('[data-solo-app]').forEach(function (b) { b.hidden = !app; });
+      form.querySelectorAll('[data-solo-no-app]').forEach(function (b) { b.hidden = app; });
+      if (destinoUrl) destinoUrl.required = !app;
+      if (selAtribucion && !selAtribucion.dataset.tocado) selAtribucion.value = app ? 'ninguna' : atribucionInicial;
+      if (refrescar) refrescarCuenta();
+    }
+    if (selObjetivo) selObjetivo.addEventListener('change', function () { alternarApp(true); });
+    if (selAtribucion) selAtribucion.addEventListener('change', function () { selAtribucion.dataset.tocado = '1'; });
+    form.querySelectorAll('[name=app_ios_url], [name=app_android_url]').forEach(function (i) { i.addEventListener('input', refrescarCuenta); });
+    alternarApp(false);
     if (nombre) nombre.addEventListener('input', function () { nombre.dataset.tocado = '1'; });
     form.addEventListener('submit', function (ev) {
       var marcadasCuadricula = Array.prototype.slice.call(cuadricula.querySelectorAll('input[name=combinaciones]:checked'));

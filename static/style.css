@@ -1762,7 +1762,10 @@ kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 .3rem; fon
 .exp-pasos { border:1px solid var(--border); border-radius:12px; padding:1rem; margin-top:1rem; }
 /* display:flex pisaría el atributo hidden (misma trampa que .org-texto[hidden]): todo lo que
    el JS esconde con .hidden = true lleva su regla explícita. */
-.exp-tarjeta[hidden], .exp-barra[hidden], .exp-pasos[hidden], .exp-pasos [data-paso][hidden] { display:none; }
+.exp-tarjeta[hidden], .exp-barra[hidden], .exp-pasos[hidden], .exp-pasos [data-paso][hidden],
+.exp-pasos [data-solo-app][hidden], .exp-pasos [data-solo-no-app][hidden] { display:none; }
+.exp-solo-app { margin-top:.8rem; }
+.exp-solo-app p { flex-basis:100%; margin:0; }
 .exp-pasos-nav { display:flex; gap:1rem; list-style:none; padding:0; margin:0 0 1rem; font-weight:600; color:var(--muted-2); }
 .exp-pasos-nav li { cursor:pointer; }
 .exp-pasos-nav li.activo { color:var(--accent-texto); }

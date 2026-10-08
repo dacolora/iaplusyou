@@ -51,6 +51,7 @@ import usuarios
 import idiomas
 import cuentas
 import meta_conexion
+import app_tiendas
 import meta_agencia
 import meta_errores
 import flowplus_prompt
@@ -2109,6 +2110,7 @@ def ver_cliente(cliente):
         objetivos_exp=meta_campaign.OBJETIVOS_VALIDOS_FASE1,
         objetivo_exp_sugerido=experimentos.objetivo_sugerido(cliente, atribucion_sug),
         nombres_objetivo_exp=NOMBRES_OBJETIVO_EXP,
+        app_id_guardado=meta_conexion.cargar_app_anunciada(cliente),
         minimo_diario_exp=PRESUPUESTO_MINIMO_DIARIO.get(moneda_exp, 1),
         moneda_exp=moneda_exp,
         propuestas_exp=propuestas_exp,
@@ -3548,7 +3550,8 @@ PRESUPUESTO_MINIMO_DIARIO = {"USD": 1, "COP": 4000, "MXN": 20, "EUR": 1, "BRL": 
 NOMBRES_OBJETIVO_EXP = {"OUTCOME_SALES": idiomas.N_("Compras (requiere Pixel)"),
                         "OUTCOME_TRAFFIC": idiomas.N_("Tráfico (clics al enlace)"),
                         "OUTCOME_ENGAGEMENT": idiomas.N_("Interacción"),
-                        "OUTCOME_LEADS": idiomas.N_("Clientes potenciales")}
+                        "OUTCOME_LEADS": idiomas.N_("Clientes potenciales"),
+                        "OUTCOME_APP_PROMOTION": idiomas.N_("Instalaciones de la app")}
 
 PROVEEDORES_SWAP_IMAGEN = ("nano_banana", "nano_banana_fal", "qwen_edit", "nano_banana_pro_ultra", "seedream_v5_pro")
 PROVEEDORES_SWAP_VIDEO = (
@@ -5310,17 +5313,40 @@ def exp_probar(cliente):
     if not combinaciones:
         flash(gettext("Marca al menos una combinación pieza × país en el paso de revisar."), "error")
         return volver
+    # Instalaciones de la app (spec 2026-10-07): en vez de URL de destino van
+    # las URLs de tienda (al menos una) y el App ID de Meta de la app anunciada.
+    es_app = objetivo == "OUTCOME_APP_PROMOTION"
+    tiendas = {}
+    if es_app:
+        try:
+            tiendas = app_tiendas.validar_urls(request.form.get("app_ios_url"), request.form.get("app_android_url"))
+        except ValueError as e:
+            flash(str(e), "error")
+            return volver
+        destino = next(iter(tiendas.values()))   # solo para que el resto de la app muestre algo
     if (objetivo not in meta_campaign.OBJETIVOS_VALIDOS_FASE1 or not codigos
-            or not destino.startswith(("http://", "https://")) or not (1 <= dias <= 90) or tope <= 0
+            or (not es_app and not destino.startswith(("http://", "https://"))) or not (1 <= dias <= 90) or tope <= 0
             or not (13 <= edad_min <= edad_max <= 65)):
         flash(gettext("Faltan datos: objetivo, al menos un país, días (1–90), tope, edades (13–65) y una URL de destino http(s)."), "error")
         return volver
     minimo = PRESUPUESTO_MINIMO_DIARIO.get(moneda, 1)
-    bajos = [p["pais"] for p in paises if p["presupuesto_dia"] < minimo]
-    if bajos:
-        flash(gettext("El presupuesto diario no alcanza el mínimo de Meta (%(minimo)s %(moneda)s) en: %(paises)s.",
-                      minimo=minimo, moneda=moneda, paises=", ".join(bajos)), "error")
-        return volver
+    if es_app:
+        # Cada país se reparte en partes iguales entre sus tiendas, en centavos
+        # como el lanzador: cada parte (un conjunto en Meta) tiene que alcanzar el mínimo.
+        n_tiendas = len(tiendas)
+        bajos = [p["pais"] for p in paises
+                 if lanzador.centavos(p["presupuesto_dia"], moneda) // n_tiendas < lanzador.centavos(minimo, moneda)]
+        if bajos:
+            flash(gettext("El presupuesto diario de cada país se reparte entre %(n)s tiendas y cada parte tiene que "
+                          "alcanzar el mínimo de Meta (%(minimo)s %(moneda)s) en: %(paises)s.",
+                          n=n_tiendas, minimo=minimo, moneda=moneda, paises=", ".join(bajos)), "error")
+            return volver
+    else:
+        bajos = [p["pais"] for p in paises if p["presupuesto_dia"] < minimo]
+        if bajos:
+            flash(gettext("El presupuesto diario no alcanza el mínimo de Meta (%(minimo)s %(moneda)s) en: %(paises)s.",
+                          minimo=minimo, moneda=moneda, paises=", ".join(bajos)), "error")
+            return volver
     modo = request.form.get("modo") or "manual"
     if modo not in modos.MODOS:
         modo = "manual"
@@ -5328,6 +5354,17 @@ def exp_probar(cliente):
     if atribucion is not None and atribucion not in experimentos.ATRIBUCIONES:
         flash(gettext("La atribución tiene que ser pixel, tienda o ninguna."), "error")
         return volver
+    datos_app = None
+    if es_app:
+        if atribucion is None:
+            atribucion = "ninguna"   # una instalación no es una compra: nada que atribuir salvo que la persona elija
+        app_id = (request.form.get("app_id") or meta_conexion.cargar_app_anunciada(cliente) or "").strip()
+        try:
+            meta_conexion.guardar_app_anunciada(cliente, app_id)
+        except meta_conexion.MetaConexionError as e:
+            flash(str(e), "error")
+            return volver
+        datos_app = {**{f"{p}_url": u for p, u in tiendas.items()}, "app_id": app_id}
     if objetivo == "OUTCOME_SALES" and (atribucion or experimentos.atribucion_sugerida(cliente)) != "pixel":
         flash(gettext("Optimizar por compras requiere el Pixel activo y atribución pixel: pulsa «Comprobar Pixel» en "
                       "Configuración, o elige el objetivo de tráfico."), "error")
@@ -5335,10 +5372,10 @@ def exp_probar(cliente):
     n_piezas = len({pid for pid, _ in combinaciones})
     nombre = (request.form.get("nombre") or "").strip()[:200] or nombre_experimento_automatico(n_piezas, codigos)
     datos = dict(nombre=nombre, paises=paises, objetivo_meta=objetivo, dias=dias, tope_total=tope, destino_url=destino,
-                 moneda=moneda, edad_min=edad_min, edad_max=edad_max, modo=modo, atribucion=atribucion)
+                 moneda=moneda, edad_min=edad_min, edad_max=edad_max, modo=modo, atribucion=atribucion, app=datos_app)
     try:
         eid = experimentos.crear_con_piezas(cliente, datos, combinaciones)
-    except experimentos.ErrorCombinacion as e:
+    except (experimentos.ErrorCombinacion, ValueError) as e:
         flash(str(e), "error")
         return volver
     job_id = tareas_exp.job_id_lanzar(cliente, eid)
