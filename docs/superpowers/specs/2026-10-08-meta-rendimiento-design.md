@@ -96,8 +96,8 @@ Paquete `meta_rendimiento/` (no `meta_ads/`, que es el submódulo, ni `meta_deta
   calculado_en; UQ (cliente, ad_account_id, ventana, dimension, clave)) y `meta_evaluacion` (como `tw_evaluacion`:
   cliente, alcance (cuentas), desde, hasta, moneda, estado, resultado JSON, usd, pedido_por, creada_en, extra).
 
-Las compras: el primer tipo presente de `("omni_purchase", "purchase", "offsite_conversion.fb_pixel_purchase")` en
-`actions`/`action_values` (el mismo orden que `meta_ads/insights.obtener_resultados`). Clics de salida:
+Las compras: el primer tipo presente de `("purchase", "omni_purchase", "offsite_conversion.fb_pixel_purchase")` en
+`actions`/`action_values` (el mismo orden que `meta_ads/insights.obtener_resultados` y `meta_detalle._COMPRA`). Clics de salida:
 `outbound_clicks[outbound_click]`, y si falta, `inline_link_clicks`. Vistas de 3 s: `actions[video_view]`.
 
 ## 5. Conexión
@@ -140,7 +140,7 @@ esperar» y la próxima pasada periódica reintenta; un token roto (190, 102, 10
 ## 7. Monedas
 
 `tasas.usd(moneda, fecha)`: USD por unidad; para un día sin publicación del BCE (fin de semana, festivo) usa el último
-día publicado anterior. `tasas.asegurar` pide `https://api.frankfurter.app/<desde>..<hasta>?from=<M>&to=USD` con
+día publicado anterior. `tasas.asegurar` pide `https://api.frankfurter.dev/v1/<desde>..<hasta>?from=<M>&to=USD` (frankfurter.app redirige ahí) con
 `conectores.url.abrir` y guarda lo que llega. USD → 1,0 sin pedir. Sin tasa: el total en USD del período dice «USD no
 disponible» y la tarjeta muestra el total por moneda.
 
