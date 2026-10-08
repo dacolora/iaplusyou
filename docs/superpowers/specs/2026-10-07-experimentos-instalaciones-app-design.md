@@ -32,8 +32,10 @@ Verificado en la documentación de Meta (2026-10-07): para promoción de apps, `
 ## Diseño
 
 ### Datos (sin migración nueva)
-- App ID de Meta del proyecto: en el almacén de la conexión (`meta_conexion`), clave `app_id`, junto a token y cuenta
-  publicitaria. Se edita en Configuración, bloque Meta. Es un identificador público, no un secreto.
+- App ID de la app **anunciada** (Forja Habit): archivo propio `meta_app_anunciada.json` del proyecto, escrito por
+  `meta_conexion.guardar_app_anunciada`. NO es `meta_app.json`: ese guarda la app de inicio de sesión de Creatv (app_id,
+  app_secret, login_config_id) y son cosas distintas. Se pide en el bloque Avanzado del formulario, precargado con el guardado.
+  Es un identificador público, no un secreto.
 - Las URLs viajan en `experimento.extra["app"] = {"ios_url": …, "android_url": …}` (JSON que ya existe). `destino_url` queda
   con la primera URL presente solo para que el resto de la app (galería, tarjeta) siga mostrando algo; nunca se usa para el
   enlace del anuncio con este objetivo.
@@ -66,8 +68,8 @@ Verificado en la documentación de Meta (2026-10-07): para promoción de apps, `
 ### Formulario (`dashboard.exp_probar`, `_tab_experimentos.html`)
 - En Avanzado, el selector de objetivo suma «Instalaciones de la app». Al elegirlo, el campo «URL de destino» se oculta y
   aparecen «URL de App Store (iOS)» y «URL de Google Play (Android)», ambos opcionales con al menos uno requerido.
-- La revisión del paso 3 muestra la cuadrícula pieza × país × plataforma, y el aviso de presupuesto cuenta conjuntos por
-  país × plataforma (el presupuesto diario por país se reparte en partes iguales entre sus plataformas).
+- La cuadrícula del paso 3 NO cambia (pieza × país): las plataformas se expanden en el servidor. El presupuesto diario por
+  país se reparte en partes iguales entre sus plataformas y cada parte debe alcanzar el mínimo de Meta.
 - Todo texto nuevo pasa por el catálogo (`_()`), inglés y español.
 
 ### Decisor y métricas
@@ -87,10 +89,12 @@ Verificado en la documentación de Meta (2026-10-07): para promoción de apps, `
 - Prueba de mutación (agente `revisor`): quitar el filtro de plataforma o el `application_id` y ver que las pruebas lo noten.
 - Pantalla: captura del formulario con el objetivo nuevo, en escritorio y celular, antes de dar por bueno.
 
-## Prueba real (primer paso del plan, antes de escribir el lanzador)
-Con el token de `colorado_forja`, crear en pausa y borrar después una campaña `OUTCOME_APP_PROMOTION` con un conjunto
+## Prueba real (último paso del plan; el token solo vive en el VPS)
+Tras desplegar, lanzar un experimento mínimo de `colorado_forja` (todo en pausa, gasto cero) y confirmar que Meta acepta la campaña y
+los conjuntos; o a mano, crear en pausa y borrar después una campaña `OUTCOME_APP_PROMOTION` con un conjunto
 `LINK_CLICKS` + `promoted_object` y confirmar que Meta lo acepta, una vez por plataforma. No cobra: todo queda en pausa.
-Si Meta rechaza `LINK_CLICKS` para apps, la versión 1 cambia y se vuelve a este spec antes de seguir.
+Si Meta rechaza `LINK_CLICKS` para apps, la versión 1 cambia y se vuelve a este spec antes de seguir. Derivar y rescatar quedan
+desactivados para este objetivo (las piezas nuevas no tendrían plataforma): solo pausar y escalar.
 
 ## Parte de Daniel en Meta for Developers (no se puede hacer desde el código)
 En la app de Meta usada para anunciar, Configuración → Básica, agregar las dos plataformas con sus datos reales:
@@ -99,6 +103,10 @@ En la app de Meta usada para anunciar, Configuración → Básica, agregar las d
   de App Store).
 - Copiar el App ID a Configuración en Creatv. Dejar la app en modo **Live**: en modo desarrollo Meta responde 1885183.
 Nota de riesgo ya anotada: Forja Habit figura como `not_verified`, con riesgo de restricción de cuenta.
+
+## Repositorios
+`meta_ads/` es un submódulo (`dacolora/CreaTvMetaAds`): los cambios de campaña, conjunto, targeting y creative se commitean
+allí y después se sube el puntero. Publicar en ese repositorio externo se consulta antes.
 
 ## Riesgos y decisiones abiertas
 1. Si `LINK_CLICKS` no se acepta para apps, la v1 depende del SDK y se re-plantea (se sabe en la prueba real).
