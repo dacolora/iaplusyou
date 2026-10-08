@@ -39,6 +39,12 @@ class Respuesta:
         self.headers = dict(headers or {})
         self.text = texto if texto is not None else (json.dumps(cuerpo) if cuerpo is not None else "")
 
+    def iter_content(self, chunk_size=65536):
+        yield self.text.encode('utf-8')
+
+    def close(self):
+        pass
+
     def json(self):
         if self._cuerpo is None:
             raise ValueError("sin JSON")

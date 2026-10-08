@@ -887,7 +887,7 @@ def test_describir_referencias_en_el_idioma_pedido(monkeypatch):
         content = [type("B", (), {"type": "text", "text": "A sandal on the sand."})()]
 
     class _Cliente:
-        def __init__(self, api_key=None):
+        def __init__(self, api_key=None, max_retries=0):
             self.messages = self
 
         def create(self, **kw):

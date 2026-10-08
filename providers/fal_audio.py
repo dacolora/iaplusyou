@@ -52,6 +52,7 @@ COSTO_VISTA_PREVIA_DISENO_POR_CARACTER = 0.00003
 IDIOMAS_MINIMAX = {
     "es": "Spanish", "en": "English", "pt": "Portuguese", "de": "German", "fr": "French",
     "it": "Italian", "fi": "Finnish", "sv": "Swedish", "no": "Norwegian", "cs": "Czech",
+    "nl": "Dutch",
 }
 
 # Eleven Music vía fal (verificado en fal.ai/models/fal-ai/elevenlabs/music el
@@ -161,6 +162,11 @@ def clonar_voz_minimax(audio_url, preview_text, timeout=300):
     return {"voice_id": voice_id, "url_vista_previa": (data.get("audio") or {}).get("url"), "costo_usd": costo}
 
 
+def costo_disenar_voz(preview_text):
+    """Diseño y vista previa; la estimación comparte este redondeo con el cobro."""
+    return round(COSTO_DISENAR_VOZ + len(preview_text or "") * COSTO_VISTA_PREVIA_DISENO_POR_CARACTER, 4)
+
+
 def disenar_voz_minimax(prompt, preview_text, timeout=300):
     """Diseña una voz nueva desde la descripción `prompt`; la vista previa lee
     `preview_text`. Devuelve {"voice_id", "url_vista_previa", "costo_usd"}."""
@@ -170,7 +176,7 @@ def disenar_voz_minimax(prompt, preview_text, timeout=300):
     if not voice_id:
         raise RuntimeError(gettext("fal.ai (%(modelo)s) no devolvió custom_voice_id: %(datos)s",
                                    modelo=MODELO_MINIMAX_DISENAR, datos=data))
-    costo = round(COSTO_DISENAR_VOZ + len(preview_text or "") * COSTO_VISTA_PREVIA_DISENO_POR_CARACTER, 4)
+    costo = costo_disenar_voz(preview_text)
     return {"voice_id": voice_id, "url_vista_previa": (data.get("audio") or {}).get("url"), "costo_usd": costo}
 
 

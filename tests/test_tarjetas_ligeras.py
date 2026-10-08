@@ -362,3 +362,36 @@ def test_final_editar_despues_y_volver_a_producir_lo_saca_de_en_edicion(app, mon
     creative_flow.crear_final("acme", cf, "es", "CO")
     creative_flow.actualizar_final("acme", fid, estado="listo", url_video="https://r2/f2.mp4")
     assert en_edicion() == []
+
+
+def test_pnd133_detalle_remoto_rechaza_login_redirigido_en_node(app):
+    import re
+    import subprocess
+    html = app['c'].get('/cliente/acme').get_data(as_text=True)
+    textos = re.search(r'var T_BASE = \{.*?\n    \};', html, re.S).group()
+    funciones = html[html.index('function avisoVacio('):html.index('window.abrirDetalleRemoto =')]
+    codigo = textos + funciones + '''
+    const assert = require('node:assert/strict');
+    const document = {createElement:()=>({})};
+    let sondeos=0, insertados=0, leidos=0;
+    const arrancarSondeos=()=>sondeos++;
+    const modal = {open:false,showModal(){this.open=true;}};
+    const cuerpo = {innerHTML:'', appendChild(p){this.innerHTML=p.textContent;}};
+    async function comprobar(respuesta) {
+      global.fetch=async()=>respuesta;
+      abrirDetalleRemoto(modal,cuerpo,'/detalle',()=>insertados++);
+      await new Promise(resolve=>setImmediate(resolve));
+    }
+    (async()=>{
+      await comprobar({ok:true,redirected:true,status:200,text:async()=>{leidos++;return '<form>login</form>';}});
+      assert.equal(cuerpo.innerHTML,T_BASE.detalleNoCargo);
+      assert.equal(leidos,0); assert.equal(sondeos,0); assert.equal(insertados,0);
+      await comprobar({ok:false,redirected:false,status:404});
+      assert.equal(cuerpo.innerHTML,T_BASE.detalleNoExiste);
+      await comprobar({ok:true,redirected:false,status:200,text:async()=>'<article>detalle</article>'});
+      assert.equal(cuerpo.innerHTML,'<article>detalle</article>');
+      assert.equal(insertados,1); assert.equal(sondeos,1);
+    })().catch(e=>{console.error(e);process.exitCode=1;});
+    '''
+    r = subprocess.run(['node','-e',codigo],capture_output=True,text=True)
+    assert r.returncode == 0, r.stderr

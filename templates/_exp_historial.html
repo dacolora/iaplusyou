@@ -34,17 +34,20 @@
   </div>
   <div class="kpi-tile">
     <span>{{ _('Compras') }}</span>
-    <strong>{{ g.compras }}</strong>
+    <strong>{{ g.compras if g.compras is not none else "—" }}</strong>
     <small>{{ _('atribuidas por Pixel o tienda') }}</small>
   </div>
   <div class="kpi-tile">
     <span>{{ _('Ingresos') }}</span>
-    <strong>{{ g.ingresos | dinero(moneda) }}</strong>
-    <small>{{ _('solo ventas medibles') }}</small>
+    <strong>{% if g.roas_comparable is sameas false %}—{% else %}{{ g.ingresos | dinero(moneda) }}{% endif %}</strong>
+    <small>{{ _('Las ventas cambiaron de fuente en este período') if g.ventas_cambiaron else _('No sumamos ingresos de otra moneda') if g.roas_comparable is sameas false else _('solo ventas medibles') }}</small>
   </div>
   <div class="kpi-tile">
     <span>ROAS</span>
-    {% if g.ingresos > 0 and g.roas > 0 %}
+    {% if g.roas_comparable is sameas false %}
+    <strong class="tb-sin-dato">—</strong>
+    <small>{{ _('ROAS no comparable') }}{% if g.ventas_cambiaron %} · {{ _('Las ventas cambiaron de fuente en este período') }}{% endif %}</small>
+    {% elif g.mide_ventas and g.gasto > 0 %}
     <strong>{{ g.roas | roas }}×</strong>
     <small>{{ _('ingresos / gasto') }}</small>
     {% else %}
@@ -88,17 +91,20 @@
   </div>
   <div class="kpi-tile">
     <span>{{ _('Compras') }}</span>
-    <strong>{{ g.compras }}</strong>
+    <strong>{{ g.compras if g.compras is not none else "—" }}</strong>
     <small>{{ _('atribuidas por TW') }}</small>
   </div>
   <div class="kpi-tile">
     <span>{{ _('Ingresos') }}</span>
-    <strong>{{ g.ingresos | dinero(moneda) }}</strong>
-    <small>{{ _('solo ventas medibles') }}</small>
+    <strong>{% if g.roas_comparable is sameas false %}—{% else %}{{ g.ingresos | dinero(moneda) }}{% endif %}</strong>
+    <small>{{ _('Las ventas cambiaron de fuente en este período') if g.ventas_cambiaron else _('No sumamos ingresos de otra moneda') if g.roas_comparable is sameas false else _('solo ventas medibles') }}</small>
   </div>
   <div class="kpi-tile">
     <span>ROAS</span>
-    {% if g.ingresos > 0 and g.roas > 0 %}
+    {% if g.roas_comparable is sameas false %}
+    <strong class="tb-sin-dato">—</strong>
+    <small>{{ _('ROAS no comparable') }}{% if g.ventas_cambiaron %} · {{ _('Las ventas cambiaron de fuente en este período') }}{% endif %}</small>
+    {% elif g.mide_ventas and g.gasto > 0 %}
     <strong>{{ g.roas | roas }}×</strong>
     <small>{{ _('ingresos / gasto') }}</small>
     {% else %}
@@ -136,9 +142,9 @@
         <td>{{ f.etiqueta }}</td>
         {% if g %}
         <td class="num">{{ g.gasto | dinero(moneda) }}</td>
-        <td class="num">{{ g.compras }}</td>
-        <td class="num">{{ g.ingresos | dinero(moneda) }}</td>
-        <td class="num">{% if g.ingresos > 0 and g.roas > 0 %}{{ g.roas | roas }}×{% else %}<span class="tb-sin-dato">—</span>{% endif %}</td>
+        <td class="num">{{ g.compras if g.compras is not none else "—" }}</td>
+        <td class="num">{% if g.roas_comparable is sameas false %}—{% else %}{{ g.ingresos | dinero(moneda) }}{% endif %}</td>
+        <td class="num">{% if g.roas_comparable is sameas false %}— · {{ _('ROAS no comparable') }}{% if g.ventas_cambiaron %} · {{ _('Las ventas cambiaron de fuente en este período') }}{% endif %}{% elif g.mide_ventas and g.gasto > 0 %}{{ g.roas | roas }}×{% else %}<span class="tb-sin-dato">—</span>{% endif %}</td>
         {% else %}
         <td class="num"><span class="tb-sin-dato">—</span></td><td class="num"><span class="tb-sin-dato">—</span></td>
         <td class="num"><span class="tb-sin-dato">—</span></td><td class="num"><span class="tb-sin-dato">—</span></td>
@@ -181,4 +187,3 @@
   </a>
 </div>
 {% endif %}
-

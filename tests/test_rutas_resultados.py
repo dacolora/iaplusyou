@@ -484,7 +484,7 @@ def test_con_y_sin_ventas_filtrados_juntos_el_roas_es_la_regla_del_tablero(app, 
     _pieza_con(base_temporal, sin, "cf_sin")
     html = app["c"].get("/cliente/acme/experimentos/resultados", headers=AJAX).get_data(as_text=True)
     kpi, ranking = _kpi_roas(html), _ranking(html)
-    assert "1,5×" in kpi and "3,0×" not in kpi and "sin ventas medibles" not in kpi
+    assert "1,5×" in kpi and "3,0×" not in kpi and "incluye" in kpi
     assert '<td class="cr-cifra cr-roas">3,0×</td>' in ranking and '<td class="cr-cifra cr-roas">—</td>' in ranking
     assert "ROAS — = sin ventas medibles" in ranking
 
@@ -632,3 +632,34 @@ def test_la_barra_de_un_anuncio_suelto_avanza_dentro_del_fragmento(app, base_tem
     assert f'<div class="barra-progreso" id="trabajo-{jid}" data-poll-job="{jid}">' in html
     assert "iniciarPolling" not in html
     assert all("application/json" in s for s in _scripts(html)), _scripts(html)
+
+
+def test_pnd140_historial_pixel_sin_ventas_y_gasto_mixto(app, base_temporal):
+    import experimentos as ex
+    pixel = _experimento("Pixel", atribucion="pixel", objetivo_meta="OUTCOME_SALES")
+    _, ep = _pieza_en(base_temporal, pixel)
+    html = app["c"].get("/cliente/acme/experimentos/resultados", headers=AJAX).get_data(as_text=True)
+    historial = html[html.index('class="tb-tiles"'):]
+    assert '<strong>0,0×</strong>' in historial
+    assert '<td class="num">0,0×</td>' in historial
+    trafico = _experimento("Tráfico")
+    _pieza_en(base_temporal, trafico, n=2)
+    # Incluso con CPA sin valor (cero compras), ambos KPI explican el gasto de tráfico.
+    html = app["c"].get("/cliente/acme/experimentos/resultados", headers=AJAX).get_data(as_text=True)
+    assert html.count('de gasto sin ventas medibles') == 2
+    # El Pixel ahora vendió; el gasto del tráfico sigue en ROAS y CPA, con su importe visible.
+    ex.snapshot(ep, {"gasto": 100, "compras": 2, "ingresos": 300, "fuente_ventas": "meta"})
+    html = app["c"].get("/cliente/acme/experimentos/resultados", headers=AJAX).get_data(as_text=True)
+    assert html.count('de gasto sin ventas medibles') == 2
+    assert '100' in _kpi_roas(html)
+
+
+def test_pnd138_historial_no_presenta_ingresos_de_otra_moneda(app, base_temporal):
+    import experimentos as ex
+    eid = ex.crear("acme", "Tienda COP en cuenta USD", PAISES, "OUTCOME_SALES", 7, 500, "https://t.co/p", "USD", atribucion="tienda")
+    ex.actualizar_extra("acme", eid, lambda extra: dict(extra, aviso_moneda="COP"))
+    _, ep = _pieza_en(base_temporal, eid)
+    ex.snapshot(ep, {"gasto": 100, "compras": 2, "ingresos": 400000, "fuente_ventas": "tienda"})
+    html = app["c"].get("/cliente/acme/experimentos/resultados", headers=AJAX).get_data(as_text=True)
+    assert 'ROAS no comparable' in html and 'No sumamos ingresos de otra moneda' in html
+    assert '400.000' not in html and '4000,0×' not in html

@@ -260,9 +260,13 @@ def _estimar_voz_clonada(nombre="", idioma="es", **_):
             "una voz clonada con MiniMax")
 
 
-def _estimar_voz_disenada(**_):
+def _estimar_voz_disenada(nombre="", idioma="es", **_):
     from providers import fal_audio
-    return fal_audio.COSTO_DISENAR_VOZ, "una voz diseñada con MiniMax"
+    from voces_propias import frase_muestra
+    frase = frase_muestra(nombre, idioma)
+    usd = (fal_audio.costo_disenar_voz(frase)
+           + round(len(frase) * fal_audio.COSTO_MINIMAX_POR_CARACTER, 4))
+    return round(usd, 4), "una voz diseñada con MiniMax"
 
 
 def _estimar_transcripcion(segundos=0, sin_duracion=False, **_):
@@ -346,11 +350,12 @@ def estimar(tipo, **params):
 
 # ----------------------------------------------------------- registrar ---
 
-def registrar(cliente, tipo, usd, referencia, detalle="", proveedor=None, extra=None, creado_en=None):
+def registrar(cliente, tipo, usd, referencia, detalle="", proveedor=None, extra=None, creado_en=None, conservar_mayor=False):
     """Guarda (o actualiza, misma `referencia`) un cobro real. `usd` None/0 se
     guarda como 0 (queda constancia de la llamada aunque no haya tarifa).
     Devuelve el id de la fila. `creado_en` solo se fija al crear (la fecha
-    del primer cobro se conserva al actualizar)."""
+    del primer cobro se conserva al actualizar). `conservar_mayor` evita reducir
+    un cobro al recuperar un componente pagado que ahora llega de caché."""
     if not cliente or not referencia:
         raise ValueError("registrar necesita cliente y referencia.")
     tipo = tipo if tipo in TIPOS else "otro"
@@ -375,7 +380,8 @@ def registrar(cliente, tipo, usd, referencia, detalle="", proveedor=None, extra=
     with db.conectar() as con:
         fila = con.execute(sa.select(g.c.id).where(g.c.cliente == cliente, g.c.referencia == referencia)).first()
         if fila:
-            con.execute(sa.update(g).where(g.c.id == fila.id).values(**cambios))
+            con.execute(sa.update(g).where(g.c.id == fila.id,
+                g.c.usd <= monto if conservar_mayor else sa.true()).values(**cambios))
             return int(fila.id)
         try:
             with con.begin_nested():
@@ -386,7 +392,8 @@ def registrar(cliente, tipo, usd, referencia, detalle="", proveedor=None, extra=
         except sa.exc.IntegrityError:
             # Carrera: otro proceso insertó la misma referencia entre el select y el insert.
             fila = con.execute(sa.select(g.c.id).where(g.c.cliente == cliente, g.c.referencia == referencia)).first()
-            con.execute(sa.update(g).where(g.c.id == fila.id).values(**cambios))
+            con.execute(sa.update(g).where(g.c.id == fila.id,
+                g.c.usd <= monto if conservar_mayor else sa.true()).values(**cambios))
             return int(fila.id)
 
 

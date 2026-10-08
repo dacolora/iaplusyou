@@ -133,3 +133,5 @@ Aprobar un sub-avatar crea (o actualiza) una `persona` con origen `investigada`
 plantilla de la hoja "Personas" (`nicho/exportar.py`). UI: pestaña **Nicho**
 (`_tab_nicho.html`) y página propia del estudio (`nicho_estudio.html`), Blueprint
 `nicho/rutas.py` bajo `/cliente/<cliente>/nicho/...`.
+
+PND-055 (2026-10-05): una búsqueda por subreddit o comentarios de un post con 400/410/422, o 403 con reason private/banned/quarantined, salta ese recurso. Reddit conserva el error global de 401/403 genérico. YouTube salta videoNotFound/commentThreadNotFound como commentsDisabled, conserva páginas leídas y propaga errores de llave/permisos; cuota sigue deteniendo con aviso.

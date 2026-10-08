@@ -552,7 +552,7 @@ def test_paises_dinero_del_motor_y_detalle_de_meta(sembrado):
     lista = r.paises(r.cargar("acme", r.Filtro(dias=7), AHORA))
     assert [x["pais"] for x in lista] == ["CO", "MX"]                      # mismo gasto: por código
     co = lista[0]
-    assert set(co) == {"pais", "impresiones", "clics_enlace", "gasto", "ctr", "roas"}
+    assert set(co) == {"pais", "impresiones", "clics_enlace", "gasto", "ctr", "roas", "roas_comparable", "ventas_cambiaron"}
     assert co["clics_enlace"] == 86 and co["ctr"] == pytest.approx(86 / 4000 * 100)      # metrica_dia
     assert co["roas"] == pytest.approx(120.0 / 40.0)                                      # el motor (snapshots)
     assert lista[1]["clics_enlace"] == 46 and lista[1]["ctr"] == pytest.approx(46 / 4000 * 100)
@@ -1103,6 +1103,19 @@ def test_pixel_que_aun_no_vende_cuenta_su_gasto_en_el_roas(sembrado):
     t = {x["nombre"]: x for x in r.experimentos_tarjetas(c)}["Pixel nuevo"]
     assert t["valor"] == pytest.approx(1.0) and t["mide_ventas"] is True
     assert t["mejor"] == "cf_px0"
+
+
+def test_pnd138_moneda_no_comparable_no_suma_ingresos_ni_roas():
+    import resultados
+    snaps = [{"tomado_en": "2026-10-01T00:00:00", "gasto": 0, "compras": 0, "ingresos": 0,
+              "fuente_ventas": "tienda"},
+             {"tomado_en": "2026-10-02T00:00:00", "gasto": 100, "compras": 2, "ingresos": 400000,
+              "fuente_ventas": "tienda"}]
+    d = resultados._deltas({"atribucion": "tienda", "extra": {"aviso_moneda": "COP"}}, snaps,
+                           "2026-10-01T12:00:00", "2026-10-03T00:00:00")
+    v = resultados._con_ventas(d["gasto"], resultados.tablero.ventas_medidas([d]))
+    assert v["gasto"] == 100 and v["compras"] == 2 and v["cpa"] == 50
+    assert v["ingresos"] is None and v["roas"] is None and v["roas_comparable"] is False
 
 
 def test_pixel_sin_ventas_no_elige_mejor_a_la_que_mas_gasto(sembrado):

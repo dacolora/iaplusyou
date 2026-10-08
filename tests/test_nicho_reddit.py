@@ -175,3 +175,23 @@ def test_recolectar_429_en_token_termina_con_aviso(entorno, monkeypatch):
     lista = list(f.recolectar({"palabras_clave": "x"}))
     assert lista == []
     assert "token" in f.aviso
+
+
+@pytest.mark.parametrize('codigo', [400,403,410,422])
+def test_pnd055_reddit_sigue_tras_recurso_roto(entorno, monkeypatch, codigo):
+    from nicho.fuentes import _http, reddit
+    s = _Sesion({'api/v1/access_token':_Resp(200,{'access_token':'llave-de-prueba'}),
+                 '/r/Roto/search':_Resp(codigo,{'reason':'private'}), '/r/Sneakers/search':_Resp(200,_fixture('reddit_search.json')),
+                 '/comments/abc123':_Resp(codigo,{'reason':'private'}), '/comments/def456':_Resp(200,_fixture('reddit_comments.json'))})
+    monkeypatch.setattr(_http,'sesion',lambda:s)
+    comentarios = list(reddit.FuenteReddit().recolectar({'palabras_clave':'foot pain','subreddits':['Roto','Sneakers']}))
+    assert [c['fuente_id'] for c in comentarios] == ['abc123','c1','c1r','c4']
+
+
+@pytest.mark.parametrize('codigo', [401,403])
+def test_pnd055_reddit_no_oculta_error_global(entorno, monkeypatch, codigo):
+    from nicho.fuentes import _http, reddit, base
+    s = _Sesion({'api/v1/access_token':_Resp(200,{'access_token':'llave-de-prueba'}), '/comments/abc123':_Resp(codigo)})
+    monkeypatch.setattr(_http,'sesion',lambda:s)
+    with pytest.raises(base.ErrorFuente):
+        list(reddit.FuenteReddit().recolectar({'links':['https://redd.it/abc123']}))

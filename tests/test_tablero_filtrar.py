@@ -37,7 +37,8 @@ def test_filtrar_por_experimento_pais_pieza_y_tipo(base_temporal):
 
 def test_snapshots_de_las_piezas_no_se_piden_una_por_una(base_temporal):
     """`_piezas_con_snapshots` hace las mismas consultas con 3 piezas que con 13
-    (la carga de experimentos.cargar es aparte: una última métrica por pieza)."""
+    (la carga de experimentos.cargar es aparte: una última métrica por pieza).
+    PND-139 requiere una tercera consulta conjunta para detectar ventas previas a la ventana."""
     import db
     import experimentos as ex
     import tablero
@@ -58,7 +59,7 @@ def test_snapshots_de_las_piezas_no_se_piden_una_por_una(base_temporal):
         return len(cuenta), filas
 
     con_tres, filas = consultas()
-    assert len(filas) == 3 and con_tres <= 2
+    assert len(filas) == 3 and con_tres <= 3
     e = ex.cargar("acme")[0]["id"]
     for i in range(10):
         ep = ex.agregar_pieza("acme", e, _pieza(db, tipo="video", estado="listo", pais=None, idioma=None, legado=f"cf_x{i}"), "CO")

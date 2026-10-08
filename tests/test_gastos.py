@@ -347,3 +347,64 @@ def test_estimado_clon_incluye_vista_previa_y_estreno(monkeypatch):
     cobro = fal_audio.clonar_voz_minimax("https://x/g.wav", frase)["costo_usd"]
     assert gastos.estimar("voz_clonada", nombre="Ana", idioma="es")["usd"] == pytest.approx(
         cobro + len(frase) * fal_audio.COSTO_MINIMAX_POR_CARACTER)
+
+
+def test_estimado_diseno_incluye_diseno_vista_previa_y_estreno():
+    import gastos
+    import voces_propias
+    from providers import fal_audio
+    frase = voces_propias.frase_muestra("Ana", "es")
+    esperado = round(round(fal_audio.COSTO_DISENAR_VOZ
+                           + len(frase) * fal_audio.COSTO_VISTA_PREVIA_DISENO_POR_CARACTER, 4)
+                     + round(len(frase) * fal_audio.COSTO_MINIMAX_POR_CARACTER, 4), 4)
+    assert gastos.estimar("voz_disenada", nombre="Ana", idioma="es")["usd"] == pytest.approx(esperado)
+
+
+@pytest.mark.parametrize('idioma,n', [('es',2),('en',26),('sv',23)])
+def test_pnd126_estimado_iguala_redondeos_del_cobro(monkeypatch, idioma, n):
+    import gastos
+    import voces_propias
+    from providers import fal_audio
+    monkeypatch.setattr(fal_audio.fal_client,'llamar',lambda *a,**kw:{'custom_voice_id':'v','audio':{'url':'https://r2/a.mp3'}})
+    frase = voces_propias.frase_muestra('x'*n,idioma)
+    diseno = fal_audio.disenar_voz_minimax('Descripción',frase)['costo_usd']
+    estreno = fal_audio.tts_minimax(frase,'v',idioma)['costo_usd']
+    assert gastos.estimar('voz_disenada',nombre='x'*n,idioma=idioma)['usd'] == round(diseno+estreno,4)
+
+
+@pytest.mark.parametrize('usd,esperado', [(.8, .82), (.84, .84)])
+def test_conservar_mayor_en_carrera_integrity_error(base_temporal, monkeypatch, usd, esperado):
+    import db
+    import gastos
+    from contextlib import contextmanager
+    from types import SimpleNamespace
+    gid = gastos.registrar('acme', 'video', .82, 'video:cf:t31', extra={'usd_musica': .02})
+    conectar = db.conectar
+    eventos = []
+
+    class Carrera:
+        def __init__(self, con):
+            self.con = con
+        def __getattr__(self, nombre):
+            return getattr(self.con, nombre)
+        def execute(self, sentencia, *a, **kw):
+            if isinstance(sentencia, sa.sql.Select) and not eventos:
+                eventos.append('select sin fila')
+                # Otro proceso ya insertó, pero el primer SELECT aún no lo vio.
+                return SimpleNamespace(first=lambda: None)
+            try:
+                return self.con.execute(sentencia, *a, **kw)
+            except sa.exc.IntegrityError:
+                eventos.append('IntegrityError real de SQLite')
+                raise
+    @contextmanager
+    def conexion():
+        with conectar() as con:
+            yield Carrera(con)
+    monkeypatch.setattr(db, 'conectar', conexion)
+    assert gastos.registrar('acme', 'video', usd, 'video:cf:t31', conservar_mayor=True,
+                             extra={'usd_musica': .04}) == gid
+    assert eventos == ['select sin fila', 'IntegrityError real de SQLite']
+    fila, = gastos.historial('acme')
+    assert fila['usd'] == esperado
+    assert fila['extra']['usd_musica'] == (.02 if usd < .82 else .04)

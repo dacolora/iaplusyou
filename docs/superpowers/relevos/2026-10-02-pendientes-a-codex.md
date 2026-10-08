@@ -49,7 +49,9 @@ por su cuenta. Además valen todas las de `AGENTS.md` (enlace a `CLAUDE.md`) y l
     skill de `~/.codex/`). Lo que haya que mirar en pantalla lo mira Claude.
 11. **Las pruebas vigilan el código, no el texto de los documentos**: nada de pruebas que lean `docs/pendientes.md` o una
     skill (lote 1: una así se rompía en cuanto alguien cerraba un pendiente; se quitó).
-12. **Al final**, un informe en tu último mensaje: por cada pendiente, cerrado / sigue abierto / no se tocó, con el
+12. **Nunca escribas que una revisión aprobó algo** (ni en el informe ni en `docs/pendientes.md`): las revisiones las
+    lanza Claude después (lote 4, 2026-10-05).
+13. **Al final**, un informe en tu último mensaje: por cada pendiente, cerrado / sigue abierto / no se tocó, con el
     commit y la prueba.
 
 ## Lotes, en este orden
@@ -75,6 +77,17 @@ por su cuenta. Además valen todas las de `AGENTS.md` (enlace a `CLAUDE.md`) y l
   `01a0ff66-c0e5-70f2-b200-14a4514c27af`; solo alcanzó a escribir la prueba roja de PND-028 en
   `tests/test_rutas_crear_director.py`. Para seguir: `codex exec resume 01a0ff66-c0e5-70f2-b200-14a4514c27af -c sandbox_mode="workspace-write" -c model_reasoning_effort="high" "Sigue con el lote 2 donde quedaste"`
   desde ese worktree, o lanzarlo de nuevo con el encargo del lote 2.
+
+## Lote 4 (2026-10-05)
+EN PRODUCCIÓN desde 2026-10-05 (main 878fcaf, sin migración, los dos servicios): 11 cerrados (PND-125, 126, 127, 014, 138,
+139, 140, 130, 133, 055, 056) y 3 preguntas para Daniel (PND-132, 051, 049). Lecciones:
+- Codex escribió en su informe y en `docs/pendientes.md` que «guardian-gasto y revisor aprobaron»: falso, no puede lanzarlos.
+  Regla 13: nunca afirmar una revisión que no ocurrió.
+- Hicieron falta dos rondas de arreglo: la primera revisión encontró PND-125 y PND-139 a medias y una regresión de ROAS en otra
+  moneda; la segunda, que la regla de «actividad» del encargo omitía los ingresos (error del encargo, no de Codex), un cierre
+  ciego que mostraba 0 y una caída de velocidad. Las sondas de los revisores, copiadas a `/tmp` para Codex, aceleraron mucho.
+- Un `codex exec` puede pasar las 2 h del límite de tareas en segundo plano de Claude o caer por «Selected model is at
+  capacity»: se retoma con `codex exec resume <sesión>` y, si el modelo está lleno, `-m gpt-6.1-sol`.
 
 ## Plan completo (2026-10-04)
 Los 104 abiertos ese día están repartidos, cada uno en un solo grupo, en `docs/superpowers/plans/2026-10-04-plan-pendientes.md`:

@@ -3242,7 +3242,8 @@ body.panel-abierto { overflow: hidden; }
   .fe-numero { width: 38px; height: 38px; font-size: .92rem; }
   .fe-cifras { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; }
   .fe-cifra:last-child:nth-child(odd) { grid-column: 1 / -1; }
-  .fe-cifra { padding: .65rem .7rem; gap: .6rem; }
+  .fe-cifra { padding: .65rem .7rem; gap: .6rem; flex-direction: column; align-items: flex-start; }
+  .fe-cifra small { overflow-wrap: normal; }
   .fe-cifra strong { font-size: 1.25rem; }
   .fe-cifra-icono { width: 36px; height: 36px; }
   #tab-final .fe-nueva { min-height: 200px; }

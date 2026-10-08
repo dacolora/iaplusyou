@@ -1,6 +1,6 @@
 ---
 name: audios-y-voces
-description: "Audios y voces: Mi música (canciones propias y ElevenLabs vía fal), el modo Audios de Crear (locuciones con las 22 voces, diez idiomas), las voces propias (clonar o diseñar con MiniMax) y el Anuncio hablado (foto + guion → P-Video-Avatar). Cargar antes de tocar mi_musica.py, audios.py, voces_propias.py, hablado.py, hablado_rutas.py, providers/fal_audio.py, tareas/audios.py o tareas/hablado.py."
+description: "Audios y voces: Mi música (canciones propias y ElevenLabs vía fal), el modo Audios de Crear (locuciones con las 22 voces, once idiomas), las voces propias (clonar o diseñar con MiniMax) y el Anuncio hablado (foto + guion → P-Video-Avatar). Cargar antes de tocar mi_musica.py, audios.py, voces_propias.py, hablado.py, hablado_rutas.py, providers/fal_audio.py, tareas/audios.py o tareas/hablado.py."
 ---
 
 # Audios, voces y música en Crear
@@ -25,7 +25,7 @@ with the re-rendered panel and the song list. Voice cloning is NOT here (fal has
 de las 22 voces verificadas de `fal_audio.VOCES`, elegida en una galería de tarjetas (género y tono de
 `audios.VOCES_INFO`/`fichas_voces`, filtros Mujer/Hombre, ▶ por voz: la muestra por voz e idioma se sintetiza UNA
 vez para toda la plataforma, fila `material` y gasto del cliente interno `_creatv`; `precalentar_muestras.py`
-las genera todas de antemano), diez idiomas (es, en, pt, de, fr, it, fi, sv, no, cs; desde 2026-09-30),
+las genera todas de antemano), once idiomas (es, en, pt, de, fr, it, fi, sv, no, cs, nl; holandés desde 2026-10-07),
 velocidad (`speed` del modelo; nunca `language_code`, multilingual-v2 lo rechaza), y opcionalmente una
 canción de Mi música con «empieza en el segundo» y volumen. El resultado es un mp3 (`libmp3lame` 192k):
 la música arranca 0,6 s antes de la voz, se agacha (`mezcla.DUCKING_VOZ_SOBRE_MUSICA`), sigue 1,5 s y se
@@ -50,7 +50,7 @@ ElevenLabs Turbo v2.5 con `language_code`; las **voces propias** por MiniMax Spe
 muestra, `extra.voice_id` de MiniMax), de la grabación de un clon (origen `grabacion`, hash con prefijo propio para
 no chocar con Mi música) y de sus muestras por idioma (hash `muestra_propia`, las paga el proyecto). Se crean con la
 tarea `voz_propia_crear` (`max_intentos=1`, job `<cliente>__voz_propia`): clonar (base US$ 1,50 más vista previa y estreno, casilla de permiso
-obligatoria guardada en `extra.consentimiento`) o diseñar desde una descripción (US$ 3,00); el gasto (tipo
+obligatoria guardada en `extra.consentimiento`) o diseñar desde una descripción (base US$ 3,00 más vista previa y estreno; el precio del botón varía según nombre e idioma); el gasto (tipo
 `voz_propia`) se registra apenas fal responde y la tarea ESTRENA la voz leyendo su muestra, porque MiniMax borra
 una voz sin uso real en 7 días (la vista previa no cuenta). En el formulario una voz propia es `vp:<id>`.
 Desde 2026-10-01 (spec `docs/superpowers/specs/2026-10-01-mis-voces-en-final-edition-design.md`) Mis voces

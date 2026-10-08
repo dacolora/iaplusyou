@@ -315,7 +315,7 @@
       cuerpo.appendChild(avisoVacio(T_BASE.cargando));
       if (!modal.open) modal.showModal();
       fetch(url, { headers: { 'X-Requested-With': 'fetch' }, cache: 'no-store' })
-        .then(function (r) { return r.ok ? r.text() : Promise.reject(new Error(String(r.status))); })
+        .then(function (r) { return r.ok && !r.redirected ? r.text() : Promise.reject(new Error(String(r.status))); })
         .then(function (html) {
           if (n !== modal._pedidoDetalle || !modal.open) return;
           cuerpo.innerHTML = html;

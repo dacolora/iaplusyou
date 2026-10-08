@@ -302,3 +302,25 @@ def test_centro_de_resultados_en_el_celular():
     assert ".cr-evolucion, .cr-experimentos, .cr-desgloses, .cr-desgloses-pieza { grid-template-columns: minmax(0, 1fr); }" in celular
     assert ".cr-embudo { grid-template-columns: repeat(3, minmax(0, 1fr));" in celular
     assert ".cr-filtro { position: static; }" in celular and ".cr-panel { width: 100vw;" in celular
+
+
+def test_pnd130_cifra_final_no_parte_la_palabra_en_el_celular():
+    import re
+    css = open('static/style.css', encoding='utf-8').read()
+    bloque = css[css.index('/* ── estilos/legado/11-final-edition'):]
+    movil = bloque[bloque.index('@media (max-width: 760px)'):]
+    cifra = re.search(r'\.fe-cifra \{([^}]+)\}', movil).group(1)
+    # Icono encima: la etiqueta dispone del ancho de la tarjeta de dos columnas.
+    assert 'flex-direction: column' in cifra
+    etiqueta = re.search(r'\.fe-cifra small \{([^}]+)\}', movil).group(1)
+    assert 'overflow-wrap: normal' in etiqueta
+
+
+def test_pnd130_no_cambia_wrap_de_escritorio_ni_flujo():
+    import re
+    css = open('static/style.css', encoding='utf-8').read()
+    bloque = css[css.index('/* ── estilos/legado/11-final-edition'):]
+    escritorio = bloque[:bloque.index('@media (max-width: 760px)')]
+    assert 'overflow-wrap: normal' not in escritorio
+    flujo = re.search(r'\.fe-flujo small \{([^}]+)\}', escritorio).group(1)
+    assert 'overflow-wrap: anywhere' in flujo

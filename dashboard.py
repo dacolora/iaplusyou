@@ -7780,11 +7780,19 @@ def _precios_clon():
                     for n in range(voces_propias.MAX_NOMBRE + 1)] for idioma in audios.IDIOMAS}
 
 
+@lru_cache(maxsize=1)
+def _precios_disenar():
+    """Tarifas por longitud e idioma del diseño, vista previa y estreno."""
+    return {idioma: [gastos.estimar("voz_disenada", nombre="x" * n, idioma=idioma)["usd"]
+                    for n in range(voces_propias.MAX_NOMBRE + 1)] for idioma in audios.IDIOMAS}
+
+
 def _contexto_mis_voces(cliente):
     jid = tareas_voces.job_id(cliente)
     return {"voces_propias": voces_propias.listar(cliente),
             "trabajo_voz": {"job_id": jid} if trabajos.en_curso(jid) else None,
             "precios_clon": _precios_clon(),
+            "precios_disenar": _precios_disenar(),
             "precio_voz_clonada": gastos.estimar("voz_clonada"), "precio_voz_disenada": gastos.estimar("voz_disenada"),
             "texto_consentimiento": voces_propias.TEXTO_CONSENTIMIENTO}
 
@@ -7946,6 +7954,21 @@ def _prefill_para(cliente):
     return pre
 
 
+def _registrar_usage_claude_interno(cliente, origen, uso):
+    """Las ayudas inmediatas de Claude las paga el proyecto interno de Creatv."""
+    if not uso:
+        return
+    try:
+        from nicho.avatares import costo_real
+        usd = costo_real(getattr(uso, "input_tokens", 0) or 0, getattr(uso, "output_tokens", 0) or 0)
+        gastos.registrar_seguro("_creatv", "otro", usd, f"claude:{origen}:{secrets.token_hex(6)}",
+                                detalle=gettext("Claude · %(origen)s", origen=origen), proveedor="anthropic",
+                                extra={"cliente": cliente})
+    except Exception:
+        # El registro nunca debe convertir una sugerencia utilizable en error.
+        logging.getLogger(__name__).warning("No pude registrar el gasto interno de Claude (%s)", origen)
+
+
 @app.route("/cliente/<cliente>/flowplus/describir", methods=["POST"])
 def fp_describir(cliente):
     """Claude mira las referencias de la bandeja y propone el texto del video.
@@ -7955,7 +7978,8 @@ def fp_describir(cliente):
         return jsonify({"ok": False, "error": gettext("Agrega primero una imagen, un video o un link.")}), 400
     try:
         texto = referencias_link.describir(refs, cliente_hint=proyectos.nombre_visible(cliente),
-                                           idioma=idiomas.de_proyecto(cliente))
+                                           idioma=idiomas.de_proyecto(cliente),
+                                           on_usage=lambda uso: _registrar_usage_claude_interno(cliente, "describir_referencias", uso))
     except Exception as e:
         bitacora.registrar(cliente, "flowplus", "describir", "error", str(e))
         return jsonify({"ok": False, "error": gettext("No pude describir las referencias (%(tipo)s).", tipo=type(e).__name__)}), 502
@@ -8338,7 +8362,9 @@ def fp_sugerir_sonido(cliente):
     e = cuerpo.get("enfoque")
     enfoque = e if isinstance(e, str) and e in flowplus_prompt.ENFOQUES else "producto"
     try:
-        texto = sonido_mod.sugerir_descripcion(escena, enfoque, idioma=idiomas.de_proyecto(cliente))
+        texto = sonido_mod.sugerir_descripcion(
+            escena, enfoque, idioma=idiomas.de_proyecto(cliente),
+            on_usage=lambda uso: _registrar_usage_claude_interno(cliente, "sugerir_sonido", uso))
     except Exception as e:
         return jsonify({"error": gettext("No se pudo sugerir (%(tipo)s).", tipo=type(e).__name__)}), 502
     return jsonify({"sonido": texto})

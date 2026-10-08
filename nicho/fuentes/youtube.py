@@ -215,7 +215,7 @@ class FuenteYouTube(Fuente):
             if error is None:
                 continue
             motivo = razon(error)                      # nunca str(error): la URI lleva key=<llave>
-            if motivo == "commentsDisabled":
+            if motivo in ("commentsDisabled", "videoNotFound", "commentThreadNotFound"):
                 continue
             if motivo in _CUOTA:
                 self.aviso = gettext("YouTube agotó la cuota diaria; se guardó lo leído hasta el video %(n)s de %(total)s. "

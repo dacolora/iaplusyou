@@ -67,8 +67,19 @@ def test_ventas_medidas_solo_de_lo_que_mide_ventas():
     trafico = [_snap("2026-09-01T08:00:00", gasto=100.0, compras=0, ingresos=0.0, fuente_ventas="ninguna")]
     a, b = (tablero._deltas_pieza(s, "2026-08-01T00:00:00", "2026-09-02T00:00:00") for s in (pixel, trafico))
     assert a["mide"] is True and b["mide"] is False
-    assert tablero.ventas_medidas([b]) == {"mide": False, "gasto": 100.0, "compras": 0, "ingresos": 0.0}
-    assert tablero.ventas_medidas([a, b]) == {"mide": True, "gasto": 200.0, "compras": 2, "ingresos": 300.0}
+    assert tablero.ventas_medidas([b]) == {"mide": False, "gasto": 100.0, "compras": 0, "ingresos": 0.0,
+                                           "roas_comparable": True, "gasto_sin_ventas": 100.0, "ventas_cambiaron": False}
+    assert tablero.ventas_medidas([a, b]) == {"mide": True, "gasto": 200.0, "compras": 2, "ingresos": 300.0,
+                                              "roas_comparable": True, "gasto_sin_ventas": 100.0, "ventas_cambiaron": False}
+
+
+def test_pnd139_delta_no_resta_ingresos_de_fuentes_distintas():
+    import tablero
+    snaps = [_snap("2026-09-01T08:00:00", gasto=100, compras=1, ingresos=300, fuente_ventas="meta"),
+             _snap("2026-09-02T08:00:00", gasto=200, compras=2, ingresos=600, fuente_ventas="triple_whale")]
+    d = tablero._deltas_pieza(snaps, "2026-09-01T12:00:00", "2026-09-03T00:00:00")
+    assert d["gasto"] == 100 and d["compras"] is None
+    assert d["ingresos"] is None and d["roas_comparable"] is False
 
 
 def test_dinero_redondea_igual_que_main():
@@ -682,3 +693,27 @@ def test_pnd118_tiendas_rotas_conservan_identidad(base_temporal, sin_red):
     alertas.descartar('acme', avisos[0]['clave'], avisos[0]['huella'])
     # El descarte de una tienda no coincide con la identidad de la otra.
     assert avisos[0]['clave'] != avisos[1]['clave']
+
+
+def test_pnd139_primera_venta_con_base_cero_no_se_pierde():
+    import tablero
+    snaps = [_snap('2026-09-01T08:00:00', gasto=100, compras=0, ingresos=0, fuente_ventas='ninguna'),
+             _snap('2026-09-02T08:00:00', gasto=200, compras=2, ingresos=600, fuente_ventas='meta')]
+    d = tablero._deltas_pieza(snaps, '2026-09-01T12:00:00', '2026-09-03T00:00:00')
+    assert d['compras'] == 2 and d['ingresos'] == 600
+    assert tablero._delta_ingresos(snaps, '2026-09-01T12:00:00', '2026-09-03T00:00:00') == 600
+
+
+def test_pnd138_csv_y_serie_no_mezclan_monedas(base_temporal, sin_red):
+    import csv
+    import io
+    import experimentos as ex
+    import tablero
+    eid = _experimento(base_temporal, 'Tienda', moneda='USD', atribucion='tienda', extra={'aviso_moneda':'COP'})
+    ep = _pieza_en(base_temporal, eid)
+    ex.snapshot(ep, {'gasto':100,'compras':2,'ingresos':400000,'fuente_ventas':'tienda'}, tomado_en='2026-09-15T23:00:00')
+    fila = list(csv.reader(io.StringIO(tablero.csv_mes('acme', ahora_iso=AHORA).lstrip('\ufeff')), delimiter=';'))[1]
+    assert fila[6:11] == ['100','2','','','USD']
+    dias = tablero.serie_diaria('acme', ahora_iso=AHORA)['dias']
+    assert dias[-1]['ingresos'] == 0
+    assert next(d for d in dias if d['dia'] == '2026-09-15')['ingresos'] is None

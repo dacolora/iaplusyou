@@ -147,7 +147,7 @@
             <span class="kpi"><b>{{ "%.2f"|format(pz.metricas.cpc or 0) }}</b> CPC</span>
             {% if not pz.es_imagen %}<span class="kpi"><b>{{ "%.0f"|format((pz.metricas.thruplay_rate or 0) * 100) }}%</b> ThruPlay</span>{% endif %}
             <span class="kpi"><b>{{ "%.2f"|format(pz.metricas.gasto or 0) }}</b> {{ _('gasto') }}</span>
-            {% if pz.metricas.compras %}<span class="kpi"><b>{{ pz.metricas.compras }}</b> {{ _('compras · ROAS %(roas)s', roas=("%.1f"|format(pz.metricas.roas or 0))) }}</span>{% endif %}
+            {% if pz.metricas.compras or e.extra.aviso_moneda %}<span class="kpi"><b>{{ pz.metricas.compras or 0 }}</b> {% if e.extra.aviso_moneda %}{{ _('compras') }} · {{ _('ROAS no comparable') }}{% else %}{{ _('compras · ROAS %(roas)s', roas=("%.1f"|format(pz.metricas.roas or 0))) }}{% endif %}</span>{% endif %}
             {% if pz.metricas.motivo_rechazo %}<span class="tag-error">{{ pz.metricas.motivo_rechazo }}</span>{% endif %}
           </span>
           {% endif %}

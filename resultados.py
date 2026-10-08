@@ -309,6 +309,7 @@ def _deltas(ex, serie_, desde, hasta):
     """`tablero._deltas_pieza` con `mide` también por la atribución del experimento: `fuente_ventas` solo se marca
     cuando el snapshot ya tiene compras, y sin esto el gasto de lo que aún no vendió salía del ROAS (lo inflaba)."""
     d = tablero._deltas_pieza(serie_, desde, hasta)
+    tablero._moneda_del_delta(ex or {}, d)
     if not d["mide"] and (ex or {}).get("atribucion") in ATRIBUCION_CON_VENTAS:
         d["mide"] = True
     return d
@@ -318,7 +319,7 @@ def _roas(v):
     """ROAS de `tablero.ventas_medidas` (lo vendido sobre TODO el gasto, redondeado como el Tablero): None si nada
     mide ventas o no hubo gasto (nunca un 0 falso de algo que no mide). Redondea ingresos y gasto antes de dividir,
     como `tablero._resumen_periodo`, para que el decimal que se muestra sea siempre el mismo."""
-    if not (v["mide"] and v["gasto"] > 0):
+    if not v.get("roas_comparable", True) or not (v["mide"] and v["gasto"] > 0):
         return None
     return round(round(v["ingresos"], 2) / round(v["gasto"], 2), 2) if round(v["gasto"], 2) > 0 else None
 
@@ -329,8 +330,10 @@ def _con_ventas(gasto, v):
     mida ventas. Sin nada que mida, las ventas son None: la pantalla dice «—» y «sin ventas medibles», no 0."""
     mide = v["mide"]
     return {"gasto": round(gasto, 2), "compras": v["compras"] if mide else None,
-            "ingresos": round(v["ingresos"], 2) if mide else None, "roas": _roas(v),
-            "cpa": v["gasto"] / v["compras"] if mide and v["compras"] else None, "mide_ventas": mide}
+            "ingresos": round(v["ingresos"], 2) if mide and v.get("roas_comparable", True) else None,
+            "roas": _roas(v), "roas_comparable": v.get("roas_comparable", True),
+            "cpa": v["gasto"] / v["compras"] if mide and not v.get("ventas_cambiaron") and v["compras"] else None, "mide_ventas": mide,
+            "gasto_sin_ventas": v.get("gasto_sin_ventas", 0.0), "ventas_cambiaron": v.get("ventas_cambiaron", False)}
 
 
 def _dinero(carga, desde, hasta):
@@ -439,7 +442,11 @@ def indicadores(carga):
                     "anterior": anterior, "cambio": cambio(actual[clave], anterior, mejor, formato),
                     "tendencia": curvas[clave],
                     # «—» por «sin ventas medibles», no por «sin datos» (la plantilla elige la nota)
-                    "sin_ventas": clave in _DE_VENTAS and not actual["mide_ventas"]})
+                    "sin_ventas": clave in _DE_VENTAS and not actual["mide_ventas"],
+                    "roas_no_comparable": clave in _DE_VENTAS and (
+                        actual["ventas_cambiaron"] or (clave in ("roas", "ingresos") and not actual["roas_comparable"])),
+                    "ventas_cambiaron": clave in _DE_VENTAS and actual["ventas_cambiaron"],
+                    "gasto_sin_ventas": actual["gasto_sin_ventas"] if clave in ("roas", "cpa") else 0.0})
     return out
 
 
@@ -698,9 +705,10 @@ def paises(carga):
     for pais, m in por_pais.items():
         a = _agregado(m["dias"], carga.es_imagen)
         r = _ratios(a)
+        ventas = tablero.ventas_medidas(m["deltas"])
         out.append({"pais": pais, "impresiones": r["impresiones"], "clics_enlace": a["clics_enlace"] if a["n"] else None,
                     "gasto": round(sum(d["gasto"] for d in m["deltas"]), 2), "ctr": r["ctr"],
-                    "roas": _roas(tablero.ventas_medidas(m["deltas"]))})
+                    "roas": _roas(ventas), "ventas_cambiaron": ventas["ventas_cambiaron"], "roas_comparable": ventas["roas_comparable"]})
     out.sort(key=lambda x: (-x["gasto"], x["pais"]))
     return out
 
@@ -987,6 +995,7 @@ def piezas(carga, reglas_cliente):
             "metrica": metrica, "serie": serie_p, "promedio": promedio,
             "gasto": round(dinero["gasto"], 2), "ctr": detalle["ctr"], "gancho": detalle["gancho"], "cpc": detalle["cpc"],
             "roas": roas, "compras": ventas["compras"] if ventas["mide"] else None, "mide_ventas": ventas["mide"],
+            "ventas_cambiaron": ventas["ventas_cambiaron"], "roas_comparable": ventas["roas_comparable"],
             "delta_roas": None if roas is None or roas_previo is None else roas - roas_previo,
             "veredicto": _veredicto(pz.get("veredicto"), escalon),
             "historia": historia(
@@ -1050,6 +1059,7 @@ def experimentos_tarjetas(carga):
                     "metrica": metrica,
                     "valor": _roas(ventas_ex) if metrica == "roas" else (clics / impresiones * 100 if impresiones else None),
                     "mide_ventas": ventas_ex["mide"],
+                    "ventas_cambiaron": ventas_ex["ventas_cambiaron"], "roas_comparable": ventas_ex["roas_comparable"],
                     "mejor": max(candidatas, key=lambda c: (c[0], c[1]))[2] if candidatas else None,
                     "seleccionado": ex["id"] == elegido})
     return out
