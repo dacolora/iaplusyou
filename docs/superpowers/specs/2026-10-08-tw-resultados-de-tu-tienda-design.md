@@ -72,8 +72,8 @@ Las tarjetas de utilidad y clientes nuevos **no existen** en esta entrega (sus c
 - **Días fuera de lo normal**: hasta 3 días marcados con un anillo (verde arriba, rojo abajo) cuando el valor se
   aparta 25 % o más de la mediana del mismo día de la semana en las 4 semanas anteriores (hacen falta 3 de esas 4
   semanas con dato). Hoy nunca se marca.
-- **Retorno**: además, una línea punteada ámbar «tu mínimo 2×» con el `roas_min` de las reglas del proyecto
-  (`decisor.reglas_efectivas(proyectos.reglas_defecto(cliente), {})`); sin `roas_min`, no se dibuja.
+- **Retorno**: además, una línea punteada ámbar «tu meta 2×» con la misma meta de ROAS que ya usa el panel
+  (`evaluacion.meta_roas`: el `roas_min` de las reglas del proyecto; si está apagado, la mediana de la cuenta).
 - **Pasar el mouse** (o el dedo) sobre la gráfica: una línea vertical sigue al día más cercano y aparece un recuadro
   con ese día: fecha con día de la semana, ventas, gasto, retorno, pedidos, % del gasto que fue a anuncios nuevos, la
   nota «▲ 38 % sobre un miércoles normal» si es un día raro, el valor del día equivalente del periodo anterior si
@@ -92,7 +92,7 @@ con «Cargando…» al instante y gana solo el último pedido. Muestra:
 - Ventas, Pedidos, Gasto y Retorno del día, cada uno contra **el mismo día de la semana anterior** (▲▼). Esta
   comparación existe también en «Desde el inicio»: es del día, no del periodo.
 - **Por canal**: gasto del canal (barra = su parte del gasto del día) y su retorno atribuido según el Pixel; solo
-  canales con gasto o con ventas atribuidas ese día.
+  canales con gasto ese día (Direct, Klaviyo, orgánico y demás fuentes sin gasto no entran: no son anuncios).
 - **Los anuncios que más vendieron**: hasta 5 anuncios **con gasto ese día**, ordenados por ventas atribuidas; cada
   uno con nombre, canal, «nuevo» si tenía menos de 14 días, ventas atribuidas, gasto y retorno, y «Hecho en Creatv»
   con enlace al experimento si `datos.piezas_creatv` lo reconoce.
@@ -206,7 +206,8 @@ MAX por anuncio y día, Pixel con SUMA):
 
 Una consulta por bloque, nunca una por día ni por anuncio. Índices existentes: `ix_tw_anuncio_dia_cliente_fecha` y
 `ix_tw_anuncio_dia_cliente_tienda_fecha` (60 663 filas de happyflops: el `MIN(fecha)` por anuncio de toda la copia
-recorre el índice del cliente).
+recorre el índice del cliente). De paso, `serie_anuncios` gana el parámetro `canal`: hoy, con un canal elegido, la
+gráfica vieja mostraba el gasto de todos los canales.
 
 ### 4.3 Rutas
 
