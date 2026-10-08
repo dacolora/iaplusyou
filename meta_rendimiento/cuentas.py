@@ -23,7 +23,8 @@ def normalizar_id(x):
 
 def adivinar_pais(nombre):
     """«HappyFlops Poland (old DK)» -> «PL»: primero un nombre de país (en, es y lenguas locales), y si no hay,
-    un código ISO de dos letras en mayúsculas («HappyFlops MX» -> «MX»). «World Wide» -> None."""
+    un código ISO de dos letras en mayúsculas pero SOLO como última palabra («HappyFlops MX» -> «MX»;
+    «HappyFlops AD Account» -> None, que ahí «AD» es una sigla de la marca). «World Wide» -> None."""
     mapa, validos = paises._construir()
     palabras = [p for p in re.split(r"[^A-Za-zÀ-ÿ]+", nombre or "") if p]
     for largo in (3, 2, 1):
@@ -31,9 +32,9 @@ def adivinar_pais(nombre):
             codigo = mapa.get(paises._norm("".join(palabras[i:i + largo])))
             if codigo:
                 return codigo
-    for p in palabras:
-        if len(p) == 2 and p.isupper() and p in validos:
-            return p
+    ultima = palabras[-1] if palabras else ""
+    if len(ultima) == 2 and ultima.isupper() and ultima in validos:
+        return ultima
     return None
 
 
@@ -105,9 +106,11 @@ def elegir(cliente, elegidas, usuario=None):
             rechazadas.append(act)
     quitadas = sorted(actuales - set(nuevas))
     for act in quitadas:
+        # Primero las copias y después la fila: si borrar las copias falla, la cuenta sigue en el proyecto
+        # y el próximo `elegir` reintenta las dos cosas (al revés quedarían copias huérfanas para siempre).
+        _borrar_copias(cliente, act)
         with db.conectar() as con:
             con.execute(db.meta_cuenta.delete().where(_C.cliente == cliente, _C.ad_account_id == act))
-        _borrar_copias(cliente, act)
     return {"agregadas": agregadas, "quitadas": quitadas, "rechazadas": rechazadas}
 
 
@@ -129,12 +132,20 @@ def actualizar(cliente, ad_account_id, **campos):
             **valores, actualizado_en=db.ahora()))
 
 
+def _bloquear(con, filtro):
+    """Toma el lock de escritura de SQLite ANTES de leer (el patrón de `experimentos._bloquear`). pysqlite solo
+    abre la transacción delante de un INSERT/UPDATE/DELETE: un SELECT seguido de UPDATE deja el SELECT fuera de
+    ella y dos escritores (la web y el worker) leen la misma foto y el último pisa al otro. Un UPDATE sin efecto
+    sobre la fila obliga a abrirla y, con `busy_timeout`, el segundo escritor espera. True si la fila existe."""
+    r = con.execute(db.meta_cuenta.update().where(filtro).values(actualizado_en=_C.actualizado_en))
+    return r.rowcount == 1
+
+
 def actualizar_extra(cliente, ad_account_id, cambios):
     with db.conectar() as con:
         filtro = (_C.cliente == cliente) & (_C.ad_account_id == normalizar_id(ad_account_id))
-        extra = con.execute(sa.select(_C.extra).where(filtro)).scalar()
-        if extra is None and not con.execute(sa.select(_C.id).where(filtro)).first():
+        if not _bloquear(con, filtro):
             return
-        nuevo = dict(extra or {})
+        nuevo = dict(con.execute(sa.select(_C.extra).where(filtro)).scalar() or {})
         nuevo.update(cambios or {})
         con.execute(db.meta_cuenta.update().where(filtro).values(extra=nuevo, actualizado_en=db.ahora()))

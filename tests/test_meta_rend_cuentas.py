@@ -1,5 +1,10 @@
 """Cuentas que un proyecto lee (spec §5): país adivinado por el nombre, una
 cuenta en un solo proyecto, quitar borra sus copias."""
+import threading
+
+import pytest
+import sqlalchemy as sa
+
 from meta_rendimiento import cuentas
 
 HF = [{"id": "act_709406360806038", "name": "HappyFlops Norway", "currency": "SEK"},
@@ -25,6 +30,15 @@ def test_adivinar_pais_no_confunde_palabras_pegadas_ni_cola():
         assert cuentas.adivinar_pais(nombre) is None, nombre
     assert cuentas.adivinar_pais("HappyFlops Sweden (Active)") == "SE"
     assert cuentas.adivinar_pais("happyflops mx") is None    # el código ISO suelto pide mayúsculas
+
+
+def test_el_codigo_iso_suelto_solo_vale_como_ultima_palabra():
+    # R7: «AD» (Andorra) o «IT» en medio de un nombre son siglas de la marca, no un país.
+    assert cuentas.adivinar_pais("HappyFlops MX") == "MX"
+    assert cuentas.adivinar_pais("HappyFlops AD Account") is None
+    assert cuentas.adivinar_pais("IT Team Norway") == "NO"       # el nombre de país gana
+    assert cuentas.adivinar_pais("IT Team") is None
+    assert cuentas.adivinar_pais("HappyFlops MX (Active)") is None  # «Active» es la última palabra
 
 
 def test_normalizar_id():
@@ -60,6 +74,8 @@ def test_actualizar_extra_mezcla(base_temporal):
     cuentas.actualizar_extra("acme", "act_709406360806038", {"a": 1})
     cuentas.actualizar_extra("acme", "act_709406360806038", {"b": 2})
     assert cuentas.cuenta("acme", "act_709406360806038")["extra"] == {"a": 1, "b": 2}
+    cuentas.actualizar_extra("acme", "act_999", {"x": 1})        # una cuenta que no existe no se crea ni falla
+    assert cuentas.cuenta("acme", "act_999") is None
 
 
 def test_elegir_idempotente_conserva_lo_ya_copiado_y_acepta_ids_sin_prefijo(base_temporal, monkeypatch):
@@ -104,3 +120,65 @@ def test_listar_ordena_por_nombre_y_aisla_proyectos(base_temporal, monkeypatch):
     cuentas.actualizar_extra("acme", "act_708698354181244", {"x": 1})
     otra = cuentas.cuenta("otro", "act_708698354181244")
     assert otra["estado"] == "nueva" and otra["extra"] == {}
+
+
+def test_si_borrar_copias_falla_la_cuenta_sigue_y_el_siguiente_elegir_reintenta(base_temporal, monkeypatch):
+    # R5: primero las copias, después la fila; si las copias fallan la fila sobrevive y no quedan huérfanas.
+    llamadas = []
+
+    def _borrar(c, a):
+        llamadas.append((c, a))
+        if len(llamadas) == 1:
+            raise RuntimeError("falló el borrado de copias")
+    monkeypatch.setattr(cuentas, "_borrar_copias", _borrar)
+    cuentas.elegir("acme", [HF[0], HF[1]])
+    with pytest.raises(RuntimeError):
+        cuentas.elegir("acme", [HF[0]])
+    assert llamadas == [("acme", "act_883891256188845")]
+    assert cuentas.ids("acme") == ["act_883891256188845", "act_709406360806038"]    # nombre: Netherlands, Norway
+    r = cuentas.elegir("acme", [HF[0]])
+    assert r["quitadas"] == ["act_883891256188845"] and cuentas.ids("acme") == ["act_709406360806038"]
+    assert llamadas == [("acme", "act_883891256188845")] * 2
+
+
+def test_actualizar_extra_no_pierde_la_escritura_de_otro_hilo(base_temporal):
+    # R6: el lock de escritura se toma ANTES de leer `extra`. El hilo A se detiene tras su primera sentencia
+    # sobre meta_cuenta; B intenta escribir mientras tanto. Sin el lock previo B escribe en medio y A la pisa.
+    import db
+    cuentas.elegir("acme", [HF[0]])
+    act = "act_709406360806038"
+    pausado, soltar, b_intenta = threading.Event(), threading.Event(), threading.Event()
+    a = {"ident": None, "hecho": False}
+    errores = []
+
+    @sa.event.listens_for(db.engine(), "after_cursor_execute")
+    def _pausar(conn, cursor, statement, parameters, context, executemany):
+        if (threading.get_ident() == a["ident"] and not a["hecho"] and "meta_cuenta" in statement):
+            a["hecho"] = True
+            pausado.set()
+            soltar.wait(timeout=10)
+
+    def _escribir(clave, valor, antes=None):
+        try:
+            if antes:
+                antes()
+            cuentas.actualizar_extra("acme", act, {clave: valor})
+        except Exception as e:  # noqa: BLE001
+            errores.append(e)
+
+    def _hilo_a():
+        a["ident"] = threading.get_ident()
+        _escribir("a", 1)
+
+    ta = threading.Thread(target=_hilo_a)
+    ta.start()
+    assert pausado.wait(timeout=10)
+    tb = threading.Thread(target=_escribir, args=("b", 2, b_intenta.set))
+    tb.start()
+    assert b_intenta.wait(timeout=10)
+    tb.join(0.3)        # sin el lock previo B termina aquí; con él espera a que A suelte
+    soltar.set()
+    ta.join(10)
+    tb.join(10)
+    assert not ta.is_alive() and not tb.is_alive() and errores == []
+    assert cuentas.cuenta("acme", act)["extra"] == {"a": 1, "b": 2}
