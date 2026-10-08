@@ -152,3 +152,7 @@ Director (revisión 2026-10-02, PND-014): Anthropic usa max_retries=0; un 529 ca
 PND-028/034 (2026-10-03): el rótulo A usa tiene_hija_b. El gancho interrumpida del director continúa la generación solo con auto_lanzar ya aprobado, también si alcanzó prompt_listo antes de cortarse; respeta prioridad y max_intentos=1. No vuelve a lanzar sesiones que ya salieron de esos estados.
 
 PND-014/125 (2026-10-05): describir referencias y sugerir sonido anotan usage bajo _creatv antes de leer el texto, sin retries del SDK; no cambia el botón de sugerencia. extra.cliente identifica al proyecto que pidió la ayuda. El gasto del video se registra apenas se descarga y el de la pista antes de mezclar, conservando un cobro mayor cuando recuperar usa caché.
+
+PND-144/145 (Codex, 2026-10-07): falla de descarga/R2 de pista conserva costo y URL en la capa fallida y gasto idempotente; imagen anota cobro antes de persistir el error o su bitácora. Pruebas locales en test_lote5_gasto; las revisiones del lote corresponden a Claude.
+
+PND-072 (2026-10-07, lote 5 B): dashboard._encolar_director y Sprints delegan en tareas.director.encolar; job_id, payload, prioridad, duración y max_intentos=1 conservados. El fallback redacta tokens con cola.sin_token solo en aviso; no cambia el prompt ni la sesión enviada al director. Banco, referencias antiguas y retokenización quedan como preguntas en PND-070/072.

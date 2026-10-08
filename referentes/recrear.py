@@ -16,6 +16,8 @@ from doctrina import producto as doctrina_producto
 import idiomas
 from storage import r2_uploader
 
+MAX_FOTOS_PRODUCTO = 2
+
 # Textos fijos del prompt determinista, por idioma del proyecto (spec
 # 2026-09-26 §B4-§B5). Los datos del referente, del producto y de la marca
 # nunca se traducen; "Image N" va igual en los dos idiomas.
@@ -130,7 +132,7 @@ def _linea_sonido(sonido_texto, con_sonido, idioma="es"):
 def armar_prompt(referente, familia, producto, guia, titular, formato, tipo="imagen", sonido_texto="", con_sonido=True,
                  idioma="es", linea_textos=None):
     t = _textos(idioma)
-    n_fotos = max(1, min(2, len(producto.get("referencias") or [1])))
+    n_fotos = max(1, min(MAX_FOTOS_PRODUCTO, len(producto.get("referencias") or [1])))
     partes = [t["intro"].format(formato=formato, familia=referente.get("familia") or "",
                                 descripcion=(familia or {}).get("descripcion") or "").strip()]
     if referente.get("firma"):
@@ -187,7 +189,7 @@ def armar_prompt_fiel(lectura, producto, linea_textos, formato, idioma="es"):
     dolor: manda la referencia (incidente 2026-09-30: la guía pedía pies y
     manos, y una foto del producto sostenida con las manos puso su pose)."""
     t = _textos(idioma)
-    n_fotos = max(1, min(2, len(producto.get("referencias") or [1])))
+    n_fotos = max(1, min(MAX_FOTOS_PRODUCTO, len(producto.get("referencias") or [1])))
     imagenes = t["dos_fotos"] if n_fotos == 2 else "Image 2"
     partes = [t["fiel_intro"].format(formato=formato)]
     if lectura:
@@ -245,7 +247,7 @@ def lanzar_animacion(cliente, cf_id, imagen_url):
     creative_flow.actualizar(cliente, cf_video, prompt_relleno=pedido.get("prompt") or "",
                              aspect_ratio=pedido.get("formato"), tipo="video", modelo=pedido.get("modelo"),
                              con_sonido=bool(pedido.get("con_sonido")), sonido_texto="", musica_estilo="",
-                             calidad="final", referente_id=entry.get("referente_id"),
+                             calidad="final", referente_id=entry.get("referente_id"), origen="recrear",
                              recrear_modo=f"{entry.get('recrear_modo') or 'fiel'}_video",
                              imagen_origen=cf_id, **({"angulo": entry["angulo"]} if entry.get("angulo") else {}))
     creative_flow.actualizar(cliente, cf_id, animar_despues=dict(pedido, cf_video=cf_video))
@@ -469,7 +471,7 @@ def referencias_para(cliente, referente, producto):
     2(/3) son hasta 2 fotos del producto, subidas a R2 si hacen falta."""
     urls = [referente["imagen_url"]]
     carpeta = catalogo_productos.CATEGORIAS["producto"]["carpeta"]
-    for ruta in (producto.get("referencias") or [])[:2]:
+    for ruta in (producto.get("referencias") or [])[:MAX_FOTOS_PRODUCTO]:
         clave = f"clientes/{cliente}/{carpeta}/{producto['id']}/{os.path.basename(ruta)}"
         urls.append(r2_uploader.upload_image(ruta, clave))
     return urls

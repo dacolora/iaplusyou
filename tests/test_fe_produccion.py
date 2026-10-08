@@ -848,3 +848,18 @@ def test_voz_fatal_nombra_la_voz_propia(entorno):
         produccion.asegurar_borrador("acme", entorno["cf_id"], _entry(entorno), GUION_BASE, GUION_BASE,
                                      _opciones(voz=f"vp:{v['id']}"), lambda n: None)
     assert exc.value.capas["voz"]["proveedor"] == "fal/minimax"
+
+
+def test_pnd144_final_anota_pista_pagada_fallida(entorno, monkeypatch):
+    import gastos
+    from final_edition import insumos, musica, produccion
+    def falla(*a, **k):
+        raise musica.PistaPagadaError(RuntimeError('R2 fallo'), .02, 'https://fal/p.wav')
+    monkeypatch.setattr(insumos, 'musica', falla)
+    fid, resumen = produccion.producir('acme', entorno['cf_id'], 'es', 'CO', {}, ref_sufijo=':t144')
+    capa = resumen['capas']['musica']
+    assert capa['estado'] == 'error' and capa['costo_usd'] == .02
+    assert capa['parametros']['url'] == 'https://fal/p.wav'
+    filas = [g for g in gastos.historial('acme') if g['referencia'] == f'final:{fid}:t144']
+    assert len(filas) == 1
+    assert filas[0]['extra']['capas']['musica'] == .02

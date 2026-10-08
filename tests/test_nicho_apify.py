@@ -433,3 +433,10 @@ def test_probar_y_llave_faltante(entorno_apify, monkeypatch):
 def test_registro_apify():
     from nicho import fuentes
     assert fuentes.por_tipo("apify").tipo == "apify" and fuentes.por_tipo("apify").de_pago is True
+
+
+@pytest.mark.parametrize("url", ["https://www.tiktok.com/@perfil", "https://tiktok.com/", "https://vm.tiktok.com/", "https://www.tiktok.com/@perfil/video/no-numero"])
+def test_pnd092_tiktok_rechaza_perfil_y_rutas_sin_video(url):
+    from nicho.fuentes import apify_actores as aa, base
+    with pytest.raises(base.ErrorFuente):
+        aa.validar_links("tiktok_comentarios", [url])

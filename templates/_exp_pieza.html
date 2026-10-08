@@ -51,12 +51,12 @@
       <div class="cr-metricas" role="group" aria-label="{{ _('Métrica de la línea') }}">
         <span class="cr-leyenda-barra">{{ _('Gasto') }}</span>
         {% for k, n in [('ctr', _('CTR')), ('roas', _('ROAS')), ('cpc', _('CPC')), ('frecuencia', _('Frecuencia')), ('gancho', _('Gancho'))] if not (k == 'gancho' and p.es_imagen) %}
-        <button type="button" class="cr-chip cr-chip-metrica{% if loop.first %} activo{% endif %}" data-cr-metrica="{{ k }}" aria-pressed="{{ 'true' if loop.first else 'false' }}">{{ n }}</button>
+        <button type="button" class="cr-chip cr-chip-metrica{% if k == p.metrica %} activo{% endif %}" data-cr-metrica="{{ k }}" aria-pressed="{{ 'true' if k == p.metrica else 'false' }}">{{ n }}</button>
         {% endfor %}
       </div>
     </div>
     <div class="cr-tarjeta cr-grafico-caja">
-      <div class="cr-grafico" data-cr-grafico="pieza" data-metrica="ctr" role="img" aria-label="{{ _('Gasto diario de la pieza en barras y la métrica elegida en línea') }}"></div>
+      <div class="cr-grafico" data-cr-grafico="pieza" data-metrica="{{ p.metrica }}" role="group" aria-label="{{ _('Gasto diario de la pieza en barras y la métrica elegida en línea') }}"></div>
     </div>
   </section>
 
@@ -124,7 +124,5 @@
     {% else %}<p class="cr-vacio">{{ _('Sin eventos todavía.') }}</p>{% endif %}
   </section>
 
-  {% set marcas = namespace(lista=[]) %}
-  {% for ev in p.eventos|reverse %}{% if ev.creado_en %}{% set marcas.lista = marcas.lista + [{"dia": ev.creado_en[:10], "texto": ev.mensaje or ''}] %}{% endif %}{% endfor %}
-  <script type="application/json" class="cr-datos-pieza">{{ {"serie": p.series, "marcas": marcas.lista, "metrica": p.metrica}|tojson }}</script>
+  <script type="application/json" class="cr-datos-pieza">{{ {"serie": p.series, "marcas": p.marcas, "metrica": p.metrica}|tojson }}</script>
 </div>

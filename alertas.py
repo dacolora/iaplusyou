@@ -394,7 +394,8 @@ def _fuente_crear(cliente, ahora):
         out.append(_alerta(f"crear:error:{f.legado_id}", huella(error), "atencion", "fallos",
                            gettext("Falló «%(nombre)s» en Crear", nombre=nombre),
                            _con_error(error, gettext("Rearma el prompt o vuelve a generar.")),
-                           "creativeflowplus", ancla=f"cf-{f.legado_id}", entidad=f.legado_id))
+                           "creativeflowplus", ancla=f"cf-{f.legado_id}", entidad=f.legado_id,
+                           url="#creativeflowplus?cf=" + quote(f.legado_id, safe="")))
     if listos:
         listos = sorted(listos)
         out.insert(0, _alerta("crear:prompt_listo", huella(*listos), "atencion", "decision",
@@ -402,7 +403,8 @@ def _fuente_crear(cliente, ahora):
                                        "%(num)s prompts listos sin generar en Crear", len(listos)),
                               gettext("Revisa y genera (o descarta): el prompt ya está armado y generar cuesta lo que "
                                       "dice el botón."),
-                              "creativeflowplus", ancla=f"cf-{listos[0]}"))
+                              "creativeflowplus", ancla=f"cf-{listos[0]}",
+                              url="#creativeflowplus?cf=" + quote(listos[0], safe="")))
     return out
 
 

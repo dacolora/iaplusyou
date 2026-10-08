@@ -47,7 +47,7 @@ ETAPAS_CREATIVE_FLOW = [
     (ETAPA_GUARDAR_VIDEO, 6),
 ]
 
-PLATAFORMAS_VERTICALES = {"instagram", "tiktok"}
+from plataformas import PLATAFORMAS_VERTICALES
 
 # «Recuperar el video» (incidente 2026-09-28): cuánto vuelve a esperar el
 # worker por una predicción que ya se lanzó. Corto a propósito: si WaveSpeed
@@ -386,15 +386,15 @@ def ejecutar_imagen(tarea):
             f.write(resp.content)
         bitacora.registrar(cliente, cf_id, "generacion", "ok", out_path)
     except Exception as e:
-        bitacora.registrar(cliente, cf_id, "generacion", "error", str(e))
-        if isinstance(e, wavespeed_common.SinSaldo):
-            saldo.marcar(e.proveedor, e.detalle, cliente=cliente)
-        creative_flow.actualizar(cliente, cf_id, estado="error", error=_mensaje_error(e, cliente))
         if costo is not None:
             # El modelo ya cobró aunque la descarga fallara: queda registrado.
             _registrar_gasto(cliente, "imagen", costo, ref, modelo,
                              gettext("%(modelo)s · %(n)s referencia(s) · falló al descargar; el modelo ya cobró",
                                      modelo=modelo, n=len(referencias)))
+        bitacora.registrar(cliente, cf_id, "generacion", "error", str(e))
+        if isinstance(e, wavespeed_common.SinSaldo):
+            saldo.marcar(e.proveedor, e.detalle, cliente=cliente)
+        creative_flow.actualizar(cliente, cf_id, estado="error", error=_mensaje_error(e, cliente))
         raise
     _registrar_gasto(cliente, "imagen", costo, ref, modelo,
                      gettext("%(modelo)s · %(n)s referencia(s)", modelo=modelo, n=len(referencias)))
@@ -659,6 +659,15 @@ def _terminar_video(cliente, cf_id, job_id, ref, entry, referencias, duracion, p
             capas["mezcla"] = {"loudnorm": mezcla.LOUDNORM, "volumenes": resultado["volumenes"]}
             bitacora.registrar(cliente, cf_id, "musica", "ok", f"{estilo_musica} (USD {usd_musica:.2f})")
         except Exception as e:
+            if isinstance(e, musica.PistaPagadaError):
+                usd_musica = e.costo_usd
+                pista = {"url": e.url}
+                if ref != ref_intento:
+                    gastos.registrar_seguro(cliente, "video", usd_musica, ref_intento + ":musica",
+                                           detalle=detalle_gasto, extra={"usd_musica": usd_musica})
+                else:
+                    _registrar_gasto(cliente, "video", costo, ref, modelo, detalle_gasto,
+                                     usd_musica=usd_musica)
             capas["musica"] = {"estilo": estilo_musica, "url": (pista or {}).get("url"),
                                "costo_usd": usd_musica, "estado": "error", "error": str(e)[:300]}
             bitacora.registrar(cliente, cf_id, "musica", "error", str(e))

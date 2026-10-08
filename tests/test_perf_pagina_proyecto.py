@@ -159,3 +159,13 @@ def test_estaticos_versionados_se_guardan_un_ano(app):
     assert editor.status_code == 200 and editor.headers["Cache-Control"] == "no-cache"
     html = c.get("/cliente/acme")
     assert html.headers["Cache-Control"] == "no-store, must-revalidate"
+
+
+def test_pnd137_pagina_no_arma_contexto_del_fragmento(app, monkeypatch):
+    dashboard = app['dashboard']
+    def pesado(*a, **k):
+        raise AssertionError('contexto pesado de Experimentos en pagina del proyecto')
+    monkeypatch.setattr(dashboard, '_contexto_experimentos', pesado)
+    html = app['c'].get('/cliente/acme').get_data(as_text=True)
+    assert 'id="reglas-motor"' in html and 'name="ventana_horas"' in html
+    assert 'name="correo"' in html

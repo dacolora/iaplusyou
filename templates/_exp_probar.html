@@ -19,6 +19,7 @@
   <p class="exp-anuncios"></p>
   <p class="exp-aviso-tope"></p>
   <p class="exp-nada">{{ _('Nada gasta hasta que pulses Activar') }}</p>
+  {% if viva %}<p id="exp-minimo" class="exp-aviso" hidden></p>{% endif %}
 </div>
 {% endmacro %}
 {% macro nota_presupuesto() %}
@@ -114,7 +115,6 @@
     <input type="range" id="exp-total-barra" class="exp-total-barra" aria-label="{{ _('Ajustar el total') }}">
     {{ resumen_presupuesto('exp-resumen', true) }}
     <p id="exp-total-aviso" class="exp-aviso" hidden>{{ _('Escribe el total.') }}</p>
-    <p id="exp-minimo" class="exp-aviso" hidden></p>
     <button type="button" class="btn-sm" id="exp-usar-minimo" hidden>{{ _('Usar ese total') }}</button>
     <details class="exp-ajuste"><summary>{{ _('Ajustar reparto') }}</summary>
       <p class="vacio">{{ _('Cambia el presupuesto diario de cada país: el total se recalcula como la suma de los diarios por los días.') }}</p>

@@ -322,7 +322,6 @@ input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
 .exp-reglas summary { cursor: pointer; font-size: .84rem; }
 .reglas-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr)); gap: .5rem .9rem; margin: .5rem 0; }
 .regla { display: flex; flex-direction: column; gap: .2rem; font-size: .76rem; }
-.regla-nombre code { font-size: .68rem; color: var(--muted); }
 .regla input[type="number"] { width: 100%; }
 .regla-sin { font-size: .72rem; color: var(--muted); display: inline-flex; align-items: center; gap: .3rem; }
 .exp-reglas-form .vacio { font-size: .74rem; padding-top: .2rem; }

@@ -89,10 +89,17 @@ def atribucion_sugerida(cliente):
     arrastran requests, cifrado, etc."""
     import meta_conexion  # noqa: PLC0415
     import tiendas  # noqa: PLC0415
+    from conectores import por_tipo  # noqa: PLC0415
     if (meta_conexion.estado_pixel(cliente, solo_cache=True) or {}).get("estado") == "ok":
         return "pixel"
-    if any(t["tipo"] in ("shopify", "woo") and t["estado"] == "conectada" for t in tiendas.listar(cliente)):
-        return "tienda"
+    for t in tiendas.listar(cliente):
+        if t["estado"] != "conectada":
+            continue
+        try:
+            if por_tipo(t["tipo"]).soporta_utm:
+                return "tienda"
+        except ValueError:  # Tipo antiguo o desconocido: no promete atribución.
+            continue
     return "ninguna"
 
 
@@ -504,7 +511,22 @@ def snapshot(ep_id, metricas, tomado_en=None):
             **valores)).inserted_primary_key[0]
 
 
-def _piezas(con, cliente, experimento_id):
+def _ultimas_metricas(con, cliente, experimento_ids):
+    """La última por id (como _ultima_metrica), en una lectura conjunta."""
+    if not experimento_ids:
+        return {}
+    ms, ep = db.metrica_snapshot, db.experimento_pieza
+    ultima_id = (sa.select(ms.c.id).where(ms.c.experimento_pieza_id == ep.c.id)
+                 .order_by(ms.c.id.desc()).limit(1).correlate(ep).scalar_subquery())
+    q = (sa.select(ms).select_from(ep.join(ms, ms.c.id == ultima_id))
+         .where(ep.c.cliente == cliente, ep.c.experimento_id.in_(experimento_ids)))
+    return {f._mapping[ms.c.experimento_pieza_id]: _snapshot_a_dict(f)
+            for f in con.execute(q)}
+
+
+def _piezas(con, cliente, experimento_id, metricas=None):
+    if metricas is None:
+        metricas = _ultimas_metricas(con, cliente, [experimento_id])
     ep, pz, cp = db.experimento_pieza, db.pieza, db.concepto
     q = (sa.select(ep, pz.c.tipo, pz.c.idioma.label("p_idioma"), pz.c.url_video, pz.c.url_miniatura, pz.c.legado_id.label("p_legado"),
                    pz.c.pais.label("p_pais"), pz.c.duracion_s,
@@ -533,7 +555,7 @@ def _piezas(con, cliente, experimento_id):
             # (spec 2026-10-01 §6): tareas/experimentos corta ahí.
             "sin_derivar": m["tipo"] == "imagen" or c_extra.get("modo_crear") == "hablado",
             "idioma": m["p_idioma"], "legado_id": m["p_legado"], "duracion_s": m["duracion_s"],
-            "metricas": _ultima_metrica(con, m[ep.c.id]), "creado_en": m[ep.c.creado_en],
+            "metricas": metricas.get(m[ep.c.id], {}), "creado_en": m[ep.c.creado_en],
             "extra": m[ep.c.extra] or {}, "escalon_rescate": m[ep.c.escalon_rescate] or 0,
             # Doctrina, bloque 4: lo que el diagnóstico y los aprendizajes leen de
             # la sesión (mismas columnas de siempre, ninguna consulta nueva).
@@ -602,10 +624,10 @@ def _propuestas_pendientes(con, cliente, experimento_id):
         p.c.cliente == cliente, p.c.experimento_id == experimento_id, p.c.estado == "pendiente")).scalar() or 0
 
 
-def _a_dict(con, f, limite_eventos):
+def _a_dict(con, f, limite_eventos, metricas=None):
     m = f._mapping
     e = db.experimento
-    pzs = _piezas(con, m[e.c.cliente], m[e.c.id])
+    pzs = _piezas(con, m[e.c.cliente], m[e.c.id], metricas=metricas)
     extra = m[e.c.extra] or {}
     return {
         "id": m[e.c.id], "nombre": m[e.c.nombre], "estado": m[e.c.estado], "modo": m[e.c.modo],
@@ -657,8 +679,9 @@ def _leer_todos(cliente):
     with db.conectar() as con:
         filas = con.execute(sa.select(db.experimento).where(
             db.experimento.c.cliente == cliente, db.experimento.c.legado.is_(False))
-            .order_by(db.experimento.c.id.desc()))
-        return [_a_dict(con, f, 30) for f in filas]
+            .order_by(db.experimento.c.id.desc())).fetchall()
+        metricas = _ultimas_metricas(con, cliente, [f._mapping[db.experimento.c.id] for f in filas])
+        return [_a_dict(con, f, 30, metricas=metricas) for f in filas]
 
 
 def cargar(cliente):
@@ -668,6 +691,14 @@ def cargar(cliente):
     if cliente not in memo:
         memo[cliente] = _leer_todos(cliente)
     return copy.deepcopy(memo[cliente])
+
+
+def contar_vivos(cliente):
+    """Solo el conteo del bloqueo de Meta, sin piezas, métricas ni eventos."""
+    e = db.experimento
+    with db.conectar() as con:
+        return con.execute(sa.select(sa.func.count()).select_from(e).where(
+            e.c.cliente == cliente, e.c.legado.is_(False), e.c.estado.in_(ESTADOS_VIVOS))).scalar() or 0
 
 
 def obtener(cliente, experimento_id):

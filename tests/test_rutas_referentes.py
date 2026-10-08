@@ -678,8 +678,9 @@ def test_traer_form_apify_configurada_muestra_pais(app, monkeypatch):
 def test_traer_form_solo_atria_no_muestra_pais(app, monkeypatch):
     monkeypatch.setenv("ATRIA_API_KEY", "atria-sk_test")
     monkeypatch.delenv("APIFY_TOKEN", raising=False)
+    monkeypatch.delenv("TRENDTRACK_API_KEY", raising=False)
     html = app["c"].get("/cliente/acme/referentes/traer", headers={"X-Requested-With": "fetch"}).data.decode()
-    assert 'name="fuente" value="atria"' in html or 'name="fuente"' not in html  # única fuente: radio o hidden, según el conteo
+    assert 'name="fuente" value="atria"' in html
     assert 'name="min_dias"' in html
 
 
@@ -1540,3 +1541,16 @@ def test_recrear_video_con_el_formulario_viejo_usa_el_prompt_de_video(app, monke
                   data={"producto_id": "espejo_led", "formato": "9:16", "tipo": "video", "campos_vista": "1"})
     entry = creative_flow.cargar("acme")[lanzados[0]]
     assert entry["tipo"] == "video" and "Cámara fija" in entry["prompt_relleno"]
+
+
+def test_pnd090_recrear_guarda_origen_sin_alterar_prompt(app, monkeypatch):
+    import creative_flow, flowplus_lanzar
+    ids = _sembrar()
+    monkeypatch.setattr("referentes.recrear.r2_uploader.upload_image", lambda ruta, clave: "https://r2/" + clave)
+    lanzados = []
+    monkeypatch.setattr(flowplus_lanzar, "lanzar", lambda cliente, cf_id, entry, **kw: lanzados.append(entry) or True)
+    r = app["c"].post(f"/cliente/acme/referentes/{ids[0]}/recrear/generar",
+        data={"producto_id": "espejo_led", "formato": "1:1", "prompt": "Mi prompt exacto", "tipo": "imagen"})
+    assert r.status_code == 302 and len(lanzados) == 1
+    assert lanzados[0]["prompt_relleno"] == "Mi prompt exacto"
+    assert lanzados[0].get("origen") == "recrear"

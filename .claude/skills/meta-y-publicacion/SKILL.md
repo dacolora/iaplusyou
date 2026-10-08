@@ -72,3 +72,8 @@ before each batch) closes it later. TikTok is asynchronous: `check_status` decid
 **Candado común (2026-10-02, PND-114):** la ruta legado `cambiar_estado_ad` opera campaña, conjunto y anuncio mediante `lanzador._con_credenciales`, con `tareas.meta._LOCK`; `_ENV_LOCK` queda para el entorno del flujo viejo, no para configurar las credenciales globales de Meta.
 
 PND-036 (2026-10-03): organico.crear rechaza tipo imagen antes de insertar una publicación; protege también un POST manual. PND-113: la primera activación del lanzador ajusta end_time antes de activar; se conserva el presupuesto y nunca se activa por actualizar fechas. Ver experimentos para reintentos y reanudación.
+
+**Error del legado (2026-10-07, PND-096):** la tarea `meta_publicar` sigue registrada para filas antiguas.
+Su subcódigo 1885183/modo Desarrollo tiene mensaje propio por gettext, separado de permisos (#3), sin prometer
+reutilización que ese camino no implementa. `tests/test_tareas_meta.py` provoca el rechazo con dobles; no cambia
+la publicación ni los reintentos.

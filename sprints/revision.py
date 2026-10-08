@@ -12,7 +12,7 @@ import estado as estado_videos
 from idiomas import N_
 from sprints import datos, estado
 
-TERMINADAS = ("listo", "degradada")
+TERMINADAS = estado.LISTAS_PARA_REVISION
 
 
 def _pieza(cliente, cp_id):

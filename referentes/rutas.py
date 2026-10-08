@@ -502,7 +502,7 @@ def recrear_generar(cliente, rid):
                                     duracion_m, "", "A", referencias_urls=referencias_urls, platforms=[])
         campos = dict(prompt_relleno=prompts[m], aspect_ratio=formato_m, tipo=tipo_m, modelo=modelo_m,
                       con_sonido=prefs_sonido["con_sonido"], sonido_texto="", musica_estilo="",
-                      calidad="final", referente_id=rid)
+                      calidad="final", referente_id=rid, origen="recrear")
         if animar:
             animar_con = _modelo_animar(request.form)
             with idiomas.en_idioma(idioma):     # el título se GUARDA: idioma del proyecto

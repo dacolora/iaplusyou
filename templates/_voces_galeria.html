@@ -12,18 +12,22 @@
    traduce aquí, al pintar, como `genero_nombre` de las fichas de la galería. #}
 {% macro fichas_galeria(fichas_voces) %}
 {% for f in fichas_voces %}
+<div class="au-voz-contenedor">
 <div class="au-voz" data-voz="{{ f.nombre }}" data-genero="{{ f.genero }}" role="radio" aria-checked="{{ 'true' if loop.first else 'false' }}" tabindex="0">
   <span class="au-voz-nombre">{{ f.nombre }}</span>
   <small class="au-voz-tono">{{ f.genero_nombre|traducir }}{% if f.tono %} · {{ f.tono|traducir }}{% endif %}</small>
+</div>
   <button type="button" class="au-voz-play" data-voz="{{ f.nombre }}" aria-label="{{ _('Escuchar') }} {{ f.nombre }}">▶</button>
 </div>
 {% endfor %}
 {% endmacro %}
 
 {% macro voz_propia_item(v, borrar_url=None) -%}
+<div class="au-voz-contenedor">
 <div class="au-voz au-voz-propia" data-voz="{{ v.valor }}" role="radio" aria-checked="false" tabindex="0">
   <span class="au-voz-nombre">{{ v.nombre }}</span>
   <small class="au-voz-tono">{{ v.forma_nombre|traducir }}{% if borrar_url and not v.estrenada %} · {{ _('sin estrenar') }}{% endif %}</small>
+</div>
   {% if borrar_url %}<button type="button" class="au-vp-borrar" data-url="{{ borrar_url }}" data-nombre="{{ v.nombre }}" aria-label="{{ _('Borrar') }} {{ v.nombre }}">✕</button>{% endif %}
   <button type="button" class="au-voz-play" data-voz="{{ v.valor }}" aria-label="{{ _('Escuchar') }} {{ v.nombre }}">▶</button>
 </div>

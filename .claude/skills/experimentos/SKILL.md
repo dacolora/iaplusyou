@@ -104,8 +104,9 @@ reemplaza la pantalla de la galería y la pestaña Tablero; no cambia el motor: 
 detalle de Meta). La pestaña es un **armazón** (`_tab_experimentos.html`: cabecera con «+ Nuevo experimento» y «Descargar
 CSV del mes», `_meta_conectar.html`, el cajón «Cómo decide el motor», `#cr-resultados`, el `<dialog id="cr-panel">` y los
 textos del JS en `#cr-textos`) más un **fragmento** que llega por `fetch`. El HTML de la página del proyecto ya no trae las
-piezas elegibles, el tablero ni la gestión de cada experimento (la regla de `ui`: lo pesado llega por fragmento; lo que
-la página todavía calcula sin pintar, PND-137). El
+piezas elegibles, el tablero ni la gestión de cada experimento (la regla de `ui`: lo pesado llega por fragmento).
+Desde PND-137 (2026-10-07), tampoco los calcula: `_contexto_motor_experimentos` solo entrega reglas y correo; el
+bloqueo de «Cambiar de forma» cuenta experimentos vivos con `contar_vivos`, sin cargar piezas. El
 Tablero dejó de ser pestaña: `resolver('tablero')` de `cliente.html` abre Experimentos, y el hash `#tablero` o `#ads` también.
 - **Rutas** (las tres GET y solo leen: nada gasta ni publica; el acceso lo decide `_guard_por_cliente`): `exp_resultados`
   (`/cliente/<c>/experimentos/resultados`, fragmento `_exp_resultados.html`; con `?exp=<id>` suma la gestión
@@ -162,8 +163,11 @@ Tablero dejó de ser pestaña: `resolver('tablero')` de `cliente.html` abre Expe
 - **Frecuencia**: la del periodo o la pieza sale del último `metrica_snapshot` (acumulada, ponderada por impresiones) y no se
   suma entre días: la diaria de `metrica_dia` es del día (regla (c) de «Detalle de Meta»).
 - **Consultas**: `exp_resultados` y `exp_nuevo` corren bajo `experimentos.con_lecturas_memorizadas`;
-  `tests/test_rutas_resultados.py` vigila que el fragmento no agregue consultas por pieza más allá del N+1 conocido de
-  `experimentos.cargar` (PND-134); ahí mismo están las pruebas de aislamiento (el 404 de una pieza o un experimento de otro proyecto).
+  `experimentos.cargar` obtiene las últimas métricas en una consulta conjunta (`_ultimas_metricas`, PND-134,
+  2026-10-07): última por id, no por fecha, con el mismo `_snapshot_a_dict` y sin borrar snapshots.
+  `tests/test_lote5_experimentos.py` contrasta cifras, historia, decisiones y otro proyecto vivo;
+  `tests/test_rutas_resultados.py` exige consultas constantes con 3 y 15 piezas. Ahí también están los 404 de piezas
+  o experimentos de otro proyecto.
 
 **`tablero.py` y OUTCOME_SALES** (el motor del dinero; desde E2 sin pestaña propia: lo pinta el centro; `tab_descargar_csv`
 sigue como botón de la cabecera). Cada cifra es un **delta de snapshots acumulados** (`metrica_snapshot` guarda los totales
@@ -218,3 +222,11 @@ PND-003 (revisión 2026-10-02): el precio de rescatar/derivar pasa musica_estilo
 PND-039/044/113 (2026-10-03): regenerar conserva las voces originales por destino en el item; un destino nuevo hereda la última voz original conocida. El payload explícito mantiene esa elección al producir. La cuadrícula conserva desmarcadas por combinación. Antes de la primera activación (experimento, país o pieza), lanzador reserva fin_primera_activacion bajo el escritor de extra y envía end_time a todos los conjuntos; solo después activa. Reanudar no extiende el plazo ni cambia presupuestos. Una reserva tras un fallo conserva la misma fecha en el próximo intento; los experimentos ya activados mantienen su fecha previa. PND-043 sigue esperando la decisión de reserva de arranques entre experimentos.
 
 PND-138/139/140 (revisión de Codex, 2026-10-05): aviso_moneda invalida ingresos/ROAS solo si hubo gasto, compras, impresiones o ingresos en el período; compras/CPA se conservan por moneda ajena, también al gestionar. Daniel decide si el agrupado futuro excluye los no comparables con nota o sigue oculto (PND-138); no convertir monedas. Una base sin ventas solo vale cero si nunca hubo compras ni fuente medible antes de desde. También se revisa el cierre: si no mide ventas y tiene cero compras, con serie.primera_venta <= hasta, el período no es comparable (compras/ingresos/ROAS/CPA None y pantalla —), nunca cero. Si serie.primera_venta es None o posterior a hasta, no se recorre la historia para buscar fuentes: no hubo ventas hasta el cierre y los resultados no cambian (segunda revisión del lote 4, 2026-10-05, pruebas test_tablero_cierre_ciego y test_tablero_rendimiento_ventas); el historial anterior se consulta en una tercera consulta conjunta para todas las piezas (conteo constante, probado con 3 y 13 piezas) y se conserva en los cierres mensuales. Entre fuentes distintas compras/ingresos/ROAS/CPA son None, CSV vacío, y la pantalla explica «Las ventas cambiaron de fuente en este período». La primera venta real se conserva. El día desconocido de TW→respaldo ciego→TW no se convierte en cero; reconstruir/fijar fuente y conciliar intervalos sigue como decisión PND-142. Historial sin gasto muestra —; con Pixel y gasto sin compras muestra 0,0×. La nota de gasto sin ventas medibles no se repite si el KPI ya dice sin ventas medibles. No cambia el decisor ni la pauta.
+
+**Capacidad de atribución (2026-10-07, PND-078):** `atribucion_sugerida` conserva la prioridad del Pixel y pregunta
+`conectores.por_tipo(tipo).soporta_utm` a cada tienda conectada. Un tipo desconocido se omite. No cambia capacidades
+ni atribuciones ya guardadas; `tests/test_lote5_higiene.py` usa conectores dobles con y sin UTM.
+
+PND-136 (2026-10-07, lote 5 B): exp_pieza memoriza lecturas solo durante la petición. En resultados, gestión_id limita trabajos, propuestas y reglas al experimento seleccionado; sin selección mantiene las propuestas de todos (son visibles en Necesita tu decisión). Las marcas del panel usan el mismo truncado y MAX_MARCAS, sin cortar la bitácora. Día a día abre con ROAS para ventas y CTR para tráfico; en el centro con mezcla de objetivos conserva CTR. Gráfica role=group admite marcas enfocables; aria-live del contenedor se hereda, sin duplicarlo. No se cambia el decisor, reparto ni destino de publicación.
+
+Regresión aria-live del lote 5 corregida (2026-10-08, pedido de Daniel): el aviso #exp-minimo pertenece al resumen vivo #exp-resumen, sin aria-live propio; la copia #exp-resumen-final sigue sin región viva. La prueba de PND-136 comprueba herencia y conteo único; la prueba antigua de presupuesto permanece intacta.

@@ -85,3 +85,10 @@ PND-003 (revisión 2026-10-02): el estimado del lote usa gastos.estimar con musi
 PND-034 (2026-10-03): si se interrumpe el director de un lote con auto_lanzar aprobado, el fallback continúa por flowplus_lanzar con su prioridad original; una pieza que ya avanzó no se relanza. Se prueba con cola simulada, sin proveedores.
 
 PND-127 (2026-10-05): _costo_regenerar pasa el musica_estilo de la sesión a gastos.estimar("video"); música generada suma su tarifa, Mi música no. La estimación comparte cálculo con la generación.
+
+**Constantes compartidas (2026-10-07, PND-077/079):** `plataformas.PLATAFORMAS_VERTICALES` es la misma constante
+inmutable en dashboard, producción de Sprints y tarea de Crear. `sprints.estado.LISTAS_PARA_REVISION` contiene listo y
+degradada; `TERMINADAS` incluye además error para cerrar generación. `sprints.revision.TERMINADAS` conserva el alias
+de revisables: error sigue sin poder aprobarse. `tests/test_lote5_higiene.py` vigila identidad y comportamiento.
+
+PND-072/088/090 (2026-10-07, lote 5 B): el director usa el encolador común; perder la reserva archiva la sesión nueva, sin borrar estado ajeno. Los candidatos de IA se leen con referentes.datos.por_ids una vez en panel y página. datos._consumir_sugerencia toma el bloqueo de campaña antes de leer extra y elimina solo el referente agregado, conservando el resto; también limpia una sugerencia ya agregada. QA y la instantánea de contexto que alimenta prompts siguen como preguntas.

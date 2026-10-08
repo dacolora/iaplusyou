@@ -907,6 +907,22 @@ def reutilizar_referencia(cliente, referencia_id, campana_destino_id):
     return rid
 
 
+def _consumir_sugerencia(cliente, campana_id, referente_id):
+    with db.conectar() as con:
+        if not _bloquear(con, db.campana, campana_id, cliente):
+            return
+        fila = _fila(con, db.campana, campana_id, cliente)
+        if not fila:
+            return
+        extra = dict(fila.extra or {})
+        if "sugerencias_ia" not in extra:
+            return
+        extra["sugerencias_ia"] = [s for s in extra["sugerencias_ia"] or []
+                                   if s.get("referente_id") != referente_id]
+        con.execute(db.campana.update().where(db.campana.c.id == campana_id)
+                    .values(extra=extra, actualizado_en=db.ahora()))
+
+
 def agregar_referencia_biblioteca(cliente, campana_id, referente_id):
     """Trae un referente de la biblioteca (`referentes.datos`) como referencia
     ya analizada de la campaña (spec §10): no se encola `sprint_analizar_referencia`.
@@ -914,6 +930,7 @@ def agregar_referencia_biblioteca(cliente, campana_id, referente_id):
     la fila existente en vez de duplicar."""
     ya = [r for r in referencias(cliente, campana_id) if (r.get("extra") or {}).get("referente_id") == referente_id]
     if ya:
+        _consumir_sugerencia(cliente, campana_id, referente_id)
         return ya[0]["id"]
     ref = referentes_datos.referente(cliente, referente_id)
     if not ref or ref.get("estado_imagen") != "ok":
@@ -930,6 +947,7 @@ def agregar_referencia_biblioteca(cliente, campana_id, referente_id):
         "etapa": ref.get("etapa"), "consciencia": ref.get("consciencia"), "dolor": ref.get("dolor"),
         "firma": firma, "resumen": firma, "lead": (ref.get("extra") or {}).get("lead"),
     }, analisis_estado="listo", extra={"referente_id": referente_id})
+    _consumir_sugerencia(cliente, campana_id, referente_id)
     return rid
 
 

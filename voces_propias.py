@@ -195,8 +195,8 @@ def _convertir_a_mp3(origen, salida):
 def guardar_grabacion(cliente, archivo, carpeta_tmp):
     """Sube la grabación de un clon a R2 como `material` (origen `grabacion`) y
     devuelve la fila. El hash va con prefijo propio para no devolver una canción
-    idéntica de Mi música. Un .aac u .ogg se convierte a mp3 antes de medirlo y
-    subirlo (CONVERTIR_A_MP3). `archivo`: FileStorage de Flask."""
+    idéntica de Mi música. Un .aac u .ogg se mide antes de convertirlo a mp3 y volver a
+    medirlo para subirlo (CONVERTIR_A_MP3). `archivo`: FileStorage de Flask."""
     nombre = os.path.basename(archivo.filename or "")
     ext = os.path.splitext(nombre)[1].lower()
     if ext not in mi_musica.EXTENSIONES:
@@ -210,6 +210,11 @@ def guardar_grabacion(cliente, archivo, carpeta_tmp):
             raise EntradaInvalida(MENSAJES["pesado"])
         local = temporales[0]
         if ext in CONVERTIR_A_MP3:
+            dur_original = _duracion_ms(local)
+            if dur_original < MIN_GRABACION_MS:
+                raise EntradaInvalida(MENSAJES["corta"])
+            if dur_original > MAX_GRABACION_MS:
+                raise EntradaInvalida(MENSAJES["larga"])
             local, ext = base + ".mp3", ".mp3"
             temporales.append(local)
             _convertir_a_mp3(temporales[0], local)

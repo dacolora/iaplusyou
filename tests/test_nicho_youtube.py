@@ -268,3 +268,17 @@ def test_pnd055_youtube_no_oculta_error_global(entorno, monkeypatch, codigo, mot
     monkeypatch.setattr(youtube,'cliente_api',lambda:yt)
     with pytest.raises(base.ErrorFuente):
         list(youtube.FuenteYouTube().recolectar({'palabras_clave':'foot pain'}))
+
+
+def test_pnd092_links_llenos_no_gastan_busqueda(monkeypatch):
+    from nicho.fuentes import youtube
+    videos = [{"id": f"vid{i:08d}", "titulo": str(i)} for i in range(youtube.MAX_VIDEOS)]
+    monkeypatch.setattr(youtube, "cliente_api", lambda: object())
+    monkeypatch.setattr(youtube, "videos_por_id", lambda yt, ids: videos)
+    def buscar(*args):
+        pytest.fail("busqueda innecesaria con cupo lleno")
+    monkeypatch.setattr(youtube, "buscar_videos", buscar)
+    leidos = []
+    monkeypatch.setattr(youtube, "comentarios_video", lambda yt, v, max_n: (leidos.append(v["id"]) or [], None))
+    assert list(youtube.FuenteYouTube().recolectar({"palabras_clave": "tema", "links": ["https://youtu.be/" + v["id"] for v in videos]})) == []
+    assert leidos == [v["id"] for v in videos]

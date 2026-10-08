@@ -1950,7 +1950,20 @@ def _etiquetas_exp():
     }
 
 
-def _contexto_experimentos(cliente, con_elegibles=False, con_organico=True):
+def _contexto_motor_experimentos(cliente):
+    """Lo que el armazón y Configuración pintan sin cargar el fragmento."""
+    return {
+        "reglas_defecto_exp": decisor.REGLAS_DEFECTO,
+        "reglas_enteras_exp": decisor.ENTEROS,
+        "reglas_desactivables_exp": decisor.UMBRALES_DESACTIVABLES,
+        "etiquetas_reglas_exp": decisor.ETIQUETAS,
+        "grupos_reglas_exp": decisor.GRUPOS_REGLAS,
+        "reglas_cliente": proyectos.reglas_defecto(cliente),
+        "correo_notificaciones": proyectos.correo_notificaciones(cliente) or "",
+    }
+
+
+def _contexto_experimentos(cliente, con_elegibles=False, con_organico=True, gestion_id=None):
     """Lo que pintan la gestión de un experimento, sus propuestas y reglas, los aprendizajes y los anuncios
     sueltos (`_exp_gestionar.html`, `_exp_probar.html`, `_anuncios_sueltos.html`, `_aprendizajes.html`): el
     contexto de Experimentos que hasta E2 armaba `ver_cliente`, sacado a una función para que lo compartan la
@@ -1977,8 +1990,9 @@ def _contexto_experimentos(cliente, con_elegibles=False, con_organico=True):
     # con campaña ya creada en Meta) — evita 2 queries por cada experimento
     # ya cerrado/armando.
     experimentos_exp = experimentos.cargar(cliente)
+    gestion = experimentos_exp if gestion_id is None else [e for e in experimentos_exp if e["id"] == gestion_id]
     trabajos_exp = {}
-    for e in experimentos_exp:
+    for e in gestion:
         if e["estado"] == "lanzando":
             jid = tareas_exp.job_id_lanzar(cliente, e["id"])
             if trabajos.en_curso(jid):
@@ -1990,7 +2004,7 @@ def _contexto_experimentos(cliente, con_elegibles=False, con_organico=True):
     moneda_exp = (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
     # Bloque 4: propuestas pendientes por experimento (una consulta por
     # experimento con contador > 0), reglas y modos para los formularios.
-    propuestas_exp = {e["id"]: propuestas.pendientes(cliente, e["id"]) for e in experimentos_exp if e["propuestas_pendientes"]}
+    propuestas_exp = {e["id"]: propuestas.pendientes(cliente, e["id"]) for e in gestion if e["propuestas_pendientes"]}
     reglas_cliente = proyectos.reglas_defecto(cliente)
     # Una sola consulta (solo caché) para atribución y objetivo sugeridos.
     atribucion_sug = experimentos.atribucion_sugerida(cliente)
@@ -2013,7 +2027,7 @@ def _contexto_experimentos(cliente, con_elegibles=False, con_organico=True):
         "etiquetas_reglas_exp": decisor.ETIQUETAS,
         "grupos_reglas_exp": decisor.GRUPOS_REGLAS,
         "reglas_cliente": reglas_cliente,
-        "reglas_efectivas_exp": {e["id"]: decisor.reglas_efectivas(reglas_cliente, e["reglas"]) for e in experimentos_exp},
+        "reglas_efectivas_exp": {e["id"]: decisor.reglas_efectivas(reglas_cliente, e["reglas"]) for e in gestion},
         "correo_notificaciones": proyectos.correo_notificaciones(cliente) or "",
         "aprendizajes_exp": proyectos.aprendizajes(cliente),
         "precio_diagnostico": gastos.estimar("diagnostico_pieza")["texto"],
@@ -2122,8 +2136,8 @@ def ver_cliente(cliente):
     # «Nuevo experimento» (`exp_nuevo`). Lo orgánico ya viene en `fe_ctx`, y las piezas elegibles (la galería) ya
     # no viajan en esta página: las pide `exp_nuevo`.
     # (El hotfix e8d433a del 2026-10-03 las devolvía mientras la pestaña vieja pintaba la galería; E2 la reemplaza.)
-    ctx_exp = _contexto_experimentos(cliente, con_organico=False)
-    ctx_meta = _contexto_meta(cliente, ctx_exp["experimentos"])
+    ctx_exp = _contexto_motor_experimentos(cliente)
+    ctx_meta = _contexto_meta(cliente)
     tiendas_cliente = tiendas.listar(cliente)
     triple_whale_conectado = triple_whale_tiendas.obtener(cliente)
     # Catálogo (spec 2026-09-28): la galería y la ficha llegan por fragmento;
@@ -2245,7 +2259,7 @@ def _llaves_visibles(tarjetas, rol):
     return tarjetas if rol == "admin" else []
 
 
-PLATAFORMAS_VERTICALES = {"instagram", "tiktok"}
+from plataformas import PLATAFORMAS_VERTICALES
 
 
 def _aspect_ratio_para_plataformas(platforms):
@@ -3967,8 +3981,8 @@ def _bloqueo_cambio_forma(cliente, experimentos_lista=None):
     ngettext/gettext con %(num)s / %(partes)s para que el inglés salga sin
     perder la concordancia singular/plural — el español (locale por defecto,
     sin catálogo) sale idéntico a como salía con los f-strings de antes."""
-    lista = experimentos.cargar(cliente) if experimentos_lista is None else experimentos_lista
-    vivos = sum(1 for e in lista if e.get("estado") in experimentos.ESTADOS_VIVOS)
+    vivos = (experimentos.contar_vivos(cliente) if experimentos_lista is None else
+             sum(1 for e in experimentos_lista if e.get("estado") in experimentos.ESTADOS_VIVOS))
     en_curso = sum(1 for p in organico.listar(cliente) if p.get("estado") in ("en_cola", "publicando"))
     if not vivos and not en_curso:
         return None
@@ -5241,7 +5255,7 @@ def exp_resultados(cliente):
     experimento (sus acciones siguen siendo las rutas POST de siempre)."""
     filtro = resultados.filtro_de(request.args)
     r = resultados.contexto(cliente, filtro)
-    ctx = _contexto_experimentos(cliente)
+    ctx = _contexto_experimentos(cliente, gestion_id=filtro.experimento_id)
     elegido = next((e for e in ctx["experimentos"] if e["id"] == filtro.experimento_id), None)
     # Las piezas elegibles solo viajan cuando algo del fragmento las pinta: el «Agregar pieza» de la gestión de un
     # experimento en armado, o el «Meter en experimento» / «Probar en Meta» de un anuncio suelto que sigue en cola.
@@ -5261,6 +5275,9 @@ def exp_resultados(cliente):
 
 
 @app.route("/cliente/<cliente>/experimentos/pieza/<int:ep_id>")
+@trabajos.con_vivos_precargados
+@experimentos.con_lecturas_memorizadas
+@catalogo_productos.con_lecturas_memorizadas
 def exp_pieza(cliente, ep_id):
     """Panel de una pieza (E2): fragmento que se abre sobre el centro de resultados. Solo busca entre las piezas de
     `cliente`: la de otro proyecto (o una que no existe) es un 404. Solo cuenta el periodo del filtro."""
@@ -5960,12 +5977,14 @@ def _volver_org(cliente, ep_id=None):
     volver = request.form.get("volver")
     if volver in ("final", "creativeflowplus"):
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor=volver))
-    return _volver_exp(cliente, experimentos.experimento_de_pieza(cliente, ep_id) if ep_id else None)
+    return _volver_exp(cliente, experimentos.experimento_de_pieza(cliente, ep_id)
+                       if isinstance(ep_id, int) and 0 < ep_id <= 2 ** 63 - 1 else None)
 
 
 def _int_form(nombre):
     try:
-        return int(request.form.get(nombre) or 0) or None
+        valor = int(request.form.get(nombre) or 0)
+        return valor if 0 < valor <= 2 ** 63 - 1 else None
     except ValueError:
         return None
 
@@ -8262,12 +8281,7 @@ def cf_crear_video(cliente):
 
 def _encolar_director(cliente, cf_id, auto_lanzar=False, prioridad=flowplus_lanzar.PRIORIDAD_NORMAL):
     """Encola la compilación del prompt (gratis, idempotente: max_intentos=1)."""
-    return trabajos.encolar(
-        tareas_director.job_id(cliente, cf_id), "flowplus_director",
-        {"cliente": cliente, "cf_id": cf_id, "auto_lanzar": bool(auto_lanzar), "prioridad": int(prioridad)},
-        cliente=cliente, duracion_estimada=tareas_director.DURACION_ESTIMADA, etapas=tareas_director.ETAPAS_DIRECTOR,
-        max_intentos=1, prioridad=prioridad,
-    )
+    return tareas_director.encolar(cliente, cf_id, auto_lanzar=auto_lanzar, prioridad=prioridad)
 
 
 @app.route("/cliente/<cliente>/creative_flow/<cf_id>/prompt", methods=["POST"])
