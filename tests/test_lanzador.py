@@ -310,6 +310,12 @@ def test_app_activar_un_pais_activa_sus_dos_conjuntos(entorno_app):
     activos = {kw["oid"] for t, kw in e["meta"].llamadas if t == "estado" and kw["status"] == "ACTIVE"}
     assert {conjuntos[("CO", "ios")], conjuntos[("CO", "android")]} <= activos
     assert not {conjuntos[("MX", "ios")], conjuntos[("MX", "android")]} & activos
+    # Simétrica a pausar, más la campaña: el experimento no corría, así que la campaña se activa también
+    # (si no, los conjuntos quedan ACTIVE y no entregan) y el experimento pasa a «corriendo».
+    ex = e["ex"].obtener("acme", e["eid"])
+    assert ex["meta_campaign_id"] in activos
+    assert ex["estado"] == "corriendo"
+    assert next(p for p in ex["paises"] if p["pais"] == "CO")["estado"] == "activo"
 
 
 def test_app_presupuesto_del_pais_se_reparte_entre_sus_conjuntos(entorno_app):
@@ -392,6 +398,58 @@ def test_app_presupuesto_que_tampoco_se_restaura_avisa_que_quedo_a_medias(entorn
         lz.cambiar_presupuesto_pais("acme", e["eid"], "CO", 40000)
     co = next(p for p in e["ex"].obtener("acme", e["eid"])["paises"] if p["pais"] == "CO")
     assert co["presupuesto_dia"] == PRESUPUESTO_PAIS
+
+
+def _presupuesto_que_falla_con(e, exc):
+    import types as _t
+    lz = e["lanzador"]
+    original = lz.meta_adset
+
+    def _actualizar(oid, c, dry_run=False):
+        raise exc
+
+    e["monkeypatch"].setattr(lz, "meta_adset", _t.SimpleNamespace(crear_adset=original.crear_adset,
+                                                                   actualizar_estado=original.actualizar_estado,
+                                                                   actualizar_presupuesto=_actualizar))
+
+
+def test_presupuesto_con_un_conjunto_propaga_el_error_original_de_meta(entorno):
+    """Revisión final, ola 2 (2026-10-08): con UN conjunto el error de Meta sale tal cual (sin envolverlo en el
+    mensaje de «todos los conjuntos»), así el aviso o la propuesta pendiente conserva el motivo real."""
+    lz = entorno["lanzador"]
+    lz.lanzar("acme", entorno["eid"])
+    original = RuntimeError("Meta Ads (adset) respondió 400: presupuesto muy bajo")
+    _presupuesto_que_falla_con(entorno, original)
+    with pytest.raises(RuntimeError) as info:
+        lz.cambiar_presupuesto_pais("acme", entorno["eid"], "CO", 40000)
+    assert info.value is original
+
+
+def test_app_presupuesto_con_un_conjunto_propaga_el_error_original(entorno_app_android):
+    e = entorno_app_android
+    lz = e["lanzador"]
+    lz.lanzar("acme", e["eid"])
+    original = RuntimeError("Meta Ads (adset) respondió 400: presupuesto muy bajo")
+    _presupuesto_que_falla_con(e, original)
+    with pytest.raises(RuntimeError) as info:
+        lz.cambiar_presupuesto_pais("acme", e["eid"], "CO", 40000)
+    assert info.value is original
+
+
+def test_app_presupuesto_con_dos_conjuntos_dice_el_motivo_sin_token(entorno_app):
+    e = entorno_app
+    lz = e["lanzador"]
+    lz.lanzar("acme", e["eid"])
+    _presupuesto_que_falla_con(e, RuntimeError(
+        "presupuesto muy bajo access_token=EAABsecreto123"))  # llave-de-prueba
+    with pytest.raises(ValueError) as info:
+        lz.cambiar_presupuesto_pais("acme", e["eid"], "CO", 40000)
+    texto = str(info.value)
+    assert "se dejó como estaba" in texto and "presupuesto muy bajo" in texto
+    assert "EAABsecreto123" not in texto  # llave-de-prueba
+    evento = [ev for ev in e["ex"].eventos("acme", e["eid"]) if ev["tipo"] == "presupuesto"][0]
+    assert "presupuesto muy bajo" in evento["mensaje"]
+    assert "EAABsecreto123" not in str(evento)  # llave-de-prueba
 
 
 def test_app_escalar_pais_reparte_el_nuevo_total(entorno_app):

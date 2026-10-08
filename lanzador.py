@@ -522,6 +522,11 @@ def cambiar_presupuesto_pais(cliente, experimento_id, pais, presupuesto_dia):
                 meta_adset.actualizar_presupuesto(adset_id, centavos_conjunto)
                 cambiados.append(adset_id)
         except Exception as exc:
+            if len(ids) == 1:
+                # Un solo conjunto (tráfico, compras, apps con una tienda): sale el
+                # error de Meta tal cual, como antes, para que el aviso o la
+                # propuesta pendiente de reintento conserve el motivo real.
+                raise
             sin_volver = []
             for adset_id in cambiados:
                 if centavos_antes <= 0:   # sin valor anterior conocido no hay a qué volver
@@ -537,8 +542,10 @@ def cambiar_presupuesto_pais(cliente, experimento_id, pais, presupuesto_dia):
             else:
                 mensaje = gettext("No se pudo cambiar el presupuesto en todos los conjuntos del país; "
                                   "se dejó como estaba.")
+            error = cola.sin_token(str(exc))
+            mensaje = f"{mensaje} {traducir_error_meta(error)}"
             experimentos.registrar_evento(cliente, experimento_id, "presupuesto", f"{pais}: {mensaje}",
-                                          {"error": str(exc)[:300], "cambiados": cambiados, "sin_volver": sin_volver,
+                                          {"error": error[:300], "cambiados": cambiados, "sin_volver": sin_volver,
                                            "anterior": p.get("presupuesto_dia"), "intentado": float(presupuesto_dia)})
             raise ValueError(mensaje) from exc
 
