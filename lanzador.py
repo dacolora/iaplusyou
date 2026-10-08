@@ -87,9 +87,9 @@ def _validar_para_lanzar(cliente, experimento_id):
         raise ValueError(gettext("Ese experimento ya fue lanzado."))
     # Conexión «solo métricas»: el creative de Meta exige una Página, y sin ella el lanzamiento dejaría campaña y
     # conjuntos huérfanos. Se exige token para no confundirlo con «sin conexión» (eso lo dice credenciales_ads).
-    conexion = meta_conexion.cargar(cliente) or {}
-    if conexion.get("token") and not conexion.get("page_id"):
-        raise ValueError(meta_conexion.error_solo_metricas())
+    sin_pagina = meta_conexion.sin_pagina(cliente)
+    if sin_pagina:
+        raise ValueError(sin_pagina)
     if not ex["piezas"]:
         raise ValueError(gettext("El experimento no tiene piezas: agrega al menos una antes de lanzar."))
     paises_con_piezas = {p["pais"] for p in ex["piezas"]}
@@ -586,6 +586,9 @@ def lanzar_piezas_nuevas(cliente, experimento_id):
     piezas_nuevas = [p for p in ex["piezas"] if p["estado"] == "en_cola" and p["pais"] in adsets]
     if not piezas_nuevas:
         return 0
+    sin_pagina = meta_conexion.sin_pagina(cliente)   # conexión «solo métricas»: ni un intento contra Meta
+    if sin_pagina:
+        raise ValueError(sin_pagina)
 
     def _correr(creds):
         creadas = 0

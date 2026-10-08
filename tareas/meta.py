@@ -125,7 +125,7 @@ def publicar(tarea):
             creds = meta_conexion.credenciales_ads(cliente)
             if not creds.get("page_id"):
                 # Conexión «solo métricas»: el creative exige Página; se frena antes de crear campaña o conjunto.
-                raise ValueError(meta_conexion.error_solo_metricas())
+                raise ValueError(meta_conexion.error_solo_metricas(cliente))
             meta_auth.configurar(creds["token"], creds["ad_account_id"], creds["page_id"])
             campaign_resp = meta_campaign.crear_campaign(entry["nombre"], objetivo)
             campaign_id = campaign_resp["id"]

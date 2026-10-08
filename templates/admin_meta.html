@@ -224,7 +224,7 @@
               {% endfor %}
             </select>
             <select name="page_id">
-              <option value="">{{ _('— sin Página (solo anuncios) —') }}</option>
+              <option value="">{{ _('— sin Página (solo métricas) —') }}</option>
               {% for p in activos.pages %}
               <option value="{{ p.id }}"{% if d.page_id == p.id or (sol and sol.page_id == p.id) %} selected{% endif %}>{{ p.name }}{% if p.ig_username %} (@{{ p.ig_username }}){% endif %} · {% if p.origen == "propia" %}{{ _('propia') }}{% else %}{{ _('cliente') }}{% endif %}</option>
               {% endfor %}

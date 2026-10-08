@@ -240,7 +240,7 @@ def test_resultados_muestran_solo_los_activos_del_portafolio(cliente, app, monke
     assert 'action="/cliente/acme/meta/agencia/conectar"' in html and 'name="portafolio_id" value="77700077700"' in html
     assert 'value="act_9"' in html and "Cuenta Socio · act_9 · MXN" in html and 'value="p2"' in html
     assert "Cuenta Uno" not in html and "Página Propia" not in html
-    assert "Sin Página (solo anuncios)" in html and 'name="page_id_manual"' not in html
+    assert "Sin Página (solo métricas)" in html and 'name="page_id_manual"' not in html
 
 
 def test_sin_resultados_ofrece_volver_a_buscar_y_avisar(cliente, app, monkeypatch):

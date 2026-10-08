@@ -13,7 +13,7 @@
   <p class="vacio" style="padding-top:0;">
     {{ _('Este proyecto usa la conexión de agencia de Creatv: no tienes que registrar una app ni conectar nada.') }}
     {{ _('Cuenta publicitaria') }} <strong>{{ md.ad_account_nombre or md.ad_account_id or '—' }}</strong>{% if md.moneda %} ({{ md.moneda }}){% endif %} ·
-    {{ _('Página') }} <strong>{{ md.page_nombre or md.page_id or _('sin Página (solo anuncios)') }}</strong>
+    {{ _('Página') }} <strong>{{ md.page_nombre or md.page_id or _('sin Página (solo métricas)') }}</strong>
     {% if md.ig_username %}· Instagram @{{ md.ig_username }}{% elif md.page_id %}· {{ _('sin Instagram vinculado') }}{% endif %}
     {% if md.asignado_en %}· {{ _('desde') }} {{ md.asignado_en[:10] }}{% endif %}.
   </p>

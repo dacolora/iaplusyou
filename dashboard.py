@@ -4126,7 +4126,7 @@ def meta_agencia_conectar(cliente):
     if page_id and not detalle.get("ig_username"):
         flash(gettext("Esa Página no tiene Instagram vinculado: los Reels no se van a publicar hasta que lo vincules en Facebook."), "warn")
     if not page_id:
-        flash(gettext("Sin Página solo se pueden pautar anuncios; la publicación orgánica queda apagada."), "warn")
+        flash(gettext("Sin Página solo se leen métricas: no se pueden lanzar anuncios y la publicación orgánica queda apagada."), "warn")
     return _ir_a_meta(cliente)
 
 
@@ -4382,8 +4382,8 @@ def admin_meta_asignar(cliente):
         flash(gettext("Esa Página no tiene Instagram vinculado: los Reels no se van a publicar hasta que lo vincule en "
                       "Facebook."), "warn")
     if not page_id:
-        flash(gettext("Sin Página asignada solo se pueden pautar anuncios; la publicación orgánica queda apagada para "
-                      "ese proyecto."), "warn")
+        flash(gettext("Sin Página asignada solo se leen métricas: no se pueden lanzar anuncios y la publicación orgánica "
+                      "queda apagada para ese proyecto."), "warn")
     return _volver_admin_meta()
 
 
@@ -5492,6 +5492,10 @@ def exp_probar(cliente):
     if meta_conexion.estado(cliente).get("estado") != "conectado":
         flash(gettext("Conecta Meta en Experimentos antes de probar piezas."), "error")
         return volver
+    sin_pagina = meta_conexion.sin_pagina(cliente)   # «solo métricas»: se avisa antes de crear nada
+    if sin_pagina:
+        flash(sin_pagina, "error")
+        return volver
     moneda = (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
     objetivo = request.form.get("objetivo") or ""
     # Sin repetidos y en el orden en que llegan: un POST armado a mano con paises=CO&paises=CO creaba dos
@@ -5707,6 +5711,10 @@ def exp_lanzar(cliente, eid):
         return volver
     if ex["estado"] not in ("armando", "error"):
         flash(gettext("Ese experimento ya fue lanzado."), "error")
+        return volver
+    sin_pagina = meta_conexion.sin_pagina(cliente)   # «solo métricas»: mismo freno que lanzador._validar_para_lanzar
+    if sin_pagina:
+        flash(sin_pagina, "error")
         return volver
     if not ex["piezas"]:
         flash(gettext("El experimento no tiene piezas: agrega al menos una antes de lanzar."), "error")

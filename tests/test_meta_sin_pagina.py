@@ -6,6 +6,7 @@ un mensaje en palabras ANTES de llamar a Meta (leer métricas sigue funcionando)
 import pytest
 
 from tests.test_lanzador import entorno  # noqa: F401 — fixture del lanzador (experimento con piezas y Meta falso)
+from tests.test_rutas_bloque4 import _flashes
 from tests.test_rutas_experimentos import _cliente_admin
 
 CUENTA = {"id": "act_1", "name": "Cuenta SEK", "currency": "SEK"}
@@ -26,11 +27,6 @@ def _pendiente(mc, paginas, cuentas=(CUENTA,)):
     mc.guardar_pendiente("acme", {"token": "TOK", "tipo_token": "bearer", "expira_en": None, "business_id": "b1",
                                   "usuario_meta": "Dueño",
                                   "activos": {"ad_accounts": list(cuentas), "pages": list(paginas)}})
-
-
-def _flashes(c):
-    with c.session_transaction() as s:
-        return [m for _cat, m in s.get("_flashes", [])]
 
 
 # ---- la ruta: guardar sin Página ----------------------------------------------------------------------------
@@ -200,3 +196,131 @@ def test_refrescar_metricas_sigue_funcionando_sin_pagina(base_temporal, monkeypa
     monkeypatch.setattr(tm.meta_insights, "obtener_resultados", lambda ad_id, objetivo=None: {"impresiones": 10})
     assert "actualizados" in tm.refrescar({"payload": {"cliente": "acme", "ad_id": aid}, "job_id": "j"})
     assert ads.cargar("acme")[aid]["metricas"]["impresiones"] == 10
+
+
+# ---- el freno también va en las rutas y en el estado del experimento (ronda de arreglos 1) ----------------------
+
+SIN_PAGINA = {"token": "t", "ad_account_id": "act_1", "page_id": None, "moneda": "COP"}
+
+
+@pytest.fixture()
+def rutas(base_temporal, monkeypatch):
+    """Rutas de experimentos con Meta conectado SIN Página: encolar se registra y cualquier lanzamiento es un fallo."""
+    import dashboard
+    monkeypatch.setattr(dashboard.meta_conexion, "cargar", lambda c: dict(SIN_PAGINA))
+    monkeypatch.setattr(dashboard.meta_conexion, "estado",
+                        lambda c: {"estado": "conectado", "verificado": True, "detalle": {}})
+    encolados = []
+    monkeypatch.setattr(dashboard.trabajos, "encolar",
+                        lambda job_id, tipo, payload, **kw: (encolados.append({"job_id": job_id, "tipo": tipo}), True)[1])
+    monkeypatch.setattr(dashboard.trabajos, "en_curso", lambda job_id: False)
+    return {"dashboard": dashboard, "c": _cliente_admin(dashboard), "encolados": encolados}
+
+
+def _experimento_listo(base_temporal, estado=None):
+    import experimentos as ex
+    from tests.test_experimentos_db import PAISES, _pieza
+    clon = _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_1")
+    eid = ex.crear("acme", "X", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP")
+    ex.agregar_pieza("acme", eid, clon, "CO")
+    ex.agregar_pieza("acme", eid, clon, "MX")
+    if estado:
+        ex.actualizar("acme", eid, estado=estado)
+    return ex, eid, clon
+
+
+@pytest.mark.parametrize("estado", ["armando", "error"])
+def test_exp_lanzar_sin_pagina_avisa_y_no_encola_ni_cambia_el_experimento(rutas, base_temporal, estado):
+    ex, eid, _ = _experimento_listo(base_temporal, estado=None if estado == "armando" else estado)
+    r = rutas["c"].post(f"/cliente/acme/experimentos/{eid}/lanzar")
+    assert r.status_code == 302
+    assert rutas["encolados"] == []
+    assert ex.obtener("acme", eid)["estado"] == estado
+    mensajes = _flashes(rutas["c"])
+    assert any("solo para métricas" in m for m in mensajes)
+    assert not any("Lanzando el experimento" in m for m in mensajes)
+
+
+def test_exp_lanzar_con_pagina_sigue_encolando(rutas, base_temporal, monkeypatch):
+    ex, eid, _ = _experimento_listo(base_temporal)
+    monkeypatch.setattr(rutas["dashboard"].meta_conexion, "cargar", lambda c: {**SIN_PAGINA, "page_id": "9"})
+    rutas["c"].post(f"/cliente/acme/experimentos/{eid}/lanzar")
+    assert [t["tipo"] for t in rutas["encolados"]] == ["exp_lanzar"]
+    assert ex.obtener("acme", eid)["estado"] == "lanzando"
+
+
+def test_exp_probar_sin_pagina_no_crea_experimento_ni_encola(rutas, base_temporal):
+    import experimentos as ex
+    from tests.test_rutas_experimentos import FORM_PROBAR
+    _, eid, clon = _experimento_listo(base_temporal)
+    antes = len(ex.cargar("acme"))
+    r = rutas["c"].post("/cliente/acme/experimentos/probar",
+                        data=dict(FORM_PROBAR, piezas=[str(clon)], combinaciones=[f"{clon}:CO", f"{clon}:MX"]))
+    assert r.status_code == 302 and "/experimentos/nuevo" in r.headers["Location"]
+    assert rutas["encolados"] == [] and len(ex.cargar("acme")) == antes   # nada nuevo, y el que había no se tocó
+    assert ex.obtener("acme", eid)["estado"] == "armando"
+    assert any("solo para métricas" in m for m in _flashes(rutas["c"]))
+
+
+def test_exp_probar_con_pagina_sigue_creando(rutas, base_temporal, monkeypatch):
+    import experimentos as ex
+    from tests.test_rutas_experimentos import FORM_PROBAR
+    clon = _experimento_listo(base_temporal)[2]
+    monkeypatch.setattr(rutas["dashboard"].meta_conexion, "cargar", lambda c: {**SIN_PAGINA, "page_id": "9"})
+    rutas["c"].post("/cliente/acme/experimentos/probar",
+                    data=dict(FORM_PROBAR, piezas=[str(clon)], combinaciones=[f"{clon}:CO", f"{clon}:MX"]))
+    assert len(ex.cargar("acme")) == 2 and [t["tipo"] for t in rutas["encolados"]] == ["exp_lanzar"]
+
+
+def test_lanzar_deja_armando_el_experimento_frenado_y_sana_lanzando(entorno, monkeypatch):   # noqa: F811
+    lanzador, ex, eid = entorno["lanzador"], entorno["ex"], entorno["eid"]
+    monkeypatch.setattr(lanzador.meta_conexion, "cargar", lambda c: dict(SIN_PAGINA))
+    with pytest.raises(ValueError, match="solo para métricas"):
+        lanzador.lanzar("acme", eid)
+    assert ex.obtener("acme", eid)["estado"] == "armando"     # frenado antes de tocar nada: sigue pudiendo lanzarse
+    ex.actualizar("acme", eid, estado="lanzando")             # la ruta ya lo había marcado antes de encolar
+    with pytest.raises(ValueError, match="solo para métricas"):
+        lanzador.lanzar("acme", eid)
+    sanado = ex.obtener("acme", eid)
+    assert sanado["estado"] == "error" and "solo para métricas" in sanado["error"]
+    assert entorno["meta"].llamadas == []
+
+
+def test_lanzar_piezas_nuevas_sin_pagina_frena_sin_tocar_meta(entorno, base_temporal, monkeypatch):   # noqa: F811
+    from tests.test_experimentos_db import _pieza
+    ex, lz, meta, eid = entorno["ex"], entorno["lanzador"], entorno["meta"], entorno["eid"]
+    lz.lanzar("acme", eid)
+    nueva = _pieza(base_temporal, tipo="final", legado="cf_1__es_CO__v1", pais="CO")
+    ex.agregar_pieza("acme", eid, nueva, "CO")
+    meta.llamadas.clear()
+    monkeypatch.setattr(lz.meta_conexion, "cargar", lambda c: dict(SIN_PAGINA))
+    with pytest.raises(ValueError, match="solo para métricas"):
+        lz.lanzar_piezas_nuevas("acme", eid)
+    assert meta.llamadas == []
+    assert [p["estado"] for p in ex.piezas("acme", eid) if p["pieza_id"] == nueva] == ["en_cola"]
+
+
+def test_lanzar_piezas_nuevas_sin_piezas_pendientes_no_se_frena_por_la_pagina(entorno, monkeypatch):   # noqa: F811
+    lz, eid = entorno["lanzador"], entorno["eid"]
+    lz.lanzar("acme", eid)
+    monkeypatch.setattr(lz.meta_conexion, "cargar", lambda c: dict(SIN_PAGINA))
+    assert lz.lanzar_piezas_nuevas("acme", eid) == 0
+
+
+def test_el_texto_en_agencia_manda_al_admin_de_creatv(monkeypatch):
+    import meta_conexion as mc
+    monkeypatch.setattr(mc, "modo", lambda c: "agencia")
+    texto = mc.error_solo_metricas("acme")
+    assert "solo para métricas" in texto and "administrador de Creatv" in texto
+    assert "Configuración › Conexiones" not in texto
+    monkeypatch.setattr(mc, "modo", lambda c: "propia")
+    assert "Configuración › Conexiones" in mc.error_solo_metricas("acme")
+    assert "Configuración › Conexiones" in mc.error_solo_metricas()
+
+
+def test_sin_pagina_en_agencia_lo_dice_el_lanzador(entorno, monkeypatch):   # noqa: F811
+    lanzador = entorno["lanzador"]
+    monkeypatch.setattr(lanzador.meta_conexion, "cargar", lambda c: dict(SIN_PAGINA))
+    monkeypatch.setattr(lanzador.meta_conexion, "modo", lambda c: "agencia")
+    with pytest.raises(ValueError, match="administrador de Creatv"):
+        lanzador._validar_para_lanzar("acme", entorno["eid"])

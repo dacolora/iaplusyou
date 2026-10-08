@@ -395,11 +395,24 @@ def credenciales_ads(cliente):
     }
 
 
-def error_solo_metricas():
+def error_solo_metricas(cliente=None):
     """Por qué no se puede lanzar ni publicar con una conexión sin Página («solo métricas», 2026-10-08): el
-    lanzador y la tarea legado `meta_publicar` lo levantan ANTES de configurar o llamar a Meta."""
+    lanzador, las rutas que lo encolan y la tarea legado `meta_publicar` lo usan ANTES de configurar o llamar a
+    Meta. En modo agencia la persona no puede conectar la Página en Conexiones: la asigna un admin de Creatv."""
+    if cliente and modo(cliente) == MODO_AGENCIA:
+        return gettext("Este proyecto está conectado a Meta solo para métricas (sin Página): un administrador de "
+                       "Creatv tiene que asignarle una Página para lanzar anuncios.")
     return gettext("Este proyecto está conectado a Meta solo para métricas (sin Página): conecta una Página en "
                    "Configuración › Conexiones para lanzar anuncios.")
+
+
+def sin_pagina(cliente):
+    """El texto de `error_solo_metricas` si el proyecto tiene Meta conectado SIN Página, o None. Se exige token para
+    no confundirlo con «sin conexión» (eso lo dicen `credenciales_ads` y `estado`)."""
+    datos = cargar(cliente) or {}
+    if datos.get("token") and not datos.get("page_id"):
+        return error_solo_metricas(cliente)
+    return None
 
 
 # ---------- llamadas a Graph ----------
