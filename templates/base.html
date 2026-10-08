@@ -292,7 +292,7 @@
             if (reintentos < 6) {
               setTimeout(tick, 2000);
             } else {
-              // Diez barras sin conexión serían diez recargas: en modo evento avisan y cada tarjeta se ocupa de lo suyo.
+              // Con la red caída, diez barras serían diez recargas: en modo evento avisan y cada tarjeta se ocupa de lo suyo.
               if (avisar) { avisarFin('desconocido', ''); return; }
               recargarOAvisar(texto, T_BASE.conexionPerdida);
             }

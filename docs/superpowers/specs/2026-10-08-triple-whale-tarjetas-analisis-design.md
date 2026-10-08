@@ -79,14 +79,17 @@ La pestaña abre así (de arriba abajo):
   Al lado, una pastilla con el resultado: «ROAS 3,1× · 42 ventas», o «Gastó 610 sin ventas», o «Sin ventas
   todavía». El motivo del veredicto queda en el `title`.
 - **Cuatro anillos** (§4.2), cada uno con su número de 0 a 100, su color por nivel y, debajo, la cifra cruda en
-  palabras. Sin dato, el anillo muestra «—» y el porqué («es imagen», «pocos datos», «sin ventas en la cuenta»).
+  palabras. Sin dato, el anillo muestra «—» y el porqué («sin datos de video», «pocos datos», «sin ventas en la cuenta»);
+  con la cifra cruda cuando existe aunque no haya percentil.
   `aria-label`: «Gancho: mejor que el 92 % de tus anuncios de Meta».
 - **Costo por venta** real del anuncio contra el de la cuenta (o «—» sin ventas) y la **tendencia** de 7 días (§4.3).
 - **✓ y ✗**: hasta tres fortalezas y tres problemas del diagnóstico gratis de hoy (`FORTALEZAS`, `PROBLEMAS`), con el
   «qué hacer» de cada problema en el `title`.
 - **«Texto del anuncio»** (`<details>`): título y copy de `tw_creativo` (§3.1), tal cual vinieron.
 - **Acciones**: «Cómo mejorarlo · US$ ≈» (§6); «Guardar en Referentes» en ganadores y prometedores con miniatura
-  (§7.2); «Pausar/Activar en Meta» en las piezas de Creatv (la ruta de hoy).
+  (§7.2). «Pausar/Activar en Meta» (la ruta de hoy, `pieza_estado`) **se quedó solo en «Ver como tabla»**, no en la
+  tarjeta (decisión de la implementación, 2026-10-08): en producción solo 4 piezas son de Creatv y la tabla conserva la
+  acción; el costo es un clic de más. Queda como pendiente (§13).
 - **Con análisis listo**, la tarjeta muestra la primera razón de Claude y «Ver el análisis», que trae el detalle
   por fetch dentro de la tarjeta (§6.5). Si el análisis es viejo (§6.6), además «Analizar otra vez · US$ ≈».
 - **En curso**, una barra `data-poll-job` en la tarjeta que, al terminar, recarga solo esa tarjeta (§5.3).
@@ -118,8 +121,9 @@ cuenta publicitaria.
 
 Único escritor: `triple_whale/datos.py` (`reemplazar_creativos(cliente, tienda_id, registros)`: upsert; comprueba
 dentro de la transacción que la tienda siga siendo del cliente, como los demás `reemplazar_*`). Se borra solo cuando
-el proyecto se queda sin tiendas (`triple_whale_tiendas._borrar_copias` con `tienda_id=None`); quitar una tienda
-de varias o cambiar moneda, modelo o ventana no la toca (nada de esto depende de ellos).
+el proyecto se queda sin tiendas, y ese borrado vive en `triple_whale_tiendas.quitar` (al quitar la última) y
+`desconectar`, con su propio `_borrar_creativos`; **no** en `_borrar_copias`, que sí corre al cambiar moneda, modelo o
+ventana. Quitar una tienda de varias o cambiar esos ajustes no la toca (nada de esto depende de ellos).
 
 ### 3.2 Tabla nueva `tw_analisis`: «Cómo mejorarlo» por anuncio
 
@@ -190,8 +194,12 @@ BENCH_MIN_ANUNCIOS`.
 
 Cada anillo: `{"pct": int|None, "valor": float|None, "nivel": "alto"|"medio"|"bajo"|None, "vacio": código|None}`.
 Nivel: `pct ≥ 67` alto (verde, `--ok`), `≥ 34` medio (amarillo, `--warn`), si no bajo (rojo, `--error`).
-Códigos de vacío: `es_imagen`, `pocos_datos` (el anuncio no llega a `impresiones_min`), `pocas_comparables`,
-`sin_ventas` (la cuenta no tiene pedidos atribuidos), `pocos_clics`.
+Códigos de vacío: `sin_video`, `pocos_datos` (el anuncio no llega a `impresiones_min`), `pocas_comparables`,
+`sin_ventas` (la cuenta no tiene pedidos atribuidos), `pocos_clics`. El primero se llamó `es_imagen` en la primera
+versión de este spec; se dejó `sin_video` (decisión de la implementación, 2026-10-08) porque el anillo se vacía cuando
+el canal no reporta métricas de video (`es_video` sale de las vistas de 3 s y los ThruPlays, no del tipo de anuncio):
+un video con cero vistas de 3 s no es una imagen. En el valor crudo de cada anillo, `clic` es un porcentaje (`ctr`) y
+los demás son fracciones.
 
 ### 4.3 Tendencia
 
@@ -224,6 +232,9 @@ Sin ninguna venta atribuida en la cuenta no hay ganadores ni perdedores (regla d
 (`""`, `ganador`, `prometedor`, `en_prueba`, `perdedor`, `cansando`, `sin_datos`) y `pagina` (desde 1). Devuelve el
 fragmento de esa página. `POR_PAGINA = 12`, ordenadas por gasto. Un `veredicto` desconocido es `""`.
 Los filtros y «Ver más» llaman a esta ruta y reemplazan o agregan tarjetas; después llaman a `arrancarSondeos`.
+Con `entera=1` (un filtro nuevo) devuelve el bloque completo de ese filtro: chips, formulario del lote (con sus claves y
+su precio) y rejilla, o el aviso de vacío; sin él, solo las tarjetas de esa página. Así el lote siempre es el del filtro
+que se está mirando.
 
 ### 5.3 Una barra que no recarga la página
 
@@ -460,7 +471,7 @@ mezclar. Revisión de `revisor`, `guardian-gasto` y `auditor-seguridad`.
 | `triple_whale/__init__.py` | `consultas_creativos()`, `medio_permitido()` |
 | `triple_whale/sync.py` | paso de creativos |
 | `triple_whale/datos.py` | escritores y lecturas de §3 |
-| `triple_whale_tiendas.py` | `_borrar_copias` borra `tw_creativo` cuando no quedan tiendas |
+| `triple_whale_tiendas.py` | `quitar` (al quitar la última tienda) y `desconectar` borran `tw_creativo` (`_borrar_creativos`) |
 | `triple_whale/evaluacion.py` | medianas por canal, anillos, tendencia, frases |
 | `triple_whale/mejorar.py` (nuevo) | visuales, voz, prompt, parseo y análisis de un anuncio |
 | `triple_whale/panel.py` | galería: página, filtros, creativos, análisis y precios |
@@ -486,3 +497,7 @@ mezclar. Revisión de `revisor`, `guardian-gasto` y `auditor-seguridad`.
 - Videos de TikTok: Triple Whale los da como página, no como archivo; quedan como enlace y sin fotogramas.
 - Retención por cuartos (`video_p25…p100`) en la tarjeta: ya se copian; una curva de retención es una mejora
   posterior.
+- «Pausar/Activar en Meta» en la tarjeta de una pieza de Creatv: hoy solo está en «Ver como tabla» (§2.1).
+- Whisper con `language: null` (la voz de un anuncio, `mejorar.transcribir`): nunca se mandó a la API real de fal; si
+  la rechaza, el análisis sigue sin voz. Y la tarifa `analisis_anuncio_tw` (0,08) es una cifra inicial hasta la medición
+  de §11.3.

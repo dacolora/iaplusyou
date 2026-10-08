@@ -99,6 +99,13 @@ alcance (anotado en el spec §7): el JS embebido a estáticos, Experimentos por 
 2026-09-30: ver «Catálogo ecommerce y conectores»), el chequeo de Meta en la carga, los N+1 de Sprints/Experimentos
 (el de últimas métricas en `experimentos.cargar` se retiró en PND-134, 2026-10-07), el flujo viejo «Nueva idea».
 
+**Barra que avisa en vez de recargar** (2026-10-08, tarjetas de Triple Whale): `iniciarPolling` recarga la página al
+terminar, y con diez barras vivas en una lista serían diez recargas. Una barra con `data-poll-al-terminar="evento"`
+despacha `trabajo-terminado` (`bubbles`; `detail.estado` y `detail.mensaje`; también si se pierde el rastro o la
+conexión) y quien la pintó repinta solo lo suyo; la lista que llega por fetch llama a `arrancarSondeos(raiz)` con lo
+insertado, y la barra de una tarjeta repintada vuelve a sondear porque la clave `job|id` solo bloquea mientras la barra
+que la marcó siga en la página. Sin el atributo todo sigue igual (skill `triple-whale`).
+
 **Experimentos: armazón + fragmento** (E2, 2026-10-03; skill `experimentos`): `#tab-experimentos` solo pinta el armazón
 (`_tab_experimentos.html`). Los resultados llegan por `fetch` a `exp_resultados` (fragmento `_exp_resultados.html`, con el filtro
 en el hash), el panel de una pieza a `exp_pieza` (`<dialog id="cr-panel">`, `_exp_pieza.html`) y «Nuevo experimento» es una
