@@ -112,6 +112,22 @@ def test_marcar_sin_estado_solo_toca_su_nivel_cuenta_y_proyecto(base_temporal):
     assert datos.activos("otro", [A])[A]["anuncio"] == 1
 
 
+def test_marcar_sin_estado_solo_limpia_los_estados_pedidos(base_temporal):
+    datos.guardar_objetos("hf", A, [
+        {"nivel": "anuncio", "objeto_id": "act1", "nombre": "A", "estado": "ACTIVE"},
+        {"nivel": "anuncio", "objeto_id": "act2", "nombre": "B", "estado": "DISAPPROVED"},
+        {"nivel": "anuncio", "objeto_id": "pau", "nombre": "C", "estado": "PAUSED"},
+        {"nivel": "anuncio", "objeto_id": "vis", "nombre": "D", "estado": "ACTIVE"}])
+    # Los anuncios pausados no se listan en cada copia: no venir en el listado no los deja sin estado.
+    n = datos.marcar_sin_estado("hf", A, "anuncio", {"vis"}, estados={"ACTIVE", "DISAPPROVED"})
+    assert n == 2
+    assert datos.activos("hf", [A])[A]["anuncio"] == 1   # solo «vis» sigue ACTIVE
+    t = db.meta_objeto
+    with db.conectar() as con:
+        estados = dict(con.execute(sa.select(t.c.objeto_id, t.c.estado)).all())
+    assert estados == {"act1": None, "act2": None, "pau": "PAUSED", "vis": "ACTIVE"}
+
+
 def test_marcar_sin_estado_con_miles_de_ids(base_temporal):
     datos.guardar_objetos("hf", A, [{"nivel": "anuncio", "objeto_id": f"a{i}", "nombre": str(i), "estado": "ACTIVE"}
                                     for i in range(1200)])

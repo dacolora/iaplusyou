@@ -130,9 +130,12 @@ def guardar_objetos(cliente, act, objetos):
     return n
 
 
-def marcar_sin_estado(cliente, act, nivel, vistos):
+def marcar_sin_estado(cliente, act, nivel, vistos, estados=None):
     """Pone `estado=None` a los objetos del nivel que Meta ya no devolvió (archivados o borrados): se
     distinguen de los que siguen ahí. Devuelve cuántos cambió.
+
+    `estados` (opcional): solo se limpian los objetos cuyo estado guardado esté en ese conjunto. Sirve cuando el
+    listado no pide todos los estados (los anuncios pausados no se listan en cada copia y conservan el suyo).
 
     Llamarla SOLO después de un listado COMPLETO de ese nivel en esa cuenta: un `vistos` vacío o parcial (una
     página que falló, un límite de Meta a medias) dejaría sin estado a todos los objetos que faltan."""
@@ -140,6 +143,8 @@ def marcar_sin_estado(cliente, act, nivel, vistos):
     vistos = {str(v) for v in vistos or ()}
     ahora = db.ahora()
     cond = (t.c.cliente == cliente, t.c.ad_account_id == act, t.c.nivel == nivel)
+    if estados is not None:
+        cond += (t.c.estado.in_(sorted(estados)),)
     with db.conectar() as con:
         guardados = con.execute(sa.select(t.c.objeto_id).where(*cond, t.c.estado.is_not(None))).scalars().all()
         faltan = [i for i in guardados if i not in vistos]
