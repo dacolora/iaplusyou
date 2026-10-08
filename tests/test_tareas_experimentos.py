@@ -521,6 +521,47 @@ def test_apps_filas_hermanas_ganadoras_escalan_el_pais_una_vez(base_temporal, mo
         assert any("otra tienda" in e["mensaje"] for e in ex.eventos("acme", eid) if e["tipo"] == "escalado")
 
 
+def test_apps_la_misma_pieza_que_gana_en_otro_pais_si_escala_ese_pais(base_temporal, monkeypatch):
+    """Prueba de mutación (2026-10-08): `_hermana_ya_gano` compara el país; sin esa condición, la pieza que ganó en
+    CO en una pasada dejaba a MX sin escalar cuando ganaba allá en otra. Cada país se escala por su cuenta."""
+    import experimentos as ex
+    import organico
+    import tareas
+    from tareas import experimentos as te
+    from tests.test_experimentos_db import _pieza
+    tareas.cargar_todas()
+    monkeypatch.setattr(organico, "disponibles", lambda c: [])
+    monkeypatch.setattr(te, "_aprender", lambda *a, **k: None)
+    pedidas = _pedidas_con_payload(monkeypatch, te)
+    clon = _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_dos_paises")
+    app = {"ios_url": "https://apps.apple.com/co/app/x/id1", "android_url": "https://play.google.com/store/apps/details?id=x"}
+    datos = dict(nombre="Forja", paises=[{"pais": "CO", "idioma": "es", "presupuesto_dia": 20000.0},
+                                         {"pais": "MX", "idioma": "es", "presupuesto_dia": 20000.0}],
+                 objetivo_meta="OUTCOME_APP_PROMOTION", dias=7, tope_total=500000.0, destino_url=app["ios_url"],
+                 moneda="COP", app=app)
+    eid = ex.crear_con_piezas("acme", datos, [(clon, "CO"), (clon, "MX")])   # dos filas (tiendas) por país
+    _activar_todo(ex, eid)
+    assert len(ex.piezas("acme", eid)) == 4
+    # exp_decidir recorre CO (2 filas) y luego MX (2 filas), solo las que siguen pendientes.
+    # Pasada 1: gana la 1.ª fila de CO. Pasada 2: la 2.ª de CO sigue pendiente y gana la 1.ª de MX.
+    respuestas = iter(["ganador", "pendiente", "pendiente", "pendiente",
+                       "pendiente", "ganador", "pendiente"])
+
+    def _decidir(snaps, reglas, ctx):
+        v = next(respuestas)
+        return {"veredicto": v, "motivo": "m", "accion": "escalar_y_derivar" if v == "ganador" else "ninguna",
+                "puerta": 1, "numeros": {}}
+    monkeypatch.setattr(te.decisor, "decidir", _decidir)
+    te.exp_decidir({"payload": {"cliente": "acme", "experimento_id": eid}})
+    te.exp_decidir({"payload": {"cliente": "acme", "experimento_id": eid}})
+    ganadoras = [p for p in ex.piezas("acme", eid) if p["veredicto"] == "ganador"]
+    assert sorted(p["pais"] for p in ganadoras) == ["CO", "MX"]
+    assert ganadoras[0]["pieza_id"] == ganadoras[1]["pieza_id"]
+    escalados = [payload for accion, payload, _ in pedidas if accion == "escalar"]
+    assert len(escalados) == 2
+    assert sorted(p.get("pais") for p in escalados) == ["CO", "MX"]
+
+
 @pytest.mark.parametrize("objetivo,esperado", [("OUTCOME_APP_PROMOTION", 10000.0), ("OUTCOME_TRAFFIC", 20000.0)])
 def test_el_decisor_juzga_con_el_presupuesto_de_cada_conjunto(base_temporal, monkeypatch, objetivo, esperado):
     """En apps cada fila vive en el conjunto de su tienda, que recibe la mitad del país: el decisor recibe esa
