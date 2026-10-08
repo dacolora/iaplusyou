@@ -6,7 +6,7 @@
     <p class="panel-cabecera-desc">{{ _('De cada prueba a la siguiente decisión: resultados, piezas y aprendizajes de tu proyecto.') }}</p></div>
   <div class="panel-cabecera-acciones">
     <a class="btn-generar" href="{{ url_for('exp_nuevo', cliente=cliente) }}">{{ _('+ Nuevo experimento') }}</a>
-    <a class="btn-sm" href="{{ url_for('tab_descargar_csv', cliente=cliente) }}" download>{{ _('Descargar CSV del mes') }}</a>
+    <a class="btn-sm" href="{{ url_for('tab_descargar_csv', cliente=cliente) }}" download>{{ _('Descargar CSV') }}</a>
   </div>
 </div>
 {# «Cómo decide el motor» de TODO el proyecto (antes «Reglas por defecto» en Configuración; spec §4.7): valen para todos los

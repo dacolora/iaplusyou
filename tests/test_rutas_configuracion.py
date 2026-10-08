@@ -655,18 +655,19 @@ def test_gasto_seccion_render(app, monkeypatch):
     # Vive en su propio apartado «Gasto» (el último), no mezclado con las conexiones.
     assert 'id="config-gasto"' in _seccion_gasto(html) and 'id="config-tienda"' not in _seccion_gasto(html)
     gasto = _seccion_gasto(html)
-    # Tiles: generación del mes (sin el cobro de agosto ni el de «otro») y pauta.
-    assert "Generación este mes" in gasto and "US$ 0,94" in gasto and "3 cobro(s)" in gasto
-    assert "Pauta este mes" in gasto and "sin pauta corriendo" in gasto
-    # Tabla por tipo con cantidad y US$, ordenada de mayor a menor.
+    # Tiles: solo totales desde el inicio (2026-10-08): agosto entra, «otro» no; nada «este mes».
+    assert "Generación total" in gasto and "US$ 5,94" in gasto and "4 cobro(s)" in gasto
+    assert "Pauta total" in gasto and "sin pauta todavía" in gasto
+    assert "este mes" not in gasto.lower() and "Mes a mes" not in gasto
+    # Tabla por tipo con cantidad y US$ desde el inicio, de mayor a menor.
     assert gasto.index("Videos") < gasto.index("Finales") < gasto.index("Guiones")
-    assert "US$ 0,85" in gasto and "US$ 0,07" in gasto and "US$ 0,02" in gasto
+    assert "US$ 5,85" in gasto and "US$ 0,07" in gasto and "US$ 0,02" in gasto
     # Historial: fecha, tipo, detalle y US$; el más nuevo primero; nada ajeno.
     assert gasto.index("final es_CO") < gasto.index("guion base") < gasto.index("wan3 · 8 s")
     assert "2026-09-12 09:00" in gasto and "del mes pasado" in gasto   # el historial no se limita al mes
     assert "de otro proyecto" not in gasto and "US$ 9,00" not in gasto
-    # Botón CSV y nota.
-    assert "/cliente/acme/gasto/mes.csv" in gasto and "Descargar CSV del mes" in gasto
+    # Un solo botón CSV, con todo, y la nota.
+    assert "/cliente/acme/gasto/todo.csv" in gasto and "/gasto/mes.csv" not in gasto and "Descargar CSV" in gasto
     assert "precios reales de los proveedores" in gasto and "se cobra en tu cuenta de Meta" in gasto
 
 
@@ -705,10 +706,9 @@ def test_sidebar_chip_generacion_sin_pauta(app, monkeypatch):
     _sembrar_gasto(monkeypatch)
     sb = _sidebar(app["c"].get("/cliente/acme").data.decode())
     assert 'class="sidebar-gasto"' in sb
-    chip = sb[sb.index("Este mes:"):sb.index("</a>", sb.index("Este mes:"))]
-    # sin pauta no se menciona; el mes pasado entra solo en «Desde el inicio»
-    assert chip == ('Este mes: US$ 0,94 generación'
-                    '<span class="sidebar-gasto-total">Desde el inicio: US$ 5,94 generación</span>')
+    chip = sb[sb.index("Gasto total:"):sb.index("</a>", sb.index("Gasto total:"))]
+    # Solo el total desde el inicio (2026-10-08); sin pauta no se menciona.
+    assert chip == "Gasto total: US$ 5,94 generación" and "Este mes" not in sb
     assert "/cliente/acme#settings" in sb
 
 
@@ -717,10 +717,10 @@ def test_sidebar_chip_con_pauta(app, monkeypatch):
     _sembrar_gasto(monkeypatch)
     resumen = {"por_moneda": {"COP": {"gasto": 1405157.0, "compras": 0, "ingresos": 0.0, "roas": 0.0}},
                "experimentos_corriendo": 0, "piezas_activas": 0, "propuestas_pendientes": 0, "ganadoras_publicadas": 0}
-    monkeypatch.setattr(tablero, "resumen_mes", lambda c, ahora_iso=None, datos=None: resumen)
+    monkeypatch.setattr(tablero, "resumen_total", lambda c, ahora_iso=None, datos=None: resumen)
     app["dashboard"].invalidar_tablero()
     html = app["c"].get("/cliente/acme").data.decode()
-    assert "Este mes: US$ 0,94 generación · 1.405.157 COP pauta" in _sidebar(html)
+    assert "Gasto total: US$ 5,94 generación · 1.405.157 COP pauta" in _sidebar(html)
     # Configuración › Gasto muestra la misma pauta, en su moneda.
     gasto = _seccion_gasto(html)
     assert "1.405.157 COP" in gasto and "se cobra en tu cuenta de Meta" in gasto
@@ -763,17 +763,17 @@ def test_panel_admin_columna_gasto_del_mes(app, monkeypatch):
     monkeypatch.setattr(estado_mod, "listar_clientes", lambda: ["acme", "otro", "vacio"])
     monkeypatch.setattr(d, "_resumen_cliente", lambda c: {"pendiente": 0, "publicado": 0, "rechazado": 0})
     html = app["c"].get("/panel").data.decode()
-    assert html.count("Gasto del mes (US$)") >= 3
+    assert html.count("Gasto total (US$)") >= 3 and "Gasto del mes" not in html
 
     def tarjeta(cid):
         # La tarjeta (no la fila de la tabla comparativa, que también enlaza al proyecto).
         ini = html.index(f'class="card-cliente" href="/cliente/{cid}"')
         return html[ini:html.index("</a>", ini)]
-    assert "US$ 0,94" in tarjeta("acme")
+    assert "US$ 5,94" in tarjeta("acme")          # desde el inicio: agosto incluido
     assert "US$ 9,02" in tarjeta("otro")
     assert "US$ 0,00" in tarjeta("vacio")
-    # Total en la cabecera: 0,94 + 9,02.
-    assert "US$ 9,96" in html and "generación este mes" in html
+    # Total en la cabecera: 5,94 + 9,02.
+    assert "US$ 14,96" in html and "generación desde el inicio" in html and "generación este mes" not in html
 
 
 def test_llaves_de_nicho_son_opcionales_y_solo_miran_presencia(app, monkeypatch):
@@ -864,9 +864,9 @@ def test_gasto_muestra_el_total_desde_el_inicio_y_el_csv_de_todo(app):
     cfg = _config(html)
     inicio = cfg[cfg.index('id="gasto-desde-inicio"'):]
     inicio = inicio[:inicio.index("</div>")]
-    assert "Generación desde el inicio" in inicio and "266,00" in inicio and "desde el 2026-09-15" in inicio
-    assert 'id="gasto-por-mes"' in cfg and "2026-09" in cfg and "200,00" in cfg and "Total desde el inicio" in cfg
-    assert "/cliente/acme/gasto/todo.csv" in cfg and "Descargar CSV de todo" in cfg
+    assert "Generación total" in inicio and "266,00" in inicio and "desde el 2026-09-15" in inicio
+    assert 'id="gasto-por-mes"' not in cfg            # sin «Mes a mes» desde 2026-10-08
+    assert "/cliente/acme/gasto/todo.csv" in cfg
     r = app["c"].get("/cliente/acme/gasto/todo.csv")
     assert r.status_code == 200 and "text/csv" in r.content_type
     filas = r.data.decode().lstrip("\ufeff").splitlines()
@@ -883,5 +883,4 @@ def test_el_chip_del_sidebar_trae_el_total_desde_el_inicio(app):
     html = app["c"].get("/cliente/acme").data.decode()
     chip = html[html.index('class="sidebar-gasto"'):]
     chip = chip[:chip.index("</a>")]
-    assert "Este mes: US$ 66,00 generación" in chip
-    assert "Desde el inicio: US$ 266,00 generación" in chip
+    assert "Gasto total: US$ 266,00 generación" in chip and "Este mes" not in chip

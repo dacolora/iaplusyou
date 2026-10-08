@@ -88,11 +88,11 @@
       </span>
       <form method="post" action="{{ url_for('logout') }}" class="sidebar-texto"><button type="submit" class="sidebar-salir" title="{{ _('Cerrar sesión') }}">{{ _('Salir') }}</button></form>
       {% if gasto_chip %}
-      {# Gasto real del mes (generación en USD; pauta en la moneda de la
-         cuenta de Meta, solo si hay). Lleva a Configuración › Gasto. #}
+      {# Gasto real desde el inicio (generación en USD; pauta en la moneda de
+         la cuenta de Meta, solo si hay). Lleva a Configuración › Gasto. #}
       <a class="sidebar-gasto" href="{{ url_for('ver_cliente', cliente=request.view_args.cliente, _anchor='settings') }}"
          title="{{ _('Ver el detalle en Configuración › Gasto') }}"
-         onclick="var b = document.querySelector('.sidebar-item[data-tab=settings]'); if (b) { b.click(); if (window.irAConfig) irAConfig('config-gasto'); return false; }">{{ _('Este mes: %(gasto)s', gasto=gasto_chip) }}{% if gasto_chip_total %}<span class="sidebar-gasto-total">{{ _('Desde el inicio: %(gasto)s', gasto=gasto_chip_total) }}</span>{% endif %}</a>
+         onclick="var b = document.querySelector('.sidebar-item[data-tab=settings]'); if (b) { b.click(); if (window.irAConfig) irAConfig('config-gasto'); return false; }">{{ _('Gasto total: %(gasto)s', gasto=gasto_chip) }}</a>
       {% endif %}
     </div>
   </div>

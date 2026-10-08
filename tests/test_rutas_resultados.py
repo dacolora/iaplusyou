@@ -640,7 +640,7 @@ def test_pnd140_historial_pixel_sin_ventas_y_gasto_mixto(app, base_temporal):
     html = app["c"].get("/cliente/acme/experimentos/resultados", headers=AJAX).get_data(as_text=True)
     historial = html[html.index('class="tb-tiles"'):]
     assert '<strong>0,0×</strong>' in historial
-    assert '<td class="num">0,0×</td>' in historial
+    assert 'class="tb-meses' not in historial          # sin tabla por mes desde 2026-10-08
     trafico = _experimento("Tráfico")
     _pieza_en(base_temporal, trafico, n=2)
     # Incluso con CPA sin valor (cero compras), ambos KPI explican el gasto de tráfico.

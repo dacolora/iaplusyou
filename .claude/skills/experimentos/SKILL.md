@@ -1,6 +1,6 @@
 ---
 name: experimentos
-description: "Experimentos en Meta y su centro de resultados: armar y lanzar pruebas (campaña → conjunto por país → anuncio por pieza), «Nuevo experimento» con presupuesto total + días, métricas, el decisor (ganador/perdedor), modos manual/semi/auto, escalar, derivar, rescatar, filtros y panel de pieza (resultados.py) y el dinero del Tablero (totales, mes a mes, OUTCOME_SALES). Cargar antes de tocar experimentos.py, lanzador.py, decisor.py, modos.py, acciones.py, derivaciones.py, propuestas.py, tablero.py, meta_detalle.py, resultados.py, presupuesto_experimentos.py, static/exp_resultados.js, _tab_experimentos.html, exp_nuevo.html o las plantillas _exp_*."
+description: "Experimentos en Meta y su centro de resultados: armar y lanzar pruebas (campaña → conjunto por país → anuncio por pieza), «Nuevo experimento» con presupuesto total + días, métricas, el decisor (ganador/perdedor), modos manual/semi/auto, escalar, derivar, rescatar, filtros y panel de pieza (resultados.py) y el dinero del Tablero (totales desde el inicio, OUTCOME_SALES). Cargar antes de tocar experimentos.py, lanzador.py, decisor.py, modos.py, acciones.py, derivaciones.py, propuestas.py, tablero.py, meta_detalle.py, resultados.py, presupuesto_experimentos.py, static/exp_resultados.js, _tab_experimentos.html, exp_nuevo.html o las plantillas _exp_*."
 ---
 
 # Experimentos, decisor y centro de resultados
@@ -186,8 +186,12 @@ nadie pinta desde E2), `tablero.alertas` (la lee `alertas.py`: skill `alertas`; 
 de una alerta cambia su huella de descarte; el centro muestra UNA línea «N alertas necesitan tu atención → Ver Alertas»,
 `.cr-alertas-linea` en `_exp_resultados.html`) y la atribución. `dashboard._contexto_tablero` lo cachea 60 s por proyecto e
 idioma, con la clave del último snapshot, el conteo de propuestas y los cobros de generación del proyecto, y degrada por
-partes sin filtrar el texto de una excepción; el total y el «Mes a mes» viven en el «Historial» plegado del centro
-(`_exp_historial.html`). `csv_mes` escapa las celdas que empiezan con fórmula. Con atribución sugerida `pixel`,
+partes sin filtrar el texto de una excepción; el total vive en «Totales desde el inicio», plegado al final del centro
+(`_exp_historial.html`). **Desde 2026-10-08 todo es desde el inicio** (Daniel: el mes y los periodos cortos confundían a
+sus clientes): `resultados.PERIODO_DEFECTO = 0` («Desde el inicio», primer chip; 7/14/30/90 días siguen como filtro), la
+tabla «Mes a mes» ya no se pinta (`tablero.mes_a_mes` sigue calculándose y probándose), y «Descargar CSV» (ruta
+`tab_descargar_csv`, `/tablero/mes.csv`) sale de `tablero.csv_total`: lo acumulado de cada pieza. `csv_mes`/`csv_total`
+escapan las celdas que empiezan con fórmula. Con atribución sugerida `pixel`,
 `experimentos.objetivo_sugerido` es `OUTCOME_SALES`; `lanzador.lanzar` vuelve a comprobar el Pixel antes de tocar Meta y manda
 `promoted_object={pixel_id, PURCHASE}` en cada conjunto (`meta_ads/adset.py` rechaza SALES sin él). El objetivo queda fijo al
 crear: Meta no deja cambiarlo.
