@@ -24,6 +24,7 @@ from flask_babel import gettext
 
 import doctrina
 import idiomas
+import idiomas_publicacion
 from final_edition import tipos
 
 # Mismo patrón que generador_prompts (replicado para no acoplar este módulo al
@@ -138,6 +139,14 @@ def _nota_canal(canal_optimo):
     return "\n" + "\n".join(lineas)
 
 
+def _idioma_txt(codigo):
+    """El idioma para el prompt: nombre y código («noruego (bokmål) ('no')»).
+    Con el código solo, 'no' se lee como la palabra «no» (spec 2026-10-08 de
+    Noruega y Suecia §4); un código sin nombre va solo, entre comillas."""
+    nombre = idiomas_publicacion.nombre(codigo)
+    return f"{nombre} ('{codigo}')" if nombre != codigo else f"'{codigo}'"
+
+
 def _reglas_generar(duracion_s, idioma_base, canal_optimo=None, pedir_angulo=False):
     """Instrucciones propias del guion (van al system después de la doctrina)."""
     regla_angulo = ""
@@ -148,7 +157,7 @@ def _reglas_generar(duracion_s, idioma_base, canal_optimo=None, pedir_angulo=Fal
                         "comentarios o demostracion. Después escribe el guion desde ese ángulo.")
     formato = FORMATO_JSON_CON_ANGULO if pedir_angulo else FORMATO_JSON
     return f"""Eres un guionista de videos cortos de venta (reels, TikTok, shorts). \
-Escribes guiones en el idioma '{idioma_base}' para un video de {duracion_s:g} segundos.
+Escribes guiones en el idioma {_idioma_txt(idioma_base)} para un video de {duracion_s:g} segundos.
 
 El guion tiene EXACTAMENTE 5 bloques, en este orden y con estos roles:
 1. hook: gancho que detiene el scroll.
@@ -209,12 +218,12 @@ def _formato_json_localizado(idioma, pais, moneda, precio_texto):
 def _system_localizar(idioma, pais, precio_texto=None):
     info = tipos.PAISES[pais]
     return f"""Eres un traductor y adaptador de guiones de videos cortos de venta. \
-Recibes un guion en JSON y lo localizas al idioma '{idioma}' para {info['nombre']} ({pais}).
+Recibes un guion en JSON y lo localizas al idioma {_idioma_txt(idioma)} para {info['nombre']} ({pais}).
 
 El guion tiene EXACTAMENTE 5 bloques con los roles hook, problema, producto, prueba y cta, en ese orden.
 
 Reglas:
-- Traduce y adapta texto_pantalla y texto_voz al idioma '{idioma}' con el tono, expresiones, unidades y \
+- Traduce y adapta texto_pantalla y texto_voz al idioma {_idioma_txt(idioma)} con el tono, expresiones, unidades y \
 referencias culturales de {info['nombre']}; que suene local, no traducido.
 - Si precio_texto NO es null, y el guion menciona precio, usa exactamente el precio_texto indicado y la moneda \
 {info['moneda']}.
@@ -295,7 +304,7 @@ REGLA_LOCALIZAR_ANGULO = ("\n\nDel ÁNGULO, si viene, conserva el arranque, la p
 
 def _mensaje_localizar(guion_base, idioma, pais, moneda, precio_texto, angulo=None):
     texto = (
-        f"Localiza este guion al idioma '{idioma}' para el país {pais} (moneda {moneda}).\n"
+        f"Localiza este guion al idioma {_idioma_txt(idioma)} para el país {pais} (moneda {moneda}).\n"
         f"precio_texto a usar: {precio_texto if precio_texto is not None else '(sin precio)'}\n\n"
         f"Guion base:\n{json.dumps(guion_base, ensure_ascii=False)}"
     )

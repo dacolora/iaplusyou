@@ -35,6 +35,10 @@ COSTO_USD_POR_PISTA_MUSICA = 0.02
 MODELO_TTS_TURBO = "fal-ai/elevenlabs/tts/turbo-v2.5"
 COSTO_TURBO_POR_CARACTER = 0.00005
 COSTOS_TTS = {MODELO_TTS: COSTO_USD_POR_CARACTER, MODELO_TTS_TURBO: COSTO_TURBO_POR_CARACTER}
+# Idiomas que Multilingual v2 no habla: las voces de la galería los leen con
+# Turbo v2.5 y el idioma forzado (spec 2026-09-30 §2). Audios y las finales
+# leen esta misma tupla (`audios.IDIOMAS_TURBO`, `tts_galeria`).
+IDIOMAS_TURBO = ("no",)
 
 # MiniMax vía fal (voces propias de Audios, spec 2026-09-30): TTS Speech 2.8 HD
 # (responde {"audio": {"url"}, "duration_ms"}, verificado el 2026-09-30),
@@ -62,8 +66,8 @@ MODELO_MUSICA_ELEVENLABS = "fal-ai/elevenlabs/music"
 COSTO_USD_POR_MINUTO_ELEVENLABS = 0.60
 
 # Voces premade multilingües de ElevenLabs disponibles vía fal. Todas sirven
-# para es/en/pt (multilingües); Rachel primero en las tres por ser la más
-# verificada.
+# para es/en/pt/sv/no (multilingües; el noruego por Turbo v2.5, ver
+# `tts_galeria`); Rachel primero en todos por ser la más verificada.
 #
 # Verificadas una a una contra fal.ai el 2026-09-15 (una llamada TTS mínima
 # "Hola." por nombre, script en el plan de Bloque 2 final edition — I3).
@@ -80,6 +84,9 @@ VOCES = {
     "es": list(_VOCES_MULTILINGUES),
     "en": list(_VOCES_MULTILINGUES),
     "pt": list(_VOCES_MULTILINGUES),
+    # Noruega y Suecia (2026-10-08): las mismas voces; Audios ya las usa en sv/no.
+    "sv": list(_VOCES_MULTILINGUES),
+    "no": list(_VOCES_MULTILINGUES),
 }
 
 
@@ -114,6 +121,16 @@ def tts(texto, voz="Rachel", idioma="es", on_progreso=None, velocidad=None, time
 
     costo = round(len(texto) * COSTOS_TTS.get(modelo, COSTO_USD_POR_CARACTER), 4)
     return {"url": url, "costo_usd": costo}
+
+
+def tts_galeria(texto, voz, idioma, **kw):
+    """Una voz de la galería (VOCES) en `idioma` por el modelo que lo habla:
+    Multilingual v2, o Turbo v2.5 con `language_code` en IDIOMAS_TURBO (el
+    noruego). Lo usan las finales (`insumos.voz_bloque`, el legado `voz._tts`).
+    Devuelve lo mismo que `tts`."""
+    if idioma in IDIOMAS_TURBO:
+        return tts(texto, voz, idioma, modelo=MODELO_TTS_TURBO, language_code=idioma, **kw)
+    return tts(texto, voz, idioma, **kw)
 
 
 def tts_minimax(texto, voice_id, idioma, velocidad=None, timeout=180):

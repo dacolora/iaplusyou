@@ -45,7 +45,8 @@ música con el evento `mi-musica:cambio` (y al revés). `fal_audio.COSTO_USD_POR
 
 Desde 2026-09-30 (spec `docs/superpowers/specs/2026-09-30-audios-europa-voces-propias-design.md`) el motor lo
 decide `audios.motor_de(voz, idioma)`: la galería por Multilingual v2 salvo el noruego, que v2 no habla y va por
-ElevenLabs Turbo v2.5 con `language_code`; las **voces propias** por MiniMax Speech 2.8 HD con `language_boost`.
+ElevenLabs Turbo v2.5 con `language_code` (`fal_audio.IDIOMAS_TURBO`; desde 2026-10-08 las finales usan la misma regla con
+`fal_audio.tts_galeria`); las **voces propias** por MiniMax Speech 2.8 HD con `language_boost`.
 `voces_propias.py` es el único escritor de las voces propias (filas `material` origen `voz_propia`, `url` = su
 muestra, `extra.voice_id` de MiniMax), de la grabación de un clon (origen `grabacion`, hash con prefijo propio para
 no chocar con Mi música) y de sus muestras por idioma (hash `muestra_propia`, las paga el proyecto). Se crean con la

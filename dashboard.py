@@ -7273,7 +7273,9 @@ def cf_descartar(cliente, cf_id):
 
 # ---------------------------------------------------------- Final edition ---
 
-IDIOMAS_FE = ("es", "en", "pt")
+# Idiomas de una final: los de los países de `fe_tipos.PAISES` (noruego y sueco desde el
+# 2026-10-08, spec de Noruega y Suecia §4).
+IDIOMAS_FE = ("es", "en", "pt", "sv", "no")
 
 
 def _volver_final(cliente):
