@@ -118,11 +118,11 @@ client's `marca.json` guía de estilo when present, so brand consistency doesn't
 to be repeated per idea. `analizar_marca()` uses Claude's vision input on uploaded
 brand reference images to auto-write that guía de estilo.
 
-**Gasto real por proyecto** (`gastos.py`, table `gasto`, migration 0010): the table
-holds the real provider COST. Since 2026-10-08 a project with «Cobrar» on also pays a prepaid balance (price = cost × markup, charged from
-`gastos.registrar`): see the skill `cobros`; every other project still just sees the real provider price. Every paying task registers
-one row per charge through `gastos.registrar_seguro(cliente, tipo, usd, referencia, ...)`
-(never raises), with a reference that includes the task id (`final:<id>:t<tarea_id>`,
+**Gasto real por proyecto** (`gastos.py`, table `gasto`, migration 0010): the table holds the real
+provider COST. Since 2026-10-08 a project with «Cobrar» on also pays a prepaid balance (price = cost ×
+markup, charged from `gastos.registrar`): see the skill `cobros`; every other project still just sees the
+real provider price. Every paying task registers one row per charge through
+`gastos.registrar_seguro(cliente, tipo, usd, referencia, ...)` (never raises), with a reference that includes the task id (`final:<id>:t<tarea_id>`,
 `video:<cf_id>:t<tarea_id>`, …) so re-runs add history instead of overwriting it; the
 reference is unique per cliente, so registering is idempotent. **Any new task that pays a
 provider must call it** where the real figure is known (on failure after paying, register what

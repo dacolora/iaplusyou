@@ -278,8 +278,16 @@ def _margen(texto):
     `libro._validar_margen`) ANTES de mirar el rango, para que el aviso diga lo
     que quedó guardado y no lo que se escribió."""
     valor = _decimal(texto)
-    if valor is not None:
-        valor = valor.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    # Un valor enorme («1e30») desborda la precisión de `quantize` con
+    # InvalidOperation (no es un ValueError → 500): primero se descarta lo
+    # que está lejos del rango, después se redondea lo cercano.
+    if valor is not None and abs(valor) <= libro.MARGEN_MAX * 2:
+        try:
+            valor = valor.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        except InvalidOperation:
+            valor = None
+    elif valor is not None:
+        valor = None
     if valor is None or not libro.MARGEN_MIN <= valor <= libro.MARGEN_MAX:
         raise ValueError(gettext("El margen va de %(min)s a %(max)s.", min=idiomas.numero(libro.MARGEN_MIN, 2),
                                  max=idiomas.numero(libro.MARGEN_MAX, 2)))

@@ -477,3 +477,17 @@ def test_lo_que_el_campo_muestra_se_vuelve_a_guardar_igual(http):
                                               "umbral": _valor_del_campo(html, "umbral", fila="acme")}, headers=MISMO)
     cta = libro.cuenta("acme")
     assert cta["margen_propio"] == 2.25 and cta["umbral"] == 12_500
+
+
+@pytest.mark.parametrize("valor", ["1e30", "-1e30", "nan", "inf", "-inf", "1e1000", "10", "100000000000000000000000000000"])
+def test_un_margen_enorme_o_no_finito_avisa_y_no_da_500(http, valor):
+    """quantize desbordaba con InvalidOperation (no es ValueError) y la ruta daba 500."""
+    from cobros import libro
+    libro.configurar("acme", usuario="admin", margen=2.0)
+    c = http.como("admin")
+    r = c.post("/admin/cobros/margen", data={"margen": valor}, headers=MISMO)
+    assert r.status_code == 302 and libro.margen_global() == 1.5
+    assert "El margen va de 1,00 a 5,00." in _flashes(c)
+    r = c.post("/admin/cobros/acme/cuenta", data={"margen": valor}, headers=MISMO)
+    assert r.status_code == 302 and libro.cuenta("acme")["margen_propio"] == 2.0
+    assert "El margen va de 1,00 a 5,00." in _flashes(c)
