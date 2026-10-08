@@ -41,8 +41,8 @@ arriba del panel (`data-tw-param`): esta sección no trae otro selector de perio
 
 ### 2.1 Tarjetas que mueven la gráfica
 
-Seis tarjetas (botones, `role="tab"`): **Ventas, Pedidos, Gasto en anuncios, Retorno por dólar (MER), Ticket
-promedio, Costo por pedido**. Cada una muestra el total del periodo, una minigráfica (la serie diaria, sin ejes) y,
+Seis tarjetas (botones, `role="tab"`): **Ventas, Pedidos, Gasto en anuncios, Retorno (MER), Ticket
+promedio, Costo por pedido** («Retorno (MER)» y no «por dólar»: la moneda puede ser COP o NOK). Cada una muestra el total del periodo, una minigráfica (la serie diaria, sin ejes) y,
 solo con un periodo de N días, la variación contra los N días anteriores (▲/▼, verde si es bueno, rojo si es malo,
 gris para el gasto, que no es bueno ni malo; en «Costo por pedido» bajar es bueno). Tocar una tarjeta cambia la
 métrica de la gráfica; la elegida queda marcada.
@@ -50,7 +50,9 @@ métrica de la gráfica; la elegida queda marcada.
 Con un canal elegido no hay datos de tienda: las tarjetas pasan a **Ventas atribuidas, Pedidos atribuidos, Gasto,
 ROAS (Pixel), Ticket atribuido, Costo por pedido atribuido**, todo del canal.
 
-Las tarjetas de utilidad y clientes nuevos **no existen** en esta entrega (sus columnas llegan en 0).
+La tarjeta de utilidad no existe en esta entrega (sus columnas llegan en 0). La de **Clientes nuevos** solo aparece
+cuando Triple Whale manda pedidos de clientes nuevos (en happyflops hoy llegan en 0, así que no se ve), para no perder
+el tile que tenía «Tu tienda».
 
 ### 2.2 La gráfica
 
@@ -131,7 +133,8 @@ gasto en la copia):
 
 ### 2.6 Celular
 
-Tarjetas en 3 columnas hasta 760 px y en 2 hasta 480 px; la gráfica ocupa el ancho y se toca para ver el recuadro
+Tarjetas en una rejilla que se acomoda sola (`auto-fit`, mínimo 8,5 rem: pasan a dos filas antes de cortar un
+total) y en 2 columnas hasta 480 px; la gráfica ocupa el ancho y se toca para ver el recuadro
 (arriba de la gráfica, nunca fuera de la pantalla); el detalle del día apila sus dos columnas; nada empuja la página
 de lado (`tests/test_movil.py`).
 
@@ -152,6 +155,17 @@ de lado (`tests/test_movil.py`).
   inventa una caída.
 - La comparación de la gráfica alinea el día i del periodo con el día i de los N días anteriores (sin el punto de hoy).
 - Sin dato en el periodo anterior (variación sin base), no se muestra variación.
+
+### 3.2 bis Copias atrasadas y varias tiendas (revisión 2026-10-08)
+
+- Los días después del último día copiado (`fin_datos`: una sincronización que falló; hoy, si todavía no llegó
+  nada) no son ventas en cero: van vacíos en la gráfica, fuera de las tarjetas, las variaciones, la lectura y los días
+  raros, y el texto de debajo de la gráfica dice hasta qué día hay datos.
+- En «Todas», la antigüedad de un anuncio se conoce desde la tienda que empezó a copiarse más tarde + 14 días: con la
+  más vieja, los anuncios de una tienda conectada después pasaban por nuevos.
+- Con un canal elegido (o sin datos de tienda), cada frase, la ayuda de las tarjetas y el texto de hoy dicen que son
+  ventas atribuidas según el Pixel.
+- La alerta «el MER de la tienda cayó» toma la misma variación que la tarjeta.
 
 ### 3.3 Métricas por día
 

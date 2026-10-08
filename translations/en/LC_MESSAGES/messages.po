@@ -4143,6 +4143,9 @@ msgstr "Maximum cost per purchase (in the account currency)"
 msgid "Costo por pedido"
 msgstr "Cost per order"
 
+msgid "Costo por pedido atribuido"
+msgstr "Attributed cost per order"
+
 msgid "Costo por venta"
 msgstr "Cost per sale"
 
@@ -7878,6 +7881,9 @@ msgstr "Ad spend"
 msgid "Gasto en publicidad entre pedidos"
 msgstr "Ad spend divided by orders"
 
+msgid "Gasto entre pedidos atribuidos"
+msgstr "Spend divided by attributed orders"
+
 msgid "Gasto por modelo"
 msgstr "Spend by model"
 
@@ -8498,6 +8504,10 @@ msgstr "How does your product help them achieve that status/characteristics?"
 #, python-format
 msgid "Hoy va en %(ventas)s y %(pedidos)s, con %(gasto)s de gasto."
 msgstr "Today so far: %(ventas)s and %(pedidos)s, with %(gasto)s of spend."
+
+#, python-format
+msgid "Hoy van %(ventas)s en ventas atribuidas según el Pixel y %(pedidos)s, con %(gasto)s de gasto."
+msgstr "Today so far: %(ventas)s in sales attributed by the Pixel and %(pedidos)s, with %(gasto)s of spend."
 
 msgid "ID de Creatv"
 msgstr "Creatv's ID"
@@ -9428,6 +9438,10 @@ msgid "La última copia de %(tienda)s falló: %(error)s"
 msgstr "The last copy of %(tienda)s failed: %(error)s"
 
 #, python-format
+msgid "La última copia de Triple Whale trae datos hasta el %(fecha)s: los días que faltan no entran en las cifras ni en las comparaciones."
+msgstr "The last Triple Whale copy has data up to %(fecha)s: the missing days are left out of the figures and the comparisons."
+
+#, python-format
 msgid "La última copia falló: %(error)s"
 msgstr "The last copy failed: %(error)s"
 
@@ -9751,6 +9765,9 @@ msgstr "What the numbers say"
 
 msgid "Lo que dicen los subtítulos"
 msgstr "What the subtitles say"
+
+msgid "Lo que el Pixel atribuye a estos anuncios: suma más que las ventas reales de la tienda"
+msgstr "What the Pixel attributes to these ads: it adds up to more than the store's real sales"
 
 msgid ""
 "Lo que el generador recibe como imagen, en este orden. Elige un activo del Catálogo o describe\n"
@@ -13965,6 +13982,10 @@ msgstr ""
 "Second pass with Bria: it raises the resolution <strong>without regenerating</strong> the\n"
 "    image, so it doesn't change the face, the pose or the background."
 
+#, python-format
+msgid "Según el Pixel, estos anuncios vendieron %(ventas)s que en los %(n)s días anteriores, con %(gasto)s de gasto: cada 1 %(moneda)s trajo %(mer)s %(moneda)s atribuidos (antes %(mer_antes)s)."
+msgstr "According to the Pixel, these ads sold %(ventas)s than in the previous %(n)s days, with %(gasto)s spend: every 1 %(moneda)s brought %(mer)s %(moneda)s attributed (before, %(mer_antes)s)."
+
 msgid "Según los pedidos de la tienda en Triple Whale; es el producto que conviene empujar en los anuncios nuevos."
 msgstr "According to the store's orders in Triple Whale; it's the product worth pushing in new ads."
 
@@ -14524,6 +14545,10 @@ msgstr "Their day to day (situations)"
 
 msgid "Su día a día (una situación por línea)"
 msgstr "Their day to day (one situation per line)"
+
+#, python-format
+msgid "Su mejor día fue el %(dia)s: %(ventas)s en ventas atribuidas según el Pixel y %(pedidos)s."
+msgstr "Their best day was %(dia)s: %(ventas)s in sales attributed by the Pixel and %(pedidos)s."
 
 msgid "Su propia conexión:"
 msgstr "Its own connection:"
@@ -16085,6 +16110,12 @@ msgstr "Sales"
 
 msgid "Ventas atribuidas"
 msgstr "Attributed sales"
+
+msgid "Ventas atribuidas entre pedidos atribuidos"
+msgstr "Attributed sales divided by attributed orders"
+
+msgid "Ventas atribuidas por el Pixel entre el gasto de estos anuncios"
+msgstr "Sales attributed by the Pixel divided by the spend on these ads"
 
 msgid "Ventas atribuidas según el Pixel; debajo, el gasto del anuncio ese día y su retorno."
 msgstr "Sales attributed by the Pixel; below, the ad's spend that day and its return."
@@ -19033,6 +19064,12 @@ msgstr "no queries"
 
 msgid "sin contar anuncios sueltos"
 msgstr "not counting standalone ads"
+
+msgid "sin copia"
+msgstr "no copy"
+
+msgid "sin copia de Triple Whale"
+msgstr "no Triple Whale copy"
 
 msgid "sin correo"
 msgstr "no email"

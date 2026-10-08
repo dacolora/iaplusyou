@@ -93,9 +93,9 @@ rejected because it would split catalog, pieces and sprints. Spec
 
 The **Triple Whale tab** (`_tab_triple_whale.html`, `data-tab="triplewhale"`, after Alertas; since E2, 2026-10-03, there is
 no Tablero tab) fetches its panel
-(`triple_whale.rutas.ver_panel` → `_tw_panel.html`) only when opened: store KPIs (MER, AOV, new customers,
-vs. previous period), ad KPIs, alerts, a day-by-day chart drawn by the old Tablero's `dashboard._grafico_tablero`
-(`app.extensions["grafico_tablero"]`; the Tablero itself no longer computes a chart), spend by
+(`triple_whale.rutas.ver_panel` → `_tw_panel.html`) only when opened: «Resultados de tu tienda» (cards + the
+interactive day-by-day chart + day detail + reading + «Tus creativos», see the paragraph at the end; it replaced the
+store KPI tiles and the old SVG chart on 2026-10-08), ad KPIs, alerts, spend by
 verdict/channel and every ad with a verdict and a diagnosis from the pure `triple_whale/evaluacion.py`
 (compared with the account's own medians; `ganador`/`prometedor`/`en_prueba`/`perdedor`/`sin_datos`; weak
 hook, low hold, few clicks, clicks without sales, expensive CPM, fatigue 7d vs 7d, no TW tracking).
@@ -163,3 +163,10 @@ un periodo anterior que empieza antes del primer día copiado NO se compara (ser
 días de prueba, «7 días» no compara); «Desde el inicio» nunca compara (5fce2658); lo atribuido del Pixel suma más que
 la tienda (PND-155) y solo se usa para comparar anuncios y canales; el CSS heredado tenía un comentario cerrado con
 `#}` que se tragaba `.tb-barra-tw` (por eso la gráfica vieja salía con barras naranjas y línea verde).
+Reglas que añadió la revisión (2026-10-08, cada una con su prueba de mutación): los días después del último copiado
+(`fin_datos`, una copia atrasada) van vacíos y fuera de cifras, comparaciones y días raros; en «Todas» la antigüedad se
+cuenta desde la tienda que empezó a copiarse MÁS TARDE (`datos.inicio_para_antiguedad`); el detalle del día no marca
+«nuevo» ni cuenta arranques antes de ese inicio + 14; con canal (o sin datos de tienda) cada frase, ayuda y el texto de
+hoy dicen «según el Pixel»; la alerta «el MER de la tienda cayó» toma la variación de la tarjeta (días completos, sin
+periodo anterior fuera de la copia); `/dia` usa `datos.primer_dia_copia` y valida el canal por su forma, sin
+recorrer la copia en cada clic.
