@@ -408,8 +408,8 @@ def _preparar_fin_primera_activacion(cliente, ex):
         return extra
     extra = experimentos.actualizar_extra(cliente, ex["id"], reservar)
     for p in actual["paises"]:
-        if p.get("meta_adset_id"):
-            meta_auth.llamar("POST", p["meta_adset_id"], payload={"end_time": extra["fin_primera_activacion"]})
+        for adset_id in _adsets_de_pais(p):   # apps: uno por tienda (meta_adsets)
+            meta_auth.llamar("POST", adset_id, payload={"end_time": extra["fin_primera_activacion"]})
 
 
 def cambiar_estado(cliente, experimento_id, status, pais=None):

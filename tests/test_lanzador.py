@@ -1388,6 +1388,42 @@ def test_pnd113_fin_desde_primera_activacion_sin_extender_al_reanudar(entorno, m
     assert not any(t == 'fin' for t, _ in meta.llamadas)
 
 
+@pytest.mark.parametrize('via', ['experimento', 'pais', 'pieza'])
+def test_pnd113_apps_fin_en_cada_conjunto_de_tienda_sin_extender_al_reanudar(entorno_app, monkeypatch, via):
+    """Prueba de mutación (2026-10-08): el fin de la primera activación se mandaba solo a `meta_adset_id`, que en apps
+    está vacío; los conjuntos de cada tienda (`meta_adsets`) quedaban sin `end_time` y gastaban sin plazo."""
+    import time
+    e = entorno_app
+    lz, ex, eid, meta = e['lanzador'], e['ex'], e['eid'], e['meta']
+    lz.lanzar('acme', eid)
+    conjuntos = _conjuntos_app(e)
+    assert len(conjuntos) == 4
+    ahora = 1800000000
+    monkeypatch.setattr(time, 'time', lambda: ahora)
+
+    def llamar(metodo, oid, payload):
+        return meta._id('fin', metodo=metodo, oid=oid, payload=payload)
+    monkeypatch.setattr(lz.meta_auth, 'llamar', llamar, raising=False)
+
+    def activar():
+        if via == 'pieza':
+            lz.activar_pieza('acme', ex.obtener('acme', eid)['piezas'][0]['id'])
+        else:
+            lz.cambiar_estado('acme', eid, 'ACTIVE', pais='CO' if via == 'pais' else None)
+    meta.llamadas.clear()
+    activar()
+    fines = [kw for t, kw in meta.llamadas if t == 'fin']
+    # un end_time por cada conjunto de tienda de TODOS los países, antes de activar nada
+    assert sorted(kw['oid'] for kw in fines) == sorted(conjuntos.values())
+    assert all(kw['payload'] == {'end_time': ahora + 7 * 86400} for kw in fines)
+    assert [t for t, _ in meta.llamadas][:4] == ['fin'] * 4
+    lz.cambiar_estado('acme', eid, 'PAUSED')
+    meta.llamadas.clear()
+    ahora += 86400
+    activar()
+    assert not any(t == 'fin' for t, _ in meta.llamadas)
+
+
 def test_pnd113_fallo_fecha_no_activa_y_reintento_conserva_fin(entorno, monkeypatch):
     lz, ex, eid, meta = entorno['lanzador'], entorno['ex'], entorno['eid'], entorno['meta']
     lz.lanzar('acme', eid)
