@@ -236,6 +236,21 @@ def test_es_mp4_lee_el_formato_de_ffprobe(monkeypatch, tmp_path):
     assert mejorar.formato_video(str(basura)) == "" and not mejorar.es_mp4(str(basura))
 
 
+def test_segundos_verificables_suma_la_parte_entera_de_fotogramas_y_voz():
+    bloques = [{"type": "text", "text": "Segundo 0,3:"}, {"type": "image", "source": {}},
+               {"type": "text", "text": "Segundo 12,6:"}, {"type": "text", "text": "Segundo 40:"}]
+    voz = {"frases": [{"segundo": 0.4, "texto": "a"}, {"segundo": 31.1, "texto": "b"}, {"segundo": 31.9, "texto": "c"},
+                      {"segundo": None, "texto": "d"}, {"segundo": "no", "texto": "e"}]}
+    extra = mejorar.segundos_verificables(bloques, voz)
+    assert extra == "Segundo 0,3: Segundo 12,6: Segundo 40: Segundo 0 Segundo 12 Segundo 31 Segundo 40"
+    assert mejorar.segundos_verificables([], None) == "" and mejorar.segundos_verificables(None, {}) == ""
+    # citar «el segundo 31» ya no es una cifra inventada, un 95 que nadie dio sí lo sigue siendo
+    d = json.loads(respuesta())
+    d["falla"] = [{"texto": "Llama tarde", "evidencia": "pide comprar en el segundo 31, con 95 veces más", "anillo": "gancho"}]
+    assert mejorar.parsear(json.dumps(d), "datos " + extra)["cifras_sin_dato"] == ["95 veces"]
+    assert "31" in " ".join(mejorar.parsear(json.dumps(d), "datos")["cifras_sin_dato"])
+
+
 def test_formato_video_corre_ffprobe_solo_con_el_protocolo_file(monkeypatch):
     """El archivo es ajeno: ffprobe no puede salir a la red por una lista (hls, concat) que traiga adentro."""
     llamadas = []

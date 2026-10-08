@@ -444,6 +444,24 @@ def _llamar(content, system_):
                                              timeout=TIMEOUT_CLAUDE_S, max_retries=0)
 
 
+def segundos_verificables(bloques, voz):
+    """Lo que Claude ve fuera del texto y puede citar como dato: los textos «Segundo 12,6:» de los fotogramas tal
+    cual, más «Segundo N» con la PARTE ENTERA de cada segundo de un fotograma y de cada frase de la voz. Quien mira
+    «[31,1 s] …» cita «el segundo 31», y esa cifra no es inventada: `doctrina.verificar_cifras` compara números
+    completos y «31» no es «311». Cada segundo entero sale una vez."""
+    textos = [b["text"] for b in bloques or [] if b.get("type") == "text"]
+    enteros = []
+    for t in textos:
+        for n in re.findall(r"\d+(?:[.,]\d+)?", t):
+            enteros.append(int(float(n.replace(",", "."))))
+    for fr in (voz or {}).get("frases") or []:
+        try:
+            enteros.append(int(float(fr.get("segundo") or 0)))
+        except (TypeError, ValueError):
+            continue
+    return " ".join(textos + [f"Segundo {n}" for n in sorted(set(enteros))])
+
+
 def analizar(texto, imagenes, idioma, verificable_extra=""):
     """(resultado, tokens_entrada, tokens_salida). Una corrección si la primera respuesta no sirve; si tampoco,
     AnalisisInvalido con los tokens pagados. `verificable_extra` suma a los datos verificables lo que Claude ve fuera

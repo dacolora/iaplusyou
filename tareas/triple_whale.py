@@ -162,9 +162,9 @@ def tw_analizar_anuncio(tarea):
                               aprendizajes=doctrina_aprendizajes.texto_para_prompt(proyectos.aprendizajes(cliente)),
                               productos=datos.top_productos(cliente, fila["tienda_id"], fila["desde"], fila["hasta"],
                                                             limite=analisis.MAX_PRODUCTOS))
-        segundos = " ".join(b["text"] for b in vis["bloques"] if b.get("type") == "text")
+        # Los segundos de los fotogramas y de la voz son datos citables, también su parte entera («el segundo 31»).
         resultado, entrada, salida = mejorar.analizar(texto, vis["bloques"], idiomas.de_proyecto(cliente),
-                                                      verificable_extra=segundos)
+                                                      verificable_extra=mejorar.segundos_verificables(vis["bloques"], voz))
         # El gasto de Claude se anota UNA vez, antes de la última escritura: si esa falla, el except no lo repite.
         usd_claude = costo_real(entrada, salida)
         gastos.registrar_seguro(cliente, "evaluacion", usd_claude, referencia, proveedor="anthropic",

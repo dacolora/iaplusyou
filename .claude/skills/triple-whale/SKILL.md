@@ -248,7 +248,9 @@ production. It must work for ANY ad, not only Creatv's: in happyflops only 4 pie
   title/copy and the account evaluation's summary and patterns go through `mejorar._linea` (`_dato` + one line; B3: a
   newline in a name opened what looked like a new part of the prompt and split the card's `data-confirmar`).
   `verificar_cifras` runs over the phrase, reasons with evidence, changes, `por_que` and the learning
-  (`cifras_sin_dato`, non-blocking). `NOMBRES_CANAL` lives in `triple_whale/__init__.py` so the worker never imports the
+  (`cifras_sin_dato`, non-blocking) against the prompt text plus `mejorar.segundos_verificables` (the «Segundo 12,6:»
+  frame labels AND the integer part of every frame and voice-phrase second: «el segundo 31» for a phrase at 31,1 s is
+  not an invented figure; the real test flagged 31 and 37 that way, 2026-10-08). `NOMBRES_CANAL` lives in `triple_whale/__init__.py` so the worker never imports the
   blueprint (`resultados.NOMBRES_CANAL` and `rutas.NOMBRES_CANAL` are that same dict).
 - **Gallery.** Tab order: bar, «Resultados de tu tienda» (main's section, 2026-10-08), «Por tienda», alerts, «Tus
   anuncios» (tiles + gallery), «Lo que hace ganar en tu cuenta», «Dónde se va el gasto», «Lo que más se vende», «Ver como

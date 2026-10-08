@@ -53,6 +53,32 @@ def test_tarea_guarda_el_resultado_y_registra_whisper_y_claude(en_cola, monkeypa
     assert fila["usd"] == pytest.approx(g[0]["usd"] + 0.001)
 
 
+def test_los_segundos_de_los_fotogramas_y_de_la_voz_son_citables_con_su_parte_entera(en_cola, monkeypatch):
+    """Quien lee «[31,1 s] …» cita «el segundo 31»: esa cifra no es inventada (caso 3 de la prueba real, 2026-10-08:
+    95/31/37 marcadas). Los segundos de los fotogramas y de cada frase de la voz van al verificable con su parte entera."""
+    monkeypatch.setattr(mejorar, "visuales", lambda foto_: ({"bloques": [
+        {"type": "text", "text": "Segundo 12,6:"}, {"type": "image", "source": {}},
+        {"type": "text", "text": "Segundo 37:"}], "clase": "fotogramas", "fotogramas": 2}, []))
+    monkeypatch.setattr(mejorar, "transcribir", lambda foto_: {"texto": "Hei", "costo_usd": 0.001, "frases": [
+        {"segundo": 0.4, "texto": "Hei"}, {"segundo": 31.1, "texto": "Kjøp nå"}, {"segundo": None, "texto": "x"}]})
+    cita = respuesta(falla=[{"texto": "Llama tarde", "evidencia": "la voz pide comprar en el segundo 31 y el logo sale "
+                                                                  "en el segundo 12", "anillo": "gancho"}])
+    pedido = {}
+    # `analizar` de verdad (arma el verificable con lo extra); solo la llamada a Claude es falsa
+    monkeypatch.setattr(mejorar, "_llamar", lambda content, system_: (pedido.update(content=content) or cita, 100, 50))
+    visto = {}
+    original = mejorar.segundos_verificables
+    monkeypatch.setattr(mejorar, "segundos_verificables", lambda b, v: visto.setdefault("extra", original(b, v)))
+    en_cola["t"].tw_analizar_anuncio({"id": 13, "payload": {"cliente": "acme", "analisis_id": en_cola["aid"]}})
+    extra = visto["extra"]
+    assert extra.startswith("Segundo 12,6: Segundo 37:")                   # los textos de siempre, tal cual
+    assert extra.endswith("Segundo 0 Segundo 12 Segundo 31 Segundo 37")   # y la parte entera de cada segundo, una vez
+    fila = datos.analisis_anuncio("acme", en_cola["aid"])
+    assert fila["estado"] == "lista" and fila["resultado"]["cifras_sin_dato"] == []
+    # sin esas líneas, citar el segundo 31 sí se marcaba como cifra inventada
+    assert "31" in " ".join(mejorar.parsear(cita, "sin segundos")["cifras_sin_dato"])
+
+
 def test_la_tarea_nunca_agrega_un_aprendizaje(en_cola, monkeypatch, tmp_path):
     """C3 (m25): el aprendizaje entra solo con el clic en «Guardar como aprendizaje»: diez análisis no pueden dejar diez
     líneas en todos los prompts del proyecto (spec §6.3). Y la prueba no escribe en clientes/ del repo."""
