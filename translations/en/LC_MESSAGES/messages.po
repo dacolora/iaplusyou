@@ -6861,6 +6861,9 @@ msgstr "This version already has %(n)s extra images; remove one first."
 msgid "Esta voz dura %(n)s s; el anuncio hablado llega a 30 s. Pártelo en tomas de unos 10 s y júntalas en el editor."
 msgstr "This voice lasts %(n)s s; a talking ad can be up to 30 s. Split it into takes of about 10 s and join them in the editor."
 
+msgid "Estable"
+msgstr "Stable"
+
 msgid "Estado"
 msgstr "Status"
 
@@ -6922,6 +6925,12 @@ msgstr "This item no longer exists"
 
 msgid "Este actor de Apify ahora pide acceso completo a la cuenta y Creatv no se lo da; hay que cambiar de actor."
 msgstr "This Apify actor now requires full account access and Creatv won't grant it; a different actor is needed."
+
+msgid "Este anuncio no funciona"
+msgstr "This ad doesn't work"
+
+msgid "Este anuncio sí funciona"
+msgstr "This ad works"
 
 msgid "Este clip dura más que el video: no cabe una copia. Acórtalo primero."
 msgstr "This clip is longer than the video: a copy doesn't fit. Shorten it first."
@@ -9923,6 +9932,9 @@ msgstr "Dimensions and fonts"
 msgid "Medios"
 msgstr "Media"
 
+msgid "Mejorando"
+msgstr "Improving"
+
 msgid "Mejorando la calidad de la imagen"
 msgstr "Improving the image quality"
 
@@ -10288,6 +10300,9 @@ msgstr "Too close to the edge of the clip to split there."
 
 msgid "Muy cerca del borde del clip para cortarlo."
 msgstr "Too close to the edge of the clip to split it."
+
+msgid "Muy pocos datos para opinar"
+msgstr "Too little data to tell"
 
 msgid "MÁS VENDIDO"
 msgstr "BEST SELLER"
@@ -14009,6 +14024,9 @@ msgstr "No original photo: entry rebuilt from the log"
 msgid "Sin fotos"
 msgstr "No photos"
 
+msgid "Sin gasto estos 7 días"
+msgstr "No spend in the last 7 days"
+
 msgid "Sin hooks alternativos."
 msgstr "No alternate hooks."
 
@@ -15017,6 +15035,9 @@ msgstr "No global sweep has been brought in yet outside copycoders."
 msgid "Todavía no se puede: faltan <code>MELI_APP_ID</code> y <code>MELI_SECRET</code> en el <code>.env</code> del servidor. Quien lo administra crea la app en developers.mercadolibre.com (permiso <code>offline_access</code>, redirect <code>%(redirect)s</code>) — ver la tarjeta MercadoLibre en <em>Puesta a punto</em>."
 msgstr "Not yet possible: <code>MELI_APP_ID</code> and <code>MELI_SECRET</code> are missing in the server's <code>.env</code>. Whoever administers it creates the app at developers.mercadolibre.com (<code>offline_access</code> permission, redirect <code>%(redirect)s</code>) — see the MercadoLibre card in <em>Setup</em>."
 
+msgid "Todavía no se sabe"
+msgstr "Not known yet"
+
 msgid "Todavía no se sabe cuánto dura uno de los archivos: espera un momento y vuelve a intentarlo."
 msgstr "We don't know yet how long one of the files lasts: wait a moment and try again."
 
@@ -15828,6 +15849,9 @@ msgstr "VIDEO"
 
 msgid "Va al final de cada prompt de clip en todos los videos de este proyecto. Déjalo vacío para volver al de fábrica."
 msgstr "Goes at the end of every clip prompt in every video of this project. Leave it empty to go back to the default."
+
+msgid "Va bien: falta confirmarlo con ventas"
+msgstr "Looking good: still needs confirming with sales"
 
 msgid "Va tal cual al modelo. Vacío: la persona solo habla."
 msgstr "Sent to the model as is. Empty: the person just talks."
@@ -18382,6 +18406,15 @@ msgstr "planned"
 msgid "planeando"
 msgstr "planning"
 
+msgid "pocos anuncios para comparar"
+msgstr "too few ads to compare"
+
+msgid "pocos clics"
+msgstr "few clicks"
+
+msgid "pocos datos"
+msgstr "little data"
+
 msgid "por revisar"
 msgstr "to review"
 
@@ -18826,6 +18859,9 @@ msgstr "no dataset"
 msgid "sin datos"
 msgstr "no data"
 
+msgid "sin datos de video"
+msgstr "no video data"
+
 msgid "sin definir"
 msgstr "not set"
 
@@ -18930,6 +18966,9 @@ msgstr "no sales thresholds"
 
 msgid "sin urgencia en el deseo"
 msgstr "no urgency in the desire"
+
+msgid "sin ventas en la cuenta"
+msgstr "no sales in the account"
 
 msgid "sin ventas medibles"
 msgstr "no measurable sales"
