@@ -84,6 +84,12 @@ partida a revisar por Daniel. Lo usa quien traduzca `translations/en/LC_MESSAGES
 | Subir (un archivo) | Upload |
 | Editar (el panel) | Edit |
 | Fuente (tipografía del editor, `msgctxt "editor"`) | Font |
+| Saldo (prepagado) | Balance |
+| Disponible (saldo menos reservas) | Available |
+| Recarga (de saldo) | Top-up |
+| Cobro (al cliente) | Charge |
+| Margen (el multiplicador sobre el costo) | Markup |
+| «Cobrar» (el interruptor de un proyecto) | Charge usage |
 | Fuente (de un dato o de las ventas: de dónde sale) | Source |
 | Detalle de Meta (día a día, desgloses y rankings de `meta_detalle.py`) | Meta details |
 | Detalle de Meta al día hace N h | Meta details updated N h ago |

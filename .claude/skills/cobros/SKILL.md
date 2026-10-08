@@ -1,0 +1,117 @@
+---
+name: cobros
+description: "Cobros: el saldo prepagado por proyecto, el margen sobre el costo, el interruptor «Cobrar», el libro de movimientos, el freno y la reserva antes de generar, la reversión cuando una tarea falla, los precios que ve el cliente, las recargas con Bold (link, webhook firmado, verificación) y /admin/cobros. Cargar antes de tocar cobros/, tareas/cobros.py, templates/_config_saldo.html, _saldo_panel.html, saldo_recarga.html, admin_cobros.html, static/cobros.js, o de agregar algo que cueste y deba descontarse del saldo, mostrar un precio o una cifra de lo ya gastado, o recibir un pago."
+---
+
+# Cobros: saldo prepagado, margen y recargas con Bold
+
+> Parte de la guía del repositorio. **Si cambias esta área, actualiza este archivo** en el mismo cambio (no CLAUDE.md). Si el código y este texto no coinciden, manda el código: corrige el texto.
+>
+> Spec: `docs/superpowers/specs/2026-10-08-cobros-saldo-prepagado-design.md` (pedido de Daniel, 2026-10-07: «todos usan el producto pero al final yo hago las recargas»). Plan y registro de la construcción (once tareas, con cada ruling): `docs/superpowers/plans/2026-10-08-cobros-saldo-prepagado.md`. Donde el spec y el código difieren, manda el código; las diferencias están en «Rulings» al final.
+
+## El principio
+
+Un proyecto con **«Cobrar» prendido** paga cada generación desde un **saldo prepagado**: `precio = costo del proveedor × margen` (1,5 por defecto). Sin saldo, lo que cuesta no arranca. Si el proveedor cobró y la pieza no llegó, al cliente no se le cobra y se le avisa. Un proyecto **sin fila en `cuenta_saldo` o con `cobrar = 0` no cambia en nada**: todas las funciones de `cobros.libro` devuelven «no cobra» y no escriben. El interruptor arranca apagado; prenderlo no cobra hacia atrás. Daniel lo prende proyecto por proyecto en `/admin/cobros`.
+
+Esto se suma a la regla 1 del repo (precio antes del cobro, `max_intentos=1`, gasto real anotado): el costo sigue anotándose en `gasto` exactamente como antes; el cobro al cliente es una segunda escritura que cuelga de la primera.
+
+## Módulos y quién escribe qué
+
+| Módulo | Qué hace | Escribe |
+|---|---|---|
+| `cobros/libro.py` | cuenta, margen, saldo, reservas, `exigir`, `cobrar_gasto`, `revertir_trabajo`, `acreditar`, `puede_arrancar`, `SaldoInsuficiente` | **ÚNICO escritor** de `cuenta_saldo`, `movimiento_saldo`, `reserva_saldo` y de `kv` `cobros:margen_global` |
+| `cobros/recargas.py` | recargas con Bold, webhook, verificación, recarga manual | **ÚNICO escritor** de `recarga` y `pago_evento` (acredita llamando a `libro.acreditar` en su misma transacción) |
+| `cobros/bold.py` | crear el link, leer su estado, verificar la firma | nada (el único módulo que habla con Bold) |
+| `cobros/vista.py` | lo que ve la persona: movimientos, chip, resúmenes de lo cobrado, `gasto_para`, `resumen_admin` | nada (solo lee) |
+| `cobros/avisos.py` | correos y bitácora (pieza no cobrada, recarga acreditada, saldo bajo, avisos al admin) | `kv` `cobros:aviso_bajo:<cliente>` |
+| `cobros/rutas.py` | Blueprint: `/cliente/<c>/saldo/…`, `/pagos/bold/webhook`, `/admin/cobros…` | nada directo: llama a los de arriba |
+| `tareas/cobros.py` | `cobros_verificar_recargas`, periódica cada 10 min (`worker.py`) | vía `recargas.verificar_pendientes` |
+
+Tablas (migración `0032_cobros`; renumérala si `alembic heads` muestra dos cabezas, pasó el 2026-10-08 al sincronizar con main): `cuenta_saldo` (cobrar, margen NULL = global, `umbral_aviso`), `movimiento_saldo` (el libro, `UNIQUE(tipo, gasto_id)` y `UNIQUE(tipo, recarga_id)`), `reserva_saldo` (PK `(cliente, job_id)`), `recarga` (`referencia` y `pago_id` únicos), `pago_evento` (cada notificación de Bold, `UNIQUE(proveedor, evento_id)`). Nadie más hace INSERT/UPDATE/DELETE en ellas.
+
+**Montos del libro: milésimas de dólar, enteros** (US$ 1,50 = 1500). `libro.precio_milesimas(costo, margen)` = `ceil(round(costo × margen × 1000, 6))`: el `round` evita que `0.01 × 1.5 × 1000 = 15.000000000000002` suba a 16. `movimiento_saldo.concepto` guarda un **código** (el `tipo` del gasto: `video`, `final`…, o `recarga_bold`, `recarga_manual`, `ajuste`, `anulacion_bold`) y se traduce al pintar (`vista.nombre_concepto`). Tipos de movimiento: `recarga`+, `cobro`−, `reverso`+, `no_cobrado` 0, `ajuste`±, `anulacion`−. Saldo = `SUM(milesimas)` por proyecto (no se guarda en caché). Disponible = saldo − reservas vivas.
+
+## Un cobro de principio a fin
+
+1. Antes: la ruta o `trabajos.encolar(..., costo_estimado=)` llama a `libro.exigir(cliente, costo, job_id)` (ver «El freno»).
+2. El worker corre la tarea dentro de `libro.en_trabajo(tarea_id, job_id)` (una `ContextVar`, cada hilo la suya): el cobro anota de qué tarea salió.
+3. La tarea anota el costo real con `gastos.registrar_seguro(cliente, tipo, usd, referencia)`. **`gastos.registrar` es la única puerta del cobro al cliente**: tras el INSERT/UPDATE de `gasto` llama a `libro.cobrar_gasto(con, gasto_id, cliente, usd_final, tipo, entregado, nuevo)` en un savepoint propio. Si el cobro falla, el gasto queda, `log.error` y `avisar_admin("cobro_no_anotado")`. El costo jamás se pierde por el cobro. Nunca llames a `cobrar_gasto` desde otro lado.
+4. `cobrar_gasto`: sin cuenta que cobre → nada. Gasto **nuevo** → `cobro` por `precio_milesimas(usd, margen)`; el margen vigente queda en `extra.margen`. Gasto **existente** (`nuevo=False`, una corrección de monto) → si ya tenía `cobro`, se recalcula con el `extra.margen` guardado (y su `reverso`, si lo hay, se mantiene como el opuesto exacto); si no tenía, **sigue sin tenerlo**. `entregado=False` (el proveedor cobró pero la pieza no llegó) → `no_cobrado` con monto 0 y `extra.precio`; si ya había cobro, un `reverso`.
+5. Ya con la transacción confirmada, `gastos._despues_del_cobro` avisa: `no_cobrado`/`reverso` → «una pieza falló y no se te cobró»; un cobro que deja el saldo bajo el umbral → «saldo bajo» (una vez por cruce, recordado en `kv`, limpiado al recargar).
+
+**`entregado=False` va en toda rama que paga y después falla** (Wan pasando los 20 min, descarga que falla, una final sin audio…). En una ruta sincrónica a Claude, «entregado» = Claude respondió: esas no se marcan.
+
+## El freno y la reserva (antes de cobrar)
+
+- `libro.exigir(cliente, costo_usd, job_id=None)`: no cobra → 0. `precio` = lo del margen, o 1 si el costo es `None` («precio no disponible»: basta saldo positivo). Si `disponible < precio` lanza `SaldoInsuficiente(cliente, precio, disponible)`; si no y viene `job_id`, inserta la reserva (un segundo clic del mismo `job_id` vivo no duplica). Una reserva está **viva** mientras exista una `tarea` con ese `job_id` en `pendiente` o `en_curso`; no se libera a mano, y `limpiar_reservas_muertas` (mantenimiento diario) las borra.
+- **Tareas del worker**: `trabajos.encolar(..., costo_estimado=)` (USD del proveedor, sin margen) exige y reserva antes de insertar la tarea si el tipo está en `tareas.TIPOS_QUE_COBRAN`. Todo tipo de `tareas/` está ahí o en `TIPOS_EXENTOS_DE_COBRO` con su motivo; `tests/test_cobros_worker.py` falla con un tipo nuevo sin clasificar, uno que sobra o uno que llama a `gastos.registrar_seguro` sin estar en la lista. **Una tarea nueva que paga a un proveedor entra a `TIPOS_QUE_COBRAN` y su ruta pasa `costo_estimado`.**
+- **Respaldo del worker** (`worker._sin_saldo` → `libro.puede_arrancar`): antes de correr un tipo que cobra, si el proyecto cobra, **no es continuación de una cadena** y su saldo es ≤ 0 (el saldo, no el disponible: la reserva propia no cuenta en su contra), la tarea queda en error definitivo con `worker.MENSAJE_SIN_SALDO`, sin llamar al proveedor, y corre su `AL_INTERRUMPIR`. Cubre lo que se encola sin pasar por una ruta (modo automático de Experimentos, lotes de Sprints).
+- **Rutas que llaman al proveedor dentro de la petición** (caption orgánico, locución, voz propia, final, Adaptar referente, chat de Flow Plus, regla de producto…) llaman `libro.exigir(cliente, costo)` sin `job_id` antes de gastar. **Toda ruta que guarda algo antes de encolar** (sesión de Crear, swap, fila de final…) pide saldo ANTES de guardar; si el encolado igual falla, deja la entidad en error con `e.frase_proyecto()` o la borra.
+- **Un solo manejador del rechazo**: `dashboard._saldo_insuficiente` (`@app.errorhandler(SaldoInsuficiente)`). Un fetch/JSON recibe `402 {ok: false, error, saldo_insuficiente: true, recargar_url}`; un formulario, un aviso con enlace «Recargar saldo» y vuelta al `Referer` del mismo sitio. `static/cobros.js` envuelve `fetch` para pintar ese enlace. Una ruta que envuelve `encolar` en `except Exception` deja pasar `SaldoInsuficiente`. Los **encoladores que corren dentro del worker** (director, cadena de escenas, derivaciones, Nicho, análisis de referencias, lote de Sprints) la atrapan y la dejan dicha en su entidad: nunca revientan la tarea. Derivar y rescatar piden saldo (`acciones._exigir_saldo`) ANTES de planificar, para no gastar la derivación.
+- Lo que paga Creatv a su propia cuenta (`_creatv`: barridos del admin, describir referencias, sugerir sonido, muestras de la galería, director) no tiene `cuenta_saldo`: nunca cobra ni frena. La pauta de Meta no pasa por el saldo. El flujo viejo de Higgsfield no se toca.
+
+## La reversión
+
+Cuando una tarea termina en **error definitivo** (excepción sin intentos, interrumpida por reinicio, continuación perdida, respaldo sin saldo), `worker._revertir` llama a `libro.revertir_trabajo(cliente, job_id, motivo, desde_tarea=libro.inicio_de_cadena(tarea))`: un `reverso` por cada `cobro` de esa cadena que no tenga ya uno, y un solo aviso con el total. Se revierte por `job_id` y **solo desde la primera tarea de la cadena** (`tareas.Continuar`): una pieza lanzar → sondear → recuperar comparte `job_id`, y si al final no llegó no se cobra ninguna parte. Una tarea que vuelve a `pendiente` por tener intentos no revierte. `libro.tiene_cobros` (solo lee) corre antes para no tomar el candado de escritura en cada fallo de un proyecto que nunca cobró.
+
+## Los precios que ve la persona
+
+En un proyecto que cobra **toda persona que lo mira ve precios, no costos** (también el admin en los botones). El costo y el margen solo aparecen en `/admin/cobros` y en la columna «costo» de Configuración › Gasto, solo para el admin.
+
+- `dashboard._margen_de_precio` (before_request) fija `g.cliente_precio` (el `<cliente>` de la URL o el de la sesión); `gastos.margen_vigente()` lee el margen la primera vez que algo pinta un precio y lo deja en `g.margen_precio`. Fuera de una petición, o en un proyecto que no cobra, es 1.
+- `gastos.estimar()["usd"]` **sigue siendo el COSTO** (lo usan reservas, `encolar`, comparaciones); su `texto` y `usd_precio` ya llevan el margen. Plantillas: el filtro `|precio` multiplica por el margen sin formatear (`data-usd-seg="{{ tarifa|precio }}"`); el JS de Crear no cambia. `|cobrado('video:' ~ id)` y `ver_cobrado()` dan lo ya cobrado de una pieza.
+- **Lo ya gastado**: a quien no es admin, en un proyecto que cobra, toda cifra de lo ya gastado es lo **cobrado** (cobro + reverso del libro), nunca el costo ni «costo × margen de hoy» (el margen del cobro queda en el libro). `cobros.vista.gasto_para(cliente, es_admin)` devuelve las funciones de gasto con la misma forma que las de `gastos`: modo `costo` (no cobra), `cobrado` (cliente) o `doble` (admin: costo y cobrado). Toda pantalla nueva que muestre una cifra de la tabla `gasto` a un cliente pasa por ahí.
+- **El costo no llega al navegador de un proyecto que cobra**: lo que vuelve (`total_visto`, `precio_visto`) es un precio, y el servidor lo convierte una vez con `gastos.costo_de_precio` antes de compararlo o pasarlo al libro.
+- **Falla cerrado**: si una lectura del libro falla, un cliente (no admin) ve «—», nunca el costo (`vista.puede_ver_costo`, `OCULTO`, `_filtro_cobrado`, `_ver_cobrado`).
+- Prueba de humo: `tests/test_cobros_precios.py::test_un_proyecto_que_cobra_muestra_precios_y_no_costos` renderiza las pestañas con margen 1,5 y falla si aparece un costo.
+
+## Bold: llaves, link, webhook, verificación
+
+- `.env` raíz: `BOLD_LLAVE_IDENTIDAD` (sin ella las recargas en línea están apagadas y el admin aún recarga a mano), `BOLD_LLAVE_SECRETA` (firma del webhook), `BOLD_PRUEBAS=1` (solo local: en pruebas Bold firma con la cadena vacía y `firma_valida` solo la acepta con esta marca; en producción con la secreta vacía haría falsificables los webhooks, `/admin/cobros` lo avisa). Ninguna llave llega a logs, flashes, eventos ni `pago_evento` (`cola.sin_token` sobre todo texto de error). Host fijo `integrations.api.bold.co`, nada que escriba una persona.
+- **Crear**: `POST /cliente/<c>/saldo/recargar` (mismo origen, tope de 10 por hora por proyecto con `cuentas.limite_ok("recarga:<c>")`, el monto se valida antes de gastar el tope): dólares enteros de 10 a 1 000. Inserta `recarga(pendiente)`, referencia `cv-<id>-<epoch>`, `bold.crear_link` (callback de `PLATAFORMA_URL`, nunca del Host; el `url` devuelto se comprueba que sea `checkout.bold.co`) y redirige. Si Bold falla, la recarga queda `rechazada` con el motivo en palabras.
+- **Webhook** `POST /pagos/bold/webhook`: exento de la barrera CSRF y del guard de sesión por **nombre de endpoint exacto** (`dashboard.ENDPOINTS_OTRO_ORIGEN`, `ENDPOINTS_SIN_GUARD_SESION`, `"cobros.bold_webhook"`; `test_ninguna_otra_ruta_acepta_un_post_de_otro_sitio` lo vigila). Cuerpo crudo con tope de 64 KB, firma HMAC-SHA256 (hex del cuerpo en base64) comparada con `compare_digest`, evento guardado en `pago_evento` (único por `evento_id`), respuesta sin cuerpo en menos de 2 s (los correos salen en un hilo aparte). Firma inválida → 401. Un evento con firma inválida se anota **sin el cuerpo** y con un `evento_id` propio (no el que dice traer), con cupo de 50 por hora por proceso y global en `kv` (`bold:sinfirma`): sin tope, cualquiera inflaba la tabla y competía por el candado con los cobros; la limpieza diaria borra los de más de 30 días y los firmados no se borran nunca.
+- **Qué acredita**: `SALE_APPROVED` de una recarga `pendiente`, **`rechazada` o `expirada`** → `aprobada`, guarda `pago_id`/moneda/total/medio y acredita `+milesimas` **de la recarga** (los USD elegidos; lo que Bold cobra en pesos queda solo de registro). Una sola vez: el `UPDATE … WHERE estado IN …`, `UNIQUE(tipo, recarga_id)` del libro y `UNIQUE(pago_id)`. `SALE_REJECTED` → `rechazada`. `VOID_APPROVED` de una `aprobada` → `anulada` y movimiento `anulacion` (el saldo puede quedar negativo; avisa al admin). Referencia desconocida → `sin_recarga`, aviso al admin, 200. Error inesperado → 500 (nada quedó escrito; Bold reintenta).
+- **La vuelta del checkout nunca acredita** ni lee los parámetros que Bold agrega a la URL. `GET /cliente/<c>/saldo/recarga/<id>` pinta «Verificando tu pago…» y sondea `/estado` por `data-` (sin `<script>` en línea).
+- **Verificación de respaldo** `recargas.verificar(id)`: `GET /online/link/v1/<link_id>`; `PAID` → mismo camino idempotente; `EXPIRED` → `expirada`. Corre al volver del checkout, con el botón «Verificar» y en la periódica de 10 min (`verificar_pendientes`: para a la primera caída de Bold y a los 60 s, y consulta una vieja una última vez antes de vencerla). En la web, una consulta por recarga cada 3 s, una sola en vuelo por recarga y como mucho dos a la vez, con espera corta (`bold.TIEMPO_INTERACTIVO`): Bold colgado no retiene hilos de gunicorn.
+- **Recarga manual y ajuste** (`recargas.manual`, solo admin): recarga positiva (`recarga(medio=manual, estado=aprobada)` + movimiento) o ajuste ± con nota obligatoria; decimales con 2 cifras, tope de US$ 100 000 en valor absoluto.
+
+## Las pantallas
+
+- **Configuración › Saldo y recargas** (`_config_saldo.html`, ancla `#config-ap-saldo`; solo si el proyecto cobra o mira el admin): `static/cobros.js` pide el fragmento `/cliente/<c>/saldo/panel` al abrir el apartado (saldo, disponible, recargar, movimientos paginados de 50 con «Ver más», últimas 20 recargas, CSV `saldo/movimientos.csv` con `;` y BOM). `cobros.js` se carga una vez desde `base.html` (el enlace «Recargar saldo» del 402 tiene que funcionar en toda página; cargarlo dos veces envolvería `fetch` dos veces).
+- **Chip de la barra lateral**: «Saldo: US$ 37,20 · Recargar» en tres tonos (`vista.tono`: normal, aviso bajo el umbral, bloqueo en 0 o negativo); proyecto que no cobra, el chip de siempre. Configuración › Gasto, sus CSV, la ficha de Experimentos, el evento de cierre de un sprint y las tarjetas de Crear/Final/Sprints muestran lo cobrado a un cliente.
+- **Alertas** (fuente `cobros` de `alertas.py`, ver la skill `alertas`): `sin_saldo`, `saldo_bajo`, `no_cobrado:<mov>` (7 días), `recarga_pendiente:<id>` (más de 15 min).
+- **`/admin/cobros`** (`admin_cobros.html`, `requiere_admin` en la misma regla que el panel): margen global (1,00 a 5,00; se redondea a 2 decimales ANTES de mirar el rango y el aviso dice lo guardado), tabla de proyectos (interruptor, margen propio, umbral, saldo, disponible, recargado/cobrado/costo/ganancia del mes, una consulta por columna agregada), recarga manual y ajuste, últimos 20 eventos de Bold firmados, y los avisos de configuración de Bold. Los campos numéricos se pintan con el separador de quien mira y sin miles; el parser acepta coma y punto. Prender «Cobrar» sin saldo avisa.
+
+## Qué prueba qué
+
+`tests/test_cobros_db.py` (tablas y únicos), `_libro.py` (precio, reservas, cobro, corrección, reverso, candado), `_gastos.py` (`registrar` cobra, savepoint, `entregado`), `_worker.py` (reversión por cadena, respaldo, ContextVar entre hilos, clasificación de tipos), `_freno.py` (`encolar` y rutas sin saldo, 402, encoladores del worker), `_precios.py` (margen en botones, el filtro no se congela, el costo no llega al navegador), `_vista.py` (lo cobrado, chip, panel, falla cerrado), `_bold.py`, `_recargas.py` (firma, idempotencia, webhook exento solo él, cupo sin firma, vuelta que no acredita), `_alertas.py`, `_admin.py`. `tests/test_cobros_*` entero son la red; una regla nueva lleva su prueba aquí.
+
+## Trampas (2026-10-08, cada una nos costó una ronda de revisión)
+
+- **pysqlite no emite `BEGIN` antes de leer ni antes de un `SAVEPOINT`.** Una transacción diferida que lee y después escribe recibe «database is locked» al instante en WAL si otro escritor confirmó en medio (`SQLITE_BUSY_SNAPSHOT`; `busy_timeout` no aplica), y dos lecturas-y-escrituras pueden pasar las dos la comprobación. Por eso `libro._candado(con)` (`UPDATE kv SET valor=valor`, el truco de `saldo.marcar` y `cuentas.limite_ok`) se toma **antes de leer** en `exigir`, `revertir_trabajo`, `cobrar_gasto`, `configurar`, `guardar_margen_global` y el webhook. Toda función nueva que lea y luego escriba el libro lo hace. El cobro de un gasto corre **dentro del savepoint del gasto**, después del INSERT que ya tomó el candado. Los reversos se escriben sin savepoint propio: el `RELEASE` de pysqlite confirmaría los ya escritos aunque uno posterior falle. El fixture `escritor_en_medio` (`tests/conftest.py`) mete otro escritor justo antes de un statement para probarlo.
+- **`nuevo=False` al actualizar un gasto.** `registrar` con una referencia que ya existe es una corrección: recalcula el cobro si lo tenía y NUNCA lo crea. Sin esto, prender «Cobrar» cobraba hacia atrás cualquier corrección de un gasto viejo.
+- **Los `job_id` se reusan** (son deterministas: el mismo clic de otro día, o uno por proyecto como `<cliente>__hablado_voz`, `voz_propia`, audios). Revertir «por job_id» a secas devolvía todas las voces ya entregadas cuando una fallaba. Se revierte solo desde `inicio_de_cadena`, y una continuación (`puede_arrancar`) es solo la `hecha` más reciente del mismo `job_id` que cerró dentro de `VENTANA_CONTINUACION` (2 s) de la creación de la siguiente (`cola.terminar_y_encolar` las cierra y encola en una transacción).
+- **Jinja pliega los filtros sobre constantes al compilar.** `{{ 0.04|precio }}` se habría congelado con el margen de la primera petición que compiló la plantilla, para todos los proyectos. Por eso `|precio` y `|cobrado` usan `@jinja2.pass_context` (`pass_eval_context` no basta). Un filtro nuevo que dependa del proyecto hace lo mismo.
+- **El costo nunca llega al navegador de un proyecto que cobra.** Se manda el precio; al volver, el servidor lo divide por el margen UNA vez con `gastos.costo_de_precio`. Un campo que mande `costo` al JS (`total_visto`, JSON de Nicho o del editor) rompe la regla del spec.
+- **`estimar()["usd"]` sigue siendo COSTO.** Lo que se reserva y se compara sale de ahí; el precio es `usd_precio`/`texto`. Multiplicar `usd` por el margen en otro lado cobra el margen dos veces (pasó con `hablado_rutas.crear` y su `precio_visto`).
+- **Falla cerrado para quien no es admin.** Si una lectura del libro falla, se oculta la cifra (`—`); nunca se cae al costo «por si acaso» (`puede_ver_costo`: solo `True` si se sabe que el proyecto no cobra). Cada rama de pantalla nueva lo respeta.
+- **La excepción del webhook es por nombre de endpoint exacto** (`cobros.bold_webhook`), no por prefijo `/pagos/`: otra ruta bajo ese prefijo seguiría protegida. Un webhook nuevo necesita su excepción Y su firma.
+- **Sin firma, poco cupo.** Un evento con firma inválida no debe poder inflar `pago_evento` ni competir por el candado con los cobros (cupo en memoria, luego global en `kv`).
+- **Una aprobación firmada acredita desde `rechazada` o `expirada`.** Bold manda `SALE_REJECTED` y después `SALE_APPROVED` si la persona reintenta en el mismo link, y el webhook tardío llega después de que la periódica dio la recarga por vencida: la plata sí entró. La idempotencia la dan el `UPDATE` condicional y los `UNIQUE`.
+- **El saldo puede quedar negativo** (el real supera al estimado, dos clics simultáneos, una anulación). Bloquea todo lo que cobra hasta recargar; no es un error.
+
+## Rulings de implementación (2026-10-08, donde difieren del spec)
+
+- Migración 0032 → renumerada si main ya tomó el número (ver arriba).
+- `movimiento_saldo.concepto` guarda un código, no texto del idioma del proyecto.
+- El respaldo del worker mira el **saldo**, no el disponible, y omite las continuaciones: un trabajo puede arrancar con disponible negativo por otras reservas.
+- `g.margen_precio` se lee perezoso (al primer precio de la petición), no en cada `before_request`.
+- `tienda_sync_productos` sigue sin frenar, pero su paso de pago (la regla de fidelidad con Claude, `importador._regla_si_hay_saldo`) pide saldo y se salta sin él; `sprint_qa_pendientes` no encola QA a un proyecto que cobra con saldo ≤ 0.
+- Los tipos marcados «cobra» exigen saldo positivo aunque una corrida concreta sea gratis (conservador; PND-163).
+- Una pieza que falló tras pagar (`no_cobrado`) y se recupera bajo la misma referencia sigue sin cobrarse; el aviso «no se te cobró» sale también en fallos de llamadas automáticas a Claude.
+- La ganancia del mes cuenta como pérdida el costo de un `no_cobrado` igual que el de un cobro revertido; para la lectura literal, quita `"no_cobrado"` de `TIPOS_CON_COSTO` en `cobros/vista.py`.
+- En el catálogo en inglés, «margen» es «markup» y «Cobrar» es «Charge usage» (`docs/i18n/glosario.md`).
+
+## Pendientes de esta área
+
+`docs/pendientes.md` PND-156 a PND-170: DIAN e IVA, la prueba real con Bold, suscripción y recarga automática, otra pasarela, promociones, y los bordes y la higiene que dejó la revisión de cada tarea.

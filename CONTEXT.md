@@ -183,3 +183,51 @@ Un producto que la persona sacó de circulación con «Archivar» en su ficha, o
 nada, solo deja de salir en la galería (queda en «Archivados») y al elegir producto, salvo donde ya estaba elegido.
 Vuelve con «Desarchivar».
 _Avoid_: eliminado, oculto, inactivo
+
+### Cobros
+
+**Costo**:
+Lo que Creatv le paga al proveedor por una generación; es la fila de la tabla `gasto`, sin cambios. Solo lo ve el
+admin en un proyecto que cobra.
+_Avoid_: precio (es lo que paga el proyecto), gasto (es el nombre de la tabla y de la pantalla)
+
+**Precio**:
+Lo que paga un proyecto que cobra: el costo × el margen, redondeado hacia arriba a la milésima de dólar. Es lo único que
+ve la persona del proyecto, en los botones («≈ US$») y en lo ya gastado.
+_Avoid_: tarifa (es el costo por unidad de un proveedor, `gastos.TARIFAS`)
+
+**Margen**:
+El multiplicador del costo (1,5 por defecto, de 1,00 a 5,00): global en `kv` y propio de un proyecto si el admin lo
+fija. En inglés, «markup». El margen del primer registro de un gasto queda en el cobro; cambiarlo no recalcula lo
+ya cobrado.
+_Avoid_: comisión, recargo, porcentaje
+
+**Saldo**:
+La suma del libro de movimientos de un proyecto, en milésimas de dólar enteras. Puede quedar negativo (el costo real
+superó al estimado, una anulación de Bold) y entonces no se genera nada que cueste hasta recargar.
+_Avoid_: crédito, créditos (los créditos son los de Higgsfield, del flujo viejo)
+
+**Disponible**:
+El saldo menos las reservas vivas. Es lo que mira el freno antes de aceptar un trabajo; el respaldo del worker mira el
+saldo, no el disponible.
+
+**Reserva**:
+Lo que un trabajo encolado aparta del disponible mientras su tarea está pendiente o en curso (`reserva_saldo`, por
+`job_id`). No se libera a mano: al terminar la tarea, bien o mal, deja de contar.
+
+**Recarga**:
+Un ingreso de saldo: con Bold (el cliente paga un link y el webhook firmado la acredita) o manual (el admin). Va en
+dólares enteros, de 10 a 1 000. Lo acreditado son los USD que se eligieron; lo que Bold cobra en pesos queda solo como
+registro.
+_Avoid_: pago (es lo que reporta Bold), compra, depósito
+
+**Cobrar** (el interruptor):
+La casilla por proyecto que decide si el uso se descuenta del saldo. Arranca apagada; prenderla no cobra lo ya
+generado. Un proyecto con «Cobrar» apagado, o sin cuenta de saldo, se comporta como siempre. En inglés, «Charge usage».
+_Avoid_: facturar, activar saldo
+
+**Movimiento**:
+Una fila del libro de un proyecto (`movimiento_saldo`): `recarga`, `cobro`, `reverso`, `no_cobrado` (monto 0, avisa
+que no se cobró una pieza), `ajuste` o `anulacion`. No se borra ni se edita, salvo el recálculo de un cobro cuando el
+costo de su gasto se corrige.
+_Avoid_: transacción, asiento

@@ -410,3 +410,70 @@ def test_la_pagina_muestra_las_cifras_con_formato(http):
     fila = re.search(r'<tr id="fila-acme".*?</tr>', html, re.S).group(0)
     for cifra in ("US$ 18,00", "US$ 20,00", "US$ 2,00", "US$ 1,00"):
         assert cifra in fila
+
+
+# --- el valor guardado y el separador de los campos (revisión de la tarea 10) ----------------
+
+def test_el_aviso_del_margen_global_dice_lo_que_quedo_guardado(http):
+    """«2,505» se guarda redondeado a 2 decimales: el aviso dice 2,51, no 2,505."""
+    from cobros import libro
+    c = http.como("admin")
+    c.post("/admin/cobros/margen", data={"margen": "2,505"}, headers=MISMO)
+    assert libro.margen_global() == 2.51
+    assert "Margen global guardado: 2,51." in _flashes(c)
+
+
+def test_el_margen_se_redondea_antes_de_mirar_el_rango(http):
+    """5,004 entra (queda en 5,00); 0,996 también (queda en 1,00); 5,006 no."""
+    from cobros import libro
+    c = http.como("admin")
+    c.post("/admin/cobros/margen", data={"margen": "5,004"}, headers=MISMO)
+    assert libro.margen_global() == 5.0
+    c.post("/admin/cobros/margen", data={"margen": "0,996"}, headers=MISMO)
+    assert libro.margen_global() == 1.0
+    c.post("/admin/cobros/margen", data={"margen": "5,006"}, headers=MISMO)
+    assert libro.margen_global() == 1.0   # rechazado: no cambió
+
+
+def test_el_margen_propio_guarda_lo_redondeado(http):
+    from cobros import libro
+    http.como("admin").post("/admin/cobros/acme/cuenta", data={"margen": "2.255"}, headers=MISMO)
+    assert libro.cuenta("acme")["margen_propio"] == 2.26
+
+
+def _valor_del_campo(html, nombre, fila=None):
+    zona = re.search(rf'<tr id="fila-{fila}".*?</tr>', html, re.S).group(0) if fila else html
+    return re.search(rf'name="{nombre}"[^>]*?value="([^"]*)"', zona).group(1)
+
+
+def test_los_campos_llevan_el_separador_de_quien_mira(http):
+    from cobros import libro
+    libro.guardar_margen_global(1.75, "admin")
+    libro.configurar("acme", usuario="admin", margen=2.25, umbral=12_500)
+    html = http.como("admin").get("/admin/cobros").get_data(as_text=True)
+    assert _valor_del_campo(html, "margen") == "1,75"
+    assert _valor_del_campo(html, "margen", fila="acme") == "2,25"
+    assert _valor_del_campo(html, "umbral", fila="acme") == "12,50"
+    assert _valor_del_campo(html, "margen", fila="otro") == ""
+
+
+def test_los_campos_en_ingles_llevan_punto_y_sin_miles(http, monkeypatch):
+    import idiomas
+    from cobros import libro
+    monkeypatch.setattr(idiomas, "de_usuario", lambda _usuario: "en")
+    libro.configurar("acme", usuario="admin", margen=2.25, umbral=1_500_000)
+    html = http.como("admin").get("/admin/cobros").get_data(as_text=True)
+    assert _valor_del_campo(html, "margen", fila="acme") == "2.25"
+    assert _valor_del_campo(html, "umbral", fila="acme") == "1500.00"   # sin «1,500.00»: el parser no lo leería
+
+
+def test_lo_que_el_campo_muestra_se_vuelve_a_guardar_igual(http):
+    """El ciclo del formulario: mostrar, enviar sin tocar, y no cambia nada."""
+    from cobros import libro
+    libro.configurar("acme", usuario="admin", margen=2.25, umbral=12_500)
+    c = http.como("admin")
+    html = c.get("/admin/cobros").get_data(as_text=True)
+    c.post("/admin/cobros/acme/cuenta", data={"margen": _valor_del_campo(html, "margen", fila="acme"),
+                                              "umbral": _valor_del_campo(html, "umbral", fila="acme")}, headers=MISMO)
+    cta = libro.cuenta("acme")
+    assert cta["margen_propio"] == 2.25 and cta["umbral"] == 12_500

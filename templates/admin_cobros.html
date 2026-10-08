@@ -5,7 +5,7 @@
    (cobros.vista.resumen_admin + nombre; montos en milésimas), margen_global,
    eventos (vista.ultimos_eventos, solo firmados, con resultado_texto),
    webhook_callado, avisos_bold {sin_llaves, pruebas_abiertas} (nunca un valor
-   de llave). Los *_texto ya vienen con el separador decimal de quien mira. Todo POST va al Blueprint
+   de llave). Los *_texto y *_campo ya vienen con el separador decimal de quien mira. Todo POST va al Blueprint
    cobros y pasa por la barrera CSRF. #}
 <section class="hero aparece">
   <div class="hero-texto">
@@ -40,7 +40,7 @@
   </div>
   <form method="post" action="{{ url_for('cobros.admin_margen') }}" class="cobros-admin-linea">
     <label>{{ _('Margen (de %(min)s a %(max)s)', min=margen_min_texto, max=margen_max_texto) }}
-      <input type="text" inputmode="decimal" name="margen" value="{{ margen_global }}" required></label>
+      <input type="text" inputmode="decimal" name="margen" value="{{ margen_global_campo }}" required></label>
     <button type="submit" class="btn-generar">{{ _('Guardar margen') }}</button>
   </form>
 </section>
@@ -75,13 +75,13 @@
           <td>
             <form id="cuenta-{{ f.cliente }}" method="post" action="{{ url_for('cobros.admin_cuenta', cliente=f.cliente) }}"></form>
             <input type="text" inputmode="decimal" name="margen" form="cuenta-{{ f.cliente }}" class="cobros-admin-num"
-                   value="{{ f.margen_propio if f.margen_propio is not none else '' }}"
+                   value="{{ f.margen_propio_texto }}"
                    placeholder="{{ _('global (%(margen)s)', margen=margen_global_texto) }}" aria-label="{{ _('Margen propio') }}">
           </td>
           <td>
             <div class="cobros-admin-celda">
               <input type="text" inputmode="decimal" name="umbral" form="cuenta-{{ f.cliente }}" class="cobros-admin-num"
-                     value="{{ '%.2f'|format(f.umbral / 1000) }}" aria-label="{{ _('Umbral de aviso en dólares') }}">
+                     value="{{ f.umbral_texto }}" aria-label="{{ _('Umbral de aviso en dólares') }}">
               <button type="submit" form="cuenta-{{ f.cliente }}" class="btn-sm">{{ _('Guardar') }}</button>
             </div>
           </td>

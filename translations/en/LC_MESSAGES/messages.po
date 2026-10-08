@@ -5409,7 +5409,7 @@ msgstr "The place and the light; the product enters the frame and is seen workin
 
 #, python-format
 msgid "El margen va de %(min)s a %(max)s."
-msgstr "The margin ranges from %(min)s to %(max)s."
+msgstr "The markup ranges from %(min)s to %(max)s."
 
 msgid "El material de cerca, un giro que muestra la forma completa y un cierre de lucimiento sobre el producto."
 msgstr "The material up close, a turn that shows the whole shape and a hero close on the product."

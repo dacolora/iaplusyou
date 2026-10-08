@@ -15,7 +15,7 @@
 import os
 import threading
 import time
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from functools import wraps
 
 import sqlalchemy as sa
@@ -274,7 +274,12 @@ def _decimal(texto):
 
 
 def _margen(texto):
+    """El margen tal como se guardará: redondeado a 2 decimales (como
+    `libro._validar_margen`) ANTES de mirar el rango, para que el aviso diga lo
+    que quedó guardado y no lo que se escribió."""
     valor = _decimal(texto)
+    if valor is not None:
+        valor = valor.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     if valor is None or not libro.MARGEN_MIN <= valor <= libro.MARGEN_MAX:
         raise ValueError(gettext("El margen va de %(min)s a %(max)s.", min=idiomas.numero(libro.MARGEN_MIN, 2),
                                  max=idiomas.numero(libro.MARGEN_MAX, 2)))
@@ -288,6 +293,13 @@ def _umbral(texto):
         raise ValueError(gettext("El umbral va de %(min)s a %(max)s, con hasta 2 decimales.",
                                  min=gastos.formatear(0), max=gastos.formatear(MAX_UMBRAL_USD)))
     return int(valor * 1000)
+
+
+def _campo(valor, decimales=2):
+    """Un número para un `<input>`: con el separador decimal de quien mira y sin
+    miles (el parser acepta coma y punto, pero no «1.500,00»)."""
+    separador = idiomas.numero(1.5, 1)[1]
+    return f"{float(valor):.{decimales}f}".replace(".", separador)
 
 
 def _avisos_bold():
@@ -305,13 +317,15 @@ def admin_cobros():
     filas = vista.resumen_admin()
     for f in filas:
         f["nombre"] = proyectos.nombre_visible(f["cliente"])
+        f["margen_propio_texto"] = _campo(f["margen_propio"]) if f["margen_propio"] is not None else ""
+        f["umbral_texto"] = _campo(f["umbral"] / 1000)
     eventos = vista.ultimos_eventos()
     for e in eventos:
         e["resultado_texto"] = vista.nombre_resultado(e["resultado"])
     margen = libro.margen_global()
     return render_template("admin_cobros.html", filas=filas, margen_global=margen,
                            eventos=eventos, webhook_callado=vista.webhook_callado(), avisos_bold=_avisos_bold(),
-                           margen_global_texto=idiomas.numero(margen, 2),
+                           margen_global_texto=idiomas.numero(margen, 2), margen_global_campo=_campo(margen),
                            margen_min_texto=idiomas.numero(libro.MARGEN_MIN, 2),
                            margen_max_texto=idiomas.numero(libro.MARGEN_MAX, 2))
 
