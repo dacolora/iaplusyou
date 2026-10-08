@@ -111,3 +111,71 @@ def test_encolar_es_una_por_anuncio_y_max_intentos_1(en_cola):
     assert t.analisis_vivos("acme") == {"acme__tw_anuncio__facebook-ads__p1"}
     assert t.id_valido("facebook-ads") and t.id_valido("120254135264020640")
     assert not t.id_valido("a/b") and not t.id_valido("") and not t.id_valido("x" * 81)
+    # `$` deja pasar un salto de línea final: «p1%0A» tendría su propio job_id y saltaría el «uno por anuncio»
+    assert not t.id_valido("p1\n") and not t.id_valido("a" * 80 + "\n") and t.id_valido("a" * 80)
+
+
+def test_encolar_rechaza_ids_invalidos_sin_encolar(en_cola):
+    t = en_cola["t"]
+    for canal, ad_id in (("facebook-ads", "p1\n"), ("a/b", "p1"), ("facebook-ads", ""), ("facebook-ads", "x" * 81),
+                         ("facebook-ads\n", "p1")):
+        assert t.encolar_analisis("acme", en_cola["aid"], canal, ad_id) is False
+    with db.conectar() as con:
+        assert con.execute(sa.select(db.tarea.c.id).where(db.tarea.c.tipo == "tw_analizar_anuncio")).first() is None
+
+
+def _analizar_bien(monkeypatch):
+    monkeypatch.setattr(mejorar, "analizar", lambda texto, imagenes, idioma, verificable_extra="": (
+        mejorar.parsear(respuesta(), texto), 10000, 5000))
+
+
+def _falla_al(monkeypatch, estado):
+    """`datos.actualizar_analisis` que lanza cuando se le pide ese estado (las demás escrituras pasan)."""
+    original = datos.actualizar_analisis
+
+    def _wrapper(analisis_id, **campos):
+        if campos.get("estado") == estado:
+            raise RuntimeError("base bloqueada")
+        return original(analisis_id, **campos)
+    monkeypatch.setattr(datos, "actualizar_analisis", _wrapper)
+
+
+def test_si_falla_guardar_la_lista_queda_en_error_y_claude_se_anota_una_vez(en_cola, monkeypatch):
+    _analizar_bien(monkeypatch)
+    _falla_al(monkeypatch, "lista")
+    llamadas = []                                  # `gastos.registrar` es idempotente por referencia: se cuentan las llamadas
+    registrar_seguro = en_cola["t"].gastos.registrar_seguro
+    monkeypatch.setattr(en_cola["t"].gastos, "registrar_seguro",
+                        lambda cliente, tipo, usd, referencia, **kw: (llamadas.append(tipo),
+                                                                      registrar_seguro(cliente, tipo, usd, referencia, **kw))[1])
+    with pytest.raises(RuntimeError):
+        en_cola["t"].tw_analizar_anuncio({"id": 6, "payload": {"cliente": "acme", "analisis_id": en_cola["aid"]}})
+    assert sorted(llamadas) == ["evaluacion", "transcripcion"]
+    fila = datos.analisis_anuncio("acme", en_cola["aid"])
+    assert fila["estado"] == "error" and "No se pudo" in fila["error"] and "base bloqueada" not in fila["error"]
+    g = _gastos()
+    assert [x["tipo"] for x in g] == ["evaluacion", "transcripcion"]          # Claude UNA vez, no dos
+    assert g[0]["usd"] > 0 and fila["usd"] == pytest.approx(g[0]["usd"] + 0.001)
+
+
+def test_si_falla_marcar_analizando_la_fila_no_queda_colgada(en_cola, monkeypatch):
+    _analizar_bien(monkeypatch)
+    _falla_al(monkeypatch, "analizando")
+    with pytest.raises(RuntimeError):
+        en_cola["t"].tw_analizar_anuncio({"id": 7, "payload": {"cliente": "acme", "analisis_id": en_cola["aid"]}})
+    fila = datos.analisis_anuncio("acme", en_cola["aid"])
+    assert fila["estado"] == "error" and fila["error"]
+    assert _gastos() == []                                                      # no llegó a pagar nada
+
+
+def test_si_falla_el_precio_de_claude_la_fila_queda_en_error(en_cola, monkeypatch):
+    _analizar_bien(monkeypatch)
+
+    def _sin_precio(*a, **k):
+        raise RuntimeError("sin precios")
+    monkeypatch.setattr(en_cola["t"], "costo_real", _sin_precio)
+    with pytest.raises(RuntimeError):
+        en_cola["t"].tw_analizar_anuncio({"id": 8, "payload": {"cliente": "acme", "analisis_id": en_cola["aid"]}})
+    fila = datos.analisis_anuncio("acme", en_cola["aid"])
+    assert fila["estado"] == "error"
+    assert [x["tipo"] for x in _gastos()] == ["transcripcion"]                  # la voz sí se pagó y se anotó

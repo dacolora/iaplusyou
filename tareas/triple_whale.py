@@ -89,8 +89,9 @@ _RE_ID = re.compile(r"^[A-Za-z0-9_.-]{1,80}$")
 
 
 def id_valido(valor):
-    """Canal o ad_id que puede ir en una URL y en un job_id."""
-    return bool(_RE_ID.match(str(valor or "")))
+    """Canal o ad_id que puede ir en una URL y en un job_id. `fullmatch`, no `match` con `$`: `$` deja pasar un salto
+    de línea final y «p1%0A» tendría su propio job_id (un segundo análisis pagado del mismo anuncio)."""
+    return bool(_RE_ID.fullmatch(str(valor or "")))
 
 
 def job_id_analisis(cliente, canal, ad_id):
@@ -98,7 +99,10 @@ def job_id_analisis(cliente, canal, ad_id):
 
 
 def encolar_analisis(cliente, analisis_id, canal, ad_id):
-    """max_intentos=1: paga a fal y a Claude. False si ese anuncio ya tenía uno vivo."""
+    """max_intentos=1: paga a fal y a Claude. False si ese anuncio ya tenía uno vivo, o si el canal o el ad_id no son
+    válidos (la garantía de «uno por anuncio» no depende de que cada ruta valide antes)."""
+    if not (id_valido(canal) and id_valido(ad_id)):
+        return False
     return trabajos.encolar(job_id_analisis(cliente, canal, ad_id), TIPO_ANALIZAR,
                             {"cliente": cliente, "analisis_id": int(analisis_id)}, cliente=cliente,
                             duracion_estimada=90, etapas=ETAPAS_ANALIZAR, max_intentos=1)
@@ -125,13 +129,16 @@ def tw_analizar_anuncio(tarea):
     if fila is None:
         return gettext("Ese análisis ya no existe.")
     job_id = tarea.get("job_id") or job_id_analisis(cliente, fila["canal"], fila["ad_id"])
-    datos.actualizar_analisis(aid, estado="analizando", tarea_id=tarea.get("id"), error=None)
     foto = fila["foto"] or {}
     referencia = f"tw_anuncio:{aid}{ref_sufijo(tarea)}"
     medios = {"visual": None, "fotogramas": 0, "transcripcion": None,
               "copy": bool((foto.get("creativo") or {}).get("copy"))}
-    usd_voz, temporales = 0.0, []
+    usd_voz, usd_claude, entrada, salida, temporales = 0.0, 0.0, 0, 0, []
+    claude_anotado = False
+    # Todo lo que pasa después de leer la fila va dentro del try: cualquier fallo (también al marcar «analizando», al
+    # poner el precio o al guardar la lista) deja la fila en `error` con palabras, nunca colgada en en_cola/analizando.
     try:
+        datos.actualizar_analisis(aid, estado="analizando", tarea_id=tarea.get("id"), error=None)
         trabajos.reportar(job_id, etapa=idiomas.N_("Bajando el video"))
         vis, temporales = mejorar.visuales(foto)
         medios.update(visual=vis["clase"], fotogramas=vis["fotogramas"])
@@ -157,24 +164,32 @@ def tw_analizar_anuncio(tarea):
         segundos = " ".join(b["text"] for b in vis["bloques"] if b.get("type") == "text")
         resultado, entrada, salida = mejorar.analizar(texto, vis["bloques"], idiomas.de_proyecto(cliente),
                                                       verificable_extra=segundos)
+        # El gasto de Claude se anota UNA vez, antes de la última escritura: si esa falla, el except no lo repite.
+        usd_claude = costo_real(entrada, salida)
+        gastos.registrar_seguro(cliente, "evaluacion", usd_claude, referencia, proveedor="anthropic",
+                                detalle=gettext("un anuncio de Triple Whale"))
+        claude_anotado = True
+        datos.actualizar_analisis(aid, estado="lista", resultado=resultado, medios=medios, error=None,
+                                  usd=round(usd_voz + usd_claude, 4))
     except Exception as e:
-        entrada = int(getattr(e, "tokens_entrada", 0) or 0)
-        salida = int(getattr(e, "tokens_salida", 0) or 0)
-        usd_claude = costo_real(entrada, salida) if (entrada or salida) else 0.0
-        if usd_claude:
-            gastos.registrar_seguro(cliente, "evaluacion", usd_claude, referencia, proveedor="anthropic",
-                                    detalle=gettext("sin resultado usable"))
+        if not claude_anotado:
+            # Los tokens vienen de la excepción (AnalisisInvalido) o, si Claude sí contestó y falló el precio, de aquí.
+            entrada = int(getattr(e, "tokens_entrada", entrada) or 0)
+            salida = int(getattr(e, "tokens_salida", salida) or 0)
+            try:
+                usd_claude = costo_real(entrada, salida) if (entrada or salida) else 0.0
+            except Exception:  # noqa: BLE001 — sin precio no se inventa uno; el error de la fila sigue siendo en palabras
+                log.exception("sin precio para los tokens del análisis %s", aid)
+                usd_claude = 0.0
+            if usd_claude:
+                gastos.registrar_seguro(cliente, "evaluacion", usd_claude, referencia, proveedor="anthropic",
+                                        detalle=gettext("sin resultado usable"))
         mensaje = mejorar.texto_error(e)
         datos.actualizar_analisis(aid, estado="error", error=mensaje, medios=medios,
                                   usd=round(usd_voz + usd_claude, 4))
         raise RuntimeError(mensaje) from None
     finally:
         analisis.borrar_temporales(temporales)
-    usd_claude = costo_real(entrada, salida)
-    gastos.registrar_seguro(cliente, "evaluacion", usd_claude, referencia, proveedor="anthropic",
-                            detalle=gettext("un anuncio de Triple Whale"))
-    datos.actualizar_analisis(aid, estado="lista", resultado=resultado, medios=medios, error=None,
-                              usd=round(usd_voz + usd_claude, 4))
     return gettext("Análisis listo: %(frase)s", frase=resultado["frase"])
 
 
