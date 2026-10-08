@@ -214,14 +214,24 @@ def rango(cliente, cuentas):
     return {"filas": int(r.filas or 0), "desde": r.desde, "hasta": r.hasta} if r.filas else vacio
 
 
+def _extremo_fecha(funcion, cliente, act, tabla):
+    t = {"cuenta": db.meta_cuenta_dia, "anuncio": db.meta_anuncio_dia}[tabla]
+    with db.conectar() as con:
+        return con.execute(sa.select(funcion(t.c.fecha)).where(
+            t.c.cliente == cliente, t.c.ad_account_id == act)).scalar()
+
+
 def ultima_fecha(cliente, act, tabla="cuenta"):
     """La fecha más reciente ya copiada (AAAA-MM-DD) de ESA cuenta en `meta_cuenta_dia` (tabla="cuenta") o en
     `meta_anuncio_dia` (tabla="anuncio"); None si no hay ninguna. La copia la usa para cubrir el hueco si pasó más
     de una semana desde la última vez. Una consulta por el índice (cliente, cuenta, fecha)."""
-    t = {"cuenta": db.meta_cuenta_dia, "anuncio": db.meta_anuncio_dia}[tabla]
-    with db.conectar() as con:
-        return con.execute(sa.select(sa.func.max(t.c.fecha)).where(
-            t.c.cliente == cliente, t.c.ad_account_id == act)).scalar()
+    return _extremo_fecha(sa.func.max, cliente, act, tabla)
+
+
+def primera_fecha(cliente, act, tabla="cuenta"):
+    """La fecha más antigua ya copiada de ESA cuenta (ver `ultima_fecha`); None si no hay ninguna. La copia la usa
+    para pedir las tasas de cambio de TODOS los días guardados, no solo los de esta corrida."""
+    return _extremo_fecha(sa.func.min, cliente, act, tabla)
 
 
 def cuenta_por_dia(cliente, cuentas, desde, hasta):

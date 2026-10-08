@@ -30,7 +30,7 @@ class FakeGraph:
 
     def __init__(self, monkeypatch, info=None, campanas=None, conjuntos=None, anuncios=None, filas_anuncio=None,
                  falla_informe=None, falla_ventana=None, falla_anuncios=None, anuncios_pausados=None,
-                 falla_pausados=None, falla_informe_n=None, falla_cuenta_n=None):
+                 falla_pausados=None, falla_informe_n=None, falla_cuenta_n=None, filas_cuenta=None):
         self.info = info if info is not None else {
             "name": "HappyFlops SE", "currency": "SEK", "timezone_name": "Europe/Stockholm",
             "account_status": 1, "disable_reason": 0, "amount_spent": "12345", "spend_cap": "0"}
@@ -49,6 +49,7 @@ class FakeGraph:
         self.falla_informe, self.falla_ventana, self.falla_anuncios = falla_informe, falla_ventana, falla_anuncios
         self.falla_pausados = falla_pausados
         self.falla_informe_n = falla_informe_n   # solo falla_informe en el informe número N (1 = el primero)
+        self.filas_cuenta = filas_cuenta         # si se da, lo único que devuelve la consulta de cuenta por día
         self.falla_cuenta_n = falla_cuenta_n     # un límite de Meta (17) en la consulta de cuenta por día número N
         self.paginas_informe = []   # cuántas páginas entregó cada informe al callback (None = devolvió la lista)
         self.llamadas = []
@@ -104,6 +105,8 @@ class FakeGraph:
         assert params["level"] == "account" and params["time_increment"] == 1
         if self.falla_cuenta_n and len(self.de("paginar", "/insights")) - self._de_campana() == self.falla_cuenta_n:
             raise graph.ErrorGraph("Meta pidió esperar", codigo=17)
+        if self.filas_cuenta is not None:
+            return self.filas_cuenta
         return [dict(FILA_META, date_start=d) for d in _dias(json.loads(params["time_range"]))]
 
     def _de_campana(self):
@@ -649,3 +652,31 @@ def test_el_relleno_de_la_cuenta_tambien_se_reanuda(cuenta, monkeypatch):
     extra = cuentas.cuenta(CLI, ACT)["extra"]
     assert extra["backfill_cuenta"] is True and extra["backfill_anuncios"] is True
     assert len(g.de("informe")) == 9    # los anuncios no habían empezado: sus 90 días enteros, nuevo -> viejo
+
+
+# ------------------------------------------------ R14: tasas de todos los días guardados ---
+
+def test_las_tasas_se_piden_desde_el_dia_mas_viejo_guardado_aunque_esta_corrida_copie_solo_siete(cuenta, monkeypatch):
+    # Corrida 1: la cuenta se rellena entera (396 días) pero el informe de anuncios falla antes de llegar a las tasas.
+    FakeGraph(monkeypatch, falla_informe=graph.ErrorGraph("Meta pidió esperar", codigo=17))
+    with pytest.raises(graph.ErrorGraph):
+        sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    assert cuentas.cuenta(CLI, ACT)["extra"]["backfill_cuenta"] is True
+    # Corrida 2: la cuenta ya está hecha, solo copia 7 días; las tasas igual cubren los 396 días guardados.
+    g = FakeGraph(monkeypatch)
+    r = sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    assert r["dias_cuenta"] == 7 and r["desde"] == (HOY - timedelta(days=6)).isoformat()
+    (a, k), = g.asegurar
+    assert a == (["SEK"], (HOY - timedelta(days=395)).isoformat(), HOY.isoformat()) and k == {"hoy": HOY}
+    # Y una corrida más, con todo hecho, también.
+    g.asegurar.clear()
+    sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    assert g.asegurar[0][0][1] == (HOY - timedelta(days=395)).isoformat()
+
+
+def test_sin_dias_de_cuenta_guardados_las_tasas_usan_el_desde_de_esta_corrida(cuenta, monkeypatch):
+    g = FakeGraph(monkeypatch, filas_cuenta=[])   # una cuenta sin gasto: Meta no devuelve ningún día
+    r = sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    assert r["dias_cuenta"] == 0 and datos.primera_fecha(CLI, ACT, "cuenta") is None
+    (a, _k), = g.asegurar
+    assert a == (["SEK"], (HOY - timedelta(days=395)).isoformat(), HOY.isoformat())

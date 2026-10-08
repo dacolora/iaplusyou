@@ -1041,7 +1041,11 @@ meta_cuenta = Table("meta_cuenta", metadata,
     Column("error", Text),
     Column("ultima_copia", String(19)),
     Column("agregada_por", String(80)),
-    Column("extra", JSON, default=dict),                     # backfill_hecho, cuenta{account_status,…}
+    # Lo que escribe meta_rendimiento/sync.py: cuenta {account_status, disable_reason, amount_spent, spend_cap},
+    # backfill_cuenta / backfill_anuncios (cada mitad de la primera copia hecha), backfill_hecho (las dos; las copias
+    # viejas solo tienen esta), cuenta_desde / anuncios_desde (día más viejo ya copiado de la primera copia en curso),
+    # listado_completo_en (cuándo se hizo el último listado completo de anuncios, con pausados).
+    Column("extra", JSON, default=dict),
     sa.Index("uq_meta_cuenta_act", "ad_account_id", unique=True),
     sqlite_autoincrement=True,
 )

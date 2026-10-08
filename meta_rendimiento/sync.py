@@ -400,9 +400,11 @@ def sincronizar(cliente, ad_account_id, token, hoy=None, on_etapa=None):
         if filas:
             datos.guardar_alcance(cliente, act, filas)
 
-    # 6. Tasas de cambio a USD (nunca lanza).
+    # 6. Tasas de cambio a USD (nunca lanza). Desde el día más viejo YA guardado de la cuenta, no solo desde esta
+    # corrida: si el relleno se hizo en varias corridas, los días de las primeras también necesitan su tasa.
     if moneda:
-        tasas.asegurar([moneda], desde_cuenta.isoformat(), hoy.isoformat(), hoy=hoy)
+        tasas.asegurar([moneda], datos.primera_fecha(cliente, act, "cuenta") or desde_cuenta.isoformat(),
+                       hoy.isoformat(), hoy=hoy)
 
     cuentas.actualizar(cliente, act, estado="ok", error=None, ultima_copia=db.ahora())
     cuentas.actualizar_extra(cliente, act, {"backfill_hecho": True})
