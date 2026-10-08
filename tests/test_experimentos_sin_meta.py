@@ -35,7 +35,7 @@ def test_sin_meta_ni_historial_la_pestana_es_solo_conectar(app, monkeypatch, bas
     # Nada de la tabla vacía, ni de armar un experimento, ni de las reglas del motor.
     assert 'id="cr-resultados"' not in tab and "exp_resultados.js" not in tab
     assert "+ Nuevo experimento" not in tab and "/experimentos/nuevo" not in tab
-    assert 'id="reglas-motor"' not in tab and "Descargar CSV del mes" not in tab
+    assert 'id="reglas-motor"' not in tab and "Descargar CSV" not in tab
     # Y Configuración no enlaza a unas reglas que no están en la página.
     assert 'id="config-reglas-enlace"' not in html
 

@@ -1,5 +1,5 @@
 """El Tablero (Bloque 6) fundido en Experimentos (E2, spec 2026-10-02): lo que antes era la pestaña Tablero ahora
-vive en el centro de resultados — los totales y el mes a mes en el historial (sección 09 de `exp_resultados`), el
+vive en el centro de resultados — los totales en «Totales desde el inicio» (sección 09 de `exp_resultados`), el
 gráfico de 30 días en «Día a día» (sección 02), las ganadoras en el ranking (sección 05), la línea de alertas en
 «Necesita tu decisión» — y la pestaña ya no existe (`tablero` resuelve a `experimentos`, que es la primera y la de
 por defecto). Se prueba el render de la página y del fragmento con datos sembrados, el estado vacío, la descarga
@@ -63,20 +63,15 @@ def _sembrar(base_temporal):
 
 
 def _historial(c, **filtro):
-    """El historial (sección 09 de `exp_resultados`): los totales, el mes a mes y la tienda según Triple Whale, que
+    """El historial (sección 09 de `exp_resultados`): los totales y la tienda según Triple Whale, que
     eran el cuerpo de la pestaña Tablero."""
     html = _resultados(c, **filtro)
-    return html[html.index("Historial mes a mes"):]
+    return html[html.index("Totales desde el inicio"):]
 
 
 def _seccion_alertas(html):
     ini = html.index('<section id="tab-alertas"')
     return html[ini:html.index('<section id="tab-', ini + 10)]
-
-
-def _mes_a_mes(tb):
-    ini = tb.index('class="tb-meses')
-    return tb[ini:tb.index("</table>", ini)]
 
 
 def _datos_graficos(html):
@@ -110,20 +105,14 @@ def test_tablero_con_datos(app, base_temporal, monkeypatch):
     exp = pagina[pagina.index('<section id="tab-experimentos"'):pagina.index('<section id="tab-alertas"')]
     assert "<h2>Experimentos</h2>" in exp and "Tablero · septiembre 2026" not in pagina
     html = _resultados(app["c"])
-    hist = html[html.index("Historial mes a mes"):]
+    hist = html[html.index("Totales desde el inicio"):]
     # Tiles: el total desde el inicio (el último acumulado): gasto 350, compras 3, ingresos 12.000, ROAS 34,3.
-    tiles = hist[:hist.index('class="tb-meses')]
+    tiles = hist[:]
     assert "Gasto total" in tiles and "350 COP" in tiles and "12.000 COP" in tiles and "34,3" in tiles
     assert "Gasto del mes" not in tiles and "250 COP" not in tiles
     assert "Experimentos corriendo" in tiles and "Propuestas pendientes" in tiles
-    # Mes a mes: septiembre (250, 2, 7.000, ROAS 28) arriba de agosto (100, 1, 5.000, ROAS 50).
-    meses = _mes_a_mes(hist)
-    assert "Mes a mes" in hist
-    assert meses.index("septiembre 2026") < meses.index("agosto 2026")
-    sep = meses[meses.index("septiembre 2026"):meses.index("agosto 2026")]
-    assert "250 COP" in sep and "7.000 COP" in sep and "28,0" in sep and "<td" in sep
-    ago = meses[meses.index("agosto 2026"):]
-    assert "100 COP" in ago and "5.000 COP" in ago and "50,0" in ago
+    # Sin «Mes a mes» desde 2026-10-08 (Daniel: solo totales, el mes confundía a sus clientes).
+    assert "Mes a mes" not in hist and 'class="tb-meses' not in hist
     # El gráfico de 30 días (SVG del Tablero) lo reemplaza «Día a día» (sección 02): el JS dibuja las barras de
     # gasto y la línea de la métrica con el JSON del fragmento, que lleva el gasto de cada día.
     assert 'data-cr-grafico="dia"' in html and 'class="tb-grafico"' not in html
@@ -140,9 +129,9 @@ def test_tablero_con_datos(app, base_temporal, monkeypatch):
     al = _seccion_alertas(pagina)
     assert "11 h sin métricas nuevas de Meta" in al
     assert "11 h sin métricas nuevas de Meta" not in html and "alertas necesitan tu atención" in html
-    assert "Descargar CSV del mes" in pagina and "/cliente/acme/tablero/mes.csv" in pagina
+    assert "/cliente/acme/tablero/mes.csv" in exp and "Descargar CSV del mes" not in pagina
     # m3 (revisión final de E2): una sola vez, en la cabecera; el historial del fragmento ya no lo repite
-    assert exp.count("Descargar CSV del mes") == 1 and "Descargar CSV del mes" not in html
+    assert exp.count("Descargar CSV") == 1 and "Descargar CSV" not in html
 
 
 def test_tablero_vacio(app, base_temporal, monkeypatch):
@@ -158,12 +147,11 @@ def test_tablero_vacio(app, base_temporal, monkeypatch):
     # Sin alertas ni propuestas: «Sin alertas. Todo en orden.» ya no tiene línea propia; lo dice «Nada por decidir»
     # y la línea de alertas solo sale cuando hay (el conteo vive en la burbuja del menú).
     assert "Nada por decidir" in html and "cr-alertas-linea" not in html and "Sin alertas. Todo en orden." not in html
-    hist = html[html.index("Historial mes a mes"):]
+    hist = html[html.index("Totales desde el inicio"):]
     assert "sin ventas medibles" in hist
     assert "tb-barra" not in html   # sin datos no se pinta un gráfico vacío
     assert 'data-cr-grafico="dia"' not in html and "Sin datos en este periodo" in html
-    assert "Mes a mes" in hist and 'class="tb-meses' not in hist
-    assert "Todavía no hay gasto en ningún mes" in hist
+    assert "Mes a mes" not in hist and 'class="tb-meses' not in hist
 
 
 def test_tablero_resume_las_alertas_en_una_linea(app, base_temporal, monkeypatch):
@@ -199,17 +187,19 @@ def test_tablero_pestana_por_defecto_y_sidebar(app, base_temporal):
     assert "t === 'ads' || t === 'tablero') return 'experimentos'" in html
 
 
-def test_csv_del_mes(app, base_temporal, monkeypatch):
+def test_csv_trae_todo_desde_el_inicio(app, base_temporal, monkeypatch):
+    """Desde 2026-10-08 el CSV de Experimentos trae lo acumulado de cada pieza
+    (agosto + septiembre), no solo el mes; la ruta sigue siendo /tablero/mes.csv."""
     _sembrar(base_temporal)
     _reloj(monkeypatch)
     r = app["c"].get("/cliente/acme/tablero/mes.csv")
     assert r.status_code == 200
     assert r.headers["Content-Type"].startswith("text/csv")
     assert "charset=utf-8" in r.headers["Content-Type"]
-    assert r.headers["Content-Disposition"] == 'attachment; filename="tablero_acme_2026-09.csv"'
+    assert r.headers["Content-Disposition"] == 'attachment; filename="tablero_acme_total_2026-09-16.csv"'
     lineas = r.get_data(as_text=True).lstrip("﻿").splitlines()
     assert lineas[0] == "experimento;pais;pieza;veredicto;impresiones;clics;gasto;compras;ingresos;roas;moneda"
-    assert lineas[1].startswith("Cojín abrazable;CO;Final es_CO;ganador;3000;30;250;2;7000;28;COP")
+    assert lineas[1] == "Cojín abrazable;CO;Final es_CO;ganador;4000;40;350;3;12000;34,29;COP"
 
 
 def test_csv_rechaza_cliente_cruzado(app, base_temporal):
@@ -245,7 +235,8 @@ def test_contexto_tablero_tolera_una_parte_rota(app, base_temporal, monkeypatch)
     # El resto se sigue mostrando: el centro de resultados (donde se fundió el Tablero) trae el gasto y la pieza.
     resultados = _resultados(app["c"])
     assert "SECRETO" not in resultados
-    assert "250 COP" in resultados and "Final es_CO" in resultados
+    # «Desde el inicio» por defecto (2026-10-08): el gasto total de la pieza, agosto incluido.
+    assert "350 COP" in resultados and "Final es_CO" in resultados
 
 
 def test_grafico_tablero_geometria(app):
@@ -453,13 +444,14 @@ def test_contexto_tablero_tolera_el_mes_a_mes_roto(app, base_temporal, monkeypat
     assert ctx["meses"] is None and ctx["total"] is not None
     assert "meses: ZeroDivisionError" in ctx["errores"]
     hist = _historial(app["c"])
-    assert "No se pudo calcular el desglose por mes." in hist and "350 COP" in hist     # el total sigue
+    # El «Mes a mes» ya no se pinta (2026-10-08): que su parte falle no cambia nada en pantalla.
+    assert "No se pudo calcular el desglose por mes." not in hist and "350 COP" in hist     # el total sigue
 
 
-def test_tile_generacion_total_y_por_mes(app, base_temporal, monkeypatch):
+def test_tile_generacion_total(app, base_temporal, monkeypatch):
     """Junto al gasto de pauta va lo pagado en generación (tabla `gasto`,
-    USD): el tile es el total desde el inicio y la tabla lo abre por mes.
-    Lleva a Configuración."""
+    USD): el tile es el total desde el inicio (sin tabla por mes desde
+    2026-10-08). Lleva a Configuración."""
     import gastos
     _sembrar(base_temporal)
     gastos.registrar("acme", "video", 0.85, "video:cf_1", detalle="wan3 · 8 s", creado_en="2026-09-10T09:00:00")
@@ -472,9 +464,7 @@ def test_tile_generacion_total_y_por_mes(app, base_temporal, monkeypatch):
     assert "US$ 5,87" in tile and "3 cobro(s) a proveedores" in tile
     assert 'data-ir-tab="settings"' in tile
     assert "350 COP" in tb   # la pauta sigue en su moneda, al lado
-    meses = _mes_a_mes(tb)
-    assert "US$ 0,87" in meses[meses.index("septiembre 2026"):meses.index("agosto 2026")]
-    assert "US$ 5,00" in meses[meses.index("agosto 2026"):]
+    assert "US$ 0,87" not in tb   # sin desglose por mes (2026-10-08)
 
 
 def test_tile_generacion_sin_gasto(app, base_temporal, monkeypatch):
@@ -483,9 +473,10 @@ def test_tile_generacion_sin_gasto(app, base_temporal, monkeypatch):
     assert "Generación total" in tb and "US$ 0,00" in tb and "sin generación pagada" in tb
 
 
-def test_mes_a_mes_una_fila_por_moneda(app, base_temporal, monkeypatch):
-    """Pauta en dos monedas el mismo mes: una fila por moneda, nunca se
-    convierte; la generación va una sola vez, en la primera fila del mes."""
+def test_totales_una_fila_de_tiles_por_moneda(app, base_temporal, monkeypatch):
+    """Pauta en dos monedas: cada moneda con sus tiles, nunca se convierte; la
+    generación va una sola vez (antes lo vigilaba la tabla «Mes a mes», que se
+    quitó el 2026-10-08)."""
     import experimentos as ex
     import gastos
     _sembrar(base_temporal)
@@ -494,10 +485,9 @@ def test_mes_a_mes_una_fila_por_moneda(app, base_temporal, monkeypatch):
     ex.snapshot(ep, {"gasto": 12.5, "impresiones": 40}, tomado_en="2026-09-05T08:00:00")
     gastos.registrar("acme", "video", 0.85, "video:cf_1", creado_en="2026-09-10T09:00:00")
     _reloj(monkeypatch)
-    meses = _mes_a_mes(_historial(app["c"]))
-    sep = meses[meses.index("septiembre 2026"):meses.index("agosto 2026")]
-    assert sep.count("<tr") == 2 and "250 COP" in sep and "12,50 USD" in sep
-    assert sep.count("US$ 0,85") == 1
+    tb = _historial(app["c"])
+    assert "Meta · COP" in tb and "Meta · USD" in tb and "350 COP" in tb and "12,50 USD" in tb
+    assert tb.count("US$ 0,85") == 1 and 'class="tb-meses' not in tb
 
 
 def test_contexto_tablero_invalida_con_un_cobro_nuevo(app, base_temporal, monkeypatch):

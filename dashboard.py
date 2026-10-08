@@ -4863,9 +4863,9 @@ def _calcular_tablero(cliente):
         "meses": lambda: tablero.mes_a_mes(cliente, ahora, datos=datos),
         "generacion_total": lambda: gastos.resumen_total(cliente, ahora),
         # La tienda según Triple Whale (copia local, spec 2026-09-28 §13): sin conexión es None.
-        "tienda_tw": lambda: triple_whale_panel.resumen_mes_tienda(cliente),
+        "tienda_tw": lambda: triple_whale_panel.resumen_total_tienda(cliente),
         # El CSV va en el contexto cacheado para que la descarga cuadre con lo que se ve (tab_descargar_csv).
-        "csv": lambda: tablero.csv_mes(cliente, ahora, datos=datos),
+        "csv": lambda: tablero.csv_total(cliente, ahora, datos=datos),
     }
     for nombre, fn in partes.items():
         try:
@@ -5117,16 +5117,16 @@ def alertas_restaurar(cliente):
 
 @app.route("/cliente/<cliente>/tablero/mes.csv")
 def tab_descargar_csv(cliente):
-    """CSV del mes en curso (una fila por pieza, `;`, BOM) para abrir en
-    Excel. Sale del mismo contexto cacheado que la pestaña; si esa parte
+    """CSV con lo acumulado de cada pieza desde el inicio (una fila por pieza,
+    `;`, BOM) para abrir en Excel. Sale del mismo contexto cacheado que la pestaña; si esa parte
     falló, se vuelve a intentar sola para que el error llegue al navegador."""
     ctx = _contexto_tablero(cliente)
     ahora = ctx["ahora"]
     texto = ctx.get("csv")
     if texto is None:
-        texto = tablero.csv_mes(cliente, ahora)
+        texto = tablero.csv_total(cliente, ahora)
     resp = Response(texto, content_type="text/csv; charset=utf-8")
-    nombre = secure_filename(f"tablero_{cliente}_{ahora[:7]}.csv")
+    nombre = secure_filename(f"tablero_{cliente}_total_{ahora[:10]}.csv")
     resp.headers["Content-Disposition"] = f'attachment; filename="{nombre}"'
     return resp
 
@@ -5180,58 +5180,51 @@ def _precios_pagina():
     }
 
 
-def _chip_gasto(gasto_mes, pauta_mes):
+def _chip_gasto(gasto, pauta):
     """Texto del chip del sidebar: «US$ 12,40 generación · 1.405.157 COP
-    pauta» (la pauta solo si hay; la generación siempre, aunque sea 0).
-    Traducido acá (no en la plantilla, que solo recibe el texto ya armado
-    con `_('Este mes: %(gasto)s', ...)`, ver _sidebar.html)."""
-    partes = [gettext("%(monto)s generación", monto=gastos.formatear((gasto_mes or {}).get('total') or 0))]
-    for p in pauta_mes or []:
+    pauta» (la pauta solo si hay; la generación siempre, aunque sea 0), desde
+    el inicio. Traducido acá (no en la plantilla, que solo recibe el texto ya
+    armado con `_('Gasto total: %(gasto)s', ...)`, ver _sidebar.html)."""
+    partes = [gettext("%(monto)s generación", monto=gastos.formatear((gasto or {}).get('total') or 0))]
+    for p in pauta or []:
         partes.append(gettext("%(monto)s pauta", monto=tablero.dinero(p['gasto'], p['moneda'])))
     return " · ".join(partes)
 
 
 def _contexto_gasto(cliente, tablero_ctx):
-    """gasto_mes (gastos.resumen_mes), pauta_mes (por moneda, del tablero),
-    precios (estimados de los botones), gastos_historial (200 últimos),
-    gastos_por_tipo (tabla) y gasto_chip (sidebar). Cada parte en su
-    try/except: el gasto informa, nunca tumba la página."""
+    """Todo desde el inicio (Daniel, 2026-10-08: «todas las métricas en la
+    totalidad, no por mes, porque confunden a mis clientes»): gasto_total
+    (gastos.resumen_total), pauta_total (por moneda, del tablero),
+    gastos_por_tipo (gastos.resumen_todo), gastos_historial (200 últimos),
+    precios (estimados de los botones) y gasto_chip (sidebar). Cada parte en
+    su try/except: el gasto informa, nunca tumba la página."""
     try:
-        gasto_mes = gastos.resumen_mes(cliente)
+        gasto_todo = gastos.resumen_todo(cliente)
     except Exception as e:  # noqa: BLE001 — informativo
-        print(f"[aviso] Gasto de {cliente}: no pude leer el resumen del mes: {type(e).__name__}")
-        gasto_mes = {"desde": None, "hasta": None, "total": 0.0, "por_tipo": {}, "n": 0, "error": True}
+        print(f"[aviso] Gasto de {cliente}: no pude leer el resumen por tipo: {type(e).__name__}")
+        gasto_todo = {"desde": None, "hasta": None, "total": 0.0, "por_tipo": {}, "n": 0, "error": True}
     try:
         historial = gastos.historial(cliente, limite=200)
     except Exception as e:  # noqa: BLE001 — informativo
         print(f"[aviso] Gasto de {cliente}: no pude leer el historial: {type(e).__name__}")
         historial = []
-    # Desde el inicio y mes a mes (2026-10-07): la pantalla solo decía «este
-    # mes» y los meses anteriores parecían perdidos.
     try:
         gasto_total = gastos.resumen_total(cliente)
-        gasto_por_mes = [{"mes": m, "usd": v["usd"], "n": v["n"]}
-                         for m, v in sorted(gastos.por_mes(cliente).items(), reverse=True)]
     except Exception as e:  # noqa: BLE001 — informativo
         print(f"[aviso] Gasto de {cliente}: no pude leer el total desde el inicio: {type(e).__name__}")
-        gasto_total, gasto_por_mes = {"total": 0.0, "n": 0, "desde": None, "error": True}, []
-    pauta = _pauta_mes(tablero_ctx)
+        gasto_total = {"total": 0.0, "n": 0, "desde": None, "error": True}
+    pauta = _pauta_mes(tablero_ctx, "total")
     por_tipo = [{"tipo": t, "nombre": NOMBRES_TIPO_GASTO.get(t, t), "n": v["n"], "usd": v["usd"]}
-                for t, v in sorted(gasto_mes["por_tipo"].items(), key=lambda kv: -kv[1]["usd"])]
+                for t, v in sorted(gasto_todo["por_tipo"].items(), key=lambda kv: -kv[1]["usd"])]
     return {
-        "gasto_mes": gasto_mes,
-        "pauta_mes": pauta,
+        "gasto_total": gasto_total,
+        "gasto_todo": gasto_todo,
+        "pauta_total": pauta,
         "precios": _precios_pagina(),
         "gastos_historial": historial,
         "gastos_por_tipo": por_tipo,
-        "gasto_total": gasto_total,
-        "gasto_por_mes": gasto_por_mes,
         "nombres_tipo_gasto": NOMBRES_TIPO_GASTO,
-        "gasto_chip": _chip_gasto(gasto_mes, pauta),
-        # Desde el inicio (2026-10-08): el chip solo decía «Este mes» y el gasto
-        # completo del proyecto no se veía en ninguna página.
-        "pauta_total": _pauta_mes(tablero_ctx, "total"),
-        "gasto_chip_total": None if gasto_total.get("error") else _chip_gasto(gasto_total, _pauta_mes(tablero_ctx, "total")),
+        "gasto_chip": None if gasto_total.get("error") else _chip_gasto(gasto_total, pauta),
     }
 
 
@@ -5248,9 +5241,7 @@ def _chip_gasto_sidebar():
     if not cliente or request.endpoint == "ver_cliente" or _quiere_json():
         return {}
     try:
-        tablero_ctx = _contexto_tablero(cliente)
-        return {"gasto_chip": _chip_gasto(gastos.resumen_mes(cliente), _pauta_mes(tablero_ctx)),
-                "gasto_chip_total": _chip_gasto(gastos.resumen_total(cliente), _pauta_mes(tablero_ctx, "total"))}
+        return {"gasto_chip": _chip_gasto(gastos.resumen_total(cliente), _pauta_mes(_contexto_tablero(cliente), "total"))}
     except Exception as e:  # noqa: BLE001 — sin chip, pero con página
         print(f"[aviso] Gasto de {cliente}: no pude calcular el chip del sidebar: {type(e).__name__}")
         return {}

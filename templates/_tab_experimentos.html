@@ -7,7 +7,7 @@
   {% if not exp_sin_meta %}
   <div class="panel-cabecera-acciones">
     {% if meta_conectado %}<a class="btn-generar" href="{{ url_for('exp_nuevo', cliente=cliente) }}">{{ _('+ Nuevo experimento') }}</a>{% endif %}
-    <a class="btn-sm" href="{{ url_for('tab_descargar_csv', cliente=cliente) }}" download>{{ _('Descargar CSV del mes') }}</a>
+    <a class="btn-sm" href="{{ url_for('tab_descargar_csv', cliente=cliente) }}" download>{{ _('Descargar CSV') }}</a>
   </div>
   {% endif %}
 </div>

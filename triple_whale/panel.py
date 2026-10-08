@@ -24,8 +24,10 @@ from idiomas import N_
 from tareas import triple_whale as tareas_tw
 from triple_whale import analisis, datos, evaluacion, paises
 
-PERIODOS = (7, 14, 30, 90)
-PERIODO_DEFECTO = 30
+# 0 = desde el inicio (todo lo copiado), el defecto desde 2026-10-08: Daniel pidió
+# las métricas en su totalidad porque los periodos cortos confundían a sus clientes.
+PERIODOS = (0, 7, 14, 30, 90)
+PERIODO_DEFECTO = 0
 MAX_FILAS = 200
 MAX_PRODUCTOS_PANEL = 8
 # Estados de Crear tal como los dice la tarjeta de una idea (idea → pieza).
@@ -37,12 +39,26 @@ def _iso(d):
     return d.isoformat()
 
 
-def periodo(dias, hoy):
-    """(desde, hasta, desde_previo, hasta_previo) de un periodo que termina hoy."""
+def periodo(dias, hoy, primero=None):
+    """(desde, hasta, desde_previo, hasta_previo) de un periodo que termina hoy.
+    `dias == 0` es «desde el inicio»: arranca en `primero` (el primer día
+    copiado; hoy si no hay nada) y su «anterior» es el día previo, donde no hay
+    datos, así que no hay comparación."""
     dias = dias if dias in PERIODOS else PERIODO_DEFECTO
+    if dias == 0:
+        desde = min(date.fromisoformat(str(primero)[:10]), hoy) if primero else hoy
+        previo = desde - timedelta(days=1)
+        return _iso(desde), _iso(hoy), _iso(previo), _iso(previo)
     desde = hoy - timedelta(days=dias - 1)
     hasta_prev = desde - timedelta(days=1)
     return _iso(desde), _iso(hoy), _iso(hasta_prev - timedelta(days=dias - 1)), _iso(hasta_prev)
+
+
+def _primer_dia(cliente, tienda_id=None):
+    """El primer día copiado de Triple Whale (anuncios o tienda), o None."""
+    fechas = [f for f in (datos.rango(cliente, tienda_id).get("desde"),
+                          datos.primer_dia_tienda(cliente, tienda_id)) if f]
+    return min(str(f)[:10] for f in fechas) if fechas else None
 
 
 def _serie_dias(desde, hasta, filas, clave_gasto="gasto", clave_ingresos="ingresos", clave_pedidos="pedidos"):
@@ -87,7 +103,7 @@ def evaluar_periodo(cliente, dias=PERIODO_DEFECTO, canal=None, tienda_id=None, h
     la ruta que encola el análisis con IA, para que Claude vea exactamente eso.
     `tienda_id=None` evalúa «Todas las tiendas»."""
     hoy = hoy or date.today()
-    desde, hasta, _, _ = periodo(dias, hoy)
+    desde, hasta, _, _ = periodo(dias, hoy, _primer_dia(cliente, tienda_id) if dias == 0 else None)
     reglas = decisor.reglas_efectivas(proyectos.reglas_defecto(cliente), {})
     ev = evaluacion.evaluar(
         datos.totales_por_anuncio(cliente, tienda_id, desde, hasta, canal),
@@ -158,6 +174,27 @@ def resumen_mes_tienda(cliente, hoy=None):
     ini_prev = fin_prev.replace(day=1)
     fin_prev_mismo = min(fin_prev, ini_prev + timedelta(days=dias - 1))
     r = evaluacion.resumen_tienda(serie, datos.serie_tienda(cliente, None, _iso(ini_prev), _iso(fin_prev_mismo)))
+    r["moneda"] = config["moneda"]
+    r["desde"], r["hasta"] = _iso(desde), _iso(hoy)
+    return r
+
+
+def resumen_total_tienda(cliente, hoy=None):
+    """La tienda según Triple Whale desde el primer día copiado hasta hoy (los
+    tiles de Experimentos desde 2026-10-08): lo mismo que `resumen_mes_tienda`
+    pero sin comparación. None sin conexión o sin datos de tienda."""
+    config = triple_whale_tiendas.obtener(cliente)
+    if not config:
+        return None
+    hoy = hoy or date.today()
+    primero = datos.primer_dia_tienda(cliente, None)
+    if not primero:
+        return None
+    desde = min(date.fromisoformat(str(primero)[:10]), hoy)
+    serie = datos.serie_tienda(cliente, None, _iso(desde), _iso(hoy))
+    if not serie:
+        return None
+    r = evaluacion.resumen_tienda(serie, None)
     r["moneda"] = config["moneda"]
     r["desde"], r["hasta"] = _iso(desde), _iso(hoy)
     return r
@@ -243,7 +280,7 @@ def contexto(cliente, dias=PERIODO_DEFECTO, canal=None, tienda_id=None, hoy=None
     varias = len(tiendas) > 1
     hoy = hoy or date.today()
     dias = dias if dias in PERIODOS else PERIODO_DEFECTO
-    desde, hasta, desde_prev, hasta_prev = periodo(dias, hoy)
+    desde, hasta, desde_prev, hasta_prev = periodo(dias, hoy, _primer_dia(cliente, tienda_id) if dias == 0 else None)
     canales = datos.canales(cliente, tienda_id, desde, hasta)
     canal = canal if canal in canales else None
     ev, _, _ = evaluar_periodo(cliente, dias, canal, tienda_id=tienda_id, hoy=hoy)

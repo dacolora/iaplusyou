@@ -204,7 +204,7 @@ def test_chip_gasto_aparece_en_paginas_de_sprints(app):
     sid, cid = _sprint(datos, pid, tid)
     gastos.registrar("acme", "guion", 0.02, "guion:t1")
     html = app["c"].get(f"/cliente/acme/sprints/{sid}").data.decode()
-    assert "Este mes:" in html and "generación" in html
+    assert "Gasto total:" in html and "generación" in html and "Este mes:" not in html
 
 
 def test_crear_sprint_persona_inexistente_no_deja_sprint_a_medias(app):

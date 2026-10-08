@@ -385,10 +385,10 @@ def test_centro_de_resultados_dice_lo_suyo_en_ingles(admin_en, app_i18n, base_te
     eid, ep = _experimento_con_pieza(base_temporal)
     html = html_de(admin_en, FRAGMENTO)
     for texto in ("Needs your decision", "Period summary", "Day by day", "Where people drop off", "Piece ranking",
-                  "By country", "What the project has already learned", "Month-by-month history",
+                  "By country", "What the project has already learned", "Totals since the start",
                   "+ New experiment", "Since the start", "All experiments", "All pieces", "Video only"):
         assert texto in html, texto
-    assert "Resumen del periodo" not in html and "Historial mes a mes" not in html
+    assert "Resumen del periodo" not in html and "Totales desde el inicio" not in html
     gestion = html_de(admin_en, f"{FRAGMENTO}?exp={eid}")
     assert "Selected experiment" in gestion and "See all experiments" in gestion and "How the engine decides" in gestion
     assert "Elegido" not in gestion
@@ -457,22 +457,22 @@ def test_experimentos_sin_valores_crudos_en_ingles(admin_en, app_i18n, monkeypat
 
 
 def _cobro_de_septiembre():
-    """Un cobro de generación: la tabla «Mes a mes» tiene una fila con el
-    nombre del mes, que sale del tablero cacheado."""
+    """Un cobro de generación: el tile «Generación total» del tablero cacheado
+    (la tabla «Mes a mes» se quitó el 2026-10-08: solo totales)."""
     import gastos
     gastos.registrar("acme", "video", 0.85, "video:cf_1", creado_en="2026-09-10T09:00:00")
 
 
 def test_tablero_en_ingles(admin_en, monkeypatch):
-    """El Tablero ya no es una pestaña (E2, 2026-10-03): su total y su «Mes a mes» viven en el «Historial» del
-    fragmento del centro de resultados."""
+    """El Tablero ya no es una pestaña (E2, 2026-10-03): su total vive en «Totales desde el inicio» del
+    fragmento del centro de resultados (el «Mes a mes» se quitó el 2026-10-08)."""
     import dashboard
     dashboard._TABLERO_CACHE.clear()
     _cobro_de_septiembre()
     monkeypatch.setattr(dashboard.db, "ahora", lambda: "2026-09-26T10:00:00")
     html = html_de(admin_en, FRAGMENTO)
-    assert "Month-by-month history" in html and "Month by month" in html and "September 2026" in html
-    assert "<h2>Tablero</h2>" not in html and "Mes a mes" not in html
+    assert "Totals since the start" in html and "Total generation" in html and "US$ 0.85" in html
+    assert "<h2>Tablero</h2>" not in html and "Mes a mes" not in html and "Month by month" not in html
     fugas = espanol_visible(html)
     assert not fugas, fugas[:15]
     # La página del proyecto ya no trae una pestaña Tablero.
@@ -487,11 +487,11 @@ def test_tablero_no_mezcla_idiomas_en_la_cache(app_i18n, monkeypatch):
     with c.session_transaction() as s:
         s["usuario"], s["rol"], s["cliente"] = "admin", "admin", None
     html = html_de(c, FRAGMENTO)
-    assert "Historial mes a mes" in html and "Mes a mes" in html and "septiembre 2026" in html
+    assert "Totales desde el inicio" in html and "Generación total" in html
     idiomas.guardar_de_usuario("admin", "en")
     html = html_de(c, FRAGMENTO)
-    assert "Month-by-month history" in html and "Month by month" in html and "September 2026" in html
-    assert "septiembre 2026" not in html
+    assert "Totals since the start" in html and "Total generation" in html
+    assert "Generación total" not in html
 
 
 def test_csv_del_tablero_con_encabezados_en_ingles(admin_en):

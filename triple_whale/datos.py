@@ -250,6 +250,14 @@ def gasto_duplicado(cliente, desde, hasta, tienda_id=None):
         return float(con.execute(q).scalar() or 0)
 
 
+def primer_dia_tienda(cliente, tienda_id=None):
+    """La primera fecha copiada de la tienda (una o todas), o None."""
+    t = db.tw_tienda_dia
+    cond = [t.c.cliente == cliente] + ([t.c.tienda_id == tienda_id] if tienda_id is not None else [])
+    with db.conectar() as con:
+        return con.execute(sa.select(sa.func.min(t.c.fecha)).where(*cond)).scalar()
+
+
 def serie_tienda(cliente, tienda_id, desde, hasta):
     """La tienda por día. Con todas, suma las tiendas y le quita al `gasto` el
     gasto duplicado de ese día (se lo devuelve a `utilidad_neta`, que lo había

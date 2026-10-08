@@ -870,10 +870,22 @@ def csv_mes(cliente, ahora_iso=None, datos=None):
     texto pasan por `_celda`; los números no (nunca son negativos)."""
     hasta = _ahora(ahora_iso)
     desde = _inicio_mes(hasta)
+    return _csv(_datos(cliente, hasta, datos, desde_necesario=desde), desde, hasta)
+
+
+def csv_total(cliente, ahora_iso=None, datos=None):
+    """Como `csv_mes` pero con todo lo acumulado de cada pieza desde el inicio
+    (el botón «Descargar CSV» de Experimentos desde 2026-10-08). Los snapshots
+    son acumulados: la carga del tablero ya trae el último de cada pieza."""
+    hasta = _ahora(ahora_iso)
+    return _csv(_datos(cliente, hasta, datos), INICIO, hasta)
+
+
+def _csv(d_cargados, desde, hasta):
     buf = io.StringIO()
     w = csv.writer(buf, delimiter=";", lineterminator="\n")
     w.writerow([gettext(c) for c in ENCABEZADO_CSV])
-    for ex, pz, snaps in _datos(cliente, hasta, datos, desde_necesario=desde).filas:
+    for ex, pz, snaps in d_cargados.filas:
         d = _deltas_pieza(snaps, desde, hasta)
         _moneda_del_delta(ex, d)
         comparable = d["roas_comparable"]
@@ -895,7 +907,7 @@ def contexto(cliente, ahora_iso=None, dias=DIAS_SERIE, datos=None):
     tiles), "total_triple_whale" (solo si hay experimentos con
     atribucion=triple_whale), "meses" (mes_a_mes), "serie" (serie_diaria de
     `dias`), "serie_triple_whale" (ídem), "top" (top_ganadoras), "alertas",
-    "csv" (csv_mes)}. Sin tolerancia a fallos: eso lo pone
+    "csv" (csv_total, desde el inicio)}. Sin tolerancia a fallos: eso lo pone
     dashboard._contexto_tablero, que llama a cada parte con `datos=` y
     envuelve cada una en su try."""
     d = datos if datos is not None else cargar_datos(cliente, ahora_iso, dias)
@@ -908,4 +920,4 @@ def contexto(cliente, ahora_iso=None, dias=DIAS_SERIE, datos=None):
             "serie_triple_whale": serie_diaria_triple_whale(cliente, dias, d.ahora, datos=d),
             "top": top_ganadoras(cliente, datos=d),
             "alertas": alertas(cliente, d.ahora, datos=d),
-            "csv": csv_mes(cliente, d.ahora, datos=d)}
+            "csv": csv_total(cliente, d.ahora, datos=d)}
