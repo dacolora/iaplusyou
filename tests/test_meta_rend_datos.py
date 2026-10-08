@@ -39,6 +39,18 @@ def test_reemplazar_es_idempotente_y_totales(base_temporal):
     assert {d["alcance"] for d in datos.cuenta_por_dia("hf", [A], "2026-10-01", "2026-10-02")} == {800}
 
 
+def test_ultima_fecha_es_de_esa_cuenta_y_ese_proyecto(base_temporal):
+    assert datos.ultima_fecha("hf", A, "cuenta") is None and datos.ultima_fecha("hf", A, "anuncio") is None
+    datos.reemplazar_cuenta_dias("hf", A, "2026-10-01", "2026-10-03",
+                                 [_dia("2026-10-01", 1, 0), _dia("2026-10-03", 1, 0)])
+    datos.reemplazar_cuenta_dias("hf", B, "2026-10-09", "2026-10-09", [_dia("2026-10-09", 1, 0)])
+    datos.reemplazar_cuenta_dias("otro", A, "2026-10-20", "2026-10-20", [_dia("2026-10-20", 1, 0)])
+    datos.reemplazar_anuncio_dias("hf", A, "2026-09-01", "2026-09-02", [_ad("2026-09-02", "a1", 1, 0)])
+    assert datos.ultima_fecha("hf", A, "cuenta") == "2026-10-03"
+    assert datos.ultima_fecha("hf", A, "anuncio") == "2026-09-02"
+    assert datos.ultima_fecha("hf", B, "anuncio") is None
+
+
 def test_anuncios_campanas_y_conjuntos_con_nombres(base_temporal):
     datos.guardar_objetos("hf", A, [
         {"nivel": "campana", "objeto_id": "c1", "nombre": "Otoño", "estado": "ACTIVE", "objetivo": "OUTCOME_SALES",

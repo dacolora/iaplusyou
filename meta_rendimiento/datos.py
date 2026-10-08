@@ -214,6 +214,16 @@ def rango(cliente, cuentas):
     return {"filas": int(r.filas or 0), "desde": r.desde, "hasta": r.hasta} if r.filas else vacio
 
 
+def ultima_fecha(cliente, act, tabla="cuenta"):
+    """La fecha más reciente ya copiada (AAAA-MM-DD) de ESA cuenta en `meta_cuenta_dia` (tabla="cuenta") o en
+    `meta_anuncio_dia` (tabla="anuncio"); None si no hay ninguna. La copia la usa para cubrir el hueco si pasó más
+    de una semana desde la última vez. Una consulta por el índice (cliente, cuenta, fecha)."""
+    t = {"cuenta": db.meta_cuenta_dia, "anuncio": db.meta_anuncio_dia}[tabla]
+    with db.conectar() as con:
+        return con.execute(sa.select(sa.func.max(t.c.fecha)).where(
+            t.c.cliente == cliente, t.c.ad_account_id == act)).scalar()
+
+
 def cuenta_por_dia(cliente, cuentas, desde, hasta):
     """Las filas de meta_cuenta_dia del rango (para el gráfico diario), por fecha y cuenta."""
     if not cuentas:

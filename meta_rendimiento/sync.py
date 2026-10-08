@@ -7,7 +7,7 @@ Una `ErrorGraph` sube tal cual: la tarea la anota en la cuenta; aquí la cuenta 
 a medias. Los textos de error ya vienen traducidos y sin token (graph.py)."""
 import json
 import logging
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import db
@@ -26,23 +26,30 @@ CAMPOS_ANUNCIO_DIA = ("ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_na
 DIAS_CUENTA_INICIAL = 395
 DIAS_ANUNCIO_INICIAL = 90
 DIAS_RECOPIA = 7
-TRAMO_ANUNCIO = 30
+TRAMO_ANUNCIO = 10   # un informe de anuncios de 10 días: ~12 000 filas a la vez como mucho (VPS de 2 GB)
 TRAMO_CUENTA = 90
 VENTANAS_ALCANCE = (7, 14, 30, 90)
 
 ESTADOS = ["ACTIVE", "PAUSED", "WITH_ISSUES", "IN_PROCESS", "PENDING_REVIEW", "DISAPPROVED", "CAMPAIGN_PAUSED",
            "ADSET_PAUSED"]
-# Los anuncios pausados no se listan (son miles y no cambian): solo estos, y solo a estos se les quita el estado
-# cuando dejan de venir.
+# Los anuncios se listan en dos tandas: los que entregan o esperan (con su creativo para la miniatura, pesados: de
+# 100 en 100) y los pausados (solo campos ligeros: de 500 en 500). Un anuncio que no sale en ninguna de las dos
+# está archivado o borrado y se queda sin estado.
 ESTADOS_ANUNCIO = ["ACTIVE", "WITH_ISSUES", "PENDING_REVIEW", "DISAPPROVED", "IN_PROCESS"]
+ESTADOS_ANUNCIO_PAUSADOS = ["PAUSED", "ADSET_PAUSED", "CAMPAIGN_PAUSED"]
 CODIGO_PARAMETRO_INVALIDO = 100
 LIMITE_PAGINA = 500
+LIMITE_ANUNCIOS = 100   # con `creative{…}` Meta responde «reduce the amount of data» a 500 por página
+# Un listado cortado por el tope de páginas dejaría sin estado a todo lo que falta: el tope es holgado aun con el
+# límite reducido a 25 (graph.paginar).
+MAX_PAGINAS_LISTADO = 1000
 
 CAMPOS_INFO = "name,currency,timezone_name,account_status,disable_reason,amount_spent,spend_cap"
 CAMPOS_CAMPANA = "id,name,objective,effective_status,daily_budget,lifetime_budget,bid_strategy,created_time"
 CAMPOS_CONJUNTO = ("id,name,campaign_id,effective_status,daily_budget,lifetime_budget,optimization_goal,"
                    "bid_strategy,learning_stage_info,created_time")
 CAMPOS_ANUNCIO = "id,name,adset_id,campaign_id,effective_status,created_time,creative{id,thumbnail_url,video_id}"
+CAMPOS_ANUNCIO_LIGERO = "id,name,adset_id,campaign_id,effective_status"
 
 ETAPA_CUENTA = idiomas.N_("Leyendo la cuenta")
 ETAPA_OBJETOS = idiomas.N_("Campañas, conjuntos y anuncios")
@@ -129,19 +136,27 @@ def _anuncio(f):
             "video_id": creative.get("video_id"), "creado_en_meta": _creado(f)}
 
 
-def objetos_de(campanas, conjuntos, anuncios, moneda=None):
+def _anuncio_ligero(f):
+    """Un anuncio pausado, de un listado sin creativo: no trae miniatura ni video y por eso esas claves NO van
+    (guardar_objetos solo toca las columnas presentes: la miniatura que ya se copió se conserva)."""
+    return {"nivel": "anuncio", "objeto_id": str(f["id"]), "padre_id": f.get("adset_id"),
+            "campaign_id": f.get("campaign_id"), "nombre": f.get("name"), "estado": f.get("effective_status")}
+
+
+def objetos_de(campanas, conjuntos, anuncios, moneda=None, anuncios_ligeros=None):
     """Graph → filas de `meta_objeto` (para `datos.guardar_objetos`). `moneda` decide si el presupuesto se divide
-    entre 100 (casi todas) o viene entero (JPY, CLP, COP…)."""
+    entre 100 (casi todas) o viene entero (JPY, CLP, COP…). `anuncios_ligeros`: anuncios de un listado sin
+    creativo (los pausados)."""
     return ([_campana(f, moneda) for f in campanas or [] if f.get("id")]
             + [_conjunto(f, moneda) for f in conjuntos or [] if f.get("id")]
-            + [_anuncio(f) for f in anuncios or [] if f.get("id")])
+            + [_anuncio(f) for f in anuncios or [] if f.get("id")]
+            + [_anuncio_ligero(f) for f in anuncios_ligeros or [] if f.get("id")])
 
 
-def _nombres(filas):
-    """Objetos con SOLO el nombre (y quién es su padre) que traen las filas de insights. Sin la clave «estado»:
-    `datos.guardar_objetos` solo toca las columnas presentes, así que no borran el estado, el presupuesto ni la
-    miniatura que ya se copiaron del listado. Un anuncio pausado (que el listado no trae) igual queda con nombre."""
-    por_id = {}
+def _recoger_nombres(por_id, filas):
+    """Suma a `por_id` los objetos con SOLO el nombre (y quién es su padre) que traen filas de insights. Sin la
+    clave «estado»: `datos.guardar_objetos` solo toca las columnas presentes, así que no borran el estado, el
+    presupuesto ni la miniatura que ya se copiaron del listado. Una fila sin nombre no crea nada."""
     for f in filas:
         for nivel, campo, nombre, padre in (("anuncio", "ad_id", "ad_name", "adset_id"),
                                             ("conjunto", "adset_id", "adset_name", "campaign_id"),
@@ -154,7 +169,6 @@ def _nombres(filas):
             if nivel != "campana" and f.get("campaign_id"):
                 o["campaign_id"] = str(f["campaign_id"])
             por_id[(nivel, o["objeto_id"])] = o
-    return list(por_id.values())
 
 
 # ------------------------------------------------------------------ apoyo ---
@@ -163,7 +177,7 @@ def _hoy_local(zona, ahora=None):
     """La fecha de hoy en la zona de la cuenta (Meta da el día de las métricas en esa zona). Sin zona o con una
     que no existe, la del servidor."""
     try:
-        return (ahora.astimezone(ZoneInfo(zona)) if ahora else datetime.now(ZoneInfo(zona))).date()
+        return (ahora or datetime.now(timezone.utc)).astimezone(ZoneInfo(zona)).date()
     except Exception:  # noqa: BLE001 — ZoneInfoNotFoundError, ValueError, TypeError (zona None): todo cae a la fecha local
         return date.today()
 
@@ -181,10 +195,33 @@ def _rango(a, b):
     return json.dumps({"since": a, "until": b})
 
 
-def _listar(act, token, edge, campos, estados):
+def _listar(act, token, edge, campos, estados, limite=LIMITE_PAGINA):
     return graph.paginar(f"{act}/{edge}", token, {
-        "fields": campos, "limit": LIMITE_PAGINA,
-        "filtering": json.dumps([{"field": "effective_status", "operator": "IN", "value": estados}])})
+        "fields": campos, "limit": limite,
+        "filtering": json.dumps([{"field": "effective_status", "operator": "IN", "value": estados}])},
+        max_paginas=MAX_PAGINAS_LISTADO)
+
+
+def _desde(hoy, dias_atras, ya_hecho, ultima):
+    """Primer día a pedir. Primera vez: toda la ventana inicial (`dias_atras` días antes de hoy). Después: los
+    últimos 7 días, o desde el ÚLTIMO día ya copiado si pasó más tiempo (cubre el hueco; ese día se repite porque
+    la copia de ese día pudo hacerse con el día a medias), sin pasar de la ventana inicial."""
+    tope = hoy - timedelta(days=dias_atras)
+    if not ya_hecho:
+        return tope
+    desde = hoy - timedelta(days=DIAS_RECOPIA - 1)
+    if ultima:
+        desde = min(desde, date.fromisoformat(ultima))
+    return max(desde, tope)
+
+
+def _por_pagina(filas, nombres):
+    """Callback de `graph.informe`: cada página cruda de insights de anuncios se convierte en filas chicas
+    (`fila_anuncio`) y en nombres de objetos, y la página cruda se suelta."""
+    def pagina(crudas):
+        filas.extend(fila_anuncio(f) for f in crudas)
+        _recoger_nombres(nombres, crudas)
+    return pagina
 
 
 def _alcance_de_ventana(act, token, w):
@@ -218,9 +255,15 @@ def _alcance_de_ventana(act, token, w):
 
 def sincronizar(cliente, ad_account_id, token, hoy=None, on_etapa=None):
     """Copia la cuenta `ad_account_id` del proyecto `cliente`. Devuelve
-    {"dias_cuenta", "filas_anuncio", "objetos", "desde", "hasta"}. `on_etapa(nombre, progreso 0-100)` se llama al
-    empezar cada paso. Una ErrorGraph sube sin tocar el estado de la cuenta (queda «copiando»)."""
+    {"omitida", "dias_cuenta", "filas_anuncio", "objetos", "desde", "hasta"}. `on_etapa(nombre, progreso 0-100)`
+    se llama al empezar cada paso. Una ErrorGraph sube sin tocar el estado de la cuenta (queda «copiando»).
+
+    Si la cuenta ya no está en el proyecto (la quitaron mientras esperaba su turno) no se llama a Meta ni se
+    escribe nada: devuelve `omitida=True`."""
     act = cuentas.normalizar_id(ad_account_id)
+    guardada = cuentas.cuenta(cliente, act)
+    if guardada is None:
+        return {"omitida": True, "dias_cuenta": 0, "filas_anuncio": 0, "objetos": 0, "desde": None, "hasta": None}
 
     def etapa(nombre, progreso):
         if on_etapa:
@@ -229,7 +272,6 @@ def sincronizar(cliente, ad_account_id, token, hoy=None, on_etapa=None):
     # 1. La cuenta.
     etapa(ETAPA_CUENTA, 5)
     info = graph.get(act, token, {"fields": CAMPOS_INFO}) or {}
-    guardada = cuentas.cuenta(cliente, act) or {}
     moneda = (info.get("currency") or guardada.get("moneda") or "")[:3].upper() or None
     cambios = {k: v for k, v in (("nombre", info.get("name")), ("moneda", moneda),
                                  ("zona_horaria", info.get("timezone_name"))) if v}
@@ -237,7 +279,10 @@ def sincronizar(cliente, ad_account_id, token, hoy=None, on_etapa=None):
     cuentas.actualizar_extra(cliente, act, {"cuenta": {k: info.get(k) for k in (
         "account_status", "disable_reason", "amount_spent", "spend_cap")}})
     hoy = hoy or _hoy_local(info.get("timezone_name") or guardada.get("zona_horaria"))
-    primera = not (guardada.get("extra") or {}).get("backfill_hecho")
+    extra = guardada.get("extra") or {}
+    # `backfill_hecho` (copias anteriores) vale por las dos; así un fallo en el alcance no repite los 13 meses.
+    cuenta_hecha = bool(extra.get("backfill_cuenta") or extra.get("backfill_hecho"))
+    anuncios_hecho = bool(extra.get("backfill_anuncios") or extra.get("backfill_hecho"))
 
     # 2. Campañas, conjuntos y anuncios. Cada nivel se guarda y se marca apenas su listado termina COMPLETO:
     # si una página falla, la ErrorGraph sube antes de marcar y nadie queda sin estado por un listado a medias.
@@ -251,14 +296,24 @@ def sincronizar(cliente, ad_account_id, token, hoy=None, on_etapa=None):
     objetos = objetos_de([], conjuntos, [], moneda)
     n_objetos += datos.guardar_objetos(cliente, act, objetos)
     datos.marcar_sin_estado(cliente, act, "conjunto", [o["objeto_id"] for o in objetos])
-    anuncios = _listar(act, token, "ads", CAMPOS_ANUNCIO, ESTADOS_ANUNCIO)
+    # Anuncios: primero los que entregan o esperan (con creativo), luego los pausados (campos ligeros). Solo
+    # cuando LAS DOS listas terminaron se quita el estado a los que no salieron en ninguna (archivados o borrados).
+    anuncios = _listar(act, token, "ads", CAMPOS_ANUNCIO, ESTADOS_ANUNCIO, LIMITE_ANUNCIOS)
     objetos = objetos_de([], [], anuncios, moneda)
     n_objetos += datos.guardar_objetos(cliente, act, objetos)
-    datos.marcar_sin_estado(cliente, act, "anuncio", [o["objeto_id"] for o in objetos], estados=set(ESTADOS_ANUNCIO))
+    vistos = {o["objeto_id"] for o in objetos}
+    anuncios = objetos = None
+    pausados = _listar(act, token, "ads", CAMPOS_ANUNCIO_LIGERO, ESTADOS_ANUNCIO_PAUSADOS)
+    objetos = objetos_de([], [], [], moneda, anuncios_ligeros=pausados)
+    n_objetos += datos.guardar_objetos(cliente, act, objetos)
+    vistos.update(o["objeto_id"] for o in objetos)
+    pausados = objetos = None
+    datos.marcar_sin_estado(cliente, act, "anuncio", vistos)
+    vistos = None
 
-    # 3 y 4. Métricas por día de la cuenta y de cada anuncio.
-    desde_cuenta = hoy - timedelta(days=DIAS_CUENTA_INICIAL if primera else DIAS_RECOPIA - 1)
-    desde_anuncio = hoy - timedelta(days=(DIAS_ANUNCIO_INICIAL if primera else DIAS_RECOPIA) - 1)
+    # 3 y 4. Métricas por día de la cuenta y de cada anuncio. Se lee hasta qué día hay datos ANTES de escribir.
+    desde_cuenta = _desde(hoy, DIAS_CUENTA_INICIAL, cuenta_hecha, datos.ultima_fecha(cliente, act, "cuenta"))
+    desde_anuncio = _desde(hoy, DIAS_ANUNCIO_INICIAL - 1, anuncios_hecho, datos.ultima_fecha(cliente, act, "anuncio"))
     tramos_cuenta = list(_tramos(desde_cuenta, hoy, TRAMO_CUENTA))
     tramos_anuncio = list(_tramos(desde_anuncio, hoy, TRAMO_ANUNCIO))
     total = len(tramos_cuenta) + len(tramos_anuncio)
@@ -270,15 +325,22 @@ def sincronizar(cliente, ad_account_id, token, hoy=None, on_etapa=None):
             "level": "account", "time_increment": 1, "time_range": _rango(a, b), "fields": CAMPOS_CUENTA_DIA,
             "limit": LIMITE_PAGINA})
         dias_cuenta += datos.reemplazar_cuenta_dias(cliente, act, a, b, [fila_cuenta(f) for f in filas])
+        filas = None
         hecho += 1
+    cuentas.actualizar_extra(cliente, act, {"backfill_cuenta": True})
     for a, b in tramos_anuncio:
         etapa(ETAPA_METRICAS, 30 + 55.0 * hecho / total)
-        filas = graph.informe(act, token, {
+        # Cada página de insights se vuelve filas chicas y se suelta (una fila cruda pesa ~8 KB): en un tramo
+        # grande las filas crudas nunca viven todas a la vez.
+        filas, nombres = [], {}
+        graph.informe(act, token, {
             "level": "ad", "time_increment": 1, "time_range": _rango(a, b), "fields": CAMPOS_ANUNCIO_DIA,
-            "limit": LIMITE_PAGINA})
-        filas_anuncio += datos.reemplazar_anuncio_dias(cliente, act, a, b, [fila_anuncio(f) for f in filas])
-        datos.guardar_objetos(cliente, act, _nombres(filas))
+            "limit": LIMITE_PAGINA}, por_pagina=_por_pagina(filas, nombres))
+        filas_anuncio += datos.reemplazar_anuncio_dias(cliente, act, a, b, filas)
+        datos.guardar_objetos(cliente, act, list(nombres.values()))
+        filas = nombres = None
         hecho += 1
+    cuentas.actualizar_extra(cliente, act, {"backfill_anuncios": True})
 
     # 5. Alcance (gente única: se pide por ventana, no se suma de los días).
     etapa(ETAPA_ALCANCE, 90)
@@ -293,5 +355,5 @@ def sincronizar(cliente, ad_account_id, token, hoy=None, on_etapa=None):
 
     cuentas.actualizar(cliente, act, estado="ok", error=None, ultima_copia=db.ahora())
     cuentas.actualizar_extra(cliente, act, {"backfill_hecho": True})
-    return {"dias_cuenta": dias_cuenta, "filas_anuncio": filas_anuncio, "objetos": n_objetos,
+    return {"omitida": False, "dias_cuenta": dias_cuenta, "filas_anuncio": filas_anuncio, "objetos": n_objetos,
             "desde": desde_cuenta.isoformat(), "hasta": hoy.isoformat()}

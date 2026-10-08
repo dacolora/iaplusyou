@@ -62,6 +62,65 @@ def test_paginar_se_detiene_sin_next_o_sin_cursor_y_en_max_paginas(http):
     assert graph.paginar("act_1/ads", TOKEN, max_paginas=3) == [{"id": 0}, {"id": 1}, {"id": 2}]
 
 
+def _muchos_datos(codigo=1):
+    return _Resp({"error": {"code": codigo, "message": "Please reduce the amount of data you're asking for, "
+                                                      "then retry your request"}}, 500)
+
+
+def test_paginar_con_demasiados_datos_baja_el_limite_y_reintenta_el_mismo_cursor(http):
+    http["respuestas"] = [
+        _Resp({"data": [{"id": 1}], "paging": {"cursors": {"after": "A"}, "next": "https://x"}}),
+        _muchos_datos(), _muchos_datos(),     # la página 2 falla con 100 y con 50 ...
+        _Resp({"data": [{"id": 2}], "paging": {"cursors": {"after": "B"}, "next": "https://x"}}),   # ... y pasa con 25
+        _Resp({"data": [{"id": 3}], "paging": {}})]
+    params = {"limit": 100, "fields": "id"}
+    assert graph.paginar("act_1/ads", TOKEN, params) == [{"id": 1}, {"id": 2}, {"id": 3}]
+    pedidas = [(p.get("limit"), p.get("after")) for _m, _u, p in http["llamadas"]]
+    # Mismo cursor «A» en los tres intentos de la segunda página; el límite reducido sigue en la tercera.
+    assert pedidas == [(100, None), (100, "A"), (50, "A"), (25, "A"), (25, "B")]
+    assert params == {"limit": 100, "fields": "id"}   # no se tocan los params del llamador
+
+
+def test_paginar_tres_reducciones_como_maximo_y_el_codigo_2_tambien_cuenta(http):
+    http["respuestas"] = [_muchos_datos(2) for _ in range(4)]
+    with pytest.raises(graph.ErrorGraph) as e:
+        graph.paginar("act_1/ads", TOKEN, {"limit": 500})
+    assert e.value.codigo == 2
+    assert [p["limit"] for _m, _u, p in http["llamadas"]] == [500, 250, 125, 62]   # 3 reducciones y se rinde
+    # Con 100 se llega al piso de 25 antes: 100, 50, 25 y se rinde (nunca por debajo de 25).
+    http["llamadas"].clear()
+    http["respuestas"] = [_muchos_datos() for _ in range(3)]
+    with pytest.raises(graph.ErrorGraph):
+        graph.paginar("act_1/ads", TOKEN, {"limit": 100})
+    assert [p["limit"] for _m, _u, p in http["llamadas"]] == [100, 50, 25]
+
+
+def test_paginar_no_reintenta_un_limite_de_uso_ni_un_error_sin_limit(http):
+    http["respuestas"] = [_Resp({"error": {"code": 17, "message": "User request limit reached"}}, 400)]
+    with pytest.raises(graph.ErrorGraph) as e:
+        graph.paginar("act_1/ads", TOKEN, {"limit": 500})
+    assert e.value.limite and len(http["llamadas"]) == 1
+    http["llamadas"].clear()
+    http["respuestas"] = [_muchos_datos()]
+    with pytest.raises(graph.ErrorGraph):
+        graph.paginar("act_1/ads", TOKEN, {"fields": "id"})   # sin `limit` no hay qué reducir
+    assert len(http["llamadas"]) == 1
+    http["llamadas"].clear()
+    http["respuestas"] = [_Resp({"error": {"code": 100, "message": "Invalid parameter"}}, 400)]
+    with pytest.raises(graph.ErrorGraph):
+        graph.paginar("act_1/ads", TOKEN, {"limit": 500})
+    assert len(http["llamadas"]) == 1
+
+
+def test_paginar_con_por_pagina_entrega_cada_pagina_y_no_acumula(http):
+    http["respuestas"] = [
+        _Resp({"data": [{"id": 1}, {"id": 2}], "paging": {"cursors": {"after": "A"}, "next": "https://x"}}),
+        _Resp({"data": [{"id": 3}], "paging": {}})]
+    paginas = []
+    n = graph.paginar("act_1/ads", TOKEN, {"limit": 2}, por_pagina=lambda filas: paginas.append(list(filas)))
+    assert n == 3 and paginas == [[{"id": 1}, {"id": 2}], [{"id": 3}]]
+
+
 def test_error_de_limite_y_de_token_en_palabras_sin_token(http):
     http["respuestas"] = [_Resp({"error": {"code": 17, "message": f"User request limit reached {TOKEN}"}}, 400)]
     with pytest.raises(graph.ErrorGraph) as e:
@@ -111,6 +170,17 @@ def test_informe_asincrono_espera_y_pagina(http):
     assert filas == [{"ad_id": "a1"}]
     assert http["llamadas"][0][0] == "POST" and http["llamadas"][0][1].endswith("/act_1/insights")
     assert http["llamadas"][-1][1].endswith("/999/insights")
+
+
+def test_informe_con_por_pagina_devuelve_la_cuenta_y_entrega_las_paginas(http):
+    http["respuestas"] = [_Resp({"report_run_id": "999"}),
+                          _Resp({"async_status": "Job Completed"}),
+                          _Resp({"data": [{"ad_id": "a1"}, {"ad_id": "a2"}],
+                                 "paging": {"cursors": {"after": "A"}, "next": "https://x"}}),
+                          _Resp({"data": [{"ad_id": "a3"}], "paging": {}})]
+    paginas = []
+    n = graph.informe("act_1", TOKEN, {"level": "ad"}, dormir=lambda s: None, por_pagina=paginas.append)
+    assert n == 3 and [[f["ad_id"] for f in p] for p in paginas] == [["a1", "a2"], ["a3"]]
 
 
 def test_informe_fallido_o_eterno(http):

@@ -72,24 +72,60 @@ def post(edge, token, params=None, timeout=60):
     return _llamar("POST", edge, token, params, timeout)
 
 
-def paginar(edge, token, params=None, max_paginas=200, timeout=60):
-    """Todas las filas de `data`, siguiendo el cursor `after` (no la URL `next`, que trae el token)."""
+# Meta responde 1 («Please reduce the amount of data…») o 2 (servicio no disponible por el tamaño) cuando una
+# página pide demasiado (anuncios con `creative{…}` y 500 por página): se baja el límite a la mitad y se reintenta
+# la MISMA página, como máximo 3 veces por llamada y sin bajar de 25.
+CODIGOS_MUCHOS_DATOS = (1, 2)
+LIMITE_MINIMO = 25
+MAX_REDUCCIONES = 3
+
+
+def _limite(params):
+    try:
+        return int(params.get("limit"))
+    except (TypeError, ValueError):
+        return None
+
+
+def paginar(edge, token, params=None, max_paginas=200, timeout=60, por_pagina=None):
+    """Todas las filas de `data`, siguiendo el cursor `after` (no la URL `next`, que trae el token).
+
+    Si una página falla con «demasiados datos» (código 1 o 2) y `limit` pasa de 25, baja el `limit` a la mitad y
+    reintenta esa misma página (el nuevo límite sigue para las demás), hasta 3 veces; después sube el error.
+    Con `por_pagina` cada página se le entrega a esa función y NO se acumula: devuelve cuántas filas pasaron
+    (así un listado enorme no vive entero en memoria)."""
     p = dict(params or {})
-    filas = []
-    for _ in range(max_paginas):
-        datos = get(edge, token, p, timeout)
-        filas.extend(datos.get("data") or [])
+    filas, total, paginas, reducciones = [], 0, 0, 0
+    while paginas < max_paginas:
+        try:
+            datos = get(edge, token, p, timeout)
+        except ErrorGraph as e:
+            limite = _limite(p)
+            if (e.codigo not in CODIGOS_MUCHOS_DATOS or not limite or limite <= LIMITE_MINIMO
+                    or reducciones >= MAX_REDUCCIONES):
+                raise
+            p["limit"] = max(LIMITE_MINIMO, limite // 2)
+            reducciones += 1
+            continue
+        paginas += 1
+        pagina = datos.get("data") or []
+        total += len(pagina)
+        if por_pagina is not None:
+            por_pagina(pagina)
+        else:
+            filas.extend(pagina)
         paging = datos.get("paging") or {}
         despues = (paging.get("cursors") or {}).get("after")
         if not paging.get("next") or not despues:
             break
         p["after"] = despues
-    return filas
+    return total if por_pagina is not None else filas
 
 
-def informe(ad_account_id, token, params, espera_max_s=600, intervalo_s=5, dormir=time.sleep):
+def informe(ad_account_id, token, params, espera_max_s=600, intervalo_s=5, dormir=time.sleep, por_pagina=None):
     """Insights asíncronos (para level=ad con muchos días): crea el informe, espera
-    a «Job Completed» y devuelve sus filas. ErrorGraph si falla o tarda más de `espera_max_s`."""
+    a «Job Completed» y devuelve sus filas. ErrorGraph si falla o tarda más de `espera_max_s`.
+    Con `por_pagina` (ver `paginar`) las filas se entregan página a página y se devuelve cuántas fueron."""
     run = post(f"{ad_account_id}/insights", token, params).get("report_run_id")
     if not run:
         raise ErrorGraph(gettext("Meta no creó el informe de métricas."))
@@ -105,7 +141,7 @@ def informe(ad_account_id, token, params, espera_max_s=600, intervalo_s=5, dormi
             raise ErrorGraph(gettext("El informe de Meta tardó demasiado; la próxima copia lo reintenta."))
         dormir(intervalo_s)
         esperado += intervalo_s
-    return paginar(f"{run}/insights", token, {"limit": 500})
+    return paginar(f"{run}/insights", token, {"limit": 500}, por_pagina=por_pagina)
 
 
 def acciones(lista, tipos):
