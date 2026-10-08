@@ -11,11 +11,11 @@ def libro(base_temporal):
     return libro
 
 
-def _tarea(db, job_id, estado="en_curso", cliente="acme", tipo="flowplus_video"):
+def _tarea(db, job_id, estado="en_curso", cliente="acme", tipo="flowplus_video", creada_en=AHORA, terminada_en=None):
     with db.conectar() as con:
         return con.execute(sa.insert(db.tarea).values(
             cliente=cliente, job_id=job_id, tipo=tipo, payload={}, estado=estado, intentos=0, max_intentos=1,
-            prioridad=5, ejecutar_desde=AHORA, creada_en=AHORA, duracion_estimada=60.0, etapas=[])).inserted_primary_key[0]
+            prioridad=5, ejecutar_desde=AHORA, creada_en=creada_en, terminada_en=terminada_en, duracion_estimada=60.0, etapas=[])).inserted_primary_key[0]
 
 
 def _recargar(db, libro, cliente, milesimas):
@@ -110,8 +110,18 @@ def test_gasto_corregido_recalcula_con_el_margen_original(libro, base_temporal):
         libro.cobrar_gasto(con, 5, "acme", 0.20, "final")
     libro.guardar_margen_global(3.0, "admin")
     with db.conectar() as con:
-        assert libro.cobrar_gasto(con, 5, "acme", 0.40, "final") == "recalculado"
+        assert libro.cobrar_gasto(con, 5, "acme", 0.40, "final", nuevo=False) == "recalculado"
     assert libro.saldo("acme") == -600
+
+
+def test_gasto_visto_sin_cobrar_y_corregido_despues_no_escribe(libro, base_temporal):
+    db = base_temporal
+    with db.conectar() as con:
+        assert libro.cobrar_gasto(con, 5, "acme", 0.20, "final") is None      # Cobrar apagado
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    with db.conectar() as con:
+        assert libro.cobrar_gasto(con, 5, "acme", 0.40, "final", nuevo=False) is None
+        assert con.execute(sa.select(sa.func.count()).select_from(db.movimiento_saldo)).scalar() == 0
 
 
 def test_no_entregado_escribe_cero(libro, base_temporal):
@@ -159,8 +169,59 @@ def test_puede_arrancar(libro, base_temporal):
     libro.configurar("acme", usuario="admin", cobrar=True)
     assert libro.puede_arrancar(t, tipos) is False             # saldo 0
     assert libro.puede_arrancar({**t, "tipo": "exp_decidir"}, tipos) is True
-    _tarea(db, "j", "hecha")
-    assert libro.puede_arrancar(t, tipos) is True              # continuación de una cadena
+    # el mismo job_id reusado de un día anterior NO es una cadena
+    _tarea(db, "j", "hecha", creada_en="2026-10-01T09:00:00", terminada_en="2026-10-01T09:05:00")
+    assert libro.puede_arrancar(t, tipos) is False
+
+
+def test_puede_arrancar_continuacion_de_cadena(libro, base_temporal):
+    db = base_temporal
+    tipos = {"flowplus_video"}
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    _tarea(db, "j", "hecha", creada_en="2026-10-08T09:00:00", terminada_en=AHORA)
+    siguiente = _tarea(db, "j", "pendiente", creada_en=AHORA)   # se crea al cerrar la anterior
+    t = {"id": siguiente, "tipo": "flowplus_video", "cliente": "acme", "job_id": "j"}   # sin creada_en: sale de la base
+    assert libro.puede_arrancar(t, tipos) is True
+    # una hecha vieja detrás de la reciente no cambia nada; y una tarea sin continuación previa, sí frena
+    otra = _tarea(db, "k", "pendiente", creada_en=AHORA)
+    assert libro.puede_arrancar({**t, "id": otra, "job_id": "k"}, tipos) is False
+
+
+def test_acreditar_rechaza_signos_y_ceros_imposibles(libro, base_temporal):
+    with base_temporal.conectar() as con:
+        for tipo, monto in (("recarga", 0), ("recarga", -5), ("anulacion", 5), ("anulacion", 0), ("ajuste", 0)):
+            with pytest.raises(ValueError):
+                libro.acreditar(con, "acme", tipo, monto, "ajuste")
+        libro.acreditar(con, "acme", "anulacion", -5, "anulacion_bold")
+        libro.acreditar(con, "acme", "ajuste", -3, "ajuste")
+    assert libro.saldo("acme") == -8
+
+
+def test_cobra_devuelve_bool(libro):
+    assert libro.cobra("acme") is False and libro.cobra("") is False and libro.cobra(None) is False
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    assert libro.cobra("acme") is True
+
+
+def test_revertir_con_fallo_a_medias_no_devuelve_ids_fantasma(libro, base_temporal, monkeypatch):
+    db = base_temporal
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    with libro.en_trabajo(1, "v:1"), db.conectar() as con:
+        libro.cobrar_gasto(con, 5, "acme", 1.0, "video")
+        libro.cobrar_gasto(con, 6, "acme", 1.0, "video")
+    llamadas = []
+    original = libro._insertar
+
+    def rota(con, **v):
+        llamadas.append(1)
+        if len(llamadas) == 2:
+            raise RuntimeError("disco lleno")
+        return original(con, **v)
+    monkeypatch.setattr(libro, "_insertar", rota)
+    assert libro.revertir_trabajo("acme", "v:1", "x") == []
+    with db.conectar() as con:
+        assert con.execute(sa.select(sa.func.count()).select_from(db.movimiento_saldo)
+                           .where(db.movimiento_saldo.c.tipo == "reverso")).scalar() == 0
 
 
 def test_limpiar_reservas_muertas(libro, base_temporal):
@@ -205,3 +266,20 @@ def test_frase_de_saldo_insuficiente(libro, base_temporal):
     with idiomas.en_idioma("es"):
         assert "1,50" in e.frase() and "0,50" in e.frase()
         assert "esto cuesta" not in libro.SaldoInsuficiente("acme", 1, 0).frase()
+
+
+def test_saldo_bajo_con_carrera_en_la_marca_no_lanza_ni_avisa(base_temporal, monkeypatch):
+    import sqlalchemy as sa2
+    from cobros import avisos
+    enviados = []
+    monkeypatch.setattr(avisos.notificaciones, "avisar", lambda *a: enviados.append(a) or True)
+    real = avisos.sa.select
+
+    class Rival:   # el select no ve la marca, pero el insert choca con la que otro acaba de poner
+        def __init__(self):
+            with base_temporal.conectar() as con:
+                con.execute(base_temporal.kv.insert().values(clave="cobros:aviso_bajo:acme", valor="1",
+                                                             actualizado_en=AHORA))
+    monkeypatch.setattr(avisos.sa, "select", lambda *a, **k: (Rival(), real(sa2.literal(0)).where(sa2.false()))[1])
+    assert avisos.saldo_bajo("acme", 100) is False
+    assert enviados == []

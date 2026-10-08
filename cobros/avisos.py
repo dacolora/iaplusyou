@@ -86,6 +86,8 @@ def saldo_bajo(cliente, saldo_milesimas):
             if con.execute(sa.select(db.kv.c.clave).where(db.kv.c.clave == clave)).first():
                 return False
             con.execute(db.kv.insert().values(clave=clave, valor="1", actualizado_en=db.ahora()))
+    except sa.exc.IntegrityError:
+        return False   # otro proceso acaba de anotar el aviso: él lo manda
     except Exception:  # noqa: BLE001
         log.exception("no se pudo anotar el aviso de saldo bajo de %s", cliente)
         return False

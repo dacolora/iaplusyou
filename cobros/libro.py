@@ -108,7 +108,7 @@ def cuenta(cliente):
 
 
 def cobra(cliente):
-    return bool(cliente) and cuenta(cliente)["cobrar"]
+    return bool(cliente and cuenta(cliente)["cobrar"])
 
 
 def margen_precio(cliente):
@@ -198,6 +198,36 @@ def exigir(cliente, costo_usd, job_id=None):
         return precio
 
 
+def _segundos(texto):
+    from datetime import datetime  # noqa: PLC0415
+    try:
+        return datetime.fromisoformat(str(texto)[:19]).timestamp()
+    except (TypeError, ValueError):
+        return None
+
+
+VENTANA_CONTINUACION = 2   # segundos entre cerrar la tarea previa y crear la siguiente
+
+
+def _es_continuacion(con, tarea):
+    """Los job_id son deterministas y se reusan (el mismo clic de otro día lleva
+    el mismo): solo es continuación de una cadena la hecha MÁS RECIENTE del mismo
+    job_id (id menor) que cerró junto con la creación de esta tarea —
+    cola.terminar_y_encolar las cierra y encola en una sola transacción."""
+    t = db.tarea.c
+    creada = tarea.get("creada_en")
+    if not creada and tarea.get("id") is not None:
+        creada = con.execute(sa.select(t.creada_en).where(t.id == tarea["id"])).scalar()
+    creada = _segundos(creada)
+    if creada is None:
+        return False
+    q = sa.select(t.terminada_en).where(t.job_id == tarea["job_id"], t.estado == "hecha")
+    if tarea.get("id") is not None:
+        q = q.where(t.id < tarea["id"])
+    terminada = _segundos(con.execute(q.order_by(t.id.desc()).limit(1)).scalar())
+    return terminada is not None and abs(creada - terminada) <= VENTANA_CONTINUACION
+
+
 def puede_arrancar(tarea, tipos_que_cobran):
     """Respaldo del worker (§5.1): False solo si el tipo cobra, el proyecto
     cobra, no es continuación de una cadena y el saldo es ≤ 0."""
@@ -206,9 +236,7 @@ def puede_arrancar(tarea, tipos_que_cobran):
     with db.conectar() as con:
         if not _cuenta(con, tarea["cliente"])["cobrar"]:
             return True
-        if tarea.get("job_id") and con.execute(sa.select(db.tarea.c.id).where(
-                db.tarea.c.job_id == tarea["job_id"], db.tarea.c.estado == "hecha",
-                db.tarea.c.id != tarea.get("id")).limit(1)).first():
+        if tarea.get("job_id") and _es_continuacion(con, tarea):
             return True
         return _saldo(con, tarea["cliente"]) > 0
 
@@ -274,18 +302,20 @@ def revertir_trabajo(cliente, job_id, motivo=""):
             for c in cobros_:
                 if con.execute(sa.select(m.c.id).where(m.c.gasto_id == c.gasto_id, m.c.tipo == "reverso")).first():
                     continue
-                try:
-                    with con.begin_nested():
-                        nuevos.append(_insertar(con, cliente=cliente, tipo="reverso", milesimas=-c.milesimas,
-                                                gasto_id=c.gasto_id, job_id=job_id, tarea_id=c.tarea_id,
-                                                concepto=c.concepto, detalle=str(motivo or "")[:300], extra={}))
-                        total += -c.milesimas
-                        concepto = concepto or c.concepto
-                except sa.exc.IntegrityError:
-                    continue
+                # Sin savepoint a propósito: pysqlite no emite BEGIN antes de un SAVEPOINT, y su
+                # RELEASE confirmaría los reversos ya escritos aunque uno posterior falle. Todo o nada.
+                nuevos.append(_insertar(con, cliente=cliente, tipo="reverso", milesimas=-c.milesimas,
+                                        gasto_id=c.gasto_id, job_id=job_id, tarea_id=c.tarea_id,
+                                        concepto=c.concepto, detalle=str(motivo or "")[:300], extra={}))
+                total += -c.milesimas
+                concepto = concepto or c.concepto
+    except sa.exc.IntegrityError:
+        # Otro proceso acaba de revertir el mismo trabajo (uq_movimiento_gasto): él los escribió y avisó.
+        log.info("el trabajo %s de %s ya lo revirtió otro proceso", job_id, cliente)
+        return []
     except Exception:  # noqa: BLE001 — el worker no muere por esto
         log.exception("no se pudo revertir el trabajo %s de %s", job_id, cliente)
-        return nuevos
+        return []   # la transacción se deshizo: ningún id nuevo quedó guardado
     if nuevos:
         from cobros import avisos  # noqa: PLC0415
         avisos.pieza_no_cobrada(cliente, total, concepto)
@@ -297,7 +327,10 @@ def acreditar(con, cliente, tipo, milesimas, concepto, *, recarga_id=None, usuar
     las pruebas, dentro de su propia transacción."""
     if tipo not in TIPOS_ACREDITAR:
         raise ValueError(f"tipo de acreditación inválido: {tipo}")
-    return _insertar(con, cliente=cliente, tipo=tipo, milesimas=int(milesimas), recarga_id=recarga_id,
+    milesimas = int(milesimas)
+    if milesimas == 0 or (tipo == "recarga" and milesimas < 0) or (tipo == "anulacion" and milesimas > 0):
+        raise ValueError(f"monto inválido para {tipo}: {milesimas}")
+    return _insertar(con, cliente=cliente, tipo=tipo, milesimas=milesimas, recarga_id=recarga_id,
                      concepto=concepto, usuario=usuario, detalle=str(detalle or "")[:300], extra={})
 
 
