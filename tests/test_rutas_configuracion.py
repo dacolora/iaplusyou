@@ -342,7 +342,7 @@ def test_triple_whale_ajustes_cambian_la_atribucion_y_vuelven_a_traer(app, monke
     _tw_acepta(monkeypatch)
     app["c"].post("/cliente/acme/cfg_triple_whale/conectar",
                   data={"llave_api": "tw_prueba123", "dominio_tienda": "acme.myshopify.com"})
-    tw_datos.reemplazar_tienda("acme", "2026-09-01", "2026-09-01", [{"fecha": "2026-09-01", "ingresos": 10}])
+    tw_datos.reemplazar_tienda("acme", triple_whale_tiendas.tiendas("acme")[0]["id"], "2026-09-01", "2026-09-01", [{"fecha": "2026-09-01", "ingresos": 10}])
     import db
     import sqlalchemy as sa
     with db.conectar() as con:
@@ -361,7 +361,7 @@ def test_triple_whale_desconectar_borra_lo_copiado(app, monkeypatch):
     _tw_acepta(monkeypatch)
     app["c"].post("/cliente/acme/cfg_triple_whale/conectar",
                   data={"llave_api": "tw_prueba123", "dominio_tienda": "acme.myshopify.com"})
-    tw_datos.reemplazar_tienda("acme", "2026-09-01", "2026-09-01", [{"fecha": "2026-09-01", "ingresos": 10}])
+    tw_datos.reemplazar_tienda("acme", triple_whale_tiendas.tiendas("acme")[0]["id"], "2026-09-01", "2026-09-01", [{"fecha": "2026-09-01", "ingresos": 10}])
     r = app["c"].post("/cliente/acme/cfg_triple_whale/desconectar", follow_redirects=False)
     assert r.status_code == 302
     assert triple_whale_tiendas.obtener("acme") is None and not tw_datos.hay_tienda("acme")

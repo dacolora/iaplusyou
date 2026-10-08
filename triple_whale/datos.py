@@ -1,6 +1,11 @@
-"""Único escritor (y lector) de `tw_anuncio_dia`, `tw_tienda_dia` y
-`tw_evaluacion` (spec 2026-09-28 §3). Solo SQLAlchemy Core; nada de Flask ni
-de la API de Triple Whale.
+"""Único escritor (y lector) de `tw_anuncio_dia`, `tw_tienda_dia`,
+`tw_producto_dia` y `tw_evaluacion` (spec 2026-09-28 §3). Solo SQLAlchemy
+Core; nada de Flask ni de la API de Triple Whale.
+
+Desde 2026-10-08 (spec de varias tiendas §6.1) cada copia es de una tienda
+(`tienda_id`): las escrituras reciben la tienda y las lecturas `tienda_id`
+como segundo argumento, con `None` = todas las del proyecto (el gasto de un
+anuncio que llega por varias tiendas cuenta una vez; los pedidos se suman).
 
 Las dos tablas de métricas son COPIAS: cada sincronización reemplaza un rango
 de fechas completo. Triple Whale reatribuye días viejos (un pedido de hoy
@@ -21,6 +26,8 @@ COLUMNAS_CANAL = ("gasto", "impresiones", "clics", "clics_salida", "compras_cana
 COLUMNAS_PIXEL = ("pedidos", "ingresos", "nc_pedidos", "nc_ingresos", "sesiones", "carritos", "checkouts")
 COLUMNAS_TIENDA = ("gasto", "ingresos", "pedidos", "nc_pedidos", "nc_ingresos", "reembolsos", "cogs", "utilidad_neta")
 COLUMNAS_PRODUCTO = ("unidades", "ingresos", "pedidos")
+COLUMNAS_POR_TIENDA = ("ingresos", "pedidos", "gasto", "nc_pedidos", "nc_ingresos")   # por_tienda
+_LLAVE_ANUNCIO = ["cliente", "tienda_id", "canal", "ad_id", "fecha"]   # uq_tw_anuncio_dia
 ESTADOS_EVALUACION = ("en_cola", "analizando", "lista", "error")
 
 
@@ -29,97 +36,127 @@ def _ceros(columnas):
 
 
 # ------------------------------------------------------------ escribir ---
+# Cada copia es de UNA tienda (`tienda_id`, spec 2026-10-08 §3.3): poner en
+# cero o borrar el rango de una tienda nunca toca las filas de otra.
 
-def reemplazar_anuncios_canal(cliente, desde, hasta, registros):
-    """Lo que reporta cada plataforma para [desde, hasta]. Pone en cero las
-    medidas de canal del rango y hace upsert de `registros` (dicts con canal,
-    ad_id, fecha, dimensiones y COLUMNAS_CANAL). No toca lo del Pixel."""
+def reemplazar_anuncios_canal(cliente, tienda_id, desde, hasta, registros):
+    """Lo que reporta cada plataforma para [desde, hasta] según esa tienda.
+    Pone en cero las medidas de canal del rango y hace upsert de `registros`
+    (dicts con canal, ad_id, fecha, dimensiones y COLUMNAS_CANAL). No toca lo
+    del Pixel."""
     t = db.tw_anuncio_dia
     ahora = db.ahora()
     with db.conectar() as con:
-        con.execute(t.update().where(t.c.cliente == cliente, t.c.fecha >= desde, t.c.fecha <= hasta)
+        con.execute(t.update().where(t.c.cliente == cliente, t.c.tienda_id == tienda_id,
+                                     t.c.fecha >= desde, t.c.fecha <= hasta)
                     .values(**_ceros(COLUMNAS_CANAL)))
         for r in registros:
             valores = {c: r.get(c) for c in COLUMNAS_DIMENSION if r.get(c) is not None}
             valores.update({c: r.get(c) or 0 for c in COLUMNAS_CANAL})
-            nuevo = dict(cliente=cliente, fecha=r["fecha"], canal=r["canal"], ad_id=r["ad_id"],
+            nuevo = dict(cliente=cliente, tienda_id=tienda_id, fecha=r["fecha"], canal=r["canal"], ad_id=r["ad_id"],
                          actualizado_en=ahora, con_pixel=False, **_ceros(COLUMNAS_PIXEL))
             nuevo.update(valores)
             con.execute(insert_sqlite(t).values(**nuevo).on_conflict_do_update(
-                index_elements=["cliente", "canal", "ad_id", "fecha"], set_=dict(valores, actualizado_en=ahora)))
+                index_elements=_LLAVE_ANUNCIO, set_=dict(valores, actualizado_en=ahora)))
 
 
-def reemplazar_anuncios_pixel(cliente, desde, hasta, registros):
-    """Lo atribuido por el Triple Pixel para [desde, hasta] con el modelo y la
-    ventana del proyecto. Mismo patrón: cero en el rango y upsert. Todas las
-    filas del rango quedan con `con_pixel=True` («el Pixel respondió»): un
-    anuncio sin fila del Pixel no vendió nada según Triple Whale, que no es
-    lo mismo que no saberlo (el lanzador usa esa diferencia)."""
+def reemplazar_anuncios_pixel(cliente, tienda_id, desde, hasta, registros):
+    """Lo atribuido por el Triple Pixel de esa tienda para [desde, hasta] con
+    el modelo y la ventana del proyecto. Mismo patrón: cero en el rango y
+    upsert. Todas las filas del rango quedan con `con_pixel=True` («el Pixel
+    respondió»): un anuncio sin fila del Pixel no vendió nada según Triple
+    Whale, que no es lo mismo que no saberlo (el lanzador usa esa diferencia)."""
     t = db.tw_anuncio_dia
     ahora = db.ahora()
     with db.conectar() as con:
-        con.execute(t.update().where(t.c.cliente == cliente, t.c.fecha >= desde, t.c.fecha <= hasta)
+        con.execute(t.update().where(t.c.cliente == cliente, t.c.tienda_id == tienda_id,
+                                     t.c.fecha >= desde, t.c.fecha <= hasta)
                     .values(con_pixel=True, **_ceros(COLUMNAS_PIXEL)))
         for r in registros:
             valores = {c: r.get(c) or 0 for c in COLUMNAS_PIXEL}
             valores["con_pixel"] = True
-            nuevo = dict(cliente=cliente, fecha=r["fecha"], canal=r["canal"], ad_id=r["ad_id"],
+            nuevo = dict(cliente=cliente, tienda_id=tienda_id, fecha=r["fecha"], canal=r["canal"], ad_id=r["ad_id"],
                          actualizado_en=ahora, **_ceros(COLUMNAS_CANAL))
             nuevo.update(valores)
             con.execute(insert_sqlite(t).values(**nuevo).on_conflict_do_update(
-                index_elements=["cliente", "canal", "ad_id", "fecha"], set_=dict(valores, actualizado_en=ahora)))
+                index_elements=_LLAVE_ANUNCIO, set_=dict(valores, actualizado_en=ahora)))
 
 
-def reemplazar_tienda(cliente, desde, hasta, registros):
-    """La tienda por día para [desde, hasta]: borra el rango y lo vuelve a escribir."""
+def reemplazar_tienda(cliente, tienda_id, desde, hasta, registros):
+    """La tienda por día para [desde, hasta]: borra el rango de ESA tienda y lo vuelve a escribir."""
     t = db.tw_tienda_dia
     ahora = db.ahora()
     with db.conectar() as con:
-        con.execute(t.delete().where(t.c.cliente == cliente, t.c.fecha >= desde, t.c.fecha <= hasta))
+        con.execute(t.delete().where(t.c.cliente == cliente, t.c.tienda_id == tienda_id,
+                                     t.c.fecha >= desde, t.c.fecha <= hasta))
         for r in registros:
-            con.execute(t.insert().values(cliente=cliente, fecha=r["fecha"], actualizado_en=ahora,
+            con.execute(t.insert().values(cliente=cliente, tienda_id=tienda_id, fecha=r["fecha"], actualizado_en=ahora,
                                           **{c: r.get(c) or 0 for c in COLUMNAS_TIENDA}))
 
 
-def reemplazar_productos(cliente, desde, hasta, registros):
-    """Ventas por producto y día para [desde, hasta]: borra el rango y lo
-    vuelve a escribir (`registros`: fecha, producto_id, nombre, sku y
-    COLUMNAS_PRODUCTO)."""
+def reemplazar_productos(cliente, tienda_id, desde, hasta, registros):
+    """Ventas por producto y día de esa tienda para [desde, hasta]: borra el
+    rango y lo vuelve a escribir (`registros`: fecha, producto_id, nombre,
+    sku y COLUMNAS_PRODUCTO)."""
     t = db.tw_producto_dia
     ahora = db.ahora()
     with db.conectar() as con:
-        con.execute(t.delete().where(t.c.cliente == cliente, t.c.fecha >= desde, t.c.fecha <= hasta))
+        con.execute(t.delete().where(t.c.cliente == cliente, t.c.tienda_id == tienda_id,
+                                     t.c.fecha >= desde, t.c.fecha <= hasta))
         for r in registros:
-            con.execute(t.insert().values(cliente=cliente, fecha=r["fecha"], producto_id=r["producto_id"],
-                                          nombre=r.get("nombre"), sku=r.get("sku"), actualizado_en=ahora,
-                                          **{c: r.get(c) or 0 for c in COLUMNAS_PRODUCTO}))
+            con.execute(t.insert().values(cliente=cliente, tienda_id=tienda_id, fecha=r["fecha"],
+                                          producto_id=r["producto_id"], nombre=r.get("nombre"), sku=r.get("sku"),
+                                          actualizado_en=ahora, **{c: r.get(c) or 0 for c in COLUMNAS_PRODUCTO}))
 
 
 # ------------------------------------------------------------- leer ---
+# `tienda_id` entero = esa tienda; None = TODAS las del proyecto (spec §6.1).
+
+def _anuncio_dia(cliente, tienda_id, desde=None, hasta=None, canal=None):
+    """Una fila por (canal, ad_id, fecha). Con una tienda, sus filas. Con todas,
+    medidas de canal con MAX (el mismo anuncio llega por cada tienda que comparte
+    la cuenta: su gasto se cuenta una vez; con cuentas separadas los ad_id no se
+    repiten y MAX es el único valor) y del Pixel con SUMA (cada tienda atribuye
+    sus propios pedidos)."""
+    t = db.tw_anuncio_dia
+    cond = [t.c.cliente == cliente]
+    if desde:
+        cond.append(t.c.fecha >= desde)
+    if hasta:
+        cond.append(t.c.fecha <= hasta)
+    if tienda_id is not None:
+        cond.append(t.c.tienda_id == tienda_id)
+    if canal:
+        cond.append(t.c.canal == canal)
+    medidas = ([sa.func.max(getattr(t.c, c)).label(c) for c in COLUMNAS_CANAL]
+               + [sa.func.sum(getattr(t.c, c)).label(c) for c in COLUMNAS_PIXEL]
+               + [sa.func.max(sa.cast(t.c.con_pixel, sa.Integer)).label("con_pixel")]
+               + [sa.func.max(getattr(t.c, c)).label(c) for c in COLUMNAS_DIMENSION if c != "utm_ok"]
+               + [sa.func.min(sa.cast(t.c.utm_ok, sa.Integer)).label("utm_ok")])
+    return (sa.select(t.c.canal, t.c.ad_id, t.c.fecha, *medidas).where(*cond)
+            .group_by(t.c.canal, t.c.ad_id, t.c.fecha).subquery())
+
 
 def _sumas(t):
     return [sa.func.coalesce(sa.func.sum(getattr(t.c, c)), 0).label(c) for c in COLUMNAS_CANAL + COLUMNAS_PIXEL]
 
 
-def totales_por_anuncio(cliente, desde, hasta, canal=None):
+def totales_por_anuncio(cliente, tienda_id, desde, hasta, canal=None):
     """Una fila por (canal, anuncio) con las medidas sumadas en [desde, hasta]
     y las dimensiones más recientes que no estén vacías. Solo anuncios con
     algo que mirar (gasto, impresiones o pedidos)."""
-    t = db.tw_anuncio_dia
-    cond = [t.c.cliente == cliente, t.c.fecha >= desde, t.c.fecha <= hasta]
-    if canal:
-        cond.append(t.c.canal == canal)
-    q = (sa.select(t.c.canal, t.c.ad_id,
-                   sa.func.max(t.c.campana).label("campana"), sa.func.max(t.c.campana_id).label("campana_id"),
-                   sa.func.max(t.c.conjunto).label("conjunto"), sa.func.max(t.c.anuncio).label("anuncio"),
-                   sa.func.max(t.c.cuenta_id).label("cuenta_id"), sa.func.max(t.c.creative_id).label("creative_id"),
-                   sa.func.max(t.c.video_url).label("video_url"), sa.func.max(t.c.destino_url).label("destino_url"),
-                   sa.func.min(sa.cast(t.c.utm_ok, sa.Integer)).label("utm_ok"),
-                   sa.func.min(t.c.fecha).label("primera_fecha"), sa.func.max(t.c.fecha).label("ultima_fecha"),
-                   sa.func.sum(sa.case((t.c.gasto > 0, 1), else_=0)).label("dias_con_gasto"),
-                   *_sumas(t))
-         .where(*cond).group_by(t.c.canal, t.c.ad_id)
-         .having(sa.or_(sa.func.sum(t.c.gasto) > 0, sa.func.sum(t.c.impresiones) > 0, sa.func.sum(t.c.pedidos) > 0)))
+    d = _anuncio_dia(cliente, tienda_id, desde, hasta, canal)
+    q = (sa.select(d.c.canal, d.c.ad_id,
+                   sa.func.max(d.c.campana).label("campana"), sa.func.max(d.c.campana_id).label("campana_id"),
+                   sa.func.max(d.c.conjunto).label("conjunto"), sa.func.max(d.c.anuncio).label("anuncio"),
+                   sa.func.max(d.c.cuenta_id).label("cuenta_id"), sa.func.max(d.c.creative_id).label("creative_id"),
+                   sa.func.max(d.c.video_url).label("video_url"), sa.func.max(d.c.destino_url).label("destino_url"),
+                   sa.func.min(d.c.utm_ok).label("utm_ok"),
+                   sa.func.min(d.c.fecha).label("primera_fecha"), sa.func.max(d.c.fecha).label("ultima_fecha"),
+                   sa.func.sum(sa.case((d.c.gasto > 0, 1), else_=0)).label("dias_con_gasto"),
+                   *_sumas(d))
+         .group_by(d.c.canal, d.c.ad_id)
+         .having(sa.or_(sa.func.sum(d.c.gasto) > 0, sa.func.sum(d.c.impresiones) > 0, sa.func.sum(d.c.pedidos) > 0)))
     with db.conectar() as con:
         filas = [dict(r._mapping) for r in con.execute(q)]
     for f in filas:
@@ -127,11 +164,13 @@ def totales_por_anuncio(cliente, desde, hasta, canal=None):
     return filas
 
 
-def totales_anuncio(cliente, canal, ad_id, desde, hasta=None):
-    """Las medidas sumadas de UN anuncio desde `desde` (para el snapshot de un
-    experimento). None si Triple Whale todavía no trajo ninguna fila suya."""
+def totales_anuncio(cliente, tienda_id, canal, ad_id, desde, hasta=None):
+    """Las medidas sumadas de UN anuncio en UNA tienda desde `desde` (para el
+    snapshot de un experimento, que vende en la tienda de su país). None si
+    Triple Whale todavía no trajo ninguna fila suya."""
     t = db.tw_anuncio_dia
-    cond = [t.c.cliente == cliente, t.c.canal == canal, t.c.ad_id == str(ad_id), t.c.fecha >= desde]
+    cond = [t.c.cliente == cliente, t.c.tienda_id == tienda_id, t.c.canal == canal, t.c.ad_id == str(ad_id),
+            t.c.fecha >= desde]
     if hasta:
         cond.append(t.c.fecha <= hasta)
     q = sa.select(sa.func.count().label("n"), sa.func.max(sa.cast(t.c.con_pixel, sa.Integer)).label("con_pixel"),
@@ -144,60 +183,144 @@ def totales_anuncio(cliente, canal, ad_id, desde, hasta=None):
     return fila
 
 
-def serie_anuncios(cliente, desde, hasta):
+def serie_anuncios(cliente, tienda_id, desde, hasta):
     """Por día: gasto de anuncios e ingresos atribuidos por el Pixel."""
+    d = _anuncio_dia(cliente, tienda_id, desde, hasta)
+    q = (sa.select(d.c.fecha, sa.func.coalesce(sa.func.sum(d.c.gasto), 0).label("gasto"),
+                   sa.func.coalesce(sa.func.sum(d.c.ingresos), 0).label("ingresos"),
+                   sa.func.coalesce(sa.func.sum(d.c.pedidos), 0).label("pedidos"))
+         .group_by(d.c.fecha).order_by(d.c.fecha))
+    with db.conectar() as con:
+        return [dict(r._mapping) for r in con.execute(q)]
+
+
+def _duplicado_por_dia(cliente, desde, hasta):
+    """Subconsulta (fecha, duplicado): por día, Σ por anuncio de (suma − máximo)
+    de su gasto entre las tiendas. Es lo que «Todas» contaría de más si sumara
+    el gasto de cada tienda con una cuenta publicitaria compartida."""
     t = db.tw_anuncio_dia
-    q = (sa.select(t.c.fecha, sa.func.coalesce(sa.func.sum(t.c.gasto), 0).label("gasto"),
-                   sa.func.coalesce(sa.func.sum(t.c.ingresos), 0).label("ingresos"),
-                   sa.func.coalesce(sa.func.sum(t.c.pedidos), 0).label("pedidos"))
-         .where(t.c.cliente == cliente, t.c.fecha >= desde, t.c.fecha <= hasta)
-         .group_by(t.c.fecha).order_by(t.c.fecha))
+    por_anuncio = (sa.select(t.c.fecha, (sa.func.sum(t.c.gasto) - sa.func.max(t.c.gasto)).label("duplicado"))
+                   .where(t.c.cliente == cliente, t.c.fecha >= desde, t.c.fecha <= hasta)
+                   .group_by(t.c.canal, t.c.ad_id, t.c.fecha).subquery())
+    return (sa.select(por_anuncio.c.fecha, sa.func.sum(por_anuncio.c.duplicado).label("duplicado"))
+            .group_by(por_anuncio.c.fecha).subquery())
+
+
+def gasto_duplicado(cliente, desde, hasta):
+    """Gasto de anuncios que llega repetido por varias tiendas en [desde, hasta]
+    (mayor que 0 = hay tiendas que comparten cuenta publicitaria)."""
+    d = _duplicado_por_dia(cliente, desde, hasta)
     with db.conectar() as con:
-        return [dict(r._mapping) for r in con.execute(q)]
+        return float(con.execute(sa.select(sa.func.coalesce(sa.func.sum(d.c.duplicado), 0))).scalar() or 0)
 
 
-def serie_tienda(cliente, desde, hasta):
+def serie_tienda(cliente, tienda_id, desde, hasta):
+    """La tienda por día. Con todas, suma las tiendas y le quita al `gasto` el
+    gasto duplicado de ese día (se lo devuelve a `utilidad_neta`, que lo había
+    restado de más): el gasto compartido cuenta una vez y el que no viene de
+    anuncios queda intacto."""
     t = db.tw_tienda_dia
-    q = (sa.select(t.c.fecha, *[getattr(t.c, c) for c in COLUMNAS_TIENDA])
-         .where(t.c.cliente == cliente, t.c.fecha >= desde, t.c.fecha <= hasta).order_by(t.c.fecha))
+    cond = [t.c.cliente == cliente, t.c.fecha >= desde, t.c.fecha <= hasta]
+    if tienda_id is not None:
+        q = sa.select(t.c.fecha, *[getattr(t.c, c) for c in COLUMNAS_TIENDA]).where(
+            *cond, t.c.tienda_id == tienda_id).order_by(t.c.fecha)
+    else:
+        s = (sa.select(t.c.fecha, *[sa.func.sum(getattr(t.c, c)).label(c) for c in COLUMNAS_TIENDA])
+             .where(*cond).group_by(t.c.fecha).subquery())
+        d = _duplicado_por_dia(cliente, desde, hasta)
+        dup = sa.func.coalesce(d.c.duplicado, 0)
+        columnas = [(s.c[c] - dup).label(c) if c == "gasto" else (s.c[c] + dup).label(c) if c == "utilidad_neta"
+                    else s.c[c] for c in COLUMNAS_TIENDA]
+        q = (sa.select(s.c.fecha, *columnas).select_from(s.outerjoin(d, d.c.fecha == s.c.fecha))
+             .order_by(s.c.fecha))
     with db.conectar() as con:
         return [dict(r._mapping) for r in con.execute(q)]
 
 
-def top_productos(cliente, desde, hasta, limite=10):
+def por_tienda(cliente, desde, hasta, desde_prev, hasta_prev):
+    """Una fila por tienda del proyecto (también las que no tienen cifras), por
+    id: {"tienda_id", "actual", "previo"}, cada periodo con COLUMNAS_POR_TIENDA
+    sumadas como `serie_tienda` de esa tienda. Una sola consulta."""
+    ti, t = db.tw_tienda, db.tw_tienda_dia
+    en_actual = sa.and_(t.c.fecha >= desde, t.c.fecha <= hasta)
+    en_previo = sa.and_(t.c.fecha >= desde_prev, t.c.fecha <= hasta_prev)
+
+    def _suma(periodo, c, etiqueta):
+        return sa.func.coalesce(sa.func.sum(sa.case((periodo, getattr(t.c, c)), else_=0)), 0).label(etiqueta)
+
+    q = (sa.select(ti.c.id, *[_suma(en_actual, c, f"a_{c}") for c in COLUMNAS_POR_TIENDA],
+                   *[_suma(en_previo, c, f"p_{c}") for c in COLUMNAS_POR_TIENDA])
+         .select_from(ti.outerjoin(t, sa.and_(t.c.cliente == ti.c.cliente, t.c.tienda_id == ti.c.id,
+                                              sa.or_(en_actual, en_previo))))
+         .where(ti.c.cliente == cliente).group_by(ti.c.id).order_by(ti.c.id))
+    with db.conectar() as con:
+        filas = [r._mapping for r in con.execute(q)]
+    return [{"tienda_id": f["id"],
+             "actual": {c: f[f"a_{c}"] for c in COLUMNAS_POR_TIENDA},
+             "previo": {c: f[f"p_{c}"] for c in COLUMNAS_POR_TIENDA}} for f in filas]
+
+
+def top_productos(cliente, tienda_id, desde, hasta, limite=10):
     """Los productos que más vendieron en [desde, hasta] (por ingresos), con
-    el nombre y el sku más recientes que no estén vacíos."""
+    el nombre y el sku más recientes que no estén vacíos. Con una tienda, por
+    `producto_id`. Con todas, por nombre normalizado (minúsculas, sin espacios
+    de más): cada tienda de Shopify tiene su propio id para el mismo producto;
+    `producto_id` es el menor del grupo."""
     t = db.tw_producto_dia
-    q = (sa.select(t.c.producto_id, sa.func.max(t.c.nombre).label("nombre"), sa.func.max(t.c.sku).label("sku"),
+    cond = [t.c.cliente == cliente, t.c.fecha >= desde, t.c.fecha <= hasta]
+    if tienda_id is not None:
+        cond.append(t.c.tienda_id == tienda_id)
+        grupo, pid = t.c.producto_id, t.c.producto_id
+    else:
+        nombre = sa.func.lower(sa.func.trim(t.c.nombre))
+        for _ in range(3):   # colapsa hasta 8 espacios seguidos (SQLite no tiene regexp_replace)
+            nombre = sa.func.replace(nombre, "  ", " ")
+        grupo = sa.func.coalesce(sa.func.nullif(nombre, ""), sa.literal("id:") + t.c.producto_id)
+        pid = sa.func.min(t.c.producto_id).label("producto_id")
+    q = (sa.select(pid, sa.func.max(t.c.nombre).label("nombre"), sa.func.max(t.c.sku).label("sku"),
                    sa.func.coalesce(sa.func.sum(t.c.unidades), 0).label("unidades"),
                    sa.func.coalesce(sa.func.sum(t.c.ingresos), 0).label("ingresos"),
                    sa.func.coalesce(sa.func.sum(t.c.pedidos), 0).label("pedidos"))
-         .where(t.c.cliente == cliente, t.c.fecha >= desde, t.c.fecha <= hasta)
-         .group_by(t.c.producto_id).order_by(sa.desc("ingresos"), sa.desc("unidades")).limit(limite))
+         .where(*cond).group_by(grupo).order_by(sa.desc("ingresos"), sa.desc("unidades")).limit(limite))
     with db.conectar() as con:
         return [dict(r._mapping) for r in con.execute(q)]
 
 
-def hay_productos(cliente):
-    t = db.tw_producto_dia
+def _hay(tabla, cliente, tienda_id):
+    cond = [tabla.c.cliente == cliente]
+    if tienda_id is not None:
+        cond.append(tabla.c.tienda_id == tienda_id)
     with db.conectar() as con:
-        return bool(con.execute(sa.select(t.c.id).where(t.c.cliente == cliente).limit(1)).first())
+        return bool(con.execute(sa.select(tabla.c.id).where(*cond).limit(1)).first())
 
 
-def rango(cliente):
-    """{"desde", "hasta", "filas", "anuncios"} de lo copiado; ceros si nada."""
-    t = db.tw_anuncio_dia
-    q = sa.select(sa.func.min(t.c.fecha), sa.func.max(t.c.fecha), sa.func.count(),
-                  sa.func.count(sa.distinct(t.c.ad_id))).where(t.c.cliente == cliente)
+def hay_productos(cliente, tienda_id=None):
+    return _hay(db.tw_producto_dia, cliente, tienda_id)
+
+
+def hay_tienda(cliente, tienda_id=None):
+    return _hay(db.tw_tienda_dia, cliente, tienda_id)
+
+
+def rango(cliente, tienda_id=None):
+    """{"desde", "hasta", "filas", "anuncios"} de lo copiado; ceros si nada.
+    `filas` cuenta (canal, anuncio, día), una vez aunque llegue por varias tiendas."""
+    d = _anuncio_dia(cliente, tienda_id)
+    q = sa.select(sa.func.min(d.c.fecha), sa.func.max(d.c.fecha), sa.func.count(),
+                  sa.func.count(sa.distinct(d.c.ad_id)))
     with db.conectar() as con:
         desde, hasta, filas, anuncios = con.execute(q).one()
     return {"desde": desde, "hasta": hasta, "filas": int(filas or 0), "anuncios": int(anuncios or 0)}
 
 
-def hay_tienda(cliente):
-    t = db.tw_tienda_dia
+def canales(cliente, tienda_id, desde, hasta):
+    """Canales con gasto o impresiones en el rango, del que más gastó al que menos."""
+    d = _anuncio_dia(cliente, tienda_id, desde, hasta)
+    q = (sa.select(d.c.canal).group_by(d.c.canal)
+         .having(sa.or_(sa.func.sum(d.c.gasto) > 0, sa.func.sum(d.c.impresiones) > 0))
+         .order_by(sa.func.sum(d.c.gasto).desc()))
     with db.conectar() as con:
-        return bool(con.execute(sa.select(t.c.id).where(t.c.cliente == cliente).limit(1)).first())
+        return [r[0] for r in con.execute(q)]
 
 
 # ------------------------------------------------------- evaluaciones ---
@@ -239,16 +362,6 @@ def borrar_evaluacion(cliente, evaluacion_id):
     t = db.tw_evaluacion
     with db.conectar() as con:
         return con.execute(t.delete().where(t.c.id == evaluacion_id, t.c.cliente == cliente)).rowcount == 1
-
-
-def canales(cliente, desde, hasta):
-    """Canales con gasto o impresiones en el rango, del que más gastó al que menos."""
-    t = db.tw_anuncio_dia
-    q = (sa.select(t.c.canal).where(t.c.cliente == cliente, t.c.fecha >= desde, t.c.fecha <= hasta)
-         .group_by(t.c.canal).having(sa.or_(sa.func.sum(t.c.gasto) > 0, sa.func.sum(t.c.impresiones) > 0))
-         .order_by(sa.func.sum(t.c.gasto).desc()))
-    with db.conectar() as con:
-        return [r[0] for r in con.execute(q)]
 
 
 def piezas_creatv(cliente, ad_ids):

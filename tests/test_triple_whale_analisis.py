@@ -194,7 +194,7 @@ def test_tarea_evaluar_guarda_resultado_medios_y_gasto(evaluacion_en_cola, monke
         recibido.update(bloques=bloques, productos=productos)
         return analisis.parsear(respuesta(), {a["ref"] for a in anuncios}, ""), 10000, 5000
     monkeypatch.setattr(analisis, "analizar", _analizar)
-    datos.reemplazar_productos("acme", "2026-09-01", "2026-09-01", [
+    datos.reemplazar_productos("acme", triple_whale_tiendas.tiendas("acme")[0]["id"], "2026-09-01", "2026-09-01", [
         {"fecha": "2026-09-01", "producto_id": "p1", "nombre": "Cojín", "unidades": 3, "ingresos": 90, "pedidos": 2}])
     texto = e["t"].tw_evaluar({"id": 7, "payload": {"cliente": "acme", "evaluacion_id": e["eid"]}})
     assert "1 idea" in texto

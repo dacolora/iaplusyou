@@ -23,6 +23,11 @@ def _conectar():
     triple_whale_tiendas.actualizar("acme", ultima_sincronizacion=db.ahora())
 
 
+def _tienda(cliente="acme"):
+    """El id de la (única) tienda conectada en la prueba."""
+    return triple_whale_tiendas.tiendas(cliente)[0]["id"]
+
+
 def _sembrar():
     """Seis anuncios de Meta con 10 días de datos: dos ganadores, dos
     perdedores, uno sin datos y uno de TikTok; y la tienda."""
@@ -40,9 +45,9 @@ def _sembrar():
                           "thruplays": imp // 10, "utm_ok": ad != "p2"})
             pixel.append({"canal": canal_, "ad_id": ad, "fecha": f, "pedidos": pedidos, "ingresos": ingresos})
         tienda.append({"fecha": f, "gasto": 120, "ingresos": 400, "pedidos": 5, "nc_pedidos": 2})
-    datos.reemplazar_anuncios_canal("acme", _hace(9), _hace(0), canal)
-    datos.reemplazar_anuncios_pixel("acme", _hace(9), _hace(0), pixel)
-    datos.reemplazar_tienda("acme", _hace(9), _hace(0), tienda)
+    datos.reemplazar_anuncios_canal("acme", _tienda(), _hace(9), _hace(0), canal)
+    datos.reemplazar_anuncios_pixel("acme", _tienda(), _hace(9), _hace(0), pixel)
+    datos.reemplazar_tienda("acme", _tienda(), _hace(9), _hace(0), tienda)
 
 
 def _tareas(tipo):
@@ -216,10 +221,10 @@ def test_otro_proyecto_no_ve_el_panel(app):  # noqa: F811
 
 def _sembrar_productos():
     import sqlalchemy as sa
-    datos.reemplazar_productos("acme", _hace(9), _hace(0), [
+    datos.reemplazar_productos("acme", _tienda(), _hace(9), _hace(0), [
         {"fecha": _hace(1), "producto_id": "8891", "nombre": "Cojín lumbar", "sku": "C-1", "unidades": 12, "ingresos": 480, "pedidos": 10},
         {"fecha": _hace(1), "producto_id": "7770", "nombre": "Lámpara", "sku": "L-1", "unidades": 2, "ingresos": 120, "pedidos": 2}])
-    datos.reemplazar_productos("acme", _hace(39), _hace(30), [
+    datos.reemplazar_productos("acme", _tienda(), _hace(39), _hace(30), [
         {"fecha": _hace(35), "producto_id": "8891", "nombre": "Cojín lumbar", "unidades": 6, "ingresos": 240, "pedidos": 5}])
     with db.conectar() as con:
         con.execute(db.producto.insert().values(

@@ -18,6 +18,11 @@ def conectado(base_temporal, monkeypatch):
     return base_temporal
 
 
+def _tienda(cliente="acme"):
+    """El id de la (única) tienda conectada en la prueba."""
+    return triple_whale_tiendas.tiendas(cliente)[0]["id"]
+
+
 class TripleWhaleFalso:
     """Responde según la tabla que nombra la consulta. `fallar` = {tabla: n}
     hace que las primeras n consultas completas de esa tabla den
@@ -117,9 +122,9 @@ def test_sincronizar_copia_anuncios_pixel_y_tienda(conectado, monkeypatch):
     assert progreso == [(0, 1, "2026-09-22", "2026-09-28")]
     # La llave, la tienda y la moneda de la conexión van en cada consulta.
     assert {(l[4], l[5], l[6]) for l in falso.llamadas} == {("USD", "tw_secreto", "acme.myshopify.com")}
-    tot = datos.totales_anuncio("acme", "facebook-ads", "1", "2026-09-01")
+    tot = datos.totales_anuncio("acme", _tienda(), "facebook-ads", "1", "2026-09-01")
     assert tot["gasto"] == 15.0 and tot["pedidos"] == 2.0 and tot["ingresos"] == 80.0 and tot["con_pixel"]
-    assert datos.serie_tienda("acme", "2026-09-28", "2026-09-28")[0]["ingresos"] == 300.0
+    assert datos.serie_tienda("acme", None, "2026-09-28", "2026-09-28")[0]["ingresos"] == 300.0
     c = triple_whale_tiendas.obtener("acme")
     assert c["estado"] == "conectada" and c["ultima_sincronizacion"] and c["extra"]["backfill_desde"] == "2026-09-22"
     assert c["extra"]["ultimo_resumen"]["anuncios"] == 2
@@ -135,8 +140,8 @@ def test_sincronizar_de_nuevo_reemplaza_lo_reatribuido(conectado, monkeypatch):
     monkeypatch.setattr(triple_whale, "sql_query", TripleWhaleFalso(ads=ads, pixel=[
         {"channel": "facebook-ads", "ad_id": "2", "event_date": "2026-09-28", "orders": 1, "revenue": 50}]))
     sync.sincronizar("acme", "2026-09-28", "2026-09-28", hoy=HOY)
-    uno = datos.totales_anuncio("acme", "facebook-ads", "1", "2026-09-28")
-    dos = datos.totales_anuncio("acme", "facebook-ads", "2", "2026-09-28")
+    uno = datos.totales_anuncio("acme", _tienda(), "facebook-ads", "1", "2026-09-28")
+    dos = datos.totales_anuncio("acme", _tienda(), "facebook-ads", "2", "2026-09-28")
     # El Pixel respondió para ese día: el 1 queda en 0 pedidos (dato, no ausencia de dato).
     assert uno["pedidos"] == 0 and uno["con_pixel"] and dos["pedidos"] == 1 and dos["con_pixel"]
     assert datos.rango("acme")["filas"] == 2
@@ -159,7 +164,7 @@ def test_sin_pixel_ni_tienda_los_anuncios_igual_llegan(conectado, monkeypatch):
     assert r["consultas"]["pixel"] == "sin_datos"
     # Tras el primer fallo del Pixel no se insiste en cada tramo.
     assert len([l for l in falso.llamadas if l[0] == "pixel"]) == 2
-    assert datos.totales_anuncio("acme", "facebook-ads", "1", "2026-09-01")["gasto"] == 10.0
+    assert datos.totales_anuncio("acme", _tienda(), "facebook-ads", "1", "2026-09-01")["gasto"] == 10.0
 
 
 def test_normalizar_producto():
@@ -182,13 +187,13 @@ def test_sincronizar_copia_ventas_por_producto_y_suma_variantes(conectado, monke
     monkeypatch.setattr(triple_whale, "sql_query", falso)
     r = sync.sincronizar("acme", "2026-09-27", "2026-09-28", hoy=HOY)
     assert r["productos"] == 2 and r["consultas"]["productos"] == "completa"
-    top = datos.top_productos("acme", "2026-09-27", "2026-09-28")
+    top = datos.top_productos("acme", None, "2026-09-27", "2026-09-28")
     assert [(p["producto_id"], p["nombre"], p["ingresos"], p["unidades"], p["pedidos"]) for p in top] == [
         ("p1", "Cojín", 240.0, 8.0, 7.0), ("p2", "Lámpara", 200.0, 1.0, 1.0)]
     assert datos.hay_productos("acme")
     # Una segunda copia del mismo rango reemplaza, no duplica.
     sync.sincronizar("acme", "2026-09-27", "2026-09-28", hoy=HOY)
-    assert datos.top_productos("acme", "2026-09-27", "2026-09-28")[0]["ingresos"] == 240.0
+    assert datos.top_productos("acme", None, "2026-09-27", "2026-09-28")[0]["ingresos"] == 240.0
 
 
 def test_sin_products_info_la_copia_sigue_sin_productos(conectado, monkeypatch):
