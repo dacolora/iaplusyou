@@ -558,7 +558,7 @@
   <div>
     <h2 style="margin-top:0;">{{ _('Gasto') }}</h2>
     <p class="vacio" style="padding-top:0;">
-      {% if gasto_modo == 'cobrado' %}
+      {% if gasto_modo in ('cobrado', 'oculto') %}
       {{ _('Lo que se descontó de tu saldo por lo que este proyecto generó, este mes y desde el inicio: cada video,
       imagen, guion, final o texto con IA deja su cobro aquí al terminar. Lo que falló y no llegó no se cobra.') }}
       {% else %}
@@ -579,7 +579,7 @@
   <div class="kpi-tile">
     <span>{{ _('Generación este mes') }}</span>
     <strong>{{ (gasto_mes.total if gasto_mes else 0) | usd }}</strong>
-    <small>{% if gasto_mes and gasto_mes.n %}{% if gasto_modo == 'cobrado' %}{{ ngettext('%(num)s cobro', '%(num)s cobros', gasto_mes.n) }}{% else %}{{ ngettext('%(num)s cobro(s) a proveedores', '%(num)s cobro(s) a proveedores', gasto_mes.n) }}{% endif %}{% else %}{{ _('sin generación pagada') }}{% endif %}</small>
+    <small>{% if gasto_mes and gasto_mes.n %}{% if gasto_modo in ('cobrado', 'oculto') %}{{ ngettext('%(num)s cobro', '%(num)s cobros', gasto_mes.n) }}{% else %}{{ ngettext('%(num)s cobro(s) a proveedores', '%(num)s cobro(s) a proveedores', gasto_mes.n) }}{% endif %}{% else %}{{ _('sin generación pagada') }}{% endif %}</small>
   </div>
   {# Desde el inicio (2026-10-07): sin esta cifra, el total del proyecto parecía
      ser solo el del mes en curso. #}
@@ -593,7 +593,7 @@
   <div class="kpi-tile" id="gasto-desde-inicio">
     <span>{{ _('Generación desde el inicio') }}</span>
     <strong>{{ (gasto_total.total if gasto_total else 0) | usd }}</strong>
-    <small>{% if gasto_total and gasto_total.n %}{% if gasto_modo == 'cobrado' %}{{ ngettext('%(num)s cobro', '%(num)s cobros', gasto_total.n) }}{% else %}{{ ngettext('%(num)s cobro(s) a proveedores', '%(num)s cobro(s) a proveedores', gasto_total.n) }}{% endif %}{% if gasto_total.desde %} · {{ _('desde el %(fecha)s', fecha=gasto_total.desde[:10]) }}{% endif %}{% else %}{{ _('sin generación pagada') }}{% endif %}</small>
+    <small>{% if gasto_total and gasto_total.n %}{% if gasto_modo in ('cobrado', 'oculto') %}{{ ngettext('%(num)s cobro', '%(num)s cobros', gasto_total.n) }}{% else %}{{ ngettext('%(num)s cobro(s) a proveedores', '%(num)s cobro(s) a proveedores', gasto_total.n) }}{% endif %}{% if gasto_total.desde %} · {{ _('desde el %(fecha)s', fecha=gasto_total.desde[:10]) }}{% endif %}{% else %}{{ _('sin generación pagada') }}{% endif %}</small>
   </div>
   {% for p in pauta_mes %}
   <div class="kpi-tile">
@@ -662,7 +662,7 @@
 <p class="vacio">{{ _('Todavía no hay cobros registrados. Aparecerán aquí cuando generes algo en Crear.') }}</p>
 {% endif %}
 <p class="vacio gasto-nota" style="font-size:.78rem;">
-  {% if gasto_modo == 'cobrado' %}
+  {% if gasto_modo in ('cobrado', 'oculto') %}
   {{ _('Es lo que se descontó de tu saldo (el detalle de cada movimiento está en Saldo y recargas); la pauta se cobra en tu cuenta de Meta y no entra en este total.') }}
   {% else %}
   {{ _('Son los precios reales de los proveedores (WaveSpeed, fal.ai, Anthropic); la pauta se cobra en tu cuenta de Meta

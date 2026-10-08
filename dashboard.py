@@ -3416,10 +3416,17 @@ def _tablero_final(items, ediciones_por_cf, n=TARJETAS_POR_PAGINA, cliente=None)
     «Finalizados», sus totales y las cifras de la cabecera. Los videos listos
     de Crear no van en la página: los trae el selector «+ Nueva» por fetch."""
     t = fe_tablero.armar(items, ediciones_por_cf)
-    if cliente and t["cifras"].get("costo_usd") and vista_cobros.ver_cobrado_aqui(cliente):
-        # «Costaron las finales listas»: lo cobrado por esas finales (cobros §7).
-        cobrado = vista_cobros.suma_vista(cliente, [(f"final:{f['id']}", f.get("costo_usd")) for _i, f in t["finalizados"]])
-        t["cifras"] = {**t["cifras"], "costo_usd": cobrado or None}
+    if cliente and t["cifras"].get("costo_usd"):
+        try:
+            if vista_cobros.ver_cobrado_aqui(cliente):
+                # «Costaron las finales listas»: lo cobrado por esas finales (cobros §7).
+                cobrado = vista_cobros.suma_vista(cliente, [(f"final:{f['id']}", f.get("costo_usd"))
+                                                            for _i, f in t["finalizados"]])
+                t["cifras"] = {**t["cifras"], "costo_usd": cobrado or None}
+        except Exception as e:  # noqa: BLE001 — falla cerrado: sin lo cobrado, sin cifra para quien no ve el costo
+            print(f"[aviso] Final edition de {cliente}: no pude leer lo cobrado: {type(e).__name__}")
+            if not vista_cobros.puede_ver_costo(cliente, session.get("rol") == "admin"):
+                t["cifras"] = {**t["cifras"], "costo_usd": None}
     return {"fe_en_edicion": t["en_edicion"][:n], "fe_en_edicion_total": len(t["en_edicion"]),
             "fe_finalizados": t["finalizados"][:n], "fe_finalizados_total": len(t["finalizados"]),
             "fe_cifras": t["cifras"]}
@@ -5216,18 +5223,21 @@ def _filtro_cobrado(ctx, costo, clave=None):
     los demás casos. Sin clave (un desglose de costo, como una capa de la
     final), None para ese cliente. `pass_context` para que Jinja no lo
     resuelva al compilar (ver `_filtro_precio`)."""
+    cliente = g.get("cliente_precio")
     try:
-        return vista_cobros.visto(g.get("cliente_precio"), clave, costo)
-    except Exception:  # noqa: BLE001 — sin libro, la cifra de siempre
-        return costo
+        return vista_cobros.visto(cliente, clave, costo)
+    except Exception:  # noqa: BLE001 — falla cerrado: el costo solo a quien puede verlo
+        return costo if vista_cobros.puede_ver_costo(cliente, session.get("rol") == "admin") else None
 
 
 def _ver_cobrado():
-    """`{% if ver_cobrado() %}`: quien mira ve lo cobrado en vez del costo."""
+    """`{% if ver_cobrado() %}`: quien mira ve lo cobrado en vez del costo.
+    Ante un error, True para quien no puede ver el costo (se oculta la cifra)."""
+    cliente = g.get("cliente_precio")
     try:
-        return vista_cobros.ver_cobrado_aqui(g.get("cliente_precio"))
-    except Exception:  # noqa: BLE001
-        return False
+        return vista_cobros.ver_cobrado_aqui(cliente)
+    except Exception:  # noqa: BLE001 — falla cerrado
+        return not vista_cobros.puede_ver_costo(cliente, session.get("rol") == "admin")
 
 
 app.jinja_env.globals["ver_cobrado"] = _ver_cobrado
@@ -5318,9 +5328,10 @@ def _contexto_gasto(cliente, tablero_ctx):
     es_admin = session.get("rol") == "admin"
     try:
         fuente = vista_cobros.gasto_para(cliente, es_admin)
-    except Exception as e:  # noqa: BLE001 — sin libro: el costo de siempre (el cobro lo decide el libro)
+    except Exception as e:  # noqa: BLE001 — falla cerrado: el costo solo a quien puede verlo
         print(f"[aviso] Gasto de {cliente}: no pude leer la cuenta del saldo: {type(e).__name__}")
-        fuente = {"modo": "costo", **vista_cobros._COSTO}
+        fuente = ({"modo": "costo", **vista_cobros._COSTO} if vista_cobros.puede_ver_costo(cliente, es_admin)
+                  else vista_cobros.OCULTO)
     doble = fuente["modo"] == "doble"
     try:
         gasto_mes = fuente["resumen_mes"](cliente)
@@ -5376,7 +5387,7 @@ def _contexto_gasto(cliente, tablero_ctx):
         "nombres_tipo_gasto": NOMBRES_TIPO_GASTO,
         "gasto_modo": "doble" if doble else fuente["modo"],
         "gasto_cobrado": cobrado,
-        "gasto_chip": _chip_gasto(chip_mes, pauta),
+        "gasto_chip": None if fuente["modo"] == "oculto" else _chip_gasto(chip_mes, pauta),
         "cobros_chip": cobros_chip,
         "cobros_cuenta": cobros_cuenta,
     }
@@ -5396,14 +5407,18 @@ def _chip_gasto_sidebar():
     if not cliente or request.endpoint == "ver_cliente" or _quiere_json():
         return {}
     es_admin = session.get("rol") == "admin"
+    out = {}
+    # Dos chips, dos try: si falla uno, el otro sigue (revisión de cobros 8/11).
     try:
         fuente = vista_cobros.gasto_para(cliente, es_admin)
-        out = {"gasto_chip": _chip_gasto(_mes_del_chip(cliente, fuente), _pauta_mes(_contexto_tablero(cliente)))}
-        out["cobros_chip"] = vista_cobros.chip(cliente, es_admin)
-        return out
-    except Exception as e:  # noqa: BLE001 — sin chip, pero con página
+        out["gasto_chip"] = _chip_gasto(_mes_del_chip(cliente, fuente), _pauta_mes(_contexto_tablero(cliente)))
+    except Exception as e:  # noqa: BLE001 — sin chip, pero con página (y nunca el costo a quien no debe)
         print(f"[aviso] Gasto de {cliente}: no pude calcular el chip del sidebar: {type(e).__name__}")
-        return {}
+    try:
+        out["cobros_chip"] = vista_cobros.chip(cliente, es_admin)
+    except Exception as e:  # noqa: BLE001
+        print(f"[aviso] Saldo de {cliente}: no pude calcular el chip del saldo: {type(e).__name__}")
+    return out
 
 
 @app.route("/cliente/<cliente>/gasto/mes.csv")

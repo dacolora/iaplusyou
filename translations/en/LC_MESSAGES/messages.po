@@ -1109,6 +1109,12 @@ msgstr[0] "%(num)s charge"
 msgstr[1] "%(num)s charges"
 
 #, python-format
+msgid "%(num)s cobro →"
+msgid_plural "%(num)s cobros →"
+msgstr[0] "%(num)s charge →"
+msgstr[1] "%(num)s charges →"
+
+#, python-format
 msgid "%(num)s cobro(s) a proveedores"
 msgid_plural "%(num)s cobro(s) a proveedores"
 msgstr[0] "%(num)s charge to providers"

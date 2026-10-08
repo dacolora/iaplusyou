@@ -342,6 +342,30 @@ _COSTO = {"resumen_mes": gastos.resumen_mes, "resumen_total": gastos.resumen_tot
           "csv_mes": gastos.csv_mes, "csv_todo": gastos.csv_todo}
 
 
+def puede_ver_costo(cliente, es_admin):
+    """¿Se le puede mostrar el COSTO a quien mira, también cuando algo falló?
+    El admin siempre; los demás solo si se sabe que el proyecto no cobra. Si la
+    cuenta no se puede leer, no (spec §11: el costo nunca le llega a quien no es
+    admin de un proyecto que cobra; ante la duda se oculta la cifra)."""
+    if es_admin:
+        return True
+    try:
+        return not cobra(cliente)
+    except Exception:  # noqa: BLE001 — sin cuenta, cerrado
+        return False
+
+
+def _oculto_mes(cliente, ahora_iso=None):
+    return {"desde": None, "hasta": None, "total": None, "por_tipo": {}, "n": 0, "error": True}
+
+
+# Lo que ve un cliente cuando no se pudo saber qué mostrarle: ninguna cifra («—»), nunca el costo.
+OCULTO = {"modo": "oculto", "resumen_mes": _oculto_mes,
+          "resumen_total": lambda cliente, ahora_iso=None: {"total": None, "n": 0, "desde": None, "error": True},
+          "por_mes": lambda cliente, ahora_iso=None: {}, "historial": lambda cliente, limite=200, desde=None: [],
+          "total_entre": lambda cliente, desde_iso, hasta_iso: {"usd": None, "n": 0}}
+
+
 def gasto_para(cliente, es_admin):
     """Las funciones de gasto que debe usar una pantalla, con la misma forma
     que las de `gastos`. `modo`: "cobrado" (quien no es admin, proyecto que

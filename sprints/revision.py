@@ -128,7 +128,7 @@ def cerrar(cliente, sprint_id):
     mensaje = datos.texto_guardado(
         cliente, N_("Sprint cerrado: %(aprobadas)s aprobadas, %(rechazadas)s rechazadas, USD %(usd)s"),
         aprobadas=r['aprobadas'], rechazadas=r['rechazadas'], usd=f"{usd:.2f}")
-    datos.registrar_evento(cliente, sprint_id, "sprint_cerrado", mensaje, r)
+    datos.registrar_evento(cliente, sprint_id, "sprint_cerrado", mensaje, {**r, "costo_usd": usd})
     return r
 
 

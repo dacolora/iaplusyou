@@ -85,10 +85,24 @@
 
   // ------------------------------------------------- Configuración › Saldo ---
 
+  // ¿Pedir el panel ahora? La primera vez que se ve; después, al volver a abrir
+  // el apartado (`reabrir`) si pasaron más de REABRIR_MS desde la última carga
+  // (varios eventos de un mismo clic no piden dos veces), o si pasó RECARGAR_MS:
+  // una generación en la misma página deja el saldo viejo (revisión 8/11).
+  var REABRIR_MS = 3000;
+  var RECARGAR_MS = 60000;
+  function debePedirPanel(estado, visible, reabrir, desdeUltimaMs) {
+    if (!visible || estado === 'pidiendo') return false;
+    if (estado !== 'listo') return true;
+    return desdeUltimaMs >= RECARGAR_MS || (reabrir && desdeUltimaMs >= REABRIR_MS);
+  }
+
   function iniciarPanel() {
     var caja = doc.querySelector('[data-saldo-panel]');
     if (!caja) return;
     var estado = 'nada';   // nada | pidiendo | listo
+    var cargadoEn = 0;
+    var seVeia = false;
     function visible() { return caja.getClientRects().length > 0; }
     function marcarError() {
       var cargando = caja.querySelector('[data-saldo-cargando]');
@@ -97,22 +111,32 @@
       if (error) error.hidden = false;
     }
     function cargar() {
-      if (estado !== 'nada' || !visible()) return;
+      var ve = visible();
+      var reabrir = ve && !seVeia;   // estaba oculto (otra pestaña u otro apartado) y ahora se ve
+      seVeia = ve;
+      if (!debePedirPanel(estado, ve, reabrir, Date.now() - cargadoEn)) return;
+      var anterior = estado;
       estado = 'pidiendo';
       raiz.fetch(caja.getAttribute('data-saldo-panel'), { headers: CABECERAS, cache: 'no-store', credentials: 'same-origin' })
         .then(function (r) {
           if (!r.ok || r.redirected) throw new Error('saldo ' + r.status);
           return r.text();
         })
-        .then(function (html) { caja.innerHTML = html; estado = 'listo'; })
-        .catch(function () { estado = 'nada'; marcarError(); });
+        .then(function (html) { caja.innerHTML = html; estado = 'listo'; cargadoEn = Date.now(); })
+        .catch(function () {
+          // Un panel ya pintado se queda (la próxima apertura lo vuelve a pedir); sin panel, el aviso.
+          estado = anterior === 'listo' ? 'listo' : 'nada';
+          if (estado === 'nada') marcarError();
+        });
     }
     function luego() { setTimeout(cargar, 0); }
     cargar();
     raiz.addEventListener('cr:tab', luego);
     raiz.addEventListener('hashchange', luego);
+    if (doc.addEventListener) doc.addEventListener('visibilitychange', function () { if (!doc.hidden) luego(); });
     doc.addEventListener('click', function (ev) {
-      if (ev.target.closest('.config-apartados [data-apartado="saldo"], .sidebar-item[data-tab="settings"]')) luego();
+      // Cualquier apartado o pestaña: así se sabe cuándo el saldo dejó de verse y vuelve a abrirse.
+      if (ev.target.closest('.config-apartados [data-apartado], .sidebar-item')) luego();
     });
 
     caja.addEventListener('click', function (ev) {
@@ -197,6 +221,7 @@
   }
 
   raiz.CobrosSaldo = { urlSegura: urlSegura, datosDe402: datosDe402, envolver: envolver, pasoSondeo: pasoSondeo, avisar: pintarAviso,
+                       debePedirPanel: debePedirPanel,
                        LIMITE_MS: LIMITE_MS, CADA_MS: CADA_MS };
   if (typeof raiz.fetch === 'function' && !raiz.fetch.cobros) raiz.fetch = envolver(raiz.fetch, pintarAviso);
   if (doc && doc.querySelector) {

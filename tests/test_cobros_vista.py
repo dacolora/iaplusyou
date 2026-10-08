@@ -285,3 +285,101 @@ def test_la_pagina_de_vuelta_sondea_por_data_y_sin_script_en_linea(libro, pagina
 def test_cobros_js_esta_en_la_pagina_del_proyecto(libro, pagina):
     html = pagina().get("/cliente/acme").get_data(as_text=True)
     assert re.search(r'<script src="/static/cobros\.js[^"]*" defer data-texto-recargar="Recargar saldo"', html)
+
+
+# --- revisión 8/11: fallar cerrado y el evento del sprint ------------------------------------
+
+def _pieza_con_gasto(libro):
+    import creative_flow as cf
+    import gastos
+    _cobra(libro, milesimas=50_000)
+    cf_id = cf.crear("acme", [], ["Chancla"], [], "camina", 8, "", "A")
+    cf.actualizar("acme", cf_id, estado="video_listo", video_url="https://r2/v.mp4", enfoque="producto", usd=1.0)
+    gastos.registrar("acme", "video", 1.0, f"video:{cf_id}:t1")
+    return cf_id
+
+
+@pytest.mark.parametrize("roto", ["_filas_cobradas", "cobra", "gasto_para"])
+def test_si_una_lectura_falla_el_cliente_no_ve_el_costo(libro, pagina, monkeypatch, roto):
+    """Spec §11: ante un error, quien no es admin de un proyecto que cobra ve «—» o nada, nunca el costo."""
+    from cobros import vista
+    cf_id = _pieza_con_gasto(libro)
+
+    def falla(*a, **k):
+        raise RuntimeError("base caída")
+    monkeypatch.setattr(vista, roto, falla)
+    html = pagina().get("/cliente/acme").get_data(as_text=True)
+    assert "US$ 1,00" not in _seccion(html, "config-ap-gasto")
+    assert "Este mes: US$ 1,00" not in html
+    detalle = pagina().get(f"/cliente/acme/creative_flow/{cf_id}/detalle").get_data(as_text=True)
+    assert "US$ 1,00" not in detalle
+    # el admin puede seguir viendo el costo
+    admin = pagina("admin", "admin", None).get(f"/cliente/acme/creative_flow/{cf_id}/detalle").get_data(as_text=True)
+    assert "costó US$ 1,00" in admin
+
+
+def test_ver_cobrado_y_el_filtro_fallan_cerrados(libro, monkeypatch):
+    import dashboard
+    from cobros import vista
+    from flask import g, session
+    _cobra(libro)
+
+    def falla(*a, **k):
+        raise RuntimeError("base caída")
+    monkeypatch.setattr(vista, "cobra", falla)
+    for rol, oculta in (("cliente", True), ("admin", False)):
+        with dashboard.app.test_request_context("/cliente/acme"):
+            session["rol"] = rol
+            g.cliente_precio = "acme"
+            assert dashboard._ver_cobrado() is oculta                      # swaps e imagen de idea sin créditos ni costo
+            assert dashboard._filtro_cobrado(None, 1.0, "video:x") == (None if oculta else 1.0)
+
+
+def test_el_evento_de_cierre_guarda_lo_cobrado_aunque_cierre_el_admin(libro, monkeypatch, tmp_path):
+    import creative_flow
+    import dashboard
+    import gastos
+    from flask import session
+    from sprints import datos, estado, revision
+    from tests.test_sprints_revision_entrega import _sprint_en_revision
+    _cobra(libro)
+    sid, _cid, piezas = _sprint_en_revision(datos, creative_flow, monkeypatch, tmp_path)
+    gastos.registrar("acme", "video", 2.0, f"video:{piezas[0][1]}:t1")     # cobrado 3,00; costo de las piezas 1,50
+    assert estado.recalcular("acme", sid)["estado"] == "revision"
+    with dashboard.app.test_request_context("/cliente/acme"):
+        session["rol"] = "admin"
+        r = revision.cerrar("acme", sid)
+    assert r["costo_usd"] == 1.5                                            # el admin ve el costo en pantalla
+    ev = next(e for e in datos.eventos("acme", sid) if e["tipo"] == "sprint_cerrado")
+    assert "USD 3.00" in ev["mensaje"] and ev["datos"]["costo_usd"] == 3.0
+
+
+def test_los_dos_chips_de_la_barra_fallan_por_separado(libro, pagina, monkeypatch):
+    import db
+    from cobros import recargas, vista
+    _cobra(libro, milesimas=3_000)
+    ahora = db.ahora()
+    with db.conectar() as con:
+        con.execute(db.recarga.insert().values(cliente="acme", creada_en=ahora, actualizada_en=ahora, medio="bold",
+                                               estado="aprobada", milesimas=3_000, referencia="cv-9-9", usuario="user_acme"))
+    ruta = f"/cliente/acme/saldo/recarga/{recargas.de_proyecto('acme')[0]['id']}"   # pasa por _chip_gasto_sidebar
+
+    def falla(*a, **k):
+        raise RuntimeError("base caída")
+    with monkeypatch.context() as m:
+        m.setattr(vista, "chip", falla)
+        html = pagina().get(ruta).get_data(as_text=True)
+        assert "Este mes:" in html and "sidebar-saldo" not in html
+    with monkeypatch.context() as m:
+        m.setattr(vista, "gasto_para", falla)
+        html = pagina().get(ruta).get_data(as_text=True)
+        assert "sidebar-saldo" in html and "Este mes:" not in html
+
+
+def test_el_historial_de_experimentos_muestra_lo_cobrado_con_texto_neutro(libro, pagina):
+    _pieza_con_gasto(libro)
+    cliente = pagina().get("/cliente/acme/experimentos/resultados").get_data(as_text=True)
+    assert "1 cobro →" in cliente and "a proveedores" not in cliente
+    assert "US$ 1,50" in cliente and "US$ 1,00" not in cliente
+    admin = pagina("admin", "admin", None).get("/cliente/acme/experimentos/resultados").get_data(as_text=True)
+    assert "cobro(s) a proveedores →" in admin

@@ -83,3 +83,15 @@ test("la vuelta del pago sondea hasta 60 s y para con el primer estado final", (
   assert.equal(pasoSondeo({ estado: "pendiente" }, LIMITE_MS), "tarde");
   for (const e of ["aprobada", "rechazada", "expirada", "anulada"]) assert.equal(pasoSondeo({ estado: e }, 0), "final");
 });
+
+test("el panel del saldo se vuelve a pedir al reabrir el apartado o pasado un minuto", () => {
+  const { debePedirPanel } = cargar(async () => null).CobrosSaldo;
+  assert.equal(debePedirPanel("nada", true, false, 0), true);          // primera vez que se ve
+  assert.equal(debePedirPanel("nada", false, false, 0), false);        // oculto: no paga el libro
+  assert.equal(debePedirPanel("pidiendo", true, true, 99999), false);  // ya va uno en camino
+  assert.equal(debePedirPanel("listo", true, false, 5000), false);     // sigue abierto y fresco
+  assert.equal(debePedirPanel("listo", true, true, 5000), true);       // se volvió a abrir
+  assert.equal(debePedirPanel("listo", true, true, 1000), false);      // varios eventos del mismo clic
+  assert.equal(debePedirPanel("listo", true, false, 60000), true);     // pasó un minuto
+  assert.equal(debePedirPanel("listo", false, true, 60000), false);
+});
