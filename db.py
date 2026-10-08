@@ -556,6 +556,80 @@ gasto = Table("gasto", metadata,
     sa.Index("ix_gasto_creado", "creado_en"),  # «Últimos cobros» del panel (0026)
 )
 
+# --- Cobros: saldo prepagado por proyecto (docs/superpowers/specs/2026-10-08-cobros-saldo-prepagado-design.md §2) ---
+# Montos en milésimas de dólar, enteros. Escritores únicos: cobros/libro.py
+# (cuenta_saldo, movimiento_saldo, reserva_saldo) y cobros/recargas.py (recarga, pago_evento).
+
+cuenta_saldo = Table("cuenta_saldo", metadata,
+    Column("cliente", String(80), primary_key=True),
+    Column("cobrar", Boolean, nullable=False, default=False),
+    Column("margen", Float),                                   # NULL = kv cobros:margen_global
+    Column("umbral_aviso", Integer, nullable=False, default=5000),
+    Column("actualizado_en", String(19)),
+    Column("actualizado_por", String(80)),
+)
+
+movimiento_saldo = Table("movimiento_saldo", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("cliente", String(80), nullable=False),
+    Column("creado_en", String(19), nullable=False),
+    Column("tipo", String(16), nullable=False),                # recarga|cobro|reverso|no_cobrado|ajuste|anulacion
+    Column("milesimas", Integer, nullable=False),              # con signo
+    Column("gasto_id", Integer),
+    Column("recarga_id", Integer),
+    Column("job_id", String(160)),
+    Column("tarea_id", Integer),
+    Column("concepto", String(120), nullable=False),           # código; se traduce al pintar
+    Column("detalle", String(300)),
+    Column("usuario", String(80)),
+    Column("extra", JSON),
+    sa.UniqueConstraint("tipo", "gasto_id", name="uq_movimiento_gasto"),
+    sa.UniqueConstraint("tipo", "recarga_id", name="uq_movimiento_recarga"),
+    sa.Index("ix_movimiento_cliente_creado", "cliente", "creado_en"),
+    sa.Index("ix_movimiento_job", "job_id"),
+    sqlite_autoincrement=True,
+)
+
+reserva_saldo = Table("reserva_saldo", metadata,
+    Column("cliente", String(80), primary_key=True),
+    Column("job_id", String(160), primary_key=True),
+    Column("milesimas", Integer, nullable=False),
+    Column("creada_en", String(19), nullable=False),
+)
+
+recarga = Table("recarga", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("cliente", String(80), nullable=False, index=True),
+    Column("creada_en", String(19), nullable=False),
+    Column("actualizada_en", String(19)),
+    Column("medio", String(12), nullable=False),               # bold|manual
+    Column("estado", String(12), nullable=False),              # pendiente|aprobada|rechazada|expirada|anulada
+    Column("milesimas", Integer, nullable=False),
+    Column("referencia", String(60), nullable=False, unique=True),
+    Column("link_id", String(40)),
+    Column("pago_id", String(40), unique=True),
+    Column("moneda_pago", String(3)),
+    Column("total_pago", Integer),
+    Column("medio_pago", String(20)),
+    Column("usuario", String(80), nullable=False),
+    Column("nota", String(300)),
+    sqlite_autoincrement=True,
+)
+
+pago_evento = Table("pago_evento", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("proveedor", String(12), nullable=False),
+    Column("evento_id", String(64), nullable=False),
+    Column("tipo", String(24), nullable=False),
+    Column("referencia", String(60)),
+    Column("recibido_en", String(19), nullable=False),
+    Column("firma_ok", Boolean, nullable=False),
+    Column("resultado", String(40), nullable=False),
+    Column("cuerpo", JSON),
+    sa.UniqueConstraint("proveedor", "evento_id", name="uq_pago_evento"),
+    sa.Index("ix_pago_evento_recibido", "recibido_en"),
+)
+
 # ---------------------------------------------------- referentes ---
 # Biblioteca de referentes (spec 2026-09-23 §3). `cliente` NULL = global de
 # Creatv; por eso no usa _comunes() (que exige cliente NOT NULL).
