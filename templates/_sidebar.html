@@ -2,9 +2,10 @@
    íconos + texto; el estado se recuerda. Las claves data-tab son las mismas de
    siempre (calzado, creativeflowplus, experimentos, catalogo, settings)
    para que los redirect(_anchor=...) y los enlaces guardados sigan
-   funcionando; `experimentos` (centro de resultados) va primero y es la pestaña por defecto;
+   funcionando; `experimentos` (centro de resultados) va primero en la lista y es la pestaña por defecto;
    `alertas` (2026-10-02) va justo después, con la burbuja del conteo.
-   `final` (Final edition, 2026-09-27) va después de Crear: el guion, las
+   `creativeflowplus` (Crear) va arriba de todo como botón azul (2026-10-08).
+   `final` (Final edition, 2026-09-27) va después de Referentes: el guion, las
    finales y sus ediciones salieron de Crear a su propia pestaña.
    `triplewhale` (2026-09-28) va después de Alertas: métricas y evaluación
    del contenido con Triple Whale; su panel llega por fetch al abrirla.
@@ -21,6 +22,13 @@
   </a>
 
   <nav class="sidebar-nav" role="tablist">
+    {# Crear va primero y aparte, como botón azul lleno (feedback que recibió Daniel el 2026-10-08: tenía que
+       notarse más que las demás pestañas). Sigue siendo una pestaña más: misma clave, mismo panel. La lista de pestañas
+       empieza por Experimentos (la de entrada; sin Meta la página abre en Crear, ver cliente.html). #}
+    <button type="button" class="sidebar-item sidebar-crear" data-tab="creativeflowplus" role="tab" title="{{ _('Crear') }}">
+      <svg viewBox="0 0 24 24"><path d="M12 4v16M4 12h16" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" fill="none"/></svg>
+      <span class="sidebar-texto">{{ _('Crear') }}</span>
+    </button>
     <button type="button" class="sidebar-item" data-tab="experimentos" role="tab" title="{{ _('Experimentos') }}">
       <svg viewBox="0 0 24 24"><path d="M4 20h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/><rect x="5" y="11" width="3.5" height="6" rx="1" stroke="currentColor" stroke-width="2" fill="none"/><rect x="10.25" y="5" width="3.5" height="12" rx="1" stroke="currentColor" stroke-width="2" fill="none"/><rect x="15.5" y="8" width="3.5" height="9" rx="1" stroke="currentColor" stroke-width="2" fill="none"/></svg>
       <span class="sidebar-texto">{{ _('Experimentos') }}</span>
@@ -49,10 +57,6 @@
     <button type="button" class="sidebar-item" data-tab="referentes" role="tab" title="{{ _('Referentes') }}">
       <svg viewBox="0 0 24 24"><rect x="3" y="4" width="8" height="7" rx="1.5" stroke="currentColor" stroke-width="2" fill="none"/><rect x="13" y="4" width="8" height="7" rx="1.5" stroke="currentColor" stroke-width="2" fill="none"/><rect x="3" y="13" width="8" height="7" rx="1.5" stroke="currentColor" stroke-width="2" fill="none"/><rect x="13" y="13" width="8" height="7" rx="1.5" stroke="currentColor" stroke-width="2" fill="none"/></svg>
       <span class="sidebar-texto">{{ _('Referentes') }}</span>
-    </button>
-    <button type="button" class="sidebar-item" data-tab="creativeflowplus" role="tab" title="{{ _('Crear') }}">
-      <svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
-      <span class="sidebar-texto">{{ _('Crear') }}</span>
     </button>
     <button type="button" class="sidebar-item" data-tab="final" role="tab" title="{{ _('Final edition') }}">
       <svg viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="12" rx="2" stroke="currentColor" stroke-width="2" fill="none"/><path d="M3 8l3-4h14l-3 4M9 4l-3 4M15 4l-3 4" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"/></svg>
@@ -93,12 +97,19 @@
         <small>{{ session.get('usuario') }}</small>
       </span>
       <form method="post" action="{{ url_for('logout') }}" class="sidebar-texto"><button type="submit" class="sidebar-salir" title="{{ _('Cerrar sesión') }}">{{ _('Salir') }}</button></form>
+      {% if cobros_chip %}
+      {# Proyecto que cobra (cobros, spec 2026-10-08 §7): el saldo, en tono de
+         aviso bajo el umbral y de bloqueo sin saldo. Lleva a Configuración ›
+         Saldo y recargas (cliente.html abre la pestaña por el ancla). #}
+      <a class="sidebar-gasto sidebar-saldo saldo-{{ cobros_chip.tono }}" href="{{ cobros_chip.url }}"
+         title="{{ _('Ver el saldo y recargar en Configuración › Saldo y recargas') }}">{{ cobros_chip.texto }}</a>
+      {% endif %}
       {% if gasto_chip %}
-      {# Gasto real del mes (generación en USD; pauta en la moneda de la
-         cuenta de Meta, solo si hay). Lleva a Configuración › Gasto. #}
+      {# Gasto real desde el inicio (generación en USD; pauta en la moneda de
+         la cuenta de Meta, solo si hay). Lleva a Configuración › Gasto. #}
       <a class="sidebar-gasto" href="{{ url_for('ver_cliente', cliente=request.view_args.cliente, _anchor='settings') }}"
          title="{{ _('Ver el detalle en Configuración › Gasto') }}"
-         onclick="var b = document.querySelector('.sidebar-item[data-tab=settings]'); if (b) { b.click(); if (window.irAConfig) irAConfig('config-gasto'); return false; }">{{ _('Este mes: %(gasto)s', gasto=gasto_chip) }}{% if gasto_chip_total %}<span class="sidebar-gasto-total">{{ _('Desde el inicio: %(gasto)s', gasto=gasto_chip_total) }}</span>{% endif %}</a>
+         onclick="var b = document.querySelector('.sidebar-item[data-tab=settings]'); if (b) { b.click(); if (window.irAConfig) irAConfig('config-gasto'); return false; }">{{ _('Gasto total: %(gasto)s', gasto=gasto_chip) }}</a>
       {% endif %}
     </div>
   </div>

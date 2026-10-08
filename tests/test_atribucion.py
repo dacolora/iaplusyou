@@ -217,7 +217,7 @@ def test_refrescar_con_atribucion_pixel_deja_lo_de_meta(entorno, tienda):
     atribucion.resolver_pendientes("acme")
     lz.refrescar("acme", eid)
     m = ex.obtener("acme", eid)["piezas"][0]["metricas"]
-    assert m["compras"] == 0 and m["ingresos"] == 0.0 and m["fuente_ventas"] == "ninguna"
+    assert m["compras"] == 0 and m["ingresos"] == 0.0 and m["fuente_ventas"] == "meta"
 
 
 def test_refrescar_con_pixel_marca_fuente_meta_cuando_hay_compras(entorno):

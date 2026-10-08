@@ -336,3 +336,23 @@ def correr_lote(sesion, token, actor, corridas, etapa, avanzar=None, max_simulta
                                   corrida=reg["run_id"], etiqueta=reg["etiqueta"], estado=frase_estado(reg["estado"]),
                                   n=reg["resultados"], motivo=("; " + reg["motivo"]) if reg["motivo"] else ""))
     return {"items": items, "resultados": sum(r["resultados"] for r in registros), "corridas": registros, "aviso": " · ".join(avisos)}
+
+
+def costo_corrida(sesion, token, run_id):
+    """Una lectura gratuita del cobro reportado; no relanza ni sondea."""
+    import math
+    if not run_id:
+        return None
+    try:
+        r = _http.pedir(sesion, "GET", f"{URL_API}/actor-runs/{run_id}", "Apify", headers=cabeceras(token))
+        if r.status_code != 200:
+            return None
+        dato = r.json().get("data") or {}
+        usd = dato.get("usageTotalUsd")
+        usd = float(usd) if usd is not None else None
+        if usd is None or not math.isfinite(usd) or usd < 0:
+            return None
+        return {"costo_real": round(usd, 4), "estado": dato.get("status"),
+                "conciliacion_pendiente": dato.get("status") not in TERMINALES}
+    except (ErrorFuente, ValueError, TypeError, AttributeError):
+        return None

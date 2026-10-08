@@ -568,7 +568,7 @@ def validar(doc):
             _fallar(f"{clave_top} debe ser un objeto o null.")
         doc[clave_top] = doc.get(clave_top)
     # como `variables`: un "marca": null explícito toma la marca por defecto
-    doc["marca"] = doc.get("marca") or {"color": "#7c3aed", "logo_material_id": None, "marca_de_agua": None}
+    doc["marca"] = doc.get("marca") or {"color": None, "logo_material_id": None, "marca_de_agua": None}
     doc.setdefault("mezcla", {"preset": "equilibrada", "volumenes": None})
     # `materiales` se deriva: lo que mandó el navegador ∪ material_id de los
     # clips de todas las pistas ∪ voces por destino ∪ valores de pngs ∪ el
@@ -624,7 +624,7 @@ def _base(formato, idioma_base):
         "esquema": ESQUEMA_ACTUAL, "formato": formato, "fps": 30, "idioma_base": idioma_base,
         "paginas": [], "pistas": [], "subtitulos": {"estilo_id": "karaoke", "posicion": 0.78, "palabras": {}},
         "variables": {"textos": {}, "precios": {}},
-        "marca": {"color": "#7c3aed", "logo_material_id": None, "marca_de_agua": None},
+        "marca": {"color": None, "logo_material_id": None, "marca_de_agua": None},
         "mezcla": {"preset": "equilibrada", "volumenes": None}, "materiales": [], "miniatura_ms": 0,
     }
 

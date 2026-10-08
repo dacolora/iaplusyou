@@ -24,6 +24,7 @@ import gastos
 import idiomas
 import materiales
 import mi_musica
+from cobros import libro
 from final_edition import cortes
 from providers import fal_audio
 from storage import r2_uploader
@@ -82,12 +83,49 @@ def _como_voz(m):
 
 def listar(cliente):
     """Las voces propias del proyecto, la más reciente primero."""
+    recuperar_pendientes(cliente)
     with db.conectar() as con:
         filas = con.execute(sa.select(db.material).where(
             db.material.c.cliente == cliente, db.material.c.tipo == "audio",
             db.material.c.origen == ORIGEN).order_by(db.material.c.id.desc())).all()
     return [_como_voz(dict(f._mapping)) for f in filas]
 
+
+
+def _guardar_ficha(cliente, cobro):
+    ficha = (cobro.get("extra") or {}).get("ficha") or {}
+    if not (ficha.get("extra") or {}).get("voice_id"):
+        raise ValueError(gettext("La voz todavía no tiene una respuesta del proveedor; no se vuelve a cobrar."))
+    mat = materiales.buscar_hash(cliente, ficha["hash"])
+    if not mat:
+        if cobro["extra"].get("ficha_guardada"):
+            raise ValueError(gettext("Esta voz se borró; no se vuelve a crear."))
+        mat, _ = materiales.obtener_o_crear(cliente, ficha["hash"], lambda: {
+            k: v for k, v in ficha.items() if k != "hash"})
+    gastos.registrar_seguro(cliente, cobro["tipo"], cobro["usd"], cobro["referencia"],
+                            detalle=cobro["detalle"], proveedor=cobro["proveedor"],
+                            extra={**cobro["extra"], "ficha_guardada": True})
+    return _como_voz(mat)
+
+
+def recuperar_pendientes(cliente):
+    """Recuperación gratuita al abrir Mis voces; nunca sintetiza ni descarga."""
+    pendientes = gastos.fichas_pendientes(cliente, "voz_propia")
+    if not pendientes:
+        return
+    with db.conectar() as con:
+        t = db.tarea
+        activas = con.execute(sa.select(t.c.id).where(t.c.cliente == cliente,
+                  t.c.tipo == "voz_propia_crear", t.c.estado == "en_curso")).scalars().all()
+    for cobro in pendientes:
+        if any(cobro["referencia"].endswith(f":t{tid}") for tid in activas):
+            continue
+        if not (cobro["extra"]["ficha"].get("extra") or {}).get("voice_id"):
+            continue
+        try:
+            _guardar_ficha(cliente, cobro)
+        except Exception:
+            log.warning("no pude recuperar una ficha de voz propia", exc_info=True)
 
 def obtener(cliente, voz_id):
     m = materiales.obtener(cliente, voz_id)
@@ -271,6 +309,28 @@ def crear(cliente, payload, ref_sufijo="", reportar=None):
         ref_sufijo = f":{int(time.time() * 1000)}"
     forma, nombre, idioma = payload["forma"], payload["nombre"], payload["idioma"]
     frase = frase_muestra(nombre, idioma)
+    ref = f"voz_propia:{forma}{ref_sufijo}"
+    anterior = gastos.por_referencia(cliente, ref)
+    if anterior and (anterior.get("extra") or {}).get("ficha"):
+        recuperada = _guardar_ficha(cliente, anterior)
+        return recuperada, recuperada["estrenada"]
+    extra = {"nombre": nombre, "forma": "clonada" if forma == "clonar" else "disenada", "proveedor": "minimax",
+             "voice_id": "", "idioma_muestra": idioma, "estrenada": False}
+    if forma == "clonar":
+        extra.update(consentimiento=payload.get("consentimiento") or {}, grabacion_id=payload.get("grabacion_id"))
+    else:
+        extra["descripcion"] = payload["descripcion"]
+    detalle = (gettext("MiniMax · clonar voz · %(nombre)s", nombre=nombre) if forma == "clonar"
+               else gettext("MiniMax · diseñar voz · %(nombre)s", nombre=nombre))
+    ficha = {"tipo": "audio", "origen": ORIGEN, "url": "", "hash": "", "bytes": 0,
+             "duracion_ms": None, "costo_usd": 0.0, "extra": extra}
+    extra_gasto = {"voice_id": "", "ficha": ficha, "ficha_guardada": False}
+    if forma == "clonar":
+        extra_gasto["consentimiento"] = payload["consentimiento"]
+    def reservar():
+        if gastos.reservar_ficha(cliente, "voz_propia", ref, detalle=detalle,
+                                 proveedor=PROVEEDOR, extra=extra_gasto) is None:
+            raise ValueError(gettext("No se pudo guardar la ficha de la voz antes de cobrar."))
     grabacion = None
     if forma == "clonar":
         # Nada se paga sin el permiso: ni siquiera se llega a fal.
@@ -279,6 +339,7 @@ def crear(cliente, payload, ref_sufijo="", reportar=None):
         grabacion = materiales.obtener(cliente, payload["grabacion_id"])
         if not grabacion or grabacion["origen"] != ORIGEN_GRABACION:
             raise ValueError(MENSAJES["grabacion_borrada"])
+        reservar()
         try:
             r = fal_audio.clonar_voz_minimax(grabacion["url"], frase)
         except Exception:
@@ -287,16 +348,14 @@ def crear(cliente, payload, ref_sufijo="", reportar=None):
             _borrar_grabacion_si_huerfana(cliente, grabacion["id"])
             raise
     else:
+        reservar()
         r = fal_audio.disenar_voz_minimax(payload["descripcion"], frase)
     usd = float(r["costo_usd"])
-    # fal ya cobró: el gasto queda aunque lo que sigue falle. El de un clon
-    # lleva también la constancia del permiso, que sobrevive a borrar la voz.
-    detalle = (gettext("MiniMax · clonar voz · %(nombre)s", nombre=nombre) if forma == "clonar"
-               else gettext("MiniMax · diseñar voz · %(nombre)s", nombre=nombre))
-    extra_gasto = {"voice_id": r["voice_id"]}
-    if forma == "clonar":
-        extra_gasto["consentimiento"] = payload["consentimiento"]
-    gastos.registrar_seguro(cliente, "voz_propia", usd, f"voz_propia:{forma}{ref_sufijo}", detalle=detalle,
+    extra["voice_id"] = r["voice_id"]
+    ficha.update(url=r.get("url_vista_previa") or "", costo_usd=usd,
+                 hash=materiales.hash_clave(ORIGEN, "minimax", r["voice_id"]))
+    extra_gasto["voice_id"] = r["voice_id"]
+    gastos.registrar_seguro(cliente, "voz_propia", usd, ref, detalle=detalle,
                             proveedor=PROVEEDOR, extra=extra_gasto)
     if reportar:
         reportar(1)
@@ -311,6 +370,10 @@ def crear(cliente, payload, ref_sufijo="", reportar=None):
     except Exception:
         log.warning("voz propia %s: no pude estrenarla", r["voice_id"], exc_info=True)
         fuente = r.get("url_vista_previa")
+    extra["estrenada"] = estrenada
+    ficha["url"] = fuente or ficha["url"]
+    gastos.registrar_seguro(cliente, "voz_propia", usd, ref, detalle=detalle,
+                            proveedor=PROVEEDOR, extra=extra_gasto)
     if reportar:
         reportar(2)
     url, bytes_, dur = "", 0, None
@@ -322,14 +385,16 @@ def crear(cliente, payload, ref_sufijo="", reportar=None):
         except Exception:
             log.warning("voz propia %s: no pude subir su muestra", r["voice_id"], exc_info=True)
             url, bytes_, dur = "", 0, None
-    extra = {"nombre": nombre, "forma": "clonada" if forma == "clonar" else "disenada", "proveedor": "minimax",
-             "voice_id": r["voice_id"], "idioma_muestra": idioma, "estrenada": estrenada}
-    if forma == "clonar":
-        extra.update(consentimiento=payload.get("consentimiento") or {}, grabacion_id=grabacion["id"])
-    else:
-        extra["descripcion"] = payload["descripcion"]
-    m = materiales.registrar(cliente, tipo="audio", origen=ORIGEN, url=url, hash=h, bytes=bytes_, duracion_ms=dur,
-                             costo_usd=usd, extra=extra)
+    extra["estrenada"] = estrenada
+    ficha.update(url=url or fuente or "", bytes=bytes_, duracion_ms=dur)
+    gastos.registrar_seguro(cliente, "voz_propia", usd, ref, detalle=detalle,
+                            proveedor=PROVEEDOR, extra=extra_gasto)
+    campos = {"tipo": "audio", "origen": ORIGEN, "url": url, "bytes": bytes_, "duracion_ms": dur,
+              "costo_usd": usd, "extra": extra}
+    m, _ = materiales.obtener_o_crear(cliente, h, lambda: campos)
+    m = materiales.actualizar_ficha(cliente, h, **campos)
+    gastos.registrar_seguro(cliente, "voz_propia", usd, ref, detalle=detalle,
+                            proveedor=PROVEEDOR, extra={**extra_gasto, "ficha_guardada": True})
     return _como_voz(m), estrenada
 
 
@@ -353,6 +418,9 @@ def muestra(cliente, valor, idioma):
     frase = frase_muestra(vp["nombre"], idioma)
 
     def _producir():
+        # Cobros (spec 2026-10-08 §5.2): la muestra se sintetiza en la petición
+        # (au_muestra) y la paga el proyecto; solo cuando no está en caché.
+        libro.exigir(cliente, gastos.estimar("locucion", caracteres=len(frase))["usd"])
         t = sintetizar(cliente, vp, frase, idioma, timeout=45)
         usd = float(t["costo_usd"])
         # La pide quien mira (ruta au_muestra), pero el detalle se GUARDA: va en

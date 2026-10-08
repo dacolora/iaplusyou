@@ -1408,3 +1408,29 @@ def test_fuente_meta_recuerda_el_metodo_de_pago_solo_con_app_propia_conectada(mo
     monkeypatch.setattr(meta_conexion, "modo", lambda c: "propia")
     monkeypatch.setattr(meta_conexion, "estado", lambda c: {"estado": "sin_conectar"})
     assert alertas._fuente_meta("acme", "2026-10-04T10:00:00") == []
+
+
+@__import__('pytest').mark.parametrize('archivado,estado', [(False, 'planeando'), (True, 'planeando'), (False, 'completado')])
+def test_pnd122_error_solo_fuera_de_sprint_vivo(base_temporal, archivado, estado):
+    import alertas
+    from sprints import datos
+    sid = _sprint(archivado=archivado, estado=estado)
+    cp = _idea(_campana(sid), cf_estado='error')
+    _sesion('cf_suelto', 'error', HACE_5_DIAS)
+    claves = _claves(alertas._fuente_crear('acme', AHORA))
+    assert 'crear:error:cf_suelto' in claves
+    assert (f'crear:error:cf_sp_{cp}' in claves) == (archivado or estado == 'completado')
+    if not archivado and estado != 'completado':
+        assert f'sprint:fallos:{sid}' in _claves(alertas._fuente_sprints('acme', AHORA))
+    datos.archivar_sprint('acme', sid)
+    assert f'crear:error:cf_sp_{cp}' in _claves(alertas._fuente_crear('acme', AHORA))
+
+
+def test_r7_sprint_vivo_ajeno_no_oculta_error_con_mismo_cf_id(base_temporal):
+    import alertas
+    from sprints import datos
+    _sesion('cf_compartido', 'error', HACE_5_DIAS, cliente='acme')
+    sid = _sprint(estado='planeando', cliente='otro')
+    cp = _idea(_campana(sid, cliente='otro'), cliente='otro')
+    datos.actualizar_idea('otro', cp, cf_id='cf_compartido')
+    assert 'crear:error:cf_compartido' in _claves(alertas._fuente_crear('acme', AHORA))

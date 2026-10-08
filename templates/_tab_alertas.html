@@ -56,11 +56,13 @@
         {% elif a.tab %}
         <a class="alerta-ir" href="#{{ a.tab }}" data-ir-tab="{{ a.tab }}"{% if a.ancla %} data-ancla="{{ a.ancla }}"{% endif %}>{{ _('Ir a %(tab)s →', tab=pestana) }}</a>
         {% endif %}
+        {% if a.puede_descartar %}
         <form method="post" action="{{ url_for('alertas_descartar', cliente=cliente) }}" class="alerta-form">
           <input type="hidden" name="clave" value="{{ a.clave }}">
           <input type="hidden" name="huella" value="{{ a.huella }}">
           <button type="submit" class="btn-xs" title="{{ _('Ocultarla hasta que su situación cambie') }}">{{ _('Descartar') }}</button>
         </form>
+        {% endif %}
       </div>
     </li>
     {% endfor %}
@@ -80,10 +82,12 @@
         <p class="alerta-detalle">{{ _('Descartada el %(fecha)s.', fecha=a.descartada_en | fecha_corta) }}</p>
       </div>
       <div class="alerta-acciones">
+        {% if a.puede_descartar %}
         <form method="post" action="{{ url_for('alertas_restaurar', cliente=cliente) }}" class="alerta-form">
           <input type="hidden" name="clave" value="{{ a.clave }}">
           <button type="submit" class="btn-xs">{{ _('Restaurar') }}</button>
         </form>
+        {% endif %}
       </div>
     </li>
     {% endfor %}

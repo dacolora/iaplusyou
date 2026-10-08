@@ -25,7 +25,10 @@ log = logging.getLogger("creatv.notificaciones")
 
 TIPOS = ("propuesta", "ganador", "rechazo_meta", "error_lanzamiento", "tope", "tienda", "sprint_lote", "publicado",
          "meta_solicitud", "meta_conexion_cliente", "meta_cambio_forma", "meta_conectado", "tw_evaluacion",
-         "sin_saldo", "error_app")
+         "sin_saldo", "error_app",
+         # cobros (spec 2026-10-08): al proyecto y a los admins
+         "pieza_no_cobrada", "recarga_acreditada", "saldo_bajo",
+         "cobro_no_anotado", "recarga_admin", "anulacion_bold", "pago_sin_recarga")
 
 
 def _config():

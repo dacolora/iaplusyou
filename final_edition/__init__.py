@@ -60,7 +60,7 @@ ETAPAS_FINAL = (
     (idiomas.N_("Texto y render"), 45),
 )
 
-COLOR_ACENTO_DEFECTO = texto.COLOR_ACENTO_DEFECTO
+COLOR_ACENTO_DEFECTO = None
 IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".webp")
 _TAMANOS = {"9:16": (1080, 1920), "16:9": (1920, 1080), "1:1": (1080, 1080), "4:5": (1080, 1350)}
 _OPCIONES_DEFECTO = {"voz": None, "estilo_musica": None, "precio": None, "precios": None, "con_voz": True,
@@ -426,7 +426,7 @@ def preparar_guion(cliente, cf_id, opciones=None, ref_sufijo=""):
                 detalle=(gettext("guion base %(idioma)s · no salió válido", idioma=idioma_base)
                          if isinstance(e, guion_mod.GuionInvalido)
                          else gettext("guion base %(idioma)s · se cortó después de cobrar", idioma=idioma_base)),
-                extra={"usd_guion": usd_guion, "usd_whisper": round(costo, 4)})
+                extra={"usd_guion": usd_guion, "usd_whisper": round(costo, 4)}, entregado=False)
         raise
     costo += float(costo_guion or 0.0)
     # Sin ángulo en la sesión, Claude ya lo decidió, corrigió y limpió junto
@@ -440,7 +440,6 @@ def preparar_guion(cliente, cf_id, opciones=None, ref_sufijo=""):
     # Guardar contexto de canal óptimo si lo hay
     if canal_optimo:
         guion_base["canal_optimo"] = canal_optimo
-    creative_flow.guardar_guion_base(cliente, cf_id, guion_base)
     # Cobro real del guion base (Claude + whisper de la referencia si la hubo).
     # Referencia por sesión + tarea (`ref_sufijo`): dos escrituras de la MISMA
     # tarea (retries) actualizan la misma fila; una tarea nueva (otro clic en
@@ -450,6 +449,7 @@ def preparar_guion(cliente, cf_id, opciones=None, ref_sufijo=""):
         detalle=(gettext("guion base %(idioma)s + transcripción de la referencia", idioma=idioma_base)
                  if costo_whisper else gettext("guion base %(idioma)s", idioma=idioma_base)),
         extra={"usd_guion": round(float(costo_guion or 0.0), 4), "usd_whisper": round(costo_whisper, 4)})
+    creative_flow.guardar_guion_base(cliente, cf_id, guion_base)
     # F: el ángulo se guarda AL FINAL — si esto falla, el guion (ya pagado) y
     # su gasto ya quedaron a salvo; una tarea nueva no vuelve a pagar por él.
     # Solo uno con promesa y gancho: si Claude lo omitió en las dos vueltas,
@@ -637,9 +637,9 @@ def producir_legado(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, 
         pagado = round(float(getattr(e, "costo_usd", 0.0) or 0.0), 4) if variando else 0.0
         capas["guion"] = {"proveedor": "anthropic", "parametros": {"variante_tipo": variante_tipo} if variante_tipo else {},
                           "costo_usd": pagado, "estado": "error", "error": str(e)}
-        creative_flow.actualizar_final(cliente, final_id, estado="error", error=str(e), capas=capas)
         if pagado:
             _registrar_gasto_final(cliente, final_id, idioma, pais, pagado, capas, fallo=True, ref_sufijo=ref_sufijo)
+        creative_flow.actualizar_final(cliente, final_id, estado="error", error=str(e), capas=capas)
         raise
     carpeta = _carpeta_final(cliente, final_id)
     shutil.rmtree(carpeta, ignore_errors=True)
@@ -738,13 +738,17 @@ def producir_legado(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, 
                 # vacío) que fallaría igual en cualquier otro bloque —
                 # degradar aquí solo pagaría música por una pieza que de
                 # todos modos sale sin voz. Es fatal: no se genera música.
-                capa("voz", proveedor_voz(nombre_voz), {"voz": nombre_voz}, estado="error", error=str(e))
+                pagado = float(getattr(e, "costo_usd", 0.0) or 0.0)
+                costo += pagado
+                capa("voz", proveedor_voz(nombre_voz), {"voz": nombre_voz}, pagado, estado="error", error=str(e))
                 raise ValueError(gettext("No se pudo generar la voz (revisa la voz elegida, '%(voz)s'): %(error)s",
                                          voz=etiqueta_voz(cliente, nombre_voz), error=e)) from e
             except Exception as e:
                 degradada = True
                 archivo_voz, palabras = None, []
-                capa("voz", proveedor_voz(nombre_voz), {"voz": nombre_voz}, estado="error", error=str(e))
+                pagado = float(getattr(e, "costo_usd", 0.0) or 0.0)
+                costo += pagado
+                capa("voz", proveedor_voz(nombre_voz), {"voz": nombre_voz}, pagado, estado="error", error=str(e))
 
         # 3. Música (degradable)
         avisar(ETAPAS_FINAL[3][0])
@@ -807,18 +811,18 @@ def producir_legado(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, 
                                   "con_musica": bool(pista_musica), "con_sonido": bool(resultado.get("con_sonido")),
                                   "mezcla": o.get("mezcla") or mezcla.PRESET_DEFECTO})
     except Exception as e:
-        creative_flow.actualizar_final(cliente, final_id, estado="error", error=str(e), capas=capas,
-                                       costo_usd=round(costo, 4), guion=guion)
         _registrar_gasto_final(cliente, final_id, idioma, pais, costo - costo_base, capas, fallo=True,
                                ref_sufijo=ref_sufijo)
+        creative_flow.actualizar_final(cliente, final_id, estado="error", error=str(e), capas=capas,
+                                       costo_usd=round(costo, 4), guion=guion)
         raise
 
+    _registrar_gasto_final(cliente, final_id, idioma, pais, costo - costo_base, capas, ref_sufijo=ref_sufijo)
     creative_flow.actualizar_final(
         cliente, final_id, estado="degradada" if degradada else "listo", url_video=url_video,
         url_miniatura=url_miniatura, url_local=resultado["archivo"],
         duracion_s=float(resultado.get("duracion_s") or duracion_final), capas=capas,
         costo_usd=round(costo, 4), guion=guion, error=None)
-    _registrar_gasto_final(cliente, final_id, idioma, pais, costo - costo_base, capas, ref_sufijo=ref_sufijo)
     return final_id, creative_flow.final_por_legado(cliente, final_id)
 
 
@@ -857,7 +861,8 @@ def _registrar_gasto_final(cliente, final_id, idioma, pais, usd, capas, fallo=Fa
     else:
         detalle = gettext("%(destino)s · sin cobros (todo cacheado u omitido)", destino=destino)
     gastos.registrar_seguro(cliente, "final", usd, f"final:{final_id}{ref_sufijo}", detalle=detalle,
-                            proveedor="fal/anthropic", extra={"capas": por_capa, "fallo": bool(fallo)})
+                            proveedor="fal/anthropic", extra={"capas": por_capa, "fallo": bool(fallo)},
+                            entregado=not fallo)
 
 
 registrar_gasto_final = _registrar_gasto_final   # lo usa final_edition.produccion (vía del editor)

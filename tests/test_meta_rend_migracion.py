@@ -1,5 +1,6 @@
-"""Migración 0033 (spec 2026-10-08 meta rendimiento §4): las seis tablas existen
-con sus restricciones únicas, y el downgrade las borra."""
+"""Migración 0034 (spec 2026-10-08 meta rendimiento §4; era la 0033 antes de mezclar main, que trajo
+0033_cobros): las seis tablas existen con sus restricciones únicas, y el downgrade las borra sin tocar las de
+Cobros."""
 import os
 import subprocess
 import sys
@@ -26,8 +27,10 @@ def test_upgrade_crea_las_tablas_y_downgrade_las_borra(tmp_path):
     indices = {i["name"]: i for i in sa.inspect(eng).get_indexes("meta_cuenta")}
     assert indices["uq_meta_cuenta_act"]["unique"]
     eng.dispose()
-    eng = _alembic(tmp_path, "downgrade", "0032")
-    assert not set(TABLAS) & set(sa.inspect(eng).get_table_names())
+    eng = _alembic(tmp_path, "downgrade", "0033")
+    nombres = set(sa.inspect(eng).get_table_names())
+    assert not set(TABLAS) & nombres
+    assert "cuenta_saldo" in nombres   # la 0033 (Cobros) sigue en pie
 
 
 def test_db_crear_todo_coincide(base_temporal):

@@ -9,11 +9,12 @@ import anthropic
 
 import doctrina
 import idiomas
+import idiomas_publicacion
 from doctrina import producto as doctrina_producto
 
 MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-5")
 
-LINK_EN_BIO = {"es": "Link en bio", "en": "Link in bio", "pt": "Link na bio"}
+LINK_EN_BIO = {"es": "Link en bio", "en": "Link in bio", "pt": "Link na bio", "sv": "Länk i bion", "no": "Lenke i bio"}
 
 
 def _con_orden(texto, idioma):
@@ -419,8 +420,11 @@ def caption_organico(contexto, plataformas):
         # Todo lo que viene de la tienda/catálogo va delimitado (y sin la
         # etiqueta de cierre adentro): es dato, no instrucción.
         return f"<{etiqueta}>{str(valor).strip()[:tope].replace(f'</{etiqueta}>', '')}</{etiqueta}>"
+    # El nombre del idioma va junto al código: «Idioma: no» se lee como la
+    # palabra «no» (spec 2026-10-08 de Noruega y Suecia §4).
+    nombre_idioma = idiomas_publicacion.nombre(idioma_pieza)
     partes = [f"Plataformas: {', '.join(plataformas)}",
-              f"Idioma: {idioma_pieza}",
+              f"Idioma: {idioma_pieza}" + (f" — {nombre_idioma}" if nombre_idioma != idioma_pieza else ""),
               "Producto: " + _dato("producto", contexto.get("nombre_producto") or "", 200)]
     if (contexto.get("descripcion") or "").strip():
         limpia = contexto["descripcion"].strip()[:1500].replace("</descripcion>", "")

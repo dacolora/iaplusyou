@@ -45,6 +45,7 @@ import idiomas
 import monitoreo
 import registro_app
 import tareas
+from cobros import libro
 from providers import wavespeed_common
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -72,7 +73,10 @@ PERIODICAS = [("tienda_sync_pedidos_todas", 7200), ("tw_sincronizar_todas", 7200
               ("meta_rend_limpiar", 86400),
               # Cadena de escenas de Flow Plus (spec 2026-09-30): avanza cada cadena viva
               # cuando su escena en curso termina (gratis; las escenas las cobra Crear).
-              ("cadena_vigilar", 60)]
+              ("cadena_vigilar", 60),
+              # Cobros (spec 2026-10-08 §9.3): respaldo del webhook de Bold, pregunta
+              # por las recargas pendientes (gratis: no cobra).
+              ("cobros_verificar_recargas", 600)]
 
 # Carril de Crear: generaciones que casi todo el tiempo esperan al proveedor
 # (también la voz del anuncio hablado, que no debe esperar detrás de un render).
@@ -144,6 +148,63 @@ def ejecutar(tarea):
 # Se guarda en la entidad de atrás (sesión, swap, anuncio): va en el idioma
 # del proyecto de cada tarea — gettext dentro de idiomas.en_idioma(de_tarea).
 MENSAJE_INTERRUMPIDA = idiomas.N_("Se interrumpió por un reinicio del servidor. Vuelve a intentar.")
+# Cobros (spec 2026-10-08 §5.1): el respaldo que no arranca una tarea que
+# cobra en un proyecto que cobra y no tiene saldo. Se guarda en la tarea y en
+# la entidad de atrás (vía AL_INTERRUMPIR), en el idioma del proyecto.
+MENSAJE_SIN_SALDO = idiomas.N_("Sin saldo: recarga para seguir. No se cobró nada.")
+# Detalle del reverso cuando la tarea entera termina en error (§3.5).
+MOTIVO_TAREA_FALLIDA = idiomas.N_("La tarea falló")
+
+
+def _cliente(tarea):
+    return tarea.get("cliente") or (tarea.get("payload") or {}).get("cliente")
+
+
+def _revertir(tarea, motivo):
+    """Spec 2026-10-08 §3.5: la tarea terminó en error definitivo → reverso de
+    los cobros de su cadena (mismo job_id, desde la primera tarea de la cadena:
+    el job_id se reusa entre corridas y lo ya entregado no se devuelve). En un
+    proyecto que no cobra no hay cobros: solo lee y no escribe nada. Nunca lanza.
+    `motivo` es un msgid: se guarda en el idioma del proyecto."""
+    if not tarea.get("job_id") or not _cliente(tarea):
+        return []
+    try:
+        desde = libro.inicio_de_cadena(tarea)
+        # Solo lectura primero: sin cobros (un proyecto que no cobra, o que
+        # nunca cobró en esta cadena) no se toma el candado de escritura. Un
+        # proyecto que apagó «Cobrar» después de cobrar sí tiene filas: se revierten.
+        if not libro.tiene_cobros(_cliente(tarea), tarea["job_id"], desde_tarea=desde):
+            return []
+        with idiomas.en_idioma(idiomas.de_tarea(tarea)):
+            texto = gettext(motivo)
+        return libro.revertir_trabajo(_cliente(tarea), tarea["job_id"], texto, desde_tarea=desde)
+    except Exception as e:  # noqa: BLE001 — el worker no muere por esto
+        log.error("tarea %s: no se pudieron revertir sus cobros: %s", tarea.get("id"), cola.sin_token(e))
+        return []
+
+
+def _sin_saldo(tarea):
+    """Respaldo (§5.1): True si la tarea no puede arrancar porque cobra, su
+    proyecto cobra, no es continuación de una cadena y el saldo es ≤ 0. En ese
+    caso ya la dejó en error definitivo (sin llamar al proveedor) y corrió el
+    gancho AL_INTERRUMPIR de su tipo para que la entidad de atrás no quede
+    «generando»."""
+    if libro.puede_arrancar({**tarea, "cliente": _cliente(tarea)}, tareas.TIPOS_QUE_COBRAN):
+        return False
+    with idiomas.en_idioma(idiomas.de_tarea(tarea)):
+        mensaje = gettext(MENSAJE_SIN_SALDO)
+    cola.fallar(tarea["id"], mensaje, definitivo=True)
+    # Un reintento (intentos > 1) pudo cobrar en su intento anterior: error definitivo = no se cobra la pieza.
+    _revertir(tarea, MOTIVO_TAREA_FALLIDA)
+    hook = tareas.AL_INTERRUMPIR.get(tarea["tipo"])
+    if hook is not None:
+        try:
+            with idiomas.en_idioma(idiomas.de_tarea(tarea)):
+                hook(tarea, mensaje)
+        except Exception as e:  # noqa: BLE001 — el gancho nunca tumba al worker
+            log.error("tarea %s sin saldo: el gancho de %s falló: %s", tarea["id"], tarea["tipo"], cola.sin_token(e))
+    log.info("tarea %s %s: proyecto sin saldo, no corre", tarea["id"], tarea["tipo"])
+    return True
 
 
 def en_vuelo():
@@ -161,6 +222,8 @@ def recuperar_interrumpidas(minutos):
     Devuelve cuántas tareas tocó recuperar_colgadas (mismo número de antes)."""
     tocadas, interrumpidas = cola.recuperar_colgadas(minutos, excluir=en_vuelo())
     for t in interrumpidas:
+        # Error definitivo: lo que cobró la cadena se devuelve (cobros §3.5), tenga o no gancho.
+        _revertir(t, MENSAJE_INTERRUMPIDA)
         hook = tareas.AL_INTERRUMPIR.get(t["tipo"])
         if hook is None:
             continue
@@ -179,7 +242,12 @@ def _correr(tarea):
     quedan). Nunca lanza: el worker no muere por una tarea."""
     log.info("tarea %s %s (intento %s) job=%s", tarea["id"], tarea["tipo"], tarea["intentos"], tarea["job_id"])
     try:
-        resultado = ejecutar(tarea)
+        if _sin_saldo(tarea):
+            return
+        # El cobro al cliente (gastos.registrar → cobros.libro.cobrar_gasto) anota
+        # tarea_id y job_id de este contexto; cada hilo tiene el suyo.
+        with libro.en_trabajo(tarea["id"], tarea["job_id"]):
+            resultado = ejecutar(tarea)
         if isinstance(resultado, tareas.Continuar):
             nueva = _terminar_y_encolar(tarea, resultado)
             log.info("tarea %s hecha; sigue en la tarea %s (%s)", tarea["id"], nueva, resultado.tipo)
@@ -194,7 +262,8 @@ def _correr(tarea):
         monitoreo.registrar_excepcion(e, "worker", ruta=tarea["tipo"], cliente=tarea.get("cliente"))
         log.error("tarea %s falló: %s\n%s", tarea["id"], cola.sin_token(e), cola.sin_token(traceback.format_exc()),
                   extra={"sin_monitoreo": True})
-        cola.fallar(tarea["id"], f"{type(e).__name__}: {e}")
+        if cola.fallar(tarea["id"], f"{type(e).__name__}: {e}") == "error":
+            _revertir(tarea, MOTIVO_TAREA_FALLIDA)
 
 
 class ContinuacionPerdida(RuntimeError):
@@ -218,8 +287,10 @@ def _terminar_y_encolar(tarea, siguiente):
             time.sleep(1 + intento)
     # Este hilo ya salió de ejecutar (y de su idioma): lo que se guarda va en el del proyecto.
     with idiomas.en_idioma(idiomas.de_tarea(tarea)):
-        cola.fallar(tarea["id"], gettext("No se pudo encolar la continuación (%(error)s)",
-                                         error=f"{type(ultimo).__name__}: {ultimo}"))
+        estado = cola.fallar(tarea["id"], gettext("No se pudo encolar la continuación (%(error)s)",
+                                                  error=f"{type(ultimo).__name__}: {ultimo}"))
+    if estado == "error":
+        _revertir(tarea, MOTIVO_TAREA_FALLIDA)
     hook = tareas.AL_INTERRUMPIR.get(tarea["tipo"])
     if hook is not None:
         try:

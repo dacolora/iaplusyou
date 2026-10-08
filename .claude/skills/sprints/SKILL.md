@@ -11,7 +11,7 @@ description: "Sprints de contenido: el plan mensual como tablero de campañas (p
 `docs/superpowers/specs/2026-09-16-sprints-design.md`): a monthly production plan.
 Since 2026-09-26 it is a **board** (spec `docs/superpowers/specs/2026-09-26-sprints-tablero-design.md`):
 «+ Nuevo sprint» is a short form (month, optional «momento del mes» from the PROJECT's calendar
-`sprints.calendario.presets(proyectos.pais(cliente))` or free text, brands to imitate). Since 2026-09-27
+`sprints.calendario.presets(proyectos.pais(cliente))` or free text, brands to imitate; CO, MX, NO and SE have their own calendar since 2026-10-08 (reason: happyflops' audience is Norway and Sweden; spec 2026-10-08-noruega-y-suecia §5), any other country falls back to CO; `datos.IDIOMAS_NOMBRE` names sv/no with `idiomas_publicacion`, never the bare code, because `no` reads as the word «no» in a prompt). Since 2026-09-27
 a sprint is **for every country**: no país/idioma in the form, the sprint header or the campaign panel
 (`CAMPOS_SPRINT`/`CAMPOS_CAMPANA` refuse them), new sprints store `pais=NULL` and
 `idioma=datos.IDIOMA_BASE` ("en"), the idea prompt says «todos los países… cada país los adapta después
@@ -91,4 +91,7 @@ inmutable en dashboard, producción de Sprints y tarea de Crear. `sprints.estado
 degradada; `TERMINADAS` incluye además error para cerrar generación. `sprints.revision.TERMINADAS` conserva el alias
 de revisables: error sigue sin poder aprobarse. `tests/test_lote5_higiene.py` vigila identidad y comportamiento.
 
-PND-072/088/090 (2026-10-07, lote 5 B): el director usa el encolador común; perder la reserva archiva la sesión nueva, sin borrar estado ajeno. Los candidatos de IA se leen con referentes.datos.por_ids una vez en panel y página. datos._consumir_sugerencia toma el bloqueo de campaña antes de leer extra y elimina solo el referente agregado, conservando el resto; también limpia una sugerencia ya agregada. QA y la instantánea de contexto que alimenta prompts siguen como preguntas.
+PND-072/088/090 (2026-10-07, lote 5 B): el director usa el encolador común; perder la reserva archiva la sesión nueva, sin borrar estado ajeno. Los candidatos de IA se leen con referentes.datos.por_ids una vez en panel y página. datos._consumir_sugerencia toma el bloqueo de campaña antes de leer extra y elimina solo el referente agregado, conservando el resto; también limpia una sugerencia ya agregada. La política de QA fue delegada el 2026-10-08 (ver abajo); la instantánea de contexto no se toca en este lote.
+
+
+PND-088 (2026-10-08, decisión delegada): Repetir QA no borra ni encola un veredicto pasa o una revisión aprobada. limpiar_qa_no_aprobada usa un UPDATE condicional por cliente/cp_id/cf_id para cubrir un resultado que llegó después de leer; el worker vuelve a comprobar el veredicto antes de llamar a Claude. R2 (2026-10-08): una pieza aprobada sin QA recibe su primer QA y deja de ser candidata de la periódica; una aprobada con cualquier QA o un veredicto pasa no se vuelve a evaluar. Las fallidas siguen el camino existente. No cambia el contexto por idea, ni los topes/prompts del QA. test_rutas_sprints.py y test_tareas_sprints.py.

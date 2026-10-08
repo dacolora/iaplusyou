@@ -1,6 +1,6 @@
 ---
 name: alertas
-description: "Alertas del proyecto: la pestaña que junta lo que necesita atención (puesta a punto, faltantes, decisiones y fallos) con diez fuentes calculadas al vuelo, descartes por huella, alertas solo para el admin, caché de 60 s y la burbuja del sidebar; y la lista de tarjetas de Puesta a punto (llaves.py). Cargar antes de agregar una fuente de alertas, tocar alertas.py, llaves.py, _tab_alertas.html o la burbuja del sidebar."
+description: "Alertas del proyecto: la pestaña que junta lo que necesita atención (puesta a punto, faltantes, decisiones y fallos) con once fuentes calculadas al vuelo, descartes por huella, alertas solo para el admin, caché de 60 s y la burbuja del sidebar; y la lista de tarjetas de Puesta a punto (llaves.py). Cargar antes de agregar una fuente de alertas, tocar alertas.py, llaves.py, _tab_alertas.html o la burbuja del sidebar."
 ---
 
 # Alertas: lo que necesita la atención de la persona
@@ -30,12 +30,12 @@ Una alerta es un dict armado por `alertas._alerta` (nunca a mano):
 
 `calcular(cliente)` corre cada fuente de `FUENTES` en su propio `try/except` y ordena por grupo, luego nivel, y dentro de eso en el orden de las fuentes. Si una fuente revienta sale `revision:<fuente>` (`info`, `solo_admin`) con SOLO el nombre de la clase de la excepción, nunca el mensaje (podría arrastrar un token), y las demás se calculan igual. Los nombres de grupo, nivel y pestaña son constantes `idiomas.N_` (`NOMBRES_GRUPO`, `NOMBRES_NIVEL`, `NOMBRES_TAB`) que la plantilla traduce con `|traducir`.
 
-## Las diez fuentes (en el orden de `FUENTES`)
+## Las once fuentes (en el orden de `FUENTES`)
 
 | # | Fuente | Claves | Grupo · nivel | Huella |
 |---|---|---|---|---|
 | 1 | `llaves` | `llave:<id de tarjeta>` | puesta_a_punto · `bloquea` (`info` si la tarjeta es `opcional`) · **solo_admin** | los nombres de las variables que faltan |
-| 2 | `cuentas` | `cuenta:correo:<usuario>` | puesta_a_punto · `bloquea` (la ven TODAS las cuentas del proyecto, no solo la dueña: PND-123) | «sin correo», o «sin verificar» + el correo |
+| 2 | `cuentas` | `cuenta:correo:<usuario>` | puesta_a_punto · `bloquea` (cada cliente ve la suya; el admin todas, PND-123) | «sin correo», o «sin verificar» + el correo |
 | 3 | `worker` | `worker:parado` | puesta_a_punto · `bloquea` · **solo_admin** | la última señal de vida |
 | 4 | `saldo` | `saldo:wavespeed` (neutra, para todos) y `saldo:wavespeed_recarga` (con la URL de recarga) | puesta_a_punto · `bloquea` · la segunda **solo_admin** | el `desde` del aviso (las dos igual) |
 | 5 | `tablero` | `tablero:<tipo>:<experimento o ->` | según el tipo: meta, tienda y píxel → puesta_a_punto; productos sin experimento → faltantes; propuestas, tope, ganador sin publicar → decision; error, rechazados, sin métricas → fallos | tipo + experimento + los números del texto |
@@ -44,6 +44,7 @@ Una alerta es un dict armado por `alertas._alerta` (nunca a mano):
 | 8 | `organico` | `organico:error:<pub_id>` | fallos · `atencion` | el error |
 | 9 | `sprints` | `sprint:{ideas,revision,fallos,referencias}:<sprint_id>` | decision / fallos | los ids (o el conteo) |
 | 10 | `nicho` | `nicho:avatares`, `nicho:error:<estudio_id>` | decision / fallos · `atencion` | el conteo / el error guardado |
+| 11 | `cobros` | `cobros:sin_saldo`, `cobros:saldo_bajo`, `cobros:no_cobrado:<mov_id>`, `cobros:recarga_pendiente:<id>` | puesta_a_punto `bloquea` / puesta_a_punto `atencion` / fallos `info` / decision `info`; todas del cliente, a Configuración › Saldo y recargas (`config-ap-saldo`) | `sin_saldo` constante; `saldo_bajo` el saldo en dólares redondeados; las otras, tipo y monto o el id |
 
 Detalles que ya costaron una duda:
 
@@ -53,11 +54,12 @@ Detalles que ya costaron una duda:
 - **Tablero**: `tablero.alertas()` no se reescribe; solo se le pone clave, nivel (`alta→bloquea`, `media→atencion`, `baja→info`) y grupo. La única lógica de experimentos sigue en `tablero.py`. El texto se acota con `_limpio(texto, 400)`: la guía de Meta en modo Desarrollo ronda los 330 caracteres y su llamado a la acción va al final. Los números de la huella salen del texto ENTERO y limpio (`_limpio(texto, None)`), no del recortado: un texto que se corta en un idioma y en el otro no cambia la huella.
 - **Crear**: los prompts listos son UNA alerta con el conteo y solo cuentan los de hace más de `MINUTOS_PROMPT_LISTO` (60): los recién armados no molestan mientras la persona trabaja. Fallos de los últimos `DIAS_FALLOS` (30) días; una sesión con dos piezas cuenta una vez.
 - **Nicho**: una investigación `detenida` alerta si tiene motivo y no es `cancelada` (clic de la persona, 2026-10-02); una `interrumpida`, siempre; un estudio, una alerta (la investigación manda sobre el error de generación).
+- **Cobros** (2026-10-08, spec `2026-10-08-cobros-saldo-prepagado` §8): solo si `libro.estado(cliente)["cobrar"]`; un proyecto que no cobra sale tras leer la cuenta y no consulta nada más. `sin_saldo` mira el DISPONIBLE (saldo menos lo reservado) ≤ 0; `saldo_bajo` mira el saldo (0 < saldo < umbral) y no sale si ya hay `sin_saldo`; su huella lleva el saldo en dólares redondeados, así que un descarte no esconde un saldo que siguió bajando. `no_cobrado`: un `reverso` o `no_cobrado` de los últimos `DIAS_NO_COBRADO` (7) días (en el `no_cobrado` el monto es `extra.precio`); `recarga_pendiente`: Bold pendiente de hace más de `MINUTOS_RECARGA_PENDIENTE` (15) min. Dos consultas fijas (movimientos y recargas, tope `TOPE_COBROS` = 20 cada una). El concepto sale de `cobros.vista.nombre_concepto`. Ninguna es `solo_admin`. El apartado `config-ap-saldo` solo existe en la página de un cliente que cobra (el admin siempre lo ve).
 - **Orgánico**: reintentar es una acción de la persona sobre la pieza; aquí solo se avisa.
 
 ## Quién ve qué: `solo_admin` (2026-10-02)
 
-Las llaves del `.env`, el worker, el enlace de recarga del saldo y las fuentes caídas son de Creatv: un cliente no ve instrucciones del servidor (el mismo criterio de `dashboard._llaves_visibles` para las tarjetas de Puesta a punto). `visibles(..., rol=)` las quita para un cliente y el resumen (la burbuja) se cuenta sobre lo que esa persona ve; el cliente nunca recibe `llave:*`, `worker:parado`, `saldo:wavespeed_recarga` ni `revision:*`.
+Las llaves del `.env`, el worker, el enlace de recarga del saldo y las fuentes caídas son de Creatv: un cliente no ve instrucciones del servidor (el mismo criterio de `dashboard._llaves_visibles` para las tarjetas de Puesta a punto). `visibles(..., rol=, usuario=)` las quita para un cliente y el resumen (la burbuja) se cuenta sobre lo que esa persona ve; el cliente nunca recibe `llave:*`, `worker:parado`, `saldo:wavespeed_recarga` ni `revision:*`.
 
 **El servidor lo hace cumplir, no la plantilla.** Los descartes son del proyecto: si un cliente pudiera descartar `saldo:wavespeed_recarga` o una `llave:*`, se las escondería al admin. Por eso `POST /cliente/<c>/alertas/descartar` y `/restaurar` responden 403 a un no-admin con una clave `solo_admin` (`dashboard._clave_alerta_del_form` + `alertas.es_solo_admin`, que mira primero la lista ya calculada y, si la alerta ya no está, el prefijo `PREFIJOS_SOLO_ADMIN = ("llave:", "worker:", "revision:", "saldo:wavespeed_recarga")`). Motivo: la revisión de la tarea 5 (2026-10-02) encontró que ocultar el botón no bastaba. Una alerta `solo_admin` nueva tiene que empezar por uno de esos prefijos (o se agrega el prefijo): `tests/test_rutas_alertas.py::test_toda_alerta_solo_admin_de_las_fuentes_lleva_prefijo_de_admin` lo comprueba.
 
@@ -67,7 +69,7 @@ Las rutas validan lo que llega: la clave con `CLAVE_VALIDA` y largo ≤ 200, la 
 
 El context processor `_alertas_sidebar` pinta `alertas_ctx` en TODA página con `<cliente>` en la URL y sesión (también Sprints y Nicho, que no pasan por `ver_cliente`); no corre para peticiones JSON/fetch ni para `landing_cliente`. Si el cálculo revienta, la página sale sin alertas y el log dice solo la clase del error.
 
-- `_alertas_calculadas(cliente)` guarda `alertas.calcular` por `(cliente, idiomas.activo())` durante `ALERTAS_TTL_S = 60`: los títulos salen traducidos al calcular, así que cada idioma tiene su entrada. Guarda el cálculo COMPLETO y el rol se filtra al leer; los descartes se leen siempre en vivo (una consulta por página).
+- `_alertas_calculadas(cliente)` guarda `alertas.calcular` por `(cliente, idiomas.activo())` durante `ALERTAS_TTL_S = 60`: los títulos salen traducidos al calcular, así que cada idioma tiene su entrada. Guarda el cálculo COMPLETO y el rol y usuario de sesión se filtran al leer; los descartes se leen siempre en vivo (una consulta por página).
 - Se renueva antes del TTL en tres casos, porque 60 s con una alerta ya resuelta se sentía roto (revisión de la tarea 5, 2026-10-02): (1) cambia `_clave_tablero` (un snapshot, una propuesta, una publicación: lo que hace el worker sin pasar por una ruta; la misma clave del Tablero, leída una vez por petición con `_clave_tablero_de_la_peticion`); (2) después de toda escritura que salió bien (`_alertas_tras_escribir`, un `after_request` para POST/PUT/PATCH/DELETE con status < 400 y `<cliente>` en la ruta, y solo si la sesión puede acceder a ese proyecto: el 302 de `_guard_por_cliente` también es < 400 y sin ese chequeo cualquiera mantendría fría la caché ajena); (3) al descartar o restaurar, ANTES de redirigir: la página siguiente se calcula con lo real y no con una lista de hace unos segundos.
 - `invalidar_alertas(cliente)` olvida todos los idiomas; `invalidar_tablero` también la llama.
 - Es por proceso: gunicorn corre UN proceso con hilos (`deploy/gunicorn.conf.py`), pero el worker es otro proceso y no vacía esta caché; lo que cambia el worker FUERA de la clave del Tablero (un error de Crear, una investigación de Nicho) puede tardar hasta 60 s en aparecer o desaparecer. PND-121 sigue como pregunta para Daniel: invalidación compartida sin subir el costo por página (2026-10-07).
@@ -99,9 +101,13 @@ El context processor `_alertas_sidebar` pinta `alertas_ctx` en TODA página con 
 ## Pendientes conocidos (`docs/pendientes.md`)
 
 - PND-121: lo que cambia el worker fuera de la clave del Tablero puede tardar hasta 60 s en aparecer o desaparecer.
-- PND-122: una pieza fallida de un Sprint se muestra dos veces, como `sprint:fallos:<sid>` y como `crear:error:<cf_id>` (`_fuente_crear` no excluye las sesiones de Sprints).
-- PND-123 (bloqueado por Daniel): `cuenta:correo:<usuario>` le muestra a cada cuenta del proyecto las cuentas y los correos de sus compañeras y le deja descartarlas; hoy el alta web crea una cuenta por proyecto, así que solo afecta a las agregadas por la línea de comandos. ¿Filtrar por quien mira?
-- PND-124 (bloqueado por Daniel, plata): los descartes son del proyecto, así que un cliente que descarta una alerta de plata (`tablero:tope_alcanzado`, `tablero:propuestas_pendientes`, `tablero:experimento_error`, `crear:prompt_listo`) se la esconde también al admin (la ve en «Descartadas» y vuelve sola si cambian los números). ¿Descartes por persona, o proteger esas claves?
+- PND-122/123/124 (decisiones delegadas, 2026-10-08): Crear excluye los errores vinculados a sprints vivos
+  (archivado o completado vuelve a alertar en Crear). Cada cliente ve y toca solo su `cuenta:correo`, por `entidad`
+  y usuario de sesión, después de la caché y antes de contar o mostrar descartadas; el admin ve todas. La poda
+  sigue mirando el cálculo completo. Los seis tipos de plata (enmienda S1, 2026-10-08) permanecen visibles pero `puede_descartar` es
+  falso para clientes: `descarte_solo_admin` protege descartar/restaurar con 403 incluso si la clave ya desapareció.
+  Pruebas `test_rutas_alertas.py` y `test_alertas_fuentes.py`, con mutaciones locales; pantalla pendiente de Claude.
+
 
 **Pedidos vencidos (2026-10-02, PND-015):** la fuente Tablero agrega `tablero:pedidos_sin_atribuir:-`, grupo `fallos`, nivel `atencion`, huella del conteo y del plazo fijo. Cuenta pedidos del proyecto con UTM que siguen sin atribución después de 30 días; informa, sin resolverlos ni tocar ventas.
 
@@ -112,3 +118,5 @@ para ese proveedor porque también se usa en Crear › Cambiar producto con Nano
 flujo viejo. Textos por `N_` y catálogo; `estado()` entrega solo presencia, nunca el valor. Alertas de error y prompt
 listo enlazan a `#creativeflowplus?cf=<id>`; el modal carga el detalle aunque no haya tarjeta inicial. El catálogo y
 las pruebas de fuentes, llaves, ruta por proyecto y JS cubren el cambio; la vista real queda para Claude.
+
+S1/S4 (2026-10-08, enmienda de revisión lote 6B): ganador_sin_publicar y anuncios_rechazados también protegen descartar/restaurar con 403 para cliente. Si sanear/truncar el usuario cambia su nombre exacto, cuenta:correo agrega - y ocho hex del sha256 del nombre exacto; nombres ya limpios mantienen la clave. Esto evita que dos cuentas viejas compartan descartes. R7 prueba que un sprint vivo ajeno con el mismo cf_id no esconde el error de Crear.

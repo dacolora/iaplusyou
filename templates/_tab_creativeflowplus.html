@@ -77,12 +77,12 @@
             <div class="crear-menu crear-menu-ancho" id="fp-menu-modelo" hidden>
               <div class="crear-opciones" data-solo-video>
                 {% for id, m in modelos_flowplus_video.items() %}
-                <label class="crear-opcion crear-modelo" title="{{ m.nota|traducir }}"><input type="radio" name="modelo_video" value="{{ id }}" data-nombre="{{ m.nombre|traducir }}" data-usd-seg="{{ m.usd_por_segundo_efectivo }}" data-usd-borrador="{{ tarifas_flowplus_borrador[id] }}" data-recargo="{{ m.audio_nativo.recargo_usd_s }}" data-max="{{ m.max_referencias }}" data-max-videos="{{ m.max_videos }}" data-max-total="{{ m.max_total_con_videos or '' }}" data-max-videos-s="{{ m.max_videos_s or '' }}" data-min-duracion="{{ m.min_duracion }}" data-max-duracion="{{ m.max_duracion }}" data-formatos="{{ m.formatos | join(',') }}" data-formatos-texto="{{ (m.formatos_texto or m.formatos) | join(',') }}" {% if preferencias_flowplus.modelo_video == id %}checked{% endif %}><span><strong>{{ m.nombre|traducir }}</strong><small>{{ ngettext('hasta %(num)s referencia', 'hasta %(num)s referencias', m.max_referencias) }} · {{ m.min_duracion }}–{{ m.max_duracion }} s</small></span><em>${{ "%.3f"|format(m.usd_por_segundo_efectivo) }}/s</em></label>
+                <label class="crear-opcion crear-modelo" title="{{ m.nota|traducir }}"><input type="radio" name="modelo_video" value="{{ id }}" data-nombre="{{ m.nombre|traducir }}" data-usd-seg="{{ m.usd_por_segundo_efectivo|precio }}" data-usd-borrador="{{ tarifas_flowplus_borrador[id]|precio }}" data-recargo="{{ m.audio_nativo.recargo_usd_s|precio }}" data-max="{{ m.max_referencias }}" data-max-videos="{{ m.max_videos }}" data-max-total="{{ m.max_total_con_videos or '' }}" data-max-videos-s="{{ m.max_videos_s or '' }}" data-min-duracion="{{ m.min_duracion }}" data-max-duracion="{{ m.max_duracion }}" data-formatos="{{ m.formatos | join(',') }}" data-formatos-texto="{{ (m.formatos_texto or m.formatos) | join(',') }}" {% if preferencias_flowplus.modelo_video == id %}checked{% endif %}><span><strong>{{ m.nombre|traducir }}</strong><small>{{ ngettext('hasta %(num)s referencia', 'hasta %(num)s referencias', m.max_referencias) }} · {{ m.min_duracion }}–{{ m.max_duracion }} s</small></span><em>${{ "%.3f"|format(m.usd_por_segundo_efectivo|precio) }}/s</em></label>
                 {% endfor %}
               </div>
               <div class="crear-opciones" data-solo-imagen hidden>
                 {% for id, m in modelos_flowplus_imagen.items() %}
-                <label class="crear-opcion crear-modelo" title="{{ m.nota|traducir }}"><input type="radio" name="modelo_imagen" value="{{ id }}" data-nombre="{{ m.nombre|traducir }}" data-usd="{{ m.usd }}" data-max="{{ m.max_referencias }}" data-formatos="{{ m.formatos | join(',') }}" {% if preferencias_flowplus.modelo_imagen == id %}checked{% endif %}><span><strong>{{ m.nombre|traducir }}</strong><small>{{ _('hasta %(n)s referencias · 2k', n=m.max_referencias) }}</small></span><em>${{ "%.3f"|format(m.usd) }}</em></label>
+                <label class="crear-opcion crear-modelo" title="{{ m.nota|traducir }}"><input type="radio" name="modelo_imagen" value="{{ id }}" data-nombre="{{ m.nombre|traducir }}" data-usd="{{ m.usd|precio }}" data-max="{{ m.max_referencias }}" data-formatos="{{ m.formatos | join(',') }}" {% if preferencias_flowplus.modelo_imagen == id %}checked{% endif %}><span><strong>{{ m.nombre|traducir }}</strong><small>{{ _('hasta %(n)s referencias · 2k', n=m.max_referencias) }}</small></span><em>${{ "%.3f"|format(m.usd|precio) }}</em></label>
                 {% endfor %}
               </div>
               <label class="crear-interruptor" id="fp-calidad-wrap" data-solo-video>
@@ -491,7 +491,7 @@
       campoModelo.value = m ? m.value : '';
       ajustarSegunModelo(m, esImagen);
       pintarReceta(m, esImagen);
-      var usdMusica = {{ tarifa_musica_crear|tojson }};
+      var usdMusica = {{ (tarifa_musica_crear|precio)|tojson }};
       var usd = 0;
       var conSonido = document.getElementById('fp-check-sonido');
       if (m) {
@@ -575,7 +575,7 @@
         var propia = g.classList.contains('mm-opciones');
         var t = document.createElement('p');
         t.className = 'crear-menu-titulo';
-        t.textContent = propia ? {{ _('Mi música · gratis')|tojson }} : {{ _('Estilos IA · US$ 0,02 la primera vez por estilo y duración')|tojson }};
+        t.textContent = propia ? {{ _('Mi música · gratis')|tojson }} : {{ _('Estilos IA · %(precio)s la primera vez por estilo y duración', precio=(tarifa_musica_crear|precio|usd))|tojson }};
         caja.appendChild(t);
         var lista = document.createElement('div');
         lista.className = propia ? 'crear-opciones' : 'crear-fichas';

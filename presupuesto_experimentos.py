@@ -15,8 +15,10 @@ test_presupuesto_experimentos.py` corre ambos con los mismos casos y exige resul
 from decimal import Decimal, InvalidOperation, ROUND_DOWN, ROUND_UP
 
 # Mínimo diario que Meta acepta por divisa (aprox., para avisar antes de fallar). Se compara contra la moneda de
-# FACTURACIÓN de la cuenta, no la del país del conjunto.
-PRESUPUESTO_MINIMO_DIARIO = {"USD": 1, "COP": 4000, "MXN": 20, "EUR": 1, "BRL": 5, "PEN": 4, "CLP": 1000, "ARS": 1000}
+# FACTURACIÓN de la cuenta, no la del país del conjunto. NOK y SEK con margen (2026-10-08): 10 coronas quedaban
+# bajo US$1; 15 ≈ US$1,4.
+PRESUPUESTO_MINIMO_DIARIO = {"USD": 1, "COP": 4000, "MXN": 20, "EUR": 1, "BRL": 5, "PEN": 4, "CLP": 1000, "ARS": 1000,
+                              "NOK": 15, "SEK": 15}
 # Monedas sin decimales para Meta: la misma lista que `tareas.meta.MONEDAS_SIN_DECIMALES` (lo que `lanzador.centavos` manda
 # sin multiplicar por 100); una prueba compara las dos.
 SIN_DECIMALES = {"JPY", "CLP", "HUF", "ISK", "KRW", "TWD", "VND", "PYG", "UGX", "XAF", "XOF"}
@@ -117,3 +119,19 @@ def validar(total, dias, presupuestos, moneda):
         raise ErrorPresupuesto("precision")
     if sum(valores) * dias > total * MARGEN_TOTAL:
         raise ErrorPresupuesto("total")
+
+
+def limite_diario(ex, pais, ahora=None):
+    """Saldo disponible por los días restantes, reservado también para los otros países.
+    Misma cuenta para formulario y servidor (PND-132, 2026-10-08)."""
+    import time
+    ahora = time.time() if ahora is None else ahora
+    fin = (ex.get("extra") or {}).get("fin_primera_activacion")
+    dias = max(0.0, (float(fin) - ahora) / 86400) if fin else float(ex.get("dias") or 7)
+    saldo = max(Decimal(0), Decimal(str(ex.get("tope_total") or 0)) - Decimal(str(ex.get("gasto_acumulado") or 0)))
+    otros = sum(Decimal(str(p.get("presupuesto_dia") or 0)) for p in ex.get("paises", []) if p["pais"] != pais)
+    disponible = max(Decimal(0), saldo / Decimal(str(dias)) - otros) if dias else Decimal(0)
+    # Menos de un día no autoriza enviar a Meta diarios mayores que el saldo restante.
+    disponible = min(disponible, max(Decimal(0), saldo - otros))
+    maximo = disponible.quantize(unidad(ex.get("moneda") or "USD"), rounding=ROUND_DOWN)
+    return {"maximo": float(maximo), "dias": dias, "saldo": float(saldo)}

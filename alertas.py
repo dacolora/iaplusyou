@@ -57,6 +57,9 @@ NOMBRES_TAB = {"settings": idiomas.N_("Configuración"), "catalogo": idiomas.N_(
 MINUTOS_WORKER = 30                                  # más de esto sin señal de vida y el worker está parado
 MINUTOS_PROMPT_LISTO = 60                            # un prompt listo más nuevo que esto no molesta: la persona sigue trabajando
 DIAS_FALLOS = 30                                     # un fallo más viejo que esto es historia, no una alerta
+DIAS_NO_COBRADO = 7                                  # una pieza que no se cobró avisa esta cantidad de días
+MINUTOS_RECARGA_PENDIENTE = 15                       # una recarga de Bold pendiente más vieja que esto avisa
+TOPE_COBROS = 20                                     # lo más que se lista de piezas no cobradas o recargas pendientes
 IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".webp")      # lo que cuenta como logo en clientes/<c>/logos/
 
 # Lo que las rutas aceptan al descartar/restaurar (una clave o huella que no
@@ -71,6 +74,16 @@ HUELLA_VALIDA = r"^[0-9a-f]{64}$"
 # `tests/test_rutas_alertas.py` comprueba que toda alerta `solo_admin` que
 # producen las fuentes empiece por uno de estos prefijos.
 PREFIJOS_SOLO_ADMIN = ("llave:", "worker:", "revision:", "saldo:wavespeed_recarga")
+
+# PND-124 (decisión 2026-10-07): visibles para todos, descartes solo admin.
+TIPOS_DESCARTE_ADMIN = {"tablero:tope_alcanzado", "tablero:propuestas_pendientes",
+                        "tablero:experimento_error", "crear:prompt_listo",
+                        "tablero:ganador_sin_publicar", "tablero:anuncios_rechazados"}
+
+
+def descarte_solo_admin(clave, calculadas=()):
+    return es_solo_admin(clave, calculadas) or ":".join(clave.split(":")[:2]) in TIPOS_DESCARTE_ADMIN
+
 
 # (nombre, función(cliente, ahora_iso) -> lista de alertas), en el orden en
 # que se muestran dentro de un mismo grupo y nivel. Las fuentes reales se
@@ -160,12 +173,7 @@ def _fuente_llaves(cliente, ahora):
 
 
 def _fuente_cuentas(cliente, ahora):
-    """Cuentas rol cliente del proyecto sin correo o con el correo sin
-    confirmar: sin él no se conecta Meta ni una tienda
-    (`_requiere_correo_verificado`). Son TODAS las cuentas del proyecto, no solo la de quien mira: cada cuenta del
-    proyecto ve las alertas, el correo y el nombre de las demás cuentas cliente y puede descartarlas (los descartes
-    son del proyecto). Hoy el alta web crea una cuenta por proyecto, así que solo afecta a las agregadas por la
-    línea de comandos; filtrar por quien mira es una decisión pendiente (PND-123)."""
+    """Todas las cuentas del proyecto; el usuario se filtra al leer (PND-123)."""
     import usuarios  # noqa: PLC0415
     out = []
     for u in usuarios.por_cliente(cliente):
@@ -174,19 +182,21 @@ def _fuente_cuentas(cliente, ahora):
         nombre = u["usuario"]
         # La clave tiene que pasar CLAVE_VALIDA aunque la cuenta sea vieja y traiga
         # espacios o acentos (usuarios.validar_usuario solo exige el formato al crear).
-        clave = f"cuenta:correo:{re.sub(r'[^A-Za-z0-9_.-]', '_', nombre)[:100]}"
+        limpio = re.sub(r'[^A-Za-z0-9_.-]', '_', nombre)[:100]
+        sufijo = '-' + hashlib.sha256(nombre.encode('utf-8')).hexdigest()[:8] if limpio != nombre else ''
+        clave = f"cuenta:correo:{limpio}{sufijo}"
         if not u.get("correo"):
             out.append(_alerta(clave, huella("sin_correo"), "bloquea", "puesta_a_punto",
                                gettext("La cuenta %(usuario)s no tiene correo", usuario=nombre),
                                gettext("Ponlo en Configuración › Cuenta para poder confirmarla y recuperar la contraseña. "
                                        "Sin correo confirmado no puedes conectar Meta ni una tienda."),
-                               "settings", ancla="config-cuenta"))
+                               "settings", ancla="config-cuenta", entidad=nombre))
         else:
             out.append(_alerta(clave, huella("sin_verificar", u["correo"]), "bloquea", "puesta_a_punto",
                                gettext("Confirma el correo de la cuenta %(usuario)s", usuario=nombre),
                                gettext("%(correo)s: abre el enlace que te mandamos o pide uno nuevo en Configuración › Cuenta. "
                                        "Sin correo confirmado no puedes conectar Meta ni una tienda.", correo=u["correo"]),
-                               "settings", ancla="config-cuenta"))
+                               "settings", ancla="config-cuenta", entidad=nombre))
     return out
 
 
@@ -387,12 +397,17 @@ def _fuente_crear(cliente, ahora):
     estado = sa.func.coalesce(legado, sa.case((pz.c.estado == "pendiente", "prompt_listo"), else_=pz.c.estado))
     accion = sa.func.coalesce(sa.func.json_extract(pz.c.extra, "$.accion_central"),
                               sa.func.json_extract(co.c.extra, "$.accion_central"))
+    sp, c, cp = db.sprint, db.campana, db.campana_pieza
+    en_sprint_vivo = sa.exists(sa.select(cp.c.id)
+        .select_from(cp.join(c, c.c.id == cp.c.campana_id).join(sp, sp.c.id == c.c.sprint_id))
+        .where(cp.c.cf_id == co.c.legado_id, cp.c.cliente == cliente, c.c.cliente == cliente,
+               sp.c.cliente == cliente, sp.c.archivado.is_(False), sp.c.estado != "completado"))
     q = (sa.select(co.c.legado_id, estado.label("estado"), accion.label("accion"), pz.c.error)
          .select_from(co.join(pz, pz.c.concepto_id == co.c.id))
          .where(co.c.cliente == cliente, co.c.legado_id.isnot(None), pz.c.tipo != "final",
                 co.c.creado_en >= _hace(ahora, days=DIAS_FALLOS),
                 sa.or_(sa.and_(estado == "prompt_listo", co.c.creado_en < _hace(ahora, minutes=MINUTOS_PROMPT_LISTO)),
-                       estado == "error"))
+                       sa.and_(estado == "error", ~en_sprint_vivo)))
          .order_by(co.c.id.desc()))
     with db.conectar() as con:
         filas = con.execute(q).fetchall()
@@ -585,6 +600,68 @@ def _fuente_nicho(cliente, ahora):
 
 # ---------- cálculo ----------
 
+def _fuente_cobros(cliente, ahora):
+    """Saldo prepagado del proyecto (spec 2026-10-08-cobros §8), solo si el proyecto cobra: sin saldo, saldo bajo,
+    piezas que no se cobraron (un `reverso` o `no_cobrado` de los últimos DIAS_NO_COBRADO días) y recargas de Bold
+    que siguen pendientes. Son del cliente (nada de aquí es solo_admin) y todas llevan a Configuración › Saldo y recargas.
+    Una consulta por tipo de dato (la cuenta con el saldo, los movimientos, las recargas), sin importar cuántos
+    haya; un proyecto que no cobra sale tras leer la cuenta. Las huellas son de cifras, nunca de texto traducido:
+    la de «saldo bajo» sigue al saldo en dólares, para que un descarte no esconda un saldo que siguió bajando."""
+    from cobros import libro, vista  # noqa: PLC0415
+    import gastos  # noqa: PLC0415
+    c = libro.estado(cliente)
+    if not c["cobrar"]:
+        return []
+    out = []
+
+    def monto(milesimas):
+        return gastos.formatear(int(milesimas) / 1000)
+
+    if c["disponible"] <= 0:
+        out.append(_alerta("cobros:sin_saldo", huella("sin_saldo"), "bloquea", "puesta_a_punto",
+                           gettext("Te quedaste sin saldo"),
+                           gettext("Sin saldo no se puede generar nada nuevo. Recarga en Configuración › Saldo y recargas "
+                                   "y sigues donde ibas."),
+                           "settings", ancla="config-ap-saldo"))
+    elif 0 < c["saldo"] < c["umbral"]:
+        out.append(_alerta("cobros:saldo_bajo", huella("saldo_bajo", round(c["saldo"] / 1000)), "atencion",
+                           "puesta_a_punto",
+                           gettext("Tu saldo se está acabando"),
+                           gettext("Te quedan %(saldo)s. Recarga en Configuración › Saldo y recargas antes de que se acabe.",
+                                   saldo=monto(c["saldo"])),
+                           "settings", ancla="config-ap-saldo"))
+
+    m = db.movimiento_saldo
+    q = (sa.select(m.c.id, m.c.tipo, m.c.milesimas, m.c.concepto, m.c.extra)
+         .where(m.c.cliente == cliente, m.c.tipo.in_(("reverso", "no_cobrado")),
+                m.c.creado_en >= _hace(ahora, days=DIAS_NO_COBRADO))
+         .order_by(m.c.id.desc()).limit(TOPE_COBROS))
+    r = db.recarga
+    qr = (sa.select(r.c.id, r.c.milesimas)
+          .where(r.c.cliente == cliente, r.c.medio == "bold", r.c.estado == "pendiente",
+                 r.c.creada_en <= _hace(ahora, minutes=MINUTOS_RECARGA_PENDIENTE))
+          .order_by(r.c.id.desc()).limit(TOPE_COBROS))
+    with db.conectar() as con:
+        movimientos = con.execute(q).fetchall()
+        recargas = con.execute(qr).fetchall()
+    for f in movimientos:
+        # El reverso devuelve lo cobrado (positivo); en un no_cobrado el libro guarda 0 y el precio en `extra`.
+        milesimas = int((f.extra or {}).get("precio") or 0) if f.tipo == "no_cobrado" else int(f.milesimas)
+        out.append(_alerta(f"cobros:no_cobrado:{f.id}", huella(f.tipo, milesimas), "info", "fallos",
+                           gettext("Una pieza falló y no se te cobró"),
+                           gettext("Algo de «%(concepto)s» no llegó. No descontamos %(monto)s de tu saldo.",
+                                   concepto=vista.nombre_concepto(f.concepto), monto=monto(milesimas)),
+                           "settings", ancla="config-ap-saldo", entidad=f.id))
+    for f in recargas:
+        out.append(_alerta(f"cobros:recarga_pendiente:{f.id}", huella(f.id), "info", "decision",
+                           gettext("Tienes una recarga sin terminar"),
+                           gettext("Una recarga de %(monto)s con Bold sigue pendiente. Si ya pagaste, se acredita "
+                                   "sola en unos minutos; si no, genera un link nuevo en Configuración › Saldo y recargas.",
+                                   monto=monto(f.milesimas)),
+                           "settings", ancla="config-ap-saldo", entidad=f.id))
+    return out
+
+
 def calcular(cliente, ahora_iso=None):
     """Todas las alertas del proyecto, sin mirar descartes ni rol, ordenadas
     por grupo (GRUPOS) y nivel (NIVELES); dentro del mismo nivel, en el orden
@@ -659,7 +736,7 @@ def _borrar_descartes(cliente, huerfanos):
             con.execute(sa.delete(t).where(t.c.cliente == cliente, t.c.clave == clave, t.c.huella == huella_))
 
 
-def visibles(cliente, ahora_iso=None, rol="cliente", calculadas=None):
+def visibles(cliente, ahora_iso=None, rol="cliente", calculadas=None, usuario=None):
     """calcular() menos las alertas descartadas con la MISMA huella, y menos
     las `solo_admin` salvo que `rol == "admin"`. `calculadas` deja al llamador
     pasar un `calcular` ya hecho (la caché de 60 s del context processor); los
@@ -676,11 +753,14 @@ def visibles(cliente, ahora_iso=None, rol="cliente", calculadas=None):
     for a in todas:
         if a.get("solo_admin") and rol != "admin":
             continue
+        if a["clave"].startswith("cuenta:correo:") and rol != "admin" and a.get("entidad") != usuario:
+            continue
         d = filas.get(a["clave"])
         if d and d[0] == a["huella"]:
-            desc.append({**a, "descartada_en": d[1]})
+            desc.append({**a, "descartada_en": d[1],
+                         "puede_descartar": rol == "admin" or not descarte_solo_admin(a["clave"], todas)})
         else:
-            vis.append(a)
+            vis.append({**a, "puede_descartar": rol == "admin" or not descarte_solo_admin(a["clave"], todas)})
     claves = {a["clave"] for a in todas}
     huerfanos = {c: f[0] for c, f in filas.items() if c not in claves}
     if huerfanos and not any(a["clave"].startswith("revision:") for a in todas):
@@ -701,5 +781,6 @@ FUENTES.extend([
     ("organico", _fuente_organico),
     ("sprints", _fuente_sprints),
     ("nicho", _fuente_nicho),
+    ("cobros", _fuente_cobros),
     ("meta", _fuente_meta),
 ])

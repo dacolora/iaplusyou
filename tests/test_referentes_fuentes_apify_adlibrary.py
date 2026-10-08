@@ -10,6 +10,13 @@ from referentes.fuentes.base import ErrorFuente
 FIXTURE_ITEM = json.load(open("tests/fixtures/apify_facebook_ads_scraper_item.json"))
 
 
+@pytest.fixture(autouse=True)
+def _sin_factura_de_conciliacion(monkeypatch):
+    # Estos casos prueban dataset/normalización, sin una factura de corrida.
+    # PND-007 prueba la consulta real (con sesión falsa) en test_lote6_apify.
+    monkeypatch.setattr(apify_api, "costo_corrida", lambda *a: None)
+
+
 class _Resp:
     def __init__(self, cuerpo, status=200):
         self._cuerpo = cuerpo

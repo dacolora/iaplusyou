@@ -924,7 +924,7 @@ export function fuenteDePreset(def, fuentes = FUENTES) {
 
 function fondoDePreset(def, res) {
   if (def.fondo === "marca") {
-    return { color: res.marca?.color || "#7c3aed", opacidad: 1, radio: 1, relleno_x: 0.03, relleno_y: 0.015, ancho: null };
+    return { color: res.marca?.color || "#000000", opacidad: res.marca?.color ? 1 : 0.6, radio: 1, relleno_x: 0.03, relleno_y: 0.015, ancho: null };
   }
   if (def.fondo === "blanco") return { color: "#FFFFFF", opacidad: 0.9, radio: 0.02, relleno_x: 0.03, relleno_y: 0.02, ancho: null };
   if (def.fondo) return { color: def.fondo.color, opacidad: 1, radio: def.fondo.radio, relleno_x: 0.03, relleno_y: 0.015, ancho: null };

@@ -74,7 +74,7 @@ Paquete `meta_rendimiento/` (no `meta_ads/`, que es el submódulo, ni `meta_deta
 | `avisos.py` (E2) | correo tras la copia: ganadores, fatiga, rechazados, cuenta con problemas | `notificaciones` |
 | `tareas/meta_rendimiento.py` | tareas del worker | `sync`, `analisis` |
 
-## 4. Datos (migración 0033)
+## 4. Datos (migración 0034; 0033 en el borrador, renumerada al mezclar main el 2026-10-08, que trajo 0033_cobros)
 
 - `meta_cuenta`: id, cliente, ad_account_id (`act_…`, **único global**), nombre, moneda, zona_horaria, pais (ISO-2 o
   NULL), estado (`ok|copiando|error`), error, ultima_copia, extra (JSON: `backfill_hecho`, `cuenta` = account_status,
@@ -153,7 +153,8 @@ selector «Todas | <cuenta> …» (con país) y período 7/14/30/90 días (por d
 1. KPIs con su variación contra el período anterior: gasto, valor de compras, ROAS, compras, costo por compra,
    alcance (suma de cuentas en «Todas»), impresiones, CPM, CTR de salida. En «Todas», montos en USD; en una cuenta, en
    su moneda.
-2. Gráfico diario gasto contra valor (`app.extensions["grafico_tablero"]`).
+2. Gráfico diario gasto contra valor (`meta_rendimiento/grafico.py`: el cálculo de `dashboard._grafico_tablero`, que
+   main borró con «Resultados de tu tienda» y se mudó aquí al mezclar main el 2026-10-08).
 3. Tabla de cuentas (como la tarjeta del Business): gasto, ROAS, compras, alcance, impresiones, activos y conjuntos
    en aprendizaje limitado; clic → elige esa cuenta.
 4. Campañas del período (orden por gasto): estado, objetivo, presupuesto, gasto, ROAS, compras, CPA, alcance.
@@ -218,7 +219,7 @@ el prompt de Claude (E2), nunca como instrucciones.
 Graph con dobles (sin red): paginación, informe asíncrono (en curso → completado → fallido), límites, token roto,
 tipos de compra; `datos.reemplazar_*` idempotente; `tasas` con fin de semana y sin tasa; `panel` con «Todas» en USD,
 una cuenta, sin datos; rutas (mismo origen, cuenta de otro proyecto → 404, proyecto sin Meta); `meta_elegir` sin
-Página; lanzador y orgánico frenan sin Página; migración 0033 en una copia. E2: cada regla de recomendaciones con su
+Página; lanzador y orgánico frenan sin Página; migración 0034 en una copia. E2: cada regla de recomendaciones con su
 caso; análisis con Claude doble; avisos una sola vez. Prueba real con la cuenta de Norway antes de desplegar y captura
 de la pestaña.
 

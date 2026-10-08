@@ -39,6 +39,7 @@ import idiomas
 import meta_conexion
 import publicador
 import tiendas
+from cobros import SaldoInsuficiente, libro
 from doctrina import producto as doctrina_producto
 from uploaders import tiktok_uploader
 
@@ -90,6 +91,9 @@ _COPY = {
     "es": {"link_bio": "Link en bio.", "cta": "Consíguelo aquí", "escribenos": "Escríbenos para conseguirlo."},
     "en": {"link_bio": "Link in bio.", "cta": "Get it here", "escribenos": "Message us to get it."},
     "pt": {"link_bio": "Link na bio.", "cta": "Garanta o seu", "escribenos": "Fale com a gente para garantir o seu."},
+    # Noruega y Suecia (2026-10-08): contenido por idioma de publicación, no pasa por el catálogo.
+    "sv": {"link_bio": "Länk i bion.", "cta": "Skaffa din här", "escribenos": "Skriv till oss för att få din."},
+    "no": {"link_bio": "Lenke i bio.", "cta": "Skaff din her", "escribenos": "Send oss en melding for å få din."},
 }
 
 
@@ -535,10 +539,19 @@ def redactar(cliente, pieza_id, plataformas):
         raise ValueError(gettext("Elige al menos una plataforma."))
     contexto = contexto_pieza(cliente, pieza_id)
     try:
+        # Cobros (spec 2026-10-08 §5.2): sin saldo no se llama a Claude y queda
+        # el texto determinista. La ruta «Escribir con IA» pide el saldo antes
+        # (y responde 402); esto cubre la publicación de una ganadora, que no
+        # se frena por un texto.
+        libro.exigir(cliente, gastos.TARIFAS["caption_organico"])
         textos = generador_prompts.caption_organico(contexto, plataformas)
         if not isinstance(textos, dict):
             textos = {}
         cobrar = True
+    except SaldoInsuficiente:
+        log.info("redactar %s/%s: sin saldo, uso el texto determinista", cliente, pieza_id)
+        textos = {}
+        cobrar = False
     except generador_prompts.RespuestaInvalida as e:
         # Claude SÍ contestó (la llamada ya se cobró) pero el JSON no vino
         # bien: se usa el fallback determinista igual, pero el cobro real

@@ -204,7 +204,7 @@ def test_chip_gasto_aparece_en_paginas_de_sprints(app):
     sid, cid = _sprint(datos, pid, tid)
     gastos.registrar("acme", "guion", 0.02, "guion:t1")
     html = app["c"].get(f"/cliente/acme/sprints/{sid}").data.decode()
-    assert "Este mes:" in html and "generación" in html
+    assert "Gasto total:" in html and "generación" in html and "Este mes:" not in html
 
 
 def test_crear_sprint_persona_inexistente_no_deja_sprint_a_medias(app):
@@ -1101,3 +1101,21 @@ def test_pnd090_sugerencias_precargadas_sin_una_lectura_por_tarjeta(app, monkeyp
     if not panel:
         assert b"Candidato 111" in r.data
     assert llamadas == [("acme", ids)]
+
+
+def test_pnd088_repetir_qa_no_borra_ni_encola_aprobadas(con_ideas, monkeypatch, tmp_path):
+    from sprints import datos
+    sid, cid, iv, ii, cfs = _con_piezas(con_ideas, monkeypatch, tmp_path)
+    c = con_ideas['c']
+    anterior = datos.idea('acme', iv)['qa']
+    n = len(con_ideas['encolados'])
+    r = c.post(f'/cliente/acme/sprints/ideas/{iv}/qa', headers={'Accept': 'application/json'})
+    assert r.status_code == 409
+    assert datos.idea('acme', iv)['qa'] == anterior
+    assert len(con_ideas['encolados']) == n
+    datos.actualizar_idea('acme', ii, revision='aprobada')
+    assert c.post(f'/cliente/acme/sprints/ideas/{ii}/qa', headers={'Accept': 'application/json'}).status_code == 409
+    assert len(con_ideas['encolados']) == n
+    datos.actualizar_idea('acme', ii, revision='pendiente', qa={'veredicto': 'falla'})
+    assert c.post(f'/cliente/acme/sprints/ideas/{ii}/qa', headers={'Accept': 'application/json'}).status_code == 200
+    assert len(con_ideas['encolados']) == n + 1

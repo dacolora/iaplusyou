@@ -1,5 +1,5 @@
 {# Panel de la pestaña «Meta» (fragmento por fetch, meta_rendimiento.rutas.ver_panel). Contexto: `mr`
-   (meta_rendimiento.panel.contexto) y `grafico` (el mismo cálculo del Tablero, app.extensions["grafico_tablero"]).
+   (meta_rendimiento.panel.contexto) y `grafico` (meta_rendimiento.grafico.armar, el cálculo del viejo Tablero).
    Solo lee la copia local; el único formulario es «Actualizar ahora» (leer de Meta no cobra). Sin <script>: el JS
    está en _tab_meta.html (`data-meta-param` cambia el filtro, `data-meta-act` elige una cuenta, `data-meta-mas`
    trae más filas). «Todas» (2+ cuentas) va en USD con la tasa de cada día; una cuenta, en su moneda; campañas,
@@ -117,12 +117,12 @@
     <g class="tb-dia">
       <title>{{ d.titulo }}</title>
       <rect class="tb-blanco" x="{{ d.x }}" y="{{ g.margen.arriba }}" width="{{ d.ancho + 2 }}" height="{{ g.base_y - g.margen.arriba }}"/>
-      {% if d.gasto > 0 %}<rect class="tb-barra tb-barra-tw" x="{{ d.x }}" y="{{ d.gasto_y }}" width="{{ d.ancho }}" height="{{ g.base_y - d.gasto_y }}"/>{% endif %}
-      <circle class="tb-marcador tb-marcador-tw" cx="{{ d.x_centro }}" cy="{{ d.ingresos_y }}" r="3"/>
+      {% if d.gasto > 0 %}<rect class="tb-barra" x="{{ d.x }}" y="{{ d.gasto_y }}" width="{{ d.ancho }}" height="{{ g.base_y - d.gasto_y }}"/>{% endif %}
+      <circle class="tb-marcador" cx="{{ d.x_centro }}" cy="{{ d.ingresos_y }}" r="3"/>
       {% if d.etiqueta %}<text class="tb-eje" x="{{ d.x_centro }}" y="{{ g.alto - 8 }}" text-anchor="middle">{{ d.etiqueta }}</text>{% endif %}
     </g>
     {% endfor %}
-    <polyline class="tb-linea tb-linea-tw" points="{{ g.puntos_linea }}"/>
+    <polyline class="tb-linea" points="{{ g.puntos_linea }}"/>
   </svg>
 </section>
 {% endif %}

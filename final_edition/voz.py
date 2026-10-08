@@ -60,15 +60,22 @@ def sintetizar(guion, voz, carpeta, on_progreso=None, cliente=None):
             pista, palabras_bloque, costo_bloque = _sintetizar_bloque(
                 bloque, voz, idioma, carpeta, cliente)
         except Exception as e:
+            e.costo_usd = round(costo + float(getattr(e, "costo_usd", 0.0) or 0.0), 4)
             if i == 0:
-                raise ErrorPrimerBloque(str(e)) from e
+                error = ErrorPrimerBloque(str(e))
+                error.costo_usd = e.costo_usd
+                raise error from e
             raise
         pistas.append(pista)
         palabras.extend(palabras_bloque)
         costo += costo_bloque
 
     archivo_voz = os.path.join(carpeta, "voz.wav")
-    _mezclar(pistas, archivo_voz)
+    try:
+        _mezclar(pistas, archivo_voz)
+    except Exception as e:
+        e.costo_usd = round(costo, 4)
+        raise
 
     salida = {"pistas": pistas, "palabras": palabras, "archivo_voz": archivo_voz}
     return salida, round(costo, 4)
@@ -82,46 +89,51 @@ def _sintetizar_bloque(bloque, voz, idioma, carpeta, cliente):
 
     resultado = _tts(bloque["texto_voz"], voz, idioma, cliente)
     costo = float(resultado.get("costo_usd") or 0.0)
-    crudo = os.path.join(carpeta, f"{rol}.mp3")
-    _descargar(resultado["url"], crudo)
-    dur_real = cortes.duracion(crudo)
+    try:
+        crudo = os.path.join(carpeta, f"{rol}.mp3")
+        _descargar(resultado["url"], crudo)
+        dur_real = cortes.duracion(crudo)
 
-    factor = min(FACTOR_MAX, dur_real / ventana) if dur_real > ventana else 1.0
-    pista = {
-        "rol": rol, "archivo_mp3": crudo, "inicio_s": inicio_s, "fin_s": fin_s,
-        "duracion_real_s": round(dur_real, 3), "factor_velocidad": round(factor, 3),
-    }
-    if factor > 1.0:
-        ajustado = os.path.join(carpeta, f"{rol}_ajustado.mp3")
-        args = ["-i", crudo, "-filter:a", f"atempo={factor:.4f}"]
-        if dur_real / factor > ventana + SOLAPE_MAX_S:
-            pista["recortado"] = True
-            args += ["-t", f"{ventana + SOLAPE_MAX_S:.3f}"]
-        cortes.ffmpeg(args + [ajustado], timeout=120)
-        pista["archivo_mp3"] = ajustado
+        factor = min(FACTOR_MAX, dur_real / ventana) if dur_real > ventana else 1.0
+        pista = {
+            "rol": rol, "archivo_mp3": crudo, "inicio_s": inicio_s, "fin_s": fin_s,
+            "duracion_real_s": round(dur_real, 3), "factor_velocidad": round(factor, 3),
+        }
+        if factor > 1.0:
+            ajustado = os.path.join(carpeta, f"{rol}_ajustado.mp3")
+            args = ["-i", crudo, "-filter:a", f"atempo={factor:.4f}"]
+            if dur_real / factor > ventana + SOLAPE_MAX_S:
+                pista["recortado"] = True
+                args += ["-t", f"{ventana + SOLAPE_MAX_S:.3f}"]
+            cortes.ffmpeg(args + [ajustado], timeout=120)
+            pista["archivo_mp3"] = ajustado
 
-    clave = f"clientes/{cliente}/final_edition/tmp/{uuid.uuid4().hex}.mp3"
-    url = r2_uploader.upload_file(pista["archivo_mp3"], clave, "audio/mpeg")
-    transcripcion = fal_audio.transcribir_palabras(url, idioma)
-    costo += float(transcripcion.get("costo_usd") or 0.0)
+        clave = f"clientes/{cliente}/final_edition/tmp/{uuid.uuid4().hex}.mp3"
+        url = r2_uploader.upload_file(pista["archivo_mp3"], clave, "audio/mpeg")
+        transcripcion = fal_audio.transcribir_palabras(url, idioma)
+        costo += float(transcripcion.get("costo_usd") or 0.0)
 
-    tope = fin_s + SOLAPE_MAX_S
-    palabras = []
-    for p in transcripcion.get("palabras") or []:
-        ini = min(round(inicio_s + float(p.get("inicio") or 0.0), 3), tope)
-        fin = min(round(inicio_s + float(p.get("fin") or 0.0), 3), tope)
-        palabras.append({"inicio": ini, "fin": max(fin, ini), "texto": p.get("texto", "")})
-    return pista, palabras, costo
+        tope = fin_s + SOLAPE_MAX_S
+        palabras = []
+        for p in transcripcion.get("palabras") or []:
+            ini = min(round(inicio_s + float(p.get("inicio") or 0.0), 3), tope)
+            fin = min(round(inicio_s + float(p.get("fin") or 0.0), 3), tope)
+            palabras.append({"inicio": ini, "fin": max(fin, ini), "texto": p.get("texto", "")})
+        return pista, palabras, costo
+    except Exception as e:
+        e.costo_usd = round(costo + float(getattr(e, "costo_usd", 0.0) or 0.0), 4)
+        raise
 
 
 def _tts(texto, voz, idioma, cliente):
-    """La galería por ElevenLabs; una voz propia (`vp:<id>`) por MiniMax
+    """La galería por ElevenLabs (`fal_audio.tts_galeria`: el noruego por
+    Turbo); una voz propia (`vp:<id>`) por MiniMax
     (`voces_propias.sintetizar`, que la estrena). ValueError si la voz propia
     ya no es de este proyecto."""
     import audios          # perezosos: los dos importan final_edition.cortes
     import voces_propias
     if not audios.es_propia(voz):
-        return fal_audio.tts(texto, voz, idioma)
+        return fal_audio.tts_galeria(texto, voz, idioma)
     vp = voces_propias.resolver(cliente, voz)
     if not vp:
         raise ValueError(idiomas.traducir(audios.MENSAJES["voz_borrada"]))

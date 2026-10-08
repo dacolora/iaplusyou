@@ -84,7 +84,16 @@ def cargar(cliente):
          .order_by(db.concepto.c.id))
     with db.conectar() as con:
         filas = con.execute(q).fetchall()
-    return {f._mapping[db.concepto.c.legado_id]: _a_dict(_Cols(f, db.concepto), _Cols(f, db.pieza)) for f in filas}
+    items = {f._mapping[db.concepto.c.legado_id]: _a_dict(_Cols(f, db.concepto), _Cols(f, db.pieza)) for f in filas}
+    if items:
+        import gastos
+        for cf_id, costo in gastos.costos_sesiones(cliente).items():
+            if cf_id in items:
+                item = items[cf_id]
+                item["usd"] = costo["usd"]
+                if "musica" in item["capas"]:
+                    item["capas"]["musica"]["costo_usd"] = costo["usd_musica"]
+    return items
 
 
 def crear(cliente, personajes_ids, productos_ids, escenas_ids, accion_central,
@@ -139,14 +148,18 @@ def actualizar(cliente, cf_id, **campos):
 
 
 def guardar_guion_base(cliente, cf_id, guion):
-    """Guarda el guion base (capa 0 de Final Edition) en `concepto.guion_base`.
-    Devuelve False si la sesión no existe."""
+    """Guarda el guion y su fecha de cambio bajo el candado de escritura."""
+    co = db.concepto
+    condicion = sa.and_(co.c.cliente == cliente, co.c.legado_id == cf_id)
     with db.conectar() as con:
-        f = _ids(con, cliente, cf_id)
-        if not f:
+        if not con.execute(co.update().where(condicion).values(extra=co.c.extra)).rowcount:
             return False
-        con.execute(db.concepto.update().where(db.concepto.c.id == f[0])
-                    .values(actualizado_en=db.ahora(), guion_base=guion))
+        anterior = con.execute(sa.select(co.c.guion_base).where(condicion)).scalar()
+        if anterior != guion:
+            ahora = db.ahora()
+            con.execute(co.update().where(condicion).values(
+                actualizado_en=ahora, guion_base=guion,
+                extra=sa.func.json_set(sa.func.coalesce(co.c.extra, "{}"), "$.guion_modificado_en", ahora)))
     return True
 
 

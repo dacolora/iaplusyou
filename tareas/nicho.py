@@ -43,7 +43,7 @@ LOTE = 100
 log = logging.getLogger(__name__)
 
 
-def encolar_generar(cliente, estudio_id, auto=False, tope_usd=None):
+def encolar_generar(cliente, estudio_id, auto=False, tope_usd=None, costo_estimado=None, excluir_job=None):
     """False si ya hay una generación viva para ese estudio. `auto` = paso final
     de la investigación: el costo ya se aprobó como parte del tope; `tope_usd`
     es lo que queda de ese tope y la tarea lo respeta antes de gastar."""
@@ -51,7 +51,8 @@ def encolar_generar(cliente, estudio_id, auto=False, tope_usd=None):
     if auto:
         payload.update({"auto": True, "tope_usd": tope_usd})
     ok = trabajos.encolar(datos.job_id_generar(cliente, estudio_id), "nicho_generar_avatares", payload, cliente=cliente,
-                          duracion_estimada=200, etapas=ETAPAS_GENERAR, max_intentos=1)
+                          duracion_estimada=200, etapas=ETAPAS_GENERAR, max_intentos=1, costo_estimado=costo_estimado,
+                          excluir_job=excluir_job)
     if ok:
         datos.recalcular(cliente, estudio_id, tarea_viva=True)
     return ok
@@ -119,7 +120,8 @@ def ejecutar_generar(tarea):
             return gettext("Avatares no generados: %(motivo)s", motivo=mensaje)
         if tope is not None and est_costo["usd"] > float(tope):
             motivo = gettext("los avatares costarían %(costo)s y quedan %(tope)s aprobados: genera con el botón cuando quieras",
-                             costo=gastos.formatear(est_costo["usd"]), tope=gastos.formatear(max(0.0, float(tope))))
+                             costo=gastos.formatear(gastos.precio(est_costo["usd"], cliente)),
+                             tope=gastos.formatear(gastos.precio(max(0.0, float(tope)), cliente)))
             datos.actualizar_investigacion(cliente, eid, lambda i: inv.detener(inv.marcar_paso(i, "generar", "pendiente"), motivo))
             datos.recalcular(cliente, eid, tarea_viva=False)
             return gettext("Avatares no generados: %(motivo)s", motivo=motivo)
@@ -147,7 +149,7 @@ def ejecutar_generar(tarea):
         if entrada + salida > 0:
             gastos.registrar_seguro(cliente, "avatares", usd, f"avatares:{eid}:fallido{ref_sufijo(tarea)}",
                                     detalle=gettext("intento fallido: %(error)s", error=cola.recortar(cola.sin_token(e), 200)),
-                                    proveedor="anthropic",
+                                    proveedor="anthropic", entregado=False,
                                     extra={"tokens_entrada": entrada, "tokens_salida": salida, "modelo": avatares.modelo_actual()})
         _anotar_error(cliente, eid, gettext("%(error)s (si Claude alcanzó a responder, este intento sí se cobró)",
                                             error=cola.sin_token(e)))
@@ -178,7 +180,7 @@ def ejecutar_generar(tarea):
         datos.actualizar_investigacion(cliente, eid, _fn)
     datos.recalcular(cliente, eid, tarea_viva=False)
     if auto:
-        tareas_inv._avanzar_seguro(cliente, eid)
+        tareas_inv._avanzar_seguro(cliente, eid, excluir_job=tarea.get("job_id"))
     aviso = (" · " + gettext("%(n)s núcleo(s) sin sub-avatares", n=resumen["errores"])) if resumen.get("errores") else ""
     return gettext("%(nucleos)s núcleo(s) y %(subs)s sub-avatar(es) propuestos — revísalos y aprueba los que sirvan%(aviso)s.",
                    nucleos=res["nucleos"], subs=res["subs"], aviso=aviso)
@@ -202,7 +204,8 @@ def interrumpida_generar(tarea, mensaje):
 
 # ------------------------------------------------------- nicho_recolectar ---
 
-def encolar_recolectar(cliente, estudio_id, fuente, params, investigacion=False):
+def encolar_recolectar(cliente, estudio_id, fuente, params, investigacion=False, costo_estimado=None,
+                       excluir_job=None):
     """False si ya hay una recolección viva de esa fuente para ese estudio.
     `investigacion=True` = es un paso de la cadena (spec Parte 3): al terminar
     anota su paso y llama a `tareas.investigacion.avanzar`."""
@@ -219,7 +222,7 @@ def encolar_recolectar(cliente, estudio_id, fuente, params, investigacion=False)
     max_intentos = 1 if (de_pago or investigacion) else 2
     return trabajos.encolar(datos.job_id_recolectar(cliente, estudio_id, fuente), "nicho_recolectar", payload,
                             cliente=cliente, duracion_estimada=300 if de_pago else 120, etapas=ETAPAS_RECOLECTAR,
-                            max_intentos=max_intentos)
+                            max_intentos=max_intentos, costo_estimado=costo_estimado, excluir_job=excluir_job)
 
 
 def _corrida(fuente):
@@ -262,7 +265,7 @@ def _gasto_recoleccion(cliente, eid, tarea, fuente, params, nota=""):
     return usd
 
 
-def _cerrar_paso_investigacion(cliente, eid, tipo, fuente, totales, aviso, usd, error=None):
+def _cerrar_paso_investigacion(cliente, eid, tipo, fuente, totales, aviso, usd, error=None, job_id=None):
     """Paso de la cadena (`resenas:<plataforma>` o `redes:<red>`): suma las
     reseñas traídas por producto, anota el paso (el `usd` dado se SUMA al que
     ya tenía -- un paso retomado no pierde lo que ya había cobrado) y sigue la
@@ -281,7 +284,7 @@ def _cerrar_paso_investigacion(cliente, eid, tipo, fuente, totales, aviso, usd, 
         return inv.marcar_paso(i, paso, estado, usd=round(previo + usd, 4), nuevos=totales["nuevos"],
                                repetidos=totales["repetidos"], aviso=(error or aviso or ""))
     datos.actualizar_investigacion(cliente, eid, _fn)
-    tareas_inv._avanzar_seguro(cliente, eid)          # si no puede encolar, la cadena queda interrumpida (F2)
+    tareas_inv._avanzar_seguro(cliente, eid, excluir_job=job_id)   # si no puede encolar, la cadena queda interrumpida (F2)
 
 
 @registrar("nicho_recolectar")
@@ -336,7 +339,8 @@ def ejecutar_recolectar(tarea):
         # `registrar_recoleccion`/`recalcular` revientan, el paso igual queda cerrado
         # (nunca `en_curso` con nada vivo detrás) -- R17.
         if p.get("investigacion"):
-            _cerrar_paso_investigacion(cliente, eid, tipo, fuente, totales, "", usd, error=mensaje)
+            _cerrar_paso_investigacion(cliente, eid, tipo, fuente, totales, "", usd, error=mensaje,
+                                       job_id=tarea.get("job_id"))
         datos.registrar_recoleccion(cliente, eid, {**totales, "fuente": tipo, "aviso": gettext("falló: %(mensaje)s", mensaje=mensaje),
                                             **_corrida(fuente)})
         datos.recalcular(cliente, eid)
@@ -344,7 +348,7 @@ def ejecutar_recolectar(tarea):
     aviso = getattr(fuente, "aviso", "") or ""
     usd = _gasto_recoleccion(cliente, eid, tarea, fuente, params)
     if p.get("investigacion"):
-        _cerrar_paso_investigacion(cliente, eid, tipo, fuente, totales, aviso, usd)
+        _cerrar_paso_investigacion(cliente, eid, tipo, fuente, totales, aviso, usd, job_id=tarea.get("job_id"))
     datos.registrar_recoleccion(cliente, eid, {**totales, "fuente": tipo, "aviso": aviso, **_corrida(fuente)})
     datos.recalcular(cliente, eid)
     nombre_fuente = idiomas.traducir(fuentes_registro.NOMBRES.get(tipo, tipo))
@@ -372,11 +376,12 @@ def interrumpida_recolectar(tarea, mensaje):
 ETAPAS_COMPLETAR = [(avatares.ETAPA_COMPLETAR, 60), (ETAPA_GUARDAR, 5)]
 
 
-def encolar_completar(cliente, estudio_id):
+def encolar_completar(cliente, estudio_id, costo_estimado=None):
     """False si ya hay un completado vivo para ese estudio. Gasta: max_intentos=1."""
     return trabajos.encolar(datos.job_id_completar(cliente, estudio_id), "nicho_completar_avatares",
                             {"cliente": cliente, "estudio_id": int(estudio_id)}, cliente=cliente,
-                            duracion_estimada=90, etapas=ETAPAS_COMPLETAR, max_intentos=1)
+                            duracion_estimada=90, etapas=ETAPAS_COMPLETAR, max_intentos=1,
+                            costo_estimado=costo_estimado)
 
 
 @registrar("nicho_completar_avatares")
@@ -400,6 +405,7 @@ def ejecutar_completar(tarea):
             res = r["resumen"]
             gastos.registrar_seguro(cliente, "avatares", res["usd"], f"avatares:{eid}:completar:fallido{ref_sufijo(tarea)}",
                                     detalle=gettext("intento fallido: %(error)s", error=cola.recortar(cola.sin_token(e), 200)), proveedor="anthropic",
+                                    entregado=False,
                                     extra={"tokens_entrada": res["tokens_entrada"], "tokens_salida": res["tokens_salida"], "modelo": res["modelo"]})
         _anotar_error(cliente, eid, gettext("%(error)s (si Claude alcanzó a responder, este intento sí se cobró)", error=cola.sin_token(e)))
         raise

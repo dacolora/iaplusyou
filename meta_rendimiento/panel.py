@@ -19,11 +19,11 @@ import meta_conexion
 import proyectos
 from idiomas import N_
 from meta_rendimiento import cuentas as cuentas_mod
-from meta_rendimiento import datos, tasas
+from meta_rendimiento import datos, grafico, tasas
 from meta_rendimiento.sync import VENTANAS_ALCANCE
 from tareas import meta_rendimiento as tareas_mr
 from triple_whale import evaluacion, paises
-from triple_whale.panel import _serie_dias, periodo
+from triple_whale.panel import periodo
 
 PERIODOS = (7, 14, 30, 90)
 PERIODO_DEFECTO = 30
@@ -156,7 +156,7 @@ def _conversion(cuentas_alcance, desde, hasta):
 
 
 def _serie(desde, hasta, filas, moneda, conv=None):
-    """La serie diaria para `grafico_tablero`: gasto contra valor de compras, sumando las cuentas de cada día."""
+    """La serie diaria para `grafico.armar`: gasto contra valor de compras, sumando las cuentas de cada día."""
     por_fecha = {}
     for f in filas:
         g, v = float(f["gasto"] or 0), float(f["valor"] or 0)
@@ -167,8 +167,8 @@ def _serie(desde, hasta, filas, moneda, conv=None):
         d["gasto"] += g
         d["valor"] += v
         d["compras"] += float(f["compras"] or 0)
-    return {"dias": _serie_dias(desde, hasta, list(por_fecha.values()), clave_ingresos="valor",
-                                clave_pedidos="compras"), "moneda": moneda}
+    return {"dias": grafico.serie_dias(desde, hasta, list(por_fecha.values()), clave_ingresos="valor",
+                                       clave_pedidos="compras"), "moneda": moneda}
 
 
 def _por_moneda(cuentas_alcance, filas):

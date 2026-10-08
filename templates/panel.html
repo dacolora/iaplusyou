@@ -7,8 +7,10 @@
     <span class="eyebrow">{{ _('Panel de administrador') }}</span>
     <h1>{{ _('Todos los proyectos.') }}</h1>
     <p class="hero-sub">{{ _('Solo tú ves esta pantalla — cada proyecto tiene su propio usuario y contraseña, restringido a lo suyo.') }}</p>
+    <p class="hero-sub"><a href="{{ url_for('admin_bloqueos_login') }}">{{ _('Accesos bloqueados →') }}</a></p>
     <p class="hero-sub">{{ _('<a href="%(url)s">Mapa del código →</a> cómo está construida la plataforma, archivo por archivo.', url=url_for('mapa_codigo')) }}</p>
     <p class="hero-sub">{{ _('<a href="%(url)s">Meta (agencia) →</a> conectar el Business de Creatv y asignar cuenta y Página a cada proyecto.', url=url_for('admin_meta')) }}</p>
+    <p class="hero-sub">{{ _('<a href="%(url)s">Cobros y saldo →</a> margen, qué proyectos cobran, recargas manuales y eventos de Bold.', url=url_for('cobros.admin_cobros')) }}</p>
     <p class="hero-sub">{{ _('<a href="%(url)s">Referentes →</a> importar el swipe file de copycoders y ver la biblioteca global.', url=url_for('admin_referentes')) }}</p>
     <p class="hero-sub">{{ _('<a href="%(url)s">Salud y errores →</a> errores de la plataforma, registros, peticiones lentas, el worker y el servidor.', url=url_for('admin_salud')) }}
       {% if errores_recientes %}<span class="admin-pill salud-pill-problema">{{ ngettext('%(num)d error en 24 h', '%(num)d errores en 24 h', errores_recientes) }}</span>{% endif %}</p>
@@ -27,12 +29,8 @@
       <span class="stat-num">{{ t.publicado }}</span>
       <span class="stat-label">{{ _('publicados') }}</span>
     </div>
-    <div class="stat" title="{{ _('Lo pagado a los proveedores de IA este mes, todos los proyectos') }}">
-      <span class="stat-num">{{ t.generacion_usd | usd }}</span>
-      <span class="stat-label">{{ _('generación este mes') }}</span>
-    </div>
     <div class="stat" title="{{ _('Todo lo pagado a los proveedores de IA desde el primer cobro, todos los proyectos') }}">
-      <span class="stat-num">{{ t.generacion_total_usd | usd }}</span>
+      <span class="stat-num">{{ t.generacion_usd | usd }}</span>
       <span class="stat-label">{{ _('generación desde el inicio') }}</span>
     </div>
   </div>
@@ -43,22 +41,18 @@
 <p class="vacio">{{ _('No pude calcular el panel esta vez. El detalle quedó en el log del servidor; vuelve a cargar en un momento.') }}</p>
 {% else %}
 
-{# ---- Este mes: totales de todos los proyectos (admin.resumen) ---- #}
+{# ---- Desde el inicio: totales de todos los proyectos (admin.resumen; antes
+   «Este mes», cambiado el 2026-10-08 a pedido de Daniel) ---- #}
 <section class="admin-bloque aparece" id="admin-mes">
   <div class="admin-cabecera">
-    <h2>{{ _('Este mes') }}</h2>
-    <span class="vacio">{{ _('del %(desde)s al %(hasta)s · todos los proyectos', desde=datos.desde[:10], hasta=datos.hasta[:10]) }}</span>
+    <h2>{{ _('Desde el inicio') }}</h2>
+    <span class="vacio">{{ _('hasta el %(hasta)s · todos los proyectos', hasta=datos.hasta[:10]) }}</span>
   </div>
   <div class="kpis admin-kpis">
     <div class="kpi">
       <span>{{ _('Generación (IA)') }}</span>
       <strong>{{ t.generacion_usd | usd }}</strong>
       <small>{{ ngettext('%(num)d cobro a proveedores', '%(num)d cobros a proveedores', t.cobros) }}</small>
-    </div>
-    <div class="kpi" title="{{ _('Todo lo pagado a los proveedores de IA desde el primer cobro, todos los proyectos') }}">
-      <span>{{ _('Generación desde el inicio') }}</span>
-      <strong>{{ t.generacion_total_usd | usd }}</strong>
-      <small>{{ ngettext('%(num)d cobro a proveedores', '%(num)d cobros a proveedores', t.cobros_total) }}</small>
     </div>
     {% if t.creatv_usd %}
     <div class="kpi" title="{{ _('Trabajo interno de Creatv sobre la biblioteca de referentes: importaciones, barridos globales, pruebas — no es de ningún proyecto') }}">
@@ -79,7 +73,7 @@
     <div class="kpi">
       <span>{{ _('Pauta en Meta') }}</span>
       <strong class="tb-sin-dato">—</strong>
-      <small>{{ _('sin gasto medido este mes') }}</small>
+      <small>{{ _('sin gasto medido') }}</small>
     </div>
     {% endif %}
     <div class="kpi">
@@ -155,11 +149,11 @@
   {% endif %}
 </section>
 
-{# ---- Proyectos: tabla comparativa del mes + tarjetas de acceso ---- #}
+{# ---- Proyectos: tabla comparativa desde el inicio + tarjetas de acceso ---- #}
 <section class="admin-bloque aparece" id="admin-proyectos">
   <div class="admin-cabecera">
     <h2>{{ _('Proyectos') }}</h2>
-    <span class="vacio">{{ _('lo de este mes, proyecto por proyecto') }}</span>
+    <span class="vacio">{{ _('todo desde el inicio, proyecto por proyecto') }}</span>
   </div>
   {% if datos.proyectos %}
   <div class="admin-scroll">
@@ -174,7 +168,7 @@
       {% for p in datos.proyectos %}
       <tr>
         <td><a href="{{ url_for('ver_cliente', cliente=p.id) }}"><strong>{{ p.nombre }}</strong></a></td>
-        <td class="num"><strong>{{ p.generacion_usd | usd }}</strong><br><small>{{ ngettext('%(num)d cobro', '%(num)d cobros', p.cobros) }}</small><br><small title="{{ _('Desde el inicio') }}">{{ _('total %(usd)s', usd=p.generacion_total_usd | usd) }}</small></td>
+        <td class="num"><strong>{{ p.generacion_usd | usd }}</strong><br><small>{{ ngettext('%(num)d cobro', '%(num)d cobros', p.cobros) }}</small></td>
         <td>
           <div class="admin-tipos-celda">
           {% for tipo, usd in p.por_tipo.items() | sort(attribute=1, reverse=true) %}
@@ -214,16 +208,12 @@
           <span class="badge publicado">{{ ngettext('%(num)d publicado', '%(num)d publicados', c.publicado) }}</span>
           {% if c.rechazado %}<span class="badge rechazado">{{ ngettext('%(num)d rechazado', '%(num)d rechazados', c.rechazado) }}</span>{% endif %}
         </div>
-        <div class="card-cliente-gasto" title="{{ _('Generación del mes (US$): lo pagado a los proveedores de IA este mes') }}">
-          <span>{{ _('Gasto del mes (US$)') }}</span>
+        <div class="card-cliente-gasto" title="{{ _('Generación desde el inicio (US$): todo lo pagado a los proveedores de IA por este proyecto') }}">
+          <span>{{ _('Gasto total (US$)') }}</span>
           <strong>{{ c.generacion_usd | usd }}</strong>
         </div>
-        <div class="card-cliente-gasto" title="{{ _('Generación desde el inicio (US$): todo lo pagado a los proveedores de IA por este proyecto') }}">
-          <span>{{ _('Desde el inicio (US$)') }}</span>
-          <strong>{{ c.generacion_total_usd | usd }}</strong>
-        </div>
         {% for moneda, gasto in c.pauta.items() | sort %}
-        <div class="card-cliente-gasto" title="{{ _('Pauta en Meta este mes, en la moneda de la cuenta publicitaria') }}">
+        <div class="card-cliente-gasto" title="{{ _('Pauta en Meta desde el inicio, en la moneda de la cuenta publicitaria') }}">
           <span>{{ _('Pauta en Meta') }}</span>
           <strong>{{ gasto | dinero(moneda) }}</strong>
         </div>

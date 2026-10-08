@@ -15,14 +15,14 @@ cada POST además exige el mismo origen (Sec-Fetch-Site), la barrera CSRF del re
 
 En modo agencia el selector dice «Todavía no disponible» (spec §2.10). Ningún token llega a una respuesta: los
 errores de Meta pasan por `cola.sin_token` y además se tacha el valor exacto del token."""
-from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, session, url_for
+from flask import Blueprint, abort, flash, redirect, render_template, request, session, url_for
 from flask_babel import gettext, ngettext
 
 import cola
 import idiomas
 import meta_conexion
 from idiomas import N_
-from meta_rendimiento import cuentas, panel
+from meta_rendimiento import cuentas, grafico, panel
 from tareas import meta_rendimiento as tareas_mr
 from triple_whale import paises
 
@@ -77,9 +77,8 @@ def _pais(valor):
 @bp.get("/panel")
 def ver_panel(cliente):
     ctx = panel.contexto(cliente, request.args.get("dias"), request.args.get("cuenta"))
-    armar_grafico = current_app.extensions.get("grafico_tablero")
-    grafico = armar_grafico(ctx["serie"]) if armar_grafico and ctx.get("serie") else None
-    return render_template("_meta_panel.html", cliente=cliente, mr=ctx, grafico=grafico)
+    dibujo = grafico.armar(ctx["serie"]) if ctx.get("serie") else None
+    return render_template("_meta_panel.html", cliente=cliente, mr=ctx, grafico=dibujo)
 
 
 @bp.get("/anuncios")

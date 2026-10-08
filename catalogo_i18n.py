@@ -23,7 +23,7 @@ import idiomas
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PO = os.path.join(idiomas.DIR_TRADUCCIONES, "en", "LC_MESSAGES", "messages.po")
 MO = os.path.join(idiomas.DIR_TRADUCCIONES, "en", "LC_MESSAGES", "messages.mo")
-PAQUETES = ("auth", "conectores", "doctrina", "final_edition", "guiones", "meta_ads", "meta_rendimiento", "nicho",
+PAQUETES = ("auth", "cobros", "conectores", "doctrina", "final_edition", "guiones", "meta_ads", "meta_rendimiento", "nicho",
             "providers", "referentes", "sprints", "storage", "tareas", "triple_whale", "uploaders")
 # pgettext:1c,2 (el contexto primero): «Fuente» del editor es la tipografía,
 # no la fuente de datos de Nicho (final_edition/textos_editor.py).

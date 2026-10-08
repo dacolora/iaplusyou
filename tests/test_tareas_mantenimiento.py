@@ -67,6 +67,23 @@ def test_cola_limpiar_borra_cerradas_viejas_y_periodicas_pero_nunca_vivas(base_t
     assert mantenimiento.ejecutar_cola_limpiar({"payload": {}}) == "0 tareas viejas borradas."
 
 
+def test_cola_limpiar_borra_las_reservas_de_saldo_sin_trabajo_vivo(base_temporal):
+    """Cobros 7/11: la limpieza diaria también borra las reservas de saldo de
+    trabajos que ya no están vivos (no cuentan; solo ocupan filas)."""
+    import cola
+    from tareas import mantenimiento
+    db = base_temporal
+    cola.encolar("flowplus_video", {}, job_id="acme__vivo", cliente="acme")
+    with db.conectar() as con:
+        for job in ("acme__vivo", "acme__muerto"):
+            con.execute(db.reserva_saldo.insert().values(cliente="acme", job_id=job, milesimas=100,
+                                                         creada_en="2026-10-08T10:00:00"))
+    mantenimiento.ejecutar_cola_limpiar({"payload": {}})
+    with db.conectar() as con:
+        quedan = [r.job_id for r in con.execute(db.reserva_saldo.select())]
+    assert quedan == ["acme__vivo"]
+
+
 def test_db_respaldar_copia_consistente_y_conserva_las_ultimas(base_temporal, tmp_path):
     from tareas import mantenimiento
     carpeta = tmp_path / "respaldos"
@@ -98,6 +115,28 @@ def test_periodicas_registradas():
     for tipo in ("salidas_limpiar", "cola_limpiar", "db_respaldar"):
         assert (tipo, 86400) in worker.PERIODICAS
         assert tipo in REGISTRO
+
+
+def test_s3_mantenimiento_diario_poda_limites_por_marca_mas_nueva(base_temporal, monkeypatch):
+    import json
+    from tareas import mantenimiento
+    db = base_temporal
+    ahora = 10 * 86400
+    monkeypatch.setattr(mantenimiento.time, 'time', lambda: ahora)
+    monkeypatch.setattr(mantenimiento.cola, 'limpiar_terminadas', lambda: 0)
+    filas = {'limite:viejo': json.dumps([ahora - 8 * 86400]),
+             'limite:reciente': json.dumps([0, ahora - 3600]),
+             'limite:frontera': json.dumps([ahora - 7 * 86400]),
+             'limite:ilegible': 'no es JSON', 'limite:objeto': '{}',
+             'limite:vacio': '[]', 'limite:infinito': '[NaN]',
+             'limite:fuera_de_rango': json.dumps([10 ** 400]),
+             'otro:viejo': json.dumps([0])}
+    with db.conectar() as con:
+        con.execute(db.kv.insert(), [{'clave': c, 'valor': v, 'actualizado_en': db.ahora()} for c, v in filas.items()])
+    mantenimiento.ejecutar_cola_limpiar({'payload': {}})
+    with db.conectar() as con:
+        quedan = dict(con.execute(db.kv.select().with_only_columns(db.kv.c.clave, db.kv.c.valor)).all())
+    assert quedan == {c: filas[c] for c in ['limite:reciente', 'limite:frontera', 'otro:viejo']}
 
 
 def test_publicador_baja_el_video_si_ya_no_esta_en_disco(tmp_path, monkeypatch):

@@ -21,7 +21,7 @@
           {% if pl.motivo %}<small>— {{ pl.motivo }}</small>{% endif %}
           {# Precio a la vista (acciones.pedir → payload.precio_estimado): lo que
              costaría producir lo que pide derivar/rescatar, aproximado. #}
-          {% if pl.precio_estimado and pl.precio_estimado.texto %}<small class="exp-propuesta-precio" title="{{ _('Lo que costaría producir lo que pide esta propuesta (precio aproximado de los proveedores)') }}">{% if pl.precio_estimado.usd is not none %}≈ {{ pl.precio_estimado.usd | usd }}{% else %}{{ pl.precio_estimado.texto }}{% endif %}</small>{% endif %}
+          {% if pl.precio_estimado and pl.precio_estimado.texto %}<small class="exp-propuesta-precio" title="{{ _('Lo que costaría producir lo que pide esta propuesta (precio aproximado)') }}">{% if pl.precio_estimado.usd is not none %}≈ {{ pl.precio_estimado.usd | precio | usd }}{% else %}{{ pl.precio_estimado.texto }}{% endif %}</small>{% endif %}
         </span>
         {% if pr.accion == "publicar_organico" %}
         <form method="post" action="{{ url_for('prop_rechazar', cliente=cliente, pid=pr.id) }}" class="inline"><button class="btn-rechazar btn-xs">{{ _('Rechazar') }}</button></form>
@@ -39,6 +39,7 @@
 {% endmacro %}
 {% if ex %}{% set e = ex %}
 <section class="cr-gestion cr-tarjeta" aria-labelledby="cr-gestion-titulo">
+  {% if e.datos_viejos and e.estado == "corriendo" %}<p class="nota">{{ _('datos viejos') }}</p>{% endif %}
   <header class="cr-gestion-cab">
     <div class="cr-gestion-titulo">
       <p class="cr-sobretitulo">{{ _('Experimento elegido') }}</p>
@@ -87,10 +88,13 @@
 
 
   <div class="exp-acciones">
+    {# Lanzar crea y ACTIVA (Daniel, 2026-10-08: este clic con el gasto diario a la vista es la aprobación): el confirm
+       dice la suma de los diarios de todos los países, lo que empieza a gastar si el lanzamiento sale bien. #}
+    {% set diario_lanzar = e.paises|sum(attribute='presupuesto_dia') %}
     {% if e.estado in ("armando", "error") and not e.meta_campaign_id %}
-      <form method="post" action="{{ url_for('exp_lanzar', cliente=cliente, eid=e.id) }}" onsubmit='return confirm({{ _("Se crean la campaña, los conjuntos y los anuncios en Meta, en pausa. ¿Seguimos?")|tojson }});'><button class="btn-generar btn-sm">{{ _('Lanzar a Meta (en pausa)') }}</button></form>
+      <form method="post" action="{{ url_for('exp_lanzar', cliente=cliente, eid=e.id) }}" onsubmit='return confirm({{ _("Se crean la campaña, los conjuntos y los anuncios en Meta y se activan: empieza a gastar ≈ %(diario)s al día entre todos los países. ¿Seguimos?", diario=(diario_lanzar|dinero(e.moneda)))|tojson }});'><button class="btn-generar btn-sm">{{ _('Lanzar a Meta') }}</button></form>
     {% elif e.estado == "error" %}
-      <form method="post" action="{{ url_for('exp_lanzar', cliente=cliente, eid=e.id) }}" onsubmit='return confirm({{ _("Se retoma el lanzamiento donde quedó (no se duplican objetos en Meta). ¿Seguimos?")|tojson }});'><button class="btn-generar btn-sm">{{ _('Reintentar lanzamiento') }}</button></form>
+      <form method="post" action="{{ url_for('exp_lanzar', cliente=cliente, eid=e.id) }}" onsubmit='return confirm({{ _("Se retoma el lanzamiento donde quedó (no se duplican objetos en Meta) y, si termina bien, se activa: empieza a gastar ≈ %(diario)s al día entre todos los países. ¿Seguimos?", diario=(diario_lanzar|dinero(e.moneda)))|tojson }});'><button class="btn-generar btn-sm">{{ _('Reintentar lanzamiento') }}</button></form>
     {% elif e.estado == "pausado" %}
       {# Regla 1: «Activar todo» activa cada país con conjunto en Meta (lanzador.cambiar_estado); dice la suma de sus diarios. #}
       {# Instalaciones de la app: un país con conjuntos por tienda (`meta_adsets`) también se activa y también cuenta. #}
@@ -124,8 +128,14 @@
         </form>
         <form method="post" action="{{ url_for('exp_presupuesto', cliente=cliente, eid=e.id) }}" class="inline">
           <input type="hidden" name="pais" value="{{ p.pais }}">
-          <input type="number" name="presupuesto_dia" value="{{ p.presupuesto_dia }}" min="{{ minimo_diario_exp }}" step="any" title="{{ _('En %(moneda)s, la moneda de la cuenta de Meta', moneda=e.moneda) }}">
+          {% set limite = limites_diarios_exp[e.id][p.pais] %}
+          <span>{{ _('Máximo permitido: %(maximo)s/día', maximo=limite.maximo|dinero(e.moneda)) }}</span>
+          {% if limite.maximo < minimo_diario_exp * ([1, p.meta_adsets|length]|max) %}
+          <p class="nota">{{ _('El saldo disponible no alcanza el mínimo diario de Meta. No se puede subir el presupuesto.') }}</p>
+          {% else %}
+          <input type="number" max="{{ limite.maximo }}" name="presupuesto_dia" value="{{ p.presupuesto_dia }}" min="{{ minimo_diario_exp * ([1, p.meta_adsets|length]|max) }}" step="any" title="{{ _('En %(moneda)s, la moneda de la cuenta de Meta', moneda=e.moneda) }}">
           <button class="btn-guardar btn-xs">{{ _('Cambiar presupuesto') }}</button>
+          {% endif %}
         </form>
         {% endif %}
       </div>

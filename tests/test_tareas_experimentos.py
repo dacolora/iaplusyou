@@ -49,7 +49,7 @@ def test_exp_lanzar_llama_lanzador_y_reporta(base_temporal, monkeypatch):
     import trabajos
     from tareas import experimentos as te
     llamadas = []
-    monkeypatch.setattr(te.lanzador, "lanzar", lambda c, e, on_etapa=None: (on_etapa("Campaña"), llamadas.append((c, e)), "ok")[-1])
+    monkeypatch.setattr(te.lanzador, "lanzar", lambda c, e, on_etapa=None, soltar=True: (on_etapa("Campaña"), llamadas.append((c, e)), "ok")[-1])
     reportes = []
     monkeypatch.setattr(trabajos, "reportar", lambda job_id, **kw: reportes.append((job_id, kw)))
     tareas.cargar_todas()

@@ -12,6 +12,7 @@ from tests.i18n_util import espanol_en_plantilla
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PLANTILLAS_TRADUCIDAS = [
+    "admin_bloqueos_login.html",
     "base.html", "_sidebar.html", "login.html", "recuperar.html", "restablecer.html",
     "index.html", "legal.html", "panel.html",
     "_llave_tarjeta.html", "_meta_conectar.html", "_meta_elegir_forma.html",
@@ -58,13 +59,16 @@ PLANTILLAS_TRADUCIDAS = [
     "cliente.html", "_etiquetas_estado.html",
     # Merge de main (2026-09-28, PR #1 Triple Whale): la pestaña y su panel ya
     # vienen con _() y su inglés en el catálogo; entran a la guardia al fusionar.
-    "_tab_triple_whale.html", "_tw_panel.html",
+    "_tab_triple_whale.html", "_tw_panel.html", "_tw_resultados.html", "_tw_dia.html",
     # Pestaña Meta (rendimiento de varias cuentas, 2026-10-08): armazón, panel, selector y filas de «Ver más».
     "_tab_meta.html", "_meta_panel.html", "_meta_cuentas.html", "_meta_anuncios_filas.html",
     "_meta_conjuntos_filas.html", "_meta_macros.html",
     "editor.html",   # Fase 6, Task 2: la página del editor
     "_tab_cambiar_calzado.html",   # Fase 6, Task 4: Crear › Cambiar producto
     "admin_meta.html", "admin_referentes.html", "meta_elegir.html",   # Fase 6, Task 5
+    "saldo_recarga.html",   # Cobros 7/11 y 8/11: la vuelta del checkout de Bold
+    "_config_saldo.html", "_saldo_panel.html",   # Cobros 8/11: Configuración › Saldo y recargas
+    "admin_cobros.html",   # Cobros 10/11: /admin/cobros
     "admin_salud.html", "admin_registros.html", "admin_estilos.html",   # Salud de la plataforma (spec 2026-10-01-escala-y-monitoreo)
     # Fase 6, Task 6: llegaron con fusiones de main ya traducidas y solo faltaba
     # sumarlas a la guardia — Crear › Audios (worktree-crear-audios, 82491a6) y el

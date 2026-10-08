@@ -14,10 +14,12 @@ import audios
 import bitacora
 import creative_flow
 import flowplus_lanzar
+import gastos
 import hablado
 import idiomas
 import trabajos
 import voces_propias
+from cobros import libro
 from final_edition import biblioteca
 from providers import fal_audio
 from tareas import hablado as tareas_hablado
@@ -79,6 +81,24 @@ def foto(cliente):
     return jsonify({"ok": True, "foto": f, "html": str(html)})
 
 
+def _voz_para_ver(m):
+    """`hablado.voz_info` con `precio_video` como lo ve la persona (cobros,
+    spec 2026-10-08 §6: × el margen si el proyecto cobra). hablado.js lo
+    pinta y lo devuelve tal cual como `precio_visto`; `_costo_visto` lo vuelve
+    costo antes de compararlo o pedir saldo."""
+    info = hablado.voz_info(m)
+    if info["precio_video"] is not None:
+        info["precio_video"] = round(info["precio_video"] * gastos.margen_vigente(), 6)
+    return info
+
+
+def _costo_visto(valor):
+    """El `precio_visto` del navegador (precio, con margen) → el costo que
+    compara `hablado.crear_pieza` y que pide `libro.exigir`; None si no es un
+    número razonable. Con margen 1 (proyecto que no cobra) es el mismo valor."""
+    return gastos.costo_de_precio(valor)
+
+
 @bp.route("/voz", methods=["POST"])
 def voz(cliente):
     """«Escuchar la voz»: si esa voz (mismo texto, voz, idioma y velocidad) ya
@@ -91,13 +111,14 @@ def voz(cliente):
         return jsonify({"ok": False, "error": e.texto()}), 400
     m = hablado.voz_existente(cliente, audios.hash_voz(p["texto"], p["voz"], p["idioma"], p["velocidad"]))
     if m:
-        return jsonify({"ok": True, "listo": True, "voz": hablado.voz_info(m)})
+        return jsonify({"ok": True, "listo": True, "voz": _voz_para_ver(m)})
     if request.form.get("solo_cache") == "1":
         return jsonify({"ok": False, "error": idiomas.traducir(hablado.MENSAJES["voz_no_quedo"])}), 404
     jid = tareas_hablado.job_id(cliente)
     estado_url = url_for("estado_trabajo", job_id=jid)
     if not trabajos.encolar(jid, "hablado_voz", {"cliente": cliente, **p}, duracion_estimada=20,
-                            etapas=list(tareas_hablado.ETAPAS), cliente=cliente, max_intentos=1):
+                            etapas=list(tareas_hablado.ETAPAS), cliente=cliente, max_intentos=1,
+                            costo_estimado=gastos.estimar("locucion", caracteres=len(p["texto"]))["usd"]):
         return jsonify({"ok": False, "error": idiomas.traducir(hablado.MENSAJES["en_curso"]), "job_id": jid,
                         "estado_url": estado_url}), 409
     return jsonify({"ok": True, "listo": False, "job_id": jid, "estado_url": estado_url})
@@ -109,9 +130,14 @@ def crear(cliente):
     nada se crea si algo no cuadra), crea la sesión de Crear y la lanza con
     `flowplus_lanzar.lanzar` (prioridad 5, max_intentos=1)."""
     f = request.form
+    # Cobros (spec 2026-10-08 §5): el precio que la persona vio se pide antes
+    # de crear la sesión (crear_pieza comprueba que sea el real; si no, el
+    # lanzamiento vuelve a pedir el real al encolar).
+    # El navegador ve (y devuelve) el precio con margen: aquí vuelve a ser costo.
+    visto = _costo_visto(f.get("precio_visto"))
+    libro.exigir(cliente, visto)
     try:
-        cf_id = hablado.crear_pieza(cliente, f.get("foto"), f.get("voz_hash"), f.get("movimiento"),
-                                    f.get("precio_visto"))
+        cf_id = hablado.crear_pieza(cliente, f.get("foto"), f.get("voz_hash"), f.get("movimiento"), visto)
     except hablado.PrecioCambio as e:
         return jsonify({"ok": False, "error": e.texto()}), 409
     except hablado.EntradaInvalida as e:

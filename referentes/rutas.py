@@ -16,6 +16,8 @@ from flask import Blueprint, abort, flash, jsonify, redirect, render_template, r
 from flask_babel import gettext
 
 import catalogo_productos
+from cobros import libro
+from cobros import vista as vista_cobros
 import creative_flow
 import doctrina
 from doctrina import producto as doctrina_producto
@@ -187,11 +189,6 @@ def traer_post(cliente):
     if consulta["modo"] == "palabra" and not consulta["palabra"]:
         flash(gettext("Escribe una palabra clave."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="referentes"))
-    try:
-        consulta = traducir.preparar_consulta(consulta, cliente)     # palabra → inglés, idioma en
-    except traducir.TraduccionInvalida as e:
-        flash(str(e), "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="referentes"))
     tope = min(max(1, _entero(request.form.get("tope"), 200)), 2000)
     modulo = fuentes.por_tipo(fuente)
     try:
@@ -201,6 +198,15 @@ def traer_post(cliente):
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="referentes"))
     est_clasificacion = gastos.estimar("clasificacion", n=tope)
     usd_estimado = est_fuente["usd_fuente"] + (est_clasificacion["usd"] or 0.0)
+    # Cobros (spec 2026-10-08 §5.2): el saldo se pide ANTES de traducir la
+    # palabra (esa llamada a Claude ya se cobra al proyecto). El estimado no
+    # depende de la palabra, solo del tope.
+    libro.exigir(cliente, usd_estimado)
+    try:
+        consulta = traducir.preparar_consulta(consulta, cliente)     # palabra → inglés, idioma en
+    except traducir.TraduccionInvalida as e:
+        flash(str(e), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="referentes"))
     tareas_referentes.encolar_barrer(cliente, fuente, consulta, tope, usd_estimado, pedido_por=session.get("usuario"))
     flash(gettext("Trayendo referentes; aparecerán en «Mis barridos» a medida que avanza."), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="referentes"))
@@ -308,8 +314,10 @@ def recrear_form(cliente, rid):
             precio = gastos.estimar("imagen", modelo=flowplus_modelos.IMAGEN_POR_DEFECTO, n_referencias=n_refs)
         else:
             precios_video = _precios_video(cliente, n_refs)
+    mostrar_dolor = bool(producto and r.get("dolor") and r["dolor"] not in ("ninguno-oferta", "ninguno-marca"))
     return render_template(
-        "_referente_recrear.html", cliente=cliente, r=r, productos=productos, producto=producto, tipo=tipo,
+        "_referente_recrear.html", mostrar_dolor=mostrar_dolor, etiquetas_dolor=datos.ETIQUETAS_DOLOR,
+        cliente=cliente, r=datos.localizado(r, idiomas.activo()), productos=productos, producto=producto, tipo=tipo,
         formato=formato, formatos=formatos, formato_elegido=request.args.get("formato_elegido") == "1",
         lectura=ctx["lectura"], traer_textos=ctx["traer"], textos=ctx["textos"], prompt=ctx["prompt"],
         prompt_fiel=ctx["prompt_fiel"], prompt_animar=ctx["prompt_animar"], modos=_modos_de(request.args),
@@ -339,6 +347,7 @@ def recrear_leer(cliente, rid):
         return jsonify({"error": gettext("Ese referente no existe.")}), 404
     if lectura.de(r):
         return jsonify({"ok": True, "cobrado": False})
+    libro.exigir(cliente, gastos.estimar("leer_referente")["usd"])     # cobros §5.2: antes de llamar a Claude
     try:
         lec, ent, sal = lectura.leer(r)
     except lectura.LecturaInvalida as e:
@@ -375,6 +384,7 @@ def recrear_adaptar(cliente, rid):
     lec = lectura.de(r)
     crudos = cuerpo.get("textos")
     campos = {f"texto_{i}": str(v or "") for i, v in enumerate(crudos)} if isinstance(crudos, list) else {}
+    libro.exigir(cliente, gastos.estimar("adaptar_referente")["usd"])     # cobros §5.2: antes de llamar a Claude
     try:
         resultado, ent, sal = recrear.adaptar(datos.localizado(r, idioma), familia, producto,
                                               str(cuerpo.get("titular") or ""), marca_mod.guia_efectiva(cliente),
@@ -400,6 +410,23 @@ def recrear_adaptar(cliente, rid):
                             detalle=f"{producto['nombre']} · {r.get('familia') or ''}", proveedor="anthropic",
                             extra={"tokens_entrada": ent, "tokens_salida": sal, "modelo": modelo_actual()})
     return jsonify(resultado)
+
+
+def _costo_recrear(cliente, tipo, legado_video, modos, referencias_urls, modelo, duracion, con_sonido, campos):
+    """USD de un clic de «Recrear» (sin margen): una pieza por modo; en video
+    cada una es imagen + animación (spec §12). None si algo no tiene tarifa."""
+    if tipo == "video" and legado_video:
+        uno = flowplus_lanzar.costo_estimado({"tipo": "video", "modelo": modelo, "duracion_objetivo": duracion,
+                                              "con_sonido": con_sonido})
+    else:
+        uno = flowplus_lanzar.costo_estimado({"tipo": "imagen", "modelo": flowplus_modelos.IMAGEN_POR_DEFECTO,
+                                              "referencias_urls": referencias_urls})
+        if tipo == "video" and uno is not None:
+            animar_con = _modelo_animar(campos)
+            video = gastos.estimar("video", modelo=animar_con, duracion=_duracion_video(cliente, animar_con),
+                                   con_sonido=con_sonido)["usd"]
+            uno = None if video is None else uno + video
+    return None if uno is None else round(uno * len(modos), 4)
 
 
 @bp.post("/<int:rid>/recrear/generar")
@@ -487,6 +514,11 @@ def recrear_generar(cliente, rid):
         else:
             titulo = titular or gettext("Recrear: %(titular)s", titular=r.get("titular") or r["id"])
             sufijos = {}
+    # Cobros (spec 2026-10-08 §5): todo lo que este clic va a generar (cada
+    # imagen y, en video, su animación) se pide junto ANTES de crear la primera
+    # sesión; cada lanzamiento reserva lo suyo al encolar.
+    libro.exigir(cliente, _costo_recrear(cliente, tipo, legado_video, modos, referencias_urls, modelo,
+                                         duracion_objetivo, prefs_sonido["con_sonido"], request.form))
     lanzados = 0
     for m in modos:
         nombre = f"{titulo} · {sufijos[m]}" if nuevo and not legado_video else titulo
@@ -594,6 +626,11 @@ def barridos(cliente):
         # «Clasificar pendientes» re-factura (spec §11): el precio va en el
         # botón igual que en cualquier otro click pagado del panel (Critical 1).
         b["precio_clasificar"] = gastos.estimar("clasificacion", n=b["pendientes"])["texto"] if b["pendientes"] else None
+        if vista_cobros.ver_cobrado_aqui(cliente):
+            # «lo que costó»: a un cliente de un proyecto que cobra, lo cobrado por los trabajos de este
+            # barrido (traer y clasificar comparten job_id, base o base + SUFIJO_CONT; cobros §7).
+            base = tareas_referentes.job_id_barrer(b["id"])
+            b["usd_real"] = vista_cobros.cobrado_donde(cliente, jobs=(base, base + tareas_referentes.SUFIJO_CONT))
     return render_template("_referentes_barridos.html", cliente=cliente, barridos=lista)
 
 

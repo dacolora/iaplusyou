@@ -16,6 +16,7 @@ from flask_babel import gettext
 import db
 import doctrina
 import idiomas
+import idiomas_publicacion
 from idiomas import N_
 from referentes import datos as referentes_datos
 
@@ -42,9 +43,10 @@ REVISIONES = ("pendiente", "aprobada", "rechazada")
 PLATAFORMAS = ("instagram", "tiktok", "facebook", "youtube")
 FUNNELS = ("tof", "mof", "bof")
 FUNNELS_NOMBRE = {"tof": "Top of Funnel", "mof": "Middle of Funnel", "bof": "Bottom of Funnel"}
-IDIOMAS = ("es", "en", "pt", "fr", "it", "de")        # los mismos de «Traer referentes»
+IDIOMAS = ("es", "en", "pt", "fr", "it", "de", "sv", "no")        # los de «Traer referentes» + sueco y noruego (2026-10-08)
+# `sv` y `no` con su nombre, nunca el código suelto: `no` en un prompt se lee como la palabra «no».
 IDIOMAS_NOMBRE = {"es": "español", "en": "inglés", "pt": "portugués", "fr": "francés", "it": "italiano",
-                  "de": "alemán"}
+                  "de": "alemán", "sv": idiomas_publicacion.nombre("sv"), "no": idiomas_publicacion.nombre("no")}
 # Desde 2026-09-27 un sprint es para todos los países: no lleva país y se
 # trabaja en inglés; cada país/idioma lo resuelve después la edición final.
 # Los sprints viejos conservan el país y el idioma que tenían.
@@ -1146,3 +1148,14 @@ def eliminar_sprint(cliente, sprint_id):
             (db.sprint.c.cliente == cliente)
         ))
     return True
+
+
+def limpiar_qa_no_aprobada(cliente, cp_id, cf_id):
+    """PND-088: el WHERE evita borrar un QA que pasó tras leer la pantalla."""
+    cp = db.campana_pieza
+    with db.conectar() as con:
+        return con.execute(cp.update().where(
+            cp.c.cliente == cliente, cp.c.id == cp_id, cp.c.cf_id == cf_id,
+            cp.c.revision != 'aprobada',
+            sa.func.coalesce(sa.func.json_extract(cp.c.qa, '$.veredicto'), '') != 'pasa')
+            .values(qa=None, actualizado_en=db.ahora())).rowcount == 1

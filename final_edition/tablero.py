@@ -41,7 +41,8 @@ def resumen(item, eds):
     propias = [e for e in eds if not ediciones.es_automatica(e)]
     ultima_edicion = max((_fecha(e.get("actualizado_en")) for e in propias), default="")
     ultima_final = max((_fecha_final(f) for f in listas), default="")
-    editada_despues = bool(listas) and ultima_edicion > ultima_final
+    ultima_guion = _fecha(item.get("guion_modificado_en"))
+    editada_despues = bool(listas) and max(ultima_edicion, ultima_guion) > ultima_final
 
     trabajos = []
     if item.get("trabajo_guion"):
@@ -62,7 +63,7 @@ def resumen(item, eds):
     else:
         siguiente = "producir"
 
-    fechas = [_fecha(item.get("creado_en")), ultima_edicion] + [_fecha_final(f) for f in finales]
+    fechas = [_fecha(item.get("creado_en")), ultima_edicion, ultima_guion] + [_fecha_final(f) for f in finales]
     return {
         "guion": "escribiendo" if item.get("trabajo_guion") else ("listo" if item.get("guion_base") else None),
         "ediciones": len(propias),
@@ -76,7 +77,7 @@ def resumen(item, eds):
     }
 
 
-def armar(items, ediciones_por_cf):
+def armar(items, ediciones_por_cf, costo_finales=None):
     """{"en_edicion": [(item, resumen)], "finalizados": [(item, final)],
     "elegibles": [(item, resumen)], "cifras": {...}}, cada lista completa
     (la página y «Ver más» recortan)."""
@@ -95,7 +96,7 @@ def armar(items, ediciones_por_cf):
     # del tablero, 2026-10-02). Después, lo último que se movió.
     en_edicion.sort(key=lambda par: (bool(par[1]["trabajos"]), par[1]["actividad"]), reverse=True)
     finalizados.sort(key=lambda par: _fecha_final(par[1]), reverse=True)
-    costo = sum(f.get("costo_usd") or 0 for _, f in finalizados)
+    costo = costo_finales
     cifras = {
         "en_edicion": len(en_edicion),
         "produciendo": sum(r["produciendo"] for _, r in elegibles),

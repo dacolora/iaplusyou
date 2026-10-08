@@ -401,6 +401,9 @@ def _entorno_plantilla():
     import doctrina
     env.globals.update(doctrina.globales_plantilla())   # editor del ángulo (doctrina, bloque 2)
     env.filters["usd"] = gastos.formatear   # mismo filtro que registra dashboard (costos «US$ 0,07»)
+    env.filters["precio"] = lambda usd: usd  # cobros §6: fuera de una petición el margen es 1 (dashboard._filtro_precio)
+    env.filters["cobrado"] = lambda usd, clave=None: usd   # cobros §7: fuera de una petición, el costo (dashboard._filtro_cobrado)
+    env.globals["ver_cobrado"] = lambda: False
     env.filters["traducir"] = lambda x: x   # idiomas.traducir necesita un app de Flask-Babel; acá no hay ninguno
     # _selector_productos.html (incluida por _tab_creativeflowplus.html) agrupa
     # colores con este filtro (Task 14) — sin registrarlo acá, un catálogo no
@@ -421,7 +424,7 @@ def _contexto_minimo(items, activos_por_categoria=None, categorias=None, product
         fp_prefill=None, activos_por_categoria=activos_por_categoria if activos_por_categoria is not None else {},
         categorias=categorias if categorias is not None else {}, productos=productos if productos is not None else [],
         referencias_bandeja=[], trabajo_link=None, capacidades_meta={},
-        paises_fe=tipos.PAISES, voces_fe=fal_audio.VOCES, estilos_fe=list(tipos.ESTILOS_MUSICA),
+        paises_fe=tipos.PAISES, idiomas_fe=("es", "en", "pt", "sv", "no"), voces_fe=fal_audio.VOCES, estilos_fe=list(tipos.ESTILOS_MUSICA),
         nombres_estilo_musica=tipos.NOMBRES_ESTILO_MUSICA,
         presets_mezcla=["equilibrada", "voz_protagonista", "ambiente_protagonista"],
         duraciones_crear=(5, 8, 10, 12, 15, 20, 25, 30), formatos_nombres={"9:16": "Vertical 9:16"},

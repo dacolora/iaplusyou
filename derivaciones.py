@@ -49,6 +49,8 @@ ciclo.
 """
 from flask_babel import gettext
 
+import sqlalchemy as sa
+
 import cola
 import creative_flow
 import db
@@ -58,7 +60,9 @@ from doctrina import aprendizajes as doctrina_aprendizajes
 import experimentos
 import lanzador
 import proyectos
+import gastos
 import trabajos
+from cobros import SaldoInsuficiente
 from final_edition import ETAPAS_FINAL
 from final_edition.tipos import PAISES
 from flowplus_prompt import ORDEN_ENFOQUES as ENFOQUES
@@ -282,6 +286,35 @@ def _guardar(cliente, experimento_id, derivacion):
     def _poner(extra):
         lista = list(extra.get("derivaciones") or [])
         if not derivacion.get("id"):
+            # PND-043: actualizar_extra ya tomó el candado SQLite. Leer las
+            # reservas de todos los hijos aquí serializa dos ganadoras.
+            reservados = set()
+            variantes = {f.get("variante") for f in creative_flow.finales(cliente, derivacion["cf_id"]) if f.get("variante")}
+            with db.conectar() as con:
+                extras = con.execute(sa.select(db.experimento.c.extra).where(
+                    db.experimento.c.cliente == cliente)).scalars().all()
+            for e in extras:
+                for d in (e or {}).get("derivaciones") or []:
+                    for i in d.get("items") or []:
+                        if i.get("cf_id") == derivacion["cf_id"]:
+                            if i.get("variante"):
+                                variantes.add(i["variante"])
+                            lead = (i.get("contexto_variante") or {}).get("lead_objetivo")
+                            if lead:
+                                reservados.add(lead)
+            sesion = _sesion(cliente, derivacion["cf_id"]) or {}
+            for i in derivacion["items"]:
+                ctx = i.get("contexto_variante") or {}
+                if i["clase"] == "reedicion":
+                    if i["variante"] in variantes:
+                        i["variante"] = max(variantes, default=0) + 1
+                    variantes.add(i["variante"])
+                if i["clase"] == "reedicion" and "lead_objetivo" in ctx:
+                    finales = _angulos_finales(cliente, derivacion["cf_id"])
+                    ctx["lead_objetivo"] = _lead_objetivo(sesion.get("angulo"), 0,
+                        excluir=tuple(reservados) + tuple(x.get("lead") for x in finales))
+                    if ctx["lead_objetivo"]:
+                        reservados.add(ctx["lead_objetivo"])
             derivacion["id"] = f"d{max((_numero(d) for d in lista), default=0) + 1}"
         lista = [d for d in lista if d.get("id") != derivacion["id"]]
         lista.append(derivacion)
@@ -426,11 +459,18 @@ def _encolar_clon(cliente, cf_id, tipo="video"):
     job_id = f"{cliente}__{cf_id}__creative_flow"
     if trabajos.en_curso(job_id):
         return False
+    import flowplus_lanzar  # perezoso: el estimado vive con el lanzamiento de Crear
+    costo = flowplus_lanzar.costo_estimado(_sesion(cliente, cf_id))
     creative_flow.actualizar(cliente, cf_id, estado="video_generando")
-    return trabajos.encolar(job_id, "flowplus_imagen" if tipo == "imagen" else "flowplus_video",
-                            {"cliente": cliente, "cf_id": cf_id}, cliente=cliente,
-                            duracion_estimada=60 if tipo == "imagen" else 180,
-                            etapas=ETAPAS_CREATIVE_FLOW, max_intentos=1)
+    try:
+        return trabajos.encolar(job_id, "flowplus_imagen" if tipo == "imagen" else "flowplus_video",
+                                {"cliente": cliente, "cf_id": cf_id}, cliente=cliente,
+                                duracion_estimada=60 if tipo == "imagen" else 180,
+                                etapas=ETAPAS_CREATIVE_FLOW, max_intentos=1, costo_estimado=costo)
+    except SaldoInsuficiente as e:
+        # Sin esto la sesión quedaría «generando» sin trabajo y el item esperaría siempre.
+        creative_flow.actualizar(cliente, cf_id, estado="error", error=e.frase_proyecto())
+        raise
 
 
 def _encolar_final(cliente, cf_id, idioma, pais, opciones):
@@ -451,10 +491,15 @@ def _encolar_final(cliente, cf_id, idioma, pais, opciones):
     existente = creative_flow.final_por_legado(cliente, legado)
     if existente is not None and existente.get("estado") != "error":
         return legado
-    creative_flow.crear_final(cliente, cf_id, idioma, pais, variante=variante)
-    trabajos.encolar(job_id, "final_producir",
-                     {"cliente": cliente, "cf_id": cf_id, "idioma": idioma, "pais": pais, "opciones": dict(opciones)},
-                     cliente=cliente, duracion_estimada=240, etapas=ETAPAS_FINAL, max_intentos=1)
+    final_id = creative_flow.crear_final(cliente, cf_id, idioma, pais, variante=variante)
+    try:
+        trabajos.encolar(job_id, "final_producir",
+                         {"cliente": cliente, "cf_id": cf_id, "idioma": idioma, "pais": pais, "opciones": dict(opciones)},
+                         cliente=cliente, duracion_estimada=240, etapas=ETAPAS_FINAL, max_intentos=1,
+                         costo_estimado=gastos.estimar("final", paises=1)["usd"])
+    except SaldoInsuficiente as e:
+        creative_flow.actualizar_final(cliente, final_id, estado="error", error=e.frase_proyecto())
+        raise
     return legado
 
 
@@ -559,10 +604,16 @@ def _avanzar_finales(cliente, experimento_id, d, item):
 
 
 def _avanzar_item(cliente, experimento_id, d, item):
-    if item["estado"] == "produciendo_clon":
-        _avanzar_clon(cliente, experimento_id, d, item)
-    elif item["estado"] == "produciendo_finales":
-        _avanzar_finales(cliente, experimento_id, d, item)
+    try:
+        if item["estado"] == "produciendo_clon":
+            _avanzar_clon(cliente, experimento_id, d, item)
+        elif item["estado"] == "produciendo_finales":
+            _avanzar_finales(cliente, experimento_id, d, item)
+    except SaldoInsuficiente as e:
+        # Cobros (spec 2026-10-08 §5.4): corre en el worker (o en la puerta del
+        # decisor); sin saldo el item falla con la frase y nada se encola. Un
+        # rescate fallido vuelve como propuesta para reintentarlo tras recargar.
+        _fallar(cliente, experimento_id, d, item, e.frase_proyecto())
 
 
 def _lanzar_piezas(cliente, experimento_id):

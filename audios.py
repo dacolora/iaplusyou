@@ -37,8 +37,9 @@ IDIOMAS = ("es", "en", "pt", "de", "fr", "it", "fi", "sv", "no", "cs", "nl")
 NOMBRES_IDIOMA = {"es": "Español", "en": "English", "pt": "Português", "de": "Deutsch", "fr": "Français",
                   "it": "Italiano", "fi": "Suomi", "sv": "Svenska", "no": "Norsk", "cs": "Čeština", "nl": "Nederlands"}
 # Idiomas que Multilingual v2 no habla: la galería los lee con Turbo v2.5 y
-# el idioma forzado (spec 2026-09-30 §2).
-IDIOMAS_TURBO = ("no",)
+# el idioma forzado (spec 2026-09-30 §2). Vive en fal_audio para que las
+# finales usen la misma tupla (`fal_audio.tts_galeria`).
+IDIOMAS_TURBO = fal_audio.IDIOMAS_TURBO
 PREFIJO_VOZ_PROPIA = "vp:"
 MOTOR_ELEVENLABS = "elevenlabs"
 MOTOR_TURBO = "elevenlabs_turbo"
@@ -326,12 +327,15 @@ def _como_audio(m):
             "musica": extra.get("musica") or None, "creado_en": m.get("creado_en")}
 
 
-def listar(cliente):
-    """Los audios del proyecto, más reciente primero."""
+def listar(cliente, desde=0, limite=None):
+    """Los audios del proyecto, más reciente primero; corte SQL opcional."""
     with db.conectar() as con:
-        filas = con.execute(sa.select(db.material).where(
+        q = sa.select(db.material).where(
             db.material.c.cliente == cliente, db.material.c.tipo == "audio",
-            db.material.c.origen == ORIGEN).order_by(db.material.c.id.desc())).all()
+            db.material.c.origen == ORIGEN).order_by(db.material.c.id.desc()).offset(desde)
+        if limite is not None:
+            q = q.limit(limite)
+        filas = con.execute(q).all()
     return [_como_audio(dict(f._mapping)) for f in filas]
 
 

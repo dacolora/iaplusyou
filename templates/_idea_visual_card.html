@@ -57,7 +57,8 @@
           <img src="{{ img.url }}" class="concepto-img-preview" alt="{{ concepto.texto }}">
         </a>
         <div class="costo-mini">
-          {% if img.credits %}~{{ "%.2f"|format(img.credits) }} cr (${{ "%.2f"|format(img.usd or 0) }}){% else %}${{ "%.3f"|format(img.usd or 0) }}{% endif %}
+          {% if ver_cobrado() %}{# flujo viejo: no pasa por el libro, no se cobró #}
+          {% elif img.credits %}~{{ "%.2f"|format(img.credits) }} cr (${{ "%.2f"|format(img.usd or 0) }}){% else %}${{ "%.3f"|format(img.usd or 0) }}{% endif %}
         </div>
 
         {% if img.estado == "listo" %}

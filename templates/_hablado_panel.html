@@ -5,7 +5,7 @@
    de la voz no lleva data-poll-job: recargaría la página y borraría lo escrito. #}
 {% from "_hablado_macros.html" import tarjeta_foto %}
 {% from "_voces_galeria.html" import fichas_galeria, voz_propia_item %}
-<div class="hb-layout" id="hb-form" data-usd-caracter="{{ usd_por_caracter }}"{% if trabajo_voz %} data-job-voz="{{ trabajo_voz.job_id }}" data-estado-voz="{{ url_for('estado_trabajo', job_id=trabajo_voz.job_id) }}"{% endif %}>
+<div class="hb-layout" id="hb-form" data-usd-caracter="{{ usd_por_caracter|precio }}"{% if trabajo_voz %} data-job-voz="{{ trabajo_voz.job_id }}" data-estado-voz="{{ url_for('estado_trabajo', job_id=trabajo_voz.job_id) }}"{% endif %}>
   <section class="hb-paso" aria-labelledby="hb-t-foto">
     <h3 id="hb-t-foto">{{ _('1. La foto') }}</h3>
     <p class="au-ayuda">{{ _('Cara de frente y sin tapar, producto por debajo de la cara, foto vertical. Las fotos nuevas se hacen en Desde referencias.') }} <a href="#referencias" data-crear-modo="referencias">{{ _('Ir a Desde referencias') }}</a></p>

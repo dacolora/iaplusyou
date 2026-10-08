@@ -41,7 +41,7 @@
 {# ---------- filtros ---------- #}
 <nav class="cr-filtros" aria-label="{{ _('Filtrar resultados') }}">
   <div class="cr-periodos" role="group" aria-label="{{ _('Periodo') }}">
-    {% for d in [7, 14, 30, 90, 0] %}
+    {% for d in [0, 7, 14, 30, 90] %}
     <a class="cr-chip" data-cr-filtro href="#experimentos?{{ consulta('dias', d) }}"{% if r.filtro.dias == d %} aria-current="true"{% endif %}>{{ _('%(n)s días', n=d) if d else _('Desde el inicio') }}{% if r.filtro.dias == d and d %} <small>{{ _('vs %(n)s anteriores', n=d) }}</small>{% endif %}</a>
     {% endfor %}
   </div>
@@ -109,8 +109,8 @@
 {% if not experimentos %}
 <div class="estado-vacio">
   <p class="estado-vacio-titulo">{{ _('Todavía no hay experimentos') }}</p>
-  <p class="estado-vacio-texto">{{ _('Elige piezas, países y un total: el experimento se lanza en pausa y nada gasta hasta que lo actives.') }}</p>
-  <a class="btn-generar" href="{{ url_for('exp_nuevo', cliente=cliente) }}">{{ _('+ Nuevo experimento') }}</a>
+  <p class="estado-vacio-texto">{{ _('Elige piezas, países y un total: en Revisar ves cuánto gasta al día antes de lanzarlo; al lanzar se activa.') }}</p>
+  {% if capacidades_meta.estado == "conectado" %}<a class="btn-generar" href="{{ url_for('exp_nuevo', cliente=cliente) }}">{{ _('+ Nuevo experimento') }}</a>{% endif %}
 </div>
 {% elif not r.piezas %}
 <div class="estado-vacio">
@@ -127,7 +127,7 @@
     <a href="#settings" data-ir-tab="settings">{{ _('Generación con IA: %(costo)s en el periodo', costo=r.generacion.usd|usd) }}</a>
     · {{ _('Las cifras de pauta están en %(moneda)s', moneda=r.moneda) }}
     {% if r.indicadores|selectattr('ventas_cambiaron')|list %} · {{ _('Las ventas cambiaron de fuente en este período') }}{% elif r.indicadores|selectattr('roas_no_comparable')|list %} · {{ _('ROAS no comparable') }} · {{ _('No sumamos ingresos de otra moneda; el costo por compra sigue usando las ventas y el gasto en la moneda de la cuenta.') }}{% endif %}
-    {% if tablero.tienda_tw %}· <a href="#triplewhale" data-ir-tab="triplewhale">{{ _('Tu tienda según Triple Whale') }}</a>: {{ _('ingresos del mes %(ingresos)s · MER %(mer)s', ingresos=tablero.tienda_tw.ingresos|dinero(tablero.tienda_tw.moneda), mer=valor(tablero.tienda_tw.mer, 'veces')) }}{% endif %}
+    {% if tablero.tienda_tw %}· <a href="#triplewhale" data-ir-tab="triplewhale">{{ _('Tu tienda según Triple Whale') }}</a>: {{ _('ingresos %(ingresos)s · MER %(mer)s', ingresos=tablero.tienda_tw.ingresos|dinero(tablero.tienda_tw.moneda), mer=valor(tablero.tienda_tw.mer, 'veces')) }}{% endif %}
   </p>
 </section>
 
@@ -242,14 +242,14 @@
 
 {# ---------- 07 Experimentos ---------- #}
 <section class="cr-seccion" aria-labelledby="cr-s07">
-  {% call cabecera('07', _('Experimentos'), 'cr-s07') %}<a class="cr-cab-nota" href="{{ url_for('exp_nuevo', cliente=cliente) }}">{{ _('+ Nuevo experimento') }}</a>{% endcall %}
+  {% call cabecera('07', _('Experimentos'), 'cr-s07') %}{% if capacidades_meta.estado == "conectado" %}<a class="cr-cab-nota" href="{{ url_for('exp_nuevo', cliente=cliente) }}">{{ _('+ Nuevo experimento') }}</a>{% endif %}{% endcall %}
   <div class="cr-experimentos">
     {% for e in r.experimentos %}
     <a data-cr-filtro href="#experimentos?{{ consulta('exp', e.id) }}" class="cr-tarjeta cr-experimento cr-estado-{{ e.estado }}{% if e.seleccionado %} cr-seleccionado{% endif %}"{% if e.seleccionado %} aria-current="true"{% endif %}>
       <span class="cr-experimento-cab">
         {% if e.pct_tope is not none %}<svg class="cr-dona-tope" data-cr-dona-pct="{{ e.pct_tope }}" viewBox="0 0 44 44" role="img" aria-label="{{ _('Tope usado: %(pct)s %%', pct=e.pct_tope|round(0)|int) }}"></svg>{% endif %}
         <span class="cr-experimento-titulo"><strong>{{ e.nombre }}</strong>
-          <small>{{ etiquetas_exp.estado.get(e.estado, e.estado)|traducir }}{% if e.dia is not none and e.dias %} · {{ _('día %(dia)s de %(dias)s', dia=e.dia, dias=e.dias) }}{% endif %}</small></span>
+          <small>{{ etiquetas_exp.estado.get(e.estado, e.estado)|traducir }}{% if e.datos_viejos and e.estado == "corriendo" %} · {{ _('datos viejos') }}{% endif %}{% if e.dia is not none and e.dias %} · {{ _('día %(dia)s de %(dias)s', dia=e.dia, dias=e.dias) }}{% endif %}</small></span>
       </span>
       <span class="cr-experimento-linea">{{ ngettext('%(num)s pieza', '%(num)s piezas', e.n_piezas) }} · {{ e.paises|join(' · ') }} · {{ _('ROAS') if e.metrica == 'roas' else _('CTR') }} {{ _('ROAS no comparable') if e.metrica == 'roas' and not e.roas_comparable else valor(e.valor, 'veces' if e.metrica == 'roas' else 'pct') }}{% if e.metrica == 'roas' and not e.mide_ventas %} ({{ _('sin ventas medibles') }}){% endif %}{% if e.ganadoras %} · {{ ngettext('%(num)s ganadora', '%(num)s ganadoras', e.ganadoras) }}{% endif %}</span>
       <small class="cr-muted">{{ _('Gastado %(gasto)s de %(tope)s', gasto=valor(e.gasto, 'dinero', corto=true), tope=e.tope|dinero(r.moneda)) }}{% if e.mejor %} · {{ _('mejor: %(nombre)s', nombre=e.mejor) }}{% endif %}</small>
@@ -269,7 +269,7 @@
 {# ---------- 09 Historial ---------- #}
 <section class="cr-seccion" aria-labelledby="cr-s09">
   {{ cabecera('09', _('Historial'), 'cr-s09') }}
-  <details class="cr-tarjeta cr-historial"><summary>{{ _('Historial mes a mes') }}</summary>{% include "_exp_historial.html" %}</details>
+  <details class="cr-tarjeta cr-historial"><summary>{{ _('Totales desde el inicio') }}</summary>{% include "_exp_historial.html" %}</details>
   {% if ads %}<details class="cr-tarjeta cr-historial"><summary>{{ _('Anuncios sueltos (de antes)') }}</summary>{% include "_anuncios_sueltos.html" %}</details>{% endif %}
 </section>
 

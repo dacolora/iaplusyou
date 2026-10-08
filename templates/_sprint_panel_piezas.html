@@ -27,7 +27,7 @@
         {% else %}<p class="vacio">{{ _('Generando…') if p.estado == 'generando' else _('En cola…') }}</p>{% endif %}
       </div>
       <strong>{{ p.titulo }}</strong>
-      <small class="vacio">{{ etiqueta_sprint(p.tipo) }}{% if p.costo_usd %} · US$ {{ '%.2f' % p.costo_usd }}{% endif %} · {{ etiqueta_sprint(p.revision) }}</small>
+      <small class="vacio">{{ etiqueta_sprint(p.tipo) }}{% set _costo = p.costo_usd | cobrado(p.tipo ~ ':' ~ p.cf_id) %}{% if _costo %} · US$ {{ '%.2f' % _costo }}{% endif %} · {{ etiqueta_sprint(p.revision) }}</small>
       {% if p.qa and p.qa.veredicto == "error" %}
       <p class="panel-pieza-qa"><span class="campo-error">{{ _('QA falló: %(nota)s', nota=(p.qa.nota or _('sin detalle'))) }}</span>
         <button type="button" class="btn-xs" data-pieza-post data-url="{{ url_for('sprints.pieza_qa', cliente=cliente, cp_id=p.id) }}">{{ _('Repetir QA') }}</button></p>
@@ -42,7 +42,7 @@
           {% if p.revision != "rechazada" %}<button type="button" class="btn-xs btn-rechazar" data-pieza-accion="rechazar">{{ _('Rechazar') }}</button>{% endif %}
           <a class="btn-xs" href="{{ url_for('ver_cliente', cliente=cliente, _anchor='creativeflowplus') }}">{{ _('Abrir en Crear') }}</a>
         {% endif %}
-        {% set precio = ('US$ %.2f' % p.costo_regenerar) if p.costo_regenerar is not none else _('precio no disponible') %}
+        {% set precio = ('US$ %.2f' % (p.costo_regenerar | precio)) if p.costo_regenerar is not none else _('precio no disponible') %}
         {% if p.estado == "error" %}
         <button type="button" class="btn-xs" data-pieza-post data-url="{{ url_for('sprints.pieza_reintentar', cliente=cliente, cp_id=p.id) }}"
                 data-confirmar="{{ _('Reintentar gasta de nuevo (%(precio)s). ¿Seguir?', precio=precio) }}">{{ _('Reintentar (%(precio)s)', precio=precio) }}</button>

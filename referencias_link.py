@@ -200,7 +200,7 @@ def describir(referencias, cliente_hint="", idioma="es", on_usage=None):
     if total == 0:
         raise LinkError(gettext("No hay imágenes ni videos que describir."))
     client = anthropic.Anthropic(api_key=_api_key(), max_retries=0)
-    resp = client.messages.create(model=MODEL, max_tokens=300, messages=[{"role": "user", "content": content}])
+    resp = client.messages.create(model=MODEL, max_tokens=4000, messages=[{"role": "user", "content": content}])
     if on_usage:
         on_usage(getattr(resp, "usage", None))
     return "".join(b.text for b in resp.content if b.type == "text").strip()

@@ -1,0 +1,34 @@
+{# Vuelta del checkout de Bold (cobros, spec 2026-10-08 §9.4). Nunca acredita:
+   muestra el estado que dio el servidor de Bold. static/cobros.js (lo carga
+   base.html) sondea data-estado-url cada 3 s hasta 60 s y cambia el texto con
+   lo que responde la ruta (ya traducido); los textos de «tarde» y los enlaces
+   viven aquí ocultos. Sin JS queda «Verificar» y «Volver al saldo». #}
+{% extends "base.html" %}
+{% block title %}{{ _('Recarga') }}{% endblock %}
+{% block content %}
+{% set esperando = recarga.estado == 'pendiente' and recarga.medio == 'bold' %}
+{% set volver = url_for('ver_cliente', cliente=cliente) ~ '#config-ap-saldo' %}
+<div class="recarga-vuelta" id="recarga-vuelta" data-estado="{{ recarga.estado }}"{% if esperando %} data-estado-url="{{ url_for('cobros.recarga_estado', cliente=cliente, rid=recarga.id) }}"{% endif %}>
+  <div class="panel-cabecera">
+    <div>
+      <h2>{{ _('Recarga de saldo') }}</h2>
+      <p class="panel-cabecera-desc">{{ _('%(monto)s con Bold', monto=((recarga.milesimas / 1000) | usd)) }}</p>
+    </div>
+  </div>
+  <div class="recarga-caja">
+    <p class="recarga-texto" data-recarga-texto aria-live="polite">{{ texto }}</p>
+    <div class="barra-progreso" data-recarga-barra{% if not esperando %} hidden{% endif %}><div class="barra-progreso-fill barra-progreso-indeterminada"></div></div>
+    <p class="vacio" data-recarga-saldo hidden>{{ _('Tu saldo ahora:') }} <strong></strong></p>
+    <p class="vacio" data-recarga-tarde hidden>{{ _('Bold todavía no confirma el pago; te avisaremos cuando llegue. Puedes cerrar esta página.') }}</p>
+    <div class="acciones">
+      {% if esperando or consultable %}
+      <form method="post" action="{{ url_for('cobros.recarga_verificar', cliente=cliente, rid=recarga.id) }}" data-recarga-verificar>
+        <button type="submit" class="btn-sm">{{ _('Verificar') }}</button>
+      </form>
+      {% endif %}
+      <a class="btn-generar" href="{{ volver }}" data-recarga-reintentar{% if recarga.estado not in ('rechazada', 'expirada') %} hidden{% endif %}>{{ _('Intentar de nuevo') }}</a>
+      <a class="btn-sm" href="{{ volver }}">{{ _('Volver al saldo') }}</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

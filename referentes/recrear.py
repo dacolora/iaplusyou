@@ -18,6 +18,7 @@ from storage import r2_uploader
 
 MAX_FOTOS_PRODUCTO = 2
 
+
 # Textos fijos del prompt determinista, por idioma del proyecto (spec
 # 2026-09-26 §B4-§B5). Los datos del referente, del producto y de la marca
 # nunca se traducen; "Image N" va igual en los dos idiomas.

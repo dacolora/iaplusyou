@@ -32,6 +32,8 @@ import math
 
 from flask_babel import ngettext
 
+import gastos
+
 ACTOR = "apify~facebook-ads-scraper"
 USD_POR_RESULTADO = 0.0058          # plan Free, US$5.80/1000 -- ver docstring
 MAX_RESULTADOS = 2000                # mismo tope que ya ofrece el formulario de Traer referentes
@@ -52,5 +54,6 @@ def estimar(tope):
     usd = math.ceil(round(n * USD_POR_RESULTADO * 100, 6)) / 100
     detalle = ngettext("≈ US$ %(usd)s en Apify (%(num)d anuncio × US$ %(unitario)s)",
                        "≈ US$ %(usd)s en Apify (%(num)d anuncios × US$ %(unitario)s)", n,
-                       usd=f"{usd:.2f}", unitario=f"{USD_POR_RESULTADO:.4f}")
+                       # el texto, como lo ve la persona (cobros §6); `usd_fuente`, costo
+                       usd=f"{gastos.precio(usd):.2f}", unitario=f"{gastos.precio(USD_POR_RESULTADO):.4f}")
     return {"usd_fuente": usd, "resultados": n, "detalle": detalle}

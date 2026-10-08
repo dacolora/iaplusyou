@@ -16,8 +16,12 @@ tumbar la tarea que ya pagó: los llamadores envuelven en try/except.
 `TARIFAS` y los `estimate_*` de los proveedores; cuando no hay tarifa
 devuelve `usd=None` y el texto "precio no disponible" — nunca se inventa.
 
-Lecturas: `resumen_mes`, `resumen_total`, `total_entre`, `por_mes`, `historial`,
+Lecturas: `resumen_mes`, `resumen_todo`, `resumen_total`, `total_entre`, `por_mes`, `historial`,
 `serie_diaria`, `csv_mes`, `por_proyecto_mes`; `formatear(usd)` -> "US$ 0,07".
+
+Precios que se ven (cobros, spec 2026-10-08 §6): `margen_vigente()`, `precio(usd)`
+y `texto_precio(usd)` multiplican por el margen del proyecto de la petición; el
+`usd` de `estimar` sigue siendo el costo.
 """
 import csv
 import io
@@ -127,6 +131,19 @@ EVALUACION_TW_POR_ANUNCIO_USD = 0.012
 IDEAS_BASE_USD = 0.015
 IDEAS_POR_IDEA_USD = 0.012
 
+# El nombre de cada tipo de gasto en pantalla (Configuración › Gasto, panel, cobros.vista).
+NOMBRES_TIPO = {
+    "video": N_("Videos"), "imagen": N_("Imágenes"), "swap": N_("Cambios de producto"),
+    "guion": N_("Guiones"), "final": N_("Finales"), "regla_producto": N_("Reglas de producto (IA)"),
+    "caption_organico": N_("Textos orgánicos (IA)"), "musica": N_("Música"),
+    "locucion": N_("Locuciones (audios)"), "voz_propia": N_("Voces propias"),
+    "refinar_prompt": N_("Correcciones de prompt (Flow Plus)"), "guion_clips": N_("Guiones a clips (Flow Plus)"),
+    "ideas": N_("Ideas de sprint (IA)"), "pedidos": N_("Pedidos al cliente (IA)"),
+    "revision": N_("Revisión de la doctrina (IA)"),
+    "evaluacion": N_("Evaluación de anuncios (IA)"),
+    "transcripcion": N_("Subtítulos (transcripción)"), "otro": N_("Otros"),
+}
+
 SIN_PRECIO = N_("precio no disponible")
 
 
@@ -153,9 +170,103 @@ def _texto_estimado(usd):
     return gettext("%(precio)s aprox.", precio=formatear(usd))
 
 
+def _leer_margen(cliente):
+    """Margen de `cliente` (1.0 si no cobra), o None si la lectura falla."""
+    if not cliente:
+        return 1.0
+    try:
+        from cobros import libro  # noqa: PLC0415 — cobros.libro importa gastos
+        return float(libro.margen_precio(cliente))
+    except Exception as e:  # noqa: BLE001
+        log.warning("margen de %s no se pudo leer: %s", cliente, e)
+        return None
+
+
+def _margen_de(cliente):
+    """Margen de `cliente` (1.0 si no cobra o si la lectura falla: lo que se
+    cobra lo decide el libro, no este número). Los textos de precio de una
+    petición no caen al costo: ver `_margen_fallido`."""
+    margen = _leer_margen(cliente)
+    return 1.0 if margen is None else margen
+
+
+def margen_vigente():
+    """Margen de precio de la petición en curso (cobros, spec 2026-10-08 §6):
+    en un proyecto que cobra, todo «≈ US$» que ve una persona es precio
+    (costo × margen). `dashboard._margen_de_precio` deja en `g.cliente_precio`
+    el proyecto de la petición (el <cliente> de la URL o, sin él, el de la
+    sesión de un cliente); el margen se lee la primera vez que se pide y queda
+    en `g.margen_precio` (una lectura por petición, y ninguna en las que no
+    pintan precios: sondeos, estáticos). Fuera de una petición, o en un
+    proyecto que no cobra, 1.0."""
+    try:
+        from flask import g, has_request_context  # noqa: PLC0415
+        if not has_request_context():
+            return 1.0
+        if "margen_precio" not in g:
+            margen = _leer_margen(g.get("cliente_precio"))
+            g.margen_precio_fallo = margen is None
+            g.margen_precio = 1.0 if margen is None else margen
+        return float(g.margen_precio)
+    except Exception:  # noqa: BLE001
+        return 1.0
+
+
+def _margen_fallido():
+    """¿Falló la lectura del margen de esta petición? Entonces el texto de un
+    precio dice «precio no disponible» en vez de mostrar el costo como si fuera
+    el precio (revisión final 2026-10-08, M1). Nunca lanza."""
+    try:
+        from flask import g, has_request_context  # noqa: PLC0415
+        if not has_request_context():
+            return False
+        margen_vigente()
+        return bool(g.get("margen_precio_fallo"))
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def precio(usd, cliente=None):
+    """`usd` (costo) × margen de la petición, o None. Solo para mostrar: las
+    reservas y el cobro los calcula `cobros.libro` desde el costo. `cliente`:
+    para un texto que se arma fuera de una petición (el worker), el margen de
+    ese proyecto."""
+    if usd is None:
+        return None
+    margen = _margen_de(cliente) if cliente else margen_vigente()
+    return round(float(usd) * margen, 4)
+
+
+def costo_de_precio(valor):
+    """Lo que la persona vio y devolvió el navegador (un precio, con el margen
+    de la petición) → el costo, para compararlo con el costo recalculado o
+    pedírselo al libro: la ÚNICA vuelta de precio a costo (spec 2026-10-08 §6:
+    al navegador de un proyecto que cobra nunca le llega el costo). None si no
+    es un número finito entre 0 y 1 000 (excluidos)."""
+    try:
+        v = float(valor)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(v) or not 0 < v < 1000:
+        return None
+    return v / margen_vigente()
+
+
+def texto_precio(usd):
+    """El «US$ 0,30 aprox.» de un costo, ya con el margen de la petición. Si el
+    margen no se pudo leer, «precio no disponible» (nunca el costo)."""
+    if usd is not None and _margen_fallido():
+        return gettext(SIN_PRECIO)
+    return _texto_estimado(precio(usd))
+
+
 def _estimado(usd, detalle=""):
+    """`usd` es el COSTO (lo usan las reservas y el libro); `usd_precio` y
+    `texto`, lo que ve la persona (con el margen si el proyecto cobra; sin
+    precio si el margen no se pudo leer)."""
     usd = None if usd is None else round(float(usd), 4)
-    return {"usd": usd, "texto": _texto_estimado(usd), "detalle": detalle}
+    usd_precio = None if usd is not None and _margen_fallido() else precio(usd)
+    return {"usd": usd, "usd_precio": usd_precio, "texto": texto_precio(usd), "detalle": detalle}
 
 
 # ------------------------------------------------------------ estimar ---
@@ -350,12 +461,20 @@ def estimar(tipo, **params):
 
 # ----------------------------------------------------------- registrar ---
 
-def registrar(cliente, tipo, usd, referencia, detalle="", proveedor=None, extra=None, creado_en=None, conservar_mayor=False):
+def registrar(cliente, tipo, usd, referencia, detalle="", proveedor=None, extra=None, creado_en=None,
+              conservar_mayor=False, entregado=True):
     """Guarda (o actualiza, misma `referencia`) un cobro real. `usd` None/0 se
     guarda como 0 (queda constancia de la llamada aunque no haya tarifa).
     Devuelve el id de la fila. `creado_en` solo se fija al crear (la fecha
     del primer cobro se conserva al actualizar). `conservar_mayor` evita reducir
-    un cobro al recuperar un componente pagado que ahora llega de caché."""
+    un cobro al recuperar un componente pagado que ahora llega de caché.
+
+    Si el proyecto cobra (cobros, spec 2026-10-08 §3), el cobro al cliente se
+    escribe aquí mismo, en un savepoint propio: si falla, el costo queda igual
+    y se avisa a los admins. Solo un gasto NUEVO estrena cobro; corregir uno que
+    ya existía recalcula su cobro si lo tenía y nunca lo crea (§3.2).
+    `entregado=False`: el proveedor cobró pero la pieza no llegó; el costo se
+    anota igual y al cliente no se le cobra (spec §3.4)."""
     if not cliente or not referencia:
         raise ValueError("registrar necesita cliente y referencia.")
     tipo = tipo if tipo in TIPOS else "otro"
@@ -377,31 +496,118 @@ def registrar(cliente, tipo, usd, referencia, detalle="", proveedor=None, extra=
     if extra is not None:
         cambios["extra"] = extra
     g = db.gasto
+
+    def _actualizar(con, gasto_id):
+        con.execute(sa.update(g).where(g.c.id == gasto_id,
+            g.c.usd <= monto if conservar_mayor else sa.true()).values(**cambios))
+
+    def _cobrar(con, gasto_id, nuevo):
+        """El cobro en su propio savepoint, con el candado de escritura YA tomado
+        por el INSERT/UPDATE del gasto: en WAL, una transacción diferida que lee y
+        después escribe recibe «database is locked» al instante si otro escritor
+        confirmó en medio (SQLITE_BUSY_SNAPSHOT; busy_timeout no aplica). Un cobro
+        que falla vuelve a su savepoint y el gasto queda. Nunca lanza."""
+        usd_final = monto
+        try:
+            # Con conservar_mayor el UPDATE pudo no aplicar: se cobra sobre lo que
+            # quedó guardado. Dentro del try (revisión final 2026-10-08, M2): si
+            # esta lectura lanzara fuera, desharía el INSERT del gasto.
+            usd_final = float(con.execute(sa.select(g.c.usd).where(g.c.id == gasto_id)).scalar() or 0.0)
+            with con.begin_nested():
+                from cobros import libro as _libro  # noqa: PLC0415 — evita el import circular
+                antes = _neto_del_gasto(con, gasto_id)
+                resultado = _libro.cobrar_gasto(con, gasto_id, cliente, usd_final, tipo,
+                                                entregado=entregado, nuevo=nuevo)
+                if resultado == "recalculado" and _neto_del_gasto(con, gasto_id) < antes:
+                    resultado = "recalculado_mayor"   # cobra más: mira el saldo como un cobro nuevo
+        except Exception:  # noqa: BLE001 — el costo no se pierde por el cobro (spec §3.1)
+            log.exception("No se pudo anotar el cobro del gasto %s de %s", referencia, cliente)
+            resultado = "error"
+        return resultado, usd_final
+
     with db.conectar() as con:
         fila = con.execute(sa.select(g.c.id).where(g.c.cliente == cliente, g.c.referencia == referencia)).first()
+        resultado_cobro = None
         if fila:
-            con.execute(sa.update(g).where(g.c.id == fila.id,
-                g.c.usd <= monto if conservar_mayor else sa.true()).values(**cambios))
-            return int(fila.id)
-        try:
-            with con.begin_nested():
-                r = con.execute(sa.insert(g).values(cliente=cliente, referencia=referencia,
-                                                    creado_en=(creado_en or db.ahora())[:19],
-                                                    proveedor=proveedor, extra=extra or {}, **valores))
-                return int(r.inserted_primary_key[0])
-        except sa.exc.IntegrityError:
-            # Carrera: otro proceso insertó la misma referencia entre el select y el insert.
-            fila = con.execute(sa.select(g.c.id).where(g.c.cliente == cliente, g.c.referencia == referencia)).first()
-            con.execute(sa.update(g).where(g.c.id == fila.id,
-                g.c.usd <= monto if conservar_mayor else sa.true()).values(**cambios))
-            return int(fila.id)
+            gasto_id = int(fila.id)
+            _actualizar(con, gasto_id)   # el UPDATE abre la transacción y toma el candado
+            resultado_cobro, usd_final = _cobrar(con, gasto_id, nuevo=False)
+        else:
+            try:
+                with con.begin_nested():
+                    r = con.execute(sa.insert(g).values(cliente=cliente, referencia=referencia,
+                                                        creado_en=(creado_en or db.ahora())[:19],
+                                                        proveedor=proveedor, extra=extra or {}, **valores))
+                    gasto_id = int(r.inserted_primary_key[0])
+                    # DENTRO del savepoint del gasto: pysqlite no emite BEGIN antes de un
+                    # SAVEPOINT, así que este es el más externo; el INSERT ya tomó el candado
+                    # y su RELEASE confirma gasto y cobro juntos.
+                    resultado_cobro, usd_final = _cobrar(con, gasto_id, nuevo=True)
+            except sa.exc.IntegrityError:
+                # Carrera: otro proceso insertó la misma referencia entre el select y el insert.
+                fila = con.execute(sa.select(g.c.id).where(g.c.cliente == cliente,
+                                                           g.c.referencia == referencia)).first()
+                gasto_id = int(fila.id)
+                _actualizar(con, gasto_id)
+                resultado_cobro, usd_final = _cobrar(con, gasto_id, nuevo=False)
+    _despues_del_cobro(cliente, resultado_cobro, gasto_id, usd_final, tipo, referencia)
+    return gasto_id
+
+
+def _neto_del_gasto(con, gasto_id):
+    m = db.movimiento_saldo
+    return int(con.execute(sa.select(sa.func.coalesce(sa.func.sum(m.c.milesimas), 0))
+                           .where(m.c.gasto_id == gasto_id)).scalar())
+
+
+def _despues_del_cobro(cliente, resultado, gasto_id, usd, tipo, referencia):
+    """Avisos del cobro, ya con la transacción confirmada (spec §3.6, §8). Nunca lanza."""
+    if not resultado:
+        return
+    try:
+        from cobros import avisos, libro  # noqa: PLC0415
+        if resultado == "error":
+            avisos.admin(
+                "cobro_no_anotado",
+                lambda: gettext("No se pudo anotar un cobro"),
+                lambda: gettext("El gasto %(ref)s de %(cliente)s (%(usd)s) quedó sin su cobro al cliente.",
+                                ref=referencia, cliente=cliente, usd=formatear(usd)),
+                cliente=cliente)
+        elif resultado in ("no_cobrado", "reverso"):
+            avisos.pieza_no_cobrada(cliente, _no_cobrado_milesimas(gasto_id, resultado, usd, cliente), tipo)
+        elif resultado in ("cobro", "recalculado_mayor"):
+            c = libro.cuenta(cliente)
+            s = libro.saldo(cliente)
+            if s < c["umbral"]:
+                avisos.saldo_bajo(cliente, s)
+    except Exception:  # noqa: BLE001
+        log.exception("aviso del cobro de %s falló", referencia)
+
+
+def _no_cobrado_milesimas(gasto_id, resultado, usd, cliente):
+    """Lo que no se descontó, con el margen que quedó guardado al cobrar (el
+    margen actual pudo cambiar después): el monto del reverso o el precio del
+    no_cobrado. Sin esa fila, el margen de hoy."""
+    from cobros import libro  # noqa: PLC0415
+    m = db.movimiento_saldo
+    with db.conectar() as con:
+        fila = con.execute(sa.select(m.c.milesimas, m.c.extra)
+                           .where(m.c.gasto_id == gasto_id, m.c.tipo == resultado)).first()
+    if fila is not None:
+        if resultado == "reverso" and fila.milesimas:
+            return int(fila.milesimas)
+        precio = (fila.extra or {}).get("precio")
+        if precio is not None:
+            return int(precio)
+    return libro.precio_milesimas(usd, libro.cuenta(cliente)["margen"])
 
 
 def registrar_seguro(cliente, tipo, usd, referencia, **kw):
     """`registrar` que NUNCA lanza: lo llaman las tareas justo después de
     que el proveedor cobró, y un fallo anotando el gasto (base bloqueada,
     disco lleno) no puede tumbar una generación ya pagada. Devuelve el id o
-    None si falló (queda en el log)."""
+    None si falló (queda en el log). Acepta `entregado=False` (ver `registrar`):
+    pagado pero no entregado, al cliente no se le cobra."""
     try:
         return registrar(cliente, tipo, usd, referencia, **kw)
     except Exception:  # noqa: BLE001 — ver docstring
@@ -426,11 +632,11 @@ def _fila(r):
     return d
 
 
-def resumen_mes(cliente, ahora_iso=None):
+def resumen_mes(cliente, ahora_iso=None, desde=None):
     """{"desde", "hasta", "total", "por_tipo": {tipo: {"usd", "n"}}, "n"} del
-    mes en curso (o del mes de `ahora_iso`)."""
+    mes en curso (o del mes de `ahora_iso`; o desde `desde`)."""
     hasta = _ahora(ahora_iso)
-    desde = _inicio_mes(hasta)
+    desde = desde or _inicio_mes(hasta)
     g = db.gasto
     q = (sa.select(g.c.tipo, sa.func.sum(g.c.usd), sa.func.count())
          .where(g.c.cliente == cliente, g.c.creado_en >= desde, g.c.creado_en <= hasta)
@@ -442,6 +648,12 @@ def resumen_mes(cliente, ahora_iso=None):
     total = round(sum(v["usd"] for v in por_tipo.values()), 4)
     return {"desde": desde, "hasta": hasta, "total": total, "por_tipo": por_tipo,
             "n": sum(v["n"] for v in por_tipo.values())}
+
+
+def resumen_todo(cliente, ahora_iso=None):
+    """Como `resumen_mes` pero con todo lo cobrado desde el primer cobro (la
+    tabla «Por tipo» de Configuración › Gasto desde 2026-10-08)."""
+    return resumen_mes(cliente, ahora_iso, desde="0001-01-01T00:00:00")
 
 
 def resumen_total(cliente, ahora_iso=None):
@@ -641,3 +853,69 @@ def importar_historico(cliente, swaps=None):
         n_swaps += 1
         total += usd
     return {"piezas": n_piezas, "swaps": n_swaps, "usd": round(total, 4)}
+
+
+def total_tipo(cliente, tipo):
+    """Todo el gasto real de un tipo del proyecto, incluidas tareas fallidas."""
+    g = db.gasto
+    with db.conectar() as con:
+        total = con.execute(sa.select(sa.func.coalesce(sa.func.sum(g.c.usd), 0.0)).where(
+            g.c.cliente == cliente, g.c.tipo == tipo)).scalar()
+    return round(float(total), 4)
+
+
+def costos_sesiones(cliente):
+    """Acumulados por sesión de Crear, una consulta para todas las tarjetas."""
+    g = db.gasto
+    with db.conectar() as con:
+        filas = con.execute(sa.select(g.c.referencia, g.c.usd, g.c.extra).where(
+            g.c.cliente == cliente, g.c.tipo.in_(("video", "imagen")))).all()
+    out = {}
+    for ref, usd, extra in filas:
+        partes = ref.split(":")
+        if len(partes) < 2 or partes[0] not in ("video", "imagen"):
+            continue
+        v = out.setdefault(partes[1], {"usd": 0.0, "usd_musica": 0.0})
+        v["usd"] += float(usd)
+        v["usd_musica"] += float((extra or {}).get("usd_musica") or 0)
+    return {cf_id: {k: round(n, 4) for k, n in v.items()} for cf_id, v in out.items()}
+
+
+def por_referencia(cliente, referencia):
+    with db.conectar() as con:
+        fila = con.execute(sa.select(db.gasto).where(db.gasto.c.cliente == cliente,
+                                                   db.gasto.c.referencia == referencia)).first()
+    if fila:
+        return _fila(fila)
+    import json
+    with db.conectar() as con:
+        valor = con.execute(sa.select(db.kv.c.valor).where(db.kv.c.clave == _clave_reserva(cliente, referencia))).scalar()
+    return json.loads(valor) if valor else None
+
+
+def fichas_pendientes(cliente, tipo):
+    with db.conectar() as con:
+        filas = con.execute(sa.select(db.gasto).where(db.gasto.c.cliente == cliente, db.gasto.c.tipo == tipo,
+                 db.gasto.c.extra["ficha_guardada"].as_boolean().isnot(True))).all()
+    return [_fila(f) for f in filas if (f._mapping[db.gasto.c.extra] or {}).get("ficha")]
+
+
+def _clave_reserva(cliente, referencia):
+    import hashlib
+    return "reserva_gasto:" + hashlib.sha256(f"{cliente}\x1f{referencia}".encode()).hexdigest()
+
+
+def reservar_ficha(cliente, tipo, referencia, *, detalle, proveedor, extra):
+    """Reserva previa al proveedor, fuera de Gasto: todavía no hubo cobro."""
+    import json
+    from sqlalchemy.dialects.sqlite import insert
+    try:
+        valor = json.dumps({"cliente": cliente, "tipo": tipo, "referencia": referencia,
+                            "detalle": detalle, "proveedor": proveedor, "extra": extra, "usd": 0})
+        with db.conectar() as con:
+            con.execute(insert(db.kv).values(clave=_clave_reserva(cliente, referencia), valor=valor,
+                        actualizado_en=db.ahora()).on_conflict_do_nothing(index_elements=[db.kv.c.clave]))
+        return True
+    except Exception:
+        log.exception("No se pudo reservar la ficha de voz")
+        return None

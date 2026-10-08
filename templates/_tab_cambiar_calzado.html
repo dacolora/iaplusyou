@@ -130,7 +130,8 @@
           <a href="{{ s.resultado_url }}" target="_blank"><img src="{{ s.resultado_url }}" alt="{{ _('resultado') }}" loading="lazy"></a>
           {% endif %}
         <div class="costo-mini">
-          {% if s.credits %}~{{ "%.2f"|format(s.credits) }} cr (${{ "%.2f"|format(s.usd or 0) }}){% elif s.usd %}${{ "%.3f"|format(s.usd) }}{% endif %}
+          {% if ver_cobrado() %}{% set _costo = s.usd | cobrado('swap:' ~ s.id) %}{% if _costo %}{{ _costo | usd }}{% endif %}
+          {% elif s.credits %}~{{ "%.2f"|format(s.credits) }} cr (${{ "%.2f"|format(s.usd or 0) }}){% elif s.usd %}${{ "%.3f"|format(s.usd) }}{% endif %}
         </div>
 
         {% elif not s.trabajo and s.estado == "listo" %}

@@ -482,6 +482,10 @@
       });
     })();
   </script>
+  {# Cobros (spec 2026-10-08 §5.4 y §7): un rechazo 402 «saldo insuficiente» de
+     cualquier fetch muestra «Recargar saldo»; además, el panel de Configuración ›
+     Saldo y el sondeo de la vuelta del pago. Un solo archivo, una sola carga. #}
+  <script src="{{ url_for('static', filename='cobros.js') }}" defer data-texto-recargar="{{ _('Recargar saldo') }}" data-texto-cerrar="{{ _('Cerrar') }}"></script>
   {% endif %}
   <script src="{{ url_for('static', filename='tablas.js') }}" defer></script>
 </body>
