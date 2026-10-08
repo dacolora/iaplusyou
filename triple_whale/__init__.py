@@ -86,19 +86,39 @@ def medio_permitido(url):
 
 
 # Un video que no se puede incrustar (TikTok llega como página) se ofrece como enlace «Ver en …», pero solo a la
-# plataforma del anuncio: una URL rara que venga en los datos no se pinta.
-ENLACES_PLATAFORMAS = ("tiktok.com", "facebook.com", "fb.watch", "instagram.com", "snapchat.com", "youtube.com",
-                       "pinterest.com")
+# plataforma del propio anuncio (su `canal`): una URL rara que venga en los datos no se pinta, ni un enlace de otra
+# plataforma, ni un redirector («l.facebook.com/l.php?u=…», «youtube.com/redirect?q=…»), que mandaría a cualquier sitio.
+ENLACES_POR_CANAL = {
+    "tiktok-ads": ("tiktok.com",),
+    "facebook-ads": ("facebook.com", "fb.watch", "instagram.com"),
+    "snapchat-ads": ("snapchat.com",),
+    "google-ads": ("youtube.com",),
+    "pinterest-ads": ("pinterest.com",),
+}
+ENLACES_PLATAFORMAS = tuple(d for dominios in ENLACES_POR_CANAL.values() for d in dominios)
+_HOSTS_REDIRECTOR = ("l.", "lm.")
+_RUTAS_REDIRECTOR = ("/l.php", "/redirect")
 
 
-def enlace_permitido(url):
+def enlace_permitido(url, canal=None):
+    """¿Se puede pintar este enlace «Ver en …»? https, sin usuario ni puerto raro, host exacto o subdominio de
+    la plataforma del `canal` del anuncio (canal desconocido: no; sin canal: cualquiera de las conocidas), y nunca
+    un redirector de enlaces."""
     try:
         p = urlsplit(str(url or "").strip())
+        puerto = p.port
     except ValueError:
         return False
-    host = (p.hostname or "").lower()
-    return (p.scheme == "https" and not p.username and not p.password
-            and any(host == d or host.endswith("." + d) for d in ENLACES_PLATAFORMAS))
+    if p.scheme != "https" or not p.hostname or p.username or p.password or puerto not in (None, 443):
+        return False
+    host = p.hostname.lower()
+    if host.startswith(_HOSTS_REDIRECTOR) or p.path.lower().startswith(_RUTAS_REDIRECTOR):
+        return False
+    if canal is None:
+        dominios = ENLACES_PLATAFORMAS
+    else:
+        dominios = ENLACES_POR_CANAL.get(str(canal).strip().lower(), ())
+    return any(host == d or host.endswith("." + d) for d in dominios)
 
 
 MONEDAS = ("USD", "EUR", "GBP", "AUD", "CAD", "MXN", "COP", "BRL", "CLP", "PEN", "ARS")

@@ -133,8 +133,14 @@ MAX_BYTES_VIDEO = 60 * 1024 * 1024   # el video de un anuncio (spec tarjetas §8
 def descargar_archivo(url, ruta, max_bytes=MAX_BYTES_VIDEO, tipos=("video/",), timeout=TIMEOUT):
     """Baja `url` a `ruta` en streaming, con la guarda de SSRF de `abrir` en cada redirección. Exige un
     Content-Type que empiece por alguno de `tipos` y corta al pasar `max_bytes`. Devuelve los bytes escritos;
-    `ErrorConector` si algo falla, y entonces borra lo que alcanzó a escribir."""
+    `ErrorConector` si algo falla (un corte de red o de disco se convierte en uno).
+
+    Escribe en `ruta + ".part"` y solo lo pasa a `ruta` (os.replace) cuando la descarga terminó bien: si falla, por
+    lo que sea (incluida una interrupción), se borra únicamente el `.part` y un archivo bueno que ya estuviera en
+    `ruta` queda intacto."""
+    parcial = ruta + ".part"
     respuesta = abrir(url, timeout=timeout)
+    listo = False
     try:
         if respuesta.status_code >= 400:
             raise ErrorConector(f"El archivo respondió con error HTTP {respuesta.status_code}.")
@@ -142,7 +148,7 @@ def descargar_archivo(url, ruta, max_bytes=MAX_BYTES_VIDEO, tipos=("video/",), t
         if tipos and not any(tipo.startswith(t) for t in tipos):
             raise ErrorConector("El archivo no es del tipo esperado.")
         total = 0
-        with open(ruta, "wb") as f:
+        with open(parcial, "wb") as f:
             for trozo in respuesta.iter_content(chunk_size=65536):
                 if not trozo:
                     continue
@@ -150,16 +156,17 @@ def descargar_archivo(url, ruta, max_bytes=MAX_BYTES_VIDEO, tipos=("video/",), t
                 if total > max_bytes:
                     raise ErrorConector("El archivo pesa demasiado.")
                 f.write(trozo)
+        os.replace(parcial, ruta)
+        listo = True
         return total
-    except (ErrorConector, requests.RequestException, OSError) as e:
-        try:
-            os.remove(ruta)
-        except OSError:
-            pass
-        if isinstance(e, ErrorConector):
-            raise
+    except (requests.RequestException, OSError) as e:
         raise ErrorConector(f"Se cortó la descarga del archivo ({type(e).__name__}).") from None
     finally:
+        if not listo:
+            try:
+                os.remove(parcial)
+            except OSError:
+                pass
         cerrar = getattr(respuesta, "close", None)
         if cerrar:
             cerrar()
