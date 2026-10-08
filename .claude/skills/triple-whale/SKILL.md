@@ -40,8 +40,13 @@ per-ad «why», and new ad ideas with a validated ángulo and an English video p
 winning own ad as a project referente (fuente `triple_whale`, `anuncio_id = tw:<ad_id>`, thumbnail in R2).
 Experiments with `atribucion="triple_whale"`: `lanzador.refrescar` keeps traffic, spend and ad status from
 Meta (the old path skipped Meta, so rejections went unseen) and overrides purchases/revenue with the Pixel
-orders from `tw_anuncio_dia` since the piece was created (after `sync.sincronizar_si_hace_falta`, once per
-experiment, outside the Meta lock); another currency → ROAS 0 + one evento, like `tienda`. `"triple_whale"`
+orders of THE STORE OF THE PIECE'S COUNTRY (`lanzador._tienda_tw_de`: the country's store, or the only one if the
+project has one; `datos.totales_anuncio` raises `ValueError` without a store) from `tw_anuncio_dia` since the piece was
+created (after `sync.sincronizar_si_hace_falta` once per store used, outside the Meta lock). A piece whose country
+has no store (with 2+ stores) keeps Meta's sales and leaves ONE evento per experiment and country
+(`extra.aviso_sin_tienda_tw`). Every `datos.reemplazar_*` checks inside its transaction that the store still
+exists for the cliente (a removed store's running sync writes nothing). Currency comes from the project's
+`ajustes`; another currency → ROAS 0 + one evento, like `tienda`. `"triple_whale"`
 stays in `tablero.FUENTES_VENTAS` and `decisor.py`'s `con_atribucion`. With Triple Whale connected, every
 creative Creatv creates (`lanzador._crear_anuncios`, and the legacy `tareas/meta.publicar`) carries
 `url_tags=triple_whale.URL_TAGS` (`tw_source={{site_source_name}}&tw_adid={{ad.id}}`, resolved by Meta; the

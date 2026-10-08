@@ -191,3 +191,41 @@ def test_un_producto_sin_nombre_se_agrupa_por_su_id(dos):
     datos.reemplazar_productos("acme", se, DIA, DIA, [{"fecha": DIA, "producto_id": "x", "unidades": 1}])
     datos.reemplazar_productos("acme", no, DIA, DIA, [{"fecha": DIA, "producto_id": "y", "unidades": 2}])
     assert sorted(p["producto_id"] for p in datos.top_productos("acme", None, DIA, DIA)) == ["x", "y"]
+
+
+# ------------------------------------- tienda quitada / sin tienda (Task 7) ---
+
+def test_totales_anuncio_sin_tienda_lanza_en_vez_de_leer_las_filas_sin_tienda(dos):
+    """`tienda_id=None` no significa «todas» aquí: el snapshot de un experimento es de UNA tienda."""
+    se, _, _ = dos
+    _anuncio_en("acme", se, "A", gasto=10, pedidos=1)
+    with pytest.raises(ValueError):
+        datos.totales_anuncio("acme", None, "facebook-ads", "A", DIA)
+
+
+def test_copias_de_una_tienda_quitada_no_dejan_filas_huerfanas(dos):
+    """Quitar una tienda mientras su sincronización corre: lo que el trabajo escribe después no queda
+    (los lectores de «Todas» filtran solo por proyecto y lo contarían)."""
+    se, no, _ = dos
+    assert tt.quitar("acme", se)
+    datos.reemplazar_anuncios_canal("acme", se, DIA, DIA, [_canal("A")])
+    datos.reemplazar_anuncios_pixel("acme", se, DIA, DIA, [_pixel("A")])
+    datos.reemplazar_tienda("acme", se, DIA, DIA, [{"fecha": DIA, "gasto": 5, "ingresos": 9, "pedidos": 1}])
+    datos.reemplazar_productos("acme", se, DIA, DIA, [{"fecha": DIA, "producto_id": "p", "nombre": "P",
+                                                       "unidades": 1, "ingresos": 9, "pedidos": 1}])
+    import db
+    import sqlalchemy as sa
+    with db.conectar() as con:
+        for tabla in (db.tw_anuncio_dia, db.tw_tienda_dia, db.tw_producto_dia):
+            assert con.execute(sa.select(sa.func.count()).select_from(tabla)
+                               .where(tabla.c.cliente == "acme")).scalar() == 0, tabla.name
+    # La otra tienda sigue aceptando copias.
+    datos.reemplazar_anuncios_canal("acme", no, DIA, DIA, [_canal("B")])
+    assert datos.totales_anuncio("acme", no, "facebook-ads", "B", DIA)["n"] == 1
+
+
+def test_copias_de_una_tienda_ajena_no_se_escriben(dos):
+    """La tienda existe pero es de otro proyecto: tampoco se escribe bajo este cliente."""
+    _, _, otro = dos
+    datos.reemplazar_anuncios_canal("acme", otro, DIA, DIA, [_canal("A")])
+    assert datos.totales_por_anuncio("acme", None, DIA, DIA) == []

@@ -10623,6 +10623,10 @@ msgstr "There are no products in the catalog: add them in Catalog › Products."
 msgid "No hay referentes para sugerir"
 msgstr "There are no references to suggest"
 
+#, python-format
+msgid "No hay tienda de Triple Whale para %(pais)s: se usan las ventas de Meta."
+msgstr "There is no Triple Whale store for %(pais)s: Meta sales are used."
+
 msgid "No hay un respaldo de la base de las últimas 48 h (data/respaldos). Revisa que el worker esté corriendo la tarea diaria db_respaldar."
 msgstr "There is no database backup from the last 48 h (data/respaldos). Check that the worker is running the daily db_respaldar task."
 

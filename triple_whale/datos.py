@@ -37,7 +37,16 @@ def _ceros(columnas):
 
 # ------------------------------------------------------------ escribir ---
 # Cada copia es de UNA tienda (`tienda_id`, spec 2026-10-08 §3.3): poner en
-# cero o borrar el rango de una tienda nunca toca las filas de otra.
+# cero o borrar el rango de una tienda nunca toca las filas de otra. Cada
+# `reemplazar_*` comprueba DENTRO de su transacción que la tienda siga siendo del
+# proyecto: si la quitaron mientras su sincronización corría no escribe nada, para
+# no dejar filas huérfanas que los lectores de «Todas» (filtran solo por cliente)
+# contarían.
+
+def _tienda_existe(con, cliente, tienda_id):
+    t = db.tw_tienda
+    return con.execute(sa.select(t.c.id).where(t.c.id == tienda_id, t.c.cliente == cliente)).first() is not None
+
 
 def reemplazar_anuncios_canal(cliente, tienda_id, desde, hasta, registros):
     """Lo que reporta cada plataforma para [desde, hasta] según esa tienda.
@@ -47,6 +56,8 @@ def reemplazar_anuncios_canal(cliente, tienda_id, desde, hasta, registros):
     t = db.tw_anuncio_dia
     ahora = db.ahora()
     with db.conectar() as con:
+        if not _tienda_existe(con, cliente, tienda_id):
+            return
         con.execute(t.update().where(t.c.cliente == cliente, t.c.tienda_id == tienda_id,
                                      t.c.fecha >= desde, t.c.fecha <= hasta)
                     .values(**_ceros(COLUMNAS_CANAL)))
@@ -69,6 +80,8 @@ def reemplazar_anuncios_pixel(cliente, tienda_id, desde, hasta, registros):
     t = db.tw_anuncio_dia
     ahora = db.ahora()
     with db.conectar() as con:
+        if not _tienda_existe(con, cliente, tienda_id):
+            return
         con.execute(t.update().where(t.c.cliente == cliente, t.c.tienda_id == tienda_id,
                                      t.c.fecha >= desde, t.c.fecha <= hasta)
                     .values(con_pixel=True, **_ceros(COLUMNAS_PIXEL)))
@@ -87,6 +100,8 @@ def reemplazar_tienda(cliente, tienda_id, desde, hasta, registros):
     t = db.tw_tienda_dia
     ahora = db.ahora()
     with db.conectar() as con:
+        if not _tienda_existe(con, cliente, tienda_id):
+            return
         con.execute(t.delete().where(t.c.cliente == cliente, t.c.tienda_id == tienda_id,
                                      t.c.fecha >= desde, t.c.fecha <= hasta))
         for r in registros:
@@ -101,6 +116,8 @@ def reemplazar_productos(cliente, tienda_id, desde, hasta, registros):
     t = db.tw_producto_dia
     ahora = db.ahora()
     with db.conectar() as con:
+        if not _tienda_existe(con, cliente, tienda_id):
+            return
         con.execute(t.delete().where(t.c.cliente == cliente, t.c.tienda_id == tienda_id,
                                      t.c.fecha >= desde, t.c.fecha <= hasta))
         for r in registros:
@@ -167,7 +184,11 @@ def totales_por_anuncio(cliente, tienda_id, desde, hasta, canal=None):
 def totales_anuncio(cliente, tienda_id, canal, ad_id, desde, hasta=None):
     """Las medidas sumadas de UN anuncio en UNA tienda desde `desde` (para el
     snapshot de un experimento, que vende en la tienda de su país). None si
-    Triple Whale todavía no trajo ninguna fila suya."""
+    Triple Whale todavía no trajo ninguna fila suya. Sin `tienda_id` lanza
+    `ValueError`: aquí `None` no es «todas» y leer las filas sin tienda daría
+    un None que parece «sin datos»."""
+    if tienda_id is None:
+        raise ValueError("totales_anuncio pide la tienda")
     t = db.tw_anuncio_dia
     cond = [t.c.cliente == cliente, t.c.tienda_id == tienda_id, t.c.canal == canal, t.c.ad_id == str(ad_id),
             t.c.fecha >= desde]
