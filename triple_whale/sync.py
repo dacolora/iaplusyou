@@ -1,5 +1,8 @@
 """Copia las métricas de Triple Whale a la base (spec 2026-09-28 §4).
 
+Una copia por TIENDA (spec 2026-10-08 §5): cada tienda con su llave, su
+dominio y sus filas; moneda, modelo y ventana son del proyecto.
+
 Al conectar: los últimos `DIAS_BACKFILL` días. Después (periódica cada 2 h,
 y antes de refrescar un experimento atribuido a Triple Whale): los últimos
 `DIAS_RECIENTES` días — o desde la última sincronización si el worker estuvo
@@ -174,24 +177,24 @@ def tramos(desde, hasta, dias=DIAS_TRAMO):
     return salida
 
 
-def rango_pendiente(config, hoy):
-    """(desde, hasta) de la próxima sincronización: todo el backfill si nunca
-    se hizo; si no, los últimos DIAS_RECIENTES días, o desde dos días antes
-    de la última sincronización si fue hace más (worker parado)."""
+def rango_pendiente(tienda, hoy):
+    """(desde, hasta) de la próxima sincronización de esa TIENDA: todo el
+    backfill si nunca se hizo; si no, los últimos DIAS_RECIENTES días, o desde
+    dos días antes de la última sincronización si fue hace más (worker parado)."""
     inicio_backfill = hoy - timedelta(days=DIAS_BACKFILL - 1)
-    extra = config.get("extra") or {}
+    extra = tienda.get("extra") or {}
     if not extra.get("backfill_desde"):
         return inicio_backfill.isoformat(), hoy.isoformat()
     desde = hoy - timedelta(days=DIAS_RECIENTES - 1)
-    ultima = _fecha(config.get("ultima_sincronizacion"))
+    ultima = _fecha(tienda.get("ultima_sincronizacion"))
     if ultima:
         desde = min(desde, date.fromisoformat(ultima) - timedelta(days=2))
     return max(desde, inicio_backfill).isoformat(), hoy.isoformat()
 
 
-def esta_fresca(config, minutos=MINUTOS_FRESCO, ahora=None):
-    ultima = (config or {}).get("ultima_sincronizacion")
-    if not ultima or not (config.get("extra") or {}).get("backfill_desde"):
+def esta_fresca(tienda, minutos=MINUTOS_FRESCO, ahora=None):
+    ultima = (tienda or {}).get("ultima_sincronizacion")
+    if not ultima or not (tienda.get("extra") or {}).get("backfill_desde"):
         return False
     try:
         return datetime.fromisoformat(ultima) + timedelta(minutes=minutos) > (ahora or datetime.now())
@@ -201,20 +204,23 @@ def esta_fresca(config, minutos=MINUTOS_FRESCO, ahora=None):
 
 # -------------------------------------------------------- sincronizar ---
 
-def sincronizar(cliente, desde=None, hasta=None, on_progreso=None, hoy=None):
-    """Trae [desde, hasta] (por defecto `rango_pendiente`) y lo guarda.
-    Devuelve el resumen que queda en `triple_whale.extra.ultimo_resumen`.
-    Lanza ErrorTripleWhale (o subclase) si la llave, la tienda o la red fallan."""
-    config = triple_whale_tiendas.obtener(cliente)
-    if not config:
-        raise triple_whale.ErrorTripleWhale(gettext("Triple Whale no está conectado en este proyecto."))
-    llave = triple_whale_tiendas.obtener_llave(cliente)
+def sincronizar(cliente, tienda_id, desde=None, hasta=None, on_progreso=None, hoy=None):
+    """Trae [desde, hasta] (por defecto `rango_pendiente`) de UNA tienda y lo
+    guarda en sus filas. Llave y dominio son los de esa tienda; moneda, modelo
+    y ventana, los del proyecto. Devuelve el resumen que queda en
+    `extra.ultimo_resumen` de la tienda. Lanza ErrorTripleWhale (o subclase)
+    si la llave, la tienda o la red fallan."""
+    tienda = triple_whale_tiendas.tienda(cliente, tienda_id)
+    config = triple_whale_tiendas.ajustes(cliente)
+    if not tienda or not config:
+        raise triple_whale.ErrorTripleWhale(gettext("Esa tienda de Triple Whale ya no está conectada."))
+    llave = triple_whale_tiendas.obtener_llave(cliente, tienda_id)
     if not llave:
         raise triple_whale.ErrorLlave(gettext("No hay llave de Triple Whale guardada. Vuelve a conectarlo."))
     hoy = hoy or date.today()
     if desde is None or hasta is None:
-        desde, hasta = rango_pendiente(config, hoy)
-    dominio, moneda = config["dominio_tienda"], config["moneda"]
+        desde, hasta = rango_pendiente(tienda, hoy)
+    dominio, moneda = tienda["dominio"], config["moneda"]
     consultas_pixel = triple_whale.consultas_pixel(config["modelo_atribucion"], config["ventana_atribucion"])
     indice = {"anuncios": 0, "pixel": 0, "tienda": 0, "productos": 0}
     fallo = {"pixel": None, "tienda": None, "productos": None}
@@ -226,7 +232,7 @@ def sincronizar(cliente, desde=None, hasta=None, on_progreso=None, hoy=None):
         filas, indice["anuncios"] = triple_whale.consultar_con_respaldo(
             llave, dominio, triple_whale.consultas_anuncios(), d, h, moneda, empezar_en=indice["anuncios"])
         registros = _sumar_por_clave((normalizar_anuncio(f) for f in filas), datos.COLUMNAS_CANAL)
-        datos.reemplazar_anuncios_canal(cliente, d, h, registros)
+        datos.reemplazar_anuncios_canal(cliente, tienda_id, d, h, registros)
         cuenta["anuncios"].update((r["canal"], r["ad_id"]) for r in registros)
 
         if fallo["pixel"] is None:
@@ -234,7 +240,7 @@ def sincronizar(cliente, desde=None, hasta=None, on_progreso=None, hoy=None):
                 filas, indice["pixel"] = triple_whale.consultar_con_respaldo(
                     llave, dominio, consultas_pixel, d, h, moneda, empezar_en=indice["pixel"])
                 registros = _sumar_por_clave((normalizar_pixel(f) for f in filas), datos.COLUMNAS_PIXEL)
-                datos.reemplazar_anuncios_pixel(cliente, d, h, registros)
+                datos.reemplazar_anuncios_pixel(cliente, tienda_id, d, h, registros)
                 cuenta["filas_pixel"] += len(registros)
             except triple_whale.ErrorConsulta as e:
                 fallo["pixel"] = str(e)
@@ -244,7 +250,7 @@ def sincronizar(cliente, desde=None, hasta=None, on_progreso=None, hoy=None):
                 filas, indice["tienda"] = triple_whale.consultar_con_respaldo(
                     llave, dominio, triple_whale.consultas_tienda(), d, h, moneda, empezar_en=indice["tienda"])
                 registros = [r for r in (normalizar_tienda(f) for f in filas) if r]
-                datos.reemplazar_tienda(cliente, d, h, registros)
+                datos.reemplazar_tienda(cliente, tienda_id, d, h, registros)
                 cuenta["dias_tienda"] += len(registros)
             except triple_whale.ErrorConsulta as e:
                 fallo["tienda"] = str(e)
@@ -254,7 +260,7 @@ def sincronizar(cliente, desde=None, hasta=None, on_progreso=None, hoy=None):
                 filas, indice["productos"] = triple_whale.consultar_con_respaldo(
                     llave, dominio, triple_whale.consultas_productos(), d, h, moneda, empezar_en=indice["productos"])
                 registros = _productos_por_clave(normalizar_producto(f) for f in filas)
-                datos.reemplazar_productos(cliente, d, h, registros)
+                datos.reemplazar_productos(cliente, tienda_id, d, h, registros)
                 cuenta["productos"].update(r["producto_id"] for r in registros)
             except triple_whale.ErrorConsulta as e:
                 fallo["productos"] = str(e)
@@ -266,16 +272,17 @@ def sincronizar(cliente, desde=None, hasta=None, on_progreso=None, hoy=None):
         "consultas": {k: ("sin_datos" if fallo.get(k) else NOMBRES_CONSULTA[v]) for k, v in indice.items()},
         "fallos": {k: v for k, v in fallo.items() if v},
     }
-    previo = (config.get("extra") or {}).get("backfill_desde")
-    triple_whale_tiendas.actualizar(cliente, estado="conectada", error=None, ultima_sincronizacion=db.ahora())
-    triple_whale_tiendas.actualizar_extra(cliente, {"backfill_desde": min(filter(None, (previo, desde))),
-                                                    "ultimo_resumen": resumen})
+    previo = (tienda.get("extra") or {}).get("backfill_desde")
+    triple_whale_tiendas.actualizar_tienda(cliente, tienda_id, estado="conectada", error=None,
+                                           ultima_sincronizacion=db.ahora())
+    triple_whale_tiendas.actualizar_extra_tienda(cliente, tienda_id, {
+        "backfill_desde": min(filter(None, (previo, desde))), "ultimo_resumen": resumen})
     return resumen
 
 
-def sincronizar_si_hace_falta(cliente, minutos=MINUTOS_FRESCO):
-    """Sincroniza solo si lo copiado tiene más de `minutos`. None si no hizo nada."""
-    config = triple_whale_tiendas.obtener(cliente)
-    if not config or esta_fresca(config, minutos):
+def sincronizar_si_hace_falta(cliente, tienda_id, minutos=MINUTOS_FRESCO):
+    """Sincroniza esa tienda solo si lo copiado tiene más de `minutos`. None si no hizo nada."""
+    tienda = triple_whale_tiendas.tienda(cliente, tienda_id)
+    if not tienda or esta_fresca(tienda, minutos):
         return None
-    return sincronizar(cliente)
+    return sincronizar(cliente, tienda_id)

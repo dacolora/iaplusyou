@@ -6257,6 +6257,9 @@ msgstr "That season doesn't exist in this project."
 msgid "Esa temporada no existe."
 msgstr "That season doesn't exist."
 
+msgid "Esa tienda de Triple Whale ya no está conectada."
+msgstr "That Triple Whale store is no longer connected."
+
 msgid "Esa tienda no existe."
 msgstr "That store doesn't exist."
 
@@ -9390,6 +9393,10 @@ msgstr "Ready, with warnings"
 msgid "Listo"
 msgstr "Done"
 
+#, python-format
+msgid "Listo (%(tienda)s): %(n)s anuncio(s) y %(dias)s día(s) de la tienda, del %(desde)s al %(hasta)s."
+msgstr "Done (%(tienda)s): %(n)s ad(s) and %(dias)s day(s) of store data, from %(desde)s to %(hasta)s."
+
 msgid "Listo para Meta o redes"
 msgstr "Ready for Meta or social"
 
@@ -9398,10 +9405,6 @@ msgstr "Ready to publish again."
 
 msgid "Listo."
 msgstr "Done."
-
-#, python-format
-msgid "Listo: %(n)s anuncio(s) y %(dias)s día(s) de la tienda, del %(desde)s al %(hasta)s."
-msgstr "Done: %(n)s ad(s) and %(dias)s day(s) of store data, from %(desde)s to %(hasta)s."
 
 msgid "Listo: Claude no lo volverá a pedir."
 msgstr "Done: Claude won't ask for it again."

@@ -51,16 +51,17 @@ def _serie_dias(desde, hasta, filas, clave_gasto="gasto", clave_ingresos="ingres
     return salida
 
 
-def evaluar_periodo(cliente, dias=PERIODO_DEFECTO, canal=None, hoy=None):
+def evaluar_periodo(cliente, dias=PERIODO_DEFECTO, canal=None, tienda_id=None, hoy=None):
     """(evaluación, desde, hasta) — lo mismo que ve la pestaña; también lo usa
-    la ruta que encola el análisis con IA, para que Claude vea exactamente eso."""
+    la ruta que encola el análisis con IA, para que Claude vea exactamente eso.
+    `tienda_id=None` evalúa «Todas las tiendas»."""
     hoy = hoy or date.today()
     desde, hasta, _, _ = periodo(dias, hoy)
     reglas = decisor.reglas_efectivas(proyectos.reglas_defecto(cliente), {})
     ev = evaluacion.evaluar(
-        datos.totales_por_anuncio(cliente, desde, hasta, canal),
-        datos.totales_por_anuncio(cliente, _iso(hoy - timedelta(days=6)), _iso(hoy), canal),
-        datos.totales_por_anuncio(cliente, _iso(hoy - timedelta(days=13)), _iso(hoy - timedelta(days=7)), canal),
+        datos.totales_por_anuncio(cliente, tienda_id, desde, hasta, canal),
+        datos.totales_por_anuncio(cliente, tienda_id, _iso(hoy - timedelta(days=6)), _iso(hoy), canal),
+        datos.totales_por_anuncio(cliente, tienda_id, _iso(hoy - timedelta(days=13)), _iso(hoy - timedelta(days=7)), canal),
         reglas)
     return ev, desde, hasta
 
@@ -147,7 +148,7 @@ def contexto(cliente, dias=PERIODO_DEFECTO, canal=None, hoy=None):
     desde, hasta, desde_prev, hasta_prev = periodo(dias, hoy)
     canales = datos.canales(cliente, desde, hasta)
     canal = canal if canal in canales else None
-    ev, _, _ = evaluar_periodo(cliente, dias, canal, hoy)
+    ev, _, _ = evaluar_periodo(cliente, dias, canal, hoy=hoy)
 
     serie_tienda = datos.serie_tienda(cliente, desde, hasta)
     tienda = evaluacion.resumen_tienda(serie_tienda, datos.serie_tienda(cliente, desde_prev, hasta_prev))
