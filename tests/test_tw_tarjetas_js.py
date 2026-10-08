@@ -85,3 +85,12 @@ def test_la_tarjeta_repintada_que_no_termino_muestra_lo_que_dijo_el_trabajo():
     # Si la tarjeta no se puede pedir de nuevo, el aviso queda en la vieja (que sigue con sus botones deshabilitados).
     assert "avisoEn(tarjeta, enFallo)" in repintar
     assert "textContent = texto" in tab                         # nunca innerHTML con lo que dice un trabajo
+
+
+def test_una_barra_en_modo_evento_nunca_recarga_despues_de_avisar():
+    """C4 (m20): cada salida de fin que avisa con el evento termina ahí (`return`); sin él, después del aviso la barra
+    recargaría la página igual (diez análisis, diez recargas)."""
+    base = _leer("base.html")
+    llamadas = base.count("avisarFin(") - base.count("function avisarFin(")
+    con_return = re.findall(r"if \(avisar\) \{ avisarFin\([^;]*\); return; \}", base)
+    assert llamadas == 4 and len(con_return) == llamadas

@@ -336,6 +336,17 @@ def test_anillo_sin_percentil_muestra_la_cifra_y_el_porque(app):  # noqa: F811
     assert re.search(r'aria-label="Gancho: [^"]*se queda 3 s · pocos anuncios para comparar"', html)
 
 
+def test_el_enlace_ver_en_es_solo_de_la_plataforma_del_propio_anuncio():
+    """C5 (m5c): `medio_tarjeta` pasa el canal del anuncio a `enlace_permitido`: un enlace de TikTok en un anuncio de
+    Meta no se pinta (sin canal valdría cualquier plataforma conocida)."""
+    tiktok = {"video_url": "https://www.tiktok.com/embed/v1"}
+    assert panel.medio_tarjeta({"canal": "tiktok-ads", "creativo": tiktok}) == {"enlace": tiktok["video_url"]}
+    assert panel.medio_tarjeta({"canal": "facebook-ads", "creativo": tiktok}) == {}
+    poster = dict(tiktok, imagen_url="https://files.triplewhale.com/t/1.jpg")
+    assert panel.medio_tarjeta({"canal": "facebook-ads", "creativo": poster}) == {"imagen": poster["imagen_url"],
+                                                                                 "enlace": None}
+
+
 def test_pieza_de_creatv_con_solo_miniatura_se_ve_como_imagen():
     a = {"canal": "facebook-ads", "creatv": {"tipo": "video", "url_video": None, "url_miniatura": "https://r2/m.jpg"}}
     assert panel.medio_tarjeta(a) == {"imagen": "https://r2/m.jpg"}

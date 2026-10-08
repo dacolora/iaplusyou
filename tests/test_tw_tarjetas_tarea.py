@@ -3,6 +3,7 @@ import pytest
 import sqlalchemy as sa
 
 import db
+import proyectos
 import triple_whale_tiendas
 from nicho.avatares import costo_real
 from tests.test_tw_mejorar import _foto, respuesta
@@ -10,8 +11,10 @@ from triple_whale import analisis, datos, mejorar
 
 
 @pytest.fixture()
-def en_cola(base_temporal, monkeypatch):
+def en_cola(base_temporal, monkeypatch, tmp_path):
     monkeypatch.setenv("FLASK_SECRET_KEY", "test_secret_key_12345678")
+    # proyecto.json (aprendizajes, preferencias) en una carpeta temporal: una tarea rota no escribe en clientes/.
+    monkeypatch.setattr(proyectos, "BASE_DIR", str(tmp_path))
     triple_whale_tiendas.agregar("acme", "tw_x", "acme.myshopify.com", None, moneda="USD")
     aid = datos.crear_analisis("acme", None, "facebook-ads", "p1", "2026-09-01", "2026-09-30", "USD", _foto())
     from tareas import triple_whale as t
@@ -48,6 +51,18 @@ def test_tarea_guarda_el_resultado_y_registra_whisper_y_claude(en_cola, monkeypa
     assert g[0]["tipo"] == "evaluacion" and g[0]["proveedor"] == "anthropic"
     assert g[1]["tipo"] == "transcripcion" and g[1]["proveedor"] == "fal" and g[1]["usd"] == pytest.approx(0.001)
     assert fila["usd"] == pytest.approx(g[0]["usd"] + 0.001)
+
+
+def test_la_tarea_nunca_agrega_un_aprendizaje(en_cola, monkeypatch, tmp_path):
+    """C3 (m25): el aprendizaje entra solo con el clic en «Guardar como aprendizaje»: diez análisis no pueden dejar diez
+    líneas en todos los prompts del proyecto (spec §6.3). Y la prueba no escribe en clientes/ del repo."""
+    _analizar_bien(monkeypatch)
+    agregados = []
+    monkeypatch.setattr(proyectos, "agregar_aprendizaje", lambda *a, **k: agregados.append(a))
+    en_cola["t"].tw_analizar_anuncio({"id": 12, "payload": {"cliente": "acme", "analisis_id": en_cola["aid"]}})
+    assert datos.analisis_anuncio("acme", en_cola["aid"])["resultado"]["aprendizaje"]
+    assert agregados == [] and proyectos.aprendizajes("acme") == []
+    assert proyectos.BASE_DIR == str(tmp_path)
 
 
 def test_whisper_caido_sigue_sin_voz(en_cola, monkeypatch):

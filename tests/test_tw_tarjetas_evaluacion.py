@@ -106,3 +106,14 @@ def test_frases_y_textos_cubren_todo():
     assert set(ev.FRASES_VEREDICTO) == set(ev.VEREDICTOS)
     assert set(ev.TENDENCIAS) == {"cansando", "mejorando", "sin_gasto", "estable"}
     assert set(ev.VACIOS_ANILLO) == {"sin_video", "pocos_datos", "pocas_comparables", "sin_ventas", "pocos_clics"}
+
+
+def test_un_anuncio_con_pocas_impresiones_no_mueve_los_percentiles_de_los_demas():
+    """C2 (m23): el grupo de cada anillo es solo de los que pasan `impresiones_min`. Uno chico con un CTR enorme
+    (50 %) no entra a comparar: los demás siguen 0, 50 y 100, y él no tiene percentil."""
+    lista = [anuncio("a", clics=100), anuncio("b", clics=200), anuncio("c", clics=200), anuncio("d", clics=300),
+             anuncio("chico", impresiones=200, clics=100)]
+    a = _por_id(ev.evaluar(lista, reglas=REGLAS))
+    assert a["a"]["anillos"]["clic"]["pct"] == 0 and a["b"]["anillos"]["clic"]["pct"] == 50
+    assert a["d"]["anillos"]["clic"]["pct"] == 100                # con el chico en el grupo serían 75
+    assert a["chico"]["anillos"]["clic"]["pct"] is None and a["chico"]["anillos"]["clic"]["vacio"] == "pocos_datos"

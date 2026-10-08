@@ -119,3 +119,38 @@ def test_tres_mil_claves_no_pasan_los_topes_de_sqlite(tienda):
     assert len(cr) == n and cr[("facebook-ads", "2999")]["titulo"] == "T2999"
     ul = datos.ultimos_analisis("acme", claves)
     assert len(ul) == n and all(f["estado"] == "error" and f["cliente"] == "acme" for f in ul.values())
+
+
+# ---------------------------------------------------------------- revisión final (sección C) ---
+
+def _pieza_de_analisis(cliente, aid, legado, accion):
+    """Una pieza de Crear nacida de la versión mejorada del análisis `aid` (concepto.extra.tw_idea)."""
+    ahora = db.ahora()
+    with db.conectar() as con:
+        cid = con.execute(db.concepto.insert().values(
+            cliente=cliente, creado_en=ahora, actualizado_en=ahora, origen="manual", legado_id=legado,
+            extra={"tw_idea": {"analisis_id": aid, "titulo": "x"}, "accion_central": accion})).inserted_primary_key[0]
+        return con.execute(db.pieza.insert().values(
+            cliente=cliente, creado_en=ahora, actualizado_en=ahora, concepto_id=cid, tipo="video", estado="listo",
+            url_video="https://r2/v.mp4", legado_id=legado, extra={})).inserted_primary_key[0]
+
+
+def test_piezas_de_analisis_solo_las_del_proyecto(tienda):
+    """C1 (m11): otro proyecto con una pieza que apunta al mismo id de análisis no se cuenta en esta tarjeta."""
+    aid = datos.crear_analisis("acme", tienda, "facebook-ads", "1", "2026-09-01", "2026-09-30", "USD", {})
+    mia = _pieza_de_analisis("acme", aid, "cf_mia", "Primer plano del pie")
+    _pieza_de_analisis("otro", aid, "cf_ajena", "Lo de otro proyecto")
+    [p] = datos.piezas_de_analisis("acme", [aid])[aid]
+    assert p["pieza_id"] == mia and p["cf_id"] == "cf_mia" and p["titulo"] == "Primer plano del pie"
+    assert [x["cf_id"] for x in datos.piezas_de_analisis("otro", [aid])[aid]] == ["cf_ajena"]
+    assert datos.piezas_de_analisis("acme", []) == {}
+
+
+def test_desconectar_borra_los_creativos_del_proyecto_y_solo_esos(tienda):
+    """C7 (m17): `desconectar` quita también el anuncio tal cual (tw_creativo); el de otro proyecto se queda."""
+    otra = triple_whale_tiendas.agregar("otro", "tw_z", "otro.myshopify.com", None, moneda="USD")
+    datos.reemplazar_creativos("acme", tienda, [_creativo("1")])
+    datos.reemplazar_creativos("otro", otra, [_creativo("1")])
+    triple_whale_tiendas.desconectar("acme")
+    assert datos.creativos("acme", [("facebook-ads", "1")]) == {}
+    assert datos.creativos("otro", [("facebook-ads", "1")])

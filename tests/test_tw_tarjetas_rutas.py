@@ -245,6 +245,23 @@ def test_detalle_muestra_razones_cambios_y_version(app):  # noqa: F811
     assert app["c"].get("/cliente/acme/triple-whale/analisis/99999").status_code == 404
 
 
+def test_un_analisis_que_no_esta_listo_ni_se_ve_ni_lleva_a_crear(app):  # noqa: F811
+    """C6 (m26, m27): uno en cola, analizando o con error (aunque tenga una versión guardada) no es un origen válido
+    para Crear y su detalle es 404."""
+    from triple_whale import puente
+    _conectar()
+    _sembrar()
+    aid = _lista(app)
+    for estado in ("en_cola", "analizando", "error"):
+        datos.actualizar_analisis(aid, estado=estado)
+        assert puente.origen_desde_formulario("acme", f"a{aid}") is None, estado
+        assert app["c"].get(f"/cliente/acme/triple-whale/analisis/{aid}").status_code == 404, estado
+        assert app["c"].post(f"/cliente/acme/triple-whale/analisis/{aid}/crear").status_code == 404, estado
+    datos.actualizar_analisis(aid, estado="lista")
+    assert puente.origen_desde_formulario("acme", f"a{aid}")["analisis_id"] == aid
+    assert app["c"].get(f"/cliente/acme/triple-whale/analisis/{aid}").status_code == 200
+
+
 def test_detalle_de_otro_proyecto_es_404(app):  # noqa: F811
     _conectar()
     aid = datos.crear_analisis("otro", None, "facebook-ads", "1", "2026-09-01", "2026-09-30", "USD", {})
