@@ -2962,6 +2962,7 @@ def _pedir_analisis(cliente, alc, a):
     canal_info = next((c for c in ev["cuenta"]["canales"] if c["canal"] == a["canal"]), None)
     cuenta = {"benchmarks": ev.get("benchmarks_canal", {}).get(a["canal"]) or ev["benchmarks"],
               "meta_roas": ev["meta_roas"],
+              "modelo": alc["config"].get("modelo_atribucion"), "ventana": alc["config"].get("ventana_atribucion"),
               "cpa_canal": (canal_info["gasto"] / canal_info["pedidos"]) if canal_info and canal_info["pedidos"] else None}
     if "creatv" not in a and a["canal"] == "facebook-ads":
         a["creatv"] = datos.piezas_creatv(cliente, [a["ad_id"]]).get(a["ad_id"])
