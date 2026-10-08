@@ -5,6 +5,7 @@ Un día sin publicación (fin de semana, festivo) usa el último publicado
 anterior. Sin tasa conocida el valor es None: la pantalla dice «USD no
 disponible», nunca una tasa inventada."""
 import logging
+import math
 import re
 from datetime import date, timedelta
 from time import monotonic
@@ -55,17 +56,24 @@ def asegurar(monedas, desde, hasta, hoy=None):
     """Pide al BCE lo que falte del rango. Nunca lanza (las métricas se ven igual, sin USD)."""
     hoy = hoy or date.today()
 
-    # Wrap date parsing in try-except
+    # Wrap date parsing in try-except (catch both ValueError and TypeError)
     try:
         desde_d = date.fromisoformat(desde)
         hasta_d = date.fromisoformat(hasta)
-    except ValueError as e:
+    except (ValueError, TypeError) as e:
         log.warning("tasas parse dates: %s", type(e).__name__)
+        return
+
+    # Wrap monedas normalization in guard (catch TypeError if monedas is None)
+    try:
+        monedas_set = {(s or "").upper() for s in monedas} - {"", "USD"}
+    except TypeError:
+        log.warning("tasas monedas type: %s", type(None).__name__)
         return
 
     desde_buffer = (desde_d - timedelta(days=_HOLGURA_DIAS)).isoformat()
 
-    for m in sorted({(s or "").upper() for s in monedas} - {"", "USD"}):
+    for m in sorted(monedas_set):
         # Validar moneda
         if not re.fullmatch(r"[A-Z]{3}", m):
             continue
@@ -112,8 +120,10 @@ def asegurar(monedas, desde, hasta, hoy=None):
                 if isinstance(v, dict) and "USD" in v:
                     try:
                         usd_val = float(v["USD"])
-                        filas.append({"fecha": f, "moneda": m, "usd_por_unidad": usd_val, "fuente": "bce",
-                                    "creado_en": db.ahora()})
+                        # Skip rates that are not finite positive numbers (0, negative, NaN, Inf)
+                        if usd_val > 0 and math.isfinite(usd_val):
+                            filas.append({"fecha": f, "moneda": m, "usd_por_unidad": usd_val, "fuente": "bce",
+                                        "creado_en": db.ahora()})
                     except (ValueError, TypeError):
                         continue
 
@@ -128,10 +138,9 @@ def asegurar(monedas, desde, hasta, hoy=None):
                         index_elements=["fecha", "moneda"], set_={"usd_por_unidad": fila["usd_por_unidad"]}))
 
             # Verificar si alcanzamos objetivo (si nueva tasa < objetivo, set negative cache)
-            if filas:
-                max_fecha = max(f["fecha"] for f in filas)
-                if max_fecha < objetivo:
-                    _intentos[clave] = monotonic()
+            max_fecha = max(f["fecha"] for f in filas)
+            if max_fecha < objetivo:
+                _intentos[clave] = monotonic()
 
         except Exception as e:
             log.warning("tasas %s: %s", m, type(e).__name__)
