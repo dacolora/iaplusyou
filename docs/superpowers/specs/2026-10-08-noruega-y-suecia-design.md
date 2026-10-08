@@ -32,11 +32,12 @@ el idioma de lo que se publica.
   El código de idioma noruego es `"no"`, el mismo que ya usan `audios.IDIOMAS` y `providers/fal_audio.IDIOMAS_MINIMAX`.
 - `formatear_precio` para NO y SE: miles con espacio, sin decimales si el valor es entero y con coma decimal si no,
   símbolo detrás con espacio: `299 kr`, `1 299 kr`, `149,50 kr`.
-- `presupuesto_experimentos.PRESUPUESTO_MINIMO_DIARIO`: `"NOK": 10, "SEK": 10` (Meta pide el equivalente a ~1 USD al
-  día). `lanzador._MIN_POR_MONEDA`: `"NOK": 1000.0, "SEK": 1000.0` (el equivalente al de EUR/USD). La regla de que se
+- `presupuesto_experimentos.PRESUPUESTO_MINIMO_DIARIO`: `"NOK": 15, "SEK": 15` (Meta pide el equivalente a ~1 USD al
+  día; 10 coronas quedaban bajo US$1, 15 ≈ US$1,4, corregido el 2026-10-08). `lanzador._MIN_POR_MONEDA`: `"NOK": 1300.0,
+  "SEK": 1300.0` (≈ US$120–140; 1 000 NOK ≈ US$94 quedaba bajo el spend_cap mínimo de Meta, corregido el 2026-10-08). La regla de que se
   compara contra la moneda de FACTURACIÓN de la cuenta no cambia.
 - `triple_whale.MONEDAS` gana `"NOK"` y `"SEK"`.
-- `proyectos.PAISES_CALENDARIO` deja de ser una copia: sale de `tipos.PAISES` (mismo orden), así NO y SE entran solos.
+- `proyectos.paises_calendario()` (antes la constante `PAISES_CALENDARIO`, una copia) sale de `tipos.PAISES` (mismo orden; importa `final_edition.tipos` dentro de la función para que `import proyectos` no cargue `final_edition`), así NO y SE entran solos.
 - `nicho/datos.PAISES_ESTUDIO` y `NOMBRES_PAIS` ganan NO (SE ya está).
 
 ## 4. Idiomas de lo que se publica

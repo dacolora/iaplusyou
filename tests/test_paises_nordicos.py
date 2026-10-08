@@ -1,5 +1,7 @@
 """Noruega (NO, noruego bokmål, NOK) y Suecia (SE, sueco, SEK): países, monedas y nombres de idioma.
 Spec docs/superpowers/specs/2026-10-08-noruega-y-suecia-design.md §3 y §4."""
+import os
+
 import pytest
 
 import idiomas_publicacion
@@ -42,10 +44,10 @@ def test_formatear_precio_de_los_demas_paises_no_cambia():
 
 
 def test_presupuesto_minimo_diario_y_tope_de_campana_en_coronas():
-    assert presupuesto_experimentos.PRESUPUESTO_MINIMO_DIARIO["NOK"] == 10
-    assert presupuesto_experimentos.PRESUPUESTO_MINIMO_DIARIO["SEK"] == 10
-    assert lanzador.minimo_tope_campana("NOK") == 1000.0
-    assert lanzador.minimo_tope_campana("SEK") == 1000.0
+    assert presupuesto_experimentos.PRESUPUESTO_MINIMO_DIARIO["NOK"] == 15
+    assert presupuesto_experimentos.PRESUPUESTO_MINIMO_DIARIO["SEK"] == 15
+    assert lanzador.minimo_tope_campana("NOK") == 1300.0
+    assert lanzador.minimo_tope_campana("SEK") == 1300.0
 
 
 def test_triple_whale_acepta_coronas():
@@ -54,7 +56,7 @@ def test_triple_whale_acepta_coronas():
 
 
 def test_calendario_sale_de_los_paises_de_final_edition(tmp_path, monkeypatch):
-    assert proyectos.PAISES_CALENDARIO == tuple(tipos.PAISES)
+    assert proyectos.paises_calendario() == tuple(tipos.PAISES)
     monkeypatch.setattr(proyectos, "_path", lambda c: str(tmp_path / f"{c}.json"))
     for pais in ("NO", "SE"):
         proyectos.guardar_pais("acme", pais)
@@ -339,3 +341,19 @@ def test_las_opciones_de_idioma_base_salen_de_idiomas_fe_de_la_ruta(base_tempora
         '<option value="es" selected>Español</option>', '<option value="en">English</option>',
         '<option value="pt">Português</option>', '<option value="sv">Svenska</option>',
         '<option value="no">Norsk (bokmål)</option>']
+
+
+def test_importar_proyectos_no_carga_final_edition():
+    """`import proyectos` no arrastra final_edition (2 000 módulos y un ciclo con final_edition/__init__.py)."""
+    import subprocess
+    import sys
+    codigo = "import sys, proyectos; print('final_edition' in sys.modules)"
+    r = subprocess.run([sys.executable, "-c", codigo], capture_output=True, text=True, cwd=os.path.dirname(os.path.dirname(__file__)))
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.strip() == "False"
+
+
+@pytest.mark.parametrize("pais", ["NO", "SE"])
+@pytest.mark.parametrize("valor", [float("nan"), float("inf"), float("-inf")])
+def test_formatear_precio_coronas_no_lanza_con_nan_o_infinito(pais, valor):
+    assert tipos.formatear_precio(valor, pais) == f"{valor} kr"

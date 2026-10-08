@@ -16,7 +16,7 @@ abren a sv/no; un módulo pequeño `idiomas_publicacion.py` da el nombre de cada
 - Worktree `.claude/worktrees/paises-nordicos`, rama `paises-nordicos`; `venv/bin/python3`; nunca el checkout principal.
 - Código de idioma noruego `"no"`, sueco `"sv"`; países `"NO"`, `"SE"`; monedas `"NOK"`, `"SEK"`; símbolo `"kr"`.
 - Precio NO/SE: `299 kr`, `1 299 kr`, `149,50 kr` (miles con espacio, coma decimal, símbolo detrás).
-- Mínimo diario Meta: `"NOK": 10, "SEK": 10`; mínimo de tope de campaña: `"NOK": 1000.0, "SEK": 1000.0`.
+- Mínimo diario Meta: `"NOK": 15, "SEK": 15`; mínimo de tope de campaña: `"NOK": 1300.0, "SEK": 1300.0` (corregidos el 2026-10-08: 1 000 NOK ≈ US$94 quedaba bajo el spend_cap mínimo de Meta y 10 NOK bajo ~US$1).
 - Nombres para prompts: `"sv": "sueco"`, `"no": "noruego (bokmål)"`; en inglés `"Swedish"`, `"Norwegian (Bokmål)"`.
 - Textos visibles por el catálogo (regla 3); textos publicables en sv/no (link en bio, CTA) no van al catálogo.
 - Ninguna prueba llama a un proveedor de verdad (dobles). Nada nuevo cobra: el precio de una final no cambia.
@@ -29,15 +29,15 @@ abren a sv/no; un módulo pequeño `idiomas_publicacion.py` da el nombre de cada
 ### Task 1: Países, monedas y nombres de idioma
 
 **Files:** `final_edition/tipos.py`, `presupuesto_experimentos.py`, `lanzador.py` (`_MIN_POR_MONEDA`),
-`triple_whale/__init__.py` (`MONEDAS`), `proyectos.py` (`PAISES_CALENDARIO` desde `tipos.PAISES`), `nicho/datos.py`
+`triple_whale/__init__.py` (`MONEDAS`), `proyectos.py` (`paises_calendario()` desde `tipos.PAISES`, perezosa), `nicho/datos.py`
 (`PAISES_ESTUDIO`, `NOMBRES_PAIS`), nuevo `idiomas_publicacion.py`; pruebas nuevas `tests/test_paises_nordicos.py`.
 
 **Produces:** `tipos.PAISES["NO"|"SE"]`, `tipos.formatear_precio(v, "NO"|"SE")`,
 `idiomas_publicacion.NOMBRES`, `NOMBRES_EN`, `nombre(codigo, en_ingles=False) -> str` (código si no lo conoce).
 
 - [ ] Pruebas: precios (`formatear_precio(299, "NO") == "299 kr"`, `(1299, "SE") == "1 299 kr"`,
-  `(149.5, "NO") == "149,50 kr"`), `PRESUPUESTO_MINIMO_DIARIO["NOK"] == 10`, `lanzador.minimo_tope_campana("SEK") ==
-  1000.0`, `"NOK" in triple_whale.MONEDAS`, `proyectos.guardar_pais("acme","NO")` válido y `PAISES_CALENDARIO` igual a
+  `(149.5, "NO") == "149,50 kr"`), `PRESUPUESTO_MINIMO_DIARIO["NOK"] == 15`, `lanzador.minimo_tope_campana("SEK") ==
+  1300.0`, `"NOK" in triple_whale.MONEDAS`, `proyectos.guardar_pais("acme","NO")` válido y `proyectos.paises_calendario()` igual a
   `tuple(tipos.PAISES)`, `nicho.datos` acepta NO, `idiomas_publicacion.nombre("no") == "noruego (bokmål)"`.
 - [ ] Verlas fallar, implementar, verlas pasar; correr `tests/test_fe*.py tests/test_presupuesto*.py tests/test_lanzador.py
   tests/test_nicho*.py tests/test_sprints*.py tests/test_rutas_experimentos*.py`.

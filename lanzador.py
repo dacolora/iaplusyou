@@ -28,10 +28,11 @@ from meta_ads.targeting import Targeting
 from tareas.meta import MONEDAS_SIN_DECIMALES, _LOCK, _miniatura_para_ad
 
 ETAPAS_LANZAR = [(idiomas.N_("Campaña"), 15), (idiomas.N_("Conjuntos por país"), 25), (idiomas.N_("Anuncios"), 60)]
+# NOK y SEK: 1 300 ≈ US$120–140 (1 000 NOK ≈ US$94 quedaba bajo el spend_cap mínimo de Meta, 2026-10-08).
 # Meta rechaza spend_cap por debajo de ~100 USD; por debajo no se manda.
 SPEND_CAP_MINIMO_USD = 100.0
 _MIN_POR_MONEDA = {"COP": 400000.0, "MXN": 2000.0, "BRL": 600.0, "EUR": 100.0, "PEN": 400.0, "CLP": 100000.0, "ARS": 100000.0, "USD": 100.0,
-                   "NOK": 1000.0, "SEK": 1000.0}
+                   "NOK": 1300.0, "SEK": 1300.0}
 _SNAP_DESDE_INSIGHTS = {"impresiones": "impresiones", "alcance": "alcance", "frecuencia": "frecuencia", "clics": "clics",
                         "clics_enlace": "clics_enlace", "ctr": "ctr", "cpc": "cpc", "cpm": "cpm", "thruplay": "thruplay",
                         "thruplay_rate": "thruplay_rate", "gasto_usd": "gasto", "compras": "compras", "ingresos": "ingresos", "roas": "roas",

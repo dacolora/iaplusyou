@@ -16,7 +16,6 @@ import fcntl
 from functools import wraps
 
 import _json_store
-from final_edition.tipos import PAISES
 
 BASE_DIR = os.path.dirname(__file__)
 
@@ -207,7 +206,11 @@ def guardar_referentes_copycoders(cliente, activa):
     _json_store.guardar(_path(cliente), datos)
 
 
-PAISES_CALENDARIO = tuple(PAISES)
+def paises_calendario():
+    """Países que acepta el calendario de Sprints: los mismos de final_edition.tipos.PAISES, en su orden. Se importa
+    aquí dentro porque final_edition importa proyectos (un import arriba armaba un ciclo y cargaba 2 000 módulos)."""
+    from final_edition.tipos import PAISES
+    return tuple(PAISES)
 
 
 def pais(cliente):
@@ -219,7 +222,7 @@ def pais(cliente):
 @_con_candado
 def guardar_pais(cliente, pais_nuevo):
     pais_nuevo = (pais_nuevo or "").upper()
-    if pais_nuevo not in PAISES_CALENDARIO:
+    if pais_nuevo not in paises_calendario():
         raise ValueError(f"País no soportado: {pais_nuevo}")
     datos = _cargar_para_escribir(cliente)
     datos["pais"] = pais_nuevo

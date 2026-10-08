@@ -3,6 +3,7 @@ soportados (idioma/moneda/símbolo por defecto), estilos de música, validación
 del guion localizado y rutas absolutas a las fuentes TTF usadas por la capa de
 texto en pantalla (Pillow).
 """
+import math
 import os
 
 from flask_babel import gettext
@@ -93,6 +94,8 @@ def formatear_precio(valor, pais):
         return f"{simbolo} {numero}"
 
     if pais in _PAISES_CORONAS:
+        if not math.isfinite(float(valor)):
+            return f"{valor} {simbolo}"
         if float(valor) == int(valor):
             numero = f"{int(valor):,}".replace(",", " ")
         else:
