@@ -15,6 +15,7 @@ y se sigue en el mismo llamado. Cada tarea termina llamando a `avanzar`.
 Todo gasto se registra con el id de la tarea; Claude va por
 `nicho.avatares._llamar` (modelo del proyecto).
 """
+import contextvars
 import functools
 import logging
 
@@ -76,15 +77,26 @@ def _interrumpir(cliente, eid, e):
         log.exception("No se pudo dejar interrumpida la investigación %s de %s", eid, cliente)
 
 
-def _avanzar_seguro(cliente, eid):
+# El job_id de la tarea que cierra su paso y pide el siguiente (cobros, revisión
+# final 2026-10-08): su reserva sigue viva mientras corre, pero ya está gastada;
+# `_avanzar` la excluye del disponible (`libro.exigir(excluir_job=)`). Va en una
+# ContextVar para no cambiar la firma de `avanzar`, que también llaman las rutas.
+_EXCLUIR_JOB = contextvars.ContextVar("investigacion_excluir_job", default=None)
+
+
+def _avanzar_seguro(cliente, eid, excluir_job=None):
     """`avanzar` después de cerrar un paso. Si revienta, la investigación queda
-    interrumpida (con Reanudar) y la tarea que ya hizo su parte termina bien."""
+    interrumpida (con Reanudar) y la tarea que ya hizo su parte termina bien.
+    `excluir_job`: el job_id de la tarea que llama (su reserva no cuenta)."""
+    token = _EXCLUIR_JOB.set(excluir_job)
     try:
         return avanzar(cliente, eid)
     except Exception as e:  # noqa: BLE001
         log.exception("avanzar falló en la investigación %s de %s", eid, cliente)
         _interrumpir(cliente, eid, e)
         return None
+    finally:
+        _EXCLUIR_JOB.reset(token)
 
 
 def red_de_la_cadena(paso_de):
@@ -260,6 +272,7 @@ def _costo_paso(est, i, paso, n_productos=None):
 
 def _avanzar(cliente, estudio_id):
     from tareas import nicho as tareas_nicho      # tareas.nicho importa este módulo: import perezoso
+    excluir = _EXCLUIR_JOB.get()
     for _ in range(MAX_SALTOS):
         est = datos.estudio(cliente, estudio_id)
         i = datos.investigacion(cliente, estudio_id) if est else {}
@@ -273,12 +286,12 @@ def _avanzar(cliente, estudio_id):
         if paso == "consultas":
             trabajos.encolar(datos.job_id_inv(cliente, estudio_id, paso), "nicho_inv_consultas", base, cliente=cliente,
                              duracion_estimada=60, etapas=ETAPAS_CONSULTAS, max_intentos=2,
-                             costo_estimado=_costo_paso(est, i, paso))
+                             costo_estimado=_costo_paso(est, i, paso), excluir_job=excluir)
             return paso
         if paso.startswith("buscar:"):
             trabajos.encolar(datos.job_id_inv(cliente, estudio_id, paso), "nicho_inv_buscar", {**base, "plataforma": paso.split(":", 1)[1]},
                              cliente=cliente, duracion_estimada=300, etapas=ETAPAS_BUSCAR, max_intentos=1,
-                             costo_estimado=_costo_paso(est, i, paso))
+                             costo_estimado=_costo_paso(est, i, paso), excluir_job=excluir)
             return paso
         if paso == "seleccionar":
             if not (i.get("plataformas") or []):
@@ -288,7 +301,7 @@ def _avanzar(cliente, estudio_id):
                 continue
             trabajos.encolar(datos.job_id_inv(cliente, estudio_id, paso), "nicho_inv_seleccionar", base, cliente=cliente,
                              duracion_estimada=60, etapas=ETAPAS_SELECCION, max_intentos=2,
-                             costo_estimado=_costo_paso(est, i, paso))
+                             costo_estimado=_costo_paso(est, i, paso), excluir_job=excluir)
             return paso
         if paso.startswith("resenas:"):
             plat = paso.split(":", 1)[1]
@@ -302,7 +315,8 @@ def _avanzar(cliente, estudio_id):
                       "pais": i.get("pais") or est.get("pais") or ""}
             job_id = datos.job_id_recolectar(cliente, estudio_id, plat)
             ok = tareas_nicho.encolar_recolectar(cliente, estudio_id, plat, params, investigacion=True,
-                                                 costo_estimado=_costo_paso(est, i, paso, len(productos)))
+                                                 costo_estimado=_costo_paso(est, i, paso, len(productos)),
+                                                 excluir_job=excluir)
             if _propio_o_choque(cliente, estudio_id, job_id, ok, "investigacion"):
                 return paso
             return None
@@ -312,7 +326,8 @@ def _avanzar(cliente, estudio_id):
                 _marcar(cliente, estudio_id, paso, "saltado", nuevos=0, aviso=N_("sin llave"))
                 continue
             job_id = datos.job_id_recolectar(cliente, estudio_id, red)
-            ok = tareas_nicho.encolar_recolectar(cliente, estudio_id, red, inv.params_redes(red, i), investigacion=True)
+            ok = tareas_nicho.encolar_recolectar(cliente, estudio_id, red, inv.params_redes(red, i), investigacion=True,
+                                                 excluir_job=excluir)
             if _propio_o_choque(cliente, estudio_id, job_id, ok, "investigacion"):
                 return paso
             return None
@@ -324,7 +339,7 @@ def _avanzar(cliente, estudio_id):
         tope = round(float(i.get("aprobado_usd") or 0) - float(i.get("gastado_usd") or 0), 4)
         job_id = datos.job_id_generar(cliente, estudio_id)
         ok = tareas_nicho.encolar_generar(cliente, estudio_id, auto=True, tope_usd=tope,
-                                          costo_estimado=_costo_paso(est, i, paso))
+                                          costo_estimado=_costo_paso(est, i, paso), excluir_job=excluir)
         if _propio_o_choque(cliente, estudio_id, job_id, ok, "auto"):
             return paso
         return None
@@ -344,7 +359,7 @@ def ejecutar_consultas(tarea):
     if ((i.get("pasos") or {}).get("consultas") or {}).get("estado") == "hecho":
         # Reintento (p. ej. avanzar() reventó DESPUÉS de guardar las consultas):
         # ya están pagadas y guardadas -- no se vuelve a llamar a Claude (I3).
-        _avanzar_seguro(cliente, eid)
+        _avanzar_seguro(cliente, eid, excluir_job=tarea.get("job_id"))
         return gettext("Consultas: %(consultas)s", consultas=", ".join(i.get("consultas") or []))
     if not (est.get("tema") or "").strip():
         _detener(cliente, eid, N_("sin tema"))
@@ -370,7 +385,7 @@ def ejecutar_consultas(tarea):
         return inv.marcar_paso({**x, "consultas": consultas, "consultas_por_idioma": por_idioma}, "consultas", "hecho",
                                usd=round(previo + usd, 4), aviso="")
     _o_interrumpir(tarea, cliente, eid, lambda: datos.actualizar_investigacion(cliente, eid, _fn))
-    _avanzar_seguro(cliente, eid)
+    _avanzar_seguro(cliente, eid, excluir_job=tarea.get("job_id"))
     return gettext("Consultas: %(consultas)s", consultas=", ".join(consultas))
 
 
@@ -423,13 +438,13 @@ def ejecutar_buscar(tarea):
             log.exception("No se pudo cerrar el paso %s", paso)
             _interrumpir(cliente, eid, e)
             raise e
-        _avanzar_seguro(cliente, eid)                           # una plataforma caída no frena a las demás
+        _avanzar_seguro(cliente, eid, excluir_job=tarea.get("job_id"))                           # una plataforma caída no frena a las demás
         raise
     usd = _gasto_apify(cliente, eid, tarea, paso, fuente, fuente.tarifa_busqueda())
     _o_interrumpir(tarea, cliente, eid, lambda: _marcar_acumulando(cliente, eid, paso, "hecho" if productos else "vacio", usd,
                                                                    productos=len(productos), nuevos=guardado["nuevos"],
                                                                    aviso=getattr(fuente, "aviso", "") or (NOTA_IDIOMA if sin_propias else "")))
-    _avanzar_seguro(cliente, eid)
+    _avanzar_seguro(cliente, eid, excluir_job=tarea.get("job_id"))
     return gettext("%(n)s producto(s) de %(plataforma)s (%(nuevos)s nuevos)", n=len(productos), plataforma=plataformas.nombre(plat), nuevos=guardado["nuevos"])
 
 
@@ -480,7 +495,7 @@ def ejecutar_seleccionar(tarea):
     relevantes, elegidos = _o_interrumpir(tarea, cliente, eid, _guardar)
     if not elegidos:
         return gettext("Ningún producto encontrado es del nicho.")
-    _avanzar_seguro(cliente, eid)
+    _avanzar_seguro(cliente, eid, excluir_job=tarea.get("job_id"))
     return gettext("%(r)s producto(s) del nicho; %(e)s elegido(s) para traer reseñas", r=len(relevantes), e=sum(len(v) for v in elegidos.values()))
 
 

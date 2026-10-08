@@ -335,7 +335,7 @@ def limpiar(job_id):
 # ---------- Trabajos persistentes (worker) ----------
 
 def encolar(job_id, tipo, payload, duracion_estimada=60, etapas=None, cliente=None, max_intentos=5, prioridad=5,
-            costo_estimado=None):
+            costo_estimado=None, excluir_job=None):
     """Igual que iniciar(), pero la tarea la ejecuta el worker (worker.py) y
     sobrevive reinicios. Devuelve False si ya hay una viva con ese job_id.
     `prioridad`: mayor se atiende antes (5 = normal; los lotes de sprint usan 3
@@ -345,13 +345,15 @@ def encolar(job_id, tipo, payload, duracion_estimada=60, etapas=None, cliente=No
     si el tipo cobra (`tareas.TIPOS_QUE_COBRAN`) y el proyecto cobra, se exige y
     se reserva saldo antes de encolar (spec 2026-10-08 §4-§5); lanza
     cobros.SaldoInsuficiente sin encolar nada. Un job_id ya vivo no exige: el
-    clic repetido no hace nada. Un proyecto que no cobra no cambia."""
+    clic repetido no hace nada. Un proyecto que no cobra no cambia.
+    `excluir_job`: el job_id de la tarea que encola el paso siguiente de su
+    cadena mientras corre; su propia reserva no cuenta (ver `libro.exigir`)."""
     import tareas  # noqa: PLC0415 — tareas/__init__ no importa nada: sin ciclo
     from cobros import libro  # noqa: PLC0415
     if job_id and cola.viva(job_id):
         return False
     if tipo in tareas.TIPOS_QUE_COBRAN:
-        libro.exigir(cliente, costo_estimado, job_id=job_id)
+        libro.exigir(cliente, costo_estimado, job_id=job_id, excluir_job=excluir_job)
     tid = cola.encolar(tipo, payload, cliente=cliente, job_id=job_id,
                        duracion_estimada=duracion_estimada, etapas=etapas or [],
                        max_intentos=max_intentos, prioridad=prioridad)

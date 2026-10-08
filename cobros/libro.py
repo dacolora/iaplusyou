@@ -172,10 +172,12 @@ def _vivas(con):
     return sa.select(db.tarea.c.job_id).where(db.tarea.c.estado.in_(ESTADOS_VIVOS), db.tarea.c.job_id.isnot(None))
 
 
-def _reservado(con, cliente):
+def _reservado(con, cliente, excluir_job=None):
     r = db.reserva_saldo
-    return int(con.execute(sa.select(sa.func.coalesce(sa.func.sum(r.c.milesimas), 0))
-                           .where(r.c.cliente == cliente, r.c.job_id.in_(_vivas(con)))).scalar())
+    filtro = [r.c.cliente == cliente, r.c.job_id.in_(_vivas(con))]
+    if excluir_job:
+        filtro.append(r.c.job_id != excluir_job)
+    return int(con.execute(sa.select(sa.func.coalesce(sa.func.sum(r.c.milesimas), 0)).where(*filtro)).scalar())
 
 
 def saldo(cliente):
@@ -208,8 +210,15 @@ def estado(cliente, siempre=False):
 
 # ------------------------------------------------------------ freno previo ---
 
-def exigir(cliente, costo_usd, job_id=None):
-    """§4. Lanza SaldoInsuficiente o devuelve lo reservado (0 si no cobra)."""
+def exigir(cliente, costo_usd, job_id=None, excluir_job=None):
+    """§4. Lanza SaldoInsuficiente o devuelve lo reservado (0 si no cobra).
+
+    `excluir_job`: el job_id de la tarea del worker que pide el paso SIGUIENTE
+    de su cadena mientras sigue corriendo (fases del barrido, tramos de
+    clasificar, pasos de la investigación). Su reserva sigue viva hasta que
+    termine, pero lo que reservó ya está gastado y anotado: contarla otra vez
+    frenaba con un «saldo insuficiente» falso un trabajo ya aprobado
+    (revisión final 2026-10-08)."""
     if not cliente:
         return 0
     r = db.reserva_saldo
@@ -227,7 +236,7 @@ def exigir(cliente, costo_usd, job_id=None):
                 r.c.cliente == cliente, r.c.job_id == job_id, r.c.job_id.in_(_vivas(con)))).scalar()
             if previa is not None:
                 return int(previa)   # segundo clic del mismo trabajo: ya reservado
-        libre = _saldo(con, cliente) - _reservado(con, cliente)
+        libre = _saldo(con, cliente) - _reservado(con, cliente, excluir_job)
         if libre < precio:
             raise SaldoInsuficiente(cliente, precio, libre)
         if job_id:

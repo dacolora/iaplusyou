@@ -553,3 +553,77 @@ def test_barrido_con_saldo_reserva_el_precio_de_la_clasificacion(libro, monkeypa
     (r,) = _reservas()
     assert r["job_id"] == t["job_id"]
     assert r["milesimas"] == libro.precio_milesimas(gastos.estimar("clasificacion", n=1)["usd"], 1.5)
+
+
+# --- revisión final, seguimiento: el paso siguiente no cuenta la reserva de la tarea que lo pide --
+# Con filas de tarea REALES: la que corre queda `en_curso` con su reserva viva.
+
+def _tarea_viva(job_id):
+    """La fila de la tarea de ese job, pasada a `en_curso` (como la ve el worker al correrla)."""
+    import db
+    t = db.tarea
+    with db.conectar() as con:
+        con.execute(t.update().where(t.c.job_id == job_id).values(estado="en_curso"))
+        fila = con.execute(sa.select(t).where(t.c.job_id == job_id)).first()
+    return dict(fila._mapping)
+
+
+def _barrido_en_curso(libro, usd_estimado, n_referentes, extra_saldo):
+    """Barrido aprobado por `usd_estimado` (su primera fase reservó ese precio y
+    sigue corriendo) con `n_referentes` listos para clasificar."""
+    from referentes import datos
+    from tareas import referentes as tr
+    aprobado = libro.precio_milesimas(usd_estimado, 1.5)
+    _cobra(libro, milesimas=aprobado + extra_saldo)
+    bid = tr.encolar_barrer("acme", "atria", {"modo": "palabra", "palabra": "x"}, 5, usd_estimado)
+    tarea = _tarea_viva(tr.job_id_barrer(bid))
+    for k in range(n_referentes):
+        rid, _ = datos.guardar_referente({"anuncio_id": f"9{k}", "fuente": "atria", "imagen_origen": f"https://x/{k}.jpg",
+                                          "marca": "M", "titular": "T", "cuerpo": "", "idioma": "en"},
+                                         cliente="acme", barrido_id=bid)
+        datos.marcar_imagen(rid, "ok", f"https://r2/{k}.jpg")
+    return tr, bid, tarea
+
+
+def test_la_fase_siguiente_del_barrido_no_cuenta_la_reserva_de_la_fase_que_corre(libro, monkeypatch):
+    """Saldo = lo aprobado + unas milésimas: la clasificación (18 milésimas) sigue."""
+    monkeypatch.setattr("idiomas.de_proyecto", lambda c: "es")
+    tr, bid, tarea = _barrido_en_curso(libro, 0.05, 1, extra_saldo=5)
+    msg = tr._fase_imagenes_barrer(tarea, tarea["payload"], bid, lambda *a, **k: None)
+    assert not msg.startswith("Saldo insuficiente")
+    nuevas = [t for t in _tareas() if t["job_id"] != tarea["job_id"]]
+    assert [t["payload"]["fase"] for t in nuevas] == ["clasificando"]
+
+
+def test_una_fase_que_de_verdad_no_alcanza_igual_se_detiene(libro, monkeypatch):
+    """La reserva propia no cuenta, la de OTRO trabajo vivo sí: con 5 referentes
+    (90 milésimas) y solo 5 + la reserva ajena de saldo libre, se detiene."""
+    monkeypatch.setattr("idiomas.de_proyecto", lambda c: "es")
+    import trabajos
+    otro = libro.precio_milesimas(0.05, 1.5)
+    tr, bid, tarea = _barrido_en_curso(libro, 0.05, 5, extra_saldo=5 + otro)
+    assert trabajos.encolar("acme__otro", "final_guion", {"cliente": "acme"}, cliente="acme", costo_estimado=0.05)
+    msg = tr._fase_imagenes_barrer(tarea, tarea["payload"], bid, lambda *a, **k: None)
+    assert msg.startswith("Saldo insuficiente")
+    assert {t["job_id"] for t in _tareas()} == {tarea["job_id"], "acme__otro"}
+
+
+def test_el_paso_siguiente_de_la_investigacion_no_cuenta_la_reserva_del_que_corre(libro, monkeypatch):
+    """La tarea de consultas corre con su reserva viva; al cerrar pide la
+    búsqueda con un saldo que alcanza para ella pero no para las dos."""
+    from nicho import datos
+    from tareas import investigacion as ti
+    from tests.test_tareas_investigacion import _claude
+    monkeypatch.setattr("idiomas.de_proyecto", lambda c: "es")
+    eid = _investigacion()
+    est, i = datos.estudio("acme", eid), datos.investigacion("acme", eid)
+    c = libro.precio_milesimas(ti._costo_paso(est, i, "consultas"), 1.5)
+    b = libro.precio_milesimas(ti._costo_paso(est, i, "buscar:amazon"), 1.5)
+    _cobra(libro, milesimas=max(c, b) + 5)
+    assert ti.avanzar("acme", eid) == "consultas"
+    tarea = _tarea_viva(datos.job_id_inv("acme", eid, "consultas"))
+    _claude(monkeypatch, [('{"consultas": ["tofflor", "mjuka tofflor"]}', 0, 0)])   # sin tokens: sin cobro
+    ti.ejecutar_consultas(tarea)
+    i = datos.investigacion("acme", eid)
+    assert i["estado"] != "detenida", i.get("detenida_por")
+    assert [t["tipo"] for t in _tareas() if t["job_id"] != tarea["job_id"]] == ["nicho_inv_buscar"]

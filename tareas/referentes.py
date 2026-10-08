@@ -335,7 +335,8 @@ def _continuar_barrer(tarea, payload, bid, tipo=TIPO_BARRER):
     costo = _costo_fase(payload, bid, tipo)
     if cliente and costo != 0:
         try:
-            libro.exigir(cliente, costo, job_id=job_id)
+            # La reserva de ESTA tarea (la fase que termina) no cuenta: lo suyo ya se gastó.
+            libro.exigir(cliente, costo, job_id=job_id, excluir_job=tarea.get("job_id"))
         except SaldoInsuficiente as e:
             frase = e.frase_proyecto()
             datos.actualizar_barrido(bid, estado="parcial", aviso=cola.recortar(frase, 300))

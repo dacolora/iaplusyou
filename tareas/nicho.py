@@ -43,7 +43,7 @@ LOTE = 100
 log = logging.getLogger(__name__)
 
 
-def encolar_generar(cliente, estudio_id, auto=False, tope_usd=None, costo_estimado=None):
+def encolar_generar(cliente, estudio_id, auto=False, tope_usd=None, costo_estimado=None, excluir_job=None):
     """False si ya hay una generación viva para ese estudio. `auto` = paso final
     de la investigación: el costo ya se aprobó como parte del tope; `tope_usd`
     es lo que queda de ese tope y la tarea lo respeta antes de gastar."""
@@ -51,7 +51,8 @@ def encolar_generar(cliente, estudio_id, auto=False, tope_usd=None, costo_estima
     if auto:
         payload.update({"auto": True, "tope_usd": tope_usd})
     ok = trabajos.encolar(datos.job_id_generar(cliente, estudio_id), "nicho_generar_avatares", payload, cliente=cliente,
-                          duracion_estimada=200, etapas=ETAPAS_GENERAR, max_intentos=1, costo_estimado=costo_estimado)
+                          duracion_estimada=200, etapas=ETAPAS_GENERAR, max_intentos=1, costo_estimado=costo_estimado,
+                          excluir_job=excluir_job)
     if ok:
         datos.recalcular(cliente, estudio_id, tarea_viva=True)
     return ok
@@ -179,7 +180,7 @@ def ejecutar_generar(tarea):
         datos.actualizar_investigacion(cliente, eid, _fn)
     datos.recalcular(cliente, eid, tarea_viva=False)
     if auto:
-        tareas_inv._avanzar_seguro(cliente, eid)
+        tareas_inv._avanzar_seguro(cliente, eid, excluir_job=tarea.get("job_id"))
     aviso = (" · " + gettext("%(n)s núcleo(s) sin sub-avatares", n=resumen["errores"])) if resumen.get("errores") else ""
     return gettext("%(nucleos)s núcleo(s) y %(subs)s sub-avatar(es) propuestos — revísalos y aprueba los que sirvan%(aviso)s.",
                    nucleos=res["nucleos"], subs=res["subs"], aviso=aviso)
@@ -203,7 +204,8 @@ def interrumpida_generar(tarea, mensaje):
 
 # ------------------------------------------------------- nicho_recolectar ---
 
-def encolar_recolectar(cliente, estudio_id, fuente, params, investigacion=False, costo_estimado=None):
+def encolar_recolectar(cliente, estudio_id, fuente, params, investigacion=False, costo_estimado=None,
+                       excluir_job=None):
     """False si ya hay una recolección viva de esa fuente para ese estudio.
     `investigacion=True` = es un paso de la cadena (spec Parte 3): al terminar
     anota su paso y llama a `tareas.investigacion.avanzar`."""
@@ -220,7 +222,7 @@ def encolar_recolectar(cliente, estudio_id, fuente, params, investigacion=False,
     max_intentos = 1 if (de_pago or investigacion) else 2
     return trabajos.encolar(datos.job_id_recolectar(cliente, estudio_id, fuente), "nicho_recolectar", payload,
                             cliente=cliente, duracion_estimada=300 if de_pago else 120, etapas=ETAPAS_RECOLECTAR,
-                            max_intentos=max_intentos, costo_estimado=costo_estimado)
+                            max_intentos=max_intentos, costo_estimado=costo_estimado, excluir_job=excluir_job)
 
 
 def _corrida(fuente):
@@ -263,7 +265,7 @@ def _gasto_recoleccion(cliente, eid, tarea, fuente, params, nota=""):
     return usd
 
 
-def _cerrar_paso_investigacion(cliente, eid, tipo, fuente, totales, aviso, usd, error=None):
+def _cerrar_paso_investigacion(cliente, eid, tipo, fuente, totales, aviso, usd, error=None, job_id=None):
     """Paso de la cadena (`resenas:<plataforma>` o `redes:<red>`): suma las
     reseñas traídas por producto, anota el paso (el `usd` dado se SUMA al que
     ya tenía -- un paso retomado no pierde lo que ya había cobrado) y sigue la
@@ -282,7 +284,7 @@ def _cerrar_paso_investigacion(cliente, eid, tipo, fuente, totales, aviso, usd, 
         return inv.marcar_paso(i, paso, estado, usd=round(previo + usd, 4), nuevos=totales["nuevos"],
                                repetidos=totales["repetidos"], aviso=(error or aviso or ""))
     datos.actualizar_investigacion(cliente, eid, _fn)
-    tareas_inv._avanzar_seguro(cliente, eid)          # si no puede encolar, la cadena queda interrumpida (F2)
+    tareas_inv._avanzar_seguro(cliente, eid, excluir_job=job_id)   # si no puede encolar, la cadena queda interrumpida (F2)
 
 
 @registrar("nicho_recolectar")
@@ -337,7 +339,8 @@ def ejecutar_recolectar(tarea):
         # `registrar_recoleccion`/`recalcular` revientan, el paso igual queda cerrado
         # (nunca `en_curso` con nada vivo detrás) -- R17.
         if p.get("investigacion"):
-            _cerrar_paso_investigacion(cliente, eid, tipo, fuente, totales, "", usd, error=mensaje)
+            _cerrar_paso_investigacion(cliente, eid, tipo, fuente, totales, "", usd, error=mensaje,
+                                       job_id=tarea.get("job_id"))
         datos.registrar_recoleccion(cliente, eid, {**totales, "fuente": tipo, "aviso": gettext("falló: %(mensaje)s", mensaje=mensaje),
                                             **_corrida(fuente)})
         datos.recalcular(cliente, eid)
@@ -345,7 +348,7 @@ def ejecutar_recolectar(tarea):
     aviso = getattr(fuente, "aviso", "") or ""
     usd = _gasto_recoleccion(cliente, eid, tarea, fuente, params)
     if p.get("investigacion"):
-        _cerrar_paso_investigacion(cliente, eid, tipo, fuente, totales, aviso, usd)
+        _cerrar_paso_investigacion(cliente, eid, tipo, fuente, totales, aviso, usd, job_id=tarea.get("job_id"))
     datos.registrar_recoleccion(cliente, eid, {**totales, "fuente": tipo, "aviso": aviso, **_corrida(fuente)})
     datos.recalcular(cliente, eid)
     nombre_fuente = idiomas.traducir(fuentes_registro.NOMBRES.get(tipo, tipo))
