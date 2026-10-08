@@ -375,6 +375,30 @@ def gasto_duplicado(cliente, desde, hasta, tienda_id=None):
         return float(con.execute(q).scalar() or 0)
 
 
+def inicio_para_antiguedad(cliente, tienda_id=None):
+    """Desde qué día la copia de anuncios cubre el alcance entero: con una tienda, su primer día copiado; con
+    «Todas», el primero de la tienda que empezó a copiarse MÁS TARDE (revisión 2026-10-08: con el más viejo, los
+    anuncios de una tienda conectada después pasaban por nuevos). Un solo MIN por tienda, sobre el índice."""
+    t = db.tw_anuncio_dia
+    cond = [t.c.cliente == cliente] + ([t.c.tienda_id == tienda_id] if tienda_id is not None else [])
+    q = sa.select(sa.func.min(t.c.fecha)).where(*cond).group_by(t.c.tienda_id)
+    with db.conectar() as con:
+        inicios = [r[0] for r in con.execute(q) if r[0]]
+    return max(inicios) if inicios else None
+
+
+def primer_dia_copia(cliente, tienda_id=None):
+    """El primer día copiado (anuncios o tienda) del alcance, o None: dos MIN sobre los índices, sin agregar
+    columnas (el detalle de un día lo pide en cada clic)."""
+    fechas = []
+    for t in (db.tw_anuncio_dia, db.tw_tienda_dia):
+        cond = [t.c.cliente == cliente] + ([t.c.tienda_id == tienda_id] if tienda_id is not None else [])
+        with db.conectar() as con:
+            fechas.append(con.execute(sa.select(sa.func.min(t.c.fecha)).where(*cond)).scalar())
+    fechas = [str(f)[:10] for f in fechas if f]
+    return min(fechas) if fechas else None
+
+
 def primer_dia_tienda(cliente, tienda_id=None):
     """La primera fecha copiada de la tienda (una o todas), o None."""
     t = db.tw_tienda_dia

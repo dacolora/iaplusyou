@@ -51,16 +51,22 @@ _METRICAS = {
     "gasto": {"tienda": N_("Gasto en anuncios"), "anuncios": N_("Gasto"), "bueno": 0, "formato": "dinero"},
     "mer": {"tienda": N_("Retorno (MER)"), "anuncios": N_("ROAS (Pixel)"), "bueno": 1, "formato": "veces"},
     "ticket": {"tienda": N_("Ticket promedio"), "anuncios": N_("Ticket atribuido"), "bueno": 1, "formato": "dinero"},
-    "cpp": {"tienda": N_("Costo por pedido"), "anuncios": N_("Costo por pedido"), "bueno": -1, "formato": "dinero"},
+    "cpp": {"tienda": N_("Costo por pedido"), "anuncios": N_("Costo por pedido atribuido"), "bueno": -1,
+            "formato": "dinero"},
     "clientes_nuevos": {"tienda": N_("Clientes nuevos"), "anuncios": N_("Clientes nuevos"), "bueno": 1,
                         "formato": "pct"},
 }
 METRICAS = ("ventas", "pedidos", "gasto", "mer", "ticket", "cpp")
 _AYUDAS = {
-    "mer": N_("Ventas de la tienda entre todo el gasto en publicidad"),
-    "ticket": N_("Ventas entre pedidos"),
-    "cpp": N_("Gasto en publicidad entre pedidos"),
-    "clientes_nuevos": N_("Pedidos de clientes nuevos entre todos los pedidos"),
+    "tienda": {"mer": N_("Ventas de la tienda entre todo el gasto en publicidad"),
+               "ticket": N_("Ventas entre pedidos"),
+               "cpp": N_("Gasto en publicidad entre pedidos"),
+               "clientes_nuevos": N_("Pedidos de clientes nuevos entre todos los pedidos")},
+    # Con un canal elegido (o sin datos de tienda) todo es lo que atribuye el Pixel, que suma más que la tienda.
+    "anuncios": {"ventas": N_("Lo que el Pixel atribuye a estos anuncios: suma más que las ventas reales de la tienda"),
+                 "mer": N_("Ventas atribuidas por el Pixel entre el gasto de estos anuncios"),
+                 "ticket": N_("Ventas atribuidas entre pedidos atribuidos"),
+                 "cpp": N_("Gasto entre pedidos atribuidos")},
 }
 
 
@@ -104,7 +110,7 @@ def por_dia(desde, hasta, filas):
 
 
 def totales(dias):
-    return {k: sum(d[k] for d in dias) for k in ("ing", "gas", "ped", "nc")}
+    return {k: sum(d[k] or 0 for d in dias) for k in ("ing", "gas", "ped", "nc")}
 
 
 def valor(clave, d):
@@ -153,12 +159,13 @@ def tono(clave, var):
     return "bueno" if (var > 0) == (bueno(clave) > 0) else "malo"
 
 
-def raros(clave, serie, inicio, minimo=0):
+def raros(clave, serie, inicio, minimo=0, fin=None):
     """{índice dentro del periodo: desvío} de los días fuera de lo normal. `serie` empieza `inicio` días antes del
     periodo (para tener sus 4 semanas previas) y su último punto es hoy, que nunca se juzga. Los puntos antes de
-    `minimo` son de antes de la copia (ceros que no son ventas en cero) y no cuentan como semanas previas."""
+    `minimo` son de antes de la copia (ceros que no son ventas en cero) y no cuentan como semanas previas; desde
+    `fin` (los días que la copia todavía no trae) tampoco se juzga nada."""
     candidatos = {}
-    for i in range(max(inicio, 0), len(serie) - 1):
+    for i in range(max(inicio, 0), len(serie) - 1 if fin is None else min(fin, len(serie) - 1)):
         v = valor(clave, serie[i])
         if v is None:
             continue
@@ -251,20 +258,28 @@ def lectura(completos, previos, comparar, nuevos, canales, moneda, fuente):
         dv, dg = variacion("ventas", completos, previos), variacion("gasto", completos, previos)
         ma, mb = valor("mer", totales(completos)), valor("mer", totales(previos))
         if None not in (dv, dg, ma, mb):
+            datos_frase = {"ventas": _mas_menos(dv), "n": len(previos), "gasto": _mas_menos(dg), "moneda": moneda,
+                           "mer": idiomas.numero(ma, 2), "mer_antes": idiomas.numero(mb, 2)}
+            if fuente == "anuncios":
+                texto = gettext("Según el Pixel, estos anuncios vendieron %(ventas)s que en los %(n)s días anteriores, "
+                                "con %(gasto)s de gasto: cada 1 %(moneda)s trajo %(mer)s %(moneda)s atribuidos "
+                                "(antes %(mer_antes)s).", **datos_frase)
+            else:
+                texto = gettext("Vendiste %(ventas)s que en los %(n)s días anteriores, con %(gasto)s de gasto: cada 1 "
+                                "%(moneda)s en anuncios trajo %(mer)s %(moneda)s en ventas (antes %(mer_antes)s).",
+                                **datos_frase)
             frases.append({"tipo": "ok" if dv >= 0 else "info", "icono": "↗" if dv >= 0 else "↘", "acciones": [],
-                           "texto": gettext(
-                               "Vendiste %(ventas)s que en los %(n)s días anteriores, con %(gasto)s de gasto: cada 1 "
-                               "%(moneda)s en anuncios trajo %(mer)s %(moneda)s en ventas (antes %(mer_antes)s).",
-                               ventas=_mas_menos(dv), n=len(previos), gasto=_mas_menos(dg), moneda=moneda,
-                               mer=idiomas.numero(ma, 2), mer_antes=idiomas.numero(mb, 2))})
+                           "texto": texto})
 
     i = mejor_dia("ventas", completos)
     if i is not None:
         d = completos[i]
-        frases.append({"tipo": "ok", "icono": "★", "acciones": [{"tipo": "dia", "fecha": d["f"]}],
-                       "texto": gettext("Tu mejor día fue el %(dia)s: %(ventas)s en ventas y %(pedidos)s.",
-                                        dia=idiomas.dia_semana(_fecha(d["f"])), ventas=_dinero(d["ing"], moneda),
-                                        pedidos=_pedidos(d["ped"]))})
+        datos_frase = {"dia": idiomas.dia_semana(_fecha(d["f"])), "ventas": _dinero(d["ing"], moneda),
+                       "pedidos": _pedidos(d["ped"])}
+        texto = (gettext("Su mejor día fue el %(dia)s: %(ventas)s en ventas atribuidas según el Pixel y %(pedidos)s.",
+                         **datos_frase) if fuente == "anuncios"
+                 else gettext("Tu mejor día fue el %(dia)s: %(ventas)s en ventas y %(pedidos)s.", **datos_frase))
+        frases.append({"tipo": "ok", "icono": "★", "acciones": [{"tipo": "dia", "fecha": d["f"]}], "texto": texto})
 
     conocidos = [d for d in completos if d["f"] in nuevos]
     if len(conocidos) >= MIN_DIAS_AVISO:
@@ -370,6 +385,7 @@ def _textos(fuente):
         "promedio": gettext("%(m)s (promedio de 7 días)"),
         "grafica": gettext("Gráfica diaria de %(m)s. Usa las flechas para recorrer los días y Enter para abrir uno."),
         "cargando": gettext("Cargando…"), "error_dia": gettext("No se pudo cargar ese día."),
+        "sin_copia": gettext("sin copia de Triple Whale"),
     }
 
 
@@ -392,9 +408,18 @@ def _subtitulo(dias_periodo, periodo, n_completos, comparar):
     return gettext("Del %(desde)s al %(hasta)s", desde=desde, hasta=hasta)
 
 
-def _hoy_texto(hoy_d, moneda, ultima_copia):
-    base = gettext("Hoy va en %(ventas)s y %(pedidos)s, con %(gasto)s de gasto.", ventas=_dinero(hoy_d["ing"], moneda),
-                   pedidos=_pedidos(hoy_d["ped"]), gasto=_dinero(hoy_d["gas"], moneda))
+def _hoy_texto(hoy_d, hoy, moneda, ultima_copia, fin_datos, fuente):
+    """La línea de debajo de la gráfica: lo que lleva hoy (que va a medias) y, si la copia se atrasó, desde
+    cuándo faltan días (esos días no cuentan como ventas en cero)."""
+    hoy_iso = _iso(_fecha(hoy))
+    if fin_datos and fin_datos < hoy_iso:
+        return gettext("La última copia de Triple Whale trae datos hasta el %(fecha)s: los días que faltan no entran "
+                       "en las cifras ni en las comparaciones.", fecha=idiomas.dia_semana(_fecha(fin_datos)))
+    datos_frase = {"ventas": _dinero(hoy_d["ing"], moneda), "pedidos": _pedidos(hoy_d["ped"]),
+                   "gasto": _dinero(hoy_d["gas"], moneda)}
+    base = (gettext("Hoy van %(ventas)s en ventas atribuidas según el Pixel y %(pedidos)s, con %(gasto)s de gasto.",
+                    **datos_frase) if fuente == "anuncios"
+            else gettext("Hoy va en %(ventas)s y %(pedidos)s, con %(gasto)s de gasto.", **datos_frase))
     hora = str(ultima_copia)[11:16] if ultima_copia and len(str(ultima_copia)) >= 16 else None
     if hora:
         return base + " " + gettext("Es un día a medias (última copia a las %(hora)s): no entra en las comparaciones.",
@@ -403,16 +428,22 @@ def _hoy_texto(hoy_d, moneda, ultima_copia):
 
 
 def armar(dias_periodo, serie_larga, inicio, hoy, fuente, moneda, nuevos, canales, cohortes, inicio_copia,
-          meta_roas, canal, url_dia, ultima_copia, inicio_datos=None):
+          meta_roas, canal, url_dia, ultima_copia, inicio_datos=None, fin_datos=None, inicio_edad=None):
     """Todo lo de la sección. `serie_larga` = `por_dia` desde `inicio` días antes del periodo (el periodo anterior
     y las 4 semanas de los días raros) hasta hoy; el periodo es `serie_larga[inicio:]` y su último punto es hoy.
-    `inicio_datos` es el primer día copiado: antes de él la serie trae ceros que no son ventas en cero, así que
-    un periodo anterior que empiece antes no se compara y esos días no cuentan para los días raros. None si no
-    hay días."""
+
+    - `inicio_datos`: el primer día copiado. Antes de él la serie trae ceros que no son ventas en cero: un periodo
+      anterior que empiece antes no se compara y esos días no cuentan para los días raros.
+    - `fin_datos`: el último día copiado. Los días después (una copia atrasada; hoy, si todavía no llegó nada)
+      tampoco son ventas en cero: van vacíos en la gráfica y fuera de cifras, comparaciones y días raros.
+    - `inicio_edad`: desde cuándo la copia cubre todo el alcance (`datos.inicio_para_antiguedad`); la antigüedad
+      de un anuncio se conoce 14 días después. Sin él, `inicio_copia`.
+    None si no hay días."""
     periodo = serie_larga[inicio:]
     if not periodo:
         return None
-    completos = periodo[:-1]
+    sin_copia = {d["f"] for d in periodo if fin_datos and d["f"] > fin_datos}
+    completos = [d for d in periodo[:-1] if d["f"] not in sin_copia]
     n = len(completos)
     previos = serie_larga[inicio - n:inicio] if dias_periodo and n and inicio >= n else []
     if previos and inicio_datos and previos[0]["f"] < inicio_datos:
@@ -421,10 +452,15 @@ def armar(dias_periodo, serie_larga, inicio, hoy, fuente, moneda, nuevos, canale
     if not comparar:
         previos = []
 
-    conocido = _iso(_fecha(inicio_copia) + timedelta(days=DIAS_NUEVO)) if inicio_copia else None
+    base_edad = inicio_edad or inicio_copia
+    conocido = _iso(_fecha(base_edad) + timedelta(days=DIAS_NUEVO)) if base_edad else None
     nuevos = nuevos or {}
     nue_conocidos, dias_json = {}, []
     for d in periodo:
+        if d["f"] in sin_copia:
+            dias_json.append({"f": d["f"], "ing": None, "gas": None, "ped": None, "nc": None, "nue": None,
+                              "sin_copia": True})
+            continue
         nue = None
         if conocido and d["f"] >= conocido:
             nue = round(min(_f(nuevos.get(d["f"])), d["gas"]) if d["gas"] else _f(nuevos.get(d["f"])), 2)
@@ -435,19 +471,22 @@ def armar(dias_periodo, serie_larga, inicio, hoy, fuente, moneda, nuevos, canale
             fila["can"] = _canales_del_dia((canales or {}).get(d["f"]))
         dias_json.append(fila)
 
-    claves = list(METRICAS) + (["clientes_nuevos"] if fuente == "tienda" and sum(d["nc"] for d in periodo) else [])
-    tot = totales(periodo)
+    con_dato = [d for d in periodo if d["f"] not in sin_copia]
+    claves = list(METRICAS) + (["clientes_nuevos"] if fuente == "tienda" and sum(d["nc"] for d in con_dato) else [])
+    ayudas = _AYUDAS["anuncios" if fuente == "anuncios" else "tienda"]
+    tot = totales(con_dato)
     tarjetas = []
     for clave in claves:
         v = valor(clave, tot)
         var = variacion(clave, completos, previos) if comparar else None
         tarjetas.append({"clave": clave, "etiqueta": _etiqueta(clave, fuente),
-                         "ayuda": idiomas.traducir(_AYUDAS[clave]) if clave in _AYUDAS else "",
+                         "ayuda": idiomas.traducir(ayudas[clave]) if clave in ayudas else "",
                          "valor": v, "texto": formatear(clave, v, moneda), "variacion": var,
                          "variacion_texto": _pct(abs(var)) if var is not None else "", "tono": tono(clave, var)})
 
     minimo = next((i for i, d in enumerate(serie_larga) if d["f"] >= inicio_datos), len(serie_larga)) \
         if inicio_datos else 0
+    fin = next((i for i, d in enumerate(serie_larga) if d["f"] in sin_copia), None)
     con_datos = [d for d in completos if d["ing"] or d["gas"]]
     dia_inicial = con_datos[-1]["f"] if con_datos else _iso(_fecha(hoy) - timedelta(days=1))
     clases = sorted({c for d in dias_json for c in (d.get("can") or {})}, key=ORDEN_CLASES.index)
@@ -456,15 +495,19 @@ def armar(dias_periodo, serie_larga, inicio, hoy, fuente, moneda, nuevos, canale
 
     tabla = []
     for d in reversed(dias_json):
-        tabla.append({"f": d["f"], "dia": idiomas.fecha_corta(_fecha(d["f"])), "hoy": d is dias_json[-1],
-                      "ventas": _dinero(d["ing"], moneda), "pedidos": _num(d["ped"]),
-                      "gasto": _dinero(d["gas"], moneda), "mer": _veces(valor("mer", d)),
-                      "nuevos": _pct(_div(d["nue"], d["gas"])) if d["nue"] is not None and d["gas"] else "—"})
+        fila = {"f": d["f"], "dia": idiomas.fecha_corta(_fecha(d["f"])), "hoy": d is dias_json[-1]}
+        if d.get("sin_copia"):
+            fila.update(ventas=gettext("sin copia"), pedidos="—", gasto="—", mer="—", nuevos="—")
+        else:
+            fila.update(ventas=_dinero(d["ing"], moneda), pedidos=_num(d["ped"]), gasto=_dinero(d["gas"], moneda),
+                        mer=_veces(valor("mer", d)),
+                        nuevos=_pct(_div(d["nue"], d["gas"])) if d["nue"] is not None and d["gas"] else "—")
+        tabla.append(fila)
 
     return {
         "titulo": _titulo(fuente, canal), "fuente": fuente,
         "subtitulo": _subtitulo(dias_periodo, periodo, n, comparar),
-        "hoy_texto": _hoy_texto(periodo[-1], moneda, ultima_copia),
+        "hoy_texto": _hoy_texto(periodo[-1], hoy, moneda, ultima_copia, fin_datos, fuente),
         "tarjetas": tarjetas,
         "lectura": lectura(completos, previos, comparar, nue_conocidos, canales if fuente == "tienda" else {},
                            moneda, fuente),
@@ -476,7 +519,7 @@ def armar(dias_periodo, serie_larga, inicio, hoy, fuente, moneda, nuevos, canale
             "dias": dias_json,
             "previos": [{"f": d["f"], "ing": round(d["ing"], 2), "gas": round(d["gas"], 2), "ped": round(d["ped"], 2),
                          "nc": round(d["nc"], 2)} for d in previos],
-            "raros": {clave: raros(clave, serie_larga, inicio, minimo) for clave in claves if clave != "gasto"},
+            "raros": {clave: raros(clave, serie_larga, inicio, minimo, fin) for clave in claves if clave != "gasto"},
             "mejor": {clave: mejor_dia(clave, completos) for clave in claves},
             "metricas": [{"clave": c, "etiqueta": _etiqueta(c, fuente), "bueno": bueno(c),
                           "formato": _METRICAS[c]["formato"]} for c in claves],
@@ -488,10 +531,12 @@ def armar(dias_periodo, serie_larga, inicio, hoy, fuente, moneda, nuevos, canale
 
 # ------------------------------------------------------- detalle del día ---
 
-def detalle_dia(fecha, dia, dia_antes, canales, anuncios, arrancaron, creatv, moneda, fuente, anterior, siguiente):
+def detalle_dia(fecha, dia, dia_antes, canales, anuncios, arrancaron, creatv, moneda, fuente, anterior, siguiente,
+                antiguedad_conocida=True):
     """«Qué pasó el …» (spec §2.3). `dia` y `dia_antes` = {"ing", "gas", "ped"} (el mismo día de la semana
     anterior puede faltar); `canales` = {canal: {"gasto", "ingresos"}}; `anuncios` = `datos.anuncios_del_dia`;
-    `creatv` = `datos.piezas_creatv` de esos anuncios."""
+    `creatv` = `datos.piezas_creatv` de esos anuncios. Sin `antiguedad_conocida` (los primeros 14 días de la
+    copia) no se marca ningún anuncio como nuevo ni se dice cuántos arrancaron: no se puede saber."""
     fecha = _fecha(fecha)
     stats = []
     for clave in ("ventas", "pedidos", "gasto", "mer"):
@@ -510,7 +555,7 @@ def detalle_dia(fecha, dia, dia_antes, canales, anuncios, arrancaron, creatv, mo
                      for c, v in sorted((canales or {}).items(), key=lambda cv: -_f(cv[1].get("gasto")))
                      if _f(v.get("gasto")) > 0]
     lista_anuncios = [{"nombre": a.get("anuncio") or a["ad_id"], "canal_nombre": nombre_canal(a["canal"]),
-                       "canal_clase": clase_canal(a["canal"]), "nuevo": bool(a.get("nuevo")),
+                       "canal_clase": clase_canal(a["canal"]), "nuevo": bool(a.get("nuevo")) and antiguedad_conocida,
                        "ingresos_texto": _dinero(a["ingresos"], moneda), "gasto_texto": _dinero(a["gasto"], moneda),
                        "roas_texto": _veces(_div(a["ingresos"], a["gasto"])),
                        "creatv": (creatv or {}).get(a["ad_id"]) if a["canal"] == CANAL_META else None}
@@ -518,5 +563,6 @@ def detalle_dia(fecha, dia, dia_antes, canales, anuncios, arrancaron, creatv, mo
     return {"fecha": _iso(fecha), "titulo": gettext("Qué pasó el %(dia)s", dia=idiomas.dia_semana(fecha)),
             "comparado": (gettext("Comparado con el %(dia)s, el mismo día de la semana anterior",
                                   dia=idiomas.dia_semana(fecha - timedelta(days=7))) if dia_antes else None),
-            "stats": stats, "canales": lista_canales, "anuncios": lista_anuncios, "arrancaron": int(arrancaron or 0),
+            "stats": stats, "canales": lista_canales, "anuncios": lista_anuncios,
+            "arrancaron": int(arrancaron or 0) if antiguedad_conocida else None,
             "anterior": anterior, "siguiente": siguiente}

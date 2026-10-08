@@ -22,11 +22,11 @@ def _dias(valores, desde="2026-09-01"):
 
 def _armar(serie, dias_periodo=0, inicio=0, hoy=date(2026, 9, 30), nuevos=None, canales=None, cohortes=None,
            inicio_copia="2026-09-01", meta_roas=None, canal=None, fuente="tienda", ultima_copia=None,
-           inicio_datos=None):
+           inicio_datos=None, fin_datos=None):
     return r.armar(dias_periodo=dias_periodo, serie_larga=serie, inicio=inicio, hoy=hoy, fuente=fuente,
                    moneda="USD", nuevos=nuevos or {}, canales=canales or {}, cohortes=cohortes,
                    inicio_copia=inicio_copia, meta_roas=meta_roas, canal=canal, url_dia="/x/dia?tienda=",
-                   ultima_copia=ultima_copia, inicio_datos=inicio_datos)
+                   ultima_copia=ultima_copia, inicio_datos=inicio_datos, fin_datos=fin_datos)
 
 
 def test_por_dia_rellena_con_ceros():
@@ -222,3 +222,81 @@ def test_detalle_dia(es):
 def test_dia_semana_en_los_dos_idiomas():
     assert idiomas.dia_semana(date(2026, 9, 17), "es") == "jueves 17 de septiembre"
     assert idiomas.dia_semana(date(2026, 9, 17), "en") == "Thursday, September 17"
+
+
+# ---- revisión 2026-10-08: lo que el revisor rompió sin que una prueba avisara ----
+
+def test_fuente_anuncios_dice_que_es_lo_que_atribuye_el_pixel(es):
+    serie = _dias([(100, 50, 2)] * 23 + [(200, 50, 2)] * 6 + [(1, 1, 1)])
+    out = _armar(serie, dias_periodo=7, inicio=23, fuente="anuncios", canal="tiktok-ads")
+    textos = " ".join(f["texto"] for f in out["lectura"])
+    assert "Según el Pixel, estos anuncios vendieron" in textos and "en ventas atribuidas según el Pixel" in textos
+    assert "Vendiste" not in textos and "Tu mejor día" not in textos
+    assert "según el Pixel" in out["hoy_texto"]
+    tarjetas = {t["clave"]: t for t in out["tarjetas"]}
+    assert "Pixel" in tarjetas["mer"]["ayuda"] and "tienda" not in tarjetas["mer"]["ayuda"]
+    assert tarjetas["cpp"]["etiqueta"] == "Costo por pedido atribuido"
+    tienda = {t["clave"]: t for t in _armar(serie, dias_periodo=7, inicio=23)["tarjetas"]}
+    assert tienda["mer"]["ayuda"] == "Ventas de la tienda entre todo el gasto en publicidad"
+
+
+def test_copia_atrasada_no_inventa_una_caida(es):
+    # 27 días copiados a 100, dos días sin copiar y hoy: los días sin copia no son ventas en cero.
+    serie = _dias([(100, 50, 2)] * 27 + [(0, 0, 0)] * 3)
+    out = _armar(serie, dias_periodo=7, inicio=23, inicio_datos=serie[0]["f"], fin_datos=serie[26]["f"])
+    ventas = out["tarjetas"][0]
+    assert ventas["variacion"] == pytest.approx(0.0) and ventas["valor"] == pytest.approx(400)
+    assert len(out["datos"]["previos"]) == 4                                     # 4 días completos contra 4
+    dias = out["datos"]["dias"]
+    assert dias[4]["sin_copia"] is True and dias[4]["ing"] is None and dias[5]["ing"] is None
+    assert out["datos"]["raros"]["ventas"] == {}                                 # los días sin copia no son «raros»
+    assert "trae datos hasta el" in out["hoy_texto"] and out["tabla"][1]["ventas"] == "sin copia"
+    assert all("menos" not in f["texto"] for f in out["lectura"])
+
+
+def test_armar_juzga_los_dias_raros_con_el_inicio_de_la_copia(es):
+    serie = _dias([(0, 0, 0)] * 14 + [(100, 50, 1)] * 14 + [(100, 50, 1), (1, 1, 1)])
+    out = _armar(serie, dias_periodo=0, inicio=28, inicio_datos=serie[14]["f"])
+    assert out["datos"]["raros"]["ventas"] == {}
+
+
+def test_desde_el_inicio_nunca_compara_aunque_haya_dias_antes(es):
+    serie = _dias([(100, 50, 2)] * 20 + [(1, 1, 1)])
+    out = _armar(serie, dias_periodo=0, inicio=10)
+    assert out["datos"]["comparar"] is False and out["datos"]["previos"] == []
+
+
+def test_borde_del_umbral_de_dias_raros():
+    serie = _dias([(100, 50, 1)] * 28 + [(125, 50, 1), (124, 50, 1), (1, 1, 1)])
+    assert r.raros("ventas", serie, inicio=28) == {0: pytest.approx(0.25)}     # 25 % entra; 24 % no
+
+
+def test_borde_de_la_caida_de_anuncios_nuevos(es):
+    a = _dias([(100, 100, 1)] * 10)
+
+    def aviso(valor_periodo):
+        nuevos = {d["f"]: valor_periodo for d in a[:8]} | {d["f"]: 0.0 for d in a[8:]}
+        return [f for f in r.lectura(a, [], False, nuevos, {}, "USD", "tienda") if f["tipo"] == "aviso"]
+    assert aviso(18.75)                                                          # 15 puntos justos: avisa
+    assert not aviso(18.7)
+
+
+def test_el_aviso_pide_7_dias_conocidos(es):
+    a = _dias([(100, 100, 1)] * 7)
+    nuevos = {d["f"]: 50.0 for d in a[:5]} | {d["f"]: 0.0 for d in a[5:]}
+    assert [f for f in r.lectura(a, [], False, nuevos, {}, "USD", "tienda") if f["tipo"] == "aviso"]
+
+
+def test_un_canal_con_el_1_por_ciento_justo_se_nombra(es):
+    a = _dias([(100, 100, 1)])
+    canales = {a[0]["f"]: {"facebook-ads": {"gasto": 99, "ingresos": 198}, "tiktok-ads": {"gasto": 1, "ingresos": 1}}}
+    frase = [f for f in r.lectura(a, [], False, {}, canales, "USD", "tienda") if f["icono"] == "◎"][0]["texto"]
+    assert "TikTok" in frase
+
+
+def test_detalle_dia_sin_antiguedad_conocida(es):
+    anuncios = [{"canal": "facebook-ads", "ad_id": "a1", "anuncio": "A", "gasto": 10.0, "ingresos": 5.0,
+                 "pedidos": 1.0, "nuevo": True}]
+    d = r.detalle_dia("2026-09-03", {"ing": 1, "gas": 1, "ped": 1}, None, {}, anuncios, 6, {}, "USD", "tienda",
+                      None, None, antiguedad_conocida=False)
+    assert d["anuncios"][0]["nuevo"] is False and d["arrancaron"] is None

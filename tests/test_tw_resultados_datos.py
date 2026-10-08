@@ -94,3 +94,18 @@ def test_otro_proyecto_no_se_mezcla(tienda):
     assert datos.gasto_por_antiguedad("acme", None, "2026-09-10", "2026-09-10") == {}
     assert datos.anuncios_del_dia("acme", None, "2026-09-10") == []
     assert datos.arrancaron_el("acme", None, "2026-09-10") == 0
+
+
+def test_anuncio_que_gasto_otro_dia_pero_no_ese_no_entra_al_top(tienda):
+    _sembrar(tienda, [("d", "2026-09-05", 3), ("d", "2026-09-10", 0, 50), ("e", "2026-09-10", 2, 5)])
+    assert [f["ad_id"] for f in datos.anuncios_del_dia("acme", tienda, "2026-09-10")] == ["e"]
+
+
+def test_antiguedad_desde_la_tienda_que_empezo_a_copiarse_mas_tarde(tienda):
+    otra = tt.agregar("acme", "llave-se", "acme-se.myshopify.com", pais="SE")
+    _sembrar(tienda, [("a", "2026-08-01", 5)])
+    _sembrar(otra, [("b", "2026-09-01", 5)])
+    assert datos.inicio_para_antiguedad("acme", tienda) == "2026-08-01"
+    assert datos.inicio_para_antiguedad("acme", None) == "2026-09-01"
+    assert datos.primer_dia_copia("acme", None) == "2026-08-01"
+    assert datos.inicio_para_antiguedad("otro", None) is None and datos.primer_dia_copia("otro") is None

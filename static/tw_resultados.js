@@ -13,6 +13,7 @@
   var NS = 'http://www.w3.org/2000/svg';
   // El dibujo se arma al ancho real del contenedor (entre 320 y 720 px): en el celular los textos no se encogen.
   var ANCHO = 720, ALTO = 270, M = { izq: 52, der: 16, arriba: 18, abajo: 28 };
+  var alRedimensionar = null;
 
   // ---------------------------------------------------------------- puro ---
   function numero(v) { return typeof v === 'number' && isFinite(v); }
@@ -313,7 +314,9 @@
       } else if (clave === 'gasto') {
         muestra('twr-nuevos', T.nuevos_leyenda);
         muestra('twr-gasto', T.viejos_leyenda);
-        if (dias.some(function (d) { return d.nue === null || d.nue === undefined; })) muestra('twr-desconocida', T.desconocida);
+        if (dias.some(function (d) { return !d.sin_copia && d.gas && (d.nue === null || d.nue === undefined); })) {
+          muestra('twr-desconocida', T.desconocida);
+        }
       }
       if (st.comparar) muestra('twr-muestra-previa', T.previo);
       var raros = (datos.raros || {})[clave] || {};
@@ -343,7 +346,7 @@
         geo.punto.classList.remove('twr-visible');
       }
       vaciar(aviso);
-      html('div', 'twr-aviso-fecha', aviso, fechaLarga(d.f) + (hoy ? ' · ' + T.hoy_medias : ''));
+      html('div', 'twr-aviso-fecha', aviso, fechaLarga(d.f) + (d.sin_copia ? ' · ' + T.sin_copia : hoy ? ' · ' + T.hoy_medias : ''));
       if (['ticket', 'cpp', 'clientes_nuevos'].indexOf(clave) >= 0) {
         fila(aviso, (metas[clave] || {}).etiqueta || '', formatear(clave, valor(clave, d)), 'twr-muestra-linea');
       }
@@ -368,7 +371,7 @@
         html('div', 'twr-aviso-sep', aviso);
         fila(aviso, texto(T.antes, { dia: fechaLarga(previo.f) }), formatear(clave, numero(geo.previos[i]) ? geo.previos[i] : valor(clave, previo)));
       }
-      if (!hoy) html('div', 'twr-aviso-pista', aviso, T.pista);
+      if (!hoy && !d.sin_copia) html('div', 'twr-aviso-pista', aviso, T.pista);
       aviso.hidden = false;
       var rLienzo = lienzo.getBoundingClientRect(), rCaja = caja.getBoundingClientRect();
       var escalaX = rLienzo.width / ANCHO;
@@ -393,7 +396,7 @@
       if (!fecha) return;
       var i = -1;
       for (var k = 0; k < n; k++) if (dias[k].f === fecha) i = k;
-      if (i === n - 1) return;                       // hoy va a medias: no tiene detalle
+      if (i === n - 1 || (i >= 0 && dias[i].sin_copia)) return;   // hoy va a medias y un día sin copia no tiene detalle
       st.sel = i;
       dibujar();
       var mio = ++st.pedido;
@@ -491,8 +494,10 @@
       mostrar(i);
     });
     lienzo.addEventListener('blur', function () { st.foco = null; ocultar(); });
+    // Un solo oyente de resize aunque el panel se vuelva a pintar (cada cambio de periodo, tienda o canal).
     var ancho = lienzo.clientWidth, espera = null;
-    window.addEventListener('resize', function () {
+    if (alRedimensionar) window.removeEventListener('resize', alRedimensionar);
+    alRedimensionar = function () {
       ocultar();
       clearTimeout(espera);
       espera = setTimeout(function () {
@@ -501,7 +506,8 @@
           dibujar();
         }
       }, 150);
-    });
+    };
+    window.addEventListener('resize', alRedimensionar);
 
     dibujar();
     abrir(datos.dia_inicial, false);

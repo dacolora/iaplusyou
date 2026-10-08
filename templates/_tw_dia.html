@@ -57,7 +57,7 @@
     {% endif %}
     <p class="twr-nota">
       {{ _('Ventas atribuidas según el Pixel; debajo, el gasto del anuncio ese día y su retorno.') }}
-      {% if d.arrancaron %}{{ ngettext('Ese día arrancó %(num)s anuncio nuevo.', 'Ese día arrancaron %(num)s anuncios nuevos.', d.arrancaron) }}{% else %}{{ _('Ese día no arrancó ningún anuncio nuevo.') }}{% endif %}
+      {% if d.arrancaron is none %}{# los primeros 14 días de la copia: no se sabe qué anuncio era nuevo #}{% elif d.arrancaron %}{{ ngettext('Ese día arrancó %(num)s anuncio nuevo.', 'Ese día arrancaron %(num)s anuncios nuevos.', d.arrancaron) }}{% else %}{{ _('Ese día no arrancó ningún anuncio nuevo.') }}{% endif %}
     </p>
     <button type="button" class="btn-xs" data-twr-ir="tw-cada-anuncio">{{ _('Ver todos los anuncios →') }}</button>
   </div>

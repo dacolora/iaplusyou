@@ -9,6 +9,7 @@ o «Todas» (`tienda_id=None`). `tienda_elegida` resuelve lo que pide la
 persona: una tienda que no es del proyecto (o un valor raro) es «Todas», y
 con una sola tienda conectada el alcance es esa tienda.
 """
+import re
 from datetime import date, timedelta
 
 from flask_babel import gettext
@@ -33,6 +34,10 @@ MAX_PRODUCTOS_PANEL = 8
 # Estados de Crear tal como los dice la tarjeta de una idea (idea → pieza).
 ETIQUETAS_PIEZA = {"prompt_pendiente": N_("armando el prompt"), "prompt_listo": N_("prompt listo, falta generar"),
                    "video_generando": N_("generando"), "video_listo": N_("lista"), "error": N_("con error")}
+
+
+# Los canales de Triple Whale son ids como «facebook-ads» o «google-ads».
+_CANAL_VALIDO = re.compile(r"^[A-Za-z0-9_.{}-]{1,60}$")
 
 
 def _iso(d):
@@ -268,16 +273,21 @@ def _resultados(cliente, config, tienda_id, canal, dias, desde, hasta, hoy, ev, 
     else:
         filas = datos.serie_anuncios(cliente, tienda_id, _iso(ancho), hasta, canal=canal)
         primer_dato = rango_copia.get("desde")
+    # El último día que la copia trae (una sincronización atrasada no son ventas en cero) y desde cuándo la copia
+    # cubre todas las tiendas del alcance (la antigüedad de un anuncio se conoce 14 días después).
+    fin_datos = max((str(f["fecha"])[:10] for f in filas), default=None)
     inicio_copia = rango_copia.get("desde")
-    conocido = (_iso(date.fromisoformat(str(inicio_copia)[:10]) + timedelta(days=resultados.DIAS_NUEVO))
-                if inicio_copia else None)
+    inicio_edad = datos.inicio_para_antiguedad(cliente, tienda_id) if inicio_copia else None
+    conocido = (_iso(date.fromisoformat(str(inicio_edad)[:10]) + timedelta(days=resultados.DIAS_NUEVO))
+                if inicio_edad else None)
     return resultados.armar(
         dias, resultados.por_dia(ancho, d_hasta, filas), (d_desde - ancho).days, hoy, fuente, config["moneda"],
         datos.gasto_por_antiguedad(cliente, tienda_id, desde, hasta, canal) if inicio_copia else {},
         datos.gasto_por_canal(cliente, tienda_id, desde, hasta) if fuente == "tienda" and inicio_copia else {},
         datos.cohortes(cliente, tienda_id, desde, hasta, canal, conocido_desde=conocido) if inicio_copia else None,
         inicio_copia, ev.get("meta_roas"), canal, "", ultima_copia,
-        inicio_datos=str(primer_dato)[:10] if primer_dato else None)
+        inicio_datos=str(primer_dato)[:10] if primer_dato else None, fin_datos=fin_datos,
+        inicio_edad=str(inicio_edad)[:10] if inicio_edad else None)
 
 
 def contexto_dia(cliente, fecha, canal=None, tienda_id=None, hoy=None):
@@ -289,11 +299,14 @@ def contexto_dia(cliente, fecha, canal=None, tienda_id=None, hoy=None):
     hoy = hoy or date.today()
     tienda_actual = tienda_elegida(config["tiendas"], tienda_id)
     tienda_id = tienda_actual["id"] if tienda_actual else None
-    primero = _primer_dia(cliente, tienda_id)
+    primero = datos.primer_dia_copia(cliente, tienda_id)
     if not primero or fecha < date.fromisoformat(primero) or fecha >= hoy:
         return None
-    if canal and canal not in datos.canales(cliente, tienda_id, primero, _iso(hoy)):
+    # Un canal con forma rara se ignora; uno bien formado que no existe da un día vacío (las consultas van
+    # parametrizadas y filtradas por cliente). Sin recorrer la copia entera en cada clic.
+    if canal and not _CANAL_VALIDO.match(canal):
         canal = None
+    inicio_edad = datos.inicio_para_antiguedad(cliente, tienda_id)
     f, f_antes = _iso(fecha), _iso(fecha - timedelta(days=7))
     filas = datos.serie_tienda(cliente, tienda_id, f_antes, f) if not canal else []
     fuente = "tienda" if filas else "anuncios"
@@ -315,7 +328,9 @@ def contexto_dia(cliente, fecha, canal=None, tienda_id=None, hoy=None):
         fecha, del_dia(f) or {"ing": 0.0, "gas": 0.0, "ped": 0.0}, antes,
         datos.gasto_por_canal(cliente, tienda_id, f, f).get(f, {}) if not canal else {},
         anuncios, datos.arrancaron_el(cliente, tienda_id, f, canal), creatv, config["moneda"], fuente,
-        _iso(anterior) if _iso(anterior) >= primero else None, _iso(siguiente) if siguiente < hoy else None)
+        _iso(anterior) if _iso(anterior) >= primero else None, _iso(siguiente) if siguiente < hoy else None,
+        antiguedad_conocida=bool(inicio_edad) and fecha >= (date.fromisoformat(str(inicio_edad)[:10])
+                                                            + timedelta(days=resultados.DIAS_NUEVO)))
     detalle.update(canal=canal, tienda_id=tienda_id)
     return detalle
 
@@ -361,6 +376,17 @@ def contexto(cliente, dias=PERIODO_DEFECTO, canal=None, tienda_id=None, hoy=None
     copias = [t["ultima_sincronizacion"] for t in en_alcance if t.get("ultima_sincronizacion")]
     ultima_copia = (min(copias) if len(copias) == len(en_alcance) else None) if copias else None
     rango_copia = datos.rango(cliente, tienda_id)
+    resultados_ctx = _resultados(cliente, config, tienda_id, canal, dias, desde, hasta, hoy, ev, bool(serie_tienda),
+                                 rango_copia, ultima_copia)
+    # La alerta «el MER de la tienda cayó» usa la misma variación que la tarjeta «Retorno (MER)» (días completos,
+    # sin periodo anterior fuera de la copia): antes de «Resultados» la tarjeta y la alerta usaban el mismo número.
+    tienda_alertas = dict(tienda or {}, variacion={}) if tienda else tienda
+    if tienda and resultados_ctx and resultados_ctx["fuente"] == "tienda":
+        por_clave = {t["clave"]: t["variacion"] for t in resultados_ctx["tarjetas"]}
+        tienda_alertas["variacion"] = {k: v for k, v in (("ingresos", por_clave.get("ventas")),
+                                                           ("pedidos", por_clave.get("pedidos")),
+                                                           ("gasto", por_clave.get("gasto")),
+                                                           ("mer", por_clave.get("mer"))) if v is not None}
     return {
         "productos": productos, "etiquetas_pieza": ETIQUETAS_PIEZA,
         "conectado": True, "config": config, "moneda": config["moneda"], "dias": dias, "periodos": PERIODOS,
@@ -375,10 +401,8 @@ def contexto(cliente, dias=PERIODO_DEFECTO, canal=None, tienda_id=None, hoy=None
         "sync_ocupado": all(t["id"] in ocupadas for t in en_alcance),
         "rango": rango_copia, "ev": ev, "anuncios": ev["anuncios"][:MAX_FILAS],
         "mas_anuncios": max(0, len(ev["anuncios"]) - MAX_FILAS),
-        "tienda": tienda, "rastreo": rastreo,
-        "resultados": _resultados(cliente, config, tienda_id, canal, dias, desde, hasta, hoy, ev, bool(serie_tienda),
-                                  rango_copia, ultima_copia),
-        "alertas": evaluacion.alertas(ev, tienda, rastreo),
+        "tienda": tienda, "rastreo": rastreo, "resultados": resultados_ctx,
+        "alertas": evaluacion.alertas(ev, tienda_alertas, rastreo),
         "muestra_ia": muestra, "estimado_ia": gastos.estimar("evaluacion_tw", n=len(muestra)) if muestra else None,
         "evaluaciones": evaluaciones, "ultima_lista": ultima_lista,
         "job_evaluar": (tareas_tw.job_id_evaluar(cliente)
