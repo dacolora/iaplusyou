@@ -5882,6 +5882,11 @@ def _ejecutar_propuesta(cliente, pr):
         except ValueError as e:
             propuestas.reabrir(cliente, pr["id"])
             return str(e)
+        except SaldoInsuficiente as e:
+            # Cobros (spec 2026-10-08 §5.4): no se planificó nada; la propuesta
+            # sigue pendiente para aprobarla después de recargar.
+            propuestas.reabrir(cliente, pr["id"])
+            return e.frase()
         except Exception as e:  # noqa: BLE001
             propuestas.reabrir(cliente, pr["id"])
             return gettext("No pude ejecutar «%(accion)s»: %(error)s", accion=pr["accion"], error=cola.sin_token(str(e)))
@@ -8513,6 +8518,10 @@ def cf_generar_video(cliente, cf_id):
     # otra aunque la casilla venga marcada.
     tiene_hija_b = any(e.get("derivado_de") == cf_id and e.get("variante") == "B" for e in data.values())
     quiere_b = request.form.get("version_b") == "si" and bool(prompt_b) and not es_imagen and not tiene_hija_b
+    # Cobros (spec 2026-10-08 §5): A (y B si se pidió) se piden juntas ANTES de
+    # duplicar la hija: sin saldo no queda una sesión B huérfana.
+    costo_uno = flowplus_lanzar.costo_estimado(entry)
+    libro_cobros.exigir(cliente, None if costo_uno is None else costo_uno * (2 if quiere_b else 1))
     hija = None
     if quiere_b:
         # Dos clics casi simultáneos pueden leer el mismo entry.estado

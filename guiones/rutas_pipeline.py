@@ -25,7 +25,7 @@ from guiones.refinador import Conflicto, DatoInvalido, ErrorRefinador, NoExiste
 from guiones.rutas import _cuerpo, _entero, _error, _sin_cuerpo, _solo_mismo_origen
 from providers import flowplus_modelos
 from storage import r2_uploader
-from tareas.cadena import PRIORIDAD_CADENA, _fallar as fallar_cadena, job_id as job_cadena
+from tareas.cadena import PRIORIDAD_CADENA, fallar_cadena, job_id as job_cadena
 
 bp = Blueprint("guiones_pipeline", __name__, url_prefix="/cliente/<cliente>/guiones")
 bp.before_request(_solo_mismo_origen)

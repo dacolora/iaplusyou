@@ -45,6 +45,7 @@ import organico
 import propuestas
 import proyectos
 import trabajos
+from cobros import SaldoInsuficiente, libro
 from tareas import organico as tareas_organico
 
 # Acciones que pueden aumentar el gasto: chequean el tope antes de ejecutarse.
@@ -190,6 +191,7 @@ def ejecutar(cliente, experimento_id, accion, payload, propuesta_id=None, ep_id_
         if (pz.get("extra") or {}).get("derivado"):
             _evento("%(nombre)s ya derivada: no se vuelve a producir.", nombre=pz["nombre"])
             return gettext("%(nombre)s ya derivada: no se vuelve a producir.", nombre=pz["nombre"])
+        _exigir_saldo(cliente, ex, accion, payload)
         with _del_proyecto(cliente):
             hijo = derivaciones.planificar(cliente, experimento_id, "derivar", payload)
         # planificar ya marcó `derivado`; repetirlo es inocuo (misma bandera).
@@ -216,6 +218,7 @@ def ejecutar(cliente, experimento_id, accion, payload, propuesta_id=None, ep_id_
                    nombre=pz["nombre"], escalon=marcado)
             return gettext("%(nombre)s ya rescatada (escalón %(escalon)s); pieza pausada.",
                            nombre=pz["nombre"], escalon=marcado)
+        _exigir_saldo(cliente, ex, accion, payload)
         with _del_proyecto(cliente):
             derivaciones.planificar(cliente, experimento_id, "rescatar", payload)
         # planificar ya dejó `rescatado_en_escalon` (I-5); acá se refuerza
@@ -487,6 +490,14 @@ def _precio_estimado(cliente, ex, accion, payload):
         return {"usd": None, "texto": sin_precio}
 
 
+def _exigir_saldo(cliente, ex, accion, payload):
+    """Cobros (spec 2026-10-08 §5): derivar y rescatar producen (clon y
+    finales). El saldo se pide ANTES de `planificar`, que crea el experimento
+    hijo y marca la pieza (`derivado`, `rescatado_en_escalon`): sin saldo no
+    se gasta la única derivación ni el escalón; lanza SaldoInsuficiente."""
+    libro.exigir(cliente, _precio_estimado(cliente, ex, accion, payload)["usd"])
+
+
 def pedir(cliente, experimento_id, accion, payload, motivo):
     """Puerta del decisor. Devuelve ("ejecutada", mensaje) o
     ("propuesta", mensaje) según el modo del experimento y el tope; en ambos
@@ -527,14 +538,21 @@ def pedir(cliente, experimento_id, accion, payload, motivo):
     if puerta == "ejecutar":
         try:
             mensaje = ejecutar(cliente, experimento_id, accion, payload)
+        except SaldoInsuficiente as e:
+            # Modo automático sin saldo (cobros §5.4): no se consumió nada
+            # (`_exigir_saldo` va antes de planificar); queda como propuesta
+            # para que una persona la apruebe después de recargar.
+            mensaje = None
+            motivo_prop = f"{e.frase_proyecto()} {motivo}".strip()
         except Exception as error:
             experimentos.registrar_evento(cliente, experimento_id, "error",
                                           cola.sin_token(str(error)), datos=datos, ep_id=ep_id)
             raise
-        experimentos.registrar_evento(cliente, experimento_id, "accion",
-                                      gettext("%(mensaje)s Motivo: %(motivo)s.", mensaje=mensaje, motivo=motivo),
-                                      datos=datos, ep_id=ep_id)
-        return "ejecutada", mensaje
+        if mensaje is not None:
+            experimentos.registrar_evento(cliente, experimento_id, "accion",
+                                          gettext("%(mensaje)s Motivo: %(motivo)s.", mensaje=mensaje, motivo=motivo),
+                                          datos=datos, ep_id=ep_id)
+            return "ejecutada", mensaje
 
     if accion == "publicar_organico" and not _propuesta_organica_pendiente(cliente, experimento_id, payload):
         payload = _completar_propuesta_organica(cliente, ex, payload)

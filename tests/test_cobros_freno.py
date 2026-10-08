@@ -289,3 +289,80 @@ def test_cadena_sin_saldo_se_detiene_en_la_escena_con_la_frase(monkeypatch):
     tareas_cadena.vigilar_una("acme", 9)
     (k, error), = fallos
     assert k == 2 and error.startswith("Saldo insuficiente")
+
+
+# --- derivar / rescatar: sin saldo no se gasta la derivación ni el escalón (fix 1) -------------
+
+from tests.test_acciones import ent  # noqa: E402,F401 — fixture de experimentos
+
+
+def _aprobada(ent, accion, payload):
+    import propuestas
+    pid = propuestas.crear("acme", ent["eid"], accion, payload, "ganador")
+    return propuestas.resolver("acme", pid, "aprobada")
+
+
+def _pieza_ep(ent):
+    return next(p for p in ent["ex"].piezas("acme", ent["eid"]) if p["id"] == ent["ep"])
+
+
+@pytest.mark.parametrize("accion", ["derivar", "rescatar"])
+def test_aprobar_sin_saldo_deja_la_propuesta_abierta_y_no_consume_nada(ent, libro, accion):
+    import dashboard
+    import propuestas
+    _cobra(libro)
+    pr = _aprobada(ent, accion, {"ep_id": ent["ep"]})
+    with dashboard.app.test_request_context("/"):
+        error = dashboard._ejecutar_propuesta("acme", pr)
+    assert error.startswith("Saldo insuficiente")
+    assert propuestas.obtener("acme", pr["id"])["estado"] == "pendiente"
+    extra = _pieza_ep(ent).get("extra") or {}
+    assert not extra.get("derivado") and extra.get("rescatado_en_escalon") is None
+    assert not [l for l in ent["llamadas"] if l[0] in ("planificar", "pausar")]   # ni hijo ni pausa
+
+
+def test_aprobar_derivar_con_saldo_sigue_como_antes(ent, libro):
+    import dashboard
+    import propuestas
+    _cobra(libro, milesimas=1_000_000)
+    pr = _aprobada(ent, "derivar", {"ep_id": ent["ep"]})
+    with dashboard.app.test_request_context("/"):
+        assert dashboard._ejecutar_propuesta("acme", pr) is None
+    assert propuestas.obtener("acme", pr["id"])["estado"] == "ejecutada"
+    assert ("planificar", "derivar", ent["ep"]) in ent["llamadas"]
+    assert _pieza_ep(ent)["extra"]["derivado"] is True
+
+
+@pytest.mark.parametrize("accion", ["derivar", "rescatar"])
+def test_modo_auto_sin_saldo_queda_como_propuesta_sin_consumir_nada(ent, libro, monkeypatch, accion):
+    import propuestas
+    monkeypatch.setattr("idiomas.de_proyecto", lambda c: "es")
+    ent["ex"].actualizar("acme", ent["eid"], modo="auto")
+    _cobra(libro)
+    estado, _ = ent["ac"].pedir("acme", ent["eid"], accion, {"ep_id": ent["ep"]}, "ganador")
+    assert estado == "propuesta"
+    (pend,) = [p for p in propuestas.pendientes("acme", ent["eid"]) if p["accion"] == accion]
+    assert pend["payload"]["motivo"].startswith("Saldo insuficiente")
+    extra = _pieza_ep(ent).get("extra") or {}
+    assert not extra.get("derivado") and extra.get("rescatado_en_escalon") is None
+    assert not [l for l in ent["llamadas"] if l[0] in ("planificar", "pausar")]
+    # Al recargar, la periódica vuelve a pedir y no duplica la propuesta.
+    _cobra(libro, milesimas=1_000_000)
+    ent["ac"].pedir("acme", ent["eid"], accion, {"ep_id": ent["ep"]}, "ganador")
+    assert (("planificar", accion, ent["ep"]) in ent["llamadas"])
+
+
+# --- «Generar» con versión B: sin saldo no queda una hija B huérfana (fix 2) -------------------
+
+def test_generar_con_version_b_sin_saldo_no_crea_la_hija(crear, libro):
+    import creative_flow
+    _cobra(libro)
+    cid = creative_flow.crear("acme", [], [], [], "camina", 8, "", "A", referencias_urls=[])
+    creative_flow.actualizar("acme", cid, tipo="video", modelo="wan3", enfoque="libre", estado="prompt_listo",
+                             prompt_relleno="A", director={"prompt_b": "B"})
+    r = crear.post(f"/cliente/acme/creative_flow/{cid}/generar_video", data={"version_b": "si"},
+                   headers={"X-Requested-With": "fetch"})
+    assert r.status_code == 402
+    sesiones = creative_flow.cargar("acme")
+    assert list(sesiones) == [cid] and sesiones[cid]["estado"] == "prompt_listo"
+    assert _tareas() == []

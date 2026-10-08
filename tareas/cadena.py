@@ -124,6 +124,12 @@ def lanzar_escena(cliente, video_id, k):
     return cf_id
 
 
+def fallar_cadena(cliente, video_id, k, error):
+    """Detiene la cadena en la escena `k` con `error` (lo usan el vigilante y la
+    ruta que aprueba la cadena cuando el encolado falla, p. ej. sin saldo)."""
+    _fallar(cliente, video_id, k, error)
+
+
 def _fallar(cliente, video_id, k, error):
     try:
         datos.modificar_cadena(cliente, video_id, lambda e, _v: cadena.fallo(e, k, error) if e else e)
