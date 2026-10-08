@@ -302,3 +302,70 @@ def test_pieza_de_creatv_con_solo_miniatura_se_ve_como_imagen():
     assert panel.medio_tarjeta(a) == {"imagen": "https://r2/m.jpg"}
     a["creatv"]["url_video"] = "https://r2/v.mp4"
     assert panel.medio_tarjeta(a) == {"video": "https://r2/v.mp4", "poster": "https://r2/m.jpg"}
+
+
+# ---------------------------------------------------------------- tarea 9: el filtro cambia el bloque entero ---
+
+def _claves_del_lote(html):
+    """Las `clave=<canal>:<ad_id>` ocultas del formulario del lote que trae el HTML."""
+    return re.findall(r'name="clave" value="([^"]+)"', html)
+
+
+def test_el_panel_envuelve_la_galeria_en_un_bloque_con_su_url(app):  # noqa: F811
+    _conectar()
+    _sembrar()
+    html = app["c"].get("/cliente/acme/triple-whale/panel?dias=7").data.decode()
+    m = re.search(r'<div class="tw-galeria-bloque" data-url="([^"]+)"', html)
+    assert m and "/cliente/acme/triple-whale/galeria?" in m.group(1) and "dias=7" in m.group(1)
+    # Chips, formulario del lote y rejilla viven dentro del bloque.
+    bloque = html[m.start():html.index('id="tw-ia"')]
+    assert "tw-galeria-barra" in bloque and "tw-analizar-lote" in bloque and 'id="tw-galeria"' in bloque
+
+
+def test_filtrar_pide_la_galeria_entera_con_los_chips_y_el_lote_de_ese_filtro(app):  # noqa: F811
+    _conectar()
+    _sembrar()
+    todos = app["c"].get("/cliente/acme/triple-whale/galeria?entera=1").data.decode()
+    assert _claves_del_lote(todos) and "facebook-ads:g1" in _claves_del_lote(todos)
+    r = app["c"].get("/cliente/acme/triple-whale/galeria?entera=1&veredicto=perdedor")
+    html = r.data.decode()
+    assert r.status_code == 200 and html.lstrip().startswith('<div class="tw-galeria-bloque"')
+    # Chips (con «Perdedores» activo), el formulario del lote de ESE filtro y la rejilla.
+    assert 'data-tw-galeria-filtro="perdedor"' in html and 'data-tw-galeria-filtro="ganador"' in html
+    assert re.search(r'class="chip activo" data-tw-galeria-filtro="perdedor"', html)
+    claves = _claves_del_lote(html)
+    assert sorted(claves) == ["facebook-ads:p1", "facebook-ads:p2"]
+    assert 'name="veredicto" value="perdedor"' in html and "tw-analizar-lote" in html
+    assert 'id="tw-galeria"' in html and 'data-veredicto="perdedor"' in html
+    assert 'id="tw-tarjeta-facebook-ads-p1"' in html and 'id="tw-tarjeta-facebook-ads-g1"' not in html
+    # El precio del lote es el de dos anuncios, no el de «Todos».
+    assert "Analizar los 2 que más gastaron" in html and "Analizar los 2 que más gastaron" not in todos
+
+
+def test_un_filtro_vacio_dice_que_no_hay_anuncios_y_sin_lote(app):  # noqa: F811
+    _conectar()
+    _sembrar()
+    html = app["c"].get("/cliente/acme/triple-whale/galeria?entera=1&veredicto=cansando").data.decode()
+    assert "Ningún anuncio en este filtro." in html
+    assert "tw-analizar-lote" not in html and "<article" not in html
+    assert 'id="tw-galeria"' in html and 'data-veredicto="cansando"' in html
+
+
+def test_sin_entera_la_galeria_sigue_siendo_solo_tarjetas(app):  # noqa: F811
+    """«Ver más» agrega tarjetas a la rejilla que ya está: sin chips, sin lote, sin bloque."""
+    _conectar()
+    _sembrar_muchos(15)
+    p2 = app["c"].get("/cliente/acme/triple-whale/galeria?pagina=2").data.decode()
+    assert "tw-galeria-bloque" not in p2 and "tw-galeria-barra" not in p2 and "tw-analizar-lote" not in p2
+    # `entera=1` siempre arranca en la primera página aunque pidan otra.
+    e = app["c"].get("/cliente/acme/triple-whale/galeria?entera=1&pagina=2").data.decode()
+    assert len(_tarjetas(e)) == 12 and 'data-pagina="2"' in e
+
+
+def test_la_galeria_entera_respeta_el_alcance_y_un_filtro_raro_es_todos(app):  # noqa: F811
+    _conectar()
+    _sembrar()
+    raro = app["c"].get("/cliente/acme/triple-whale/galeria?entera=1&veredicto=<script>").data.decode()
+    assert "<script>" not in raro and 'data-veredicto=""' in raro
+    sin_conexion = app["c"].get("/cliente/otro/triple-whale/galeria?entera=1")
+    assert sin_conexion.status_code in (403, 404)

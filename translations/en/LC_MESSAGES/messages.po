@@ -11189,6 +11189,9 @@ msgstr "Couldn't open the campaign. Check your connection and try again."
 msgid "No se pudo abrir la ficha. Revisa tu conexión e intenta de nuevo."
 msgstr "Couldn't open the details. Check your connection and try again."
 
+msgid "No se pudo actualizar este anuncio. Recarga la página para ver el resultado."
+msgstr "Couldn't update this ad. Reload the page to see the result."
+
 #, python-format
 msgid "No se pudo adaptar (%(tipo)s)."
 msgstr "Couldn't adapt it (%(tipo)s)."
@@ -11243,6 +11246,9 @@ msgstr "Couldn't change the budget on all of the country's ad sets; it was left 
 
 msgid "No se pudo cambiar el presupuesto en todos los conjuntos del país; se dejó como estaba."
 msgstr "Couldn't change the budget on all of the country's ad sets; it was left as it was."
+
+msgid "No se pudo cargar el análisis. Intenta de nuevo."
+msgstr "Couldn't load the analysis. Try again."
 
 msgid "No se pudo cargar el catálogo. Revisa tu conexión e intenta de nuevo."
 msgstr "Couldn't load the catalog. Check your connection and try again."

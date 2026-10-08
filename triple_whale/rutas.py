@@ -16,7 +16,8 @@ todo porque la URL lleva `<cliente>`; cada POST además exige el mismo origen
   pieza de experimento) desde la tabla, con confirmación; usa
   `lanzador.pausar_pieza` / `activar_pieza`, que dejan su evento.
 - `galeria` (GET, spec 2026-10-08 tarjetas §5.2): una página de tarjetas
-  (`dias`, `canal`, `tienda`, `veredicto`, `pagina`) para los filtros y «Ver más».
+  (`dias`, `canal`, `tienda`, `veredicto`, `pagina`) para «Ver más»; con `entera=1`, la galería completa del filtro
+  (chips + formulario del lote + rejilla, página 1) para cambiar de filtro.
 - `tarjeta` (GET, §5.3): una sola tarjeta, para repintarla cuando termina su
   análisis; un anuncio que no está en el alcance (o un id raro) es 404.
 - `analizar_anuncio` (POST, §6.2): «Cómo mejorarlo» de un anuncio: la foto de hoy, la fila `tw_analisis` y la tarea
@@ -128,8 +129,14 @@ def galeria(cliente):
     alc = _alcance_peticion(cliente, request.args)
     if not alc:
         abort(404)
-    g = panel.galeria(cliente, alc["ev"], request.args.get("veredicto") or "", request.args.get("pagina"), alcance=alc)
-    return render_template("_tw_galeria_fragmento.html", modo="pagina", g=g, **_contexto_galeria(cliente, alc))
+    # `entera=1` (un filtro nuevo): la galería completa de ese filtro, página 1 — chips, formulario del lote (sus claves
+    # y su precio) y rejilla o el aviso de vacío — para que el JS reemplace el bloque entero y no solo las tarjetas.
+    # Sin ella («Ver más»): solo las tarjetas de esa página.
+    entera = request.args.get("entera") == "1"
+    g = panel.galeria(cliente, alc["ev"], request.args.get("veredicto") or "",
+                      1 if entera else request.args.get("pagina"), alcance=alc)
+    return render_template("_tw_galeria_fragmento.html", modo="entera" if entera else "pagina", g=g,
+                           **_contexto_galeria(cliente, alc))
 
 
 @bp.get("/tarjeta/<canal>/<ad_id>")

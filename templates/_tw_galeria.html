@@ -137,7 +137,10 @@
 {% if g.hay_mas %}<button type="button" class="btn-sm tw-ver-mas" data-tw-mas data-pagina="{{ g.pagina + 1 }}">{{ _('Ver más') }}</button>{% endif %}
 {%- endmacro %}
 
+{#- El bloque entero (chips + lote + rejilla) vive en un solo elemento: al cambiar de filtro el JS lo reemplaza completo
+    (ruta `galeria` con `entera=1`), así el formulario del lote y su precio siempre son los del filtro que se ve. -#}
 {% macro galeria(g, cliente, alcance_params, moneda, tw) -%}
+<div class="tw-galeria-bloque" data-url="{{ url_for('triple_whale.galeria', cliente=cliente, **alcance_params) }}">
 <div class="tw-galeria-barra">
   <div class="tw-filtros" role="group" aria-label="{{ _('Filtrar anuncios') }}">
     {% set nombres = {"": _('Todos'), "ganador": _('Ganadores'), "prometedor": _('Prometedores'), "en_prueba": _('En prueba'),
@@ -161,5 +164,6 @@
 </div>
 <div class="tw-galeria" id="tw-galeria" data-url="{{ url_for('triple_whale.galeria', cliente=cliente, **alcance_params) }}" data-veredicto="{{ g.veredicto }}">
   {% if g.tarjetas %}{{ tarjetas_pagina(g, cliente, alcance_params, moneda, tw) }}{% else %}<p class="vacio">{{ _('Ningún anuncio en este filtro.') }}</p>{% endif %}
+</div>
 </div>
 {%- endmacro %}
