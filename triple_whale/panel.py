@@ -307,16 +307,27 @@ def _dias_periodo(desde, hasta):
         return None
 
 
+def canal_del_alcance(fila):
+    """El filtro de canal del panel con que se pidió ese análisis (`foto.alcance_canal`), o None = «Todos». Las filas
+    de antes de la revisión final no lo guardaban: se pidieron en «Todos»."""
+    return ((fila or {}).get("foto") or {}).get("alcance_canal") or None
+
+
 def mismo_alcance(fila, alcance):
-    """¿Ese análisis se pagó en el alcance que se mira? Misma tienda (None = «Todas») y un periodo del mismo largo
-    O con el mismo `desde`. Un periodo de N días corre con los días (se compara el largo, no las fechas); «Desde el
-    inicio» crece un día cada día pero arranca siempre en el primer día copiado, así que el análisis de ayer sigue
-    siendo de este alcance (mezcla con «Resultados de tu tienda», 2026-10-08). Sin `alcance`, sí. Una fila sin
-    fechas no es del mismo alcance: ante la duda no se ofrece pagar otra vez (revisión de la tarea 7)."""
+    """¿Ese análisis se pagó en el alcance que se mira? Misma tienda (None = «Todas»), el mismo filtro de canal
+    (None = «Todos») y un periodo del mismo largo O con el mismo `desde`. El filtro de canal cuenta porque el
+    veredicto se calcula contra los anuncios del filtro: sin él, un análisis pedido en «Todos» se veía viejo con el
+    filtro de Snapchat y el lote lo volvía a cobrar (revisión final, E1). Un periodo de N días corre con los días (se
+    compara el largo, no las fechas); «Desde el inicio» crece un día cada día pero arranca siempre en el primer día
+    copiado, así que el análisis de ayer sigue siendo de este alcance (mezcla con «Resultados de tu tienda»,
+    2026-10-08). Sin `alcance`, sí. Una fila sin fechas no es del mismo alcance: ante la duda no se ofrece pagar otra
+    vez (revisión de la tarea 7)."""
     if not alcance:
         return True
     fila = fila or {}
     if fila.get("tienda_id") != alcance.get("tienda_id"):
+        return False
+    if canal_del_alcance(fila) != (alcance.get("canal") or None):
         return False
     largo = _dias_periodo(fila.get("desde"), fila.get("hasta"))
     if largo is None:
@@ -336,6 +347,32 @@ def es_viejo(a, fila, alcance=None):
         return True
     antes = float((foto.get("m") or {}).get("gasto") or 0)
     return a["m"]["gasto"] >= FACTOR_VIEJO * antes if antes > 0 else a["m"]["gasto"] > 0
+
+
+def elegir_analisis(a, filas, alcance=None, vivo=False):
+    """Qué análisis cuenta para la tarjeta, el lote y la ruta que cobra, entre TODOS los del anuncio (`filas`, el más
+    nuevo primero; `datos.analisis_de_anuncios`). Mirar solo el más nuevo escondía uno fresco de este alcance detrás de
+    uno de otro, y el error de otro alcance volvía a ofrecer pagar (revisión final, A2).
+
+    - `mismo`: el más nuevo del alcance que se mira (listo, con error o en curso).
+    - `otro`: el más nuevo LISTO de otro alcance (uno con error de otro alcance no cuenta).
+    - `fila`: el que se muestra (`mismo`, si no `otro`); `viejo` / `fresco`: de `mismo` listo (`es_viejo`).
+    - `otro_alcance`: no hay `mismo` pero sí `otro`: nota neutra y el botón secundario «Analizar con estos datos».
+    - `ofrecer`: el botón principal pagado (y entrar al lote): sin tarea viva, con datos, y sin `mismo` fresco ni
+      `otro` listo. `vivo` = el anuncio tiene su tarea en cola o corriendo."""
+    mismo = otro = None
+    for f in filas or []:
+        if mismo_alcance(f, alcance):
+            mismo = mismo or f
+        elif otro is None and f["estado"] == "lista":
+            otro = f
+    lista = bool(mismo and mismo["estado"] == "lista")
+    viejo = lista and es_viejo(a, mismo, alcance)
+    fresco = lista and not viejo
+    otro_alcance = mismo is None and otro is not None
+    return {"mismo": mismo, "otro": otro, "fila": mismo or otro, "viejo": viejo, "fresco": fresco,
+            "otro_alcance": otro_alcance, "vivo": bool(vivo),
+            "ofrecer": not vivo and a["veredicto"] != "sin_datos" and not fresco and not otro_alcance}
 
 
 def medio_tarjeta(a):
@@ -580,7 +617,7 @@ def contexto(cliente, dias=PERIODO_DEFECTO, canal=None, tienda_id=None, hoy=None
         "etiquetas_veredicto": evaluacion.ETIQUETAS_VEREDICTO, "problemas": evaluacion.PROBLEMAS,
         "fortalezas": evaluacion.FORTALEZAS, "veredictos": evaluacion.VEREDICTOS,
         # La galería de tarjetas (spec tarjetas §2): su primera página llega con el panel, sin un segundo fetch.
-        "galeria": galeria(cliente, ev, alcance={"tienda_id": tienda_id, "desde": desde, "hasta": hasta}),
+        "galeria": galeria(cliente, ev, alcance={"tienda_id": tienda_id, "canal": canal, "desde": desde, "hasta": hasta}),
         "alcance_params": {"dias": dias, "canal": canal or "", "tienda": tienda_id if tienda_id is not None else ""},
         "frases_veredicto": evaluacion.FRASES_VEREDICTO, "tendencias": evaluacion.TENDENCIAS,
         "vacios_anillo": evaluacion.VACIOS_ANILLO,

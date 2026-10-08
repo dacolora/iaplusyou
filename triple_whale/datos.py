@@ -697,19 +697,26 @@ def analisis_anuncio(cliente, analisis_id):
     return dict(fila._mapping) if fila else None
 
 
-def ultimos_analisis(cliente, claves):
-    """{(canal, ad_id): fila} con el análisis más nuevo de cada anuncio: UNA consulta por tramo de claves
-    (_CLAVES_POR_CONSULTA), sin importar cuántas tarjetas tenga la página."""
+def analisis_de_anuncios(cliente, claves):
+    """{(canal, ad_id): [filas, la más nueva primero]} con TODOS los análisis de esos anuncios: UNA consulta por tramo
+    de claves (_CLAVES_POR_CONSULTA), sin importar cuántas tarjetas tenga la página. Un anuncio tiene pocos (uno por
+    alcance que alguien pagó): se leen todos y `panel.elegir_analisis` elige el de este alcance. Leer solo el más
+    nuevo escondía uno fresco detrás de uno de otro alcance (revisión final, A2)."""
     if not claves:
         return {}
     t = db.tw_analisis
-    filas = []
+    salida = {}
     with db.conectar() as con:
         for pares in _tramos_claves(claves):
-            ultimo = (sa.select(sa.func.max(t.c.id)).where(_por_claves(t, cliente, pares))
-                      .group_by(t.c.canal, t.c.ad_id))
-            filas.extend(con.execute(sa.select(t).where(t.c.id.in_(ultimo))).all())
-    return {(f.canal, f.ad_id): dict(f._mapping) for f in filas}
+            for f in con.execute(sa.select(t).where(_por_claves(t, cliente, pares)).order_by(t.c.id.desc())):
+                salida.setdefault((f.canal, f.ad_id), []).append(dict(f._mapping))
+    return salida
+
+
+def ultimos_analisis(cliente, claves):
+    """{(canal, ad_id): fila} con el análisis más nuevo de cada anuncio (la misma consulta que
+    `analisis_de_anuncios`)."""
+    return {k: filas[0] for k, filas in analisis_de_anuncios(cliente, claves).items()}
 
 
 def analisis_en_curso(cliente, canal, ad_id):

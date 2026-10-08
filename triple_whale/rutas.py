@@ -187,6 +187,11 @@ def _pedir_analisis(cliente, alc, a):
         return False, gettext("Todavía tiene muy pocos datos: espera a que gaste más.")
     if datos.analisis_en_curso(cliente, a["canal"], a["ad_id"]):
         return False, gettext("Ese anuncio ya se está analizando.")
+    # Uno listo y fresco de ESTE alcance no se paga otra vez: una pestaña vieja (o la de 7 días después de pasar por
+    # 30) todavía muestra el botón (revisión final, A1).
+    clave = (a["canal"], a["ad_id"])
+    if panel.elegir_analisis(a, datos.analisis_de_anuncios(cliente, [clave]).get(clave), alc)["fresco"]:
+        return False, gettext("Ese anuncio ya tiene un análisis con estos datos.")
     ev = alc["ev"]
     claves = [(a["canal"], a["ad_id"])] + [(b["canal"], b["ad_id"]) for b in ev["anuncios"]
                                            if b["veredicto"] == "ganador" and b["canal"] == a["canal"]]
@@ -200,7 +205,8 @@ def _pedir_analisis(cliente, alc, a):
         a["creatv"] = datos.piezas_creatv(cliente, [a["ad_id"]]).get(a["ad_id"])
     foto = mejorar.foto(a, creativos.get((a["canal"], a["ad_id"])), cuenta,
                         mejorar.ganadores_del_canal(ev, a, creativos))
-    aid = datos.crear_analisis(cliente, alc["tienda_id"], a["canal"], a["ad_id"], alc["desde"], alc["hasta"],
+    foto["alcance_canal"] = alc.get("canal")     # el filtro de canal del panel también es del alcance (revisión final, A3)
+    aid =datos.crear_analisis(cliente, alc["tienda_id"], a["canal"], a["ad_id"], alc["desde"], alc["hasta"],
                                alc["config"]["moneda"], foto, pedido_por=session.get("usuario"))
     try:
         encolada = tareas_tw.encolar_analisis(cliente, aid, a["canal"], a["ad_id"])

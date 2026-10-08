@@ -6829,6 +6829,9 @@ msgstr "That ad no longer exists."
 msgid "Ese anuncio ya se está analizando."
 msgstr "That ad is already being analyzed."
 
+msgid "Ese anuncio ya tiene un análisis con estos datos."
+msgstr "That ad already has an analysis with this data."
+
 msgid "Ese análisis no dejó un aprendizaje."
 msgstr "That analysis did not leave a learning."
 
