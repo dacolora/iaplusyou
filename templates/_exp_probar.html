@@ -19,7 +19,7 @@
   <p class="exp-anuncios"></p>
   <p class="exp-aviso-tope"></p>
   <p class="exp-nada">{{ _('Nada gasta hasta que pulses Activar') }}</p>
-  {% if viva %}<p id="exp-minimo" class="exp-aviso" hidden></p>{% endif %}
+  {% if viva %}{{ caller() }}{% endif %}
 </div>
 {% endmacro %}
 {% macro nota_presupuesto() %}
@@ -113,9 +113,11 @@
       <label>{{ _('Días') }} <input type="number" name="dias" value="7" min="1" max="90"></label>
     </div>
     <input type="range" id="exp-total-barra" class="exp-total-barra" aria-label="{{ _('Ajustar el total') }}">
-    {{ resumen_presupuesto('exp-resumen', true) }}
     <p id="exp-total-aviso" class="exp-aviso" hidden>{{ _('Escribe el total.') }}</p>
-    <button type="button" class="btn-sm" id="exp-usar-minimo" hidden>{{ _('Usar ese total') }}</button>
+    {% call resumen_presupuesto('exp-resumen', true) %}
+      <p id="exp-minimo" class="exp-aviso" hidden></p>
+      <button type="button" class="btn-sm" id="exp-usar-minimo" hidden>{{ _('Usar ese total') }}</button>
+    {% endcall %}
     <details class="exp-ajuste"><summary>{{ _('Ajustar reparto') }}</summary>
       <p class="vacio">{{ _('Cambia el presupuesto diario de cada país: el total se recalcula como la suma de los diarios por los días.') }}</p>
       <div class="exp-reparto">{% for codigo, p in paises_fe.items() %}<label data-reparto="{{ codigo }}" hidden>{{ p.bandera }} {{ p.nombre|traducir }}

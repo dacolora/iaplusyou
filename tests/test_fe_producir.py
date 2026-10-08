@@ -838,3 +838,5 @@ def test_pnd144_legado_anota_pista_pagada_fallida(entorno, monkeypatch):
     filas = [g for g in gastos.historial('acme') if g['referencia'] == f'final:{fid}:t144']
     assert len(filas) == 1
     assert filas[0]['extra']['capas']['musica'] == .02
+    assert filas[0]['usd'] == pytest.approx(sum(filas[0]['extra']['capas'].values()))
+    assert filas[0]['usd'] >= .02

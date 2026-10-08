@@ -155,4 +155,4 @@ PND-014/125 (2026-10-05): describir referencias y sugerir sonido anotan usage ba
 
 PND-144/145 (Codex, 2026-10-07): falla de descarga/R2 de pista conserva costo y URL en la capa fallida y gasto idempotente; imagen anota cobro antes de persistir el error o su bitácora. Pruebas locales en test_lote5_gasto; las revisiones del lote corresponden a Claude.
 
-PND-072 (2026-10-07, lote 5 B): dashboard._encolar_director y Sprints delegan en tareas.director.encolar; job_id, payload, prioridad, duración y max_intentos=1 conservados. El fallback redacta tokens con cola.sin_token solo en aviso; no cambia el prompt ni la sesión enviada al director. Banco, referencias antiguas y retokenización quedan como preguntas en PND-070/072.
+PND-072 (2026-10-07, lote 5 B): dashboard._encolar_director y Sprints delegan en tareas.director.encolar; job_id, payload, prioridad, duración y max_intentos=1 conservados. El fallback redacta tokens con monitoreo.limpiar_texto(motivo, 300) solo en aviso; no cambia el prompt ni la sesión enviada al director. Banco, referencias antiguas y retokenización quedan como preguntas en PND-070/072.

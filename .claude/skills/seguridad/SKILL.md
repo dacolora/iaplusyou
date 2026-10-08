@@ -51,4 +51,4 @@ escrita a mano va por «Avisar a Creatv». (8) Tokens de YouTube/TikTok en disco
 Dependencias: `requirements.txt` trae pisos verificados con `pip-audit` (`venv/bin/pip install pip-audit && venv/bin/pip-audit`); en el VPS,
 `pip install -U -r requirements.txt` los aplica.
 
-PND-072/136 (2026-10-07, lote 5 B): el aviso del fallback del director pasa por cola.sin_token; el prompt permanece igual. _int_form limita identificadores al entero positivo de SQLite y _volver_org no consulta un ep_id fuera de rango, evitando OverflowError. La pantalla admin de intentos de login permanece como pregunta PND-076; no se crean rutas ni se cambian topes.
+PND-072/136 (2026-10-07, lote 5 B): el aviso del fallback del director pasa por monitoreo.limpiar_texto(motivo, 300), que también tapa Bearer y llaves sk-; el prompt permanece igual. _int_form limita identificadores al entero positivo de SQLite y _volver_org no consulta un ep_id fuera de rango, evitando OverflowError. La pantalla admin de intentos de login permanece como pregunta PND-076; no se crean rutas ni se cambian topes.

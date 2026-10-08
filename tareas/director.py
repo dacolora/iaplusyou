@@ -7,7 +7,7 @@ determinista de `flowplus_prompt.armar` y un aviso: el fallo de Claude nunca
 es un fallo del trabajo ni bloquea a la persona. Con `auto_lanzar` (lotes de
 Sprints, cuyo costo ya se aprobó) encola además la generación.
 """
-import cola
+import monitoreo
 import creative_flow
 import director
 import gastos
@@ -55,7 +55,7 @@ def _fallback(cliente, entry, motivo):
         con_sonido=sesion["con_sonido"], cierre_sonido=flowplus_modelos.cierre_sonido(modelo) if modelo else None,
         idioma=idiomas.de_proyecto(cliente),
     )
-    return prompt, {"estado": "fallback", "aviso": cola.sin_token(motivo)[:300], "planos": None, "planos_b": None, "prompt_b": None,
+    return prompt, {"estado": "fallback", "aviso": monitoreo.limpiar_texto(motivo, 300), "planos": None, "planos_b": None, "prompt_b": None,
                     "diferencia_b": None, "modelo_claude": None, "version": director.VERSION, "usd": 0.0}
 
 

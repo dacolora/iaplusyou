@@ -1,6 +1,6 @@
-"""Inventario estático: regenera ESTRUCTURA.md y el mapa sin importar la app.
+"""Inventario estático en una salida aparte, sin importar la app.
 
-Lee solo fuentes enumeradas por git (incluye archivos nuevos del worktree),
+Lee solo fuentes versionadas enumeradas por git,
 extrae declaraciones con AST y no abre datos de clientes ni credenciales.
 """
 import argparse
@@ -10,6 +10,10 @@ from datetime import date
 from html import escape
 from pathlib import Path
 import subprocess
+
+def _texto_html(texto):
+    return escape(str(texto)).replace("{", "&#123;").replace("}", "&#125;")
+
 
 # Bloque de estilo del mapa base: la regeneración solo reemplaza el contenido.
 ESTILO_MAPA = r'''<style>
@@ -229,7 +233,7 @@ def _tabla_md(filas):
 
 
 def _tabla_html(filas):
-    return "\n".join("<tr>" + "".join("<td>" + escape(str(v)) + "</td>" for v in fila) + "</tr>" for fila in filas)
+    return "\n".join("<tr>" + "".join("<td>" + _texto_html(str(v)) + "</td>" for v in fila) + "</tr>" for fila in filas)
 
 
 def documentos(inv, fecha):
@@ -239,7 +243,7 @@ def documentos(inv, fecha):
     resumen = (f"{len(archivos)} fuentes: {counts['.py']} Python, {counts['.html']} plantillas, "
                f"{counts['.js']} JavaScript y {counts['.css']} CSS. {len(inv['tablas'])} declaraciones Table en db.py; "
                f"{len(inv['rutas'])} decoradores de rutas; {len(inv['tareas'])} tareas con @registrar en tareas/.")
-    alcance = ("Inventario del código local, incluidos archivos nuevos sin commit. Los conteos son declaraciones estáticas: "
+    alcance = ("Inventario del código local versionado. Los conteos son declaraciones estáticas: "
                "las rutas de blueprints se muestran relativas a su prefijo y las altas por add_url_rule no se cuentan como decoradores. "
                "Las descripciones proceden del docstring del módulo; las líneas, del archivo actual. "
                "Se excluyen datos de clientes, secretos, submódulos y los dos artefactos generados mapa_codigo.html/style.css.")
@@ -260,7 +264,7 @@ def documentos(inv, fecha):
           "el inventario no presume que toda llamada pagada pase por el worker."]
     for titulo, cabecera, filas in secciones:
         md.extend(["\n## " + titulo, _tabla_md([cabecera, ["---"] * len(cabecera)] + filas)])
-    md.extend(["\n## Cómo regenerarlo", "`python3 mapa_codigo_generar.py` lee las fuentes locales con AST. "
+    md.extend(["\n## Cómo regenerarlo", "`python3 mapa_codigo_generar.py --salida /tmp/inventario` lee las fuentes versionadas con AST. "
         "La publicación del artifact del mapa corresponde a Claude."])
     html = ['''{# Documentación interna en español; barra traducida por catálogo. Generado por mapa_codigo_generar.py. #}
 <!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -269,14 +273,14 @@ def documentos(inv, fecha):
 <div id="mapa-barra"><a href="{{ url_for('panel') }}">{{ _('Volver al panel') }}</a> · <span>{{ _('Mapa del código') }}</span> · <span>{{ _('Solo lo ve el administrador') }}</span>
 {% if idioma_ui != 'es' %}<span>{{ _('Este mapa es documentación interna y está en español.') }}</span>{% endif %}</div>
 {% raw %}''', '<main class="panel-contenido"><h1>Mapa de Creatv Machine</h1>',
-        '<p>Regenerado desde el código del worktree el ' + escape(fecha) + '.</p>', '<p>' + escape(resumen) + '</p>', '<p>' + escape(alcance) + '</p>',
+        '<p>Regenerado desde el código del worktree el ' + _texto_html(fecha) + '.</p>', '<p>' + _texto_html(resumen) + '</p>', '<p>' + _texto_html(alcance) + '</p>',
         '''<svg id="svg-mapa" role="img" aria-label="Entradas del código" viewBox="0 0 700 100" width="100%" height="100">
 <rect x="5" y="5" width="330" height="90" fill="none" stroke="currentColor"/><text x="25" y="40" fill="currentColor">Web: dashboard.py</text><text x="25" y="65" fill="currentColor">Cola e hilos: trabajos.py</text>
 <rect x="365" y="5" width="330" height="90" fill="none" stroke="currentColor"/><text x="385" y="40" fill="currentColor">Worker: worker.py</text><text x="385" y="65" fill="currentColor">Registro: tareas/__init__.py</text></svg>
 <label for="buscar">Filtrar inventario</label><input id="buscar" type="search" placeholder="Archivo, área o función">''']
     for num, (titulo, cabecera, filas) in enumerate(secciones):
-        html.extend(['<section><h2>' + escape(titulo) + '</h2><div class="tabla-scroll"><table' + (' id="inv"' if num == 0 else '') + '><thead><tr>',
-            ''.join('<th>' + escape(c) + '</th>' for c in cabecera), '</tr></thead><tbody>', _tabla_html(filas), '</tbody></table></div></section>'])
+        html.extend(['<section><h2>' + _texto_html(titulo) + '</h2><div class="tabla-scroll"><table' + (' id="inv"' if num == 0 else '') + '><thead><tr>',
+            ''.join('<th>' + _texto_html(c) + '</th>' for c in cabecera), '</tr></thead><tbody>', _tabla_html(filas), '</tbody></table></div></section>'])
     html.extend(['''<section><h2>Antes de exponerlo</h2><p>Las reglas de autorización, gasto y publicación se consultan en AGENTS.md y las skills. Este mapa describe declaraciones del código; la publicación del artifact corresponde a Claude.</p></section>
 <script>
 document.getElementById('buscar').addEventListener('input', function () {
@@ -290,14 +294,21 @@ document.getElementById('buscar').addEventListener('input', function () {
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--fecha", default=date.today().isoformat())
+    parser.add_argument("--salida", required=True, type=Path, help="Carpeta aparte para el inventario")
     args = parser.parse_args()
     raiz = Path(__file__).resolve().parent
-    listado = subprocess.check_output(["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"], cwd=raiz)
+    salida = args.salida.resolve()
+    destinos = (salida / "ESTRUCTURA.md", salida / "mapa_codigo.html")
+    protegidos = {raiz / "ESTRUCTURA.md", raiz / "templates/mapa_codigo.html"}
+    if any(p in protegidos for p in destinos):
+        parser.error("La salida debe estar aparte del mapa del producto")
+    listado = subprocess.check_output(["git", "ls-files", "--cached", "-z"], cwd=raiz)
     inv = inventariar(raiz, [s.decode() for s in listado.split(b"\0") if s])
     md, html = documentos(inv, args.fecha)
-    (raiz / "ESTRUCTURA.md").write_text(md, encoding="utf-8")
-    (raiz / "templates/mapa_codigo.html").write_text(html, encoding="utf-8")
-    print(f"Regenerados ESTRUCTURA.md y templates/mapa_codigo.html: {len(inv['archivos'])} fuentes.")
+    salida.mkdir(parents=True, exist_ok=True)
+    destinos[0].write_text(md, encoding="utf-8")
+    destinos[1].write_text(html, encoding="utf-8")
+    print(f"Inventario en {salida}: {len(inv['archivos'])} fuentes.")
 
 
 if __name__ == "__main__":

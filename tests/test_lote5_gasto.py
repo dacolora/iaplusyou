@@ -52,3 +52,57 @@ def test_pnd145_registra_antes_de_persistir_error(base_temporal, monkeypatch, tm
     assert len(filas) == 1
     assert filas[0]['usd'] == .1 and filas[0]['referencia'] == f'imagen:{cid}:t145'
     assert gastos.historial('otro') == []
+
+
+@pytest.mark.parametrize('recuperado', [False, True])
+def test_pista_pagada_se_anota_antes_de_bitacora_rota(base_temporal, monkeypatch, tmp_path, recuperado):
+    import creative_flow as cf
+    import gastos
+    import tareas.flowplus as fp
+    cid = _sesion_video(cf, monkeypatch, tmp_path, musica_estilo='calmado',
+                        prediccion={'id': 'pagada', 'modelo': 'wan3', 'referencia_gasto': 'video:original:t31'})
+    _fakes_de_cierre(monkeypatch)
+    monkeypatch.setattr(fp.cortes, 'duracion', lambda *a: 8)
+    def pista(*a, **k):
+        raise fp.musica.PistaPagadaError(RuntimeError('descarga rota'), .02, 'https://fal/p.wav')
+    def bitacora(cliente, cf_id, etapa, *a, **k):
+        if etapa == 'musica':
+            raise RuntimeError('bitacora musica rota')
+    monkeypatch.setattr(fp.musica, 'obtener_pista', pista)
+    monkeypatch.setattr(fp.bitacora, 'registrar', bitacora)
+    with pytest.raises(RuntimeError, match='bitacora musica rota'):
+        fp._terminar_video('acme', cid, 'j32', f'video:{cid}:t32', cf.cargar('acme')[cid], [], 8,
+                           'P', [], 'wan3', 'final', 'https://prov/v.mp4', recuperado=recuperado)
+    filas = gastos.historial('acme')
+    assert sum(g['usd'] for g in filas) == pytest.approx(.82)
+    referencia = f'video:{cid}:t32:musica' if recuperado else f'video:{cid}:t32'
+    fila, = [g for g in filas if g['referencia'] == referencia]
+    assert fila['usd'] == pytest.approx(.02 if recuperado else .82)
+    assert len(filas) == (2 if recuperado else 1)
+    assert gastos.historial('otro') == []
+
+
+def test_pista_fallida_recuperada_anota_proveedor_fal(base_temporal, monkeypatch, tmp_path):
+    import creative_flow as cf
+    import gastos
+    import tareas.flowplus as fp
+    cid = _sesion_video(cf, monkeypatch, tmp_path, musica_estilo='calmado',
+                        prediccion={'id': 'pagada', 'modelo': 'wan3', 'referencia_gasto': 'video:original:t31'})
+    _fakes_de_cierre(monkeypatch)
+    monkeypatch.setattr(fp.cortes, 'duracion', lambda *a: 8)
+    def pista(*a, **k):
+        raise fp.musica.PistaPagadaError(RuntimeError('R2 roto'), .02, 'https://fal/p.wav')
+    monkeypatch.setattr(fp.musica, 'obtener_pista', pista)
+    original = gastos.registrar_seguro
+    proveedores = []
+    def registrar(cliente, tipo, usd, referencia, **kwargs):
+        if referencia.endswith(':musica'):
+            proveedores.append(kwargs.get('proveedor'))
+        return original(cliente, tipo, usd, referencia, **kwargs)
+    monkeypatch.setattr(gastos, 'registrar_seguro', registrar)
+    fp._terminar_video('acme', cid, 'j32', f'video:{cid}:t32', cf.cargar('acme')[cid], [], 8,
+                       'P', [], 'wan3', 'final', 'https://prov/v.mp4', recuperado=True)
+    fila, = [g for g in gastos.historial('acme') if g['referencia'] == f'video:{cid}:t32:musica']
+    assert set(proveedores) == {'fal'}
+    assert fila['proveedor'] == 'fal'
+    assert fila['usd'] == pytest.approx(.02)

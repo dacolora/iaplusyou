@@ -30,13 +30,46 @@ def test_pnd100_imports_relativos_aliases_y_no_ejecuta_fuentes(tmp_path):
     assert inv["tareas"][0]["linea"] == 3
 
 
-def test_estilo_del_mapa_identico_a_head_al_regenerar():
+def test_estilo_del_mapa_identico_al_disco_al_regenerar():
     import re
-    import subprocess
     from pathlib import Path
     raiz = Path(__file__).resolve().parents[1]
-    original = subprocess.check_output(["git", "show", "HEAD:templates/mapa_codigo.html"], cwd=raiz, text=True)
+    original = (raiz / "templates/mapa_codigo.html").read_text()
     estilo = re.search(r"<style>.*?</style>", original, re.S).group()
     for fecha in ("2026-10-08", "2026-10-09"):
         _, html = mapa.documentos({"archivos": [], "rutas": [], "tablas": [], "tareas": []}, fecha)
         assert re.findall(r"<style>.*?</style>", html, re.S) == [estilo]
+
+
+def test_salida_aparte_solo_versionados_sin_pisar_mapa(tmp_path, monkeypatch):
+    raiz = tmp_path / 'repo'; raiz.mkdir()
+    (raiz / 'templates').mkdir()
+    (raiz / 'dashboard.py').write_text('def vista(): pass')
+    (raiz / 'sin_versionar.py').write_text('raise RuntimeError("no inventariar")')
+    estructura = raiz / 'ESTRUCTURA.md'; estructura.write_text('Mapa en llano')
+    plantilla = raiz / 'templates/mapa_codigo.html'; plantilla.write_text('<p>Mapa en llano</p>')
+    def listado(args, **kwargs):
+        return b'dashboard.py\0' + (b'sin_versionar.py\0' if '--others' in args else b'')
+    monkeypatch.setattr(mapa.subprocess, 'check_output', listado)
+    monkeypatch.setattr(mapa, '__file__', str(raiz / 'mapa_codigo_generar.py'))
+    salida = tmp_path / 'inventario'
+    monkeypatch.setattr('sys.argv', ['mapa', '--salida', str(salida), '--fecha', '2026-10-08'])
+    mapa.main()
+    assert estructura.read_text() == 'Mapa en llano'
+    assert plantilla.read_text() == '<p>Mapa en llano</p>'
+    assert (salida / 'ESTRUCTURA.md').exists() and (salida / 'mapa_codigo.html').exists()
+    assert 'sin_versionar.py' not in (salida / 'mapa_codigo.html').read_text()
+
+
+def test_texto_del_inventario_no_puede_salir_de_raw(tmp_path):
+    from jinja2 import Environment
+    ataque = '{% endraw %}INJECT={{ 7 * 7 }}{% raw %}'
+    nombre = 'archivo' + ataque + '.py'
+    (tmp_path / nombre).write_text('"""' + ataque + '"""\ndef vista(): pass')
+    inv = mapa.inventariar(tmp_path, [nombre])
+    _, html = mapa.documentos(inv, ataque)
+    seguro = ataque.replace('{', '&#123;').replace('}', '&#125;')
+    assert seguro in html
+    render = Environment().from_string(html).render(url_for=lambda *a, **k: '/panel', _=lambda s:s, idioma_ui='es')
+    assert 'INJECT=49' not in render
+    assert render.count(seguro) >= 2

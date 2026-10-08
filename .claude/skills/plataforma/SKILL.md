@@ -144,3 +144,5 @@ Revisión de Codex, 2026-10-05, lote 4: conservar_mayor se vigila también en la
 PND-144/145 (Codex, 2026-10-07): la imagen registra antes de escribir bitácora/error. Una pista fallida después de generar lleva costo_usd y URL en PistaPagadaError; Crear la registra con la referencia de tarea existente (o :musica de recuperación), conservando el video. No implica recuperación automática ni cubre SIGKILL antes del registro.
 
 PND-072/088 (2026-10-07, lote 5 B): el encolado del director vive en tareas.director.encolar, conserva max_intentos=1 y prioridad del llamador. Una reserva perdida en sprints.produccion.crear_sesion archiva exclusivamente el concepto recién creado; no borra piezas ni la reserva de otro lote. La política de Repetir QA sigue pendiente (no se modifica cuándo cobra).
+
+PND-144 (correcciones de lote 5, 2026-10-08): la referencia :musica de recuperación lleva proveedor fal explícito. Las pruebas provocan PistaPagadaError y fallo de bitácora juntos: generación y recuperación conservan US$ 0,82 sin duplicar la fila de pista. No se amplía la lógica de cobro en esta corrección.

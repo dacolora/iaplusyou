@@ -167,3 +167,23 @@ def test_pnd034_interrumpida_no_relanza_y_respeta_clic(base_temporal, monkeypatc
     td.interrumpida({'payload': p}, 'reinicio')
     assert len(llamadas) == 1
     assert llamadas[0][1]['max_intentos'] == 1 and llamadas[0][1]['prioridad'] == 3
+
+
+def test_fallback_tapa_bearer_y_llave_y_conserva_prompt(base_temporal, monkeypatch):
+    import creative_flow as cf
+    import tareas.director as td
+    cid = _sesion(cf)
+    entry = cf.cargar('acme')[cid]
+    esperado, _ = td._fallback('acme', entry, 'error neutro')
+    bearer = 'abcdefghijklmnop'  # llave-de-prueba
+    llave = 'sk-ant-xxxxxxxxxxxx'  # llave-de-prueba
+    motivo = f'Bearer {bearer}; proveedor {llave}; ' + 'x' * 400
+    def falla(*a, **k):
+        raise RuntimeError(motivo)
+    monkeypatch.setattr(td.director, 'compilar', falla)
+    td.ejecutar({'payload': {'cliente': 'acme', 'cf_id': cid}, 'job_id': 'j-redaccion'})
+    final = cf.cargar('acme')[cid]
+    aviso = final['director']['aviso']
+    assert bearer not in aviso and llave not in aviso
+    assert 'Bearer ***' in aviso and len(aviso) <= 300
+    assert final['prompt_relleno'] == esperado

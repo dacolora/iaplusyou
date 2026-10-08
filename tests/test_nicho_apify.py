@@ -440,3 +440,9 @@ def test_pnd092_tiktok_rechaza_perfil_y_rutas_sin_video(url):
     from nicho.fuentes import apify_actores as aa, base
     with pytest.raises(base.ErrorFuente):
         aa.validar_links("tiktok_comentarios", [url])
+
+
+@pytest.mark.parametrize('url', ['https://www.tiktok.com/t/ZTRabc123/', 'https://www.tiktok.com/@x/photo/123456789', 'https://www.tiktok.com/@x/photo/123456789?lang=es'])
+def test_tiktok_acepta_compartir_y_fotos_sin_aceptar_perfiles(url):
+    from nicho.fuentes import apify_actores as aa
+    assert aa.validar_links('tiktok_comentarios', [url]) == [url]

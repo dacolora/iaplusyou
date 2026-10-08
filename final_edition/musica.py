@@ -29,7 +29,7 @@ CARPETA_PROPIA_DEFAULT = os.path.join(CARPETA_CACHE_DEFAULT, "propia")
 
 
 class PistaPagadaError(RuntimeError):
-    """La generación terminó; falló conservarla, no hay que volver a pagar."""
+    """La pista se pagó, pero no quedó conservada; otro intento sin caché puede cobrarla de nuevo."""
     def __init__(self, error, costo_usd, url):
         super().__init__(str(error))
         self.costo_usd = costo_usd

@@ -5949,7 +5949,7 @@ msgid "Entra a <a href=\"https://business.facebook.com/settings/partners\" targe
 msgstr "Go to <a href=\"https://business.facebook.com/settings/partners\" target=\"_blank\" rel=\"noopener\">business.facebook.com</a> › <em>Business settings</em> › <em>Partners</em> › <em>Add</em> › <em>Give a partner access to your assets</em> and paste Creatv's ID. If Meta asks you to turn on two-step verification for the portfolio, do it: it's their requirement for sharing."
 
 msgid "Entra a aistudio.google.com/apikey con la cuenta de Google de la empresa y crea una llave."
-msgstr "Go to aistudio.google.com/apikey with the company’s Google account and create a key."
+msgstr "Go to aistudio.google.com/apikey with the company's Google account and create a key."
 
 msgid "Entra a console.anthropic.com e inicia sesión (o crea la cuenta de la empresa)."
 msgstr "Go to console.anthropic.com and log in (or create the company's account)."
@@ -9693,6 +9693,9 @@ msgstr "Body map (only if it goes on a person)"
 msgid "Mapa del código"
 msgstr "Code map"
 
+msgid "Mapa del código · versión del 20 de septiembre de 2026"
+msgstr "Code map · version of September 20, 2026"
+
 msgid "Marca"
 msgstr "Brand"
 
@@ -12510,7 +12513,7 @@ msgid "Pégala como FAL_KEY en el .env del servidor y reinicia."
 msgstr "Paste it as FAL_KEY in the server's .env and restart."
 
 msgid "Pégala como GEMINI_API_KEY en el .env del servidor y reinicia los dos servicios."
-msgstr "Paste it as GEMINI_API_KEY in the server’s .env and restart both services."
+msgstr "Paste it as GEMINI_API_KEY in the server's .env and restart both services."
 
 msgid "Pégala como TRENDTRACK_API_KEY en el .env del servidor y reinicia los dos servicios."
 msgstr "Paste it as TRENDTRACK_API_KEY in the server's .env and restart both services."

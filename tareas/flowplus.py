@@ -664,7 +664,7 @@ def _terminar_video(cliente, cf_id, job_id, ref, entry, referencias, duracion, p
                 pista = {"url": e.url}
                 if ref != ref_intento:
                     gastos.registrar_seguro(cliente, "video", usd_musica, ref_intento + ":musica",
-                                           detalle=detalle_gasto, extra={"usd_musica": usd_musica})
+                                           proveedor="fal", detalle=detalle_gasto, extra={"usd_musica": usd_musica})
                 else:
                     _registrar_gasto(cliente, "video", costo, ref, modelo, detalle_gasto,
                                      usd_musica=usd_musica)
