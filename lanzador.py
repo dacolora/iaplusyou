@@ -456,10 +456,36 @@ def cambiar_presupuesto_pais(cliente, experimento_id, pais, presupuesto_dia):
     # nunca pasa el presupuesto del país (el resto queda sin gastar). Lo
     # guardado del país sigue siendo el total.
     centavos_conjunto = centavos(presupuesto_dia, moneda) // len(ids)
+    # Lo que cada conjunto tenía antes, con el mismo reparto: si una llamada
+    # falla a medias, los ya cambiados vuelven a su valor (mejor esfuerzo) —
+    # si no, el panel diría un presupuesto y Meta gastaría otro.
+    centavos_antes = centavos(p.get("presupuesto_dia") or 0, moneda) // len(ids)
 
     def _correr(_c):
-        for adset_id in ids:
-            meta_adset.actualizar_presupuesto(adset_id, centavos_conjunto)
+        cambiados = []
+        try:
+            for adset_id in ids:
+                meta_adset.actualizar_presupuesto(adset_id, centavos_conjunto)
+                cambiados.append(adset_id)
+        except Exception as exc:
+            sin_volver = []
+            for adset_id in cambiados:
+                try:
+                    if centavos_antes <= 0:
+                        raise ValueError("sin presupuesto anterior")
+                    meta_adset.actualizar_presupuesto(adset_id, centavos_antes)
+                except Exception:
+                    sin_volver.append(adset_id)
+            if sin_volver:
+                mensaje = gettext("No se pudo cambiar el presupuesto en todos los conjuntos del país; "
+                                  "quedó a medias: revisa los conjuntos en Meta.")
+            else:
+                mensaje = gettext("No se pudo cambiar el presupuesto en todos los conjuntos del país; "
+                                  "se dejó como estaba.")
+            experimentos.registrar_evento(cliente, experimento_id, "presupuesto", f"{pais}: {mensaje}",
+                                          {"error": str(exc)[:300], "cambiados": cambiados, "sin_volver": sin_volver,
+                                           "anterior": p.get("presupuesto_dia"), "intentado": float(presupuesto_dia)})
+            raise ValueError(mensaje) from exc
 
     _con_credenciales(cliente, _correr)
     experimentos.actualizar_pais(cliente, experimento_id, pais, presupuesto_dia=float(presupuesto_dia))

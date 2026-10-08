@@ -312,6 +312,59 @@ def test_app_cambiar_presupuesto_nunca_sobrepasa_el_del_pais(entorno_app, moneda
     assert len(partes) == 2 and sum(partes) <= total and all(c == total // 2 for c in partes)
 
 
+def _presupuesto_que_falla(e, fallar_en_llamada, fallar_restauracion=False):
+    """Cambia actualizar_presupuesto del adset falso por uno que falla en la
+    llamada número `fallar_en_llamada` (1 = la primera) y, si se pide,
+    también en todas las siguientes (la restauración)."""
+    import types as _t
+    lz = e["lanzador"]
+    vistas = []
+    original = lz.meta_adset
+
+    def _actualizar(oid, c, dry_run=False):
+        vistas.append((oid, c))
+        if len(vistas) == fallar_en_llamada or (fallar_restauracion and len(vistas) > fallar_en_llamada):
+            raise RuntimeError("Meta dijo que no")
+        return {"id": oid}
+
+    e["monkeypatch"].setattr(lz, "meta_adset", _t.SimpleNamespace(crear_adset=original.crear_adset,
+                                                                   actualizar_estado=original.actualizar_estado,
+                                                                   actualizar_presupuesto=_actualizar))
+    return vistas
+
+
+def test_app_presupuesto_que_falla_a_medias_vuelve_y_no_cambia_lo_guardado(entorno_app):
+    e = entorno_app
+    lz = e["lanzador"]
+    lz.lanzar("acme", e["eid"])
+    conjuntos = _conjuntos_app(e)
+    vistas = _presupuesto_que_falla(e, fallar_en_llamada=2)
+    with pytest.raises(ValueError, match="se dejó como estaba"):
+        lz.cambiar_presupuesto_pais("acme", e["eid"], "CO", 40000)
+    antes = lz.centavos(PRESUPUESTO_PAIS, "COP") // 2
+    nuevo = lz.centavos(40000, "COP") // 2
+    primero = vistas[0][0]
+    assert primero in {conjuntos[("CO", "ios")], conjuntos[("CO", "android")]}
+    assert vistas[0] == (primero, nuevo)
+    assert vistas[-1] == (primero, antes)  # el primer conjunto volvió a su valor
+    ex = e["ex"].obtener("acme", e["eid"])
+    co = next(p for p in ex["paises"] if p["pais"] == "CO")
+    assert co["presupuesto_dia"] == PRESUPUESTO_PAIS
+    evento = [ev for ev in e["ex"].eventos("acme", e["eid"]) if ev["tipo"] == "presupuesto"]
+    assert evento and "se dejó como estaba" in evento[-1]["mensaje"]
+
+
+def test_app_presupuesto_que_tampoco_se_restaura_avisa_que_quedo_a_medias(entorno_app):
+    e = entorno_app
+    lz = e["lanzador"]
+    lz.lanzar("acme", e["eid"])
+    _presupuesto_que_falla(e, fallar_en_llamada=2, fallar_restauracion=True)
+    with pytest.raises(ValueError, match="quedó a medias"):
+        lz.cambiar_presupuesto_pais("acme", e["eid"], "CO", 40000)
+    co = next(p for p in e["ex"].obtener("acme", e["eid"])["paises"] if p["pais"] == "CO")
+    assert co["presupuesto_dia"] == PRESUPUESTO_PAIS
+
+
 def test_app_escalar_pais_reparte_el_nuevo_total(entorno_app):
     e = entorno_app
     lz = e["lanzador"]
