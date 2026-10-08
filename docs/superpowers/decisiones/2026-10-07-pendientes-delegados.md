@@ -42,6 +42,21 @@ mala, se cambia aquí y en la fila.
 | 051 | Nicho tiene su propio carril de un hilo para las tareas que esperan a un proveedor, con parada limpia y recuperación. | Que finales y sprints no esperen a Apify. | Revisión con `revisor` y prueba de concurrencia. |
 | 049 | El editor recorta antes de escalar: toma la ventana visible en píxeles de origen y la escala después. Lleva prueba de paridad con la vista previa y medición de memoria en la imagen Docker `render-vps`. | Que un zoom alto no mate el render por memoria. | Se ve en la paridad: si no cuadra, no se despliega. |
 
+## Preguntas que dejó el lote 5 (decididas el 2026-10-08)
+
+| PND | Decisión | Por qué |
+|---|---|---|
+| 076 | Sí: pantalla de admin con las cuentas bloqueadas por intentos de login y un botón «Desbloquear» (solo admin, POST del mismo origen, sin contraseñas ni tokens en pantalla). Entra al lote 6. | Hoy un bloqueo solo se quita esperando o a mano en el servidor. |
+| 080 | Sí: una edición pasa a «producida» cuando una final se renderiza desde ella. No cambia qué se borra. Entra al lote 6. | El estado tiene que decir la verdad; borrar es otra decisión (PND-064). |
+| 088 | Sí: «Repetir QA» solo vuelve a revisar las piezas que no pasaron. Entra al lote 6. | Repetir sobre lo aprobado gasta en Claude sin necesidad. |
+| 095 | Sí a paginar la lista de audios (24 por página, como las demás listas). Lo demás queda como está. Entra al lote 6. | Rendimiento de la página. |
+| 070 | No se retira el banco de prompts por ahora: retirarlo cambia lo que recibe Claude al proponer ideas. Se mide en la tanda de pruebas pagadas antes de decidir. | Regla 2 de CLAUDE.md y `eval-claude`. |
+| 072 | Las sesiones viejas del director no se migran: siguen funcionando como hoy. | Migrarlas cambia prompts ya armados y no arregla nada visible. |
+| 084 | El código repetido entre los paneles de voz y subtítulos se unifica solo cuando se vuelva a tocar el editor. | Sin daño hoy; otra frontera entre módulos. |
+| 092 | Lo que queda de Nicho (botón «Probar», `edad_rango`, helpers) se cierra: no vale lo que cuesta. | Higiene sin efecto para el cliente. |
+| 094 | Variantes por la Admin API y selectores que cargan al pedirlos pasan a proyectos nuevos (grupo 8 del plan). | Son funciones nuevas, no arreglos. |
+| 136 | Lo que queda del centro de resultados (reparto, destino, ranking, «Activar») pasa a la entrega E3 de Experimentos. | Lo decide ese rediseño. |
+
 ## Se dejan como están (cerradas con su motivo)
 
 | PND | Decisión | Por qué |
