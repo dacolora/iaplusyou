@@ -333,6 +333,20 @@ def cobrar_gasto(con, gasto_id, cliente, usd, tipo, entregado=True, nuevo=True):
     return "cobro"
 
 
+def tiene_cobros(cliente, job_id, desde_tarea=None):
+    """¿Hay algún `cobro` de ese job_id (desde esa tarea)? Solo lee: el worker
+    lo mira antes de revertir para no tomar el candado de escritura en cada
+    fallo de un proyecto que nunca cobró (índice ix_movimiento_job)."""
+    if not cliente or not job_id:
+        return False
+    m = db.movimiento_saldo
+    q = sa.select(m.c.id).where(m.c.job_id == job_id, m.c.cliente == cliente, m.c.tipo == "cobro")
+    if desde_tarea is not None:
+        q = q.where(m.c.tarea_id >= int(desde_tarea))
+    with db.conectar() as con:
+        return con.execute(q.limit(1)).first() is not None
+
+
 def revertir_trabajo(cliente, job_id, motivo="", desde_tarea=None):
     """§3.5: un reverso por cada cobro del job_id que no lo tenga. Avisa una
     vez con el total. Nunca lanza (lo llama el worker).

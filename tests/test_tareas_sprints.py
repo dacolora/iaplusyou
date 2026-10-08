@@ -335,6 +335,31 @@ def test_qa_pendientes_encola_y_avisa_fin_de_lote(base_temporal, monkeypatch):
     assert encolados == []
 
 
+def test_qa_pendientes_no_encola_qa_en_un_proyecto_que_cobra_sin_saldo(base_temporal, monkeypatch):
+    """Cobros (2026-10-08): el QA cobra; sin saldo el respaldo del worker la
+    dejaría en error y la periódica la volvería a encolar cada 5 min."""
+    import cola
+    import creative_flow
+    import db
+    import tareas
+    from cobros import libro
+    from sprints import datos
+    _, _, cp, _ = _pieza_lista(datos, creative_flow)
+    _, _, cp_otro, _ = _pieza_lista(datos, creative_flow, cliente="otro")
+    encolados = []
+    monkeypatch.setattr(cola, "encolar", lambda tipo, payload, **kw: encolados.append((payload["cliente"], payload["cp_id"])) or 1)
+    tareas.cargar_todas()
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    tareas.REGISTRO["sprint_qa_pendientes"]({"payload": {}})
+    assert encolados == [("otro", cp_otro)]   # «otro» no cobra: como siempre
+
+    encolados.clear()
+    with db.conectar() as con:
+        libro.acreditar(con, "acme", "ajuste", 1000, "ajuste", usuario="admin", detalle="prueba")
+    tareas.REGISTRO["sprint_qa_pendientes"]({"payload": {}})
+    assert sorted(encolados) == [("acme", cp), ("otro", cp_otro)]
+
+
 def test_qa_pendientes_no_avisa_con_idea_reservando(base_temporal, monkeypatch):
     """Fix round 1, hallazgo 2: una idea con una reserva VIVA (cf_id
     "reservando_<cp>_<epoch>", otro lote está armando su sesión de Crear) no

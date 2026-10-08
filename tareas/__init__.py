@@ -62,8 +62,9 @@ TIPOS_EXENTOS_DE_COBRO = {
     "sprint_empaquetar": "arma el zip de la entrega",
     "referentes_importar_copycoders": "importación del admin; lo paga Creatv (_creatv)",
     "referentes_familias_en": "traducción del admin; la paga Creatv (_creatv)",
-    "tienda_sync_productos": "sincronización automática del catálogo; frenarla dejaría la tienda desactualizada "
-                             "(la regla de un producto nuevo, centavos, se anota y cobra igual)",
+    "tienda_sync_productos": "sincronización automática del catálogo; frenarla dejaría la tienda desactualizada. "
+                             "La regla de fidelidad de un producto nuevo (Claude) pide saldo antes, en "
+                             "importador._regla_si_hay_saldo: sin saldo el producto entra sin regla",
     "tienda_sync_pedidos": "lee pedidos de la tienda",
     "tienda_sync_productos_todas": "periódica: solo encola tienda_sync_productos",
     "tienda_sync_pedidos_todas": "periódica: solo encola tienda_sync_pedidos",

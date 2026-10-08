@@ -42,6 +42,7 @@ import notificaciones
 import proyectos
 import referencias_link
 import trabajos
+from cobros import libro
 from idiomas import N_
 from nicho.avatares import costo_real, modelo_actual
 from referentes import sugerir as referentes_sugerir
@@ -405,7 +406,15 @@ def ejecutar_qa_pendientes(tarea):
     """Periódica (5 min): encola el QA de las piezas listas sin evaluar y avisa
     cuando un lote termina (ninguna pieza pendiente ni generando)."""
     n = 0
+    sin_saldo = {}
     for cliente, cp_id in _piezas_listas_sin_qa():
+        # Cobros (spec 2026-10-08 §5.1): el QA cobra. Un proyecto que cobra y no
+        # tiene saldo no recibe QA hasta recargar; encolarlo igual dejaba una
+        # tarea en error (el respaldo del worker) cada 5 min por pieza.
+        if cliente not in sin_saldo:
+            sin_saldo[cliente] = libro.cobra(cliente) and libro.saldo(cliente) <= 0
+        if sin_saldo[cliente]:
+            continue
         if cola.encolar("sprint_qa_pieza", {"cliente": cliente, "cp_id": cp_id}, cliente=cliente,
                         job_id=job_id_qa(cliente, cp_id), duracion_estimada=30, max_intentos=3):
             n += 1

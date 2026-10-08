@@ -146,15 +146,20 @@ def _revertir(tarea, motivo):
     """Spec 2026-10-08 §3.5: la tarea terminó en error definitivo → reverso de
     los cobros de su cadena (mismo job_id, desde la primera tarea de la cadena:
     el job_id se reusa entre corridas y lo ya entregado no se devuelve). En un
-    proyecto que no cobra no hay cobros y no escribe nada. Nunca lanza.
+    proyecto que no cobra no hay cobros: solo lee y no escribe nada. Nunca lanza.
     `motivo` es un msgid: se guarda en el idioma del proyecto."""
     if not tarea.get("job_id") or not _cliente(tarea):
         return []
     try:
+        desde = libro.inicio_de_cadena(tarea)
+        # Solo lectura primero: sin cobros (un proyecto que no cobra, o que
+        # nunca cobró en esta cadena) no se toma el candado de escritura. Un
+        # proyecto que apagó «Cobrar» después de cobrar sí tiene filas: se revierten.
+        if not libro.tiene_cobros(_cliente(tarea), tarea["job_id"], desde_tarea=desde):
+            return []
         with idiomas.en_idioma(idiomas.de_tarea(tarea)):
             texto = gettext(motivo)
-        return libro.revertir_trabajo(_cliente(tarea), tarea["job_id"], texto,
-                                      desde_tarea=libro.inicio_de_cadena(tarea))
+        return libro.revertir_trabajo(_cliente(tarea), tarea["job_id"], texto, desde_tarea=desde)
     except Exception as e:  # noqa: BLE001 — el worker no muere por esto
         log.error("tarea %s: no se pudieron revertir sus cobros: %s", tarea.get("id"), cola.sin_token(e))
         return []

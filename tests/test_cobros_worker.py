@@ -310,3 +310,32 @@ def test_todo_tipo_real_esta_clasificado_y_nada_sobra():
     assert reales - clasificados == set()
     assert clasificados - reales == set()
     assert all(str(motivo).strip() for motivo in tareas.TIPOS_EXENTOS_DE_COBRO.values())
+
+
+def test_revertir_no_toma_el_candado_si_no_hay_cobros(entorno, monkeypatch):
+    """Un proyecto que no cobra (o una cadena sin cobros) falla sin escribir en
+    el libro; uno que apagó «Cobrar» después de cobrar sí recibe su reverso."""
+    import worker
+    from cobros import libro
+    llamadas = []
+    original = libro.revertir_trabajo
+    monkeypatch.setattr(libro, "revertir_trabajo", lambda *a, **k: llamadas.append(a) or original(*a, **k))
+
+    def falla(tarea):
+        raise RuntimeError("x")
+    _registrar(monkeypatch, falla)
+    libro.configurar("acme", usuario="admin", cobrar=False)
+    worker._correr(_encolar_y_reclamar("video:1"))
+    assert llamadas == []
+
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    _recargar(entorno, 1500)
+
+    def cobra_y_apaga(tarea):
+        _cobra(tarea)
+        libro.configurar("acme", usuario="admin", cobrar=False)
+        raise RuntimeError("y")
+    _registrar(monkeypatch, cobra_y_apaga)
+    worker._correr(_encolar_y_reclamar("video:2"))
+    assert [a[1] for a in llamadas] == ["video:2"]
+    assert libro.saldo("acme") == 1500
