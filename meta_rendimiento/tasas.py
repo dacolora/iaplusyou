@@ -43,52 +43,59 @@ def _guardadas(moneda, desde, hasta):
     return {f.fecha: f.usd_por_unidad for f in filas}
 
 
+def _last_weekday(check_date):
+    """Retorna ISO string de último día laboral ≤ check_date."""
+    if check_date.weekday() < 5:
+        return check_date.isoformat()
+    else:
+        return (check_date - timedelta(days=check_date.weekday() - 4)).isoformat()
+
+
 def asegurar(monedas, desde, hasta, hoy=None):
     """Pide al BCE lo que falte del rango. Nunca lanza (las métricas se ven igual, sin USD)."""
     hoy = hoy or date.today()
-    inicio = (date.fromisoformat(desde) - timedelta(days=_HOLGURA_DIAS)).isoformat()
+
+    # Wrap date parsing in try-except
+    try:
+        desde_d = date.fromisoformat(desde)
+        hasta_d = date.fromisoformat(hasta)
+    except ValueError as e:
+        log.warning("tasas parse dates: %s", type(e).__name__)
+        return
+
+    desde_buffer = (desde_d - timedelta(days=_HOLGURA_DIAS)).isoformat()
 
     for m in sorted({(s or "").upper() for s in monedas} - {"", "USD"}):
         # Validar moneda
         if not re.fullmatch(r"[A-Z]{3}", m):
             continue
 
-        # Determinar objetivo (última fecha laboral que necesitamos)
-        hasta_d = date.fromisoformat(hasta)
-        check_date = hasta_d if hasta_d < hoy else hoy - timedelta(days=1)
-        if check_date.weekday() < 5:
-            objetivo = check_date
-        else:
-            objetivo = check_date - timedelta(days=check_date.weekday() - 4)
+        # Wrap entire per-currency body in try-except
+        try:
+            # Determinar objetivo (ISO string): último día laboral ≤ (hasta si hasta < hoy, else hoy-1)
+            check_date = hasta_d if hasta_d < hoy else hoy - timedelta(days=1)
+            objetivo = _last_weekday(check_date)
 
-        # Determinar primer día laboral ≥ desde
-        primero = None
-        for d in _dias(desde, hasta):
-            if date.fromisoformat(d).weekday() < 5:
-                primero = d
-                break
+            # Determinar inicio (ISO string): min(último día laboral ≤ desde, objetivo)
+            last_weekday_desde = _last_weekday(desde_d)
+            inicio = min(last_weekday_desde, objetivo)
 
-        # Si no hay labor days, nada que traer
-        if not primero or date.fromisoformat(primero) > objetivo:
-            continue
-
-        # Verificar caché negativo
-        clave = (m, objetivo)
-        if clave in _intentos and monotonic() - _intentos[clave] < _ESPERA_S:
-            continue
-
-        # Verificar si ya tenemos datos suficientes
-        ya = _guardadas(m, inicio, hasta)
-        if ya:
-            ya_keys = sorted(ya.keys())
-            tiene_antes_primero = any(f <= primero for f in ya_keys)
-            tiene_objetivo_o_despues = max(ya_keys) >= objetivo
-            if tiene_antes_primero and tiene_objetivo_o_despues:
+            # Verificar caché negativo
+            clave = (m, objetivo)
+            if clave in _intentos and monotonic() - _intentos[clave] < _ESPERA_S:
                 continue
 
-        # Intentar fetch
-        try:
-            resp = url_conector.abrir(f"{URL_BASE}/{inicio}..{hasta}?from={m}&to=USD")
+            # Verificar si ya tenemos datos suficientes
+            ya = _guardadas(m, desde_buffer, hasta)
+            if ya:
+                ya_keys = sorted(ya.keys())
+                tiene_antes_inicio = any(f <= inicio for f in ya_keys)
+                tiene_objetivo_o_despues = max(ya_keys) >= objetivo
+                if tiene_antes_inicio and tiene_objetivo_o_despues:
+                    continue
+
+            # Intentar fetch
+            resp = url_conector.abrir(f"{URL_BASE}/{desde_buffer}..{hasta}?from={m}&to=USD")
             try:
                 datos = resp.json() if resp.status_code == 200 else {}
             finally:
@@ -99,7 +106,7 @@ def asegurar(monedas, desde, hasta, hoy=None):
                 _intentos[clave] = monotonic()
                 continue
 
-            # Parsear y guardar (DENTRO del try para capturar errores de JSON)
+            # Parsear y guardar
             filas = []
             for f, v in ((datos or {}).get("rates") or {}).items():
                 if isinstance(v, dict) and "USD" in v:
@@ -108,7 +115,6 @@ def asegurar(monedas, desde, hasta, hoy=None):
                         filas.append({"fecha": f, "moneda": m, "usd_por_unidad": usd_val, "fuente": "bce",
                                     "creado_en": db.ahora()})
                     except (ValueError, TypeError):
-                        # Tasa no-numérica, skip this date
                         continue
 
             if not filas:
@@ -121,7 +127,7 @@ def asegurar(monedas, desde, hasta, hoy=None):
                     con.execute(insert_sqlite(db.tasa_cambio).values(**fila).on_conflict_do_update(
                         index_elements=["fecha", "moneda"], set_={"usd_por_unidad": fila["usd_por_unidad"]}))
 
-            # Verificar si alcanzamos objetivo
+            # Verificar si alcanzamos objetivo (si nueva tasa < objetivo, set negative cache)
             if filas:
                 max_fecha = max(f["fecha"] for f in filas)
                 if max_fecha < objetivo:
@@ -129,7 +135,6 @@ def asegurar(monedas, desde, hasta, hoy=None):
 
         except Exception as e:
             log.warning("tasas %s: %s", m, type(e).__name__)
-            _intentos[clave] = monotonic()
             continue
 
 
@@ -138,10 +143,10 @@ def mapa(moneda, desde, hasta):
     moneda = (moneda or "").upper()
     if moneda == "USD":
         return {d: 1.0 for d in _dias(desde, hasta)}
-    inicio = (date.fromisoformat(desde) - timedelta(days=_HOLGURA_DIAS)).isoformat()
-    guardadas = _guardadas(moneda, inicio, hasta)
+    desde_buffer = (date.fromisoformat(desde) - timedelta(days=_HOLGURA_DIAS)).isoformat()
+    guardadas = _guardadas(moneda, desde_buffer, hasta)
     salida, ultima = {}, None
-    for d in _dias(inicio, hasta):
+    for d in _dias(desde_buffer, hasta):
         ultima = guardadas.get(d, ultima)
         if d >= desde:
             salida[d] = ultima
