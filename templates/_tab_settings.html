@@ -579,6 +579,13 @@
     <strong>{{ (gasto_total.total if gasto_total else 0) | usd }}</strong>
     <small>{% if gasto_total and gasto_total.n %}{{ ngettext('%(num)s cobro(s) a proveedores', '%(num)s cobro(s) a proveedores', gasto_total.n) }}{% if gasto_total.desde %} · {{ _('desde el %(fecha)s', fecha=gasto_total.desde[:10]) }}{% endif %}{% else %}{{ _('sin generación pagada') }}{% endif %}</small>
   </div>
+  {% for p in pauta_total %}
+  <div class="kpi-tile">
+    <span>{{ _('Pauta desde el inicio') }}{% if pauta_total | length > 1 %} · {{ p.moneda }}{% endif %}</span>
+    <strong>{{ p.gasto | dinero(p.moneda) }}</strong>
+    <small>{{ _('se cobra en tu cuenta de Meta') }}</small>
+  </div>
+  {% endfor %}
   {% for p in pauta_mes %}
   <div class="kpi-tile">
     <span>{{ _('Pauta este mes') }}{% if pauta_mes | length > 1 %} · {{ p.moneda }}{% endif %}</span>

@@ -4600,6 +4600,10 @@ msgstr "Since the start"
 msgid "Desde el inicio (US$)"
 msgstr "Since the start (US$)"
 
+#, python-format
+msgid "Desde el inicio: %(gasto)s"
+msgstr "Since the start: %(gasto)s"
+
 msgid "Desde que lo conectes, los anuncios que Creatv lance en Meta llevan solos los parámetros de rastreo de Triple Whale. A los que ya estaban, o a los que crees fuera de Creatv, ponles en «Parámetros de URL»: <code>tw_source={{site_source_name}}&amp;tw_adid={{ad.id}}</code>."
 msgstr "Once you connect it, the ads Creatv launches on Meta carry Triple Whale's tracking parameters on their own. For ads that already existed, or that you create outside Creatv, add under “URL parameters”: <code>tw_source={{site_source_name}}&amp;tw_adid={{ad.id}}</code>."
 
@@ -11800,6 +11804,9 @@ msgstr "Pause all"
 msgid "Pauta"
 msgstr "Ad spend"
 
+msgid "Pauta desde el inicio"
+msgstr "Ad spend since the start"
+
 msgid "Pauta en Meta"
 msgstr "Meta ad spend"
 
@@ -15070,6 +15077,9 @@ msgstr ""
 "Everything below is verifiable: it comes from the log, the state on disk and the\n"
 "  git history of this repository. Nothing estimated is presented as measured."
 
+msgid "Todo lo pagado a los proveedores de IA desde el primer cobro, todos los proyectos"
+msgstr "Everything paid to the AI providers since the first charge, all projects"
+
 msgid ""
 "Todo lo que el proyecto necesita para generar piezas, guardarlas y pagar\n"
 "  anuncios, en el orden en que se usa. Cada tarjeta dice para qué sirve, cómo se\n"
@@ -17687,6 +17697,9 @@ msgstr "generates from scratch, doesn't edit"
 #, python-format
 msgid "generación %(n)s"
 msgstr "generation %(n)s"
+
+msgid "generación desde el inicio"
+msgstr "generation since the start"
 
 msgid "generación este mes"
 msgstr "generation this month"

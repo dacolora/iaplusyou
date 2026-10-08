@@ -706,7 +706,9 @@ def test_sidebar_chip_generacion_sin_pauta(app, monkeypatch):
     sb = _sidebar(app["c"].get("/cliente/acme").data.decode())
     assert 'class="sidebar-gasto"' in sb
     chip = sb[sb.index("Este mes:"):sb.index("</a>", sb.index("Este mes:"))]
-    assert chip == "Este mes: US$ 0,94 generación"   # sin pauta no se menciona
+    # sin pauta no se menciona; el mes pasado entra solo en «Desde el inicio»
+    assert chip == ('Este mes: US$ 0,94 generación'
+                    '<span class="sidebar-gasto-total">Desde el inicio: US$ 5,94 generación</span>')
     assert "/cliente/acme#settings" in sb
 
 
@@ -870,3 +872,16 @@ def test_gasto_muestra_el_total_desde_el_inicio_y_el_csv_de_todo(app):
     filas = r.data.decode().lstrip("\ufeff").splitlines()
     assert [f.split(";")[3] for f in filas[1:]] == ["video:septiembre", "video:ahora"]
     assert 'filename="gasto_acme_todo_' in r.headers["Content-Disposition"]
+
+
+def test_el_chip_del_sidebar_trae_el_total_desde_el_inicio(app):
+    """2026-10-08: «necesito que se vea reflejado el gasto completo». El chip
+    lateral, que sale en todas las páginas del proyecto, solo decía «Este mes»."""
+    import gastos
+    gastos.registrar("acme", "video", 200.0, "video:septiembre", creado_en="2026-09-15T10:00:00")
+    gastos.registrar("acme", "video", 66.0, "video:ahora")
+    html = app["c"].get("/cliente/acme").data.decode()
+    chip = html[html.index('class="sidebar-gasto"'):]
+    chip = chip[:chip.index("</a>")]
+    assert "Este mes: US$ 66,00 generación" in chip
+    assert "Desde el inicio: US$ 266,00 generación" in chip

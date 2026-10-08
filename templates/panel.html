@@ -31,6 +31,10 @@
       <span class="stat-num">{{ t.generacion_usd | usd }}</span>
       <span class="stat-label">{{ _('generación este mes') }}</span>
     </div>
+    <div class="stat" title="{{ _('Todo lo pagado a los proveedores de IA desde el primer cobro, todos los proyectos') }}">
+      <span class="stat-num">{{ t.generacion_total_usd | usd }}</span>
+      <span class="stat-label">{{ _('generación desde el inicio') }}</span>
+    </div>
   </div>
   {% endif %}
 </section>
@@ -50,6 +54,11 @@
       <span>{{ _('Generación (IA)') }}</span>
       <strong>{{ t.generacion_usd | usd }}</strong>
       <small>{{ ngettext('%(num)d cobro a proveedores', '%(num)d cobros a proveedores', t.cobros) }}</small>
+    </div>
+    <div class="kpi" title="{{ _('Todo lo pagado a los proveedores de IA desde el primer cobro, todos los proyectos') }}">
+      <span>{{ _('Generación desde el inicio') }}</span>
+      <strong>{{ t.generacion_total_usd | usd }}</strong>
+      <small>{{ ngettext('%(num)d cobro a proveedores', '%(num)d cobros a proveedores', t.cobros_total) }}</small>
     </div>
     {% if t.creatv_usd %}
     <div class="kpi" title="{{ _('Trabajo interno de Creatv sobre la biblioteca de referentes: importaciones, barridos globales, pruebas — no es de ningún proyecto') }}">

@@ -5152,10 +5152,11 @@ def _filtro_usd(valor):
     return gastos.formatear(valor)
 
 
-def _pauta_mes(tablero_ctx):
+def _pauta_mes(tablero_ctx, parte="resumen"):
     """[{"moneda", "gasto"}] con la pauta del mes por moneda (solo > 0), del
-    resumen ya calculado por el tablero. Sin resumen (parte rota) → []."""
-    resumen = (tablero_ctx or {}).get("resumen") or {}
+    resumen ya calculado por el tablero. Sin resumen (parte rota) → [].
+    `parte="total"` da la pauta desde el inicio (`tablero.resumen_total`)."""
+    resumen = (tablero_ctx or {}).get(parte) or {}
     salida = []
     for moneda, g in sorted((resumen.get("por_moneda") or {}).items()):
         gasto = float((g or {}).get("gasto") or 0)
@@ -5224,6 +5225,10 @@ def _contexto_gasto(cliente, tablero_ctx):
         "gasto_por_mes": gasto_por_mes,
         "nombres_tipo_gasto": NOMBRES_TIPO_GASTO,
         "gasto_chip": _chip_gasto(gasto_mes, pauta),
+        # Desde el inicio (2026-10-08): el chip solo decía «Este mes» y el gasto
+        # completo del proyecto no se veía en ninguna página.
+        "pauta_total": _pauta_mes(tablero_ctx, "total"),
+        "gasto_chip_total": None if gasto_total.get("error") else _chip_gasto(gasto_total, _pauta_mes(tablero_ctx, "total")),
     }
 
 
@@ -5240,7 +5245,9 @@ def _chip_gasto_sidebar():
     if not cliente or request.endpoint == "ver_cliente" or _quiere_json():
         return {}
     try:
-        return {"gasto_chip": _chip_gasto(gastos.resumen_mes(cliente), _pauta_mes(_contexto_tablero(cliente)))}
+        tablero_ctx = _contexto_tablero(cliente)
+        return {"gasto_chip": _chip_gasto(gastos.resumen_mes(cliente), _pauta_mes(tablero_ctx)),
+                "gasto_chip_total": _chip_gasto(gastos.resumen_total(cliente), _pauta_mes(tablero_ctx, "total"))}
     except Exception as e:  # noqa: BLE001 — sin chip, pero con página
         print(f"[aviso] Gasto de {cliente}: no pude calcular el chip del sidebar: {type(e).__name__}")
         return {}

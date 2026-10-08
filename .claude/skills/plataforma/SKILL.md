@@ -132,7 +132,10 @@ guessing. Reads: `resumen_mes` (the month), `resumen_total` (everything since th
 `por_mes`, `historial`, `csv_mes` and `csv_todo` — Configuración › Gasto shows the month AND the total since the start
 with a month-by-month table and «Descargar CSV de todo» (`gasto_csv_todo`), and the admin panel card shows both figures
 (`admin.generacion_total`): on 2026-10-07 the screens only said «este mes» (US$ 66) and the US$ 200 of earlier months
-looked lost. Meta spend is NOT in `gasto` — it comes from `metrica_snapshot` via `tablero` and is
+looked lost. Since 2026-10-08 the sidebar chip (on every project page) adds a second line «Desde el inicio:
+generación · pauta» (`gasto_chip_total`, pauta from `tablero.resumen_total` via `_pauta_mes(ctx, "total")`),
+Configuración › Gasto has a «Pauta desde el inicio» tile and the admin panel top shows «generación desde el inicio»
+(Daniel: «necesito que se vea reflejado el gasto completo»). Meta spend is NOT in `gasto` — it comes from `metrica_snapshot` via `tablero` and is
 shown next to generation spend in its own currency. UI: sidebar chip "Este mes: US$ X
 generación · Y pauta" (context processor, template renders only, cached), Configuración ›
 Gasto (by type, history, CSV), Tablero tile, admin panel column.

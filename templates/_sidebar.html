@@ -92,7 +92,7 @@
          cuenta de Meta, solo si hay). Lleva a Configuración › Gasto. #}
       <a class="sidebar-gasto" href="{{ url_for('ver_cliente', cliente=request.view_args.cliente, _anchor='settings') }}"
          title="{{ _('Ver el detalle en Configuración › Gasto') }}"
-         onclick="var b = document.querySelector('.sidebar-item[data-tab=settings]'); if (b) { b.click(); if (window.irAConfig) irAConfig('config-gasto'); return false; }">{{ _('Este mes: %(gasto)s', gasto=gasto_chip) }}</a>
+         onclick="var b = document.querySelector('.sidebar-item[data-tab=settings]'); if (b) { b.click(); if (window.irAConfig) irAConfig('config-gasto'); return false; }">{{ _('Este mes: %(gasto)s', gasto=gasto_chip) }}{% if gasto_chip_total %}<span class="sidebar-gasto-total">{{ _('Desde el inicio: %(gasto)s', gasto=gasto_chip_total) }}</span>{% endif %}</a>
       {% endif %}
     </div>
   </div>
