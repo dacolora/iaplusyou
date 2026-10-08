@@ -483,3 +483,56 @@ def test_apps_dos_tiendas_perdedoras_se_diagnostican_una_vez(base_temporal, monk
     if objetivo == "OUTCOME_APP_PROMOTION":
         assert despues[1]["extra"]["diagnostico"]["reutilizado_de"] == despues[0]["id"]
         assert despues[1]["extra"]["diagnostico"]["usd"] == 0
+
+
+def _activar_todo(ex, eid):
+    ex.actualizar("acme", eid, estado="corriendo", meta_campaign_id="c1")
+    for pz in ex.obtener("acme", eid)["piezas"]:
+        ex.actualizar_pieza("acme", pz["id"], meta_ad_id=f"ad{pz['id']}", estado="activo")
+
+
+@pytest.mark.parametrize("objetivo,subidas", [("OUTCOME_APP_PROMOTION", 1), ("OUTCOME_TRAFFIC", 2)])
+def test_apps_filas_hermanas_ganadoras_escalan_el_pais_una_vez(base_temporal, monkeypatch, objetivo, subidas):
+    """Revisión final, ola 2 (2026-10-08): en apps la misma pieza tiene una fila por tienda; si las dos ganan en
+    pasadas distintas, el país se escala UNA vez por esa pieza. En tráfico, dos piezas distintas que ganan siguen
+    escalando cada una."""
+    import experimentos as ex
+    import organico
+    import tareas
+    from tareas import experimentos as te
+    tareas.cargar_todas()
+    monkeypatch.setattr(organico, "disponibles", lambda c: [])
+    monkeypatch.setattr(te, "_aprender", lambda *a, **k: None)
+    pedidas = _pedidas(monkeypatch, te)
+    eid = _experimento_app_dos_tiendas(base_temporal, objetivo)
+    _activar_todo(ex, eid)
+    respuestas = iter(["ganador", "pendiente", "ganador"])   # pasada 1: fila 1 gana, fila 2 no; pasada 2: fila 2 gana
+
+    def _decidir(snaps, reglas, ctx):
+        v = next(respuestas)
+        return {"veredicto": v, "motivo": "m", "accion": "escalar_y_derivar" if v == "ganador" else "ninguna",
+                "puerta": 1, "numeros": {}}
+    monkeypatch.setattr(te.decisor, "decidir", _decidir)
+    te.exp_decidir({"payload": {"cliente": "acme", "experimento_id": eid}})
+    te.exp_decidir({"payload": {"cliente": "acme", "experimento_id": eid}})
+    assert all(p["veredicto"] == "ganador" for p in ex.piezas("acme", eid))
+    assert pedidas.count("escalar") == subidas
+    if objetivo == "OUTCOME_APP_PROMOTION":
+        assert any("otra tienda" in e["mensaje"] for e in ex.eventos("acme", eid) if e["tipo"] == "escalado")
+
+
+@pytest.mark.parametrize("objetivo,esperado", [("OUTCOME_APP_PROMOTION", 10000.0), ("OUTCOME_TRAFFIC", 20000.0)])
+def test_el_decisor_juzga_con_el_presupuesto_de_cada_conjunto(base_temporal, monkeypatch, objetivo, esperado):
+    """En apps cada fila vive en el conjunto de su tienda, que recibe la mitad del país: el decisor recibe esa
+    parte (con el del país, el umbral de evidencia se duplicaría)."""
+    import experimentos as ex
+    import tareas
+    from tareas import experimentos as te
+    tareas.cargar_todas()
+    vistos = []
+    monkeypatch.setattr(te.decisor, "decidir", lambda snaps, reglas, ctx: (vistos.append(ctx["presupuesto_dia"]), {
+        "veredicto": "pendiente", "motivo": "m", "accion": "ninguna", "puerta": 1, "numeros": {}})[1])
+    eid = _experimento_app_dos_tiendas(base_temporal, objetivo)
+    _activar_todo(ex, eid)
+    te.exp_decidir({"payload": {"cliente": "acme", "experimento_id": eid}})
+    assert vistos and all(v == esperado for v in vistos)

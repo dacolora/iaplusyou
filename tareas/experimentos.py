@@ -17,6 +17,7 @@ import sqlalchemy as sa
 from flask_babel import gettext
 
 import acciones
+import app_tiendas
 import cola
 import creative_flow
 import db
@@ -334,6 +335,25 @@ def _aprender(cliente, ex, pz, v, diagnostico):
         log.warning("aprendizaje no guardado (%s): %s", cliente, type(e).__name__)
 
 
+def _hermana_ya_gano(ex, pz):
+    """En un experimento de apps: ¿otra fila de la misma pieza y el mismo país
+    (la otra tienda) ya tiene veredicto `ganador`? Fuera de apps, siempre False."""
+    if ex.get("objetivo_meta") != "OUTCOME_APP_PROMOTION" or not pz.get("pieza_id"):
+        return False
+    return any(o["id"] != pz["id"] and o.get("pieza_id") == pz["pieza_id"] and o.get("pais") == pz["pais"]
+               and o.get("veredicto") == "ganador" for o in ex.get("piezas") or [])
+
+
+def _presupuesto_para_decidir(ex, pais):
+    """El presupuesto diario que juzga el decisor: en apps cada fila vive en el
+    conjunto de su tienda, que recibe solo su parte del país (si se le pasara el
+    del país, el umbral de evidencia se duplicaría con dos tiendas)."""
+    presupuesto = pais.get("presupuesto_dia")
+    if ex.get("objetivo_meta") == "OUTCOME_APP_PROMOTION" and presupuesto:
+        return app_tiendas.parte_presupuesto(presupuesto, len(experimentos.plataformas_de(ex.get("extra"))))
+    return presupuesto
+
+
 def _aplicar_veredicto(cliente, ex, pz, v, resultado, snaps=None, reglas=None, ctx=None, tarea=None):
     """Escribe el veredicto en la pieza + evento `veredicto`, y pide la acción
     que el decisor recomendó (todo gasto pasa por acciones.pedir). Una
@@ -385,6 +405,16 @@ def _aplicar_veredicto(cliente, ex, pz, v, resultado, snaps=None, reglas=None, c
             experimentos.registrar_evento(cliente, ex["id"], "escalado",
                                           gettext("%(nombre)s (%(pais)s): escalado ya pedido en esta pasada.",
                                                   nombre=pz["nombre"], pais=pz["pais"]),
+                                          ep_id=ep_id)
+        elif _hermana_ya_gano(ex, pz):
+            # Apps (revisión final, ola 2, 2026-10-08): la misma pieza tiene una
+            # fila por tienda y escalar sube el presupuesto del PAÍS entero
+            # (todos sus conjuntos). Si la fila de la otra tienda ya ganó en una
+            # pasada anterior, el país ya se escaló por esta pieza: no se pide
+            # otra subida.
+            experimentos.registrar_evento(cliente, ex["id"], "escalado",
+                                          gettext("%(nombre)s (%(pais)s): el país ya se escaló por esta pieza en "
+                                                  "la otra tienda.", nombre=pz["nombre"], pais=pz["pais"]),
                                           ep_id=ep_id)
         else:
             resultado["escalados"].add(pz["pais"])
@@ -590,7 +620,7 @@ def exp_decidir(tarea):
                 continue
             snaps = snaps_por_pieza.setdefault(pz["id"], experimentos.snapshots(pz["id"]))
             dias_transcurridos = _dias_transcurridos(ex, snaps_por_pieza, ahora)
-            ctx = {"horas_activo": _horas_activo(pz, snaps, ahora), "presupuesto_dia": pais.get("presupuesto_dia"),
+            ctx = {"horas_activo": _horas_activo(pz, snaps, ahora), "presupuesto_dia": _presupuesto_para_decidir(ex, pais),
                    "dias_experimento": ex.get("dias"), "dias_transcurridos": dias_transcurridos,
                    "escalon_rescate": pz.get("escalon_rescate") or 0, "atribucion": ex.get("atribucion"),
                    "posicion": (orden.index(pz["id"]) + 1) if pz["id"] in orden else None, "total_pais": len(orden),
