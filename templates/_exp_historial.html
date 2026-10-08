@@ -49,7 +49,7 @@
     <small>{{ _('ROAS no comparable') }}{% if g.ventas_cambiaron %} · {{ _('Las ventas cambiaron de fuente en este período') }}{% endif %}</small>
     {% elif g.mide_ventas and g.gasto > 0 %}
     <strong>{{ g.roas | roas }}×</strong>
-    <small>{{ _('ingresos / gasto') }}</small>
+    <small>{{ _('ingresos / gasto') }}{% if g.excluidos %} · {{ _('excluye %(n)s en otra moneda', n=g.excluidos) }}{% endif %}</small>
     {% else %}
     <strong class="tb-sin-dato">—</strong>
     <small>{{ _('sin ventas medibles') }}</small>
@@ -106,7 +106,7 @@
     <small>{{ _('ROAS no comparable') }}{% if g.ventas_cambiaron %} · {{ _('Las ventas cambiaron de fuente en este período') }}{% endif %}</small>
     {% elif g.mide_ventas and g.gasto > 0 %}
     <strong>{{ g.roas | roas }}×</strong>
-    <small>{{ _('ingresos / gasto') }}</small>
+    <small>{{ _('ingresos / gasto') }}{% if g.excluidos %} · {{ _('excluye %(n)s en otra moneda', n=g.excluidos) }}{% endif %}</small>
     {% else %}
     <strong class="tb-sin-dato">—</strong>
     <small>{{ _('sin ventas medibles') }}</small>
@@ -144,7 +144,7 @@
         <td class="num">{{ g.gasto | dinero(moneda) }}</td>
         <td class="num">{{ g.compras if g.compras is not none else "—" }}</td>
         <td class="num">{% if g.roas_comparable is sameas false %}—{% else %}{{ g.ingresos | dinero(moneda) }}{% endif %}</td>
-        <td class="num">{% if g.roas_comparable is sameas false %}— · {{ _('ROAS no comparable') }}{% if g.ventas_cambiaron %} · {{ _('Las ventas cambiaron de fuente en este período') }}{% endif %}{% elif g.mide_ventas and g.gasto > 0 %}{{ g.roas | roas }}×{% else %}<span class="tb-sin-dato">—</span>{% endif %}</td>
+        <td class="num">{% if g.excluidos %}<small>{{ _('excluye %(n)s en otra moneda', n=g.excluidos) }}</small> {% endif %}{% if g.roas_comparable is sameas false %}— · {{ _('ROAS no comparable') }}{% if g.ventas_cambiaron %} · {{ _('Las ventas cambiaron de fuente en este período') }}{% endif %}{% elif g.mide_ventas and g.gasto > 0 %}{{ g.roas | roas }}×{% else %}<span class="tb-sin-dato">—</span>{% endif %}</td>
         {% else %}
         <td class="num"><span class="tb-sin-dato">—</span></td><td class="num"><span class="tb-sin-dato">—</span></td>
         <td class="num"><span class="tb-sin-dato">—</span></td><td class="num"><span class="tb-sin-dato">—</span></td>

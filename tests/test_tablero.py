@@ -67,9 +67,9 @@ def test_ventas_medidas_solo_de_lo_que_mide_ventas():
     trafico = [_snap("2026-09-01T08:00:00", gasto=100.0, compras=0, ingresos=0.0, fuente_ventas="ninguna")]
     a, b = (tablero._deltas_pieza(s, "2026-08-01T00:00:00", "2026-09-02T00:00:00") for s in (pixel, trafico))
     assert a["mide"] is True and b["mide"] is False
-    assert tablero.ventas_medidas([b]) == {"mide": False, "gasto": 100.0, "compras": 0, "ingresos": 0.0,
+    assert tablero.ventas_medidas([b]) == {"mide": False, "gasto": 100.0, "compras": 0, "ingresos": 0.0, "gasto_roas": 100.0, "excluidos": 0,
                                            "roas_comparable": True, "gasto_sin_ventas": 100.0, "ventas_cambiaron": False}
-    assert tablero.ventas_medidas([a, b]) == {"mide": True, "gasto": 200.0, "compras": 2, "ingresos": 300.0,
+    assert tablero.ventas_medidas([a, b]) == {"mide": True, "gasto": 200.0, "compras": 2, "ingresos": 300.0, "gasto_roas": 200.0, "excluidos": 0,
                                               "roas_comparable": True, "gasto_sin_ventas": 100.0, "ventas_cambiaron": False}
 
 

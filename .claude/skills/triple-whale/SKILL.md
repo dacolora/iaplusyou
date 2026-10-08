@@ -140,3 +140,5 @@ stores `concepto.extra.tw_idea` (`puente.origen_desde_formulario` validates it, 
 idea card lists the pieces born from it with their Crear state and Meta verdict (`datos.piezas_de_evaluacion`,
 `panel.enlazar_ideas`) and a Creatv ad says which idea it came from (`piezas_creatv(...)["tw_idea"]`). None of
 the SQL has run against a real store yet (spec 2026-09-28 §9).
+
+PND-142 (2026-10-08, decisión delegada, reemplaza el respaldo descrito arriba): al lanzar se fija fuente_ventas_fija en el extra del experimento (Triple Whale si hay tiendas conectadas, Meta si no); un relanzamiento no la cambia. Sin esa marca, la primera lectura fija Triple Whale si la atribución guardada es triple_whale y Meta en los demás casos, incluidos los experimentos antiguos de tienda; no se agrega una tercera fuente. País sin tienda, Pixel ausente o sync fallido deja ventas_no_disponibles y ventas no comparables, sin respaldo a Meta; el decisor omite esas fotos. Cada país sigue leyendo exclusivamente su tienda. tests/test_lote6_ventas.py y test_lanzador.py prueban las dos fuentes, ausencia y aislamiento con dobles.

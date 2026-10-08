@@ -366,6 +366,8 @@ def _aplicar_veredicto(cliente, ex, pz, v, resultado, snaps=None, reglas=None, c
                                   f"{pz['nombre']} ({pz['pais']}): {v['veredicto']} — {v['motivo']}",
                                   {"veredicto": v["veredicto"], "accion": v["accion"], "puerta": v["puerta"],
                                    "numeros": v["numeros"]}, ep_id=ep_id)
+    if v.get("muestra_ventas_insuficiente") or (pz.get("extra") or {}).get("muestra_ventas_insuficiente"):
+        experimentos.marcar_pieza(cliente, ep_id, muestra_ventas_insuficiente=bool(v.get("muestra_ventas_insuficiente")))
     resultado["veredictos"].append((pz, v))
     accion = v["accion"]
     diagnostico, diagnosticado = None, False
@@ -579,7 +581,7 @@ def _marcar_decidido(cliente, ex):
     # Una pieza pausada a mano sin veredicto no bloquea: `decidido` es "todas
     # las piezas ACTIVAS tienen veredicto". Sin ninguna activa ni ninguna
     # con veredicto no hay nada decidido (experimento recién activado).
-    if not con_anuncio or any((p.get("veredicto") or "pendiente") == "pendiente" for p in activas):
+    if not con_anuncio or any((p.get("veredicto") or "pendiente") == "pendiente" or (p.get("extra") or {}).get("muestra_ventas_insuficiente") for p in activas):
         return False
     if not any((p.get("veredicto") or "pendiente") != "pendiente" for p in con_anuncio):
         return False
@@ -602,6 +604,9 @@ def exp_decidir(tarea):
         return gettext("Ese experimento no existe.")
     if ex["estado"] != "corriendo":
         return gettext("Experimento en estado %(estado)s: no se decide.", estado=ex["estado"])
+    ahora = datetime.now()
+    if experimentos.datos_viejos(ex, ahora):
+        return gettext("Datos viejos: el decisor no ejecuta nada hasta actualizar las métricas.")
     if acciones.tope_alcanzado(ex):
         return _pausar_por_tope(cliente, ex)
 
@@ -613,10 +618,14 @@ def exp_decidir(tarea):
     for pais in ex["paises"]:
         piezas_pais = [pz for pz in ex["piezas"] if pz["pais"] == pais["pais"]]
         orden = _ranking(piezas_pais, ex.get("atribucion"))
+        compras_pais = sum(int((pz.get("metricas") or {}).get("compras") or 0)
+                           for pz in piezas_pais if pz["id"] in orden)
         for pz in piezas_pais:
-            if not pz.get("meta_ad_id") or pz.get("estado") != "activo" or (pz.get("veredicto") or "pendiente") != "pendiente":
+            if not pz.get("meta_ad_id") or pz.get("estado") != "activo" or ((pz.get("veredicto") or "pendiente") != "pendiente" and not (pz.get("extra") or {}).get("muestra_ventas_insuficiente")):
                 continue
             if _rechazada_por_meta(cliente, ex, pz):
+                continue
+            if (pz.get("metricas") or {}).get("ventas_no_disponibles") or experimentos.datos_viejos({"piezas": [pz]}, ahora):
                 continue
             snaps = snaps_por_pieza.setdefault(pz["id"], experimentos.snapshots(pz["id"]))
             dias_transcurridos = _dias_transcurridos(ex, snaps_por_pieza, ahora)
@@ -624,8 +633,10 @@ def exp_decidir(tarea):
                    "dias_experimento": ex.get("dias"), "dias_transcurridos": dias_transcurridos,
                    "escalon_rescate": pz.get("escalon_rescate") or 0, "atribucion": ex.get("atribucion"),
                    "posicion": (orden.index(pz["id"]) + 1) if pz["id"] in orden else None, "total_pais": len(orden),
-                   "es_imagen": bool(pz.get("es_imagen"))}
+                   "es_imagen": bool(pz.get("es_imagen")), "compras_pais": compras_pais}
             v = decisor.decidir(snaps, reglas, ctx)
+            if v.get("muestra_ventas_insuficiente") and (pz.get("extra") or {}).get("muestra_ventas_insuficiente"):
+                continue
             if v["veredicto"] == "pendiente":
                 continue
             _aplicar_veredicto(cliente, ex, pz, v, resultado, snaps=snaps, reglas=reglas, ctx=ctx, tarea=tarea)

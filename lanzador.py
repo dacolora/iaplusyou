@@ -6,6 +6,7 @@ Meta lo devuelve, así un reintento retoma donde quedó sin duplicar nada. Todo
 nace PAUSED: activar es otro clic (cambiar_estado). Las credenciales se cargan
 y limpian bajo el lock de tareas.meta (mismo motivo que allá).
 """
+import math
 import time
 
 from flask_babel import gettext
@@ -298,6 +299,9 @@ def lanzar(cliente, experimento_id, on_etapa=None):
         if actual and actual["estado"] == "lanzando":
             experimentos.actualizar(cliente, experimento_id, estado="error", error=str(e))
         raise
+    fuente = "triple_whale" if triple_whale_tiendas.tiendas(cliente) else "meta"
+    experimentos.actualizar_extra(cliente, experimento_id,
+                                 lambda extra: {"fuente_ventas_fija": fuente, **extra})
     moneda = ex["moneda"] or (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
     etapa = on_etapa or (lambda n: None)
     experimentos.actualizar(cliente, experimento_id, estado="lanzando", error=None)
@@ -507,6 +511,11 @@ def cambiar_presupuesto_pais(cliente, experimento_id, pais, presupuesto_dia):
     ids = _adsets_de_pais(p) if p else []
     if not ids:
         raise ValueError(gettext("Ese país no tiene conjunto en Meta."))
+    from presupuesto_experimentos import limite_diario
+    limite = limite_diario(ex, pais)
+    if not math.isfinite(float(presupuesto_dia)) or float(presupuesto_dia) > limite["maximo"]:
+        raise ValueError(gettext("El máximo diario permitido es %(maximo)s %(moneda)s por los días restantes.",
+                                 maximo=limite["maximo"], moneda=ex["moneda"] or "USD"))
     moneda = ex["moneda"] or "USD"
     # Con varios conjuntos (una plataforma cada uno, en apps) se reparten los
     # centavos del país convertidos UNA vez: total // n a cada uno, así la suma
@@ -773,12 +782,14 @@ def _sincronizar_triple_whale(cliente, ex, tienda):
     «key=»; auditoría de seguridad, 2026-10-08) y se usa lo ya copiado."""
     try:
         tw_sync.sincronizar_si_hace_falta(cliente, tienda["id"])
+        return True
     except Exception as e:  # noqa: BLE001 — la copia vieja sigue sirviendo
         error = cola.sin_token(triple_whale_tiendas.sin_llave(cliente, tienda["id"], str(e)))
         nombre = _nombre_pais(tienda["pais"]) if tienda.get("pais") else tienda.get("dominio")
         experimentos.registrar_evento(
             cliente, ex["id"], "error",
             gettext("Error al traer métricas de Triple Whale de %(tienda)s: %(error)s", tienda=nombre, error=error))
+        return False
 
 
 def _nombre_pais(pais):
@@ -811,6 +822,9 @@ def _avisar_sin_tienda_tw(cliente, ex, paises):
                             pais=_nombre_pais(pais))
         else:
             texto = gettext("Una pieza sin país no tiene tienda de Triple Whale: se usan las ventas de Meta.")
+        if (ex.get("extra") or {}).get("fuente_ventas_fija"):
+            texto = (gettext("No hay tienda de Triple Whale para %(pais)s: ventas no comparables.", pais=_nombre_pais(pais))
+                     if pais else gettext("Una pieza sin país no tiene tienda de Triple Whale: ventas no comparables."))
         experimentos.registrar_evento(cliente, ex["id"], "atribucion", texto, {"pais": pais or None})
 
 
@@ -841,7 +855,8 @@ def _mezclar_ventas_triple_whale(cliente, ex, pz, snap, ajustes, tienda_id):
     snap["ingresos"] = ingresos
     snap["roas"] = round(ingresos / gasto, 4) if gasto and not ajenas else 0.0
     snap["cpa"] = round(gasto / compras, 2) if compras else 0.0
-    snap["fuente_ventas"] = "triple_whale" if compras > 0 else "ninguna"
+    snap["fuente_ventas"] = "triple_whale" if compras > 0 or (ex.get("extra") or {}).get("fuente_ventas_fija") else "ninguna"
+    snap.pop("ventas_no_disponibles", None)
     return ajenas
 
 
@@ -851,12 +866,17 @@ def refrescar(cliente, experimento_id):
     if not piezas:
         return 0
 
+    if not (ex.get("extra") or {}).get("fuente_ventas_fija"):
+        fuente = "triple_whale" if ex.get("atribucion") == "triple_whale" else "meta"
+        experimentos.actualizar_extra(cliente, experimento_id, lambda extra: {"fuente_ventas_fija": fuente, **extra})
+        ex = experimentos.obtener(cliente, experimento_id)
     rechazados = []
     monedas_ajenas = set()
     # Triple Whale: cada pieza vende en la tienda de su país. Las copias de las tiendas usadas se ponen
     # al día FUERA del lock de Meta (son llamadas a otra API), una vez por tienda y no por pieza.
+    fija = (ex.get("extra") or {}).get("fuente_ventas_fija")
     ajustes_tw, tienda_de_pieza = None, {}
-    tiendas_tw = triple_whale_tiendas.tiendas(cliente) if ex.get("atribucion") == "triple_whale" else []
+    tiendas_tw = triple_whale_tiendas.tiendas(cliente) if (fija == "triple_whale" or not fija and ex.get("atribucion") == "triple_whale") else []
     if tiendas_tw:
         ajustes_tw = triple_whale_tiendas.ajustes(cliente)
         sin_tienda = []
@@ -868,7 +888,8 @@ def refrescar(cliente, experimento_id):
                 sin_tienda.append(pz.get("pais") or "")   # "" = pieza sin país (su propio aviso)
         por_id = {t["id"]: t for t in tiendas_tw}
         for tienda_id in sorted(set(tienda_de_pieza.values())):
-            _sincronizar_triple_whale(cliente, ex, por_id[tienda_id])
+            if _sincronizar_triple_whale(cliente, ex, por_id[tienda_id]) is False and fija:
+                tienda_de_pieza = {ep: tid for ep, tid in tienda_de_pieza.items() if tid != tienda_id}
         if sin_tienda:
             _avisar_sin_tienda_tw(cliente, ex, sin_tienda)
 
@@ -879,7 +900,14 @@ def refrescar(cliente, experimento_id):
                 r = meta_insights.obtener_resultados(pz["meta_ad_id"], objetivo=ex["objetivo_meta"])
                 snap = {dest: r.get(src) for src, dest in _SNAP_DESDE_INSIGHTS.items() if src in r}
                 snap["fuente_ventas"] = "meta" if (r.get("compras") or 0) > 0 else "ninguna"
-                if ex["atribucion"] == "tienda":
+                if fija == "meta":
+                    snap["fuente_ventas"] = "meta"
+                elif fija == "triple_whale":
+                    snap.update(compras=0, ingresos=0.0, roas=0.0, cpa=0.0,
+                                fuente_ventas="triple_whale", ventas_no_disponibles=True)
+                    monedas_ajenas.update(_mezclar_ventas_triple_whale(
+                        cliente, ex, pz, snap, ajustes_tw, tienda_de_pieza.get(pz["id"])))
+                elif ex["atribucion"] == "tienda":
                     monedas_ajenas.update(_mezclar_ventas_tienda(cliente, ex, pz, snap))
                 elif ex["atribucion"] == "triple_whale":
                     monedas_ajenas.update(_mezclar_ventas_triple_whale(

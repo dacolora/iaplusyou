@@ -98,3 +98,7 @@ PND-014 (2026-10-05): sugerir_descripcion acepta on_usage; lo llama después de 
 PND-144 (Codex, 2026-10-07): obtener_pista transporta costo_usd y URL fal con PistaPagadaError en fallos de descarga, R2 o manifest. Producción del editor y legada conservan ambos en la capa degradada y suman el importe al gasto de su tarea. La URL no es una garantía de conservación permanente del proveedor.
 
 PND-144/146 (correcciones de lote 5, 2026-10-08): las pruebas comparan el gasto final con la suma de capas, incluida la pista pagada fallida. PistaPagadaError transporta el costo y la URL, pero no garantiza caché: otro intento puede pagar otra pista. Los caminos aún sin registro seguro están en PND-146 y se dejan para lote 6.
+
+PND-146 (2026-10-08, decisiones delegadas): el guion base y ambos caminos de producción registran el cobro antes de persistir guion/error/final. Insumos de música conservan costo_usd y URL en PistaPagadaError si falla medir/guardar; voz y Whisper conservan lo cobrado por bloque en las excepciones, incluido primer bloque y mezcla del legado. No cambia obtener_pista, referencias ni reintentos. SQLite real e idempotencia: tests/test_lote6_plata_final.py.
+
+PND-111 (2026-10-08, decisión delegada): la cabecera «Lo que costaron las finales» recibe gastos.total_tipo(cliente, final), todos los cobros reales incluso finales fallidas, borradas o reproducidas. armar conserva su pureza y recibe costo_finales, no suma los destinos listos. test_lote6_costos usa SQLite real y dos proyectos.

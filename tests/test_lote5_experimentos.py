@@ -44,7 +44,7 @@ def test_pnd134_ultima_metrica_en_una_consulta_sin_cambiar_valores(base_temporal
         decision = decisor.decidir([metricas[ep]], {}, contexto)
         assert decision == decisor.decidir(historia, {}, contexto)
         veredictos.add(decision['veredicto'])
-    assert veredictos == {'ganador', 'perdedor'}
+    assert veredictos == {'inconcluso'}  # PND-017: cada llamada aislada tiene solo 2 compras.
     for eid in ids:
         assert ex.obtener('acme', eid)['piezas'] == next(e['piezas'] for e in cargados if e['id'] == eid)
 

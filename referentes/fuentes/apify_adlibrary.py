@@ -233,47 +233,50 @@ def traer(consulta, tope, avanzar, cursor=None):
     estimado = apify_actores.estimar(tope)
     avanzar(etapa=ETAPA_BUSCAR, detalle="apify/facebook-ads-scraper")
     run_id = dataset_id = None
+    conciliacion = None
     try:
         run_id, dataset_id, estado = apify_api.arrancar(
             sesion, token, apify_actores.ACTOR, entrada, tope, estimado["usd_fuente"])
         estado = apify_api.sondear(sesion, token, run_id, estado, ETAPA_LEER, avanzar)
+        if estado not in apify_api.TERMINALES:
+            conciliacion = apify_api.costo_corrida(sesion, token, run_id)
+            if conciliacion:
+                estado = conciliacion["estado"] or estado
         crudos, motivo = apify_api.leer_dataset(sesion, token, dataset_id, tope)
     except _ErrorApify as e:
         # El sondeo puede rendirse después de que Apify haya cobrado.
-        contados = apify_api.contar_dataset(sesion, token, dataset_id) if dataset_id else None
-        costo_real = round(contados * apify_actores.USD_POR_RESULTADO, 4) if contados is not None else None
-        raise ErrorFuente(e.usuario, costo_real=costo_real, extra_gasto={"run_id": run_id, "dataset_id": dataset_id}) from e
+        conciliacion = conciliacion or apify_api.costo_corrida(sesion, token, run_id)
+        contados = apify_api.contar_dataset(sesion, token, dataset_id) if not conciliacion and dataset_id else None
+        costo_real = conciliacion["costo_real"] if conciliacion else (round(contados * apify_actores.USD_POR_RESULTADO, 4) if contados is not None else None)
+        raise ErrorFuente(e.usuario, costo_real=costo_real,
+                          extra_gasto={"run_id": run_id, "dataset_id": dataset_id, **({k: v for k, v in conciliacion.items() if k != "costo_real"} if conciliacion else {})}) from e
     if crudos is None:
-        # La corrida ya se pagó aunque su dataset no se haya podido leer --
-        # `contar_dataset` da el itemCount real cobrado; si tampoco se puede
-        # leer, `tope` es la cota superior de lo que Apify pudo cobrar (mismo
-        # respaldo que ya usa `nicho/fuentes/apify.py::FuenteApify.recolectar`
-        # para el mismo caso). CLAUDE.md: "on failure after paying, register
-        # what was paid" -- `costo_real` va en la excepción para que
-        # `_fase_trayendo` lo registre en gastos aunque el barrido termine en
-        # error total.
+        # Un límite aprobado no es un cobro confirmado: sin factura ni
+        # resultados contados, el importe sigue desconocido (PND-007).
         contados = apify_api.contar_dataset(sesion, token, dataset_id)
-        costo_real = round((contados if contados is not None else tope) * apify_actores.USD_POR_RESULTADO, 4)
+        costo_real = (conciliacion["costo_real"] if conciliacion else round(contados * apify_actores.USD_POR_RESULTADO, 4) if contados is not None else None)
         raise ErrorFuente(gettext("Apify no entregó los resultados (%(motivo)s); corrida %(corrida)s, "
                                   "dataset %(dataset)s: revísalos en console.apify.com.",
                                   motivo=motivo, corrida=run_id, dataset=dataset_id), costo_real=costo_real,
                           extra_gasto={"run_id": run_id, "dataset_id": dataset_id})
+    extra_gasto = {"run_id": run_id, "dataset_id": dataset_id, **({k: v for k, v in conciliacion.items() if k != "costo_real"} if conciliacion else {})}
     if not crudos:
         if estado != "SUCCEEDED":
             raise ErrorFuente(gettext("Apify %(estado)s sin resultados (corrida %(corrida)s); "
                                       "revísala en console.apify.com.",
-                                      estado=apify_api.frase_estado(estado), corrida=run_id))
+                                      estado=apify_api.frase_estado(estado), corrida=run_id),
+                              costo_real=conciliacion["costo_real"] if conciliacion else None, extra_gasto=extra_gasto)
         avanzar(etapa=ETAPA_BUSCAR, detalle=ngettext("%(num)d anuncio", "%(num)d anuncios", 0))
-        yield [], None, {}
+        yield [], None, {**extra_gasto, "costo_real": conciliacion["costo_real"]} if conciliacion else {}
         return
-    costo_real = round(len(crudos) * apify_actores.USD_POR_RESULTADO, 4)
+    costo_real = conciliacion["costo_real"] if conciliacion else round(len(crudos) * apify_actores.USD_POR_RESULTADO, 4)
     try:
         pagina = [_normalizar(it) for it in crudos if isinstance(it, dict)]
     except Exception as e:
         raise ErrorFuente(str(e), costo_real=costo_real,
-                          extra_gasto={"run_id": run_id, "dataset_id": dataset_id}) from e
+                          extra_gasto=extra_gasto) from e
     avanzar(etapa=ETAPA_BUSCAR, detalle=ngettext("%(num)d anuncio", "%(num)d anuncios", len(crudos)))
-    meta = {"costo_real": costo_real, "run_id": run_id, "dataset_id": dataset_id}
+    meta = {"costo_real": costo_real, "run_id": run_id, "dataset_id": dataset_id, **(conciliacion or {})}
     if estado != "SUCCEEDED":
         meta.update(estado=estado, incompleto=True, aviso=gettext(
             "Apify terminó %(estado)s; los resultados son parciales (corrida %(corrida)s).",

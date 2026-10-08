@@ -1995,6 +1995,7 @@ def _contexto_experimentos(cliente, con_elegibles=False, con_organico=True, gest
     gestion = experimentos_exp if gestion_id is None else [e for e in experimentos_exp if e["id"] == gestion_id]
     trabajos_exp = {}
     for e in gestion:
+        e["datos_viejos"] = experimentos.datos_viejos(e)
         if e["estado"] == "lanzando":
             jid = tareas_exp.job_id_lanzar(cliente, e["id"])
             if trabajos.en_curso(jid):
@@ -2020,6 +2021,8 @@ def _contexto_experimentos(cliente, con_elegibles=False, con_organico=True, gest
         "objetivo_exp_sugerido": experimentos.objetivo_sugerido(cliente, atribucion_sug),
         "nombres_objetivo_exp": NOMBRES_OBJETIVO_EXP,
         "app_id_guardado": meta_conexion.cargar_app_anunciada(cliente),
+        "limites_diarios_exp": {e["id"]: {p["pais"]: presupuesto_experimentos.limite_diario(e, p["pais"])
+                                           for p in e["paises"]} for e in gestion},
         "minimo_diario_exp": PRESUPUESTO_MINIMO_DIARIO.get(moneda_exp, 1),
         "tope_campana_min_exp": lanzador.minimo_tope_campana(moneda_exp),
         "moneda_exp": moneda_exp,
@@ -2203,7 +2206,7 @@ def ver_cliente(cliente):
         swaps=_swap_items(cliente),
         creative_flow_items=cf_items,
         **_listas_crear(cf_items),
-        **_tablero_final(cf_items, fe_ctx["ediciones_por_cf"]),
+        **_tablero_final(cf_items, fe_ctx["ediciones_por_cf"], cliente=cliente),
         preferencias_flowplus=proyectos.preferencias_flowplus(cliente),
         preferencias_sonido=proyectos.preferencias_sonido(cliente),
         aviso_saldo=saldo.vigente("wavespeed"),
@@ -3379,12 +3382,12 @@ def _listas_crear(items, n=TARJETAS_POR_PAGINA):
     return {"crear": items[:n], "crear_total": len(items)}
 
 
-def _tablero_final(items, ediciones_por_cf, n=TARJETAS_POR_PAGINA):
+def _tablero_final(items, ediciones_por_cf, n=TARJETAS_POR_PAGINA, cliente=None):
     """Lo que pinta el tablero de Final edition (2026-10-02,
     `final_edition.tablero`): las primeras `n` tarjetas de «En edición» y de
     «Finalizados», sus totales y las cifras de la cabecera. Los videos listos
     de Crear no van en la página: los trae el selector «+ Nueva» por fetch."""
-    t = fe_tablero.armar(items, ediciones_por_cf)
+    t = fe_tablero.armar(items, ediciones_por_cf, gastos.total_tipo(cliente, "final") if cliente else None)
     return {"fe_en_edicion": t["en_edicion"][:n], "fe_en_edicion_total": len(t["en_edicion"]),
             "fe_finalizados": t["finalizados"][:n], "fe_finalizados_total": len(t["finalizados"]),
             "fe_cifras": t["cifras"]}

@@ -182,10 +182,20 @@ def crear_hijo(cliente, padre_id, nombre, pieza_origen_ep_id):
         e = db.experimento
         extra_padre = m[e.c.extra] or {}
         tope = max(0.0, float(m[e.c.tope_total] or 0) - float(m[e.c.gasto_acumulado] or 0))
+        paises = [_pais_nuevo(p) for p in (m[e.c.paises] or [])]
+        dias = int(m[e.c.dias] or 7)
+        suma = sum(float(p.get("presupuesto_dia") or 0) for p in paises)
+        if suma * dias > tope:
+            from decimal import Decimal, ROUND_DOWN
+            from presupuesto_experimentos import unidad
+            # El hijo reserva solo el saldo del padre; conserva las proporciones.
+            for p in paises:
+                diario = Decimal(str(tope)) * Decimal(str(p["presupuesto_dia"])) / Decimal(str(suma)) / dias
+                p["presupuesto_dia"] = float(diario.quantize(unidad(m[e.c.moneda]), rounding=ROUND_DOWN))
         return con.execute(e.insert().values(
             cliente=cliente, creado_en=ahora, actualizado_en=ahora, nombre=nombre, modo=m[e.c.modo],
             producto_id=m[e.c.producto_id], reglas=dict(m[e.c.reglas] or {}),
-            paises=[_pais_nuevo(p) for p in (m[e.c.paises] or [])],
+            paises=paises,
             moneda=m[e.c.moneda], tope_total=tope, dias=m[e.c.dias],
             objetivo_meta=m[e.c.objetivo_meta], atribucion=m[e.c.atribucion] or "ninguna", estado="armando",
             gasto_acumulado=0.0, legado=False, destino_url=m[e.c.destino_url], edad_min=m[e.c.edad_min],
@@ -814,3 +824,20 @@ def _experimentos_vivos_por_pieza(con, cliente):
         if not any(x["id"] == eid for x in lista):
             lista.append({"id": eid, "nombre": nombre, "estado": estado})
     return out
+
+
+def datos_viejos(ex, ahora=None):
+    """La última foto del experimento excede 6 h."""
+    from datetime import datetime
+    ahora = ahora or datetime.now()
+    if isinstance(ahora, str):
+        ahora = datetime.fromisoformat(ahora)
+    fechas = []
+    for pz in ex.get("piezas") or []:
+        texto = (pz.get("metricas") or {}).get("tomado_en")
+        try:
+            if texto:
+                fechas.append(datetime.fromisoformat(texto))
+        except (TypeError, ValueError):
+            continue
+    return bool(fechas) and (ahora - max(fechas)).total_seconds() > 6 * 3600

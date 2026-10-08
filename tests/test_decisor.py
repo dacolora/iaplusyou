@@ -76,7 +76,7 @@ def test_puerta_2_ventas_espera_72h_y_decide_por_roas_o_cpa():
     assert v["veredicto"] == "ganador" and v["puerta"] == 2 and "roas" in v["motivo"].lower()
     mal = [snap(impresiones=3000, clics_enlace=90, ctr=3.0, cpc=0.3, gasto=30.0, compras=1, cpa=30.0, roas=0.5, thruplay_rate=0.3)]
     v = decisor.decidir(mal, r, dict(ctx, horas_activo=80))
-    assert v["veredicto"] == "perdedor" and v["puerta"] == 2 and v["accion"] == "rescatar"
+    assert v["veredicto"] == "inconcluso" and v["puerta"] == 2 and v["accion"] is None
 
 
 def test_puerta_2_ventas_con_triple_whale_decide_igual_que_pixel_o_tienda():

@@ -38,6 +38,7 @@
 
 {% endmacro %}
 {% if ex %}{% set e = ex %}
+{% if e.datos_viejos and e.estado == "corriendo" %}<p class="nota">{{ _('datos viejos') }}</p>{% endif %}
 <section class="cr-gestion cr-tarjeta" aria-labelledby="cr-gestion-titulo">
   <header class="cr-gestion-cab">
     <div class="cr-gestion-titulo">
@@ -124,7 +125,9 @@
         </form>
         <form method="post" action="{{ url_for('exp_presupuesto', cliente=cliente, eid=e.id) }}" class="inline">
           <input type="hidden" name="pais" value="{{ p.pais }}">
-          <input type="number" name="presupuesto_dia" value="{{ p.presupuesto_dia }}" min="{{ minimo_diario_exp }}" step="any" title="{{ _('En %(moneda)s, la moneda de la cuenta de Meta', moneda=e.moneda) }}">
+          {% set limite = limites_diarios_exp[e.id][p.pais] %}
+          <span>{{ _('Máximo permitido: %(maximo)s %(moneda)s/día', maximo=limite.maximo, moneda=e.moneda) }}</span>
+          <input type="number" max="{{ limite.maximo }}" name="presupuesto_dia" value="{{ p.presupuesto_dia }}" min="{{ minimo_diario_exp }}" step="any" title="{{ _('En %(moneda)s, la moneda de la cuenta de Meta', moneda=e.moneda) }}">
           <button class="btn-guardar btn-xs">{{ _('Cambiar presupuesto') }}</button>
         </form>
         {% endif %}

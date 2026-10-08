@@ -641,3 +641,43 @@ def importar_historico(cliente, swaps=None):
         n_swaps += 1
         total += usd
     return {"piezas": n_piezas, "swaps": n_swaps, "usd": round(total, 4)}
+
+
+def total_tipo(cliente, tipo):
+    """Todo el gasto real de un tipo del proyecto, incluidas tareas fallidas."""
+    g = db.gasto
+    with db.conectar() as con:
+        total = con.execute(sa.select(sa.func.coalesce(sa.func.sum(g.c.usd), 0.0)).where(
+            g.c.cliente == cliente, g.c.tipo == tipo)).scalar()
+    return round(float(total), 4)
+
+
+def costos_sesiones(cliente):
+    """Acumulados por sesión de Crear, una consulta para todas las tarjetas."""
+    g = db.gasto
+    with db.conectar() as con:
+        filas = con.execute(sa.select(g.c.referencia, g.c.usd, g.c.extra).where(
+            g.c.cliente == cliente, g.c.tipo.in_(("video", "imagen")))).all()
+    out = {}
+    for ref, usd, extra in filas:
+        partes = ref.split(":")
+        if len(partes) < 2 or partes[0] not in ("video", "imagen"):
+            continue
+        v = out.setdefault(partes[1], {"usd": 0.0, "usd_musica": 0.0})
+        v["usd"] += float(usd)
+        v["usd_musica"] += float((extra or {}).get("usd_musica") or 0)
+    return {cf_id: {k: round(n, 4) for k, n in v.items()} for cf_id, v in out.items()}
+
+
+def por_referencia(cliente, referencia):
+    with db.conectar() as con:
+        fila = con.execute(sa.select(db.gasto).where(db.gasto.c.cliente == cliente,
+                                                   db.gasto.c.referencia == referencia)).first()
+    return _fila(fila) if fila else None
+
+
+def fichas_pendientes(cliente, tipo):
+    with db.conectar() as con:
+        filas = con.execute(sa.select(db.gasto).where(db.gasto.c.cliente == cliente, db.gasto.c.tipo == tipo,
+                 db.gasto.c.extra["ficha_guardada"].as_boolean().isnot(True))).all()
+    return [_fila(f) for f in filas if (f._mapping[db.gasto.c.extra] or {}).get("ficha")]

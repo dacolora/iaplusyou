@@ -4048,9 +4048,6 @@ msgstr "Cut"
 msgid "Cortes"
 msgstr "Cuts"
 
-msgid "Costaron las finales listas"
-msgstr "Ready final cuts cost"
-
 msgid "Costo"
 msgstr "Cost"
 
@@ -4366,6 +4363,9 @@ msgstr "Details"
 
 msgid "Datos del sprint (se guardan solos)"
 msgstr "Sprint data (saves on its own)"
+
+msgid "Datos viejos: el decisor no ejecuta nada hasta actualizar las métricas."
+msgstr "Stale data: the decision engine takes no action until metrics are updated."
 
 #, python-format
 msgid "De %(persona)s:"
@@ -5322,6 +5322,10 @@ msgstr "The engine waits until it has evidence, then compares each piece against
 
 msgid "El motor no tiene a quién avisarle de propuestas, ganadores y rechazos: escríbelo en Configuración › Correo de avisos."
 msgstr "The engine has nobody to notify about proposals, winners and rejections: enter one in Settings › Notification email."
+
+#, python-format
+msgid "El máximo diario permitido es %(maximo)s %(moneda)s por los días restantes."
+msgstr "The maximum daily budget allowed is %(maximo)s %(moneda)s for the remaining days."
 
 msgid "El objetivo de referencias debe ser al menos 1."
 msgstr "The reference target must be at least 1."
@@ -6860,6 +6864,9 @@ msgstr "This version already has %(n)s extra images; remove one first."
 #, python-format
 msgid "Esta voz dura %(n)s s; el anuncio hablado llega a 30 s. Pártelo en tomas de unos 10 s y júntalas en el editor."
 msgstr "This voice lasts %(n)s s; a talking ad can be up to 30 s. Split it into takes of about 10 s and join them in the editor."
+
+msgid "Esta voz se borró; no se vuelve a crear."
+msgstr "This voice was deleted; it will not be recreated."
 
 msgid "Estado"
 msgstr "Status"
@@ -9297,6 +9304,9 @@ msgstr "The voice adjusts itself to each country."
 msgid "La voz se ajusta sola a cada país: puedes moverla o borrarla, pero no recortarla."
 msgstr "The voice adjusts itself to each country: you can move it or delete it, but not trim it."
 
+msgid "La voz todavía no tiene una respuesta del proveedor; no se vuelve a cobrar."
+msgstr "The voice has no response from the provider yet; you will not be charged again."
+
 #, python-format
 msgid "La última copia de %(tienda)s falló: %(error)s"
 msgstr "The last copy of %(tienda)s failed: %(error)s"
@@ -9620,6 +9630,9 @@ msgstr "What Claude couldn't find in the data"
 msgid "Lo que Claude sabe de este prompt"
 msgstr "What Claude knows about this prompt"
 
+msgid "Lo que costaron las finales"
+msgstr "What the final cuts cost"
+
 msgid "Lo que costaría producir lo que pide esta propuesta (precio aproximado de los proveedores)"
 msgstr "What it would cost to produce what this proposal is asking for (approximate provider price)"
 
@@ -9935,6 +9948,9 @@ msgstr "Available memory"
 #, python-format
 msgid "Menos de %(n)s impresiones: todavía no dice nada."
 msgstr "Fewer than %(n)s impressions: it doesn't tell us anything yet."
+
+msgid "Menos de 3 compras entre las piezas del país: ventas inconclusas."
+msgstr "Fewer than 3 purchases among the pieces in this country: inconclusive sales."
 
 msgid "Menú"
 msgstr "Menu"
@@ -10326,6 +10342,10 @@ msgid "Máximo de resultados"
 msgstr "Maximum results"
 
 #, python-format
+msgid "Máximo permitido: %(maximo)s %(moneda)s/día"
+msgstr "Maximum allowed: %(maximo)s %(moneda)s/day"
+
+#, python-format
 msgid "Máximo que puede gastar: %(total)s en %(num)s día"
 msgid_plural "Máximo que puede gastar: %(total)s en %(num)s días"
 msgstr[0] "Most it can spend: %(total)s in %(num)s day"
@@ -10704,6 +10724,10 @@ msgstr "There are no references to suggest"
 #, python-format
 msgid "No hay tienda de Triple Whale para %(pais)s: se usan las ventas de Meta."
 msgstr "There is no Triple Whale store for %(pais)s: Meta sales are used."
+
+#, python-format
+msgid "No hay tienda de Triple Whale para %(pais)s: ventas no comparables."
+msgstr "There is no Triple Whale store for %(pais)s: sales are not comparable."
 
 msgid "No hay un respaldo de la base de las últimas 48 h (data/respaldos). Revisa que el worker esté corriendo la tarea diaria db_respaldar."
 msgstr "There is no database backup from the last 48 h (data/respaldos). Check that the worker is running the daily db_respaldar task."
@@ -11230,6 +11254,9 @@ msgstr "That image couldn't be saved."
 
 msgid "No se pudo guardar este cambio; deshazlo y vuelve a intentar."
 msgstr "Couldn't save this change; undo it and try again."
+
+msgid "No se pudo guardar la ficha de la voz antes de cobrar."
+msgstr "The voice details could not be saved before charging."
 
 msgid "No se pudo guardar la revisión."
 msgstr "Couldn't save the review."
@@ -15712,6 +15739,9 @@ msgstr "A piece has no store platform: create the experiment again."
 msgid "Una pieza sin país no tiene tienda de Triple Whale: se usan las ventas de Meta."
 msgstr "A piece without a country has no Triple Whale store: Meta sales are used."
 
+msgid "Una pieza sin país no tiene tienda de Triple Whale: ventas no comparables."
+msgstr "A piece without a country has no Triple Whale store: sales are not comparable."
+
 msgid "Una por línea"
 msgstr "One per line"
 
@@ -17106,6 +17136,9 @@ msgstr "dataset %(dataset)s not read (%(motivo)s)"
 msgid "dato del producto"
 msgstr "product fact"
 
+msgid "datos viejos"
+msgstr "stale data"
+
 msgid "de"
 msgstr "of"
 
@@ -17528,6 +17561,10 @@ msgstr "tags"
 
 msgid "etiquetas de precio"
 msgstr "price tags"
+
+#, python-format
+msgid "excluye %(n)s en otra moneda"
+msgstr "excludes %(n)s in another currency"
 
 msgid "experiencia con el producto"
 msgstr "experience with the product"

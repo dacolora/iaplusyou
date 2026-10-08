@@ -117,3 +117,19 @@ def validar(total, dias, presupuestos, moneda):
         raise ErrorPresupuesto("precision")
     if sum(valores) * dias > total * MARGEN_TOTAL:
         raise ErrorPresupuesto("total")
+
+
+def limite_diario(ex, pais, ahora=None):
+    """Saldo disponible por los días restantes, reservado también para los otros países.
+    Misma cuenta para formulario y servidor (PND-132, 2026-10-08)."""
+    import time
+    ahora = time.time() if ahora is None else ahora
+    fin = (ex.get("extra") or {}).get("fin_primera_activacion")
+    dias = max(0.0, (float(fin) - ahora) / 86400) if fin else float(ex.get("dias") or 7)
+    saldo = max(Decimal(0), Decimal(str(ex.get("tope_total") or 0)) - Decimal(str(ex.get("gasto_acumulado") or 0)))
+    otros = sum(Decimal(str(p.get("presupuesto_dia") or 0)) for p in ex.get("paises", []) if p["pais"] != pais)
+    disponible = max(Decimal(0), saldo / Decimal(str(dias)) - otros) if dias else Decimal(0)
+    # Menos de un día no autoriza enviar a Meta un diario mayor que el total.
+    disponible = min(disponible, max(Decimal(0), Decimal(str(ex.get("tope_total") or 0)) - otros))
+    maximo = disponible.quantize(unidad(ex.get("moneda") or "USD"), rounding=ROUND_DOWN)
+    return {"maximo": float(maximo), "dias": dias, "saldo": float(saldo)}

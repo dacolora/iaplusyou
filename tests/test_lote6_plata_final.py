@@ -62,7 +62,7 @@ def test_pnd146_final_antes_de_persistir(via, fase, request, monkeypatch):
         with pytest.raises(RuntimeError):
             ejecutar("acme", cf_id, "en", "US", opciones, ref_sufijo=":t146")
         fid = f"{cf_id}__en_US" + ("__v1" if fase == "variante" else "")
-        gasto_unico(f"final:{fid}:t146", monto if via == "legado" or fase == "variante" else (.02 if _ == 0 else 0))
+        gasto_unico(f"final:{fid}:t146", monto)
 
 
 def test_pnd146_pista_material_falla_con_importe_y_url(entorno, monkeypatch):
@@ -97,6 +97,8 @@ def test_pnd146_voz_pagada(via, bloque, fallo, request, monkeypatch, tmp_path):
     monkeypatch.setattr(insumos if via == "editor" else voz,
                         "voz_bloque" if via == "editor" else "sintetizar",
                         modulo.voz_bloque if via == "editor" else modulo.sintetizar)
+    if via == "legado":
+        monkeypatch.setattr(voz, "ErrorPrimerBloque", modulo.ErrorPrimerBloque)
     llamadas = []
     def tts(*a, **k):
         llamadas.append(a[0])
@@ -124,7 +126,7 @@ def test_pnd146_voz_pagada(via, bloque, fallo, request, monkeypatch, tmp_path):
         llamadas.clear()
         if via == "editor":
             import db, sqlalchemy as sa
-            with db.transaccion() as con:
+            with db.engine().begin() as con:
                 con.execute(sa.delete(db.material))
         if bloque == 0:
             with pytest.raises(ValueError):
