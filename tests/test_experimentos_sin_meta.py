@@ -97,3 +97,18 @@ def test_probar_y_crear_sin_meta_mandan_a_conexiones(app, monkeypatch, base_temp
     assert len(avisos) == 2 and all("Configuración › Conexiones" in m for m in avisos)
     assert not any("en Experimentos" in m for m in avisos)
     assert ex.cargar("acme") == []
+
+
+def test_sin_meta_la_pagina_abre_en_crear(app, monkeypatch, base_temporal):
+    """Daniel, 2026-10-08: sin Meta la página abre en Crear, aunque Experimentos haya quedado como la pestaña recordada
+    (era la de entrada); un #experimentos explícito la sigue abriendo (lo resuelve el hash, antes que este default)."""
+    _sin_meta(app, monkeypatch)
+    html, _tab = _pestana(app)
+    assert "activar(paneles[inicial] ? inicial : 'creativeflowplus');" in html
+    assert "if (inicial === 'experimentos') inicial = '';" in html
+
+
+def test_con_meta_la_pagina_sigue_abriendo_en_experimentos(app, base_temporal):
+    html, _tab = _pestana(app)
+    assert "activar(paneles[inicial] ? inicial : 'experimentos');" in html
+    assert "if (inicial === 'experimentos') inicial = '';" not in html

@@ -96,7 +96,9 @@ botón a Configuración › Conexiones › Meta (`data-ir-tab="settings" data-an
 reglas del motor, ni CSV, y Configuración esconde su enlace a las reglas. Con historial y sin Meta se ven los
 resultados con un aviso, pero ningún «+ Nuevo experimento» (tampoco en `_exp_resultados.html` ni el `data-url-nuevo`).
 `exp_nuevo` sin Meta redirige a `#experimentos` (no pinta la galería) y `exp_probar`/`exp_crear` avisan «Conecta Meta en
-Configuración › Conexiones…». Pruebas: `tests/test_experimentos_sin_meta.py`.
+Configuración › Conexiones…». Y la página del proyecto abre en Crear en vez de Experimentos (`cliente.html`), también
+si Experimentos quedó como la pestaña recordada; un `#experimentos` explícito la sigue abriendo. Pruebas:
+`tests/test_experimentos_sin_meta.py`.
 
 There is also NO Campañas tab any more: `_tab_ads.html` is gone, `nueva_campana`/`publicar_ad`
 are no-ops that flash and redirect, and the legacy "Anuncios sueltos" (Forja's ads) render

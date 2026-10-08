@@ -129,9 +129,15 @@
     }
     // Sin hash ni pestaña recordada, la página abre en Experimentos:
     // es lo que el dueño mira cada mañana. La recordada sigue mandando.
+    // Sin Meta ni historial (exp_sin_meta) Experimentos es solo «Conecta Meta», así que abre en Crear, también
+    // si la recordada es Experimentos (era la de entrada y quedó guardada); un #experimentos explícito la abre
+    // igual (Daniel, 2026-10-08).
     var inicial = resolver(desdeHash) || '';
-    if (!paneles[inicial]) inicial = resolver(desdeStorage) || '';
-    activar(paneles[inicial] ? inicial : 'experimentos');
+    if (!paneles[inicial]) {
+      inicial = resolver(desdeStorage) || '';
+      {% if exp_sin_meta %}if (inicial === 'experimentos') inicial = '';{% endif %}
+    }
+    activar(paneles[inicial] ? inicial : '{{ "creativeflowplus" if exp_sin_meta else "experimentos" }}');
 
     // Un enlace a «#settings» (alertas del Tablero, «Ir a Configuración →»,
     // una acción de Experimentos → «#experimentos?exp=…») cambia solo el hash: sin esto la
