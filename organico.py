@@ -39,6 +39,7 @@ import idiomas
 import meta_conexion
 import publicador
 import tiendas
+from cobros import SaldoInsuficiente, libro
 from doctrina import producto as doctrina_producto
 from uploaders import tiktok_uploader
 
@@ -538,10 +539,19 @@ def redactar(cliente, pieza_id, plataformas):
         raise ValueError(gettext("Elige al menos una plataforma."))
     contexto = contexto_pieza(cliente, pieza_id)
     try:
+        # Cobros (spec 2026-10-08 §5.2): sin saldo no se llama a Claude y queda
+        # el texto determinista. La ruta «Escribir con IA» pide el saldo antes
+        # (y responde 402); esto cubre la publicación de una ganadora, que no
+        # se frena por un texto.
+        libro.exigir(cliente, gastos.TARIFAS["caption_organico"])
         textos = generador_prompts.caption_organico(contexto, plataformas)
         if not isinstance(textos, dict):
             textos = {}
         cobrar = True
+    except SaldoInsuficiente:
+        log.info("redactar %s/%s: sin saldo, uso el texto determinista", cliente, pieza_id)
+        textos = {}
+        cobrar = False
     except generador_prompts.RespuestaInvalida as e:
         # Claude SÍ contestó (la llamada ya se cobró) pero el JSON no vino
         # bien: se usa el fallback determinista igual, pero el cobro real

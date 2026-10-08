@@ -144,7 +144,7 @@
     <footer class="modal-form-pie">
       <div class="modal-form-precio" id="traer-precio">
         {% if precio %}
-        <strong>≈ US$ {{ '%.2f' | format(precio.total_usd) }}</strong>
+        <strong>≈ US$ {{ '%.2f' | format(precio.total_usd | precio) }}</strong>
         <small>{{ _('%(fuente)s · Clasificar %(tope)s con Claude: %(precio)s', fuente=precio.fuente.detalle, tope=tope, precio=precio.clasificacion.texto) }}</small>
         {% else %}
         <small>{{ _('Escribe qué buscar y completa los datos para ver el precio.') }}</small>

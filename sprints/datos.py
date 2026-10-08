@@ -1148,3 +1148,14 @@ def eliminar_sprint(cliente, sprint_id):
             (db.sprint.c.cliente == cliente)
         ))
     return True
+
+
+def limpiar_qa_no_aprobada(cliente, cp_id, cf_id):
+    """PND-088: el WHERE evita borrar un QA que pasó tras leer la pantalla."""
+    cp = db.campana_pieza
+    with db.conectar() as con:
+        return con.execute(cp.update().where(
+            cp.c.cliente == cliente, cp.c.id == cp_id, cp.c.cf_id == cf_id,
+            cp.c.revision != 'aprobada',
+            sa.func.coalesce(sa.func.json_extract(cp.c.qa, '$.veredicto'), '') != 'pasa')
+            .values(qa=None, actualizado_en=db.ahora())).rowcount == 1

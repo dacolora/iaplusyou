@@ -3,7 +3,7 @@
 **Cambio medido:** la llamada nueva a Claude de la tarea `tw_analizar_anuncio` (`triple_whale/mejorar.py`: `armar` →
 `analizar`, hasta 8 fotogramas + la voz transcrita + los datos del anuncio, doctrina en el system con caché, tope de
 salida `MAX_TOKENS` = 12 000). No hay «antes»: la llamada no existía, así que la tabla trae solo el resultado y lo que
-se buscaba con cada caso. Sirve también para medir la tarifa `analisis_anuncio_tw` (PND-171).
+se buscaba con cada caso. Sirve también para medir la tarifa `analisis_anuncio_tw` (PND-179).
 
 **Cómo:** la tarea real `tw_analizar_anuncio`, sin tocar el código bajo prueba: el mp4 se baja de
 `files.triplewhale.com` (`descargar_archivo`), ffmpeg saca los fotogramas, Whisper (fal) transcribe la voz y Claude
@@ -87,7 +87,7 @@ pasó a 1 de 4. La corrección ocurre dentro de la misma tarea (`max_intentos=1`
 Ningún caso en rojo (no hay `max_tokens`, JSON inválido final, validación rechazada ni campo vacío); no hay «antes» con
 el que comparar el costo. Sin saldo ni errores de proveedor. Se midió con el modelo real, sin cambiar el código bajo
 prueba. Whisper con `language: null` lo aceptó fal (3 de 4 anuncios con voz transcrita), que es lo que esperaba el
-PND-177.
+PND-185.
 
 **Conclusión:** la llamada responde válida y dentro del tope en los 4 anuncios reales (1 con corrección), con evidencia
 de segundos, voz y cifras del canal, y cuesta US$ 0,067–0,084 (0,16 con corrección); la tarifa queda en 0,10.

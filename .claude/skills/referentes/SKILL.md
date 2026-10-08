@@ -111,3 +111,7 @@ PND-090 (2026-10-07, lote 5 B): MAX_FOTOS_PRODUCTO=2 es el tope compartido por a
 
 
 PND-007 (2026-10-08, decisión delegada enmendada): traer consulta el estado/cobro final gratis también cuando el estado ya es terminal. Con resultados leídos/contados registra el mayor entre usageTotalUsd y resultados × USD_POR_RESULTADO. Si ambas lecturas fallan, conserva tope × precio con estimado=True y conciliacion_pendiente=True. ErrorFuente transporta el costo antes de persistir el barrido; tests/test_lote6_apify.py usa SQLite, fallo posterior, referencia por tarea, idempotencia y aislamiento. Sigue abierta la pregunta de confirmar con una corrida real qué significa usageTotalUsd en este actor; no se llama a proveedores reales para estas pruebas.
+
+
+
+PND-024 (enmienda 2026-10-08, R4 del lote 6B): Recrear muestra una línea neutra con el dolor del referente y el nombre del producto elegido, solo con producto y dolor real (excluye ninguno-oferta/ninguno-marca/vacío). Usa datos.localizado para el idioma de quien mira y la misma expresión etiquetas_dolor + traducir de la ficha. Usa la clase existente vacio. No compara familia/categoría, no llama a Claude, no cambia prompts/precios y no bloquea. test_rutas_referentes.py::test_r4_contexto_dolor_y_producto_sin_cobrar_ni_bloquear.

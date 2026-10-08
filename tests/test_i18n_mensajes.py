@@ -30,6 +30,7 @@ RUTAS += ["dashboard.py", "guiones/rutas.py", "guiones/rutas_pipeline.py", "nich
           "referentes/rutas.py", "sprints/rutas.py"]
 RUTAS += ["triple_whale/rutas.py"]   # Fase 6, Task 6: llegó con una fusión de main (pestaña Triple Whale)
 RUTAS += ["hablado_rutas.py"]   # Anuncio hablado en Crear (2026-10-01)
+RUTAS += ["cobros/rutas.py"]   # Cobros 7/11: recargas con Bold y su webhook (2026-10-08)
 WORKER = ["ediciones.py", "final_edition/edicion_clon.py", "final_edition/motor/__init__.py", "tareas/edicion.py",
           "final_edition/biblioteca.py"]
 WORKER += ["final_edition/__init__.py", "final_edition/produccion.py", "final_edition/borrador.py",
@@ -48,6 +49,7 @@ WORKER += ["voces_propias.py", "audios.py"]   # Audios Europa (2026-09-30)
 WORKER += ["final_edition/transcripcion.py"]   # Editor capa 5a, Task 5
 WORKER += ["hablado.py"]   # Anuncio hablado en Crear (2026-10-01); tareas/hablado.py ya entra por el glob
 WORKER += ["final_edition/fotos.py"]   # Editor capa 5b, Task 3 (la copia de una foto para el render)
+WORKER += ["cobros/bold.py", "cobros/recargas.py"]   # Cobros 7/11: los errores de Bold y las recargas (2026-10-08)
 
 
 def _nombre(llamada):

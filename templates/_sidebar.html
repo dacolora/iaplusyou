@@ -91,6 +91,13 @@
         <small>{{ session.get('usuario') }}</small>
       </span>
       <form method="post" action="{{ url_for('logout') }}" class="sidebar-texto"><button type="submit" class="sidebar-salir" title="{{ _('Cerrar sesión') }}">{{ _('Salir') }}</button></form>
+      {% if cobros_chip %}
+      {# Proyecto que cobra (cobros, spec 2026-10-08 §7): el saldo, en tono de
+         aviso bajo el umbral y de bloqueo sin saldo. Lleva a Configuración ›
+         Saldo y recargas (cliente.html abre la pestaña por el ancla). #}
+      <a class="sidebar-gasto sidebar-saldo saldo-{{ cobros_chip.tono }}" href="{{ cobros_chip.url }}"
+         title="{{ _('Ver el saldo y recargar en Configuración › Saldo y recargas') }}">{{ cobros_chip.texto }}</a>
+      {% endif %}
       {% if gasto_chip %}
       {# Gasto real desde el inicio (generación en USD; pauta en la moneda de
          la cuenta de Meta, solo si hay). Lleva a Configuración › Gasto. #}

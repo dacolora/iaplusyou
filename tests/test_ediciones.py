@@ -192,3 +192,24 @@ def test_nombre_visible_y_orden_para_editar():
     assert ediciones.nombre_visible(propia) == "Edición de gira" and ediciones.nombre_visible(vieja) == "Borrador es_CO"
     # entran de la más reciente a la más vieja (ediciones.listar): las de la persona primero, en ese orden
     assert [e["id"] for e in ediciones.para_editar([auto, propia, variante, vieja])] == [3, 4, 1, 2]
+
+
+def test_pnd080_final_produce_edicion_sin_marcar_edicion_posterior(base_temporal):
+    import creative_flow as cf
+    cf.crear('acme', [], [], [], 'video', 8, '', 'A', legado_id='cf_pnd080')
+    fid = cf.crear_final('acme', 'cf_pnd080', 'es', 'CO')
+    ed = e.crear('acme', 'video', 'ed', _doc())
+    v = e.versionar('acme', ed['id'], 'producir')
+    assert e.cargar('acme', ed['id'])['estado'] == 'borrador'
+    assert e.apuntar_final('otro', fid, v['id']) == 0
+    assert e.apuntar_final('acme', fid, v['id']) == 1
+    assert e.cargar('acme', ed['id'])['estado'] == 'producida'
+    doc = _doc()
+    doc['miniatura_ms'] = 1000
+    e.guardar('acme', ed['id'], doc, 0)
+    assert e.cargar('acme', ed['id'])['estado'] == 'borrador'
+    e.apuntar_final('acme', fid, v['id'])  # render viejo terminó después del autoguardado
+    assert e.cargar('acme', ed['id'])['estado'] == 'borrador'
+    nueva = e.versionar('acme', ed['id'], 'producir')
+    e.apuntar_final('acme', fid, nueva['id'])
+    assert e.cargar('acme', ed['id'])['estado'] == 'producida'

@@ -1304,3 +1304,14 @@ test("un borrador de 7 pistas con un título y un sticker acepta otro emoji y ot
   assert.ok(d.pistas.length > ocho, `de ${ocho} a ${d.pistas.length} pistas`);
   assert.ok(d.pistas.length <= op.MAX_PISTAS);
 });
+
+test("PND-128 precio sin marca es blanco sobre negro translúcido", () => {
+  const d = docBase();
+  d.marca = { color: null };
+  const r = op.agregarTexto(d, 500, "precio", {}, {});
+  const c = clipDe(r.doc, r.seleccion);
+  assert.equal(c.estilo.color, "#FFFFFF");
+  assert.equal(c.estilo.fondo.color, "#000000");
+  assert.equal(c.estilo.fondo.opacidad, 0.6);
+  assert.equal(d.marca.color, null);
+});

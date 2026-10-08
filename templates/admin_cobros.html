@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}{{ _('Cobros y saldo') }}{% endblock %}
+{% block content %}
+{# /admin/cobros (cobros.admin_cobros, spec 2026-10-08 §10). Contexto: filas
+   (cobros.vista.resumen_admin + nombre; montos en milésimas), margen_global,
+   eventos (vista.ultimos_eventos, solo firmados, con resultado_texto),
+   webhook_callado, avisos_bold {sin_llaves, pruebas_abiertas, pruebas_fuera_de_local} (nunca un valor
+   de llave). Los *_texto y *_campo ya vienen con el separador decimal de quien mira. Todo POST va al Blueprint
+   cobros y pasa por la barrera CSRF. #}
+<section class="hero aparece">
+  <div class="hero-texto">
+    <span class="eyebrow">{{ _('Panel de administrador') }}</span>
+    <h1>{{ _('Cobros y saldo.') }}</h1>
+    <p class="hero-sub">{{ _('Un proyecto que cobra paga cada pieza con su saldo prepagado: costo del proveedor × margen. Un proyecto que no cobra sigue igual que siempre.') }}</p>
+    <p class="hero-sub"><a href="{{ url_for('panel') }}">{{ _('← Volver al panel') }}</a></p>
+  </div>
+</section>
+
+<div id="admin-cobros">
+{% if avisos_bold.pruebas_abiertas %}
+<div class="flash error" id="aviso-bold-pruebas">
+  {{ _('<strong>BOLD_PRUEBAS=1 sin BOLD_LLAVE_SECRETA.</strong> El webhook acepta la firma de pruebas de Bold: cualquiera que lo sepa puede acreditar saldo. Úsalo solo en local; en el servidor pon la llave secreta y quita BOLD_PRUEBAS.') }}
+</div>
+{% endif %}
+{% if avisos_bold.pruebas_fuera_de_local %}
+<div class="flash error" id="aviso-bold-pruebas-servidor">
+  {{ _('<strong>BOLD_PRUEBAS=1 en un servidor que no es local.</strong> Aquí no vale: el webhook no acepta la firma de pruebas y no se crean links de pago, así que las recargas en línea están apagadas. Quita BOLD_PRUEBAS del <code>.env</code> del servidor y usa las llaves de producción.') }}
+</div>
+{% endif %}
+{% if avisos_bold.sin_llaves %}
+<div class="flash warn" id="aviso-bold-llaves">
+  {{ _('<strong>Faltan llaves de Bold.</strong> Sin BOLD_LLAVE_IDENTIDAD y BOLD_LLAVE_SECRETA en el <code>.env</code> del servidor no hay recargas en línea: los proyectos solo pueden recargar con una recarga manual desde aquí.') }}
+</div>
+{% endif %}
+{% if webhook_callado %}
+<div class="flash warn" id="aviso-webhook">
+  {{ _('Hay recargas de Bold pendientes y no llegó ningún evento de Bold en 7 días. Revisa la URL del webhook en el panel de Bold.') }}
+</div>
+{% endif %}
+
+<section class="admin-bloque aparece" id="cobros-margen">
+  <div class="admin-cabecera">
+    <h2>{{ _('Margen global') }}</h2>
+    <span class="vacio">{{ _('el que usa todo proyecto sin margen propio; no cambia lo ya cobrado') }}</span>
+  </div>
+  <form method="post" action="{{ url_for('cobros.admin_margen') }}" class="cobros-admin-linea">
+    <label>{{ _('Margen (de %(min)s a %(max)s)', min=margen_min_texto, max=margen_max_texto) }}
+      <input type="text" inputmode="decimal" name="margen" value="{{ margen_global_campo }}" required></label>
+    <button type="submit" class="btn-generar">{{ _('Guardar margen') }}</button>
+  </form>
+</section>
+
+<section class="admin-bloque aparece" id="cobros-proyectos">
+  <div class="admin-cabecera">
+    <h2>{{ _('Proyectos') }}</h2>
+    <span class="vacio">{{ _('cifras del mes por la fecha del gasto; ganancia = cobrado − costo de lo que se intentó cobrar') }}</span>
+  </div>
+  {% if filas %}
+  <div class="admin-scroll">
+    <table class="tabla-admin cobros-admin-tabla">
+      <thead>
+        <tr>
+          <th>{{ _('Proyecto') }}</th><th>{{ _('Cobra') }}</th><th>{{ _('Margen propio') }}</th><th>{{ _('Umbral de aviso') }}</th>
+          <th>{{ _('Saldo') }}</th><th>{{ _('Disponible') }}</th><th>{{ _('Recargado del mes') }}</th>
+          <th>{{ _('Cobrado del mes') }}</th><th>{{ _('Costo del mes') }}</th><th>{{ _('Ganancia del mes') }}</th>
+          <th>{{ _('Recargar') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in filas %}
+        <tr id="fila-{{ f.cliente }}">
+          <td><strong>{{ f.nombre }}</strong>{% if f.nombre != f.cliente %} <code>{{ f.cliente }}</code>{% endif %}</td>
+          <td>
+            <form method="post" action="{{ url_for('cobros.admin_cuenta', cliente=f.cliente) }}" class="cobros-admin-celda">
+              <input type="hidden" name="cobrar" value="{{ '0' if f.cobrar else '1' }}">
+              <span class="tag-estado {{ 'tag-en-uso' if f.cobrar else 'tag-descartado' }}">{{ _('Cobra') if f.cobrar else _('No cobra') }}</span>
+              <button type="submit" class="btn-sm" aria-pressed="{{ 'true' if f.cobrar else 'false' }}">{{ _('Apagar') if f.cobrar else _('Prender') }}</button>
+            </form>
+          </td>
+          <td>
+            <form id="cuenta-{{ f.cliente }}" method="post" action="{{ url_for('cobros.admin_cuenta', cliente=f.cliente) }}"></form>
+            <input type="text" inputmode="decimal" name="margen" form="cuenta-{{ f.cliente }}" class="cobros-admin-num"
+                   value="{{ f.margen_propio_texto }}"
+                   placeholder="{{ _('global (%(margen)s)', margen=margen_global_texto) }}" aria-label="{{ _('Margen propio') }}">
+          </td>
+          <td>
+            <div class="cobros-admin-celda">
+              <input type="text" inputmode="decimal" name="umbral" form="cuenta-{{ f.cliente }}" class="cobros-admin-num"
+                     value="{{ f.umbral_texto }}" aria-label="{{ _('Umbral de aviso en dólares') }}">
+              <button type="submit" form="cuenta-{{ f.cliente }}" class="btn-sm">{{ _('Guardar') }}</button>
+            </div>
+          </td>
+          <td class="num">{{ (f.saldo / 1000) | usd }}{% if f.cobrar and f.disponible <= 0 %}<br><span class="tag-estado tag-descartado">{{ _('sin saldo') }}</span>{% endif %}</td>
+          <td class="num">{{ (f.disponible / 1000) | usd }}</td>
+          <td class="num">{{ (f.recargado_mes / 1000) | usd }}</td>
+          <td class="num">{{ (f.cobrado_mes / 1000) | usd }}</td>
+          <td class="num">{{ (f.costo_mes / 1000) | usd }}</td>
+          <td class="num{{ ' cobros-admin-perdida' if f.ganancia_mes < 0 else '' }}">{% if f.ganancia_mes < 0 %}▼ {% endif %}{{ (f.ganancia_mes / 1000) | usd }}</td>
+          <td>
+            <details class="cobros-admin-recarga">
+              <summary>{{ _('Recarga manual o ajuste') }}</summary>
+              <form method="post" action="{{ url_for('cobros.admin_recarga', cliente=f.cliente) }}" class="agencia-form">
+                {% if not f.cobrar %}<p class="vacio">{{ _('Este proyecto todavía no cobra: el saldo queda guardado para cuando prendas «Cobrar».') }}</p>{% endif %}
+                <label>{{ _('Monto en US$ (negativo solo en un ajuste)') }}
+                  <input type="text" inputmode="decimal" name="monto" required></label>
+                <label>{{ _('Tipo') }}
+                  <select name="tipo">
+                    <option value="recarga">{{ _('Recarga (entró plata)') }}</option>
+                    <option value="ajuste">{{ _('Ajuste (corrección, con nota)') }}</option>
+                  </select></label>
+                <label>{{ _('Nota (la ve el cliente en sus movimientos)') }}
+                  <input type="text" name="nota" maxlength="300"></label>
+                <button type="submit" class="btn-generar">{{ _('Anotar') }}</button>
+              </form>
+            </details>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="estado-vacio">{{ _('Todavía no hay proyectos.') }}</p>
+  {% endif %}
+</section>
+
+<section class="admin-bloque aparece" id="cobros-eventos">
+  <div class="admin-cabecera">
+    <h2>{{ _('Últimos eventos de Bold') }}</h2>
+    <span class="vacio">{{ _('solo los que llegaron con firma válida') }}</span>
+  </div>
+  {% if eventos %}
+  <div class="admin-scroll">
+    <table class="tabla-admin">
+      <thead><tr><th>{{ _('Hora') }}</th><th>{{ _('Tipo') }}</th><th>{{ _('Referencia') }}</th><th>{{ _('Resultado') }}</th></tr></thead>
+      <tbody>
+        {% for e in eventos %}
+        <tr><td>{{ e.recibido_en | replace('T', ' ') }}</td><td><code>{{ e.tipo }}</code></td><td><code>{{ e.referencia or '—' }}</code></td><td>{{ e.resultado_texto }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="estado-vacio">{{ _('Todavía no llegó ningún evento de Bold.') }}</p>
+  {% endif %}
+</section>
+</div>
+{% endblock %}

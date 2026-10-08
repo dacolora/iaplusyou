@@ -35,10 +35,12 @@ from datetime import date
 from flask import Blueprint, abort, flash, redirect, render_template, request, session, url_for
 from flask_babel import gettext, ngettext
 
+import gastos
 import idiomas
 import proyectos
 import triple_whale
 import triple_whale_tiendas
+from cobros import SaldoInsuficiente, libro
 from doctrina import aprendizajes as doctrina_aprendizajes
 from tareas import triple_whale as tareas_tw
 from triple_whale import analisis, datos, evaluacion, mejorar, panel, puente
@@ -206,14 +208,19 @@ def _pedir_analisis(cliente, alc, a):
     # 30) todavía muestra el botón (revisión final, A1).
     if panel.elegir_analisis(a, filas, alc)["fresco"]:
         return False, gettext("Ese anuncio ya tiene un análisis con estos datos.")
-    if any(f["estado"] in panel.EN_CURSO for f in filas):
-        with idiomas.en_idioma(idiomas.de_proyecto(cliente)):        # lo que se guarda, en el idioma del proyecto
-            interrumpido = gettext("Se interrumpió antes de terminar.")
-        datos.cerrar_colgados(cliente, a["canal"], a["ad_id"], interrumpido)
     ev = alc["ev"]
     claves = [(a["canal"], a["ad_id"])] + [(b["canal"], b["ad_id"]) for b in ev["anuncios"]
                                            if b["veredicto"] == "ganador" and b["canal"] == a["canal"]]
     creativos = datos.creativos(cliente, claves)
+    # Cobros (spec 2026-10-08-cobros §5): sin saldo no se guarda nada ni se encola; SaldoInsuficiente sube al
+    # manejador común (402 al fetch de la tarjeta, aviso con «Recargar saldo» al formulario). `usd` es el COSTO, el
+    # mismo del botón (`panel.precio_analisis`); la reserva la hace el encolado.
+    usd = panel.precio_analisis(creativos.get(clave))["usd"]
+    libro.exigir(cliente, usd)
+    if any(f["estado"] in panel.EN_CURSO for f in filas):
+        with idiomas.en_idioma(idiomas.de_proyecto(cliente)):        # lo que se guarda, en el idioma del proyecto
+            interrumpido = gettext("Se interrumpió antes de terminar.")
+        datos.cerrar_colgados(cliente, a["canal"], a["ad_id"], interrumpido)
     canal_info = next((c for c in ev["cuenta"]["canales"] if c["canal"] == a["canal"]), None)
     cuenta = {"benchmarks": ev.get("benchmarks_canal", {}).get(a["canal"]) or ev["benchmarks"],
               "meta_roas": ev["meta_roas"],
@@ -227,8 +234,8 @@ def _pedir_analisis(cliente, alc, a):
     aid = datos.crear_analisis(cliente, alc["tienda_id"], a["canal"], a["ad_id"], alc["desde"], alc["hasta"],
                                alc["config"]["moneda"], foto, pedido_por=session.get("usuario"))
     try:
-        encolada = tareas_tw.encolar_analisis(cliente, aid, a["canal"], a["ad_id"])
-    except Exception:
+        encolada = tareas_tw.encolar_analisis(cliente, aid, a["canal"], a["ad_id"], costo_estimado=usd)
+    except Exception:                             # SaldoInsuficiente incluida: se borra la fila y sigue su camino
         datos.borrar_analisis(cliente, aid)       # sin tarea no hay quien la termine: una fila en_cola bloquearía el anuncio
         raise
     if not encolada:
@@ -278,6 +285,14 @@ def _claves_confirmadas(valores, tope=None):
     return claves
 
 
+def _avisos_lote(n, fallos):
+    if n:
+        flash(ngettext("Analizando %(num)s anuncio con IA…", "Analizando %(num)s anuncios con IA…", n), "ok")
+    if fallos:
+        flash(ngettext("No se pudo encolar %(num)s anuncio: vuelve a intentarlo.",
+                       "No se pudieron encolar %(num)s anuncios: vuelve a intentarlo.", fallos), "warn")
+
+
 @bp.post("/analizar-lote")
 def analizar_lote(cliente):
     alc = _alcance_peticion(cliente, request.form)
@@ -296,14 +311,15 @@ def analizar_lote(cliente):
         try:
             if _pedir_analisis(cliente, alc, a)[0]:
                 n += 1
+        except SaldoInsuficiente:
+            # Sin saldo para el siguiente (cobros §5.4): los ya encolados siguen con su reserva, los demás no se piden y
+            # el manejador común dice el resto con «Recargar saldo».
+            _avisos_lote(n, fallos)
+            raise
         except Exception as e:  # noqa: BLE001 — una que falla no tumba las demás (cada una es su propia tarea pagada)
             fallos += 1
             log.warning("lote de análisis: %s/%s no se pudo encolar (%s)", canal, ad_id, type(e).__name__)
-    if n:
-        flash(ngettext("Analizando %(num)s anuncio con IA…", "Analizando %(num)s anuncios con IA…", n), "ok")
-    if fallos:
-        flash(ngettext("No se pudo encolar %(num)s anuncio: vuelve a intentarlo.",
-                       "No se pudieron encolar %(num)s anuncios: vuelve a intentarlo.", fallos), "warn")
+    _avisos_lote(n, fallos)
     if not n and not fallos:
         flash(gettext("No quedó ningún anuncio por analizar."), "warn")
     return _volver(cliente)
@@ -443,13 +459,22 @@ def evaluar(cliente):
     if not muestra:
         flash(gettext("Todavía no hay anuncios con datos suficientes para evaluar con IA."), "error")
         return _volver(cliente)
+    # Cobros (spec 2026-10-08 §5): sin saldo no se crea la evaluación; el
+    # manejador común responde. La reserva la hace el encolado.
+    usd = gastos.estimar("evaluacion_tw", n=len(muestra))["usd"]
+    libro.exigir(cliente, usd)
     eid = datos.crear_evaluacion(cliente, desde, hasta, config["moneda"], muestra,
                                  pedido_por=session.get("usuario"))
     datos.actualizar_evaluacion(eid, extra={"modelo": config["modelo_atribucion"],
                                             "ventana": config["ventana_atribucion"], "canal": canal,
                                             "tienda_id": tienda_id, "pais": tienda["pais"] if tienda else None,
                                             "benchmarks": ev["benchmarks"], "meta_roas": ev["meta_roas"]})
-    if not tareas_tw.encolar_evaluacion(cliente, eid):
+    try:
+        encolada = tareas_tw.encolar_evaluacion(cliente, eid, costo_estimado=usd)
+    except SaldoInsuficiente:
+        datos.borrar_evaluacion(cliente, eid)
+        raise
+    if not encolada:
         datos.borrar_evaluacion(cliente, eid)
         flash(gettext("Ya hay una evaluación con IA en curso."), "warn")
         return _volver(cliente)

@@ -59,6 +59,6 @@
     {% if m.visual == 'fotogramas' %}{{ ngettext('Claude vio %(num)s fotograma', 'Claude vio %(num)s fotogramas', m.fotogramas or 0) }}{% elif m.visual == 'imagen' %}{{ _('Claude vio la imagen') }}{% else %}{{ _('Claude no vio el anuncio: juzgó por los números') }}{% endif %}
     {% if m.transcripcion %} · {{ _('la voz') }}{% endif %}{% if m.get('copy') %} · {{ _('el texto') }}{% endif %}
     · {{ _('datos del %(desde)s al %(hasta)s', desde=fila.desde, hasta=fila.hasta) }}{% if alcance_nombre %} · {{ alcance_nombre }}{% endif %}
-    · {{ _('analizado el %(fecha)s', fecha=(fila.creado_en or '')[:10]) }} · {{ fila.usd | usd }}
+    · {{ _('analizado el %(fecha)s', fecha=(fila.creado_en or '')[:10]) }} · {{ (fila.usd | cobrado('tw_anuncio:' ~ fila.id)) | usd }}
   </small></p>
 </div>

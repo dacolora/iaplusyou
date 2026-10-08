@@ -148,14 +148,18 @@ def actualizar(cliente, cf_id, **campos):
 
 
 def guardar_guion_base(cliente, cf_id, guion):
-    """Guarda el guion base (capa 0 de Final Edition) en `concepto.guion_base`.
-    Devuelve False si la sesión no existe."""
+    """Guarda el guion y su fecha de cambio bajo el candado de escritura."""
+    co = db.concepto
+    condicion = sa.and_(co.c.cliente == cliente, co.c.legado_id == cf_id)
     with db.conectar() as con:
-        f = _ids(con, cliente, cf_id)
-        if not f:
+        if not con.execute(co.update().where(condicion).values(extra=co.c.extra)).rowcount:
             return False
-        con.execute(db.concepto.update().where(db.concepto.c.id == f[0])
-                    .values(actualizado_en=db.ahora(), guion_base=guion))
+        anterior = con.execute(sa.select(co.c.guion_base).where(condicion)).scalar()
+        if anterior != guion:
+            ahora = db.ahora()
+            con.execute(co.update().where(condicion).values(
+                actualizado_en=ahora, guion_base=guion,
+                extra=sa.func.json_set(sa.func.coalesce(co.c.extra, "{}"), "$.guion_modificado_en", ahora)))
     return True
 
 

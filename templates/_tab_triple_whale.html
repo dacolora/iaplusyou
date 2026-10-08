@@ -221,7 +221,9 @@
       botones.forEach(function (b) { b.disabled = true; });
       fetch(asincrono.action, { method: 'POST', body: new FormData(asincrono),
                                 headers: { 'Accept': 'application/json', 'X-Requested-With': 'fetch' } })
-        .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+        // 402 = sin saldo: una respuesta conocida (no se guardó ni se encoló nada). static/cobros.js ya pinta el aviso
+        // con «Recargar saldo»; aquí solo vuelven los botones.
+        .then(function (r) { return (r.ok || r.status === 402) ? r.json() : Promise.reject(r.status); })
         .then(function (d) {
           var nueva = d && d.html ? elementoDe(d.html, 'article.tw-tarjeta') : null;
           if (nueva && tarjeta) { tarjeta.replaceWith(nueva); sondear(nueva); }

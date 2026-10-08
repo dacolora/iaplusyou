@@ -51,8 +51,9 @@ Cada una apunta a la skill que trae el detalle y el incidente que la originó.
    `estimate_*` del proveedor; sin precio conocido dice «precio no disponible», nunca uno inventado), corre como
    tarea con `max_intentos=1` y anota lo que de verdad cobró con
    `gastos.registrar_seguro(cliente, tipo, usd, referencia)`: referencia con el id de la tarea, también cuando falla
-   después de pagar. Excepción: en Experimentos el clic de «Lanzar a Meta», con el gasto diario a la vista, ES la
-   aprobación; lanzar crea y activa sin un segundo «Activar» (pedido de Daniel 2026-10-08). → `plataforma`, `experimentos`
+   después de pagar. El cobro al cliente de un proyecto con saldo sale solo de ahí (`gastos.registrar`), nunca de otro
+   lado. Excepción: en Experimentos el clic de «Lanzar a Meta», con el gasto diario a la vista, ES la aprobación;
+   lanzar crea y activa sin un segundo «Activar» (pedido de Daniel 2026-10-08). → `plataforma`, `cobros`, `experimentos`
 2. **El prompt de la persona va tal cual.** En Crear lo que escribe llega al modelo sin agregarle marca, «EVITAR»,
    reglas ni logos (`flowplus_prompt.tal_cual`). Las ayudas con IA (director, «Armar prompt», recetas) son
    opcionales y nunca el camino obligado (incidentes 2026-09-21 y 2026-09-26). Video e imagen nuevos van por
@@ -104,6 +105,7 @@ incidente. Si la tarea cruza dos áreas, carga las dos.
 | Meta (propia/agencia), publicador, uploaders, publicación orgánica | [`meta-y-publicacion`](.claude/skills/meta-y-publicacion/SKILL.md) |
 | Catálogo: productos y colores, conectores de tiendas, importador, ficha | [`catalogo`](.claude/skills/catalogo/SKILL.md) |
 | Triple Whale: sincronización, pestaña, evaluación con IA, atribución | [`triple-whale`](.claude/skills/triple-whale/SKILL.md) |
+| el saldo prepagado, el margen, el interruptor «Cobrar», las recargas, Bold, `cobros/`, el precio que ve un cliente | [`cobros`](.claude/skills/cobros/SKILL.md) |
 | Alertas: la pestaña, las fuentes, los descartes, la burbuja del sidebar, las tarjetas de Puesta a punto (`llaves.py`) | [`alertas`](.claude/skills/alertas/SKILL.md) |
 | una ruta nueva, una subida, una URL ajena, el login, las cuentas | [`seguridad`](.claude/skills/seguridad/SKILL.md) |
 | una pantalla, tarjeta o lista, `style.css`, `base.html`, el celular, la velocidad de la página | [`ui`](.claude/skills/ui/SKILL.md) |

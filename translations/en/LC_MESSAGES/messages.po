@@ -161,6 +161,10 @@ msgstr[0] "%(capas)s charged"
 msgstr[1] "%(capas)s charged"
 
 #, python-format
+msgid "%(cliente)s recargó %(monto)s (%(medio)s)."
+msgstr "%(cliente)s topped up %(monto)s (%(medio)s)."
+
+#, python-format
 msgid "%(color)s: sin fotos en la tienda; revisa el catálogo."
 msgstr "%(color)s: no photos in the store; check the catalog."
 
@@ -387,6 +391,14 @@ msgstr "%(modelo)s · %(n)s reference(s)"
 #, python-format
 msgid "%(modelo)s · %(n)s referencia(s) · falló al descargar; el modelo ya cobró"
 msgstr "%(modelo)s · %(n)s reference(s) · download failed; the model already charged"
+
+#, python-format
+msgid "%(monto)s apartados para lo que se está generando"
+msgstr "%(monto)s set aside for what is being generated"
+
+#, python-format
+msgid "%(monto)s con Bold"
+msgstr "%(monto)s with Bold"
 
 #, python-format
 msgid "%(monto)s generación"
@@ -721,6 +733,10 @@ msgid "%(n)s propuesta(s) pendiente(s)"
 msgstr "%(n)s proposal(s) pending"
 
 #, python-format
+msgid "%(n)s recargas revisadas"
+msgstr "%(n)s top-ups checked"
+
+#, python-format
 msgid "%(n)s referencia(s) agregada(s)."
 msgstr "%(n)s reference(s) added."
 
@@ -1025,6 +1041,12 @@ msgstr[0] "%(num)d call from the Atria plan"
 msgstr[1] "%(num)d calls from the Atria plan"
 
 #, python-format
+msgid "%(num)d minuto"
+msgid_plural "%(num)d minutos"
+msgstr[0] "%(num)d minute"
+msgstr[1] "%(num)d minutes"
+
+#, python-format
 msgid "%(num)d petición"
 msgid_plural "%(num)d peticiones"
 msgstr[0] "%(num)d request"
@@ -1135,6 +1157,18 @@ msgid "%(num)s bloquea"
 msgid_plural "%(num)s bloquean"
 msgstr[0] "%(num)s blocking"
 msgstr[1] "%(num)s blocking"
+
+#, python-format
+msgid "%(num)s cobro"
+msgid_plural "%(num)s cobros"
+msgstr[0] "%(num)s charge"
+msgstr[1] "%(num)s charges"
+
+#, python-format
+msgid "%(num)s cobro →"
+msgid_plural "%(num)s cobros →"
+msgstr[0] "%(num)s charge →"
+msgstr[1] "%(num)s charges →"
 
 #, python-format
 msgid "%(num)s cobro(s) a proveedores"
@@ -1363,6 +1397,10 @@ msgid "%(precio)s aprox."
 msgstr "%(precio)s approx."
 
 #, python-format
+msgid "%(precio)s solo la primera vez por estilo y duración (después sale de la caché)"
+msgstr "%(precio)s only the first time per style and duration (after that it comes from the cache)"
+
+#, python-format
 msgid "%(presupuesto)s %(moneda)s/día"
 msgstr "%(presupuesto)s %(moneda)s/day"
 
@@ -1383,12 +1421,24 @@ msgid "%(proveedor)s, el proveedor de videos e imágenes, se quedó sin saldo: n
 msgstr "%(proveedor)s, the video and image provider, ran out of credit: nothing was generated or charged. Creatv has been notified; try again once it is topped up."
 
 #, python-format
+msgid "%(proyecto)s ahora cobra lo que genera."
+msgstr "%(proyecto)s now pays for what it generates."
+
+#, python-format
 msgid "%(proyecto)s ahora lo gestiona Creatv en Meta: %(cuenta)s · %(pagina)s%(ig)s."
 msgstr "Creatv now manages %(proyecto)s on Meta: %(cuenta)s · %(pagina)s%(ig)s."
 
 #, python-format
+msgid "%(proyecto)s dejó de cobrar: genera sin tocar el saldo."
+msgstr "%(proyecto)s no longer charges usage: it generates without touching the balance."
+
+#, python-format
 msgid "%(proyecto)s no estaba en modo agencia."
 msgstr "%(proyecto)s wasn't in agency mode."
+
+#, python-format
+msgid "%(proyecto)s todavía no cobra: el saldo queda guardado para cuando prendas «Cobrar»."
+msgstr "%(proyecto)s does not charge usage yet: the balance stays saved for when you turn on “Charge usage”."
 
 #, python-format
 msgid "%(proyecto)s volvió a modo propia: si tenía su propia conexión se restauró; si no, tendrá que registrar su app y conectar con Meta."
@@ -1711,6 +1761,10 @@ msgid "; %(motivo)s"
 msgstr "; %(motivo)s"
 
 #, python-format
+msgid "<a href=\"%(url)s\">Cobros y saldo →</a> margen, qué proyectos cobran, recargas manuales y eventos de Bold."
+msgstr "<a href=\"%(url)s\">Charges and balance →</a> markup, which projects charge usage, manual top-ups and Bold events."
+
+#, python-format
 msgid "<a href=\"%(url)s\">Mapa del código →</a> cómo está construida la plataforma, archivo por archivo."
 msgstr "<a href=\"%(url)s\">Code map →</a> how the platform is built, file by file."
 
@@ -1732,6 +1786,15 @@ msgstr "<em>Generate new token</em>: choose Creatv's app, expiration <strong>nev
 
 msgid "<strong>Arriba del panel, «Modo de la app»: pásala de Desarrollo a Live.</strong> Sin esto Meta rechaza cada anuncio (subcódigo 1885183). En Live sin App Review solo pueden usar la app las personas con rol en ella: conecta con el Facebook que la administra."
 msgstr "<strong>At the top of the panel, “App mode”: switch it from Development to Live.</strong> Without this Meta rejects every ad (subcode 1885183). In Live without App Review only people with a role on the app can use it: connect with the Facebook that administers it."
+
+msgid "<strong>BOLD_PRUEBAS=1 en un servidor que no es local.</strong> Aquí no vale: el webhook no acepta la firma de pruebas y no se crean links de pago, así que las recargas en línea están apagadas. Quita BOLD_PRUEBAS del <code>.env</code> del servidor y usa las llaves de producción."
+msgstr "<strong>BOLD_PRUEBAS=1 on a server that is not local.</strong> It does not apply here: the webhook does not accept the test signature and no payment links are created, so online top-ups are off. Remove BOLD_PRUEBAS from the server’s <code>.env</code> and use the production keys."
+
+msgid "<strong>BOLD_PRUEBAS=1 sin BOLD_LLAVE_SECRETA.</strong> El webhook acepta la firma de pruebas de Bold: cualquiera que lo sepa puede acreditar saldo. Úsalo solo en local; en el servidor pon la llave secreta y quita BOLD_PRUEBAS."
+msgstr "<strong>BOLD_PRUEBAS=1 without BOLD_LLAVE_SECRETA.</strong> The webhook accepts Bold’s test signature: anyone who knows it can add balance. Use it only locally; on the server set the secret key and remove BOLD_PRUEBAS."
+
+msgid "<strong>Faltan llaves de Bold.</strong> Sin BOLD_LLAVE_IDENTIDAD y BOLD_LLAVE_SECRETA en el <code>.env</code> del servidor no hay recargas en línea: los proyectos solo pueden recargar con una recarga manual desde aquí."
+msgstr "<strong>Bold keys are missing.</strong> Without BOLD_LLAVE_IDENTIDAD and BOLD_LLAVE_SECRETA in the server’s <code>.env</code> there are no online top-ups: projects can only be topped up manually from here."
 
 msgid ""
 "<strong>Límite real confirmado (2 sep 2026, foto real de 3 personas — una\n"
@@ -1870,6 +1933,15 @@ msgstr "Open campaign %(n)s"
 msgid "Aburrimiento"
 msgstr "Boredom"
 
+msgid "Acceso desbloqueado."
+msgstr "Login unlocked."
+
+msgid "Accesos bloqueados"
+msgstr "Blocked logins"
+
+msgid "Accesos bloqueados →"
+msgstr "Blocked logins →"
+
 msgid "Acciones"
 msgstr "Actions"
 
@@ -1891,6 +1963,9 @@ msgstr "Zoom in"
 
 msgid "Acercar el cuadro"
 msgstr "Zoom in on the frame"
+
+msgid "Acreditada"
+msgstr "Credited"
 
 #, python-format
 msgid "Activadas %(n)s pieza(s)."
@@ -2096,6 +2171,16 @@ msgstr "Adjust the total"
 msgid "Ajustar reparto"
 msgstr "Adjust the split"
 
+msgid "Ajuste"
+msgstr "Adjustment"
+
+msgid "Ajuste (corrección, con nota)"
+msgstr "Adjustment (correction, with a note)"
+
+#, python-format
+msgid "Ajuste de %(monto)s anotado en %(proyecto)s."
+msgstr "Adjustment of %(monto)s recorded for %(proyecto)s."
+
 msgid "Ajustes"
 msgstr "Settings"
 
@@ -2154,6 +2239,10 @@ msgstr "Alert restored."
 
 msgid "Alertas"
 msgstr "Alerts"
+
+#, python-format
+msgid "Algo de «%(concepto)s» no llegó. No descontamos %(monto)s de tu saldo."
+msgstr "Something in «%(concepto)s» was not delivered. We did not deduct %(monto)s from your balance."
 
 #, python-format
 msgid "Algo falló en el servidor (error %(status)s). Intenta de nuevo en un momento."
@@ -2254,6 +2343,9 @@ msgstr "Animate with"
 msgid "Anota el servidor y el puerto (Gmail: smtp.gmail.com y 587, STARTTLS)."
 msgstr "Note the server and the port (Gmail: smtp.gmail.com and 587, STARTTLS)."
 
+msgid "Anotar"
+msgstr "Record"
+
 msgid "Antebrazo (codo→muñeca)"
 msgstr "Forearm (elbow→wrist)"
 
@@ -2293,6 +2385,9 @@ msgstr "Anthropic (scripts and prompts)"
 
 msgid "Antigüedad desconocida"
 msgstr "Unknown age"
+
+msgid "Anulada"
+msgstr "Voided"
 
 msgid "Anuncio"
 msgstr "Ad"
@@ -2349,6 +2444,9 @@ msgstr "Standalone ads (from before)"
 #, python-format
 msgid "Análisis listo: %(frase)s"
 msgstr "Analysis ready: %(frase)s"
+
+msgid "Apagar"
+msgstr "Turn off"
 
 msgid "Apartados de Configuración"
 msgstr "Settings sections"
@@ -2456,6 +2554,9 @@ msgstr "Learning saved: the next ideas and scripts will take it into account."
 
 msgid "Aprendizajes del proyecto"
 msgstr "Project learnings"
+
+msgid "Aprobada"
+msgstr "Approved"
 
 #, python-format
 msgid "Aprobada «%(titulo)s»"
@@ -2839,6 +2940,41 @@ msgstr "White"
 
 msgid "Bloque del video (se repite en cada clip)"
 msgstr "Video block (repeats in every clip)"
+
+msgid "Bold anuló este pago y lo descontamos de tu saldo."
+msgstr "Bold voided this payment and we deducted it from your balance."
+
+#, python-format
+msgid "Bold anuló la recarga %(ref)s de %(cliente)s: descontamos %(monto)s de su saldo."
+msgstr "Bold voided top-up %(ref)s for %(cliente)s: we deducted %(monto)s from its balance."
+
+#, python-format
+msgid "Bold anuló una recarga de %(cliente)s"
+msgstr "Bold voided a top-up for %(cliente)s"
+
+#, python-format
+msgid "Bold no aceptó el pedido (HTTP %(codigo)s)"
+msgstr "Bold did not accept the request (HTTP %(codigo)s)"
+
+msgid "Bold no devolvió un link de pago válido"
+msgstr "Bold did not return a valid payment link"
+
+#, python-format
+msgid "Bold no pudo abrir el pago: %(motivo)s. Intenta de nuevo en un rato."
+msgstr "Bold could not open the payment: %(motivo)s. Try again in a while."
+
+#, python-format
+msgid "Bold no respondió el estado (HTTP %(codigo)s)"
+msgstr "Bold did not return the status (HTTP %(codigo)s)"
+
+msgid "Bold rechazó el pago. No se te cobró nada."
+msgstr "Bold declined the payment. You were not charged."
+
+msgid "Bold respondió algo que no es JSON"
+msgstr "Bold replied with something that is not JSON"
+
+msgid "Bold todavía no confirma el pago; te avisaremos cuando llegue. Puedes cerrar esta página."
+msgstr "Bold has not confirmed the payment yet; we will let you know when it arrives. You can close this page."
 
 msgid "Bolso o accesorio que se carga"
 msgstr "Bag or accessory that's carried"
@@ -3321,6 +3457,9 @@ msgstr "Loading Meta details…"
 msgid "Cargando el prompt…"
 msgstr "Loading the prompt…"
 
+msgid "Cargando el saldo…"
+msgstr "Loading the balance…"
+
 msgid "Cargando el sonido…"
 msgstr "Loading the sound…"
 
@@ -3669,6 +3808,24 @@ msgstr "Cloudflare R2 (storage)"
 msgid "Clásicas"
 msgstr "Classic"
 
+msgid "Cobra"
+msgstr "Charges usage"
+
+msgid "Cobrado"
+msgstr "Charged"
+
+msgid "Cobrado del mes"
+msgstr "Charged this month"
+
+msgid "Cobrado total"
+msgstr "Total charged"
+
+msgid "Cobros y saldo"
+msgstr "Charges and balance"
+
+msgid "Cobros y saldo."
+msgstr "Charges and balance."
+
 msgid "Colombia"
 msgstr "Colombia"
 
@@ -3864,6 +4021,9 @@ msgstr "With a store, experiments attribute real sales. Connect it in Settings �
 
 msgid "Con videos de referencia (Wan 3.0), sus segundos más los del resultado no pueden pasar de 30."
 msgstr "With reference videos (Wan 3.0), their seconds plus the result's can't add up to more than 30."
+
+msgid "Concepto"
+msgstr "Item"
 
 msgid "Conecta Meta arriba para probar"
 msgstr "Connect Meta above to test"
@@ -4241,6 +4401,9 @@ msgstr "Cuts"
 
 msgid "Costo"
 msgstr "Cost"
+
+msgid "Costo del mes"
+msgstr "Cost this month"
 
 #, python-format
 msgid "Costo estimado: %(precio)s"
@@ -4676,6 +4839,13 @@ msgstr "Derive and rescue aren't available in app install experiments."
 msgid "Desarchivar"
 msgstr "Unarchive"
 
+msgid "Desbloquear"
+msgstr "Unlock"
+
+#, python-format
+msgid "Desbloqueo de %(clave)s por %(usuario)s"
+msgstr "%(clave)s unlocked by %(usuario)s"
+
 msgid "Descanso, viajes y tiempo en casa; compras para el hogar."
 msgstr "Rest, travel and time at home; purchases for the home."
 
@@ -4899,6 +5069,10 @@ msgstr "Stopped: %(motivo)s. Open it in the study to resume it or research again
 
 msgid "Detergente en cápsulas · Suecia"
 msgstr "Detergent pods · Sweden"
+
+#, python-format
+msgid "Devuelto: %(concepto)s"
+msgstr "Refunded: %(concepto)s"
 
 msgid "Di cuántas personas salen, y que no hay nadie más."
 msgstr "Say how many people appear, and that there is nobody else."
@@ -5492,6 +5666,10 @@ msgstr "The hook is over %(max)s words: shorten it."
 msgid "El gancho tiene %(n)s palabras: con %(max)s o menos se lee en tres segundos."
 msgstr "The hook has %(n)s words: with %(max)s or fewer it reads in three seconds."
 
+#, python-format
+msgid "El gasto %(ref)s de %(cliente)s (%(usd)s) quedó sin su cobro al cliente."
+msgstr "Spend %(ref)s for %(cliente)s (%(usd)s) was recorded without its charge to the client."
+
 msgid "El guion"
 msgstr "The script"
 
@@ -5533,6 +5711,9 @@ msgstr "A Meta page id is digits only."
 msgid "El id del Business está en <em>Configuración del negocio › Información del negocio</em>."
 msgstr "The Business id is in <em>Business settings › Business info</em>."
 
+msgid "El link de pago venció sin pagarse."
+msgstr "The payment link expired without being paid."
+
 msgid ""
 "El logo tal como debe verse en el producto. En cada generación de FlowPlus se adjunta como referencia\n"
 "  <code>@Logo N</code> con la instrucción de reproducirlo exacto — así el modelo no inventa marcas ni letras.\n"
@@ -5552,6 +5733,10 @@ msgstr "The sprint batch “%(nombre)s” finished: %(listas)s piece(s) ready an
 msgid "El lugar y la luz; el producto entra a cuadro y se ve funcionando ahí."
 msgstr "The place and the light; the product enters the frame and is seen working there."
 
+#, python-format
+msgid "El margen va de %(min)s a %(max)s."
+msgstr "The markup ranges from %(min)s to %(max)s."
+
 msgid "El material de cerca, un giro que muestra la forma completa y un cierre de lucimiento sobre el producto."
 msgstr "The material up close, a turn that shows the whole shape and a hero close on the product."
 
@@ -5565,6 +5750,13 @@ msgstr "The market has already seen similar promises (sophistication %(sof)s) an
 
 msgid "El momento del mes no es válido."
 msgstr "The moment of the month isn't valid."
+
+msgid "El monto tiene que ser un número distinto de 0, con hasta 2 decimales."
+msgstr "The amount must be a number other than 0, with up to 2 decimals."
+
+#, python-format
+msgid "El monto va hasta %(max)s, positivo o negativo."
+msgstr "The amount goes up to %(max)s, positive or negative."
 
 msgid "El motor espera a tener evidencia y después compara cada pieza con estas reglas. Vacío = el valor de fábrica (en gris)."
 msgstr "The engine waits until it has evidence, then compares each piece against these rules. Empty = the factory value (in gray)."
@@ -5812,9 +6004,19 @@ msgstr "The text “{texto}” ends up under the {plataforma} interface ({zona})
 msgid "El texto «{texto}» se sale del video: achícalo o baja su ancho."
 msgstr "The text “{texto}” goes off the video: shrink it or reduce its width."
 
+msgid "El tipo tiene que ser recarga o ajuste."
+msgstr "The type must be top-up or adjustment."
+
 #, python-format
 msgid "El token no ve el Business %(business)s (%(error)s). Revisa que el usuario del sistema pertenezca a ese Business Manager y tenga permiso business_management."
 msgstr "The token can't see the Business %(business)s (%(error)s). Check that the system user belongs to that Business Manager and has the business_management permission."
+
+msgid "El umbral no puede ser negativo."
+msgstr "The threshold cannot be negative."
+
+#, python-format
+msgid "El umbral va de %(min)s a %(max)s, con hasta 2 decimales."
+msgstr "The threshold ranges from %(min)s to %(max)s, with up to 2 decimals."
 
 msgid "El usuario debe tener entre 3 y 40 caracteres: solo minúsculas, números, puntos, guiones y guiones bajos."
 msgstr "The username must be between 3 and 40 characters: only lowercase letters, numbers, dots, hyphens and underscores."
@@ -6399,6 +6601,9 @@ msgstr "It is the SAME person/character in every shot: same face, same features,
 msgid "Es la única foto del producto. Si quieres quitarla, sube otra primero o elimina el producto completo."
 msgstr "It's the product's only photo. If you want to remove it, upload another one first or delete the whole product."
 
+msgid "Es lo que se descontó de tu saldo (el detalle de cada movimiento está en Saldo y recargas); la pauta se cobra en tu cuenta de Meta y no entra en este total."
+msgstr "This is what was deducted from your balance (each movement is listed in Balance and top-ups); ad spend is charged to your Meta account and is not part of this total."
+
 msgid "Es mi voz o tengo permiso escrito de la persona para clonarla y usarla en anuncios."
 msgstr "This is my voice, or I have the person's written permission to clone it and use it in ads."
 
@@ -6563,6 +6768,9 @@ msgstr "That piece is already published (or queued) on %(nombre)s."
 
 msgid "Esa pieza ya no existe."
 msgstr "That piece no longer exists."
+
+msgid "Esa pieza ya pasó el QA o está aprobada."
+msgstr "That piece already passed QA or is approved."
 
 msgid "Esa pieza ya se está regenerando."
 msgstr "That piece is already being regenerated."
@@ -6814,6 +7022,9 @@ msgstr "Listen to “{nombre}”"
 
 msgid "Escúchala antes de usarla:"
 msgstr "Listen to it before using it:"
+
+msgid "Ese acceso ya no está bloqueado."
+msgstr "That login is no longer blocked."
 
 msgid "Ese anuncio no está en error."
 msgstr "That ad isn't in an error state."
@@ -7290,6 +7501,9 @@ msgstr "This prompt has issues; fix them before approving it:"
 msgid "Este prompt ya está aprobado. Reábrelo para seguir corrigiendo."
 msgstr "This prompt is already approved. Reopen it to keep correcting it."
 
+msgid "Este proyecto cobra: «Costo» es lo que pagó Creatv al proveedor y «Cobrado», lo que se descontó del saldo del proyecto."
+msgstr "This project is charged: «Cost» is what Creatv paid the provider and «Charged» is what was deducted from the project balance."
+
 #, python-format
 msgid "Este proyecto está gestionado por Creatv (modo agencia): no se puede %(para_que)s. Un admin tiene que volverlo a modo propia primero."
 msgstr "This project is managed by Creatv (agency mode): you can't %(para_que)s. An admin has to switch it back to own-app mode first."
@@ -7313,8 +7527,20 @@ msgstr "This project doesn't have Meta connected — connect it in FlowMarketing
 msgid "Este proyecto no tiene registrada su app de Meta — hace falta para %(para_que)s."
 msgstr "This project hasn't registered its Meta app — it's needed to %(para_que)s."
 
+msgid "Este proyecto no tiene saldo: desde ahora no podrá generar nada que cueste hasta que recargue."
+msgstr "This project has no balance: from now on it cannot generate anything that costs money until it tops up."
+
+msgid "Este proyecto no usa saldo prepagado."
+msgstr "This project does not use a prepaid balance."
+
+msgid "Este proyecto no usa saldo prepagado: nada de lo que genera se descuenta. Se prende desde el panel de administración."
+msgstr "This project does not use a prepaid balance: nothing it generates is deducted. It is turned on from the admin panel."
+
 msgid "Este proyecto tiene su propia conexión con Meta. Pasarlo a modo agencia la guarda como respaldo (se restaura con «Volver a propia») y sus anuncios pasan a operarse con la cuenta que asignes. ¿Seguir?"
 msgstr "This project has its own connection with Meta. Switching it to agency mode keeps that as a backup (restored with “Back to own app”) and its ads start running with the account you assign. Continue?"
+
+msgid "Este proyecto todavía no cobra: el saldo queda guardado para cuando prendas «Cobrar»."
+msgstr "This project does not charge usage yet: the balance stays saved for when you turn on “Charge usage”."
 
 msgid "Este proyecto usa la conexión de agencia de Creatv: no tienes que registrar una app ni conectar nada."
 msgstr "This project uses Creatv's agency connection: you don't have to register an app or connect anything."
@@ -7353,8 +7579,9 @@ msgstr "Visual style, in English"
 msgid "Estilos IA"
 msgstr "AI styles"
 
-msgid "Estilos IA · US$ 0,02 la primera vez por estilo y duración"
-msgstr "AI styles · US$ 0.02 the first time per style and duration"
+#, python-format
+msgid "Estilos IA · %(precio)s la primera vez por estilo y duración"
+msgstr "AI styles · %(precio)s the first time per style and duration"
 
 #, python-format
 msgid "Estimado: %(estimado)s s"
@@ -7640,6 +7867,9 @@ msgstr "FLASK_SECRET_KEY is missing from the .env: without it the agency token c
 msgid "Falta PLATAFORMA_URL en el .env: los enlaces de los correos y el host aceptado no están fijos."
 msgstr "PLATAFORMA_URL is missing from .env: email links and the accepted host are not pinned."
 
+msgid "Falta PLATAFORMA_URL en el servidor"
+msgstr "PLATAFORMA_URL is missing on the server"
+
 msgid "Falta WAVESPEED_API_KEY en tu .env. Consíguela en wavespeed.ai (API Keys)."
 msgstr "WAVESPEED_API_KEY is missing from your .env. Get it at wavespeed.ai (API Keys)."
 
@@ -7748,6 +7978,9 @@ msgstr "Missing data: objective, at least one country, days (1–90), cap, ages 
 
 msgid "Faltan la llave o el dominio de la tienda (por ejemplo mitienda.myshopify.com)."
 msgstr "The key or the store domain is missing (for example mystore.myshopify.com)."
+
+msgid "Faltan las llaves de Bold"
+msgstr "The Bold keys are missing"
 
 msgid "Faltan los datos de la campaña."
 msgstr "The campaign's data is missing."
@@ -8040,6 +8273,9 @@ msgstr "Winners"
 
 msgid "Ganadores que se están cansando (toca hacer variantes)"
 msgstr "Winners that are fatiguing (time to make variants)"
+
+msgid "Ganancia del mes"
+msgstr "Profit this month"
 
 msgid "Gancho"
 msgstr "Hook"
@@ -8423,6 +8659,10 @@ msgstr "Saved to the Swipe file: from there you can recreate it with your produc
 msgid "Guardado ✓"
 msgstr "Saved ✓"
 
+#, python-format
+msgid "Guardado: margen y umbral de %(proyecto)s."
+msgstr "Saved: markup and threshold for %(proyecto)s."
+
 msgid "Guardado: tu edición es ahora el prompt vigente."
 msgstr "Saved: your edit is now the current prompt."
 
@@ -8500,6 +8740,9 @@ msgstr "Save language"
 
 msgid "Guardar la lectura"
 msgstr "Save the reading"
+
+msgid "Guardar margen"
+msgstr "Save markup"
 
 msgid "Guardar modelos de FlowPlus"
 msgstr "Save FlowPlus models"
@@ -8599,8 +8842,8 @@ msgstr "To"
 msgid "Hasta 10 imágenes y 5 videos de referencia (1-15 s), 720p, hasta 30 s (con videos de referencia, sus segundos más los del resultado no pasan de 30). El único que usa videos tal cual. Sonido de la escena incluido."
 msgstr "Up to 10 images and 5 reference videos (1-15 s), 720p, up to 30 s (with reference videos, their seconds plus the result's don't exceed 30). The only one that uses videos as-is. Scene sound included."
 
-msgid "Hasta 7 imágenes. De un video usa solo un fotograma. Movimiento y realismo de personas muy buenos. Hasta 15 s. El sonido de la escena cuesta 0,028 USD/s más (ya incluido en el estimado)."
-msgstr "Up to 7 images. From a video it only uses one frame. Very good movement and realism for people. Up to 15 s. The scene sound costs USD 0.028/s more (already included in the estimate)."
+msgid "Hasta 7 imágenes. De un video usa solo un fotograma. Movimiento y realismo de personas muy buenos. Hasta 15 s. El sonido de la escena cobra un recargo por segundo (ya incluido en el estimado)."
+msgstr "Up to 7 images. From a video it only uses one frame. Very good movement and realism for people. Up to 15 s. The scene sound adds a per-second surcharge (already included in the estimate)."
 
 #, python-format
 msgid "Hay %(num)d tarea en curso hace más de 30 min."
@@ -8621,6 +8864,9 @@ msgstr "There are %(usos)s result(s) already generated with this product: they w
 #, python-format
 msgid "Hay más de %(n)s capas en el mismo instante; quita algunas."
 msgstr "There are more than %(n)s layers at the same moment; remove some."
+
+msgid "Hay recargas de Bold pendientes y no llegó ningún evento de Bold en 7 días. Revisa la URL del webhook en el panel de Bold."
+msgstr "There are pending Bold top-ups and no Bold event has arrived in 7 days. Check the webhook URL in the Bold dashboard."
 
 msgid "Hay textos sin traducir para algún destino."
 msgstr "Some texts aren't translated for a market."
@@ -8700,6 +8946,9 @@ msgstr "Alternate hooks"
 msgid "Hooks alternativos, uno por renglón"
 msgstr "Alternate hooks, one per row"
 
+msgid "Hora"
+msgstr "Time"
+
 msgid "Horas"
 msgstr "Hours"
 
@@ -8743,6 +8992,9 @@ msgstr "Your ad account's ID (optional, starts with act_)"
 
 msgid "ID de tu portafolio comercial"
 msgstr "Your business portfolio's ID"
+
+msgid "IP"
+msgstr "IP"
 
 msgid "Id del Business"
 msgstr "Business id"
@@ -8795,6 +9047,9 @@ msgstr "Login configuration id"
 msgid "Identificador de la app"
 msgstr "App id"
 
+msgid "Identificador de link inválido"
+msgstr "Invalid link identifier"
+
 msgid "Idioma"
 msgstr "Language"
 
@@ -8823,6 +9078,9 @@ msgstr "Language not available: %(v)s. Options: %(opciones)s."
 #, python-format
 msgid "Idioma no soportado: %(idioma)s (se esperan dos letras minúsculas)."
 msgstr "Unsupported language: %(idioma)s (two lowercase letters expected)."
+
+msgid "Ignorado"
+msgstr "Ignored"
 
 msgid "Igual a la referencia"
 msgstr "Same as the reference"
@@ -9050,8 +9308,17 @@ msgstr "Unknown intent: %(malas)s"
 msgid "Intención inicial (se puede cambiar por referencia):"
 msgstr "Initial intent (can be changed per reference):"
 
+msgid "Intentar de nuevo"
+msgstr "Try again"
+
 msgid "Intentar otra vez"
 msgstr "Try again"
+
+msgid "Intentos"
+msgstr "Attempts"
+
+msgid "Intentos fallidos de login vigentes. Desbloquear permite volver a intentar el acceso y queda en la bitácora."
+msgstr "Current failed login attempts. Unlocking allows another login attempt and is recorded in the activity log."
 
 msgid "Interacción"
 msgstr "Engagement"
@@ -9569,6 +9836,10 @@ msgid "La página pública de UN producto: leo nombre, precio y fotos de sus dat
 msgstr "The public page of ONE product: I read the name, price and photos from its structured data."
 
 #, python-format
+msgid "La recarga va de US$ %(min)s a US$ %(max)s, en dólares enteros."
+msgstr "A top-up goes from US$ %(min)s to US$ %(max)s, in whole dollars."
+
+#, python-format
 msgid "La receta «%(receta)s» necesita un video de referencia en la bandeja y el modelo Wan 3.0. Agrégalo o elige otra receta."
 msgstr "The “%(receta)s” recipe needs a reference video in the tray and the Wan 3.0 model. Add one or pick another recipe."
 
@@ -9614,6 +9885,9 @@ msgstr "The seed is copycoders' swipe file: it's imported from their public page
 #, python-format
 msgid "La sesión %(cf_id)s no tiene video listo para producir."
 msgstr "Session %(cf_id)s has no video ready to produce."
+
+msgid "La tarea falló"
+msgstr "The task failed"
 
 msgid "La tarea se interrumpió antes de llegar a esta plataforma; reintenta desde el panel."
 msgstr "The task was interrupted before reaching this platform; retry from the panel."
@@ -9797,6 +10071,12 @@ msgstr "The slowest (over 1 s)"
 msgid "Las pone quien administra el servidor en el archivo <code>.env</code>; no se escriben desde aquí."
 msgstr "Whoever administers the server sets them in the <code>.env</code> file; they're not written from here."
 
+msgid "Las recargas en línea están apagadas: este servidor tiene el modo de pruebas de Bold puesto. Avísale al administrador."
+msgstr "Online top-ups are off: this server has Bold’s test mode on. Let the administrator know."
+
+msgid "Las recargas en línea todavía no están disponibles; escríbenos para recargar."
+msgstr "Online top-ups are not available yet; write to us to top up."
+
 msgid "Las reglas del decisor están en <a href=\"#experimentos\" onclick=\"document.querySelector('.sidebar-item[data-tab=experimentos]').click(); document.getElementById('reglas-motor').open = true; return false;\">Experimentos →</a>"
 msgstr "The decisor's rules are in <a href=\"#experimentos\" onclick=\"document.querySelector('.sidebar-item[data-tab=experimentos]').click(); document.getElementById('reglas-motor').open = true; return false;\">Experiments →</a>"
 
@@ -9936,6 +10216,14 @@ msgstr "Done: the copycoders library now shows up in References."
 msgid "Listo: la versión de Claude es ahora el prompt vigente."
 msgstr "Done: Claude's version is now the current prompt."
 
+#, python-format
+msgid "Listo: sumamos %(monto)s a tu saldo."
+msgstr "Done: we added %(monto)s to your balance."
+
+#, python-format
+msgid "Listo: sumamos %(monto)s al saldo de %(proyecto)s."
+msgstr "Done: we added %(monto)s to the balance of %(proyecto)s."
+
 msgid "Listo: volviste al prompt original."
 msgstr "Done: you reverted to the original prompt."
 
@@ -9960,6 +10248,10 @@ msgstr "Reaching people is expensive (high CPM): the audience is saturated or th
 
 msgid "Llegaste a los 5 minutos: la grabación se detuvo."
 msgstr "You reached 5 minutes: the recording stopped."
+
+#, python-format
+msgid "Llegó un evento %(tipo)s de Bold con la referencia «%(ref)s», que no es de ninguna recarga de Creatv. Revísalo en el panel de Bold."
+msgstr "A Bold %(tipo)s event arrived with the reference “%(ref)s”, which does not belong to any Creatv top-up. Check it in the Bold dashboard."
 
 msgid "Llenar"
 msgstr "Fill"
@@ -10007,8 +10299,8 @@ msgstr "What Claude knows about this prompt"
 msgid "Lo que costaron las finales"
 msgstr "What the final cuts cost"
 
-msgid "Lo que costaría producir lo que pide esta propuesta (precio aproximado de los proveedores)"
-msgstr "What it would cost to produce what this proposal is asking for (approximate provider price)"
+msgid "Lo que costaría producir lo que pide esta propuesta (precio aproximado)"
+msgstr "What it would cost to produce what this proposal asks for (approximate price)"
 
 msgid "Lo que dicen los números"
 msgstr "What the numbers say"
@@ -10028,6 +10320,9 @@ msgstr ""
 
 msgid "Lo que escribe la IA y los anuncios de este proyecto salen en este idioma."
 msgstr "What the AI writes and this project's ads come out in this language."
+
+msgid "Lo que este proyecto tiene para generar. Cada pieza que llega descuenta su precio; la que falla no se cobra."
+msgstr "What this project has available to generate. Each delivered piece deducts its price; a failed one is not charged."
 
 msgid "Lo que falla"
 msgstr "What is not working"
@@ -10070,6 +10365,11 @@ msgstr "What must never change in this asset"
 
 msgid "Lo que sale:"
 msgstr "What's coming out:"
+
+msgid ""
+"Lo que se descontó de tu saldo por todo lo que este proyecto generó desde el inicio: cada video,\n"
+"      imagen, guion, final o texto con IA deja su cobro aquí al terminar. Lo que falló y no llegó no se cobra."
+msgstr "What was deducted from your balance for everything this project generated since the start: every video, image, script, final or AI text leaves its charge here when it finishes. Anything that failed and was not delivered is not charged."
 
 #, python-format
 msgid "Lo que subiste pesa más de %(mb)s MB."
@@ -10216,6 +10516,9 @@ msgstr "Mannequin to mark body zones"
 msgid "Manos"
 msgstr "Hands"
 
+msgid "Manual"
+msgstr "Manual"
+
 msgid "Manual: el motor solo propone y tú apruebas. Semi: pausar y archivar se hacen solos. Auto: todo solo salvo con el tope alcanzado. Compras exige el Pixel activo y atribución pixel; Tráfico sirve siempre. La atribución sugerida sale de lo conectado en Configuración: pulsa «Comprobar Pixel» allí para que la tenga en cuenta."
 msgstr "Manual: the engine only proposes and you approve. Semi: pausing and archiving happen on their own. Auto: everything happens on its own except when the cap is reached. Purchases requires an active Pixel and pixel attribution; Traffic always works. The suggested attribution comes from what's connected in Settings: press “Check Pixel” there so it's taken into account."
 
@@ -10303,6 +10606,20 @@ msgstr "Brands to imitate"
 msgid "Marcas a mano"
 msgstr "Hand-drawn marks"
 
+#, python-format
+msgid "Margen (de %(min)s a %(max)s)"
+msgstr "Markup (from %(min)s to %(max)s)"
+
+msgid "Margen global"
+msgstr "Global markup"
+
+#, python-format
+msgid "Margen global guardado: %(margen)s."
+msgstr "Global markup saved: %(margen)s."
+
+msgid "Margen propio"
+msgstr "Own markup"
+
 msgid "Marketplace"
 msgstr "Marketplace"
 
@@ -10329,6 +10646,9 @@ msgstr "Medium"
 msgid "Medidas y fuentes"
 msgstr "Dimensions and fonts"
 
+msgid "Medio"
+msgstr "Method"
+
 msgid "Medios"
 msgstr "Media"
 
@@ -10338,8 +10658,9 @@ msgstr "Improving"
 msgid "Mejorando la calidad de la imagen"
 msgstr "Improving the image quality"
 
-msgid "Mejorar la calidad al final (+$0.04, solo aplica a fotos)"
-msgstr "Improve quality at the end (+$0.04, photos only)"
+#, python-format
+msgid "Mejorar la calidad al final (+%(precio)s, solo aplica a fotos)"
+msgstr "Improve quality at the end (+%(precio)s, photos only)"
 
 msgid "Memoria disponible"
 msgstr "Available memory"
@@ -10666,6 +10987,16 @@ msgstr "Currency of the figures"
 msgid "Monto"
 msgstr "Amount"
 
+msgid "Monto en US$ (negativo solo en un ajuste)"
+msgstr "Amount in US$ (negative only for an adjustment)"
+
+#, python-format
+msgid "Monto en dólares (de %(min)s a %(max)s, sin centavos)"
+msgstr "Amount in dollars (%(min)s to %(max)s, no cents)"
+
+msgid "Montos sugeridos"
+msgstr "Suggested amounts"
+
 msgid "Mors dag"
 msgstr "Mother's Day (Mors dag)"
 
@@ -10694,6 +11025,9 @@ msgstr "Movement"
 
 msgid "Movimiento de cámara"
 msgstr "Camera movement"
+
+msgid "Movimientos"
+msgstr "Movements"
 
 msgid "Mucho clic"
 msgstr "Lots of clicks"
@@ -10938,6 +11272,13 @@ msgstr "Not applicable — it receives the already-generated result"
 msgid "No cambiaste nada."
 msgstr "You didn't change anything."
 
+msgid "No cobra"
+msgstr "Does not charge"
+
+#, python-format
+msgid "No cobrado: %(concepto)s"
+msgstr "Not charged: %(concepto)s"
+
 msgid "No describas a una persona real ni pidas imitar a alguien famoso."
 msgstr "Don't describe a real person or ask to imitate someone famous."
 
@@ -11058,6 +11399,9 @@ msgstr "No need to generate images: all the references come from the Catalog."
 
 msgid "No hay SMTP: los avisos de errores nuevos no salen por correo, solo quedan aquí."
 msgstr "There is no SMTP: alerts about new errors are not emailed, they only show up here."
+
+msgid "No hay accesos bloqueados."
+msgstr "No blocked logins."
 
 msgid "No hay avatares incompletos que completar."
 msgstr "There are no incomplete avatars to complete."
@@ -11519,6 +11863,9 @@ msgstr "Couldn't analyze it"
 msgid "No se pudo analizar."
 msgstr "Couldn't analyze it."
 
+msgid "No se pudo anotar un cobro"
+msgstr "A charge could not be recorded"
+
 #, python-format
 msgid "No se pudo avanzar la derivación: %(error)s"
 msgstr "Could not advance the derivation: %(error)s"
@@ -11565,6 +11912,9 @@ msgstr "Couldn't load the scripts panel. Reload the page."
 
 msgid "No se pudo cargar el prompt."
 msgstr "Couldn't load the prompt."
+
+msgid "No se pudo cargar el saldo. Vuelve a abrir este apartado en un rato."
+msgstr "The balance could not be loaded. Open this section again in a while."
 
 #, python-brace-format
 msgid "No se pudo cargar el sonido de {n} archivo(s) (puede ser la conexión o que el almacenamiento no dé permiso de lectura): la vista previa sigue sin ese sonido."
@@ -11715,6 +12065,10 @@ msgstr "Couldn't save."
 
 msgid "No se pudo guardar: el servidor respondió con un error. Recarga la página e intenta de nuevo."
 msgstr "Couldn't save: the server responded with an error. Reload the page and try again."
+
+#, python-format
+msgid "No se pudo hablar con Bold (%(tipo)s)"
+msgstr "Could not reach Bold (%(tipo)s)"
 
 msgid "No se pudo hablar con Notion; intenta de nuevo en un momento."
 msgstr "Couldn't reach Notion; try again in a moment."
@@ -11936,6 +12290,9 @@ msgstr "Norway"
 msgid "Nota"
 msgstr "Note"
 
+msgid "Nota (la ve el cliente en sus movimientos)"
+msgstr "Note (the client sees it in their movements)"
+
 msgid "Nota (opcional)"
 msgstr "Note (optional)"
 
@@ -12119,6 +12476,12 @@ msgstr "Other text"
 
 msgid "Otros"
 msgstr "Other"
+
+msgid "Pagar con Bold"
+msgstr "Pay with Bold"
+
+msgid "Pago anulado por Bold"
+msgstr "Payment voided by Bold"
 
 msgid "Palabra clave"
 msgstr "Keyword"
@@ -12406,6 +12769,9 @@ msgstr "Paste a link"
 
 msgid "Peligro"
 msgstr "Danger"
+
+msgid "Pendiente"
+msgstr "Pending"
 
 msgid "Pensando…"
 msgstr "Thinking…"
@@ -12696,6 +13062,9 @@ msgstr "Asking WaveSpeed for the video… if it already finished, it shows up he
 
 msgid "Prenda de vestir (saco, camiseta, chaqueta)"
 msgstr "Clothing (sweater, t-shirt, jacket)"
+
+msgid "Prender"
+msgstr "Turn on"
 
 msgid "Preparando el audio"
 msgstr "Preparing the audio"
@@ -13477,14 +13846,40 @@ msgstr "Rebuild the prompt"
 msgid "Reason for failure with those solutions"
 msgstr "Reason for failure with those solutions"
 
+msgid "Recarga"
+msgstr "Top-up"
+
+msgid "Recarga (entró plata)"
+msgstr "Top-up (money came in)"
+
+#, python-format
+msgid "Recarga Creatv · %(proyecto)s"
+msgstr "Creatv top-up · %(proyecto)s"
+
+#, python-format
+msgid "Recarga acreditada en %(cliente)s"
+msgstr "Top-up credited to %(cliente)s"
+
+msgid "Recarga con Bold"
+msgstr "Top-up with Bold"
+
+msgid "Recarga de saldo"
+msgstr "Balance top-up"
+
 msgid "Recarga esta página. TikTok no tiene título aparte: el texto de la publicación es el caption completo (sin enlaces; se agrega «Link en bio»)."
 msgstr "Reload this page. TikTok has no separate title: the post's text is the full caption (no links; “Link in bio” gets added)."
 
 msgid "Recarga esta página: el canal pasa a «conectado». Los Shorts salen con el título y la descripción que redactes."
 msgstr "Reload this page: the channel becomes “connected”. Shorts go out with the title and description you write."
 
+msgid "Recarga manual o ajuste"
+msgstr "Manual top-up or adjustment"
+
 msgid "Recarga para ver el análisis completo."
 msgstr "Reload to see the full analysis."
+
+msgid "Recargado del mes"
+msgstr "Topped up this month"
 
 msgid "Recargar"
 msgstr "Reload"
@@ -13499,8 +13894,17 @@ msgstr "Reload now"
 msgid "Recargar el prompt"
 msgstr "Reload the prompt"
 
+msgid "Recargar saldo"
+msgstr "Top up balance"
+
+msgid "Recargas"
+msgstr "Top-ups"
+
 msgid "Receta de tomas"
 msgstr "Shot recipe"
+
+msgid "Rechazada"
+msgstr "Rejected"
 
 #, python-format
 msgid "Rechazada «%(titulo)s»: %(motivo)s"
@@ -13516,6 +13920,9 @@ msgstr "Rejected (%(n)s)"
 
 msgid "Rechazar"
 msgstr "Reject"
+
+msgid "Recibido"
+msgstr "Received"
 
 #, python-format
 msgid "Recolectando de %(fuente)s; la página se recarga sola al terminar."
@@ -13633,6 +14040,9 @@ msgstr "Rewriting the idea from its angle…"
 #, python-format
 msgid "Reescribir la idea con este ángulo (%(precio)s)"
 msgstr "Rewrite the idea with this angle (%(precio)s)"
+
+msgid "Referencia"
+msgstr "Reference"
 
 #, python-format
 msgid "Referencia agregada (%(tipo)s, %(origen)s)"
@@ -13837,6 +14247,9 @@ msgstr "Rendering"
 #, python-format
 msgid "Renderizando tramo %(i)s/%(n)s"
 msgstr "Rendering segment %(i)s/%(n)s"
+
+msgid "Repetido"
+msgstr "Duplicate"
 
 msgid "Repetir QA"
 msgstr "Repeat QA"
@@ -14086,6 +14499,31 @@ msgstr "Knows they have the problem, but doesn't know of solutions"
 
 msgid "Sacando fotogramas"
 msgstr "Extracting frames"
+
+msgid "Saldo"
+msgstr "Balance"
+
+#, python-format
+msgid "Saldo bajo: te queda menos de %(umbral)s."
+msgstr "Low balance: you have less than %(umbral)s left."
+
+msgid "Saldo después"
+msgstr "Balance after"
+
+#, python-format
+msgid "Saldo insuficiente: esto cuesta ≈ %(precio)s y tienes %(disponible)s disponibles. Recarga para seguir."
+msgstr "Insufficient balance: this costs ≈ %(precio)s and you have %(disponible)s available. Top up to continue."
+
+#, python-format
+msgid "Saldo insuficiente: tienes %(disponible)s disponibles. Recarga para seguir."
+msgstr "Insufficient balance: you have %(disponible)s available. Top up to continue."
+
+msgid "Saldo y recargas"
+msgstr "Balance and top-ups"
+
+#, python-format
+msgid "Saldo: %(saldo)s · Recargar"
+msgstr "Balance: %(saldo)s · Top up"
 
 msgid "Sale de lo que elegiste en «Imágenes de cada escena»."
 msgstr "Comes from what you chose in “Images for each scene”."
@@ -14651,6 +15089,9 @@ msgstr "No lightweight copy for this type."
 msgid "Sin rastreo de Triple Whale"
 msgstr "No Triple Whale tracking"
 
+msgid "Sin recarga"
+msgstr "No top-up"
+
 msgid "Sin receta"
 msgstr "No recipe"
 
@@ -14659,6 +15100,15 @@ msgstr "No brand references yet."
 
 msgid "Sin referencias ni producto: el modelo recibe el texto tal cual, sin marca ni logos."
 msgstr "No references or product: the model gets the text as-is, with no brand or logos."
+
+msgid "Sin saldo no se puede generar nada nuevo. Recarga en Configuración › Saldo y recargas y sigues donde ibas."
+msgstr "Nothing new can be generated without a balance. Top up in Settings › Balance and top-ups and pick up where you left off."
+
+msgid "Sin saldo: recarga para seguir generando."
+msgstr "No balance: top up to keep generating."
+
+msgid "Sin saldo: recarga para seguir. No se cobró nada."
+msgstr "No balance: top up to continue. Nothing was charged."
 
 msgid "Sin sonido: súbelo para oír el sonido de este video."
 msgstr "No sound: turn it up to hear this video's sound."
@@ -14873,8 +15323,9 @@ msgstr "Sound when creating"
 msgid "Sonido de la escena"
 msgstr "Scene sound"
 
-msgid "Sonido de la escena (audio nativo del modelo; Kling cobra 0,028 USD/s más)"
-msgstr "Scene sound (the model's native audio; Kling charges USD 0.028/s more)"
+#, python-format
+msgid "Sonido de la escena (audio nativo del modelo; Kling: %(precio)s más por segundo)"
+msgstr "Scene sound (the model's native audio; Kling: %(precio)s more per second)"
 
 #, python-format
 msgid "Sprint %(nombre)s · Campaña %(n)s"
@@ -15141,6 +15592,10 @@ msgstr "Suggest with AI (%(precio)s)"
 msgid "Sugerir de la biblioteca (gratis)"
 msgstr "Suggest from the library (free)"
 
+#, python-format
+msgid "Sumamos %(monto)s a tu saldo (%(medio)s)."
+msgstr "We added %(monto)s to your balance (%(medio)s)."
+
 msgid "Superior al promedio"
 msgstr "Above average"
 
@@ -15216,6 +15671,13 @@ msgstr "Tasks in the last 24 h by type"
 msgid "Tareas en espera"
 msgstr "Tasks waiting"
 
+msgid "Tarjetas de cualquier país; en Colombia también PSE y Nequi. Bold cobra en pesos colombianos a la tasa del día."
+msgstr "Cards from any country; in Colombia also PSE and Nequi. Bold charges in Colombian pesos at the day's rate."
+
+#, python-format
+msgid "Te avisamos cuando baje de %(umbral)s."
+msgstr "We will let you know when it drops below %(umbral)s."
+
 #, python-format
 msgid "Te faltan referencias de composición o ángulo de producto y hay %(n)s imágenes planeadas."
 msgstr "You're missing composition or product-angle references and there are %(n)s images planned."
@@ -15226,6 +15688,17 @@ msgstr "You're missing camera-movement or transition references and there are %(
 
 msgid "Te mandamos un enlace para confirmarlo; con él también recuperas la contraseña si la olvidas."
 msgstr "We'll send you a link to confirm it; you can also use it to recover your password if you forget it."
+
+#, python-format
+msgid "Te quedan %(monto)s. Recarga para seguir creando."
+msgstr "You have %(monto)s left. Top up to keep creating."
+
+#, python-format
+msgid "Te quedan %(saldo)s. Recarga en Configuración › Saldo y recargas antes de que se acabe."
+msgstr "You have %(saldo)s left. Top up in Settings › Balance and top-ups before it runs out."
+
+msgid "Te quedaste sin saldo"
+msgstr "You are out of balance"
 
 msgid "Temporada agregada desde el calendario."
 msgstr "Season added from the calendar."
@@ -15370,6 +15843,9 @@ msgstr "You have unsaved changes here. Close the details anyway?"
 
 msgid "Tienes cambios sin guardar, por eso no se recargó sola."
 msgstr "You have unsaved changes, so it didn't reload on its own."
+
+msgid "Tienes una recarga sin terminar"
+msgstr "You have an unfinished top-up"
 
 #, python-format
 msgid "TikTok rechazó el video: %(error)s"
@@ -15549,6 +16025,9 @@ msgstr "No photos yet: upload one or create an image in From references."
 msgid "Todavía no hay ideas"
 msgstr "No ideas yet"
 
+msgid "Todavía no hay movimientos."
+msgstr "No movements yet."
+
 msgid "Todavía no hay métricas copiadas"
 msgstr "No metrics copied yet"
 
@@ -15579,6 +16058,9 @@ msgstr "No prompts yet. Paste one with “New prompt” to fix it with Claude."
 msgid "Todavía no hay proyectos."
 msgstr "No projects yet."
 
+msgid "Todavía no hay recargas."
+msgstr "No top-ups yet."
+
 msgid "Todavía no hay referencias. Sube las que inspiran esta campaña."
 msgstr "No references yet. Upload the ones that inspire this campaign."
 
@@ -15608,6 +16090,9 @@ msgstr "No videos yet. Create the first one: choose duration, mode, hook and ref
 
 msgid "Todavía no le has escrito a Claude. Cuéntale qué salió mal en este prompt y te propone una versión corregida."
 msgstr "You haven't written to Claude yet. Tell it what went wrong with this prompt and it'll suggest a fixed version."
+
+msgid "Todavía no llegó ningún evento de Bold."
+msgstr "No Bold event has arrived yet."
 
 msgid "Todavía no se ha publicado nada."
 msgstr "Nothing has been published yet."
@@ -16093,8 +16578,20 @@ msgstr "Your project %(nombre)s is now connected to Meta: account %(cuenta)s · 
 msgid "Tu proyecto usa su propia app de Meta: CreatvMachine opera solo con tus credenciales y tus datos no pasan por ninguna app ajena."
 msgstr "Your project uses its own Meta app: CreatvMachine operates only with your credentials and your data doesn't pass through any third-party app."
 
+msgid "Tu recarga se acreditó"
+msgstr "Your top-up was credited"
+
 msgid "Tu respuesta"
 msgstr "Your answer"
+
+msgid "Tu saldo ahora:"
+msgstr "Your balance now:"
+
+msgid "Tu saldo está bajo"
+msgstr "Your balance is low"
+
+msgid "Tu saldo se está acabando"
+msgstr "Your balance is running low"
 
 msgid "Tu sesión se cerró; entra de nuevo."
 msgstr "Your session closed; log in again."
@@ -16206,11 +16703,17 @@ msgstr "US$ %(usd)s per result"
 msgid "USD %(usd)s gastado"
 msgstr "USD %(usd)s spent"
 
-msgid "USD 0,02 solo la primera vez por estilo y duración (después sale de la caché)"
-msgstr "USD 0.02 only the first time per style and duration (after that it comes from the cache)"
-
 msgid "Ubicación (gasto)"
 msgstr "Placement (spend)"
+
+msgid "Umbral de aviso"
+msgstr "Warning threshold"
+
+msgid "Umbral de aviso en dólares"
+msgstr "Warning threshold in dollars"
+
+msgid "Un ajuste necesita una nota."
+msgstr "An adjustment needs a note."
 
 msgid "Un anuncio que lleva semanas al aire, o que la marca duplicó en muchas variantes, casi siempre es uno que está vendiendo. Déjalos vacíos para no filtrar."
 msgstr "An ad that has been running for weeks, or that the brand duplicated into many variants, is almost always one that's selling. Leave them empty to not filter."
@@ -16247,6 +16750,12 @@ msgstr "An experiment with one piece and one country is an ad; with several piec
 
 msgid "Un hecho real"
 msgstr "A real fact"
+
+msgid "Un pago de Bold no corresponde a ninguna recarga"
+msgstr "A Bold payment does not match any top-up"
+
+msgid "Un proyecto que cobra paga cada pieza con su saldo prepagado: costo del proveedor × margen. Un proyecto que no cobra sigue igual que siempre."
+msgstr "A project that charges usage pays for each piece from its prepaid balance: provider cost × markup. A project that does not charge works the same as always."
 
 msgid "Un solo lugar por video: si nombras varios cuartos, el modelo los recorre."
 msgstr "One single place per video: if you name several rooms, the model walks through them."
@@ -16323,6 +16832,9 @@ msgstr "A person with the product: an attention-grabbing hook, natural use and a
 msgid "Una persona real usando el producto de forma natural; el producto sigue siendo el protagonista."
 msgstr "A real person using the product naturally; the product is still the star."
 
+msgid "Una pieza falló y no se te cobró"
+msgstr "A piece failed and you were not charged"
+
 msgid "Una pieza no tiene plataforma de tienda: vuelve a crear el experimento."
 msgstr "A piece has no store platform: create the experiment again."
 
@@ -16334,6 +16846,13 @@ msgstr "One per line"
 
 msgid "Una por línea; por ejemplo, los diálogos exactos del guion. Claude no las puede tocar."
 msgstr "One per line; for example, the exact dialogue lines from the script. Claude can't touch them."
+
+#, python-format
+msgid "Una recarga de %(monto)s con Bold sigue pendiente. Si ya pagaste, se acredita sola en unos minutos; si no, genera un link nuevo en Configuración › Saldo y recargas."
+msgstr "A %(monto)s top-up with Bold is still pending. If you already paid, it is credited on its own in a few minutes; if not, create a new link in Settings › Balance and top-ups."
+
+msgid "Una recarga manual es positiva; para descontar, usa un ajuste."
+msgstr "A manual top-up is positive; to deduct, use an adjustment."
 
 msgid "Una referencia cuenta cuando tiene descripción. Dinos qué quieres reutilizar de cada una: eso es lo que Claude analiza y lo que después arma las ideas."
 msgstr "A reference counts once it has a description. Tell us what you want to reuse from each one: that's what Claude analyzes and what later builds the ideas."
@@ -16411,6 +16930,9 @@ msgstr "Username"
 #, python-format
 msgid "Usuario '%(usuario)s' marcado como verificado."
 msgstr "User '%(usuario)s' marked as verified."
+
+msgid "Usuario o IP"
+msgstr "User or IP"
 
 msgid "Usuario o contraseña incorrectos."
 msgstr "Incorrect username or password."
@@ -16515,6 +17037,12 @@ msgstr "Times"
 msgid "Velocidad"
 msgstr "Speed"
 
+msgid "Vence en"
+msgstr "Expires in"
+
+msgid "Vencida"
+msgstr "Expired"
+
 #, python-format
 msgid "Vendiste %(ventas)s que en los %(n)s días anteriores, con %(gasto)s de gasto: cada 1 %(moneda)s en anuncios trajo %(mer)s %(moneda)s en ventas (antes %(mer_antes)s)."
 msgstr "You sold %(ventas)s than in the previous %(n)s days, with %(gasto)s spend: every 1 %(moneda)s in ads brought %(mer)s %(moneda)s in sales (before, %(mer_antes)s)."
@@ -16579,6 +17107,9 @@ msgstr "View the original"
 
 msgid "Ver el prompt completo que recibió el modelo"
 msgstr "See the full prompt the model received"
+
+msgid "Ver el saldo y recargar en Configuración › Saldo y recargas"
+msgstr "See the balance and top up in Settings › Balance and top-ups"
 
 msgid "Ver el video de referencia"
 msgstr "View the reference video"
@@ -16656,6 +17187,12 @@ msgstr "Verdict"
 
 msgid "Verificado"
 msgstr "Verified"
+
+msgid "Verificando tu pago…"
+msgstr "Checking your payment…"
+
+msgid "Verificar"
+msgstr "Check"
 
 msgid "Versiones nuevas del guion al derivar"
 msgstr "New script versions when deriving"
@@ -16835,6 +17372,9 @@ msgstr "Back to the panel"
 msgid "Volver al reparto automático"
 msgstr "Back to the automatic split"
 
+msgid "Volver al saldo"
+msgstr "Back to balance"
+
 msgid "Volver al tablero"
 msgstr "Back to the board"
 
@@ -16984,6 +17524,9 @@ msgstr "Worker and queue"
 #, python-format
 msgid "Y %(n)s anuncio(s) más con poco gasto que no se muestran."
 msgstr "And %(n)s more ad(s) with little spend that aren't shown."
+
+msgid "Ya abriste muchas recargas en la última hora. Espera un rato o escríbenos."
+msgstr "You opened too many top-ups in the last hour. Wait a while or write to us."
 
 #, python-format
 msgid "Ya estaba publicada (o en cola) en %(plataformas)s: no se publica dos veces."
@@ -17588,6 +18131,9 @@ msgstr "closed"
 msgid "cf_id inválido: %(cf)s"
 msgstr "invalid cf_id: %(cf)s"
 
+msgid "cifras del mes por la fecha del gasto; ganancia = cobrado − costo de lo que se intentó cobrar"
+msgstr "month figures by spend date; profit = charged − cost of what we tried to charge"
+
 #, python-format
 msgid "cifras en %(moneda)s"
 msgstr "figures in %(moneda)s"
@@ -17766,6 +18312,10 @@ msgstr "running"
 
 msgid "cortes"
 msgstr "cuts"
+
+#, python-format
+msgid "costo del mes: %(costo)s"
+msgstr "cost this month: %(costo)s"
 
 msgid "costo desconocido"
 msgstr "unknown cost"
@@ -18114,6 +18664,9 @@ msgstr "the product has no downloadable photos."
 msgid "el producto solo se le puede describir en texto, no mostrárselo"
 msgstr "the product can only be described to it in text, not shown to it"
 
+msgid "el que usa todo proyecto sin margen propio; no cambia lo ya cobrado"
+msgstr "used by every project without its own markup; it does not change what was already charged"
+
 #, python-brace-format
 msgid "el servidor falló (error {status}): se guarda con el próximo cambio."
 msgstr "the server failed (error {status}): it'll be saved with your next change."
@@ -18353,8 +18906,14 @@ msgstr "families in English (unusable response: %(error)s)"
 msgid "fatiga: frecuencia %(f)s"
 msgstr "fatigue: frequency %(f)s"
 
+msgid "fecha;movimiento;concepto;detalle;usd;saldo"
+msgstr "date;movement;item;detail;usd;balance"
+
 msgid "fecha;tipo;proveedor;referencia;detalle;usd"
 msgstr "date;type;provider;reference;detail;usd"
+
+msgid "fecha;tipo;proveedor;referencia;detalle;usd;cobrado"
+msgstr "date;type;provider;reference;detail;usd;charged"
 
 #, python-format
 msgid "ffprobe falló (%(error)s); formato no verificado"
@@ -18439,6 +18998,10 @@ msgid "generar %(num)d pieza"
 msgid_plural "generar %(num)d piezas"
 msgstr[0] "generate %(num)d piece"
 msgstr[1] "generate %(num)d pieces"
+
+#, python-format
+msgid "global (%(margen)s)"
+msgstr "global (%(margen)s)"
 
 msgid "grave"
 msgstr "deep"
@@ -18593,6 +19156,10 @@ msgstr "inactive"
 #, python-format
 msgid "incluye %(gasto)s de gasto sin ventas medibles"
 msgstr "includes %(gasto)s in spend without measurable sales"
+
+#, python-format
+msgid "incluye el control de calidad automático de cada pieza (USD %(qa)s)"
+msgstr "includes the automatic quality check of each piece (USD %(qa)s)"
 
 #, python-format
 msgid "incompleto: falta %(faltan)s"
@@ -18978,6 +19545,10 @@ msgstr "its outcome couldn't be confirmed"
 
 msgid "no se puede usar aún"
 msgstr "can't be used yet"
+
+#, python-format
+msgid "no se te cobraron %(monto)s"
+msgstr "you were not charged %(monto)s"
 
 #, python-format
 msgid "no terminó en %(minutos)s min"
@@ -19698,6 +20269,9 @@ msgstr "no usable result"
 msgid "sin resultados"
 msgstr "no results"
 
+msgid "sin saldo"
+msgstr "no balance"
+
 msgid "sin sonido"
 msgstr "no sound"
 
@@ -19750,6 +20324,9 @@ msgstr "direct sun, outdoors"
 #, python-format
 msgid "solo hay %(n)s comentarios; hacen falta %(min)s para los avatares"
 msgstr "there are only %(n)s comments; %(min)s are needed for the avatars"
+
+msgid "solo los que llegaron con firma válida"
+msgstr "only those that arrived with a valid signature"
 
 msgid "solo ventas medibles"
 msgstr "measurable sales only"
@@ -20483,6 +21060,9 @@ msgstr "Last %(n)s days vs previous %(n)s"
 
 msgid "Últimos cobros"
 msgstr "Latest charges"
+
+msgid "Últimos eventos de Bold"
+msgstr "Latest Bold events"
 
 msgid "Útiles, uniformes y organización del hogar para el inicio del año escolar."
 msgstr "School supplies, uniforms and home organization for the start of the school year."

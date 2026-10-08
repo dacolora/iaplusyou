@@ -43,7 +43,7 @@ def ejecutar(tarea):
             cancion = mi_musica.registrar_generada(cliente, local, prompt, instrumental, usd)
     except Exception:
         gastos.registrar_seguro(cliente, "musica", usd, ref, detalle=gettext("%(detalle)s · falló al guardar; fal ya cobró", detalle=detalle),
-                                proveedor="fal/elevenlabs")
+                                proveedor="fal/elevenlabs", entregado=False)
         raise
     gastos.registrar_seguro(cliente, "musica", usd, ref, detalle=detalle, proveedor="fal/elevenlabs",
                             extra={"material_id": cancion["id"]})

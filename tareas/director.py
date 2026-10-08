@@ -15,6 +15,7 @@ import flowplus_lanzar
 import flowplus_prompt
 import idiomas
 import trabajos
+from cobros import SaldoInsuficiente
 from idiomas import N_
 from providers import flowplus_modelos
 from tareas import al_interrumpir, registrar
@@ -89,9 +90,23 @@ def ejecutar(tarea):
     trabajos.reportar(jid, etapa=ETAPA_LISTO)
     creative_flow.actualizar(cliente, cf_id, estado="prompt_listo", prompt_relleno=prompt, director=datos, idioma_prompt=idioma)
     if p.get("auto_lanzar"):
-        entry = creative_flow.cargar(cliente)[cf_id]
-        flowplus_lanzar.lanzar(cliente, cf_id, entry, prioridad=int(p.get("prioridad") or flowplus_lanzar.PRIORIDAD_NORMAL))
+        mensaje = _lanzar_aprobado(cliente, cf_id, p) or mensaje
     return mensaje
+
+
+def _lanzar_aprobado(cliente, cf_id, p):
+    """Lanza la generación que la persona ya aprobó (`auto_lanzar`). Sin saldo
+    (cobros, spec 2026-10-08 §5.4) no se encola: la sesión queda en error con
+    la frase (su «Reintentar» relanza con el prompt ya armado) y la frase vuelve
+    como mensaje de la tarea. Devuelve None si encoló o ya estaba encolada."""
+    entry = creative_flow.cargar(cliente)[cf_id]
+    try:
+        flowplus_lanzar.lanzar(cliente, cf_id, entry, prioridad=int(p.get("prioridad") or flowplus_lanzar.PRIORIDAD_NORMAL))
+    except SaldoInsuficiente as e:
+        frase = e.frase_proyecto()
+        creative_flow.actualizar(cliente, cf_id, estado="error", error=frase)
+        return frase
+    return None
 
 
 @al_interrumpir("flowplus_director")
@@ -113,5 +128,4 @@ def interrumpida(tarea, mensaje):
         prompt, datos = _fallback(cliente, entry, mensaje)
         creative_flow.actualizar(cliente, cf_id, estado="prompt_listo", prompt_relleno=prompt, director=datos)
     if p.get("auto_lanzar"):
-        entry = creative_flow.cargar(cliente)[cf_id]
-        flowplus_lanzar.lanzar(cliente, cf_id, entry, prioridad=int(p.get("prioridad") or flowplus_lanzar.PRIORIDAD_NORMAL))
+        _lanzar_aprobado(cliente, cf_id, p)

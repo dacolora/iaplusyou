@@ -72,10 +72,11 @@ def syncs_en_curso(cliente):
     return sorted(cola.job_ids_vivos(cliente, TIPO_SYNC))
 
 
-def encolar_evaluacion(cliente, evaluacion_id):
+def encolar_evaluacion(cliente, evaluacion_id, costo_estimado=None):
     """max_intentos=1: paga a Claude. False si ya había una viva."""
     return trabajos.encolar(job_id_evaluar(cliente), TIPO_EVALUAR, {"cliente": cliente, "evaluacion_id": evaluacion_id},
-                            cliente=cliente, duracion_estimada=120, etapas=ETAPAS_EVALUAR, max_intentos=1)
+                            cliente=cliente, duracion_estimada=120, etapas=ETAPAS_EVALUAR, max_intentos=1,
+                            costo_estimado=costo_estimado)
 
 
 def evaluacion_en_curso(cliente):
@@ -98,14 +99,16 @@ def job_id_analisis(cliente, canal, ad_id):
     return f"{cliente}__tw_anuncio__{canal}__{ad_id}"
 
 
-def encolar_analisis(cliente, analisis_id, canal, ad_id):
+def encolar_analisis(cliente, analisis_id, canal, ad_id, costo_estimado=None):
     """max_intentos=1: paga a fal y a Claude. False si ese anuncio ya tenía uno vivo, o si el canal o el ad_id no son
-    válidos (la garantía de «uno por anuncio» no depende de que cada ruta valide antes)."""
+    válidos (la garantía de «uno por anuncio» no depende de que cada ruta valide antes). `costo_estimado` (USD del
+    proveedor, sin margen): en un proyecto que cobra, `trabajos.encolar` exige y reserva ese precio (cobros §5.1)."""
     if not (id_valido(canal) and id_valido(ad_id)):
         return False
     return trabajos.encolar(job_id_analisis(cliente, canal, ad_id), TIPO_ANALIZAR,
                             {"cliente": cliente, "analisis_id": int(analisis_id)}, cliente=cliente,
-                            duracion_estimada=90, etapas=ETAPAS_ANALIZAR, max_intentos=1)
+                            duracion_estimada=90, etapas=ETAPAS_ANALIZAR, max_intentos=1,
+                            costo_estimado=costo_estimado)
 
 
 def analisis_vivos(cliente):
@@ -182,9 +185,9 @@ def tw_analizar_anuncio(tarea):
             except Exception:  # noqa: BLE001 — sin precio no se inventa uno; el error de la fila sigue siendo en palabras
                 log.exception("sin precio para los tokens del análisis %s", aid)
                 usd_claude = 0.0
-            if usd_claude:
+            if usd_claude:      # pagado y sin entregar: en un proyecto que cobra no se le cobra (cobros §3)
                 gastos.registrar_seguro(cliente, "evaluacion", usd_claude, referencia, proveedor="anthropic",
-                                        detalle=gettext("sin resultado usable"))
+                                        detalle=gettext("sin resultado usable"), entregado=False)
         mensaje = mejorar.texto_error(e)
         try:
             datos.actualizar_analisis(aid, estado="error", error=mensaje, medios=medios,
@@ -313,7 +316,7 @@ def tw_evaluar(tarea):
         usd = costo_real(entrada, salida) if (entrada or salida) else 0.0
         if usd:
             gastos.registrar_seguro(cliente, "evaluacion", usd, referencia, proveedor="anthropic",
-                                    detalle=gettext("sin resultado usable"))
+                                    detalle=gettext("sin resultado usable"), entregado=False)
         mensaje = analisis.texto_error(e)
         datos.actualizar_evaluacion(eid, estado="error", error=mensaje, usd=usd)
         raise RuntimeError(mensaje) from None

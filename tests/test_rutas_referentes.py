@@ -1554,3 +1554,31 @@ def test_pnd090_recrear_guarda_origen_sin_alterar_prompt(app, monkeypatch):
     assert r.status_code == 302 and len(lanzados) == 1
     assert lanzados[0]["prompt_relleno"] == "Mi prompt exacto"
     assert lanzados[0].get("origen") == "recrear"
+
+
+@pytest.mark.parametrize('dolor,producto,avisa', [
+    ('pies cansados', True, True), ('ninguno-oferta', True, False),
+    ('ninguno-marca', True, False), (None, True, False), ('pies cansados', False, False)])
+def test_r4_contexto_dolor_y_producto_sin_cobrar_ni_bloquear(app, monkeypatch, dolor, producto, avisa):
+    import re
+    from referentes import datos, recrear
+    ids = _sembrar()
+    datos.actualizar_referente(ids[0], dolor=dolor, extra={'i18n': {'en': {'dolor': 'aching feet'}}})
+    monkeypatch.setattr(recrear, '_llamar', lambda *a, **k: pytest.fail('llamada pagada'))
+    url = f'/cliente/acme/referentes/{ids[0]}/recrear'
+    if not producto:
+        url += '?producto_id=ausente'
+    import idiomas
+    idiomas.guardar_de_usuario('admin', 'en')
+    html = app['c'].get(url).get_data(as_text=True)
+    aviso = re.search(r'<p\b[^>]*data-contexto-dolor[^>]*>(.*?)</p>', html, re.S)
+    assert bool(aviso) == avisa
+    if avisa:
+        assert 'aching feet' in aviso.group(1)
+        assert re.search(r'<span data-producto>(.*?)</span>', aviso.group(1)).group(1) == app['productos'][0]['nombre']
+        assert 'class="vacio"' in aviso.group(0)
+    boton = re.search(r'<button\b(?=[^>]*data-recrear-generar)([^>]*)>(.*?)</button>', html, re.S)
+    assert boton is not None and 'disabled' not in boton.group(1)
+    if producto:
+        assert 'US$' in boton.group(2)
+    assert '<script' not in html

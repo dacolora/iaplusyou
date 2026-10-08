@@ -24,6 +24,7 @@ from flask_babel import gettext
 import cola
 import gastos
 import trabajos
+from cobros import SaldoInsuficiente, libro
 from idiomas import N_
 from nicho.avatares import costo_real, modelo_actual
 from referentes import clasificar, copycoders, datos, fuentes, imagenes
@@ -303,11 +304,48 @@ def _job_continuacion_barrer(job_id):
     return job_id[:-len(SUFIJO_CONT)] if job_id.endswith(SUFIJO_CONT) else job_id + SUFIJO_CONT
 
 
+def _costo_fase(payload, bid, tipo):
+    """Costo del proveedor (USD, sin margen) de la fase que se va a encolar:
+    el resto de lo que falta traer, o la clasificación del siguiente tramo
+    (cobros, revisión final 2026-10-08). 0 para las imágenes (no pagan a
+    nadie); None si no se puede calcular (basta con saldo positivo)."""
+    fase = payload.get("fase")
+    if fase == "imagenes":
+        return 0
+    try:
+        if fase == "trayendo":
+            consulta = payload.get("consulta") or {}
+            faltan = max(1, int(payload.get("tope") or 0) - int((datos.barrido(bid) or {}).get("traidos") or 0))
+            return float(fuentes.por_tipo(consulta.get("fuente")).estimar(consulta, faltan)["usd_fuente"])
+        n = len(datos.pendientes_clasificacion(barrido_id=bid, limite=TRAMO, incluir_error=tipo == TIPO_CLASIFICAR))
+        return gastos.estimar("clasificacion", n=max(1, n))["usd"]
+    except Exception:  # noqa: BLE001 — sin estimado no se inventa un precio
+        return None
+
+
 def _continuar_barrer(tarea, payload, bid, tipo=TIPO_BARRER):
+    """Encola la siguiente fase o tramo. Devuelve None, o la frase de «saldo
+    insuficiente» si el proyecto cobra y no le alcanza para lo que sigue: la
+    reserva de la primera fase muere al terminarla, así que cada fase pide y
+    reserva su propio precio con su job_id (cobros, revisión final 2026-10-08).
+    Sin saldo el barrido queda «parcial» con la frase y lo ya traído se
+    conserva; la tarea termina bien (no revierte lo que sí se entregó)."""
+    job_id = _job_continuacion_barrer(tarea.get("job_id") or job_id_barrer(bid))
+    cliente = payload.get("cliente") or tarea.get("cliente")
+    costo = _costo_fase(payload, bid, tipo)
+    if cliente and costo != 0:
+        try:
+            # La reserva de ESTA tarea (la fase que termina) no cuenta: lo suyo ya se gastó.
+            libro.exigir(cliente, costo, job_id=job_id, excluir_job=tarea.get("job_id"))
+        except SaldoInsuficiente as e:
+            frase = e.frase_proyecto()
+            datos.actualizar_barrido(bid, estado="parcial", aviso=cola.recortar(frase, 300))
+            return frase
     cuando = (datetime.now() + timedelta(seconds=ESPERA_CONT)).isoformat(timespec="seconds")
-    cola.encolar(tipo, payload, job_id=_job_continuacion_barrer(tarea.get("job_id") or job_id_barrer(bid)),
+    cola.encolar(tipo, payload, job_id=job_id,
                 cliente=tarea.get("cliente"),
                 duracion_estimada=1800, etapas=ETAPAS_BARRER, ejecutar_desde=cuando, max_intentos=1, prioridad=2)
+    return None
 
 
 def encolar_barrer(cliente, fuente, consulta, tope, usd_estimado, pedido_por=None):
@@ -315,11 +353,15 @@ def encolar_barrer(cliente, fuente, consulta, tope, usd_estimado, pedido_por=Non
     limita a 2000 acá (no solo en la ruta) porque esta función es el único
     punto de entrada real — cualquier ruta que la llame queda cubierta."""
     tope = min(int(tope or 0), 2000)
+    # Cobros (spec 2026-10-08 §5): sin saldo no queda un barrido «en cola» sin
+    # trabajo detrás; encolar vuelve a exigir y reserva con el job_id.
+    libro.exigir(cliente, usd_estimado)
     bid = datos.crear_barrido(cliente, fuente, consulta, tope, pedido_por=pedido_por, usd_estimado=usd_estimado)
     trabajos.encolar(job_id_barrer(bid), TIPO_BARRER,
                      {"cliente": cliente, "barrido_id": bid, "fase": "trayendo",
                       "consulta": {**consulta, "fuente": fuente}, "tope": tope},
-                     duracion_estimada=1800, etapas=ETAPAS_BARRER, max_intentos=1, prioridad=2, cliente=cliente)
+                     duracion_estimada=1800, etapas=ETAPAS_BARRER, max_intentos=1, prioridad=2, cliente=cliente,
+                     costo_estimado=usd_estimado)
     return bid
 
 
@@ -335,7 +377,8 @@ def encolar_clasificar_pendientes(cliente, barrido_id):
     trabajos.encolar(job_id_barrer(barrido_id), TIPO_CLASIFICAR,
                      {"cliente": cliente, "barrido_id": barrido_id, "fase": "clasificando",
                       "consulta": {**(b.get("consulta") or {}), "fuente": b["fuente"]}, "tope": b.get("tope") or 0},
-                     duracion_estimada=600, etapas=[(ETAPA_CLASIFICAR, 1)], max_intentos=1, prioridad=2, cliente=cliente)
+                     duracion_estimada=600, etapas=[(ETAPA_CLASIFICAR, 1)], max_intentos=1, prioridad=2, cliente=cliente,
+                     costo_estimado=gastos.estimar("clasificacion", n=b.get("pendientes") or 1)["usd"])
     return True
 
 
@@ -347,6 +390,7 @@ def encolar_reintentar_imagenes(cliente, barrido_id):
     b = datos.barrido(barrido_id)
     if not b:
         return False
+    libro.exigir(cliente, None)     # cobros §5: sin saldo no se reinician las imágenes sin trabajo detrás
     datos.reintentar_imagenes(barrido_id)
     trabajos.encolar(job_id_barrer(barrido_id), TIPO_BARRER,
                      {"cliente": cliente, "barrido_id": barrido_id, "fase": "imagenes",
@@ -455,10 +499,12 @@ def _fase_trayendo(tarea, p, bid, avanzar):
     datos.actualizar_barrido(bid, traidos=traidos_total, nuevos=nuevos_total, extra=extra, tarea_id=tarea.get("id"))
     if traidos_total >= tope or not cursor_final:
         datos.actualizar_barrido(bid, estado="guardando")
-        _continuar_barrer(tarea, {**p, "fase": "imagenes"}, bid)
+        _continuar_barrer(tarea, {**p, "fase": "imagenes"}, bid)   # las imágenes no cobran: nunca frena
         return gettext("%(traidos)s anuncios traídos (%(nuevos)s nuevos); siguen las imágenes.",
                        traidos=traidos_total, nuevos=nuevos_total)
-    _continuar_barrer(tarea, {**p, "fase": "trayendo"}, bid)
+    sin_saldo = _continuar_barrer(tarea, {**p, "fase": "trayendo"}, bid)
+    if sin_saldo:
+        return sin_saldo
     return gettext("Trayendo… %(traidos)s/%(tope)s.", traidos=traidos_total, tope=tope)
 
 
@@ -483,7 +529,9 @@ def _fase_imagenes_barrer(tarea, p, bid, avanzar):
         _continuar_barrer(tarea, {**p, "fase": "imagenes"}, bid)
         return gettext("Imágenes: %(listas)s listas, %(pendientes)s por bajar.", listas=con_imagen,
                        pendientes=pendientes_img)
-    _continuar_barrer(tarea, {**p, "fase": "clasificando"}, bid)
+    sin_saldo = _continuar_barrer(tarea, {**p, "fase": "clasificando"}, bid)
+    if sin_saldo:
+        return sin_saldo
     return gettext("Imágenes listas: %(listas)s. Sigue la clasificación.", listas=con_imagen)
 
 
@@ -588,6 +636,7 @@ def _fase_clasificando(tarea, p, bid, avanzar):
             usd = costo_real(ent, sal)
             gastos.registrar_seguro(cliente_gasto, "clasificacion", usd, f"referentes:clasificar:{r['id']}{ref_sufijo(tarea)}",
                                     detalle=r.get("titular") or r.get("marca") or "", proveedor="anthropic",
+                                    entregado=ok,   # una clasificación inválida no llegó (cobros §3.4)
                                     extra={"tokens_entrada": ent, "tokens_salida": sal, "modelo": modelo_actual()})
             b2 = datos.barrido(bid) or {}
             datos.actualizar_barrido(bid, usd_real=round(float(b2.get("usd_real") or 0.0) + usd, 4))
@@ -602,7 +651,9 @@ def _fase_clasificando(tarea, p, bid, avanzar):
     pendientes_total = len(filas_pendientes)
     datos.actualizar_barrido(bid, clasificados=clasificados, pendientes=pendientes_total)
     if pendientes_total and avanzo:
-        _continuar_barrer(tarea, {**p, "fase": "clasificando"}, bid, tipo=tipo_actual)
+        sin_saldo = _continuar_barrer(tarea, {**p, "fase": "clasificando"}, bid, tipo=tipo_actual)
+        if sin_saldo:
+            return sin_saldo
         return gettext("Clasificando… %(n)s listos.", n=clasificados)
     # `error` (no `pendiente`, que a esta altura la fase de imágenes ya dejó
     # siempre en 0 — Important 1) es lo que de verdad hay que avisar y lo que

@@ -37,7 +37,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 from final_edition.tipos import FUENTES
 
-COLOR_ACENTO_DEFECTO = "#7c3aed"
+COLOR_ACENTO_DEFECTO = "#FFFFFF"
 MAX_PALABRAS_GRUPO = 4
 MAX_PALABRAS_LINEA_DENSA = 6
 HUECO_NUEVO_GRUPO_S = 0.8
@@ -61,7 +61,10 @@ def generar_overlays(guion, palabras, marca, carpeta, ancho=1080, alto=1920):
     y subtitulos una lista, vacía si no hay palabras)."""
     os.makedirs(carpeta, exist_ok=True)
     marca = marca or {}
-    acento = _color(marca.get("color_acento") or COLOR_ACENTO_DEFECTO)
+    from final_edition.borrador import color_marca
+    color = color_marca(marca.get("color_acento"))
+    acento = _color(color or "#FFD400")
+    fondo_precio = acento if color else (0, 0, 0, 153)
     bloques = {b["rol"]: b for b in guion.get("bloques") or []}
     escala = ancho / 1080.0  # las medidas están pensadas para 1080x1920
 
@@ -78,7 +81,7 @@ def generar_overlays(guion, palabras, marca, carpeta, ancho=1080, alto=1920):
     precio = guion.get("precio_texto")
     if precio:
         ruta_badge = os.path.join(carpeta, "badge.png")
-        x, y = _png_badge(str(precio), acento, ruta_badge, ancho, alto, escala)
+        x, y = _png_badge(str(precio), fondo_precio, ruta_badge, ancho, alto, escala)
         producto = bloques.get("producto") or {}
         prueba = bloques.get("prueba") or producto
         salida["badge"] = _entrada(ruta_badge, producto.get("inicio_s", 0),

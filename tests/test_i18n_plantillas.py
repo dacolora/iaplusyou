@@ -12,6 +12,7 @@ from tests.i18n_util import espanol_en_plantilla
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PLANTILLAS_TRADUCIDAS = [
+    "admin_bloqueos_login.html",
     "base.html", "_sidebar.html", "login.html", "recuperar.html", "restablecer.html",
     "index.html", "legal.html", "panel.html",
     "_llave_tarjeta.html", "_meta_conectar.html", "_meta_elegir_forma.html",
@@ -64,6 +65,9 @@ PLANTILLAS_TRADUCIDAS = [
     "editor.html",   # Fase 6, Task 2: la página del editor
     "_tab_cambiar_calzado.html",   # Fase 6, Task 4: Crear › Cambiar producto
     "admin_meta.html", "admin_referentes.html", "meta_elegir.html",   # Fase 6, Task 5
+    "saldo_recarga.html",   # Cobros 7/11 y 8/11: la vuelta del checkout de Bold
+    "_config_saldo.html", "_saldo_panel.html",   # Cobros 8/11: Configuración › Saldo y recargas
+    "admin_cobros.html",   # Cobros 10/11: /admin/cobros
     "admin_salud.html", "admin_registros.html", "admin_estilos.html",   # Salud de la plataforma (spec 2026-10-01-escala-y-monitoreo)
     # Fase 6, Task 6: llegaron con fusiones de main ya traducidas y solo faltaba
     # sumarlas a la guardia — Crear › Audios (worktree-crear-audios, 82491a6) y el

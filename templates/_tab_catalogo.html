@@ -109,7 +109,7 @@
         <input type="file" name="imagenes" accept=".jpg,.jpeg,.png,.webp" multiple required>
 
         <button class="btn-generar btn-sm" type="submit" style="margin-top:.8rem;">{{ _('Crear %(nombre)s', nombre=(c.nombre|traducir|lower)) }}</button>
-        <small class="vacio precio-nota" style="display:inline;padding:0 0 0 .5rem;">{{ _('no gasta: la regla la escribes tú') }}{% if precios and precios.regla_producto and precios.regla_producto.usd is not none %} {{ _('(al importar, ≈ %(usd)s la regla con IA)', usd=(precios.regla_producto.usd | usd)) }}{% endif %}</small>
+        <small class="vacio precio-nota" style="display:inline;padding:0 0 0 .5rem;">{{ _('no gasta: la regla la escribes tú') }}{% if precios and precios.regla_producto and precios.regla_producto.usd is not none %} {{ _('(al importar, ≈ %(usd)s la regla con IA)', usd=(precios.regla_producto.usd | precio | usd)) }}{% endif %}</small>
       </form>
     </div>
   </details>

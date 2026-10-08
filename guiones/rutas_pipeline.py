@@ -18,13 +18,14 @@ import referencias_flowplus
 import tiendas
 import trabajos
 import usuarios
+from cobros import SaldoInsuficiente, libro
 from final_edition import biblioteca
 from guiones import cadena, clips, config, datos, duracion, escenas, imagenes, lectura, medios, notion, plantillas, recorte, refinador
 from guiones.refinador import Conflicto, DatoInvalido, ErrorRefinador, NoExiste
 from guiones.rutas import _cuerpo, _entero, _error, _sin_cuerpo, _solo_mismo_origen
 from providers import flowplus_modelos
 from storage import r2_uploader
-from tareas.cadena import PRIORIDAD_CADENA, job_id as job_cadena
+from tareas.cadena import PRIORIDAD_CADENA, fallar_cadena, job_id as job_cadena
 
 bp = Blueprint("guiones_pipeline", __name__, url_prefix="/cliente/<cliente>/guiones")
 bp.before_request(_solo_mismo_origen)
@@ -32,6 +33,20 @@ bp.before_request(_solo_mismo_origen)
 
 def _costo(paso, palabras=0):
     return gastos.estimar("guion_clips", paso=paso, palabras=palabras)["texto"]
+
+
+def _exigir(cliente, paso, palabras=0):
+    """Cobros (spec 2026-10-08 §5.2): los pasos con Claude corren en un hilo de
+    esta misma petición (`trabajos.iniciar`), no en el worker: el saldo se pide
+    aquí, antes de cambiar el estado y de lanzar el hilo. Sin saldo,
+    SaldoInsuficiente y el manejador común responde 402."""
+    libro.exigir(cliente, gastos.estimar("guion_clips", paso=paso, palabras=palabras)["usd"])
+
+
+def _palabras(v):
+    """Palabras que se le mandan a Claude al armar (las mismas del precio del botón)."""
+    textos = duracion.textos_efectivos(v["guion"]["lectura"], v["config"].get("hook", "original"))
+    return sum(duracion.palabras(t) for _, t in duracion.conservadas(textos, v["recorte"].get("quitadas", [])))
 
 
 def _catalogo_para_elegir(cliente, en_uso):
@@ -77,9 +92,7 @@ def _contexto(cliente, guion_id=None, video_id=None):
         propio = proyectos.bloque_global_flowplus(cliente)
         ctx["bloque_global"] = {"texto": propio or plantillas.BLOQUE_GLOBAL_FABRICA, "propio": bool(propio)}
     if v is not None:
-        textos = duracion.textos_efectivos(v["guion"]["lectura"], v["config"].get("hook", "original"))
-        palabras = sum(duracion.palabras(t) for _, t in duracion.conservadas(textos, v["recorte"].get("quitadas", [])))
-        ctx["costos"]["armar"] = _costo("armar", palabras)
+        ctx["costos"]["armar"] = _costo("armar", _palabras(v))
         ctx["prompts"] = {f"{(p['extra'] or {}).get('variante')}:{(p['extra'] or {}).get('clip_index')}":
                           {"id": p["id"], "estado": p["estado"]}
                           for p in datos.prompts_de_video(v["id"]) if p["tipo"] == "clip"}
@@ -165,6 +178,7 @@ def lote_crear(cliente):
     cuerpo = _cuerpo()
     if cuerpo is None:
         return _sin_cuerpo()
+    _exigir(cliente, "leer", 750)
     try:
         if str(cuerpo.get("notion_url") or "").strip():
             if not notion.conectado(cliente):
@@ -224,6 +238,7 @@ def notion_borrar(cliente):
 def lote_reintentar(cliente, lid):
     if _cuerpo() is None:
         return _sin_cuerpo()
+    _exigir(cliente, "leer", 750)
     try:
         datos.reintentar_lote(cliente, lid)
     except ErrorRefinador as e:
@@ -328,6 +343,7 @@ def video_recorte_proponer(cliente, vid):
         v = _video_o_404(cliente, vid)
         if not v["config"].get("duracion_objetivo"):
             raise Conflicto(gettext("Pon una duración objetivo para poder recortar."))
+        _exigir(cliente, "recorte")
         datos.empezar(cliente, vid, "recortando", ("configurando",))
     except ErrorRefinador as e:
         return _error(e)
@@ -353,6 +369,7 @@ def video_armar(cliente, vid):
     if _cuerpo() is None:
         return _sin_cuerpo()
     try:
+        _exigir(cliente, "armar", _palabras(_video_o_404(cliente, vid)))
         datos.empezar(cliente, vid, "armando", ("configurando", "invalido", "error"))
     except ErrorRefinador as e:
         return _error(e)
@@ -404,6 +421,8 @@ def video_imagenes(cliente, vid):
     if _cuerpo() is None:
         return _sin_cuerpo()
     try:
+        _video_o_404(cliente, vid)
+        _exigir(cliente, "imagenes")
         datos.empezar_imagenes(cliente, vid)
     except ErrorRefinador as e:
         return _error(e)
@@ -596,13 +615,15 @@ def cadena_aprobar(cliente, vid):
         if desde != ks[0] and not cadena.puede_rehacer(est, desde, ks[0]):
             raise Conflicto(gettext("Para rehacer desde esa escena hace falta el último cuadro de la anterior."))
         precio = cadena.precio(v, desde, list(((est or {}).get("elementos") or {}).keys()))
-        try:
-            visto = float(cuerpo.get("total_visto"))
-        except (TypeError, ValueError):
-            visto = None
+        # `total_visto` es lo que la persona vio (precio, con margen si el
+        # proyecto cobra; cobros, spec 2026-10-08 §6): vuelve a costo una sola vez.
+        visto = gastos.costo_de_precio(cuerpo.get("total_visto"))
         if visto is None or abs(visto - precio) > 0.005:
             return jsonify({"error": gettext("El precio cambió: ahora es ≈ US$ %(precio)s. Revisa y vuelve a aprobar.",
-                                             precio=f"{precio:.2f}"), "precio": precio}), 409
+                                             precio=f"{gastos.precio(precio):.2f}"), "precio": gastos.precio(precio)}), 409
+        # Cobros (spec 2026-10-08 §5): la cadena entera se pide antes de
+        # aprobarla; cada escena vuelve a pedir y reservar lo suyo al encolarse.
+        libro.exigir(cliente, precio)
         usuario = session.get("usuario")
 
         def aprobar(e, video):
@@ -612,8 +633,15 @@ def cadena_aprobar(cliente, vid):
         datos.modificar_cadena(cliente, vid, aprobar)
     except ErrorRefinador as e:
         return _error(e)
-    trabajos.encolar(job_cadena(cliente, vid, "elementos"), "cadena_elementos", {"cliente": cliente, "video_id": vid},
-                     duracion_estimada=60, cliente=cliente, max_intentos=1, prioridad=PRIORIDAD_CADENA)
+    try:
+        trabajos.encolar(job_cadena(cliente, vid, "elementos"), "cadena_elementos", {"cliente": cliente, "video_id": vid},
+                         duracion_estimada=60, cliente=cliente, max_intentos=1, prioridad=PRIORIDAD_CADENA,
+                         costo_estimado=precio)
+    except SaldoInsuficiente as e:
+        # Otro clic gastó el saldo entre la revisión y el encolado: la cadena
+        # aprobada no queda «corriendo» sin trabajo detrás.
+        fallar_cadena(cliente, vid, desde, e.frase_proyecto())
+        raise
     return jsonify({"video_id": vid}), 202
 
 

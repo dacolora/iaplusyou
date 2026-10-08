@@ -189,6 +189,8 @@ def test_qa_pieza_registra_el_gasto_y_guarda_la_doctrina_en_la_sesion(base_tempo
         e = qa.AnalisisInvalido("Claude no devolvió JSON.")
         e.tokens_entrada, e.tokens_salida = 1400, 100
         raise e
+    # PND-088: el caso de fallo pagado evalúa una pieza que todavía no pasó.
+    datos.actualizar_idea("acme", cp, qa=None)
     monkeypatch.setattr(qa, "evaluar", falla)
     with pytest.raises(qa.AnalisisInvalido):
         tareas.REGISTRO["sprint_qa_pieza"]({"id": 31, "intentos": 2, "payload": {"cliente": "acme", "cp_id": cp}})
@@ -333,6 +335,31 @@ def test_qa_pendientes_encola_y_avisa_fin_de_lote(base_temporal, monkeypatch):
     encolados.clear()
     tareas.REGISTRO["sprint_qa_pendientes"]({"payload": {}})
     assert encolados == []
+
+
+def test_qa_pendientes_no_encola_qa_en_un_proyecto_que_cobra_sin_saldo(base_temporal, monkeypatch):
+    """Cobros (2026-10-08): el QA cobra; sin saldo el respaldo del worker la
+    dejaría en error y la periódica la volvería a encolar cada 5 min."""
+    import cola
+    import creative_flow
+    import db
+    import tareas
+    from cobros import libro
+    from sprints import datos
+    _, _, cp, _ = _pieza_lista(datos, creative_flow)
+    _, _, cp_otro, _ = _pieza_lista(datos, creative_flow, cliente="otro")
+    encolados = []
+    monkeypatch.setattr(cola, "encolar", lambda tipo, payload, **kw: encolados.append((payload["cliente"], payload["cp_id"])) or 1)
+    tareas.cargar_todas()
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    tareas.REGISTRO["sprint_qa_pendientes"]({"payload": {}})
+    assert encolados == [("otro", cp_otro)]   # «otro» no cobra: como siempre
+
+    encolados.clear()
+    with db.conectar() as con:
+        libro.acreditar(con, "acme", "ajuste", 1000, "ajuste", usuario="admin", detalle="prueba")
+    tareas.REGISTRO["sprint_qa_pendientes"]({"payload": {}})
+    assert sorted(encolados) == [("acme", cp), ("otro", cp_otro)]
 
 
 def test_qa_pendientes_no_avisa_con_idea_reservando(base_temporal, monkeypatch):
@@ -610,3 +637,35 @@ def test_encolar_ideas_no_se_reintenta_sola(base_temporal, monkeypatch):
     monkeypatch.setattr(ts.trabajos, "encolar", lambda job_id, tipo, payload, **kw: vistos.append(kw) or True)
     ts.encolar_ideas("acme", 5)
     assert vistos[0]["max_intentos"] == 1
+
+
+def test_pnd088_worker_no_paga_qa_que_ya_paso(base_temporal, monkeypatch):
+    import creative_flow
+    from sprints import datos, qa
+    from tareas import sprints as ts
+    sid, cid, cp, cf = _pieza_lista(datos, creative_flow)
+    datos.actualizar_idea('acme', cp, qa={'veredicto': 'pasa'})
+    monkeypatch.setattr(qa, 'evaluar', lambda *a, **k: pytest.fail('QA pagado sobre aprobada'))
+    ts.ejecutar_qa_pieza({'payload': {'cliente': 'acme', 'cp_id': cp}})
+    assert datos.idea('acme', cp)['qa'] == {'veredicto': 'pasa'}
+
+
+@pytest.mark.parametrize('qa_previo,veces', [(None, 1), ({'veredicto': 'falla'}, 0)])
+def test_r2_aprobada_recibe_solo_su_primer_qa(base_temporal, monkeypatch, qa_previo, veces):
+    import creative_flow
+    from sprints import datos, qa
+    from tareas import sprints as ts
+    sid, cid, cp, cf = _pieza_lista(datos, creative_flow)
+    datos.actualizar_idea('acme', cp, revision='aprobada', qa=qa_previo)
+    llamadas = []
+    def evaluar(*a, **kw):
+        llamadas.append(cp)
+        return {'veredicto': 'pasa', 'score': 90, 'checks': {}}
+    monkeypatch.setattr(qa, 'evaluar', evaluar)
+    assert (('acme', cp) in ts._piezas_listas_sin_qa()) == (qa_previo is None)
+    for _ in range(2):
+        ts.ejecutar_qa_pieza({'payload': {'cliente': 'acme', 'cp_id': cp}})
+    assert len(llamadas) == veces
+    assert ('acme', cp) not in ts._piezas_listas_sin_qa()
+    if qa_previo:
+        assert datos.idea('acme', cp)['qa'] == qa_previo

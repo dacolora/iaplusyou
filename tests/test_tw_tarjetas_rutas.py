@@ -202,10 +202,10 @@ def test_en_el_lote_una_que_falla_no_tumba_las_demas(app, monkeypatch, caplog): 
     _sembrar()
     real = tareas_tw.encolar_analisis
 
-    def a_veces(cliente, aid, canal, ad_id):
+    def a_veces(cliente, aid, canal, ad_id, **k):
         if ad_id == "p1":
             raise RuntimeError("boom token=abc")
-        return real(cliente, aid, canal, ad_id)
+        return real(cliente, aid, canal, ad_id, **k)
     monkeypatch.setattr(tareas_tw, "encolar_analisis", a_veces)
     _, claves, _ = _form_del_lote(app)
     assert "facebook-ads:p1" in claves and len(claves) == 5
@@ -215,6 +215,73 @@ def test_en_el_lote_una_que_falla_no_tumba_las_demas(app, monkeypatch, caplog): 
     assert len(_jobs()) == 4 and "acme__tw_anuncio__facebook-ads__p1" not in _jobs() and _filas_analisis() == 4
     assert "Analizando 4 anuncios con IA" in html and "No se pudo encolar 1 anuncio" in html
     assert "RuntimeError" in caplog.text and "token=abc" not in caplog.text    # la clase, nunca el mensaje
+
+
+# --- Cobros (main, 2026-10-08): «Cómo mejorarlo» es una tarea que cobra ------------------------------------------
+
+def _cobra(milesimas=0):
+    from cobros import libro
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    if milesimas:
+        with db.conectar() as con:
+            libro.acreditar(con, "acme", "ajuste", milesimas, "ajuste", usuario="admin", detalle="prueba")
+    return libro
+
+
+def _reservas():
+    with db.conectar() as con:
+        return [dict(x._mapping) for x in con.execute(sa.select(db.reserva_saldo)).all()]
+
+
+def _precio(libro, ad_id):
+    """Las milésimas que cobra el botón de ese anuncio: el costo de `panel.precio_analisis` por el margen."""
+    from triple_whale import panel
+    clave = ("facebook-ads", ad_id)
+    usd = panel.precio_analisis(datos.creativos("acme", [clave]).get(clave))["usd"]
+    return libro.precio_milesimas(usd, libro.margen_precio("acme"))
+
+
+def test_sin_saldo_el_analisis_no_guarda_nada_y_el_fetch_recibe_402(app):  # noqa: F811
+    _conectar()
+    _sembrar()
+    _cobra()
+    r = _analizar(app, json=True)
+    d = r.get_json()
+    assert r.status_code == 402 and d["saldo_insuficiente"] is True and d["recargar_url"].endswith("#config-ap-saldo")
+    assert _filas_analisis() == 0 and _jobs() == [] and _reservas() == []
+    r = _analizar(app)                                               # el formulario: aviso y vuelta, nada guardado
+    assert r.status_code == 302 and _filas_analisis() == 0 and _jobs() == []
+
+
+def test_con_saldo_el_analisis_reserva_el_precio_del_boton(app):  # noqa: F811
+    libro = _cobra(milesimas=5000)
+    _conectar()
+    _sembrar()
+    assert _analizar(app, json=True).get_json()["ok"]
+    [res] = _reservas()
+    assert res["job_id"] == "acme__tw_anuncio__facebook-ads__p1" and res["milesimas"] == _precio(libro, "p1") > 0
+    assert _jobs() == ["acme__tw_anuncio__facebook-ads__p1"]
+
+
+def test_el_lote_sin_saldo_para_todos_encola_los_que_alcanzan_y_lo_dice(app):  # noqa: F811
+    _conectar()
+    _sembrar()
+    data, claves, _ = _form_del_lote(app)
+    assert len(claves) == 5
+    libro = _cobra()
+    dos = [c.split(":")[1] for c in claves[:2]]
+    with db.conectar() as con:
+        libro.acreditar(con, "acme", "ajuste", sum(_precio(libro, a) for a in dos), "ajuste", usuario="admin",
+                        detalle="prueba")
+    html = _lote(app, data).data.decode()
+    assert _jobs() == sorted(f"acme__tw_anuncio__facebook-ads__{a}" for a in dos) and _filas_analisis() == 2
+    assert "Analizando 2 anuncios con IA" in html and "Saldo insuficiente" in html and "Recargar saldo" in html
+    assert libro.disponible("acme") == 0
+
+
+def test_el_analisis_esta_clasificado_como_tarea_que_cobra():
+    import tareas
+    assert "tw_analizar_anuncio" in tareas.TIPOS_QUE_COBRAN
 
 
 def _lista(app, ad_id="p1"):  # noqa: F811

@@ -149,20 +149,35 @@ def terminar_y_encolar(tarea_id, mensaje, siguiente):
         return int(r.inserted_primary_key[0])
 
 
-def fallar(tarea_id, error):
+def fallar(tarea_id, error, definitivo=False):
+    """Marca el fallo de una tarea. Si le quedan intentos vuelve a `pendiente`
+    con espera exponencial; si no (o con `definitivo=True`, p. ej. el respaldo
+    de cobros que no la deja arrancar sin saldo), queda en `error`.
+    Devuelve "pendiente" (se reintenta), "error" (fallo definitivo) o None
+    (la tarea no existe)."""
     with db.conectar() as con:
         fila = con.execute(sa.select(db.tarea.c.intentos, db.tarea.c.max_intentos).where(db.tarea.c.id == tarea_id)).first()
         if not fila:
-            return
-        if fila.intentos < fila.max_intentos:
+            return None
+        if fila.intentos < fila.max_intentos and not definitivo:
             espera = timedelta(minutes=2 ** fila.intentos)
             con.execute(db.tarea.update().where(db.tarea.c.id == tarea_id).values(
                 estado="pendiente", error=recortar(sin_token(error)),
                 ejecutar_desde=(datetime.now() + espera).isoformat(timespec="seconds")))
-        else:
-            con.execute(db.tarea.update().where(db.tarea.c.id == tarea_id).values(
-                estado="error", error=recortar(sin_token(error)), terminada_en=db.ahora(),
-                mensaje=recortar(sin_token(error))))
+            return "pendiente"
+        con.execute(db.tarea.update().where(db.tarea.c.id == tarea_id).values(
+            estado="error", error=recortar(sin_token(error)), terminada_en=db.ahora(),
+            mensaje=recortar(sin_token(error))))
+        return "error"
+
+
+def viva(job_id):
+    """True si hay una tarea pendiente o en curso con ese job_id."""
+    if not job_id:
+        return False
+    with db.conectar() as con:
+        return con.execute(sa.select(db.tarea.c.id).where(
+            db.tarea.c.job_id == job_id, db.tarea.c.estado.in_(("pendiente", "en_curso"))).limit(1)).first() is not None
 
 
 def recuperar_colgadas(minutos=30, excluir=()):

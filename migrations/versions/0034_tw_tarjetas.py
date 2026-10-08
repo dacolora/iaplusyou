@@ -1,8 +1,10 @@
 """Triple Whale: tarjetas de análisis por anuncio (spec 2026-10-08-triple-whale-tarjetas-analisis §3)
 
-Revision ID: 0033
-Revises: 0032
+Revision ID: 0034
+Revises: 0033
 Create Date: 2026-10-08 12:00:00.000000
+
+Era la 0033 en la rama tw-tarjetas; se renumeró a 0034 al mezclar main (2026-10-08), que ya tenía 0033_cobros.
 
 `tw_creativo`: el anuncio tal cual (miniatura, video, título, copy) por (proyecto, canal, anuncio).
 `tw_analisis`: «Cómo mejorarlo» de un anuncio, pagado; AUTOINCREMENT para que un id no se reuse.
@@ -12,8 +14,8 @@ from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
 
-revision: str = '0033'
-down_revision: Union[str, Sequence[str], None] = '0032'
+revision: str = '0034'
+down_revision: Union[str, Sequence[str], None] = '0033'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

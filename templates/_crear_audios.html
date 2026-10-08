@@ -14,7 +14,7 @@
      data-url-vp-lista="{{ url_for('vp_lista', cliente=cliente) }}"
      data-url-vp-clonar="{{ url_for('vp_clonar', cliente=cliente) }}"
      data-url-vp-disenar="{{ url_for('vp_disenar', cliente=cliente) }}"
-     data-usd-caracter="{{ usd_por_caracter }}">
+     data-usd-caracter="{{ usd_por_caracter|precio }}">
   <p class="vacio au-intro">{{ _('Escribe un texto, elige la voz y, si quieres, una canción de fondo. Sale un mp3 para escuchar y descargar. Nada se cobra hasta que pulses «Crear audio».') }}</p>
 
   <div class="au-layout">
@@ -43,7 +43,7 @@
               <input type="file" id="au-vp-archivo" accept=".mp3,.wav,.m4a,.aac,.ogg,audio/*"></label>
             <label class="au-vp-permiso"><input type="checkbox" id="au-vp-permiso"> <span>{{ texto_consentimiento|traducir }}</span></label>
             <p class="au-ayuda">{{ _('Graba en un lugar silencioso, con una sola persona hablando y sin música.') }}</p>
-            <div><button type="button" class="btn-generar btn-sm" id="au-vp-clonar">{{ _('Clonar voz') }} <span id="au-vp-clonar-precio">≈ {{ precio_voz_clonada.usd|usd }}</span></button></div>
+            <div><button type="button" class="btn-generar btn-sm" id="au-vp-clonar">{{ _('Clonar voz') }} <span id="au-vp-clonar-precio">≈ {{ precio_voz_clonada.usd|precio|usd }}</span></button></div>
           </div>
           <div class="au-vp-form" id="au-vp-form-disenar" role="tabpanel" data-vp-form="disenar" hidden>
             <label class="campo-label" for="au-vp-nombre-d">{{ _('Nombre de la voz') }}
@@ -51,7 +51,7 @@
             <label class="campo-label" for="au-vp-descripcion">{{ _('Descripción') }}
               <textarea id="au-vp-descripcion" rows="3" maxlength="500" placeholder="{{ _('ej. Mujer de unos 30 años, voz cálida y cercana, ritmo pausado, acento sueco suave') }}"></textarea></label>
             <p class="au-ayuda">{{ _('No describas a una persona real ni pidas imitar a alguien famoso.') }}</p>
-            <div><button type="button" class="btn-generar btn-sm" id="au-vp-disenar">{{ _('Diseñar voz') }} <span id="au-vp-disenar-precio">≈ {{ precio_voz_disenada.usd|usd }}</span></button></div>
+            <div><button type="button" class="btn-generar btn-sm" id="au-vp-disenar">{{ _('Diseñar voz') }} <span id="au-vp-disenar-precio">≈ {{ precio_voz_disenada.usd|precio|usd }}</span></button></div>
           </div>
           <p class="au-ayuda">{{ _('Tu voz habla los diez idiomas; su muestra se crea en el idioma del texto que elijas abajo.') }}</p>
         </div>
@@ -519,6 +519,23 @@
     }, 4000);
   }
   raiz.addEventListener('click', function (ev) {
+    var mas = ev.target.closest('.au-mas');
+    if (mas) {
+      mas.disabled = true;
+      fetch(mas.dataset.url, {headers: {'X-Requested-With': 'fetch'}})
+        .then(function (r) { if (!r.ok || r.redirected) throw new Error(); return r.json(); })
+        .then(function (d) {
+          if (!mas.isConnected) return;
+          var fragmento = document.createElement('template');
+          fragmento.innerHTML = d.html;
+          var lista = document.querySelector('#au-lista .au-items');
+          fragmento.content.querySelectorAll('.au-item').forEach(function (item) { lista.appendChild(item); });
+          var siguiente = fragmento.content.querySelector('.au-mas');
+          if (siguiente) mas.replaceWith(siguiente); else (mas.closest('.acciones') || mas).remove();
+        })
+        .catch(function () { mas.disabled = false; mostrarError(T.sinConexion); });
+      return;
+    }
     var b = ev.target.closest('.au-borrar');
     if (b) {
       if (!confirm(T.confirmarBorrar + ' «' + b.dataset.nombre + '»')) return;

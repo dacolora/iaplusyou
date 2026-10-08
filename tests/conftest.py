@@ -22,6 +22,40 @@ def base_temporal(monkeypatch):
     db._reset_para_tests()
 
 
+@pytest.fixture()
+def escritor_en_medio(base_temporal):
+    """`escritor_en_medio(patron, sql)`: justo antes del primer statement que
+    contenga `patron`, OTRA conexión (otro hilo, el worker) ejecuta `sql` y
+    confirma. Si la transacción en curso ya tiene el candado de escritura, esa
+    conexión queda bloqueada (timeout corto) y no escribe nada: devuelve el
+    estado {"hecho", "resultado": "confirmó" | "bloqueado: …"}."""
+    import sqlite3
+
+    import sqlalchemy as sa
+
+    ruta = str(base_temporal.engine().url.database)
+
+    def armar(patron, sql):
+        estado = {"hecho": False, "resultado": None}
+
+        @sa.event.listens_for(base_temporal.engine(), "before_cursor_execute")
+        def _antes(conn, cursor, statement, params, context, executemany):
+            if estado["hecho"] or patron not in statement:
+                return
+            estado["hecho"] = True
+            otro = sqlite3.connect(ruta, timeout=0.3)
+            try:
+                otro.execute(sql)
+                otro.commit()
+                estado["resultado"] = "confirmó"
+            except sqlite3.OperationalError as e:
+                estado["resultado"] = f"bloqueado: {e}"
+            finally:
+                otro.close()
+        return estado
+    return armar
+
+
 # Usuarios que los tests de rutas meten en la sesión a mano (session_transaction).
 # El guard _verificar_sesion cierra cualquier sesión cuyo usuario no esté en
 # usuarios.json, así que tienen que existir. Contraseña de todos: PASSWORD_PRUEBA.

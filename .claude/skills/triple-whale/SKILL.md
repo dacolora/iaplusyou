@@ -8,7 +8,7 @@ description: "Triple Whale: conexión, sincronización por SQL, la pestaña de r
 > Parte de la guía del repositorio; hasta el 2026-10-01 vivía dentro de CLAUDE.md. **Si cambias esta área, actualiza este archivo** en el mismo cambio (no CLAUDE.md). Si el código y este texto no coinciden, manda el código: corrige el texto.
 
 **Triple Whale** (package `triple_whale/`, `triple_whale_tiendas.py`, `tareas/triple_whale.py`; spec
-`docs/superpowers/specs/2026-09-28-triple-whale-rendimiento-design.md`, migrations 0023, 0024, 0032 and 0033; the
+`docs/superpowers/specs/2026-09-28-triple-whale-rendimiento-design.md`, migrations 0023, 0024, 0032 and 0034; the
 per-ad cards are in «Tarjetas de análisis» at the end): connected from
 the Triple Whale tab itself (`_triple_whale_conectar.html`, included by `_tab_triple_whale.html` in both states;
 until 2026-09-28 the form sat in Configuración › Conexiones, and the `cfg_triple_whale_*` routes now return to
@@ -192,15 +192,15 @@ verdict, rings and «how to improve it»; the tab was a table and «Evaluar con 
 production. It must work for ANY ad, not only Creatv's: in happyflops only 4 pieces have a `meta_ad_id`. Spec
 `docs/superpowers/specs/2026-10-08-triple-whale-tarjetas-analisis-design.md`, plan in `docs/superpowers/plans/`.
 
-- **Tables (migration 0033).** `tw_creativo` = the ad as `ads_table` gives it (type, thumbnail, mp4, title, copy,
-  duration), one row per (cliente, canal, ad_id) with NO store: the same ad arrives identical through every store that
-  shares an ad account. `tw_analisis` = one paid «Cómo mejorarlo» (state, `foto` = the ad as it looked when asked,
-  `resultado`, `medios`, `usd`), AUTOINCREMENT, never deleted with stores: it is money already spent, like
-  `tw_evaluacion`. Only `triple_whale/datos.py` writes them; the one other delete is `tw_creativo` in
-  `triple_whale_tiendas.quitar`/`desconectar` (`_borrar_creativos`) when the LAST store goes. It is not in
-  `_borrar_copias`, so changing currency/model/window or removing one of several stores keeps it: it depends on neither.
-  Reads for a page of ads go through `datos._por_claves`, a flat `(canal, ad_id) IN (…)` in chunks of 400: a chain of
-  ORs hit SQLite's expression-depth limit with ~2 500 ads («Expression tree is too large»).
+- **Tables (migration 0034; it was 0033 until main brought `0033_cobros` on 2026-10-08).** `tw_creativo` = the ad as
+  `ads_table` gives it (type, thumbnail, mp4, title, copy, duration), one row per (cliente, canal, ad_id) with NO
+  store: the same ad arrives identical through every store that shares an ad account. `tw_analisis` = one paid «Cómo
+  mejorarlo» (state, `foto` = the ad as it looked when asked, `resultado`, `medios`, `usd`), AUTOINCREMENT, never
+  deleted with stores: it is money already spent, like `tw_evaluacion`. Only `triple_whale/datos.py` writes them; the
+  one other delete is `tw_creativo` in `triple_whale_tiendas.quitar`/`desconectar` (`_borrar_creativos`) when the LAST
+  store goes. It is not in `_borrar_copias`, so changing currency/model/window or removing one of several stores keeps
+  it: it depends on neither. Reads for a page of ads go through `datos._por_claves`, a flat `(canal, ad_id) IN (…)` in
+  chunks of 400: a chain of ORs hit SQLite's expression-depth limit with ~2 500 ads («Expression tree is too large»).
 - **Sync.** `triple_whale.consultas_creativos()` (full/minimal) is the fifth query of each tramo, in its own step. A
   failure goes to `ultimo_resumen.fallos["creativos"]` (key struck) and the copy continues, and it is not retried in
   later tramos: a card without its creative still has its numbers, and the ads must never be lost for this.
@@ -232,13 +232,24 @@ production. It must work for ANY ad, not only Creatv's: in happyflops only 4 pie
   `gastos.estimar("analisis_anuncio_tw", segundos=)` = tariff 0.10 + Whisper by the video's duration (30 s when
   unknown). The 0.10 is measured (real run 2026-10-08, 4 happyflops ads, `docs/superpowers/evals/2026-10-08-tw-como-mejorarlo.md`):
   one call US$ 0,067–0,084 with a warm cache, US$ 0,095 cold (the cache write), US$ 0,16 when the correction call was
-  needed (1 of 4); Whisper ≤ US$ 0,0014 (PND-171). `max_intentos=1`, `job_id`
+  needed (1 of 4); Whisper ≤ US$ 0,0014 (PND-179). `max_intentos=1`, `job_id`
   `<cliente>__tw_anuncio__<canal>__<ad_id>`: a second click launches nothing. `id_valido` is a `fullmatch` because `$`
   lets a trailing newline through and «p1%0A» would be its own job, a second paid analysis; `encolar_analisis` refuses
   invalid ids. Spend: Whisper as `transcripcion`/fal `tw_anuncio:<aid>:t<tarea>:voz`, Claude as `evaluacion`/anthropic
   `tw_anuncio:<aid>:t<tarea>`, once, also when it fails after paying (the tokens ride the exception). The Claude call has
   `timeout=300, max_retries=0` (A6: a retry by the SDK could be paid without being recorded; a failure ends in error
-  and the person asks again with the price in view). The task reads its row inside the `try` and guards the `except`'s
+  and the person asks again with the price in view). **Cobros** (main's prepaid balance, wired in when main was merged on
+  2026-10-08; skill `cobros`): `tw_analizar_anuncio` is in `tareas.TIPOS_QUE_COBRAN`; `_pedir_analisis` reads the
+  creative, takes the button's COST (`panel.precio_analisis(...)["usd"]`) and calls `libro.exigir(cliente, usd)` BEFORE
+  closing stale rows or creating the `tw_analisis` row, then `encolar_analisis(..., costo_estimado=usd)` reserves it;
+  `SaldoInsuficiente` goes up to `dashboard._saldo_insuficiente` (402 JSON to the card's fetch, which treats 402 as a
+  known answer and only re-enables its buttons, since `static/cobros.js` paints «Recargar saldo»; flash to the form).
+  The batch stops at the first ad without balance: the ones already queued keep their reservation, the flash says how
+  many, and the exception is re-raised for the common handler. Claude's spend after a failed call goes with
+  `entregado=False` (paid, not delivered: never charged), like `tw_evaluar`. The detail's figure is
+  `fila.usd | cobrado('tw_anuncio:' ~ fila.id)`: `cobros.vista.clave_de` folds `…:t<id>` and `…:t<id>:voz` into that
+  key, so a client of a charging project sees what was charged, never the cost. Tests:
+  `tests/test_tw_tarjetas_rutas.py` (`test_sin_saldo_…`, `test_con_saldo_…`, `test_el_lote_sin_saldo_…`). The task reads its row inside the `try` and guards the `except`'s
   own write (A4), so any failure leaves the row in `error`, with words: a row stuck in `en_cola` would block that ad. Claude gets up to 8
   frames with their second (a Creatv piece's from R2, else the video, else the thumbnail), the ad text, the Whisper
   voice, rings, trend, the attribution model and window, up to 3 winners of the channel, the account evaluation, the
@@ -308,11 +319,11 @@ production. It must work for ANY ad, not only Creatv's: in happyflops only 4 pie
   (`mejorar.cifras_del_aprendizaje`, also in the route against an old form): it would enter every prompt as a fact.
 - **Rulings that differ from the spec.** Ring code `sin_video` (above). «Pausar/Activar en Meta» stays only in «Ver como
   tabla» (the spec listed it on the card): 4 Creatv pieces live in production and the table keeps the action; the cost
-  is one extra click (PND-176). The card's «Costo por venta» compares with the ad's CHANNEL (`cpa_canal`), not the
+  is one extra click (PND-184). The card's «Costo por venta» compares with the ad's CHANNEL (`cpa_canal`), not the
   account (spec §2.1, D4): the rings already measure inside the channel and the account's figure is mostly Meta's, so a
   Snapchat or TikTok ad looked cheap or expensive just for its channel; the verdict still uses the account's CPA.
-- **Out of this change (spec §13, PND-172 to PND-178).** «v1 vs v2 ring by ring» and «change only the hook»; predict
+- **Out of this change (spec §13, PND-180 to PND-186).** «v1 vs v2 ring by ring» and «change only the hook»; predict
   before spending; new Meta copy; TikTok videos without frames; the retention-by-quarters curve; Whisper
   `language: null` (`fal_audio.transcribir_palabras(url, None)`): fal accepted it in the real run of 2026-10-08 (3 of 4
-  ads transcribed, Norwegian and English), PND-177 only waits to be closed; if fal ever rejects it, the task goes on
-  without voice.
+  ads transcribed, Norwegian and English), so PND-185 is closed; if fal ever rejects it, the task goes on without
+  voice.

@@ -327,12 +327,15 @@ def _como_audio(m):
             "musica": extra.get("musica") or None, "creado_en": m.get("creado_en")}
 
 
-def listar(cliente):
-    """Los audios del proyecto, más reciente primero."""
+def listar(cliente, desde=0, limite=None):
+    """Los audios del proyecto, más reciente primero; corte SQL opcional."""
     with db.conectar() as con:
-        filas = con.execute(sa.select(db.material).where(
+        q = sa.select(db.material).where(
             db.material.c.cliente == cliente, db.material.c.tipo == "audio",
-            db.material.c.origen == ORIGEN).order_by(db.material.c.id.desc())).all()
+            db.material.c.origen == ORIGEN).order_by(db.material.c.id.desc()).offset(desde)
+        if limite is not None:
+            q = q.limit(limite)
+        filas = con.execute(q).all()
     return [_como_audio(dict(f._mapping)) for f in filas]
 
 

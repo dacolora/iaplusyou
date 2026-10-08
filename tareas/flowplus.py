@@ -23,6 +23,7 @@ import gastos
 import idiomas
 import saldo
 import trabajos
+from cobros import SaldoInsuficiente
 from final_edition import cortes, mezcla, musica
 from idiomas import N_
 from providers import flowplus_modelos, wavespeed_common
@@ -96,15 +97,16 @@ def _job_id(cliente, cf_id):
 PROVEEDOR = "wavespeed"
 
 
-def _registrar_gasto(cliente, tipo, costo, referencia, modelo, detalle, usd_musica=0.0):
+def _registrar_gasto(cliente, tipo, costo, referencia, modelo, detalle, usd_musica=0.0, entregado=True):
     """Anota el cobro real de la sesión (`video:<cf_id><ref_sufijo>` /
     `imagen:<cf_id><ref_sufijo>`): el `usd` del estimate del modelo más la
     música de fal si la hubo. Nunca lanza (gastos.registrar_seguro): el
-    gasto es un registro, no la pieza."""
+    gasto es un registro, no la pieza. `entregado=False` en las ramas de
+    fallo después de pagar: el costo queda, al cliente no se le cobra (cobros §3.4)."""
     usd_modelo = float((costo or {}).get("usd") or 0.0)
     gastos.registrar_seguro(
         cliente, tipo, round(usd_modelo + float(usd_musica or 0.0), 4), referencia, detalle=detalle,
-        conservar_mayor=True,
+        conservar_mayor=True, entregado=entregado,
         proveedor=PROVEEDOR,
         extra={"modelo": modelo, "usd_modelo": round(usd_modelo, 4), "usd_musica": round(float(usd_musica or 0.0), 4),
                "credits": (costo or {}).get("credits")},
@@ -390,7 +392,7 @@ def ejecutar_imagen(tarea):
             # El modelo ya cobró aunque la descarga fallara: queda registrado.
             _registrar_gasto(cliente, "imagen", costo, ref, modelo,
                              gettext("%(modelo)s · %(n)s referencia(s) · falló al descargar; el modelo ya cobró",
-                                     modelo=modelo, n=len(referencias)))
+                                     modelo=modelo, n=len(referencias)), entregado=False)
         bitacora.registrar(cliente, cf_id, "generacion", "error", str(e))
         if isinstance(e, wavespeed_common.SinSaldo):
             saldo.marcar(e.proveedor, e.detalle, cliente=cliente)
@@ -423,6 +425,10 @@ def _animar_imagen(cliente, cf_id, imagen_url):
     from referentes import recrear      # perezoso: recrear importa flowplus_lanzar, que importa este módulo
     try:
         recrear.lanzar_animacion(cliente, cf_id, imagen_url)
+    except SaldoInsuficiente as e:
+        # Cobros (spec 2026-10-08 §5.4): sin saldo el video no se encola; la
+        # imagen queda lista y dice por qué (el video quedó en error con la frase).
+        creative_flow.actualizar(cliente, cf_id, animar_error=e.frase_proyecto())
     except Exception as e:  # noqa: BLE001
         creative_flow.actualizar(cliente, cf_id, animar_error=gettext(
             "La imagen está lista, pero no se pudo lanzar su video (%(tipo)s). Usa «Editar y crear otra a partir de "
@@ -614,7 +620,8 @@ def _terminar_video(cliente, cf_id, job_id, ref, entry, referencias, duracion, p
         if costo is not None:
             # Registrar antes de persistir el error: esa escritura también puede fallar.
             _registrar_gasto(cliente, "video", costo, ref, modelo,
-                             detalle_gasto + " · " + gettext("falló al descargar; el modelo ya cobró"))
+                             detalle_gasto + " · " + gettext("falló al descargar; el modelo ya cobró"),
+                             entregado=False)
         bitacora.registrar(cliente, cf_id, "generacion", "error", str(e))
         creative_flow.actualizar(cliente, cf_id, estado="error", error=str(e))
         raise
@@ -663,8 +670,10 @@ def _terminar_video(cliente, cf_id, job_id, ref, entry, referencias, duracion, p
                 usd_musica = e.costo_usd
                 pista = {"url": e.url}
                 if ref != ref_intento:
+                    # La pista se pagó pero no llegó a la pieza: no se cobra (cobros §3.4).
                     gastos.registrar_seguro(cliente, "video", usd_musica, ref_intento + ":musica",
-                                           proveedor="fal", detalle=detalle_gasto, extra={"usd_musica": usd_musica})
+                                           proveedor="fal", detalle=detalle_gasto, extra={"usd_musica": usd_musica},
+                                           entregado=False)
                 else:
                     _registrar_gasto(cliente, "video", costo, ref, modelo, detalle_gasto,
                                      usd_musica=usd_musica)
@@ -697,10 +706,12 @@ def _terminar_video(cliente, cf_id, job_id, ref, entry, referencias, duracion, p
             (" (" + gettext("falló la mezcla; la pista ya se cobró") + ")") if estado_musica == "error" else "")
     if ref != ref_intento and usd_musica:
         # Una pista nueva es un cobro del intento de recuperación, separado
-        # del video que ya pagó la tarea original.
+        # del video que ya pagó la tarea original. Si la mezcla falló, la pista
+        # no llegó: el costo queda y al cliente no se le cobra (cobros §3.4).
         gastos.registrar_seguro(cliente, "video", usd_musica, ref_intento + ":musica",
                                proveedor="fal", detalle=detalle_gasto,
-                               extra={"usd_musica": usd_musica})
+                               extra={"usd_musica": usd_musica},
+                               entregado=(capas.get("musica") or {}).get("estado") != "error")
         usd_musica = 0.0
     _registrar_gasto(cliente, "video", costo, ref, modelo, detalle_gasto, usd_musica=usd_musica)
 

@@ -48,6 +48,7 @@
   <button type="button" class="cat-tab" data-apartado="generacion">{{ _('Generación') }}</button>
   <button type="button" class="cat-tab" data-apartado="cuenta">{{ _('Cuenta y avisos') }}</button>
   <button type="button" class="cat-tab" data-apartado="gasto">{{ _('Gasto') }}</button>
+  {% if (cobros_cuenta and cobros_cuenta.cobrar) or es_admin %}<button type="button" class="cat-tab" data-apartado="saldo">{{ _('Saldo y recargas') }}</button>{% endif %}
 </nav>
 
 {% if es_admin %}
@@ -393,7 +394,7 @@
   </div>
   <label style="display:block;margin-top:.8rem;font-size:.85rem;">
     <input type="checkbox" name="mejorar_calidad" {% if preferencias_swap.mejorar_calidad %}checked{% endif %}>
-    {{ _('Mejorar la calidad al final (+$0.04, solo aplica a fotos)') }}
+    {{ _('Mejorar la calidad al final (+%(precio)s, solo aplica a fotos)', precio=(costo_mejora_swap|precio|usd)) }}
   </label>
   <p class="vacio" style="padding-top:.2rem;font-size:.76rem;">
     {{ _('Segunda pasada con Bria: sube la resolución <strong>sin regenerar</strong> la
@@ -413,7 +414,7 @@
       <label class="campo-label">{{ _('Modelo para VIDEO') }}</label>
       <div class="checks-plataformas">
         {% for id, m in modelos_flowplus_video.items() %}
-        <label title="{{ m.nota|traducir }}"><input type="radio" name="modelo_video" value="{{ id }}" {% if preferencias_flowplus.modelo_video == id %}checked{% endif %}> {{ m.nombre|traducir }} <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· ${{ "%.3f"|format(m.usd_por_segundo_efectivo) }}{{ _('/s con sonido') }}</span></label>
+        <label title="{{ m.nota|traducir }}"><input type="radio" name="modelo_video" value="{{ id }}" {% if preferencias_flowplus.modelo_video == id %}checked{% endif %}> {{ m.nombre|traducir }} <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· ${{ "%.3f"|format(m.usd_por_segundo_efectivo|precio) }}{{ _('/s con sonido') }}</span></label>
         {% endfor %}
       </div>
     </div>
@@ -421,7 +422,7 @@
       <label class="campo-label">{{ _('Modelo para IMAGEN') }}</label>
       <div class="checks-plataformas">
         {% for id, m in modelos_flowplus_imagen.items() %}
-        <label title="{{ m.nota|traducir }}"><input type="radio" name="modelo_imagen" value="{{ id }}" {% if preferencias_flowplus.modelo_imagen == id %}checked{% endif %}> {{ m.nombre|traducir }} <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· ${{ "%.3f"|format(m.usd) }}</span></label>
+        <label title="{{ m.nota|traducir }}"><input type="radio" name="modelo_imagen" value="{{ id }}" {% if preferencias_flowplus.modelo_imagen == id %}checked{% endif %}> {{ m.nombre|traducir }} <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· ${{ "%.3f"|format(m.usd|precio) }}</span></label>
         {% endfor %}
       </div>
     </div>
@@ -457,19 +458,21 @@
   {{ _('Cómo salen marcados el sonido de la escena y la música al abrir Crear. En cada generación se puede cambiar. Los lotes de los sprints usan esto tal cual.') }}
 </p>
 <form method="post" action="{{ url_for('guardar_preferencias_sonido', cliente=cliente) }}" class="form-nueva-idea">
-  <label class="fe-check"><input type="checkbox" name="con_sonido" value="si" {% if preferencias_sonido.con_sonido %}checked{% endif %}> {{ _('Sonido de la escena (audio nativo del modelo; Kling cobra 0,028 USD/s más)') }}</label>
+  <label class="fe-check"><input type="checkbox" name="con_sonido" value="si" {% if preferencias_sonido.con_sonido %}checked{% endif %}> {{ _('Sonido de la escena (audio nativo del modelo; Kling: %(precio)s más por segundo)', precio=(modelos_flowplus_video.kling_o3_pro.audio_nativo.recargo_usd_s|precio|usd_fino)) }}</label>
   <div style="margin-top:.6rem;">
     <label class="campo-label">{{ _('Música al crear') }}</label>
     <select name="musica_al_crear">
       <option value="" {% if not preferencias_sonido.musica_al_crear %}selected{% endif %}>{{ _('ninguna') }}</option>
       {% for e in estilos_fe %}<option value="{{ e }}" {% if preferencias_sonido.musica_al_crear == e %}selected{% endif %}>{{ nombres_estilos_musica.get(e, e)|traducir }}</option>{% endfor %}
     </select>
-    <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· {{ _('USD 0,02 solo la primera vez por estilo y duración (después sale de la caché)') }}</span>
+    <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· {{ _('%(precio)s solo la primera vez por estilo y duración (después sale de la caché)', precio=(tarifa_musica_crear|precio|usd)) }}</span>
   </div>
   <button class="btn-guardar btn-sm" type="submit" style="margin-top:.8rem;">{{ _('Guardar sonido al crear') }}</button>
 </form>
 
-{% include "_comparacion_modelos.html" %}
+{# Cobros (spec 2026-10-08 §6): la comparación cita lo que cobra cada proveedor; en un proyecto que cobra, el
+   cliente ve precios, no costos, así que solo la ve el admin (o cualquiera si el proyecto no cobra). #}
+{% if es_admin or margen_precio() == 1 %}{% include "_comparacion_modelos.html" %}{% endif %}
 </section>
 
 <section class="config-apartado" id="config-ap-cuenta" data-apartado="cuenta">
@@ -553,24 +556,38 @@
    USD; la pauta de Meta al lado, en la moneda de la cuenta. Solo totales desde
    el 2026-10-08 (Daniel: las cifras del mes confundían a sus clientes).
    Contexto de ver_cliente: gasto_total, gasto_todo, pauta_total,
-   gastos_por_tipo, gastos_historial. ---- #}
+   gastos_por_tipo, gastos_historial; en un proyecto que cobra, gasto_modo y
+   gasto_cobrado (cobros, spec 2026-10-08 §7). ---- #}
 <div class="panel-cabecera tb-cabecera" id="config-gasto">
   <div>
     <h2 style="margin-top:0;">{{ _('Gasto') }}</h2>
     <p class="vacio" style="padding-top:0;">
+      {% if gasto_modo in ('cobrado', 'oculto') %}
+      {{ _('Lo que se descontó de tu saldo por todo lo que este proyecto generó desde el inicio: cada video,
+      imagen, guion, final o texto con IA deja su cobro aquí al terminar. Lo que falló y no llegó no se cobra.') }}
+      {% else %}
       {{ _('Cuánto costó de verdad todo lo que este proyecto generó desde el inicio: cada video, imagen, guion,
       final o texto con IA deja su cobro aquí apenas el proveedor lo cobra. Los botones de la app
       muestran el precio aproximado antes de gastar; esta lista es el precio real después.') }}
+      {% endif %}
+      {% if gasto_modo == 'doble' %}<br><strong>{{ _('Este proyecto cobra: «Costo» es lo que pagó Creatv al proveedor y «Cobrado», lo que se descontó del saldo del proyecto.') }}</strong>{% endif %}
     </p>
   </div>
   <a class="btn-guardar btn-sm tb-csv" href="{{ url_for('gasto_csv_todo', cliente=cliente) }}" download>{{ _('Descargar CSV') }}</a>
 </div>
 
 <div class="tb-tiles gasto-tiles">
+  {% if gasto_modo == 'doble' %}
+  <div class="kpi-tile">
+    <span>{{ _('Cobrado total') }}</span>
+    <strong>{{ gasto_cobrado.total.total | usd }}</strong>
+    <small>{{ ngettext('%(num)s cobro', '%(num)s cobros', gasto_cobrado.total.n) }}</small>
+  </div>
+  {% endif %}
   <div class="kpi-tile" id="gasto-desde-inicio">
     <span>{{ _('Generación total') }}</span>
     <strong>{{ (gasto_total.total if gasto_total else 0) | usd }}</strong>
-    <small>{% if gasto_total and gasto_total.n %}{{ ngettext('%(num)s cobro(s) a proveedores', '%(num)s cobro(s) a proveedores', gasto_total.n) }}{% if gasto_total.desde %} · {{ _('desde el %(fecha)s', fecha=gasto_total.desde[:10]) }}{% endif %}{% else %}{{ _('sin generación pagada') }}{% endif %}</small>
+    <small>{% if gasto_total and gasto_total.n %}{% if gasto_modo in ('cobrado', 'oculto') %}{{ ngettext('%(num)s cobro', '%(num)s cobros', gasto_total.n) }}{% else %}{{ ngettext('%(num)s cobro(s) a proveedores', '%(num)s cobro(s) a proveedores', gasto_total.n) }}{% endif %}{% if gasto_total.desde %} · {{ _('desde el %(fecha)s', fecha=gasto_total.desde[:10]) }}{% endif %}{% else %}{{ _('sin generación pagada') }}{% endif %}</small>
   </div>
   {% for p in pauta_total %}
   <div class="kpi-tile">
@@ -590,12 +607,12 @@
 {% if gastos_por_tipo %}
 <h3 style="margin-top:1.2rem;">{{ _('Por tipo') }}</h3>
 <table class="gasto-tabla">
-  <thead><tr><th>{{ _('Tipo') }}</th><th class="num">{{ _('Cantidad') }}</th><th class="num">US$</th></tr></thead>
+  <thead><tr><th>{{ _('Tipo') }}</th><th class="num">{{ _('Cantidad') }}</th><th class="num">{% if gasto_modo == 'doble' %}{{ _('Costo') }}{% else %}US${% endif %}</th>{% if gasto_modo == 'doble' %}<th class="num">{{ _('Cobrado') }}</th>{% endif %}</tr></thead>
   <tbody>
     {% for t in gastos_por_tipo %}
-    <tr><td>{{ t.nombre|traducir }}</td><td class="num">{{ t.n }}</td><td class="num">{{ t.usd | usd }}</td></tr>
+    <tr><td>{{ t.nombre|traducir }}</td><td class="num">{{ t.n }}</td><td class="num">{{ t.usd | usd }}</td>{% if gasto_modo == 'doble' %}<td class="num">{{ t.cobrado | usd }}</td>{% endif %}</tr>
     {% endfor %}
-    <tr class="gasto-total"><td>{{ _('Total') }}</td><td class="num">{{ gasto_todo.n }}</td><td class="num">{{ gasto_todo.total | usd }}</td></tr>
+    <tr class="gasto-total"><td>{{ _('Total') }}</td><td class="num">{{ gasto_todo.n }}</td><td class="num">{{ gasto_todo.total | usd }}</td>{% if gasto_modo == 'doble' %}<td class="num">{{ gasto_cobrado.todo.total | usd }}</td>{% endif %}</tr>
   </tbody>
 </table>
 {% endif %}
@@ -607,7 +624,7 @@
 {% if gastos_historial %}
 <div class="gasto-historial">
   <table class="gasto-tabla">
-    <thead><tr><th>{{ _('Fecha') }}</th><th>{{ _('Tipo') }}</th><th>{{ _('Detalle') }}</th><th class="num">US$</th></tr></thead>
+    <thead><tr><th>{{ _('Fecha') }}</th><th>{{ _('Tipo') }}</th><th>{{ _('Detalle') }}</th><th class="num">{% if gasto_modo == 'doble' %}{{ _('Costo') }}{% else %}US${% endif %}</th>{% if gasto_modo == 'doble' %}<th class="num">{{ _('Cobrado') }}</th>{% endif %}</tr></thead>
     <tbody>
       {% for g in gastos_historial %}
       <tr>
@@ -615,6 +632,7 @@
         <td>{{ nombres_tipo_gasto.get(g.tipo, g.tipo)|traducir }}</td>
         <td class="gasto-detalle" title="{{ g.referencia }}">{{ g.detalle or g.referencia }}{% if g.proveedor %} <small class="vacio" style="display:inline;padding:0;">· {{ g.proveedor }}</small>{% endif %}</td>
         <td class="num">{{ g.usd | usd }}</td>
+        {% if gasto_modo == 'doble' %}<td class="num">{{ gasto_cobrado.por_gasto.get(g.id, 0) | usd }}</td>{% endif %}
       </tr>
       {% endfor %}
     </tbody>
@@ -625,8 +643,12 @@
 <p class="vacio">{{ _('Todavía no hay cobros registrados. Aparecerán aquí cuando generes algo en Crear.') }}</p>
 {% endif %}
 <p class="vacio gasto-nota" style="font-size:.78rem;">
+  {% if gasto_modo in ('cobrado', 'oculto') %}
+  {{ _('Es lo que se descontó de tu saldo (el detalle de cada movimiento está en Saldo y recargas); la pauta se cobra en tu cuenta de Meta y no entra en este total.') }}
+  {% else %}
   {{ _('Son los precios reales de los proveedores (WaveSpeed, fal.ai, Anthropic); la pauta se cobra en tu cuenta de Meta
   y no entra en este total. Ningún gasto bloquea una acción: solo se informa.') }}
+  {% endif %}
 </p>
 
 {% if session.get('rol') == 'admin' %}
@@ -725,6 +747,12 @@
 </details>
 {% endif %}
 </section>
+
+{% if (cobros_cuenta and cobros_cuenta.cobrar) or es_admin %}
+<section class="config-apartado" id="config-ap-saldo" data-apartado="saldo">
+{% include "_config_saldo.html" %}
+</section>
+{% endif %}
 
 <script>
   // Configuración en apartados (spec 2026-09-26): uno a la vez; se recuerda

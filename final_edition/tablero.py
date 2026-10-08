@@ -41,7 +41,8 @@ def resumen(item, eds):
     propias = [e for e in eds if not ediciones.es_automatica(e)]
     ultima_edicion = max((_fecha(e.get("actualizado_en")) for e in propias), default="")
     ultima_final = max((_fecha_final(f) for f in listas), default="")
-    editada_despues = bool(listas) and ultima_edicion > ultima_final
+    ultima_guion = _fecha(item.get("guion_modificado_en"))
+    editada_despues = bool(listas) and max(ultima_edicion, ultima_guion) > ultima_final
 
     trabajos = []
     if item.get("trabajo_guion"):
@@ -62,7 +63,7 @@ def resumen(item, eds):
     else:
         siguiente = "producir"
 
-    fechas = [_fecha(item.get("creado_en")), ultima_edicion] + [_fecha_final(f) for f in finales]
+    fechas = [_fecha(item.get("creado_en")), ultima_edicion, ultima_guion] + [_fecha_final(f) for f in finales]
     return {
         "guion": "escribiendo" if item.get("trabajo_guion") else ("listo" if item.get("guion_base") else None),
         "ediciones": len(propias),

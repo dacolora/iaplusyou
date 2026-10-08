@@ -359,7 +359,7 @@ def test_precio_del_analisis():
 
 
 def test_la_tarifa_del_analisis_es_la_medida_en_la_prueba_real():
-    """PND-171: 4 anuncios reales (2026-10-08) costaron US$ 0,067–0,084 por llamada con la caché caliente y 0,095 con la
+    """PND-179: 4 anuncios reales (2026-10-08) costaron US$ 0,067–0,084 por llamada con la caché caliente y 0,095 con la
     fría; la tarifa es 0,10 (≈ 0,075 × 1,25, hacia arriba) y el precio que ve la persona, 0,10 + Whisper de 30 s."""
     assert gastos.TARIFAS["analisis_anuncio_tw"] == 0.10
     assert gastos.estimar("analisis_anuncio_tw", segundos=30)["usd"] == pytest.approx(0.101, abs=1e-6)

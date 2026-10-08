@@ -103,7 +103,7 @@ La pestaña abre así (de arriba abajo):
 En el celular la tarjeta se apila (anuncio arriba, ancho completo y alto máximo de 60vh; anillos en dos filas de
 dos); nada empuja la página de lado.
 
-## 3. Datos (migración 0033)
+## 3. Datos (migración 0034; era la 0033 hasta que main trajo `0033_cobros`, 2026-10-08)
 
 ### 3.1 Tabla nueva `tw_creativo`: el anuncio tal cual
 
@@ -478,7 +478,7 @@ mezclar. Revisión de `revisor`, `guardian-gasto` y `auditor-seguridad`.
 
 | Archivo | Qué cambia |
 |---|---|
-| `migrations/versions/0033_tw_tarjetas.py`, `db.py` | `tw_creativo`, `tw_analisis` |
+| `migrations/versions/0034_tw_tarjetas.py`, `db.py` | `tw_creativo`, `tw_analisis` |
 | `triple_whale/__init__.py` | `consultas_creativos()`, `medio_permitido()` |
 | `triple_whale/sync.py` | paso de creativos |
 | `triple_whale/datos.py` | escritores y lecturas de §3 |
