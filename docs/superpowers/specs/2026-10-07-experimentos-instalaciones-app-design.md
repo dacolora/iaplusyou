@@ -19,7 +19,8 @@ Dentro:
 - Un conjunto de anuncios por país **y** plataforma con URL, segmentado a iOS o Android.
 - Optimización por **clics al enlace de la tienda** (`LINK_CLICKS`), porque la app de Forja no tiene SDK de Meta ni
   servicio de atribución (revisado en `flutter-wt-upsell/pubspec.yaml` el 2026-10-04). El decisor juzga por CPC y CTR.
-- Comprobaciones antes de tocar Meta (App ID, URLs, app en modo desarrollo).
+- Comprobaciones antes de tocar Meta (App ID y URLs). Que la app esté en modo desarrollo no se puede saber desde el
+  código: cuando Meta devuelve el error 1885183 se explica en palabras.
 
 Fuera (segunda fase, cuando la app tenga SDK o atribución):
 - Optimizar por instalaciones reales (`APP_INSTALLS`) y juzgar por costo por instalación.
@@ -59,8 +60,9 @@ Verificado en la documentación de Meta (2026-10-07): para promoción de apps, `
 - `_promoted_object_para` devuelve, para este objetivo, la plantilla `{application_id}`; la URL de tienda se completa por
   conjunto.
 - Antes de crear campaña o conjuntos: falla con mensaje claro si no hay App ID, si no hay ninguna URL, si una URL no es de
-  `apps.apple.com` / `itunes.apple.com` / `play.google.com`, o si el proyecto marca la app en modo desarrollo. Nada de esto
-  cobra, pero un rechazo tardío de Meta deja una campaña huérfana (lección del Pixel apagado).
+  `apps.apple.com` / `itunes.apple.com` / `play.google.com`. Nada de esto cobra, pero un rechazo tardío de Meta deja una
+  campaña huérfana (lección del Pixel apagado). El modo desarrollo de la app NO se comprueba antes: no hay forma de
+  saberlo desde el código (corregido 2026-10-08); si Meta responde 1885183, el error se explica en palabras.
 - El bucle de conjuntos recorre país × plataforma; reanuda por `meta_adsets[plataforma]` igual que hoy por `meta_adset_id`.
 - `meta_errores.explicar` ya traduce el 1885183 (app en desarrollo); se agrega el texto de este error nuevo para que se
   vea en palabras y no como JSON.
