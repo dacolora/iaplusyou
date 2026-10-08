@@ -324,3 +324,18 @@ def test_selector_de_idioma_base_ofrece_noruego_y_sueco(base_temporal):
     cf_id = _sesion_video_listo()
     html = _cliente_admin(dashboard).get(f"/cliente/acme/creative_flow/{cf_id}/final/detalle").get_data(as_text=True)
     assert '<option value="sv">Svenska</option>' in html and '<option value="no">Norsk (bokmål)</option>' in html
+
+
+def test_las_opciones_de_idioma_base_salen_de_idiomas_fe_de_la_ruta(base_temporal):
+    """La plantilla no repite la lista de idiomas: la recibe de la ruta (`IDIOMAS_FE`) y pinta las mismas cinco
+    opciones de siempre, con el idioma del proyecto marcado."""
+    import re
+    import dashboard
+    assert dashboard._contexto_final_edition("acme")["idiomas_fe"] is dashboard.IDIOMAS_FE
+    cf_id = _sesion_video_listo()
+    html = _cliente_admin(dashboard).get(f"/cliente/acme/creative_flow/{cf_id}/final/detalle").get_data(as_text=True)
+    opciones = re.search(r'<select name="idioma_base">(.*?)</select>', html, re.S).group(1)
+    assert re.findall(r"<option[^>]*>[^<]*</option>", opciones) == [
+        '<option value="es" selected>Español</option>', '<option value="en">English</option>',
+        '<option value="pt">Português</option>', '<option value="sv">Svenska</option>',
+        '<option value="no">Norsk (bokmål)</option>']

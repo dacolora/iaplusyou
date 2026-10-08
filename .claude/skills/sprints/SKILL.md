@@ -11,7 +11,7 @@ description: "Sprints de contenido: el plan mensual como tablero de campañas (p
 `docs/superpowers/specs/2026-09-16-sprints-design.md`): a monthly production plan.
 Since 2026-09-26 it is a **board** (spec `docs/superpowers/specs/2026-09-26-sprints-tablero-design.md`):
 «+ Nuevo sprint» is a short form (month, optional «momento del mes» from the PROJECT's calendar
-`sprints.calendario.presets(proyectos.pais(cliente))` or free text, brands to imitate; CO, MX, NO and SE have their own calendar since 2026-10-08, any other country falls back to CO; `datos.IDIOMAS_NOMBRE` names sv/no with `idiomas_publicacion`, never the bare code, because `no` reads as the word «no» in a prompt). Since 2026-09-27
+`sprints.calendario.presets(proyectos.pais(cliente))` or free text, brands to imitate; CO, MX, NO and SE have their own calendar since 2026-10-08 (reason: happyflops' audience is Norway and Sweden; spec 2026-10-08-noruega-y-suecia §5), any other country falls back to CO; `datos.IDIOMAS_NOMBRE` names sv/no with `idiomas_publicacion`, never the bare code, because `no` reads as the word «no» in a prompt). Since 2026-09-27
 a sprint is **for every country**: no país/idioma in the form, the sprint header or the campaign panel
 (`CAMPOS_SPRINT`/`CAMPOS_CAMPANA` refuse them), new sprints store `pais=NULL` and
 `idioma=datos.IDIOMA_BASE` ("en"), the idea prompt says «todos los países… cada país los adapta después

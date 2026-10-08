@@ -140,3 +140,5 @@ stores `concepto.extra.tw_idea` (`puente.origen_desde_formulario` validates it, 
 idea card lists the pieces born from it with their Crear state and Meta verdict (`datos.piezas_de_evaluacion`,
 `panel.enlazar_ideas`) and a Creatv ad says which idea it came from (`piezas_creatv(...)["tw_idea"]`). None of
 the SQL has run against a real store yet (spec 2026-09-28 §9).
+
+Coronas (2026-10-08, spec de Noruega y Suecia §3; motivo: las tiendas de happyflops son de Noruega y Suecia): `triple_whale.MONEDAS` trae NOK y SEK, así que la tienda de un país NO o SE guarda su moneda y el tablero y los experimentos la distinguen del dólar como a cualquier otra moneda local. Con moneda mezclada el ROAS se oculta (PND-138), no se convierte.

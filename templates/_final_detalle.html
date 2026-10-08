@@ -103,11 +103,10 @@
                 {% set _idioma_def = idioma_proyecto or "es" %}
                 <label>{{ _('Idioma base') }}
                   <select name="idioma_base">
-                    <option value="es"{% if _idioma_def == "es" %} selected{% endif %}>Español</option>
-                    <option value="en"{% if _idioma_def == "en" %} selected{% endif %}>English</option>
-                    <option value="pt">Português</option>
-                    <option value="sv">Svenska</option>
-                    <option value="no">Norsk (bokmål)</option>
+                    {% set _nombres_idioma_fe = {"es": "Español", "en": "English", "pt": "Português", "sv": "Svenska", "no": "Norsk (bokmål)"} %}
+                    {% for _cod in idiomas_fe %}
+                    <option value="{{ _cod }}"{% if _idioma_def == _cod %} selected{% endif %}>{{ _nombres_idioma_fe.get(_cod, _cod) }}</option>
+                    {% endfor %}
                   </select>
                 </label>
                 <button type="submit" class="btn-guardar btn-sm">{{ _('Preparar guion con IA') }}{% if precios and precios.guion and precios.guion.usd is not none %} ≈ {{ precios.guion.usd | usd }}{% endif %}</button>
@@ -130,7 +129,7 @@
               {% else %}
               <form method="post" action="{{ url_for('fe_preparar', cliente=cliente, cf_id=item.id) }}" class="fe-preparar"
                     onsubmit='return confirm({{ _("¿Volver a escribir el guion con IA? Se reemplaza el guion actual (incluidas tus ediciones).")|tojson }});'>
-                <input type="hidden" name="idioma_base" value="{{ _g.idioma if _g.idioma in ('es', 'en', 'pt', 'sv', 'no') else 'es' }}">
+                <input type="hidden" name="idioma_base" value="{{ _g.idioma if _g.idioma in idiomas_fe else 'es' }}">
                 <button type="submit" class="btn-rechazar btn-sm">{{ _('Volver a escribir con IA') }}</button>
               </form>
               {% endif %}

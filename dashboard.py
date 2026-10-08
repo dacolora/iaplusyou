@@ -3414,6 +3414,7 @@ def _contexto_final_edition(cliente):
     return {
         **_contexto_organico(cliente),
         "paises_fe": fe_tipos.PAISES,
+        "idiomas_fe": IDIOMAS_FE,
         "voces_fe": fal_audio.VOCES,
         "mis_voces_fe": _mis_voces_fe(cliente),
         "estilos_fe": list(fe_tipos.ESTILOS_MUSICA),
