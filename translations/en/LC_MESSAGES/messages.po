@@ -9139,6 +9139,9 @@ msgstr "The seed is copycoders' swipe file: it's imported from their public page
 msgid "La sesión %(cf_id)s no tiene video listo para producir."
 msgstr "Session %(cf_id)s has no video ready to produce."
 
+msgid "La tarea falló"
+msgstr "The task failed"
+
 msgid "La tarea se interrumpió antes de llegar a esta plataforma; reintenta desde el panel."
 msgstr "The task was interrupted before reaching this platform; retry from the panel."
 
@@ -13934,6 +13937,9 @@ msgstr "No brand references yet."
 
 msgid "Sin referencias ni producto: el modelo recibe el texto tal cual, sin marca ni logos."
 msgstr "No references or product: the model gets the text as-is, with no brand or logos."
+
+msgid "Sin saldo: recarga para seguir. No se cobró nada."
+msgstr "No balance: top up to continue. Nothing was charged."
 
 msgid "Sin sonido: súbelo para oír el sonido de este video."
 msgstr "No sound: turn it up to hear this video's sound."

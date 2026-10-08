@@ -11,6 +11,70 @@ AL_INTERRUMPIR es el segundo registro: qué hacer con la entidad de dominio
 REGISTRO = {}
 AL_INTERRUMPIR = {}
 
+# Cobros (spec 2026-10-08 §5.1): tipos cuya ejecución puede llamar a un
+# proveedor que cobra (WaveSpeed, fal, Anthropic, Apify, Atria, TrendTrack) a
+# cuenta del proyecto. Si el proyecto cobra, trabajos.encolar exige saldo antes
+# de encolarlos y el worker no los arranca con saldo ≤ 0 (salvo la continuación
+# de una cadena). Todo tipo de tareas/ está aquí o en los exentos, con su motivo:
+# tests/test_cobros_worker.py falla si uno nuevo no está en ninguno.
+TIPOS_QUE_COBRAN = frozenset({
+    # Crear y Flow Plus (WaveSpeed)
+    "flowplus_video", "flowplus_imagen", "cadena_elementos", "swap_generar",
+    # Voz y música (fal: MiniMax, ElevenLabs, Whisper)
+    "audio_generar", "hablado_voz", "voz_propia_crear", "musica_generar", "editor_voz", "material_transcribir",
+    # Final edition (Claude escribe el guion; voz y música por fal)
+    "final_guion", "final_producir",
+    # Doctrina, Sprints y Triple Whale (Claude)
+    "producto_pedidos", "pieza_revisar", "sprint_analizar_referencia", "sprint_sugerir_personas",
+    "sprint_reescribir_idea", "sprint_proponer_ideas", "sprint_qa_pieza", "referentes_sugerir_ia", "tw_evaluar",
+    # Nicho e investigación (Apify y Claude)
+    "nicho_recolectar", "nicho_generar_avatares", "nicho_completar_avatares",
+    "nicho_inv_consultas", "nicho_inv_buscar", "nicho_inv_seleccionar",
+    # Referentes pedidos por un proyecto (Apify, Atria, TrendTrack y Claude)
+    "referentes_barrer", "referentes_clasificar",
+    # Catálogo: la regla de fidelidad de cada producto la escribe Claude
+    "catalogo_importar", "producto_vincular",
+})
+
+TIPOS_EXENTOS_DE_COBRO = {
+    "flowplus_recuperar": "recupera un video ya pagado; no paga de nuevo",
+    "flowplus_director": "el director lo paga Creatv (_creatv); el video que lanza pasa por su propio freno",
+    "cadena_vigilar": "periódica: avanza las cadenas; cada escena la cobra flowplus_video",
+    "cadena_unir": "une con ffmpeg escenas ya pagadas",
+    "edicion_producir": "renderiza con ffmpeg materiales que ya existen",
+    "edicion_proxy": "proxy con ffmpeg, sin proveedor",
+    "edicion_desde_clon": "baja y mide el clon para editarlo; gratis",
+    "material_de_pieza": "materializa una pieza de Crear como material; gratis",
+    "materiales_limpiar": "periódica de mantenimiento",
+    "exp_decidir": "el decisor pausa perdedoras y frena gasto en Meta: nunca se bloquea por saldo "
+                   "(el diagnóstico con Claude de una perdedora se anota y cobra igual)",
+    "exp_decidir_todos": "periódica: solo encola exp_decidir",
+    "exp_lanzar": "publica en Meta en pausa; la pauta la paga el cliente en su cuenta, no el saldo",
+    "exp_refrescar": "lee métricas de Meta",
+    "exp_refrescar_todos": "periódica: solo encola exp_refrescar",
+    "exp_detalle": "lee el detalle de Meta",
+    "exp_avanzar_todos": "periódica: avanza derivaciones; lo que produce pasa por su propio freno",
+    "meta_publicar": "publica en Meta; no llama a un proveedor que cobra",
+    "meta_refrescar": "lee métricas de Meta",
+    "organico_publicar": "publica en redes; el texto con IA se cobra en la ruta «Escribir con IA»",
+    "sprint_referencia_link": "descarga el link; el análisis con Claude es su propia tarea",
+    "sprint_qa_pendientes": "periódica: solo encola sprint_qa_pieza",
+    "sprint_empaquetar": "arma el zip de la entrega",
+    "referentes_importar_copycoders": "importación del admin; lo paga Creatv (_creatv)",
+    "referentes_familias_en": "traducción del admin; la paga Creatv (_creatv)",
+    "tienda_sync_productos": "sincronización automática del catálogo; frenarla dejaría la tienda desactualizada "
+                             "(la regla de un producto nuevo, centavos, se anota y cobra igual)",
+    "tienda_sync_pedidos": "lee pedidos de la tienda",
+    "tienda_sync_productos_todas": "periódica: solo encola tienda_sync_productos",
+    "tienda_sync_pedidos_todas": "periódica: solo encola tienda_sync_pedidos",
+    "tw_sincronizar": "lee datos de Triple Whale",
+    "tw_sincronizar_todas": "periódica: solo encola tw_sincronizar",
+    "salidas_limpiar": "periódica de mantenimiento",
+    "cola_limpiar": "periódica de mantenimiento",
+    "db_respaldar": "periódica de mantenimiento",
+    "errores_limpiar": "periódica de mantenimiento",
+}
+
 
 def registrar(tipo):
     def _dec(fn):

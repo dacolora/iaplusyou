@@ -226,23 +226,50 @@ def _segundos(texto):
 VENTANA_CONTINUACION = 2   # segundos entre cerrar la tarea previa y crear la siguiente
 
 
-def _es_continuacion(con, tarea):
-    """Los job_id son deterministas y se reusan (el mismo clic de otro día lleva
+def _anterior_en_cadena(con, tarea):
+    """Id de la tarea de la que `tarea` es continuación, o None.
+
+    Los job_id son deterministas y se reusan (el mismo clic de otro día lleva
     el mismo): solo es continuación de una cadena la hecha MÁS RECIENTE del mismo
     job_id (id menor) que cerró junto con la creación de esta tarea —
     cola.terminar_y_encolar las cierra y encola en una sola transacción."""
     t = db.tarea.c
+    if not tarea.get("job_id"):
+        return None
     creada = tarea.get("creada_en")
     if not creada and tarea.get("id") is not None:
         creada = con.execute(sa.select(t.creada_en).where(t.id == tarea["id"])).scalar()
     creada = _segundos(creada)
     if creada is None:
-        return False
-    q = sa.select(t.terminada_en).where(t.job_id == tarea["job_id"], t.estado == "hecha")
+        return None
+    q = sa.select(t.id, t.terminada_en).where(t.job_id == tarea["job_id"], t.estado == "hecha")
     if tarea.get("id") is not None:
         q = q.where(t.id < tarea["id"])
-    terminada = _segundos(con.execute(q.order_by(t.id.desc()).limit(1)).scalar())
-    return terminada is not None and abs(creada - terminada) <= VENTANA_CONTINUACION
+    previa = con.execute(q.order_by(t.id.desc()).limit(1)).first()
+    if previa is None:
+        return None
+    terminada = _segundos(previa.terminada_en)
+    return int(previa.id) if terminada is not None and abs(creada - terminada) <= VENTANA_CONTINUACION else None
+
+
+def _es_continuacion(con, tarea):
+    return _anterior_en_cadena(con, tarea) is not None
+
+
+def inicio_de_cadena(tarea):
+    """Id de la primera tarea de la cadena (`tareas.Continuar`) a la que
+    pertenece `tarea`; su propio id si no es continuación de nada. El worker lo
+    pasa a revertir_trabajo para no devolver lo que entregó otra corrida del
+    mismo job_id (hay job_id por proyecto, como `<cliente>__hablado_voz`)."""
+    if tarea.get("id") is None:
+        return None
+    actual = {"id": tarea["id"], "job_id": tarea.get("job_id"), "creada_en": tarea.get("creada_en")}
+    with db.conectar() as con:
+        while True:   # los ids bajan en cada paso: termina
+            previa = _anterior_en_cadena(con, actual)
+            if previa is None:
+                return int(actual["id"])
+            actual = {"id": previa, "job_id": actual["job_id"]}
 
 
 def puede_arrancar(tarea, tipos_que_cobran):
@@ -306,9 +333,13 @@ def cobrar_gasto(con, gasto_id, cliente, usd, tipo, entregado=True, nuevo=True):
     return "cobro"
 
 
-def revertir_trabajo(cliente, job_id, motivo=""):
+def revertir_trabajo(cliente, job_id, motivo="", desde_tarea=None):
     """§3.5: un reverso por cada cobro del job_id que no lo tenga. Avisa una
-    vez con el total. Nunca lanza (lo llama el worker)."""
+    vez con el total. Nunca lanza (lo llama el worker).
+
+    `desde_tarea`: solo los cobros de tareas con id ≥ ese (el inicio de la
+    cadena que falló, `inicio_de_cadena`). El job_id se reusa entre corridas:
+    sin esto, una voz que falla hoy devolvería todas las voces ya entregadas."""
     if not cliente or not job_id:
         return []
     m = db.movimiento_saldo
@@ -316,8 +347,10 @@ def revertir_trabajo(cliente, job_id, motivo=""):
     try:
         with db.conectar() as con:
             _candado(con)
-            cobros_ = con.execute(sa.select(m).where(m.c.cliente == cliente, m.c.job_id == job_id,
-                                                     m.c.tipo == "cobro")).all()
+            q = sa.select(m).where(m.c.cliente == cliente, m.c.job_id == job_id, m.c.tipo == "cobro")
+            if desde_tarea is not None:
+                q = q.where(m.c.tarea_id >= int(desde_tarea))
+            cobros_ = con.execute(q).all()
             for c in cobros_:
                 if con.execute(sa.select(m.c.id).where(m.c.gasto_id == c.gasto_id, m.c.tipo == "reverso")).first():
                     continue
