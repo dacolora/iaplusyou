@@ -395,6 +395,13 @@ def credenciales_ads(cliente):
     }
 
 
+def error_solo_metricas():
+    """Por qué no se puede lanzar ni publicar con una conexión sin Página («solo métricas», 2026-10-08): el
+    lanzador y la tarea legado `meta_publicar` lo levantan ANTES de configurar o llamar a Meta."""
+    return gettext("Este proyecto está conectado a Meta solo para métricas (sin Página): conecta una Página en "
+                   "Configuración › Conexiones para lanzar anuncios.")
+
+
 # ---------- llamadas a Graph ----------
 
 def _graph_get(edge, token, params=None, timeout=30):

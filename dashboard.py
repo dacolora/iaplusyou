@@ -3890,8 +3890,11 @@ def meta_elegir(cliente):
         )
 
     cuenta = next((a for a in cuentas if a["id"] == request.form.get("ad_account_id")), None)
-    pagina = next((p for p in paginas if p["id"] == request.form.get("page_id")), None)
-    if not cuenta or not pagina:
+    # La Página es opcional («solo métricas», 2026-10-08): vacía o ausente guarda la conexión sin Página; una que no
+    # está en la lista sigue siendo un formulario manipulado.
+    page_id = (request.form.get("page_id") or "").strip()
+    pagina = next((p for p in paginas if p["id"] == page_id), None) if page_id else None
+    if not cuenta or (page_id and not pagina):
         flash(gettext("Elige una cuenta publicitaria y una Página de la lista."), "error")
         return redirect(url_for("meta_elegir", cliente=cliente))
 
@@ -3904,7 +3907,11 @@ def meta_elegir(cliente):
         flash(gettext(MENSAJE_MODO_AGENCIA), "error")
         return _ir_a_flowmarketing(cliente)
     meta_conexion.borrar_pendiente(cliente)
-    bitacora.registrar(cliente, "meta", "conexion", "ok", f"{cuenta.get('name')} · {pagina.get('name')}")
+    bitacora.registrar(cliente, "meta", "conexion", "ok", f"{cuenta.get('name')} · {pagina.get('name') if pagina else '—'}")
+    if not pagina:
+        flash(gettext("Meta conectado: %(cuenta)s. %(aviso)s", cuenta=cuenta.get("name"),
+                      aviso=gettext("Conectado solo para métricas: sin Página no se pueden lanzar anuncios ni publicar.")), "ok")
+        return _ir_a_flowmarketing(cliente)
     aviso = "" if pagina.get("ig_user_id") else " " + gettext(
         "Esa Página no tiene Instagram vinculado: los Reels no se van a publicar hasta que lo vincules en Facebook.")
     flash(gettext("Meta conectado: %(cuenta)s · %(pagina)s.%(aviso)s",
@@ -3912,7 +3919,10 @@ def meta_elegir(cliente):
     return _ir_a_flowmarketing(cliente)
 
 
-def _guardar_conexion_propia(cliente, pendiente, cuenta, pagina):
+def _guardar_conexion_propia(cliente, pendiente, cuenta, pagina=None):
+    """`pagina=None` guarda la conexión «solo métricas»: se leen las cuentas publicitarias sin Página, así que
+    page_id, su token e Instagram quedan en None (lanzar y publicar frenan en palabras; ver lanzador y tareas.meta)."""
+    pagina = pagina or {}
     meta_conexion.guardar(cliente, {
         "token": pendiente["token"],
         "tipo_token": pendiente.get("tipo_token", ""),
@@ -3921,7 +3931,7 @@ def _guardar_conexion_propia(cliente, pendiente, cuenta, pagina):
         "ad_account_id": cuenta["id"],
         "ad_account_nombre": cuenta.get("name"),
         "moneda": cuenta.get("currency"),
-        "page_id": pagina["id"],
+        "page_id": pagina.get("id"),
         "page_nombre": pagina.get("name"),
         "page_access_token": pagina.get("access_token"),
         "ig_user_id": pagina.get("ig_user_id"),

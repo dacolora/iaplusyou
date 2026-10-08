@@ -206,7 +206,7 @@
             {{ d.page_nombre or d.page_id or _('sin Página') }}{% if d.ig_username %} · @{{ d.ig_username }}{% endif %}
             {% if d.asignado_en %}<br><small>{{ _('desde %(fecha)s', fecha=d.asignado_en[:10]) }}</small>{% endif %}
           {% elif f.propia_conectada %}
-            {{ _('Su propia conexión:') }} {{ d.ad_account_nombre or d.ad_account_id }} · {{ d.page_nombre or d.page_id }}
+            {{ _('Su propia conexión:') }} {{ d.ad_account_nombre or d.ad_account_id }} · {{ d.page_nombre or d.page_id or _('sin Página') }}
           {% elif f.app_propia %}
             {{ _('App propia registrada, sin conectar') }}
           {% else %}

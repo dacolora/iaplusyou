@@ -3736,6 +3736,9 @@ msgstr ""
 msgid "Conectada: %(nombre)s · última sincronización: %(cuando)s. Se actualiza sola cada 6 h."
 msgstr "Connected: %(nombre)s · last sync: %(cuando)s. It refreshes on its own every 6 h."
 
+msgid "Conectado solo para métricas: sin Página no se pueden lanzar anuncios ni publicar."
+msgstr "Connected for metrics only: without a Page you can't launch ads or publish."
+
 msgid "Conectar"
 msgstr "Connect"
 
@@ -6992,6 +6995,9 @@ msgstr "This prompt has issues; fix them before approving it:"
 msgid "Este prompt ya está aprobado. Reábrelo para seguir corrigiendo."
 msgstr "This prompt is already approved. Reopen it to keep correcting it."
 
+msgid "Este proyecto está conectado a Meta solo para métricas (sin Página): conecta una Página en Configuración › Conexiones para lanzar anuncios."
+msgstr "This project is connected to Meta for metrics only (no Page): connect a Page in Settings › Connections to launch ads."
+
 #, python-format
 msgid "Este proyecto está gestionado por Creatv (modo agencia): no se puede %(para_que)s. Un admin tiene que volverlo a modo propia primero."
 msgstr "This project is managed by Creatv (agency mode): you can't %(para_que)s. An admin has to switch it back to own-app mode first."
@@ -9996,6 +10002,10 @@ msgstr "Meta connected:"
 #, python-format
 msgid "Meta conectado: %(cuenta)s · %(pagina)s.%(aviso)s"
 msgstr "Meta connected: %(cuenta)s · %(pagina)s.%(aviso)s"
+
+#, python-format
+msgid "Meta conectado: %(cuenta)s. %(aviso)s"
+msgstr "Meta connected: %(cuenta)s. %(aviso)s"
 
 msgid "Meta desconectado de este proyecto y acceso revocado en Meta."
 msgstr "Meta disconnected from this project and access revoked on Meta."
@@ -13913,6 +13923,9 @@ msgstr "No Pixel"
 msgid "Sin Página (solo anuncios)"
 msgstr "No Page (ads only)"
 
+msgid "Sin Página (solo métricas)"
+msgstr "No Page (metrics only)"
+
 msgid "Sin Página asignada solo se pueden pautar anuncios; la publicación orgánica queda apagada para ese proyecto."
 msgstr "Without an assigned Page only ads can run; organic posting stays off for that project."
 
@@ -14233,6 +14246,9 @@ msgstr "Only the admin sees it"
 
 msgid "Solo manos y producto, como grabado con el teléfono: sacarlo, usarlo y mostrarlo."
 msgstr "Just hands and the product, as if shot on a phone: take it out, use it and show it."
+
+msgid "Solo métricas"
+msgstr "Metrics only"
 
 msgid "Solo míos"
 msgstr "Only mine"
@@ -15979,6 +15995,9 @@ msgstr "Show more"
 #, python-format
 msgid "Ver más (quedan %(n)s)"
 msgstr "Show more (%(n)s left)"
+
+msgid "Ver métricas en la pestaña Meta"
+msgstr "See metrics in the Meta tab"
 
 msgid "Ver o editar los prompts"
 msgstr "See or edit the prompts"
@@ -18781,6 +18800,9 @@ msgstr "generated automatically"
 
 msgid "se guardan 10 min; si acabas de asignar un activo en Business Manager, actualiza"
 msgstr "kept for 10 min; if you just assigned an asset in Business Manager, refresh"
+
+msgid "se leen las métricas de la cuenta; sin Página no se pueden lanzar anuncios ni publicar"
+msgstr "the account's metrics are read; without a Page you can't launch ads or publish"
 
 #, python-format
 msgid "se repiten %(lista)s"
