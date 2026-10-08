@@ -194,6 +194,21 @@ def test_app_sin_app_id_falla_antes_de_tocar_meta(entorno_app):
     assert e["ex"].obtener("acme", e["eid"])["estado"] != "lanzando"
 
 
+def test_app_usa_el_app_id_aprobado_al_crear_no_el_del_proyecto(base_temporal, monkeypatch):
+    e = _entorno_app(base_temporal, monkeypatch, {"ios_url": URL_IOS, "android_url": URL_ANDROID, "app_id": "777"})
+    # El proyecto ya anuncia otra app (12345, en _entorno_app): el experimento usa la suya.
+    e["lanzador"].lanzar("acme", e["eid"])
+    pos = {kw["promoted_object"]["application_id"] for t, kw in e["meta"].llamadas if t == "adset"}
+    assert pos == {"777"}
+
+
+def test_app_sin_app_id_propio_usa_el_del_proyecto(entorno_app):
+    e = entorno_app
+    e["lanzador"].lanzar("acme", e["eid"])
+    pos = {kw["promoted_object"]["application_id"] for t, kw in e["meta"].llamadas if t == "adset"}
+    assert pos == {"12345"}
+
+
 def test_app_url_que_no_es_de_tienda_falla_antes_de_tocar_meta(entorno_app):
     e = entorno_app
     e["ex"].actualizar_extra("acme", e["eid"], lambda extra: {**extra, "app": {**extra["app"], "ios_url": "https://forja.co"}})

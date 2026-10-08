@@ -104,11 +104,15 @@ def _promoted_object_para(cliente, ex):
         # antes de crear nada — un rechazo tardío de Meta dejaría una campaña
         # huérfana (misma lección que el Pixel apagado). La URL de tienda
         # (`object_store_url`) se completa por conjunto, uno por plataforma.
-        app_id = meta_conexion.cargar_app_anunciada(cliente)
+        # El App ID es el que se aprobó al crear el experimento (guardado en
+        # extra.app); el del proyecto solo cubre experimentos viejos que no lo
+        # traen — si la persona cambió el App ID después, este experimento
+        # sigue anunciando la app con la que se creó.
+        app = (ex.get("extra") or {}).get("app") or {}
+        app_id = str(app.get("app_id") or "").strip() or meta_conexion.cargar_app_anunciada(cliente)
         if not app_id:
             raise ValueError(gettext("Falta el App ID de la app que anuncias: pégalo en Avanzado "
                                      "(lo encuentras en Meta for Developers)."))
-        app = (ex.get("extra") or {}).get("app") or {}
         app_tiendas.validar_urls(app.get("ios_url"), app.get("android_url"))
         return {"application_id": app_id}
     if ex["objetivo_meta"] != "OUTCOME_SALES":
