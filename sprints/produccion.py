@@ -22,6 +22,7 @@ import marca
 import proyectos
 import tareas.director as tareas_director
 import trabajos
+from cobros import SaldoInsuficiente, libro
 from idiomas import N_
 from providers import flowplus_modelos
 from sprints import datos, estado
@@ -313,6 +314,11 @@ def lanzar_lote(cliente, sprint_id, campana_id=None, modelo_video=None, modelo_i
     sp = _sprint(cliente, sprint_id)
     mv, mi = modelos(cliente, modelo_video, modelo_imagen)
     est = estimar(cliente, sprint_id, campana_id, mv, mi)
+    # Cobros (spec 2026-10-08 §5): el lote entero se pide antes de reservar la
+    # primera idea. Los videos pasan por el director (gratis) y su generación
+    # vuelve a pedir y reservar al lanzarse; las imágenes reservan al encolar.
+    if est["videos"] or est["imagenes"]:
+        libro.exigir(cliente, est["usd"])
     encoladas, omitidas, cf_ids = 0, 0, []
     for c, i in pendientes(cliente, sprint_id, campana_id):
         reserva = reserva_placeholder(i["id"])
@@ -330,7 +336,17 @@ def lanzar_lote(cliente, sprint_id, campana_id=None, modelo_video=None, modelo_i
                                    {"cp_id": i["id"], "error": str(e)}, campana_id=c["id"])
             continue
         entry = creative_flow.cargar(cliente)[cf_id]
-        if _encolar_pieza(cliente, cf_id, entry):
+        try:
+            encolada = _encolar_pieza(cliente, cf_id, entry)
+        except SaldoInsuficiente as e:
+            # Otro gasto se llevó el saldo a mitad del lote: la sesión quedó en
+            # error con la frase (flowplus_lanzar) y el lote sigue con lo demás.
+            encolada = False
+            datos.registrar_evento(cliente, sprint_id, "pieza_omitida",
+                                   datos.texto_guardado(cliente, N_("«%(titulo)s» no se pudo preparar: %(error)s"),
+                                                        titulo=i['titulo'], error=e.frase_proyecto()),
+                                   {"cp_id": i["id"], "error": "saldo_insuficiente"}, campana_id=c["id"])
+        if encolada:
             encoladas += 1
             cf_ids.append(cf_id)
         else:
@@ -389,6 +405,9 @@ def regenerar(cliente, cp_id):
     sesión duplicada de acá se archiva sin encolarse nunca, en vez de dejar
     dos regeneraciones corriendo para la misma idea (double spend)."""
     i = _idea_con_sesion(cliente, cp_id)
+    # Cobros (spec 2026-10-08 §5): sin saldo no se duplica la sesión ni se
+    # borra el QA; el manejador común responde.
+    libro.exigir(cliente, flowplus_lanzar.costo_estimado(creative_flow.cargar(cliente).get(i["cf_id"])))
     nuevo = creative_flow.duplicar(cliente, i["cf_id"])
     if not datos.reclamar_cf(cliente, cp_id, nuevo, esperado=i["cf_id"]):
         creative_flow.archivar_concepto(cliente, nuevo, "regeneración duplicada")

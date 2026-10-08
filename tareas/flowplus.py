@@ -23,6 +23,7 @@ import gastos
 import idiomas
 import saldo
 import trabajos
+from cobros import SaldoInsuficiente
 from final_edition import cortes, mezcla, musica
 from idiomas import N_
 from providers import flowplus_modelos, wavespeed_common
@@ -424,6 +425,10 @@ def _animar_imagen(cliente, cf_id, imagen_url):
     from referentes import recrear      # perezoso: recrear importa flowplus_lanzar, que importa este módulo
     try:
         recrear.lanzar_animacion(cliente, cf_id, imagen_url)
+    except SaldoInsuficiente as e:
+        # Cobros (spec 2026-10-08 §5.4): sin saldo el video no se encola; la
+        # imagen queda lista y dice por qué (el video quedó en error con la frase).
+        creative_flow.actualizar(cliente, cf_id, animar_error=e.frase_proyecto())
     except Exception as e:  # noqa: BLE001
         creative_flow.actualizar(cliente, cf_id, animar_error=gettext(
             "La imagen está lista, pero no se pudo lanzar su video (%(tipo)s). Usa «Editar y crear otra a partir de "

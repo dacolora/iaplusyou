@@ -24,6 +24,7 @@ import cola
 import gastos
 import idiomas
 import trabajos
+from cobros import SaldoInsuficiente
 from idiomas import N_
 from nicho import avatares, datos
 from nicho import fuentes as fuentes_registro
@@ -217,7 +218,18 @@ def _fallo_claude(cliente, eid, tarea, paso, e, motivo_de, ref=None):
 
 def avanzar(cliente, estudio_id):
     """Encola el siguiente paso pendiente (idempotente: `trabajos.encolar`
-    rechaza un job vivo). Devuelve el paso encolado o None."""
+    rechaza un job vivo). Devuelve el paso encolado o None. Sin saldo (cobros,
+    spec 2026-10-08 §5.4) la investigación queda detenida con la frase y nada
+    se encola; «Reanudar» la retoma tras recargar. Corre en el worker (al
+    cerrar cada paso) y en las rutas de iniciar y reanudar: nunca lanza por saldo."""
+    try:
+        return _avanzar(cliente, estudio_id)
+    except SaldoInsuficiente as e:
+        _detener(cliente, estudio_id, e.frase_proyecto())
+        return None
+
+
+def _avanzar(cliente, estudio_id):
     from tareas import nicho as tareas_nicho      # tareas.nicho importa este módulo: import perezoso
     for _ in range(MAX_SALTOS):
         est = datos.estudio(cliente, estudio_id)

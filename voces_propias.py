@@ -24,6 +24,7 @@ import gastos
 import idiomas
 import materiales
 import mi_musica
+from cobros import libro
 from final_edition import cortes
 from providers import fal_audio
 from storage import r2_uploader
@@ -348,6 +349,9 @@ def muestra(cliente, valor, idioma):
     frase = frase_muestra(vp["nombre"], idioma)
 
     def _producir():
+        # Cobros (spec 2026-10-08 §5.2): la muestra se sintetiza en la petición
+        # (au_muestra) y la paga el proyecto; solo cuando no está en caché.
+        libro.exigir(cliente, gastos.estimar("locucion", caracteres=len(frase))["usd"])
         t = sintetizar(cliente, vp, frase, idioma, timeout=45)
         usd = float(t["costo_usd"])
         # La pide quien mira (ruta au_muestra), pero el detalle se GUARDA: va en

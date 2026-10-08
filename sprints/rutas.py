@@ -16,6 +16,7 @@ from flask import Blueprint, abort, flash, jsonify, redirect, render_template, r
 from flask_babel import gettext
 
 import catalogo_productos
+from cobros import libro
 import creative_flow
 import db
 import doctrina
@@ -1507,6 +1508,9 @@ def pieza_qa(cliente, cp_id):
             return jsonify({"ok": False, "error": gettext("Esa pieza todavía no está lista para el QA.")}), 400
         flash(gettext("Esa pieza todavía no está lista para el QA."), "error")
         return destino
+    # Cobros (spec 2026-10-08 §5): sin saldo no se borra el QA anterior; el
+    # manejador común responde. Sin tarifa propia: basta con saldo positivo.
+    libro.exigir(cliente, None)
     datos.actualizar_idea(cliente, cp_id, qa=None)
     ok = tareas_sprints.encolar_qa(cliente, cp_id)
     if _quiere_json():

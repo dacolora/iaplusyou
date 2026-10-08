@@ -45,6 +45,14 @@ class SaldoInsuficiente(Exception):
         return gettext("Saldo insuficiente: esto cuesta ≈ %(precio)s y tienes %(disponible)s disponibles. "
                        "Recarga para seguir.", precio=gastos.formatear(self.precio / 1000), disponible=disponible)
 
+    def frase_proyecto(self):
+        """La frase en el idioma del proyecto: para lo que se GUARDA (el error de
+        una sesión, el mensaje de una tarea del worker), no para lo que responde
+        una ruta (esa va en el idioma de quien mira: `frase()`)."""
+        import idiomas  # noqa: PLC0415
+        with idiomas.en_idioma(idiomas.de_proyecto(self.cliente)):
+            return self.frase()
+
 
 def precio_milesimas(costo_usd, margen):
     """ceil a la milésima; el round(…, 6) quita el ruido del float

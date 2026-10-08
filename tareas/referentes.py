@@ -24,6 +24,7 @@ from flask_babel import gettext
 import cola
 import gastos
 import trabajos
+from cobros import libro
 from idiomas import N_
 from nicho.avatares import costo_real, modelo_actual
 from referentes import clasificar, copycoders, datos, fuentes, imagenes
@@ -315,11 +316,15 @@ def encolar_barrer(cliente, fuente, consulta, tope, usd_estimado, pedido_por=Non
     limita a 2000 acá (no solo en la ruta) porque esta función es el único
     punto de entrada real — cualquier ruta que la llame queda cubierta."""
     tope = min(int(tope or 0), 2000)
+    # Cobros (spec 2026-10-08 §5): sin saldo no queda un barrido «en cola» sin
+    # trabajo detrás; encolar vuelve a exigir y reserva con el job_id.
+    libro.exigir(cliente, usd_estimado)
     bid = datos.crear_barrido(cliente, fuente, consulta, tope, pedido_por=pedido_por, usd_estimado=usd_estimado)
     trabajos.encolar(job_id_barrer(bid), TIPO_BARRER,
                      {"cliente": cliente, "barrido_id": bid, "fase": "trayendo",
                       "consulta": {**consulta, "fuente": fuente}, "tope": tope},
-                     duracion_estimada=1800, etapas=ETAPAS_BARRER, max_intentos=1, prioridad=2, cliente=cliente)
+                     duracion_estimada=1800, etapas=ETAPAS_BARRER, max_intentos=1, prioridad=2, cliente=cliente,
+                     costo_estimado=usd_estimado)
     return bid
 
 
@@ -335,7 +340,8 @@ def encolar_clasificar_pendientes(cliente, barrido_id):
     trabajos.encolar(job_id_barrer(barrido_id), TIPO_CLASIFICAR,
                      {"cliente": cliente, "barrido_id": barrido_id, "fase": "clasificando",
                       "consulta": {**(b.get("consulta") or {}), "fuente": b["fuente"]}, "tope": b.get("tope") or 0},
-                     duracion_estimada=600, etapas=[(ETAPA_CLASIFICAR, 1)], max_intentos=1, prioridad=2, cliente=cliente)
+                     duracion_estimada=600, etapas=[(ETAPA_CLASIFICAR, 1)], max_intentos=1, prioridad=2, cliente=cliente,
+                     costo_estimado=gastos.estimar("clasificacion", n=b.get("pendientes") or 1)["usd"])
     return True
 
 
@@ -347,6 +353,7 @@ def encolar_reintentar_imagenes(cliente, barrido_id):
     b = datos.barrido(barrido_id)
     if not b:
         return False
+    libro.exigir(cliente, None)     # cobros §5: sin saldo no se reinician las imágenes sin trabajo detrás
     datos.reintentar_imagenes(barrido_id)
     trabajos.encolar(job_id_barrer(barrido_id), TIPO_BARRER,
                      {"cliente": cliente, "barrido_id": barrido_id, "fase": "imagenes",

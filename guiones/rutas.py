@@ -10,6 +10,7 @@ from flask_babel import gettext
 
 import gastos
 import trabajos
+from cobros import libro
 from guiones import refinador
 
 bp = Blueprint("guiones", __name__, url_prefix="/cliente/<cliente>/guiones")
@@ -101,6 +102,9 @@ def prompt_mensaje(cliente, pid):
     cuerpo = _cuerpo()
     if cuerpo is None:
         return _sin_cuerpo()
+    # Cobros (spec 2026-10-08 §5.2): Claude responde en un hilo de esta
+    # petición; sin saldo no se guarda el mensaje ni se lanza el hilo.
+    libro.exigir(cliente, gastos.estimar("refinar_prompt")["usd"])
     try:
         mensaje_id = refinador.pedir_cambio(cliente, pid, cuerpo.get("mensaje"), usuario=session.get("usuario"))
     except refinador.ErrorRefinador as e:

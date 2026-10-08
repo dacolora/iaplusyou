@@ -14,6 +14,7 @@ from flask import Blueprint, Response, abort, flash, jsonify, redirect, render_t
 from flask_babel import gettext
 
 import catalogo_productos
+from cobros import libro
 import doctrina
 import gastos
 import idiomas
@@ -375,11 +376,22 @@ def recolectar(cliente, eid, fuente):
         flash(str(e), "error")
         return _volver(cliente, eid)
     nombre_fuente = idiomas.traducir(fuentes_registro.NOMBRES[fuente])
-    if tareas_nicho.encolar_recolectar(cliente, eid, fuente, params):
+    if tareas_nicho.encolar_recolectar(cliente, eid, fuente, params, costo_estimado=_costo_recolectar(fuente, params)):
         flash(gettext("Recolectando de %(fuente)s; la página se recarga sola al terminar.", fuente=nombre_fuente), "ok")
     else:
         flash(gettext("Ya hay una recolección de %(fuente)s en curso.", fuente=nombre_fuente), "error")
     return _volver(cliente, eid)
+
+
+def _costo_recolectar(fuente, params):
+    """USD del peor caso de Apify (lo que muestra el botón); None para las
+    fuentes sin tarifa propia (el freno pide entonces saldo positivo)."""
+    if fuente != "apify":
+        return None
+    try:
+        return apify_actores.estimar(params.get("actor") or "", params.get("max_resultados") or 1)["usd"]
+    except ErrorFuente:
+        return None
 
 
 @bp.get("/<int:eid>/recolectar/apify/estimar")
@@ -408,7 +420,7 @@ def generar(cliente, eid):
         flash(gettext("Hacen falta al menos %(minimo)s comentarios no excluidos (hay %(hay)s).",
                       minimo=avatares.MIN_COMENTARIOS, hay=len(lista)), "error")
         return _volver(cliente, eid)
-    if tareas_nicho.encolar_generar(cliente, eid):
+    if tareas_nicho.encolar_generar(cliente, eid, costo_estimado=avatares.estimar_costo(lista)["usd"]):
         flash(gettext("Claude está armando los avatares; la página se recarga sola al terminar."), "ok")
     else:
         flash(gettext("Ya hay una generación en curso para este estudio."), "error")
@@ -578,7 +590,7 @@ def completar(cliente, eid):
     if e["usd"] > visto + 0.005:
         flash(gettext("El costo es %(costo)s y el que viste era otro: revísalo y vuelve a confirmar.", costo=gastos.formatear(e["usd"])), "error")
         return volver
-    if tareas_nicho.encolar_completar(cliente, eid):
+    if tareas_nicho.encolar_completar(cliente, eid, costo_estimado=e["usd"]):
         flash(gettext("Completando %(n)s avatar(es); la página se recarga sola al terminar.", n=e["avatares"]), "ok")
     else:
         flash(gettext("Ya se están completando los avatares de este estudio."), "error")
@@ -702,6 +714,10 @@ def investigacion_iniciar(cliente, eid):
         flash(gettext("El costo es %(costo)s y el que viste era otro: revísalo y vuelve a confirmar.",
                       costo=gastos.formatear(estimado["total_usd"])), "error")
         return _volver(cliente, eid)
+    # Cobros (spec 2026-10-08 §5): el tope aprobado se pide entero antes de
+    # empezar; cada paso vuelve a pedir saldo al encolarse (sin saldo, la
+    # investigación se detiene con la frase y se reanuda tras recargar).
+    libro.exigir(cliente, estimado["total_usd"])
     if est.get("pais") != pais:
         datos.actualizar_estudio(cliente, eid, pais=pais)
     datos.iniciar_investigacion(cliente, eid, investigacion.crear_inicial(est["tema"], pais, plats, redes, topes, estimado=estimado))

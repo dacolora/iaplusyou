@@ -30,6 +30,7 @@ from dotenv import load_dotenv
 from PIL import Image
 from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, send_file, abort, session, Response, stream_with_context, g, got_request_exception, has_request_context
 from flask_babel import Babel, format_decimal, get_locale, gettext, ngettext
+from markupsafe import Markup
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.utils import secure_filename
 from datetime import date, datetime
@@ -100,6 +101,8 @@ import admin
 import monitoreo
 import registro_app
 import gastos
+from cobros import SaldoInsuficiente
+from cobros import libro as libro_cobros
 from conectores import ErrorConector
 from conectores import csv_excel as conector_csv
 from conectores import meli as conector_meli
@@ -687,6 +690,22 @@ def _peticion_demasiado_grande(_error):
     if cliente and usuarios.puede_acceder(_sesion(), cliente):
         return redirect(url_for("ver_cliente", cliente=cliente))
     return redirect(url_for("index"))
+
+
+@app.errorhandler(SaldoInsuficiente)
+def _saldo_insuficiente(e):
+    """Spec 2026-10-08 §5.4: un solo lugar para el rechazo por saldo. Un fetch
+    recibe 402 con la frase y el enlace a Configuración › Saldo; un formulario,
+    un aviso y de vuelta a la página de origen (si es de este sitio). No se
+    cobró ni se encoló nada."""
+    recargar = url_for("ver_cliente", cliente=e.cliente) + "#config-ap-saldo"
+    frase = e.frase()
+    if _quiere_json() or request.is_json:
+        return jsonify({"ok": False, "error": frase, "saldo_insuficiente": True, "recargar_url": recargar}), 402
+    flash(Markup('{} <a href="{}">{}</a>').format(frase, recargar, gettext("Recargar saldo")), "error")
+    origen = request.referrer
+    destino = origen if origen and urlsplit(origen).netloc == request.host else recargar
+    return redirect(destino)
 
 
 @app.route("/trabajo/<path:job_id>/estado")
@@ -3589,6 +3608,9 @@ def generar_swap(cliente):
         flash(gettext("Elige un producto del catálogo."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
+    # Cobros (spec 2026-10-08 §5): todos los swaps de este envío se piden
+    # juntos antes de guardar el primero; cada uno reserva lo suyo al encolar.
+    libro_cobros.exigir(cliente, _costo_swaps(archivos, proveedor_foto, proveedor_video, mejorar_calidad))
     lanzados = 0
     for archivo in archivos:
         if _lanzar_swap(cliente, archivo, producto, producto_id, proveedor_foto, proveedor_video, mejorar_calidad):
@@ -3601,6 +3623,23 @@ def generar_swap(cliente):
     else:
         flash(gettext("Ya se estaban generando esos swaps — espera a que terminen."), "warn")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
+
+
+def _costo_un_swap(es_video, proveedor_foto, proveedor_video, mejorar_calidad):
+    if es_video:
+        return gastos.estimar("swap", proveedor=proveedor_video, formato="video")["usd"]
+    return gastos.estimar("swap", proveedor=proveedor_foto, formato="foto", mejorar_calidad=mejorar_calidad)["usd"]
+
+
+def _costo_swaps(archivos, proveedor_foto, proveedor_video, mejorar_calidad):
+    """USD (sin margen) de los swaps de un envío; None si alguno no tiene tarifa."""
+    total = 0.0
+    for a in archivos:
+        usd = _costo_un_swap(_ext_de(a.filename) in VIDEO_EXTS, proveedor_foto, proveedor_video, mejorar_calidad)
+        if usd is None:
+            return None
+        total += float(usd)
+    return round(total, 4)
 
 
 def _lanzar_swap(cliente, archivo, producto, producto_id, proveedor_foto, proveedor_video, mejorar_calidad):
@@ -3645,10 +3684,16 @@ def _lanzar_swap(cliente, archivo, producto, producto_id, proveedor_foto, provee
     # La generación corre en el worker (sobrevive reinicios). Sin reintento
     # automático: es generación pagada, un segundo intento gastaría créditos
     # otra vez sobre un fallo que ya se le mostró a la persona.
-    return trabajos.encolar(job_id, "swap_generar", {
-        "cliente": cliente, "swap_id": swap_id, "producto_id": producto_id,
-        "proveedor": proveedor, "tipo": tipo, "mejorar_calidad": bool(mejorar_calidad),
-    }, cliente=cliente, duracion_estimada=duracion_estimada, etapas=etapas, max_intentos=1)
+    try:
+        return trabajos.encolar(job_id, "swap_generar", {
+            "cliente": cliente, "swap_id": swap_id, "producto_id": producto_id,
+            "proveedor": proveedor, "tipo": tipo, "mejorar_calidad": bool(mejorar_calidad),
+        }, cliente=cliente, duracion_estimada=duracion_estimada, etapas=etapas, max_intentos=1,
+            costo_estimado=_costo_un_swap(es_video, proveedor_foto, proveedor_video, mejorar_calidad))
+    except SaldoInsuficiente as e:
+        # Un swap guardado sin trabajo detrás quedaría «generando» para siempre.
+        swaps_mod.actualizar(cliente, swap_id, estado="error", error=e.frase_proyecto())
+        raise
 
 
 @app.route("/cliente/<cliente>/swap/<swap_id>/original")
@@ -6030,6 +6075,9 @@ def org_redactar(cliente):
     plataformas = [p for p in request.form.getlist("plataformas") if p in organico.PLATAFORMAS]
     if not pieza_id or not plataformas:
         return jsonify({"error": gettext("Elige la pieza y al menos una plataforma.")}), 400
+    # Cobros (spec 2026-10-08 §5.2): sin saldo, 402 (organico.redactar
+    # caería en silencio al texto determinista, y la persona pidió IA).
+    libro_cobros.exigir(cliente, gastos.TARIFAS["caption_organico"])
     try:
         textos = organico.redactar(cliente, pieza_id, plataformas)
     except ValueError as e:
@@ -6382,6 +6430,10 @@ def prod_importar_archivo(cliente):
     if trabajos.en_curso(job_id):
         flash(gettext("Ya hay una importación de archivo en curso — espera a que termine."), "warn")
         return _volver_productos(cliente)
+    # Cobros (spec 2026-10-08 §5): la regla de cada producto la escribe Claude;
+    # sin saldo no se guarda el archivo ni se encola (precio por producto
+    # desconocido: basta con saldo positivo).
+    libro_cobros.exigir(cliente, None)
     carpeta = os.path.join(_client_dir(cliente), "importaciones")
     os.makedirs(carpeta, exist_ok=True)
     # <ts>_<micro>_<nombre>: dos subidas del mismo archivo en el mismo segundo
@@ -6391,10 +6443,17 @@ def prod_importar_archivo(cliente):
         f.write(datos)
     # max_intentos=1: crea activos y llama a Claude por cada uno; un reintento
     # a ciegas duplicaría trabajo. La tarea borra el archivo al terminar.
-    arranco = trabajos.encolar(
-        job_id, "catalogo_importar",
-        {"cliente": cliente, "ruta": ruta, "nombre_archivo": nombre, "borrar_al_terminar": True},
-        cliente=cliente, duracion_estimada=120, etapas=tareas_tiendas.ETAPAS_IMPORTAR, max_intentos=1)
+    try:
+        arranco = trabajos.encolar(
+            job_id, "catalogo_importar",
+            {"cliente": cliente, "ruta": ruta, "nombre_archivo": nombre, "borrar_al_terminar": True},
+            cliente=cliente, duracion_estimada=120, etapas=tareas_tiendas.ETAPAS_IMPORTAR, max_intentos=1)
+    except SaldoInsuficiente:
+        try:
+            os.remove(ruta)
+        except OSError:
+            pass
+        raise
     if arranco:
         flash(gettext("Importando «%(nombre)s»… Los productos aparecen aquí cuando termine.", nombre=nombre), "ok")
     else:
@@ -6561,7 +6620,8 @@ def prod_vincular(cliente, pid):
     job_id = tareas_tiendas.job_id_vincular(cliente, pid)
     arranco = trabajos.encolar(
         job_id, "producto_vincular", {"cliente": cliente, "producto_id": pid},
-        cliente=cliente, duracion_estimada=90, etapas=tareas_tiendas.ETAPAS_VINCULAR, max_intentos=1)
+        cliente=cliente, duracion_estimada=90, etapas=tareas_tiendas.ETAPAS_VINCULAR, max_intentos=1,
+        costo_estimado=gastos.TARIFAS["regla_producto"])
     if arranco:
         flash(gettext("Creando el activo de «%(nombre)s»… aparece en el Catálogo cuando termine.",
                       nombre=prod.get("nombre") or pid), "ok")
@@ -7329,7 +7389,7 @@ def fe_preparar(cliente, cf_id):
         {"cliente": cliente, "cf_id": cf_id, "opciones": opciones},
         # Un solo intento: el guion cobra (Whisper + Claude); un reintento automático pagaba
         # otra vez y pisaba el gasto del primero con la misma referencia (2026-10-02).
-        cliente=cliente, duracion_estimada=25, max_intentos=1,
+        cliente=cliente, duracion_estimada=25, max_intentos=1, costo_estimado=gastos.estimar("guion")["usd"],
     )
     flash(gettext("Escribiendo el guion con IA… en unos segundos aparece aquí para que lo revises.") if encolado
           else gettext("Ya se estaba escribiendo el guion de esta pieza."), "ok")
@@ -7429,6 +7489,10 @@ def fe_producir(cliente, cf_id):
     }
     if cancion:
         opciones["musica_inicio_s"] = mi_musica.inicio_valido(cancion, request.form.get("musica_inicio_s"))
+    # Cobros (spec 2026-10-08 §5): todas las finales del clic se piden juntas
+    # antes de crear la primera fila; cada una reserva lo suyo al encolar.
+    libro_cobros.exigir(cliente, gastos.estimar("final", paises=len(destinos))["usd"])
+    usd_una = gastos.estimar("final", paises=1)["usd"]
     encolados = 0
     for idioma, pais in destinos:
         job_id = tareas_fe.job_id_final(cliente, cf_id, idioma, pais)
@@ -7437,13 +7501,19 @@ def fe_producir(cliente, cf_id):
             continue
         # La fila final existe en `generando` desde que se encola, así la
         # cuadrícula la muestra con su barra sin esperar a que el worker arranque.
-        creative_flow.crear_final(cliente, cf_id, idioma, pais)
-        if trabajos.encolar(
-            job_id, "final_producir",
-            {"cliente": cliente, "cf_id": cf_id, "idioma": idioma, "pais": pais, "opciones": dict(opciones)},
-            cliente=cliente, duracion_estimada=150, etapas=ETAPAS_FINAL, max_intentos=1,
-        ):
-            encolados += 1
+        final_id = creative_flow.crear_final(cliente, cf_id, idioma, pais)
+        try:
+            if trabajos.encolar(
+                job_id, "final_producir",
+                {"cliente": cliente, "cf_id": cf_id, "idioma": idioma, "pais": pais, "opciones": dict(opciones)},
+                cliente=cliente, duracion_estimada=150, etapas=ETAPAS_FINAL, max_intentos=1, costo_estimado=usd_una,
+            ):
+                encolados += 1
+        except SaldoInsuficiente as e:
+            # Sin esto la fila quedaría «generando» sin trabajo (la anterior, si
+            # había, se conserva: el error no la pisa).
+            creative_flow.actualizar_final(cliente, final_id, estado="error", error=e.frase_proyecto())
+            raise
     if encolados:
         flash(gettext("Produciendo %(n)s finales… cada una aparece aquí, en Finales, cuando termina.", n=encolados), "ok")
     else:
@@ -7682,7 +7752,8 @@ def mm_crear(cliente):
     jid = tareas_musica.job_id(cliente)
     encolado = trabajos.encolar(jid, "musica_generar",
                                 {"cliente": cliente, "prompt": prompt, "instrumental": request.form.get("instrumental") == "si"},
-                                duracion_estimada=90, etapas=list(tareas_musica.ETAPAS), cliente=cliente, max_intentos=1)
+                                duracion_estimada=90, etapas=list(tareas_musica.ETAPAS), cliente=cliente, max_intentos=1,
+                                costo_estimado=gastos.estimar("musica_elevenlabs")["usd"])
     if not encolado:
         return _respuesta_mi_musica(cliente, error=gettext("Ya se está creando una canción — espera a que termine."))
     return _respuesta_mi_musica(cliente, mensaje=gettext("Creando la canción con ElevenLabs…"), job_id=jid)
@@ -7729,7 +7800,8 @@ def au_crear(cliente):
         return _respuesta_audios(cliente, error=idiomas.traducir(str(e)))
     jid = tareas_audios.job_id(cliente)
     encolado = trabajos.encolar(jid, "audio_generar", {"cliente": cliente, **payload}, duracion_estimada=60,
-                                etapas=list(tareas_audios.ETAPAS), cliente=cliente, max_intentos=1)
+                                etapas=list(tareas_audios.ETAPAS), cliente=cliente, max_intentos=1,
+                                costo_estimado=gastos.estimar("locucion", caracteres=len(payload["texto"]))["usd"])
     if not encolado:
         return _respuesta_audios(cliente, error=idiomas.traducir(audios.MENSAJES["en_curso"]))
     return _respuesta_audios(cliente, mensaje=gettext("Creando el audio…"), job_id=jid)
@@ -7763,6 +7835,8 @@ def au_muestra(cliente):
         return jsonify({"ok": False, "error": gettext("Elige una voz y un idioma de la lista.")}), 400
     try:
         url = voces_propias.muestra(cliente, voz, idioma) if propia else audios.muestra(voz, idioma)
+    except SaldoInsuficiente:
+        raise
     except Exception as e:
         bitacora.registrar(cliente, voz, "audios", "muestra_error", str(e))
         return jsonify({"ok": False, "error": gettext("No pude generar la muestra (%(tipo)s); intenta de nuevo.", tipo=type(e).__name__)}), 502
@@ -7826,11 +7900,18 @@ def _respuesta_mis_voces(cliente, error=None, mensaje=None, job_id=None):
                     "error": error, "mensaje": mensaje, "job_id": job_id}), (400 if error else 200)
 
 
+def _costo_voz(payload):
+    """USD (sin margen) de crear la voz: el mismo estimado que muestra el botón."""
+    tipo = "voz_clonada" if payload.get("forma") == "clonar" else "voz_disenada"
+    return gastos.estimar(tipo, nombre=payload.get("nombre") or "", idioma=payload.get("idioma") or "es")["usd"]
+
+
 def _encolar_voz(cliente, payload):
     """Una creación de voz a la vez por proyecto; paga, así que sin reintentos."""
     jid = tareas_voces.job_id(cliente)
     if trabajos.encolar(jid, "voz_propia_crear", {"cliente": cliente, **payload}, duracion_estimada=90,
-                        etapas=list(tareas_voces.ETAPAS), cliente=cliente, max_intentos=1):
+                        etapas=list(tareas_voces.ETAPAS), cliente=cliente, max_intentos=1,
+                        costo_estimado=_costo_voz(payload)):
         return jid
     return None
 
@@ -7869,6 +7950,8 @@ def vp_clonar(cliente):
     archivo = request.files.get("grabacion")
     if not archivo or not archivo.filename:
         return _respuesta_mis_voces(cliente, error=idiomas.traducir(voces_propias.MENSAJES["archivo"]))
+    # Cobros (spec 2026-10-08 §5): sin saldo la grabación ni se sube.
+    libro_cobros.exigir(cliente, _costo_voz(payload))
     try:
         g = voces_propias.guardar_grabacion(cliente, archivo, os.path.join(_client_dir(cliente), "tmp_voces"))
     except voces_propias.EntradaInvalida as e:
@@ -7877,7 +7960,11 @@ def vp_clonar(cliente):
         bitacora.registrar(cliente, archivo.filename, "voces_propias", "error", str(e))
         return _respuesta_mis_voces(cliente, error=gettext("No pude subir la grabación (%(tipo)s).", tipo=type(e).__name__))
     payload["grabacion_id"] = g["id"]
-    jid = _encolar_voz(cliente, payload)
+    try:
+        jid = _encolar_voz(cliente, payload)
+    except SaldoInsuficiente:
+        voces_propias._borrar_grabacion_si_huerfana(cliente, g["id"])
+        raise
     if not jid:
         # Otra creación se encoló entre el chequeo de arriba y aquí: la grabación
         # recién guardada no se queda en R2 sin voz — salvo que sea la misma fila
@@ -8214,6 +8301,14 @@ def cf_crear_video(cliente):
             # Con receta el enfoque lo fija la receta (spec §9); sin referencias sigue «libre».
             enfoque = plantilla["enfoque"]
     info = flowplus_prompt.ENFOQUES[enfoque]
+    if tipo == "imagen" or request.form.get("modo_prompt") != "director":
+        # Cobros (spec 2026-10-08 §5): sin saldo no se crea la sesión ni se toca
+        # la bandeja; el manejador de SaldoInsuficiente responde. La reserva la
+        # hace flowplus_lanzar al encolar. El director es gratis: su freno es
+        # el del botón «Generar» de la tarjeta.
+        libro_cobros.exigir(cliente, flowplus_lanzar.costo_estimado(dict(
+            tipo=tipo, modelo=modelo, duracion_objetivo=duracion_objetivo, referencias=referencias,
+            referencias_urls=referencias_urls, con_sonido=con_sonido, musica_estilo=musica_estilo, calidad=calidad)))
     cf_id = creative_flow.crear(
         cliente, [], productos_sel, [],
         accion_central, duracion_objetivo, "", "A",

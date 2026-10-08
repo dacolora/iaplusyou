@@ -29,6 +29,7 @@ import flowplus_lanzar
 import gastos
 import idiomas
 import trabajos
+from cobros import SaldoInsuficiente
 from final_edition import cortes, edicion_clon, insumos
 from guiones import cadena, datos, escenas, medios
 from guiones.refinador import ErrorRefinador
@@ -172,6 +173,10 @@ def vigilar_una(cliente, video_id):
         if siguiente is not None:
             try:
                 lanzar_escena(cliente, video_id, siguiente)
+            except SaldoInsuficiente as e:
+                # Cobros (spec 2026-10-08 §5.4): la cadena se detiene en esta
+                # escena con la frase; nada se encoló ni se cobró.
+                _fallar(cliente, video_id, siguiente, e.frase_proyecto())
             except Exception as e:  # noqa: BLE001 — la cadena queda detenida con el motivo
                 log.exception("cadena: no se pudo lanzar la escena %s del video %s", siguiente, video_id)
                 _fallar(cliente, video_id, siguiente, str(e))

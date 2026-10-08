@@ -52,10 +52,11 @@ def encolar_sync(cliente):
                             duracion_estimada=90, etapas=ETAPAS_SYNC, max_intentos=MAX_INTENTOS_SYNC)
 
 
-def encolar_evaluacion(cliente, evaluacion_id):
+def encolar_evaluacion(cliente, evaluacion_id, costo_estimado=None):
     """max_intentos=1: paga a Claude. False si ya había una viva."""
     return trabajos.encolar(job_id_evaluar(cliente), TIPO_EVALUAR, {"cliente": cliente, "evaluacion_id": evaluacion_id},
-                            cliente=cliente, duracion_estimada=120, etapas=ETAPAS_EVALUAR, max_intentos=1)
+                            cliente=cliente, duracion_estimada=120, etapas=ETAPAS_EVALUAR, max_intentos=1,
+                            costo_estimado=costo_estimado)
 
 
 def evaluacion_en_curso(cliente):

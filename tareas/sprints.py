@@ -42,7 +42,7 @@ import notificaciones
 import proyectos
 import referencias_link
 import trabajos
-from cobros import libro
+from cobros import SaldoInsuficiente, libro
 from idiomas import N_
 from nicho.avatares import costo_real, modelo_actual
 from referentes import sugerir as referentes_sugerir
@@ -63,9 +63,19 @@ def job_id_link(cliente, campana_id):
 
 
 def encolar_analisis(cliente, referencia_id):
-    return trabajos.encolar(job_id_analizar(cliente, referencia_id), "sprint_analizar_referencia",
-                            {"cliente": cliente, "referencia_id": referencia_id}, cliente=cliente,
-                            duracion_estimada=20, max_intentos=3)
+    """Encola el análisis (Claude) de una referencia recién guardada. Sin saldo
+    (cobros, spec 2026-10-08 §5.4) no se encola: la referencia queda guardada
+    con el análisis en error y la frase (se puede «Analizar de nuevo» tras
+    recargar). Nunca lanza por saldo: lo llaman bucles de subida y el worker
+    (después de bajar un link), que no deben cortarse a la mitad."""
+    try:
+        return trabajos.encolar(job_id_analizar(cliente, referencia_id), "sprint_analizar_referencia",
+                                {"cliente": cliente, "referencia_id": referencia_id}, cliente=cliente,
+                                duracion_estimada=20, max_intentos=3)
+    except SaldoInsuficiente as e:
+        datos.actualizar_referencia(cliente, referencia_id, analisis_estado="error",
+                                    analisis={"error": e.frase_proyecto()})
+        return False
 
 
 def encolar_sugerir(cliente, cuantas=3):
@@ -141,7 +151,22 @@ def encolar_ideas(cliente, campana_id, n_videos=None, n_imagenes=None, reemplaza
     return trabajos.encolar(job_id_ideas(cliente, campana_id), "sprint_proponer_ideas",
                             {"cliente": cliente, "campana_id": campana_id, "n_videos": n_videos, "n_imagenes": n_imagenes,
                              "reemplaza": reemplaza}, cliente=cliente, duracion_estimada=40,
-                            max_intentos=1)  # pagada: nunca se reintenta sola
+                            max_intentos=1,  # pagada: nunca se reintenta sola
+                            costo_estimado=_costo_ideas(cliente, campana_id, n_videos, n_imagenes, reemplaza))
+
+
+def _costo_ideas(cliente, campana_id, n_videos, n_imagenes, reemplaza):
+    """El mismo estimado del botón: base + por idea pedida (una si reemplaza;
+    sin cantidades, las que la campaña tiene como objetivo — tope conservador:
+    el botón muestra solo las que faltan; si no se sabe, una)."""
+    if reemplaza:
+        n = 1
+    elif n_videos is not None or n_imagenes is not None:
+        n = int(n_videos or 0) + int(n_imagenes or 0)
+    else:
+        c = datos.campana(cliente, campana_id) or {}
+        n = int(c.get("n_videos") or 0) + int(c.get("n_imagenes") or 0)
+    return gastos.estimar("proponer_ideas", n=max(1, n))["usd"]
 
 
 def job_id_reescribir(cliente, cp_id):
@@ -152,7 +177,8 @@ def encolar_reescribir(cliente, cp_id):
     """«Reescribir la idea con este ángulo» (doctrina, bloque 2): pagada, un
     clic con precio a la vista, nunca se reintenta sola."""
     return trabajos.encolar(job_id_reescribir(cliente, cp_id), "sprint_reescribir_idea",
-                            {"cliente": cliente, "cp_id": cp_id}, cliente=cliente, duracion_estimada=40, max_intentos=1)
+                            {"cliente": cliente, "cp_id": cp_id}, cliente=cliente, duracion_estimada=40, max_intentos=1,
+                            costo_estimado=gastos.estimar("reescribir_idea")["usd"])
 
 
 @registrar("sprint_reescribir_idea")
@@ -213,7 +239,7 @@ def job_id_sugerir_biblioteca(cliente, campana_id):
 def encolar_sugerir_biblioteca(cliente, campana_id):
     return trabajos.encolar(job_id_sugerir_biblioteca(cliente, campana_id), "referentes_sugerir_ia",
                             {"cliente": cliente, "campana_id": int(campana_id)}, cliente=cliente,
-                            duracion_estimada=20, max_intentos=1)
+                            duracion_estimada=20, max_intentos=1, costo_estimado=gastos.estimar("sugerir_ia")["usd"])
 
 
 @registrar("referentes_sugerir_ia")

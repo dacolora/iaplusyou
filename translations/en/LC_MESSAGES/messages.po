@@ -12837,6 +12837,9 @@ msgstr "Reload now"
 msgid "Recargar el prompt"
 msgstr "Reload the prompt"
 
+msgid "Recargar saldo"
+msgstr "Top up balance"
+
 msgid "Receta de tomas"
 msgstr "Shot recipe"
 

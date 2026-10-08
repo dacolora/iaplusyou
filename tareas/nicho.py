@@ -43,7 +43,7 @@ LOTE = 100
 log = logging.getLogger(__name__)
 
 
-def encolar_generar(cliente, estudio_id, auto=False, tope_usd=None):
+def encolar_generar(cliente, estudio_id, auto=False, tope_usd=None, costo_estimado=None):
     """False si ya hay una generación viva para ese estudio. `auto` = paso final
     de la investigación: el costo ya se aprobó como parte del tope; `tope_usd`
     es lo que queda de ese tope y la tarea lo respeta antes de gastar."""
@@ -51,7 +51,7 @@ def encolar_generar(cliente, estudio_id, auto=False, tope_usd=None):
     if auto:
         payload.update({"auto": True, "tope_usd": tope_usd})
     ok = trabajos.encolar(datos.job_id_generar(cliente, estudio_id), "nicho_generar_avatares", payload, cliente=cliente,
-                          duracion_estimada=200, etapas=ETAPAS_GENERAR, max_intentos=1)
+                          duracion_estimada=200, etapas=ETAPAS_GENERAR, max_intentos=1, costo_estimado=costo_estimado)
     if ok:
         datos.recalcular(cliente, estudio_id, tarea_viva=True)
     return ok
@@ -202,7 +202,7 @@ def interrumpida_generar(tarea, mensaje):
 
 # ------------------------------------------------------- nicho_recolectar ---
 
-def encolar_recolectar(cliente, estudio_id, fuente, params, investigacion=False):
+def encolar_recolectar(cliente, estudio_id, fuente, params, investigacion=False, costo_estimado=None):
     """False si ya hay una recolección viva de esa fuente para ese estudio.
     `investigacion=True` = es un paso de la cadena (spec Parte 3): al terminar
     anota su paso y llama a `tareas.investigacion.avanzar`."""
@@ -219,7 +219,7 @@ def encolar_recolectar(cliente, estudio_id, fuente, params, investigacion=False)
     max_intentos = 1 if (de_pago or investigacion) else 2
     return trabajos.encolar(datos.job_id_recolectar(cliente, estudio_id, fuente), "nicho_recolectar", payload,
                             cliente=cliente, duracion_estimada=300 if de_pago else 120, etapas=ETAPAS_RECOLECTAR,
-                            max_intentos=max_intentos)
+                            max_intentos=max_intentos, costo_estimado=costo_estimado)
 
 
 def _corrida(fuente):
@@ -372,11 +372,12 @@ def interrumpida_recolectar(tarea, mensaje):
 ETAPAS_COMPLETAR = [(avatares.ETAPA_COMPLETAR, 60), (ETAPA_GUARDAR, 5)]
 
 
-def encolar_completar(cliente, estudio_id):
+def encolar_completar(cliente, estudio_id, costo_estimado=None):
     """False si ya hay un completado vivo para ese estudio. Gasta: max_intentos=1."""
     return trabajos.encolar(datos.job_id_completar(cliente, estudio_id), "nicho_completar_avatares",
                             {"cliente": cliente, "estudio_id": int(estudio_id)}, cliente=cliente,
-                            duracion_estimada=90, etapas=ETAPAS_COMPLETAR, max_intentos=1)
+                            duracion_estimada=90, etapas=ETAPAS_COMPLETAR, max_intentos=1,
+                            costo_estimado=costo_estimado)
 
 
 @registrar("nicho_completar_avatares")

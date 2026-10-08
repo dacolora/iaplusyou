@@ -33,7 +33,8 @@ def job_id_pedidos(cliente, producto_id):
 def encolar_pedidos(cliente, producto_id):
     return trabajos.encolar(job_id_pedidos(cliente, producto_id), TIPO_PEDIDOS,
                             {"cliente": cliente, "producto_id": producto_id},
-                            cliente=cliente, duracion_estimada=40, max_intentos=1)
+                            cliente=cliente, duracion_estimada=40, max_intentos=1,
+                            costo_estimado=gastos.estimar("pedidos_producto")["usd"])
 
 
 def _gasto(cliente, referencia, ent, sal, detalle, tipo="pedidos", entregado=True):
@@ -65,7 +66,8 @@ def job_id_revisar(cliente, cf_id):
 
 def encolar_revisar(cliente, cf_id):
     return trabajos.encolar(job_id_revisar(cliente, cf_id), TIPO_REVISAR, {"cliente": cliente, "cf_id": cf_id},
-                            cliente=cliente, duracion_estimada=60, max_intentos=1)
+                            cliente=cliente, duracion_estimada=60, max_intentos=1,
+                            costo_estimado=gastos.estimar("revision_pieza")["usd"])
 
 
 @registrar(TIPO_REVISAR)

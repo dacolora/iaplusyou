@@ -5,6 +5,7 @@ el modo), subir una foto (gratis), la voz (cacheada o la tarea `hablado_voz`,
 que paga una vez) y crear el video (sesión de Crear + `flowplus_lanzar.lanzar`).
 `dashboard._guard_por_cliente` protege estas rutas porque la URL lleva
 <cliente>; aquí se rechazan los POST que el navegador marca de otro sitio."""
+import math
 import os
 
 from flask import Blueprint, get_template_attribute, jsonify, render_template, request, url_for
@@ -14,10 +15,12 @@ import audios
 import bitacora
 import creative_flow
 import flowplus_lanzar
+import gastos
 import hablado
 import idiomas
 import trabajos
 import voces_propias
+from cobros import libro
 from final_edition import biblioteca
 from providers import fal_audio
 from tareas import hablado as tareas_hablado
@@ -97,7 +100,8 @@ def voz(cliente):
     jid = tareas_hablado.job_id(cliente)
     estado_url = url_for("estado_trabajo", job_id=jid)
     if not trabajos.encolar(jid, "hablado_voz", {"cliente": cliente, **p}, duracion_estimada=20,
-                            etapas=list(tareas_hablado.ETAPAS), cliente=cliente, max_intentos=1):
+                            etapas=list(tareas_hablado.ETAPAS), cliente=cliente, max_intentos=1,
+                            costo_estimado=gastos.estimar("locucion", caracteres=len(p["texto"]))["usd"]):
         return jsonify({"ok": False, "error": idiomas.traducir(hablado.MENSAJES["en_curso"]), "job_id": jid,
                         "estado_url": estado_url}), 409
     return jsonify({"ok": True, "listo": False, "job_id": jid, "estado_url": estado_url})
@@ -109,6 +113,14 @@ def crear(cliente):
     nada se crea si algo no cuadra), crea la sesión de Crear y la lanza con
     `flowplus_lanzar.lanzar` (prioridad 5, max_intentos=1)."""
     f = request.form
+    # Cobros (spec 2026-10-08 §5): el precio que la persona vio se pide antes
+    # de crear la sesión (crear_pieza comprueba que sea el real; si no, el
+    # lanzamiento vuelve a pedir el real al encolar).
+    try:
+        visto = float(f.get("precio_visto"))
+    except (TypeError, ValueError):
+        visto = None
+    libro.exigir(cliente, visto if visto is not None and math.isfinite(visto) and 0 < visto < 1000 else None)
     try:
         cf_id = hablado.crear_pieza(cliente, f.get("foto"), f.get("voz_hash"), f.get("movimiento"),
                                     f.get("precio_visto"))
