@@ -163,7 +163,7 @@
   <div class="tb-seccion-cab"><h3>{{ _('Campañas') }}</h3><small class="vacio">{{ ngettext('%(num)s campaña con gasto en el periodo', '%(num)s campañas con gasto en el periodo', mr.campanas | length) }}</small></div>
   <div class="tw-tabla-scroll">
     <table class="tw-tabla">
-      <thead><tr><th>{{ _('Campaña') }}</th><th>{{ _('Estado') }}</th><th>{{ _('Objetivo') }}</th><th>{{ _('Presupuesto') }}</th><th>{{ _('Gasto') }}</th><th>ROAS</th><th>{{ _('Compras') }}</th><th>{{ _('Costo por compra') }}</th></tr></thead>
+      <thead><tr><th>{{ _('Campaña') }}</th><th>{{ _('Estado') }}</th><th>{{ _('Objetivo') }}</th><th>{{ _('Presupuesto') }}</th><th>{{ _('Gasto') }}</th><th>ROAS</th><th>{{ _('Compras') }}</th><th>{{ _('Costo por compra') }}</th><th>{{ _('Alcance') }}</th></tr></thead>
       <tbody>
         {% for c in campanas %}
         <tr>
@@ -175,6 +175,7 @@
           <td>{{ mx.roas(c.m.roas) }}</td>
           <td>{{ c.compras | tw_num }}</td>
           <td>{{ mx.monto(c.m.cpa, c.moneda) }}</td>
+          <td>{{ c.alcance | tw_num }}</td>
         </tr>
         {% endfor %}
       </tbody>

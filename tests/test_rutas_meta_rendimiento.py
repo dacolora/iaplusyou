@@ -82,6 +82,8 @@ def _sembrar(n_anuncios=4):
          "aprendizaje": "FAIL", "campaign_id": "c1"},
         {"nivel": "anuncio", "objeto_id": "gana", "nombre": "Video gana", "estado": "ACTIVE",
          "miniatura_url": "https://scontent.example/gana.jpg"}])
+    datos.guardar_alcance("acme", A, [{"nivel": "campana", "objeto_id": "c1", "ventana": 30, "alcance": 4321,
+                                       "frecuencia": 1.2}])
     for d in range(0, 70):
         _tasa(_hace(d))
 
@@ -147,6 +149,7 @@ def test_panel_con_datos(conectado):
     assert "Por cuenta" in html and f'data-meta-act="{A}"' in html
     assert 'class="tb-grafico"' in html and "USD" in html
     assert "Campaña Otoño" in html and "Conjunto Mujeres" in html and "Aprendizaje limitado" in html
+    assert "<td>4.321</td>" in html                                    # alcance de la campaña (spec §8.4)
     assert 'src="https://scontent.example/gana.jpg" alt="" loading="lazy" width="48" height="48"' in html
     assert "Conectado solo para métricas" in html                     # sin Página
     assert "<script" not in html
