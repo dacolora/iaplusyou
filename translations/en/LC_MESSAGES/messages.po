@@ -3481,8 +3481,8 @@ msgstr "Claude didn't answer in the expected format. Send your message again."
 msgid "Claude no respondió en el formato esperado. Vuelve a intentarlo."
 msgstr "Claude didn't answer in the expected format. Try again."
 
-msgid "Claude no vio el anuncio: juzgó por el texto y los números"
-msgstr "Claude did not see the ad: it judged by the text and the numbers"
+msgid "Claude no vio el anuncio: juzgó por los números"
+msgstr "Claude did not see the ad: it judged by the numbers"
 
 msgid "Claude para investigación"
 msgstr "Claude for research"
@@ -11352,6 +11352,12 @@ msgid "No se pudo describir."
 msgstr "Couldn't describe it."
 
 #, python-format
+msgid "No se pudo encolar %(num)s anuncio: vuelve a intentarlo."
+msgid_plural "No se pudieron encolar %(num)s anuncios: vuelve a intentarlo."
+msgstr[0] "%(num)s ad could not be queued: try again."
+msgstr[1] "%(num)s ads could not be queued: try again."
+
+#, python-format
 msgid "No se pudo encolar la continuación (%(error)s)"
 msgstr "Couldn't queue the follow-up task (%(error)s)"
 
@@ -16890,6 +16896,10 @@ msgstr "ambience first"
 
 msgid "amigable"
 msgstr "friendly"
+
+#, python-format
+msgid "analizado el %(fecha)s"
+msgstr "analyzed on %(fecha)s"
 
 msgid "animada"
 msgstr "upbeat"

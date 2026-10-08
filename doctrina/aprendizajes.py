@@ -108,7 +108,9 @@ def desde_veredicto(pz, v, diagnostico=None, ahora=None):
 
 def desde_analisis_tw(fila, ahora=None):
     """Un aprendizaje desde un análisis «Cómo mejorarlo» de Triple Whale (spec tarjetas §6.3), o None si Claude no
-    dejó uno. Lo guarda la persona con un clic; analizar nunca agrega aprendizajes solo."""
+    dejó uno. Lo guarda la persona con un clic; analizar nunca agrega aprendizajes solo. El `id` sale del análisis
+    (`tw<id>`): `proyectos.agregar_aprendizaje` descarta por `id` y bajo su candado, así dos clics (o dos pestañas) a
+    la vez guardan una sola línea."""
     r = (fila or {}).get("resultado") or {}
     f = (fila or {}).get("foto") or {}
     aprendizaje = _limpio(r.get("aprendizaje"), 220)
@@ -123,10 +125,12 @@ def desde_analisis_tw(fila, ahora=None):
     else:
         texto = gettext("Analizado en Triple Whale: «%(nombre)s»", nombre=nombre)
     texto += gettext(". Diagnóstico: %(a)s", a=aprendizaje)
-    return {"id": uuid.uuid4().hex[:8], "en": ahora, "tipo": ver if ver in ("ganador", "perdedor") else "manual",
+    analisis_id = (fila or {}).get("id")
+    return {"id": f"tw{analisis_id}" if analisis_id is not None else uuid.uuid4().hex[:8], "en": ahora,
+            "tipo": ver if ver in ("ganador", "perdedor") else "manual",
             "pais": None, "producto": None, "gancho": None, "lead": None, "consciencia": None,
             "texto": _limpio(texto, MAX_TEXTO_MOTOR), "aprendizaje": aprendizaje, "origen": "triple_whale",
-            "analisis_id": (fila or {}).get("id")}
+            "analisis_id": analisis_id}
 
 
 def manual(texto, ahora=None):

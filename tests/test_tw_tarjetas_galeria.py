@@ -238,6 +238,20 @@ def test_el_lote_mira_mas_alla_de_los_primeros_treinta(app):  # noqa: F811
     assert g["lote"]["n"] == 5 and g["lote"]["claves"][0] == ("facebook-ads", orden[35]["ad_id"])
 
 
+def test_el_lote_muestra_diez_pero_las_elegibles_son_todas(app):  # noqa: F811
+    """La ruta del lote intersecta lo confirmado con TODAS las elegibles, no solo con las 10 del botón."""
+    _conectar()
+    _sembrar_muchos(25)
+    alc = panel.alcance("acme")
+    g = panel.galeria("acme", alc["ev"], alcance=alc)
+    assert g["lote"]["n"] == 10 and len(g["lote"]["claves"]) == 10 and len(g["lote"]["elegibles"]) == 25
+    assert set(g["lote"]["claves"]) <= g["lote"]["elegibles"]
+    primero = g["lote"]["claves"][0]
+    _lista(alc, primero[1], _foto(_anuncio(alc, primero[1])))             # uno con análisis fresco sale de las dos listas
+    g = panel.galeria("acme", alc["ev"], alcance=alc)
+    assert len(g["lote"]["elegibles"]) == 24 and primero not in g["lote"]["elegibles"] and primero not in g["lote"]["claves"]
+
+
 def test_estados_de_la_tarjeta(app):  # noqa: F811
     """Barra viva, listo, viejo, con error, en cola sin barra, y la regla de plata: sin datos no hay «Cómo mejorarlo»."""
     from tareas import triple_whale as tareas_tw

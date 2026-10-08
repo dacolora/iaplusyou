@@ -379,13 +379,16 @@ def galeria(cliente, ev, veredicto="", pagina=1, alcance=None):
     claves = {(a["canal"], a["ad_id"]) for a in tarjetas + candidatos}
     por_clave = datos.ultimos_analisis(cliente, list(claves))
     enriquecer(cliente, tarjetas, ev, por_clave, alcance)
-    lote = [a for a in candidatos
-            if not _fresco_o_vivo(a, por_clave.get((a["canal"], a["ad_id"])), alcance)][:N_LOTE]
+    elegibles = [a for a in candidatos if not _fresco_o_vivo(a, por_clave.get((a["canal"], a["ad_id"])), alcance)]
+    lote = elegibles[:N_LOTE]
     unidad = gastos.estimar("analisis_anuncio_tw")["usd"] or 0
     conteo = {f: len(filtrar(ev["anuncios"], f)) for f in FILTROS_GALERIA}
     return {"tarjetas": tarjetas, "pagina": pagina, "hay_mas": pagina * POR_PAGINA < len(lista), "total": len(lista),
             "veredicto": veredicto, "conteo_filtros": conteo,
+            # `claves` son las que muestra el botón (hasta N_LOTE); `elegibles`, todas las que hoy se podrían analizar:
+            # la ruta del lote solo cobra lo que se confirmó Y sigue siendo elegible (revisión de la tarea 8).
             "lote": {"n": len(lote), "claves": [(a["canal"], a["ad_id"]) for a in lote],
+                     "elegibles": {(a["canal"], a["ad_id"]) for a in elegibles},
                      # el mismo texto que gastos.estimar («US$ 0,81 aprox.»); sin duración, 30 s por anuncio
                      "precio": gastos._estimado(unidad * len(lote), "análisis por anuncio")}}
 

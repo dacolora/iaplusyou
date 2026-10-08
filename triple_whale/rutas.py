@@ -21,11 +21,15 @@ todo porque la URL lleva `<cliente>`; cada POST además exige el mismo origen
   análisis; un anuncio que no está en el alcance (o un id raro) es 404.
 - `analizar_anuncio` (POST, §6.2): «Cómo mejorarlo» de un anuncio: la foto de hoy, la fila `tw_analisis` y la tarea
   pagada (`max_intentos=1`, un `job_id` por anuncio). Con `Accept: application/json` devuelve la tarjeta ya en curso.
-- `analizar_lote` (POST, §6.4): lo mismo para los N que más gastaron del filtro, sin repetir ni cobrar de más.
+- `analizar_lote` (POST, §6.4): lo mismo para los N que más gastaron del filtro. Cobra solo lo que la persona
+  confirmó: las claves `clave=<canal>:<ad_id>` que mostró el formulario Y que hoy siguen siendo elegibles (sin
+  análisis fresco ni en curso), nunca «los próximos N»: un segundo envío del mismo formulario no cobra nada.
 - `analisis_detalle` (GET, §6.5): el fragmento con lo que dijo Claude; `analisis_crear` (§7.1) lleva la versión
   mejorada a Crear; `analisis_aprendizaje` (§6.3) la guarda como aprendizaje del proyecto con un clic;
   `anuncio_referente` (§7.2) guarda el anuncio en Referentes.
 """
+import logging
+
 from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, session, url_for
 from flask_babel import gettext, ngettext
 
@@ -38,6 +42,7 @@ from tareas import triple_whale as tareas_tw
 from triple_whale import analisis, datos, evaluacion, mejorar, panel, puente
 
 bp = Blueprint("triple_whale", __name__, url_prefix="/cliente/<cliente>/triple-whale")
+log = logging.getLogger("creatv.triple_whale.rutas")
 
 
 @bp.before_request
@@ -171,7 +176,12 @@ def _pedir_analisis(cliente, alc, a):
                         mejorar.ganadores_del_canal(ev, a, creativos))
     aid = datos.crear_analisis(cliente, alc["tienda_id"], a["canal"], a["ad_id"], alc["desde"], alc["hasta"],
                                alc["config"]["moneda"], foto, pedido_por=session.get("usuario"))
-    if not tareas_tw.encolar_analisis(cliente, aid, a["canal"], a["ad_id"]):
+    try:
+        encolada = tareas_tw.encolar_analisis(cliente, aid, a["canal"], a["ad_id"])
+    except Exception:
+        datos.borrar_analisis(cliente, aid)       # sin tarea no hay quien la termine: una fila en_cola bloquearía el anuncio
+        raise
+    if not encolada:
         datos.borrar_analisis(cliente, aid)
         return False, gettext("Ese anuncio ya se está analizando.")
     return True, gettext("Analizando «%(nombre)s» con IA…", nombre=a["nombre"])
@@ -200,6 +210,17 @@ def analizar_anuncio(cliente, canal, ad_id):
     return _volver(cliente)
 
 
+def _claves_confirmadas(valores):
+    """[(canal, ad_id)] de los `clave=<canal>:<ad_id>` del formulario del lote: cada mitad validada con `id_valido`,
+    lo mal formado se ignora y no se repite ninguna."""
+    claves = []
+    for v in valores:
+        canal, dos_puntos, ad_id = str(v or "").partition(":")
+        if dos_puntos and tareas_tw.id_valido(canal) and tareas_tw.id_valido(ad_id) and (canal, ad_id) not in claves:
+            claves.append((canal, ad_id))
+    return claves
+
+
 @bp.post("/analizar-lote")
 def analizar_lote(cliente):
     alc = _alcance_peticion(cliente, request.form)
@@ -207,13 +228,27 @@ def analizar_lote(cliente):
         flash(gettext("Triple Whale no está conectado en este proyecto."), "error")
         return _volver(cliente)
     g = panel.galeria(cliente, alc["ev"], request.form.get("veredicto") or "", alcance=alc)
-    n = 0
-    for canal, ad_id in g["lote"]["claves"]:
+    # Solo lo que se confirmó (el precio que vio la persona) Y que hoy se puede analizar; a lo sumo N_LOTE.
+    elegibles = g["lote"]["elegibles"]
+    claves = [k for k in _claves_confirmadas(request.form.getlist("clave")) if k in elegibles][:panel.N_LOTE]
+    n = fallos = 0
+    for canal, ad_id in claves:
         a = _anuncio_del_alcance(alc, canal, ad_id)
-        if a and _pedir_analisis(cliente, alc, a)[0]:
-            n += 1
-    flash(ngettext("Analizando %(num)s anuncio con IA…", "Analizando %(num)s anuncios con IA…", n) if n
-          else gettext("No quedó ningún anuncio por analizar."), "ok" if n else "warn")
+        if a is None:
+            continue
+        try:
+            if _pedir_analisis(cliente, alc, a)[0]:
+                n += 1
+        except Exception as e:  # noqa: BLE001 — una que falla no tumba las demás (cada una es su propia tarea pagada)
+            fallos += 1
+            log.warning("lote de análisis: %s/%s no se pudo encolar (%s)", canal, ad_id, type(e).__name__)
+    if n:
+        flash(ngettext("Analizando %(num)s anuncio con IA…", "Analizando %(num)s anuncios con IA…", n), "ok")
+    if fallos:
+        flash(ngettext("No se pudo encolar %(num)s anuncio: vuelve a intentarlo.",
+                       "No se pudieron encolar %(num)s anuncios: vuelve a intentarlo.", fallos), "warn")
+    if not n and not fallos:
+        flash(gettext("No quedó ningún anuncio por analizar."), "warn")
     return _volver(cliente)
 
 
@@ -228,11 +263,19 @@ def _aprendizaje_guardado(cliente, aid):
     return any(x.get("analisis_id") == aid for x in proyectos.aprendizajes(cliente))
 
 
+def _nombre_alcance(cliente, fila):
+    """«Todas las tiendas» o el nombre de la tienda en que se pagó ese análisis ("" si ya no existe)."""
+    if fila.get("tienda_id") is None:
+        return gettext("Todas las tiendas")
+    tienda = triple_whale_tiendas.tienda(cliente, fila["tienda_id"])
+    return panel.nombre_tienda(tienda) if tienda else ""
+
+
 @bp.get("/analisis/<int:aid>")
 def analisis_detalle(cliente, aid):
     fila = _analisis_listo(cliente, aid)
     return render_template("_tw_analisis.html", cliente=cliente, fila=fila, r=fila["resultado"] or {},
-                           guardado=_aprendizaje_guardado(cliente, aid))
+                           guardado=_aprendizaje_guardado(cliente, aid), alcance_nombre=_nombre_alcance(cliente, fila))
 
 
 @bp.post("/analisis/<int:aid>/crear")
@@ -275,7 +318,10 @@ def anuncio_referente(cliente, canal, ad_id):
     if a is None:
         abort(404)
     c = datos.creativos(cliente, [(canal, ad_id)]).get((canal, ad_id)) or {}
-    imagen = c.get("imagen_url") if triple_whale.medio_permitido(c.get("imagen_url")) else None
+    # La miniatura es la misma que pinta la tarjeta (`panel.medio_tarjeta`): el botón sale justo cuando esto puede guardar.
+    creatv = datos.piezas_creatv(cliente, [ad_id]).get(ad_id) if canal == triple_whale.CANAL_META else None
+    visto = panel.medio_tarjeta(dict(a, creativo=c, creatv=creatv))
+    imagen = visto.get("imagen") or visto.get("poster")
     anuncio = dict(a, medio={"imagen": imagen, "titulo": c.get("titulo") or "", "texto": c.get("copy") or "",
                              "tipo": "video" if (c.get("tipo") or "") == "video" else "imagen"})
     fila = datos.ultimos_analisis(cliente, [(canal, ad_id)]).get((canal, ad_id))

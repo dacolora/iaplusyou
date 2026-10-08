@@ -153,6 +153,8 @@
     <input type="hidden" name="canal" value="{{ alcance_params.canal }}">
     <input type="hidden" name="tienda" value="{{ alcance_params.tienda }}">
     <input type="hidden" name="veredicto" value="{{ g.veredicto }}">
+    {#- Lo que se confirmó: el servidor cobra solo estos (y solo si siguen elegibles), no «los próximos N». -#}
+    {% for canal, ad_id in g.lote.claves %}<input type="hidden" name="clave" value="{{ canal }}:{{ ad_id }}">{% endfor %}
     <button type="submit" class="btn-sm">{{ _('Analizar los %(n)s que más gastaron · %(precio)s', n=g.lote.n, precio=g.lote.precio.texto) }}</button>
   </form>
   {% endif %}
