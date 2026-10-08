@@ -33,6 +33,10 @@
       </label>
     </div>
 
+    {% if aviso_familia %}
+    <p class="tag-aviso" data-aviso-familia>{{ _('La familia del referente (%(familia)s) no coincide con la categoría del producto (%(categoria)s). Revisa si sirve para tu producto; puedes continuar.', familia=r.familia, categoria=categoria_producto) }}</p>
+    {% endif %}
+
     <fieldset class="ref-recrear-bloque">
       <legend>{{ _('Textos de la referencia') }}</legend>
       {% if not lectura %}

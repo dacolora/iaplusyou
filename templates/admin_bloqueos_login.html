@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}{{ _('Accesos bloqueados') }}{% endblock %}
+{% block content %}
+<section class="hero aparece">
+  <div class="hero-texto">
+    <span class="eyebrow">{{ _('Panel de administrador') }}</span>
+    <h1>{{ _('Accesos bloqueados') }}</h1>
+    <p class="hero-sub">{{ _('Intentos fallidos de login vigentes. Desbloquear permite volver a intentar el acceso y queda en la bitácora.') }}</p>
+    <a href="{{ url_for('panel') }}">{{ _('← Volver al panel') }}</a>
+  </div>
+</section>
+<section class="admin-bloque aparece">
+{% if bloqueos %}
+  <table class="tabla-apilada tabla-admin">
+    <thead><tr><th>{{ _('Usuario o IP') }}</th><th>{{ _('Intentos') }}</th><th>{{ _('Vence en') }}</th><th>{{ _('Acción') }}</th></tr></thead>
+    <tbody>{% for b in bloqueos %}
+      <tr>
+        <td data-etiqueta="{{ _('Usuario o IP') }}">{{ _('IP') if b.tipo == 'ip' else _('Usuario') }}: {{ b.objetivo }}</td>
+        <td data-etiqueta="{{ _('Intentos') }}">{{ b.intentos }}</td>
+        <td data-etiqueta="{{ _('Vence en') }}">{{ _('%(n)s segundos', n=b.restantes_s) }}</td>
+        <td data-etiqueta="{{ _('Acción') }}"><form method="post" action="{{ url_for('admin_desbloquear_login') }}">
+          <input type="hidden" name="clave" value="{{ b.clave }}">
+          <button type="submit" class="btn-sm">{{ _('Desbloquear') }}</button>
+        </form></td>
+      </tr>
+    {% endfor %}</tbody>
+  </table>
+{% else %}<p class="vacio">{{ _('No hay accesos bloqueados.') }}</p>{% endif %}
+</section>
+{% endblock %}

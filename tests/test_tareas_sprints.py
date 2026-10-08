@@ -189,6 +189,8 @@ def test_qa_pieza_registra_el_gasto_y_guarda_la_doctrina_en_la_sesion(base_tempo
         e = qa.AnalisisInvalido("Claude no devolvió JSON.")
         e.tokens_entrada, e.tokens_salida = 1400, 100
         raise e
+    # PND-088: el caso de fallo pagado evalúa una pieza que todavía no pasó.
+    datos.actualizar_idea("acme", cp, qa=None)
     monkeypatch.setattr(qa, "evaluar", falla)
     with pytest.raises(qa.AnalisisInvalido):
         tareas.REGISTRO["sprint_qa_pieza"]({"id": 31, "intentos": 2, "payload": {"cliente": "acme", "cp_id": cp}})
@@ -610,3 +612,14 @@ def test_encolar_ideas_no_se_reintenta_sola(base_temporal, monkeypatch):
     monkeypatch.setattr(ts.trabajos, "encolar", lambda job_id, tipo, payload, **kw: vistos.append(kw) or True)
     ts.encolar_ideas("acme", 5)
     assert vistos[0]["max_intentos"] == 1
+
+
+def test_pnd088_worker_no_paga_qa_que_ya_paso(base_temporal, monkeypatch):
+    import creative_flow
+    from sprints import datos, qa
+    from tareas import sprints as ts
+    sid, cid, cp, cf = _pieza_lista(datos, creative_flow)
+    datos.actualizar_idea('acme', cp, qa={'veredicto': 'pasa'})
+    monkeypatch.setattr(qa, 'evaluar', lambda *a, **k: pytest.fail('QA pagado sobre aprobada'))
+    ts.ejecutar_qa_pieza({'payload': {'cliente': 'acme', 'cp_id': cp}})
+    assert datos.idea('acme', cp)['qa'] == {'veredicto': 'pasa'}

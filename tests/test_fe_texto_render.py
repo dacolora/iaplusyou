@@ -392,3 +392,14 @@ def test_componer_loudness_cerca_de_menos_14(tmp_path, overlays, medios):
                           capture_output=True, text=True)
     m = re.findall(r"I:\s+(-?\d+(?:\.\d+)?) LUFS", proc.stderr)
     assert m and -14 - 2.5 <= float(m[-1]) <= -14 + 2.5, proc.stderr[-600:]
+
+
+def test_pnd128_legado_sin_color_genera_badge_negro_translucido(tmp_path):
+    from final_edition import texto
+    from PIL import Image
+    g = {'precio_texto': '$10', 'bloques': [{'rol': 'producto', 'inicio_s': 0, 'fin_s': 2}]}
+    for marca, esperado in [({}, (0, 0, 0, 153)), ({'color_acento': '#7c3aed'}, (124, 58, 237, 255))]:
+        out = texto.generar_overlays(g, [], marca, str(tmp_path), ancho=540, alto=960)
+        with Image.open(out['badge']['png']) as im:
+            pixeles = [rgba for n, rgba in im.getcolors(im.width * im.height)]
+        assert esperado in pixeles

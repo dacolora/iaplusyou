@@ -694,3 +694,54 @@ def test_en_frio_las_alertas_no_crecen_con_las_piezas(base_temporal, monkeypatch
         html = c.get("/cliente/acme").data.decode()
     assert 'id="tab-alertas"' in html
     assert muchas.total - pocas.total <= 6, (pocas.total, muchas.total)
+
+
+@pytest.mark.parametrize('clave', ['tablero:tope_alcanzado:1', 'tablero:propuestas_pendientes:1',
+                                  'tablero:experimento_error:1', 'crear:prompt_listo'])
+def test_pnd124_plata_visible_pero_solo_admin_descarta(app, monkeypatch, clave):
+    a = _alerta(app, clave)
+    _fijas(app, monkeypatch, [a])
+    cliente = _cliente_rol_cliente(app)
+    tab = _tab(_html(cliente))
+    assert a['titulo'] in tab
+    assert 'name="clave"' not in tab
+    for accion in ('descartar', 'restaurar'):
+        r = cliente.post('/cliente/acme/alertas/' + accion, data={'clave': clave, 'huella': a['huella']})
+        assert r.status_code == 403
+    assert _descartes() == []
+    assert app['c'].post('/cliente/acme/alertas/descartar', data={'clave': clave, 'huella': a['huella']}).status_code == 302
+    assert _descartes()
+    _fijas(app, monkeypatch, [])
+    assert cliente.post('/cliente/acme/alertas/descartar', data={'clave': clave, 'huella': a['huella']}).status_code == 403
+
+
+def test_pnd123_cuentas_filtradas_al_leer_y_post_ajeno_403(app, monkeypatch):
+    al, d = app['alertas'], app['dashboard']
+    monkeypatch.setattr(d.usuarios, 'por_cliente', lambda c: [
+        {'usuario': 'user_acme', 'correo': 'propio@example.test'},
+        {'usuario': 'alguien', 'correo': 'privado@example.test'}])
+    llamadas = []
+    _fijas(app, monkeypatch, al._fuente_cuentas('acme', '2026-10-08T00:00:00'), llamadas)
+    cliente = _cliente_rol_cliente(app)
+    tab = _tab(_html(cliente))
+    assert 'privado@example.test' not in tab
+    assert 'propio@example.test' in tab
+    assert 'privado@example.test' in _tab(_html(app['c']))
+    assert llamadas == ['acme']
+    for accion in ('descartar', 'restaurar'):
+        assert cliente.post('/cliente/acme/alertas/' + accion, data={
+            'clave': 'cuenta:correo:alguien', 'huella': H64}).status_code == 403
+    assert _descartes() == []
+    al.descartar('acme', 'cuenta:correo:alguien', al.huella('sin_verificar', 'privado@example.test'))
+    tab = _tab(_html(cliente))
+    assert 'alguien' not in tab
+    assert _descartes()  # la lectura del cliente no poda el descarte ajeno
+
+
+@pytest.mark.parametrize('clave', ['tablero:tope_alcanzado:1', 'tablero:propuestas_pendientes:1',
+                                  'tablero:experimento_error:1', 'crear:prompt_listo'])
+def test_pnd124_servidor_rechaza_plata_aunque_no_este_en_cache(app, monkeypatch, clave):
+    _fijas(app, monkeypatch, [])
+    c = _cliente_rol_cliente(app)
+    for accion in ('descartar', 'restaurar'):
+        assert c.post('/cliente/acme/alertas/' + accion, data={'clave': clave, 'huella': H64}).status_code == 403

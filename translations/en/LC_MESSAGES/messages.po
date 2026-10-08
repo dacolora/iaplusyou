@@ -733,6 +733,10 @@ msgid "%(n)s s"
 msgstr "%(n)s s"
 
 #, python-format
+msgid "%(n)s segundos"
+msgstr "%(n)s seconds"
+
+#, python-format
 msgid "%(n)s sin clasificar"
 msgstr "%(n)s unclassified"
 
@@ -1845,6 +1849,15 @@ msgstr "Open campaign %(n)s"
 
 msgid "Aburrimiento"
 msgstr "Boredom"
+
+msgid "Acceso desbloqueado."
+msgstr "Login unlocked."
+
+msgid "Accesos bloqueados"
+msgstr "Blocked logins"
+
+msgid "Accesos bloqueados →"
+msgstr "Blocked logins →"
 
 msgid "Acciones"
 msgstr "Actions"
@@ -4567,6 +4580,13 @@ msgstr "Derive and rescue aren't available in app install experiments."
 msgid "Desarchivar"
 msgstr "Unarchive"
 
+msgid "Desbloquear"
+msgstr "Unlock"
+
+#, python-format
+msgid "Desbloqueo de %(clave)s por %(usuario)s"
+msgstr "%(clave)s unlocked by %(usuario)s"
+
 msgid "Descanso, viajes y tiempo en casa; compras para el hogar."
 msgstr "Rest, travel and time at home; purchases for the home."
 
@@ -6432,6 +6452,9 @@ msgstr "That piece is already published (or queued) on %(nombre)s."
 msgid "Esa pieza ya no existe."
 msgstr "That piece no longer exists."
 
+msgid "Esa pieza ya pasó el QA o está aprobada."
+msgstr "That piece already passed QA or is approved."
+
 msgid "Esa pieza ya se está regenerando."
 msgstr "That piece is already being regenerated."
 
@@ -6679,6 +6702,9 @@ msgstr "Listen to “{nombre}”"
 
 msgid "Escúchala antes de usarla:"
 msgstr "Listen to it before using it:"
+
+msgid "Ese acceso ya no está bloqueado."
+msgstr "That login is no longer blocked."
 
 msgid "Ese anuncio no está en error."
 msgstr "That ad isn't in an error state."
@@ -8558,6 +8584,9 @@ msgstr "Your ad account's ID (optional, starts with act_)"
 msgid "ID de tu portafolio comercial"
 msgstr "Your business portfolio's ID"
 
+msgid "IP"
+msgstr "IP"
+
 msgid "Id del Business"
 msgstr "Business id"
 
@@ -8863,6 +8892,12 @@ msgstr "Unknown intent: %(malas)s"
 
 msgid "Intención inicial (se puede cambiar por referencia):"
 msgstr "Initial intent (can be changed per reference):"
+
+msgid "Intentos"
+msgstr "Attempts"
+
+msgid "Intentos fallidos de login vigentes. Desbloquear permite volver a intentar el acceso y queda en la bitácora."
+msgstr "Current failed login attempts. Unlocking allows another login attempt and is recorded in the activity log."
 
 msgid "Interacción"
 msgstr "Engagement"
@@ -9190,6 +9225,10 @@ msgstr "The stage must be TOF, MOF or BOF."
 
 msgid "La evidencia no se edita a mano."
 msgstr "Evidence can't be edited by hand."
+
+#, python-format
+msgid "La familia del referente (%(familia)s) no coincide con la categoría del producto (%(categoria)s). Revisa si sirve para tu producto; puedes continuar."
+msgstr "The reference family (%(familia)s) does not match the product category (%(categoria)s). Check whether it works for your product; you can continue."
 
 msgid "La familia necesita un nombre."
 msgstr "The family needs a name."
@@ -10851,6 +10890,9 @@ msgstr "No need to generate images: all the references come from the Catalog."
 
 msgid "No hay SMTP: los avisos de errores nuevos no salen por correo, solo quedan aquí."
 msgstr "There is no SMTP: alerts about new errors are not emailed, they only show up here."
+
+msgid "No hay accesos bloqueados."
+msgstr "No blocked logins."
 
 msgid "No hay avatares incompletos que completar."
 msgstr "There are no incomplete avatars to complete."
@@ -16103,6 +16145,9 @@ msgstr "Username"
 msgid "Usuario '%(usuario)s' marcado como verificado."
 msgstr "User '%(usuario)s' marked as verified."
 
+msgid "Usuario o IP"
+msgstr "User or IP"
+
 msgid "Usuario o contraseña incorrectos."
 msgstr "Incorrect username or password."
 
@@ -16202,6 +16247,9 @@ msgstr "Times"
 
 msgid "Velocidad"
 msgstr "Speed"
+
+msgid "Vence en"
+msgstr "Expires in"
 
 #, python-format
 msgid "Vendiste %(ventas)s que en los %(n)s días anteriores, con %(gasto)s de gasto: cada 1 %(moneda)s en anuncios trajo %(mer)s %(moneda)s en ventas (antes %(mer_antes)s)."

@@ -299,3 +299,64 @@ def enviar_restablecer(usuario, correo, url_base, ip=None):
     """Emite un token de restablecimiento y manda el enlace
     `{url_base}/restablecer/<token>`. Misma semántica que enviar_verificacion."""
     return _enviar("restablecer", "restablecer", usuario, correo, url_base, ip=ip)
+
+
+# PND-076 (decisión 2026-10-08): solo datos del límite de login, nunca fichas/tokens.
+def _limite_login(clave):
+    import ipaddress
+    import re
+    if not clave.startswith('limite:login:'):
+        return None
+    objetivo = clave[len('limite:login:'):]
+    if objetivo.startswith('ip:'):
+        ip = objetivo[3:]
+        try:
+            ipaddress.ip_address(ip)
+        except ValueError:
+            if ip != 'desconocida':
+                return None
+        return 'ip', ip, 30
+    if re.fullmatch(r'[a-z0-9._-]{3,40}', objetivo):
+        return 'usuario', objetivo, 10
+    return None
+
+
+def _bloqueo_login(clave, valor, ahora):
+    import math
+    tipo = _limite_login(clave)
+    if not tipo:
+        return None
+    try:
+        marcas = sorted(float(t) for t in json.loads(valor))
+    except (TypeError, ValueError):
+        return None
+    marcas = [t for t in marcas if math.isfinite(t) and t > ahora - 900]
+    if len(marcas) < tipo[2]:
+        return None
+    return {'clave': clave, 'tipo': tipo[0], 'objetivo': tipo[1], 'intentos': len(marcas),
+            'restantes_s': max(1, math.ceil(marcas[-tipo[2]] + 900 - ahora))}
+
+
+def bloqueos_login():
+    ahora = time.time()
+    with db.conectar() as con:
+        filas = con.execute(sa.select(db.kv.c.clave, db.kv.c.valor).where(
+            db.kv.c.clave.startswith('limite:login:', autoescape=True))).all()
+    return [b for f in filas if (b := _bloqueo_login(f.clave, f.valor, ahora))]
+
+
+def desbloquear_login(clave, pedido_por):
+    """Un solo escritor: candado, bitácora y borrado del límite vigente."""
+    import bitacora
+    if not _limite_login(clave):
+        return False
+    with db.conectar() as con:
+        con.execute(db.kv.update().where(db.kv.c.clave == clave).values(valor=db.kv.c.valor))
+        valor = con.execute(sa.select(db.kv.c.valor).where(db.kv.c.clave == clave)).scalar()
+        if not _bloqueo_login(clave, valor, time.time()):
+            return False
+        with idiomas.en_idioma(idiomas.de_proyecto('_creatv')):
+            detalle = gettext('Desbloqueo de %(clave)s por %(usuario)s', clave=clave, usuario=pedido_por)
+        bitacora.registrar('_creatv', 'login', 'desbloqueo_login', 'ok', detalle)
+        con.execute(db.kv.delete().where(db.kv.c.clave == clave))
+    return True

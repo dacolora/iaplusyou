@@ -49,6 +49,8 @@ ciclo.
 """
 from flask_babel import gettext
 
+import sqlalchemy as sa
+
 import cola
 import creative_flow
 import db
@@ -282,6 +284,35 @@ def _guardar(cliente, experimento_id, derivacion):
     def _poner(extra):
         lista = list(extra.get("derivaciones") or [])
         if not derivacion.get("id"):
+            # PND-043: actualizar_extra ya tomó el candado SQLite. Leer las
+            # reservas de todos los hijos aquí serializa dos ganadoras.
+            reservados = set()
+            variantes = {f.get("variante") for f in creative_flow.finales(cliente, derivacion["cf_id"]) if f.get("variante")}
+            with db.conectar() as con:
+                extras = con.execute(sa.select(db.experimento.c.extra).where(
+                    db.experimento.c.cliente == cliente)).scalars().all()
+            for e in extras:
+                for d in (e or {}).get("derivaciones") or []:
+                    for i in d.get("items") or []:
+                        if i.get("cf_id") == derivacion["cf_id"]:
+                            if i.get("variante"):
+                                variantes.add(i["variante"])
+                            lead = (i.get("contexto_variante") or {}).get("lead_objetivo")
+                            if lead:
+                                reservados.add(lead)
+            sesion = _sesion(cliente, derivacion["cf_id"]) or {}
+            for i in derivacion["items"]:
+                ctx = i.get("contexto_variante") or {}
+                if i["clase"] == "reedicion":
+                    if i["variante"] in variantes:
+                        i["variante"] = max(variantes, default=0) + 1
+                    variantes.add(i["variante"])
+                if i["clase"] == "reedicion" and "lead_objetivo" in ctx:
+                    finales = _angulos_finales(cliente, derivacion["cf_id"])
+                    ctx["lead_objetivo"] = _lead_objetivo(sesion.get("angulo"), 0,
+                        excluir=tuple(reservados) + tuple(x.get("lead") for x in finales))
+                    if ctx["lead_objetivo"]:
+                        reservados.add(ctx["lead_objetivo"])
             derivacion["id"] = f"d{max((_numero(d) for d in lista), default=0) + 1}"
         lista = [d for d in lista if d.get("id") != derivacion["id"]]
         lista.append(derivacion)

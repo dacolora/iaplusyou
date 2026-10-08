@@ -1554,3 +1554,15 @@ def test_pnd090_recrear_guarda_origen_sin_alterar_prompt(app, monkeypatch):
     assert r.status_code == 302 and len(lanzados) == 1
     assert lanzados[0]["prompt_relleno"] == "Mi prompt exacto"
     assert lanzados[0].get("origen") == "recrear"
+
+
+@pytest.mark.parametrize('categoria,avisa', [('Muebles', True), ('Price Slash Hero', False), ('', False)])
+def test_pnd024_aviso_clasificacion_existente_sin_cobrar_ni_bloquear(app, monkeypatch, categoria, avisa):
+    from referentes import rutas, recrear
+    ids = _sembrar()
+    monkeypatch.setattr(rutas.tiendas, 'por_activo', lambda c: {'espejo_led': {'categoria': categoria}})
+    monkeypatch.setattr(recrear, '_llamar', lambda *a, **k: pytest.fail('llamada pagada'))
+    html = app['c'].get(f'/cliente/acme/referentes/{ids[0]}/recrear').get_data(as_text=True)
+    assert ('data-aviso-familia' in html) == avisa
+    assert 'data-recrear-generar' in html
+    assert '<script' not in html

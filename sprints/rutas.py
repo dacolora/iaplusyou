@@ -1510,7 +1510,11 @@ def pieza_qa(cliente, cp_id):
             return jsonify({"ok": False, "error": gettext("Esa pieza todavía no está lista para el QA.")}), 400
         flash(gettext("Esa pieza todavía no está lista para el QA."), "error")
         return destino
-    datos.actualizar_idea(cliente, cp_id, qa=None)
+    if not datos.limpiar_qa_no_aprobada(cliente, cp_id, i["cf_id"]):
+        if _quiere_json():
+            return jsonify({"ok": False, "error": gettext("Esa pieza ya pasó el QA o está aprobada.")}), 409
+        flash(gettext("Esa pieza ya pasó el QA o está aprobada."), "warn")
+        return destino
     ok = tareas_sprints.encolar_qa(cliente, cp_id)
     if _quiere_json():
         return jsonify({"ok": bool(ok), "error": None if ok else gettext("Ya hay un QA en curso para esa pieza.")}), \

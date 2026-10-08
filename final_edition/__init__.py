@@ -60,7 +60,7 @@ ETAPAS_FINAL = (
     (idiomas.N_("Texto y render"), 45),
 )
 
-COLOR_ACENTO_DEFECTO = texto.COLOR_ACENTO_DEFECTO
+COLOR_ACENTO_DEFECTO = None
 IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".webp")
 _TAMANOS = {"9:16": (1080, 1920), "16:9": (1920, 1080), "1:1": (1080, 1080), "4:5": (1080, 1350)}
 _OPCIONES_DEFECTO = {"voz": None, "estilo_musica": None, "precio": None, "precios": None, "con_voz": True,

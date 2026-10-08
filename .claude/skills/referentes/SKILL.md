@@ -111,3 +111,6 @@ PND-090 (2026-10-07, lote 5 B): MAX_FOTOS_PRODUCTO=2 es el tope compartido por a
 
 
 PND-007 (2026-10-08, decisión delegada enmendada): traer consulta el estado/cobro final gratis también cuando el estado ya es terminal. Con resultados leídos/contados registra el mayor entre usageTotalUsd y resultados × USD_POR_RESULTADO. Si ambas lecturas fallan, conserva tope × precio con estimado=True y conciliacion_pendiente=True. ErrorFuente transporta el costo antes de persistir el barrido; tests/test_lote6_apify.py usa SQLite, fallo posterior, referencia por tarea, idempotencia y aislamiento. Sigue abierta la pregunta de confirmar con una corrida real qué significa usageTotalUsd en este actor; no se llama a proveedores reales para estas pruebas.
+
+
+PND-024 (2026-10-08, decisión delegada): Recrear compara familia ya guardada y categoria de la ficha de tienda enlazada al activo, normalizadas con db.pliegue. Con ambas presentes y distintas pinta data-aviso-familia; sin clasificación no inventa una. El aviso no bloquea, no altera prompts ni agrega llamadas a Claude. Son nombres clasificados, no una nueva inferencia de afinidad. test_rutas_referentes.py prueba coincidencia, diferencia y ausencia con doble que falla ante una llamada pagada.

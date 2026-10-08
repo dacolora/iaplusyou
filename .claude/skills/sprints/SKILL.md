@@ -91,4 +91,7 @@ inmutable en dashboard, producción de Sprints y tarea de Crear. `sprints.estado
 degradada; `TERMINADAS` incluye además error para cerrar generación. `sprints.revision.TERMINADAS` conserva el alias
 de revisables: error sigue sin poder aprobarse. `tests/test_lote5_higiene.py` vigila identidad y comportamiento.
 
-PND-072/088/090 (2026-10-07, lote 5 B): el director usa el encolador común; perder la reserva archiva la sesión nueva, sin borrar estado ajeno. Los candidatos de IA se leen con referentes.datos.por_ids una vez en panel y página. datos._consumir_sugerencia toma el bloqueo de campaña antes de leer extra y elimina solo el referente agregado, conservando el resto; también limpia una sugerencia ya agregada. QA y la instantánea de contexto que alimenta prompts siguen como preguntas.
+PND-072/088/090 (2026-10-07, lote 5 B): el director usa el encolador común; perder la reserva archiva la sesión nueva, sin borrar estado ajeno. Los candidatos de IA se leen con referentes.datos.por_ids una vez en panel y página. datos._consumir_sugerencia toma el bloqueo de campaña antes de leer extra y elimina solo el referente agregado, conservando el resto; también limpia una sugerencia ya agregada. La política de QA fue delegada el 2026-10-08 (ver abajo); la instantánea de contexto no se toca en este lote.
+
+
+PND-088 (2026-10-08, decisión delegada): Repetir QA no borra ni encola un veredicto pasa o una revisión aprobada. limpiar_qa_no_aprobada usa un UPDATE condicional por cliente/cp_id/cf_id para cubrir un resultado que llegó después de leer; el worker vuelve a comprobar el veredicto antes de llamar a Claude. Las fallidas siguen el camino existente. No cambia el contexto por idea, ni los topes/prompts del QA. test_rutas_sprints.py y test_tareas_sprints.py.

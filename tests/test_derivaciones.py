@@ -807,3 +807,26 @@ def test_pnd039_voz_propia_borrada_entre_planificar_y_avanzar_no_se_propaga(ent)
 def test_pnd039_voz_de_la_galeria_se_propaga_sin_resolver(ent):
     finales = _regenerar_hasta_las_finales(ent, 'Rachel')
     assert len(finales) == 2 and all(f['opciones'].get('voz') == 'Rachel' for f in finales)
+
+
+def test_pnd043_dos_ganadoras_reservan_arranques_antes_de_encolar(ent, monkeypatch):
+    dv, ex, cf = ent['dv'], ent['ex'], ent['cf']
+    cf.actualizar('acme', ent['cf_id'], angulo={'consciencia': 'inconsciente', 'lead': 'oferta'})
+    monkeypatch.setattr(dv.doctrina, 'lead_por_consciencia', lambda c: ['historia', 'secreto', 'problema_solucion'])
+    ex.actualizar('acme', ent['eid'], reglas={'n_reediciones': 1, 'n_regeneraciones': 0})
+    monkeypatch.setattr(dv, '_avanzar_sin_relanzar', lambda *a: None)  # ninguna final creada aún
+    fid = cf.crear_final('acme', ent['cf_id'], 'es', 'MX')
+    ep2 = ex.agregar_pieza('acme', ent['eid'], cf.pieza_id_por_legado('acme', fid), 'MX')
+    def plan(ep):
+        hijo = dv.planificar('acme', ent['eid'], 'derivar', {'ep_id': ep})
+        return ex.obtener('acme', hijo)['extra']['derivaciones'][-1]['items'][0]['contexto_variante']['lead_objetivo']
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        leads = list(pool.map(plan, [ent['ep'], ep2]))
+    assert set(leads) == {'historia', 'secreto'}
+    assert not [f for f in cf.finales('acme', ent['cf_id']) if f['variante']]
+    assert plan(ep2) == 'problema_solucion'
+
+    derivadas = [d for exp in ex.cargar("acme") for d in (exp.get("extra") or {}).get("derivaciones") or []]
+    variantes = [i["variante"] for d in derivadas for i in d["items"] if i["clase"] == "reedicion"]
+    assert len(set(variantes)) == 3

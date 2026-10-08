@@ -108,7 +108,7 @@ def guardar(cliente, edicion_id, documento, version_n):
         r = con.execute(db.edicion.update().where(
             db.edicion.c.cliente == cliente, db.edicion.c.id == int(edicion_id),
             db.edicion.c.version_n == int(version_n)).values(
-            documento=doc, version_n=nuevo, actualizado_en=db.ahora()))
+            documento=doc, version_n=nuevo, estado="borrador", actualizado_en=db.ahora()))
         if r.rowcount != 1:
             raise Conflicto(gettext("La edición cambió en otra pestaña; recarga para seguir."))
     materiales.marcar_uso(doc.get("materiales") or [])
@@ -206,6 +206,15 @@ def apuntar_final(cliente, final_legado_id, version_id):
         r = con.execute(db.pieza.update().where(
             db.pieza.c.cliente == cliente, db.pieza.c.tipo == "final", db.pieza.c.legado_id == final_legado_id)
             .values(edicion_version_id=int(version_id), actualizado_en=db.ahora()))
+        if r.rowcount:
+            ev, ed = db.edicion_version, db.edicion
+            fila = con.execute(sa.select(ev.c.edicion_id, ev.c.documento.label("congelado"),
+                                         ed.c.documento.label("actual"))
+                .select_from(ev.join(ed, ed.c.id == ev.c.edicion_id))
+                .where(ev.c.id == int(version_id), ed.c.cliente == cliente)).first()
+            if fila and fila.congelado == fila.actual:
+                con.execute(ed.update().where(ed.c.id == fila.edicion_id, ed.c.cliente == cliente)
+                            .values(estado="producida"))
         return r.rowcount
 
 

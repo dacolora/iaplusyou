@@ -433,7 +433,7 @@ def test_producir_ok(entorno):
     assert entorno["voz"] == {"voz": "Daniel", "cliente": "acme", "idioma": "en"}
     assert entorno["musica"]["estilo"] == "urbano"
     assert entorno["texto"]["palabras"][0]["texto"] == "Hola"
-    assert entorno["texto"]["marca"]["color_acento"] == "#7c3aed"
+    assert entorno["texto"]["marca"]["color_acento"] is None
     assert entorno["render"]["clon"].endswith("clon.mp4") and entorno["render"]["voz"] and entorno["render"]["musica"]
     assert entorno["render"]["duracion_s"] == pytest.approx(8.0, abs=0.1)
 

@@ -664,3 +664,36 @@ def test_referrer_policy_en_paginas_con_token(app):
     c = app["dashboard"].app.test_client()
     assert c.get(f"/restablecer/{token}").headers["Referrer-Policy"] == "no-referrer"
     assert c.get("/login").headers["Referrer-Policy"] == "strict-origin-when-cross-origin"
+
+
+def test_pnd076_admin_desbloquea_con_bitacora_y_guardias(app, monkeypatch):
+    import bitacora
+    d, cuentas = app['dashboard'], app['cuentas']
+    monkeypatch.setattr(bitacora, 'LOG_FILE', str(app['tmp'] / 'bitacora.csv'))
+    monkeypatch.setattr(cuentas.time, 'time', lambda: 1000)
+    for _ in range(10):
+        cuentas.limite_ok('login:ana', maximo=10, ventana_s=900)
+    for _ in range(30):
+        cuentas.limite_ok('login:ip:127.0.0.1', maximo=30, ventana_s=900)
+    cuentas.limite_ok('recuperar:ana', maximo=5)
+    admin = _cliente_con_sesion(app, 'admin')
+    ana = _ana(app)
+    url, post = '/admin/cuentas/bloqueos', '/admin/cuentas/desbloquear'
+    html = admin.get(url).get_data(as_text=True)
+    assert 'limite:login:ana' in html and '127.0.0.1' in html
+    assert 'password_hash' not in html and 'secreta123' not in html and 'recuperar:ana' not in html
+    assert ana.get(url).status_code == 302
+    assert ana.post(post, data={'clave': 'limite:login:ana'}).status_code == 302
+    assert admin.post(post, data={'clave': 'limite:login:ana'}, headers={'Sec-Fetch-Site': 'cross-site'}).status_code == 403
+    assert not cuentas.limite_disponible('login:ana', maximo=10, ventana_s=900)
+    assert admin.post(post, data={'clave': 'limite:recuperar:ana'}).status_code == 400
+    assert admin.post(post, data={'clave': 'limite:login:ana'}).status_code == 302
+    assert cuentas.limite_disponible('login:ana', maximo=10, ventana_s=900)
+    assert not cuentas.limite_disponible('login:ip:127.0.0.1', maximo=30, ventana_s=900)
+    filas = bitacora.leer()
+    assert len(filas) == 1 and filas[0]['etapa'] == 'desbloqueo_login'
+    assert 'ana' in filas[0]['detalle'] and 'admin' in filas[0]['detalle']
+    admin.post(post, data={'clave': 'limite:login:ip:127.0.0.1'})
+    assert cuentas.bloqueos_login() == []
+    monkeypatch.setattr(cuentas.time, 'time', lambda: 2000)
+    assert cuentas.bloqueos_login() == []

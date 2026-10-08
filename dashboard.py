@@ -1444,6 +1444,23 @@ LOGIN_MAX_POR_IP = 30
 LOGIN_VENTANA_S = 15 * 60
 
 
+@app.get("/admin/cuentas/bloqueos")
+@requiere_admin
+def admin_bloqueos_login():
+    return render_template("admin_bloqueos_login.html", bloqueos=cuentas.bloqueos_login())
+
+
+@app.post("/admin/cuentas/desbloquear")
+@requiere_admin
+def admin_desbloquear_login():
+    clave = request.form.get("clave") or ""
+    if not cuentas._limite_login(clave):
+        abort(400)
+    ok = cuentas.desbloquear_login(clave, session["usuario"])
+    flash(gettext("Acceso desbloqueado.") if ok else gettext("Ese acceso ya no está bloqueado."), "ok")
+    return redirect(url_for("admin_bloqueos_login"))
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "GET":
@@ -4945,7 +4962,7 @@ def _alertas_calculadas(cliente):
 def _contexto_alertas(cliente, rol):
     """{visibles, descartadas, resumen} para quien mira: el cálculo cacheado,
     sin las `solo_admin` salvo para un admin y sin lo descartado."""
-    return alertas.visibles(cliente, rol=rol, calculadas=_alertas_calculadas(cliente))
+    return alertas.visibles(cliente, rol=rol, calculadas=_alertas_calculadas(cliente), usuario=session.get("usuario"))
 
 
 @app.context_processor
@@ -4981,8 +4998,12 @@ def _clave_alerta_del_form(cliente):
     clave = request.form.get("clave") or ""
     if len(clave) > LARGO_MAX_CLAVE_ALERTA or not _CLAVE_ALERTA.fullmatch(clave):
         abort(400)
-    if session.get("rol") != "admin" and alertas.es_solo_admin(clave, _alertas_calculadas(cliente)):
+    if session.get("rol") != "admin" and alertas.descarte_solo_admin(clave, _alertas_calculadas(cliente)):
         abort(403)
+    if session.get("rol") != "admin" and clave.startswith("cuenta:correo:"):
+        propias = _contexto_alertas(cliente, session.get("rol"))
+        if not any(a["clave"] == clave for a in propias["visibles"] + propias["descartadas"]):
+            abort(403)
     return clave
 
 
@@ -7707,9 +7728,11 @@ def mm_lista(cliente):
 # ---------------------------------------------------------- Audios en Crear ---
 # (spec 2026-09-28) Mismo patrón que Mi música: JSON con la lista ya pintada.
 
-def _contexto_audios(cliente):
+def _contexto_audios(cliente, desde=0):
+    lista = audios.listar(cliente, desde=desde, limite=TARJETAS_POR_PAGINA + 1)
     jid = tareas_audios.job_id(cliente)
-    return {"audios": audios.listar(cliente),
+    return {"audios": lista[:TARJETAS_POR_PAGINA],
+            "audios_siguiente": desde + TARJETAS_POR_PAGINA if len(lista) > TARJETAS_POR_PAGINA else None,
             "trabajo_audio": {"job_id": jid} if trabajos.en_curso(jid) else None,
             "voces_audio": audios.voces(), "fichas_voces": audios.fichas_voces(),
             "idiomas_audio": audios.IDIOMAS, "nombres_idioma_audio": audios.NOMBRES_IDIOMA,
@@ -7719,9 +7742,9 @@ def _contexto_audios(cliente):
 
 
 def _respuesta_audios(cliente, error=None, mensaje=None, job_id=None):
-    ctx = _contexto_audios(cliente)
+    ctx = _contexto_audios(cliente, desde=min(_pagina_desde(request.args.get("desde")), 2**63 - 1) if request.endpoint == "au_lista" else 0)
     html = render_template("_audios_lista.html", cliente=cliente, **ctx)
-    return jsonify({"ok": error is None, "html": html, "audios": ctx["audios"], "trabajo": ctx["trabajo_audio"],
+    return jsonify({"ok": error is None, "html": html, "audios": ctx["audios"], "siguiente": ctx["audios_siguiente"], "trabajo": ctx["trabajo_audio"],
                     "error": error, "mensaje": mensaje, "job_id": job_id}), (400 if error else 200)
 
 

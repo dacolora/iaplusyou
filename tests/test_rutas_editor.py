@@ -240,7 +240,7 @@ def test_guardar_con_una_forma_rara_responde_400_y_no_500(dashboard, encolados):
     doc["marca"] = None                                          # null explícito: la marca por defecto
     r = c.put(url, json={"documento": doc, "version_n": ed["version_n"]})
     assert r.status_code == 200
-    assert ediciones.cargar("acme", ed["id"])["documento"]["marca"]["color"] == "#7c3aed"
+    assert ediciones.cargar("acme", ed["id"])["documento"]["marca"]["color"] is None
 
 
 def test_guardar_exige_mismo_origen_y_acceso(dashboard, encolados):

@@ -519,6 +519,23 @@
     }, 4000);
   }
   raiz.addEventListener('click', function (ev) {
+    var mas = ev.target.closest('.au-mas');
+    if (mas) {
+      mas.disabled = true;
+      fetch(mas.dataset.url, {headers: {'X-Requested-With': 'fetch'}})
+        .then(function (r) { if (!r.ok || r.redirected) throw new Error(); return r.json(); })
+        .then(function (d) {
+          if (!mas.isConnected) return;
+          var fragmento = document.createElement('template');
+          fragmento.innerHTML = d.html;
+          var lista = document.querySelector('#au-lista .au-items');
+          fragmento.content.querySelectorAll('.au-item').forEach(function (item) { lista.appendChild(item); });
+          var siguiente = fragmento.content.querySelector('.au-mas');
+          if (siguiente) mas.replaceWith(siguiente); else mas.remove();
+        })
+        .catch(function () { mas.disabled = false; mostrarError(T.sinConexion); });
+      return;
+    }
     var b = ev.target.closest('.au-borrar');
     if (b) {
       if (!confirm(T.confirmarBorrar + ' «' + b.dataset.nombre + '»')) return;

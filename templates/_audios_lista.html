@@ -31,3 +31,7 @@
   <p class="estado-vacio-texto">{{ _('Escribe un texto, elige la voz y créalo. Aparecerá aquí para escucharlo y descargarlo.') }}</p>
 </div>
 {% endif %}
+
+{% if audios_siguiente is defined and audios_siguiente is not none %}
+<button type="button" class="btn-sm au-mas" data-url="{{ url_for('au_lista', cliente=cliente, desde=audios_siguiente) }}">{{ _('Ver más') }}</button>
+{% endif %}

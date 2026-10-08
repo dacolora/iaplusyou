@@ -432,3 +432,47 @@ def test_pnd095_botones_de_muestra_y_borrar_fuera_del_radio(app):
             self.pila.pop()
     lector = Lector(); lector.feed(html)
     assert lector.radios == 2 and lector.botones == 3
+
+
+def test_pnd095_lista_paginada_24_con_aislamiento_y_sin_scripts(app):
+    propios = [_audio(n=n)['id'] for n in range(1, 51)]
+    _audio(cliente='otro', n=1000)
+    c = app['c']
+    ids = []
+    desde = 0
+    for cantidad, siguiente in [(24, 24), (24, 48), (2, None)]:
+        d = c.get(f'/cliente/acme/audios/lista?desde={desde}', headers=FETCH).get_json()
+        assert len(d['audios']) == cantidad
+        assert d['siguiente'] == siguiente
+        assert '<script' not in d['html']
+        assert ('class="btn-sm au-mas"' in d['html']) == (siguiente is not None)
+        ids += [a['id'] for a in d['audios']]
+        desde = siguiente
+    assert ids == list(reversed(propios)) and len(set(ids)) == 50
+    html = c.get('/cliente/acme').get_data(as_text=True)
+    assert len(re.findall(r'id="au-item-\d+"', html)) == 24
+    for valor in ['-1', 'no', str(2**100)]:
+        assert c.get('/cliente/acme/audios/lista?desde=' + valor, headers=FETCH).status_code == 200
+
+
+def test_pnd095_ver_mas_agrega_tarjetas_en_node(app):
+    import subprocess
+    html = app['c'].get('/cliente/acme').get_data(as_text=True)
+    ini = html.index("    var mas = ev.target.closest('.au-mas');")
+    fin = html.index("    var b = ev.target.closest('.au-borrar');", ini)
+    script = html[ini:fin]
+    codigo = '''
+    const assert = require('node:assert/strict');
+    let items=[1,2], reemplazo=null, error=false;
+    const mas={dataset:{url:'/lista?desde=24'},isConnected:true, disabled:false,
+      replaceWith(x){reemplazo=x},remove(){reemplazo='fin'}};
+    const ev={target:{closest:()=>mas}};
+    const fragmento={content:{querySelectorAll:()=>[3,4],querySelector:()=>({dataset:{url:'/lista?desde=48'}})}};
+    const document={createElement:()=>fragmento,querySelector:()=>({appendChild:x=>items.push(x)})};
+    const T={sinConexion:'error'}, mostrarError=()=>{error=true};
+    const fetch=url=>{assert.equal(url,'/lista?desde=24');return Promise.resolve({ok:true,json:()=>Promise.resolve({html:'fragmento'})})};
+    function click(){''' + script + '''}
+    click();
+    setTimeout(()=>{assert.deepEqual(items,[1,2,3,4]);assert.equal(reemplazo.dataset.url,'/lista?desde=48');assert.equal(error,false)},0);
+    '''
+    subprocess.run(['node', '-e', codigo], check=True, capture_output=True, text=True)
