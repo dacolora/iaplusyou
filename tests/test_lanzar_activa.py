@@ -137,6 +137,7 @@ def test_entre_lanzar_y_activar_sigue_lanzando_y_cerrar_o_activar_a_mano_se_rech
     ex, lz, eid = entorno["ex"], entorno["lanzador"], entorno["eid"]
     mp = entorno["monkeypatch"]
     mp.setattr(dashboard.meta_conexion, "estado", lambda c: {"estado": "conectado"})
+    mp.setattr(dashboard.trabajos, "en_curso", lambda job_id: True)   # la tarea que lanza y activa sigue viva
     c = _cliente_admin(dashboard)
     vistos = []
 
@@ -252,3 +253,136 @@ def test_la_pagina_trae_un_token_de_un_solo_uso_distinto_cada_vez(app, base_temp
     tokens = [re.search(r'name="token_form" value="([^"]+)"', app["c"].get("/cliente/acme/experimentos/nuevo").get_data(as_text=True)).group(1)
               for _ in range(2)]
     assert tokens[0] and tokens[0] != tokens[1]
+
+
+# ---------- Ronda 2 de guardian-gasto ----------
+
+def test_interrupcion_con_repausado_que_falla_lo_dice_avisa_y_cerrar_desde_error_pausa(entorno):
+    import tareas
+    ex, lz, meta, eid = entorno["ex"], entorno["lanzador"], entorno["meta"], entorno["eid"]
+    mp = entorno["monkeypatch"]
+    lz.lanzar("acme", eid, soltar=False)
+    reales = [(m, m.actualizar_estado) for m in (lz.meta_campaign, lz.meta_adset, lz.meta_ad)]
+    for mod, real in reales:
+        mp.setattr(mod, "actualizar_estado",
+                   lambda oid, status, dry_run=False, _r=real: (_ for _ in ()).throw(RuntimeError("Meta no responde"))
+                   if status == "PAUSED" else _r(oid, status))
+    avisos = []
+    mp.setattr(lz.notificaciones, "avisar", lambda c, tipo, asunto, cuerpo, **k: avisos.append((tipo, cuerpo)))
+    tareas.cargar_todas()
+    tareas.AL_INTERRUMPIR["exp_lanzar"]({"payload": {"cliente": "acme", "experimento_id": eid, "activar": True}}, "Se cayó.")
+    e = ex.obtener("acme", eid)
+    assert e["estado"] == "error" and "Puede haber anuncios activos en Meta: pulsa Cerrar" in e["error"]
+    assert [a[0] for a in avisos] == ["error_lanzamiento"]
+    # Meta vuelve: «Cerrar» desde «error» pausa en Meta campaña, conjuntos y anuncios.
+    for mod, real in reales:
+        mp.setattr(mod, "actualizar_estado", real)
+    meta.llamadas.clear()
+    lz.cerrar("acme", eid)
+    pausados = {kw["oid"] for t, kw in meta.llamadas if t == "estado" and kw["status"] == "PAUSED"}
+    assert e["meta_campaign_id"] in pausados and {p["meta_adset_id"] for p in e["paises"]} <= pausados
+    assert {p["meta_ad_id"] for p in e["piezas"]} <= pausados
+    assert ex.obtener("acme", eid)["estado"] == "cerrado"
+
+
+def test_cerrar_un_experimento_de_apps_en_error_pausa_sus_dos_conjuntos(entorno_app):
+    e = entorno_app
+    e["lanzador"].lanzar("acme", e["eid"])
+    e["ex"].actualizar("acme", e["eid"], estado="error", error="x")
+    e["meta"].llamadas.clear()
+    e["lanzador"].cerrar("acme", e["eid"])
+    ex = e["ex"].obtener("acme", e["eid"])
+    conjuntos = {i for p in ex["paises"] for i in (p.get("meta_adsets") or {}).values()}
+    pausados = {kw["oid"] for t, kw in e["meta"].llamadas if t == "estado" and kw["status"] == "PAUSED"}
+    assert len(conjuntos) == 4 and conjuntos <= pausados and ex["estado"] == "cerrado"
+
+
+def test_cerrar_que_falla_en_meta_no_cierra(entorno):
+    ex, lz, eid = entorno["ex"], entorno["lanzador"], entorno["eid"]
+    lz.lanzar("acme", eid)
+    entorno["meta"].fallar_en = "estado"
+    with pytest.raises(RuntimeError):
+        lz.cerrar("acme", eid)
+    assert ex.obtener("acme", eid)["estado"] == "pausado"
+
+
+@pytest.mark.parametrize("ruta", ["probar", "lanzar"])
+def test_las_rutas_marcan_lanzando_antes_de_encolar_y_vuelven_atras_si_no_arranca(app, base_temporal, rutas, monkeypatch, ruta):
+    import experimentos as ex
+    from tests.test_experimentos_db import PAISES, _pieza
+    d = app["dashboard"]
+    vistos = []
+
+    def encolar(job_id, tipo, payload, **kw):
+        vistos.append(ex.obtener("acme", payload["experimento_id"])["estado"])
+        return False   # no arrancó
+    monkeypatch.setattr(d.trabajos, "encolar", encolar)
+    if ruta == "probar":
+        app["c"].post("/cliente/acme/experimentos/probar", data=_form(base_temporal))
+        (e,) = ex.cargar("acme")
+        previo = "armando"
+    else:
+        clon = _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_r2")
+        eid = ex.crear("acme", "X", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP")
+        ex.agregar_pieza("acme", eid, clon, "CO")
+        ex.agregar_pieza("acme", eid, clon, "MX")
+        ex.actualizar("acme", eid, estado="error", error="antes")
+        app["c"].post(f"/cliente/acme/experimentos/{eid}/lanzar")
+        e = ex.obtener("acme", eid)
+        previo = "error"
+    assert vistos == ["lanzando"]                       # ya estaba «lanzando» cuando se encoló
+    assert e["estado"] == previo                        # no arrancó: vuelve a como estaba
+    if ruta == "lanzar":
+        assert e["error"] == "antes"
+
+
+def test_la_ruta_no_pisa_lo_que_el_worker_escribio_despues_de_encolar(app, base_temporal, rutas, monkeypatch):
+    """Un worker rápido termina (corriendo) antes de que la ruta vuelva de encolar: nada lo pisa con «lanzando»."""
+    import experimentos as ex
+    d = app["dashboard"]
+
+    def encolar_y_correr(job_id, tipo, payload, **kw):
+        ex.actualizar("acme", payload["experimento_id"], estado="corriendo")
+        return True
+    monkeypatch.setattr(d.trabajos, "encolar", encolar_y_correr)
+    app["c"].post("/cliente/acme/experimentos/probar", data=_form(base_temporal))
+    (e,) = ex.cargar("acme")
+    assert e["estado"] == "corriendo"
+
+
+@pytest.mark.parametrize("donde", ["reportar", "dinero"])
+def test_un_fallo_en_medio_de_la_tarea_nunca_deja_lanzando(entorno, monkeypatch, donde):
+    import tablero
+    import tareas
+    import trabajos
+    ex, meta, eid = entorno["ex"], entorno["meta"], entorno["eid"]
+    if donde == "reportar":
+        def reportar(job_id, etapa=None, **kw):
+            if etapa == "Activar":
+                raise RuntimeError("se cayó la cola")
+        monkeypatch.setattr(trabajos, "reportar", reportar)
+    else:
+        monkeypatch.setattr(trabajos, "reportar", lambda job_id, **kw: None)
+        monkeypatch.setattr(tablero, "dinero", lambda *a: (_ for _ in ()).throw(RuntimeError("falló el formato")))
+    tareas.cargar_todas()
+    with pytest.raises(RuntimeError):
+        tareas.REGISTRO["exp_lanzar"]({"payload": {"cliente": "acme", "experimento_id": eid, "activar": True},
+                                       "job_id": f"acme__exp{eid}__lanzar"})
+    e = ex.obtener("acme", eid)
+    assert e["estado"] == "pausado" and "algo falló antes de activarlo" in e["error"]
+    assert not _activados(meta)
+
+
+def test_un_fallo_antes_de_crear_todo_deja_error_no_lanzando(entorno, monkeypatch):
+    import tareas
+    import trabajos
+    ex, eid = entorno["ex"], entorno["eid"]
+    monkeypatch.setattr(trabajos, "reportar", lambda job_id, **kw: None)
+    monkeypatch.setattr(entorno["lanzador"], "lanzar",
+                        lambda c, e, on_etapa=None, soltar=True: (ex.actualizar(c, e, estado="lanzando"),
+                                                                  (_ for _ in ()).throw(KeyError("raro")))[1])
+    tareas.cargar_todas()
+    with pytest.raises(KeyError):
+        tareas.REGISTRO["exp_lanzar"]({"payload": {"cliente": "acme", "experimento_id": eid, "activar": True}, "job_id": "j"})
+    e = ex.obtener("acme", eid)
+    assert e["estado"] == "error" and "raro" in e["error"]

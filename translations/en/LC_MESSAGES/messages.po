@@ -321,6 +321,10 @@ msgid "%(mensaje)s Motivo: %(motivo)s."
 msgstr "%(mensaje)s Reason: %(motivo)s."
 
 #, python-format
+msgid "%(mensaje)s Puede haber anuncios activos en Meta: pulsa Cerrar o revisa el Administrador de anuncios."
+msgstr "%(mensaje)s There may be active ads on Meta: press Close or check Meta Ads Manager."
+
+#, python-format
 msgid "%(modelo)s llega a %(aviso)s s: se armará para %(aviso)s s."
 msgstr "%(modelo)s tops out at %(aviso)s s: it'll be built for %(aviso)s s."
 
@@ -5258,6 +5262,16 @@ msgstr ""
 "Reason: %(mensaje)s\n"
 "\n"
 "Check it in the panel and try again."
+
+#, python-format
+msgid ""
+"El experimento «%(experimento)s» (#%(id)s) no terminó de lanzarse y no se pudo volver a pausar en Meta.\n"
+"\n"
+"%(mensaje)s"
+msgstr ""
+"The experiment “%(experimento)s” (#%(id)s) didn't finish launching and couldn't be paused again on Meta.\n"
+"\n"
+"%(mensaje)s"
 
 #, python-format
 msgid ""
@@ -12716,6 +12730,10 @@ msgstr "Publish it"
 msgid "Pudo borrarse en otra pestaña."
 msgstr "It may have been deleted in another tab."
 
+#, python-format
+msgid "Puede haber anuncios activos en «%(experimento)s»"
+msgstr "There may be active ads in “%(experimento)s”"
+
 msgid "Puesta a punto"
 msgstr "Setup"
 
@@ -13706,6 +13724,10 @@ msgstr "The campaign, ad sets and ads will be created on Meta and activated: it 
 #, python-format
 msgid "Se crean la campaña, los conjuntos y los anuncios en Meta y se activan: empieza a gastar ≈ %(diario)s al día entre todos los países. ¿Seguimos?"
 msgstr "The campaign, ad sets and ads will be created on Meta and activated: it starts spending ≈ %(diario)s a day across all countries. Continue?"
+
+#, python-format
+msgid "Se creó en Meta, pero algo falló antes de activarlo: %(motivo)s. Quedó en pausa; actívalo desde su tarjeta cuando lo revises."
+msgstr "It was created on Meta, but something failed before activating it: %(motivo)s. It stayed paused; activate it from its card once you've checked it."
 
 #, python-format
 msgid "Se creó en Meta, pero no se pudo activar: %(motivo)s. Quedó en pausa y no gasta; actívalo desde su tarjeta cuando lo revises."
@@ -18890,6 +18912,9 @@ msgstr "charged when you generate."
 
 msgid "se cobra en tu cuenta de Meta"
 msgstr "charged on your Meta account"
+
+msgid "se detuvo antes de terminar"
+msgstr "it stopped before finishing"
 
 msgid "se genera solo"
 msgstr "generated automatically"

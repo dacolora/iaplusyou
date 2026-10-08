@@ -297,9 +297,14 @@ def test_cerrar_rechaza_mientras_esta_lanzando(app, base_temporal, monkeypatch):
     ex.actualizar("acme", eid, estado="lanzando")
     llamado = []
     monkeypatch.setattr(d.lanzador, "cerrar", lambda c, e: llamado.append(True))
+    monkeypatch.setattr(d.trabajos, "en_curso", lambda job_id: True)   # la tarea de lanzar sigue viva
     r = app["c"].post(f"/cliente/acme/experimentos/{eid}/cerrar")
     assert r.status_code == 302 and llamado == []
     assert ex.obtener("acme", eid)["estado"] == "lanzando"
+    # Sin tarea viva (el worker murió) sí se cierra: cerrar pausa en Meta lo que haya (2026-10-08).
+    monkeypatch.setattr(d.trabajos, "en_curso", lambda job_id: False)
+    app["c"].post(f"/cliente/acme/experimentos/{eid}/cerrar")
+    assert llamado == [True]
 
 
 def test_cerrar_experimento_inexistente_no_falla(app, base_temporal):

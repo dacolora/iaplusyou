@@ -3,9 +3,11 @@ Lanzador multi-país (spec §4): traduce un experimento a objetos de Meta —
 1 campaña (spend_cap = tope total) → 1 conjunto por país (presupuesto diario
 propio, targeting país + edad) → 1 anuncio por pieza — y guarda cada id apenas
 Meta lo devuelve, así un reintento retoma donde quedó sin duplicar nada. Todo
-nace PAUSED: activar es otro clic (cambiar_estado). Las credenciales se cargan
-y limpian bajo el lock de tareas.meta (mismo motivo que allá).
+nace PAUSED; la tarea exp_lanzar de las rutas de la persona activa al terminar
+(activar_tras_lanzar, 2026-10-08), los demás llamadores activan con cambiar_estado.
+Las credenciales se cargan y limpian bajo el lock de tareas.meta (mismo motivo que allá).
 """
+import logging
 import time
 
 from flask_babel import gettext, ngettext
@@ -26,6 +28,8 @@ from meta_ads import ad as meta_ad, adset as meta_adset, auth as meta_auth, camp
 from meta_ads import creative as meta_creative, insights as meta_insights
 from meta_ads.targeting import Targeting
 from tareas.meta import MONEDAS_SIN_DECIMALES, _LOCK, _miniatura_para_ad
+
+log = logging.getLogger("creatv.lanzador")
 
 ETAPAS_LANZAR = [(idiomas.N_("Campaña"), 15), (idiomas.N_("Conjuntos por país"), 25), (idiomas.N_("Anuncios"), 60)]
 # Lanzar crea y activa (2026-10-08): la barra de las rutas de la persona suma la etapa de activar.
@@ -573,24 +577,89 @@ def activar_tras_lanzar(cliente, experimento_id):
     return gettext("Experimento en Meta y activo: empieza a gastar ≈ %(diario)s al día.", diario=diario)
 
 
+def _pausar_todo_en_meta(cliente, ex):
+    """PAUSED en Meta a la campaña, a TODOS los conjuntos (también los `meta_adsets` de apps) y a todos los anuncios
+    de un experimento, sin mirar su estado local (cerrar o repausar uno en «error» o «lanzando» tiene que poder
+    pausar lo que haya). Deja en pausa el estado local de países y piezas. Lanza la excepción de Meta si falla."""
+    def _correr(_creds):
+        meta_campaign.actualizar_estado(ex["meta_campaign_id"], "PAUSED")
+        for p in ex["paises"]:
+            ids = _adsets_de_pais(p)
+            for adset_id in ids:
+                meta_adset.actualizar_estado(adset_id, "PAUSED")
+            if ids:
+                experimentos.actualizar_pais(cliente, ex["id"], p["pais"], estado="pausado")
+        for pz in ex["piezas"]:
+            if pz["meta_ad_id"]:
+                meta_ad.actualizar_estado(pz["meta_ad_id"], "PAUSED")
+                experimentos.actualizar_pieza(cliente, pz["id"], estado="pausado")
+    _con_credenciales(cliente, _correr)
+
+
 def repausar(cliente, experimento_id):
     """Vuelve a poner en pausa en Meta todo lo de un experimento que salió mal a mitad de lanzar o activar (también
-    tras una interrupción del worker o del servidor). Lo que se haya creado debería estar en pausa; pausar algo que ya
-    lo está no cuesta ni cambia nada. True si quedó todo pausado (o no había nada en Meta), False si Meta falló.
-    Nunca lanza excepción."""
+    tras una interrupción del worker o del servidor), sin mirar su estado local. Pausar algo que ya lo está no cuesta
+    ni cambia nada. True si quedó todo pausado (o no había nada en Meta), False si Meta falló (queda un evento).
+    No cambia el estado del experimento: eso lo decide quien llama. Nunca lanza excepción."""
     ex = experimentos.obtener(cliente, experimento_id)
     if not ex or not ex["meta_campaign_id"] or ex["estado"] == "cerrado":
         return True
     try:
-        cambiar_estado(cliente, experimento_id, "PAUSED", desde_lanzamiento=True)
+        _pausar_todo_en_meta(cliente, ex)
         return True
-    except ValueError:
-        return True   # sin nada que pausar en Meta (p. ej. ya pasó a error antes de crear la campaña)
     except Exception as e:  # noqa: BLE001
         log_aviso = cola.sin_token(str(e))
-        experimentos.registrar_evento(cliente, experimento_id, "error",
-                                      gettext("No se pudo volver a pausar en Meta: %(motivo)s", motivo=log_aviso))
+        try:
+            experimentos.registrar_evento(cliente, experimento_id, "error",
+                                          gettext("No se pudo volver a pausar en Meta: %(motivo)s", motivo=log_aviso))
+        except Exception:  # noqa: BLE001
+            pass
         return False
+
+
+def dejar_sin_gastar(cliente, experimento_id, estado, mensaje):
+    """Salida de emergencia de un lanzamiento que no terminó (interrupción del worker, reconciliación al arrancar, un
+    fallo inesperado en la tarea): repausa en Meta y deja el experimento en `estado` («error» o «pausado») con
+    `mensaje`. Si el repausado falla, el mensaje lo dice en palabras y llega el aviso `error_lanzamiento`: puede haber
+    anuncios activos y «Cerrar» los vuelve a intentar pausar (ronda 2 de guardian-gasto, 2026-10-08). Nunca lanza."""
+    try:
+        ok = repausar(cliente, experimento_id)
+        if not ok:
+            mensaje = gettext("%(mensaje)s Puede haber anuncios activos en Meta: pulsa Cerrar o revisa el "
+                              "Administrador de anuncios.", mensaje=mensaje)
+        experimentos.actualizar(cliente, experimento_id, estado=estado, error=mensaje)
+        if not ok:
+            ex = experimentos.obtener(cliente, experimento_id) or {}
+            notificaciones.avisar(cliente, "error_lanzamiento",
+                                  gettext("Puede haber anuncios activos en «%(experimento)s»",
+                                          experimento=ex.get("nombre", "")),
+                                  gettext("El experimento «%(experimento)s» (#%(id)s) no terminó de lanzarse y no se "
+                                          "pudo volver a pausar en Meta.\n\n%(mensaje)s",
+                                          experimento=ex.get("nombre", ""), id=experimento_id, mensaje=mensaje))
+    except Exception:  # noqa: BLE001
+        log.exception("No pude dejar sin gastar el experimento %s de %s", experimento_id, cliente)
+
+
+def soltar_lanzando(cliente, experimento_id, motivo=None):
+    """La tarea `exp_lanzar` con `activar` la llama al salir, pase lo que pase: el experimento nunca queda en
+    «lanzando» sin tarea viva. Si ya salió (corriendo, pausado, error) no hace nada. Si quedó en «lanzando»: con todo
+    creado en Meta, a «pausado» con el motivo; si no se terminó de crear, a «error» (se puede reintentar)."""
+    try:
+        ex = experimentos.obtener(cliente, experimento_id)
+    except Exception:  # noqa: BLE001
+        log.exception("No pude leer el experimento %s de %s al soltar «lanzando»", experimento_id, cliente)
+        return
+    if not ex or ex["estado"] != "lanzando":
+        return
+    motivo = motivo or gettext("se detuvo antes de terminar")
+    lanzado = bool(ex["meta_campaign_id"]) and bool(ex["piezas"]) and all(pz["meta_ad_id"] for pz in ex["piezas"])
+    if lanzado:
+        dejar_sin_gastar(cliente, experimento_id, "pausado",
+                         gettext("Se creó en Meta, pero algo falló antes de activarlo: %(motivo)s. Quedó en pausa; "
+                                 "actívalo desde su tarjeta cuando lo revises.", motivo=motivo))
+    else:
+        dejar_sin_gastar(cliente, experimento_id, "error",
+                         gettext("Falló el lanzamiento: %(mensaje)s", mensaje=motivo))
 
 
 def cambiar_presupuesto_pais(cliente, experimento_id, pais, presupuesto_dia):
@@ -1033,8 +1102,11 @@ def _avisar_rechazo_meta(cliente, ex, pz, estado_meta, motivo):
 
 
 def cerrar(cliente, experimento_id):
+    """Pausa en Meta todo lo que tenga (campaña, conjuntos —también de apps— y anuncios) en CUALQUIER estado con
+    campaña, también «error» o un «lanzando» sin tarea viva: un lanzamiento interrumpido pudo dejar algo activo
+    (ronda 2 de guardian-gasto, 2026-10-08). Si Meta falla, lanza y el experimento no se cierra (se puede reintentar)."""
     ex = experimentos.obtener(cliente, experimento_id)
-    if ex and ex["meta_campaign_id"] and ex["estado"] in ("corriendo", "pausado"):
-        cambiar_estado(cliente, experimento_id, "PAUSED")
+    if ex and ex["meta_campaign_id"] and ex["estado"] != "cerrado":
+        _pausar_todo_en_meta(cliente, ex)
     experimentos.actualizar(cliente, experimento_id, estado="cerrado")
     experimentos.registrar_evento(cliente, experimento_id, "estado", gettext("Experimento cerrado"))

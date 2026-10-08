@@ -38,6 +38,13 @@ de `dashboard` llaman `lanzador.repausar` ANTES de marcar el error (lo que alcan
 `clave_form` («t:<token>», o sin token «h:<huella>» de piezas × países, diarios, días, total, objetivo, destino, app)
 y `experimentos.crear_con_piezas` la busca con el candado de escritura tomado antes de leer (token: 1 día; huella:
 10 min); repetida es `ExperimentoRepetido(eid)`: no se crea ni se encola nada y la ruta lleva al que ya existe.
+Ronda 2 (2026-10-08): las rutas escriben «lanzando» ANTES de encolar (`dashboard._encolar_lanzamiento`, que vuelve
+al estado previo si no arrancó o falló: una escritura tardía pisaba un «corriendo» de un worker rápido); la tarea con
+`activar` envuelve lanzar + activar en un `finally` con `lanzador.soltar_lanzando` (nunca sale en «lanzando»: con todo
+creado, a «pausado» con motivo; si no, a «error»); interrupción, reconciliación y `soltar_lanzando` pasan por
+`lanzador.dejar_sin_gastar` (repausa; si Meta no deja, el mensaje dice «Puede haber anuncios activos en Meta: pulsa
+Cerrar…» y llega `error_lanzamiento`); `lanzador.cerrar` pausa en Meta campaña, todos los conjuntos y anuncios
+(`_pausar_todo_en_meta`) en CUALQUIER estado con campaña, y `exp_cerrar` deja cerrar un «lanzando» sin tarea viva.
 Pruebas: `tests/test_lanzar_activa.py`. `exp_estado`
 activates/pauses the whole experiment or one country inline. Metrics: `lanzador.refrescar`
 appends a `metrica_snapshot` per ad (thruplay, purchases, ROAS when Meta reports them) —

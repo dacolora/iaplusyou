@@ -66,8 +66,7 @@ def interrumpida(tarea, mensaje):
     p = tarea["payload"]
     ex = experimentos.obtener(p["cliente"], p["experimento_id"])
     if ex and ex["estado"] == "lanzando":
-        lanzador.repausar(p["cliente"], p["experimento_id"])
-        experimentos.actualizar(p["cliente"], p["experimento_id"], estado="error", error=mensaje)
+        lanzador.dejar_sin_gastar(p["cliente"], p["experimento_id"], "error", mensaje)
 
 
 @registrar("exp_lanzar")
@@ -79,13 +78,23 @@ def exp_lanzar(tarea):
     p = tarea["payload"]
     job_id = tarea.get("job_id")
     activar = bool(p.get("activar"))
-    # Con activar, `lanzar` no suelta «lanzando»: lo suelta activar_tras_lanzar (a corriendo o a pausado con motivo).
-    mensaje = lanzador.lanzar(p["cliente"], p["experimento_id"], soltar=not activar,
-                              on_etapa=lambda nombre: trabajos.reportar(job_id, etapa=nombre))
     if not activar:
-        return mensaje
-    trabajos.reportar(job_id, etapa=lanzador.ETAPA_ACTIVAR)
-    return lanzador.activar_tras_lanzar(p["cliente"], p["experimento_id"])
+        return lanzador.lanzar(p["cliente"], p["experimento_id"],
+                               on_etapa=lambda nombre: trabajos.reportar(job_id, etapa=nombre))
+    # Con activar, `lanzar` no suelta «lanzando»: lo suelta activar_tras_lanzar (a corriendo o a pausado con motivo).
+    # El finally garantiza que nunca quede en «lanzando» al salir, falle lo que falle en medio (ronda 2 de
+    # guardian-gasto, 2026-10-08): repausa en Meta y lo deja en pausa con el motivo, o en error si no se terminó de crear.
+    motivo = None
+    try:
+        lanzador.lanzar(p["cliente"], p["experimento_id"], soltar=False,
+                        on_etapa=lambda nombre: trabajos.reportar(job_id, etapa=nombre))
+        trabajos.reportar(job_id, etapa=lanzador.ETAPA_ACTIVAR)
+        return lanzador.activar_tras_lanzar(p["cliente"], p["experimento_id"])
+    except Exception as e:
+        motivo = cola.sin_token(str(e))
+        raise
+    finally:
+        lanzador.soltar_lanzando(p["cliente"], p["experimento_id"], motivo)
 
 
 @registrar("exp_refrescar")

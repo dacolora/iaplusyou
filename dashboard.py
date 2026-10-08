@@ -5600,16 +5600,31 @@ def exp_probar(cliente):
         return volver
     if es_app:
         meta_conexion.guardar_app_anunciada(cliente, datos_app["app_id"])
-    job_id = tareas_exp.job_id_lanzar(cliente, eid)
     # activar=True: el clic de «Lanzar a Meta», con el gasto diario a la vista, es la aprobación (Daniel, 2026-10-08).
-    arranco = trabajos.encolar(job_id, "exp_lanzar", {"cliente": cliente, "experimento_id": eid, "activar": True},
-                               cliente=cliente, duracion_estimada=120, etapas=lanzador.ETAPAS_LANZAR_Y_ACTIVAR, max_intentos=1)
+    arranco = _encolar_lanzamiento(cliente, eid, "armando", None)
     if arranco:
-        experimentos.actualizar(cliente, eid, estado="lanzando", error=None)
         flash(gettext("«%(nombre)s»: lanzando a Meta. Si todo sale bien, queda activo y empieza a gastar.", nombre=nombre), "ok")
     else:
         flash(gettext("«%(nombre)s» quedó creado; ya se estaba lanzando.", nombre=nombre), "warn")
     return _volver_exp(cliente, eid)
+
+
+def _encolar_lanzamiento(cliente, eid, estado_previo, error_previo):
+    """Marca «lanzando» ANTES de encolar `exp_lanzar` (con `activar`) y, si no arrancó o encolar falló, lo devuelve a
+    como estaba. Al revés (encolar y después escribir «lanzando», el M2 de antes) un worker rápido podía activar y
+    dejarlo «corriendo» antes de que la ruta escribiera, y esa escritura tardía lo pisaba con anuncios gastando (ronda 2
+    de guardian-gasto, 2026-10-08). Lo que M2 cuidaba (quedar en «lanzando» sin tarea) lo cubre la vuelta atrás."""
+    experimentos.actualizar(cliente, eid, estado="lanzando", error=None)
+    try:
+        arranco = trabajos.encolar(tareas_exp.job_id_lanzar(cliente, eid), "exp_lanzar",
+                                   {"cliente": cliente, "experimento_id": eid, "activar": True}, cliente=cliente,
+                                   duracion_estimada=120, etapas=lanzador.ETAPAS_LANZAR_Y_ACTIVAR, max_intentos=1)
+    except Exception:
+        experimentos.actualizar(cliente, eid, estado=estado_previo, error=error_previo)
+        raise
+    if not arranco:
+        experimentos.actualizar(cliente, eid, estado=estado_previo, error=error_previo)
+    return arranco
 
 
 def _clave_formulario_experimento(token, datos, combinaciones):
@@ -5731,15 +5746,8 @@ def exp_lanzar(cliente, eid):
         flash(gettext("Sin piezas para: %(paises)s. Agrega una pieza por país o quita el país.",
                       paises=", ".join(faltan)), "error")
         return volver
-    job_id = tareas_exp.job_id_lanzar(cliente, eid)
-    # M2: encolar primero y solo marcar "lanzando" si de verdad arrancó — si
-    # se pusiera "lanzando" antes y trabajos.encolar fallara (ej. "database is
-    # locked"), el experimento quedaría colgado ahí sin tarea que lo saque
-    # (_reconciliar_huerfanos no corre bajo gunicorn).
-    arranco = trabajos.encolar(job_id, "exp_lanzar", {"cliente": cliente, "experimento_id": eid, "activar": True},
-                               cliente=cliente, duracion_estimada=120, etapas=lanzador.ETAPAS_LANZAR_Y_ACTIVAR, max_intentos=1)
+    arranco = _encolar_lanzamiento(cliente, eid, ex["estado"], ex["error"])
     if arranco:
-        experimentos.actualizar(cliente, eid, estado="lanzando", error=None)
         flash(gettext("Lanzando el experimento a Meta: si todo sale bien, queda activo y empieza a gastar…"), "ok")
     else:
         flash(gettext("Ya se está lanzando ese experimento."), "warn")
@@ -5844,7 +5852,10 @@ def exp_cerrar(cliente, eid):
     # los objetos ya creados en Meta sin que el experimento se entere. Solo
     # se puede cerrar desde armando/error (nunca se lanzó) o pausado/corriendo
     # (ya está en Meta).
-    if ex["estado"] not in ("pausado", "corriendo", "armando", "error"):
+    # Un «lanzando» SIN tarea viva (el worker murió y nadie lo reconcilió todavía) sí se cierra: cerrar pausa en Meta lo
+    # que haya, sin mirar el estado local (ronda 2 de guardian-gasto, 2026-10-08).
+    lanzando_huerfano = ex["estado"] == "lanzando" and not trabajos.en_curso(tareas_exp.job_id_lanzar(cliente, eid))
+    if ex["estado"] not in ("pausado", "corriendo", "armando", "error") and not lanzando_huerfano:
         flash(gettext("Espera a que termine el lanzamiento antes de cerrar."), "error")
         return volver
     with _ENV_LOCK:
@@ -8638,10 +8649,10 @@ def _reconciliar_huerfanos():
             if trabajos.en_curso(tareas_exp.job_id_lanzar(cliente, eid)):
                 continue
             with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
-                # Lanzar crea y activa (2026-10-08): lo que alcanzó a activarse vuelve a pausa antes del error.
-                lanzador.repausar(cliente, eid)
-                experimentos.actualizar(cliente, eid, estado="error",
-                                         error=gettext("Se interrumpió el lanzamiento; revisa Ads Manager y vuelve a intentar."))
+                # Lanzar crea y activa (2026-10-08): lo que alcanzó a activarse vuelve a pausa antes del error; si
+                # Meta no deja, el mensaje y un aviso lo dicen (dejar_sin_gastar).
+                lanzador.dejar_sin_gastar(cliente, eid, "error",
+                                          gettext("Se interrumpió el lanzamiento; revisa Ads Manager y vuelve a intentar."))
     except Exception as e:
         print(f"[aviso] No pude reconciliar experimentos lanzando: {e}")
 
