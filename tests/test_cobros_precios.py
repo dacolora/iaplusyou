@@ -347,3 +347,21 @@ def test_el_filtro_no_se_congela_al_compilar(libro):
     with dashboard.app.test_request_context("/cliente/acme"):
         g.margen_precio = 1.0
         assert plantilla.render() == "2.0|sin"
+
+
+def test_si_el_margen_no_se_puede_leer_el_precio_no_cae_al_costo(libro, monkeypatch):
+    """Revisión final 2026-10-08 (M1): una lectura del margen que falla da
+    «precio no disponible», nunca el costo con cara de precio. El costo
+    (`usd`) sigue ahí para las reservas y el libro."""
+    import dashboard
+    import gastos
+    from flask import g
+    _cobra(libro)
+    monkeypatch.setattr(libro, "margen_precio", lambda c: (_ for _ in ()).throw(RuntimeError("base caída")))
+    with dashboard.app.test_request_context("/cliente/acme"):
+        g.cliente_precio = "acme"
+        e = gastos.estimar("guion")
+        texto = gastos.texto_precio(0.13)
+    assert e["usd"] == gastos.TARIFAS["guion"]
+    assert e["usd_precio"] is None and e["texto"] == "precio no disponible"
+    assert texto == "precio no disponible"

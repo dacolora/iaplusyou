@@ -232,3 +232,53 @@ def test_recalculado_que_cobra_mas_mira_el_saldo_bajo(base_temporal, monkeypatch
     gastos.registrar("acme", "final", 0.2, "final:1:t1")    # mismo monto: no sube, no mira
     gastos.registrar("acme", "final", 1.0, "final:1:t1")    # recalcula a 1500: 4500
     assert bajos == [("acme", 4500)]
+
+
+# ---- revisión final (2026-10-08) ----
+
+def test_un_cobro_a_medias_que_falla_se_deshace_y_el_gasto_queda(base_temporal, monkeypatch):
+    """El savepoint del cobro: `cobrar_gasto` ya escribió su movimiento y
+    después lanza. El movimiento se deshace (sin savepoint quedaría un cobro
+    anotado como «no se pudo cobrar») y el costo queda."""
+    import gastos
+    from cobros import avisos, libro
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    real = libro.cobrar_gasto
+
+    escritos = []
+
+    def a_medias(con, *a, **k):
+        real(con, *a, **k)
+        escritos.append(con.execute(sa.select(sa.func.count()).select_from(base_temporal.movimiento_saldo)).scalar())
+        raise RuntimeError("falla después de escribir")
+    monkeypatch.setattr(libro, "cobrar_gasto", a_medias)
+    admin = []
+    monkeypatch.setattr(avisos, "admin", lambda *a, **k: admin.append(a))
+    gid = gastos.registrar("acme", "video", 1.0, "video:1:t1")
+    assert escritos == [1]              # el cobro sí llegó a escribir su movimiento...
+    assert _movs(base_temporal) == []   # ...y el savepoint lo deshizo
+    with base_temporal.conectar() as con:
+        assert con.execute(sa.select(base_temporal.gasto.c.usd).where(base_temporal.gasto.c.id == gid)).scalar() == 1.0
+    assert admin and admin[0][0] == "cobro_no_anotado"
+
+
+def test_si_falla_leer_el_monto_para_cobrar_el_gasto_queda(base_temporal, monkeypatch):
+    """M2: la lectura del monto del cobro va dentro del try del cobro."""
+    import gastos
+    from cobros import avisos, libro
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    real = gastos.sa.select
+
+    def select(*cols, **k):
+        if len(cols) == 1 and cols[0] is base_temporal.gasto.c.usd:
+            raise RuntimeError("lectura rota")
+        return real(*cols, **k)
+    monkeypatch.setattr(gastos.sa, "select", select)
+    admin = []
+    monkeypatch.setattr(avisos, "admin", lambda *a, **k: admin.append(a))
+    gid = gastos.registrar("acme", "video", 1.0, "video:1:t1")
+    monkeypatch.undo()
+    with base_temporal.conectar() as con:
+        assert con.execute(sa.select(base_temporal.gasto.c.usd).where(base_temporal.gasto.c.id == gid)).scalar() == 1.0
+    assert _movs(base_temporal) == []
+    assert admin and admin[0][0] == "cobro_no_anotado"

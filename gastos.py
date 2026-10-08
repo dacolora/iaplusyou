@@ -170,9 +170,8 @@ def _texto_estimado(usd):
     return gettext("%(precio)s aprox.", precio=formatear(usd))
 
 
-def _margen_de(cliente):
-    """Margen de `cliente` (1.0 si no cobra). Una lectura que falla muestra el
-    costo: lo que se cobra lo decide el libro, no este número."""
+def _leer_margen(cliente):
+    """Margen de `cliente` (1.0 si no cobra), o None si la lectura falla."""
     if not cliente:
         return 1.0
     try:
@@ -180,7 +179,15 @@ def _margen_de(cliente):
         return float(libro.margen_precio(cliente))
     except Exception as e:  # noqa: BLE001
         log.warning("margen de %s no se pudo leer: %s", cliente, e)
-        return 1.0
+        return None
+
+
+def _margen_de(cliente):
+    """Margen de `cliente` (1.0 si no cobra o si la lectura falla: lo que se
+    cobra lo decide el libro, no este número). Los textos de precio de una
+    petición no caen al costo: ver `_margen_fallido`."""
+    margen = _leer_margen(cliente)
+    return 1.0 if margen is None else margen
 
 
 def margen_vigente():
@@ -197,10 +204,26 @@ def margen_vigente():
         if not has_request_context():
             return 1.0
         if "margen_precio" not in g:
-            g.margen_precio = _margen_de(g.get("cliente_precio"))
+            margen = _leer_margen(g.get("cliente_precio"))
+            g.margen_precio_fallo = margen is None
+            g.margen_precio = 1.0 if margen is None else margen
         return float(g.margen_precio)
     except Exception:  # noqa: BLE001
         return 1.0
+
+
+def _margen_fallido():
+    """¿Falló la lectura del margen de esta petición? Entonces el texto de un
+    precio dice «precio no disponible» en vez de mostrar el costo como si fuera
+    el precio (revisión final 2026-10-08, M1). Nunca lanza."""
+    try:
+        from flask import g, has_request_context  # noqa: PLC0415
+        if not has_request_context():
+            return False
+        margen_vigente()
+        return bool(g.get("margen_precio_fallo"))
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def precio(usd, cliente=None):
@@ -230,15 +253,20 @@ def costo_de_precio(valor):
 
 
 def texto_precio(usd):
-    """El «US$ 0,30 aprox.» de un costo, ya con el margen de la petición."""
+    """El «US$ 0,30 aprox.» de un costo, ya con el margen de la petición. Si el
+    margen no se pudo leer, «precio no disponible» (nunca el costo)."""
+    if usd is not None and _margen_fallido():
+        return gettext(SIN_PRECIO)
     return _texto_estimado(precio(usd))
 
 
 def _estimado(usd, detalle=""):
     """`usd` es el COSTO (lo usan las reservas y el libro); `usd_precio` y
-    `texto`, lo que ve la persona (con el margen si el proyecto cobra)."""
+    `texto`, lo que ve la persona (con el margen si el proyecto cobra; sin
+    precio si el margen no se pudo leer)."""
     usd = None if usd is None else round(float(usd), 4)
-    return {"usd": usd, "usd_precio": precio(usd), "texto": texto_precio(usd), "detalle": detalle}
+    usd_precio = None if usd is not None and _margen_fallido() else precio(usd)
+    return {"usd": usd, "usd_precio": usd_precio, "texto": texto_precio(usd), "detalle": detalle}
 
 
 # ------------------------------------------------------------ estimar ---
@@ -479,9 +507,12 @@ def registrar(cliente, tipo, usd, referencia, detalle="", proveedor=None, extra=
         después escribe recibe «database is locked» al instante si otro escritor
         confirmó en medio (SQLITE_BUSY_SNAPSHOT; busy_timeout no aplica). Un cobro
         que falla vuelve a su savepoint y el gasto queda. Nunca lanza."""
-        # Con conservar_mayor el UPDATE pudo no aplicar: se cobra sobre lo que quedó guardado.
-        usd_final = float(con.execute(sa.select(g.c.usd).where(g.c.id == gasto_id)).scalar() or 0.0)
+        usd_final = monto
         try:
+            # Con conservar_mayor el UPDATE pudo no aplicar: se cobra sobre lo que
+            # quedó guardado. Dentro del try (revisión final 2026-10-08, M2): si
+            # esta lectura lanzara fuera, desharía el INSERT del gasto.
+            usd_final = float(con.execute(sa.select(g.c.usd).where(g.c.id == gasto_id)).scalar() or 0.0)
             with con.begin_nested():
                 from cobros import libro as _libro  # noqa: PLC0415 — evita el import circular
                 antes = _neto_del_gasto(con, gasto_id)
