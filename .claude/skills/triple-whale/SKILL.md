@@ -144,3 +144,22 @@ stores `concepto.extra.tw_idea` (`puente.origen_desde_formulario` validates it, 
 idea card lists the pieces born from it with their Crear state and Meta verdict (`datos.piezas_de_evaluacion`,
 `panel.enlazar_ideas`) and a Creatv ad says which idea it came from (`piezas_creatv(...)["tw_idea"]`). None of
 the SQL has run against a real store yet (spec 2026-09-28 §9).
+
+**«Resultados de tu tienda»** (spec `docs/superpowers/specs/2026-10-08-tw-resultados-de-tu-tienda-design.md`, pedido
+de Daniel 2026-10-08 con la captura de «Día a día»): reemplazó a «Tu tienda» (tiles) y «Día a día» (el SVG de
+`dashboard._grafico_tablero`, que se borró: ya no lo usaba nadie). `panel._resultados` arma UNA serie ancha (periodo +
+anterior + 28 días para los días raros) y llama a `triple_whale/resultados.py` (puro: tarjetas, variaciones con días
+completos — hoy va aparte —, días raros contra la mediana del mismo día de la semana, mejor día, lectura con reglas,
+«Tus creativos» por mes de arranque, la tabla y el JSON). Las consultas nuevas de `datos.py` (`gasto_por_antiguedad`,
+`gasto_por_canal`, `anuncios_del_dia`, `arrancaron_el`, `cohortes`) van sobre `_medidas_dia` (solo gasto MAX entre
+tiendas, ventas y pedidos SUMA: `_anuncio_dia` con sus 30 columnas costaba el doble) y `_primeros_dias` (primer día
+con gasto de cada anuncio en la copia: nuevo = hasta ese día + 13; la antigüedad se conoce desde el inicio de la copia +
+14). `_tw_resultados.html` pinta tarjetas, lectura, creativos y tabla en el servidor y deja el JSON en
+`<script type="application/json" id="tw-resultados-datos">`; `static/tw_resultados.js` (ES5, como
+`exp_resultados.js`, textos en el JSON, números con los separadores de la app) dibuja la gráfica al ancho real del
+contenedor y pide el detalle del día a `GET /triple-whale/dia` (`panel.contexto_dia` → `_tw_dia.html`; del primer día
+copiado a ayer, 400 si no). `_tab_triple_whale.html` llama `TwResultados.iniciar(cont)` tras pintar el panel. Trampas:
+un periodo anterior que empieza antes del primer día copiado NO se compara (serían ceros que no son ventas; con 10
+días de prueba, «7 días» no compara); «Desde el inicio» nunca compara (5fce2658); lo atribuido del Pixel suma más que
+la tienda (PND-155) y solo se usa para comparar anuncios y canales; el CSS heredado tenía un comentario cerrado con
+`#}` que se tragaba `.tb-barra-tw` (por eso la gráfica vieja salía con barras naranjas y línea verde).
