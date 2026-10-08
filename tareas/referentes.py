@@ -588,6 +588,7 @@ def _fase_clasificando(tarea, p, bid, avanzar):
             usd = costo_real(ent, sal)
             gastos.registrar_seguro(cliente_gasto, "clasificacion", usd, f"referentes:clasificar:{r['id']}{ref_sufijo(tarea)}",
                                     detalle=r.get("titular") or r.get("marca") or "", proveedor="anthropic",
+                                    entregado=ok,   # una clasificación inválida no llegó (cobros §3.4)
                                     extra={"tokens_entrada": ent, "tokens_salida": sal, "modelo": modelo_actual()})
             b2 = datos.barrido(bid) or {}
             datos.actualizar_barrido(bid, usd_real=round(float(b2.get("usd_real") or 0.0) + usd, 4))

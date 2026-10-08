@@ -5196,6 +5196,10 @@ msgstr "The hook is over %(max)s words: shorten it."
 msgid "El gancho tiene %(n)s palabras: con %(max)s o menos se lee en tres segundos."
 msgstr "The hook has %(n)s words: with %(max)s or fewer it reads in three seconds."
 
+#, python-format
+msgid "El gasto %(ref)s de %(cliente)s (%(usd)s) quedó sin su cobro al cliente."
+msgstr "The cost %(ref)s of %(cliente)s (%(usd)s) was recorded without its charge to the client."
+
 msgid "El guion"
 msgstr "The script"
 
@@ -10936,6 +10940,9 @@ msgstr "Couldn't analyze it"
 
 msgid "No se pudo analizar."
 msgstr "Couldn't analyze it."
+
+msgid "No se pudo anotar un cobro"
+msgstr "A charge could not be recorded"
 
 #, python-format
 msgid "No se pudo avanzar la derivación: %(error)s"

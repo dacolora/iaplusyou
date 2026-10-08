@@ -426,7 +426,7 @@ def preparar_guion(cliente, cf_id, opciones=None, ref_sufijo=""):
                 detalle=(gettext("guion base %(idioma)s · no salió válido", idioma=idioma_base)
                          if isinstance(e, guion_mod.GuionInvalido)
                          else gettext("guion base %(idioma)s · se cortó después de cobrar", idioma=idioma_base)),
-                extra={"usd_guion": usd_guion, "usd_whisper": round(costo, 4)})
+                extra={"usd_guion": usd_guion, "usd_whisper": round(costo, 4)}, entregado=False)
         raise
     costo += float(costo_guion or 0.0)
     # Sin ángulo en la sesión, Claude ya lo decidió, corrigió y limpió junto
@@ -854,7 +854,8 @@ def _registrar_gasto_final(cliente, final_id, idioma, pais, usd, capas, fallo=Fa
     else:
         detalle = gettext("%(destino)s · sin cobros (todo cacheado u omitido)", destino=destino)
     gastos.registrar_seguro(cliente, "final", usd, f"final:{final_id}{ref_sufijo}", detalle=detalle,
-                            proveedor="fal/anthropic", extra={"capas": por_capa, "fallo": bool(fallo)})
+                            proveedor="fal/anthropic", extra={"capas": por_capa, "fallo": bool(fallo)},
+                            entregado=not fallo)
 
 
 registrar_gasto_final = _registrar_gasto_final   # lo usa final_edition.produccion (vía del editor)

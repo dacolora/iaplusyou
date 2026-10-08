@@ -36,10 +36,10 @@ def encolar_pedidos(cliente, producto_id):
                             cliente=cliente, duracion_estimada=40, max_intentos=1)
 
 
-def _gasto(cliente, referencia, ent, sal, detalle, tipo="pedidos"):
+def _gasto(cliente, referencia, ent, sal, detalle, tipo="pedidos", entregado=True):
     if ent or sal:
         gastos.registrar_seguro(cliente, tipo, costo_real(ent, sal), referencia, proveedor="anthropic",
-                                detalle=detalle, extra={"tokens_entrada": ent, "tokens_salida": sal,
+                                detalle=detalle, entregado=entregado, extra={"tokens_entrada": ent, "tokens_salida": sal,
                                                         "modelo": modelo_actual()})
 
 
@@ -52,7 +52,7 @@ def ejecutar_pedidos(tarea):
         n, ent, sal = pedidos.resumir(cliente, producto_id)
     except pedidos.ErrorPedidos as e:
         _gasto(cliente, referencia, getattr(e, "tokens_entrada", 0) or 0, getattr(e, "tokens_salida", 0) or 0,
-               gettext("pedidos al cliente · respuesta inválida"))
+               gettext("pedidos al cliente · respuesta inválida"), entregado=False)
         raise
     _gasto(cliente, referencia, ent, sal, gettext("pedidos al cliente"))
     return (gettext("%(n)s pedido(s) listos para el cliente.", n=n) if n
@@ -77,7 +77,7 @@ def ejecutar_revisar(tarea):
         rev, ent, sal = revisor.revisar(cliente, cf_id)
     except revisor.ErrorRevision as e:
         _gasto(cliente, referencia, e.tokens_entrada, e.tokens_salida,
-               gettext("revisión de la doctrina · respuesta inválida"), tipo="revision")
+               gettext("revisión de la doctrina · respuesta inválida"), tipo="revision", entregado=False)
         raise
     _gasto(cliente, referencia, ent, sal, gettext("revisión de la doctrina"), tipo="revision")
     n = revisor.contar(rev)

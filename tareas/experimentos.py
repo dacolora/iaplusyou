@@ -259,6 +259,7 @@ def _diagnosticar(cliente, ex, pz, v, snaps, reglas, ctx, tarea):
         if e.tokens_entrada or e.tokens_salida:
             gastos.registrar_seguro(cliente, "revision", costo_real(e.tokens_entrada, e.tokens_salida), referencia,
                                     proveedor="anthropic", detalle=gettext("diagnóstico de perdedora · respuesta inválida"),
+                                    entregado=False,
                                     extra={"tokens_entrada": e.tokens_entrada, "tokens_salida": e.tokens_salida,
                                            "modelo": modelo_actual()})
         error = {"error": cola.sin_token(str(e))[:200], "pistas": doctrina_diagnostico.pistas(

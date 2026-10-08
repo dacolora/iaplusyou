@@ -167,7 +167,7 @@ def ejecutar_reescribir_idea(tarea):
                    else gettext("reescribir idea · respuesta inválida"))
         if ent or sal:
             gastos.registrar_seguro(cliente, "ideas", costo_real(ent, sal), referencia, proveedor="anthropic",
-                                    detalle=detalle,
+                                    detalle=detalle, entregado=False,
                                     extra={"tokens_entrada": ent, "tokens_salida": sal, "modelo": modelo_actual()})
         raise
     gastos.registrar_seguro(cliente, "ideas", costo_real(ent, sal), referencia, proveedor="anthropic",
@@ -186,17 +186,17 @@ def ejecutar_proponer_ideas(tarea):
     uso = {"entrada": 0, "salida": 0}
     referencia = f"idea:proponer:{campana_id}{ref_sufijo(tarea)}"
 
-    def _registrar(detalle):
+    def _registrar(detalle, entregado=True):
         if uso["entrada"] or uso["salida"]:
             gastos.registrar_seguro(cliente, "ideas", costo_real(uso["entrada"], uso["salida"]), referencia,
-                                    proveedor="anthropic", detalle=detalle,
+                                    proveedor="anthropic", detalle=detalle, entregado=entregado,
                                     extra={"tokens_entrada": uso["entrada"], "tokens_salida": uso["salida"],
                                            "modelo": modelo_actual()})
     try:
         creadas = ideas.proponer(cliente, campana_id, n_videos=p.get("n_videos"), n_imagenes=p.get("n_imagenes"),
                                  reemplaza=p.get("reemplaza"), uso=uso)
     except Exception:
-        _registrar(gettext("proponer ideas · la respuesta no sirvió"))
+        _registrar(gettext("proponer ideas · la respuesta no sirvió"), entregado=False)
         raise
     _registrar(gettext("proponer %(n)s idea(s)", n=len(creadas)))
     c = datos.campana(cliente, campana_id)
@@ -266,7 +266,7 @@ def ejecutar_sugerir_biblioteca(tarea):
         if ent or sal:
             usd = costo_real(ent, sal)
             gastos.registrar_seguro(cliente, "sugerir_ia", usd, f"referentes:sugerir_ia:{cid}{ref_sufijo(tarea)}",
-                                    detalle=gettext("respuesta inválida"), proveedor="anthropic",
+                                    detalle=gettext("respuesta inválida"), proveedor="anthropic", entregado=False,
                                     extra={"tokens_entrada": ent, "tokens_salida": sal, "modelo": modelo_actual()})
         raise
     usd = costo_real(ent, sal)
@@ -290,10 +290,10 @@ def encolar_qa(cliente, cp_id):
                             cliente=cliente, duracion_estimada=30, max_intentos=3)
 
 
-def _gasto_qa(cliente, referencia, ent, sal, detalle):
+def _gasto_qa(cliente, referencia, ent, sal, detalle, entregado=True):
     if ent or sal:
         gastos.registrar_seguro(cliente, "revision", costo_real(ent, sal), referencia, proveedor="anthropic",
-                                detalle=detalle, extra={"tokens_entrada": ent, "tokens_salida": sal,
+                                detalle=detalle, entregado=entregado, extra={"tokens_entrada": ent, "tokens_salida": sal,
                                                         "modelo": modelo_actual()})
 
 
@@ -329,7 +329,7 @@ def ejecutar_qa_pieza(tarea):
         resultado = dict(qa.evaluar(cliente, i, entry, campana, umbral=umbral))
     except Exception as e:
         _gasto_qa(cliente, referencia, getattr(e, "tokens_entrada", 0) or 0, getattr(e, "tokens_salida", 0) or 0,
-                  gettext("control de calidad · respuesta inválida"))
+                  gettext("control de calidad · respuesta inválida"), entregado=False)
         datos.guardar_qa(cliente, cp_id, cf_id, {"veredicto": "error", "score": None, "checks": {}, "nota": str(e)[:300],
                                                  "cf_id": cf_id})
         raise

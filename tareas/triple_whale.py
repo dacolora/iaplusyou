@@ -157,7 +157,7 @@ def tw_evaluar(tarea):
         usd = costo_real(entrada, salida) if (entrada or salida) else 0.0
         if usd:
             gastos.registrar_seguro(cliente, "evaluacion", usd, referencia, proveedor="anthropic",
-                                    detalle=gettext("sin resultado usable"))
+                                    detalle=gettext("sin resultado usable"), entregado=False)
         mensaje = analisis.texto_error(e)
         datos.actualizar_evaluacion(eid, estado="error", error=mensaje, usd=usd)
         raise RuntimeError(mensaje) from None

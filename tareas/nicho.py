@@ -147,7 +147,7 @@ def ejecutar_generar(tarea):
         if entrada + salida > 0:
             gastos.registrar_seguro(cliente, "avatares", usd, f"avatares:{eid}:fallido{ref_sufijo(tarea)}",
                                     detalle=gettext("intento fallido: %(error)s", error=cola.recortar(cola.sin_token(e), 200)),
-                                    proveedor="anthropic",
+                                    proveedor="anthropic", entregado=False,
                                     extra={"tokens_entrada": entrada, "tokens_salida": salida, "modelo": avatares.modelo_actual()})
         _anotar_error(cliente, eid, gettext("%(error)s (si Claude alcanzó a responder, este intento sí se cobró)",
                                             error=cola.sin_token(e)))
@@ -400,6 +400,7 @@ def ejecutar_completar(tarea):
             res = r["resumen"]
             gastos.registrar_seguro(cliente, "avatares", res["usd"], f"avatares:{eid}:completar:fallido{ref_sufijo(tarea)}",
                                     detalle=gettext("intento fallido: %(error)s", error=cola.recortar(cola.sin_token(e), 200)), proveedor="anthropic",
+                                    entregado=False,
                                     extra={"tokens_entrada": res["tokens_entrada"], "tokens_salida": res["tokens_salida"], "modelo": res["modelo"]})
         _anotar_error(cliente, eid, gettext("%(error)s (si Claude alcanzó a responder, este intento sí se cobró)", error=cola.sin_token(e)))
         raise

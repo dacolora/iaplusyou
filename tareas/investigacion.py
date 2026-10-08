@@ -127,13 +127,15 @@ def _o_interrumpir(tarea, cliente, eid, fn):
         raise
 
 
-def _gasto_claude(cliente, eid, tarea, paso, entrada, salida, detalle):
-    """Registra la llamada a Claude (tipo `investigacion`) y devuelve su costo."""
+def _gasto_claude(cliente, eid, tarea, paso, entrada, salida, detalle, entregado=True):
+    """Registra la llamada a Claude (tipo `investigacion`) y devuelve su costo.
+    `entregado=False` para un intento fallido: el costo queda, al cliente no se
+    le cobra (cobros §3.4)."""
     if entrada + salida <= 0:
         return 0.0
     usd = inv.costo_claude(entrada, salida)
     gastos.registrar_seguro(cliente, "investigacion", usd, f"investigacion:{eid}:{paso}{ref_sufijo(tarea)}", detalle=detalle,
-                            proveedor="anthropic", extra={"tokens_entrada": entrada, "tokens_salida": salida, "modelo": avatares.modelo_actual()})
+                            proveedor="anthropic", entregado=entregado, extra={"tokens_entrada": entrada, "tokens_salida": salida, "modelo": avatares.modelo_actual()})
     return usd
 
 
@@ -199,7 +201,7 @@ def _fallo_claude(cliente, eid, tarea, paso, e, motivo_de, ref=None):
     # Referencia propia por intento: el reintento usa la misma tarea (mismo :t<id>) y registrar_seguro
     # es idempotente por referencia; sin esto el cobro del intento bueno se perdería.
     usd = _gasto_claude(cliente, eid, tarea, f"{ref or paso}:fallido{int(tarea.get('intentos') or 1)}", entrada, salida,
-                        gettext("intento fallido"))
+                        gettext("intento fallido"), entregado=False)
     mensaje = cola.recortar(cola.sin_token(e), 300)
 
     def _fn(i):
