@@ -1,5 +1,7 @@
 """Copias de Meta en la base (spec §4 y §6): reemplazar un tramo es idempotente,
 las lecturas agregan en una consulta y quitar una cuenta borra sus copias."""
+import re
+
 import sqlalchemy as sa
 
 import db
@@ -32,6 +34,9 @@ def test_reemplazar_es_idempotente_y_totales(base_temporal):
     assert t[A]["gasto"] == 160 and t[A]["valor"] == 420 and t[B]["gasto"] == 10
     assert datos.rango("hf", [A]) == {"filas": 2, "desde": "2026-10-01", "hasta": "2026-10-02"}
     assert len(datos.cuenta_por_dia("hf", [A, B], "2026-10-01", "2026-10-02")) == 3
+    # El alcance son personas únicas: no se suma entre días. Por día sí se guarda y se lee; del período, alcance().
+    assert "alcance" not in t[A] and "alcance" not in t[B]
+    assert {d["alcance"] for d in datos.cuenta_por_dia("hf", [A], "2026-10-01", "2026-10-02")} == {800}
 
 
 def test_anuncios_campanas_y_conjuntos_con_nombres(base_temporal):
@@ -150,6 +155,72 @@ def test_alcance_borrar_y_purgar(base_temporal):
     assert datos.alcance("hf", [A], 30) == {} and datos.totales_por_anuncio("hf", [A], "2026-01-01", "2026-12-31") == []
 
 
+def test_alcance_de_cada_proyecto_es_solo_suyo(base_temporal):
+    datos.guardar_alcance("hf", A, [{"nivel": "cuenta", "objeto_id": A, "ventana": 30, "alcance": 111,
+                                     "frecuencia": 1.1}])
+    datos.guardar_alcance("otro", A, [{"nivel": "cuenta", "objeto_id": A, "ventana": 30, "alcance": 999,
+                                       "frecuencia": 9.9}])
+    assert datos.alcance("hf", [A], 30) == {A: {"alcance": 111, "frecuencia": 1.1}}
+    assert datos.alcance("otro", [A], 30) == {A: {"alcance": 999, "frecuencia": 9.9}}
+    # Reescribir el de un proyecto no toca el del otro.
+    datos.guardar_alcance("hf", A, [{"nivel": "cuenta", "objeto_id": A, "ventana": 30, "alcance": 222,
+                                     "frecuencia": 2.2}])
+    assert datos.alcance("hf", [A], 30)[A]["alcance"] == 222
+    assert datos.alcance("otro", [A], 30)[A]["alcance"] == 999
+
+
+def test_nombres_y_estados_de_los_objetos_no_se_cruzan_entre_proyectos(base_temporal):
+    """Dos proyectos con los MISMOS ids de campaña, conjunto y anuncio (el único es por proyecto + id): cada
+    lectura trae solo los nombres y estados del suyo, una fila por objeto."""
+    for cliente, sufijo, estado, apr in (("hf", "propio", "ACTIVE", "FAIL"), ("otro", "ajeno", "PAUSED", "SUCCESS")):
+        datos.guardar_objetos(cliente, A, [
+            {"nivel": "campana", "objeto_id": "c1", "nombre": f"Campaña {sufijo}", "estado": estado,
+             "objetivo": "OUTCOME_SALES" if cliente == "hf" else "OUTCOME_LEADS"},
+            {"nivel": "conjunto", "objeto_id": "s1", "campaign_id": "c1", "nombre": f"Conjunto {sufijo}",
+             "estado": estado, "aprendizaje": apr},
+            {"nivel": "anuncio", "objeto_id": "a1", "campaign_id": "c1", "nombre": f"Anuncio {sufijo}",
+             "estado": estado, "miniatura_url": f"https://x/{sufijo}.jpg"}])
+        datos.reemplazar_anuncio_dias(cliente, A, "2026-10-01", "2026-10-01", [_ad("2026-10-01", "a1", 10, 0)])
+    for cliente, sufijo, estado in (("hf", "propio", "ACTIVE"), ("otro", "ajeno", "PAUSED")):
+        ads = datos.totales_por_anuncio(cliente, [A], "2026-10-01", "2026-10-01")
+        assert len(ads) == 1
+        assert (ads[0]["anuncio"], ads[0]["conjunto"], ads[0]["campana"], ads[0]["estado"],
+                ads[0]["miniatura_url"]) == (f"Anuncio {sufijo}", f"Conjunto {sufijo}", f"Campaña {sufijo}", estado,
+                                             f"https://x/{sufijo}.jpg")
+        conj = datos.totales_por_conjunto(cliente, [A], "2026-10-01", "2026-10-01")
+        assert len(conj) == 1
+        assert (conj[0]["nombre"], conj[0]["campana"], conj[0]["estado"]) == (f"Conjunto {sufijo}",
+                                                                              f"Campaña {sufijo}", estado)
+        camp = datos.totales_por_campana(cliente, [A], "2026-10-01", "2026-10-01")
+        assert len(camp) == 1
+        assert (camp[0]["nombre"], camp[0]["estado"], camp[0]["objetivo"]) == (
+            f"Campaña {sufijo}", estado, "OUTCOME_SALES" if cliente == "hf" else "OUTCOME_LEADS")
+        assert datos.activos(cliente, [A])[A]["anuncio"] == (1 if estado == "ACTIVE" else 0)
+
+
+def test_dias_con_gasto_no_cuenta_los_dias_en_cero(base_temporal):
+    datos.reemplazar_anuncio_dias("hf", A, "2026-10-01", "2026-10-03", [
+        _ad("2026-10-01", "a1", 10, 0), _ad("2026-10-02", "a1", 0, 0, compras=0), _ad("2026-10-03", "a1", 5, 0)])
+    a1 = _ads("hf", [A])["a1"]
+    assert a1["dias_con_gasto"] == 2
+    assert (a1["primera_fecha"], a1["ultima_fecha"]) == ("2026-10-01", "2026-10-03")
+
+
+def test_un_dia_sin_conjunto_ni_campana_no_parte_el_anuncio_en_dos_filas(base_temporal):
+    datos.guardar_objetos("hf", A, [
+        {"nivel": "campana", "objeto_id": "c1", "nombre": "Otoño"},
+        {"nivel": "conjunto", "objeto_id": "s1", "campaign_id": "c1", "nombre": "Mujeres"},
+        {"nivel": "anuncio", "objeto_id": "a1", "nombre": "Video 1", "estado": "ACTIVE"}])
+    sin_ids = _ad("2026-10-02", "a1", 20, 0)
+    sin_ids.update(adset_id=None, campaign_id=None)
+    datos.reemplazar_anuncio_dias("hf", A, "2026-10-01", "2026-10-02", [_ad("2026-10-01", "a1", 30, 90), sin_ids])
+    ads = datos.totales_por_anuncio("hf", [A], "2026-10-01", "2026-10-02")
+    assert len(ads) == 1
+    a1 = ads[0]
+    assert (a1["gasto"], a1["adset_id"], a1["campaign_id"], a1["conjunto"], a1["campana"], a1["dias_con_gasto"]) == \
+        (50, "s1", "c1", "Mujeres", "Otoño", 2)
+
+
 def test_alcance_por_ventana_y_nivel(base_temporal):
     datos.guardar_alcance("hf", A, [
         {"nivel": "cuenta", "objeto_id": A, "ventana": 7, "alcance": 100, "frecuencia": 1.1},
@@ -264,4 +335,8 @@ def test_cada_lectura_es_una_consulta_y_usa_el_indice_de_cuenta_y_fecha(base_tem
                                                                       selects[0][1]))
         assert "SCAN meta_anuncio_dia" not in plan and "SCAN meta_cuenta_dia" not in plan, plan
         if "FROM meta_anuncio_dia" in selects[0][0]:
-            assert "ix_meta_anuncio_dia_cuenta_fecha" in plan, plan
+            # Búsqueda por índice con proyecto + cuenta por delante. Para campañas y conjuntos es el de
+            # cuenta y fecha; el agregado por anuncio prefiere el único (cliente, cuenta, anuncio, fecha) porque
+            # ya viene ordenado para agrupar y la fecha se filtra dentro del índice.
+            assert re.search(r"SEARCH meta_anuncio_dia USING (COVERING )?INDEX \w+ \(cliente=\? AND ad_account_id=\?",
+                             plan), plan

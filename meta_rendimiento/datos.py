@@ -132,7 +132,10 @@ def guardar_objetos(cliente, act, objetos):
 
 def marcar_sin_estado(cliente, act, nivel, vistos):
     """Pone `estado=None` a los objetos del nivel que Meta ya no devolvió (archivados o borrados): se
-    distinguen de los que siguen ahí. Devuelve cuántos cambió."""
+    distinguen de los que siguen ahí. Devuelve cuántos cambió.
+
+    Llamarla SOLO después de un listado COMPLETO de ese nivel en esa cuenta: un `vistos` vacío o parcial (una
+    página que falló, un límite de Meta a medias) dejaría sin estado a todos los objetos que faltan."""
     t = db.meta_objeto
     vistos = {str(v) for v in vistos or ()}
     ahora = db.ahora()
@@ -220,16 +223,17 @@ def cuenta_por_dia(cliente, cuentas, desde, hasta):
 
 def totales_por_cuenta(cliente, cuentas, desde, hasta):
     """{ad_account_id: sumas de meta_cuenta_dia en el rango + `dias` (cuántos días hay)}. Solo las cuentas con
-    al menos un día en el rango. OJO: `alcance` es la SUMA de los alcances diarios (cota superior, la misma
-    persona cuenta cada día); el alcance de verdad de un período es `alcance()`."""
+    al menos un día en el rango. NO trae `alcance`: el alcance son personas únicas y no se suma entre días (ni
+    tiene sentido «sumar» alcances diarios); el alcance de un período es `alcance()`. El alcance de UN día sí
+    está en `cuenta_por_dia`."""
     if not cuentas:
         return {}
     t = db.meta_cuenta_dia
-    q = (sa.select(t.c.ad_account_id, sa.func.count().label("dias"), *_sumas(t, METRICAS_CUENTA))
+    q = (sa.select(t.c.ad_account_id, sa.func.count().label("dias"), *_sumas(t, METRICAS))
          .where(*_donde(t, cliente, cuentas, desde, hasta)).group_by(t.c.ad_account_id))
     with db.conectar() as con:
         filas = con.execute(q).mappings().all()
-    return {f["ad_account_id"]: dict(_medidas(f, METRICAS_CUENTA), dias=int(f["dias"])) for f in filas}
+    return {f["ad_account_id"]: dict(_medidas(f, METRICAS), dias=int(f["dias"])) for f in filas}
 
 
 def totales_por_campana(cliente, cuentas, desde, hasta):
@@ -287,24 +291,27 @@ def totales_por_anuncio(cliente, cuentas, desde, hasta):
     """Una fila por anuncio con las sumas del rango en las claves que espera
     `triple_whale.evaluacion.metricas` (`pedidos` = compras, `ingresos` = valor), su nombre, estado y miniatura
     (meta_objeto), los nombres de su conjunto y campaña, las fechas del primer y último día con datos y los
-    días con gasto. `canal` siempre «meta». Orden: gasto descendente."""
+    días con gasto. `canal` siempre «meta». Orden: gasto descendente.
+
+    Primero se agrega meta_anuncio_dia por (cuenta, anuncio) (con `max` del conjunto y la campaña: un día con
+    esos ids vacíos no parte el anuncio en dos filas) y solo después se unen los objetos a ESAS filas, una vez
+    por anuncio y no una por día."""
     if not cuentas:
         return []
     a, o, s, c = db.meta_anuncio_dia, db.meta_objeto.alias("o"), db.meta_objeto.alias("s"), db.meta_objeto.alias("c")
-    gasto = sa.func.sum(a.c.gasto)
-    cols_obj = [o.c.nombre.label("anuncio"), o.c.estado, o.c.miniatura_url, s.c.nombre.label("conjunto"),
-                c.c.nombre.label("campana")]
-    q = (sa.select(a.c.ad_account_id, a.c.ad_id, a.c.adset_id, a.c.campaign_id, *cols_obj,
-                   sa.func.min(a.c.fecha).label("primera_fecha"), sa.func.max(a.c.fecha).label("ultima_fecha"),
-                   sa.func.sum(sa.case((a.c.gasto > 0, 1), else_=0)).label("dias_con_gasto"),
-                   *_sumas(a, METRICAS_ANUNCIO))
-         .select_from(a.outerjoin(o, sa.and_(o.c.cliente == a.c.cliente, o.c.objeto_id == a.c.ad_id))
-                      .outerjoin(s, sa.and_(s.c.cliente == a.c.cliente, s.c.objeto_id == a.c.adset_id))
-                      .outerjoin(c, sa.and_(c.c.cliente == a.c.cliente, c.c.objeto_id == a.c.campaign_id)))
-         .where(*_donde(a, cliente, cuentas, desde, hasta))
-         .group_by(a.c.ad_account_id, a.c.ad_id, a.c.adset_id, a.c.campaign_id, o.c.nombre, o.c.estado,
-                   o.c.miniatura_url, s.c.nombre, c.c.nombre)
-         .order_by(gasto.desc(), a.c.ad_id))
+    agg = (sa.select(a.c.ad_account_id, a.c.ad_id, sa.func.max(a.c.adset_id).label("adset_id"),
+                     sa.func.max(a.c.campaign_id).label("campaign_id"),
+                     sa.func.min(a.c.fecha).label("primera_fecha"), sa.func.max(a.c.fecha).label("ultima_fecha"),
+                     sa.func.sum(sa.case((a.c.gasto > 0, 1), else_=0)).label("dias_con_gasto"),
+                     *_sumas(a, METRICAS_ANUNCIO))
+           .where(*_donde(a, cliente, cuentas, desde, hasta))
+           .group_by(a.c.ad_account_id, a.c.ad_id).subquery("agg"))
+    q = (sa.select(agg, o.c.nombre.label("anuncio"), o.c.estado, o.c.miniatura_url, s.c.nombre.label("conjunto"),
+                   c.c.nombre.label("campana"))
+         .select_from(agg.outerjoin(o, sa.and_(o.c.cliente == cliente, o.c.objeto_id == agg.c.ad_id))
+                      .outerjoin(s, sa.and_(s.c.cliente == cliente, s.c.objeto_id == agg.c.adset_id))
+                      .outerjoin(c, sa.and_(c.c.cliente == cliente, c.c.objeto_id == agg.c.campaign_id)))
+         .order_by(agg.c.gasto.desc(), agg.c.ad_id))
     with db.conectar() as con:
         filas = con.execute(q).mappings().all()
     return [_con_alias_evaluacion(dict(
