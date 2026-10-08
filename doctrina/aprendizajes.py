@@ -106,6 +106,29 @@ def desde_veredicto(pz, v, diagnostico=None, ahora=None):
             "ep_id": pz.get("id"), "experimento_id": pz.get("experimento_id")}
 
 
+def desde_analisis_tw(fila, ahora=None):
+    """Un aprendizaje desde un análisis «Cómo mejorarlo» de Triple Whale (spec tarjetas §6.3), o None si Claude no
+    dejó uno. Lo guarda la persona con un clic; analizar nunca agrega aprendizajes solo."""
+    r = (fila or {}).get("resultado") or {}
+    f = (fila or {}).get("foto") or {}
+    aprendizaje = _limpio(r.get("aprendizaje"), 220)
+    if not aprendizaje:
+        return None
+    ver = f.get("veredicto")
+    nombre = _limpio(f.get("nombre"), 120)
+    if ver == "ganador":
+        texto = gettext("Ganó en Triple Whale: «%(nombre)s»", nombre=nombre)
+    elif ver == "perdedor":
+        texto = gettext("Perdió en Triple Whale: «%(nombre)s»", nombre=nombre)
+    else:
+        texto = gettext("Analizado en Triple Whale: «%(nombre)s»", nombre=nombre)
+    texto += gettext(". Diagnóstico: %(a)s", a=aprendizaje)
+    return {"id": uuid.uuid4().hex[:8], "en": ahora, "tipo": ver if ver in ("ganador", "perdedor") else "manual",
+            "pais": None, "producto": None, "gancho": None, "lead": None, "consciencia": None,
+            "texto": _limpio(texto, MAX_TEXTO_MOTOR), "aprendizaje": aprendizaje, "origen": "triple_whale",
+            "analisis_id": (fila or {}).get("id")}
+
+
 def manual(texto, ahora=None):
     """Un aprendizaje escrito por la persona. ValueError si viene vacío."""
     t = _limpio(texto)

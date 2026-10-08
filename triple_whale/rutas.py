@@ -20,6 +20,7 @@ from flask import Blueprint, abort, current_app, flash, redirect, render_templat
 from flask_babel import gettext
 
 import idiomas
+import triple_whale
 import triple_whale_tiendas
 from tareas import triple_whale as tareas_tw
 from triple_whale import analisis, datos, panel, puente
@@ -35,9 +36,8 @@ def _mismo_origen():
             abort(403)
 
 
-# Nombres de los canales estandarizados de Triple Whale ("ads-standardized-channel-ids").
-NOMBRES_CANAL = {"facebook-ads": "Meta", "google-ads": "Google Ads", "tiktok-ads": "TikTok", "bing": "Microsoft Ads",
-                 "pinterest-ads": "Pinterest", "snapchat-ads": "Snapchat", "twitter-ads": "X"}
+# Los nombres de los canales viven en el paquete (los usa también `mejorar`, que corre en el worker).
+NOMBRES_CANAL = triple_whale.NOMBRES_CANAL
 
 
 @bp.app_template_filter("tw_num")

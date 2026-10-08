@@ -52,6 +52,10 @@ _VENTANAS_VIEJAS = {"1": "1_day", "1d": "1_day", "7": "7_days", "7d": "7_days", 
                     "28": "28_days", "28d": "28_days", "30": "28_days", "30d": "28_days"}
 # Canal estandarizado de Meta en las tablas de Triple Whale.
 CANAL_META = "facebook-ads"
+# Nombres de los canales estandarizados de Triple Whale ("ads-standardized-channel-ids"). Viven aquí (no en el
+# blueprint) para que `mejorar`, que corre en el worker, no importe `rutas`.
+NOMBRES_CANAL = {"facebook-ads": "Meta", "google-ads": "Google Ads", "tiktok-ads": "TikTok", "bing": "Microsoft Ads",
+                 "pinterest-ads": "Pinterest", "snapchat-ads": "Snapchat", "twitter-ads": "X"}
 # «REQUIRED TRACKING PARAMETERS» de la KB de Meta en Triple Whale: van en los
 # Parámetros de URL del anuncio (url_tags del AdCreative), donde Meta resuelve
 # {{site_source_name}} y {{ad.id}}. Sin ellos Triple Whale igual ve el gasto,
