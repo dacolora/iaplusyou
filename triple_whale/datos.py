@@ -230,6 +230,23 @@ def _primeros_dias(cliente, tienda_id):
             .where(*cond).group_by(t.c.canal, t.c.ad_id).subquery())
 
 
+def _medidas_dia(cliente, tienda_id, desde, hasta, canal=None, con_nombre=False):
+    """Como `_anuncio_dia` pero solo con gasto (MAX entre tiendas), ventas y pedidos del Pixel (SUMA): las
+    consultas de «Resultados» no necesitan las otras 30 columnas y agregarlas costaba casi medio segundo con los
+    60 000 anuncios-día de happyflops."""
+    t = db.tw_anuncio_dia
+    cond = [t.c.cliente == cliente, t.c.fecha >= desde, t.c.fecha <= hasta]
+    if tienda_id is not None:
+        cond.append(t.c.tienda_id == tienda_id)
+    if canal:
+        cond.append(t.c.canal == canal)
+    columnas = [sa.func.max(t.c.gasto).label("gasto"), sa.func.sum(t.c.ingresos).label("ingresos"),
+                sa.func.sum(t.c.pedidos).label("pedidos")] + ([sa.func.max(t.c.anuncio).label("anuncio")]
+                                                              if con_nombre else [])
+    return (sa.select(t.c.canal, t.c.ad_id, t.c.fecha, *columnas).where(*cond)
+            .group_by(t.c.canal, t.c.ad_id, t.c.fecha).subquery())
+
+
 def _es_nuevo(fecha_col, primer_dia_col):
     return fecha_col <= sa.func.date(primer_dia_col, f"+{DIAS_NUEVO - 1} day")
 
@@ -240,7 +257,7 @@ def _con_primer_dia(d, p):
 
 def gasto_por_antiguedad(cliente, tienda_id, desde, hasta, canal=None):
     """{fecha: gasto de los anuncios nuevos ese día}, de los días con algún anuncio con gasto."""
-    d, p = _anuncio_dia(cliente, tienda_id, desde, hasta, canal), _primeros_dias(cliente, tienda_id)
+    d, p = _medidas_dia(cliente, tienda_id, desde, hasta, canal), _primeros_dias(cliente, tienda_id)
     q = (sa.select(d.c.fecha, sa.func.coalesce(sa.func.sum(
             sa.case((_es_nuevo(d.c.fecha, p.c.primer_dia), d.c.gasto), else_=0)), 0))
          .select_from(_con_primer_dia(d, p)).where(d.c.gasto > 0).group_by(d.c.fecha))
@@ -251,7 +268,7 @@ def gasto_por_antiguedad(cliente, tienda_id, desde, hasta, canal=None):
 def gasto_por_canal(cliente, tienda_id, desde, hasta):
     """{fecha: {canal: {"gasto", "ingresos"}}} de los canales con gasto ese día (los ingresos son del Pixel).
     Direct, Klaviyo, orgánico y demás fuentes sin gasto no entran: no son anuncios."""
-    d = _anuncio_dia(cliente, tienda_id, desde, hasta)
+    d = _medidas_dia(cliente, tienda_id, desde, hasta)
     q = (sa.select(d.c.fecha, d.c.canal, sa.func.sum(d.c.gasto), sa.func.coalesce(sa.func.sum(d.c.ingresos), 0))
          .group_by(d.c.fecha, d.c.canal).having(sa.func.sum(d.c.gasto) > 0))
     salida = {}
@@ -263,7 +280,8 @@ def gasto_por_canal(cliente, tienda_id, desde, hasta):
 
 def anuncios_del_dia(cliente, tienda_id, fecha, canal=None, limite=5):
     """Los anuncios con gasto ese día, de más a menos ventas del Pixel, con su primer día y si eran nuevos."""
-    d, p = _anuncio_dia(cliente, tienda_id, fecha, fecha, canal), _primeros_dias(cliente, tienda_id)
+    d = _medidas_dia(cliente, tienda_id, fecha, fecha, canal, con_nombre=True)
+    p = _primeros_dias(cliente, tienda_id)
     q = (sa.select(d.c.canal, d.c.ad_id, d.c.anuncio, d.c.gasto, d.c.ingresos, d.c.pedidos, p.c.primer_dia,
                    _es_nuevo(d.c.fecha, p.c.primer_dia).label("nuevo"))
          .select_from(_con_primer_dia(d, p)).where(d.c.gasto > 0)
@@ -291,7 +309,7 @@ def cohortes(cliente, tienda_id, desde, hasta, canal=None, conocido_desde=None):
     gasto e ingresos del Pixel; gasto e ingresos de nuevos y de establecidos solo en días con antigüedad
     conocida (≥ `conocido_desde`); y cuántos anuncios arrancaron dentro del periodo (desde `conocido_desde`
     si es más tarde: antes no se sabe si arrancaron ahí o venían de antes de la copia). Dos consultas."""
-    d, p = _anuncio_dia(cliente, tienda_id, desde, hasta, canal), _primeros_dias(cliente, tienda_id)
+    d, p = _medidas_dia(cliente, tienda_id, desde, hasta, canal), _primeros_dias(cliente, tienda_id)
     mes = sa.func.substr(p.c.primer_dia, 1, 7)
     conocido = d.c.fecha >= (conocido_desde or desde)
     nuevo = _es_nuevo(d.c.fecha, p.c.primer_dia)
