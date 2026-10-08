@@ -104,6 +104,7 @@ def _registrar_gasto(cliente, tipo, costo, referencia, modelo, detalle, usd_musi
     usd_modelo = float((costo or {}).get("usd") or 0.0)
     gastos.registrar_seguro(
         cliente, tipo, round(usd_modelo + float(usd_musica or 0.0), 4), referencia, detalle=detalle,
+        conservar_mayor=True,
         proveedor=PROVEEDOR,
         extra={"modelo": modelo, "usd_modelo": round(usd_modelo, 4), "usd_musica": round(float(usd_musica or 0.0), 4),
                "credits": (costo or {}).get("credits")},
@@ -575,6 +576,9 @@ def _terminar_video(cliente, cf_id, job_id, ref, entry, referencias, duracion, p
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, f"{cf_id}.mp4")
 
+    # La predicción conserva la referencia del intento que pagó, aunque la
+    # descarga se cierre desde otra tarea (PND-109, 2026-10-02).
+    ref_intento = ref
     costo = None
     # El `detalle` del gasto se guarda (Configuración › Gasto): en el idioma del
     # proyecto, que ya puso worker.ejecutar.
@@ -590,22 +594,29 @@ def _terminar_video(cliente, cf_id, job_id, ref, entry, referencias, duracion, p
     try:
         costo = flowplus_modelos.estimate_video(modelo, duracion, con_sonido=con_sonido, calidad=calidad,
                                                 **_kw_videos(modelo, entry))
+        pred = (_sesion_o_vacia(cliente, cf_id).get("prediccion") or {}).copy()
+        if pred.get("id"):
+            if recuperado:
+                ref = pred.get("referencia_gasto") or ref
+            pred["referencia_gasto"] = ref
+            creative_flow.actualizar(cliente, cf_id, prediccion=pred)
         trabajos.reportar(job_id, etapa=ETAPA_DESCARGAR)
         resp = requests.get(video_url_wan, timeout=180)
         resp.raise_for_status()
         os.makedirs(out_dir, exist_ok=True)     # por si la limpieza diaria la borró mientras bajaba
         with open(out_path, "wb") as f:
             f.write(resp.content)
+        _registrar_gasto(cliente, "video", costo, ref, modelo, detalle_gasto)
         bitacora.registrar(cliente, cf_id, "generacion", "ok", out_path)
     except Exception as e:
         # El video existe en WaveSpeed y ya se cobró: la sesión conserva la
         # predicción, así que «Recuperar el video» puede volver a bajarlo.
-        bitacora.registrar(cliente, cf_id, "generacion", "error", str(e))
-        creative_flow.actualizar(cliente, cf_id, estado="error", error=str(e))
         if costo is not None:
-            # El modelo ya cobró aunque la descarga fallara: queda registrado.
+            # Registrar antes de persistir el error: esa escritura también puede fallar.
             _registrar_gasto(cliente, "video", costo, ref, modelo,
                              detalle_gasto + " · " + gettext("falló al descargar; el modelo ya cobró"))
+        bitacora.registrar(cliente, cf_id, "generacion", "error", str(e))
+        creative_flow.actualizar(cliente, cf_id, estado="error", error=str(e))
         raise
 
     # --- Mezcla: ¿trajo sonido? ¿pidió música? (degradable: el video ya está pagado) ---
@@ -630,6 +641,14 @@ def _terminar_video(cliente, cf_id, job_id, ref, entry, referencias, duracion, p
             else:
                 pista, c = musica.obtener_pista(estilo_musica, float(duracion))
             usd_musica = float(c or 0.0)  # ya se cobró al obtener la pista, se cuenta aunque falle la mezcla
+            if usd_musica > 0:
+                if ref != ref_intento:
+                    gastos.registrar_seguro(cliente, "video", usd_musica, ref_intento + ":musica",
+                                           proveedor="fal", detalle=detalle_gasto,
+                                           extra={"usd_musica": usd_musica})
+                else:
+                    _registrar_gasto(cliente, "video", costo, ref, modelo, detalle_gasto,
+                                     usd_musica=usd_musica)
             mezclado = os.path.join(out_dir, f"{cf_id}_musica.mp4")
             resultado = mezcla.mezclar_musica(out_path, pista["archivo"], mezclado, duracion_real)
             archivo_final = mezclado
@@ -663,6 +682,21 @@ def _terminar_video(cliente, cf_id, job_id, ref, entry, referencias, duracion, p
         except Exception:
             video_url_crudo = video_url_wan
 
+    if estilo_musica and not musica.es_propia(estilo_musica):
+        estado_musica = (capas.get("musica") or {}).get("estado")
+        detalle_gasto += " + " + gettext("música %(estilo)s", estilo=estilo_musica) + (
+            (" (" + gettext("falló la mezcla; la pista ya se cobró") + ")") if estado_musica == "error" else "")
+    if ref != ref_intento and usd_musica:
+        # Una pista nueva es un cobro del intento de recuperación, separado
+        # del video que ya pagó la tarea original.
+        gastos.registrar_seguro(cliente, "video", usd_musica, ref_intento + ":musica",
+                               proveedor="fal", detalle=detalle_gasto,
+                               extra={"usd_musica": usd_musica})
+        usd_musica = 0.0
+    _registrar_gasto(cliente, "video", costo, ref, modelo, detalle_gasto, usd_musica=usd_musica)
+
+    # El gasto de la pista ya quedó anotado si fallara persistir video_listo.
+    # Las referencias hacen idempotente una recuperación de esta misma tarea.
     creative_flow.actualizar(
         cliente, cf_id, estado="video_listo", video_url=video_url, video_local=archivo_final,
         video_url_crudo=video_url_crudo, video_local_crudo=out_path,
@@ -676,11 +710,6 @@ def _terminar_video(cliente, cf_id, job_id, ref, entry, referencias, duracion, p
     )
     if not recuperado:
         saldo.limpiar("wavespeed")   # un video nuevo salió bien: hay saldo (uno recuperado ya estaba pagado)
-    if estilo_musica and not musica.es_propia(estilo_musica):
-        estado_musica = (capas.get("musica") or {}).get("estado")
-        detalle_gasto += " + " + gettext("música %(estilo)s", estilo=estilo_musica) + (
-            (" (" + gettext("falló la mezcla; la pista ya se cobró") + ")") if estado_musica == "error" else "")
-    _registrar_gasto(cliente, "video", costo, ref, modelo, detalle_gasto, usd_musica=usd_musica)
 
     registro = {
         "prompt": prompt_texto,

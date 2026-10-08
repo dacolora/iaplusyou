@@ -70,11 +70,13 @@ class Serie:
     para buscar por bisección: `en(instante)` es O(log N) en vez de reordenar
     la lista en cada consulta. Los ISO naive de 19 caracteres se ordenan como
     texto."""
-    __slots__ = ("snaps", "claves")
+    __slots__ = ("snaps", "claves", "primera_venta")
 
-    def __init__(self, snaps):
+    def __init__(self, snaps, primera_venta=None):
         self.snaps = sorted(snaps or [], key=lambda s: s.get("tomado_en") or "")
         self.claves = [s.get("tomado_en") or "" for s in self.snaps]
+        medidas = [s["tomado_en"] for s in self.snaps if mide_ventas(s) or (s.get("compras") or 0) > 0]
+        self.primera_venta = min(medidas + ([primera_venta] if primera_venta else []), default=None)
 
     def en(self, instante_iso):
         """Último snapshot con tomado_en <= instante (None si ninguno)."""
@@ -111,30 +113,98 @@ def delta(snaps, desde_iso, hasta_iso, campo):
     return _delta_entre(serie.en(desde_iso), serie.en(hasta_iso), campo)
 
 
+def mide_ventas(snap):
+    """¿Este snapshot mide ventas? Solo si su `fuente_ventas` es el Pixel de
+    Meta, la tienda o Triple Whale (FUENTES_VENTAS). Es LA regla: la usan los
+    ingresos de cada delta y el «—» del centro de resultados cuando nada de lo
+    elegido mide ventas (`ventas_medidas`)."""
+    return (snap or {}).get("fuente_ventas") in FUENTES_VENTAS
+
+
 def _delta_ingresos(snaps, desde_iso, hasta_iso):
-    """Ingresos del período solo si el snapshot de cierre los mide (pixel o
-    tienda): `fuente_ventas` es por snapshot, así que decide el de `hasta`.
-    Si la fuente cambió dentro del período (la atribución se fija al crear
-    el experimento, así que es raro) el delta resta acumulados de fuentes
-    distintas; se acepta como aproximación."""
-    serie = _serie(snaps)
-    cierre = serie.en(hasta_iso) or {}
-    if cierre.get("fuente_ventas") not in FUENTES_VENTAS:
-        return 0.0
-    return _delta_entre(serie.en(desde_iso), cierre, "ingresos")
+    return _deltas_pieza(snaps, desde_iso, hasta_iso)["ingresos"]
+
+
+def _ventas_comparables(base, cierre, hubo_ventas=False):
+    # Un cero inicial sirve de base; un respaldo ciego tras medir ventas no.
+    if mide_ventas(base) and mide_ventas(cierre):
+        return base.get("fuente_ventas") == cierre.get("fuente_ventas")
+    return not hubo_ventas and not mide_ventas(base) and not ((base or {}).get("compras") or 0)
 
 
 def _deltas_pieza(snaps, desde_iso, hasta_iso):
-    """Los cinco deltas de una pieza en [desde, hasta) con solo dos
-    búsquedas (los extremos), no una por campo."""
+    """Deltas acumulados; las ventas entre fuentes distintas son desconocidas, no cero."""
     serie = _serie(snaps)
     a, b = serie.en(desde_iso), serie.en(hasta_iso)
-    mide = (b or {}).get("fuente_ventas") in FUENTES_VENTAS
+    mide = mide_ventas(b)
+    hubo = bool(serie.primera_venta and serie.primera_venta <= desde_iso)
+    comparable = _ventas_comparables(a, b, hubo)
+    hubo_al_cierre = bool(serie.primera_venta and serie.primera_venta <= hasta_iso)
+    if not mide and not ((b or {}).get("compras") or 0) and hubo_al_cierre:
+        # Un cierre ciego después de medir ventas tampoco representa ventas cero.
+        comparable = False
+    if comparable and not hubo and hubo_al_cierre:
+        # Al empezar sin base, varios acumulados de fuentes distintas tampoco son un total comparable.
+        fuentes = {s.get("fuente_ventas") for s in serie.snaps
+                   if s["tomado_en"] <= hasta_iso and mide_ventas(s)}
+        comparable = len(fuentes) <= 1
     return {"gasto": _delta_entre(a, b, "gasto"),
-            "compras": int(_delta_entre(a, b, "compras")),
-            "ingresos": _delta_entre(a, b, "ingresos") if mide else 0.0,
+            "compras": int(_delta_entre(a, b, "compras")) if comparable else None,
+            "ingresos": (_delta_entre(a, b, "ingresos") if mide else 0.0) if comparable else None,
             "clics_enlace": int(_delta_entre(a, b, "clics_enlace")),
-            "impresiones": int(_delta_entre(a, b, "impresiones"))}
+            "impresiones": int(_delta_entre(a, b, "impresiones")),
+            "mide": mide, "roas_comparable": comparable, "ventas_cambiaron": not comparable}
+
+
+def _moneda_del_delta(ex, d):
+    """Una moneda ajena invalida solo los ingresos de un período con actividad."""
+    if ((ex.get("extra") or {}).get("aviso_moneda")
+            and any((d[k] or 0) > 0 for k in ("gasto", "compras", "impresiones", "ingresos"))):
+        d["ingresos"] = None
+        d["roas_comparable"] = False
+    return d
+
+
+def _primeras_ventas(ep_ids):
+    """Historia previa a la ventana, en una consulta para todas las piezas."""
+    if not ep_ids:
+        return {}
+    ms = db.metrica_snapshot
+    with db.conectar() as con:
+        filas = con.execute(sa.select(ms.c.experimento_pieza_id, sa.func.min(ms.c.tomado_en))
+                            .where(ms.c.experimento_pieza_id.in_(list(ep_ids)),
+                                   sa.or_(ms.c.compras > 0, ms.c.fuente_ventas.in_(FUENTES_VENTAS)))
+                            .group_by(ms.c.experimento_pieza_id))
+        return dict(filas.all())
+
+
+def ventas_medidas(deltas):
+    """Las ventas de varios deltas de `_deltas_pieza` (piezas, días o ambos)
+    con la regla del Tablero (`_resumen_periodo`): {"mide": alguno mide
+    ventas, "gasto", "compras", "ingresos"} sumados de TODOS, así el ROAS es
+    lo vendido y medido sobre todo el gasto. Con `mide` False (nada de lo
+    elegido mide ventas: tráfico, atribución «ninguna») el ROAS, las compras y
+    el costo por compra no existen, no son cero. Ojo: `fuente_ventas` solo se
+    marca cuando el snapshot ya tiene compras (`lanzador.refrescar`), así que
+    quien llama marca `mide` también por la atribución del experimento; sacar
+    del denominador el gasto de lo que aún no vendió inflaba el ROAS (revisión
+    final de E2, 2026-10-04: 3,0× donde el Tablero decía 1,0×)."""
+    out = {"mide": False, "gasto": 0.0, "compras": 0, "ingresos": 0.0, "roas_comparable": True,
+           "gasto_sin_ventas": 0.0, "ventas_cambiaron": False}
+    for d in deltas:
+        out["mide"] = out["mide"] or bool(d["mide"])
+        out["gasto"] += d["gasto"]
+        out["compras"] += d["compras"] or 0
+        out["ingresos"] += d["ingresos"] or 0
+        out["roas_comparable"] = out["roas_comparable"] and d.get("roas_comparable", True)
+        out["ventas_cambiaron"] = out["ventas_cambiaron"] or d.get("ventas_cambiaron", False)
+        if not d["mide"]:
+            out["gasto_sin_ventas"] += d["gasto"]
+    if out["ventas_cambiaron"]:
+        out["compras"] = None
+    if not out["roas_comparable"]:
+        out["ingresos"] = None
+    return out
 
 
 def _roas(ingresos, gasto):
@@ -165,14 +235,16 @@ def _desde_ventana(ahora_iso, dias=DIAS_SERIE):
 
 
 def _piezas_con_snapshots(exps, desde=None):
-    """[(experimento, pieza, Serie)] — una consulta por pieza, una sola vez
-    por carga aunque después se recorran 30 días. Con `desde` solo trae la
-    ventana más la base del delta (ver experimentos.snapshots)."""
-    out = []
-    for ex in exps:
-        for pz in ex.get("piezas") or []:
-            out.append((ex, pz, Serie(experimentos.snapshots(pz["id"], desde=desde))))
-    return out
+    """[(experimento, pieza, Serie)] con TODAS las series en dos consultas
+    (experimentos.snapshots_de), no una por pieza (centro de resultados,
+    spec 2026-10-02 §4.1). Con `desde` solo trae la ventana más la base del
+    delta (ver experimentos.snapshots)."""
+    pares = [(ex, pz) for ex in exps for pz in ex.get("piezas") or []]
+    if desde is None:  # sin cota (nadie lo hace hoy): una por pieza, como antes
+        return [(ex, pz, Serie(experimentos.snapshots(pz["id"], desde=None))) for ex, pz in pares]
+    series = experimentos.snapshots_de([pz["id"] for _ex, pz in pares], desde) if pares else {}
+    primeras = _primeras_ventas(series.keys())
+    return [(ex, pz, Serie(series.get(pz["id"]) or [], primeras.get(pz["id"]))) for ex, pz in pares]
 
 
 class Datos:
@@ -195,6 +267,27 @@ def cargar_datos(cliente, ahora_iso=None, dias=DIAS_SERIE, desde=None):
     return Datos(cliente, ahora, desde, exps, _piezas_con_snapshots(exps, desde))
 
 
+def filtrar(datos, experimento_id=None, pais=None, ep_id=None, tipo=None, moneda=None):
+    """Subconjunto de `datos` para el centro de resultados: las funciones
+    públicas de este módulo aceptan el resultado como `datos=` y calculan
+    igual que con todo el proyecto. Sin filtros devuelve el mismo objeto.
+    `tipo` es "video" o "imagen" (imagen = `es_imagen` de la pieza)."""
+    if all(v is None for v in (experimento_id, pais, ep_id, tipo, moneda)):
+        return datos
+
+    def entra(ex, pz):
+        return ((experimento_id is None or ex["id"] == experimento_id)
+                and (pais is None or pz.get("pais") == pais)
+                and (ep_id is None or pz["id"] == ep_id)
+                and (tipo is None or (tipo == "imagen") == bool(pz.get("es_imagen")))
+                and (moneda is None or _moneda(ex) == moneda))
+
+    filas = [f for f in datos.filas if entra(f[0], f[1])]
+    ids = {ex["id"] for ex, _pz, _s in filas}
+    exps = [ex for ex in datos.exps if ex["id"] in ids or ex["id"] == experimento_id]
+    return Datos(datos.cliente, datos.ahora, datos.desde, exps, filas)
+
+
 def _datos(cliente, ahora_iso, datos, desde_necesario=None):
     """`datos` si sirve para la ventana pedida; si no (o si no viene), carga.
     Una ventana que empiece antes de `datos.desde` no tendría la base de su
@@ -207,8 +300,8 @@ def _datos(cliente, ahora_iso, datos, desde_necesario=None):
 # ---------- resumen ----------
 
 def _grupo_vacio():
-    return {"gasto": 0.0, "compras": 0, "ingresos": 0.0, "roas": 0.0, "clics_enlace": 0, "impresiones": 0,
-            "anuncios": 0}
+    return {"gasto": 0.0, "compras": 0, "ingresos": 0.0, "roas": 0.0, "roas_comparable": True,
+            "ventas_cambiaron": False, "mide_ventas": False, "clics_enlace": 0, "impresiones": 0, "anuncios": 0}
 
 
 def _resumen_periodo(exps, filas, desde_iso, hasta_iso, atribucion_filtro=None):
@@ -222,14 +315,24 @@ def _resumen_periodo(exps, filas, desde_iso, hasta_iso, atribucion_filtro=None):
             continue
         d = _deltas_pieza(snaps, desde_iso, hasta_iso)
         g = por_moneda.setdefault(_moneda(ex), _grupo_vacio())
+        if ex.get("atribucion") in ("pixel", "tienda", "triple_whale"):
+            d["mide"] = True
+        g["mide_ventas"] = g["mide_ventas"] or d["mide"]
+        _moneda_del_delta(ex, d)
+        g["roas_comparable"] = g["roas_comparable"] and d["roas_comparable"]
+        g["ventas_cambiaron"] = g["ventas_cambiaron"] or d["ventas_cambiaron"]
         for k in ("gasto", "compras", "ingresos", "clics_enlace", "impresiones"):
-            g[k] += d[k]
+            g[k] += d[k] or 0
         if d["gasto"] > 0 or d["impresiones"] > 0:
             g["anuncios"] += 1
     for g in por_moneda.values():
         g["gasto"] = round(g["gasto"], 2)
         g["ingresos"] = round(g["ingresos"], 2)
-        g["roas"] = _roas(g["ingresos"], g["gasto"])
+        g["roas"] = _roas(g["ingresos"], g["gasto"]) if g["roas_comparable"] else None
+        if not g["roas_comparable"]:
+            g["ingresos"] = None
+        if g["ventas_cambiaron"]:
+            g["compras"] = None
     # Contar experimentos y piezas activas solo del filtro
     exps_filtrados = exps if atribucion_filtro is None else [ex for ex in exps
                                                               if ex.get("atribucion") in atribucion_filtro]
@@ -333,7 +436,9 @@ def _cierres_de_mes(ep_ids, hasta_iso):
             ms.c.clics_enlace, ms.c.impresiones, ms.c.fuente_ventas)
     orden = sa.func.row_number().over(partition_by=(ms.c.experimento_pieza_id, mes),
                                       order_by=(ms.c.tomado_en.desc(), ms.c.id.desc()))
-    sub = (sa.select(*cols, mes.label("mes"), orden.label("n"))
+    primera = sa.func.min(sa.case((sa.or_(ms.c.compras > 0, ms.c.fuente_ventas.in_(FUENTES_VENTAS)),
+                                   ms.c.tomado_en), else_=None)).over(partition_by=ms.c.experimento_pieza_id)
+    sub = (sa.select(*cols, mes.label("mes"), orden.label("n"), primera.label("primera_venta"))
            .where(ms.c.experimento_pieza_id.in_(list(ep_ids)), ms.c.tomado_en <= hasta_iso).subquery())
     por_pieza, primero = {}, None
     with db.conectar() as con:
@@ -341,7 +446,7 @@ def _cierres_de_mes(ep_ids, hasta_iso):
             m = dict(f._mapping)
             primero = min(primero or m["mes"], m["mes"])
             por_pieza.setdefault(m["experimento_pieza_id"], []).append(m)
-    return {ep: Serie(s) for ep, s in por_pieza.items()}, primero
+    return {ep: Serie(s, s[0]["primera_venta"]) for ep, s in por_pieza.items()}, primero
 
 
 def _meses_hasta(primero, ultimo):
@@ -397,19 +502,16 @@ def _serie_diaria_con_filtro(filas, lista_dias, moneda, atribucion_filtro=None):
     for d in lista_dias:
         a = d.isoformat() + "T00:00:00"
         b = (d + timedelta(days=1)).isoformat() + "T00:00:00"
-        gasto = compras = ingresos = 0.0
+        deltas = []
         for ex, _pz, snaps in filas:
-            # Filtrar por atribución si se pide
             if atribucion_filtro is not None and ex.get("atribucion") not in atribucion_filtro:
                 continue
             if _moneda(ex) != moneda:
                 continue
-            dd = _deltas_pieza(snaps, a, b)
-            gasto += dd["gasto"]
-            compras += dd["compras"]
-            ingresos += dd["ingresos"]
-        salida.append({"dia": d.isoformat(), "gasto": round(gasto, 2), "compras": int(compras),
-                       "ingresos": round(ingresos, 2)})
+            deltas.append(_moneda_del_delta(ex, _deltas_pieza(snaps, a, b)))
+        v = ventas_medidas(deltas)
+        salida.append({"dia": d.isoformat(), "gasto": round(v["gasto"], 2), "compras": v["compras"],
+                       "ingresos": round(v["ingresos"], 2) if v["ingresos"] is not None else None})
     return salida
 
 
@@ -505,8 +607,8 @@ def _dinero(valor, moneda):
 dinero = _dinero
 
 
-def _alerta(tipo, nivel, texto, tab, experimento_id=None):
-    return {"tipo": tipo, "nivel": nivel, "texto": texto, "tab": tab, "experimento_id": experimento_id}
+def _alerta(tipo, nivel, texto, tab, experimento_id=None, **entidad):
+    return {"tipo": tipo, "nivel": nivel, "texto": texto, "tab": tab, "experimento_id": experimento_id, **entidad}
 
 
 def _horas_desde(iso, ahora_iso):
@@ -686,7 +788,14 @@ def alertas(cliente, ahora_iso=None, datos=None):
                                        "dejó de sincronizar%(detalle)s. Vuelve a conectarla en Configuración.",
                                        tipo=t.get("tipo") or "",
                                        nombre=t.get("nombre") or t.get("dominio") or "", detalle=detalle),
-                               "settings"))
+                               "settings", tienda_id=t["id"]))
+
+    vencidos = tiendas.pedidos_vencidos_sin_resolver(cliente, ahora)
+    if vencidos:
+        out.append(_alerta("pedidos_sin_atribuir", "media", ngettext(
+            "%(num)s pedido con UTM lleva más de 30 días sin atribuir y dejó de reintentarse. No cuenta en las ventas atribuidas; revisa el UTM y el experimento de la tienda.",
+            "%(num)s pedidos con UTM llevan más de 30 días sin atribuir y dejaron de reintentarse. No cuentan en las ventas atribuidas; revisa los UTM y los experimentos de la tienda.",
+            vencidos), "settings"))
 
     # 7. Pixel sin datos con experimentos que dependen de él (media, settings).
     con_pixel = [ex for ex in exps if ex["estado"] != "cerrado" and ex.get("atribucion") == "pixel"]
@@ -766,9 +875,12 @@ def csv_mes(cliente, ahora_iso=None, datos=None):
     w.writerow([gettext(c) for c in ENCABEZADO_CSV])
     for ex, pz, snaps in _datos(cliente, hasta, datos, desde_necesario=desde).filas:
         d = _deltas_pieza(snaps, desde, hasta)
+        _moneda_del_delta(ex, d)
+        comparable = d["roas_comparable"]
         w.writerow([_celda(ex["nombre"]), _celda(pz["pais"]), _celda(pz["nombre"]), _celda(pz.get("veredicto")),
-                    _num(d["impresiones"]), _num(d["clics_enlace"]), _num(d["gasto"]), _num(d["compras"]),
-                    _num(d["ingresos"]), _num(_roas(d["ingresos"], d["gasto"])), _celda(_moneda(ex))])
+                    _num(d["impresiones"]), _num(d["clics_enlace"]), _num(d["gasto"]), _num(d["compras"]) if d["compras"] is not None else "",
+                    _num(d["ingresos"]) if comparable else "",
+                    _num(_roas(d["ingresos"], d["gasto"])) if comparable else "", _celda(_moneda(ex))])
     return "﻿" + buf.getvalue()
 
 

@@ -122,7 +122,8 @@ def test_formulario_trae_campos_de_tienda_y_objetivo_no_sugerido(app, base_tempo
     import meta_conexion
     meta_conexion.guardar_app_anunciada("acme", "1234567890")
     _clon(base_temporal)
-    html = app["c"].get("/cliente/acme").get_data(as_text=True)
+    # Desde E2 el formulario vive en «Nuevo experimento» (_exp_probar.html), ya no en la pestaña.
+    html = app["c"].get("/cliente/acme/experimentos/nuevo").get_data(as_text=True)
     import re
     opcion = re.search(r'<option value="OUTCOME_APP_PROMOTION"[^>]*>[^<]*</option>', html).group(0)
     assert "Instalaciones de la app" in opcion and "(sugerido)" not in opcion
@@ -143,8 +144,16 @@ def test_arbol_de_app_deja_pausar_y_cambiar_presupuesto(app, base_temporal):
     (e,) = ex.cargar("acme")
     ex.actualizar_pais("acme", e["id"], "CO", meta_adsets={"ios": "111", "android": "222"}, estado="pausado")
     ex.actualizar("acme", e["id"], estado="pausado", meta_campaign_id="999")
-    html = app["c"].get("/cliente/acme").get_data(as_text=True)
+    # Desde E2 la gestión del experimento llega en el fragmento del centro de resultados (_exp_gestionar.html).
+    html = app["c"].get(f"/cliente/acme/experimentos/resultados?exp={e['id']}",
+                        headers={"X-Requested-With": "fetch"}).get_data(as_text=True)
     assert "Activar país" in html and "Cambiar presupuesto" in html
+    # «Activar todo» dice lo que gasta al día contando el país de la app (antes solo sumaba meta_adset_id).
+    import json
+    import re
+    confirmaciones = [json.loads(m) for m in re.findall(r"confirm\((\"[^\"]*\")\)", html)]
+    (activar_todo,) = [t for t in confirmaciones if t.startswith("Activar todo")]
+    assert "20.000" in activar_todo, activar_todo
 
 
 def test_app_id_no_se_guarda_si_falla_la_creacion(app, base_temporal, monkeypatch):

@@ -177,8 +177,11 @@ def crear(cliente, pieza_id, plataforma, caption, titulo=None, origen="manual", 
     nombre = PLATAFORMAS[plataforma]["nombre"]
     p = db.publicacion
     with db.conectar() as con:
-        if _fila_pieza(con, cliente, pieza_id) is None:
+        pieza = _fila_pieza(con, cliente, pieza_id)
+        if pieza is None:
             raise ValueError(gettext("Esa pieza no existe en este proyecto."))
+        if pieza.tipo == "imagen":
+            raise ValueError(gettext("Solo se pueden publicar videos por este camino."))
         if ep_id is not None:
             ep = con.execute(sa.select(db.experimento_pieza.c.pieza_id).where(
                 db.experimento_pieza.c.id == ep_id, db.experimento_pieza.c.cliente == cliente)).first()

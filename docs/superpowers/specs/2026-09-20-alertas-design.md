@@ -375,3 +375,39 @@ se haya descartado.
   su destino sigue abierto (memoria `proveedor-solo-wavespeed`); no genera
   alertas.
 - Notificaciones push o en el navegador.
+
+## 12. Rescate del 2026-10-02 (la rama `worktree-alertas` nunca se fusionó)
+
+La rama del 2026-09-20 (11 commits, `worktree-alertas`) quedó 955 commits atrás y su migración 0014 ya está tomada.
+Daniel pidió rescatarla (PND-102). Se rehace sobre `main` reusando el núcleo (`git show worktree-alertas:alertas.py`,
+`llaves.py`, plantillas y pruebas como punto de partida) con estos cambios al diseño, decididos al rescatar:
+
+1. **Migración 0029** `alerta_descartada` (misma tabla de §4; la 0028 la tomó E1 el mismo día).
+2. **Idioma**: todo título, detalle, nombre de grupo, nivel y pestaña pasa por el catálogo (`gettext` al calcular,
+   `idiomas.N_` en las constantes, `|traducir` en la plantilla). La caché del context processor es por
+   `(cliente, idiomas.activo())`, como la del Tablero.
+3. **Quién ve qué**: cada alerta lleva `solo_admin` (bool). `llave:*` y `worker:parado` son `solo_admin=True`: las llaves
+   del `.env` y el worker son de Creatv y el cliente no ve instrucciones del servidor (decisión del 2026-09-27,
+   `_llaves_visibles`). `visibles(cliente, ahora_iso=None, rol="cliente")` filtra las `solo_admin` para un cliente; el
+   resumen (burbuja) se cuenta sobre lo que esa persona ve. La caché guarda el cálculo completo y filtra al leer.
+4. **Fuente nueva `saldo`** (grupo `puesta_a_punto`, nivel `bloquea`, para todos): `saldo.vigente("wavespeed")` no vacío →
+   clave `saldo:wavespeed`, huella = su `desde`. Admin: «WaveSpeed se quedó sin saldo» + desde cuándo y que se recarga en
+   `vigente()["recarga"]` (como `_aviso_sin_saldo.html`); cliente: «La generación de videos e imágenes está en pausa»,
+   neutro, sin enlace de recarga.
+5. **Correo sin confirmar**: el aviso `#cuenta-banner` sigue arriba de Configuración (desde 2026-09-26 ya no está en
+   `base.html`); la alerta `cuenta:correo:<usuario>` se suma, no lo reemplaza. `usuarios.por_cliente(cliente)` es nueva.
+6. **Worker parado** (`solo_admin`): última señal = el más reciente entre las marcas `kv` `ultimo_<tipo>` que el bucle
+   del worker escribe al encolar sus periódicas (`worker.py`) y `MAX(tarea.iniciada_en)`; más de 30 min o nunca →
+   alerta. Huella = esa señal.
+7. **Nicho**: una sola alerta de decisión por proyecto, `nicho:avatares`, con `nicho.datos.resumen_avatares(cliente)
+   ["nuevos"] > 0`, que lleva a la página de avatares del proyecto (`nicho.avatares_proyecto`). Fallo:
+   `nicho:error:<eid>` para un estudio cuya investigación (`extra.investigacion`) está `detenida` o `interrumpida` con
+   error, o con `extra.ultimo_error`.
+8. **Crear**: `crear:prompt_listo` y `crear:error:<cf_id>` salen de UNA consulta acotada (sesiones en `prompt_listo` o
+   `error`, de los últimos 30 días), nunca de cargar todas las sesiones: la pestaña se calcula en cada carga de página
+   (con caché de 60 s) y `tests/test_perf_pagina_proyecto.py` vigila que las consultas no crezcan con las piezas.
+9. **Tablero**: la sección de alertas pasa a una línea («N alertas necesitan tu atención → Ver Alertas»), como en §7;
+   `_calcular_tablero` deja de calcular la parte `alertas` y `tablero.alertas()` lo consume solo `alertas.py`.
+10. **Puesta a punto**: `llaves.py` con la tarjeta de WaveSpeed y Higgsfield `opcional` (cierra PND-075).
+11. **Documentación**: skill nueva `.claude/skills/alertas/SKILL.md` con su fila en la tabla de `CLAUDE.md`;
+    `docs/pendientes.md` cierra PND-102 y PND-075.

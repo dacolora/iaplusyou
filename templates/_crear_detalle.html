@@ -112,11 +112,10 @@
             <form method="post" action="{{ url_for('cf_descartar', cliente=cliente, cf_id=item.id) }}" onsubmit='return confirm({{ _('¿Descartar esta pieza?')|tojson }});' style="display:inline;">
               <button type="submit" class="btn-rechazar btn-sm">{{ _('Descartar') }}</button>
             </form>
-            {# Galería primero: videos e imágenes listos van a Experimentos ya
-               marcados (#experimentos?piezas=<pieza_id>); el reload hace que la
-               pestaña lea el hash y abra los tres pasos. #}
+            {# Galería primero: videos e imágenes listos van a «Nuevo experimento» ya
+               marcados (exp_nuevo?piezas=<pieza_id>): esa página lee ?piezas= y abre los tres pasos. #}
             {% if item.estado == "video_listo" and item.pieza_id %}
-            <a class="btn-guardar btn-sm" href="#experimentos?piezas={{ item.pieza_id }}" onclick="location.hash = this.getAttribute('href'); location.reload(); return false;">{{ _('Probar en Meta') }}</a>
+            <a class="btn-guardar btn-sm" href="{{ url_for('exp_nuevo', cliente=cliente, piezas=item.pieza_id) }}">{{ _('Probar en Meta') }}</a>
             {% endif %}
           </div>
         </div>

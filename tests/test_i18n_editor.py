@@ -31,6 +31,7 @@ CLAVE = re.compile(
 INTERNOS = {
     "audio.js": ("Preset de mezcla desconocido",),
     "subtitulos.js": ("color ASS inválido",),
+    "tipografia.js": ("no está en la tabla tipográfica",),     # capa 5c: una fuente que la tabla no trae (un bug de quien llama)
     "avisos_editor.js": ("Un módulo del editor vuelve a cambiar la edición",),       # solo a la consola
     "propiedades_modelo.js": ("Forma de fondo desconocida",),
     "operaciones.js": (
@@ -40,6 +41,7 @@ INTERNOS = {
         "inválida (", "ken_burns solo se cambia", "Esa mezcla no existe",
         "Esa fuente de subtítulos no existe", "Ese estilo de subtítulos no existe", "Ese idioma no es válido",
         "Son demasiadas fuentes de subtítulos", "Ese encuadre no existe",
+        "tinte debe ser un color #RRGGBB",          # capa 5c (D15): el tinte de un sticker que no es un color
     ),
 }
 # Palabras españolas del editor que MARCAS_CODIGO no trae (etiquetas de la
@@ -221,3 +223,81 @@ def test_borrador_automatico_sin_doble_etiqueta_en_ingles():
     with idiomas.en_idioma("en"):
         assert ediciones.nombre_visible(manual) == "Draft · gira"
     assert ediciones.nombre_visible(manual) == "Draft · gira"
+
+
+def test_capa_5c_claves_borradas_y_plantillas_en_ingles():
+    """Capa 5c (Tarea 7, D15): los nombres de las fuentes salen del catálogo
+    (nombres propios, sin traducir) y los avisos del texto reemplazan al aviso
+    de emojis de la capa 4c: esas cuatro claves ya no están en ningún lado.
+    Las plantillas para vender nacen en el idioma de quien edita (como
+    «Escribe aquí»): en inglés, su palabra en inglés."""
+    for clave in ("prop.fuente_inter_gruesa", "prop.fuente_inter_media", "prop.fuente_space", "prop.aviso_emoji"):
+        assert clave not in textos_editor.TEXTOS
+        for ruta in glob.glob(os.path.join(EDITOR, "*.js")):
+            with open(ruta, encoding="utf-8") as f:
+                assert clave not in f.read(), f"{os.path.basename(ruta)} todavía usa {clave}"
+    with idiomas.en_idioma("en"):
+        t = textos_editor.textos()
+    assert [t[f"op.plantilla_{p}"] for p in ("oferta", "nuevo", "envio", "ultimas", "mas_vendido")] == [
+        "SALE", "NEW", "FREE SHIPPING", "ONLY A FEW LEFT!", "BEST SELLER"]
+    # en inglés un descuento se escribe «50% OFF» (revisión final de la 5c); con espacio duro, como el «-50 %» del
+    # español: el ajuste de línea solo parte por U+0020 y la plantilla no se separa en dos renglones
+    assert t["op.plantilla_descuento"] == "50%\u00a0OFF" and textos_editor.TEXTOS["op.plantilla_descuento"] == "-50\u00a0%"
+    assert t["prop.ancho"] == "Text width" and t["prop.mostrar_emojis"] == "Show the emojis"
+
+
+def test_capa_5c_los_20_stickers_y_la_pestana_en_los_dos_idiomas():
+    """Capa 5c (Tarea 8, D11.4/D15): los 20 stickers no tienen palabras, así que su nombre (el del lector de pantalla y el
+    `title`) sale de una clave `bib.sticker_<id>` escrita entera; cada uno, en español e inglés; y la atribución de
+    Twemoji (CC-BY 4.0, que la licencia exige) sale igual en los dos idiomas."""
+    ES = {
+        "flecha_recta": "Flecha", "flecha_curva": "Flecha curva", "flecha_mano": "Flecha a mano", "flecha_abajo": "Flecha hacia abajo",
+        "circulo_mano": "Círculo a mano", "subrayado_mano": "Subrayado", "tachado_mano": "Tachado", "chulo": "Visto bueno",
+        "equis": "Equis", "exclamacion": "Exclamación", "estallido": "Estallido", "estrella": "Estrella",
+        "estrellas_5": "Cinco estrellas", "corazon": "Corazón", "etiqueta": "Etiqueta de precio", "cinta": "Cinta",
+        "circulo": "Círculo", "burbuja": "Globo de diálogo", "rayo": "Rayo", "destellos": "Destellos",
+    }
+    EN = {
+        "flecha_recta": "Arrow", "flecha_curva": "Curved arrow", "flecha_mano": "Hand-drawn arrow", "flecha_abajo": "Down arrow",
+        "circulo_mano": "Hand-drawn circle", "subrayado_mano": "Underline", "tachado_mano": "Strikethrough", "chulo": "Check mark",
+        "equis": "X mark", "exclamacion": "Exclamation", "estallido": "Burst", "estrella": "Star",
+        "estrellas_5": "Five stars", "corazon": "Heart", "etiqueta": "Price tag", "cinta": "Ribbon",
+        "circulo": "Circle", "burbuja": "Speech bubble", "rayo": "Lightning", "destellos": "Sparkles",
+    }
+    from final_edition import stickers
+    assert sorted(ES) == sorted(stickers.IDS) == sorted(EN)
+    for sid, nombre in ES.items():
+        assert textos_editor.TEXTOS[f"bib.sticker_{sid}"] == nombre
+    with idiomas.en_idioma("en"):
+        t = textos_editor.textos()
+    assert {sid: t[f"bib.sticker_{sid}"] for sid in EN} == EN
+    assert len({t[f"bib.sticker_{sid}"] for sid in EN}) == 20, "ningún nombre repetido: cada uno se oye distinto"
+    assert [t[c] for c in ("bib.stickers", "bib.flechas", "bib.marcas", "bib.formas", "bib.emojis", "bib.para_vender", "prop.color_sticker")] == [
+        "Stickers", "Arrows", "Hand-drawn marks", "Shapes", "Emojis", "Promo labels", "Color"]
+    assert t["bib.sticker_agregado"] == "Sticker added: change its color in “Edit”."
+    assert t["bib.sticker_error"] == "Couldn't add the sticker ({error})."
+    assert t["bib.sticker_sin_conexion"] == "no connection" and t["bib.sticker_error_http"] == "error {status}"
+    assert t["bib.atribucion_emoji"] == textos_editor.TEXTOS["bib.atribucion_emoji"] == "Emojis: Twemoji (CC-BY 4.0)."
+    # la pestaña de la plantilla (`_('Stickers')`) también está en el catálogo, y las 20 traducciones llenas
+    import catalogo_i18n
+    from babel.messages.pofile import read_po
+    with open(catalogo_i18n.PO, "rb") as f:
+        po = read_po(f, locale="en")
+    assert po.get("Stickers").string == "Stickers"
+
+
+def test_capa_5c_el_selector_de_zonas_dice_off_en_ingles():
+    """Revisión final de la 5c: la opción «No» del selector de zonas (`#zonas`) en inglés es «Off» (un selector que
+    se apaga), no «No». El msgid «No» solo lo usa ese selector: si otra pantalla lo usara, cambiar su inglés la
+    cambiaría también, y tendría que ir con su propio msgid."""
+    import catalogo_i18n
+    from babel.messages.pofile import read_po
+    assert catalogo_i18n.extraer().get("No").locations == [("templates/editor.html", _linea_de_zonas())]
+    with open(catalogo_i18n.PO, "rb") as f:
+        po = read_po(f, locale="en")
+    assert po.get("No").string == "Off"
+
+
+def _linea_de_zonas():
+    with open(os.path.join(RAIZ, "templates", "editor.html"), encoding="utf-8") as f:
+        return next(i for i, linea in enumerate(f, 1) if '<select id="zonas">' in linea)

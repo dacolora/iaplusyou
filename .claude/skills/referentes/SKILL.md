@@ -12,8 +12,8 @@ description: "Biblioteca de referentes: anuncios reales clasificados (copycoders
 reales clasificados por etapa (TOF/MOF/BOF), consciencia, familia (190 de
 copycoders + las que Claude proponga como `EMERGING`), dolor y firma («por qué
 funciona»). Tablas `referente` (`anuncio_id` = id del Ad Library de Meta, UNIQUE
-global; `cliente` NULL = global de Creatv, `<cliente>` = solo ese proyecto; solo
-se lista con `estado_imagen=ok`, la copia en R2 `referentes/<anuncio_id>.jpg`),
+por proyecto (la biblioteca global NULL tiene su propia unicidad, migración 0030); `cliente` NULL = global de Creatv, `<cliente>` = solo ese proyecto; solo
+se lista con `estado_imagen=ok`, la copia global en R2 `referentes/<anuncio_id>.jpg` y las nuevas privadas `referentes/<anuncio_id>_r<id>.jpg`),
 `referente_familia` y `barrido`. `referentes/datos.py` es el único escritor. La búsqueda (`q`) y las marcas a imitar
 comparan sin tildes ni mayúsculas con `db.pliegue`, que `db.engine()` también registra como función SQL
 `pliegue(col)` en cada conexión (el `lower()` de SQLite solo baja ASCII).
@@ -48,7 +48,7 @@ no se puede traducir el barrido no se lanza. Atria va con `order=best_match` (si
 `newest` y su `query` acepta cualquier palabra); Apify, con varias palabras, pide la frase exacta
 (`keyword_exact_phrase` con comillas). `datos.borrar_de_barrido` quita los referentes de un barrido
 y las familias `claude` que quedan vacías (el barrido queda por el historial del gasto; las
-imágenes R2 las borra el llamador).
+imágenes R2 las borra el llamador con `claves_r2`, extraídas de imagen_url; no reconstruye la clave desde anuncio_id, porque las filas privadas llevan `_r<id>`).
 `traer()` ahora entrega `(pagina, cursor_siguiente, meta)`: `meta` es `{}`
 para Atria (solo consume cupo del plan) o `{"costo_real": ...}` para una
 fuente que cobra por resultado real. Bloque 6: panel admin completo
@@ -98,3 +98,9 @@ la imagen queda lista con `animar_error`, que su detalle muestra). El modelo lo 
 con el subtítulo viejo de la referencia y cortaba a la foto del producto con manos: por eso también va por imagen. El formato de video va al más
 parecido que el modelo admite (`_formato_video`: 4:5 → 3:4 en Wan). Un formulario de video sin `modos_vista` (abierto
 antes de esto) sigue haciendo un solo video.
+
+**Cobros e aislamiento (2026-10-02, PND-006/007/008):** `guardar_referente` toma `BEGIN IMMEDIATE` y hace upsert por `(cliente, anuncio_id)`; una corrida de otro proyecto crea su propia fila, sin modificar las de la biblioteca global o de otro proyecto. La migración 0030 conserva ids y rechaza bajar si habría que borrar duplicados entre proyectos. El gasto de fuente se anota antes de guardar anuncios; Apify conserva el costo contado cuando falla el sondeo y propaga `run_id`/`dataset_id`, guardados en `gasto.extra` con proveedor `apify`.
+
+Listados (revisión 2026-10-02, PND-006): si existe una copia del anuncio en el proyecto, se oculta su fila global en listar, opciones, familias, familias_frecuentes y los sugeridos que usan esos lectores. referente(cliente, id) conserva su visibilidad por id.
+
+PND-031/045 (2026-10-03): los enlaces internos de las fichas cierran su dialog antes de navegar. Apify devuelve estado/incompleto/aviso si termina sin SUCCEEDED y entrega resultados; el worker conserva aviso_trayendo y la fase final termina parcial, sin perder anuncios ni cambiar el cobro.

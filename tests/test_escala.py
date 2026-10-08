@@ -243,7 +243,10 @@ class _Consultas:
         event.remove(sa.engine.Engine, "before_cursor_execute", self._f)
 
 
-@pytest.mark.parametrize("url", ["/cliente/acme/crear/tarjetas?desde=0", "/cliente/acme/final/tarjetas?lista=videos&desde=0"])
+@pytest.mark.parametrize("url", ["/cliente/acme/crear/tarjetas?desde=0",
+                                 "/cliente/acme/final/tarjetas?lista=elegir&desde=0",
+                                 "/cliente/acme/final/tarjetas?lista=en_edicion&desde=0",
+                                 "/cliente/acme/final/tarjetas?lista=finalizados&desde=0"])
 def test_ver_mas_no_consulta_por_tarjeta(app, url):
     """«Ver más» de Crear y Final edition armaba TODOS los items consultando la
     cola una vez por tarjeta (1 077 consultas con 300 piezas): ahora una sola

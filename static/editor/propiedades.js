@@ -10,8 +10,11 @@
 // - «Encuadre» (capa 5b, D4/D8; video y foto): llenar o ajustar con el fondo
 //   desenfocado, acercar el cuadro (100–400 %) y centrarlo — qué parte se ve
 //   se elige arrastrando sobre el video (lienzo_interaccion.js).
-// - Texto: el texto, fuente, tamaño, color, contorno, sombra, fondo,
-//   alineación, animación de entrada, centrar y borrar.
+// - Texto: el texto (y, bajo el campo, lo que no sale en el video — capa 5c,
+//   D7.5 —, con «Mostrar los emojis» en un texto de antes), fuente (por
+//   familia, cada nombre en su letra: D9.4), tamaño, ancho del texto y «Sin
+//   límite» (D7.2), color, contorno, sombra, fondo, alineación, animación de
+//   entrada, centrar y borrar.
 // - Imagen: tamaño (en % del ancho de la pantalla), opacidad, «Llenar la
 //   pantalla», «Centrar» y borrar.
 // - Audio (música, efecto, voz…): volumen, fundidos, silenciar, «Suena en»
@@ -31,9 +34,9 @@
 // No hace nada al importarse (lo prueba Node).
 import { avisoTransicion } from "./escala.js";
 import {
-  alternarSilencio, buscar, cambioCentrarEncuadre, cambioContorno, cambioFondo, cambioGrosor, cambioLlenar, cambioModoEncuadre,
-  cambioSombra, cambioSuenaEn, cambioZoomEncuadre, claveForma, escalaDePorcentaje, mensajeRechazo, modelo, msDeDuracionFoto,
-  textoDuracionFoto, textoPorcentaje, textoSegundos,
+  alternarSilencio, buscar, cambioAncho, cambioCentrarEncuadre, cambioContorno, cambioFondo, cambioGrosor, cambioLlenar,
+  cambioModoEncuadre, cambioSinLimite, cambioSombra, cambioSuenaEn, cambioZoomEncuadre, claveForma, escalaDePorcentaje,
+  mensajeRechazo, modelo, msDeDuracionFoto, textoDuracionFoto, textoPorcentaje, textoSegundos,
 } from "./propiedades_modelo.js";
 import { t } from "./textos.js";
 
@@ -77,10 +80,23 @@ export class Propiedades {
   // `medidasPrincipal(clipId)`: [ancho, alto] que se ven del cuadro de un
   // clip de la principal (vista.medidasPrincipal; capa 5b: «Encuadre» avisa
   // si el cuadro no tiene margen para moverse — sin ella, las del material).
-  constructor({ contenedor, editor, materiales = () => ({}), nombresIdioma = {}, medidasPrincipal = null }) {
+  // Capa 5c: `catalogoFuentes` (config.catalogo_fuentes: las fuentes que la
+  // página tiene, para la lista por familia) y `tabla` (config.tipografia:
+  // qué no sale en el video de un texto).
+  constructor({
+    contenedor, editor, materiales = () => ({}), nombresIdioma = {}, medidasPrincipal = null, catalogoFuentes = [], tabla = null,
+  }) {
     this.contenedor = contenedor;
     this.editor = editor;
     this.materiales = materiales;
+    this.catalogoFuentes = Array.isArray(catalogoFuentes) ? catalogoFuentes : [];
+    this.tabla = tabla ?? null;
+    // D9.3: las fuentes de la lista se piden la primera vez que la lista SE VE (una vez por panel) y
+    // cada nombre toma su letra recién cuando la suya bajó (`_letrasListas`)
+    this.fuentesPedidas = false;
+    this.fuentesListas = new Set();   // las que ya bajaron
+    this.muestrasFuente = [];         // [{id, span}] de la lista armada ahora
+    this.vigiaFuentes = null;         // el IntersectionObserver de esa lista
     this.medidasPrincipal = typeof medidasPrincipal === "function" ? medidasPrincipal : null;
     this.nombresIdioma = nombresIdioma ?? {};
     this.m = null;                    // el modelo que se ve
@@ -112,7 +128,7 @@ export class Propiedades {
     const ed = this.editor;
     const m = modelo(ed.doc(), ed.seleccion, {
       destino: ed.destino(), info: ed.info(), materiales: this.materiales() ?? {}, nombresIdioma: this.nombresIdioma,
-      medidasPrincipal: this.medidasPrincipal,
+      medidasPrincipal: this.medidasPrincipal, catalogoFuentes: this.catalogoFuentes, tabla: this.tabla,
     });
     const otra = claveForma(m) !== this.clave;
     this.m = m;
@@ -243,7 +259,7 @@ export class Propiedades {
   }
 
   // Opciones excluyentes (radios con la forma de .segmentado de style.css).
-  // `opciones`: [{valor, texto, fuente?}]; `leer(m)` da {valor, deshabilitado?}.
+  // `opciones`: [{valor, texto}]; `leer(m)` da {valor, deshabilitado?}.
   _opciones(padre, { nombre, etiqueta, opciones, leer, aplicar, lista = false }) {
     const fs = el("fieldset", "ed-prop-campo", padre);
     el("legend", "ed-prop-etiqueta", fs, etiqueta);
@@ -252,8 +268,7 @@ export class Propiedades {
       const l = el("label", "", grupo);
       const r = el("input", "", l);
       Object.assign(r, { type: "radio", name: nombre, value: String(o.valor) });
-      const s = el("span", "", l, o.texto);
-      if (o.fuente) s.style.fontFamily = `"${o.fuente}", var(--font-body)`;
+      el("span", "", l, o.texto);
       r.addEventListener("change", () => {
         if (r.checked) aplicar(o.valor);
       });
@@ -519,18 +534,14 @@ export class Propiedades {
       if (document.activeElement !== area && area.value !== x.texto.valor) area.value = x.texto.valor;
     });
     this._nota(campo, (x) => x.texto.nota);
-    this._nota(campo, (x) => x.avisoEmoji, "ed-prop-aviso");     // capa 4c: se ve mientras se escribe
-    this._opciones(this.cuerpo, {
-      nombre: "ed-prop-fuente", etiqueta: t("prop.fuente"), lista: true,
-      opciones: m.fuentes.map((f) => ({ ...f, fuente: f.valor })),
-      leer: (x) => ({ valor: x.fuente }),
-      aplicar: (v) => this._cambiar(null, { estilo: { fuente: v } }),
-    });
+    this._armarAvisos(campo);                                     // capa 5c: se ven mientras se escribe
+    this._armarFuentes(m);
     this._deslizador(this.cuerpo, {
       id: "ed-prop-tamano", etiqueta: t("prop.tamano"), min: m.tamano.min, max: m.tamano.max, escribir: (v) => String(v),
       leer: (x) => ({ valor: x.tamano.px }),
       aplicar: (v) => this._cambiar(`${id}:tamano`, { estilo: { tamano: v } }),
     });
+    this._armarAncho(m);
     this._paleta(m);
     // Contorno: sí/no y, si sí, su color y su grosor
     this._casilla(this.cuerpo, {
@@ -591,29 +602,197 @@ export class Propiedades {
     this._botonBorrar();
   }
 
+  // Capa 5c (D7.5): lo que no sale en el video como se escribió, bajo el
+  // campo del texto (propiedades_modelo.avisosTexto); el de un texto de antes
+  // trae «Mostrar los emojis» — una operación, un deshacer. Se rehace solo
+  // cuando los avisos cambian (no a cada letra).
+  _armarAvisos(padre) {
+    const caja = el("div", "ed-prop-avisos", padre);
+    caja.setAttribute("aria-live", "polite");
+    let firma = null;
+    this.pintores.push((x) => {
+      const nueva = JSON.stringify(x.avisos);
+      if (nueva === firma) return;
+      firma = nueva;
+      caja.replaceChildren();
+      caja.hidden = x.avisos.length === 0;
+      for (const a of x.avisos) {
+        el("p", "ed-prop-nota ed-prop-aviso", caja, a.texto);
+        if (a.accion !== "actualizar") continue;
+        const fila = el("div", "ed-prop-acciones", caja);
+        this._boton(fila, {
+          texto: t("prop.mostrar_emojis"), aplicar: () => this._operar(null, "actualizarTexto", this.m.clipId),
+        }).id = "ed-prop-mostrar-emojis";
+      }
+    });
+  }
+
+  // Capa 5c (D9.4): la lista de fuentes por familia de estilo (un encabezado
+  // por familia, solo las que tienen fuentes), cada nombre escrito en su
+  // fuente. La página baja al abrir solo las fuentes que usa el documento
+  // (D9.3), y armar este formulario no puede bajar nada: en el celular la hoja
+  // «Editar» está cerrada pero maquetada (visibility + translateY), y un span
+  // con `fontFamily` de una @font-face declarada ya la bajaría. Así que los
+  // nombres nacen en la letra de la página, la lista pide sus fuentes la
+  // primera vez que se ve (`_alVerse`; una vez por panel) y cada nombre toma su
+  // letra cuando la suya bajó.
+  _armarFuentes(m) {
+    const fs = el("fieldset", "ed-prop-campo ed-fuentes", this.cuerpo);
+    el("legend", "ed-prop-etiqueta", fs, t("prop.fuente"));
+    const radios = [];
+    const muestras = [];
+    for (const g of m.fuentes) {
+      const grupo = el("div", "ed-fuentes-grupo", fs);
+      const titulo = el("p", "ed-fuentes-familia", grupo, g.texto);
+      titulo.id = `ed-fuentes-${g.categoria}`;
+      grupo.setAttribute("role", "group");
+      grupo.setAttribute("aria-labelledby", titulo.id);
+      const lista = el("div", "segmentado ed-prop-segmentado", grupo);
+      lista.classList.add("ed-prop-lista");             // como la lista de _opciones: una opción por línea
+      for (const f of g.fuentes) {
+        const l = el("label", "", lista);
+        const r = el("input", "", l);
+        Object.assign(r, { type: "radio", name: "ed-prop-fuente", value: f.valor });
+        r.setAttribute("aria-label", f.texto);
+        muestras.push({ id: f.valor, span: el("span", "", l, f.texto) });
+        r.addEventListener("change", () => {
+          if (r.checked) this._cambiar(null, { estilo: { fuente: f.valor } });
+        });
+        radios.push(r);
+      }
+    }
+    this.pintores.push((x) => {
+      for (const r of radios) r.checked = r.value === String(x.fuente);
+    });
+    this.vigiaFuentes?.disconnect();       // la lista anterior se fue con su formulario
+    this.vigiaFuentes = null;
+    this.muestrasFuente = muestras;
+    this._letrasListas();
+    const ids = muestras.map((x) => x.id);
+    if (!this.fuentesPedidas && ids.length) this._alVerse(fs, () => this._pedirFuentes(ids));
+  }
+
+  // `hacer()` la primera vez que `nodo` se ve: con IntersectionObserver (en el
+  // escritorio, cuando la columna lo muestra; en el celular, cuando la hoja
+  // sube); sin él, cuando se lo toca o recibe el foco.
+  _alVerse(nodo, hacer) {
+    const Vigia = globalThis.IntersectionObserver;
+    if (typeof Vigia !== "function") {
+      nodo.addEventListener("pointerdown", hacer);
+      nodo.addEventListener("focusin", hacer);
+      return;
+    }
+    const vigia = new Vigia((entradas) => {
+      if (!entradas.some((e) => e.isIntersecting)) return;
+      vigia.disconnect();
+      if (this.vigiaFuentes === vigia) this.vigiaFuentes = null;
+      hacer();
+    });
+    vigia.observe(nodo);
+    this.vigiaFuentes = vigia;
+  }
+
+  // Pide cada fuente de la lista (vista.cargarFuentes no baja dos veces la
+  // misma) y, cuando una bajó, le da su letra a su nombre; la que no baja deja
+  // su nombre en la letra de la página.
+  _pedirFuentes(ids) {
+    if (this.fuentesPedidas) return;
+    this.fuentesPedidas = true;
+    for (const id of ids) {
+      Promise.resolve(this.editor.cargarFuentes?.([id])).then((r) => {
+        if (Array.isArray(r) && r.includes(false)) return;
+        this.fuentesListas.add(id);
+        this._letrasListas();
+      }, () => {});
+    }
+  }
+
+  _letrasListas() {
+    for (const { id, span } of this.muestrasFuente) {
+      if (this.fuentesListas.has(id)) span.style.fontFamily = `"${id}", var(--font-body)`;
+    }
+  }
+
+  // «Ancho del texto» (capa 5c, D7.2): 30–100 % del ancho del video (un
+  // deshacer por arrastre: clave <id>:ancho) y «Sin límite», que deja el
+  // deslizador quieto. Los dos en una fila que se envuelve en el celular.
+  _armarAncho(m) {
+    const id = m.clipId;
+    const campo = el("div", "ed-prop-campo ed-prop-ancho", this.cuerpo);
+    const fila = el("div", "ed-prop-fila", campo);
+    const label = el("label", "ed-prop-etiqueta", fila, t("prop.ancho"));
+    label.htmlFor = "ed-prop-ancho";
+    const salida = el("output", "ed-prop-valor", fila);
+    salida.setAttribute("for", "ed-prop-ancho");
+    const controles = el("div", "ed-prop-ancho-fila", campo);
+    const input = el("input", "", controles);
+    Object.assign(input, { type: "range", id: "ed-prop-ancho", min: String(m.ancho.min), max: String(m.ancho.max), step: "1" });
+    input.addEventListener("input", () => {
+      const v = Number(input.value);
+      salida.textContent = textoPorcentaje(v);
+      this._cambiar(`${id}:ancho`, cambioAncho(v));
+    });
+    input.addEventListener("change", () => this.pintar());      // al soltar: el valor que de verdad quedó
+    const etiqueta = el("label", "ed-prop-casilla", controles);
+    const casilla = el("input", "", etiqueta);
+    Object.assign(casilla, { type: "checkbox", id: "ed-prop-sin-limite" });
+    etiqueta.append(t("prop.sin_limite"));
+    casilla.addEventListener("change", () => this._cambiar(null, cambioSinLimite(casilla.checked)));
+    this.pintores.push((x) => {
+      input.disabled = x.ancho.sinLimite;
+      if (input.value !== String(x.ancho.pct)) input.value = String(x.ancho.pct);
+      salida.textContent = x.ancho.sinLimite ? "—" : textoPorcentaje(x.ancho.pct);
+      casilla.checked = x.ancho.sinLimite;
+    });
+  }
+
   // Color del texto: blanco, negro, el de la marca, amarillo, rojo y uno libre.
   _paleta(m) {
     const id = m.clipId;
+    this._paletaColor({
+      etiqueta: t("prop.color"), paleta: m.paleta, leer: (x) => x.color,
+      elegir: (color) => this._cambiar(null, { estilo: { color } }),
+      libre: (color) => this._cambiar(`${id}:color`, { estilo: { color } }),
+    });
+  }
+
+  // Capa 5c (D11): el color de un sticker, con la misma paleta que el del
+  // texto; la muestra es un toque, el color libre fusiona su arrastre en UN
+  // deshacer (`<id>:tinte`). Sin color elegido, el sticker se ve blanco.
+  _armarColorSticker(m) {
+    const id = m.clipId;
+    this._paletaColor({
+      etiqueta: t("prop.color_sticker"), paleta: m.tinte.paleta, leer: (x) => x.tinte?.color ?? "#FFFFFF",
+      elegir: (tinte) => this._cambiar(null, { tinte }),
+      libre: (tinte) => this._cambiar(`${id}:tinte`, { tinte }),
+    });
+  }
+
+  // La paleta de colores con su color libre: `leer(m)` da el color que se ve
+  // ahora (la muestra igual queda marcada); `elegir(color)` y `libre(color)`
+  // operan al tocar una muestra y al mover el color libre.
+  _paletaColor({ etiqueta, paleta, leer, elegir, libre }) {
     const fs = el("fieldset", "ed-prop-campo", this.cuerpo);
-    el("legend", "ed-prop-etiqueta", fs, t("prop.color"));
+    el("legend", "ed-prop-etiqueta", fs, etiqueta);
     const fila = el("div", "ed-prop-colores", fs);
-    const muestras = m.paleta.map((c) => {
+    const muestras = paleta.map((c) => {
       const b = el("button", "ed-prop-muestra", fila);
       b.type = "button";
       b.style.background = c.color;
       b.title = c.nombre;
       b.setAttribute("aria-label", c.nombre);
-      b.addEventListener("click", () => this._cambiar(null, { estilo: { color: c.color } }));
+      b.addEventListener("click", () => elegir(c.color));
       return { b, color: c.color };
     });
     const otro = el("label", "ed-prop-otro", fila);
     const input = el("input", "ed-prop-color", otro);
     input.type = "color";
     otro.append(t("prop.otro"));
-    input.addEventListener("input", () => this._cambiar(`${id}:color`, { estilo: { color: input.value.toUpperCase() } }));
+    input.addEventListener("input", () => libre(input.value.toUpperCase()));
     this.pintores.push((x) => {
-      for (const { b, color } of muestras) b.setAttribute("aria-pressed", String(color === x.color));
-      const v = x.color.toLowerCase();
+      const actual = leer(x);
+      for (const { b, color } of muestras) b.setAttribute("aria-pressed", String(color === actual));
+      const v = actual.toLowerCase();
       if (input.value !== v) input.value = v;
     });
   }
@@ -638,6 +817,7 @@ export class Propiedades {
       leer: (x) => ({ valor: x.opacidad }),
       aplicar: (v) => this._cambiar(`${id}:opacidad`, { transform: { opacidad: v / 100 } }),
     });
+    if (m.tinte) this._armarColorSticker(m);              // solo un material que se tiñe (un sticker)
     const acciones = el("div", "ed-prop-acciones", this.cuerpo);
     this._boton(acciones, {
       texto: t("prop.llenar"), leer: (x) => ({ deshabilitado: x.llena }),

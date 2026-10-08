@@ -259,7 +259,8 @@ def test_experimento_desde_producto_redirige_con_query(app):
     assert r.status_code == 302
     loc = r.headers["Location"]
     assert "exp_nombre=Espejo+redondo" in loc and "exp_destino=https://tienda.test/espejo" in loc
-    assert loc.endswith("#experimentos")
+    # «Crear experimento» lleva a «Nuevo experimento» (E2: exp_nuevo), donde está la galería con el paso 3.
+    assert loc.startswith("/cliente/acme/experimentos/nuevo?")
     r = app["c"].post(f"/cliente/acme/productos/{_producto(cliente='otro')}/experimento")
     assert "exp_nombre" not in r.headers["Location"] and r.headers["Location"].endswith("#catalogo")
 
@@ -624,7 +625,8 @@ def test_render_configuracion_tienda_y_pixel(app, monkeypatch):
     assert "Sincronizar" in html and "Desconectar" in html and "Conectar Shopify" in html and "Conectar WooCommerce" in html
     assert "MELI_APP_ID" in html          # sin app configurada: dice qué falta
     assert "Pixel activo" in html and "Pixel Acme" in html and "Volver a comprobar" in html
-    assert "(sugerida)" in html           # selector de atribución en Nuevo experimento
+    # El selector de atribución vive en «Nuevo experimento» (E2: su propia ruta, ya no la pestaña).
+    assert "(sugerida)" in app["c"].get("/cliente/acme/experimentos/nuevo").data.decode()
     assert "Falta <code>FLASK_SECRET_KEY" not in html
 
 
@@ -658,7 +660,11 @@ def test_render_pixel_meta_conectado_sin_cache_muestra_sin_comprobar(app, monkey
     assert "sin comprobar" in html and "Comprobar Pixel" in html
     assert "/cliente/acme/config/pixel/refrescar" in html
     assert "Volver a comprobar" not in html and "sin conexión" not in html
-    assert "pulsa «Comprobar Pixel»" in html
+    # La ayuda de la atribución sugerida («pulsa «Comprobar Pixel» en Configuración») va en «Nuevo experimento», que
+    # tampoco va nunca a Graph: solo lee el caché del Pixel.
+    llamadas.clear()
+    nuevo = app["c"].get("/cliente/acme/experimentos/nuevo").data.decode()
+    assert "pulsa «Comprobar Pixel»" in nuevo and llamadas and all(llamadas)
 
 
 def test_render_meli_configurado_sin_cifrado_avisa(app, monkeypatch):
@@ -749,7 +755,8 @@ def test_pedidos_por_experimento(app, base_temporal):
         tiendas.resolver_pedido("acme", ped["id"], ep_id)
     assert tiendas.pedidos_por_experimento("acme") == {eid: 2}
     assert tiendas.pedidos_por_experimento("otro") == {}
-    html = app["c"].get("/cliente/acme").data.decode()
+    from tests.test_rutas_experimentos import _resultados
+    html = _resultados(app["c"], exp=eid)   # E2: la gestión del experimento llega en el fragmento de resultados
     assert "ventas por tienda: 2 pedido(s)" in html and "atribución tienda" in html
 
 

@@ -1,6 +1,6 @@
-"""Configuración = puesta a punto (Task 4): las 7 tarjetas de servicios
-(dashboard._estado_llaves) con el badge según las variables de entorno, sin
-que NINGÚN valor de llave llegue al HTML; el paso a paso de Conectar tu
+"""Configuración = puesta a punto (Task 4): las tarjetas de servicios
+(llaves.estado; dashboard._estado_llaves es su alias) con el badge según las variables de
+entorno, sin que NINGÚN valor de llave llegue al HTML; el paso a paso de Conectar tu
 tienda por plataforma (Shopify / WooCommerce / MercadoLibre, con el aviso de
 qué falta cuando MELI no está configurado); el orden de las secciones; y el
 enlace a Experimentos para las reglas del motor."""
@@ -13,6 +13,7 @@ from tests.test_rutas_productos import _cliente_admin
 # (variable, valor distintivo que NUNCA debe aparecer en el HTML)
 VALORES_FALSOS = {
     "ANTHROPIC_API_KEY": "sk-ant-PRUEBA123",
+    "WAVESPEED_API_KEY": "wsp-PRUEBA321",
     "FAL_KEY": "fal-PRUEBA456",
     "HF_API_KEY_ID": "hfid-PRUEBA789",
     "HF_API_KEY_SECRET": "hfsecret-PRUEBA000",
@@ -23,7 +24,7 @@ VALORES_FALSOS = {
     "SMTP_PASS": "smtppass-PRUEBA555",
 }
 TODAS = [
-    "ANTHROPIC_API_KEY", "FAL_KEY", "HF_API_KEY_ID", "HF_API_KEY_SECRET",
+    "ANTHROPIC_API_KEY", "WAVESPEED_API_KEY", "FAL_KEY", "HF_API_KEY_ID", "HF_API_KEY_SECRET",
     "R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET_NAME", "R2_PUBLIC_BASE_URL",
     "META_APP_ID", "META_APP_SECRET",
     "SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS", "SMTP_FROM", "PLATAFORMA_URL",
@@ -75,12 +76,15 @@ def test_estado_llaves_solo_mira_presencia(app, monkeypatch):
     monkeypatch.setenv("HF_API_KEY_ID", "solo-el-id")          # secreto ausente → parcial
     monkeypatch.setenv("R2_ACCOUNT_ID", "   ")                  # solo espacios = ausente
     llaves = d._estado_llaves()
-    assert [l["id"] for l in llaves] == ["anthropic", "fal", "higgsfield", "r2", "smtp", "meli", "reddit", "youtube_api", "apify", "atria", "trendtrack"]
+    assert [l["id"] for l in llaves] == ["anthropic", "wavespeed", "fal", "higgsfield", "r2", "smtp", "meli", "reddit", "youtube_api", "apify", "atria", "trendtrack"]
     por_id = {l["id"]: l for l in llaves}
     assert por_id["anthropic"]["estado"] == "configurada" and por_id["anthropic"]["faltan"] == []
     assert por_id["higgsfield"]["estado"] == "parcial" and por_id["higgsfield"]["faltan"] == ["HF_API_KEY_SECRET"]
     assert por_id["r2"]["estado"] == "falta" and por_id["fal"]["estado"] == "falta"
     assert por_id["smtp"]["opcional"] and por_id["meli"]["opcional"] and not por_id["anthropic"]["opcional"]
+    # WaveSpeed paga todo Crear (obligatoria); Higgsfield solo el flujo viejo «Nueva idea» (opcional).
+    assert por_id["wavespeed"]["estado"] == "falta" and not por_id["wavespeed"]["opcional"]
+    assert por_id["higgsfield"]["opcional"]
     # Sin request: el paso de MELI lleva el texto genérico; con URL, la real.
     assert any("<url del sitio>/meli/callback" in p for p in por_id["meli"]["pasos"])
     con_url = {l["id"]: l for l in d._estado_llaves("https://app.test/meli/callback")}
@@ -104,7 +108,7 @@ def test_render_siete_tarjetas_con_badge_y_sin_valores(app, monkeypatch):
     html = app["c"].get("/cliente/acme").data.decode()
     cfg = _config(html)
     assert "Puesta a punto" in cfg
-    esperado = {"anthropic": "configurada", "fal": "configurada", "higgsfield": "configurada",
+    esperado = {"anthropic": "configurada", "wavespeed": "configurada", "fal": "configurada", "higgsfield": "configurada",
                 "r2": "parcial", "smtp": "parcial", "meli": "falta"}
     for sid, estado in esperado.items():
         t = _tarjeta(cfg, sid)
@@ -112,10 +116,10 @@ def test_render_siete_tarjetas_con_badge_y_sin_valores(app, monkeypatch):
         assert 'target="_blank" rel="noopener"' in t
         assert "Cómo conseguirla" in t
         assert "no se escriben desde aquí" in t
-    assert cfg.count('class="llave-tarjeta') == 11
+    assert cfg.count('class="llave-tarjeta') == 12
     # Orden de las tarjetas: todas las del servidor en «Puesta a punto»;
     # ninguna en «Conexiones».
-    pos = [cfg.index(f'id="llave-{sid}"') for sid in ("anthropic", "fal", "higgsfield", "r2", "smtp", "meli")]
+    pos = [cfg.index(f'id="llave-{sid}"') for sid in ("anthropic", "wavespeed", "fal", "higgsfield", "r2", "smtp", "meli")]
     assert pos == sorted(pos)
     assert cfg.index('id="config-ap-puesta"') < pos[0] and pos[-1] < cfg.index('id="config-ap-conexiones"')
     assert 'id="llave-meta"' not in cfg
@@ -126,16 +130,16 @@ def test_render_siete_tarjetas_con_badge_y_sin_valores(app, monkeypatch):
     for valor in VALORES_FALSOS.values():
         assert valor not in html, valor
     # Meta: la elección de cómo conectar (spec 2026-09-20 §1) se ve en
-    # Experimentos y ya no en Configuración (2026-09-28).
+    # Configuración › Conexiones (desde 2026-10-04) y ya no en Experimentos.
     fin = cfg.find('<section id="tab-', 10)
-    assert "¿Cómo quieres conectar Meta?" not in (cfg[:fin] if fin > 0 else cfg)
+    assert "¿Cómo quieres conectar Meta?" in (cfg[:fin] if fin > 0 else cfg)
     exp = html[html.index('<section id="tab-experimentos"'):html.index('<section id="tab-sprints"')]
-    assert "¿Cómo quieres conectar Meta?" in exp
+    assert "¿Cómo quieres conectar Meta?" not in exp
 
 
 def test_render_todo_falta(app):
     cfg = _config(app["c"].get("/cliente/acme").data.decode())
-    for sid in ("anthropic", "fal", "higgsfield", "r2", "smtp", "meli"):
+    for sid in ("anthropic", "wavespeed", "fal", "higgsfield", "r2", "smtp", "meli"):
         assert _badge(_tarjeta(cfg, sid)) == "falta", sid
     assert "configurada</span>" not in cfg.split('id="config-tienda"')[0]
 
@@ -147,7 +151,7 @@ def test_render_todo_configurado(app, monkeypatch):
     monkeypatch.setattr(app["dashboard"].meta_conexion, "app_publica", lambda c: {"app_id": "1", "login_config_id": "2"})
     html = app["c"].get("/cliente/acme").data.decode()
     cfg = _config(html)
-    for sid in ("anthropic", "fal", "higgsfield", "r2", "smtp", "meli"):
+    for sid in ("anthropic", "wavespeed", "fal", "higgsfield", "r2", "smtp", "meli"):
         assert _badge(_tarjeta(cfg, sid)) == "configurada", sid
     assert "Faltan:" not in cfg.split('id="config-tienda"')[0]
     for v in TODAS:
@@ -188,7 +192,7 @@ def test_orden_de_secciones_y_enlace_a_reglas(app):
     # (tienda, Pixel) → Marca (nombre, logos) → Generación (modelos) → Cuenta y
     # avisos (correo) → Gasto.
     orden = ['id="config-puesta-a-punto"', 'id="config-tienda"', 'id="config-pixel"',
-             "<h2>Nombre del proyecto</h2>", "<h2>Logos oficiales</h2>", "Modelos por defecto — Cambiar producto",
+             "<h2>Nombre del proyecto</h2>", 'id="config-logos"', "Modelos por defecto — Cambiar producto",
              "Modelos por defecto — FlowPlus", 'id="config-correo"', 'id="config-gasto"']
     pos = [cfg.index(x) for x in orden]
     assert pos == sorted(pos), list(zip(orden, pos))
@@ -557,7 +561,7 @@ def test_atria_tiene_tarjeta_en_puesta_a_punto(app, monkeypatch):
 
 
 # ---- Qué ve un cliente en Puesta a punto -----------------------------------
-# Las llaves de Anthropic, fal, Higgsfield, R2, SMTP, MELI y las fuentes de
+# Las llaves de Anthropic, WaveSpeed, fal, Higgsfield, R2, SMTP, MELI y las fuentes de
 # Nicho las pone Creatv en el .env del servidor: un cliente no puede hacer
 # nada con ellas. Lo único que se configura por proyecto es Meta.
 
@@ -591,16 +595,38 @@ def test_cliente_no_ve_llaves_ni_variables_del_servidor(app, monkeypatch):
     conexiones = _puesta_a_punto(cfg)
     for texto in ("ANTHROPIC_API_KEY", "SMTP_HOST", ".env", "no se escriben desde aquí", "Cómo conseguirla"):
         assert texto not in conexiones, texto
-    # Lo que sí le toca: elegir cómo conectar Meta, en Experimentos.
+    # Lo que sí le toca: elegir cómo conectar Meta, en Configuración › Conexiones.
+    assert "¿Cómo quieres conectar Meta?" in cfg
     exp = html[html.index('<section id="tab-experimentos"'):html.index('<section id="tab-sprints"')]
-    assert "¿Cómo quieres conectar Meta?" in exp
+    assert "¿Cómo quieres conectar Meta?" not in exp
 
 
 def test_admin_sigue_viendo_todas_las_tarjetas_de_puesta_a_punto(app):
-    # Desde 2026-09-28 las 11 tarjetas del servidor van en «Puesta a punto»
+    # Desde 2026-09-28 las tarjetas del servidor (12 con la de WaveSpeed) van en «Puesta a punto»
     # (solo admin); la de Meta ya no se pinta: la conexión vive en Experimentos.
     cfg = _config(app["c"].get("/cliente/acme").data.decode())
     puesta = cfg[cfg.index('id="config-ap-puesta"'):cfg.index('id="config-ap-conexiones"')]
-    assert puesta.count('class="llave-tarjeta') == 11
+    assert puesta.count('class="llave-tarjeta') == 12
     assert _puesta_a_punto(cfg).count('class="llave-tarjeta') == 0
     assert "no se escriben desde aquí" in _tarjeta(puesta, "anthropic")
+
+
+def test_gasto_muestra_el_total_desde_el_inicio_y_el_csv_de_todo(app):
+    """2026-10-07: la pantalla de Gasto solo decía «este mes» (US$ 66) y Daniel
+    creyó perdidos los US$ 200 de los meses anteriores. Ahora muestra el total
+    desde el inicio, el mes a mes y un CSV con todo."""
+    import gastos
+    gastos.registrar("acme", "video", 200.0, "video:septiembre", creado_en="2026-09-15T10:00:00")
+    gastos.registrar("acme", "video", 66.0, "video:ahora")
+    html = app["c"].get("/cliente/acme").data.decode()
+    cfg = _config(html)
+    inicio = cfg[cfg.index('id="gasto-desde-inicio"'):]
+    inicio = inicio[:inicio.index("</div>")]
+    assert "Generación desde el inicio" in inicio and "266,00" in inicio and "desde el 2026-09-15" in inicio
+    assert 'id="gasto-por-mes"' in cfg and "2026-09" in cfg and "200,00" in cfg and "Total desde el inicio" in cfg
+    assert "/cliente/acme/gasto/todo.csv" in cfg and "Descargar CSV de todo" in cfg
+    r = app["c"].get("/cliente/acme/gasto/todo.csv")
+    assert r.status_code == 200 and "text/csv" in r.content_type
+    filas = r.data.decode().lstrip("\ufeff").splitlines()
+    assert [f.split(";")[3] for f in filas[1:]] == ["video:septiembre", "video:ahora"]
+    assert 'filename="gasto_acme_todo_' in r.headers["Content-Disposition"]

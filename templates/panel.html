@@ -165,7 +165,7 @@
       {% for p in datos.proyectos %}
       <tr>
         <td><a href="{{ url_for('ver_cliente', cliente=p.id) }}"><strong>{{ p.nombre }}</strong></a></td>
-        <td class="num"><strong>{{ p.generacion_usd | usd }}</strong><br><small>{{ ngettext('%(num)d cobro', '%(num)d cobros', p.cobros) }}</small></td>
+        <td class="num"><strong>{{ p.generacion_usd | usd }}</strong><br><small>{{ ngettext('%(num)d cobro', '%(num)d cobros', p.cobros) }}</small><br><small title="{{ _('Desde el inicio') }}">{{ _('total %(usd)s', usd=p.generacion_total_usd | usd) }}</small></td>
         <td>
           <div class="admin-tipos-celda">
           {% for tipo, usd in p.por_tipo.items() | sort(attribute=1, reverse=true) %}
@@ -208,6 +208,10 @@
         <div class="card-cliente-gasto" title="{{ _('Generación del mes (US$): lo pagado a los proveedores de IA este mes') }}">
           <span>{{ _('Gasto del mes (US$)') }}</span>
           <strong>{{ c.generacion_usd | usd }}</strong>
+        </div>
+        <div class="card-cliente-gasto" title="{{ _('Generación desde el inicio (US$): todo lo pagado a los proveedores de IA por este proyecto') }}">
+          <span>{{ _('Desde el inicio (US$)') }}</span>
+          <strong>{{ c.generacion_total_usd | usd }}</strong>
         </div>
         {% for moneda, gasto in c.pauta.items() | sort %}
         <div class="card-cliente-gasto" title="{{ _('Pauta en Meta este mes, en la moneda de la cuenta publicitaria') }}">

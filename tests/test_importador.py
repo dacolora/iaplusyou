@@ -653,3 +653,14 @@ def test_la_regla_se_pide_en_el_idioma_del_proyecto(entorno, monkeypatch):
     entorno["respuestas"]["https://cdn.test/a.jpg"] = _Respuesta(content_type="image/jpeg")
     importador.importar_lista("acme", "shopify", [_prod()])
     assert vistos == ["en"]
+
+
+def test_pnd030_color_sin_fotos_avisa_sin_borrar_fotos_locales(entorno):
+    import importador
+    destino = entorno['tmp'] / 'color'
+    destino.mkdir()
+    (destino / '01.png').write_bytes(PNG)
+    errores = []
+    importador._bajar_a([], str(destino), _prod(), errores, 'color azul')
+    assert errores and 'color azul' in str(errores) and 'sin fotos' in str(errores)
+    assert (destino / '01.png').read_bytes() == PNG

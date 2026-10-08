@@ -6,6 +6,8 @@ Meta lo devuelve, así un reintento retoma donde quedó sin duplicar nada. Todo
 nace PAUSED: activar es otro clic (cambiar_estado). Las credenciales se cargan
 y limpian bajo el lock de tareas.meta (mismo motivo que allá).
 """
+import time
+
 from flask_babel import gettext
 
 import app_tiendas
@@ -37,6 +39,13 @@ _SNAP_DESDE_INSIGHTS = {"impresiones": "impresiones", "alcance": "alcance", "fre
 
 def centavos(monto, moneda):
     return int(round(float(monto) * (1 if moneda in MONEDAS_SIN_DECIMALES else 100)))
+
+
+def minimo_tope_campana(moneda):
+    """Desde qué total Creatv manda el tope (`spend_cap`) a la campaña de Meta: por debajo, Meta no lo acepta y el
+    límite lo dan solo el presupuesto diario de cada país y la fecha de cierre. «Nuevo experimento» lo dice en
+    palabras, así que se lee de aquí y no se repite."""
+    return _MIN_POR_MONEDA.get(moneda, SPEND_CAP_MINIMO_USD)
 
 
 def url_destino(base, ep_id):
@@ -294,7 +303,7 @@ def lanzar(cliente, experimento_id, on_etapa=None):
         etapa(ETAPAS_LANZAR[0][0])
         campaign_id = ex["meta_campaign_id"]
         if not campaign_id:
-            cap = centavos(ex["tope_total"], moneda) if float(ex["tope_total"] or 0) >= _MIN_POR_MONEDA.get(moneda, SPEND_CAP_MINIMO_USD) else None
+            cap = centavos(ex["tope_total"], moneda) if float(ex["tope_total"] or 0) >= minimo_tope_campana(moneda) else None
             campaign_id = meta_campaign.crear_campaign(ex["nombre"], ex["objetivo_meta"], spend_cap_centavos=cap)["id"]
             experimentos.actualizar(cliente, experimento_id, meta_campaign_id=campaign_id)
             experimentos.registrar_evento(cliente, experimento_id, "lanzamiento", gettext("Campaña creada en Meta (en pausa)"),
@@ -363,6 +372,43 @@ def pieza_retirada(pz):
             or extra.get("rescatado_en_escalon") is not None)
 
 
+# Estados de un experimento que ya empezó a gastar: su `end_time` ya está en Meta.
+_ESTADOS_YA_ACTIVADO = ("corriendo", "decidido")
+
+# Margen mínimo entre "ahora" y el fin reservado: una reserva más cercana que esto
+# (o ya vencida) se recalcula, porque Meta rechaza un `end_time` pasado o casi pasado.
+_MARGEN_FIN_RESERVADO = 3600
+
+
+def _preparar_fin_primera_activacion(cliente, ex):
+    """PND-113: fija el plazo antes de activar; reanudar nunca lo extiende.
+    Solo la PRIMERA activación fija `end_time` (decisión de Daniel, 2026-10-03):
+    un experimento que ya corre, o que ya tiene `activado_en`, no se toca. Que
+    esté `corriendo`/`decidido` basta aunque no tenga la marca: los activados
+    antes de que existiera `activado_en` ya tienen su pauta, y alargarla sin
+    que nadie lo apruebe es plata.
+    La reserva persistida hace idempotente un fallo parcial de Meta, salvo que
+    ya haya vencido (o esté a menos de una hora): entonces se recalcula desde
+    ahora, para no reenviar un `end_time` en el pasado.
+    Corre bajo el candado de credenciales, sin cambiar presupuestos.
+    """
+    actual = experimentos.obtener(cliente, ex["id"])
+    if (actual["estado"] in _ESTADOS_YA_ACTIVADO or ex.get("estado") in _ESTADOS_YA_ACTIVADO
+            or (actual.get("extra") or {}).get("activado_en")):
+        return
+    ahora = int(time.time())
+
+    def reservar(extra):
+        previo = extra.get("fin_primera_activacion")
+        if not previo or int(previo) < ahora + _MARGEN_FIN_RESERVADO:
+            extra["fin_primera_activacion"] = ahora + int(ex.get("dias") or 7) * 86400
+        return extra
+    extra = experimentos.actualizar_extra(cliente, ex["id"], reservar)
+    for p in actual["paises"]:
+        if p.get("meta_adset_id"):
+            meta_auth.llamar("POST", p["meta_adset_id"], payload={"end_time": extra["fin_primera_activacion"]})
+
+
 def cambiar_estado(cliente, experimento_id, status, pais=None):
     if status not in ("ACTIVE", "PAUSED"):
         raise ValueError(gettext("Estado no permitido."))
@@ -375,6 +421,10 @@ def cambiar_estado(cliente, experimento_id, status, pais=None):
     saltadas = []
 
     def _correr(_creds):
+        if status == "ACTIVE":
+            if pais is not None and not any(p["pais"] == pais and _adsets_de_pais(p) for p in ex["paises"]):   # apps: meta_adsets
+                raise ValueError(gettext("Ese país no tiene conjunto en Meta."))
+            _preparar_fin_primera_activacion(cliente, ex)
         if pais is None:
             meta_campaign.actualizar_estado(ex["meta_campaign_id"], status)
             for p in ex["paises"]:
@@ -613,6 +663,7 @@ def activar_pieza(cliente, ep_id):
         adsets_a_activar = [pais["meta_adset_id"]] if pais and pais.get("meta_adset_id") else []
 
     def _correr(_creds):
+        _preparar_fin_primera_activacion(cliente, ex)
         if campaña_pausada:
             meta_campaign.actualizar_estado(ex["meta_campaign_id"], "ACTIVE")
         if reactivar_conjunto:

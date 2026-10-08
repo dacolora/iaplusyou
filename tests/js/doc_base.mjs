@@ -1,6 +1,8 @@
 // Documento de prueba de las operaciones: dos clips del mismo clon (8 s) en la
 // principal, el sonido de la escena espejo, un texto y una voz. Lo usan las
 // pruebas de Node y salida_operaciones.mjs (que Python valida).
+import { agregarImagen, MAX_PISTAS } from "../../static/editor/operaciones.js";
+
 export const DURACIONES = { 1: 8000, 2: 3000 };
 const T = { x: 0.5, y: 0.5, escala: 1, rotacion: 0, opacidad: 1, ancla: "centro" };
 const A = { volumen: 1, fundido_entrada_ms: 0, fundido_salida_ms: 0, ducking: true };
@@ -66,5 +68,16 @@ export function docVinculos() {
         recorte: { desde_ms: 0, hasta_ms: 8000 }, velocidad: 1, audio: { ...A } },
     ],
   });
+  return d;
+}
+
+// Un documento AL TOPE de pistas (`MAX_PISTAS`, el de documento.py): `doc` más
+// filas de imágenes que se pisan en el tiempo, así que cada una abre fila
+// propia. Capa 5c, prueba en vivo: ya no son 8 escritas a mano.
+export function conLasPistasLlenas(doc) {
+  let d = doc;
+  for (let i = 0; i < 2 * MAX_PISTAS && d.pistas.length < MAX_PISTAS; i++) {
+    d = agregarImagen(d, { id: 4, ancho: 600, alto: 400 }, 0, { duracionMs: 1000 }, DURACIONES).doc;
+  }
   return d;
 }

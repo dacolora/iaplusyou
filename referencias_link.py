@@ -174,7 +174,7 @@ DESCRIPCION_PROMPT = """Eres director creativo de anuncios cortos para redes. Va
 No inventes marcas ni textos. No menciones "fotograma" ni "imagen": describe la escena directamente. Si son varias referencias, nómbralas como @Video 1, @Imagen 1, etc. en el orden dado."""
 
 
-def describir(referencias, cliente_hint="", idioma="es"):
+def describir(referencias, cliente_hint="", idioma="es", on_usage=None):
     """referencias: [{etiqueta, tipo, ruta_local?, url?}]. Usa Claude con visión
     sobre fotogramas/imágenes. Devuelve el texto en el idioma pedido (el del
     proyecto: la sugerencia cae en el cuadro de la persona, que la edita)."""
@@ -199,6 +199,8 @@ def describir(referencias, cliente_hint="", idioma="es"):
             break
     if total == 0:
         raise LinkError(gettext("No hay imágenes ni videos que describir."))
-    client = anthropic.Anthropic(api_key=_api_key())
+    client = anthropic.Anthropic(api_key=_api_key(), max_retries=0)
     resp = client.messages.create(model=MODEL, max_tokens=300, messages=[{"role": "user", "content": content}])
+    if on_usage:
+        on_usage(getattr(resp, "usage", None))
     return "".join(b.text for b in resp.content if b.type == "text").strip()

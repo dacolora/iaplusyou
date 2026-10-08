@@ -54,7 +54,8 @@ def test_clases_de_encabezado_y_estado_vacio():
         assert clase in bloque
 
 
-PESTANAS = [("tablero", "Tablero"), ("nicho", "Nicho"), ("referentes", "Referentes"),
+# El Tablero se fundió en Experimentos (E2, 2026-10-02): ya no es pestaña.
+PESTANAS = [("alertas", "Alertas"), ("nicho", "Nicho"), ("referentes", "Referentes"),
             ("creativeflowplus", "Crear"), ("final", "Final edition"), ("experimentos", "Experimentos"), ("sprints", "Sprints"),
             ("catalogo", "Catálogo"), ("settings", "Configuración")]
 
@@ -76,13 +77,19 @@ def test_cada_pestana_abre_con_su_encabezado(app):
 
 def test_estados_vacios_con_accion(app):
     html = _pagina(app)
-    sp, ni, rf, ex = (_pestana(html, t) for t in ("sprints", "nicho", "referentes", "experimentos"))
+    sp, ni, rf = (_pestana(html, t) for t in ("sprints", "nicho", "referentes"))
     # Sprints y Nicho: el botón del encabezado y el formulario de abajo bastan
     # (tres «+ Nuevo …» en la misma pantalla sobraban).
     assert 'class="estado-vacio"' in sp and sp.count('data-abrir-detalle="alta-sprint"') == 1
     assert 'class="estado-vacio"' in ni and ni.count('data-abrir-detalle="nuevo-estudio"') == 1
     assert 'class="estado-vacio"' in rf and "Todavía no hay referentes" in rf
-    assert 'class="estado-vacio"' in ex and 'href="#creativeflowplus"' in ex
+    # Experimentos (E2): la pestaña es un armazón y su estado vacío llega en el fragmento de resultados, con el botón
+    # para crear el primero; el «Ir a Crear» de la galería vacía vive ahora en «Nuevo experimento».
+    ex = app["c"].get("/cliente/acme/experimentos/resultados", headers={"X-Requested-With": "fetch"}).data.decode()
+    assert 'class="estado-vacio"' in ex and "Todavía no hay experimentos" in ex
+    assert 'href="/cliente/acme/experimentos/nuevo"' in ex[ex.index('class="estado-vacio"'):]
+    nuevo = app["c"].get("/cliente/acme/experimentos/nuevo").data.decode()
+    assert 'class="estado-vacio"' in nuevo and "#creativeflowplus" in nuevo
 
 
 # --------------------------------------------- F3 (ronda final): hint en labels ---

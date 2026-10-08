@@ -391,14 +391,8 @@ def _fase_trayendo(tarea, p, bid, avanzar):
 
     try:
         for pagina, cursor_siguiente, meta in fuente_mod.traer(consulta, tope - traidos_total, avanzar_trayendo, cursor=cursor):
-            for a in pagina:
-                if not a or not a.get("anuncio_id") or not a.get("imagen_origen"):
-                    continue
-                a = dict(a, fuente=consulta["fuente"])
-                _, creado = datos.guardar_referente(a, cliente=p["cliente"], barrido_id=bid)
-                traidos_total += 1
-                nuevos_total += int(creado)
-            cursor_final = cursor_siguiente
+            if (meta or {}).get("aviso"):
+                aviso_parcial = meta["aviso"]
             costo_real = (meta or {}).get("costo_real")
             # La referencia no varía por página dentro de esta misma tarea: si una
             # fuente futura reportara costo_real en MÁS de una página en una sola
@@ -411,13 +405,22 @@ def _fase_trayendo(tarea, p, bid, avanzar):
                 gastos.registrar_seguro(cliente_gasto, "recoleccion", costo_real,
                                         f"referentes:barrer:{bid}:{consulta['fuente']}:t{tarea.get('id')}",
                                         detalle=gettext("%(fuente)s: %(n)s anuncio(s) reales", fuente=consulta["fuente"],
-                                                        n=len(pagina)))
+                                                        n=len(pagina)), proveedor=consulta["fuente"],
+                                        extra={k: v for k, v in (meta or {}).items() if k != "costo_real"})
                 # Mismo mecanismo que `_fase_clasificando` con su gasto de
                 # Claude (Important 1 del review final): sin esto, el costo
                 # real de Apify queda solo en `gastos` y "Mis barridos"
                 # sigue mostrando Costo 0.00 aunque ya se haya pagado.
                 b2 = datos.barrido(bid) or {}
                 datos.actualizar_barrido(bid, usd_real=round(float(b2.get("usd_real") or 0.0) + costo_real, 4))
+            for a in pagina:
+                if not a or not a.get("anuncio_id") or not a.get("imagen_origen"):
+                    continue
+                a = dict(a, fuente=consulta["fuente"])
+                _, creado = datos.guardar_referente(a, cliente=p["cliente"], barrido_id=bid)
+                traidos_total += 1
+                nuevos_total += int(creado)
+            cursor_final = cursor_siguiente
             if traidos_total - int(b.get("traidos") or 0) >= TRAMO:
                 break
     except ErrorFuente as e:
@@ -431,7 +434,8 @@ def _fase_trayendo(tarea, p, bid, avanzar):
             gastos.registrar_seguro(cliente_gasto, "recoleccion", costo_real,
                                     f"referentes:barrer:{bid}:{consulta['fuente']}:t{tarea.get('id')}",
                                     detalle=gettext("%(fuente)s: corrida cobrada pero no se pudo leer del todo",
-                                                    fuente=consulta["fuente"]))
+                                                    fuente=consulta["fuente"]), proveedor=consulta["fuente"],
+                                    extra=getattr(e, "extra_gasto", {}))
             # Mismo motivo que en el bucle de arriba: esto también es plata
             # ya pagada y debe verse en "Mis barridos", aunque la corrida
             # haya terminado en error total.
@@ -466,7 +470,8 @@ def _fase_imagenes_barrer(tarea, p, bid, avanzar):
     avanzar(ETAPA_GUARDAR_IMAGENES)
     for r in datos.pendientes_imagen(barrido_id=bid, limite=TRAMO):
         try:
-            url = imagenes.guardar_en_r2(r["anuncio_id"], r["imagen_origen"], CARPETA)
+            clave = f"{r['anuncio_id']}_r{r['id']}" if r.get("cliente") else r["anuncio_id"]
+            url = imagenes.guardar_en_r2(clave, r["imagen_origen"], CARPETA)
             datos.marcar_imagen(r["id"], "ok", url)
         except Exception:
             # Igual que en copycoders: una imagen mala no debe abortar el

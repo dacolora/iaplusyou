@@ -146,4 +146,6 @@ def eliminar(cliente, ad_id):
             return
         epid = f._mapping[db.experimento_pieza.c.id]
         con.execute(db.metrica_snapshot.delete().where(db.metrica_snapshot.c.experimento_pieza_id == epid))
+        con.execute(db.metrica_dia.delete().where(db.metrica_dia.c.experimento_pieza_id == epid))
+        con.execute(db.metrica_desglose.delete().where(db.metrica_desglose.c.experimento_pieza_id == epid))
         con.execute(db.experimento_pieza.delete().where(db.experimento_pieza.c.id == epid))

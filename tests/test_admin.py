@@ -56,6 +56,10 @@ def test_generacion_del_mes_por_proyecto_y_por_tipo(admin, base_temporal):
     assert beta["generacion_usd"] == 0.2 and beta["por_tipo"] == {"final": 0.2}
     assert r["totales"]["generacion_usd"] == 2.0 and r["totales"]["cobros"] == 3
     assert r["totales"]["por_tipo"] == {"video": 1.3, "swap": 0.5, "final": 0.2}
+    # Desde el inicio (2026-10-07): el mes anterior cuenta en el total, no en el mes.
+    assert acme["generacion_total_usd"] == 6.8 and acme["cobros_total"] == 3
+    assert beta["generacion_total_usd"] == 0.2 and beta["cobros_total"] == 1
+    assert r["totales"]["generacion_total_usd"] == 7.0 and r["totales"]["cobros_total"] == 4
 
 
 def test_pauta_del_mes_incluye_anuncios_sueltos_por_moneda(admin, base_temporal):

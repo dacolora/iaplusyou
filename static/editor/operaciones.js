@@ -43,11 +43,22 @@ export const TRANSICIONES = ["corte", "fundido", "deslizar", "zoom", "desenfoque
 export const FOTO_MAX_MS = 60000;
 export const FOTO_DEFECTO_MS = 3000;
 export const TRANSICION_MIN_MS = 200;
-export const FUENTES = ["Inter-Bold", "Inter-SemiBold", "SpaceGrotesk-Bold"];
+// Capa 5c (D9.2): los ids de final_edition/fuentes.CATALOGO, en su orden
+// (tests/test_editor_js.py los compara). `cambiar` acepta cualquiera; la
+// página ofrece solo las que tienen su archivo (config.catalogo_fuentes).
+export const FUENTES = ["Inter-Bold", "Inter-SemiBold", "SpaceGrotesk-Bold", "Poppins-ExtraBold", "ArchivoBlack-Regular", "Anton-Regular", "BebasNeue-Regular", "LilitaOne-Regular", "Pacifico-Regular", "CaveatBrush-Regular", "DMSerifDisplay-Regular"];
+// Capa 5c (D7): el ancho de un texto (estilo.ancho_max, fracción del ANCHO
+// del lienzo): el deslizador «Ancho del texto» va de min a max y «Sin límite»
+// lo deja en null; `defecto` es el de un título nuevo y el que vuelve al
+// quitar «Sin límite».
+export const ANCHO_TEXTO = { min: 0.3, max: 1, defecto: 0.86 };
 // Cuánto dura la entrada «deslizar» elegida en el panel (capa 4c): sin
 // `duracion_ms` ni la vista previa ni el render la aplican.
 export const DURACION_ANIMACION_MS = 400;
-const MAX_PISTAS = 8;   // documento.MAX_PISTAS
+// Tope de pistas de una edición: el de documento.MAX_PISTAS (tests/test_editor_js.py
+// los compara) — agregar* abre una fila nueva solo mientras quepa. Eran 8 hasta la
+// capa 5c: un borrador ya usa 7 y no dejaba sumar otro emoji ni otra plantilla.
+export const MAX_PISTAS = 20;
 const ESCALA_MIN = 0.05;  // transform.escala: lo que acepta cambiar
 const ESCALA_MAX = 5;
 const _IDIOMA_RE = /^[a-z]{2}$/;   // documento._IDIOMA_CLIP_RE (D10): solo idioma, nunca país
@@ -788,28 +799,34 @@ export function cambiarDuracionFoto(doc, clipId, ms, info = {}) {
 
 // Capa de imagen en `tMs` (el material entero, sin recorte propio: una
 // imagen no tiene tiempo de fuente), de `duracionMs` sin pasar del fin del
-// video (`lugarCapa`). Centrada; sin `llenar`, a lo ancho del
-// 60 % del lienzo; con `llenar`, a cubrirlo entero (cover: el mayor de los
-// dos factores). La escala multiplica el tamaño natural del material
-// (`ancho`/`alto`) — sin esas medidas cae al tamaño por defecto de una capa
-// (tiempo.CAPA_DEFECTO), igual que hace la vista previa con un material sin
-// medidas conocidas.
-export function agregarImagen(doc, material, tMs, { llenar = false, duracionMs = 3000 } = {}, info = {}) {
+// video (`lugarCapa`). Centrada; sin `llenar`, a lo ancho de `fraccion` del
+// lienzo (60 %; un sticker entra al 35 %); con `llenar`, a cubrirlo entero
+// (cover: el mayor de los dos factores). La escala multiplica el tamaño
+// natural del material (`ancho`/`alto`) — sin esas medidas cae al tamaño por
+// defecto de una capa (tiempo.CAPA_DEFECTO), igual que hace la vista previa
+// con un material sin medidas conocidas. `tinte` (capa 5c, D11: el color de
+// un sticker) se valida como en `cambiar`; null o ausente, la imagen tal cual.
+export function agregarImagen(doc, material, tMs, {
+  llenar = false, duracionMs = 3000, fraccion = 0.6, tinte = null,
+} = {}, info = {}) {
   const res = structuredClone(doc);
+  const color = tinte === null || tinte === undefined ? null : colorSinAlfa(tinte, "tinte");
   const { inicio, dur } = lugarCapa(res, tMs, Math.max(MIN_CLIP_MS, Math.round(Number(duracionMs) || 3000)));
   const pista = pistaLibre(res, "imagen", "p_imagen", inicio, dur);
   const [anchoLienzo, altoLienzo] = FORMATOS[res.formato];
   const tieneMedidas = Number(material?.ancho) > 0 && Number(material?.alto) > 0;
   const anchoNatural = tieneMedidas ? Number(material.ancho) : CAPA_DEFECTO[0];
   const altoNatural = tieneMedidas ? Number(material.alto) : CAPA_DEFECTO[1];
+  const parte = Number(fraccion) > 0 ? Number(fraccion) : 0.6;
   // el mismo rango que acepta cambiar (0,05–5): una imagen diminuta entraba a 64×
   const escala = acotar(llenar
     ? Math.max(anchoLienzo / anchoNatural, altoLienzo / altoNatural)
-    : (anchoLienzo * 0.6) / anchoNatural, ESCALA_MIN, ESCALA_MAX);
+    : (anchoLienzo * parte) / anchoNatural, ESCALA_MIN, ESCALA_MAX);
   const clip = {
     id: idNuevo(res, "img"), inicio_ms: inicio, duracion_ms: dur, material_id: material.id,
     transform: { ...TRANSFORM, escala }, keyframes: [], animacion: null,
     ...(tieneMedidas ? { ancho_px: Math.trunc(anchoNatural), alto_px: Math.trunc(altoNatural) } : {}),
+    ...(color ? { tinte: color } : {}),
   };
   pista.clips.push(clip);
   return terminar(res, clip.id, info);
@@ -863,43 +880,88 @@ export function vozCortada(antes, res, clipId, info = {}) {
 
 // Medidas de estilo en 1080x1920 (borrador.py), en fracción de la altura del
 // lienzo (tamaño, grosor de contorno, offset de sombra) salvo donde se
-// anota lo contrario.
-const PRESETS_TEXTO = {
-  titulo: { fuente: "Inter-Bold", px: 72, color: "#FFFFFF", y: 0.2,
-            contorno: { color: "#000000", grosorPx: 4 } },
-  subtitulo: { fuente: "Inter-SemiBold", px: 48, color: "#FFFFFF", y: 0.75,
-               sombra: { color: "#000000", dxPx: 3, dyPx: 3 } },
-  precio: { fuente: "SpaceGrotesk-Bold", px: 56, color: "#FFFFFF", y: 0.6, fondo: "marca" },
-  llamado: { fuente: "Inter-Bold", px: 52, color: "#000000", y: 0.85, fondo: "blanco" },
-};
+// anota lo contrario. `anchoMax` es fracción del ANCHO (estilo.ancho_max, D7.1):
+// null en lo corto (precio, plantillas, emojis), que no se parta. `texto` es
+// la CLAVE de su palabra inicial (se traduce al agregarlo: nace en el idioma
+// de quien edita, como «Escribe aquí»). Las plantillas para vender (D12.1)
+// prefieren una fuente de anuncio y caen a `respaldo` si no está en FUENTES
+// (`fuenteDePreset`). `fondo`: "marca" | "blanco" (los de siempre) o
+// {color, radio} (opaco; radio 1 = píldora, 0,01 = caja).
+const TEXTO_NUEVO = "op.texto_nuevo";
+const ALTO_PLANTILLA = 0.35;
+const congelar = (o) => Object.freeze(Object.fromEntries(Object.entries(o).map(([k, v]) => [
+  k, v && typeof v === "object" ? Object.freeze({ ...v }) : v])));
+export const PRESETS_TEXTO = Object.freeze({
+  titulo: congelar({ fuente: "Inter-Bold", px: 72, color: "#FFFFFF", y: 0.2, anchoMax: 0.86, texto: TEXTO_NUEVO,
+    contorno: { color: "#000000", grosorPx: 4 } }),
+  subtitulo: congelar({ fuente: "Inter-SemiBold", px: 48, color: "#FFFFFF", y: 0.75, anchoMax: 0.86, texto: TEXTO_NUEVO,
+    sombra: { color: "#000000", dxPx: 3, dyPx: 3 } }),
+  precio: congelar({ fuente: "SpaceGrotesk-Bold", px: 56, color: "#FFFFFF", y: 0.6, anchoMax: null, texto: "op.texto_precio",
+    fondo: "marca" }),
+  llamado: congelar({ fuente: "Inter-Bold", px: 52, color: "#000000", y: 0.85, anchoMax: 0.8, texto: TEXTO_NUEVO,
+    fondo: "blanco" }),
+  oferta: congelar({ fuente: "Anton-Regular", respaldo: "Inter-Bold", px: 96, color: "#FFFFFF", y: ALTO_PLANTILLA,
+    anchoMax: null, texto: "op.plantilla_oferta", fondo: { color: "#E11D48", radio: 0.01 } }),
+  nuevo: congelar({ fuente: "BebasNeue-Regular", respaldo: "Inter-Bold", px: 110, color: "#111111", y: ALTO_PLANTILLA,
+    anchoMax: null, texto: "op.plantilla_nuevo", fondo: { color: "#FFD400", radio: 1 } }),
+  descuento: congelar({ fuente: "ArchivoBlack-Regular", respaldo: "Inter-Bold", px: 120, color: "#FFD400", y: ALTO_PLANTILLA,
+    anchoMax: null, texto: "op.plantilla_descuento", contorno: { color: "#111111", grosorPx: 6 } }),
+  envio: congelar({ fuente: "Poppins-ExtraBold", respaldo: "Inter-Bold", px: 56, color: "#FFFFFF", y: ALTO_PLANTILLA,
+    anchoMax: null, texto: "op.plantilla_envio", fondo: { color: "#16A34A", radio: 1 } }),
+  ultimas: congelar({ fuente: "Poppins-ExtraBold", respaldo: "Inter-Bold", px: 52, color: "#FFFFFF", y: ALTO_PLANTILLA,
+    anchoMax: null, texto: "op.plantilla_ultimas", fondo: { color: "#111111", radio: 0.01 } }),
+  mas_vendido: congelar({ fuente: "LilitaOne-Regular", respaldo: "Inter-Bold", px: 64, color: "#111111", y: ALTO_PLANTILLA,
+    anchoMax: null, texto: "op.plantilla_mas_vendido", fondo: { color: "#FFD400", radio: 1 } }),
+  // D12.2: un emoji como sticker — su emoji llega en `literal` (no tiene palabra propia)
+  emoji: congelar({ fuente: "Inter-Bold", px: 160, color: "#FFFFFF", y: 0.4, anchoMax: null, texto: null }),
+});
+
+// La fuente con que nace un preset: la preferida si está entre `fuentes`
+// (FUENTES: el catálogo), si no su respaldo (Inter-Bold, que siempre está).
+export function fuenteDePreset(def, fuentes = FUENTES) {
+  return fuentes.includes(def.fuente) || !def.respaldo ? def.fuente : def.respaldo;
+}
+
+function fondoDePreset(def, res) {
+  if (def.fondo === "marca") {
+    return { color: res.marca?.color || "#7c3aed", opacidad: 1, radio: 1, relleno_x: 0.03, relleno_y: 0.015, ancho: null };
+  }
+  if (def.fondo === "blanco") return { color: "#FFFFFF", opacidad: 0.9, radio: 0.02, relleno_x: 0.03, relleno_y: 0.02, ancho: null };
+  if (def.fondo) return { color: def.fondo.color, opacidad: 1, radio: def.fondo.radio, relleno_x: 0.03, relleno_y: 0.015, ancho: null };
+  return null;
+}
 
 // Un texto nuevo, literal («Escribe aquí», o «Escribe el precio» para el
 // preset precio — antes «$ 0», que salía así en la final si se olvidaba
 // cambiarlo; el precio del producto no se inventa aquí: lo escribe la
-// persona, que tiene el campo enfocado con todo seleccionado), de 3 s (sin
-// pasar del fin del video: `lugarCapa`), en una pista de texto libre.
-// `estilo.tamano` es px/altura del lienzo, como pide documento.py (fracción
-// de la altura).
-export function agregarTexto(doc, tMs, preset, info = {}) {
+// persona, que tiene el campo enfocado con todo seleccionado; la palabra de
+// una plantilla para vender; o `literal`, si viene: el emoji de un
+// emoji-sticker, que lo exige), de 3 s (sin pasar del fin del video:
+// `lugarCapa`), en una pista de texto libre. `estilo.tamano` es px/altura
+// del lienzo, como pide documento.py (fracción de la altura). Capa 5c (D3):
+// todo texto nuevo nace v2 (`estilo.version: 2`) con el ancho de su preset.
+// Las opciones van ANTES de `info`, como en agregarImagen: la página agrega
+// `info` al final de cada operación (`operarCon("agregarTexto", cabezal,
+// "emoji", {literal})`).
+export function agregarTexto(doc, tMs, preset, { literal = null } = {}, info = {}) {
   const res = structuredClone(doc);
-  const def = PRESETS_TEXTO[preset];
+  const def = Object.hasOwn(PRESETS_TEXTO, preset) ? PRESETS_TEXTO[preset] : null;
   if (!def) throw new OperacionInvalida(`Ese estilo de texto no existe (${preset}).`);
+  const propio = typeof literal === "string" ? literal.trim() : "";
+  if (!propio && def.texto === null) throw new OperacionInvalida(t("op.emoji_sin_literal"));
   const { inicio, dur } = lugarCapa(res, tMs, 3000);
   const [, altoLienzo] = FORMATOS[res.formato];
   const pista = pistaLibre(res, "texto", "p_texto", inicio, dur);
   const estilo = {
-    fuente: def.fuente, tamano: def.px / altoLienzo, color: def.color, alineacion: "centro", ancho_max: null,
+    fuente: fuenteDePreset(def), tamano: def.px / altoLienzo, color: def.color, alineacion: "centro", ancho_max: def.anchoMax,
     contorno: def.contorno ? { color: def.contorno.color, grosor: def.contorno.grosorPx / altoLienzo } : null,
     sombra: def.sombra ? { color: def.sombra.color, dx: def.sombra.dxPx / altoLienzo, dy: def.sombra.dyPx / altoLienzo } : null,
-    fondo: def.fondo === "marca"
-      ? { color: res.marca?.color || "#7c3aed", opacidad: 1, radio: 1, relleno_x: 0.03, relleno_y: 0.015, ancho: null }
-      : def.fondo === "blanco"
-      ? { color: "#FFFFFF", opacidad: 0.9, radio: 0.02, relleno_x: 0.03, relleno_y: 0.02, ancho: null }
-      : null,
+    fondo: fondoDePreset(def, res),
+    version: 2,
   };
   const clip = {
     id: idNuevo(res, preset), inicio_ms: inicio, duracion_ms: dur,
-    texto: { literal: preset === "precio" ? t("op.texto_precio") : t("op.texto_nuevo") },
+    texto: { literal: propio || t(def.texto) },
     estilo, transform: { ...TRANSFORM, y: def.y }, keyframes: [], animacion: null,
   };
   pista.clips.push(clip);
@@ -973,18 +1035,41 @@ export function editarTexto(doc, clipId, texto, destino, info = {}) {
     res.variables = res.variables || {};
     res.variables.textos = res.variables.textos || {};
     res.variables.textos[rol] = { ...(res.variables.textos[rol] || {}), [destino]: valor };
-    if (res.pngs) {
-      for (const p of res.pistas) {
-        if (p.tipo !== "texto") continue;
-        for (const c of p.clips) {
-          if ((c.texto || {}).variable === rol) delete res.pngs[c.id];
-        }
+    // capa 5c (D3): todos los que muestran esa variable cambiaron de contenido: pasan a v2
+    for (const p of res.pistas) {
+      if (p.tipo !== "texto") continue;
+      for (const c of p.clips) {
+        if ((c.texto || {}).variable !== rol) continue;
+        aV2(c);
+        if (res.pngs) delete res.pngs[c.id];
       }
     }
   } else {
     clip.texto = { literal: valor };
+    aV2(clip);
     if (res.pngs) delete res.pngs[clipId];
   }
+  return terminar(res, clip.id, info);
+}
+
+// Capa 5c (D3): un texto pasa a v2 (la maqueta compartida, los emojis, la
+// nitidez) en cuanto la persona le cambia algo que se dibuja — su contenido,
+// su estilo o su tamaño —; moverlo, recortarlo o cambiarle la entrada no lo
+// toca (un documento viejo sigue byte a byte igual hasta que se edita).
+function aV2(clip) {
+  clip.estilo = { ...(clip.estilo && typeof clip.estilo === "object" ? clip.estilo : {}), version: 2 };
+}
+
+// «Mostrar los emojis» (D3, D7.5): pasa a v2 un texto de antes, sin cambiarle
+// nada más (un deshacer). Si ya era v2, el documento sale igual en contenido
+// (sin normalizar: nada que guardar ni que deshacer).
+export function actualizarTexto(doc, clipId, info = {}) {
+  const res = structuredClone(doc);
+  const { pista, clip } = buscar(res, clipId);
+  if (pista.tipo !== "texto") throw new OperacionInvalida(t("op.estilo_solo_texto"));
+  if (clip.estilo?.version === 2) return { doc: res, seleccion: clip.id };
+  aV2(clip);
+  if (res.pngs) delete res.pngs[clipId];
   return terminar(res, clip.id, info);
 }
 
@@ -1029,7 +1114,7 @@ function subCambio(actual, valor, campos, nombre, automaticos = []) {
 const CAMPOS_CONTORNO = { color: null, grosor: [0, 0.1] };
 const CAMPOS_SOMBRA = { color: null, dx: [-0.1, 0.1], dy: [-0.1, 0.1] };
 const CAMPOS_FONDO = { color: null, opacidad: [0, 1], radio: [0, 1], relleno_x: [0, 0.5], relleno_y: [0, 0.5], ancho: [0, 1] };
-const CAMBIOS_TOP = ["estilo", "transform", "audio", "ken_burns", "animacion", "idioma", "encuadre"];
+const CAMBIOS_TOP = ["estilo", "transform", "audio", "ken_burns", "animacion", "idioma", "encuadre", "tinte"];
 
 // Cambia un clip existente por una lista blanca de campos (cualquier otra
 // clave, en cualquier nivel, se rechaza): estilo.{fuente, tamano, color,
@@ -1041,10 +1126,15 @@ const CAMBIOS_TOP = ["estilo", "transform", "audio", "ken_burns", "animacion", "
 // (ninguna|deslizar: con su duración, DURACION_ANIMACION_MS; «ninguna» deja
 // `animacion: null`), encuadre (capa 5b, D4/D8: solo en un clip de la
 // principal de video — videos y fotos —; `null` quita el encuadre; se
-// fusiona sobre el actual y pasa por `encuadre.limpio`). Los valores fuera
+// fusiona sobre el actual y pasa por `encuadre.limpio`), tinte (capa 5c,
+// D11: solo en una capa de imagen — un sticker —; un color #RRGGBB que se
+// guarda en mayúsculas, `null` lo quita). Los valores fuera
 // de rango se acotan en vez de rechazarse; `estilo.tamano` llega en PÍXELES (12–200,
 // como los presets de agregarTexto) y se guarda como fracción de la altura
-// del lienzo. Cambiar el estilo de un texto invalida su png en caché.
+// del lienzo. Cambiar el estilo de un texto invalida su png en caché. Capa 5c
+// (D3): cambiar el estilo o el tamaño (`transform.escala`) de un texto lo pasa
+// a v2 — solo si de verdad cambió: poner el valor que ya tenía no lo toca —;
+// moverlo (x, y) o cambiarle la opacidad, no.
 export function cambiar(doc, clipId, cambios, info = {}) {
   const res = structuredClone(doc);
   const { pista, clip } = buscar(res, clipId);
@@ -1057,6 +1147,7 @@ export function cambiar(doc, clipId, cambios, info = {}) {
   let tocaEstilo = false;
   if (cambios.estilo !== undefined) {
     if (pista.tipo !== "texto") throw new OperacionInvalida(t("op.estilo_solo_texto"));
+    const estiloAntes = JSON.stringify(clip.estilo);
     const e = cambios.estilo;
     if (typeof e !== "object" || Array.isArray(e) || e === null) throw new OperacionInvalida("estilo debe ser un objeto.");
     for (const clave of Object.keys(e)) {
@@ -1085,7 +1176,12 @@ export function cambiar(doc, clipId, cambios, info = {}) {
     if (e.ancho_max !== undefined) {
       clip.estilo.ancho_max = e.ancho_max === null ? null : acotar(numeroCambio(e.ancho_max, "estilo.ancho_max"), 0, 1);
     }
-    tocaEstilo = true;
+    // ruling (Tarea 7, arreglo): solo un estilo que de verdad cambió lo pasa a v2 (tocar el color que
+    // ya tiene no convierte, no guarda ni mueve los saltos de línea de un anuncio que ya existe)
+    if (JSON.stringify(clip.estilo) !== estiloAntes) {
+      aV2(clip);
+      tocaEstilo = true;
+    }
   }
   if (cambios.transform !== undefined) {
     if (!["video", "superpuesto", "imagen", "texto"].includes(pista.tipo)) {
@@ -1098,7 +1194,14 @@ export function cambiar(doc, clipId, cambios, info = {}) {
     }
     if (tf.x !== undefined) clip.transform.x = acotar(numeroCambio(tf.x, "transform.x"), 0, 1);
     if (tf.y !== undefined) clip.transform.y = acotar(numeroCambio(tf.y, "transform.y"), 0, 1);
-    if (tf.escala !== undefined) clip.transform.escala = acotar(numeroCambio(tf.escala, "transform.escala"), ESCALA_MIN, ESCALA_MAX);
+    if (tf.escala !== undefined) {
+      const escalaAntes = clip.transform.escala ?? TRANSFORM.escala;
+      clip.transform.escala = acotar(numeroCambio(tf.escala, "transform.escala"), ESCALA_MIN, ESCALA_MAX);
+      if (pista.tipo === "texto" && clip.transform.escala !== escalaAntes) {
+        aV2(clip);
+        tocaEstilo = true;      // lo dibujado como v1 ya no vale
+      }
+    }
     if (tf.opacidad !== undefined) clip.transform.opacidad = acotar(numeroCambio(tf.opacidad, "transform.opacidad"), 0, 1);
   }
   if (cambios.audio !== undefined) {
@@ -1167,6 +1270,13 @@ export function cambiar(doc, clipId, cambios, info = {}) {
       if (enc.modo !== undefined && !MODOS.includes(enc.modo)) throw new OperacionInvalida(`Ese encuadre no existe (${enc.modo}).`);
       clip.encuadre = limpio({ ...completo(clip.encuadre), ...enc });
     }
+  }
+  if (cambios.tinte !== undefined) {
+    // D11: solo en una capa de imagen (la página lo ofrece en un sticker);
+    // un valor que no es un color es de contrato (INTERNOS)
+    if (pista.tipo !== "imagen") throw new OperacionInvalida(t("op.tinte_solo_imagen"));
+    if (cambios.tinte === null) delete clip.tinte;
+    else clip.tinte = colorSinAlfa(cambios.tinte, "tinte");
   }
   if (tocaEstilo && pista.tipo === "texto" && res.pngs) delete res.pngs[clipId];
   return terminar(res, clip.id, info);

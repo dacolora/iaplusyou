@@ -293,6 +293,17 @@ def duplicar(cliente, cf_id, modelo=None, enfoque=None, prompt_relleno=None, var
     if enfoque is not None and enfoque not in flowplus_prompt.ENFOQUES:
         raise ValueError(f"Enfoque desconocido: {enfoque}. Opciones: {list(flowplus_prompt.ENFOQUES)}")
     with db.conectar() as con:
+        if variante == "B":
+            # Reserva entre procesos antes de leer (PND-004, 2026-10-02).
+            # Todas las hijas B pasan por este escritor; otro clic obtiene
+            # la misma sesión y la cola deduplica su job_id.
+            con.exec_driver_sql("BEGIN IMMEDIATE")
+            hija = con.execute(sa.select(db.concepto.c.legado_id).where(
+                db.concepto.c.cliente == cliente,
+                db.concepto.c.extra["derivado_de"].as_string() == cf_id,
+                db.concepto.c.extra["variante"].as_string() == "B")).scalar()
+            if hija:
+                return hija
         f = con.execute(sa.select(db.concepto.c.extra, db.concepto.c.enfoque, db.pieza.c.modelo,
                                   db.pieza.c.aspect_ratio, db.pieza.c.duracion_s, db.pieza.c.tipo)
                         .join(db.pieza, db.pieza.c.concepto_id == db.concepto.c.id)
@@ -385,6 +396,8 @@ def _final_a_dict(p):
         "video_url": p.url_video, "url_miniatura": p.url_miniatura, "url_local": p.url_local,
         "duracion_s": p.duracion_s, "costo_usd": p.costo_usd, "capas": p.capas or {},
         "guion": p.guion, "error": p.error, "creado_en": p.creado_en,
+        # El tablero de Final edition ordena por lo último que se movió.
+        "actualizado_en": p.actualizado_en,
         # Id numérico de la fila `pieza`: Crear lo usa para publicar orgánico
         # (organico.py trabaja por pieza_id, no por legado_id).
         "pieza_id": p.id,

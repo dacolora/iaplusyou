@@ -99,6 +99,24 @@ def generacion_mes(clientes, ahora_iso=None):
     return out
 
 
+def generacion_total(clientes, ahora_iso=None):
+    """{cliente: {"usd", "cobros"}} de TODO lo cobrado a cada proyecto desde su
+    primer cobro hasta `ahora`, en UNA consulta (la tarjeta del panel mostraba
+    solo el mes y el total parecía perdido, 2026-10-07)."""
+    hasta = _ahora(ahora_iso)
+    out = {c: {"usd": 0.0, "cobros": 0} for c in clientes}
+    if not clientes:
+        return out
+    g = db.gasto
+    q = (sa.select(g.c.cliente, sa.func.sum(g.c.usd), sa.func.count())
+         .where(g.c.cliente.in_(list(clientes)), g.c.creado_en <= hasta)
+         .group_by(g.c.cliente))
+    with db.conectar() as con:
+        for cliente, usd, n in con.execute(q):
+            out[cliente] = {"usd": round(float(usd or 0), 4), "cobros": int(n)}
+    return out
+
+
 # ------------------------------------- pauta (snapshots, incluido el legado) ---
 
 def pauta_mes(clientes, ahora_iso=None):
@@ -331,6 +349,7 @@ def resumen(clientes, nombres=None, ahora_iso=None):
     hasta = _ahora(ahora_iso)
     desde = _inicio_mes(hasta)
     gen = generacion_mes(clientes, hasta)
+    gen_total = generacion_total(clientes, hasta)
     creatv_gen = generacion_mes([referentes_datos.CLIENTE_CREATV], hasta)[referentes_datos.CLIENTE_CREATV]
     pauta = pauta_mes(clientes, hasta)
     piezas = piezas_mes(clientes, hasta)
@@ -343,6 +362,7 @@ def resumen(clientes, nombres=None, ahora_iso=None):
         proyectos.append({
             "id": c, "nombre": (nombres or {}).get(c) or c,
             "generacion_usd": gen[c]["usd"], "cobros": gen[c]["cobros"], "por_tipo": gen[c]["por_tipo"],
+            "generacion_total_usd": gen_total[c]["usd"], "cobros_total": gen_total[c]["cobros"],
             "pauta": pauta[c], "piezas_mes": piezas[c],
             "pendiente": aprob[c]["pendiente"], "publicado": aprob[c]["publicado"], "rechazado": aprob[c]["rechazado"],
             "experimentos_corriendo": exps[c], "meta": meta_estado(c), "tiendas": tiendas_[c],
@@ -358,6 +378,8 @@ def resumen(clientes, nombres=None, ahora_iso=None):
         "proyectos": len(proyectos),
         "generacion_usd": round(sum(p["generacion_usd"] for p in proyectos), 4),
         "cobros": sum(p["cobros"] for p in proyectos),
+        "generacion_total_usd": round(sum(p["generacion_total_usd"] for p in proyectos), 4),
+        "cobros_total": sum(p["cobros_total"] for p in proyectos),
         "por_tipo": tot_tipo, "pauta": tot_pauta,
         "piezas_mes": sum(p["piezas_mes"] for p in proyectos),
         "pendiente": sum(p["pendiente"] for p in proyectos),

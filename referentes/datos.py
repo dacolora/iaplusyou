@@ -6,10 +6,11 @@ nada de Flask (salvo `gettext` de flask_babel para los mensajes de error) ni
 de proveedores.
 
 Visibilidad: un proyecto ve los referentes globales (cliente NULL) y los
-suyos. `anuncio_id` (id del Ad Library de Meta) es único global: un anuncio
-que ya existe se actualiza, nunca se duplica ni cambia de dueño.
+suyos. `anuncio_id` es único dentro de cada proyecto; NULL conserva una
+biblioteca global independiente (PND-006, 2026-10-02).
 """
 import math
+from urllib.parse import unquote, urlparse
 
 import sqlalchemy as sa
 from flask_babel import gettext
@@ -76,9 +77,17 @@ def _visible_listado(t, cliente):
     proyecto no la traiga (`proyectos.referentes_copycoders`, incidente
     2026-09-28). Un referente puntual (ficha, Recrear, uno ya usado en un
     sprint) se sigue abriendo por id con `_visible`."""
-    if cliente is None or proyectos.referentes_copycoders(cliente):
-        return _visible(t, cliente)
-    return sa.or_(sa.and_(t.c.cliente.is_(None), t.c.fuente != "copycoders"), t.c.cliente == cliente)
+    visible = _visible(t, cliente)
+    if cliente is not None:
+        propio = t.alias("referente_propio")
+        existe_propio = sa.exists(sa.select(propio.c.id).where(
+            propio.c.cliente == cliente, propio.c.anuncio_id == t.c.anuncio_id,
+            propio.c.estado_imagen == "ok").correlate(t))   # una copia sin imagen no deja la grilla vacía
+        visible = sa.and_(visible, sa.or_(t.c.cliente == cliente, ~existe_propio))
+        if not proyectos.referentes_copycoders(cliente):
+            visible = sa.and_(visible, sa.or_(t.c.cliente == cliente, t.c.fuente != "copycoders"))
+    return visible
+
 
 
 def total_copycoders():
@@ -205,7 +214,7 @@ def _validar_anuncio(a):
 
 
 def guardar_referente(anuncio, cliente=None, barrido_id=None):
-    """Upsert por anuncio_id. Devuelve (id, creado). Si ya existe: actualiza
+    """Upsert por (cliente, anuncio_id). Devuelve (id, creado). Si ya existe: actualiza
     dias/variantes/ultima_vez/activo (y cuerpo si estaba vacío); si estaba sin
     clasificar y la fuente trae clasificación, la toma; nunca cambia `cliente`."""
     a = dict(anuncio)
@@ -214,7 +223,8 @@ def guardar_referente(anuncio, cliente=None, barrido_id=None):
     ahora = db.ahora()
     t = db.referente
     with db.conectar() as con:
-        fila = con.execute(sa.select(t).where(t.c.anuncio_id == aid)).first()
+        con.exec_driver_sql("BEGIN IMMEDIATE")
+        fila = con.execute(sa.select(t).where(t.c.anuncio_id == aid, t.c.cliente == cliente)).first()
         if fila:
             cambios = {k: a[k] for k in _ACTUALIZABLES if a.get(k) is not None}
             if not (fila.cuerpo or "").strip() and _texto(a.get("cuerpo")):
@@ -560,13 +570,14 @@ def borrar_de_barrido(barrido_id):
     """Borra los referentes que trajo un barrido y las familias de origen
     `claude` que se quedan sin ningún referente (las de copycoders nunca).
     El barrido queda como historial del gasto. Devuelve {"referentes": n,
-    "familias": [nombres borrados], "anuncio_ids": [...]} -- el llamador borra
-    las copias en R2 (`referentes/<anuncio_id>.jpg`). Uso: limpiar un barrido
+    "familias": [nombres borrados], "claves_r2": [...]} -- claves extraídas
+    de imagen_url, históricas o privadas; el llamador borra esas copias en R2.
+    Uso: limpiar un barrido
     que trajo ruido (2026-09-27, «dolor de pies» sin orden por relevancia)."""
     r, f = db.referente, db.referente_familia
     with db.conectar() as con:
-        filas = con.execute(sa.select(r.c.anuncio_id, r.c.familia).where(r.c.barrido_id == barrido_id)).all()
-        anuncio_ids = [a for a, _ in filas]
+        filas = con.execute(sa.select(r.c.imagen_url, r.c.familia).where(r.c.barrido_id == barrido_id)).all()
+        claves_r2 = [unquote(urlparse(url).path).lstrip("/") for url, _ in filas if url]
         tocadas = sorted({fam for _, fam in filas if fam})
         con.execute(r.delete().where(r.c.barrido_id == barrido_id))
         vacias = []
@@ -575,4 +586,4 @@ def borrar_de_barrido(barrido_id):
                 continue
             if con.execute(f.delete().where(f.c.nombre == nombre, f.c.origen == "claude")).rowcount:
                 vacias.append(nombre)
-    return {"referentes": len(anuncio_ids), "familias": vacias, "anuncio_ids": anuncio_ids}
+    return {"referentes": len(filas), "familias": vacias, "claves_r2": claves_r2}

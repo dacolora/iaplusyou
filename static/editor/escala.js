@@ -415,7 +415,8 @@ export function rolDeMaterial(material) {
 // Qué operación pide agregar algo de la biblioteca: [nombre, ...args] para
 // `editor.operar` (sin el documento ni info), o null si no hay dónde.
 // `cosa`: {tipo: "video" | "imagen" | "audio", material}, {tipo: "texto",
-// preset} o {tipo: "transicion", transicion}. Con `punto` (lo que dio
+// preset, literal?}, {tipo: "sticker", material, tinte} o {tipo:
+// "transicion", transicion}. Con `punto` (lo que dio
 // LineaTiempo.puntoEn al soltar) va ahí: un video, en su lugar de la
 // principal (soltado en otra fila, por el tiempo: no hay video sobre video);
 // una imagen, como capa en ese instante aunque caiga en la fila del video —
@@ -429,6 +430,10 @@ export function rolDeMaterial(material) {
 // IA o una locución como VOZ (agacha la música), con el idioma del destino
 // que se ve si habla ese idioma (`destino`, voz_modelo.idiomaDeVoz); lo
 // demás como música.
+// Capa 5c (D11): un sticker entra como una capa de imagen al 35 % del ancho del
+// lienzo (una imagen cualquiera, al 60 %), del color que trae su ficha.
+export const FRACCION_STICKER = 0.35;
+
 export function pedidoAgregar(doc, cosa, { punto = null, cabezalMs = 0, seleccion = null, destino = null, como = null } = {}) {
   const ms = Math.max(0, Math.round(Number(punto ? punto.tMs : cabezalMs) || 0));
   switch (cosa?.tipo) {
@@ -449,8 +454,13 @@ export function pedidoAgregar(doc, cosa, { punto = null, cabezalMs = 0, seleccio
       if (rolDeMaterial(cosa.material) !== "voz") return ["agregarAudio", cosa.material, ms, { rol: "musica" }];
       return ["agregarAudio", cosa.material, ms, { rol: "voz", idioma: idiomaDeVoz(cosa.material?.idioma, destino).idioma }];
     }
+    case "sticker":
+      // siempre una capa (nunca una foto del video, aunque caiga en su fila ni se pida «como clip»)
+      return ["agregarImagen", cosa.material, ms, { fraccion: FRACCION_STICKER, tinte: cosa.tinte }];
     case "texto":
-      return ["agregarTexto", ms, cosa.preset];
+      // las opciones de agregarTexto (capa 5c: `literal`, el emoji de un emoji-sticker) van antes de `info`, que la
+      // página agrega al final: las muestras y las plantillas siempre llevan el `{}`
+      return ["agregarTexto", ms, cosa.preset, cosa.literal === undefined ? {} : { literal: cosa.literal }];
     case "transicion": {
       if (!punto) return pedidoTransicion(doc, seleccion, ms, cosa.transicion);
       const id = corteCercano(doc, ms);

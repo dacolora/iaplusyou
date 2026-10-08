@@ -202,7 +202,7 @@ export function seguirPrincipal(antes, despues, info = {}) {
     // Filas (D10.6): una capa movida que queda encima de otra de su misma
     // fila pasa a la primera fila de su clase donde quepa (la regla de
     // agregar, `pistaLibre`); sin filas libres — ni lugar para una nueva:
-    // las 8 pistas ocupadas, `pistaNueva` lanza — se queda en la suya
+    // las MAX_PISTAS ocupadas, `pistaNueva` lanza — se queda en la suya
     // (documento.validar solo prohíbe el solape en la principal).
     for (const { pista, clip } of movidas) {
       const pisa = pista.clips.some((c) => c !== clip

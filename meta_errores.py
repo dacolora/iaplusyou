@@ -43,8 +43,16 @@ def _cadena(texto, campo):
 
 # Códigos de la Graph API con remedio conocido (developers.facebook.com › Graph API › errores).
 _PERMISOS = {10, 200, 294}
-_LIMITE = {4, 17, 32, 613, 80004}
+# Límites de uso: 4, 17, 32 y 613 son los de la app y la cuenta; la familia 8000x es la de los límites
+# «por caso de uso de negocio» de Meta (80000 es el de Ads Insights, el que más pega al pedir el detalle de
+# un experimento; 80004 el de Ads Management).
+_LIMITE = {4, 17, 32, 613, 80000, 80001, 80002, 80003, 80004, 80005, 80006, 80008, 80009, 80014}
 _TEMPORAL = {1, 2}
+
+
+def es_limite(texto):
+    """True si el texto trae un código de Graph API de límite de uso (esperar y reintentar)."""
+    return _numero(str(texto or ""), "code") in _LIMITE
 
 
 def explicar(texto, modo="propia"):

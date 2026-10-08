@@ -746,3 +746,64 @@ def test_el_rescate_excluye_el_arranque_de_la_pieza_que_perdio(ent, monkeypatch)
     item = _derivacion(ex, eid)["items"][0]
     assert item["variante_tipo"] == "hook" and item["contexto_variante"]["lead_objetivo"] is None
     assert "S" in item["contexto_variante"]["ganchos_usados"] or item["contexto_variante"]["ganchos_usados"] == ["¿Pies fríos?"]
+
+
+def _voz_propia(cliente="acme", nombre="Ana", voice_id="mmx_1"):
+    import materiales
+    import voces_propias
+    return materiales.registrar(
+        cliente, tipo="audio", origen=voces_propias.ORIGEN, url=f"https://r2/vp_{voice_id}.mp3",
+        hash=materiales.hash_clave("voz_propia", "minimax", voice_id), bytes=10, duracion_ms=3000, costo_usd=3.0,
+        extra={"nombre": nombre, "forma": "disenada", "proveedor": "minimax", "voice_id": voice_id,
+               "idioma_muestra": "es", "estrenada": True})
+
+
+def _regenerar_hasta_las_finales(ent, voz, borrar_antes=None, borrar_entre=None):
+    """Planifica una derivación con una regeneración, pone el clon listo y avanza:
+    devuelve las opciones de cada `final_producir` encolada."""
+    dv, cf, ex = ent['dv'], ent['cf'], ent['ex']
+    cf.actualizar_final('acme', ent['final_id'], capas={'voz': {'parametros': {'voz': voz}}})
+    ex.actualizar('acme', ent['eid'], reglas={'n_reediciones': 0, 'n_regeneraciones': 1})
+    if borrar_antes:
+        borrar_antes()
+    hijo = dv.planificar('acme', ent['eid'], 'derivar', {'ep_id': ent['ep']})
+    if borrar_entre:
+        borrar_entre()
+    item = _derivacion(ex, hijo)['items'][0]
+    cf.actualizar('acme', item['cf_id'], estado='video_listo', video_url='https://r2/n.mp4')
+    dv.avanzar('acme', hijo)
+    return [x['payload'] for x in ent['encolados'] if x['tipo'] == 'final_producir']
+
+
+def test_pnd039_regeneracion_conserva_voz_por_destino(ent):
+    v = _voz_propia()
+    voz = f"vp:{v['id']}"
+    finales = _regenerar_hasta_las_finales(ent, voz)
+    assert len(finales) == 2
+    assert all(f['opciones'].get('voz') == voz for f in finales)
+
+
+def test_pnd039_voz_propia_borrada_antes_de_planificar_no_se_propaga(ent):
+    """Revisión del lote 2: una voz propia que ya no existe no viaja a la
+    regeneración (la final fallaría con «esa voz ya no está»): se queda la voz
+    por defecto de siempre, sin `voz` explícita."""
+    import materiales
+    v = _voz_propia()
+    voz = f"vp:{v['id']}"
+    finales = _regenerar_hasta_las_finales(ent, voz, borrar_antes=lambda: materiales.borrar('acme', v['id']))
+    assert len(finales) == 2
+    assert all('voz' not in f['opciones'] for f in finales)
+
+
+def test_pnd039_voz_propia_borrada_entre_planificar_y_avanzar_no_se_propaga(ent):
+    import materiales
+    v = _voz_propia()
+    voz = f"vp:{v['id']}"
+    finales = _regenerar_hasta_las_finales(ent, voz, borrar_entre=lambda: materiales.borrar('acme', v['id']))
+    assert len(finales) == 2
+    assert all('voz' not in f['opciones'] for f in finales)
+
+
+def test_pnd039_voz_de_la_galeria_se_propaga_sin_resolver(ent):
+    finales = _regenerar_hasta_las_finales(ent, 'Rachel')
+    assert len(finales) == 2 and all(f['opciones'].get('voz') == 'Rachel' for f in finales)

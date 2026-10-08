@@ -232,13 +232,17 @@ def traer(consulta, tope, avanzar, cursor=None):
     entrada = {"startUrls": [{"url": url}], "resultsLimit": tope}
     estimado = apify_actores.estimar(tope)
     avanzar(etapa=ETAPA_BUSCAR, detalle="apify/facebook-ads-scraper")
+    run_id = dataset_id = None
     try:
         run_id, dataset_id, estado = apify_api.arrancar(
             sesion, token, apify_actores.ACTOR, entrada, tope, estimado["usd_fuente"])
         estado = apify_api.sondear(sesion, token, run_id, estado, ETAPA_LEER, avanzar)
         crudos, motivo = apify_api.leer_dataset(sesion, token, dataset_id, tope)
     except _ErrorApify as e:
-        raise ErrorFuente(e.usuario) from e
+        # El sondeo puede rendirse después de que Apify haya cobrado.
+        contados = apify_api.contar_dataset(sesion, token, dataset_id) if dataset_id else None
+        costo_real = round(contados * apify_actores.USD_POR_RESULTADO, 4) if contados is not None else None
+        raise ErrorFuente(e.usuario, costo_real=costo_real, extra_gasto={"run_id": run_id, "dataset_id": dataset_id}) from e
     if crudos is None:
         # La corrida ya se pagó aunque su dataset no se haya podido leer --
         # `contar_dataset` da el itemCount real cobrado; si tampoco se puede
@@ -252,7 +256,8 @@ def traer(consulta, tope, avanzar, cursor=None):
         costo_real = round((contados if contados is not None else tope) * apify_actores.USD_POR_RESULTADO, 4)
         raise ErrorFuente(gettext("Apify no entregó los resultados (%(motivo)s); corrida %(corrida)s, "
                                   "dataset %(dataset)s: revísalos en console.apify.com.",
-                                  motivo=motivo, corrida=run_id, dataset=dataset_id), costo_real=costo_real)
+                                  motivo=motivo, corrida=run_id, dataset=dataset_id), costo_real=costo_real,
+                          extra_gasto={"run_id": run_id, "dataset_id": dataset_id})
     if not crudos:
         if estado != "SUCCEEDED":
             raise ErrorFuente(gettext("Apify %(estado)s sin resultados (corrida %(corrida)s); "
@@ -262,6 +267,15 @@ def traer(consulta, tope, avanzar, cursor=None):
         yield [], None, {}
         return
     costo_real = round(len(crudos) * apify_actores.USD_POR_RESULTADO, 4)
-    pagina = [_normalizar(it) for it in crudos if isinstance(it, dict)]
+    try:
+        pagina = [_normalizar(it) for it in crudos if isinstance(it, dict)]
+    except Exception as e:
+        raise ErrorFuente(str(e), costo_real=costo_real,
+                          extra_gasto={"run_id": run_id, "dataset_id": dataset_id}) from e
     avanzar(etapa=ETAPA_BUSCAR, detalle=ngettext("%(num)d anuncio", "%(num)d anuncios", len(crudos)))
-    yield pagina, None, {"costo_real": costo_real}
+    meta = {"costo_real": costo_real, "run_id": run_id, "dataset_id": dataset_id}
+    if estado != "SUCCEEDED":
+        meta.update(estado=estado, incompleto=True, aviso=gettext(
+            "Apify terminó %(estado)s; los resultados son parciales (corrida %(corrida)s).",
+            estado=apify_api.frase_estado(estado), corrida=run_id))
+    yield pagina, None, meta

@@ -160,9 +160,10 @@ def test_exp_crear_traffic_sin_pixel_sigue_igual(app, monkeypatch):  # noqa: F81
 
 
 def test_form_preselecciona_objetivo_sugerido(app, monkeypatch):  # noqa: F811
+    # El formulario (objetivo y atribución) vive en «Nuevo experimento» (E2: su propia ruta, ya no la pestaña).
     _pixel(app, monkeypatch, PIXEL_OK)
-    html = app["c"].get("/cliente/acme").get_data(as_text=True)
+    html = app["c"].get("/cliente/acme/experimentos/nuevo").get_data(as_text=True)
     assert '<option value="OUTCOME_SALES" selected>' in html and "Compras (requiere Pixel)" in html
     _pixel(app, monkeypatch, None)
-    html = app["c"].get("/cliente/acme").get_data(as_text=True)
+    html = app["c"].get("/cliente/acme/experimentos/nuevo").get_data(as_text=True)
     assert '<option value="OUTCOME_TRAFFIC" selected>' in html and "Tráfico (clics al enlace)" in html

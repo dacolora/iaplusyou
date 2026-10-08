@@ -688,3 +688,43 @@ def test_guion_invalido_en_el_idioma_de_quien_lo_ve(monkeypatch):
             guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "es", "", "")
         assert str(e.value) == ("Guion inválido: La cifra «3x» del bloque hook no está en los datos: reescríbelo "
                                 "sin ella o con el dato real.")
+
+
+def test_respuesta_cortada_no_paga_correccion_y_conserva_costo(monkeypatch):
+    from final_edition import guion
+    original = _Resp.__init__
+    def init(self, *a, **k):
+        original(self, *a, **k)
+        self.stop_reason = "max_tokens"
+    monkeypatch.setattr(_Resp, "__init__", init)
+    reg = _instalar_fake(monkeypatch, ['{"bloques": [', json.dumps(_guion_valido())])
+    with pytest.raises(guion.GuionInvalido) as exc:
+        guion.generar_guion_base(PRODUCTO, None, "producto", 10, "es", "", "")
+    assert len(reg.kwargs) == 1
+    assert exc.value.costo_usd == pytest.approx(0.01)
+
+
+@pytest.mark.parametrize('fallo', ['cortada', 'red'])
+def test_correccion_fallida_conserva_primera_valida_y_costo(monkeypatch, fallo):
+    from final_edition import guion
+    from types import SimpleNamespace
+    primera = _guion_valido()
+    respuestas = [SimpleNamespace(content=[_Bloque(json.dumps(primera))], usage=_Uso(), stop_reason='end_turn')]
+    if fallo == 'cortada':
+        respuestas.append(SimpleNamespace(content=[_Bloque('{')], usage=_Uso(2000, 800), stop_reason='max_tokens'))
+    else:
+        e = RuntimeError('red')
+        e.costo_usd = .012
+        respuestas.append(e)
+    llamadas = []
+    def llamar(**kw):
+        llamadas.append(kw)
+        r = respuestas.pop(0)
+        if isinstance(r, Exception): raise r
+        return r
+    monkeypatch.setattr(guion, '_api_key', lambda: 'llave-de-prueba')
+    monkeypatch.setattr(guion.anthropic, 'Anthropic', lambda **kw: SimpleNamespace(messages=SimpleNamespace(create=llamar)))
+    resultado, costo = guion._generar_con_correccion('', 'guion', 10, lambda g: g, errores_extra=lambda g: ['ángulo pendiente'])
+    assert resultado == primera
+    assert costo == pytest.approx(.022)
+    assert len(llamadas) == 2

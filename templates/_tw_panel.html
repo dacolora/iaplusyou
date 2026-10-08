@@ -329,7 +329,7 @@
           <td class="tw-nombre">
             <strong>{{ a.nombre }}</strong>
             <small>{{ a.canal | tw_canal }}{% if a.campana %} · {{ a.campana }}{% endif %}</small>
-            {% if a.creatv %}<small><a href="?exp={{ a.creatv.experimento_id }}#experimentos">{{ _('Hecho en Creatv · %(exp)s', exp=a.creatv.experimento) }}</a></small>{% endif %}
+            {% if a.creatv %}<small><a href="#experimentos?exp={{ a.creatv.experimento_id }}">{{ _('Hecho en Creatv · %(exp)s', exp=a.creatv.experimento) }}</a></small>{% endif %}
             {% if a.idea_origen %}<small class="tw-origen-idea">{{ _('Nació de la idea «%(idea)s» de la evaluación con IA', idea=a.idea_origen.titulo or a.idea_origen.idea + 1) }}</small>{% endif %}
             {% if a.creatv and a.creatv.estado == 'activo' %}
             <form method="post" class="tw-accion" action="{{ url_for('triple_whale.pieza_estado', cliente=cliente, ep_id=a.creatv.ep_id, accion='pausar') }}"

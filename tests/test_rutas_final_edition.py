@@ -410,10 +410,12 @@ def _entorno_plantilla():
 
 
 def _contexto_minimo(items, activos_por_categoria=None, categorias=None, productos=None):
+    import gastos
     from final_edition import tipos
     from providers import fal_audio
     return dict(
         creative_flow_items=items, cliente="acme", logos=[],
+        tarifa_musica_crear=gastos.costo_musica_estimada("generada"),
         modelos_flowplus_video={}, modelos_flowplus_imagen={}, preferencias_flowplus={},
         preferencias_sonido={"con_sonido": True, "musica_al_crear": ""},
         fp_prefill=None, activos_por_categoria=activos_por_categoria if activos_por_categoria is not None else {},
@@ -443,11 +445,13 @@ def _item_video_listo(**extra):
 # tarjeta. Acá se renderizan las dos piezas por separado, con el mismo
 # contexto que reciben en dashboard.
 def _listas(items):
-    """Lo que dashboard._listas_crear_final le da a las pestañas."""
-    videos = [i for i in items if i.get("estado") == "video_listo" and (i.get("tipo") or "video") != "imagen"]
-    finales = [(i, f) for i in items for f in (i.get("finales") or [])]
-    return dict(crear=items, crear_total=len(items), final_videos=videos, final_videos_total=len(videos),
-                finales=finales, finales_total=len(finales))
+    """Lo que dashboard._listas_crear y dashboard._tablero_final le dan a las
+    pestañas (el tablero de Final edition, 2026-10-02)."""
+    from final_edition import tablero
+    t = tablero.armar(items, {})
+    return dict(crear=items, crear_total=len(items),
+                fe_en_edicion=t["en_edicion"], fe_en_edicion_total=len(t["en_edicion"]),
+                fe_finalizados=t["finalizados"], fe_finalizados_total=len(t["finalizados"]), fe_cifras=t["cifras"])
 
 
 def _tab_final(env, items):
@@ -556,8 +560,15 @@ def test_plantilla_con_guion_y_finales_renderiza():
     assert "trabajo-acme__cf_1__en_US__final" in tarjetas
     assert "generado-badge" in tarjetas
     assert "ffmpeg murió" in html
-    # la clon + 3 finales en las cuadrículas (el selector del JS no cuenta)
-    assert len(re.findall(r'data-cf="[\w-]+"', tarjetas)) == 4
+    # Tablero (2026-10-02): la clon en «En edición» (una final produciéndose
+    # y otra con error, con sus banderas) y solo la final lista en
+    # «Finalizados» (el selector del JS no cuenta).
+    assert len(re.findall(r'data-cf="[\w-]+"', tarjetas)) == 2
+    assert "1 produciéndose" in tarjetas and "1 con error" in tarjetas
+    # Cada final, una bandera con su estado (la lista en verde, la viva
+    # brillando, la de error en rojo).
+    assert 'class="fe-bandera-ok" title="es_CO' in tarjetas and 'class="fe-bandera-vivo" title="en_US' in tarjetas
+    assert 'class="fe-bandera-error" title="pt_BR' in tarjetas
     assert "Final de Producto" in tarjetas
     # I4: es_CO ya tiene una final -> hint + checkbox marcado para confirm(); en_US y pt_BR no.
     assert "ya producida — se reemplaza" in html
@@ -596,6 +607,21 @@ def test_plantilla_ofrece_mis_voces_solo_si_hay():
     assert "Mis voces" not in sin
 
 
+def test_tablero_final_degradada_es_finalizada_y_su_bandera_va_en_verde():
+    """Una «degradada» (sin voz o sin música) es un video terminado: va a
+    Finalizados con su aviso, y en la tarjeta de su video que sigue en edición
+    (otra final con error) su bandera es «lista», no roja."""
+    env = _entorno_plantilla()
+    base = {"video_url": "https://r2/f.mp4", "url_miniatura": None, "duracion_s": 8.0, "costo_usd": None,
+            "capas": {}, "guion": None, "trabajo": None}
+    finales = [dict(base, id="cf_1__es_CO", idioma="es", pais="CO", estado="degradada", error=None),
+               dict(base, id="cf_1__en_US", idioma="en", pais="US", estado="error", error="ffmpeg", video_url=None)]
+    tarjetas = _tab_final(env, [_item_video_listo(finales=finales)])
+    assert 'class="fe-bandera-ok" title="es_CO' in tarjetas and 'class="fe-bandera-error" title="en_US' in tarjetas
+    assert 'data-cf="cf_1__es_CO"' in tarjetas and "Sin voz/música" in tarjetas
+    assert 'data-cf="cf_1__en_US"' not in tarjetas
+
+
 def test_plantilla_imagen_no_muestra_final_edition():
     """Una imagen no entra a Final edition: la pestaña no la lista y Crear no
     ofrece «Llevar a final edition» (un video listo sí)."""
@@ -603,7 +629,7 @@ def test_plantilla_imagen_no_muestra_final_edition():
     imagen = _item_video_listo(tipo="imagen")
     html = _tab_final(env, [imagen])
     assert 'data-cf="cf_1"' not in html and "Preparar guion con IA" not in html
-    assert "Videos listos (0)" in html
+    assert "0 videos listos en Crear" in html
     crear = _tab_crear(env, [imagen]) + _detalle_crear(env, imagen)    # la tarjeta y su detalle (por fetch)
     marcado = re.sub(r"<script>.*?</script>", "", crear, flags=re.S)   # lo que se ve, sin los comentarios del JS
     assert "Llevar a final edition" not in marcado and "Final edition" not in marcado
@@ -925,3 +951,9 @@ def test_decision_b_un_proyecto_en_ingles_produce_co_en_espanol(base_temporal, m
     assert (t["payload"]["idioma"], t["payload"]["pais"]) == ("es", "CO")
     assert t["payload"]["opciones"]["precios"] == {"es_CO": 89900.0}
     assert cf.final_por_legado("acme", f"{cf_id}__es_CO")["estado"] == "generando"
+
+
+def test_contexto_minimo_pasa_tarifa_musica_del_servidor(monkeypatch):
+    from providers import fal_audio
+    monkeypatch.setattr(fal_audio, 'COSTO_USD_POR_PISTA_MUSICA', .037)
+    assert _contexto_minimo([])['tarifa_musica_crear'] == .037

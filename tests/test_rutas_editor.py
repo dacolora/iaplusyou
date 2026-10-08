@@ -62,6 +62,36 @@ def _datos(html):
     return json.loads(m.group(1))
 
 
+def test_la_pagina_declara_la_fuente_de_emojis_y_la_tabla_solo_si_el_archivo_esta(dashboard, encolados, monkeypatch, tmp_path):
+    """Capa 5c (D6, D9): el lienzo dibuja los emojis con la familia `CreatvEmoji` (la TTF de Twemoji, que el
+    navegador compone por capas él mismo) y mide con la tabla tipográfica. Sin el archivo, ni la `@font-face`
+    ni `config.emoji` ni la fuente en la tabla: la página no promete lo que no puede dibujar."""
+    from final_edition import fuentes
+    ed, _clon, _voz = _edicion()
+    cliente = _cliente_admin(dashboard)
+    html = cliente.get(f"/cliente/acme/ediciones/{ed['id']}").get_data(as_text=True)
+    assert re.search(r'@font-face \{ font-family: "CreatvEmoji"; src: url\("/static/fonts/emoji/TwemojiMozilla\.ttf(\?v=\d+)?"\) '
+                     r'format\("truetype"\); font-display: block; \}', html)
+    datos = _datos(html)
+    assert datos["config"]["emoji"] == {"familia": "CreatvEmoji", "archivo": "fonts/emoji/TwemojiMozilla.ttf"}
+    assert datos["config"]["tipografia"]["emoji"]["id"] == fuentes.EMOJI_ID
+    assert datos["config"]["tipografia"]["fuentes"]["Inter-Bold"]["upem"] == 2048
+    assert datos["config"]["fuentes"][0] == "Inter-Bold"                   # las @font-face de siempre
+    try:
+        with monkeypatch.context() as m:
+            m.setattr(fuentes, "RUTA_EMOJI", str(tmp_path / "no_existe.ttf"))
+            fuentes.cargar_tabla.cache_clear()          # la tabla se lee una vez: sin esto seguiría con la fuente
+            html = cliente.get(f"/cliente/acme/ediciones/{ed['id']}").get_data(as_text=True)
+    finally:
+        fuentes.cargar_tabla.cache_clear()
+    assert "CreatvEmoji" not in html
+    datos = _datos(html)
+    assert datos["config"]["emoji"] is None and datos["config"]["tipografia"]["emoji"] is None
+    assert datos["config"]["tipografia"]["fuentes"]["Inter-Bold"]["upem"] == 2048      # lo demás sigue
+    assert 'font-family: "Inter-Bold"' in html
+    assert "CreatvEmoji" in cliente.get(f"/cliente/acme/ediciones/{ed['id']}").get_data(as_text=True)   # y con el archivo, vuelve
+
+
 def test_la_vista_previa_trae_sus_datos_y_encola_el_proxy(dashboard, encolados):
     ed, clon, voz = _edicion()
     r = _cliente_admin(dashboard).get(f"/cliente/acme/ediciones/{ed['id']}")
@@ -546,9 +576,9 @@ def test_la_pagina_tiene_la_disposicion_de_capcut(dashboard, encolados):
     # (propiedades.js lo arma y conserva el id h-velocidad)
     assert 'id="h-velocidad"' not in html
     assert "ed-cuerpo" not in arbol["ed-herramientas"] and "ed-cuerpo" not in arbol["linea"]
-    # la biblioteca: cinco pestañas con su icono (capa 5a: «Subtítulos» entre Texto y Transiciones)
+    # la biblioteca: seis pestañas con su icono (capa 5a: «Subtítulos» entre Texto y Transiciones; capa 5c: «Stickers» tras Texto)
     pestanas = re.search(r'id="ed-pestanas-biblioteca".*?</div>', html, re.S).group(0)
-    for panel in ("medios", "audio", "texto", "subtitulos", "transiciones"):
+    for panel in ("medios", "audio", "texto", "stickers", "subtitulos", "transiciones"):
         boton = re.search(rf'<button[^>]*data-panel="{panel}"[^>]*>(.*?)</button>', pestanas, re.S)
         assert boton and "<svg" in boton.group(1), panel
     assert pestanas.count('aria-selected="true"') == 1
@@ -576,8 +606,8 @@ def test_las_pestanas_de_la_biblioteca_dicen_su_nombre(dashboard, encolados):
     ed, _c, _v = _edicion()
     html = _cliente_admin(dashboard).get(f"/cliente/acme/ediciones/{ed['id']}").get_data(as_text=True)
     pestanas = re.search(r'id="ed-pestanas-biblioteca".*?</div>', html, re.S).group(0)
-    for panel, nombre in (("medios", "Medios"), ("audio", "Audio"), ("texto", "Texto"), ("subtitulos", "Subtítulos"),
-                          ("transiciones", "Transiciones")):
+    for panel, nombre in (("medios", "Medios"), ("audio", "Audio"), ("texto", "Texto"), ("stickers", "Stickers"),
+                          ("subtitulos", "Subtítulos"), ("transiciones", "Transiciones")):
         boton = re.search(rf'<button[^>]*data-panel="{panel}"[^>]*>(.*?)</button>', pestanas, re.S)
         assert boton and f'title="{nombre}"' in boton.group(0) and f"<span>{nombre}</span>" in boton.group(1), panel
     css = re.search(r"<style>(.*?)</style>", html, re.S).group(1)
@@ -597,11 +627,11 @@ def test_la_pestana_subtitulos_en_la_biblioteca_y_en_el_celular(dashboard, encol
     ed, _c, _v = _edicion()
     html = _cliente_admin(dashboard).get(f"/cliente/acme/ediciones/{ed['id']}").get_data(as_text=True)
     pestanas = re.search(r'id="ed-pestanas-biblioteca".*?</div>', html, re.S).group(0)
-    assert re.findall(r'data-panel="([a-z]+)"', pestanas) == ["medios", "audio", "texto", "subtitulos", "transiciones"]
+    assert re.findall(r'data-panel="([a-z]+)"', pestanas) == ["medios", "audio", "texto", "stickers", "subtitulos", "transiciones"]
     movil = re.search(r'id="ed-acciones-movil".*?</nav>', html, re.S).group(0)
     assert re.findall(r'id="(ed-abrir-[a-z]+)"', movil) == [
-        "ed-abrir-medios", "ed-abrir-audio", "ed-abrir-texto", "ed-abrir-subtitulos", "ed-abrir-transiciones",
-        "ed-abrir-propiedades"]
+        "ed-abrir-medios", "ed-abrir-audio", "ed-abrir-texto", "ed-abrir-stickers", "ed-abrir-subtitulos",
+        "ed-abrir-transiciones", "ed-abrir-propiedades"]
     abrir = re.search(r'<button[^>]*id="ed-abrir-subtitulos"[^>]*>(.*?)</button>', html, re.S)
     assert 'data-abrir-hoja="ed-biblioteca"' in abrir.group(0) and 'data-abrir-panel="subtitulos"' in abrir.group(0)
     assert "<svg" in abrir.group(1) and "<span>Subtítulos</span>" in abrir.group(1)
@@ -614,10 +644,11 @@ def test_la_pestana_subtitulos_en_la_biblioteca_y_en_el_celular(dashboard, encol
     css = re.search(r"<style>(.*?)</style>", html, re.S).group(1)
     for regla in (".ed-sub-lineas", ".ed-sub-palabra", ".ed-sub-estilo", ".ed-sub-fila", ".ed-sub-bloque"):
         assert regla in css, regla
-    # seis botones en 375 px: cada uno se achica (nunca empuja la página de lado)
+    # siete botones en 375 px (capa 5c: «Stickers»): cada uno parte de lo que mide su nombre (se ven enteros) y se
+    # puede achicar (nunca empuja la página de lado)
     celular = css[css.index("@media (max-width: 760px)"):]
     accion = re.search(r"\.ed-accion \{([^}]*)\}", celular).group(1)
-    assert "flex: 1 1 0" in accion and "min-width: 0" in accion
+    assert "flex: 1 1 auto" in accion and "min-width: 0" in accion
 
 
 def test_la_voz_en_off_arriba_de_la_pestana_audio(dashboard, encolados, monkeypatch):
@@ -1474,3 +1505,156 @@ def test_vincular_en_las_herramientas_y_el_aviso_de_voces_juntas(dashboard, enco
     # el menú de una imagen flota sobre la columna (no lo corta su scroll) y nunca la empuja de lado
     como = re.search(r"\.ed-bib-como \{([^}]*)\}", css).group(1)
     assert "position: fixed" in como and "max-width" in como
+
+
+def test_las_zonas_seguras_tienen_sus_guias_su_selector_y_su_aviso(dashboard, encolados):
+    """Capa 5c (Tarea 5, D10): las guías de las zonas van DENTRO del escenario, encima
+    del lienzo y debajo de la capa de toques (sin recibir ni un toque, `aria-hidden`);
+    el selector «Zonas» (No · TikTok · Reels · Shorts) va en la barra de herramientas
+    con su etiqueta, y el aviso con los demás avisos bajo el video. Las guías son solo
+    de la página: rayadas y translúcidas, en % del lienzo (las pinta pagina_editor.js)."""
+    ed, _c, _v = _edicion()
+    html = _cliente_admin(dashboard).get(f"/cliente/acme/ediciones/{ed['id']}").get_data(as_text=True)
+    arbol = _ancestros(html)
+    assert arbol["ed-zonas"][0] == "ed-escenario"
+    assert html.index('id="lienzo"') < html.index('id="ed-zonas"') < html.index('id="ed-interaccion"')
+    capa = re.search(r'<div[^>]*id="ed-zonas"[^>]*>', html).group(0)
+    assert 'aria-hidden="true"' in capa and 'class="ed-zonas"' in capa
+    # el selector: con etiqueta visible, en la barra de herramientas, las cuatro opciones en su orden
+    etiqueta = re.search(r'<label class="ed-zonas-elegir">(.*?)</label>', html, re.S)
+    assert etiqueta and etiqueta.group(1).lstrip().startswith("Zonas")
+    assert '<select id="zonas">' in etiqueta.group(1)
+    assert re.findall(r'<option value="([^"]*)">([^<]*)</option>', etiqueta.group(1)) == [
+        ("no", "No"), ("tiktok", "TikTok"), ("reels", "Reels"), ("shorts", "Shorts")]
+    assert "ed-herramientas" in arbol["zonas"]
+    # el aviso: oculto al empezar, con los demás avisos (bajo el video, aria-live) y nunca en rojo
+    aviso = re.search(r'<p id="aviso-zonas"[^>]*>', html)
+    assert aviso and "editor-aviso" in aviso.group(0) and "hidden" in aviso.group(0) and "error" not in aviso.group(0)
+    assert "ed-centro" in arbol["aviso-zonas"]
+    avisos = re.search(r'<div class="editor-avisos"[^>]*>.*?</div>', html, re.S).group(0)
+    assert 'id="aviso-zonas"' in avisos
+    # el estilo: encima del lienzo y de lado a lado, sin tocar el dedo, y rayado y translúcido
+    css = re.search(r"<style>(.*?)</style>", html, re.S).group(1)
+    regla = re.search(r"\.ed-zonas \{([^}]*)\}", css).group(1)
+    for decl in ("position: absolute", "inset: 0", "pointer-events: none"):
+        assert decl in regla, decl
+    franja = re.search(r"\.ed-zona \{([^}]*)\}", css).group(1)
+    assert "position: absolute" in franja and "pointer-events: none" in franja
+    assert "repeating-linear-gradient" in franja and "var(--error)" in franja and "18%" in franja
+    assert "--danger" not in css, "ese token no existe en la app: el de error es --error"
+    # los textos de la página en el diccionario del servidor, con todos sus marcadores
+    datos = _datos(html)
+    for clave in ("vista.zona_texto", "vista.zona_imagen", "vista.zona_subtitulos", "vista.fuera_texto", "vista.fuera_imagen",
+                  "vista.y_mas", "vista.zona_arriba", "vista.zona_abajo", "vista.zona_lados", "vista.zona_botones",
+                  "vista.zonas_solo_vertical"):
+        assert datos["textos"][clave], clave
+    assert "{plataforma}" in datos["textos"]["vista.zona_texto"] and "{zona}" in datos["textos"]["vista.zona_texto"]
+    assert "{texto}" in datos["textos"]["vista.fuera_texto"] and "{n}" in datos["textos"]["vista.y_mas"]
+    js = open(os.path.join(RAIZ, "static", "editor", "pagina_editor.js"), encoding="utf-8").read()
+    assert 'from "./zonas.js";' in js and "controlZonas.montar();" in js
+
+
+# --- Stickers propios (capa 5c, D11) ---
+
+@pytest.fixture()
+def r2_parchado(monkeypatch):
+    subidos = []
+    monkeypatch.setattr(materiales.r2_uploader, "upload_file",
+                        lambda local, key, ct: subidos.append((key, ct)) or f"https://r2.test/{key}")
+    return subidos
+
+
+def test_agregar_sticker_es_gratis_y_devuelve_el_material_tenible(dashboard, encolados, r2_parchado):
+    c = _cliente_admin(dashboard)
+    r = c.post("/cliente/acme/ediciones/biblioteca/sticker/estrella")
+    assert r.status_code == 200
+    m = r.get_json()["material"]
+    assert m["tenible"] is True and m["origen"] == "sticker" and m["tipo"] == "imagen"
+    assert m["url"] == m["url_proxy"] == "https://r2.test/clientes/acme/materiales/sticker_estrella.png"
+    assert r2_parchado == [("clientes/acme/materiales/sticker_estrella.png", "image/png")]
+    again = c.post("/cliente/acme/ediciones/biblioteca/sticker/estrella").get_json()["material"]
+    assert again["id"] == m["id"] and len(r2_parchado) == 1       # idempotente: el mismo material, ninguna subida más
+    assert encolados == []                                         # nada va al worker: no cuesta ni se encola
+
+
+def test_agregar_sticker_rechaza_otro_sitio_y_un_id_que_no_existe(dashboard, encolados, r2_parchado):
+    c = _cliente_admin(dashboard)
+    r = c.post("/cliente/acme/ediciones/biblioteca/sticker/estrella", headers={"Sec-Fetch-Site": "cross-site"})
+    assert r.status_code == 403          # el guardia del servidor lo corta antes (y la ruta lo repite por si acaso)
+    r = c.post("/cliente/acme/ediciones/biblioteca/sticker/nope")
+    assert r.status_code == 404 and r.get_json() == {"error": "Ese sticker no existe."}
+    for malo in ("..%2Fx", "Estrella", "estrella.png", "x" * 41):
+        assert c.post(f"/cliente/acme/ediciones/biblioteca/sticker/{malo}").status_code == 404, malo
+    assert r2_parchado == [] and encolados == []                   # lo que no pasa el manifiesto nunca toca disco ni R2
+
+
+def test_agregar_sticker_solo_sirve_al_proyecto_de_la_url(dashboard, encolados, r2_parchado):
+    """Un cliente solo entra a su proyecto (el guardia por cliente de la app); el sticker queda en el proyecto de la URL."""
+    propio = _cliente(dashboard, "user_acme", "acme")
+    assert propio.post("/cliente/acme/ediciones/biblioteca/sticker/corazon").status_code == 200
+    ajeno = _cliente(dashboard, "otro", "otro")
+    r = ajeno.post("/cliente/acme/ediciones/biblioteca/sticker/corazon")
+    assert r.status_code in (302, 403) and "/cliente/acme/" not in (r.headers.get("Location") or "")
+    anonimo = dashboard.app.test_client().post("/cliente/acme/ediciones/biblioteca/sticker/corazon")
+    assert anonimo.status_code in (302, 401, 403)
+    assert [k for k, _ct in r2_parchado] == ["clientes/acme/materiales/sticker_corazon.png"]
+    assert materiales.obtener("otro", 1) is None
+
+
+def test_la_pagina_trae_los_20_stickers_con_su_url_estatica(dashboard, encolados):
+    from final_edition import stickers
+    ed, _clon, _voz = _edicion()
+    r = _cliente_admin(dashboard).get(f"/cliente/acme/ediciones/{ed['id']}")
+    datos = _datos(r.get_data(as_text=True))
+    assert [s["id"] for s in datos["stickers"]] == list(stickers.IDS) and len(datos["stickers"]) == 20
+    for s in datos["stickers"]:
+        assert set(s) == {"id", "categoria", "archivo", "ancho", "alto", "color", "url"}
+        assert s["url"].split("?")[0] == f"/static/stickers/{s['id']}.png"
+        assert s["color"] in ("#FFD400", "#E11D48") and s["categoria"] in ("flechas", "marcas", "formas")
+    assert {s["categoria"] for s in datos["stickers"]} == {"flechas", "marcas", "formas"}
+    # y cada URL se sirve de verdad (los PNG están commiteados)
+    primero = _cliente_admin(dashboard).get(datos["stickers"][0]["url"])
+    assert primero.status_code == 200 and primero.mimetype == "image/png"
+
+
+def test_agregar_sticker_repite_el_guardia_de_otro_sitio_por_si_el_global_falla(dashboard, encolados, r2_parchado):
+    """Defensa en profundidad: la vista misma rechaza lo que el navegador marca de otro sitio, sin pasar por el
+    guardia global (se la llama en un contexto de pedido, como las demás rutas del editor que repiten `_mismo_origen`)."""
+    from final_edition import rutas_editor
+    with dashboard.app.test_request_context("/cliente/acme/ediciones/biblioteca/sticker/estrella", method="POST",
+                                            headers={"Sec-Fetch-Site": "cross-site"}):
+        respuesta, codigo = rutas_editor.agregar_sticker("acme", "estrella")
+    assert codigo == 403 and respuesta.get_json()["error"]
+    assert r2_parchado == [] and materiales.obtener("acme", 1) is None
+
+
+def test_la_pestana_stickers_en_la_biblioteca_y_en_el_celular(dashboard, encolados):
+    """Capa 5c (Tarea 8, D11/D13): «Stickers» es una pestaña de la biblioteca (tras Texto) con su icono y, en el
+    celular, el séptimo botón de la barra de abajo, que abre la hoja en esa pestaña. La página trae lo que la
+    pestaña pinta: los 20 stickers con su URL, la tabla con (o sin) la fuente de emojis y la ruta de la biblioteca
+    de la que sale la del sticker; y la fuente de emojis se declara solo si hay."""
+    ed, _c, _v = _edicion()
+    html = _cliente_admin(dashboard).get(f"/cliente/acme/ediciones/{ed['id']}").get_data(as_text=True)
+    pestanas = re.search(r'id="ed-pestanas-biblioteca".*?</div>', html, re.S).group(0)
+    boton = re.search(r'<button[^>]*data-panel="stickers"[^>]*>(.*?)</button>', pestanas, re.S)
+    assert boton and 'title="Stickers"' in boton.group(0) and "<span>Stickers</span>" in boton.group(1)
+    assert "<svg" in boton.group(1) and "ed-icono" in boton.group(1)
+    assert pestanas.count('aria-selected="true"') == 1       # la primera sigue siendo «Medios»
+    abrir = re.search(r'<button[^>]*id="ed-abrir-stickers"[^>]*>(.*?)</button>', html, re.S)
+    assert 'data-abrir-hoja="ed-biblioteca"' in abrir.group(0) and 'data-abrir-panel="stickers"' in abrir.group(0)
+    assert 'aria-controls="ed-biblioteca"' in abrir.group(0) and 'aria-expanded="false"' in abrir.group(0)
+    assert "<svg" in abrir.group(1) and "<span>Stickers</span>" in abrir.group(1)
+    # el icono del sticker no es el de otra pestaña
+    iconos = re.findall(r'data-panel="([a-z]+)"[^>]*>\s*<svg[^>]*>(.*?)</svg>', pestanas, re.S)
+    formas = [f for _p, f in iconos]
+    assert len(iconos) == 6 and len(set(formas)) == 6
+    datos = _datos(html)
+    assert len(datos["stickers"]) == 20
+    assert datos["urls"]["biblioteca"].endswith("/ediciones/biblioteca")
+    assert datos["textos"]["bib.stickers"] == "Stickers" and datos["textos"]["bib.sticker_estrella"] == "Estrella"
+    assert datos["textos"]["bib.atribucion_emoji"] == "Emojis: Twemoji (CC-BY 4.0)."
+    css = re.search(r"<style>(.*?)</style>", html, re.S).group(1)
+    assert ".ed-stickers-cuadricula" in css and ".ed-sticker {" in css
+    assert re.search(r"\.ed-stickers-cuadricula \{[^}]*minmax\(min\(100%, 64px\), 1fr\)", css)
+    # el emoji de la página: su fuente se declara solo si la hay (la tabla dice lo mismo)
+    assert ("CreatvEmoji" in css) == bool(datos["config"]["emoji"]) == bool(datos["config"]["tipografia"]["emoji"])

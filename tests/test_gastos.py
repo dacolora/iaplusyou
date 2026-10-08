@@ -78,10 +78,10 @@ def test_total_y_por_mes_desde_el_inicio(base_temporal):
     gastos.registrar("acme", "video", 9.0, "video:futuro", creado_en="2026-09-20T10:00:00")
     gastos.registrar("otro", "video", 9.0, "video:a", creado_en="2026-09-10T10:00:00")
     ahora = "2026-09-18T12:00:00"
-    assert gastos.resumen_total("acme", ahora_iso=ahora) == {"total": 10.77, "n": 4}
+    assert gastos.resumen_total("acme", ahora_iso=ahora) == {"total": 10.77, "n": 4, "desde": "2026-07-30T10:00:00"}
     assert gastos.por_mes("acme", ahora_iso=ahora) == {
         "2026-07": {"usd": 9.0, "n": 1}, "2026-08": {"usd": 1.25, "n": 1}, "2026-09": {"usd": 0.52, "n": 2}}
-    assert gastos.resumen_total("nadie", ahora_iso=ahora) == {"total": 0.0, "n": 0}
+    assert gastos.resumen_total("nadie", ahora_iso=ahora) == {"total": 0.0, "n": 0, "desde": None}
     assert gastos.por_mes("nadie", ahora_iso=ahora) == {}
 
 
@@ -131,6 +131,22 @@ def test_csv_mes_con_bom_punto_y_coma_y_escape_de_formulas(base_temporal):
     assert lineas[1] == '2026-09-02T10:00:00;video;wavespeed;video:1;"\'=HYPERLINK(""x"")";0,5000'
     assert lineas[2] == "2026-09-03T10:00:00;guion;;guion:1;'-guion;0,0200"
     assert len(lineas) == 3
+
+
+def test_csv_todo_trae_los_meses_anteriores_y_no_el_futuro(base_temporal):
+    """«Descargar CSV de todo» (2026-10-07): todos los cobros del proyecto desde
+    el primero, en orden, hasta `ahora`; el del mes sigue trayendo solo el mes."""
+    import gastos
+    gastos.registrar("acme", "video", 9, "video:viejo", creado_en="2026-08-03T10:00:00")
+    gastos.registrar("acme", "video", 0.5, "video:1", creado_en="2026-09-02T10:00:00")
+    gastos.registrar("acme", "video", 1, "video:futuro", creado_en="2026-09-30T10:00:00")
+    gastos.registrar("otro", "video", 7, "video:ajeno", creado_en="2026-08-10T10:00:00")
+    todo = gastos.csv_todo("acme", ahora_iso="2026-09-18T12:00:00").lstrip("\ufeff").splitlines()
+    assert todo[0] == "fecha;tipo;proveedor;referencia;detalle;usd"
+    assert [l.split(";")[3] for l in todo[1:]] == ["video:viejo", "video:1"]
+    assert todo[1].endswith(";9,0000")
+    mes = gastos.csv_mes("acme", ahora_iso="2026-09-18T12:00:00").lstrip("\ufeff").splitlines()
+    assert [l.split(";")[3] for l in mes[1:]] == ["video:1"]
 
 
 def test_estimar_video_e_imagen_delegan_en_flowplus_modelos(monkeypatch):
@@ -328,3 +344,83 @@ def test_estimar_voz_editor_solo_subtitulos_cobra_solo_whisper():
     assert e["usd"] == fal_audio.costo_whisper(42000)
     sin_dur = gastos.estimar("voz_editor", caracteres=120, solo_subtitulos=True)
     assert sin_dur["usd"] == fal_audio.costo_whisper(10000)
+
+
+@pytest.mark.parametrize("estilo,extra", [("", 0), ("mat:3", 0), ("calmado", 0.02)])
+def test_estimar_video_suma_solo_musica_generada(monkeypatch, estilo, extra):
+    import gastos
+    from providers import flowplus_modelos
+    monkeypatch.setattr(flowplus_modelos, "estimate_video", lambda *a, **k: {"usd": 0.8})
+    assert gastos.estimar("video", modelo="wan3", duracion=8, musica_estilo=estilo)["usd"] == pytest.approx(0.8 + extra)
+
+
+def test_estimado_clon_incluye_vista_previa_y_estreno(monkeypatch):
+    import gastos
+    import voces_propias
+    from providers import fal_audio
+    monkeypatch.setattr(fal_audio.fal_client, "llamar", lambda *a, **k: {"custom_voice_id": "v", "audio": {"url": "https://x/a.mp3"}})
+    frase = voces_propias.frase_muestra("Ana", "es")
+    cobro = fal_audio.clonar_voz_minimax("https://x/g.wav", frase)["costo_usd"]
+    assert gastos.estimar("voz_clonada", nombre="Ana", idioma="es")["usd"] == pytest.approx(
+        cobro + len(frase) * fal_audio.COSTO_MINIMAX_POR_CARACTER)
+
+
+def test_estimado_diseno_incluye_diseno_vista_previa_y_estreno():
+    import gastos
+    import voces_propias
+    from providers import fal_audio
+    frase = voces_propias.frase_muestra("Ana", "es")
+    esperado = round(round(fal_audio.COSTO_DISENAR_VOZ
+                           + len(frase) * fal_audio.COSTO_VISTA_PREVIA_DISENO_POR_CARACTER, 4)
+                     + round(len(frase) * fal_audio.COSTO_MINIMAX_POR_CARACTER, 4), 4)
+    assert gastos.estimar("voz_disenada", nombre="Ana", idioma="es")["usd"] == pytest.approx(esperado)
+
+
+@pytest.mark.parametrize('idioma,n', [('es',2),('en',26),('sv',23)])
+def test_pnd126_estimado_iguala_redondeos_del_cobro(monkeypatch, idioma, n):
+    import gastos
+    import voces_propias
+    from providers import fal_audio
+    monkeypatch.setattr(fal_audio.fal_client,'llamar',lambda *a,**kw:{'custom_voice_id':'v','audio':{'url':'https://r2/a.mp3'}})
+    frase = voces_propias.frase_muestra('x'*n,idioma)
+    diseno = fal_audio.disenar_voz_minimax('Descripción',frase)['costo_usd']
+    estreno = fal_audio.tts_minimax(frase,'v',idioma)['costo_usd']
+    assert gastos.estimar('voz_disenada',nombre='x'*n,idioma=idioma)['usd'] == round(diseno+estreno,4)
+
+
+@pytest.mark.parametrize('usd,esperado', [(.8, .82), (.84, .84)])
+def test_conservar_mayor_en_carrera_integrity_error(base_temporal, monkeypatch, usd, esperado):
+    import db
+    import gastos
+    from contextlib import contextmanager
+    from types import SimpleNamespace
+    gid = gastos.registrar('acme', 'video', .82, 'video:cf:t31', extra={'usd_musica': .02})
+    conectar = db.conectar
+    eventos = []
+
+    class Carrera:
+        def __init__(self, con):
+            self.con = con
+        def __getattr__(self, nombre):
+            return getattr(self.con, nombre)
+        def execute(self, sentencia, *a, **kw):
+            if isinstance(sentencia, sa.sql.Select) and not eventos:
+                eventos.append('select sin fila')
+                # Otro proceso ya insertó, pero el primer SELECT aún no lo vio.
+                return SimpleNamespace(first=lambda: None)
+            try:
+                return self.con.execute(sentencia, *a, **kw)
+            except sa.exc.IntegrityError:
+                eventos.append('IntegrityError real de SQLite')
+                raise
+    @contextmanager
+    def conexion():
+        with conectar() as con:
+            yield Carrera(con)
+    monkeypatch.setattr(db, 'conectar', conexion)
+    assert gastos.registrar('acme', 'video', usd, 'video:cf:t31', conservar_mayor=True,
+                             extra={'usd_musica': .04}) == gid
+    assert eventos == ['select sin fila', 'IntegrityError real de SQLite']
+    fila, = gastos.historial('acme')
+    assert fila['usd'] == esperado
+    assert fila['extra']['usd_musica'] == (.02 if usd < .82 else .04)

@@ -120,14 +120,26 @@ is `id="cat-sync-<job>"`, because Configuración paints its own `trabajo-<job>` 
 on entries without `producto_id`). Rows without an activo (imported without photos) are cards in the same gallery
 («Sin fotos» filter) with Subir fotos / Crear activo / Archivar. Configuración (`_tab_settings.html`) shows one
 apartado at a time (pills, last one remembered, `window.irAConfig(id)` opens the apartado
-holding `id`): Puesta a punto (admin only), Conexiones (store, Pixel, organic channels — since
-2026-09-28 the Meta connection card is NOT here: it lives only in Experimentos,
-`_meta_conectar.html`; the Triple Whale form left the same day for the Triple Whale tab,
+holding `id`): Puesta a punto (admin only), Conexiones (Meta card `_meta_conectar.html` — back here since
+2026-10-04, it was in Experimentos from 2026-09-28 —, store, Pixel, organic channels; the payment-method reminder is the
+`meta:metodo_pago` alert, `alertas._fuente_meta`; the Triple Whale form left the same day for the Triple Whale tab,
 `_triple_whale_conectar.html`), Marca, Generación, Cuenta y avisos,
-Gasto. The key cards (`_llave_tarjeta.html`,
-`dashboard._estado_llaves`) list every
-paid key (Anthropic, fal, Higgsfield, R2, Meta, SMTP, MELI) with configured/missing badges —
-computed from `bool(os.environ.get(...))` only, values are never rendered. Since 2026-09-20 that
+Gasto. The key cards (`_llave_tarjeta.html`;
+the list and its state live in `llaves.py`: `llaves.SERVICIOS` / `llaves.estado`, aliased in `dashboard.py` as
+`SERVICIOS_LLAVES` / `_estado_llaves`) list every
+paid key (Anthropic, WaveSpeed, fal, Higgsfield — optional, only the old «Nueva idea» flow —, R2, SMTP, MELI,
+Nicho and Referentes sources) with configured/missing badges —
+computed from `bool(os.environ.get(...))` only, values are never rendered (`alertas.py` reads the same `llaves.estado()`: every card not configured is also an admin-only alert `llave:<id>` — `info` if the card is `opcional` —, skill `alertas`). Since 2026-09-20 that
 full list is admin-only: `dashboard._llaves_visibles` gives a cliente just the `por_proyecto`
 cards (Meta), and the template hides `.env` variables, the server note and the "Cómo
 conseguirla" steps for them (the client sees `cliente_hace`: billing + the connect block).
+
+**Pedidos sin atribuir (2026-10-02, PND-015):** pasado `DIAS_RESOLVER_PEDIDOS`, se conservan sin reintento y `tiendas.pedidos_vencidos_sin_resolver` los cuenta por proyecto. `tablero.alertas` avisa en Alertas que no entran en las ventas atribuidas; no cambia el criterio de atribución ni convierte importes.
+
+PND-015 (revisión 2026-10-02): el aviso de pedidos vencidos cuenta solo UTM numéricos según atribucion._numero que correspondan a experimento_pieza.id o pieza.id del mismo cliente; un UTM externo no genera aviso.
+
+PND-030 (2026-10-03): una descarga solicitada sin fotos informa qué color falta, sin borrar fotos locales. La salida temprana de la Admin API cuando el catálogo viene de Shopify público limpia estado/error y marca la fecha, sin pedir productos. El hash antiguo #productos activa también la carga del Catálogo.
+
+PND-056 (2026-10-05): Shopify público pide stream=True y limita cada respuesta a 8 MB de bytes descomprimidos, antes de parsear JSON. Content-Length puede adelantar el rechazo, pero no sustituye contar los trozos. Cierra respuestas en éxito, error, redirecciones y reintentos HTTP.
+
+PND-056 (revisión de Codex, 2026-10-05): una página de productos que supera 8 MB se pide de nuevo con límite 125→25→5→1, desde la posición equivalente (divisores exactos de 250). El alcance sigue en 250 × MAX_PAGINAS productos; no limita a 40 peticiones pequeñas ni salta productos. Una sola ficha que aun con limit=1 excede el tope informa el error. Pruebas sin red con página grande de variantes y 10 000 ids; 5xx/429 cierran el stream antes del siguiente request.

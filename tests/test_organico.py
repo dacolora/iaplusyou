@@ -995,3 +995,12 @@ def test_contexto_pieza_trae_las_pruebas_del_producto(proyecto, monkeypatch):
     pid = _pieza(db, productos_ids=("Pantufla Nube",))
     ctx = proyecto["organico"].contexto_pieza("acme", pid)
     assert [p["texto"] for p in ctx["pruebas"]] == ["Algodón 100 %"]
+
+
+def test_pnd036_imagen_no_crea_publicacion(base_temporal):
+    import organico
+    pid = _pieza(base_temporal, tipo='imagen', url='https://r2/i.png')
+    with pytest.raises(ValueError, match='video'):
+        organico.crear('acme', pid, 'instagram', 'Texto')
+    with base_temporal.conectar() as con:
+        assert con.execute(sa.select(sa.func.count()).select_from(base_temporal.publicacion)).scalar() == 0

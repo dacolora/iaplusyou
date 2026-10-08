@@ -35,7 +35,7 @@ import ediciones
 import idiomas
 import materiales
 import trabajos
-from final_edition import cortes, encuadre, fotos, mezcla, motor, rasterizar, subtitulos_fuente, transcripcion
+from final_edition import cortes, encuadre, fotos, mezcla, motor, rasterizar, subtitulos_fuente, tipografia, transcripcion
 from final_edition import documento as documento_mod
 from final_edition.motor import compilador
 from idiomas import N_
@@ -210,8 +210,12 @@ def preparar_rutas(cliente, doc, carpeta):
             if literal is None:
                 raise RuntimeError(gettext("El clip de texto %(clip)s no está resuelto (¿falta documento.resolver?).",
                                            clip=cl["id"]))
+            # Un texto v2 se dibuja al tamaño más grande en que se ve (capa 5c,
+            # D8) y devuelve su tamaño natural, que es el que se estampa; v1 no
+            # usa `escala_max`.
             medidas = rasterizar.png_texto(literal, cl.get("estilo") or {}, doc["formato"],
-                                           os.path.join(carpeta, f"png_{cl['id']}.png"))
+                                           os.path.join(carpeta, f"png_{cl['id']}.png"),
+                                           escala_max=tipografia.escala_max(cl))
             rutas[clave] = os.path.join(carpeta, f"png_{cl['id']}.png")
             cl["ancho_px"], cl["alto_px"] = medidas["ancho_px"], medidas["alto_px"]
     for p in doc.get("pistas") or []:

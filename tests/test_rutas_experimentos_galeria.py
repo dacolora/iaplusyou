@@ -1,11 +1,21 @@
-"""La galería primero (spec 2026-09-20): la pestaña Experimentos abre con las
-piezas, el formulario viejo desaparece y el paso 3 trae la cuadrícula."""
+"""La galería primero (spec 2026-09-20): «Nuevo experimento» abre con las piezas,
+el formulario viejo desaparece y el paso 3 trae la cuadrícula. Desde E2 (2026-10-02)
+la galería vive en su propia ruta (exp_nuevo) y la gestión de cada experimento en el
+fragmento del centro de resultados (exp_resultados?exp=<id>)."""
 from tests.test_experimentos_db import PAISES, _pieza, _pieza_imagen
 from tests.test_rutas_experimentos import app  # noqa: F401  (fixture)
 
 
 def _html(app):
-    return app["c"].get("/cliente/acme").get_data(as_text=True)
+    """«Nuevo experimento»: la galería, la barra y los tres pasos."""
+    return app["c"].get("/cliente/acme/experimentos/nuevo").get_data(as_text=True)
+
+
+def _html_exp(app, eid):
+    """La gestión de un experimento (su árbol de países y piezas): el fragmento del centro de resultados."""
+    r = app["c"].get(f"/cliente/acme/experimentos/resultados?exp={eid}", headers={"X-Requested-With": "fetch"})
+    assert r.status_code == 200
+    return r.get_data(as_text=True)
 
 
 def test_galeria_lista_piezas_y_no_hay_formulario_viejo(app, base_temporal):
@@ -42,10 +52,9 @@ def test_arbol_pinta_miniatura_o_video(app, base_temporal):
     eid = ex.crear("acme", "Prueba", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP")
     ex.agregar_pieza("acme", eid, img, "CO")
     ex.agregar_pieza("acme", eid, clon, "CO")
-    html = _html(app)
+    html = _html_exp(app, eid)
     assert '<img src="https://r2/i.png"' in html and 'src="https://r2/f.mp4"' in html and "muted" in html
-    # Y en el árbol mismo (la pestaña Crear también pinta la imagen): la imagen
-    # va como <img>, el clon como <video muted>.
+    # Y en el árbol mismo: la imagen va como <img>, el clon como <video muted>.
     import re
     minis = re.findall(r'<span class="exp-pieza-mini">(.*?)</span>', html, re.S)
     assert any('<img src="https://r2/i.png"' in m for m in minis)
@@ -64,9 +73,9 @@ def test_crear_enlaza_a_la_galeria_con_la_pieza(app, base_temporal):
     # «Probar en Meta» va en el detalle de la pieza, que llega por fetch
     # (tarjetas ligeras, 2026-09-28).
     detalle = app["c"].get(f"/cliente/acme/creative_flow/{cid}/detalle").get_data(as_text=True)
-    assert f'href="#experimentos?piezas={pieza_id}"' in detalle
+    assert f'href="/cliente/acme/experimentos/nuevo?piezas={pieza_id}"' in detalle
     assert 'action="/cliente/acme/experimentos/meter"' not in detalle
-    assert 'action="/cliente/acme/experimentos/meter"' not in _html(app)
+    assert 'action="/cliente/acme/experimentos/meter"' not in app["c"].get("/cliente/acme").get_data(as_text=True)
 
 
 def test_arbol_oculta_thruplay_en_imagenes(app, base_temporal):
@@ -82,7 +91,7 @@ def test_arbol_oculta_thruplay_en_imagenes(app, base_temporal):
         ep = ex.agregar_pieza("acme", eid, pid, "CO")
         ex.actualizar_pieza("acme", ep, meta_ad_id=f"ad{ep}", estado="activo")
         ex.snapshot(ep, m)
-    html = _html(app)
+    html = _html_exp(app, eid)
     filas = re.findall(r'<li class="exp-pieza exp-pieza-activo">(.*?)</li>', html, re.S)
     assert len(filas) == 2
     fila_img = next(f for f in filas if 'src="https://r2/i.png"' in f)

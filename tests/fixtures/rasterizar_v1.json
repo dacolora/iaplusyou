@@ -1,0 +1,114 @@
+{
+  "pillow": "11.3.0",
+  "freetype": "2.13.3",
+  "casos": [
+    {
+      "texto": "Tu piel cambia en 7 días con nuestra crema",
+      "estilo": {
+        "fuente": "SpaceGrotesk-Bold",
+        "peso": 700,
+        "tamano": 0.0458,
+        "color": "#FFFFFF",
+        "contorno": {
+          "color": "#000000DC",
+          "grosor": 0.0016
+        },
+        "sombra": {
+          "color": "#000000C8",
+          "dx": 0.0031,
+          "dy": 0.0031
+        },
+        "fondo": null,
+        "alineacion": "centro",
+        "interlineado": 1.136,
+        "ancho_max": 0.8889
+      },
+      "formato": "9:16",
+      "medidas": {
+        "ancho_px": 835,
+        "alto_px": 300
+      },
+      "sha256": "9e0c865afb0ac7b23929fb42ed6d4a13616f5c1fdce80ec92a7f2f3c0ffc5de0"
+    },
+    {
+      "texto": "Compra hoy y recibe mañana",
+      "estilo": {
+        "fuente": "SpaceGrotesk-Bold",
+        "peso": 700,
+        "tamano": 0.0375,
+        "color": "#FFFFFF",
+        "contorno": null,
+        "sombra": null,
+        "fondo": {
+          "color": "#121218",
+          "opacidad": 0.92,
+          "radio": 0.025,
+          "relleno_x": 0.0333,
+          "relleno_y": 0.0333,
+          "ancho": 0.8
+        },
+        "alineacion": "centro",
+        "interlineado": 1.194,
+        "ancho_max": 0.6815
+      },
+      "formato": "9:16",
+      "medidas": {
+        "ancho_px": 872,
+        "alto_px": 274
+      },
+      "sha256": "cd9e514d7ff85d81537893d4dbcfa145afb6126cd0dfb814013cef3cc8d97c9a"
+    },
+    {
+      "texto": "$ 89.900",
+      "estilo": {
+        "fuente": "Inter-Bold",
+        "peso": 700,
+        "tamano": 0.0292,
+        "color": "#FFFFFF",
+        "contorno": null,
+        "sombra": null,
+        "fondo": {
+          "color": "#7c3aed",
+          "opacidad": 1.0,
+          "radio": 1.0,
+          "relleno_x": 0.0208,
+          "relleno_y": 0.0115,
+          "ancho": null
+        },
+        "alineacion": "centro",
+        "interlineado": 1.1,
+        "ancho_max": null
+      },
+      "formato": "9:16",
+      "medidas": {
+        "ancho_px": 341,
+        "alto_px": 104
+      },
+      "sha256": "f75cb91689ecf5e4174cf278de47efc5665d35bfc05143823e76c54919a36717"
+    },
+    {
+      "texto": "Hola 🔥 mundo",
+      "estilo": {
+        "fuente": "Inter-Bold",
+        "peso": 700,
+        "tamano": 0.06,
+        "color": "#FFFFFF",
+        "contorno": {
+          "color": "#000000",
+          "grosor": 0.003
+        },
+        "sombra": null,
+        "fondo": null,
+        "alineacion": "centro",
+        "interlineado": 1.1,
+        "ancho_max": null
+      },
+      "formato": "1:1",
+      "medidas": {
+        "ancho_px": 394,
+        "alto_px": 62
+      },
+      "sha256": "f6eb03a2b88d74504fbd2771d516f5404dbfc2ad7bc4bd8a239b45a2d7e15316"
+    }
+  ]
+}

@@ -567,3 +567,15 @@ def test_migracion_0018_crea_y_quita_las_tablas(tmp_path, monkeypatch):
     insp = sa.inspect(db.engine())
     assert not ({"guion_prompt", "guion_mensaje"} & set(insp.get_table_names()))
     db._reset_para_tests()
+
+
+def test_pnd027_lista_completa_agrupada_por_origen(base_temporal):
+    from guiones import refinador
+    manual = _crear()['id']
+    for n in range(201):
+        _crear(origen='pipeline', titulo=f'Clip {n}')
+    _crear(cliente='otro')
+    filas = refinador.listar('acme')
+    assert len(filas) == 202
+    assert filas[0]['id'] == manual
+    assert all(p['origen'] == 'pipeline' for p in filas[1:])

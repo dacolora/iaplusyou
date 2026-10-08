@@ -24,7 +24,9 @@ PLANTILLAS_TRADUCIDAS = [
     "_tab_catalogo.html", "_catalogo_campos_comerciales.html", "_catalogo_importar.html",
     "_maniqui.html", "_seccion_personajes.html",
     "_tab_experimentos.html", "_form_reglas.html", "_anuncios_sueltos.html", "_organico_publicar.html",
-    "_tab_tablero.html", "landing_cliente.html",
+    "_exp_gestionar.html", "_exp_pieza.html", "_exp_probar.html", "_exp_resultados.html", "exp_nuevo.html",
+    "_exp_historial.html", "_exp_macros.html",
+    "_tab_alertas.html", "landing_cliente.html",   # _tab_tablero.html se fue: el Tablero se fundió en Experimentos (E2)
     # Merge de main (2026-09-27): parciales nuevos dentro de pantallas ya traducidas
     # (Crear › detalle de la pieza; Catálogo › ficha del producto).
     "_revision_doctrina.html", "_producto_doctrina.html",
@@ -60,7 +62,7 @@ PLANTILLAS_TRADUCIDAS = [
     "editor.html",   # Fase 6, Task 2: la página del editor
     "_tab_cambiar_calzado.html",   # Fase 6, Task 4: Crear › Cambiar producto
     "admin_meta.html", "admin_referentes.html", "meta_elegir.html",   # Fase 6, Task 5
-    "admin_salud.html", "admin_registros.html",   # Salud de la plataforma (spec 2026-10-01-escala-y-monitoreo)
+    "admin_salud.html", "admin_registros.html", "admin_estilos.html",   # Salud de la plataforma (spec 2026-10-01-escala-y-monitoreo)
     # Fase 6, Task 6: llegaron con fusiones de main ya traducidas y solo faltaba
     # sumarlas a la guardia — Crear › Audios (worktree-crear-audios, 82491a6) y el
     # formulario de conexión de Triple Whale en su pestaña (4ecd154).

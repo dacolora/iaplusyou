@@ -1,5 +1,5 @@
 // Biblioteca del editor (capa 4b, Task 6): el panel de la izquierda (en el
-// celular, la hoja que sube desde abajo) con cinco pestañas:
+// celular, la hoja que sube desde abajo) con seis pestañas:
 //
 // - Medios: «Subir» (varios archivos; cada uno con su barra y, si falla, su
 //   error en llano debajo), los videos e imágenes del proyecto y, debajo,
@@ -17,7 +17,18 @@
 //   grabar con el micrófono).
 // - Texto: cuatro muestras (Título, Subtítulo, Precio, Llamado) con su estilo;
 //   tocar una la pone en el cabezal, la deja elegida y pide el foco para su
-//   texto (editor.enfocarTexto: el panel de propiedades lo atiende).
+//   texto (editor.enfocarTexto: el panel de propiedades lo atiende). Capa 5c
+//   (D12.1): debajo, «Para vender» — seis plantillas (OFERTA, NUEVO, -50 %,
+//   ENVÍO GRATIS…) que entran igual, escritas en su fuente y con su fondo.
+// - Stickers (capa 5c, D11 y D12.2): una cuadrícula por sección — flechas,
+//   marcas a mano y formas (los 20 PNG blancos de la casa, sobre un fondo
+//   oscuro) y, solo si la fuente de emojis está, los emojis de anuncio —.
+//   Tocar un sticker pide al servidor su material (gratis: la primera vez que
+//   se usa en el proyecto lo sube; ruta `agregar_sticker`) y lo agrega como
+//   una capa de imagen del color de su ficha, que «Editar» cambia; tocar un
+//   emoji agrega un texto con ese emoji solo. Con el mouse, los tres también
+//   se arrastran a la línea de tiempo. El pie del panel de emojis trae la
+//   atribución de Twemoji (CC-BY 4.0), que su licencia exige.
 // - Subtítulos (capa 5a): la llena subtitulos_panel.js en la zona que da
 //   `zona("subtitulos")`; la biblioteca solo la muestra.
 // - Transiciones: las cinco que el render hace; tocar una la pone (500 ms) en
@@ -53,6 +64,7 @@ import { TRANSICIONES } from "./operaciones.js";
 import { mensajeSesion, sesionTerminada } from "./guardado.js";
 import { evaluarRespuesta } from "./pendientes.js";
 import { mensajeConflicto, textoSegundos } from "./propiedades_modelo.js";
+import { plantillasTexto, seccionesStickers } from "./stickers_modelo.js";
 import { t } from "./textos.js";
 import { pistaPrincipal } from "./tiempo.js";
 import { idiomaDeVoz } from "./voz_modelo.js";
@@ -238,6 +250,28 @@ export function urlBorrar(plantilla, id) {
   return String(plantilla).replace("__ID__", encodeURIComponent(String(id)));
 }
 
+// Capa 5c (D11): la ruta que vuelve un sticker material del proyecto
+// (`editor.agregar_sticker`, gratis) cuelga de la de la biblioteca:
+// <biblioteca>/sticker/<id>. El id sale del manifiesto, pero se codifica igual.
+export function urlSticker(biblioteca, id) {
+  return `${String(biblioteca)}/sticker/${encodeURIComponent(String(id))}`;
+}
+
+// Lo que se dice cuando un sticker no se pudo agregar: el motivo que dio el
+// servidor (sin el punto final, que va dentro de un paréntesis); si no dijo
+// nada —un 500 con una página HTML cuando R2 falla—, el número del error; sin
+// red, «sin conexión»; con la sesión vencida, eso (la edición pendiente no se
+// pierde: se dice que recargue).
+export function mensajeSticker({ status = 0, cuerpo = null, redirigido = false, red = false } = {}) {
+  if (redirigido) return mensajeSesion();
+  let motivo;
+  if (red) motivo = t("bib.sticker_sin_conexion");
+  else if (cuerpo && typeof cuerpo === "object" && typeof cuerpo.error === "string" && cuerpo.error.trim()) {
+    motivo = cuerpo.error.trim().replace(/[.\s]+$/, "");
+  } else motivo = t("bib.sticker_error_http", { status });
+  return t("bib.sticker_error", { error: motivo });
+}
+
 // Por qué no se ofrece borrar ese material ahora (o null): el servidor solo
 // ve lo guardado, así que lo que usa la edición abierta se mira aquí.
 export function motivoNoBorrar(m, doc) {
@@ -305,7 +339,9 @@ const ICONOS = {
 // El icono de cada opción del menú de una imagen (opcionesImagen).
 const ICONO_COMO = { clip: "video", capa: "capas" };
 const MENU_COMO_MARGEN_PX = 8;
-const ICONO_DE = { video: "video", pieza: "video", imagen: "imagen", audio: "nota", texto: "texto", transicion: "transicion" };
+const ICONO_DE = { video: "video", pieza: "video", imagen: "imagen", sticker: "imagen", audio: "nota", texto: "texto", transicion: "transicion" };
+// El título de un panel cuando la página no trae su pestaña (normalmente lo da el nombre de la pestaña).
+const TITULO_PANEL = { stickers: "bib.stickers" };
 const ESTADO_SUBIDA = {
   espera: () => t("bib.en_espera"),
   subiendo: (s) => t("bib.subiendo", { n: Math.round(s.progreso * 100) }),
@@ -365,9 +401,14 @@ export class Biblioteca {
   // `pestanas`: la lista de pestañas (la página ya marca la elegida; aquí se
   // muestra su panel); `urls`: las de datos-editor; `linea`: la LineaTiempo;
   // `nombresIdioma`: {es: "Español", …} (el aviso de una voz en otro idioma).
-  constructor({ contenedor, pestanas, urls, editor, linea, nombresIdioma = {} }) {
+  // Capa 5c: `stickers` (datos.stickers: los 20 de la casa con su URL) y
+  // `tabla` (config.tipografia: sin su fuente de emojis no hay emojis).
+  constructor({ contenedor, pestanas, urls, editor, linea, nombresIdioma = {}, stickers = [], tabla = null }) {
     this.contenedor = contenedor;
     this.nombresIdioma = nombresIdioma ?? {};
+    this.stickers = Array.isArray(stickers) ? stickers : [];
+    this.tabla = tabla ?? null;
+    this.pidiendoSticker = new Set();   // id de sticker cuyo material se está pidiendo: otro toque no suma otro
     this.pestanas = pestanas;
     this.urls = urls ?? {};
     this.editor = editor;
@@ -438,18 +479,20 @@ export class Biblioteca {
     this.mensaje.setAttribute("aria-live", "polite");
     this.mensaje.hidden = true;
     this.paneles = {};
-    for (const panel of ["medios", "audio", "texto", "subtitulos", "transiciones"]) {
+    for (const panel of ["medios", "audio", "texto", "stickers", "subtitulos", "transiciones"]) {
       const s = el("section", "ed-bib-panel", c);
       s.dataset.panel = panel;
       s.hidden = true;
       // en la columna las pestañas van solo con el icono: el panel dice cuál es
-      el("h2", "ed-titulo ed-bib-cabeza", s, this.pestanas.querySelector(`[data-panel="${panel}"]`)?.textContent.trim() ?? "");
+      const nombre = this.pestanas.querySelector(`[data-panel="${panel}"]`)?.textContent.trim();
+      el("h2", "ed-titulo ed-bib-cabeza", s, nombre || (TITULO_PANEL[panel] ? t(TITULO_PANEL[panel]) : ""));
       this.paneles[panel] = s;
     }
     this.listaSubidas = {};
     this._construirMedios();
     this._construirAudio();
     this._construirTextos();
+    this._construirStickers();
     this._construirTransiciones();
     // escuchas una sola vez (delegación): repintar las listas no suma escuchas
     c.addEventListener("click", (e) => this._clic(e));
@@ -516,16 +559,71 @@ export class Biblioteca {
     const p = this.paneles.texto;
     el("p", "ed-bib-ayuda", p, t("bib.ayuda_textos"));
     const g = el("div", "ed-bib-textos", p);
-    for (const muestra of textosBiblioteca()) {
-      const clave = `t:${muestra.preset}`;
-      this.cosas.set(clave, { tipo: "texto", preset: muestra.preset, nombre: muestra.nombre });
-      const b = el("button", `ed-bib-texto ed-bib-texto-${muestra.preset}`, g);
-      b.type = "button";
-      b.dataset.clave = clave;
-      b.dataset.arrastrable = "";
-      b.setAttribute("aria-label", t("bib.agregar_texto", { nombre: muestra.nombre }));
-      el("span", "ed-bib-texto-muestra", b, muestra.nombre);
+    for (const muestra of textosBiblioteca()) this._botonTexto(g, muestra.preset, muestra.nombre);
+    // capa 5c (D12.1): las plantillas para vender, con el mismo estilo de muestra
+    el("h3", "ed-bib-titulo", p, t("bib.para_vender"));
+    const v = el("div", "ed-bib-textos ed-bib-plantillas", p);
+    for (const plantilla of plantillasTexto()) this._botonTexto(v, plantilla.preset, plantilla.texto);
+  }
+
+  // Una muestra de texto (o plantilla): un botón escrito con el estilo con que
+  // entra (`ed-bib-texto-<preset>`, en el CSS de la página).
+  _botonTexto(grilla, preset, nombre) {
+    const clave = `t:${preset}`;
+    this.cosas.set(clave, { tipo: "texto", preset, nombre });
+    const b = el("button", `ed-bib-texto ed-bib-texto-${preset}`, grilla);
+    b.type = "button";
+    b.dataset.clave = clave;
+    b.dataset.arrastrable = "";
+    b.setAttribute("aria-label", t("bib.agregar_texto", { nombre }));
+    el("span", "ed-bib-texto-muestra", b, nombre);
+    return b;
+  }
+
+  // «Stickers» (capa 5c): una cuadrícula por sección, cada título justo antes
+  // de la suya. Los stickers son blancos (se tiñen al agregarlos): sus
+  // miniaturas van sobre un fondo oscuro. El pie con la atribución de Twemoji
+  // sale siempre que sale la sección de emojis (la licencia lo exige).
+  _construirStickers() {
+    const p = this.paneles.stickers;
+    const secciones = seccionesStickers(this.stickers, this.tabla);
+    for (const { seccion, titulo, items } of secciones) {
+      el("h3", "ed-bib-titulo", p, titulo);
+      const g = el("div", "ed-stickers-cuadricula", p);
+      g.dataset.seccion = seccion;
+      for (const item of items) g.append(item.emoji === undefined ? this._botonSticker(item) : this._botonEmoji(item.emoji));
     }
+    if (secciones.some((s) => s.seccion === "emojis")) el("p", "ed-bib-ayuda ed-stickers-atribucion", p, t("bib.atribucion_emoji"));
+  }
+
+  _botonSticker(item) {
+    const clave = `s:${item.id}`;
+    this.cosas.set(clave, { tipo: "sticker", sticker: item, nombre: item.nombre });
+    const b = el("button", "ed-sticker");
+    b.type = "button";
+    b.dataset.clave = clave;
+    b.dataset.arrastrable = "";
+    b.title = item.nombre;
+    b.setAttribute("aria-label", item.nombre);
+    const img = el("img", "", b);
+    img.alt = "";                                   // el nombre lo dice el botón
+    img.loading = "lazy";
+    img.decoding = "async";
+    img.draggable = false;
+    img.src = item.url;
+    return b;
+  }
+
+  _botonEmoji(emoji) {
+    const clave = `e:${emoji}`;
+    this.cosas.set(clave, { tipo: "texto", preset: "emoji", literal: emoji, nombre: emoji });
+    const b = el("button", "ed-sticker ed-sticker-emoji", null, emoji);
+    b.type = "button";
+    b.dataset.clave = clave;
+    b.dataset.arrastrable = "";
+    b.title = emoji;
+    b.setAttribute("aria-label", emoji);
+    return b;
   }
 
   _construirTransiciones() {
@@ -862,6 +960,7 @@ export class Biblioteca {
   agregar(clave, punto = null, cosa = this.cosas.get(clave), { como = null } = {}) {
     if (!cosa) return false;
     if (cosa.tipo === "pieza") return this._agregarPieza(cosa, punto);
+    if (cosa.tipo === "sticker") return this._agregarSticker(cosa, punto);
     return this._operar(cosa, punto, como);
   }
 
@@ -887,6 +986,10 @@ export class Biblioteca {
       // la foto nueva queda elegida (operaciones.agregarFoto): su duración, y que se cambia en «Editar»
       const foto = (pistaPrincipal(ed.doc())?.clips ?? []).find((c) => c.id === ed.seleccion);
       this._decir(foto ? textoFotoAgregada(foto.duracion_ms) : t("bib.agregado", { nombre: cosa.nombre }));
+    } else if (cosa.tipo === "sticker") {
+      this._decir(t("bib.sticker_agregado"));        // su color se cambia en «Editar»
+    } else if (cosa.tipo === "texto" && cosa.preset === "emoji") {
+      this._decir(t("bib.agregado", { nombre: cosa.nombre }));      // un emoji no se escribe: el teclado no sube
     } else if (cosa.tipo === "texto") {
       this._decir(t("bib.texto_agregado"));
       ed.enfocarTexto();
@@ -996,6 +1099,43 @@ export class Biblioteca {
       return null;                         // no es la operación: la edición está bloqueada (otra pestaña)
     } catch (e) {
       return e?.name === "OperacionInvalida" ? e.message : null;
+    }
+  }
+
+  // Un sticker de la casa (capa 5c, D11): el servidor lo vuelve material del
+  // proyecto (gratis, una vez por proyecto; después lo encuentra por su hash)
+  // y vuelve el material, que se agrega como una capa de imagen del color de
+  // su ficha, en UNA operación (un toque, un deshacer). Mientras se pide, otro
+  // toque en el mismo sticker no hace nada (los lentos no se acumulan).
+  async _agregarSticker(cosa, punto) {
+    const { id, color } = cosa.sticker;
+    this.pidiendoSticker ??= new Set();
+    if (this.pidiendoSticker.has(id)) return false;
+    this.pidiendoSticker.add(id);
+    try {
+      let r;
+      let j = null;
+      try {
+        r = await fetch(urlSticker(this.urls.biblioteca, id), {
+          method: "POST", credentials: "same-origin", headers: { Accept: "application/json", "X-Requested-With": "fetch" },
+        });
+        // un 500 con una página HTML (R2 falló) o la página de entrar no son JSON
+        if (!sesionTerminada(r)) j = await r.json().catch(() => null);
+      } catch {
+        this._decir(mensajeSticker({ red: true }), true);
+        return false;
+      }
+      if (sesionTerminada(r)) {
+        this._decir(mensajeSticker({ redirigido: true }), true);
+        return false;
+      }
+      if (!r.ok || !j?.material) {
+        this._decir(mensajeSticker({ status: r.status, cuerpo: j }), true);
+        return false;
+      }
+      return this._operar({ tipo: "sticker", material: j.material, tinte: color, nombre: cosa.nombre }, punto);
+    } finally {
+      this.pidiendoSticker.delete(id);
     }
   }
 

@@ -55,6 +55,33 @@ def test_valor_en_y_delta_con_truncado():
     assert tablero.delta([], "2026-09-01T00:00:00", "2026-09-30T00:00:00", "gasto") == 0.0
 
 
+def test_ventas_medidas_solo_de_lo_que_mide_ventas():
+    """La regla de «ventas medibles» es una sola (`mide_ventas`: Pixel, tienda o Triple Whale en el snapshot de
+    cierre) y `ventas_medidas` suma TODO el gasto (la regla del Tablero: lo vendido sobre todo el gasto) y dice si
+    algo mide: el centro de resultados pinta «—» sin ninguno."""
+    import tablero
+    assert [tablero.mide_ventas({"fuente_ventas": f}) for f in ("meta", "tienda", "triple_whale", "ninguna", None)] == [
+        True, True, True, False, False]
+    assert tablero.mide_ventas(None) is False
+    pixel = [_snap("2026-09-01T08:00:00", gasto=100.0, compras=2, ingresos=300.0, fuente_ventas="meta")]
+    trafico = [_snap("2026-09-01T08:00:00", gasto=100.0, compras=0, ingresos=0.0, fuente_ventas="ninguna")]
+    a, b = (tablero._deltas_pieza(s, "2026-08-01T00:00:00", "2026-09-02T00:00:00") for s in (pixel, trafico))
+    assert a["mide"] is True and b["mide"] is False
+    assert tablero.ventas_medidas([b]) == {"mide": False, "gasto": 100.0, "compras": 0, "ingresos": 0.0,
+                                           "roas_comparable": True, "gasto_sin_ventas": 100.0, "ventas_cambiaron": False}
+    assert tablero.ventas_medidas([a, b]) == {"mide": True, "gasto": 200.0, "compras": 2, "ingresos": 300.0,
+                                              "roas_comparable": True, "gasto_sin_ventas": 100.0, "ventas_cambiaron": False}
+
+
+def test_pnd139_delta_no_resta_ingresos_de_fuentes_distintas():
+    import tablero
+    snaps = [_snap("2026-09-01T08:00:00", gasto=100, compras=1, ingresos=300, fuente_ventas="meta"),
+             _snap("2026-09-02T08:00:00", gasto=200, compras=2, ingresos=600, fuente_ventas="triple_whale")]
+    d = tablero._deltas_pieza(snaps, "2026-09-01T12:00:00", "2026-09-03T00:00:00")
+    assert d["gasto"] == 100 and d["compras"] is None
+    assert d["ingresos"] is None and d["roas_comparable"] is False
+
+
 def test_dinero_redondea_igual_que_main():
     """`tablero.dinero` pasa por `idiomas.numero` (revisión final fase 4,
     M2): confirma que el pre-redondeo llega hasta acá y no solo hasta
@@ -360,8 +387,8 @@ def test_snapshots_con_desde_trae_la_ventana_y_la_base(base_temporal):
 
 def test_cargar_datos_una_vez_y_contexto(base_temporal, sin_red, monkeypatch):
     """`contexto` deriva todas las partes de UNA carga: experimentos.cargar
-    y experimentos.snapshots se llaman una vez (por proyecto / por pieza),
-    y el resultado coincide con las funciones sueltas."""
+    y experimentos.snapshots_de se llaman una vez (por proyecto / para todas
+    las piezas), y el resultado coincide con las funciones sueltas."""
     import experimentos as ex
     import tablero
     eid = _experimento(base_temporal, "Cojín")
@@ -374,20 +401,21 @@ def test_cargar_datos_una_vez_y_contexto(base_temporal, sin_red, monkeypatch):
                "top": tablero.top_ganadoras("acme"), "alertas": tablero.alertas("acme", AHORA),
                "csv": tablero.csv_mes("acme", AHORA)}
     llamadas = {"cargar": 0, "snapshots": []}
-    cargar, snapshots = ex.cargar, ex.snapshots
+    cargar, snapshots_de = ex.cargar, ex.snapshots_de
 
     def _cargar(cliente):
         llamadas["cargar"] += 1
         return cargar(cliente)
 
-    def _snapshots(ep_id, desde=None):
+    def _snapshots_de(ep_ids, desde):
         llamadas["snapshots"].append(desde)
-        return snapshots(ep_id, desde=desde)
+        return snapshots_de(ep_ids, desde)
     monkeypatch.setattr(ex, "cargar", _cargar)
-    monkeypatch.setattr(ex, "snapshots", _snapshots)
+    monkeypatch.setattr(ex, "snapshots_de", _snapshots_de)
     ctx = tablero.contexto("acme", AHORA)
     assert llamadas["cargar"] == 1
-    # Una consulta por pieza, acotada a lo más temprano entre el mes y los 30 días.
+    # Una llamada para todas las piezas (dos consultas), acotada a lo más temprano
+    # entre el mes y los 30 días.
     assert llamadas["snapshots"] == ["2026-08-18T00:00:00"]
     assert ctx["ahora"] == AHORA
     for parte, valor in sueltas.items():
@@ -653,3 +681,39 @@ def test_alerta_de_experimento_en_error_explica_el_json_de_meta(base_temporal, s
     assert a[0]["tipo"] == "experimento_error"
     assert "modo Desarrollo" in texto and "Live" in texto and "{" not in texto and "OAuthException" not in texto
     assert ".." not in texto
+
+
+def test_pnd118_tiendas_rotas_conservan_identidad(base_temporal, sin_red):
+    import tiendas
+    import alertas
+    sin_red.setattr(tiendas, 'listar', lambda c: [dict(id=i, tipo='shopify', nombre='tienda', estado='rota', error='falló') for i in (21, 22)])
+    avisos = [a for a in alertas._fuente_tablero('acme', AHORA) if a['clave'].startswith('tablero:tienda_rota')]
+    assert {a['clave'] for a in avisos} == {'tablero:tienda_rota:21', 'tablero:tienda_rota:22'}
+    assert len({a['huella'] for a in avisos}) == 2
+    alertas.descartar('acme', avisos[0]['clave'], avisos[0]['huella'])
+    # El descarte de una tienda no coincide con la identidad de la otra.
+    assert avisos[0]['clave'] != avisos[1]['clave']
+
+
+def test_pnd139_primera_venta_con_base_cero_no_se_pierde():
+    import tablero
+    snaps = [_snap('2026-09-01T08:00:00', gasto=100, compras=0, ingresos=0, fuente_ventas='ninguna'),
+             _snap('2026-09-02T08:00:00', gasto=200, compras=2, ingresos=600, fuente_ventas='meta')]
+    d = tablero._deltas_pieza(snaps, '2026-09-01T12:00:00', '2026-09-03T00:00:00')
+    assert d['compras'] == 2 and d['ingresos'] == 600
+    assert tablero._delta_ingresos(snaps, '2026-09-01T12:00:00', '2026-09-03T00:00:00') == 600
+
+
+def test_pnd138_csv_y_serie_no_mezclan_monedas(base_temporal, sin_red):
+    import csv
+    import io
+    import experimentos as ex
+    import tablero
+    eid = _experimento(base_temporal, 'Tienda', moneda='USD', atribucion='tienda', extra={'aviso_moneda':'COP'})
+    ep = _pieza_en(base_temporal, eid)
+    ex.snapshot(ep, {'gasto':100,'compras':2,'ingresos':400000,'fuente_ventas':'tienda'}, tomado_en='2026-09-15T23:00:00')
+    fila = list(csv.reader(io.StringIO(tablero.csv_mes('acme', ahora_iso=AHORA).lstrip('\ufeff')), delimiter=';'))[1]
+    assert fila[6:11] == ['100','2','','','USD']
+    dias = tablero.serie_diaria('acme', ahora_iso=AHORA)['dias']
+    assert dias[-1]['ingresos'] == 0
+    assert next(d for d in dias if d['dia'] == '2026-09-15')['ingresos'] is None

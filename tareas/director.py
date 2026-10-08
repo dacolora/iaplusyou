@@ -9,6 +9,7 @@ Sprints, cuyo costo ya se aprobó) encola además la generación.
 """
 import creative_flow
 import director
+import gastos
 import flowplus_lanzar
 import flowplus_prompt
 import idiomas
@@ -64,10 +65,16 @@ def ejecutar(tarea):
         mensaje = N_("Prompt listo — revísalo y genera.")
     except director.DirectorError as e:
         prompt, datos = _fallback(cliente, entry, e.motivo)
+        datos["usd"] = e.costo_usd
         mensaje = N_("La IA no pudo armar los planos; quedó el prompt básico para que lo edites o rearmes.")
     except Exception as e:  # red, SDK, lo que sea: nunca deja la sesión colgada
         prompt, datos = _fallback(cliente, entry, str(e)[:300])
         mensaje = N_("La IA no pudo armar los planos; quedó el prompt básico para que lo edites o rearmes.")
+    if datos["usd"]:
+        # La ayuda sigue gratis para la persona: el proveedor lo paga Creatv.
+        gastos.registrar_seguro("_creatv", "otro", datos["usd"],
+                               f"director:{cf_id}:t{tarea.get('id', 0)}",
+                               proveedor="anthropic", extra={"cliente": cliente, "modelo": director.MODEL})
     trabajos.reportar(jid, etapa=ETAPA_LISTO)
     creative_flow.actualizar(cliente, cf_id, estado="prompt_listo", prompt_relleno=prompt, director=datos, idioma_prompt=idioma)
     if p.get("auto_lanzar"):
@@ -78,15 +85,22 @@ def ejecutar(tarea):
 
 @al_interrumpir("flowplus_director")
 def interrumpida(tarea, mensaje):
-    """El worker murió a mitad de la compilación (dos veces: max_intentos=2).
+    """El worker murió a mitad de la compilación (max_intentos=1).
     La sesión quedaría en `prompt_pendiente` sin trabajo y sin botón: se le
     deja el prompt determinista con el aviso, en `prompt_listo`, para que la
     persona lo edite, rearme o genere. Si ya salió de `prompt_pendiente` por
-    otro camino, no se pisa."""
+    otro camino, no se pisa. Si la persona ya había aprobado el lanzamiento
+    (`auto_lanzar`, PND-034), la generación continúa igual con ese prompt:
+    interrumpir la compilación no cancela la aprobación ni deja el clic a
+    medias."""
     p = tarea["payload"]
     cliente, cf_id = p["cliente"], p["cf_id"]
     entry = creative_flow.cargar(cliente).get(cf_id)
-    if entry is None or entry.get("estado") != "prompt_pendiente":
+    if entry is None or entry.get("estado") not in ("prompt_pendiente", "prompt_listo"):
         return
-    prompt, datos = _fallback(cliente, entry, mensaje)
-    creative_flow.actualizar(cliente, cf_id, estado="prompt_listo", prompt_relleno=prompt, director=datos)
+    if entry.get("estado") == "prompt_pendiente":
+        prompt, datos = _fallback(cliente, entry, mensaje)
+        creative_flow.actualizar(cliente, cf_id, estado="prompt_listo", prompt_relleno=prompt, director=datos)
+    if p.get("auto_lanzar"):
+        entry = creative_flow.cargar(cliente)[cf_id]
+        flowplus_lanzar.lanzar(cliente, cf_id, entry, prioridad=int(p.get("prioridad") or flowplus_lanzar.PRIORIDAD_NORMAL))

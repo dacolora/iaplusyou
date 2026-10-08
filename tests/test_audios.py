@@ -204,9 +204,9 @@ def test_fichas_de_voces_para_la_galeria():
     assert {f["genero"] for f in fichas} >= {"mujer", "hombre"}
 
 
-def test_diez_idiomas_con_nombre_y_frase():
+def test_once_idiomas_con_nombre_y_frase():
     from providers import fal_audio
-    assert audios.IDIOMAS == ("es", "en", "pt", "de", "fr", "it", "fi", "sv", "no", "cs")
+    assert audios.IDIOMAS == ("es", "en", "pt", "de", "fr", "it", "fi", "sv", "no", "cs", "nl")
     assert set(audios.NOMBRES_IDIOMA) == set(audios.IDIOMAS) == set(audios.FRASES_MUESTRA) == set(fal_audio.IDIOMAS_MINIMAX)
     assert audios.NOMBRES_IDIOMA["no"] == "Norsk" and audios.NOMBRES_IDIOMA["cs"] == "Čeština"
     assert all("{voz}" in audios.FRASES_MUESTRA[i] for i in audios.IDIOMAS)

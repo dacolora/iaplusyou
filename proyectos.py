@@ -12,6 +12,8 @@ consecuencias. Si no hay nombre guardado, se usa el id capitalizado, que es lo
 que se mostraba antes de que esto existiera.
 """
 import os
+import fcntl
+from functools import wraps
 
 import _json_store
 
@@ -30,8 +32,30 @@ def nombre_visible(cliente):
     return (cargar(cliente).get("nombre") or "").strip() or cliente.capitalize()
 
 
+def _con_candado(fn):
+    @wraps(fn)
+    def escribir(cliente, *args, **kwargs):
+        ruta = _path(cliente)
+        os.makedirs(os.path.dirname(ruta) or ".", exist_ok=True)
+        with open(ruta + ".lock", "a+") as candado:
+            fcntl.flock(candado.fileno(), fcntl.LOCK_EX)
+            try:
+                return fn(cliente, *args, **kwargs)
+            finally:
+                fcntl.flock(candado.fileno(), fcntl.LOCK_UN)
+    return escribir
+
+
+@_con_candado
+def actualizar_campos(cliente, **campos):
+    datos = _cargar_para_escribir(cliente)
+    datos.update(campos)
+    _json_store.guardar(_path(cliente), datos)
+
+
+@_con_candado
 def guardar_nombre(cliente, nombre):
-    datos = cargar(cliente)
+    datos = _cargar_para_escribir(cliente)
     datos["nombre"] = (nombre or "").strip()
     _json_store.guardar(_path(cliente), datos)
 
@@ -53,9 +77,10 @@ def preferencias_flowplus(cliente):
     return prefs
 
 
+@_con_candado
 def guardar_preferencias_flowplus(cliente, modelo_video, modelo_imagen, duracion_defecto=8):
     from providers import flowplus_modelos
-    datos = cargar(cliente)
+    datos = _cargar_para_escribir(cliente)
     try:
         dur = int(duracion_defecto)
     except (TypeError, ValueError):
@@ -79,8 +104,9 @@ def preferencias_sonido(cliente):
     return {**DEFAULTS_SONIDO, **datos.get("preferencias_sonido", {})}
 
 
+@_con_candado
 def guardar_preferencias_sonido(cliente, con_sonido, musica_al_crear):
-    datos = cargar(cliente)
+    datos = _cargar_para_escribir(cliente)
     datos["preferencias_sonido"] = {"con_sonido": bool(con_sonido), "musica_al_crear": str(musica_al_crear or "")}
     _json_store.guardar(_path(cliente), datos)
 
@@ -101,8 +127,9 @@ def preferencias(cliente):
     return {**DEFAULTS_PREFERENCIAS, **datos.get("preferencias_swap", {})}
 
 
+@_con_candado
 def guardar_preferencias(cliente, proveedor_foto, proveedor_video, mejorar_calidad):
-    datos = cargar(cliente)
+    datos = _cargar_para_escribir(cliente)
     datos["preferencias_swap"] = {
         "proveedor_foto": proveedor_foto,
         "proveedor_video": proveedor_video,
@@ -118,9 +145,10 @@ def reglas_defecto(cliente):
     return {k: v for k, v in data.items() if k in decisor.REGLAS_DEFECTO}
 
 
+@_con_candado
 def guardar_reglas_defecto(cliente, reglas):
     import decisor
-    data = cargar(cliente)
+    data = _cargar_para_escribir(cliente)
     data["reglas_experimentos"] = {k: v for k, v in (reglas or {}).items() if k in decisor.REGLAS_DEFECTO}
     _json_store.guardar(_path(cliente), data)
 
@@ -132,8 +160,9 @@ def correo_notificaciones(cliente):
     return correo or None
 
 
+@_con_candado
 def guardar_correo_notificaciones(cliente, correo):
-    datos = cargar(cliente)
+    datos = _cargar_para_escribir(cliente)
     datos["correo_notificaciones"] = (correo or "").strip()
     _json_store.guardar(_path(cliente), datos)
 
@@ -150,11 +179,12 @@ def meta_forma(cliente):
     return forma if forma in FORMAS_META else None
 
 
+@_con_candado
 def guardar_meta_forma(cliente, forma):
     """Guarda (o borra, con None) la forma elegida. No toca Meta ni meta.json."""
     if forma is not None and forma not in FORMAS_META:
         raise ValueError(f"Forma no soportada: {forma}")
-    datos = cargar(cliente)
+    datos = _cargar_para_escribir(cliente)
     if forma is None:
         datos.pop("meta_forma", None)
     else:
@@ -169,8 +199,9 @@ def referentes_copycoders(cliente):
     return bool(cargar(cliente).get("referentes_copycoders"))
 
 
+@_con_candado
 def guardar_referentes_copycoders(cliente, activa):
-    datos = cargar(cliente)
+    datos = _cargar_para_escribir(cliente)
     datos["referentes_copycoders"] = bool(activa)
     _json_store.guardar(_path(cliente), datos)
 
@@ -184,11 +215,12 @@ def pais(cliente):
     return (cargar(cliente).get("pais") or "CO").upper()
 
 
+@_con_candado
 def guardar_pais(cliente, pais_nuevo):
     pais_nuevo = (pais_nuevo or "").upper()
     if pais_nuevo not in PAISES_CALENDARIO:
         raise ValueError(f"País no soportado: {pais_nuevo}")
-    datos = cargar(cliente)
+    datos = _cargar_para_escribir(cliente)
     datos["pais"] = pais_nuevo
     _json_store.guardar(_path(cliente), datos)
 
@@ -199,8 +231,9 @@ def bloque_global_flowplus(cliente):
     return (cargar(cliente).get("flowplus_bloque_global") or "").strip()
 
 
+@_con_candado
 def guardar_bloque_global_flowplus(cliente, texto):
-    datos = cargar(cliente)
+    datos = _cargar_para_escribir(cliente)
     datos["flowplus_bloque_global"] = (texto or "").strip()
     _json_store.guardar(_path(cliente), datos)
 
@@ -227,6 +260,7 @@ def _cargar_para_escribir(cliente):
     return data
 
 
+@_con_candado
 def agregar_aprendizaje(cliente, item):
     """Guarda `item` (dict de doctrina.aprendizajes) al frente; corta a
     MAX_APRENDIZAJES. Le pone `en` si no lo trae."""
@@ -240,6 +274,7 @@ def agregar_aprendizaje(cliente, item):
     return item
 
 
+@_con_candado
 def quitar_aprendizaje(cliente, aid):
     """True si existía y se quitó."""
     data = _cargar_para_escribir(cliente)

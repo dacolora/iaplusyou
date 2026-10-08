@@ -1,8 +1,12 @@
 {% extends "base.html" %}
 {% block title %}{{ nombre_proyecto }}{% endblock %}
 {% block content %}
-<section id="tab-tablero" class="tab-panel" role="tabpanel">
-  {% include "_tab_tablero.html" %}
+<section id="tab-experimentos" class="tab-panel zona-exp" role="tabpanel">
+  {% include "_tab_experimentos.html" %}
+</section>
+
+<section id="tab-alertas" class="tab-panel" role="tabpanel">
+  {% include "_tab_alertas.html" %}
 </section>
 
 <section id="tab-triplewhale" class="tab-panel" role="tabpanel">
@@ -25,9 +29,6 @@
   {% include "_tab_final.html" %}
 </section>
 
-<section id="tab-experimentos" class="tab-panel" role="tabpanel">
-  {% include "_tab_experimentos.html" %}
-</section>
 
 <section id="tab-sprints" class="tab-panel" role="tabpanel">
   {% include "_tab_sprints.html" %}
@@ -52,7 +53,7 @@
     // son las que usan los redirect(_anchor=...) de dashboard.py y las que ya
     // están guardadas en el localStorage de la gente. Solo cambió la etiqueta.
     var paneles = {
-      tablero: document.getElementById('tab-tablero'),
+      alertas: document.getElementById('tab-alertas'),
       triplewhale: document.getElementById('tab-triplewhale'),
       nicho: document.getElementById('tab-nicho'),
       referentes: document.getElementById('tab-referentes'),
@@ -82,11 +83,12 @@
       b.addEventListener('click', function () {
         activar(b.dataset.tab, true);
         history.replaceState(null, '', '#' + b.dataset.tab);
+        window.dispatchEvent(new Event('cr:tab'));
       });
     });
 
-    // El hash puede traer query propia de una pestaña (#experimentos?piezas=1,2
-    // desde Crear): la pestaña es lo que va antes del «?».
+    // El hash puede traer query propia de una pestaña (#experimentos?exp=3, a donde
+    // vuelven las acciones de un experimento): la pestaña es lo que va antes del «?».
     var desdeHash = location.hash.replace('#', '').split('?')[0];
     var desdeStorage = null;
     try { desdeStorage = localStorage.getItem(STORAGE_KEY); } catch (e) {}
@@ -102,7 +104,7 @@
     function resolver(t) {
       if (t === 'idea') return 'creativeflowplus';
       if (t === 'productos') return 'catalogo';
-      if (t === 'ads') return 'experimentos';
+      if (t === 'ads' || t === 'tablero') return 'experimentos';
       if (t === 'calzado' || t === 'cambiar') {
         try { localStorage.setItem('crear-modo-{{ cliente }}', 'cambiar'); } catch (e) {}
         return 'creativeflowplus';
@@ -125,19 +127,41 @@
       }
       return t;
     }
-    // Sin hash ni pestaña recordada, la página abre en el Tablero (Bloque 6):
+    // Sin hash ni pestaña recordada, la página abre en Experimentos:
     // es lo que el dueño mira cada mañana. La recordada sigue mandando.
     var inicial = resolver(desdeHash) || '';
     if (!paneles[inicial]) inicial = resolver(desdeStorage) || '';
-    activar(paneles[inicial] ? inicial : 'tablero');
+    activar(paneles[inicial] ? inicial : 'experimentos');
 
     // Un enlace a «#settings» (alertas del Tablero, «Ir a Configuración →»,
-    // Crear → «#experimentos?piezas=…») cambia solo el hash: sin esto la
+    // una acción de Experimentos → «#experimentos?exp=…») cambia solo el hash: sin esto la
     // pestaña no cambiaba estando ya en la página. Un hash que no es
     // pestaña (#alta-sprint…) se ignora.
-    window.addEventListener('hashchange', function () {
+    function desdeUbicacion() {
       var t = resolver(location.hash.replace('#', '').split('?')[0]);
       if (paneles[t]) activar(t, true);
+    }
+    window.addEventListener('hashchange', desdeUbicacion);
+    window.addEventListener('popstate', desdeUbicacion);
+
+    // «Ir a …» del Tablero y de Alertas (data-ir-tab, y data-ancla opcional):
+    // activan la pestaña sin recargar y, con ancla, llevan a ese elemento — en
+    // Configuración con irAConfig, que además abre su apartado. Sin
+    // preventDefault el hashchange de arriba volvería a subir la página. Con
+    // query (?exp=<id>#experimentos) el navegador recarga y el hash se
+    // resuelve como siempre. Una sola copia para las dos pestañas.
+    document.addEventListener('click', function (ev) {
+      var a = ev.target.closest('#tab-experimentos [data-ir-tab], #tab-alertas [data-ir-tab]');
+      if (!a || (a.getAttribute('href') || '').indexOf('?') === 0) return;
+      var btn = document.querySelector('.sidebar-item[data-tab="' + a.dataset.irTab + '"]');
+      if (!btn) return;
+      ev.preventDefault();
+      btn.click();
+      var ancla = a.dataset.ancla;
+      if (!ancla) return;
+      if (a.dataset.irTab === 'settings' && window.irAConfig) { window.irAConfig(ancla); return; }
+      var el = document.getElementById(ancla);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
 
     // Botón que abre un <details> de la página (estado vacío / encabezado:

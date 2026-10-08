@@ -193,6 +193,41 @@ def test_preparar_rutas_respeta_el_png_del_navegador(entorno, tmp_path, monkeypa
     assert rutas["png:t1"].endswith("png_t1.png") and "ancho_px" not in doc["pistas"][1]["clips"][0]
 
 
+def _con_texto(estilo, escala=1.0):
+    from final_edition import documento as d
+    base = _doc()
+    clip = base["pistas"][1]["clips"][0]
+    clip["texto"] = {"literal": "Hola"}
+    clip["estilo"] = estilo
+    clip["transform"]["escala"] = escala
+    return d.resolver(d.validar(base), "es", "CO")
+
+
+def test_preparar_rutas_dibuja_el_texto_v2_al_tamano_en_que_se_ve(entorno, tmp_path):
+    # Capa 5c, D8: a escala 2 el PNG se dibuja al doble (nítido) y el clip lleva el tamaño
+    # NATURAL, que es el que coloca geometria.caja (el compilador lo escala a 442 × 250).
+    from PIL import Image
+    doc = _con_texto({"fuente": "Inter-Bold", "tamano": 0.05, "color": "#FFFFFF", "version": 2}, escala=2.0)
+    rutas = entorno.preparar_rutas("acme", doc, str(tmp_path / "w"))
+    clip = doc["pistas"][1]["clips"][0]
+    assert (clip["ancho_px"], clip["alto_px"]) == (221, 125)
+    assert Image.open(rutas["png:t1"]).size == (442, 250)
+
+
+def test_preparar_rutas_un_texto_v1_sigue_igual_aunque_este_agrandado(entorno, tmp_path):
+    # D3: sin `version` el PNG es el de siempre (su tamaño natural, aunque la escala sea 2).
+    from PIL import Image
+    from final_edition import rasterizar
+    estilo = {"fuente": "Inter-Bold", "tamano": 0.05, "color": "#FFFFFF"}
+    doc = _con_texto(estilo, escala=2.0)
+    rutas = entorno.preparar_rutas("acme", doc, str(tmp_path / "w"))
+    clip = doc["pistas"][1]["clips"][0]
+    hoy = rasterizar.png_texto("Hola", clip["estilo"], "9:16", str(tmp_path / "hoy.png"))
+    assert (clip["ancho_px"], clip["alto_px"]) == (hoy["ancho_px"], hoy["alto_px"])
+    assert Image.open(rutas["png:t1"]).size == (hoy["ancho_px"], hoy["alto_px"])
+    assert Image.open(rutas["png:t1"]).tobytes() == Image.open(str(tmp_path / "hoy.png")).tobytes()
+
+
 def test_producir_falla_si_la_final_no_existe(entorno, monkeypatch):
     """I12: la ruta debe crear la final (creative_flow.crear_final) antes de
     encolar; si `actualizar_final` no encuentra la fila, la tarea falla con un

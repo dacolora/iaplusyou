@@ -296,5 +296,7 @@ def test_plantilla_anuncios_sueltos_compila():
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(os.path.join(raiz, "templates")))
     src = env.loader.get_source(env, "_anuncios_sueltos.html")[0]
     env.parse(src)
-    assert "trabajos_ads" in src and "iniciarPolling" in src
+    # La barra de un trabajo vivo se sondea por data-poll-job (revisión de R2, 2026-10-03): la plantilla llega dentro
+    # del fragmento de resultados y un <script>iniciarPolling…</script> insertado con innerHTML no corre.
+    assert "trabajos_ads" in src and 'data-poll-job="{{ trabajo_ad.job_id }}"' in src and "iniciarPolling" not in src
     assert not os.path.exists(os.path.join(raiz, "templates", "_tab_ads.html"))

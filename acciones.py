@@ -477,7 +477,8 @@ def _precio_estimado(cliente, ex, accion, payload):
         con_sonido = sesion.get("con_sonido", True) is not False
         for k in range(n_rg):
             modelo = derivaciones.modelo_regeneracion(sesion, k)
-            video = gastos.estimar("video", modelo=modelo, duracion=duracion, con_sonido=con_sonido)
+            video = gastos.estimar("video", modelo=modelo, duracion=duracion, con_sonido=con_sonido,
+                                  musica_estilo=sesion.get("musica_estilo"))
             if video["usd"] is None:
                 return {"usd": None, "texto": sin_precio}
             usd += video["usd"] + final

@@ -59,7 +59,9 @@ def test_producir_finales_vive_en_la_pestana_y_no_en_crear(app, pieza):
 
 
 def test_las_finales_se_ven_en_la_pestana_y_no_en_crear(app, pieza):
-    creative_flow.crear_final("acme", pieza, "es", "CO")
+    # Tablero (2026-10-02): solo una final lista es tarjeta de «Finalizados».
+    fid = creative_flow.crear_final("acme", pieza, "es", "CO")
+    creative_flow.actualizar_final("acme", fid, estado="listo", url_video="https://r2.test/f.mp4")
     html = app["c"].get("/cliente/acme").get_data(as_text=True)
     assert "generado-final" in _seccion(html, "final")
     assert "generado-final" not in _seccion(html, "creativeflowplus")
@@ -173,7 +175,11 @@ def test_cada_modal_toma_solo_las_tarjetas_de_su_pestana(app, pieza):
     edition) — se delega sobre #creativeflowplus-resultados —, y el de Final
     edition sobre su sección (`panel`); delegado, además, para que las
     tarjetas que agrega «Ver más» abran igual (tarjetas ligeras, 2026-09-28)."""
-    creative_flow.crear_final("acme", pieza, "es", "CO")
+    # Tablero (2026-10-02): una final lista (tarjeta de «Finalizados») y otra
+    # interrumpida, que deja el video en «En edición».
+    fid = creative_flow.crear_final("acme", pieza, "es", "CO")
+    creative_flow.actualizar_final("acme", fid, estado="listo", url_video="https://r2.test/f.mp4")
+    creative_flow.crear_final("acme", pieza, "en", "US")
     html = app["c"].get("/cliente/acme").get_data(as_text=True)
     crear, final = _seccion(html, "creativeflowplus"), _seccion(html, "final")
     assert "var zona = document.getElementById('creativeflowplus-resultados')" in crear
@@ -189,9 +195,10 @@ def test_cada_modal_toma_solo_las_tarjetas_de_su_pestana(app, pieza):
     # y cerrar el detalle lo vacía, igual que en Crear.
     assert "document.addEventListener('DOMContentLoaded', desdeHash)" in final
     assert "modal.addEventListener('close'" in final
-    # Tarjetas: el video de la pieza + su final, cada una en su cuadrícula.
+    # Tarjetas: el video de la pieza (En edición) + su final lista
+    # (Finalizados), cada una en su columna; la interrumpida no es tarjeta.
     assert final.count(f'data-cf="{pieza}"') == 1
-    assert f'data-cf="{pieza}__es_CO"' in final
+    assert f'data-cf="{pieza}__es_CO"' in final and f'data-cf="{pieza}__en_US"' not in final
 
 
 def test_cerrar_el_detalle_suelta_la_pieza_del_hash_y_un_hash_roto_no_rompe(app):

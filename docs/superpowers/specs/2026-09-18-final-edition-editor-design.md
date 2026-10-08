@@ -97,7 +97,7 @@ Reglas que hacen que el mismo documento sirva para todo:
   producir. La composición no depende del idioma.
 - El precio de un país es el número escrito para ese país o no existe; **nunca se
   convierte** entre monedas (regla vigente).
-- Máximo 8 pistas. Sin keyframes manuales: `keyframes` solo los escribe una
+- Máximo 8 pistas (20 desde la capa 5c, 2026-10-02: un borrador ya usa 7). Sin keyframes manuales: `keyframes` solo los escribe una
   animación predefinida (entrada/salida/Ken Burns) y el motor los interpreta.
 
 ### 1.2 Módulos
@@ -229,6 +229,13 @@ Reglas que hacen que el mismo documento sirva para todo:
 >   formato, el paneo manual es el encuadre (arrastrar y acercar sobre el video), las transiciones nuevas juntan los
 >   dos clips (el video queda tan corto como la transición) y lo de encima sigue a su clip (vínculos derivados en la
 >   página, interruptor «Vincular»). Siguen fuera: PIP (video sobre video), filtros, rotación y el Producir por país.
+> - **Capa 5c-1 implementada** (2026-10-02, spec `2026-10-01-editor-capa5c-textos-graficos-design.md`): de §4
+>   «Texto» quedan hechos el ajuste de línea con su ancho, 11 fuentes de anuncio (no ~20: las de un anuncio que vende,
+>   agrupadas por familia) y los emojis a color en la final; los stickers son 20 gráficos propios sin palabras, del
+>   color que se elija, más los emojis y seis plantillas de texto para vender; las zonas seguras de TikTok, Reels y
+>   Shorts son guías y avisos en la página. El texto sale de una maqueta compartida entre el servidor y la vista
+>   previa (texto v2); los textos viejos se producen igual. Siguen fuera (capa 5c-2): animaciones de texto además de
+>   «deslizar», rotación, escala y opacidad animadas, filtros de color.
 >
 > Decisiones de la capa 2 (plan `docs/superpowers/plans/2026-09-20-editor-capa2-borrador.md`):
 > - **Traducción por destino, con respaldo por idioma**: `variables.textos/voz`,
@@ -476,7 +483,7 @@ panel contextual: propiedades de lo seleccionado (abajo en celular, derecha en c
 - **Atajos** en computador: espacio, S (cortar), Supr, Cmd/Ctrl+Z/Shift+Z,
   flechas por fotograma, +/− zoom del timeline.
 - **Fuera**: keyframes manuales, chroma key, curvas de color, pistas anidadas,
-  más de 8 pistas.
+  más de 20 pistas (8 hasta la capa 5c).
 
 Tecnología: Preact + htm **vendorizados** en `static/vendor/` (sin CDN) para los
 paneles; dos `<canvas>` con módulos propios; eventos de puntero (dedo y mouse

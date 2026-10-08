@@ -150,7 +150,7 @@ def test_tts_minimax_payload_respuesta_y_costo(monkeypatch):
 
 def test_tts_minimax_idiomas_y_errores(monkeypatch):
     from providers import fal_audio
-    assert set(fal_audio.IDIOMAS_MINIMAX) == {"es", "en", "pt", "de", "fr", "it", "fi", "sv", "no", "cs"}
+    assert set(fal_audio.IDIOMAS_MINIMAX) == {"es", "en", "pt", "de", "fr", "it", "fi", "sv", "no", "cs", "nl"}
     assert fal_audio.IDIOMAS_MINIMAX["no"] == "Norwegian" and fal_audio.IDIOMAS_MINIMAX["cs"] == "Czech"
     llamadas = _capturar(monkeypatch, fal_audio, {"audio": {"url": "u"}, "duration_ms": 1})
     fal_audio.tts_minimax("Hola", "v", "es")

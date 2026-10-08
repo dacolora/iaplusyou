@@ -128,7 +128,19 @@ provider must call it** where the real figure is known (on failure after paying,
 was paid with a detalle). `gastos.estimar(tipo, **params)` gives the "≈ US$" shown next to
 buttons from `gastos.TARIFAS` (video/imagen from `flowplus_modelos`, `final` per country,
 guion, regla_producto, caption_organico) and returns "precio no disponible" rather than
-guessing. Meta spend is NOT in `gasto` — it comes from `metrica_snapshot` via `tablero` and is
+guessing. Reads: `resumen_mes` (the month), `resumen_total` (everything since the first charge, with `desde`),
+`por_mes`, `historial`, `csv_mes` and `csv_todo` — Configuración › Gasto shows the month AND the total since the start
+with a month-by-month table and «Descargar CSV de todo» (`gasto_csv_todo`), and the admin panel card shows both figures
+(`admin.generacion_total`): on 2026-10-07 the screens only said «este mes» (US$ 66) and the US$ 200 of earlier months
+looked lost. Meta spend is NOT in `gasto` — it comes from `metrica_snapshot` via `tablero` and is
 shown next to generation spend in its own currency. UI: sidebar chip "Este mes: US$ X
 generación · Y pauta" (context processor, template renders only, cached), Configuración ›
 Gasto (by type, history, CSV), Tablero tile, admin panel column.
+
+**Cobros recuperados (2026-10-02, PND-109):** la identidad y la referencia del cobro original viajan en la predicción; una recuperación conserva ese id de tarea. Un gasto nuevo de música pertenece a la tarea que la obtuvo. Ver la regla de recuperación de `crear`.
+
+PND-040/042 (2026-10-03): migración 0031 reconstruye material con AUTOINCREMENT conservando filas e ids. Todos los escritores de proyectos.py toman flock de proyecto.json.lock antes de leer; el idioma usa actualizar_campos y comparte el candado. Las escrituras rechazan un JSON ilegible en vez de sobrescribir ajustes. El generador de fixtures rendimiento/sembrar.py sigue siendo una inicialización fuera del flujo concurrente de producción.
+
+PND-125 (2026-10-05): el cierre de Crear registra el video inmediatamente tras descargarlo, antes de la bitácora/mezcla, y la pista apenas recibe su costo, antes de mezclar; el registro final mantiene referencias idempotentes; _registrar_gasto activa conservar_mayor en gastos.registrar_seguro. La condición SQL impide que una recuperación con música de caché reduzca un cobro original con música; las recuperaciones que pagan una pista nueva conservan su referencia de tarea separada.
+
+Revisión de Codex, 2026-10-05, lote 4: conservar_mayor se vigila también en la carrera IntegrityError con SQLite real. Describir referencias y sugerir sonido anotan bajo _creatv el cliente solicitante en extra.cliente. PND-144/145 registran los huecos aún abiertos de pista fallida e imagen cuyo error no se pudo persistir.

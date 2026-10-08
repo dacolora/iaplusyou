@@ -1,5 +1,5 @@
-{# Tarjeta Meta, incluida solo en Experimentos (hasta 2026-09-28 también en
-   Configuración › Conexiones). Cuatro estados (spec §1):
+{# Tarjeta Meta, incluida en Configuración › Conexiones (hasta 2026-10-04 estaba en Experimentos; la nota del método
+   de pago pasó a la pestaña Alertas, alertas._fuente_meta). Cuatro estados (spec §1):
    sin forma y sin conexión → elegir; forma agencia sin conectar → guía y
    autoservicio; forma propia → guía corregida + app + conexión (lo de
    siempre); conectado (modo agencia o propia) → estado + «Cambiar de forma».
@@ -99,6 +99,3 @@
 </div>
 {% endif %}
 {% endif %}{# modo_meta / forma #}
-<p class="vacio" style="padding-top:.3rem;font-size:.8rem;">
-  {{ _('La cuenta publicitaria necesita un método de pago en <a href="https://business.facebook.com/settings/payment-methods" target="_blank" rel="noopener">business.facebook.com › Facturación ↗</a>: sin él Meta no activa ningún anuncio.') }}
-</p>

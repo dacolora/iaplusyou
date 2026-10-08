@@ -190,3 +190,63 @@ def test_material_para_dice_el_idioma_que_habla_una_voz(base_temporal):
     assert vista_previa.material_para(voz)["idioma"] == "en"
     assert vista_previa.material_para(raro)["idioma"] is None
     assert vista_previa.material_para(grab)["idioma"] is None
+
+
+# --- fuentes, tipografía y emojis (capa 5c, Task 1) --------------------------
+
+def test_fuentes_son_los_ids_del_catalogo_y_nunca_la_de_emojis():
+    from final_edition import fuentes
+    ids = [f["id"] for f in fuentes.catalogo()]
+    assert vista_previa.fuentes() == ids and ids[0] == "Inter-Bold" and len(ids) == 11
+    assert fuentes.EMOJI_ID not in vista_previa.fuentes()
+    assert vista_previa.config_navegador()["fuentes"] == ids
+
+
+def test_config_navegador_trae_catalogo_tipografia_y_emoji():
+    from final_edition import fuentes
+    cfg = vista_previa.config_navegador()
+    assert cfg["catalogo_fuentes"] == fuentes.catalogo()
+    assert all({"id", "nombre", "categoria"} <= set(f) for f in cfg["catalogo_fuentes"])
+    assert cfg["tipografia"] == fuentes.cargar_tabla()
+    assert cfg["tipografia"]["fuentes"]["Inter-Bold"]["upem"] == 2048
+    assert cfg["emoji"] == {"familia": "CreatvEmoji", "archivo": "fonts/emoji/TwemojiMozilla.ttf"}
+    json.dumps(cfg)
+
+
+def test_config_navegador_sin_fuente_de_emojis_manda_emoji_none(monkeypatch):
+    from final_edition import fuentes
+    monkeypatch.setenv("EDITOR_SIN_EMOJI", "1")
+    fuentes.cargar_tabla.cache_clear()
+    try:
+        cfg = vista_previa.config_navegador()
+        assert cfg["emoji"] is None and cfg["tipografia"]["emoji"] is None
+        assert cfg["tipografia"]["fuentes"] == fuentes.generar_tabla()["fuentes"]
+    finally:
+        monkeypatch.delenv("EDITOR_SIN_EMOJI")
+        fuentes.cargar_tabla.cache_clear()
+    assert vista_previa.config_navegador()["emoji"] is not None
+
+
+def test_config_navegador_sin_el_archivo_de_emojis_manda_emoji_none(monkeypatch, tmp_path):
+    # el despliegue perdió la TTF: la tabla (`cargar_tabla`) ya sale sin emoji y la página no declara nada
+    from final_edition import fuentes
+    fuentes.cargar_tabla.cache_clear()
+    try:
+        with monkeypatch.context() as m:
+            m.setattr(fuentes, "RUTA_EMOJI", str(tmp_path / "no_existe.ttf"))
+            fuentes.cargar_tabla.cache_clear()
+            cfg = vista_previa.config_navegador()
+            assert cfg["emoji"] is None and cfg["tipografia"]["emoji"] is None
+            assert cfg["tipografia"]["fuentes"] == fuentes.generar_tabla()["fuentes"]
+    finally:
+        fuentes.cargar_tabla.cache_clear()
+    assert vista_previa.config_navegador()["emoji"] is not None
+
+
+def test_material_para_dice_si_se_puede_tenir(base_temporal):
+    import materiales
+    con = materiales.registrar("acme", tipo="imagen", origen="sticker", url="https://r2.test/s1.png", hash="hs1", bytes=1,
+                               extra={"tenible": True})
+    sin = materiales.registrar("acme", tipo="imagen", origen="subida", url="https://r2.test/s2.png", hash="hs2", bytes=1)
+    assert vista_previa.material_para(con)["tenible"] is True
+    assert vista_previa.material_para(sin)["tenible"] is False

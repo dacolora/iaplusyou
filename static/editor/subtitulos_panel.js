@@ -30,13 +30,13 @@
 // al día sola. No hace nada al importarse (lo prueba Node).
 import { mensajeSesion, sesionTerminada } from "./guardado.js";
 import { ESTILOS_SUBTITULOS, MAX_CORRECCION } from "./operaciones.js";
-import { avisoEmoji, mensajeConflicto, mensajeRechazo, textoPorcentaje, tieneEmoji } from "./propiedades_modelo.js";
+import { mensajeConflicto, mensajeRechazo, textoPorcentaje } from "./propiedades_modelo.js";
 import { valorDestino } from "./resolver.js";
 import { derivar, palabrasDe } from "./subtitulos_fuente.js";
 import {
-  alturaDePosicion, coloresResaltado, encargoGuardado, estadoPanel, estilosPanel, fuenteDeClave, fuentePorDefecto,
-  fuentesDisponibles, idiomaPorDefecto, lineaEn, lineasListado, pedido, posicionDeAltura, POSICIONES, resaltadoElegido,
-  respuestaEstimado, textoBoton, textoEstado, textoTiempo,
+  alturaDePosicion, avisoEmojiSubtitulos, coloresResaltado, encargoGuardado, estadoPanel, estilosPanel, fuenteDeClave,
+  fuentePorDefecto, fuentesDisponibles, idiomaPorDefecto, lineaEn, lineasListado, pedido, posicionDeAltura, POSICIONES,
+  resaltadoElegido, respuestaEstimado, textoBoton, textoEstado, textoTiempo, tieneEmoji,
 } from "./subtitulos_modelo.js";
 import { t } from "./textos.js";
 
@@ -209,7 +209,7 @@ export class SubtitulosPanel {
     titulo.id = "ed-sub-lineas-titulo";
     const ayuda = el("p", "ed-sub-nota", this.seccionLineas, t("sub.ayuda_lineas"));
     ayuda.id = "ed-sub-lineas-ayuda";
-    this.emoji = el("p", "ed-sub-nota ed-sub-advertencia", this.seccionLineas, avisoEmoji());
+    this.emoji = el("p", "ed-sub-nota ed-sub-advertencia", this.seccionLineas, avisoEmojiSubtitulos());
     this.emoji.id = "ed-sub-emoji";
     this.emoji.hidden = true;
     this.listaLineas = el("ol", "ed-sub-lineas", this.seccionLineas);

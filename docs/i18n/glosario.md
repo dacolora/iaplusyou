@@ -84,6 +84,10 @@ partida a revisar por Daniel. Lo usa quien traduzca `translations/en/LC_MESSAGES
 | Subir (un archivo) | Upload |
 | Editar (el panel) | Edit |
 | Fuente (tipografía del editor, `msgctxt "editor"`) | Font |
+| Fuente (de un dato o de las ventas: de dónde sale) | Source |
+| Detalle de Meta (día a día, desgloses y rankings de `meta_detalle.py`) | Meta details |
+| Detalle de Meta al día hace N h | Meta details updated N h ago |
+| Indicadores (del centro de resultados) | Key metrics |
 
 ## Reglas de estilo
 
