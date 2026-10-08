@@ -179,6 +179,21 @@ def test_enlace_permitido_ata_el_enlace_a_la_plataforma_del_canal():
     "https://www.tiktok.com///link/v2?target=x",
     "https://www.facebook.com/%6C.php?u=x",                                   # %-codificada
     "https://www.facebook.com/FLX/Warn/?u=x",
+    # Última vuelta de B8: segmentos «.» y «..» (el servidor los resuelve antes de enrutar)
+    "https://www.facebook.com/./l.php?u=x",
+    "https://www.facebook.com/a/../l.php?u=x",
+    "https://www.facebook.com/%2e/l.php?u=x",
+    "https://www.facebook.com/%2E%2E/l.php?u=x",
+    "https://www.facebook.com/a/%2e%2e/l.php?u=x",
+    "https://www.facebook.com/a%2f..%2fl.php?u=x",
+    "https://www.facebook.com/a/b/../../l.php?u=x",
+    "https://www.facebook.com/%252e/l.php?u=x",                               # doblemente %-codificada
+    "https://www.facebook.com/.//l.php?u=x",
+    "https://www.facebook.com/\\l.php?u=x",                                    # «\» es «/» para un navegador
+    "https://www.tiktok.com/./link/v2?target=x",
+    "https://www.tiktok.com/a/../link/v2?target=x",
+    "https://www.pinterest.com/%2e/offsite/?url=x",
+    "https://www.facebook.com/a/./../flx/./warn/?u=x",
 ])
 def test_enlace_permitido_rechaza_redirectores_y_formas_raras(malo):
     assert not triple_whale.enlace_permitido(malo), malo
@@ -218,3 +233,9 @@ def test_enlace_permitido_no_confunde_una_ruta_normal_con_un_redirector():
     assert triple_whale.enlace_permitido("https://www.tiktok.com/@marca/video/1", "tiktok-ads")
     assert triple_whale.enlace_permitido("https://www.pinterest.com/pin/1/", "pinterest-ads")
     assert triple_whale.enlace_permitido("https://www.facebook.com/watch/?v=1", "facebook-ads")
+    # las rutas con puntos que NO terminan en un redirector siguen pasando
+    assert triple_whale.enlace_permitido("https://www.facebook.com/./watch/?v=1", "facebook-ads")
+    assert triple_whale.enlace_permitido("https://www.facebook.com/a/../watch/?v=1", "facebook-ads")
+    assert triple_whale.enlace_permitido("https://www.tiktok.com/@marca/video/1/../2", "tiktok-ads")
+    assert triple_whale.enlace_permitido("https://www.tiktok.com/", "tiktok-ads")
+    assert triple_whale.enlace_permitido("https://www.tiktok.com", "tiktok-ads")

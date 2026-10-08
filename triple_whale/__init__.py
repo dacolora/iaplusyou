@@ -24,6 +24,7 @@ mejor lectura del "Data Dictionary"; ninguna se probó todavía contra una
 tienda real (ver el spec 2026-09-28-triple-whale-rendimiento-design.md §9).
 """
 import os
+import posixpath
 import re
 import time
 from datetime import date, timedelta
@@ -106,6 +107,21 @@ _HOSTS_REDIRECTOR = ("l.", "lm.")
 _RUTAS_REDIRECTOR = ("/l.php", "/redirect", "/link", "/offsite", "/flx/warn")
 
 
+def _ruta_como_la_lee_el_servidor(ruta):
+    """La ruta de una URL como la resolvería el servidor, para compararla con `_RUTAS_REDIRECTOR`: sin
+    %-codificación (hasta tres vueltas: «/%252e/» también), con «\\» como «/» (así lo hacen los navegadores en
+    https), con los segmentos «.» y «..» resueltos y una sola barra al principio, en minúsculas. «//l.php», «/%6C.php»,
+    «/./l.php», «/a/../l.php» y «/%2e/l.php» salen todas «/l.php». Revisión final de las tarjetas, B8 (2026-10-08):
+    los puntos y los `..` se colaban."""
+    for _ in range(3):
+        decodificada = unquote(ruta)
+        if decodificada == ruta:
+            break
+        ruta = decodificada
+    ruta = "/" + ruta.replace("\\", "/").lstrip("/")
+    return posixpath.normpath(ruta).lower()
+
+
 def enlace_permitido(url, canal=None):
     """¿Se puede pintar este enlace «Ver en …»? https, sin usuario ni puerto raro, host exacto o subdominio de
     la plataforma del `canal` del anuncio (canal desconocido: no; sin canal: cualquiera de las conocidas), y nunca
@@ -118,10 +134,7 @@ def enlace_permitido(url, canal=None):
     if p.scheme != "https" or not p.hostname or p.username or p.password or puerto not in (None, 443):
         return False
     host = p.hostname.lower()
-    # La ruta como la leería el servidor: sin %-codificación y con una sola barra al principio («//l.php» y
-    # «/%6C.php» también son el redirector).
-    ruta = "/" + unquote(p.path).lower().lstrip("/")
-    if host.startswith(_HOSTS_REDIRECTOR) or ruta.startswith(_RUTAS_REDIRECTOR):
+    if host.startswith(_HOSTS_REDIRECTOR) or _ruta_como_la_lee_el_servidor(p.path).startswith(_RUTAS_REDIRECTOR):
         return False
     if canal is None:
         dominios = ENLACES_PLATAFORMAS

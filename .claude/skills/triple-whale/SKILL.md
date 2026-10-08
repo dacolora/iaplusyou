@@ -216,9 +216,11 @@ production. It must work for ANY ad, not only Creatv's: in happyflops only 4 pie
   `files.triplewhale.com` or the R2 host) is embedded or downloaded: the URLs arrive inside ad-platform data and our
   server fetches them and hands them to ffmpeg and fal (SSRF). A TikTok video arrives as a page, so it is a «Ver en
   TikTok» link: `enlace_permitido(url, canal)` accepts only the ad's own platform and refuses redirectors (`l.`/`lm.`
-  hosts; paths `/l.php`, `/redirect`, `/link` (TikTok), `/offsite` (Pinterest), `/flx/warn` (Facebook), read
-  %-decoded and with one leading slash: `l.facebook.com/l.php?u=…` would send anywhere; the last three and `//l.php`
-  slipped through until the final review, B8). `conectores.url.descargar_archivo` streams to `ruta + ".part"` and
+  hosts; paths `/l.php`, `/redirect`, `/link` (TikTok), `/offsite` (Pinterest), `/flx/warn` (Facebook), read as the
+  server would (`_ruta_como_la_lee_el_servidor`: %-decoded, `\` as `/`, `.`/`..` segments resolved with
+  `posixpath.normpath`, one leading slash, lowercase): `l.facebook.com/l.php?u=…` would send anywhere; the last three
+  and `//l.php` slipped through until the final review, B8, and `/./l.php`, `/a/../l.php`, `/%2e/l.php` until its last
+  pass). `conectores.url.descargar_archivo` streams to `ruta + ".part"` and
   renames on success (a cut download never destroys a good file), 60 MB cap, `tiempo_max` = 120 s for the whole
   download, enforced by a watchdog `threading.Timer` that shuts the socket down (B5: `timeout` is per read, and a
   check «between chunks» never runs while `iter_content(65536)` waits for its 64 KB, so a server dripping 1 byte every
