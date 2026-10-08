@@ -389,6 +389,18 @@ def parsear(texto, verificable):
             "aprendizaje": aprendizaje, "cifras_sin_dato": doctrina.verificar_cifras(" ".join(textos), verificable)}
 
 
+def cifras_del_aprendizaje(resultado):
+    """Las cifras sin dato (`cifras_sin_dato`) que aparecen en el aprendizaje. Con alguna no se ofrece «Guardar como
+    aprendizaje» ni se guarda (revisión final, B2): el aprendizaje entra como un hecho en todos los prompts futuros
+    del proyecto, y una cifra inventada se repetiría como si fuera de la cuenta. Compara el fragmento tal como lo
+    devolvió `doctrina.verificar_cifras`; si coincide de más, solo deja de ofrecer el botón."""
+    r = resultado if isinstance(resultado, dict) else {}
+    aprendizaje = str(r.get("aprendizaje") or "")
+    if not aprendizaje:
+        return []
+    return [str(c) for c in r.get("cifras_sin_dato") or [] if str(c or "").strip() and str(c) in aprendizaje]
+
+
 # ------------------------------------------------------------- analizar ---
 
 def _llamar(content, system_):

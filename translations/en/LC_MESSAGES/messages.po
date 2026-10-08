@@ -3448,6 +3448,10 @@ msgid "Claude agrupa las líneas en clips de 5 a 15 s; el código pega el diálo
 msgstr "Claude groups the lines into 5-to-15-second clips; the code pastes the exact dialogue, calculates the timing and validates everything before showing you anything."
 
 #, python-format
+msgid "Claude citó cifras que no están en los datos: %(cifras)s"
+msgstr "Claude cited figures that are not in the data: %(cifras)s"
+
+#, python-format
 msgid "Claude devolvió menos de %(n)s consultas."
 msgstr "Claude returned fewer than %(n)s searches."
 
@@ -6837,6 +6841,9 @@ msgstr "That analysis did not leave a learning."
 
 msgid "Ese análisis ya no existe."
 msgstr "That analysis no longer exists."
+
+msgid "Ese aprendizaje cita cifras que no están en los datos: no se guarda."
+msgstr "That learning cites figures that are not in the data: it is not saved."
 
 msgid "Ese aprendizaje ya estaba guardado."
 msgstr "That learning was already saved."
@@ -11415,6 +11422,9 @@ msgstr "The script wasn't saved: %(errores)s"
 msgid "No se guardó: {mensaje}"
 msgstr "Not saved: {mensaje}"
 
+msgid "No se ofrece guardarlo: cita cifras que no están en los datos."
+msgstr "It can't be saved: it cites figures that are not in the data."
+
 msgid "No se pudieron armar los clips. Vuelve a intentarlo."
 msgstr "Couldn't assemble the clips. Try again."
 
@@ -14211,6 +14221,10 @@ msgstr "It was generated, but it couldn't be uploaded to storage (%(error)s)."
 
 msgid "Se generó, pero no se pudo subir al almacenamiento."
 msgstr "It was generated, but it couldn't be uploaded to storage."
+
+#, python-format
+msgid "Se guarda así: %(texto)s"
+msgstr "It will be saved as: %(texto)s"
 
 #, python-format
 msgid "Se guardó localmente pero falló la subida a R2: %(error)s"

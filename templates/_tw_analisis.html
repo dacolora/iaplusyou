@@ -4,6 +4,10 @@
 {% set m = fila.medios or {} %}
 <div class="tw-analisis">
   <p class="tw-analisis-frase"><strong>{{ r.frase }}</strong></p>
+  {#- Revisión final B2: una cifra que Claude citó y que no está en los datos se dice, no se muestra como un hecho. -#}
+  {% if r.cifras_sin_dato %}
+  <p class="tag-advertencia tw-aviso">{{ _('Claude citó cifras que no están en los datos: %(cifras)s', cifras=r.cifras_sin_dato | join(', ')) }}</p>
+  {% endif %}
   {% if r.funciona %}
   <h5>{{ _('Lo que funciona') }}</h5>
   <ul class="tw-analisis-lista">{% for x in r.funciona %}<li>✓ {{ x.texto }}{% if x.evidencia %} <small class="vacio">— {{ x.evidencia }}</small>{% endif %}</li>{% endfor %}</ul>
@@ -39,9 +43,14 @@
   {% if r.aprendizaje %}
   <h5>{{ _('Aprendizaje') }}</h5>
   <p>{{ r.aprendizaje }}</p>
-  {% if guardado %}<small class="vacio">{{ _('Guardado') }}</small>{% else %}
-  <form method="post" action="{{ url_for('triple_whale.analisis_aprendizaje', cliente=cliente, aid=fila.id) }}">
+  {#- B1: junto al botón va el texto EXACTO que se guardará (y que recibirán los prompts futuros). B2: con una cifra
+      que no está en los datos no se ofrece guardarlo. -#}
+  {% if guardado %}<small class="vacio">{{ _('Guardado') }}</small>
+  {% elif cifras_aprendizaje %}<small class="vacio">{{ _('No se ofrece guardarlo: cita cifras que no están en los datos.') }}</small>
+  {% elif aprendizaje_texto %}
+  <form method="post" class="tw-guardar-aprendizaje" action="{{ url_for('triple_whale.analisis_aprendizaje', cliente=cliente, aid=fila.id) }}">
     <button type="submit" class="btn-xs">{{ _('Guardar como aprendizaje') }}</button>
+    <small class="vacio">{{ _('Se guarda así: %(texto)s', texto=aprendizaje_texto) }}</small>
   </form>
   {% endif %}
   {% endif %}

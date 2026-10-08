@@ -310,11 +310,22 @@ def _nombre_alcance(cliente, fila):
     return panel.nombre_tienda(tienda) if tienda else ""
 
 
+def _aprendizaje_de(cliente, fila):
+    """El aprendizaje (dict) que guardaría «Guardar como aprendizaje», o None. Lo que se guarda va en el idioma del
+    PROYECTO (regla 3), no en el de quien hace el clic; el detalle muestra este mismo texto junto al botón (B1)."""
+    with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+        return doctrina_aprendizajes.desde_analisis_tw(fila)
+
+
 @bp.get("/analisis/<int:aid>")
 def analisis_detalle(cliente, aid):
     fila = _analisis_listo(cliente, aid)
-    return render_template("_tw_analisis.html", cliente=cliente, fila=fila, r=fila["resultado"] or {},
-                           guardado=_aprendizaje_guardado(cliente, aid), alcance_nombre=_nombre_alcance(cliente, fila))
+    r = fila["resultado"] or {}
+    item = _aprendizaje_de(cliente, fila)
+    return render_template("_tw_analisis.html", cliente=cliente, fila=fila, r=r,
+                           guardado=_aprendizaje_guardado(cliente, aid), alcance_nombre=_nombre_alcance(cliente, fila),
+                           aprendizaje_texto=item["texto"] if item else None,
+                           cifras_aprendizaje=mejorar.cifras_del_aprendizaje(r))
 
 
 @bp.post("/analisis/<int:aid>/crear")
@@ -337,9 +348,11 @@ def analisis_aprendizaje(cliente, aid):
     if _aprendizaje_guardado(cliente, aid):
         flash(gettext("Ese aprendizaje ya estaba guardado."), "ok")
         return _volver(cliente)
-    # Lo que se guarda va en el idioma del PROYECTO (regla 3), no en el de quien hace el clic.
-    with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
-        item = doctrina_aprendizajes.desde_analisis_tw(fila)
+    # Una cifra que no está en los datos no se guarda como un hecho del proyecto (B2): ni con un formulario viejo.
+    if mejorar.cifras_del_aprendizaje(fila["resultado"]):
+        flash(gettext("Ese aprendizaje cita cifras que no están en los datos: no se guarda."), "warn")
+        return _volver(cliente)
+    item = _aprendizaje_de(cliente, fila)
     if not item:
         flash(gettext("Ese análisis no dejó un aprendizaje."), "warn")
         return _volver(cliente)
