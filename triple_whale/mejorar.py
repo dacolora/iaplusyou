@@ -26,6 +26,7 @@ from triple_whale import analisis, evaluacion
 log = logging.getLogger("creatv.triple_whale.mejorar")
 
 MAX_TOKENS = 12000
+TIMEOUT_CLAUDE_S = 300
 MAX_GANADORES = 3
 MAX_COPY_GANADOR = 300
 MAX_TRANSCRIPCION = 4000
@@ -391,8 +392,12 @@ def parsear(texto, verificable):
 # ------------------------------------------------------------- analizar ---
 
 def _llamar(content, system_):
+    """Sin reintentos del cliente y con un tope de tiempo (revisión final, A6): un intento que el SDK repite solo
+    podría cobrarse sin quedar anotado (los tokens que se anotan son los de la respuesta que llega). Un fallo deja la
+    fila en error y la persona vuelve a pedirlo con su precio a la vista."""
     from sprints import analisis as sprints_analisis
-    return sprints_analisis._llamar_contando(content, max_tokens=MAX_TOKENS, system=system_)
+    return sprints_analisis._llamar_contando(content, max_tokens=MAX_TOKENS, system=system_,
+                                             timeout=TIMEOUT_CLAUDE_S, max_retries=0)
 
 
 def analizar(texto, imagenes, idioma, verificable_extra=""):

@@ -4,6 +4,7 @@ import sqlalchemy as sa
 
 import db
 import triple_whale_tiendas
+from nicho.avatares import costo_real
 from tests.test_tw_mejorar import _foto, respuesta
 from triple_whale import analisis, datos, mejorar
 
@@ -72,7 +73,9 @@ def test_claude_invalido_queda_en_error_y_registra_lo_pagado(en_cola, monkeypatc
     fila = datos.analisis_anuncio("acme", en_cola["aid"])
     assert fila["estado"] == "error" and "otra vez" in fila["error"]
     g = {x["tipo"]: x for x in _gastos()}
-    assert g["evaluacion"]["usd"] > 0 and g["transcripcion"]["usd"] == pytest.approx(0.001)
+    # El monto exacto de los tokens que trae la excepción (revisión final A7): ignorarlos no puede pasar.
+    assert g["evaluacion"]["usd"] == pytest.approx(costo_real(1000, 500), abs=1e-4) and costo_real(1000, 500) > 0
+    assert g["transcripcion"]["usd"] == pytest.approx(0.001)
     assert fila["usd"] == pytest.approx(g["evaluacion"]["usd"] + 0.001)
 
 

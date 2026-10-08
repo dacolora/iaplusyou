@@ -408,14 +408,19 @@ def _elegir(cliente, a, analisis_por_clave, vivos, alcance):
     return job, elegir_analisis(a, analisis_por_clave.get((a["canal"], a["ad_id"])), alcance, vivo=job in vivos)
 
 
-def enriquecer(cliente, tarjetas, ev, analisis_por_clave, alcance=None, vivos=None):
+def precio_analisis(creativo):
+    """El precio de «Cómo mejorarlo» de un anuncio: Claude + Whisper por la duración de SU video (30 s sin ella)."""
+    return gastos.estimar("analisis_anuncio_tw", segundos=(creativo or {}).get("duracion_s"))
+
+
+def enriquecer(cliente, tarjetas, ev, analisis_por_clave, alcance=None, vivos=None, creativos=None):
     """Lo que cada tarjeta necesita además de la evaluación, sin consultas por tarjeta: creativos, piezas de Creatv,
     análisis, barras vivas, precio, costo por venta del canal y piezas nacidas de la versión mejorada.
     `analisis_por_clave` = `datos.analisis_de_anuncios` (todas las filas de cada anuncio) y `elegir_analisis` decide
-    cuál cuenta en `alcance` ({"tienda_id", "canal", "desde", "hasta"}, spec §6.6). `vivos` = los job ids vivos si
-    quien llama ya los leyó (la galería), para no leerlos dos veces."""
-    claves = [(a["canal"], a["ad_id"]) for a in tarjetas]
-    creativos = datos.creativos(cliente, claves)
+    cuál cuenta en `alcance` ({"tienda_id", "canal", "desde", "hasta"}, spec §6.6). `vivos` y `creativos`, si quien
+    llama ya los leyó (la galería), para no leerlos dos veces."""
+    if creativos is None:
+        creativos = datos.creativos(cliente, [(a["canal"], a["ad_id"]) for a in tarjetas])
     meta_ids = [a["ad_id"] for a in tarjetas if a["canal"] == triple_whale.CANAL_META]
     creatv = datos.piezas_creatv(cliente, meta_ids)
     vivos = tareas_tw.analisis_vivos(cliente) if vivos is None else vivos
@@ -435,7 +440,7 @@ def enriquecer(cliente, tarjetas, ev, analisis_por_clave, alcance=None, vivos=No
         a["analisis_otro_alcance"] = e["otro_alcance"]
         a["ofrecer_analisis"] = e["ofrecer"]                # el botón principal pagado: la misma regla que el lote
         a["job_analisis"] = job if e["vivo"] else None
-        a["precio_analisis"] = gastos.estimar("analisis_anuncio_tw", segundos=a["creativo"].get("duracion_s"))
+        a["precio_analisis"] = precio_analisis(a["creativo"])
         a["cpa_canal"] = cpa_canal.get(a["canal"])
         a["piezas_mejora"] = hechas.get(fila["id"], []) if fila else []
     return tarjetas
@@ -458,10 +463,15 @@ def galeria(cliente, ev, veredicto="", pagina=1, alcance=None):
     claves = {(a["canal"], a["ad_id"]) for a in tarjetas + candidatos}
     por_clave = datos.analisis_de_anuncios(cliente, list(claves))
     vivos = tareas_tw.analisis_vivos(cliente)
-    enriquecer(cliente, tarjetas, ev, por_clave, alcance, vivos=vivos)
     elegibles = [a for a in candidatos if _elegir(cliente, a, por_clave, vivos, alcance)[1]["ofrecer"]]
     lote = elegibles[:N_LOTE]
-    unidad = gastos.estimar("analisis_anuncio_tw")["usd"] or 0
+    # Una consulta para los creativos de la página Y del lote (≤ 22 claves): el precio del lote usa la duración real
+    # de cada video, así es la suma de los precios de sus tarjetas (revisión final, A5).
+    creativos = datos.creativos(cliente, [(a["canal"], a["ad_id"]) for a in tarjetas + lote])
+    enriquecer(cliente, tarjetas, ev, por_clave, alcance, vivos=vivos, creativos=creativos)
+    precios = [precio_analisis(creativos.get((a["canal"], a["ad_id"])))["usd"] for a in lote]
+    # Sin precio de alguno, el total es «precio no disponible», nunca «US$ 0» (regla 1).
+    total = None if any(p is None for p in precios) else sum(precios)
     conteo = {f: len(filtrar(ev["anuncios"], f)) for f in FILTROS_GALERIA}
     return {"tarjetas": tarjetas, "pagina": pagina, "hay_mas": pagina * POR_PAGINA < len(lista), "total": len(lista),
             "veredicto": veredicto, "conteo_filtros": conteo,
@@ -469,8 +479,8 @@ def galeria(cliente, ev, veredicto="", pagina=1, alcance=None):
             # la ruta del lote solo cobra lo que se confirmó Y sigue siendo elegible (revisión de la tarea 8).
             "lote": {"n": len(lote), "claves": [(a["canal"], a["ad_id"]) for a in lote],
                      "elegibles": {(a["canal"], a["ad_id"]) for a in elegibles},
-                     # el mismo texto que gastos.estimar («US$ 0,81 aprox.»); sin duración, 30 s por anuncio
-                     "precio": gastos._estimado(unidad * len(lote), "análisis por anuncio")}}
+                     # el mismo texto que gastos.estimar («US$ 0,81 aprox.» o «precio no disponible»)
+                     "precio": gastos._estimado(total, "análisis por anuncio")}}
 
 
 def _resultados(cliente, config, tienda_id, canal, dias, desde, hasta, hoy, ev, hay_tienda, rango_copia,

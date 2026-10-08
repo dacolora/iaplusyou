@@ -265,3 +265,42 @@ def test_una_tarea_que_falla_al_leer_su_fila_deja_el_anuncio_analizable(app, mon
         con.execute(db.tarea.update().values(estado="error"))
     assert "Intentar otra vez · US$" in _tarjeta(app, "p1")
     assert _analizar(app, "p1", json=True).get_json()["ok"] and _n_filas() == 2
+
+
+# ------------------------------------------------------------------- A5: el precio del lote ---
+
+def _con_duraciones(duraciones):
+    datos.reemplazar_creativos("acme", _tienda(), [{"canal": "facebook-ads", "ad_id": ad, "tipo": "video",
+                                                    "duracion_s": s} for ad, s in duraciones.items()])
+
+
+def test_el_precio_del_lote_es_la_suma_de_las_tarjetas(app):  # noqa: F811
+    """Cada tarjeta cobra por la duración de su video: el total del lote es la suma de esas tarjetas, no 30 s × N."""
+    _conectar()
+    _sembrar_con_snapchat()
+    _con_duraciones({"g1": 600, "p1": 15, "p2": 120})
+    alc = panel.alcance("acme", 30)
+    g = panel.galeria("acme", alc["ev"], alcance=alc)
+    claves = set(g["lote"]["claves"])
+    assert {("facebook-ads", "g1"), ("facebook-ads", "p1"), ("facebook-ads", "p2")} <= claves
+    por_tarjeta = {(a["canal"], a["ad_id"]): a["precio_analisis"]["usd"] for a in g["tarjetas"]}
+    assert set(por_tarjeta) >= claves
+    total = sum(por_tarjeta[k] for k in claves)
+    assert g["lote"]["precio"]["usd"] == pytest.approx(total, abs=1e-4)
+    treinta = panel.precio_analisis({})["usd"]
+    assert g["lote"]["precio"]["usd"] != pytest.approx(treinta * len(claves), abs=1e-4)
+    html = app["c"].get("/cliente/acme/triple-whale/galeria?entera=1&dias=30").data.decode()
+    assert f"Analizar los {len(claves)} que más gastaron · {g['lote']['precio']['texto']}" in html
+
+
+def test_sin_precio_el_lote_dice_precio_no_disponible(app, monkeypatch):  # noqa: F811
+    import gastos
+    _conectar()
+    _sembrar_con_snapchat()
+    monkeypatch.setattr(gastos, "_ESTIMADORES", dict(gastos._ESTIMADORES, analisis_anuncio_tw=lambda **_: (None, "")))
+    alc = panel.alcance("acme", 30)
+    g = panel.galeria("acme", alc["ev"], alcance=alc)
+    assert g["lote"]["n"] and g["lote"]["precio"]["usd"] is None
+    html = app["c"].get("/cliente/acme/triple-whale/galeria?entera=1&dias=30").data.decode()
+    assert "que más gastaron · precio no disponible" in html and "Costo total: precio no disponible" in html
+    assert "US$ 0" not in html

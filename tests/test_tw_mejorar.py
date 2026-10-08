@@ -162,6 +162,20 @@ def test_analizar_invalido_dos_veces_lleva_los_tokens(monkeypatch):
     assert (e.value.tokens_entrada, e.value.tokens_salida) == (200, 80)
 
 
+def test_la_llamada_a_claude_no_se_reintenta_sola_y_tiene_tope_de_tiempo(monkeypatch):
+    """Revisión final A6: un reintento del SDK podría cobrarse sin quedar anotado; el fallo termina en error y la
+    persona lo vuelve a pedir con el precio a la vista."""
+    from sprints import analisis as sprints_analisis
+    recibido = {}
+
+    def _contando(content, **kw):
+        recibido.update(kw)
+        return respuesta(), 10, 5
+    monkeypatch.setattr(sprints_analisis, "_llamar_contando", _contando)
+    assert mejorar._llamar([{"type": "text", "text": "DATOS"}], "SYSTEM") == (respuesta(), 10, 5)
+    assert recibido == {"max_tokens": mejorar.MAX_TOKENS, "system": "SYSTEM", "timeout": 300, "max_retries": 0}
+
+
 def test_system_lleva_las_rebanadas_el_idioma_y_el_prompt_en_ingles(monkeypatch):
     import doctrina
     capturado = {}
