@@ -165,8 +165,8 @@
       var avisar = el.dataset.pollAlTerminar === 'evento';
       // Una barra así reaparece con el mismo job_id y el mismo id (otro filtro y de vuelta, la tarjeta repintada, otro
       // análisis del mismo anuncio): la clave solo bloquea mientras la barra que la marcó siga en la página.
-      var previo = trabajosPolling[clave];
-      if (previo && (previo === true || previo.isConnected)) return;
+      var claveActiva = trabajosPolling[clave];
+      if (claveActiva && (claveActiva === true || claveActiva.isConnected)) return;
       trabajosPolling[clave] = avisar ? el : true;
 
       var barra = el.querySelector('.barra-progreso-fill');
@@ -292,6 +292,8 @@
             if (reintentos < 6) {
               setTimeout(tick, 2000);
             } else {
+              // Diez barras sin conexión serían diez recargas: en modo evento avisan y cada tarjeta se ocupa de lo suyo.
+              if (avisar) { avisarFin('desconocido', ''); return; }
               recargarOAvisar(texto, T_BASE.conexionPerdida);
             }
           });

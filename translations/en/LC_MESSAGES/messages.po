@@ -11312,6 +11312,9 @@ msgstr "Couldn't connect to Atria: %(tipo)s."
 msgid "No se pudo conectar con TrendTrack: %(tipo)s."
 msgstr "Couldn't connect to TrendTrack: %(tipo)s."
 
+msgid "No se pudo confirmar el pedido. Revisa la tarjeta antes de intentar otra vez."
+msgstr "Couldn't confirm the request. Check the card before trying again."
+
 #, python-format
 msgid "No se pudo consultar a Claude (%(tipo)s). Vuelve a enviar tu mensaje."
 msgstr "Couldn't reach Claude (%(tipo)s). Send your message again."

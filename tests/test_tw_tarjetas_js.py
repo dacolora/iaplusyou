@@ -25,7 +25,10 @@ def test_iniciar_polling_avisa_con_un_evento_si_la_barra_lo_pide():
     # La clave del sondeo se libera al avisar: el próximo análisis del mismo anuncio usa el mismo job_id y el mismo id.
     assert "delete trabajosPolling[clave]" in base
     # Y una barra que reaparece (otro filtro y de vuelta) no queda sin sondeo por la clave de la que ya no está.
-    assert "previo.isConnected" in base and "!el.isConnected" in base
+    assert "claveActiva.isConnected" in base and "!el.isConnected" in base
+    assert "var previo = trabajosPolling" not in base          # `previo` ya es el texto previo de la barra
+    # Sin conexión, N barras en modo evento no son N recargas: avisan (listo/error cuentan una vez cada una).
+    assert base.count("avisarFin('desconocido'") == 2
 
 
 def test_la_pestana_maneja_filtros_ver_mas_post_por_fetch_y_detalle():
@@ -52,3 +55,33 @@ def test_los_textos_del_js_vienen_de_la_plantilla_y_no_hay_script_en_los_fragmen
     fragmento = _sin_comentarios(_leer("_tw_galeria_fragmento.html"))
     assert "|tojson" in tab and "No se pudo" in tab
     assert "<script" not in galeria and "<script" not in fragmento
+
+
+def _manejador(tab, desde, hasta):
+    ini = tab.index(desde)
+    return tab[ini:tab.index(hasta, ini)]
+
+
+def test_un_pedido_que_cobra_nunca_se_repite_solo():
+    """Repo, regla 1: ni un reintento automático ni un envío de respaldo. Si no se sabe cómo terminó el POST, la
+    tarjeta se repinta con lo que dice el servidor y la persona vuelve a confirmar el precio."""
+    tab = _leer("_tab_triple_whale.html")
+    manejador = _manejador(tab, "cont.addEventListener('submit'", "cont.addEventListener('trabajo-terminado'")
+    assert ".submit(" not in manejador and ".submit(" not in tab
+    # Se confirma el precio ANTES del único fetch (el POST) del manejador.
+    assert manejador.count("fetch(") == 1 and manejador.index("window.confirm(") < manejador.index("fetch(")
+    assert "method: 'POST'" in manejador
+    # El fallo repinta la tarjeta con un aviso del catálogo y no devuelve los botones por su cuenta.
+    fallo = manejador[manejador.index("}, function () {"):]
+    assert "repintarTarjeta(tarjeta, { aviso: T_TW.pedido })" in fallo and "disabled = false" not in fallo
+    assert "No se pudo confirmar el pedido" in tab and "|tojson" in tab
+
+
+def test_la_tarjeta_repintada_que_no_termino_muestra_lo_que_dijo_el_trabajo():
+    tab = _leer("_tab_triple_whale.html")
+    repintar = _manejador(tab, "function repintarTarjeta(", "function aplicarVeredicto(")
+    assert "tarjetaTerminada(nueva)" in repintar and "op.mensaje" in repintar and "avisoEn(nueva, op.mensaje)" in repintar
+    assert "ev.detail.mensaje" in tab
+    # Si la tarjeta no se puede pedir de nuevo, el aviso queda en la vieja (que sigue con sus botones deshabilitados).
+    assert "avisoEn(tarjeta, enFallo)" in repintar
+    assert "textContent = texto" in tab                         # nunca innerHTML con lo que dice un trabajo

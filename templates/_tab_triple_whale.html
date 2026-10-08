@@ -35,7 +35,8 @@
     // Los textos que el JS escribe en la página salen de la plantilla (catálogo de idiomas), no de aquí.
     var T_TW = {
       tarjeta: {{ _('No se pudo actualizar este anuncio. Recarga la página para ver el resultado.')|tojson }},
-      detalle: {{ _('No se pudo cargar el análisis. Intenta de nuevo.')|tojson }}
+      detalle: {{ _('No se pudo cargar el análisis. Intenta de nuevo.')|tojson }},
+      pedido: {{ _('No se pudo confirmar el pedido. Revisa la tarjeta antes de intentar otra vez.')|tojson }}
     };
     var galeriaSeq = 0;   // cada pedido de la galería lleva su número: la respuesta que llega tarde no pisa la de ahora
 
@@ -86,10 +87,33 @@
         .catch(liberar);
     }
 
-    // Repinta UNA tarjeta (terminó su análisis): el resto de la galería, los filtros y lo que la persona tenía abierto
-    // no se tocan.
-    function recargarTarjeta(tarjeta) {
-      if (!tarjeta || !tarjeta.dataset.tarjetaUrl) return;
+    // Un aviso corto dentro de la tarjeta (textContent: puede venir del servidor o de un trabajo, nunca se interpreta).
+    function avisoEn(tarjeta, texto) {
+      var caja = tarjeta.querySelector('.tw-tarjeta-ia') || tarjeta;
+      var p = caja.querySelector('.tw-aviso-tarjeta');
+      if (!p) {
+        p = document.createElement('p');
+        p.className = 'tag-error tw-aviso-tarjeta';
+        p.setAttribute('role', 'status');
+        caja.insertBefore(p, caja.firstChild);
+      }
+      p.textContent = texto;
+    }
+
+    // Una tarjeta ya dijo su última palabra si muestra el análisis hecho o su error.
+    function tarjetaTerminada(tarjeta) {
+      return !!tarjeta.querySelector('.tw-ia-frase:not(.vacio), .tag-error');
+    }
+
+    // Repinta UNA tarjeta con lo que dice el servidor ahora: el resto de la galería, los filtros y lo que la persona
+    // tenía abierto no se tocan. `op.aviso` va en la tarjeta que quede (la nueva, o la vieja si no se pudo pedir);
+    // `op.falla`, solo si no se pudo pedir; `op.mensaje` (lo que dijo el trabajo al terminar), solo en una tarjeta
+    // nueva que no muestra ni un análisis hecho ni un error ni una barra viva, para que un fallo no pase en silencio.
+    function repintarTarjeta(tarjeta, op) {
+      if (!tarjeta) return;
+      var enFallo = op.aviso || op.falla;
+      function fallo() { if (enFallo) avisoEn(tarjeta, enFallo); }
+      if (!tarjeta.dataset.tarjetaUrl) { fallo(); return; }
       fetch(tarjeta.dataset.tarjetaUrl, { headers: { 'X-Requested-With': 'fetch' } })
         .then(function (r) { return r.ok ? r.text() : Promise.reject(r.status); })
         .then(function (html) {
@@ -97,12 +121,10 @@
           if (!nueva) return Promise.reject(0);
           tarjeta.replaceWith(nueva);
           sondear(nueva);
+          if (op.aviso) avisoEn(nueva, op.aviso);
+          else if (op.mensaje && !tarjetaTerminada(nueva) && !nueva.querySelector('[data-poll-job]')) avisoEn(nueva, op.mensaje);
         })
-        .catch(function () {
-          // La barra ya terminó y no se repinta sola: que la tarjeta diga qué hacer, no que se quede en un número.
-          var texto = tarjeta.querySelector('.progreso-texto');
-          if (texto) texto.textContent = T_TW.tarjeta;
-        });
+        .catch(fallo);
     }
 
     function aplicarVeredicto(v) {
@@ -180,7 +202,9 @@
       }
     });
     // «Cómo mejorarlo» (data-tw-async) se manda por fetch y la respuesta trae la tarjeta ya en curso; el lote y los
-    // demás formularios son POST normales (la página redirige con su aviso). Siempre se confirma el precio antes.
+    // demás formularios son POST normales (la página redirige con su aviso). Siempre se confirma el precio antes, y un
+    // pedido que cobra NUNCA se repite solo: si no se sabe cómo terminó (red caída, error, respuesta rara), se mira la
+    // tarjeta tal como está ahora (barra viva si el análisis corre, el botón de nuevo si no) y la persona decide.
     cont.addEventListener('submit', function (ev) {
       var f = ev.target.closest('form[data-confirmar]');
       if (f && !window.confirm(f.dataset.confirmar)) { ev.preventDefault(); return; }
@@ -200,14 +224,14 @@
           else botones.forEach(function (b) { b.disabled = false; });
           if (d && !d.ok && d.mensaje) window.alert(d.mensaje);
         }, function () {
-          // Sin JSON (red caída, respuesta rara) el formulario sale como siempre: la ruta redirige con su aviso.
-          // El anuncio lleva un solo job_id, así que repetir el envío no cobra dos veces.
-          asincrono.submit();
+          // Los botones siguen deshabilitados: solo la tarjeta repintada (o la persona, tras mirarla) los devuelve.
+          repintarTarjeta(tarjeta, { aviso: T_TW.pedido });
         });
     });
     // La barra de una tarjeta avisa al terminar (data-poll-al-terminar="evento", base.html) en vez de recargar la página.
     cont.addEventListener('trabajo-terminado', function (ev) {
-      recargarTarjeta(ev.target.closest('article.tw-tarjeta'));
+      repintarTarjeta(ev.target.closest('article.tw-tarjeta'),
+                      { falla: T_TW.tarjeta, mensaje: (ev.detail && ev.detail.mensaje) || '' });
     });
 
     function siActiva() { if (!cargado && pestana.classList.contains('activo')) cargar(); }
