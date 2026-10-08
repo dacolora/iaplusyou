@@ -401,19 +401,41 @@ tienda = Table("tienda", metadata,
     Column("error", Text),
 )
 
+# Desde la migración 0032 (spec 2026-10-08 §3.2) esta tabla son los AJUSTES del proyecto: una fila por
+# proyecto con moneda, modelo_atribucion, ventana_atribucion y extra (avisados, aviso_sin_ventas). Las
+# columnas llave, dominio_tienda, zona_horaria, ultima_sincronizacion, estado y error YA NO SE LEEN NI SE
+# ESCRIBEN (la conexión vive en tw_tienda); siguen aquí, intactas, para poder volver al despliegue anterior.
 triple_whale = Table("triple_whale", metadata,
     Column("id", Integer, primary_key=True),
     *_comunes(),
-    Column("llave", Text),                                   # cifrado (Fernet)
-    Column("dominio_tienda", String(200)),                   # ej: example.myshopify.com
+    Column("llave", Text),                                   # SIN USO desde 0032 (ahora tw_tienda.llave)
+    Column("dominio_tienda", String(200)),                   # SIN USO desde 0032
     Column("moneda", String(3)),                             # ISO 4217 (ej: USD, COP)
     Column("modelo_atribucion", String(50), default="Triple Attribution"),  # ej: Triple Attribution, Last Click 7d
     Column("ventana_atribucion", String(30), default="lifetime"),  # ej: lifetime, 7d
+    Column("zona_horaria", String(50)),                      # SIN USO desde 0032
+    Column("ultima_sincronizacion", String(19)),             # SIN USO desde 0032
+    Column("estado", String(20), default="conectada"),       # SIN USO desde 0032
+    Column("error", Text),                                   # SIN USO desde 0032
+    Column("extra", JSON, default=dict),                     # avisados, aviso_sin_ventas (los backfill_desde/... viejos quedan sin uso)
+)
+
+# Una fila por tienda de Triple Whale conectada (spec 2026-10-08 §3.1, migración 0032): un proyecto puede
+# tener varias, una por país. Único escritor: triple_whale_tiendas.py.
+tw_tienda = Table("tw_tienda", metadata,
+    Column("id", Integer, primary_key=True),
+    *_comunes(),
+    Column("pais", String(2)),                               # ISO 3166-1 alfa-2 en mayúsculas; None = sin elegir
+    Column("dominio", String(200), nullable=False),          # normalizado (triple_whale.normalizar_dominio)
+    Column("llave", Text),                                   # cifrado (Fernet)
     Column("zona_horaria", String(50)),                      # ej: America/Bogota (desde shop_timezone)
-    Column("ultima_sincronizacion", String(19)),             # ISO 8601
     Column("estado", String(20), default="conectada"),       # conectada / error
     Column("error", Text),
-    Column("extra", JSON, default=dict),                     # backfill_desde, ultimo_resumen, gasto_7d (0023)
+    Column("ultima_sincronizacion", String(19)),             # ISO 8601
+    Column("extra", JSON, default=dict),                     # backfill_desde, ultimo_resumen, gasto_7d
+    sa.UniqueConstraint("cliente", "dominio", name="uq_tw_tienda_dominio"),
+    # una tienda por país; varias sin país se permiten mientras se eligen
+    sa.Index("uq_tw_tienda_pais", "cliente", "pais", unique=True, sqlite_where=sa.text("pais IS NOT NULL")),
 )
 
 # --- Triple Whale: métricas copiadas y evaluación (spec 2026-09-28, migraciones 0023 y 0024) ---
@@ -425,6 +447,7 @@ triple_whale = Table("triple_whale", metadata,
 tw_anuncio_dia = Table("tw_anuncio_dia", metadata,
     Column("id", Integer, primary_key=True),
     Column("cliente", String(80), nullable=False),
+    Column("tienda_id", Integer, nullable=False),            # tw_tienda.id (0032); sin FK, como el resto
     Column("fecha", String(10), nullable=False),
     Column("canal", String(40), nullable=False),
     Column("ad_id", String(64), nullable=False),
@@ -447,21 +470,23 @@ tw_anuncio_dia = Table("tw_anuncio_dia", metadata,
     Column("checkouts", Integer, default=0),
     Column("con_pixel", Boolean, default=False),            # el Pixel respondió para ese día (aunque sin pedidos)
     Column("actualizado_en", String(19), nullable=False),
-    sa.UniqueConstraint("cliente", "canal", "ad_id", "fecha", name="uq_tw_anuncio_dia"),
+    sa.UniqueConstraint("cliente", "tienda_id", "canal", "ad_id", "fecha", name="uq_tw_anuncio_dia"),
     sa.Index("ix_tw_anuncio_dia_cliente_fecha", "cliente", "fecha"),
+    sa.Index("ix_tw_anuncio_dia_cliente_tienda_fecha", "cliente", "tienda_id", "fecha"),
 )
 
 # La tienda por día (blended_stats_tvf): ingresos y pedidos reales, gasto total.
 tw_tienda_dia = Table("tw_tienda_dia", metadata,
     Column("id", Integer, primary_key=True),
     Column("cliente", String(80), nullable=False),
+    Column("tienda_id", Integer, nullable=False),            # tw_tienda.id (0032)
     Column("fecha", String(10), nullable=False),
     Column("gasto", Float, default=0.0), Column("ingresos", Float, default=0.0),
     Column("pedidos", Float, default=0.0), Column("nc_pedidos", Float, default=0.0),
     Column("nc_ingresos", Float, default=0.0), Column("reembolsos", Float, default=0.0),
     Column("cogs", Float, default=0.0), Column("utilidad_neta", Float, default=0.0),
     Column("actualizado_en", String(19), nullable=False),
-    sa.UniqueConstraint("cliente", "fecha", name="uq_tw_tienda_dia"),
+    sa.UniqueConstraint("cliente", "tienda_id", "fecha", name="uq_tw_tienda_dia"),
 )
 
 # Una evaluación con IA de los anuncios (pagada, max_intentos=1): la muestra
@@ -487,14 +512,16 @@ tw_evaluacion = Table("tw_evaluacion", metadata,
 tw_producto_dia = Table("tw_producto_dia", metadata,
     Column("id", Integer, primary_key=True),
     Column("cliente", String(80), nullable=False),
+    Column("tienda_id", Integer, nullable=False),            # tw_tienda.id (0032)
     Column("fecha", String(10), nullable=False),
     Column("producto_id", String(120), nullable=False),
     Column("nombre", Text), Column("sku", String(120)),
     Column("unidades", Float, default=0.0), Column("ingresos", Float, default=0.0),
     Column("pedidos", Float, default=0.0),
     Column("actualizado_en", String(19), nullable=False),
-    sa.UniqueConstraint("cliente", "producto_id", "fecha", name="uq_tw_producto_dia"),
+    sa.UniqueConstraint("cliente", "tienda_id", "producto_id", "fecha", name="uq_tw_producto_dia"),
     sa.Index("ix_tw_producto_dia_cliente_fecha", "cliente", "fecha"),
+    sa.Index("ix_tw_producto_dia_cliente_tienda_fecha", "cliente", "tienda_id", "fecha"),
 )
 
 pedido = Table("pedido", metadata,
