@@ -91,3 +91,26 @@ def test_ultimos_analisis_es_una_sola_consulta(tienda):
     finally:
         event.remove(sa.engine.Engine, "before_cursor_execute", f)
     assert len(n) == 1
+
+
+def test_tres_mil_claves_no_pasan_los_topes_de_sqlite(tienda):
+    """happyflops tiene ~2 500 anuncios de Meta en 90 días y el lote mira todos los candidatos: una cadena de OR por
+    clave pasaba el tope de profundidad de expresiones de SQLite (revisión de la tarea 7). Sin error, sin mezclar
+    proyectos y con el análisis más nuevo de cada anuncio."""
+    n = 3000
+    datos.reemplazar_creativos("acme", tienda, [_creativo(str(i), titulo=f"T{i}") for i in range(n)])
+    ahora = db.ahora()
+    filas = []
+    for i in range(n):
+        for estado in ("lista", "error"):                     # el segundo (id mayor) es el último
+            filas.append(dict(cliente="acme", creado_en=ahora, actualizado_en=ahora, canal="facebook-ads",
+                              ad_id=str(i), estado=estado, foto={}, resultado={}, medios={}, usd=0.0))
+    filas.append(dict(cliente="otro", creado_en=ahora, actualizado_en=ahora, canal="facebook-ads", ad_id="7",
+                      estado="en_cola", foto={}, resultado={}, medios={}, usd=0.0))
+    with db.conectar() as con:
+        con.execute(db.tw_analisis.insert(), filas)
+    claves = [("facebook-ads", str(i)) for i in range(n)] + [("tiktok-ads", "nada")]
+    cr = datos.creativos("acme", claves)
+    assert len(cr) == n and cr[("facebook-ads", "2999")]["titulo"] == "T2999"
+    ul = datos.ultimos_analisis("acme", claves)
+    assert len(ul) == n and all(f["estado"] == "error" and f["cliente"] == "acme" for f in ul.values())

@@ -482,20 +482,33 @@ def reemplazar_creativos(cliente, tienda_id, registros):
                                                set_=dict(valores, actualizado_en=ahora)))
 
 
-def _por_claves(tabla, cliente, claves):
-    """Condición `(canal, ad_id) IN claves` sobre `tabla` del cliente (una consulta para toda una página)."""
+# Claves (canal, ad_id) por consulta: 800 variables, por debajo del tope de 999 de los SQLite anteriores a 3.32. Una
+# página de la galería (12) cabe en una; el lote mira todos los candidatos (~2 500 en happyflops): unas pocas.
+_CLAVES_POR_CONSULTA = 400
+
+
+def _tramos_claves(claves):
+    """Los pares (canal, ad_id) sin repetir, ordenados y en tramos de _CLAVES_POR_CONSULTA."""
     pares = sorted({(str(c), str(a)) for c, a in claves})
-    return sa.and_(tabla.c.cliente == cliente,
-                   sa.or_(*[sa.and_(tabla.c.canal == c, tabla.c.ad_id == a) for c, a in pares]))
+    return [pares[i:i + _CLAVES_POR_CONSULTA] for i in range(0, len(pares), _CLAVES_POR_CONSULTA)]
+
+
+def _por_claves(tabla, cliente, pares):
+    """Condición `cliente = ? AND (canal, ad_id) IN (…)` con row values (SQLite ≥ 3.15): plana. Hasta la revisión de
+    la tarea 7 era una cadena de OR por clave, que con ~2 500 anuncios pasaba el tope de profundidad de expresiones
+    de SQLite («Expression tree is too large»)."""
+    return sa.and_(tabla.c.cliente == cliente, sa.tuple_(tabla.c.canal, tabla.c.ad_id).in_(pares))
 
 
 def creativos(cliente, claves):
-    """{(canal, ad_id): {COLUMNAS_CREATIVO}} de esos anuncios, en una consulta."""
+    """{(canal, ad_id): {COLUMNAS_CREATIVO}} de esos anuncios: una consulta por tramo de claves (una por página)."""
     if not claves:
         return {}
     t = db.tw_creativo
+    filas = []
     with db.conectar() as con:
-        filas = con.execute(sa.select(t).where(_por_claves(t, cliente, claves))).all()
+        for pares in _tramos_claves(claves):
+            filas.extend(con.execute(sa.select(t).where(_por_claves(t, cliente, pares))).all())
     return {(f.canal, f.ad_id): {c: getattr(f, c) for c in COLUMNAS_CREATIVO} for f in filas}
 
 
@@ -528,14 +541,17 @@ def analisis_anuncio(cliente, analisis_id):
 
 
 def ultimos_analisis(cliente, claves):
-    """{(canal, ad_id): fila} con el análisis más nuevo de cada anuncio, en UNA consulta."""
+    """{(canal, ad_id): fila} con el análisis más nuevo de cada anuncio: UNA consulta por tramo de claves
+    (_CLAVES_POR_CONSULTA), sin importar cuántas tarjetas tenga la página."""
     if not claves:
         return {}
     t = db.tw_analisis
-    ultimo = (sa.select(sa.func.max(t.c.id)).where(_por_claves(t, cliente, claves))
-              .group_by(t.c.canal, t.c.ad_id))
+    filas = []
     with db.conectar() as con:
-        filas = con.execute(sa.select(t).where(t.c.id.in_(ultimo))).all()
+        for pares in _tramos_claves(claves):
+            ultimo = (sa.select(sa.func.max(t.c.id)).where(_por_claves(t, cliente, pares))
+                      .group_by(t.c.canal, t.c.ad_id))
+            filas.extend(con.execute(sa.select(t).where(t.c.id.in_(ultimo))).all())
     return {(f.canal, f.ad_id): dict(f._mapping) for f in filas}
 
 

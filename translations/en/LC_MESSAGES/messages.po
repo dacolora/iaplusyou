@@ -2127,6 +2127,10 @@ msgid "Amor y amistad"
 msgstr "Love and Friendship"
 
 #, python-format
+msgid "Analizado con los datos del %(desde)s al %(hasta)s"
+msgstr "Analyzed with data from %(desde)s to %(hasta)s"
+
+#, python-format
 msgid "Analizado en Triple Whale: «%(nombre)s»"
 msgstr "Analyzed in Triple Whale: “%(nombre)s”"
 

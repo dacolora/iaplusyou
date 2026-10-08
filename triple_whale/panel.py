@@ -42,7 +42,6 @@ POR_PAGINA = 12
 N_LOTE = 10
 FILTROS_GALERIA = ("", "ganador", "prometedor", "en_prueba", "perdedor", "cansando", "sin_datos")
 FACTOR_VIEJO = 1.5
-_CANDIDATOS_LOTE = N_LOTE * 3
 
 
 def _iso(d):
@@ -272,8 +271,31 @@ def _orden_gasto(a):
     return (-a["m"]["gasto"], a["canal"], a["ad_id"])
 
 
-def es_viejo(a, fila):
-    """Un análisis listo es viejo si cambió el veredicto o el anuncio gastó al menos un 50 % más (spec §6.6)."""
+def _dias_periodo(desde, hasta):
+    try:
+        return (date.fromisoformat(hasta) - date.fromisoformat(desde)).days
+    except (TypeError, ValueError):
+        return None
+
+
+def mismo_alcance(fila, alcance):
+    """¿Ese análisis se pagó en el alcance que se mira? Misma tienda (None = «Todas») y un periodo del mismo largo
+    (el periodo corre con los días: se compara el largo, no las fechas). Sin `alcance`, sí. Una fila sin fechas no
+    es del mismo alcance: ante la duda no se ofrece pagar otra vez (revisión de la tarea 7)."""
+    if not alcance:
+        return True
+    fila = fila or {}
+    if fila.get("tienda_id") != alcance.get("tienda_id"):
+        return False
+    largo = _dias_periodo(fila.get("desde"), fila.get("hasta"))
+    return largo is not None and largo == _dias_periodo(alcance.get("desde"), alcance.get("hasta"))
+
+
+def es_viejo(a, fila, alcance=None):
+    """Un análisis listo es viejo si, EN EL MISMO ALCANCE (spec §6.6), cambió el veredicto o el anuncio gastó al menos
+    un 50 % más. Uno de otra tienda u otro largo de periodo no es viejo: pasar de 7 a 30 días no lo vuelve a cobrar."""
+    if not mismo_alcance(fila, alcance):
+        return False
     foto = (fila or {}).get("foto") or {}
     if foto.get("veredicto") != a["veredicto"]:
         return True
@@ -289,7 +311,9 @@ def medio_tarjeta(a):
     if p.get("url_video") or p.get("url_miniatura"):
         if p.get("tipo") == "imagen":
             return {"imagen": p.get("url_video") or p.get("url_miniatura")}
-        return {"video": p.get("url_video"), "poster": p.get("url_miniatura")}
+        if p.get("url_video"):
+            return {"video": p.get("url_video"), "poster": p.get("url_miniatura")}
+        return {"imagen": p.get("url_miniatura")}           # una pieza de video con solo su miniatura
     video = c.get("video_url") or a.get("video_url")
     poster = c.get("imagen_url") if triple_whale.medio_permitido(c.get("imagen_url")) else None
     if video and triple_whale.medio_permitido(video):
@@ -300,9 +324,10 @@ def medio_tarjeta(a):
     return {"enlace": enlace} if enlace else {}
 
 
-def enriquecer(cliente, tarjetas, ev, analisis_por_clave):
+def enriquecer(cliente, tarjetas, ev, analisis_por_clave, alcance=None):
     """Lo que cada tarjeta necesita además de la evaluación, sin consultas por tarjeta: creativos, piezas de Creatv,
-    análisis, barras vivas, precio, costo por venta del canal y piezas nacidas de la versión mejorada."""
+    análisis, barras vivas, precio, costo por venta del canal y piezas nacidas de la versión mejorada. `alcance`
+    ({"tienda_id", "desde", "hasta"}) decide si un análisis listo es viejo o de otro alcance (spec §6.6)."""
     claves = [(a["canal"], a["ad_id"]) for a in tarjetas]
     creativos = datos.creativos(cliente, claves)
     meta_ids = [a["ad_id"] for a in tarjetas if a["canal"] == triple_whale.CANAL_META]
@@ -318,7 +343,9 @@ def enriquecer(cliente, tarjetas, ev, analisis_por_clave):
         a["medio"] = medio_tarjeta(a)
         fila = analisis_por_clave.get(k)
         a["analisis"] = fila
-        a["analisis_viejo"] = bool(fila and fila["estado"] == "lista" and es_viejo(a, fila))
+        lista = bool(fila and fila["estado"] == "lista")
+        a["analisis_viejo"] = lista and es_viejo(a, fila, alcance)
+        a["analisis_otro_alcance"] = lista and not mismo_alcance(fila, alcance)
         job = tareas_tw.job_id_analisis(cliente, a["canal"], a["ad_id"])
         a["job_analisis"] = job if job in vivos else None
         a["precio_analisis"] = gastos.estimar("analisis_anuncio_tw", segundos=a["creativo"].get("duracion_s"))
@@ -327,17 +354,20 @@ def enriquecer(cliente, tarjetas, ev, analisis_por_clave):
     return tarjetas
 
 
-def _fresco_o_vivo(a, fila):
+def _fresco_o_vivo(a, fila, alcance=None):
+    """En cola, corriendo, o listo y no viejo (uno de otro alcance cuenta como fresco: no se vuelve a ofrecer)."""
     if not fila:
         return False
     if fila["estado"] in ("en_cola", "analizando"):
         return True
-    return fila["estado"] == "lista" and not es_viejo(a, fila)
+    return fila["estado"] == "lista" and not es_viejo(a, fila, alcance)
 
 
-def galeria(cliente, ev, veredicto="", pagina=1):
-    """Una página de la galería (spec §5.2) y el lote «Analizar los N que más gastaron» (§6.4). Lee los análisis de
-    la página y de los candidatos del lote en UNA consulta."""
+def galeria(cliente, ev, veredicto="", pagina=1, alcance=None):
+    """Una página de la galería (spec §5.2) y el lote «Analizar los N que más gastaron» (§6.4): los N de más gasto
+    del filtro, mirando TODOS sus anuncios (no solo los primeros), que no tengan un análisis fresco ni en curso. Lee
+    los análisis de la página y de los candidatos en una consulta por tramo de claves (`datos.ultimos_analisis`).
+    `alcance` = {"tienda_id", "desde", "hasta"} del que se mira (ver `es_viejo`)."""
     veredicto = veredicto if veredicto in FILTROS_GALERIA else ""
     try:
         pagina = max(1, int(pagina or 1))
@@ -345,11 +375,12 @@ def galeria(cliente, ev, veredicto="", pagina=1):
         pagina = 1
     lista = sorted(filtrar(ev["anuncios"], veredicto), key=_orden_gasto)
     tarjetas = lista[(pagina - 1) * POR_PAGINA: pagina * POR_PAGINA]
-    candidatos = [a for a in lista if a["veredicto"] != "sin_datos"][:_CANDIDATOS_LOTE]
+    candidatos = [a for a in lista if a["veredicto"] != "sin_datos"]
     claves = {(a["canal"], a["ad_id"]) for a in tarjetas + candidatos}
     por_clave = datos.ultimos_analisis(cliente, list(claves))
-    enriquecer(cliente, tarjetas, ev, por_clave)
-    lote = [a for a in candidatos if not _fresco_o_vivo(a, por_clave.get((a["canal"], a["ad_id"])))][:N_LOTE]
+    enriquecer(cliente, tarjetas, ev, por_clave, alcance)
+    lote = [a for a in candidatos
+            if not _fresco_o_vivo(a, por_clave.get((a["canal"], a["ad_id"])), alcance)][:N_LOTE]
     unidad = gastos.estimar("analisis_anuncio_tw")["usd"] or 0
     conteo = {f: len(filtrar(ev["anuncios"], f)) for f in FILTROS_GALERIA}
     return {"tarjetas": tarjetas, "pagina": pagina, "hay_mas": pagina * POR_PAGINA < len(lista), "total": len(lista),
@@ -427,7 +458,7 @@ def contexto(cliente, dias=PERIODO_DEFECTO, canal=None, tienda_id=None, hoy=None
         "etiquetas_veredicto": evaluacion.ETIQUETAS_VEREDICTO, "problemas": evaluacion.PROBLEMAS,
         "fortalezas": evaluacion.FORTALEZAS, "veredictos": evaluacion.VEREDICTOS,
         # La galería de tarjetas (spec tarjetas §2): su primera página llega con el panel, sin un segundo fetch.
-        "galeria": galeria(cliente, ev),
+        "galeria": galeria(cliente, ev, alcance={"tienda_id": tienda_id, "desde": desde, "hasta": hasta}),
         "alcance_params": {"dias": dias, "canal": canal or "", "tienda": tienda_id if tienda_id is not None else ""},
         "frases_veredicto": evaluacion.FRASES_VEREDICTO, "tendencias": evaluacion.TENDENCIAS,
         "vacios_anillo": evaluacion.VACIOS_ANILLO,

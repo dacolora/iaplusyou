@@ -56,7 +56,7 @@ def test_galeria_pagina_dos_y_filtros(app):  # noqa: F811
     pocos = app["c"].get("/cliente/acme/triple-whale/galeria?veredicto=sin_datos").data.decode()
     assert 'id="tw-tarjeta-facebook-ads-n1"' in pocos
     raro = app["c"].get("/cliente/acme/triple-whale/galeria?veredicto=<script>").data.decode()
-    assert "<script>" not in raro
+    assert "<script>" not in raro and raro == todos                         # un filtro desconocido es «Todos»
 
 
 def test_tarjeta_sola_y_anuncio_ajeno(app):  # noqa: F811
@@ -165,3 +165,121 @@ def test_el_lote_ofrece_los_que_mas_gastaron_sin_analisis_fresco(app):  # noqa: 
     g = panel.galeria("acme", alc["ev"])
     assert g["lote"]["n"] == 10 and ("facebook-ads", "m14") not in g["lote"]["claves"]
     assert g["lote"]["precio"]["usd"] > 0
+
+
+# ---------------------------------------------------------------- revisión de la tarea 7 (ronda 1) ---
+
+def _anuncio(alc, ad_id):
+    return next(a for a in alc["ev"]["anuncios"] if a["ad_id"] == ad_id)
+
+
+def _foto(a, factor_gasto=1.0, veredicto=None):
+    return {"veredicto": veredicto or a["veredicto"], "m": {"gasto": a["m"]["gasto"] / factor_gasto}}
+
+
+def _lista(alc, ad_id, foto, tienda_id="mismo", desde=None, hasta=None, frase="Gana por el arranque."):
+    """Un análisis listo de `ad_id`; por defecto en el mismo alcance que `alc`."""
+    aid = datos.crear_analisis("acme", alc["tienda_id"] if tienda_id == "mismo" else tienda_id, "facebook-ads", ad_id,
+                               desde or alc["desde"], hasta or alc["hasta"], "USD", foto)
+    datos.actualizar_analisis(aid, estado="lista", resultado={"frase": frase})
+    return aid
+
+
+def _tarjeta(app, ad_id, canal="facebook-ads", q=""):  # noqa: F811
+    return app["c"].get(f"/cliente/acme/triple-whale/tarjeta/{canal}/{ad_id}{q}").data.decode()
+
+
+def test_un_analisis_de_otro_alcance_no_es_viejo_ni_vuelve_a_cobrarse(app):  # noqa: F811
+    """Spec §6.6: viejo «en el mismo alcance». Otra tienda u otro largo de periodo no es «desde entonces cambió» ni
+    se vuelve a ofrecer (ni en la tarjeta ni en el lote): solo una nota neutra con sus fechas."""
+    _conectar()
+    _sembrar()
+    alc = panel.alcance("acme")
+    g1, p1 = _anuncio(alc, "g1"), _anuncio(alc, "p1")
+    # Con la foto de otro veredicto: en el mismo alcance sería viejo.
+    _lista(alc, "g1", _foto(g1, veredicto="perdedor"), tienda_id=None)                          # otra tienda («Todas»)
+    _lista(alc, "p1", _foto(p1, veredicto="ganador"), desde=_hace(6), hasta=_hace(0))           # 7 días, no 30
+    for ad in ("g1", "p1"):
+        fila = datos.ultimos_analisis("acme", [("facebook-ads", ad)])[("facebook-ads", ad)]
+        assert not panel.es_viejo(_anuncio(alc, ad), fila, alc)
+        html = _tarjeta(app, ad)
+        assert "Analizado con los datos del" in html and "desde entonces cambió" not in html
+        assert "Analizar otra vez" not in html and "/analizar" not in html and "Ver el análisis" in html
+    g = panel.galeria("acme", alc["ev"], alcance=alc)
+    assert ("facebook-ads", "g1") not in g["lote"]["claves"] and ("facebook-ads", "p1") not in g["lote"]["claves"]
+
+
+def test_en_el_mismo_alcance_un_50_por_ciento_mas_de_gasto_es_viejo(app):  # noqa: F811
+    _conectar()
+    _sembrar()
+    alc = panel.alcance("acme")
+    p1 = _anuncio(alc, "p1")
+    _lista(alc, "p1", _foto(p1, factor_gasto=1.6))            # 400 contra 250: +60 %
+    fila = datos.ultimos_analisis("acme", [("facebook-ads", "p1")])[("facebook-ads", "p1")]
+    assert panel.es_viejo(p1, fila, alc)
+    html = _tarjeta(app, "p1")
+    assert "desde entonces cambió" in html and "Analizar otra vez" in html and "Analizado con los datos del" not in html
+    assert ("facebook-ads", "p1") in panel.galeria("acme", alc["ev"], alcance=alc)["lote"]["claves"]
+
+
+def test_el_lote_mira_mas_alla_de_los_primeros_treinta(app):  # noqa: F811
+    """Spec §6.4: los 35 que más gastaron ya tienen su análisis fresco; el 36 se sigue ofreciendo."""
+    _conectar()
+    _sembrar_muchos(40)
+    alc = panel.alcance("acme")
+    orden = sorted((a for a in alc["ev"]["anuncios"] if a["veredicto"] != "sin_datos"), key=lambda a: -a["m"]["gasto"])
+    assert len(orden) == 40
+    for a in orden[:35]:
+        _lista(alc, a["ad_id"], _foto(a))
+    g = panel.galeria("acme", alc["ev"], alcance=alc)
+    assert g["lote"]["n"] == 5 and g["lote"]["claves"][0] == ("facebook-ads", orden[35]["ad_id"])
+
+
+def test_estados_de_la_tarjeta(app):  # noqa: F811
+    """Barra viva, listo, viejo, con error, en cola sin barra, y la regla de plata: sin datos no hay «Cómo mejorarlo»."""
+    from tareas import triple_whale as tareas_tw
+    _conectar()
+    _sembrar()
+    alc = panel.alcance("acme")
+    vivo = datos.crear_analisis("acme", alc["tienda_id"], "facebook-ads", "g2", alc["desde"], alc["hasta"], "USD", {})
+    assert tareas_tw.encolar_analisis("acme", vivo, "facebook-ads", "g2")
+    html = _tarjeta(app, "g2")
+    assert ('id="tw-anuncio-facebook-ads-g2" data-poll-job="acme__tw_anuncio__facebook-ads__g2" '
+            'data-poll-al-terminar="evento"') in html and "Cómo mejorarlo" not in html
+
+    _lista(alc, "g1", _foto(_anuncio(alc, "g1")), frase="Gana porque muestra el pie.")
+    html = _tarjeta(app, "g1")
+    assert "Gana porque muestra el pie." in html and "Ver el análisis" in html
+    assert "Analizar otra vez" not in html and "desde entonces cambió" not in html and "Cómo mejorarlo" not in html
+
+    _lista(alc, "p2", _foto(_anuncio(alc, "p2"), veredicto="ganador"))
+    html = _tarjeta(app, "p2")
+    assert "desde entonces cambió" in html and "Analizar otra vez" in html
+
+    error = datos.crear_analisis("acme", alc["tienda_id"], "facebook-ads", "p1", alc["desde"], alc["hasta"], "USD", {})
+    datos.actualizar_analisis(error, estado="error", error="Claude no respondió a tiempo.")
+    html = _tarjeta(app, "p1")
+    assert "Claude no respondió a tiempo." in html and "Intentar otra vez" in html
+
+    datos.crear_analisis("acme", alc["tienda_id"], "tiktok-ads", "t1", alc["desde"], alc["hasta"], "USD", {})
+    html = _tarjeta(app, "t1", canal="tiktok-ads")                         # fila en cola sin tarea viva
+    assert "En cola…" in html and "data-poll-job" not in html and "Cómo mejorarlo" not in html
+
+    html = _tarjeta(app, "n1")                                              # sin datos: nunca se ofrece pagar
+    assert "Muy pocos datos para opinar" in html and "Cómo mejorarlo" not in html and "/analizar" not in html
+
+
+def test_anillo_sin_percentil_muestra_la_cifra_y_el_porque(app):  # noqa: F811
+    """Una cuenta chica (menos de 3 anuncios comparables por canal) igual ve sus números bajo cada anillo."""
+    _conectar()
+    _sembrar()
+    html = _tarjeta(app, "t1", canal="tiktok-ads")                         # TikTok tiene un solo anuncio
+    assert "se queda 3 s · pocos anuncios para comparar" in html
+    assert re.search(r'aria-label="Gancho: [^"]*se queda 3 s · pocos anuncios para comparar"', html)
+
+
+def test_pieza_de_creatv_con_solo_miniatura_se_ve_como_imagen():
+    a = {"canal": "facebook-ads", "creatv": {"tipo": "video", "url_video": None, "url_miniatura": "https://r2/m.jpg"}}
+    assert panel.medio_tarjeta(a) == {"imagen": "https://r2/m.jpg"}
+    a["creatv"]["url_video"] = "https://r2/v.mp4"
+    assert panel.medio_tarjeta(a) == {"video": "https://r2/v.mp4", "poster": "https://r2/m.jpg"}

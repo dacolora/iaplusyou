@@ -117,7 +117,7 @@ def galeria(cliente):
     alc = _alcance_peticion(cliente, request.args)
     if not alc:
         abort(404)
-    g = panel.galeria(cliente, alc["ev"], request.args.get("veredicto") or "", request.args.get("pagina"))
+    g = panel.galeria(cliente, alc["ev"], request.args.get("veredicto") or "", request.args.get("pagina"), alcance=alc)
     return render_template("_tw_galeria_fragmento.html", modo="pagina", g=g, **_contexto_galeria(cliente, alc))
 
 
@@ -130,7 +130,7 @@ def tarjeta(cliente, canal, ad_id):
              None)
     if a is None:
         abort(404)
-    panel.enriquecer(cliente, [a], alc["ev"], datos.ultimos_analisis(cliente, [(canal, ad_id)]))
+    panel.enriquecer(cliente, [a], alc["ev"], datos.ultimos_analisis(cliente, [(canal, ad_id)]), alcance=alc)
     return render_template("_tw_galeria_fragmento.html", modo="tarjeta", a=a, **_contexto_galeria(cliente, alc))
 
 

@@ -3886,7 +3886,8 @@ body:has(#exp-nuevo) main { margin-left: 0; max-width: 1440px; width: 100%; }
 .tw-tarjeta-perdedor { border-color: var(--error); }
 .tw-tarjeta-ganador { border-color: var(--ok); }
 .tw-tarjeta-medio { display: flex; flex-direction: column; gap: .4rem; min-width: 0; }
-.tw-tarjeta-medio video, .tw-tarjeta-medio img { width: 100%; aspect-ratio: 9 / 16; object-fit: cover; border-radius: var(--radius-sm); background: var(--fondo-video); }
+/* contain, no cover: un anuncio 1:1 o 4:5 se ve entero (con bandas), nunca recortado (revisión de la tarea 7). */
+.tw-tarjeta-medio video, .tw-tarjeta-medio img { width: 100%; aspect-ratio: 9 / 16; object-fit: contain; border-radius: var(--radius-sm); background: var(--fondo-video); }
 .tw-tarjeta-sin-medio { display: flex; align-items: center; justify-content: center; aspect-ratio: 9 / 16; border-radius: var(--radius-sm); background: var(--panel-2); color: var(--muted); }
 .tw-tarjeta-cuerpo { display: flex; flex-direction: column; gap: .6rem; min-width: 0; }
 .tw-tarjeta-cabeza { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .5rem; }

@@ -4,17 +4,20 @@
    `data-tarjeta-url` lleva el alcance como query aparte (`|urlencode`): en esa ruta `<canal>` del camino es el
    canal del anuncio y `canal` de la query es el filtro del panel, y url_for no admite los dos. #}
 
+{#- `detalle` es la cifra cruda en palabras («30 % se queda 3 s») o "" si no hay valor. Sin percentil (cuenta chica,
+    pocos datos) el anillo dice «—» pero la cifra y el porqué siguen debajo y en el aria-label. -#}
 {% macro anillo_tw(r, etiqueta, detalle, canal_nombre, tw) -%}
 {%- set pct = r.pct if r and r.pct is not none else none -%}
+{%- set razon = (tw.vacios_anillo.get(r.vacio) | traducir) if pct is none and r and r.vacio else '' -%}
 <div class="tw-anillo tw-anillo-{{ (r.nivel if r and r.nivel else 'vacio') }}" role="img"
-     aria-label="{% if pct is not none %}{{ _('%(etiqueta)s: mejor que el %(pct)s %% de tus anuncios de %(canal)s', etiqueta=etiqueta, pct=pct, canal=canal_nombre) }}{% else %}{{ etiqueta }}: {{ (tw.vacios_anillo.get(r.vacio) | traducir) if r and r.vacio else '—' }}{% endif %}">
+     aria-label="{% if pct is not none %}{{ _('%(etiqueta)s: mejor que el %(pct)s %% de tus anuncios de %(canal)s', etiqueta=etiqueta, pct=pct, canal=canal_nombre) }}{% else %}{{ etiqueta }}:{% if not detalle and not razon %} —{% endif %}{% endif %}{% if detalle %}{% if pct is not none %} ·{% endif %} {{ detalle }}{% endif %}{% if razon %}{% if detalle %} ·{% endif %} {{ razon }}{% endif %}">
   <svg viewBox="0 0 36 36" aria-hidden="true">
     <circle class="tw-anillo-fondo" cx="18" cy="18" r="15.9"/>
     {% if pct is not none %}<circle class="tw-anillo-valor" cx="18" cy="18" r="15.9" stroke-dasharray="{{ pct }} 100" transform="rotate(-90 18 18)"/>{% endif %}
     <text x="18" y="21.5" text-anchor="middle">{{ pct if pct is not none else '—' }}</text>
   </svg>
   <span class="tw-anillo-etiqueta">{{ etiqueta }}</span>
-  <small>{% if pct is not none %}{{ detalle }}{% elif r and r.vacio %}{{ tw.vacios_anillo.get(r.vacio) | traducir }}{% endif %}</small>
+  <small>{{ detalle }}{% if razon %}{% if detalle %} · {% endif %}{{ razon }}{% endif %}</small>
 </div>
 {%- endmacro %}
 
@@ -50,10 +53,10 @@
       </span>
     </div>
     <div class="tw-anillos">
-      {{ anillo_tw(an.gancho, _('Gancho'), _('%(p)s se queda 3 s', p=an.gancho.valor | tw_pct(0)) if an.gancho else '', canal_nombre, tw) }}
-      {{ anillo_tw(an.retencion, _('Retención'), _('%(p)s lo ve completo', p=an.retencion.valor | tw_pct(0)) if an.retencion else '', canal_nombre, tw) }}
-      {{ anillo_tw(an.clic, _('Clic'), _('CTR %(p)s', p=an.clic.valor | tw_pct(1, false)) if an.clic else '', canal_nombre, tw) }}
-      {{ anillo_tw(an.compra, _('Compra'), _('%(p)s compra', p=an.compra.valor | tw_pct(1)) if an.compra else '', canal_nombre, tw) }}
+      {{ anillo_tw(an.gancho, _('Gancho'), _('%(p)s se queda 3 s', p=an.gancho.valor | tw_pct(0)) if an.gancho and an.gancho.valor is not none else '', canal_nombre, tw) }}
+      {{ anillo_tw(an.retencion, _('Retención'), _('%(p)s lo ve completo', p=an.retencion.valor | tw_pct(0)) if an.retencion and an.retencion.valor is not none else '', canal_nombre, tw) }}
+      {{ anillo_tw(an.clic, _('Clic'), _('CTR %(p)s', p=an.clic.valor | tw_pct(1, false)) if an.clic and an.clic.valor is not none else '', canal_nombre, tw) }}
+      {{ anillo_tw(an.compra, _('Compra'), _('%(p)s compra', p=an.compra.valor | tw_pct(1)) if an.compra and an.compra.valor is not none else '', canal_nombre, tw) }}
     </div>
     <dl class="tw-cifras">
       <div><dt>{{ _('Costo por venta') }}</dt><dd>{% if am.cpa %}{{ am.cpa | dinero(moneda) }}{% else %}—{% endif %}{% if a.cpa_canal %} <small>{{ _('canal: %(c)s', c=a.cpa_canal | dinero(moneda)) }}</small>{% endif %}</dd></div>
@@ -82,12 +85,15 @@
       </div>
       {% elif fila and fila.estado == 'lista' %}
       <p class="tw-ia-frase">{{ fila.resultado.frase }}</p>
-      {% if a.analisis_viejo %}<small class="vacio">{{ _('Con los datos del %(desde)s al %(hasta)s; desde entonces cambió.', desde=fila.desde, hasta=fila.hasta) }}</small>{% endif %}
+      {% if a.analisis_viejo %}<small class="vacio">{{ _('Con los datos del %(desde)s al %(hasta)s; desde entonces cambió.', desde=fila.desde, hasta=fila.hasta) }}</small>
+      {% elif a.analisis_otro_alcance %}<small class="vacio">{{ _('Analizado con los datos del %(desde)s al %(hasta)s', desde=fila.desde, hasta=fila.hasta) }}</small>{% endif %}
       <button type="button" class="btn-sm" data-tw-ver-analisis data-url="{{ url_for('triple_whale.analisis_detalle', cliente=cliente, aid=fila.id) }}">{{ _('Ver el análisis') }}</button>
       <div class="tw-analisis-detalle" hidden></div>
       {% if a.piezas_mejora %}<small>{{ ngettext('Ya se hizo %(num)s pieza con esta mejora', 'Ya se hicieron %(num)s piezas con esta mejora', a.piezas_mejora | length) }}</small>{% endif %}
       {% elif fila and fila.estado == 'error' %}
       <p class="tag-error">{{ fila.error or _('El análisis falló.') }}</p>
+      {% elif fila and fila.estado in ('en_cola', 'analizando') %}
+      <p class="vacio tw-ia-frase">{{ _('En cola…') }}</p>
       {% endif %}
       {% if not a.job_analisis and a.veredicto != 'sin_datos' and (not fila or fila.estado == 'error' or a.analisis_viejo) %}
       {% set precio = a.precio_analisis.texto if a.precio_analisis else _('precio no disponible') %}
