@@ -8,6 +8,8 @@
   tw_evaluar            -> f"{cliente}__tw_evaluar"  (max_intentos=1: paga a
                            Claude; el gasto real se registra como tipo
                            `evaluacion`, también si la respuesta no sirvió)
+  tw_analizar_anuncio   -> f"{cliente}__tw_anuncio__{canal}__{ad_id}"  (max_intentos=1: paga Whisper (fal) y
+                           Claude; «Cómo mejorarlo» de UN anuncio, spec 2026-10-08 tarjetas §6.2)
 
 Un error de Triple Whale (llave revocada, tienda, red) deja ESA tienda en
 `estado="error"` con el motivo sin token ni llave y sube para que la cola
@@ -15,6 +17,7 @@ reintente; las demás tiendas del proyecto no se enteran. Los avisos por correo
 corren cuando termina la última copia del proyecto, no en cada una.
 """
 import logging
+import re
 
 from flask_babel import gettext
 
@@ -26,9 +29,10 @@ import proyectos
 import trabajos
 import triple_whale
 import triple_whale_tiendas
+from doctrina import aprendizajes as doctrina_aprendizajes
 from nicho.avatares import costo_real
 from tareas import al_interrumpir, ref_sufijo, registrar
-from triple_whale import analisis, avisos, datos, paises, sync
+from triple_whale import analisis, avisos, datos, mejorar, paises, sync
 
 log = logging.getLogger("creatv.tareas.triple_whale")
 
@@ -76,6 +80,112 @@ def encolar_evaluacion(cliente, evaluacion_id):
 
 def evaluacion_en_curso(cliente):
     return trabajos.en_curso(job_id_evaluar(cliente))
+
+
+TIPO_ANALIZAR = "tw_analizar_anuncio"
+ETAPAS_ANALIZAR = [(idiomas.N_("Bajando el video"), 15), (idiomas.N_("Escuchando la voz"), 15),
+                   (idiomas.N_("Analizando con Claude"), 70)]
+_RE_ID = re.compile(r"^[A-Za-z0-9_.-]{1,80}$")
+
+
+def id_valido(valor):
+    """Canal o ad_id que puede ir en una URL y en un job_id."""
+    return bool(_RE_ID.match(str(valor or "")))
+
+
+def job_id_analisis(cliente, canal, ad_id):
+    return f"{cliente}__tw_anuncio__{canal}__{ad_id}"
+
+
+def encolar_analisis(cliente, analisis_id, canal, ad_id):
+    """max_intentos=1: paga a fal y a Claude. False si ese anuncio ya tenía uno vivo."""
+    return trabajos.encolar(job_id_analisis(cliente, canal, ad_id), TIPO_ANALIZAR,
+                            {"cliente": cliente, "analisis_id": int(analisis_id)}, cliente=cliente,
+                            duracion_estimada=90, etapas=ETAPAS_ANALIZAR, max_intentos=1)
+
+
+def analisis_vivos(cliente):
+    """job_ids de los análisis por anuncio en cola o corriendo (una consulta, para las barras de la galería)."""
+    return cola.job_ids_vivos(cliente, TIPO_ANALIZAR)
+
+
+def _evaluacion_de_cuenta(cliente, tienda_id):
+    """El `resultado` de la evaluación de cuenta lista más nueva del mismo alcance, o None."""
+    for e in datos.evaluaciones(cliente, limite=5):
+        if e["estado"] == "lista" and (e.get("extra") or {}).get("tienda_id") == tienda_id:
+            return e.get("resultado") or None
+    return None
+
+
+@registrar(TIPO_ANALIZAR)
+def tw_analizar_anuncio(tarea):
+    p = tarea["payload"]
+    cliente, aid = p["cliente"], int(p["analisis_id"])
+    fila = datos.analisis_anuncio(cliente, aid)
+    if fila is None:
+        return gettext("Ese análisis ya no existe.")
+    job_id = tarea.get("job_id") or job_id_analisis(cliente, fila["canal"], fila["ad_id"])
+    datos.actualizar_analisis(aid, estado="analizando", tarea_id=tarea.get("id"), error=None)
+    foto = fila["foto"] or {}
+    referencia = f"tw_anuncio:{aid}{ref_sufijo(tarea)}"
+    medios = {"visual": None, "fotogramas": 0, "transcripcion": None,
+              "copy": bool((foto.get("creativo") or {}).get("copy"))}
+    usd_voz, temporales = 0.0, []
+    try:
+        trabajos.reportar(job_id, etapa=idiomas.N_("Bajando el video"))
+        vis, temporales = mejorar.visuales(foto)
+        medios.update(visual=vis["clase"], fotogramas=vis["fotogramas"])
+        voz = None
+        if mejorar.tiene_voz(foto):
+            trabajos.reportar(job_id, etapa=idiomas.N_("Escuchando la voz"))
+            try:
+                voz = mejorar.transcribir(foto)
+            except Exception as e:  # noqa: BLE001 — sin voz, Claude juzga por lo demás
+                log.info("sin voz para el análisis %s: %s", aid, type(e).__name__)
+            if voz:
+                usd_voz = float(voz.get("costo_usd") or 0)
+                if usd_voz:
+                    gastos.registrar_seguro(cliente, "transcripcion", usd_voz, f"{referencia}:voz", proveedor="fal",
+                                            detalle=gettext("la voz de un anuncio de Triple Whale"))
+                medios["transcripcion"] = (voz.get("texto") or "")[:mejorar.MAX_TRANSCRIPCION] or None
+        trabajos.reportar(job_id, etapa=idiomas.N_("Analizando con Claude"))
+        texto = mejorar.armar(proyectos.nombre_visible(cliente), fila, voz=voz,
+                              evaluacion_cuenta=_evaluacion_de_cuenta(cliente, fila["tienda_id"]),
+                              aprendizajes=doctrina_aprendizajes.texto_para_prompt(proyectos.aprendizajes(cliente)),
+                              productos=datos.top_productos(cliente, fila["tienda_id"], fila["desde"], fila["hasta"],
+                                                            limite=analisis.MAX_PRODUCTOS))
+        segundos = " ".join(b["text"] for b in vis["bloques"] if b.get("type") == "text")
+        resultado, entrada, salida = mejorar.analizar(texto, vis["bloques"], idiomas.de_proyecto(cliente),
+                                                      verificable_extra=segundos)
+    except Exception as e:
+        entrada = int(getattr(e, "tokens_entrada", 0) or 0)
+        salida = int(getattr(e, "tokens_salida", 0) or 0)
+        usd_claude = costo_real(entrada, salida) if (entrada or salida) else 0.0
+        if usd_claude:
+            gastos.registrar_seguro(cliente, "evaluacion", usd_claude, referencia, proveedor="anthropic",
+                                    detalle=gettext("sin resultado usable"))
+        mensaje = mejorar.texto_error(e)
+        datos.actualizar_analisis(aid, estado="error", error=mensaje, medios=medios,
+                                  usd=round(usd_voz + usd_claude, 4))
+        raise RuntimeError(mensaje) from None
+    finally:
+        analisis.borrar_temporales(temporales)
+    usd_claude = costo_real(entrada, salida)
+    gastos.registrar_seguro(cliente, "evaluacion", usd_claude, referencia, proveedor="anthropic",
+                            detalle=gettext("un anuncio de Triple Whale"))
+    datos.actualizar_analisis(aid, estado="lista", resultado=resultado, medios=medios, error=None,
+                              usd=round(usd_voz + usd_claude, 4))
+    return gettext("Análisis listo: %(frase)s", frase=resultado["frase"])
+
+
+@al_interrumpir(TIPO_ANALIZAR)
+def _analizar_interrumpido(tarea, mensaje):
+    p = tarea.get("payload") or {}
+    if p.get("cliente") and p.get("analisis_id"):
+        fila = datos.analisis_anuncio(p["cliente"], int(p["analisis_id"]))
+        if fila and fila["estado"] in ("en_cola", "analizando"):
+            datos.actualizar_analisis(int(p["analisis_id"]), estado="error",
+                                      error=cola.recortar(cola.sin_token(str(mensaje)), 500))
 
 
 def _sin_llave(cliente, tienda_id, texto):

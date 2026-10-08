@@ -2224,6 +2224,10 @@ msgstr "Standalone ads (previous)"
 msgid "Anuncios sueltos (de antes)"
 msgstr "Standalone ads (from before)"
 
+#, python-format
+msgid "Análisis listo: %(frase)s"
+msgstr "Analysis ready: %(frase)s"
+
 msgid "Apartados de Configuración"
 msgstr "Settings sections"
 
@@ -2644,6 +2648,9 @@ msgstr "Low"
 
 msgid "Baja a negro y aparece el siguiente."
 msgstr "It fades to black and the next one appears."
+
+msgid "Bajando el video"
+msgstr "Downloading the video"
 
 msgid "Bajando fotos"
 msgstr "Downloading photos"
@@ -6533,6 +6540,9 @@ msgstr "Listen to the voice with the current text and voice before generating."
 msgid "Escucha la voz otra vez."
 msgstr "Listen to the voice again."
 
+msgid "Escuchando la voz"
+msgstr "Listening to the voice"
+
 msgid "Escuchar"
 msgstr "Listen"
 
@@ -6564,6 +6574,9 @@ msgstr "That ad was already in the Swipe file."
 
 msgid "Ese anuncio ya no existe."
 msgstr "That ad no longer exists."
+
+msgid "Ese análisis ya no existe."
+msgstr "That analysis no longer exists."
 
 msgid "Ese aprendizaje ya no existe."
 msgstr "That learning no longer exists."
@@ -18003,6 +18016,9 @@ msgstr "the market's sophistication"
 msgid "la tienda no trajo fotos"
 msgstr "the store didn't bring photos"
 
+msgid "la voz de un anuncio de Triple Whale"
+msgstr "the voice of a Triple Whale ad"
+
 msgid "lanzamiento"
 msgstr "launch"
 
@@ -19127,6 +19143,9 @@ msgstr "your average %(pct)s"
 
 msgid "tu@empresa.com"
 msgstr "you@company.com"
+
+msgid "un anuncio de Triple Whale"
+msgstr "a Triple Whale ad"
 
 #, python-format
 msgid "un momento del clip %(i)s no describe qué se ve"
