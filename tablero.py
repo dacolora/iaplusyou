@@ -198,12 +198,12 @@ def ventas_medidas(deltas):
     out["gasto_roas"] = 0.0
     comparables = 0
     for d in deltas:
-        out["mide"] = out["mide"] or bool(d["mide"])
         out["gasto"] += d["gasto"]
         out["compras"] += d["compras"] or 0
         if d.get("moneda_ajena"):
             excluidos.add(d["moneda_ajena"])
         else:
+            out["mide"] = out["mide"] or bool(d["mide"] and d.get("roas_comparable", True))
             comparables += 1
             out["gasto_roas"] += d["gasto"]
             out["ingresos"] += d["ingresos"] or 0
@@ -342,11 +342,11 @@ def _resumen_periodo(exps, filas, desde_iso, hasta_iso, atribucion_filtro=None):
             g["anuncios"] += 1
     for moneda, g in por_moneda.items():
         v = ventas_medidas(deltas_por_moneda[moneda])
-        g.update(roas_comparable=v["roas_comparable"], excluidos=v["excluidos"],
+        g.update(mide_ventas=v["mide"], roas_comparable=v["roas_comparable"], excluidos=v["excluidos"],
                  ingresos=v["ingresos"], gasto_roas=v["gasto_roas"])
         g["gasto"] = round(g["gasto"], 2)
         g["ingresos"] = round(g["ingresos"] or 0, 2)
-        g["roas"] = _roas(g["ingresos"], g["gasto_roas"]) if g["roas_comparable"] else None
+        g["roas"] = _roas(g["ingresos"], g["gasto_roas"]) if g["roas_comparable"] and g["mide_ventas"] else None
         if not g["roas_comparable"]:
             g["ingresos"] = None
         if g["ventas_cambiaron"]:

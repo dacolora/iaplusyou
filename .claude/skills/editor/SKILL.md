@@ -256,3 +256,6 @@ ffmpeg): the local venv has Pillow 11.3 without Raqm. Before restarting the VPS 
 the pre-restart check (scratchpad script of the 5c deploy: emoji layers, a v2 text with every style at factor 3, base glyphs
 under Raqm, v1 against `main`, `lutrgb`). Still out (capa 5c-2): text animations beyond «deslizar», rotation, scale/opacity
 keyframes, colour filters; widening `REPERTORIO` (Cyrillic, ẞ, ⅓, ① — the v1 preview drops them while the v1 render draws them).
+
+
+PND-012 (2026-10-08, corrección lote 6A): materiales.actualizar_ficha actualiza URL/campos y mezcla extra por (cliente, hash), tomando el candado antes de leer. La creación de una voz usa obtener_o_crear y después actualizar_ficha: una ficha recuperada antes del guardado final conserva su id y recibe la URL final y estrenada, sin duplicarla. Prueba test_lote6_voces.py::test_revision_guardado_idempotente_actualiza_url.

@@ -735,7 +735,7 @@ def test_refrescar_con_triple_whale_sin_conectar_cae_a_meta(entorno, monkeypatch
                         lambda cliente, tienda_id, minutos=30: (_ for _ in ()).throw(AssertionError("no debía sincronizar")))
     assert lz.refrescar("acme", eid) == 3
     m = ex.obtener("acme", eid)["piezas"][0]["metricas"]
-    assert m["impresiones"] == 100 and m["gasto"] == 2.0 and m["fuente_ventas"] == "meta"
+    assert m["impresiones"] == 100 and m["gasto"] == 2.0 and m["fuente_ventas"] == "ninguna"
 
 
 def test_refrescar_con_triple_whale_error_de_sync_registra_evento_y_usa_la_copia(entorno, monkeypatch):

@@ -163,7 +163,7 @@ def test_resumen_mes_agrupa_por_moneda(base_temporal, sin_red):
     ex.snapshot(ep2, {"gasto": 12.5, "impresiones": 10}, tomado_en="2026-09-05T00:00:00")
     r = tablero.resumen_mes("acme", ahora_iso=AHORA)
     assert r["por_moneda"]["COP"]["gasto"] == 20000 and r["por_moneda"]["USD"]["gasto"] == 12.5
-    assert r["por_moneda"]["USD"]["roas"] == 0.0
+    assert r["por_moneda"]["USD"]["roas"] is None
     assert r["experimentos_corriendo"] == 1
 
 
@@ -204,7 +204,7 @@ def test_resumen_total_es_el_acumulado_hasta_ahora(base_temporal, sin_red):
     assert r["hasta"] == AHORA
     assert r["por_moneda"]["COP"]["gasto"] == 600 and r["por_moneda"]["COP"]["compras"] == 4
     assert r["por_moneda"]["COP"]["ingresos"] == 7000 and r["por_moneda"]["COP"]["roas"] == round(7000 / 600, 2)
-    assert r["por_moneda"]["USD"]["gasto"] == 12.5 and r["por_moneda"]["USD"]["roas"] == 0.0
+    assert r["por_moneda"]["USD"]["gasto"] == 12.5 and r["por_moneda"]["USD"]["roas"] is None
     assert r["experimentos_corriendo"] == 1 and r["piezas_activas"] == 2
     assert r["propuestas_pendientes"] == 0 and r["ganadoras_publicadas"] == 0
 

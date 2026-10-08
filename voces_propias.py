@@ -109,7 +109,16 @@ def _guardar_ficha(cliente, cobro):
 
 def recuperar_pendientes(cliente):
     """Recuperación gratuita al abrir Mis voces; nunca sintetiza ni descarga."""
-    for cobro in gastos.fichas_pendientes(cliente, "voz_propia"):
+    pendientes = gastos.fichas_pendientes(cliente, "voz_propia")
+    if not pendientes:
+        return
+    with db.conectar() as con:
+        t = db.tarea
+        activas = con.execute(sa.select(t.c.id).where(t.c.cliente == cliente,
+                  t.c.tipo == "voz_propia_crear", t.c.estado == "en_curso")).scalars().all()
+    for cobro in pendientes:
+        if any(cobro["referencia"].endswith(f":t{tid}") for tid in activas):
+            continue
         if not (cobro["extra"]["ficha"].get("extra") or {}).get("voice_id"):
             continue
         try:
@@ -318,8 +327,8 @@ def crear(cliente, payload, ref_sufijo="", reportar=None):
     if forma == "clonar":
         extra_gasto["consentimiento"] = payload["consentimiento"]
     def reservar():
-        if gastos.registrar_seguro(cliente, "voz_propia", 0, ref, detalle=detalle,
-                                   proveedor=PROVEEDOR, extra=extra_gasto) is None:
+        if gastos.reservar_ficha(cliente, "voz_propia", ref, detalle=detalle,
+                                 proveedor=PROVEEDOR, extra=extra_gasto) is None:
             raise ValueError(gettext("No se pudo guardar la ficha de la voz antes de cobrar."))
     grabacion = None
     if forma == "clonar":
@@ -379,8 +388,10 @@ def crear(cliente, payload, ref_sufijo="", reportar=None):
     ficha.update(url=url or fuente or "", bytes=bytes_, duracion_ms=dur)
     gastos.registrar_seguro(cliente, "voz_propia", usd, ref, detalle=detalle,
                             proveedor=PROVEEDOR, extra=extra_gasto)
-    m = materiales.registrar(cliente, tipo="audio", origen=ORIGEN, url=url, hash=h, bytes=bytes_, duracion_ms=dur,
-                             costo_usd=usd, extra=extra)
+    campos = {"tipo": "audio", "origen": ORIGEN, "url": url, "bytes": bytes_, "duracion_ms": dur,
+              "costo_usd": usd, "extra": extra}
+    m, _ = materiales.obtener_o_crear(cliente, h, lambda: campos)
+    m = materiales.actualizar_ficha(cliente, h, **campos)
     gastos.registrar_seguro(cliente, "voz_propia", usd, ref, detalle=detalle,
                             proveedor=PROVEEDOR, extra={**extra_gasto, "ficha_guardada": True})
     return _como_voz(m), estrenada

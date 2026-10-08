@@ -605,10 +605,10 @@ def exp_decidir(tarea):
     if ex["estado"] != "corriendo":
         return gettext("Experimento en estado %(estado)s: no se decide.", estado=ex["estado"])
     ahora = datetime.now()
-    if experimentos.datos_viejos(ex, ahora):
-        return gettext("Datos viejos: el decisor no ejecuta nada hasta actualizar las métricas.")
     if acciones.tope_alcanzado(ex):
         return _pausar_por_tope(cliente, ex)
+    if experimentos.datos_viejos(ex, ahora):
+        return gettext("Datos viejos: el decisor no ejecuta nada hasta actualizar las métricas.")
 
     reglas = decisor.reglas_efectivas(proyectos.reglas_defecto(cliente), ex.get("reglas"))
     ahora = datetime.now()
@@ -619,13 +619,13 @@ def exp_decidir(tarea):
         piezas_pais = [pz for pz in ex["piezas"] if pz["pais"] == pais["pais"]]
         orden = _ranking(piezas_pais, ex.get("atribucion"))
         compras_pais = sum(int((pz.get("metricas") or {}).get("compras") or 0)
-                           for pz in piezas_pais if pz["id"] in orden)
+                           for pz in piezas_pais if pz["id"] in orden and not (pz.get("metricas") or {}).get("ventas_no_disponibles"))
         for pz in piezas_pais:
             if not pz.get("meta_ad_id") or pz.get("estado") != "activo" or ((pz.get("veredicto") or "pendiente") != "pendiente" and not (pz.get("extra") or {}).get("muestra_ventas_insuficiente")):
                 continue
             if _rechazada_por_meta(cliente, ex, pz):
                 continue
-            if (pz.get("metricas") or {}).get("ventas_no_disponibles") or experimentos.datos_viejos({"piezas": [pz]}, ahora):
+            if experimentos.datos_viejos({"piezas": [pz]}, ahora):
                 continue
             snaps = snaps_por_pieza.setdefault(pz["id"], experimentos.snapshots(pz["id"]))
             dias_transcurridos = _dias_transcurridos(ex, snaps_por_pieza, ahora)
@@ -635,6 +635,10 @@ def exp_decidir(tarea):
                    "posicion": (orden.index(pz["id"]) + 1) if pz["id"] in orden else None, "total_pais": len(orden),
                    "es_imagen": bool(pz.get("es_imagen")), "compras_pais": compras_pais}
             v = decisor.decidir(snaps, reglas, ctx)
+            if (pz.get("metricas") or {}).get("ventas_no_disponibles") and not (
+                    (v["puerta"] == 0 and v["veredicto"] == "inconcluso" and v["accion"] == "pausar")
+                    or (v["puerta"] == 1 and v["veredicto"] == "perdedor")):
+                continue
             if v.get("muestra_ventas_insuficiente") and (pz.get("extra") or {}).get("muestra_ventas_insuficiente"):
                 continue
             if v["veredicto"] == "pendiente":

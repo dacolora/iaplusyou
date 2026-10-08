@@ -129,7 +129,7 @@ def limite_diario(ex, pais, ahora=None):
     saldo = max(Decimal(0), Decimal(str(ex.get("tope_total") or 0)) - Decimal(str(ex.get("gasto_acumulado") or 0)))
     otros = sum(Decimal(str(p.get("presupuesto_dia") or 0)) for p in ex.get("paises", []) if p["pais"] != pais)
     disponible = max(Decimal(0), saldo / Decimal(str(dias)) - otros) if dias else Decimal(0)
-    # Menos de un día no autoriza enviar a Meta un diario mayor que el total.
-    disponible = min(disponible, max(Decimal(0), Decimal(str(ex.get("tope_total") or 0)) - otros))
+    # Menos de un día no autoriza enviar a Meta diarios mayores que el saldo restante.
+    disponible = min(disponible, max(Decimal(0), saldo - otros))
     maximo = disponible.quantize(unidad(ex.get("moneda") or "USD"), rounding=ROUND_DOWN)
     return {"maximo": float(maximo), "dias": dias, "saldo": float(saldo)}

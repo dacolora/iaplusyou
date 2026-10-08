@@ -169,19 +169,22 @@ def test_refrescar_con_atribucion_tienda_mezcla_ventas(entorno, tienda):
     assert lz.refrescar("acme", eid) == 3
     e = ex.obtener("acme", eid)
     m = e["piezas"][0]["metricas"]
-    # PND-142: sin TW al lanzar se fija Meta; no se mezclan los pedidos de tienda.
-    assert m["compras"] == 0 and m["ingresos"] == 0.0
-    assert m["roas"] == 0.0 and m["cpa"] == 0.0 and m["fuente_ventas"] == "meta"
+    # Meta reportó compras=0/ingresos=0; la tienda manda: 2 compras, 50 de ingresos sobre 2.0 de gasto
+    assert m["compras"] == 2 and m["ingresos"] == 50.0
+    assert m["roas"] == 25.0 and m["cpa"] == 1.0 and m["fuente_ventas"] == "tienda"
     assert m["impresiones"] == 100 and m["gasto"] == 2.0   # el resto sigue viniendo de Meta
     m1 = e["piezas"][1]["metricas"]
     assert m1["compras"] == 0 and m1["ingresos"] == 0.0 and m1["roas"] == 0.0 and m1["cpa"] == 0.0
-    assert m1["fuente_ventas"] == "meta"
+    assert m1["fuente_ventas"] == "tienda"
     assert e["gasto_acumulado"] == 6.0
     assert not any(ev["tipo"] == "atribucion" for ev in e["eventos"]) and not e["extra"].get("aviso_moneda")
 
 
 def test_refrescar_con_ventas_en_otra_moneda_deja_roas_en_cero_y_avisa_una_vez(entorno, tienda):
-    """PND-142: Meta fijo al lanzar no mezcla ni avisa moneda de pedidos de tienda."""
+    """F1: ventas en USD sobre una cuenta en COP — el ROAS (ingresos/gasto)
+    no es comparable con el umbral absoluto del decisor: queda 0.0, el CPA
+    (gasto/compras, moneda de la cuenta) sigue, y hay UN evento por
+    experimento, no uno por refresco."""
     import atribucion
     ex, lz, eid = entorno["ex"], entorno["lanzador"], entorno["eid"]
     ex.actualizar("acme", eid, atribucion="tienda")
@@ -192,14 +195,15 @@ def test_refrescar_con_ventas_en_otra_moneda_deja_roas_en_cero_y_avisa_una_vez(e
     lz.refrescar("acme", eid)
     e = ex.obtener("acme", eid)
     m = e["piezas"][0]["metricas"]
-    assert m["compras"] == 0 and m["ingresos"] == 0.0 and m["fuente_ventas"] == "meta"
-    assert m["roas"] == 0.0 and m["cpa"] == 0.0
+    assert m["compras"] == 2 and m["ingresos"] == 50.0 and m["fuente_ventas"] == "tienda"
+    assert m["roas"] == 0.0 and m["cpa"] == 1.0
     avisos = [ev for ev in e["eventos"] if ev["tipo"] == "atribucion"]
-    assert avisos == []
-    assert not e["extra"].get("aviso_moneda")
+    assert len(avisos) == 1
+    assert avisos[0]["mensaje"] == "Ventas en USD, cuenta en COP: ROAS no comparable, se usa CPA"
+    assert e["extra"]["aviso_moneda"] == "USD"
     lz.refrescar("acme", eid)
     e = ex.obtener("acme", eid)
-    assert len([ev for ev in e["eventos"] if ev["tipo"] == "atribucion"]) == 0
+    assert len([ev for ev in e["eventos"] if ev["tipo"] == "atribucion"]) == 1
     assert e["piezas"][0]["metricas"]["roas"] == 0.0
 
 

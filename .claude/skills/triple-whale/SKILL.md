@@ -110,9 +110,9 @@ Meta (the old path skipped Meta, so rejections went unseen) and overrides purcha
 orders of THE STORE OF THE PIECE'S COUNTRY (`lanzador._tienda_tw_de`: the country's store, or the only one if the
 project has one WITHOUT a country; `datos.totales_anuncio` raises `ValueError` without a store) from `tw_anuncio_dia` since the piece was
 created (after `sync.sincronizar_si_hace_falta` once per store used, outside the Meta lock). A piece whose country
-has no store keeps Meta's sales and leaves ONE evento per experiment and country
-(`extra.aviso_sin_tienda_tw`); a piece WITHOUT a country does the same with the mark "" and its own text «Una pieza
-sin país no tiene tienda de Triple Whale…» (2026-10-08, spend guardian: before it fell to Meta silently). Every `datos.reemplazar_*` checks inside its transaction that the store still
+has no store marks sales unavailable (no Meta fallback) and leaves ONE new evento per experiment and country
+(`extra.aviso_ventas_no_comparables_tw`); a piece WITHOUT a country uses the mark "" and its own text.
+This notice is independent of the old fallback notice (PND-142 amended, 2026-10-08). Every `datos.reemplazar_*` checks inside its transaction that the store still
 exists for the cliente (a removed store's running sync writes nothing). Currency comes from the project's
 `ajustes`; another currency → ROAS 0 + one evento, like `tienda`. `"triple_whale"`
 stays in `tablero.FUENTES_VENTAS` and `decisor.py`'s `con_atribucion`. With Triple Whale connected, every
@@ -145,4 +145,4 @@ idea card lists the pieces born from it with their Crear state and Meta verdict 
 `panel.enlazar_ideas`) and a Creatv ad says which idea it came from (`piezas_creatv(...)["tw_idea"]`). None of
 the SQL has run against a real store yet (spec 2026-09-28 §9).
 
-PND-142 (2026-10-08, decisión delegada, reemplaza el respaldo descrito arriba): al lanzar se fija fuente_ventas_fija en el extra del experimento (Triple Whale si hay tiendas conectadas, Meta si no); un relanzamiento no la cambia. Sin esa marca, la primera lectura fija Triple Whale si la atribución guardada es triple_whale y Meta en los demás casos, incluidos los experimentos antiguos de tienda; no se agrega una tercera fuente. País sin tienda, Pixel ausente o sync fallido deja ventas_no_disponibles y ventas no comparables, sin respaldo a Meta; el decisor omite esas fotos. Cada país sigue leyendo exclusivamente su tienda. tests/test_lote6_ventas.py y test_lanzador.py prueban las dos fuentes, ausencia y aislamiento con dobles.
+PND-142 (2026-10-08, decisión delegada enmendada): fuente_ventas_fija se fija al lanzar según la atribución: triple_whale solo con atribución triple_whale y tiendas conectadas (sin tiendas, meta); tienda para pedidos por UTM, meta para Pixel y ninguna si no mide ventas. Una fuente fijada no se cambia por conectar/desconectar después. La lectura corrige las marcas antiguas que ignoraban tienda/Pixel/ninguna. Con ninguna, ninguna foto marca ventas medibles, aunque Meta reporte compras. Si la fuente fija no está disponible, ventas_no_disponibles y ventas no comparables (—), sin respaldo a Meta; todavía se permite el cierre sin evidencia y el perdedor por tráfico del decisor, pero no ganar/escalar por ventas. Triple Whale lee solo la tienda del país. El aviso nuevo aviso_ventas_no_comparables_tw no se deduplica contra el viejo aviso de respaldo. tests/test_lote6_ventas.py, test_atribucion.py y test_lote6_decisor.py vigilan la regla, pedidos e aislamiento.

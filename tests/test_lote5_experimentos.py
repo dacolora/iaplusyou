@@ -37,14 +37,14 @@ def test_pnd134_ultima_metrica_en_una_consulta_sin_cambiar_valores(base_temporal
     pieza_otra, = ex.cargar('otro')[0]['piezas']
     assert pieza_otra['id'] == ep_otro and pieza_otra['metricas']['gasto'] == 999
     assert ep_otro not in metricas
-    contexto = {'horas_activo': 96, 'atribucion': 'tienda'}
+    contexto = {'horas_activo': 96, 'atribucion': 'tienda', 'compras_pais': 3}
     veredictos = set()
     for ep, historia in historias.items():
         assert ex.snapshots(ep) == historia
         decision = decisor.decidir([metricas[ep]], {}, contexto)
         assert decision == decisor.decidir(historia, {}, contexto)
         veredictos.add(decision['veredicto'])
-    assert veredictos == {'inconcluso'}  # PND-017: cada llamada aislada tiene solo 2 compras.
+    assert veredictos == {'ganador', 'perdedor'}
     for eid in ids:
         assert ex.obtener('acme', eid)['piezas'] == next(e['piezas'] for e in cargados if e['id'] == eid)
 

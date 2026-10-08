@@ -5337,8 +5337,8 @@ msgid "El motor no tiene a quién avisarle de propuestas, ganadores y rechazos: 
 msgstr "The engine has nobody to notify about proposals, winners and rejections: enter one in Settings › Notification email."
 
 #, python-format
-msgid "El máximo diario permitido es %(maximo)s %(moneda)s por los días restantes."
-msgstr "The maximum daily budget allowed is %(maximo)s %(moneda)s for the remaining days."
+msgid "El máximo diario permitido es %(maximo)s por los días restantes."
+msgstr "The maximum daily budget is %(maximo)s for the remaining days."
 
 msgid "El objetivo de referencias debe ser al menos 1."
 msgstr "The reference target must be at least 1."
@@ -5508,6 +5508,9 @@ msgstr "The split exceeds the total: lower a country's budget or raise the total
 
 msgid "El ritmo va entre 1,5 y 4 palabras por segundo."
 msgstr "The pace is between 1.5 and 4 words per second."
+
+msgid "El saldo disponible no alcanza el mínimo diario de Meta. No se puede subir el presupuesto."
+msgstr "The available balance is below Meta’s minimum daily budget. The budget cannot be increased."
 
 msgid "El servidor no pudo guardar el archivo. Vuelve a intentar."
 msgstr "The server couldn't save the file. Try again."
@@ -10343,8 +10346,8 @@ msgid "Máximo de resultados"
 msgstr "Maximum results"
 
 #, python-format
-msgid "Máximo permitido: %(maximo)s %(moneda)s/día"
-msgstr "Maximum allowed: %(maximo)s %(moneda)s/day"
+msgid "Máximo permitido: %(maximo)s/día"
+msgstr "Maximum allowed: %(maximo)s/day"
 
 #, python-format
 msgid "Máximo que puede gastar: %(total)s en %(num)s día"
@@ -10698,6 +10701,10 @@ msgstr "There's no research in progress to cancel."
 msgid "No hay llave de Triple Whale guardada. Vuelve a conectarlo."
 msgstr "There's no saved Triple Whale key. Connect it again."
 
+#, python-format
+msgid "No hay margen para subir el diario de %(pais)s dentro del saldo aprobado."
+msgstr "There is no room to increase the daily budget for %(pais)s within the approved balance."
+
 msgid "No hay nada en el catálogo todavía — crea el primero con \"+ Nuevo producto\" o en Catálogo."
 msgstr "There's nothing in the catalog yet — create the first one with “+ New product” or in Catalog."
 
@@ -10721,10 +10728,6 @@ msgstr "There are no products in the catalog: add them in Catalog › Products."
 
 msgid "No hay referentes para sugerir"
 msgstr "There are no references to suggest"
-
-#, python-format
-msgid "No hay tienda de Triple Whale para %(pais)s: se usan las ventas de Meta."
-msgstr "There is no Triple Whale store for %(pais)s: Meta sales are used."
 
 #, python-format
 msgid "No hay tienda de Triple Whale para %(pais)s: ventas no comparables."
@@ -15737,9 +15740,6 @@ msgstr "A real person using the product naturally; the product is still the star
 msgid "Una pieza no tiene plataforma de tienda: vuelve a crear el experimento."
 msgstr "A piece has no store platform: create the experiment again."
 
-msgid "Una pieza sin país no tiene tienda de Triple Whale: se usan las ventas de Meta."
-msgstr "A piece without a country has no Triple Whale store: Meta sales are used."
-
 msgid "Una pieza sin país no tiene tienda de Triple Whale: ventas no comparables."
 msgstr "A piece without a country has no Triple Whale store: sales are not comparable."
 
@@ -17559,8 +17559,10 @@ msgid "etiquetas de precio"
 msgstr "price tags"
 
 #, python-format
-msgid "excluye %(n)s en otra moneda"
-msgstr "excludes %(n)s in another currency"
+msgid "excluye %(num)s experimento en otra moneda"
+msgid_plural "excluye %(num)s experimentos en otra moneda"
+msgstr[0] "excludes %(num)s experiment in another currency"
+msgstr[1] "excludes %(num)s experiments in another currency"
 
 msgid "experiencia con el producto"
 msgstr "experience with the product"

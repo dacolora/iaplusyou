@@ -679,7 +679,12 @@ def por_referencia(cliente, referencia):
     with db.conectar() as con:
         fila = con.execute(sa.select(db.gasto).where(db.gasto.c.cliente == cliente,
                                                    db.gasto.c.referencia == referencia)).first()
-    return _fila(fila) if fila else None
+    if fila:
+        return _fila(fila)
+    import json
+    with db.conectar() as con:
+        valor = con.execute(sa.select(db.kv.c.valor).where(db.kv.c.clave == _clave_reserva(cliente, referencia))).scalar()
+    return json.loads(valor) if valor else None
 
 
 def fichas_pendientes(cliente, tipo):
@@ -687,3 +692,24 @@ def fichas_pendientes(cliente, tipo):
         filas = con.execute(sa.select(db.gasto).where(db.gasto.c.cliente == cliente, db.gasto.c.tipo == tipo,
                  db.gasto.c.extra["ficha_guardada"].as_boolean().isnot(True))).all()
     return [_fila(f) for f in filas if (f._mapping[db.gasto.c.extra] or {}).get("ficha")]
+
+
+def _clave_reserva(cliente, referencia):
+    import hashlib
+    return "reserva_gasto:" + hashlib.sha256(f"{cliente}\x1f{referencia}".encode()).hexdigest()
+
+
+def reservar_ficha(cliente, tipo, referencia, *, detalle, proveedor, extra):
+    """Reserva previa al proveedor, fuera de Gasto: todavía no hubo cobro."""
+    import json
+    from sqlalchemy.dialects.sqlite import insert
+    try:
+        valor = json.dumps({"cliente": cliente, "tipo": tipo, "referencia": referencia,
+                            "detalle": detalle, "proveedor": proveedor, "extra": extra, "usd": 0})
+        with db.conectar() as con:
+            con.execute(insert(db.kv).values(clave=_clave_reserva(cliente, referencia), valor=valor,
+                        actualizado_en=db.ahora()).on_conflict_do_nothing(index_elements=[db.kv.c.clave]))
+        return True
+    except Exception:
+        log.exception("No se pudo reservar la ficha de voz")
+        return None

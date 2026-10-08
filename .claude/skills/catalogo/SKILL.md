@@ -31,7 +31,11 @@ only for clients with a `corriendo` experiment attributed by store). Orders carr
 `utm_content = experimento_pieza.id` (set by `lanzador.url_destino`; legacy `pieza.id`
 still resolves) and `atribucion.resolver_pendientes` links them; when an experiment's
 `atribucion` is `tienda`, `lanzador.refrescar` overrides purchases/revenue/CPA from the
-store (ROAS forced to 0 when order and account currencies differ, with one evento).
+store, without a Meta fallback; missing store data remains unavailable. The fixed sales source follows the
+experiment's attribution: tienda for store/UTM orders, meta for Pixel, triple_whale only for Triple Whale
+attribution with connected stores (meta if none), ninguna for traffic without sales measurement. With ninguna
+no snapshot marks sales measurable (PND-142 amended, 2026-10-08). Different order/account currencies leave
+ROAS non-comparable with one evento; grouped ROAS excludes that experiment without currency conversion.
 `meta_conexion.estado_pixel` (cached 10 min, computed only by the Configuración button —
 never on page load) feeds `experimentos.atribucion_sugerida`: pixel > tienda > ninguna.
 Since 2026-09-30 (spec `docs/superpowers/specs/2026-09-28-catalogo-por-colores-design.md`, ADR 0005) a **product has

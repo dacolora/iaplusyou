@@ -266,7 +266,7 @@ def test_si_la_creacion_falla_no_hay_gasto_ni_voz(base_temporal, r2, fal, monkey
     monkeypatch.setattr(voces_propias.fal_audio, "disenar_voz_minimax", _falla)
     with pytest.raises(RuntimeError):
         voces_propias.crear("acme", {"forma": "disenar", "nombre": "Ana", "descripcion": "Mujer cálida", "idioma": "es"})
-    assert [g["usd"] for g in _gastos("acme")] == [0.0] and voces_propias.listar("acme") == []
+    assert _gastos("acme") == [] and voces_propias.listar("acme") == []
 
 
 def _clon_que_falla(monkeypatch, grabacion_id):
@@ -287,7 +287,7 @@ def test_si_el_clon_falla_la_grabacion_no_se_queda(base_temporal, r2, fal, monke
     _clon_que_falla(monkeypatch, g["id"])
     assert materiales.obtener("acme", g["id"]) is None
     assert "clientes/acme/materiales/grabacion_f.wav" in r2["borrados"]
-    assert [g["usd"] for g in _gastos("acme")] == [0.0] and voces_propias.listar("acme") == []
+    assert _gastos("acme") == [] and voces_propias.listar("acme") == []
 
 
 def test_si_el_clon_falla_no_borra_una_grabacion_que_usa_otra_voz(base_temporal, r2, fal, monkeypatch):

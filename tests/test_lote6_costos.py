@@ -42,3 +42,19 @@ def test_pnd143_recuperar_cache_muestra_total(base_temporal, monkeypatch, tmp_pa
         assert cf.cargar('acme')[cid]['usd'] == pytest.approx(.82)
         assert cf.cargar('acme')[cid]['capas']['musica']['costo_usd'] == .02
         assert gastos.historial('otro') == []
+
+
+def test_revision_costos_sesiones_dos_proyectos(base_temporal):
+    for c,usd,musica in [('acme',.82,.02),('otro',20,2)]:
+        gastos.registrar_seguro(c,'video',usd,'video:cf1:t31',extra={'usd_musica':musica})
+    assert gastos.costos_sesiones('acme')=={'cf1':{'usd':.82,'usd_musica':.02}}
+    assert gastos.costos_sesiones('otro')=={'cf1':{'usd':20,'usd_musica':2}}
+
+
+def test_revision_fichas_dos_proyectos(base_temporal):
+    for c,usd,ref in [('acme',3,'voz_propia:disenar:t12'),('otro',6,'voz_propia:disenar:t13')]:
+        gastos.registrar_seguro(c,'voz_propia',usd,ref,extra={'ficha':{'hash':c,'extra':{'voice_id':c}}})
+    fila,=gastos.fichas_pendientes('acme','voz_propia')
+    assert fila['usd']==3 and fila['referencia'].endswith(':t12')
+    fila,=gastos.fichas_pendientes('otro','voz_propia')
+    assert fila['usd']==6 and fila['referencia'].endswith(':t13')
