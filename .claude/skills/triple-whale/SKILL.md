@@ -220,8 +220,10 @@ production. It must work for ANY ad, not only Creatv's: in happyflops only 4 pie
   %-decoded and with one leading slash: `l.facebook.com/l.php?u=…` would send anywhere; the last three and `//l.php`
   slipped through until the final review, B8). `conectores.url.descargar_archivo` streams to `ruta + ".part"` and
   renames on success (a cut download never destroys a good file), 60 MB cap, `tiempo_max` = 120 s for the whole
-  download (B5: `timeout` is per read, so a server that drips a chunk every few seconds held the worker), `video/*`
-  only, SSRF check on every redirect. ffmpeg opens the downloaded file only if ffprobe says mp4/mov
+  download, enforced by a watchdog `threading.Timer` that shuts the socket down (B5: `timeout` is per read, and a
+  check «between chunks» never runs while `iter_content(65536)` waits for its 64 KB, so a server dripping 1 byte every
+  0.25 s held the worker 12 s with `tiempo_max=2`; proved against a real slow-drip `http.server`,
+  `tests/test_conectores_descarga_lenta.py`), `video/*` only, SSRF check on every redirect. ffmpeg opens the downloaded file only if ffprobe says mp4/mov
   (`mejorar.es_mp4`, B4: it is a third-party file and an odd demuxer must not get it); otherwise the thumbnail.
 - **«Cómo mejorarlo» (`triple_whale/mejorar.py`, task `tw_analizar_anuncio`).** Price first:
   `gastos.estimar("analisis_anuncio_tw", segundos=)` = tariff 0.08 + Whisper by the video's duration (30 s when
