@@ -29,6 +29,13 @@ def test_plataforma_de_url_rechaza_hosts_disfrazados(url):
     assert t.plataforma_de_url(url) is None
 
 
+def test_plataforma_de_url_rechaza_contrabarra_despues_del_host():
+    """La única URL que solo la guarda de «\\» rechaza (mutación, 2026-10-08): urlparse ve el host exacto de la
+    tienda, sin usuario ni puerto. Inofensiva hoy (el navegador va a la misma tienda), pero la guarda queda fijada."""
+    assert t.plataforma_de_url("https://apps.apple.com/co/app\\x/id1") is None
+    assert t.plataforma_de_url("https://play.google.com/store/apps/details?id=com.x\\y") is None
+
+
 def test_plataforma_de_url_acepta_host_en_mayusculas():
     assert t.plataforma_de_url("https://APPS.APPLE.COM/co/app/x/id1") == "ios"
 

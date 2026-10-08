@@ -17,6 +17,11 @@ def plataforma_de_url(url):
     # «usuario@» delante, `https://evil.com\@apps.apple.com/x` le parece a
     # urlparse de la App Store y el navegador va a evil.com. Se rechaza todo
     # lo que no sea exactamente «https://<host de la tienda>/…».
+    # Contra el host disfrazado, la guarda de «\» es redundante (mutación,
+    # 2026-10-08): esos casos ya los frenan la de usuario/puerto y la del host
+    # exacto. Lo único que solo ella rechaza es un «\» después del host
+    # (`https://apps.apple.com/co/app\x/id1`), que el navegador lee como «/»
+    # en la misma tienda; se deja como defensa de más y la prueba lo fija.
     if "\\" in url or any(c.isspace() or ord(c) < 32 or ord(c) == 127 for c in url):
         return None
     try:
