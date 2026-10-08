@@ -3,7 +3,10 @@
    Tablero). Solo lectura salvo tres formularios: sincronizar (gratis), evaluar
    con IA (precio a la vista y confirmación) y, en una evaluación lista, llevar
    una idea a Crear o guardar un anuncio en Referentes (nada se genera). Sin
-   <script>: el JS está en _tab_triple_whale.html. #}
+   <script>: el JS está en _tab_triple_whale.html. Varias tiendas (spec
+   2026-10-08 §6.2): con 2+ tiendas, selector «Tienda» (`data-tw-param="tienda"`),
+   «Por tienda» en «Todas», la nota de cuenta compartida si `gasto_duplicado` y
+   una barra `data-poll-job` por copia en curso. #}
 {% if not tw.conectado %}
 <p class="vacio">{{ _('Triple Whale ya no está conectado en este proyecto.') }}</p>
 {% else %}
@@ -13,8 +16,17 @@
 {% set cuenta = ev.cuenta %}
 {% set clases_veredicto = {"ganador": "tag-en-uso", "prometedor": "tag-en-curso", "en_prueba": "", "perdedor": "tag-descartado", "sin_datos": "tag-advertencia"} %}
 
+{% set actual = tw.tienda_actual %}
 <div class="tw-barra">
   <div class="tw-controles">
+    {% if tw.varias_tiendas %}
+    <label class="campo-label">{{ _('Tienda') }}
+      <select data-tw-param="tienda">
+        <option value="" {% if not actual %}selected{% endif %}>{{ _('Todas las tiendas (%(n)s)', n=tw.tiendas | length) }}</option>
+        {% for t in tw.tiendas %}<option value="{{ t.id }}" {% if actual and actual.id == t.id %}selected{% endif %}>{% if t.pais %}{{ t.bandera }} {{ t.nombre }}{% else %}{{ t.dominio }}{% endif %}</option>{% endfor %}
+      </select>
+    </label>
+    {% endif %}
     <label class="campo-label">{{ _('Periodo') }}
       <select data-tw-param="dias">
         {% for d in tw.periodos %}<option value="{{ d }}" {% if d == tw.dias %}selected{% endif %}>{{ _('Últimos %(n)s días', n=d) }}</option>{% endfor %}
@@ -30,32 +42,35 @@
     {% endif %}
   </div>
   <div class="tw-sync">
-    <small>{{ c.dominio_tienda }} · {{ c.modelo_atribucion }} · {{ c.ventana_atribucion }} · {{ moneda }}</small>
-    <small>{% if c.ultima_sincronizacion %}{{ _('Última copia: %(fecha)s', fecha=c.ultima_sincronizacion | replace('T', ' ')) }}{% else %}{{ _('Todavía sin copia') }}{% endif %}</small>
+    <small>{% if actual %}{{ actual.dominio }} · {% endif %}{{ c.modelo_atribucion }} · {{ c.ventana_atribucion }} · {{ moneda }}</small>
+    <small>{% if tw.ultima_copia %}{{ _('Última copia: %(fecha)s', fecha=tw.ultima_copia | replace('T', ' ')) }}{% else %}{{ _('Todavía sin copia') }}{% endif %}</small>
     <form method="post" action="{{ url_for('triple_whale.sincronizar', cliente=cliente) }}" class="inline">
-      <button type="submit" class="btn-sm" {% if tw.job_sync %}disabled{% endif %}>{{ _('Sincronizar ahora') }}</button>
+      {% if actual and tw.varias_tiendas %}<input type="hidden" name="tienda_id" value="{{ actual.id }}">{% endif %}
+      <button type="submit" class="btn-sm" {% if tw.sync_ocupado %}disabled{% endif %}>{{ _('Sincronizar ahora') }}</button>
     </form>
     <a class="btn-sm" href="#tw-ajustes" data-tw-ajustes>{{ _('Ajustes') }}</a>
   </div>
 </div>
 
-{% if tw.job_sync %}
+{% for j in tw.jobs_sync %}
 <div class="tw-progreso">
-  <div class="barra-progreso" id="tw-sync-{{ cliente }}" data-poll-job="{{ tw.job_sync }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
-  <div class="progreso-texto">{{ _('Trayendo métricas de Triple Whale…') }}</div>
+  <div class="barra-progreso" id="tw-sync-{{ cliente }}-{{ j.tienda.id }}" data-poll-job="{{ j.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
+  <div class="progreso-texto">{% if tw.varias_tiendas %}{{ _('Trayendo métricas de %(tienda)s…', tienda=j.tienda.nombre) }}{% else %}{{ _('Trayendo métricas de Triple Whale…') }}{% endif %}</div>
 </div>
+{% endfor %}
+{% for t in tw.en_alcance %}
+{% if t.estado == 'error' and t.error %}
+<p class="tag-error">{% if tw.varias_tiendas %}{{ _('La última copia de %(tienda)s falló: %(error)s', tienda=t.nombre, error=t.error) }}{% else %}{{ _('La última copia falló: %(error)s', error=t.error) }}{% endif %}</p>
 {% endif %}
-{% if c.estado == 'error' and c.error %}
-<p class="tag-error">{{ _('La última copia falló: %(error)s', error=c.error) }}</p>
-{% endif %}
-{% set resumen_sync = (c.extra or {}).get('ultimo_resumen') or {} %}
+{% set resumen_sync = (t.extra or {}).get('ultimo_resumen') or {} %}
 {% if resumen_sync.get('fallos') %}
-<p class="tag-advertencia tw-aviso">{{ _('Triple Whale no aceptó la consulta de: %(partes)s. El resto de las métricas sí llegó.', partes=resumen_sync.fallos.keys() | join(', ')) }}</p>
+<p class="tag-advertencia tw-aviso">{% if tw.varias_tiendas %}{{ _('Triple Whale no aceptó la consulta de %(partes)s en %(tienda)s. El resto de las métricas sí llegó.', partes=resumen_sync.fallos.keys() | join(', '), tienda=t.nombre) }}{% else %}{{ _('Triple Whale no aceptó la consulta de: %(partes)s. El resto de las métricas sí llegó.', partes=resumen_sync.fallos.keys() | join(', ')) }}{% endif %}</p>
 {% endif %}
+{% endfor %}
 
 {% if tw.rango.filas == 0 %}
 <div class="estado-vacio">
-  {% if tw.job_sync %}
+  {% if tw.jobs_sync %}
   <p class="estado-vacio-titulo">{{ _('Trayendo los últimos 90 días…') }}</p>
   <p class="estado-vacio-texto">{{ _('La primera copia tarda unos minutos. Cuando termine, esta pestaña se recarga sola con la evaluación de cada anuncio.') }}</p>
   {% else %}
@@ -79,6 +94,33 @@
     <div class="kpi-tile"><span>{{ _('Clientes nuevos') }}</span><strong>{{ t.pct_nuevos | tw_pct(0) }}</strong><small>{{ _('de los pedidos') }}</small></div>
   </div>
 </section>
+{% endif %}
+
+{# ---------- por tienda (solo «Todas» con 2+ tiendas) ---------- #}
+{% if tw.por_tienda %}
+<section class="tb-seccion">
+  <div class="tb-seccion-cab"><h3>{{ _('Por tienda') }}</h3><small class="vacio">{{ _('Cada país contra sus %(n)s días anteriores: dónde conviene poner el presupuesto.', n=tw.dias) }}</small></div>
+  <div class="tw-tabla-scroll">
+    <table class="tw-tabla tw-por-tienda">
+      <thead><tr><th>{{ _('Tienda') }}</th><th>{{ _('Ingresos') }}</th><th>{{ _('Pedidos') }}</th><th>{{ _('Gasto en publicidad') }}</th><th>MER</th><th>{{ _('vs. periodo anterior') }}</th></tr></thead>
+      <tbody>
+        {% for f in tw.por_tienda %}
+        <tr>
+          <td class="tw-nombre"><strong>{% if f.tienda.pais %}{{ f.tienda.bandera }} {{ f.tienda.nombre }}{% else %}{{ f.tienda.dominio }}{% endif %}</strong>{% if f.tienda.pais %}<small>{{ f.tienda.dominio }}</small>{% endif %}</td>
+          <td>{{ f.actual.ingresos | dinero(moneda) }}</td>
+          <td>{{ f.actual.pedidos | tw_num }}</td>
+          <td>{{ f.actual.gasto | dinero(moneda) }}</td>
+          <td>{% if f.mer %}{{ f.mer | roas }}×{% else %}—{% endif %}</td>
+          <td>{{ f.variacion_ingresos | tw_var or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+{% if tw.gasto_duplicado > 0 %}
+<p class="tag-advertencia tw-aviso">{{ _('Estas tiendas comparten cuenta publicitaria: el gasto de cada tienda incluye anuncios de los otros países. «Todas» lo cuenta una sola vez.') }}{% if actual %} {{ _('Aquí el ROAS de cada anuncio solo cuenta las ventas de esta tienda.') }}{% endif %}</p>
 {% endif %}
 
 {# ---------- los anuncios ---------- #}
@@ -214,6 +256,7 @@
         data-confirmar="{{ _('¿Evaluar %(n)s anuncio(s) con IA? Costo: %(precio)s', n=tw.muestra_ia | length, precio=precio) }}">
     <input type="hidden" name="dias" value="{{ tw.dias }}">
     <input type="hidden" name="canal" value="{{ tw.canal or '' }}">
+    <input type="hidden" name="tienda" value="{{ actual.id if actual else '' }}">
     <button type="submit" class="btn-generar btn-sm">{{ _('Evaluar %(n)s anuncio(s) con IA · %(precio)s', n=tw.muestra_ia | length, precio=precio) }}</button>
   </form>
   {% else %}
@@ -222,7 +265,7 @@
 
   {% set fallida = (tw.evaluaciones | selectattr('estado', 'equalto', 'error') | first) if tw.evaluaciones else none %}
   {% if fallida and (not tw.ultima_lista or fallida.id > tw.ultima_lista.id) %}
-  <p class="tag-error">{{ _('La última evaluación falló: %(error)s', error=fallida.error or '—') }}</p>
+  <p class="tag-error">{% if fallida.alcance %}{{ _('La última evaluación (%(alcance)s) falló: %(error)s', alcance=fallida.alcance, error=fallida.error or '—') }}{% else %}{{ _('La última evaluación falló: %(error)s', error=fallida.error or '—') }}{% endif %}</p>
   {% endif %}
 
   {% set e = tw.ultima_lista %}
@@ -230,7 +273,7 @@
   {% set r = e.resultado %}
   {% set por_ref = {} %}{% for a in e.anuncios %}{% set _x = por_ref.update({a.ref: a}) %}{% endfor %}
   <div class="tw-eval">
-    <p class="tw-eval-cab"><small>{{ _('Evaluación del %(desde)s al %(hasta)s · %(precio)s', desde=e.desde, hasta=e.hasta, precio=e.usd | usd) }}</small></p>
+    <p class="tw-eval-cab"><small>{% if e.alcance %}{{ _('Evaluación de %(alcance)s del %(desde)s al %(hasta)s · %(precio)s', alcance=e.alcance, desde=e.desde, hasta=e.hasta, precio=e.usd | usd) }}{% else %}{{ _('Evaluación del %(desde)s al %(hasta)s · %(precio)s', desde=e.desde, hasta=e.hasta, precio=e.usd | usd) }}{% endif %}</small></p>
     {% if r.resumen %}<p class="tw-eval-resumen">{{ r.resumen }}</p>{% endif %}
     <div class="tw-patrones">
       {% for titulo, lista in [(_('Lo que hace ganar'), r.patrones_ganadores), (_('Lo que hace perder'), r.patrones_perdedores)] %}

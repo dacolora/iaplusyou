@@ -2360,6 +2360,9 @@ msgstr "Approve or reject each one from the sprint; the approved ones go into th
 msgid "Apruebas una cifra y el sistema busca productos del nicho en las tiendas del país, elige los que son del nicho, trae sus reseñas y arma los avatares. Nadie marca nada a mano."
 msgstr "You approve a figure and the system searches for niche products in the country's stores, picks out the ones that are really in the niche, pulls their reviews and builds the avatars. Nobody marks anything by hand."
 
+msgid "Aquí el ROAS de cada anuncio solo cuenta las ventas de esta tienda."
+msgstr "Here each ad's ROAS only counts this store's sales."
+
 msgid "Aquí están los videos, las imágenes, los audios, los textos y las transiciones para sumar a la edición."
 msgstr "Here are the videos, images, audio, texts and transitions to add to the edit."
 
@@ -2878,6 +2881,10 @@ msgstr "Every idea, script and caption follows Creatv's sales doctrine:"
 
 msgid "Cada marca necesita un nombre."
 msgstr "Each brand needs a name."
+
+#, python-format
+msgid "Cada país contra sus %(n)s días anteriores: dónde conviene poner el presupuesto."
+msgstr "Each country against its previous %(n)s days: where the budget pays off."
 
 #, python-format
 msgid "Cada país tiene su presupuesto diario. Además, el total se manda a Meta como tope de la campaña desde %(minimo)s, el mínimo que Meta acepta para un tope; con un total menor, el límite lo dan el presupuesto diario y la fecha de cierre."
@@ -6830,6 +6837,9 @@ msgstr "Burst"
 msgid "Estas reglas valen para todos los experimentos del proyecto; cada experimento puede cambiar una en su propio panel. «Sin umbral» apaga esa comparación."
 msgstr "These rules apply to every experiment in the project; each experiment can change one in its own panel. “No threshold” turns that comparison off."
 
+msgid "Estas tiendas comparten cuenta publicitaria: el gasto de cada tienda incluye anuncios de los otros países. «Todas» lo cuenta una sola vez."
+msgstr "These stores share an ad account: each store's spend includes ads from the other countries. “All” counts it only once."
+
 msgid "Este activo ya no existe"
 msgstr "This item no longer exists"
 
@@ -7037,6 +7047,10 @@ msgstr "Price tag"
 
 msgid "Evaluación con IA"
 msgstr "AI evaluation"
+
+#, python-format
+msgid "Evaluación de %(alcance)s del %(desde)s al %(hasta)s · %(precio)s"
+msgstr "Evaluation of %(alcance)s from %(desde)s to %(hasta)s · %(precio)s"
 
 msgid "Evaluación de anuncios (IA)"
 msgstr "Ad evaluation (AI)"
@@ -9186,8 +9200,16 @@ msgid "La voz se ajusta sola a cada país: puedes moverla o borrarla, pero no re
 msgstr "The voice adjusts itself to each country: you can move it or delete it, but not trim it."
 
 #, python-format
+msgid "La última copia de %(tienda)s falló: %(error)s"
+msgstr "The last copy of %(tienda)s failed: %(error)s"
+
+#, python-format
 msgid "La última copia falló: %(error)s"
 msgstr "The last copy failed: %(error)s"
+
+#, python-format
+msgid "La última evaluación (%(alcance)s) falló: %(error)s"
+msgstr "The last evaluation (%(alcance)s) failed: %(error)s"
 
 #, python-format
 msgid "La última evaluación falló: %(error)s"
@@ -11994,6 +12016,9 @@ msgstr "To review"
 msgid "Por segundo de video y por imagen: el precio se muestra antes de cada generación."
 msgstr "Per second of video and per image: the price is shown before each generation."
 
+msgid "Por tienda"
+msgstr "By store"
+
 msgid "Por tipo"
 msgstr "By type"
 
@@ -14689,6 +14714,13 @@ msgstr "All the metrics of your ads and your store according to Triple Whale, an
 msgid "Todas las piezas"
 msgstr "All pieces"
 
+msgid "Todas las tiendas"
+msgstr "All stores"
+
+#, python-format
+msgid "Todas las tiendas (%(n)s)"
+msgstr "All stores (%(n)s)"
+
 msgid "Todavía no consultamos el Pixel de esta cuenta. Comprobarlo tarda unos segundos y también actualiza la atribución sugerida al crear experimentos."
 msgstr "We haven't checked this account's Pixel yet. Checking it takes a few seconds and also updates the suggested attribution when creating experiments."
 
@@ -15088,6 +15120,10 @@ msgstr "Pulling the last 90 days…"
 msgid "Trayendo métricas"
 msgstr "Fetching metrics"
 
+#, python-format
+msgid "Trayendo métricas de %(tienda)s…"
+msgstr "Pulling metrics for %(tienda)s…"
+
 msgid "Trayendo métricas de Triple Whale…"
 msgstr "Pulling Triple Whale metrics…"
 
@@ -15169,6 +15205,10 @@ msgstr "Triple Whale connected. We're pulling the last 90 days of metrics; check
 
 msgid "Triple Whale desconectado. Se borraron las métricas copiadas; las evaluaciones con IA se conservan."
 msgstr "Triple Whale disconnected. The copied metrics were deleted; AI evaluations are kept."
+
+#, python-format
+msgid "Triple Whale no aceptó la consulta de %(partes)s en %(tienda)s. El resto de las métricas sí llegó."
+msgstr "Triple Whale didn't accept the query for %(partes)s in %(tienda)s. The rest of the metrics did arrive."
 
 #, python-format
 msgid "Triple Whale no aceptó la consulta de: %(partes)s. El resto de las métricas sí llegó."
