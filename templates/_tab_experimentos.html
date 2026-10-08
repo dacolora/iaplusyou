@@ -4,11 +4,35 @@
 <div class="panel-cabecera cr-cabecera">
   <div><p class="cr-sobretitulo">{{ _('Centro de resultados') }}</p><h2>{{ _('Experimentos') }}</h2>
     <p class="panel-cabecera-desc">{{ _('De cada prueba a la siguiente decisión: resultados, piezas y aprendizajes de tu proyecto.') }}</p></div>
+  {% if not exp_sin_meta %}
   <div class="panel-cabecera-acciones">
-    <a class="btn-generar" href="{{ url_for('exp_nuevo', cliente=cliente) }}">{{ _('+ Nuevo experimento') }}</a>
+    {% if meta_conectado %}<a class="btn-generar" href="{{ url_for('exp_nuevo', cliente=cliente) }}">{{ _('+ Nuevo experimento') }}</a>{% endif %}
     <a class="btn-sm" href="{{ url_for('tab_descargar_csv', cliente=cliente) }}" download>{{ _('Descargar CSV del mes') }}</a>
   </div>
+  {% endif %}
 </div>
+{# Sin Meta conectado (2026-10-08, pedido de Daniel): sin historial, la pestaña es solo esta tarjeta —ni la tabla vacía
+   ni una galería que deja marcar piezas que no se pueden lanzar—; con historial se ve lo ya probado y un aviso. El
+   enlace abre Configuración › Conexiones › Meta sin recargar (data-ir-tab + data-ancla, manejado en cliente.html). #}
+{% if exp_sin_meta %}
+<div class="estado-vacio exp-sin-meta" id="exp-sin-meta">
+  {% if capacidades_meta.estado == "roto" %}
+  <p class="estado-vacio-titulo">{{ _('La conexión con Meta se cortó') }}</p>
+  <p class="estado-vacio-texto">{{ _('Vuelve a conectarla para probar tus piezas como anuncios.') }}</p>
+  {% else %}
+  <p class="estado-vacio-titulo">{{ _('Conecta Meta para probar tus piezas') }}</p>
+  <p class="estado-vacio-texto">{{ _('Aquí tus piezas salen como anuncios en Meta, se mide cuál funciona y el motor te dice cuál escalar y cuál pausar. Sin una cuenta de Meta conectada todavía no hay nada que probar ni que medir.') }}</p>
+  {% endif %}
+  {% if triple_whale_conectado %}
+  <p class="estado-vacio-texto">{{ _('Triple Whale ya está conectado: cuando tus anuncios corran en Meta, aquí verás las ventas que trae cada uno. Mientras tanto, los números de tu tienda están en la pestaña') }} <a href="#triplewhale" data-ir-tab="triplewhale">Triple Whale</a>.</p>
+  {% endif %}
+  <a class="btn-generar" href="#settings" data-ir-tab="settings" data-ancla="config-meta">{{ _('Conectar Meta') }}</a>
+</div>
+{% else %}
+{% if not meta_conectado %}
+<p class="tag-error exp-aviso-meta">{{ _('La conexión con Meta se cortó: ves lo que ya probaste, pero para lanzar algo nuevo hay que reconectarla.') if capacidades_meta.estado == "roto" else _('Meta no está conectado: ves lo que ya probaste, pero para lanzar algo nuevo hay que conectarlo.') }}
+  <a href="#settings" data-ir-tab="settings" data-ancla="config-meta">{{ _('Ir a Conexiones →') }}</a></p>
+{% endif %}
 {# «Cómo decide el motor» de TODO el proyecto (antes «Reglas por defecto» en Configuración; spec §4.7): valen para todos los
    experimentos; cada uno puede sobreescribir una en su gestión. Va en el armazón y no en el fragmento para que el
    enlace de Configuración (`#reglas-motor`) la encuentre sin esperar al fetch. Mismo formulario y misma ruta
@@ -23,7 +47,8 @@
     <button class="btn-guardar btn-sm" type="submit">{{ _('Guardar reglas del motor') }}</button>
   </form>
 </details>
-<div id="cr-resultados" class="cr-resultados" data-url="{{ url_for('exp_resultados', cliente=cliente) }}" data-url-nuevo="{{ url_for('exp_nuevo', cliente=cliente) }}" aria-live="polite"><p class="cr-cargando">{{ _('Cargando resultados…') }}</p></div>
+<div id="cr-resultados" class="cr-resultados" data-url="{{ url_for('exp_resultados', cliente=cliente) }}" {% if meta_conectado %}data-url-nuevo="{{ url_for('exp_nuevo', cliente=cliente) }}"{% endif %} aria-live="polite"><p class="cr-cargando">{{ _('Cargando resultados…') }}</p></div>
 <dialog id="cr-panel" class="cr-panel" aria-label="{{ _('Detalle de la pieza') }}"><button type="button" class="cr-panel-cerrar" aria-label="{{ _('Cerrar') }}">×</button><div class="cr-panel-cuerpo"></div></dialog>
 <script type="application/json" id="cr-textos">{{ {'cargando': _('Cargando resultados…'), 'cargandoPieza': _('Cargando la pieza…'), 'error': _('No se pudieron cargar los resultados'), 'errorPieza': _('No se pudo cargar la pieza'), 'piezaNoExiste': _('Esta pieza ya no está en el proyecto'), 'reintentar': _('Reintentar'), 'gasto': _('Gasto'), 'ctr': _('CTR'), 'roas': _('ROAS'), 'cpc': _('CPC'), 'cpm': _('CPM'), 'frecuencia': _('Frecuencia'), 'gancho': _('Gancho'), 'promedio': _('Promedio del experimento'), 'sinDatos': _('Sin datos'), 'cerrar': _('Cerrar')}|tojson }}</script>
 <script src="{{ url_for('static', filename='exp_resultados.js') }}" defer></script>
+{% endif %}

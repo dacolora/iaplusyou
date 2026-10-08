@@ -187,7 +187,9 @@ def test_render_tienda_meli_configurado(app, monkeypatch):
     assert "s-PRUEBA" not in html
 
 
-def test_orden_de_secciones_y_enlace_a_reglas(app):
+def test_orden_de_secciones_y_enlace_a_reglas(app, monkeypatch):
+    # Con Meta: sin Meta ni historial Experimentos no pinta las reglas y Configuración no enlaza a ellas (2026-10-08).
+    monkeypatch.setattr(app["dashboard"].meta_conexion, "estado", lambda c: {"estado": "conectado", "verificado": True, "detalle": {}})
     cfg = _config(app["c"].get("/cliente/acme").data.decode())
     # Orden de los apartados (2026-09-26): Puesta a punto (admin) → Conexiones
     # (tienda, Pixel) → Marca (nombre, logos) → Generación (modelos) → Cuenta y

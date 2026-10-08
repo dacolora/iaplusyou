@@ -2141,6 +2141,9 @@ def ver_cliente(cliente):
     # (El hotfix e8d433a del 2026-10-03 las devolvía mientras la pestaña vieja pintaba la galería; E2 la reemplaza.)
     ctx_exp = _contexto_motor_experimentos(cliente)
     ctx_meta = _contexto_meta(cliente)
+    # Sin Meta y sin nada probado, la pestaña es solo «Conecta Meta» (Daniel, 2026-10-08: la tabla vacía y una galería
+    # que dejaba marcar piezas sin poder lanzarlas confundían). Con Meta conectado ni se consulta.
+    ctx_exp["exp_sin_meta"] = not ctx_meta["meta_conectado"] and not experimentos.hay_historial(cliente)
     tiendas_cliente = tiendas.listar(cliente)
     triple_whale_conectado = triple_whale_tiendas.obtener(cliente)
     # Las tarjetas de tiendas (spec 2026-10-08 §6.2): país y bandera en el idioma de quien mira.
@@ -5333,7 +5336,10 @@ def exp_pieza(cliente, ep_id):
 def exp_nuevo(cliente):
     """«Nuevo experimento» en su propia ruta (E2): la galería de piezas, la barra y los tres pasos que hasta ahora
     vivían arriba de la lista de experimentos. Misma URL que el POST de `exp_crear`, otro método. Llega con
-    `?piezas=1,2` (las marca), `?exp_nombre=&exp_destino=` (Catálogo) o sin nada."""
+    `?piezas=1,2` (las marca), `?exp_nombre=&exp_destino=` (Catálogo) o sin nada. Sin Meta conectado no hay galería:
+    vuelve a la pestaña, que dice qué falta (2026-10-08: dejaba marcar piezas que después no se podían lanzar)."""
+    if meta_conexion.estado(cliente).get("estado") != "conectado":
+        return _volver_exp(cliente)
     ctx = _contexto_experimentos(cliente, con_elegibles=True, con_organico=False)
     return render_template("exp_nuevo.html", cliente=cliente, nombre_proyecto=proyectos.nombre_visible(cliente),
                            paises_fe=fe_tipos.PAISES, **ctx, **_contexto_meta(cliente, ctx["experimentos"]))
@@ -5346,7 +5352,7 @@ def exp_crear(cliente):
     lo pide."""
     volver = _volver_exp(cliente)
     if meta_conexion.estado(cliente).get("estado") != "conectado":
-        flash(gettext("Conecta Meta en Experimentos antes de crear un experimento."), "error")
+        flash(gettext("Conecta Meta en Configuración › Conexiones antes de crear un experimento."), "error")
         return volver
     moneda = (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
     nombre = (request.form.get("nombre") or "").strip()[:200]
@@ -5480,8 +5486,8 @@ def exp_probar(cliente):
     marcadas = ",".join(x for x in request.form.getlist("piezas") if x.isascii() and x.isdigit())
     volver = redirect(url_for("exp_nuevo", cliente=cliente, **({"piezas": marcadas} if marcadas else {})))
     if meta_conexion.estado(cliente).get("estado") != "conectado":
-        flash(gettext("Conecta Meta en Experimentos antes de probar piezas."), "error")
-        return volver
+        flash(gettext("Conecta Meta en Configuración › Conexiones antes de probar piezas."), "error")
+        return _volver_exp(cliente)   # «Nuevo experimento» sin Meta ya no pinta la galería
     moneda = (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
     objetivo = request.form.get("objetivo") or ""
     # Sin repetidos y en el orden en que llegan: un POST armado a mano con paises=CO&paises=CO creaba dos

@@ -141,14 +141,14 @@ def test_nuevo_experimento_tiene_su_ruta_con_la_galeria_y_los_tres_pasos(app, ba
     assert ex.cargar("acme") == []
 
 
-def test_nuevo_experimento_sin_meta_ofrece_conectar_y_no_deja_probar(app, monkeypatch, base_temporal):
+def test_nuevo_experimento_sin_meta_vuelve_a_la_pestana(app, monkeypatch, base_temporal):
+    """Desde 2026-10-08 sin Meta no hay galería (dejaba marcar piezas que no se podían lanzar): la pestaña dice qué
+    falta. El resto del caso está en tests/test_experimentos_sin_meta.py."""
     _pieza(base_temporal)
     monkeypatch.setattr(app["dashboard"].meta_conexion, "estado",
                         lambda c: {"estado": "sin_conectar", "verificado": False, "detalle": {}})
-    html = app["c"].get("/cliente/acme/experimentos/nuevo").get_data(as_text=True)
-    assert 'id="exp-galeria"' in html and "Conecta Meta arriba para probar" in html
-    assert "¿Cómo quieres conectar Meta?" not in html and "Conéctalo en Configuración › Conexiones" in html
-    assert 'action="/cliente/acme/experimentos/probar"' not in html
+    r = app["c"].get("/cliente/acme/experimentos/nuevo")
+    assert r.status_code == 302 and r.headers["Location"].endswith("/cliente/acme#experimentos")
 
 
 def test_nuevo_experimento_prellena_nombre_y_destino_del_catalogo(app, base_temporal):

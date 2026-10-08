@@ -110,7 +110,7 @@
 <div class="estado-vacio">
   <p class="estado-vacio-titulo">{{ _('Todavía no hay experimentos') }}</p>
   <p class="estado-vacio-texto">{{ _('Elige piezas, países y un total: el experimento se lanza en pausa y nada gasta hasta que lo actives.') }}</p>
-  <a class="btn-generar" href="{{ url_for('exp_nuevo', cliente=cliente) }}">{{ _('+ Nuevo experimento') }}</a>
+  {% if capacidades_meta.estado == "conectado" %}<a class="btn-generar" href="{{ url_for('exp_nuevo', cliente=cliente) }}">{{ _('+ Nuevo experimento') }}</a>{% endif %}
 </div>
 {% elif not r.piezas %}
 <div class="estado-vacio">
@@ -242,7 +242,7 @@
 
 {# ---------- 07 Experimentos ---------- #}
 <section class="cr-seccion" aria-labelledby="cr-s07">
-  {% call cabecera('07', _('Experimentos'), 'cr-s07') %}<a class="cr-cab-nota" href="{{ url_for('exp_nuevo', cliente=cliente) }}">{{ _('+ Nuevo experimento') }}</a>{% endcall %}
+  {% call cabecera('07', _('Experimentos'), 'cr-s07') %}{% if capacidades_meta.estado == "conectado" %}<a class="cr-cab-nota" href="{{ url_for('exp_nuevo', cliente=cliente) }}">{{ _('+ Nuevo experimento') }}</a>{% endif %}{% endcall %}
   <div class="cr-experimentos">
     {% for e in r.experimentos %}
     <a data-cr-filtro href="#experimentos?{{ consulta('exp', e.id) }}" class="cr-tarjeta cr-experimento cr-estado-{{ e.estado }}{% if e.seleccionado %} cr-seleccionado{% endif %}"{% if e.seleccionado %} aria-current="true"{% endif %}>
