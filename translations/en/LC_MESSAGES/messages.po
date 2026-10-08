@@ -2112,7 +2112,7 @@ msgstr "Love and Friendship"
 
 #, python-format
 msgid "Analizado en Triple Whale: «%(nombre)s»"
-msgstr "Analyzed in Triple Whale: «%(nombre)s»"
+msgstr "Analyzed in Triple Whale: “%(nombre)s”"
 
 msgid "Analizando con Claude"
 msgstr "Analyzing with Claude"
@@ -7747,7 +7747,7 @@ msgstr "Won in %(pais)s: %(quien)s"
 
 #, python-format
 msgid "Ganó en Triple Whale: «%(nombre)s»"
-msgstr "Won in Triple Whale: «%(nombre)s»"
+msgstr "Won in Triple Whale: “%(nombre)s”"
 
 #, python-format
 msgid "Gastado %(gastado)s de %(aprobado)s aprobados"
@@ -11956,7 +11956,7 @@ msgstr "Lost in %(pais)s: %(quien)s"
 
 #, python-format
 msgid "Perdió en Triple Whale: «%(nombre)s»"
-msgstr "Lost in Triple Whale: «%(nombre)s»"
+msgstr "Lost in Triple Whale: “%(nombre)s”"
 
 msgid "Periodo"
 msgstr "Period"
