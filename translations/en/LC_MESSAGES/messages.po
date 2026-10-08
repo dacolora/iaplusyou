@@ -733,10 +733,6 @@ msgid "%(n)s s"
 msgstr "%(n)s s"
 
 #, python-format
-msgid "%(n)s segundos"
-msgstr "%(n)s seconds"
-
-#, python-format
 msgid "%(n)s sin clasificar"
 msgstr "%(n)s unclassified"
 
@@ -1015,6 +1011,12 @@ msgid "%(num)d llamada del plan de Atria"
 msgid_plural "%(num)d llamadas del plan de Atria"
 msgstr[0] "%(num)d call from the Atria plan"
 msgstr[1] "%(num)d calls from the Atria plan"
+
+#, python-format
+msgid "%(num)d minuto"
+msgid_plural "%(num)d minutos"
+msgstr[0] "%(num)d minute"
+msgstr[1] "%(num)d minutes"
 
 #, python-format
 msgid "%(num)d petición"
@@ -9225,10 +9227,6 @@ msgstr "The stage must be TOF, MOF or BOF."
 
 msgid "La evidencia no se edita a mano."
 msgstr "Evidence can't be edited by hand."
-
-#, python-format
-msgid "La familia del referente (%(familia)s) no coincide con la categoría del producto (%(categoria)s). Revisa si sirve para tu producto; puedes continuar."
-msgstr "The reference family (%(familia)s) does not match the product category (%(categoria)s). Check whether it works for your product; you can continue."
 
 msgid "La familia necesita un nombre."
 msgstr "The family needs a name."

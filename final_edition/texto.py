@@ -63,7 +63,7 @@ def generar_overlays(guion, palabras, marca, carpeta, ancho=1080, alto=1920):
     marca = marca or {}
     from final_edition.borrador import color_marca
     color = color_marca(marca.get("color_acento"))
-    acento = _color(color or COLOR_ACENTO_DEFECTO)
+    acento = _color(color or "#FFD400")
     fondo_precio = acento if color else (0, 0, 0, 153)
     bloques = {b["rol"]: b for b in guion.get("bloques") or []}
     escala = ancho / 1080.0  # las medidas están pensadas para 1080x1920

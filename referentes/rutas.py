@@ -308,10 +308,10 @@ def recrear_form(cliente, rid):
             precio = gastos.estimar("imagen", modelo=flowplus_modelos.IMAGEN_POR_DEFECTO, n_referencias=n_refs)
         else:
             precios_video = _precios_video(cliente, n_refs)
-    fila = tiendas.por_activo(cliente).get(catalogo_productos.producto_base(producto["id"])) or {} if producto else {}
-    categoria = fila.get("categoria")
+    mostrar_dolor = bool(producto and r.get("dolor") and r["dolor"] not in ("ninguno-oferta", "ninguno-marca"))
     return render_template(
-        "_referente_recrear.html", aviso_familia=recrear.familias_distintas(r, categoria), categoria_producto=categoria, cliente=cliente, r=r, productos=productos, producto=producto, tipo=tipo,
+        "_referente_recrear.html", mostrar_dolor=mostrar_dolor, etiquetas_dolor=datos.ETIQUETAS_DOLOR,
+        cliente=cliente, r=datos.localizado(r, idiomas.activo()), productos=productos, producto=producto, tipo=tipo,
         formato=formato, formatos=formatos, formato_elegido=request.args.get("formato_elegido") == "1",
         lectura=ctx["lectura"], traer_textos=ctx["traer"], textos=ctx["textos"], prompt=ctx["prompt"],
         prompt_fiel=ctx["prompt_fiel"], prompt_animar=ctx["prompt_animar"], modos=_modos_de(request.args),

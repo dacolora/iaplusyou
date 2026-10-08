@@ -102,7 +102,7 @@ El context processor `_alertas_sidebar` pinta `alertas_ctx` en TODA página con 
 - PND-122/123/124 (decisiones delegadas, 2026-10-08): Crear excluye los errores vinculados a sprints vivos
   (archivado o completado vuelve a alertar en Crear). Cada cliente ve y toca solo su `cuenta:correo`, por `entidad`
   y usuario de sesión, después de la caché y antes de contar o mostrar descartadas; el admin ve todas. La poda
-  sigue mirando el cálculo completo. Los cuatro tipos de plata permanecen visibles pero `puede_descartar` es
+  sigue mirando el cálculo completo. Los seis tipos de plata (enmienda S1, 2026-10-08) permanecen visibles pero `puede_descartar` es
   falso para clientes: `descarte_solo_admin` protege descartar/restaurar con 403 incluso si la clave ya desapareció.
   Pruebas `test_rutas_alertas.py` y `test_alertas_fuentes.py`, con mutaciones locales; pantalla pendiente de Claude.
 
@@ -116,3 +116,5 @@ para ese proveedor porque también se usa en Crear › Cambiar producto con Nano
 flujo viejo. Textos por `N_` y catálogo; `estado()` entrega solo presencia, nunca el valor. Alertas de error y prompt
 listo enlazan a `#creativeflowplus?cf=<id>`; el modal carga el detalle aunque no haya tarjeta inicial. El catálogo y
 las pruebas de fuentes, llaves, ruta por proyecto y JS cubren el cambio; la vista real queda para Claude.
+
+S1/S4 (2026-10-08, enmienda de revisión lote 6B): ganador_sin_publicar y anuncios_rechazados también protegen descartar/restaurar con 403 para cliente. Si sanear/truncar el usuario cambia su nombre exacto, cuenta:correo agrega - y ocho hex del sha256 del nombre exacto; nombres ya limpios mantienen la clave. Esto evita que dos cuentas viejas compartan descartes. R7 prueba que un sprint vivo ajeno con el mismo cf_id no esconde el error de Crear.

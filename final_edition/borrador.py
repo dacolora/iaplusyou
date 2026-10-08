@@ -223,11 +223,6 @@ def armar_documento(guion, segmentos, clon, voces, musica, marca, formato, opcio
         "voz": {rol: {destino: bl.get("texto_voz") or "", idioma: bl.get("texto_voz") or ""} for rol, bl in bloques.items()},
         "precios": {},
     }
-    if color is None:
-        doc["subtitulos"].update(estilo_id="caja", resaltado="#FFFFFF")
-        for clip in clips_t:
-            clip["estilo"]["fondo"] = {**(clip["estilo"]["fondo"] or ESTILO_CTA["fondo"]),
-                                      "color": "#000000", "opacidad": 0.6}
     doc["marca"]["color"] = color
     doc["mezcla"] = {"preset": (opciones or {}).get("mezcla") or "equilibrada", "volumenes": (opciones or {}).get("volumenes")}
     doc["miniatura_ms"] = min(1000, total_ms // 2)      # como render._miniatura: min(1 s, mitad)

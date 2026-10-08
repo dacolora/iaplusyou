@@ -190,8 +190,10 @@ def test_pnd128_neutro_sin_marca_y_color_explicito_intacto(monkeypatch):
         assert f['color'] == (color or '#000000')
         assert f['opacidad'] == (1 if color else 0.6)
         assert t['t_precio']['estilo']['color'] == '#FFFFFF'
-        if color is None:
-            assert doc['subtitulos']['resaltado'] == '#FFFFFF'
+        assert t['t_hook']['estilo'] == b.ESTILO_HOOK
+        assert t['t_cta']['estilo'] == b.ESTILO_CTA
+        assert doc['subtitulos']['estilo_id'] == 'karaoke'
+        assert doc['subtitulos']['resaltado'] is None
     antiguo = b.armar_documento(GUION, SEGMENTOS, CLON, None, None, MARCA, '9:16', OPCIONES)
     assert d.validar(antiguo) == antiguo
     assert d.nuevo_video('9:16')['marca']['color'] is None

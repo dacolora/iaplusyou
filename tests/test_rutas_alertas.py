@@ -715,6 +715,34 @@ def test_pnd124_plata_visible_pero_solo_admin_descarta(app, monkeypatch, clave):
     assert cliente.post('/cliente/acme/alertas/descartar', data={'clave': clave, 'huella': a['huella']}).status_code == 403
 
 
+@pytest.mark.parametrize('clave', ['tablero:ganador_sin_publicar:1', 'tablero:anuncios_rechazados:1'])
+def test_s1_alertas_de_plata_adicionales_protegidas_en_servidor(app, monkeypatch, clave):
+    a = _alerta(app, clave)
+    _fijas(app, monkeypatch, [a])
+    cliente = _cliente_rol_cliente(app)
+    for accion in ('descartar', 'restaurar'):
+        assert cliente.post('/cliente/acme/alertas/' + accion,
+                            data={'clave': clave, 'huella': a['huella']}).status_code == 403
+    assert _descartes() == []
+
+
+def test_s4_cuentas_con_nombres_saneados_no_comparten_descartes(app, monkeypatch):
+    import re, usuarios
+    al = app['alertas']
+    monkeypatch.setattr(usuarios, 'por_cliente', lambda c: [
+        {'usuario': n, 'correo_verificado': False} for n in ['ana pérez', 'ana_p_rez', 'ana']])
+    todas = al._fuente_cuentas('acme', '2026-10-08T12:00:00')
+    claves = {a['entidad']: a['clave'] for a in todas}
+    assert len(set(claves.values())) == 3
+    assert claves['ana_p_rez'] == 'cuenta:correo:ana_p_rez'
+    assert claves['ana'] == 'cuenta:correo:ana'
+    assert all(re.fullmatch(al.CLAVE_VALIDA, c) for c in claves.values())
+    una = next(a for a in todas if a['entidad'] == 'ana pérez')
+    al.descartar('acme', una['clave'], una['huella'])
+    visibles = al.visibles('acme', rol='admin', calculadas=todas)['visibles']
+    assert {a['entidad'] for a in visibles} == {'ana_p_rez', 'ana'}
+
+
 def test_pnd123_cuentas_filtradas_al_leer_y_post_ajeno_403(app, monkeypatch):
     al, d = app['alertas'], app['dashboard']
     monkeypatch.setattr(d.usuarios, 'por_cliente', lambda c: [

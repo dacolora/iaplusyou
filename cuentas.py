@@ -43,6 +43,9 @@ VENCIMIENTO_S = {"verificacion": 24 * 3600, "restablecer": 3600}
 TOKEN_BYTES = 32
 LIMITE_MAXIMO = 5
 LIMITE_VENTANA_S = 3600
+LOGIN_MAX_POR_USUARIO = 10
+LOGIN_MAX_POR_IP = 30
+LOGIN_VENTANA_S = 15 * 60
 
 
 def _ahora():
@@ -304,7 +307,6 @@ def enviar_restablecer(usuario, correo, url_base, ip=None):
 # PND-076 (decisión 2026-10-08): solo datos del límite de login, nunca fichas/tokens.
 def _limite_login(clave):
     import ipaddress
-    import re
     if not clave.startswith('limite:login:'):
         return None
     objetivo = clave[len('limite:login:'):]
@@ -315,9 +317,9 @@ def _limite_login(clave):
         except ValueError:
             if ip != 'desconocida':
                 return None
-        return 'ip', ip, 30
-    if re.fullmatch(r'[a-z0-9._-]{3,40}', objetivo):
-        return 'usuario', objetivo, 10
+        return 'ip', ip, LOGIN_MAX_POR_IP
+    if objetivo.startswith('u:') and 0 < len(objetivo[2:]) <= 200:
+        return 'usuario', objetivo[2:], LOGIN_MAX_POR_USUARIO
     return None
 
 
@@ -330,11 +332,11 @@ def _bloqueo_login(clave, valor, ahora):
         marcas = sorted(float(t) for t in json.loads(valor))
     except (TypeError, ValueError):
         return None
-    marcas = [t for t in marcas if math.isfinite(t) and t > ahora - 900]
+    marcas = [t for t in marcas if math.isfinite(t) and t > ahora - LOGIN_VENTANA_S]
     if len(marcas) < tipo[2]:
         return None
     return {'clave': clave, 'tipo': tipo[0], 'objetivo': tipo[1], 'intentos': len(marcas),
-            'restantes_s': max(1, math.ceil(marcas[-tipo[2]] + 900 - ahora))}
+            'restantes_s': max(1, math.ceil(marcas[-tipo[2]] + LOGIN_VENTANA_S - ahora))}
 
 
 def bloqueos_login():

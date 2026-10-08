@@ -100,6 +100,28 @@ def test_periodicas_registradas():
         assert tipo in REGISTRO
 
 
+def test_s3_mantenimiento_diario_poda_limites_por_marca_mas_nueva(base_temporal, monkeypatch):
+    import json
+    from tareas import mantenimiento
+    db = base_temporal
+    ahora = 10 * 86400
+    monkeypatch.setattr(mantenimiento.time, 'time', lambda: ahora)
+    monkeypatch.setattr(mantenimiento.cola, 'limpiar_terminadas', lambda: 0)
+    filas = {'limite:viejo': json.dumps([ahora - 8 * 86400]),
+             'limite:reciente': json.dumps([0, ahora - 3600]),
+             'limite:frontera': json.dumps([ahora - 7 * 86400]),
+             'limite:ilegible': 'no es JSON', 'limite:objeto': '{}',
+             'limite:vacio': '[]', 'limite:infinito': '[NaN]',
+             'limite:fuera_de_rango': json.dumps([10 ** 400]),
+             'otro:viejo': json.dumps([0])}
+    with db.conectar() as con:
+        con.execute(db.kv.insert(), [{'clave': c, 'valor': v, 'actualizado_en': db.ahora()} for c, v in filas.items()])
+    mantenimiento.ejecutar_cola_limpiar({'payload': {}})
+    with db.conectar() as con:
+        quedan = dict(con.execute(db.kv.select().with_only_columns(db.kv.c.clave, db.kv.c.valor)).all())
+    assert quedan == {c: filas[c] for c in ['limite:reciente', 'limite:frontera', 'otro:viejo']}
+
+
 def test_publicador_baja_el_video_si_ya_no_esta_en_disco(tmp_path, monkeypatch):
     import publicador
     monkeypatch.setenv("CREATV_SALIDAS", str(tmp_path / "salidas"))

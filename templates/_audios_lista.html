@@ -33,5 +33,7 @@
 {% endif %}
 
 {% if audios_siguiente is defined and audios_siguiente is not none %}
+<div class="acciones">
 <button type="button" class="btn-sm au-mas" data-url="{{ url_for('au_lista', cliente=cliente, desde=audios_siguiente) }}">{{ _('Ver más') }}</button>
+</div>
 {% endif %}

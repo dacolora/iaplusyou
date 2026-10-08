@@ -455,6 +455,17 @@ def test_pnd095_lista_paginada_24_con_aislamiento_y_sin_scripts(app):
         assert c.get('/cliente/acme/audios/lista?desde=' + valor, headers=FETCH).status_code == 200
 
 
+def test_r8_ver_mas_usa_espaciado_comun(app):
+    from pathlib import Path
+    for n in range(25):
+        _audio(n=n)
+    html = app['c'].get('/cliente/acme/audios/lista', headers=FETCH).get_json()['html']
+    assert re.search(r'<div class="acciones">\s*<button[^>]*class="btn-sm au-mas"', html)
+    css = (Path(__file__).parents[1] / 'static/style.css').read_text()
+    regla = re.search(r'\.acciones\s*\{([^}]+)\}', css).group(1)
+    assert float(re.search(r'margin-top:\s*([\d.]+)rem', regla).group(1)) > 0
+
+
 def test_pnd095_ver_mas_agrega_tarjetas_en_node(app):
     import subprocess
     html = app['c'].get('/cliente/acme').get_data(as_text=True)

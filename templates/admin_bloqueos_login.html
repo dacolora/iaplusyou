@@ -17,7 +17,8 @@
       <tr>
         <td data-etiqueta="{{ _('Usuario o IP') }}">{{ _('IP') if b.tipo == 'ip' else _('Usuario') }}: {{ b.objetivo }}</td>
         <td data-etiqueta="{{ _('Intentos') }}">{{ b.intentos }}</td>
-        <td data-etiqueta="{{ _('Vence en') }}">{{ _('%(n)s segundos', n=b.restantes_s) }}</td>
+        {% set minutos = (b.restantes_s + 59) // 60 %}
+        <td data-etiqueta="{{ _('Vence en') }}" data-vence-minutos="{{ minutos }}">{{ ngettext('%(num)d minuto', '%(num)d minutos', minutos) }}</td>
         <td data-etiqueta="{{ _('Acción') }}"><form method="post" action="{{ url_for('admin_desbloquear_login') }}">
           <input type="hidden" name="clave" value="{{ b.clave }}">
           <button type="submit" class="btn-sm">{{ _('Desbloquear') }}</button>

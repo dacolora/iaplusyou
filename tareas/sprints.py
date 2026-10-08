@@ -316,7 +316,7 @@ def ejecutar_qa_pieza(tarea):
     i = datos.idea(cliente, cp_id)
     if not i or not i.get("cf_id"):
         return gettext("La pieza ya no existe.")
-    if i.get("revision") == "aprobada" or (i.get("qa") or {}).get("veredicto") == "pasa":
+    if (i.get("qa") or {}).get("veredicto") == "pasa" or (i.get("revision") == "aprobada" and i.get("qa") is not None):
         return gettext("Esa pieza ya pasó el QA o está aprobada.")
     cf_id = i["cf_id"]
     entry = creative_flow.cargar(cliente).get(cf_id)

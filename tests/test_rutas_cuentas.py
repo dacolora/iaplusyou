@@ -672,7 +672,7 @@ def test_pnd076_admin_desbloquea_con_bitacora_y_guardias(app, monkeypatch):
     monkeypatch.setattr(bitacora, 'LOG_FILE', str(app['tmp'] / 'bitacora.csv'))
     monkeypatch.setattr(cuentas.time, 'time', lambda: 1000)
     for _ in range(10):
-        cuentas.limite_ok('login:ana', maximo=10, ventana_s=900)
+        cuentas.limite_ok('login:u:ana', maximo=10, ventana_s=900)
     for _ in range(30):
         cuentas.limite_ok('login:ip:127.0.0.1', maximo=30, ventana_s=900)
     cuentas.limite_ok('recuperar:ana', maximo=5)
@@ -680,15 +680,15 @@ def test_pnd076_admin_desbloquea_con_bitacora_y_guardias(app, monkeypatch):
     ana = _ana(app)
     url, post = '/admin/cuentas/bloqueos', '/admin/cuentas/desbloquear'
     html = admin.get(url).get_data(as_text=True)
-    assert 'limite:login:ana' in html and '127.0.0.1' in html
+    assert 'limite:login:u:ana' in html and '127.0.0.1' in html
     assert 'password_hash' not in html and 'secreta123' not in html and 'recuperar:ana' not in html
     assert ana.get(url).status_code == 302
-    assert ana.post(post, data={'clave': 'limite:login:ana'}).status_code == 302
-    assert admin.post(post, data={'clave': 'limite:login:ana'}, headers={'Sec-Fetch-Site': 'cross-site'}).status_code == 403
-    assert not cuentas.limite_disponible('login:ana', maximo=10, ventana_s=900)
+    assert ana.post(post, data={'clave': 'limite:login:u:ana'}).status_code == 302
+    assert admin.post(post, data={'clave': 'limite:login:u:ana'}, headers={'Sec-Fetch-Site': 'cross-site'}).status_code == 403
+    assert not cuentas.limite_disponible('login:u:ana', maximo=10, ventana_s=900)
     assert admin.post(post, data={'clave': 'limite:recuperar:ana'}).status_code == 400
-    assert admin.post(post, data={'clave': 'limite:login:ana'}).status_code == 302
-    assert cuentas.limite_disponible('login:ana', maximo=10, ventana_s=900)
+    assert admin.post(post, data={'clave': 'limite:login:u:ana'}).status_code == 302
+    assert cuentas.limite_disponible('login:u:ana', maximo=10, ventana_s=900)
     assert not cuentas.limite_disponible('login:ip:127.0.0.1', maximo=30, ventana_s=900)
     filas = bitacora.leer()
     assert len(filas) == 1 and filas[0]['etapa'] == 'desbloqueo_login'
@@ -697,3 +697,76 @@ def test_pnd076_admin_desbloquea_con_bitacora_y_guardias(app, monkeypatch):
     assert cuentas.bloqueos_login() == []
     monkeypatch.setattr(cuentas.time, 'time', lambda: 2000)
     assert cuentas.bloqueos_login() == []
+
+
+@pytest.mark.parametrize('objetivo,constante', [('u:ana', 'LOGIN_MAX_POR_USUARIO'), ('ip:127.0.0.1', 'LOGIN_MAX_POR_IP')])
+def test_r5_topes_y_ventana_compartidos_con_pantalla(app, monkeypatch, objetivo, constante):
+    cuentas = app['cuentas']
+    monkeypatch.setattr(cuentas.time, 'time', lambda: 1000)
+    monkeypatch.setattr(cuentas, constante, 2)
+    monkeypatch.setattr(cuentas, 'LOGIN_VENTANA_S', 60)
+    for _ in range(2):
+        cuentas.limite_ok('login:' + objetivo, maximo=2, ventana_s=60)
+    [bloqueo] = cuentas.bloqueos_login()
+    assert bloqueo['restantes_s'] == 60
+    html = _cliente_con_sesion(app, 'admin').get('/admin/cuentas/bloqueos').get_data(as_text=True)
+    assert bloqueo['clave'] in html
+    monkeypatch.setattr(cuentas, constante, 3)
+    assert cuentas.bloqueos_login() == []
+    assert bloqueo['clave'] not in _cliente_con_sesion(app, 'admin').get('/admin/cuentas/bloqueos').get_data(as_text=True)
+    monkeypatch.setattr(cuentas, constante, 2)
+    monkeypatch.setattr(cuentas.time, 'time', lambda: 1061)
+    assert cuentas.bloqueos_login() == []
+
+
+def test_r6_vencimiento_minutos_redondeados_y_pluralizacion(app, monkeypatch):
+    cuentas = app['cuentas']
+    monkeypatch.setattr(cuentas.time, 'time', lambda: 1000)
+    for usuario, resto in [('uno', 60), ('dos', 61)]:
+        monkeypatch.setattr(cuentas.time, 'time', lambda resto=resto: 1000 - cuentas.LOGIN_VENTANA_S + resto)
+        for _ in range(cuentas.LOGIN_MAX_POR_USUARIO):
+            cuentas.limite_ok('login:u:' + usuario, maximo=cuentas.LOGIN_MAX_POR_USUARIO,
+                             ventana_s=cuentas.LOGIN_VENTANA_S)
+    monkeypatch.setattr(cuentas.time, 'time', lambda: 1000)
+    llamadas = []
+    from flask_babel import ngettext as original
+    def plural(singular, plural, num, **kw):
+        llamadas.append(num)
+        return original(singular, plural, num, **kw)
+    monkeypatch.setitem(app['dashboard'].app.jinja_env.globals, 'ngettext', plural)
+    html = _cliente_con_sesion(app, 'admin').get('/admin/cuentas/bloqueos').get_data(as_text=True)
+    valores = [int(n) for n in re.findall(r'data-vence-minutos="(\d+)"', html)]
+    assert sorted(valores) == [1, 2]
+    assert 1 in llamadas and 2 in llamadas
+
+
+def test_s2_usuario_con_prefijo_ip_no_comparte_tope(app, monkeypatch):
+    import db, json
+    monkeypatch.setattr(app['usuarios'], 'verificar', lambda *a: None)
+    c = app['dashboard'].app.test_client()
+    assert c.post('/login', data={'usuario': 'IP:1.2.3.4', 'password': 'mala'},
+                  environ_base={'REMOTE_ADDR': '1.2.3.4'}).status_code == 401
+    with db.conectar() as con:
+        filas = dict(con.execute(db.kv.select().with_only_columns(db.kv.c.clave, db.kv.c.valor)).all())
+    assert len(json.loads(filas['limite:login:u:ip:1.2.3.4'])) == 1
+    assert len(json.loads(filas['limite:login:ip:1.2.3.4'])) == 1
+    assert c.post('/login', data={'usuario': 'A' * 220, 'password': 'mala'}).status_code == 401
+    with db.conectar() as con:
+        assert con.execute(db.kv.select().where(db.kv.c.clave == 'limite:login:u:' + 'a' * 200)).first()
+
+
+def test_s2_bloqueo_usuario_viejo_y_claves_ajenas(app, monkeypatch):
+    cuentas = app['cuentas']
+    monkeypatch.setattr(cuentas.time, 'time', lambda: 1000)
+    monkeypatch.setattr('bitacora.registrar', lambda *a, **kw: None)
+    for _ in range(cuentas.LOGIN_MAX_POR_USUARIO):
+        cuentas.limite_ok('login:u:ana pérez', maximo=cuentas.LOGIN_MAX_POR_USUARIO, ventana_s=cuentas.LOGIN_VENTANA_S)
+    [bloqueo] = cuentas.bloqueos_login()
+    assert bloqueo['objetivo'] == 'ana pérez'
+    admin = _cliente_con_sesion(app, 'admin')
+    assert 'ana pérez' in admin.get('/admin/cuentas/bloqueos').get_data(as_text=True)
+    assert admin.post('/admin/cuentas/desbloquear', data={'clave': bloqueo['clave']}).status_code == 302
+    assert cuentas.bloqueos_login() == []
+    for clave in ['limite:recuperar:x', 'limite:login:', 'limite:login:ana', 'limite:login:u:', 'limite:login:u:' + 'a' * 201]:
+        assert cuentas._limite_login(clave) is None
+        assert admin.post('/admin/cuentas/desbloquear', data={'clave': clave}).status_code == 400

@@ -1439,11 +1439,6 @@ def mapa_codigo():
     return render_template("mapa_codigo.html")
 
 
-LOGIN_MAX_POR_USUARIO = 10
-LOGIN_MAX_POR_IP = 30
-LOGIN_VENTANA_S = 15 * 60
-
-
 @app.get("/admin/cuentas/bloqueos")
 @requiere_admin
 def admin_bloqueos_login():
@@ -1474,15 +1469,15 @@ def login():
     # usuario frena adivinar una contraseña; por IP, probar muchos usuarios
     # (y cada intento cuesta ~1 s de CPU en el VPS). Se mira antes de
     # calcular el hash y solo se anota un intento que falló.
-    claves = (f"login:{usuario.lower()}", f"login:ip:{_ip_cliente() or 'desconocida'}")
-    topes = (LOGIN_MAX_POR_USUARIO, LOGIN_MAX_POR_IP)
-    if not all(cuentas.limite_disponible(c, maximo=m, ventana_s=LOGIN_VENTANA_S) for c, m in zip(claves, topes)):
+    claves = (f"login:u:{usuario.lower()[:200]}", f"login:ip:{_ip_cliente() or 'desconocida'}")
+    topes = (cuentas.LOGIN_MAX_POR_USUARIO, cuentas.LOGIN_MAX_POR_IP)
+    if not all(cuentas.limite_disponible(c, maximo=m, ventana_s=cuentas.LOGIN_VENTANA_S) for c, m in zip(claves, topes)):
         flash(gettext("Demasiados intentos fallidos. Espera unos minutos e inténtalo de nuevo."), "error")
         return render_template("login.html"), 429
     entry = usuarios.verificar(usuario, password)
     if not entry:
         for c, m in zip(claves, topes):
-            cuentas.limite_ok(c, maximo=m, ventana_s=LOGIN_VENTANA_S)
+            cuentas.limite_ok(c, maximo=m, ventana_s=cuentas.LOGIN_VENTANA_S)
         flash(gettext("Usuario o contraseña incorrectos."), "error")
         return render_template("login.html"), 401
 

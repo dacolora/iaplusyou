@@ -304,3 +304,5 @@ Noruega y Suecia (2026-10-08, spec `docs/superpowers/specs/2026-10-08-noruega-y-
 
 
 PND-043 (2026-10-08, decisión delegada): _guardar asigna los arranques bajo actualizar_extra, después del candado de escritura. Lee reservas de todos los experimentos del proyecto para la misma sesión y excluye hermanas persistidas y finales; reserva también sus números de variante para que la carrera no comparta la misma final. No vuelve a elegir al avanzar una derivación existente. Regresión con dos ganadoras en hilos y encolado detenido: test_derivaciones.py::test_pnd043_dos_ganadoras_reservan_arranques_antes_de_encolar.
+
+R3 (2026-10-08, revisión lote 6B): test_derivaciones.py::test_r3_hermanas_de_la_misma_derivacion_reservan_arranques exige arranques distintos dentro de una misma derivación con n_reediciones=2 y varios libres; retirar reservados.add del bucle debe hacerlo fallar.

@@ -830,3 +830,17 @@ def test_pnd043_dos_ganadoras_reservan_arranques_antes_de_encolar(ent, monkeypat
     derivadas = [d for exp in ex.cargar("acme") for d in (exp.get("extra") or {}).get("derivaciones") or []]
     variantes = [i["variante"] for d in derivadas for i in d["items"] if i["clase"] == "reedicion"]
     assert len(set(variantes)) == 3
+
+
+def test_r3_hermanas_de_la_misma_derivacion_reservan_arranques(ent, monkeypatch):
+    dv, ex, cf = ent['dv'], ent['ex'], ent['cf']
+    cf.actualizar('acme', ent['cf_id'], angulo={'consciencia': 'inconsciente', 'lead': 'oferta'})
+    monkeypatch.setattr(dv.doctrina, 'lead_por_consciencia', lambda c: ['historia', 'secreto', 'problema_solucion'])
+    ex.actualizar('acme', ent['eid'], reglas={'n_reediciones': 2, 'n_regeneraciones': 0})
+    monkeypatch.setattr(dv, '_avanzar_sin_relanzar', lambda *a: None)
+    hijo = dv.planificar('acme', ent['eid'], 'derivar', {'ep_id': ent['ep']})
+    [derivacion] = ex.obtener('acme', hijo)['extra']['derivaciones']
+    items = [i for i in derivacion['items'] if i['clase'] == 'reedicion']
+    arranques = [i['contexto_variante']['lead_objetivo'] for i in items]
+    assert len(items) >= 2 and all(arranques)
+    assert len(set(arranques)) == len(items)

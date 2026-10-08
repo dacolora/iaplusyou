@@ -8,7 +8,8 @@ almacenamiento del 2026-09-28: nada se limpiaba nunca).
                        materiales.descargar, sprints.qa.archivo_local,
                        publicador.archivo_local).
   cola_limpiar {}      diaria — cola.limpiar_terminadas: filas hecha/error
-                       viejas y las periódicas vacías.
+                       viejas, las periódicas vacías y límites de kv de
+                       más de siete días (o ilegibles).
   db_respaldar {}      diaria — copia de data/creatv.db en data/respaldos/
                        (Connection.backup, seguro con WAL), conserva las
                        últimas RESPALDOS_CONSERVAR. Antes solo había
@@ -18,13 +19,16 @@ almacenamiento del 2026-09-28: nada se limpiaba nunca).
                        2 000 filas (spec 2026-10-01-escala-y-monitoreo §6).
 Ninguna gasta ni toca R2.
 """
+import json
 import logging
+import math
 import os
 import sqlite3
 import time
 from datetime import datetime
 
 from flask_babel import gettext
+import sqlalchemy as sa
 
 import cola
 import db
@@ -127,8 +131,35 @@ def ejecutar_salidas_limpiar(tarea):
 
 @registrar("cola_limpiar")
 def ejecutar_cola_limpiar(tarea):
+    limpiar_limites()
     n = cola.limpiar_terminadas()
     return gettext("%(n)s tareas viejas borradas.", n=n)
+
+
+def limpiar_limites():
+    """S3 (2026-10-08): límites sin marcas vigentes, tras tomar el candado."""
+    prefijo = db.kv.c.clave.startswith("limite:", autoescape=True)
+    corte = time.time() - 7 * 86400
+    with db.conectar() as con:
+        con.execute(db.kv.update().where(prefijo).values(valor=db.kv.c.valor))
+        filas = con.execute(sa.select(db.kv.c.clave, db.kv.c.valor).where(prefijo)).all()
+        borrar = []
+        for clave, valor in filas:
+            try:
+                marcas = json.loads(valor)
+                if not isinstance(marcas, list) or not marcas:
+                    raise ValueError
+                marcas = [float(t) for t in marcas]
+                if not all(math.isfinite(t) for t in marcas):
+                    raise ValueError
+                vieja = max(marcas) < corte
+            except (TypeError, ValueError, OverflowError):
+                vieja = True
+            if vieja:
+                borrar.append(clave)
+        if borrar:
+            con.execute(db.kv.delete().where(db.kv.c.clave.in_(borrar)))
+    return len(borrar)
 
 
 @registrar("db_respaldar")

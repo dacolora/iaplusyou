@@ -74,7 +74,8 @@ PREFIJOS_SOLO_ADMIN = ("llave:", "worker:", "revision:", "saldo:wavespeed_recarg
 
 # PND-124 (decisión 2026-10-07): visibles para todos, descartes solo admin.
 TIPOS_DESCARTE_ADMIN = {"tablero:tope_alcanzado", "tablero:propuestas_pendientes",
-                        "tablero:experimento_error", "crear:prompt_listo"}
+                        "tablero:experimento_error", "crear:prompt_listo",
+                        "tablero:ganador_sin_publicar", "tablero:anuncios_rechazados"}
 
 
 def descarte_solo_admin(clave, calculadas=()):
@@ -178,7 +179,9 @@ def _fuente_cuentas(cliente, ahora):
         nombre = u["usuario"]
         # La clave tiene que pasar CLAVE_VALIDA aunque la cuenta sea vieja y traiga
         # espacios o acentos (usuarios.validar_usuario solo exige el formato al crear).
-        clave = f"cuenta:correo:{re.sub(r'[^A-Za-z0-9_.-]', '_', nombre)[:100]}"
+        limpio = re.sub(r'[^A-Za-z0-9_.-]', '_', nombre)[:100]
+        sufijo = '-' + hashlib.sha256(nombre.encode('utf-8')).hexdigest()[:8] if limpio != nombre else ''
+        clave = f"cuenta:correo:{limpio}{sufijo}"
         if not u.get("correo"):
             out.append(_alerta(clave, huella("sin_correo"), "bloquea", "puesta_a_punto",
                                gettext("La cuenta %(usuario)s no tiene correo", usuario=nombre),

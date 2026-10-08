@@ -623,3 +623,24 @@ def test_pnd088_worker_no_paga_qa_que_ya_paso(base_temporal, monkeypatch):
     monkeypatch.setattr(qa, 'evaluar', lambda *a, **k: pytest.fail('QA pagado sobre aprobada'))
     ts.ejecutar_qa_pieza({'payload': {'cliente': 'acme', 'cp_id': cp}})
     assert datos.idea('acme', cp)['qa'] == {'veredicto': 'pasa'}
+
+
+@pytest.mark.parametrize('qa_previo,veces', [(None, 1), ({'veredicto': 'falla'}, 0)])
+def test_r2_aprobada_recibe_solo_su_primer_qa(base_temporal, monkeypatch, qa_previo, veces):
+    import creative_flow
+    from sprints import datos, qa
+    from tareas import sprints as ts
+    sid, cid, cp, cf = _pieza_lista(datos, creative_flow)
+    datos.actualizar_idea('acme', cp, revision='aprobada', qa=qa_previo)
+    llamadas = []
+    def evaluar(*a, **kw):
+        llamadas.append(cp)
+        return {'veredicto': 'pasa', 'score': 90, 'checks': {}}
+    monkeypatch.setattr(qa, 'evaluar', evaluar)
+    assert (('acme', cp) in ts._piezas_listas_sin_qa()) == (qa_previo is None)
+    for _ in range(2):
+        ts.ejecutar_qa_pieza({'payload': {'cliente': 'acme', 'cp_id': cp}})
+    assert len(llamadas) == veces
+    assert ('acme', cp) not in ts._piezas_listas_sin_qa()
+    if qa_previo:
+        assert datos.idea('acme', cp)['qa'] == qa_previo

@@ -403,3 +403,14 @@ def test_pnd128_legado_sin_color_genera_badge_negro_translucido(tmp_path):
         with Image.open(out['badge']['png']) as im:
             pixeles = [rgba for n, rgba in im.getcolors(im.width * im.height)]
         assert esperado in pixeles
+
+
+def test_r1_karaoke_legado_sin_marca_resalta_amarillo(tmp_path):
+    from final_edition import texto
+    from PIL import Image
+    palabras = [{'texto': 'Hola', 'inicio': 0, 'fin': 1}]
+    for marca, esperado in [({}, (255, 212, 0, 255)), ({'color_acento': '#7c3aed'}, (124, 58, 237, 255))]:
+        out = texto.generar_overlays({}, palabras, marca, str(tmp_path), ancho=540, alto=960)
+        assert out['subtitulos']
+        with Image.open(out['subtitulos'][0]['png']) as im:
+            assert esperado in [rgba for n, rgba in im.getcolors(im.width * im.height)]

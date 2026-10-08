@@ -19,13 +19,6 @@ from storage import r2_uploader
 MAX_FOTOS_PRODUCTO = 2
 
 
-def familias_distintas(referente, categoria_producto):
-    """PND-024: comparar los nombres ya clasificados; sin inferir ni cobrar."""
-    familia = db.pliegue(referente.get("familia") or "").strip()
-    categoria = db.pliegue(categoria_producto or "").strip()
-    return bool(familia and categoria and familia != categoria)
-
-
 # Textos fijos del prompt determinista, por idioma del proyecto (spec
 # 2026-09-26 §B4-§B5). Los datos del referente, del producto y de la marca
 # nunca se traducen; "Image N" va igual en los dos idiomas.
