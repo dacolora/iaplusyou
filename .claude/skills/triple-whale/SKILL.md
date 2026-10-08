@@ -8,22 +8,73 @@ description: "Triple Whale: conexión, sincronización por SQL, la pestaña de r
 > Parte de la guía del repositorio; hasta el 2026-10-01 vivía dentro de CLAUDE.md. **Si cambias esta área, actualiza este archivo** en el mismo cambio (no CLAUDE.md). Si el código y este texto no coinciden, manda el código: corrige el texto.
 
 **Triple Whale** (package `triple_whale/`, `triple_whale_tiendas.py`, `tareas/triple_whale.py`; spec
-`docs/superpowers/specs/2026-09-28-triple-whale-rendimiento-design.md`, migrations 0023 and 0024): connected from
+`docs/superpowers/specs/2026-09-28-triple-whale-rendimiento-design.md`, migrations 0023, 0024 and 0032): connected from
 the Triple Whale tab itself (`_triple_whale_conectar.html`, included by `_tab_triple_whale.html` in both states;
 until 2026-09-28 the form sat in Configuración › Conexiones, and the `cfg_triple_whale_*` routes now return to
-`#triplewhale`) (Fernet-encrypted API key; `cfg_triple_whale_conectar` requires a verified correo,
-same origin, and tests the key AND a short SQL query before saving; `cfg_triple_whale_ajustes` changes
-currency/model/window). The client (`triple_whale/__init__.py`) follows the documented SQL endpoint:
+`#triplewhale`) (one Fernet-encrypted API key PER STORE; `cfg_triple_whale_conectar` adds a store: requires a verified correo, same
+origin, a country (the form's or the one guessed from the domain) and tests the key AND a short SQL query before
+saving; `cfg_triple_whale_ajustes` changes the project's currency/model/window; `cfg_triple_whale_probar`,
+`cfg_triple_whale_pais` and `cfg_triple_whale_desconectar` act on ONE store through its `tienda_id`, 404 if it is not
+the project's). The client (`triple_whale/__init__.py`) follows the documented SQL endpoint:
 `{"shopId", "query", "period": {startDate, endDate}, "currency"}` → `data` (an older version sent an
 undocumented `parameters` and read `rows`, so it never returned anything); `ErrorLlave`/`ErrorTienda`/
 `ErrorConsulta`; `MODELOS`/`VENTANAS` are Triple Whale's own vocabulary (old «First Touch»/«7» values are
 normalized on read); every query has a full and a minimal version (`consultar_con_respaldo` falls back only
-on `ErrorConsulta`). On connect `tw_sincronizar` copies 90 days into `tw_anuncio_dia` (per canal/ad/day:
-what the platform reports from `ads_table` + what the Triple Pixel attributes from `pixel_joined_tvf()` with
-the project's model/window) and `tw_tienda_dia` (`blended_stats_tvf()`); the periodic
-`tw_sincronizar_todas` (2 h, before `exp_refrescar_todos`) re-pulls the last 7 days because Triple Whale
-re-attributes; each `triple_whale.datos.reemplazar_*` zeroes/deletes the range before writing. Changing
-store/currency/model/window or disconnecting deletes the copies (never the paid evaluations). The
+on `ErrorConsulta`). On connect `tw_sincronizar` (ONE job per store, `job_id` `<cliente>__tw_sync__<tienda_id>`, payload `cliente` +
+`tienda_id`; `max_intentos=2`, it only reads) copies 90 days of that store into `tw_anuncio_dia` (per
+canal/ad/day: what the platform reports from `ads_table` + what the Triple Pixel attributes from `pixel_joined_tvf()`
+with the project's model/window) and `tw_tienda_dia` (`blended_stats_tvf()`); the periodic `tw_sincronizar_todas`
+(2 h, before `exp_refrescar_todos`) enqueues `encolar_sync(cliente, tienda_id)` for every `conectadas()` store and
+each re-pulls its last 7 days because Triple Whale re-attributes; each `triple_whale.datos.reemplazar_*(cliente,
+tienda_id, desde, hasta, registros)` zeroes/deletes only THAT store's range before writing. Changing
+currency/model/window (`cambiar_ajustes`) deletes the copies of ALL stores; removing a store (`quitar`) deletes only its
+copies, and the project's `triple_whale` settings row goes with the last one (never the paid evaluations).
+
+## Varias tiendas, una por país (2026-10-08)
+
+Why: happyflops has one Shopify store per country and each one lives in Triple Whale with its own shop-id and its own
+API key (Daniel confirmed it on 2026-10-08), while the ads are the same in all countries; one project per country was
+rejected because it would split catalog, pieces and sprints. Spec
+`docs/superpowers/specs/2026-10-08-triple-whale-varias-tiendas-design.md`, migration 0032, plan in `docs/superpowers/plans/`.
+
+- **Tables.** `tw_tienda` (one row per connected store: `pais` ISO-2 or None, `dominio`, encrypted `llave`,
+  `zona_horaria`, `estado`, `error`, `ultima_sincronizacion`, `extra` = `backfill_desde`/`ultimo_resumen`/`gasto_7d`;
+  unique per (cliente, dominio) and per (cliente, pais) when the country is set). `triple_whale` is now the PROJECT's
+  settings (currency, model, window, `extra` = `avisados`/`aviso_sin_ventas`), one row while there is at least one store;
+  its old connection columns are unused but kept so the previous deploy can still run. The three copies
+  (`tw_anuncio_dia`, `tw_tienda_dia`, `tw_producto_dia`) carry `tienda_id` (NOT NULL, no FK) inside their unique keys.
+- **Single writer.** `triple_whale_tiendas.py` writes `tw_tienda` and `triple_whale`: `agregar(cliente, llave, dominio,
+  pais=None, moneda, modelo_atribucion, ventana_atribucion, zona_horaria)` (guesses the country from the domain; a
+  second connect of the same domain reconnects; the project's settings are only created, never overwritten),
+  `cambiar_pais(cliente, tienda_id, pais)`, `actualizar_tienda`, `actualizar_extra_tienda`, `actualizar_extra`
+  (project's), `cambiar_ajustes`, `quitar(cliente, tienda_id)`; reads `ajustes`, `tiendas`, `tienda(cliente,
+  tienda_id)`, `tienda_de_pais`, `obtener` (settings + `tiendas`, None without stores), `obtener_llave(cliente,
+  tienda_id)`, `conectadas()`, `firma(cliente)` (cache key of the Tablero). A taken country raises `PaisOcupado`.
+  `triple_whale/paises.py` is pure (Babel/CLDR names): `adivinar_pais(dominio)`, `es_pais`, `bandera`, `nombre_pais`.
+- **Reads take `tienda_id`** as their second argument: an integer is that store, `None` is «Todas». In `datos._anuncio_dia`
+  «Todas» is, per (canal, ad_id, fecha), the MAX of the channel measures (the same ad arrives through every store that
+  shares an ad account: its spend counts once) and the SUM of the Pixel measures (each store attributes its own
+  orders). `serie_tienda(None)` sums the stores and subtracts from `gasto` the duplicated ad spend of that day
+  (`_duplicado_por_dia`: Σ over ads of sum − max) and gives it back to `utilidad_neta`; `gasto_duplicado` says if
+  any is shared (the panel shows a note). `top_productos(None)` groups by normalized name (each store has its own
+  product ids); `por_tienda` is the «Por tienda» table in one query. The panel (`panel.contexto(cliente, dias,
+  canal, tienda_id)`, `?tienda=` in `ver_panel`) has a store selector; with one store it is always that one.
+- **Avisos** (`triple_whale/avisos.py`) always look at «Todas»: `tw_sincronizar` calls `avisos.revisar_y_avisar`
+  only when no OTHER sync of the project is still queued or running (`syncs_en_curso`), so the LAST one to finish
+  warns once with everything fresh. «Evaluar con IA» evaluates the selected scope and saves it in
+  `tw_evaluacion.extra` (`tienda_id`, `pais`; None = Todas).
+- **Atribución de experimentos** by the store of the piece's country: see below (`lanzador._tienda_tw_de`).
+- **Removed store.** Every `datos.reemplazar_*` checks inside its transaction that the store still belongs to the
+  cliente (`_tienda_existe`) and writes nothing if not: a sync that was running when the store was removed must not
+  leave orphan rows that «Todas» (filters only by cliente) would count.
+- **Routes (dashboard.py).** `cfg_triple_whale_pais` (POST, change a store's country without touching its figures;
+  `PaisOcupado` -> flash) and `cfg_triple_whale_adivinar_pais` (GET, `{"pais": "NO"}` or null from the typed domain;
+  reads text only, calls nobody). The project has ONE currency, model and window for all its stores (happyflops: USD).
+- Not done yet (spec §13): European countries are not in `final_edition.tipos.PAISES` (PND-146), several Meta ad
+  accounts per project (PND-147), and no SQL has run against a real store: the first copy of happyflops-norge
+  after the deploy is the test.
+
+The
 **Triple Whale tab** (`_tab_triple_whale.html`, `data-tab="triplewhale"`, after Alertas; since E2, 2026-10-03, there is
 no Tablero tab) fetches its panel
 (`triple_whale.rutas.ver_panel` → `_tw_panel.html`) only when opened: store KPIs (MER, AOV, new customers,
@@ -59,16 +110,16 @@ by `fuente_id`/name) and the top 5 in the AI prompt (each idea carries `producto
 (`datos.piezas_creatv`, now with the pieza's video/thumbnail/state) sends Claude the real frames
 (`analisis.visuales` → `sprints.qa.archivo_local` + `doctrina.revisor.bloques_visuales`, temp file deleted
 in a `finally`; `anuncio.visual`), every Meta thumbnail is copied to R2 first (`analisis.copiar_miniaturas`,
-`clientes/<c>/triple_whale/eval<id>_<ref>.jpg`); after every sync `triple_whale/avisos.py` emails (tipo
-`tw_evaluacion`) new winners, fatiguing winners, new losers and «no attributed sales» once (state in
+`clientes/<c>/triple_whale/eval<id>_<ref>.jpg`); after the LAST sync of the project (see «Varias tiendas») `triple_whale/avisos.py` emails (tipo
+`tw_evaluacion`, over «Todas») new winners, fatiguing winners, new losers and «no attributed sales» once (state in
 `triple_whale.extra.avisados` / `aviso_sin_ventas`; first sync only seeds the baseline); «Pausar»/«Activar» on a
 Creatv piece in the tab (`triple_whale.pieza_estado` → `lanzador.pausar_pieza`/`activar_pieza`); and the
 Experimentos results center shows «Tu tienda según Triple Whale» (`panel.resumen_mes_tienda`, part `tienda_tw` of
-`dashboard._calcular_tablero`; the cache key includes `triple_whale.actualizado_en`) in two places: a line with the month's
+`dashboard._calcular_tablero`; the cache key includes `triple_whale_tiendas.firma(cliente)`) in two places: a line with the month's
 revenue and MER under «01 Resumen del periodo» (`_exp_resultados.html`) and its tiles at the end of the folded
 «Historial» (`_exp_historial.html`). Idea → pieza → anuncio (spec §14): the prefill of «Llevar a Crear»
 carries `origen_tw` («<evaluación>:<índice>»), the Crear form returns it in a hidden field and `cf_crear_video`
 stores `concepto.extra.tw_idea` (`puente.origen_desde_formulario` validates it, a bad value is ignored); the
 idea card lists the pieces born from it with their Crear state and Meta verdict (`datos.piezas_de_evaluacion`,
 `panel.enlazar_ideas`) and a Creatv ad says which idea it came from (`piezas_creatv(...)["tw_idea"]`). None of
-the SQL has run against a real store yet (spec §9).
+the SQL has run against a real store yet (spec 2026-09-28 §9).
