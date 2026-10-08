@@ -603,8 +603,11 @@ def _avisar_moneda_no_comparable(cliente, ex, ajenas):
 
 def _tienda_tw_de(tiendas, pais):
     """La tienda de Triple Whale que vende para `pais` (ISO-2), o None. Si el proyecto tiene UNA sola
-    tienda esa sirve para todos los países (así funcionaba antes de las tiendas por país)."""
-    if len(tiendas) == 1:
+    tienda SIN país, esa sirve para todos los países (así funcionaba antes de las tiendas por país). Una
+    tienda CON país solo sirve a las piezas de ese país, aunque sea la única: el Pixel de Noruega no
+    sabe nada de los pedidos de Suecia, y leerlo daría 0 compras → «perdedor» → el decisor pausaría la
+    pieza solo (revisión del guardián del gasto, 2026-10-08)."""
+    if len(tiendas) == 1 and not tiendas[0].get("pais"):
         return tiendas[0]
     pais = (pais or "").strip().upper()
     return next((t for t in tiendas if pais and t.get("pais") == pais), None)

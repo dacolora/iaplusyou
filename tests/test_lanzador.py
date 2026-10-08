@@ -346,15 +346,20 @@ def _tw_dos_tiendas(lz, monkeypatch, paises=("CO", "MX")):
     return llamadas, ids
 
 
-def test_tienda_tw_de_elige_la_del_pais_o_la_unica():
+def test_tienda_tw_de_elige_la_del_pais_o_la_unica_sin_pais():
     import lanzador
     no, se = {"id": 1, "pais": "NO"}, {"id": 2, "pais": "SE"}
     assert lanzador._tienda_tw_de([no, se], "SE") is se
     assert lanzador._tienda_tw_de([no, se], "no") is no
     assert lanzador._tienda_tw_de([no, se], "DK") is None
     assert lanzador._tienda_tw_de([no, se], None) is None
-    assert lanzador._tienda_tw_de([no], "DK") is no          # una sola tienda sirve para todos los países
+    # Una sola tienda SIN país sirve para todos los países; con país, solo para el suyo (revisión del
+    # guardián del gasto, 2026-10-08: una pieza de SE leída con el Pixel de NO salía «perdedor»).
     assert lanzador._tienda_tw_de([{"id": 3, "pais": None}], "SE")["id"] == 3
+    assert lanzador._tienda_tw_de([{"id": 3, "pais": None}], None)["id"] == 3
+    assert lanzador._tienda_tw_de([no], "DK") is None
+    assert lanzador._tienda_tw_de([no], "no") is no
+    assert lanzador._tienda_tw_de([no], None) is None
     assert lanzador._tienda_tw_de([], "NO") is None
 
 
@@ -417,6 +422,33 @@ def test_refrescar_con_una_sola_tienda_sin_pais_la_usa_para_todas_las_piezas(ent
     m = [p["metricas"] for p in ex.obtener("acme", eid)["piezas"]]
     assert (m[0]["compras"], m[2]["compras"]) == (1, 5)    # la pieza de MX también usa la única tienda
     assert not [e for e in ex.eventos("acme", eid) if "No hay tienda" in (e.get("mensaje") or "")]
+    assert llamadas == [("acme", llamadas.tienda_id)]
+
+
+def test_refrescar_con_una_sola_tienda_con_pais_no_la_usa_para_otro_pais(entorno, monkeypatch):
+    """Revisión del guardián del gasto (2026-10-08): UNA tienda con país (CO) y una pieza de MX. La pieza de
+    MX no puede leerse con el Pixel de CO (saldría con 0 compras → «perdedor» → el decisor la pausaría):
+    se queda con las ventas de Meta y deja un evento «No hay tienda…» para MX."""
+    ex, lz, eid = entorno["ex"], entorno["lanzador"], entorno["eid"]
+    ex.actualizar("acme", eid, atribucion="triple_whale")
+    lz.lanzar("acme", eid)
+    monkeypatch.setattr(lz.meta_insights, "obtener_resultados", lambda ad_id, objetivo=None: {
+        "impresiones": 100, "gasto_usd": 30.0, "compras": 3, "ingresos": 90.0, "roas": 3.0,
+        "estado_meta": "ACTIVE", "estado_meta_texto": "Activo"})
+    piezas = ex.obtener("acme", eid)["piezas"]
+    llamadas = _tw_conectado(lz, monkeypatch, dominio="acme-co.myshopify.com", pais="CO")
+    dia = piezas[0]["creado_en"][:10]
+    # El Pixel de CO conoce el anuncio de MX con 0 pedidos: si se usara, la pieza de MX quedaría en 0.
+    _sembrar_pixel(llamadas.tienda_id, piezas[0]["meta_ad_id"], [(dia, 1.0, 10.0)],
+                   otros=[(piezas[2]["meta_ad_id"], dia, 0.0, 0.0)])
+
+    lz.refrescar("acme", eid)
+    m = {p["pais"]: p["metricas"] for p in ex.obtener("acme", eid)["piezas"] if p["id"] != piezas[1]["id"]}
+    assert m["CO"]["compras"] == 1 and m["CO"]["fuente_ventas"] == "triple_whale"
+    assert m["MX"]["compras"] == 3 and m["MX"]["fuente_ventas"] == "meta"
+    avisos = [e for e in ex.eventos("acme", eid) if "No hay tienda de Triple Whale" in (e.get("mensaje") or "")]
+    assert len(avisos) == 1 and "Meta" in avisos[0]["mensaje"]
+    assert ex.obtener("acme", eid)["extra"]["aviso_sin_tienda_tw"] == ["MX"]
     assert llamadas == [("acme", llamadas.tienda_id)]
 
 
