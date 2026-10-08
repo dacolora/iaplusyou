@@ -7,6 +7,7 @@ Meta viven en lanzador.py. Campañas (ads.py) sigue usando el experimento legado
 """
 import contextlib
 import copy
+from datetime import datetime, timedelta
 import functools
 import json
 import threading
@@ -297,6 +298,22 @@ class ErrorCombinacion(ValueError):
     """Una combinación pieza × país no es válida: el experimento no se crea."""
 
 
+class ExperimentoRepetido(Exception):
+    """El mismo formulario de «Nuevo experimento» ya creó un experimento (un «¿Reenviar formulario?», un doble envío):
+    no se crea otro. `eid` es el que ya existe. Desde 2026-10-08 lanzar también activa, así que un duplicado gastaría
+    el doble (ronda de guardian-gasto)."""
+
+    def __init__(self, eid):
+        super().__init__(eid)
+        self.eid = eid
+
+
+# Cuánto tiempo cuenta como repetido: un formulario con su token de un solo uso, un día (una pestaña vieja que se
+# reenvía); sin token, la misma huella (piezas, países, presupuestos, objetivo…), diez minutos.
+VENTANA_REPETIDO_TOKEN = timedelta(days=1)
+VENTANA_REPETIDO_HUELLA = timedelta(minutes=10)
+
+
 def validar_combinacion(candidata, paises_experimento, pais):
     """Regla de reparto (spec §0/§3): una final solo va a su país; un clon o
     una imagen solo a un país del experimento. Devuelve (pais_efectivo, error)."""
@@ -322,7 +339,11 @@ def crear_con_piezas(cliente, datos, combinaciones):
     transacción. Una final pedida en otro país se ignora en silencio (la UI la
     ofrece solo en el suyo); una pieza ajena/inexistente o un clon a un país
     fuera del experimento es ErrorCombinacion y no queda nada creado.
-    Duplicados se colapsan. No encola nada."""
+    Duplicados se colapsan. No encola nada.
+    `datos["clave_form"]` («t:<token>» o «h:<huella>», la arma `dashboard.exp_probar`): si ya hay un experimento del
+    proyecto con esa clave dentro de su ventana, es ExperimentoRepetido y no se crea nada. La búsqueda y el INSERT van
+    en la misma transacción con el candado de escritura tomado antes de leer, así dos envíos a la vez (dos hilos o
+    dos procesos) no crean dos."""
     es_app = datos["objetivo_meta"] == "OUTCOME_APP_PROMOTION"
     plataformas = plataformas_de({"app": datos.get("app")}) if es_app else [None]
     if es_app and not plataformas:
@@ -367,14 +388,28 @@ def crear_con_piezas(cliente, datos, combinaciones):
     with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
         mensaje_creado = gettext("Experimento creado desde la galería con %(anuncios)s anuncio(s) en %(paises)s país(es)",
                                  anuncios=len(finales) * len(plataformas), paises=len(paises_exp))
+    clave = datos.get("clave_form")
+    extra = {"app": dict(datos["app"])} if es_app else {}
+    if clave:
+        extra["clave_form"] = clave
     with db.conectar() as con:
+        if clave:
+            # Candado ANTES de leer (como _bloquear): un UPDATE sin filas abre la transacción con el lock de escritura.
+            con.execute(db.experimento.update().where(db.experimento.c.id == -1).values(actualizado_en=ahora))
+            ventana = VENTANA_REPETIDO_TOKEN if clave.startswith("t:") else VENTANA_REPETIDO_HUELLA
+            desde = (datetime.fromisoformat(ahora) - ventana).isoformat(timespec="seconds")
+            for fila_id, fila_extra in con.execute(sa.select(db.experimento.c.id, db.experimento.c.extra).where(
+                    db.experimento.c.cliente == cliente, db.experimento.c.legado.is_(False),
+                    db.experimento.c.creado_en >= desde)):
+                if (fila_extra or {}).get("clave_form") == clave:
+                    raise ExperimentoRepetido(fila_id)
         eid = con.execute(db.experimento.insert().values(
             cliente=cliente, creado_en=ahora, actualizado_en=ahora, nombre=datos["nombre"], modo=datos.get("modo", "manual"),
             reglas={}, paises=[_pais_nuevo(p) for p in datos["paises"]], moneda=datos["moneda"],
             tope_total=float(datos["tope_total"]), dias=int(datos["dias"]), objetivo_meta=datos["objetivo_meta"],
             atribucion=atribucion, estado="armando", gasto_acumulado=0.0, legado=False,
             destino_url=datos["destino_url"], edad_min=int(datos.get("edad_min", 18)), edad_max=int(datos.get("edad_max", 65)),
-            extra={"app": dict(datos["app"])} if es_app else {})).inserted_primary_key[0]
+            extra=extra)).inserted_primary_key[0]
         for pieza_id, pais in finales:
             for plataforma in plataformas:
                 con.execute(db.experimento_pieza.insert().values(

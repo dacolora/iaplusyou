@@ -61,9 +61,12 @@ def job_id_detalle(cliente, experimento_id):
 
 @al_interrumpir("exp_lanzar")
 def interrumpida(tarea, mensaje):
+    """Una interrupción a mitad (también entre lanzar y activar, que sigue en «lanzando») repausa en Meta lo que haya
+    alcanzado a activarse ANTES de marcar el error: nunca queda gastando con el experimento en error aquí."""
     p = tarea["payload"]
     ex = experimentos.obtener(p["cliente"], p["experimento_id"])
     if ex and ex["estado"] == "lanzando":
+        lanzador.repausar(p["cliente"], p["experimento_id"])
         experimentos.actualizar(p["cliente"], p["experimento_id"], estado="error", error=mensaje)
 
 
@@ -75,10 +78,13 @@ def exp_lanzar(tarea):
     llegar aquí. Un fallo al activar no relanza nada (max_intentos=1): queda en pausa con su motivo."""
     p = tarea["payload"]
     job_id = tarea.get("job_id")
-    mensaje = lanzador.lanzar(p["cliente"], p["experimento_id"],
+    activar = bool(p.get("activar"))
+    # Con activar, `lanzar` no suelta «lanzando»: lo suelta activar_tras_lanzar (a corriendo o a pausado con motivo).
+    mensaje = lanzador.lanzar(p["cliente"], p["experimento_id"], soltar=not activar,
                               on_etapa=lambda nombre: trabajos.reportar(job_id, etapa=nombre))
-    if not p.get("activar"):
+    if not activar:
         return mensaje
+    trabajos.reportar(job_id, etapa=lanzador.ETAPA_ACTIVAR)
     return lanzador.activar_tras_lanzar(p["cliente"], p["experimento_id"])
 
 

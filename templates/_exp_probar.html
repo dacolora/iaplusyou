@@ -88,6 +88,8 @@
    marcar) bloquearían el envío sin decir nada; el JS avisa y exp_probar valida todo. #}
 <form method="post" action="{{ url_for('exp_probar', cliente=cliente) }}" id="exp-probar" class="exp-pasos" hidden novalidate
       data-minimo="{{ minimo_diario_exp }}" data-moneda="{{ moneda_exp }}" data-tope-campana="{{ tope_campana_min_exp }}">
+  {# Un solo uso (exp_probar lo consume): un «¿Reenviar formulario?» no crea ni activa un segundo experimento. #}
+  <input type="hidden" name="token_form" value="{{ token_form or '' }}">
   <ol class="exp-pasos-nav"><li data-ir="1" class="activo">{{ _('02 · Dónde') }}</li><li data-ir="2">{{ _('03 · Total y días') }}</li><li data-ir="3">{{ _('04 · Revisar') }}</li></ol>
 
   <section data-paso="1">

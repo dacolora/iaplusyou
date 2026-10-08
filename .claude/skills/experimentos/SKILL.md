@@ -27,7 +27,18 @@ anuncio o en error; registra «Activado al lanzar: ≈ X al día» (`datos`: dia
 por excepción y nada se activa. Si la activación falla, vuelve a pausar todo (lo que alcanzó a activarse gastaría con el
 experimento «en pausa» aquí), guarda el motivo en `experimento.error` (lo borra `_a_corriendo` al activar después) y un
 evento, y no se reintenta. Sin `activar` (cualquier otro llamador) todo queda en pausa como antes;
-`derivaciones`/`lanzar_piezas_nuevas` no pasan por aquí. Pruebas: `tests/test_lanzar_activa.py`. `exp_estado`
+`derivaciones`/`lanzar_piezas_nuevas` no pasan por aquí. Ronda de guardian-gasto (2026-10-08): (1) con `activar` la
+tarea llama `lanzar(..., soltar=False)` y el experimento sigue en `lanzando` hasta que `activar_tras_lanzar` lo saca
+(a `corriendo`, o a `pausado` con motivo en `error`): así la barra sigue sondeando (etapas
+`ETAPAS_LANZAR_Y_ACTIVAR`, con «Activar»), `exp_cerrar` rechaza, `cambiar_estado` dice «Espera a que termine el
+lanzamiento» (solo la tarea pasa `desde_lanzamiento=True`), y el hook `interrumpida` y la reconciliación de huérfanos
+de `dashboard` llaman `lanzador.repausar` ANTES de marcar el error (lo que alcanzó a activarse vuelve a pausa);
+`_a_corriendo` nunca pisa `cerrado`. Un fallo al activar también manda `notificaciones.avisar("error_lanzamiento")`.
+(2) «Nuevo experimento» es de un solo envío: `exp_nuevo` pinta un `token_form` oculto, `exp_probar` arma
+`clave_form` («t:<token>», o sin token «h:<huella>» de piezas × países, diarios, días, total, objetivo, destino, app)
+y `experimentos.crear_con_piezas` la busca con el candado de escritura tomado antes de leer (token: 1 día; huella:
+10 min); repetida es `ExperimentoRepetido(eid)`: no se crea ni se encola nada y la ruta lleva al que ya existe.
+Pruebas: `tests/test_lanzar_activa.py`. `exp_estado`
 activates/pauses the whole experiment or one country inline. Metrics: `lanzador.refrescar`
 appends a `metrica_snapshot` per ad (thruplay, purchases, ROAS when Meta reports them) —
 the worker periodic `exp_refrescar_todos` (every 2 h, `worker.PERIODICAS`) does it for

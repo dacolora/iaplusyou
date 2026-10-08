@@ -8,6 +8,7 @@ Uso:
 
 Solo corre en tu máquina (127.0.0.1), no queda expuesto a internet.
 """
+import hashlib
 import json
 import logging
 import math
@@ -5333,8 +5334,10 @@ def exp_nuevo(cliente):
     if meta_conexion.estado(cliente).get("estado") != "conectado":
         return _volver_exp(cliente)
     ctx = _contexto_experimentos(cliente, con_elegibles=True, con_organico=False)
+    # token_form: de un solo uso por formulario pintado; exp_probar lo consume (un reenvío no crea ni activa otro).
     return render_template("exp_nuevo.html", cliente=cliente, nombre_proyecto=proyectos.nombre_visible(cliente),
-                           paises_fe=fe_tipos.PAISES, **ctx, **_contexto_meta(cliente, ctx["experimentos"]))
+                           paises_fe=fe_tipos.PAISES, token_form=secrets.token_urlsafe(16), **ctx,
+                           **_contexto_meta(cliente, ctx["experimentos"]))
 
 
 @app.route("/cliente/<cliente>/experimentos/nuevo", methods=["POST"])
@@ -5585,8 +5588,13 @@ def exp_probar(cliente):
     nombre = (request.form.get("nombre") or "").strip()[:200] or nombre_experimento_automatico(n_piezas, codigos)
     datos = dict(nombre=nombre, paises=paises, objetivo_meta=objetivo, dias=dias, tope_total=tope, destino_url=destino,
                  moneda=moneda, edad_min=edad_min, edad_max=edad_max, modo=modo, atribucion=atribucion, app=datos_app)
+    datos["clave_form"] = _clave_formulario_experimento(request.form.get("token_form"), datos, combinaciones)
     try:
         eid = experimentos.crear_con_piezas(cliente, datos, combinaciones)
+    except experimentos.ExperimentoRepetido as e:
+        # Lanzar también activa (2026-10-08): un «¿Reenviar formulario?» o un doble envío no crea ni gasta otra vez.
+        flash(gettext("Ese formulario ya creó un experimento: no se creó otro. Aquí está el que ya existe."), "warn")
+        return _volver_exp(cliente, e.eid)
     except (experimentos.ErrorCombinacion, ValueError) as e:
         flash(str(e), "error")
         return volver
@@ -5595,13 +5603,27 @@ def exp_probar(cliente):
     job_id = tareas_exp.job_id_lanzar(cliente, eid)
     # activar=True: el clic de «Lanzar a Meta», con el gasto diario a la vista, es la aprobación (Daniel, 2026-10-08).
     arranco = trabajos.encolar(job_id, "exp_lanzar", {"cliente": cliente, "experimento_id": eid, "activar": True},
-                               cliente=cliente, duracion_estimada=120, etapas=lanzador.ETAPAS_LANZAR, max_intentos=1)
+                               cliente=cliente, duracion_estimada=120, etapas=lanzador.ETAPAS_LANZAR_Y_ACTIVAR, max_intentos=1)
     if arranco:
         experimentos.actualizar(cliente, eid, estado="lanzando", error=None)
         flash(gettext("«%(nombre)s»: lanzando a Meta. Si todo sale bien, queda activo y empieza a gastar.", nombre=nombre), "ok")
     else:
         flash(gettext("«%(nombre)s» quedó creado; ya se estaba lanzando.", nombre=nombre), "warn")
     return _volver_exp(cliente, eid)
+
+
+def _clave_formulario_experimento(token, datos, combinaciones):
+    """La clave que hace de «Nuevo experimento» un envío de un solo uso (experimentos.crear_con_piezas la busca):
+    el token oculto del formulario («t:…»), o sin token (un POST armado a mano, una pestaña de antes del cambio) la
+    huella de lo que se pide («h:…»: piezas × países, presupuestos, días, total, objetivo, destino, app)."""
+    token = (token or "").strip()
+    if token and len(token) <= 64 and token.replace("-", "").replace("_", "").isalnum():
+        return "t:" + token
+    huella = {"combinaciones": sorted([int(pid), pais or ""] for pid, pais in combinaciones),
+              "paises": sorted([p["pais"], float(p.get("presupuesto_dia") or 0)] for p in datos["paises"]),
+              "dias": int(datos["dias"]), "tope": float(datos["tope_total"]), "objetivo": datos["objetivo_meta"],
+              "destino": datos["destino_url"], "app": datos.get("app")}
+    return "h:" + hashlib.sha256(json.dumps(huella, sort_keys=True, default=str).encode()).hexdigest()[:32]
 
 
 def _agregar_pieza_validada(cliente, experimento_id, pieza_id, pais):
@@ -5715,7 +5737,7 @@ def exp_lanzar(cliente, eid):
     # locked"), el experimento quedaría colgado ahí sin tarea que lo saque
     # (_reconciliar_huerfanos no corre bajo gunicorn).
     arranco = trabajos.encolar(job_id, "exp_lanzar", {"cliente": cliente, "experimento_id": eid, "activar": True},
-                               cliente=cliente, duracion_estimada=120, etapas=lanzador.ETAPAS_LANZAR, max_intentos=1)
+                               cliente=cliente, duracion_estimada=120, etapas=lanzador.ETAPAS_LANZAR_Y_ACTIVAR, max_intentos=1)
     if arranco:
         experimentos.actualizar(cliente, eid, estado="lanzando", error=None)
         flash(gettext("Lanzando el experimento a Meta: si todo sale bien, queda activo y empieza a gastar…"), "ok")
@@ -8616,6 +8638,8 @@ def _reconciliar_huerfanos():
             if trabajos.en_curso(tareas_exp.job_id_lanzar(cliente, eid)):
                 continue
             with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+                # Lanzar crea y activa (2026-10-08): lo que alcanzó a activarse vuelve a pausa antes del error.
+                lanzador.repausar(cliente, eid)
                 experimentos.actualizar(cliente, eid, estado="error",
                                          error=gettext("Se interrumpió el lanzamiento; revisa Ads Manager y vuelve a intentar."))
     except Exception as e:

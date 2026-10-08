@@ -28,6 +28,9 @@ from meta_ads.targeting import Targeting
 from tareas.meta import MONEDAS_SIN_DECIMALES, _LOCK, _miniatura_para_ad
 
 ETAPAS_LANZAR = [(idiomas.N_("Campaña"), 15), (idiomas.N_("Conjuntos por país"), 25), (idiomas.N_("Anuncios"), 60)]
+# Lanzar crea y activa (2026-10-08): la barra de las rutas de la persona suma la etapa de activar.
+ETAPA_ACTIVAR = idiomas.N_("Activar")
+ETAPAS_LANZAR_Y_ACTIVAR = ETAPAS_LANZAR + [(ETAPA_ACTIVAR, 10)]
 # NOK y SEK: 1 300 ≈ US$120–140 (1 000 NOK ≈ US$94 quedaba bajo el spend_cap mínimo de Meta, 2026-10-08).
 # Meta rechaza spend_cap por debajo de ~100 USD; por debajo no se manda.
 SPEND_CAP_MINIMO_USD = 100.0
@@ -291,7 +294,10 @@ def _conjunto_de(cliente, ex, p, plat, n_plataformas, campaign_id, promoted_obje
     return adset_id
 
 
-def lanzar(cliente, experimento_id, on_etapa=None):
+def lanzar(cliente, experimento_id, on_etapa=None, soltar=True):
+    """Crea en Meta campaña → conjuntos → anuncios, todo PAUSED. Al terminar pasa a `pausado`; con `soltar=False`
+    (la tarea que después activa, 2026-10-08) se queda en `lanzando`, para que ninguna guarda (barra de progreso,
+    Cerrar, Activar/Pausar, interrupción, reconciliación) lo trate como terminado mientras falta activar."""
     try:
         ex = _validar_para_lanzar(cliente, experimento_id)
         promoted_object = _promoted_object_para(cliente, ex)
@@ -338,6 +344,8 @@ def lanzar(cliente, experimento_id, on_etapa=None):
                                       {"detalle": cola.recortar(crudo)} if mensaje != crudo else None)
         _avisar_error_lanzamiento(cliente, ex, experimento_id, mensaje)
         raise
+    if not soltar:
+        return None
     experimentos.actualizar(cliente, experimento_id, estado="pausado", error=None)
     return gettext("Experimento en Meta, en pausa. Actívalo cuando quieras empezar a gastar.")
 
@@ -362,6 +370,9 @@ def _a_corriendo(cliente, experimento_id):
     (derivaciones) pudo escribir `extra.derivaciones` en ese intervalo —
     escribir la foto vieja las pisaría."""
     # error=None: un «no se pudo activar al lanzar» (activar_tras_lanzar) deja de valer al activar de verdad.
+    # Nunca pisa «cerrado»: un experimento cerrado mientras se hablaba con Meta no vuelve a correr aquí.
+    if (experimentos.obtener(cliente, experimento_id) or {}).get("estado") == "cerrado":
+        return
     experimentos.actualizar_extra(cliente, experimento_id, _con_activado, estado="corriendo", error=None)
 
 
@@ -415,11 +426,15 @@ def _preparar_fin_primera_activacion(cliente, ex):
             meta_auth.llamar("POST", adset_id, payload={"end_time": extra["fin_primera_activacion"]})
 
 
-def cambiar_estado(cliente, experimento_id, status, pais=None):
+def cambiar_estado(cliente, experimento_id, status, pais=None, desde_lanzamiento=False):
+    """`desde_lanzamiento`: solo la tarea `exp_lanzar` (activar al terminar de lanzar, o repausar tras un fallo o una
+    interrupción) puede tocar un experimento en `lanzando`; desde la pantalla, «Espera a que termine el lanzamiento»."""
     if status not in ("ACTIVE", "PAUSED"):
         raise ValueError(gettext("Estado no permitido."))
     ex = experimentos.obtener(cliente, experimento_id)
-    if ex is None or not ex["meta_campaign_id"] or ex["estado"] in ("armando", "lanzando", "error"):
+    if ex is not None and ex["estado"] == "lanzando" and not desde_lanzamiento:
+        raise ValueError(gettext("Espera a que termine el lanzamiento."))
+    if ex is None or not ex["meta_campaign_id"] or ex["estado"] in ("armando", "error"):
         raise ValueError(gettext("Ese experimento todavía no está en Meta."))
     if ex["estado"] == "cerrado":
         raise ValueError(gettext("Ese experimento está cerrado."))
@@ -501,48 +516,81 @@ def diario_activable(ex):
 def activar_tras_lanzar(cliente, experimento_id):
     """Pedido de Daniel (2026-10-08): el clic de «Lanzar a Meta», con el gasto diario a la vista, ES la aprobación;
     lanzar crea y activa, sin un segundo «Activar». Lo llama la tarea `exp_lanzar` con `activar=True`, después de un
-    `lanzar` que terminó sin error. Activa por el mismo camino que el botón «Activar todo» (`cambiar_estado`:
+    `lanzar(..., soltar=False)` que terminó sin error: el experimento sigue en `lanzando` hasta aquí, así ninguna
+    guarda lo da por terminado a mitad (ronda de guardian-gasto: Cerrar o «Activar todo» en esa ventana dejaban
+    anuncios gastando con el experimento cerrado). Activa por el mismo camino que «Activar todo» (`cambiar_estado`:
     campaña, todos los conjuntos —también los de apps— y los anuncios, con el plazo de PND-113).
 
-    Nada se activa si alguna pieza quedó sin anuncio o en error, o si el experimento no quedó en pausa. Si la activación
-    falla a medias, se vuelve a pausar todo (un anuncio activo en Meta con el experimento «en pausa» aquí gastaría sin
-    que el motor lo mida), queda el motivo en el experimento y un evento, y no se reintenta. Devuelve el mensaje de la
-    tarea, en el idioma en que corre (el del proyecto)."""
+    Sale de `lanzando` SIEMPRE: a `corriendo` si activó; a `pausado` con su motivo en `error` si alguna pieza quedó sin
+    anuncio o en error (nada se activa) o si la activación falló (se vuelve a pausar todo: un anuncio activo en Meta con
+    el experimento «en pausa» aquí gastaría sin que el motor lo mida; evento + aviso `error_lanzamiento`; sin
+    reintento). Devuelve el mensaje de la tarea, en el idioma en que corre (el del proyecto)."""
     import tablero   # perezoso: tablero es una capa de lectura por encima de este módulo
 
     ex = experimentos.obtener(cliente, experimento_id)
+    if ex["estado"] != "lanzando":
+        # Nadie más debería sacarlo de «lanzando» mientras la tarea corre; si pasó, no se activa nada encima.
+        mensaje = gettext("No se activó: el experimento ya no estaba lanzándose (quedó «%(estado)s»).",
+                          estado=gettext(experimentos.ETIQUETAS_ESTADO.get(ex["estado"], ex["estado"])))
+        experimentos.registrar_evento(cliente, experimento_id, "error", mensaje)
+        return mensaje
     sin_anuncio = [pz for pz in ex["piezas"] if not pz["meta_ad_id"] or pz["estado"] == "error"]
-    if ex["estado"] != "pausado" or sin_anuncio:
+    if sin_anuncio:
         mensaje = ngettext("No se activó: %(num)s pieza quedó sin anuncio en Meta. El experimento sigue en pausa; "
                            "revísalo y actívalo desde su tarjeta.",
                            "No se activó: %(num)s piezas quedaron sin anuncio en Meta. El experimento sigue en pausa; "
                            "revísalo y actívalo desde su tarjeta.", len(sin_anuncio))
+        experimentos.actualizar(cliente, experimento_id, estado="pausado", error=mensaje)
         experimentos.registrar_evento(cliente, experimento_id, "error", mensaje,
-                                      {"piezas": [pz["id"] for pz in sin_anuncio]} if sin_anuncio else None)
+                                      {"piezas": [pz["id"] for pz in sin_anuncio]})
         return mensaje
     moneda = ex["moneda"] or (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
     diario = tablero.dinero(diario_activable(ex), moneda)
     try:
-        cambiar_estado(cliente, experimento_id, "ACTIVE")
+        cambiar_estado(cliente, experimento_id, "ACTIVE", desde_lanzamiento=True)
     except Exception as e:  # noqa: BLE001 — cualquier fallo deja todo en pausa y en palabras, sin reintento
         crudo = cola.sin_token(str(e))
         motivo = crudo if isinstance(e, ValueError) else traducir_error_meta(crudo, meta_conexion.modo(cliente))
-        try:
-            cambiar_estado(cliente, experimento_id, "PAUSED")
+        if repausar(cliente, experimento_id):
             mensaje = gettext("Se creó en Meta, pero no se pudo activar: %(motivo)s. Quedó en pausa y no gasta; "
                               "actívalo desde su tarjeta cuando lo revises.", motivo=motivo)
-        except Exception:  # noqa: BLE001
+        else:
             mensaje = gettext("Se creó en Meta, pero no se pudo activar: %(motivo)s. Tampoco se pudo volver a pausar "
                               "todo: revisa en el Administrador de anuncios de Meta que no quede nada activo.",
                               motivo=motivo)
-        experimentos.actualizar(cliente, experimento_id, error=mensaje)
+        experimentos.actualizar(cliente, experimento_id, estado="pausado", error=mensaje)
         experimentos.registrar_evento(cliente, experimento_id, "error", mensaje,
                                       {"detalle": cola.recortar(crudo)} if motivo != crudo else None)
+        notificaciones.avisar(cliente, "error_lanzamiento",
+                              gettext("No se pudo activar «%(experimento)s»", experimento=ex["nombre"]),
+                              gettext("El experimento «%(experimento)s» (#%(id)s) se creó en Meta pero no se pudo "
+                                      "activar.\n\n%(mensaje)s", experimento=ex["nombre"], id=experimento_id,
+                                      mensaje=mensaje))
         return mensaje
     experimentos.registrar_evento(cliente, experimento_id, "estado",
                                   gettext("Activado al lanzar: ≈ %(diario)s al día", diario=diario),
                                   {"diario": diario_activable(ex), "moneda": moneda})
     return gettext("Experimento en Meta y activo: empieza a gastar ≈ %(diario)s al día.", diario=diario)
+
+
+def repausar(cliente, experimento_id):
+    """Vuelve a poner en pausa en Meta todo lo de un experimento que salió mal a mitad de lanzar o activar (también
+    tras una interrupción del worker o del servidor). Lo que se haya creado debería estar en pausa; pausar algo que ya
+    lo está no cuesta ni cambia nada. True si quedó todo pausado (o no había nada en Meta), False si Meta falló.
+    Nunca lanza excepción."""
+    ex = experimentos.obtener(cliente, experimento_id)
+    if not ex or not ex["meta_campaign_id"] or ex["estado"] == "cerrado":
+        return True
+    try:
+        cambiar_estado(cliente, experimento_id, "PAUSED", desde_lanzamiento=True)
+        return True
+    except ValueError:
+        return True   # sin nada que pausar en Meta (p. ej. ya pasó a error antes de crear la campaña)
+    except Exception as e:  # noqa: BLE001
+        log_aviso = cola.sin_token(str(e))
+        experimentos.registrar_evento(cliente, experimento_id, "error",
+                                      gettext("No se pudo volver a pausar en Meta: %(motivo)s", motivo=log_aviso))
+        return False
 
 
 def cambiar_presupuesto_pais(cliente, experimento_id, pais, presupuesto_dia):

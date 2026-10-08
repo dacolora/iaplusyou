@@ -114,7 +114,7 @@ def test_otros_objetivos_siguen_exigiendo_destino(app, base_temporal):
     data = dict(data, destino_url="https://tienda.co/p", app_ios_url="nada", app_id="x")
     app["c"].post("/cliente/acme/experimentos/probar", data=data)
     (e,) = ex.cargar("acme")
-    assert e["objetivo_meta"] == "OUTCOME_TRAFFIC" and e["extra"] == {} and e["destino_url"] == "https://tienda.co/p"
+    assert e["objetivo_meta"] == "OUTCOME_TRAFFIC" and "app" not in e["extra"] and e["destino_url"] == "https://tienda.co/p"
     assert [p["extra"] for p in e["piezas"]] == [{}]
 
 

@@ -5260,6 +5260,16 @@ msgstr ""
 "Check it in the panel and try again."
 
 #, python-format
+msgid ""
+"El experimento «%(experimento)s» (#%(id)s) se creó en Meta pero no se pudo activar.\n"
+"\n"
+"%(mensaje)s"
+msgstr ""
+"The experiment “%(experimento)s” (#%(id)s) was created on Meta but couldn't be activated.\n"
+"\n"
+"%(mensaje)s"
+
+#, python-format
 msgid "El experimento «%(nombre)s» falló al lanzar%(detalle)s. Revísalo y vuelve a intentarlo."
 msgstr "The experiment “%(nombre)s” failed to launch%(detalle)s. Check it and try again."
 
@@ -6685,6 +6695,9 @@ msgstr "That experiment no longer accepts piece changes."
 msgid "Ese experimento ya no acepta piezas nuevas."
 msgstr "That experiment no longer accepts new pieces."
 
+msgid "Ese formulario ya creó un experimento: no se creó otro. Aquí está el que ya existe."
+msgstr "That form already created an experiment: no new one was created. Here is the one that already exists."
+
 msgid "Ese guion no está en error."
 msgstr "That script isn't in an error state."
 
@@ -6808,6 +6821,9 @@ msgstr "Wait for Claude to finish answering before approving."
 
 msgid "Espera a que termine el lanzamiento antes de cerrar."
 msgstr "Wait for the launch to finish before closing."
+
+msgid "Espera a que termine el lanzamiento."
+msgstr "Wait for the launch to finish."
 
 msgid "Espera la respuesta de Claude para aprobar."
 msgstr "Wait for Claude's response before approving."
@@ -11006,6 +11022,10 @@ msgid_plural "No se activó: %(num)s piezas quedaron sin anuncio en Meta. El exp
 msgstr[0] "Not activated: %(num)s piece was left without an ad on Meta. The experiment stays paused; check it and activate it from its card."
 msgstr[1] "Not activated: %(num)s pieces were left without an ad on Meta. The experiment stays paused; check it and activate it from its card."
 
+#, python-format
+msgid "No se activó: el experimento ya no estaba lanzándose (quedó «%(estado)s»)."
+msgstr "Not activated: the experiment was no longer launching (it was left “%(estado)s”)."
+
 msgid "No se agregó ningún referente."
 msgstr "No reference was added."
 
@@ -11093,6 +11113,10 @@ msgstr "Couldn't open the campaign. Check your connection and try again."
 
 msgid "No se pudo abrir la ficha. Revisa tu conexión e intenta de nuevo."
 msgstr "Couldn't open the details. Check your connection and try again."
+
+#, python-format
+msgid "No se pudo activar «%(experimento)s»"
+msgstr "Couldn't activate “%(experimento)s”"
 
 #, python-format
 msgid "No se pudo adaptar (%(tipo)s)."
@@ -11425,6 +11449,10 @@ msgstr[1] "Couldn't transcribe %(num)s files."
 
 msgid "No se pudo usar el micrófono."
 msgstr "Couldn't use the microphone."
+
+#, python-format
+msgid "No se pudo volver a pausar en Meta: %(motivo)s"
+msgstr "Couldn't pause it again on Meta: %(motivo)s"
 
 msgid "No se subió"
 msgstr "Not uploaded"
