@@ -791,6 +791,10 @@ msgid "%(nombre)s (%(pais)s): el mismo diagnóstico de la otra tienda: %(causas)
 msgstr "%(nombre)s (%(pais)s): same diagnosis as the other store: %(causas)s — next: %(que)s."
 
 #, python-format
+msgid "%(nombre)s (%(pais)s): el país ya se escaló por esta pieza en la otra tienda."
+msgstr "%(nombre)s (%(pais)s): the country was already scaled for this piece in the other store."
+
+#, python-format
 msgid "%(nombre)s (%(pais)s): escalado ya pedido en esta pasada."
 msgstr "%(nombre)s (%(pais)s): scaling already requested in this pass."
 
@@ -5929,6 +5933,9 @@ msgstr "At trendtrack.io choose the Pro plan or higher (it includes the API and 
 #, python-format
 msgid "En tu catálogo: %(nombre)s"
 msgstr "In your catalog: %(nombre)s"
+
+msgid "En un experimento de instalaciones de la app las piezas se eligen al crearlo."
+msgstr "In an app installs experiment, pieces are chosen when you create it."
 
 msgid "En uso"
 msgstr "In use"
@@ -11612,8 +11619,8 @@ msgstr "To connect a Page by typing its ID, use “Let Creatv know”: we'll rev
 msgid "Para grabar, abre el editor desde su dirección segura (https)."
 msgstr "To record, open the editor from its secure address (https)."
 
-msgid "Para instalaciones de la app usa el formulario de la galería."
-msgstr "For app installs use the gallery form."
+msgid "Para instalaciones de la app usa «Nuevo experimento»."
+msgstr "For app installs use “New experiment”."
 
 msgid "Para producir una variante hay que indicar `variante` (número) y `variante_tipo` (hook | estructura) a la vez."
 msgstr "To produce a variant you must give `variante` (number) and `variante_tipo` (hook | estructura) together."
@@ -14628,6 +14635,9 @@ msgstr "Store"
 #, python-format
 msgid "Tienda %(nombre)s conectada. %(detalle)s %(extra)s"
 msgstr "Store %(nombre)s connected. %(detalle)s %(extra)s"
+
+msgid "Tienda de la app"
+msgstr "App store"
 
 msgid "Tienda desconectada. Sus productos quedaron archivados y sus pedidos se conservan (no se borró nada)."
 msgstr "Store disconnected. Its products were archived and its orders are kept (nothing was deleted)."

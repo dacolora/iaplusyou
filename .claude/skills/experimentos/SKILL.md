@@ -200,8 +200,10 @@ Activar, pausar, presupuesto y escalar recorren los conjuntos del país con `lan
 `LINK_CLICKS` a la tienda: las instalaciones reales solo se miden cuando la app tenga SDK de Meta o un servicio de
 atribución; la app debe estar en modo Live. Los campos de tienda y App ID viven en «Avanzado» de «Nuevo experimento»
 (`_exp_probar.html`, `data-solo-app`/`data-solo-no-app`; `app_id_guardado` lo trae `_contexto_experimentos`); `exp_crear` rechaza
-el objetivo de apps (se crea por el formulario de la galería). Derivar y rescatar quedan omitidos por
-`acciones.pedir` para estos experimentos, y no se agregan piezas nuevas después de lanzar. Meta rechaza una URL de
+el objetivo de apps (se crea en «Nuevo experimento»). Derivar y rescatar quedan omitidos por
+`acciones.pedir` para estos experimentos, y no se agregan piezas sueltas ni antes ni después de lanzar
+(`experimentos.agregar_pieza` lanza `ValueError` y `_agregar_pieza_validada` devuelve el mismo aviso: una fila sin
+plataforma bloqueaba el lanzamiento; las filas por tienda solo las arma `crear_con_piezas`). Meta rechaza una URL de
 tienda con otro objetivo: `meta_errores.explicar` lo dice en palabras. `meta_ads/` es un submódulo.
 Arreglos de la revisión final (2026-10-08, plata y seguridad): `cambiar_presupuesto_pais` cambia los conjuntos uno a
 uno y, si Meta falla a medias, devuelve los ya cambiados a `centavos(anterior) // n` y no toca lo guardado del país
@@ -215,6 +217,15 @@ Tras fusionar el centro de resultados (2026-10-08): toda condición «el país t
 `meta_adset_id or meta_adsets` (`_exp_gestionar.html`, `_exp_pieza.html` con `resultados.py` pasando `meta_adsets`,
 `lanzador.cambiar_estado` con `_adsets_de_pais`) y la suma diaria de «Activar todo» cuenta los países de apps; sin
 eso «Activar país» de una app decía «Ese país no tiene conjunto en Meta» y el confirm de «Activar todo» mostraba 0.
+Ola 2 de la revisión final (2026-10-08): `cambiar_presupuesto_pais` con UN solo conjunto relanza la excepción
+original de Meta (el aviso o la propuesta pendiente conserva el motivo); con varios, el «se dejó como estaba» termina
+con `traducir_error_meta(cola.sin_token(…))` y el evento guarda el error sin token. Una pieza que gana en las dos
+tiendas escala su país UNA vez (`tareas.experimentos._hermana_ya_gano`: si la fila hermana, misma `pieza_id` y país,
+ya es `ganador`, no se pide otro `escalar` y queda un evento) y el decisor juzga con el presupuesto del conjunto
+(`_presupuesto_para_decidir` = `app_tiendas.parte_presupuesto`), no con el del país. Cada fila muestra su tienda
+(«iOS»/«Android», `.tag-estado`) en la gestión, el ranking y el panel (`resultados.piezas` trae `plataforma`), y el
+anuncio y el creative en Meta llevan el sufijo « · iOS» / « · Android». Limitación conocida: el ranking top-tercio del
+decisor mezcla las filas de iOS y Android de un país.
 
 **Detalle de Meta** (`meta_detalle.py`, spec `2026-10-02-experimentos-centro-de-resultados` §3, E1 2026-10-02): único escritor de
 `metrica_dia` (una fila por anuncio y día: tráfico, embudo `visitas_pagina`/`carrito`/`pago_iniciado`/`compras_meta`,
