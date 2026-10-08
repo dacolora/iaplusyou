@@ -1,5 +1,8 @@
 """«Cómo mejorarlo» (spec tarjetas §6.3): prompt, visuales, voz, parseo, corrección y precio. Nada real se llama."""
 import json
+import shutil
+import subprocess
+import types
 
 import pytest
 
@@ -231,6 +234,34 @@ def test_es_mp4_lee_el_formato_de_ffprobe(monkeypatch, tmp_path):
     basura = tmp_path / "v.mp4"
     basura.write_bytes(b"no soy un video")
     assert mejorar.formato_video(str(basura)) == "" and not mejorar.es_mp4(str(basura))
+
+
+def test_formato_video_corre_ffprobe_solo_con_el_protocolo_file(monkeypatch):
+    """El archivo es ajeno: ffprobe no puede salir a la red por una lista (hls, concat) que traiga adentro."""
+    llamadas = []
+
+    def falso_run(cmd, **kw):
+        llamadas.append(cmd)
+        return types.SimpleNamespace(stdout="mov,mp4,m4a,3gp,3g2,mj2\n")
+    monkeypatch.setattr(mejorar.subprocess, "run", falso_run)
+    assert mejorar.formato_video("/tmp/v.mp4") == "mov,mp4,m4a,3gp,3g2,mj2"
+    cmd = llamadas[0]
+    assert cmd[0] == "ffprobe" and cmd[-1] == "/tmp/v.mp4"
+    i = cmd.index("-protocol_whitelist")
+    assert cmd[i + 1] == "file" and i < len(cmd) - 1, "la opción de entrada va antes del archivo"
+
+
+@pytest.mark.skipif(shutil.which("ffprobe") is None or shutil.which("ffmpeg") is None, reason="sin ffmpeg/ffprobe")
+def test_formato_video_real_acepta_la_opcion_y_un_mp4_sigue_pasando(tmp_path):
+    """Con el ffprobe de verdad: la opción `-protocol_whitelist file` es válida (si no, TODO video caería a la
+    miniatura), un mp4 pasa y una lista de reproducción con una URL adentro no (cierra cerrado)."""
+    mp4 = tmp_path / "v.mp4"
+    subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "color=c=red:s=64x64:d=1", "-pix_fmt", "yuv420p",
+                    str(mp4)], check=True, timeout=60)
+    assert mejorar.es_mp4(str(mp4)) and "mp4" in mejorar.formato_video(str(mp4))
+    lista = tmp_path / "lista.m3u8"
+    lista.write_text("#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:1,\nhttp://127.0.0.1:9/x.ts\n#EXT-X-ENDLIST\n")
+    assert mejorar.formato_video(str(lista)) == "" and not mejorar.es_mp4(str(lista))
 
 
 def test_visuales_no_baja_de_un_host_no_permitido_y_cae_a_la_miniatura(monkeypatch):

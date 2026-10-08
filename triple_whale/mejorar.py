@@ -129,10 +129,14 @@ def visuales(foto_):
 
 
 def formato_video(ruta):
-    """El `format_name` que da ffprobe («mov,mp4,m4a,3gp,3g2,mj2» para un mp4), o "" si no lo puede leer."""
+    """El `format_name` que da ffprobe («mov,mp4,m4a,3gp,3g2,mj2» para un mp4), o "" si no lo puede leer. El archivo
+    es ajeno: `-protocol_whitelist file` (ffmpeg ya lo pone por defecto para una lista local, aquí se pide explícito)
+    evita que, si resulta ser una lista (hls, concat, sdp…), ffprobe salga a abrir las direcciones que traiga dentro
+    (http, tcp, rtp…); sin poder abrirlas falla y queda "" (cierra cerrado)."""
     try:
-        salida = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=format_name", "-of", "csv=p=0",
-                                 ruta], check=True, capture_output=True, text=True, timeout=60).stdout
+        salida = subprocess.run(["ffprobe", "-protocol_whitelist", "file", "-v", "error", "-show_entries",
+                                 "format=format_name", "-of", "csv=p=0", ruta],
+                                check=True, capture_output=True, text=True, timeout=60).stdout
         return salida.strip()
     except Exception:  # noqa: BLE001 — sin formato conocido no se le pasa a ffmpeg
         return ""

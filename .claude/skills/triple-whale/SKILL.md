@@ -226,7 +226,8 @@ production. It must work for ANY ad, not only Creatv's: in happyflops only 4 pie
   check «between chunks» never runs while `iter_content(65536)` waits for its 64 KB, so a server dripping 1 byte every
   0.25 s held the worker 12 s with `tiempo_max=2`; proved against a real slow-drip `http.server`,
   `tests/test_conectores_descarga_lenta.py`), `video/*` only, SSRF check on every redirect. ffmpeg opens the downloaded file only if ffprobe says mp4/mov
-  (`mejorar.es_mp4`, B4: it is a third-party file and an odd demuxer must not get it); otherwise the thumbnail.
+  (`mejorar.es_mp4`, B4: it is a third-party file and an odd demuxer must not get it; ffprobe runs with
+  `-protocol_whitelist file` and fails closed); otherwise the thumbnail.
 - **«Cómo mejorarlo» (`triple_whale/mejorar.py`, task `tw_analizar_anuncio`).** Price first:
   `gastos.estimar("analisis_anuncio_tw", segundos=)` = tariff 0.08 + Whisper by the video's duration (30 s when
   unknown). The 0.08 is an initial guess, not measured (PND-171). `max_intentos=1`, `job_id`
