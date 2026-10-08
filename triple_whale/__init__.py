@@ -27,7 +27,7 @@ import os
 import re
 import time
 from datetime import date, timedelta
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 import requests
 from flask_babel import gettext
@@ -101,7 +101,9 @@ ENLACES_POR_CANAL = {
 }
 ENLACES_PLATAFORMAS = tuple(d for dominios in ENLACES_POR_CANAL.values() for d in dominios)
 _HOSTS_REDIRECTOR = ("l.", "lm.")
-_RUTAS_REDIRECTOR = ("/l.php", "/redirect")
+# Redirectores de las plataformas: Facebook (/l.php, /flx/warn), TikTok (/link), Pinterest (/offsite) y los genéricos
+# (/redirect). Revisión final de las tarjetas, B8 (2026-10-08): /link, /offsite y /flx/warn se colaban.
+_RUTAS_REDIRECTOR = ("/l.php", "/redirect", "/link", "/offsite", "/flx/warn")
 
 
 def enlace_permitido(url, canal=None):
@@ -116,7 +118,10 @@ def enlace_permitido(url, canal=None):
     if p.scheme != "https" or not p.hostname or p.username or p.password or puerto not in (None, 443):
         return False
     host = p.hostname.lower()
-    if host.startswith(_HOSTS_REDIRECTOR) or p.path.lower().startswith(_RUTAS_REDIRECTOR):
+    # La ruta como la leería el servidor: sin %-codificación y con una sola barra al principio («//l.php» y
+    # «/%6C.php» también son el redirector).
+    ruta = "/" + unquote(p.path).lower().lstrip("/")
+    if host.startswith(_HOSTS_REDIRECTOR) or ruta.startswith(_RUTAS_REDIRECTOR):
         return False
     if canal is None:
         dominios = ENLACES_PLATAFORMAS

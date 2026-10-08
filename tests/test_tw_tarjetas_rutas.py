@@ -556,3 +556,26 @@ def test_cifras_del_aprendizaje():
     assert mejorar.cifras_del_aprendizaje({"aprendizaje": None, "cifras_sin_dato": ["73 %"]}) == []
     assert mejorar.cifras_del_aprendizaje({"aprendizaje": "x", "cifras_sin_dato": None}) == []
     assert mejorar.cifras_del_aprendizaje(None) == []
+
+
+def test_un_id_de_analisis_enorme_es_404_no_500(app):  # noqa: F811
+    """Revisión final B7: un `aid` más grande que un entero de SQLite daba OverflowError (500)."""
+    _conectar()
+    _sembrar()
+    enorme = 10 ** 30
+    assert app["c"].get(f"/cliente/acme/triple-whale/analisis/{enorme}").status_code == 404
+    assert app["c"].post(f"/cliente/acme/triple-whale/analisis/{enorme}/crear").status_code == 404
+    assert app["c"].post(f"/cliente/acme/triple-whale/analisis/{enorme}/aprendizaje").status_code == 404
+    assert app["c"].get(f"/cliente/acme/triple-whale/analisis/{2 ** 63 - 1}").status_code == 404   # el tope, sin fila
+
+
+def test_las_claves_del_lote_no_se_repiten_y_paran_en_el_tope():
+    """Revisión final B6: un conjunto para lo ya visto y nunca más de N_LOTE claves válidas."""
+    from triple_whale import panel, rutas
+    valores = ["facebook-ads:p1"] * 5000 + ["mal", "facebook-ads:a/b", ":p2", "facebook-ads:"] + \
+        [f"facebook-ads:x{i}" for i in range(50)]
+    claves = rutas._claves_confirmadas(valores)
+    assert claves[0] == ("facebook-ads", "p1") and len(claves) == panel.N_LOTE == len(set(claves))
+    assert claves[1:] == [("facebook-ads", f"x{i}") for i in range(panel.N_LOTE - 1)]
+    assert rutas._claves_confirmadas(["tiktok-ads:1", "tiktok-ads:1", "tiktok-ads:2"], tope=5) == \
+        [("tiktok-ads", "1"), ("tiktok-ads", "2")]

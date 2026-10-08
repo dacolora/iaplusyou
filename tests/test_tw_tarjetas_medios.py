@@ -171,6 +171,14 @@ def test_enlace_permitido_ata_el_enlace_a_la_plataforma_del_canal():
     "https://www.tiktok.com:8443/x",
     "ftp://www.tiktok.com/x",
     "https://www.tiktok.com.evil.test/x",
+    # Revisión final B8: los otros redirectores de las plataformas, y las formas de escribir la misma ruta.
+    "https://www.tiktok.com/link/v2?target=https%3A%2F%2Fevil.test",          # TikTok
+    "https://www.pinterest.com/offsite/?url=https%3A%2F%2Fevil.test",         # Pinterest
+    "https://www.facebook.com/flx/warn/?u=https%3A%2F%2Fevil.test",           # Facebook
+    "https://www.facebook.com//l.php?u=x",                                    # doble barra
+    "https://www.tiktok.com///link/v2?target=x",
+    "https://www.facebook.com/%6C.php?u=x",                                   # %-codificada
+    "https://www.facebook.com/FLX/Warn/?u=x",
 ])
 def test_enlace_permitido_rechaza_redirectores_y_formas_raras(malo):
     assert not triple_whale.enlace_permitido(malo), malo
@@ -204,3 +212,9 @@ def test_descargar_archivo_dentro_del_tiempo_termina(monkeypatch, tmp_path):
     monkeypatch.setattr(conector_url.time, "monotonic", lambda: 0)
     _fingir(monkeypatch, _RespuestaPorTrozos([b"N" * 10] * 3))
     assert conector_url.descargar_archivo("https://files.triplewhale.com/v.mp4", str(tmp_path / "v.mp4")) == 30
+
+
+def test_enlace_permitido_no_confunde_una_ruta_normal_con_un_redirector():
+    assert triple_whale.enlace_permitido("https://www.tiktok.com/@marca/video/1", "tiktok-ads")
+    assert triple_whale.enlace_permitido("https://www.pinterest.com/pin/1/", "pinterest-ads")
+    assert triple_whale.enlace_permitido("https://www.facebook.com/watch/?v=1", "facebook-ads")

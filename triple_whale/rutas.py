@@ -44,6 +44,7 @@ from tareas import triple_whale as tareas_tw
 from triple_whale import analisis, datos, evaluacion, mejorar, panel, puente
 
 bp = Blueprint("triple_whale", __name__, url_prefix="/cliente/<cliente>/triple-whale")
+AID_MAX = 2 ** 63 - 1           # el mayor entero de SQLite: un id más grande es 404, no un OverflowError (B7)
 log = logging.getLogger("creatv.triple_whale.rutas")
 
 
@@ -249,14 +250,21 @@ def analizar_anuncio(cliente, canal, ad_id):
     return _volver(cliente)
 
 
-def _claves_confirmadas(valores):
+def _claves_confirmadas(valores, tope=None):
     """[(canal, ad_id)] de los `clave=<canal>:<ad_id>` del formulario del lote: cada mitad validada con `id_valido`,
-    lo mal formado se ignora y no se repite ninguna."""
-    claves = []
+    lo mal formado se ignora, no se repite ninguna y se para en `tope` claves válidas (por defecto `panel.N_LOTE`).
+    Un conjunto para lo ya visto: un formulario con miles de claves repetidas no cuesta cuadrático (revisión final,
+    B6)."""
+    tope = panel.N_LOTE if tope is None else tope
+    claves, vistas = [], set()
     for v in valores:
+        if len(claves) >= tope:
+            break
         canal, dos_puntos, ad_id = str(v or "").partition(":")
-        if dos_puntos and tareas_tw.id_valido(canal) and tareas_tw.id_valido(ad_id) and (canal, ad_id) not in claves:
-            claves.append((canal, ad_id))
+        clave = (canal, ad_id)
+        if dos_puntos and clave not in vistas and tareas_tw.id_valido(canal) and tareas_tw.id_valido(ad_id):
+            vistas.add(clave)
+            claves.append(clave)
     return claves
 
 
@@ -269,7 +277,7 @@ def analizar_lote(cliente):
     g = panel.galeria(cliente, alc["ev"], request.form.get("veredicto") or "", alcance=alc)
     # Solo lo que se confirmó (el precio que vio la persona) Y que hoy se puede analizar; a lo sumo N_LOTE.
     elegibles = g["lote"]["elegibles"]
-    claves = [k for k in _claves_confirmadas(request.form.getlist("clave")) if k in elegibles][:panel.N_LOTE]
+    claves = [k for k in _claves_confirmadas(request.form.getlist("clave")) if k in elegibles]
     n = fallos = 0
     for canal, ad_id in claves:
         a = _anuncio_del_alcance(alc, canal, ad_id)
@@ -317,7 +325,7 @@ def _aprendizaje_de(cliente, fila):
         return doctrina_aprendizajes.desde_analisis_tw(fila)
 
 
-@bp.get("/analisis/<int:aid>")
+@bp.get(f"/analisis/<int(max={AID_MAX}):aid>")
 def analisis_detalle(cliente, aid):
     fila = _analisis_listo(cliente, aid)
     r = fila["resultado"] or {}
@@ -328,7 +336,7 @@ def analisis_detalle(cliente, aid):
                            cifras_aprendizaje=mejorar.cifras_del_aprendizaje(r))
 
 
-@bp.post("/analisis/<int:aid>/crear")
+@bp.post(f"/analisis/<int(max={AID_MAX}):aid>/crear")
 def analisis_crear(cliente, aid):
     version = (_analisis_listo(cliente, aid)["resultado"] or {}).get("version")
     if not version:
@@ -342,7 +350,7 @@ def analisis_crear(cliente, aid):
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
 
-@bp.post("/analisis/<int:aid>/aprendizaje")
+@bp.post(f"/analisis/<int(max={AID_MAX}):aid>/aprendizaje")
 def analisis_aprendizaje(cliente, aid):
     fila = _analisis_listo(cliente, aid)
     if _aprendizaje_guardado(cliente, aid):
