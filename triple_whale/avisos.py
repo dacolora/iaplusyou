@@ -1,9 +1,12 @@
 """Avisos por correo después de cada copia de Triple Whale (spec 2026-09-28
 §12): la persona se entera de lo que cambió sin abrir la pestaña.
 
-Tras cada `sync.sincronizar` el worker evalúa los últimos 30 días
+Tras la copia que cierra el lote de tiendas del proyecto (la última en terminar,
+`tareas.triple_whale.tw_sincronizar`) el worker evalúa «Todas las tiendas»: por
+tienda habría perdedores falsos, porque un anuncio de una tienda no vende en la
+de otro país. Evalúa los últimos 30 días
 (`panel.evaluar_periodo`, gratis) y compara con lo que se avisó la vez
-anterior (`triple_whale.extra.avisados`: {ad_id: {veredicto, fatiga}}):
+anterior (`avisados` en el `extra` de los ajustes del proyecto: {ad_id: {veredicto, fatiga}}):
 
 - anuncios que pasaron a `ganador` → «Nuevos ganadores»;
 - ganadores/prometedores que ahora se están cansando → «Se están cansando»;
@@ -93,7 +96,7 @@ def revisar_y_avisar(cliente, ev=None, config=None, dias=DIAS):
     if not config:
         return None
     if ev is None:
-        ev, _, _ = panel.evaluar_periodo(cliente, dias)
+        ev, _, _ = panel.evaluar_periodo(cliente, dias, tienda_id=None)   # «Todas»: ver spec §7
     extra = config.get("extra") or {}
     if "avisados" not in extra:
         triple_whale_tiendas.actualizar_extra(cliente, {"avisados": _estado(ev)})

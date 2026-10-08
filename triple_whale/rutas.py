@@ -3,10 +3,13 @@
 todo porque la URL lleva `<cliente>`; cada POST además exige el mismo origen
 (Sec-Fetch-Site), la barrera CSRF del resto de la app.
 
-- `panel`: el fragmento que la pestaña pide por fetch (solo lectura).
-- `sincronizar`: encola la copia de Triple Whale (gratis).
-- `evaluar`: encola el análisis con IA con la muestra del periodo que se está
-  viendo; el precio ya estaba a la vista en el botón (y en su confirmación).
+- `panel`: el fragmento que la pestaña pide por fetch (solo lectura). Lee
+  `tienda` (spec 2026-10-08 §6.2): una tienda del proyecto; ajena o inválida = «Todas».
+- `sincronizar`: encola la copia de Triple Whale (gratis): sin `tienda_id`, la
+  de cada tienda; con él, la de esa (ajena o inválida → 404).
+- `evaluar`: encola el análisis con IA con la muestra del periodo Y la tienda
+  que se están viendo (`tienda`, como en el panel); `extra` guarda `tienda_id`
+  y `pais`. El precio ya estaba a la vista en el botón (y en su confirmación).
 - `idea_crear`: una idea del análisis → Crear precargado (nada se genera).
 - `a_referente`: un anuncio de una evaluación → Referentes del proyecto.
 - `pieza_estado`: pausa o activa en Meta un anuncio hecho en Creatv (una
@@ -80,7 +83,8 @@ def _dias(valor):
 
 @bp.get("/panel")
 def ver_panel(cliente):
-    ctx = panel.contexto(cliente, _dias(request.args.get("dias")), (request.args.get("canal") or "").strip() or None)
+    ctx = panel.contexto(cliente, _dias(request.args.get("dias")), (request.args.get("canal") or "").strip() or None,
+                         tienda_id=request.args.get("tienda"))
     armar_grafico = current_app.extensions.get("grafico_tablero")
     grafico = armar_grafico(ctx["serie"]) if armar_grafico and ctx.get("serie") else None
     return render_template("_tw_panel.html", cliente=cliente, tw=ctx, grafico=grafico)
@@ -88,9 +92,18 @@ def ver_panel(cliente):
 
 @bp.post("/sincronizar")
 def sincronizar(cliente):
+    tienda_id = None
+    valor = (request.form.get("tienda_id") or "").strip()
+    if valor:
+        try:
+            tienda_id = int(valor)
+        except ValueError:
+            abort(404)
+        if not triple_whale_tiendas.tienda(cliente, tienda_id):
+            abort(404)
     if not triple_whale_tiendas.obtener(cliente):
         flash(gettext("Triple Whale no está conectado en este proyecto."), "error")
-    elif tareas_tw.encolar_sync(cliente):
+    elif tareas_tw.encolar_sync(cliente, tienda_id):
         flash(gettext("Trayendo las métricas de Triple Whale…"), "ok")
     else:
         flash(gettext("Ya se están trayendo las métricas de Triple Whale."), "warn")
@@ -107,7 +120,9 @@ def evaluar(cliente):
         flash(gettext("Ya hay una evaluación con IA en curso."), "warn")
         return _volver(cliente)
     canal = (request.form.get("canal") or "").strip() or None
-    ev, desde, hasta = panel.evaluar_periodo(cliente, _dias(request.form.get("dias")), canal)
+    tienda = panel.tienda_elegida(config["tiendas"], request.form.get("tienda"))
+    tienda_id = tienda["id"] if tienda else None
+    ev, desde, hasta = panel.evaluar_periodo(cliente, _dias(request.form.get("dias")), canal, tienda_id=tienda_id)
     muestra = analisis.muestra(ev)
     if not muestra:
         flash(gettext("Todavía no hay anuncios con datos suficientes para evaluar con IA."), "error")
@@ -116,6 +131,7 @@ def evaluar(cliente):
                                  pedido_por=session.get("usuario"))
     datos.actualizar_evaluacion(eid, extra={"modelo": config["modelo_atribucion"],
                                             "ventana": config["ventana_atribucion"], "canal": canal,
+                                            "tienda_id": tienda_id, "pais": tienda["pais"] if tienda else None,
                                             "benchmarks": ev["benchmarks"], "meta_roas": ev["meta_roas"]})
     if not tareas_tw.encolar_evaluacion(cliente, eid):
         datos.borrar_evaluacion(cliente, eid)

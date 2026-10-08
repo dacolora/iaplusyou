@@ -614,25 +614,32 @@ def test_refrescar_guarda_snapshots(entorno):
     assert m["estado_meta_texto"] == "Activo" and e["piezas"][0]["estado_meta"] == "ACTIVE"
 
 
-def _tw_conectado(lz, monkeypatch, moneda="COP"):
-    """Triple Whale conectado (sin tocar la base) y la sincronización previa
-    reemplazada por un contador: los tests siembran la copia a mano."""
-    config = {"dominio_tienda": "acme.myshopify.com", "modelo_atribucion": "Triple Attribution",
-              "ventana_atribucion": "lifetime", "moneda": moneda}
-    monkeypatch.setattr(lz.triple_whale_tiendas, "obtener", lambda cliente: config)
-    llamadas = []
-    monkeypatch.setattr(lz.tw_sync, "sincronizar_si_hace_falta", lambda cliente: llamadas.append(cliente))
+def _tw_conectado(lz, monkeypatch, moneda="COP", dominio="acme.myshopify.com", pais=None):
+    """Triple Whale conectado con una tienda REAL (la conexión de verdad, con llave de prueba) y la
+    sincronización previa reemplazada por un contador de `(cliente, tienda_id)`: los tests siembran la
+    copia a mano. Devuelve la lista de llamadas; `llamadas.tienda_id` es el id de la tienda creada."""
+    monkeypatch.setenv("FLASK_SECRET_KEY", "test_secret_key_12345678")
+    tienda_id = lz.triple_whale_tiendas.agregar("acme", "tw_secreto", dominio, pais, moneda=moneda,
+                                                modelo_atribucion="Triple Attribution", ventana_atribucion="lifetime")
+    llamadas = _Llamadas()
+    llamadas.tienda_id = tienda_id
+    monkeypatch.setattr(lz.tw_sync, "sincronizar_si_hace_falta",
+                        lambda cliente, tienda_id, minutos=30: llamadas.append((cliente, tienda_id)))
     return llamadas
 
 
-def _sembrar_pixel(ad_id, dias, otros=()):
-    """dias: [(fecha, pedidos, ingresos)] del Triple Pixel para ese anuncio de
+class _Llamadas(list):
+    tienda_id = None
+
+
+def _sembrar_pixel(tienda_id, ad_id, dias, otros=()):
+    """dias: [(fecha, pedidos, ingresos)] del Triple Pixel de esa tienda para ese anuncio de
     Meta; otros: [(ad_id, fecha, pedidos, ingresos)] de otros anuncios. Una
     sola llamada: reemplazar_anuncios_pixel pisa todo el rango."""
     from triple_whale import datos as tw_datos
     filas = [(ad_id, f, p, i) for f, p, i in dias] + list(otros)
     fechas = [f for _, f, _, _ in filas]
-    tw_datos.reemplazar_anuncios_pixel("acme", min(fechas), max(fechas), [
+    tw_datos.reemplazar_anuncios_pixel("acme", tienda_id, min(fechas), max(fechas), [
         {"canal": "facebook-ads", "ad_id": a, "fecha": f, "pedidos": p, "ingresos": i} for a, f, p, i in filas])
 
 
@@ -648,11 +655,11 @@ def test_refrescar_con_triple_whale_toma_trafico_de_meta_y_ventas_del_pixel(ento
     pieza = ex.obtener("acme", eid)["piezas"][0]
     ad_id, creado = pieza["meta_ad_id"], pieza["creado_en"][:10]
     llamadas = _tw_conectado(lz, monkeypatch)
-    _sembrar_pixel(ad_id, [(creado, 1.0, 80.0), ("2099-01-01", 1.4, 40.0), ("2000-01-01", 50.0, 9999.0)],
+    _sembrar_pixel(llamadas.tienda_id, ad_id, [(creado, 1.0, 80.0), ("2099-01-01", 1.4, 40.0), ("2000-01-01", 50.0, 9999.0)],
                    otros=[("otro_anuncio", creado, 99.0, 99999.0)])
 
     assert lz.refrescar("acme", eid) == 3
-    assert llamadas == ["acme"]   # una sola puesta al día por experimento, no por pieza
+    assert llamadas == [("acme", llamadas.tienda_id)]   # una sola puesta al día por experimento, no por pieza
     m = ex.obtener("acme", eid)["piezas"][0]["metricas"]
     assert m["impresiones"] == 100 and m["gasto"] == 2.0 and m["estado_meta_texto"] == "Activo"
     # 1 + 1,4 pedidos (modelo lineal) = 2; lo de antes de crear la pieza no cuenta.
@@ -670,7 +677,7 @@ def test_lanzar_con_triple_whale_pone_sus_parametros_de_url_en_cada_creative(ent
     si el proyecto tiene Triple Whale conectado, y el link sigue llevando el
     utm_content de la pieza (la atribución por tienda no se pierde)."""
     ex, lz, meta, eid = entorno["ex"], entorno["lanzador"], entorno["meta"], entorno["eid"]
-    monkeypatch.setattr(lz.triple_whale_tiendas, "obtener", lambda cliente: {"dominio_tienda": "acme.myshopify.com"})
+    _tw_conectado(lz, monkeypatch)
     lz.lanzar("acme", eid)
     creativos = [kw for t, kw in meta.llamadas if t.startswith("creative")]
     assert len(creativos) == 3
@@ -695,14 +702,14 @@ def test_refrescar_con_triple_whale_distingue_sin_ventas_de_sin_dato(entorno, mo
     lz.lanzar("acme", eid)
     piezas = ex.obtener("acme", eid)["piezas"]
     hoy = piezas[0]["creado_en"][:10]
-    _tw_conectado(lz, monkeypatch)
+    tienda_id = _tw_conectado(lz, monkeypatch).tienda_id
     monkeypatch.setattr(lz.meta_insights, "obtener_resultados", lambda ad_id, objetivo=None: {
         "impresiones": 100, "gasto_usd": 30.0, "compras": 3, "ingresos": 90.0, "roas": 3.0,
         "estado_meta": "ACTIVE", "estado_meta_texto": "Activo"})
     canal = [{"canal": "facebook-ads", "ad_id": p["meta_ad_id"], "fecha": hoy, "gasto": 30} for p in piezas[:2]]
-    tw_datos.reemplazar_anuncios_canal("acme", hoy, hoy, canal)
+    tw_datos.reemplazar_anuncios_canal("acme", tienda_id, hoy, hoy, canal)
     # El Pixel respondió para ese día, con pedidos solo para la primera pieza.
-    tw_datos.reemplazar_anuncios_pixel("acme", hoy, hoy, [
+    tw_datos.reemplazar_anuncios_pixel("acme", tienda_id, hoy, hoy, [
         {"canal": "facebook-ads", "ad_id": piezas[0]["meta_ad_id"], "fecha": hoy, "pedidos": 1, "ingresos": 45}])
     lz.refrescar("acme", eid)
     m = [p["metricas"] for p in ex.obtener("acme", eid)["piezas"]]
@@ -710,7 +717,7 @@ def test_refrescar_con_triple_whale_distingue_sin_ventas_de_sin_dato(entorno, mo
     assert (m[1]["compras"], m[1]["ingresos"], m[1]["fuente_ventas"]) == (0, 0.0, "ninguna")
     # Sin respuesta del Pixel (una fila de canal nueva, sin consulta del Pixel): queda lo de Meta.
     manana = "2099-12-31"
-    tw_datos.reemplazar_anuncios_canal("acme", manana, manana, [
+    tw_datos.reemplazar_anuncios_canal("acme", tienda_id, manana, manana, [
         {"canal": "facebook-ads", "ad_id": piezas[2]["meta_ad_id"], "fecha": manana, "gasto": 1}])
     lz.refrescar("acme", eid)
     tercera = ex.obtener("acme", eid)["piezas"][2]["metricas"]
@@ -725,7 +732,7 @@ def test_refrescar_con_triple_whale_sin_conectar_cae_a_meta(entorno, monkeypatch
     ex.actualizar("acme", eid, atribucion="triple_whale")
     lz.lanzar("acme", eid)
     monkeypatch.setattr(lz.tw_sync, "sincronizar_si_hace_falta",
-                        lambda cliente: (_ for _ in ()).throw(AssertionError("no debía sincronizar")))
+                        lambda cliente, tienda_id, minutos=30: (_ for _ in ()).throw(AssertionError("no debía sincronizar")))
     assert lz.refrescar("acme", eid) == 3
     m = ex.obtener("acme", eid)["piezas"][0]["metricas"]
     assert m["impresiones"] == 100 and m["gasto"] == 2.0 and m["fuente_ventas"] == "ninguna"
@@ -737,17 +744,38 @@ def test_refrescar_con_triple_whale_error_de_sync_registra_evento_y_usa_la_copia
     ex.actualizar("acme", eid, atribucion="triple_whale")
     lz.lanzar("acme", eid)
     pieza = ex.obtener("acme", eid)["piezas"][0]
-    _tw_conectado(lz, monkeypatch)
+    tienda_id = _tw_conectado(lz, monkeypatch).tienda_id
 
-    def _revienta(cliente):
+    def _revienta(cliente, tienda_id, minutos=30):
         raise lz.triple_whale.ErrorTripleWhale("límite de tasa x-api-key=tw_secreto")
     monkeypatch.setattr(lz.tw_sync, "sincronizar_si_hace_falta", _revienta)
-    _sembrar_pixel(pieza["meta_ad_id"], [(pieza["creado_en"][:10], 3.0, 30.0)])
+    _sembrar_pixel(tienda_id, pieza["meta_ad_id"], [(pieza["creado_en"][:10], 3.0, 30.0)])
 
     assert lz.refrescar("acme", eid) == 3
     eventos = ex.eventos("acme", eid)
     assert any("Triple Whale" in (e.get("mensaje") or "") for e in eventos)
     assert ex.obtener("acme", eid)["piezas"][0]["metricas"]["compras"] == 3
+
+
+@pytest.mark.parametrize("pais, dominio, se_ve", [(None, "acme.myshopify.com", "acme.myshopify.com"),
+                                                  ("CO", "acme-co.myshopify.com", "Colombia")])
+def test_refrescar_error_de_sync_tacha_la_llave_y_dice_la_tienda(entorno, monkeypatch, pais, dominio, se_ve):
+    """Auditoría de seguridad (2026-10-08): el evento «Error al traer métricas de Triple Whale» tacha el
+    valor exacto de la llave de esa tienda (un proveedor puede repetirla sin «key=») y dice de qué tienda
+    era: su país o, sin país, su dominio."""
+    ex, lz, eid = entorno["ex"], entorno["lanzador"], entorno["eid"]
+    ex.actualizar("acme", eid, atribucion="triple_whale")
+    lz.lanzar("acme", eid)
+    _tw_conectado(lz, monkeypatch, dominio=dominio, pais=pais)
+
+    def _revienta(cliente, tienda_id, minutos=30):
+        raise lz.triple_whale.ErrorTripleWhale("401 para la llave tw_secreto en la tienda")
+    monkeypatch.setattr(lz.tw_sync, "sincronizar_si_hace_falta", _revienta)
+
+    lz.refrescar("acme", eid)
+    [evento] = [e for e in ex.eventos("acme", eid) if "Error al traer métricas" in (e.get("mensaje") or "")]
+    assert "tw_secreto" not in evento["mensaje"] and "***" in evento["mensaje"]
+    assert se_ve in evento["mensaje"]
 
 
 def test_refrescar_con_triple_whale_en_otra_moneda_deja_roas_en_cero(entorno, monkeypatch):
@@ -758,12 +786,167 @@ def test_refrescar_con_triple_whale_en_otra_moneda_deja_roas_en_cero(entorno, mo
     ex.actualizar("acme", eid, atribucion="triple_whale")
     lz.lanzar("acme", eid)
     pieza = ex.obtener("acme", eid)["piezas"][0]
-    _tw_conectado(lz, monkeypatch, moneda="USD")
-    _sembrar_pixel(pieza["meta_ad_id"], [(pieza["creado_en"][:10], 2.0, 50.0)])
+    tienda_id = _tw_conectado(lz, monkeypatch, moneda="USD").tienda_id
+    _sembrar_pixel(tienda_id, pieza["meta_ad_id"], [(pieza["creado_en"][:10], 2.0, 50.0)])
     lz.refrescar("acme", eid)
     m = ex.obtener("acme", eid)["piezas"][0]["metricas"]
     assert m["compras"] == 2 and m["roas"] == 0.0 and m["cpa"] == 1.0
     assert ex.obtener("acme", eid)["extra"].get("aviso_moneda") == "USD"
+
+
+def _tw_dos_tiendas(lz, monkeypatch, paises=("CO", "MX")):
+    """Una tienda por país (dominios distintos). Devuelve (llamadas, {pais: tienda_id})."""
+    llamadas = _tw_conectado(lz, monkeypatch, dominio=f"acme-{paises[0].lower()}.myshopify.com", pais=paises[0])
+    ids = {paises[0]: llamadas.tienda_id}
+    for pais in paises[1:]:
+        ids[pais] = lz.triple_whale_tiendas.agregar("acme", "tw_secreto", f"acme-{pais.lower()}.myshopify.com", pais)
+    return llamadas, ids
+
+
+def test_tienda_tw_de_elige_la_del_pais_o_la_unica_sin_pais():
+    import lanzador
+    no, se = {"id": 1, "pais": "NO"}, {"id": 2, "pais": "SE"}
+    assert lanzador._tienda_tw_de([no, se], "SE") is se
+    assert lanzador._tienda_tw_de([no, se], "no") is no
+    assert lanzador._tienda_tw_de([no, se], "DK") is None
+    assert lanzador._tienda_tw_de([no, se], None) is None
+    # Una sola tienda SIN país sirve para todos los países; con país, solo para el suyo (revisión del
+    # guardián del gasto, 2026-10-08: una pieza de SE leída con el Pixel de NO salía «perdedor»).
+    assert lanzador._tienda_tw_de([{"id": 3, "pais": None}], "SE")["id"] == 3
+    assert lanzador._tienda_tw_de([{"id": 3, "pais": None}], None)["id"] == 3
+    assert lanzador._tienda_tw_de([no], "DK") is None
+    assert lanzador._tienda_tw_de([no], "no") is no
+    assert lanzador._tienda_tw_de([no], None) is None
+    assert lanzador._tienda_tw_de([], "NO") is None
+
+
+def test_refrescar_cada_pieza_toma_las_ventas_de_la_tienda_de_su_pais(entorno, monkeypatch):
+    """Spec 2026-10-08 §9: el MISMO ad_id con ventas distintas en dos tiendas: cada pieza toma las de la
+    tienda de su país, y cada tienda usada se sincroniza una sola vez por refresco (no por pieza)."""
+    ex, lz, eid = entorno["ex"], entorno["lanzador"], entorno["eid"]
+    ex.actualizar("acme", eid, atribucion="triple_whale")
+    lz.lanzar("acme", eid)
+    piezas = ex.obtener("acme", eid)["piezas"]
+    co1, co2, mx = piezas[0], piezas[1], piezas[2]
+    assert (co1["pais"], co2["pais"], mx["pais"]) == ("CO", "CO", "MX")
+    llamadas, ids = _tw_dos_tiendas(lz, monkeypatch)
+    dia = mx["creado_en"][:10]
+    # El anuncio de la pieza de MX existe en las dos tiendas, con pedidos distintos.
+    _sembrar_pixel(ids["MX"], mx["meta_ad_id"], [(dia, 4.0, 400.0)])
+    _sembrar_pixel(ids["CO"], mx["meta_ad_id"], [(dia, 1.0, 10.0)], otros=[(co1["meta_ad_id"], dia, 2.0, 20.0)])
+
+    assert lz.refrescar("acme", eid) == 3
+    m = {p["id"]: p["metricas"] for p in ex.obtener("acme", eid)["piezas"]}
+    assert (m[mx["id"]]["compras"], m[mx["id"]]["ingresos"]) == (4, 400.0)          # la de MX, no la de CO
+    assert (m[co1["id"]]["compras"], m[co1["id"]]["ingresos"]) == (2, 20.0)         # la de CO
+    assert m[co2["id"]]["fuente_ventas"] == "ninguna"                               # el Pixel de CO no la conoce
+    assert sorted(llamadas) == sorted([("acme", ids["CO"]), ("acme", ids["MX"])])   # una vez cada tienda
+
+
+def test_refrescar_pieza_de_un_pais_sin_tienda_usa_meta_y_avisa_una_sola_vez(entorno, monkeypatch):
+    """Dos tiendas (CO y PE), una pieza de MX: se queda con las ventas de Meta y deja UN evento por
+    experimento y país, aunque se refresque dos veces."""
+    ex, lz, eid = entorno["ex"], entorno["lanzador"], entorno["eid"]
+    ex.actualizar("acme", eid, atribucion="triple_whale")
+    lz.lanzar("acme", eid)
+    monkeypatch.setattr(lz.meta_insights, "obtener_resultados", lambda ad_id, objetivo=None: {
+        "impresiones": 100, "gasto_usd": 30.0, "compras": 3, "ingresos": 90.0, "roas": 3.0,
+        "estado_meta": "ACTIVE", "estado_meta_texto": "Activo"})
+    llamadas, ids = _tw_dos_tiendas(lz, monkeypatch, ("CO", "PE"))
+
+    lz.refrescar("acme", eid)
+    lz.refrescar("acme", eid)
+    piezas = {p["pais"]: p["metricas"] for p in ex.obtener("acme", eid)["piezas"]}
+    assert piezas["MX"]["compras"] == 3 and piezas["MX"]["fuente_ventas"] == "meta"
+    avisos = [e for e in ex.eventos("acme", eid) if "No hay tienda de Triple Whale" in (e.get("mensaje") or "")]
+    assert len(avisos) == 1 and "Meta" in avisos[0]["mensaje"]
+    assert ex.obtener("acme", eid)["extra"]["aviso_sin_tienda_tw"] == ["MX"]
+    # PE no es país de ninguna pieza: su tienda no se sincroniza.
+    assert {t for _, t in llamadas} == {ids["CO"]}
+
+
+def test_refrescar_con_una_sola_tienda_sin_pais_la_usa_para_todas_las_piezas(entorno, monkeypatch):
+    ex, lz, eid = entorno["ex"], entorno["lanzador"], entorno["eid"]
+    ex.actualizar("acme", eid, atribucion="triple_whale")
+    lz.lanzar("acme", eid)
+    piezas = ex.obtener("acme", eid)["piezas"]
+    llamadas = _tw_conectado(lz, monkeypatch, dominio="acme.myshopify.com")   # sin pista de país
+    dia = piezas[0]["creado_en"][:10]
+    _sembrar_pixel(llamadas.tienda_id, piezas[0]["meta_ad_id"], [(dia, 1.0, 10.0)],
+                   otros=[(piezas[2]["meta_ad_id"], dia, 5.0, 50.0)])
+
+    lz.refrescar("acme", eid)
+    m = [p["metricas"] for p in ex.obtener("acme", eid)["piezas"]]
+    assert (m[0]["compras"], m[2]["compras"]) == (1, 5)    # la pieza de MX también usa la única tienda
+    assert not [e for e in ex.eventos("acme", eid) if "No hay tienda" in (e.get("mensaje") or "")]
+    assert llamadas == [("acme", llamadas.tienda_id)]
+
+
+def test_refrescar_con_una_sola_tienda_con_pais_no_la_usa_para_otro_pais(entorno, monkeypatch):
+    """Revisión del guardián del gasto (2026-10-08): UNA tienda con país (CO) y una pieza de MX. La pieza de
+    MX no puede leerse con el Pixel de CO (saldría con 0 compras → «perdedor» → el decisor la pausaría):
+    se queda con las ventas de Meta y deja un evento «No hay tienda…» para MX."""
+    ex, lz, eid = entorno["ex"], entorno["lanzador"], entorno["eid"]
+    ex.actualizar("acme", eid, atribucion="triple_whale")
+    lz.lanzar("acme", eid)
+    monkeypatch.setattr(lz.meta_insights, "obtener_resultados", lambda ad_id, objetivo=None: {
+        "impresiones": 100, "gasto_usd": 30.0, "compras": 3, "ingresos": 90.0, "roas": 3.0,
+        "estado_meta": "ACTIVE", "estado_meta_texto": "Activo"})
+    piezas = ex.obtener("acme", eid)["piezas"]
+    llamadas = _tw_conectado(lz, monkeypatch, dominio="acme-co.myshopify.com", pais="CO")
+    dia = piezas[0]["creado_en"][:10]
+    # El Pixel de CO conoce el anuncio de MX con 0 pedidos: si se usara, la pieza de MX quedaría en 0.
+    _sembrar_pixel(llamadas.tienda_id, piezas[0]["meta_ad_id"], [(dia, 1.0, 10.0)],
+                   otros=[(piezas[2]["meta_ad_id"], dia, 0.0, 0.0)])
+
+    lz.refrescar("acme", eid)
+    m = {p["pais"]: p["metricas"] for p in ex.obtener("acme", eid)["piezas"] if p["id"] != piezas[1]["id"]}
+    assert m["CO"]["compras"] == 1 and m["CO"]["fuente_ventas"] == "triple_whale"
+    assert m["MX"]["compras"] == 3 and m["MX"]["fuente_ventas"] == "meta"
+    avisos = [e for e in ex.eventos("acme", eid) if "No hay tienda de Triple Whale" in (e.get("mensaje") or "")]
+    assert len(avisos) == 1 and "Meta" in avisos[0]["mensaje"]
+    assert ex.obtener("acme", eid)["extra"]["aviso_sin_tienda_tw"] == ["MX"]
+    assert llamadas == [("acme", llamadas.tienda_id)]
+
+
+def test_refrescar_pieza_sin_pais_usa_meta_y_avisa_una_sola_vez(entorno, monkeypatch):
+    """Revisión del guardián del gasto (2026-10-08): con 2+ tiendas una pieza sin país caía a Meta sin
+    dejar rastro. Ahora deja UN evento propio por experimento (marca "" en `aviso_sin_tienda_tw`)."""
+    import db
+    ex, lz, eid = entorno["ex"], entorno["lanzador"], entorno["eid"]
+    ex.actualizar("acme", eid, atribucion="triple_whale")
+    lz.lanzar("acme", eid)
+    monkeypatch.setattr(lz.meta_insights, "obtener_resultados", lambda ad_id, objetivo=None: {
+        "impresiones": 100, "gasto_usd": 30.0, "compras": 3, "ingresos": 90.0, "roas": 3.0,
+        "estado_meta": "ACTIVE", "estado_meta_texto": "Activo"})
+    piezas = ex.obtener("acme", eid)["piezas"]
+    with db.conectar() as con:
+        con.execute(db.experimento_pieza.update().where(db.experimento_pieza.c.id == piezas[2]["id"]).values(pais=None))
+    _tw_dos_tiendas(lz, monkeypatch, ("CO", "PE"))
+
+    lz.refrescar("acme", eid)
+    lz.refrescar("acme", eid)
+    sin_pais = next(p for p in ex.obtener("acme", eid)["piezas"] if p["id"] == piezas[2]["id"])
+    assert sin_pais["metricas"]["compras"] == 3 and sin_pais["metricas"]["fuente_ventas"] == "meta"
+    avisos = [e for e in ex.eventos("acme", eid)
+              if "Una pieza sin país no tiene tienda de Triple Whale" in (e.get("mensaje") or "")]
+    assert len(avisos) == 1 and "ventas de Meta" in avisos[0]["mensaje"]
+    assert ex.obtener("acme", eid)["extra"]["aviso_sin_tienda_tw"] == [""]
+    assert not [e for e in ex.eventos("acme", eid) if "No hay tienda de Triple Whale" in (e.get("mensaje") or "")]
+
+
+def test_refrescar_la_moneda_sale_de_los_ajustes_del_proyecto(entorno, monkeypatch):
+    ex, lz, eid = entorno["ex"], entorno["lanzador"], entorno["eid"]
+    ex.actualizar("acme", eid, atribucion="triple_whale")
+    lz.lanzar("acme", eid)
+    piezas = ex.obtener("acme", eid)["piezas"]
+    llamadas, ids = _tw_dos_tiendas(lz, monkeypatch)   # los ajustes quedan en COP (la cuenta de Meta también)
+    dia = piezas[2]["creado_en"][:10]
+    _sembrar_pixel(ids["MX"], piezas[2]["meta_ad_id"], [(dia, 2.0, 50.0)])
+    lz.refrescar("acme", eid)
+    m = ex.obtener("acme", eid)["piezas"][2]["metricas"]
+    assert m["compras"] == 2 and m["roas"] == 25.0
+    assert "aviso_moneda" not in ex.obtener("acme", eid)["extra"]
 
 
 def test_cambiar_estado_activa_campana_al_activar_un_pais_pausado(entorno):

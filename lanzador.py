@@ -21,7 +21,7 @@ import meta_errores
 import notificaciones
 import triple_whale
 import triple_whale_tiendas
-from triple_whale import datos as tw_datos, sync as tw_sync
+from triple_whale import datos as tw_datos, paises as tw_paises, sync as tw_sync
 from meta_ads import ad as meta_ad, adset as meta_adset, auth as meta_auth, campaign as meta_campaign
 from meta_ads import creative as meta_creative, insights as meta_insights
 from meta_ads.targeting import Targeting
@@ -753,40 +753,89 @@ def _avisar_moneda_no_comparable(cliente, ex, ajenas):
     experimentos.actualizar_extra(cliente, ex["id"], lambda extra: {**extra, "aviso_moneda": monedas})
 
 
-def _sincronizar_triple_whale(cliente, ex):
-    """Antes de leer ventas de Triple Whale, pone al día su copia
+def _tienda_tw_de(tiendas, pais):
+    """La tienda de Triple Whale que vende para `pais` (ISO-2), o None. Si el proyecto tiene UNA sola
+    tienda SIN país, esa sirve para todos los países (así funcionaba antes de las tiendas por país). Una
+    tienda CON país solo sirve a las piezas de ese país, aunque sea la única: el Pixel de Noruega no
+    sabe nada de los pedidos de Suecia, y leerlo daría 0 compras → «perdedor» → el decisor pausaría la
+    pieza solo (revisión del guardián del gasto, 2026-10-08)."""
+    if len(tiendas) == 1 and not tiendas[0].get("pais"):
+        return tiendas[0]
+    pais = (pais or "").strip().upper()
+    return next((t for t in tiendas if pais and t.get("pais") == pais), None)
+
+
+def _sincronizar_triple_whale(cliente, ex, tienda):
+    """Antes de leer ventas de Triple Whale, pone al día la copia de esa tienda
     (`triple_whale.sync`, solo si tiene más de 30 min). Si Triple Whale
-    falla, queda un evento y se usa lo que ya estaba copiado."""
+    falla, queda un evento que dice de qué tienda era (su país, o su dominio)
+    con la llave de esa tienda tachada (un proveedor puede repetirla sin
+    «key=»; auditoría de seguridad, 2026-10-08) y se usa lo ya copiado."""
     try:
-        tw_sync.sincronizar_si_hace_falta(cliente)
+        tw_sync.sincronizar_si_hace_falta(cliente, tienda["id"])
     except Exception as e:  # noqa: BLE001 — la copia vieja sigue sirviendo
+        error = cola.sin_token(triple_whale_tiendas.sin_llave(cliente, tienda["id"], str(e)))
+        nombre = _nombre_pais(tienda["pais"]) if tienda.get("pais") else tienda.get("dominio")
         experimentos.registrar_evento(
             cliente, ex["id"], "error",
-            gettext("Error al traer métricas de Triple Whale: %(error)s", error=cola.sin_token(str(e))))
+            gettext("Error al traer métricas de Triple Whale de %(tienda)s: %(error)s", tienda=nombre, error=error))
 
 
-def _mezclar_ventas_triple_whale(cliente, ex, pz, snap, config_tw):
+def _nombre_pais(pais):
+    """El país en palabras, en el idioma de quien mira (o en español sin petición, como en el worker)."""
+    try:
+        from flask_babel import get_locale
+        locale = str(get_locale() or "es")
+    except Exception:  # noqa: BLE001 — sin contexto de Flask
+        locale = "es"
+    return tw_paises.nombre_pais(pais, locale.split("_")[0])
+
+
+def _avisar_sin_tienda_tw(cliente, ex, paises):
+    """Un solo evento por experimento y país (`extra.aviso_sin_tienda_tw` = países ya avisados) cuando
+    una pieza es de un país que no tiene tienda de Triple Whale: sus ventas son las de Meta. Una pieza
+    sin país usa la marca "" y su propio texto (antes caía a Meta sin rastro; revisión del guardián del
+    gasto, 2026-10-08). La marca se escribe ANTES, bajo el candado del `extra`, y solo el que la escribió
+    deja el evento."""
+    nuevos = []
+
+    def _marcar(extra):
+        ya = list(extra.get("aviso_sin_tienda_tw") or [])
+        nuevos[:] = [p for p in paises if p not in ya]
+        return {**extra, "aviso_sin_tienda_tw": ya + nuevos}
+
+    experimentos.actualizar_extra(cliente, ex["id"], _marcar)
+    for pais in nuevos:
+        if pais:
+            texto = gettext("No hay tienda de Triple Whale para %(pais)s: se usan las ventas de Meta.",
+                            pais=_nombre_pais(pais))
+        else:
+            texto = gettext("Una pieza sin país no tiene tienda de Triple Whale: se usan las ventas de Meta.")
+        experimentos.registrar_evento(cliente, ex["id"], "atribucion", texto, {"pais": pais or None})
+
+
+def _mezclar_ventas_triple_whale(cliente, ex, pz, snap, ajustes, tienda_id):
     """Atribución por Triple Whale (spec 2026-09-28 §7): el tráfico, el gasto
     y el estado del anuncio siguen saliendo de Meta (como `tienda`); las
-    compras y los ingresos, de lo que atribuyó el Triple Pixel a ese anuncio
+    compras y los ingresos, de lo que atribuyó el Triple Pixel de LA TIENDA
+    DEL PAÍS de la pieza (`tienda_id`, spec 2026-10-08 §9) a ese anuncio
     desde que se creó la pieza, con el modelo y la ventana del proyecto
-    (`tw_anuncio_dia`, sumado: snapshot ACUMULADO, igual que Meta). Antes se
-    tomaban las `conversions` de ads_table, que son las que reporta Meta, no
-    las del Pixel. Si Triple Whale no tiene ese anuncio o su Pixel no
-    respondió para esos días, el snapshot queda con lo de Meta; si respondió
-    sin pedidos para él, las compras son 0 (eso también es un dato). Los
-    ingresos vienen en la moneda de la conexión: si no es la de la cuenta
-    publicitaria, el ROAS se deja en 0 y queda el CPA (misma regla que la
-    tienda). Devuelve el set de monedas ajenas."""
-    if not config_tw or not pz.get("meta_ad_id"):
+    (`tw_anuncio_dia`, sumado: snapshot ACUMULADO, igual que Meta). Si esa
+    tienda no tiene ese anuncio o su Pixel no respondió para esos días, el
+    snapshot queda con lo de Meta; si respondió sin pedidos para él, las
+    compras son 0 (eso también es un dato). Los ingresos vienen en la moneda
+    de los ajustes del proyecto: si no es la de la cuenta publicitaria, el
+    ROAS se deja en 0 y queda el CPA (misma regla que la tienda). Devuelve el
+    set de monedas ajenas."""
+    if not ajustes or tienda_id is None or not pz.get("meta_ad_id"):
         return set()
-    tot = tw_datos.totales_anuncio(cliente, triple_whale.CANAL_META, pz["meta_ad_id"],
+    tot = tw_datos.totales_anuncio(cliente, tienda_id, triple_whale.CANAL_META, pz["meta_ad_id"],
                                    (pz.get("creado_en") or db.ahora())[:10])
     if not tot or not tot["con_pixel"]:
         return set()
     gasto = float(snap.get("gasto") or 0)
     compras, ingresos = int(round(tot["pedidos"])), round(float(tot["ingresos"]), 2)
-    moneda_tw = config_tw.get("moneda")
+    moneda_tw = ajustes.get("moneda")
     ajenas = {moneda_tw} if moneda_tw and ex.get("moneda") and moneda_tw != ex["moneda"] else set()
     snap["compras"] = compras
     snap["ingresos"] = ingresos
@@ -804,11 +853,24 @@ def refrescar(cliente, experimento_id):
 
     rechazados = []
     monedas_ajenas = set()
-    # Triple Whale: la copia se pone al día FUERA del lock de Meta (son
-    # llamadas a otra API) y una sola vez por experimento, no por pieza.
-    config_tw = triple_whale_tiendas.obtener(cliente) if ex.get("atribucion") == "triple_whale" else None
-    if config_tw:
-        _sincronizar_triple_whale(cliente, ex)
+    # Triple Whale: cada pieza vende en la tienda de su país. Las copias de las tiendas usadas se ponen
+    # al día FUERA del lock de Meta (son llamadas a otra API), una vez por tienda y no por pieza.
+    ajustes_tw, tienda_de_pieza = None, {}
+    tiendas_tw = triple_whale_tiendas.tiendas(cliente) if ex.get("atribucion") == "triple_whale" else []
+    if tiendas_tw:
+        ajustes_tw = triple_whale_tiendas.ajustes(cliente)
+        sin_tienda = []
+        for pz in piezas:
+            tienda = _tienda_tw_de(tiendas_tw, pz.get("pais"))
+            if tienda:
+                tienda_de_pieza[pz["id"]] = tienda["id"]
+            elif (pz.get("pais") or "") not in sin_tienda:
+                sin_tienda.append(pz.get("pais") or "")   # "" = pieza sin país (su propio aviso)
+        por_id = {t["id"]: t for t in tiendas_tw}
+        for tienda_id in sorted(set(tienda_de_pieza.values())):
+            _sincronizar_triple_whale(cliente, ex, por_id[tienda_id])
+        if sin_tienda:
+            _avisar_sin_tienda_tw(cliente, ex, sin_tienda)
 
     def _correr(_creds):
         n = 0
@@ -820,7 +882,8 @@ def refrescar(cliente, experimento_id):
                 if ex["atribucion"] == "tienda":
                     monedas_ajenas.update(_mezclar_ventas_tienda(cliente, ex, pz, snap))
                 elif ex["atribucion"] == "triple_whale":
-                    monedas_ajenas.update(_mezclar_ventas_triple_whale(cliente, ex, pz, snap, config_tw))
+                    monedas_ajenas.update(_mezclar_ventas_triple_whale(
+                        cliente, ex, pz, snap, ajustes_tw, tienda_de_pieza.get(pz["id"])))
                 for k in ("resultado_nombre", "resultado", "estado_meta_texto", "motivo_rechazo"):
                     snap[k] = r.get(k)
                 experimentos.snapshot(pz["id"], snap)
