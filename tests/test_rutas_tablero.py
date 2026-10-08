@@ -239,57 +239,6 @@ def test_contexto_tablero_tolera_una_parte_rota(app, base_temporal, monkeypatch)
     assert "350 COP" in resultados and "Final es_CO" in resultados
 
 
-def test_grafico_tablero_geometria(app):
-    """Un eje: barras de gasto y línea de ingresos comparten escala (misma
-    moneda); 4 marcas + máximo redondeado; etiqueta cada 5 días."""
-    d = app["dashboard"]
-    dias = [{"dia": f"2026-09-{i:02d}", "gasto": 1000.0 * i, "compras": 0, "ingresos": 0.0} for i in range(1, 31)]
-    dias[-1]["ingresos"] = 42000.0
-    g = d._grafico_tablero({"moneda": "COP", "dias": dias})
-    assert g["maximo"] == 50000.0
-    assert [t["valor"] for t in g["marcas"]] == [0.0, 12500.0, 25000.0, 37500.0, 50000.0]
-    assert len(g["dias"]) == 30 and g["dias"][0]["etiqueta"] == "01/09" and g["dias"][1]["etiqueta"] == ""
-    assert g["dias"][5]["etiqueta"] == "06/09"
-    assert g["dias"][-1]["ingresos_y"] < g["dias"][-1]["gasto_y"]   # 42.000 queda por encima de 30.000
-    assert g["dias"][0]["titulo"] == "01/09 · gasto 1.000 COP · ingresos 0 COP"
-    assert d._grafico_tablero({"moneda": None, "dias": []}) is None
-    vacio = [{"dia": "2026-09-01", "gasto": 0, "compras": 0, "ingresos": 0}]
-    assert d._grafico_tablero({"moneda": "COP", "dias": vacio}) is None
-
-
-def test_grafico_tablero_tope_menor_que_uno(app):
-    """Gasto en céntimos (< 1): el máximo «bonito» y las etiquetas siguen
-    siendo números razonables, no 0 ni un eje vacío."""
-    d = app["dashboard"]
-    dias = [{"dia": "2026-09-01", "gasto": 0.42, "compras": 0, "ingresos": 0.0},
-            {"dia": "2026-09-02", "gasto": 0.07, "compras": 0, "ingresos": 0.3}]
-    g = d._grafico_tablero({"moneda": "USD", "dias": dias})
-    assert g["maximo"] == 0.5
-    assert [t["texto"] for t in g["marcas"]] == ["0", "0,12", "0,25", "0,38", "0,5"]
-    assert g["dias"][0]["gasto_y"] < g["dias"][1]["gasto_y"] < g["base_y"]   # 0,42 más alto que 0,07
-    assert g["dias"][1]["ingresos_y"] < g["dias"][1]["gasto_y"]
-    assert d._nice_max(0.001) == 0.001 and d._nice_max(0.0011) == 0.002
-
-
-def test_grafico_tooltip_en_ingles(app):
-    """Fix round 1: el tooltip nativo (<title>) sigue el idioma de quien
-    mira — nunca «gasto»/«ingresos» crudos para alguien viendo en inglés;
-    los números del tooltip usan el separador de miles de ese idioma
-    (`tablero.dinero` ya pasa por `idiomas.numero`)."""
-    d = app["dashboard"]
-    dias = [{"dia": f"2026-09-{i:02d}", "gasto": 1000.0 * i, "compras": 0, "ingresos": 0.0} for i in range(1, 31)]
-    dias[-1]["ingresos"] = 42000.0
-    with idiomas.en_idioma("en"):
-        g = d._grafico_tablero({"moneda": "COP", "dias": dias})
-    titulo = g["dias"][0]["titulo"]
-    assert "spend" in titulo and "revenue" in titulo
-    assert "gasto" not in titulo and "ingresos" not in titulo
-    assert titulo == "01/09 · spend 1,000 COP · revenue 0 COP"
-    # En español el tooltip queda exactamente como antes (test_grafico_tablero_geometria).
-    g_es = d._grafico_tablero({"moneda": "COP", "dias": dias})
-    assert g_es["dias"][0]["titulo"] == "01/09 · gasto 1.000 COP · ingresos 0 COP"
-
-
 def test_filtro_roas_redondea_igual_que_main(app):
     """El filtro `roas` pasa por `idiomas.numero` (revisión final fase 4,
     M2): confirma que llega hasta acá también, no solo hasta
@@ -297,17 +246,6 @@ def test_filtro_roas_redondea_igual_que_main(app):
     d = app["dashboard"]
     assert d._filtro_roas(12.345) == "12,3"
     assert d._filtro_roas(0.015) == "0,0"
-
-
-def test_compacto_eje_en_ingles(app):
-    """Fix round 1: `_compacto` (etiquetas del eje) usa el separador decimal
-    del idioma activo — coma en español (sin cambios), punto en inglés."""
-    d = app["dashboard"]
-    assert d._compacto(1_200_000) == "1,2 M"
-    assert d._compacto(0.5) == "0,5"
-    with idiomas.en_idioma("en"):
-        assert d._compacto(1_200_000) == "1.2 M"
-        assert d._compacto(0.5) == "0.5"
 
 
 def test_top_ganadora_de_experimento_cerrado_lo_avisa(app, base_temporal, monkeypatch):
@@ -428,7 +366,7 @@ def test_contexto_tablero_solo_calcula_lo_que_alguien_pinta(app, base_temporal, 
     _reloj(monkeypatch)
     for nombre in ("serie_diaria", "serie_diaria_triple_whale", "top_ganadoras"):
         monkeypatch.setattr(tablero, nombre, lambda *a, **k: pytest.fail("nadie lo pinta"))
-    monkeypatch.setattr(d, "_grafico_tablero", lambda serie: pytest.fail("nadie lo pinta"))
+    assert not hasattr(d, "_grafico_tablero")          # 2026-10-08: la gráfica vieja se fue con «Día a día»
     ctx = d._contexto_tablero("acme")
     assert not {"serie", "serie_triple_whale", "top", "grafico", "grafico_triple_whale"} & set(ctx)
     assert ctx["errores"] == [] and ctx["csv"] and ctx["total"] is not None and ctx["meses"]

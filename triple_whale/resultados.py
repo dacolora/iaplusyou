@@ -153,15 +153,16 @@ def tono(clave, var):
     return "bueno" if (var > 0) == (bueno(clave) > 0) else "malo"
 
 
-def raros(clave, serie, inicio):
+def raros(clave, serie, inicio, minimo=0):
     """{índice dentro del periodo: desvío} de los días fuera de lo normal. `serie` empieza `inicio` días antes del
-    periodo (para tener sus 4 semanas previas) y su último punto es hoy, que nunca se juzga."""
+    periodo (para tener sus 4 semanas previas) y su último punto es hoy, que nunca se juzga. Los puntos antes de
+    `minimo` son de antes de la copia (ceros que no son ventas en cero) y no cuentan como semanas previas."""
     candidatos = {}
     for i in range(max(inicio, 0), len(serie) - 1):
         v = valor(clave, serie[i])
         if v is None:
             continue
-        previos = [valor(clave, serie[i - 7 * k]) for k in range(1, SEMANAS_RARO + 1) if i - 7 * k >= 0]
+        previos = [valor(clave, serie[i - 7 * k]) for k in range(1, SEMANAS_RARO + 1) if i - 7 * k >= minimo]
         previos = [x for x in previos if x is not None]
         if len(previos) < MIN_SEMANAS_RARO:
             continue
@@ -402,16 +403,20 @@ def _hoy_texto(hoy_d, moneda, ultima_copia):
 
 
 def armar(dias_periodo, serie_larga, inicio, hoy, fuente, moneda, nuevos, canales, cohortes, inicio_copia,
-          meta_roas, canal, url_dia, ultima_copia):
+          meta_roas, canal, url_dia, ultima_copia, inicio_datos=None):
     """Todo lo de la sección. `serie_larga` = `por_dia` desde `inicio` días antes del periodo (el periodo anterior
     y las 4 semanas de los días raros) hasta hoy; el periodo es `serie_larga[inicio:]` y su último punto es hoy.
-    None si no hay días."""
+    `inicio_datos` es el primer día copiado: antes de él la serie trae ceros que no son ventas en cero, así que
+    un periodo anterior que empiece antes no se compara y esos días no cuentan para los días raros. None si no
+    hay días."""
     periodo = serie_larga[inicio:]
     if not periodo:
         return None
     completos = periodo[:-1]
     n = len(completos)
     previos = serie_larga[inicio - n:inicio] if dias_periodo and n and inicio >= n else []
+    if previos and inicio_datos and previos[0]["f"] < inicio_datos:
+        previos = []
     comparar = any(d["ing"] or d["gas"] or d["ped"] for d in previos)
     if not comparar:
         previos = []
@@ -441,6 +446,8 @@ def armar(dias_periodo, serie_larga, inicio, hoy, fuente, moneda, nuevos, canale
                          "valor": v, "texto": formatear(clave, v, moneda), "variacion": var,
                          "variacion_texto": _pct(abs(var)) if var is not None else "", "tono": tono(clave, var)})
 
+    minimo = next((i for i, d in enumerate(serie_larga) if d["f"] >= inicio_datos), len(serie_larga)) \
+        if inicio_datos else 0
     con_datos = [d for d in completos if d["ing"] or d["gas"]]
     dia_inicial = con_datos[-1]["f"] if con_datos else _iso(_fecha(hoy) - timedelta(days=1))
     clases = sorted({c for d in dias_json for c in (d.get("can") or {})}, key=ORDEN_CLASES.index)
@@ -469,7 +476,7 @@ def armar(dias_periodo, serie_larga, inicio, hoy, fuente, moneda, nuevos, canale
             "dias": dias_json,
             "previos": [{"f": d["f"], "ing": round(d["ing"], 2), "gas": round(d["gas"], 2), "ped": round(d["ped"], 2),
                          "nc": round(d["nc"], 2)} for d in previos],
-            "raros": {clave: raros(clave, serie_larga, inicio) for clave in claves if clave != "gasto"},
+            "raros": {clave: raros(clave, serie_larga, inicio, minimo) for clave in claves if clave != "gasto"},
             "mejor": {clave: mejor_dia(clave, completos) for clave in claves},
             "metricas": [{"clave": c, "etiqueta": _etiqueta(c, fuente), "bueno": bueno(c),
                           "formato": _METRICAS[c]["formato"]} for c in claves],

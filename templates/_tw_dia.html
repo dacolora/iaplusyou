@@ -1,0 +1,64 @@
+{# «Qué pasó el …»: el detalle de un día de «Resultados de tu tienda» (spec 2026-10-08-tw-resultados §2.3).
+   Fragmento que pide static/tw_resultados.js a triple_whale.rutas.ver_dia (contexto `d` =
+   triple_whale.resultados.detalle_dia + canal y tienda). Solo lectura: los nombres de los anuncios son texto
+   ajeno y salen escapados por Jinja. Sin <script> (los de un fragmento por fetch no corren). #}
+<div class="twr-dia-cab">
+  <div>
+    <h4>{{ d.titulo }}</h4>
+    {% if d.comparado %}<p class="twr-nota">{{ d.comparado }}</p>{% endif %}
+  </div>
+  <div class="twr-dia-nav">
+    <button type="button" class="btn-sm" data-twr-dia="{{ d.anterior or '' }}" aria-label="{{ _('Día anterior') }}" {% if not d.anterior %}disabled{% endif %}>‹</button>
+    <button type="button" class="btn-sm" data-twr-dia="{{ d.siguiente or '' }}" aria-label="{{ _('Día siguiente') }}" {% if not d.siguiente %}disabled{% endif %}>›</button>
+  </div>
+</div>
+<div class="twr-dia-cifras">
+  {% for s in d.stats %}
+  <div>
+    <span>{{ s.etiqueta }}</span>
+    <strong>{{ s.texto }}</strong>
+    {% if s.variacion_texto %}<small class="twr-{{ s.tono }}">{{ s.variacion_texto }}</small>{% endif %}
+  </div>
+  {% endfor %}
+</div>
+<div class="twr-dia-cols">
+  {% if d.canales %}
+  <div>
+    <h5>{{ _('Por canal') }}</h5>
+    <ul class="twr-dia-canales">
+      {% for c in d.canales %}
+      <li>
+        <span class="twr-dia-canal"><i class="twr-muestra twr-c-{{ c.clase }}"></i>{{ c.nombre }}</span>
+        <span class="twr-dia-barra"><i class="twr-c-{{ c.clase }}" style="width: {{ '%.1f' | format([c.pct * 100, 2] | max) }}%"></i></span>
+        <span class="twr-dia-num">{{ c.gasto_texto }}</span>
+        <span class="twr-dia-num twr-gris">{{ c.roas_texto }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    <p class="twr-nota">{{ _('La barra es su parte del gasto del día; a la derecha, su retorno según el Pixel.') }}</p>
+  </div>
+  {% endif %}
+  <div>
+    <h5>{{ _('Los anuncios que más vendieron') }}</h5>
+    {% if d.anuncios %}
+    <ol class="twr-dia-anuncios">
+      {% for a in d.anuncios %}
+      <li>
+        <span class="twr-dia-anuncio">
+          <strong>{{ a.nombre }}</strong>
+          <small><span class="twr-t-{{ a.canal_clase }}">{{ a.canal_nombre }}</span>{% if a.nuevo %} <span class="twr-chip-nuevo">{{ _('nuevo') }}</span>{% endif %}{% if a.creatv %} · <a href="#experimentos?exp={{ a.creatv.experimento_id }}">{{ _('Hecho en Creatv · %(exp)s', exp=a.creatv.experimento) }}</a>{% endif %}</small>
+        </span>
+        <span class="twr-dia-valor"><strong>{{ a.ingresos_texto }}</strong><small>{{ a.gasto_texto }} · {{ a.roas_texto }}</small></span>
+      </li>
+      {% endfor %}
+    </ol>
+    {% else %}
+    <p class="vacio">{{ _('Ese día ningún anuncio tuvo gasto.') }}</p>
+    {% endif %}
+    <p class="twr-nota">
+      {{ _('Ventas atribuidas según el Pixel; debajo, el gasto del anuncio ese día y su retorno.') }}
+      {% if d.arrancaron %}{{ ngettext('Ese día arrancó %(num)s anuncio nuevo.', 'Ese día arrancaron %(num)s anuncios nuevos.', d.arrancaron) }}{% else %}{{ _('Ese día no arrancó ningún anuncio nuevo.') }}{% endif %}
+    </p>
+    <button type="button" class="btn-xs" data-twr-ir="tw-cada-anuncio">{{ _('Ver todos los anuncios →') }}</button>
+  </div>
+</div>

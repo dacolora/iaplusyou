@@ -21,11 +21,12 @@ def _dias(valores, desde="2026-09-01"):
 
 
 def _armar(serie, dias_periodo=0, inicio=0, hoy=date(2026, 9, 30), nuevos=None, canales=None, cohortes=None,
-           inicio_copia="2026-09-01", meta_roas=None, canal=None, fuente="tienda", ultima_copia=None):
+           inicio_copia="2026-09-01", meta_roas=None, canal=None, fuente="tienda", ultima_copia=None,
+           inicio_datos=None):
     return r.armar(dias_periodo=dias_periodo, serie_larga=serie, inicio=inicio, hoy=hoy, fuente=fuente,
                    moneda="USD", nuevos=nuevos or {}, canales=canales or {}, cohortes=cohortes,
                    inicio_copia=inicio_copia, meta_roas=meta_roas, canal=canal, url_dia="/x/dia?tienda=",
-                   ultima_copia=ultima_copia)
+                   ultima_copia=ultima_copia, inicio_datos=inicio_datos)
 
 
 def test_por_dia_rellena_con_ceros():
@@ -158,6 +159,23 @@ def test_armar_sin_datos_previos_no_compara(es):
     serie = _dias([(0, 0, 0)] * 6 + [(200, 50, 2)] * 7)
     out = _armar(serie, dias_periodo=7, inicio=6)
     assert out["datos"]["comparar"] is False and out["tarjetas"][0]["variacion"] is None
+
+
+def test_periodo_anterior_antes_de_la_copia_no_se_compara(es):
+    """90 días con 91 copiados: el periodo anterior caería casi entero antes de la copia (ceros que no son ventas
+    en cero) y daría una subida inventada."""
+    serie = _dias([(0, 0, 0)] * 5 + [(100, 50, 2)] * 12)
+    out = _armar(serie, dias_periodo=7, inicio=10, inicio_datos=serie[5]["f"])
+    assert out["datos"]["comparar"] is False and out["tarjetas"][0]["variacion"] is None
+    assert _armar(serie, dias_periodo=7, inicio=10, inicio_datos=serie[4]["f"])["datos"]["comparar"] is True
+
+
+def test_raros_no_cuentan_semanas_de_antes_de_la_copia():
+    # 2 semanas antes de la copia (ceros) + 2 dentro a 100 y un día normal de 100: sin el mínimo, la mediana de
+    # [100, 100, 0, 0] es 50 y el día «sube 100 %»; con el mínimo solo hay 2 semanas previas y no se juzga.
+    serie = _dias([(0, 0, 0)] * 14 + [(100, 50, 1)] * 14 + [(100, 50, 1), (1, 1, 1)])
+    assert r.raros("ventas", serie, inicio=28, minimo=0) == {0: pytest.approx(1.0)}
+    assert r.raros("ventas", serie, inicio=28, minimo=14) == {}
 
 
 def test_antiguedad_desconocida_antes_de_14_dias_de_copia(es):
