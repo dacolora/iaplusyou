@@ -349,6 +349,28 @@ WHERE event_date BETWEEN @startDate AND @endDate
 GROUP BY event_date, products_info.product_id
 """
 
+# El anuncio tal cual (spec 2026-10-08-triple-whale-tarjetas-analisis §3.3): miniatura, video, título y copy, una
+# fila por anuncio (sin fecha). Probado con la tienda real el 2026-10-08: ad_type, ad_image_url (en
+# files.triplewhale.com, no caduca), video_url, ad_title, ad_copy y video_duration llegan; creative_cta_type vino
+# vacío. Columnas en https://triplewhale.readme.io/docs/ads-table.md.
+_CREATIVOS_COMPLETA = """
+SELECT
+    channel, ad_id,
+    max(ad_type) AS ad_type, max(ad_image_url) AS ad_image_url, max(video_url) AS video_url,
+    max(ad_title) AS ad_title, max(ad_copy) AS ad_copy, max(creative_cta_type) AS creative_cta_type,
+    max(video_duration) AS video_duration
+FROM ads_table
+WHERE event_date BETWEEN @startDate AND @endDate AND ad_id IS NOT NULL AND ad_id != ''
+GROUP BY channel, ad_id
+"""
+
+_CREATIVOS_MINIMA = """
+SELECT channel, ad_id, max(ad_type) AS ad_type, max(ad_image_url) AS ad_image_url, max(video_url) AS video_url
+FROM ads_table
+WHERE event_date BETWEEN @startDate AND @endDate AND ad_id IS NOT NULL AND ad_id != ''
+GROUP BY channel, ad_id
+"""
+
 _PRUEBA = "SELECT SUM(spend) AS spend FROM ads_table WHERE event_date BETWEEN @startDate AND @endDate"
 
 
@@ -368,6 +390,10 @@ def consultas_tienda():
 
 def consultas_productos():
     return [_PRODUCTOS_COMPLETA, _PRODUCTOS_MINIMA]
+
+
+def consultas_creativos():
+    return [_CREATIVOS_COMPLETA, _CREATIVOS_MINIMA]
 
 
 # ------------------------------------------------------------ llamadas ---

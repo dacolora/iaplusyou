@@ -9,12 +9,14 @@ y antes de refrescar un experimento atribuido a Triple Whale): los últimos
 parado más tiempo —, porque Triple Whale reatribuye pedidos a clics viejos.
 
 El rango se pide en tramos de `DIAS_TRAMO` días ("Split wide date ranges into
-smaller chunks", guía de errores) y por cada tramo van tres consultas:
+smaller chunks", guía de errores) y por cada tramo van cinco consultas:
 anuncios (lo que reporta cada plataforma), Pixel (lo atribuido con el modelo
-y la ventana del proyecto) y tienda. Cada una tiene versión completa y mínima
-(`triple_whale.consultar_con_respaldo`); si la mínima del Pixel o de la
-tienda tampoco sirve, la sincronización sigue sin esa parte y lo avisa: los
-anuncios nunca se pierden por eso. Llave, tienda, límite y red sí cortan la
+y la ventana del proyecto), tienda, productos y creativos (miniatura, video,
+título y copy de cada anuncio, spec tarjetas 2026-10-08 §3.3). Cada una tiene
+versión completa y mínima (`triple_whale.consultar_con_respaldo`); si la
+mínima del Pixel, la tienda, los productos o los creativos tampoco sirve, la
+sincronización sigue sin esa parte y lo avisa: los anuncios nunca se pierden
+por eso. Llave, tienda, límite y red sí cortan la
 sincronización (la tarea marca la conexión en error y la cola reintenta).
 """
 import re
@@ -128,6 +130,21 @@ def normalizar_producto(fila):
             "ingresos": _real(fila.get("revenue")), "pedidos": _real(fila.get("orders"))}
 
 
+def normalizar_creativo(fila):
+    """Fila de la consulta de creativos -> registro de tw_creativo (None sin anuncio)."""
+    ad_id = _texto(fila.get("ad_id"), 64)
+    if not ad_id or ad_id.lower() in ("null", "none", "0"):
+        return None
+    tipo = _texto(fila.get("ad_type"), 20)
+    duracion = fila.get("video_duration")
+    duracion = _real(duracion) if duracion not in (None, "") else None
+    return {"canal": _texto(fila.get("channel"), 40) or "desconocido", "ad_id": ad_id,
+            "tipo": tipo.lower() if tipo else None,
+            "imagen_url": _texto(fila.get("ad_image_url"), 2000), "video_url": _texto(fila.get("video_url"), 2000),
+            "titulo": _texto(fila.get("ad_title"), 300), "copy": _texto(fila.get("ad_copy"), 3000),
+            "cta": _texto(fila.get("creative_cta_type"), 60), "duracion_s": duracion or None}
+
+
 def _sumar_por_clave(registros, claves_suma):
     """Dos filas con la misma clave (canal, anuncio, día) se suman: la
     consulta ya agrupa, pero un `ad_id` numérico y uno de texto pueden
@@ -222,9 +239,9 @@ def sincronizar(cliente, tienda_id, desde=None, hasta=None, on_progreso=None, ho
         desde, hasta = rango_pendiente(tienda, hoy)
     dominio, moneda = tienda["dominio"], config["moneda"]
     consultas_pixel = triple_whale.consultas_pixel(config["modelo_atribucion"], config["ventana_atribucion"])
-    indice = {"anuncios": 0, "pixel": 0, "tienda": 0, "productos": 0}
-    fallo = {"pixel": None, "tienda": None, "productos": None}
-    cuenta = {"anuncios": set(), "filas_pixel": 0, "dias_tienda": 0, "productos": set()}
+    indice = {"anuncios": 0, "pixel": 0, "tienda": 0, "productos": 0, "creativos": 0}
+    fallo = {"pixel": None, "tienda": None, "productos": None, "creativos": None}
+    cuenta = {"anuncios": set(), "filas_pixel": 0, "dias_tienda": 0, "productos": set(), "creativos": set()}
     lista = tramos(desde, hasta)
     for i, (d, h) in enumerate(lista):
         if on_progreso:
@@ -265,12 +282,22 @@ def sincronizar(cliente, tienda_id, desde=None, hasta=None, on_progreso=None, ho
             except triple_whale.ErrorConsulta as e:
                 fallo["productos"] = triple_whale.tachar_llave(str(e), llave)
 
+        if fallo["creativos"] is None:
+            try:
+                filas, indice["creativos"] = triple_whale.consultar_con_respaldo(
+                    llave, dominio, triple_whale.consultas_creativos(), d, h, moneda, empezar_en=indice["creativos"])
+                registros = [r for r in (normalizar_creativo(f) for f in filas) if r]
+                datos.reemplazar_creativos(cliente, tienda_id, registros)
+                cuenta["creativos"].update((r["canal"], r["ad_id"]) for r in registros)
+            except triple_whale.ErrorConsulta as e:
+                fallo["creativos"] = triple_whale.tachar_llave(str(e), llave)
+
     # Los textos de `fallos` quedan en `extra.ultimo_resumen` y se pintan en la pestaña: van con la llave
     # tachada (arriba, `tachar_llave`; auditoría de seguridad, 2026-10-08).
     resumen = {
         "desde": desde, "hasta": hasta, "tramos": len(lista), "anuncios": len(cuenta["anuncios"]),
         "filas_pixel": cuenta["filas_pixel"], "dias_tienda": cuenta["dias_tienda"],
-        "productos": len(cuenta["productos"]),
+        "productos": len(cuenta["productos"]), "creativos": len(cuenta["creativos"]),
         "consultas": {k: ("sin_datos" if fallo.get(k) else NOMBRES_CONSULTA[v]) for k, v in indice.items()},
         "fallos": {k: v for k, v in fallo.items() if v},
     }
