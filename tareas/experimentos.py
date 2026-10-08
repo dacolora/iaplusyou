@@ -182,6 +182,37 @@ def _anotar_diagnostico(cliente, ex, pz, diagnostico, evento, datos=None):
                     cola.sin_token(str(e))[:200], exc_info=True)
 
 
+def _diagnostico_de_hermana(cliente, ex, pz):
+    """Instalaciones de la app: si la fila de la otra tienda (misma pieza y
+    país) ya se diagnosticó en este experimento, copia ese diagnóstico a esta
+    fila con su evento y SIN gasto nuevo (no hay llamada a Claude). Devuelve
+    el diagnóstico (o None si el reusado era un error), o False si no hay
+    hermana diagnosticada y toca llamar a Claude."""
+    try:
+        hermana = experimentos.diagnostico_hermano(cliente, ex["id"], pz["id"])
+    except Exception as e:  # noqa: BLE001 — sin poder leer, se diagnostica como siempre
+        log.warning("no pude buscar el diagnóstico hermano (%s, ep %s): %s", cliente, pz["id"], type(e).__name__)
+        return False
+    if not hermana:
+        return False
+    otro_id, d = hermana
+    copia = dict(d, usd=0.0, reutilizado_de=otro_id)
+    if d.get("error") or not d.get("causas"):
+        _anotar_diagnostico(cliente, ex, pz, copia,
+                            gettext("%(nombre)s (%(pais)s): diagnóstico no disponible (el mismo de la otra tienda).",
+                                    nombre=pz["nombre"], pais=pz["pais"]),
+                            {"reutilizado_de": otro_id})
+        return None
+    causas = ", ".join(idiomas.traducir(doctrina.CAUSAS_NOMBRE.get(c["codigo"], c["codigo"])) for c in d["causas"])
+    que = (d.get("siguiente") or {}).get("que") or ""
+    _anotar_diagnostico(cliente, ex, pz, copia,
+                        gettext("%(nombre)s (%(pais)s): el mismo diagnóstico de la otra tienda: %(causas)s — "
+                                "siguiente: %(que)s.", nombre=pz["nombre"], pais=pz["pais"], causas=causas,
+                                que=idiomas.traducir(doctrina.SIGUIENTES_NOMBRE.get(que, que))),
+                        {"causas": [c["codigo"] for c in d["causas"]], "siguiente": que, "reutilizado_de": otro_id})
+    return copia
+
+
 def _diagnosticar(cliente, ex, pz, v, snaps, reglas, ctx, tarea):
     """Doctrina, bloque 4 (§3): el diagnóstico de una perdedora, una vez por
     veredicto, con su gasto real (tipo «revision»). Corre DESPUÉS de pedir la
@@ -189,6 +220,10 @@ def _diagnosticar(cliente, ex, pz, v, snaps, reglas, ctx, tarea):
     `extra.diagnostico = {"error", "pistas", "en"}` y el rescate sigue como
     siempre. Devuelve el diagnóstico (dict) o None."""
     ep_id = pz["id"]
+    if ex.get("objetivo_meta") == "OUTCOME_APP_PROMOTION":
+        reusado = _diagnostico_de_hermana(cliente, ex, pz)
+        if reusado is not False:
+            return reusado
     referencia = f"diagnostico:{ep_id}{ref_sufijo(tarea or {})}"
     contexto_pistas = {"es_imagen": pz.get("es_imagen"), "puerta": v.get("puerta")}
     extras = {"revision": pz.get("revision_doctrina"), "dias_transcurridos": (ctx or {}).get("dias_transcurridos")}

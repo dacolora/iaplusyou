@@ -577,6 +577,29 @@ def piezas(cliente, experimento_id):
         return _piezas(con, cliente, experimento_id)
 
 
+def diagnostico_hermano(cliente, experimento_id, ep_id):
+    """Instalaciones de la app: una pieza tiene una fila por tienda (misma
+    `pieza_id` y `pais`). Devuelve `(id, diagnostico)` de otra fila hermana de
+    `ep_id` en este experimento que ya tenga `extra.diagnostico`, o None —
+    así el mismo video que pierde en iOS y en Android se diagnostica (y se
+    paga) una sola vez. Se lee de la base, no del experimento cargado al
+    empezar la pasada: la hermana puede haberse diagnosticado en esta misma."""
+    ep = db.experimento_pieza
+    with db.conectar() as con:
+        f = con.execute(sa.select(ep.c.pieza_id, ep.c.pais).where(
+            ep.c.id == ep_id, ep.c.cliente == cliente, ep.c.experimento_id == experimento_id)).first()
+        if f is None:
+            return None
+        filas = con.execute(sa.select(ep.c.id, ep.c.extra).where(
+            ep.c.cliente == cliente, ep.c.experimento_id == experimento_id, ep.c.pieza_id == f.pieza_id,
+            ep.c.pais == f.pais, ep.c.id != ep_id).order_by(ep.c.id)).all()
+    for fila in filas:
+        d = (fila.extra or {}).get("diagnostico")
+        if isinstance(d, dict) and d:
+            return fila.id, d
+    return None
+
+
 def _resumen(piezas_):
     con_m = [p["metricas"] for p in piezas_ if p["metricas"]]
     cpcs = [m["cpc"] for m in con_m if (m.get("cpc") or 0) > 0]

@@ -431,3 +431,55 @@ def test_la_ganadora_aprende_antes_de_sus_acciones(base_temporal, monkeypatch, t
     _decisor_fijo(monkeypatch, te, "ganador", "escalar_y_derivar")
     te.exp_decidir({"payload": {"cliente": "acme", "experimento_id": eid}})
     assert orden[0] == "aprender" and "escalar" in orden
+
+
+def _experimento_app_dos_tiendas(base_temporal, objetivo="OUTCOME_APP_PROMOTION"):
+    import experimentos as ex
+    from tests.test_experimentos_db import _pieza
+    clon = _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_diag")
+    app = {"ios_url": "https://apps.apple.com/co/app/x/id1", "android_url": "https://play.google.com/store/apps/details?id=x"}
+    datos = dict(nombre="Forja", paises=[{"pais": "CO", "idioma": "es", "presupuesto_dia": 20000.0}],
+                 objetivo_meta=objetivo, dias=7, tope_total=500000.0, destino_url=app["ios_url"], moneda="COP",
+                 app=app if objetivo == "OUTCOME_APP_PROMOTION" else None)
+    if objetivo == "OUTCOME_APP_PROMOTION":
+        return ex.crear_con_piezas("acme", datos, [(clon, "CO")])   # una fila por tienda
+    otro = _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_diag2")
+    return ex.crear_con_piezas("acme", datos, [(clon, "CO"), (otro, "CO")])
+
+
+@pytest.mark.parametrize("objetivo,llamadas_esperadas", [("OUTCOME_APP_PROMOTION", 1), ("OUTCOME_TRAFFIC", 2)])
+def test_apps_dos_tiendas_perdedoras_se_diagnostican_una_vez(base_temporal, monkeypatch, tmp_path, objetivo,
+                                                             llamadas_esperadas):
+    import experimentos as ex
+    import gastos
+    import proyectos
+    import tareas
+    from tareas import experimentos as te
+    tareas.cargar_todas()
+    monkeypatch.setattr(proyectos, "_path", lambda cliente: str(tmp_path / f"{cliente}.json"))
+    _pedidas_con_payload(monkeypatch, te)
+    llamadas = []
+    monkeypatch.setattr(te.doctrina_diagnostico, "diagnosticar", lambda pz, v, snaps, reglas, extras=None, idioma=None: (
+        llamadas.append(pz["id"]), ({"causas": [{"codigo": "gancho", "detalle": "d", "evidencia": "e"}],
+                                     "siguiente": {"que": "gancho", "porque": "p", "hipotesis": "h"},
+                                     "aprendizaje": "En CO no.", "pistas": []}, 900, 300))[1])
+    eid = _experimento_app_dos_tiendas(base_temporal, objetivo)
+    exp = ex.obtener("acme", eid)
+    filas = exp["piezas"]
+    assert len(filas) == 2
+    assert (filas[0]["pieza_id"] == filas[1]["pieza_id"]) == (objetivo == "OUTCOME_APP_PROMOTION")
+    v = {"veredicto": "perdedor", "motivo": "x", "accion": "pausar", "puerta": 1, "numeros": {}}
+    for pz in filas:
+        resultado = {"veredictos": [], "ganadores": [], "propuestas": [], "errores": [], "escalados": set(),
+                     "organico_propuesto": set()}
+        te._aplicar_veredicto("acme", exp, pz, v, resultado)
+    assert len(llamadas) == llamadas_esperadas
+    revisiones = [g for g in gastos.historial("acme", limite=10) if g["tipo"] == "revision"]
+    assert len(revisiones) == llamadas_esperadas
+    despues = ex.piezas("acme", eid)
+    assert all(p["extra"].get("diagnostico", {}).get("causas") for p in despues)
+    eventos = [e for e in ex.eventos("acme", eid) if e["tipo"] == "diagnostico"]
+    assert len(eventos) == 2
+    if objetivo == "OUTCOME_APP_PROMOTION":
+        assert despues[1]["extra"]["diagnostico"]["reutilizado_de"] == despues[0]["id"]
+        assert despues[1]["extra"]["diagnostico"]["usd"] == 0

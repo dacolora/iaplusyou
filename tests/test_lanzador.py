@@ -351,7 +351,7 @@ def test_app_presupuesto_que_falla_a_medias_vuelve_y_no_cambia_lo_guardado(entor
     co = next(p for p in ex["paises"] if p["pais"] == "CO")
     assert co["presupuesto_dia"] == PRESUPUESTO_PAIS
     evento = [ev for ev in e["ex"].eventos("acme", e["eid"]) if ev["tipo"] == "presupuesto"]
-    assert evento and "se dejó como estaba" in evento[-1]["mensaje"]
+    assert evento and "se dejó como estaba" in evento[0]["mensaje"]  # eventos(): el más nuevo primero
 
 
 def test_app_presupuesto_que_tampoco_se_restaura_avisa_que_quedo_a_medias(entorno_app):
