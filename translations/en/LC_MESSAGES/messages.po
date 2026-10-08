@@ -5376,8 +5376,8 @@ msgstr "The Meta App ID is digits only (you can find it in Meta for Developers).
 msgid "El Buen Fin"
 msgstr "El Buen Fin"
 
-msgid "El Business no ve ninguna Página. Sin Página un proyecto solo puede pautar anuncios (nada de orgánico)."
-msgstr "The Business can't see any Page. Without a Page a project can only run ads (no organic)."
+msgid "El Business no ve ninguna Página. Sin Página el proyecto queda solo para métricas: no se pueden lanzar anuncios ni publicar."
+msgstr "The Business can't see any Page. Without a Page the project is metrics-only: you can't launch ads or publish."
 
 msgid "El Business no ve ninguna cuenta publicitaria. Asígnaselas al usuario del sistema en Business Manager y pulsa «Actualizar desde Meta»."
 msgstr "The Business can't see any ad account. Assign them to the system user in Business Manager and press “Refresh from Meta”."

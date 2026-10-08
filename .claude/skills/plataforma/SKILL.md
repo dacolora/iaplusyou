@@ -104,8 +104,9 @@ runs in its own single thread (`HILOS_LECTURA = 1`), and the general lane exclud
 14 min (Netherlands), about an hour for happyflops' 7 accounts; on the single general thread that would have
 blocked experiment launches and refreshes, Triple Whale and the stores for that long. Copies of different accounts
 still run one after another (Meta's rate limits are per user+app, shared across accounts). It is free (reading
-Meta never charges, `max_intentos=2`). `meta_rend_sincronizar_todas` and `meta_rend_limpiar` stay in the general
-lane (instant). A new long, free, read-only sync can join this lane; anything that charges stays out of it.
+Meta never charges, `max_intentos=2`, and all three `meta_rend_*` types are in `TIPOS_EXENTOS_DE_COBRO`, so a project
+with «Cobrar» on still syncs). `meta_rend_sincronizar_todas` and `meta_rend_limpiar` stay in the general
+lane (instant). The area's own skill is `meta-rendimiento`. A new long, free, read-only sync can join this lane; anything that charges stays out of it.
 
 **Higgsfield API wrapper** (`higgsfield_client.py`): all calls follow launch ->
 `poll_until_done(status_url)` -> extract-result, for both video (`kling-2.1-pro`,
