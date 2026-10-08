@@ -48,6 +48,7 @@
   <button type="button" class="cat-tab" data-apartado="generacion">{{ _('Generación') }}</button>
   <button type="button" class="cat-tab" data-apartado="cuenta">{{ _('Cuenta y avisos') }}</button>
   <button type="button" class="cat-tab" data-apartado="gasto">{{ _('Gasto') }}</button>
+  {% if (cobros_cuenta and cobros_cuenta.cobrar) or es_admin %}<button type="button" class="cat-tab" data-apartado="saldo">{{ _('Saldo y recargas') }}</button>{% endif %}
 </nav>
 
 {% if es_admin %}
@@ -557,9 +558,15 @@
   <div>
     <h2 style="margin-top:0;">{{ _('Gasto') }}</h2>
     <p class="vacio" style="padding-top:0;">
+      {% if gasto_modo == 'cobrado' %}
+      {{ _('Lo que se descontó de tu saldo por lo que este proyecto generó, este mes y desde el inicio: cada video,
+      imagen, guion, final o texto con IA deja su cobro aquí al terminar. Lo que falló y no llegó no se cobra.') }}
+      {% else %}
       {{ _('Cuánto costó de verdad lo que este proyecto generó, este mes y desde el inicio: cada video, imagen, guion,
       final o texto con IA deja su cobro aquí apenas el proveedor lo cobra. Los botones de la app
       muestran el precio aproximado antes de gastar; esta lista es el precio real después.') }}
+      {% endif %}
+      {% if gasto_modo == 'doble' %}<br><strong>{{ _('Este proyecto cobra: «Costo» es lo que pagó Creatv al proveedor y «Cobrado», lo que se descontó del saldo del proyecto.') }}</strong>{% endif %}
     </p>
   </div>
   <div class="gasto-descargas">
@@ -572,14 +579,21 @@
   <div class="kpi-tile">
     <span>{{ _('Generación este mes') }}</span>
     <strong>{{ (gasto_mes.total if gasto_mes else 0) | usd }}</strong>
-    <small>{% if gasto_mes and gasto_mes.n %}{{ ngettext('%(num)s cobro(s) a proveedores', '%(num)s cobro(s) a proveedores', gasto_mes.n) }}{% else %}{{ _('sin generación pagada') }}{% endif %}</small>
+    <small>{% if gasto_mes and gasto_mes.n %}{% if gasto_modo == 'cobrado' %}{{ ngettext('%(num)s cobro', '%(num)s cobros', gasto_mes.n) }}{% else %}{{ ngettext('%(num)s cobro(s) a proveedores', '%(num)s cobro(s) a proveedores', gasto_mes.n) }}{% endif %}{% else %}{{ _('sin generación pagada') }}{% endif %}</small>
   </div>
   {# Desde el inicio (2026-10-07): sin esta cifra, el total del proyecto parecía
      ser solo el del mes en curso. #}
+  {% if gasto_modo == 'doble' %}
+  <div class="kpi-tile">
+    <span>{{ _('Cobrado este mes') }}</span>
+    <strong>{{ gasto_cobrado.mes.total | usd }}</strong>
+    <small>{{ _('desde el inicio: %(monto)s', monto=(gasto_cobrado.total.total | usd)) }}</small>
+  </div>
+  {% endif %}
   <div class="kpi-tile" id="gasto-desde-inicio">
     <span>{{ _('Generación desde el inicio') }}</span>
     <strong>{{ (gasto_total.total if gasto_total else 0) | usd }}</strong>
-    <small>{% if gasto_total and gasto_total.n %}{{ ngettext('%(num)s cobro(s) a proveedores', '%(num)s cobro(s) a proveedores', gasto_total.n) }}{% if gasto_total.desde %} · {{ _('desde el %(fecha)s', fecha=gasto_total.desde[:10]) }}{% endif %}{% else %}{{ _('sin generación pagada') }}{% endif %}</small>
+    <small>{% if gasto_total and gasto_total.n %}{% if gasto_modo == 'cobrado' %}{{ ngettext('%(num)s cobro', '%(num)s cobros', gasto_total.n) }}{% else %}{{ ngettext('%(num)s cobro(s) a proveedores', '%(num)s cobro(s) a proveedores', gasto_total.n) }}{% endif %}{% if gasto_total.desde %} · {{ _('desde el %(fecha)s', fecha=gasto_total.desde[:10]) }}{% endif %}{% else %}{{ _('sin generación pagada') }}{% endif %}</small>
   </div>
   {% for p in pauta_mes %}
   <div class="kpi-tile">
@@ -599,12 +613,12 @@
 {% if gastos_por_tipo %}
 <h3 style="margin-top:1.2rem;">{{ _('Por tipo') }}</h3>
 <table class="gasto-tabla">
-  <thead><tr><th>{{ _('Tipo') }}</th><th class="num">{{ _('Cantidad') }}</th><th class="num">US$</th></tr></thead>
+  <thead><tr><th>{{ _('Tipo') }}</th><th class="num">{{ _('Cantidad') }}</th><th class="num">{% if gasto_modo == 'doble' %}{{ _('Costo') }}{% else %}US${% endif %}</th>{% if gasto_modo == 'doble' %}<th class="num">{{ _('Cobrado') }}</th>{% endif %}</tr></thead>
   <tbody>
     {% for t in gastos_por_tipo %}
-    <tr><td>{{ t.nombre|traducir }}</td><td class="num">{{ t.n }}</td><td class="num">{{ t.usd | usd }}</td></tr>
+    <tr><td>{{ t.nombre|traducir }}</td><td class="num">{{ t.n }}</td><td class="num">{{ t.usd | usd }}</td>{% if gasto_modo == 'doble' %}<td class="num">{{ t.cobrado | usd }}</td>{% endif %}</tr>
     {% endfor %}
-    <tr class="gasto-total"><td>{{ _('Total') }}</td><td class="num">{{ gasto_mes.n }}</td><td class="num">{{ gasto_mes.total | usd }}</td></tr>
+    <tr class="gasto-total"><td>{{ _('Total') }}</td><td class="num">{{ gasto_mes.n }}</td><td class="num">{{ gasto_mes.total | usd }}</td>{% if gasto_modo == 'doble' %}<td class="num">{{ gasto_cobrado.mes.total | usd }}</td>{% endif %}</tr>
   </tbody>
 </table>
 {% endif %}
@@ -612,12 +626,12 @@
 {% if gasto_por_mes and gasto_por_mes | length > 1 %}
 <h3 style="margin-top:1.2rem;">{{ _('Mes a mes') }}</h3>
 <table class="gasto-tabla" id="gasto-por-mes">
-  <thead><tr><th>{{ _('Mes') }}</th><th class="num">{{ _('Cantidad') }}</th><th class="num">US$</th></tr></thead>
+  <thead><tr><th>{{ _('Mes') }}</th><th class="num">{{ _('Cantidad') }}</th><th class="num">{% if gasto_modo == 'doble' %}{{ _('Costo') }}{% else %}US${% endif %}</th>{% if gasto_modo == 'doble' %}<th class="num">{{ _('Cobrado') }}</th>{% endif %}</tr></thead>
   <tbody>
     {% for m in gasto_por_mes %}
-    <tr><td>{{ m.mes }}</td><td class="num">{{ m.n }}</td><td class="num">{{ m.usd | usd }}</td></tr>
+    <tr><td>{{ m.mes }}</td><td class="num">{{ m.n }}</td><td class="num">{{ m.usd | usd }}</td>{% if gasto_modo == 'doble' %}<td class="num">{{ m.cobrado | usd }}</td>{% endif %}</tr>
     {% endfor %}
-    <tr class="gasto-total"><td>{{ _('Total desde el inicio') }}</td><td class="num">{{ gasto_total.n }}</td><td class="num">{{ gasto_total.total | usd }}</td></tr>
+    <tr class="gasto-total"><td>{{ _('Total desde el inicio') }}</td><td class="num">{{ gasto_total.n }}</td><td class="num">{{ gasto_total.total | usd }}</td>{% if gasto_modo == 'doble' %}<td class="num">{{ gasto_cobrado.total.total | usd }}</td>{% endif %}</tr>
   </tbody>
 </table>
 {% endif %}
@@ -629,7 +643,7 @@
 {% if gastos_historial %}
 <div class="gasto-historial">
   <table class="gasto-tabla">
-    <thead><tr><th>{{ _('Fecha') }}</th><th>{{ _('Tipo') }}</th><th>{{ _('Detalle') }}</th><th class="num">US$</th></tr></thead>
+    <thead><tr><th>{{ _('Fecha') }}</th><th>{{ _('Tipo') }}</th><th>{{ _('Detalle') }}</th><th class="num">{% if gasto_modo == 'doble' %}{{ _('Costo') }}{% else %}US${% endif %}</th>{% if gasto_modo == 'doble' %}<th class="num">{{ _('Cobrado') }}</th>{% endif %}</tr></thead>
     <tbody>
       {% for g in gastos_historial %}
       <tr>
@@ -637,6 +651,7 @@
         <td>{{ nombres_tipo_gasto.get(g.tipo, g.tipo)|traducir }}</td>
         <td class="gasto-detalle" title="{{ g.referencia }}">{{ g.detalle or g.referencia }}{% if g.proveedor %} <small class="vacio" style="display:inline;padding:0;">· {{ g.proveedor }}</small>{% endif %}</td>
         <td class="num">{{ g.usd | usd }}</td>
+        {% if gasto_modo == 'doble' %}<td class="num">{{ gasto_cobrado.por_gasto.get(g.id, 0) | usd }}</td>{% endif %}
       </tr>
       {% endfor %}
     </tbody>
@@ -647,8 +662,12 @@
 <p class="vacio">{{ _('Todavía no hay cobros registrados. Aparecerán aquí cuando generes algo en Crear.') }}</p>
 {% endif %}
 <p class="vacio gasto-nota" style="font-size:.78rem;">
+  {% if gasto_modo == 'cobrado' %}
+  {{ _('Es lo que se descontó de tu saldo (el detalle de cada movimiento está en Saldo y recargas); la pauta se cobra en tu cuenta de Meta y no entra en este total.') }}
+  {% else %}
   {{ _('Son los precios reales de los proveedores (WaveSpeed, fal.ai, Anthropic); la pauta se cobra en tu cuenta de Meta
   y no entra en este total. Ningún gasto bloquea una acción: solo se informa.') }}
+  {% endif %}
 </p>
 
 {% if session.get('rol') == 'admin' %}
@@ -747,6 +766,12 @@
 </details>
 {% endif %}
 </section>
+
+{% if (cobros_cuenta and cobros_cuenta.cobrar) or es_admin %}
+<section class="config-apartado" id="config-ap-saldo" data-apartado="saldo">
+{% include "_config_saldo.html" %}
+</section>
+{% endif %}
 
 <script>
   // Configuración en apartados (spec 2026-09-26): uno a la vez; se recuerda

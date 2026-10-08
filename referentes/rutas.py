@@ -17,6 +17,7 @@ from flask_babel import gettext
 
 import catalogo_productos
 from cobros import libro
+from cobros import vista as vista_cobros
 import creative_flow
 import doctrina
 from doctrina import producto as doctrina_producto
@@ -623,6 +624,11 @@ def barridos(cliente):
         # «Clasificar pendientes» re-factura (spec §11): el precio va en el
         # botón igual que en cualquier otro click pagado del panel (Critical 1).
         b["precio_clasificar"] = gastos.estimar("clasificacion", n=b["pendientes"])["texto"] if b["pendientes"] else None
+        if vista_cobros.ver_cobrado_aqui(cliente):
+            # «lo que costó»: a un cliente de un proyecto que cobra, lo cobrado por los trabajos de este
+            # barrido (traer y clasificar comparten job_id, base o base + SUFIJO_CONT; cobros §7).
+            base = tareas_referentes.job_id_barrer(b["id"])
+            b["usd_real"] = vista_cobros.cobrado_donde(cliente, jobs=(base, base + tareas_referentes.SUFIJO_CONT))
     return render_template("_referentes_barridos.html", cliente=cliente, barridos=lista)
 
 

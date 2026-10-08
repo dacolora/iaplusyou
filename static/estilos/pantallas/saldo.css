@@ -1,0 +1,46 @@
+/* Cobros: saldo prepagado (spec 2026-10-08 §7 y §9.4). Uso: Configuración › Saldo y recargas (_config_saldo.html y el
+   fragmento _saldo_panel.html, clases saldo-*), el chip de la barra lateral (.sidebar-saldo, sobre .sidebar-gasto), la
+   vuelta del pago (saldo_recarga.html, #recarga-vuelta) y el aviso de saldo insuficiente que pinta static/cobros.js
+   (.aviso-sin-saldo). Tonos: normal, aviso (bajo el umbral) y bloqueo (sin saldo), siempre con palabras además del color. */
+.saldo-panel [hidden], #recarga-vuelta [hidden], .aviso-sin-saldo[hidden] { display: none !important; }
+
+/* Chip de la barra lateral */
+.sidebar-saldo { font-weight: 600; color: var(--text); }
+.sidebar-saldo.saldo-aviso { border-color: var(--warn); background: var(--warn-fondo); }
+.sidebar-saldo.saldo-bloqueo { border-color: var(--error); background: var(--error-fondo); }
+
+/* Configuración › Saldo y recargas */
+.saldo-panel { min-width: 0; }
+.saldo-tiles { grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); max-width: 720px; }
+.saldo-panel h3 { margin: var(--esp-5) 0 var(--esp-2); }
+.saldo-tile.saldo-aviso { border-color: var(--warn); }
+.saldo-tile.saldo-bloqueo { border-color: var(--error); }
+.saldo-tile.saldo-aviso small, .saldo-tile.saldo-bloqueo small { color: var(--text); }
+.saldo-recarga { display: grid; gap: var(--esp-2); max-width: 520px; }
+.saldo-montos { display: flex; flex-wrap: wrap; gap: var(--esp-2); }
+.saldo-fila { display: flex; flex-wrap: wrap; gap: var(--esp-2); align-items: center; }
+.saldo-fila input[type=number] { flex: 1 1 140px; min-width: 0; max-width: 220px; }
+.saldo-nota { padding-top: 0; font-size: var(--t-chico); }
+.saldo-cabecera { display: flex; flex-wrap: wrap; gap: var(--esp-2); align-items: center; justify-content: space-between; margin-top: var(--esp-5); }
+.saldo-cabecera h3 { margin: 0; }
+.saldo-tabla-caja { max-width: 100%; overflow-x: auto; }
+.saldo-detalle { display: block; color: var(--muted); font-size: var(--t-chico); overflow-wrap: anywhere; }
+.saldo-monto-mas { color: var(--ok); }
+.saldo-monto-menos { color: var(--text); }
+.saldo-monto-cero { color: var(--muted); }
+.saldo-mas { margin-top: var(--esp-2); }
+.saldo-estado-aprobada { color: var(--ok); }
+.saldo-estado-rechazada, .saldo-estado-anulada { color: var(--error); }
+.saldo-estado-pendiente { color: var(--warn); }
+
+/* Vuelta del pago */
+.recarga-caja { display: grid; gap: var(--esp-3); max-width: 560px; padding: var(--esp-4); border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); }
+.recarga-texto { margin: 0; font-size: var(--t-titulo); line-height: 1.35; overflow-wrap: anywhere; }
+
+/* Aviso de saldo insuficiente (cualquier fetch que reciba el 402) */
+.flash.aviso-sin-saldo { position: fixed; z-index: 60; left: var(--esp-4); right: var(--esp-4); bottom: var(--esp-4); max-width: 640px; margin: 0 auto;
+  display: flex; flex-wrap: wrap; gap: var(--esp-2); align-items: center; box-shadow: var(--shadow);
+  background: var(--panel-2); border: 1px solid var(--error); color: var(--text); }
+.aviso-sin-saldo span { flex: 1 1 240px; min-width: 0; overflow-wrap: anywhere; }
+.aviso-sin-saldo-enlace { font-weight: 700; }
+.aviso-sin-saldo-cerrar { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0 var(--esp-2); line-height: 1.6; }

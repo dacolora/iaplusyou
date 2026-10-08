@@ -22,7 +22,7 @@ import marca
 import proyectos
 import tareas.director as tareas_director
 import trabajos
-from cobros import SaldoInsuficiente, libro
+from cobros import SaldoInsuficiente, libro, vista as vista_cobros
 from idiomas import N_
 from providers import flowplus_modelos
 from sprints import datos, estado
@@ -438,6 +438,11 @@ def pieza_viva(p):
     return est is None and es_reserva(p.get("cf_id")) and not reserva_vencida(p.get("cf_id"))
 
 
+def _claves_piezas(piezas):
+    """(clave del gasto, costo) de cada pieza de Crear de un sprint: `video:<cf_id>` / `imagen:<cf_id>`."""
+    return [(f"{p.get('tipo') or 'video'}:{p.get('cf_id')}", p.get("costo_usd")) for p in piezas if p.get("cf_id")]
+
+
 def _resumen(piezas, planeadas):
     r = {"planeadas": planeadas, "encoladas": 0, "generando": 0, "listas": 0, "error": 0, "aprobadas": 0,
          "costo_usd": 0.0, "segundos_restantes": 0}
@@ -458,6 +463,9 @@ def _resumen(piezas, planeadas):
                 r["encoladas"] += 1
             r["segundos_restantes"] += SEGUNDOS_VIDEO if p.get("tipo") == "video" else SEGUNDOS_IMAGEN
     r["costo_usd"] = round(r["costo_usd"], 4)
+    if piezas and vista_cobros.ver_cobrado_aqui(piezas[0].get("cliente")):
+        # Lo «gastado» de un lote que ve el cliente de un proyecto que cobra es lo cobrado (cobros §7).
+        r["costo_usd"] = vista_cobros.suma_vista(piezas[0].get("cliente"), _claves_piezas(piezas))
     r["en_curso"] = (r["encoladas"] + r["generando"]) > 0
     return r
 

@@ -102,6 +102,9 @@
     // 'ads' (Campañas) se fundió en Experimentos: el hash viejo (o el
     // guardado) abre Experimentos, donde quedan los anuncios sueltos.
     function resolver(t) {
+      // «#config-ap-saldo» (el «Recargar» de un aviso sin saldo, la vuelta del
+      // pago): un apartado de Configuración abre esa pestaña; su script lo enfoca.
+      if (t && t.indexOf('config-') === 0) return 'settings';
       if (t === 'idea') return 'creativeflowplus';
       if (t === 'productos') return 'catalogo';
       if (t === 'ads' || t === 'tablero') return 'experimentos';

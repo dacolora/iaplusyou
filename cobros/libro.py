@@ -193,6 +193,19 @@ def disponible(cliente):
         return _saldo(con, cliente) - _reservado(con, cliente)
 
 
+def estado(cliente, siempre=False):
+    """La cuenta con su saldo, lo reservado y el disponible, en UNA conexión
+    (el chip de la barra lateral y el panel del saldo). Solo lee. Si el
+    proyecto no cobra, no suma el libro salvo con `siempre` (el admin mira el
+    panel de un proyecto apagado)."""
+    with db.conectar() as con:
+        c = _cuenta(con, cliente)
+        if not (c["cobrar"] or siempre):
+            return {**c, "saldo": 0, "reservado": 0, "disponible": 0}
+        s, r = _saldo(con, cliente), _reservado(con, cliente)
+    return {**c, "saldo": s, "reservado": r, "disponible": s - r}
+
+
 # ------------------------------------------------------------ freno previo ---
 
 def exigir(cliente, costo_usd, job_id=None):

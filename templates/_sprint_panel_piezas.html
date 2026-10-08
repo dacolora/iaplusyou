@@ -27,7 +27,7 @@
         {% else %}<p class="vacio">{{ _('Generando…') if p.estado == 'generando' else _('En cola…') }}</p>{% endif %}
       </div>
       <strong>{{ p.titulo }}</strong>
-      <small class="vacio">{{ etiqueta_sprint(p.tipo) }}{% if p.costo_usd %} · US$ {{ '%.2f' % p.costo_usd }}{% endif %} · {{ etiqueta_sprint(p.revision) }}</small>
+      <small class="vacio">{{ etiqueta_sprint(p.tipo) }}{% set _costo = p.costo_usd | cobrado(p.tipo ~ ':' ~ p.cf_id) %}{% if _costo %} · US$ {{ '%.2f' % _costo }}{% endif %} · {{ etiqueta_sprint(p.revision) }}</small>
       {% if p.qa and p.qa.veredicto == "error" %}
       <p class="panel-pieza-qa"><span class="campo-error">{{ _('QA falló: %(nota)s', nota=(p.qa.nota or _('sin detalle'))) }}</span>
         <button type="button" class="btn-xs" data-pieza-post data-url="{{ url_for('sprints.pieza_qa', cliente=cliente, cp_id=p.id) }}">{{ _('Repetir QA') }}</button></p>

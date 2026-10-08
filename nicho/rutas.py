@@ -15,6 +15,7 @@ from flask_babel import gettext
 
 import catalogo_productos
 from cobros import libro
+from cobros import vista as vista_cobros
 import doctrina
 import gastos
 import idiomas
@@ -241,7 +242,7 @@ def ver(cliente, eid):
         # El idioma de BÚSQUEDA de YouTube sale del país del proyecto (spec §B5: no es el idioma
         # de salida; con inglés por defecto, `estudio.idioma` haría buscar en inglés a un cliente LatAm).
         idioma_busqueda=plataformas.idioma(proyectos.pais(cliente) or ""),
-        investigacion=investigacion.resumen(inv_actual),
+        investigacion=_investigacion_vista(cliente, eid, inv_actual),
         trabajo_inv=({"job_id": job_inv, "paso": paso_vivo} if job_inv and trabajos.en_curso(job_inv) else None),
         productos_investigados=(datos.productos_nicho(cliente, eid) if inv_actual else []),
         paises_estudio=[(c, datos.NOMBRES_PAIS.get(c, c)) for c in datos.PAISES_ESTUDIO],
@@ -669,6 +670,26 @@ def _pedido_investigacion(fuente, est, cliente):
                                if _es_admin() else gettext("Esa fuente no está disponible todavía."))
     topes = investigacion.normalizar_topes({k: fuente.get(k) for k in investigacion.TOPES_DEFECTO})
     return pais, plats, redes, topes
+
+
+def _investigacion_vista(cliente, eid, inv):
+    """`investigacion.resumen` con lo gastado que ve quien mira: a un cliente de
+    un proyecto que cobra, lo COBRADO por los pasos de esta investigación (desde
+    que arrancó; cobros, spec 2026-10-08 §7), no el costo × el margen de hoy.
+    `cobrado` le dice a la plantilla que no le ponga margen."""
+    r = investigacion.resumen(inv)
+    if not inv or not vista_cobros.ver_cobrado_aqui(cliente):
+        return r
+    desde = inv.get("iniciada_en")
+    r["gastado"] = vista_cobros.cobrado_donde(
+        cliente, prefijos=(f"investigacion:{eid}:", f"recoleccion:{eid}:", f"avatares:{eid}:"), desde=desde)
+    pasos = {}
+    for paso, info in (r.get("pasos") or {}).items():
+        prefijos = ((f"avatares:{eid}:",) if paso == "generar"
+                    else (f"investigacion:{eid}:{paso}:", f"recoleccion:{eid}:{paso}:"))
+        pasos[paso] = {**(info or {}), "usd": vista_cobros.cobrado_donde(cliente, prefijos=prefijos, desde=desde)}
+    r["pasos"], r["cobrado"] = pasos, True
+    return r
 
 
 def _ver(usd):

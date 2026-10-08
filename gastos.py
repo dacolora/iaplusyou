@@ -131,6 +131,19 @@ EVALUACION_TW_POR_ANUNCIO_USD = 0.012
 IDEAS_BASE_USD = 0.015
 IDEAS_POR_IDEA_USD = 0.012
 
+# El nombre de cada tipo de gasto en pantalla (Configuración › Gasto, panel, cobros.vista).
+NOMBRES_TIPO = {
+    "video": N_("Videos"), "imagen": N_("Imágenes"), "swap": N_("Cambios de producto"),
+    "guion": N_("Guiones"), "final": N_("Finales"), "regla_producto": N_("Reglas de producto (IA)"),
+    "caption_organico": N_("Textos orgánicos (IA)"), "musica": N_("Música"),
+    "locucion": N_("Locuciones (audios)"), "voz_propia": N_("Voces propias"),
+    "refinar_prompt": N_("Correcciones de prompt (Flow Plus)"), "guion_clips": N_("Guiones a clips (Flow Plus)"),
+    "ideas": N_("Ideas de sprint (IA)"), "pedidos": N_("Pedidos al cliente (IA)"),
+    "revision": N_("Revisión de la doctrina (IA)"),
+    "evaluacion": N_("Evaluación de anuncios (IA)"),
+    "transcripcion": N_("Subtítulos (transcripción)"), "otro": N_("Otros"),
+}
+
 SIN_PRECIO = N_("precio no disponible")
 
 

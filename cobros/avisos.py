@@ -24,12 +24,11 @@ def _monto(milesimas):
 
 
 def _nombre_concepto(concepto):
-    """La Task 8 trae cobros.vista.nombre_concepto; mientras no exista, el código tal cual."""
-    try:
-        from cobros import vista  # noqa: PLC0415
-        return vista.nombre_concepto(concepto)
-    except Exception:  # noqa: BLE001 — sin vista (aún) o sin contexto: el código sirve
-        return str(concepto or "")
+    """El código guardado («video», «final»…) en palabras, en el idioma activo
+    (el del proyecto: `_al_proyecto` lo pone). Import tardío: vista importa
+    libro, que importa este módulo dentro de sus funciones."""
+    from cobros import vista  # noqa: PLC0415
+    return vista.nombre_concepto(concepto)
 
 
 def _al_proyecto(cliente, tipo, armar):
@@ -56,7 +55,7 @@ def admin(tipo, asunto, cuerpo, cliente=""):
 def pieza_no_cobrada(cliente, milesimas, concepto):
     def armar():
         return (gettext("Una pieza falló y no se te cobró"),
-                gettext("%(concepto)s no llegó. No descontamos %(monto)s de tu saldo.",
+                gettext("Algo de «%(concepto)s» no llegó. No descontamos %(monto)s de tu saldo.",
                         concepto=_nombre_concepto(concepto), monto=_monto(milesimas)))
     return _al_proyecto(cliente, "pieza_no_cobrada", armar)
 

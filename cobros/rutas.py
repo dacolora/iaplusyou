@@ -11,14 +11,16 @@
 import threading
 import time
 
-from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, session, url_for
+from flask import Blueprint, Response, abort, flash, jsonify, redirect, render_template, request, session, url_for
 from flask_babel import gettext
+from werkzeug.utils import secure_filename
 
 import cola
 import cuentas
+import db
 import gastos
 import usuarios
-from cobros import bold, libro, recargas
+from cobros import bold, libro, recargas, vista
 
 bp = Blueprint("cobros", __name__)
 
@@ -93,6 +95,49 @@ def texto_estado(recarga):
     if estado == "anulada":
         return gettext("Bold anuló este pago y lo descontamos de tu saldo.")
     return gettext("Verificando tu pago…")
+
+
+def _puede_ver_saldo(cliente):
+    """Configuración › Saldo: quien entra a un proyecto que cobra (el guard de
+    la app ya decidió que entra) y el admin siempre. Lo demás, 404."""
+    if session.get("rol") == "admin":
+        return True
+    return vista.cobra(cliente)
+
+
+@bp.get("/cliente/<cliente>/saldo/panel")
+def saldo_panel(cliente):
+    """El fragmento del saldo que pide static/cobros.js al abrir el apartado
+    (spec §7): saldo, recargar, movimientos (página 1) y recargas. Solo lee."""
+    if not _puede_ver_saldo(cliente):
+        abort(404)
+    e = vista.estado(cliente, siempre=True)
+    return render_template("_saldo_panel.html", cliente=cliente, e=e, tono=vista.tono(e),
+                           movs=vista.movimientos(cliente), pagina=1, recargas=recargas.de_proyecto(cliente),
+                           estados_recarga=vista.ESTADOS_RECARGA, bold_ok=bold.configurado(),
+                           min_usd=recargas.MIN_USD, max_usd=recargas.MAX_USD, solo_filas=False)
+
+
+@bp.get("/cliente/<cliente>/saldo/movimientos")
+def saldo_movimientos(cliente):
+    """«Ver más»: las filas (`<tr>`) de la página pedida, y al final una fila
+    oculta con la URL de la siguiente si hay más."""
+    if not _puede_ver_saldo(cliente):
+        abort(404)
+    pagina = max(1, request.args.get("pagina", 1, type=int) or 1)
+    return render_template("_saldo_panel.html", cliente=cliente, movs=vista.movimientos(cliente, pagina=pagina),
+                           pagina=pagina, solo_filas=True)
+
+
+@bp.get("/cliente/<cliente>/saldo/movimientos.csv")
+def saldo_movimientos_csv(cliente):
+    """Todo el libro del proyecto en CSV (`;`, BOM), como el de gasto."""
+    if not _puede_ver_saldo(cliente):
+        abort(404)
+    resp = Response(vista.csv_movimientos(cliente), content_type="text/csv; charset=utf-8")
+    nombre = secure_filename(f"saldo_{cliente}_{db.ahora()[:10]}.csv")
+    resp.headers["Content-Disposition"] = f'attachment; filename="{nombre}"'
+    return resp
 
 
 @bp.post("/cliente/<cliente>/saldo/recargar")

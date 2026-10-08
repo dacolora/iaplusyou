@@ -218,14 +218,14 @@
           <p class="vacio" style="padding:0;font-size:.78rem;">
             {{ _('Final de: %(texto)s', texto=(item.accion_central or item.id)) }}
             {% if f.duracion_s %} · {{ "%.1f"|format(f.duracion_s) }}s{% endif %}
-            {% if f.costo_usd %} · {{ _('costó %(usd)s', usd=(f.costo_usd | usd)) }}{% endif %}
+            {% set _costo = f.costo_usd | cobrado('final:' ~ f.id) %}{% if _costo %} · {{ _('costó %(usd)s', usd=(_costo | usd)) }}{% endif %}
             · <span class="tag-estado">{{ etiqueta_estado(f.estado) }}</span>
           </p>
           {% if f.capas %}
           <p class="campo-label" style="margin-top:.8rem;">{{ _('Capas') }}</p>
           <ul class="fe-capas">
             {% for nombre, capa in f.capas.items() %}
-            <li><strong>{{ etiqueta_fe(nombre) }}</strong> · {{ capa.proveedor or "" }} · <span class="tag-estado">{{ etiqueta_fe(capa.estado) }}</span>{% if capa.costo_usd %} · {{ capa.costo_usd | usd }}{% endif %}{% if capa.error %} <span class="tag-error" style="font-size:.72rem;">{{ capa.error }}</span>{% endif %}</li>
+            <li><strong>{{ etiqueta_fe(nombre) }}</strong> · {{ capa.proveedor or "" }} · <span class="tag-estado">{{ etiqueta_fe(capa.estado) }}</span>{% set _capa_usd = capa.costo_usd | cobrado %}{% if _capa_usd %} · {{ _capa_usd | usd }}{% endif %}{% if capa.error %} <span class="tag-error" style="font-size:.72rem;">{{ capa.error }}</span>{% endif %}</li>
             {% endfor %}
           </ul>
           {% endif %}

@@ -240,7 +240,7 @@ def test_avisos_arman_el_texto_y_saldo_bajo_avisa_una_vez(base_temporal, monkeyp
     monkeypatch.setattr(avisos.notificaciones, "avisar", lambda c, t, a, b: enviados.append((c, t, a, b)) or True)
     monkeypatch.setattr(avisos.idiomas, "de_proyecto", lambda c: "es")
     avisos.pieza_no_cobrada("acme", 2250, "video")
-    assert enviados[0][1] == "pieza_no_cobrada" and "video" in enviados[0][3] and "2,25" in enviados[0][3]
+    assert enviados[0][1] == "pieza_no_cobrada" and "«Videos»" in enviados[0][3] and "2,25" in enviados[0][3]
     avisos.saldo_bajo("acme", 3000)
     avisos.saldo_bajo("acme", 2000)
     assert [e[1] for e in enviados].count("saldo_bajo") == 1

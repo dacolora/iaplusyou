@@ -10,6 +10,7 @@ from flask_babel import gettext
 
 import estado as estado_videos
 from idiomas import N_
+from cobros import vista as vista_cobros
 from sprints import datos, estado
 
 TERMINADAS = ("listo", "degradada")
@@ -83,6 +84,11 @@ def aprobar_pasaron_qa(cliente, sprint_id, campana_id=None):
     return n
 
 
+def _claves(piezas):
+    """(clave del gasto, costo) de cada pieza de Crear: `video:<cf_id>` / `imagen:<cf_id>`."""
+    return [(f"{p.get('tipo') or 'video'}:{p.get('cf_id')}", p.get("costo_usd")) for p in piezas if p.get("cf_id")]
+
+
 def resumen(cliente, sprint_id):
     sp = datos.sprint(cliente, sprint_id, con_eventos=False)
     if not sp:
@@ -99,7 +105,8 @@ def resumen(cliente, sprint_id):
         "rechazadas": sum(1 for p in terminadas if p.get("revision") == "rechazada"),
         "sin_revisar": sum(1 for p in terminadas if p.get("revision") == "pendiente"),
         "error": sum(1 for p in piezas if p.get("estado") == "error"),
-        "costo_usd": round(sum(float(p.get("costo_usd") or 0.0) for p in piezas), 4),
+        # Lo que ve quien mira: a un cliente de un proyecto que cobra, lo cobrado (cobros §7).
+        "costo_usd": vista_cobros.suma_vista(cliente, _claves(piezas)),
         "costo_estimado_usd": round(float((sp.get("extra") or {}).get("costo_estimado_usd") or 0.0), 4),
         "dias": dias,
     }
@@ -112,10 +119,15 @@ def cerrar(cliente, sprint_id):
     if sp["estado"] != "revision":
         raise datos.ErrorDatos(gettext("Solo se cierra un sprint que está en revisión."))
     r = resumen(cliente, sprint_id)
+    usd = r["costo_usd"]
+    if vista_cobros.cobra(cliente):
+        # El evento lo leen todos (y el admin cierra a veces): en un proyecto que cobra, lo cobrado.
+        sp = datos.sprint(cliente, sprint_id, con_eventos=False)
+        usd = vista_cobros.suma_cobrada(cliente, [k for k, _c in _claves([p for c in sp["campanas"] for p in c["piezas"]])])
     datos.actualizar_sprint(cliente, sprint_id, estado="completado")
     mensaje = datos.texto_guardado(
         cliente, N_("Sprint cerrado: %(aprobadas)s aprobadas, %(rechazadas)s rechazadas, USD %(usd)s"),
-        aprobadas=r['aprobadas'], rechazadas=r['rechazadas'], usd=f"{r['costo_usd']:.2f}")
+        aprobadas=r['aprobadas'], rechazadas=r['rechazadas'], usd=f"{usd:.2f}")
     datos.registrar_evento(cliente, sprint_id, "sprint_cerrado", mensaje, r)
     return r
 

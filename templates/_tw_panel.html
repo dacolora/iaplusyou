@@ -230,7 +230,7 @@
   {% set r = e.resultado %}
   {% set por_ref = {} %}{% for a in e.anuncios %}{% set _x = por_ref.update({a.ref: a}) %}{% endfor %}
   <div class="tw-eval">
-    <p class="tw-eval-cab"><small>{{ _('Evaluación del %(desde)s al %(hasta)s · %(precio)s', desde=e.desde, hasta=e.hasta, precio=e.usd | usd) }}</small></p>
+    <p class="tw-eval-cab"><small>{{ _('Evaluación del %(desde)s al %(hasta)s · %(precio)s', desde=e.desde, hasta=e.hasta, precio=(e.usd | cobrado('tw_eval:' ~ e.id)) | usd) }}</small></p>
     {% if r.resumen %}<p class="tw-eval-resumen">{{ r.resumen }}</p>{% endif %}
     <div class="tw-patrones">
       {% for titulo, lista in [(_('Lo que hace ganar'), r.patrones_ganadores), (_('Lo que hace perder'), r.patrones_perdedores)] %}

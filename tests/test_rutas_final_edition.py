@@ -402,6 +402,8 @@ def _entorno_plantilla():
     env.globals.update(doctrina.globales_plantilla())   # editor del ángulo (doctrina, bloque 2)
     env.filters["usd"] = gastos.formatear   # mismo filtro que registra dashboard (costos «US$ 0,07»)
     env.filters["precio"] = lambda usd: usd  # cobros §6: fuera de una petición el margen es 1 (dashboard._filtro_precio)
+    env.filters["cobrado"] = lambda usd, clave=None: usd   # cobros §7: fuera de una petición, el costo (dashboard._filtro_cobrado)
+    env.globals["ver_cobrado"] = lambda: False
     env.filters["traducir"] = lambda x: x   # idiomas.traducir necesita un app de Flask-Babel; acá no hay ninguno
     # _selector_productos.html (incluida por _tab_creativeflowplus.html) agrupa
     # colores con este filtro (Task 14) — sin registrarlo acá, un catálogo no

@@ -104,6 +104,7 @@ import registro_app
 import gastos
 from cobros import SaldoInsuficiente
 from cobros import libro as libro_cobros
+from cobros import vista as vista_cobros
 from conectores import ErrorConector
 from conectores import csv_excel as conector_csv
 from conectores import meli as conector_meli
@@ -2233,7 +2234,7 @@ def ver_cliente(cliente):
         swaps=_swap_items(cliente),
         creative_flow_items=cf_items,
         **_listas_crear(cf_items),
-        **_tablero_final(cf_items, fe_ctx["ediciones_por_cf"]),
+        **_tablero_final(cf_items, fe_ctx["ediciones_por_cf"], cliente=cliente),
         preferencias_flowplus=proyectos.preferencias_flowplus(cliente),
         preferencias_sonido=proyectos.preferencias_sonido(cliente),
         aviso_saldo=saldo.vigente("wavespeed"),
@@ -3409,12 +3410,16 @@ def _listas_crear(items, n=TARJETAS_POR_PAGINA):
     return {"crear": items[:n], "crear_total": len(items)}
 
 
-def _tablero_final(items, ediciones_por_cf, n=TARJETAS_POR_PAGINA):
+def _tablero_final(items, ediciones_por_cf, n=TARJETAS_POR_PAGINA, cliente=None):
     """Lo que pinta el tablero de Final edition (2026-10-02,
     `final_edition.tablero`): las primeras `n` tarjetas de «En edición» y de
     «Finalizados», sus totales y las cifras de la cabecera. Los videos listos
     de Crear no van en la página: los trae el selector «+ Nueva» por fetch."""
     t = fe_tablero.armar(items, ediciones_por_cf)
+    if cliente and t["cifras"].get("costo_usd") and vista_cobros.ver_cobrado_aqui(cliente):
+        # «Costaron las finales listas»: lo cobrado por esas finales (cobros §7).
+        cobrado = vista_cobros.suma_vista(cliente, [(f"final:{f['id']}", f.get("costo_usd")) for _i, f in t["finalizados"]])
+        t["cifras"] = {**t["cifras"], "costo_usd": cobrado or None}
     return {"fe_en_edicion": t["en_edicion"][:n], "fe_en_edicion_total": len(t["en_edicion"]),
             "fe_finalizados": t["finalizados"][:n], "fe_finalizados_total": len(t["finalizados"]),
             "fe_cifras": t["cifras"]}
@@ -5188,17 +5193,8 @@ def tab_descargar_csv(cliente):
 # Rótulos de cada `tipo` de la tabla `gasto` (gastos.TIPOS): constante de
 # módulo que se muestra, marcada con N_ y traducida donde se usa
 # ({{ valor|traducir }} en las plantillas) — nunca acá mismo (idiomas.py).
-NOMBRES_TIPO_GASTO = {
-    "video": idiomas.N_("Videos"), "imagen": idiomas.N_("Imágenes"), "swap": idiomas.N_("Cambios de producto"),
-    "guion": idiomas.N_("Guiones"), "final": idiomas.N_("Finales"), "regla_producto": idiomas.N_("Reglas de producto (IA)"),
-    "caption_organico": idiomas.N_("Textos orgánicos (IA)"), "musica": idiomas.N_("Música"),
-    "locucion": idiomas.N_("Locuciones (audios)"), "voz_propia": idiomas.N_("Voces propias"),
-    "refinar_prompt": idiomas.N_("Correcciones de prompt (Flow Plus)"), "guion_clips": idiomas.N_("Guiones a clips (Flow Plus)"),
-    "ideas": idiomas.N_("Ideas de sprint (IA)"), "pedidos": idiomas.N_("Pedidos al cliente (IA)"),
-    "revision": idiomas.N_("Revisión de la doctrina (IA)"),
-    "evaluacion": idiomas.N_("Evaluación de anuncios (IA)"),
-    "transcripcion": idiomas.N_("Subtítulos (transcripción)"), "otro": idiomas.N_("Otros"),
-}
+# Vive en gastos (cobros.vista también lo usa); el alias queda para plantillas y pruebas.
+NOMBRES_TIPO_GASTO = gastos.NOMBRES_TIPO
 
 
 @app.template_filter("usd")
@@ -5209,6 +5205,32 @@ def _filtro_usd(valor):
 
 # `{% if margen_precio() == 1 %}`: el margen de la petición (1.0 si el proyecto no cobra).
 app.jinja_env.globals["margen_precio"] = gastos.margen_vigente
+
+
+@app.template_filter("cobrado")
+@jinja2.pass_context
+def _filtro_cobrado(ctx, costo, clave=None):
+    """Una cifra de algo YA gastado (cobros, spec 2026-10-08 §7):
+    `{{ item.usd|cobrado('video:' ~ item.id) }}` es lo cobrado por esa pieza a
+    quien no es admin en un proyecto que cobra (None si nada), y el costo en
+    los demás casos. Sin clave (un desglose de costo, como una capa de la
+    final), None para ese cliente. `pass_context` para que Jinja no lo
+    resuelva al compilar (ver `_filtro_precio`)."""
+    try:
+        return vista_cobros.visto(g.get("cliente_precio"), clave, costo)
+    except Exception:  # noqa: BLE001 — sin libro, la cifra de siempre
+        return costo
+
+
+def _ver_cobrado():
+    """`{% if ver_cobrado() %}`: quien mira ve lo cobrado en vez del costo."""
+    try:
+        return vista_cobros.ver_cobrado_aqui(g.get("cliente_precio"))
+    except Exception:  # noqa: BLE001
+        return False
+
+
+app.jinja_env.globals["ver_cobrado"] = _ver_cobrado
 
 
 @app.template_filter("usd_fino")
@@ -5269,40 +5291,80 @@ def _chip_gasto(gasto_mes, pauta_mes):
     """Texto del chip del sidebar: «US$ 12,40 generación · 1.405.157 COP
     pauta» (la pauta solo si hay; la generación siempre, aunque sea 0).
     Traducido acá (no en la plantilla, que solo recibe el texto ya armado
-    con `_('Este mes: %(gasto)s', ...)`, ver _sidebar.html)."""
+    con `_('Este mes: %(gasto)s', ...)`, ver _sidebar.html). En un proyecto que
+    cobra, `gasto_mes` es lo cobrado del mes (cobros, spec 2026-10-08 §7)."""
     partes = [gettext("%(monto)s generación", monto=gastos.formatear((gasto_mes or {}).get('total') or 0))]
     for p in pauta_mes or []:
         partes.append(gettext("%(monto)s pauta", monto=tablero.dinero(p['gasto'], p['moneda'])))
     return " · ".join(partes)
 
 
+def _mes_del_chip(cliente, fuente):
+    """El mes del chip «Este mes»: lo cobrado si el proyecto cobra (también al
+    admin, que ve el costo del mes en el chip del saldo), si no el costo."""
+    if fuente["modo"] == "doble":
+        return fuente["cobrado"]["resumen_mes"](cliente)
+    return fuente["resumen_mes"](cliente)
+
+
 def _contexto_gasto(cliente, tablero_ctx):
-    """gasto_mes (gastos.resumen_mes), pauta_mes (por moneda, del tablero),
+    """gasto_mes (resumen del mes), pauta_mes (por moneda, del tablero),
     precios (estimados de los botones), gastos_historial (200 últimos),
-    gastos_por_tipo (tabla) y gasto_chip (sidebar). Cada parte en su
-    try/except: el gasto informa, nunca tumba la página."""
+    gastos_por_tipo (tabla), gasto_chip y cobros_chip (sidebar) y
+    cobros_cuenta (si el proyecto cobra). Las cifras salen de
+    `cobros.vista.gasto_para`: a quien no es admin, en un proyecto que cobra,
+    lo cobrado; al admin, el costo y (`gasto_modo` "doble") también lo cobrado.
+    Cada parte en su try/except: el gasto informa, nunca tumba la página."""
+    es_admin = session.get("rol") == "admin"
     try:
-        gasto_mes = gastos.resumen_mes(cliente)
+        fuente = vista_cobros.gasto_para(cliente, es_admin)
+    except Exception as e:  # noqa: BLE001 — sin libro: el costo de siempre (el cobro lo decide el libro)
+        print(f"[aviso] Gasto de {cliente}: no pude leer la cuenta del saldo: {type(e).__name__}")
+        fuente = {"modo": "costo", **vista_cobros._COSTO}
+    doble = fuente["modo"] == "doble"
+    try:
+        gasto_mes = fuente["resumen_mes"](cliente)
     except Exception as e:  # noqa: BLE001 — informativo
         print(f"[aviso] Gasto de {cliente}: no pude leer el resumen del mes: {type(e).__name__}")
         gasto_mes = {"desde": None, "hasta": None, "total": 0.0, "por_tipo": {}, "n": 0, "error": True}
     try:
-        historial = gastos.historial(cliente, limite=200)
+        historial = fuente["historial"](cliente, limite=200)
     except Exception as e:  # noqa: BLE001 — informativo
         print(f"[aviso] Gasto de {cliente}: no pude leer el historial: {type(e).__name__}")
         historial = []
     # Desde el inicio y mes a mes (2026-10-07): la pantalla solo decía «este
     # mes» y los meses anteriores parecían perdidos.
     try:
-        gasto_total = gastos.resumen_total(cliente)
+        gasto_total = fuente["resumen_total"](cliente)
         gasto_por_mes = [{"mes": m, "usd": v["usd"], "n": v["n"]}
-                         for m, v in sorted(gastos.por_mes(cliente).items(), reverse=True)]
+                         for m, v in sorted(fuente["por_mes"](cliente).items(), reverse=True)]
     except Exception as e:  # noqa: BLE001 — informativo
         print(f"[aviso] Gasto de {cliente}: no pude leer el total desde el inicio: {type(e).__name__}")
         gasto_total, gasto_por_mes = {"total": 0.0, "n": 0, "desde": None, "error": True}, []
+    cobrado = {}
+    if doble:
+        # El admin de un proyecto que cobra ve las dos cifras: el costo y lo cobrado.
+        try:
+            c = fuente["cobrado"]
+            cobrado = {"mes": c["resumen_mes"](cliente), "total": c["resumen_total"](cliente),
+                       "por_mes": c["por_mes"](cliente),
+                       "por_gasto": vista_cobros.cobrado_por_gasto(cliente, [h["id"] for h in historial])}
+        except Exception as e:  # noqa: BLE001 — informativo
+            print(f"[aviso] Gasto de {cliente}: no pude leer lo cobrado: {type(e).__name__}")
+            doble = False
     pauta = _pauta_mes(tablero_ctx)
-    por_tipo = [{"tipo": t, "nombre": NOMBRES_TIPO_GASTO.get(t, t), "n": v["n"], "usd": v["usd"]}
+    por_tipo = [{"tipo": t, "nombre": NOMBRES_TIPO_GASTO.get(t, t), "n": v["n"], "usd": v["usd"],
+                 "cobrado": ((cobrado.get("mes") or {}).get("por_tipo", {}).get(t) or {}).get("usd", 0.0)}
                 for t, v in sorted(gasto_mes["por_tipo"].items(), key=lambda kv: -kv[1]["usd"])]
+    for m in gasto_por_mes:
+        m["cobrado"] = ((cobrado.get("por_mes") or {}).get(m["mes"]) or {}).get("usd", 0.0)
+    try:
+        chip_mes = cobrado["mes"] if doble else gasto_mes
+        cobros_chip = vista_cobros.chip(cliente, es_admin)
+        cobros_cuenta = vista_cobros.cuenta(cliente)
+    except Exception as e:  # noqa: BLE001 — sin chip de saldo, pero con página
+        print(f"[aviso] Saldo de {cliente}: no pude leer la cuenta: {type(e).__name__}")
+        chip_mes, cobros_chip, cobros_cuenta = gasto_mes, None, {"cobrar": False}
     return {
         "gasto_mes": gasto_mes,
         "pauta_mes": pauta,
@@ -5312,7 +5374,11 @@ def _contexto_gasto(cliente, tablero_ctx):
         "gasto_total": gasto_total,
         "gasto_por_mes": gasto_por_mes,
         "nombres_tipo_gasto": NOMBRES_TIPO_GASTO,
-        "gasto_chip": _chip_gasto(gasto_mes, pauta),
+        "gasto_modo": "doble" if doble else fuente["modo"],
+        "gasto_cobrado": cobrado,
+        "gasto_chip": _chip_gasto(chip_mes, pauta),
+        "cobros_chip": cobros_chip,
+        "cobros_cuenta": cobros_cuenta,
     }
 
 
@@ -5324,12 +5390,17 @@ def _chip_gasto_sidebar():
     gana sobre el context processor), así que no se repite el trabajo.
     M1: los parciales JSON (`_respuesta_bandeja` y similares, sin sidebar)
     no lo necesitan — salir temprano evita recalcular el tablero entero
-    (1 + 5 consultas) solo para un chip que nadie va a ver."""
+    (1 + 5 consultas) solo para un chip que nadie va a ver. En un proyecto
+    que cobra suma el chip del saldo (`cobros_chip`, una lectura del libro)."""
     cliente = request.view_args.get("cliente") if request.view_args else None
     if not cliente or request.endpoint == "ver_cliente" or _quiere_json():
         return {}
+    es_admin = session.get("rol") == "admin"
     try:
-        return {"gasto_chip": _chip_gasto(gastos.resumen_mes(cliente), _pauta_mes(_contexto_tablero(cliente)))}
+        fuente = vista_cobros.gasto_para(cliente, es_admin)
+        out = {"gasto_chip": _chip_gasto(_mes_del_chip(cliente, fuente), _pauta_mes(_contexto_tablero(cliente)))}
+        out["cobros_chip"] = vista_cobros.chip(cliente, es_admin)
+        return out
     except Exception as e:  # noqa: BLE001 — sin chip, pero con página
         print(f"[aviso] Gasto de {cliente}: no pude calcular el chip del sidebar: {type(e).__name__}")
         return {}
@@ -5340,7 +5411,7 @@ def gasto_csv(cliente):
     """CSV del gasto de generación del mes en curso (una fila por cobro,
     `;`, BOM) para abrir en Excel. Mismos headers que tab_descargar_csv."""
     ahora = db.ahora()
-    texto = gastos.csv_mes(cliente, ahora)
+    texto = vista_cobros.gasto_para(cliente, session.get("rol") == "admin")["csv_mes"](cliente, ahora)
     resp = Response(texto, content_type="text/csv; charset=utf-8")
     nombre = secure_filename(f"gasto_{cliente}_{ahora[:7]}.csv")
     resp.headers["Content-Disposition"] = f'attachment; filename="{nombre}"'
@@ -5352,7 +5423,8 @@ def gasto_csv_todo(cliente):
     """CSV con TODOS los cobros de generación del proyecto desde el primero
     (misma forma que gasto_csv)."""
     ahora = db.ahora()
-    resp = Response(gastos.csv_todo(cliente, ahora), content_type="text/csv; charset=utf-8")
+    texto = vista_cobros.gasto_para(cliente, session.get("rol") == "admin")["csv_todo"](cliente, ahora)
+    resp = Response(texto, content_type="text/csv; charset=utf-8")
     nombre = secure_filename(f"gasto_{cliente}_todo_{ahora[:10]}.csv")
     resp.headers["Content-Disposition"] = f'attachment; filename="{nombre}"'
     return resp
@@ -5364,6 +5436,23 @@ def _volver_exp(cliente, eid=None):
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor=f"experimentos?exp={eid}" if eid else "experimentos"))
 
 
+def _tablero_visto(cliente, ctx):
+    """El tablero cacheado (con el COSTO de la generación: la caché es por
+    proyecto e idioma, la comparten admin y cliente) con la generación cambiada
+    por lo cobrado para quien la ve así (cobros, spec 2026-10-08 §7). Copia: la
+    caché no se toca."""
+    if not ctx or not vista_cobros.ver_cobrado_aqui(cliente):
+        return ctx
+    try:
+        total = vista_cobros.resumen_total_cobrado(cliente, ctx.get("ahora"))
+        por_mes = vista_cobros.por_mes_cobrado(cliente, ctx.get("ahora"))
+    except Exception as e:  # noqa: BLE001 — sin lo cobrado tampoco se muestra el costo
+        print(f"[aviso] Tablero de {cliente}: no pude leer lo cobrado: {type(e).__name__}")
+        total, por_mes = None, {}
+    meses = [{**f, "generacion": por_mes.get(f.get("mes")) or {"usd": 0.0, "n": 0}} for f in (ctx.get("meses") or [])]
+    return {**ctx, "generacion_total": total, "meses": meses if ctx.get("meses") is not None else None}
+
+
 @app.route("/cliente/<cliente>/experimentos/resultados")
 @trabajos.con_vivos_precargados
 @experimentos.con_lecturas_memorizadas
@@ -5373,7 +5462,8 @@ def exp_resultados(cliente):
     decide `_guard_por_cliente`, como en las demás rutas de la página. Con `exp=<id>` suma la gestión de ese
     experimento (sus acciones siguen siendo las rutas POST de siempre)."""
     filtro = resultados.filtro_de(request.args)
-    r = resultados.contexto(cliente, filtro)
+    r = resultados.contexto(cliente, filtro,
+                            total_entre=vista_cobros.gasto_para(cliente, session.get("rol") == "admin")["total_entre"])
     ctx = _contexto_experimentos(cliente)
     elegido = next((e for e in ctx["experimentos"] if e["id"] == filtro.experimento_id), None)
     # Las piezas elegibles solo viajan cuando algo del fragmento las pinta: el «Agregar pieza» de la gestión de un
@@ -5388,7 +5478,8 @@ def exp_resultados(cliente):
         alertas_ctx = None
     # `precios`: el botón «Escribir texto con IA» de «Publicar orgánico» (en la gestión) muestra su precio ANTES de
     # cobrar (regla 1); en la página venía de `_contexto_gasto`, y el fragmento ya no pasa por ahí.
-    return render_template("_exp_resultados.html", cliente=cliente, r=r, ex=elegido, tablero=_contexto_tablero(cliente),
+    return render_template("_exp_resultados.html", cliente=cliente, r=r, ex=elegido,
+                           tablero=_tablero_visto(cliente, _contexto_tablero(cliente)),
                            alertas_ctx=alertas_ctx, paises_fe=fe_tipos.PAISES, capacidades_meta=meta_conexion.estado(cliente),
                            modo_meta=_modo_de(meta_conexion.cargar(cliente)), precios=_precios_pagina(), **ctx)
 
