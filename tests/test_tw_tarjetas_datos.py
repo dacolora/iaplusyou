@@ -64,10 +64,15 @@ def test_analisis_crear_actualizar_leer_y_ultimo_por_anuncio(tienda):
     assert datos.analisis_anuncio("otro", a2) is None
     ultimos = datos.ultimos_analisis("acme", [("facebook-ads", "1"), ("facebook-ads", "2")])
     assert ultimos[("facebook-ads", "1")]["id"] == a2 and ultimos[("facebook-ads", "2")]["id"] == a3
+    todas = datos.analisis_de_anuncios("acme", [("facebook-ads", "1"), ("facebook-ads", "2")])
+    assert [f["id"] for f in todas[("facebook-ads", "1")]] == [a2, a1]          # todas, la más nueva primero
+    assert datos.analisis_de_anuncios("otro", [("facebook-ads", "1")]) == {}
     assert datos.analisis_anuncio("acme", a1)["foto"] == {"veredicto": "perdedor"}
-    assert datos.analisis_en_curso("acme", "facebook-ads", "1")      # a1 sigue en cola: ese anuncio sigue en curso
-    assert datos.actualizar_analisis(a1, estado="error")
-    assert datos.analisis_en_curso("acme", "facebook-ads", "2") and not datos.analisis_en_curso("acme", "facebook-ads", "1")
+    # cerrar_colgados: solo las de ese anuncio y proyecto que siguen en_cola/analizando (a1); la lista (a2) no.
+    assert datos.cerrar_colgados("otro", "facebook-ads", "1", "x") == 0
+    assert datos.cerrar_colgados("acme", "facebook-ads", "1", "Se interrumpió.") == 1
+    assert datos.analisis_anuncio("acme", a1)["estado"] == "error" and datos.analisis_anuncio("acme", a1)["error"] == "Se interrumpió."
+    assert datos.analisis_anuncio("acme", a2)["estado"] == "lista" and datos.analisis_anuncio("acme", a3)["estado"] == "en_cola"
     assert datos.borrar_analisis("acme", a3) and not datos.borrar_analisis("otro", a1)
     assert datos.ultimos_analisis("acme", []) == {}
 

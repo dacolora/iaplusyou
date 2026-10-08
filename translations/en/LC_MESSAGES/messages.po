@@ -14224,6 +14224,9 @@ msgstr "Saved locally but the video upload to R2 failed: %(error)s"
 msgid "Se interrumpió (llevaba más de %(min)s min en curso). Revisa el resultado y vuelve a intentar."
 msgstr "Interrupted (it had been running for more than %(min)s min). Check the result and try again."
 
+msgid "Se interrumpió antes de terminar."
+msgstr "It was interrupted before it finished."
+
 msgid "Se interrumpió el lanzamiento; revisa Ads Manager y vuelve a intentar."
 msgstr "The launch was interrupted; check Ads Manager and try again."
 

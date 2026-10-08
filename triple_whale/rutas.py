@@ -185,13 +185,20 @@ def _pedir_analisis(cliente, alc, a):
     """Crea la fila con la foto y encola la tarea (spec §6.2). (ok, mensaje)."""
     if a["veredicto"] == "sin_datos":
         return False, gettext("Todavía tiene muy pocos datos: espera a que gaste más.")
-    if datos.analisis_en_curso(cliente, a["canal"], a["ad_id"]):
+    # «En curso» es la TAREA viva, no la fila: una fila en_cola/analizando cuya tarea ya no existe (murió antes de su
+    # try, un reinicio) bloqueaba el anuncio para siempre (revisión final, A4).
+    clave = (a["canal"], a["ad_id"])
+    if tareas_tw.job_id_analisis(cliente, *clave) in tareas_tw.analisis_vivos(cliente):
         return False, gettext("Ese anuncio ya se está analizando.")
+    filas = datos.analisis_de_anuncios(cliente, [clave]).get(clave, [])
     # Uno listo y fresco de ESTE alcance no se paga otra vez: una pestaña vieja (o la de 7 días después de pasar por
     # 30) todavía muestra el botón (revisión final, A1).
-    clave = (a["canal"], a["ad_id"])
-    if panel.elegir_analisis(a, datos.analisis_de_anuncios(cliente, [clave]).get(clave), alc)["fresco"]:
+    if panel.elegir_analisis(a, filas, alc)["fresco"]:
         return False, gettext("Ese anuncio ya tiene un análisis con estos datos.")
+    if any(f["estado"] in panel.EN_CURSO for f in filas):
+        with idiomas.en_idioma(idiomas.de_proyecto(cliente)):        # lo que se guarda, en el idioma del proyecto
+            interrumpido = gettext("Se interrumpió antes de terminar.")
+        datos.cerrar_colgados(cliente, a["canal"], a["ad_id"], interrumpido)
     ev = alc["ev"]
     claves = [(a["canal"], a["ad_id"])] + [(b["canal"], b["ad_id"]) for b in ev["anuncios"]
                                            if b["veredicto"] == "ganador" and b["canal"] == a["canal"]]

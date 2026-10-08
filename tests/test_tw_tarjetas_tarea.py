@@ -179,3 +179,31 @@ def test_si_falla_el_precio_de_claude_la_fila_queda_en_error(en_cola, monkeypatc
     fila = datos.analisis_anuncio("acme", en_cola["aid"])
     assert fila["estado"] == "error"
     assert [x["tipo"] for x in _gastos()] == ["transcripcion"]                  # la voz sí se pagó y se anotó
+
+
+def test_si_falla_leer_la_fila_queda_en_error(en_cola, monkeypatch):
+    """Revisión final A4: leer la fila también va dentro del try (antes, un fallo ahí la dejaba en_cola para siempre)."""
+    _analizar_bien(monkeypatch)
+    leer = datos.analisis_anuncio
+    monkeypatch.setattr(datos, "analisis_anuncio", lambda cliente, aid: (_ for _ in ()).throw(RuntimeError("bloqueada")))
+    with pytest.raises(RuntimeError):
+        en_cola["t"].tw_analizar_anuncio({"id": 10, "payload": {"cliente": "acme", "analisis_id": en_cola["aid"]}})
+    fila = leer("acme", en_cola["aid"])
+    assert fila["estado"] == "error" and fila["error"] and "bloqueada" not in fila["error"]
+    assert _gastos() == []
+
+
+def test_si_tampoco_se_puede_escribir_el_error_la_tarea_igual_falla_con_palabras(en_cola, monkeypatch, caplog):
+    """El `except` no puede tapar el error de la tarea con el suyo: la tarea termina en error con el mensaje en
+    palabras y el registro dice la clase del fallo al escribir la fila, nunca su texto."""
+    def _falla(*a, **k):
+        raise RuntimeError("red token=abc")
+    monkeypatch.setattr(mejorar, "analizar", _falla)
+    _falla_al(monkeypatch, "error")
+    with caplog.at_level("WARNING", logger="creatv.tareas.triple_whale"):
+        with pytest.raises(RuntimeError) as exc:
+            en_cola["t"].tw_analizar_anuncio({"id": 11, "payload": {"cliente": "acme", "analisis_id": en_cola["aid"]}})
+    assert str(exc.value) == mejorar.texto_error(RuntimeError("red")) and "token" not in str(exc.value)
+    assert "no se pudo dejar en error" in caplog.text and "RuntimeError" in caplog.text
+    assert "base bloqueada" not in caplog.text and "token=abc" not in caplog.text
+    assert datos.analisis_anuncio("acme", en_cola["aid"])["estado"] == "analizando"   # colgada: la ruta la cierra

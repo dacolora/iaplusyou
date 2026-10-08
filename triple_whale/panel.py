@@ -45,6 +45,7 @@ POR_PAGINA = 12
 N_LOTE = 10
 FILTROS_GALERIA = ("", "ganador", "prometedor", "en_prueba", "perdedor", "cansando", "sin_datos")
 FACTOR_VIEJO = 1.5
+EN_CURSO = ("en_cola", "analizando")
 
 
 # Los canales de Triple Whale son ids como «facebook-ads» o «google-ads».
@@ -359,9 +360,15 @@ def elegir_analisis(a, filas, alcance=None, vivo=False):
     - `fila`: el que se muestra (`mismo`, si no `otro`); `viejo` / `fresco`: de `mismo` listo (`es_viejo`).
     - `otro_alcance`: no hay `mismo` pero sí `otro`: nota neutra y el botón secundario «Analizar con estos datos».
     - `ofrecer`: el botón principal pagado (y entrar al lote): sin tarea viva, con datos, y sin `mismo` fresco ni
-      `otro` listo. `vivo` = el anuncio tiene su tarea en cola o corriendo."""
+      `otro` listo. `vivo` = el anuncio tiene su tarea en cola o corriendo.
+
+    Una fila en_cola/analizando SIN tarea viva quedó colgada (una tarea que murió antes de su try, un reinicio): no
+    bloquea, se ve como un error («Se interrumpió antes de terminar.», `interrumpido`) con «Intentar otra vez», y la
+    ruta la cierra antes de crear la nueva (revisión final, A4)."""
     mismo = otro = None
     for f in filas or []:
+        if not vivo and f["estado"] in EN_CURSO:
+            f = dict(f, estado="error", error=None, interrumpido=True)
         if mismo_alcance(f, alcance):
             mismo = mismo or f
         elif otro is None and f["estado"] == "lista":
@@ -369,12 +376,10 @@ def elegir_analisis(a, filas, alcance=None, vivo=False):
     lista = bool(mismo and mismo["estado"] == "lista")
     viejo = lista and es_viejo(a, mismo, alcance)
     fresco = lista and not viejo
-    en_curso = bool(mismo and mismo["estado"] in ("en_cola", "analizando"))
     otro_alcance = mismo is None and otro is not None
     return {"mismo": mismo, "otro": otro, "fila": mismo or otro, "viejo": viejo, "fresco": fresco,
             "otro_alcance": otro_alcance, "vivo": bool(vivo),
-            "ofrecer": (not vivo and a["veredicto"] != "sin_datos" and not fresco and not otro_alcance
-                        and not en_curso)}
+            "ofrecer": not vivo and a["veredicto"] != "sin_datos" and not fresco and not otro_alcance}
 
 
 def medio_tarjeta(a):

@@ -125,19 +125,20 @@ def _evaluacion_de_cuenta(cliente, tienda_id):
 def tw_analizar_anuncio(tarea):
     p = tarea["payload"]
     cliente, aid = p["cliente"], int(p["analisis_id"])
-    fila = datos.analisis_anuncio(cliente, aid)
-    if fila is None:
-        return gettext("Ese análisis ya no existe.")
-    job_id = tarea.get("job_id") or job_id_analisis(cliente, fila["canal"], fila["ad_id"])
-    foto = fila["foto"] or {}
     referencia = f"tw_anuncio:{aid}{ref_sufijo(tarea)}"
-    medios = {"visual": None, "fotogramas": 0, "transcripcion": None,
-              "copy": bool((foto.get("creativo") or {}).get("copy"))}
+    medios = {"visual": None, "fotogramas": 0, "transcripcion": None, "copy": False}
     usd_voz, usd_claude, entrada, salida, temporales = 0.0, 0.0, 0, 0, []
     claude_anotado = False
-    # Todo lo que pasa después de leer la fila va dentro del try: cualquier fallo (también al marcar «analizando», al
-    # poner el precio o al guardar la lista) deja la fila en `error` con palabras, nunca colgada en en_cola/analizando.
+    # Todo va dentro del try, también leer la fila (revisión final, A4): cualquier fallo (al leerla, al marcar
+    # «analizando», al poner el precio o al guardar la lista) deja la fila en `error` con palabras, nunca colgada en
+    # en_cola/analizando.
     try:
+        fila = datos.analisis_anuncio(cliente, aid)
+        if fila is None:
+            return gettext("Ese análisis ya no existe.")
+        job_id = tarea.get("job_id") or job_id_analisis(cliente, fila["canal"], fila["ad_id"])
+        foto = fila["foto"] or {}
+        medios["copy"] = bool((foto.get("creativo") or {}).get("copy"))
         datos.actualizar_analisis(aid, estado="analizando", tarea_id=tarea.get("id"), error=None)
         trabajos.reportar(job_id, etapa=idiomas.N_("Bajando el video"))
         vis, temporales = mejorar.visuales(foto)
@@ -185,8 +186,12 @@ def tw_analizar_anuncio(tarea):
                 gastos.registrar_seguro(cliente, "evaluacion", usd_claude, referencia, proveedor="anthropic",
                                         detalle=gettext("sin resultado usable"))
         mensaje = mejorar.texto_error(e)
-        datos.actualizar_analisis(aid, estado="error", error=mensaje, medios=medios,
-                                  usd=round(usd_voz + usd_claude, 4))
+        try:
+            datos.actualizar_analisis(aid, estado="error", error=mensaje, medios=medios,
+                                      usd=round(usd_voz + usd_claude, 4))
+        except Exception as e_fila:  # noqa: BLE001 — la tarea igual termina en error con su mensaje; la fila colgada
+            # sin tarea viva ya no bloquea el anuncio (panel.elegir_analisis) y la ruta la cierra al pedir otro.
+            log.warning("el análisis %s no se pudo dejar en error: %s", aid, type(e_fila).__name__)
         raise RuntimeError(mensaje) from None
     finally:
         analisis.borrar_temporales(temporales)

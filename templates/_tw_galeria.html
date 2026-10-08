@@ -91,9 +91,8 @@
       <div class="tw-analisis-detalle" hidden></div>
       {% if a.piezas_mejora %}<small>{{ ngettext('Ya se hizo %(num)s pieza con esta mejora', 'Ya se hicieron %(num)s piezas con esta mejora', a.piezas_mejora | length) }}</small>{% endif %}
       {% elif fila and fila.estado == 'error' %}
-      <p class="tag-error">{{ fila.error or _('El análisis falló.') }}</p>
-      {% elif fila and fila.estado in ('en_cola', 'analizando') %}
-      <p class="vacio tw-ia-frase">{{ _('En cola…') }}</p>
+      {#- `interrumpido`: una fila en_cola/analizando sin tarea viva (panel.elegir_analisis) no bloquea: es un error. -#}
+      <p class="tag-error">{{ fila.error or (_('Se interrumpió antes de terminar.') if fila.interrumpido else _('El análisis falló.')) }}</p>
       {% endif %}
       {#- `ofrecer_analisis` (panel.elegir_analisis) es la misma regla que decide el lote: sin tarea viva, con datos, sin
           uno fresco de este alcance ni uno listo de otro. -#}

@@ -187,11 +187,13 @@ def test_si_encolar_falla_no_queda_una_fila_colgada(app, monkeypatch):  # noqa: 
     _sembrar()
     def revienta(*a, **k):  # noqa: E306
         raise RuntimeError("redis token=abc")
+    real = tareas_tw.encolar_analisis
     monkeypatch.setattr(tareas_tw, "encolar_analisis", revienta)
     with pytest.raises(RuntimeError):
         _analizar(app)
     assert _filas_analisis() == 0 and _jobs() == []
-    assert not datos.analisis_en_curso("acme", "facebook-ads", "p1")
+    monkeypatch.setattr(tareas_tw, "encolar_analisis", real)                # el anuncio sigue pudiéndose analizar
+    assert _analizar(app, json=True).get_json()["ok"] and _jobs() == ["acme__tw_anuncio__facebook-ads__p1"]
 
 
 def test_en_el_lote_una_que_falla_no_tumba_las_demas(app, monkeypatch, caplog):  # noqa: F811

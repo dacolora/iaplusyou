@@ -719,12 +719,15 @@ def ultimos_analisis(cliente, claves):
     return {k: filas[0] for k, filas in analisis_de_anuncios(cliente, claves).items()}
 
 
-def analisis_en_curso(cliente, canal, ad_id):
+def cerrar_colgados(cliente, canal, ad_id, error):
+    """Deja en `error` (con `error` en palabras) los análisis de ese anuncio que siguen en_cola/analizando. La ruta
+    lo llama solo después de comprobar que el anuncio NO tiene una tarea viva: sin tarea nadie los terminaría
+    (revisión final, A4). Devuelve cuántas filas cerró."""
     t = db.tw_analisis
     with db.conectar() as con:
-        return con.execute(sa.select(t.c.id).where(
-            t.c.cliente == cliente, t.c.canal == canal, t.c.ad_id == str(ad_id),
-            t.c.estado.in_(("en_cola", "analizando"))).limit(1)).first() is not None
+        return con.execute(t.update().where(t.c.cliente == cliente, t.c.canal == canal, t.c.ad_id == str(ad_id),
+                                            t.c.estado.in_(("en_cola", "analizando")))
+                           .values(estado="error", error=error, actualizado_en=db.ahora())).rowcount
 
 
 def borrar_analisis(cliente, analisis_id):

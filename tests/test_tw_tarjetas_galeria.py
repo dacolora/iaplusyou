@@ -161,6 +161,8 @@ def test_el_lote_ofrece_los_que_mas_gastaron_sin_analisis_fresco(app):  # noqa: 
     aid = datos.crear_analisis("acme", None, "facebook-ads", "m14", _hace(2), _hace(0), "USD",
                                {"veredicto": "x", "m": {"gasto": 1.0}})
     datos.actualizar_analisis(aid, estado="en_cola")
+    from tareas import triple_whale as tareas_tw
+    assert tareas_tw.encolar_analisis("acme", aid, "facebook-ads", "m14")     # en curso = con su tarea viva (A4)
     alc = panel.alcance("acme")
     g = panel.galeria("acme", alc["ev"])
     assert g["lote"]["n"] == 10 and ("facebook-ads", "m14") not in g["lote"]["claves"]
@@ -317,8 +319,9 @@ def test_estados_de_la_tarjeta(app):  # noqa: F811
     assert "Claude no respondió a tiempo." in html and "Intentar otra vez" in html
 
     datos.crear_analisis("acme", alc["tienda_id"], "tiktok-ads", "t1", alc["desde"], alc["hasta"], "USD", {})
-    html = _tarjeta(app, "t1", canal="tiktok-ads")                         # fila en cola sin tarea viva
-    assert "En cola…" in html and "data-poll-job" not in html and "Cómo mejorarlo" not in html
+    html = _tarjeta(app, "t1", canal="tiktok-ads")                         # fila en cola sin tarea viva: colgada
+    assert "Se interrumpió antes de terminar." in html and "Intentar otra vez · US$" in html
+    assert "En cola…" not in html and "data-poll-job" not in html and "Cómo mejorarlo" not in html
 
     html = _tarjeta(app, "n1")                                              # sin datos: nunca se ofrece pagar
     assert "Muy pocos datos para opinar" in html and "Cómo mejorarlo" not in html and "/analizar" not in html

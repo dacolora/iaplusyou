@@ -213,3 +213,55 @@ def test_elegir_analisis():
     e = panel.elegir_analisis(a, [], alc, vivo=True)
     assert not e["ofrecer"] and e["vivo"]
     assert not panel.elegir_analisis(dict(a, veredicto="sin_datos"), [], alc)["ofrecer"]
+
+
+# ------------------------------------------------------------------- A4: una fila colgada no bloquea ---
+
+def test_una_fila_colgada_sin_tarea_no_bloquea_el_anuncio(app):  # noqa: F811
+    """Una fila en_cola cuya tarea ya no existe (murió antes de su try, un reinicio): la tarjeta la muestra como error
+    con «Intentar otra vez · US$», entra al lote, y el POST la cierra en error antes de crear la nueva."""
+    _conectar()
+    _sembrar_con_snapchat()
+    alc = panel.alcance("acme", 30)
+    colgada = datos.crear_analisis("acme", alc["tienda_id"], "facebook-ads", "p1", alc["desde"], alc["hasta"], "USD", {})
+    html = _tarjeta(app, "p1")
+    assert "Se interrumpió antes de terminar." in html and "Intentar otra vez · US$" in html and "data-poll-job" not in html
+    assert ("facebook-ads", "p1") in panel.galeria("acme", alc["ev"], alcance=alc)["lote"]["elegibles"]
+    d = _analizar(app, "p1", json=True).get_json()
+    assert d["ok"] and 'data-poll-job="acme__tw_anuncio__facebook-ads__p1"' in d["html"]
+    vieja = datos.analisis_anuncio("acme", colgada)
+    assert vieja["estado"] == "error" and vieja["error"] == "Se interrumpió antes de terminar."
+    assert _n_filas() == 2 and [t["payload"]["analisis_id"] for t in _tareas("tw_analizar_anuncio")] != [colgada]
+
+
+def test_con_la_tarea_viva_no_se_crea_otra_fila(app):  # noqa: F811
+    _conectar()
+    _sembrar_con_snapchat()
+    assert _analizar(app, "p1", json=True).get_json()["ok"]
+    d = _analizar(app, "p1", json=True).get_json()
+    assert d["ok"] is False and "ya se está analizando" in d["mensaje"] and _n_filas() == 1
+    assert datos.analisis_de_anuncios("acme", [("facebook-ads", "p1")])[("facebook-ads", "p1")][0]["estado"] == "en_cola"
+
+
+def test_una_tarea_que_falla_al_leer_su_fila_deja_el_anuncio_analizable(app, monkeypatch):  # noqa: F811
+    """La tarea muere antes de llegar a analizar (la base no deja leer la fila): la fila queda en error o, si ni eso se
+    pudo escribir, colgada sin tarea viva; en los dos casos el anuncio se puede volver a pedir."""
+    from tareas import triple_whale as t
+    _conectar()
+    _sembrar_con_snapchat()
+    assert _analizar(app, "p1", json=True).get_json()["ok"]
+    [fila] = _filas("p1")
+    leer = datos.analisis_anuncio
+
+    def bloqueada(cliente, aid):
+        raise RuntimeError("database is locked")
+    monkeypatch.setattr(datos, "analisis_anuncio", bloqueada)
+    with pytest.raises(RuntimeError):
+        t.tw_analizar_anuncio({"id": 1, "job_id": t.job_id_analisis("acme", "facebook-ads", "p1"),
+                               "payload": {"cliente": "acme", "analisis_id": fila["id"]}})
+    monkeypatch.setattr(datos, "analisis_anuncio", leer)
+    assert datos.analisis_anuncio("acme", fila["id"])["estado"] == "error"
+    with db.conectar() as con:                                       # el worker cierra la tarea en error
+        con.execute(db.tarea.update().values(estado="error"))
+    assert "Intentar otra vez · US$" in _tarjeta(app, "p1")
+    assert _analizar(app, "p1", json=True).get_json()["ok"] and _n_filas() == 2
