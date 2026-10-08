@@ -87,6 +87,7 @@ def test_tarjeta_muestra_anillos_frase_y_costo_por_venta(app):  # noqa: F811
     for etiqueta in ("Gancho", "Retención", "Clic", "Compra"):
         assert etiqueta in html
     assert 'class="tw-anillo' in html and "Costo por venta" in html and "Tendencia" in html
+    assert "· 10 ventas" in html and "10,0 ventas" not in html                    # D2: entero sin decimal
     # g1 no tiene creativo: ni «Texto del anuncio» ni el método dict.copy que Jinja da por a.creativo.copy.
     assert "Texto del anuncio" not in html and "built-in method" not in html
 

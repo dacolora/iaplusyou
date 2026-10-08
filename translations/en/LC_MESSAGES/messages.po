@@ -18714,6 +18714,10 @@ msgstr "the voice"
 msgid "la voz de un anuncio de Triple Whale"
 msgstr "the voice of a Triple Whale ad"
 
+#, python-format
+msgid "la última: %(estado)s"
+msgstr "the latest: %(estado)s"
+
 msgid "lago"
 msgstr "lake"
 

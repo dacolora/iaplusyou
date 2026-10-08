@@ -47,7 +47,7 @@
         <p class="tw-frase" title="{{ a.motivo }}">{{ tw.frases_veredicto[a.veredicto] | traducir }}</p>
       </div>
       <span class="tw-resultado tw-resultado-{{ a.veredicto }}">
-        {%- if am.pedidos and am.pedidos > 0 -%}{{ _('ROAS %(roas)s× · %(n)s ventas', roas=am.roas | roas, n=am.pedidos | tw_num(1)) }}
+        {%- if am.pedidos and am.pedidos > 0 -%}{{ _('ROAS %(roas)s× · %(n)s ventas', roas=am.roas | roas, n=am.pedidos | tw_ventas) }}
         {%- elif am.gasto > 0 -%}{{ _('Gastó %(g)s sin ventas', g=am.gasto | dinero(moneda)) }}
         {%- else -%}{{ _('Sin ventas todavía') }}{%- endif -%}
       </span>
@@ -89,7 +89,8 @@
       {% elif a.analisis_otro_alcance %}<small class="vacio">{{ _('Analizado con los datos del %(desde)s al %(hasta)s', desde=fila.desde, hasta=fila.hasta) }}</small>{% endif %}
       <button type="button" class="btn-sm" data-tw-ver-analisis data-url="{{ url_for('triple_whale.analisis_detalle', cliente=cliente, aid=fila.id) }}">{{ _('Ver el análisis') }}</button>
       <div class="tw-analisis-detalle" hidden></div>
-      {% if a.piezas_mejora %}<small>{{ ngettext('Ya se hizo %(num)s pieza con esta mejora', 'Ya se hicieron %(num)s piezas con esta mejora', a.piezas_mejora | length) }}</small>{% endif %}
+      {#- D3 (spec §7.1): con el estado en Crear de la más reciente (piezas_de_analisis va por id de pieza). -#}
+      {% if a.piezas_mejora %}{% set ultima = a.piezas_mejora | last %}<small>{{ ngettext('Ya se hizo %(num)s pieza con esta mejora', 'Ya se hicieron %(num)s piezas con esta mejora', a.piezas_mejora | length) }} · {{ _('la última: %(estado)s', estado=(tw.etiquetas_pieza or {}).get(ultima.estado, ultima.estado) | traducir) }}</small>{% endif %}
       {% elif fila and fila.estado == 'error' %}
       {#- `interrumpido`: una fila en_cola/analizando sin tarea viva (panel.elegir_analisis) no bloquea: es un error. -#}
       <p class="tag-error">{{ fila.error or (_('Se interrumpió antes de terminar.') if fila.interrumpido else _('El análisis falló.')) }}</p>

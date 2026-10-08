@@ -3,7 +3,8 @@
    _tab_triple_whale.html. #}
 {% from "_tw_galeria.html" import galeria, tarjetas_pagina, tarjeta_anuncio %}
 {% set tw = {"etiquetas_veredicto": etiquetas_veredicto, "frases_veredicto": frases_veredicto, "tendencias": tendencias,
-             "vacios_anillo": vacios_anillo, "problemas": problemas, "fortalezas": fortalezas} %}
+             "vacios_anillo": vacios_anillo, "problemas": problemas, "fortalezas": fortalezas,
+             "etiquetas_pieza": etiquetas_pieza} %}
 {% if modo == "tarjeta" %}{{ tarjeta_anuncio(a, cliente, alcance_params, moneda, tw) }}
 {% elif modo == "entera" %}{{ galeria(g, cliente, alcance_params, moneda, tw) }}
 {% else %}{{ tarjetas_pagina(g, cliente, alcance_params, moneda, tw) }}{% endif %}

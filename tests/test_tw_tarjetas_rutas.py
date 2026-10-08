@@ -237,6 +237,10 @@ def test_detalle_muestra_razones_cambios_y_version(app):  # noqa: F811
     _sembrar()
     aid = _lista(app)
     html = app["c"].get(f"/cliente/acme/triple-whale/analisis/{aid}").data.decode()
+    # D1: las listas con ✓/✗ van sin viñeta (la clase que la quita), la de los tres cambios sigue numerada.
+    assert html.count('class="tw-analisis-lista tw-analisis-marcas"') == 2 and '<ol class="tw-analisis-lista">' in html
+    with open("static/style.css", encoding="utf-8") as f:
+        assert ".tw-analisis-marcas { list-style: none;" in f.read()
     assert "Pierde porque arranca con el logo." in html and "Arranque lento" in html and "Segundo 0" in html
     assert "Otro arranque" in html and "Pies cansados al final del día" in html and "Close-up" in html
     assert f"/cliente/acme/triple-whale/analisis/{aid}/crear" in html
@@ -432,7 +436,7 @@ def test_la_pieza_hecha_con_el_origen_del_analisis_se_cuenta_en_la_tarjeta(app, 
     [(cf_id, entry)] = cf.cargar("acme").items()
     assert entry["tw_idea"] == {"analisis_id": aid, "titulo": "Pies cansados al final del día"} and lanzadas == [cf_id]
     html = app["c"].get("/cliente/acme/triple-whale/tarjeta/facebook-ads/p1?dias=30").data.decode()
-    assert "Ya se hizo 1 pieza con esta mejora" in html
+    assert "Ya se hizo 1 pieza con esta mejora · la última: " in " ".join(html.split())
 
 
 def test_el_lote_no_repite_lo_analizado_en_otro_periodo_pero_la_tarjeta_si_lo_ofrece(app):  # noqa: F811
@@ -579,3 +583,27 @@ def test_las_claves_del_lote_no_se_repiten_y_paran_en_el_tope():
     assert claves[1:] == [("facebook-ads", f"x{i}") for i in range(panel.N_LOTE - 1)]
     assert rutas._claves_confirmadas(["tiktok-ads:1", "tiktok-ads:1", "tiktok-ads:2"], tope=5) == \
         [("tiktok-ads", "1"), ("tiktok-ads", "2")]
+
+
+def test_la_tarjeta_dice_el_estado_en_crear_de_la_pieza_mas_reciente(app, monkeypatch):  # noqa: F811
+    """Revisión final D3 (spec §7.1): «Ya se hicieron N piezas con esta mejora · la última: <estado en Crear>», con
+    las etiquetas de `panel.ETIQUETAS_PIEZA`; la más reciente es la última de `piezas_de_analisis` (va por id)."""
+    _conectar()
+    _sembrar()
+    aid = _lista(app)
+    _el_worker_termino()
+    monkeypatch.setattr(datos, "piezas_de_analisis", lambda cliente, ids: {aid: [
+        {"cf_id": "cf1", "pieza_id": 1, "titulo": "Vieja", "estado": "error"},
+        {"cf_id": "cf2", "pieza_id": 2, "titulo": "Nueva", "estado": "video_generando"}]})
+    html = " ".join(app["c"].get("/cliente/acme/triple-whale/tarjeta/facebook-ads/p1?dias=30").data.decode().split())
+    assert "Ya se hicieron 2 piezas con esta mejora · la última: generando" in html and "con error" not in html
+    # El panel (no solo el fragmento) también tiene las etiquetas.
+    panel_html = " ".join(app["c"].get("/cliente/acme/triple-whale/panel?dias=30").data.decode().split())
+    assert "la última: generando" in panel_html
+
+
+def test_las_ventas_enteras_van_sin_decimal():
+    """Revisión final D2: «10 ventas», no «10,0 ventas»; una fracción del Pixel sí lleva su decimal."""
+    from triple_whale import rutas
+    assert rutas._tw_ventas(196.0) == "196" and rutas._tw_ventas(196.04) == "196"
+    assert rutas._tw_ventas(2.5) == "2,5" and rutas._tw_ventas(0.25) == "0,2" and rutas._tw_ventas(None) == "—"

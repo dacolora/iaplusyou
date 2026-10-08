@@ -69,6 +69,16 @@ def _tw_num(valor, decimales=0):
     return idiomas.numero(float(valor), decimales)
 
 
+@bp.app_template_filter("tw_ventas")
+def _tw_ventas(valor):
+    """Ventas: entero cuando lo es («196 ventas», no «196,0») y un decimal cuando el Pixel reparte fracciones de un
+    pedido (revisión final, D2). «—» si no hay dato."""
+    if valor is None:
+        return "—"
+    v = round(float(valor), 1)
+    return idiomas.numero(v, 0 if v == int(v) else 1)
+
+
 @bp.app_template_filter("tw_pct")
 def _tw_pct(valor, decimales=1, es_fraccion=True):
     """0,123 -> «12,3 %» (o 12,3 -> «12,3 %» con es_fraccion=False)."""
@@ -141,7 +151,7 @@ def _contexto_galeria(cliente, alc):
             "etiquetas_veredicto": evaluacion.ETIQUETAS_VEREDICTO,
             "frases_veredicto": evaluacion.FRASES_VEREDICTO, "tendencias": evaluacion.TENDENCIAS,
             "vacios_anillo": evaluacion.VACIOS_ANILLO, "problemas": evaluacion.PROBLEMAS,
-            "fortalezas": evaluacion.FORTALEZAS}
+            "fortalezas": evaluacion.FORTALEZAS, "etiquetas_pieza": panel.ETIQUETAS_PIEZA}
 
 
 @bp.get("/galeria")

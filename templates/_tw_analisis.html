@@ -10,11 +10,11 @@
   {% endif %}
   {% if r.funciona %}
   <h5>{{ _('Lo que funciona') }}</h5>
-  <ul class="tw-analisis-lista">{% for x in r.funciona %}<li>✓ {{ x.texto }}{% if x.evidencia %} <small class="vacio">— {{ x.evidencia }}</small>{% endif %}</li>{% endfor %}</ul>
+  <ul class="tw-analisis-lista tw-analisis-marcas">{% for x in r.funciona %}<li>✓ {{ x.texto }}{% if x.evidencia %} <small class="vacio">— {{ x.evidencia }}</small>{% endif %}</li>{% endfor %}</ul>
   {% endif %}
   {% if r.falla %}
   <h5>{{ _('Lo que falla') }}</h5>
-  <ul class="tw-analisis-lista">{% for x in r.falla %}<li>✗ {{ x.texto }} <span class="tag-estado">{{ nombres_anillo.get(x.anillo, x.anillo) }}</span>{% if x.evidencia %} <small class="vacio">— {{ x.evidencia }}</small>{% endif %}</li>{% endfor %}</ul>
+  <ul class="tw-analisis-lista tw-analisis-marcas">{% for x in r.falla %}<li>✗ {{ x.texto }} <span class="tag-estado">{{ nombres_anillo.get(x.anillo, x.anillo) }}</span>{% if x.evidencia %} <small class="vacio">— {{ x.evidencia }}</small>{% endif %}</li>{% endfor %}</ul>
   {% endif %}
   {% if r.cambios %}
   <h5>{{ _('Tres cambios') }}</h5>

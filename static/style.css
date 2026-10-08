@@ -3920,6 +3920,9 @@ body:has(#exp-nuevo) main { margin-left: 0; max-width: 1440px; width: 100%; }
 .tw-analisis { display: flex; flex-direction: column; gap: .4rem; padding: .6rem 0 0; border-top: 1px solid var(--border); overflow-wrap: anywhere; }
 .tw-analisis h5 { margin: .4rem 0 0; }
 .tw-analisis-lista { margin: 0; padding-left: 1.1rem; }
+/* «Lo que funciona» y «Lo que falla» ya llevan ✓/✗: sin la viñeta de la lista (revisión final, D1). */
+.tw-analisis-marcas { list-style: none; padding-left: 0; }
+.tw-guardar-aprendizaje { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; margin: 0; }
 .tw-tarjeta-ia .tw-progreso { flex-basis: 100%; }
 .tw-ver-mas { grid-column: 1 / -1; justify-self: center; }
 .tw-tabla-detalle summary { cursor: pointer; }
