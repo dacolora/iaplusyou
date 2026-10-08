@@ -119,3 +119,11 @@ atribución; la app debe estar en modo Live. `exp_probar` y la galería traen su
 el objetivo de apps (se crea por el formulario de la galería). Derivar y rescatar quedan omitidos por
 `acciones.pedir` para estos experimentos, y no se agregan piezas nuevas después de lanzar. Meta rechaza una URL de
 tienda con otro objetivo: `meta_errores.explicar` lo dice en palabras. `meta_ads/` es un submódulo.
+Arreglos de la revisión final (2026-10-08, plata y seguridad): `cambiar_presupuesto_pais` cambia los conjuntos uno a
+uno y, si Meta falla a medias, devuelve los ya cambiados a `centavos(anterior) // n` y no toca lo guardado del país
+(antes el panel decía un presupuesto y Meta gastaba otro); `exp_presupuesto` valida el mínimo de Meta contra cada
+parte (`centavos(total) // n`), como `exp_probar`; el lanzador usa el App ID de `extra["app"]["app_id"]` (el aprobado
+al crear) y solo de respaldo el del proyecto; un perdedor en las dos tiendas se diagnostica con Claude UNA vez
+(`experimentos.diagnostico_hermano` + `tareas.experimentos._diagnostico_de_hermana` copian el de la otra fila, con
+evento y sin gasto); `app_tiendas.plataforma_de_url` rechaza `\`, usuario/clave, puerto, espacios y todo host que
+no sea exactamente el de la tienda (`https://evil.com\@apps.apple.com` daba `ios`).
