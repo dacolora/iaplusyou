@@ -7533,6 +7533,21 @@ def _precio_form(valor):
         return None
 
 
+@app.route("/cliente/<cliente>/creative_flow/<cf_id>/favorito", methods=["POST"])
+def cf_favorito(cliente, cf_id):
+    """El corazón de una tarjeta de Crear (pedido del 2026-10-08): marca o
+    desmarca la pieza para separarla de las versiones que no se van a usar.
+    Form `favorito=1|0` → {ok, favorito}; sin fetch, vuelve a Crear."""
+    favorito = request.form.get("favorito") == "1"
+    if not creative_flow.marcar_favorito(cliente, cf_id, favorito):
+        if request.headers.get("X-Requested-With") == "fetch":
+            return jsonify({"ok": False, "error": gettext("Esa pieza ya no existe.")}), 404
+        abort(404)
+    if request.headers.get("X-Requested-With") == "fetch":
+        return jsonify({"ok": True, "favorito": favorito})
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+
+
 @app.route("/cliente/<cliente>/creative_flow/<cf_id>/angulo", methods=["POST"])
 def cf_angulo(cliente, cf_id):
     """Doctrina, bloque 2 (§3.3): guarda el ángulo editado a mano de una

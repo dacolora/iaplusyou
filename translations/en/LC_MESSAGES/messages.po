@@ -10585,6 +10585,9 @@ msgstr "Check the read permissions and “offline_access” (to renew the token 
 msgid "Marcado listo para generar a mano"
 msgstr "Marked ready to generate by hand"
 
+msgid "Marcar con corazón"
+msgstr "Mark with a heart"
+
 msgid "Marcar listo para generar"
 msgstr "Mark ready to generate"
 
@@ -10633,6 +10636,9 @@ msgstr "File doesn't exist."
 #, python-format
 msgid "Me detuve en la propuesta #%(id)s (%(accion)s): %(error)s"
 msgstr "I stopped at proposal #%(id)s (%(accion)s): %(error)s"
+
+msgid "Me gusta"
+msgstr "Like"
 
 msgid "Mecanismo"
 msgstr "Mechanism"
@@ -13657,6 +13663,9 @@ msgstr "Remove color"
 
 msgid "Quitar de la lista"
 msgstr "Remove from the list"
+
+msgid "Quitar el corazón"
+msgstr "Remove the heart"
 
 #, python-format
 msgid "Quitar el filtro: %(nombre)s"

@@ -57,6 +57,9 @@
   --fondo-logo: #e9e9f0;
   --fondo-video: #121417;
   --fondo-lienzo: #000000;
+  --velo-media: rgba(17, 17, 24, 0.72); /* botones encima de un video o una imagen (corazón de Crear) */
+  --velo-media-fuerte: rgba(17, 17, 24, 0.88);
+  --sobre-media: #ffffff;
 
   /* Tipografía */
   --font-display: "Space Grotesk", "Helvetica Neue", Arial, sans-serif;
@@ -4174,3 +4177,11 @@ body:has(#exp-nuevo) main { margin-left: 0; max-width: 1440px; width: 100%; }
 @media (max-width: 480px) {
   .twr-tarjetas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+/* ── estilos/pantallas/crear.css ── */
+/* Crear: el corazón de cada tarjeta (2026-10-08), para separar las versiones que se van a usar. */
+.generado-fav-form { position: absolute; right: .45rem; top: .4rem; margin: 0; z-index: 1; }
+.generado-fav { width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 999px; background: var(--velo-media); color: var(--sobre-media); font-size: 1.15rem; line-height: 1; cursor: pointer; }
+.generado-fav:hover { background: var(--velo-media-fuerte); }
+.generado-fav.activo { color: var(--error); }
+.generado-fav:focus-visible { outline: 2px solid var(--sobre-media); outline-offset: 2px; }
+.generado-fav-form ~ .generado-tipo { max-width: calc(100% - 3.6rem); } /* que el corazón no tape la etiqueta del formato */
