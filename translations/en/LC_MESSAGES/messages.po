@@ -1403,9 +1403,6 @@ msgstr "(code %(codigo)s)"
 msgid "(de %(min)s a %(max)s)"
 msgstr "(from %(min)s to %(max)s)"
 
-msgid "(el CSV trae todos los del mes)"
-msgstr "(the CSV includes all of this month's)"
-
 msgid "(el servidor no tiene correo configurado; avisa al administrador)"
 msgstr "(the server has no email configured; let the administrator know)"
 
@@ -1470,6 +1467,9 @@ msgstr "(and {n} more)"
 
 msgid "(ya producida — se reemplaza)"
 msgstr "(already produced — will be replaced)"
+
+msgid "(«Descargar CSV de todo» trae todos los cobros desde el inicio)"
+msgstr "(\"Download full CSV\" has every charge since the start)"
 
 msgid "+ Color"
 msgstr "+ Color"
@@ -4236,13 +4236,13 @@ msgid "Cuántas promesas parecidas vio ya tu cliente"
 msgstr "How many similar promises your customer has already seen"
 
 msgid ""
-"Cuánto costó de verdad lo que este proyecto generó este mes: cada video, imagen, guion,\n"
+"Cuánto costó de verdad lo que este proyecto generó, este mes y desde el inicio: cada video, imagen, guion,\n"
 "      final o texto con IA deja su cobro aquí apenas el proveedor lo cobra. Los botones de la app\n"
 "      muestran el precio aproximado antes de gastar; esta lista es el precio real después."
 msgstr ""
-"What this project actually generated this month really cost: every video, image, script,\n"
-"      final cut or AI text leaves its charge here as soon as the provider charges it. The app's buttons\n"
-"      show the approximate price before spending; this list is the real price afterward."
+"What this project's generation really cost, this month and since the start: every video, image, script,\n"
+"      final or AI text leaves its charge here as soon as the provider bills it. The app's buttons show the\n"
+"      approximate price before spending; this list is the real price afterwards."
 
 msgid "Cuánto sube el presupuesto por día (%)"
 msgstr "How much the budget goes up per day (%)"
@@ -4440,6 +4440,9 @@ msgstr "Downloading the link's video… it'll appear among the references in a f
 msgid "Descargar"
 msgstr "Download"
 
+msgid "Descargar CSV de todo"
+msgstr "Download full CSV"
+
 msgid "Descargar CSV del mes"
 msgstr "Download this month's CSV"
 
@@ -4547,6 +4550,9 @@ msgstr "Since %(desde)s, generations in Create and Change product fail (without 
 
 msgid "Desde el inicio"
 msgstr "Since the start"
+
+msgid "Desde el inicio (US$)"
+msgstr "Since the start (US$)"
 
 msgid "Desde que lo conectes, los anuncios que Creatv lance en Meta llevan solos los parámetros de rastreo de Triple Whale. A los que ya estaban, o a los que crees fuera de Creatv, ponles en «Parámetros de URL»: <code>tw_source={{site_source_name}}&amp;tw_adid={{ad.id}}</code>."
 msgstr "Once you connect it, the ads Creatv launches on Meta carry Triple Whale's tracking parameters on their own. For ads that already existed, or that you create outside Creatv, add under “URL parameters”: <code>tw_source={{site_source_name}}&amp;tw_adid={{ad.id}}</code>."
@@ -7704,6 +7710,12 @@ msgstr "AI generation: %(costo)s in the period"
 
 msgid "Generación del mes (US$): lo pagado a los proveedores de IA este mes"
 msgstr "Generation this month (US$): what was paid to AI providers this month"
+
+msgid "Generación desde el inicio"
+msgstr "Generation since the start"
+
+msgid "Generación desde el inicio (US$): todo lo pagado a los proveedores de IA por este proyecto"
+msgstr "Generation since the start (US$): everything this project has paid to the AI providers"
 
 msgid "Generación este mes"
 msgstr "Generation this month"
@@ -14951,6 +14963,9 @@ msgstr "Total"
 msgid "Total (%(moneda)s)"
 msgstr "Total (%(moneda)s)"
 
+msgid "Total desde el inicio"
+msgstr "Total since the start"
+
 msgid "Total proyectos"
 msgstr "Total projects"
 
@@ -16978,6 +16993,10 @@ msgid "desde %(nombre)s"
 msgstr "from %(nombre)s"
 
 #, python-format
+msgid "desde el %(fecha)s"
+msgstr "since %(fecha)s"
+
+#, python-format
 msgid "desde el 1 de %(mes)s"
 msgstr "since %(mes)s 1"
 
@@ -18826,6 +18845,10 @@ msgstr "cap"
 #, python-format
 msgid "tope alcanzado (%(gasto)s de %(tope)s %(moneda)s); %(motivo)s"
 msgstr "cap reached (%(gasto)s of %(tope)s %(moneda)s); %(motivo)s"
+
+#, python-format
+msgid "total %(usd)s"
+msgstr "total %(usd)s"
 
 msgid "traducción de firmas copycoders"
 msgstr "copycoders “why it works” translation"

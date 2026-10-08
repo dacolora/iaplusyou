@@ -5180,6 +5180,15 @@ def _contexto_gasto(cliente, tablero_ctx):
     except Exception as e:  # noqa: BLE001 — informativo
         print(f"[aviso] Gasto de {cliente}: no pude leer el historial: {type(e).__name__}")
         historial = []
+    # Desde el inicio y mes a mes (2026-10-07): la pantalla solo decía «este
+    # mes» y los meses anteriores parecían perdidos.
+    try:
+        gasto_total = gastos.resumen_total(cliente)
+        gasto_por_mes = [{"mes": m, "usd": v["usd"], "n": v["n"]}
+                         for m, v in sorted(gastos.por_mes(cliente).items(), reverse=True)]
+    except Exception as e:  # noqa: BLE001 — informativo
+        print(f"[aviso] Gasto de {cliente}: no pude leer el total desde el inicio: {type(e).__name__}")
+        gasto_total, gasto_por_mes = {"total": 0.0, "n": 0, "desde": None, "error": True}, []
     pauta = _pauta_mes(tablero_ctx)
     por_tipo = [{"tipo": t, "nombre": NOMBRES_TIPO_GASTO.get(t, t), "n": v["n"], "usd": v["usd"]}
                 for t, v in sorted(gasto_mes["por_tipo"].items(), key=lambda kv: -kv[1]["usd"])]
@@ -5189,6 +5198,8 @@ def _contexto_gasto(cliente, tablero_ctx):
         "precios": _precios_pagina(),
         "gastos_historial": historial,
         "gastos_por_tipo": por_tipo,
+        "gasto_total": gasto_total,
+        "gasto_por_mes": gasto_por_mes,
         "nombres_tipo_gasto": NOMBRES_TIPO_GASTO,
         "gasto_chip": _chip_gasto(gasto_mes, pauta),
     }
@@ -5221,6 +5232,17 @@ def gasto_csv(cliente):
     texto = gastos.csv_mes(cliente, ahora)
     resp = Response(texto, content_type="text/csv; charset=utf-8")
     nombre = secure_filename(f"gasto_{cliente}_{ahora[:7]}.csv")
+    resp.headers["Content-Disposition"] = f'attachment; filename="{nombre}"'
+    return resp
+
+
+@app.route("/cliente/<cliente>/gasto/todo.csv")
+def gasto_csv_todo(cliente):
+    """CSV con TODOS los cobros de generación del proyecto desde el primero
+    (misma forma que gasto_csv)."""
+    ahora = db.ahora()
+    resp = Response(gastos.csv_todo(cliente, ahora), content_type="text/csv; charset=utf-8")
+    nombre = secure_filename(f"gasto_{cliente}_todo_{ahora[:10]}.csv")
     resp.headers["Content-Disposition"] = f'attachment; filename="{nombre}"'
     return resp
 

@@ -609,3 +609,24 @@ def test_admin_sigue_viendo_todas_las_tarjetas_de_puesta_a_punto(app):
     assert puesta.count('class="llave-tarjeta') == 12
     assert _puesta_a_punto(cfg).count('class="llave-tarjeta') == 0
     assert "no se escriben desde aquí" in _tarjeta(puesta, "anthropic")
+
+
+def test_gasto_muestra_el_total_desde_el_inicio_y_el_csv_de_todo(app):
+    """2026-10-07: la pantalla de Gasto solo decía «este mes» (US$ 66) y Daniel
+    creyó perdidos los US$ 200 de los meses anteriores. Ahora muestra el total
+    desde el inicio, el mes a mes y un CSV con todo."""
+    import gastos
+    gastos.registrar("acme", "video", 200.0, "video:septiembre", creado_en="2026-09-15T10:00:00")
+    gastos.registrar("acme", "video", 66.0, "video:ahora")
+    html = app["c"].get("/cliente/acme").data.decode()
+    cfg = _config(html)
+    inicio = cfg[cfg.index('id="gasto-desde-inicio"'):]
+    inicio = inicio[:inicio.index("</div>")]
+    assert "Generación desde el inicio" in inicio and "266,00" in inicio and "desde el 2026-09-15" in inicio
+    assert 'id="gasto-por-mes"' in cfg and "2026-09" in cfg and "200,00" in cfg and "Total desde el inicio" in cfg
+    assert "/cliente/acme/gasto/todo.csv" in cfg and "Descargar CSV de todo" in cfg
+    r = app["c"].get("/cliente/acme/gasto/todo.csv")
+    assert r.status_code == 200 and "text/csv" in r.content_type
+    filas = r.data.decode().lstrip("\ufeff").splitlines()
+    assert [f.split(";")[3] for f in filas[1:]] == ["video:septiembre", "video:ahora"]
+    assert 'filename="gasto_acme_todo_' in r.headers["Content-Disposition"]

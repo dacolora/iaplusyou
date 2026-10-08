@@ -555,12 +555,15 @@
   <div>
     <h2 style="margin-top:0;">{{ _('Gasto') }}</h2>
     <p class="vacio" style="padding-top:0;">
-      {{ _('Cuánto costó de verdad lo que este proyecto generó este mes: cada video, imagen, guion,
+      {{ _('Cuánto costó de verdad lo que este proyecto generó, este mes y desde el inicio: cada video, imagen, guion,
       final o texto con IA deja su cobro aquí apenas el proveedor lo cobra. Los botones de la app
       muestran el precio aproximado antes de gastar; esta lista es el precio real después.') }}
     </p>
   </div>
-  <a class="btn-guardar btn-sm tb-csv" href="{{ url_for('gasto_csv', cliente=cliente) }}" download>{{ _('Descargar CSV del mes') }}</a>
+  <div class="gasto-descargas">
+    <a class="btn-guardar btn-sm tb-csv" href="{{ url_for('gasto_csv', cliente=cliente) }}" download>{{ _('Descargar CSV del mes') }}</a>
+    <a class="btn-guardar btn-sm tb-csv" href="{{ url_for('gasto_csv_todo', cliente=cliente) }}" download>{{ _('Descargar CSV de todo') }}</a>
+  </div>
 </div>
 
 <div class="tb-tiles gasto-tiles">
@@ -568,6 +571,13 @@
     <span>{{ _('Generación este mes') }}</span>
     <strong>{{ (gasto_mes.total if gasto_mes else 0) | usd }}</strong>
     <small>{% if gasto_mes and gasto_mes.n %}{{ ngettext('%(num)s cobro(s) a proveedores', '%(num)s cobro(s) a proveedores', gasto_mes.n) }}{% else %}{{ _('sin generación pagada') }}{% endif %}</small>
+  </div>
+  {# Desde el inicio (2026-10-07): sin esta cifra, el total del proyecto parecía
+     ser solo el del mes en curso. #}
+  <div class="kpi-tile" id="gasto-desde-inicio">
+    <span>{{ _('Generación desde el inicio') }}</span>
+    <strong>{{ (gasto_total.total if gasto_total else 0) | usd }}</strong>
+    <small>{% if gasto_total and gasto_total.n %}{{ ngettext('%(num)s cobro(s) a proveedores', '%(num)s cobro(s) a proveedores', gasto_total.n) }}{% if gasto_total.desde %} · {{ _('desde el %(fecha)s', fecha=gasto_total.desde[:10]) }}{% endif %}{% else %}{{ _('sin generación pagada') }}{% endif %}</small>
   </div>
   {% for p in pauta_mes %}
   <div class="kpi-tile">
@@ -597,6 +607,19 @@
 </table>
 {% endif %}
 
+{% if gasto_por_mes and gasto_por_mes | length > 1 %}
+<h3 style="margin-top:1.2rem;">{{ _('Mes a mes') }}</h3>
+<table class="gasto-tabla" id="gasto-por-mes">
+  <thead><tr><th>{{ _('Mes') }}</th><th class="num">{{ _('Cantidad') }}</th><th class="num">US$</th></tr></thead>
+  <tbody>
+    {% for m in gasto_por_mes %}
+    <tr><td>{{ m.mes }}</td><td class="num">{{ m.n }}</td><td class="num">{{ m.usd | usd }}</td></tr>
+    {% endfor %}
+    <tr class="gasto-total"><td>{{ _('Total desde el inicio') }}</td><td class="num">{{ gasto_total.n }}</td><td class="num">{{ gasto_total.total | usd }}</td></tr>
+  </tbody>
+</table>
+{% endif %}
+
 {# M6: el límite de 200 es fijo (sin paginación real); el scroll + la nota
    de abajo alcanzan para el brief de hoy, pero si el volumen de cobros
    crece, una Task futura debería paginar de verdad en vez de solo recortar. #}
@@ -617,7 +640,7 @@
     </tbody>
   </table>
 </div>
-<p class="vacio" style="padding-top:.3rem;font-size:.74rem;">{{ _('Se muestran los últimos %(n)s cobros', n=gastos_historial | length) }}{% if gastos_historial | length >= 200 %} {{ _('(el CSV trae todos los del mes)') }}{% endif %}.</p>
+<p class="vacio" style="padding-top:.3rem;font-size:.74rem;">{{ _('Se muestran los últimos %(n)s cobros', n=gastos_historial | length) }}{% if gastos_historial | length >= 200 %} {{ _('(«Descargar CSV de todo» trae todos los cobros desde el inicio)') }}{% endif %}.</p>
 {% else %}
 <p class="vacio">{{ _('Todavía no hay cobros registrados. Aparecerán aquí cuando generes algo en Crear.') }}</p>
 {% endif %}

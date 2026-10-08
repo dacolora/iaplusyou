@@ -669,6 +669,7 @@ kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 .3rem; fon
 .sidebar-gasto:hover { color: var(--text); border-color: var(--accent); }
 /* Configuración › Gasto: tiles reutilizan .kpi-tile; tablas por tipo e historial. */
 .gasto-tiles { margin-top: .4rem; }
+.gasto-descargas { display: flex; flex-wrap: wrap; gap: .4rem; align-items: flex-start; }
 .gasto-tabla { margin-top: .4rem; }
 .gasto-tabla th, .gasto-tabla td { padding: .4rem .6rem; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
 .gasto-tabla th { font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; }
