@@ -283,3 +283,58 @@ def test_saldo_bajo_con_carrera_en_la_marca_no_lanza_ni_avisa(base_temporal, mon
     monkeypatch.setattr(avisos.sa, "select", lambda *a, **k: (Rival(), real(sa2.literal(0)).where(sa2.false()))[1])
     assert avisos.saldo_bajo("acme", 100) is False
     assert enviados == []
+
+
+# ---- concurrencia: el candado se toma ANTES de leer (fix 1 de la Task 3) ----
+
+def test_exigir_no_deja_que_otra_reserva_entre_en_medio(libro, base_temporal, escritor_en_medio):
+    """Sin el candado, otra reserva confirmada entre la lectura del disponible y
+    la escritura pasaba: juntas reservaban más que el saldo."""
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    with base_temporal.conectar() as con:
+        libro.acreditar(con, "acme", "recarga", 2000, "recarga_manual")
+    _tarea(base_temporal, "j1")
+    _tarea(base_temporal, "j2")
+    otro = escritor_en_medio("DELETE FROM reserva_saldo",
+                             "insert into reserva_saldo(cliente, job_id, milesimas, creada_en) "
+                             "values ('acme', 'j2', 1500, 'ahora')")
+    assert libro.exigir("acme", 1.0, job_id="j1") == 1500
+    assert otro["resultado"].startswith("bloqueado")
+    assert libro.reservado("acme") <= libro.saldo("acme")
+
+
+def test_revertir_no_pierde_reversos_si_otro_revierte_en_medio(libro, base_temporal, monkeypatch, escritor_en_medio):
+    """Sin el candado, un reverso ajeno confirmado en medio tumbaba con
+    IntegrityError el lote entero: el segundo cobro quedaba sin revertir."""
+    import gastos
+    from cobros import avisos
+    monkeypatch.setattr(avisos, "pieza_no_cobrada", lambda *a: None)
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    with libro.en_trabajo(1, "j1"):
+        g1 = gastos.registrar("acme", "video", 1.0, "video:1:t1")
+        g2 = gastos.registrar("acme", "video", 2.0, "video:1:t1:musica")
+    otro = escritor_en_medio("INSERT INTO movimiento_saldo",
+                             "insert into movimiento_saldo(cliente, creado_en, tipo, milesimas, gasto_id, job_id, concepto) "
+                             f"values ('acme', 'ahora', 'reverso', 1500, {g1}, 'j1', 'video')")
+    assert len(libro.revertir_trabajo("acme", "j1", "falló")) == 2
+    assert otro["resultado"].startswith("bloqueado")
+    m = base_temporal.movimiento_saldo
+    with base_temporal.conectar() as con:
+        rev = con.execute(sa.select(m.c.gasto_id).where(m.c.tipo == "reverso")).scalars().all()
+    assert sorted(rev) == sorted([g1, g2])
+    assert libro.saldo("acme") == 0
+
+
+def test_configurar_no_choca_con_otro_que_crea_la_cuenta_en_medio(libro, base_temporal, escritor_en_medio):
+    otro = escritor_en_medio("INSERT INTO cuenta_saldo",
+                             "insert into cuenta_saldo(cliente, cobrar, umbral_aviso) values ('acme', 0, 5000)")
+    assert libro.configurar("acme", usuario="admin", cobrar=True)["cobrar"] is True
+    assert otro["resultado"].startswith("bloqueado")
+
+
+def test_guardar_margen_global_no_choca_con_otro_en_medio(libro, base_temporal, escritor_en_medio):
+    otro = escritor_en_medio("INSERT INTO kv",
+                             f"insert into kv(clave, valor, actualizado_en) values ('{libro.CLAVE_MARGEN}', '2.0', 'ahora')")
+    libro.guardar_margen_global(1.8, "admin")
+    assert libro.margen_global() == 1.8
+    assert otro["resultado"].startswith("bloqueado")

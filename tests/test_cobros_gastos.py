@@ -185,3 +185,50 @@ def test_video_que_fallo_al_descargar_no_se_cobra(base_temporal, monkeypatch):
     libro.configurar("acme", usuario="admin", cobrar=True)
     flowplus._registrar_gasto("acme", "video", {"usd": 1.0}, "video:cf_1:t1", "wan3", "falló", entregado=False)
     assert _tipos(base_temporal) == [("no_cobrado", 0)]
+
+
+# ---- concurrencia: otro escritor confirma entre la lectura y la escritura del cobro (fix 1) ----
+
+def test_otro_escritor_en_medio_no_pierde_el_cobro_al_insertar(base_temporal, monkeypatch, escritor_en_medio):
+    """Revisión de la Task 3: con el cobro en un savepoint aparte del gasto, la
+    lectura de cobrar_gasto abría una transacción diferida nueva y otro escritor
+    en medio hacía «database is locked» al instante: gasto sin cobro, para siempre."""
+    import gastos
+    from cobros import avisos, libro
+    admin = []
+    monkeypatch.setattr(avisos, "admin", lambda *a, **k: admin.append(a))
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    otro = escritor_en_medio("INSERT INTO movimiento_saldo",
+                             "insert into kv(clave, valor, actualizado_en) values ('x', '1', 'ahora')")
+    gastos.registrar("acme", "video", 1.0, "video:1:t1")
+    assert _tipos(base_temporal) == [("cobro", -1500)]
+    assert admin == []
+    assert otro["resultado"].startswith("bloqueado")   # el candado estaba tomado: nadie escribió en medio
+
+
+def test_otro_escritor_en_medio_no_pierde_el_reverso_al_corregir(base_temporal, monkeypatch, escritor_en_medio):
+    import gastos
+    from cobros import avisos, libro
+    monkeypatch.setattr(avisos, "pieza_no_cobrada", lambda *a: None)
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    gastos.registrar("acme", "video", 1.0, "video:1:t1")
+    otro = escritor_en_medio("INSERT INTO movimiento_saldo",
+                             "insert into kv(clave, valor, actualizado_en) values ('x', '1', 'ahora')")
+    gastos.registrar("acme", "video", 1.0, "video:1:t1", entregado=False)
+    assert _tipos(base_temporal) == [("cobro", -1500), ("reverso", 1500)]
+    assert otro["resultado"].startswith("bloqueado")
+
+
+def test_recalculado_que_cobra_mas_mira_el_saldo_bajo(base_temporal, monkeypatch):
+    import gastos
+    from cobros import avisos, libro
+    bajos = []
+    monkeypatch.setattr(avisos, "saldo_bajo", lambda c, s: bajos.append((c, s)))
+    libro.configurar("acme", usuario="admin", cobrar=True, umbral=5000)
+    with base_temporal.conectar() as con:
+        libro.acreditar(con, "acme", "recarga", 6000, "recarga_manual")
+    gastos.registrar("acme", "final", 0.2, "final:1:t1")    # 6000 - 300 = 5700
+    assert bajos == []
+    gastos.registrar("acme", "final", 0.2, "final:1:t1")    # mismo monto: no sube, no mira
+    gastos.registrar("acme", "final", 1.0, "final:1:t1")    # recalcula a 1500: 4500
+    assert bajos == [("acme", 4500)]

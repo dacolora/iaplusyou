@@ -390,12 +390,34 @@ def registrar(cliente, tipo, usd, referencia, detalle="", proveedor=None, extra=
         con.execute(sa.update(g).where(g.c.id == gasto_id,
             g.c.usd <= monto if conservar_mayor else sa.true()).values(**cambios))
 
+    def _cobrar(con, gasto_id, nuevo):
+        """El cobro en su propio savepoint, con el candado de escritura YA tomado
+        por el INSERT/UPDATE del gasto: en WAL, una transacción diferida que lee y
+        después escribe recibe «database is locked» al instante si otro escritor
+        confirmó en medio (SQLITE_BUSY_SNAPSHOT; busy_timeout no aplica). Un cobro
+        que falla vuelve a su savepoint y el gasto queda. Nunca lanza."""
+        # Con conservar_mayor el UPDATE pudo no aplicar: se cobra sobre lo que quedó guardado.
+        usd_final = float(con.execute(sa.select(g.c.usd).where(g.c.id == gasto_id)).scalar() or 0.0)
+        try:
+            with con.begin_nested():
+                from cobros import libro as _libro  # noqa: PLC0415 — evita el import circular
+                antes = _neto_del_gasto(con, gasto_id)
+                resultado = _libro.cobrar_gasto(con, gasto_id, cliente, usd_final, tipo,
+                                                entregado=entregado, nuevo=nuevo)
+                if resultado == "recalculado" and _neto_del_gasto(con, gasto_id) < antes:
+                    resultado = "recalculado_mayor"   # cobra más: mira el saldo como un cobro nuevo
+        except Exception:  # noqa: BLE001 — el costo no se pierde por el cobro (spec §3.1)
+            log.exception("No se pudo anotar el cobro del gasto %s de %s", referencia, cliente)
+            resultado = "error"
+        return resultado, usd_final
+
     with db.conectar() as con:
         fila = con.execute(sa.select(g.c.id).where(g.c.cliente == cliente, g.c.referencia == referencia)).first()
-        nuevo = False
+        resultado_cobro = None
         if fila:
             gasto_id = int(fila.id)
-            _actualizar(con, gasto_id)
+            _actualizar(con, gasto_id)   # el UPDATE abre la transacción y toma el candado
+            resultado_cobro, usd_final = _cobrar(con, gasto_id, nuevo=False)
         else:
             try:
                 with con.begin_nested():
@@ -403,30 +425,25 @@ def registrar(cliente, tipo, usd, referencia, detalle="", proveedor=None, extra=
                                                         creado_en=(creado_en or db.ahora())[:19],
                                                         proveedor=proveedor, extra=extra or {}, **valores))
                     gasto_id = int(r.inserted_primary_key[0])
-                    nuevo = True
+                    # DENTRO del savepoint del gasto: pysqlite no emite BEGIN antes de un
+                    # SAVEPOINT, así que este es el más externo; el INSERT ya tomó el candado
+                    # y su RELEASE confirma gasto y cobro juntos.
+                    resultado_cobro, usd_final = _cobrar(con, gasto_id, nuevo=True)
             except sa.exc.IntegrityError:
                 # Carrera: otro proceso insertó la misma referencia entre el select y el insert.
                 fila = con.execute(sa.select(g.c.id).where(g.c.cliente == cliente,
                                                            g.c.referencia == referencia)).first()
                 gasto_id = int(fila.id)
                 _actualizar(con, gasto_id)
-        # Con conservar_mayor el UPDATE pudo no aplicar: se cobra sobre lo que quedó guardado.
-        usd_final = float(con.execute(sa.select(g.c.usd).where(g.c.id == gasto_id)).scalar() or 0.0)
-        resultado_cobro = None
-        try:
-            # pysqlite no emite BEGIN antes de un SAVEPOINT: si el gasto se insertó en su
-            # propio savepoint (ya confirmado), este es el más externo y su RELEASE confirma
-            # el cobro; si el gasto se actualizó, va dentro de esa transacción. En los dos
-            # casos un cobro que falla vuelve a su savepoint y el gasto queda.
-            with con.begin_nested():
-                from cobros import libro as _libro  # noqa: PLC0415 — evita el import circular
-                resultado_cobro = _libro.cobrar_gasto(con, gasto_id, cliente, usd_final, tipo,
-                                                      entregado=entregado, nuevo=nuevo)
-        except Exception:  # noqa: BLE001 — el costo no se pierde por el cobro (spec §3.1)
-            log.exception("No se pudo anotar el cobro del gasto %s de %s", referencia, cliente)
-            resultado_cobro = "error"
+                resultado_cobro, usd_final = _cobrar(con, gasto_id, nuevo=False)
     _despues_del_cobro(cliente, resultado_cobro, gasto_id, usd_final, tipo, referencia)
     return gasto_id
+
+
+def _neto_del_gasto(con, gasto_id):
+    m = db.movimiento_saldo
+    return int(con.execute(sa.select(sa.func.coalesce(sa.func.sum(m.c.milesimas), 0))
+                           .where(m.c.gasto_id == gasto_id)).scalar())
 
 
 def _despues_del_cobro(cliente, resultado, gasto_id, usd, tipo, referencia):
@@ -444,7 +461,7 @@ def _despues_del_cobro(cliente, resultado, gasto_id, usd, tipo, referencia):
                 cliente=cliente)
         elif resultado in ("no_cobrado", "reverso"):
             avisos.pieza_no_cobrada(cliente, _no_cobrado_milesimas(gasto_id, resultado, usd, cliente), tipo)
-        elif resultado == "cobro":
+        elif resultado in ("cobro", "recalculado_mayor"):
             c = libro.cuenta(cliente)
             s = libro.saldo(cliente)
             if s < c["umbral"]:

@@ -5198,7 +5198,7 @@ msgstr "The hook has %(n)s words: with %(max)s or fewer it reads in three second
 
 #, python-format
 msgid "El gasto %(ref)s de %(cliente)s (%(usd)s) quedó sin su cobro al cliente."
-msgstr "The cost %(ref)s of %(cliente)s (%(usd)s) was recorded without its charge to the client."
+msgstr "Spend %(ref)s for %(cliente)s (%(usd)s) was recorded without its charge to the client."
 
 msgid "El guion"
 msgstr "The script"

@@ -22,6 +22,7 @@ CLAVE_MARGEN = "cobros:margen_global"
 TIPOS_ACREDITAR = ("recarga", "ajuste", "anulacion")
 ESTADOS_VIVOS = ("pendiente", "en_curso")
 SIN_CAMBIO = object()
+CLAVE_CANDADO = "cobros:candado"
 
 # (tarea_id, job_id) del trabajo del worker que corre en este hilo. Cada hilo
 # empieza con el valor por defecto: dos hilos del carril de Crear no se cruzan.
@@ -60,6 +61,17 @@ def en_trabajo(tarea_id, job_id):
         _CONTEXTO.reset(token)
 
 
+def _candado(con):
+    """Toma el candado de escritura de SQLite ANTES de leer (mismo truco que
+    saldo.marcar y cuentas.limite_ok: un UPDATE que no cambia nada). Sin esto,
+    leer-y-después-escribir en una transacción diferida deja que otro escritor
+    cambie lo leído en medio (dos reservas que juntas pasan el saldo; un reverso
+    ajeno que tumba con IntegrityError todo el lote) y, si la lectura ya abrió la
+    transacción (un SAVEPOINT), «database is locked» al instante en WAL
+    (SQLITE_BUSY_SNAPSHOT, busy_timeout no aplica)."""
+    con.execute(db.kv.update().where(db.kv.c.clave == CLAVE_CANDADO).values(valor=db.kv.c.valor))
+
+
 # ------------------------------------------------------------------ cuenta ---
 
 def _margen_global(con):
@@ -85,6 +97,7 @@ def _validar_margen(valor):
 def guardar_margen_global(valor, usuario):
     valor = _validar_margen(valor)
     with db.conectar() as con:
+        _candado(con)
         fila = {"valor": str(valor), "actualizado_en": db.ahora()}
         if con.execute(sa.select(db.kv.c.clave).where(db.kv.c.clave == CLAVE_MARGEN)).first():
             con.execute(db.kv.update().where(db.kv.c.clave == CLAVE_MARGEN).values(**fila))
@@ -129,6 +142,7 @@ def configurar(cliente, *, usuario, cobrar=None, margen=SIN_CAMBIO, umbral=None)
         cambios["umbral_aviso"] = umbral
     t = db.cuenta_saldo
     with db.conectar() as con:
+        _candado(con)
         if con.execute(sa.select(t.c.cliente).where(t.c.cliente == cliente)).first():
             con.execute(t.update().where(t.c.cliente == cliente).values(**cambios))
         else:
@@ -179,7 +193,10 @@ def exigir(cliente, costo_usd, job_id=None):
         return 0
     r = db.reserva_saldo
     with db.conectar() as con:
-        c = _cuenta(con, cliente)
+        if not _cuenta(con, cliente)["cobrar"]:
+            return 0   # un proyecto que no cobra ni siquiera toma el candado
+        _candado(con)
+        c = _cuenta(con, cliente)   # releída con el candado: nadie la cambia hasta confirmar
         if not c["cobrar"]:
             return 0
         precio = precio_milesimas(costo_usd, c["margen"]) if costo_usd is not None else 1
@@ -256,6 +273,7 @@ def cobrar_gasto(con, gasto_id, cliente, usd, tipo, entregado=True, nuevo=True):
     corrección de monto): si no tenía cobro, sigue sin tenerlo (§3.2-§3.3,
     prender «Cobrar» no cobra hacia atrás); si lo tenía, se recalcula."""
     m = db.movimiento_saldo
+    _candado(con)   # gastos ya lo tiene (INSERT/UPDATE del gasto); para cualquier otro llamador
     previo = con.execute(sa.select(m).where(m.c.gasto_id == gasto_id, m.c.tipo.in_(("cobro", "no_cobrado")))).first()
     if previo is not None:
         if previo.tipo != "cobro":
@@ -297,6 +315,7 @@ def revertir_trabajo(cliente, job_id, motivo=""):
     nuevos, total, concepto = [], 0, None
     try:
         with db.conectar() as con:
+            _candado(con)
             cobros_ = con.execute(sa.select(m).where(m.c.cliente == cliente, m.c.job_id == job_id,
                                                      m.c.tipo == "cobro")).all()
             for c in cobros_:
