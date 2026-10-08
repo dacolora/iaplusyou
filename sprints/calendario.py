@@ -3,7 +3,7 @@ Calendario comercial por país: fechas de temporadas que un proyecto adopta con
 un clic como `temporada` propia (spec §1.1, §1.6). Las fechas son del año
 pedido; las que dependen de un domingo (Día de la madre, del padre) se
 aproximan a una ventana fija de venta. Sin calendario para un país, se usa el
-de Colombia.
+de Colombia. Noruega y Suecia tienen el suyo desde 2026-10-08.
 """
 from datetime import date
 
@@ -33,6 +33,30 @@ _HALLOWEEN = {"clave": "halloween", "nombre": N_("Halloween"), "tipo": "estacion
               "contexto": N_("Disfraces, fiestas y decoración; tono lúdico."),
               "mood_visual": {"paleta": ["#FF7A00", "#1A1A1A", "#7C3AED"], "luz": N_("nocturna, dramática"),
                               "elementos": [N_("calabaza"), N_("velas"), N_("disfraz")]}}
+
+# Países nórdicos (spec 2026-10-08 §5): ventanas de venta del año; las que dependen de un domingo (Morsdag, Mors dag,
+# Farsdag, Fars dag) se aproximan a una ventana fija, como el Día de la madre de Colombia.
+_JUL = {"clave": "jul", "nombre": N_("Jul"), "tipo": "comercial", "mm_dd": ("11-15", "12-24"),
+        "contexto": N_("La Navidad nórdica: regalos, velas, reuniones en casa y comida de temporada; la compra se "
+                       "concentra antes del 24."),
+        "mood_visual": {"paleta": ["#9B1C31", "#1F4D3A", "#F3E9D2"], "luz": N_("cálida, de velas, tarde oscura"),
+                        "elementos": [N_("velas"), N_("regalos"), N_("mesa familiar")]}}
+_SAN_VALENTIN_NORDICO = {"tipo": "comercial", "mm_dd": ("02-01", "02-14"),
+                         "contexto": N_("Regalos de pareja y detalles; tono cercano y sencillo."),
+                         "mood_visual": {"paleta": ["#E63946", "#FFE5EC", "#1D3557"], "luz": N_("cálida"),
+                                         "elementos": [N_("regalo"), N_("cena"), N_("flores")]}}
+_VERANO_NORDICO = {"tipo": "estacional", "mm_dd": ("06-20", "07-31"),
+                   "contexto": N_("Vacaciones largas de verano: cabaña, viajes, aire libre y tiempo en familia."),
+                   "mood_visual": {"paleta": ["#2A9D8F", "#F9F7F1", "#F4B942"], "luz": N_("sol bajo, noches claras"),
+                                   "elementos": [N_("cabaña"), N_("lago"), N_("maleta")]}}
+_DIA_DE_LA_MADRE_NORDICO = {"tipo": "comercial",
+                            "contexto": N_("Regalos para mamá: detalle, cuidado y hogar; tono afectivo."),
+                            "mood_visual": {"paleta": ["#F4A7B9", "#FFFFFF", "#C9A227"], "luz": N_("suave y cálida"),
+                                            "elementos": [N_("flores"), N_("desayuno"), N_("abrazo")]}}
+_DIA_DEL_PADRE_NORDICO = {"tipo": "comercial", "mm_dd": ("10-28", "11-12"),
+                          "contexto": N_("Regalos útiles y con carácter para papá; tono cercano, algo de humor."),
+                          "mood_visual": {"paleta": ["#1B2A41", "#8C6D46", "#E8E4DC"], "luz": N_("natural, de tarde"),
+                                          "elementos": [N_("taller"), N_("café"), N_("reloj")]}}
 
 PRESETS = {
     "CO": [
@@ -68,6 +92,28 @@ PRESETS = {
          "mood_visual": {"paleta": ["#000000", "#FFD400", "#FFFFFF"], "luz": N_("contrastada"),
                          "elementos": [N_("etiquetas"), N_("carrito")]}},
         _HALLOWEEN, _BLACK, _NAVIDAD,
+    ],
+    "NO": [
+        dict(_SAN_VALENTIN_NORDICO, clave="valentinsdagen", nombre=N_("Valentinsdagen")),
+        dict(_DIA_DE_LA_MADRE_NORDICO, clave="morsdag", nombre=N_("Morsdag"), mm_dd=("01-28", "02-12")),
+        {"clave": "17_mai", "nombre": N_("17. mai"), "tipo": "estacional", "mm_dd": ("05-05", "05-17"),
+         "contexto": N_("El Día de la Constitución: bunad, banderas, desfiles y comida al aire libre."),
+         "mood_visual": {"paleta": ["#BA0C2F", "#FFFFFF", "#00205B"], "luz": N_("de primavera, clara"),
+                         "elementos": [N_("banderas"), N_("desfile"), N_("pícnic")]}},
+        dict(_VERANO_NORDICO, clave="fellesferie", nombre=N_("Fellesferie")),
+        dict(_DIA_DEL_PADRE_NORDICO, clave="farsdag", nombre=N_("Farsdag")),
+        _BLACK, _JUL,
+    ],
+    "SE": [
+        dict(_SAN_VALENTIN_NORDICO, clave="alla_hjartans_dag", nombre=N_("Alla hjärtans dag")),
+        dict(_DIA_DE_LA_MADRE_NORDICO, clave="mors_dag", nombre=N_("Mors dag"), mm_dd=("05-15", "05-31")),
+        {"clave": "midsommar", "nombre": N_("Midsommar"), "tipo": "estacional", "mm_dd": ("06-10", "06-24"),
+         "contexto": N_("La fiesta del solsticio: mesa al aire libre, flores, fresas y reunión de amigos y familia."),
+         "mood_visual": {"paleta": ["#FECC02", "#006AA7", "#FFFFFF"], "luz": N_("luz de noche clara, dorada"),
+                         "elementos": [N_("corona de flores"), N_("mesa al aire libre"), N_("fresas")]}},
+        dict(_VERANO_NORDICO, clave="semester", nombre=N_("Semester")),
+        dict(_DIA_DEL_PADRE_NORDICO, clave="fars_dag", nombre=N_("Fars dag")),
+        _BLACK, _JUL,
     ],
 }
 
