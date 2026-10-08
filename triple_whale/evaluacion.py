@@ -337,6 +337,14 @@ def veredicto(m, bench, reglas, cpa_cuenta, hay_ventas, diag):
 
 # ------------------------------------------------------------ evaluar ---
 
+def _una_linea(texto):
+    """Texto ajeno (nombre del anuncio, campaña, conjunto) en una sola línea, o None si queda vacío. Un salto de línea
+    en un nombre lo sacaba del bloque delimitado del prompt y partía el `data-confirmar` de la tarjeta (revisión
+    final de las tarjetas, B3)."""
+    t = " ".join(str(texto).split()) if texto is not None else ""
+    return t or None
+
+
 def _clave(t):
     return (t.get("canal"), str(t.get("ad_id")))
 
@@ -372,8 +380,10 @@ def evaluar(totales, recientes=None, previos=None, reglas=None):
         diag = diagnostico(m, bench_diag, reglas, rec.get(k), prev.get(k), hay_ventas, t.get("utm_ok"))
         ver, motivo = veredicto(m, bench, reglas, cpa_cuenta, hay_ventas, diag)
         anuncios.append({
-            "canal": t.get("canal"), "ad_id": str(t.get("ad_id")), "nombre": t.get("anuncio") or str(t.get("ad_id")),
-            "campana": t.get("campana"), "conjunto": t.get("conjunto"), "creative_id": t.get("creative_id"),
+            "canal": t.get("canal"), "ad_id": str(t.get("ad_id")),
+            "nombre": _una_linea(t.get("anuncio")) or str(t.get("ad_id")),
+            "campana": _una_linea(t.get("campana")), "conjunto": _una_linea(t.get("conjunto")),
+            "creative_id": t.get("creative_id"),
             "video_url": t.get("video_url"), "destino_url": t.get("destino_url"), "utm_ok": t.get("utm_ok"),
             "primera_fecha": t.get("primera_fecha"), "ultima_fecha": t.get("ultima_fecha"),
             "dias_con_gasto": int(t.get("dias_con_gasto") or 0),

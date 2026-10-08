@@ -180,3 +180,27 @@ def test_enlace_permitido_rechaza_redirectores_y_formas_raras(malo):
 
 def test_enlace_permitido_acepta_el_puerto_443():
     assert triple_whale.enlace_permitido("https://www.tiktok.com:443/embed/v1", "tiktok-ads")
+
+
+def test_descargar_archivo_tiene_tope_de_tiempo_total_y_borra_el_parcial(monkeypatch, tmp_path):
+    """Revisión final B5: `timeout` es por lectura; un servidor que suelta un trozo cada pocos segundos no puede
+    tener al worker bajando sin fin. Pasado `tiempo_max` desde antes de conectar, se corta y no queda ningún `.part`
+    (y un archivo bueno que ya estaba sigue intacto)."""
+    reloj = iter(range(0, 10_000, 50))                       # cada consulta del reloj avanza 50 s
+    monkeypatch.setattr(conector_url.time, "monotonic", lambda: next(reloj))
+    resp = _RespuestaPorTrozos([b"\x00" * 1000] * 10)
+    _fingir(monkeypatch, resp)
+    ruta = tmp_path / "v.mp4"
+    ruta.write_bytes(b"BUENO")
+    with pytest.raises(conector_url.ErrorConector) as ei:
+        conector_url.descargar_archivo("https://files.triplewhale.com/v.mp4", str(ruta), tiempo_max=120)
+    assert "tardó demasiado" in ei.value.usuario
+    assert resp.consumidos == 3, "siguió leyendo después del tope de tiempo"
+    assert ruta.read_bytes() == b"BUENO" and _restos(tmp_path) == ["v.mp4"]
+    assert conector_url.TIEMPO_MAX_ARCHIVO == 120         # el tope por defecto de quien no lo pasa
+
+
+def test_descargar_archivo_dentro_del_tiempo_termina(monkeypatch, tmp_path):
+    monkeypatch.setattr(conector_url.time, "monotonic", lambda: 0)
+    _fingir(monkeypatch, _RespuestaPorTrozos([b"N" * 10] * 3))
+    assert conector_url.descargar_archivo("https://files.triplewhale.com/v.mp4", str(tmp_path / "v.mp4")) == 30

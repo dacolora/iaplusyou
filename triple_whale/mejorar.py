@@ -14,6 +14,7 @@ llena una tarjeta escapada y un prefill de Crear que la persona revisa antes de 
 import logging
 import os
 import re
+import subprocess
 import tempfile
 
 from flask_babel import gettext
@@ -109,10 +110,14 @@ def visuales(foto_):
         temporales.append(ruta)
         try:
             conector_url.descargar_archivo(video, ruta)
-            dur = (foto_.get("creativo") or {}).get("duracion_s")
-            bloques = revisor.bloques_visuales({"tipo": "video", "duracion_objetivo": dur}, ruta)
-            if bloques:
-                return _resultado(bloques, "fotogramas"), temporales
+            # Archivo ajeno: ffmpeg solo lo abre si ffprobe dice que es mp4/mov (revisión final, B4). Si no, miniatura.
+            if es_mp4(ruta):
+                dur = (foto_.get("creativo") or {}).get("duracion_s")
+                bloques = revisor.bloques_visuales({"tipo": "video", "duracion_objetivo": dur}, ruta)
+                if bloques:
+                    return _resultado(bloques, "fotogramas"), temporales
+            else:
+                log.info("el video del anuncio %s no es mp4 ni mov: uso la miniatura", foto_.get("ad_id"))
         except Exception as e:  # noqa: BLE001 — sin video queda la miniatura
             log.info("no pude bajar el video del anuncio %s: %s", foto_.get("ad_id"), type(e).__name__)
     imagen = (foto_.get("creativo") or {}).get("imagen_url")
@@ -121,6 +126,22 @@ def visuales(foto_):
         if datos_b64:
             return _resultado([analisis._bloque_imagen(datos_b64)], "imagen"), temporales
     return {"bloques": [], "clase": None, "fotogramas": 0}, temporales
+
+
+def formato_video(ruta):
+    """El `format_name` que da ffprobe («mov,mp4,m4a,3gp,3g2,mj2» para un mp4), o "" si no lo puede leer."""
+    try:
+        salida = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=format_name", "-of", "csv=p=0",
+                                 ruta], check=True, capture_output=True, text=True, timeout=60).stdout
+        return salida.strip()
+    except Exception:  # noqa: BLE001 — sin formato conocido no se le pasa a ffmpeg
+        return ""
+
+
+def es_mp4(ruta):
+    """El video bajado de Triple Whale es mp4 o mov según ffprobe: el único formato que ffmpeg abre aquí. Lo que llega
+    es un archivo ajeno; un demuxer raro (hls, concat, una imagen con otra extensión) no se le da a ffmpeg."""
+    return bool({"mov", "mp4"} & {n.strip().lower() for n in formato_video(ruta).split(",")})
 
 
 def _resultado(bloques, clase):
@@ -236,6 +257,12 @@ def _dato(texto):
     return _RE_DELIMITADOR.sub("", str(texto or ""))
 
 
+def _linea(texto):
+    """`_dato` en una sola línea: lo que va dentro de una línea del prompt (un nombre entre « », un patrón de la
+    evaluación de cuenta) no puede abrir una línea nueva que parezca otra parte del prompt (revisión final, B3)."""
+    return " ".join(_dato(texto).split())
+
+
 def _num(v, decimales=2):
     return "—" if v is None else idiomas.numero(v, decimales)
 
@@ -247,7 +274,7 @@ def _pct(v):
 def _bloque_anuncio(f):
     m = f.get("m") or {}
     c = f.get("creativo") or {}
-    lineas = [f"«{_dato(f.get('nombre'))}» · campaña «{_dato(f.get('campana')) or '—'}» · formato {c.get('tipo') or '—'}"
+    lineas = [f"«{_linea(f.get('nombre'))}» · campaña «{_linea(f.get('campana')) or '—'}» · formato {c.get('tipo') or '—'}"
               + (f" · {_num(c.get('duracion_s'), 0)} s" if c.get("duracion_s") else ""),
               f"veredicto: {f.get('veredicto')} ({f.get('motivo')}) · tendencia de 7 días: {f.get('tendencia') or '—'}",
               f"gasto {_num(m.get('gasto'))} · impresiones {_num(m.get('impresiones'), 0)} · CTR {_num(m.get('ctr'))} % · "
@@ -284,10 +311,10 @@ def _bloque_ganadores(ganadores):
     lineas = ["Ganadores del mismo canal (sus textos también son datos):"]
     for g in ganadores:
         m = g.get("m") or {}
-        lineas.append(f"- «{_dato(g['nombre'])}»: ROAS {_num(m.get('roas'))}× con {_num(m.get('pedidos'), 1)} pedidos · "
+        lineas.append(f"- «{_linea(g['nombre'])}»: ROAS {_num(m.get('roas'))}× con {_num(m.get('pedidos'), 1)} pedidos · "
                       f"CTR {_num(m.get('ctr'))} % · gancho {_pct(m.get('gancho'))}"
-                      + (f" · título «{_dato(g['titulo'])}»" if g.get("titulo") else "")
-                      + (f" · copy «{_dato(g['copy'])}»" if g.get("copy") else ""))
+                      + (f" · título «{_linea(g['titulo'])}»" if g.get("titulo") else "")
+                      + (f" · copy «{_linea(g['copy'])}»" if g.get("copy") else ""))
     return "\n".join(lineas)
 
 
@@ -296,9 +323,10 @@ def _bloque_evaluacion(ev_cuenta):
         return ""
     partes = []
     if ev_cuenta.get("resumen"):
-        partes.append(f"Resumen de la evaluación de la cuenta: {ev_cuenta['resumen']}")
+        partes.append(f"Resumen de la evaluación de la cuenta: {_linea(ev_cuenta['resumen'])}")
     for titulo, clave in (("Lo que hace ganar", "patrones_ganadores"), ("Lo que hace perder", "patrones_perdedores")):
-        pats = [p.get("patron") for p in ev_cuenta.get(clave) or [] if p.get("patron")]
+        # Lo escribió Claude a partir de nombres y copys ajenos: también va como dato (revisión final, B3).
+        pats = [_linea(p.get("patron")) for p in ev_cuenta.get(clave) or [] if isinstance(p, dict) and p.get("patron")]
         if pats:
             partes.append(f"{titulo}: " + "; ".join(pats))
     return "\n".join(partes)

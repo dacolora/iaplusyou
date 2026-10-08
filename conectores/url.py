@@ -27,6 +27,7 @@ import json
 import os
 import re
 import socket
+import time
 
 import requests
 from urllib.parse import urljoin, urlparse
@@ -128,17 +129,23 @@ def abrir(url, cabeceras=None, timeout=TIMEOUT, max_redirecciones=MAX_REDIRECCIO
 
 
 MAX_BYTES_VIDEO = 60 * 1024 * 1024   # el video de un anuncio (spec tarjetas §8.1); las páginas siguen con MAX_BYTES
+# Tope de tiempo de TODA la descarga (revisión final de las tarjetas, B5): `timeout` es por lectura, así que un
+# servidor que suelta un trozo cada pocos segundos podía tener ocupado al worker sin fin.
+TIEMPO_MAX_ARCHIVO = 120
 
 
-def descargar_archivo(url, ruta, max_bytes=MAX_BYTES_VIDEO, tipos=("video/",), timeout=TIMEOUT):
+def descargar_archivo(url, ruta, max_bytes=MAX_BYTES_VIDEO, tipos=("video/",), timeout=TIMEOUT,
+                      tiempo_max=TIEMPO_MAX_ARCHIVO):
     """Baja `url` a `ruta` en streaming, con la guarda de SSRF de `abrir` en cada redirección. Exige un
-    Content-Type que empiece por alguno de `tipos` y corta al pasar `max_bytes`. Devuelve los bytes escritos;
-    `ErrorConector` si algo falla (un corte de red o de disco se convierte en uno).
+    Content-Type que empiece por alguno de `tipos` y corta al pasar `max_bytes` o cuando la descarga entera (desde
+    antes de conectar) pasa de `tiempo_max` segundos. Devuelve los bytes escritos; `ErrorConector` si algo falla (un
+    corte de red o de disco se convierte en uno).
 
     Escribe en `ruta + ".part"` y solo lo pasa a `ruta` (os.replace) cuando la descarga terminó bien: si falla, por
     lo que sea (incluida una interrupción), se borra únicamente el `.part` y un archivo bueno que ya estuviera en
     `ruta` queda intacto."""
     parcial = ruta + ".part"
+    inicio = time.monotonic()
     respuesta = abrir(url, timeout=timeout)
     listo = False
     try:
@@ -155,6 +162,8 @@ def descargar_archivo(url, ruta, max_bytes=MAX_BYTES_VIDEO, tipos=("video/",), t
                 total += len(trozo)
                 if total > max_bytes:
                     raise ErrorConector("El archivo pesa demasiado.")
+                if time.monotonic() - inicio > tiempo_max:
+                    raise ErrorConector("La descarga del archivo tardó demasiado.")
                 f.write(trozo)
         os.replace(parcial, ruta)
         listo = True
