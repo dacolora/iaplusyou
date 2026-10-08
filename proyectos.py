@@ -16,6 +16,7 @@ import fcntl
 from functools import wraps
 
 import _json_store
+from final_edition.tipos import PAISES
 
 BASE_DIR = os.path.dirname(__file__)
 
@@ -206,7 +207,7 @@ def guardar_referentes_copycoders(cliente, activa):
     _json_store.guardar(_path(cliente), datos)
 
 
-PAISES_CALENDARIO = ("CO", "MX", "US", "ES", "BR", "AR", "CL", "PE")
+PAISES_CALENDARIO = tuple(PAISES)
 
 
 def pais(cliente):

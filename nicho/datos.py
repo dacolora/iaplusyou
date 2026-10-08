@@ -21,10 +21,10 @@ from sprints.sugerencias import COLORES
 ESTADOS_ESTUDIO = ("armando", "generando", "revisando")
 FUENTES_PLATAFORMA = ("amazon", "meli", "tiktok_shop", "walmart", "aliexpress")   # claves de nicho.fuentes.plataformas (Partes 3 y 4)
 FUENTES = ("texto", "csv", "reddit", "youtube", "apify") + FUENTES_PLATAFORMA
-PAISES_ESTUDIO = ("CO", "MX", "US", "ES", "BR", "AR", "CL", "PE", "UY", "EC", "SE", "GB", "DE", "FR", "IT", "NL", "CA", "AU", "IN", "JP", "AE")
+PAISES_ESTUDIO = ("CO", "MX", "US", "ES", "BR", "AR", "CL", "PE", "UY", "EC", "SE", "NO", "GB", "DE", "FR", "IT", "NL", "CA", "AU", "IN", "JP", "AE")
 NOMBRES_PAIS = {"CO": N_("Colombia"), "MX": N_("México"), "US": N_("Estados Unidos"), "ES": N_("España"), "BR": N_("Brasil"),
                 "AR": N_("Argentina"), "CL": N_("Chile"), "PE": N_("Perú"), "UY": N_("Uruguay"), "EC": N_("Ecuador"),
-                "SE": N_("Suecia"), "GB": N_("Reino Unido"), "DE": N_("Alemania"), "FR": N_("Francia"), "IT": N_("Italia"),
+                "SE": N_("Suecia"), "NO": N_("Noruega"), "GB": N_("Reino Unido"), "DE": N_("Alemania"), "FR": N_("Francia"), "IT": N_("Italia"),
                 "NL": N_("Países Bajos"), "CA": N_("Canadá"), "AU": N_("Australia"), "IN": N_("India"), "JP": N_("Japón"),
                 "AE": N_("Emiratos Árabes Unidos")}
 MAX_INVESTIGACIONES_PREVIAS = 3

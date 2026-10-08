@@ -16,7 +16,8 @@ from decimal import Decimal, InvalidOperation, ROUND_DOWN, ROUND_UP
 
 # Mínimo diario que Meta acepta por divisa (aprox., para avisar antes de fallar). Se compara contra la moneda de
 # FACTURACIÓN de la cuenta, no la del país del conjunto.
-PRESUPUESTO_MINIMO_DIARIO = {"USD": 1, "COP": 4000, "MXN": 20, "EUR": 1, "BRL": 5, "PEN": 4, "CLP": 1000, "ARS": 1000}
+PRESUPUESTO_MINIMO_DIARIO = {"USD": 1, "COP": 4000, "MXN": 20, "EUR": 1, "BRL": 5, "PEN": 4, "CLP": 1000, "ARS": 1000,
+                              "NOK": 10, "SEK": 10}
 # Monedas sin decimales para Meta: la misma lista que `tareas.meta.MONEDAS_SIN_DECIMALES` (lo que `lanzador.centavos` manda
 # sin multiplicar por 100); una prueba compara las dos.
 SIN_DECIMALES = {"JPY", "CLP", "HUF", "ISK", "KRW", "TWD", "VND", "PYG", "UGX", "XAF", "XOF"}

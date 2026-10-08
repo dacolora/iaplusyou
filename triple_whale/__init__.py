@@ -55,7 +55,7 @@ CANAL_META = "facebook-ads"
 # {{site_source_name}} y {{ad.id}}. Sin ellos Triple Whale igual ve el gasto,
 # pero "attribution accuracy may suffer significantly".
 URL_TAGS = "tw_source={{site_source_name}}&tw_adid={{ad.id}}"
-MONEDAS = ("USD", "EUR", "GBP", "AUD", "CAD", "MXN", "COP", "BRL", "CLP", "PEN", "ARS")
+MONEDAS = ("USD", "EUR", "GBP", "AUD", "CAD", "MXN", "COP", "BRL", "CLP", "PEN", "ARS", "NOK", "SEK")
 
 _RE_DOMINIO = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$")
 

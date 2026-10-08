@@ -11450,6 +11450,9 @@ msgstr "Project's visible name"
 msgid "Normal"
 msgstr "Normal"
 
+msgid "Noruega"
+msgstr "Norway"
+
 msgid "Nota"
 msgstr "Note"
 
