@@ -467,6 +467,10 @@ msgid "%(n)s consultas"
 msgstr "%(n)s queries"
 
 #, python-format
+msgid "%(n)s copia(s) de Meta en cola"
+msgstr "%(n)s Meta copy job(s) queued"
+
+#, python-format
 msgid "%(n)s de %(t)s avatar(es) completados."
 msgstr "%(n)s of %(t)s avatar(s) completed."
 
@@ -517,6 +521,10 @@ msgstr "%(n)s experiments queued to decide."
 #, python-format
 msgid "%(n)s experimentos en cola."
 msgstr "%(n)s experiments queued."
+
+#, python-format
+msgid "%(n)s fila(s) viejas de anuncios de Meta borradas"
+msgstr "%(n)s old Meta ad row(s) deleted"
 
 #, python-format
 msgid "%(n)s firmas no se pudieron traducir; reintenta la importación más tarde."
@@ -6180,6 +6188,9 @@ msgstr "That song belongs to My music: delete it in Create › My music."
 msgid "Esa canción ya no está en Mi música."
 msgstr "That song is no longer in My music."
 
+msgid "Esa cuenta de Meta ya no está en el proyecto."
+msgstr "That Meta account is no longer in the project."
+
 msgid "Esa cuenta publicitaria no aparece entre las de tu portafolio; vuelve a buscar."
 msgstr "That ad account doesn't show up among your portfolio's; search again."
 
@@ -9518,6 +9529,10 @@ msgid "Listo"
 msgstr "Done"
 
 #, python-format
+msgid "Listo (%(cuenta)s): %(dias)s día(s) de la cuenta y %(filas)s fila(s) de anuncios, del %(desde)s al %(hasta)s."
+msgstr "Done (%(cuenta)s): %(dias)s day(s) of account data and %(filas)s ad row(s), from %(desde)s to %(hasta)s."
+
+#, python-format
 msgid "Listo (%(tienda)s): %(n)s anuncio(s) y %(dias)s día(s) de la tienda, del %(desde)s al %(hasta)s."
 msgstr "Done (%(tienda)s): %(n)s ad(s) and %(dias)s day(s) of store data, from %(desde)s to %(hasta)s."
 
@@ -10012,6 +10027,9 @@ msgstr "Meta gave no reason"
 #, python-format
 msgid "Meta no entregó token para la Página %(pagina)s: el usuario del sistema necesita la Página asignada con permisos de contenido (pages_manage_posts)."
 msgstr "Meta didn't return a token for the Page %(pagina)s: the system user needs the Page assigned with content permissions (pages_manage_posts)."
+
+msgid "Meta no está conectado en este proyecto: conéctalo en Configuración › Conexiones."
+msgstr "Meta isn't connected in this project: connect it in Settings › Connections."
 
 msgid "Meta no está conectado."
 msgstr "Meta isn't connected."
@@ -11166,6 +11184,10 @@ msgstr "Couldn't reach Claude (%(tipo)s). Try again."
 
 msgid "No se pudo copiar"
 msgstr "Couldn't copy"
+
+#, python-format
+msgid "No se pudo copiar la cuenta de Meta (%(tipo)s)."
+msgstr "The Meta account couldn't be copied (%(tipo)s)."
 
 #, python-format
 msgid "No se pudo copiar la miniatura: %(error)s"

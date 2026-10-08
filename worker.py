@@ -53,7 +53,9 @@ log = logging.getLogger("creatv.worker")
 # dentro de un mismo tick: los pedidos de las tiendas se sincronizan (y se
 # atribuyen) ANTES de refrescar experimentos, así el snapshot por tienda ve
 # las ventas de este ciclo y no las de hace 2 h; lo mismo Triple Whale.
-PERIODICAS = [("tienda_sync_pedidos_todas", 7200), ("tw_sincronizar_todas", 7200), ("exp_refrescar_todos", 7200),
+PERIODICAS = [("tienda_sync_pedidos_todas", 7200), ("tw_sincronizar_todas", 7200),
+              # Meta rendimiento (spec 2026-10-08 §6): la copia de cada cuenta publicitaria, cada 3 h.
+              ("meta_rend_sincronizar_todas", 10800), ("exp_refrescar_todos", 7200),
               ("exp_decidir_todos", 3600),
               ("exp_avanzar_todos", 600), ("tienda_sync_productos_todas", 21600), ("sprint_qa_pendientes", 300),
               ("materiales_limpiar", 86400),
@@ -62,6 +64,8 @@ PERIODICAS = [("tienda_sync_pedidos_todas", 7200), ("tw_sincronizar_todas", 7200
               ("salidas_limpiar", 86400), ("cola_limpiar", 86400), ("db_respaldar", 86400),
               # Salud (spec 2026-10-01): los errores resueltos viejos no se acumulan.
               ("errores_limpiar", 86400),
+              # Los días de anuncio de Meta se guardan 95 días (spec 2026-10-08 §6).
+              ("meta_rend_limpiar", 86400),
               # Cadena de escenas de Flow Plus (spec 2026-09-30): avanza cada cadena viva
               # cuando su escena en curso termina (gratis; las escenas las cobra Crear).
               ("cadena_vigilar", 60)]
