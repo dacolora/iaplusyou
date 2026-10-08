@@ -5471,9 +5471,10 @@ def _error_de_presupuesto(moneda, codigos, paises, dias):
 @app.route("/cliente/<cliente>/experimentos/probar", methods=["POST"])
 def exp_probar(cliente):
     """La galería primero: un solo POST crea el experimento, reparte las
-    piezas por país y encola el lanzamiento (todo PAUSED en Meta). Valida lo
-    mismo que exp_crear; si algo falla no queda nada creado. Activar sigue
-    siendo un clic aparte. Un error de validación (no queda nada creado) vuelve a «Nuevo experimento», donde está
+    piezas por país y encola el lanzamiento, que crea todo PAUSED en Meta y lo
+    activa si terminó sin error (Daniel 2026-10-08: este clic, con el gasto
+    diario a la vista en Revisar, es la aprobación). Valida lo mismo que
+    exp_crear; si algo falla no queda nada creado. Un error de validación (no queda nada creado) vuelve a «Nuevo experimento», donde está
     el formulario, con las piezas ya marcadas; lo creado lleva al centro de resultados, a ese experimento."""
     marcadas = ",".join(x for x in request.form.getlist("piezas") if x.isascii() and x.isdigit())
     volver = redirect(url_for("exp_nuevo", cliente=cliente, **({"piezas": marcadas} if marcadas else {})))
@@ -5592,11 +5593,12 @@ def exp_probar(cliente):
     if es_app:
         meta_conexion.guardar_app_anunciada(cliente, datos_app["app_id"])
     job_id = tareas_exp.job_id_lanzar(cliente, eid)
-    arranco = trabajos.encolar(job_id, "exp_lanzar", {"cliente": cliente, "experimento_id": eid},
+    # activar=True: el clic de «Lanzar a Meta», con el gasto diario a la vista, es la aprobación (Daniel, 2026-10-08).
+    arranco = trabajos.encolar(job_id, "exp_lanzar", {"cliente": cliente, "experimento_id": eid, "activar": True},
                                cliente=cliente, duracion_estimada=120, etapas=lanzador.ETAPAS_LANZAR, max_intentos=1)
     if arranco:
         experimentos.actualizar(cliente, eid, estado="lanzando", error=None)
-        flash(gettext("«%(nombre)s»: lanzando a Meta en pausa. Cuando termine, actívalo desde su tarjeta.", nombre=nombre), "ok")
+        flash(gettext("«%(nombre)s»: lanzando a Meta. Si todo sale bien, queda activo y empieza a gastar.", nombre=nombre), "ok")
     else:
         flash(gettext("«%(nombre)s» quedó creado; ya se estaba lanzando.", nombre=nombre), "warn")
     return _volver_exp(cliente, eid)
@@ -5685,7 +5687,9 @@ def exp_meter_pieza(cliente):
 @app.route("/cliente/<cliente>/experimentos/<int:eid>/lanzar", methods=["POST"])
 def exp_lanzar(cliente, eid):
     """Encola el lanzamiento a Meta (campaña + conjuntos por país + anuncios,
-    todo PAUSED). Valida acá lo mismo que lanzador.lanzar para poder avisar
+    creados PAUSED) y, si termina sin error, la activación de todo (`activar`:
+    Daniel 2026-10-08, este clic con el gasto diario a la vista es la
+    aprobación). Valida acá lo mismo que lanzador.lanzar para poder avisar
     por flash sin gastar un intento de la cola (max_intentos=1: un reintento
     automático a mitad de la cadena crearía objetos huérfanos en Meta)."""
     volver = _volver_exp(cliente, eid)
@@ -5710,11 +5714,11 @@ def exp_lanzar(cliente, eid):
     # se pusiera "lanzando" antes y trabajos.encolar fallara (ej. "database is
     # locked"), el experimento quedaría colgado ahí sin tarea que lo saque
     # (_reconciliar_huerfanos no corre bajo gunicorn).
-    arranco = trabajos.encolar(job_id, "exp_lanzar", {"cliente": cliente, "experimento_id": eid},
+    arranco = trabajos.encolar(job_id, "exp_lanzar", {"cliente": cliente, "experimento_id": eid, "activar": True},
                                cliente=cliente, duracion_estimada=120, etapas=lanzador.ETAPAS_LANZAR, max_intentos=1)
     if arranco:
         experimentos.actualizar(cliente, eid, estado="lanzando", error=None)
-        flash(gettext("Lanzando el experimento a Meta (queda en pausa)…"), "ok")
+        flash(gettext("Lanzando el experimento a Meta: si todo sale bien, queda activo y empieza a gastar…"), "ok")
     else:
         flash(gettext("Ya se está lanzando ese experimento."), "warn")
     return volver

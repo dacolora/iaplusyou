@@ -128,6 +128,7 @@ def test_lanzar_encola_una_sola_vez_y_valida(app, base_temporal):
     assert len(app["encolados"]) == 1
     t = app["encolados"][0]
     assert t["tipo"] == "exp_lanzar" and t["max_intentos"] == 1 and t["job_id"] == f"acme__exp{eid}__lanzar"
+    assert t["payload"]["activar"] is True   # lanzar crea y activa (Daniel, 2026-10-08)
     assert ex.obtener("acme", eid)["estado"] == "lanzando"
     c.post(f"/cliente/acme/experimentos/{eid}/piezas", data={"pieza_id": clon, "pais": "CO"})   # ya no acepta piezas
     assert len(ex.piezas("acme", eid)) == 2
@@ -483,7 +484,7 @@ def test_probar_crea_reparte_y_encola_en_un_post(app, base_temporal):
     assert e["estado"] == "lanzando" and e["nombre"].startswith("Prueba ") and "3 piezas" in e["nombre"] and "CO, MX" in e["nombre"]
     assert sorted((p["pieza_id"], p["pais"]) for p in e["piezas"]) == sorted([(f_co, "CO"), (clon, "CO"), (clon, "MX"), (img, "MX")])
     assert [t["tipo"] for t in app["encolados"]] == ["exp_lanzar"] and app["encolados"][0]["max_intentos"] == 1
-    assert app["encolados"][0]["payload"] == {"cliente": "acme", "experimento_id": e["id"]}
+    assert app["encolados"][0]["payload"] == {"cliente": "acme", "experimento_id": e["id"], "activar": True}
 
 
 def test_probar_no_deja_nada_si_algo_falla(app, base_temporal):

@@ -398,7 +398,7 @@ def test_centro_de_resultados_dice_lo_suyo_en_ingles(admin_en, app_i18n, base_te
         assert texto in panel, texto
     nuevo = html_de(admin_en, "/cliente/acme/experimentos/nuevo")
     for texto in ("01 · Pieces", "02 · Where", "03 · Total and days", "04 · Review", "Back to results",
-                  "Quick test", "Standard", "Strong", "Adjust the split", "Nothing is spent until you press Activate"):
+                  "Quick test", "Standard", "Strong", "Adjust the split", "Launching starts spending."):
         assert texto in nuevo, texto
 
 

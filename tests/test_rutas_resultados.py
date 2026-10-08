@@ -64,7 +64,7 @@ def test_resultados_con_experimento_trae_su_gestion(app, base_temporal):
     assert f'id="exp-{eid}"' not in sin_exp
     html = app["c"].get(f"/cliente/acme/experimentos/resultados?exp={eid}", headers=AJAX).get_data(as_text=True)
     assert f'id="exp-{eid}"' in html and "Cojín armando" in html
-    assert f"/cliente/acme/experimentos/{eid}/lanzar" in html and "Lanzar a Meta (en pausa)" in html
+    assert f"/cliente/acme/experimentos/{eid}/lanzar" in html and "Lanzar a Meta</button>" in html and "se activan: empieza a gastar" in html
     assert f"/cliente/acme/experimentos/{eid}/modo" in html and f"/cliente/acme/experimentos/{eid}/reglas" in html
     # En armado se pueden agregar piezas: el formulario trae las elegibles (que salen de ex.elegibles, no de la página).
     assert f"/cliente/acme/experimentos/{eid}/piezas" in html and "Agregar pieza" in html

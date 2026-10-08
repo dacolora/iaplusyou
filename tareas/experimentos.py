@@ -1,6 +1,7 @@
 """
-Tareas del worker para Experimentos: lanzar (crea objetos en Meta, en pausa;
-max_intentos=1 y hook de interrupción como meta_publicar), refrescar métricas
+Tareas del worker para Experimentos: lanzar (crea objetos en Meta en pausa y,
+con `activar` en el payload, los activa si todo salió bien — pedido de Daniel
+2026-10-08; max_intentos=1 y hook de interrupción como meta_publicar), refrescar métricas
 de un experimento, decidir (Bloque 4: el decisor dicta un veredicto por pieza
 y pide la acción a acciones.pedir, que respeta el modo y el tope), y las
 periódicas: refrescar todos los que corren, decidir todos los que corren y
@@ -68,10 +69,17 @@ def interrumpida(tarea, mensaje):
 
 @registrar("exp_lanzar")
 def exp_lanzar(tarea):
+    """Lanza a Meta (todo nace PAUSED). Con `payload["activar"]` (las dos rutas de la persona: «Nuevo experimento» y
+    «Lanzar a Meta»; Daniel 2026-10-08: ese clic, con el gasto diario a la vista, ya es la aprobación) activa el
+    experimento completo SOLO si el lanzamiento terminó sin error: un `lanzar` que falla sale por excepción antes de
+    llegar aquí. Un fallo al activar no relanza nada (max_intentos=1): queda en pausa con su motivo."""
     p = tarea["payload"]
     job_id = tarea.get("job_id")
-    return lanzador.lanzar(p["cliente"], p["experimento_id"],
-                           on_etapa=lambda nombre: trabajos.reportar(job_id, etapa=nombre))
+    mensaje = lanzador.lanzar(p["cliente"], p["experimento_id"],
+                              on_etapa=lambda nombre: trabajos.reportar(job_id, etapa=nombre))
+    if not p.get("activar"):
+        return mensaje
+    return lanzador.activar_tras_lanzar(p["cliente"], p["experimento_id"])
 
 
 @registrar("exp_refrescar")

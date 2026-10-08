@@ -69,6 +69,10 @@ msgstr " · show"
 msgid " · prompt mejorado"
 msgstr " · enhanced prompt"
 
+#, python-format
+msgid " · ≈ %(dia)s al día"
+msgstr " · ≈ %(dia)s a day"
+
 msgid " — apunta a algo que no es el creativo: decide tú si rescatar"
 msgstr " — it points to something other than the creative: you decide whether to rescue"
 
@@ -1832,6 +1836,10 @@ msgid "Activado %(objetivo)s"
 msgstr "Activated %(objetivo)s"
 
 #, python-format
+msgid "Activado al lanzar: ≈ %(diario)s al día"
+msgstr "Activated on launch: ≈ %(diario)s a day"
+
+#, python-format
 msgid "Activado: %(nombre)s (%(pais)s)"
 msgstr "Activated: %(nombre)s (%(pais)s)"
 
@@ -2044,6 +2052,13 @@ msgstr "When connecting, choose that Page: its page token (<code>page_id</code>)
 #, python-format
 msgid "Al dataset le faltan claves: %(claves)s"
 msgstr "The dataset is missing keys: %(claves)s"
+
+msgid "Al lanzar empieza a gastar."
+msgstr "Launching starts spending."
+
+#, python-format
+msgid "Al lanzar empieza a gastar: ≈ %(dia)s al día"
+msgstr "Launching starts spending: ≈ %(dia)s a day"
 
 msgid "Al menos un destino marcado ya tiene una final producida: se reemplaza por la nueva (la anterior se ve hasta que termine)."
 msgstr "At least one checked market already has a produced final cut: it gets replaced by the new one (the previous one stays visible until it's done)."
@@ -2896,8 +2911,8 @@ msgstr "Each campaign is a persona with a product and the ads it will follow. St
 msgid "Cada casilla es un anuncio (pieza × país). Las finales solo van a su país."
 msgstr "Each checkbox is an ad (piece × country). Final cuts only go to their own country."
 
-msgid "Cada experimento es 1 campaña en Meta → 1 conjunto por país → 1 anuncio por pieza. Todo nace en pausa: lanzar crea los anuncios, activar empieza a gastar."
-msgstr "Each experiment is 1 campaign on Meta → 1 ad set per country → 1 ad per piece. Everything starts paused: launching creates the ads, activating starts spending."
+msgid "Cada experimento es 1 campaña en Meta → 1 conjunto por país → 1 anuncio por pieza. Lanzar crea los anuncios y los activa: desde ahí gasta lo que ves en Revisar."
+msgstr "Each experiment is 1 campaign on Meta → 1 ad set per country → 1 ad per piece. Launching creates the ads and activates them: from then on it spends what you see in Review."
 
 #, python-format
 msgid ""
@@ -3725,8 +3740,8 @@ msgstr "Connect the agency above to be able to assign accounts and Pages; meanwh
 msgid "Conecta tu cuenta de Meta"
 msgstr "Connect your Meta account"
 
-msgid "Conecta tu cuenta de Meta, arma la campaña con lo que generaste y publica. Siempre en pausa al crearse; tú decides cuándo gasta y ves los resultados aquí."
-msgstr "Connect your Meta account, build the campaign with what you generated and publish it. It's always paused when created; you decide when it spends and you see the results here."
+msgid "Conecta tu cuenta de Meta, arma la campaña con lo que generaste y publica. Antes de lanzar ves cuánto gasta al día; lanzar lo activa y ves los resultados aquí."
+msgstr "Connect your Meta account, build the campaign with what you generated and publish it. Before launching you see how much it spends a day; launching activates it and you see the results here."
 
 msgid ""
 "Conecta tu tienda para traer el catálogo solo (cada 6 h) y, en Shopify y\n"
@@ -5716,8 +5731,8 @@ msgstr "Choose the photos from your computer: the product gets created in the ca
 msgid "Elige los destinos. Es gratis: se produce con lo que hay en esta edición, sin pagar nada nuevo. Tarda <span id=\"producir-tiempo\"></span>."
 msgstr "Choose the markets. It's free: it's produced with what's in this edit, without paying for anything new. It takes <span id=\"producir-tiempo\"></span>."
 
-msgid "Elige piezas, países y un total: el experimento se lanza en pausa y nada gasta hasta que lo actives."
-msgstr "Pick pieces, countries and a total: the experiment launches paused and nothing is spent until you activate it."
+msgid "Elige piezas, países y un total: en Revisar ves cuánto gasta al día antes de lanzarlo; al lanzar se activa."
+msgstr "Pick pieces, countries and a total: in Review you see how much it spends a day before launching it; launching activates it."
 
 msgid "Elige qué transcribir."
 msgstr "Choose what to transcribe."
@@ -7210,6 +7225,10 @@ msgstr "Experiment decided: all active pieces have a verdict."
 
 msgid "Experimento elegido"
 msgstr "Selected experiment"
+
+#, python-format
+msgid "Experimento en Meta y activo: empieza a gastar ≈ %(diario)s al día."
+msgstr "Experiment on Meta and active: it starts spending ≈ %(diario)s a day."
 
 msgid "Experimento en Meta, en pausa. Actívalo cuando quieras empezar a gastar."
 msgstr "Experiment on Meta, paused. Activate it whenever you want to start spending."
@@ -9361,8 +9380,8 @@ msgstr "Bright side"
 msgid "Lanzamiento de la colección"
 msgstr "Collection launch"
 
-msgid "Lanzando el experimento a Meta (queda en pausa)…"
-msgstr "Launching the experiment to Meta (it stays paused)…"
+msgid "Lanzando el experimento a Meta: si todo sale bien, queda activo y empieza a gastar…"
+msgstr "Launching the experiment to Meta: if all goes well, it goes active and starts spending…"
 
 msgid "Lanzando el video…"
 msgstr "Launching the video…"
@@ -9370,8 +9389,8 @@ msgstr "Launching the video…"
 msgid "Lanzando…"
 msgstr "Launching…"
 
-msgid "Lanzar a Meta (en pausa)"
-msgstr "Launch to Meta (paused)"
+msgid "Lanzar a Meta"
+msgstr "Launch to Meta"
 
 msgid "Las banderas, los tonos de piel y los emojis compuestos salen simplificados."
 msgstr "Flags, skin tones and combined emojis come out simplified."
@@ -9743,8 +9762,8 @@ msgstr "The clips were assembled but couldn't be sent to chat. Create a new vers
 msgid "Los de mayor prioridad van primero al loop de prueba"
 msgstr "The ones with higher priority go first in the test loop"
 
-msgid "Los días empiezan a contar cuando actives el experimento por primera vez, no cuando lo lances; si lo pausas y lo reanudas, la fecha de cierre no se mueve."
-msgstr "The days start counting when you activate the experiment for the first time, not when you launch it; if you pause and resume it, the end date doesn't move."
+msgid "Los días empiezan a contar cuando el experimento empieza a gastar por primera vez (al lanzarlo, si todo sale bien); si lo pausas y lo reanudas, la fecha de cierre no se mueve."
+msgstr "The days start counting when the experiment starts spending for the first time (when you launch it, if all goes well); if you pause and resume it, the end date doesn't move."
 
 msgid "Los días van de 1 a 90."
 msgstr "Days range from 1 to 90."
@@ -10419,9 +10438,6 @@ msgstr "Nothing matches that filter in the most recent part of the file."
 msgid "Nada elegido todavía."
 msgstr "Nothing chosen yet."
 
-msgid "Nada gasta hasta que pulses Activar"
-msgstr "Nothing is spent until you press Activate"
-
 msgid "Nada necesita tu atención ahora mismo."
 msgstr "Nothing needs your attention right now."
 
@@ -10983,6 +10999,12 @@ msgstr "We don't know how it ended: reload the page to see the subtitles."
 #, python-brace-format
 msgid "No sale en el video: «{caracteres}» (esta fuente no los tiene)."
 msgstr "Won't show in the video: “{caracteres}” (this font doesn't have them)."
+
+#, python-format
+msgid "No se activó: %(num)s pieza quedó sin anuncio en Meta. El experimento sigue en pausa; revísalo y actívalo desde su tarjeta."
+msgid_plural "No se activó: %(num)s piezas quedaron sin anuncio en Meta. El experimento sigue en pausa; revísalo y actívalo desde su tarjeta."
+msgstr[0] "Not activated: %(num)s piece was left without an ad on Meta. The experiment stays paused; check it and activate it from its card."
+msgstr[1] "Not activated: %(num)s pieces were left without an ad on Meta. The experiment stays paused; check it and activate it from its card."
 
 msgid "No se agregó ningún referente."
 msgstr "No reference was added."
@@ -13650,11 +13672,20 @@ msgid "Se crea una sola vez en <a href=\"https://developers.facebook.com/apps/cr
 msgstr "It's created once, at <a href=\"https://developers.facebook.com/apps/creation/\" target=\"_blank\" rel=\"noopener\">developers.facebook.com</a>."
 
 #, python-format
-msgid "Se crean la campaña, los conjuntos y los anuncios en Meta, EN PAUSA (no gasta hasta que actives). %(resumen)s ¿Seguimos?"
-msgstr "The campaign, ad sets and ads will be created on Meta, PAUSED (it doesn't spend until you activate it). %(resumen)s Continue?"
+msgid "Se crean la campaña, los conjuntos y los anuncios en Meta y se activan: empieza a gastar ≈ %(dia)s al día. %(resumen)s ¿Seguimos?"
+msgstr "The campaign, ad sets and ads will be created on Meta and activated: it starts spending ≈ %(dia)s a day. %(resumen)s Continue?"
 
-msgid "Se crean la campaña, los conjuntos y los anuncios en Meta, en pausa. ¿Seguimos?"
-msgstr "The campaign, ad sets and ads will be created on Meta, paused. Continue?"
+#, python-format
+msgid "Se crean la campaña, los conjuntos y los anuncios en Meta y se activan: empieza a gastar ≈ %(diario)s al día entre todos los países. ¿Seguimos?"
+msgstr "The campaign, ad sets and ads will be created on Meta and activated: it starts spending ≈ %(diario)s a day across all countries. Continue?"
+
+#, python-format
+msgid "Se creó en Meta, pero no se pudo activar: %(motivo)s. Quedó en pausa y no gasta; actívalo desde su tarjeta cuando lo revises."
+msgstr "It was created on Meta, but it couldn't be activated: %(motivo)s. It stayed paused and isn't spending; activate it from its card once you've checked it."
+
+#, python-format
+msgid "Se creó en Meta, pero no se pudo activar: %(motivo)s. Tampoco se pudo volver a pausar todo: revisa en el Administrador de anuncios de Meta que no quede nada activo."
+msgstr "It was created on Meta, but it couldn't be activated: %(motivo)s. Pausing everything again also failed: check in Meta Ads Manager that nothing is left active."
 
 msgid "Se detiene al terminar la escena en curso."
 msgstr "It will stop when the current scene finishes."
@@ -13773,8 +13804,9 @@ msgstr "Removed: "
 msgid "Se quitaron %(n)s comentario(s) de %(fuente)s."
 msgstr "Removed %(n)s comment(s) from %(fuente)s."
 
-msgid "Se retoma el lanzamiento donde quedó (no se duplican objetos en Meta). ¿Seguimos?"
-msgstr "The launch will resume where it left off (no objects get duplicated on Meta). Continue?"
+#, python-format
+msgid "Se retoma el lanzamiento donde quedó (no se duplican objetos en Meta) y, si termina bien, se activa: empieza a gastar ≈ %(diario)s al día entre todos los países. ¿Seguimos?"
+msgstr "The launch resumes where it left off (no objects get duplicated on Meta) and, if it finishes well, it's activated: it starts spending ≈ %(diario)s a day across all countries. Continue?"
 
 msgid "Se revisa desde la pieza en Crear"
 msgstr "Reviewed from the piece in Create"
@@ -19408,8 +19440,8 @@ msgid "«%(nombre)s» ya no está en el Catálogo."
 msgstr "“%(nombre)s” is no longer in the Catalog."
 
 #, python-format
-msgid "«%(nombre)s»: lanzando a Meta en pausa. Cuando termine, actívalo desde su tarjeta."
-msgstr "“%(nombre)s”: launching to Meta paused. When it's done, activate it from its card."
+msgid "«%(nombre)s»: lanzando a Meta. Si todo sale bien, queda activo y empieza a gastar."
+msgstr "“%(nombre)s”: launching to Meta. If all goes well, it goes active and starts spending."
 
 #, python-format
 msgid "«%(original)s» → «%(buscado)s»"

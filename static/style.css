@@ -3855,7 +3855,7 @@ body:has(#exp-nuevo) main { margin-left: 0; max-width: 1440px; width: 100%; }
 #exp-nuevo .exp-dia { color: var(--text); font-size: clamp(16px, 2vw, 22px); overflow-wrap: anywhere; }
 #exp-nuevo .exp-anuncios { color: var(--muted); font-size: clamp(15px, 1.8vw, 18px); }
 #exp-nuevo .exp-aviso-tope { color: var(--muted); font-size: var(--t-chico); line-height: 1.5; }
-#exp-nuevo .exp-nada { color: var(--ok); font-weight: 600; }
+#exp-nuevo .exp-al-lanzar { color: var(--warn); font-weight: 600; overflow-wrap: anywhere; }
 #exp-nuevo .exp-maximo:empty, #exp-nuevo .exp-dia:empty, #exp-nuevo .exp-anuncios:empty, #exp-nuevo .exp-aviso-tope:empty { display: none; }
 #exp-nuevo .exp-aviso { margin: 0 0 8px; padding: 14px 16px; border: 1px solid var(--warn); border-radius: var(--radius-sm); background: var(--warn-fondo); color: var(--text); line-height: 1.5; }
 #exp-nuevo .exp-ajuste { margin: 16px 0; }

@@ -15,10 +15,20 @@ for their own country, or text-free clones for any country) are attached as
 `experimento_pieza` rows. `lanzador.lanzar` maps it onto Meta as 1 campaign
 (`spend_cap` = tope total, only when it clears Meta's minimum) -> 1 adset per country
 (`Targeting().edad().paises([pais])`, budget in the ad ACCOUNT's currency, never the
-country's) -> 1 ad per piece, all `PAUSED`, saving every id as soon as Meta returns it so
-a retry resumes instead of duplicating. Launching and activating are two different
-clicks (`exp_lanzar` queues the `exp_lanzar` task with `max_intentos=1`; `exp_estado`
-activates/pauses the whole experiment or one country inline). Metrics: `lanzador.refrescar`
+country's) -> 1 ad per piece, all created `PAUSED`, saving every id as soon as Meta returns it so
+a retry resumes instead of duplicating. **Lanzar crea y activa** (pedido de Daniel 2026-10-08: «si la persona ya lo
+había configurado es porque ya le había dado aprobar»; es la excepción a la regla 1 de CLAUDE.md: el clic de «Lanzar a
+Meta», con el gasto diario a la vista en Revisar, en el botón y en el confirm, ES la aprobación). Las dos rutas de la
+persona (`exp_probar` y `exp_lanzar`, que también sirve para «Reintentar lanzamiento») encolan la tarea `exp_lanzar` con
+`{"activar": True}` y `max_intentos=1`; la tarea corre `lanzador.lanzar` y después `lanzador.activar_tras_lanzar`, que
+activa por el MISMO camino que «Activar todo» (`cambiar_estado(..., "ACTIVE")`: campaña, conjuntos —también
+`meta_adsets` de apps—, anuncios y el plazo de PND-113) solo si el experimento quedó `pausado` y ninguna pieza quedó sin
+anuncio o en error; registra «Activado al lanzar: ≈ X al día» (`datos`: diario y moneda). Un `lanzar` que falla sale
+por excepción y nada se activa. Si la activación falla, vuelve a pausar todo (lo que alcanzó a activarse gastaría con el
+experimento «en pausa» aquí), guarda el motivo en `experimento.error` (lo borra `_a_corriendo` al activar después) y un
+evento, y no se reintenta. Sin `activar` (cualquier otro llamador) todo queda en pausa como antes;
+`derivaciones`/`lanzar_piezas_nuevas` no pasan por aquí. Pruebas: `tests/test_lanzar_activa.py`. `exp_estado`
+activates/pauses the whole experiment or one country inline. Metrics: `lanzador.refrescar`
 appends a `metrica_snapshot` per ad (thruplay, purchases, ROAS when Meta reports them) —
 the worker periodic `exp_refrescar_todos` (every 2 h, `worker.PERIODICAS`) does it for
 every `corriendo` experiment. Every verdict/action writes an `evento`. Experiment
@@ -32,8 +42,9 @@ piezas de sprints, finales; `origen`, `formato`, `en_experimentos`), con filtros
 son países con bandera y edad. El paso 4 es la cuadrícula pieza × país, el nombre automático editable («Prueba 20 sep ·
 3 piezas · CO, MX»), «Avanzado» (objetivo, atribución, modo, URL) y el aviso de doctrina. Un solo `POST exp_probar` corre
 `experimentos.crear_con_piezas` (experimento + filas `experimento_pieza` en UNA transacción, `validar_combinacion`: una
-final solo en su país, clones e imágenes solo en los países del experimento) y encola `exp_lanzar`: activar sigue
-siendo otro clic. **El presupuesto se pide como UN total y los días** (Daniel, 2026-10-02: la pantalla vieja pedía
+final solo en su país, clones e imágenes solo en los países del experimento) y encola `exp_lanzar` con `activar`: el
+paso Revisar dice «Al lanzar empieza a gastar: ≈ X al día» (`.exp-al-lanzar`) y el botón «Lanzar a Meta · ≈ X al día»
+(`.exp-lanzar-dia`), los dos desde el `diario` que ya calcula `refrescarCuenta` (2026-10-08). **El presupuesto se pide como UN total y los días** (Daniel, 2026-10-02: la pantalla vieja pedía
 diario + tope + días, respondía con un multiplicador y nunca decía cuánto iba a gastar, que roza la regla 1 de la casa).
 `presupuesto_experimentos.py` es el único lugar de la cuenta: `repartir` (diario de cada país = total × su parte de
 anuncios ÷ días, redondeado HACIA ABAJO a la unidad de la moneda, de modo que la suma por los días nunca pasa del
@@ -47,7 +58,7 @@ supere el total × 1,01 (el 1 % es el margen por redondeo): así «Máximo que p
 POST a mano. El titular dice **«Máximo que puede gastar» solo cuando Meta recibe `spend_cap`** (total ≥
 `lanzador.minimo_tope_campana(moneda)`); con un total menor dice «Presupuesto planeado» y una línea de que Meta no pone un
 tope duro y que el límite lo dan los diarios por país y la fecha de cierre (ronda 1 de R4, 2026-10-03: decir «máximo»
-sin tope duro prometía de más). Los días cuentan desde la PRIMERA activación, no desde el lanzamiento (ver PND-039/044/113
+sin tope duro prometía de más). Los días cuentan desde la PRIMERA activación (desde 2026-10-08, la que hace el propio lanzamiento si sale bien; ver PND-039/044/113
 al final). Llegadas a la página: Crear, Final edition, los anuncios sueltos y «Probar en otro experimento» del panel de
 una pieza enlazan a `exp_nuevo?piezas=<pieza_id>` (la pieza llega marcada); un hash viejo `#experimentos?piezas=` salta ahí
 por JS; Catálogo › «Crear experimento» redirige a `exp_nuevo?exp_nombre=&exp_destino=`, que el paso 4 trae puestos. Images are real
