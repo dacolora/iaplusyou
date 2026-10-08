@@ -23,9 +23,11 @@ Ningún mensaje de error lleva la llave. Las consultas de este módulo son la
 mejor lectura del "Data Dictionary"; ninguna se probó todavía contra una
 tienda real (ver el spec 2026-09-28-triple-whale-rendimiento-design.md §9).
 """
+import os
 import re
 import time
 from datetime import date, timedelta
+from urllib.parse import urlsplit
 
 import requests
 from flask_babel import gettext
@@ -55,6 +57,50 @@ CANAL_META = "facebook-ads"
 # {{site_source_name}} y {{ad.id}}. Sin ellos Triple Whale igual ve el gasto,
 # pero "attribution accuracy may suffer significantly".
 URL_TAGS = "tw_source={{site_source_name}}&tw_adid={{ad.id}}"
+
+# Tarjetas de análisis (spec 2026-10-08 §8.1): solo se incrusta en la página o se baja un medio de estos hosts, por
+# https. files.triplewhale.com aloja la miniatura y el mp4 de cada anuncio de Meta; el host de R2 (R2_PUBLIC_BASE_URL),
+# los de Creatv. Un video de TikTok llega como página (www.tiktok.com/embed/…) y queda como enlace.
+HOSTS_MEDIOS = ("files.triplewhale.com",)
+
+
+def _host_r2():
+    try:
+        return (urlsplit(os.environ.get("R2_PUBLIC_BASE_URL") or "").hostname or "").lower() or None
+    except ValueError:
+        return None
+
+
+def medio_permitido(url):
+    """¿Se puede incrustar o bajar este medio? https, sin usuario ni puerto raro, y host exacto de HOSTS_MEDIOS o
+    el de R2."""
+    try:
+        p = urlsplit(str(url or "").strip())
+        puerto = p.port
+    except ValueError:
+        return False
+    if p.scheme != "https" or not p.hostname or p.username or p.password or puerto not in (None, 443):
+        return False
+    host = p.hostname.lower()
+    return host in HOSTS_MEDIOS or (host == _host_r2())
+
+
+# Un video que no se puede incrustar (TikTok llega como página) se ofrece como enlace «Ver en …», pero solo a la
+# plataforma del anuncio: una URL rara que venga en los datos no se pinta.
+ENLACES_PLATAFORMAS = ("tiktok.com", "facebook.com", "fb.watch", "instagram.com", "snapchat.com", "youtube.com",
+                       "pinterest.com")
+
+
+def enlace_permitido(url):
+    try:
+        p = urlsplit(str(url or "").strip())
+    except ValueError:
+        return False
+    host = (p.hostname or "").lower()
+    return (p.scheme == "https" and not p.username and not p.password
+            and any(host == d or host.endswith("." + d) for d in ENLACES_PLATAFORMAS))
+
+
 MONEDAS = ("USD", "EUR", "GBP", "AUD", "CAD", "MXN", "COP", "BRL", "CLP", "PEN", "ARS")
 
 _RE_DOMINIO = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$")

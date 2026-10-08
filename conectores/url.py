@@ -24,6 +24,7 @@ import hashlib
 import html
 import ipaddress
 import json
+import os
 import re
 import socket
 
@@ -124,6 +125,44 @@ def abrir(url, cabeceras=None, timeout=TIMEOUT, max_redirecciones=MAX_REDIRECCIO
         url = urljoin(url, ubicacion)
         if not host_permitido(url):
             raise ErrorConector("Esa URL no está permitida (apunta a una red interna o local).")
+
+
+MAX_BYTES_VIDEO = 60 * 1024 * 1024   # el video de un anuncio (spec tarjetas §8.1); las páginas siguen con MAX_BYTES
+
+
+def descargar_archivo(url, ruta, max_bytes=MAX_BYTES_VIDEO, tipos=("video/",), timeout=TIMEOUT):
+    """Baja `url` a `ruta` en streaming, con la guarda de SSRF de `abrir` en cada redirección. Exige un
+    Content-Type que empiece por alguno de `tipos` y corta al pasar `max_bytes`. Devuelve los bytes escritos;
+    `ErrorConector` si algo falla, y entonces borra lo que alcanzó a escribir."""
+    respuesta = abrir(url, timeout=timeout)
+    try:
+        if respuesta.status_code >= 400:
+            raise ErrorConector(f"El archivo respondió con error HTTP {respuesta.status_code}.")
+        tipo = (respuesta.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+        if tipos and not any(tipo.startswith(t) for t in tipos):
+            raise ErrorConector("El archivo no es del tipo esperado.")
+        total = 0
+        with open(ruta, "wb") as f:
+            for trozo in respuesta.iter_content(chunk_size=65536):
+                if not trozo:
+                    continue
+                total += len(trozo)
+                if total > max_bytes:
+                    raise ErrorConector("El archivo pesa demasiado.")
+                f.write(trozo)
+        return total
+    except (ErrorConector, requests.RequestException, OSError) as e:
+        try:
+            os.remove(ruta)
+        except OSError:
+            pass
+        if isinstance(e, ErrorConector):
+            raise
+        raise ErrorConector(f"Se cortó la descarga del archivo ({type(e).__name__}).") from None
+    finally:
+        cerrar = getattr(respuesta, "close", None)
+        if cerrar:
+            cerrar()
 
 
 def _descargar(url):
