@@ -132,10 +132,15 @@ guessing. Reads: `resumen_mes` (the month), `resumen_total` (everything since th
 `por_mes`, `historial`, `csv_mes` and `csv_todo` — Configuración › Gasto shows the month AND the total since the start
 with a month-by-month table and «Descargar CSV de todo» (`gasto_csv_todo`), and the admin panel card shows both figures
 (`admin.generacion_total`): on 2026-10-07 the screens only said «este mes» (US$ 66) and the US$ 200 of earlier months
-looked lost. Meta spend is NOT in `gasto` — it comes from `metrica_snapshot` via `tablero` and is
-shown next to generation spend in its own currency. UI: sidebar chip "Este mes: US$ X
-generación · Y pauta" (context processor, template renders only, cached), Configuración ›
-Gasto (by type, history, CSV), Tablero tile, admin panel column.
+looked lost. **Since 2026-10-08 every spend figure is a total since the start, never the month** (Daniel: «quiero que
+todas las métricas aparezcan en la totalidad, no por mes, porque confunden a mis clientes»): the sidebar chip says
+«Gasto total: US$ X generación · Y pauta» (`_chip_gasto(gastos.resumen_total, _pauta_mes(ctx, "total"))`, context processor,
+cached), Configuración › Gasto shows «Generación total», «Pauta total», «Por tipo» since the start (`gastos.resumen_todo`),
+the history and ONE «Descargar CSV» (`gasto_csv_todo`; `/gasto/mes.csv` still answers but nothing links it), and the
+admin panel (`admin.resumen`, `desde=tablero.INICIO`) counts generation, ad spend and pieces since the start; only its
+«Historial» table and its CSV stay per month (bookkeeping for invoices). Meta spend is NOT in `gasto` — it comes from
+`metrica_snapshot` via `tablero` and is shown next to generation spend in its own currency. A new screen with money
+shows the total; do not bring back «este mes».
 
 **Cobros recuperados (2026-10-02, PND-109):** la identidad y la referencia del cobro original viajan en la predicción; una recuperación conserva ese id de tarea. Un gasto nuevo de música pertenece a la tarea que la obtuvo. Ver la regla de recuperación de `crear`.
 
@@ -150,3 +155,5 @@ PND-144/145 (Codex, 2026-10-07): la imagen registra antes de escribir bitácora/
 PND-072/088 (2026-10-07, lote 5 B): el encolado del director vive en tareas.director.encolar, conserva max_intentos=1 y prioridad del llamador. Una reserva perdida en sprints.produccion.crear_sesion archiva exclusivamente el concepto recién creado; no borra piezas ni la reserva de otro lote. La política de Repetir QA sigue pendiente (no se modifica cuándo cobra).
 
 PND-144 (correcciones de lote 5, 2026-10-08): la referencia :musica de recuperación lleva proveedor fal explícito. Las pruebas provocan PistaPagadaError y fallo de bitácora juntos: generación y recuperación conservan US$ 0,82 sin duplicar la fila de pista. No se amplía la lógica de cobro en esta corrección.
+
+**Lecturas de gasto real (2026-10-08, PND-111/143):** `gastos.total_tipo` suma también finales fallidas/reproducidas; `gastos.costos_sesiones` agrupa referencias de video/imagen por sesión y su `extra.usd_musica`. No se usa el costo del último intento para sustituir lo ya pagado. PND-012 reserva la ficha de voz en kv (gastos.reservar_ficha, no es gasto en cero) antes del proveedor, y con su respuesta la completa en gasto.extra junto al cobro real; la recuperación no llama a fal ni descarga otra vez y omite tareas en_curso (corrección lote 6A, 2026-10-08).

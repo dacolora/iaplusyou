@@ -49,6 +49,8 @@ def test_exp_probar_rechaza_pasarse_de_a_poco_y_acepta_el_margen_de_redondeo(app
     (e,) = ex.cargar("acme")
     assert e["tope_total"] == 277500.0 and [p["presupuesto_dia"] for p in e["paises"]] == [20000.0, 20000.0]
     assert [t["tipo"] for t in app["encolados"]] == ["exp_lanzar"] and app["encolados"][0]["max_intentos"] == 1
+    # Lanzar crea y activa (Daniel, 2026-10-08): el clic con el gasto diario a la vista es la aprobación.
+    assert app["encolados"][0]["payload"] == {"cliente": "acme", "experimento_id": e["id"], "activar": True}
 
 
 def test_exp_probar_acepta_exactamente_el_total_que_la_pantalla_propone(app, base_temporal):
@@ -150,13 +152,14 @@ def test_lo_grande_es_el_maximo_que_puede_gastar_y_el_reparto_sin_multiplicador(
     for paso in (2, 3):
         p = _paso(html, paso)
         assert 'class="exp-maximo"' in p and 'class="exp-dia"' in p and 'class="exp-anuncios"' in p
-        assert "Nada gasta hasta que pulses Activar" in p
+        # Lanzar activa (Daniel, 2026-10-08): el resumen dice que al lanzar empieza a gastar, nunca «Nada gasta…».
+        assert 'class="exp-al-lanzar"' in p and "Nada gasta" not in p
     # las frases que arma el JS: el máximo, el diario por país y «N anuncios (X piezas en Y países)»
     for frase in ("Máximo que puede gastar: {total} en {n} días", "Máximo que puede gastar: {total} en {n} día",
                   "≈ {dia} al día", "{anuncios} ({piezas} en {paises})"):
         assert json.dumps(frase) in html, frase           # el JS las recibe como cadenas JSON
     # la confirmación de «Lanzar» repite el máximo
-    assert "PLANTILLA_CONFIRMAR_LANZAR.replace('{resumen}', textoConfirmar" in html
+    assert "PLANTILLA_CONFIRMAR_LANZAR.replace('{dia}', textoDia).replace('{resumen}', textoConfirmar" in html
     # ninguna línea con multiplicador («3 piezas × 2 países = …») ni conectores sueltos para armarla
     assert "CONECTOR_X" not in html and "CONECTOR_IGUAL" not in html and "CONECTOR_HASTA" not in html and "CONECTOR_TOPE" not in html
     assert not re.search(r"\d+\s*(piezas?|anuncios?|países|país)\s*[×x]\s*\d+", html)
@@ -175,7 +178,7 @@ def test_la_pantalla_dice_que_los_dias_cuentan_desde_la_primera_activacion_y_has
     html = _pagina(app, base_temporal)
     for paso in (2, 3):
         p = _paso(html, paso)
-        assert "empiezan a contar cuando actives el experimento por primera vez" in p
+        assert "empiezan a contar cuando el experimento empieza a gastar por primera vez" in p
         assert "la fecha de cierre no se mueve" in p
         assert "tope de la campaña desde 400.000 COP" in p       # lanzador.minimo_tope_campana('COP')
     assert "no desde la activación" not in html and "desde el lanzamiento, no" not in html

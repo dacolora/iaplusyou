@@ -88,7 +88,7 @@ def test_pagina_desde_y_listas(app):
 
 def test_contexto_final_edition_tiene_lo_que_usan_los_detalles(app):
     ctx = app["dashboard"]._contexto_final_edition("acme")
-    for clave in ("paises_fe", "voces_fe", "estilos_fe", "presets_mezcla", "precios", "ediciones_por_cf", "mi_musica",
+    for clave in ("paises_fe", "idiomas_fe", "voces_fe", "estilos_fe", "presets_mezcla", "precios", "ediciones_por_cf", "mi_musica",
                   "mis_voces_fe"):
         assert clave in ctx
     assert "guion" in ctx["precios"] and "final_por_pais" in ctx["precios"]

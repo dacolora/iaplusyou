@@ -96,13 +96,14 @@ rejected because it would split catalog, pieces and sprints. Spec
 
 The **Triple Whale tab** (`_tab_triple_whale.html`, `data-tab="triplewhale"`, after Alertas; since E2, 2026-10-03, there is
 no Tablero tab) fetches its panel
-(`triple_whale.rutas.ver_panel` → `_tw_panel.html`) only when opened: store KPIs (MER, AOV, new customers,
-vs. previous period), ad KPIs, alerts, «Tus anuncios» (the account tiles + the card gallery, see «Tarjetas de
-análisis»), the account's AI evaluation, a day-by-day chart drawn by the old Tablero's `dashboard._grafico_tablero`
-(`app.extensions["grafico_tablero"]`; the Tablero itself no longer computes a chart), spend by
-verdict/channel and, inside «Ver como tabla», every ad with a verdict and a diagnosis from the pure
-`triple_whale/evaluacion.py` (compared with the medians of its own channel, or the account's when the channel has
-fewer than `BENCH_MIN_ANUNCIOS` comparable ads; `ganador`/`prometedor`/`en_prueba`/`perdedor`/`sin_datos`; weak
+(`triple_whale.rutas.ver_panel` → `_tw_panel.html`) only when opened, in this order: «Resultados de tu tienda» (cards +
+the interactive day-by-day chart + day detail + reading + «Tus creativos», see the paragraph below; it replaced the
+store KPI tiles «Tu tienda» and the old SVG «Día a día» on 2026-10-08), «Por tienda» (only «Todas» with 2+ stores),
+alerts, «Tus anuncios» (the account's ad KPI tiles + the card gallery, see «Tarjetas de análisis»), the account's AI
+evaluation, spend by verdict/channel, «Lo que más se vende» and, inside «Ver como tabla» (a closed `<details
+id="tw-cada-anuncio">`, opened by the day detail's «Ver todos los anuncios →»), every ad with a verdict and a diagnosis
+from the pure `triple_whale/evaluacion.py` (compared with the medians of its own channel, or the account's when the
+channel has fewer than `BENCH_MIN_ANUNCIOS` comparable ads; `ganador`/`prometedor`/`en_prueba`/`perdedor`/`sin_datos`; weak
 hook, low hold, few clicks, clicks without sales, expensive CPM, fatigue 7d vs 7d, no TW tracking).
 «Evaluar con IA» (now «Lo que hace ganar en tu cuenta»; `tw_evaluar`, `max_intentos=1`, price `gastos.estimar("evaluacion_tw", n=)`, real spend as
 tipo `evaluacion`) sends Claude up to 6 winners + 4 losers with their Meta thumbnail (`analisis.medios_meta`,
@@ -115,9 +116,9 @@ Meta (the old path skipped Meta, so rejections went unseen) and overrides purcha
 orders of THE STORE OF THE PIECE'S COUNTRY (`lanzador._tienda_tw_de`: the country's store, or the only one if the
 project has one WITHOUT a country; `datos.totales_anuncio` raises `ValueError` without a store) from `tw_anuncio_dia` since the piece was
 created (after `sync.sincronizar_si_hace_falta` once per store used, outside the Meta lock). A piece whose country
-has no store keeps Meta's sales and leaves ONE evento per experiment and country
-(`extra.aviso_sin_tienda_tw`); a piece WITHOUT a country does the same with the mark "" and its own text «Una pieza
-sin país no tiene tienda de Triple Whale…» (2026-10-08, spend guardian: before it fell to Meta silently). Every `datos.reemplazar_*` checks inside its transaction that the store still
+has no store marks sales unavailable (no Meta fallback) and leaves ONE new evento per experiment and country
+(`extra.aviso_ventas_no_comparables_tw`); a piece WITHOUT a country uses the mark "" and its own text.
+This notice is independent of the old fallback notice (PND-142 amended, 2026-10-08). Every `datos.reemplazar_*` checks inside its transaction that the store still
 exists for the cliente (a removed store's running sync writes nothing). Currency comes from the project's
 `ajustes`; another currency → ROAS 0 + one evento, like `tienda`. `"triple_whale"`
 stays in `tablero.FUENTES_VENTAS` and `decisor.py`'s `con_atribucion`. With Triple Whale connected, every
@@ -126,8 +127,11 @@ creative Creatv creates (`lanzador._crear_anuncios`, and the legacy `tareas/meta
 `meta_ads.creative` functions take an optional `url_tags` for the AdCreative's «URL parameters»), via
 `triple_whale_tiendas.url_tags(cliente)` — None without Triple Whale; ads created before connecting keep
 none (changing them sends the ad back to review). Second round (spec §11–§13): `tw_producto_dia` (migration
-0024) copies `orders_table` opened by `products_info` in the same sync (`consultas_productos`, full/minimal,
-never verified: §9.5) → «Lo que más se vende» in the tab (`panel.productos_periodo`, matched to the Catálogo
+0024) copies `orders_table` opened by `products_info` in the same sync (`consultas_productos`, full/minimal;
+checked against happyflops-norge on 2026-10-08, PND-150: `products_info` is an array of objects opened with
+`ARRAY JOIN products_info AS p`, fields `product_id`, `product_name`, `product_sku`, `product_name_price` (unit),
+`product_name_quantity_sold`, `net_discount_amount_for_product`; price × quantity matches the store's
+`gross_product_sales`; the full query subtracts the discount) → «Lo que más se vende» in the tab (`panel.productos_periodo`, matched to the Catálogo
 by `fuente_id`/name) and the top 5 in the AI prompt (each idea carries `producto`); a Creatv-made ad
 (`datos.piezas_creatv`, now with the pieza's video/thumbnail/state) sends Claude the real frames
 (`analisis.visuales` → `sprints.qa.archivo_local` + `doctrina.revisor.bloques_visuales`, temp file deleted
@@ -136,15 +140,50 @@ in a `finally`; `anuncio.visual`), every Meta thumbnail is copied to R2 first (`
 `tw_evaluacion`, over «Todas») new winners, fatiguing winners, new losers and «no attributed sales» once (state in
 `triple_whale.extra.avisados` / `aviso_sin_ventas`; first sync only seeds the baseline); «Pausar»/«Activar» on a
 Creatv piece in the tab (`triple_whale.pieza_estado` → `lanzador.pausar_pieza`/`activar_pieza`); and the
-Experimentos results center shows «Tu tienda según Triple Whale» (`panel.resumen_mes_tienda`, part `tienda_tw` of
-`dashboard._calcular_tablero`; the cache key includes `triple_whale_tiendas.firma(cliente)`) in two places: a line with the month's
-revenue and MER under «01 Resumen del periodo» (`_exp_resultados.html`) and its tiles at the end of the folded
-«Historial» (`_exp_historial.html`). Idea → pieza → anuncio (spec §14): the prefill of «Llevar a Crear»
+Experimentos results center shows «Tu tienda según Triple Whale» (`panel.resumen_total_tienda`, part `tienda_tw` of
+`dashboard._calcular_tablero`; the cache key includes `triple_whale_tiendas.firma(cliente)`) in two places: a line with
+revenue and MER since the first copied day under «01 Resumen del periodo» (`_exp_resultados.html`) and its tiles in the folded
+«Totales desde el inicio» (`_exp_historial.html`). Since 2026-10-08 the tab opens on «Desde el inicio»
+(`panel.PERIODOS = (0, 7, 14, 30, 90)`, `PERIODO_DEFECTO = 0`; `panel.periodo(0, hoy, primero)` starts at the first copied
+day, `_primer_dia` = min of `datos.rango` and `datos.primer_dia_tienda`, and its «previous» is the empty day before, so no
+comparison and the «vs. periodo anterior» columns are hidden); «Evaluar con IA» posts the same `dias`. Daniel asked for
+every metric as a total because short periods confused their clients. `panel.resumen_mes_tienda` stays for tests only. Idea → pieza → anuncio (spec §14): the prefill of «Llevar a Crear»
 carries `origen_tw` («<evaluación>:<índice>»), the Crear form returns it in a hidden field and `cf_crear_video`
 stores `concepto.extra.tw_idea` (`puente.origen_desde_formulario` validates it, a bad value is ignored); the
 idea card lists the pieces born from it with their Crear state and Meta verdict (`datos.piezas_de_evaluacion`,
-`panel.enlazar_ideas`) and a Creatv ad says which idea it came from (`piezas_creatv(...)["tw_idea"]`). None of
-the SQL has run against a real store yet (spec 2026-09-28 §9).
+`panel.enlazar_ideas`) and a Creatv ad says which idea it came from (`piezas_creatv(...)["tw_idea"]`). Since 2026-10-08 every query runs against the real store (happyflops-norge): ads, Pixel and products full; the store
+query dropped `net_profit` (not a `blended_stats_tvf()` column — it made every copy fall back to the minimal one and
+lose new customers); `utilidad_neta` stays 0 and is shown nowhere.
+
+Coronas (2026-10-08, spec de Noruega y Suecia §3; motivo: las tiendas de happyflops son de Noruega y Suecia): `triple_whale.MONEDAS` trae NOK y SEK, así que la tienda de un país NO o SE guarda su moneda y el tablero y los experimentos la distinguen del dólar como a cualquier otra moneda local. Con moneda mezclada el ROAS se oculta (PND-138), no se convierte.
+
+**«Resultados de tu tienda»** (spec `docs/superpowers/specs/2026-10-08-tw-resultados-de-tu-tienda-design.md`, pedido
+de Daniel 2026-10-08 con la captura de «Día a día»): reemplazó a «Tu tienda» (tiles) y «Día a día» (el SVG de
+`dashboard._grafico_tablero`, que se borró: ya no lo usaba nadie). `panel._resultados` arma UNA serie ancha (periodo +
+anterior + 28 días para los días raros) y llama a `triple_whale/resultados.py` (puro: tarjetas, variaciones con días
+completos — hoy va aparte —, días raros contra la mediana del mismo día de la semana, mejor día, lectura con reglas,
+«Tus creativos» por mes de arranque, la tabla y el JSON). Las consultas nuevas de `datos.py` (`gasto_por_antiguedad`,
+`gasto_por_canal`, `anuncios_del_dia`, `arrancaron_el`, `cohortes`) van sobre `_medidas_dia` (solo gasto MAX entre
+tiendas, ventas y pedidos SUMA: `_anuncio_dia` con sus 30 columnas costaba el doble) y `_primeros_dias` (primer día
+con gasto de cada anuncio en la copia: nuevo = hasta ese día + 13; la antigüedad se conoce desde el inicio de la copia +
+14). `_tw_resultados.html` pinta tarjetas, lectura, creativos y tabla en el servidor y deja el JSON en
+`<script type="application/json" id="tw-resultados-datos">`; `static/tw_resultados.js` (ES5, como
+`exp_resultados.js`, textos en el JSON, números con los separadores de la app) dibuja la gráfica al ancho real del
+contenedor y pide el detalle del día a `GET /triple-whale/dia` (`panel.contexto_dia` → `_tw_dia.html`; del primer día
+copiado a ayer, 400 si no). `_tab_triple_whale.html` llama `TwResultados.iniciar(cont)` tras pintar el panel. Trampas:
+un periodo anterior que empieza antes del primer día copiado NO se compara (serían ceros que no son ventas; con 10
+días de prueba, «7 días» no compara); «Desde el inicio» nunca compara (5fce2658); lo atribuido del Pixel suma más que
+la tienda (PND-157) y solo se usa para comparar anuncios y canales; el CSS heredado tenía un comentario cerrado con
+`#}` que se tragaba `.tb-barra-tw` (por eso la gráfica vieja salía con barras naranjas y línea verde).
+Reglas que añadió la revisión (2026-10-08, cada una con su prueba de mutación): los días después del último copiado
+(`fin_datos`, una copia atrasada) van vacíos y fuera de cifras, comparaciones y días raros; en «Todas» la antigüedad se
+cuenta desde la tienda que empezó a copiarse MÁS TARDE (`datos.inicio_para_antiguedad`); el detalle del día no marca
+«nuevo» ni cuenta arranques antes de ese inicio + 14; con canal (o sin datos de tienda) cada frase, ayuda y el texto de
+hoy dicen «según el Pixel»; la alerta «el MER de la tienda cayó» toma la variación de la tarjeta (días completos, sin
+periodo anterior fuera de la copia); `/dia` usa `datos.primer_dia_copia` y valida el canal por su forma, sin
+recorrer la copia en cada clic.
+
+PND-142 (2026-10-08, decisión delegada enmendada): fuente_ventas_fija se fija al lanzar según la atribución: triple_whale solo con atribución triple_whale y tiendas conectadas (sin tiendas, meta); tienda para pedidos por UTM, meta para Pixel y ninguna si no mide ventas. Una fuente fijada no se cambia por conectar/desconectar después. La lectura corrige las marcas antiguas que ignoraban tienda/Pixel/ninguna. Con ninguna, ninguna foto marca ventas medibles, aunque Meta reporte compras. Si la fuente fija no está disponible, ventas_no_disponibles y ventas no comparables (—), sin respaldo a Meta; todavía se permite el cierre sin evidencia y el perdedor por tráfico del decisor, pero no ganar/escalar por ventas. Triple Whale lee solo la tienda del país. El aviso nuevo aviso_ventas_no_comparables_tw no se deduplica contra el viejo aviso de respaldo. tests/test_lote6_ventas.py, test_atribucion.py y test_lote6_decisor.py vigilan la regla, pedidos e aislamiento.
 
 ## Tarjetas de análisis (2026-10-08)
 
@@ -196,9 +235,11 @@ production. It must work for ANY ad, not only Creatv's: in happyflops only 4 pie
   copy cannot close the DATOS block, and the output only fills an escaped card and a Crear prefill the person reviews.
   `verificar_cifras` runs over the phrase, reasons with evidence, changes, `por_que` and the learning
   (`cifras_sin_dato`, non-blocking). `NOMBRES_CANAL` lives in `triple_whale/__init__.py` so the worker never imports the
-  blueprint.
-- **Gallery.** Tab order: bar, «Tu tienda», alerts, «Tus anuncios» (tiles + gallery), «Lo que hace ganar en tu cuenta»,
-  day by day…, «Ver como tabla». 12 cards per page by spend (`panel.POR_PAGINA`), filters (`Muy pocos datos` is not in
+  blueprint (`resultados.NOMBRES_CANAL` and `rutas.NOMBRES_CANAL` are that same dict).
+- **Gallery.** Tab order: bar, «Resultados de tu tienda» (main's section, 2026-10-08), «Por tienda», alerts, «Tus
+  anuncios» (tiles + gallery), «Lo que hace ganar en tu cuenta», «Dónde se va el gasto», «Lo que más se vende», «Ver como
+  tabla». The gallery, card, analyze and batch routes resolve their scope with `panel.alcance` → `evaluar_periodo`, the
+  same as the panel, «Desde el inicio» (`dias=0`, from the first copied day) included. 12 cards per page by spend (`panel.POR_PAGINA`), filters (`Muy pocos datos` is not in
   «Todos»), and a fixed number of queries whatever the cards (`panel.enriquecer`, `datos.ultimos_analisis`;
   `test_las_consultas_no_crecen_con_las_tarjetas`): a query per card was what made project pages take 1 158 queries
   (2026-09-28 audit). Routes: `galeria` (`entera=1`
@@ -208,8 +249,10 @@ production. It must work for ANY ad, not only Creatv's: in happyflops only 4 pie
   `data-poll-al-terminar="evento"` and dispatches `trabajo-terminado` instead of reloading (ten analyses would be ten
   reloads); the tab JS repaints only that card. The async «Cómo mejorarlo» never re-POSTs on a failure: it repaints the
   card and shows a message, and paying again takes a fresh click and confirm (rule 1).
-- **Old analysis.** `panel.es_viejo` applies only inside the same scope (same store and same period length): a changed
-  verdict or ≥ 1.5× the spend. From another scope the card shows a neutral note and a secondary «Analizar con estos
+- **Old analysis.** `panel.es_viejo` applies only inside the same scope (`panel.mismo_alcance`: same store AND either the
+  same period length or the same `desde`): a changed verdict or ≥ 1.5× the spend. «Desde el inicio» grows one day every
+  day but always starts on the first copied day, so yesterday's analysis is still this scope (merge with «Resultados de
+  tu tienda», 2026-10-08). From another scope the card shows a neutral note and a secondary «Analizar con estos
   datos»; moving from 7 to 30 days must not nudge a second payment.
 - **Batch.** «Analizar los N que más gastaron» (`panel.N_LOTE` = 10; `sin_datos`, fresh and in-flight ads are skipped)
   posts the `clave=<canal>:<ad_id>` inputs the form showed with their total price, and the route charges only posted ∩

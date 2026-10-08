@@ -15,6 +15,7 @@ tarjeta; `galeria` arma una página (12, por gasto) y el lote «Analizar los N
 que más gastaron»; `enriquecer` agrega a cada tarjeta su creativo, su pieza de
 Creatv, su análisis, su barra viva y su precio con un número fijo de consultas.
 """
+import re
 from datetime import date, timedelta
 
 from flask_babel import gettext
@@ -28,10 +29,12 @@ import triple_whale
 import triple_whale_tiendas
 from idiomas import N_
 from tareas import triple_whale as tareas_tw
-from triple_whale import analisis, datos, evaluacion, paises
+from triple_whale import analisis, datos, evaluacion, paises, resultados
 
-PERIODOS = (7, 14, 30, 90)
-PERIODO_DEFECTO = 30
+# 0 = desde el inicio (todo lo copiado), el defecto desde 2026-10-08: Daniel pidió
+# las métricas en su totalidad porque los periodos cortos confundían a sus clientes.
+PERIODOS = (0, 7, 14, 30, 90)
+PERIODO_DEFECTO = 0
 MAX_FILAS = 200
 MAX_PRODUCTOS_PANEL = 8
 # Estados de Crear tal como los dice la tarjeta de una idea (idea → pieza).
@@ -44,29 +47,34 @@ FILTROS_GALERIA = ("", "ganador", "prometedor", "en_prueba", "perdedor", "cansan
 FACTOR_VIEJO = 1.5
 
 
+# Los canales de Triple Whale son ids como «facebook-ads» o «google-ads».
+_CANAL_VALIDO = re.compile(r"^[A-Za-z0-9_.{}-]{1,60}$")
+
+
 def _iso(d):
     return d.isoformat()
 
 
-def periodo(dias, hoy):
-    """(desde, hasta, desde_previo, hasta_previo) de un periodo que termina hoy."""
+def periodo(dias, hoy, primero=None):
+    """(desde, hasta, desde_previo, hasta_previo) de un periodo que termina hoy.
+    `dias == 0` es «desde el inicio»: arranca en `primero` (el primer día
+    copiado; hoy si no hay nada) y su «anterior» es el día previo, donde no hay
+    datos, así que no hay comparación."""
     dias = dias if dias in PERIODOS else PERIODO_DEFECTO
+    if dias == 0:
+        desde = min(date.fromisoformat(str(primero)[:10]), hoy) if primero else hoy
+        previo = desde - timedelta(days=1)
+        return _iso(desde), _iso(hoy), _iso(previo), _iso(previo)
     desde = hoy - timedelta(days=dias - 1)
     hasta_prev = desde - timedelta(days=1)
     return _iso(desde), _iso(hoy), _iso(hasta_prev - timedelta(days=dias - 1)), _iso(hasta_prev)
 
 
-def _serie_dias(desde, hasta, filas, clave_gasto="gasto", clave_ingresos="ingresos", clave_pedidos="pedidos"):
-    """Un punto por día del rango (los días sin fila en cero), con la forma
-    que espera el gráfico del Tablero."""
-    por_dia = {f["fecha"]: f for f in filas}
-    d, fin, salida = date.fromisoformat(desde), date.fromisoformat(hasta), []
-    while d <= fin:
-        f = por_dia.get(_iso(d)) or {}
-        salida.append({"dia": _iso(d), "gasto": float(f.get(clave_gasto) or 0),
-                       "ingresos": float(f.get(clave_ingresos) or 0), "compras": int(round(f.get(clave_pedidos) or 0))})
-        d += timedelta(days=1)
-    return salida
+def _primer_dia(cliente, tienda_id=None):
+    """El primer día copiado de Triple Whale (anuncios o tienda), o None."""
+    fechas = [f for f in (datos.rango(cliente, tienda_id).get("desde"),
+                          datos.primer_dia_tienda(cliente, tienda_id)) if f]
+    return min(str(f)[:10] for f in fechas) if fechas else None
 
 
 def tienda_elegida(tiendas, valor):
@@ -98,7 +106,7 @@ def evaluar_periodo(cliente, dias=PERIODO_DEFECTO, canal=None, tienda_id=None, h
     la ruta que encola el análisis con IA, para que Claude vea exactamente eso.
     `tienda_id=None` evalúa «Todas las tiendas»."""
     hoy = hoy or date.today()
-    desde, hasta, _, _ = periodo(dias, hoy)
+    desde, hasta, _, _ = periodo(dias, hoy, _primer_dia(cliente, tienda_id) if dias == 0 else None)
     reglas = decisor.reglas_efectivas(proyectos.reglas_defecto(cliente), {})
     ev = evaluacion.evaluar(
         datos.totales_por_anuncio(cliente, tienda_id, desde, hasta, canal),
@@ -169,6 +177,27 @@ def resumen_mes_tienda(cliente, hoy=None):
     ini_prev = fin_prev.replace(day=1)
     fin_prev_mismo = min(fin_prev, ini_prev + timedelta(days=dias - 1))
     r = evaluacion.resumen_tienda(serie, datos.serie_tienda(cliente, None, _iso(ini_prev), _iso(fin_prev_mismo)))
+    r["moneda"] = config["moneda"]
+    r["desde"], r["hasta"] = _iso(desde), _iso(hoy)
+    return r
+
+
+def resumen_total_tienda(cliente, hoy=None):
+    """La tienda según Triple Whale desde el primer día copiado hasta hoy (los
+    tiles de Experimentos desde 2026-10-08): lo mismo que `resumen_mes_tienda`
+    pero sin comparación. None sin conexión o sin datos de tienda."""
+    config = triple_whale_tiendas.obtener(cliente)
+    if not config:
+        return None
+    hoy = hoy or date.today()
+    primero = datos.primer_dia_tienda(cliente, None)
+    if not primero:
+        return None
+    desde = min(date.fromisoformat(str(primero)[:10]), hoy)
+    serie = datos.serie_tienda(cliente, None, _iso(desde), _iso(hoy))
+    if not serie:
+        return None
+    r = evaluacion.resumen_tienda(serie, None)
     r["moneda"] = config["moneda"]
     r["desde"], r["hasta"] = _iso(desde), _iso(hoy)
     return r
@@ -280,15 +309,21 @@ def _dias_periodo(desde, hasta):
 
 def mismo_alcance(fila, alcance):
     """¿Ese análisis se pagó en el alcance que se mira? Misma tienda (None = «Todas») y un periodo del mismo largo
-    (el periodo corre con los días: se compara el largo, no las fechas). Sin `alcance`, sí. Una fila sin fechas no
-    es del mismo alcance: ante la duda no se ofrece pagar otra vez (revisión de la tarea 7)."""
+    O con el mismo `desde`. Un periodo de N días corre con los días (se compara el largo, no las fechas); «Desde el
+    inicio» crece un día cada día pero arranca siempre en el primer día copiado, así que el análisis de ayer sigue
+    siendo de este alcance (mezcla con «Resultados de tu tienda», 2026-10-08). Sin `alcance`, sí. Una fila sin
+    fechas no es del mismo alcance: ante la duda no se ofrece pagar otra vez (revisión de la tarea 7)."""
     if not alcance:
         return True
     fila = fila or {}
     if fila.get("tienda_id") != alcance.get("tienda_id"):
         return False
     largo = _dias_periodo(fila.get("desde"), fila.get("hasta"))
-    return largo is not None and largo == _dias_periodo(alcance.get("desde"), alcance.get("hasta"))
+    if largo is None:
+        return False
+    if largo == _dias_periodo(alcance.get("desde"), alcance.get("hasta")):
+        return True
+    return str(fila.get("desde"))[:10] == str(alcance.get("desde") or "")[:10]
 
 
 def es_viejo(a, fila, alcance=None):
@@ -393,6 +428,83 @@ def galeria(cliente, ev, veredicto="", pagina=1, alcance=None):
                      "precio": gastos._estimado(unidad * len(lote), "análisis por anuncio")}}
 
 
+def _resultados(cliente, config, tienda_id, canal, dias, desde, hasta, hoy, ev, hay_tienda, rango_copia,
+                ultima_copia):
+    """«Resultados de tu tienda» (spec 2026-10-08-tw-resultados §4): una serie ancha (el periodo, el anterior y
+    las 4 semanas que piden los días raros) y los bloques de antigüedad, canal y creativos, cada uno con UNA
+    consulta. La ruta completa `url_dia` (aquí no hay petición garantizada)."""
+    d_desde, d_hasta = date.fromisoformat(desde), date.fromisoformat(hasta)
+    n_completos = (d_hasta - d_desde).days
+    ancho = d_desde - timedelta(days=max(n_completos if dias else 0, resultados.SEMANAS_EXTRA))
+    fuente = "tienda" if hay_tienda and not canal else "anuncios"
+    if fuente == "tienda":
+        filas = datos.serie_tienda(cliente, tienda_id, _iso(ancho), hasta)
+        primer_dato = datos.primer_dia_tienda(cliente, tienda_id)
+    else:
+        filas = datos.serie_anuncios(cliente, tienda_id, _iso(ancho), hasta, canal=canal)
+        primer_dato = rango_copia.get("desde")
+    # El último día que la copia trae (una sincronización atrasada no son ventas en cero) y desde cuándo la copia
+    # cubre todas las tiendas del alcance (la antigüedad de un anuncio se conoce 14 días después).
+    fin_datos = max((str(f["fecha"])[:10] for f in filas), default=None)
+    inicio_copia = rango_copia.get("desde")
+    inicio_edad = datos.inicio_para_antiguedad(cliente, tienda_id) if inicio_copia else None
+    conocido = (_iso(date.fromisoformat(str(inicio_edad)[:10]) + timedelta(days=resultados.DIAS_NUEVO))
+                if inicio_edad else None)
+    return resultados.armar(
+        dias, resultados.por_dia(ancho, d_hasta, filas), (d_desde - ancho).days, hoy, fuente, config["moneda"],
+        datos.gasto_por_antiguedad(cliente, tienda_id, desde, hasta, canal) if inicio_copia else {},
+        datos.gasto_por_canal(cliente, tienda_id, desde, hasta) if fuente == "tienda" and inicio_copia else {},
+        datos.cohortes(cliente, tienda_id, desde, hasta, canal, conocido_desde=conocido) if inicio_copia else None,
+        inicio_copia, ev.get("meta_roas"), canal, "", ultima_copia,
+        inicio_datos=str(primer_dato)[:10] if primer_dato else None, fin_datos=fin_datos,
+        inicio_edad=str(inicio_edad)[:10] if inicio_edad else None)
+
+
+def contexto_dia(cliente, fecha, canal=None, tienda_id=None, hoy=None):
+    """El detalle de un día (spec 2026-10-08-tw-resultados §2.3) en el alcance pedido, o None si Triple Whale no
+    está conectado o el día no va del primer día copiado a ayer (hoy va a medias)."""
+    config = triple_whale_tiendas.obtener(cliente)
+    if not config:
+        return None
+    hoy = hoy or date.today()
+    tienda_actual = tienda_elegida(config["tiendas"], tienda_id)
+    tienda_id = tienda_actual["id"] if tienda_actual else None
+    primero = datos.primer_dia_copia(cliente, tienda_id)
+    if not primero or fecha < date.fromisoformat(primero) or fecha >= hoy:
+        return None
+    # Un canal con forma rara se ignora; uno bien formado que no existe da un día vacío (las consultas van
+    # parametrizadas y filtradas por cliente). Sin recorrer la copia entera en cada clic.
+    if canal and not _CANAL_VALIDO.match(canal):
+        canal = None
+    inicio_edad = datos.inicio_para_antiguedad(cliente, tienda_id)
+    f, f_antes = _iso(fecha), _iso(fecha - timedelta(days=7))
+    filas = datos.serie_tienda(cliente, tienda_id, f_antes, f) if not canal else []
+    fuente = "tienda" if filas else "anuncios"
+    if not filas:
+        filas = datos.serie_anuncios(cliente, tienda_id, f_antes, f, canal=canal)
+    por_fecha = {str(x["fecha"])[:10]: x for x in filas}
+
+    def del_dia(clave):
+        x = por_fecha.get(clave)
+        return {"ing": float(x["ingresos"] or 0), "gas": float(x["gasto"] or 0),
+                "ped": float(x["pedidos"] or 0)} if x else None
+
+    antes = del_dia(f_antes) if f_antes >= primero else None
+    anuncios = datos.anuncios_del_dia(cliente, tienda_id, f, canal)
+    creatv = datos.piezas_creatv(cliente, [a["ad_id"] for a in anuncios if a["canal"] == triple_whale.CANAL_META])
+    anterior = fecha - timedelta(days=1)
+    siguiente = fecha + timedelta(days=1)
+    detalle = resultados.detalle_dia(
+        fecha, del_dia(f) or {"ing": 0.0, "gas": 0.0, "ped": 0.0}, antes,
+        datos.gasto_por_canal(cliente, tienda_id, f, f).get(f, {}) if not canal else {},
+        anuncios, datos.arrancaron_el(cliente, tienda_id, f, canal), creatv, config["moneda"], fuente,
+        _iso(anterior) if _iso(anterior) >= primero else None, _iso(siguiente) if siguiente < hoy else None,
+        antiguedad_conocida=bool(inicio_edad) and fecha >= (date.fromisoformat(str(inicio_edad)[:10])
+                                                            + timedelta(days=resultados.DIAS_NUEVO)))
+    detalle.update(canal=canal, tienda_id=tienda_id)
+    return detalle
+
+
 def contexto(cliente, dias=PERIODO_DEFECTO, canal=None, tienda_id=None, hoy=None):
     """Todo lo que pinta `_tw_panel.html` en el alcance pedido (`tienda_id`:
     una tienda del proyecto, o None = «Todas»; un id ajeno se ignora)."""
@@ -407,19 +519,13 @@ def contexto(cliente, dias=PERIODO_DEFECTO, canal=None, tienda_id=None, hoy=None
     varias = len(tiendas) > 1
     hoy = hoy or date.today()
     dias = dias if dias in PERIODOS else PERIODO_DEFECTO
-    desde, hasta, desde_prev, hasta_prev = periodo(dias, hoy)
+    desde, hasta, desde_prev, hasta_prev = periodo(dias, hoy, _primer_dia(cliente, tienda_id) if dias == 0 else None)
     canales = datos.canales(cliente, tienda_id, desde, hasta)
     canal = canal if canal in canales else None
     ev, _, _ = evaluar_periodo(cliente, dias, canal, tienda_id=tienda_id, hoy=hoy)
 
     serie_tienda = datos.serie_tienda(cliente, tienda_id, desde, hasta)
     tienda = evaluacion.resumen_tienda(serie_tienda, datos.serie_tienda(cliente, tienda_id, desde_prev, hasta_prev))
-    if serie_tienda and not canal:
-        serie = {"fuente": "tienda", "dias": _serie_dias(desde, hasta, serie_tienda)}
-    else:
-        serie = {"fuente": "anuncios",
-                 "dias": _serie_dias(desde, hasta, datos.serie_anuncios(cliente, tienda_id, desde, hasta))}
-    serie["moneda"] = config["moneda"]
     rastreo = evaluacion.rastreo(ev["anuncios"], triple_whale.CANAL_META)
 
     creatv = datos.piezas_creatv(cliente, [a["ad_id"] for a in ev["anuncios"] if a["canal"] == triple_whale.CANAL_META])
@@ -438,22 +544,35 @@ def contexto(cliente, dias=PERIODO_DEFECTO, canal=None, tienda_id=None, hoy=None
     en_alcance = [tienda_actual] if tienda_actual else tiendas
     ocupadas = {j["tienda"]["id"] for j in jobs_sync}
     copias = [t["ultima_sincronizacion"] for t in en_alcance if t.get("ultima_sincronizacion")]
+    ultima_copia = (min(copias) if len(copias) == len(en_alcance) else None) if copias else None
+    rango_copia = datos.rango(cliente, tienda_id)
+    resultados_ctx = _resultados(cliente, config, tienda_id, canal, dias, desde, hasta, hoy, ev, bool(serie_tienda),
+                                 rango_copia, ultima_copia)
+    # La alerta «el MER de la tienda cayó» usa la misma variación que la tarjeta «Retorno (MER)» (días completos,
+    # sin periodo anterior fuera de la copia): antes de «Resultados» la tarjeta y la alerta usaban el mismo número.
+    tienda_alertas = dict(tienda or {}, variacion={}) if tienda else tienda
+    if tienda and resultados_ctx and resultados_ctx["fuente"] == "tienda":
+        por_clave = {t["clave"]: t["variacion"] for t in resultados_ctx["tarjetas"]}
+        tienda_alertas["variacion"] = {k: v for k, v in (("ingresos", por_clave.get("ventas")),
+                                                           ("pedidos", por_clave.get("pedidos")),
+                                                           ("gasto", por_clave.get("gasto")),
+                                                           ("mer", por_clave.get("mer"))) if v is not None}
     return {
         "productos": productos, "etiquetas_pieza": ETIQUETAS_PIEZA,
         "conectado": True, "config": config, "moneda": config["moneda"], "dias": dias, "periodos": PERIODOS,
         "desde": desde, "hasta": hasta, "canal": canal, "canales": canales,
         "tiendas": tiendas, "tienda_actual": tienda_actual, "varias_tiendas": varias, "en_alcance": en_alcance,
-        "ultima_copia": (min(copias) if len(copias) == len(en_alcance) else None) if copias else None,
+        "ultima_copia": ultima_copia,
         "por_tienda": (_por_tienda(cliente, tiendas_por_id, desde, hasta, desde_prev, hasta_prev)
                        if varias and tienda_actual is None else []),
         # La nota de cuenta compartida mira el alcance: una tienda con cuenta propia no la lleva.
         "gasto_duplicado": datos.gasto_duplicado(cliente, desde, hasta, tienda_id) if varias else 0.0,
         "jobs_sync": jobs_sync,
         "sync_ocupado": all(t["id"] in ocupadas for t in en_alcance),
-        "rango": datos.rango(cliente, tienda_id), "ev": ev, "anuncios": ev["anuncios"][:MAX_FILAS],
+        "rango": rango_copia, "ev": ev, "anuncios": ev["anuncios"][:MAX_FILAS],
         "mas_anuncios": max(0, len(ev["anuncios"]) - MAX_FILAS),
-        "tienda": tienda, "serie": serie, "rastreo": rastreo,
-        "alertas": evaluacion.alertas(ev, tienda, rastreo),
+        "tienda": tienda, "rastreo": rastreo, "resultados": resultados_ctx,
+        "alertas": evaluacion.alertas(ev, tienda_alertas, rastreo),
         "muestra_ia": muestra, "estimado_ia": gastos.estimar("evaluacion_tw", n=len(muestra)) if muestra else None,
         "evaluaciones": evaluaciones, "ultima_lista": ultima_lista,
         "job_evaluar": (tareas_tw.job_id_evaluar(cliente)

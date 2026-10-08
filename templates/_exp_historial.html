@@ -1,4 +1,4 @@
-{# Totales, monedas separadas, mes a mes y tienda TW del Tablero original (el «Historial» plegado del centro de
+{# Totales, monedas separadas y tienda TW del Tablero original (el «Historial» plegado del centro de
    resultados desde E2; el Tablero ya no es pestaña). #}
 {% set tb = tablero %}
 {% macro tile_generacion(gen) %}
@@ -9,7 +9,7 @@
 </a>
 {% endmacro %}
 
-{# «Descargar CSV del mes» vive una sola vez, en la cabecera de la pestaña (_tab_experimentos.html). #}
+{# «Descargar CSV» (todo desde el inicio) vive una sola vez, en la cabecera de la pestaña (_tab_experimentos.html). #}
 {# ---------- tiles ---------- #}
 {% if tb.total is none and tb.total_triple_whale is none %}
 <p class="tag-error">{{ _('No se pudo calcular el total.') }}</p>
@@ -39,8 +39,8 @@
   </div>
   <div class="kpi-tile">
     <span>{{ _('Ingresos') }}</span>
-    <strong>{% if g.roas_comparable is sameas false %}—{% else %}{{ g.ingresos | dinero(moneda) }}{% endif %}</strong>
-    <small>{{ _('Las ventas cambiaron de fuente en este período') if g.ventas_cambiaron else _('No sumamos ingresos de otra moneda') if g.roas_comparable is sameas false else _('solo ventas medibles') }}</small>
+    <strong>{% if g.roas_comparable is sameas false or not g.mide_ventas %}—{% else %}{{ g.ingresos | dinero(moneda) }}{% endif %}</strong>
+    <small>{{ _('Las ventas cambiaron de fuente en este período') if g.ventas_cambiaron else _('No sumamos ingresos de otra moneda') if g.roas_comparable is sameas false else _('solo ventas medibles') }}{% if g.excluidos %} · {{ ngettext('excluye %(num)s experimento en otra moneda', 'excluye %(num)s experimentos en otra moneda', g.excluidos) }}{% endif %}</small>
   </div>
   <div class="kpi-tile">
     <span>ROAS</span>
@@ -49,7 +49,7 @@
     <small>{{ _('ROAS no comparable') }}{% if g.ventas_cambiaron %} · {{ _('Las ventas cambiaron de fuente en este período') }}{% endif %}</small>
     {% elif g.mide_ventas and g.gasto > 0 %}
     <strong>{{ g.roas | roas }}×</strong>
-    <small>{{ _('ingresos / gasto') }}</small>
+    <small>{{ _('ingresos / gasto') }}{% if g.excluidos %} · {{ ngettext('excluye %(num)s experimento en otra moneda', 'excluye %(num)s experimentos en otra moneda', g.excluidos) }}{% endif %}</small>
     {% else %}
     <strong class="tb-sin-dato">—</strong>
     <small>{{ _('sin ventas medibles') }}</small>
@@ -96,8 +96,8 @@
   </div>
   <div class="kpi-tile">
     <span>{{ _('Ingresos') }}</span>
-    <strong>{% if g.roas_comparable is sameas false %}—{% else %}{{ g.ingresos | dinero(moneda) }}{% endif %}</strong>
-    <small>{{ _('Las ventas cambiaron de fuente en este período') if g.ventas_cambiaron else _('No sumamos ingresos de otra moneda') if g.roas_comparable is sameas false else _('solo ventas medibles') }}</small>
+    <strong>{% if g.roas_comparable is sameas false or not g.mide_ventas %}—{% else %}{{ g.ingresos | dinero(moneda) }}{% endif %}</strong>
+    <small>{{ _('Las ventas cambiaron de fuente en este período') if g.ventas_cambiaron else _('No sumamos ingresos de otra moneda') if g.roas_comparable is sameas false else _('solo ventas medibles') }}{% if g.excluidos %} · {{ ngettext('excluye %(num)s experimento en otra moneda', 'excluye %(num)s experimentos en otra moneda', g.excluidos) }}{% endif %}</small>
   </div>
   <div class="kpi-tile">
     <span>ROAS</span>
@@ -106,7 +106,7 @@
     <small>{{ _('ROAS no comparable') }}{% if g.ventas_cambiaron %} · {{ _('Las ventas cambiaron de fuente en este período') }}{% endif %}</small>
     {% elif g.mide_ventas and g.gasto > 0 %}
     <strong>{{ g.roas | roas }}×</strong>
-    <small>{{ _('ingresos / gasto') }}</small>
+    <small>{{ _('ingresos / gasto') }}{% if g.excluidos %} · {{ ngettext('excluye %(num)s experimento en otra moneda', 'excluye %(num)s experimentos en otra moneda', g.excluidos) }}{% endif %}</small>
     {% else %}
     <strong class="tb-sin-dato">—</strong>
     <small>{{ _('sin ventas medibles') }}</small>
@@ -117,58 +117,18 @@
 {% endif %}
 {% endif %}
 
-{# ---------- mes a mes ---------- #}
-{# El desglose del total: una fila por mes (el más reciente arriba) desde el
-   primer mes con pauta o generación; con pauta en dos monedas, una fila por
-   moneda (nunca se convierte) y la generación solo en la primera. En el
-   celular cada fila es una tarjeta (tabla-apilada; la celda vacía se oculta). #}
-<section class="tb-seccion">
-  <div class="tb-seccion-cab"><h3>{{ _('Mes a mes') }}</h3></div>
-  {% if tb.meses is none %}
-  <p class="tag-error">{{ _('No se pudo calcular el desglose por mes.') }}</p>
-  {% elif not tb.meses %}
-  <p class="vacio">{{ _('Todavía no hay gasto en ningún mes. Cuando un experimento gaste o pagues una generación, aquí verás cada mes.') }}</p>
-  {% else %}
-  <table class="tb-meses tabla-apilada">
-    <thead><tr>
-      <th>{{ _('Mes') }}</th><th class="num">{{ _('Gasto') }}</th><th class="num">{{ _('Compras') }}</th>
-      <th class="num">{{ _('Ingresos') }}</th><th class="num">ROAS</th><th class="num">{{ _('Generación') }}</th>
-    </tr></thead>
-    <tbody>
-      {% for f in tb.meses %}
-      {% set gen = f.generacion %}
-      {% for moneda, g in (f.por_moneda | dictsort) or [(none, none)] %}
-      <tr{% if loop.first and not loop.last %} class="tb-mes-varias"{% endif %}>
-        <td>{{ f.etiqueta }}</td>
-        {% if g %}
-        <td class="num">{{ g.gasto | dinero(moneda) }}</td>
-        <td class="num">{{ g.compras if g.compras is not none else "—" }}</td>
-        <td class="num">{% if g.roas_comparable is sameas false %}—{% else %}{{ g.ingresos | dinero(moneda) }}{% endif %}</td>
-        <td class="num">{% if g.roas_comparable is sameas false %}— · {{ _('ROAS no comparable') }}{% if g.ventas_cambiaron %} · {{ _('Las ventas cambiaron de fuente en este período') }}{% endif %}{% elif g.mide_ventas and g.gasto > 0 %}{{ g.roas | roas }}×{% else %}<span class="tb-sin-dato">—</span>{% endif %}</td>
-        {% else %}
-        <td class="num"><span class="tb-sin-dato">—</span></td><td class="num"><span class="tb-sin-dato">—</span></td>
-        <td class="num"><span class="tb-sin-dato">—</span></td><td class="num"><span class="tb-sin-dato">—</span></td>
-        {% endif %}
-        <td class="num">{% if loop.first %}{% if gen.n %}{{ gen.usd | usd }}{% else %}<span class="tb-sin-dato">—</span>{% endif %}{% endif %}</td>
-      </tr>
-      {% endfor %}
-      {% endfor %}
-    </tbody>
-  </table>
-  {% endif %}
-</section>
-
-{# La tienda según Triple Whale (copia local): ingresos y MER reales del mes,
-   con la variación contra los mismos días del mes anterior. Solo con
-   Triple Whale conectado y datos de tienda; el detalle vive en su pestaña. #}
+{# La tienda según Triple Whale (copia local): ingresos y MER reales desde el
+   primer día copiado (antes del mes; 2026-10-08, Daniel quiere solo totales).
+   Solo con Triple Whale conectado y datos de tienda; el detalle vive en su pestaña.
+   El «Mes a mes» que había arriba se quitó el mismo día por la misma razón. #}
 {% if tb.tienda_tw %}
 {% set t = tb.tienda_tw %}
 <div class="tb-tiles" aria-label="{{ _('Tu tienda según Triple Whale') }}">
   <div class="tb-tiles-moneda">{{ _('Tu tienda según Triple Whale') }} · {{ t.moneda }}</div>
   <div class="kpi-tile">
-    <span>{{ _('Ingresos del mes') }}</span>
+    <span>{{ _('Ingresos') }}</span>
     <strong>{{ t.ingresos | dinero(t.moneda) }}</strong>
-    <small>{% if t.variacion.get('ingresos') is not none %}{{ t.variacion.get('ingresos') | tw_var }} {{ _('vs. mes anterior') }}{% else %}{{ _('desde el 1 de %(mes)s', mes=tb.mes) }}{% endif %}</small>
+    <small>{{ _('desde el %(fecha)s', fecha=t.desde[:10]) }}</small>
   </div>
   <div class="kpi-tile">
     <span>{{ _('Pedidos') }}</span>

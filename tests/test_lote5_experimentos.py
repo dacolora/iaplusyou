@@ -37,7 +37,7 @@ def test_pnd134_ultima_metrica_en_una_consulta_sin_cambiar_valores(base_temporal
     pieza_otra, = ex.cargar('otro')[0]['piezas']
     assert pieza_otra['id'] == ep_otro and pieza_otra['metricas']['gasto'] == 999
     assert ep_otro not in metricas
-    contexto = {'horas_activo': 96, 'atribucion': 'tienda'}
+    contexto = {'horas_activo': 96, 'atribucion': 'tienda', 'compras_pais': 3}
     veredictos = set()
     for ep, historia in historias.items():
         assert ex.snapshots(ep) == historia

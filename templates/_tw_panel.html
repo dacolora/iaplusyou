@@ -1,11 +1,12 @@
 {# Panel de la pestaña Triple Whale (fragmento por fetch, triple_whale.rutas.ver_panel).
-   Contexto: `tw` (triple_whale.panel.contexto) y `grafico` (el mismo cálculo del
-   Tablero). Sus formularios: sincronizar (gratis); los que cobran, con el precio
-   en el botón y en su confirmación: evaluar con IA, y en la galería «Cómo
-   mejorarlo» por tarjeta y «Analizar los N que más gastaron»; los que no
-   generan nada: llevar una idea a Crear, guardar un anuncio en Referentes y,
-   en la tabla, pausar o activar en Meta una pieza de Creatv (con
-   confirmación). Sin <script>: el JS está en _tab_triple_whale.html. Varias tiendas (spec
+   Contexto: `tw` (triple_whale.panel.contexto; `tw.resultados` es la sección
+   «Resultados de tu tienda», _tw_resultados.html). Sus formularios: sincronizar
+   (gratis); los que cobran, con el precio en el botón y en su confirmación:
+   evaluar con IA, y en la galería «Cómo mejorarlo» por tarjeta y «Analizar los
+   N que más gastaron»; los que no generan nada: llevar una idea a Crear,
+   guardar un anuncio en Referentes y, en la tabla, pausar o activar en Meta una
+   pieza de Creatv (con confirmación). Sin <script>: el JS está en
+   _tab_triple_whale.html. Varias tiendas (spec
    2026-10-08 §6.2): con 2+ tiendas, selector «Tienda» (`data-tw-param="tienda"`),
    «Por tienda» en «Todas», la nota de cuenta compartida si `gasto_duplicado` (del
    alcance que se mira; viendo una tienda, repetida junto a «Evaluar con IA») y
@@ -13,8 +14,10 @@
    tarjetas §2): las alertas van arriba, «Tus anuncios» trae la primera página
    de la galería (macros de _tw_galeria.html, sin un segundo fetch), justo
    debajo va la evaluación con IA, ahora «Lo que hace ganar en tu cuenta»,
-   luego día a día, reparto y lo que más se vende, y al final la tabla de
-   siempre en «Ver como tabla», un <details> cerrado. #}
+   luego reparto y lo que más se vende, y al final la tabla de siempre en «Ver
+   como tabla», un <details> cerrado (id `tw-cada-anuncio`: «Ver todos los
+   anuncios →» del detalle del día lo abre). «Resultados de tu tienda» va
+   arriba, en el lugar de «Tu tienda» y del viejo «Día a día». #}
 {% if not tw.conectado %}
 <p class="vacio">{{ _('Triple Whale ya no está conectado en este proyecto.') }}</p>
 {% else %}
@@ -37,7 +40,7 @@
     {% endif %}
     <label class="campo-label">{{ _('Periodo') }}
       <select data-tw-param="dias">
-        {% for d in tw.periodos %}<option value="{{ d }}" {% if d == tw.dias %}selected{% endif %}>{{ _('Últimos %(n)s días', n=d) }}</option>{% endfor %}
+        {% for d in tw.periodos %}<option value="{{ d }}" {% if d == tw.dias %}selected{% endif %}>{{ _('Últimos %(n)s días', n=d) if d else _('Desde el inicio') }}</option>{% endfor %}
       </select>
     </label>
     {% if tw.canales | length > 1 %}
@@ -88,29 +91,16 @@
 </div>
 {% else %}
 
-{# ---------- la tienda ---------- #}
-{% if tw.tienda and not tw.canal %}
-{% set t = tw.tienda %}
-<section class="tb-seccion">
-  <div class="tb-seccion-cab"><h3>{{ _('Tu tienda') }}</h3><small class="vacio">{{ _('Del %(desde)s al %(hasta)s, contra los %(n)s días anteriores', desde=tw.desde, hasta=tw.hasta, n=tw.dias) }}</small></div>
-  <div class="tb-tiles">
-    <div class="kpi-tile"><span>{{ _('Ingresos') }}</span><strong>{{ t.ingresos | dinero(moneda) }}</strong><small>{{ t.variacion.get('ingresos') | tw_var }}</small></div>
-    <div class="kpi-tile"><span>{{ _('Pedidos') }}</span><strong>{{ t.pedidos | tw_num }}</strong><small>{{ t.variacion.get('pedidos') | tw_var }}</small></div>
-    <div class="kpi-tile"><span>{{ _('Gasto en publicidad') }}</span><strong>{{ t.gasto | dinero(moneda) }}</strong><small>{{ t.variacion.get('gasto') | tw_var }}</small></div>
-    <div class="kpi-tile" title="{{ _('MER: ingresos de la tienda / todo el gasto en publicidad') }}"><span>MER</span>{% if t.mer %}<strong>{{ t.mer | roas }}×</strong>{% else %}<strong class="tb-sin-dato">—</strong>{% endif %}<small>{{ t.variacion.get('mer') | tw_var }}</small></div>
-    <div class="kpi-tile"><span>{{ _('Ticket promedio') }}</span><strong>{% if t.ticket %}{{ t.ticket | dinero(moneda) }}{% else %}—{% endif %}</strong><small>{{ _('ingresos / pedidos') }}</small></div>
-    <div class="kpi-tile"><span>{{ _('Clientes nuevos') }}</span><strong>{{ t.pct_nuevos | tw_pct(0) }}</strong><small>{{ _('de los pedidos') }}</small></div>
-  </div>
-</section>
-{% endif %}
+{# ---------- resultados de la tienda (spec 2026-10-08-tw-resultados) ---------- #}
+{% include "_tw_resultados.html" %}
 
 {# ---------- por tienda (solo «Todas» con 2+ tiendas) ---------- #}
 {% if tw.por_tienda %}
 <section class="tb-seccion">
-  <div class="tb-seccion-cab"><h3>{{ _('Por tienda') }}</h3><small class="vacio">{{ _('Cada país contra sus %(n)s días anteriores: dónde conviene poner el presupuesto.', n=tw.dias) }}</small></div>
+  <div class="tb-seccion-cab"><h3>{{ _('Por tienda') }}</h3><small class="vacio">{% if tw.dias %}{{ _('Cada país contra sus %(n)s días anteriores: dónde conviene poner el presupuesto.', n=tw.dias) }}{% else %}{{ _('Cada país desde el inicio: dónde conviene poner el presupuesto.') }}{% endif %}</small></div>
   <div class="tw-tabla-scroll">
     <table class="tw-tabla tw-por-tienda">
-      <thead><tr><th>{{ _('Tienda') }}</th><th>{{ _('Ingresos') }}</th><th>{{ _('Pedidos') }}</th><th>{{ _('Gasto en publicidad') }}</th><th>MER</th><th>{{ _('vs. periodo anterior') }}</th></tr></thead>
+      <thead><tr><th>{{ _('Tienda') }}</th><th>{{ _('Ingresos') }}</th><th>{{ _('Pedidos') }}</th><th>{{ _('Gasto en publicidad') }}</th><th>MER</th>{% if tw.dias %}<th>{{ _('vs. periodo anterior') }}</th>{% endif %}</tr></thead>
       <tbody>
         {% for f in tw.por_tienda %}
         <tr>
@@ -119,7 +109,7 @@
           <td>{{ f.actual.pedidos | tw_num }}</td>
           <td>{{ f.actual.gasto | dinero(moneda) }}</td>
           <td>{% if f.mer %}{{ f.mer | roas }}×{% else %}—{% endif %}</td>
-          <td>{{ f.variacion_ingresos | tw_var or '—' }}</td>
+          {% if tw.dias %}<td>{{ f.variacion_ingresos | tw_var or '—' }}</td>{% endif %}
         </tr>
         {% endfor %}
       </tbody>
@@ -277,39 +267,6 @@
   {% endif %}
 </section>
 
-{# ---------- día a día ---------- #}
-{% if grafico %}
-{% set g = grafico %}
-<section class="tb-seccion">
-  <div class="tb-seccion-cab">
-    <h3>{{ _('Día a día') }}</h3>
-    <ul class="tb-leyenda" aria-label="{{ _('Leyenda') }}">
-      <li><span class="tb-muestra tb-muestra-gasto"></span>{{ _('Gasto') }}</li>
-      <li><span class="tb-muestra tb-muestra-ingresos"></span>{% if tw.serie.fuente == 'tienda' %}{{ _('Ingresos de la tienda') }}{% else %}{{ _('Ingresos atribuidos') }}{% endif %}</li>
-      <li class="tb-leyenda-moneda">{{ g.moneda }}</li>
-    </ul>
-  </div>
-  <svg class="tb-grafico" viewBox="0 0 {{ g.ancho }} {{ g.alto }}" role="img"
-       aria-label="{{ _('Triple Whale: gasto (barras) e ingresos (línea) por día en %(moneda)s', moneda=g.moneda) }}">
-    {% for t in g.marcas %}
-    <line class="tb-rejilla" x1="{{ g.margen.izq }}" x2="{{ g.ancho - g.margen.der }}" y1="{{ t.y }}" y2="{{ t.y }}"/>
-    <text class="tb-eje" x="{{ g.margen.izq - 8 }}" y="{{ t.y }}" text-anchor="end" dominant-baseline="middle">{{ t.texto }}</text>
-    {% endfor %}
-    <line class="tb-base" x1="{{ g.margen.izq }}" x2="{{ g.ancho - g.margen.der }}" y1="{{ g.base_y }}" y2="{{ g.base_y }}"/>
-    {% for d in g.dias %}
-    <g class="tb-dia">
-      <title>{{ d.titulo }}</title>
-      <rect class="tb-blanco" x="{{ d.x }}" y="{{ g.margen.arriba }}" width="{{ d.ancho + 2 }}" height="{{ g.base_y - g.margen.arriba }}"/>
-      {% if d.gasto > 0 %}<rect class="tb-barra tb-barra-tw" x="{{ d.x }}" y="{{ d.gasto_y }}" width="{{ d.ancho }}" height="{{ g.base_y - d.gasto_y }}"/>{% endif %}
-      <circle class="tb-marcador tb-marcador-tw" cx="{{ d.x_centro }}" cy="{{ d.ingresos_y }}" r="3"/>
-      {% if d.etiqueta %}<text class="tb-eje" x="{{ d.x_centro }}" y="{{ g.alto - 8 }}" text-anchor="middle">{{ d.etiqueta }}</text>{% endif %}
-    </g>
-    {% endfor %}
-    <polyline class="tb-linea tb-linea-tw" points="{{ g.puntos_linea }}"/>
-  </svg>
-</section>
-{% endif %}
-
 {# ---------- reparto por veredicto y por canal ---------- #}
 <section class="tb-seccion">
   <div class="tb-seccion-cab"><h3>{{ _('Dónde se va el gasto') }}</h3></div>
@@ -343,7 +300,7 @@
   <div class="tb-seccion-cab"><h3>{{ _('Lo que más se vende') }}</h3><small class="vacio">{{ _('Según los pedidos de la tienda en Triple Whale; es el producto que conviene empujar en los anuncios nuevos.') }}</small></div>
   <div class="tw-tabla-scroll">
     <table class="tw-tabla">
-      <thead><tr><th>{{ _('Producto') }}</th><th>{{ _('Ingresos') }}</th><th>{{ _('%% de la tienda') }}</th><th>{{ _('Pedidos') }}</th><th>{{ _('Unidades') }}</th><th>{{ _('vs. periodo anterior') }}</th></tr></thead>
+      <thead><tr><th>{{ _('Producto') }}</th><th>{{ _('Ingresos') }}</th><th>{{ _('%% de la tienda') }}</th><th>{{ _('Pedidos') }}</th><th>{{ _('Unidades') }}</th>{% if tw.dias %}<th>{{ _('vs. periodo anterior') }}</th>{% endif %}</tr></thead>
       <tbody>
         {% for p in tw.productos %}
         <tr>
@@ -356,7 +313,7 @@
           <td>{{ p.pct_ingresos | tw_pct(0) }}</td>
           <td>{{ p.pedidos | tw_num }}</td>
           <td>{{ p.unidades | tw_num }}</td>
-          <td>{{ p.variacion | tw_var or '—' }}</td>
+          {% if tw.dias %}<td>{{ p.variacion | tw_var or '—' }}</td>{% endif %}
         </tr>
         {% endfor %}
       </tbody>
@@ -366,7 +323,7 @@
 {% endif %}
 
 {# ---------- todos los anuncios ---------- #}
-<details class="tw-tabla-detalle"><summary>{{ _('Ver como tabla') }}</summary>
+<details class="tw-tabla-detalle" id="tw-cada-anuncio"><summary>{{ _('Ver como tabla') }}</summary>
 <section class="tb-seccion">
   <div class="tb-seccion-cab"><h3>{{ _('Cada anuncio') }}</h3></div>
   <div class="tw-filtros" role="group" aria-label="{{ _('Filtrar por veredicto') }}">

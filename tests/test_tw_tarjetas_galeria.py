@@ -212,6 +212,42 @@ def test_un_analisis_de_otro_alcance_no_es_viejo_ni_vuelve_a_cobrarse(app):  # n
     assert ("facebook-ads", "g1") not in g["lote"]["claves"] and ("facebook-ads", "p1") not in g["lote"]["claves"]
 
 
+def test_mismo_alcance_por_largo_o_por_desde():
+    """Mezcla con «Resultados de tu tienda» (2026-10-08): misma tienda Y (mismo largo O mismo `desde`). «Desde el
+    inicio» crece un día cada día pero arranca siempre en el primer día copiado."""
+    alc = {"tienda_id": 3, "desde": "2026-09-01", "hasta": "2026-10-08"}
+    # Desde el inicio, ayer: un día menos de largo, el mismo primer día.
+    assert panel.mismo_alcance({"tienda_id": 3, "desde": "2026-09-01", "hasta": "2026-10-07"}, alc)
+    # El mismo largo en otras fechas (un periodo de N días que corre con los días).
+    assert panel.mismo_alcance({"tienda_id": 3, "desde": "2026-08-31", "hasta": "2026-10-07"}, alc)
+    # Otro largo y otro desde: otro alcance.
+    assert not panel.mismo_alcance({"tienda_id": 3, "desde": "2026-10-02", "hasta": "2026-10-08"}, alc)
+    # El mismo desde en otra tienda (o en «Todas»): otro alcance.
+    assert not panel.mismo_alcance({"tienda_id": 4, "desde": "2026-09-01", "hasta": "2026-10-07"}, alc)
+    assert not panel.mismo_alcance({"tienda_id": None, "desde": "2026-09-01", "hasta": "2026-10-08"}, alc)
+    # Sin fechas: ante la duda, no es el mismo (no se ofrece pagar otra vez como «viejo»).
+    assert not panel.mismo_alcance({"tienda_id": 3}, alc)
+    assert panel.mismo_alcance({"tienda_id": 3}, None)
+
+
+def test_desde_el_inicio_el_analisis_de_ayer_sigue_siendo_del_alcance(app):  # noqa: F811
+    """La galería abre en «Desde el inicio», como el panel (PERIODO_DEFECTO = 0): el alcance arranca en el primer día
+    copiado. Un análisis pagado ayer en ese alcance no pasa a «otro alcance» ni vuelve al lote solo por el día nuevo."""
+    _conectar()
+    _sembrar()
+    alc = panel.alcance("acme")
+    assert alc["dias"] == 0 and alc["desde"] == _hace(9) and alc["hasta"] == _hace(0)
+    p1 = _anuncio(alc, "p1")
+    _lista(alc, "p1", _foto(p1), hasta=_hace(1))                       # pagado ayer: un día menos, el mismo desde
+    fila = datos.ultimos_analisis("acme", [("facebook-ads", "p1")])[("facebook-ads", "p1")]
+    assert panel.mismo_alcance(fila, alc) and not panel.es_viejo(p1, fila, alc)
+    html = _tarjeta(app, "p1")
+    assert "Ver el análisis" in html and "Analizado con los datos del" not in html and "Analizar otra vez" not in html
+    assert ("facebook-ads", "p1") not in panel.galeria("acme", alc["ev"], alcance=alc)["lote"]["claves"]
+    # Y en el mismo alcance, un veredicto que cambió sí lo vuelve viejo.
+    assert panel.es_viejo(dict(p1, veredicto="perdedor" if p1["veredicto"] != "perdedor" else "ganador"), fila, alc)
+
+
 def test_en_el_mismo_alcance_un_50_por_ciento_mas_de_gasto_es_viejo(app):  # noqa: F811
     _conectar()
     _sembrar()

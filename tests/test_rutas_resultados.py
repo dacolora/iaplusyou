@@ -64,7 +64,7 @@ def test_resultados_con_experimento_trae_su_gestion(app, base_temporal):
     assert f'id="exp-{eid}"' not in sin_exp
     html = app["c"].get(f"/cliente/acme/experimentos/resultados?exp={eid}", headers=AJAX).get_data(as_text=True)
     assert f'id="exp-{eid}"' in html and "Cojín armando" in html
-    assert f"/cliente/acme/experimentos/{eid}/lanzar" in html and "Lanzar a Meta (en pausa)" in html
+    assert f"/cliente/acme/experimentos/{eid}/lanzar" in html and "Lanzar a Meta</button>" in html and "se activan: empieza a gastar" in html
     assert f"/cliente/acme/experimentos/{eid}/modo" in html and f"/cliente/acme/experimentos/{eid}/reglas" in html
     # En armado se pueden agregar piezas: el formulario trae las elegibles (que salen de ex.elegibles, no de la página).
     assert f"/cliente/acme/experimentos/{eid}/piezas" in html and "Agregar pieza" in html
@@ -141,14 +141,14 @@ def test_nuevo_experimento_tiene_su_ruta_con_la_galeria_y_los_tres_pasos(app, ba
     assert ex.cargar("acme") == []
 
 
-def test_nuevo_experimento_sin_meta_ofrece_conectar_y_no_deja_probar(app, monkeypatch, base_temporal):
+def test_nuevo_experimento_sin_meta_vuelve_a_la_pestana(app, monkeypatch, base_temporal):
+    """Desde 2026-10-08 sin Meta no hay galería (dejaba marcar piezas que no se podían lanzar): la pestaña dice qué
+    falta. El resto del caso está en tests/test_experimentos_sin_meta.py."""
     _pieza(base_temporal)
     monkeypatch.setattr(app["dashboard"].meta_conexion, "estado",
                         lambda c: {"estado": "sin_conectar", "verificado": False, "detalle": {}})
-    html = app["c"].get("/cliente/acme/experimentos/nuevo").get_data(as_text=True)
-    assert 'id="exp-galeria"' in html and "Conecta Meta arriba para probar" in html
-    assert "¿Cómo quieres conectar Meta?" not in html and "Conéctalo en Configuración › Conexiones" in html
-    assert 'action="/cliente/acme/experimentos/probar"' not in html
+    r = app["c"].get("/cliente/acme/experimentos/nuevo")
+    assert r.status_code == 302 and r.headers["Location"].endswith("/cliente/acme#experimentos")
 
 
 def test_nuevo_experimento_prellena_nombre_y_destino_del_catalogo(app, base_temporal):
@@ -640,7 +640,7 @@ def test_pnd140_historial_pixel_sin_ventas_y_gasto_mixto(app, base_temporal):
     html = app["c"].get("/cliente/acme/experimentos/resultados", headers=AJAX).get_data(as_text=True)
     historial = html[html.index('class="tb-tiles"'):]
     assert '<strong>0,0×</strong>' in historial
-    assert '<td class="num">0,0×</td>' in historial
+    assert 'class="tb-meses' not in historial          # sin tabla por mes desde 2026-10-08
     trafico = _experimento("Tráfico")
     _pieza_en(base_temporal, trafico, n=2)
     # Incluso con CPA sin valor (cero compras), ambos KPI explican el gasto de tráfico.

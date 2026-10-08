@@ -205,6 +205,16 @@ def dia_mes(fecha, idioma=None):
     return format_date(fecha, _PATRON_DIA_MES[loc], locale=loc)
 
 
+_PATRON_DIA_SEMANA = {"es": "EEEE d 'de' MMMM", "en": "EEEE, MMMM d"}
+
+
+def dia_semana(fecha, idioma=None):
+    """«jueves 17 de septiembre» / «Thursday, September 17» (el detalle del día de Triple Whale)."""
+    from babel.dates import format_date
+    loc = _loc(idioma)
+    return format_date(fecha, _PATRON_DIA_SEMANA[loc], locale=loc)
+
+
 def numero(valor, decimales=0, idioma=None):
     """Miles y decimales del idioma: «1.250.000» / «1,250,000»; con
     decimales=2, «12,50» / «12.50». El patrón explícito agrupa también los

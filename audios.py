@@ -37,8 +37,9 @@ IDIOMAS = ("es", "en", "pt", "de", "fr", "it", "fi", "sv", "no", "cs", "nl")
 NOMBRES_IDIOMA = {"es": "Español", "en": "English", "pt": "Português", "de": "Deutsch", "fr": "Français",
                   "it": "Italiano", "fi": "Suomi", "sv": "Svenska", "no": "Norsk", "cs": "Čeština", "nl": "Nederlands"}
 # Idiomas que Multilingual v2 no habla: la galería los lee con Turbo v2.5 y
-# el idioma forzado (spec 2026-09-30 §2).
-IDIOMAS_TURBO = ("no",)
+# el idioma forzado (spec 2026-09-30 §2). Vive en fal_audio para que las
+# finales usen la misma tupla (`fal_audio.tts_galeria`).
+IDIOMAS_TURBO = fal_audio.IDIOMAS_TURBO
 PREFIJO_VOZ_PROPIA = "vp:"
 MOTOR_ELEVENLABS = "elevenlabs"
 MOTOR_TURBO = "elevenlabs_turbo"

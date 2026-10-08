@@ -8,6 +8,7 @@ Uso:
 
 Solo corre en tu máquina (127.0.0.1), no queda expuesto a internet.
 """
+import hashlib
 import json
 import logging
 import math
@@ -1995,6 +1996,7 @@ def _contexto_experimentos(cliente, con_elegibles=False, con_organico=True, gest
     gestion = experimentos_exp if gestion_id is None else [e for e in experimentos_exp if e["id"] == gestion_id]
     trabajos_exp = {}
     for e in gestion:
+        e["datos_viejos"] = experimentos.datos_viejos(e)
         if e["estado"] == "lanzando":
             jid = tareas_exp.job_id_lanzar(cliente, e["id"])
             if trabajos.en_curso(jid):
@@ -2020,6 +2022,8 @@ def _contexto_experimentos(cliente, con_elegibles=False, con_organico=True, gest
         "objetivo_exp_sugerido": experimentos.objetivo_sugerido(cliente, atribucion_sug),
         "nombres_objetivo_exp": NOMBRES_OBJETIVO_EXP,
         "app_id_guardado": meta_conexion.cargar_app_anunciada(cliente),
+        "limites_diarios_exp": {e["id"]: {p["pais"]: presupuesto_experimentos.limite_diario(e, p["pais"])
+                                           for p in e["paises"]} for e in gestion},
         "minimo_diario_exp": PRESUPUESTO_MINIMO_DIARIO.get(moneda_exp, 1),
         "tope_campana_min_exp": lanzador.minimo_tope_campana(moneda_exp),
         "moneda_exp": moneda_exp,
@@ -2141,6 +2145,9 @@ def ver_cliente(cliente):
     # (El hotfix e8d433a del 2026-10-03 las devolvía mientras la pestaña vieja pintaba la galería; E2 la reemplaza.)
     ctx_exp = _contexto_motor_experimentos(cliente)
     ctx_meta = _contexto_meta(cliente)
+    # Sin Meta y sin nada probado, la pestaña es solo «Conecta Meta» (Daniel, 2026-10-08: la tabla vacía y una galería
+    # que dejaba marcar piezas sin poder lanzarlas confundían). Con Meta conectado ni se consulta.
+    ctx_exp["exp_sin_meta"] = not ctx_meta["meta_conectado"] and not experimentos.hay_historial(cliente)
     tiendas_cliente = tiendas.listar(cliente)
     triple_whale_conectado = triple_whale_tiendas.obtener(cliente)
     # Las tarjetas de tiendas (spec 2026-10-08 §6.2): país y bandera en el idioma de quien mira.
@@ -2203,7 +2210,7 @@ def ver_cliente(cliente):
         swaps=_swap_items(cliente),
         creative_flow_items=cf_items,
         **_listas_crear(cf_items),
-        **_tablero_final(cf_items, fe_ctx["ediciones_por_cf"]),
+        **_tablero_final(cf_items, fe_ctx["ediciones_por_cf"], cliente=cliente),
         preferencias_flowplus=proyectos.preferencias_flowplus(cliente),
         preferencias_sonido=proyectos.preferencias_sonido(cliente),
         aviso_saldo=saldo.vigente("wavespeed"),
@@ -3379,12 +3386,12 @@ def _listas_crear(items, n=TARJETAS_POR_PAGINA):
     return {"crear": items[:n], "crear_total": len(items)}
 
 
-def _tablero_final(items, ediciones_por_cf, n=TARJETAS_POR_PAGINA):
+def _tablero_final(items, ediciones_por_cf, n=TARJETAS_POR_PAGINA, cliente=None):
     """Lo que pinta el tablero de Final edition (2026-10-02,
     `final_edition.tablero`): las primeras `n` tarjetas de «En edición» y de
     «Finalizados», sus totales y las cifras de la cabecera. Los videos listos
     de Crear no van en la página: los trae el selector «+ Nueva» por fetch."""
-    t = fe_tablero.armar(items, ediciones_por_cf)
+    t = fe_tablero.armar(items, ediciones_por_cf, gastos.total_tipo(cliente, "final") if cliente else None)
     return {"fe_en_edicion": t["en_edicion"][:n], "fe_en_edicion_total": len(t["en_edicion"]),
             "fe_finalizados": t["finalizados"][:n], "fe_finalizados_total": len(t["finalizados"]),
             "fe_cifras": t["cifras"]}
@@ -3414,6 +3421,7 @@ def _contexto_final_edition(cliente):
     return {
         **_contexto_organico(cliente),
         "paises_fe": fe_tipos.PAISES,
+        "idiomas_fe": IDIOMAS_FE,
         "voces_fe": fal_audio.VOCES,
         "mis_voces_fe": _mis_voces_fe(cliente),
         "estilos_fe": list(fe_tipos.ESTILOS_MUSICA),
@@ -4712,89 +4720,6 @@ def eliminar_ad(cliente, ad_id):
 
 # ---------- Tablero (Bloque 6) ----------
 
-# Geometría del gráfico de 30 días (viewBox fija; el SVG escala al ancho).
-_TB_ANCHO, _TB_ALTO = 720, 220
-_TB_MARGEN = {"izq": 60, "der": 12, "arriba": 12, "abajo": 26}
-
-
-def _nice_max(valor):
-    """Máximo «bonito» para el eje: el primer 1/2/2,5/5/10 × 10^n que cubre
-    el valor, para que las 4 marcas queden en números redondos."""
-    if valor <= 0:
-        return 1.0
-    exp = 10 ** math.floor(math.log10(valor))
-    for f in (1, 2, 2.5, 5, 10):
-        if f * exp >= valor:
-            return float(f * exp)
-    return float(10 * exp)
-
-
-def _compacto(valor):
-    """Etiqueta corta para el eje: 1,2 M / 250 k / 12 en español; 1.2 M / 250 k /
-    12 en inglés (idiomas.separador_decimal — el recorte de ceros es a medida,
-    así que no usa `idiomas.numero` completo)."""
-    v = float(valor or 0)
-    if v >= 1_000_000:
-        t = f"{v / 1_000_000:.1f}".rstrip("0").rstrip(".") + " M"
-    elif v >= 1_000:
-        t = f"{v / 1_000:.1f}".rstrip("0").rstrip(".") + " k"
-    elif v == int(v):
-        t = str(int(v))
-    else:
-        t = f"{v:.2f}".rstrip("0").rstrip(".")   # 0,5 y 0,25, no 0,50
-    return t.replace(".", idiomas.separador_decimal())
-
-
-def _grafico_tablero(serie):
-    """Coordenadas listas para pintar la serie de 30 días como SVG inline:
-    barras de gasto y línea de ingresos sobre UN solo eje (las dos son dinero
-    en `serie.moneda`, así que comparten escala), 4 marcas + máximo redondeado,
-    etiqueta de fecha cada 5 días y un `titulo` por día para el tooltip nativo.
-    None si no hay días o todo es cero (la plantilla muestra el estado vacío
-    en vez de un gráfico en blanco)."""
-    dias = (serie or {}).get("dias") or []
-    moneda = (serie or {}).get("moneda") or tablero.MONEDA_POR_DEFECTO
-    if not dias:
-        return None
-    tope = max(max(float(d["gasto"] or 0), float(d["ingresos"] or 0)) for d in dias)
-    if tope <= 0:
-        return None
-    maximo = _nice_max(tope)
-    m = _TB_MARGEN
-    ancho_plot = _TB_ANCHO - m["izq"] - m["der"]
-    alto_plot = _TB_ALTO - m["arriba"] - m["abajo"]
-    base_y = m["arriba"] + alto_plot
-    paso = ancho_plot / len(dias)
-    ancho_barra = max(2.0, paso - 2)   # 2px de aire entre barras
-
-    def y_de(v):
-        return round(base_y - (float(v or 0) / maximo) * alto_plot, 2)
-
-    salida = []
-    for i, d in enumerate(dias):
-        dd, mm = d["dia"][8:10], d["dia"][5:7]
-        fecha_dia = date(int(d["dia"][0:4]), int(mm), int(dd))
-        x = m["izq"] + i * paso
-        gasto, ingresos = float(d["gasto"] or 0), float(d["ingresos"] or 0)
-        salida.append({
-            "dia": d["dia"], "gasto": gasto, "ingresos": ingresos, "compras": int(d.get("compras") or 0),
-            "x": round(x, 2), "x_centro": round(x + paso / 2, 2), "ancho": round(ancho_barra, 2),
-            "gasto_y": y_de(gasto), "ingresos_y": y_de(ingresos),
-            "etiqueta": idiomas.dia_mes(fecha_dia) if i % 5 == 0 else "",
-            "titulo": gettext("%(dd)s/%(mm)s · gasto %(gasto)s · ingresos %(ingresos)s",
-                              dd=dd, mm=mm, gasto=tablero.dinero(gasto, moneda),
-                              ingresos=tablero.dinero(ingresos, moneda)),
-        })
-    marcas = [{"valor": maximo * k / 4, "y": y_de(maximo * k / 4), "texto": _compacto(maximo * k / 4)} for k in range(5)]
-    puntos = " ".join(f"{d['x_centro']},{d['ingresos_y']}" for d in salida)
-    return {"ancho": _TB_ANCHO, "alto": _TB_ALTO, "margen": m, "base_y": base_y, "maximo": maximo, "moneda": moneda,
-            "marcas": marcas, "dias": salida, "puntos_linea": puntos}
-
-
-# La pestaña Triple Whale (Blueprint) pinta el mismo gráfico que el Tablero.
-app.extensions["grafico_tablero"] = _grafico_tablero
-
-
 @app.template_filter("dinero")
 def _filtro_dinero(valor, moneda):
     """«1.250.000 COP» / «12,50 USD» (la misma regla que las alertas)."""
@@ -4840,8 +4765,8 @@ def _calcular_tablero(cliente):
     para esa parte y pinta el resto. Si la carga misma falla, cada parte carga
     por su cuenta (más lento, mismo resultado). La serie de 30 días, el top de
     ganadoras y los dos gráficos ya no se calculan: desde E2 no los pinta nadie
-    (revisión final, 2026-10-03; el gráfico de Triple Whale lo arma su pestaña
-    con `app.extensions["grafico_tablero"]`). Las alertas tampoco son una parte:
+    (revisión final, 2026-10-03; la pestaña Triple Whale tiene su propia gráfica
+    desde 2026-10-08, «Resultados de tu tienda»). Las alertas tampoco son una parte:
     las calcula alertas.py (que sigue leyendo `tablero.alertas`) y el centro
     solo pinta su conteo, de `alertas_ctx` (spec alertas §7 y §12.9)."""
     ahora = db.ahora()
@@ -4860,9 +4785,9 @@ def _calcular_tablero(cliente):
         "meses": lambda: tablero.mes_a_mes(cliente, ahora, datos=datos),
         "generacion_total": lambda: gastos.resumen_total(cliente, ahora),
         # La tienda según Triple Whale (copia local, spec 2026-09-28 §13): sin conexión es None.
-        "tienda_tw": lambda: triple_whale_panel.resumen_mes_tienda(cliente),
+        "tienda_tw": lambda: triple_whale_panel.resumen_total_tienda(cliente),
         # El CSV va en el contexto cacheado para que la descarga cuadre con lo que se ve (tab_descargar_csv).
-        "csv": lambda: tablero.csv_mes(cliente, ahora, datos=datos),
+        "csv": lambda: tablero.csv_total(cliente, ahora, datos=datos),
     }
     for nombre, fn in partes.items():
         try:
@@ -5114,16 +5039,16 @@ def alertas_restaurar(cliente):
 
 @app.route("/cliente/<cliente>/tablero/mes.csv")
 def tab_descargar_csv(cliente):
-    """CSV del mes en curso (una fila por pieza, `;`, BOM) para abrir en
-    Excel. Sale del mismo contexto cacheado que la pestaña; si esa parte
+    """CSV con lo acumulado de cada pieza desde el inicio (una fila por pieza,
+    `;`, BOM) para abrir en Excel. Sale del mismo contexto cacheado que la pestaña; si esa parte
     falló, se vuelve a intentar sola para que el error llegue al navegador."""
     ctx = _contexto_tablero(cliente)
     ahora = ctx["ahora"]
     texto = ctx.get("csv")
     if texto is None:
-        texto = tablero.csv_mes(cliente, ahora)
+        texto = tablero.csv_total(cliente, ahora)
     resp = Response(texto, content_type="text/csv; charset=utf-8")
-    nombre = secure_filename(f"tablero_{cliente}_{ahora[:7]}.csv")
+    nombre = secure_filename(f"tablero_{cliente}_total_{ahora[:10]}.csv")
     resp.headers["Content-Disposition"] = f'attachment; filename="{nombre}"'
     return resp
 
@@ -5152,10 +5077,11 @@ def _filtro_usd(valor):
     return gastos.formatear(valor)
 
 
-def _pauta_mes(tablero_ctx):
+def _pauta_mes(tablero_ctx, parte="resumen"):
     """[{"moneda", "gasto"}] con la pauta del mes por moneda (solo > 0), del
-    resumen ya calculado por el tablero. Sin resumen (parte rota) → []."""
-    resumen = (tablero_ctx or {}).get("resumen") or {}
+    resumen ya calculado por el tablero. Sin resumen (parte rota) → [].
+    `parte="total"` da la pauta desde el inicio (`tablero.resumen_total`)."""
+    resumen = (tablero_ctx or {}).get(parte) or {}
     salida = []
     for moneda, g in sorted((resumen.get("por_moneda") or {}).items()):
         gasto = float((g or {}).get("gasto") or 0)
@@ -5176,54 +5102,51 @@ def _precios_pagina():
     }
 
 
-def _chip_gasto(gasto_mes, pauta_mes):
+def _chip_gasto(gasto, pauta):
     """Texto del chip del sidebar: «US$ 12,40 generación · 1.405.157 COP
-    pauta» (la pauta solo si hay; la generación siempre, aunque sea 0).
-    Traducido acá (no en la plantilla, que solo recibe el texto ya armado
-    con `_('Este mes: %(gasto)s', ...)`, ver _sidebar.html)."""
-    partes = [gettext("%(monto)s generación", monto=gastos.formatear((gasto_mes or {}).get('total') or 0))]
-    for p in pauta_mes or []:
+    pauta» (la pauta solo si hay; la generación siempre, aunque sea 0), desde
+    el inicio. Traducido acá (no en la plantilla, que solo recibe el texto ya
+    armado con `_('Gasto total: %(gasto)s', ...)`, ver _sidebar.html)."""
+    partes = [gettext("%(monto)s generación", monto=gastos.formatear((gasto or {}).get('total') or 0))]
+    for p in pauta or []:
         partes.append(gettext("%(monto)s pauta", monto=tablero.dinero(p['gasto'], p['moneda'])))
     return " · ".join(partes)
 
 
 def _contexto_gasto(cliente, tablero_ctx):
-    """gasto_mes (gastos.resumen_mes), pauta_mes (por moneda, del tablero),
-    precios (estimados de los botones), gastos_historial (200 últimos),
-    gastos_por_tipo (tabla) y gasto_chip (sidebar). Cada parte en su
-    try/except: el gasto informa, nunca tumba la página."""
+    """Todo desde el inicio (Daniel, 2026-10-08: «todas las métricas en la
+    totalidad, no por mes, porque confunden a mis clientes»): gasto_total
+    (gastos.resumen_total), pauta_total (por moneda, del tablero),
+    gastos_por_tipo (gastos.resumen_todo), gastos_historial (200 últimos),
+    precios (estimados de los botones) y gasto_chip (sidebar). Cada parte en
+    su try/except: el gasto informa, nunca tumba la página."""
     try:
-        gasto_mes = gastos.resumen_mes(cliente)
+        gasto_todo = gastos.resumen_todo(cliente)
     except Exception as e:  # noqa: BLE001 — informativo
-        print(f"[aviso] Gasto de {cliente}: no pude leer el resumen del mes: {type(e).__name__}")
-        gasto_mes = {"desde": None, "hasta": None, "total": 0.0, "por_tipo": {}, "n": 0, "error": True}
+        print(f"[aviso] Gasto de {cliente}: no pude leer el resumen por tipo: {type(e).__name__}")
+        gasto_todo = {"desde": None, "hasta": None, "total": 0.0, "por_tipo": {}, "n": 0, "error": True}
     try:
         historial = gastos.historial(cliente, limite=200)
     except Exception as e:  # noqa: BLE001 — informativo
         print(f"[aviso] Gasto de {cliente}: no pude leer el historial: {type(e).__name__}")
         historial = []
-    # Desde el inicio y mes a mes (2026-10-07): la pantalla solo decía «este
-    # mes» y los meses anteriores parecían perdidos.
     try:
         gasto_total = gastos.resumen_total(cliente)
-        gasto_por_mes = [{"mes": m, "usd": v["usd"], "n": v["n"]}
-                         for m, v in sorted(gastos.por_mes(cliente).items(), reverse=True)]
     except Exception as e:  # noqa: BLE001 — informativo
         print(f"[aviso] Gasto de {cliente}: no pude leer el total desde el inicio: {type(e).__name__}")
-        gasto_total, gasto_por_mes = {"total": 0.0, "n": 0, "desde": None, "error": True}, []
-    pauta = _pauta_mes(tablero_ctx)
+        gasto_total = {"total": 0.0, "n": 0, "desde": None, "error": True}
+    pauta = _pauta_mes(tablero_ctx, "total")
     por_tipo = [{"tipo": t, "nombre": NOMBRES_TIPO_GASTO.get(t, t), "n": v["n"], "usd": v["usd"]}
-                for t, v in sorted(gasto_mes["por_tipo"].items(), key=lambda kv: -kv[1]["usd"])]
+                for t, v in sorted(gasto_todo["por_tipo"].items(), key=lambda kv: -kv[1]["usd"])]
     return {
-        "gasto_mes": gasto_mes,
-        "pauta_mes": pauta,
+        "gasto_total": gasto_total,
+        "gasto_todo": gasto_todo,
+        "pauta_total": pauta,
         "precios": _precios_pagina(),
         "gastos_historial": historial,
         "gastos_por_tipo": por_tipo,
-        "gasto_total": gasto_total,
-        "gasto_por_mes": gasto_por_mes,
         "nombres_tipo_gasto": NOMBRES_TIPO_GASTO,
-        "gasto_chip": _chip_gasto(gasto_mes, pauta),
+        "gasto_chip": None if gasto_total.get("error") else _chip_gasto(gasto_total, pauta),
     }
 
 
@@ -5240,7 +5163,7 @@ def _chip_gasto_sidebar():
     if not cliente or request.endpoint == "ver_cliente" or _quiere_json():
         return {}
     try:
-        return {"gasto_chip": _chip_gasto(gastos.resumen_mes(cliente), _pauta_mes(_contexto_tablero(cliente)))}
+        return {"gasto_chip": _chip_gasto(gastos.resumen_total(cliente), _pauta_mes(_contexto_tablero(cliente), "total"))}
     except Exception as e:  # noqa: BLE001 — sin chip, pero con página
         print(f"[aviso] Gasto de {cliente}: no pude calcular el chip del sidebar: {type(e).__name__}")
         return {}
@@ -5326,10 +5249,15 @@ def exp_pieza(cliente, ep_id):
 def exp_nuevo(cliente):
     """«Nuevo experimento» en su propia ruta (E2): la galería de piezas, la barra y los tres pasos que hasta ahora
     vivían arriba de la lista de experimentos. Misma URL que el POST de `exp_crear`, otro método. Llega con
-    `?piezas=1,2` (las marca), `?exp_nombre=&exp_destino=` (Catálogo) o sin nada."""
+    `?piezas=1,2` (las marca), `?exp_nombre=&exp_destino=` (Catálogo) o sin nada. Sin Meta conectado no hay galería:
+    vuelve a la pestaña, que dice qué falta (2026-10-08: dejaba marcar piezas que después no se podían lanzar)."""
+    if meta_conexion.estado(cliente).get("estado") != "conectado":
+        return _volver_exp(cliente)
     ctx = _contexto_experimentos(cliente, con_elegibles=True, con_organico=False)
+    # token_form: de un solo uso por formulario pintado; exp_probar lo consume (un reenvío no crea ni activa otro).
     return render_template("exp_nuevo.html", cliente=cliente, nombre_proyecto=proyectos.nombre_visible(cliente),
-                           paises_fe=fe_tipos.PAISES, **ctx, **_contexto_meta(cliente, ctx["experimentos"]))
+                           paises_fe=fe_tipos.PAISES, token_form=secrets.token_urlsafe(16), **ctx,
+                           **_contexto_meta(cliente, ctx["experimentos"]))
 
 
 @app.route("/cliente/<cliente>/experimentos/nuevo", methods=["POST"])
@@ -5339,7 +5267,7 @@ def exp_crear(cliente):
     lo pide."""
     volver = _volver_exp(cliente)
     if meta_conexion.estado(cliente).get("estado") != "conectado":
-        flash(gettext("Conecta Meta en Experimentos antes de crear un experimento."), "error")
+        flash(gettext("Conecta Meta en Configuración › Conexiones antes de crear un experimento."), "error")
         return volver
     moneda = (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
     nombre = (request.form.get("nombre") or "").strip()[:200]
@@ -5466,15 +5394,16 @@ def _error_de_presupuesto(moneda, codigos, paises, dias):
 @app.route("/cliente/<cliente>/experimentos/probar", methods=["POST"])
 def exp_probar(cliente):
     """La galería primero: un solo POST crea el experimento, reparte las
-    piezas por país y encola el lanzamiento (todo PAUSED en Meta). Valida lo
-    mismo que exp_crear; si algo falla no queda nada creado. Activar sigue
-    siendo un clic aparte. Un error de validación (no queda nada creado) vuelve a «Nuevo experimento», donde está
+    piezas por país y encola el lanzamiento, que crea todo PAUSED en Meta y lo
+    activa si terminó sin error (Daniel 2026-10-08: este clic, con el gasto
+    diario a la vista en Revisar, es la aprobación). Valida lo mismo que
+    exp_crear; si algo falla no queda nada creado. Un error de validación (no queda nada creado) vuelve a «Nuevo experimento», donde está
     el formulario, con las piezas ya marcadas; lo creado lleva al centro de resultados, a ese experimento."""
     marcadas = ",".join(x for x in request.form.getlist("piezas") if x.isascii() and x.isdigit())
     volver = redirect(url_for("exp_nuevo", cliente=cliente, **({"piezas": marcadas} if marcadas else {})))
     if meta_conexion.estado(cliente).get("estado") != "conectado":
-        flash(gettext("Conecta Meta en Experimentos antes de probar piezas."), "error")
-        return volver
+        flash(gettext("Conecta Meta en Configuración › Conexiones antes de probar piezas."), "error")
+        return _volver_exp(cliente)   # «Nuevo experimento» sin Meta ya no pinta la galería
     moneda = (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
     objetivo = request.form.get("objetivo") or ""
     # Sin repetidos y en el orden en que llegan: un POST armado a mano con paises=CO&paises=CO creaba dos
@@ -5579,22 +5508,57 @@ def exp_probar(cliente):
     nombre = (request.form.get("nombre") or "").strip()[:200] or nombre_experimento_automatico(n_piezas, codigos)
     datos = dict(nombre=nombre, paises=paises, objetivo_meta=objetivo, dias=dias, tope_total=tope, destino_url=destino,
                  moneda=moneda, edad_min=edad_min, edad_max=edad_max, modo=modo, atribucion=atribucion, app=datos_app)
+    datos["clave_form"] = _clave_formulario_experimento(request.form.get("token_form"), datos, combinaciones)
     try:
         eid = experimentos.crear_con_piezas(cliente, datos, combinaciones)
+    except experimentos.ExperimentoRepetido as e:
+        # Lanzar también activa (2026-10-08): un «¿Reenviar formulario?» o un doble envío no crea ni gasta otra vez.
+        flash(gettext("Ese formulario ya creó un experimento: no se creó otro. Aquí está el que ya existe."), "warn")
+        return _volver_exp(cliente, e.eid)
     except (experimentos.ErrorCombinacion, ValueError) as e:
         flash(str(e), "error")
         return volver
     if es_app:
         meta_conexion.guardar_app_anunciada(cliente, datos_app["app_id"])
-    job_id = tareas_exp.job_id_lanzar(cliente, eid)
-    arranco = trabajos.encolar(job_id, "exp_lanzar", {"cliente": cliente, "experimento_id": eid},
-                               cliente=cliente, duracion_estimada=120, etapas=lanzador.ETAPAS_LANZAR, max_intentos=1)
+    # activar=True: el clic de «Lanzar a Meta», con el gasto diario a la vista, es la aprobación (Daniel, 2026-10-08).
+    arranco = _encolar_lanzamiento(cliente, eid, "armando", None)
     if arranco:
-        experimentos.actualizar(cliente, eid, estado="lanzando", error=None)
-        flash(gettext("«%(nombre)s»: lanzando a Meta en pausa. Cuando termine, actívalo desde su tarjeta.", nombre=nombre), "ok")
+        flash(gettext("«%(nombre)s»: lanzando a Meta. Si todo sale bien, queda activo y empieza a gastar.", nombre=nombre), "ok")
     else:
         flash(gettext("«%(nombre)s» quedó creado; ya se estaba lanzando.", nombre=nombre), "warn")
     return _volver_exp(cliente, eid)
+
+
+def _encolar_lanzamiento(cliente, eid, estado_previo, error_previo):
+    """Marca «lanzando» ANTES de encolar `exp_lanzar` (con `activar`) y, si no arrancó o encolar falló, lo devuelve a
+    como estaba. Al revés (encolar y después escribir «lanzando», el M2 de antes) un worker rápido podía activar y
+    dejarlo «corriendo» antes de que la ruta escribiera, y esa escritura tardía lo pisaba con anuncios gastando (ronda 2
+    de guardian-gasto, 2026-10-08). Lo que M2 cuidaba (quedar en «lanzando» sin tarea) lo cubre la vuelta atrás."""
+    experimentos.actualizar(cliente, eid, estado="lanzando", error=None)
+    try:
+        arranco = trabajos.encolar(tareas_exp.job_id_lanzar(cliente, eid), "exp_lanzar",
+                                   {"cliente": cliente, "experimento_id": eid, "activar": True}, cliente=cliente,
+                                   duracion_estimada=120, etapas=lanzador.ETAPAS_LANZAR_Y_ACTIVAR, max_intentos=1)
+    except Exception:
+        experimentos.actualizar(cliente, eid, estado=estado_previo, error=error_previo)
+        raise
+    if not arranco:
+        experimentos.actualizar(cliente, eid, estado=estado_previo, error=error_previo)
+    return arranco
+
+
+def _clave_formulario_experimento(token, datos, combinaciones):
+    """La clave que hace de «Nuevo experimento» un envío de un solo uso (experimentos.crear_con_piezas la busca):
+    el token oculto del formulario («t:…»), o sin token (un POST armado a mano, una pestaña de antes del cambio) la
+    huella de lo que se pide («h:…»: piezas × países, presupuestos, días, total, objetivo, destino, app)."""
+    token = (token or "").strip()
+    if token and len(token) <= 64 and token.replace("-", "").replace("_", "").isalnum():
+        return "t:" + token
+    huella = {"combinaciones": sorted([int(pid), pais or ""] for pid, pais in combinaciones),
+              "paises": sorted([p["pais"], float(p.get("presupuesto_dia") or 0)] for p in datos["paises"]),
+              "dias": int(datos["dias"]), "tope": float(datos["tope_total"]), "objetivo": datos["objetivo_meta"],
+              "destino": datos["destino_url"], "app": datos.get("app")}
+    return "h:" + hashlib.sha256(json.dumps(huella, sort_keys=True, default=str).encode()).hexdigest()[:32]
 
 
 def _agregar_pieza_validada(cliente, experimento_id, pieza_id, pais):
@@ -5680,7 +5644,9 @@ def exp_meter_pieza(cliente):
 @app.route("/cliente/<cliente>/experimentos/<int:eid>/lanzar", methods=["POST"])
 def exp_lanzar(cliente, eid):
     """Encola el lanzamiento a Meta (campaña + conjuntos por país + anuncios,
-    todo PAUSED). Valida acá lo mismo que lanzador.lanzar para poder avisar
+    creados PAUSED) y, si termina sin error, la activación de todo (`activar`:
+    Daniel 2026-10-08, este clic con el gasto diario a la vista es la
+    aprobación). Valida acá lo mismo que lanzador.lanzar para poder avisar
     por flash sin gastar un intento de la cola (max_intentos=1: un reintento
     automático a mitad de la cadena crearía objetos huérfanos en Meta)."""
     volver = _volver_exp(cliente, eid)
@@ -5700,16 +5666,9 @@ def exp_lanzar(cliente, eid):
         flash(gettext("Sin piezas para: %(paises)s. Agrega una pieza por país o quita el país.",
                       paises=", ".join(faltan)), "error")
         return volver
-    job_id = tareas_exp.job_id_lanzar(cliente, eid)
-    # M2: encolar primero y solo marcar "lanzando" si de verdad arrancó — si
-    # se pusiera "lanzando" antes y trabajos.encolar fallara (ej. "database is
-    # locked"), el experimento quedaría colgado ahí sin tarea que lo saque
-    # (_reconciliar_huerfanos no corre bajo gunicorn).
-    arranco = trabajos.encolar(job_id, "exp_lanzar", {"cliente": cliente, "experimento_id": eid},
-                               cliente=cliente, duracion_estimada=120, etapas=lanzador.ETAPAS_LANZAR, max_intentos=1)
+    arranco = _encolar_lanzamiento(cliente, eid, ex["estado"], ex["error"])
     if arranco:
-        experimentos.actualizar(cliente, eid, estado="lanzando", error=None)
-        flash(gettext("Lanzando el experimento a Meta (queda en pausa)…"), "ok")
+        flash(gettext("Lanzando el experimento a Meta: si todo sale bien, queda activo y empieza a gastar…"), "ok")
     else:
         flash(gettext("Ya se está lanzando ese experimento."), "warn")
     return volver
@@ -5813,7 +5772,10 @@ def exp_cerrar(cliente, eid):
     # los objetos ya creados en Meta sin que el experimento se entere. Solo
     # se puede cerrar desde armando/error (nunca se lanzó) o pausado/corriendo
     # (ya está en Meta).
-    if ex["estado"] not in ("pausado", "corriendo", "armando", "error"):
+    # Un «lanzando» SIN tarea viva (el worker murió y nadie lo reconcilió todavía) sí se cierra: cerrar pausa en Meta lo
+    # que haya, sin mirar el estado local (ronda 2 de guardian-gasto, 2026-10-08).
+    lanzando_huerfano = ex["estado"] == "lanzando" and not trabajos.en_curso(tareas_exp.job_id_lanzar(cliente, eid))
+    if ex["estado"] not in ("pausado", "corriendo", "armando", "error") and not lanzando_huerfano:
         flash(gettext("Espera a que termine el lanzamiento antes de cerrar."), "error")
         return volver
     with _ENV_LOCK:
@@ -7273,7 +7235,9 @@ def cf_descartar(cliente, cf_id):
 
 # ---------------------------------------------------------- Final edition ---
 
-IDIOMAS_FE = ("es", "en", "pt")
+# Idiomas de una final: los de los países de `fe_tipos.PAISES` (noruego y sueco desde el
+# 2026-10-08, spec de Noruega y Suecia §4).
+IDIOMAS_FE = ("es", "en", "pt", "sv", "no")
 
 
 def _volver_final(cliente):
@@ -8605,8 +8569,10 @@ def _reconciliar_huerfanos():
             if trabajos.en_curso(tareas_exp.job_id_lanzar(cliente, eid)):
                 continue
             with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
-                experimentos.actualizar(cliente, eid, estado="error",
-                                         error=gettext("Se interrumpió el lanzamiento; revisa Ads Manager y vuelve a intentar."))
+                # Lanzar crea y activa (2026-10-08): lo que alcanzó a activarse vuelve a pausa antes del error; si
+                # Meta no deja, el mensaje y un aviso lo dicen (dejar_sin_gastar).
+                lanzador.dejar_sin_gastar(cliente, eid, "error",
+                                          gettext("Se interrumpió el lanzamiento; revisa Ads Manager y vuelve a intentar."))
     except Exception as e:
         print(f"[aviso] No pude reconciliar experimentos lanzando: {e}")
 

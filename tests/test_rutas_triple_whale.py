@@ -30,13 +30,13 @@ def _tienda(cliente="acme"):
     return triple_whale_tiendas.tiendas(cliente)[0]["id"]
 
 
-def _sembrar(tienda_id=None):
+def _sembrar(tienda_id=None, dias=10):
     """Seis anuncios de Meta con 10 días de datos: dos ganadores, dos
     perdedores, uno sin datos y uno de TikTok; y la tienda. En la primera
     tienda del proyecto si no se dice cuál."""
     tienda_id = tienda_id or _tienda()
     canal, pixel, tienda = [], [], []
-    for dia in range(10):
+    for dia in range(dias):
         f = _hace(dia)
         for ad, gasto, imp, pedidos, ingresos, canal_ in (("g1", 20, 2000, 1, 120, "facebook-ads"),
                                                           ("g2", 15, 1500, 1, 90, "facebook-ads"),
@@ -49,9 +49,9 @@ def _sembrar(tienda_id=None):
                           "thruplays": imp // 10, "utm_ok": ad != "p2"})
             pixel.append({"canal": canal_, "ad_id": ad, "fecha": f, "pedidos": pedidos, "ingresos": ingresos})
         tienda.append({"fecha": f, "gasto": 120, "ingresos": 400, "pedidos": 5, "nc_pedidos": 2})
-    datos.reemplazar_anuncios_canal("acme", tienda_id, _hace(9), _hace(0), canal)
-    datos.reemplazar_anuncios_pixel("acme", tienda_id, _hace(9), _hace(0), pixel)
-    datos.reemplazar_tienda("acme", tienda_id, _hace(9), _hace(0), tienda)
+    datos.reemplazar_anuncios_canal("acme", tienda_id, _hace(dias - 1), _hace(0), canal)
+    datos.reemplazar_anuncios_pixel("acme", tienda_id, _hace(dias - 1), _hace(0), pixel)
+    datos.reemplazar_tienda("acme", tienda_id, _hace(dias - 1), _hace(0), tienda)
 
 
 def _tareas(tipo):
@@ -84,17 +84,18 @@ def test_panel_con_datos_muestra_tienda_veredictos_diagnostico_e_ia(app):  # noq
     _conectar()
     _sembrar()
     html = app["c"].get("/cliente/acme/triple-whale/panel").data.decode()
-    assert "Tu tienda" in html and "MER" in html and "Tus anuncios" in html
+    assert "Resultados de tu tienda" in html and "Retorno (MER)" in html and "Tus anuncios" in html
     assert "Anuncio g1" in html and "Anuncio p1" in html
     assert "Ganador" in html and "Perdedor" in html and "Sin datos suficientes" in html
-    assert 'class="tb-grafico"' in html
+    assert 'id="tw-resultados-datos"' in html and 'class="tb-grafico"' not in html
     assert "Sin rastreo de Triple Whale" in html            # p2 no lleva los parámetros
     assert "TikTok" in html and 'data-tw-param="canal"' in html
     assert "/cliente/acme/triple-whale/evaluar" in html and "aprox." in html
     assert "tw_secreto_123" not in html
     # Filtro por canal: solo TikTok.
     solo_tt = app["c"].get("/cliente/acme/triple-whale/panel?canal=tiktok-ads&dias=7").data.decode()
-    assert "Anuncio t1" in solo_tt and "Anuncio g1" not in solo_tt and "Tu tienda" not in solo_tt
+    assert "Anuncio t1" in solo_tt and "Anuncio g1" not in solo_tt and "Resultados de tu tienda" not in solo_tt
+    assert "Resultados de TikTok" in solo_tt and "Ventas atribuidas" in solo_tt
     assert '<option value="7" selected>' in solo_tt
 
 
@@ -295,7 +296,7 @@ def test_tablero_muestra_la_tienda_segun_triple_whale(app):  # noqa: F811
     _conectar()
     _sembrar()
     html = _resultados(app["c"])
-    historial = html[html.index("Historial mes a mes"):]
+    historial = html[html.index("Totales desde el inicio"):]
     assert "Tu tienda según Triple Whale" in historial and "MER" in historial and 'data-ir-tab="triplewhale"' in historial
     resumen = html[html.index('aria-labelledby="cr-s01"'):html.index('aria-labelledby="cr-s02"')]
     assert "Tu tienda según Triple Whale" in resumen and "MER" in resumen
@@ -422,7 +423,7 @@ def test_con_una_sola_tienda_no_hay_selector(app):  # noqa: F811
     _sembrar()
     html = app["c"].get("/cliente/acme/triple-whale/panel").data.decode()
     assert 'data-tw-param="tienda"' not in html and "Por tienda" not in html and "Todas las tiendas" not in html
-    assert "Tu tienda" in html and "acme.myshopify.com" in html
+    assert "Resultados de tu tienda" in html and "acme.myshopify.com" in html
 
 
 def test_evaluar_una_tienda_guarda_su_alcance_y_su_muestra(app):  # noqa: F811
@@ -477,7 +478,8 @@ def test_una_barra_por_copia_en_curso_con_el_pais(app):  # noqa: F811
     assert f'data-poll-job="acme__tw_sync__{no}"' in html and f'data-poll-job="acme__tw_sync__{se}"' in html
     assert f'id="tw-sync-acme-{no}"' in html and f'id="tw-sync-acme-{se}"' in html
     assert "Trayendo métricas de Noruega" in html and "Trayendo métricas de Suecia" in html
-    assert "<script" not in html
+    # Ningún <script> que corra (rule 8): el único es el JSON inerte que lee static/tw_resultados.js.
+    assert "<script" not in html.replace('<script type="application/json" id="tw-resultados-datos">', "")
 
 
 def test_panel_con_una_tienda_en_error_dice_cual(app):  # noqa: F811
@@ -510,3 +512,186 @@ def test_resumen_mes_tienda_suma_todas_las_tiendas(app):  # noqa: F811
     dias = min(10, hoy.day)                                    # días sembrados dentro del mes en curso
     assert r["moneda"] == "USD" and r["ingresos"] == pytest.approx((400 + 700) * dias)
     assert r["pedidos"] == pytest.approx((5 + 6) * dias)
+
+
+def test_panel_abre_desde_el_inicio_y_resumen_total_de_la_tienda(app):  # noqa: F811
+    """Daniel, 2026-10-08: las métricas en su totalidad, no por periodos cortos. La pestaña abre en «Desde el
+    inicio» (todo lo copiado, sin comparación) y los tiles de Experimentos suman la tienda desde el primer día."""
+    from triple_whale import panel
+    _dos_tiendas(compartida=False)
+    html = app["c"].get("/cliente/acme/triple-whale/panel").data.decode()
+    assert '<option value="0" selected>Desde el inicio</option>' in html
+    assert "todo lo copiado de Triple Whale" in html and "días anteriores" not in html
+    assert "Cada país desde el inicio" in html
+    assert "vs. periodo anterior" not in html         # sin comparación, sin columna vacía
+    assert '<input type="hidden" name="dias" value="0">' in html
+    # Un periodo corto se puede seguir eligiendo y vuelve a comparar.
+    corto = app["c"].get("/cliente/acme/triple-whale/panel?dias=7").data.decode()
+    assert '<option value="7" selected>' in corto
+    assert "vs. periodo anterior" in corto
+    # Los tiles de la tienda en Experimentos: los 10 días sembrados de las dos tiendas, sin variación.
+    r = panel.resumen_total_tienda("acme", hoy=date.today())
+    assert r["moneda"] == "USD" and r["ingresos"] == pytest.approx((400 + 700) * 10) and r["variacion"] == {}
+    assert r["desde"] == _hace(9)
+
+
+# ---- Resultados de tu tienda (spec 2026-10-08-tw-resultados) ----
+
+def test_detalle_del_dia(app):  # noqa: F811
+    _conectar()
+    _sembrar()
+    r = app["c"].get(f"/cliente/acme/triple-whale/dia?fecha={_hace(1)}")
+    html = r.data.decode()
+    assert r.status_code == 200 and "Qué pasó el" in html and "Anuncio g1" in html
+    assert "Meta" in html and "TikTok" in html and "según el Pixel" in html
+    assert "el mismo día de la semana anterior" in html
+    assert f'data-twr-dia="{_hace(2)}"' in html and 'data-twr-dia=""' in html     # ‹ va al día anterior; › no llega a hoy
+
+
+def test_detalle_del_dia_valida_la_fecha(app):  # noqa: F811
+    _conectar()
+    _sembrar()
+    assert app["c"].get("/cliente/acme/triple-whale/dia?fecha=ayer").status_code == 400
+    assert app["c"].get("/cliente/acme/triple-whale/dia").status_code == 400
+    assert app["c"].get(f"/cliente/acme/triple-whale/dia?fecha={_hace(0)}").status_code == 400      # hoy, a medias
+    assert app["c"].get(f"/cliente/acme/triple-whale/dia?fecha={_hace(30)}").status_code == 400     # antes de la copia
+    assert app["c"].get(f"/cliente/acme/triple-whale/dia?fecha={_hace(9)}").status_code == 200      # el primer día
+
+
+def test_detalle_del_dia_de_otro_proyecto_no(app):  # noqa: F811
+    import dashboard
+    _conectar()
+    _sembrar()
+    c = dashboard.app.test_client()
+    with c.session_transaction() as s:
+        s.update({"usuario": "otro", "rol": "cliente", "cliente": "otro"})
+    r = c.get(f"/cliente/acme/triple-whale/dia?fecha={_hace(1)}")
+    assert r.status_code in (302, 403, 404) and b"Anuncio g1" not in r.data
+
+
+def test_detalle_del_dia_por_canal_y_canal_raro(app):  # noqa: F811
+    _conectar()
+    _sembrar()
+    html = app["c"].get(f"/cliente/acme/triple-whale/dia?fecha={_hace(1)}&canal=tiktok-ads").data.decode()
+    assert "Anuncio t1" in html and "Anuncio g1" not in html and "Por canal" not in html
+    raro = app["c"].get(f"/cliente/acme/triple-whale/dia?fecha={_hace(1)}&canal=<script>").data.decode()
+    assert "Anuncio g1" in raro and "<script>" not in raro                      # canal desconocido = todos
+
+
+def test_detalle_del_dia_dice_hecho_en_creatv(app, base_temporal):  # noqa: F811
+    import experimentos as ex
+    from tests.test_experimentos_db import PAISES, _pieza
+    _conectar()
+    _sembrar()
+    eid = ex.crear("acme", "Cojín otoño", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "USD")
+    ep = ex.agregar_pieza("acme", eid, _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None,
+                                              legado="cf_tw2"), "CO")
+    ex.actualizar_pieza("acme", ep, meta_ad_id="g1")
+    html = app["c"].get(f"/cliente/acme/triple-whale/dia?fecha={_hace(1)}").data.decode()
+    assert f'<a href="#experimentos?exp={eid}">Hecho en Creatv · Cojín otoño</a>' in html
+
+
+def test_resultados_pinta_tarjetas_lectura_creativos_y_tabla(app):  # noqa: F811
+    _conectar()
+    _sembrar(dias=20)                                                      # 7 días + sus 6 anteriores dentro de la copia
+    html = app["c"].get("/cliente/acme/triple-whale/panel?dias=7").data.decode()
+    for texto in ("Ventas", "Pedidos", "Gasto en anuncios", "Retorno (MER)", "Ticket promedio", "Costo por pedido",
+                  "Clientes nuevos", "Tu mejor día fue el", "Ver los datos en tabla", 'data-twr-metrica="ventas"',
+                  "Comparar", "Tendencia", "Por antigüedad", "Por canal", "Lo que dicen los números",
+                  'data-twr-dia="', 'id="tw-cada-anuncio"', "Hoy va en"):
+        assert texto in html, texto
+    assert html.count('role="tab"') == 7                                   # 6 + clientes nuevos (nc_pedidos > 0)
+    assert '"comparar": true' in html and "Vendiste" in html and "las variaciones comparan 6 días completos" in html
+    corto = app["c"].get("/cliente/acme/triple-whale/panel?dias=30").data.decode()
+    assert '"comparar": false' in corto                                    # el periodo anterior cae antes de la copia
+    inicio = app["c"].get("/cliente/acme/triple-whale/panel").data.decode()
+    assert '"comparar": false' in inicio and "data-twr-comparar" not in inicio and "▲" not in inicio
+
+
+def test_resultados_no_hace_una_consulta_por_dia(app):  # noqa: F811
+    from tests.test_escala import _Consultas
+    _conectar()
+    _sembrar()
+    assert app["c"].get("/cliente/acme/triple-whale/panel?dias=7").status_code == 200   # calienta caché y sesión
+    with _Consultas() as corto:
+        assert app["c"].get("/cliente/acme/triple-whale/panel?dias=7").status_code == 200
+    with _Consultas() as largo:
+        assert app["c"].get("/cliente/acme/triple-whale/panel?dias=90").status_code == 200
+    assert largo.n == corto.n, (corto.n, largo.n)
+
+
+def test_resultados_con_periodo_anterior_antes_de_la_copia_no_compara(app):  # noqa: F811
+    _conectar()
+    _sembrar()                                                             # 10 días: «7 días» compararía 6 contra 6
+    assert '"comparar": false' in app["c"].get("/cliente/acme/triple-whale/panel?dias=7").data.decode()
+
+
+def test_creativos_no_reparten_nuevos_en_los_primeros_14_dias(app):  # noqa: F811
+    from triple_whale import panel
+    _conectar()
+    _sembrar()
+    with app["dashboard"].app.test_request_context():
+        cr = panel.contexto("acme", 0)["resultados"]["creativos"]
+    assert cr["roas_nuevos"] is None and cr["probados"] == 0
+
+
+def test_detalle_del_dia_ignora_una_tienda_ajena(app):  # noqa: F811
+    _conectar()
+    _sembrar()
+    ajena = triple_whale_tiendas.agregar("otro", "llave-otro-9", "otro.myshopify.com", None, moneda="USD")
+    html = app["c"].get(f"/cliente/acme/triple-whale/dia?fecha={_hace(1)}&tienda={ajena}").data.decode()
+    assert "Anuncio g1" in html                                            # «Todas» del propio proyecto
+
+
+def test_url_del_detalle_lleva_tienda_y_canal(app):  # noqa: F811
+    tid = _conectar()
+    _sembrar()
+    import json
+    html = app["c"].get("/cliente/acme/triple-whale/panel?canal=tiktok-ads").data.decode()
+    ini = html.index('id="tw-resultados-datos">') + len('id="tw-resultados-datos">')
+    datos_json = json.loads(html[ini:html.index("</script>", ini)])
+    assert datos_json["url_dia"] == f"/cliente/acme/triple-whale/dia?tienda={tid}&canal=tiktok-ads"
+
+
+def test_nombre_de_anuncio_con_html_sale_escapado(app):  # noqa: F811
+    tid = _conectar()
+    _sembrar()
+    datos.reemplazar_anuncios_canal("acme", tid, _hace(1), _hace(1), [
+        {"canal": "facebook-ads", "ad_id": "x1", "fecha": _hace(1), "anuncio": "<script>alert(1)</script>",
+         "gasto": 50, "impresiones": 100}])
+    html = app["c"].get(f"/cliente/acme/triple-whale/dia?fecha={_hace(1)}").data.decode()
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in html and "<script>alert" not in html
+
+
+def test_detalle_del_dia_sin_antiguedad_conocida_no_dice_nuevo(app):  # noqa: F811
+    _conectar()
+    _sembrar()                                                             # 10 días: ninguno con antigüedad conocida
+    html = app["c"].get(f"/cliente/acme/triple-whale/dia?fecha={_hace(1)}").data.decode()
+    assert "twr-chip-nuevo" not in html and "arranc" not in html
+
+
+def test_alerta_de_mer_usa_la_misma_variacion_que_la_tarjeta(app):  # noqa: F811
+    from triple_whale import panel
+    tid = _conectar()
+    _sembrar(dias=20)
+    tienda = [{"fecha": _hace(d), "gasto": 120, "ingresos": 400 if d > 6 else 150, "pedidos": 5} for d in range(20)]
+    datos.reemplazar_tienda("acme", tid, _hace(19), _hace(0), tienda)
+    with app["dashboard"].app.test_request_context():
+        corto, inicio = panel.contexto("acme", 7), panel.contexto("acme", 0)
+    mer = next(t for t in corto["resultados"]["tarjetas"] if t["clave"] == "mer")
+    assert mer["variacion"] < -0.5 and any("MER de la tienda" in a["texto"] for a in corto["alertas"])
+    assert not any("MER de la tienda" in a["texto"] for a in inicio["alertas"])
+
+
+def test_alerta_de_mer_no_compara_contra_un_periodo_fuera_de_la_copia(app):  # noqa: F811
+    """Con 10 días copiados, «7 días» no tiene periodo anterior completo: la tarjeta no compara y la alerta
+    tampoco (antes comparaba contra 3 días sueltos y anunciaba una caída que nadie podía ver en la tarjeta)."""
+    from triple_whale import panel
+    tid = _conectar()
+    _sembrar()
+    tienda = [{"fecha": _hace(d), "gasto": 120, "ingresos": 400 if d > 6 else 150, "pedidos": 5} for d in range(10)]
+    datos.reemplazar_tienda("acme", tid, _hace(9), _hace(0), tienda)
+    with app["dashboard"].app.test_request_context():
+        ctx = panel.contexto("acme", 7)
+    assert ctx["resultados"]["datos"]["comparar"] is False
+    assert not any("MER de la tienda" in a["texto"] for a in ctx["alertas"])

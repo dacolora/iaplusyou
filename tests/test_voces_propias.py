@@ -179,7 +179,7 @@ def test_crear_disenada_registra_gasto_estrena_y_guarda(base_temporal, r2, fal):
     assert g == [("locucion", 0.0045, "voz_propia_estreno:t9", "fal/minimax"),
                  ("voz_propia", 3.0004, "voz_propia:disenar:t9", "fal/minimax")]
     (gasto_diseno,) = [x for x in _gastos("acme") if x["tipo"] == "voz_propia"]
-    assert gasto_diseno["extra"] == {"voice_id": "mmx_dis"}      # un diseño no lleva consentimiento
+    assert gasto_diseno["extra"]["voice_id"] == "mmx_dis" and "consentimiento" not in gasto_diseno["extra"]      # un diseño no lleva consentimiento
     assert voces_propias.listar("acme") == [voz]
 
 
@@ -198,7 +198,8 @@ def test_crear_clonada_guarda_el_consentimiento_y_la_grabacion(base_temporal, r2
     assert (gasto_clon["usd"], gasto_clon["referencia"]) == (1.5042, "voz_propia:clonar:t3")
     # Revisión final F5: la constancia del permiso viaja con el cobro del clon
     # (sobrevive a borrar la voz y su extra).
-    assert gasto_clon["extra"] == {"voice_id": "mmx_clon", "consentimiento": consentimiento}
+    assert gasto_clon["extra"]["voice_id"] == "mmx_clon" and gasto_clon["extra"]["consentimiento"] == consentimiento
+    assert gasto_clon["extra"]["ficha"]["extra"]["grabacion_id"] == g["id"]
 
 
 def test_crear_clon_sin_consentimiento_no_paga(base_temporal, r2, fal):

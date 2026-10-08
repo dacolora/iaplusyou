@@ -4,7 +4,8 @@
    moneda_exp, objetivos_exp, objetivo_exp_sugerido, nombres_objetivo_exp, atribuciones_exp, atribucion_sugerida,
    etiquetas_exp, modos_exp y meses_cortos. Llega con ?piezas=1,2 (Crear, Final edition, anuncios sueltos: las marca y
    abre el paso 1) o con ?exp_nombre=&exp_destino= (Catálogo › «Crear experimento»: los pone en el paso 4). Termina en
-   un POST a exp_probar que crea el experimento y lo lanza EN PAUSA; nada gasta hasta «Activar».
+   un POST a exp_probar que crea el experimento, lo lanza y, si terminó sin error, lo ACTIVA (Daniel, 2026-10-08: este
+   clic, con el gasto diario a la vista aquí y en el botón, es la aprobación; no hay un segundo «Activar»).
 
    El presupuesto se pide como UN total y los días (paso 3): Creatv reparte entre los países
    (`presupuesto_experimentos.repartir`, que `static/presupuesto_exp.js` replica; una prueba exige que den lo mismo) y
@@ -18,13 +19,14 @@
   <p class="exp-dia"></p>
   <p class="exp-anuncios"></p>
   <p class="exp-aviso-tope"></p>
-  <p class="exp-nada">{{ _('Nada gasta hasta que pulses Activar') }}</p>
+  {# El JS cambia este texto por «Al lanzar empieza a gastar: ≈ X al día» en cuanto hay cifras: el precio antes del clic. #}
+  <p class="exp-al-lanzar">{{ _('Al lanzar empieza a gastar.') }}</p>
   {% if viva %}{{ caller() }}{% endif %}
 </div>
 {% endmacro %}
 {% macro nota_presupuesto() %}
 <div class="exp-nota">
-  <p>{{ _('Los días empiezan a contar cuando actives el experimento por primera vez, no cuando lo lances; si lo pausas y lo reanudas, la fecha de cierre no se mueve.') }}</p>
+  <p>{{ _('Los días empiezan a contar cuando el experimento empieza a gastar por primera vez (al lanzarlo, si todo sale bien); si lo pausas y lo reanudas, la fecha de cierre no se mueve.') }}</p>
   <p>{{ _('Cada país tiene su presupuesto diario. Además, el total se manda a Meta como tope de la campaña desde %(minimo)s, el mínimo que Meta acepta para un tope; con un total menor, el límite lo dan el presupuesto diario y la fecha de cierre.', minimo=tope_campana_min_exp|dinero(moneda_exp)) }}</p>
 </div>
 {% endmacro %}
@@ -86,6 +88,8 @@
    marcar) bloquearían el envío sin decir nada; el JS avisa y exp_probar valida todo. #}
 <form method="post" action="{{ url_for('exp_probar', cliente=cliente) }}" id="exp-probar" class="exp-pasos" hidden novalidate
       data-minimo="{{ minimo_diario_exp }}" data-moneda="{{ moneda_exp }}" data-tope-campana="{{ tope_campana_min_exp }}">
+  {# Un solo uso (exp_probar lo consume): un «¿Reenviar formulario?» no crea ni activa un segundo experimento. #}
+  <input type="hidden" name="token_form" value="{{ token_form or '' }}">
   <ol class="exp-pasos-nav"><li data-ir="1" class="activo">{{ _('02 · Dónde') }}</li><li data-ir="2">{{ _('03 · Total y días') }}</li><li data-ir="3">{{ _('04 · Revisar') }}</li></ol>
 
   <section data-paso="1">
@@ -165,7 +169,7 @@
     {{ nota_presupuesto() }}
     <div class="exp-pasos-botones">
       <button type="button" class="btn-sm" data-ir="2">{{ _('← Atrás') }}</button>
-      <button type="submit" class="btn-generar" id="exp-lanzar">{{ _('Lanzar a Meta (en pausa)') }}</button>
+      <button type="submit" class="btn-generar" id="exp-lanzar">{{ _('Lanzar a Meta') }}<span class="exp-lanzar-dia"></span></button>
     </div>
   </section>
 </form>
@@ -175,7 +179,7 @@
 <script>
   // La galería primero (spec 2026-09-20): marcar piezas -> barra «Probar en
   // Meta» -> tres pasos (dónde, cuánto, revisar) -> un POST a exp_probar que
-  // crea el experimento y lo lanza EN PAUSA. Nada gasta hasta «Activar».
+  // crea el experimento, lo lanza y lo activa (Daniel 2026-10-08: este clic, con el ≈ diario a la vista, es la aprobación).
   (function () {
     var galeria = document.getElementById('exp-galeria');
     var form = document.getElementById('exp-probar');
@@ -252,7 +256,10 @@
     var AVISO_CENTAVOS = {{ _('El presupuesto diario de cada país no lleva más de dos decimales en %(moneda)s.', moneda='{moneda}')|tojson }};
     var AVISO_SUPERA = {{ _('El reparto supera el total: baja el presupuesto de algún país o sube el total.')|tojson }};
     var AVISO_CUADRICULA_VACIA = {{ _('Deja al menos una casilla marcada en la cuadrícula.')|tojson }};
-    var PLANTILLA_CONFIRMAR_LANZAR = {{ _('Se crean la campaña, los conjuntos y los anuncios en Meta, EN PAUSA (no gasta hasta que actives). %(resumen)s ¿Seguimos?', resumen='{resumen}')|tojson }};
+    var PLANTILLA_CONFIRMAR_LANZAR = {{ _('Se crean la campaña, los conjuntos y los anuncios en Meta y se activan: empieza a gastar ≈ %(dia)s al día. %(resumen)s ¿Seguimos?', dia='{dia}', resumen='{resumen}')|tojson }};
+    var AL_LANZAR_GASTA = {{ _('Al lanzar empieza a gastar: ≈ %(dia)s al día', dia='{dia}')|tojson }};
+    var AL_LANZAR_SIN_CIFRA = {{ _('Al lanzar empieza a gastar.')|tojson }};
+    var BOTON_AL_DIA = {{ _(' · ≈ %(dia)s al día', dia='{dia}')|tojson }};
     var TEXTO_LANZANDO = {{ _('Lanzando…')|tojson }};
     var ETIQUETA_IMAGEN = {{ _('(imagen)')|tojson }};
     var PLANTILLA_DOCTRINA_N = {{ _('Doctrina: %(n)s por mejorar', n='{n}')|tojson }};
@@ -308,7 +315,7 @@
     var reparto = document.getElementById('exp-resumen-reparto');
     var enteros = P.EN_ENTEROS.indexOf(moneda) !== -1;
     // `manual`: la persona editó el diario de algún país («Ajustar reparto»); el total se recalcula de ahí.
-    var manual = false, ultimoMinimo = 0, estadoActual = {}, textoMaximo = '', textoConfirmar = '';
+    var manual = false, ultimoMinimo = 0, estadoActual = {}, textoMaximo = '', textoConfirmar = '', textoDia = '';
     var alEntrar = false, ultimosAnuncios = 0, rango = {anuncios: -1};
     // useGrouping «always»: «4.000», no «4000» (en español un número de cuatro cifras no se agrupa solo; el servidor sí lo hace).
     function numeroLocal(n) { return Number.isFinite(n) ? n.toLocaleString(document.documentElement.lang || 'es', {maximumFractionDigits: 2, useGrouping: "always"}) : ''; }
@@ -333,7 +340,11 @@
         r.querySelector('.exp-dia').textContent = d.dia;
         r.querySelector('.exp-anuncios').textContent = d.anuncios;
         r.querySelector('.exp-aviso-tope').textContent = d.sinTope;
+        r.querySelector('.exp-al-lanzar').textContent = d.diaTotal ? AL_LANZAR_GASTA.replace('{dia}', d.diaTotal) : AL_LANZAR_SIN_CIFRA;
       });
+      // El botón también dice el gasto diario: el precio a la vista en el mismo clic que lo aprueba.
+      var botonDia = form.querySelector('.exp-lanzar-dia');
+      if (botonDia) botonDia.textContent = d.diaTotal ? BOTON_AL_DIA.replace('{dia}', d.diaTotal) : '';
     }
     function refrescarCuenta() {
       var ps = paisesMarcados(), est = estado(), pesos = est.pesos, anuncios = suma(pesos);
@@ -380,8 +391,9 @@
       textoMaximo = hayCifras ? plantillaMaximo.replace('{total}', dinero(total)).replace('{n}', dias) : '';
       var textoSinTope = sinTope ? AVISO_SIN_TOPE.replace('{tope}', dinero(topeCampana)).replace('{total}', dinero(total)).replace('{dia}', dinero(diario)) : '';
       textoConfirmar = textoMaximo ? textoMaximo + (textoSinTope ? '. ' + textoSinTope : '.') : '';
+      textoDia = hayCifras ? dinero(diario) : '';
       pintarResumen({
-        maximo: textoMaximo, sinTope: textoSinTope,
+        maximo: textoMaximo, sinTope: textoSinTope, diaTotal: textoDia,
         dia: hayCifras ? [AL_DIA.replace('{dia}', dinero(diario))].concat(porPais).join(' · ') : '',
         // «6 anuncios (3 piezas en 2 países)»; un solo anuncio no necesita el paréntesis.
         anuncios: !anuncios ? '' : anunciosVista === 1 ? anunciosTxt
@@ -523,7 +535,7 @@
       var marcadasCuadricula = Array.prototype.slice.call(cuadricula.querySelectorAll('input[name=combinaciones]:checked'));
       if (!marcadasCuadricula.length) { ev.preventDefault(); alert(AVISO_CUADRICULA_VACIA); return; }
       // La confirmación repite lo que puede costar, con las mismas palabras que la pantalla (máximo o planeado).
-      if (!confirm(PLANTILLA_CONFIRMAR_LANZAR.replace('{resumen}', textoConfirmar))) { ev.preventDefault(); return; }
+      if (!confirm(PLANTILLA_CONFIRMAR_LANZAR.replace('{dia}', textoDia).replace('{resumen}', textoConfirmar))) { ev.preventDefault(); return; }
       // Los países deshabilitados por una final igual deben viajar: se
       // rehabilitan solo cuando el envío sigue adelante.
       paises.forEach(function (p) { p.disabled = false; });

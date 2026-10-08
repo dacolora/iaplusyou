@@ -1,0 +1,112 @@
+{# «Resultados de tu tienda» (spec 2026-10-08-tw-resultados-de-tu-tienda): la sección que reemplazó a «Tu tienda»
+   y «Día a día» del panel de Triple Whale. Contexto: `tw.resultados` (triple_whale.resultados.armar).
+   El servidor pinta tarjetas, lectura, «Tus creativos» y la tabla (se leen aunque el JS falle); la gráfica, las
+   minigráficas, el recuadro de cada día y el detalle del día los dibuja static/tw_resultados.js con el JSON del
+   final (los <script> de este fragmento no corren: _tab_triple_whale.html llama TwResultados.iniciar). #}
+{% set r = tw.resultados %}
+{% if r %}
+<section class="tb-seccion twr" id="tw-resultados" data-twr>
+  <div class="twr-cab">
+    <div>
+      <h3>{{ r.titulo }}</h3>
+      <small class="twr-nota">{{ r.subtitulo }}</small>
+    </div>
+    <div class="twr-controles">
+      {% if r.datos.comparar %}<label class="twr-interruptor"><input type="checkbox" data-twr-comparar checked> {{ _('Comparar') }}</label>{% endif %}
+      <label class="twr-interruptor"><input type="checkbox" data-twr-tendencia> {{ _('Tendencia') }}</label>
+    </div>
+  </div>
+
+  <div class="twr-tarjetas" role="tablist" aria-label="{{ _('Qué muestra la gráfica') }}">
+    {% for t in r.tarjetas %}
+    <button type="button" role="tab" class="twr-tarjeta" data-twr-metrica="{{ t.clave }}"
+            aria-selected="{{ 'true' if loop.first else 'false' }}"{% if t.ayuda %} title="{{ t.ayuda }}"{% endif %}>
+      <span class="twr-tarjeta-k">{{ t.etiqueta }}</span>
+      <strong class="twr-tarjeta-v">{{ t.texto }}</strong>
+      {% if t.variacion is not none %}<small class="twr-tarjeta-d twr-{{ t.tono }}" title="{{ _('Días completos contra el mismo número de días anteriores') }}">{{ '▲' if t.variacion >= 0 else '▼' }} {{ t.variacion_texto }}</small>{% endif %}
+      <svg class="twr-spark" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true" data-twr-spark="{{ t.clave }}"></svg>
+    </button>
+    {% endfor %}
+  </div>
+
+  <div class="twr-grafico" data-twr-grafico>
+    <div class="twr-grafico-cab">
+      <ul class="twr-leyenda" data-twr-leyenda aria-label="{{ _('Leyenda') }}"></ul>
+      {% if r.fuente == 'tienda' %}
+      <div class="twr-modo" role="group" aria-label="{{ _('Cómo partir el gasto') }}" data-twr-modo hidden>
+        <button type="button" aria-pressed="true" data-twr-modo-valor="edad">{{ _('Por antigüedad') }}</button>
+        <button type="button" aria-pressed="false" data-twr-modo-valor="canal">{{ _('Por canal') }}</button>
+      </div>
+      {% endif %}
+    </div>
+    <svg class="twr-svg" viewBox="0 0 720 270" role="img" tabindex="0" data-twr-svg
+         aria-label="{{ _('Gráfica diaria') }}"></svg>
+    <div class="twr-aviso" data-twr-aviso hidden></div>
+    <p class="twr-hoy">{{ r.hoy_texto }}</p>
+  </div>
+
+  <div class="twr-dia" data-twr-dia aria-live="polite"><p class="twr-nota">{{ _('Cargando…') }}</p></div>
+
+  {% if r.lectura %}
+  <h4 class="twr-titulo">{{ _('Lo que dicen los números') }}</h4>
+  <ul class="twr-lectura">
+    {% for frase in r.lectura %}
+    <li class="twr-li twr-li-{{ frase.tipo }}">
+      <span class="twr-li-icono" aria-hidden="true">{{ frase.icono }}</span>
+      <div>
+        <p>{{ frase.texto }}</p>
+        {% if frase.acciones %}
+        <div class="twr-li-acciones">
+          {% for a in frase.acciones %}
+          {% if a.tipo == 'dia' %}<button type="button" class="btn-xs" data-twr-dia="{{ a.fecha }}">{{ _('Ver qué pasó →') }}</button>
+          {% elif a.tipo == 'crear' %}<a class="btn-generar btn-sm" href="#creativeflowplus" data-ir-tab="creativeflowplus">{{ _('Crear anuncios nuevos →') }}</a>
+          {% elif a.tipo == 'evaluar' %}<button type="button" class="btn-sm" data-twr-ir="tw-ia">{{ _('Evaluar con IA') }}</button>{% endif %}
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  {% set cr = r.creativos %}
+  {% if cr and (cr.meses or cr.probados or cr.roas_nuevos or cr.roas_establecidos) %}
+  <h4 class="twr-titulo">{{ _('Tus creativos') }} <small>{{ _('de dónde salieron las ventas del periodo, según el mes en que arrancó cada anuncio (según el Pixel)') }}</small></h4>
+  <div class="twr-creativos">
+    {% if cr.meses %}
+    <div class="twr-cr-fila"><span class="twr-cr-et">{{ _('Ventas atribuidas') }}</span>
+      <span class="twr-cr-barra">{% for m in cr.meses %}{% if m.pct_ingresos > 0 %}<span class="twr-{{ m.clase }}" style="width: {{ '%.2f' | format(m.pct_ingresos * 100) }}%" title="{{ m.nombre }} · {{ m.pct_ingresos | tw_pct(0) }}"></span>{% endif %}{% endfor %}</span></div>
+    <div class="twr-cr-fila"><span class="twr-cr-et">{{ _('Gasto') }}</span>
+      <span class="twr-cr-barra">{% for m in cr.meses %}{% if m.pct_gasto > 0 %}<span class="twr-{{ m.clase }}" style="width: {{ '%.2f' | format(m.pct_gasto * 100) }}%" title="{{ m.nombre }} · {{ m.pct_gasto | tw_pct(0) }}"></span>{% endif %}{% endfor %}</span></div>
+    <ul class="twr-cr-leyenda">
+      {% for m in cr.meses %}
+      <li><i class="twr-muestra twr-{{ m.clase }}"></i><strong>{{ m.nombre }}</strong> · {{ ngettext('%(num)s anuncio', '%(num)s anuncios', m.anuncios) }} · {{ _('%(pct)s de las ventas', pct=m.pct_ingresos | tw_pct(0)) }} · {% if m.roas %}{{ m.roas | roas }}×{% else %}—{% endif %}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    <div class="twr-cr-cifras">
+      <div><span>{{ _('Anuncios nuevos probados') }}</span><strong>{{ cr.probados | tw_num }}</strong><small>{{ _('arrancaron en el periodo') }}</small></div>
+      <div><span>{{ _('Retorno de los nuevos') }}</span><strong>{% if cr.roas_nuevos %}{{ cr.roas_nuevos | roas }}×{% else %}—{% endif %}</strong><small>{{ _('en sus primeros 14 días') }}</small></div>
+      <div><span>{{ _('Retorno de los establecidos') }}</span><strong>{% if cr.roas_establecidos %}{{ cr.roas_establecidos | roas }}×{% else %}—{% endif %}</strong><small>{{ _('después de sus primeros 14 días') }}</small></div>
+    </div>
+  </div>
+  {% endif %}
+
+  <details class="twr-tabla">
+    <summary>{{ _('Ver los datos en tabla') }}</summary>
+    <div class="tw-tabla-scroll">
+      <table class="tw-tabla tabla-apilada">
+        <thead><tr><th>{{ _('Día') }}</th><th>{{ r.tarjetas[0].etiqueta }}</th><th>{{ r.tarjetas[1].etiqueta }}</th><th>{{ r.tarjetas[2].etiqueta }}</th><th>{{ r.tarjetas[3].etiqueta }}</th><th>{{ _('A anuncios nuevos') }}</th></tr></thead>
+        <tbody>
+          {% for f in r.tabla %}
+          <tr><td>{{ f.dia }}{% if f.hoy %} <small>({{ _('hoy, a medias') }})</small>{% endif %}</td><td>{{ f.ventas }}</td><td>{{ f.pedidos }}</td><td>{{ f.gasto }}</td><td>{{ f.mer }}</td><td>{{ f.nuevos }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </details>
+
+  <script type="application/json" id="tw-resultados-datos">{{ r.datos | tojson }}</script>
+</section>
+{% endif %}

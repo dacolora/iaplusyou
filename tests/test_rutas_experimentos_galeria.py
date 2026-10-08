@@ -33,16 +33,15 @@ def test_galeria_lista_piezas_y_no_hay_formulario_viejo(app, base_temporal):
     assert 'data-origen="sprint"' in html and "Sprint Octubre" in html and 'data-imagen="1"' in html
     assert "en prueba: Prueba vieja" in html
     assert 'data-paso="1"' in html and 'data-paso="2"' in html and 'data-paso="3"' in html
-    assert 'id="exp-cuadricula"' in html and 'name="nombre"' in html and "Lanzar a Meta (en pausa)" in html
+    assert 'id="exp-cuadricula"' in html and 'name="nombre"' in html and "Lanzar a Meta<span class=\"exp-lanzar-dia\">" in html
     assert 'data-pais="CO"' in html   # la final sabe su país para el reparto
 
 
-def test_galeria_sin_meta_no_deja_probar(app, monkeypatch, base_temporal):
+def test_galeria_sin_meta_no_se_muestra(app, monkeypatch, base_temporal):
     _pieza(base_temporal)
     monkeypatch.setattr(app["dashboard"].meta_conexion, "estado", lambda c: {"estado": "sin_conectar", "verificado": False, "detalle": {}})
-    html = _html(app)
-    assert 'id="exp-galeria"' in html and "Conecta Meta arriba para probar" in html
-    assert 'action="/cliente/acme/experimentos/probar"' not in html
+    r = app["c"].get("/cliente/acme/experimentos/nuevo")
+    assert r.status_code == 302 and 'id="exp-galeria"' not in r.get_data(as_text=True)
 
 
 def test_arbol_pinta_miniatura_o_video(app, base_temporal):
@@ -111,7 +110,7 @@ def test_boton_lanzar_se_bloquea_tras_confirmar(app, base_temporal):
     exacto en el HTML crudo."""
     _pieza(base_temporal)
     html = _html(app)
-    inicio = html.index("EN PAUSA (no gasta hasta que actives)")
+    inicio = html.index("form.addEventListener('submit'")
     handler = html[inicio:html.index("// El setTimeout", inicio)]
     assert "ev.submitter" in handler and "disabled = true" in handler and "TEXTO_LANZANDO" in handler
 

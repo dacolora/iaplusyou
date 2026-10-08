@@ -156,3 +156,7 @@ PND-014/125 (2026-10-05): describir referencias y sugerir sonido anotan usage ba
 PND-144/145 (Codex, 2026-10-07): falla de descarga/R2 de pista conserva costo y URL en la capa fallida y gasto idempotente; imagen anota cobro antes de persistir el error o su bitácora. Pruebas locales en test_lote5_gasto; las revisiones del lote corresponden a Claude.
 
 PND-072 (2026-10-07, lote 5 B): dashboard._encolar_director y Sprints delegan en tareas.director.encolar; job_id, payload, prioridad, duración y max_intentos=1 conservados. El fallback redacta tokens con monitoreo.limpiar_texto(motivo, 300) solo en aviso; no cambia el prompt ni la sesión enviada al director. Banco, referencias antiguas y retokenización quedan como preguntas en PND-070/072.
+
+PND-143 (2026-10-08, decisión delegada): cargar añade el acumulado real de gasto por sesión y música (costos_sesiones, una consulta para todo el proyecto). Incluye referencias históricas/importadas y tareas fallidas y recuperadas; no cambia referencias, conservación ni reintentos. SQLite y fallo después del pago en test_lote6_costos; los campos mostrados ya no bajan a cero al recuperar una pista cacheada.
+
+**Topes de ayudas Claude (2026-10-08, PND-141, decisión delegada):** Describir referencias y Sugerir sonido usan 4000 tokens; prompts intactos, SDK sin reintentos. La medición real con `eval-claude` queda para la tanda pagada autorizada por Daniel.

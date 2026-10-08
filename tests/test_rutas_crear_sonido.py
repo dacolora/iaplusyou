@@ -143,6 +143,7 @@ def test_pnd014_sdk_registra_antes_de_leer_respuesta(app, monkeypatch, origen, r
     from types import SimpleNamespace
     from nicho.avatares import costo_real
     cliente_kw = []
+    peticiones = []
     class RespuestaClaude:
         usage = SimpleNamespace(input_tokens=200, output_tokens=40)
         @property
@@ -152,7 +153,10 @@ def test_pnd014_sdk_registra_antes_de_leer_respuesta(app, monkeypatch, origen, r
             return [SimpleNamespace(type='text', text='Una escena con pasos.')]
     def cliente(**kw):
         cliente_kw.append(kw)
-        return SimpleNamespace(messages=SimpleNamespace(create=lambda **kw: RespuestaClaude()))
+        def crear(**kw):
+            peticiones.append(kw)
+            return RespuestaClaude()
+        return SimpleNamespace(messages=SimpleNamespace(create=crear))
     monkeypatch.setattr(anthropic, 'Anthropic', cliente)
     monkeypatch.setattr(generador_prompts, '_api_key', lambda: 'llave-de-prueba')
     monkeypatch.setattr(app['dashboard'].referencias_flowplus, 'listar', lambda c: [
@@ -164,3 +168,4 @@ def test_pnd014_sdk_registra_antes_de_leer_respuesta(app, monkeypatch, origen, r
     assert fila['proveedor'] == 'anthropic'
     assert fila['extra']['cliente'] == 'acme'
     assert cliente_kw[0]['max_retries'] == 0
+    assert peticiones[0]['max_tokens'] == 4000

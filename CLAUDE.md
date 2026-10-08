@@ -51,7 +51,8 @@ Cada una apunta a la skill que trae el detalle y el incidente que la originó.
    `estimate_*` del proveedor; sin precio conocido dice «precio no disponible», nunca uno inventado), corre como
    tarea con `max_intentos=1` y anota lo que de verdad cobró con
    `gastos.registrar_seguro(cliente, tipo, usd, referencia)`: referencia con el id de la tarea, también cuando falla
-   después de pagar. → `plataforma`
+   después de pagar. Excepción: en Experimentos el clic de «Lanzar a Meta», con el gasto diario a la vista, ES la
+   aprobación; lanzar crea y activa sin un segundo «Activar» (pedido de Daniel 2026-10-08). → `plataforma`, `experimentos`
 2. **El prompt de la persona va tal cual.** En Crear lo que escribe llega al modelo sin agregarle marca, «EVITAR»,
    reglas ni logos (`flowplus_prompt.tal_cual`). Las ayudas con IA (director, «Armar prompt», recetas) son
    opcionales y nunca el camino obligado (incidentes 2026-09-21 y 2026-09-26). Video e imagen nuevos van por

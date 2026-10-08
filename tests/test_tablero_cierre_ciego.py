@@ -1,5 +1,4 @@
 """Sonda del guardián: el respaldo ciego es el CIERRE y la primera venta cayó dentro de la ventana."""
-import re
 import pytest
 from tests.test_rutas_experimentos import app  # noqa: F401
 from tests.test_rutas_resultados import AJAX, _kpi_roas, _proyectos_en_tmp  # noqa: F401
@@ -92,8 +91,6 @@ def test_pnd139_cierre_ciego_pantalla_centro_total_y_mes(app, base_temporal, sin
     html = respuesta.get_data(as_text=True)
     assert "Las ventas cambiaron de fuente en este período" in _kpi_roas(html)
     historial = html[html.index('class="tb-tiles"'):]
-    tiles = historial[:historial.index('class="tb-meses')]
+    tiles = historial[:]
     assert tiles.count("—") >= 3 and "0,0×" not in tiles
-    meses = historial[historial.index('class="tb-meses'):]
-    septiembre = next(f for f in re.findall(r'<tr[^>]*>(.*?)</tr>', meses, re.S) if "septiembre 2026" in f)
-    assert septiembre.count("—") >= 3 and "0,0×" not in septiembre
+    assert 'class="tb-meses' not in historial      # sin tabla por mes desde 2026-10-08

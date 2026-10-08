@@ -489,34 +489,6 @@ input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
 .tb-meses .tb-sin-dato { color: var(--muted-2); }
 .tb-meses tr.tb-mes-varias td { border-bottom-style: dashed; }
 
-/* Gráfico de 30 días: un solo eje (gasto e ingresos son dinero en la misma
-   moneda), rejilla recesiva, barras finas con 2px de aire y tope redondeado,
-   línea de 2px, marcadores de 8px solo al pasar el ratón. */
-.tb-leyenda { list-style: none; margin: 0; padding: 0; display: flex; gap: 1rem; font-size: .78rem; color: var(--muted); }
-.tb-leyenda li { display: inline-flex; align-items: center; gap: .4rem; }
-.tb-leyenda-moneda { color: var(--muted-2); }
-.tb-muestra { display: inline-block; width: 12px; height: 12px; border-radius: 3px; }
-.tb-muestra-gasto { background: var(--tb-gasto); }
-.tb-muestra-ingresos { height: 2px; width: 16px; border-radius: 1px; background: var(--tb-ingresos); position: relative; }
-.tb-muestra-ingresos::after { content: ""; position: absolute; left: 4px; top: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--tb-ingresos); }
-.tb-grafico { width: 100%; height: auto; display: block; font-family: var(--font-body); }
-.tb-rejilla { stroke: var(--border); stroke-width: 1; }
-.tb-base { stroke: var(--muted-2); stroke-width: 1; }
-.tb-eje { fill: var(--muted); font-size: 11px; }
-.tb-blanco { fill: transparent; }
-.tb-barra { fill: var(--tb-gasto); }
-.tb-linea { fill: none; stroke: var(--tb-ingresos); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; pointer-events: none; }
-.tb-marcador { fill: var(--tb-ingresos); stroke: var(--panel); stroke-width: 2; opacity: 0; transition: opacity .12s; pointer-events: none; }
-.tb-dia:hover .tb-blanco { fill: var(--panel-hover); }
-.tb-dia:hover .tb-marcador { opacity: 1; }
-.tb-dia:hover .tb-barra { fill: var(--accent-2); }
-
-/* Triple Whale: colores alternativos en la serie #}
-.tb-barra-tw { fill: var(--serie-3); }  /* tercera serie: aqua */
-.tb-linea-tw { fill: none; stroke: var(--serie-3); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; pointer-events: none; }
-.tb-marcador-tw { fill: var(--serie-3); stroke: var(--panel); stroke-width: 2; opacity: 0; transition: opacity .12s; pointer-events: none; }
-.tb-dia:hover .tb-barra-tw { fill: var(--serie-1); }  /* primera serie: azul al hover */
-
 /* Top 5 ganadoras */
 .tb-top { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: .8rem; }
 .tb-ganadora { display: flex; gap: .8rem; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: .8rem; min-width: 0; }
@@ -664,7 +636,7 @@ kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 .3rem; fon
 
 /* ---------- Gasto real (Task 3): precio a la vista ---------- */
 /* Chip del sidebar bajo el nombre del proyecto: generación en USD (+ pauta en su moneda). */
-.sidebar-gasto { display: block; margin-top: .3rem; font-size: .68rem; line-height: 1.25; color: var(--muted); text-decoration: none; white-space: normal; border: 1px solid var(--border); border-radius: 999px; padding: .15rem .5rem; transition: border-color .15s, color .15s; }
+.sidebar-gasto { display: block; margin-top: .3rem; font-size: .68rem; line-height: 1.25; color: var(--muted); text-decoration: none; white-space: normal; border: 1px solid var(--border); border-radius: .6rem; padding: .25rem .5rem; transition: border-color .15s, color .15s; }
 .sidebar-gasto:hover { color: var(--text); border-color: var(--accent); }
 /* Configuración › Gasto: tiles reutilizan .kpi-tile; tablas por tipo e historial. */
 .gasto-tiles { margin-top: .4rem; }

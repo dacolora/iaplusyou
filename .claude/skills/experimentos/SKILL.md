@@ -1,6 +1,6 @@
 ---
 name: experimentos
-description: "Experimentos en Meta y su centro de resultados: armar y lanzar pruebas (campaña → conjunto por país → anuncio por pieza), «Nuevo experimento» con presupuesto total + días, métricas, el decisor (ganador/perdedor), modos manual/semi/auto, escalar, derivar, rescatar, filtros y panel de pieza (resultados.py) y el dinero del Tablero (totales, mes a mes, OUTCOME_SALES). Cargar antes de tocar experimentos.py, lanzador.py, decisor.py, modos.py, acciones.py, derivaciones.py, propuestas.py, tablero.py, meta_detalle.py, resultados.py, presupuesto_experimentos.py, static/exp_resultados.js, _tab_experimentos.html, exp_nuevo.html o las plantillas _exp_*."
+description: "Experimentos en Meta y su centro de resultados: armar y lanzar pruebas (campaña → conjunto por país → anuncio por pieza), «Nuevo experimento» con presupuesto total + días, métricas, el decisor (ganador/perdedor), modos manual/semi/auto, escalar, derivar, rescatar, filtros y panel de pieza (resultados.py) y el dinero del Tablero (totales desde el inicio, OUTCOME_SALES). Cargar antes de tocar experimentos.py, lanzador.py, decisor.py, modos.py, acciones.py, derivaciones.py, propuestas.py, tablero.py, meta_detalle.py, resultados.py, presupuesto_experimentos.py, static/exp_resultados.js, _tab_experimentos.html, exp_nuevo.html o las plantillas _exp_*."
 ---
 
 # Experimentos, decisor y centro de resultados
@@ -15,10 +15,38 @@ for their own country, or text-free clones for any country) are attached as
 `experimento_pieza` rows. `lanzador.lanzar` maps it onto Meta as 1 campaign
 (`spend_cap` = tope total, only when it clears Meta's minimum) -> 1 adset per country
 (`Targeting().edad().paises([pais])`, budget in the ad ACCOUNT's currency, never the
-country's) -> 1 ad per piece, all `PAUSED`, saving every id as soon as Meta returns it so
-a retry resumes instead of duplicating. Launching and activating are two different
-clicks (`exp_lanzar` queues the `exp_lanzar` task with `max_intentos=1`; `exp_estado`
-activates/pauses the whole experiment or one country inline). Metrics: `lanzador.refrescar`
+country's) -> 1 ad per piece, all created `PAUSED`, saving every id as soon as Meta returns it so
+a retry resumes instead of duplicating. **Lanzar crea y activa** (pedido de Daniel 2026-10-08: «si la persona ya lo
+había configurado es porque ya le había dado aprobar»; es la excepción a la regla 1 de CLAUDE.md: el clic de «Lanzar a
+Meta», con el gasto diario a la vista en Revisar, en el botón y en el confirm, ES la aprobación). Las dos rutas de la
+persona (`exp_probar` y `exp_lanzar`, que también sirve para «Reintentar lanzamiento») encolan la tarea `exp_lanzar` con
+`{"activar": True}` y `max_intentos=1`; la tarea corre `lanzador.lanzar` y después `lanzador.activar_tras_lanzar`, que
+activa por el MISMO camino que «Activar todo» (`cambiar_estado(..., "ACTIVE")`: campaña, conjuntos —también
+`meta_adsets` de apps—, anuncios y el plazo de PND-113) solo si el experimento quedó `pausado` y ninguna pieza quedó sin
+anuncio o en error; registra «Activado al lanzar: ≈ X al día» (`datos`: diario y moneda). Un `lanzar` que falla sale
+por excepción y nada se activa. Si la activación falla, vuelve a pausar todo (lo que alcanzó a activarse gastaría con el
+experimento «en pausa» aquí), guarda el motivo en `experimento.error` (lo borra `_a_corriendo` al activar después) y un
+evento, y no se reintenta. Sin `activar` (cualquier otro llamador) todo queda en pausa como antes;
+`derivaciones`/`lanzar_piezas_nuevas` no pasan por aquí. Ronda de guardian-gasto (2026-10-08): (1) con `activar` la
+tarea llama `lanzar(..., soltar=False)` y el experimento sigue en `lanzando` hasta que `activar_tras_lanzar` lo saca
+(a `corriendo`, o a `pausado` con motivo en `error`): así la barra sigue sondeando (etapas
+`ETAPAS_LANZAR_Y_ACTIVAR`, con «Activar»), `exp_cerrar` rechaza, `cambiar_estado` dice «Espera a que termine el
+lanzamiento» (solo la tarea pasa `desde_lanzamiento=True`), y el hook `interrumpida` y la reconciliación de huérfanos
+de `dashboard` llaman `lanzador.repausar` ANTES de marcar el error (lo que alcanzó a activarse vuelve a pausa);
+`_a_corriendo` nunca pisa `cerrado`. Un fallo al activar también manda `notificaciones.avisar("error_lanzamiento")`.
+(2) «Nuevo experimento» es de un solo envío: `exp_nuevo` pinta un `token_form` oculto, `exp_probar` arma
+`clave_form` («t:<token>», o sin token «h:<huella>» de piezas × países, diarios, días, total, objetivo, destino, app)
+y `experimentos.crear_con_piezas` la busca con el candado de escritura tomado antes de leer (token: 1 día; huella:
+10 min); repetida es `ExperimentoRepetido(eid)`: no se crea ni se encola nada y la ruta lleva al que ya existe.
+Ronda 2 (2026-10-08): las rutas escriben «lanzando» ANTES de encolar (`dashboard._encolar_lanzamiento`, que vuelve
+al estado previo si no arrancó o falló: una escritura tardía pisaba un «corriendo» de un worker rápido); la tarea con
+`activar` envuelve lanzar + activar en un `finally` con `lanzador.soltar_lanzando` (nunca sale en «lanzando»: con todo
+creado, a «pausado» con motivo; si no, a «error»); interrupción, reconciliación y `soltar_lanzando` pasan por
+`lanzador.dejar_sin_gastar` (repausa; si Meta no deja, el mensaje dice «Puede haber anuncios activos en Meta: pulsa
+Cerrar…» y llega `error_lanzamiento`); `lanzador.cerrar` pausa en Meta campaña, todos los conjuntos y anuncios
+(`_pausar_todo_en_meta`) en CUALQUIER estado con campaña, y `exp_cerrar` deja cerrar un «lanzando» sin tarea viva.
+Pruebas: `tests/test_lanzar_activa.py`. `exp_estado`
+activates/pauses the whole experiment or one country inline. Metrics: `lanzador.refrescar`
 appends a `metrica_snapshot` per ad (thruplay, purchases, ROAS when Meta reports them) —
 the worker periodic `exp_refrescar_todos` (every 2 h, `worker.PERIODICAS`) does it for
 every `corriendo` experiment. Every verdict/action writes an `evento`. Experiment
@@ -32,8 +60,9 @@ piezas de sprints, finales; `origen`, `formato`, `en_experimentos`), con filtros
 son países con bandera y edad. El paso 4 es la cuadrícula pieza × país, el nombre automático editable («Prueba 20 sep ·
 3 piezas · CO, MX»), «Avanzado» (objetivo, atribución, modo, URL) y el aviso de doctrina. Un solo `POST exp_probar` corre
 `experimentos.crear_con_piezas` (experimento + filas `experimento_pieza` en UNA transacción, `validar_combinacion`: una
-final solo en su país, clones e imágenes solo en los países del experimento) y encola `exp_lanzar`: activar sigue
-siendo otro clic. **El presupuesto se pide como UN total y los días** (Daniel, 2026-10-02: la pantalla vieja pedía
+final solo en su país, clones e imágenes solo en los países del experimento) y encola `exp_lanzar` con `activar`: el
+paso Revisar dice «Al lanzar empieza a gastar: ≈ X al día» (`.exp-al-lanzar`) y el botón «Lanzar a Meta · ≈ X al día»
+(`.exp-lanzar-dia`), los dos desde el `diario` que ya calcula `refrescarCuenta` (2026-10-08). **El presupuesto se pide como UN total y los días** (Daniel, 2026-10-02: la pantalla vieja pedía
 diario + tope + días, respondía con un multiplicador y nunca decía cuánto iba a gastar, que roza la regla 1 de la casa).
 `presupuesto_experimentos.py` es el único lugar de la cuenta: `repartir` (diario de cada país = total × su parte de
 anuncios ÷ días, redondeado HACIA ABAJO a la unidad de la moneda, de modo que la suma por los días nunca pasa del
@@ -47,7 +76,7 @@ supere el total × 1,01 (el 1 % es el margen por redondeo): así «Máximo que p
 POST a mano. El titular dice **«Máximo que puede gastar» solo cuando Meta recibe `spend_cap`** (total ≥
 `lanzador.minimo_tope_campana(moneda)`); con un total menor dice «Presupuesto planeado» y una línea de que Meta no pone un
 tope duro y que el límite lo dan los diarios por país y la fecha de cierre (ronda 1 de R4, 2026-10-03: decir «máximo»
-sin tope duro prometía de más). Los días cuentan desde la PRIMERA activación, no desde el lanzamiento (ver PND-039/044/113
+sin tope duro prometía de más). Los días cuentan desde la PRIMERA activación (desde 2026-10-08, la que hace el propio lanzamiento si sale bien; ver PND-039/044/113
 al final). Llegadas a la página: Crear, Final edition, los anuncios sueltos y «Probar en otro experimento» del panel de
 una pieza enlazan a `exp_nuevo?piezas=<pieza_id>` (la pieza llega marcada); un hash viejo `#experimentos?piezas=` salta ahí
 por JS; Catálogo › «Crear experimento» redirige a `exp_nuevo?exp_nombre=&exp_destino=`, que el paso 4 trae puestos. Images are real
@@ -86,6 +115,19 @@ clones via `creative_flow.duplicar`). Losers: `rescatar` climbs `escalon_rescate
 updates. Notifications (`notificaciones.avisar`: propuesta, ganador, rechazo_meta,
 error_lanzamiento) go by SMTP when `SMTP_HOST` is set and the project has a
 `correo_notificaciones`; otherwise they are only eventos.
+
+**Sin Meta conectado** (2026-10-08, pedido de Daniel: happyflops tenía Triple Whale y no Meta, y la pestaña le mostraba
+la tabla vacía y una galería que dejaba marcar piezas que después no se podían lanzar): `ver_cliente` pone
+`exp_sin_meta = not meta_conectado and not experimentos.hay_historial(cliente)` (un EXISTS: experimento no legado o
+anuncio suelto; con Meta conectado ni se consulta). Con `exp_sin_meta` la pestaña es SOLO la tarjeta `#exp-sin-meta`
+(«Conecta Meta…» o, con `estado == "roto"`, «La conexión con Meta se cortó»; una línea más si hay Triple Whale) con el
+botón a Configuración › Conexiones › Meta (`data-ir-tab="settings" data-ancla="config-meta"`): ni resultados, ni
+reglas del motor, ni CSV, y Configuración esconde su enlace a las reglas. Con historial y sin Meta se ven los
+resultados con un aviso, pero ningún «+ Nuevo experimento» (tampoco en `_exp_resultados.html` ni el `data-url-nuevo`).
+`exp_nuevo` sin Meta redirige a `#experimentos` (no pinta la galería) y `exp_probar`/`exp_crear` avisan «Conecta Meta en
+Configuración › Conexiones…». Y la página del proyecto abre en Crear en vez de Experimentos (`cliente.html`), también
+si Experimentos quedó como la pestaña recordada; un `#experimentos` explícito la sigue abriendo. Pruebas:
+`tests/test_experimentos_sin_meta.py`.
 
 There is also NO Campañas tab any more: `_tab_ads.html` is gone, `nueva_campana`/`publicar_ad`
 are no-ops that flash and redirect, and the legacy "Anuncios sueltos" (Forja's ads) render
@@ -186,8 +228,12 @@ nadie pinta desde E2), `tablero.alertas` (la lee `alertas.py`: skill `alertas`; 
 de una alerta cambia su huella de descarte; el centro muestra UNA línea «N alertas necesitan tu atención → Ver Alertas»,
 `.cr-alertas-linea` en `_exp_resultados.html`) y la atribución. `dashboard._contexto_tablero` lo cachea 60 s por proyecto e
 idioma, con la clave del último snapshot, el conteo de propuestas y los cobros de generación del proyecto, y degrada por
-partes sin filtrar el texto de una excepción; el total y el «Mes a mes» viven en el «Historial» plegado del centro
-(`_exp_historial.html`). `csv_mes` escapa las celdas que empiezan con fórmula. Con atribución sugerida `pixel`,
+partes sin filtrar el texto de una excepción; el total vive en «Totales desde el inicio», plegado al final del centro
+(`_exp_historial.html`). **Desde 2026-10-08 todo es desde el inicio** (Daniel: el mes y los periodos cortos confundían a
+sus clientes): `resultados.PERIODO_DEFECTO = 0` («Desde el inicio», primer chip; 7/14/30/90 días siguen como filtro), la
+tabla «Mes a mes» ya no se pinta (`tablero.mes_a_mes` sigue calculándose y probándose), y «Descargar CSV» (ruta
+`tab_descargar_csv`, `/tablero/mes.csv`) sale de `tablero.csv_total`: lo acumulado de cada pieza. `csv_mes`/`csv_total`
+escapan las celdas que empiezan con fórmula. Con atribución sugerida `pixel`,
 `experimentos.objetivo_sugerido` es `OUTCOME_SALES`; `lanzador.lanzar` vuelve a comprobar el Pixel antes de tocar Meta y manda
 `promoted_object={pixel_id, PURCHASE}` en cada conjunto (`meta_ads/adset.py` rechaza SALES sin él). El objetivo queda fijo al
 crear: Meta no deja cambiarlo.
@@ -260,7 +306,7 @@ PND-003 (revisión 2026-10-02): el precio de rescatar/derivar pasa musica_estilo
 
 PND-039/044/113 (2026-10-03): regenerar conserva las voces originales por destino en el item; un destino nuevo hereda la última voz original conocida. El payload explícito mantiene esa elección al producir. La cuadrícula conserva desmarcadas por combinación. Antes de la primera activación (experimento, país o pieza), lanzador reserva fin_primera_activacion bajo el escritor de extra y envía end_time a todos los conjuntos; solo después activa. Reanudar no extiende el plazo ni cambia presupuestos. Una reserva tras un fallo conserva la misma fecha en el próximo intento; los experimentos ya activados mantienen su fecha previa. PND-043 sigue esperando la decisión de reserva de arranques entre experimentos.
 
-PND-138/139/140 (revisión de Codex, 2026-10-05): aviso_moneda invalida ingresos/ROAS solo si hubo gasto, compras, impresiones o ingresos en el período; compras/CPA se conservan por moneda ajena, también al gestionar. Daniel decide si el agrupado futuro excluye los no comparables con nota o sigue oculto (PND-138); no convertir monedas. Una base sin ventas solo vale cero si nunca hubo compras ni fuente medible antes de desde. También se revisa el cierre: si no mide ventas y tiene cero compras, con serie.primera_venta <= hasta, el período no es comparable (compras/ingresos/ROAS/CPA None y pantalla —), nunca cero. Si serie.primera_venta es None o posterior a hasta, no se recorre la historia para buscar fuentes: no hubo ventas hasta el cierre y los resultados no cambian (segunda revisión del lote 4, 2026-10-05, pruebas test_tablero_cierre_ciego y test_tablero_rendimiento_ventas); el historial anterior se consulta en una tercera consulta conjunta para todas las piezas (conteo constante, probado con 3 y 13 piezas) y se conserva en los cierres mensuales. Entre fuentes distintas compras/ingresos/ROAS/CPA son None, CSV vacío, y la pantalla explica «Las ventas cambiaron de fuente en este período». La primera venta real se conserva. El día desconocido de TW→respaldo ciego→TW no se convierte en cero; reconstruir/fijar fuente y conciliar intervalos sigue como decisión PND-142. Historial sin gasto muestra —; con Pixel y gasto sin compras muestra 0,0×. La nota de gasto sin ventas medibles no se repite si el KPI ya dice sin ventas medibles. No cambia el decisor ni la pauta.
+PND-138/139/140 (revisión de Codex, 2026-10-05): aviso_moneda invalida ingresos/ROAS solo si hubo gasto, compras, impresiones o ingresos en el período; compras/CPA se conservan por moneda ajena, también al gestionar. La decisión delegada del 2026-10-07 (PND-138) excluye los de otra moneda del ROAS agrupado y muestra la nota con cuántos; no convertir monedas. Una base sin ventas solo vale cero si nunca hubo compras ni fuente medible antes de desde. También se revisa el cierre: si no mide ventas y tiene cero compras, con serie.primera_venta <= hasta, el período no es comparable (compras/ingresos/ROAS/CPA None y pantalla —), nunca cero. Si serie.primera_venta es None o posterior a hasta, no se recorre la historia para buscar fuentes: no hubo ventas hasta el cierre y los resultados no cambian (segunda revisión del lote 4, 2026-10-05, pruebas test_tablero_cierre_ciego y test_tablero_rendimiento_ventas); el historial anterior se consulta en una tercera consulta conjunta para todas las piezas (conteo constante, probado con 3 y 13 piezas) y se conserva en los cierres mensuales. Entre fuentes distintas compras/ingresos/ROAS/CPA son None, CSV vacío, y la pantalla explica «Las ventas cambiaron de fuente en este período». La primera venta real se conserva. El día desconocido de TW→respaldo ciego→TW no se convierte en cero; PND-142 fija la fuente al lanzar desde el 2026-10-08 y conserva sin mezclar los intervalos históricos desconocidos. Historial sin gasto muestra —; con Pixel y gasto sin compras muestra 0,0×. La nota de gasto sin ventas medibles no se repite si el KPI ya dice sin ventas medibles. No cambia el decisor ni la pauta.
 
 **Capacidad de atribución (2026-10-07, PND-078):** `atribucion_sugerida` conserva la prioridad del Pixel y pregunta
 `conectores.por_tipo(tipo).soporta_utm` a cada tienda conectada. Un tipo desconocido se omite. No cambia capacidades
@@ -269,3 +315,18 @@ ni atribuciones ya guardadas; `tests/test_lote5_higiene.py` usa conectores doble
 PND-136 (2026-10-07, lote 5 B): exp_pieza memoriza lecturas solo durante la petición. En resultados, gestión_id limita trabajos, propuestas y reglas al experimento seleccionado; sin selección mantiene las propuestas de todos (son visibles en Necesita tu decisión). Las marcas del panel usan el mismo truncado y MAX_MARCAS, sin cortar la bitácora. Día a día abre con ROAS para ventas y CTR para tráfico; en el centro con mezcla de objetivos conserva CTR. Gráfica role=group admite marcas enfocables; aria-live del contenedor se hereda, sin duplicarlo. No se cambia el decisor, reparto ni destino de publicación.
 
 Regresión aria-live del lote 5 corregida (2026-10-08, pedido de Daniel): el aviso #exp-minimo pertenece al resumen vivo #exp-resumen, sin aria-live propio; la copia #exp-resumen-final sigue sin región viva. La prueba de PND-136 comprueba herencia y conteo único; la prueba antigua de presupuesto permanece intacta.
+
+PND-132 (2026-10-08, decisión delegada): presupuesto_experimentos.limite_diario comparte formulario y servidor: saldo total menos los diarios de otros países por los días restantes desde fin_primera_activacion (antes de activar, días completos). El último día también topa con saldo menos otros diarios. Cambiar rechaza superar el máximo antes de Meta, también con conjuntos de apps; escalar se recorta al máximo y sin margen solo deja un evento, sin error ni propuesta. Un hijo reduce los diarios copiados proporcionalmente al saldo reservado. El formulario muestra el máximo con dinero; si queda bajo el mínimo de Meta de todos los conjuntos, explica el impedimento y no ofrece un campo con min > max. Pruebas test_lote6_presupuesto.py; verificación visual queda para Claude.
+
+PND-018 (2026-10-08, decisión delegada enmendada): datos_viejos comprueba la última foto (más de 6 h, límite estricto). La pausa por tope se hace ANTES de ese corte; todo lo demás sigue bloqueado. Se omite una pieza vieja aunque otra tenga foto fresca (máximo de fechas para el experimento). Tarjeta y gestión muestran datos viejos dentro de la tarjeta; pruebas SQLite/HTML y mutaciones en test_lote6_decisor.py. No cambia períodos ni umbrales.
+
+PND-017 (2026-10-08, decisión delegada): la puerta de ventas requiere 3 compras sumadas entre las piezas comparadas del país, excluyendo ventas_no_disponibles. Debajo da inconcluso sin acción, después de la puerta de tráfico existente. La marca muestra_ventas_insuficiente permite reevaluar al llegar más compras, evita repetir el evento y no retira la pieza al pausar/reactivar el experimento; apps y fuentes usan la misma regla. test_lote6_decisor.py y test_lote6_presupuesto.py vigilan muestra, tráfico, repetición y reactivación.
+
+PND-138 (2026-10-08, decisión delegada): ventas_medidas excluye numerador y denominador de los experimentos con moneda de ingresos ajena que tengan actividad en la ventana. Mide ventas solo con los comparables; sin ninguno que mida, ROAS — y nota. Cuenta experimentos distintos (no piezas) y muestra con ngettext «excluye 1 experimento en otra moneda» / «excluye 2 experimentos en otra moneda» tanto en ROAS como en Ingresos. Pauta total, compras y CPA conservan todos; ventanas desconocidas por fuente siguen desconocidas. Tablero, total y centro comparten la cuenta; test_lote6_ventas.py prueba agrupado y HTML. Historial conserva solo Totales desde el inicio: main retiró Mes a mes a propósito.
+
+**Diario en el último día (2026-10-08, PND-132, encargo de lote 6A):** el límite compartido también topa la suma de diarios por el saldo restante (total menos gastado): una fracción de día no permite mandar a Meta un diario mayor que ese saldo. Apps reparten ese diario entre sus conjuntos sin excederlo.
+
+
+PND-142 (2026-10-08, decisión delegada enmendada): fuente_ventas_fija se fija al lanzar según la atribución: triple_whale solo con atribución triple_whale y tiendas conectadas (sin tiendas, meta); tienda para pedidos por UTM, meta para Pixel y ninguna si no mide ventas. Una fuente fijada no se cambia por conectar/desconectar después. La lectura corrige las marcas antiguas que ignoraban tienda/Pixel/ninguna. Con ninguna, ninguna foto marca ventas medibles, aunque Meta reporte compras. Si la fuente fija no está disponible, ventas_no_disponibles y ventas no comparables (—), sin respaldo a Meta; todavía se permite el cierre sin evidencia y el perdedor por tráfico del decisor, pero no ganar/escalar por ventas. Triple Whale lee solo la tienda del país. El aviso nuevo aviso_ventas_no_comparables_tw no se deduplica contra el viejo aviso de respaldo. tests/test_lote6_ventas.py, test_atribucion.py y test_lote6_decisor.py vigilan la regla, pedidos e aislamiento.
+
+Noruega y Suecia (2026-10-08, spec `docs/superpowers/specs/2026-10-08-noruega-y-suecia-design.md` §3 y §5; motivo: el público de happyflops es Noruega y Suecia): un conjunto por país NO o SE sale con su moneda de la lista de países (`final_edition.tipos.PAISES`: NOK y SEK, símbolo «kr», que va detrás del número). Los mínimos de Meta se avisan con `presupuesto_experimentos.PRESUPUESTO_MINIMO_DIARIO` (NOK y SEK: 15 al día) y `lanzador._MIN_POR_MONEDA` (1 300 para el tope de gasto; 1 000 NOK ≈ US$94 quedaba bajo el mínimo de Meta, 2026-10-08); NOK y SEK llevan decimales para Meta (no están en `SIN_DECIMALES`). El presupuesto se compara contra la moneda de FACTURACIÓN de la cuenta, no la del país del conjunto, como siempre. `proyectos.paises_calendario()` ahora sale de `PAISES` (importa `final_edition.tipos` dentro de la función: `import proyectos` no debe cargar `final_edition`): un país nuevo en `PAISES` entra solo al selector de país del proyecto; si le falta calendario de Sprints usa el de Colombia. Las tiendas de Triple Whale por país NO y SE ya se conectaban; ahora una pieza de esos países sí se puede lanzar y producir (cierra PND-147).

@@ -30,8 +30,9 @@ todo porque la URL lleva `<cliente>`; cada POST además exige el mismo origen
   `anuncio_referente` (§7.2) guarda el anuncio en Referentes.
 """
 import logging
+from datetime import date
 
-from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, session, url_for
+from flask import Blueprint, abort, flash, redirect, render_template, request, session, url_for
 from flask_babel import gettext, ngettext
 
 import idiomas
@@ -54,7 +55,8 @@ def _mismo_origen():
             abort(403)
 
 
-# Los nombres de los canales viven en el paquete (los usa también `mejorar`, que corre en el worker).
+# Los nombres de los canales viven en el paquete (los usan también `mejorar`, que corre en el worker, y
+# «Resultados de tu tienda» en sus frases).
 NOMBRES_CANAL = triple_whale.NOMBRES_CANAL
 
 
@@ -103,9 +105,26 @@ def _dias(valor):
 def ver_panel(cliente):
     ctx = panel.contexto(cliente, _dias(request.args.get("dias")), (request.args.get("canal") or "").strip() or None,
                          tienda_id=request.args.get("tienda"))
-    armar_grafico = current_app.extensions.get("grafico_tablero")
-    grafico = armar_grafico(ctx["serie"]) if armar_grafico and ctx.get("serie") else None
-    return render_template("_tw_panel.html", cliente=cliente, tw=ctx, grafico=grafico)
+    if ctx.get("resultados"):
+        tienda = ctx["tienda_actual"]["id"] if ctx.get("tienda_actual") else ""
+        ctx["resultados"]["datos"]["url_dia"] = url_for("triple_whale.ver_dia", cliente=cliente, tienda=tienda,
+                                                        canal=ctx.get("canal") or "")
+    return render_template("_tw_panel.html", cliente=cliente, tw=ctx)
+
+
+@bp.get("/dia")
+def ver_dia(cliente):
+    """El detalle de un día de «Resultados de tu tienda» (fragmento que pide static/tw_resultados.js). Solo
+    lectura: un día del primero copiado a ayer, en la tienda y el canal que se están mirando."""
+    try:
+        fecha = date.fromisoformat((request.args.get("fecha") or "").strip()[:10])
+    except ValueError:
+        return gettext("Fecha no válida."), 400
+    ctx = panel.contexto_dia(cliente, fecha, (request.args.get("canal") or "").strip() or None,
+                             tienda_id=request.args.get("tienda"))
+    if ctx is None:
+        return gettext("Ese día no tiene datos completos de Triple Whale."), 400
+    return render_template("_tw_dia.html", cliente=cliente, d=ctx)
 
 
 # ------------------------------------------------ galería de tarjetas (spec tarjetas §5) ---
