@@ -44,11 +44,26 @@ def test_sincronizar_guarda_los_creativos(conectado, monkeypatch):
 def test_si_la_consulta_de_creativos_falla_la_copia_sigue(conectado, monkeypatch):
     falso = TripleWhaleFalso(ads=[_ad("1", "2026-09-28")], fallar_todo={"creativos"})
     monkeypatch.setattr(triple_whale, "sql_query", falso)
-    r = sync.sincronizar("acme", _tienda(), "2026-09-22", "2026-09-28", hoy=HOY)
-    assert "creativos" in r["fallos"] and r["anuncios"] == 1
+    # 14 días = dos tramos (DIAS_TRAMO = 7): el segundo no vuelve a probar los creativos.
+    r = sync.sincronizar("acme", _tienda(), "2026-09-15", "2026-09-28", hoy=HOY)
+    assert r["tramos"] == 2
+    assert "creativos" in r["fallos"] and r["anuncios"] == 1 and r["consultas"]["creativos"] == "sin_datos"
     assert triple_whale_tiendas.tienda("acme", _tienda())["estado"] == "conectada"
     # Un fallo no se reintenta en cada tramo: una sola llamada completa y una mínima.
     assert len([l for l in falso.llamadas if l[0] == "creativos"]) == 2
+
+
+def test_el_fallo_de_creativos_queda_sin_la_llave(conectado, monkeypatch):
+    """El texto del fallo se guarda en `ultimo_resumen` y se pinta en la pestaña: sin la llave."""
+    def responde(llave, shop, consulta, desde, hasta, moneda=None):
+        if "ad_image_url" in consulta:
+            raise triple_whale.ErrorConsulta(f"consulta rechazada para {llave}")
+        return []
+    monkeypatch.setattr(triple_whale, "sql_query", responde)
+    r = sync.sincronizar("acme", _tienda(), "2026-09-22", "2026-09-28", hoy=HOY)
+    guardado = triple_whale_tiendas.tienda("acme", _tienda())["extra"]["ultimo_resumen"]["fallos"]
+    for texto in (r["fallos"]["creativos"], guardado["creativos"]):
+        assert "tw_secreto" not in texto and "***" in texto
 
 
 def test_la_minima_de_creativos_sirve_si_la_completa_no(conectado, monkeypatch):
