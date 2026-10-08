@@ -152,7 +152,8 @@ def voz_bloque(cliente, texto_voz, voz, idioma, ventana_ms, carpeta):
     (`voces_propias.sintetizar`, que la estrena) y su caché va por el
     `voice_id`, no por el id de la fila (SQLite puede reutilizar el de una voz
     borrada); ValueError si ya no es una voz de este proyecto. La galería va
-    por ElevenLabs como siempre."""
+    por ElevenLabs como siempre (`fal_audio.tts_galeria`: el noruego por Turbo
+    v2.5 con `language_code`)."""
     import audios          # perezosos: los dos importan final_edition.cortes
     import voces_propias
     if not (texto_voz or "").strip():
@@ -174,7 +175,7 @@ def voz_bloque(cliente, texto_voz, voz, idioma, ventana_ms, carpeta):
             if propia:
                 r = voces_propias.sintetizar(cliente, propia, texto_voz, idioma)
             else:
-                r = fal_audio.tts(texto_voz, voz, idioma)
+                r = fal_audio.tts_galeria(texto_voz, voz, idioma)      # el noruego, por Turbo
             costo += float(r.get("costo_usd") or 0.0)
             local = _descargar(r["url"], os.path.join(carpeta, f"voz_{h[:16]}.mp3"))
             url = r2_uploader.upload_file(local, f"clientes/{cliente}/materiales/voz_{h[:16]}.mp3", "audio/mpeg")

@@ -126,13 +126,14 @@ def _sintetizar_bloque(bloque, voz, idioma, carpeta, cliente):
 
 
 def _tts(texto, voz, idioma, cliente):
-    """La galería por ElevenLabs; una voz propia (`vp:<id>`) por MiniMax
+    """La galería por ElevenLabs (`fal_audio.tts_galeria`: el noruego por
+    Turbo); una voz propia (`vp:<id>`) por MiniMax
     (`voces_propias.sintetizar`, que la estrena). ValueError si la voz propia
     ya no es de este proyecto."""
     import audios          # perezosos: los dos importan final_edition.cortes
     import voces_propias
     if not audios.es_propia(voz):
-        return fal_audio.tts(texto, voz, idioma)
+        return fal_audio.tts_galeria(texto, voz, idioma)
     vp = voces_propias.resolver(cliente, voz)
     if not vp:
         raise ValueError(idiomas.traducir(audios.MENSAJES["voz_borrada"]))

@@ -16,13 +16,15 @@ todo porque la URL lleva `<cliente>`; cada POST además exige el mismo origen
   pieza de experimento) desde la tabla, con confirmación; usa
   `lanzador.pausar_pieza` / `activar_pieza`, que dejan su evento.
 """
-from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, session, url_for
+from datetime import date
+
+from flask import Blueprint, abort, flash, redirect, render_template, request, session, url_for
 from flask_babel import gettext
 
 import idiomas
 import triple_whale_tiendas
 from tareas import triple_whale as tareas_tw
-from triple_whale import analisis, datos, panel, puente
+from triple_whale import analisis, datos, panel, puente, resultados
 
 bp = Blueprint("triple_whale", __name__, url_prefix="/cliente/<cliente>/triple-whale")
 
@@ -35,9 +37,8 @@ def _mismo_origen():
             abort(403)
 
 
-# Nombres de los canales estandarizados de Triple Whale ("ads-standardized-channel-ids").
-NOMBRES_CANAL = {"facebook-ads": "Meta", "google-ads": "Google Ads", "tiktok-ads": "TikTok", "bing": "Microsoft Ads",
-                 "pinterest-ads": "Pinterest", "snapchat-ads": "Snapchat", "twitter-ads": "X"}
+# Nombres de los canales estandarizados de Triple Whale (viven con «Resultados de tu tienda», que los usa en sus frases).
+NOMBRES_CANAL = resultados.NOMBRES_CANAL
 
 
 @bp.app_template_filter("tw_num")
@@ -85,9 +86,26 @@ def _dias(valor):
 def ver_panel(cliente):
     ctx = panel.contexto(cliente, _dias(request.args.get("dias")), (request.args.get("canal") or "").strip() or None,
                          tienda_id=request.args.get("tienda"))
-    armar_grafico = current_app.extensions.get("grafico_tablero")
-    grafico = armar_grafico(ctx["serie"]) if armar_grafico and ctx.get("serie") else None
-    return render_template("_tw_panel.html", cliente=cliente, tw=ctx, grafico=grafico)
+    if ctx.get("resultados"):
+        tienda = ctx["tienda_actual"]["id"] if ctx.get("tienda_actual") else ""
+        ctx["resultados"]["datos"]["url_dia"] = url_for("triple_whale.ver_dia", cliente=cliente, tienda=tienda,
+                                                        canal=ctx.get("canal") or "")
+    return render_template("_tw_panel.html", cliente=cliente, tw=ctx)
+
+
+@bp.get("/dia")
+def ver_dia(cliente):
+    """El detalle de un día de «Resultados de tu tienda» (fragmento que pide static/tw_resultados.js). Solo
+    lectura: un día del primero copiado a ayer, en la tienda y el canal que se están mirando."""
+    try:
+        fecha = date.fromisoformat((request.args.get("fecha") or "").strip()[:10])
+    except ValueError:
+        return gettext("Fecha no válida."), 400
+    ctx = panel.contexto_dia(cliente, fecha, (request.args.get("canal") or "").strip() or None,
+                             tienda_id=request.args.get("tienda"))
+    if ctx is None:
+        return gettext("Ese día no tiene datos completos de Triple Whale."), 400
+    return render_template("_tw_dia.html", cliente=cliente, d=ctx)
 
 
 @bp.post("/sincronizar")

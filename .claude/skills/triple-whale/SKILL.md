@@ -93,9 +93,9 @@ rejected because it would split catalog, pieces and sprints. Spec
 
 The **Triple Whale tab** (`_tab_triple_whale.html`, `data-tab="triplewhale"`, after Alertas; since E2, 2026-10-03, there is
 no Tablero tab) fetches its panel
-(`triple_whale.rutas.ver_panel` → `_tw_panel.html`) only when opened: store KPIs (MER, AOV, new customers,
-vs. previous period), ad KPIs, alerts, a day-by-day chart drawn by the old Tablero's `dashboard._grafico_tablero`
-(`app.extensions["grafico_tablero"]`; the Tablero itself no longer computes a chart), spend by
+(`triple_whale.rutas.ver_panel` → `_tw_panel.html`) only when opened: «Resultados de tu tienda» (cards + the
+interactive day-by-day chart + day detail + reading + «Tus creativos», see the paragraph at the end; it replaced the
+store KPI tiles and the old SVG chart on 2026-10-08), ad KPIs, alerts, spend by
 verdict/channel and every ad with a verdict and a diagnosis from the pure `triple_whale/evaluacion.py`
 (compared with the account's own medians; `ganador`/`prometedor`/`en_prueba`/`perdedor`/`sin_datos`; weak
 hook, low hold, few clicks, clicks without sales, expensive CPM, fatigue 7d vs 7d, no TW tracking).
@@ -121,8 +121,11 @@ creative Creatv creates (`lanzador._crear_anuncios`, and the legacy `tareas/meta
 `meta_ads.creative` functions take an optional `url_tags` for the AdCreative's «URL parameters»), via
 `triple_whale_tiendas.url_tags(cliente)` — None without Triple Whale; ads created before connecting keep
 none (changing them sends the ad back to review). Second round (spec §11–§13): `tw_producto_dia` (migration
-0024) copies `orders_table` opened by `products_info` in the same sync (`consultas_productos`, full/minimal,
-never verified: §9.5) → «Lo que más se vende» in the tab (`panel.productos_periodo`, matched to the Catálogo
+0024) copies `orders_table` opened by `products_info` in the same sync (`consultas_productos`, full/minimal;
+checked against happyflops-norge on 2026-10-08, PND-150: `products_info` is an array of objects opened with
+`ARRAY JOIN products_info AS p`, fields `product_id`, `product_name`, `product_sku`, `product_name_price` (unit),
+`product_name_quantity_sold`, `net_discount_amount_for_product`; price × quantity matches the store's
+`gross_product_sales`; the full query subtracts the discount) → «Lo que más se vende» in the tab (`panel.productos_periodo`, matched to the Catálogo
 by `fuente_id`/name) and the top 5 in the AI prompt (each idea carries `producto`); a Creatv-made ad
 (`datos.piezas_creatv`, now with the pieza's video/thumbnail/state) sends Claude the real frames
 (`analisis.visuales` → `sprints.qa.archivo_local` + `doctrina.revisor.bloques_visuales`, temp file deleted
@@ -142,7 +145,36 @@ every metric as a total because short periods confused their clients. `panel.res
 carries `origen_tw` («<evaluación>:<índice>»), the Crear form returns it in a hidden field and `cf_crear_video`
 stores `concepto.extra.tw_idea` (`puente.origen_desde_formulario` validates it, a bad value is ignored); the
 idea card lists the pieces born from it with their Crear state and Meta verdict (`datos.piezas_de_evaluacion`,
-`panel.enlazar_ideas`) and a Creatv ad says which idea it came from (`piezas_creatv(...)["tw_idea"]`). None of
-the SQL has run against a real store yet (spec 2026-09-28 §9).
+`panel.enlazar_ideas`) and a Creatv ad says which idea it came from (`piezas_creatv(...)["tw_idea"]`). Since 2026-10-08 every query runs against the real store (happyflops-norge): ads, Pixel and products full; the store
+query dropped `net_profit` (not a `blended_stats_tvf()` column — it made every copy fall back to the minimal one and
+lose new customers); `utilidad_neta` stays 0 and is shown nowhere.
+
+Coronas (2026-10-08, spec de Noruega y Suecia §3; motivo: las tiendas de happyflops son de Noruega y Suecia): `triple_whale.MONEDAS` trae NOK y SEK, así que la tienda de un país NO o SE guarda su moneda y el tablero y los experimentos la distinguen del dólar como a cualquier otra moneda local. Con moneda mezclada el ROAS se oculta (PND-138), no se convierte.
+
+**«Resultados de tu tienda»** (spec `docs/superpowers/specs/2026-10-08-tw-resultados-de-tu-tienda-design.md`, pedido
+de Daniel 2026-10-08 con la captura de «Día a día»): reemplazó a «Tu tienda» (tiles) y «Día a día» (el SVG de
+`dashboard._grafico_tablero`, que se borró: ya no lo usaba nadie). `panel._resultados` arma UNA serie ancha (periodo +
+anterior + 28 días para los días raros) y llama a `triple_whale/resultados.py` (puro: tarjetas, variaciones con días
+completos — hoy va aparte —, días raros contra la mediana del mismo día de la semana, mejor día, lectura con reglas,
+«Tus creativos» por mes de arranque, la tabla y el JSON). Las consultas nuevas de `datos.py` (`gasto_por_antiguedad`,
+`gasto_por_canal`, `anuncios_del_dia`, `arrancaron_el`, `cohortes`) van sobre `_medidas_dia` (solo gasto MAX entre
+tiendas, ventas y pedidos SUMA: `_anuncio_dia` con sus 30 columnas costaba el doble) y `_primeros_dias` (primer día
+con gasto de cada anuncio en la copia: nuevo = hasta ese día + 13; la antigüedad se conoce desde el inicio de la copia +
+14). `_tw_resultados.html` pinta tarjetas, lectura, creativos y tabla en el servidor y deja el JSON en
+`<script type="application/json" id="tw-resultados-datos">`; `static/tw_resultados.js` (ES5, como
+`exp_resultados.js`, textos en el JSON, números con los separadores de la app) dibuja la gráfica al ancho real del
+contenedor y pide el detalle del día a `GET /triple-whale/dia` (`panel.contexto_dia` → `_tw_dia.html`; del primer día
+copiado a ayer, 400 si no). `_tab_triple_whale.html` llama `TwResultados.iniciar(cont)` tras pintar el panel. Trampas:
+un periodo anterior que empieza antes del primer día copiado NO se compara (serían ceros que no son ventas; con 10
+días de prueba, «7 días» no compara); «Desde el inicio» nunca compara (5fce2658); lo atribuido del Pixel suma más que
+la tienda (PND-157) y solo se usa para comparar anuncios y canales; el CSS heredado tenía un comentario cerrado con
+`#}` que se tragaba `.tb-barra-tw` (por eso la gráfica vieja salía con barras naranjas y línea verde).
+Reglas que añadió la revisión (2026-10-08, cada una con su prueba de mutación): los días después del último copiado
+(`fin_datos`, una copia atrasada) van vacíos y fuera de cifras, comparaciones y días raros; en «Todas» la antigüedad se
+cuenta desde la tienda que empezó a copiarse MÁS TARDE (`datos.inicio_para_antiguedad`); el detalle del día no marca
+«nuevo» ni cuenta arranques antes de ese inicio + 14; con canal (o sin datos de tienda) cada frase, ayuda y el texto de
+hoy dicen «según el Pixel»; la alerta «el MER de la tienda cayó» toma la variación de la tarjeta (días completos, sin
+periodo anterior fuera de la copia); `/dia` usa `datos.primer_dia_copia` y valida el canal por su forma, sin
+recorrer la copia en cada clic.
 
 PND-142 (2026-10-08, decisión delegada enmendada): fuente_ventas_fija se fija al lanzar según la atribución: triple_whale solo con atribución triple_whale y tiendas conectadas (sin tiendas, meta); tienda para pedidos por UTM, meta para Pixel y ninguna si no mide ventas. Una fuente fijada no se cambia por conectar/desconectar después. La lectura corrige las marcas antiguas que ignoraban tienda/Pixel/ninguna. Con ninguna, ninguna foto marca ventas medibles, aunque Meta reporte compras. Si la fuente fija no está disponible, ventas_no_disponibles y ventas no comparables (—), sin respaldo a Meta; todavía se permite el cierre sin evidencia y el perdedor por tráfico del decisor, pero no ganar/escalar por ventas. Triple Whale lee solo la tienda del país. El aviso nuevo aviso_ventas_no_comparables_tw no se deduplica contra el viejo aviso de respaldo. tests/test_lote6_ventas.py, test_atribucion.py y test_lote6_decisor.py vigilan la regla, pedidos e aislamiento.
