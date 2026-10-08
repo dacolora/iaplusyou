@@ -11,6 +11,7 @@ import hmac
 import os
 import re
 import time
+from urllib.parse import urlsplit
 
 import requests
 from flask_babel import gettext
@@ -34,6 +35,40 @@ class ErrorBold(Exception):
 
 def _identidad():
     return (os.environ.get("BOLD_LLAVE_IDENTIDAD") or "").strip()
+
+
+def _secreta():
+    # strip(): una secreta de solo espacios es una clave adivinable, y un
+    # espacio de más al final hacía fallar todas las firmas (revisión final B1).
+    return (os.environ.get("BOLD_LLAVE_SECRETA") or "").strip()
+
+
+def host_local(url):
+    """¿El host de `url` es de una máquina local? (localhost, 127.0.0.1, ::1,
+    *.localhost, *.test, como la regla de pruebas del repo)."""
+    try:
+        host = (urlsplit(str(url or "").strip()).hostname or "").lower().rstrip(".")
+    except ValueError:
+        return False
+    return host in ("localhost", "127.0.0.1", "::1") or host.endswith((".localhost", ".test"))
+
+
+def marca_pruebas():
+    return os.environ.get("BOLD_PRUEBAS") == "1"
+
+
+def pruebas_activas():
+    """BOLD_PRUEBAS=1 solo vale si PLATAFORMA_URL es local (revisión final
+    2026-10-08, E1): en un servidor público la marca se ignora, así una marca
+    olvidada en el .env del VPS no vuelve falsificables los webhooks ni crea
+    links de pruebas que acreditarían saldo real."""
+    return marca_pruebas() and host_local(os.environ.get("PLATAFORMA_URL"))
+
+
+def pruebas_fuera_de_local():
+    """La marca está puesta en un servidor que no es local: se ignora y el
+    admin lo ve en /admin/cobros."""
+    return marca_pruebas() and not host_local(os.environ.get("PLATAFORMA_URL"))
 
 
 def configurado():
@@ -108,9 +143,10 @@ def estado_link(link_id, tiempo=TIEMPO):
 def firma_valida(cuerpo, firma):
     """HMAC-SHA256 (hex) del cuerpo en base64 con la llave secreta, comparado
     en tiempo constante con x-bold-signature. En pruebas Bold firma con la
-    cadena vacía: solo se acepta con BOLD_PRUEBAS=1."""
-    secreta = os.environ.get("BOLD_LLAVE_SECRETA") or ""
-    if not secreta and os.environ.get("BOLD_PRUEBAS") != "1":
+    cadena vacía: solo se acepta con BOLD_PRUEBAS=1 en un servidor local
+    (`pruebas_activas`)."""
+    secreta = _secreta()
+    if not secreta and not pruebas_activas():
         return False
     if not firma:
         return False

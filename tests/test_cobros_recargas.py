@@ -24,7 +24,8 @@ def entorno(base_temporal, monkeypatch, tmp_path):
     monkeypatch.setenv("BOLD_LLAVE_IDENTIDAD", "identidad-falsa")  # llave-de-prueba
     monkeypatch.setenv("BOLD_LLAVE_SECRETA", "")
     monkeypatch.setenv("BOLD_PRUEBAS", "1")
-    monkeypatch.setenv("PLATAFORMA_URL", "https://app.creatvmachine.com/")
+    # Local: BOLD_PRUEBAS=1 solo vale con PLATAFORMA_URL de una máquina local (revisión final, E1).
+    monkeypatch.setenv("PLATAFORMA_URL", "http://localhost:5050/")
 
     estado = {"links": [], "status": {"status": "ACTIVE", "transaction_id": None, "total": None},
               "avisos": [], "consultas": 0, "error_link": None}
@@ -107,7 +108,7 @@ def test_crear_deja_la_recarga_pendiente_con_su_link(entorno):
     assert fila["link_id"] == "LNK_PRUEBA1" and fila["usuario"] == "user_acme"
     link = entorno["links"][0]
     assert link["referencia"] == fila["referencia"] and link["usd"] == 50 and link["correo"] == "acme@prueba.local"
-    assert link["callback_url"] == f"https://app.creatvmachine.com/cliente/acme/saldo/recarga/{r['id']}"
+    assert link["callback_url"] == f"http://localhost:5050/cliente/acme/saldo/recarga/{r['id']}"
     assert link["descripcion"] == "Recarga Creatv · acme"
     assert _movimientos(entorno["db"]) == []   # crear no acredita nada
 
@@ -526,6 +527,10 @@ def test_webhook_solo_acepta_post(entorno, cliente_http):
 
 
 def test_ninguna_otra_ruta_acepta_un_post_de_otro_sitio(entorno, cliente_http):
+    import dashboard
+    # B3 (revisión final 2026-10-08): la lista de excepciones a la barrera CSRF
+    # es exactamente el webhook; uno nuevo se agrega aquí a conciencia.
+    assert dashboard.ENDPOINTS_OTRO_ORIGEN == {"cobros.bold_webhook"}
     c = cliente_http.como("user_acme")
     r = c.post("/cliente/acme/saldo/recargar", data={"usd": "50"}, headers={"Sec-Fetch-Site": "cross-site"})
     assert r.status_code == 403
@@ -834,3 +839,19 @@ def test_boton_verificar_de_una_rechazada_reciente_consulta_y_acredita(entorno, 
     r = c.post(f"/cliente/acme/saldo/recarga/{rid}/verificar")
     assert r.status_code == 302 and _recarga(entorno["db"], rid)["estado"] == "aprobada"
     assert entorno["libro"].saldo("acme") == 50000
+
+
+# --- revisión final (2026-10-08), E1: BOLD_PRUEBAS=1 solo en un servidor local ---------------
+
+@pytest.mark.parametrize("url", ["https://app.creatvmachine.com/", "http://192.168.1.5:5050", ""])
+def test_con_bold_pruebas_en_un_servidor_publico_no_se_crea_el_link_ni_vale_la_firma(entorno, monkeypatch, url):
+    recargas = entorno["recargas"]
+    rid, ref = _pendiente(entorno)   # creada con el servidor local
+    monkeypatch.setenv("PLATAFORMA_URL", url)
+    if url:
+        with pytest.raises(ValueError) as e:
+            recargas.crear("acme", 50, "user_acme")
+        assert "modo de pruebas" in str(e.value)
+        assert len(_recargas(entorno["db"])) == 1 and len(entorno["links"]) == 1   # nada escrito ni pedido a Bold
+    assert _webhook(recargas, _evento(ref=ref))[0] == 401
+    assert _recarga(entorno["db"], rid)["estado"] == "pendiente" and entorno["libro"].saldo("acme") == 0

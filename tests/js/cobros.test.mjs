@@ -9,8 +9,11 @@ import vm from "node:vm";
 
 const FUENTE = readFileSync(new URL("../../static/cobros.js", import.meta.url), "utf8");
 
+const ORIGEN = "https://app.creatvmachine.com";
+
 function cargar(fetchFalso) {
-  const ctx = { Response, Promise, setTimeout, Date, console, document: null, fetch: fetchFalso };
+  const ctx = { Response, Promise, setTimeout, Date, console, URL, location: { origin: ORIGEN }, document: null,
+                fetch: fetchFalso };
   ctx.window = ctx;
   ctx.addEventListener = () => {};
   vm.createContext(ctx);
@@ -18,8 +21,14 @@ function cargar(fetchFalso) {
   return ctx;
 }
 
-function json402(cuerpo) {
-  return new Response(JSON.stringify(cuerpo), { status: 402, headers: { "content-type": "application/json" } });
+// Un Response armado a mano no tiene `url`; el de un fetch real sí: se le pone.
+function conUrl(respuesta, url) {
+  Object.defineProperty(respuesta, "url", { value: url });
+  return respuesta;
+}
+
+function json402(cuerpo, url = `${ORIGEN}/cliente/acme/creative_flow/generar`) {
+  return conUrl(new Response(JSON.stringify(cuerpo), { status: 402, headers: { "content-type": "application/json" } }), url);
 }
 
 const SALDO = { ok: false, error: "Saldo insuficiente: esto cuesta ≈ US$ 1,50 y tienes US$ 0,40 disponibles. Recarga para seguir.",
@@ -72,6 +81,24 @@ test("el enlace solo lleva a una ruta de este sitio", () => {
   assert.equal(urlSegura("/cliente/acme#config-ap-saldo"), "/cliente/acme#config-ap-saldo");
   for (const mala of ["javascript:alert(1)", "//otro.com/x", "https://otro.com", "/\\otro.com", "", null]) {
     assert.equal(urlSegura(mala), "");
+  }
+});
+
+test("revisión final (B2): un carácter de control no cuela otro dominio", () => {
+  const { urlSegura } = cargar(async () => null).CobrosSaldo;
+  for (const mala of ["/\t/otro.com", "/\n/otro.com", "/\r/otro.com", "/\u0000x", "/x\u007f", "/\u0085/otro.com"]) {
+    assert.equal(urlSegura(mala), "", JSON.stringify(mala));
+  }
+});
+
+test("revisión final (B2): un 402 de otro sitio no avisa", async () => {
+  for (const url of ["https://otro.com/x", "", "http://app.creatvmachine.com/x"]) {
+    const avisos = [];
+    const w = cargar(async () => json402(SALDO, url));
+    const envuelto = w.CobrosSaldo.envolver(w.fetch, (d) => avisos.push(d));
+    await envuelto("https://otro.com/x");
+    await new Promise((ok) => setTimeout(ok, 0));
+    assert.equal(avisos.length, 0, url);
   }
 });
 

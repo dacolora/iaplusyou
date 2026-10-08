@@ -129,6 +129,11 @@ def crear(cliente, usd, usuario, correo=None):
         raise ValueError(gettext("Falta PLATAFORMA_URL en el servidor"))
     if not bold.configurado():
         raise bold.ErrorBold(gettext("Faltan las llaves de Bold"))
+    if bold.pruebas_fuera_de_local():
+        # BOLD_PRUEBAS=1 en un servidor público: con llaves de pruebas el link
+        # se pagaría con una tarjeta de pruebas y acreditaría saldo real (E1).
+        raise ValueError(gettext("Las recargas en línea están apagadas: este servidor tiene el modo de pruebas "
+                                 "de Bold puesto. Avísale al administrador."))
     ahora = db.ahora()
     with db.conectar() as con:   # el INSERT toma el candado; no hay lectura previa
         rid = int(con.execute(db.recarga.insert().values(

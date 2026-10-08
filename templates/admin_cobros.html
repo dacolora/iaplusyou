@@ -4,7 +4,7 @@
 {# /admin/cobros (cobros.admin_cobros, spec 2026-10-08 §10). Contexto: filas
    (cobros.vista.resumen_admin + nombre; montos en milésimas), margen_global,
    eventos (vista.ultimos_eventos, solo firmados, con resultado_texto),
-   webhook_callado, avisos_bold {sin_llaves, pruebas_abiertas} (nunca un valor
+   webhook_callado, avisos_bold {sin_llaves, pruebas_abiertas, pruebas_fuera_de_local} (nunca un valor
    de llave). Los *_texto y *_campo ya vienen con el separador decimal de quien mira. Todo POST va al Blueprint
    cobros y pasa por la barrera CSRF. #}
 <section class="hero aparece">
@@ -20,6 +20,11 @@
 {% if avisos_bold.pruebas_abiertas %}
 <div class="flash error" id="aviso-bold-pruebas">
   {{ _('<strong>BOLD_PRUEBAS=1 sin BOLD_LLAVE_SECRETA.</strong> El webhook acepta la firma de pruebas de Bold: cualquiera que lo sepa puede acreditar saldo. Úsalo solo en local; en el servidor pon la llave secreta y quita BOLD_PRUEBAS.') }}
+</div>
+{% endif %}
+{% if avisos_bold.pruebas_fuera_de_local %}
+<div class="flash error" id="aviso-bold-pruebas-servidor">
+  {{ _('<strong>BOLD_PRUEBAS=1 en un servidor que no es local.</strong> Aquí no vale: el webhook no acepta la firma de pruebas y no se crean links de pago, así que las recargas en línea están apagadas. Quita BOLD_PRUEBAS del <code>.env</code> del servidor y usa las llaves de producción.') }}
 </div>
 {% endif %}
 {% if avisos_bold.sin_llaves %}
@@ -103,7 +108,7 @@
                     <option value="recarga">{{ _('Recarga (entró plata)') }}</option>
                     <option value="ajuste">{{ _('Ajuste (corrección, con nota)') }}</option>
                   </select></label>
-                <label>{{ _('Nota') }}
+                <label>{{ _('Nota (la ve el cliente en sus movimientos)') }}
                   <input type="text" name="nota" maxlength="300"></label>
                 <button type="submit" class="btn-generar">{{ _('Anotar') }}</button>
               </form>

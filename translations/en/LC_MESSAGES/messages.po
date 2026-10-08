@@ -1696,6 +1696,9 @@ msgstr "<em>Generate new token</em>: choose Creatv's app, expiration <strong>nev
 msgid "<strong>Arriba del panel, «Modo de la app»: pásala de Desarrollo a Live.</strong> Sin esto Meta rechaza cada anuncio (subcódigo 1885183). En Live sin App Review solo pueden usar la app las personas con rol en ella: conecta con el Facebook que la administra."
 msgstr "<strong>At the top of the panel, “App mode”: switch it from Development to Live.</strong> Without this Meta rejects every ad (subcode 1885183). In Live without App Review only people with a role on the app can use it: connect with the Facebook that administers it."
 
+msgid "<strong>BOLD_PRUEBAS=1 en un servidor que no es local.</strong> Aquí no vale: el webhook no acepta la firma de pruebas y no se crean links de pago, así que las recargas en línea están apagadas. Quita BOLD_PRUEBAS del <code>.env</code> del servidor y usa las llaves de producción."
+msgstr "<strong>BOLD_PRUEBAS=1 on a server that is not local.</strong> It does not apply here: the webhook does not accept the test signature and no payment links are created, so online top-ups are off. Remove BOLD_PRUEBAS from the server’s <code>.env</code> and use the production keys."
+
 msgid "<strong>BOLD_PRUEBAS=1 sin BOLD_LLAVE_SECRETA.</strong> El webhook acepta la firma de pruebas de Bold: cualquiera que lo sepa puede acreditar saldo. Úsalo solo en local; en el servidor pon la llave secreta y quita BOLD_PRUEBAS."
 msgstr "<strong>BOLD_PRUEBAS=1 without BOLD_LLAVE_SECRETA.</strong> The webhook accepts Bold’s test signature: anyone who knows it can add balance. Use it only locally; on the server set the secret key and remove BOLD_PRUEBAS."
 
@@ -9524,6 +9527,9 @@ msgstr "The slowest (over 1 s)"
 msgid "Las pone quien administra el servidor en el archivo <code>.env</code>; no se escriben desde aquí."
 msgstr "Whoever administers the server sets them in the <code>.env</code> file; they're not written from here."
 
+msgid "Las recargas en línea están apagadas: este servidor tiene el modo de pruebas de Bold puesto. Avísale al administrador."
+msgstr "Online top-ups are off: this server has Bold’s test mode on. Let the administrator know."
+
 msgid "Las recargas en línea todavía no están disponibles; escríbenos para recargar."
 msgstr "Online top-ups are not available yet; write to us to top up."
 
@@ -11621,6 +11627,9 @@ msgstr "Normal"
 
 msgid "Nota"
 msgstr "Note"
+
+msgid "Nota (la ve el cliente en sus movimientos)"
+msgstr "Note (the client sees it in their movements)"
 
 msgid "Nota (opcional)"
 msgstr "Note (optional)"

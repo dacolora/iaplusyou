@@ -391,8 +391,10 @@ def test_avisos_de_configuracion_de_bold(http, monkeypatch):
     assert 'id="aviso-bold-llaves"' in html and 'id="aviso-bold-pruebas"' not in html
     monkeypatch.setenv("BOLD_LLAVE_IDENTIDAD", "identidad-falsa")  # llave-de-prueba
     monkeypatch.setenv("BOLD_PRUEBAS", "1")
+    monkeypatch.setenv("PLATAFORMA_URL", "http://localhost:5050")   # la marca solo vale en local
     html = c.get("/admin/cobros").get_data(as_text=True)
     assert 'id="aviso-bold-llaves"' in html and 'id="aviso-bold-pruebas"' in html   # falta la secreta
+    assert 'id="aviso-bold-pruebas-servidor"' not in html
     monkeypatch.setenv("BOLD_LLAVE_SECRETA", "secreta-falsa")  # llave-de-prueba
     monkeypatch.delenv("BOLD_PRUEBAS")
     html = c.get("/admin/cobros").get_data(as_text=True)
@@ -491,3 +493,20 @@ def test_un_margen_enorme_o_no_finito_avisa_y_no_da_500(http, valor):
     r = c.post("/admin/cobros/acme/cuenta", data={"margen": valor}, headers=MISMO)
     assert r.status_code == 302 and libro.cuenta("acme")["margen_propio"] == 2.0
     assert "El margen va de 1,00 a 5,00." in _flashes(c)
+
+
+def test_bold_pruebas_en_un_servidor_publico_se_marca_en_el_panel(http, monkeypatch):
+    """Revisión final 2026-10-08 (E1): la marca se ignora fuera de local y el admin lo ve."""
+    c = http.como("admin")
+    monkeypatch.setenv("BOLD_PRUEBAS", "1")
+    monkeypatch.setenv("PLATAFORMA_URL", "https://app.creatvmachine.com")
+    html = c.get("/admin/cobros").get_data(as_text=True)
+    assert 'id="aviso-bold-pruebas-servidor"' in html and 'id="aviso-bold-pruebas"' not in html
+    monkeypatch.delenv("BOLD_PRUEBAS")
+    assert 'id="aviso-bold-pruebas-servidor"' not in c.get("/admin/cobros").get_data(as_text=True)
+
+
+def test_la_nota_de_una_recarga_manual_dice_que_la_ve_el_cliente(http):
+    """E2: la nota (detalle) sale en los movimientos y el CSV del cliente."""
+    html = http.como("admin").get("/admin/cobros").get_data(as_text=True)
+    assert "la ve el cliente" in html

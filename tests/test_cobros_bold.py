@@ -189,8 +189,43 @@ def test_firma_con_secreta_vacia_solo_en_modo_pruebas(bold, monkeypatch):
     firma_vacia = _firma("", cuerpo)
     assert bold.firma_valida(cuerpo, firma_vacia) is False          # sin BOLD_PRUEBAS=1
     monkeypatch.setenv("BOLD_PRUEBAS", "1")
+    monkeypatch.setenv("PLATAFORMA_URL", "http://localhost:5050")
     assert bold.firma_valida(cuerpo, firma_vacia) is True
     assert bold.firma_valida(cuerpo, _firma(SECRETA, cuerpo)) is False
+
+
+@pytest.mark.parametrize("url", ["https://app.creatvmachine.com", "http://10.0.0.2", "http://localhost.evil.com", "", None])
+def test_bold_pruebas_en_un_servidor_que_no_es_local_no_acepta_la_firma_vacia(bold, monkeypatch, url):
+    """Revisión final 2026-10-08 (E1): una marca BOLD_PRUEBAS=1 olvidada en el
+    VPS no vuelve falsificable el webhook."""
+    cuerpo = b'{"id":"ev1"}'
+    monkeypatch.setenv("BOLD_PRUEBAS", "1")
+    if url is None:
+        monkeypatch.delenv("PLATAFORMA_URL", raising=False)
+    else:
+        monkeypatch.setenv("PLATAFORMA_URL", url)
+    assert bold.pruebas_activas() is False and bold.pruebas_fuera_de_local() is True
+    assert bold.firma_valida(cuerpo, _firma("", cuerpo)) is False
+
+
+@pytest.mark.parametrize("url", ["http://localhost:5050", "http://127.0.0.1:5050/", "http://[::1]:5050",
+                                 "http://creatv.localhost", "https://app.creatv.test/x"])
+def test_hosts_locales(bold, url):
+    assert bold.host_local(url) is True
+
+
+@pytest.mark.parametrize("secreta", ["   ", "\t\n"])
+def test_una_secreta_de_solo_espacios_cuenta_como_vacia(bold, monkeypatch, secreta):
+    """B1: sin strip() una secreta de espacios era una clave adivinable."""
+    cuerpo = b'{"id":"ev1"}'
+    monkeypatch.setenv("BOLD_LLAVE_SECRETA", secreta)
+    assert bold.firma_valida(cuerpo, _firma(secreta, cuerpo)) is False
+
+
+def test_un_espacio_de_mas_en_la_secreta_no_rompe_las_firmas(bold, monkeypatch):
+    cuerpo = b'{"id":"ev1"}'
+    monkeypatch.setenv("BOLD_LLAVE_SECRETA", SECRETA + " \n")
+    assert bold.firma_valida(cuerpo, _firma(SECRETA, cuerpo)) is True
 
 
 # --- ronda de arreglos 1: Bold caído y tiempos de espera --------------------------------------

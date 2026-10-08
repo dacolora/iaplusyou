@@ -23,17 +23,36 @@
 
   // ---------------------------------------------------------------- 402 ---
 
-  // Solo rutas de este sitio: el enlace sale de una respuesta del servidor,
-  // pero nunca se pinta un «javascript:» ni una URL de otro dominio.
-  function urlSegura(url) {
-    url = String(url || '');
-    return url.charAt(0) === '/' && url.charAt(1) !== '/' && url.charAt(1) !== '\\' ? url : '';
+  // El origen de esta página, o '' si no se sabe (entonces nada pasa: falla cerrado).
+  function origenPropio() {
+    try { return (raiz.location && raiz.location.origin) || ''; } catch (e) { return ''; }
   }
 
-  // La respuesta es un 402 de saldo insuficiente → sus datos; si no, null.
-  // Lee una COPIA: quien hizo el fetch sigue leyendo su cuerpo.
+  // ¿`url` (absoluta o relativa a esta página) es de este mismo sitio?
+  function mismoOrigen(url) {
+    var propio = origenPropio();
+    if (!propio || !raiz.URL || !url) return false;
+    try { return new raiz.URL(String(url), propio).origin === propio; } catch (e) { return false; }
+  }
+
+  // Solo rutas de este sitio: el enlace sale de una respuesta del servidor,
+  // pero nunca se pinta un «javascript:» ni una URL de otro dominio. Un
+  // carácter de control se rechaza antes de mirar nada: el navegador quita los
+  // tabuladores y saltos de una URL, así «/\t/otro.com» terminaba en
+  // «//otro.com» (revisión final 2026-10-08, B2).
+  function urlSegura(url) {
+    url = String(url == null ? '' : url);
+    if (/[\u0000-\u001f\u007f-\u009f]/.test(url)) return '';
+    if (url.charAt(0) !== '/' || url.charAt(1) === '/' || url.charAt(1) === '\\') return '';
+    return mismoOrigen(url) ? url : '';
+  }
+
+  // La respuesta es un 402 de saldo insuficiente DE ESTE SITIO → sus datos; si
+  // no, null (un 402 de otro dominio no pinta nada, B2). Lee una COPIA: quien
+  // hizo el fetch sigue leyendo su cuerpo.
   function datosDe402(respuesta) {
     if (!respuesta || respuesta.status !== 402) return Promise.resolve(null);
+    if (!mismoOrigen(respuesta.url)) return Promise.resolve(null);
     var tipo = (respuesta.headers && respuesta.headers.get('content-type')) || '';
     if (tipo.indexOf('json') < 0) return Promise.resolve(null);
     return respuesta.clone().json().then(function (d) {

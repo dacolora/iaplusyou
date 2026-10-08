@@ -316,10 +316,11 @@ def _campo(valor, decimales=2):
 def _avisos_bold():
     """Lo que el admin tiene que saber de la configuración de Bold, sin
     mostrar ningún valor de llave."""
-    sin_llaves = not bold.configurado() or not (os.environ.get("BOLD_LLAVE_SECRETA") or "").strip()
-    pruebas_abiertas = (os.environ.get("BOLD_PRUEBAS") == "1"
-                        and not (os.environ.get("BOLD_LLAVE_SECRETA") or "").strip())
-    return {"sin_llaves": sin_llaves, "pruebas_abiertas": pruebas_abiertas}
+    sin_secreta = not (os.environ.get("BOLD_LLAVE_SECRETA") or "").strip()
+    sin_llaves = not bold.configurado() or sin_secreta
+    pruebas_abiertas = bold.pruebas_activas() and sin_secreta
+    return {"sin_llaves": sin_llaves, "pruebas_abiertas": pruebas_abiertas,
+            "pruebas_fuera_de_local": bold.pruebas_fuera_de_local()}
 
 
 @bp.get("/admin/cobros")
