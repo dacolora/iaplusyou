@@ -168,3 +168,29 @@ def test_exp_crear_rechaza_instalaciones_de_app(app):
     assert r.status_code == 302
     assert any("formulario de la galería" in m for m in _flashes(app["c"]))
     assert ex.cargar("acme") == []
+
+
+def _experimento_app_en_meta(base_temporal, presupuesto=20000.0):
+    import experimentos as ex
+    clon = _clon(base_temporal)
+    datos = dict(nombre="Forja", paises=[{"pais": "CO", "idioma": "es", "presupuesto_dia": presupuesto}],
+                 objetivo_meta="OUTCOME_APP_PROMOTION", dias=7, tope_total=500000.0, destino_url=IOS, moneda="COP",
+                 app={"ios_url": IOS, "android_url": ANDROID, "app_id": "1234567890"})
+    eid = ex.crear_con_piezas("acme", datos, [(clon, "CO")])
+    ex.actualizar_pais("acme", eid, "CO", meta_adsets={"ios": "as_ios", "android": "as_and"})
+    ex.actualizar("acme", eid, estado="pausado", meta_campaign_id="999")
+    return eid
+
+
+def test_presupuesto_de_pais_en_apps_valida_cada_parte_contra_el_minimo(app, base_temporal, monkeypatch):
+    d = app["dashboard"]
+    eid = _experimento_app_en_meta(base_temporal)
+    llamadas = []
+    monkeypatch.setattr(d.lanzador, "cambiar_presupuesto_pais", lambda c, e, p, v: llamadas.append((p, v)))
+    # 6000 COP pasa el mínimo (4000) como total, pero cada tienda recibiría 3000.
+    app["c"].post(f"/cliente/acme/experimentos/{eid}/presupuesto", data={"pais": "CO", "presupuesto_dia": "6000"})
+    msgs = _flashes(app["c"])
+    assert llamadas == []
+    assert any("CO" in m and "4000" in m and "COP" in m and "2" in m for m in msgs)
+    app["c"].post(f"/cliente/acme/experimentos/{eid}/presupuesto", data={"pais": "CO", "presupuesto_dia": "8000"})
+    assert llamadas == [("CO", 8000.0)]

@@ -5550,6 +5550,19 @@ def exp_presupuesto(cliente, eid):
     if not math.isfinite(presupuesto_dia) or presupuesto_dia < minimo:
         flash(gettext("El presupuesto diario mínimo es %(minimo)s %(moneda)s.", minimo=minimo, moneda=moneda), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
+    ex = experimentos.obtener(cliente, eid)
+    if ex and ex["objetivo_meta"] == "OUTCOME_APP_PROMOTION":
+        # Igual que exp_probar: el total del país se reparte entre sus
+        # conjuntos (uno por tienda) y es cada parte la que Meta compara con
+        # su mínimo — validar el total dejaría pasar partes que Meta rechaza.
+        p_ex = next((p for p in ex.get("paises", []) if p["pais"] == pais), None)
+        n_partes = len(lanzador._adsets_de_pais(p_ex)) if p_ex else 0
+        n_partes = n_partes or len(experimentos.plataformas_de(ex.get("extra"))) or 1
+        if lanzador.centavos(presupuesto_dia, moneda) // n_partes < lanzador.centavos(minimo, moneda):
+            flash(gettext("El presupuesto diario de %(pais)s se reparte entre %(n)s tiendas y cada parte tiene que "
+                          "alcanzar el mínimo de Meta (%(minimo)s %(moneda)s).",
+                          pais=pais, n=n_partes, minimo=minimo, moneda=moneda), "error")
+            return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
     with _ENV_LOCK:
         try:
             with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
