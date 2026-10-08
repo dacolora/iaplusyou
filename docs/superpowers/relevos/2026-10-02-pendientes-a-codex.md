@@ -89,6 +89,16 @@ EN PRODUCCIÓN desde 2026-10-05 (main 878fcaf, sin migración, los dos servicios
 - Un `codex exec` puede pasar las 2 h del límite de tareas en segundo plano de Claude o caer por «Selected model is at
   capacity»: se retoma con `codex exec resume <sesión>` y, si el modelo está lleno, `-m gpt-6.1-sol`.
 
+## Lote 5 y lote 6 (2026-10-08)
+- Lote 5 EN PRODUCCIÓN (main 578696a, sin migración, los dos servicios). Decisiones delegadas por Daniel en
+  `docs/superpowers/decisiones/2026-10-07-pendientes-delegados.md`.
+- Lote 6, parte A (plata), PARADO por el límite de uso de ChatGPT el 2026-10-08 02:18 (Bogotá): «try again at 3:55 AM».
+  Worktree `.claude/worktrees/codex-lote6` (rama `codex/lote6`, sobre 578696a0), sesión `01a11a5d-95fe-7ce1-a619-8338d057f6d6`
+  (Codex avisó «thread not found» al cortarse: si `resume` falla, relanzar con el encargo de la parte A diciendo que ya hay
+  trabajo a medias en el worktree). Alcanzó a tocar PND-146 en `final_edition/{__init__,insumos,produccion,voz}.py` y
+  `tests/test_lote6_plata_final.py`, sin informe. Encargo: `lote6a.md` (en el scratchpad de la sesión de Claude; su contenido
+  es la lista de la sección «Se implementan» del documento de decisiones, parte de plata).
+
 ## Plan completo (2026-10-04)
 Los 104 abiertos ese día están repartidos, cada uno en un solo grupo, en `docs/superpowers/plans/2026-10-04-plan-pendientes.md`:
 lo que es de Daniel, los lotes 4 y 5 de Codex, lo que Claude verifica en pantalla, las pruebas reales que gastan y los
