@@ -300,11 +300,14 @@ SELECT
     event_date,
     SUM(spend) AS spend, SUM(order_revenue) AS revenue, SUM(orders_count) AS orders,
     SUM(new_customer_orders) AS nc_orders, SUM(new_customer_revenue) AS nc_revenue,
-    SUM(refund_money) AS refunds, SUM(cogs) AS cogs, SUM(net_profit) AS net_profit
+    SUM(refund_money) AS refunds, SUM(cogs) AS cogs
 FROM blended_stats_tvf()
 WHERE event_date BETWEEN @startDate AND @endDate
 GROUP BY event_date
 """
+# `blended_stats_tvf()` no tiene `net_profit` (comprobado contra happyflops-norge el 2026-10-08, PND-150): pedirla
+# hacía caer cada copia a la versión mínima y se perdían los clientes nuevos. La utilidad neta no se pinta en ningún
+# lado, así que no se pide ni se inventa con otras columnas; `utilidad_neta` queda en 0.
 
 _TIENDA_MINIMA = """
 SELECT event_date, SUM(spend) AS spend, SUM(order_revenue) AS revenue, SUM(orders_count) AS orders
@@ -313,40 +316,41 @@ WHERE event_date BETWEEN @startDate AND @endDate
 GROUP BY event_date
 """
 
-# Ventas por producto y día. `products_info` es una columna anidada de
-# orders_table ("products_info.* (product_id, sku, variant_id…)" en el Data
-# Dictionary): ARRAY JOIN la abre a una fila por producto de cada pedido,
-# como en ClickHouse. Los nombres de las medidas por producto (quantity,
-# price, title) no están en el diccionario que leímos: la versión mínima solo
-# cuenta pedidos por producto y reparte los ingresos del pedido en partes
-# iguales.
+# Ventas por producto y día. `products_info` es un arreglo de objetos dentro de cada fila de orders_table; ARRAY JOIN
+# lo abre a una fila por línea del pedido. Los nombres de sus campos se leyeron de la tienda real el 2026-10-08
+# (PND-150; la versión anterior pedía `title`, `sku`, `quantity` y `price`, que no existen): `product_id`,
+# `product_name`, `product_sku`, `variant_id`, `product_name_price` (precio unitario),
+# `product_name_quantity_sold` y `net_discount_amount_for_product` (descuento de la línea). La suma de
+# precio × cantidad cuadra con `gross_product_sales` de la tienda. La completa resta el descuento (ventas netas por
+# producto); la mínima, sin descuento, por si una tienda no lo trae.
 _PRODUCTOS_COMPLETA = """
 SELECT
     event_date,
-    products_info.product_id AS product_id,
-    any(products_info.title) AS title,
-    any(products_info.sku) AS sku,
-    SUM(products_info.quantity) AS quantity,
-    SUM(products_info.price * products_info.quantity) AS revenue,
+    p.product_id AS product_id,
+    any(p.product_name) AS title,
+    any(p.product_sku) AS sku,
+    SUM(p.product_name_quantity_sold) AS quantity,
+    SUM(p.product_name_price * p.product_name_quantity_sold - p.net_discount_amount_for_product) AS revenue,
     uniq(order_id) AS orders
 FROM orders_table
-ARRAY JOIN products_info
+ARRAY JOIN products_info AS p
 WHERE event_date BETWEEN @startDate AND @endDate
-GROUP BY event_date, products_info.product_id
+GROUP BY event_date, p.product_id
 """
 
 _PRODUCTOS_MINIMA = """
 SELECT
     event_date,
-    products_info.product_id AS product_id,
-    any(products_info.sku) AS sku,
-    count() AS quantity,
-    SUM(order_revenue / greatest(length(products_info), 1)) AS revenue,
+    p.product_id AS product_id,
+    any(p.product_name) AS title,
+    any(p.product_sku) AS sku,
+    SUM(p.product_name_quantity_sold) AS quantity,
+    SUM(p.product_name_price * p.product_name_quantity_sold) AS revenue,
     uniq(order_id) AS orders
 FROM orders_table
-ARRAY JOIN products_info
+ARRAY JOIN products_info AS p
 WHERE event_date BETWEEN @startDate AND @endDate
-GROUP BY event_date, products_info.product_id
+GROUP BY event_date, p.product_id
 """
 
 _PRUEBA = "SELECT SUM(spend) AS spend FROM ads_table WHERE event_date BETWEEN @startDate AND @endDate"
