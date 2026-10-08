@@ -26,6 +26,7 @@
   --accent-2: #2f8cff;
   --accent-grad: linear-gradient(135deg, #1a5fd0, #2a7ff0);
   --accent-texto: #5cb4ff;
+  --sobre-accent: #ffffff; /* letra e íconos sobre --accent o --accent-grad (5:1) */
 
   /* Luz: solo texto, trazos, íconos y sombras */
   --cian: #38c8ff;
