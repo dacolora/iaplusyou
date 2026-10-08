@@ -28,6 +28,7 @@ from triple_whale.panel import _serie_dias, periodo
 PERIODOS = (7, 14, 30, 90)
 PERIODO_DEFECTO = 30
 POR_PAGINA = 24
+PAGINA_MAXIMA = 100_000
 
 # effective_status de Meta en palabras (se traducen donde se muestran). None: Meta ya no lo devuelve en el listado.
 ESTADOS = {
@@ -39,6 +40,13 @@ ESTADOS = {
 # learning_stage_info.status de un conjunto.
 APRENDIZAJE = {"FAIL": N_("Aprendizaje limitado"), "LEARNING": N_("Aprendiendo"),
                "SUCCESS": N_("Fuera de aprendizaje")}
+# objective de una campaña (los ODAX de hoy y los viejos que aún devuelve una campaña antigua); otro valor va tal cual.
+OBJETIVOS = {
+    "OUTCOME_SALES": N_("Ventas"), "OUTCOME_TRAFFIC": N_("Tráfico"), "OUTCOME_ENGAGEMENT": N_("Interacción"),
+    "OUTCOME_LEADS": N_("Clientes potenciales"), "OUTCOME_AWARENESS": N_("Reconocimiento"),
+    "OUTCOME_APP_PROMOTION": N_("Promoción de la app"), "CONVERSIONS": N_("Conversiones"),
+    "LINK_CLICKS": N_("Clics en el enlace"), "PRODUCT_CATALOG_SALES": N_("Ventas del catálogo"),
+}
 
 _CLAVES_VARIACION = ("gasto", "valor", "compras", "impresiones", "clics_salida", "roas", "cpa", "cpm", "ctr_salida")
 _MONTOS_KPI = ("gasto", "valor", "roas", "cpa", "cpm")
@@ -286,7 +294,8 @@ def _base(dias, desde, hasta):
         "conteo": {v: 0 for v in evaluacion.VEREDICTOS}, "meta_roas": None,
         "rango": {"filas": 0, "desde": None, "hasta": None}, "jobs_sync": [], "sync_ocupado": False,
         "ultima_copia": None, "por_pagina": POR_PAGINA,
-        "estados": ESTADOS, "aprendizaje": APRENDIZAJE, "etiquetas_veredicto": evaluacion.ETIQUETAS_VEREDICTO,
+        "estados": ESTADOS, "aprendizaje": APRENDIZAJE, "objetivos": OBJETIVOS,
+        "etiquetas_veredicto": evaluacion.ETIQUETAS_VEREDICTO,
         "veredictos": evaluacion.VEREDICTOS, "problemas": evaluacion.PROBLEMAS, "fortalezas": evaluacion.FORTALEZAS,
     }
 
@@ -359,4 +368,59 @@ def contexto(cliente, dias=PERIODO_DEFECTO, cuenta=None, hoy=None, pagina_anunci
     ctx.update(conjuntos=conjuntos, hay_mas_conjuntos=hay_mas_conjuntos, pagina_conjuntos=pagina_c,
                anuncios=anuncios[inicio:inicio + POR_PAGINA], hay_mas_anuncios=len(anuncios) > inicio + POR_PAGINA,
                n_anuncios=len(anuncios), pagina_anuncios=pagina_a, conteo=conteo, meta_roas=meta_roas)
+    return ctx
+
+
+# ---------------------------------------------------------- «Ver más» ---
+
+def _alcance_pagina(cliente, dias, cuenta, hoy):
+    """Lo común de las páginas de «Ver más»: (ctx base, en_alcance, cuentas_por_id), con `en_alcance` vacío si no hay
+    token o cuentas. No lee días de cuenta, alcance ni tasas: solo la conexión y la lista de cuentas."""
+    hoy = hoy or date.today()
+    dias = _dias_periodo(dias)
+    desde, hasta, _, _ = periodo(dias, hoy)
+    ctx = _base(dias, desde, hasta)
+    if not (meta_conexion.cargar(cliente) or {}).get("token"):
+        return ctx, [], {}
+    lista = [_con_pais(c, idiomas.activo()) for c in cuentas_mod.listar(cliente)]
+    if not lista:
+        return ctx, [], {}
+    actual = cuenta_elegida(lista, cuenta)
+    en_alcance = [actual] if actual else lista
+    ctx.update(conectado=True, cuentas=lista, actual=actual, ids=[c["ad_account_id"] for c in en_alcance],
+               varias_cuentas=len(lista) > 1)
+    return ctx, en_alcance, {c["ad_account_id"]: c for c in lista}
+
+
+def _pagina_valida(valor):
+    """El número de página de «Ver más» (viene de la URL): entero entre 0 y PAGINA_MAXIMA. Uno enorme haría un OFFSET
+    que no cabe en un entero de SQLite (OverflowError → 500)."""
+    return min(max(0, _entero(valor)), PAGINA_MAXIMA)
+
+
+def anuncios_pagina(cliente, dias=PERIODO_DEFECTO, cuenta=None, pagina=1, hoy=None):
+    """Una página más de anuncios evaluados («Ver más»): las mismas claves que `contexto`, pero solo calcula la
+    evaluación (tres lecturas para todas las cuentas del alcance), sin KPIs, serie, campañas ni conjuntos."""
+    hoy = hoy or date.today()
+    ctx, en_alcance, cuentas_por_id = _alcance_pagina(cliente, dias, cuenta, hoy)
+    if not en_alcance:
+        return ctx
+    reglas = decisor.reglas_efectivas(proyectos.reglas_defecto(cliente), {})
+    anuncios, conteo, meta_roas = evaluar_anuncios(cliente, ctx["ids"], ctx["desde"], ctx["hasta"], hoy,
+                                                   cuentas_por_id, reglas)
+    pagina = _pagina_valida(pagina)
+    inicio = pagina * POR_PAGINA
+    ctx.update(anuncios=anuncios[inicio:inicio + POR_PAGINA], hay_mas_anuncios=len(anuncios) > inicio + POR_PAGINA,
+               n_anuncios=len(anuncios), pagina_anuncios=pagina, conteo=conteo, meta_roas=meta_roas)
+    return ctx
+
+
+def conjuntos_pagina(cliente, dias=PERIODO_DEFECTO, cuenta=None, pagina=1, hoy=None):
+    """Una página más de conjuntos («Ver más»): una lectura agregada con su `limit`/`offset`."""
+    ctx, en_alcance, cuentas_por_id = _alcance_pagina(cliente, dias, cuenta, hoy)
+    if not en_alcance:
+        return ctx
+    pagina = _pagina_valida(pagina)
+    conjuntos, hay_mas = _conjuntos(cliente, ctx["ids"], ctx["desde"], ctx["hasta"], pagina, cuentas_por_id)
+    ctx.update(conjuntos=conjuntos, hay_mas_conjuntos=hay_mas, pagina_conjuntos=pagina)
     return ctx

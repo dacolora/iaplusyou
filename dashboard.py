@@ -358,6 +358,10 @@ from triple_whale import panel as triple_whale_panel  # noqa: E402  (la tienda s
 from triple_whale import puente as triple_whale_puente  # noqa: E402  (una pieza de Crear nacida de una idea)
 app.register_blueprint(triple_whale_rutas.bp)
 
+from meta_rendimiento import rutas as meta_rendimiento_rutas  # noqa: E402  (Blueprint de la pestaña Meta)
+from meta_rendimiento import cuentas as meta_rend_cuentas  # noqa: E402  (las cuentas que lee el proyecto)
+app.register_blueprint(meta_rendimiento_rutas.bp)
+
 from guiones import rutas as guiones_rutas  # noqa: E402  (Blueprint JSON del chat de Flow Plus en Crear)
 app.register_blueprint(guiones_rutas.bp)
 
@@ -2146,6 +2150,10 @@ def ver_cliente(cliente):
     # Las tarjetas de tiendas (spec 2026-10-08 §6.2): país y bandera en el idioma de quien mira.
     tw_tiendas = [dict(t, nombre=triple_whale_panel.nombre_tienda(t), bandera=tw_paises.bandera(t["pais"]))
                   for t in (triple_whale_conectado or {}).get("tiendas", [])]
+    # Pestaña Meta (spec 2026-10-08 meta rendimiento §8): solo lo que decide su estado vacío. Ni Graph ni el panel:
+    # el selector y el panel llegan por fetch al abrirla.
+    meta_rend = {"conectado": bool((meta_conexion.cargar(cliente) or {}).get("token")),
+                 "n_cuentas": len(meta_rend_cuentas.ids(cliente)), "modo": meta_conexion.modo(cliente)}
     # Catálogo (spec 2026-09-28): la galería y la ficha llegan por fragmento;
     # la página solo trae contadores por categoría y lo que Crear necesita.
     activos_producto = _productos_con_uso(cliente)
@@ -2237,6 +2245,7 @@ def ver_cliente(cliente):
         triple_whale_conectado=triple_whale_conectado,
         tw_modelos=triple_whale.MODELOS, tw_ventanas=triple_whale.VENTANAS, tw_monedas=triple_whale.MONEDAS,
         tw_tiendas=tw_tiendas, tw_paises=tw_paises.paises_opciones(idiomas.activo()),
+        meta_rend=meta_rend,
         trabajos_prod=_trabajos_productos(cliente, tiendas_cliente),
         precio_pedidos=gastos.estimar("pedidos_producto")["texto"],
         cifrado_ok=cifrado.disponible(),

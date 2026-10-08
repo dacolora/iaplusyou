@@ -131,3 +131,14 @@ en Node con 30 sesiones y prueba 200/404 entre proyectos. La comprobación visua
 PND-095/136/100 (2026-10-07, lote 5 B): acciones de voz fuera del role=radio con contenedor; foco del filtro se restaura tras reemplazar el fragmento; el fondo del panel cierra solo fuera de sus límites; popstate y cambios de filtro dentro de la misma pestaña conservan scroll; exp-minimo anuncia cambios. Se retira .regla-nombre code y se regenera style.css. El mapa es documentación interna generada por AST; su barra sigue por catálogo. Verificación de código con Flask/Node y dobles; inspección visual a cargo de Claude (encargo sin navegadores).
 
 Correcciones del lote 5 (2026-10-08, pedido de Daniel): ESTRUCTURA.md y mapa_codigo.html conservan el mapa en llano de ecef5555 hasta la decisión PND-100. mapa_codigo_generar exige --salida aparte, solo lee fuentes versionadas y escapa también llaves en textos dinámicos; el estilo se compara con la plantilla del disco. El aviso exp-minimo y Usar ese total son hermanos dentro del único resumen vivo exp-resumen; el call de la plantilla coloca ambos juntos y anuncia el propio aviso, sin aria-live añadido. Las pruebas antiguas de modo oscuro y resumen único no se modifican.
+
+**Pestaña Meta (2026-10-08, rendimiento de varias cuentas; spec `2026-10-08-meta-rendimiento-design.md` §8):** `#tab-meta`
+(`data-tab="meta"`, después de Triple Whale; `cliente.html` la registra en `paneles`, así el `href="#meta"` de la
+tarjeta de Conexiones la abre) es solo el armazón `_tab_meta.html` con un contexto barato de `ver_cliente`
+(`meta_rend` = conectado, n_cuentas, modo: ni Graph ni el panel, una prueba lo vigila). El panel
+(`_meta_panel.html`), el selector «Elegir cuentas» (`_meta_cuentas.html`, la única ruta que llama a Meta) y las filas
+de «Ver más» (`_meta_anuncios_filas.html`, `_meta_conjuntos_filas.html`: solo `<tr>`, que el JS pone en el lugar de la
+fila del botón) llegan por fetch; todo el JS vive en el armazón. Reutiliza las clases de Triple Whale y del Tablero;
+lo propio está en `static/estilos/pantallas/meta.css` (separación del selector abierto y la miniatura). Los
+selectores del JS evitan palabras que `tests/i18n_util.py` lee como español (`data-meta-act`, `data-meta-seleccion`:
+«cuenta» y «guardar» están en sus marcas).

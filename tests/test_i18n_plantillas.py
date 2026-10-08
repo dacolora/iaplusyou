@@ -59,6 +59,9 @@ PLANTILLAS_TRADUCIDAS = [
     # Merge de main (2026-09-28, PR #1 Triple Whale): la pestaña y su panel ya
     # vienen con _() y su inglés en el catálogo; entran a la guardia al fusionar.
     "_tab_triple_whale.html", "_tw_panel.html",
+    # Pestaña Meta (rendimiento de varias cuentas, 2026-10-08): armazón, panel, selector y filas de «Ver más».
+    "_tab_meta.html", "_meta_panel.html", "_meta_cuentas.html", "_meta_anuncios_filas.html",
+    "_meta_conjuntos_filas.html", "_meta_macros.html",
     "editor.html",   # Fase 6, Task 2: la página del editor
     "_tab_cambiar_calzado.html",   # Fase 6, Task 4: Crear › Cambiar producto
     "admin_meta.html", "admin_referentes.html", "meta_elegir.html",   # Fase 6, Task 5

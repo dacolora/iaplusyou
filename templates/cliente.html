@@ -13,6 +13,10 @@
   {% include "_tab_triple_whale.html" %}
 </section>
 
+<section id="tab-meta" class="tab-panel" role="tabpanel">
+  {% include "_tab_meta.html" %}
+</section>
+
 <section id="tab-nicho" class="tab-panel" role="tabpanel">
   {% include "_tab_nicho.html" %}
 </section>
@@ -55,6 +59,7 @@
     var paneles = {
       alertas: document.getElementById('tab-alertas'),
       triplewhale: document.getElementById('tab-triplewhale'),
+      meta: document.getElementById('tab-meta'),
       nicho: document.getElementById('tab-nicho'),
       referentes: document.getElementById('tab-referentes'),
       creativeflowplus: document.getElementById('tab-creativeflowplus'),

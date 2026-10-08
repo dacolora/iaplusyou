@@ -1,0 +1,11 @@
+/* ============================================================
+   Meta: la pestaña de rendimiento de varias cuentas (spec 2026-10-08 meta rendimiento §8). Uso:
+   _tab_meta.html y sus fragmentos. El selector «Elegir cuentas» (#meta-cuentas, _meta_cuentas.html) abierto
+   encima del panel se separa de él con su propia línea; el resto del panel reutiliza las clases de la pestaña
+   Triple Whale (.tw-barra, .tw-tabla…) y del Tablero (.tb-seccion, .kpi-tile…).
+   ============================================================ */
+
+.meta-cuentas:not([hidden]):not(:empty) { margin: 0 0 1.4rem; padding-bottom: 1.1rem; border-bottom: 1px solid var(--border); }
+.meta-cuentas .tb-seccion { margin-top: 0; padding-top: 0; border-top: 0; }
+.meta-cuentas select { min-width: 10rem; }
+.tw-tabla img.meta-mini { display: block; width: 48px; height: 48px; max-width: none; object-fit: cover; border-radius: 6px; }

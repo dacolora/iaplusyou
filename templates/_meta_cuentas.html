@@ -1,0 +1,49 @@
+{# «Elegir cuentas» de la pestaña «Meta» (fragmento por fetch, meta_rendimiento.rutas.ver_cuentas; spec 2026-10-08 §5).
+   Contexto: `sel` = conectado, agencia, error (ya sin token), filas (las cuentas que ve el token, con `elegida`,
+   `en_otro`, `pais` guardado o adivinado y `no_visible` para una del proyecto que el token ya no ve) y paises
+   ([(código, «🇳🇴 Noruega»)]). Una cuenta de otro proyecto se ve deshabilitada (nunca el nombre de ese proyecto).
+   Sin <script>: _tab_meta.html confirma antes de quitar una cuenta (`data-elegida`). Los selectores de país van con
+   translate="no": los nombres ya vienen de Babel en el idioma de quien mira. #}
+<section class="tb-seccion">
+  <div class="tb-seccion-cab"><h3>{{ _('Elegir cuentas') }}</h3></div>
+  {% if sel.agencia %}
+  <p class="vacio">{{ _('Todavía no disponible en modo agencia.') }}</p>
+  {% elif not sel.conectado %}
+  <p class="vacio">{{ _('Meta no está conectado en este proyecto.') }}</p>
+  {% elif sel.error %}
+  <p class="tag-error tag-descartado tw-aviso">{{ _('Meta no devolvió tus cuentas: %(error)s', error=sel.error) }}</p>
+  {% elif not sel.filas %}
+  <p class="vacio">{{ _('Tu conexión de Meta no ve ninguna cuenta publicitaria.') }}</p>
+  {% else %}
+  <p class="vacio">{{ _('Marca las cuentas publicitarias que quieres ver aquí y el país de cada una. Las nuevas se copian enseguida; quitar una borra sus métricas copiadas en Creatv, no toca nada en Meta.') }}</p>
+  <form method="post" action="{{ url_for('meta_rendimiento.guardar_cuentas', cliente=cliente) }}" data-meta-seleccion>
+    <div class="tw-tabla-scroll">
+      <table class="tw-tabla">
+        <thead><tr><th>{{ _('Ver') }}</th><th>{{ _('Cuenta publicitaria') }}</th><th>{{ _('Moneda') }}</th><th>{{ _('Estado en Meta') }}</th><th>{{ _('País') }}</th></tr></thead>
+        <tbody>
+          {% for f in sel.filas %}
+          <tr>
+            <td><input type="checkbox" name="cuenta" value="{{ f.id }}" id="meta-elegir-{{ f.id }}"{% if f.elegida %} checked data-elegida{% endif %}{% if f.en_otro %} disabled{% endif %}></td>
+            <td class="tw-nombre">
+              <label for="meta-elegir-{{ f.id }}"><strong>{{ f.nombre }}</strong></label>
+              <small>{{ f.id }}</small>
+              {% if f.en_otro %}<small class="tag-estado tag-advertencia">{{ _('En otro proyecto') }}</small>{% endif %}
+              {% if f.no_visible %}<small>{{ _('Tu conexión ya no ve esta cuenta') }}</small>{% endif %}
+            </td>
+            <td>{{ f.moneda or '—' }}</td>
+            <td>{% if f.estado %}{{ f.estado | traducir }}{% else %}—{% endif %}</td>
+            <td>
+              <select name="pais_{{ f.id }}" translate="no" aria-label="{{ _('País de la cuenta') }}"{% if f.en_otro %} disabled{% endif %}>
+                <option value="">{{ _('Sin país') }}</option>
+                {% for codigo, nombre in sel.paises %}<option value="{{ codigo }}"{% if codigo == f.pais %} selected{% endif %}>{{ nombre }}</option>{% endfor %}
+              </select>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="acciones"><button type="submit" class="btn-generar btn-sm">{{ _('Guardar cuentas') }}</button></div>
+  </form>
+  {% endif %}
+</section>
