@@ -1,6 +1,6 @@
 """
 Worker de Creatv Machine: proceso aparte de gunicorn (servicio systemd
-creatv-worker) que ejecuta las tareas de la cola persistente (cola.py) en dos
+creatv-worker) que ejecuta las tareas de la cola persistente (cola.py) en tres
 carriles (spec 2026-09-28-crear-sin-cola):
 
 - **crear**: las generaciones de Crear (`CARRIL_CREAR`) en hasta `HILOS_CREAR`
@@ -8,6 +8,8 @@ carriles (spec 2026-09-28-crear-sin-cola):
   colgada (Wan 3.0 llegó a 20 min) ya no deja a las demás en fila. Los lotes de
   Sprints (prioridad < 5) ocupan como mucho `HILOS_LOTE`, así una pieza suelta
   siempre encuentra hilo.
+- **nicho**: las seis tareas de Nicho que esperan a Apify, Reddit/YouTube
+  o Claude (`CARRIL_NICHO`), de a una. Sus esperas no ocupan general.
 - **general**: todo lo demás, de a una y en orden, como siempre (renders con
   1 CPU, Meta, periódicas…).
 
@@ -16,7 +18,8 @@ una tarea, esa tarea vuelve a `pendiente` a los 30 min (recuperar_colgadas) y
 se reintenta — nunca una que este mismo proceso está ejecutando. Al arrancar
 recupera de inmediato lo que quedó en_curso (solo hay un worker: es huérfano
 seguro), y ante SIGINT/SIGTERM deja de repartir, corta las esperas a WaveSpeed
-(pasan la posta a `flowplus_recuperar`) y espera a que terminen los hilos.
+(pasan la posta a `flowplus_recuperar`) y a Apify (Nicho continúa por los mismos
+IDs guardados en estudio.extra), y espera a que terminen los hilos.
 
 Uso: `python worker.py` (carga .env como dashboard.py).
 """
@@ -73,6 +76,8 @@ PERIODICAS = [("tienda_sync_pedidos_todas", 7200), ("tw_sincronizar_todas", 7200
 # Carril de Crear: generaciones que casi todo el tiempo esperan al proveedor
 # (también la voz del anuncio hablado, que no debe esperar detrás de un render).
 CARRIL_CREAR = ("flowplus_video", "flowplus_imagen", "flowplus_recuperar", "flowplus_director", "hablado_voz")
+CARRIL_NICHO = ("nicho_recolectar", "nicho_inv_buscar", "nicho_inv_consultas",
+                "nicho_inv_seleccionar", "nicho_generar_avatares", "nicho_completar_avatares")
 HILOS_CREAR = 4
 HILOS_LOTE = 2
 PRIORIDAD_SUELTA = 5    # flowplus_lanzar.PRIORIDAD_NORMAL: una pieza pedida desde Crear
@@ -127,6 +132,9 @@ def ejecutar(tarea):
         fn = tareas.REGISTRO.get(tarea["tipo"])
         if fn is None:
             raise RuntimeError(gettext("tipo de tarea desconocido: %(tipo)s", tipo=tarea["tipo"]))
+        if tarea["tipo"] in ("nicho_recolectar", "nicho_inv_buscar"):
+            from tareas import apify_nicho
+            return apify_nicho.ejecutar(tarea, fn, debe_parar)
         return fn(tarea)
 
 
@@ -332,7 +340,8 @@ def _ocupados():
     crear = [v for v in vuelo if v["carril"] == "crear"]
     lotes = [v for v in crear if v["prioridad"] < PRIORIDAD_SUELTA]
     general = [v for v in vuelo if v["carril"] == "general"]
-    return len(crear), len(lotes), len(general)
+    nicho = [v for v in vuelo if v["carril"] == "nicho"]
+    return len(crear), len(lotes), len(general), len(nicho)
 
 
 def repartir():
@@ -344,7 +353,7 @@ def repartir():
     encolar_periodicas()
     arrancadas = 0
     while not debe_parar():
-        crear, lotes, _ = _ocupados()
+        crear, lotes, _, _ = _ocupados()
         if crear >= HILOS_CREAR:
             break
         tarea = cola.reclamar(tipos=CARRIL_CREAR, prioridad_min=PRIORIDAD_SUELTA if lotes >= HILOS_LOTE else None)
@@ -353,8 +362,12 @@ def repartir():
         if not _lanzar(tarea, "crear"):
             break
         arrancadas += 1
+    if not debe_parar() and _ocupados()[3] == 0:
+        tarea = cola.reclamar(tipos=CARRIL_NICHO)
+        if tarea is not None and _lanzar(tarea, "nicho"):
+            arrancadas += 1
     if not debe_parar() and _ocupados()[2] == 0:
-        tarea = cola.reclamar(excluir_tipos=CARRIL_CREAR)
+        tarea = cola.reclamar(excluir_tipos=CARRIL_CREAR + CARRIL_NICHO)
         if tarea is not None and _lanzar(tarea, "general"):
             arrancadas += 1
     return arrancadas

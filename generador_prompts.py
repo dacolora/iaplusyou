@@ -1,6 +1,5 @@
 """
-Genera prompts candidatos de video (para Higgsfield) a partir de una idea, usando
-la API de Anthropic (Claude). Requiere ANTHROPIC_API_KEY en el .env.
+Ayudas de copy, marca y prompts con Anthropic (Claude). Requiere ANTHROPIC_API_KEY en el .env.
 """
 import json
 import os
@@ -23,23 +22,6 @@ def _con_orden(texto, idioma):
     return f"{orden}\n\n{texto}\n\n{orden}"
 
 
-SYSTEM_PROMPT = """Eres un director creativo que escribe prompts para un modelo de \
-imagen-a-video (Kling, vía Higgsfield). A partir de una idea y sabiendo que ya hay \
-una imagen de referencia de un personaje (el modelo anima esa imagen, no cambia el \
-personaje ni el estilo visual), escribe variantes de prompt en __IDIOMA__.
-
-Reglas:
-- Cada prompt describe UNA sola acción física concreta del personaje y/o un \
-movimiento de cámara (paneo, zoom, travelling, etc.), filmable en 5-10 segundos.
-- No repitas la misma acción en dos variantes; dale variedad de planos y momentos \
-dentro de la misma idea.
-- No menciones texto en pantalla, marcas, ni cambies la apariencia del personaje.
-- Cada prompt: 1-2 frases, directo, sin explicaciones extra ni comillas.
-
-Responde ÚNICAMENTE con un JSON array de strings, sin texto adicional ni markdown.
-Ejemplo de formato: ["prompt 1", "prompt 2", "prompt 3", "prompt 4", "prompt 5"]"""
-
-
 def _api_key():
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
@@ -48,100 +30,6 @@ def _api_key():
             "(Settings > API Keys)."
         )
     return api_key
-
-
-def generar_prompts(idea, n=5, guia_estilo=None, idioma="es"):
-    """guia_estilo: texto de la identidad de marca del cliente (paleta, tono,
-    iluminación, ambientación), si existe — se le pide a Claude que lo respete
-    en cada variante para que el contenido se mantenga consistente. `idioma`:
-    idioma del proyecto (spec 2026-09-26 §B4)."""
-    client = anthropic.Anthropic(api_key=_api_key())
-
-    mensaje = f"Idea: {idea}\n\nEscribe {n} variantes de prompt."
-    if guia_estilo and guia_estilo.strip():
-        mensaje += (
-            f"\n\nGuía de estilo de la marca (respétala en cada variante, sin "
-            f"mencionarla explícitamente en el prompt):\n{guia_estilo.strip()}"
-        )
-
-    resp = client.messages.create(
-        model=MODEL,
-        max_tokens=1024,
-        system=_con_orden(SYSTEM_PROMPT.replace("__IDIOMA__", idiomas.nombre_para_claude(idioma)), idioma),
-        messages=[{"role": "user", "content": mensaje}],
-    )
-    texto = "".join(block.text for block in resp.content if block.type == "text").strip()
-
-    if texto.startswith("```"):
-        texto = texto.strip("`")
-        if texto.lower().startswith("json"):
-            texto = texto[4:]
-        texto = texto.strip()
-
-    try:
-        prompts = json.loads(texto)
-    except json.JSONDecodeError:
-        raise RuntimeError(f"No pude interpretar la respuesta del modelo como JSON: {texto[:300]}")
-
-    if not isinstance(prompts, list) or not all(isinstance(p, str) for p in prompts):
-        raise RuntimeError(f"Respuesta con formato inesperado: {texto[:300]}")
-
-    return prompts[:n]
-
-
-CONCEPTOS_IMAGEN_SYSTEM_PROMPT = """Eres un director de arte. A partir de una idea y \
-sabiendo que ya hay una imagen de referencia de un personaje (el modelo genera una \
-escena nueva a partir de esa imagen, sin cambiar el personaje ni su identidad), \
-describe escenas FIJAS para una fotografía — no un video, no menciones cámara, \
-movimiento ni duración.
-
-Reglas:
-- Cada escena es una sola frase concreta: qué se ve, dónde, con qué luz y composición.
-- Dale variedad real entre las escenas — distintos encuadres, momentos o ambientaciones \
-dentro de la misma idea, nunca la misma escena repetida con otras palabras.
-- No menciones texto en pantalla, marcas, ni cambies la apariencia del personaje.
-- Cada escena: 1-2 frases, directo, sin explicaciones extra ni comillas.
-
-Responde ÚNICAMENTE con un JSON array de strings, sin texto adicional ni markdown.
-Ejemplo de formato: ["escena 1", "escena 2", "escena 3"]"""
-
-
-def generar_conceptos_imagen(idea, n=5, guia_estilo=None, idioma="es"):
-    """Como generar_prompts(), pero para IMAGEN fija en vez de video: sin lenguaje de
-    cámara/animación. Se usa en el flujo imagen-primero, antes de saber cómo se va a
-    animar cada escena elegida. `idioma`: idioma del proyecto (spec 2026-09-26 §B4)."""
-    client = anthropic.Anthropic(api_key=_api_key())
-
-    mensaje = f"Idea: {idea}\n\nDescribe {n} escenas distintas."
-    if guia_estilo and guia_estilo.strip():
-        mensaje += (
-            f"\n\nGuía de estilo de la marca (respétala en cada escena, sin "
-            f"mencionarla explícitamente):\n{guia_estilo.strip()}"
-        )
-
-    resp = client.messages.create(
-        model=MODEL,
-        max_tokens=1024,
-        system=_con_orden(CONCEPTOS_IMAGEN_SYSTEM_PROMPT, idioma),
-        messages=[{"role": "user", "content": mensaje}],
-    )
-    texto = "".join(block.text for block in resp.content if block.type == "text").strip()
-
-    if texto.startswith("```"):
-        texto = texto.strip("`")
-        if texto.lower().startswith("json"):
-            texto = texto[4:]
-        texto = texto.strip()
-
-    try:
-        escenas = json.loads(texto)
-    except json.JSONDecodeError:
-        raise RuntimeError(f"No pude interpretar la respuesta del modelo como JSON: {texto[:300]}")
-
-    if not isinstance(escenas, list) or not all(isinstance(e, str) for e in escenas):
-        raise RuntimeError(f"Respuesta con formato inesperado: {texto[:300]}")
-
-    return escenas[:n]
 
 
 EVALUACION_MATRIZ_SYSTEM_PROMPT = """Eres un auditor de marca estricto. Te van a \

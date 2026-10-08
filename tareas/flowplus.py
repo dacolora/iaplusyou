@@ -4,8 +4,8 @@ sesión cf_... Cuerpos movidos de dashboard._lanzar_video_cf; dashboard ahora
 solo encola. Todo lo que la closure tomaba del request se relee de la base.
 
 `_texto_fase`, `_avisar_fase_de` y `_aspect_ratio_para_plataformas` están
-copiadas tal cual de dashboard.py (que conserva las suyas para el pipeline
-viejo de Higgsfield); lo mismo las constantes ETAPA_* que usa
+movidas de dashboard.py; el flujo viejo de Higgsfield se retiró por PND-068
+(decisión 2026-09-18, ejecutada 2026-10-08). Las constantes ETAPA_* que usa
 ETAPAS_CREATIVE_FLOW — deben seguir siendo las mismas cadenas.
 """
 import math

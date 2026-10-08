@@ -534,14 +534,14 @@ def test_el_zoom_lento_de_una_foto_va_despues_del_loop_y_sigue_en_cada_tramo():
     assert f"[0:v]{_LLENAR},format=yuv420p,loop=loop=59:size=1:start=0,setpts=N/(30*TB),fps=30,{zp.format(off=30)}" in plan.filtergraph
 
 
-def test_encuadre_llenar_escala_a_la_caja_y_recorta_donde_se_ve():
+def test_encuadre_llenar_recorta_origen_y_conserva_donde_se_ve():
     doc = _doc_foto()
     doc["pistas"][0]["clips"][1].update(encuadre={"x": 0}, ancho_px=400, alto_px=200)
     plan = _compilar_foto(doc)
-    assert ("[1:v]scale=3840:1920,crop=1080:1920:0:0,format=yuv420p,loop=loop=89:size=1:start=0,"
+    assert ("[1:v]crop=120:200:0:0:exact=1,scale=1152:1920,crop=1080:1920:0:0,format=yuv420p,loop=loop=89:size=1:start=0,"
             "setpts=N/(30*TB),fps=30,setsar=1,format=yuv420p[v1]") in plan.filtergraph.split(";")
     doc["pistas"][0]["clips"][1]["encuadre"] = {"x": 1}
-    assert "[1:v]scale=3840:1920,crop=1080:1920:2760:0,format=yuv420p,loop=" in _compilar_foto(doc).filtergraph
+    assert "[1:v]crop=120:200:280:0:exact=1,scale=1152:1920,crop=1080:1920:72:0,format=yuv420p,loop=" in _compilar_foto(doc).filtergraph
 
 
 def test_encuadre_ajustar_pone_el_cuadro_entero_sobre_el_fondo_desenfocado():
@@ -553,7 +553,7 @@ def test_encuadre_ajustar_pone_el_cuadro_entero_sobre_el_fondo_desenfocado():
         "[0:v]setpts=PTS-STARTPTS,split=2[f0a][f0b]",
         "[f0a]scale=108:192:force_original_aspect_ratio=increase,crop=108:192,boxblur=luma_radius=6:luma_power=2,"
         "scale=1080:1920,setsar=1[f0c]",
-        "[f0b]scale=1080:608,setsar=1[f0d]",
+        "[f0b]crop=1920:1080:0:0:exact=1,scale=1080:608,setsar=1[f0d]",
         "[f0c][f0d]overlay=x=0:y=656,fps=30,setsar=1,format=yuv420p[v0]",
     ]
 
@@ -563,7 +563,7 @@ def test_foto_en_ajustar_repite_el_cuadro_ya_compuesto():
     doc["pistas"][0]["clips"][1].update(encuadre={"modo": "ajustar"}, ancho_px=400, alto_px=200)
     partes = _compilar_foto(doc).filtergraph.split(";")
     assert "[1:v]split=2[f1a][f1b]" in partes
-    assert "[f1b]scale=1080:540,setsar=1[f1d]" in partes
+    assert "[f1b]crop=400:200:0:0:exact=1,scale=1080:540,setsar=1[f1d]" in partes
     assert ("[f1c][f1d]overlay=x=0:y=690,format=yuv420p,loop=loop=89:size=1:start=0,setpts=N/(30*TB),fps=30,"
             "setsar=1,format=yuv420p[v1]") in partes
 

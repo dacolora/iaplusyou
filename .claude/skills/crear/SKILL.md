@@ -160,3 +160,5 @@ PND-072 (2026-10-07, lote 5 B): dashboard._encolar_director y Sprints delegan en
 PND-143 (2026-10-08, decisión delegada): cargar añade el acumulado real de gasto por sesión y música (costos_sesiones, una consulta para todo el proyecto). Incluye referencias históricas/importadas y tareas fallidas y recuperadas; no cambia referencias, conservación ni reintentos. SQLite y fallo después del pago en test_lote6_costos; los campos mostrados ya no bajan a cero al recuperar una pista cacheada.
 
 **Topes de ayudas Claude (2026-10-08, PND-141, decisión delegada):** Describir referencias y Sugerir sonido usan 4000 tokens; prompts intactos, SDK sin reintentos. La medición real con `eval-claude` queda para la tanda pagada autorizada por Daniel.
+
+PND-068 (2026-10-08, decisión 2026-09-18: nada nuevo a Higgsfield): Nueva idea y Nueva idea visual están retiradas, incluidas sus rutas de generar/aprobar imágenes y animaciones. Las URL antiguas dan 404. Las piezas ya generadas, sus conceptos, archivos y gasto se conservan; los CLI y proveedores compartidos permanecen.

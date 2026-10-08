@@ -35,8 +35,7 @@ Desde la fase 6 (2026-09) toda la app pasa por el catálogo (excepciones a prop�
 (`doctrina/textos/*.md`), documentación interna en español; los mensajes de contrato de
 `final_edition/documento.validar` y los de `static/editor/operaciones.js` (`INTERNOS` en `tests/test_i18n_editor.py`);
 los prompts para los modelos de video e imagen y sus tokens `Image N`/`Video N`/`@Imagen N` (`prompt_swap.py`,
-`flowplus_prompt`); las 9 plantillas del flujo viejo «Nueva idea» se tradujeron el 2026-10-01 y `EXCLUIDAS` ya solo
-tiene el mapa. Una excepción a §B8: «Escribe aquí» y «Escribe el precio» (capa 4c), el texto inicial editable de un
+`flowplus_prompt`); las 9 plantillas del flujo viejo «Nueva idea» se retiraron el 2026-10-08 (PND-068, decisión 2026-09-18); `EXCLUIDAS` solo tiene el mapa. Una excepción a §B8: «Escribe aquí» y «Escribe el precio» (capa 4c), el texto inicial editable de un
 clip de texto nuevo del editor, salen en el idioma de quien mira; desde la capa 5c también las seis plantillas «Para vender» —
 OFERTA, NUEVO, -50 %, ENVÍO GRATIS, ¡ÚLTIMAS UNIDADES!, MÁS VENDIDO—: textos editables que nacen en su idioma y se quedan así). Final edition sigue la **decisión B** (Daniel, 2026-09-28; reemplaza el §B5
 del spec): cada final sale en el idioma de su país destino (`<idioma>_<PAIS>`); el guion base, que no es por destino,
