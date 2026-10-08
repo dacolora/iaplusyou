@@ -5327,7 +5327,7 @@ def exp_crear(cliente):
     codigos = list(dict.fromkeys(p for p in request.form.getlist("paises") if p in fe_tipos.PAISES))
     destino = (request.form.get("destino_url") or "").strip()
     if objetivo == "OUTCOME_APP_PROMOTION":
-        flash(gettext("Para instalaciones de la app usa el formulario de la galería."), "error")
+        flash(gettext("Para instalaciones de la app usa «Nuevo experimento»."), "error")
         return volver
     try:
         dias = int(request.form.get("dias") or 7)
@@ -5584,6 +5584,8 @@ def _agregar_pieza_validada(cliente, experimento_id, pieza_id, pais):
         return gettext("Ese experimento no existe.")
     if ex["estado"] not in ("armando", "error") or ex["meta_campaign_id"]:
         return gettext("Ese experimento ya no acepta piezas nuevas.")
+    if ex["objetivo_meta"] == "OUTCOME_APP_PROMOTION":
+        return gettext("En un experimento de instalaciones de la app las piezas se eligen al crearlo.")
     candidata = next((p for p in experimentos.elegibles(cliente) if p["pieza_id"] == pieza_id), None)
     if not candidata:
         return gettext("Esa pieza no está disponible (o no está lista).")

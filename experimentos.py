@@ -262,8 +262,14 @@ def agregar_pieza(cliente, experimento_id, pieza_id, pais):
         # no insertan la misma pieza dos veces.
         if not _bloquear(con, db.experimento, experimento_id, cliente):
             return None
-        if not _fila_experimento(con, cliente, experimento_id):
+        fila = _fila_experimento(con, cliente, experimento_id)
+        if not fila:
             return None
+        if fila._mapping[db.experimento.c.objetivo_meta] == "OUTCOME_APP_PROMOTION":
+            # Cada pieza de apps lleva una fila por tienda (extra.plataforma) que
+            # solo arma crear_con_piezas; una fila sin plataforma bloquearía el
+            # lanzamiento (revisión final, ola 2, 2026-10-08).
+            raise ValueError(gettext("En un experimento de instalaciones de la app las piezas se eligen al crearlo."))
         pieza_ok = con.execute(sa.select(db.pieza.c.id).where(
             db.pieza.c.id == pieza_id, db.pieza.c.cliente == cliente)).scalar()
         if not pieza_ok:

@@ -16,8 +16,16 @@ def _armar(base_temporal, monkeypatch, objetivo, modo="auto"):
     monkeypatch.setattr(acciones.derivaciones, "planificar",
                         lambda c, e, tipo, payload: (llamadas.append(("planificar", tipo)), 99)[1])
     pid = _pieza(base_temporal)
-    eid = ex.crear("acme", "X", PAISES, objetivo, 7, 100.0, "https://t", "COP", modo=modo)
-    ep = ex.agregar_pieza("acme", eid, pid, "CO")
+    if objetivo == "OUTCOME_APP_PROMOTION":
+        # Las filas de apps (una por tienda) solo las arma crear_con_piezas: agregar_pieza las rechaza.
+        datos = dict(nombre="X", paises=[p for p in PAISES if p["pais"] == "CO"], objetivo_meta=objetivo, dias=7,
+                     tope_total=100.0, destino_url="https://apps.apple.com/co/app/x/id1", moneda="COP", modo=modo,
+                     app={"ios_url": "https://apps.apple.com/co/app/x/id1"})
+        eid = ex.crear_con_piezas("acme", datos, [(pid, "CO")])
+        ep = ex.piezas("acme", eid)[0]["id"]
+    else:
+        eid = ex.crear("acme", "X", PAISES, objetivo, 7, 100.0, "https://t", "COP", modo=modo)
+        ep = ex.agregar_pieza("acme", eid, pid, "CO")
     ex.actualizar_pieza("acme", ep, meta_ad_id="ad1", estado="activo")
     ex.actualizar("acme", eid, estado="corriendo", meta_campaign_id="c1")
     return acciones, ex, eid, ep, llamadas

@@ -179,8 +179,26 @@ def test_exp_crear_rechaza_instalaciones_de_app(app):
     import experimentos as ex
     r = app["c"].post("/cliente/acme/experimentos/nuevo", data=dict(FORM_PROBAR, nombre="x", objetivo="OUTCOME_APP_PROMOTION"))
     assert r.status_code == 302
-    assert any("formulario de la galería" in m for m in _flashes(app["c"]))
+    assert any("usa «Nuevo experimento»" in m for m in _flashes(app["c"]))
     assert ex.cargar("acme") == []
+
+
+def test_agregar_pieza_a_un_experimento_de_apps_se_rechaza(app, base_temporal):
+    """Revisión final, ola 2 (2026-10-08): una fila agregada después nacía sin plataforma y bloqueaba el
+    lanzamiento. En apps las piezas se eligen al crear el experimento."""
+    import experimentos as ex
+    clon = _clon(base_temporal)
+    datos = dict(nombre="Forja", paises=[{"pais": "CO", "idioma": "es", "presupuesto_dia": 20000.0}],
+                 objetivo_meta="OUTCOME_APP_PROMOTION", dias=7, tope_total=500000.0, destino_url=IOS, moneda="COP",
+                 app={"ios_url": IOS, "android_url": ANDROID, "app_id": "1234567890"})
+    eid = ex.crear_con_piezas("acme", datos, [(clon, "CO")])
+    otro = _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_otro")
+    with pytest.raises(ValueError, match="las piezas se eligen al crearlo"):
+        ex.agregar_pieza("acme", eid, otro, "CO")
+    r = app["c"].post(f"/cliente/acme/experimentos/{eid}/piezas", data={"pieza_id": str(otro), "pais": "CO"})
+    assert r.status_code == 302
+    assert any("las piezas se eligen al crearlo" in m for m in _flashes(app["c"]))
+    assert len(ex.piezas("acme", eid)) == 2      # solo las dos filas (una por tienda) del alta
 
 
 def _experimento_app_en_meta(base_temporal, presupuesto=20000.0):
