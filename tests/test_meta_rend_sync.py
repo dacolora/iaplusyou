@@ -501,3 +501,15 @@ def test_desde_sin_hueco_son_siete_dias_y_con_hueco_nunca_pasa_de_la_ventana_ini
     # ... pero nunca más atrás de la ventana inicial (cuenta 395 días, anuncio 89).
     assert sync._desde(hoy, 395, True, "2024-01-01") == hoy - timedelta(days=395)
     assert sync._desde(hoy, 89, True, "2026-01-01") == hoy - timedelta(days=89)
+
+
+def test_un_informe_que_falla_no_borra_los_dias_de_anuncio_ya_copiados(cuenta, monkeypatch):
+    FakeGraph(monkeypatch)
+    sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    desde = (HOY - timedelta(days=89)).isoformat()
+    assert datos.totales_por_anuncio(CLI, [ACT], desde, HOY.isoformat())[0]["dias_con_gasto"] == 90
+    # El informe sube (p. ej. «más páginas de las esperadas»): el tramo no se reemplaza a medias.
+    FakeGraph(monkeypatch, falla_informe=graph.ErrorGraph("Meta devolvió más páginas de las esperadas"))
+    with pytest.raises(graph.ErrorGraph):
+        sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    assert datos.totales_por_anuncio(CLI, [ACT], desde, HOY.isoformat())[0]["dias_con_gasto"] == 90

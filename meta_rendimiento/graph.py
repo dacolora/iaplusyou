@@ -78,6 +78,7 @@ def post(edge, token, params=None, timeout=60):
 CODIGOS_MUCHOS_DATOS = (1, 2)
 LIMITE_MINIMO = 25
 MAX_REDUCCIONES = 3
+MAX_PAGINAS_INFORME = 2000   # holgado aun con el límite reducido a 62 o 25: un informe nunca debería llegar aquí
 
 
 def _limite(params):
@@ -93,10 +94,13 @@ def paginar(edge, token, params=None, max_paginas=200, timeout=60, por_pagina=No
     Si una página falla con «demasiados datos» (código 1 o 2) y `limit` pasa de 25, baja el `limit` a la mitad y
     reintenta esa misma página (el nuevo límite sigue para las demás), hasta 3 veces; después sube el error.
     Con `por_pagina` cada página se le entrega a esa función y NO se acumula: devuelve cuántas filas pasaron
-    (así un listado enorme no vive entero en memoria)."""
+    (así un listado enorme no vive entero en memoria).
+
+    Si llega a `max_paginas` y Meta todavía tiene más páginas, sube ErrorGraph: devolver lo leído como si fuera
+    todo dejaría a quien llama borrando y reescribiendo con datos incompletos."""
     p = dict(params or {})
     filas, total, paginas, reducciones = [], 0, 0, 0
-    while paginas < max_paginas:
+    while True:
         try:
             datos = get(edge, token, p, timeout)
         except ErrorGraph as e:
@@ -118,6 +122,8 @@ def paginar(edge, token, params=None, max_paginas=200, timeout=60, por_pagina=No
         despues = (paging.get("cursors") or {}).get("after")
         if not paging.get("next") or not despues:
             break
+        if paginas >= max_paginas:
+            raise ErrorGraph(gettext("Meta devolvió más páginas de las esperadas; la copia se reintenta más tarde."))
         p["after"] = despues
     return total if por_pagina is not None else filas
 
@@ -141,7 +147,8 @@ def informe(ad_account_id, token, params, espera_max_s=600, intervalo_s=5, dormi
             raise ErrorGraph(gettext("El informe de Meta tardó demasiado; la próxima copia lo reintenta."))
         dormir(intervalo_s)
         esperado += intervalo_s
-    return paginar(f"{run}/insights", token, {"limit": 500}, por_pagina=por_pagina)
+    return paginar(f"{run}/insights", token, {"limit": 500}, max_paginas=MAX_PAGINAS_INFORME,
+                   por_pagina=por_pagina)
 
 
 def acciones(lista, tipos):

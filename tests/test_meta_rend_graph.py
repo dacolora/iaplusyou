@@ -1,6 +1,9 @@
 # tests/test_meta_rend_graph.py
 """Lectura de Graph para el rendimiento de Meta (spec §6): paginación, informe
 asíncrono, errores en palabras y nunca el token en un error."""
+import gc
+import weakref
+
 import pytest
 
 from meta_rendimiento import graph
@@ -54,12 +57,37 @@ def test_paginar_sigue_el_cursor_y_manda_el_token_solo_en_params(http):
         assert TOKEN not in url and "access_token" not in url
 
 
-def test_paginar_se_detiene_sin_next_o_sin_cursor_y_en_max_paginas(http):
+def test_paginar_se_detiene_sin_next_o_sin_cursor(http):
     http["respuestas"] = [_Resp({"data": [{"id": 1}], "paging": {"next": "https://x", "cursors": {}}})]
-    assert graph.paginar("act_1/ads", TOKEN) == [{"id": 1}]
-    http["respuestas"] = [_Resp({"data": [{"id": n}], "paging": {"next": "https://x", "cursors": {"after": "A"}}})
-                          for n in range(3)]
+    assert graph.paginar("act_1/ads", TOKEN) == [{"id": 1}]            # next sin cursor: no hay a dónde seguir
+    http["respuestas"] = [_Resp({"data": [{"id": 1}], "paging": {"cursors": {"after": "A"}}})]
+    assert graph.paginar("act_1/ads", TOKEN) == [{"id": 1}]            # cursor sin next: era la última
+
+
+def _con_siguiente(n):
+    return _Resp({"data": [{"id": n}], "paging": {"next": "https://x", "cursors": {"after": f"c{n}"}}})
+
+
+def test_paginar_que_llega_al_tope_con_mas_paginas_sube_en_vez_de_devolver_a_medias(http):
+    http["respuestas"] = [_con_siguiente(n) for n in range(3)]
+    with pytest.raises(graph.ErrorGraph) as e:
+        graph.paginar("act_1/ads", TOKEN, max_paginas=3)
+    assert "más páginas de las esperadas" in str(e.value) and TOKEN not in str(e.value)
+    assert len(http["llamadas"]) == 3    # leyó hasta el tope y no pidió una cuarta
+    # Con callback también sube (quien llama no debe dar por completo un conjunto cortado).
+    http["llamadas"].clear()
+    http["respuestas"] = [_con_siguiente(n) for n in range(3)]
+    with pytest.raises(graph.ErrorGraph):
+        graph.paginar("act_1/ads", TOKEN, max_paginas=3, por_pagina=lambda filas: None)
+
+
+def test_paginar_que_termina_justo_en_el_tope_devuelve_todo(http):
+    # La tercera página es la última (sin next): llegar al tope sin que falte nada NO es un error.
+    http["respuestas"] = [_con_siguiente(0), _con_siguiente(1), _Resp({"data": [{"id": 2}], "paging": {}})]
     assert graph.paginar("act_1/ads", TOKEN, max_paginas=3) == [{"id": 0}, {"id": 1}, {"id": 2}]
+    http["respuestas"] = [_con_siguiente(0), _con_siguiente(1),
+                          _Resp({"data": [{"id": 2}], "paging": {"cursors": {"after": "z"}}})]   # cursor sin next
+    assert len(graph.paginar("act_1/ads", TOKEN, max_paginas=3)) == 3
 
 
 def _muchos_datos(codigo=1):
@@ -112,13 +140,29 @@ def test_paginar_no_reintenta_un_limite_de_uso_ni_un_error_sin_limit(http):
     assert len(http["llamadas"]) == 1
 
 
+class _Fila(dict):
+    """Un dict que admite weakref: sirve para ver si alguien sigue sujetando una fila."""
+
+
 def test_paginar_con_por_pagina_entrega_cada_pagina_y_no_acumula(http):
-    http["respuestas"] = [
-        _Resp({"data": [{"id": 1}, {"id": 2}], "paging": {"cursors": {"after": "A"}, "next": "https://x"}}),
-        _Resp({"data": [{"id": 3}], "paging": {}})]
-    paginas = []
-    n = graph.paginar("act_1/ads", TOKEN, {"limit": 2}, por_pagina=lambda filas: paginas.append(list(filas)))
-    assert n == 3 and paginas == [[{"id": 1}, {"id": 2}], [{"id": 3}]]
+    def pagina(ids, siguiente):
+        paging = {"next": "https://x", "cursors": {"after": siguiente}} if siguiente else {}
+        return _Resp({"data": [_Fila(id=i) for i in ids], "paging": paging})
+    http["respuestas"] = [pagina([1, 2], "A"), pagina([3, 4], "B"), pagina([5], None)]
+    entregadas, vivas, refs = [], [], []
+
+    def por_pagina(filas):
+        gc.collect()
+        # Al llegar esta página, las filas de las anteriores ya no deben estar sujetas por nadie: si paginar las
+        # acumulara (aunque no las devuelva) seguirían vivas aquí.
+        vivas.append(sum(1 for r in refs if r() is not None))
+        entregadas.append([f["id"] for f in filas])
+        refs.extend(weakref.ref(f) for f in filas)
+
+    n = graph.paginar("act_1/ads", TOKEN, {"limit": 2}, por_pagina=por_pagina)
+    assert n == 5 and isinstance(n, int)
+    assert entregadas == [[1, 2], [3, 4], [5]]
+    assert vivas == [0, 0, 0]
 
 
 def test_error_de_limite_y_de_token_en_palabras_sin_token(http):
@@ -181,6 +225,19 @@ def test_informe_con_por_pagina_devuelve_la_cuenta_y_entrega_las_paginas(http):
     paginas = []
     n = graph.informe("act_1", TOKEN, {"level": "ad"}, dormir=lambda s: None, por_pagina=paginas.append)
     assert n == 3 and [[f["ad_id"] for f in p] for p in paginas] == [["a1", "a2"], ["a3"]]
+
+
+def test_informe_usa_un_tope_de_paginas_holgado_y_sube_si_aun_asi_lo_pasa(http, monkeypatch):
+    # Más de las 200 páginas de paginar por defecto: el informe no se corta a los ~12 000 filas.
+    http["respuestas"] = ([_Resp({"report_run_id": "9"}), _Resp({"async_status": "Job Completed"})]
+                          + [_con_siguiente(n) for n in range(250)] + [_Resp({"data": [{"id": 250}], "paging": {}})])
+    assert graph.informe("act_1", TOKEN, {}, dormir=lambda s: None, por_pagina=lambda filas: None) == 251
+    # Y si Meta aún tiene más después del tope, sube en vez de dejar al llamador escribir un conjunto cortado.
+    monkeypatch.setattr(graph, "MAX_PAGINAS_INFORME", 3)
+    http["respuestas"] = ([_Resp({"report_run_id": "9"}), _Resp({"async_status": "Job Completed"})]
+                          + [_con_siguiente(n) for n in range(3)])
+    with pytest.raises(graph.ErrorGraph):
+        graph.informe("act_1", TOKEN, {}, dormir=lambda s: None, por_pagina=lambda filas: None)
 
 
 def test_informe_fallido_o_eterno(http):
