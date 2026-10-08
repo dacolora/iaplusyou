@@ -63,7 +63,7 @@ La pestaña abre así (de arriba abajo):
 │  imagen   │  (92)      (71)      (88)      (64)        │
 │  real     │ Gancho   Retención   Clic     Compra       │
 │ (poster = │ 31 % se  18 % lo ve  CTR 2,4% 3,1 % compra │
-│ miniatura)│ COSTO POR VENTA 18,40 (cuenta 27,10)        │
+│ miniatura)│ COSTO POR VENTA 18,40 (canal 27,10)         │
 │           │ TENDENCIA 7 DÍAS  Se está cansando          │
 │           │ ✓ Gancho fuerte ✓ Mucho clic ✗ Se cansa     │
 │           │ ▸ Texto del anuncio                         │
@@ -82,7 +82,12 @@ La pestaña abre así (de arriba abajo):
   palabras. Sin dato, el anillo muestra «—» y el porqué («sin datos de video», «pocos datos», «sin ventas en la cuenta»);
   con la cifra cruda cuando existe aunque no haya percentil.
   `aria-label`: «Gancho: mejor que el 92 % de tus anuncios de Meta».
-- **Costo por venta** real del anuncio contra el de la cuenta (o «—» sin ventas) y la **tendencia** de 7 días (§4.3).
+- **Costo por venta** real del anuncio contra el de **su canal** (o «—» sin ventas) y la **tendencia** de 7 días
+  (§4.3). *Decisión de la revisión final (2026-10-08, D4):* el spec decía «el de la cuenta»; la tarjeta muestra el del
+  canal (`panel.enriquecer` → `cpa_canal`, el mismo que recibe Claude en `foto.cuenta.cpa_canal`) porque es más
+  comparable: los anillos y el diagnóstico ya se miden dentro del canal (§4.1), y el costo por venta de la cuenta lo
+  domina Meta, así que un anuncio de Snapchat o TikTok parecía caro o barato solo por su canal. El veredicto sigue con
+  el costo por venta de toda la cuenta (§4.1), porque el negocio mira su costo total.
 - **✓ y ✗**: hasta tres fortalezas y tres problemas del diagnóstico gratis de hoy (`FORTALEZAS`, `PROBLEMAS`), con el
   «qué hacer» de cada problema en el `title`.
 - **«Texto del anuncio»** (`<details>`): título y copy de `tw_creativo` (§3.1), tal cual vinieron.
@@ -355,7 +360,10 @@ está `lista`. Devuelve el fragmento `_tw_analisis.html`: la frase; «Lo que fun
 su evidencia y el anillo que toca; «Tres cambios» con el anillo que mueve cada uno; «Versión mejorada» (título, por
 qué, gancho y promesa del ángulo, escena, «Prompt para el video» en `<details>`) con «Llevar a Crear →»; el
 aprendizaje con «Guardar como aprendizaje» (§6.3); «Claude vio: 8 fotogramas · la voz · el texto» (o «solo los
-números»); la fecha, el periodo, el alcance y lo que costó.
+números»); la fecha, el periodo, el alcance y lo que costó. Revisión final (2026-10-08, B1/B2): junto al botón va el
+texto exacto que se guardará («Se guarda así: …»); si Claude citó cifras que no están en los datos
+(`cifras_sin_dato`) se avisa arriba, y si una de ellas está en el aprendizaje no se ofrece guardarlo (ni la ruta lo
+guarda).
 
 ### 6.6 Análisis viejo
 
