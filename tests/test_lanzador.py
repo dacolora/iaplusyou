@@ -452,6 +452,32 @@ def test_refrescar_con_una_sola_tienda_con_pais_no_la_usa_para_otro_pais(entorno
     assert llamadas == [("acme", llamadas.tienda_id)]
 
 
+def test_refrescar_pieza_sin_pais_usa_meta_y_avisa_una_sola_vez(entorno, monkeypatch):
+    """Revisión del guardián del gasto (2026-10-08): con 2+ tiendas una pieza sin país caía a Meta sin
+    dejar rastro. Ahora deja UN evento propio por experimento (marca "" en `aviso_sin_tienda_tw`)."""
+    import db
+    ex, lz, eid = entorno["ex"], entorno["lanzador"], entorno["eid"]
+    ex.actualizar("acme", eid, atribucion="triple_whale")
+    lz.lanzar("acme", eid)
+    monkeypatch.setattr(lz.meta_insights, "obtener_resultados", lambda ad_id, objetivo=None: {
+        "impresiones": 100, "gasto_usd": 30.0, "compras": 3, "ingresos": 90.0, "roas": 3.0,
+        "estado_meta": "ACTIVE", "estado_meta_texto": "Activo"})
+    piezas = ex.obtener("acme", eid)["piezas"]
+    with db.conectar() as con:
+        con.execute(db.experimento_pieza.update().where(db.experimento_pieza.c.id == piezas[2]["id"]).values(pais=None))
+    _tw_dos_tiendas(lz, monkeypatch, ("CO", "PE"))
+
+    lz.refrescar("acme", eid)
+    lz.refrescar("acme", eid)
+    sin_pais = next(p for p in ex.obtener("acme", eid)["piezas"] if p["id"] == piezas[2]["id"])
+    assert sin_pais["metricas"]["compras"] == 3 and sin_pais["metricas"]["fuente_ventas"] == "meta"
+    avisos = [e for e in ex.eventos("acme", eid)
+              if "Una pieza sin país no tiene tienda de Triple Whale" in (e.get("mensaje") or "")]
+    assert len(avisos) == 1 and "ventas de Meta" in avisos[0]["mensaje"]
+    assert ex.obtener("acme", eid)["extra"]["aviso_sin_tienda_tw"] == [""]
+    assert not [e for e in ex.eventos("acme", eid) if "No hay tienda de Triple Whale" in (e.get("mensaje") or "")]
+
+
 def test_refrescar_la_moneda_sale_de_los_ajustes_del_proyecto(entorno, monkeypatch):
     ex, lz, eid = entorno["ex"], entorno["lanzador"], entorno["eid"]
     ex.actualizar("acme", eid, atribucion="triple_whale")

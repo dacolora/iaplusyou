@@ -637,8 +637,10 @@ def _nombre_pais(pais):
 
 def _avisar_sin_tienda_tw(cliente, ex, paises):
     """Un solo evento por experimento y país (`extra.aviso_sin_tienda_tw` = países ya avisados) cuando
-    una pieza es de un país que no tiene tienda de Triple Whale: sus ventas son las de Meta. La marca se
-    escribe ANTES, bajo el candado del `extra`, y solo el que la escribió deja el evento."""
+    una pieza es de un país que no tiene tienda de Triple Whale: sus ventas son las de Meta. Una pieza
+    sin país usa la marca "" y su propio texto (antes caía a Meta sin rastro; revisión del guardián del
+    gasto, 2026-10-08). La marca se escribe ANTES, bajo el candado del `extra`, y solo el que la escribió
+    deja el evento."""
     nuevos = []
 
     def _marcar(extra):
@@ -648,11 +650,12 @@ def _avisar_sin_tienda_tw(cliente, ex, paises):
 
     experimentos.actualizar_extra(cliente, ex["id"], _marcar)
     for pais in nuevos:
-        experimentos.registrar_evento(
-            cliente, ex["id"], "atribucion",
-            gettext("No hay tienda de Triple Whale para %(pais)s: se usan las ventas de Meta.",
-                    pais=_nombre_pais(pais)),
-            {"pais": pais})
+        if pais:
+            texto = gettext("No hay tienda de Triple Whale para %(pais)s: se usan las ventas de Meta.",
+                            pais=_nombre_pais(pais))
+        else:
+            texto = gettext("Una pieza sin país no tiene tienda de Triple Whale: se usan las ventas de Meta.")
+        experimentos.registrar_evento(cliente, ex["id"], "atribucion", texto, {"pais": pais or None})
 
 
 def _mezclar_ventas_triple_whale(cliente, ex, pz, snap, ajustes, tienda_id):
@@ -705,8 +708,8 @@ def refrescar(cliente, experimento_id):
             tienda = _tienda_tw_de(tiendas_tw, pz.get("pais"))
             if tienda:
                 tienda_de_pieza[pz["id"]] = tienda["id"]
-            elif pz.get("pais") and pz["pais"] not in sin_tienda:
-                sin_tienda.append(pz["pais"])
+            elif (pz.get("pais") or "") not in sin_tienda:
+                sin_tienda.append(pz.get("pais") or "")   # "" = pieza sin país (su propio aviso)
         for tienda_id in sorted(set(tienda_de_pieza.values())):
             _sincronizar_triple_whale(cliente, ex, tienda_id)
         if sin_tienda:
