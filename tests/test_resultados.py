@@ -939,7 +939,7 @@ def test_detalle_de_pieza_completo(sembrado):
     # lo del panel (R2): la gráfica de la pieza con su gasto, y sus acciones (la pieza de Crear, el país en Meta)
     assert len(d["series"]["gasto"]) == 7 and d["series"]["moneda"] == "COP" and "roas" in d["series"]
     assert d["pieza_id"] and d["estado_experimento"] == ex.obtener("acme", e1)["estado"]
-    assert d["pais_experimento"]["pais"] == d["pais"] and set(d["pais_experimento"]) == {"pais", "estado", "meta_adset_id", "presupuesto_dia"}
+    assert d["pais_experimento"]["pais"] == d["pais"] and set(d["pais_experimento"]) == {"pais", "estado", "meta_adset_id", "meta_adsets", "presupuesto_dia"}
     json.dumps({k2: d[k2] for k2 in ("curva", "series", "serie", "promedio", "historia", "eventos", "periodo",
                                      "pais_experimento")})
 

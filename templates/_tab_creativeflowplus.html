@@ -280,6 +280,20 @@
       if (!card.dataset.detalle) return;
       abrirDetalleRemoto(modal, cuerpo, card.dataset.detalle, null);
     }
+    // Una alerta puede apuntar a una pieza que no está entre las 24 tarjetas.
+    function desdeHash() {
+      var partes = location.hash.split('?');
+      if (partes[0] !== '#creativeflowplus' || !partes[1]) return;
+      var m = /(?:^|&)cf=([^&]+)/.exec(partes[1]);
+      if (!m) return;
+      var id;
+      try { id = decodeURIComponent(m[1]); } catch (e) { return; }
+      if (!/^cf_[A-Za-z0-9_-]+$/.test(id)) return;
+      var url = {{ url_for('cf_detalle', cliente=cliente, cf_id='__cf__')|tojson }};
+      abrirDetalleRemoto(modal, cuerpo, url.replace('__cf__', encodeURIComponent(id)), null);
+    }
+    document.addEventListener('DOMContentLoaded', desdeHash);
+    window.addEventListener('hashchange', function () { setTimeout(desdeHash, 0); });
     // Delegado sobre la zona: las tarjetas que agrega «Ver más» funcionan igual
     // (spec 2026-09-28 «tarjetas ligeras»).
     var zona = document.getElementById('creativeflowplus-resultados');

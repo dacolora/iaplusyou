@@ -87,8 +87,8 @@ rejected because it would split catalog, pieces and sprints. Spec
 - **Routes (dashboard.py).** `cfg_triple_whale_pais` (POST, change a store's country without touching its figures;
   `PaisOcupado` -> flash) and `cfg_triple_whale_adivinar_pais` (GET, `{"pais": "NO"}` or null from the typed domain;
   reads text only, calls nobody). The project has ONE currency, model and window for all its stores (happyflops: USD).
-- Not done yet (spec §13): European countries are not in `final_edition.tipos.PAISES` (PND-146), several Meta ad
-  accounts per project (PND-147), the residuals of the final reviews (PND-148), and no SQL has run against a real
+- Not done yet (spec §13): European countries are not in `final_edition.tipos.PAISES` (PND-147), several Meta ad
+  accounts per project (PND-148), the residuals of the final reviews (PND-149), and no SQL has run against a real
   store: the first copy of happyflops-norge after the deploy is the test.
 
 The **Triple Whale tab** (`_tab_triple_whale.html`, `data-tab="triplewhale"`, after Alertas; since E2, 2026-10-03, there is

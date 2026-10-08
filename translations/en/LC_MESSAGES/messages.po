@@ -779,12 +779,24 @@ msgid "%(nombre)s (%(pais)s): anuncio %(estado_meta)s en Meta, el decisor no la 
 msgstr "%(nombre)s (%(pais)s): ad %(estado_meta)s on Meta, the decision engine won't evaluate it until it's fixed or replaced."
 
 #, python-format
+msgid "%(nombre)s (%(pais)s): diagnóstico no disponible (el mismo de la otra tienda)."
+msgstr "%(nombre)s (%(pais)s): diagnosis not available (same as the other store)."
+
+#, python-format
 msgid "%(nombre)s (%(pais)s): diagnóstico no disponible."
 msgstr "%(nombre)s (%(pais)s): diagnosis not available."
 
 #, python-format
 msgid "%(nombre)s (%(pais)s): diagnóstico no disponible: %(error)s"
 msgstr "%(nombre)s (%(pais)s): diagnosis not available: %(error)s"
+
+#, python-format
+msgid "%(nombre)s (%(pais)s): el mismo diagnóstico de la otra tienda: %(causas)s — siguiente: %(que)s."
+msgstr "%(nombre)s (%(pais)s): same diagnosis as the other store: %(causas)s — next: %(que)s."
+
+#, python-format
+msgid "%(nombre)s (%(pais)s): el país ya se escaló por esta pieza en la otra tienda."
+msgstr "%(nombre)s (%(pais)s): the country was already scaled for this piece in the other store."
 
 #, python-format
 msgid "%(nombre)s (%(pais)s): escalado ya pedido en esta pasada."
@@ -2284,6 +2296,9 @@ msgstr "Apify: %(estado)s · run %(corrida)s"
 #, python-format
 msgid "Apify: %(estado)s · corrida %(corrida)s (%(hechas)s/%(total)s)"
 msgstr "Apify: %(estado)s · run %(corrida)s (%(hechas)s/%(total)s)"
+
+msgid "App ID de Meta de tu app"
+msgstr "Meta App ID of your app"
 
 msgid "App de Meta del proyecto:"
 msgstr "Project's Meta app:"
@@ -3822,6 +3837,10 @@ msgstr "Confirm my email"
 msgid "Conjunto %(pais)s creado%(con_pixel)s"
 msgstr "Ad set %(pais)s created%(con_pixel)s"
 
+#, python-format
+msgid "Conjunto %(pais)s · %(sistema)s creado"
+msgstr "Ad set %(pais)s · %(sistema)s created"
+
 msgid "Conjunto completo"
 msgstr "Full outfit"
 
@@ -4437,6 +4456,9 @@ msgstr "Derivation %(id)s: could not queue production (%(error)s); the periodic 
 msgid "Derivación planificada a partir de %(nombre)s (experimento hijo %(hijo)s)."
 msgstr "Derivation planned from %(nombre)s (child experiment %(hijo)s)."
 
+msgid "Derivar y rescatar no están disponibles en experimentos de instalaciones de la app."
+msgstr "Derive and rescue aren't available in app install experiments."
+
 msgid "Desarchivar"
 msgstr "Unarchive"
 
@@ -4895,6 +4917,9 @@ msgstr "The %(tipo)s is larger than %(mb)s MB."
 msgid "El 95 %% de las peticiones tardó esto o menos (aproximado)"
 msgstr "95%% of the requests took this long or less (approximate)"
 
+msgid "El App ID de Meta son solo números (lo encuentras en Meta for Developers)."
+msgstr "The Meta App ID is digits only (you can find it in Meta for Developers)."
+
 msgid "El Buen Fin"
 msgstr "El Buen Fin"
 
@@ -5332,8 +5357,19 @@ msgid "El presupuesto debe ser un número."
 msgstr "The budget must be a number."
 
 #, python-format
+msgid "El presupuesto diario de %(pais)s se reparte entre %(n)s tiendas y cada parte tiene que alcanzar el mínimo de Meta (%(minimo)s %(moneda)s)."
+msgstr "%(pais)s's daily budget is split across %(n)s stores and each share has to reach Meta's minimum (%(minimo)s %(moneda)s)."
+
+#, python-format
 msgid "El presupuesto diario de cada país no lleva más de dos decimales en %(moneda)s."
 msgstr "Each country's daily budget can have no more than two decimal places in %(moneda)s."
+
+#, python-format
+msgid "El presupuesto diario de cada país se reparte entre %(n)s tiendas y cada parte tiene que alcanzar el mínimo de Meta (%(minimo)s %(moneda)s) en: %(paises)s."
+msgstr "Each country's daily budget is split across %(n)s stores and each share has to reach Meta's minimum (%(minimo)s %(moneda)s) in: %(paises)s."
+
+msgid "El presupuesto diario de cada país se reparte entre las tiendas."
+msgstr "Each country's daily budget is split across the stores."
 
 #, python-format
 msgid "El presupuesto diario de cada país va en cifras enteras en %(moneda)s."
@@ -5918,6 +5954,9 @@ msgstr "In the season, the start date must be before the end date."
 msgid "En los clips %(lista)s las líneas declaradas no coinciden con las que se dicen."
 msgstr "In clips %(lista)s the declared lines don't match what's actually said."
 
+msgid "En los experimentos de instalaciones de la app todavía no se agregan piezas nuevas después de lanzar."
+msgstr "In app install experiments, new pieces can't be added after launching yet."
+
 msgid "En notion.so/profile/integrations crea una integración interna (solo lectura de contenido)."
 msgstr "At notion.so/profile/integrations create an internal integration (content read-only)."
 
@@ -5930,6 +5969,9 @@ msgstr "At trendtrack.io choose the Pro plan or higher (it includes the API and 
 #, python-format
 msgid "En tu catálogo: %(nombre)s"
 msgstr "In your catalog: %(nombre)s"
+
+msgid "En un experimento de instalaciones de la app las piezas se eligen al crearlo."
+msgstr "In an app installs experiment, pieces are chosen when you create it."
 
 msgid "En uso"
 msgstr "In use"
@@ -5992,6 +6034,9 @@ msgstr "Environments that aren't environment-type references in: %(lista)s."
 
 msgid "Entra a <a href=\"https://business.facebook.com/settings/partners\" target=\"_blank\" rel=\"noopener\">business.facebook.com</a> › <em>Configuración del negocio</em> › <em>Socios</em> › <em>Agregar</em> › <em>Dar acceso a un socio a tus activos</em> y pega el ID de Creatv. Si Meta te pide activar la autenticación en dos pasos del portafolio, hazlo: es requisito suyo para compartir."
 msgstr "Go to <a href=\"https://business.facebook.com/settings/partners\" target=\"_blank\" rel=\"noopener\">business.facebook.com</a> › <em>Business settings</em> › <em>Partners</em> › <em>Add</em> › <em>Give a partner access to your assets</em> and paste Creatv's ID. If Meta asks you to turn on two-step verification for the portfolio, do it: it's their requirement for sharing."
+
+msgid "Entra a aistudio.google.com/apikey con la cuenta de Google de la empresa y crea una llave."
+msgstr "Go to aistudio.google.com/apikey with the company's Google account and create a key."
 
 msgid "Entra a console.anthropic.com e inicia sesión (o crea la cuenta de la empresa)."
 msgstr "Go to console.anthropic.com and log in (or create the company's account)."
@@ -7291,6 +7336,9 @@ msgstr "%(vars)s still need to be set in the server's .env (developers.mercadoli
 msgid "Falta describir ✎"
 msgstr "Needs a description ✎"
 
+msgid "Falta el App ID de la app que anuncias: pégalo en Avanzado (lo encuentras en Meta for Developers)."
+msgstr "The App ID of the app you're advertising is missing: paste it in Advanced (you can find it in Meta for Developers)."
+
 #, python-format
 msgid "Falta el check %(k)s."
 msgstr "The %(k)s check is missing."
@@ -7374,6 +7422,9 @@ msgstr "Missing data: the system user's token and the Business id are required."
 
 msgid "Faltan datos: nombre, objetivo, al menos un país, días (1–90), tope, edades (13–65) y una URL de destino http(s)."
 msgstr "Missing data: name, objective, at least one country, days (1–90), cap, ages (13–65) and a http(s) destination URL."
+
+msgid "Faltan datos: objetivo, al menos un país, días (1–90), tope y edades (13–65)."
+msgstr "Missing data: objective, at least one country, days (1–90), cap and ages (13–65)."
 
 msgid "Faltan datos: objetivo, al menos un país, días (1–90), tope, edades (13–65) y una URL de destino http(s)."
 msgstr "Missing data: objective, at least one country, days (1–90), cap, ages (13–65) and a http(s) destination URL."
@@ -7726,6 +7777,9 @@ msgstr "Gemini Omni Flash Edit"
 msgid "Genera cada video (Wan 3.0, Kling O3 Pro, Seedance 2.5) e imagen (Seedream) de Crear y de los lotes de Sprints."
 msgstr "Generates every video (Wan 3.0, Kling O3 Pro, Seedance 2.5) and image (Seedream) in Create and in the Sprints batches."
 
+msgid "Genera imágenes y reemplaza el producto en Crear › Cambiar producto cuando eliges Nano Banana."
+msgstr "Generates images and replaces the product in Create › Change product when you choose Nano Banana."
+
 msgid "Genera la imagen y el video del flujo viejo «Nueva idea»."
 msgstr "Generates the image and the video of the old “New idea” flow."
 
@@ -7943,6 +7997,9 @@ msgstr "Manage the agency connection →"
 
 msgid "Globo de diálogo"
 msgstr "Speech bubble"
+
+msgid "Google Gemini (Nano Banana)"
+msgstr "Google Gemini (Nano Banana)"
 
 msgid "Google permite 100 búsquedas por día por proyecto; cada recolección usa una. Los links no gastan búsqueda."
 msgstr "Google allows 100 searches per day per project; each collection uses one. Links don't use up searches."
@@ -8621,6 +8678,9 @@ msgstr "Start"
 msgid "Instagram"
 msgstr "Instagram"
 
+msgid "Instalaciones de la app"
+msgstr "App installs"
+
 msgid "Instrumental (sin voz cantada)"
 msgstr "Instrumental (no sung vocals)"
 
@@ -8756,11 +8816,17 @@ msgstr "The AI couldn't build the shots; the basic prompt is there for you to ed
 msgid "La Página %(pagina)s no está entre las que ve el Business de la agencia."
 msgstr "The Page %(pagina)s isn't among the ones the agency's Business can see."
 
+msgid "La URL de Android tiene que ser un enlace https de Google Play (play.google.com)."
+msgstr "The Android URL has to be an https Google Play link (play.google.com)."
+
 msgid "La URL de compra tiene que empezar por http:// o https:// (o ser wa.me/…); no la guardé."
 msgstr "The purchase URL has to start with http:// or https:// (or be wa.me/…); I didn't save it."
 
 msgid "La URL de compra tiene que empezar por http:// o https://."
 msgstr "The purchase URL has to start with http:// or https://."
+
+msgid "La URL de iOS tiene que ser un enlace https de la App Store (apps.apple.com)."
+msgstr "The iOS URL has to be an https App Store link (apps.apple.com)."
 
 msgid "La URL del anuncio no lleva los parámetros de Triple Whale: sus ventas pueden no atribuirse."
 msgstr "The ad URL doesn't carry the Triple Whale parameters: its sales may not be attributed."
@@ -9985,6 +10051,9 @@ msgstr "Meta rejected the ad because Creatv's Meta app (agency mode) is in Devel
 msgid "Meta rechazó el anuncio porque la app de Meta de este proyecto está en modo Desarrollo (subcódigo 1885183). Pásala a modo Live en developers.facebook.com › Mis apps › tu app › «Modo de la app» y reintenta el lanzamiento: la campaña, los conjuntos y los videos ya creados se reutilizan, no se duplica nada."
 msgstr "Meta rejected the ad because this project's Meta app is in Development mode (subcode 1885183). Switch it to Live mode at developers.facebook.com › My Apps › your app › “App Mode” and retry the launch: the campaign, ad sets and videos already created are reused, nothing is duplicated."
 
+msgid "Meta rechazó el anuncio porque la app está en modo Desarrollo (subcódigo 1885183). Pásala a modo Live y revisa lo creado en Ads Manager antes de volver a intentar."
+msgstr "Meta rejected the ad because the app is in Development mode (subcode 1885183). Switch it to Live mode and review what was created in Ads Manager before trying again."
+
 #, python-format
 msgid "Meta rechazó el pedido (código %(codigo)s%(sub)s)%(mensaje)s."
 msgstr "Meta rejected the request (code %(codigo)s%(sub)s)%(mensaje)s."
@@ -10012,6 +10081,9 @@ msgstr "Meta reviews every new ad before showing it (usually under 24 h). Once i
 
 msgid "Meta siguió pidiendo esperar después de varios intentos: el detalle quedó incompleto. Actualiza el experimento más tarde para completarlo."
 msgstr "Meta kept asking us to wait after several attempts: the detail is incomplete. Update the experiment later to complete it."
+
+msgid "Meta solo acepta un enlace de tienda con el objetivo “Instalaciones de la app”: elige ese objetivo en Avanzado o cambia el destino por una página web."
+msgstr "Meta only accepts a store link with the “App installs” objective: choose that objective in Advanced or change the destination to a web page."
 
 msgid "Meta tuvo una falla temporal: reintenta en unos minutos."
 msgstr "Meta had a temporary failure: try again in a few minutes."
@@ -10333,6 +10405,9 @@ msgstr "Nano Banana (via fal)"
 
 msgid "Nano Banana Pro Ultra (4k)"
 msgstr "Nano Banana Pro Ultra (4k)"
+
+msgid "Nano Banana necesita esta llave; los modelos de WaveSpeed usan su propia llave."
+msgstr "Nano Banana needs this key; WaveSpeed models use their own key."
 
 msgid "Navidad"
 msgstr "Christmas"
@@ -11009,6 +11084,12 @@ msgstr "I couldn't calculate the total."
 msgid "No se pudo calcular las alertas."
 msgstr "I couldn't calculate the alerts."
 
+msgid "No se pudo cambiar el presupuesto en todos los conjuntos del país; quedó a medias: revisa los conjuntos en Meta."
+msgstr "Couldn't change the budget on all of the country's ad sets; it was left half-changed: check the ad sets on Meta."
+
+msgid "No se pudo cambiar el presupuesto en todos los conjuntos del país; se dejó como estaba."
+msgstr "Couldn't change the budget on all of the country's ad sets; it was left as it was."
+
 msgid "No se pudo cargar el catálogo. Revisa tu conexión e intenta de nuevo."
 msgstr "Couldn't load the catalog. Check your connection and try again."
 
@@ -11493,6 +11574,9 @@ msgstr "Option"
 msgid "Opiniones de Mercado Libre"
 msgstr "Mercado Libre reviews"
 
+msgid "Optimiza por clics a la tienda; las instalaciones reales se miden cuando la app tenga el SDK de Meta o un servicio de atribución. Deja la app en modo Live en Meta for Developers."
+msgstr "It optimizes for clicks to the store; real installs are measured once the app has the Meta SDK or an attribution service. Keep the app in Live mode in Meta for Developers."
+
 msgid "Optimizar por compras requiere el Pixel activo y atribución pixel: pulsa «Comprobar Pixel» en Configuración, o elige el objetivo de tráfico."
 msgstr "Optimizing for purchases requires an active Pixel and pixel attribution: press “Check Pixel” in Settings, or choose the traffic objective."
 
@@ -11610,6 +11694,9 @@ msgstr "To connect a Page by typing its ID, use “Let Creatv know”: we'll rev
 
 msgid "Para grabar, abre el editor desde su dirección segura (https)."
 msgstr "To record, open the editor from its secure address (https)."
+
+msgid "Para instalaciones de la app usa «Nuevo experimento»."
+msgstr "For app installs use “New experiment”."
 
 msgid "Para producir una variante hay que indicar `variante` (número) y `variante_tipo` (hook | estructura) a la vez."
 msgstr "To produce a variant you must give `variante` (number) and `variante_tipo` (hook | estructura) together."
@@ -11975,6 +12062,9 @@ msgstr "Privacy policy"
 
 msgid "Pon REDDIT_USER_AGENT con la forma «creatv-machine/1.0 (by u/tu_usuario)» y reinicia los dos servicios."
 msgstr "Set REDDIT_USER_AGENT to the form “creatv-machine/1.0 (by u/your_username)” and restart both services."
+
+msgid "Pon al menos una URL de tienda: App Store (iOS) o Google Play (Android)."
+msgstr "Add at least one store URL: App Store (iOS) or Google Play (Android)."
 
 msgid "Pon el cabezal dentro de un clip para cortarlo."
 msgstr "Put the playhead inside a clip to split it."
@@ -12578,6 +12668,9 @@ msgstr "Paste it as ATRIA_API_KEY in the server's .env and restart both services
 
 msgid "Pégala como FAL_KEY en el .env del servidor y reinicia."
 msgstr "Paste it as FAL_KEY in the server's .env and restart."
+
+msgid "Pégala como GEMINI_API_KEY en el .env del servidor y reinicia los dos servicios."
+msgstr "Paste it as GEMINI_API_KEY in the server's .env and restart both services."
 
 msgid "Pégala como TRENDTRACK_API_KEY en el .env del servidor y reinicia los dos servicios."
 msgstr "Paste it as TRENDTRACK_API_KEY in the server's .env and restart both services."
@@ -13324,6 +13417,9 @@ msgstr "Check the worker or refresh the experiment."
 msgid "Revisa estos valores, deben ser números: %(nombres)s. No se guardó nada."
 msgstr "Check these values, they must be numbers: %(nombres)s. Nothing was saved."
 
+msgid "Revisa la facturación del proyecto de Google asociado a la llave."
+msgstr "Check billing for the Google project associated with the key."
+
 msgid "Revisa lo que falló →"
 msgstr "Check what failed →"
 
@@ -13592,6 +13688,9 @@ msgstr "It was interrupted; try again."
 #, python-format
 msgid "Se muestran los últimos %(n)s cobros"
 msgstr "Showing the last %(n)s charges"
+
+msgid "Se paga por imagen; el precio estimado se muestra antes de generar."
+msgstr "Paid per image; the estimated price is shown before generating."
 
 msgid "Se paga por resultado (Amazon ≈ US$ 3 por 1 000 reseñas; TikTok ≈ US$ 0,50 por 1 000 comentarios) más cómputo; el estimado se muestra antes de cada clic."
 msgstr "Pay per result (Amazon ≈ US$ 3 per 1 000 reviews; TikTok ≈ US$ 0,50 per 1 000 comments) plus compute; the estimate is shown before every click."
@@ -14642,6 +14741,9 @@ msgstr "Store %(nombre)s connected. %(detalle)s %(extra)s"
 msgid "Tienda de %(pais)s conectada (%(dominio)s). Estamos trayendo sus últimos 90 días de métricas; mira la pestaña Triple Whale en unos minutos."
 msgstr "%(pais)s store connected (%(dominio)s). We're pulling its last 90 days of metrics; check the Triple Whale tab in a few minutes."
 
+msgid "Tienda de la app"
+msgstr "App store"
+
 msgid "Tienda desconectada. Sus productos quedaron archivados y sus pedidos se conservan (no se borró nada)."
 msgstr "Store disconnected. Its products were archived and its orders are kept (nothing was deleted)."
 
@@ -15460,6 +15562,12 @@ msgstr "Faceless UGC"
 msgid "URL"
 msgstr "URL"
 
+msgid "URL de App Store (iOS)"
+msgstr "App Store URL (iOS)"
+
+msgid "URL de Google Play (Android)"
+msgstr "Google Play URL (Android)"
+
 msgid "URL de compra (opcional)"
 msgstr "Purchase URL (optional)"
 
@@ -15597,6 +15705,9 @@ msgstr "A person with the product: an attention-grabbing hook, natural use and a
 
 msgid "Una persona real usando el producto de forma natural; el producto sigue siendo el protagonista."
 msgstr "A real person using the product naturally; the product is still the star."
+
+msgid "Una pieza no tiene plataforma de tienda: vuelve a crear el experimento."
+msgstr "A piece has no store platform: create the experiment again."
 
 msgid "Una pieza sin país no tiene tienda de Triple Whale: se usan las ventas de Meta."
 msgstr "A piece without a country has no Triple Whale store: Meta sales are used."
@@ -16544,6 +16655,9 @@ msgstr "agency connected"
 
 msgid "ahora mismo"
 msgstr "right now"
+
+msgid "aistudio.google.com › Llaves de API"
+msgstr "aistudio.google.com › API keys"
 
 msgid "alemán"
 msgstr "German"

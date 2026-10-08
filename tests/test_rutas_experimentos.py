@@ -244,9 +244,8 @@ def test_reconciliar_lanzando_huerfano(app, base_temporal):
 
 
 def test_ver_cliente_pasa_contexto_experimentos(app, base_temporal, monkeypatch):
-    """C1 (review round 2): ver_cliente debe pasar el contexto de
-    experimentos a la plantilla — probado acá capturando render_template en
-    vez de depender del template de la Task 5 (ese es el xfail de arriba)."""
+    """PND-137: la página entrega solo reglas/correo; fragmento y Nuevo
+    conservan el contexto completo y sus trabajos, sin red."""
     import experimentos as ex
     from meta_ads import campaign as meta_campaign
     d = app["dashboard"]
@@ -267,11 +266,16 @@ def test_ver_cliente_pasa_contexto_experimentos(app, base_temporal, monkeypatch)
     monkeypatch.setattr(d, "render_template", _render)
     r = app["c"].get("/cliente/acme")
     assert r.status_code == 200
+    assert capturado["reglas_defecto_exp"] is d.decisor.REGLAS_DEFECTO
+    assert capturado["correo_notificaciones"] == ""
+    for pesado in ("experimentos", "experimentos_armando", "trabajos_exp", "elegibles_exp", "objetivos_exp"):
+        assert pesado not in capturado
+    capturado.clear()
+    assert app["c"].get("/cliente/acme/experimentos/resultados").status_code == 200
     assert {e["id"] for e in capturado["experimentos"]} == {eid_armando, eid_lanzando}
     assert [e["id"] for e in capturado["experimentos_armando"]] == [eid_armando]
-    # E2: las piezas elegibles (la galería) ya no viajan en la página del proyecto: las pide «Nuevo experimento»
-    # (el hotfix e8d433a las devolvió mientras corría la pestaña vieja).
-    assert "elegibles_exp" not in capturado
+    # El anuncio suelto en cola sí pide las elegibles en el fragmento.
+    assert capturado["elegibles_exp"] == ex.elegibles("acme")
     assert capturado["trabajos_exp"] == {eid_lanzando: {"job_id": job_id}}
     assert capturado["objetivos_exp"] is meta_campaign.OBJETIVOS_VALIDOS_FASE1
     assert capturado["moneda_exp"] == "COP"

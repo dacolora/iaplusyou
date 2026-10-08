@@ -74,6 +74,21 @@ SERVICIOS = (
         ],
     },
     {
+        "id": "gemini",
+        "nombre": idiomas.N_("Google Gemini (Nano Banana)"),
+        "para_que": idiomas.N_("Genera imágenes y reemplaza el producto en Crear › Cambiar producto cuando eliges Nano Banana."),
+        "costo": idiomas.N_("Se paga por imagen; el precio estimado se muestra antes de generar."),
+        "url": "https://aistudio.google.com/apikey",
+        "url_texto": idiomas.N_("aistudio.google.com › Llaves de API"),
+        "variables": ["GEMINI_API_KEY"],
+        "nota": idiomas.N_("Nano Banana necesita esta llave; los modelos de WaveSpeed usan su propia llave."),
+        "pasos": [
+            idiomas.N_("Entra a aistudio.google.com/apikey con la cuenta de Google de la empresa y crea una llave."),
+            idiomas.N_("Revisa la facturación del proyecto de Google asociado a la llave."),
+            idiomas.N_("Pégala como GEMINI_API_KEY en el .env del servidor y reinicia los dos servicios."),
+        ],
+    },
+    {
         "id": "higgsfield",
         "nombre": idiomas.N_("Higgsfield (video e imagen)"),
         "para_que": idiomas.N_("Genera la imagen y el video del flujo viejo «Nueva idea»."),

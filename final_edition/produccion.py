@@ -183,7 +183,11 @@ def asegurar_borrador(cliente, cf_id, entry, guion_base, guion, o, avisar):
                 _capa(capas, "musica", "fal/stable-audio", {"estilo": o.get("estilo_musica"), "url": mat.get("url")}, c)
             except Exception as e:
                 degradada = True
-                _capa(capas, "musica", "fal/stable-audio", {"estilo": o.get("estilo_musica")}, estado="error", error=_mensaje(e))
+                pagado = float(getattr(e, "costo_usd", 0.0) or 0.0)
+                costo += pagado
+                _capa(capas, "musica", "fal/stable-audio",
+                      {"estilo": o.get("estilo_musica"), "url": getattr(e, "url", None)},
+                      pagado, estado="error", error=_mensaje(e))
         # 4. el documento
         logo = insumos.logo(cliente)
         marca = {"color": final_edition._color_acento(cliente),

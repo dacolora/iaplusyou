@@ -19,6 +19,7 @@
   <p class="exp-anuncios"></p>
   <p class="exp-aviso-tope"></p>
   <p class="exp-nada">{{ _('Nada gasta hasta que pulses Activar') }}</p>
+  {% if viva %}{{ caller() }}{% endif %}
 </div>
 {% endmacro %}
 {% macro nota_presupuesto() %}
@@ -112,10 +113,12 @@
       <label>{{ _('Días') }} <input type="number" name="dias" value="7" min="1" max="90"></label>
     </div>
     <input type="range" id="exp-total-barra" class="exp-total-barra" aria-label="{{ _('Ajustar el total') }}">
-    {{ resumen_presupuesto('exp-resumen', true) }}
     <p id="exp-total-aviso" class="exp-aviso" hidden>{{ _('Escribe el total.') }}</p>
-    <p id="exp-minimo" class="exp-aviso" hidden></p>
-    <button type="button" class="btn-sm" id="exp-usar-minimo" hidden>{{ _('Usar ese total') }}</button>
+    {% call resumen_presupuesto('exp-resumen', true) %}
+      <p id="exp-minimo" class="exp-aviso" hidden></p>
+      <button type="button" class="btn-sm" id="exp-usar-minimo" hidden>{{ _('Usar ese total') }}</button>
+    {% endcall %}
+    <p class="vacio exp-resumen-reparto" id="exp-resumen-reparto" hidden>{{ _('El presupuesto diario de cada país se reparte entre las tiendas.') }}</p>
     <details class="exp-ajuste"><summary>{{ _('Ajustar reparto') }}</summary>
       <p class="vacio">{{ _('Cambia el presupuesto diario de cada país: el total se recalcula como la suma de los diarios por los días.') }}</p>
       <div class="exp-reparto">{% for codigo, p in paises_fe.items() %}<label data-reparto="{{ codigo }}" hidden>{{ p.bandera }} {{ p.nombre|traducir }}
@@ -147,7 +150,15 @@
         <label>{{ _('Modo') }}
           <select name="modo">{% for m in modos_exp %}<option value="{{ m }}" {% if m == "manual" %}selected{% endif %}>{{ m }}</option>{% endfor %}</select>
         </label>
-        <label>{{ _('URL de destino') }} <input type="url" name="destino_url" value="{{ request.args.get('exp_destino') or url_for('landing_cliente', cliente=cliente, _external=True) }}" required></label>
+        <label data-solo-no-app>{{ _('URL de destino') }} <input type="url" name="destino_url" value="{{ request.args.get('exp_destino') or url_for('landing_cliente', cliente=cliente, _external=True) }}" required></label>
+      </div>
+      {# Instalaciones de la app: las URLs de tienda reemplazan la de destino (al
+         menos una); el App ID es el de la app que se anuncia, no el de Creatv. #}
+      <div class="fe-opciones exp-solo-app" data-solo-app hidden>
+        <label>{{ _('URL de App Store (iOS)') }} <input type="url" name="app_ios_url" placeholder="https://apps.apple.com/…"></label>
+        <label>{{ _('URL de Google Play (Android)') }} <input type="url" name="app_android_url" placeholder="https://play.google.com/store/apps/details?id=…"></label>
+        <label>{{ _('App ID de Meta de tu app') }} <input name="app_id" inputmode="numeric" value="{{ app_id_guardado or '' }}"></label>
+        <p class="vacio">{{ _('Optimiza por clics a la tienda; las instalaciones reales se miden cuando la app tenga el SDK de Meta o un servicio de atribución. Deja la app en modo Live en Meta for Developers.') }}</p>
       </div>
       <p class="vacio exp-ayuda-modo">{{ _('Manual: el motor solo propone y tú apruebas. Semi: pausar y archivar se hacen solos. Auto: todo solo salvo con el tope alcanzado. Compras exige el Pixel activo y atribución pixel; Tráfico sirve siempre. La atribución sugerida sale de lo conectado en Configuración: pulsa «Comprobar Pixel» allí para que la tenga en cuenta.') }}</p>
     </details>
@@ -294,6 +305,7 @@
     var avisoTotal = document.getElementById('exp-total-aviso');
     var usarMinimo = document.getElementById('exp-usar-minimo'), repartoAuto = document.getElementById('exp-reparto-auto');
     var resumenes = [document.getElementById('exp-resumen'), document.getElementById('exp-resumen-final')];
+    var reparto = document.getElementById('exp-resumen-reparto');
     var enteros = P.EN_ENTEROS.indexOf(moneda) !== -1;
     // `manual`: la persona editó el diario de algún país («Ajustar reparto»); el total se recalcula de ahí.
     var manual = false, ultimoMinimo = 0, estadoActual = {}, textoMaximo = '', textoConfirmar = '';
@@ -355,7 +367,10 @@
       var hayCifras = anuncios > 0 && conTotal && diasOk;
       var porPais = ps.length > 1 ? ps.map(function (p) { return (casillaPais(p).dataset.bandera || p) + ' ' + numeroLocal(Number(campoPais(p).value)); }) : [];
       var nPaises = Object.keys(pesos).length;
-      var anunciosTxt = (anuncios === 1 ? UN_ANUNCIO : VARIOS_ANUNCIOS).replace('{n}', anuncios);
+      // En apps cada casilla son tantos anuncios como tiendas (las plataformas se expanden en el servidor).
+      if (reparto) reparto.hidden = tiendasApp() < 2;
+      var anunciosVista = anuncios * tiendasApp();
+      var anunciosTxt = (anunciosVista === 1 ? UN_ANUNCIO : VARIOS_ANUNCIOS).replace('{n}', anunciosVista);
       var piezasTxt = (est.piezas === 1 ? UNA_PIEZA : VARIAS_PIEZAS).replace('{n}', est.piezas);
       var paisesTxt = (nPaises === 1 ? UN_PAIS : VARIOS_PAISES).replace('{n}', nPaises);
       // «Máximo que puede gastar» solo es verdad con un tope duro en Meta (el total llega al mínimo para un tope de campaña);
@@ -369,7 +384,7 @@
         maximo: textoMaximo, sinTope: textoSinTope,
         dia: hayCifras ? [AL_DIA.replace('{dia}', dinero(diario))].concat(porPais).join(' · ') : '',
         // «6 anuncios (3 piezas en 2 países)»; un solo anuncio no necesita el paréntesis.
-        anuncios: !anuncios ? '' : anuncios === 1 ? anunciosTxt
+        anuncios: !anuncios ? '' : anunciosVista === 1 ? anunciosTxt
           : PLANTILLA_ANUNCIOS.replace('{anuncios}', anunciosTxt).replace('{piezas}', piezasTxt).replace('{paises}', paisesTxt)
       });
       // País bajo el mínimo de Meta: se dice en palabras, con el total mínimo que lo arregla.
@@ -448,6 +463,30 @@
       cuadricula.innerHTML = '<table><thead><tr><th></th>' + ps.map(function (p) { return '<th>' + p + '</th>'; }).join('') + '</tr></thead><tbody>' + filas + '</tbody></table>';
       cuadricula.querySelectorAll('input[name=combinaciones]').forEach(function (i) { if (i.value in previas) i.checked = previas[i.value]; i.addEventListener('change', refrescarCuenta); });
     }
+    // Instalaciones de la app: las URLs de tienda reemplazan la de destino y
+    // la atribución arranca en «ninguna» (la persona puede elegir otra).
+    var selObjetivo = form.querySelector('select[name=objetivo]');
+    var selAtribucion = form.querySelector('select[name=atribucion]');
+    var destinoUrl = form.querySelector('[name=destino_url]');
+    var atribucionInicial = selAtribucion ? selAtribucion.value : '';
+    function esApp() { return !!selObjetivo && selObjetivo.value === 'OUTCOME_APP_PROMOTION'; }
+    function tiendasApp() {
+      if (!esApp()) return 1;
+      var n = ['app_ios_url', 'app_android_url'].filter(function (k) { return ((form.querySelector('[name=' + k + ']') || {}).value || '').trim(); }).length;
+      return Math.max(1, n);
+    }
+    function alternarApp(refrescar) {
+      var app = esApp();
+      form.querySelectorAll('[data-solo-app]').forEach(function (b) { b.hidden = !app; });
+      form.querySelectorAll('[data-solo-no-app]').forEach(function (b) { b.hidden = app; });
+      if (destinoUrl) destinoUrl.required = !app;
+      if (selAtribucion && !selAtribucion.dataset.tocado) selAtribucion.value = app ? 'ninguna' : atribucionInicial;
+      if (refrescar) refrescarCuenta();
+    }
+    if (selObjetivo) selObjetivo.addEventListener('change', function () { alternarApp(true); });
+    if (selAtribucion) selAtribucion.addEventListener('change', function () { selAtribucion.dataset.tocado = '1'; });
+    form.querySelectorAll('[name=app_ios_url], [name=app_android_url]').forEach(function (i) { i.addEventListener('input', refrescarCuenta); });
+    alternarApp(false);
     abrir.addEventListener('click', function () { form.hidden = false; forzarPaisesDeFinales(); irA(1); });
     form.querySelectorAll('[data-ir]').forEach(function (b) {
       b.addEventListener('click', function () {

@@ -511,3 +511,46 @@ def test_la_pantalla_manda_a_la_pagina_desde_que_total_hay_tope_de_campana(app, 
                   "Meta no pone un tope duro a la campaña por debajo de {tope}: Creatv reparte {total} en presupuestos diarios por país (≈ {dia} al día)."):
         assert json.dumps(frase) in html, frase
     assert "(suma × días)" not in html and "suma × días" not in html
+
+
+def test_aviso_del_minimo_junto_a_su_boton_dentro_del_resumen_vivo(app):
+    from html.parser import HTMLParser
+    html = app["c"].get("/cliente/acme/experimentos/nuevo").get_data(as_text=True)
+    class Lector(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.padres = []
+            self.hijos = {}
+            self.nodos = {}
+        def handle_starttag(self, tag, attrs):
+            a = dict(attrs)
+            padre = self.padres[-1] if self.padres else None
+            clave = a.get("id", object())
+            self.hijos.setdefault(padre, []).append(clave)
+            if "id" in a:
+                self.nodos[a["id"]] = (padre, a)
+            if tag not in {"input", "img", "br", "meta", "link", "hr", "source"}:
+                self.padres.append(clave)
+        def handle_endtag(self, tag):
+            if self.padres:
+                self.padres.pop()
+    lector = Lector(); lector.feed(html)
+    padre, aviso = lector.nodos["exp-minimo"]
+    assert padre == lector.nodos["exp-usar-minimo"][0], "aviso separado de Usar ese total"
+    hermanos = lector.hijos[padre]
+    assert hermanos[hermanos.index("exp-minimo") + 1] == "exp-usar-minimo"
+    assert "aria-live" not in aviso
+    assert lector.nodos[padre][1].get("aria-live") == "polite"
+
+
+@pytest.mark.skipif(not shutil.which("node"), reason="sin Node no se corre el JS")
+def test_aviso_del_minimo_actualiza_y_limpia_el_texto_anunciado(app, base_temporal):
+    _en_la_pagina(app, base_temporal, r"""
+campo('[name=tope_total]').value = '100000'; campo('[name=dias]').value = '30';
+refrescarCuenta();
+assert.strictEqual(ids['exp-minimo'].hidden, false);
+assert(ids['exp-minimo'].textContent.includes('240.000 COP'));
+ids['exp-usar-minimo'].oyentes.click();
+assert.strictEqual(ids['exp-minimo'].hidden, true);
+assert.strictEqual(ids['exp-minimo'].textContent, '');
+""")

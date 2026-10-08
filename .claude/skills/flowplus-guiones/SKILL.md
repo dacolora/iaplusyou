@@ -90,3 +90,5 @@ coincide o falta algo) y `/cadena/detener`; UI `_gpg_cadena.html` dentro de `_gp
 corre, con el tope de 12 min de siempre).
 
 PND-027 (2026-10-03): listar ya no trunca por defecto en 200; agrupa manual/pipeline y ordena cada grupo por actividad. El chat muestra «Escritos a mano» y «Del guion», también al incorporar un prompt nuevo. El parámetro limite sigue disponible para lectores que lo pidan. Esta corrección no agrega paginación: una biblioteca muy grande aún se carga completa.
+
+PND-094 (2026-10-07, lote 5 B): _gpg_macros.form_config agrupa los colores del selector por producto con agrupar_por_producto; conserva los IDs, la selección y el orden de las entradas dentro de cada producto. No cambia configuración ni prompts enviados.

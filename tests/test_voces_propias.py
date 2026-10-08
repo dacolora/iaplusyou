@@ -144,7 +144,7 @@ def test_grabacion_aac_u_ogg_se_sube_convertida_a_mp3(base_temporal, monkeypatch
         (args,) = conversiones
         origen, salida = args[1], args[-1]
         assert args == ["-i", origen, "-vn", "-ac", "1", "-ar", "44100", "-c:a", "libmp3lame", "-b:a", "128k", salida]
-        assert origen.endswith(ext) and salida.endswith(".mp3") and medidos == [salida]
+        assert origen.endswith(ext) and salida.endswith(".mp3") and medidos == [origen, salida]
         assert key.endswith(".mp3") and ct == "audio/mpeg" and g["bytes"] == len(b"ID3 mp3 convertido")
     else:
         assert conversiones == [] and key.endswith(".m4a") and ct == "audio/mp4"
@@ -462,3 +462,19 @@ def test_pnd040_borrar_ultima_voz_no_reutiliza_su_id(base_temporal):
     nueva = _voz(voice_id='nueva')
     assert nueva['id'] > vieja['id']
     assert voces_propias.resolver('acme', f"vp:{vieja['id']}") is None
+
+
+@pytest.mark.parametrize("ext", [".ogg", ".aac"])
+def test_pnd095_grabacion_larga_rechazada_antes_de_convertir(base_temporal, monkeypatch, tmp_path, ext):
+    monkeypatch.setattr(voces_propias, "_duracion_ms", lambda ruta: voces_propias.MAX_GRABACION_MS + 1)
+    conversiones = []
+    def convertir(origen, salida):
+        conversiones.append((origen, salida))
+        with open(salida, "wb") as f:
+            f.write(b"mp3 falso")
+    monkeypatch.setattr(voces_propias, "_convertir_a_mp3", convertir)
+    with pytest.raises(voces_propias.EntradaInvalida) as exc:
+        voces_propias.guardar_grabacion("acme", _Archivo("voz" + ext), str(tmp_path / "grabacion"))
+    assert exc.value.args[0] == voces_propias.MENSAJES["larga"]
+    assert conversiones == []
+    assert list((tmp_path / "grabacion").iterdir()) == []

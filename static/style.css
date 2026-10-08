@@ -1398,7 +1398,6 @@ input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
 .exp-reglas summary { cursor: pointer; font-size: .84rem; }
 .reglas-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr)); gap: .5rem .9rem; margin: .5rem 0; }
 .regla { display: flex; flex-direction: column; gap: .2rem; font-size: .76rem; }
-.regla-nombre code { font-size: .68rem; color: var(--muted); }
 .regla input[type="number"] { width: 100%; }
 .regla-sin { font-size: .72rem; color: var(--muted); display: inline-flex; align-items: center; gap: .3rem; }
 .exp-reglas-form .vacio { font-size: .74rem; padding-top: .2rem; }
@@ -1818,7 +1817,11 @@ kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 .3rem; fon
 .exp-pasos { border:1px solid var(--border); border-radius:12px; padding:1rem; margin-top:1rem; }
 /* display:flex pisaría el atributo hidden (misma trampa que .org-texto[hidden]): todo lo que
    el JS esconde con .hidden = true lleva su regla explícita. */
-.exp-tarjeta[hidden], .exp-barra[hidden], .exp-pasos[hidden], .exp-pasos [data-paso][hidden] { display:none; }
+.exp-tarjeta[hidden], .exp-barra[hidden], .exp-pasos[hidden], .exp-pasos [data-paso][hidden],
+.exp-pasos [data-solo-app][hidden], .exp-pasos [data-solo-no-app][hidden] { display:none; }
+/* Instalaciones de la app (2026-10-07): las URLs de tienda y el App ID en «Avanzado». */
+.exp-solo-app { margin-top:.8rem; }
+.exp-solo-app p { flex-basis:100%; margin:0; }
 .exp-pasos-nav { display:flex; gap:1rem; list-style:none; padding:0; margin:0 0 1rem; font-weight:600; color:var(--muted-2); }
 .exp-pasos-nav li { cursor:pointer; }
 .exp-pasos-nav li.activo { color:var(--accent-texto); }
@@ -2894,6 +2897,10 @@ body.panel-abierto { overflow: hidden; }
 @media (max-width: 760px) { .gpg-img { width: calc(50% - .25rem); } }
 .gpg-escena-cab .gpg-a-crear { margin-left: auto; }
 
+
+/* PND-095 (2026-10-07): acciones hermanas del radio; filtro oculta la tarjeta completa. */
+.au-voz-contenedor { position: relative; min-width: 0; }
+.au-voz-contenedor:has(.au-voz[hidden]) { display: none; }
 /* ── estilos/legado/09-catalogo-galeria-y-ficha-spec-2026-09-28.css ── */
 /* ============================================================
    Catálogo: galería y ficha (spec 2026-09-28 §10)

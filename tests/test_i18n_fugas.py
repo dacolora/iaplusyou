@@ -139,7 +139,7 @@ def test_bloqueo_cambio_forma_en_ingles_y_espanol_intacto(app_i18n, monkeypatch)
     verdad + una publicación orgánica en_cola solo para renderizar la página):
     en español (sin catálogo) tiene que salir BYTE a byte igual que antes de
     envolverla, y en inglés no puede dejar ninguna marca de español."""
-    monkeypatch.setattr(app_i18n.experimentos, "cargar", lambda cliente: [{"estado": "corriendo"}])
+    monkeypatch.setattr(app_i18n.experimentos, "contar_vivos", lambda cliente: 1)
     monkeypatch.setattr(app_i18n.organico, "listar", lambda cliente: [{"estado": "en_cola"}, {"estado": "en_cola"}])
 
     with idiomas.en_idioma("es"):

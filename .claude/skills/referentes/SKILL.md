@@ -104,3 +104,5 @@ antes de esto) sigue haciendo un solo video.
 Listados (revisión 2026-10-02, PND-006): si existe una copia del anuncio en el proyecto, se oculta su fila global en listar, opciones, familias, familias_frecuentes y los sugeridos que usan esos lectores. referente(cliente, id) conserva su visibilidad por id.
 
 PND-031/045 (2026-10-03): los enlaces internos de las fichas cierran su dialog antes de navegar. Apify devuelve estado/incompleto/aviso si termina sin SUCCEEDED y entrega resultados; el worker conserva aviso_trayendo y la fase final termina parcial, sin perder anuncios ni cambiar el cobro.
+
+PND-090 (2026-10-07, lote 5 B): MAX_FOTOS_PRODUCTO=2 es el tope compartido por ambos prompts deterministas y referencias_para (la salida normal es la misma). Las sesiones de Recrear, incluida su animación, llevan origen=recrear. por_ids devuelve exactamente la visibilidad por id de referente(), incluida biblioteca global y proyecto propio, en una consulta; no usa el filtro de listado que ocultaría copias globales por id.

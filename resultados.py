@@ -36,6 +36,7 @@ from typing import Optional
 import sqlalchemy as sa
 from flask_babel import gettext
 
+import app_tiendas
 import db
 import decisor
 import doctrina
@@ -469,6 +470,11 @@ def serie(carga):
     return out
 
 
+def _texto_marca(mensaje):
+    texto = mensaje or ""
+    return texto[:LARGO_MARCA - 1] + "…" if len(texto) > LARGO_MARCA else texto
+
+
 def marcas(carga):
     """Los días en que el motor actuó: eventos del periodo de los experimentos de la carga (veredictos,
     acciones, topes, escaladas, pausas…), los últimos MAX_MARCAS, en orden de fecha."""
@@ -483,10 +489,7 @@ def marcas(carga):
             .order_by(ev.c.creado_en.desc(), ev.c.id.desc()).limit(MAX_MARCAS)).all()
     out = []
     for creado_en, mensaje in reversed(filas):
-        texto = mensaje or ""
-        if len(texto) > LARGO_MARCA:
-            texto = texto[:LARGO_MARCA - 1] + "…"
-        out.append({"dia": creado_en[:10], "texto": texto})
+        out.append({"dia": creado_en[:10], "texto": _texto_marca(mensaje)})
     return out
 
 
@@ -991,6 +994,8 @@ def piezas(carga, reglas_cliente):
         escalon = pz.get("escalon_rescate") or 0
         out.append({
             "ep_id": ep_id, "experimento_id": ex["id"], "nombre": pz["nombre"], "pais": pz["pais"], "es_imagen": es_imagen,
+            # Apps: «iOS» / «Android» (la misma pieza tiene una fila por tienda); None en los demás.
+            "plataforma": app_tiendas.OS_META.get((pz.get("extra") or {}).get("plataforma")),
             "url_miniatura": pz.get("url_miniatura"), "url_video": pz.get("url_video"),
             "metrica": metrica, "serie": serie_p, "promedio": promedio,
             "gasto": round(dinero["gasto"], 2), "ctr": detalle["ctr"], "gancho": detalle["gancho"], "cpc": detalle["cpc"],
@@ -1104,14 +1109,17 @@ def pieza(cliente, ep_id, filtro, ahora_iso=None):
     pais_ex = next((p for p in ex.get("paises") or [] if p.get("pais") == pz.get("pais")), {})
     acciones = {"pieza_id": pz.get("pieza_id"), "url_imagen": pz.get("url_imagen"), "tipo": pz.get("tipo"),
                 "estado_experimento": ex.get("estado"),
-                "pais_experimento": {k: pais_ex.get(k) for k in ("pais", "estado", "meta_adset_id", "presupuesto_dia")}}
+                "pais_experimento": {k: pais_ex.get(k) for k in ("pais", "estado", "meta_adset_id", "meta_adsets", "presupuesto_dia")}}
+    eventos = _eventos_pieza(cliente, ep_id)
+    marcas_panel = [{"dia": ev["creado_en"][:10], "texto": _texto_marca(ev.get("mensaje"))}
+                    for ev in reversed(eventos[:MAX_MARCAS]) if ev.get("creado_en")]
     return dict(piezas(carga, proyectos.reglas_defecto(cliente))[0], **acciones, moneda=carga.moneda,
                 periodo=_periodo_json(carga.per), indicadores=indicadores(carga),
                 series={k: s[k] for k in ("dias", "gasto", "roas", "ctr", "cpc", "cpm", "frecuencia", "gancho", "moneda")},
                 curva=_curva(carga.dias_act, bool(pz.get("es_imagen"))), desgloses=desgloses(carga),
                 rankings=dict(extra.get("rankings_meta") or {}),
                 diagnostico=extra.get("diagnostico") if isinstance(extra.get("diagnostico"), dict) else None,
-                eventos=_eventos_pieza(cliente, ep_id), experimento={"id": ex["id"], "nombre": ex["nombre"]})
+                eventos=eventos, marcas=marcas_panel, experimento={"id": ex["id"], "nombre": ex["nombre"]})
 
 
 # ---------- todo junto ----------
@@ -1140,6 +1148,7 @@ def contexto(cliente, filtro, ahora_iso=None):
     return {
         "filtro": filtro, "query": a_query(filtro), "opciones": _opciones(carga), "periodo": _periodo_json(per),
         "moneda": carga.moneda, "indicadores": indic, "serie": serie_dia, "marcas": marcas_dia,
+        "metrica": "roas" if carga.datos.exps and all(_metrica_principal(e) == "roas" for e in carga.datos.exps) else "ctr",
         "embudo": embudo(carga, promedio_embudo(cliente)), "piezas": lista, "evolucion": lista[:EVOLUCION_PIEZAS],
         "desgloses": desglose, "paises": paises(carga), "experimentos": experimentos_tarjetas(carga),
         "generacion": gastos.total_entre(cliente, tablero.INICIO if per["es_todo"] else per["desde"], per["hasta"]),

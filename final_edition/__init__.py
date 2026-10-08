@@ -777,7 +777,10 @@ def producir_legado(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, 
             except Exception as e:
                 degradada = True
                 pista_musica = None
-                capa("musica", "propia" if propia else "fal/stable-audio", {"estilo": estilo}, estado="error", error=str(e))
+                pagado = float(getattr(e, "costo_usd", 0.0) or 0.0)
+                costo += pagado
+                capa("musica", "propia" if propia else "fal/stable-audio",
+                     {"estilo": estilo, "url": getattr(e, "url", None)}, pagado, estado="error", error=str(e))
 
         # 4. Texto en pantalla + 5. Render
         avisar(ETAPAS_FINAL[4][0])

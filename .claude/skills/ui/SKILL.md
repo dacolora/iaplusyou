@@ -97,7 +97,7 @@ con `document.hidden` y baja de ritmo (`intervaloSondeo`: 1,5 s → 3 s al minut
 alcance (anotado en el spec §7): el JS embebido a estáticos, Experimentos por fragmentos (**hecho el
 2026-10-03**: ver «Experimentos: armazón + fragmento»; Catálogo ya carga su galería y su ficha por fragmento desde
 2026-09-30: ver «Catálogo ecommerce y conectores»), el chequeo de Meta en la carga, los N+1 de Sprints/Experimentos
-(el de `experimentos.cargar` sigue: PND-134), el flujo viejo «Nueva idea».
+(el de últimas métricas en `experimentos.cargar` se retiró en PND-134, 2026-10-07), el flujo viejo «Nueva idea».
 
 **Experimentos: armazón + fragmento** (E2, 2026-10-03; skill `experimentos`): `#tab-experimentos` solo pinta el armazón
 (`_tab_experimentos.html`). Los resultados llegan por `fetch` a `exp_resultados` (fragmento `_exp_resultados.html`, con el filtro
@@ -122,3 +122,12 @@ Precios del compositor y clon (2026-10-02, PND-011/016): el JS recibe tarifas y 
 PND-028/031/044 (2026-10-03, lote 2): «Versión A» requiere una hija B real; los enlaces de los diálogos de Referentes cierran el diálogo antes de cambiar de pestaña. Experimentos conserva la selección por pieza/país al reconstruir la cuadrícula y cuenta cero casillas sin sustituirlo por el total. Pruebas renderizadas con Node; la revisión visual a 375 px sigue a cargo del integrador.
 
 PND-130/133 (2026-10-05, lote 4): en celular las cifras de Final edition colocan el icono encima para que la etiqueta use todo el ancho, sin cortar palabras: overflow-wrap normal solo dentro de @media max-width 760px; escritorio y .fe-flujo small conservan anywhere (revisión de Codex, 2026-10-05). El detalle remoto rechaza respuestas redirigidas (sesión vencida) antes de leer su HTML; conserva el aviso de error y no arranca sondeos. La revisión visual a 375 px la hace Claude.
+
+**Enlace directo a Crear (2026-10-07, PND-120):** `#creativeflowplus?cf=<id>` abre el detalle remoto también si la
+sesión queda fuera de las 24 tarjetas iniciales. El script del modal atiende carga y `hashchange`, valida el id y usa
+la ruta `cf_detalle` existente, con su guardia de proyecto. `tests/test_tarjetas_ligeras.py` ejecuta el script renderizado
+en Node con 30 sesiones y prueba 200/404 entre proyectos. La comprobación visual queda para Claude: Codex no abrió navegador.
+
+PND-095/136/100 (2026-10-07, lote 5 B): acciones de voz fuera del role=radio con contenedor; foco del filtro se restaura tras reemplazar el fragmento; el fondo del panel cierra solo fuera de sus límites; popstate y cambios de filtro dentro de la misma pestaña conservan scroll; exp-minimo anuncia cambios. Se retira .regla-nombre code y se regenera style.css. El mapa es documentación interna generada por AST; su barra sigue por catálogo. Verificación de código con Flask/Node y dobles; inspección visual a cargo de Claude (encargo sin navegadores).
+
+Correcciones del lote 5 (2026-10-08, pedido de Daniel): ESTRUCTURA.md y mapa_codigo.html conservan el mapa en llano de ecef5555 hasta la decisión PND-100. mapa_codigo_generar exige --salida aparte, solo lee fuentes versionadas y escapa también llaves en textos dinámicos; el estilo se compara con la plantilla del disco. El aviso exp-minimo y Usar ese total son hermanos dentro del único resumen vivo exp-resumen; el call de la plantilla coloca ambos juntos y anuncia el propio aviso, sin aria-live añadido. Las pruebas antiguas de modo oscuro y resumen único no se modifican.

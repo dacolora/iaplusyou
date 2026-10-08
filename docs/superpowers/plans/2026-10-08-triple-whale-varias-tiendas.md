@@ -344,10 +344,10 @@ def _anuncio_dia(cliente, tienda_id, desde, hasta, canal=None):
 - [ ] **Step 2:** reescribir en la skill `triple-whale` lo que cambió (tablas, funciones con firma nueva, «Todas»
   con MAX/SUMA y gasto duplicado, avisos sobre todas, atribución por país, rutas nuevas) con la fecha 2026-10-08 y el
   motivo (happyflops con una tienda por país).
-- [ ] **Step 3:** en `docs/pendientes.md` agregar `PND-146` (países europeos en `final_edition.tipos.PAISES` para
+- [ ] **Step 3:** en `docs/pendientes.md` agregar `PND-147` (países europeos en `final_edition.tipos.PAISES` para
   experimentos y finales; severidad `bloqueo de uso`; afecta `clientes en producción`; desde 2026-10-08; origen este
-  spec §13) y `PND-147` (varias cuentas publicitarias de Meta por proyecto en la conexión de Meta; `higiene`;
-  `no determinado`; 2026-10-08; spec §13). Comprobar antes que 146 y 147 están libres.
+  spec §13) y `PND-148` (varias cuentas publicitarias de Meta por proyecto en la conexión de Meta; `higiene`;
+  `no determinado`; 2026-10-08; spec §13). Comprobar antes que 147 y 148 están libres (renumerados del 146 y 147 al mezclar main el 2026-10-08, que ya usaba el 146).
 - [ ] **Step 4:** `venv/bin/python3 -m pytest -q` completo (incluye `slow`). Todo verde; si algo falla fuera del área,
   mirar si ya fallaba en `origin/main` antes de tocarlo y decirlo en el reporte.
 - [ ] **Step 5: commit** «Triple Whale varias tiendas: textos en inglés, skill y pendientes».

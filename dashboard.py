@@ -53,6 +53,7 @@ import llaves
 import alertas
 import cuentas
 import meta_conexion
+import app_tiendas
 import meta_agencia
 import meta_errores
 import flowplus_prompt
@@ -1951,7 +1952,20 @@ def _etiquetas_exp():
     }
 
 
-def _contexto_experimentos(cliente, con_elegibles=False, con_organico=True):
+def _contexto_motor_experimentos(cliente):
+    """Lo que el armazón y Configuración pintan sin cargar el fragmento."""
+    return {
+        "reglas_defecto_exp": decisor.REGLAS_DEFECTO,
+        "reglas_enteras_exp": decisor.ENTEROS,
+        "reglas_desactivables_exp": decisor.UMBRALES_DESACTIVABLES,
+        "etiquetas_reglas_exp": decisor.ETIQUETAS,
+        "grupos_reglas_exp": decisor.GRUPOS_REGLAS,
+        "reglas_cliente": proyectos.reglas_defecto(cliente),
+        "correo_notificaciones": proyectos.correo_notificaciones(cliente) or "",
+    }
+
+
+def _contexto_experimentos(cliente, con_elegibles=False, con_organico=True, gestion_id=None):
     """Lo que pintan la gestión de un experimento, sus propuestas y reglas, los aprendizajes y los anuncios
     sueltos (`_exp_gestionar.html`, `_exp_probar.html`, `_anuncios_sueltos.html`, `_aprendizajes.html`): el
     contexto de Experimentos que hasta E2 armaba `ver_cliente`, sacado a una función para que lo compartan la
@@ -1978,8 +1992,9 @@ def _contexto_experimentos(cliente, con_elegibles=False, con_organico=True):
     # con campaña ya creada en Meta) — evita 2 queries por cada experimento
     # ya cerrado/armando.
     experimentos_exp = experimentos.cargar(cliente)
+    gestion = experimentos_exp if gestion_id is None else [e for e in experimentos_exp if e["id"] == gestion_id]
     trabajos_exp = {}
-    for e in experimentos_exp:
+    for e in gestion:
         if e["estado"] == "lanzando":
             jid = tareas_exp.job_id_lanzar(cliente, e["id"])
             if trabajos.en_curso(jid):
@@ -1991,7 +2006,7 @@ def _contexto_experimentos(cliente, con_elegibles=False, con_organico=True):
     moneda_exp = (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
     # Bloque 4: propuestas pendientes por experimento (una consulta por
     # experimento con contador > 0), reglas y modos para los formularios.
-    propuestas_exp = {e["id"]: propuestas.pendientes(cliente, e["id"]) for e in experimentos_exp if e["propuestas_pendientes"]}
+    propuestas_exp = {e["id"]: propuestas.pendientes(cliente, e["id"]) for e in gestion if e["propuestas_pendientes"]}
     reglas_cliente = proyectos.reglas_defecto(cliente)
     # Una sola consulta (solo caché) para atribución y objetivo sugeridos.
     atribucion_sug = experimentos.atribucion_sugerida(cliente)
@@ -2004,6 +2019,7 @@ def _contexto_experimentos(cliente, con_elegibles=False, con_organico=True):
         "objetivos_exp": meta_campaign.OBJETIVOS_VALIDOS_FASE1,
         "objetivo_exp_sugerido": experimentos.objetivo_sugerido(cliente, atribucion_sug),
         "nombres_objetivo_exp": NOMBRES_OBJETIVO_EXP,
+        "app_id_guardado": meta_conexion.cargar_app_anunciada(cliente),
         "minimo_diario_exp": PRESUPUESTO_MINIMO_DIARIO.get(moneda_exp, 1),
         "tope_campana_min_exp": lanzador.minimo_tope_campana(moneda_exp),
         "moneda_exp": moneda_exp,
@@ -2014,7 +2030,7 @@ def _contexto_experimentos(cliente, con_elegibles=False, con_organico=True):
         "etiquetas_reglas_exp": decisor.ETIQUETAS,
         "grupos_reglas_exp": decisor.GRUPOS_REGLAS,
         "reglas_cliente": reglas_cliente,
-        "reglas_efectivas_exp": {e["id"]: decisor.reglas_efectivas(reglas_cliente, e["reglas"]) for e in experimentos_exp},
+        "reglas_efectivas_exp": {e["id"]: decisor.reglas_efectivas(reglas_cliente, e["reglas"]) for e in gestion},
         "correo_notificaciones": proyectos.correo_notificaciones(cliente) or "",
         "aprendizajes_exp": proyectos.aprendizajes(cliente),
         "precio_diagnostico": gastos.estimar("diagnostico_pieza")["texto"],
@@ -2123,8 +2139,8 @@ def ver_cliente(cliente):
     # «Nuevo experimento» (`exp_nuevo`). Lo orgánico ya viene en `fe_ctx`, y las piezas elegibles (la galería) ya
     # no viajan en esta página: las pide `exp_nuevo`.
     # (El hotfix e8d433a del 2026-10-03 las devolvía mientras la pestaña vieja pintaba la galería; E2 la reemplaza.)
-    ctx_exp = _contexto_experimentos(cliente, con_organico=False)
-    ctx_meta = _contexto_meta(cliente, ctx_exp["experimentos"])
+    ctx_exp = _contexto_motor_experimentos(cliente)
+    ctx_meta = _contexto_meta(cliente)
     tiendas_cliente = tiendas.listar(cliente)
     triple_whale_conectado = triple_whale_tiendas.obtener(cliente)
     # Las tarjetas de tiendas (spec 2026-10-08 §6.2): país y bandera en el idioma de quien mira.
@@ -2250,7 +2266,7 @@ def _llaves_visibles(tarjetas, rol):
     return tarjetas if rol == "admin" else []
 
 
-PLATAFORMAS_VERTICALES = {"instagram", "tiktok"}
+from plataformas import PLATAFORMAS_VERTICALES
 
 
 def _aspect_ratio_para_plataformas(platforms):
@@ -3430,7 +3446,8 @@ PRESUPUESTO_MINIMO_DIARIO = presupuesto_experimentos.PRESUPUESTO_MINIMO_DIARIO
 NOMBRES_OBJETIVO_EXP = {"OUTCOME_SALES": idiomas.N_("Compras (requiere Pixel)"),
                         "OUTCOME_TRAFFIC": idiomas.N_("Tráfico (clics al enlace)"),
                         "OUTCOME_ENGAGEMENT": idiomas.N_("Interacción"),
-                        "OUTCOME_LEADS": idiomas.N_("Clientes potenciales")}
+                        "OUTCOME_LEADS": idiomas.N_("Clientes potenciales"),
+                        "OUTCOME_APP_PROMOTION": idiomas.N_("Instalaciones de la app")}
 
 PROVEEDORES_SWAP_IMAGEN = ("nano_banana", "nano_banana_fal", "qwen_edit", "nano_banana_pro_ultra", "seedream_v5_pro")
 PROVEEDORES_SWAP_VIDEO = (
@@ -3972,8 +3989,8 @@ def _bloqueo_cambio_forma(cliente, experimentos_lista=None):
     ngettext/gettext con %(num)s / %(partes)s para que el inglés salga sin
     perder la concordancia singular/plural — el español (locale por defecto,
     sin catálogo) sale idéntico a como salía con los f-strings de antes."""
-    lista = experimentos.cargar(cliente) if experimentos_lista is None else experimentos_lista
-    vivos = sum(1 for e in lista if e.get("estado") in experimentos.ESTADOS_VIVOS)
+    vivos = (experimentos.contar_vivos(cliente) if experimentos_lista is None else
+             sum(1 for e in experimentos_lista if e.get("estado") in experimentos.ESTADOS_VIVOS))
     en_curso = sum(1 for p in organico.listar(cliente) if p.get("estado") in ("en_cola", "publicando"))
     if not vivos and not en_curso:
         return None
@@ -5268,7 +5285,7 @@ def exp_resultados(cliente):
     experimento (sus acciones siguen siendo las rutas POST de siempre)."""
     filtro = resultados.filtro_de(request.args)
     r = resultados.contexto(cliente, filtro)
-    ctx = _contexto_experimentos(cliente)
+    ctx = _contexto_experimentos(cliente, gestion_id=filtro.experimento_id)
     elegido = next((e for e in ctx["experimentos"] if e["id"] == filtro.experimento_id), None)
     # Las piezas elegibles solo viajan cuando algo del fragmento las pinta: el «Agregar pieza» de la gestión de un
     # experimento en armado, o el «Meter en experimento» / «Probar en Meta» de un anuncio suelto que sigue en cola.
@@ -5288,6 +5305,9 @@ def exp_resultados(cliente):
 
 
 @app.route("/cliente/<cliente>/experimentos/pieza/<int:ep_id>")
+@trabajos.con_vivos_precargados
+@experimentos.con_lecturas_memorizadas
+@catalogo_productos.con_lecturas_memorizadas
 def exp_pieza(cliente, ep_id):
     """Panel de una pieza (E2): fragmento que se abre sobre el centro de resultados. Solo busca entre las piezas de
     `cliente`: la de otro proyecto (o una que no existe) es un 404. Solo cuenta el periodo del filtro."""
@@ -5328,6 +5348,9 @@ def exp_crear(cliente):
     # filas del mismo país y un conjunto huérfano en Meta (revisión final de E2, 2026-10-03).
     codigos = list(dict.fromkeys(p for p in request.form.getlist("paises") if p in fe_tipos.PAISES))
     destino = (request.form.get("destino_url") or "").strip()
+    if objetivo == "OUTCOME_APP_PROMOTION":
+        flash(gettext("Para instalaciones de la app usa «Nuevo experimento»."), "error")
+        return volver
     try:
         dias = int(request.form.get("dias") or 7)
         tope = float(request.form.get("tope_total") or 0)
@@ -5488,17 +5511,43 @@ def exp_probar(cliente):
     if not combinaciones:
         flash(gettext("Marca al menos una combinación pieza × país en el paso de revisar."), "error")
         return volver
+    # Instalaciones de la app (spec 2026-10-07): en vez de URL de destino van
+    # las URLs de tienda (al menos una) y el App ID de Meta de la app anunciada.
+    es_app = objetivo == "OUTCOME_APP_PROMOTION"
+    tiendas = {}
+    if es_app:
+        try:
+            tiendas = app_tiendas.validar_urls(request.form.get("app_ios_url"), request.form.get("app_android_url"))
+        except ValueError as e:
+            flash(str(e), "error")
+            return volver
+        destino = next(iter(tiendas.values()))   # solo para que el resto de la app muestre algo
     if (objetivo not in meta_campaign.OBJETIVOS_VALIDOS_FASE1 or not codigos
-            or not destino.startswith(("http://", "https://")) or not (1 <= dias <= 90) or tope <= 0
+            or (not es_app and not destino.startswith(("http://", "https://"))) or not (1 <= dias <= 90) or tope <= 0
             or not (13 <= edad_min <= edad_max <= 65)):
-        flash(gettext("Faltan datos: objetivo, al menos un país, días (1–90), tope, edades (13–65) y una URL de destino http(s)."), "error")
+        if es_app:
+            flash(gettext("Faltan datos: objetivo, al menos un país, días (1–90), tope y edades (13–65)."), "error")
+        else:
+            flash(gettext("Faltan datos: objetivo, al menos un país, días (1–90), tope, edades (13–65) y una URL de destino http(s)."), "error")
         return volver
     minimo = PRESUPUESTO_MINIMO_DIARIO.get(moneda, 1)
-    bajos = [p["pais"] for p in paises if p["presupuesto_dia"] < minimo]
-    if bajos:
-        flash(gettext("El presupuesto diario no alcanza el mínimo de Meta (%(minimo)s %(moneda)s) en: %(paises)s.",
-                      minimo=minimo, moneda=moneda, paises=", ".join(bajos)), "error")
-        return volver
+    if es_app:
+        # Cada país se reparte en partes iguales entre sus tiendas, en centavos
+        # como el lanzador: cada parte (un conjunto en Meta) tiene que alcanzar el mínimo.
+        n_tiendas = len(tiendas)
+        bajos = [p["pais"] for p in paises
+                 if lanzador.centavos(p["presupuesto_dia"], moneda) // n_tiendas < lanzador.centavos(minimo, moneda)]
+        if bajos:
+            flash(gettext("El presupuesto diario de cada país se reparte entre %(n)s tiendas y cada parte tiene que "
+                          "alcanzar el mínimo de Meta (%(minimo)s %(moneda)s) en: %(paises)s.",
+                          n=n_tiendas, minimo=minimo, moneda=moneda, paises=", ".join(bajos)), "error")
+            return volver
+    else:
+        bajos = [p["pais"] for p in paises if p["presupuesto_dia"] < minimo]
+        if bajos:
+            flash(gettext("El presupuesto diario no alcanza el mínimo de Meta (%(minimo)s %(moneda)s) en: %(paises)s.",
+                          minimo=minimo, moneda=moneda, paises=", ".join(bajos)), "error")
+            return volver
     # E2 (R4): el reparto no puede pasar del total (la comprobación es del servidor, no del navegador).
     error = _error_de_presupuesto(moneda, codigos, paises, dias)
     if error:
@@ -5511,6 +5560,17 @@ def exp_probar(cliente):
     if atribucion is not None and atribucion not in experimentos.ATRIBUCIONES:
         flash(gettext("La atribución tiene que ser pixel, tienda o ninguna."), "error")
         return volver
+    datos_app = None
+    if es_app:
+        if atribucion is None:
+            atribucion = "ninguna"   # una instalación no es una compra: nada que atribuir salvo que la persona elija
+        app_id = (request.form.get("app_id") or meta_conexion.cargar_app_anunciada(cliente) or "").strip()
+        try:
+            app_id = meta_conexion.validar_app_anunciada(app_id)   # se guarda solo si la creación sale bien
+        except meta_conexion.MetaConexionError as e:
+            flash(str(e), "error")
+            return volver
+        datos_app = {**{f"{p}_url": u for p, u in tiendas.items()}, "app_id": app_id}
     if objetivo == "OUTCOME_SALES" and (atribucion or experimentos.atribucion_sugerida(cliente)) != "pixel":
         flash(gettext("Optimizar por compras requiere el Pixel activo y atribución pixel: pulsa «Comprobar Pixel» en "
                       "Configuración, o elige el objetivo de tráfico."), "error")
@@ -5518,12 +5578,14 @@ def exp_probar(cliente):
     n_piezas = len({pid for pid, _ in combinaciones})
     nombre = (request.form.get("nombre") or "").strip()[:200] or nombre_experimento_automatico(n_piezas, codigos)
     datos = dict(nombre=nombre, paises=paises, objetivo_meta=objetivo, dias=dias, tope_total=tope, destino_url=destino,
-                 moneda=moneda, edad_min=edad_min, edad_max=edad_max, modo=modo, atribucion=atribucion)
+                 moneda=moneda, edad_min=edad_min, edad_max=edad_max, modo=modo, atribucion=atribucion, app=datos_app)
     try:
         eid = experimentos.crear_con_piezas(cliente, datos, combinaciones)
-    except experimentos.ErrorCombinacion as e:
+    except (experimentos.ErrorCombinacion, ValueError) as e:
         flash(str(e), "error")
         return volver
+    if es_app:
+        meta_conexion.guardar_app_anunciada(cliente, datos_app["app_id"])
     job_id = tareas_exp.job_id_lanzar(cliente, eid)
     arranco = trabajos.encolar(job_id, "exp_lanzar", {"cliente": cliente, "experimento_id": eid},
                                cliente=cliente, duracion_estimada=120, etapas=lanzador.ETAPAS_LANZAR, max_intentos=1)
@@ -5544,6 +5606,8 @@ def _agregar_pieza_validada(cliente, experimento_id, pieza_id, pais):
         return gettext("Ese experimento no existe.")
     if ex["estado"] not in ("armando", "error") or ex["meta_campaign_id"]:
         return gettext("Ese experimento ya no acepta piezas nuevas.")
+    if ex["objetivo_meta"] == "OUTCOME_APP_PROMOTION":
+        return gettext("En un experimento de instalaciones de la app las piezas se eligen al crearlo.")
     candidata = next((p for p in experimentos.elegibles(cliente) if p["pieza_id"] == pieza_id), None)
     if not candidata:
         return gettext("Esa pieza no está disponible (o no está lista).")
@@ -5690,6 +5754,19 @@ def exp_presupuesto(cliente, eid):
     if not math.isfinite(presupuesto_dia) or presupuesto_dia < minimo:
         flash(gettext("El presupuesto diario mínimo es %(minimo)s %(moneda)s.", minimo=minimo, moneda=moneda), "error")
         return _volver_exp(cliente, eid)
+    ex = experimentos.obtener(cliente, eid)
+    if ex and ex["objetivo_meta"] == "OUTCOME_APP_PROMOTION":
+        # Igual que exp_probar: el total del país se reparte entre sus
+        # conjuntos (uno por tienda) y es cada parte la que Meta compara con
+        # su mínimo — validar el total dejaría pasar partes que Meta rechaza.
+        p_ex = next((p for p in ex.get("paises", []) if p["pais"] == pais), None)
+        n_partes = len(lanzador._adsets_de_pais(p_ex)) if p_ex else 0
+        n_partes = n_partes or len(experimentos.plataformas_de(ex.get("extra"))) or 1
+        if lanzador.centavos(presupuesto_dia, moneda) // n_partes < lanzador.centavos(minimo, moneda):
+            flash(gettext("El presupuesto diario de %(pais)s se reparte entre %(n)s tiendas y cada parte tiene que "
+                          "alcanzar el mínimo de Meta (%(minimo)s %(moneda)s).",
+                          pais=pais, n=n_partes, minimo=minimo, moneda=moneda), "error")
+            return _volver_exp(cliente, eid)
     with _ENV_LOCK:
         try:
             with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
@@ -5987,12 +6064,14 @@ def _volver_org(cliente, ep_id=None):
     volver = request.form.get("volver")
     if volver in ("final", "creativeflowplus"):
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor=volver))
-    return _volver_exp(cliente, experimentos.experimento_de_pieza(cliente, ep_id) if ep_id else None)
+    return _volver_exp(cliente, experimentos.experimento_de_pieza(cliente, ep_id)
+                       if isinstance(ep_id, int) and 0 < ep_id <= 2 ** 63 - 1 else None)
 
 
 def _int_form(nombre):
     try:
-        return int(request.form.get(nombre) or 0) or None
+        valor = int(request.form.get(nombre) or 0)
+        return valor if 0 < valor <= 2 ** 63 - 1 else None
     except ValueError:
         return None
 
@@ -8289,12 +8368,7 @@ def cf_crear_video(cliente):
 
 def _encolar_director(cliente, cf_id, auto_lanzar=False, prioridad=flowplus_lanzar.PRIORIDAD_NORMAL):
     """Encola la compilación del prompt (gratis, idempotente: max_intentos=1)."""
-    return trabajos.encolar(
-        tareas_director.job_id(cliente, cf_id), "flowplus_director",
-        {"cliente": cliente, "cf_id": cf_id, "auto_lanzar": bool(auto_lanzar), "prioridad": int(prioridad)},
-        cliente=cliente, duracion_estimada=tareas_director.DURACION_ESTIMADA, etapas=tareas_director.ETAPAS_DIRECTOR,
-        max_intentos=1, prioridad=prioridad,
-    )
+    return tareas_director.encolar(cliente, cf_id, auto_lanzar=auto_lanzar, prioridad=prioridad)
 
 
 @app.route("/cliente/<cliente>/creative_flow/<cf_id>/prompt", methods=["POST"])

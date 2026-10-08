@@ -304,10 +304,21 @@ def agregar_comentarios(cliente, estudio_id, fuente, lista):
     with db.conectar() as con:
         if not _fila(con, db.estudio, estudio_id, cliente):
             raise ErrorDatos(gettext("Ese estudio no existe."))
+        historicos = set()
+        if fuente == "reddit":
+            _bloquear(con, db.estudio, estudio_id, cliente)
+            historicos = {(f.fuente_id, f.url) for f in con.execute(
+                sa.select(db.comentario.c.fuente_id, db.comentario.c.url).where(
+                    db.comentario.c.cliente == cliente, db.comentario.c.estudio_id == estudio_id,
+                    db.comentario.c.fuente == "reddit")) if not f.fuente_id.startswith(("t1_", "t3_"))}
         for c in lista or []:
             texto = _texto((c or {}).get("texto"))
             fuente_id = _texto((c or {}).get("fuente_id"), 120)
             if not texto or not fuente_id:
+                continue
+            if (fuente == "reddit" and fuente_id.startswith(("t1_", "t3_"))
+                    and c.get("url") and (fuente_id[3:], _texto(c["url"], 500)) in historicos):
+                repetidos += 1
                 continue
             r = con.execute(db.comentario.insert().prefix_with("OR IGNORE").values(
                 cliente=cliente, creado_en=ahora, actualizado_en=ahora, estudio_id=estudio_id, fuente=fuente,

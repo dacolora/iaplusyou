@@ -154,6 +154,33 @@ def _app_obligatoria(cliente, para_que):
     return app
 
 
+# ---------- app anunciada por el proyecto: clientes/<cliente>/meta_app_anunciada.json ----------
+
+def _path_app_anunciada(cliente):
+    return os.path.join(_dir(cliente), "meta_app_anunciada.json")
+
+
+def cargar_app_anunciada(cliente):
+    """App ID de Meta de la app que se anuncia (Instalaciones de la app); None si no hay.
+    No es `meta_app.json`: esa es la app con la que Creatv inicia sesión."""
+    datos = _leer(_path_app_anunciada(cliente))
+    return (datos or {}).get("app_id") or None
+
+
+def validar_app_anunciada(app_id):
+    """Devuelve el App ID limpio o levanta MetaConexionError. Solo dígitos
+    ASCII: `isdigit()` solo acepta también «٣» o «²»."""
+    valor = str(app_id or "").strip()
+    if not (valor.isascii() and valor.isdigit() and 5 <= len(valor) <= 20):
+        raise MetaConexionError(gettext("El App ID de Meta son solo números (lo encuentras en Meta for Developers)."))
+    return valor
+
+
+def guardar_app_anunciada(cliente, app_id):
+    valor = validar_app_anunciada(app_id)
+    _escribir_atomico(_path_app_anunciada(cliente), {"app_id": valor})
+
+
 def redirect_uri():
     return _env_obligatoria(
         "META_REDIRECT_URI",

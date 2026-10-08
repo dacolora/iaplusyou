@@ -94,3 +94,7 @@ PND-108 (revisión 2026-10-02): si la primera pasada es válida y solo tiene err
 PND-039 (2026-10-03): derivaciones guarda la voz original por destino en el item de regeneración y la pasa como opción explícita al encolar final_producir; funciona tanto con la producción del editor como con la legada, que ya respetaban voz explícita.
 
 PND-014 (2026-10-05): sugerir_descripcion acepta on_usage; lo llama después de recibir Claude y antes de leer content. La ayuda de Crear registra con ese callback bajo _creatv y usa max_retries=0. Topes existentes requieren evaluación real (PND-141), sin cambiar el botón.
+
+PND-144 (Codex, 2026-10-07): obtener_pista transporta costo_usd y URL fal con PistaPagadaError en fallos de descarga, R2 o manifest. Producción del editor y legada conservan ambos en la capa degradada y suman el importe al gasto de su tarea. La URL no es una garantía de conservación permanente del proveedor.
+
+PND-144/146 (correcciones de lote 5, 2026-10-08): las pruebas comparan el gasto final con la suma de capas, incluida la pista pagada fallida. PistaPagadaError transporta el costo y la URL, pero no garantiza caché: otro intento puede pagar otra pista. Los caminos aún sin registro seguro están en PND-146 y se dejan para lote 6.

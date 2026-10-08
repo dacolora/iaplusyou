@@ -137,9 +137,9 @@
     // una acción de Experimentos → «#experimentos?exp=…») cambia solo el hash: sin esto la
     // pestaña no cambiaba estando ya en la página. Un hash que no es
     // pestaña (#alta-sprint…) se ignora.
-    function desdeUbicacion() {
+    function desdeUbicacion(ev) {
       var t = resolver(location.hash.replace('#', '').split('?')[0]);
-      if (paneles[t]) activar(t, true);
+      if (paneles[t]) activar(t, !(ev && ev.type === 'popstate') && !paneles[t].classList.contains('activo'));
     }
     window.addEventListener('hashchange', desdeUbicacion);
     window.addEventListener('popstate', desdeUbicacion);

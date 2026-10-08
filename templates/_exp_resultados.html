@@ -16,7 +16,7 @@
 {# Tarjeta de la evolución de una pieza (04): abre su panel. #}
 {% macro evolucion(p) %}
 <button type="button" class="cr-tarjeta cr-evolucion-pieza cr-v-{{ p.veredicto.clase }}" data-cr-pieza="{{ url_pieza(p.ep_id) }}">
-  <span class="cr-tarjeta-cab"><strong class="cr-pieza-nombre">{{ p.nombre }}</strong>{{ veredicto(p.veredicto) }}</span>
+  <span class="cr-tarjeta-cab"><strong class="cr-pieza-nombre">{{ p.nombre }}</strong>{% if p.plataforma %} <span class="tag-estado" title="{{ _('Tienda de la app') }}">{{ p.plataforma }}</span>{% endif %}{{ veredicto(p.veredicto) }}</span>
   <small class="cr-muted">{{ paises_fe.get(p.pais, {}).get('bandera', '') }} {{ p.pais }} · {{ _('ROAS diario') if p.metrica == 'roas' else _('CTR diario') }}</small>
   <svg class="cr-evolucion-grafico" data-cr-evolucion='{{ {"serie": p.serie, "promedio": p.promedio, "metrica": p.metrica}|tojson }}' viewBox="0 0 300 56" role="img" aria-label="{{ _('Evolución de %(nombre)s', nombre=p.nombre) }}"></svg>
   <span class="cr-historia">{{ p.historia|join(' · ') if p.historia else _('Esperando evidencia para el diagnóstico') }}</span>
@@ -137,13 +137,13 @@
   <div class="cr-metricas" role="group" aria-label="{{ _('Métrica de la línea') }}">
     <span class="cr-leyenda-barra">{{ _('Gasto') }}</span>
     {% for k, n in [('ctr', _('CTR')), ('roas', _('ROAS')), ('cpc', _('CPC')), ('cpm', _('CPM')), ('frecuencia', _('Frecuencia')), ('gancho', _('Gancho'))] %}
-    <button type="button" class="cr-chip cr-chip-metrica{% if loop.first %} activo{% endif %}" data-cr-metrica="{{ k }}" aria-pressed="{{ 'true' if loop.first else 'false' }}">{{ n }}</button>
+    <button type="button" class="cr-chip cr-chip-metrica{% if k == r.metrica %} activo{% endif %}" data-cr-metrica="{{ k }}" aria-pressed="{{ 'true' if k == r.metrica else 'false' }}">{{ n }}</button>
     {% endfor %}
   </div>
   {% endcall %}
   <div class="cr-tarjeta cr-grafico-caja">
     {% if r.hay_detalle %}
-    <div class="cr-grafico" data-cr-grafico="dia" data-metrica="ctr" role="img" aria-label="{{ _('Gasto diario en barras y la métrica elegida en línea') }}"></div>
+    <div class="cr-grafico" data-cr-grafico="dia" data-metrica="{{ r.metrica }}" role="group" aria-label="{{ _('Gasto diario en barras y la métrica elegida en línea') }}"></div>
     {% if r.marcas %}<p class="cr-nota cr-nota-marcas"><span class="cr-marca-muestra" aria-hidden="true"></span> {{ _('punteadas: días en que el motor actuó (pasa el mouse para ver qué hizo)') }}</p>{% endif %}
     {% else %}<p class="cr-vacio">{{ _('Cargando el detalle de Meta…') if r.piezas else _('Sin datos en este periodo') }}</p>{% endif %}
   </div>
@@ -197,7 +197,7 @@
         <tr class="cr-fila-{{ p.veredicto.clase }}" data-cr-pieza="{{ url_pieza(p.ep_id) }}">
           <td><button type="button" class="cr-pieza-enlace" data-cr-pieza="{{ url_pieza(p.ep_id) }}">
             {% if p.url_miniatura or (p.es_imagen and p.url_video) %}<img class="cr-mini" src="{{ p.url_miniatura or p.url_video }}" alt="" loading="lazy">{% else %}<span class="cr-mini cr-mini-video" aria-hidden="true">▶</span>{% endif %}
-            <span class="cr-pieza-texto"><span class="cr-pieza-nombre">{{ p.nombre }}</span>{{ veredicto(p.veredicto) }}</span>
+            <span class="cr-pieza-texto"><span class="cr-pieza-nombre">{{ p.nombre }}</span>{% if p.plataforma %} <span class="tag-estado" title="{{ _('Tienda de la app') }}">{{ p.plataforma }}</span>{% endif %}{{ veredicto(p.veredicto) }}</span>
           </button></td>
           <td>{{ paises_fe.get(p.pais, {}).get('bandera', '') }} {{ p.pais }}</td>
           <td class="cr-cifra">{{ valor(p.gasto, 'dinero', corto=true) }}</td>
