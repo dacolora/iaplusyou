@@ -88,7 +88,7 @@ VIDEO = {
         "formatos": ("9:16", "16:9", "1:1"),
         "max_videos": 0,
         "audio_nativo": {"parametro": "sound", "recargo_usd_s": 0.028},
-        "nota": N_("Hasta 7 imágenes. De un video usa solo un fotograma. Movimiento y realismo de personas muy buenos. Hasta 15 s. El sonido de la escena cuesta 0,028 USD/s más (ya incluido en el estimado)."),
+        "nota": N_("Hasta 7 imágenes. De un video usa solo un fotograma. Movimiento y realismo de personas muy buenos. Hasta 15 s. El sonido de la escena cobra un recargo por segundo (ya incluido en el estimado)."),
     },
     "seedance25": {
         "nombre": N_("Seedance 2.5"),

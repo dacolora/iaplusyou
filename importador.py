@@ -64,6 +64,7 @@ import generador_prompts
 import idiomas
 import prompt_swap
 import tiendas
+from cobros import libro
 from conectores import csv_excel
 from conectores import url as conector_url
 from conectores.base import ErrorConector
@@ -478,6 +479,20 @@ def _id_activo_disponible(cliente, nombre, fuente_id, producto_id):
     return candidato
 
 
+def _regla_si_hay_saldo(cliente, nombre, descripcion, categoria):
+    """La regla de fidelidad la escribe Claude y se cobra al proyecto (cobros,
+    spec 2026-10-08 §5). Un proyecto que cobra sin saldo para ella se queda sin
+    regla, igual que cuando Claude no la puede escribir: la sincronización de la
+    tienda (periódica, exenta del respaldo del worker) sigue y la persona puede
+    escribirla a mano después. Un proyecto que no cobra no cambia."""
+    try:
+        libro.exigir(cliente, gastos.TARIFAS["regla_producto"])
+    except libro.SaldoInsuficiente:
+        log.info("%s sin saldo: «%s» queda sin regla de fidelidad", cliente, nombre)
+        return ""
+    return generador_prompts.regla_fidelidad(nombre, descripcion, categoria, idiomas.de_proyecto(cliente))
+
+
 def vincular_activo(cliente, producto_id, forzar_fotos=False, errores=None):
     """Liga el producto (fila `producto`) a un activo del catálogo de Crear.
     Devuelve el `activo_id` (None si no se pudo). Con `extra.variantes`
@@ -551,8 +566,7 @@ def vincular_activo(cliente, producto_id, forzar_fotos=False, errores=None):
             return None
         if fallidas:
             errores.append(_aviso(prod, gettext("%(n)s foto(s) no se pudieron descargar.", n=fallidas)))
-        regla = generador_prompts.regla_fidelidad(nombre, descripcion, prod.get("categoria") or "",
-                                                   idiomas.de_proyecto(cliente))
+        regla = _regla_si_hay_saldo(cliente, nombre, descripcion, prod.get("categoria") or "")
         if regla:
             # Claude respondió (una regla vacía es el fallback sin llamada o
             # con error, que no cobra). Tarifa fija: el SDK no devuelve el

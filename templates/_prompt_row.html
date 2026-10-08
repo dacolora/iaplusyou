@@ -8,7 +8,7 @@
         {% if p.aspect_ratio in ("9:16", "3:4", "2:3") %}{{ _('vertical') }}{% else %}{{ _('horizontal') }}{% endif %} {{ p.aspect_ratio }}
       </span>
       <span class="costo-mini">
-        {% if p.credits is not none %}{{ _('~%(cr)s cr imagen ($%(usd)s)', cr="%.2f"|format(p.credits), usd="%.2f"|format(p.usd)) }}{% else %}{{ _('costo desconocido') }}{% endif %}
+        {% if p.credits is not none %}{{ _('~%(cr)s cr imagen ($%(usd)s)', cr="%.2f"|format(p.credits), usd="%.2f"|format(p.usd|precio)) }}{% else %}{{ _('costo desconocido') }}{% endif %}
       </span>
       {% for pl in p.platforms %}
       <span class="plataforma-chip">{{ pl }}</span>

@@ -49,7 +49,7 @@
   {% if completar_estimado.avatares and not trabajo_completar and not estudio.archivado %}
   <form method="post" action="{{ url_for('nicho.completar', cliente=cliente, eid=estudio.id) }}" class="inline" data-costo="{{ completar_estimado.texto }}"
         onsubmit='return confirm({{ _("Completar con Claude lo que les falta a estos avatares cuesta aprox. %(costo)s. ¿Seguimos?", costo="__C__")|tojson }}.replace("__C__", this.dataset.costo));'>
-    <input type="hidden" name="total_visto" value="{{ completar_estimado.usd }}">
+    <input type="hidden" name="total_visto" value="{{ completar_estimado.usd|precio }}">
     <button type="submit" class="btn-sm">{{ ngettext('Completar %(num)s incompleto · ≈ %(costo)s', 'Completar %(num)s incompletos · ≈ %(costo)s', completar_estimado.avatares, costo=completar_estimado.texto) }}</button>
   </form>
   {% endif %}

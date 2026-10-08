@@ -5,7 +5,7 @@
 <a class="kpi-tile kpi-tile-enlace" href="#settings" data-ir-tab="settings" title="{{ _('Videos, imágenes, guiones, finales y textos con IA pagados desde el inicio; detalle en Configuración › Gasto') }}">
   <span>{{ _('Generación total') }}</span>
   <strong>{{ (gen.total if gen else 0) | usd }}</strong>
-  <small>{% if gen and gen.n %}{{ ngettext('%(num)s cobro(s) a proveedores →', '%(num)s cobro(s) a proveedores →', gen.n) }}{% else %}{{ _('sin generación pagada') }}{% endif %}</small>
+  <small>{% if gen and gen.n %}{% if ver_cobrado() %}{{ ngettext('%(num)s cobro →', '%(num)s cobros →', gen.n) }}{% else %}{{ ngettext('%(num)s cobro(s) a proveedores →', '%(num)s cobro(s) a proveedores →', gen.n) }}{% endif %}{% else %}{{ _('sin generación pagada') }}{% endif %}</small>
 </a>
 {% endmacro %}
 

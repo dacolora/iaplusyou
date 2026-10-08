@@ -1,0 +1,284 @@
+"""El cobro se escribe en la misma puerta que el costo (spec §3)."""
+import sqlalchemy as sa
+
+
+def _movs(db):
+    with db.conectar() as con:
+        return con.execute(sa.select(db.movimiento_saldo).order_by(db.movimiento_saldo.c.id)).all()
+
+
+def test_registrar_cobra_si_el_proyecto_cobra(base_temporal):
+    import gastos
+    from cobros import libro
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    gid = gastos.registrar("acme", "video", 1.0, "video:1:t1")
+    (m,) = _movs(base_temporal)
+    assert (m.tipo, m.milesimas, m.gasto_id) == ("cobro", -1500, gid)
+
+
+def test_registrar_no_toca_un_proyecto_que_no_cobra(base_temporal):
+    import gastos
+    gastos.registrar("acme", "video", 1.0, "video:1:t1")
+    assert _movs(base_temporal) == []
+
+
+def test_corregir_el_monto_recalcula_el_cobro(base_temporal):
+    import gastos
+    from cobros import libro
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    gastos.registrar("acme", "final", 0.2, "final:1:t1")
+    gastos.registrar("acme", "final", 0.4, "final:1:t1")
+    assert [m.milesimas for m in _movs(base_temporal)] == [-600]
+
+
+def test_entregado_false_no_cobra_y_avisa(base_temporal, monkeypatch):
+    import gastos
+    from cobros import avisos, libro
+    vistos = []
+    monkeypatch.setattr(avisos, "pieza_no_cobrada", lambda c, m, k: vistos.append((c, m, k)))
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    gastos.registrar_seguro("acme", "video", 1.0, "video:1:t1", entregado=False)
+    (m,) = _movs(base_temporal)
+    assert (m.tipo, m.milesimas) == ("no_cobrado", 0)
+    assert vistos == [("acme", 1500, "video")]
+
+
+def test_si_el_cobro_falla_el_gasto_queda(base_temporal, monkeypatch):
+    import gastos
+    from cobros import avisos, libro
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    monkeypatch.setattr(libro, "cobrar_gasto", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("x")))
+    admin = []
+    monkeypatch.setattr(avisos, "admin", lambda *a, **k: admin.append(a))
+    gid = gastos.registrar("acme", "video", 1.0, "video:1:t1")
+    with base_temporal.conectar() as con:
+        assert con.execute(sa.select(base_temporal.gasto.c.usd).where(base_temporal.gasto.c.id == gid)).scalar() == 1.0
+    assert admin
+
+
+# ---- más allá del brief: las dos ramas (insertar / actualizar) y los avisos ----
+
+def test_prender_cobrar_no_cobra_la_correccion_de_un_gasto_viejo(base_temporal):
+    """§3.2: un gasto anotado con «Cobrar» apagado no se cobra al corregirlo después."""
+    import gastos
+    from cobros import libro
+    gastos.registrar("acme", "video", 1.0, "video:1:t1")
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    gastos.registrar("acme", "video", 2.0, "video:1:t1")
+    assert _movs(base_temporal) == []
+
+
+def test_si_el_cobro_falla_al_corregir_el_gasto_corregido_queda(base_temporal, monkeypatch):
+    import gastos
+    from cobros import avisos, libro
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    gid = gastos.registrar("acme", "video", 1.0, "video:1:t1")
+    monkeypatch.setattr(libro, "cobrar_gasto", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("x")))
+    admin = []
+    monkeypatch.setattr(avisos, "admin", lambda *a, **k: admin.append(a))
+    gastos.registrar("acme", "video", 3.0, "video:1:t1")
+    with base_temporal.conectar() as con:
+        assert con.execute(sa.select(base_temporal.gasto.c.usd).where(base_temporal.gasto.c.id == gid)).scalar() == 3.0
+    assert [m.milesimas for m in _movs(base_temporal)] == [-1500]   # el cobro previo no se tocó
+    assert admin
+
+
+def test_el_cobro_queda_guardado_en_ambas_ramas(base_temporal):
+    """El cobro sobrevive a la conexión (savepoint confirmado), al insertar y al corregir."""
+    import gastos
+    from cobros import libro
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    gastos.registrar("acme", "video", 1.0, "video:1:t1")
+    assert libro.saldo("acme") == -1500
+    gastos.registrar("acme", "video", 2.0, "video:1:t1")
+    assert libro.saldo("acme") == -3000
+
+
+def test_conservar_mayor_cobra_sobre_el_monto_guardado(base_temporal):
+    import gastos
+    from cobros import libro
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    gastos.registrar("acme", "video", 1.0, "video:1:t1", conservar_mayor=True)
+    gastos.registrar("acme", "video", 0.2, "video:1:t1", conservar_mayor=True)
+    assert [m.milesimas for m in _movs(base_temporal)] == [-1500]
+
+
+def test_no_entregado_despues_de_cobrado_revierte_con_el_margen_del_cobro(base_temporal, monkeypatch):
+    import gastos
+    from cobros import avisos, libro
+    vistos = []
+    monkeypatch.setattr(avisos, "pieza_no_cobrada", lambda c, m, k: vistos.append((c, m, k)))
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    gastos.registrar("acme", "video", 1.0, "video:1:t1")
+    libro.configurar("acme", usuario="admin", margen=3.0)
+    gastos.registrar("acme", "video", 1.0, "video:1:t1", entregado=False)
+    assert [(m.tipo, m.milesimas) for m in _movs(base_temporal)] == [("cobro", -1500), ("reverso", 1500)]
+    assert vistos == [("acme", 1500, "video")]
+    assert libro.saldo("acme") == 0
+
+
+def test_cobro_bajo_el_umbral_avisa_saldo_bajo(base_temporal, monkeypatch):
+    import gastos
+    from cobros import avisos, libro
+    bajos = []
+    monkeypatch.setattr(avisos, "saldo_bajo", lambda c, s: bajos.append((c, s)))
+    libro.configurar("acme", usuario="admin", cobrar=True, umbral=5000)
+    with base_temporal.conectar() as con:
+        libro.acreditar(con, "acme", "recarga", 6000, "recarga_manual")
+    gastos.registrar("acme", "video", 0.1, "video:1:t1")   # 6000 - 150 = 5850: no avisa
+    assert bajos == []
+    gastos.registrar("acme", "video", 1.0, "video:2:t2")   # 5850 - 1500 = 4350: avisa
+    assert bajos == [("acme", 4350)]
+
+
+def test_un_aviso_que_revienta_no_tumba_el_registro(base_temporal, monkeypatch):
+    import gastos
+    from cobros import avisos, libro
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    monkeypatch.setattr(avisos, "saldo_bajo", lambda *a: (_ for _ in ()).throw(RuntimeError("smtp")))
+    gid = gastos.registrar("acme", "video", 1.0, "video:1:t1")
+    assert gid and libro.saldo("acme") == -1500
+
+
+# ---- llamadores que anotan «pagado pero no entregado» (Step 4) ----
+
+def _tipos(db):
+    return [(m.tipo, m.milesimas) for m in _movs(db)]
+
+
+def test_final_que_fallo_no_se_cobra_y_la_buena_si(base_temporal, monkeypatch):
+    import final_edition
+    from cobros import avisos, libro
+    monkeypatch.setattr(avisos, "pieza_no_cobrada", lambda *a: None)
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    capas = {"voz": {"costo_usd": 0.1, "estado": "ok"}, "render": {"costo_usd": 0.0, "estado": "error"}}
+    final_edition._registrar_gasto_final("acme", 7, "es", "CO", 0.1, capas, fallo=True, ref_sufijo=":t1")
+    assert _tipos(base_temporal) == [("no_cobrado", 0)]
+    final_edition._registrar_gasto_final("acme", 8, "es", "CO", 0.1, capas, fallo=False, ref_sufijo=":t2")
+    assert _tipos(base_temporal)[-1] == ("cobro", -150)
+
+
+def test_guion_de_clips_con_respuesta_invalida_no_se_cobra(base_temporal, monkeypatch):
+    from cobros import avisos, libro
+    from guiones import claude
+    monkeypatch.setattr(avisos, "pieza_no_cobrada", lambda *a: None)
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    claude.pedir_json("acme", "armar", 3, "sis", [], "Armar", llamar_fn=lambda *a: ("no es json", 1000, 800))
+    assert [t for t, _ in _tipos(base_temporal)] == ["no_cobrado"]
+    claude.pedir_json("acme", "leer", 4, "sis", [], "Leer", llamar_fn=lambda *a: ('{"a": 1}', 1000, 800))
+    assert [t for t, _ in _tipos(base_temporal)] == ["no_cobrado", "cobro"]
+
+
+def test_swap_que_fallo_despues_de_generar_no_se_cobra(base_temporal, monkeypatch):
+    from cobros import avisos, libro
+    from tareas import swap
+    monkeypatch.setattr(avisos, "pieza_no_cobrada", lambda *a: None)
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    swap._registrar_gasto("acme", "swap:1:t1", "wavespeed", "foto", {"usd": 0.2}, False, entregado=False)
+    assert _tipos(base_temporal) == [("no_cobrado", 0)]
+
+
+def test_video_que_fallo_al_descargar_no_se_cobra(base_temporal, monkeypatch):
+    from cobros import avisos, libro
+    from tareas import flowplus
+    monkeypatch.setattr(avisos, "pieza_no_cobrada", lambda *a: None)
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    flowplus._registrar_gasto("acme", "video", {"usd": 1.0}, "video:cf_1:t1", "wan3", "falló", entregado=False)
+    assert _tipos(base_temporal) == [("no_cobrado", 0)]
+
+
+# ---- concurrencia: otro escritor confirma entre la lectura y la escritura del cobro (fix 1) ----
+
+def test_otro_escritor_en_medio_no_pierde_el_cobro_al_insertar(base_temporal, monkeypatch, escritor_en_medio):
+    """Revisión de la Task 3: con el cobro en un savepoint aparte del gasto, la
+    lectura de cobrar_gasto abría una transacción diferida nueva y otro escritor
+    en medio hacía «database is locked» al instante: gasto sin cobro, para siempre."""
+    import gastos
+    from cobros import avisos, libro
+    admin = []
+    monkeypatch.setattr(avisos, "admin", lambda *a, **k: admin.append(a))
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    otro = escritor_en_medio("INSERT INTO movimiento_saldo",
+                             "insert into kv(clave, valor, actualizado_en) values ('x', '1', 'ahora')")
+    gastos.registrar("acme", "video", 1.0, "video:1:t1")
+    assert _tipos(base_temporal) == [("cobro", -1500)]
+    assert admin == []
+    assert otro["resultado"].startswith("bloqueado")   # el candado estaba tomado: nadie escribió en medio
+
+
+def test_otro_escritor_en_medio_no_pierde_el_reverso_al_corregir(base_temporal, monkeypatch, escritor_en_medio):
+    import gastos
+    from cobros import avisos, libro
+    monkeypatch.setattr(avisos, "pieza_no_cobrada", lambda *a: None)
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    gastos.registrar("acme", "video", 1.0, "video:1:t1")
+    otro = escritor_en_medio("INSERT INTO movimiento_saldo",
+                             "insert into kv(clave, valor, actualizado_en) values ('x', '1', 'ahora')")
+    gastos.registrar("acme", "video", 1.0, "video:1:t1", entregado=False)
+    assert _tipos(base_temporal) == [("cobro", -1500), ("reverso", 1500)]
+    assert otro["resultado"].startswith("bloqueado")
+
+
+def test_recalculado_que_cobra_mas_mira_el_saldo_bajo(base_temporal, monkeypatch):
+    import gastos
+    from cobros import avisos, libro
+    bajos = []
+    monkeypatch.setattr(avisos, "saldo_bajo", lambda c, s: bajos.append((c, s)))
+    libro.configurar("acme", usuario="admin", cobrar=True, umbral=5000)
+    with base_temporal.conectar() as con:
+        libro.acreditar(con, "acme", "recarga", 6000, "recarga_manual")
+    gastos.registrar("acme", "final", 0.2, "final:1:t1")    # 6000 - 300 = 5700
+    assert bajos == []
+    gastos.registrar("acme", "final", 0.2, "final:1:t1")    # mismo monto: no sube, no mira
+    gastos.registrar("acme", "final", 1.0, "final:1:t1")    # recalcula a 1500: 4500
+    assert bajos == [("acme", 4500)]
+
+
+# ---- revisión final (2026-10-08) ----
+
+def test_un_cobro_a_medias_que_falla_se_deshace_y_el_gasto_queda(base_temporal, monkeypatch):
+    """El savepoint del cobro: `cobrar_gasto` ya escribió su movimiento y
+    después lanza. El movimiento se deshace (sin savepoint quedaría un cobro
+    anotado como «no se pudo cobrar») y el costo queda."""
+    import gastos
+    from cobros import avisos, libro
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    real = libro.cobrar_gasto
+
+    escritos = []
+
+    def a_medias(con, *a, **k):
+        real(con, *a, **k)
+        escritos.append(con.execute(sa.select(sa.func.count()).select_from(base_temporal.movimiento_saldo)).scalar())
+        raise RuntimeError("falla después de escribir")
+    monkeypatch.setattr(libro, "cobrar_gasto", a_medias)
+    admin = []
+    monkeypatch.setattr(avisos, "admin", lambda *a, **k: admin.append(a))
+    gid = gastos.registrar("acme", "video", 1.0, "video:1:t1")
+    assert escritos == [1]              # el cobro sí llegó a escribir su movimiento...
+    assert _movs(base_temporal) == []   # ...y el savepoint lo deshizo
+    with base_temporal.conectar() as con:
+        assert con.execute(sa.select(base_temporal.gasto.c.usd).where(base_temporal.gasto.c.id == gid)).scalar() == 1.0
+    assert admin and admin[0][0] == "cobro_no_anotado"
+
+
+def test_si_falla_leer_el_monto_para_cobrar_el_gasto_queda(base_temporal, monkeypatch):
+    """M2: la lectura del monto del cobro va dentro del try del cobro."""
+    import gastos
+    from cobros import avisos, libro
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    real = gastos.sa.select
+
+    def select(*cols, **k):
+        if len(cols) == 1 and cols[0] is base_temporal.gasto.c.usd:
+            raise RuntimeError("lectura rota")
+        return real(*cols, **k)
+    monkeypatch.setattr(gastos.sa, "select", select)
+    admin = []
+    monkeypatch.setattr(avisos, "admin", lambda *a, **k: admin.append(a))
+    gid = gastos.registrar("acme", "video", 1.0, "video:1:t1")
+    monkeypatch.undo()
+    with base_temporal.conectar() as con:
+        assert con.execute(sa.select(base_temporal.gasto.c.usd).where(base_temporal.gasto.c.id == gid)).scalar() == 1.0
+    assert _movs(base_temporal) == []
+    assert admin and admin[0][0] == "cobro_no_anotado"

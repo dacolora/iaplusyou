@@ -21,7 +21,7 @@
           {% if pl.motivo %}<small>— {{ pl.motivo }}</small>{% endif %}
           {# Precio a la vista (acciones.pedir → payload.precio_estimado): lo que
              costaría producir lo que pide derivar/rescatar, aproximado. #}
-          {% if pl.precio_estimado and pl.precio_estimado.texto %}<small class="exp-propuesta-precio" title="{{ _('Lo que costaría producir lo que pide esta propuesta (precio aproximado de los proveedores)') }}">{% if pl.precio_estimado.usd is not none %}≈ {{ pl.precio_estimado.usd | usd }}{% else %}{{ pl.precio_estimado.texto }}{% endif %}</small>{% endif %}
+          {% if pl.precio_estimado and pl.precio_estimado.texto %}<small class="exp-propuesta-precio" title="{{ _('Lo que costaría producir lo que pide esta propuesta (precio aproximado)') }}">{% if pl.precio_estimado.usd is not none %}≈ {{ pl.precio_estimado.usd | precio | usd }}{% else %}{{ pl.precio_estimado.texto }}{% endif %}</small>{% endif %}
         </span>
         {% if pr.accion == "publicar_organico" %}
         <form method="post" action="{{ url_for('prop_rechazar', cliente=cliente, pid=pr.id) }}" class="inline"><button class="btn-rechazar btn-xs">{{ _('Rechazar') }}</button></form>
@@ -88,10 +88,13 @@
 
 
   <div class="exp-acciones">
+    {# Lanzar crea y ACTIVA (Daniel, 2026-10-08: este clic con el gasto diario a la vista es la aprobación): el confirm
+       dice la suma de los diarios de todos los países, lo que empieza a gastar si el lanzamiento sale bien. #}
+    {% set diario_lanzar = e.paises|sum(attribute='presupuesto_dia') %}
     {% if e.estado in ("armando", "error") and not e.meta_campaign_id %}
-      <form method="post" action="{{ url_for('exp_lanzar', cliente=cliente, eid=e.id) }}" onsubmit='return confirm({{ _("Se crean la campaña, los conjuntos y los anuncios en Meta, en pausa. ¿Seguimos?")|tojson }});'><button class="btn-generar btn-sm">{{ _('Lanzar a Meta (en pausa)') }}</button></form>
+      <form method="post" action="{{ url_for('exp_lanzar', cliente=cliente, eid=e.id) }}" onsubmit='return confirm({{ _("Se crean la campaña, los conjuntos y los anuncios en Meta y se activan: empieza a gastar ≈ %(diario)s al día entre todos los países. ¿Seguimos?", diario=(diario_lanzar|dinero(e.moneda)))|tojson }});'><button class="btn-generar btn-sm">{{ _('Lanzar a Meta') }}</button></form>
     {% elif e.estado == "error" %}
-      <form method="post" action="{{ url_for('exp_lanzar', cliente=cliente, eid=e.id) }}" onsubmit='return confirm({{ _("Se retoma el lanzamiento donde quedó (no se duplican objetos en Meta). ¿Seguimos?")|tojson }});'><button class="btn-generar btn-sm">{{ _('Reintentar lanzamiento') }}</button></form>
+      <form method="post" action="{{ url_for('exp_lanzar', cliente=cliente, eid=e.id) }}" onsubmit='return confirm({{ _("Se retoma el lanzamiento donde quedó (no se duplican objetos en Meta) y, si termina bien, se activa: empieza a gastar ≈ %(diario)s al día entre todos los países. ¿Seguimos?", diario=(diario_lanzar|dinero(e.moneda)))|tojson }});'><button class="btn-generar btn-sm">{{ _('Reintentar lanzamiento') }}</button></form>
     {% elif e.estado == "pausado" %}
       {# Regla 1: «Activar todo» activa cada país con conjunto en Meta (lanzador.cambiar_estado); dice la suma de sus diarios. #}
       {# Instalaciones de la app: un país con conjuntos por tienda (`meta_adsets`) también se activa y también cuenta. #}

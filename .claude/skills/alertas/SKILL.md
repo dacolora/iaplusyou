@@ -1,6 +1,6 @@
 ---
 name: alertas
-description: "Alertas del proyecto: la pestaña que junta lo que necesita atención (puesta a punto, faltantes, decisiones y fallos) con diez fuentes calculadas al vuelo, descartes por huella, alertas solo para el admin, caché de 60 s y la burbuja del sidebar; y la lista de tarjetas de Puesta a punto (llaves.py). Cargar antes de agregar una fuente de alertas, tocar alertas.py, llaves.py, _tab_alertas.html o la burbuja del sidebar."
+description: "Alertas del proyecto: la pestaña que junta lo que necesita atención (puesta a punto, faltantes, decisiones y fallos) con once fuentes calculadas al vuelo, descartes por huella, alertas solo para el admin, caché de 60 s y la burbuja del sidebar; y la lista de tarjetas de Puesta a punto (llaves.py). Cargar antes de agregar una fuente de alertas, tocar alertas.py, llaves.py, _tab_alertas.html o la burbuja del sidebar."
 ---
 
 # Alertas: lo que necesita la atención de la persona
@@ -30,7 +30,7 @@ Una alerta es un dict armado por `alertas._alerta` (nunca a mano):
 
 `calcular(cliente)` corre cada fuente de `FUENTES` en su propio `try/except` y ordena por grupo, luego nivel, y dentro de eso en el orden de las fuentes. Si una fuente revienta sale `revision:<fuente>` (`info`, `solo_admin`) con SOLO el nombre de la clase de la excepción, nunca el mensaje (podría arrastrar un token), y las demás se calculan igual. Los nombres de grupo, nivel y pestaña son constantes `idiomas.N_` (`NOMBRES_GRUPO`, `NOMBRES_NIVEL`, `NOMBRES_TAB`) que la plantilla traduce con `|traducir`.
 
-## Las diez fuentes (en el orden de `FUENTES`)
+## Las once fuentes (en el orden de `FUENTES`)
 
 | # | Fuente | Claves | Grupo · nivel | Huella |
 |---|---|---|---|---|
@@ -44,6 +44,7 @@ Una alerta es un dict armado por `alertas._alerta` (nunca a mano):
 | 8 | `organico` | `organico:error:<pub_id>` | fallos · `atencion` | el error |
 | 9 | `sprints` | `sprint:{ideas,revision,fallos,referencias}:<sprint_id>` | decision / fallos | los ids (o el conteo) |
 | 10 | `nicho` | `nicho:avatares`, `nicho:error:<estudio_id>` | decision / fallos · `atencion` | el conteo / el error guardado |
+| 11 | `cobros` | `cobros:sin_saldo`, `cobros:saldo_bajo`, `cobros:no_cobrado:<mov_id>`, `cobros:recarga_pendiente:<id>` | puesta_a_punto `bloquea` / puesta_a_punto `atencion` / fallos `info` / decision `info`; todas del cliente, a Configuración › Saldo y recargas (`config-ap-saldo`) | `sin_saldo` constante; `saldo_bajo` el saldo en dólares redondeados; las otras, tipo y monto o el id |
 
 Detalles que ya costaron una duda:
 
@@ -53,6 +54,7 @@ Detalles que ya costaron una duda:
 - **Tablero**: `tablero.alertas()` no se reescribe; solo se le pone clave, nivel (`alta→bloquea`, `media→atencion`, `baja→info`) y grupo. La única lógica de experimentos sigue en `tablero.py`. El texto se acota con `_limpio(texto, 400)`: la guía de Meta en modo Desarrollo ronda los 330 caracteres y su llamado a la acción va al final. Los números de la huella salen del texto ENTERO y limpio (`_limpio(texto, None)`), no del recortado: un texto que se corta en un idioma y en el otro no cambia la huella.
 - **Crear**: los prompts listos son UNA alerta con el conteo y solo cuentan los de hace más de `MINUTOS_PROMPT_LISTO` (60): los recién armados no molestan mientras la persona trabaja. Fallos de los últimos `DIAS_FALLOS` (30) días; una sesión con dos piezas cuenta una vez.
 - **Nicho**: una investigación `detenida` alerta si tiene motivo y no es `cancelada` (clic de la persona, 2026-10-02); una `interrumpida`, siempre; un estudio, una alerta (la investigación manda sobre el error de generación).
+- **Cobros** (2026-10-08, spec `2026-10-08-cobros-saldo-prepagado` §8): solo si `libro.estado(cliente)["cobrar"]`; un proyecto que no cobra sale tras leer la cuenta y no consulta nada más. `sin_saldo` mira el DISPONIBLE (saldo menos lo reservado) ≤ 0; `saldo_bajo` mira el saldo (0 < saldo < umbral) y no sale si ya hay `sin_saldo`; su huella lleva el saldo en dólares redondeados, así que un descarte no esconde un saldo que siguió bajando. `no_cobrado`: un `reverso` o `no_cobrado` de los últimos `DIAS_NO_COBRADO` (7) días (en el `no_cobrado` el monto es `extra.precio`); `recarga_pendiente`: Bold pendiente de hace más de `MINUTOS_RECARGA_PENDIENTE` (15) min. Dos consultas fijas (movimientos y recargas, tope `TOPE_COBROS` = 20 cada una). El concepto sale de `cobros.vista.nombre_concepto`. Ninguna es `solo_admin`. El apartado `config-ap-saldo` solo existe en la página de un cliente que cobra (el admin siempre lo ve).
 - **Orgánico**: reintentar es una acción de la persona sobre la pieza; aquí solo se avisa.
 
 ## Quién ve qué: `solo_admin` (2026-10-02)

@@ -15,7 +15,7 @@
   <div id="mm-crear" hidden style="margin-top:.5rem;">
     <input type="text" id="mm-prompt" maxlength="400" placeholder="{{ _('ej. reguetón suave con guitarra, alegre, para un anuncio de verano') }}" style="width:100%;">
     <label class="fe-check"><input type="checkbox" id="mm-instrumental" checked> {{ _('Instrumental (sin voz cantada)') }}</label>
-    <button type="button" class="btn-generar btn-sm" id="mm-crear-btn">{{ _('Crear canción') }}{% if precio_musica_ia and precio_musica_ia.usd is not none %} ≈ {{ precio_musica_ia.usd | usd }}{% endif %}</button>
+    <button type="button" class="btn-generar btn-sm" id="mm-crear-btn">{{ _('Crear canción') }}{% if precio_musica_ia and precio_musica_ia.usd is not none %} ≈ {{ precio_musica_ia.usd | precio | usd }}{% endif %}</button>
     <p class="vacio" style="font-size:.74rem;padding:0;">{{ _('60 s de música a medida. No nombres artistas, canciones ni sellos: ElevenLabs lo rechaza.') }}</p>
   </div>
   {% if trabajo_musica %}

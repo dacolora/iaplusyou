@@ -1,0 +1,105 @@
+{# Fragmento de Configuración › Saldo y recargas (GET cobros.saldo_panel; con
+   solo_filas, GET cobros.saldo_movimientos: las filas de la página siguiente
+   para «Ver más»). Lo pide static/cobros.js. Contexto: cliente, e
+   (libro.estado), tono, movs (vista.movimientos), pagina, recargas,
+   consultables (ids de recargas.consultable: pendiente, o rechazada/vencida
+   de menos de 26 h), estados_recarga, bold_ok, min_usd, max_usd. #}
+{% macro filas_movimientos(filas) %}
+{% for f in filas %}
+<tr>
+  <td class="gasto-fecha">{{ f.creado_en[:16] | replace("T", " ") }}</td>
+  <td>{{ f.concepto }}{% if f.detalle %}<small class="saldo-detalle">{{ f.detalle }}</small>{% endif %}</td>
+  <td class="num saldo-monto-{{ 'mas' if f.milesimas > 0 else ('menos' if f.milesimas < 0 else 'cero') }}">{% if f.milesimas > 0 %}+{% endif %}{{ (f.milesimas / 1000) | usd }}</td>
+  <td class="num">{{ (f.saldo_despues / 1000) | usd }}</td>
+</tr>
+{% endfor %}
+{% endmacro %}
+{% if solo_filas %}
+{{ filas_movimientos(movs.filas) }}
+{% if movs.hay_mas %}<tr data-saldo-siguiente="{{ url_for('cobros.saldo_movimientos', cliente=cliente, pagina=pagina + 1) }}" hidden></tr>{% endif %}
+{% else %}
+<div class="tb-tiles saldo-tiles">
+  <div class="kpi-tile saldo-tile saldo-{{ tono }}">
+    <span>{{ _('Saldo') }}</span>
+    <strong>{{ (e.saldo / 1000) | usd }}</strong>
+    <small>
+      {% if tono == 'bloqueo' %}{{ _('Sin saldo: recarga para seguir generando.') }}
+      {% elif tono == 'aviso' %}{{ _('Saldo bajo: te queda menos de %(umbral)s.', umbral=((e.umbral / 1000) | usd)) }}
+      {% else %}{{ _('Te avisamos cuando baje de %(umbral)s.', umbral=((e.umbral / 1000) | usd)) }}{% endif %}
+    </small>
+  </div>
+  {% if e.reservado %}
+  <div class="kpi-tile saldo-tile">
+    <span>{{ _('Disponible') }}</span>
+    <strong>{{ (e.disponible / 1000) | usd }}</strong>
+    <small>{{ _('%(monto)s apartados para lo que se está generando', monto=((e.reservado / 1000) | usd)) }}</small>
+  </div>
+  {% endif %}
+</div>
+{% if not e.cobrar %}
+<p class="flash warn">{{ _('Este proyecto no usa saldo prepagado: nada de lo que genera se descuenta. Se prende desde el panel de administración.') }}</p>
+{% endif %}
+
+<h3>{{ _('Recargar') }}</h3>
+{% if bold_ok %}
+<form method="post" action="{{ url_for('cobros.recargar', cliente=cliente) }}" class="saldo-recarga">
+  <div class="saldo-montos" role="group" aria-label="{{ _('Montos sugeridos') }}">
+    {% for m in (20, 50, 100, 200) %}<button type="button" class="btn-sm" data-saldo-monto="{{ m }}">US$ {{ m }}</button>{% endfor %}
+  </div>
+  <label class="campo-label" for="saldo-usd">{{ _('Monto en dólares (de %(min)s a %(max)s, sin centavos)', min=min_usd, max=max_usd) }}</label>
+  <div class="saldo-fila">
+    <input type="number" id="saldo-usd" name="usd" min="{{ min_usd }}" max="{{ max_usd }}" step="1" value="50" inputmode="numeric" required>
+    <button type="submit" class="btn-generar">{{ _('Pagar con Bold') }}</button>
+  </div>
+  <p class="vacio saldo-nota">{{ _('Tarjetas de cualquier país; en Colombia también PSE y Nequi. Bold cobra en pesos colombianos a la tasa del día.') }}</p>
+</form>
+{% else %}
+<p class="vacio">{{ _('Las recargas en línea todavía no están disponibles; escríbenos para recargar.') }}</p>
+{% endif %}
+
+<div class="saldo-cabecera">
+  <h3>{{ _('Movimientos') }}</h3>
+  <a class="btn-guardar btn-sm" href="{{ url_for('cobros.saldo_movimientos_csv', cliente=cliente) }}" download>{{ _('Descargar CSV') }}</a>
+</div>
+{% if movs.filas %}
+<div class="saldo-tabla-caja">
+  <table class="gasto-tabla saldo-movimientos">
+    <thead><tr><th>{{ _('Fecha') }}</th><th>{{ _('Concepto') }}</th><th class="num">{{ _('Monto') }}</th><th class="num">{{ _('Saldo después') }}</th></tr></thead>
+    <tbody data-saldo-filas>{{ filas_movimientos(movs.filas) }}</tbody>
+  </table>
+</div>
+{% if movs.hay_mas %}
+<button type="button" class="btn-sm saldo-mas" data-saldo-mas="{{ url_for('cobros.saldo_movimientos', cliente=cliente, pagina=2) }}">{{ _('Ver más') }}</button>
+{% endif %}
+{% else %}
+<p class="vacio">{{ _('Todavía no hay movimientos.') }}</p>
+{% endif %}
+
+<h3>{{ _('Recargas') }}</h3>
+{% if recargas %}
+<div class="saldo-tabla-caja">
+  <table class="gasto-tabla saldo-recargas">
+    <thead><tr><th>{{ _('Fecha') }}</th><th>{{ _('Medio') }}</th><th class="num">{{ _('Monto') }}</th><th>{{ _('Estado') }}</th><th></th></tr></thead>
+    <tbody>
+      {% for r in recargas %}
+      <tr>
+        <td class="gasto-fecha">{{ r.creada_en[:16] | replace("T", " ") }}</td>
+        <td>{% if r.medio == 'bold' %}Bold{% else %}{{ _('Manual') }}{% endif %}</td>
+        <td class="num">{{ (r.milesimas / 1000) | usd }}</td>
+        <td><span class="tag-estado saldo-estado-{{ r.estado }}">{{ estados_recarga.get(r.estado, r.estado) | traducir }}</span></td>
+        <td>
+          {% if (r.estado == 'pendiente' and r.medio == 'bold') or r.id in consultables %}
+          <form method="post" action="{{ url_for('cobros.recarga_verificar', cliente=cliente, rid=r.id) }}">
+            <button type="submit" class="btn-xs">{{ _('Verificar') }}</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="vacio">{{ _('Todavía no hay recargas.') }}</p>
+{% endif %}
+{% endif %}

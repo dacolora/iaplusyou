@@ -42,6 +42,7 @@ import notificaciones
 import proyectos
 import referencias_link
 import trabajos
+from cobros import SaldoInsuficiente
 from idiomas import N_
 from nicho.avatares import costo_real, modelo_actual
 from referentes import sugerir as referentes_sugerir
@@ -62,9 +63,19 @@ def job_id_link(cliente, campana_id):
 
 
 def encolar_analisis(cliente, referencia_id):
-    return trabajos.encolar(job_id_analizar(cliente, referencia_id), "sprint_analizar_referencia",
-                            {"cliente": cliente, "referencia_id": referencia_id}, cliente=cliente,
-                            duracion_estimada=20, max_intentos=3)
+    """Encola el análisis (Claude) de una referencia recién guardada. Sin saldo
+    (cobros, spec 2026-10-08 §5.4) no se encola: la referencia queda guardada
+    con el análisis en error y la frase (se puede «Analizar de nuevo» tras
+    recargar). Nunca lanza por saldo: lo llaman bucles de subida y el worker
+    (después de bajar un link), que no deben cortarse a la mitad."""
+    try:
+        return trabajos.encolar(job_id_analizar(cliente, referencia_id), "sprint_analizar_referencia",
+                                {"cliente": cliente, "referencia_id": referencia_id}, cliente=cliente,
+                                duracion_estimada=20, max_intentos=3)
+    except SaldoInsuficiente as e:
+        datos.actualizar_referencia(cliente, referencia_id, analisis_estado="error",
+                                    analisis={"error": e.frase_proyecto()})
+        return False
 
 
 def encolar_sugerir(cliente, cuantas=3):
@@ -140,7 +151,22 @@ def encolar_ideas(cliente, campana_id, n_videos=None, n_imagenes=None, reemplaza
     return trabajos.encolar(job_id_ideas(cliente, campana_id), "sprint_proponer_ideas",
                             {"cliente": cliente, "campana_id": campana_id, "n_videos": n_videos, "n_imagenes": n_imagenes,
                              "reemplaza": reemplaza}, cliente=cliente, duracion_estimada=40,
-                            max_intentos=1)  # pagada: nunca se reintenta sola
+                            max_intentos=1,  # pagada: nunca se reintenta sola
+                            costo_estimado=_costo_ideas(cliente, campana_id, n_videos, n_imagenes, reemplaza))
+
+
+def _costo_ideas(cliente, campana_id, n_videos, n_imagenes, reemplaza):
+    """El mismo estimado del botón: base + por idea pedida (una si reemplaza;
+    sin cantidades, las que la campaña tiene como objetivo — tope conservador:
+    el botón muestra solo las que faltan; si no se sabe, una)."""
+    if reemplaza:
+        n = 1
+    elif n_videos is not None or n_imagenes is not None:
+        n = int(n_videos or 0) + int(n_imagenes or 0)
+    else:
+        c = datos.campana(cliente, campana_id) or {}
+        n = int(c.get("n_videos") or 0) + int(c.get("n_imagenes") or 0)
+    return gastos.estimar("proponer_ideas", n=max(1, n))["usd"]
 
 
 def job_id_reescribir(cliente, cp_id):
@@ -151,7 +177,8 @@ def encolar_reescribir(cliente, cp_id):
     """«Reescribir la idea con este ángulo» (doctrina, bloque 2): pagada, un
     clic con precio a la vista, nunca se reintenta sola."""
     return trabajos.encolar(job_id_reescribir(cliente, cp_id), "sprint_reescribir_idea",
-                            {"cliente": cliente, "cp_id": cp_id}, cliente=cliente, duracion_estimada=40, max_intentos=1)
+                            {"cliente": cliente, "cp_id": cp_id}, cliente=cliente, duracion_estimada=40, max_intentos=1,
+                            costo_estimado=gastos.estimar("reescribir_idea")["usd"])
 
 
 @registrar("sprint_reescribir_idea")
@@ -167,7 +194,7 @@ def ejecutar_reescribir_idea(tarea):
                    else gettext("reescribir idea · respuesta inválida"))
         if ent or sal:
             gastos.registrar_seguro(cliente, "ideas", costo_real(ent, sal), referencia, proveedor="anthropic",
-                                    detalle=detalle,
+                                    detalle=detalle, entregado=False,
                                     extra={"tokens_entrada": ent, "tokens_salida": sal, "modelo": modelo_actual()})
         raise
     gastos.registrar_seguro(cliente, "ideas", costo_real(ent, sal), referencia, proveedor="anthropic",
@@ -186,17 +213,17 @@ def ejecutar_proponer_ideas(tarea):
     uso = {"entrada": 0, "salida": 0}
     referencia = f"idea:proponer:{campana_id}{ref_sufijo(tarea)}"
 
-    def _registrar(detalle):
+    def _registrar(detalle, entregado=True):
         if uso["entrada"] or uso["salida"]:
             gastos.registrar_seguro(cliente, "ideas", costo_real(uso["entrada"], uso["salida"]), referencia,
-                                    proveedor="anthropic", detalle=detalle,
+                                    proveedor="anthropic", detalle=detalle, entregado=entregado,
                                     extra={"tokens_entrada": uso["entrada"], "tokens_salida": uso["salida"],
                                            "modelo": modelo_actual()})
     try:
         creadas = ideas.proponer(cliente, campana_id, n_videos=p.get("n_videos"), n_imagenes=p.get("n_imagenes"),
                                  reemplaza=p.get("reemplaza"), uso=uso)
     except Exception:
-        _registrar(gettext("proponer ideas · la respuesta no sirvió"))
+        _registrar(gettext("proponer ideas · la respuesta no sirvió"), entregado=False)
         raise
     _registrar(gettext("proponer %(n)s idea(s)", n=len(creadas)))
     c = datos.campana(cliente, campana_id)
@@ -212,7 +239,7 @@ def job_id_sugerir_biblioteca(cliente, campana_id):
 def encolar_sugerir_biblioteca(cliente, campana_id):
     return trabajos.encolar(job_id_sugerir_biblioteca(cliente, campana_id), "referentes_sugerir_ia",
                             {"cliente": cliente, "campana_id": int(campana_id)}, cliente=cliente,
-                            duracion_estimada=20, max_intentos=1)
+                            duracion_estimada=20, max_intentos=1, costo_estimado=gastos.estimar("sugerir_ia")["usd"])
 
 
 @registrar("referentes_sugerir_ia")
@@ -266,7 +293,7 @@ def ejecutar_sugerir_biblioteca(tarea):
         if ent or sal:
             usd = costo_real(ent, sal)
             gastos.registrar_seguro(cliente, "sugerir_ia", usd, f"referentes:sugerir_ia:{cid}{ref_sufijo(tarea)}",
-                                    detalle=gettext("respuesta inválida"), proveedor="anthropic",
+                                    detalle=gettext("respuesta inválida"), proveedor="anthropic", entregado=False,
                                     extra={"tokens_entrada": ent, "tokens_salida": sal, "modelo": modelo_actual()})
         raise
     usd = costo_real(ent, sal)
@@ -287,13 +314,14 @@ def encolar_qa(cliente, cp_id):
     """El mismo trabajo que encola la periódica; lo usa «Repetir QA» desde la
     bandeja. Solo QA (centavos de visión), nunca generación."""
     return trabajos.encolar(job_id_qa(cliente, cp_id), "sprint_qa_pieza", {"cliente": cliente, "cp_id": cp_id},
-                            cliente=cliente, duracion_estimada=30, max_intentos=3)
+                            cliente=cliente, duracion_estimada=30, max_intentos=3,
+                            costo_estimado=gastos.TARIFAS["revision_pieza"])
 
 
-def _gasto_qa(cliente, referencia, ent, sal, detalle):
+def _gasto_qa(cliente, referencia, ent, sal, detalle, entregado=True):
     if ent or sal:
         gastos.registrar_seguro(cliente, "revision", costo_real(ent, sal), referencia, proveedor="anthropic",
-                                detalle=detalle, extra={"tokens_entrada": ent, "tokens_salida": sal,
+                                detalle=detalle, entregado=entregado, extra={"tokens_entrada": ent, "tokens_salida": sal,
                                                         "modelo": modelo_actual()})
 
 
@@ -331,7 +359,7 @@ def ejecutar_qa_pieza(tarea):
         resultado = dict(qa.evaluar(cliente, i, entry, campana, umbral=umbral))
     except Exception as e:
         _gasto_qa(cliente, referencia, getattr(e, "tokens_entrada", 0) or 0, getattr(e, "tokens_salida", 0) or 0,
-                  gettext("control de calidad · respuesta inválida"))
+                  gettext("control de calidad · respuesta inválida"), entregado=False)
         datos.guardar_qa(cliente, cp_id, cf_id, {"veredicto": "error", "score": None, "checks": {}, "nota": str(e)[:300],
                                                  "cf_id": cf_id})
         raise
@@ -407,10 +435,21 @@ def ejecutar_qa_pendientes(tarea):
     """Periódica (5 min): encola el QA de las piezas listas sin evaluar y avisa
     cuando un lote termina (ninguna pieza pendiente ni generando)."""
     n = 0
+    sin_saldo = set()
     for cliente, cp_id in _piezas_listas_sin_qa():
-        if cola.encolar("sprint_qa_pieza", {"cliente": cliente, "cp_id": cp_id}, cliente=cliente,
-                        job_id=job_id_qa(cliente, cp_id), duracion_estimada=30, max_intentos=3):
-            n += 1
+        # Cobros (spec 2026-10-08 §5.1; revisión final 2026-10-08): el QA cobra
+        # y va por `trabajos.encolar` con su costo, así exige y reserva el
+        # precio de cada pieza. Sin saldo para la siguiente, el proyecto no
+        # recibe más QA en esta vuelta (se reintenta en 5 min, cuando recargue):
+        # encolarlo igual dejaba una tarea en error cada vuelta, o un saldo
+        # negativo por todo el lote.
+        if cliente in sin_saldo:
+            continue
+        try:
+            if encolar_qa(cliente, cp_id):
+                n += 1
+        except SaldoInsuficiente:
+            sin_saldo.add(cliente)
     terminados = 0
     for cliente, sid, nombre in _sprints_con_lote():
         sp = estado.recalcular(cliente, sid)

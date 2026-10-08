@@ -68,10 +68,11 @@ def syncs_en_curso(cliente):
     return sorted(cola.job_ids_vivos(cliente, TIPO_SYNC))
 
 
-def encolar_evaluacion(cliente, evaluacion_id):
+def encolar_evaluacion(cliente, evaluacion_id, costo_estimado=None):
     """max_intentos=1: paga a Claude. False si ya había una viva."""
     return trabajos.encolar(job_id_evaluar(cliente), TIPO_EVALUAR, {"cliente": cliente, "evaluacion_id": evaluacion_id},
-                            cliente=cliente, duracion_estimada=120, etapas=ETAPAS_EVALUAR, max_intentos=1)
+                            cliente=cliente, duracion_estimada=120, etapas=ETAPAS_EVALUAR, max_intentos=1,
+                            costo_estimado=costo_estimado)
 
 
 def evaluacion_en_curso(cliente):
@@ -183,7 +184,7 @@ def tw_evaluar(tarea):
         usd = costo_real(entrada, salida) if (entrada or salida) else 0.0
         if usd:
             gastos.registrar_seguro(cliente, "evaluacion", usd, referencia, proveedor="anthropic",
-                                    detalle=gettext("sin resultado usable"))
+                                    detalle=gettext("sin resultado usable"), entregado=False)
         mensaje = analisis.texto_error(e)
         datos.actualizar_evaluacion(eid, estado="error", error=mensaje, usd=usd)
         raise RuntimeError(mensaje) from None

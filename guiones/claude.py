@@ -84,10 +84,12 @@ def parsear_json(texto):
     return data
 
 
-def _registrar(cliente, paso, ref_id, entrada, salida, detalle):
+def _registrar(cliente, paso, ref_id, entrada, salida, detalle, entregado=True):
+    """`entregado=False` cuando la respuesta no sirvió: el costo queda, al
+    cliente no se le cobra (cobros §3.4)."""
     usd = costo_real(entrada, salida)
     gastos.registrar_seguro(cliente, TIPO_GASTO, usd, f"guiones:{paso}:{ref_id}:{uuid4().hex[:8]}",
-                            detalle=detalle, proveedor="anthropic",
+                            detalle=detalle, proveedor="anthropic", entregado=entregado,
                             extra={"tokens_entrada": entrada, "tokens_salida": salida, "modelo": modelo_actual()})
     return usd
 
@@ -111,7 +113,8 @@ def pedir_json(cliente, paso, ref_id, system, messages, detalle, llamar_fn=None,
             texto, ent, sal = fn(system, messages, max_tokens, timeout)
         except Exception as e:  # noqa: BLE001 — ver docstring
             ent, sal = int(getattr(e, "tokens_entrada", 0) or 0), int(getattr(e, "tokens_salida", 0) or 0)
-            usd = _registrar(cliente, paso, ref_id, ent, sal, f"{detalle} · sin respuesta útil") if (ent or sal) else 0.0
+            usd = (_registrar(cliente, paso, ref_id, ent, sal, f"{detalle} · sin respuesta útil", entregado=False)
+                   if (ent or sal) else 0.0)
             log.warning("guiones: Claude falló en %s %s (%s)", paso, ref_id, type(e).__name__)
             if isinstance(e, RespuestaFallida):
                 return None, usd, str(e)
@@ -120,6 +123,6 @@ def pedir_json(cliente, paso, ref_id, system, messages, detalle, llamar_fn=None,
         try:
             data = parsear_json(texto)
         except ValueError:
-            usd = _registrar(cliente, paso, ref_id, ent, sal, f"{detalle} · respuesta inválida")
+            usd = _registrar(cliente, paso, ref_id, ent, sal, f"{detalle} · respuesta inválida", entregado=False)
             return None, usd, gettext("Claude no respondió en el formato esperado. Vuelve a intentarlo.")
         return data, _registrar(cliente, paso, ref_id, ent, sal, detalle), None

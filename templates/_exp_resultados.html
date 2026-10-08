@@ -109,7 +109,7 @@
 {% if not experimentos %}
 <div class="estado-vacio">
   <p class="estado-vacio-titulo">{{ _('Todavía no hay experimentos') }}</p>
-  <p class="estado-vacio-texto">{{ _('Elige piezas, países y un total: el experimento se lanza en pausa y nada gasta hasta que lo actives.') }}</p>
+  <p class="estado-vacio-texto">{{ _('Elige piezas, países y un total: en Revisar ves cuánto gasta al día antes de lanzarlo; al lanzar se activa.') }}</p>
   {% if capacidades_meta.estado == "conectado" %}<a class="btn-generar" href="{{ url_for('exp_nuevo', cliente=cliente) }}">{{ _('+ Nuevo experimento') }}</a>{% endif %}
 </div>
 {% elif not r.piezas %}

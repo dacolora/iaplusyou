@@ -22,6 +22,7 @@ import marca
 import proyectos
 import tareas.director as tareas_director
 import trabajos
+from cobros import SaldoInsuficiente, libro, vista as vista_cobros
 from idiomas import N_
 from providers import flowplus_modelos
 from sprints import datos, estado
@@ -119,6 +120,14 @@ def estimar(cliente, sprint_id, campana_id=None, modelo_video=None, modelo_image
         else:
             imagenes += 1
             usd += float((flowplus_modelos.estimate_imagen(mi, n_referencias=_n_referencias(cliente, c)) or {}).get("usd") or 0.0)
+    # Cobros (revisión final 2026-10-08): cada pieza lista recibe el QA
+    # automático (Claude con visión, `sprint_qa_pendientes`). En un proyecto
+    # que cobra ese QA se descuenta del saldo, así que entra en el precio que
+    # se aprueba. En uno que no cobra el estimado no cambia.
+    qa_usd = 0.0
+    if (videos or imagenes) and libro.cobra(cliente):
+        qa_usd = round(gastos.TARIFAS["revision_pieza"] * (videos + imagenes), 4)
+        usd += qa_usd
     segundos = videos * SEGUNDOS_VIDEO + imagenes * SEGUNDOS_IMAGEN
     acumulado = float((sp.get("extra") or {}).get("costo_estimado_usd") or 0.0)
     nombre_v, nombre_i = flowplus_modelos.VIDEO[mv]["nombre"], flowplus_modelos.IMAGEN[mi]["nombre"]
@@ -126,8 +135,12 @@ def estimar(cliente, sprint_id, campana_id=None, modelo_video=None, modelo_image
         "%(videos)s video(s) (%(modelo_v)s) y %(imagenes)s imagen(es) (%(modelo_i)s): USD %(usd)s estimado · "
         "acumulado del sprint USD %(acumulado)s · tiempo estimado %(tiempo)s",
         videos=videos, modelo_v=nombre_v, imagenes=imagenes, modelo_i=nombre_i,
-        usd=f"{usd:.2f}", acumulado=f"{acumulado:.2f}", tiempo=_texto_tiempo(segundos))
-    return {"videos": videos, "imagenes": imagenes, "usd": round(usd, 4), "segundos": segundos, "modelo_video": mv,
+        usd=f"{gastos.precio(usd):.2f}", acumulado=f"{gastos.precio(acumulado):.2f}", tiempo=_texto_tiempo(segundos))
+    if qa_usd:
+        texto += " · " + gettext("incluye el control de calidad automático de cada pieza (USD %(qa)s)",
+                                 qa=f"{gastos.precio(qa_usd):.2f}")
+    return {"videos": videos, "imagenes": imagenes, "usd": round(usd, 4), "qa_usd": qa_usd, "segundos": segundos,
+            "modelo_video": mv,
             "modelo_imagen": mi, "modelo_video_nombre": nombre_v, "modelo_imagen_nombre": nombre_i,
             "acumulado_usd": round(acumulado, 4), "texto": texto}
 
@@ -309,6 +322,11 @@ def lanzar_lote(cliente, sprint_id, campana_id=None, modelo_video=None, modelo_i
     sp = _sprint(cliente, sprint_id)
     mv, mi = modelos(cliente, modelo_video, modelo_imagen)
     est = estimar(cliente, sprint_id, campana_id, mv, mi)
+    # Cobros (spec 2026-10-08 §5): el lote entero se pide antes de reservar la
+    # primera idea. Los videos pasan por el director (gratis) y su generación
+    # vuelve a pedir y reservar al lanzarse; las imágenes reservan al encolar.
+    if est["videos"] or est["imagenes"]:
+        libro.exigir(cliente, est["usd"])
     encoladas, omitidas, cf_ids = 0, 0, []
     for c, i in pendientes(cliente, sprint_id, campana_id):
         reserva = reserva_placeholder(i["id"])
@@ -326,7 +344,17 @@ def lanzar_lote(cliente, sprint_id, campana_id=None, modelo_video=None, modelo_i
                                    {"cp_id": i["id"], "error": str(e)}, campana_id=c["id"])
             continue
         entry = creative_flow.cargar(cliente)[cf_id]
-        if _encolar_pieza(cliente, cf_id, entry):
+        try:
+            encolada = _encolar_pieza(cliente, cf_id, entry)
+        except SaldoInsuficiente as e:
+            # Otro gasto se llevó el saldo a mitad del lote: la sesión quedó en
+            # error con la frase (flowplus_lanzar) y el lote sigue con lo demás.
+            encolada = False
+            datos.registrar_evento(cliente, sprint_id, "pieza_omitida",
+                                   datos.texto_guardado(cliente, N_("«%(titulo)s» no se pudo preparar: %(error)s"),
+                                                        titulo=i['titulo'], error=e.frase_proyecto()),
+                                   {"cp_id": i["id"], "error": "saldo_insuficiente"}, campana_id=c["id"])
+        if encolada:
             encoladas += 1
             cf_ids.append(cf_id)
         else:
@@ -341,7 +369,7 @@ def lanzar_lote(cliente, sprint_id, campana_id=None, modelo_video=None, modelo_i
         mensaje = datos.texto_guardado(
             cliente, N_("Lote de %(encoladas)s pieza(s) encolado: %(videos)s video(s), %(imagenes)s imagen(es), "
                        "USD %(usd)s estimado"),
-            encoladas=encoladas, videos=est['videos'], imagenes=est['imagenes'], usd=f"{est['usd']:.2f}")
+            encoladas=encoladas, videos=est['videos'], imagenes=est['imagenes'], usd=f"{gastos.precio(est['usd'], cliente):.2f}")
         datos.registrar_evento(cliente, sprint_id, "lote_encolado", mensaje,
                                {"encoladas": encoladas, "omitidas": omitidas, "usd": est["usd"], "campana_id": campana_id,
                                 "modelo_video": mv, "modelo_imagen": mi}, campana_id=campana_id)
@@ -385,6 +413,9 @@ def regenerar(cliente, cp_id):
     sesión duplicada de acá se archiva sin encolarse nunca, en vez de dejar
     dos regeneraciones corriendo para la misma idea (double spend)."""
     i = _idea_con_sesion(cliente, cp_id)
+    # Cobros (spec 2026-10-08 §5): sin saldo no se duplica la sesión ni se
+    # borra el QA; el manejador común responde.
+    libro.exigir(cliente, flowplus_lanzar.costo_estimado(creative_flow.cargar(cliente).get(i["cf_id"])))
     nuevo = creative_flow.duplicar(cliente, i["cf_id"])
     if not datos.reclamar_cf(cliente, cp_id, nuevo, esperado=i["cf_id"]):
         creative_flow.archivar_concepto(cliente, nuevo, "regeneración duplicada")
@@ -415,6 +446,11 @@ def pieza_viva(p):
     return est is None and es_reserva(p.get("cf_id")) and not reserva_vencida(p.get("cf_id"))
 
 
+def _claves_piezas(piezas):
+    """(clave del gasto, costo) de cada pieza de Crear de un sprint: `video:<cf_id>` / `imagen:<cf_id>`."""
+    return [(f"{p.get('tipo') or 'video'}:{p.get('cf_id')}", p.get("costo_usd")) for p in piezas if p.get("cf_id")]
+
+
 def _resumen(piezas, planeadas):
     r = {"planeadas": planeadas, "encoladas": 0, "generando": 0, "listas": 0, "error": 0, "aprobadas": 0,
          "costo_usd": 0.0, "segundos_restantes": 0}
@@ -435,6 +471,9 @@ def _resumen(piezas, planeadas):
                 r["encoladas"] += 1
             r["segundos_restantes"] += SEGUNDOS_VIDEO if p.get("tipo") == "video" else SEGUNDOS_IMAGEN
     r["costo_usd"] = round(r["costo_usd"], 4)
+    if piezas and vista_cobros.ver_cobrado_aqui(piezas[0].get("cliente")):
+        # Lo «gastado» de un lote que ve el cliente de un proyecto que cobra es lo cobrado (cobros §7).
+        r["costo_usd"] = vista_cobros.suma_vista(piezas[0].get("cliente"), _claves_piezas(piezas))
     r["en_curso"] = (r["encoladas"] + r["generando"]) > 0
     return r
 

@@ -664,3 +664,52 @@ def test_pnd030_color_sin_fotos_avisa_sin_borrar_fotos_locales(entorno):
     importador._bajar_a([], str(destino), _prod(), errores, 'color azul')
     assert errores and 'color azul' in str(errores) and 'sin fotos' in str(errores)
     assert (destino / '01.png').read_bytes() == PNG
+
+
+def _cobra_con_saldo(milesimas):
+    import db
+    from cobros import libro
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    if milesimas:
+        with db.conectar() as con:
+            libro.acreditar(con, "acme", "ajuste", milesimas, "ajuste", usuario="admin", detalle="prueba")
+
+
+def _movimientos_acme():
+    import db
+    import sqlalchemy as sa
+    m = db.movimiento_saldo
+    with db.conectar() as con:
+        return [r.tipo for r in con.execute(sa.select(m.c.tipo).where(m.c.cliente == "acme").order_by(m.c.id)).all()]
+
+
+def test_proyecto_que_cobra_sin_saldo_sincroniza_sin_regla_ni_cobro(entorno):
+    """Cobros (2026-10-08, ruling del orquestador): la sincronización de la
+    tienda está exenta del respaldo del worker; sin saldo para la regla de
+    fidelidad, el producto entra igual y queda sin regla (como cuando Claude
+    no la puede escribir), sin llamar a Claude ni anotar gasto ni cobro."""
+    import catalogo_productos
+    import gastos
+    import importador
+    import tiendas
+    _cobra_con_saldo(0)
+    res = importador.importar_lista("acme", "shopify", [_prod()])
+    assert res["nuevos"] == 1 and res["activos"] == 1
+    assert tiendas.productos("acme")[0]["activo_catalogo_id"] == "cojin_azul"
+    assert not catalogo_productos.encontrar("acme", "cojin_azul", "producto").get("regla_propia")
+    assert entorno["reglas"] == []
+    assert gastos.historial("acme") == [] and _movimientos_acme() == []
+
+
+def test_proyecto_que_cobra_con_saldo_paga_la_regla(entorno):
+    import catalogo_productos
+    import gastos
+    import importador
+    from cobros import libro
+    _cobra_con_saldo(1000)
+    importador.importar_lista("acme", "shopify", [_prod()])
+    assert catalogo_productos.encontrar("acme", "cojin_azul", "producto")["regla_propia"]
+    assert entorno["reglas"] == ["Cojín Azul"]
+    assert [g["tipo"] for g in gastos.historial("acme")] == ["regla_producto"]
+    assert _movimientos_acme() == ["ajuste", "cobro"]
+    assert libro.saldo("acme") == 1000 - libro.precio_milesimas(gastos.TARIFAS["regla_producto"], 1.5)

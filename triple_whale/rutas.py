@@ -21,8 +21,10 @@ from datetime import date
 from flask import Blueprint, abort, flash, redirect, render_template, request, session, url_for
 from flask_babel import gettext
 
+import gastos
 import idiomas
 import triple_whale_tiendas
+from cobros import SaldoInsuficiente, libro
 from tareas import triple_whale as tareas_tw
 from triple_whale import analisis, datos, panel, puente, resultados
 
@@ -145,13 +147,22 @@ def evaluar(cliente):
     if not muestra:
         flash(gettext("Todavía no hay anuncios con datos suficientes para evaluar con IA."), "error")
         return _volver(cliente)
+    # Cobros (spec 2026-10-08 §5): sin saldo no se crea la evaluación; el
+    # manejador común responde. La reserva la hace el encolado.
+    usd = gastos.estimar("evaluacion_tw", n=len(muestra))["usd"]
+    libro.exigir(cliente, usd)
     eid = datos.crear_evaluacion(cliente, desde, hasta, config["moneda"], muestra,
                                  pedido_por=session.get("usuario"))
     datos.actualizar_evaluacion(eid, extra={"modelo": config["modelo_atribucion"],
                                             "ventana": config["ventana_atribucion"], "canal": canal,
                                             "tienda_id": tienda_id, "pais": tienda["pais"] if tienda else None,
                                             "benchmarks": ev["benchmarks"], "meta_roas": ev["meta_roas"]})
-    if not tareas_tw.encolar_evaluacion(cliente, eid):
+    try:
+        encolada = tareas_tw.encolar_evaluacion(cliente, eid, costo_estimado=usd)
+    except SaldoInsuficiente:
+        datos.borrar_evaluacion(cliente, eid)
+        raise
+    if not encolada:
         datos.borrar_evaluacion(cliente, eid)
         flash(gettext("Ya hay una evaluación con IA en curso."), "warn")
         return _volver(cliente)

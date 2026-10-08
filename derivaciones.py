@@ -60,7 +60,9 @@ from doctrina import aprendizajes as doctrina_aprendizajes
 import experimentos
 import lanzador
 import proyectos
+import gastos
 import trabajos
+from cobros import SaldoInsuficiente
 from final_edition import ETAPAS_FINAL
 from final_edition.tipos import PAISES
 from flowplus_prompt import ORDEN_ENFOQUES as ENFOQUES
@@ -457,11 +459,18 @@ def _encolar_clon(cliente, cf_id, tipo="video"):
     job_id = f"{cliente}__{cf_id}__creative_flow"
     if trabajos.en_curso(job_id):
         return False
+    import flowplus_lanzar  # perezoso: el estimado vive con el lanzamiento de Crear
+    costo = flowplus_lanzar.costo_estimado(_sesion(cliente, cf_id))
     creative_flow.actualizar(cliente, cf_id, estado="video_generando")
-    return trabajos.encolar(job_id, "flowplus_imagen" if tipo == "imagen" else "flowplus_video",
-                            {"cliente": cliente, "cf_id": cf_id}, cliente=cliente,
-                            duracion_estimada=60 if tipo == "imagen" else 180,
-                            etapas=ETAPAS_CREATIVE_FLOW, max_intentos=1)
+    try:
+        return trabajos.encolar(job_id, "flowplus_imagen" if tipo == "imagen" else "flowplus_video",
+                                {"cliente": cliente, "cf_id": cf_id}, cliente=cliente,
+                                duracion_estimada=60 if tipo == "imagen" else 180,
+                                etapas=ETAPAS_CREATIVE_FLOW, max_intentos=1, costo_estimado=costo)
+    except SaldoInsuficiente as e:
+        # Sin esto la sesión quedaría «generando» sin trabajo y el item esperaría siempre.
+        creative_flow.actualizar(cliente, cf_id, estado="error", error=e.frase_proyecto())
+        raise
 
 
 def _encolar_final(cliente, cf_id, idioma, pais, opciones):
@@ -482,10 +491,15 @@ def _encolar_final(cliente, cf_id, idioma, pais, opciones):
     existente = creative_flow.final_por_legado(cliente, legado)
     if existente is not None and existente.get("estado") != "error":
         return legado
-    creative_flow.crear_final(cliente, cf_id, idioma, pais, variante=variante)
-    trabajos.encolar(job_id, "final_producir",
-                     {"cliente": cliente, "cf_id": cf_id, "idioma": idioma, "pais": pais, "opciones": dict(opciones)},
-                     cliente=cliente, duracion_estimada=240, etapas=ETAPAS_FINAL, max_intentos=1)
+    final_id = creative_flow.crear_final(cliente, cf_id, idioma, pais, variante=variante)
+    try:
+        trabajos.encolar(job_id, "final_producir",
+                         {"cliente": cliente, "cf_id": cf_id, "idioma": idioma, "pais": pais, "opciones": dict(opciones)},
+                         cliente=cliente, duracion_estimada=240, etapas=ETAPAS_FINAL, max_intentos=1,
+                         costo_estimado=gastos.estimar("final", paises=1)["usd"])
+    except SaldoInsuficiente as e:
+        creative_flow.actualizar_final(cliente, final_id, estado="error", error=e.frase_proyecto())
+        raise
     return legado
 
 
@@ -590,10 +604,16 @@ def _avanzar_finales(cliente, experimento_id, d, item):
 
 
 def _avanzar_item(cliente, experimento_id, d, item):
-    if item["estado"] == "produciendo_clon":
-        _avanzar_clon(cliente, experimento_id, d, item)
-    elif item["estado"] == "produciendo_finales":
-        _avanzar_finales(cliente, experimento_id, d, item)
+    try:
+        if item["estado"] == "produciendo_clon":
+            _avanzar_clon(cliente, experimento_id, d, item)
+        elif item["estado"] == "produciendo_finales":
+            _avanzar_finales(cliente, experimento_id, d, item)
+    except SaldoInsuficiente as e:
+        # Cobros (spec 2026-10-08 §5.4): corre en el worker (o en la puerta del
+        # decisor); sin saldo el item falla con la frase y nada se encola. Un
+        # rescate fallido vuelve como propuesta para reintentarlo tras recargar.
+        _fallar(cliente, experimento_id, d, item, e.frase_proyecto())
 
 
 def _lanzar_piezas(cliente, experimento_id):

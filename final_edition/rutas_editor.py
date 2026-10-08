@@ -312,7 +312,7 @@ def subtitulos_estimar(cliente, edicion_id):
         return jsonify({"faltan": [], "segundos": 0, "usd": 0, "precio": "", "gratis": True})
     estimado = gastos.estimar("transcripcion", segundos=segundos, sin_duracion=sin_duracion)
     return jsonify({"faltan": faltan, "segundos": None if sin_duracion else round(segundos, 1),
-                    "usd": estimado["usd"], "precio": estimado["texto"], "gratis": False})
+                    "usd": estimado["usd_precio"], "precio": estimado["texto"], "gratis": False})   # con margen (cobros §6)
 
 
 @bp.post("/<int:edicion_id>/subtitulos/transcribir", endpoint="transcribir")
@@ -360,7 +360,8 @@ def transcribir_subtitulos(cliente, edicion_id):
     trabajos.encolar(job_id, "material_transcribir",
                      {"cliente": cliente, "edicion_id": edicion_id, "material_ids": faltan, "idioma": idioma},
                      duracion_estimada=20 + int(segundos // 4), etapas=list(tareas_edicion.ETAPAS_TRANSCRIBIR),
-                     cliente=cliente, max_intentos=1)
+                     cliente=cliente, max_intentos=1,
+                     costo_estimado=gastos.estimar("transcripcion", segundos=segundos)["usd"])
     return jsonify({"job_id": job_id}), 202
 
 
@@ -401,7 +402,7 @@ def voz_estimar(cliente, edicion_id):
     solo_subtitulos = bool(existente) and not ya_existe
     estimado = gastos.estimar("voz_editor", caracteres=len(texto), solo_subtitulos=solo_subtitulos,
                               duracion_ms=existente.get("duracion_ms") if existente else None)
-    return jsonify({"caracteres": len(texto), "usd": estimado["usd"], "precio": estimado["texto"],
+    return jsonify({"caracteres": len(texto), "usd": estimado["usd_precio"], "precio": estimado["texto"],   # con margen (cobros §6)
                     "ya_existe": ya_existe, "solo_subtitulos": solo_subtitulos})
 
 
@@ -435,10 +436,12 @@ def voz(cliente, edicion_id):
     job_id = tareas_edicion.job_id_voz(cliente, edicion_id)
     if trabajos.en_curso(job_id):
         return jsonify({"error": gettext("Ya se está creando una voz en esta edición: espera a que termine.")}), 409
+    estimado = gastos.estimar("voz_editor", caracteres=len(texto), solo_subtitulos=bool(existente),
+                              duracion_ms=existente.get("duracion_ms") if existente else None)
     trabajos.encolar(job_id, "editor_voz",
                      {"cliente": cliente, "edicion_id": edicion_id, "texto": texto, "voz": voz_, "idioma": idioma,
                       "velocidad": velocidad}, duracion_estimada=40, etapas=list(tareas_edicion.ETAPAS_VOZ),
-                     cliente=cliente, max_intentos=1)
+                     cliente=cliente, max_intentos=1, costo_estimado=estimado["usd"])
     return jsonify({"job_id": job_id, "clave": clave}), 202
 
 

@@ -1143,9 +1143,12 @@ def _opciones(carga):
             "monedas": list(carga.monedas)}
 
 
-def contexto(cliente, filtro, ahora_iso=None):
+def contexto(cliente, filtro, ahora_iso=None, total_entre=None):
     """Todo lo que pinta el centro de resultados para un filtro. `datos_graficos` es apto para JSON (listas, sin
-    fechas): lo que dibuja el JS de la pantalla."""
+    fechas): lo que dibuja el JS de la pantalla. `total_entre`: de dónde sale «Generación con IA» (por defecto el
+    costo, `gastos.total_entre`; la ruta pasa el de `cobros.vista.gasto_para`: a un cliente de un proyecto que
+    cobra, lo cobrado)."""
+    total_entre = total_entre or gastos.total_entre
     carga = cargar(cliente, filtro, ahora_iso)
     per = carga.per
     lista, indic = piezas(carga, proyectos.reglas_defecto(cliente)), indicadores(carga)
@@ -1156,7 +1159,7 @@ def contexto(cliente, filtro, ahora_iso=None):
         "metrica": "roas" if carga.datos.exps and all(_metrica_principal(e) == "roas" for e in carga.datos.exps) else "ctr",
         "embudo": embudo(carga, promedio_embudo(cliente)), "piezas": lista, "evolucion": lista[:EVOLUCION_PIEZAS],
         "desgloses": desglose, "paises": paises(carga), "experimentos": experimentos_tarjetas(carga),
-        "generacion": gastos.total_entre(cliente, tablero.INICIO if per["es_todo"] else per["desde"], per["hasta"]),
+        "generacion": total_entre(cliente, tablero.INICIO if per["es_todo"] else per["desde"], per["hasta"]),
         "detalle_meta": {ex["id"]: (ex.get("extra") or {}).get("detalle_meta") for ex in carga.datos.exps},
         "hay_detalle": bool(carga.dias_act),
         "datos_graficos": {

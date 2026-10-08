@@ -1,6 +1,7 @@
 """
-Tareas del worker para Experimentos: lanzar (crea objetos en Meta, en pausa;
-max_intentos=1 y hook de interrupción como meta_publicar), refrescar métricas
+Tareas del worker para Experimentos: lanzar (crea objetos en Meta en pausa y,
+con `activar` en el payload, los activa si todo salió bien — pedido de Daniel
+2026-10-08; max_intentos=1 y hook de interrupción como meta_publicar), refrescar métricas
 de un experimento, decidir (Bloque 4: el decisor dicta un veredicto por pieza
 y pide la acción a acciones.pedir, que respeta el modo y el tope), y las
 periódicas: refrescar todos los que corren, decidir todos los que corren y
@@ -34,6 +35,7 @@ import organico
 import propuestas
 import proyectos
 import trabajos
+from cobros import SaldoInsuficiente, libro
 from doctrina import aprendizajes as doctrina_aprendizajes
 from doctrina import diagnostico as doctrina_diagnostico
 from nicho.avatares import costo_real, modelo_actual
@@ -60,18 +62,40 @@ def job_id_detalle(cliente, experimento_id):
 
 @al_interrumpir("exp_lanzar")
 def interrumpida(tarea, mensaje):
+    """Una interrupción a mitad (también entre lanzar y activar, que sigue en «lanzando») repausa en Meta lo que haya
+    alcanzado a activarse ANTES de marcar el error: nunca queda gastando con el experimento en error aquí."""
     p = tarea["payload"]
     ex = experimentos.obtener(p["cliente"], p["experimento_id"])
     if ex and ex["estado"] == "lanzando":
-        experimentos.actualizar(p["cliente"], p["experimento_id"], estado="error", error=mensaje)
+        lanzador.dejar_sin_gastar(p["cliente"], p["experimento_id"], "error", mensaje)
 
 
 @registrar("exp_lanzar")
 def exp_lanzar(tarea):
+    """Lanza a Meta (todo nace PAUSED). Con `payload["activar"]` (las dos rutas de la persona: «Nuevo experimento» y
+    «Lanzar a Meta»; Daniel 2026-10-08: ese clic, con el gasto diario a la vista, ya es la aprobación) activa el
+    experimento completo SOLO si el lanzamiento terminó sin error: un `lanzar` que falla sale por excepción antes de
+    llegar aquí. Un fallo al activar no relanza nada (max_intentos=1): queda en pausa con su motivo."""
     p = tarea["payload"]
     job_id = tarea.get("job_id")
-    return lanzador.lanzar(p["cliente"], p["experimento_id"],
-                           on_etapa=lambda nombre: trabajos.reportar(job_id, etapa=nombre))
+    activar = bool(p.get("activar"))
+    if not activar:
+        return lanzador.lanzar(p["cliente"], p["experimento_id"],
+                               on_etapa=lambda nombre: trabajos.reportar(job_id, etapa=nombre))
+    # Con activar, `lanzar` no suelta «lanzando»: lo suelta activar_tras_lanzar (a corriendo o a pausado con motivo).
+    # El finally garantiza que nunca quede en «lanzando» al salir, falle lo que falle en medio (ronda 2 de
+    # guardian-gasto, 2026-10-08): repausa en Meta y lo deja en pausa con el motivo, o en error si no se terminó de crear.
+    motivo = None
+    try:
+        lanzador.lanzar(p["cliente"], p["experimento_id"], soltar=False,
+                        on_etapa=lambda nombre: trabajos.reportar(job_id, etapa=nombre))
+        trabajos.reportar(job_id, etapa=lanzador.ETAPA_ACTIVAR)
+        return lanzador.activar_tras_lanzar(p["cliente"], p["experimento_id"])
+    except Exception as e:
+        motivo = cola.sin_token(str(e))
+        raise
+    finally:
+        lanzador.soltar_lanzando(p["cliente"], p["experimento_id"], motivo)
 
 
 @registrar("exp_refrescar")
@@ -290,11 +314,24 @@ def _diagnosticar(cliente, ex, pz, v, snaps, reglas, ctx, tarea):
     except Exception:  # noqa: BLE001 — sin guion/producto el diagnóstico sigue con menos datos
         pass
     try:
+        # Cobros (revisión final 2026-10-08): el decisor corre solo, cada hora.
+        # En un proyecto que cobra y no tiene saldo, la llamada a Claude NO se
+        # hace (no se paga ni se cobra): quedan las pistas, que no cuestan.
+        libro.exigir(cliente, gastos.TARIFAS["diagnostico_pieza"])
+    except SaldoInsuficiente as e:
+        sin_saldo = {"error": e.frase_proyecto(), "sin_saldo": True, "pistas": doctrina_diagnostico.pistas(
+            snaps or [], reglas or {}, contexto_pistas), "en": db.ahora()}
+        _anotar_diagnostico(cliente, ex, pz, sin_saldo,
+                            gettext("%(nombre)s (%(pais)s): diagnóstico no disponible: %(error)s",
+                                    nombre=pz["nombre"], pais=pz["pais"], error=sin_saldo["error"]))
+        return None
+    try:
         d, ent, sal = doctrina_diagnostico.diagnosticar(pz, v, snaps or [], reglas or {}, extras, idioma=idioma)
     except doctrina_diagnostico.ErrorDiagnostico as e:
         if e.tokens_entrada or e.tokens_salida:
             gastos.registrar_seguro(cliente, "revision", costo_real(e.tokens_entrada, e.tokens_salida), referencia,
                                     proveedor="anthropic", detalle=gettext("diagnóstico de perdedora · respuesta inválida"),
+                                    entregado=False,
                                     extra={"tokens_entrada": e.tokens_entrada, "tokens_salida": e.tokens_salida,
                                            "modelo": modelo_actual()})
         error = {"error": cola.sin_token(str(e))[:200], "pistas": doctrina_diagnostico.pistas(

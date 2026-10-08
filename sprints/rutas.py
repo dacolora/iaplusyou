@@ -16,6 +16,7 @@ from flask import Blueprint, abort, flash, jsonify, redirect, render_template, r
 from flask_babel import gettext
 
 import catalogo_productos
+from cobros import libro
 import creative_flow
 import db
 import doctrina
@@ -1369,10 +1370,13 @@ def lote_estimar(cliente, sid):
     _sprint_o_404(cliente, sid)
     cid = request.args.get("campana_id", type=int)
     try:
-        return jsonify(produccion.estimar(cliente, sid, campana_id=cid, modelo_video=request.args.get("modelo_video"),
-                                          modelo_imagen=request.args.get("modelo_imagen")))
-    except datos.ErrorDatos as e:
-        return jsonify({"ok": False, "error": str(e)}), 400
+        e = produccion.estimar(cliente, sid, campana_id=cid, modelo_video=request.args.get("modelo_video"),
+                               modelo_imagen=request.args.get("modelo_imagen"))
+    except datos.ErrorDatos as ex:
+        return jsonify({"ok": False, "error": str(ex)}), 400
+    # El botón pinta `usd` y `texto`: lo que ve la persona (cobros, spec 2026-10-08 §6).
+    return jsonify({**e, "usd": gastos.precio(e["usd"]), "acumulado_usd": gastos.precio(e["acumulado_usd"]),
+                    "qa_usd": gastos.precio(e["qa_usd"])})
 
 
 @bp.post("/<int:sid>/lote")
@@ -1398,9 +1402,9 @@ def lote(cliente, sid):
         return _volver(cliente, sid)
     texto = gettext("Lote encolado: %(n)s pieza(s), USD %(usd)s estimado. "
                     "Te avisamos por correo al terminar si está configurado.",
-                    n=r['encoladas'], usd=f"{r['usd']:.2f}")
+                    n=r['encoladas'], usd=f"{gastos.precio(r['usd']):.2f}")
     if _quiere_json():
-        return jsonify({"ok": True, "encoladas": r["encoladas"], "omitidas": r["omitidas"], "usd": r["usd"],
+        return jsonify({"ok": True, "encoladas": r["encoladas"], "omitidas": r["omitidas"], "usd": gastos.precio(r["usd"]),
                         "mensaje": texto})
     flash(texto, "ok")
     return _volver(cliente, sid)
@@ -1510,6 +1514,10 @@ def pieza_qa(cliente, cp_id):
             return jsonify({"ok": False, "error": gettext("Esa pieza todavía no está lista para el QA.")}), 400
         flash(gettext("Esa pieza todavía no está lista para el QA."), "error")
         return destino
+    # Cobros (spec 2026-10-08 §5): sin saldo no se borra el QA anterior; el
+    # manejador común responde. Pide lo mismo que `encolar_qa` va a reservar
+    # (revisión final 2026-10-08), para no borrar el QA y quedarse sin encolar.
+    libro.exigir(cliente, gastos.TARIFAS["revision_pieza"])
     if not datos.limpiar_qa_no_aprobada(cliente, cp_id, i["cf_id"]):
         if _quiere_json():
             return jsonify({"ok": False, "error": gettext("Esa pieza ya pasó el QA o está aprobada.")}), 409

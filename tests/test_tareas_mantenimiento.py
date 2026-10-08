@@ -67,6 +67,23 @@ def test_cola_limpiar_borra_cerradas_viejas_y_periodicas_pero_nunca_vivas(base_t
     assert mantenimiento.ejecutar_cola_limpiar({"payload": {}}) == "0 tareas viejas borradas."
 
 
+def test_cola_limpiar_borra_las_reservas_de_saldo_sin_trabajo_vivo(base_temporal):
+    """Cobros 7/11: la limpieza diaria también borra las reservas de saldo de
+    trabajos que ya no están vivos (no cuentan; solo ocupan filas)."""
+    import cola
+    from tareas import mantenimiento
+    db = base_temporal
+    cola.encolar("flowplus_video", {}, job_id="acme__vivo", cliente="acme")
+    with db.conectar() as con:
+        for job in ("acme__vivo", "acme__muerto"):
+            con.execute(db.reserva_saldo.insert().values(cliente="acme", job_id=job, milesimas=100,
+                                                         creada_en="2026-10-08T10:00:00"))
+    mantenimiento.ejecutar_cola_limpiar({"payload": {}})
+    with db.conectar() as con:
+        quedan = [r.job_id for r in con.execute(db.reserva_saldo.select())]
+    assert quedan == ["acme__vivo"]
+
+
 def test_db_respaldar_copia_consistente_y_conserva_las_ultimas(base_temporal, tmp_path):
     from tareas import mantenimiento
     carpeta = tmp_path / "respaldos"

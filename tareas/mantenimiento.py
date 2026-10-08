@@ -8,8 +8,13 @@ almacenamiento del 2026-09-28: nada se limpiaba nunca).
                        materiales.descargar, sprints.qa.archivo_local,
                        publicador.archivo_local).
   cola_limpiar {}      diaria — cola.limpiar_terminadas: filas hecha/error
-                       viejas, las periódicas vacías y límites de kv de
-                       más de siete días (o ilegibles).
+                       viejas y las periódicas vacías; también las reservas
+                       de saldo cuyo trabajo ya no está vivo
+                       (cobros.libro.limpiar_reservas_muertas: ya no cuentan,
+                       solo ocupan filas), los eventos de Bold con firma
+                       inválida de más de 30 días
+                       (cobros.recargas.limpiar_eventos_sin_firma) y los
+                       límites de kv de más de siete días (o ilegibles).
   db_respaldar {}      diaria — copia de data/creatv.db en data/respaldos/
                        (Connection.backup, seguro con WAL), conserva las
                        últimas RESPALDOS_CONSERVAR. Antes solo había
@@ -132,7 +137,24 @@ def ejecutar_salidas_limpiar(tarea):
 @registrar("cola_limpiar")
 def ejecutar_cola_limpiar(tarea):
     n = cola.limpiar_terminadas()
-    limpiar_limites()      # después: si falla, la cola ya quedó limpia
+    try:
+        from cobros import libro  # noqa: PLC0415
+        reservas = libro.limpiar_reservas_muertas()
+        if reservas:
+            log.info("%s reservas de saldo sin trabajo vivo borradas", reservas)
+    except Exception:  # noqa: BLE001 — limpiar reservas no frena la limpieza de la cola
+        log.exception("no se pudieron limpiar las reservas de saldo")
+    try:
+        from cobros import recargas  # noqa: PLC0415
+        eventos = recargas.limpiar_eventos_sin_firma()
+        if eventos:
+            log.info("%s eventos de Bold con firma inválida viejos borrados", eventos)
+    except Exception:  # noqa: BLE001 — tampoco frena la limpieza de la cola
+        log.exception("no se pudieron limpiar los eventos de Bold sin firma")
+    try:
+        limpiar_limites()
+    except Exception:  # noqa: BLE001 — tampoco frena la limpieza de la cola
+        log.exception("no se pudieron limpiar los límites viejos de kv")
     return gettext("%(n)s tareas viejas borradas.", n=n)
 
 
