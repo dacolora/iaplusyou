@@ -681,3 +681,17 @@ def test_alerta_de_mer_usa_la_misma_variacion_que_la_tarjeta(app):  # noqa: F811
     mer = next(t for t in corto["resultados"]["tarjetas"] if t["clave"] == "mer")
     assert mer["variacion"] < -0.5 and any("MER de la tienda" in a["texto"] for a in corto["alertas"])
     assert not any("MER de la tienda" in a["texto"] for a in inicio["alertas"])
+
+
+def test_alerta_de_mer_no_compara_contra_un_periodo_fuera_de_la_copia(app):  # noqa: F811
+    """Con 10 días copiados, «7 días» no tiene periodo anterior completo: la tarjeta no compara y la alerta
+    tampoco (antes comparaba contra 3 días sueltos y anunciaba una caída que nadie podía ver en la tarjeta)."""
+    from triple_whale import panel
+    tid = _conectar()
+    _sembrar()
+    tienda = [{"fecha": _hace(d), "gasto": 120, "ingresos": 400 if d > 6 else 150, "pedidos": 5} for d in range(10)]
+    datos.reemplazar_tienda("acme", tid, _hace(9), _hace(0), tienda)
+    with app["dashboard"].app.test_request_context():
+        ctx = panel.contexto("acme", 7)
+    assert ctx["resultados"]["datos"]["comparar"] is False
+    assert not any("MER de la tienda" in a["texto"] for a in ctx["alertas"])
