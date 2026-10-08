@@ -14,6 +14,25 @@ def test_plataforma_de_url():
         assert t.plataforma_de_url(falsa) is None
 
 
+@pytest.mark.parametrize("url", [
+    "https://evil.com\\@apps.apple.com/x",
+    "https://evil.com\\@play.google.com/store",
+    "https://apps.apple.com:444/x",
+    "https://x%2f@apps.apple.com",
+    "https://user:pw@play.google.com/x",
+    "https://apps.apple.com/co/app/x /id1",
+    "https://apps.apple.com/co/app/x\x00/id1",
+    "https://apps.apple.com:99999/x",
+    "https://apps.apple.com:/x",
+])
+def test_plataforma_de_url_rechaza_hosts_disfrazados(url):
+    assert t.plataforma_de_url(url) is None
+
+
+def test_plataforma_de_url_acepta_host_en_mayusculas():
+    assert t.plataforma_de_url("https://APPS.APPLE.COM/co/app/x/id1") == "ios"
+
+
 def test_validar_urls_devuelve_solo_las_presentes():
     ios = "https://apps.apple.com/co/app/forja/id123"
     andr = "https://play.google.com/store/apps/details?id=com.x"

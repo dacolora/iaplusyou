@@ -12,13 +12,22 @@ _HOSTS = {"apps.apple.com": "ios", "itunes.apple.com": "ios", "play.google.com":
 
 def plataforma_de_url(url):
     """'ios' / 'android' si es una URL https de la tienda; None en cualquier otro caso."""
+    url = (url or "").strip()
+    # Un navegador y urlparse no siempre leen el mismo host: con «\» o un
+    # «usuario@» delante, `https://evil.com\@apps.apple.com/x` le parece a
+    # urlparse de la App Store y el navegador va a evil.com. Se rechaza todo
+    # lo que no sea exactamente «https://<host de la tienda>/…».
+    if "\\" in url or any(c.isspace() or ord(c) < 32 or ord(c) == 127 for c in url):
+        return None
     try:
-        u = urlparse((url or "").strip())
+        u = urlparse(url)
+        if u.username is not None or u.password is not None or u.port is not None:
+            return None
     except ValueError:
         return None
     if u.scheme != "https":
         return None
-    return _HOSTS.get((u.hostname or "").lower())
+    return _HOSTS.get(u.netloc.lower())
 
 
 def validar_urls(ios_url, android_url):
