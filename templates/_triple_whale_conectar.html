@@ -75,7 +75,7 @@
         <input type="hidden" name="tienda_id" value="{{ t.id }}">
         <button class="btn-guardar btn-xs">{{ _('Probar conexión') }}</button>
       </form>
-      <form method="post" action="{{ url_for('cfg_triple_whale_desconectar', cliente=cliente) }}" class="inline" data-confirmar="{{ _('¿Quitar la tienda %(tienda)s? Se borran sus métricas copiadas y sus ventas dejan de contar en los experimentos de su país (las evaluaciones con IA se conservan).', tienda=(t.nombre if t.pais else t.dominio)) }}">
+      <form method="post" action="{{ url_for('cfg_triple_whale_desconectar', cliente=cliente) }}" class="inline" data-confirmar="{{ _('¿Quitar la tienda %(tienda)s? Se borran sus métricas copiadas y los experimentos de su país pasan a usar las ventas de Meta (las evaluaciones con IA se conservan).', tienda=(t.nombre if t.pais else t.dominio)) }}">
         <input type="hidden" name="tienda_id" value="{{ t.id }}">
         <button class="btn-rechazar btn-xs">{{ _('Quitar') }}</button>
       </form>

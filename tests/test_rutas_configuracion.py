@@ -527,6 +527,19 @@ def test_triple_whale_quitar_una_tienda_deja_la_otra_y_sus_cifras(app):
     assert triple_whale_tiendas.obtener("acme") is None and triple_whale_tiendas.ajustes("acme") is None
 
 
+def test_triple_whale_confirmar_quitar_dice_que_su_pais_pasa_a_las_ventas_de_meta(app):
+    """Revisión del spec (2026-10-08): la confirmación de «Quitar» dice lo que cambia en la plata: los
+    experimentos de ese país pasan a usar las ventas de Meta."""
+    import html as html_mod
+
+    import triple_whale_tiendas
+    triple_whale_tiendas.agregar("acme", "tw_no", "happyflops-norge.myshopify.com")
+    con = html_mod.unescape(_seccion_conexion(app["c"].get("/cliente/acme").data.decode()))
+    confirmar = con[con.index("¿Quitar la tienda"):]
+    confirmar = confirmar[:confirmar.index('"')]
+    assert "Noruega" in confirmar and "pasan a usar las ventas de Meta" in confirmar
+
+
 def test_triple_whale_adivinar_pais_responde_json_sin_llamar_a_nadie(app, monkeypatch):
     import triple_whale
     monkeypatch.setattr(triple_whale, "validar_llave", lambda llave: pytest.fail("no debía llamar"))

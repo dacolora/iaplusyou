@@ -186,11 +186,14 @@ def enlazar_ideas(cliente, anuncios, evaluacion_lista):
 
 def _por_tienda(cliente, tiendas_por_id, desde, hasta, desde_prev, hasta_prev):
     """«Por tienda»: una fila por tienda con sus totales, su MER y la variación
-    de sus ingresos contra el periodo anterior (una consulta)."""
+    de sus ingresos contra el periodo anterior (una consulta). En el orden de
+    `tiendas_por_id` (el de `triple_whale_tiendas.tiendas`: país, luego id),
+    el mismo del selector; la consulta devuelve por id (revisión 2026-10-08)."""
+    por_id = {f["tienda_id"]: f for f in datos.por_tienda(cliente, desde, hasta, desde_prev, hasta_prev)}
     filas = []
-    for f in datos.por_tienda(cliente, desde, hasta, desde_prev, hasta_prev):
-        tienda = tiendas_por_id.get(f["tienda_id"])
-        if not tienda:
+    for tienda_id, tienda in tiendas_por_id.items():
+        f = por_id.get(tienda_id)
+        if not f:
             continue
         a, p = f["actual"], f["previo"]
         ingresos, ingresos_prev = float(a["ingresos"] or 0), float(p["ingresos"] or 0)

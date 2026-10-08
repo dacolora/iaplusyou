@@ -95,8 +95,12 @@
 <script>
   /* Conexión (_triple_whale_conectar.html, incluido arriba en los dos estados):
      confirmar «Quitar» una tienda y, al salir del campo dominio, preseleccionar
-     el país que adivina el servidor (solo si el selector sigue en «Detectar por
-     el dominio»; si la persona ya eligió uno, no se toca). */
+     el país que adivina el servidor. `pais.dataset.auto` recuerda el país que
+     puso este JS: si la persona corrige el dominio y el selector sigue con ese
+     valor, se vuelve a adivinar (norge → sverige pasa de Noruega a Suecia, y un
+     dominio sin pista vuelve a «Detectar por el dominio»); si la persona eligió
+     un país a mano (evento change del selector), no se toca (revisión del spec,
+     2026-10-08). */
   (function () {
     var con = document.getElementById('tw-conexion');
     if (!con) return;
@@ -109,19 +113,34 @@
     var dominio = form.querySelector('[name="dominio_tienda"]');
     var pais = form.querySelector('select[name="pais"]');
     if (!dominio || !pais || !form.dataset.adivinar) return;
-    var ultimo = '';
+    var ultimo = '', pedido = 0;
+    function libre() {
+      // El selector es del JS mientras siga vacío o con el país que el JS puso.
+      return !pais.value || pais.value === pais.dataset.auto;
+    }
     function adivinar() {
       var valor = dominio.value.trim();
-      if (!valor || valor === ultimo || pais.value) return;
+      if (!valor || valor === ultimo || !libre()) return;
       ultimo = valor;
+      var mio = ++pedido;
       fetch(form.dataset.adivinar + '?dominio=' + encodeURIComponent(valor), { headers: { 'X-Requested-With': 'fetch' } })
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (d) {
-          if (!d || !d.pais || pais.value) return;
-          if (pais.querySelector('option[value="' + d.pais + '"]')) pais.value = d.pais;
+          if (!d || mio !== pedido || !libre()) return;
+          if (d.pais && pais.querySelector('option[value="' + d.pais + '"]')) {
+            pais.value = d.pais;
+            pais.dataset.auto = d.pais;
+          } else if (pais.dataset.auto) {
+            pais.value = '';
+            delete pais.dataset.auto;
+          }
         })
         .catch(function () { /* sin red: el servidor vuelve a adivinar al enviar */ });
     }
+    pais.addEventListener('change', function () {
+      delete pais.dataset.auto;   // la persona eligió: el JS ya no lo toca
+      ultimo = '';                // si volvió a «Detectar por el dominio», el próximo blur adivina de nuevo
+    });
     dominio.addEventListener('change', adivinar);
     dominio.addEventListener('blur', adivinar);
   })();

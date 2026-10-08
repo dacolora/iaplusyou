@@ -37,3 +37,49 @@ def test_es_pais():
     assert paises.es_pais("NO") and paises.es_pais("no") and paises.es_pais(" se ")
     assert not paises.es_pais("XX") and not paises.es_pais("EU") and not paises.es_pais("")
     assert not paises.es_pais(None) and not paises.es_pais("NOR")
+
+
+def test_otro_hilo_nunca_ve_el_mapa_listo_y_los_validos_sin_construir(monkeypatch):
+    """Revisión del spec (2026-10-08): `_construir` asignaba el mapa y los códigos válidos en dos pasos; un
+    hilo que llegara entre los dos veía el mapa listo, no construía y leía los válidos en None (TypeError).
+    La prueba detiene al hilo que construye justo después de su PRIMERA asignación global y, en ese
+    momento, pregunta desde otro hilo."""
+    import dis
+    import sys
+    import threading
+
+    for nombre in ("_mapa", "_validos", "_tablas"):
+        monkeypatch.setattr(paises, nombre, None, raising=False)
+    store_global = dis.opmap["STORE_GLOBAL"]
+    pausado, seguir = threading.Event(), threading.Event()
+    codigo = paises._construir.__code__
+
+    def local(frame, evento, arg):
+        if (evento == "opcode" and not pausado.is_set() and frame.f_lasti >= 2
+                and frame.f_code.co_code[frame.f_lasti - 2] == store_global):
+            pausado.set()
+            seguir.wait(5)
+        return local
+
+    def traza(frame, evento, arg):
+        if frame.f_code is not codigo:
+            return None
+        frame.f_trace_opcodes = True
+        return local
+
+    def construir():
+        sys.settrace(traza)
+        try:
+            paises._construir()
+        finally:
+            sys.settrace(None)
+
+    hilo = threading.Thread(target=construir)
+    hilo.start()
+    assert pausado.wait(5)
+    try:
+        resultado = (paises.es_pais("NO"), paises.adivinar_pais("happyflops-norge.myshopify.com"))
+    finally:
+        seguir.set()
+        hilo.join(5)
+    assert resultado == (True, "NO")

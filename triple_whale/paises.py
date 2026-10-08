@@ -17,8 +17,9 @@ _IDIOMAS_NOMBRE = ("en", "es", "nb", "sv", "da", "fi", "de", "fr", "it", "nl", "
 _NO_PAISES = frozenset({"EU", "EZ", "UN", "ZZ", "QO", "XA", "XB"})
 _MAX_UNION = 4          # trozos contiguos que se unen para «new-zealand»
 
-_mapa = None            # {nombre normalizado: código}, se construye una vez
-_validos = None         # códigos de país conocidos
+# ({nombre normalizado: código}, códigos de país conocidos): se construye una vez y se asigna de una
+# sola vez (una tupla), así otro hilo nunca ve el mapa listo y los válidos en None (revisión 2026-10-08).
+_tablas = None
 
 
 def _territorios(locale):
@@ -37,16 +38,20 @@ def _norm(texto):
 
 
 def _construir():
-    global _mapa, _validos
-    if _mapa is not None:
-        return
-    mapa, validos = {}, set(_territorios("en"))
+    """(mapa, válidos). Dos hilos pueden construirlo a la vez: los dos arman lo mismo en locales y el
+    último que asigna gana; ninguno lee un estado a medias."""
+    global _tablas
+    tablas = _tablas
+    if tablas is not None:
+        return tablas
+    mapa, validos = {}, frozenset(_territorios("en"))
     for loc in _IDIOMAS_NOMBRE:
         for codigo, nombre in _territorios(loc).items():
             clave = _norm(nombre)
             if len(clave) >= 4:
                 mapa.setdefault(clave, codigo)
-    _mapa, _validos = mapa, validos
+    _tablas = (mapa, validos)
+    return _tablas
 
 
 def _subdominio(dominio):
@@ -64,17 +69,17 @@ def _subdominio(dominio):
 
 def adivinar_pais(dominio):
     """«happyflops-norge.myshopify.com» -> «NO»; None si el dominio no da pista."""
-    _construir()
+    mapa, validos = _construir()
     trozos = [p for p in re.split(r"[-_.]", _subdominio(dominio)) if p]
     if not trozos:
         return None
     for largo in range(min(_MAX_UNION, len(trozos)), 0, -1):
         for i in range(len(trozos) - largo + 1):
-            codigo = _mapa.get(_norm("".join(trozos[i:i + largo])))
+            codigo = mapa.get(_norm("".join(trozos[i:i + largo])))
             if codigo:
                 return codigo
     ultimo = trozos[-1].upper()
-    if len(ultimo) == 2 and ultimo.isalpha() and ultimo in _validos:
+    if len(ultimo) == 2 and ultimo.isalpha() and ultimo in validos:
         return ultimo
     return None
 
@@ -82,8 +87,8 @@ def adivinar_pais(dominio):
 def es_pais(codigo):
     """True si `codigo` (con o sin mayúsculas) es un país del selector: lo que llega de un
     formulario se valida con esto antes de guardarlo."""
-    _construir()
-    return (codigo or "").strip().upper() in _validos
+    _, validos = _construir()
+    return (codigo or "").strip().upper() in validos
 
 
 def bandera(codigo):

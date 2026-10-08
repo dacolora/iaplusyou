@@ -390,6 +390,24 @@ def test_nota_de_cuenta_compartida_segun_la_tienda_que_se_mira(app):  # noqa: F8
     assert NOTA_COMPARTIDA in todas and NOTA_EVALUAR not in todas
 
 
+def test_por_tienda_va_en_el_orden_de_las_tiendas_no_por_id(app):  # noqa: F811
+    """Revisión del spec (2026-10-08): «Por tienda» sigue el orden de `triple_whale_tiendas.tiendas` (por
+    país, las sin país al final, luego id), el mismo del selector; antes salía por id de la tienda."""
+    sin_pais = _conectar(dominio="acme.myshopify.com")                                   # id menor, sin país
+    se = _conectar(dominio="happyflops-sverige.myshopify.com", pais="SE", llave="tw_llave_se_2")
+    no = _conectar(dominio="happyflops-norge.myshopify.com", pais="NO", llave="tw_llave_no_1")
+    assert sin_pais < se < no
+    for tid in (sin_pais, se, no):
+        datos.reemplazar_tienda("acme", tid, _hace(1), _hace(1), [{"fecha": _hace(1), "ingresos": 100, "gasto": 10}])
+        datos.reemplazar_anuncios_canal("acme", tid, _hace(1), _hace(1), [
+            {"canal": "facebook-ads", "ad_id": f"a{tid}", "fecha": _hace(1), "gasto": 10, "impresiones": 1000}])
+    html = app["c"].get("/cliente/acme/triple-whale/panel").data.decode()
+    por_tienda = html[html.index("tw-por-tienda"):]
+    por_tienda = por_tienda[:por_tienda.index("</table>")]
+    posiciones = [por_tienda.index(t) for t in ("Noruega", "Suecia", "acme.myshopify.com")]
+    assert posiciones == sorted(posiciones)
+
+
 def test_tienda_de_otro_proyecto_o_invalida_es_todas(app):  # noqa: F811
     _dos_tiendas()
     ajena = _conectar(cliente="otro", dominio="otro-norge.myshopify.com")
