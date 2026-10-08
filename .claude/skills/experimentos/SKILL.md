@@ -104,3 +104,18 @@ When the suggested attribution is `pixel`, `experimentos.objetivo_sugerido` is
 `OUTCOME_SALES`; `lanzador.lanzar` then re-checks the Pixel before touching Meta and sends
 `promoted_object={pixel_id, PURCHASE}` on every adset (`meta_ads/adset.py` refuses SALES
 without it). The objective is fixed at creation — Meta doesn't allow changing it.
+
+**Instalaciones de la app** (2026-10-07; spec `docs/superpowers/specs/2026-10-07-experimentos-instalaciones-app-design.md`).
+Un objetivo más del experimento: anuncia una app (App Store iOS y/o Google Play Android) en vez de una web. El
+experimento lleva `extra["app"]` (URLs de tienda y App ID) y **cada pieza tiene una fila por plataforma**
+(`pieza.extra["plataforma"]`; `experimentos.plataformas_de(extra)`), así que el lanzador crea un conjunto por país y
+plataforma (`lanzador._clave_adset`, el presupuesto del país se reparte con `app_tiendas.parte_presupuesto`).
+Activar, pausar, presupuesto y escalar recorren los conjuntos del país con `lanzador._adsets_de_pais`, nunca un solo
+`meta_adset_id`. El App ID de la app anunciada (distinta de la de inicio de sesión) vive en
+`clientes/<cliente>/meta_app_anunciada.json` (`meta_conexion.cargar/guardar_app_anunciada`; se valida con
+`meta_conexion.validar_app_anunciada`: solo dígitos ASCII, y se guarda tras crear con éxito). Se optimiza por
+`LINK_CLICKS` a la tienda: las instalaciones reales solo se miden cuando la app tenga SDK de Meta o un servicio de
+atribución; la app debe estar en modo Live. `exp_probar` y la galería traen su formulario propio; `exp_crear` rechaza
+el objetivo de apps (se crea por el formulario de la galería). Derivar y rescatar quedan omitidos por
+`acciones.pedir` para estos experimentos, y no se agregan piezas nuevas después de lanzar. Meta rechaza una URL de
+tienda con otro objetivo: `meta_errores.explicar` lo dice en palabras. `meta_ads/` es un submódulo.

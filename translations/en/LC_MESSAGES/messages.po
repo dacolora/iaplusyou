@@ -2117,6 +2117,9 @@ msgstr "Apify: %(estado)s · run %(corrida)s"
 msgid "Apify: %(estado)s · corrida %(corrida)s (%(hechas)s/%(total)s)"
 msgstr "Apify: %(estado)s · run %(corrida)s (%(hechas)s/%(total)s)"
 
+msgid "App ID de Meta de tu app"
+msgstr "Meta App ID of your app"
+
 msgid "App de Meta del proyecto:"
 msgstr "Project's Meta app:"
 
@@ -3510,6 +3513,10 @@ msgstr "Confirm my email"
 msgid "Conjunto %(pais)s creado%(con_pixel)s"
 msgstr "Ad set %(pais)s created%(con_pixel)s"
 
+#, python-format
+msgid "Conjunto %(pais)s · %(sistema)s creado"
+msgstr "Ad set %(pais)s · %(sistema)s created"
+
 msgid "Conjunto completo"
 msgstr "Full outfit"
 
@@ -4050,6 +4057,9 @@ msgstr "Derivation %(id)s: could not queue production (%(error)s); the periodic 
 msgid "Derivación planificada a partir de %(nombre)s (experimento hijo %(hijo)s)."
 msgstr "Derivation planned from %(nombre)s (child experiment %(hijo)s)."
 
+msgid "Derivar y rescatar no están disponibles en experimentos de instalaciones de la app."
+msgstr "Derive and rescue aren't available in app install experiments."
+
 msgid "Desarchivar"
 msgstr "Unarchive"
 
@@ -4425,6 +4435,9 @@ msgstr "The %(tipo)s is larger than %(mb)s MB."
 #, python-format
 msgid "El 95 %% de las peticiones tardó esto o menos (aproximado)"
 msgstr "95%% of the requests took this long or less (approximate)"
+
+msgid "El App ID de Meta son solo números (lo encuentras en Meta for Developers)."
+msgstr "The Meta App ID is digits only (you can find it in Meta for Developers)."
 
 msgid "El Buen Fin"
 msgstr "El Buen Fin"
@@ -4840,6 +4853,10 @@ msgstr "The price has to be a positive number (e.g. 89900 or 25.50); I didn't sa
 
 msgid "El presupuesto debe ser un número."
 msgstr "The budget must be a number."
+
+#, python-format
+msgid "El presupuesto diario de cada país se reparte entre %(n)s tiendas y cada parte tiene que alcanzar el mínimo de Meta (%(minimo)s %(moneda)s) en: %(paises)s."
+msgstr "Each country's daily budget is split across %(n)s stores and each share has to reach Meta's minimum (%(minimo)s %(moneda)s) in: %(paises)s."
 
 msgid "El presupuesto diario debe ser mayor que cero."
 msgstr "The daily budget must be greater than zero."
@@ -5361,6 +5378,9 @@ msgstr "In the season, the start date must be before the end date."
 #, python-format
 msgid "En los clips %(lista)s las líneas declaradas no coinciden con las que se dicen."
 msgstr "In clips %(lista)s the declared lines don't match what's actually said."
+
+msgid "En los experimentos de instalaciones de la app todavía no se agregan piezas nuevas después de lanzar."
+msgstr "In app install experiments, new pieces can't be added after launching yet."
 
 msgid "En notion.so/profile/integrations crea una integración interna (solo lectura de contenido)."
 msgstr "At notion.so/profile/integrations create an internal integration (content read-only)."
@@ -6645,6 +6665,9 @@ msgstr "%(vars)s still need to be set in the server's .env (developers.mercadoli
 msgid "Falta describir ✎"
 msgstr "Needs a description ✎"
 
+msgid "Falta el App ID de la app que anuncias: pégalo en Avanzado (lo encuentras en Meta for Developers)."
+msgstr "The App ID of the app you're advertising is missing: paste it in Advanced (you can find it in Meta for Developers)."
+
 #, python-format
 msgid "Falta el check %(k)s."
 msgstr "The %(k)s check is missing."
@@ -6724,6 +6747,9 @@ msgstr "Missing data: the system user's token and the Business id are required."
 
 msgid "Faltan datos: nombre, objetivo, al menos un país, días (1–90), tope, edades (13–65) y una URL de destino http(s)."
 msgstr "Missing data: name, objective, at least one country, days (1–90), cap, ages (13–65) and a http(s) destination URL."
+
+msgid "Faltan datos: objetivo, al menos un país, días (1–90), tope y edades (13–65)."
+msgstr "Missing data: objective, at least one country, days (1–90), cap and ages (13–65)."
 
 msgid "Faltan datos: objetivo, al menos un país, días (1–90), tope, edades (13–65) y una URL de destino http(s)."
 msgstr "Missing data: objective, at least one country, days (1–90), cap, ages (13–65) and a http(s) destination URL."
@@ -7859,6 +7885,9 @@ msgstr "You log in with the store's account and authorize the app: no token gets
 msgid "Inicio"
 msgstr "Start"
 
+msgid "Instalaciones de la app"
+msgstr "App installs"
+
 msgid "Instrumental (sin voz cantada)"
 msgstr "Instrumental (no sung vocals)"
 
@@ -8003,11 +8032,17 @@ msgstr "The AI couldn't build the shots; the basic prompt is there for you to ed
 msgid "La Página %(pagina)s no está entre las que ve el Business de la agencia."
 msgstr "The Page %(pagina)s isn't among the ones the agency's Business can see."
 
+msgid "La URL de Android tiene que ser un enlace https de Google Play (play.google.com)."
+msgstr "The Android URL has to be an https Google Play link (play.google.com)."
+
 msgid "La URL de compra tiene que empezar por http:// o https:// (o ser wa.me/…); no la guardé."
 msgstr "The purchase URL has to start with http:// or https:// (or be wa.me/…); I didn't save it."
 
 msgid "La URL de compra tiene que empezar por http:// o https://."
 msgstr "The purchase URL has to start with http:// or https://."
+
+msgid "La URL de iOS tiene que ser un enlace https de la App Store (apps.apple.com)."
+msgstr "The iOS URL has to be an https App Store link (apps.apple.com)."
 
 msgid "La URL del anuncio no lleva los parámetros de Triple Whale: sus ventas pueden no atribuirse."
 msgstr "The ad URL doesn't carry the Triple Whale parameters: its sales may not be attributed."
@@ -9168,6 +9203,9 @@ msgstr "Meta replied: %(mensaje)s"
 
 msgid "Meta revisa cada anuncio nuevo antes de mostrarlo (normalmente menos de 24 h). Cuando empiece a circular, «Actualizar métricas» trae las cifras."
 msgstr "Meta reviews every new ad before showing it (usually under 24 h). Once it starts running, “Update metrics” brings in the numbers."
+
+msgid "Meta solo acepta un enlace de tienda con el objetivo “Instalaciones de la app”: elige ese objetivo en Avanzado o cambia el destino por una página web."
+msgstr "Meta only accepts a store link with the “App installs” objective: choose that objective in Advanced or change the destination to a web page."
 
 msgid "Meta tuvo una falla temporal: reintenta en unos minutos."
 msgstr "Meta had a temporary failure: try again in a few minutes."
@@ -10568,6 +10606,9 @@ msgstr "Background opacity"
 msgid "Opiniones de Mercado Libre"
 msgstr "Mercado Libre reviews"
 
+msgid "Optimiza por clics a la tienda; las instalaciones reales se miden cuando la app tenga el SDK de Meta o un servicio de atribución. Deja la app en modo Live en Meta for Developers."
+msgstr "It optimizes for clicks to the store; real installs are measured once the app has the Meta SDK or an attribution service. Keep the app in Live mode in Meta for Developers."
+
 msgid "Optimizar por compras requiere el Pixel activo y atribución pixel: pulsa «Comprobar Pixel» en Configuración, o elige el objetivo de tráfico."
 msgstr "Optimizing for purchases requires an active Pixel and pixel attribution: press “Check Pixel” in Settings, or choose the traffic objective."
 
@@ -10682,6 +10723,9 @@ msgstr "To connect a Page by typing its ID, use “Let Creatv know”: we'll rev
 
 msgid "Para grabar, abre el editor desde su dirección segura (https)."
 msgstr "To record, open the editor from its secure address (https)."
+
+msgid "Para instalaciones de la app usa el formulario de la galería."
+msgstr "For app installs use the gallery form."
 
 msgid "Para producir una variante hay que indicar `variante` (número) y `variante_tipo` (hook | estructura) a la vez."
 msgstr "To produce a variant you must give `variante` (number) and `variante_tipo` (hook | estructura) together."
@@ -11022,6 +11066,9 @@ msgstr "Privacy policy"
 
 msgid "Pon REDDIT_USER_AGENT con la forma «creatv-machine/1.0 (by u/tu_usuario)» y reinicia los dos servicios."
 msgstr "Set REDDIT_USER_AGENT to the form “creatv-machine/1.0 (by u/your_username)” and restart both services."
+
+msgid "Pon al menos una URL de tienda: App Store (iOS) o Google Play (Android)."
+msgstr "Add at least one store URL: App Store (iOS) or Google Play (Android)."
 
 msgid "Pon el cabezal dentro de un clip para cortarlo."
 msgstr "Put the playhead inside a clip to split it."
@@ -14234,6 +14281,12 @@ msgstr "Faceless UGC"
 msgid "URL"
 msgstr "URL"
 
+msgid "URL de App Store (iOS)"
+msgstr "App Store URL (iOS)"
+
+msgid "URL de Google Play (Android)"
+msgstr "Google Play URL (Android)"
+
 msgid "URL de compra (opcional)"
 msgstr "Purchase URL (optional)"
 
@@ -14361,6 +14414,9 @@ msgstr "A person with the product: an attention-grabbing hook, natural use and a
 
 msgid "Una persona real usando el producto de forma natural; el producto sigue siendo el protagonista."
 msgstr "A real person using the product naturally; the product is still the star."
+
+msgid "Una pieza no tiene plataforma de tienda: vuelve a crear el experimento."
+msgstr "A piece has no store platform: create the experiment again."
 
 msgid "Una por línea"
 msgstr "One per line"

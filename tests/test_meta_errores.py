@@ -110,3 +110,25 @@ def test_el_mensaje_ya_explicado_se_vuelve_a_decir_en_el_idioma_de_quien_mira():
     with idiomas.en_idioma("en"):
         otra = meta_errores.explicar(guardado)
     assert "Development mode" in otra and "modo Desarrollo" not in otra
+
+
+REAL_URL_APP = _crudo(
+    '{"error":{"message":"Invalid parameter","type":"OAuthException","code":100,"error_subcode":1815430,'
+    '"is_transient":false,"error_user_title":"URL de la app no permitida","error_user_msg":"Solo puede incluirse '
+    'la URL de la app con el objetivo de instalaciones de la app.","fbtrace_id":"AbC"}}')
+
+
+def test_url_de_tienda_sin_objetivo_de_instalaciones_dice_que_hacer():
+    import meta_errores
+    t = meta_errores.explicar(REAL_URL_APP)
+    assert "Instalaciones de la app" in t and "{" not in t and "OAuthException" not in t
+
+
+def test_url_de_tienda_ya_explicada_se_vuelve_a_decir_en_ingles():
+    import idiomas
+    import meta_errores
+    guardado = meta_errores.explicar(REAL_URL_APP)
+    assert meta_errores.explicar(guardado) == guardado
+    with idiomas.en_idioma("en"):
+        otra = meta_errores.explicar(guardado)
+    assert "App installs" in otra and "Instalaciones" not in otra
