@@ -2134,6 +2134,12 @@ msgstr "Analyzed with data from %(desde)s to %(hasta)s"
 msgid "Analizado en Triple Whale: «%(nombre)s»"
 msgstr "Analyzed in Triple Whale: “%(nombre)s”"
 
+#, python-format
+msgid "Analizando %(num)s anuncio con IA…"
+msgid_plural "Analizando %(num)s anuncios con IA…"
+msgstr[0] "Analyzing %(num)s ad with AI…"
+msgstr[1] "Analyzing %(num)s ads with AI…"
+
 msgid "Analizando con Claude"
 msgstr "Analyzing with Claude"
 
@@ -2148,6 +2154,13 @@ msgstr "Analyzing brand references…"
 
 msgid "Analizando referencias…"
 msgstr "Analyzing references…"
+
+#, python-format
+msgid "Analizando «%(nombre)s» con IA…"
+msgstr "Analyzing “%(nombre)s” with AI…"
+
+msgid "Analizar con estos datos"
+msgstr "Analyze with this data"
 
 #, python-format
 msgid "Analizar los %(n)s que más gastaron · %(precio)s"
@@ -2350,8 +2363,14 @@ msgstr "Own app registered, not connected"
 msgid "Aprendiendo"
 msgstr "Learning"
 
+msgid "Aprendizaje"
+msgstr "Learning"
+
 msgid "Aprendizaje guardado."
 msgstr "Learning saved."
+
+msgid "Aprendizaje guardado: las próximas ideas y guiones lo tendrán en cuenta."
+msgstr "Learning saved: the next ideas and scripts will take it into account."
 
 msgid "Aprendizajes del proyecto"
 msgstr "Project learnings"
@@ -3462,6 +3481,9 @@ msgstr "Claude didn't answer in the expected format. Send your message again."
 msgid "Claude no respondió en el formato esperado. Vuelve a intentarlo."
 msgstr "Claude didn't answer in the expected format. Try again."
 
+msgid "Claude no vio el anuncio: juzgó por el texto y los números"
+msgstr "Claude did not see the ad: it judged by the text and the numbers"
+
 msgid "Claude para investigación"
 msgstr "Claude for research"
 
@@ -3470,6 +3492,15 @@ msgstr "Claude declined the request."
 
 msgid "Claude todavía está respondiendo tu mensaje anterior."
 msgstr "Claude is still answering your previous message."
+
+#, python-format
+msgid "Claude vio %(num)s fotograma"
+msgid_plural "Claude vio %(num)s fotogramas"
+msgstr[0] "Claude saw %(num)s frame"
+msgstr[1] "Claude saw %(num)s frames"
+
+msgid "Claude vio la imagen"
+msgstr "Claude saw the image"
 
 msgid "Claude vio los fotogramas del video"
 msgstr "Claude saw the video's frames"
@@ -6622,8 +6653,17 @@ msgstr "That ad was already in the Swipe file."
 msgid "Ese anuncio ya no existe."
 msgstr "That ad no longer exists."
 
+msgid "Ese anuncio ya se está analizando."
+msgstr "That ad is already being analyzed."
+
+msgid "Ese análisis no dejó un aprendizaje."
+msgstr "That analysis did not leave a learning."
+
 msgid "Ese análisis ya no existe."
 msgstr "That analysis no longer exists."
+
+msgid "Ese aprendizaje ya estaba guardado."
+msgstr "That learning was already saved."
 
 msgid "Ese aprendizaje ya no existe."
 msgstr "That learning no longer exists."
@@ -8198,6 +8238,9 @@ msgstr "Save global block"
 msgid "Guardar cambios"
 msgstr "Save changes"
 
+msgid "Guardar como aprendizaje"
+msgstr "Save as learning"
+
 msgid "Guardar como prueba"
 msgstr "Save as proof"
 
@@ -9723,8 +9766,14 @@ msgstr ""
 msgid "Lo que escribe la IA y los anuncios de este proyecto salen en este idioma."
 msgstr "What the AI writes and this project's ads come out in this language."
 
+msgid "Lo que falla"
+msgstr "What is not working"
+
 msgid "Lo que faltó en los datos cuando Claude escribió anuncios de este producto. Cada respuesta queda como prueba y mejora lo que venga."
 msgstr "What was missing from the data when Claude wrote ads for this product. Each answer is saved as proof and improves what comes next."
+
+msgid "Lo que funciona"
+msgstr "What is working"
 
 msgid "Lo que ganó y lo que perdió en tus pruebas. Las ideas nuevas, el guion y las variantes lo leen antes de escribir."
 msgstr "What won and what lost in your tests. New ideas, the script and the variants read it before writing."
@@ -11032,6 +11081,9 @@ msgstr "I couldn't translate the word into English; write it another way."
 
 msgid "No pude traducir la palabra al inglés; intenta de nuevo en un momento."
 msgstr "I couldn't translate the word into English; try again in a moment."
+
+msgid "No quedó ningún anuncio por analizar."
+msgstr "No ads were left to analyze."
 
 msgid "No retiene"
 msgstr "Doesn't hold"
@@ -15185,6 +15237,9 @@ msgstr "Still no impressions — hit “Update metrics” in a few hours."
 msgid "Todavía sin una señal clara ni para bien ni para mal."
 msgstr "No clear signal yet, good or bad."
 
+msgid "Todavía tiene muy pocos datos: espera a que gaste más."
+msgstr "It has very little data yet: wait until it spends more."
+
 msgid "Todo"
 msgstr "All"
 
@@ -15488,6 +15543,9 @@ msgstr "TrendTrack: the plan's credits have run out."
 
 msgid "TrendTrack: se alcanzó el límite de peticiones del plan; intenta en un rato."
 msgstr "TrendTrack: the plan's request limit was reached; try again in a while."
+
+msgid "Tres cambios"
+msgstr "Three changes"
 
 msgid "Triple Whale"
 msgstr "Triple Whale"
@@ -16153,6 +16211,12 @@ msgstr "Version B — %(dif)s"
 
 msgid "Versión elegida"
 msgstr "Chosen version"
+
+msgid "Versión mejorada"
+msgstr "Improved version"
+
+msgid "Versión mejorada cargada en Crear: ajusta lo que quieras y genera."
+msgstr "Improved version loaded in Create: tweak what you want and generate."
 
 msgid "Vertical 9:16 (Reels, TikTok, Shorts)"
 msgstr "Vertical 9:16 (Reels, TikTok, Shorts)"
@@ -17263,6 +17327,10 @@ msgstr "dataset %(dataset)s not read (%(motivo)s)"
 msgid "dato del producto"
 msgstr "product fact"
 
+#, python-format
+msgid "datos del %(desde)s al %(hasta)s"
+msgstr "data from %(desde)s to %(hasta)s"
+
 msgid "de"
 msgstr "of"
 
@@ -17555,6 +17623,9 @@ msgstr "the product can only be described to it in text, not shown to it"
 #, python-brace-format
 msgid "el servidor falló (error {status}): se guarda con el próximo cambio."
 msgstr "the server failed (error {status}): it'll be saved with your next change."
+
+msgid "el texto"
+msgstr "the text"
 
 msgid "el video"
 msgstr "the video"
@@ -18124,6 +18195,9 @@ msgstr "the market's sophistication"
 msgid "la tienda no trajo fotos"
 msgstr "the store didn't bring photos"
 
+msgid "la voz"
+msgstr "the voice"
+
 msgid "la voz de un anuncio de Triple Whale"
 msgstr "the voice of a Triple Whale ad"
 
@@ -18280,6 +18354,10 @@ msgstr "custom voice sample · %(nombre)s · %(idioma)s"
 #, python-format
 msgid "muestra de voz · %(voz)s · %(idioma)s"
 msgstr "voice sample · %(voz)s · %(idioma)s"
+
+#, python-format
+msgid "mueve: %(anillo)s"
+msgstr "moves: %(anillo)s"
 
 msgid "musica"
 msgstr "music"

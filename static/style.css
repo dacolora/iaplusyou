@@ -3925,6 +3925,9 @@ body:has(#exp-nuevo) main { margin-left: 0; max-width: 1440px; width: 100%; }
 .tw-tarjeta-ia form { margin: 0; }
 .tw-ia-frase { flex-basis: 100%; margin: 0; }
 .tw-analisis-detalle { flex-basis: 100%; }
+.tw-analisis { display: flex; flex-direction: column; gap: .4rem; padding: .6rem 0 0; border-top: 1px solid var(--border); overflow-wrap: anywhere; }
+.tw-analisis h5 { margin: .4rem 0 0; }
+.tw-analisis-lista { margin: 0; padding-left: 1.1rem; }
 .tw-tarjeta-ia .tw-progreso { flex-basis: 100%; }
 .tw-ver-mas { grid-column: 1 / -1; justify-self: center; }
 .tw-tabla-detalle summary { cursor: pointer; }

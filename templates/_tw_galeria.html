@@ -107,6 +107,18 @@
         <button type="submit" class="btn-generar btn-sm">{{ etiqueta }} · {{ precio }}</button>
       </form>
       {% endif %}
+      {#- Un análisis de otra tienda u otro periodo no se da por viejo (§6.6): se ofrece, discreto, volver a pagarlo con los datos de ahora. -#}
+      {% if a.analisis_otro_alcance and not a.job_analisis and a.veredicto != 'sin_datos' %}
+      {% set precio_otro = a.precio_analisis.texto if a.precio_analisis else _('precio no disponible') %}
+      <form method="post" class="tw-analizar" data-tw-async
+            action="{{ url_for('triple_whale.analizar_anuncio', cliente=cliente, canal=a.canal, ad_id=a.ad_id) }}"
+            data-confirmar="{{ _('¿Analizar «%(nombre)s» con IA? Costo: %(precio)s', nombre=a.nombre, precio=precio_otro) }}">
+        <input type="hidden" name="dias" value="{{ alcance_params.dias }}">
+        <input type="hidden" name="canal" value="{{ alcance_params.canal }}">
+        <input type="hidden" name="tienda" value="{{ alcance_params.tienda }}">
+        <button type="submit" class="btn-xs">{{ _('Analizar con estos datos') }} · {{ precio_otro }}</button>
+      </form>
+      {% endif %}
       {% if a.veredicto in ('ganador', 'prometedor') and (a.medio.imagen or a.medio.poster) %}
       <form method="post" action="{{ url_for('triple_whale.anuncio_referente', cliente=cliente, canal=a.canal, ad_id=a.ad_id) }}">
         <input type="hidden" name="dias" value="{{ alcance_params.dias }}">

@@ -204,7 +204,10 @@ def test_un_analisis_de_otro_alcance_no_es_viejo_ni_vuelve_a_cobrarse(app):  # n
         assert not panel.es_viejo(_anuncio(alc, ad), fila, alc)
         html = _tarjeta(app, ad)
         assert "Analizado con los datos del" in html and "desde entonces cambió" not in html
-        assert "Analizar otra vez" not in html and "/analizar" not in html and "Ver el análisis" in html
+        assert "Analizar otra vez" not in html and "Ver el análisis" in html
+        # Discreto y neutro: un botón chico para pagar con los datos de ahora, sin decir que «cambió» algo.
+        assert f"/anuncio/facebook-ads/{ad}/analizar" in html and "Analizar con estos datos" in html
+        assert 'class="btn-xs">Analizar con estos datos' in html and "data-tw-async" in html
     g = panel.galeria("acme", alc["ev"], alcance=alc)
     assert ("facebook-ads", "g1") not in g["lote"]["claves"] and ("facebook-ads", "p1") not in g["lote"]["claves"]
 
@@ -251,10 +254,12 @@ def test_estados_de_la_tarjeta(app):  # noqa: F811
     html = _tarjeta(app, "g1")
     assert "Gana porque muestra el pie." in html and "Ver el análisis" in html
     assert "Analizar otra vez" not in html and "desde entonces cambió" not in html and "Cómo mejorarlo" not in html
+    assert "Analizar con estos datos" not in html                  # mismo alcance y fresco: nada que ofrecer
 
     _lista(alc, "p2", _foto(_anuncio(alc, "p2"), veredicto="ganador"))
     html = _tarjeta(app, "p2")
     assert "desde entonces cambió" in html and "Analizar otra vez" in html
+    assert "Analizar con estos datos" not in html                  # viejo: ya tiene su botón principal
 
     error = datos.crear_analisis("acme", alc["tienda_id"], "facebook-ads", "p1", alc["desde"], alc["hasta"], "USD", {})
     datos.actualizar_analisis(error, estado="error", error="Claude no respondió a tiempo.")
