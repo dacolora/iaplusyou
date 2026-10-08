@@ -83,6 +83,12 @@ def _validar_para_lanzar(cliente, experimento_id):
     if faltan:
         raise ValueError(gettext("Sin piezas para: %(paises)s. Agrega una pieza por país o quita el país.",
                                  paises=", ".join(faltan)))
+    if ex["objetivo_meta"] == "OUTCOME_APP_PROMOTION":
+        # Cada fila tiene que caer en un conjunto de tienda que se va a crear;
+        # si no, el KeyError llegaría después de crear campaña y conjuntos.
+        plataformas = experimentos.plataformas_de(ex.get("extra"))
+        if any((pz.get("extra") or {}).get("plataforma") not in plataformas for pz in ex["piezas"]):
+            raise ValueError(gettext("Una pieza no tiene plataforma de tienda: vuelve a crear el experimento."))
     return ex
 
 
@@ -233,18 +239,24 @@ def _conjunto_de(cliente, ex, p, plat, n_plataformas, campaign_id, promoted_obje
                                       {"adset_id": adset_id, "presupuesto_dia": p["presupuesto_dia"],
                                        "pixel_id": promoted_object["pixel_id"] if promoted_object else None})
         return adset_id
-    ids = p.setdefault("meta_adsets", {})
+    ids = dict(p.get("meta_adsets") or {})
     if ids.get(plat):
         return ids[plat]
     sistema = app_tiendas.OS_META[plat]
     app = (ex.get("extra") or {}).get("app") or {}
     targeting = (Targeting().edad(int(ex["edad_min"] or 18), int(ex["edad_max"] or 65)).paises([p["pais"]])
                  .sistema(sistema).to_dict())
+    # Se reparten los centavos del país (una sola conversión) y el resto se
+    # queda sin gastar: redondear cada parte por separado podía sumar más
+    # que el presupuesto del país (CLP 1003 → 502 + 502).
+    centavos_conjunto = centavos(p["presupuesto_dia"], moneda) // max(1, int(n_plataformas))
     presupuesto = app_tiendas.parte_presupuesto(p["presupuesto_dia"], n_plataformas)
     adset_id = meta_adset.crear_adset(f"{ex['nombre']} — {p['pais']} · {sistema}", campaign_id, ex["objetivo_meta"],
-                                      targeting, centavos(presupuesto, moneda), int(ex["dias"] or 7),
+                                      targeting, centavos_conjunto, int(ex["dias"] or 7),
                                       promoted_object={**promoted_object, "object_store_url": app[f"{plat}_url"]})["id"]
     ids[plat] = adset_id
+    # Copia viva en `p` para la siguiente plataforma del mismo país en esta corrida.
+    p["meta_adsets"] = ids
     experimentos.actualizar_pais(cliente, experimento_id, p["pais"], meta_adsets=dict(ids), estado="pausado")
     experimentos.registrar_evento(cliente, experimento_id, "lanzamiento",
                                   gettext("Conjunto %(pais)s · %(sistema)s creado", pais=p["pais"], sistema=sistema),

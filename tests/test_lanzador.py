@@ -124,8 +124,8 @@ def test_app_dos_plataformas_crea_un_conjunto_por_pais_y_plataforma(entorno_app)
         assert a["promoted_object"]["application_id"] == "12345"
         assert a["promoted_object"]["object_store_url"] == (URL_IOS if a["targeting"]["user_os"] == ["iOS"] else URL_ANDROID)
         assert a["objetivo"] == "OUTCOME_APP_PROMOTION"
-    # presupuesto del país partido en dos
-    assert all(a["centavos"] == e["lanzador"].centavos(PRESUPUESTO_PAIS / 2, "COP") for a in adsets)
+    # presupuesto del país partido en dos (centavos del país // 2)
+    assert all(a["centavos"] == e["lanzador"].centavos(PRESUPUESTO_PAIS, "COP") // 2 for a in adsets)
     ex = e["ex"].obtener("acme", e["eid"])
     assert ex["estado"] == "pausado"
     assert all(set(p["meta_adsets"]) == {"ios", "android"} and not p.get("meta_adset_id") for p in ex["paises"])
@@ -146,6 +146,32 @@ def test_app_el_anuncio_lleva_la_url_de_tienda_sin_utm(entorno_app):
     # la misma pieza en dos plataformas comparte la subida del video
     ex = e["ex"].obtener("acme", e["eid"])
     assert {(pz.get("extra") or {}).get("meta_video_id") for pz in ex["piezas"]} == {"vid_1"}
+
+
+@pytest.mark.parametrize("moneda,presupuesto", [("CLP", 1003.0), ("USD", 10.05), ("COP", 20001.0)])
+def test_app_reparto_nunca_sobrepasa_el_presupuesto_del_pais(entorno_app, moneda, presupuesto):
+    e = entorno_app
+    paises = [{**p, "presupuesto_dia": presupuesto} for p in e["ex"].obtener("acme", e["eid"])["paises"]]
+    import db
+    with db.conectar() as con:  # la moneda no se cambia por la API: se fija acá, como al crear
+        con.execute(db.experimento.update().where(db.experimento.c.id == e["eid"]).values(moneda=moneda, paises=paises))
+    e["lanzador"].lanzar("acme", e["eid"])
+    adsets = [kw for tipo, kw in e["meta"].llamadas if tipo == "adset"]
+    total = e["lanzador"].centavos(presupuesto, moneda)
+    for pais in ("CO", "MX"):
+        del_pais = [a["centavos"] for a in adsets if a["targeting"]["geo_locations"]["countries"] == [pais]]
+        assert len(del_pais) == 2 and sum(del_pais) <= total
+        assert del_pais == [total // 2, total // 2]
+
+
+def test_app_pieza_sin_plataforma_valida_falla_antes_de_tocar_meta(entorno_app):
+    e = entorno_app
+    # La URL de Android ya no está: sus filas no tienen conjunto donde caer.
+    e["ex"].actualizar_extra("acme", e["eid"], lambda extra: {**extra, "app": {"ios_url": URL_IOS}})
+    with pytest.raises(ValueError, match="plataforma"):
+        e["lanzador"].lanzar("acme", e["eid"])
+    assert not e["meta"].llamadas
+    assert e["ex"].obtener("acme", e["eid"])["estado"] != "lanzando"
 
 
 def test_app_una_sola_plataforma_crea_la_mitad(entorno_app_android):
