@@ -47,8 +47,9 @@ import experimentos
 import tablero
 from idiomas import N_
 
-PERIODOS = (7, 14, 30, 90, 0)
-PERIODO_DEFECTO = 14
+PERIODOS = (0, 7, 14, 30, 90)
+# «Desde el inicio» por defecto (Daniel, 2026-10-08: las cifras por periodo confundían a sus clientes).
+PERIODO_DEFECTO = 0
 DIAS_MAX_INICIO = 180
 TIPOS = ("video", "imagen")
 PUNTOS_CURVA = 14

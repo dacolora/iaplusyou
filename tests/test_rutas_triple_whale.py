@@ -295,7 +295,7 @@ def test_tablero_muestra_la_tienda_segun_triple_whale(app):  # noqa: F811
     _conectar()
     _sembrar()
     html = _resultados(app["c"])
-    historial = html[html.index("Historial mes a mes"):]
+    historial = html[html.index("Totales desde el inicio"):]
     assert "Tu tienda según Triple Whale" in historial and "MER" in historial and 'data-ir-tab="triplewhale"' in historial
     resumen = html[html.index('aria-labelledby="cr-s01"'):html.index('aria-labelledby="cr-s02"')]
     assert "Tu tienda según Triple Whale" in resumen and "MER" in resumen
@@ -510,3 +510,24 @@ def test_resumen_mes_tienda_suma_todas_las_tiendas(app):  # noqa: F811
     dias = min(10, hoy.day)                                    # días sembrados dentro del mes en curso
     assert r["moneda"] == "USD" and r["ingresos"] == pytest.approx((400 + 700) * dias)
     assert r["pedidos"] == pytest.approx((5 + 6) * dias)
+
+
+def test_panel_abre_desde_el_inicio_y_resumen_total_de_la_tienda(app):  # noqa: F811
+    """Daniel, 2026-10-08: las métricas en su totalidad, no por periodos cortos. La pestaña abre en «Desde el
+    inicio» (todo lo copiado, sin comparación) y los tiles de Experimentos suman la tienda desde el primer día."""
+    from triple_whale import panel
+    _dos_tiendas(compartida=False)
+    html = app["c"].get("/cliente/acme/triple-whale/panel").data.decode()
+    assert '<option value="0" selected>Desde el inicio</option>' in html
+    assert "todo lo copiado de Triple Whale" in html and "días anteriores" not in html
+    assert "Cada país desde el inicio" in html
+    assert "vs. periodo anterior" not in html         # sin comparación, sin columna vacía
+    assert '<input type="hidden" name="dias" value="0">' in html
+    # Un periodo corto se puede seguir eligiendo y vuelve a comparar.
+    corto = app["c"].get("/cliente/acme/triple-whale/panel?dias=7").data.decode()
+    assert '<option value="7" selected>' in corto and "contra los 7 días anteriores" in corto
+    assert "vs. periodo anterior" in corto
+    # Los tiles de la tienda en Experimentos: los 10 días sembrados de las dos tiendas, sin variación.
+    r = panel.resumen_total_tienda("acme", hoy=date.today())
+    assert r["moneda"] == "USD" and r["ingresos"] == pytest.approx((400 + 700) * 10) and r["variacion"] == {}
+    assert r["desde"] == _hace(9)

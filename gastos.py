@@ -16,7 +16,7 @@ tumbar la tarea que ya pagó: los llamadores envuelven en try/except.
 `TARIFAS` y los `estimate_*` de los proveedores; cuando no hay tarifa
 devuelve `usd=None` y el texto "precio no disponible" — nunca se inventa.
 
-Lecturas: `resumen_mes`, `resumen_total`, `total_entre`, `por_mes`, `historial`,
+Lecturas: `resumen_mes`, `resumen_todo`, `resumen_total`, `total_entre`, `por_mes`, `historial`,
 `serie_diaria`, `csv_mes`, `por_proyecto_mes`; `formatear(usd)` -> "US$ 0,07".
 """
 import csv
@@ -426,11 +426,11 @@ def _fila(r):
     return d
 
 
-def resumen_mes(cliente, ahora_iso=None):
+def resumen_mes(cliente, ahora_iso=None, desde=None):
     """{"desde", "hasta", "total", "por_tipo": {tipo: {"usd", "n"}}, "n"} del
-    mes en curso (o del mes de `ahora_iso`)."""
+    mes en curso (o del mes de `ahora_iso`; o desde `desde`)."""
     hasta = _ahora(ahora_iso)
-    desde = _inicio_mes(hasta)
+    desde = desde or _inicio_mes(hasta)
     g = db.gasto
     q = (sa.select(g.c.tipo, sa.func.sum(g.c.usd), sa.func.count())
          .where(g.c.cliente == cliente, g.c.creado_en >= desde, g.c.creado_en <= hasta)
@@ -442,6 +442,12 @@ def resumen_mes(cliente, ahora_iso=None):
     total = round(sum(v["usd"] for v in por_tipo.values()), 4)
     return {"desde": desde, "hasta": hasta, "total": total, "por_tipo": por_tipo,
             "n": sum(v["n"] for v in por_tipo.values())}
+
+
+def resumen_todo(cliente, ahora_iso=None):
+    """Como `resumen_mes` pero con todo lo cobrado desde el primer cobro (la
+    tabla «Por tipo» de Configuración › Gasto desde 2026-10-08)."""
+    return resumen_mes(cliente, ahora_iso, desde="0001-01-01T00:00:00")
 
 
 def resumen_total(cliente, ahora_iso=None):

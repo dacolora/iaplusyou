@@ -399,7 +399,7 @@ def test_cargar_datos_una_vez_y_contexto(base_temporal, sin_red, monkeypatch):
                 tomado_en="2026-09-15T23:00:00")
     sueltas = {"resumen": tablero.resumen_mes("acme", AHORA), "serie": tablero.serie_diaria("acme", 30, AHORA),
                "top": tablero.top_ganadoras("acme"), "alertas": tablero.alertas("acme", AHORA),
-               "csv": tablero.csv_mes("acme", AHORA)}
+               "csv": tablero.csv_total("acme", AHORA)}
     llamadas = {"cargar": 0, "snapshots": []}
     cargar, snapshots_de = ex.cargar, ex.snapshots_de
 

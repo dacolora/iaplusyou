@@ -1419,6 +1419,9 @@ msgstr "(code %(codigo)s)"
 msgid "(de %(min)s a %(max)s)"
 msgstr "(from %(min)s to %(max)s)"
 
+msgid "(el CSV trae todos los cobros desde el inicio)"
+msgstr "(the CSV has every charge since the start)"
+
 msgid "(el servidor no tiene correo configurado; avisa al administrador)"
 msgstr "(the server has no email configured; let the administrator know)"
 
@@ -1483,9 +1486,6 @@ msgstr "(and {n} more)"
 
 msgid "(ya producida — se reemplaza)"
 msgstr "(already produced — will be replaced)"
-
-msgid "(«Descargar CSV de todo» trae todos los cobros desde el inicio)"
-msgstr "(\"Download full CSV\" has every charge since the start)"
 
 msgid "+ Color"
 msgstr "+ Color"
@@ -2394,6 +2394,9 @@ msgstr "Here each ad's ROAS only counts this store's sales."
 msgid "Aquí están los videos, las imágenes, los audios, los textos y las transiciones para sumar a la edición."
 msgstr "Here are the videos, images, audio, texts and transitions to add to the edit."
 
+msgid "Aquí tus piezas salen como anuncios en Meta, se mide cuál funciona y el motor te dice cuál escalar y cuál pausar. Sin una cuenta de Meta conectada todavía no hay nada que probar ni que medir."
+msgstr "Here your pieces run as ads on Meta, we measure which one works and the engine tells you which to scale and which to pause. Without a connected Meta account there is nothing to test or measure yet."
+
 msgid "Archivado"
 msgstr "Archived"
 
@@ -2913,6 +2916,9 @@ msgstr "Each brand needs a name."
 #, python-format
 msgid "Cada país contra sus %(n)s días anteriores: dónde conviene poner el presupuesto."
 msgstr "Each country against its previous %(n)s days: where the budget pays off."
+
+msgid "Cada país desde el inicio: dónde conviene poner el presupuesto."
+msgstr "Each country since the start: where the budget pays off."
 
 #, python-format
 msgid "Cada país tiene su presupuesto diario. Además, el total se manda a Meta como tope de la campaña desde %(minimo)s, el mínimo que Meta acepta para un tope; con un total menor, el límite lo dan el presupuesto diario y la fecha de cierre."
@@ -3692,11 +3698,14 @@ msgstr "Connect Meta in <a href=\"#experimentos\" onclick=\"document.querySelect
 msgid "Conecta Meta en <a href=\"#experimentos\" onclick=\"document.querySelector('.sidebar-item[data-tab=experimentos]').click(); return false;\">Experimentos</a> para comprobar el Pixel."
 msgstr "Connect Meta in <a href=\"#experimentos\" onclick=\"document.querySelector('.sidebar-item[data-tab=experimentos]').click(); return false;\">Experiments</a> to check the Pixel."
 
-msgid "Conecta Meta en Experimentos antes de crear un experimento."
-msgstr "Connect Meta in Experiments before creating an experiment."
+msgid "Conecta Meta en Configuración › Conexiones antes de crear un experimento."
+msgstr "Connect Meta in Settings › Connections before creating an experiment."
 
-msgid "Conecta Meta en Experimentos antes de probar piezas."
-msgstr "Connect Meta in Experiments before testing pieces."
+msgid "Conecta Meta en Configuración › Conexiones antes de probar piezas."
+msgstr "Connect Meta in Settings › Connections before testing pieces."
+
+msgid "Conecta Meta para probar tus piezas"
+msgstr "Connect Meta to test your pieces"
 
 msgid "Conecta Notion primero."
 msgstr "Connect Notion first."
@@ -3730,6 +3739,9 @@ msgstr "Connected: %(nombre)s · last sync: %(cuando)s. It refreshes on its own 
 
 msgid "Conectar"
 msgstr "Connect"
+
+msgid "Conectar Meta"
+msgstr "Connect Meta"
 
 msgid "Conectar Notion"
 msgstr "Connect Notion"
@@ -4276,11 +4288,11 @@ msgid "Cuántas promesas parecidas vio ya tu cliente"
 msgstr "How many similar promises your customer has already seen"
 
 msgid ""
-"Cuánto costó de verdad lo que este proyecto generó, este mes y desde el inicio: cada video, imagen, guion,\n"
+"Cuánto costó de verdad todo lo que este proyecto generó desde el inicio: cada video, imagen, guion,\n"
 "      final o texto con IA deja su cobro aquí apenas el proveedor lo cobra. Los botones de la app\n"
 "      muestran el precio aproximado antes de gastar; esta lista es el precio real después."
 msgstr ""
-"What this project's generation really cost, this month and since the start: every video, image, script,\n"
+"What everything this project generated since the start really cost: every video, image, script,\n"
 "      final or AI text leaves its charge here as soon as the provider bills it. The app's buttons show the\n"
 "      approximate price before spending; this list is the real price afterwards."
 
@@ -4393,6 +4405,10 @@ msgstr "Leave at least one checkbox selected in the grid."
 msgid "Del %(desde)s al %(hasta)s, contra los %(n)s días anteriores"
 msgstr "From %(desde)s to %(hasta)s, against the previous %(n)s days"
 
+#, python-format
+msgid "Del %(desde)s al %(hasta)s: todo lo copiado de Triple Whale"
+msgstr "From %(desde)s to %(hasta)s: everything copied from Triple Whale"
+
 msgid "Del Catálogo"
 msgstr "From the Catalog"
 
@@ -4486,8 +4502,8 @@ msgstr "Downloading the link's video… it'll appear among the references in a f
 msgid "Descargar"
 msgstr "Download"
 
-msgid "Descargar CSV de todo"
-msgstr "Download full CSV"
+msgid "Descargar CSV"
+msgstr "Download CSV"
 
 msgid "Descargar CSV del mes"
 msgstr "Download this month's CSV"
@@ -4596,9 +4612,6 @@ msgstr "Since %(desde)s, generations in Create and Change product fail (without 
 
 msgid "Desde el inicio"
 msgstr "Since the start"
-
-msgid "Desde el inicio (US$)"
-msgstr "Since the start (US$)"
 
 msgid "Desde que lo conectes, los anuncios que Creatv lance en Meta llevan solos los parámetros de rastreo de Triple Whale. A los que ya estaban, o a los que crees fuera de Creatv, ponles en «Parámetros de URL»: <code>tw_source={{site_source_name}}&amp;tw_adid={{ad.id}}</code>."
 msgstr "Once you connect it, the ads Creatv launches on Meta carry Triple Whale's tracking parameters on their own. For ads that already existed, or that you create outside Creatv, add under “URL parameters”: <code>tw_source={{site_source_name}}&amp;tw_adid={{ad.id}}</code>."
@@ -6952,13 +6965,6 @@ msgstr "This language doesn't have subtitles yet."
 msgid "Este mapa es documentación interna y está en español."
 msgstr "This map is internal documentation and is written in Spanish."
 
-msgid "Este mes"
-msgstr "This month"
-
-#, python-format
-msgid "Este mes: %(gasto)s"
-msgstr "This month: %(gasto)s"
-
 msgid "Este navegador no graba audio: prueba con Chrome, Edge, Firefox o Safari al día."
 msgstr "This browser can't record audio: try an up-to-date Chrome, Edge, Firefox or Safari."
 
@@ -7750,9 +7756,6 @@ msgstr "Spent %(gasto)s of %(tope)s"
 msgid "Gasto"
 msgstr "Spend"
 
-msgid "Gasto del mes (US$)"
-msgstr "Spend this month (US$)"
-
 msgid "Gasto diario de la pieza en barras y la métrica elegida en línea"
 msgstr "Daily spend of the piece as bars and the chosen metric as a line"
 
@@ -7773,6 +7776,13 @@ msgstr "Real spend on AI APIs"
 
 msgid "Gasto total"
 msgstr "Total spend"
+
+msgid "Gasto total (US$)"
+msgstr "Total spend (US$)"
+
+#, python-format
+msgid "Gasto total: %(gasto)s"
+msgstr "Total spend: %(gasto)s"
 
 #, python-format
 msgid "Gastó lo de %(n)s ventas al costo por venta de la cuenta y su ROAS es %(roas)s× (meta %(meta)s×)."
@@ -7818,17 +7828,8 @@ msgstr "Generation (US$)"
 msgid "Generación con IA: %(costo)s en el periodo"
 msgstr "AI generation: %(costo)s in the period"
 
-msgid "Generación del mes (US$): lo pagado a los proveedores de IA este mes"
-msgstr "Generation this month (US$): what was paid to AI providers this month"
-
-msgid "Generación desde el inicio"
-msgstr "Generation since the start"
-
 msgid "Generación desde el inicio (US$): todo lo pagado a los proveedores de IA por este proyecto"
 msgstr "Generation since the start (US$): everything this project has paid to the AI providers"
-
-msgid "Generación este mes"
-msgstr "Generation this month"
 
 msgid "Generación por mes (US$)"
 msgstr "Generation by month (US$)"
@@ -8309,9 +8310,6 @@ msgstr "Higgsfield (video and image)"
 msgid "Historial"
 msgstr "History"
 
-msgid "Historial mes a mes"
-msgstr "Month-by-month history"
-
 msgid "Historias"
 msgstr "Stories"
 
@@ -8646,9 +8644,6 @@ msgstr "Attributed revenue"
 msgid "Ingresos de la tienda"
 msgstr "Store revenue"
 
-msgid "Ingresos del mes"
-msgstr "Revenue this month"
-
 msgid "Ingresos que el Triple Pixel atribuye a los anuncios con el modelo y la ventana elegidos"
 msgstr "Revenue the Triple Pixel attributes to the ads with the chosen model and window"
 
@@ -8749,6 +8744,9 @@ msgstr "Go to %(tab)s →"
 
 msgid "Ir a Catálogo →"
 msgstr "Go to Catalog →"
+
+msgid "Ir a Conexiones →"
+msgstr "Go to Connections →"
 
 msgid "Ir a Crear"
 msgstr "Go to Create"
@@ -8913,6 +8911,12 @@ msgstr "The figure “%(cifra)s” isn't in the product's data."
 
 msgid "La conexión con Meta está rota (token vencido o permisos retirados): vuelve a conectar en Configuración."
 msgstr "The connection with Meta is broken (expired token or withdrawn permissions): reconnect in Settings."
+
+msgid "La conexión con Meta se cortó"
+msgstr "The connection with Meta was lost"
+
+msgid "La conexión con Meta se cortó: ves lo que ya probaste, pero para lanzar algo nuevo hay que reconectarla."
+msgstr "The connection with Meta was lost: you can see what you already tested, but to launch something new you need to reconnect it."
 
 msgid "La conexión con Meta venció o se retiró: vuelve a conectar Meta en Experimentos y reintenta."
 msgstr "The Meta connection expired or was revoked: reconnect Meta in Experiments and try again."
@@ -9618,9 +9622,6 @@ msgstr "What’s on top stays where it is. Tap to make it follow its video."
 msgid "Lo esencial"
 msgstr "The essentials"
 
-msgid "Lo pagado a los proveedores de IA este mes, todos los proyectos"
-msgstr "What was paid to AI providers this month, all projects"
-
 msgid "Lo que Claude necesita"
 msgstr "What Claude needs"
 
@@ -9975,9 +9976,6 @@ msgstr "MercadoLibre, step by step"
 msgid "Mes"
 msgstr "Month"
 
-msgid "Mes a mes"
-msgstr "Month by month"
-
 msgid "Messenger"
 msgstr "Messenger"
 
@@ -10030,6 +10028,9 @@ msgstr "Meta isn't connected."
 
 msgid "Meta no está conectado: conéctalo en Configuración para lanzar y medir experimentos."
 msgstr "Meta isn't connected: connect it in Settings to launch and measure experiments."
+
+msgid "Meta no está conectado: ves lo que ya probaste, pero para lanzar algo nuevo hay que conectarlo."
+msgstr "Meta is not connected: you can see what you already tested, but to launch something new you need to connect it."
 
 #, python-format
 msgid "Meta no lo está mostrando: %(motivo)s"
@@ -11096,9 +11097,6 @@ msgstr "Couldn't delete the file. Try again."
 msgid "No se pudo calcular el costo."
 msgstr "Couldn't calculate the cost."
 
-msgid "No se pudo calcular el desglose por mes."
-msgstr "I couldn't calculate the monthly breakdown."
-
 msgid "No se pudo calcular el precio: vuelve a intentar."
 msgstr "Couldn't calculate the price: try again."
 
@@ -11830,11 +11828,11 @@ msgstr "Ad spend"
 msgid "Pauta en Meta"
 msgstr "Meta ad spend"
 
-msgid "Pauta en Meta este mes, en la moneda de la cuenta publicitaria"
-msgstr "Meta ad spend this month, in the ad account's currency"
+msgid "Pauta en Meta desde el inicio, en la moneda de la cuenta publicitaria"
+msgstr "Meta ad spend since the start, in the ad account currency"
 
-msgid "Pauta este mes"
-msgstr "Ad spend this month"
+msgid "Pauta total"
+msgstr "Total ad spend"
 
 msgid "País"
 msgstr "Country"
@@ -14968,9 +14966,6 @@ msgstr "No final cuts ready yet. They show up here as soon as one finishes produ
 msgid "Todavía no hay fotos: sube una o crea una imagen en Desde referencias."
 msgstr "No photos yet: upload one or create an image in From references."
 
-msgid "Todavía no hay gasto en ningún mes. Cuando un experimento gaste o pagues una generación, aquí verás cada mes."
-msgstr "There's no spend in any month yet. Once an experiment spends or you pay for a generation, you'll see each month here."
-
 msgid "Todavía no hay ideas"
 msgstr "No ideas yet"
 
@@ -15097,6 +15092,9 @@ msgstr ""
 "Everything below is verifiable: it comes from the log, the state on disk and the\n"
 "  git history of this repository. Nothing estimated is presented as measured."
 
+msgid "Todo lo pagado a los proveedores de IA desde el primer cobro, todos los proyectos"
+msgstr "Everything paid to the AI providers since the first charge, all projects"
+
 msgid ""
 "Todo lo que el proyecto necesita para generar piezas, guardarlas y pagar\n"
 "  anuncios, en el orden en que se usa. Cada tarjeta dice para qué sirve, cómo se\n"
@@ -15183,9 +15181,6 @@ msgstr "Total"
 msgid "Total (%(moneda)s)"
 msgstr "Total (%(moneda)s)"
 
-msgid "Total desde el inicio"
-msgstr "Total since the start"
-
 msgid "Total proyectos"
 msgstr "Total projects"
 
@@ -15195,6 +15190,9 @@ msgstr "Total ≈ US$ %(total)s"
 
 msgid "Totales"
 msgstr "Totals"
+
+msgid "Totales desde el inicio"
+msgstr "Totals since the start"
 
 msgid "Trabajo en segundo plano"
 msgstr "Background job"
@@ -15432,6 +15430,9 @@ msgstr "Triple Whale answered %(codigo)s: %(detalle)s"
 
 msgid "Triple Whale respondió algo que no es JSON."
 msgstr "Triple Whale answered something that isn't JSON."
+
+msgid "Triple Whale ya está conectado: cuando tus anuncios corran en Meta, aquí verás las ventas que trae cada uno. Mientras tanto, los números de tu tienda están en la pestaña"
+msgstr "Triple Whale is already connected: once your ads run on Meta, you will see here the sales each one brings. In the meantime, your store numbers are in the tab"
 
 msgid "Triple Whale ya no está conectado en este proyecto."
 msgstr "Triple Whale is no longer connected in this project."
@@ -16245,6 +16246,9 @@ msgstr "Go back to R2 › “Manage R2 API tokens” › “Create API token” 
 
 msgid "Vuelve a conectar Meta para que se guarde el <code>ig_user_id</code> de la cuenta vinculada."
 msgstr "Reconnect Meta so the linked account's <code>ig_user_id</code> gets saved."
+
+msgid "Vuelve a conectarla para probar tus piezas como anuncios."
+msgstr "Reconnect it to test your pieces as ads."
 
 msgid "Vuelve a enviar tu mensaje cuando quieras."
 msgstr "Send your message again whenever you like."
@@ -17180,10 +17184,6 @@ msgstr "decided"
 msgid "degradada"
 msgstr "degraded"
 
-#, python-format
-msgid "del %(desde)s al %(hasta)s · todos los proyectos"
-msgstr "from %(desde)s to %(hasta)s · all projects"
-
 msgid "del Nicho"
 msgstr "from Niche"
 
@@ -17242,10 +17242,6 @@ msgstr "from %(nombre)s"
 #, python-format
 msgid "desde el %(fecha)s"
 msgstr "since %(fecha)s"
-
-#, python-format
-msgid "desde el 1 de %(mes)s"
-msgstr "since %(mes)s 1"
 
 msgid "desde el inicio"
 msgstr "since the start"
@@ -17725,8 +17721,8 @@ msgstr "generates from scratch, doesn't edit"
 msgid "generación %(n)s"
 msgstr "generation %(n)s"
 
-msgid "generación este mes"
-msgstr "generation this month"
+msgid "generación desde el inicio"
+msgstr "generation since the start"
 
 msgid "generada"
 msgstr "generated"
@@ -17797,6 +17793,10 @@ msgid "hasta %(num)s referencia"
 msgid_plural "hasta %(num)s referencias"
 msgstr[0] "up to %(num)s reference"
 msgstr[1] "up to %(num)s references"
+
+#, python-format
+msgid "hasta el %(hasta)s · todos los proyectos"
+msgstr "up to %(hasta)s · all projects"
 
 #, python-format
 msgid ""
@@ -17906,15 +17906,15 @@ msgstr "English"
 msgid "ingresos"
 msgstr "revenue"
 
+#, python-format
+msgid "ingresos %(ingresos)s · MER %(mer)s"
+msgstr "revenue %(ingresos)s · MER %(mer)s"
+
 msgid "ingresos / gasto"
 msgstr "revenue / spend"
 
 msgid "ingresos / pedidos"
 msgstr "revenue / orders"
-
-#, python-format
-msgid "ingresos del mes %(ingresos)s · MER %(mer)s"
-msgstr "revenue this month %(ingresos)s · MER %(mer)s"
 
 msgid "intensa"
 msgstr "intense"
@@ -18036,9 +18036,6 @@ msgstr "done"
 
 msgid "listo para generar"
 msgstr "ready to generate"
-
-msgid "lo de este mes, proyecto por proyecto"
-msgstr "this month's numbers, project by project"
 
 msgid "lo grave primero"
 msgstr "most serious first"
@@ -18887,8 +18884,8 @@ msgstr "no photos: the Catalog asset wasn't created."
 msgid "sin fotos: no se enlazó al activo del catálogo."
 msgstr "no photos: it wasn't linked to the Catalog asset."
 
-msgid "sin gasto medido este mes"
-msgstr "no spend measured this month"
+msgid "sin gasto medido"
+msgstr "no measured spend"
 
 msgid "sin generación pagada"
 msgstr "no paid generation"
@@ -18911,8 +18908,8 @@ msgstr "no name"
 msgid "sin nombre o sin identificador; se omitió."
 msgstr "no name or no identifier; skipped."
 
-msgid "sin pauta corriendo"
-msgstr "no ad spend running"
+msgid "sin pauta todavía"
+msgstr "no ad spend yet"
 
 msgid "sin piezas"
 msgstr "no pieces"
@@ -19078,6 +19075,9 @@ msgstr "all"
 msgid "todavía no se han traído resultados"
 msgstr "results haven't been pulled yet"
 
+msgid "todo desde el inicio, proyecto por proyecto"
+msgstr "everything since the start, project by project"
+
 msgid "todo el experimento"
 msgstr "the whole experiment"
 
@@ -19096,10 +19096,6 @@ msgstr "cap"
 #, python-format
 msgid "tope alcanzado (%(gasto)s de %(tope)s %(moneda)s); %(motivo)s"
 msgstr "cap reached (%(gasto)s of %(tope)s %(moneda)s); %(motivo)s"
-
-#, python-format
-msgid "total %(usd)s"
-msgstr "total %(usd)s"
 
 msgid "traducción de firmas copycoders"
 msgstr "copycoders “why it works” translation"
@@ -19232,9 +19228,6 @@ msgstr "voz_bloque: the block has no voice text."
 #, python-format
 msgid "vs %(n)s anteriores"
 msgstr "vs previous %(n)s"
-
-msgid "vs. mes anterior"
-msgstr "vs. last month"
 
 msgid "vs. periodo anterior"
 msgstr "vs. previous period"

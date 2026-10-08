@@ -2144,6 +2144,9 @@ def ver_cliente(cliente):
     # (El hotfix e8d433a del 2026-10-03 las devolvía mientras la pestaña vieja pintaba la galería; E2 la reemplaza.)
     ctx_exp = _contexto_motor_experimentos(cliente)
     ctx_meta = _contexto_meta(cliente)
+    # Sin Meta y sin nada probado, la pestaña es solo «Conecta Meta» (Daniel, 2026-10-08: la tabla vacía y una galería
+    # que dejaba marcar piezas sin poder lanzarlas confundían). Con Meta conectado ni se consulta.
+    ctx_exp["exp_sin_meta"] = not ctx_meta["meta_conectado"] and not experimentos.hay_historial(cliente)
     tiendas_cliente = tiendas.listar(cliente)
     triple_whale_conectado = triple_whale_tiendas.obtener(cliente)
     # Las tarjetas de tiendas (spec 2026-10-08 §6.2): país y bandera en el idioma de quien mira.
@@ -4863,9 +4866,9 @@ def _calcular_tablero(cliente):
         "meses": lambda: tablero.mes_a_mes(cliente, ahora, datos=datos),
         "generacion_total": lambda: gastos.resumen_total(cliente, ahora),
         # La tienda según Triple Whale (copia local, spec 2026-09-28 §13): sin conexión es None.
-        "tienda_tw": lambda: triple_whale_panel.resumen_mes_tienda(cliente),
+        "tienda_tw": lambda: triple_whale_panel.resumen_total_tienda(cliente),
         # El CSV va en el contexto cacheado para que la descarga cuadre con lo que se ve (tab_descargar_csv).
-        "csv": lambda: tablero.csv_mes(cliente, ahora, datos=datos),
+        "csv": lambda: tablero.csv_total(cliente, ahora, datos=datos),
     }
     for nombre, fn in partes.items():
         try:
@@ -5117,16 +5120,16 @@ def alertas_restaurar(cliente):
 
 @app.route("/cliente/<cliente>/tablero/mes.csv")
 def tab_descargar_csv(cliente):
-    """CSV del mes en curso (una fila por pieza, `;`, BOM) para abrir en
-    Excel. Sale del mismo contexto cacheado que la pestaña; si esa parte
+    """CSV con lo acumulado de cada pieza desde el inicio (una fila por pieza,
+    `;`, BOM) para abrir en Excel. Sale del mismo contexto cacheado que la pestaña; si esa parte
     falló, se vuelve a intentar sola para que el error llegue al navegador."""
     ctx = _contexto_tablero(cliente)
     ahora = ctx["ahora"]
     texto = ctx.get("csv")
     if texto is None:
-        texto = tablero.csv_mes(cliente, ahora)
+        texto = tablero.csv_total(cliente, ahora)
     resp = Response(texto, content_type="text/csv; charset=utf-8")
-    nombre = secure_filename(f"tablero_{cliente}_{ahora[:7]}.csv")
+    nombre = secure_filename(f"tablero_{cliente}_total_{ahora[:10]}.csv")
     resp.headers["Content-Disposition"] = f'attachment; filename="{nombre}"'
     return resp
 
@@ -5155,10 +5158,11 @@ def _filtro_usd(valor):
     return gastos.formatear(valor)
 
 
-def _pauta_mes(tablero_ctx):
+def _pauta_mes(tablero_ctx, parte="resumen"):
     """[{"moneda", "gasto"}] con la pauta del mes por moneda (solo > 0), del
-    resumen ya calculado por el tablero. Sin resumen (parte rota) → []."""
-    resumen = (tablero_ctx or {}).get("resumen") or {}
+    resumen ya calculado por el tablero. Sin resumen (parte rota) → [].
+    `parte="total"` da la pauta desde el inicio (`tablero.resumen_total`)."""
+    resumen = (tablero_ctx or {}).get(parte) or {}
     salida = []
     for moneda, g in sorted((resumen.get("por_moneda") or {}).items()):
         gasto = float((g or {}).get("gasto") or 0)
@@ -5179,54 +5183,51 @@ def _precios_pagina():
     }
 
 
-def _chip_gasto(gasto_mes, pauta_mes):
+def _chip_gasto(gasto, pauta):
     """Texto del chip del sidebar: «US$ 12,40 generación · 1.405.157 COP
-    pauta» (la pauta solo si hay; la generación siempre, aunque sea 0).
-    Traducido acá (no en la plantilla, que solo recibe el texto ya armado
-    con `_('Este mes: %(gasto)s', ...)`, ver _sidebar.html)."""
-    partes = [gettext("%(monto)s generación", monto=gastos.formatear((gasto_mes or {}).get('total') or 0))]
-    for p in pauta_mes or []:
+    pauta» (la pauta solo si hay; la generación siempre, aunque sea 0), desde
+    el inicio. Traducido acá (no en la plantilla, que solo recibe el texto ya
+    armado con `_('Gasto total: %(gasto)s', ...)`, ver _sidebar.html)."""
+    partes = [gettext("%(monto)s generación", monto=gastos.formatear((gasto or {}).get('total') or 0))]
+    for p in pauta or []:
         partes.append(gettext("%(monto)s pauta", monto=tablero.dinero(p['gasto'], p['moneda'])))
     return " · ".join(partes)
 
 
 def _contexto_gasto(cliente, tablero_ctx):
-    """gasto_mes (gastos.resumen_mes), pauta_mes (por moneda, del tablero),
-    precios (estimados de los botones), gastos_historial (200 últimos),
-    gastos_por_tipo (tabla) y gasto_chip (sidebar). Cada parte en su
-    try/except: el gasto informa, nunca tumba la página."""
+    """Todo desde el inicio (Daniel, 2026-10-08: «todas las métricas en la
+    totalidad, no por mes, porque confunden a mis clientes»): gasto_total
+    (gastos.resumen_total), pauta_total (por moneda, del tablero),
+    gastos_por_tipo (gastos.resumen_todo), gastos_historial (200 últimos),
+    precios (estimados de los botones) y gasto_chip (sidebar). Cada parte en
+    su try/except: el gasto informa, nunca tumba la página."""
     try:
-        gasto_mes = gastos.resumen_mes(cliente)
+        gasto_todo = gastos.resumen_todo(cliente)
     except Exception as e:  # noqa: BLE001 — informativo
-        print(f"[aviso] Gasto de {cliente}: no pude leer el resumen del mes: {type(e).__name__}")
-        gasto_mes = {"desde": None, "hasta": None, "total": 0.0, "por_tipo": {}, "n": 0, "error": True}
+        print(f"[aviso] Gasto de {cliente}: no pude leer el resumen por tipo: {type(e).__name__}")
+        gasto_todo = {"desde": None, "hasta": None, "total": 0.0, "por_tipo": {}, "n": 0, "error": True}
     try:
         historial = gastos.historial(cliente, limite=200)
     except Exception as e:  # noqa: BLE001 — informativo
         print(f"[aviso] Gasto de {cliente}: no pude leer el historial: {type(e).__name__}")
         historial = []
-    # Desde el inicio y mes a mes (2026-10-07): la pantalla solo decía «este
-    # mes» y los meses anteriores parecían perdidos.
     try:
         gasto_total = gastos.resumen_total(cliente)
-        gasto_por_mes = [{"mes": m, "usd": v["usd"], "n": v["n"]}
-                         for m, v in sorted(gastos.por_mes(cliente).items(), reverse=True)]
     except Exception as e:  # noqa: BLE001 — informativo
         print(f"[aviso] Gasto de {cliente}: no pude leer el total desde el inicio: {type(e).__name__}")
-        gasto_total, gasto_por_mes = {"total": 0.0, "n": 0, "desde": None, "error": True}, []
-    pauta = _pauta_mes(tablero_ctx)
+        gasto_total = {"total": 0.0, "n": 0, "desde": None, "error": True}
+    pauta = _pauta_mes(tablero_ctx, "total")
     por_tipo = [{"tipo": t, "nombre": NOMBRES_TIPO_GASTO.get(t, t), "n": v["n"], "usd": v["usd"]}
-                for t, v in sorted(gasto_mes["por_tipo"].items(), key=lambda kv: -kv[1]["usd"])]
+                for t, v in sorted(gasto_todo["por_tipo"].items(), key=lambda kv: -kv[1]["usd"])]
     return {
-        "gasto_mes": gasto_mes,
-        "pauta_mes": pauta,
+        "gasto_total": gasto_total,
+        "gasto_todo": gasto_todo,
+        "pauta_total": pauta,
         "precios": _precios_pagina(),
         "gastos_historial": historial,
         "gastos_por_tipo": por_tipo,
-        "gasto_total": gasto_total,
-        "gasto_por_mes": gasto_por_mes,
         "nombres_tipo_gasto": NOMBRES_TIPO_GASTO,
-        "gasto_chip": _chip_gasto(gasto_mes, pauta),
+        "gasto_chip": None if gasto_total.get("error") else _chip_gasto(gasto_total, pauta),
     }
 
 
@@ -5243,7 +5244,7 @@ def _chip_gasto_sidebar():
     if not cliente or request.endpoint == "ver_cliente" or _quiere_json():
         return {}
     try:
-        return {"gasto_chip": _chip_gasto(gastos.resumen_mes(cliente), _pauta_mes(_contexto_tablero(cliente)))}
+        return {"gasto_chip": _chip_gasto(gastos.resumen_total(cliente), _pauta_mes(_contexto_tablero(cliente), "total"))}
     except Exception as e:  # noqa: BLE001 — sin chip, pero con página
         print(f"[aviso] Gasto de {cliente}: no pude calcular el chip del sidebar: {type(e).__name__}")
         return {}
@@ -5329,7 +5330,10 @@ def exp_pieza(cliente, ep_id):
 def exp_nuevo(cliente):
     """«Nuevo experimento» en su propia ruta (E2): la galería de piezas, la barra y los tres pasos que hasta ahora
     vivían arriba de la lista de experimentos. Misma URL que el POST de `exp_crear`, otro método. Llega con
-    `?piezas=1,2` (las marca), `?exp_nombre=&exp_destino=` (Catálogo) o sin nada."""
+    `?piezas=1,2` (las marca), `?exp_nombre=&exp_destino=` (Catálogo) o sin nada. Sin Meta conectado no hay galería:
+    vuelve a la pestaña, que dice qué falta (2026-10-08: dejaba marcar piezas que después no se podían lanzar)."""
+    if meta_conexion.estado(cliente).get("estado") != "conectado":
+        return _volver_exp(cliente)
     ctx = _contexto_experimentos(cliente, con_elegibles=True, con_organico=False)
     return render_template("exp_nuevo.html", cliente=cliente, nombre_proyecto=proyectos.nombre_visible(cliente),
                            paises_fe=fe_tipos.PAISES, **ctx, **_contexto_meta(cliente, ctx["experimentos"]))
@@ -5342,7 +5346,7 @@ def exp_crear(cliente):
     lo pide."""
     volver = _volver_exp(cliente)
     if meta_conexion.estado(cliente).get("estado") != "conectado":
-        flash(gettext("Conecta Meta en Experimentos antes de crear un experimento."), "error")
+        flash(gettext("Conecta Meta en Configuración › Conexiones antes de crear un experimento."), "error")
         return volver
     moneda = (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
     nombre = (request.form.get("nombre") or "").strip()[:200]
@@ -5476,8 +5480,8 @@ def exp_probar(cliente):
     marcadas = ",".join(x for x in request.form.getlist("piezas") if x.isascii() and x.isdigit())
     volver = redirect(url_for("exp_nuevo", cliente=cliente, **({"piezas": marcadas} if marcadas else {})))
     if meta_conexion.estado(cliente).get("estado") != "conectado":
-        flash(gettext("Conecta Meta en Experimentos antes de probar piezas."), "error")
-        return volver
+        flash(gettext("Conecta Meta en Configuración › Conexiones antes de probar piezas."), "error")
+        return _volver_exp(cliente)   # «Nuevo experimento» sin Meta ya no pinta la galería
     moneda = (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
     objetivo = request.form.get("objetivo") or ""
     # Sin repetidos y en el orden en que llegan: un POST armado a mano con paises=CO&paises=CO creaba dos
