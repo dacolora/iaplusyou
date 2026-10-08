@@ -15,6 +15,12 @@ todo porque la URL lleva `<cliente>`; cada POST además exige el mismo origen
 - `pieza_estado`: pausa o activa en Meta un anuncio hecho en Creatv (una
   pieza de experimento) desde la tabla, con confirmación; usa
   `lanzador.pausar_pieza` / `activar_pieza`, que dejan su evento.
+- `galeria` (GET, spec 2026-10-08 tarjetas §5.2): una página de tarjetas
+  (`dias`, `canal`, `tienda`, `veredicto`, `pagina`) para los filtros y «Ver más».
+- `tarjeta` (GET, §5.3): una sola tarjeta, para repintarla cuando termina su
+  análisis; un anuncio que no está en el alcance (o un id raro) es 404.
+- `analizar_anuncio`, `analizar_lote`, `analisis_detalle`, `anuncio_referente`:
+  esqueletos que la galería ya nombra (501/404); los llena la tarea 8 del plan.
 """
 from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, session, url_for
 from flask_babel import gettext
@@ -23,7 +29,7 @@ import idiomas
 import triple_whale
 import triple_whale_tiendas
 from tareas import triple_whale as tareas_tw
-from triple_whale import analisis, datos, panel, puente
+from triple_whale import analisis, datos, evaluacion, panel, puente
 
 bp = Blueprint("triple_whale", __name__, url_prefix="/cliente/<cliente>/triple-whale")
 
@@ -88,6 +94,65 @@ def ver_panel(cliente):
     armar_grafico = current_app.extensions.get("grafico_tablero")
     grafico = armar_grafico(ctx["serie"]) if armar_grafico and ctx.get("serie") else None
     return render_template("_tw_panel.html", cliente=cliente, tw=ctx, grafico=grafico)
+
+
+# ------------------------------------------------ galería de tarjetas (spec tarjetas §5) ---
+
+def _alcance_peticion(cliente, fuente):
+    return panel.alcance(cliente, _dias(fuente.get("dias")), (fuente.get("canal") or "").strip() or None,
+                         fuente.get("tienda"))
+
+
+def _contexto_galeria(cliente, alc):
+    """Lo que necesitan las macros de la galería fuera del panel."""
+    return {"cliente": cliente, "moneda": alc["config"]["moneda"], "alcance_params": alc["params"],
+            "etiquetas_veredicto": evaluacion.ETIQUETAS_VEREDICTO,
+            "frases_veredicto": evaluacion.FRASES_VEREDICTO, "tendencias": evaluacion.TENDENCIAS,
+            "vacios_anillo": evaluacion.VACIOS_ANILLO, "problemas": evaluacion.PROBLEMAS,
+            "fortalezas": evaluacion.FORTALEZAS}
+
+
+@bp.get("/galeria")
+def galeria(cliente):
+    alc = _alcance_peticion(cliente, request.args)
+    if not alc:
+        abort(404)
+    g = panel.galeria(cliente, alc["ev"], request.args.get("veredicto") or "", request.args.get("pagina"))
+    return render_template("_tw_galeria_fragmento.html", modo="pagina", g=g, **_contexto_galeria(cliente, alc))
+
+
+@bp.get("/tarjeta/<canal>/<ad_id>")
+def tarjeta(cliente, canal, ad_id):
+    if not (tareas_tw.id_valido(canal) and tareas_tw.id_valido(ad_id)):
+        abort(404)
+    alc = _alcance_peticion(cliente, request.args)
+    a = next((x for x in (alc or {}).get("ev", {}).get("anuncios", []) if x["canal"] == canal and x["ad_id"] == ad_id),
+             None)
+    if a is None:
+        abort(404)
+    panel.enriquecer(cliente, [a], alc["ev"], datos.ultimos_analisis(cliente, [(canal, ad_id)]))
+    return render_template("_tw_galeria_fragmento.html", modo="tarjeta", a=a, **_contexto_galeria(cliente, alc))
+
+
+# Esqueletos: la galería ya los nombra (url_for); la tarea 8 del plan los llena.
+@bp.post("/anuncio/<canal>/<ad_id>/analizar")
+def analizar_anuncio(cliente, canal, ad_id):
+    abort(501)
+
+
+@bp.post("/analizar-lote")
+def analizar_lote(cliente):
+    abort(501)
+
+
+@bp.get("/analisis/<int:aid>")
+def analisis_detalle(cliente, aid):
+    abort(404)
+
+
+@bp.post("/anuncio/<canal>/<ad_id>/referente")
+def anuncio_referente(cliente, canal, ad_id):
+    abort(501)
 
 
 @bp.post("/sincronizar")

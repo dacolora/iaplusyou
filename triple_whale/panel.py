@@ -8,6 +8,12 @@ Varias tiendas (spec 2026-10-08 §6.2): todo se lee en un alcance, una tienda
 o «Todas» (`tienda_id=None`). `tienda_elegida` resuelve lo que pide la
 persona: una tienda que no es del proyecto (o un valor raro) es «Todas», y
 con una sola tienda conectada el alcance es esa tienda.
+
+Galería de tarjetas (spec 2026-10-08-triple-whale-tarjetas-analisis §2, §5):
+`alcance` resuelve lo mismo que el panel para las rutas de la galería y de una
+tarjeta; `galeria` arma una página (12, por gasto) y el lote «Analizar los N
+que más gastaron»; `enriquecer` agrega a cada tarjeta su creativo, su pieza de
+Creatv, su análisis, su barra viva y su precio con un número fijo de consultas.
 """
 from datetime import date, timedelta
 
@@ -31,6 +37,12 @@ MAX_PRODUCTOS_PANEL = 8
 # Estados de Crear tal como los dice la tarjeta de una idea (idea → pieza).
 ETIQUETAS_PIEZA = {"prompt_pendiente": N_("armando el prompt"), "prompt_listo": N_("prompt listo, falta generar"),
                    "video_generando": N_("generando"), "video_listo": N_("lista"), "error": N_("con error")}
+# La galería de tarjetas (spec 2026-10-08-triple-whale-tarjetas-analisis §2, §5).
+POR_PAGINA = 12
+N_LOTE = 10
+FILTROS_GALERIA = ("", "ganador", "prometedor", "en_prueba", "perdedor", "cansando", "sin_datos")
+FACTOR_VIEJO = 1.5
+_CANDIDATOS_LOTE = N_LOTE * 3
 
 
 def _iso(d):
@@ -229,6 +241,124 @@ def _jobs_sync(cliente, tiendas):
     return salida
 
 
+# ------------------------------------------------ galería de tarjetas (spec tarjetas §2, §5) ---
+
+def alcance(cliente, dias=PERIODO_DEFECTO, canal=None, tienda=None, hoy=None):
+    """El mismo alcance que el panel, para la galería, una tarjeta y «Cómo mejorarlo». None sin Triple Whale.
+    `params` es lo que va en las URL (dias, canal, tienda)."""
+    config = triple_whale_tiendas.obtener(cliente)
+    if not config:
+        return None
+    t = tienda_elegida(config["tiendas"], tienda)
+    tienda_id = t["id"] if t else None
+    dias = dias if dias in PERIODOS else PERIODO_DEFECTO
+    canal = canal if canal and tareas_tw.id_valido(canal) else None
+    ev, desde, hasta = evaluar_periodo(cliente, dias, canal, tienda_id=tienda_id, hoy=hoy)
+    return {"config": config, "tienda": t, "tienda_id": tienda_id, "dias": dias, "canal": canal, "ev": ev,
+            "desde": desde, "hasta": hasta,
+            "params": {"dias": dias, "canal": canal or "", "tienda": tienda_id if tienda_id is not None else ""}}
+
+
+def filtrar(anuncios, veredicto):
+    """Los anuncios del filtro de la galería; «Todos» ("") deja fuera los de muy pocos datos."""
+    if veredicto == "cansando":
+        return [a for a in anuncios if a.get("tendencia") == "cansando"]
+    if veredicto in evaluacion.VEREDICTOS:
+        return [a for a in anuncios if a["veredicto"] == veredicto]
+    return [a for a in anuncios if a["veredicto"] != "sin_datos"]
+
+
+def _orden_gasto(a):
+    return (-a["m"]["gasto"], a["canal"], a["ad_id"])
+
+
+def es_viejo(a, fila):
+    """Un análisis listo es viejo si cambió el veredicto o el anuncio gastó al menos un 50 % más (spec §6.6)."""
+    foto = (fila or {}).get("foto") or {}
+    if foto.get("veredicto") != a["veredicto"]:
+        return True
+    antes = float((foto.get("m") or {}).get("gasto") or 0)
+    return a["m"]["gasto"] >= FACTOR_VIEJO * antes if antes > 0 else a["m"]["gasto"] > 0
+
+
+def medio_tarjeta(a):
+    """Qué muestra la tarjeta: {"video", "poster"} | {"imagen", "enlace"?} | {"enlace"} | {}. Solo hosts permitidos
+    se incrustan; un video de otro host (TikTok) es un enlace, y solo a la plataforma del propio anuncio. Una pieza
+    de Creatv usa lo suyo de R2."""
+    c, p = a.get("creativo") or {}, a.get("creatv") or {}
+    if p.get("url_video") or p.get("url_miniatura"):
+        if p.get("tipo") == "imagen":
+            return {"imagen": p.get("url_video") or p.get("url_miniatura")}
+        return {"video": p.get("url_video"), "poster": p.get("url_miniatura")}
+    video = c.get("video_url") or a.get("video_url")
+    poster = c.get("imagen_url") if triple_whale.medio_permitido(c.get("imagen_url")) else None
+    if video and triple_whale.medio_permitido(video):
+        return {"video": video, "poster": poster}
+    enlace = video if triple_whale.enlace_permitido(video, a.get("canal")) else None
+    if poster:
+        return {"imagen": poster, "enlace": enlace}
+    return {"enlace": enlace} if enlace else {}
+
+
+def enriquecer(cliente, tarjetas, ev, analisis_por_clave):
+    """Lo que cada tarjeta necesita además de la evaluación, sin consultas por tarjeta: creativos, piezas de Creatv,
+    análisis, barras vivas, precio, costo por venta del canal y piezas nacidas de la versión mejorada."""
+    claves = [(a["canal"], a["ad_id"]) for a in tarjetas]
+    creativos = datos.creativos(cliente, claves)
+    meta_ids = [a["ad_id"] for a in tarjetas if a["canal"] == triple_whale.CANAL_META]
+    creatv = datos.piezas_creatv(cliente, meta_ids)
+    vivos = tareas_tw.analisis_vivos(cliente)
+    listos = [f["id"] for f in analisis_por_clave.values() if f["estado"] == "lista"]
+    hechas = datos.piezas_de_analisis(cliente, listos)
+    cpa_canal = {c["canal"]: (c["gasto"] / c["pedidos"] if c["pedidos"] else None) for c in ev["cuenta"]["canales"]}
+    for a in tarjetas:
+        k = (a["canal"], a["ad_id"])
+        a["creativo"] = creativos.get(k) or {}
+        a["creatv"] = creatv.get(a["ad_id"]) if a["canal"] == triple_whale.CANAL_META else None
+        a["medio"] = medio_tarjeta(a)
+        fila = analisis_por_clave.get(k)
+        a["analisis"] = fila
+        a["analisis_viejo"] = bool(fila and fila["estado"] == "lista" and es_viejo(a, fila))
+        job = tareas_tw.job_id_analisis(cliente, a["canal"], a["ad_id"])
+        a["job_analisis"] = job if job in vivos else None
+        a["precio_analisis"] = gastos.estimar("analisis_anuncio_tw", segundos=a["creativo"].get("duracion_s"))
+        a["cpa_canal"] = cpa_canal.get(a["canal"])
+        a["piezas_mejora"] = hechas.get(fila["id"], []) if fila else []
+    return tarjetas
+
+
+def _fresco_o_vivo(a, fila):
+    if not fila:
+        return False
+    if fila["estado"] in ("en_cola", "analizando"):
+        return True
+    return fila["estado"] == "lista" and not es_viejo(a, fila)
+
+
+def galeria(cliente, ev, veredicto="", pagina=1):
+    """Una página de la galería (spec §5.2) y el lote «Analizar los N que más gastaron» (§6.4). Lee los análisis de
+    la página y de los candidatos del lote en UNA consulta."""
+    veredicto = veredicto if veredicto in FILTROS_GALERIA else ""
+    try:
+        pagina = max(1, int(pagina or 1))
+    except (TypeError, ValueError):
+        pagina = 1
+    lista = sorted(filtrar(ev["anuncios"], veredicto), key=_orden_gasto)
+    tarjetas = lista[(pagina - 1) * POR_PAGINA: pagina * POR_PAGINA]
+    candidatos = [a for a in lista if a["veredicto"] != "sin_datos"][:_CANDIDATOS_LOTE]
+    claves = {(a["canal"], a["ad_id"]) for a in tarjetas + candidatos}
+    por_clave = datos.ultimos_analisis(cliente, list(claves))
+    enriquecer(cliente, tarjetas, ev, por_clave)
+    lote = [a for a in candidatos if not _fresco_o_vivo(a, por_clave.get((a["canal"], a["ad_id"])))][:N_LOTE]
+    unidad = gastos.estimar("analisis_anuncio_tw")["usd"] or 0
+    conteo = {f: len(filtrar(ev["anuncios"], f)) for f in FILTROS_GALERIA}
+    return {"tarjetas": tarjetas, "pagina": pagina, "hay_mas": pagina * POR_PAGINA < len(lista), "total": len(lista),
+            "veredicto": veredicto, "conteo_filtros": conteo,
+            "lote": {"n": len(lote), "claves": [(a["canal"], a["ad_id"]) for a in lote],
+                     # el mismo texto que gastos.estimar («US$ 0,81 aprox.»); sin duración, 30 s por anuncio
+                     "precio": gastos._estimado(unidad * len(lote), "análisis por anuncio")}}
+
+
 def contexto(cliente, dias=PERIODO_DEFECTO, canal=None, tienda_id=None, hoy=None):
     """Todo lo que pinta `_tw_panel.html` en el alcance pedido (`tienda_id`:
     una tienda del proyecto, o None = «Todas»; un id ajeno se ignora)."""
@@ -296,4 +426,9 @@ def contexto(cliente, dias=PERIODO_DEFECTO, canal=None, tienda_id=None, hoy=None
                         if trabajos.en_curso(tareas_tw.job_id_evaluar(cliente)) else None),
         "etiquetas_veredicto": evaluacion.ETIQUETAS_VEREDICTO, "problemas": evaluacion.PROBLEMAS,
         "fortalezas": evaluacion.FORTALEZAS, "veredictos": evaluacion.VEREDICTOS,
+        # La galería de tarjetas (spec tarjetas §2): su primera página llega con el panel, sin un segundo fetch.
+        "galeria": galeria(cliente, ev),
+        "alcance_params": {"dias": dias, "canal": canal or "", "tienda": tienda_id if tienda_id is not None else ""},
+        "frases_veredicto": evaluacion.FRASES_VEREDICTO, "tendencias": evaluacion.TENDENCIAS,
+        "vacios_anillo": evaluacion.VACIOS_ANILLO,
     }

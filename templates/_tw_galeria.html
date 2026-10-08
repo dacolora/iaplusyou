@@ -1,0 +1,145 @@
+{# Galería de tarjetas de la pestaña Triple Whale (spec 2026-10-08-triple-whale-tarjetas-analisis §2, §5).
+   `tw` trae los diccionarios de textos (etiquetas_veredicto, frases_veredicto, tendencias, vacios_anillo,
+   problemas, fortalezas); `alcance_params` = {dias, canal, tienda}. Sin <script>.
+   `data-tarjeta-url` lleva el alcance como query aparte (`|urlencode`): en esa ruta `<canal>` del camino es el
+   canal del anuncio y `canal` de la query es el filtro del panel, y url_for no admite los dos. #}
+
+{% macro anillo_tw(r, etiqueta, detalle, canal_nombre, tw) -%}
+{%- set pct = r.pct if r and r.pct is not none else none -%}
+<div class="tw-anillo tw-anillo-{{ (r.nivel if r and r.nivel else 'vacio') }}" role="img"
+     aria-label="{% if pct is not none %}{{ _('%(etiqueta)s: mejor que el %(pct)s %% de tus anuncios de %(canal)s', etiqueta=etiqueta, pct=pct, canal=canal_nombre) }}{% else %}{{ etiqueta }}: {{ (tw.vacios_anillo.get(r.vacio) | traducir) if r and r.vacio else '—' }}{% endif %}">
+  <svg viewBox="0 0 36 36" aria-hidden="true">
+    <circle class="tw-anillo-fondo" cx="18" cy="18" r="15.9"/>
+    {% if pct is not none %}<circle class="tw-anillo-valor" cx="18" cy="18" r="15.9" stroke-dasharray="{{ pct }} 100" transform="rotate(-90 18 18)"/>{% endif %}
+    <text x="18" y="21.5" text-anchor="middle">{{ pct if pct is not none else '—' }}</text>
+  </svg>
+  <span class="tw-anillo-etiqueta">{{ etiqueta }}</span>
+  <small>{% if pct is not none %}{{ detalle }}{% elif r and r.vacio %}{{ tw.vacios_anillo.get(r.vacio) | traducir }}{% endif %}</small>
+</div>
+{%- endmacro %}
+
+{% macro tarjeta_anuncio(a, cliente, alcance_params, moneda, tw) -%}
+{%- set am = a.m -%}
+{%- set an = a.anillos or {} -%}
+{%- set canal_nombre = a.canal | tw_canal -%}
+{%- set clave = a.canal ~ '-' ~ a.ad_id -%}
+{%- set fila = a.analisis -%}
+<article class="tw-tarjeta tw-tarjeta-{{ a.veredicto }}" id="tw-tarjeta-{{ clave }}"
+         data-tarjeta-url="{{ url_for('triple_whale.tarjeta', cliente=cliente, canal=a.canal, ad_id=a.ad_id) }}?{{ alcance_params | urlencode }}">
+  <div class="tw-tarjeta-medio">
+    {% if a.medio.video %}
+    <video src="{{ a.medio.video }}" {% if a.medio.poster %}poster="{{ a.medio.poster }}"{% endif %} controls playsinline preload="none" data-precarga></video>
+    {% elif a.medio.imagen %}
+    <img src="{{ a.medio.imagen }}" alt="{{ a.nombre }}" loading="lazy" referrerpolicy="no-referrer">
+    {% else %}
+    <div class="tw-tarjeta-sin-medio">{{ canal_nombre }}</div>
+    {% endif %}
+    {% if a.medio.enlace %}<a class="tw-tarjeta-enlace" href="{{ a.medio.enlace }}" target="_blank" rel="noopener noreferrer">{{ _('Ver en %(canal)s', canal=canal_nombre) }}</a>{% endif %}
+  </div>
+  <div class="tw-tarjeta-cuerpo">
+    <div class="tw-tarjeta-cabeza">
+      <div class="tw-tarjeta-titulos">
+        <small class="tw-sobretitulo">{{ canal_nombre }}{% if a.campana %} · {{ a.campana }}{% endif %}</small>
+        <strong class="tw-tarjeta-nombre">{{ a.nombre }}</strong>
+        <p class="tw-frase" title="{{ a.motivo }}">{{ tw.frases_veredicto[a.veredicto] | traducir }}</p>
+      </div>
+      <span class="tw-resultado tw-resultado-{{ a.veredicto }}">
+        {%- if am.pedidos and am.pedidos > 0 -%}{{ _('ROAS %(roas)s× · %(n)s ventas', roas=am.roas | roas, n=am.pedidos | tw_num(1)) }}
+        {%- elif am.gasto > 0 -%}{{ _('Gastó %(g)s sin ventas', g=am.gasto | dinero(moneda)) }}
+        {%- else -%}{{ _('Sin ventas todavía') }}{%- endif -%}
+      </span>
+    </div>
+    <div class="tw-anillos">
+      {{ anillo_tw(an.gancho, _('Gancho'), _('%(p)s se queda 3 s', p=an.gancho.valor | tw_pct(0)) if an.gancho else '', canal_nombre, tw) }}
+      {{ anillo_tw(an.retencion, _('Retención'), _('%(p)s lo ve completo', p=an.retencion.valor | tw_pct(0)) if an.retencion else '', canal_nombre, tw) }}
+      {{ anillo_tw(an.clic, _('Clic'), _('CTR %(p)s', p=an.clic.valor | tw_pct(1, false)) if an.clic else '', canal_nombre, tw) }}
+      {{ anillo_tw(an.compra, _('Compra'), _('%(p)s compra', p=an.compra.valor | tw_pct(1)) if an.compra else '', canal_nombre, tw) }}
+    </div>
+    <dl class="tw-cifras">
+      <div><dt>{{ _('Costo por venta') }}</dt><dd>{% if am.cpa %}{{ am.cpa | dinero(moneda) }}{% else %}—{% endif %}{% if a.cpa_canal %} <small>{{ _('canal: %(c)s', c=a.cpa_canal | dinero(moneda)) }}</small>{% endif %}</dd></div>
+      <div><dt>{{ _('Tendencia (7 días)') }}</dt><dd class="tw-tendencia-{{ a.tendencia or 'nada' }}">{% if a.tendencia %}{{ tw.tendencias[a.tendencia] | traducir }}{% else %}—{% endif %}</dd></div>
+    </dl>
+    {% if a.fortalezas or a.problemas %}
+    <ul class="tw-razones">
+      {% for f in a.fortalezas[:3] %}<li class="tw-razon tw-razon-ok">✓ {{ tw.fortalezas[f] | traducir }}</li>{% endfor %}
+      {% for p in a.problemas[:3] %}<li class="tw-razon tw-razon-mal" title="{{ tw.problemas[p][1] | traducir }}">✗ {{ tw.problemas[p][0] | traducir }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+    {#- .get('copy'): ni a.creativo.copy ni a.creativo['copy'] (sin la clave) sirven, Jinja cae al método dict.copy. -#}
+    {% set copy_anuncio = a.creativo.get('copy') %}
+    {% if a.creativo.titulo or copy_anuncio %}
+    <details class="tw-texto-anuncio"><summary>{{ _('Texto del anuncio') }}</summary>
+      {% if a.creativo.titulo %}<p><strong>{{ a.creativo.titulo }}</strong></p>{% endif %}
+      {% if copy_anuncio %}<p class="tw-copy">{{ copy_anuncio }}</p>{% endif %}
+    </details>
+    {% endif %}
+    {% if a.creatv %}<small><a href="#experimentos?exp={{ a.creatv.experimento_id }}">{{ _('Hecho en Creatv · %(exp)s', exp=a.creatv.experimento) }}</a></small>{% endif %}
+    <div class="tw-tarjeta-ia">
+      {% if a.job_analisis %}
+      <div class="tw-progreso">
+        <div class="barra-progreso" id="tw-anuncio-{{ clave }}" data-poll-job="{{ a.job_analisis }}" data-poll-al-terminar="evento"><div class="barra-progreso-fill" style="width:0%"></div></div>
+        <div class="progreso-texto">{{ _('Analizando con IA…') }}</div>
+      </div>
+      {% elif fila and fila.estado == 'lista' %}
+      <p class="tw-ia-frase">{{ fila.resultado.frase }}</p>
+      {% if a.analisis_viejo %}<small class="vacio">{{ _('Con los datos del %(desde)s al %(hasta)s; desde entonces cambió.', desde=fila.desde, hasta=fila.hasta) }}</small>{% endif %}
+      <button type="button" class="btn-sm" data-tw-ver-analisis data-url="{{ url_for('triple_whale.analisis_detalle', cliente=cliente, aid=fila.id) }}">{{ _('Ver el análisis') }}</button>
+      <div class="tw-analisis-detalle" hidden></div>
+      {% if a.piezas_mejora %}<small>{{ ngettext('Ya se hizo %(num)s pieza con esta mejora', 'Ya se hicieron %(num)s piezas con esta mejora', a.piezas_mejora | length) }}</small>{% endif %}
+      {% elif fila and fila.estado == 'error' %}
+      <p class="tag-error">{{ fila.error or _('El análisis falló.') }}</p>
+      {% endif %}
+      {% if not a.job_analisis and a.veredicto != 'sin_datos' and (not fila or fila.estado == 'error' or a.analisis_viejo) %}
+      {% set precio = a.precio_analisis.texto if a.precio_analisis else _('precio no disponible') %}
+      {% set etiqueta = _('Intentar otra vez') if fila and fila.estado == 'error' else (_('Analizar otra vez') if fila else _('Cómo mejorarlo')) %}
+      <form method="post" class="tw-analizar" data-tw-async
+            action="{{ url_for('triple_whale.analizar_anuncio', cliente=cliente, canal=a.canal, ad_id=a.ad_id) }}"
+            data-confirmar="{{ _('¿Analizar «%(nombre)s» con IA? Costo: %(precio)s', nombre=a.nombre, precio=precio) }}">
+        <input type="hidden" name="dias" value="{{ alcance_params.dias }}">
+        <input type="hidden" name="canal" value="{{ alcance_params.canal }}">
+        <input type="hidden" name="tienda" value="{{ alcance_params.tienda }}">
+        <button type="submit" class="btn-generar btn-sm">{{ etiqueta }} · {{ precio }}</button>
+      </form>
+      {% endif %}
+      {% if a.veredicto in ('ganador', 'prometedor') and (a.medio.imagen or a.medio.poster) %}
+      <form method="post" action="{{ url_for('triple_whale.anuncio_referente', cliente=cliente, canal=a.canal, ad_id=a.ad_id) }}">
+        <input type="hidden" name="dias" value="{{ alcance_params.dias }}">
+        <input type="hidden" name="canal" value="{{ alcance_params.canal }}">
+        <input type="hidden" name="tienda" value="{{ alcance_params.tienda }}">
+        <button type="submit" class="btn-xs">{{ _('Guardar en Referentes') }}</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+</article>
+{%- endmacro %}
+
+{% macro tarjetas_pagina(g, cliente, alcance_params, moneda, tw) -%}
+{% for a in g.tarjetas %}{{ tarjeta_anuncio(a, cliente, alcance_params, moneda, tw) }}{% endfor %}
+{% if g.hay_mas %}<button type="button" class="btn-sm tw-ver-mas" data-tw-mas data-pagina="{{ g.pagina + 1 }}">{{ _('Ver más') }}</button>{% endif %}
+{%- endmacro %}
+
+{% macro galeria(g, cliente, alcance_params, moneda, tw) -%}
+<div class="tw-galeria-barra">
+  <div class="tw-filtros" role="group" aria-label="{{ _('Filtrar anuncios') }}">
+    {% set nombres = {"": _('Todos'), "ganador": _('Ganadores'), "prometedor": _('Prometedores'), "en_prueba": _('En prueba'),
+                      "perdedor": _('Perdedores'), "cansando": _('Se están cansando'), "sin_datos": _('Muy pocos datos')} %}
+    {% for f, nombre in nombres.items() %}{% if f == '' or g.conteo_filtros[f] %}
+    <button type="button" class="chip{% if g.veredicto == f %} activo{% endif %}" data-tw-galeria-filtro="{{ f }}">{{ nombre }} ({{ g.conteo_filtros[f] }})</button>
+    {% endif %}{% endfor %}
+  </div>
+  {% if g.lote.n %}
+  <form method="post" class="tw-analizar-lote" action="{{ url_for('triple_whale.analizar_lote', cliente=cliente) }}"
+        data-confirmar="{{ _('¿Analizar con IA los %(n)s anuncios que más gastaron? Costo total: %(precio)s', n=g.lote.n, precio=g.lote.precio.texto) }}">
+    <input type="hidden" name="dias" value="{{ alcance_params.dias }}">
+    <input type="hidden" name="canal" value="{{ alcance_params.canal }}">
+    <input type="hidden" name="tienda" value="{{ alcance_params.tienda }}">
+    <input type="hidden" name="veredicto" value="{{ g.veredicto }}">
+    <button type="submit" class="btn-sm">{{ _('Analizar los %(n)s que más gastaron · %(precio)s', n=g.lote.n, precio=g.lote.precio.texto) }}</button>
+  </form>
+  {% endif %}
+</div>
+<div class="tw-galeria" id="tw-galeria" data-url="{{ url_for('triple_whale.galeria', cliente=cliente, **alcance_params) }}" data-veredicto="{{ g.veredicto }}">
+  {% if g.tarjetas %}{{ tarjetas_pagina(g, cliente, alcance_params, moneda, tw) }}{% else %}<p class="vacio">{{ _('Ningún anuncio en este filtro.') }}</p>{% endif %}
+</div>
+{%- endmacro %}
