@@ -216,6 +216,15 @@ def _clave_adset(pais, plataforma=None):
     return f"{pais}:{plataforma}" if plataforma else pais
 
 
+def _adsets_de_pais(p):
+    """Ids de los conjuntos de Meta de un país: los de cada plataforma en los
+    experimentos de Instalaciones de la app (`meta_adsets`, orden ios, android)
+    o el único conjunto del país (`meta_adset_id`) en los demás."""
+    if p.get("meta_adsets"):
+        return [i for i in (p["meta_adsets"] or {}).values() if i]
+    return [p["meta_adset_id"]] if p.get("meta_adset_id") else []
+
+
 def _conjunto_de(cliente, ex, p, plat, n_plataformas, campaign_id, promoted_object, moneda):
     """Id del conjunto del país `p` (y de la plataforma `plat`, en apps): el
     guardado si ya existe — así un reintento no lo duplica — o uno nuevo,
@@ -365,18 +374,22 @@ def cambiar_estado(cliente, experimento_id, status, pais=None):
         if pais is None:
             meta_campaign.actualizar_estado(ex["meta_campaign_id"], status)
             for p in ex["paises"]:
-                if p.get("meta_adset_id"):
-                    meta_adset.actualizar_estado(p["meta_adset_id"], status)
+                ids = _adsets_de_pais(p)
+                for adset_id in ids:
+                    meta_adset.actualizar_estado(adset_id, status)
+                if ids:
                     experimentos.actualizar_pais(cliente, experimento_id, p["pais"], estado=local)
         else:
             p = next((p for p in ex["paises"] if p["pais"] == pais), None)
-            if not p or not p.get("meta_adset_id"):
+            ids = _adsets_de_pais(p) if p else []
+            if not ids:
                 raise ValueError(gettext("Ese país no tiene conjunto en Meta."))
             if status == "ACTIVE" and ex["estado"] != "corriendo":
                 # Activar un solo país no sirve de nada si la campaña sigue en pausa
                 # en Meta: sin ella, el conjunto no entrega aunque quede ACTIVE local.
                 meta_campaign.actualizar_estado(ex["meta_campaign_id"], status)
-            meta_adset.actualizar_estado(p["meta_adset_id"], status)
+            for adset_id in ids:
+                meta_adset.actualizar_estado(adset_id, status)
             experimentos.actualizar_pais(cliente, experimento_id, pais, estado=local)
         for pz in _piezas_de(ex, pais):
             if status == "ACTIVE" and pieza_retirada(pz):
@@ -434,10 +447,21 @@ def cambiar_presupuesto_pais(cliente, experimento_id, pais, presupuesto_dia):
         # worker acaba de guardar, y el reintento crearía un segundo adset.
         raise ValueError(gettext("Ese experimento todavía no está en Meta."))
     p = next((p for p in ex.get("paises", []) if p["pais"] == pais), None)
-    if not p or not p.get("meta_adset_id"):
+    ids = _adsets_de_pais(p) if p else []
+    if not ids:
         raise ValueError(gettext("Ese país no tiene conjunto en Meta."))
     moneda = ex["moneda"] or "USD"
-    _con_credenciales(cliente, lambda _c: meta_adset.actualizar_presupuesto(p["meta_adset_id"], centavos(presupuesto_dia, moneda)))
+    # Con varios conjuntos (una plataforma cada uno, en apps) se reparten los
+    # centavos del país convertidos UNA vez: total // n a cada uno, así la suma
+    # nunca pasa el presupuesto del país (el resto queda sin gastar). Lo
+    # guardado del país sigue siendo el total.
+    centavos_conjunto = centavos(presupuesto_dia, moneda) // len(ids)
+
+    def _correr(_c):
+        for adset_id in ids:
+            meta_adset.actualizar_presupuesto(adset_id, centavos_conjunto)
+
+    _con_credenciales(cliente, _correr)
     experimentos.actualizar_pais(cliente, experimento_id, pais, presupuesto_dia=float(presupuesto_dia))
     for pz in _piezas_de(ex, pais):
         experimentos.actualizar_pieza(cliente, pz["id"], presupuesto_dia_actual=float(presupuesto_dia))
@@ -543,13 +567,23 @@ def activar_pieza(cliente, ep_id):
         raise ValueError(gettext("Esa pieza todavía no tiene anuncio en Meta."))
     pais = next((p for p in ex["paises"] if p["pais"] == pz["pais"]), None)
     campaña_pausada = ex["estado"] == "pausado"
-    pais_pausado = bool(pais) and pais["estado"] != "activo"
+    reactivar_conjunto = bool(pais) and pais["estado"] != "activo"
+    if pais and pais.get("meta_adsets"):
+        # Apps: un conjunto por plataforma; se reactiva solo el de esta pieza,
+        # y siempre (no solo con el país en pausa): el país pudo quedar
+        # «activo» al activar una pieza de la otra plataforma, con este
+        # conjunto todavía en PAUSED, y el anuncio no entregaría.
+        adsets_a_activar = [pz["meta_adset_id"]] if pz.get("meta_adset_id") else _adsets_de_pais(pais)
+        reactivar_conjunto = True
+    else:
+        adsets_a_activar = [pais["meta_adset_id"]] if pais and pais.get("meta_adset_id") else []
 
     def _correr(_creds):
         if campaña_pausada:
             meta_campaign.actualizar_estado(ex["meta_campaign_id"], "ACTIVE")
-        if pais_pausado and pais.get("meta_adset_id"):
-            meta_adset.actualizar_estado(pais["meta_adset_id"], "ACTIVE")
+        if reactivar_conjunto:
+            for adset_id in adsets_a_activar:
+                meta_adset.actualizar_estado(adset_id, "ACTIVE")
         meta_ad.actualizar_estado(pz["meta_ad_id"], "ACTIVE")
 
     _con_credenciales(cliente, _correr)

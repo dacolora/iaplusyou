@@ -251,6 +251,100 @@ def test_app_no_agrega_piezas_nuevas_despues_de_lanzar(entorno_app):
         e["lanzador"].lanzar_piezas_nuevas("acme", e["eid"])
 
 
+def _conjuntos_app(e):
+    """{(país, plataforma): adset_id} de un experimento de apps ya lanzado."""
+    return {(p["pais"], plat): i for p in e["ex"].obtener("acme", e["eid"])["paises"]
+            for plat, i in (p.get("meta_adsets") or {}).items()}
+
+
+def test_app_activar_experimento_activa_todos_los_conjuntos(entorno_app):
+    e = entorno_app
+    e["lanzador"].lanzar("acme", e["eid"])
+    conjuntos = _conjuntos_app(e)
+    assert len(conjuntos) == 4
+    e["meta"].llamadas.clear()
+    e["lanzador"].cambiar_estado("acme", e["eid"], "ACTIVE")
+    activos = {kw["oid"] for t, kw in e["meta"].llamadas if t == "estado" and kw["status"] == "ACTIVE"}
+    ex = e["ex"].obtener("acme", e["eid"])
+    assert ex["meta_campaign_id"] in activos
+    assert set(conjuntos.values()) <= activos
+    assert all(p["estado"] == "activo" for p in ex["paises"])
+
+
+def test_app_pausar_un_pais_pausa_sus_dos_conjuntos(entorno_app):
+    e = entorno_app
+    e["lanzador"].lanzar("acme", e["eid"])
+    e["lanzador"].cambiar_estado("acme", e["eid"], "ACTIVE")
+    conjuntos = _conjuntos_app(e)
+    e["meta"].llamadas.clear()
+    e["lanzador"].cambiar_estado("acme", e["eid"], "PAUSED", pais="CO")
+    pausados = {kw["oid"] for t, kw in e["meta"].llamadas if t == "estado" and kw["status"] == "PAUSED"}
+    assert {conjuntos[("CO", "ios")], conjuntos[("CO", "android")]} <= pausados
+    assert not {conjuntos[("MX", "ios")], conjuntos[("MX", "android")]} & pausados
+
+
+def test_app_presupuesto_del_pais_se_reparte_entre_sus_conjuntos(entorno_app):
+    e = entorno_app
+    lz = e["lanzador"]
+    lz.lanzar("acme", e["eid"])
+    conjuntos = _conjuntos_app(e)
+    e["meta"].llamadas.clear()
+    lz.cambiar_presupuesto_pais("acme", e["eid"], "CO", 20000)
+    llamadas = [kw for t, kw in e["meta"].llamadas if t == "presupuesto"]
+    assert {kw["oid"] for kw in llamadas} == {conjuntos[("CO", "ios")], conjuntos[("CO", "android")]}
+    assert all(kw["centavos"] == lz.centavos(10000, "COP") for kw in llamadas) and len(llamadas) == 2
+    co = next(p for p in e["ex"].obtener("acme", e["eid"])["paises"] if p["pais"] == "CO")
+    assert co["presupuesto_dia"] == 20000
+
+
+@pytest.mark.parametrize("moneda,presupuesto", [("CLP", 1003), ("USD", 10.05), ("COP", 20001)])
+def test_app_cambiar_presupuesto_nunca_sobrepasa_el_del_pais(entorno_app, moneda, presupuesto):
+    e = entorno_app
+    lz = e["lanzador"]
+    lz.lanzar("acme", e["eid"])
+    import db
+    with db.conectar() as con:  # la moneda no se cambia por la API: se fija acá, como al crear
+        con.execute(db.experimento.update().where(db.experimento.c.id == e["eid"]).values(moneda=moneda))
+    e["meta"].llamadas.clear()
+    lz.cambiar_presupuesto_pais("acme", e["eid"], "CO", presupuesto)
+    partes = [kw["centavos"] for t, kw in e["meta"].llamadas if t == "presupuesto"]
+    total = lz.centavos(presupuesto, moneda)
+    assert len(partes) == 2 and sum(partes) <= total and all(c == total // 2 for c in partes)
+
+
+def test_app_escalar_pais_reparte_el_nuevo_total(entorno_app):
+    e = entorno_app
+    lz = e["lanzador"]
+    lz.lanzar("acme", e["eid"])
+    e["meta"].llamadas.clear()
+    nuevo = lz.escalar_pais("acme", e["eid"], "CO", 50)
+    assert nuevo == PRESUPUESTO_PAIS * 1.5
+    partes = [kw["centavos"] for t, kw in e["meta"].llamadas if t == "presupuesto"]
+    assert len(partes) == 2 and sum(partes) == lz.centavos(nuevo, "COP")
+    co = next(p for p in e["ex"].obtener("acme", e["eid"])["paises"] if p["pais"] == "CO")
+    assert co["presupuesto_dia"] == nuevo
+
+
+def test_app_activar_pieza_android_reactiva_solo_su_conjunto(entorno_app):
+    e = entorno_app
+    lz = e["lanzador"]
+    lz.lanzar("acme", e["eid"])
+    conjuntos = _conjuntos_app(e)
+    ex = e["ex"].obtener("acme", e["eid"])
+    android = next(pz for pz in ex["piezas"] if pz["pais"] == "CO" and (pz.get("extra") or {}).get("plataforma") == "android")
+    assert android["meta_adset_id"] == conjuntos[("CO", "android")]
+    e["meta"].llamadas.clear()
+    lz.activar_pieza("acme", android["id"])
+    activos = {kw["oid"] for t, kw in e["meta"].llamadas if t == "estado" and kw["status"] == "ACTIVE"}
+    assert conjuntos[("CO", "android")] in activos and conjuntos[("CO", "ios")] not in activos
+    # La pieza iOS de CO, activada después (el país ya «activo»), reactiva SU conjunto.
+    ios = next(pz for pz in ex["piezas"] if pz["pais"] == "CO" and (pz.get("extra") or {}).get("plataforma") == "ios")
+    e["meta"].llamadas.clear()
+    lz.activar_pieza("acme", ios["id"])
+    activos = {kw["oid"] for t, kw in e["meta"].llamadas if t == "estado" and kw["status"] == "ACTIVE"}
+    assert conjuntos[("CO", "ios")] in activos and conjuntos[("CO", "android")] not in activos
+
+
 def test_centavos_y_url(base_temporal):
     import lanzador
     assert lanzador.centavos(20000, "COP") == 2000000 and lanzador.centavos(1000, "CLP") == 1000
