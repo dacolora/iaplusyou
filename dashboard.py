@@ -5195,6 +5195,9 @@ def exp_crear(cliente):
     objetivo = request.form.get("objetivo") or ""
     codigos = [p for p in request.form.getlist("paises") if p in fe_tipos.PAISES]
     destino = (request.form.get("destino_url") or "").strip()
+    if objetivo == "OUTCOME_APP_PROMOTION":
+        flash(gettext("Para instalaciones de la app usa el formulario de la galería."), "error")
+        return volver
     try:
         dias = int(request.form.get("dias") or 7)
         tope = float(request.form.get("tope_total") or 0)
@@ -5327,7 +5330,10 @@ def exp_probar(cliente):
     if (objetivo not in meta_campaign.OBJETIVOS_VALIDOS_FASE1 or not codigos
             or (not es_app and not destino.startswith(("http://", "https://"))) or not (1 <= dias <= 90) or tope <= 0
             or not (13 <= edad_min <= edad_max <= 65)):
-        flash(gettext("Faltan datos: objetivo, al menos un país, días (1–90), tope, edades (13–65) y una URL de destino http(s)."), "error")
+        if es_app:
+            flash(gettext("Faltan datos: objetivo, al menos un país, días (1–90), tope y edades (13–65)."), "error")
+        else:
+            flash(gettext("Faltan datos: objetivo, al menos un país, días (1–90), tope, edades (13–65) y una URL de destino http(s)."), "error")
         return volver
     minimo = PRESUPUESTO_MINIMO_DIARIO.get(moneda, 1)
     if es_app:
@@ -5360,7 +5366,7 @@ def exp_probar(cliente):
             atribucion = "ninguna"   # una instalación no es una compra: nada que atribuir salvo que la persona elija
         app_id = (request.form.get("app_id") or meta_conexion.cargar_app_anunciada(cliente) or "").strip()
         try:
-            meta_conexion.guardar_app_anunciada(cliente, app_id)
+            app_id = meta_conexion.validar_app_anunciada(app_id)   # se guarda solo si la creación sale bien
         except meta_conexion.MetaConexionError as e:
             flash(str(e), "error")
             return volver
@@ -5378,6 +5384,8 @@ def exp_probar(cliente):
     except (experimentos.ErrorCombinacion, ValueError) as e:
         flash(str(e), "error")
         return volver
+    if es_app:
+        meta_conexion.guardar_app_anunciada(cliente, datos_app["app_id"])
     job_id = tareas_exp.job_id_lanzar(cliente, eid)
     arranco = trabajos.encolar(job_id, "exp_lanzar", {"cliente": cliente, "experimento_id": eid},
                                cliente=cliente, duracion_estimada=120, etapas=lanzador.ETAPAS_LANZAR, max_intentos=1)

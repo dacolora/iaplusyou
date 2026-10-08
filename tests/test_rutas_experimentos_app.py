@@ -123,7 +123,9 @@ def test_formulario_trae_campos_de_tienda_y_objetivo_no_sugerido(app, base_tempo
     meta_conexion.guardar_app_anunciada("acme", "1234567890")
     _clon(base_temporal)
     html = app["c"].get("/cliente/acme").get_data(as_text=True)
-    assert '<option value="OUTCOME_APP_PROMOTION" >Instalaciones de la app</option>' in html
+    import re
+    opcion = re.search(r'<option value="OUTCOME_APP_PROMOTION"[^>]*>[^<]*</option>', html).group(0)
+    assert "Instalaciones de la app" in opcion and "(sugerido)" not in opcion
     assert 'name="app_ios_url"' in html and 'name="app_android_url"' in html
     assert 'name="app_id" inputmode="numeric" value="1234567890"' in html
     assert "data-solo-app hidden" in html and "data-solo-no-app" in html
@@ -139,3 +141,30 @@ def test_arbol_de_app_deja_pausar_y_cambiar_presupuesto(app, base_temporal):
     ex.actualizar("acme", e["id"], estado="pausado", meta_campaign_id="999")
     html = app["c"].get("/cliente/acme").get_data(as_text=True)
     assert "Activar país" in html and "Cambiar presupuesto" in html
+
+
+def test_app_id_no_se_guarda_si_falla_la_creacion(app, base_temporal, monkeypatch):
+    import experimentos as ex
+    import meta_conexion
+    clon = _clon(base_temporal)
+
+    def _falla(*a, **k):
+        raise ValueError("no se pudo")
+    monkeypatch.setattr(ex, "crear_con_piezas", _falla)
+    app["c"].post("/cliente/acme/experimentos/probar", data=_form_app(clon))
+    assert meta_conexion.cargar_app_anunciada("acme") is None
+
+
+def test_faltan_datos_de_app_no_pide_url_de_destino(app, base_temporal):
+    clon = _clon(base_temporal)
+    app["c"].post("/cliente/acme/experimentos/probar", data=_form_app(clon, dias="0"))
+    msgs = _flashes(app["c"])
+    assert any("Faltan datos" in m for m in msgs) and not any("URL de destino" in m for m in msgs)
+
+
+def test_exp_crear_rechaza_instalaciones_de_app(app):
+    import experimentos as ex
+    r = app["c"].post("/cliente/acme/experimentos/nuevo", data=dict(FORM_PROBAR, nombre="x", objetivo="OUTCOME_APP_PROMOTION"))
+    assert r.status_code == 302
+    assert any("formulario de la galería" in m for m in _flashes(app["c"]))
+    assert ex.cargar("acme") == []
