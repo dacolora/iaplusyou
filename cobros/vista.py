@@ -470,3 +470,107 @@ def chip(cliente, es_admin):
         costo = gastos.resumen_mes(cliente)["total"]
         texto = f"{texto} · " + gettext("costo del mes: %(costo)s", costo=gastos.formatear(costo))
     return {"texto": texto, "tono": tono(e), "url": url_for("ver_cliente", cliente=cliente) + "#config-ap-saldo"}
+
+
+# ------------------------------------------------------------ /admin/cobros ---
+
+DIAS_WEBHOOK = 7
+TIPOS_RECARGADO = ("recarga", "anulacion")
+TIPOS_CON_COSTO = ("cobro", "no_cobrado")
+RESULTADOS_EVENTO = {
+    "acreditada": N_("Acreditada"), "duplicada": N_("Repetido"), "sin_recarga": N_("Sin recarga"),
+    "rechazada": N_("Rechazada"), "anulada": N_("Anulada"), "ignorada": N_("Ignorado"),
+    "recibido": N_("Recibido"), "error": N_("Error"),
+}
+
+
+def _por_cliente(con, q):
+    return {c: v for c, v in con.execute(q)}
+
+
+def resumen_admin(ahora_iso=None):
+    """Una fila por proyecto para /admin/cobros (spec §10), en milésimas: los
+    proyectos de `estado.listar_clientes()` (los del panel) más los que tengan
+    fila en cuenta_saldo. UNA consulta agregada por columna (GROUP BY cliente),
+    sin importar cuántos proyectos haya.
+
+    Las cifras del mes van por la fecha del GASTO, como Configuración › Gasto
+    del cliente (`resumen_mes_cobrado`):
+    - `recargado_mes`: recargas (Bold y manuales) menos las anulaciones de Bold
+      del mes; los ajustes no cuentan (no entra plata).
+    - `cobrado_mes`: cobros menos reversos de los gastos del mes.
+    - `costo_mes`: lo que costaron los gastos del mes que pasaron por el libro
+      con un `cobro` (revertido o no) o un `no_cobrado`: lo que se intentó
+      cobrar. Un gasto de antes de prender «Cobrar» no tiene fila en el libro
+      y no entra.
+    - `ganancia_mes = cobrado_mes − costo_mes`: un cobro revertido o una pieza
+      no cobrada aporta 0 cobrado y su costo entero como pérdida."""
+    import estado as estado_mod  # noqa: PLC0415 — estado importa media app; solo lo usa el admin
+    hasta = gastos._ahora(ahora_iso)
+    desde = gastos._inicio_mes(hasta)
+    m, g, r = db.movimiento_saldo, db.gasto, db.reserva_saldo
+    suma = sa.func.coalesce(sa.func.sum(m.c.milesimas), 0)
+    del_mes = sa.and_(g.c.creado_en >= desde, g.c.creado_en <= hasta)
+    with db.conectar() as con:
+        glob = libro._margen_global(con)
+        cuentas = {f.cliente: f for f in con.execute(sa.select(db.cuenta_saldo))}
+        saldos = _por_cliente(con, sa.select(m.c.cliente, suma).group_by(m.c.cliente))
+        reservas = _por_cliente(con, sa.select(r.c.cliente, sa.func.coalesce(sa.func.sum(r.c.milesimas), 0))
+                                .where(r.c.job_id.in_(libro._vivas(con))).group_by(r.c.cliente))
+        recargado = _por_cliente(con, sa.select(m.c.cliente, suma)
+                                 .where(m.c.tipo.in_(TIPOS_RECARGADO), m.c.creado_en >= desde, m.c.creado_en <= hasta)
+                                 .group_by(m.c.cliente))
+        cobrado = _por_cliente(con, sa.select(m.c.cliente, -suma).select_from(m.join(g, g.c.id == m.c.gasto_id))
+                               .where(m.c.tipo.in_(TIPOS_COBRADOS), del_mes).group_by(m.c.cliente))
+        costo = _por_cliente(con, sa.select(m.c.cliente, sa.func.coalesce(sa.func.sum(g.c.usd), 0))
+                             .select_from(m.join(g, g.c.id == m.c.gasto_id))
+                             .where(m.c.tipo.in_(TIPOS_CON_COSTO), del_mes).group_by(m.c.cliente))
+    clientes = sorted(set(estado_mod.listar_clientes()) | set(cuentas))
+    filas = []
+    for c in clientes:
+        cta = cuentas.get(c)
+        saldo = int(saldos.get(c) or 0)
+        cobrado_mes = int(cobrado.get(c) or 0)
+        costo_mes = int(round(float(costo.get(c) or 0) * 1000))
+        filas.append({
+            "cliente": c, "cobrar": bool(cta.cobrar) if cta else False,
+            "margen_propio": float(cta.margen) if cta is not None and cta.margen is not None else None,
+            "margen": float(cta.margen) if cta is not None and cta.margen is not None else glob,
+            "umbral": int(cta.umbral_aviso) if cta else libro.UMBRAL_DEFECTO,
+            "saldo": saldo, "disponible": saldo - int(reservas.get(c) or 0),
+            "recargado_mes": int(recargado.get(c) or 0), "cobrado_mes": cobrado_mes,
+            "costo_mes": costo_mes, "ganancia_mes": cobrado_mes - costo_mes,
+        })
+    return filas
+
+
+def ultimos_eventos(limite=20):
+    """Los últimos eventos de Bold con firma válida (los sin firma son basura
+    con cupo, `recargas._cupo_sin_firma`), el más nuevo primero. Sin el cuerpo."""
+    pe = db.pago_evento
+    q = (sa.select(pe.c.id, pe.c.recibido_en, pe.c.tipo, pe.c.referencia, pe.c.resultado)
+         .where(pe.c.firma_ok.is_(True)).order_by(pe.c.id.desc()).limit(int(limite)))
+    with db.conectar() as con:
+        return [dict(f._mapping) for f in con.execute(q)]
+
+
+def nombre_resultado(codigo):
+    base = RESULTADOS_EVENTO.get(codigo)
+    return gettext(base) if base else str(codigo or "")
+
+
+def webhook_callado(ahora_iso=None):
+    """True si hay recargas de Bold pendientes y ningún evento firmado llegó
+    en DIAS_WEBHOOK días: el webhook puede estar mal configurado en Bold."""
+    from datetime import datetime, timedelta  # noqa: PLC0415
+    hasta = datetime.fromisoformat(gastos._ahora(ahora_iso))
+    limite = (hasta - timedelta(days=DIAS_WEBHOOK)).isoformat(timespec="seconds")
+    rc, pe = db.recarga, db.pago_evento
+    with db.conectar() as con:
+        pendiente = con.execute(sa.select(rc.c.id).where(rc.c.medio == "bold", rc.c.estado == "pendiente")
+                                .limit(1)).first()
+        if pendiente is None:
+            return False
+        reciente = con.execute(sa.select(pe.c.id).where(pe.c.firma_ok.is_(True), pe.c.recibido_en >= limite)
+                               .limit(1)).first()
+    return reciente is None

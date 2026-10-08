@@ -9,6 +9,7 @@
     <p class="hero-sub">{{ _('Solo tú ves esta pantalla — cada proyecto tiene su propio usuario y contraseña, restringido a lo suyo.') }}</p>
     <p class="hero-sub">{{ _('<a href="%(url)s">Mapa del código →</a> cómo está construida la plataforma, archivo por archivo.', url=url_for('mapa_codigo')) }}</p>
     <p class="hero-sub">{{ _('<a href="%(url)s">Meta (agencia) →</a> conectar el Business de Creatv y asignar cuenta y Página a cada proyecto.', url=url_for('admin_meta')) }}</p>
+    <p class="hero-sub">{{ _('<a href="%(url)s">Cobros y saldo →</a> margen, qué proyectos cobran, recargas manuales y eventos de Bold.', url=url_for('cobros.admin_cobros')) }}</p>
     <p class="hero-sub">{{ _('<a href="%(url)s">Referentes →</a> importar el swipe file de copycoders y ver la biblioteca global.', url=url_for('admin_referentes')) }}</p>
     <p class="hero-sub">{{ _('<a href="%(url)s">Salud y errores →</a> errores de la plataforma, registros, peticiones lentas, el worker y el servidor.', url=url_for('admin_salud')) }}
       {% if errores_recientes %}<span class="admin-pill salud-pill-problema">{{ ngettext('%(num)d error en 24 h', '%(num)d errores en 24 h', errores_recientes) }}</span>{% endif %}</p>

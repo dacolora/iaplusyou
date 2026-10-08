@@ -7,10 +7,18 @@
 - `POST /pagos/bold/webhook` es el ÚNICO POST de la app que acepta otro origen
   y no lleva sesión: dashboard lo exime por nombre de endpoint
   (`ENDPOINTS_OTRO_ORIGEN`, `ENDPOINTS_SIN_GUARD_SESION`). Lo protege la firma
-  HMAC de Bold (`recargas.procesar_webhook`) y responde sin cuerpo."""
+  HMAC de Bold (`recargas.procesar_webhook`) y responde sin cuerpo.
+- Las de /admin/cobros (spec §10) son solo del admin (`_solo_admin`, la misma
+  regla que `dashboard.requiere_admin`) y sus POST pasan por la barrera CSRF.
+  Escriben a través de `libro.configurar`, `libro.guardar_margen_global` y
+  `recargas.manual`, nunca directo en las tablas."""
+import os
 import threading
 import time
+from decimal import Decimal, InvalidOperation
+from functools import wraps
 
+import sqlalchemy as sa
 from flask import Blueprint, Response, abort, flash, jsonify, redirect, render_template, request, session, url_for
 from flask_babel import gettext
 from werkzeug.utils import secure_filename
@@ -19,6 +27,8 @@ import cola
 import cuentas
 import db
 import gastos
+import idiomas
+import proyectos
 import usuarios
 from cobros import bold, libro, recargas, vista
 
@@ -215,3 +225,166 @@ def bold_webhook():
         return "", 413
     status, _resultado = recargas.procesar_webhook(cuerpo, request.headers.get("x-bold-signature"))
     return "", status
+
+
+# ------------------------------------------------------------ /admin/cobros ---
+
+MAX_UMBRAL_USD = 100_000
+
+
+def _solo_admin(fn):
+    """La regla de `dashboard.requiere_admin` (no se importa dashboard desde un
+    Blueprint): sin sesión de admin, al login con el mismo aviso."""
+    @wraps(fn)
+    def envuelta(*args, **kwargs):
+        if "usuario" not in session or session.get("rol") != "admin":
+            flash(gettext("Esa página es solo para el administrador."), "error")
+            return redirect(url_for("login"))
+        return fn(*args, **kwargs)
+    return envuelta
+
+
+def _volver_admin(cliente=None):
+    return redirect(url_for("cobros.admin_cobros") + (f"#fila-{cliente}" if cliente else ""))
+
+
+def _proyectos_admin():
+    import estado  # noqa: PLC0415 — el mismo origen que el panel (dashboard.panel)
+    return set(estado.listar_clientes())
+
+
+def _existe(cliente):
+    """Un proyecto del panel o con cuenta de saldo; si no, 404 (un error de
+    tipeo en la URL no crea una cuenta nueva)."""
+    return cliente in _proyectos_admin() or _tiene_cuenta(cliente)
+
+
+def _tiene_cuenta(cliente):
+    with db.conectar() as con:
+        return con.execute(sa.select(db.cuenta_saldo.c.cliente)
+                           .where(db.cuenta_saldo.c.cliente == cliente)).first() is not None
+
+
+def _decimal(texto):
+    try:
+        valor = Decimal(str(texto or "").strip().replace(",", "."))
+    except (InvalidOperation, ValueError):
+        return None
+    return valor if valor.is_finite() else None
+
+
+def _margen(texto):
+    valor = _decimal(texto)
+    if valor is None or not libro.MARGEN_MIN <= valor <= libro.MARGEN_MAX:
+        raise ValueError(gettext("El margen va de %(min)s a %(max)s.", min=idiomas.numero(libro.MARGEN_MIN, 2),
+                                 max=idiomas.numero(libro.MARGEN_MAX, 2)))
+    return float(valor)
+
+
+def _umbral(texto):
+    """Dólares con hasta 2 decimales, de 0 a MAX_UMBRAL_USD → milésimas."""
+    valor = _decimal(texto)
+    if valor is None or valor < 0 or valor > MAX_UMBRAL_USD or valor != valor.quantize(Decimal("0.01")):
+        raise ValueError(gettext("El umbral va de %(min)s a %(max)s, con hasta 2 decimales.",
+                                 min=gastos.formatear(0), max=gastos.formatear(MAX_UMBRAL_USD)))
+    return int(valor * 1000)
+
+
+def _avisos_bold():
+    """Lo que el admin tiene que saber de la configuración de Bold, sin
+    mostrar ningún valor de llave."""
+    sin_llaves = not bold.configurado() or not (os.environ.get("BOLD_LLAVE_SECRETA") or "").strip()
+    pruebas_abiertas = (os.environ.get("BOLD_PRUEBAS") == "1"
+                        and not (os.environ.get("BOLD_LLAVE_SECRETA") or "").strip())
+    return {"sin_llaves": sin_llaves, "pruebas_abiertas": pruebas_abiertas}
+
+
+@bp.get("/admin/cobros")
+@_solo_admin
+def admin_cobros():
+    filas = vista.resumen_admin()
+    for f in filas:
+        f["nombre"] = proyectos.nombre_visible(f["cliente"])
+    eventos = vista.ultimos_eventos()
+    for e in eventos:
+        e["resultado_texto"] = vista.nombre_resultado(e["resultado"])
+    margen = libro.margen_global()
+    return render_template("admin_cobros.html", filas=filas, margen_global=margen,
+                           eventos=eventos, webhook_callado=vista.webhook_callado(), avisos_bold=_avisos_bold(),
+                           margen_global_texto=idiomas.numero(margen, 2),
+                           margen_min_texto=idiomas.numero(libro.MARGEN_MIN, 2),
+                           margen_max_texto=idiomas.numero(libro.MARGEN_MAX, 2))
+
+
+@bp.post("/admin/cobros/margen")
+@_solo_admin
+def admin_margen():
+    try:
+        valor = _margen(request.form.get("margen"))
+        libro.guardar_margen_global(valor, session.get("usuario"))
+    except ValueError as e:
+        flash(str(e), "error")
+        return _volver_admin()
+    flash(gettext("Margen global guardado: %(margen)s.", margen=idiomas.numero(valor, 2)), "ok")
+    return _volver_admin()
+
+
+@bp.post("/admin/cobros/<cliente>/cuenta")
+@_solo_admin
+def admin_cuenta(cliente):
+    """Solo cambia lo que trae el formulario: `cobrar` (1|0, el interruptor),
+    `margen` (vacío = vuelve al global) y `umbral` (en dólares)."""
+    if not _existe(cliente):
+        abort(404)
+    cambios = {}
+    try:
+        if "cobrar" in request.form:
+            cambios["cobrar"] = request.form.get("cobrar") == "1"
+        if "margen" in request.form:
+            texto = (request.form.get("margen") or "").strip()
+            cambios["margen"] = _margen(texto) if texto else None
+        if "umbral" in request.form:
+            cambios["umbral"] = _umbral(request.form.get("umbral"))
+        if cambios:
+            libro.configurar(cliente, usuario=session.get("usuario"), **cambios)
+    except ValueError as e:
+        flash(str(e), "error")
+        return _volver_admin(cliente)
+    nombre = proyectos.nombre_visible(cliente)
+    if "cobrar" in cambios:
+        if cambios["cobrar"]:
+            flash(gettext("%(proyecto)s ahora cobra lo que genera.", proyecto=nombre), "ok")
+            if libro.disponible(cliente) <= 0:
+                flash(gettext("Este proyecto no tiene saldo: desde ahora no podrá generar nada que cueste "
+                              "hasta que recargue."), "warn")
+        else:
+            flash(gettext("%(proyecto)s dejó de cobrar: genera sin tocar el saldo.", proyecto=nombre), "ok")
+    elif cambios:
+        flash(gettext("Guardado: margen y umbral de %(proyecto)s.", proyecto=nombre), "ok")
+    return _volver_admin(cliente)
+
+
+@bp.post("/admin/cobros/<cliente>/recarga")
+@_solo_admin
+def admin_recarga(cliente):
+    """Recarga manual (una transferencia, un pago por fuera) o ajuste (±,
+    con nota). A un proyecto que no cobra se le puede dejar saldo, y se avisa."""
+    if not _existe(cliente):
+        abort(404)
+    tipo = request.form.get("tipo") or "recarga"
+    try:
+        recargas.manual(cliente, request.form.get("monto", ""), session.get("usuario"), request.form.get("nota", ""),
+                        tipo=tipo)
+    except ValueError as e:
+        flash(str(e), "error")
+        return _volver_admin(cliente)
+    nombre = proyectos.nombre_visible(cliente)
+    monto = gastos.formatear(float(_decimal(request.form.get("monto")) or 0))
+    if tipo == "ajuste":
+        flash(gettext("Ajuste de %(monto)s anotado en %(proyecto)s.", monto=monto, proyecto=nombre), "ok")
+    else:
+        flash(gettext("Listo: sumamos %(monto)s al saldo de %(proyecto)s.", monto=monto, proyecto=nombre), "ok")
+    if not libro.cobra(cliente):
+        flash(gettext("%(proyecto)s todavía no cobra: el saldo queda guardado para cuando prendas «Cobrar».",
+                      proyecto=nombre), "warn")
+    return _volver_admin(cliente)

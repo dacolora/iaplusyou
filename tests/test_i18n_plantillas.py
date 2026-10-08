@@ -64,6 +64,7 @@ PLANTILLAS_TRADUCIDAS = [
     "admin_meta.html", "admin_referentes.html", "meta_elegir.html",   # Fase 6, Task 5
     "saldo_recarga.html",   # Cobros 7/11 y 8/11: la vuelta del checkout de Bold
     "_config_saldo.html", "_saldo_panel.html",   # Cobros 8/11: Configuración › Saldo y recargas
+    "admin_cobros.html",   # Cobros 10/11: /admin/cobros
     "admin_salud.html", "admin_registros.html", "admin_estilos.html",   # Salud de la plataforma (spec 2026-10-01-escala-y-monitoreo)
     # Fase 6, Task 6: llegaron con fusiones de main ya traducidas y solo faltaba
     # sumarlas a la guardia — Crear › Audios (worktree-crear-audios, 82491a6) y el

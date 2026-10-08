@@ -1,7 +1,7 @@
 /* Cobros: saldo prepagado (spec 2026-10-08 §7 y §9.4). Uso: Configuración › Saldo y recargas (_config_saldo.html y el
    fragmento _saldo_panel.html, clases saldo-*), el chip de la barra lateral (.sidebar-saldo, sobre .sidebar-gasto), la
    vuelta del pago (saldo_recarga.html, #recarga-vuelta) y el aviso de saldo insuficiente que pinta static/cobros.js
-   (.aviso-sin-saldo). Tonos: normal, aviso (bajo el umbral) y bloqueo (sin saldo), siempre con palabras además del color. */
+   (.aviso-sin-saldo) y /admin/cobros (admin_cobros.html, #admin-cobros y clases cobros-admin-*). Tonos: normal, aviso (bajo el umbral) y bloqueo (sin saldo), siempre con palabras además del color. */
 .saldo-panel [hidden], #recarga-vuelta [hidden], .aviso-sin-saldo[hidden] { display: none !important; }
 
 /* Chip de la barra lateral */
@@ -44,3 +44,13 @@
 .aviso-sin-saldo span { flex: 1 1 240px; min-width: 0; overflow-wrap: anywhere; }
 .aviso-sin-saldo-enlace { font-weight: 700; }
 .aviso-sin-saldo-cerrar { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0 var(--esp-2); line-height: 1.6; }
+
+/* /admin/cobros: la tabla va en .admin-scroll (desplazamiento propio) y en el celular tablas.js la apila */
+.cobros-admin-linea { display: flex; flex-wrap: wrap; gap: var(--esp-2); align-items: flex-end; max-width: 520px; }
+.cobros-admin-linea label { display: grid; gap: var(--esp-1); flex: 1 1 200px; min-width: 0; }
+.cobros-admin-celda { display: flex; flex-direction: column; align-items: flex-start; gap: var(--esp-1); }
+.cobros-admin-num { width: 8.5rem; min-width: 8.5rem; }
+.cobros-admin-tabla td { white-space: nowrap; }
+.cobros-admin-tabla td:last-child { white-space: normal; min-width: 15rem; }
+.cobros-admin-recarga summary { white-space: nowrap; }
+.cobros-admin-perdida { color: var(--error); font-weight: 600; }

@@ -34,6 +34,9 @@ log = logging.getLogger(__name__)
 
 MIN_USD = 10
 MAX_USD = 1000
+# Tope de una recarga manual o un ajuste del admin, en valor absoluto: «1e20»
+# desbordaba el INTEGER de SQLite y respondía 500 (revisión 2026-10-08).
+MAX_MANUAL_USD = 100_000
 MAX_CUERPO = 65536          # tope del cuerpo del webhook (spec §9.3)
 HORAS_VIGENTE = 26          # el link vence a las 24 h; 2 h de gracia para el webhook o la consulta
 # Eventos con firma inválida: cuántos se anotan por hora (por proceso y en total).
@@ -433,7 +436,11 @@ def _milesimas_manual(usd):
         valor = Decimal(str(usd).strip().replace(",", "."))
     except (InvalidOperation, ValueError) as e:
         raise ValueError(mensaje) from e
-    if not valor.is_finite() or valor != valor.quantize(Decimal("0.01")) or valor == 0:
+    if not valor.is_finite() or valor == 0:
+        raise ValueError(mensaje)
+    if abs(valor) > MAX_MANUAL_USD:
+        raise ValueError(gettext("El monto va hasta %(max)s, positivo o negativo.", max=_monto(MAX_MANUAL_USD * 1000)))
+    if valor != valor.quantize(Decimal("0.01")):
         raise ValueError(mensaje)
     return int(valor * 1000)
 
