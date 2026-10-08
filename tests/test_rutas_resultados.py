@@ -147,7 +147,7 @@ def test_nuevo_experimento_sin_meta_ofrece_conectar_y_no_deja_probar(app, monkey
                         lambda c: {"estado": "sin_conectar", "verificado": False, "detalle": {}})
     html = app["c"].get("/cliente/acme/experimentos/nuevo").get_data(as_text=True)
     assert 'id="exp-galeria"' in html and "Conecta Meta arriba para probar" in html
-    assert "¿Cómo quieres conectar Meta?" in html     # la tarjeta de _meta_conectar.html, ahora también en esta ruta
+    assert "¿Cómo quieres conectar Meta?" not in html and "Conéctalo en Configuración › Conexiones" in html
     assert 'action="/cliente/acme/experimentos/probar"' not in html
 
 

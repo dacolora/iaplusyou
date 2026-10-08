@@ -420,7 +420,7 @@ def test_rutas_propias_en_modo_agencia_avisan_y_no_tocan_nada(app, monkeypatch, 
     app["dashboard"].usuarios.actualizar("alguien", correo_verificado=False)
     c = _cliente_rol_cliente(app["dashboard"])
     r = getattr(c, metodo)(ruta, data={"app_id": "1", "app_secret": "s", "login_config_id": "2"})
-    assert r.status_code == 302 and r.headers["Location"].endswith("/cliente/acme#experimentos")
+    assert r.status_code == 302 and r.headers["Location"].endswith("/cliente/acme#settings")
     flashes = _flashes(c)
     assert any("Este proyecto lo gestiona Creatv en Meta" in m for m in flashes)
     assert not any("Confirma tu correo" in m for m in flashes)

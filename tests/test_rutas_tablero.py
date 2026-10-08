@@ -509,8 +509,8 @@ def test_contexto_tablero_invalida_con_un_cobro_nuevo(app, base_temporal, monkey
     _reloj(monkeypatch)
     monkeypatch.setattr(d.time, "monotonic", lambda: 1000.0)
     ctx1 = d._contexto_tablero("acme")
-    assert ctx1["generacion_total"] == {"total": 0.0, "n": 0}
+    assert ctx1["generacion_total"] == {"total": 0.0, "n": 0, "desde": None}
     gastos.registrar("acme", "video", 0.85, "video:cf_1", creado_en="2026-09-10T09:00:00")
     ctx2 = d._contexto_tablero("acme")
-    assert ctx2 is not ctx1 and ctx2["generacion_total"] == {"total": 0.85, "n": 1}
+    assert ctx2 is not ctx1 and ctx2["generacion_total"] == {"total": 0.85, "n": 1, "desde": "2026-09-10T09:00:00"}
     assert ctx2["meses"][0]["generacion"] == {"usd": 0.85, "n": 1}

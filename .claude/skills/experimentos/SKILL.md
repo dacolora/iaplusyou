@@ -102,7 +102,7 @@ no se vería). `_form_reglas.html` es el mismo formulario: los `name` de los cam
 **Centro de resultados (E2, 2026-10-03)** (spec `docs/superpowers/specs/2026-10-02-experimentos-centro-de-resultados-design.md`;
 reemplaza la pantalla de la galería y la pestaña Tablero; no cambia el motor: lee lo que ya guardan lanzador, decisor y
 detalle de Meta). La pestaña es un **armazón** (`_tab_experimentos.html`: cabecera con «+ Nuevo experimento» y «Descargar
-CSV del mes», `_meta_conectar.html`, el cajón «Cómo decide el motor», `#cr-resultados`, el `<dialog id="cr-panel">` y los
+CSV del mes», el cajón «Cómo decide el motor», `#cr-resultados`, el `<dialog id="cr-panel">` y los
 textos del JS en `#cr-textos`) más un **fragmento** que llega por `fetch`. El HTML de la página del proyecto ya no trae las
 piezas elegibles, el tablero ni la gestión de cada experimento (la regla de `ui`: lo pesado llega por fragmento).
 Desde PND-137 (2026-10-07), tampoco los calcula: `_contexto_motor_experimentos` solo entrega reglas y correo; el
@@ -191,6 +191,45 @@ partes sin filtrar el texto de una excepción; el total y el «Mes a mes» viven
 `experimentos.objetivo_sugerido` es `OUTCOME_SALES`; `lanzador.lanzar` vuelve a comprobar el Pixel antes de tocar Meta y manda
 `promoted_object={pixel_id, PURCHASE}` en cada conjunto (`meta_ads/adset.py` rechaza SALES sin él). El objetivo queda fijo al
 crear: Meta no deja cambiarlo.
+
+**Instalaciones de la app** (2026-10-07; spec `docs/superpowers/specs/2026-10-07-experimentos-instalaciones-app-design.md`).
+Un objetivo más del experimento: anuncia una app (App Store iOS y/o Google Play Android) en vez de una web. El
+experimento lleva `extra["app"]` (URLs de tienda y App ID) y **cada pieza tiene una fila por plataforma**
+(`pieza.extra["plataforma"]`; `experimentos.plataformas_de(extra)`), así que el lanzador crea un conjunto por país y
+plataforma (`lanzador._clave_adset`, el presupuesto del país se reparte con `app_tiendas.parte_presupuesto`).
+Activar, pausar, presupuesto y escalar recorren los conjuntos del país con `lanzador._adsets_de_pais`, nunca un solo
+`meta_adset_id`. El App ID de la app anunciada (distinta de la de inicio de sesión) vive en
+`clientes/<cliente>/meta_app_anunciada.json` (`meta_conexion.cargar/guardar_app_anunciada`; se valida con
+`meta_conexion.validar_app_anunciada`: solo dígitos ASCII, y se guarda tras crear con éxito). Se optimiza por
+`LINK_CLICKS` a la tienda: las instalaciones reales solo se miden cuando la app tenga SDK de Meta o un servicio de
+atribución; la app debe estar en modo Live. Los campos de tienda y App ID viven en «Avanzado» de «Nuevo experimento»
+(`_exp_probar.html`, `data-solo-app`/`data-solo-no-app`; `app_id_guardado` lo trae `_contexto_experimentos`); `exp_crear` rechaza
+el objetivo de apps (se crea en «Nuevo experimento»). Derivar y rescatar quedan omitidos por
+`acciones.pedir` para estos experimentos, y no se agregan piezas sueltas ni antes ni después de lanzar
+(`experimentos.agregar_pieza` lanza `ValueError` y `_agregar_pieza_validada` devuelve el mismo aviso: una fila sin
+plataforma bloqueaba el lanzamiento; las filas por tienda solo las arma `crear_con_piezas`). Meta rechaza una URL de
+tienda con otro objetivo: `meta_errores.explicar` lo dice en palabras. `meta_ads/` es un submódulo.
+Arreglos de la revisión final (2026-10-08, plata y seguridad): `cambiar_presupuesto_pais` cambia los conjuntos uno a
+uno y, si Meta falla a medias, devuelve los ya cambiados a `centavos(anterior) // n` y no toca lo guardado del país
+(antes el panel decía un presupuesto y Meta gastaba otro); `exp_presupuesto` valida el mínimo de Meta contra cada
+parte (`centavos(total) // n`), como `exp_probar`; el lanzador usa el App ID de `extra["app"]["app_id"]` (el aprobado
+al crear) y solo de respaldo el del proyecto; un perdedor en las dos tiendas se diagnostica con Claude UNA vez
+(`experimentos.diagnostico_hermano` + `tareas.experimentos._diagnostico_de_hermana` copian el de la otra fila, con
+evento y sin gasto); `app_tiendas.plataforma_de_url` rechaza `\`, usuario/clave, puerto, espacios y todo host que
+no sea exactamente el de la tienda (`https://evil.com\@apps.apple.com` daba `ios`).
+Tras fusionar el centro de resultados (2026-10-08): toda condición «el país tiene conjunto en Meta» mira
+`meta_adset_id or meta_adsets` (`_exp_gestionar.html`, `_exp_pieza.html` con `resultados.py` pasando `meta_adsets`,
+`lanzador.cambiar_estado` con `_adsets_de_pais`) y la suma diaria de «Activar todo» cuenta los países de apps; sin
+eso «Activar país» de una app decía «Ese país no tiene conjunto en Meta» y el confirm de «Activar todo» mostraba 0.
+Ola 2 de la revisión final (2026-10-08): `cambiar_presupuesto_pais` con UN solo conjunto relanza la excepción
+original de Meta (el aviso o la propuesta pendiente conserva el motivo); con varios, el «se dejó como estaba» termina
+con `traducir_error_meta(cola.sin_token(…))` y el evento guarda el error sin token. Una pieza que gana en las dos
+tiendas escala su país UNA vez (`tareas.experimentos._hermana_ya_gano`: si la fila hermana, misma `pieza_id` y país,
+ya es `ganador`, no se pide otro `escalar` y queda un evento) y el decisor juzga con el presupuesto del conjunto
+(`_presupuesto_para_decidir` = `app_tiendas.parte_presupuesto`), no con el del país. Cada fila muestra su tienda
+(«iOS»/«Android», `.tag-estado`) en la gestión, el ranking y el panel (`resultados.piezas` trae `plataforma`), y el
+anuncio y el creative en Meta llevan el sufijo « · iOS» / « · Android». Limitación conocida: el ranking top-tercio del
+decisor mezcla las filas de iOS y Android de un país.
 
 **Detalle de Meta** (`meta_detalle.py`, spec `2026-10-02-experimentos-centro-de-resultados` §3, E1 2026-10-02): único escritor de
 `metrica_dia` (una fila por anuncio y día: tráfico, embudo `visitas_pagina`/`carrito`/`pago_iniciado`/`compras_meta`,

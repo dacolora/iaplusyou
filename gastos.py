@@ -445,13 +445,15 @@ def resumen_mes(cliente, ahora_iso=None):
 
 
 def resumen_total(cliente, ahora_iso=None):
-    """{"total", "n"} de todo lo cobrado al proyecto hasta `ahora` (Tablero:
-    el total desde el inicio)."""
+    """{"total", "n", "desde"} de todo lo cobrado al proyecto hasta `ahora`
+    (Tablero y Configuración › Gasto: el total desde el inicio; `desde` es la
+    fecha del primer cobro, None sin cobros)."""
     g = db.gasto
-    q = sa.select(sa.func.sum(g.c.usd), sa.func.count()).where(g.c.cliente == cliente, g.c.creado_en <= _ahora(ahora_iso))
+    q = (sa.select(sa.func.sum(g.c.usd), sa.func.count(), sa.func.min(g.c.creado_en))
+         .where(g.c.cliente == cliente, g.c.creado_en <= _ahora(ahora_iso)))
     with db.conectar() as con:
-        suma, n = con.execute(q).first()
-    return {"total": round(float(suma or 0.0), 4), "n": int(n or 0)}
+        suma, n, desde = con.execute(q).first()
+    return {"total": round(float(suma or 0.0), 4), "n": int(n or 0), "desde": desde}
 
 
 def total_entre(cliente, desde_iso, hasta_iso):
@@ -549,13 +551,25 @@ def csv_mes(cliente, ahora_iso=None):
     Encabezados en el idioma activo (en la ruta, el de quien lo descarga); los
     `detalle` guardados salen tal cual."""
     hasta = _ahora(ahora_iso)
-    desde = _inicio_mes(hasta)
+    return _csv(cliente, _inicio_mes(hasta), hasta)
+
+
+def csv_todo(cliente, ahora_iso=None):
+    """Como `csv_mes` pero con TODOS los cobros del proyecto desde el primero
+    (2026-10-07: la pantalla de Gasto solo mostraba el mes y Daniel creyó
+    perdidos los meses anteriores)."""
+    return _csv(cliente, None, _ahora(ahora_iso))
+
+
+def _csv(cliente, desde, hasta):
     buf = io.StringIO()
     w = csv.writer(buf, delimiter=";", lineterminator="\n")
     w.writerow(idiomas.traducir(";".join(ENCABEZADO_CSV)).split(";"))
     g = db.gasto
-    q = (sa.select(g).where(g.c.cliente == cliente, g.c.creado_en >= desde, g.c.creado_en <= hasta)
-         .order_by(g.c.creado_en.asc(), g.c.id.asc()))
+    q = sa.select(g).where(g.c.cliente == cliente, g.c.creado_en <= hasta)
+    if desde:
+        q = q.where(g.c.creado_en >= desde)
+    q = q.order_by(g.c.creado_en.asc(), g.c.id.asc())
     with db.conectar() as con:
         for r in con.execute(q):
             f = _fila(r)

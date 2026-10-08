@@ -12,7 +12,7 @@
   <header class="cr-pieza-cab">
     <div>
       <p class="cr-sobretitulo">{{ p.experimento.nombre }}</p>
-      <h3>{{ p.nombre }}</h3>
+      <h3>{{ p.nombre }}{% if p.plataforma %} <span class="tag-estado" title="{{ _('Tienda de la app') }}">{{ p.plataforma }}</span>{% endif %}</h3>
       <p class="cr-muted">{{ pais.bandera }} {{ pais.nombre|traducir if pais.nombre else p.pais }} · {{ _('Imagen') if p.es_imagen else _('Video') }} · {{ _('desde el inicio') if p.periodo.es_todo else _('últimos %(n)s días', n=p.periodo.n) }}</p>
     </div>
     {{ veredicto(p.veredicto) }}
@@ -28,7 +28,7 @@
     <div class="cr-pieza-acciones">
       {% if p.pieza_id %}<a class="btn-generar btn-sm" href="{{ url_for('exp_nuevo', cliente=cliente, piezas=p.pieza_id) }}">{{ _('Probar en otro experimento') }}</a>{% endif %}
       <a class="btn-sm" href="#creativeflowplus" data-ir-tab="creativeflowplus">{{ _('Ver en Crear') }}</a>
-      {% if pais_ex.meta_adset_id and p.estado_experimento in ("pausado", "corriendo") %}
+      {% if (pais_ex.meta_adset_id or pais_ex.meta_adsets) and p.estado_experimento in ("pausado", "corriendo") %}
       <form method="post" action="{{ url_for('exp_estado', cliente=cliente, eid=p.experimento.id) }}" class="inline">
         <input type="hidden" name="pais" value="{{ p.pais }}">
         {% if pais_ex.estado == "activo" %}<input type="hidden" name="estado" value="PAUSED"><button class="btn-rechazar btn-sm">{{ _('Pausar %(pais)s', pais=p.pais) }}</button>

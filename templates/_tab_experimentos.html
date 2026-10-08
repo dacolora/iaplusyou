@@ -9,7 +9,6 @@
     <a class="btn-sm" href="{{ url_for('tab_descargar_csv', cliente=cliente) }}" download>{{ _('Descargar CSV del mes') }}</a>
   </div>
 </div>
-{% include "_meta_conectar.html" %}
 {# «Cómo decide el motor» de TODO el proyecto (antes «Reglas por defecto» en Configuración; spec §4.7): valen para todos los
    experimentos; cada uno puede sobreescribir una en su gestión. Va en el armazón y no en el fragmento para que el
    enlace de Configuración (`#reglas-motor`) la encuentre sin esperar al fetch. Mismo formulario y misma ruta

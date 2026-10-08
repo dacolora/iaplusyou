@@ -128,7 +128,11 @@ provider must call it** where the real figure is known (on failure after paying,
 was paid with a detalle). `gastos.estimar(tipo, **params)` gives the "≈ US$" shown next to
 buttons from `gastos.TARIFAS` (video/imagen from `flowplus_modelos`, `final` per country,
 guion, regla_producto, caption_organico) and returns "precio no disponible" rather than
-guessing. Meta spend is NOT in `gasto` — it comes from `metrica_snapshot` via `tablero` and is
+guessing. Reads: `resumen_mes` (the month), `resumen_total` (everything since the first charge, with `desde`),
+`por_mes`, `historial`, `csv_mes` and `csv_todo` — Configuración › Gasto shows the month AND the total since the start
+with a month-by-month table and «Descargar CSV de todo» (`gasto_csv_todo`), and the admin panel card shows both figures
+(`admin.generacion_total`): on 2026-10-07 the screens only said «este mes» (US$ 66) and the US$ 200 of earlier months
+looked lost. Meta spend is NOT in `gasto` — it comes from `metrica_snapshot` via `tablero` and is
 shown next to generation spend in its own currency. UI: sidebar chip "Este mes: US$ X
 generación · Y pauta" (context processor, template renders only, cached), Configuración ›
 Gasto (by type, history, CSV), Tablero tile, admin panel column.

@@ -14,6 +14,7 @@ import threading
 import sqlalchemy as sa
 from flask_babel import gettext
 
+import app_tiendas
 import db
 import idiomas
 from doctrina import revisor as doctrina_revisor
@@ -268,8 +269,14 @@ def agregar_pieza(cliente, experimento_id, pieza_id, pais):
         # no insertan la misma pieza dos veces.
         if not _bloquear(con, db.experimento, experimento_id, cliente):
             return None
-        if not _fila_experimento(con, cliente, experimento_id):
+        fila = _fila_experimento(con, cliente, experimento_id)
+        if not fila:
             return None
+        if fila._mapping[db.experimento.c.objetivo_meta] == "OUTCOME_APP_PROMOTION":
+            # Cada pieza de apps lleva una fila por tienda (extra.plataforma) que
+            # solo arma crear_con_piezas; una fila sin plataforma bloquearía el
+            # lanzamiento (revisión final, ola 2, 2026-10-08).
+            raise ValueError(gettext("En un experimento de instalaciones de la app las piezas se eligen al crearlo."))
         pieza_ok = con.execute(sa.select(db.pieza.c.id).where(
             db.pieza.c.id == pieza_id, db.pieza.c.cliente == cliente)).scalar()
         if not pieza_ok:
@@ -304,12 +311,22 @@ def validar_combinacion(candidata, paises_experimento, pais):
     return pais, None
 
 
+def plataformas_de(extra):
+    """Plataformas con URL de tienda de un experimento de apps, en orden ios, android; [] si no es de apps."""
+    app = (extra or {}).get("app") or {}
+    return [p for p in app_tiendas.PLATAFORMAS if app.get(f"{p}_url")]
+
+
 def crear_con_piezas(cliente, datos, combinaciones):
     """Crea el experimento y adjunta las combinaciones (pieza_id, pais) en UNA
     transacción. Una final pedida en otro país se ignora en silencio (la UI la
     ofrece solo en el suyo); una pieza ajena/inexistente o un clon a un país
     fuera del experimento es ErrorCombinacion y no queda nada creado.
     Duplicados se colapsan. No encola nada."""
+    es_app = datos["objetivo_meta"] == "OUTCOME_APP_PROMOTION"
+    plataformas = plataformas_de({"app": datos.get("app")}) if es_app else [None]
+    if es_app and not plataformas:
+        raise ValueError(gettext("Pon al menos una URL de tienda: App Store (iOS) o Google Play (Android)."))
     elegibles_por_id = {e["pieza_id"]: e for e in elegibles(cliente)}
     paises_exp = {p["pais"] for p in datos["paises"]}
     finales = []
@@ -349,7 +366,7 @@ def crear_con_piezas(cliente, datos, combinaciones):
     # las piezas en la galería (la ruta exp_probar).
     with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
         mensaje_creado = gettext("Experimento creado desde la galería con %(anuncios)s anuncio(s) en %(paises)s país(es)",
-                                 anuncios=len(finales), paises=len(paises_exp))
+                                 anuncios=len(finales) * len(plataformas), paises=len(paises_exp))
     with db.conectar() as con:
         eid = con.execute(db.experimento.insert().values(
             cliente=cliente, creado_en=ahora, actualizado_en=ahora, nombre=datos["nombre"], modo=datos.get("modo", "manual"),
@@ -357,11 +374,13 @@ def crear_con_piezas(cliente, datos, combinaciones):
             tope_total=float(datos["tope_total"]), dias=int(datos["dias"]), objetivo_meta=datos["objetivo_meta"],
             atribucion=atribucion, estado="armando", gasto_acumulado=0.0, legado=False,
             destino_url=datos["destino_url"], edad_min=int(datos.get("edad_min", 18)), edad_max=int(datos.get("edad_max", 65)),
-            extra={})).inserted_primary_key[0]
+            extra={"app": dict(datos["app"])} if es_app else {})).inserted_primary_key[0]
         for pieza_id, pais in finales:
-            con.execute(db.experimento_pieza.insert().values(
-                cliente=cliente, creado_en=ahora, actualizado_en=ahora, experimento_id=eid, pieza_id=pieza_id,
-                pais=pais, estado="en_cola", veredicto="pendiente", escalon_rescate=0, extra={}))
+            for plataforma in plataformas:
+                con.execute(db.experimento_pieza.insert().values(
+                    cliente=cliente, creado_en=ahora, actualizado_en=ahora, experimento_id=eid, pieza_id=pieza_id,
+                    pais=pais, estado="en_cola", veredicto="pendiente", escalon_rescate=0,
+                    extra={"plataforma": plataforma} if plataforma else {}))
         con.execute(db.evento.insert().values(
             cliente=cliente, creado_en=ahora, experimento_id=eid, tipo="creado",
             mensaje=mensaje_creado,
@@ -588,6 +607,29 @@ def _angulo_de(c_extra, angulo_variante):
 def piezas(cliente, experimento_id):
     with db.conectar() as con:
         return _piezas(con, cliente, experimento_id)
+
+
+def diagnostico_hermano(cliente, experimento_id, ep_id):
+    """Instalaciones de la app: una pieza tiene una fila por tienda (misma
+    `pieza_id` y `pais`). Devuelve `(id, diagnostico)` de otra fila hermana de
+    `ep_id` en este experimento que ya tenga `extra.diagnostico`, o None —
+    así el mismo video que pierde en iOS y en Android se diagnostica (y se
+    paga) una sola vez. Se lee de la base, no del experimento cargado al
+    empezar la pasada: la hermana puede haberse diagnosticado en esta misma."""
+    ep = db.experimento_pieza
+    with db.conectar() as con:
+        f = con.execute(sa.select(ep.c.pieza_id, ep.c.pais).where(
+            ep.c.id == ep_id, ep.c.cliente == cliente, ep.c.experimento_id == experimento_id)).first()
+        if f is None:
+            return None
+        filas = con.execute(sa.select(ep.c.id, ep.c.extra).where(
+            ep.c.cliente == cliente, ep.c.experimento_id == experimento_id, ep.c.pieza_id == f.pieza_id,
+            ep.c.pais == f.pais, ep.c.id != ep_id).order_by(ep.c.id)).all()
+    for fila in filas:
+        d = (fila.extra or {}).get("diagnostico")
+        if isinstance(d, dict) and d:
+            return fila.id, d
+    return None
 
 
 def _resumen(piezas_):

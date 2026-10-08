@@ -431,3 +431,149 @@ def test_la_ganadora_aprende_antes_de_sus_acciones(base_temporal, monkeypatch, t
     _decisor_fijo(monkeypatch, te, "ganador", "escalar_y_derivar")
     te.exp_decidir({"payload": {"cliente": "acme", "experimento_id": eid}})
     assert orden[0] == "aprender" and "escalar" in orden
+
+
+def _experimento_app_dos_tiendas(base_temporal, objetivo="OUTCOME_APP_PROMOTION"):
+    import experimentos as ex
+    from tests.test_experimentos_db import _pieza
+    clon = _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_diag")
+    app = {"ios_url": "https://apps.apple.com/co/app/x/id1", "android_url": "https://play.google.com/store/apps/details?id=x"}
+    datos = dict(nombre="Forja", paises=[{"pais": "CO", "idioma": "es", "presupuesto_dia": 20000.0}],
+                 objetivo_meta=objetivo, dias=7, tope_total=500000.0, destino_url=app["ios_url"], moneda="COP",
+                 app=app if objetivo == "OUTCOME_APP_PROMOTION" else None)
+    if objetivo == "OUTCOME_APP_PROMOTION":
+        return ex.crear_con_piezas("acme", datos, [(clon, "CO")])   # una fila por tienda
+    otro = _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_diag2")
+    return ex.crear_con_piezas("acme", datos, [(clon, "CO"), (otro, "CO")])
+
+
+@pytest.mark.parametrize("objetivo,llamadas_esperadas", [("OUTCOME_APP_PROMOTION", 1), ("OUTCOME_TRAFFIC", 2)])
+def test_apps_dos_tiendas_perdedoras_se_diagnostican_una_vez(base_temporal, monkeypatch, tmp_path, objetivo,
+                                                             llamadas_esperadas):
+    import experimentos as ex
+    import gastos
+    import proyectos
+    import tareas
+    from tareas import experimentos as te
+    tareas.cargar_todas()
+    monkeypatch.setattr(proyectos, "_path", lambda cliente: str(tmp_path / f"{cliente}.json"))
+    _pedidas_con_payload(monkeypatch, te)
+    llamadas = []
+    monkeypatch.setattr(te.doctrina_diagnostico, "diagnosticar", lambda pz, v, snaps, reglas, extras=None, idioma=None: (
+        llamadas.append(pz["id"]), ({"causas": [{"codigo": "gancho", "detalle": "d", "evidencia": "e"}],
+                                     "siguiente": {"que": "gancho", "porque": "p", "hipotesis": "h"},
+                                     "aprendizaje": "En CO no.", "pistas": []}, 900, 300))[1])
+    eid = _experimento_app_dos_tiendas(base_temporal, objetivo)
+    exp = ex.obtener("acme", eid)
+    filas = exp["piezas"]
+    assert len(filas) == 2
+    assert (filas[0]["pieza_id"] == filas[1]["pieza_id"]) == (objetivo == "OUTCOME_APP_PROMOTION")
+    v = {"veredicto": "perdedor", "motivo": "x", "accion": "pausar", "puerta": 1, "numeros": {}}
+    for pz in filas:
+        resultado = {"veredictos": [], "ganadores": [], "propuestas": [], "errores": [], "escalados": set(),
+                     "organico_propuesto": set()}
+        te._aplicar_veredicto("acme", exp, pz, v, resultado)
+    assert len(llamadas) == llamadas_esperadas
+    revisiones = [g for g in gastos.historial("acme", limite=10) if g["tipo"] == "revision"]
+    assert len(revisiones) == llamadas_esperadas
+    despues = ex.piezas("acme", eid)
+    assert all(p["extra"].get("diagnostico", {}).get("causas") for p in despues)
+    eventos = [e for e in ex.eventos("acme", eid) if e["tipo"] == "diagnostico"]
+    assert len(eventos) == 2
+    if objetivo == "OUTCOME_APP_PROMOTION":
+        assert despues[1]["extra"]["diagnostico"]["reutilizado_de"] == despues[0]["id"]
+        assert despues[1]["extra"]["diagnostico"]["usd"] == 0
+
+
+def _activar_todo(ex, eid):
+    ex.actualizar("acme", eid, estado="corriendo", meta_campaign_id="c1")
+    for pz in ex.obtener("acme", eid)["piezas"]:
+        ex.actualizar_pieza("acme", pz["id"], meta_ad_id=f"ad{pz['id']}", estado="activo")
+
+
+@pytest.mark.parametrize("objetivo,subidas", [("OUTCOME_APP_PROMOTION", 1), ("OUTCOME_TRAFFIC", 2)])
+def test_apps_filas_hermanas_ganadoras_escalan_el_pais_una_vez(base_temporal, monkeypatch, objetivo, subidas):
+    """Revisión final, ola 2 (2026-10-08): en apps la misma pieza tiene una fila por tienda; si las dos ganan en
+    pasadas distintas, el país se escala UNA vez por esa pieza. En tráfico, dos piezas distintas que ganan siguen
+    escalando cada una."""
+    import experimentos as ex
+    import organico
+    import tareas
+    from tareas import experimentos as te
+    tareas.cargar_todas()
+    monkeypatch.setattr(organico, "disponibles", lambda c: [])
+    monkeypatch.setattr(te, "_aprender", lambda *a, **k: None)
+    pedidas = _pedidas(monkeypatch, te)
+    eid = _experimento_app_dos_tiendas(base_temporal, objetivo)
+    _activar_todo(ex, eid)
+    respuestas = iter(["ganador", "pendiente", "ganador"])   # pasada 1: fila 1 gana, fila 2 no; pasada 2: fila 2 gana
+
+    def _decidir(snaps, reglas, ctx):
+        v = next(respuestas)
+        return {"veredicto": v, "motivo": "m", "accion": "escalar_y_derivar" if v == "ganador" else "ninguna",
+                "puerta": 1, "numeros": {}}
+    monkeypatch.setattr(te.decisor, "decidir", _decidir)
+    te.exp_decidir({"payload": {"cliente": "acme", "experimento_id": eid}})
+    te.exp_decidir({"payload": {"cliente": "acme", "experimento_id": eid}})
+    assert all(p["veredicto"] == "ganador" for p in ex.piezas("acme", eid))
+    assert pedidas.count("escalar") == subidas
+    if objetivo == "OUTCOME_APP_PROMOTION":
+        assert any("otra tienda" in e["mensaje"] for e in ex.eventos("acme", eid) if e["tipo"] == "escalado")
+
+
+def test_apps_la_misma_pieza_que_gana_en_otro_pais_si_escala_ese_pais(base_temporal, monkeypatch):
+    """Prueba de mutación (2026-10-08): `_hermana_ya_gano` compara el país; sin esa condición, la pieza que ganó en
+    CO en una pasada dejaba a MX sin escalar cuando ganaba allá en otra. Cada país se escala por su cuenta."""
+    import experimentos as ex
+    import organico
+    import tareas
+    from tareas import experimentos as te
+    from tests.test_experimentos_db import _pieza
+    tareas.cargar_todas()
+    monkeypatch.setattr(organico, "disponibles", lambda c: [])
+    monkeypatch.setattr(te, "_aprender", lambda *a, **k: None)
+    pedidas = _pedidas_con_payload(monkeypatch, te)
+    clon = _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_dos_paises")
+    app = {"ios_url": "https://apps.apple.com/co/app/x/id1", "android_url": "https://play.google.com/store/apps/details?id=x"}
+    datos = dict(nombre="Forja", paises=[{"pais": "CO", "idioma": "es", "presupuesto_dia": 20000.0},
+                                         {"pais": "MX", "idioma": "es", "presupuesto_dia": 20000.0}],
+                 objetivo_meta="OUTCOME_APP_PROMOTION", dias=7, tope_total=500000.0, destino_url=app["ios_url"],
+                 moneda="COP", app=app)
+    eid = ex.crear_con_piezas("acme", datos, [(clon, "CO"), (clon, "MX")])   # dos filas (tiendas) por país
+    _activar_todo(ex, eid)
+    assert len(ex.piezas("acme", eid)) == 4
+    # exp_decidir recorre CO (2 filas) y luego MX (2 filas), solo las que siguen pendientes.
+    # Pasada 1: gana la 1.ª fila de CO. Pasada 2: la 2.ª de CO sigue pendiente y gana la 1.ª de MX.
+    respuestas = iter(["ganador", "pendiente", "pendiente", "pendiente",
+                       "pendiente", "ganador", "pendiente"])
+
+    def _decidir(snaps, reglas, ctx):
+        v = next(respuestas)
+        return {"veredicto": v, "motivo": "m", "accion": "escalar_y_derivar" if v == "ganador" else "ninguna",
+                "puerta": 1, "numeros": {}}
+    monkeypatch.setattr(te.decisor, "decidir", _decidir)
+    te.exp_decidir({"payload": {"cliente": "acme", "experimento_id": eid}})
+    te.exp_decidir({"payload": {"cliente": "acme", "experimento_id": eid}})
+    ganadoras = [p for p in ex.piezas("acme", eid) if p["veredicto"] == "ganador"]
+    assert sorted(p["pais"] for p in ganadoras) == ["CO", "MX"]
+    assert ganadoras[0]["pieza_id"] == ganadoras[1]["pieza_id"]
+    escalados = [payload for accion, payload, _ in pedidas if accion == "escalar"]
+    assert len(escalados) == 2
+    assert sorted(p.get("pais") for p in escalados) == ["CO", "MX"]
+
+
+@pytest.mark.parametrize("objetivo,esperado", [("OUTCOME_APP_PROMOTION", 10000.0), ("OUTCOME_TRAFFIC", 20000.0)])
+def test_el_decisor_juzga_con_el_presupuesto_de_cada_conjunto(base_temporal, monkeypatch, objetivo, esperado):
+    """En apps cada fila vive en el conjunto de su tienda, que recibe la mitad del país: el decisor recibe esa
+    parte (con el del país, el umbral de evidencia se duplicaría)."""
+    import experimentos as ex
+    import tareas
+    from tareas import experimentos as te
+    tareas.cargar_todas()
+    vistos = []
+    monkeypatch.setattr(te.decisor, "decidir", lambda snaps, reglas, ctx: (vistos.append(ctx["presupuesto_dia"]), {
+        "veredicto": "pendiente", "motivo": "m", "accion": "ninguna", "puerta": 1, "numeros": {}})[1])
+    eid = _experimento_app_dos_tiendas(base_temporal, objetivo)
+    _activar_todo(ex, eid)
+    te.exp_decidir({"payload": {"cliente": "acme", "experimento_id": eid}})
+    assert vistos and all(v == esperado for v in vistos)

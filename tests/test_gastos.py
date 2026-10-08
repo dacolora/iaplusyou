@@ -78,10 +78,10 @@ def test_total_y_por_mes_desde_el_inicio(base_temporal):
     gastos.registrar("acme", "video", 9.0, "video:futuro", creado_en="2026-09-20T10:00:00")
     gastos.registrar("otro", "video", 9.0, "video:a", creado_en="2026-09-10T10:00:00")
     ahora = "2026-09-18T12:00:00"
-    assert gastos.resumen_total("acme", ahora_iso=ahora) == {"total": 10.77, "n": 4}
+    assert gastos.resumen_total("acme", ahora_iso=ahora) == {"total": 10.77, "n": 4, "desde": "2026-07-30T10:00:00"}
     assert gastos.por_mes("acme", ahora_iso=ahora) == {
         "2026-07": {"usd": 9.0, "n": 1}, "2026-08": {"usd": 1.25, "n": 1}, "2026-09": {"usd": 0.52, "n": 2}}
-    assert gastos.resumen_total("nadie", ahora_iso=ahora) == {"total": 0.0, "n": 0}
+    assert gastos.resumen_total("nadie", ahora_iso=ahora) == {"total": 0.0, "n": 0, "desde": None}
     assert gastos.por_mes("nadie", ahora_iso=ahora) == {}
 
 
@@ -131,6 +131,22 @@ def test_csv_mes_con_bom_punto_y_coma_y_escape_de_formulas(base_temporal):
     assert lineas[1] == '2026-09-02T10:00:00;video;wavespeed;video:1;"\'=HYPERLINK(""x"")";0,5000'
     assert lineas[2] == "2026-09-03T10:00:00;guion;;guion:1;'-guion;0,0200"
     assert len(lineas) == 3
+
+
+def test_csv_todo_trae_los_meses_anteriores_y_no_el_futuro(base_temporal):
+    """«Descargar CSV de todo» (2026-10-07): todos los cobros del proyecto desde
+    el primero, en orden, hasta `ahora`; el del mes sigue trayendo solo el mes."""
+    import gastos
+    gastos.registrar("acme", "video", 9, "video:viejo", creado_en="2026-08-03T10:00:00")
+    gastos.registrar("acme", "video", 0.5, "video:1", creado_en="2026-09-02T10:00:00")
+    gastos.registrar("acme", "video", 1, "video:futuro", creado_en="2026-09-30T10:00:00")
+    gastos.registrar("otro", "video", 7, "video:ajeno", creado_en="2026-08-10T10:00:00")
+    todo = gastos.csv_todo("acme", ahora_iso="2026-09-18T12:00:00").lstrip("\ufeff").splitlines()
+    assert todo[0] == "fecha;tipo;proveedor;referencia;detalle;usd"
+    assert [l.split(";")[3] for l in todo[1:]] == ["video:viejo", "video:1"]
+    assert todo[1].endswith(";9,0000")
+    mes = gastos.csv_mes("acme", ahora_iso="2026-09-18T12:00:00").lstrip("\ufeff").splitlines()
+    assert [l.split(";")[3] for l in mes[1:]] == ["video:1"]
 
 
 def test_estimar_video_e_imagen_delegan_en_flowplus_modelos(monkeypatch):

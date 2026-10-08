@@ -53,6 +53,7 @@ import llaves
 import alertas
 import cuentas
 import meta_conexion
+import app_tiendas
 import meta_agencia
 import meta_errores
 import flowplus_prompt
@@ -2017,6 +2018,7 @@ def _contexto_experimentos(cliente, con_elegibles=False, con_organico=True, gest
         "objetivos_exp": meta_campaign.OBJETIVOS_VALIDOS_FASE1,
         "objetivo_exp_sugerido": experimentos.objetivo_sugerido(cliente, atribucion_sug),
         "nombres_objetivo_exp": NOMBRES_OBJETIVO_EXP,
+        "app_id_guardado": meta_conexion.cargar_app_anunciada(cliente),
         "minimo_diario_exp": PRESUPUESTO_MINIMO_DIARIO.get(moneda_exp, 1),
         "tope_campana_min_exp": lanzador.minimo_tope_campana(moneda_exp),
         "moneda_exp": moneda_exp,
@@ -2062,7 +2064,7 @@ def _contexto_meta(cliente, experimentos_lista=None):
     meta_app = meta_conexion.app_publica(cliente)
     meta_conectado = capacidades_meta.get("estado") == "conectado"
     # Modo de la conexión con Meta (propia / agencia): en agencia la tarjeta
-    # de _meta_conectar.html (en Experimentos) es «Gestionado por Creatv», sin
+    # de _meta_conectar.html (en Configuración) es «Gestionado por Creatv», sin
     # app ni botón de conectar.
     datos_meta = meta_conexion.cargar(cliente) or {}
     modo_meta = _modo_de(datos_meta)
@@ -3439,7 +3441,8 @@ PRESUPUESTO_MINIMO_DIARIO = presupuesto_experimentos.PRESUPUESTO_MINIMO_DIARIO
 NOMBRES_OBJETIVO_EXP = {"OUTCOME_SALES": idiomas.N_("Compras (requiere Pixel)"),
                         "OUTCOME_TRAFFIC": idiomas.N_("Tráfico (clics al enlace)"),
                         "OUTCOME_ENGAGEMENT": idiomas.N_("Interacción"),
-                        "OUTCOME_LEADS": idiomas.N_("Clientes potenciales")}
+                        "OUTCOME_LEADS": idiomas.N_("Clientes potenciales"),
+                        "OUTCOME_APP_PROMOTION": idiomas.N_("Instalaciones de la app")}
 
 PROVEEDORES_SWAP_IMAGEN = ("nano_banana", "nano_banana_fal", "qwen_edit", "nano_banana_pro_ultra", "seedream_v5_pro")
 PROVEEDORES_SWAP_VIDEO = (
@@ -3740,8 +3743,8 @@ def enviar_video_a_publicidad(cliente, brief_id):
 # clientes/<cliente>/meta.json (meta_conexion.py).
 
 def _ir_a_flowmarketing(cliente):
-    # La conexión con Meta se muestra en Experimentos (_meta_conectar.html).
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
+    # La conexión con Meta se muestra en Configuración › Conexiones (_meta_conectar.html).
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
 
 
 MENSAJE_MODO_AGENCIA = idiomas.N_("Este proyecto lo gestiona Creatv en Meta. Para volver a tu propia app usa «Cambiar de forma» "
@@ -3966,7 +3969,7 @@ _RE_PORTAFOLIO = re.compile(r"^\d{5,20}$")
 
 
 def _ir_a_meta(cliente):
-    # La elección de forma y las guías viven en Experimentos (_meta_conectar.html).
+    # La elección de forma y las guías viven en Configuración › Conexiones (_meta_conectar.html).
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
 
 
@@ -5194,6 +5197,15 @@ def _contexto_gasto(cliente, tablero_ctx):
     except Exception as e:  # noqa: BLE001 — informativo
         print(f"[aviso] Gasto de {cliente}: no pude leer el historial: {type(e).__name__}")
         historial = []
+    # Desde el inicio y mes a mes (2026-10-07): la pantalla solo decía «este
+    # mes» y los meses anteriores parecían perdidos.
+    try:
+        gasto_total = gastos.resumen_total(cliente)
+        gasto_por_mes = [{"mes": m, "usd": v["usd"], "n": v["n"]}
+                         for m, v in sorted(gastos.por_mes(cliente).items(), reverse=True)]
+    except Exception as e:  # noqa: BLE001 — informativo
+        print(f"[aviso] Gasto de {cliente}: no pude leer el total desde el inicio: {type(e).__name__}")
+        gasto_total, gasto_por_mes = {"total": 0.0, "n": 0, "desde": None, "error": True}, []
     pauta = _pauta_mes(tablero_ctx)
     por_tipo = [{"tipo": t, "nombre": NOMBRES_TIPO_GASTO.get(t, t), "n": v["n"], "usd": v["usd"]}
                 for t, v in sorted(gasto_mes["por_tipo"].items(), key=lambda kv: -kv[1]["usd"])]
@@ -5203,6 +5215,8 @@ def _contexto_gasto(cliente, tablero_ctx):
         "precios": _precios_pagina(),
         "gastos_historial": historial,
         "gastos_por_tipo": por_tipo,
+        "gasto_total": gasto_total,
+        "gasto_por_mes": gasto_por_mes,
         "nombres_tipo_gasto": NOMBRES_TIPO_GASTO,
         "gasto_chip": _chip_gasto(gasto_mes, pauta),
     }
@@ -5235,6 +5249,17 @@ def gasto_csv(cliente):
     texto = gastos.csv_mes(cliente, ahora)
     resp = Response(texto, content_type="text/csv; charset=utf-8")
     nombre = secure_filename(f"gasto_{cliente}_{ahora[:7]}.csv")
+    resp.headers["Content-Disposition"] = f'attachment; filename="{nombre}"'
+    return resp
+
+
+@app.route("/cliente/<cliente>/gasto/todo.csv")
+def gasto_csv_todo(cliente):
+    """CSV con TODOS los cobros de generación del proyecto desde el primero
+    (misma forma que gasto_csv)."""
+    ahora = db.ahora()
+    resp = Response(gastos.csv_todo(cliente, ahora), content_type="text/csv; charset=utf-8")
+    nombre = secure_filename(f"gasto_{cliente}_todo_{ahora[:10]}.csv")
     resp.headers["Content-Disposition"] = f'attachment; filename="{nombre}"'
     return resp
 
@@ -5318,6 +5343,9 @@ def exp_crear(cliente):
     # filas del mismo país y un conjunto huérfano en Meta (revisión final de E2, 2026-10-03).
     codigos = list(dict.fromkeys(p for p in request.form.getlist("paises") if p in fe_tipos.PAISES))
     destino = (request.form.get("destino_url") or "").strip()
+    if objetivo == "OUTCOME_APP_PROMOTION":
+        flash(gettext("Para instalaciones de la app usa «Nuevo experimento»."), "error")
+        return volver
     try:
         dias = int(request.form.get("dias") or 7)
         tope = float(request.form.get("tope_total") or 0)
@@ -5478,17 +5506,43 @@ def exp_probar(cliente):
     if not combinaciones:
         flash(gettext("Marca al menos una combinación pieza × país en el paso de revisar."), "error")
         return volver
+    # Instalaciones de la app (spec 2026-10-07): en vez de URL de destino van
+    # las URLs de tienda (al menos una) y el App ID de Meta de la app anunciada.
+    es_app = objetivo == "OUTCOME_APP_PROMOTION"
+    tiendas = {}
+    if es_app:
+        try:
+            tiendas = app_tiendas.validar_urls(request.form.get("app_ios_url"), request.form.get("app_android_url"))
+        except ValueError as e:
+            flash(str(e), "error")
+            return volver
+        destino = next(iter(tiendas.values()))   # solo para que el resto de la app muestre algo
     if (objetivo not in meta_campaign.OBJETIVOS_VALIDOS_FASE1 or not codigos
-            or not destino.startswith(("http://", "https://")) or not (1 <= dias <= 90) or tope <= 0
+            or (not es_app and not destino.startswith(("http://", "https://"))) or not (1 <= dias <= 90) or tope <= 0
             or not (13 <= edad_min <= edad_max <= 65)):
-        flash(gettext("Faltan datos: objetivo, al menos un país, días (1–90), tope, edades (13–65) y una URL de destino http(s)."), "error")
+        if es_app:
+            flash(gettext("Faltan datos: objetivo, al menos un país, días (1–90), tope y edades (13–65)."), "error")
+        else:
+            flash(gettext("Faltan datos: objetivo, al menos un país, días (1–90), tope, edades (13–65) y una URL de destino http(s)."), "error")
         return volver
     minimo = PRESUPUESTO_MINIMO_DIARIO.get(moneda, 1)
-    bajos = [p["pais"] for p in paises if p["presupuesto_dia"] < minimo]
-    if bajos:
-        flash(gettext("El presupuesto diario no alcanza el mínimo de Meta (%(minimo)s %(moneda)s) en: %(paises)s.",
-                      minimo=minimo, moneda=moneda, paises=", ".join(bajos)), "error")
-        return volver
+    if es_app:
+        # Cada país se reparte en partes iguales entre sus tiendas, en centavos
+        # como el lanzador: cada parte (un conjunto en Meta) tiene que alcanzar el mínimo.
+        n_tiendas = len(tiendas)
+        bajos = [p["pais"] for p in paises
+                 if lanzador.centavos(p["presupuesto_dia"], moneda) // n_tiendas < lanzador.centavos(minimo, moneda)]
+        if bajos:
+            flash(gettext("El presupuesto diario de cada país se reparte entre %(n)s tiendas y cada parte tiene que "
+                          "alcanzar el mínimo de Meta (%(minimo)s %(moneda)s) en: %(paises)s.",
+                          n=n_tiendas, minimo=minimo, moneda=moneda, paises=", ".join(bajos)), "error")
+            return volver
+    else:
+        bajos = [p["pais"] for p in paises if p["presupuesto_dia"] < minimo]
+        if bajos:
+            flash(gettext("El presupuesto diario no alcanza el mínimo de Meta (%(minimo)s %(moneda)s) en: %(paises)s.",
+                          minimo=minimo, moneda=moneda, paises=", ".join(bajos)), "error")
+            return volver
     # E2 (R4): el reparto no puede pasar del total (la comprobación es del servidor, no del navegador).
     error = _error_de_presupuesto(moneda, codigos, paises, dias)
     if error:
@@ -5501,6 +5555,17 @@ def exp_probar(cliente):
     if atribucion is not None and atribucion not in experimentos.ATRIBUCIONES:
         flash(gettext("La atribución tiene que ser pixel, tienda o ninguna."), "error")
         return volver
+    datos_app = None
+    if es_app:
+        if atribucion is None:
+            atribucion = "ninguna"   # una instalación no es una compra: nada que atribuir salvo que la persona elija
+        app_id = (request.form.get("app_id") or meta_conexion.cargar_app_anunciada(cliente) or "").strip()
+        try:
+            app_id = meta_conexion.validar_app_anunciada(app_id)   # se guarda solo si la creación sale bien
+        except meta_conexion.MetaConexionError as e:
+            flash(str(e), "error")
+            return volver
+        datos_app = {**{f"{p}_url": u for p, u in tiendas.items()}, "app_id": app_id}
     if objetivo == "OUTCOME_SALES" and (atribucion or experimentos.atribucion_sugerida(cliente)) != "pixel":
         flash(gettext("Optimizar por compras requiere el Pixel activo y atribución pixel: pulsa «Comprobar Pixel» en "
                       "Configuración, o elige el objetivo de tráfico."), "error")
@@ -5508,12 +5573,14 @@ def exp_probar(cliente):
     n_piezas = len({pid for pid, _ in combinaciones})
     nombre = (request.form.get("nombre") or "").strip()[:200] or nombre_experimento_automatico(n_piezas, codigos)
     datos = dict(nombre=nombre, paises=paises, objetivo_meta=objetivo, dias=dias, tope_total=tope, destino_url=destino,
-                 moneda=moneda, edad_min=edad_min, edad_max=edad_max, modo=modo, atribucion=atribucion)
+                 moneda=moneda, edad_min=edad_min, edad_max=edad_max, modo=modo, atribucion=atribucion, app=datos_app)
     try:
         eid = experimentos.crear_con_piezas(cliente, datos, combinaciones)
-    except experimentos.ErrorCombinacion as e:
+    except (experimentos.ErrorCombinacion, ValueError) as e:
         flash(str(e), "error")
         return volver
+    if es_app:
+        meta_conexion.guardar_app_anunciada(cliente, datos_app["app_id"])
     job_id = tareas_exp.job_id_lanzar(cliente, eid)
     arranco = trabajos.encolar(job_id, "exp_lanzar", {"cliente": cliente, "experimento_id": eid},
                                cliente=cliente, duracion_estimada=120, etapas=lanzador.ETAPAS_LANZAR, max_intentos=1)
@@ -5534,6 +5601,8 @@ def _agregar_pieza_validada(cliente, experimento_id, pieza_id, pais):
         return gettext("Ese experimento no existe.")
     if ex["estado"] not in ("armando", "error") or ex["meta_campaign_id"]:
         return gettext("Ese experimento ya no acepta piezas nuevas.")
+    if ex["objetivo_meta"] == "OUTCOME_APP_PROMOTION":
+        return gettext("En un experimento de instalaciones de la app las piezas se eligen al crearlo.")
     candidata = next((p for p in experimentos.elegibles(cliente) if p["pieza_id"] == pieza_id), None)
     if not candidata:
         return gettext("Esa pieza no está disponible (o no está lista).")
@@ -5680,6 +5749,19 @@ def exp_presupuesto(cliente, eid):
     if not math.isfinite(presupuesto_dia) or presupuesto_dia < minimo:
         flash(gettext("El presupuesto diario mínimo es %(minimo)s %(moneda)s.", minimo=minimo, moneda=moneda), "error")
         return _volver_exp(cliente, eid)
+    ex = experimentos.obtener(cliente, eid)
+    if ex and ex["objetivo_meta"] == "OUTCOME_APP_PROMOTION":
+        # Igual que exp_probar: el total del país se reparte entre sus
+        # conjuntos (uno por tienda) y es cada parte la que Meta compara con
+        # su mínimo — validar el total dejaría pasar partes que Meta rechaza.
+        p_ex = next((p for p in ex.get("paises", []) if p["pais"] == pais), None)
+        n_partes = len(lanzador._adsets_de_pais(p_ex)) if p_ex else 0
+        n_partes = n_partes or len(experimentos.plataformas_de(ex.get("extra"))) or 1
+        if lanzador.centavos(presupuesto_dia, moneda) // n_partes < lanzador.centavos(minimo, moneda):
+            flash(gettext("El presupuesto diario de %(pais)s se reparte entre %(n)s tiendas y cada parte tiene que "
+                          "alcanzar el mínimo de Meta (%(minimo)s %(moneda)s).",
+                          pais=pais, n=n_partes, minimo=minimo, moneda=moneda), "error")
+            return _volver_exp(cliente, eid)
     with _ENV_LOCK:
         try:
             with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
