@@ -52,8 +52,29 @@ def test_medianas_por_canal_en_el_diagnostico():
 
 
 def test_canal_sin_comparables_cae_a_las_medianas_de_la_cuenta():
-    lista = [anuncio(f"m{i}", clics=150) for i in range(4)] + [anuncio("s0", clics=30, canal="snapchat-ads")]
-    assert "sin_clic" in _por_id(ev.evaluar(lista, reglas=REGLAS))["s0"]["problemas"]
+    # Meta: CTR 3 % (mediana de la cuenta 3 %). Un solo Snapchat con CTR 1,2 %: su canal no tiene comparables, así que
+    # el diagnóstico usa la mediana de la cuenta (1,2 < 0,75 × 3 -> «pocos clics»). Con las medianas vacías de su
+    # canal caería al ctr_min de las reglas (1,0) y 1,2 % no sería «pocos clics»: por eso el CTR de Snapchat se pone
+    # entre las dos referencias.
+    lista = [anuncio(f"m{i}", clics=300) for i in range(4)] + [anuncio("s0", clics=120, canal="snapchat-ads")]
+    r = ev.evaluar(lista, reglas=REGLAS)
+    assert r["benchmarks"]["ctr"] == 3.0 and r["benchmarks_canal"]["snapchat-ads"]["ctr"] is None
+    assert _por_id(r)["s0"]["m"]["ctr"] == 1.2 and REGLAS["ctr_min"] == 1.0
+    assert "sin_clic" in _por_id(r)["s0"]["problemas"]
+
+
+def test_anillos_con_dos_anuncios_en_el_canal_son_pocas_comparables():
+    # Con 2 anuncios cada uno tiene 1 «otro» (otros + 1 = 2 < BENCH_MIN_ANUNCIOS): no hay percentil. Con 3 sí.
+    base = [anuncio(f"m{i}", clics=100 + 100 * i) for i in range(3)]
+    dos = [anuncio("s1", clics=100, canal="snapchat-ads"), anuncio("s2", clics=300, canal="snapchat-ads")]
+    a = _por_id(ev.evaluar(base + dos, reglas=REGLAS))
+    for ad_id in ("s1", "s2"):
+        assert a[ad_id]["anillos"]["clic"]["pct"] is None
+        assert a[ad_id]["anillos"]["clic"]["vacio"] == "pocas_comparables"
+    tres = dos + [anuncio("s3", clics=200, canal="snapchat-ads")]
+    b = _por_id(ev.evaluar(base + tres, reglas=REGLAS))
+    assert (b["s1"]["anillos"]["clic"]["pct"], b["s3"]["anillos"]["clic"]["pct"],
+            b["s2"]["anillos"]["clic"]["pct"]) == (0, 50, 100)
 
 
 def _m(**kw):
