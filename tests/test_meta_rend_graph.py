@@ -12,9 +12,10 @@ TOKEN = "EAAtoken-secreto-llave-de-prueba"
 
 
 class _Resp:
-    def __init__(self, datos, status=200):
+    def __init__(self, datos, status=200, headers=None):
         self._datos, self.status_code, self.ok = datos, status, status < 400
         self.content = b"x"
+        self.headers = headers or {}
 
     def json(self):
         return self._datos
@@ -291,3 +292,101 @@ def test_es_codigo_limite():
     assert meta_errores.es_codigo_limite(17) and meta_errores.es_codigo_limite("80000")
     assert not meta_errores.es_codigo_limite(190)
     assert not meta_errores.es_codigo_limite(None) and not meta_errores.es_codigo_limite("x")
+
+
+# ------------------------------------------------- freno de uso (ruling R22) ---
+
+def _cab(**kv):
+    return {k.replace("_", "-"): v for k, v in kv.items()}
+
+
+def test_uso_de_la_app_en_75_o_mas_frena_con_limite_y_espera_por_defecto(http):
+    import json
+    http["respuestas"] = [_Resp({"id": "act_1"}, headers=_cab(
+        x_app_usage=json.dumps({"call_count": 76, "total_cputime": 3, "total_time": 10})))]
+    with pytest.raises(graph.ErrorGraph) as e:
+        graph.get("act_1", TOKEN)
+    assert e.value.limite and not e.value.token_roto
+    assert e.value.espera_min == 30 and TOKEN not in str(e.value)
+    assert "límite de uso" in str(e.value)
+
+
+def test_uso_de_negocio_y_de_cuenta_tambien_frenan_y_traen_la_espera_de_meta(http):
+    import json
+    negocio = {"123": [{"type": "ads_management", "call_count": 10, "total_cputime": 80, "total_time": 5,
+                        "estimated_time_to_regain_access": 45}]}
+    http["respuestas"] = [_Resp({"id": 1}, headers=_cab(x_business_use_case_usage=json.dumps(negocio)))]
+    with pytest.raises(graph.ErrorGraph) as e:
+        graph.get("act_1", TOKEN)
+    assert e.value.limite and e.value.espera_min == 45
+    http["respuestas"] = [_Resp({"id": 1}, headers=_cab(x_ad_account_usage=json.dumps({"acc_id_util_pct": 75})))]
+    with pytest.raises(graph.ErrorGraph) as e:
+        graph.get("act_1", TOKEN)
+    assert e.value.limite and e.value.espera_min == 30   # sin estimated_time_to_regain_access: 30 por defecto
+
+
+def test_uso_por_debajo_de_75_deja_pasar_la_respuesta(http):
+    import json
+    http["respuestas"] = [_Resp({"id": "act_1"}, headers=_cab(
+        x_app_usage=json.dumps({"call_count": 74.9, "total_cputime": 20, "total_time": 10}),
+        x_ad_account_usage=json.dumps({"acc_id_util_pct": 12})))]
+    assert graph.get("act_1", TOKEN) == {"id": "act_1"}
+
+
+def test_cabeceras_de_uso_mal_formadas_se_ignoran(http):
+    http["respuestas"] = [_Resp({"id": "act_1"}, headers=_cab(
+        x_app_usage="no es json", x_business_use_case_usage='["raro"]', x_ad_account_usage='{"acc_id_util_pct": "x"}'))]
+    assert graph.get("act_1", TOKEN) == {"id": "act_1"}
+    http["respuestas"] = [_Resp({"id": "act_1"}, headers=_cab(x_app_usage="[1, 2]"))]   # JSON válido pero no un objeto
+    assert graph.get("act_1", TOKEN) == {"id": "act_1"}
+    assert graph.uso(None) == (0.0, None)
+
+
+def test_un_error_de_limite_de_meta_trae_la_espera_de_sus_cabeceras(http):
+    import json
+    http["respuestas"] = [_Resp({"error": {"code": 17, "message": "limit"}}, 400, headers=_cab(
+        x_business_use_case_usage=json.dumps({"1": [{"estimated_time_to_regain_access": 12}]})))]
+    with pytest.raises(graph.ErrorGraph) as e:
+        graph.get("act_1", TOKEN)
+    assert e.value.limite and e.value.codigo == 17 and e.value.espera_min == 12
+
+
+def test_el_uso_alto_a_mitad_de_una_paginacion_detiene_la_lectura(http):
+    import json
+    alto = _cab(x_app_usage=json.dumps({"call_count": 90}))
+    http["respuestas"] = [_Resp({"data": [{"id": 1}], "paging": {"next": "https://x", "cursors": {"after": "A"}}}),
+                          _Resp({"data": [{"id": 2}], "paging": {}}, headers=alto)]
+    with pytest.raises(graph.ErrorGraph) as e:
+        graph.paginar("act_1/ads", TOKEN)
+    assert e.value.limite and len(http["llamadas"]) == 2
+
+
+# ---------------------------------------------------- edges y cursores ---
+
+def test_el_token_nunca_viaja_a_una_url_completa(http):
+    # Un edge es siempre relativo: una URL completa (p. ej. un paging.next ajeno) se trata como ruta de Graph,
+    # nunca como destino, así el token solo llega a graph.facebook.com.
+    http["respuestas"] = [_Resp({"ok": 1})]
+    graph.get("https://evil.example/steal", TOKEN)
+    _metodo, url, _params = http["llamadas"][0]
+    assert url.startswith(graph.meta_conexion.GRAPH_URL + "/") and "evil.example" in url.split("/", 3)[3]
+    assert url.split("/")[2] == "graph.facebook.com"
+
+
+def test_informe_con_report_run_id_que_no_es_numerico_no_se_usa_como_edge(http):
+    http["respuestas"] = [_Resp({"report_run_id": "../me/accounts"})]
+    with pytest.raises(graph.ErrorGraph):
+        graph.informe("act_1", TOKEN, {}, dormir=lambda s: None)
+    assert len(http["llamadas"]) == 1          # solo el POST: nunca sondeó esa «ruta»
+    http["llamadas"].clear()
+    http["respuestas"] = [_Resp({"report_run_id": 12345}), _Resp({"async_status": "Job Completed"}),
+                          _Resp({"data": [], "paging": {}})]
+    assert graph.informe("act_1", TOKEN, {}, dormir=lambda s: None) == []
+    assert http["llamadas"][1][1].endswith("/12345")
+
+
+def test_la_ultima_pagina_real_de_meta_cursor_sin_next_se_detiene_tras_una_llamada(http):
+    # Meta en la última página manda cursors.after pero NO next: no hay una segunda llamada.
+    http["respuestas"] = [_Resp({"data": [{"id": 1}], "paging": {"cursors": {"before": "B", "after": "A"}}})]
+    assert graph.paginar("act_1/ads", TOKEN) == [{"id": 1}]
+    assert len(http["llamadas"]) == 1
