@@ -79,7 +79,7 @@ PAISES_MELI = {"AR": "https://listado.mercadolibre.com.ar/", "BO": "https://list
                "PY": "https://listado.mercadolibre.com.py/", "SV": "https://listado.mercadolibre.com.sv/",
                "UY": "https://listado.mercadolibre.com.uy/", "VE": "https://listado.mercadolibre.com.ve/"}
 PAISES_WALMART = {"US": "https://www.walmart.com/"}
-IDIOMA_POR_PAIS = {"SE": "sv", "CO": "es", "MX": "es", "ES": "es", "AR": "es", "CL": "es", "PE": "es", "UY": "es", "EC": "es", "BO": "es",
+IDIOMA_POR_PAIS = {"SE": "sv", "NO": "no", "CO": "es", "MX": "es", "ES": "es", "AR": "es", "CL": "es", "PE": "es", "UY": "es", "EC": "es", "BO": "es",
                    "PY": "es", "VE": "es", "CR": "es", "PA": "es", "DO": "es", "GT": "es", "HN": "es", "NI": "es", "SV": "es",
                    "US": "en", "GB": "en", "CA": "en", "AU": "en", "IN": "en", "AE": "en", "BR": "pt", "DE": "de", "FR": "fr",
                    "IT": "it", "NL": "nl", "JP": "ja"}
@@ -91,6 +91,8 @@ _RE_HTTP = re.compile(r"^https?://", re.IGNORECASE)      # la misma regla que ba
 # Amazon México devuelve {"value": 149.99, "currency": "$"} y son pesos)
 _DOLAR_LOCAL = {"MX": "MXN", "CO": "COP", "AR": "ARS", "CL": "CLP", "UY": "UYU", "DO": "DOP", "CA": "CAD", "AU": "AUD",
                 "US": "USD", "EC": "USD", "SV": "USD", "PA": "USD"}
+# «kr» a secas: corona noruega en Noruega, sueca en Suecia (sin país, la sueca de siempre)
+_CORONA_LOCAL = {"NO": "NOK", "SE": "SEK"}
 _MESES_EN = {"jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6, "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12}
 # El id del producto dentro del link que le mandamos al actor de reseñas (y que devuelve con cada una):
 # amazon.<tld>/dp/<asin>, walmart.com/ip/<id> (o /ip/<nombre>/<id>) y aliexpress.com/item/<id>.html.
@@ -153,6 +155,8 @@ def _moneda(v, pais=None):
         return s.upper()
     if s == "$" and pais:
         return _DOLAR_LOCAL.get(str(pais).upper(), "USD")
+    if s.lower() == "kr" and pais:
+        return _CORONA_LOCAL.get(str(pais).upper(), "SEK")
     return _MONEDA_POR_SIMBOLO.get(s)
 
 
@@ -169,7 +173,7 @@ def _precio_moneda(item):
     if moneda is None and isinstance(p, str):
         for simbolo in sorted(_MONEDA_POR_SIMBOLO, key=len, reverse=True):
             if simbolo in p:
-                moneda = _moneda(simbolo, pais) if simbolo == "$" else _MONEDA_POR_SIMBOLO[simbolo]
+                moneda = _moneda(simbolo, pais) if simbolo in ("$", "kr") else _MONEDA_POR_SIMBOLO[simbolo]
                 break
     return _flotante(p), moneda
 

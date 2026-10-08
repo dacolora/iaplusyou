@@ -743,6 +743,16 @@ def contar_vivos(cliente):
             e.c.cliente == cliente, e.c.legado.is_(False), e.c.estado.in_(ESTADOS_VIVOS))).scalar() or 0
 
 
+def hay_historial(cliente):
+    """¿El proyecto ya probó algo en Meta? Un experimento o un anuncio suelto (los de `ads.py`, que cuelgan de la
+    fila legado). Sin Meta conectado y sin historial, la pestaña Experimentos es solo «Conecta Meta» (2026-10-08)."""
+    e, ep = db.experimento, db.experimento_pieza
+    with db.conectar() as con:
+        return bool(con.execute(sa.select(sa.or_(
+            sa.exists().where(e.c.cliente == cliente, e.c.legado.is_(False)),
+            sa.exists().where(ep.c.cliente == cliente, ep.c.legado_id.isnot(None))))).scalar())
+
+
 def obtener(cliente, experimento_id):
     with db.conectar() as con:
         f = _fila_experimento(con, cliente, experimento_id)

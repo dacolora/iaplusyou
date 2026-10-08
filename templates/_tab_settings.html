@@ -320,8 +320,9 @@
   {% endfor %}
 </ul>
 
-{# Las reglas por defecto del decisor se movieron a Experimentos › «Reglas del motor». #}
-<p class="vacio" id="config-reglas-enlace" style="padding-top:1rem;">{{ _('Las reglas del decisor están en <a href="#experimentos" onclick="document.querySelector(\'.sidebar-item[data-tab=experimentos]\').click(); document.getElementById(\'reglas-motor\').open = true; return false;">Experimentos →</a>') }}</p>
+{# Las reglas por defecto del decisor se movieron a Experimentos › «Reglas del motor» (sin Meta ni historial esa
+   pestaña no las pinta: el enlace tampoco, 2026-10-08). #}
+{% if not exp_sin_meta %}<p class="vacio" id="config-reglas-enlace" style="padding-top:1rem;">{{ _('Las reglas del decisor están en <a href="#experimentos" onclick="document.querySelector(\'.sidebar-item[data-tab=experimentos]\').click(); document.getElementById(\'reglas-motor\').open = true; return false;">Experimentos →</a>') }}</p>{% endif %}
 </section>
 
 <section class="config-apartado" id="config-ap-marca" data-apartado="marca">

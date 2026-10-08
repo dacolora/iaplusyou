@@ -6,6 +6,7 @@ por defecto). Se prueba el render de la página y del fragmento con datos sembra
 CSV, el aislamiento entre proyectos y la tolerancia a que una parte del tablero explote (`_contexto_tablero`).
 Sin red: meta_conexion y tiendas se fingen con monkeypatch, como en test_tablero."""
 import json
+import re
 
 import pytest
 
@@ -178,8 +179,13 @@ def test_tablero_pestana_por_defecto_y_sidebar(app, base_temporal):
     # El Tablero ya no es pestaña: sale del menú y de los paneles; Experimentos lo absorbe y va primero.
     assert 'data-tab="tablero"' not in html and 'id="tab-tablero"' not in html and "tablero:" not in html
     assert 'data-tab="experimentos"' in html
-    # El sidebar lista Experimentos antes que Crear (y que Alertas), y su panel es el primero de la página.
-    assert html.index('data-tab="experimentos"') < html.index('data-tab="alertas"') < html.index('data-tab="creativeflowplus"')
+    # Crear va arriba de todo, aparte, como botón azul (2026-10-08); la lista de pestañas empieza por Experimentos
+    # (antes que Alertas y que Final edition), y su panel es el primero de la página.
+    sb = html[html.index('<aside class="sidebar"'):html.index("</aside>")]
+    assert re.search(r'<button[^>]*class="sidebar-item sidebar-crear"[^>]*data-tab="creativeflowplus"', sb)
+    assert sb.index('data-tab="creativeflowplus"') < sb.index('data-tab="experimentos"') < sb.index('data-tab="alertas"') \
+        < sb.index('data-tab="final"')
+    assert sb.count("sidebar-crear") == 1
     assert html.index('id="tab-experimentos"') < html.index('id="tab-alertas"') < html.index('id="tab-creativeflowplus"')
     # Sin hash ni pestaña recordada, la página abre en Experimentos; un hash o una pestaña recordada «tablero»
     # (de antes de E2) también caen ahí.

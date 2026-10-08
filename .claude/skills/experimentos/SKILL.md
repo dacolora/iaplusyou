@@ -87,6 +87,19 @@ updates. Notifications (`notificaciones.avisar`: propuesta, ganador, rechazo_met
 error_lanzamiento) go by SMTP when `SMTP_HOST` is set and the project has a
 `correo_notificaciones`; otherwise they are only eventos.
 
+**Sin Meta conectado** (2026-10-08, pedido de Daniel: happyflops tenía Triple Whale y no Meta, y la pestaña le mostraba
+la tabla vacía y una galería que dejaba marcar piezas que después no se podían lanzar): `ver_cliente` pone
+`exp_sin_meta = not meta_conectado and not experimentos.hay_historial(cliente)` (un EXISTS: experimento no legado o
+anuncio suelto; con Meta conectado ni se consulta). Con `exp_sin_meta` la pestaña es SOLO la tarjeta `#exp-sin-meta`
+(«Conecta Meta…» o, con `estado == "roto"`, «La conexión con Meta se cortó»; una línea más si hay Triple Whale) con el
+botón a Configuración › Conexiones › Meta (`data-ir-tab="settings" data-ancla="config-meta"`): ni resultados, ni
+reglas del motor, ni CSV, y Configuración esconde su enlace a las reglas. Con historial y sin Meta se ven los
+resultados con un aviso, pero ningún «+ Nuevo experimento» (tampoco en `_exp_resultados.html` ni el `data-url-nuevo`).
+`exp_nuevo` sin Meta redirige a `#experimentos` (no pinta la galería) y `exp_probar`/`exp_crear` avisan «Conecta Meta en
+Configuración › Conexiones…». Y la página del proyecto abre en Crear en vez de Experimentos (`cliente.html`), también
+si Experimentos quedó como la pestaña recordada; un `#experimentos` explícito la sigue abriendo. Pruebas:
+`tests/test_experimentos_sin_meta.py`.
+
 There is also NO Campañas tab any more: `_tab_ads.html` is gone, `nueva_campana`/`publicar_ad`
 are no-ops that flash and redirect, and the legacy "Anuncios sueltos" (Forja's ads) render
 read-only inside the centro de resultados, plegados en su «Historial» (`_anuncios_sueltos.html`: KPIs, pausar/activar,
@@ -273,3 +286,5 @@ ni atribuciones ya guardadas; `tests/test_lote5_higiene.py` usa conectores doble
 PND-136 (2026-10-07, lote 5 B): exp_pieza memoriza lecturas solo durante la petición. En resultados, gestión_id limita trabajos, propuestas y reglas al experimento seleccionado; sin selección mantiene las propuestas de todos (son visibles en Necesita tu decisión). Las marcas del panel usan el mismo truncado y MAX_MARCAS, sin cortar la bitácora. Día a día abre con ROAS para ventas y CTR para tráfico; en el centro con mezcla de objetivos conserva CTR. Gráfica role=group admite marcas enfocables; aria-live del contenedor se hereda, sin duplicarlo. No se cambia el decisor, reparto ni destino de publicación.
 
 Regresión aria-live del lote 5 corregida (2026-10-08, pedido de Daniel): el aviso #exp-minimo pertenece al resumen vivo #exp-resumen, sin aria-live propio; la copia #exp-resumen-final sigue sin región viva. La prueba de PND-136 comprueba herencia y conteo único; la prueba antigua de presupuesto permanece intacta.
+
+Noruega y Suecia (2026-10-08, spec `docs/superpowers/specs/2026-10-08-noruega-y-suecia-design.md` §3 y §5; motivo: el público de happyflops es Noruega y Suecia): un conjunto por país NO o SE sale con su moneda de la lista de países (`final_edition.tipos.PAISES`: NOK y SEK, símbolo «kr», que va detrás del número). Los mínimos de Meta se avisan con `presupuesto_experimentos.PRESUPUESTO_MINIMO_DIARIO` (NOK y SEK: 15 al día) y `lanzador._MIN_POR_MONEDA` (1 300 para el tope de gasto; 1 000 NOK ≈ US$94 quedaba bajo el mínimo de Meta, 2026-10-08); NOK y SEK llevan decimales para Meta (no están en `SIN_DECIMALES`). El presupuesto se compara contra la moneda de FACTURACIÓN de la cuenta, no la del país del conjunto, como siempre. `proyectos.paises_calendario()` ahora sale de `PAISES` (importa `final_edition.tipos` dentro de la función: `import proyectos` no debe cargar `final_edition`): un país nuevo en `PAISES` entra solo al selector de país del proyecto; si le falta calendario de Sprints usa el de Colombia. Las tiendas de Triple Whale por país NO y SE ya se conectaban; ahora una pieza de esos países sí se puede lanzar y producir (cierra PND-147).

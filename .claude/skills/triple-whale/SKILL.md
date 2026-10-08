@@ -121,8 +121,11 @@ creative Creatv creates (`lanzador._crear_anuncios`, and the legacy `tareas/meta
 `meta_ads.creative` functions take an optional `url_tags` for the AdCreative's «URL parameters»), via
 `triple_whale_tiendas.url_tags(cliente)` — None without Triple Whale; ads created before connecting keep
 none (changing them sends the ad back to review). Second round (spec §11–§13): `tw_producto_dia` (migration
-0024) copies `orders_table` opened by `products_info` in the same sync (`consultas_productos`, full/minimal,
-never verified: §9.5) → «Lo que más se vende» in the tab (`panel.productos_periodo`, matched to the Catálogo
+0024) copies `orders_table` opened by `products_info` in the same sync (`consultas_productos`, full/minimal;
+checked against happyflops-norge on 2026-10-08, PND-150: `products_info` is an array of objects opened with
+`ARRAY JOIN products_info AS p`, fields `product_id`, `product_name`, `product_sku`, `product_name_price` (unit),
+`product_name_quantity_sold`, `net_discount_amount_for_product`; price × quantity matches the store's
+`gross_product_sales`; the full query subtracts the discount) → «Lo que más se vende» in the tab (`panel.productos_periodo`, matched to the Catálogo
 by `fuente_id`/name) and the top 5 in the AI prompt (each idea carries `producto`); a Creatv-made ad
 (`datos.piezas_creatv`, now with the pieza's video/thumbnail/state) sends Claude the real frames
 (`analisis.visuales` → `sprints.qa.archivo_local` + `doctrina.revisor.bloques_visuales`, temp file deleted
@@ -142,8 +145,11 @@ every metric as a total because short periods confused their clients. `panel.res
 carries `origen_tw` («<evaluación>:<índice>»), the Crear form returns it in a hidden field and `cf_crear_video`
 stores `concepto.extra.tw_idea` (`puente.origen_desde_formulario` validates it, a bad value is ignored); the
 idea card lists the pieces born from it with their Crear state and Meta verdict (`datos.piezas_de_evaluacion`,
-`panel.enlazar_ideas`) and a Creatv ad says which idea it came from (`piezas_creatv(...)["tw_idea"]`). None of
-the SQL has run against a real store yet (spec 2026-09-28 §9).
+`panel.enlazar_ideas`) and a Creatv ad says which idea it came from (`piezas_creatv(...)["tw_idea"]`). Since 2026-10-08 every query runs against the real store (happyflops-norge): ads, Pixel and products full; the store
+query dropped `net_profit` (not a `blended_stats_tvf()` column — it made every copy fall back to the minimal one and
+lose new customers); `utilidad_neta` stays 0 and is shown nowhere.
+
+Coronas (2026-10-08, spec de Noruega y Suecia §3; motivo: las tiendas de happyflops son de Noruega y Suecia): `triple_whale.MONEDAS` trae NOK y SEK, así que la tienda de un país NO o SE guarda su moneda y el tablero y los experimentos la distinguen del dólar como a cualquier otra moneda local. Con moneda mezclada el ROAS se oculta (PND-138), no se convierte.
 
 **«Resultados de tu tienda»** (spec `docs/superpowers/specs/2026-10-08-tw-resultados-de-tu-tienda-design.md`, pedido
 de Daniel 2026-10-08 con la captura de «Día a día»): reemplazó a «Tu tienda» (tiles) y «Día a día» (el SVG de
@@ -161,7 +167,7 @@ contenedor y pide el detalle del día a `GET /triple-whale/dia` (`panel.contexto
 copiado a ayer, 400 si no). `_tab_triple_whale.html` llama `TwResultados.iniciar(cont)` tras pintar el panel. Trampas:
 un periodo anterior que empieza antes del primer día copiado NO se compara (serían ceros que no son ventas; con 10
 días de prueba, «7 días» no compara); «Desde el inicio» nunca compara (5fce2658); lo atribuido del Pixel suma más que
-la tienda (PND-155) y solo se usa para comparar anuncios y canales; el CSS heredado tenía un comentario cerrado con
+la tienda (PND-157) y solo se usa para comparar anuncios y canales; el CSS heredado tenía un comentario cerrado con
 `#}` que se tragaba `.tb-barra-tw` (por eso la gráfica vieja salía con barras naranjas y línea verde).
 Reglas que añadió la revisión (2026-10-08, cada una con su prueba de mutación): los días después del último copiado
 (`fin_datos`, una copia atrasada) van vacíos y fuera de cifras, comparaciones y días raros; en «Todas» la antigüedad se

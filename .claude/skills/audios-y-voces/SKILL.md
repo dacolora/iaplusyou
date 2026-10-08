@@ -45,7 +45,8 @@ música con el evento `mi-musica:cambio` (y al revés). `fal_audio.COSTO_USD_POR
 
 Desde 2026-09-30 (spec `docs/superpowers/specs/2026-09-30-audios-europa-voces-propias-design.md`) el motor lo
 decide `audios.motor_de(voz, idioma)`: la galería por Multilingual v2 salvo el noruego, que v2 no habla y va por
-ElevenLabs Turbo v2.5 con `language_code`; las **voces propias** por MiniMax Speech 2.8 HD con `language_boost`.
+ElevenLabs Turbo v2.5 con `language_code` (`fal_audio.IDIOMAS_TURBO`; desde 2026-10-08 las finales usan la misma regla con
+`fal_audio.tts_galeria`); las **voces propias** por MiniMax Speech 2.8 HD con `language_boost`.
 `voces_propias.py` es el único escritor de las voces propias (filas `material` origen `voz_propia`, `url` = su
 muestra, `extra.voice_id` de MiniMax), de la grabación de un clon (origen `grabacion`, hash con prefijo propio para
 no chocar con Mi música) y de sus muestras por idioma (hash `muestra_propia`, las paga el proyecto). Se crean con la
@@ -93,3 +94,5 @@ doctrina, «Reintentar», «Recuperar» y la publicación orgánica sí funciona
 PND-038/039/040 (2026-10-03): sintetizar reconoce los errores voice not found / voice_id does not exist / invalid voice id y los convierte al mensaje fijo traducible de voz ausente; otros errores siguen el manejo habitual. Las regeneraciones llevan la voz original al payload de finales. material usa AUTOINCREMENT (migración 0031): borrar la última voz no permite que otra herede su vp:id. No repara identificadores que ya hubieran sido reutilizados antes de migrar.
 
 PND-095 (2026-10-07, lote 5 B): guardar_grabacion mide .aac/.ogg antes de convertir (descarta duración fuera del límite), y vuelve a validar la duración del mp3 final. _voces_galeria pone escuchar/borrar como hermanos del role=radio; conserva .au-voz/data-voz/tabindex y la delegación de eventos. El contenedor oculta también las acciones al filtrar la voz. Paginación, muestra de Final edition y validación vp: sin voz siguen como preguntas por función nueva o gasto.
+
+Finales en noruego (2026-10-08, spec de Noruega y Suecia §4; motivo: el público de happyflops es Noruega y Suecia): la regla del Turbo ya no es solo de Audios. `fal_audio.tts_galeria(texto, voz, idioma)` es el único camino de una voz de la galería hacia ElevenLabs: Multilingual v2, o Turbo v2.5 con `language_code` cuando el idioma está en `fal_audio.IDIOMAS_TURBO` (hoy solo `no`). Lo usan Audios (`audios.IDIOMAS_TURBO` es la misma tupla), las finales (`final_edition.insumos.voz_bloque`) y el legado `final_edition.voz._tts`. Una voz nueva de la galería o un idioma nuevo que v2 no hable se agrega a esa tupla, no en cada llamador. Sueco (`sv`) va por v2. El precio de una final en noruego se estima con la tarifa de v2 y se cobra con la de Turbo (la mitad): ver `final-edition`.

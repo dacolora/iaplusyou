@@ -1648,6 +1648,9 @@ msgstr "September 12, 2026"
 msgid "14 días"
 msgstr "14 days"
 
+msgid "17. mai"
+msgstr "17 May (Norway's Constitution Day)"
+
 msgid "2. El guion y la voz"
 msgstr "2. The script and the voice"
 
@@ -2140,6 +2143,9 @@ msgstr "Someone receives their purchase and opens the box or bag until they disc
 msgid "Alineación"
 msgstr "Alignment"
 
+msgid "Alla hjärtans dag"
+msgstr "Valentine's Day (Alla hjärtans dag)"
+
 msgid "Alta"
 msgstr "High"
 
@@ -2450,6 +2456,9 @@ msgstr "Here each ad's ROAS only counts this store's sales."
 
 msgid "Aquí están los videos, las imágenes, los audios, los textos y las transiciones para sumar a la edición."
 msgstr "Here are the videos, images, audio, texts and transitions to add to the edit."
+
+msgid "Aquí tus piezas salen como anuncios en Meta, se mide cuál funciona y el motor te dice cuál escalar y cuál pausar. Sin una cuenta de Meta conectada todavía no hay nada que probar ni que medir."
+msgstr "Here your pieces run as ads on Meta, we measure which one works and the engine tells you which to scale and which to pause. Without a connected Meta account there is nothing to test or measure yet."
 
 msgid "Archivado"
 msgstr "Archived"
@@ -3762,11 +3771,14 @@ msgstr "Connect Meta in <a href=\"#experimentos\" onclick=\"document.querySelect
 msgid "Conecta Meta en <a href=\"#experimentos\" onclick=\"document.querySelector('.sidebar-item[data-tab=experimentos]').click(); return false;\">Experimentos</a> para comprobar el Pixel."
 msgstr "Connect Meta in <a href=\"#experimentos\" onclick=\"document.querySelector('.sidebar-item[data-tab=experimentos]').click(); return false;\">Experiments</a> to check the Pixel."
 
-msgid "Conecta Meta en Experimentos antes de crear un experimento."
-msgstr "Connect Meta in Experiments before creating an experiment."
+msgid "Conecta Meta en Configuración › Conexiones antes de crear un experimento."
+msgstr "Connect Meta in Settings › Connections before creating an experiment."
 
-msgid "Conecta Meta en Experimentos antes de probar piezas."
-msgstr "Connect Meta in Experiments before testing pieces."
+msgid "Conecta Meta en Configuración › Conexiones antes de probar piezas."
+msgstr "Connect Meta in Settings › Connections before testing pieces."
+
+msgid "Conecta Meta para probar tus piezas"
+msgstr "Connect Meta to test your pieces"
 
 msgid "Conecta Notion primero."
 msgstr "Connect Notion first."
@@ -3800,6 +3812,9 @@ msgstr "Connected: %(nombre)s · last sync: %(cuando)s. It refreshes on its own 
 
 msgid "Conectar"
 msgstr "Connect"
+
+msgid "Conectar Meta"
+msgstr "Connect Meta"
 
 msgid "Conectar Notion"
 msgstr "Connect Notion"
@@ -5033,6 +5048,9 @@ msgstr "The Business can't see any ad account. Assign them to the system user in
 
 msgid "El Catálogo todavía no tiene fotos."
 msgstr "The Catalog has no photos yet."
+
+msgid "El Día de la Constitución: bunad, banderas, desfiles y comida al aire libre."
+msgstr "Constitution Day: bunad costumes, flags, parades and outdoor food."
 
 msgid "El Excel está vacío."
 msgstr "The Excel file is empty."
@@ -7584,6 +7602,12 @@ msgstr "Family"
 msgid "Familias (%(n)s)"
 msgstr "Families (%(n)s)"
 
+msgid "Fars dag"
+msgstr "Father's Day (Fars dag)"
+
+msgid "Farsdag"
+msgstr "Father's Day (Farsdag)"
+
 msgid "Fecha"
 msgstr "Date"
 
@@ -7592,6 +7616,9 @@ msgstr "Invalid date."
 
 msgid "Feed"
 msgstr "Feed"
+
+msgid "Fellesferie"
+msgstr "Summer holidays (Fellesferie)"
 
 msgid "Ficha"
 msgstr "Details"
@@ -8876,6 +8903,9 @@ msgstr "Go to %(tab)s →"
 msgid "Ir a Catálogo →"
 msgstr "Go to Catalog →"
 
+msgid "Ir a Conexiones →"
+msgstr "Go to Connections →"
+
 msgid "Ir a Crear"
 msgstr "Go to Create"
 
@@ -8920,6 +8950,9 @@ msgstr "Japan"
 msgid "Jornadas de trabajo"
 msgstr "Work days"
 
+msgid "Jul"
+msgstr "Jul (Nordic Christmas)"
+
 msgid "Junta los dos clips: el video queda tan corto como dure la transición."
 msgstr "Joins the two clips: the video gets shorter by the length of the transition."
 
@@ -8944,6 +8977,9 @@ msgstr "The AI couldn't build the shots (%(aviso)s); this is the basic prompt. Y
 
 msgid "La IA no pudo armar los planos; quedó el prompt básico para que lo edites o rearmes."
 msgstr "The AI couldn't build the shots; the basic prompt is there for you to edit or rebuild."
+
+msgid "La Navidad nórdica: regalos, velas, reuniones en casa y comida de temporada; la compra se concentra antes del 24."
+msgstr "Nordic Christmas: gifts, candles, gatherings at home and seasonal food; buying peaks before the 24th."
 
 #, python-format
 msgid "La Página %(pagina)s no está entre las que ve el Business de la agencia."
@@ -9042,6 +9078,12 @@ msgstr "The figure “%(cifra)s” isn't in the product's data."
 
 msgid "La conexión con Meta está rota (token vencido o permisos retirados): vuelve a conectar en Configuración."
 msgstr "The connection with Meta is broken (expired token or withdrawn permissions): reconnect in Settings."
+
+msgid "La conexión con Meta se cortó"
+msgstr "The connection with Meta was lost"
+
+msgid "La conexión con Meta se cortó: ves lo que ya probaste, pero para lanzar algo nuevo hay que reconectarla."
+msgstr "The connection with Meta was lost: you can see what you already tested, but to launch something new you need to reconnect it."
 
 msgid "La conexión con Meta venció o se retiró: vuelve a conectar Meta en Experimentos y reintenta."
 msgstr "The Meta connection expired or was revoked: reconnect Meta in Experiments and try again."
@@ -9147,6 +9189,9 @@ msgstr "The end date isn't valid (use YYYY-MM-DD)."
 
 msgid "La fecha de inicio no es válida (usa AAAA-MM-DD)."
 msgstr "The start date isn't valid (use YYYY-MM-DD)."
+
+msgid "La fiesta del solsticio: mesa al aire libre, flores, fresas y reunión de amigos y familia."
+msgstr "The solstice celebration: outdoor table, flowers, strawberries and friends and family together."
 
 #, python-format
 msgid "La final %(final)s no existe en pieza; la ruta debe crearla con creative_flow.crear_final antes de encolar."
@@ -10162,6 +10207,9 @@ msgstr "Meta isn't connected."
 msgid "Meta no está conectado: conéctalo en Configuración para lanzar y medir experimentos."
 msgstr "Meta isn't connected: connect it in Settings to launch and measure experiments."
 
+msgid "Meta no está conectado: ves lo que ya probaste, pero para lanzar algo nuevo hay que conectarlo."
+msgstr "Meta is not connected: you can see what you already tested, but to launch something new you need to connect it."
+
 #, python-format
 msgid "Meta no lo está mostrando: %(motivo)s"
 msgstr "Meta isn't showing it: %(motivo)s"
@@ -10272,6 +10320,9 @@ msgstr "My music"
 
 msgid "Mi música · gratis"
 msgstr "My music · free"
+
+msgid "Midsommar"
+msgstr "Midsummer (Midsommar)"
 
 #, python-format
 msgid "MiniMax · clonar voz · %(nombre)s"
@@ -10394,6 +10445,12 @@ msgstr "Currency of the figures"
 
 msgid "Monto"
 msgstr "Amount"
+
+msgid "Mors dag"
+msgstr "Mother's Day (Mors dag)"
+
+msgid "Morsdag"
+msgstr "Mother's Day (Morsdag)"
 
 msgid "Mostrar los emojis"
 msgstr "Show the emojis"
@@ -11596,6 +11653,9 @@ msgstr "Project's visible name"
 
 msgid "Normal"
 msgstr "Normal"
+
+msgid "Noruega"
+msgstr "Norway"
 
 msgid "Nota"
 msgstr "Note"
@@ -13337,11 +13397,17 @@ msgstr "Swipe file (admin)"
 msgid "Regalos de pareja y amistad; detalles y experiencias."
 msgstr "Gifts for partners and friends; treats and experiences."
 
+msgid "Regalos de pareja y detalles; tono cercano y sencillo."
+msgstr "Gifts for couples and small gestures; a close, simple tone."
+
 msgid "Regalos entre parejas y amigos, planes y detalles; tono afectivo."
 msgstr "Gifts between partners and friends, plans and treats; an affectionate tone."
 
 msgid "Regalos para mamá: detalle, cuidado y hogar. Compra emocional y de última hora."
 msgstr "Gifts for mom: thoughtful touches, care and home. An emotional, last-minute purchase."
+
+msgid "Regalos para mamá: detalle, cuidado y hogar; tono afectivo."
+msgstr "Gifts for mom: thoughtful touches, care and home; an affectionate tone."
 
 msgid "Regalos útiles y con carácter para papá; tono cercano, algo de humor."
 msgstr "Useful, characterful gifts for dad; a warm tone, a bit of humor."
@@ -13991,6 +14057,9 @@ msgstr "According to the store's orders in Triple Whale; it's the product worth 
 
 msgid "Selfie sin voz"
 msgstr "Silent selfie"
+
+msgid "Semester"
+msgstr "Summer holidays (Semester)"
 
 msgid "Separados por una línea en blanco"
 msgstr "Separated by a blank line"
@@ -15612,6 +15681,9 @@ msgstr "Triple Whale answered %(codigo)s: %(detalle)s"
 msgid "Triple Whale respondió algo que no es JSON."
 msgstr "Triple Whale answered something that isn't JSON."
 
+msgid "Triple Whale ya está conectado: cuando tus anuncios corran en Meta, aquí verás las ventas que trae cada uno. Mientras tanto, los números de tu tienda están en la pestaña"
+msgstr "Triple Whale is already connected: once your ads run on Meta, you will see here the sales each one brings. In the meantime, your store numbers are in the tab"
+
 msgid "Triple Whale ya no está conectado en este proyecto."
 msgstr "Triple Whale is no longer connected in this project."
 
@@ -16041,6 +16113,9 @@ msgstr "Sent to the model as is. Empty: the person just talks."
 msgid "Vacaciones de mitad de año"
 msgstr "Mid-year vacation"
 
+msgid "Vacaciones largas de verano: cabaña, viajes, aire libre y tiempo en familia."
+msgstr "Long summer holidays: cabin, trips, outdoors and family time."
+
 msgid "Vacía el texto, el sonido, la música, la bandeja y el catálogo; la duración, el modelo y el formato vuelven a los del proyecto."
 msgstr "Clears the text, the sound, the music, the tray and the catalog; the duration, the model and the format go back to the project's."
 
@@ -16049,6 +16124,9 @@ msgstr "Empty = the scene's natural ambience."
 
 msgid "Vacío: se quita"
 msgstr "Empty: it's removed"
+
+msgid "Valentinsdagen"
+msgstr "Valentine's Day (Valentinsdagen)"
 
 msgid "Validaciones"
 msgstr "Validations"
@@ -16455,6 +16533,9 @@ msgstr "Go back to R2 › “Manage R2 API tokens” › “Create API token” 
 
 msgid "Vuelve a conectar Meta para que se guarde el <code>ig_user_id</code> de la cuenta vinculada."
 msgstr "Reconnect Meta so the linked account's <code>ig_user_id</code> gets saved."
+
+msgid "Vuelve a conectarla para probar tus piezas como anuncios."
+msgstr "Reconnect it to test your pieces as ads."
 
 msgid "Vuelve a enviar tu mensaje cuando quieras."
 msgstr "Send your message again whenever you like."
@@ -17031,6 +17112,9 @@ msgstr "avatars in %(idioma)s"
 msgid "baja"
 msgstr "down"
 
+msgid "banderas"
+msgstr "flags"
+
 #, python-format
 msgid "barrido %(barrido)s"
 msgstr "sweep %(barrido)s"
@@ -17071,8 +17155,14 @@ msgstr "search Walmart"
 msgid "búsqueda"
 msgstr "search"
 
+msgid "cabaña"
+msgstr "cabin"
+
 msgid "cada proyecto está en un modo a la vez: <strong>propia</strong> (registra su app y conecta él) o <strong>agencia</strong> (tú le asignas cuenta y Página)"
 msgstr "each project is in one mode at a time: <strong>own app</strong> (it registers its app and connects itself) or <strong>agency</strong> (you assign it an account and a Page)"
+
+msgid "café"
+msgstr "coffee"
 
 msgid "calabaza"
 msgstr "pumpkin"
@@ -17285,6 +17375,9 @@ msgstr "sprint quality check and doctrine"
 msgid "control de calidad · respuesta inválida"
 msgstr "quality check · invalid response"
 
+msgid "corona de flores"
+msgstr "flower crown"
+
 msgid "correo"
 msgstr "email"
 
@@ -17332,6 +17425,9 @@ msgstr "warm, sunset"
 msgid "cálida, británica"
 msgstr "warm, British"
 
+msgid "cálida, de velas, tarde oscura"
+msgstr "warm, candlelit, dark afternoon"
+
 msgid "cálida, nocturna, luces"
 msgstr "warm, nighttime, lights"
 
@@ -17373,6 +17469,9 @@ msgstr "where the period's sales came from, by the month each ad started (accord
 
 msgid "de más de 1 s (las últimas 50)"
 msgstr "over 1 s (the last 50)"
+
+msgid "de primavera, clara"
+msgstr "spring, bright"
 
 msgid "de un cliente (socio)"
 msgstr "a client's (partner)"
@@ -17458,6 +17557,9 @@ msgstr "since the web process started (%(fecha)s); they reset on every deploy"
 
 msgid "deseo"
 msgstr "desire"
+
+msgid "desfile"
+msgstr "parade"
 
 msgid "desgloses de Meta desde el inicio · países en el periodo"
 msgstr "Meta breakdowns since the start · countries in the period"
@@ -17898,6 +18000,9 @@ msgstr "French"
 msgid "frente, perfil y cuerpo entero — 3 a 6"
 msgstr "front, profile and full body — 3 to 6"
 
+msgid "fresas"
+msgstr "strawberries"
+
 #, python-format
 msgid "fuente: %(fuente)s"
 msgstr "source: %(fuente)s"
@@ -18215,6 +18320,9 @@ msgstr "the market's sophistication"
 msgid "la tienda no trajo fotos"
 msgstr "the store didn't bring photos"
 
+msgid "lago"
+msgstr "lake"
+
 msgid "lanzamiento"
 msgstr "launch"
 
@@ -18282,6 +18390,9 @@ msgstr "lights"
 msgid "lujo"
 msgstr "Luxury"
 
+msgid "luz de noche clara, dorada"
+msgstr "bright, golden night light"
+
 msgid "línea"
 msgstr "line"
 
@@ -18316,6 +18427,9 @@ msgstr "best: %(nombre)s"
 
 msgid "mensaje_id inválido."
 msgstr "Invalid mensaje_id."
+
+msgid "mesa al aire libre"
+msgstr "outdoor table"
 
 msgid "mesa familiar"
 msgstr "family table"
@@ -18484,6 +18598,9 @@ msgstr "name"
 
 msgid "nombre, precio, moneda, url_compra, fotos (varias con |), descripcion, categoria, sku"
 msgstr "nombre, precio, moneda, url_compra, fotos (multiple with |), descripcion, categoria, sku"
+
+msgid "noruego (bokmål)"
+msgstr "Norwegian (Bokmål)"
 
 msgid "nota"
 msgstr "note"
@@ -18782,6 +18899,9 @@ msgstr "dotted = experiment average"
 
 msgid "punteadas: días en que el motor actuó (pasa el mouse para ver qué hizo)"
 msgstr "dotted: days the engine acted (hover to see what it did)"
+
+msgid "pícnic"
+msgstr "picnic"
 
 msgid "qué parte de las impresiones siguió viendo"
 msgstr "share of impressions that kept watching"
@@ -19200,6 +19320,9 @@ msgstr "situations (at least 2)"
 #, python-format
 msgid "sobran %(lista)s (quitadas o inexistentes)"
 msgstr "extra %(lista)s (removed or nonexistent)"
+
+msgid "sol bajo, noches claras"
+msgstr "low sun, bright nights"
 
 msgid "sol directo, exteriores"
 msgstr "direct sun, outdoors"
