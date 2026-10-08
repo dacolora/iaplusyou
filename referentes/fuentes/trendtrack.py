@@ -46,6 +46,7 @@ from flask_babel import gettext, ngettext
 from sqlalchemy.dialects.sqlite import insert as insert_sqlite
 
 import db
+import gastos
 from referentes.fuentes.base import AVISO_CUOTA_AGOTADA, ErrorFuente
 
 BASE_URL = "https://api.trendtrack.io"
@@ -234,7 +235,7 @@ def estimar(consulta, tope):
     return {"usd_fuente": 0.0, "llamadas": llamadas,
             "detalle": ngettext("hasta %(num)d crédito de TrendTrack (del plan; US$ %(usd)s si fueran de recarga)",
                                 "hasta %(num)d créditos de TrendTrack (del plan; US$ %(usd)s si fueran de recarga)",
-                                creditos, usd=f"{usd:.2f}")}
+                                creditos, usd=f"{gastos.precio(usd):.2f}")}
 
 
 # ------------------------------------------------------------ normalización ---

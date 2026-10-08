@@ -108,7 +108,7 @@
                     <option value="pt">Português</option>
                   </select>
                 </label>
-                <button type="submit" class="btn-guardar btn-sm">{{ _('Preparar guion con IA') }}{% if precios and precios.guion and precios.guion.usd is not none %} ≈ {{ precios.guion.usd | usd }}{% endif %}</button>
+                <button type="submit" class="btn-guardar btn-sm">{{ _('Preparar guion con IA') }}{% if precios and precios.guion and precios.guion.usd is not none %} ≈ {{ precios.guion.usd | precio | usd }}{% endif %}</button>
               </form>
               {% endif %}
             {% else %}
@@ -191,7 +191,7 @@
                     </select>
                   </label>
                 </div>
-                {% set _cu = (' ' ~ _('≈ %(usd)s c/u', usd=(precios.final_por_pais.usd | usd))) if (precios and precios.final_por_pais and precios.final_por_pais.usd is not none) else "" %}
+                {% set _cu = (' ' ~ _('≈ %(usd)s c/u', usd=(precios.final_por_pais.usd | precio | usd))) if (precios and precios.final_por_pais and precios.final_por_pais.usd is not none) else "" %}
                 <button type="submit" class="btn-generar btn-sm fe-producir-btn" data-plantilla="{{ _('Producir {n} finales') }}{{ _cu }}" data-plantilla-uno="{{ _('Producir 1 final') }}{{ _cu }}" data-sin-n="{{ _('Producir finales') }}{{ _cu }}">{{ _('Producir finales') }}{{ _cu }}</button>
               </form>
             {% endif %}

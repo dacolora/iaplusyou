@@ -392,7 +392,7 @@
   </div>
   <label style="display:block;margin-top:.8rem;font-size:.85rem;">
     <input type="checkbox" name="mejorar_calidad" {% if preferencias_swap.mejorar_calidad %}checked{% endif %}>
-    {{ _('Mejorar la calidad al final (+$0.04, solo aplica a fotos)') }}
+    {{ _('Mejorar la calidad al final (+%(precio)s, solo aplica a fotos)', precio=(costo_mejora_swap|precio|usd)) }}
   </label>
   <p class="vacio" style="padding-top:.2rem;font-size:.76rem;">
     {{ _('Segunda pasada con Bria: sube la resolución <strong>sin regenerar</strong> la
@@ -412,7 +412,7 @@
       <label class="campo-label">{{ _('Modelo para VIDEO') }}</label>
       <div class="checks-plataformas">
         {% for id, m in modelos_flowplus_video.items() %}
-        <label title="{{ m.nota|traducir }}"><input type="radio" name="modelo_video" value="{{ id }}" {% if preferencias_flowplus.modelo_video == id %}checked{% endif %}> {{ m.nombre|traducir }} <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· ${{ "%.3f"|format(m.usd_por_segundo_efectivo) }}{{ _('/s con sonido') }}</span></label>
+        <label title="{{ m.nota|traducir }}"><input type="radio" name="modelo_video" value="{{ id }}" {% if preferencias_flowplus.modelo_video == id %}checked{% endif %}> {{ m.nombre|traducir }} <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· ${{ "%.3f"|format(m.usd_por_segundo_efectivo|precio) }}{{ _('/s con sonido') }}</span></label>
         {% endfor %}
       </div>
     </div>
@@ -420,7 +420,7 @@
       <label class="campo-label">{{ _('Modelo para IMAGEN') }}</label>
       <div class="checks-plataformas">
         {% for id, m in modelos_flowplus_imagen.items() %}
-        <label title="{{ m.nota|traducir }}"><input type="radio" name="modelo_imagen" value="{{ id }}" {% if preferencias_flowplus.modelo_imagen == id %}checked{% endif %}> {{ m.nombre|traducir }} <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· ${{ "%.3f"|format(m.usd) }}</span></label>
+        <label title="{{ m.nota|traducir }}"><input type="radio" name="modelo_imagen" value="{{ id }}" {% if preferencias_flowplus.modelo_imagen == id %}checked{% endif %}> {{ m.nombre|traducir }} <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· ${{ "%.3f"|format(m.usd|precio) }}</span></label>
         {% endfor %}
       </div>
     </div>
@@ -456,19 +456,21 @@
   {{ _('Cómo salen marcados el sonido de la escena y la música al abrir Crear. En cada generación se puede cambiar. Los lotes de los sprints usan esto tal cual.') }}
 </p>
 <form method="post" action="{{ url_for('guardar_preferencias_sonido', cliente=cliente) }}" class="form-nueva-idea">
-  <label class="fe-check"><input type="checkbox" name="con_sonido" value="si" {% if preferencias_sonido.con_sonido %}checked{% endif %}> {{ _('Sonido de la escena (audio nativo del modelo; Kling cobra 0,028 USD/s más)') }}</label>
+  <label class="fe-check"><input type="checkbox" name="con_sonido" value="si" {% if preferencias_sonido.con_sonido %}checked{% endif %}> {{ _('Sonido de la escena (audio nativo del modelo; Kling cobra %(precio)s por segundo más)', precio=(modelos_flowplus_video.kling_o3_pro.audio_nativo.recargo_usd_s|precio|usd_fino)) }}</label>
   <div style="margin-top:.6rem;">
     <label class="campo-label">{{ _('Música al crear') }}</label>
     <select name="musica_al_crear">
       <option value="" {% if not preferencias_sonido.musica_al_crear %}selected{% endif %}>{{ _('ninguna') }}</option>
       {% for e in estilos_fe %}<option value="{{ e }}" {% if preferencias_sonido.musica_al_crear == e %}selected{% endif %}>{{ nombres_estilos_musica.get(e, e)|traducir }}</option>{% endfor %}
     </select>
-    <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· {{ _('USD 0,02 solo la primera vez por estilo y duración (después sale de la caché)') }}</span>
+    <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· {{ _('%(precio)s solo la primera vez por estilo y duración (después sale de la caché)', precio=(tarifa_musica_crear|precio|usd)) }}</span>
   </div>
   <button class="btn-guardar btn-sm" type="submit" style="margin-top:.8rem;">{{ _('Guardar sonido al crear') }}</button>
 </form>
 
-{% include "_comparacion_modelos.html" %}
+{# Cobros (spec 2026-10-08 §6): la comparación cita lo que cobra cada proveedor; en un proyecto que cobra, el
+   cliente ve precios, no costos, así que solo la ve el admin (o cualquiera si el proyecto no cobra). #}
+{% if es_admin or margen_precio() == 1 %}{% include "_comparacion_modelos.html" %}{% endif %}
 </section>
 
 <section class="config-apartado" id="config-ap-cuenta" data-apartado="cuenta">

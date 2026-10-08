@@ -86,7 +86,7 @@
   <p>{{ _('%(n)s aprobada(s) sin generar (%(videos)s, %(imagenes)s)', n=ci.por_generar, videos=cuantos(ci.por_generar_videos, _('video'), _('videos')), imagenes=cuantos(ci.por_generar_imagenes, _('imagen'), _('imágenes'))) }}</p>
   <div class="panel-fila">
     <label>{{ _('Modelo de video') }}
-      <select data-lote-modelo="video">{% for k, m in modelos_video.items() %}<option value="{{ k }}" {% if k == modelo_video_defecto %}selected{% endif %}>{{ m.nombre }} {{ _('(US$ %(precio)s/s con sonido)', precio='%.3f' % m.usd_por_segundo_efectivo) }}</option>{% endfor %}</select></label>
+      <select data-lote-modelo="video">{% for k, m in modelos_video.items() %}<option value="{{ k }}" {% if k == modelo_video_defecto %}selected{% endif %}>{{ m.nombre }} {{ _('(US$ %(precio)s/s con sonido)', precio='%.3f' % (m.usd_por_segundo_efectivo|precio)) }}</option>{% endfor %}</select></label>
     <label>{{ _('Modelo de imagen') }}
       <select data-lote-modelo="imagen">{% for k, m in modelos_imagen.items() %}<option value="{{ k }}" {% if k == modelo_imagen_defecto %}selected{% endif %}>{{ m.nombre }}</option>{% endfor %}</select></label>
   </div>

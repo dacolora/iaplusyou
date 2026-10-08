@@ -119,7 +119,8 @@ def ejecutar_generar(tarea):
             return gettext("Avatares no generados: %(motivo)s", motivo=mensaje)
         if tope is not None and est_costo["usd"] > float(tope):
             motivo = gettext("los avatares costarían %(costo)s y quedan %(tope)s aprobados: genera con el botón cuando quieras",
-                             costo=gastos.formatear(est_costo["usd"]), tope=gastos.formatear(max(0.0, float(tope))))
+                             costo=gastos.formatear(gastos.precio(est_costo["usd"], cliente)),
+                             tope=gastos.formatear(gastos.precio(max(0.0, float(tope)), cliente)))
             datos.actualizar_investigacion(cliente, eid, lambda i: inv.detener(inv.marcar_paso(i, "generar", "pendiente"), motivo))
             datos.recalcular(cliente, eid, tarea_viva=False)
             return gettext("Avatares no generados: %(motivo)s", motivo=motivo)

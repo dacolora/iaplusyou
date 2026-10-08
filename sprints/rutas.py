@@ -1367,10 +1367,12 @@ def lote_estimar(cliente, sid):
     _sprint_o_404(cliente, sid)
     cid = request.args.get("campana_id", type=int)
     try:
-        return jsonify(produccion.estimar(cliente, sid, campana_id=cid, modelo_video=request.args.get("modelo_video"),
-                                          modelo_imagen=request.args.get("modelo_imagen")))
-    except datos.ErrorDatos as e:
-        return jsonify({"ok": False, "error": str(e)}), 400
+        e = produccion.estimar(cliente, sid, campana_id=cid, modelo_video=request.args.get("modelo_video"),
+                               modelo_imagen=request.args.get("modelo_imagen"))
+    except datos.ErrorDatos as ex:
+        return jsonify({"ok": False, "error": str(ex)}), 400
+    # El botón pinta `usd` y `texto`: lo que ve la persona (cobros, spec 2026-10-08 §6).
+    return jsonify({**e, "usd": gastos.precio(e["usd"]), "acumulado_usd": gastos.precio(e["acumulado_usd"])})
 
 
 @bp.post("/<int:sid>/lote")
@@ -1396,9 +1398,9 @@ def lote(cliente, sid):
         return _volver(cliente, sid)
     texto = gettext("Lote encolado: %(n)s pieza(s), USD %(usd)s estimado. "
                     "Te avisamos por correo al terminar si está configurado.",
-                    n=r['encoladas'], usd=f"{r['usd']:.2f}")
+                    n=r['encoladas'], usd=f"{gastos.precio(r['usd']):.2f}")
     if _quiere_json():
-        return jsonify({"ok": True, "encoladas": r["encoladas"], "omitidas": r["omitidas"], "usd": r["usd"],
+        return jsonify({"ok": True, "encoladas": r["encoladas"], "omitidas": r["omitidas"], "usd": gastos.precio(r["usd"]),
                         "mensaje": texto})
     flash(texto, "ok")
     return _volver(cliente, sid)

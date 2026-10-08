@@ -1289,6 +1289,10 @@ msgid "%(precio)s aprox."
 msgstr "%(precio)s approx."
 
 #, python-format
+msgid "%(precio)s solo la primera vez por estilo y duración (después sale de la caché)"
+msgstr "%(precio)s only the first time per style and duration (after that it comes from the cache)"
+
+#, python-format
 msgid "%(presupuesto)s %(moneda)s/día"
 msgstr "%(presupuesto)s %(moneda)s/day"
 
@@ -6969,8 +6973,9 @@ msgstr "Visual style, in English"
 msgid "Estilos IA"
 msgstr "AI styles"
 
-msgid "Estilos IA · US$ 0,02 la primera vez por estilo y duración"
-msgstr "AI styles · US$ 0.02 the first time per style and duration"
+#, python-format
+msgid "Estilos IA · %(precio)s la primera vez por estilo y duración"
+msgstr "AI styles · %(precio)s the first time per style and duration"
 
 #, python-format
 msgid "Estimado: %(estimado)s s"
@@ -8155,8 +8160,8 @@ msgstr "To"
 msgid "Hasta 10 imágenes y 5 videos de referencia (1-15 s), 720p, hasta 30 s (con videos de referencia, sus segundos más los del resultado no pasan de 30). El único que usa videos tal cual. Sonido de la escena incluido."
 msgstr "Up to 10 images and 5 reference videos (1-15 s), 720p, up to 30 s (with reference videos, their seconds plus the result's don't exceed 30). The only one that uses videos as-is. Scene sound included."
 
-msgid "Hasta 7 imágenes. De un video usa solo un fotograma. Movimiento y realismo de personas muy buenos. Hasta 15 s. El sonido de la escena cuesta 0,028 USD/s más (ya incluido en el estimado)."
-msgstr "Up to 7 images. From a video it only uses one frame. Very good movement and realism for people. Up to 15 s. The scene sound costs USD 0.028/s more (already included in the estimate)."
+msgid "Hasta 7 imágenes. De un video usa solo un fotograma. Movimiento y realismo de personas muy buenos. Hasta 15 s. El sonido de la escena cobra un recargo por segundo (ya incluido en el estimado)."
+msgstr "Up to 7 images. From a video it only uses one frame. Very good movement and realism for people. Up to 15 s. The scene sound adds a per-second surcharge (already included in the estimate)."
 
 #, python-format
 msgid "Hay %(num)d tarea en curso hace más de 30 min."
@@ -9825,8 +9830,9 @@ msgstr "Media"
 msgid "Mejorando la calidad de la imagen"
 msgstr "Improving the image quality"
 
-msgid "Mejorar la calidad al final (+$0.04, solo aplica a fotos)"
-msgstr "Improve quality at the end (+$0.04, photos only)"
+#, python-format
+msgid "Mejorar la calidad al final (+%(precio)s, solo aplica a fotos)"
+msgstr "Improve quality at the end (+%(precio)s, photos only)"
 
 msgid "Memoria disponible"
 msgstr "Available memory"
@@ -14154,8 +14160,9 @@ msgstr "Sound when creating"
 msgid "Sonido de la escena"
 msgstr "Scene sound"
 
-msgid "Sonido de la escena (audio nativo del modelo; Kling cobra 0,028 USD/s más)"
-msgstr "Scene sound (the model's native audio; Kling charges USD 0.028/s more)"
+#, python-format
+msgid "Sonido de la escena (audio nativo del modelo; Kling cobra %(precio)s por segundo más)"
+msgstr "Scene sound (the model's native audio; Kling charges %(precio)s more per second)"
 
 #, python-format
 msgid "Sprint %(nombre)s · Campaña %(n)s"
@@ -15444,9 +15451,6 @@ msgstr "US$ %(usd)s per result"
 #, python-format
 msgid "USD %(usd)s gastado"
 msgstr "USD %(usd)s spent"
-
-msgid "USD 0,02 solo la primera vez por estilo y duración (después sale de la caché)"
-msgstr "USD 0.02 only the first time per style and duration (after that it comes from the cache)"
 
 msgid "Ubicación (gasto)"
 msgstr "Placement (spend)"

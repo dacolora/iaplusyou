@@ -158,7 +158,7 @@ def test_estimar_video_e_imagen_delegan_en_flowplus_modelos(monkeypatch):
     monkeypatch.setattr(flowplus_modelos, "estimate_imagen",
                         lambda m, n_referencias=1: visto.update(imagen=(m, n_referencias)) or {"credits": None, "usd": 0.093})
     v = gastos.estimar("video", modelo="wan3", duracion=5, con_sonido=False)
-    assert v == {"usd": 0.35, "texto": "US$ 0,35 aprox.", "detalle": "wan3 · 5 s · sin sonido"}
+    assert v == {"usd": 0.35, "usd_precio": 0.35, "texto": "US$ 0,35 aprox.", "detalle": "wan3 · 5 s · sin sonido"}
     assert visto["video"] == ("wan3", 5.0, False)
     assert gastos.estimar("regeneracion", modelo="wan3", duracion=5)["usd"] == 0.35
     i = gastos.estimar("imagen", modelo="seedream_v5_pro", n_referencias=2)
@@ -182,7 +182,7 @@ def test_estimar_sin_tarifa_no_inventa(monkeypatch):
 
 def test_estimar_tarifas_fijas_y_final_por_pais():
     import gastos
-    assert gastos.estimar("guion") == {"usd": 0.13, "texto": "US$ 0,13 aprox.",
+    assert gastos.estimar("guion") == {"usd": 0.13, "usd_precio": 0.13, "texto": "US$ 0,13 aprox.",
                                        "detalle": "hasta dos llamadas a Claude y la transcripción de la referencia"}
     assert gastos.estimar("regla_producto")["usd"] == 0.01
     assert gastos.estimar("caption_organico")["usd"] == 0.01
@@ -234,7 +234,7 @@ def test_tipo_recoleccion_es_conocido(base_temporal):
 
 def test_estimar_adaptar_referente():
     import gastos
-    assert gastos.estimar("adaptar_referente") == {"usd": 0.01, "texto": "US$ 0,01 aprox.", "detalle": "una llamada corta a Claude"}
+    assert gastos.estimar("adaptar_referente") == {"usd": 0.01, "usd_precio": 0.01, "texto": "US$ 0,01 aprox.", "detalle": "una llamada corta a Claude"}
     assert "adaptar_referente" in gastos.TIPOS
 
 

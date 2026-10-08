@@ -49,8 +49,8 @@
       <div class="gp-botones">
         <button type="button" class="btn-generar btn-sm" data-gpg-accion="/videos/{{ video.id }}/cadena"
                 data-gpg-cuerpo='{{ {"desde": cadena_primera, "total_visto": C.precio}|tojson }}'
-                data-gpg-confirmar="{{ ngettext('Se genera %(num)s escena con Kling O3 Pro por ≈ US$ %(precio)s. Nada más se cobra hasta que la apruebes de nuevo. ¿Generar?', 'Se generan %(num)s escenas con Kling O3 Pro, una tras otra, por ≈ US$ %(precio)s en total. Si una falla, la cadena se detiene y no cobra lo que sigue. ¿Generar?', C.total, precio='%.2f' % C.precio) }}">
-          {{ ngettext('Generar %(num)s escena', 'Generar las %(num)s escenas', C.total) }} · ≈ US$ {{ '%.2f' % C.precio }}</button>
+                data-gpg-confirmar="{{ ngettext('Se genera %(num)s escena con Kling O3 Pro por ≈ US$ %(precio)s. Nada más se cobra hasta que la apruebes de nuevo. ¿Generar?', 'Se generan %(num)s escenas con Kling O3 Pro, una tras otra, por ≈ US$ %(precio)s en total. Si una falla, la cadena se detiene y no cobra lo que sigue. ¿Generar?', C.total, precio='%.2f' % (C.precio | precio)) }}">
+          {{ ngettext('Generar %(num)s escena', 'Generar las %(num)s escenas', C.total) }} · ≈ US$ {{ '%.2f' % (C.precio | precio) }}</button>
       </div>
     {% endif %}
   {% endif %}
@@ -66,7 +66,7 @@
       {% if f.rehacer_precio is not none %}
       <button type="button" class="btn-xs" data-gpg-accion="/videos/{{ video.id }}/cadena"
               data-gpg-cuerpo='{{ {"desde": f.indice, "total_visto": f.rehacer_precio}|tojson }}'
-              data-gpg-confirmar="{{ _('Se vuelven a generar la escena %(n)s y las siguientes por ≈ US$ %(precio)s. Las anteriores se quedan como están. ¿Rehacer?', n=f.indice, precio='%.2f' % f.rehacer_precio) }}">{{ _('Rehacer desde aquí') }} · ≈ US$ {{ '%.2f' % f.rehacer_precio }}</button>
+              data-gpg-confirmar="{{ _('Se vuelven a generar la escena %(n)s y las siguientes por ≈ US$ %(precio)s. Las anteriores se quedan como están. ¿Rehacer?', n=f.indice, precio='%.2f' % (f.rehacer_precio | precio)) }}">{{ _('Rehacer desde aquí') }} · ≈ US$ {{ '%.2f' % (f.rehacer_precio | precio) }}</button>
       {% endif %}
     </li>
     {% endfor %}

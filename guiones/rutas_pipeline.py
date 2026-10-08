@@ -619,9 +619,11 @@ def cadena_aprobar(cliente, vid):
             visto = float(cuerpo.get("total_visto"))
         except (TypeError, ValueError):
             visto = None
+        # `total_visto` viaja como costo (data-gpg-cuerpo); el texto, como lo
+        # ve la persona (cobros, spec 2026-10-08 §6).
         if visto is None or abs(visto - precio) > 0.005:
             return jsonify({"error": gettext("El precio cambió: ahora es ≈ US$ %(precio)s. Revisa y vuelve a aprobar.",
-                                             precio=f"{precio:.2f}"), "precio": precio}), 409
+                                             precio=f"{gastos.precio(precio):.2f}"), "precio": precio}), 409
         # Cobros (spec 2026-10-08 §5): la cadena entera se pide antes de
         # aprobarla; cada escena vuelve a pedir y reservar lo suyo al encolarse.
         libro.exigir(cliente, precio)

@@ -56,7 +56,7 @@
       <small class="vacio">{{ _('Google permite 100 búsquedas por día por proyecto; cada recolección usa una. Los links no gastan búsqueda.') }}</small>
       {% else %}
       <label>{{ _('Qué traer') }}
-        <select name="actor" id="apify-actor">{% for a in actores_apify %}<option value="{{ a.clave }}" data-ayuda="{{ a.ayuda|traducir }}">{{ a.nombre|traducir }} · {{ _('US$ %(usd)s por resultado', usd='%.4f' % a.usd_por_resultado) }}</option>{% endfor %}</select>
+        <select name="actor" id="apify-actor">{% for a in actores_apify %}<option value="{{ a.clave }}" data-ayuda="{{ a.ayuda|traducir }}">{{ a.nombre|traducir }} · {{ _('US$ %(usd)s por resultado', usd='%.4f' % (a.usd_por_resultado|precio)) }}</option>{% endfor %}</select>
       </label>
       <label>{{ _('Links (uno por línea)') }} <textarea name="links" rows="3" required></textarea></label>
       <small class="vacio" id="apify-ayuda">{{ actores_apify[0].ayuda|traducir if actores_apify else '' }}</small>

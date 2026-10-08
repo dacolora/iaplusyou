@@ -28,6 +28,7 @@ import sqlalchemy as sa
 
 from dotenv import load_dotenv
 from PIL import Image
+import jinja2
 from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, send_file, abort, session, Response, stream_with_context, g, got_request_exception, has_request_context
 from flask_babel import Babel, format_decimal, get_locale, gettext, ngettext
 from markupsafe import Markup
@@ -121,6 +122,7 @@ from tareas import triple_whale as tareas_tw
 from final_edition import ETAPAS_FINAL, cortes as fe_cortes, mezcla as fe_mezcla, tipos as fe_tipos
 from final_edition import tablero as fe_tablero
 from providers import fal_audio
+from providers import wavespeed_imagen as wavespeed_imagen_prov
 from tareas.swap import ETAPAS_SWAP_VIDEO, ETAPAS_SWAP_FOTO, ETAPAS_SWAP_FOTO_MEJORADA
 from publicador import publicar_brief
 from higgsfield_client import (
@@ -516,6 +518,22 @@ def _guard_por_cliente():
         flash(gettext("No tienes acceso a ese proyecto."), "error")
         return redirect(url_for("ver_cliente", cliente=sesion["cliente"])) if sesion["rol"] == "cliente" else redirect(url_for("index"))
     return None
+
+
+@app.before_request
+def _margen_de_precio():
+    """Cobros (spec 2026-10-08 §6): en un proyecto que cobra, todo «≈ US$» que
+    ve una persona es precio — también el admin en los botones. Aquí solo se
+    decide de qué proyecto es la petición (el <cliente> de la URL; sin él, el
+    de la sesión de un cliente): el margen lo lee `gastos.margen_vigente` la
+    primera vez que algo pinta un precio y lo deja en `g.margen_precio` (una
+    lectura por petición y ninguna en sondeos o estáticos). Va después de
+    `_guard_por_cliente`: un pedido rechazado no llega aquí."""
+    cliente = request.view_args.get("cliente") if request.view_args else None
+    if not cliente:
+        s = _sesion()
+        cliente = s["cliente"] if s and s["rol"] == "cliente" else None
+    g.cliente_precio = cliente
 
 
 @app.context_processor
@@ -2218,6 +2236,7 @@ def ver_cliente(cliente):
         trabajo_link={"job_id": _job_id_link(cliente)} if trabajos.en_curso(_job_id_link(cliente)) else None,
         modelos_flowplus_video=flowplus_modelos.VIDEO,
         tarifa_musica_crear=gastos.costo_musica_estimada("generada"),
+        costo_mejora_swap=wavespeed_imagen_prov.COSTO_USD_UPSCALE,
         tarifas_flowplus_borrador={m: flowplus_modelos.usd_por_segundo(m, calidad="borrador") for m in flowplus_modelos.VIDEO},
         duraciones_crear=flowplus_modelos.DURACIONES_CREAR,
         formatos_nombres=flowplus_modelos.FORMATOS_NOMBRES,
@@ -5175,6 +5194,38 @@ def _filtro_usd(valor):
     return gastos.formatear(valor)
 
 
+# `{% if margen_precio() == 1 %}`: el margen de la petición (1.0 si el proyecto no cobra).
+app.jinja_env.globals["margen_precio"] = gastos.margen_vigente
+
+
+@app.template_filter("usd_fino")
+def _filtro_usd_fino(valor):
+    """«US$ 0,042»: tarifas por segundo, donde dos decimales mentirían."""
+    try:
+        return f"US$ {idiomas.numero(float(valor), 3)}"
+    except (TypeError, ValueError):
+        return "—"
+
+
+@app.template_filter("precio")
+@jinja2.pass_eval_context
+def _filtro_precio(_eval_ctx, usd):
+    """Cobros (spec 2026-10-08 §6): un costo en dólares → lo que ve la persona
+    (× el margen del proyecto de la petición; 1.0 si no cobra), sin formatear:
+    `data-usd-seg="{{ m.usd_por_segundo_efectivo|precio }}"`,
+    `{{ est.usd|precio|usd }}`. Lo que vuelve al servidor para compararlo o
+    cobrarlo (`total_visto`, `precio_visto`) es costo, nunca pasa por aquí.
+    `pass_eval_context` para que Jinja no lo resuelva al compilar sobre una
+    constante (`{{ 0.04|precio }}` quedaría con el margen de la primera
+    petición que compiló la plantilla, para todos los proyectos)."""
+    if usd is None or usd == "":
+        return usd
+    try:
+        return round(float(usd) * gastos.margen_vigente(), 6)
+    except (TypeError, ValueError):
+        return usd
+
+
 def _pauta_mes(tablero_ctx):
     """[{"moneda", "gasto"}] con la pauta del mes por moneda (solo > 0), del
     resumen ya calculado por el tablero. Sin resumen (parte rota) → []."""
@@ -7888,12 +7939,19 @@ def _precios_disenar():
                     for n in range(voces_propias.MAX_NOMBRE + 1)] for idioma in audios.IDIOMAS}
 
 
+def _tabla_con_margen(tabla):
+    """Las tablas de costo por idioma (cacheadas por proceso) → lo que ve la
+    persona (cobros, spec 2026-10-08 §6): el margen va al pintar, nunca al
+    caché, que es el mismo para todos los proyectos."""
+    return {idioma: [gastos.precio(usd) for usd in lista] for idioma, lista in tabla.items()}
+
+
 def _contexto_mis_voces(cliente):
     jid = tareas_voces.job_id(cliente)
     return {"voces_propias": voces_propias.listar(cliente),
             "trabajo_voz": {"job_id": jid} if trabajos.en_curso(jid) else None,
-            "precios_clon": _precios_clon(),
-            "precios_disenar": _precios_disenar(),
+            "precios_clon": _tabla_con_margen(_precios_clon()),
+            "precios_disenar": _tabla_con_margen(_precios_disenar()),
             "precio_voz_clonada": gastos.estimar("voz_clonada"), "precio_voz_disenada": gastos.estimar("voz_disenada"),
             "texto_consentimiento": voces_propias.TEXTO_CONSENTIMIENTO}
 

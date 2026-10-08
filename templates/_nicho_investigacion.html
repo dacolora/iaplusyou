@@ -17,7 +17,7 @@
 
   {% if inv.estado %}
   <p class="nicho-inv-cifras">
-    {{ _('Gastado %(gastado)s de %(aprobado)s aprobados', gastado=inv.gastado|usd, aprobado=inv.aprobado|usd) }}
+    {{ _('Gastado %(gastado)s de %(aprobado)s aprobados', gastado=inv.gastado|precio|usd, aprobado=inv.aprobado|precio|usd) }}
     {% if inv.productos %} · {{ _('%(n)s producto(s) encontrados', n=inv.productos) }}{% endif %}
     {% if inv.relevantes %} · {{ _('%(n)s del nicho', n=inv.relevantes) }}{% endif %}
     {% if inv.resenas %} · {{ _('%(n)s comentario(s) nuevos', n=inv.resenas) }}{% endif %}
@@ -33,7 +33,7 @@
       {% if info.productos %}<small>{{ _('%(n)s producto(s)', n=info.productos) }}</small>{% endif %}
       {% if info.relevantes %}<small>{{ _('%(n)s del nicho', n=info.relevantes) }}</small>{% endif %}
       {% if info.nuevos %}<small>{{ _('%(n)s comentario(s) nuevos', n=info.nuevos) }}</small>{% endif %}
-      {% if info.usd %}<small>{{ info.usd|usd }}</small>{% endif %}
+      {% if info.usd %}<small>{{ info.usd|precio|usd }}</small>{% endif %}
       {% if info.aviso %}<small class="nicho-inv-aviso">{{ info.aviso|traducir }}</small>{% endif %}
     </li>
     {% endfor %}

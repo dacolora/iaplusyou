@@ -127,7 +127,7 @@ def estimar(cliente, sprint_id, campana_id=None, modelo_video=None, modelo_image
         "%(videos)s video(s) (%(modelo_v)s) y %(imagenes)s imagen(es) (%(modelo_i)s): USD %(usd)s estimado · "
         "acumulado del sprint USD %(acumulado)s · tiempo estimado %(tiempo)s",
         videos=videos, modelo_v=nombre_v, imagenes=imagenes, modelo_i=nombre_i,
-        usd=f"{usd:.2f}", acumulado=f"{acumulado:.2f}", tiempo=_texto_tiempo(segundos))
+        usd=f"{gastos.precio(usd):.2f}", acumulado=f"{gastos.precio(acumulado):.2f}", tiempo=_texto_tiempo(segundos))
     return {"videos": videos, "imagenes": imagenes, "usd": round(usd, 4), "segundos": segundos, "modelo_video": mv,
             "modelo_imagen": mi, "modelo_video_nombre": nombre_v, "modelo_imagen_nombre": nombre_i,
             "acumulado_usd": round(acumulado, 4), "texto": texto}
@@ -361,7 +361,7 @@ def lanzar_lote(cliente, sprint_id, campana_id=None, modelo_video=None, modelo_i
         mensaje = datos.texto_guardado(
             cliente, N_("Lote de %(encoladas)s pieza(s) encolado: %(videos)s video(s), %(imagenes)s imagen(es), "
                        "USD %(usd)s estimado"),
-            encoladas=encoladas, videos=est['videos'], imagenes=est['imagenes'], usd=f"{est['usd']:.2f}")
+            encoladas=encoladas, videos=est['videos'], imagenes=est['imagenes'], usd=f"{gastos.precio(est['usd'], cliente):.2f}")
         datos.registrar_evento(cliente, sprint_id, "lote_encolado", mensaje,
                                {"encoladas": encoladas, "omitidas": omitidas, "usd": est["usd"], "campana_id": campana_id,
                                 "modelo_video": mv, "modelo_imagen": mi}, campana_id=campana_id)

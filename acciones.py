@@ -485,7 +485,7 @@ def _precio_estimado(cliente, ex, accion, payload):
             if video["usd"] is None:
                 return {"usd": None, "texto": sin_precio}
             usd += video["usd"] + final
-        return {"usd": round(usd, 4), "texto": gettext("%(precio)s aprox.", precio=gastos.formatear(usd))}
+        return {"usd": round(usd, 4), "texto": gastos.texto_precio(usd)}
     except Exception:  # noqa: BLE001 — el precio es informativo, nunca bloquea la acción
         return {"usd": None, "texto": sin_precio}
 

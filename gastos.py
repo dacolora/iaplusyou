@@ -18,6 +18,10 @@ devuelve `usd=None` y el texto "precio no disponible" — nunca se inventa.
 
 Lecturas: `resumen_mes`, `resumen_total`, `total_entre`, `por_mes`, `historial`,
 `serie_diaria`, `csv_mes`, `por_proyecto_mes`; `formatear(usd)` -> "US$ 0,07".
+
+Precios que se ven (cobros, spec 2026-10-08 §6): `margen_vigente()`, `precio(usd)`
+y `texto_precio(usd)` multiplican por el margen del proyecto de la petición; el
+`usd` de `estimar` sigue siendo el costo.
 """
 import csv
 import io
@@ -153,9 +157,60 @@ def _texto_estimado(usd):
     return gettext("%(precio)s aprox.", precio=formatear(usd))
 
 
+def _margen_de(cliente):
+    """Margen de `cliente` (1.0 si no cobra). Una lectura que falla muestra el
+    costo: lo que se cobra lo decide el libro, no este número."""
+    if not cliente:
+        return 1.0
+    try:
+        from cobros import libro  # noqa: PLC0415 — cobros.libro importa gastos
+        return float(libro.margen_precio(cliente))
+    except Exception as e:  # noqa: BLE001
+        log.warning("margen de %s no se pudo leer: %s", cliente, e)
+        return 1.0
+
+
+def margen_vigente():
+    """Margen de precio de la petición en curso (cobros, spec 2026-10-08 §6):
+    en un proyecto que cobra, todo «≈ US$» que ve una persona es precio
+    (costo × margen). `dashboard._margen_de_precio` deja en `g.cliente_precio`
+    el proyecto de la petición (el <cliente> de la URL o, sin él, el de la
+    sesión de un cliente); el margen se lee la primera vez que se pide y queda
+    en `g.margen_precio` (una lectura por petición, y ninguna en las que no
+    pintan precios: sondeos, estáticos). Fuera de una petición, o en un
+    proyecto que no cobra, 1.0."""
+    try:
+        from flask import g, has_request_context  # noqa: PLC0415
+        if not has_request_context():
+            return 1.0
+        if "margen_precio" not in g:
+            g.margen_precio = _margen_de(g.get("cliente_precio"))
+        return float(g.margen_precio)
+    except Exception:  # noqa: BLE001
+        return 1.0
+
+
+def precio(usd, cliente=None):
+    """`usd` (costo) × margen de la petición, o None. Solo para mostrar: las
+    reservas y el cobro los calcula `cobros.libro` desde el costo. `cliente`:
+    para un texto que se arma fuera de una petición (el worker), el margen de
+    ese proyecto."""
+    if usd is None:
+        return None
+    margen = _margen_de(cliente) if cliente else margen_vigente()
+    return round(float(usd) * margen, 4)
+
+
+def texto_precio(usd):
+    """El «US$ 0,30 aprox.» de un costo, ya con el margen de la petición."""
+    return _texto_estimado(precio(usd))
+
+
 def _estimado(usd, detalle=""):
+    """`usd` es el COSTO (lo usan las reservas y el libro); `usd_precio` y
+    `texto`, lo que ve la persona (con el margen si el proyecto cobra)."""
     usd = None if usd is None else round(float(usd), 4)
-    return {"usd": usd, "texto": _texto_estimado(usd), "detalle": detalle}
+    return {"usd": usd, "usd_precio": precio(usd), "texto": texto_precio(usd), "detalle": detalle}
 
 
 # ------------------------------------------------------------ estimar ---

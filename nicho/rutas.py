@@ -226,9 +226,9 @@ def ver(cliente, eid):
         pagina_comentarios=datos.comentarios(cliente, eid, fuente=fuente, pagina=pagina, por_pagina=POR_PAGINA),
         nucleos=nucleos, urls_comentarios=datos.urls_comentarios(cliente, eid),
         paises_comentarios=datos.paises_otro_mercado_de(cliente, citados), nombres_pais=datos.NOMBRES_PAIS,
-        estimado=estimado, precio_texto=gastos.formatear(estimado["usd"]), min_comentarios=avatares.MIN_COMENTARIOS,
+        estimado=estimado, precio_texto=gastos.formatear(gastos.precio(estimado["usd"])), min_comentarios=avatares.MIN_COMENTARIOS,
         trabajo_generar=({"job_id": job} if trabajos.en_curso(job) else None),
-        completar_estimado={**completar_e, "texto": gastos.formatear(completar_e["usd"])},
+        completar_estimado={**completar_e, "texto": gastos.formatear(gastos.precio(completar_e["usd"]))},
         trabajo_completar=({"job_id": job_comp} if trabajos.en_curso(job_comp) else None),
         modos_texto=fuente_texto.NOMBRES_MODO, fuentes_nombre=fuentes_registro.NOMBRES, idiomas=avatares.IDIOMAS,
         niveles_conciencia=datos.NIVELES_CONCIENCIA, bases=datos.BASES,
@@ -401,7 +401,7 @@ def apify_estimar(cliente, eid):
         est = apify_actores.estimar(request.args.get("actor") or "", request.args.get("max") or 1)
     except ErrorFuente as e:
         return jsonify({"error": str(e)}), 400
-    return jsonify({**est, "texto": gastos.formatear(est["usd"])})
+    return jsonify({**est, "texto": gastos.formatear(gastos.precio(est["usd"]))})
 
 
 # ----------------------------------------------------------- avatares ---
@@ -517,7 +517,7 @@ def avatares_proyecto(cliente):
     completables = avatares.completables_por_estudio(cliente)
     for c in completables:
         job = datos.job_id_completar(cliente, c["estudio_id"])
-        c.update(texto=gastos.formatear(c["usd"]), job_id=job, en_curso=trabajos.en_curso(job))
+        c.update(texto=gastos.formatear(gastos.precio(c["usd"])), job_id=job, en_curso=trabajos.en_curso(job))
     return render_template("nicho_avatares_proyecto.html", cliente=cliente, nombre_proyecto=proyectos.nombre_visible(cliente),
                            estudio=None, grupos=grupos, completables=completables, nuevo=request.args.get("nuevo") == "1",
                            abrir=request.args.get("abrir") or "", urls_comentarios=datos.urls_de_comentarios(cliente, ids),
@@ -588,7 +588,7 @@ def completar(cliente, eid):
     except ValueError:
         visto = 0.0
     if e["usd"] > visto + 0.005:
-        flash(gettext("El costo es %(costo)s y el que viste era otro: revísalo y vuelve a confirmar.", costo=gastos.formatear(e["usd"])), "error")
+        flash(gettext("El costo es %(costo)s y el que viste era otro: revísalo y vuelve a confirmar.", costo=gastos.formatear(gastos.precio(e["usd"]))), "error")
         return volver
     if tareas_nicho.encolar_completar(cliente, eid, costo_estimado=e["usd"]):
         flash(gettext("Completando %(n)s avatar(es); la página se recarga sola al terminar.", n=e["avatares"]), "ok")
@@ -673,6 +673,11 @@ def _pedido_investigacion(fuente, est, cliente):
     return pais, plats, redes, topes
 
 
+def _ver(usd):
+    """«US$ 0,30» de un costo como lo ve la persona (cobros, spec 2026-10-08 §6)."""
+    return gastos.formatear(gastos.precio(usd))
+
+
 @bp.get("/<int:eid>/investigacion/estimar")
 def investigacion_estimar(cliente, eid):
     est = _estudio_o_404(cliente, eid)
@@ -681,11 +686,14 @@ def investigacion_estimar(cliente, eid):
         e = investigacion.estimar(est, pais, plats, redes, topes)
     except (datos.ErrorDatos, ErrorFuente, ValueError) as ex:
         return jsonify({"error": str(ex)}), 400
-    filas = [{**f, "busqueda_texto": gastos.formatear(f["busqueda_usd"]), "resenas_texto": gastos.formatear(f["resenas_usd"]),
+    # Los `*_texto` son lo que ve la persona (cobros §6: con margen); los `*_usd`
+    # siguen siendo costo: `total_usd` vuelve como `total_visto` y se compara
+    # con el costo recalculado.
+    filas = [{**f, "busqueda_texto": _ver(f["busqueda_usd"]), "resenas_texto": _ver(f["resenas_usd"]),
               "etiqueta": f["nombre"] if f["mercado"] == "local"
               else f"{f['nombre']} ({idiomas.traducir(datos.NOMBRES_PAIS.get(f['sitio'], f['sitio']))})"} for f in e["filas"]]
-    return jsonify({**e, "filas": filas, "claude_texto": gastos.formatear(e["claude_usd"]), "avatares_texto": gastos.formatear(e["avatares_usd"]),
-                    "texto": gastos.formatear(e["total_usd"]), "pais": pais, "plataformas": plats, "redes": redes, "topes": topes})
+    return jsonify({**e, "filas": filas, "claude_texto": _ver(e["claude_usd"]), "avatares_texto": _ver(e["avatares_usd"]),
+                    "texto": _ver(e["total_usd"]), "pais": pais, "plataformas": plats, "redes": redes, "topes": topes})
 
 
 @bp.post("/<int:eid>/investigacion")
@@ -712,7 +720,7 @@ def investigacion_iniciar(cliente, eid):
         return _volver(cliente, eid)
     if estimado["total_usd"] > visto + 0.005:
         flash(gettext("El costo es %(costo)s y el que viste era otro: revísalo y vuelve a confirmar.",
-                      costo=gastos.formatear(estimado["total_usd"])), "error")
+                      costo=_ver(estimado["total_usd"])), "error")
         return _volver(cliente, eid)
     # Cobros (spec 2026-10-08 §5): el tope aprobado se pide entero antes de
     # empezar; cada paso vuelve a pedir saldo al encolarse (sin saldo, la
@@ -723,7 +731,7 @@ def investigacion_iniciar(cliente, eid):
     datos.iniciar_investigacion(cliente, eid, investigacion.crear_inicial(est["tema"], pais, plats, redes, topes, estimado=estimado))
     tareas_investigacion.avanzar(cliente, eid)
     flash(gettext("Investigación en marcha con un tope de %(tope)s; la página muestra cada paso.",
-                  tope=gastos.formatear(estimado["total_usd"])), "ok")
+                  tope=_ver(estimado["total_usd"])), "ok")
     return _volver(cliente, eid)
 
 
