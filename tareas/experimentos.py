@@ -33,6 +33,7 @@ import organico
 import propuestas
 import proyectos
 import trabajos
+from cobros import SaldoInsuficiente, libro
 from doctrina import aprendizajes as doctrina_aprendizajes
 from doctrina import diagnostico as doctrina_diagnostico
 from nicho.avatares import costo_real, modelo_actual
@@ -253,6 +254,18 @@ def _diagnosticar(cliente, ex, pz, v, snaps, reglas, ctx, tarea):
                 extras["producto"] = final_edition._producto(cliente, entry, None)
     except Exception:  # noqa: BLE001 — sin guion/producto el diagnóstico sigue con menos datos
         pass
+    try:
+        # Cobros (revisión final 2026-10-08): el decisor corre solo, cada hora.
+        # En un proyecto que cobra y no tiene saldo, la llamada a Claude NO se
+        # hace (no se paga ni se cobra): quedan las pistas, que no cuestan.
+        libro.exigir(cliente, gastos.TARIFAS["diagnostico_pieza"])
+    except SaldoInsuficiente as e:
+        sin_saldo = {"error": e.frase_proyecto(), "sin_saldo": True, "pistas": doctrina_diagnostico.pistas(
+            snaps or [], reglas or {}, contexto_pistas), "en": db.ahora()}
+        _anotar_diagnostico(cliente, ex, pz, sin_saldo,
+                            gettext("%(nombre)s (%(pais)s): diagnóstico no disponible: %(error)s",
+                                    nombre=pz["nombre"], pais=pz["pais"], error=sin_saldo["error"]))
+        return None
     try:
         d, ent, sal = doctrina_diagnostico.diagnosticar(pz, v, snaps or [], reglas or {}, extras, idioma=idioma)
     except doctrina_diagnostico.ErrorDiagnostico as e:

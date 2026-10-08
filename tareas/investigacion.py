@@ -229,6 +229,35 @@ def avanzar(cliente, estudio_id):
         return None
 
 
+def _costo_paso(est, i, paso, n_productos=None):
+    """Costo del proveedor (USD, sin margen) del paso que se va a encolar, para
+    que `trabajos.encolar` exija y reserve SU precio (cobros, revisión final
+    2026-10-08: el total aprobado al iniciar no se reserva, y sin esto cada
+    paso pedía solo una milésima y uno de varios dólares corría con centavos de
+    saldo). El peor caso, con las mismas cuentas que el estimado aprobado
+    (`inv.estimar`). None si no se puede calcular: basta con saldo positivo."""
+    try:
+        topes = {**inv.TOPES_DEFECTO, **(i.get("topes") or {})}
+        pais = i.get("pais") or est.get("pais") or ""
+        plat = i.get("plataformas") or []
+        if paso in ("consultas", "seleccionar"):
+            entrada, salida = inv._tokens_claude(len(plat), topes, len(inv.idiomas_necesarios(pais, plat)))
+            return inv.costo_claude(entrada, salida)
+        clave = paso.split(":", 1)[1] if ":" in paso else ""
+        if paso.startswith("buscar:"):
+            return plataformas.estimar_busqueda(clave, topes["consultas"], topes["productos_por_consulta"], pais)
+        if paso.startswith("resenas:"):
+            return plataformas.estimar_resenas(clave, n_productos or topes["productos_elegidos"],
+                                               topes["resenas_por_producto"], pais)
+        if paso == "generar":
+            maximo = float(avatares.estimar_costo_maximo()["usd"])
+            tope = round(float(i.get("aprobado_usd") or 0) - float(i.get("gastado_usd") or 0), 4)
+            return min(maximo, tope) if tope > 0 else maximo
+    except Exception as e:  # noqa: BLE001 — sin estimado no se inventa un precio
+        log.warning("sin estimado del paso %s: %s", paso, type(e).__name__)
+    return None
+
+
 def _avanzar(cliente, estudio_id):
     from tareas import nicho as tareas_nicho      # tareas.nicho importa este módulo: import perezoso
     for _ in range(MAX_SALTOS):
@@ -243,11 +272,13 @@ def _avanzar(cliente, estudio_id):
         base = {"cliente": cliente, "estudio_id": int(estudio_id)}
         if paso == "consultas":
             trabajos.encolar(datos.job_id_inv(cliente, estudio_id, paso), "nicho_inv_consultas", base, cliente=cliente,
-                             duracion_estimada=60, etapas=ETAPAS_CONSULTAS, max_intentos=2)
+                             duracion_estimada=60, etapas=ETAPAS_CONSULTAS, max_intentos=2,
+                             costo_estimado=_costo_paso(est, i, paso))
             return paso
         if paso.startswith("buscar:"):
             trabajos.encolar(datos.job_id_inv(cliente, estudio_id, paso), "nicho_inv_buscar", {**base, "plataforma": paso.split(":", 1)[1]},
-                             cliente=cliente, duracion_estimada=300, etapas=ETAPAS_BUSCAR, max_intentos=1)
+                             cliente=cliente, duracion_estimada=300, etapas=ETAPAS_BUSCAR, max_intentos=1,
+                             costo_estimado=_costo_paso(est, i, paso))
             return paso
         if paso == "seleccionar":
             if not (i.get("plataformas") or []):
@@ -256,7 +287,8 @@ def _avanzar(cliente, estudio_id):
                 _marcar(cliente, estudio_id, paso, "vacio", aviso=N_("sin plataformas"))
                 continue
             trabajos.encolar(datos.job_id_inv(cliente, estudio_id, paso), "nicho_inv_seleccionar", base, cliente=cliente,
-                             duracion_estimada=60, etapas=ETAPAS_SELECCION, max_intentos=2)
+                             duracion_estimada=60, etapas=ETAPAS_SELECCION, max_intentos=2,
+                             costo_estimado=_costo_paso(est, i, paso))
             return paso
         if paso.startswith("resenas:"):
             plat = paso.split(":", 1)[1]
@@ -269,7 +301,8 @@ def _avanzar(cliente, estudio_id):
                       "resenas_por_producto": int((i.get("topes") or {}).get("resenas_por_producto") or inv.TOPES_DEFECTO["resenas_por_producto"]),
                       "pais": i.get("pais") or est.get("pais") or ""}
             job_id = datos.job_id_recolectar(cliente, estudio_id, plat)
-            ok = tareas_nicho.encolar_recolectar(cliente, estudio_id, plat, params, investigacion=True)
+            ok = tareas_nicho.encolar_recolectar(cliente, estudio_id, plat, params, investigacion=True,
+                                                 costo_estimado=_costo_paso(est, i, paso, len(productos)))
             if _propio_o_choque(cliente, estudio_id, job_id, ok, "investigacion"):
                 return paso
             return None
@@ -290,7 +323,8 @@ def _avanzar(cliente, estudio_id):
             return None
         tope = round(float(i.get("aprobado_usd") or 0) - float(i.get("gastado_usd") or 0), 4)
         job_id = datos.job_id_generar(cliente, estudio_id)
-        ok = tareas_nicho.encolar_generar(cliente, estudio_id, auto=True, tope_usd=tope)
+        ok = tareas_nicho.encolar_generar(cliente, estudio_id, auto=True, tope_usd=tope,
+                                          costo_estimado=_costo_paso(est, i, paso))
         if _propio_o_choque(cliente, estudio_id, job_id, ok, "auto"):
             return paso
         return None

@@ -69,7 +69,7 @@ def _toca_verificar(recarga_id):
 def _verificar_si_toca(recarga):
     """Pregunta a Bold si toca y hay cupo; si no, devuelve la recarga tal cual."""
     rid = recarga["id"]
-    if recarga["medio"] != "bold" or recarga["estado"] != "pendiente":
+    if not recargas.consultable(recarga):   # pendiente, o rechazada/vencida de menos de 26 h
         return recarga
     with _CANDADO:
         if rid in _EN_CURSO:
@@ -122,8 +122,10 @@ def saldo_panel(cliente):
     if not _puede_ver_saldo(cliente):
         abort(404)
     e = vista.estado(cliente, siempre=True)
+    lista = recargas.de_proyecto(cliente)
     return render_template("_saldo_panel.html", cliente=cliente, e=e, tono=vista.tono(e),
-                           movs=vista.movimientos(cliente), pagina=1, recargas=recargas.de_proyecto(cliente),
+                           movs=vista.movimientos(cliente), pagina=1, recargas=lista,
+                           consultables={r["id"] for r in lista if recargas.consultable(r)},
                            estados_recarga=vista.ESTADOS_RECARGA, bold_ok=bold.configurado(),
                            min_usd=recargas.MIN_USD, max_usd=recargas.MAX_USD, solo_filas=False)
 
@@ -190,7 +192,8 @@ def recarga_vuelta(cliente, rid):
     recarga = recargas.obtener(cliente, rid)
     if recarga is None:
         abort(404)
-    return render_template("saldo_recarga.html", cliente=cliente, recarga=recarga, texto=texto_estado(recarga))
+    return render_template("saldo_recarga.html", cliente=cliente, recarga=recarga, texto=texto_estado(recarga),
+                           consultable=recargas.consultable(recarga))
 
 
 @bp.get("/cliente/<cliente>/saldo/recarga/<int:rid>/estado")

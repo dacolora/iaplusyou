@@ -1372,7 +1372,8 @@ def lote_estimar(cliente, sid):
     except datos.ErrorDatos as ex:
         return jsonify({"ok": False, "error": str(ex)}), 400
     # El botón pinta `usd` y `texto`: lo que ve la persona (cobros, spec 2026-10-08 §6).
-    return jsonify({**e, "usd": gastos.precio(e["usd"]), "acumulado_usd": gastos.precio(e["acumulado_usd"])})
+    return jsonify({**e, "usd": gastos.precio(e["usd"]), "acumulado_usd": gastos.precio(e["acumulado_usd"]),
+                    "qa_usd": gastos.precio(e["qa_usd"])})
 
 
 @bp.post("/<int:sid>/lote")
@@ -1511,8 +1512,9 @@ def pieza_qa(cliente, cp_id):
         flash(gettext("Esa pieza todavía no está lista para el QA."), "error")
         return destino
     # Cobros (spec 2026-10-08 §5): sin saldo no se borra el QA anterior; el
-    # manejador común responde. Sin tarifa propia: basta con saldo positivo.
-    libro.exigir(cliente, None)
+    # manejador común responde. Pide lo mismo que `encolar_qa` va a reservar
+    # (revisión final 2026-10-08), para no borrar el QA y quedarse sin encolar.
+    libro.exigir(cliente, gastos.TARIFAS["revision_pieza"])
     datos.actualizar_idea(cliente, cp_id, qa=None)
     ok = tareas_sprints.encolar_qa(cliente, cp_id)
     if _quiere_json():

@@ -21,7 +21,7 @@
     <p class="vacio" data-recarga-saldo hidden>{{ _('Tu saldo ahora:') }} <strong></strong></p>
     <p class="vacio" data-recarga-tarde hidden>{{ _('Bold todavía no confirma el pago; te avisaremos cuando llegue. Puedes cerrar esta página.') }}</p>
     <div class="acciones">
-      {% if esperando %}
+      {% if esperando or consultable %}
       <form method="post" action="{{ url_for('cobros.recarga_verificar', cliente=cliente, rid=recarga.id) }}" data-recarga-verificar>
         <button type="submit" class="btn-sm">{{ _('Verificar') }}</button>
       </form>

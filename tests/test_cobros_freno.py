@@ -366,3 +366,190 @@ def test_generar_con_version_b_sin_saldo_no_crea_la_hija(crear, libro):
     sesiones = creative_flow.cargar("acme")
     assert list(sesiones) == [cid] and sesiones[cid]["estado"] == "prompt_listo"
     assert _tareas() == []
+
+
+# --- revisión final (2026-10-08): el diagnóstico del decisor pide saldo ----------------------
+
+def _diagnostico_falso(monkeypatch, llamadas):
+    from tareas import experimentos as te
+
+    def diagnosticar(*a, **k):
+        llamadas.append(a)
+        return {"causas": [], "siguiente": {"que": "nada"}}, 1000, 500
+    monkeypatch.setattr(te.doctrina_diagnostico, "diagnosticar", diagnosticar)
+    anotados = []
+    monkeypatch.setattr(te, "_anotar_diagnostico", lambda c, ex, pz, d, evento, datos=None: anotados.append(d))
+    monkeypatch.setattr("idiomas.de_proyecto", lambda c: "es")
+    return te, anotados
+
+
+def _diagnosticar(te):
+    pz = {"id": 7, "nombre": "Pieza", "pais": "CO", "es_imagen": False}
+    return te._diagnosticar("acme", {"id": 1}, pz, {"puerta": None}, [], {}, {}, {"id": 99})
+
+
+def _gastos(cliente="acme"):
+    import db
+    with db.conectar() as con:
+        return [dict(r._mapping) for r in con.execute(sa.select(db.gasto).where(db.gasto.c.cliente == cliente)).all()]
+
+
+def _movimientos(cliente="acme"):
+    import db
+    m = db.movimiento_saldo
+    with db.conectar() as con:
+        return [dict(r._mapping) for r in con.execute(sa.select(m).where(m.c.cliente == cliente)).all()]
+
+
+def test_diagnostico_del_decisor_sin_saldo_no_llama_a_claude_ni_cobra(libro, monkeypatch):
+    llamadas = []
+    te, anotados = _diagnostico_falso(monkeypatch, llamadas)
+    _cobra(libro)
+    assert _diagnosticar(te) is None
+    assert llamadas == [] and _gastos() == [] and _movimientos() == []
+    (d,) = anotados
+    assert d["sin_saldo"] is True and d["error"].startswith("Saldo insuficiente") and "pistas" in d
+
+
+def test_diagnostico_del_decisor_con_saldo_llama_y_cobra_como_siempre(libro, monkeypatch):
+    llamadas = []
+    te, anotados = _diagnostico_falso(monkeypatch, llamadas)
+    _cobra(libro, milesimas=5000)
+    assert _diagnosticar(te) is not None
+    assert len(llamadas) == 1
+    (g,) = _gastos()
+    assert g["tipo"] == "revision" and g["referencia"].startswith("diagnostico:7")
+    assert [m["tipo"] for m in _movimientos()] == ["ajuste", "cobro"]
+
+
+# --- revisión final: el QA automático de Sprints reserva su precio y entra en el estimado ----
+
+def test_qa_automatico_reserva_por_pieza_y_salta_la_que_no_alcanza(libro, monkeypatch):
+    import creative_flow
+    import gastos
+    import tareas
+    from sprints import datos
+    from tests.test_tareas_sprints import _pieza_lista
+    _, _, cp1, _ = _pieza_lista(datos, creative_flow)
+    _, _, cp2, _ = _pieza_lista(datos, creative_flow)
+    precio_qa = libro.precio_milesimas(gastos.TARIFAS["revision_pieza"], 1.5)
+    _cobra(libro, milesimas=precio_qa + 10)   # alcanza para un QA, no para dos
+    tareas.cargar_todas()
+    tareas.REGISTRO["sprint_qa_pendientes"]({"payload": {}})
+    qa = [t for t in _tareas() if t["tipo"] == "sprint_qa_pieza"]
+    assert [t["payload"]["cp_id"] for t in qa] == [cp1]
+    (r,) = _reservas()
+    assert r["job_id"] == f"acme__cp{cp1}__qa" and r["milesimas"] == precio_qa
+
+
+from tests.test_sprints_produccion import escenario  # noqa: E402,F401 — fixture de Sprints
+
+
+def test_estimado_del_lote_incluye_el_qa_solo_si_el_proyecto_cobra(libro, escenario):
+    import gastos
+    from sprints import produccion
+    sin = produccion.estimar("acme", escenario["sid"])
+    assert sin["qa_usd"] == 0.0
+    _cobra(libro)
+    con = produccion.estimar("acme", escenario["sid"])
+    assert con["qa_usd"] == pytest.approx(2 * gastos.TARIFAS["revision_pieza"])
+    assert con["usd"] == pytest.approx(sin["usd"] + con["qa_usd"])
+    assert "control de calidad" in con["texto"]
+
+
+# --- revisión final: cada paso de la investigación y del barrido reserva su precio -----------
+
+def _investigacion(paso_hecho=None):
+    from nicho import datos
+    from nicho import investigacion as inv
+    eid = datos.crear_estudio("acme", "Tofflor", producto="HappyFlops", tema="pantuflas", pais="SE")
+    datos.iniciar_investigacion("acme", eid, inv.crear_inicial("pantuflas", "SE", ["amazon"], [], inv.TOPES_DEFECTO,
+                                                              estimado={"total_usd": 9.0}))
+    if paso_hecho:
+        datos.actualizar_investigacion("acme", eid, lambda i: inv.marcar_paso(i, paso_hecho, "hecho"))
+    return eid
+
+
+@pytest.mark.parametrize("paso_hecho, paso", [(None, "consultas"), ("consultas", "buscar:amazon")])
+def test_paso_de_investigacion_sin_saldo_para_su_costo_no_se_encola_y_lo_dice(libro, monkeypatch, paso_hecho, paso):
+    from nicho import datos
+    from tareas import investigacion as ti
+    monkeypatch.setattr("idiomas.de_proyecto", lambda c: "es")
+    eid = _investigacion(paso_hecho)
+    i = datos.investigacion("acme", eid)
+    costo = ti._costo_paso(datos.estudio("acme", eid), i, paso)
+    assert costo and libro.precio_milesimas(costo, 1.5) > 5
+    _cobra(libro, milesimas=5)   # saldo positivo, menos que el precio del paso
+    assert ti.avanzar("acme", eid) is None
+    assert _tareas() == []
+    i = datos.investigacion("acme", eid)
+    assert i["estado"] == "detenida" and i["detenida_por"].startswith("Saldo insuficiente")
+
+
+def test_paso_de_investigacion_con_saldo_reserva_su_precio(libro, monkeypatch):
+    from nicho import datos
+    from tareas import investigacion as ti
+    eid = _investigacion("consultas")
+    costo = ti._costo_paso(datos.estudio("acme", eid), datos.investigacion("acme", eid), "buscar:amazon")
+    _cobra(libro, milesimas=100_000)
+    assert ti.avanzar("acme", eid) == "buscar:amazon"
+    (r,) = _reservas()
+    assert r["milesimas"] == libro.precio_milesimas(costo, 1.5)
+
+
+def test_resenas_de_la_investigacion_sin_saldo_para_su_costo_no_se_encolan(libro, monkeypatch):
+    from nicho import datos
+    from tareas import investigacion as ti
+    from tests.test_tareas_investigacion import _productos
+    monkeypatch.setattr("idiomas.de_proyecto", lambda c: "es")
+    eid = _investigacion()
+    datos.guardar_productos_nicho("acme", eid, "amazon", _productos(2))
+    datos.actualizar_investigacion("acme", eid, lambda x: {
+        **x, "elegidos": {"amazon": ["P0", "P1"]},
+        "pasos": {**x["pasos"], "consultas": {"estado": "hecho"}, "buscar:amazon": {"estado": "hecho"},
+                  "seleccionar": {"estado": "hecho"}}})
+    costo = ti._costo_paso(datos.estudio("acme", eid), datos.investigacion("acme", eid), "resenas:amazon", 2)
+    assert costo and libro.precio_milesimas(costo, 1.5) > 5
+    _cobra(libro, milesimas=5)
+    assert ti.avanzar("acme", eid) is None
+    assert _tareas() == []
+    assert datos.investigacion("acme", eid)["detenida_por"].startswith("Saldo insuficiente")
+
+
+def _barrido_listo_para_clasificar():
+    from referentes import datos
+    bid = datos.crear_barrido("acme", "atria", {}, 5)
+    rid, _ = datos.guardar_referente({"anuncio_id": "90", "fuente": "atria", "imagen_origen": "https://x/90.jpg",
+                                      "marca": "M", "titular": "T", "cuerpo": "", "idioma": "en"},
+                                     cliente="acme", barrido_id=bid)
+    datos.marcar_imagen(rid, "ok", "https://r2/90.jpg")
+    tarea = {"id": 1, "job_id": f"referentes:barrer:{bid}", "cliente": "acme",
+             "payload": {"cliente": "acme", "barrido_id": bid, "fase": "imagenes", "consulta": {"fuente": "atria"},
+                         "tope": 5}}
+    return bid, tarea
+
+
+def test_barrido_sin_saldo_para_clasificar_no_encola_la_fase_y_lo_dice(libro, monkeypatch):
+    from referentes import datos
+    from tareas import referentes as tr
+    monkeypatch.setattr("idiomas.de_proyecto", lambda c: "es")
+    bid, tarea = _barrido_listo_para_clasificar()
+    _cobra(libro, milesimas=5)   # positivo, menos que clasificar un referente
+    msg = tr._fase_imagenes_barrer(tarea, tarea["payload"], bid, lambda *a, **k: None)
+    assert msg.startswith("Saldo insuficiente")
+    assert [t for t in _tareas() if t["tipo"] == "referentes_barrer"] == []
+    b = datos.barrido(bid)
+    assert b["estado"] == "parcial" and b["aviso"].startswith("Saldo insuficiente")
+
+
+def test_barrido_con_saldo_reserva_el_precio_de_la_clasificacion(libro, monkeypatch):
+    import gastos
+    from tareas import referentes as tr
+    bid, tarea = _barrido_listo_para_clasificar()
+    _cobra(libro, milesimas=10_000)
+    tr._fase_imagenes_barrer(tarea, tarea["payload"], bid, lambda *a, **k: None)
+    (t,) = [t for t in _tareas() if t["tipo"] == "referentes_barrer"]
+    assert t["payload"]["fase"] == "clasificando"
+    (r,) = _reservas()
+    assert r["job_id"] == t["job_id"]
+    assert r["milesimas"] == libro.precio_milesimas(gastos.estimar("clasificacion", n=1)["usd"], 1.5)

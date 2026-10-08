@@ -777,3 +777,60 @@ def test_un_monto_invalido_no_gasta_el_tope_por_hora(entorno, cliente_http):
     for _ in range(12):
         c.post("/cliente/acme/saldo/recargar", data={"usd": "5"})
     assert c.post("/cliente/acme/saldo/recargar", data={"usd": "50"}).headers["Location"] == URL_BOLD
+
+
+# --- revisión final (2026-10-08): la consulta también cubre rechazadas y vencidas recientes ----
+
+def _rechazada(entorno):
+    rid, ref = _pendiente(entorno)
+    assert _webhook(entorno["recargas"], _evento("SALE_REJECTED", ref=ref, evento=f"ev-r{rid}", pago=f"PAY-R{rid}")) == (200, "rechazada")
+    return rid, ref
+
+
+def test_verificar_una_rechazada_reciente_que_bold_da_por_pagada_la_acredita_con_sus_datos(entorno):
+    db, recargas = entorno["db"], entorno["recargas"]
+    rid, ref = _rechazada(entorno)
+    entorno["status"] = {"status": "PAID", "transaction_id": "PAY-2", "total": 200000, "moneda": "COP", "medio": "PSE"}
+    assert recargas.verificar(rid) == "aprobada"
+    fila = _recarga(db, rid)
+    assert (fila["pago_id"], fila["moneda_pago"], fila["total_pago"], fila["medio_pago"]) == ("PAY-2", "COP", 200000, "PSE")
+    assert entorno["libro"].saldo("acme") == 50000
+    # El SALE_APPROVED tardío del mismo pago no acredita otra vez.
+    assert _webhook(recargas, _evento(ref=ref, evento="ev-2", pago="PAY-2")) == (200, "duplicada")
+    assert len(_movimientos(db)) == 1
+
+
+def test_verificar_pendientes_consulta_rechazadas_y_vencidas_recientes(entorno):
+    db, recargas = entorno["db"], entorno["recargas"]
+    rechazada, _ = _rechazada(entorno)
+    vencida, _ = _pendiente(entorno)
+    with db.conectar() as con:
+        con.execute(db.recarga.update().where(db.recarga.c.id == vencida).values(estado="expirada"))
+    entorno["status"] = {"status": "PAID", "transaction_id": None, "total": 50}
+    assert recargas.verificar_pendientes() == 2
+    assert _recarga(db, rechazada)["estado"] == "aprobada" and _recarga(db, vencida)["estado"] == "aprobada"
+    assert entorno["libro"].saldo("acme") == 100000
+
+
+def test_una_rechazada_vieja_no_se_consulta_y_una_reciente_no_pagada_queda_igual(entorno):
+    db, recargas = entorno["db"], entorno["recargas"]
+    vieja, _ = _rechazada(entorno)
+    _envejecer(db, vieja, 30)
+    assert recargas.verificar(vieja) == "rechazada"
+    assert recargas.verificar_pendientes() == 0
+    assert entorno["consultas"] == 0
+    reciente, _ = _rechazada(entorno)
+    entorno["status"] = {"status": "EXPIRED", "transaction_id": None, "total": None}
+    assert recargas.verificar_pendientes() == 1
+    assert _recarga(db, reciente)["estado"] == "rechazada" and _movimientos(db) == []
+
+
+def test_boton_verificar_de_una_rechazada_reciente_consulta_y_acredita(entorno, cliente_http):
+    rid, _ = _rechazada(entorno)
+    c = cliente_http.como("user_acme")
+    panel = c.get("/cliente/acme/saldo/panel").get_data(as_text=True)
+    assert f"/saldo/recarga/{rid}/verificar" in panel
+    entorno["status"] = {"status": "PAID", "transaction_id": "PAY-3", "total": 50}
+    r = c.post(f"/cliente/acme/saldo/recarga/{rid}/verificar")
+    assert r.status_code == 302 and _recarga(entorno["db"], rid)["estado"] == "aprobada"
+    assert entorno["libro"].saldo("acme") == 50000

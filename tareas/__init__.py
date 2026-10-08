@@ -46,8 +46,9 @@ TIPOS_EXENTOS_DE_COBRO = {
     "edicion_desde_clon": "baja y mide el clon para editarlo; gratis",
     "material_de_pieza": "materializa una pieza de Crear como material; gratis",
     "materiales_limpiar": "periódica de mantenimiento",
-    "exp_decidir": "el decisor pausa perdedoras y frena gasto en Meta: nunca se bloquea por saldo "
-                   "(el diagnóstico con Claude de una perdedora se anota y cobra igual)",
+    "exp_decidir": "el decisor pausa perdedoras y frena gasto en Meta: nunca se bloquea por saldo. "
+                   "El diagnóstico con Claude de cada perdedora pide saldo antes (libro.exigir en "
+                   "tareas/experimentos._diagnosticar): sin saldo quedan solo las pistas, sin llamar a Claude",
     "exp_decidir_todos": "periódica: solo encola exp_decidir",
     "exp_lanzar": "publica en Meta en pausa; la pauta la paga el cliente en su cuenta, no el saldo",
     "exp_refrescar": "lee métricas de Meta",

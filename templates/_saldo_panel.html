@@ -2,7 +2,8 @@
    solo_filas, GET cobros.saldo_movimientos: las filas de la página siguiente
    para «Ver más»). Lo pide static/cobros.js. Contexto: cliente, e
    (libro.estado), tono, movs (vista.movimientos), pagina, recargas,
-   estados_recarga, bold_ok, min_usd, max_usd. #}
+   consultables (ids de recargas.consultable: pendiente, o rechazada/vencida
+   de menos de 26 h), estados_recarga, bold_ok, min_usd, max_usd. #}
 {% macro filas_movimientos(filas) %}
 {% for f in filas %}
 <tr>
@@ -87,7 +88,7 @@
         <td class="num">{{ (r.milesimas / 1000) | usd }}</td>
         <td><span class="tag-estado saldo-estado-{{ r.estado }}">{{ estados_recarga.get(r.estado, r.estado) | traducir }}</span></td>
         <td>
-          {% if r.estado == 'pendiente' and r.medio == 'bold' %}
+          {% if (r.estado == 'pendiente' and r.medio == 'bold') or r.id in consultables %}
           <form method="post" action="{{ url_for('cobros.recarga_verificar', cliente=cliente, rid=r.id) }}">
             <button type="submit" class="btn-xs">{{ _('Verificar') }}</button>
           </form>

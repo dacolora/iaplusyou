@@ -341,13 +341,30 @@ def _avisar_evento(resultado, tipo, ref, fila):
 
 # ----------------------------------------------------- verificar (respaldo) ---
 
+def _limite_vigente():
+    return (datetime.now() - timedelta(hours=HORAS_VIGENTE)).isoformat(timespec="seconds")
+
+
+def consultable(recarga):
+    """¿Vale preguntarle a Bold por el link de esta recarga? Una `pendiente`
+    con link siempre; una `rechazada` o `expirada` con link de menos de
+    HORAS_VIGENTE también: la persona pudo reintentar y pagar en el mismo link
+    sin que llegara el SALE_APPROVED (ruling de la tarea 7, completado en la
+    revisión final 2026-10-08). Solo lee el dict."""
+    if not recarga or recarga.get("medio") != "bold" or not recarga.get("link_id"):
+        return False
+    if recarga.get("estado") == "pendiente":
+        return True
+    return recarga.get("estado") in ("rechazada", "expirada") and str(recarga.get("creada_en") or "") >= _limite_vigente()
+
+
 def _verificar(recarga_id, tiempo=bold.TIEMPO):
     """(estado, error): error = el ErrorBold si Bold no respondió, o None."""
     with db.conectar() as con:
         fila = _fila(con, recarga_id)
     if fila is None:
         return None, None
-    if fila["medio"] != "bold" or fila["estado"] != "pendiente" or not fila["link_id"]:
+    if not consultable(fila):
         return fila["estado"], None
     try:
         est = bold.estado_link(fila["link_id"], tiempo=tiempo)
@@ -364,8 +381,13 @@ def _verificar(recarga_id, tiempo=bold.TIEMPO):
             if _pago_de_otra(con, pago_id, recarga_id):
                 log.warning("la recarga %s dice pagada con un pago que ya es de otra recarga", recarga_id)
             else:
-                n = con.execute(r.update().where(r.c.id == recarga_id, r.c.estado == "pendiente").values(
-                    estado="aprobada", pago_id=pago_id, actualizada_en=db.ahora())).rowcount
+                # Desde cualquier estado acreditable (pendiente, rechazada,
+                # expirada), con el mismo UPDATE condicional que el webhook: los
+                # dos caminos juntos acreditan una sola vez (más los UNIQUE).
+                n = con.execute(r.update().where(r.c.id == recarga_id, r.c.estado.in_(ACREDITABLES)).values(
+                    estado="aprobada", pago_id=pago_id, moneda_pago=est.get("moneda"),
+                    total_pago=_entero(est.get("total")), medio_pago=est.get("medio"),
+                    actualizada_en=db.ahora())).rowcount
                 if n == 1:
                     libro.acreditar(con, fila["cliente"], "recarga", fila["milesimas"], "recarga_bold",
                                     recarga_id=recarga_id)
@@ -381,8 +403,8 @@ def _verificar(recarga_id, tiempo=bold.TIEMPO):
 
 
 def verificar(recarga_id, tiempo=bold.TIEMPO):
-    """Pregunta a Bold por el link de una recarga `bold/pendiente` y aplica lo
-    que diga: PAID acredita (mismo cambio condicional que el webhook, así que
+    """Pregunta a Bold por el link de una recarga `consultable` (pendiente, o
+    rechazada/expirada de menos de HORAS_VIGENTE) y aplica lo que diga: PAID acredita (mismo cambio condicional que el webhook, así que
     correr los dos no acredita dos veces), EXPIRED la vence. Con Bold caído la
     deja pendiente. Devuelve el estado (None si la recarga no existe).
     `tiempo`: la espera de la consulta; la página pasa bold.TIEMPO_INTERACTIVO."""
@@ -400,10 +422,16 @@ def verificar_pendientes():
     pasa de TOPE_VUELTA_S; las que quedan van en la próxima vuelta.
     Devuelve cuántas revisó."""
     r = db.recarga
-    limite = (datetime.now() - timedelta(hours=HORAS_VIGENTE)).isoformat(timespec="seconds")
+    limite = _limite_vigente()
+    # También las rechazadas y vencidas con link de menos de HORAS_VIGENTE: el
+    # pago pudo entrar en el mismo link sin que llegara el webhook (revisión
+    # final 2026-10-08). Esas se consultan, nunca se vencen ni se tocan si Bold
+    # no dice PAID.
     with db.conectar() as con:
-        filas = con.execute(sa.select(r.c.id, r.c.creada_en).where(r.c.medio == "bold", r.c.estado == "pendiente")
-                            .order_by(r.c.id)).all()
+        filas = con.execute(sa.select(r.c.id, r.c.creada_en, r.c.estado).where(r.c.medio == "bold", sa.or_(
+            r.c.estado == "pendiente",
+            sa.and_(r.c.estado.in_(("rechazada", "expirada")), r.c.link_id.is_not(None), r.c.creada_en >= limite)))
+            .order_by(r.c.id)).all()
     revisadas = 0
     inicio = _reloj()
     for fila in filas:
@@ -419,7 +447,7 @@ def verificar_pendientes():
             log.warning("verificar recargas: Bold no responde; la vuelta para aquí")
             break
         revisadas += 1
-        if estado == "pendiente" and error is None and str(fila.creada_en) < limite:
+        if fila.estado == "pendiente" and estado == "pendiente" and error is None and str(fila.creada_en) < limite:
             with db.conectar() as con:
                 con.execute(r.update().where(r.c.id == fila.id, r.c.estado == "pendiente")
                             .values(estado="expirada", actualizada_en=db.ahora()))

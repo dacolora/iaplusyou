@@ -120,6 +120,14 @@ def estimar(cliente, sprint_id, campana_id=None, modelo_video=None, modelo_image
         else:
             imagenes += 1
             usd += float((flowplus_modelos.estimate_imagen(mi, n_referencias=_n_referencias(cliente, c)) or {}).get("usd") or 0.0)
+    # Cobros (revisión final 2026-10-08): cada pieza lista recibe el QA
+    # automático (Claude con visión, `sprint_qa_pendientes`). En un proyecto
+    # que cobra ese QA se descuenta del saldo, así que entra en el precio que
+    # se aprueba. En uno que no cobra el estimado no cambia.
+    qa_usd = 0.0
+    if (videos or imagenes) and libro.cobra(cliente):
+        qa_usd = round(gastos.TARIFAS["revision_pieza"] * (videos + imagenes), 4)
+        usd += qa_usd
     segundos = videos * SEGUNDOS_VIDEO + imagenes * SEGUNDOS_IMAGEN
     acumulado = float((sp.get("extra") or {}).get("costo_estimado_usd") or 0.0)
     nombre_v, nombre_i = flowplus_modelos.VIDEO[mv]["nombre"], flowplus_modelos.IMAGEN[mi]["nombre"]
@@ -128,7 +136,11 @@ def estimar(cliente, sprint_id, campana_id=None, modelo_video=None, modelo_image
         "acumulado del sprint USD %(acumulado)s · tiempo estimado %(tiempo)s",
         videos=videos, modelo_v=nombre_v, imagenes=imagenes, modelo_i=nombre_i,
         usd=f"{gastos.precio(usd):.2f}", acumulado=f"{gastos.precio(acumulado):.2f}", tiempo=_texto_tiempo(segundos))
-    return {"videos": videos, "imagenes": imagenes, "usd": round(usd, 4), "segundos": segundos, "modelo_video": mv,
+    if qa_usd:
+        texto += " · " + gettext("incluye el control de calidad automático de cada pieza (USD %(qa)s)",
+                                 qa=f"{gastos.precio(qa_usd):.2f}")
+    return {"videos": videos, "imagenes": imagenes, "usd": round(usd, 4), "qa_usd": qa_usd, "segundos": segundos,
+            "modelo_video": mv,
             "modelo_imagen": mi, "modelo_video_nombre": nombre_v, "modelo_imagen_nombre": nombre_i,
             "acumulado_usd": round(acumulado, 4), "texto": texto}
 

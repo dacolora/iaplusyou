@@ -18152,6 +18152,10 @@ msgid "incluye %(gasto)s de gasto sin ventas medibles"
 msgstr "includes %(gasto)s in spend without measurable sales"
 
 #, python-format
+msgid "incluye el control de calidad automático de cada pieza (USD %(qa)s)"
+msgstr "includes the automatic quality check of each piece (USD %(qa)s)"
+
+#, python-format
 msgid "incompleto: falta %(faltan)s"
 msgstr "incomplete: missing %(faltan)s"
 

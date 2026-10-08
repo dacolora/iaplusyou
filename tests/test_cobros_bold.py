@@ -134,14 +134,25 @@ def test_estado_link_plano_o_dentro_de_payload(bold, monkeypatch, datos):
         visto.update(url=url, headers=headers)
         return _Respuesta(200, datos)
     monkeypatch.setattr(bold.requests, "get", get)
-    assert bold.estado_link("LNK_ABC123") == {"status": "PAID", "transaction_id": "TX1", "total": 50}
+    assert bold.estado_link("LNK_ABC123") == {"status": "PAID", "transaction_id": "TX1", "total": 50,
+                                              "moneda": None, "medio": None}
     assert visto["url"] == "https://integrations.api.bold.co/online/link/v1/LNK_ABC123"
     assert visto["headers"]["Authorization"] == f"x-api-key {LLAVE}"
 
 
 def test_estado_link_sin_total_ni_transaccion(bold, monkeypatch):
     monkeypatch.setattr(bold.requests, "get", lambda *a, **k: _Respuesta(200, {"status": "ACTIVE"}))
-    assert bold.estado_link("LNK_X") == {"status": "ACTIVE", "transaction_id": None, "total": None}
+    assert bold.estado_link("LNK_X") == {"status": "ACTIVE", "transaction_id": None, "total": None,
+                                         "moneda": None, "medio": None}
+
+
+def test_estado_link_trae_moneda_y_medio_si_bold_los_manda(bold, monkeypatch):
+    """Revisión final 2026-10-08: cuando la consulta es la que acredita, la
+    recarga guarda también moneda y medio (solo de registro)."""
+    monkeypatch.setattr(bold.requests, "get", lambda *a, **k: _Respuesta(200, {
+        "status": "PAID", "transaction_id": "TX1", "total": 200000, "currency": "COP", "payment_method": "PSE"}))
+    e = bold.estado_link("LNK_X")
+    assert (e["moneda"], e["medio"], e["total"]) == ("COP", "PSE", 200000)
 
 
 @pytest.mark.parametrize("link_id", ["", None, "LNK_", "lnk_abc", "LNK_ABC/../x", "LNK_A?b=1", "https://x/LNK_A"])

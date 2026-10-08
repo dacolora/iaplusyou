@@ -96,8 +96,13 @@ def estado_link(link_id, tiempo=TIEMPO):
                         caida=r.status_code >= 500)
     d = _datos(r)
     total = d.get("total")
+    # Moneda y medio, si Bold los manda (solo de registro: se guardan en la
+    # recarga cuando la consulta es la que acredita).
+    moneda = str(d.get("currency") or "")[:3] or None
+    medio = str(d.get("payment_method") or "")[:20] or None
     return {"status": str(d.get("status") or "").upper(), "transaction_id": d.get("transaction_id"),
-            "total": int(total) if isinstance(total, (int, float)) and not isinstance(total, bool) else None}
+            "total": int(total) if isinstance(total, (int, float)) and not isinstance(total, bool) else None,
+            "moneda": moneda, "medio": medio}
 
 
 def firma_valida(cuerpo, firma):
