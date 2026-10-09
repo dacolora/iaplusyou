@@ -328,3 +328,24 @@ production. It must work for ANY ad, not only Creatv's: in happyflops only 4 pie
   `language: null` (`fal_audio.transcribir_palabras(url, None)`): fal accepted it in the real run of 2026-10-08 (3 of 4
   ads transcribed, Norwegian and English), so PND-185 is closed; if fal ever rejects it, the task goes on without
   voice.
+
+## Lado Triple Whale de la pestaña Rendimiento (2026-10-09, E1 tarea 1)
+
+Why: Triple Whale y Meta se unen en una sola pestaña «Rendimiento» (spec `docs/superpowers/specs/2026-10-09-pestana-rendimiento-design.md`);
+lo atribuido por el Pixel sumaba 2,5 veces las ventas reales de la tienda (PND-157) porque contaba orígenes que no son anuncios.
+
+- **Solo canales pagados (R9).** `datos.totales_por_anuncio` y `datos.serie_anuncios` dejan fuera todo canal sin gasto en la
+  copia del alcance (`_canales_pagados`: `SUM(gasto) > 0` por canal, de la tienda o de todas, sobre toda la copia y no solo el
+  periodo): orgánico, Klaviyo, Direct y lo que Triple Whale agregue mañana. `totales_anuncio` (el de UN anuncio, para
+  Experimentos) no cambia: el decisor lee anuncios de Meta, que siempre tienen gasto (A4). No se tocan `VENTANA_DEFECTO`,
+  `MODELO_DEFECTO` ni el ajuste de ningún proyecto.
+- **Lecturas nuevas.** `datos.cuentas_meta_de_tiendas(cliente)` → `{tienda_id: {"act_…"}}` (R5: una cuenta de Meta cuyos
+  anuncios llegan en la copia de una tienda está «dentro» de esa tienda; normaliza con o sin `act_`);
+  `datos.totales_por_grupo(cliente, tienda_id, desde, hasta, nivel)` (`"campana"|"conjunto"`) → gasto, pedidos e ingresos del
+  Pixel por campaña o conjunto, solo `facebook-ads`.
+- **Parámetros.** `evaluacion.alertas(..., origen="tw"|"meta")`: con `"meta"` la alerta «sin ventas» habla del Pixel de Meta
+  y no de los parámetros de rastreo. `panel.contexto(..., con_resultados=False)` no calcula «Resultados de tu tienda»
+  (`"resultados"` es None); la pestaña Rendimiento arma los suyos cuando el alcance mezcla fuentes.
+- **Tasas.** Al terminar bien una copia, `tareas.triple_whale._asegurar_tasas(cliente)` pide a `meta_rendimiento.tasas` las
+  tasas USD de la moneda del proyecto (si no es USD) desde el primer día copiado, para que «Todas» sume en dólares; nunca
+  tumba la copia.

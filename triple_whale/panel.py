@@ -560,9 +560,12 @@ def contexto_dia(cliente, fecha, canal=None, tienda_id=None, hoy=None):
     return detalle
 
 
-def contexto(cliente, dias=PERIODO_DEFECTO, canal=None, tienda_id=None, hoy=None):
+def contexto(cliente, dias=PERIODO_DEFECTO, canal=None, tienda_id=None, hoy=None, con_resultados=True):
     """Todo lo que pinta `_tw_panel.html` en el alcance pedido (`tienda_id`:
-    una tienda del proyecto, o None = «Todas»; un id ajeno se ignora)."""
+    una tienda del proyecto, o None = «Todas»; un id ajeno se ignora).
+
+    Con `con_resultados=False`, `"resultados"` es None y «Resultados de tu tienda» no se calcula: la pestaña
+    Rendimiento arma sus propios Resultados cuando el alcance mezcla fuentes (spec 2026-10-09)."""
     config = triple_whale_tiendas.obtener(cliente)
     if not config:
         return {"conectado": False}
@@ -601,8 +604,8 @@ def contexto(cliente, dias=PERIODO_DEFECTO, canal=None, tienda_id=None, hoy=None
     copias = [t["ultima_sincronizacion"] for t in en_alcance if t.get("ultima_sincronizacion")]
     ultima_copia = (min(copias) if len(copias) == len(en_alcance) else None) if copias else None
     rango_copia = datos.rango(cliente, tienda_id)
-    resultados_ctx = _resultados(cliente, config, tienda_id, canal, dias, desde, hasta, hoy, ev, bool(serie_tienda),
-                                 rango_copia, ultima_copia)
+    resultados_ctx = (_resultados(cliente, config, tienda_id, canal, dias, desde, hasta, hoy, ev, bool(serie_tienda),
+                                  rango_copia, ultima_copia) if con_resultados else None)
     # La alerta «el MER de la tienda cayó» usa la misma variación que la tarjeta «Retorno (MER)» (días completos,
     # sin periodo anterior fuera de la copia): antes de «Resultados» la tarjeta y la alerta usaban el mismo número.
     tienda_alertas = dict(tienda or {}, variacion={}) if tienda else tienda

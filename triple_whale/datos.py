@@ -159,10 +159,24 @@ def _sumas(t):
     return [sa.func.coalesce(sa.func.sum(getattr(t.c, c)), 0).label(c) for c in COLUMNAS_CANAL + COLUMNAS_PIXEL]
 
 
+CANAL_META = "facebook-ads"   # el canal de Meta en las tablas de Triple Whale (triple_whale.CANAL_META)
+
+
+def _canales_pagados(cliente, tienda_id):
+    """Subconsulta (canal): los canales con gasto en la copia del alcance (spec 2026-10-09 R9). Lo que el Pixel
+    atribuye a fuentes sin gasto (orgánico, Klaviyo, Direct…) no es venta de un anuncio: sumarlo hacía que lo
+    atribuido pasara 2,5 veces las ventas reales de la tienda (PND-157)."""
+    t = db.tw_anuncio_dia
+    cond = [t.c.cliente == cliente] + ([t.c.tienda_id == tienda_id] if tienda_id is not None else [])
+    return sa.select(t.c.canal).where(*cond).group_by(t.c.canal).having(sa.func.sum(t.c.gasto) > 0)
+
+
 def totales_por_anuncio(cliente, tienda_id, desde, hasta, canal=None):
     """Una fila por (canal, anuncio) con las medidas sumadas en [desde, hasta]
     y las dimensiones más recientes que no estén vacías. Solo anuncios con
-    algo que mirar (gasto, impresiones o pedidos)."""
+    algo que mirar (gasto, impresiones o pedidos) y solo de canales con gasto
+    en la copia del alcance (R9: lo atribuido a orgánico, Klaviyo o Direct no
+    es un anuncio)."""
     d = _anuncio_dia(cliente, tienda_id, desde, hasta, canal)
     q = (sa.select(d.c.canal, d.c.ad_id,
                    sa.func.max(d.c.campana).label("campana"), sa.func.max(d.c.campana_id).label("campana_id"),
@@ -173,6 +187,7 @@ def totales_por_anuncio(cliente, tienda_id, desde, hasta, canal=None):
                    sa.func.min(d.c.fecha).label("primera_fecha"), sa.func.max(d.c.fecha).label("ultima_fecha"),
                    sa.func.sum(sa.case((d.c.gasto > 0, 1), else_=0)).label("dias_con_gasto"),
                    *_sumas(d))
+         .where(d.c.canal.in_(_canales_pagados(cliente, tienda_id)))
          .group_by(d.c.canal, d.c.ad_id)
          .having(sa.or_(sa.func.sum(d.c.gasto) > 0, sa.func.sum(d.c.impresiones) > 0, sa.func.sum(d.c.pedidos) > 0)))
     with db.conectar() as con:
@@ -206,11 +221,13 @@ def totales_anuncio(cliente, tienda_id, canal, ad_id, desde, hasta=None):
 
 
 def serie_anuncios(cliente, tienda_id, desde, hasta, canal=None):
-    """Por día: gasto de anuncios e ingresos atribuidos por el Pixel (de un canal, si se pide)."""
+    """Por día: gasto de anuncios e ingresos atribuidos por el Pixel (de un canal, si se pide), solo de canales
+    con gasto en la copia del alcance (R9)."""
     d = _anuncio_dia(cliente, tienda_id, desde, hasta, canal)
     q = (sa.select(d.c.fecha, sa.func.coalesce(sa.func.sum(d.c.gasto), 0).label("gasto"),
                    sa.func.coalesce(sa.func.sum(d.c.ingresos), 0).label("ingresos"),
                    sa.func.coalesce(sa.func.sum(d.c.pedidos), 0).label("pedidos"))
+         .where(d.c.canal.in_(_canales_pagados(cliente, tienda_id)))
          .group_by(d.c.fecha).order_by(d.c.fecha))
     with db.conectar() as con:
         return [dict(r._mapping) for r in con.execute(q)]
@@ -515,6 +532,41 @@ def canales(cliente, tienda_id, desde, hasta):
          .order_by(sa.func.sum(d.c.gasto).desc()))
     with db.conectar() as con:
         return [r[0] for r in con.execute(q)]
+
+
+def _act(cuenta_id):
+    """El id de cuenta de Meta como lo guarda meta_rendimiento («act_123»); Triple Whale lo trae con o sin «act_»."""
+    v = str(cuenta_id).strip()
+    return v if v.startswith("act_") else f"act_{v}"
+
+
+def cuentas_meta_de_tiendas(cliente):
+    """{tienda_id: {"act_…"}}: las cuentas publicitarias de Meta cuyos anuncios llegan en la copia de cada tienda
+    (spec 2026-10-09 R5: una cuenta así está «dentro» de esa tienda y «Todas» no suma su gasto aparte). Una
+    consulta."""
+    t = db.tw_anuncio_dia
+    q = (sa.select(t.c.tienda_id, t.c.cuenta_id)
+         .where(t.c.cliente == cliente, t.c.canal == CANAL_META, t.c.cuenta_id.isnot(None), t.c.cuenta_id != "")
+         .distinct())
+    salida = {}
+    with db.conectar() as con:
+        for tienda_id, cuenta_id in con.execute(q):
+            salida.setdefault(tienda_id, set()).add(_act(cuenta_id))
+    return salida
+
+
+def totales_por_grupo(cliente, tienda_id, desde, hasta, nivel):
+    """{campana_id | conjunto_id: {"gasto", "pedidos", "ingresos"}} de los anuncios de Meta en [desde, hasta], para
+    poner las ventas de Triple Whale en la tabla de campañas y conjuntos de Meta (spec 2026-10-09 §4). Gasto MAX
+    entre tiendas por (anuncio, día) y Pixel SUMA, como `_anuncio_dia`. Una consulta."""
+    columna = {"campana": "campana_id", "conjunto": "conjunto_id"}[nivel]
+    d = _anuncio_dia(cliente, tienda_id, desde, hasta, CANAL_META)
+    clave = d.c[columna]
+    q = (sa.select(clave, sa.func.coalesce(sa.func.sum(d.c.gasto), 0), sa.func.coalesce(sa.func.sum(d.c.pedidos), 0),
+                   sa.func.coalesce(sa.func.sum(d.c.ingresos), 0))
+         .where(clave.isnot(None), clave != "").group_by(clave))
+    with db.conectar() as con:
+        return {str(k): {"gasto": float(g), "pedidos": float(p), "ingresos": float(i)} for k, g, p, i in con.execute(q)}
 
 
 # ------------------------------------------------------- evaluaciones ---

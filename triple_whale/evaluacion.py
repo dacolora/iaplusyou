@@ -457,14 +457,23 @@ def rastreo(anuncios, canal_meta="facebook-ads"):
             "pct_gasto": _div(sum(a["m"]["gasto"] for a in malos), gasto) or 0.0}
 
 
-def alertas(ev, tienda=None, rastreo_info=None):
-    """Lo que necesita atención, ya traducido: [{"nivel": alta|media|bien, "texto"}]."""
+def alertas(ev, tienda=None, rastreo_info=None, origen="tw"):
+    """Lo que necesita atención, ya traducido: [{"nivel": alta|media|bien, "texto"}].
+
+    `origen` es de dónde salen las ventas de los anuncios que se evaluaron: "tw" (Triple Whale, el defecto) o "meta"
+    (el Pixel de Meta, spec 2026-10-09 R8). Solo cambia la alerta «sin ventas»: con Meta no tiene sentido hablar de los
+    parámetros de rastreo ni de la ventana de atribución de Triple Whale."""
     salida = []
     cuenta = ev["cuenta"]
     if cuenta["m"]["gasto"] > 0 and not ev["hay_ventas"]:
-        salida.append({"nivel": "alta", "texto": gettext(
-            "Triple Whale no atribuye ninguna venta a tus anuncios en este periodo. Revisa que los anuncios lleven "
-            "sus parámetros de rastreo (tw_source y tw_adid) o prueba otra ventana de atribución.")})
+        if origen == "meta":
+            texto = gettext("Meta no reporta ninguna compra de estos anuncios en este periodo. Revisa que el Pixel de "
+                            "Meta mida las compras de tu tienda.")
+        else:
+            texto = gettext(
+                "Triple Whale no atribuye ninguna venta a tus anuncios en este periodo. Revisa que los anuncios lleven "
+                "sus parámetros de rastreo (tw_source y tw_adid) o prueba otra ventana de atribución.")
+        salida.append({"nivel": "alta", "texto": texto})
     pct = cuenta["pct_gasto"].get("perdedor") or 0
     if pct >= ALERTA_GASTO_PERDEDORES:
         salida.append({"nivel": "media", "texto": gettext(

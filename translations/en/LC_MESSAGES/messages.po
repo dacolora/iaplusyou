@@ -10917,6 +10917,9 @@ msgstr "Meta puts no hard cap on the campaign below %(tope)s: Creatv splits %(to
 msgid "Meta no pudo armar el informe de métricas (%(estado)s)."
 msgstr "Meta couldn't build the metrics report (%(estado)s)."
 
+msgid "Meta no reporta ninguna compra de estos anuncios en este periodo. Revisa que el Pixel de Meta mida las compras de tu tienda."
+msgstr "Meta reports no purchases from these ads in this period. Check that the Meta Pixel tracks your store's purchases."
+
 #, python-format
 msgid "Meta no termina de paginar %(edge)s después de %(n)s páginas — parece un bucle; revisa el Business o avisa a soporte."
 msgstr "Meta doesn't finish paging %(edge)s after %(n)s pages — it looks like a loop; check the Business or tell support."

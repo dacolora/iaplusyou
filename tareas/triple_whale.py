@@ -18,6 +18,7 @@ corren cuando termina la última copia del proyecto, no en cada una.
 """
 import logging
 import re
+from datetime import date
 
 from flask_babel import gettext
 
@@ -30,6 +31,7 @@ import trabajos
 import triple_whale
 import triple_whale_tiendas
 from doctrina import aprendizajes as doctrina_aprendizajes
+from meta_rendimiento import tasas
 from nicho.avatares import costo_real
 from tareas import al_interrumpir, ref_sufijo, registrar
 from triple_whale import analisis, avisos, datos, mejorar, paises, sync
@@ -225,6 +227,22 @@ def _nombre_tienda(cliente, tienda):
     return tienda["dominio"]
 
 
+def _asegurar_tasas(cliente):
+    """Tasas USD de la moneda del proyecto para que «Todas» de la pestaña Rendimiento sume Triple Whale con cuentas de
+    Meta en otra moneda (spec 2026-10-09 R6). Nunca hace fallar la copia: sin tasa la pantalla dice «USD no
+    disponible»."""
+    moneda = "?"
+    try:
+        moneda = ((triple_whale_tiendas.ajustes(cliente) or {}).get("moneda") or "USD").upper()
+        if moneda == "USD":
+            return
+        primero = datos.primer_dia_copia(cliente)
+        if primero:
+            tasas.asegurar([moneda], primero, date.today().isoformat())
+    except Exception as e:   # noqa: BLE001 — una tasa que no llega no es una copia fallida
+        log.warning("tasas de %s para %s: %s", moneda, cliente, type(e).__name__)
+
+
 @registrar(TIPO_SYNC)
 def tw_sincronizar(tarea):
     cliente, tienda_id = tarea["payload"]["cliente"], tarea["payload"].get("tienda_id")
@@ -249,6 +267,7 @@ def tw_sincronizar(tarea):
     if r["fallos"]:
         texto += " " + gettext("Sin %(partes)s: Triple Whale no aceptó esa consulta.",
                                partes=", ".join(sorted(r["fallos"])))
+    _asegurar_tasas(cliente)   # la copia ya salió bien; las tasas son un extra que nunca la tumba
     # Los avisos miran «Todas las tiendas»: solo corren cuando no queda otra
     # copia del proyecto en cola o en curso, así la última que termina avisa
     # una vez y con todo al día. Un fallo aquí no tumba la copia.
