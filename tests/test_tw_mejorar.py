@@ -165,7 +165,7 @@ def test_analizar_corrige_una_vez_y_suma_tokens(monkeypatch):
 
     def _llamar(content, system_):
         llamadas.append(content)
-        return ("nada", 100, 10) if len(llamadas) == 1 else (respuesta(), 200, 50)
+        return ("nada", 100, 10, "end_turn") if len(llamadas) == 1 else (respuesta(), 200, 50, "end_turn")
     monkeypatch.setattr(mejorar, "_llamar", _llamar)
     monkeypatch.setattr(mejorar, "system", lambda idioma: "SYSTEM")
     r, e, s = mejorar.analizar("DATOS", [{"type": "text", "text": "Segundo 0:"}], "es")
@@ -174,25 +174,85 @@ def test_analizar_corrige_una_vez_y_suma_tokens(monkeypatch):
 
 
 def test_analizar_invalido_dos_veces_lleva_los_tokens(monkeypatch):
-    monkeypatch.setattr(mejorar, "_llamar", lambda content, system_: ("nada", 100, 40))
+    monkeypatch.setattr(mejorar, "_llamar", lambda content, system_: ("nada", 100, 40, "end_turn"))
     monkeypatch.setattr(mejorar, "system", lambda idioma: "SYSTEM")
     with pytest.raises(analisis.AnalisisInvalido) as e:
         mejorar.analizar("DATOS", [], "es")
     assert (e.value.tokens_entrada, e.value.tokens_salida) == (200, 80)
 
 
+class _Uso:
+    def __init__(self, entrada, salida, escrita=0, leida=0):
+        self.input_tokens, self.output_tokens = entrada, salida
+        self.cache_creation_input_tokens, self.cache_read_input_tokens = escrita, leida
+
+
+def _anthropic_falso(monkeypatch, texto, stop_reason="end_turn", uso=None):
+    """El cliente de Anthropic sin red: guarda con qué se creó y qué se le pidió."""
+    import anthropic
+    recibido = {"cliente": {}, "pedido": {}}
+
+    class _Bloque:
+        type, text = "text", texto
+
+    class _Mensajes:
+        def create(self, **kw):
+            recibido["pedido"].update(kw)
+            return types.SimpleNamespace(content=[_Bloque()], usage=uso or _Uso(10, 5), stop_reason=stop_reason)
+
+    class _Cliente:
+        def __init__(self, **kw):
+            recibido["cliente"].update(kw)
+            self.messages = _Mensajes()
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "clave-test")
+    monkeypatch.setattr(anthropic, "Anthropic", _Cliente)
+    return recibido
+
+
 def test_la_llamada_a_claude_no_se_reintenta_sola_y_tiene_tope_de_tiempo(monkeypatch):
     """Revisión final A6: un reintento del SDK podría cobrarse sin quedar anotado; el fallo termina en error y la
-    persona lo vuelve a pedir con el precio a la vista."""
-    from sprints import analisis as sprints_analisis
-    recibido = {}
+    persona lo vuelve a pedir con el precio a la vista. Desde la revisión del gasto del 2026-10-09 (arreglo A) la
+    llamada también devuelve el `stop_reason`, con la caché contada como `sprints.analisis._llamar_contando`."""
+    recibido = _anthropic_falso(monkeypatch, respuesta(), uso=_Uso(100, 50, escrita=40, leida=1000))
+    texto, entrada, salida, parada = mejorar._llamar([{"type": "text", "text": "DATOS"}], "SYSTEM")
+    assert (texto, entrada, salida, parada) == (respuesta(), 100 + round(40 * 1.25 + 1000 * 0.1), 50, "end_turn")
+    assert recibido["cliente"]["timeout"] == 300 and recibido["cliente"]["max_retries"] == 0
+    assert recibido["pedido"]["max_tokens"] == mejorar.MAX_TOKENS and recibido["pedido"]["system"] == "SYSTEM"
+    assert recibido["pedido"]["messages"] == [{"role": "user", "content": [{"type": "text", "text": "DATOS"}]}]
+    assert _anthropic_falso(monkeypatch, "{", stop_reason="max_tokens") and mejorar._llamar([], "S")[3] == "max_tokens"
 
-    def _contando(content, **kw):
-        recibido.update(kw)
-        return respuesta(), 10, 5
-    monkeypatch.setattr(sprints_analisis, "_llamar_contando", _contando)
-    assert mejorar._llamar([{"type": "text", "text": "DATOS"}], "SYSTEM") == (respuesta(), 10, 5)
-    assert recibido == {"max_tokens": mejorar.MAX_TOKENS, "system": "SYSTEM", "timeout": 300, "max_retries": 0}
+
+def test_el_tope_de_salida_es_amplio():
+    """Una corrida real llegó a 11 323 de 12 000 tokens (PND-224); solo se pagan los tokens usados."""
+    assert mejorar.MAX_TOKENS == 20000
+
+
+def test_una_respuesta_cortada_por_el_tope_no_paga_una_correccion_a_ciegas(monkeypatch):
+    """Arreglo A (revisión del gasto, 2026-10-09): con `stop_reason` = max_tokens la corrección con el mismo tope
+    saldría cortada otra vez y se pagaría dos veces. Una sola llamada, el error lleva los tokens pagados y la fila
+    lo dice en palabras."""
+    llamadas = []
+
+    def _llamar(content, system_):
+        llamadas.append(content)
+        return '{"frase": "Pierde porque', 300, 20000, "max_tokens"
+    monkeypatch.setattr(mejorar, "_llamar", _llamar)
+    monkeypatch.setattr(mejorar, "system", lambda idioma: "SYSTEM")
+    with pytest.raises(analisis.AnalisisInvalido) as e:
+        mejorar.analizar("DATOS", [], "es")
+    assert len(llamadas) == 1 and isinstance(e.value, mejorar.AnalisisCortado)
+    assert (e.value.tokens_entrada, e.value.tokens_salida) == (300, 20000)
+    assert mejorar.texto_error(e.value) == "La respuesta de Claude salió cortada; vuelve a intentarlo."
+
+
+def test_una_correccion_cortada_por_el_tope_tambien_lo_dice(monkeypatch):
+    respuestas = [("nada", 100, 10, "end_turn"), ('{"frase": "x', 200, 20000, "max_tokens")]
+    monkeypatch.setattr(mejorar, "_llamar", lambda content, system_: respuestas.pop(0))
+    monkeypatch.setattr(mejorar, "system", lambda idioma: "SYSTEM")
+    with pytest.raises(mejorar.AnalisisCortado) as e:
+        mejorar.analizar("DATOS", [], "es")
+    assert (e.value.tokens_entrada, e.value.tokens_salida) == (300, 20010) and respuestas == []
+    assert mejorar.texto_error(analisis.AnalisisInvalido("x")).startswith("Claude no devolvió un análisis")
 
 
 def test_system_lleva_las_rebanadas_el_idioma_y_el_prompt_en_ingles(monkeypatch):
@@ -503,7 +563,7 @@ def test_parsear_un_analisis_sin_ganchos_ni_copy_sigue_valido():
 
 
 def test_analizar_le_pasa_la_duracion_al_parseo(monkeypatch):
-    monkeypatch.setattr(mejorar, "_llamar", lambda content, system_: (respuesta(ganchos=GANCHOS), 100, 10))
+    monkeypatch.setattr(mejorar, "_llamar", lambda content, system_: (respuesta(ganchos=GANCHOS), 100, 10, "end_turn"))
     monkeypatch.setattr(mejorar, "system", lambda idioma: "SYSTEM")
     r, _, _ = mejorar.analizar("DATOS", [], "es", duracion_s=8.0)
     assert [g["fotograma_s"] for g in r["ganchos"]] == [4.2, 6.0, 1.5]
@@ -607,7 +667,7 @@ def test_datos_verificables_no_cambia_armar():
 
 def test_analizar_verifica_contra_el_verificable_que_se_le_da(monkeypatch):
     monkeypatch.setattr(mejorar, "_llamar", lambda content, system_: (respuesta(
-        ganchos=[{"texto": "60 % menos dolor", "prompt": "Push in", "fotograma_s": 4}]), 100, 10))
+        ganchos=[{"texto": "60 % menos dolor", "prompt": "Push in", "fotograma_s": 4}]), 100, 10, "end_turn"))
     monkeypatch.setattr(mejorar, "system", lambda idioma: "SYSTEM")
     r, _, _ = mejorar.analizar("TEXTO CON 60 EN LAS INSTRUCCIONES", [], "es", duracion_s=8.0)         # como hoy
     assert r["ganchos"][0]["cifras_sin_dato"] == []

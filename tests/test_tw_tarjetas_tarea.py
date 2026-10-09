@@ -65,7 +65,8 @@ def test_los_segundos_de_los_fotogramas_y_de_la_voz_son_citables_con_su_parte_en
                                                                   "en el segundo 12", "anillo": "gancho"}])
     pedido = {}
     # `analizar` de verdad (arma el verificable con lo extra); solo la llamada a Claude es falsa
-    monkeypatch.setattr(mejorar, "_llamar", lambda content, system_: (pedido.update(content=content) or cita, 100, 50))
+    monkeypatch.setattr(mejorar, "_llamar", lambda content, system_: (pedido.update(content=content) or cita, 100, 50,
+                                                                       "end_turn"))
     visto = {}
     original = mejorar.segundos_verificables
     monkeypatch.setattr(mejorar, "segundos_verificables", lambda b, v: visto.setdefault("extra", original(b, v)))
@@ -118,6 +119,25 @@ def test_claude_invalido_queda_en_error_y_registra_lo_pagado(en_cola, monkeypatc
     assert g["evaluacion"]["usd"] == pytest.approx(costo_real(1000, 500), abs=1e-4) and costo_real(1000, 500) > 0
     assert g["transcripcion"]["usd"] == pytest.approx(0.001)
     assert fila["usd"] == pytest.approx(g["evaluacion"]["usd"] + 0.001)
+
+
+def test_una_respuesta_cortada_queda_en_error_en_palabras_y_registra_lo_pagado_una_vez(en_cola, monkeypatch):
+    """Arreglo A (revisión del gasto, 2026-10-09): una respuesta cortada por el tope es UNA llamada pagada, sin
+    corrección a ciegas; la fila lo dice en palabras y el gasto real queda anotado como pagado y no entregado."""
+    llamadas = []
+
+    def _llamar(content, system_):
+        llamadas.append(1)
+        return '{"frase": "Pierde', 1000, 20000, "max_tokens"
+    monkeypatch.setattr(mejorar, "_llamar", _llamar)
+    with pytest.raises(RuntimeError):
+        en_cola["t"].tw_analizar_anuncio({"id": 5, "payload": {"cliente": "acme", "analisis_id": en_cola["aid"]}})
+    fila = datos.analisis_anuncio("acme", en_cola["aid"])
+    assert len(llamadas) == 1
+    assert fila["estado"] == "error" and fila["error"] == "La respuesta de Claude salió cortada; vuelve a intentarlo."
+    g = {x["tipo"]: x for x in _gastos()}
+    assert g["evaluacion"]["usd"] == pytest.approx(costo_real(1000, 20000), abs=1e-4)
+    assert g["evaluacion"]["referencia"] == f"tw_anuncio:{en_cola['aid']}:t5"
 
 
 def test_los_temporales_se_borran_siempre(en_cola, monkeypatch, tmp_path):
@@ -283,7 +303,7 @@ def test_la_tarea_verifica_las_cifras_contra_los_datos_y_no_contra_las_instrucci
     def _llamar(content, system_):
         llamadas.append(content[0]["text"])
         return respuesta(ganchos=[{"texto": "Hasta 60 días de prueba", "prompt": "Push in", "fotograma_s": 4}],
-                         copy_nuevo={"titulo": "T", "texto": "Más de 700 clientes"}), 100, 50
+                         copy_nuevo={"titulo": "T", "texto": "Más de 700 clientes"}), 100, 50, "end_turn"
     monkeypatch.setattr(mejorar, "_llamar", _llamar)
     recibido = {}
     original = mejorar.analizar

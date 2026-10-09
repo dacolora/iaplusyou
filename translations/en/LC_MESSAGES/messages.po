@@ -10058,6 +10058,9 @@ msgstr "The reference no longer exists."
 msgid "La regla no pide re-ediciones ni regeneraciones: no hay nada que derivar."
 msgstr "The rule doesn't ask for re-edits or regenerations: there's nothing to derive."
 
+msgid "La respuesta de Claude salió cortada; vuelve a intentarlo."
+msgstr "Claude's answer was cut off; try again."
+
 msgid "La respuesta de Claude salió incompleta. Intenta con un guion más corto."
 msgstr "Claude's answer came back incomplete. Try a shorter script."
 

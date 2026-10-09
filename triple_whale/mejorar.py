@@ -30,7 +30,9 @@ from triple_whale import analisis, evaluacion
 
 log = logging.getLogger("creatv.triple_whale.mejorar")
 
-MAX_TOKENS = 12000
+# Una corrida real llegó a 11 323 de 12 000 tokens de salida con ganchos y copy (PND-224, 2026-10-09). Solo se pagan
+# los tokens usados: un tope amplio no encarece nada y evita la respuesta cortada (regla 7).
+MAX_TOKENS = 20000
 TIMEOUT_CLAUDE_S = 300
 MAX_GANADORES = 3
 MAX_COPY_GANADOR = 300
@@ -571,13 +573,33 @@ def cifras_del_aprendizaje(resultado):
 
 # ------------------------------------------------------------- analizar ---
 
+class AnalisisCortado(analisis.AnalisisInvalido):
+    """La respuesta llegó cortada por el tope de salida (`stop_reason` = max_tokens). Lleva los tokens pagados."""
+
+
 def _llamar(content, system_):
-    """Sin reintentos del cliente y con un tope de tiempo (revisión final, A6): un intento que el SDK repite solo
-    podría cobrarse sin quedar anotado (los tokens que se anotan son los de la respuesta que llega). Un fallo deja la
-    fila en error y la persona vuelve a pedirlo con su precio a la vista."""
-    from sprints import analisis as sprints_analisis
-    return sprints_analisis._llamar_contando(content, max_tokens=MAX_TOKENS, system=system_,
-                                             timeout=TIMEOUT_CLAUDE_S, max_retries=0)
+    """(texto, tokens_entrada_equivalentes, tokens_salida, stop_reason). Sin reintentos del cliente y con un tope de
+    tiempo (revisión final, A6): un intento que el SDK repite solo podría cobrarse sin quedar anotado (los tokens que
+    se anotan son los de la respuesta que llega). Un fallo deja la fila en error y la persona vuelve a pedirlo con su
+    precio a la vista. La caché se cuenta como en `sprints.analisis._llamar_contando` (escribirla 1,25×, leerla 0,1×);
+    es una llamada propia porque `analizar` tiene que ver el `stop_reason` (revisión del gasto del 2026-10-09, A)."""
+    import anthropic
+    from generador_prompts import MODEL, _api_key
+    client = anthropic.Anthropic(api_key=_api_key(), timeout=TIMEOUT_CLAUDE_S, max_retries=0)
+    extra = {"system": system_} if system_ else {}
+    resp = client.messages.create(model=MODEL, max_tokens=MAX_TOKENS,
+                                  messages=[{"role": "user", "content": content}], **extra)
+    texto = "".join(b.text for b in resp.content if b.type == "text").strip()
+    u = resp.usage
+    escrita = getattr(u, "cache_creation_input_tokens", None) or 0
+    leida = getattr(u, "cache_read_input_tokens", None) or 0
+    return texto, u.input_tokens + round(escrita * 1.25 + leida * 0.1), u.output_tokens, getattr(resp, "stop_reason", None)
+
+
+def _cortado(entrada, salida):
+    e = AnalisisCortado("La respuesta llegó cortada por el tope de salida.")
+    e.tokens_entrada, e.tokens_salida = entrada, salida
+    return e
 
 
 def segundos_verificables(bloques, voz):
@@ -600,25 +622,32 @@ def segundos_verificables(bloques, voz):
 
 def analizar(texto, imagenes, idioma, verificable_extra="", duracion_s=None, verificable=None):
     """(resultado, tokens_entrada, tokens_salida). Una corrección si la primera respuesta no sirve; si tampoco,
-    AnalisisInvalido con los tokens pagados. `verificable_extra` suma a los datos verificables lo que Claude ve fuera
-    del texto (los segundos de los fotogramas); `duracion_s` (la del video del anuncio, o None) acota el `fotograma_s`
-    de cada gancho (spec 2026-10-09 §3.2). `verificable` (`datos_verificables`: los datos sin la plantilla) es contra lo
-    que se contrastan las cifras; sin él, el `texto` entero, con los números de sus instrucciones."""
+    AnalisisInvalido con los tokens pagados. Una respuesta cortada por el tope (`stop_reason` = max_tokens) no se
+    corrige: la corrección, con el mismo tope, saldría cortada otra vez y se pagaría dos veces (revisión del gasto del
+    2026-10-09, A); sale `AnalisisCortado` con los tokens pagados. `verificable_extra` suma a los datos verificables
+    lo que Claude ve fuera del texto (los segundos de los fotogramas); `duracion_s` (la del video del anuncio, o None)
+    acota el `fotograma_s` de cada gancho (spec 2026-10-09 §3.2). `verificable` (`datos_verificables`: los datos sin
+    la plantilla) es contra lo que se contrastan las cifras; sin él, el `texto` entero, con los números de sus
+    instrucciones."""
     content = [{"type": "text", "text": texto}] + list(imagenes or [])
     system_ = system(idioma)
     verificable = (texto if verificable is None else verificable) + ("\n" + verificable_extra if verificable_extra else "")
-    crudo, entrada, salida = _llamar(content, system_)
+    crudo, entrada, salida, parada = _llamar(content, system_)
+    if parada == "max_tokens":
+        raise _cortado(entrada, salida)
     try:
         return parsear(crudo, verificable, duracion_s), entrada, salida
     except analisis.AnalisisInvalido as e:
         correccion = content + [{"type": "text", "text": f"Tu respuesta anterior no sirvió ({e}). "
                                                          "Responde solo el JSON pedido."}]
         try:
-            crudo, e2, s2 = _llamar(correccion, system_)
+            crudo, e2, s2, parada = _llamar(correccion, system_)
         except Exception:
             e.tokens_entrada, e.tokens_salida = entrada, salida
             raise e
         entrada, salida = entrada + e2, salida + s2
+        if parada == "max_tokens":
+            raise _cortado(entrada, salida) from None
         try:
             return parsear(crudo, verificable, duracion_s), entrada, salida
         except analisis.AnalisisInvalido as e3:
@@ -628,6 +657,8 @@ def analizar(texto, imagenes, idioma, verificable_extra="", duracion_s=None, ver
 
 def texto_error(error):
     """Lo que ve la persona cuando el análisis falla (sin tokens ni rutas)."""
+    if isinstance(error, AnalisisCortado):
+        return gettext("La respuesta de Claude salió cortada; vuelve a intentarlo.")
     if isinstance(error, analisis.AnalisisInvalido):
         return gettext("Claude no devolvió un análisis que se pueda usar. Puedes intentarlo otra vez.")
     return gettext("No se pudo hacer el análisis: %(error)s", error=type(error).__name__)
