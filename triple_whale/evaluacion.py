@@ -39,6 +39,7 @@ from flask_babel import gettext, ngettext
 
 import idiomas
 from idiomas import N_
+from triple_whale import visitantes
 
 VEREDICTOS = ("ganador", "prometedor", "en_prueba", "perdedor", "sin_datos")
 ETIQUETAS_VEREDICTO = {"ganador": N_("Ganador"), "prometedor": N_("Prometedor"), "en_prueba": N_("En prueba"),
@@ -114,7 +115,7 @@ def metricas(t):
     no lo reporta)."""
     m = {k: _f(t.get(k)) for k in ("gasto", "impresiones", "clics", "clics_salida", "thruplays", "vistas_3s", "p100",
                                    "pedidos", "ingresos", "nc_pedidos", "nc_ingresos", "sesiones", "carritos",
-                                   "checkouts", "compras_canal", "valor_canal")}
+                                   "checkouts", "compras_canal", "valor_canal", "visitantes", "visitantes_nuevos")}
     ctr = _div(m["clics"], m["impresiones"])
     m["ctr"] = None if ctr is None else ctr * 100
     salida = _div(m["clics_salida"], m["impresiones"])
@@ -132,6 +133,9 @@ def metricas(t):
     m["conversion"] = _div(m["pedidos"], base_clics)
     m["roas_canal"] = _div(m["valor_canal"], m["gasto"])
     m["es_video"] = bool(m["vistas_3s"] or m["thruplays"])
+    # NVP y etapa del embudo (spec 2026-10-09-nvp-visitantes-nuevos §2): una lectura, no entra al veredicto.
+    nvp = visitantes.resumen(m["visitantes_nuevos"], m["visitantes"])
+    m["nvp"], m["etapa"] = nvp["nvp"], nvp["etapa"]
     return m
 
 

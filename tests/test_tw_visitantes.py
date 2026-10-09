@@ -37,3 +37,28 @@ def test_de_fila_lee_las_columnas_de_la_copia():
 
 def test_cada_etapa_tiene_su_explicacion():
     assert set(vis.EXPLICACION) == set(vis.ETAPAS)
+
+
+def test_la_macro_pinta_el_chip_en_sus_cinco_estados(base_temporal):
+    import dashboard
+    with dashboard.app.test_request_context("/"):
+        plantilla = dashboard.app.jinja_env.from_string(
+            '{% import "_componentes.html" as cx %}'
+            '{{ cx.nvp(820, 1000) }}|{{ cx.nvp(520, 1000) }}|{{ cx.nvp(250, 1000) }}|{{ cx.nvp(30, 40) }}|{{ cx.nvp(0, 0) }}'
+            '|{{ cx.nvp(none, none) }}')
+        tof, mof, bof, pocos, vacio, nada = plantilla.render().split("|")
+    assert "chip-nvp-tof" in tof and "82&nbsp;%" in tof and ">TOF<" in tof and "820" in tof and "1000" in tof
+    assert "chip-nvp-mof" in mof and ">MOF<" in mof
+    assert "chip-nvp-bof" in bof and "25&nbsp;%" in bof and ">BOF<" in bof
+    assert "chip-nvp-pocos" in pocos and "75&nbsp;%" in pocos and "TOF" not in pocos
+    assert "chip-nvp-vacio" in vacio and "—" in vacio and "chip-nvp-vacio" in nada
+
+
+def test_las_metricas_de_un_anuncio_traen_su_nvp_y_no_cambian_el_veredicto():
+    from triple_whale import evaluacion
+    m = evaluacion.metricas({"gasto": 10, "impresiones": 1000, "visitantes": 200, "visitantes_nuevos": 150})
+    assert m["visitantes"] == 200 and m["nvp"] == 75.0 and m["etapa"] == "TOF"
+    m = evaluacion.metricas({"gasto": 10, "impresiones": 1000})
+    assert m["nvp"] is None and m["etapa"] is None
+    pocos = evaluacion.metricas({"visitantes": 10, "visitantes_nuevos": 9})
+    assert pocos["nvp"] == 90.0 and pocos["etapa"] is None

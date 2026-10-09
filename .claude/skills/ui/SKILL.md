@@ -16,7 +16,11 @@ colores literales restantes de `legado/` son la excepción transitoria: solo se 
 `TECHO_COLORES_LEGADO` en `tests/test_estilos_sistema.py` (199 al cerrar la entrega 1). Los estilos en línea
 sin colores tampoco crecen (`TECHO_ESTILOS_EN_LINEA`: 414). Un componente nuevo lleva archivo en `componentes/`,
 macro en `templates/_componentes.html` si tiene marcado, sección `data-componente="<nombre>"` en la Guía
-`/admin/estilos` y una línea aquí. Cada CSS nuevo empieza con un comentario de uso, emplea tokens y se enumera
+`/admin/estilos` y una línea aquí. Componentes: **`nvp`** (2026-10-09, pedido del cliente de HappyFlops: el %
+de visitantes nuevos dice si un anuncio es TOF, MOF o BOF): `{% import "_componentes.html" as cx %}` y
+`{{ cx.nvp(nuevos, visitantes) }}` con las SUMAS del periodo; la regla (70/40, mínimo 50 visitantes) vive solo en
+`triple_whale/visitantes.py` y llega a Jinja como los globales `resumen_nvp`/`explicacion_nvp`; CSS
+`componentes/nvp.css` (los colores de etapa distinguen, no califican). Cada CSS nuevo empieza con un comentario de uso, emplea tokens y se enumera
 una sola vez en `ORDEN`; sin `@import`. `base.css` respeta `prefers-reduced-motion` y pinta los enlaces sin clase
 con `:where(a) { color: var(--accent-texto) }` (sin ella Chrome los deja lila y, visitados, morados); un `<button>`
 con clase que no pinta su fondo queda con el gris del navegador: dale fondo o súmalo al secundario de la base
