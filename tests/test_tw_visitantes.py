@@ -62,3 +62,48 @@ def test_las_metricas_de_un_anuncio_traen_su_nvp_y_no_cambian_el_veredicto():
     assert m["nvp"] is None and m["etapa"] is None
     pocos = evaluacion.metricas({"visitantes": 10, "visitantes_nuevos": 9})
     assert pocos["nvp"] == 90.0 and pocos["etapa"] is None
+
+
+# ------------------------------------------------- lectura compartida ---
+
+@pytest.fixture()
+def copia(base_temporal, monkeypatch):
+    """Dos tiendas con el mismo anuncio y un anuncio del que solo llegó el Pixel (sin campaña ese día)."""
+    import triple_whale_tiendas
+    from triple_whale import datos
+    monkeypatch.setenv("FLASK_SECRET_KEY", "test_secret_key_12345678")
+    t1 = triple_whale_tiendas.agregar("acme", "k1", "no.myshopify.com", pais="NO")
+    t2 = triple_whale_tiendas.agregar("acme", "k2", "se.myshopify.com", pais="SE")
+    otro = triple_whale_tiendas.agregar("otro", "k3", "otro.myshopify.com", pais="NO")
+    ids = [t["id"] for t in triple_whale_tiendas.tiendas("acme")]
+    dims = {"cuenta_id": "act_1", "campana_id": "c1", "conjunto_id": "s1"}
+    datos.reemplazar_anuncios_canal("acme", ids[0], "2026-10-01", "2026-10-02", [
+        dict(canal="facebook-ads", ad_id="a1", fecha="2026-10-01", **dims),
+        dict(canal="facebook-ads", ad_id="a2", fecha="2026-10-01", **dims)])
+    datos.reemplazar_anuncios_pixel("acme", ids[0], "2026-10-01", "2026-10-02", [
+        dict(canal="facebook-ads", ad_id="a1", fecha="2026-10-01", visitantes=100, visitantes_nuevos=80),
+        dict(canal="facebook-ads", ad_id="a1", fecha="2026-10-02", visitantes=50, visitantes_nuevos=10),  # sin campaña
+        dict(canal="facebook-ads", ad_id="a2", fecha="2026-10-01", visitantes=0, visitantes_nuevos=0),
+        dict(canal="google-ads", ad_id="a1", fecha="2026-10-01", visitantes=999, visitantes_nuevos=999)])
+    datos.reemplazar_anuncios_pixel("acme", ids[1], "2026-10-01", "2026-10-01", [
+        dict(canal="facebook-ads", ad_id="a1", fecha="2026-10-01", visitantes=10, visitantes_nuevos=5)])
+    datos.reemplazar_anuncios_pixel("otro", [t["id"] for t in triple_whale_tiendas.tiendas("otro")][0],
+                                    "2026-10-01", "2026-10-01", [
+        dict(canal="facebook-ads", ad_id="a1", fecha="2026-10-01", visitantes=7, visitantes_nuevos=7)])
+    return datos
+
+
+def test_visitantes_por_anuncio_suma_tiendas_y_dias_sin_mezclar_canales_ni_proyectos(copia):
+    assert copia.visitantes_por("acme", "ad_id", ["a1", "a2", "zz"]) == {
+        "a1": {"visitantes": 160, "visitantes_nuevos": 95}}
+    assert copia.visitantes_por("acme", "ad_id", ["a1"], desde="2026-10-02") == {
+        "a1": {"visitantes": 50, "visitantes_nuevos": 10}}
+    assert copia.visitantes_por("acme", "ad_id", []) == {}
+
+
+def test_visitantes_por_campana_cuenta_tambien_los_dias_sin_campana(copia):
+    for campo, objeto in (("campana_id", "c1"), ("conjunto_id", "s1"), ("cuenta_id", "act_1")):
+        assert copia.visitantes_por("acme", campo, [objeto, "otra"]) == {
+            objeto: {"visitantes": 160, "visitantes_nuevos": 95}}
+    with pytest.raises(ValueError):
+        copia.visitantes_por("acme", "anuncio; DROP", ["x"])
