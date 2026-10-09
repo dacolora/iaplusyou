@@ -357,6 +357,10 @@ msgid "%(modelo)s llega a %(aviso)s s: se generará de %(aviso)s s."
 msgstr "%(modelo)s tops out at %(aviso)s s: it'll be generated at %(aviso)s s."
 
 #, python-format
+msgid "%(modelo)s no acepta fotos de personas reales como referencia (regla de ByteDance): usa un personaje creado con IA o quita esa foto. No se cobró. Detalle: %(detalle)s"
+msgstr "%(modelo)s doesn't accept photos of real people as references (ByteDance rule): use a character created with AI or remove that photo. Nothing was charged. Detail: %(detalle)s"
+
+#, python-format
 msgid "%(modelo)s no pasa de %(total)s s sumando tus videos de referencia (%(s)s s): el resultado puede durar hasta %(max)s s. Baja la duración o usa un video más corto — no se cobró nada."
 msgstr "%(modelo)s can't go past %(total)s s counting your reference videos (%(s)s s): the result can last up to %(max)s s. Lower the duration or use a shorter video — nothing was charged."
 
@@ -8795,8 +8799,8 @@ msgstr "Halloween"
 msgid "Hasta"
 msgstr "To"
 
-msgid "Hasta 10 imágenes de referencia (personajes, producto, lugar) que nombras en el texto con @Imagen 1, @Imagen 2…; de un video usa solo un fotograma. Hasta 30 s, en el formato que elijas. Va por fal y es el más caro. Sonido de la escena incluido."
-msgstr "Up to 10 reference images (characters, product, place) that you name in the text with @Imagen 1, @Imagen 2…; from a video it only uses one frame. Up to 30 s, in the format you choose. Runs on fal and is the most expensive. Scene sound included."
+msgid "Hasta 10 imágenes de referencia (personajes, producto, lugar) que nombras en el texto con @Imagen 1, @Imagen 2…; de un video usa solo un fotograma. No acepta fotos de personas reales: los personajes tienen que ser creados con IA. Hasta 30 s, en el formato que elijas. Va por fal y es el más caro. Sonido de la escena incluido."
+msgstr "Up to 10 reference images (characters, product, place) that you name in the text with @Imagen 1, @Imagen 2…; from a video it only uses one frame. It doesn't accept photos of real people: characters have to be created with AI. Up to 30 s, in the format you choose. Runs on fal and is the most expensive. Scene sound included."
 
 msgid "Hasta 10 imágenes y 5 videos de referencia (1-15 s), 720p, hasta 30 s (con videos de referencia, sus segundos más los del resultado no pasan de 30). El único que usa videos tal cual. Sonido de la escena incluido."
 msgstr "Up to 10 images and 5 reference videos (1-15 s), 720p, up to 30 s (with reference videos, their seconds plus the result's don't exceed 30). The only one that uses videos as-is. Scene sound included."

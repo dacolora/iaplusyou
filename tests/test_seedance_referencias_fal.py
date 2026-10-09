@@ -155,8 +155,10 @@ def test_lanza_avisa_el_id_y_devuelve_el_video(fal):
     assert url == "https://fal/v.mp4"
     assert avisos[0] == {"fase": "created", "elapsed": 0, "prediction_id": "req-1"}   # el id, antes de esperar
     assert avisos[1]["fase"] == "IN_QUEUE" and avisos[1]["queue_position"] == 2
-    assert fal["urls"] == [f"https://queue.fal.run/{RUTA}"] + [f"https://queue.fal.run/{RUTA}/requests/req-1/status"] * 3 + [
-        f"https://queue.fal.run/{RUTA}/requests/req-1"]
+    # Prueba real 2026-10-09: el estado y el resultado van por la app (bytedance/seedance-2.5),
+    # no por la ruta completa (405).
+    app = "https://queue.fal.run/bytedance/seedance-2.5/requests/req-1"
+    assert fal["urls"] == [f"https://queue.fal.run/{RUTA}"] + [f"{app}/status"] * 3 + [app]
 
 
 def test_sin_saldo_en_fal_es_sin_saldo_de_fal(fal):
@@ -406,3 +408,22 @@ def test_4_3_y_3_4_quedan_fuera_hasta_medir_su_cobro():
     from providers import flowplus_modelos as fm
     assert fm.VIDEO["seedance25_ref"]["formatos"] == ("9:16", "16:9", "1:1")
     assert fm.ajustar_formato("seedance25_ref", "4:3") == "9:16"
+
+
+def test_una_foto_de_persona_real_rechazada_se_explica(base_temporal, monkeypatch, tmp_path):
+    """Prueba real 2026-10-09: ByteDance devolvió 422 «The images or videos provided may
+    contain likenesses of real people…» con un retrato real de referencia."""
+    import creative_flow as cf
+    import tareas.flowplus as fp
+    from providers import fal_video
+    cid = _sesion_video(cf, monkeypatch, tmp_path, modelo="seedance25_ref")
+    detalle = ("The images or videos provided may contain likenesses of real people or other private information "
+               "that cannot be processed.")
+
+    def _gen(*a, **k):
+        raise fal_video._error_proveedor("Seedance 2.5 · varias referencias", "failed", detalle, "req-50", codigo=422)
+    monkeypatch.setattr(fp.flowplus_modelos, "generar_video", _gen)
+    with pytest.raises(RuntimeError):
+        fp.ejecutar_video({"id": 50, "payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j"})
+    e = cf.cargar("acme")[cid]
+    assert "personas reales" in e["error"] and "creado con IA" in e["error"] and e["prediccion"] is None

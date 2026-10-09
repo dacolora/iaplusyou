@@ -140,7 +140,8 @@ VIDEO = {
         "token_imagen": "@Image{n}",
         "rotar": False,
         "audio_nativo": {"parametro": "generate_audio", "recargo_usd_s": 0.0},
-        "nota": N_("Hasta 10 imágenes de referencia (personajes, producto, lugar) que nombras en el texto con @Imagen 1, @Imagen 2…; de un video usa solo un fotograma. Hasta 30 s, en el formato que elijas. Va por fal y es el más caro. Sonido de la escena incluido."),
+        # Prueba real 2026-10-09: ByteDance rechaza (422, sin cobro) las fotos de personas reales.
+        "nota": N_("Hasta 10 imágenes de referencia (personajes, producto, lugar) que nombras en el texto con @Imagen 1, @Imagen 2…; de un video usa solo un fotograma. No acepta fotos de personas reales: los personajes tienen que ser creados con IA. Hasta 30 s, en el formato que elijas. Va por fal y es el más caro. Sonido de la escena incluido."),
     },
 }
 

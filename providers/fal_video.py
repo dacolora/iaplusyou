@@ -14,12 +14,14 @@ excepciones de `wavespeed_common` (marcadas `proveedor = "fal"`):
     sin video es `ErrorProveedor`.
 `providers/fal_client.py` (audio) no hace nada de eso y se deja como está.
 
-Contrato verificado el 2026-10-09 contra el OpenAPI de fal
-(fal.ai/api/openapi/queue/openapi.json?endpoint_id=bytedance/seedance-2.5/reference-to-video):
+Contrato verificado el 2026-10-09 con un pedido real (PND-192):
   POST {COLA}/{ruta}                          -> {"request_id", "status_url", "response_url", ...}
-  GET  {COLA}/{ruta}/requests/{id}/status     -> {"status": IN_QUEUE|IN_PROGRESS|COMPLETED, "queue_position"?}
-  GET  {COLA}/{ruta}/requests/{id}            -> {"video": {"url"}, "seed"} (o el error, si falló)
-Los errores de fal traen `detail` (texto o lista de {"msg"}).
+  GET  {COLA}/{app}/requests/{id}/status      -> 202 {"status": IN_QUEUE|IN_PROGRESS, "queue_position"?} / 200 COMPLETED
+  GET  {COLA}/{app}/requests/{id}             -> {"video": {"url"}, "seed"} (o el error, si falló;
+                                                 400 «still in progress» si se pide antes de tiempo)
+donde `app` son los dos primeros tramos de la ruta (`bytedance/seedance-2.5`): con la ruta completa, como la
+escribe el OpenAPI de fal, el estado responde 405 (la prueba real lo destapó; el pedido ya estaba pagado y se
+recuperó por la raíz). Los errores de fal traen `detail` (texto o lista de {"msg"}).
 """
 import time
 
@@ -94,6 +96,14 @@ def _error_proveedor(nombre, estado, detalle, request_id, codigo=None, datos=Non
     return e
 
 
+def _base(ruta, request_id):
+    """URL del pedido en la cola: la app (dos primeros tramos de la ruta), no la
+    ruta completa — así la arma fal en `status_url`/`response_url` y así la piden
+    sus clientes oficiales."""
+    app = "/".join(ruta.split("/")[:2])
+    return f"{COLA}/{app}/requests/{request_id}"
+
+
 def lanzar(ruta, payload, nombre, on_progreso=None, timeout_seconds=1200):
     """Encola `payload` en `ruta`, avisa el id y espera el video. Devuelve la
     URL pública del video."""
@@ -117,7 +127,7 @@ def esperar(ruta, request_id, nombre, interval_seconds=5, timeout_seconds=900, o
     del video. Lo usan la generación y «Recuperar el video» (que nunca vuelve
     a lanzar). Igual que `wavespeed_common.poll_hasta_listo`: varios cortes de
     red seguidos o un 4xx tumban la espera; un 5xx suelto, no."""
-    base = f"{COLA}/{ruta}/requests/{request_id}"
+    base = _base(ruta, request_id)
     inicio = time.time()
     plazo = wavespeed_common.plazo_cortable()
     limite = timeout_seconds if plazo is None else min(timeout_seconds, plazo)

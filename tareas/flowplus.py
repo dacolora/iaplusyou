@@ -250,6 +250,12 @@ def _mensaje_error(e, cliente):
                            modelo=e.nombre_modelo, min=int(e.timeout_seconds // 60), id=e.prediction_id)
         if isinstance(e, wavespeed_common.ErrorProveedor):
             detalle = (e.detalle or "").lower()
+            if "likeness" in detalle or "real people" in detalle:
+                # Prueba real 2026-10-09 (Seedance 2.5 vía fal): ByteDance rechaza con 422 las
+                # referencias que parecen fotos de personas reales.
+                return gettext("%(modelo)s no acepta fotos de personas reales como referencia (regla de ByteDance): "
+                               "usa un personaje creado con IA o quita esa foto. No se cobró. Detalle: %(detalle)s",
+                               modelo=e.nombre_modelo, detalle=e.detalle)
             if e.codigo == 1200 or "sensitive" in detalle or "content policy" in detalle or "content_policy" in detalle:
                 return gettext("%(modelo)s rechazó el contenido por sensible (el texto o las imágenes): cambia la "
                                "escena y vuelve a generar. No se cobró. Detalle: %(detalle)s",
