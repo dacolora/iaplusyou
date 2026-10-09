@@ -87,5 +87,26 @@ Las filas de gasto quedaron en la base temporal de la corrida.
 - **El costo sube más del 20 % por llamada.** Vale la pena porque cada análisis trae ahora tres anuncios listos para
   probar y un copy listo para Meta. La tarifa se ajustó a lo medido.
 
+## Segunda ronda: el fotograma de arranque y el precio de un clic suelto
+
+**El fotograma.** La prueba real de una variante (caso 3, Kling de verdad) mostró que el clip arranca en el fotograma
+elegido CON su subtítulo quemado. El fotograma del segundo 18,46 traía el subtítulo de ese momento, y durante 3 s no
+coincidía con la voz que suena debajo.
+
+- **Arreglo** (commit `0cbf026e`): la regla de `fotograma_s` pide un fotograma SIN texto quemado. Si todos lo tienen, se
+  usa el primero (el del segundo 0,3), porque su subtítulo es el de la voz del gancho.
+- **Medición** con el caso 3: end_turn · 9 647 de salida · US$ 0,1424 · válido.
+  - Claude vio que todos los fotogramas del UGC traen subtítulos y eligió el 0,3 en los 3 ganchos.
+  - Cada gancho mantiene su movimiento y su texto propios.
+  - Es una instrucción al modelo y no una garantía: el código no puede saber si un fotograma tiene subtítulos.
+
+**El precio.** La media de 0,110 sale de una tanda en la que 3 de 4 llamadas leyeron la caché del prompt. Un clic
+suelto en una tarjeta, que es el caso normal, va con la caché fría: 0,1309 · 0,1333 · 0,1324 · 0,1424. Un precio
+mostrado antes de cobrar no puede quedar por debajo de lo que cuesta ese clic. Por eso la tarifa `analisis_anuncio_tw`
+queda en **0,14**, y no en 0,12. Con Cobros se cobra lo real × margen; la tarifa es el precio que se ve antes.
+
+**Gasto total de esta medición:** US$ 0,8487 (0,7063 de la primera ronda + 0,1424). La prueba real de Kling se anota
+aparte: US$ 0,336.
+
 **Conclusión:** se cierra. El análisis con ganchos y copy es válido en los 4 casos reales, sin correcciones, en el
-idioma correcto y sin cifras inventadas. La tarifa queda en US$ 0,12.
+idioma correcto y sin cifras inventadas. La tarifa queda en US$ 0,14 (ver la segunda ronda).
