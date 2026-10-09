@@ -52,14 +52,16 @@
     {% if gh.ultima %}
     <div class="tw-variantes">{% for g in gh.ultima %}
       <div class="tw-variante">
-        <p class="tw-variante-cabeza"><strong>{{ _('Gancho %(n)s', n=g.n) }}</strong> <code>{{ g.codigo }}</code>
-          <button type="button" class="btn-xs" data-copiar="{{ g.codigo }}" onclick="navigator.clipboard && navigator.clipboard.writeText(this.dataset.copiar)">{{ _('Copiar') }}</button></p>
+        {#- En error no hay video que nombrar: ni el código ni «Copiar» (revisión de la tarea 6). -#}
+        <p class="tw-variante-cabeza"><strong>{{ _('Gancho %(n)s', n=g.n) }}</strong>{% if g.estado != 'error' %} <code>{{ g.codigo }}</code>
+          <button type="button" class="btn-xs" data-copiar="{{ g.codigo }}" onclick="navigator.clipboard && navigator.clipboard.writeText(this.dataset.copiar)">{{ _('Copiar') }}</button>{% endif %}</p>
         {% if g.estado == 'lista' %}
         <video controls preload="none" data-precarga src="{{ g.url_final }}"></video>
         <p class="tw-variante-acciones">
-          <a href="{{ g.url_final }}" download>{{ _('Descargar') }}</a>
+          <a href="{{ g.url_final }}" download target="_blank" rel="noopener">{{ _('Descargar') }}</a>
           {% if g.edicion_id %}<a href="{{ url_for('editor.ver', cliente=cliente, edicion_id=g.edicion_id) }}">{{ _('Abrir en el editor') }}</a>{% endif %}
-          {% if g.cf_id %}<a href="{{ url_for('ver_cliente', cliente=cliente) }}#creativeflowplus?cf={{ g.cf_id }}">{{ _('Ver en Crear') }}</a>{% endif %}
+          {#- La final cuelga de la sesión del clip: el enlace de siempre a Final edition (rutas_editor.producir). -#}
+          {% if g.cf_id %}<a href="{{ url_for('ver_cliente', cliente=cliente) }}#final?cf={{ g.cf_id }}">{{ _('Ver en Final edition') }}</a>{% endif %}
         </p>
         {% elif g.estado == 'error' %}
         <p class="tag-error">{{ g.error or _('No se pudo hacer este gancho.') }}</p>
@@ -76,9 +78,10 @@
     {% if gh.anteriores %}
     <details class="tw-tandas-anteriores"><summary>{{ ngettext('Antes: %(num)s tanda · ver', 'Antes: %(num)s tandas · ver', gh.anteriores | length) }}</summary>
       <ul>{% for t in gh.anteriores %}{% for g in t.filas %}
-        <li><code>{{ g.codigo }}</code> «{{ g.texto }}»
-          {% if g.estado == 'lista' %}· <a href="{{ g.url_final }}">{{ _('Ver el video') }}</a>{% if g.edicion_id %} · <a href="{{ url_for('editor.ver', cliente=cliente, edicion_id=g.edicion_id) }}">{{ _('Abrir en el editor') }}</a>{% endif %}
-          {% else %}· <span class="vacio">{{ g.error or estados_gancho.get(g.estado, g.estado) }}</span>{% endif %}</li>{% endfor %}{% endfor %}
+        <li>{% if g.estado != 'error' %}<code>{{ g.codigo }}</code> {% endif %}«{{ g.texto }}»
+          {% if g.estado == 'lista' %}· <a href="{{ g.url_final }}" target="_blank" rel="noopener">{{ _('Ver el video') }}</a>{% if g.edicion_id %} · <a href="{{ url_for('editor.ver', cliente=cliente, edicion_id=g.edicion_id) }}">{{ _('Abrir en el editor') }}</a>{% endif %}
+          {% elif g.estado == 'error' %}· <span class="vacio">{{ g.error or _('No se pudo hacer este gancho.') }}</span>
+          {% else %}· <span class="vacio">{{ estados_gancho.get(g.estado, g.estado) }}</span>{% endif %}</li>{% endfor %}{% endfor %}
       </ul>
     </details>
     {% endif %}

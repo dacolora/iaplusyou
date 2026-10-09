@@ -126,8 +126,9 @@ def test_el_detalle_muestra_cada_variante_segun_su_estado(app):  # noqa: F811
     html = _detalle(app, aid)
     assert '<video controls preload="none" data-precarga src="https://r2.test/final.mp4"' in html
     assert f"CV{f1['id']}" in html and f"CV{f3['id']}" in html and f'data-copiar="CV{f1["id"]}"' in html
-    assert "/cliente/acme/ediciones/5" in html and "#creativeflowplus?cf=cf_x" in html
-    assert 'href="https://r2.test/final.mp4" download' in html
+    assert "/cliente/acme/ediciones/5" in html and 'href="/cliente/acme#final?cf=cf_x"' in html
+    assert "Ver en Final edition" in html and "Ver en Crear" not in html and "#creativeflowplus" not in html
+    assert 'href="https://r2.test/final.mp4" download target="_blank" rel="noopener"' in html
     assert "Kling: contenido sensible" in html
     assert f'id="tw-gancho-{f3["id"]}" data-poll-job="acme__cf_y__creative_flow" data-poll-al-terminar="evento"' in html
     assert "Generando el clip" in html and "Pon este código en el nombre del anuncio en Meta" in html
@@ -251,3 +252,42 @@ def test_la_hoja_tiene_las_reglas_de_los_ganchos():
         css = f.read()
     assert ".tw-variantes { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 12rem), 1fr))" in css
     assert ".tw-copy-texto { margin: 0; white-space: pre-line; }" in css
+
+
+# ---------------------------------------------------- endurecimiento (revisión de la tarea 6) ---
+
+def test_una_variante_en_error_no_muestra_codigo_ni_copiar(app):  # noqa: F811
+    """No hay video que nombrar: ni el código CV<id> ni «Copiar», tampoco en las tandas anteriores."""
+    aid = _analisis()
+    viejas = datos.crear_tanda("acme", aid, _generables(aid))
+    assert datos.mover(viejas[0]["id"], "preparando", "error", error="Kling: contenido sensible")
+    for f in viejas[1:]:
+        assert datos.mover(f["id"], "preparando", "lista", cf_id="cf", edicion_id=1, url_final="https://r2.test/x.mp4")
+    f1, f2, _f3 = datos.crear_tanda("acme", aid, _generables(aid))
+    assert datos.mover(f1["id"], "preparando", "lista", cf_id="cf_x", edicion_id=5, url_final="https://r2.test/final.mp4")
+    assert datos.mover(f2["id"], "preparando", "error", error="Kling: contenido sensible")
+    html = _detalle(app, aid)
+    assert f"CV{f1['id']}" in html and f'data-copiar="CV{f1["id"]}"' in html
+    assert f"CV{f2['id']}" not in html and f"CV{viejas[0]['id']}" not in html
+    assert f"CV{viejas[1]['id']}" in html
+
+
+def test_las_tandas_anteriores_sin_motivo_dicen_lo_mismo_que_la_ultima(app):  # noqa: F811
+    aid = _analisis()
+    viejas = datos.crear_tanda("acme", aid, _generables(aid))
+    assert datos.mover(viejas[0]["id"], "preparando", "error")               # sin motivo guardado
+    for f in viejas[1:]:
+        assert datos.mover(f["id"], "preparando", "lista", cf_id="cf", edicion_id=1, url_final="https://r2.test/x.mp4")
+    for f in datos.crear_tanda("acme", aid, _generables(aid)):
+        assert datos.mover(f["id"], "preparando", "error", error="x")
+    html = _detalle(app, aid)
+    assert '<span class="vacio">No se pudo hacer este gancho.</span>' in html and ">error<" not in html
+    assert 'href="https://r2.test/x.mp4" target="_blank" rel="noopener"' in html
+
+
+def test_ver_en_final_edition_solo_con_su_sesion(app):  # noqa: F811
+    aid = _analisis()
+    f1, _f2, _f3 = datos.crear_tanda("acme", aid, _generables(aid))
+    assert datos.mover(f1["id"], "preparando", "lista", edicion_id=5, url_final="https://r2.test/final.mp4")
+    html = _detalle(app, aid)
+    assert "Ver en Final edition" not in html and "#final?cf=" not in html
