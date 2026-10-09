@@ -773,6 +773,29 @@ class TandaViva(Exception):
     """Ese análisis ya tiene una tanda de ganchos en curso: no se pide otra (doble clic, dos pestañas)."""
 
 
+class AnalisisAjeno(LookupError):
+    """El análisis no existe o es de otro proyecto: una tanda nunca se cuelga de un análisis que no es del `cliente`
+    (aislamiento entre proyectos; sin esto `otro` bloquearía al dueño con TandaViva)."""
+
+
+_COLUMNAS_TANDA = frozenset({"tw_gancho.analisis_id", "tw_gancho.tanda", "tw_gancho.n"})
+
+
+def _es_choque_de_tanda(exc):
+    """True solo si `exc` es el UNIQUE `uq_tw_gancho_tanda` (analisis_id, tanda, n). SQLite no dice el nombre del
+    constraint, dice sus columnas («UNIQUE constraint failed: tw_gancho.analisis_id, tw_gancho.tanda, tw_gancho.n»);
+    otros motores sí dicen el nombre. Se lee solo la primera línea: el resto del texto de SQLAlchemy trae el SQL y
+    los parámetros, que pueden llevar texto ajeno. Cualquier otro error de la base (un NOT NULL, otro UNIQUE) NO es
+    «ya hay una tanda en curso»."""
+    linea = (str(getattr(exc, "orig", None) or exc).split("\n") or [""])[0]
+    if "uq_tw_gancho_tanda" in linea:
+        return True
+    marca = "UNIQUE constraint failed:"
+    if marca not in linea:
+        return False
+    return {c.strip() for c in linea.split(marca, 1)[1].split(",")} == _COLUMNAS_TANDA
+
+
 def _campos_gancho(campos):
     raros = set(campos) - set(CAMPOS_GANCHO)
     if raros:
@@ -783,16 +806,25 @@ def crear_tanda(cliente, analisis_id, ganchos, pedido_por=None):
     """Las filas de una tanda nueva del análisis, en `preparando` (spec §4.2). `ganchos` = [{"n", "texto", "prompt",
     "fotograma_s"}] (`triple_whale.ganchos.ganchos_generables`). El candado de escritura de SQLite se toma ANTES de
     leer (BEGIN IMMEDIATE, como referentes.datos.guardar_referente): dos clics a la vez no leen los dos «sin tanda
-    viva». Con alguna fila viva del análisis lanza TandaViva; si no, inserta la tanda max + 1 en la misma transacción
-    y devuelve sus filas por `n`. El UNIQUE (analisis_id, tanda, n) es la red si algo se cuela."""
+    viva». Con el candado ya tomado comprueba que el análisis es de `cliente` (si no, `AnalisisAjeno`, una
+    LookupError, y no inserta nada); con alguna fila viva del análisis lanza TandaViva; si no, inserta la tanda
+    max + 1 en la misma transacción y devuelve sus filas por `n`. Un `n` repetido en la lista es un dato malo
+    (ValueError, antes del candado). El UNIQUE (analisis_id, tanda, n) es la red si algo se cuela y SOLO ese choque se
+    traduce a TandaViva (`_es_choque_de_tanda`); cualquier otro IntegrityError sale tal cual."""
     if not ganchos:
         raise ValueError("crear_tanda: sin ganchos no hay tanda")
+    ns = [int(g["n"]) for g in ganchos]
+    if len(set(ns)) != len(ns):
+        raise ValueError(f"crear_tanda: n repetido en los ganchos: {sorted(ns)}")
     t = db.tw_gancho
     aid = int(analisis_id)
     ahora = db.ahora()
     try:
         with db.conectar() as con:
             con.exec_driver_sql("BEGIN IMMEDIATE")
+            if con.execute(sa.select(db.tw_analisis.c.id).where(
+                    db.tw_analisis.c.id == aid, db.tw_analisis.c.cliente == cliente)).first() is None:
+                raise AnalisisAjeno(f"el análisis {aid} no es del proyecto {cliente}")
             vivas = con.execute(sa.select(sa.func.count()).select_from(t).where(
                 t.c.cliente == cliente, t.c.analisis_id == aid, t.c.estado.in_(VIVOS_GANCHO))).scalar()
             if vivas:
@@ -804,8 +836,10 @@ def crear_tanda(cliente, analisis_id, ganchos, pedido_por=None):
                 estado="preparando", texto=g["texto"], prompt=g["prompt"], fotograma_s=g.get("fotograma_s"),
                 pedido_por=pedido_por)).inserted_primary_key[0] for g in ganchos]
             filas = con.execute(sa.select(t).where(t.c.id.in_(ids)).order_by(t.c.n)).all()
-    except sa.exc.IntegrityError:
-        raise TandaViva() from None
+    except sa.exc.IntegrityError as e:
+        if _es_choque_de_tanda(e):
+            raise TandaViva() from None
+        raise
     return [dict(f._mapping) for f in filas]
 
 
