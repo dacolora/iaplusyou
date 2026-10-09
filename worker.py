@@ -8,8 +8,9 @@ carriles (spec 2026-09-28-crear-sin-cola):
   colgada (Wan 3.0 llegó a 20 min) ya no deja a las demás en fila. Los lotes de
   Sprints (prioridad < 5) ocupan como mucho `HILOS_LOTE`, así una pieza suelta
   siempre encuentra hilo.
-- **nicho**: las seis tareas de Nicho que esperan a Apify, Reddit/YouTube
-  o Claude (`CARRIL_NICHO`), de a una. Sus esperas no ocupan general.
+- **nicho**: las tareas de Nicho que esperan a Apify, Reddit/YouTube o
+  Claude y los barridos de Referentes (`CARRIL_NICHO`), de a una: comparten
+  la RAM de la cuenta de Apify. Sus esperas no ocupan general.
 - **general**: todo lo demás, de a una y en orden, como siempre (renders con
   1 CPU, Meta, periódicas…).
 
@@ -18,8 +19,9 @@ una tarea, esa tarea vuelve a `pendiente` a los 30 min (recuperar_colgadas) y
 se reintenta — nunca una que este mismo proceso está ejecutando. Al arrancar
 recupera de inmediato lo que quedó en_curso (solo hay un worker: es huérfano
 seguro), y ante SIGINT/SIGTERM deja de repartir, corta las esperas a WaveSpeed
-(pasan la posta a `flowplus_recuperar`) y a Apify (Nicho continúa por los mismos
-IDs guardados en estudio.extra), y espera a que terminen los hilos.
+(pasan la posta a `flowplus_recuperar`), y espera a que terminen todos los
+hilos. Nicho y Referentes terminan su tarea y su espera habitual a Apify;
+no se crean puntos de control ni continuaciones nuevas (enmienda 051, 2026-10-08).
 
 Uso: `python worker.py` (carga .env como dashboard.py).
 """
@@ -76,8 +78,10 @@ PERIODICAS = [("tienda_sync_pedidos_todas", 7200), ("tw_sincronizar_todas", 7200
 # Carril de Crear: generaciones que casi todo el tiempo esperan al proveedor
 # (también la voz del anuncio hablado, que no debe esperar detrás de un render).
 CARRIL_CREAR = ("flowplus_video", "flowplus_imagen", "flowplus_recuperar", "flowplus_director", "hablado_voz")
+# Un hilo para Nicho y barridos: comparten RAM/corridas de Apify y separados
+# podían recibir 402 por capacidad (enmienda 051, 2026-10-08).
 CARRIL_NICHO = ("nicho_recolectar", "nicho_inv_buscar", "nicho_inv_consultas",
-                "nicho_inv_seleccionar", "nicho_generar_avatares", "nicho_completar_avatares")
+                "nicho_inv_seleccionar", "nicho_generar_avatares", "nicho_completar_avatares", "referentes_barrer")
 HILOS_CREAR = 4
 HILOS_LOTE = 2
 PRIORIDAD_SUELTA = 5    # flowplus_lanzar.PRIORIDAD_NORMAL: una pieza pedida desde Crear
@@ -132,9 +136,6 @@ def ejecutar(tarea):
         fn = tareas.REGISTRO.get(tarea["tipo"])
         if fn is None:
             raise RuntimeError(gettext("tipo de tarea desconocido: %(tipo)s", tipo=tarea["tipo"]))
-        if tarea["tipo"] in ("nicho_recolectar", "nicho_inv_buscar"):
-            from tareas import apify_nicho
-            return apify_nicho.ejecutar(tarea, fn, debe_parar)
         return fn(tarea)
 
 

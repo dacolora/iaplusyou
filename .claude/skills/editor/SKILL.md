@@ -279,5 +279,7 @@ renders (including transitions, photos and rotation). Mean absolute RGB differen
 per channel, allowing interpolation without accepting a framing shift: max observed 0.036781, while a
 deliberate two-pixel shift gives 1.493974. Do not edit `tests/fixtures/*.json` to accommodate a discrepancy.
 `deploy/medir_memoria_render.py` compares isolated children with two 1920×1080 clips, zoom 2.45, one window
-and one transition, offline. macOS peak RSS: old 888.45 MiB, new 707.81 MiB (20.33% lower). Claude must
-measure in render-vps before changing the conservative window budget; this local measurement is not a VPS limit.
+and one transition, offline. macOS peak RSS: old 888.45 MiB, new 707.81 MiB (20.33% lower). La medición posterior en render-vps está registrada abajo; el presupuesto de ventanas sigue conservador
+y la medición local no se usa como límite del VPS.
+
+PND-049 (pruebas reforzadas, 2026-10-08): MAE RGB < 0.5 y máximo absoluto por canal ≤ 6/255. En trece casos de paridad el máximo observado fue 5; se deja un nivel para redondeos entre builds. El caso llenar_margen (640×360 → 360×640, zoom 1.125) coincide sin diferencia con el margen; sin los cuatro píxeles de apoyo da MAE 0.006104–0.007419 pero máximo 25–47, que el tope nuevo rechaza. No se cambia compilador, tramos ni fixtures. PND-049 queda abierto para recortar del todo: paridad geométrica exacta conservada; render-vps dos clips en un tramo, zoom 1.0 742→743 MiB, 2.45 969→837, 4.0 1443→898 (mediciones aportadas por Claude). La cuadrícula puede abarcar un eje entero; tolerar fase fraccionaria o cambiar caja necesita decisión de Daniel.

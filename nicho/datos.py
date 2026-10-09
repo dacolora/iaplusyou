@@ -278,15 +278,23 @@ def recalcular(cliente, estudio_id, tarea_viva=None):
     if tarea_viva is None:
         fila = cola.consultar_por_job(job_id_generar(cliente, estudio_id))
         tarea_viva = bool(fila and fila["estado"] in ("pendiente", "en_curso"))
-    with db.conectar() as con:
-        if not _bloquear(con, db.estudio, estudio_id, cliente):
-            return None
+    def leer(con):
         f = _fila(con, db.estudio, estudio_id, cliente)
         if not f:
-            return None
+            return None, None
         n = con.execute(sa.select(sa.func.count()).select_from(db.avatar).where(
             db.avatar.c.estudio_id == estudio_id, db.avatar.c.cliente == cliente)).scalar() or 0
-        nuevo = "generando" if tarea_viva else ("revisando" if n else "armando")
+        return f, "generando" if tarea_viva else ("revisando" if n else "armando")
+
+    with db.conectar() as con:
+        f, nuevo = leer(con)
+        if not f or nuevo == f.estado:
+            return nuevo
+        # Solo el cambio necesita escritura. Tras tomar el candado, deriva de
+        # nuevo contra las filas vivas: otra tarea pudo cambiar estudio/avatares.
+        if not _bloquear(con, db.estudio, estudio_id, cliente):
+            return None
+        f, nuevo = leer(con)
         if nuevo != f.estado:
             con.execute(db.estudio.update().where(db.estudio.c.id == estudio_id)
                         .values(actualizado_en=db.ahora(), estado=nuevo))

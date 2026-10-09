@@ -16,9 +16,8 @@ def test_rutas_retiradas_dan_404_sin_generar(app, monkeypatch, ruta):
     assert app['c'].post('/cliente/acme/' + ruta).status_code == 404
 
 
-def test_pieza_higgsfield_importada_sigue_en_proyecto(app, monkeypatch, tmp_path):
-    import creative_flow, gastos, estado, conceptos_imagen, json
-    from flask import template_rendered
+def test_proyecto_con_legado_responde_200_sin_leer_conceptos_retirados(app, monkeypatch, tmp_path):
+    import estado, conceptos_imagen, json
     monkeypatch.setattr(estado, 'BASE_DIR', str(tmp_path))
     monkeypatch.setattr(conceptos_imagen, 'BASE_DIR', str(tmp_path))
     estado.guardar('acme', {'viejo': {'estado': 'pendiente', 'video_url': 'https://r2.test/antiguo.mp4'}})
@@ -28,26 +27,8 @@ def test_pieza_higgsfield_importada_sigue_en_proyecto(app, monkeypatch, tmp_path
     carpeta = tmp_path / 'clientes' / 'acme'
     (carpeta / 'prompts_pendientes.json').write_text(json.dumps({'p1': {'estado': 'aprobado'}}))
     archivos = {p: p.read_bytes() for p in carpeta.glob('*.json')}
-    contextos = []
-    def recoger(sender, template, context, **kw):
-        if template.name == 'cliente.html':
-            contextos.append(context)
-    cid = creative_flow.crear('acme', [], [], [], 'Concepto antiguo conservado', 5, '', 'A',
-                             referencias_urls=['https://r2.test/antigua.png'])
-    creative_flow.actualizar('acme', cid, estado='video_listo', modelo='kling-2.1-pro',
-                            video_url='https://r2.test/antiguo.mp4', imagen_url='https://r2.test/antigua.png')
-    gastos.registrar_seguro('acme', 'video', 0.49, f'video:{cid}:t1', proveedor='higgsfield')
-    antes = creative_flow.cargar('acme')
-    with template_rendered.connected_to(recoger, app['dashboard'].app):
-        r = app['c'].get('/cliente/acme')
-    assert r.status_code == 200 and cid.encode() in r.data
-    detalle = app['c'].get(f'/cliente/acme/creative_flow/{cid}/detalle')
-    assert detalle.status_code == 200
-    assert b'https://r2.test/antiguo.mp4' in detalle.data
-    assert creative_flow.cargar('acme') == antes
-    assert gastos.resumen_total('acme')['total'] == 0.49
-    assert contextos[0]['videos'][0]['id'] == 'viejo'
-    assert contextos[0]['ideas_visuales'][0]['conceptos'][0]['imagenes']['higgsfield']['url'] == 'https://r2.test/antigua.png'
+    monkeypatch.setattr(conceptos_imagen, 'cargar', lambda c: pytest.fail('la página lee conceptos que no pinta'))
+    assert app['c'].get('/cliente/acme').status_code == 200
     assert all(p.read_bytes() == original for p, original in archivos.items())
 
 

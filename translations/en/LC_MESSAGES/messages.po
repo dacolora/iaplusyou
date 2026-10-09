@@ -2451,9 +2451,6 @@ msgstr "Apify isn't set up (APIFY_TOKEN is missing)."
 msgid "Apify no respondió el estado %(n)s veces seguidas (%(ultimo)s); corrida %(corrida)s: revísala en console.apify.com."
 msgstr "Apify didn't report the status %(n)s times in a row (%(ultimo)s); run %(corrida)s: check it at console.apify.com."
 
-msgid "Apify pudo arrancar una corrida sin devolver su id; revisa la corrida antes de lanzar otra."
-msgstr "Apify may have started a run without returning its ID; check the run before starting another."
-
 #, python-format
 msgid "Apify rechazó la entrada del actor: %(motivo)s"
 msgstr "Apify rejected the actor input: %(motivo)s"
@@ -4283,9 +4280,6 @@ msgstr "Email saved: %(correo)s. Wait a moment before requesting the confirmatio
 
 msgid "Correo nuevo"
 msgstr "New email"
-
-msgid "Corrida de Apify pausada; se recuperará sin volver a lanzarla."
-msgstr "Apify run paused; it will be recovered without starting it again."
 
 msgid "Corta, textos y música, gratis"
 msgstr "Cuts, text and music, free"
@@ -8671,9 +8665,6 @@ msgstr "There is a problem with the provider and Creatv has already been notifie
 msgid "Hay una conexión guardada pero no se puede leer (¿cambió FLASK_SECRET_KEY?). Vuelve a conectar con un token nuevo: la anterior se reemplaza."
 msgstr "There's a saved connection but it can't be read (did FLASK_SECRET_KEY change?). Connect again with a new token: the previous one gets replaced."
 
-msgid "Hay una corrida de Apify pendiente con otros parámetros; recupérala antes de lanzar otra."
-msgstr "An Apify run with different settings is still pending; recover it before starting another."
-
 msgid "Hay una investigación en curso en este estudio: espera a que termine o cancélala."
 msgstr "There's research in progress on this study: wait for it to finish or cancel it."
 
@@ -9409,9 +9400,6 @@ msgstr "The scene takes place in THIS place: keep walls, floor, furniture, decor
 
 msgid "La escena que se está generando termina (ya se cobró); después la cadena se detiene. ¿Detener?"
 msgstr "The scene being generated will finish (it has already been charged); then the chain stops. Stop?"
-
-msgid "La espera a Apify se pausó; seguirá con la misma corrida, sin volver a lanzarla."
-msgstr "The wait for Apify was paused; it will resume the same run without starting it again."
 
 msgid "La etapa debe ser TOF, MOF o BOF."
 msgstr "The stage must be TOF, MOF or BOF."
@@ -11745,9 +11733,6 @@ msgstr "That image couldn't be saved."
 
 msgid "No se pudo guardar este cambio; deshazlo y vuelve a intentar."
 msgstr "Couldn't save this change; undo it and try again."
-
-msgid "No se pudo guardar la corrida de Apify; no se lanza otra."
-msgstr "The Apify run could not be saved; another run will not be started."
 
 msgid "No se pudo guardar la ficha de la voz antes de cobrar."
 msgstr "The voice details could not be saved before charging."

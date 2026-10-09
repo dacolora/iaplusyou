@@ -7,6 +7,7 @@ from final_edition.motor import compilador as c, render as r
 from deploy.medir_memoria_render import encuadre_anterior
 
 CASOS = [
+    ('llenar_margen', {'zoom': 1.125}, False, False),
     ('llenar_centro', {'zoom': 2.45}, False, False),
     ('llenar_izquierda', {'zoom': 2.45, 'x': 0, 'y': 0}, False, False),
     ('llenar_derecha', {'zoom': 2.45, 'x': 1, 'y': 1}, False, False),
@@ -64,15 +65,22 @@ def test_paridad_real(tmp_path, medios, monkeypatch, nombre, enc, foto, rotado):
         path = str(tmp_path / (modo + '.mp4'))
         r.ejecutar(c.compilar(doc, rutas, con_ass=False), path)
         archivos.append(path)
-    valores = []
+    valores, maximos = [], []
     for tiempo in (100, 400, 500, 700):
         a, b = [_cuadro(path, tiempo, tmp_path, f'{i}_{tiempo}') for i, path in enumerate(archivos)]
-        mae = sum(ImageStat.Stat(ImageChops.difference(a, b)).mean) / 3
+        diferencia = ImageStat.Stat(ImageChops.difference(a, b))
+        mae = sum(diferencia.mean) / 3
+        maximos.append(max(mx for _, mx in diferencia.extrema))
         valores.append(mae)
         # 0.5/255 por canal: admite pequeñas diferencias de redondeo del
         # interpolador; la prueba de sensibilidad rechaza mover 2 px el cuadro.
         assert mae < 0.5, (nombre, tiempo, mae)
+        # Máximo observado con margen: 5/255. Un nivel de tolerancia entre
+        # builds de ffmpeg; sin margen el caso llenar_margen da 25–47/255
+        # aunque su MAE siga por debajo de 0.008. La media sola lo ocultaba.
+        assert maximos[-1] <= 6, (nombre, tiempo, maximos[-1])
     print(f'{nombre}: MAE RGB por cuadro = ' + ', '.join(f'{v:.6f}' for v in valores))
+    print(f'{nombre}: MAX RGB por cuadro = ' + ', '.join(str(v) for v in maximos))
     # El centro y límites visibles conservan EXACTAMENTE la cuadrícula que
     # encuadre.caja comparte con JS; no se regeneran sus fixtures.
     k = encuadre.caja(w, h, 360, 640, enc)

@@ -162,3 +162,5 @@ PND-143 (2026-10-08, decisión delegada): cargar añade el acumulado real de gas
 **Topes de ayudas Claude (2026-10-08, PND-141, decisión delegada):** Describir referencias y Sugerir sonido usan 4000 tokens; prompts intactos, SDK sin reintentos. La medición real con `eval-claude` queda para la tanda pagada autorizada por Daniel.
 
 PND-068 (2026-10-08, decisión 2026-09-18: nada nuevo a Higgsfield): Nueva idea y Nueva idea visual están retiradas, incluidas sus rutas de generar/aprobar imágenes y animaciones. Las URL antiguas dan 404. Las piezas ya generadas, sus conceptos, archivos y gasto se conservan; los CLI y proveedores compartidos permanecen.
+
+PND-068 (corrección 2026-10-08): la página del proyecto no carga estado_videos, bitácora ni conceptos_pendientes para un contexto que ninguna plantilla pinta. Retirados _conceptos_pendientes y sus job_id locales; se conservan los módulos/datos históricos y los consumidores vigentes (CLI, reconciliación y publicación). La regresión comprueba 404 de las rutas retiradas y 200 del proyecto con JSON antiguos sin leer conceptos para pintarlos; no usa una pieza Flow Plus como prueba del flujo Higgsfield.

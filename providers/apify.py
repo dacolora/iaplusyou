@@ -21,10 +21,6 @@ sería peor que reintentarla.
 Los mensajes se muestran a la persona (nunca van a Claude): pasan por
 `gettext` y salen en el idioma del contexto (el del proyecto en el worker).
 """
-from contextlib import contextmanager
-from contextvars import ContextVar
-from copy import deepcopy
-
 from flask_babel import gettext
 
 from nicho.fuentes import _http
@@ -40,46 +36,6 @@ ESTADO_SIN_TERMINAR = "sin terminar"   # estado ficticio: venció el reloj local
 MAX_SIMULTANEAS = 5            # corridas de un lote a la vez (Apify limita las concurrentes por cuenta)
 ESTADO_NO_ARRANCO = "no arrancó"     # el POST fue rechazado: no se cobró nada
 ESTADO_SIN_ESTADO = "sin estado"     # el sondeo se rindió: la corrida sigue viva en Apify
-
-
-# Solo las tareas de Nicho activan este contexto; Referentes conserva su contrato.
-_RECUPERABLE = ContextVar("apify_recuperable", default=None)
-
-
-class EsperaInterrumpida(BaseException):
-    """Parada del worker: atraviesa los catches de fallo de una tienda.
-    La envuelve tareas.apify_nicho, que devuelve Continuar en vez de fallar."""
-
-
-@contextmanager
-def recuperable(previo, guardar, detener):
-    token = _RECUPERABLE.set({"previo": previo, "guardar": guardar, "detener": detener})
-    try:
-        yield _RECUPERABLE.get()
-    finally:
-        _RECUPERABLE.reset(token)
-
-
-def costo_guardado(registros, corridas, tarifa):
-    """PND-007: mayor de usage y resultados × precio; sin cifra, peor caso.
-    Solo lee registros ya obtenidos. La aproximación queda identificada."""
-    total, estimado, pendiente = 0.0, False, False
-    for reg, plan in zip(registros, corridas):
-        if not reg.get("run_id"):
-            continue
-        reporte = reg.get("cobro") or {}
-        n = reg.get("resultados") if reg.get("leido") else plan["max_items"]
-        calculado = plataformas_costo(n, tarifa)
-        real = reporte.get("costo_real")
-        total += max(calculado, real or 0)
-        estimado |= real is None or not reg.get("leido")
-        pendiente |= real is None or reporte.get("conciliacion_pendiente", False)
-    return round(total, 4), {"estimado": estimado, "conciliacion_pendiente": pendiente,
-                            "corridas": [r["run_id"] for r in registros if r.get("run_id")]}
-
-
-def plataformas_costo(n, tarifa):
-    return n * float(tarifa.get("usd_por_resultado") or 0) + float(tarifa.get("usd_por_corrida") or 0)
 
 
 def cabeceras(token):
@@ -300,50 +256,17 @@ def correr_lote(sesion, token, actor, corridas, etapa, avanzar=None, max_simulta
     avanzar = avanzar or (lambda etapa, detalle=None: None)
     registros = [{"indice": i, "etiqueta": c.get("etiqueta"), "run_id": None, "dataset_id": None, "estado": None, "resultados": 0, "motivo": ""}
                  for i, c in enumerate(corridas)]
-    contexto = _RECUPERABLE.get()
-    if contexto:
-        contexto["usado"] = True
-    previo = (contexto or {}).get("previo") or {}
-    if previo:
-        if previo.get("actor") != actor or previo.get("corridas") != corridas:
-            raise ErrorFuente(gettext("Hay una corrida de Apify pendiente con otros parámetros; recupérala antes de lanzar otra."))
-        registros = deepcopy(previo["registros"])
     pendientes = list(range(len(corridas)))
     vivas = {}                                  # indice -> {"esperado": s, "fallos": n}
     total = len(corridas)
 
-    def guardar():
-        if contexto:
-            contexto["guardar"]({"actor": actor, "corridas": corridas, "registros": registros})
-
-    def revisar_parada():
-        if contexto and contexto["detener"]():
-            for reg in registros:
-                if reg.get("run_id"):
-                    reg["cobro"] = costo_corrida(sesion, token, reg["run_id"])
-            guardar()
-            raise EsperaInterrumpida()
-
     def _arrancar_siguientes():
         while pendientes and len(vivas) < max_simultaneas:
-            revisar_parada()
             i = pendientes.pop(0)
             reg, c = registros[i], corridas[i]
-            if reg.get("run_id"):
-                if reg["estado"] not in TERMINALES:
-                    vivas[i] = {"esperado": 0.0, "fallos": 0}
-                continue
-            if reg.get("lanzando"):
-                raise ErrorFuente(gettext("Apify pudo arrancar una corrida sin devolver su id; revisa la corrida antes de lanzar otra."))
-            if reg["estado"] == ESTADO_NO_ARRANCO:
-                continue
-            reg["lanzando"] = True
-            guardar()
 
             def _ids(run_id, dataset_id, reg=reg):
                 reg["run_id"], reg["dataset_id"] = run_id, dataset_id
-                reg["estado"] = "READY"
-                guardar()
             try:
                 _, _, estado = arrancar(sesion, token, actor, c["entrada"], c["max_items"], c["max_usd"], on_ids=_ids,
                                         memoria_mb=c.get("memoria_mb"))
@@ -353,10 +276,8 @@ def correr_lote(sesion, token, actor, corridas, etapa, avanzar=None, max_simulta
                     vivas[i] = {"esperado": 0.0, "fallos": 0}
                 else:
                     reg["estado"], reg["motivo"] = ESTADO_NO_ARRANCO, e.usuario
-                guardar()
                 continue
             reg["estado"] = estado
-            guardar()
             if estado in TERMINALES:
                 continue
             vivas[i] = {"esperado": 0.0, "fallos": 0}
@@ -365,9 +286,7 @@ def correr_lote(sesion, token, actor, corridas, etapa, avanzar=None, max_simulta
     if all(r["estado"] == ESTADO_NO_ARRANCO for r in registros):
         raise ErrorFuente(registros[0]["motivo"] if registros else gettext("No hay corridas que lanzar."))
     while vivas:
-        revisar_parada()
         _http.dormir(PAUSA_SONDEO)
-        revisar_parada()
         for i in list(vivas):
             reg, v = registros[i], vivas[i]
             v["esperado"] += PAUSA_SONDEO
@@ -397,12 +316,9 @@ def correr_lote(sesion, token, actor, corridas, etapa, avanzar=None, max_simulta
                                    estado=reg["estado"], corrida=reg["run_id"], hechas=hechas, total=total))
             if reg["estado"] in TERMINALES:
                 del vivas[i]
-        guardar()
         _arrancar_siguientes()
-    revisar_parada()
     items, avisos = [], []
     for reg, c in zip(registros, corridas):
-        revisar_parada()
         if not reg["run_id"]:
             avisos.append(gettext("corrida no lanzada (%(etiqueta)s): %(motivo)s", etiqueta=reg["etiqueta"], motivo=reg["motivo"]))
             continue
@@ -414,11 +330,7 @@ def correr_lote(sesion, token, actor, corridas, etapa, avanzar=None, max_simulta
                                                                                      dataset=reg["dataset_id"] or "?", motivo=motivo)
         else:
             reg["resultados"] = len(crudos)
-            reg["leido"] = True
             items.extend((reg["indice"], it) for it in crudos)
-        if contexto:
-            reg["cobro"] = costo_corrida(sesion, token, reg["run_id"])
-            guardar()
         if reg["estado"] != "SUCCEEDED" or reg["motivo"]:
             avisos.append(gettext("corrida %(corrida)s (%(etiqueta)s) %(estado)s: %(n)s resultado(s)%(motivo)s",
                                   corrida=reg["run_id"], etiqueta=reg["etiqueta"], estado=frase_estado(reg["estado"]),

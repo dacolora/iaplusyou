@@ -253,18 +253,13 @@ def _gasto_recoleccion(cliente, eid, tarea, fuente, params, nota=""):
     if not tarifa:
         return 0.0
     usd = plataformas.costo(n, len(corridas), tarifa)
-    cobro_extra = {}
-    if any("cobro" in c for c in (getattr(fuente, "corridas", None) or [])):
-        from providers import apify
-        registros = fuente.corridas
-        usd, cobro_extra = apify.costo_guardado(registros, [{"max_items": c["resultados"]} for c in registros], tarifa)
     if usd <= 0:
         return 0.0
     detalle = gettext("Apify %(actor)s: %(n)s resultado(s) aprox.", actor=idiomas.traducir(tarifa["nombre"]), n=n)
     gastos.registrar_seguro(cliente, "recoleccion", usd, f"recoleccion:{eid}{ref_sufijo(tarea)}",
                             detalle=detalle + (f" — {nota}" if nota else ""),
                             proveedor="apify",
-                            extra={**cobro_extra, "actor": tarifa["actor"], "resultados": n, "usd_por_resultado": tarifa["usd_por_resultado"],
+                            extra={"actor": tarifa["actor"], "resultados": n, "usd_por_resultado": tarifa["usd_por_resultado"],
                                    "usd_por_corrida": tarifa.get("usd_por_corrida", 0), **_corrida(fuente),
                                    **({"corridas": corridas} if corridas else {})})
     return usd

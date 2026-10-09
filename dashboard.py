@@ -2057,21 +2057,6 @@ def _contexto_meta(cliente, experimentos_lista=None):
 @trabajos.con_vivos_precargados
 @catalogo_productos.con_lecturas_memorizadas
 def ver_cliente(cliente):
-    videos_dict = estado_mod.cargar(cliente)
-    videos = []
-    for brief_id, entry in sorted(
-        videos_dict.items(), key=lambda kv: kv[1].get("generado_en", ""), reverse=True
-    ):
-        job_id = _job_id_publicar(cliente, brief_id)
-        videos.append({
-            "id": brief_id,
-            **entry,
-            "plataformas_estado": _estado_plataformas(cliente, brief_id) if entry.get("estado") == "publicado" else {},
-            "trabajo": {"job_id": job_id} if entry.get("estado") == "pendiente" and trabajos.en_curso(job_id) else None,
-        })
-
-    log = bitacora.leer(cliente=cliente, limit=100)
-
     # Experimentos (centro de resultados, E2): la gestión de cada experimento, sus propuestas y reglas, los anuncios
     # sueltos y lo de Meta salen de contextos que comparten el fragmento de resultados (`exp_resultados`) y
     # «Nuevo experimento» (`exp_nuevo`). Lo orgánico ya viene en `fe_ctx`, y las piezas elegibles (la galería) ya
@@ -2121,9 +2106,6 @@ def ver_cliente(cliente):
         escenas=_escenas(cliente),
         productos_referencia=_productos_referencia(cliente),
         marca=_marca_contexto(cliente),
-        ideas_visuales=_conceptos_pendientes(cliente),
-        videos=videos,
-        log=log,
         # Solo el admin ve el informe (Configuración › Puesta a punto) y armarlo
         # corre git y lee todo el repo (~100 ms): a un cliente no se le cobra.
         informe=informe.completo(cliente) if session.get("rol") == "admin" else None,
@@ -2218,51 +2200,6 @@ def _aspect_ratio_para_plataformas(platforms):
     if platforms == ["youtube"]:
         return "16:9"
     return "9:16"
-
-
-# Lectura de conceptos históricos: no permite generar ni borrar piezas pagadas.
-
-def _job_id_concepto(cliente, idea_id, concepto_id, proveedor):
-    return f"{cliente}__{idea_id}__{concepto_id}__{proveedor}__imagen"
-
-
-def _job_id_animacion(cliente, idea_id, concepto_id, proveedor, anim_id):
-    return f"{cliente}__{idea_id}__{concepto_id}__{proveedor}__{anim_id}__video"
-
-
-def _conceptos_pendientes(cliente):
-    """Estado del flujo imagen-primero, listo para el template: por idea, sus
-    escenas, y por escena sus dos imágenes (con trabajo en curso si aplica) y las
-    animaciones pendientes de cada imagen ya aprobada."""
-    data = conceptos_imagen.cargar(cliente)
-    ideas = []
-    for idea_id, idea in data.items():
-        conceptos = []
-        for concepto_id, concepto in idea.get("conceptos", {}).items():
-            imagenes = {}
-            for proveedor in conceptos_imagen.PROVEEDORES:
-                img = dict(concepto[proveedor])
-                job_id = _job_id_concepto(cliente, idea_id, concepto_id, proveedor)
-                img["trabajo"] = {"job_id": job_id} if trabajos.en_curso(job_id) else None
-                animaciones = []
-                for anim_id, anim in img.get("animaciones", {}).items():
-                    if anim.get("estado") not in ("pendiente",):
-                        continue
-                    a = {"id": anim_id, **anim}
-                    a_job_id = _job_id_animacion(cliente, idea_id, concepto_id, proveedor, anim_id)
-                    a["trabajo"] = {"job_id": a_job_id} if trabajos.en_curso(a_job_id) else None
-                    animaciones.append(a)
-                img["animaciones_pendientes"] = animaciones
-                imagenes[proveedor] = img
-            conceptos.append({"id": concepto_id, "texto": concepto["texto"], "imagenes": imagenes})
-        if conceptos:
-            ideas.append({
-                "id": idea_id,
-                "idea": idea.get("idea"),
-                "creado_en": idea.get("creado_en"),
-                "conceptos": conceptos,
-            })
-    return sorted(ideas, key=lambda i: i.get("creado_en", ""), reverse=True)
 
 
 # ---------- flujo "cambiar calzado": una foto real + un producto del catálogo ->

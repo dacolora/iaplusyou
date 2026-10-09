@@ -159,17 +159,12 @@ def _gasto_apify(cliente, eid, tarea, paso, fuente, tarifa, nota=""):
     n = int(getattr(fuente, "resultados", 0) or 0)
     corridas = [c.get("run_id") for c in (getattr(fuente, "corridas", None) or []) if c.get("run_id")]
     usd = plataformas.costo(n, len(corridas), tarifa)
-    cobro_extra = {}
-    if any("cobro" in c for c in (getattr(fuente, "corridas", None) or [])):
-        from providers import apify
-        registros = fuente.corridas
-        usd, cobro_extra = apify.costo_guardado(registros, [{"max_items": c["resultados"]} for c in registros], tarifa)
     if usd <= 0:
         return 0.0
     detalle = gettext("Apify %(actor)s: %(n)s resultado(s) aprox.", actor=idiomas.traducir(tarifa["nombre"]), n=n)
     gastos.registrar_seguro(cliente, "recoleccion", usd, f"recoleccion:{eid}:{paso}{ref_sufijo(tarea)}",
                             detalle=detalle + (f" — {nota}" if nota else ""),
-                            proveedor="apify", extra={**cobro_extra, "actor": tarifa["actor"], "resultados": n, "usd_por_resultado": tarifa["usd_por_resultado"],
+                            proveedor="apify", extra={"actor": tarifa["actor"], "resultados": n, "usd_por_resultado": tarifa["usd_por_resultado"],
                                                       "usd_por_corrida": tarifa.get("usd_por_corrida", 0), "corridas": corridas})
     return usd
 
