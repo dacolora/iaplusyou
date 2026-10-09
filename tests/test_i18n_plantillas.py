@@ -86,10 +86,6 @@ PLANTILLAS_TRADUCIDAS = [
     # tarjetas y la ficha del producto reemplazan a _catalogo_lista.html y
     # _catalogo_sin_fotos.html (borradas); ya vienen con _() y su inglés en el catálogo.
     "_catalogo_grid.html", "_catalogo_tarjeta.html", "_catalogo_ficha.html",
-    # Flujo viejo «Nueva idea» (pedido de Daniel, 2026-10-01): sin pantalla viva,
-    # pero traducido igual; tests/test_i18n_nueva_idea.py lo pinta en los dos idiomas.
-    "_seccion_ideas.html", "_idea_card.html", "_idea_visual_card.html", "_prompt_row.html", "_imagen_row.html",
-    "_progreso_row.html", "_seccion_videos.html", "_video_card.html", "_seccion_bitacora.html",
     "_audios_mis_voces.html",   # Audios Europa (2026-09-30): Crear › Audios › Mis voces, ya con _()
     # Anuncio hablado en Crear (2026-10-01): el panel por fetch, su tarjeta de foto, la
     # galería de voces que comparte con Audios y la cáscara de la página (Task 7).

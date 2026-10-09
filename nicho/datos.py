@@ -278,13 +278,23 @@ def recalcular(cliente, estudio_id, tarea_viva=None):
     if tarea_viva is None:
         fila = cola.consultar_por_job(job_id_generar(cliente, estudio_id))
         tarea_viva = bool(fila and fila["estado"] in ("pendiente", "en_curso"))
-    with db.conectar() as con:
+    def leer(con):
         f = _fila(con, db.estudio, estudio_id, cliente)
         if not f:
-            return None
+            return None, None
         n = con.execute(sa.select(sa.func.count()).select_from(db.avatar).where(
             db.avatar.c.estudio_id == estudio_id, db.avatar.c.cliente == cliente)).scalar() or 0
-        nuevo = "generando" if tarea_viva else ("revisando" if n else "armando")
+        return f, "generando" if tarea_viva else ("revisando" if n else "armando")
+
+    with db.conectar() as con:
+        f, nuevo = leer(con)
+        if not f or nuevo == f.estado:
+            return nuevo
+        # Solo el cambio necesita escritura. Tras tomar el candado, deriva de
+        # nuevo contra las filas vivas: otra tarea pudo cambiar estudio/avatares.
+        if not _bloquear(con, db.estudio, estudio_id, cliente):
+            return None
+        f, nuevo = leer(con)
         if nuevo != f.estado:
             con.execute(db.estudio.update().where(db.estudio.c.id == estudio_id)
                         .values(actualizado_en=db.ahora(), estado=nuevo))
@@ -302,11 +312,10 @@ def agregar_comentarios(cliente, estudio_id, fuente, lista):
     ahora = db.ahora()
     nuevos = repetidos = 0
     with db.conectar() as con:
-        if not _fila(con, db.estudio, estudio_id, cliente):
+        if not _bloquear(con, db.estudio, estudio_id, cliente) or not _fila(con, db.estudio, estudio_id, cliente):
             raise ErrorDatos(gettext("Ese estudio no existe."))
         historicos = set()
         if fuente == "reddit":
-            _bloquear(con, db.estudio, estudio_id, cliente)
             historicos = {(f.fuente_id, f.url) for f in con.execute(
                 sa.select(db.comentario.c.fuente_id, db.comentario.c.url).where(
                     db.comentario.c.cliente == cliente, db.comentario.c.estudio_id == estudio_id,
@@ -595,6 +604,8 @@ def guardar_completado(cliente, estudio_id, cambios):
     aprobados = []
     with db.conectar() as con:
         for aid, campos in (cambios or {}).items():
+            if not _bloquear(con, db.avatar, int(aid), cliente):
+                continue
             f = _fila(con, db.avatar, int(aid), cliente)
             if not f or f.estudio_id != int(estudio_id) or f.tipo != "sub":
                 continue
@@ -792,7 +803,7 @@ def guardar_productos_nicho(cliente, estudio_id, plataforma, productos):
     t, ahora = db.producto_nicho, db.ahora()
     nuevos = actualizados = 0
     with db.conectar() as con:
-        if not _fila(con, db.estudio, estudio_id, cliente):
+        if not _bloquear(con, db.estudio, estudio_id, cliente) or not _fila(con, db.estudio, estudio_id, cliente):
             raise ErrorDatos(gettext("Ese estudio no existe."))
         for p in productos or []:
             limpio = _producto_limpio(p)

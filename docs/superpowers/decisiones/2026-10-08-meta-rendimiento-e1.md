@@ -78,7 +78,7 @@ y en el código. Las sub-decisiones (R4b, R4c, R11b) refinan a la que llevan por
 - **R18.** Se fusionó `origin/main` ANTES de la tarea 11 y nuestra migración pasa a ser la 0034 (`down_revision` 0033) —
   `cobros` de main es dueña de la 0033 y puede estar ya desplegada; la nuestra nunca se desplegó — si está mal: nada.
   (R29, 2026-10-09: en la segunda mezcla de main, que trajo `0034_tw_tarjetas`, la nuestra pasa a ser la 0035,
-  `down_revision` 0034, y sus pendientes se renumeran a PND-190…206, después de los de main.)
+  `down_revision` 0034, y sus pendientes se renumeran a PND-190…206, después de los de main; en la tercera, a PND-192…208, R31.)
 - **R19.** En `docs/pendientes.md`, E2 «Diagnosticar y recomendar» queda `decidido sin hacer` y E3 «Aplicar cambios» queda
   `bloqueado por Daniel` (cambia pauta en Meta) — así lo piden las definiciones de estado de la tabla — si está mal: solo
   cambia el estado de una fila del registro.
@@ -122,6 +122,7 @@ y en el código. Las sub-decisiones (R4b, R4c, R11b) refinan a la que llevan por
 - **R29.** Segunda mezcla de `origin/main` (trajo `0034_tw_tarjetas` y PND-179…189): se revisa primero la ola de arreglos y
   después se mezcla; nuestra migración pasa a ser la 0035 (`down_revision` 0034) y nuestros pendientes se renumeran a
   PND-190…206, después del máximo de main — la nuestra nunca se desplegó — si está mal: nada.
+  (R31: en la tercera mezcla pasan a PND-192…208.)
 - **R30.** Las copias de Meta ya no se pierden por ceder el turno: los tipos periódicos que escriben en Meta (`exp_decidir`,
   `exp_avanzar_todos`) frenan la copia solo mientras CORREN y los que dispara una persona (`exp_lanzar`, `meta_publicar`,
   `organico_publicar`) mientras están en cola o corriendo; una copia pospuesta se vuelve a encolar sola para dentro de 10
@@ -129,8 +130,12 @@ y en el código. Las sub-decisiones (R4b, R4c, R11b) refinan a la que llevan por
   (`MAX_POSPOSICIONES`, el contador viaja en el payload) y después deja que la retome la periódica de 3 h; la pausa
   compartida por el límite de uso de Meta tiene un tope de 24 h; «Actualizar ahora» durante la pausa avisa «Meta pidió
   esperar: la copia sigue a las HH:MM» y no encola nada — la revisión encontró que `exp_avanzar_todos` (cada 10 min, en
-  el único carril general) casi siempre estaba en cola y dejaba cuentas horas sin copiar (PND-206) — si está mal: unas
+  el único carril general) casi siempre estaba en cola y dejaba cuentas horas sin copiar (PND-208) — si está mal: unas
   pocas filas extra en la cola.
+- **R31.** Tercera mezcla de `origin/main` (2026-10-09, lote 6C: carril de Nicho, PND-190 y PND-191 de main): el worker
+  queda con cuatro carriles (crear, nicho, lectura y general) y el general excluye a los otros tres; nuestra migración sigue
+  siendo la 0035 (main sigue en 0034) y nuestros pendientes se renumeran otra vez, de PND-190…206 a PND-192…208 (+2),
+  después del máximo de main — si está mal: nada.
 
 ## Hechos medidos contra la API real de Meta
 

@@ -5,17 +5,14 @@ entrada `-ss/-t`, ~85 MB (ffmpeg 8 con 1 CPU, el VPS: 4 cortes 663 MB, 8 984,
 2026-09-30). Por encima de PRESUPUESTO_OVERLAYS o de PRESUPUESTO_VIDEOS el
 documento se renderiza por ventanas de tiempo y se concatena sin recodificar.
 
-Encuadre con acercamiento (capa 5b, revisión final, R7): «llenar» hace
-`scale={sw}:{sh},crop=W:H` en CADA cuadro, y con zoom z un 1080p horizontal
-en 9:16 se escala a 3414·z × 1920·z antes del crop («ajustar» con zoom
-escala su primer plano igual). Medido en la Mac (`-threads 1`), un tramo de
-seis clips así: zoom 2 = 1,5 GB, zoom 4 = 2,9 GB — contra los ~85 MB por
-entrada que supone PRESUPUESTO_VIDEOS. Por eso un VIDEO de la principal con
-zoom > 1 pesa ceil(zoom²) entradas (tope PRESUPUESTO_VIDEOS: un clip muy
-acercado queda solo en su tramo); una foto sigue pesando 1, porque se escala
-una vez antes del `loop`. Recortar primero y escalar después (lo que
-ahorraría la memoria) queda para más adelante: cambia el compilador y su
-paridad con la vista previa. Puro."""
+Encuadre con acercamiento (PND-049, 2026-10-08): el compilador recorta en
+origen antes de escalar, alineado a la cuadrícula original para conservar la
+paridad. Una proporción coprima puede obligar a conservar un eje entero. Se
+MANTIENE el peso conservador ceil(zoom²) (tope PRESUPUESTO_VIDEOS) hasta medir
+la imagen render-vps; fotos siguen pesando 1. Las transiciones siguen sin
+partirse: esta protección por sí sola no resuelve dos clips inseparables.
+La medición de ambos caminos está en deploy/medir_memoria_render.py. Puro.
+"""
 import math
 
 from flask_babel import gettext
@@ -69,7 +66,7 @@ def videos(doc, inicio_ms, fin_ms):
 def peso_video(clip):
     """Cuántas entradas «de 85 MB» vale un clip de la principal de video:
     1, o ceil(zoom²) (tope PRESUPUESTO_VIDEOS) para un VIDEO cuyo encuadre
-    acerca — escala el cuadro entero antes del crop en cada cuadro (ver el
+    acerca — presupuesto conservador mientras se mide el render-vps (ver el
     docstring del módulo). Una foto vale 1: se escala una sola vez."""
     enc = clip.get("encuadre")
     if clip.get("foto") or not enc:

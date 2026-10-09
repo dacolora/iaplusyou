@@ -20,9 +20,7 @@ propósito: el contenido del mapa del código (`mapa_codigo.html`, con
 contrato de `final_edition/documento.validar` y los de
 `static/editor/operaciones.js` (`INTERNOS` en tests/test_i18n_editor.py), los
 prompts para los modelos de video e imagen con sus tokens `Image N` /
-`Video N` / `@Imagen N` (`prompt_swap.py`, `flowplus_prompt`). Las 9
-plantillas del flujo viejo «Nueva idea» también se traducen desde 2026-10-01
-(tests/test_i18n_nueva_idea.py). Una excepción a §B8: «Escribe aquí» y «Escribe el
+`Video N` / `@Imagen N` (`prompt_swap.py`, `flowplus_prompt`). Una excepción a §B8: «Escribe aquí» y «Escribe el
 precio» (capa 4c), el texto inicial editable de un clip de texto nuevo del
 editor, salen en el idioma de quien mira (el navegador solo tiene su
 diccionario). Los tests fijan

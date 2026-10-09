@@ -326,3 +326,43 @@ def test_el_general_sigue_tomando_lo_demas_aunque_haya_copias_de_meta_esperando(
     assert _esperar(lambda: general == [g])
     soltar.set(); soltar_general.set()
     w.esperar_hilos(timeout=5)
+
+
+# --- Cuatro carriles (tercera mezcla de main, 2026-10-09): el de Nicho (lote 6C) y el de lectura conviven ---
+
+def test_los_carriles_no_se_pisan_y_el_general_excluye_a_los_otros_tres(w, monkeypatch):
+    crear, nicho, lectura = set(w.CARRIL_CREAR), set(w.CARRIL_NICHO), set(w.CARRIL_LECTURA)
+    assert not (crear & nicho) and not (crear & lectura) and not (nicho & lectura)
+    llamadas = []
+    monkeypatch.setattr(w.cola, "reclamar", lambda **kw: llamadas.append(kw))
+    w.repartir()
+    general = [k for k in llamadas if "excluir_tipos" in k]
+    assert len(general) == 1
+    assert crear | nicho | lectura <= set(general[0]["excluir_tipos"])
+    assert any(set(k.get("tipos", ())) == nicho for k in llamadas)
+    assert any(set(k.get("tipos", ())) == lectura for k in llamadas)
+
+
+def test_nicho_lectura_y_general_corren_a_la_vez(w, monkeypatch):
+    import cola
+    import tareas
+    copias, soltar_meta, _ = _bloqueante_de_meta(monkeypatch)
+    entro_nicho, soltar_nicho = threading.Event(), threading.Event()
+
+    def _nicho(t):
+        entro_nicho.set()
+        soltar_nicho.wait(5)
+        return "ok"
+    monkeypatch.setitem(tareas.REGISTRO, "nicho_recolectar", _nicho)
+    general, soltar_general = _bloqueante("prueba_render")
+    n = cola.encolar("nicho_recolectar", {}, max_intentos=1)
+    m = cola.encolar("meta_rend_sincronizar", {}, job_id="hf__meta_rend__act_1", prioridad=2)
+    g = cola.encolar("prueba_render", {})
+    try:
+        assert w.repartir() == 3
+        assert entro_nicho.wait(2) and _esperar(lambda: copias == [m] and general == [g])
+        assert {v["carril"] for v in w._EN_VUELO.values()} == {"nicho", "lectura", "general"}
+    finally:
+        soltar_meta.set(); soltar_nicho.set(); soltar_general.set()
+        w.esperar_hilos(timeout=5)
+    assert {cola.consultar_por_id(i)["estado"] for i in (n, m, g)} == {"hecha"}

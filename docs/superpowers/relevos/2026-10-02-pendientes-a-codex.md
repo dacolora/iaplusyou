@@ -92,12 +92,18 @@ EN PRODUCCIÓN desde 2026-10-05 (main 878fcaf, sin migración, los dos servicios
 ## Lote 5 y lote 6 (2026-10-08)
 - Lote 5 EN PRODUCCIÓN (main 578696a, sin migración, los dos servicios). Decisiones delegadas por Daniel en
   `docs/superpowers/decisiones/2026-10-07-pendientes-delegados.md`.
-- Lote 6, parte A (plata), PARADO por el límite de uso de ChatGPT el 2026-10-08 02:18 (Bogotá): «try again at 3:55 AM».
-  Worktree `.claude/worktrees/codex-lote6` (rama `codex/lote6`, sobre 578696a0), sesión `01a11a5d-95fe-7ce1-a619-8338d057f6d6`
-  (Codex avisó «thread not found» al cortarse: si `resume` falla, relanzar con el encargo de la parte A diciendo que ya hay
-  trabajo a medias en el worktree). Alcanzó a tocar PND-146 en `final_edition/{__init__,insumos,produccion,voz}.py` y
-  `tests/test_lote6_plata_final.py`, sin informe. Encargo: `lote6a.md` (en el scratchpad de la sesión de Claude; su contenido
-  es la lista de la sección «Se implementan» del documento de decisiones, parte de plata).
+- Lote 6 COMPLETO Y EN PRODUCCIÓN, las tres partes, cada una con revisión y una ronda de arreglos:
+  - A (plata): main 18677d1, 2026-10-08. Decisiones 142, 018 y 007 enmendadas.
+  - B (alertas y lo que ve el cliente): main 586d372, 2026-10-08 19:23 UTC. Decisiones 128, 024 y 124 enmendadas.
+  - C (068 «Nueva idea» retirada, 051 carril de Nicho, 049 recortar antes de escalar): main 17bc4d4, 2026-10-09 19:20 UTC.
+    Decisión 051 enmendada: sin puntos de control de Apify y con los barridos de Referentes en el mismo carril. PND-049
+    sigue abierto: la mejora es parcial (memoria en render-vps con zoom 2,45: 969 → 837 MiB; con zoom 4: 1 443 → 898 MiB),
+    y lo que falta exige una decisión de diseño de Daniel.
+- Lecciones del lote 6:
+  - Codex resuelve «parada limpia» inventando mecanismos grandes (puntos de control). Pedir lo mínimo y decir qué NO
+    construir.
+  - Al mezclar main, los PND nuevos de la rama chocan con los de main: renumerar sobre el máximo de main.
+  - Codex deja texto de informe dentro de docs/pendientes.md: quitarlo.
 
 ## Plan completo (2026-10-04)
 Los 104 abiertos ese día están repartidos, cada uno en un solo grupo, en `docs/superpowers/plans/2026-10-04-plan-pendientes.md`:

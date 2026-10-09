@@ -1608,9 +1608,6 @@ msgstr "(this clone has no sound)"
 msgid "(falta %(llaves)s)"
 msgstr "(missing %(llaves)s)"
 
-msgid "(fotograma del video)"
-msgstr "(video frame)"
-
 msgid "(imagen)"
 msgstr "(image)"
 
@@ -1918,9 +1915,6 @@ msgstr "At once (peak)"
 
 msgid "A otra velocidad el video va sin su sonido."
 msgstr "At another speed the video plays without its sound."
-
-msgid "A partir de qué personaje"
-msgstr "From which character"
 
 msgid "A quién le habla"
 msgstr "Who it speaks to"
@@ -2656,9 +2650,6 @@ msgstr "Approved: %(n)s"
 msgid "Aprobar"
 msgstr "Approve"
 
-msgid "Aprobar imagen y generar video"
-msgstr "Approve image and generate video"
-
 #, python-format
 msgid "Aprobar las que pasaron QA (%(n)s)"
 msgstr "Approve the ones that passed QA (%(n)s)"
@@ -2675,9 +2666,6 @@ msgstr "Approve all that passed QA"
 
 msgid "Aprobar todo lo pendiente"
 msgstr "Approve everything pending"
-
-msgid "Aprobar y generar imagen"
-msgstr "Approve and generate image"
 
 msgid "Aprobar y publicar"
 msgstr "Approve and publish"
@@ -3006,9 +2994,6 @@ msgstr "Activity log"
 #, python-format
 msgid "Bitácora (%(n)s)"
 msgstr "Log (%(n)s)"
-
-msgid "Bitácora reciente"
-msgstr "Recent activity"
 
 msgid "Black Friday"
 msgstr "Black Friday"
@@ -3371,10 +3356,6 @@ msgstr "Changing it creates a new version with the same clips, without calling C
 
 msgid "Cambios de producto"
 msgstr "Product swaps"
-
-#, python-format
-msgid "Cambios guardados en %(prompt)s."
-msgstr "Changes saved to %(prompt)s."
 
 msgid "Cambios sin guardar…"
 msgstr "Unsaved changes…"
@@ -5039,9 +5020,6 @@ msgstr "Download the file"
 msgid "Descartada el %(fecha)s."
 msgstr "Discarded on %(fecha)s."
 
-msgid "Descartada."
-msgstr "Discarded."
-
 #, python-format
 msgid "Descartadas (%(n)s)"
 msgstr "Discarded (%(n)s)"
@@ -5063,9 +5041,6 @@ msgstr "Disconnect the agency"
 
 msgid "Describe el estilo visual del video."
 msgstr "Describe the video's visual style."
-
-msgid "Describe la idea del video"
-msgstr "Describe the video idea"
 
 msgid "Describe la música que quieres."
 msgstr "Describe the music you want."
@@ -5445,9 +5420,6 @@ msgstr "E.g.: anti-wrinkle cream, sandals, protein"
 
 msgid "Ej.: «Llevo tres inviernos con ellas y siguen igual de calientitas»"
 msgstr "E.g.: “I've worn them for three winters and they're still just as warm”"
-
-msgid "Ej: el guerrero encuentra un mapa antiguo en la biblioteca del castillo"
-msgstr "E.g.: the warrior finds an old map in the castle library"
 
 msgid "Ej: paleta cálida, tonos tierra, iluminación de atardecer, ambientes rústicos..."
 msgstr "E.g.: warm palette, earth tones, sunset lighting, rustic settings..."
@@ -6025,9 +5997,6 @@ msgstr "The prompt breaks non-negotiable rules; fix it before approving."
 msgid "El prompt vigente es igual al original."
 msgstr "The current prompt is the same as the original."
 
-msgid "El prompt ya no existe (¿se descartó mientras generaba?)."
-msgstr "The prompt no longer exists (was it discarded while generating?)."
-
 msgid "El proveedor entregó el video sin pista de audio"
 msgstr "The provider delivered the video without an audio track"
 
@@ -6440,12 +6409,6 @@ msgstr "Delete"
 
 msgid "Eliminar campaña"
 msgstr "Delete campaign"
-
-msgid "Eliminar idea"
-msgstr "Delete idea"
-
-msgid "Eliminar idea completa"
-msgstr "Delete the whole idea"
 
 msgid "Eliminar permanentemente"
 msgstr "Delete permanently"
@@ -7080,9 +7043,6 @@ msgstr "Write the text you want the voice to read."
 
 msgid "Escribe el total."
 msgstr "Enter the total."
-
-msgid "Escribe la idea y elige un personaje."
-msgstr "Write the idea and choose a character."
 
 msgid "Escribe lo que dirá la persona de la foto, como presentador."
 msgstr "Write what the person in the photo will say, as a presenter."
@@ -8316,9 +8276,6 @@ msgstr "Format"
 msgid "Formato de los anuncios"
 msgstr "Ad format"
 
-msgid "Formato elegido automáticamente según las plataformas"
-msgstr "Format picked automatically from the platforms"
-
 msgid "Formato inválido."
 msgstr "Invalid format."
 
@@ -8612,10 +8569,6 @@ msgid "Generando"
 msgstr "Generating"
 
 #, python-format
-msgid "Generando %(n)s escenas x 2 proveedores (10 imágenes)…"
-msgstr "Generating %(n)s scenes x 2 providers (10 images)…"
-
-#, python-format
 msgid "Generando %(n)s imágenes desde el referente…"
 msgstr "Generating %(n)s images from the reference…"
 
@@ -8644,14 +8597,6 @@ msgid "Generando el video con %(modelo)s%(detalle)s · %(duracion)s s…"
 msgstr "Generating the video with %(modelo)s%(detalle)s · %(duracion)s s…"
 
 #, python-format
-msgid "Generando el video de %(prompt)s…"
-msgstr "Generating the video for %(prompt)s…"
-
-#, python-format
-msgid "Generando imagen candidata para %(prompt)s…"
-msgstr "Generating a candidate image for %(prompt)s…"
-
-#, python-format
 msgid "Generando la imagen con %(modelo)s%(detalle)s…"
 msgstr "Generating the image with %(modelo)s%(detalle)s…"
 
@@ -8662,13 +8607,6 @@ msgstr "Generating versions A and B with %(modelo)s…"
 #, python-brace-format
 msgid "Generando los subtítulos… {etapa}"
 msgstr "Generating the subtitles… {etapa}"
-
-msgid "Generando video…"
-msgstr "Generating video…"
-
-#, python-format
-msgid "Generando video… 0%% · 0s"
-msgstr "Generating video… 0%% · 0s"
 
 #, python-format
 msgid "Generando: %(num)s de %(total)s escena lista."
@@ -8710,9 +8648,6 @@ msgstr "Generate 2 images"
 msgid "Generar 2 videos"
 msgstr "Generate 2 videos"
 
-msgid "Generar 5 prompts"
-msgstr "Generate 5 prompts"
-
 msgid "Generar avatares"
 msgstr "Generate avatars"
 
@@ -8721,9 +8656,6 @@ msgstr "Generate the same-as-reference video"
 
 msgid "Generar imagen"
 msgstr "Generate image"
-
-msgid "Generar imágenes (5 escenas × 2 motores)"
-msgstr "Generate images (5 scenes × 2 engines)"
 
 msgid "Generar la variación"
 msgstr "Generate the variation"
@@ -8750,10 +8682,6 @@ msgstr "Generate all scenes"
 
 msgid "Generar video"
 msgstr "Generate video"
-
-#, python-format
-msgid "Generé %(n)s prompts para la idea. Revísalos y apruébalos abajo."
-msgstr "I generated %(n)s prompts for the idea. Review and approve them below."
 
 msgid "Gente que lava en casa y odia cargar garrafas; mercado sueco; reseñas de Via, Ariel y pods"
 msgstr "People who do laundry at home and hate carrying jugs; Swedish market; reviews of Via, Ariel and pods"
@@ -8872,9 +8800,6 @@ msgstr "Saving to My music"
 
 msgid "Guardando imágenes"
 msgstr "Saving images"
-
-msgid "Guardando la imagen"
-msgstr "Saving the image"
 
 msgid "Guardando productos"
 msgstr "Saving products"
@@ -9194,17 +9119,8 @@ msgstr "IP"
 msgid "Id del Business"
 msgstr "Business id"
 
-msgid "Idea"
-msgstr "Idea"
-
 msgid "Idea cargada en Crear: ajusta lo que quieras y genera."
 msgstr "Idea loaded in Create: tweak what you want and generate."
-
-msgid "Idea eliminada junto con sus prompts."
-msgstr "Idea deleted along with its prompts."
-
-msgid "Idea eliminada."
-msgstr "Idea deleted."
 
 msgid "Idea guardada."
 msgstr "Idea saved."
@@ -9222,10 +9138,6 @@ msgstr "Idea “%(titulo)s” deleted"
 
 msgid "Ideas"
 msgstr "Ideas"
-
-#, python-format
-msgid "Ideas (%(n)s)"
-msgstr "Ideas (%(n)s)"
 
 msgid "Ideas de sprint (IA)"
 msgstr "Sprint ideas (AI)"
@@ -9317,12 +9229,6 @@ msgstr "Image"
 msgid "Imagen 2k a partir de tus referencias y el texto, en el formato que elijas. Realismo fotográfico."
 msgstr "2k image from your references and the text, in the format you choose. Photographic realism."
 
-msgid "Imagen aprobada — elige cómo animarla abajo."
-msgstr "Image approved — choose how to animate it below."
-
-msgid "Imagen candidata lista."
-msgstr "Candidate image ready."
-
 msgid "Imagen de FlowPlus lista."
 msgstr "FlowPlus image ready."
 
@@ -9333,18 +9239,12 @@ msgstr "Reference image"
 msgid "Imagen de referencia para %(version)s del guion «%(titulo)s»."
 msgstr "Reference image for %(version)s of the script «%(titulo)s»."
 
-msgid "Imagen descartada."
-msgstr "Image discarded."
-
 #, python-format
 msgid "Imagen eliminada: %(nombre)s"
 msgstr "Image deleted: %(nombre)s"
 
 msgid "Imagen generada"
 msgstr "Generated image"
-
-msgid "Imagen lista."
-msgstr "Image ready."
 
 msgid "Importaciones anteriores"
 msgstr "Previous imports"
@@ -9881,9 +9781,6 @@ msgstr "Video and image generation is paused."
 
 msgid "La generación se interrumpió (el servidor se reinició). Elimínala y vuelve a intentarlo."
 msgstr "The generation was interrupted (the server restarted). Delete it and try again."
-
-msgid "La generación se interrumpió (el servidor se reinició). Vuelve a intentarlo."
-msgstr "The generation was interrupted (the server restarted). Try again."
 
 msgid "La generación se interrumpió porque el servidor se reinició — vuelve a intentarlo."
 msgstr "The generation was interrupted because the server restarted — try again."
@@ -11588,16 +11485,6 @@ msgstr "I didn't find comments in the text (minimum 3 characters each)."
 msgid "No encontré el producto %(id)s"
 msgstr "I couldn't find product %(id)s"
 
-#, python-format
-msgid "No encontré el prompt %(prompt)s"
-msgstr "I couldn't find the prompt %(prompt)s"
-
-msgid "No encontré esa animación."
-msgstr "I couldn't find that animation."
-
-msgid "No encontré esa imagen para aprobar."
-msgstr "I couldn't find that image to approve."
-
 msgid "No encontré esa imagen."
 msgstr "I couldn't find that image."
 
@@ -11618,10 +11505,6 @@ msgstr "I couldn't find the original photo."
 
 msgid "No encontré una columna con comentarios (ponle «texto» o «comentario» de encabezado)."
 msgstr "I didn't find a column with comments (give it “text” or “comment” as its header)."
-
-#, python-format
-msgid "No encontré una imagen candidata para %(prompt)s"
-msgstr "I couldn't find a candidate image for %(prompt)s"
 
 msgid "No encuentro la llave de Notion de este proyecto; vuelve a conectarla."
 msgstr "Can't find this project's Notion key; reconnect it."
@@ -11723,12 +11606,6 @@ msgstr "There are no families missing an English description."
 msgid "No hay ideas aprobadas sin generar. Aprueba ideas para poder generarlas."
 msgstr "There are no approved ideas left to generate. Approve ideas so you can generate them."
 
-msgid "No hay ideas esperando aprobación. Dale una idea a Claude en el chat para que proponga prompts nuevos."
-msgstr "No ideas waiting for approval. Give Claude an idea in the chat so it proposes new prompts."
-
-msgid "No hay ideas esperando revisión. Escribe una idea arriba para generar las primeras imágenes."
-msgstr "No ideas waiting for review. Write an idea above to generate the first images."
-
 msgid "No hay imágenes ni videos que describir."
 msgstr "There are no images or videos to describe."
 
@@ -11781,9 +11658,6 @@ msgstr "There's no account in this session."
 
 msgid "No hay una investigación detenida para reanudar."
 msgstr "There's no stopped research to resume."
-
-msgid "No hay videos esperando aprobación."
-msgstr "No videos waiting for approval."
 
 msgid "No hay voz en este destino."
 msgstr "There's no voice in this market."
@@ -11892,18 +11766,6 @@ msgstr "I couldn't generate the sample (%(tipo)s); try again."
 
 msgid "No pude generar la muestra; intenta de nuevo."
 msgstr "I couldn't generate the sample; try again."
-
-#, python-format
-msgid "No pude generar las escenas: %(error)s"
-msgstr "I couldn't generate the scenes: %(error)s"
-
-#, python-format
-msgid "No pude generar las propuestas de animación: %(error)s"
-msgstr "I couldn't generate the animation proposals: %(error)s"
-
-#, python-format
-msgid "No pude generar los prompts: %(error)s"
-msgstr "I couldn't generate the prompts: %(error)s"
 
 #, python-format
 msgid "No pude hablar con Meta (%(error)s)."
@@ -12627,9 +12489,6 @@ msgstr "New password"
 msgid "Nueva final edition"
 msgstr "New final edition"
 
-msgid "Nueva idea"
-msgstr "New idea"
-
 msgid "Nueva versión con otra configuración"
 msgstr "New version with a different configuration"
 
@@ -13218,9 +13077,6 @@ msgstr "Platform"
 msgid "Plataforma desconocida: %(plataforma)s"
 msgstr "Unknown platform: %(plataforma)s"
 
-msgid "Plataformas"
-msgstr "Platforms"
-
 msgid "Plegar / desplegar"
 msgstr "Collapse / expand"
 
@@ -13656,10 +13512,6 @@ msgstr "App promotion"
 msgid "Prompt"
 msgstr "Prompt"
 
-#, python-format
-msgid "Prompt %(prompt)s descartado, no se generó video (no gastó créditos)."
-msgstr "Prompt %(prompt)s discarded, no video was generated (no credits spent)."
-
 msgid "Prompt elegido"
 msgstr "Chosen prompt"
 
@@ -13806,10 +13658,6 @@ msgstr "Published on every platform."
 
 msgid "Publicados"
 msgstr "Published"
-
-#, python-format
-msgid "Publicados (%(n)s)"
-msgstr "Published (%(n)s)"
 
 msgid "Publicando"
 msgstr "Posting"
@@ -14256,10 +14104,6 @@ msgstr "Rejected “%(titulo)s”: %(motivo)s (it was already published; the rec
 msgid "Rechazado"
 msgstr "Rejected"
 
-#, python-format
-msgid "Rechazados (%(n)s)"
-msgstr "Rejected (%(n)s)"
-
 msgid "Rechazar"
 msgstr "Reject"
 
@@ -14471,10 +14315,6 @@ msgstr "Regenerate the ones you want from the sprint; each one goes through the 
 msgid "Regeneración de «%(titulo)s»"
 msgstr "Regeneration of “%(titulo)s”"
 
-#, python-format
-msgid "Regenerando imagen candidata para %(prompt)s…"
-msgstr "Regenerating the candidate image for %(prompt)s…"
-
 msgid "Regenerando la pieza (sesión nueva, misma idea)."
 msgstr "Regenerating the piece (new session, same idea)."
 
@@ -14488,9 +14328,6 @@ msgstr "Regenerate avatars"
 #, python-format
 msgid "Regenerar crea una pieza nueva con la misma idea (%(precio)s). ¿Seguir?"
 msgstr "Regenerating creates a new piece with the same idea (%(precio)s). Continue?"
-
-msgid "Regenerar imagen"
-msgstr "Regenerate image"
 
 msgid "Registra tu app de Meta"
 msgstr "Register your Meta app"
@@ -15259,9 +15096,6 @@ msgstr "Without a Page only metrics are read: ads can't be launched and organic 
 msgid "Sin URL"
 msgstr "No URL"
 
-msgid "Sin actividad registrada todavía."
-msgstr "No activity recorded yet."
-
 msgid "Sin cambios en las cuentas."
 msgstr "No changes to the accounts."
 
@@ -15755,9 +15589,6 @@ msgstr "Its video was already launched: look for it as “%(titulo)s”."
 #, python-format
 msgid "Sub-avatar %(n)s: %(nombre)s (%(base)s · %(estado)s)"
 msgstr "Sub-avatar %(n)s: %(nombre)s (%(base)s · %(estado)s)"
-
-msgid "Sube al menos un personaje (imagen o video) más abajo antes de crear ideas."
-msgstr "Upload at least one character (image or video) below before creating ideas."
 
 msgid "Sube al menos una foto o video primero."
 msgstr "Upload at least one photo or video first."
@@ -16463,9 +16294,6 @@ msgstr "You haven't written to Claude yet. Tell it what went wrong with this pro
 
 msgid "Todavía no llegó ningún evento de Bold."
 msgstr "No Bold event has arrived yet."
-
-msgid "Todavía no se ha publicado nada."
-msgstr "Nothing has been published yet."
 
 msgid "Todavía no se ha traído ningún barrido global fuera de copycoders."
 msgstr "No global sweep has been brought in yet outside copycoders."
@@ -17672,9 +17500,6 @@ msgstr "Video from your references"
 msgid "Video encima"
 msgstr "Overlay video"
 
-msgid "Video listo, pendiente de revisión."
-msgstr "Video ready, pending review."
-
 msgid "Video sin fotograma —"
 msgstr "Video without a frame —"
 
@@ -17699,10 +17524,6 @@ msgstr "Videos from Create"
 
 msgid "Videos de este guion"
 msgstr "This script's videos"
-
-#, python-format
-msgid "Videos pendientes de revisión (%(n)s)"
-msgstr "Videos waiting for review (%(n)s)"
 
 msgid "Videos que ya empezaste: guion, editor o finales en camino."
 msgstr "Videos you've started: script, editor or final cuts on the way."
@@ -18138,21 +17959,6 @@ msgstr "Already evaluating."
 #, python-format
 msgid "Ya se está generando %(que)s — espera a que termine."
 msgstr "Already generating %(que)s — wait for it to finish."
-
-#, python-format
-msgid "Ya se está generando el video de %(prompt)s — espera a que termine."
-msgstr "The video for %(prompt)s is already being generated — wait for it to finish."
-
-msgid "Ya se está generando ese video — espera a que termine."
-msgstr "That video is already being generated — wait for it to finish."
-
-#, python-format
-msgid "Ya se está generando la imagen de %(prompt)s — espera a que termine."
-msgstr "The image for %(prompt)s is already being generated — wait for it to finish."
-
-#, python-format
-msgid "Ya se está generando una imagen para %(prompt)s — espera a que termine."
-msgstr "An image for %(prompt)s is already being generated — wait for it to finish."
 
 msgid "Ya se está lanzando ese experimento."
 msgstr "That experiment is already launching."
@@ -18739,9 +18545,6 @@ msgstr "cuts"
 #, python-format
 msgid "costo del mes: %(costo)s"
 msgstr "cost this month: %(costo)s"
-
-msgid "costo desconocido"
-msgstr "unknown cost"
 
 #, python-format
 msgid "costó %(usd)s"
@@ -19520,9 +19323,6 @@ msgstr "story"
 msgid "hook"
 msgstr "hook"
 
-msgid "horizontal"
-msgstr "horizontal"
-
 msgid "hoy"
 msgstr "today"
 
@@ -19554,9 +19354,6 @@ msgstr "faithful"
 
 msgid "imagen"
 msgstr "image"
-
-msgid "imagen candidata"
-msgstr "candidate image"
 
 #, python-format
 msgid "imita: %(marcas)s"
@@ -20359,9 +20156,6 @@ msgstr "rewrite idea · the idea already had a piece"
 msgid "reescribir idea · respuesta inválida"
 msgstr "rewrite idea · invalid response"
 
-msgid "referencia"
-msgstr "reference"
-
 msgid "referencias"
 msgstr "references"
 
@@ -20678,9 +20472,6 @@ msgstr "no pieces planned"
 msgid "sin plataformas"
 msgstr "no platforms"
 
-msgid "sin plataformas asignadas"
-msgstr "no platforms assigned"
-
 msgid "sin precio"
 msgstr "no price"
 
@@ -20965,9 +20756,6 @@ msgstr "earlier version than Wan 2.7 Video Edit (which we do use) and with no su
 msgid "versión más nueva que Kling O1, mismo precio por segundo"
 msgstr "newer version than Kling O1, same price per second"
 
-msgid "vertical"
-msgstr "vertical"
-
 msgid "video"
 msgstr "video"
 
@@ -21062,14 +20850,6 @@ msgstr "{n} of {max} characters"
 #, python-brace-format
 msgid "{tipo} «{archivo}»"
 msgstr "{tipo} “{archivo}”"
-
-#, python-format
-msgid "~%(cr)s cr imagen ($%(usd)s)"
-msgstr "~%(cr)s cr image ($%(usd)s)"
-
-#, python-format
-msgid "~%(cr)s cr video ($%(usd)s)"
-msgstr "~%(cr)s cr video ($%(usd)s)"
 
 msgid "¡Listo! Tienes cambios sin guardar en esta página."
 msgstr "Done! You have unsaved changes on this page."
@@ -21263,14 +21043,8 @@ msgstr "Discard this final cut?"
 msgid "¿Descartar esta pieza?"
 msgstr "Discard this piece?"
 
-msgid "¿Descartar este prompt? No se genera nada."
-msgstr "Discard this prompt? Nothing is generated."
-
 msgid "¿Descartar la solicitud? El cliente no recibe aviso."
 msgstr "Discard the request? The client gets no notice."
-
-msgid "¿Descartar? No se genera video."
-msgstr "Discard? No video is generated."
 
 msgid "¿Desconectar Meta de este proyecto? No se borra nada en Meta."
 msgstr "Disconnect Meta from this project? Nothing gets deleted on Meta."
@@ -21292,13 +21066,6 @@ msgstr "Delete %(nombre)s? This doesn't affect ideas already generated with it, 
 msgid "¿Eliminar esta campaña y sus referentes?"
 msgstr "Delete this campaign and its references?"
 
-#, python-format
-msgid "¿Eliminar esta idea completa y sus %(n)s prompts? No se puede deshacer."
-msgstr "Delete this whole idea and its %(n)s prompts? This can't be undone."
-
-msgid "¿Eliminar esta idea completa, con todas sus escenas e imágenes? No se puede deshacer."
-msgstr "Delete this whole idea, with all its scenes and images? This can't be undone."
-
 msgid "¿Eliminar este producto?"
 msgstr "Delete this product?"
 
@@ -21314,18 +21081,6 @@ msgstr "Start from scratch? The text, the settings and the reference tray will b
 #, python-format
 msgid "¿Evaluar %(n)s anuncio(s) con IA? Costo: %(precio)s"
 msgstr "Evaluate %(n)s ad(s) with AI? Cost: %(precio)s"
-
-msgid "¿Generar el video con esta animación? Esto gasta el crédito de video de Higgsfield (~8cr)."
-msgstr "Generate the video with this animation? This spends Higgsfield video credit (~8cr)."
-
-msgid "¿Generar el video final con esta imagen? Esto gasta créditos de Higgsfield."
-msgstr "Generate the final video with this image? This spends Higgsfield credits."
-
-msgid "¿Generar otra imagen candidata? Esto gasta créditos de nuevo (~1.5cr)."
-msgstr "Generate another candidate image? This spends credits again (~1.5cr)."
-
-msgid "¿Generar una imagen de referencia con estos valores? Esto gasta créditos de Higgsfield (barato, ~1.5cr)."
-msgstr "Generate a reference image with these values? This spends Higgsfield credits (cheap, ~1.5cr)."
 
 #, python-format
 msgid "¿Marcar a %(usuario)s como verificado sin que abra el enlace del correo?"
@@ -21362,10 +21117,6 @@ msgstr "Prefer that Creatv manage it? Change"
 
 msgid "¿Prefieres usar tu propia app? Cambiar"
 msgstr "Prefer to use your own app? Change"
-
-#, python-format
-msgid "¿Publicar %(id)s en: %(plataformas)s?"
-msgstr "Publish %(id)s on: %(plataformas)s?"
 
 msgid "¿Quitar de la lista?"
 msgstr "Remove from the list?"
@@ -21405,10 +21156,6 @@ msgstr "What do you want to search for?"
 
 msgid "¿Qué quieres reutilizar de esta referencia? (obligatorio para que cuente)"
 msgstr "What do you want to reuse from this reference? (required for it to count)"
-
-#, python-format
-msgid "¿Rechazar %(id)s? No se publicará."
-msgstr "Reject %(id)s? It won't be published."
 
 msgid "¿Seguro? Toca otra vez"
 msgstr "Sure? Tap again"

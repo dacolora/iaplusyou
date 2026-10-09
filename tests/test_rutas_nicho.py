@@ -780,3 +780,16 @@ def test_pnd092_estimado_agrupa_inputs_y_rechaza_precio_viejo(app, monkeypatch):
     '''.replace('CODIGO',json.dumps(codigo))
     r = subprocess.run(["node", "-e", programa], capture_output=True, text=True)
     assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_get_estudio_sin_cambios_no_pide_escritura(app, base_temporal):
+    import sqlite3
+    from nicho import datos
+    eid = datos.crear_estudio('acme', 'Lectura mientras otro escribe')
+    ruta = str(base_temporal.engine().url.database)
+    with sqlite3.connect(ruta, timeout=0.05) as otro:
+        otro.execute('BEGIN IMMEDIATE')
+        otro.execute('UPDATE estudio SET nombre=nombre WHERE id=?', (eid,))
+        r = app['c'].get(f'/cliente/acme/nicho/{eid}')
+        assert r.status_code == 200
+        otro.rollback()
