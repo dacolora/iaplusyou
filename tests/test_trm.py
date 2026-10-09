@@ -6,7 +6,8 @@ import json
 import pytest
 import requests as requests_real
 
-URL = "https://www.datos.gov.co/resource/32sa-8pi3.json?$limit=1&$order=vigenciadesde%20DESC"
+URL = ("https://www.datos.gov.co/resource/32sa-8pi3.json?$limit=1&$order=vigenciadesde%20DESC"
+       "&$where=vigenciadesde%20%3C%3D%20%272026-10-09T00%3A00%3A00%27")
 HOY = dt.date(2026, 10, 9)
 T0 = 1_791_500_000.0
 
@@ -151,3 +152,17 @@ def test_una_guardada_fuera_de_rango_no_sirve_de_respaldo(trm, base_temporal):
     trm.respuesta["r"] = requests_real.ConnectionError("x")
     with pytest.raises(trm.SinTasa):
         trm.actual()
+
+
+def test_una_tasa_de_un_dia_futuro_no_sirve(trm):
+    """Aunque el `$where` ya la filtra, una fila de mañana no es la TRM de hoy."""
+    trm.respuesta["r"] = _Respuesta(200, _fila("3300.00", desde="2026-10-10", hasta="2026-10-10"))
+    with pytest.raises(trm.SinTasa):
+        trm.actual()
+
+
+def test_no_poder_guardar_no_pierde_la_tasa_leida(trm, monkeypatch):
+    def falla(*a, **k):
+        raise RuntimeError("database is locked")
+    monkeypatch.setattr(trm, "_guardar", falla)
+    assert trm.actual() == 3218.75

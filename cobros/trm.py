@@ -13,6 +13,7 @@ import json
 import logging
 import math
 import time
+from urllib.parse import quote
 
 import requests
 import sqlalchemy as sa
@@ -86,9 +87,16 @@ def _guardar(valor, desde, hasta):
                                            set_={"valor": texto, "actualizado_en": db.ahora()}))
 
 
+def url():
+    """La consulta con `$where vigenciadesde <= hoy`: el dataset publica a veces
+    la TRM de mañana (o la del lunes un viernes), y esa no es la de hoy."""
+    filtro = quote(f"vigenciadesde <= '{_hoy().isoformat()}T00:00:00'", safe="")
+    return f"{URL}&$where={filtro}"
+
+
 def _pedir():
     try:
-        r = requests.get(URL, headers={"Accept": "application/json"}, timeout=TIEMPO, allow_redirects=False)
+        r = requests.get(url(), headers={"Accept": "application/json"}, timeout=TIEMPO, allow_redirects=False)
     except requests.RequestException as e:
         raise _Falla(type(e).__name__) from None
     if r.status_code != 200:
@@ -107,6 +115,9 @@ def _pedir():
     if not math.isfinite(valor) or not (MINIMO <= valor <= MAXIMO):
         raise _Falla("valor fuera de rango")
     desde, hasta = fila.get("vigenciadesde"), fila.get("vigenciahasta") or fila.get("vigenciadesde")
+    inicio = _fecha(desde)
+    if inicio is not None and inicio > _hoy():
+        raise _Falla("tasa de un día futuro")
     if not _vigente(hasta):
         raise _Falla("tasa vieja")
     return valor, str(desde or "")[:30], str(hasta or "")[:30]
@@ -127,5 +138,8 @@ def actual():
             return guardada["valor"]
         log.warning("TRM: datos.gov.co falló (%s) y no hay una guardada de ≤ 3 días", e)
         raise SinTasa(gettext("No pudimos leer la tasa de cambio; intenta en unos minutos")) from None
-    _guardar(valor, desde, hasta)
+    try:
+        _guardar(valor, desde, hasta)
+    except Exception:  # noqa: BLE001 — no poder guardarla no quita una tasa buena recién leída
+        log.exception("TRM: no se pudo guardar la tasa leída; se usa igual")
     return valor

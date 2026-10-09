@@ -451,6 +451,19 @@ def test_cobrar_fuente_nequi_no_manda_cuotas(wompi, monkeypatch):
     assert visto["json"]["recurrent"] is True
 
 
+def test_cobrar_fuente_manda_la_aceptacion_si_la_hay(wompi, monkeypatch):
+    visto = _capturar(monkeypatch, wompi, "post", _tx(status="PENDING"))
+    wompi.cobrar_fuente(77, 100000, "a@b.co", "pl-1-20261109-1", acceptance_token=" eyJ.acepta.do ")
+    assert visto["json"]["acceptance_token"] == "eyJ.acepta.do"
+
+
+@pytest.mark.parametrize("k", [{"tipo": "PSE"}, {"tipo": None}, {"acceptance_token": ""}, {"acceptance_token": 5}])
+def test_cobrar_fuente_valida_el_tipo_y_la_aceptacion(wompi, monkeypatch, k):
+    monkeypatch.setattr(wompi.requests, "post", lambda *a, **kw: (_ for _ in ()).throw(AssertionError("salió")))
+    with pytest.raises(wompi.ErrorWompi):
+        wompi.cobrar_fuente(77, 100000, "a@b.co", "pl-1-20261109-1", **k)
+
+
 @pytest.mark.parametrize("fuente", [0, -1, True, "3891", None])
 def test_cobrar_fuente_valida_la_fuente(wompi, fuente):
     with pytest.raises(wompi.ErrorWompi):

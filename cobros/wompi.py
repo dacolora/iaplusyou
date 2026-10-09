@@ -431,16 +431,25 @@ def crear_fuente(tipo, token, correo, acceptance_token, personal_token, tiempo=T
     return {"id": fuente, "tipo": tipo_real, "resumen": _resumen(tipo_real, d.get("public_data"))}
 
 
-def cobrar_fuente(fuente_id, centavos, correo, referencia, *, tipo="CARD", tiempo=TIEMPO):
+def cobrar_fuente(fuente_id, centavos, correo, referencia, *, tipo="CARD", acceptance_token=None, tiempo=TIEMPO):
     """`POST /transactions` con `payment_source_id` (wompi-api.md §7): el
     cobro de un periodo. Siempre con `recurrent=True` y la firma de
     integridad; `payment_method.installments=1` solo para tarjeta (la doc pide
     no mandar `payment_method` para otras fuentes). Devuelve la transacción
     normalizada (casi siempre PENDING: la verdad llega por evento o consulta).
     La referencia es única por cuenta en Wompi: un reintento con la misma
-    referencia da `ErrorWompi.referencia_usada`, nunca un segundo cobro."""
+    referencia da `ErrorWompi.referencia_usada`, nunca un segundo cobro.
+    `acceptance_token` (opcional): el del formulario recién aceptado, en el
+    primer cobro (la página de transacciones lo lista como obligatorio y el
+    ejemplo de fuentes lo omite: wompi-api.md §13.2); en una renovación ya
+    venció (≈1 h) y no se manda."""
+    if tipo not in TIPOS_FUENTE:
+        raise ErrorWompi(gettext("Medio de pago no soportado"))
     if _entero(fuente_id) is None or fuente_id <= 0:
         raise ErrorWompi(gettext("Fuente de pago inválida"))
+    if acceptance_token is not None and (not isinstance(acceptance_token, str) or not acceptance_token.strip()
+                                         or len(acceptance_token) > 8000):
+        raise ErrorWompi(gettext("Faltan las aceptaciones de Wompi"))
     firma = firma_integridad(referencia, centavos)
     cuerpo = {
         "amount_in_cents": centavos,
@@ -453,6 +462,8 @@ def cobrar_fuente(fuente_id, centavos, correo, referencia, *, tipo="CARD", tiemp
         cuerpo["payment_method"] = {"installments": 1}
     cuerpo["recurrent"] = True
     cuerpo["signature"] = firma
+    if acceptance_token is not None:
+        cuerpo["acceptance_token"] = acceptance_token.strip()
     d = _pedir("post", "/transactions", llave=_privada(), cuerpo=cuerpo, tiempo=tiempo, cobro=True)
     tx = _transaccion(d)
     if not tx["id"]:
