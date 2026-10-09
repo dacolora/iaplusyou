@@ -66,6 +66,9 @@ PERIODICAS = [("tienda_sync_pedidos_todas", 7200), ("tw_sincronizar_todas", 7200
               # Cadena de escenas de Flow Plus (spec 2026-09-30): avanza cada cadena viva
               # cuando su escena en curso termina (gratis; las escenas las cobra Crear).
               ("cadena_vigilar", 60),
+              # Ganchos de Triple Whale (spec 2026-10-09 §4.5): mueve cada variante viva (gratis; cada clip lo
+              # cobra Crear y el armado y el render son ffmpeg).
+              ("tw_ganchos_vigilar", 60),
               # Cobros (spec 2026-10-08 §9.3): respaldo del webhook de Bold, pregunta
               # por las recargas pendientes (gratis: no cobra).
               ("cobros_verificar_recargas", 600)]

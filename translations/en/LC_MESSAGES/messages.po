@@ -1213,6 +1213,12 @@ msgstr[0] "%(num)s winner"
 msgstr[1] "%(num)s winners"
 
 #, python-format
+msgid "%(num)s gancho en camino."
+msgid_plural "%(num)s ganchos en camino."
+msgstr[0] "%(num)s hook on its way."
+msgstr[1] "%(num)s hooks on their way."
+
+#, python-format
 msgid "%(num)s idea por aprobar en el sprint «%(nombre)s»"
 msgid_plural "%(num)s ideas por aprobar en el sprint «%(nombre)s»"
 msgstr[0] "%(num)s idea to approve in the sprint “%(nombre)s”"
@@ -2245,6 +2251,10 @@ msgid "Algo de «%(concepto)s» no llegó. No descontamos %(monto)s de tu saldo.
 msgstr "Something in «%(concepto)s» was not delivered. We did not deduct %(monto)s from your balance."
 
 #, python-format
+msgid "Algo falló al preparar el gancho (%(error)s)."
+msgstr "Something failed while preparing the hook (%(error)s)."
+
+#, python-format
 msgid "Algo falló en el servidor (error %(status)s). Intenta de nuevo en un momento."
 msgstr "Something failed on the server (error %(status)s). Try again in a moment."
 
@@ -2680,6 +2690,9 @@ msgstr "Building the prompt with AI…"
 
 msgid "Armando el prompt con IA… en unos segundos aparece aquí para que lo revises y generes."
 msgstr "Building the prompt with AI… it'll appear here in a few seconds for you to review and generate."
+
+msgid "Armando el video"
+msgstr "Building the video"
 
 msgid "Armando el zip; el enlace aparecerá aquí al terminar."
 msgstr "Building the zip; the link will appear here when it's done."
@@ -5494,12 +5507,18 @@ msgstr "Clip 1 has to start with line 1 (the hook)."
 msgid "El clip anterior termina así: %(estado)s"
 msgstr "The previous clip ends like this: %(estado)s"
 
+msgid "El clip de este gancho ya no está en Crear."
+msgstr "This hook's clip is no longer in Create."
+
 #, python-format
 msgid "El clip de texto %(clip)s no está resuelto (¿falta documento.resolver?)."
 msgstr "Text clip %(clip)s isn't resolved (is documento.resolver missing?)."
 
 msgid "El clip final tiene que terminar con HARD CUT sobre un cuadro sostenido."
 msgstr "The final clip has to end with a HARD CUT on a held frame."
+
+msgid "El clip no se pudo generar."
+msgstr "The clip couldn't be generated."
 
 msgid "El clip quedaría demasiado corto a esa velocidad."
 msgstr "The clip would be too short at that speed."
@@ -8295,8 +8314,16 @@ msgstr "Profit this month"
 msgid "Gancho"
 msgstr "Hook"
 
+#, python-format
+msgid "Gancho %(n)s · %(nombre)s"
+msgstr "Hook %(n)s · %(nombre)s"
+
 msgid "Gancho (3 s)"
 msgstr "Hook (3 s)"
+
+#, python-format
+msgid "Gancho armado: produciendo %(codigo)s."
+msgstr "Hook built: producing %(codigo)s."
 
 msgid "Gancho débil"
 msgstr "Weak hook"
@@ -9693,6 +9720,9 @@ msgstr "Final cut %(final_id)s does not exist in pieza; the route must create it
 msgid "La final %(final_id)s no existe; la ruta debe crearla con creative_flow.crear_final antes de encolar."
 msgstr "Final cut %(final_id)s does not exist; the route must create it with creative_flow.crear_final before queuing."
 
+msgid "La final de este gancho ya no existe."
+msgstr "This hook's final cut no longer exists."
+
 msgid "La generación de videos e imágenes está en pausa"
 msgstr "Video and image generation is paused"
 
@@ -9822,6 +9852,9 @@ msgstr "The piece no longer exists."
 
 msgid "La plataforma ya recibió el video; falta confirmar que terminó de procesarlo. Se confirma solo."
 msgstr "The platform already received the video; it still needs to confirm it finished processing it. It confirms itself."
+
+msgid "La preparación se cortó antes de terminar."
+msgstr "The preparation stopped before finishing."
 
 msgid "La primera copia tarda unos minutos. Cuando termine, esta pestaña se recarga sola con la evaluación de cada anuncio."
 msgstr "The first copy takes a few minutes. When it's done, this tab reloads by itself with the evaluation of each ad."
@@ -10014,6 +10047,9 @@ msgstr "Launching the experiment to Meta: if all goes well, it goes active and s
 
 msgid "Lanzando el video…"
 msgstr "Launching the video…"
+
+msgid "Lanzando los clips"
+msgstr "Launching the clips"
 
 msgid "Lanzando…"
 msgstr "Launching…"
@@ -11394,8 +11430,14 @@ msgstr "Session %(cf_id)s of %(cliente)s does not exist."
 msgid "No había cambios que guardar."
 msgstr "There were no changes to save."
 
+msgid "No había ganchos que preparar."
+msgstr "There were no hooks to prepare."
+
 msgid "No había ideas aprobadas sin generar."
 msgstr "There were no approved ideas left to generate."
+
+msgid "No había nada que armar."
+msgstr "There was nothing to build."
 
 msgid "No había nada que preparar."
 msgstr "There was nothing to prepare."
@@ -12124,9 +12166,18 @@ msgstr "Couldn't read the reference (%(tipo)s)."
 msgid "No se pudo leer la referencia."
 msgstr "Couldn't read the reference."
 
+msgid "No se pudo medir la duración del video."
+msgstr "Couldn't measure the video's length."
+
 #, python-format
 msgid "No se pudo pausar por tope: %(error)s"
 msgstr "Could not pause for reaching the cap: %(error)s"
+
+msgid "No se pudo poner el armado en la cola."
+msgstr "Couldn't queue the video assembly."
+
+msgid "No se pudo poner el clip en la cola."
+msgstr "Couldn't queue the clip."
 
 msgid "No se pudo poner la escena en la cola."
 msgstr "The scene couldn't be queued."
@@ -12150,6 +12201,9 @@ msgstr "Couldn't prepare “{nombre}”. Try again."
 #, python-brace-format
 msgid "No se pudo producir (error {status})."
 msgstr "Couldn't produce (error {status})."
+
+msgid "No se pudo producir el video."
+msgstr "Couldn't produce the video."
 
 msgid "No se pudo producir esta final. Vuelve a intentar; si se repite, avísanos."
 msgstr "Couldn't produce this final cut. Try again; if it happens again, let us know."

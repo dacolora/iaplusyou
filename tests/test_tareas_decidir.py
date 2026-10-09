@@ -371,7 +371,7 @@ def test_periodica_decidir_registrada():
                                  ("tienda_sync_productos_todas", 21600), ("sprint_qa_pendientes", 300),
                                  ("materiales_limpiar", 86400),
                                  ("salidas_limpiar", 86400), ("cola_limpiar", 86400), ("db_respaldar", 86400),
-                                 ("errores_limpiar", 86400), ("cadena_vigilar", 60),
+                                 ("errores_limpiar", 86400), ("cadena_vigilar", 60), ("tw_ganchos_vigilar", 60),
                                  ("cobros_verificar_recargas", 600)]
 
 

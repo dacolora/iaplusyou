@@ -31,7 +31,8 @@ def test_registro_contiene_swap_generar(base_temporal):
         "sprint_empaquetar", "sprint_proponer_ideas", "sprint_qa_pendientes", "sprint_qa_pieza",
         "sprint_reescribir_idea", "sprint_referencia_link", "sprint_sugerir_personas", "swap_generar",
         "tienda_sync_pedidos", "tienda_sync_pedidos_todas", "tienda_sync_productos", "tienda_sync_productos_todas",
-        "tw_analizar_anuncio", "tw_evaluar", "tw_sincronizar", "tw_sincronizar_todas", "voz_propia_crear",
+        "tw_analizar_anuncio", "tw_evaluar", "tw_gancho_armar", "tw_ganchos_preparar", "tw_ganchos_vigilar",
+        "tw_sincronizar", "tw_sincronizar_todas", "voz_propia_crear",
     ]
 
 
