@@ -3,8 +3,10 @@ from datetime import date, timedelta
 
 import pytest
 
+import db
 import idiomas
 import triple_whale_tiendas
+from meta_rendimiento import cuentas as mcuentas
 from meta_rendimiento import datos as mdatos
 from pestana_rendimiento import entradas as E, resumen
 from tests.test_rutas_meta_rendimiento import _cuentas, _dia, _tasa
@@ -187,3 +189,69 @@ def test_los_dias_de_antes_de_que_haya_datos_no_cuentan_como_semanas_normales(ba
     _sembrar(dias_tw=18, dias_meta=20)
     c = _ctx(dias=7)
     assert all(v == {} for v in c["resultados"]["datos"]["raros"].values())
+
+
+# ------------------------------------------------- ronda de arreglos 1 ---
+
+def _tarjetas(c):
+    return {t["clave"]: t["valor"] for t in c["resultados"]["tarjetas"]}
+
+
+def _sin_copia(c):
+    return [bool(d.get("sin_copia")) for d in c["resultados"]["datos"]["dias"]]
+
+
+def test_con_un_periodo_fijo_todas_cuadra_con_las_filas_de_por_pais(base_temporal):
+    """La tienda empezó dentro de los últimos 7 días y Meta antes: lo que cae dentro del periodo cuenta entero (la
+    fecha común solo vale para «Desde el inicio»)."""
+    _sembrar(dias_tw=5, dias_meta=20)
+    c = _ctx(dias=7)
+    filas = [f for f in c["por_pais"] if not f["fuera_de_todas"]]
+    assert round(_tarjetas(c)["gasto"], 2) == round(sum(f["gasto_usd"] for f in filas), 2) == 50 + 70 + 70
+    assert round(_tarjetas(c)["ventas"], 2) == round(sum(f["ventas_usd"] for f in filas), 2) == 150 + 105 + 105
+
+
+def test_una_fuente_atrasada_no_cuenta_como_ventas_en_cero(base_temporal):
+    """Meta de Suecia dejó de copiarse hace 3 días: esos días salen «sin copia» y no se suma solo a las demás."""
+    _sembrar()
+    mdatos.reemplazar_cuenta_dias("acme", "act_se", _hace(2), _hace(0), [])
+    mcuentas.actualizar("acme", "act_se", ultima_copia=f"{_hace(3)}T10:00:00")
+    c = _ctx()
+    assert _sin_copia(c) == [False, False, True, True, True]      # del hace 4 a hoy
+    assert round(_tarjetas(c)["gasto"], 2) == 2 * (10 + 10 + 10)  # solo los dos días que todas ya traen
+
+
+def test_una_cuenta_en_pausa_con_la_copia_al_dia_no_atrasa_a_las_demas(base_temporal):
+    """Sin entrega no hay filas, pero la copia está al día: sus días sin filas son días en cero de verdad."""
+    _sembrar()
+    mdatos.reemplazar_cuenta_dias("acme", "act_ww", _hace(2), _hace(0), [])
+    mcuentas.actualizar("acme", "act_ww", ultima_copia=db.ahora())
+    c = _ctx()
+    assert _sin_copia(c) == [False] * 5
+    assert round(_tarjetas(c)["gasto"], 2) == 50 + 50 + 20
+
+
+def test_una_tienda_que_no_trajo_sus_ultimos_dias_atrasa_aunque_la_copia_diga_hoy(base_temporal):
+    """La sincronización terminó hoy (fecha de copia al día) pero la consulta de la tienda no trajo los últimos 3
+    días: la última fila manda."""
+    tid = _sembrar()
+    twdatos.reemplazar_tienda("acme", tid, _hace(2), _hace(0), [])
+    triple_whale_tiendas.actualizar_tienda("acme", tid, ultima_sincronizacion=db.ahora())
+    c = _ctx()
+    assert _sin_copia(c) == [False, False, True, True, True]
+    assert round(_tarjetas(c)["gasto"], 2) == 2 * (10 + 10 + 10)
+
+
+def test_fuentes_que_no_se_cruzan_no_rompen_la_seccion(base_temporal):
+    """La tienda termina antes de que empiece Meta: no hay ningún día que todas traigan, todos salen «sin copia»."""
+    tid = triple_whale_tiendas.agregar("acme", "tw_llave_123", "acme-no.myshopify.com", "NO", moneda="USD")  # llave-de-prueba
+    for n in range(10, 15):
+        twdatos.reemplazar_tienda("acme", tid, _hace(n), _hace(n), [{"fecha": _hace(n), "gasto": 10, "ingresos": 30,
+                                                                     "pedidos": 1}])
+    _cuentas("acme", ("act_se", "HappyFlops Sweden", "SE"))
+    for n in range(0, 6):
+        mdatos.reemplazar_cuenta_dias("acme", "act_se", _hace(n), _hace(n), [_dia(_hace(n), 100, 150, compras=2)])
+        _tasa(_hace(n), 0.1, "SEK")
+    c = _ctx()
+    assert c["usd_ok"] is True and all(_sin_copia(c))
+    assert _tarjetas(c)["gasto"] == 0

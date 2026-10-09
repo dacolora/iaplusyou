@@ -144,11 +144,53 @@ def _ultima_copia(tiendas, ids_meta, cuentas_por_id):
     return min(hay) if hay and len(hay) == len(copias) else None
 
 
+def _dia(valor):
+    return str(valor)[:10] if valor else None
+
+
+def _fin_datos(filas, lee, origen_tw, con_datos, tiendas, cuentas_por_id):
+    """El último día que TODAS las fuentes con datos ya traen: el más temprano de los finales de cada fuente. Si una
+    copia va atrasada, esos días no son ventas en cero de esa fuente: salen «sin copia» y no entran en cifras ni
+    comparaciones (sumar solo a la fuente que sí llegó daría una caída que no existe).
+
+    `con_datos` son las fuentes que ya copiaron algún día (None = la parte Triple Whale, o el id de una cuenta de
+    Meta): una fuente que todavía no copió nada no atrasa a las demás, pero una que dejó de copiarse sí, aunque no
+    tenga ninguna fila dentro del periodo.
+    - Una fuente con una fila diaria para cada día (la tienda de Triple Whale) termina en su última fila: es lo que
+      también atrapa una sincronización que dejó la fecha de copia al día pero no trajo los totales de la tienda.
+      Sin ninguna fila desde `lee`, terminó antes de que empiece lo que se lee.
+    - Una fuente que no tiene filas los días sin actividad (una cuenta de Meta en pausa; los anuncios pagados de
+      Triple Whale) termina en el día de su última copia o en su última fila, el que sea más tarde: una cuenta
+      pausada y al día no atrasa a las demás. Sin filas ni fecha de copia no se sabe y no cuenta."""
+    ultima_fila = {}
+    for f in filas:
+        ultima_fila[f["act"]] = max(ultima_fila.get(f["act"], ""), f["fecha"])
+    antes = (date.fromisoformat(lee) - timedelta(days=1)).isoformat()
+    fines = []
+    for clave in con_datos:
+        ultima = ultima_fila.get(clave)
+        if clave is None:
+            if origen_tw == "tienda":
+                fines.append(ultima or antes)
+                continue
+            copias = [c for c in (_dia(t.get("ultima_sincronizacion")) for t in tiendas) if c]
+            copia = min(copias) if copias else None
+        else:
+            copia = _dia(cuentas_por_id.get(clave, {}).get("ultima_copia"))
+        conocidos = [x for x in (ultima, copia) if x]
+        if conocidos:
+            fines.append(max(conocidos))
+    return min(fines, default=None)
+
+
 def _resultados(cliente, alc, dias, hoy, desde, hasta, ancho, inicio_real, moneda, convertir, origen_tw, moneda_tw,
-                tiendas, cuentas_por_id, tasa):
+                tiendas, cuentas_por_id, con_datos, tasa):
     """({"resultados", "usd_ok"}): la sección con las series de las fuentes que suman, o None sin una tasa."""
-    # Antes del primer día en que todas las fuentes tienen datos la serie traería sumas a medias: no se lee.
-    lee = max(ancho.isoformat(), min(inicio_real, hasta)) if inicio_real else ancho.isoformat()
+    # «Desde el inicio» arranca el día en que todas las fuentes tienen datos (R7): antes la serie traería sumas a
+    # medias. Un periodo fijo lee desde `ancho`, como la pestaña de Triple Whale: lo que cae dentro del periodo
+    # cuenta entero (así «Todas» cuadra con las filas de «Por país») y la comparación con el periodo anterior y los
+    # días raros se protegen con `inicio_datos`.
+    lee = desde if dias == 0 else ancho.isoformat()
     filas = []
     if alc["tw"]:
         leer = twdatos.serie_tienda if origen_tw == "tienda" else twdatos.serie_anuncios
@@ -163,7 +205,8 @@ def _resultados(cliente, alc, dias, hoy, desde, hasta, ancho, inicio_real, moned
     r = resultados.armar(
         dias, serie, (d_desde - ancho).days, hoy, alc["fuente"], moneda, {}, {}, None, None, None, None, "",
         _ultima_copia(tiendas, alc["meta_fuente"], cuentas_por_id),
-        inicio_datos=inicio_real, fin_datos=max(por_dia, default=None), con_detalle=False)
+        inicio_datos=inicio_real, fin_datos=_fin_datos(filas, lee, origen_tw, con_datos, tiendas, cuentas_por_id),
+        con_detalle=False)
     return {"resultados": r, "usd_ok": True}
 
 
@@ -251,8 +294,9 @@ def contexto(cliente, entradas_, actual, alc, dias, hoy, moneda_tw):
     convertir = len(monedas) > 1
     moneda = "USD" if convertir else next(iter(monedas), moneda_tw)
 
-    primeros = [p for p in (twdatos.primer_dia_copia(cliente, t["id"]) for t in tiendas) if p]
-    primeros += list(mdatos.primeras_fechas(cliente, alc["meta_fuente"]).values())
+    primeros_tw = [p for p in (twdatos.primer_dia_copia(cliente, t["id"]) for t in tiendas) if p]
+    primeros_meta = mdatos.primeras_fechas(cliente, alc["meta_fuente"])
+    primeros = primeros_tw + list(primeros_meta.values())
     inicio_real = max(primeros) if primeros else None
     desde, hasta = periodo(dias, hoy, inicio_real if dias == 0 else None)[:2]
     d_desde = date.fromisoformat(desde)
@@ -266,7 +310,8 @@ def contexto(cliente, entradas_, actual, alc, dias, hoy, moneda_tw):
               "origen": _origen(entradas_, actual, origen_tw), "por_pais": []}
     if alc["fuente"] in ("meta", "mixta"):
         salida.update(_resultados(cliente, alc, dias, hoy, desde, hasta, ancho, inicio_real, moneda, convertir,
-                                  origen_tw, moneda_tw, tiendas, cuentas_por_id, tasa))
+                                  origen_tw, moneda_tw, tiendas, cuentas_por_id,
+                                  ([None] if primeros_tw else []) + list(primeros_meta), tasa))
     if actual is None and len(entradas_) >= 2:
         salida["por_pais"] = _por_pais(cliente, entradas_, desde, hasta, origen_tw, moneda_tw, cuentas_por_id, tasa)
     return salida
