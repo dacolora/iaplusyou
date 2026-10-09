@@ -211,3 +211,34 @@ def test_enmienda_marcas_estimadas_llegan_al_gasto(base_temporal, investigacion)
     final, = gastos.historial('acme')
     assert final['id'] == g['id'] and final['usd'] == 0
     assert not final['extra'].get('estimado')
+
+
+def test_r2_adlibrary_cero_corrige_el_estimado_y_el_saldo(base_temporal, monkeypatch):
+    import gastos
+    from types import SimpleNamespace
+    from cobros import libro
+    from referentes import datos, fuentes
+    from tareas import referentes as tr
+    monkeypatch.setattr(ad, '_token', lambda: 'llave-de-prueba')
+    monkeypatch.setattr(fuentes, 'por_tipo', lambda *a: ad)
+    s = _Sesion([_Resp(201, json={'data': {'id': 'run', 'defaultDatasetId': 'ds', 'status': 'SUCCEEDED'}}),
+                 _Resp(200, json={'data': {'status': 'SUCCEEDED', 'usageTotalUsd': 0}}),
+                 _Resp(200, json=[])])
+    iniciales = []
+    def pedir(metodo, url, **kw):
+        if metodo == 'GET' and not iniciales:
+            g, = gastos.historial('acme')
+            assert g['usd'] == .58 and g['extra']['estimado']
+            iniciales.append(g['id'])
+        return s.request(metodo, url, **kw)
+    monkeypatch.setattr(ad, '_sesion', lambda: SimpleNamespace(request=pedir))
+    libro.configurar('acme', usuario='admin', cobrar=True, margen=2)
+    bid = datos.crear_barrido('acme', 'apify', {}, 100)
+    tarea = {'id': 92, 'payload': {'cliente': 'acme', 'barrido_id': bid, 'consulta': {'fuente': 'apify', 'palabra': 'shoes'}, 'tope': 100, 'fase': 'trayendo'}}
+    with libro.en_trabajo(92, 'job'):
+        tr.ejecutar_barrer(tarea)
+    final, = gastos.historial('acme')
+    assert final['usd'] == 0
+    assert final['id'] == iniciales[0] and final['referencia'].endswith(':t92')
+    assert not final['extra'].get('estimado') and not final['extra']['conciliacion_pendiente']
+    assert libro.saldo('acme') == 0

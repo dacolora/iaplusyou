@@ -5388,6 +5388,9 @@ msgstr "The analysis with Claude failed: try again from the campaign."
 msgid "El análisis falló."
 msgstr "The analysis failed."
 
+msgid "El análisis se interrumpió; intenta de nuevo"
+msgstr "The analysis was interrupted; try again"
+
 msgid "El archivo es demasiado grande."
 msgstr "The file is too large."
 
@@ -9436,6 +9439,9 @@ msgstr "The box opens, the product comes out and is looked at up close."
 msgid "La canción dura más de 10 min."
 msgstr "The song is longer than 10 min."
 
+msgid "La cantidad de fotos cambió; revisa el precio antes de traerlas."
+msgstr "The number of photos changed; check the price before bringing them in."
+
 msgid "La cara de la marca: una persona real, un embajador o un personaje creado que debe verse igual siempre."
 msgstr "The face of the brand: a real person, an ambassador or a created character that has to look the same every time."
 
@@ -9772,6 +9778,9 @@ msgstr "The reference no longer exists."
 
 msgid "La regla no pide re-ediciones ni regeneraciones: no hay nada que derivar."
 msgstr "The rule doesn't ask for re-edits or regenerations: there's nothing to derive."
+
+msgid "La respuesta de Claude no sirvió; intenta de nuevo"
+msgstr "Claude's response was unusable; try again"
 
 msgid "La respuesta de Claude salió incompleta. Intenta con un guion más corto."
 msgstr "Claude's answer came back incomplete. Try a shorter script."
@@ -11830,6 +11839,9 @@ msgstr "Couldn't load. Close and try again."
 msgid "No se pudo completar (error %(status)s)."
 msgstr "Couldn't complete (error %(status)s)."
 
+msgid "No se pudo completar el análisis; intenta de nuevo"
+msgstr "The analysis could not be completed; try again"
+
 msgid "No se pudo completar el trabajo."
 msgstr "The task couldn't be completed."
 
@@ -11928,6 +11940,9 @@ msgstr "Couldn't generate the voice (check the chosen voice, '%(voz)s'): %(error
 #, python-brace-format
 msgid "No se pudo guardar (error {status})."
 msgstr "Couldn't save (error {status})."
+
+msgid "No se pudo guardar el análisis; intenta de nuevo"
+msgstr "The analysis could not be saved; try again"
 
 msgid "No se pudo guardar esa imagen."
 msgstr "That image couldn't be saved."
@@ -13906,6 +13921,10 @@ msgstr "Rewrite the idea with this angle (%(precio)s)"
 
 msgid "Referencia"
 msgstr "Reference"
+
+#, python-format
+msgid "Referencia %(n)s"
+msgstr "Reference %(n)s"
 
 #, python-format
 msgid "Referencia agregada (%(tipo)s, %(origen)s)"

@@ -670,3 +670,40 @@ def test_r2_aprobada_recibe_solo_su_primer_qa(base_temporal, monkeypatch, qa_pre
     assert ('acme', cp) not in ts._piezas_listas_sin_qa()
     if qa_previo:
         assert datos.idea('acme', cp)['qa'] == qa_previo
+
+
+@pytest.mark.parametrize('fallo,motivo', [('parser', 'respuesta_invalida'), ('llamada', 'sin_respuesta'),
+                                       ('guardar', 'guardar'), ('preparar', 'incompleto')])
+def test_r2_analisis_guarda_causa_segura_y_el_hook_la_conserva(base_temporal, monkeypatch, caplog, fallo, motivo):
+    import json
+    from sprints import datos, analisis
+    from tareas import sprints as ts
+    _, _, rid = _referencia(datos)
+    texto = json.dumps({k: ([] if k in ('paleta', 'elementos') else 'ok') for k in analisis.CLAVES})
+    def llamar(*a, uso=None, **kw):
+        if fallo == 'llamada':
+            raise RuntimeError('Error code: 529 - {"detalle": "crudo"}')
+        uso['entrada'] += 10
+        uso['salida'] += 5
+        return ('{"resumen":' if fallo == 'parser' else texto), 10, 5
+    monkeypatch.setattr(analisis, '_llamar_contando', llamar)
+    if fallo == 'guardar':
+        guardar = datos.actualizar_referencia
+        def actualizar(*a, **kw):
+            if kw.get('analisis_estado') == 'listo':
+                raise RuntimeError('fallo de persistencia')
+            return guardar(*a, **kw)
+        monkeypatch.setattr(datos, 'actualizar_referencia', actualizar)
+    if fallo == 'preparar':
+        def romper(*a):
+            raise OSError('fallo preparando fotogramas')
+        monkeypatch.setattr(analisis, '_bloques_imagen', romper)
+    tarea = {'id': 102, 'payload': {'cliente': 'acme', 'referencia_id': rid}}
+    with pytest.raises(Exception) as e:
+        ts.ejecutar_analizar(tarea)
+    guardado = datos.referencia('acme', rid)['analisis']
+    assert guardado.get('motivo') == motivo
+    assert guardado['error'] and str(e.value) not in guardado['error']
+    assert str(e.value) in caplog.text
+    ts.interrumpida_analizar(tarea, 'fin del intento')
+    assert datos.referencia('acme', rid)['analisis'] == guardado

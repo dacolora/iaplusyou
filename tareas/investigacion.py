@@ -257,6 +257,8 @@ def _costo_paso(est, i, paso, n_productos=None):
         topes = {**inv.TOPES_DEFECTO, **(i.get("topes") or {})}
         pais = i.get("pais") or est.get("pais") or ""
         plat = i.get("plataformas") or []
+        if paso.startswith("redes:"):
+            return 0.0
         if paso in ("consultas", "seleccionar"):
             entrada, salida = inv._tokens_claude(len(plat), topes, len(inv.idiomas_necesarios(pais, plat)))
             return inv.costo_claude(entrada, salida)

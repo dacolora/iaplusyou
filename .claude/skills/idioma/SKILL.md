@@ -87,3 +87,5 @@ PND-166 (2026-10-09, decisión delegada): Reintentar análisis, Análisis por re
 
 
 Enmiendas lote 7 (2026-10-09): mensajes de arranque incierto de Apify, detalles de gasto de análisis/personas, hasta, cantidad de fotos y error breve de Claude pasan por catálogo. Sugerir personas solo conserva su detalle de gasto y ruta, sin botón en pantalla.
+
+Segunda ronda lote 7 (2026-10-09): motivos del análisis se guardan con clave reconocida y mensaje en el idioma del proyecto; error_visible los traduce para quien mira. El catálogo incluye respuesta no útil, interrupción, fallos de guardado/preparación, Referencia N y aviso de cantidad de fotos cambiada.

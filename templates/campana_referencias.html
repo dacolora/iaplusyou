@@ -46,6 +46,7 @@
 
 <div class="acciones">
   <form method="post" action="{{ url_for('sprints.referencias_catalogo', cliente=cliente, sid=sprint.id, cid=campana.id) }}" class="inline">
+    <input type="hidden" name="n_visto" value="{{ fotos_catalogo.n }}">
     {% if fotos_catalogo.n %}<button type="submit" class="btn-sm">{{ _('Traer las fotos del producto') }} · {{ _('%(n)s fotos · %(precio)s', n=fotos_catalogo.n, precio=fotos_catalogo.texto) }}</button>
     {% else %}<p class="vacio">{{ _('No hay fotos nuevas que traer') }}</p>{% endif %}
   </form>
@@ -121,14 +122,16 @@
             </dl>
           </details>
         {% elif r.analisis_estado == "error" %}
-          <p class="tag-error">{{ _('No se pudo analizar') }}{% if r.analisis and r.analisis.error %}: {{ r.analisis.error }}{% endif %}</p>
+          <p class="campo-error">{{ _('No se pudo analizar') }}: {{ error_analisis_sprint(r.analisis).texto }}</p>
         {% else %}
           <p class="vacio sprint-analizando">{{ _('Analizando con IA…') }}</p>
         {% endif %}
       </div>
       <div class="sprint-ref-acciones">
         <span class="sprint-guardado" hidden>{{ _('Guardado') }}</span>
+        {% if r.analisis_estado != 'error' or error_analisis_sprint(r.analisis).reintentar %}
         <form method="post" action="{{ url_for('sprints.referencia_reanalizar', cliente=cliente, rid=r.id) }}" class="inline"><button type="submit" class="btn-xs">{{ _('Reintentar análisis') if r.analisis_estado == 'error' else _('Reanalizar') }} · {{ precio_analisis_sprint }}</button></form>
+        {% endif %}
         <form method="post" action="{{ url_for('sprints.referencia_quitar', cliente=cliente, rid=r.id) }}" class="inline"
               onsubmit='return confirm({{ _("¿Quitar esta referencia?")|tojson }});'><button type="submit" class="btn-xs btn-peligro">{{ _('Quitar') }}</button></form>
       </div>

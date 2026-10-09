@@ -109,14 +109,24 @@ def ejecutar_analizar(tarea):
         return gettext("La referencia ya no existe.")
     uso = {"entrada": 0, "salida": 0}
     referencia = f"sprint:referencia:{rid}{ref_sufijo(tarea)}"
+    resultado_recibido = False
     try:
         resultado = analisis.analizar(ref, marca=proyectos.nombre_visible(cliente), idioma=idiomas.de_proyecto(cliente), uso=uso)
+        resultado_recibido = True
         datos.actualizar_referencia(cliente, rid, analisis=resultado, analisis_estado="listo")
     except Exception as e:
         logging.getLogger(__name__).warning("Análisis de referencia %s: %s", rid, cola.sin_token(str(e)))
         _gasto_uso(cliente, uso, referencia, gettext("analizar referencia · la respuesta no sirvió"), entregado=False)
+        if isinstance(e, analisis.ReferenciaSinImagen):
+            motivo = "sin_imagen"
+        elif isinstance(e, analisis.AnalisisInvalido):
+            motivo = "respuesta_invalida"
+        elif resultado_recibido:
+            motivo = "guardar"
+        else:
+            motivo = "sin_respuesta" if uso.get("fallo_llamada") else "incompleto"
         try:
-            datos.actualizar_referencia(cliente, rid, analisis_estado="error", analisis={"error": gettext("Claude no respondió; intenta de nuevo")})
+            datos.actualizar_referencia(cliente, rid, analisis_estado="error", analisis=analisis.error_guardado(motivo))
         except Exception:
             pass  # conserva el fallo original; el hook del worker también deja el análisis en error
         raise
@@ -127,8 +137,13 @@ def ejecutar_analizar(tarea):
 @al_interrumpir("sprint_analizar_referencia")
 def interrumpida_analizar(tarea, mensaje):
     p = tarea["payload"]
+    ref = datos.referencia(p["cliente"], int(p["referencia_id"]))
+    guardado = ref.get("analisis") if ref else None
+    motivo = guardado.get("motivo") if isinstance(guardado, dict) else None
+    if ref and ref["analisis_estado"] == "error" and isinstance(motivo, str) and motivo in analisis.MOTIVOS_ERROR:
+        return  # conserva la causa que ejecutar_analizar ya dejó, también la falta de imagen
     datos.actualizar_referencia(p["cliente"], int(p["referencia_id"]), analisis_estado="error",
-                                analisis={"error": gettext("Claude no respondió; intenta de nuevo")})
+                                analisis=analisis.error_guardado("interrumpido"))
 
 
 @registrar("sprint_sugerir_personas")

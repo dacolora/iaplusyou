@@ -122,3 +122,5 @@ PND-159/187 (2026-10-09, decisiones delegadas): Apify conserva run_id vía on_id
 
 
 Enmienda PND-159 (2026-10-09): on_ids avisa al worker para registrar YA tope × tarifa, estimado/conciliacion_pendiente y run_id, con la misma referencia referentes:barrer:<bid>:apify:t<tid> de la final. El upsert corrige monto e indicadores, sin sumar dos gastos. GET de corridas recientes gratuito resuelve un timeout/5xx solo con una corrida posterior al inicio del POST; 429 sí espera y reintenta.
+
+Segunda ronda lote 7 (2026-10-09, regresión del estimado temprano): Apify entrega meta con costo_real también para una lista vacía y monto cero. La final corrige la misma fila y su saldo, y quita las marcas del estimado; un costo_real desconocido conserva el estimado marcado, según PND-007.

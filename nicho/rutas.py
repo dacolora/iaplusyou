@@ -218,8 +218,7 @@ def ver(cliente, eid):
         pendientes = [paso for paso in investigacion._orden(retomada)
                       if ((retomada.get("pasos") or {}).get(paso) or {}).get("estado") in (None, "pendiente", "en_curso")]
         costos = [tareas_investigacion._costo_paso(est, retomada, paso) for paso in pendientes]
-        costo = None if any(c is None for c in costos) else min(
-            sum(costos), max(0.0, float(retomada.get("aprobado_usd") or 0) - float(retomada.get("gastado_usd") or 0)))
+        costo = None if any(c is None for c in costos) else sum(costos)
         precio_reanudar = gastos.texto_precio(costo)
     nucleos = datos.avatares(cliente, eid)
     for n in nucleos:

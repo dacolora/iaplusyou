@@ -30,7 +30,7 @@ from idiomas import N_
 from providers import flowplus_modelos
 from referentes import datos as referentes_datos
 from referentes import sugerir as referentes_sugerir
-from sprints import (archivos, calendario, datos, entrega, estado, ideas, produccion, progreso,
+from sprints import (analisis, archivos, calendario, datos, entrega, estado, ideas, produccion, progreso,
                      revision as revision_mod, tablero)
 from tareas import sprints as tareas_sprints
 
@@ -117,7 +117,8 @@ def _productos(cliente):
 
 @bp.context_processor
 def _precios_sprints():
-    return {"precio_analisis_sprint": gastos.estimar("analizar_referencia")["texto"]}
+    return {"precio_analisis_sprint": gastos.estimar("analizar_referencia")["texto"],
+            "error_analisis_sprint": analisis.error_visible}
 
 
 def contexto(cliente):
@@ -1023,6 +1024,17 @@ def referencias_catalogo(cliente, sid, cid):
         flash(gettext("El producto de la campaña ya no está en el catálogo."), "error")
         return _volver_campana(cliente, sid, cid)
     faltantes = _fotos_catalogo_pendientes(cliente, producto, datos.referencias(cliente, cid))
+    pedido = request.get_json(silent=True) if request.is_json else request.form
+    try:
+        n_visto = int(str((pedido or {}).get("n_visto", "")))
+    except (ValueError, TypeError):
+        n_visto = None
+    if n_visto != len(faltantes):
+        mensaje = gettext("La cantidad de fotos cambió; revisa el precio antes de traerlas.")
+        if _quiere_json() or request.is_json:
+            return jsonify({"ok": False, "error": mensaje, "n_actual": len(faltantes)}), 409
+        flash(mensaje, "warn")
+        return _volver_campana(cliente, sid, cid)
     nuevas = 0
     for nombre, url in faltantes:
         descripcion = datos.texto_guardado(cliente, N_("Foto real del producto %(nombre)s, tal como es."),

@@ -123,12 +123,15 @@
       {% for _ in range([0, (c.referencias_objetivo or 1) - (c.referencias_lista | length)] | max) %}<span class="panel-elegido panel-elegido-vacio"></span>{% endfor %}
     </div>
     {% for r in c.referencias_lista if r.analisis_estado == 'error' %}
+    {% set motivo = error_analisis_sprint(r.analisis) %}
     <div class="panel-analisis-error">
-      <p class="tag-error">{{ _('No se pudo analizar') }}: {{ _('Claude no respondió; intenta de nuevo') }}</p>
+      <p class="campo-error"><strong>{{ r.titulo or _('Referencia %(n)s', n=r.id) }}</strong> · {{ motivo.texto }}</p>
+      {% if motivo.reintentar %}
       <form method="post" action="{{ url_for('sprints.referencia_reanalizar', cliente=cliente, rid=r.id) }}">
         <input type="hidden" name="volver" value="tablero">
         <button type="submit" class="btn-sm">{{ _('Reintentar análisis') }} · {{ precio_analisis_sprint }}</button>
       </form>
+      {% endif %}
     </div>
     {% endfor %}
     {% for r in c.referencias_lista if r.estado != 'lista' %}
@@ -170,6 +173,7 @@
       </form>
       <form method="post" action="{{ url_for('sprints.referencias_catalogo', cliente=cliente, sid=sprint.id, cid=c.id) }}">
         <input type="hidden" name="volver" value="tablero">
+        <input type="hidden" name="n_visto" value="{{ c.fotos_catalogo.n }}">
         {% if c.fotos_catalogo.n %}<button type="submit" class="btn-sm">{{ _('Traer las fotos del producto') }} · {{ _('%(n)s fotos · %(precio)s', n=c.fotos_catalogo.n, precio=c.fotos_catalogo.texto) }}</button>
         {% else %}<p class="vacio">{{ _('No hay fotos nuevas que traer') }}</p>{% endif %}
       </form>

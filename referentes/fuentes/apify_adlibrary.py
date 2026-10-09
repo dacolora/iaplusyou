@@ -291,7 +291,7 @@ def traer(consulta, tope, avanzar, cursor=None, on_ids=None):
                                       estado=apify_api.frase_estado(estado), corrida=run_id),
                               costo_real=costo_real, extra_gasto=extra_gasto)
         avanzar(etapa=ETAPA_BUSCAR, detalle=ngettext("%(num)d anuncio", "%(num)d anuncios", 0))
-        yield [], None, {**extra_gasto, "costo_real": costo_real} if costo_real else {}
+        yield [], None, {**extra_gasto, "costo_real": costo_real}
         return
     try:
         pagina = [_normalizar(it) for it in crudos if isinstance(it, dict)]
