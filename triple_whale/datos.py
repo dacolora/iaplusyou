@@ -24,8 +24,12 @@ COLUMNAS_DIMENSION = ("cuenta_id", "campana_id", "campana", "conjunto_id", "conj
                       "creative_id", "video_url", "destino_url", "utm_ok")
 COLUMNAS_CANAL = ("gasto", "impresiones", "clics", "clics_salida", "compras_canal", "valor_canal", "thruplays",
                   "vistas_3s", "p25", "p50", "p75", "p100")
-COLUMNAS_PIXEL = ("pedidos", "ingresos", "nc_pedidos", "nc_ingresos", "sesiones", "carritos", "checkouts")
-COLUMNAS_TIENDA = ("gasto", "ingresos", "pedidos", "nc_pedidos", "nc_ingresos", "reembolsos", "cogs", "utilidad_neta")
+# `visitantes` y `visitantes_nuevos` (0036) dan el NVP: se suman como el resto y el % se calcula después con
+# `triple_whale.visitantes` (nunca un promedio de porcentajes).
+COLUMNAS_PIXEL = ("pedidos", "ingresos", "nc_pedidos", "nc_ingresos", "sesiones", "carritos", "checkouts",
+                  "visitantes", "visitantes_nuevos")
+COLUMNAS_TIENDA = ("gasto", "ingresos", "pedidos", "nc_pedidos", "nc_ingresos", "reembolsos", "cogs", "utilidad_neta",
+                   "visitantes", "visitantes_nuevos")
 COLUMNAS_PRODUCTO = ("unidades", "ingresos", "pedidos")
 COLUMNAS_POR_TIENDA = ("ingresos", "pedidos", "gasto", "nc_pedidos", "nc_ingresos")   # por_tienda
 _LLAVE_ANUNCIO = ["cliente", "tienda_id", "canal", "ad_id", "fecha"]   # uq_tw_anuncio_dia
