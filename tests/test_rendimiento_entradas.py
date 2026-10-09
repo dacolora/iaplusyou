@@ -58,5 +58,23 @@ def test_alcance_de_una_tienda_y_de_nada():
     es = E.armar([_t(1, "NO")], [_c("act_no", "NO")])
     a = E.alcance(es, es[0])
     assert a == {"tw": {"tienda_id": 1}, "meta_fuente": [], "meta_estructura": ["act_no"],
-                 "cubiertas_tw": [], "fuente": "tw"}
+                 "cubiertas_tw": ["act_no"], "fuente": "tw"}
     assert E.alcance([], None)["fuente"] is None
+
+
+def test_r4_una_sola_tienda_sin_pais_alcance():
+    # R4: una sola tienda sin país es la fuente de todo; alcance muestra todos los accounts en cubiertas_tw
+    es = E.armar([_t(7, None)], [_c("act_no", "NO"), _c("act_se", "SE")])
+    elegida = E.elegir(es, "")
+    a = E.alcance(es, elegida)
+    assert a["cubiertas_tw"] == ["act_no", "act_se"] and a["fuente"] == "tw"
+
+
+def test_paridad_cubiertas_tw_tw_vs_todas():
+    # Parity: accounts en cubiertas_tw de una entrada TW sola son subset de cubiertas_tw en «Todas»
+    es = E.armar([_t(1, "NO")], [_c("act_no", "NO"), _c("act_se", "SE")])
+    por = {e["clave"]: e for e in es}
+    sola_no = E.alcance(es, por["NO"])
+    todas = E.alcance(es, None)
+    assert set(sola_no["cubiertas_tw"]) <= set(todas["cubiertas_tw"])
+    assert sola_no["cubiertas_tw"] == ["act_no"]

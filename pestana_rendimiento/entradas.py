@@ -96,8 +96,7 @@ def alcance(entradas, actual):
         ids = [c["ad_account_id"] for c in e["cuentas"]]
         estructura.extend(ids)
         if e["fuente"] == TW:
-            if not actual:
-                cubiertas_tw.extend(ids)
+            cubiertas_tw.extend(ids)
         elif actual:
             meta_fuente.extend(ids)
         else:
