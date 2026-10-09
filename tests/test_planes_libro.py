@@ -435,9 +435,11 @@ def _prioridad(db, job_id):
 
 def test_prioridad_6_con_plan_y_5_sin_el(base_temporal, libro):
     import trabajos
+    libro.configurar("acme", usuario="admin", cobrar=True)
     trabajos.encolar("acme__a", "cola_limpiar", {}, cliente="acme")
     assert _prioridad(base_temporal, "acme__a") == 5
     _periodo(base_temporal)
+    _periodo(base_temporal, cliente="otro", suscripcion_id=2)         # «otro» no cobra: su periodo no le sube nada
     trabajos.encolar("acme__b", "cola_limpiar", {}, cliente="acme")
     trabajos.encolar("acme__lote", "cola_limpiar", {}, cliente="acme", prioridad=3)
     trabajos.encolar("acme__alta", "cola_limpiar", {}, cliente="acme", prioridad=7)
@@ -481,3 +483,118 @@ def test_una_llamada_sincronica_incluida_no_pide_saldo_con_plan(base_temporal, l
     assert importador._regla_si_hay_saldo("acme", "Chancla", "", "") == ""       # sin plan y sin saldo: sin regla
     _periodo(base_temporal)
     assert importador._regla_si_hay_saldo("acme", "Chancla", "", "") == "regla"
+
+
+# ----------------------------------------------- respaldo del worker (fix 1) ---
+
+@pytest.fixture()
+def worker_guion(base_temporal, libro, monkeypatch):
+    """El worker de verdad corriendo una `final_guion` (tipo que cobra, gasto «guion» incluido) con un
+    ejecutor falso que anota su gasto como lo haría Claude."""
+    import idiomas
+    import tareas
+    import worker
+    import gastos
+    monkeypatch.setattr(worker, "PERIODICAS", [])
+    monkeypatch.setattr(idiomas, "de_proyecto", lambda cliente: "es")
+    llamado = []
+
+    def fn(tarea):
+        llamado.append(tarea["id"])
+        gastos.registrar_seguro("acme", "guion", 0.13, f"guion:t{tarea['id']}")
+        return "listo"
+    monkeypatch.setitem(tareas.REGISTRO, "final_guion", fn)
+    monkeypatch.setitem(tareas.AL_INTERRUMPIR, "final_guion", lambda t, m: None)
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    return llamado
+
+
+def _correr_guion(db, job_id):
+    import cola
+    import trabajos
+    import worker
+    assert trabajos.encolar(job_id, "final_guion", {}, cliente="acme", costo_estimado=0.13, max_intentos=1)
+    tarea = cola.reclamar()
+    worker._correr(tarea)
+    return cola.consultar_por_id(tarea["id"])
+
+
+def test_respaldo_deja_correr_lo_incluido_con_plan_y_saldo_cero(base_temporal, libro, worker_guion, sin_avisos):
+    import tareas
+    _periodo(base_temporal)                                          # plan abierto, saldo 0
+    assert libro.puede_arrancar({"tipo": "flowplus_video", "cliente": "acme"}, tareas.TIPOS_QUE_COBRAN) is False
+    fila = _correr_guion(base_temporal, "acme__g1")
+    assert fila["estado"] == "hecha" and worker_guion
+    (i,) = _movs(base_temporal, tipo="incluido")
+    assert i.extra["costo"] == 0.13
+    assert libro.saldo("acme") == 0
+
+
+def test_respaldo_frena_lo_incluido_sin_tope_o_sin_plan(base_temporal, libro, worker_guion, sin_avisos):
+    import cola
+    import tareas
+    import worker
+    from cobros import planes
+    # Sin plan y sin saldo, `encolar` no lo deja pasar; una tarea que llegó a la cola por otro lado la frena el respaldo.
+    cola.encolar("final_guion", {}, cliente="acme", job_id="acme__g0", max_intentos=1)
+    tarea = cola.reclamar()
+    assert libro.puede_arrancar(tarea, tareas.TIPOS_QUE_COBRAN) is False
+    worker._correr(tarea)
+    assert cola.consultar_por_id(tarea["id"])["mensaje"] == worker.MENSAJE_SIN_SALDO
+    # Con plan pero el tope ya gastado: tampoco arranca.
+    _periodo(base_temporal, tope=0.13)
+    _correr_guion(base_temporal, "acme__g1")                         # usa el tope entero
+    assert planes.incluido_usado("acme", planes.periodo_abierto(None, "acme")) == pytest.approx(0.13)
+    cola.encolar("final_guion", {}, cliente="acme", job_id="acme__g2", max_intentos=1)
+    tarea = cola.reclamar()
+    assert libro.puede_arrancar(tarea, tareas.TIPOS_QUE_COBRAN) is False
+    # Un video con plan abierto y saldo 0 nunca arranca por el plan.
+    assert len(worker_guion) == 1
+
+
+def test_respaldo_sin_plan_no_lee_periodo_plan(base_temporal, libro):
+    """Un proyecto que cobra y tiene saldo arranca sin una sola lectura del plan."""
+    import tareas
+    from sqlalchemy import event
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    _acreditar(base_temporal, libro, 5_000)
+    vistas = []
+
+    def contar(conn, cursor, statement, *a):
+        vistas.append(statement)
+    event.listen(base_temporal.engine(), "before_cursor_execute", contar)
+    try:
+        assert libro.puede_arrancar({"tipo": "final_guion", "cliente": "acme"}, tareas.TIPOS_QUE_COBRAN) is True
+        libro.exigir("acme", 0.13)
+    finally:
+        event.remove(base_temporal.engine(), "before_cursor_execute", contar)
+    assert not [q for q in vistas if "periodo_plan" in q][1:]       # exigir: a lo más una (con el candado)
+    assert sum("FROM cuenta_saldo" in q for q in vistas) <= 3        # respaldo 1 + exigir (barata 1 + con candado 1)
+
+
+def test_prioridad_no_lee_el_plan_de_un_proyecto_que_no_cobra(base_temporal, libro, monkeypatch):
+    import trabajos
+    from cobros import planes
+    monkeypatch.setattr(planes, "periodo_abierto", lambda *a, **k: pytest.fail("no debía leer el plan"))
+    trabajos.encolar("acme__a", "cola_limpiar", {}, cliente="acme")
+    libro.configurar("acme", usuario="admin", cobrar=False)
+    trabajos.encolar("acme__b", "cola_limpiar", {}, cliente="acme")
+    assert _prioridad(base_temporal, "acme__a") == _prioridad(base_temporal, "acme__b") == 5
+
+
+def test_exigir_con_plan_ilegible_cobra_como_sin_plan(base_temporal, libro, monkeypatch, caplog):
+    """Si leer el plan falla en el freno, nunca un 500: se pide el precio a la carta y queda en el log."""
+    from cobros import planes
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    _periodo(base_temporal)
+    _acreditar(base_temporal, libro, 5_000)
+
+    def rota(*a, **k):
+        raise RuntimeError("base rota")
+    monkeypatch.setattr(planes, "periodo_abierto", rota)
+    _tarea_viva(base_temporal, "j1")
+    assert libro.exigir("acme", 0.13, job_id="j1", tipo="guion") == 260   # 0,13 × 2,0: a la carta
+    assert "no se pudo leer el plan" in caplog.text
+    monkeypatch.undo()
+    monkeypatch.setattr(planes, "incluido_usado", rota)
+    assert libro.exigir("acme", 0.13, tipo="guion") == 163               # periodo leído (×1,25), tope ilegible: cobra

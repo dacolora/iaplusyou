@@ -351,7 +351,7 @@ def encolar(job_id, tipo, payload, duracion_estimada=60, etapas=None, cliente=No
 
     Planes (spec 2026-10-09 §4): si el tipo de tarea anota un tipo de gasto
     incluido (`planes.GASTO_DE_TAREA`), `exigir` lo recibe y, con plan y dentro
-    del tope, no pide saldo. Un proyecto con periodo de plan abierto sube a 6 la
+    del tope, no pide saldo. Un proyecto que cobra con periodo de plan abierto sube a 6 la
     prioridad normal (5); la de un lote (< 5) o una pedida a mano no cambia."""
     import tareas  # noqa: PLC0415 — tareas/__init__ no importa nada: sin ciclo
     from cobros import libro, planes  # noqa: PLC0415
@@ -370,10 +370,12 @@ def encolar(job_id, tipo, payload, duracion_estimada=60, etapas=None, cliente=No
 
 
 def _prioridad_de_plan(cliente):
-    """6 si el proyecto tiene un periodo de plan abierto, 5 si no. Si la lectura
-    falla, 5: la prioridad nunca frena un encolado."""
-    from cobros import planes  # noqa: PLC0415
+    """6 si el proyecto cobra y tiene un periodo de plan abierto, 5 si no. Si la
+    lectura falla, 5: la prioridad nunca frena un encolado."""
+    from cobros import libro, planes  # noqa: PLC0415
     try:
+        if not libro.cobra_activo(cliente):   # sin «Cobrar» prendido no hay plan que mirar: una lectura barata
+            return 5
         return 6 if planes.periodo_abierto(None, cliente) is not None else 5
     except Exception:  # noqa: BLE001
         log.warning("no se pudo leer el plan de %s para la prioridad", cliente, exc_info=True)

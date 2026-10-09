@@ -138,6 +138,49 @@ def _cuenta(con, cliente):
     return _cuenta_y_periodo(con, cliente)[0]
 
 
+def _cobra(con, cliente):
+    """¿El proyecto tiene «Cobrar» prendido? Una sola lectura (sin margen ni
+    periodo): la comprobación barata antes del candado y de todo lo del plan."""
+    return bool(con.execute(sa.select(db.cuenta_saldo.c.cobrar)
+                            .where(db.cuenta_saldo.c.cliente == cliente)).scalar())
+
+
+def cobra_activo(cliente):
+    """`_cobra` con su propia conexión (trabajos.encolar, antes de mirar el plan)."""
+    if not cliente:
+        return False
+    with db.conectar() as con:
+        return _cobra(con, cliente)
+
+
+def _incluido_cabe(con, cliente, periodo, tipo_gasto, costo_usd):
+    """¿Un gasto de `tipo_gasto` que cuesta `costo_usd` entra en lo incluido del
+    periodo? Si la lectura falla: False (se cobra como sin plan) y queda en el log;
+    nunca un 500 ni un freno que se salta."""
+    if periodo is None or tipo_gasto not in planes.TIPOS_INCLUIDOS or costo_usd is None:
+        return False
+    try:
+        return planes.cabe_incluido(planes.incluido_usado(cliente, periodo, con=con), costo_usd, periodo)
+    except Exception:  # noqa: BLE001
+        log.warning("no se pudo leer lo incluido del plan de %s; se cobra como sin plan", cliente, exc_info=True)
+        return False
+
+
+def _cuenta_y_periodo_tolerante(con, cliente):
+    """`_cuenta_y_periodo` para el freno: si leer el periodo falla, la cuenta sin
+    plan (margen a la carta, más caro: el freno pide de más, nunca de menos)."""
+    try:
+        return _cuenta_y_periodo(con, cliente)
+    except Exception:  # noqa: BLE001
+        log.warning("no se pudo leer el plan de %s; el freno sigue sin plan", cliente, exc_info=True)
+    fila = con.execute(sa.select(db.cuenta_saldo).where(db.cuenta_saldo.c.cliente == cliente)).first()
+    glob = _margen_global(con)
+    if fila is None:
+        return {"cobrar": False, "margen": glob, "margen_propio": None, "umbral": UMBRAL_DEFECTO}, None
+    return {"cobrar": bool(fila.cobrar), "margen": float(fila.margen) if fila.margen is not None else glob,
+            "margen_propio": fila.margen, "umbral": int(fila.umbral_aviso)}, None
+
+
 def cuenta(cliente):
     with db.conectar() as con:
         return _cuenta(con, cliente)
@@ -243,14 +286,13 @@ def exigir(cliente, costo_usd, job_id=None, excluir_job=None, tipo=None):
         return 0
     r = db.reserva_saldo
     with db.conectar() as con:
-        if not _cuenta(con, cliente)["cobrar"]:
+        if not _cobra(con, cliente):
             return 0   # un proyecto que no cobra ni siquiera toma el candado
         _candado(con)
-        c, periodo = _cuenta_y_periodo(con, cliente)   # releída con el candado: nadie la cambia hasta confirmar
+        c, periodo = _cuenta_y_periodo_tolerante(con, cliente)   # releída con el candado: nadie la cambia
         if not c["cobrar"]:
             return 0
-        if (periodo is not None and tipo in planes.TIPOS_INCLUIDOS and costo_usd is not None
-                and planes.cabe_incluido(planes.incluido_usado(cliente, periodo, con=con), costo_usd, periodo)):
+        if _incluido_cabe(con, cliente, periodo, tipo, costo_usd):
             return 0   # incluido en el plan: no pide saldo
         precio = precio_milesimas(costo_usd, c["margen"]) if costo_usd is not None else 1
         precio = max(precio, 1)
@@ -327,15 +369,29 @@ def inicio_de_cadena(tarea):
 
 def puede_arrancar(tarea, tipos_que_cobran):
     """Respaldo del worker (§5.1): False solo si el tipo cobra, el proyecto
-    cobra, no es continuación de una cadena y el saldo es ≤ 0."""
+    cobra, no es continuación de una cadena, el saldo es ≤ 0 y no es algo
+    incluido en un plan abierto al que aún le queda tope (planes §4: `encolar`
+    ya lo aceptó sin pedir saldo; el periodo solo se lee en ese último caso)."""
     if tarea.get("tipo") not in tipos_que_cobran or not tarea.get("cliente"):
         return True
+    cliente = tarea["cliente"]
     with db.conectar() as con:
-        if not _cuenta(con, tarea["cliente"])["cobrar"]:
+        if not _cobra(con, cliente):
             return True
         if tarea.get("job_id") and _es_continuacion(con, tarea):
             return True
-        return _saldo(con, tarea["cliente"]) > 0
+        if _saldo(con, cliente) > 0:
+            return True
+        tipo_gasto = planes.GASTO_DE_TAREA.get(tarea.get("tipo"))
+        if tipo_gasto is None:
+            return False
+        try:
+            periodo = planes.periodo_abierto(con, cliente)
+            return periodo is not None and (planes.incluido_usado(cliente, periodo, con=con)
+                                            < float(periodo["tope_incluido_usd"]) - planes.EPSILON_USD)
+        except Exception:  # noqa: BLE001
+            log.warning("no se pudo leer el plan de %s en el respaldo; sin saldo no arranca", cliente, exc_info=True)
+            return False
 
 
 # ---------------------------------------------------------------- cobrar ---
