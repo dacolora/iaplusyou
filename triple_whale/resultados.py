@@ -13,7 +13,11 @@ Reglas que fija (spec §3):
 - un día es raro si se aparta 25 % o más de la mediana del mismo día de la semana en las 4 semanas anteriores
   (con al menos 3 con dato); se marcan los 3 más raros y hoy nunca;
 - lo atribuido por el Pixel (Triple Attribution) suma más que la tienda: sirve para comparar anuncios y canales
-  entre sí y siempre dice «según el Pixel»; los totales de la tienda salen de `tw_tienda_dia`.
+  entre sí y siempre dice «según el Pixel»; los totales de la tienda salen de `tw_tienda_dia`;
+- la pestaña Rendimiento (spec 2026-10-09-pestana-rendimiento §3 R6–R8) usa la misma sección con otras fuentes:
+  `"meta"` (el Pixel de Meta de una cuenta: «según Meta», sin Triple Whale en ninguna frase) y `"mixta"` (varios
+  países con fuentes distintas: «Ventas» y «Retorno» sin apellido). Ninguna de las dos tiene detalle del día
+  (`con_detalle=False`): sus frases no ofrecen abrir un día.
 """
 import statistics
 from datetime import date, timedelta
@@ -46,16 +50,22 @@ ORDEN_CLASES = ("meta", "google", "snapchat", "tiktok", "otros")
 CANAL_META = "facebook-ads"
 
 # Las tarjetas, en su orden. «anuncios» es el nombre con un canal elegido (todo atribuido por el Pixel).
+# «meta» = el Pixel de una cuenta de Meta; «mixta» = varias fuentes juntas (Rendimiento, spec 2026-10-09 R8).
 _METRICAS = {
-    "ventas": {"tienda": N_("Ventas"), "anuncios": N_("Ventas atribuidas"), "bueno": 1, "formato": "dinero"},
-    "pedidos": {"tienda": N_("Pedidos"), "anuncios": N_("Pedidos atribuidos"), "bueno": 1, "formato": "numero"},
-    "gasto": {"tienda": N_("Gasto en anuncios"), "anuncios": N_("Gasto"), "bueno": 0, "formato": "dinero"},
-    "mer": {"tienda": N_("Retorno (MER)"), "anuncios": N_("ROAS (Pixel)"), "bueno": 1, "formato": "veces"},
-    "ticket": {"tienda": N_("Ticket promedio"), "anuncios": N_("Ticket atribuido"), "bueno": 1, "formato": "dinero"},
-    "cpp": {"tienda": N_("Costo por pedido"), "anuncios": N_("Costo por pedido atribuido"), "bueno": -1,
-            "formato": "dinero"},
-    "clientes_nuevos": {"tienda": N_("Clientes nuevos"), "anuncios": N_("Clientes nuevos"), "bueno": 1,
-                        "formato": "pct"},
+    "ventas": {"tienda": N_("Ventas"), "anuncios": N_("Ventas atribuidas"), "meta": N_("Ventas según Meta"),
+               "mixta": N_("Ventas"), "bueno": 1, "formato": "dinero"},
+    "pedidos": {"tienda": N_("Pedidos"), "anuncios": N_("Pedidos atribuidos"), "meta": N_("Compras según Meta"),
+                "mixta": N_("Pedidos"), "bueno": 1, "formato": "numero"},
+    "gasto": {"tienda": N_("Gasto en anuncios"), "anuncios": N_("Gasto"), "meta": N_("Gasto"),
+              "mixta": N_("Gasto en anuncios"), "bueno": 0, "formato": "dinero"},
+    "mer": {"tienda": N_("Retorno (MER)"), "anuncios": N_("ROAS (Pixel)"), "meta": N_("ROAS según Meta"),
+            "mixta": N_("Retorno"), "bueno": 1, "formato": "veces"},
+    "ticket": {"tienda": N_("Ticket promedio"), "anuncios": N_("Ticket atribuido"), "meta": N_("Ticket según Meta"),
+               "mixta": N_("Ticket promedio"), "bueno": 1, "formato": "dinero"},
+    "cpp": {"tienda": N_("Costo por pedido"), "anuncios": N_("Costo por pedido atribuido"),
+            "meta": N_("Costo por compra"), "mixta": N_("Costo por pedido"), "bueno": -1, "formato": "dinero"},
+    "clientes_nuevos": {"tienda": N_("Clientes nuevos"), "anuncios": N_("Clientes nuevos"),
+                        "meta": N_("Clientes nuevos"), "mixta": N_("Clientes nuevos"), "bueno": 1, "formato": "pct"},
 }
 METRICAS = ("ventas", "pedidos", "gasto", "mer", "ticket", "cpp")
 _AYUDAS = {
@@ -68,6 +78,16 @@ _AYUDAS = {
                  "mer": N_("Ventas atribuidas por el Pixel entre el gasto de estos anuncios"),
                  "ticket": N_("Ventas atribuidas entre pedidos atribuidos"),
                  "cpp": N_("Gasto entre pedidos atribuidos")},
+    # Rendimiento: una cuenta de Meta sola (todo lo que dice es el Pixel de Meta) y varios países con fuentes mezcladas.
+    "meta": {"ventas": N_("Valor de compras que reporta el Pixel de Meta"),
+             "mer": N_("Valor de compras según Meta entre el gasto"),
+             "ticket": N_("Valor de compras entre compras"),
+             "cpp": N_("Gasto entre compras según Meta")},
+    "mixta": {"ventas": N_("Ventas de la tienda donde hay Triple Whale y, donde no, el valor de compras que "
+                           "reporta Meta"),
+              "mer": N_("Esas ventas entre todo el gasto en publicidad"),
+              "ticket": N_("Ventas entre pedidos"),
+              "cpp": N_("Gasto entre pedidos")},
 }
 
 
@@ -234,7 +254,7 @@ def formatear(clave, v, moneda):
 
 
 def _etiqueta(clave, fuente):
-    return idiomas.traducir(_METRICAS[clave]["anuncios" if fuente == "anuncios" else "tienda"])
+    return idiomas.traducir(_METRICAS[clave].get(fuente if fuente in ("anuncios", "meta", "mixta") else "tienda"))
 
 
 def _mas_menos(var):
@@ -265,6 +285,10 @@ def lectura(completos, previos, comparar, nuevos, canales, moneda, fuente):
                 texto = gettext("Según el Pixel, estos anuncios vendieron %(ventas)s que en los %(n)s días anteriores, "
                                 "con %(gasto)s de gasto: cada 1 %(moneda)s trajo %(mer)s %(moneda)s atribuidos "
                                 "(antes %(mer_antes)s).", **datos_frase)
+            elif fuente == "meta":
+                texto = gettext("Según Meta, tus anuncios vendieron %(ventas)s que en los %(n)s días anteriores, con "
+                                "%(gasto)s de gasto: cada 1 %(moneda)s trajo %(mer)s %(moneda)s (antes "
+                                "%(mer_antes)s).", **datos_frase)
             else:
                 texto = gettext("Vendiste %(ventas)s que en los %(n)s días anteriores, con %(gasto)s de gasto: cada 1 "
                                 "%(moneda)s en anuncios trajo %(mer)s %(moneda)s en ventas (antes %(mer_antes)s).",
@@ -277,9 +301,14 @@ def lectura(completos, previos, comparar, nuevos, canales, moneda, fuente):
         d = completos[i]
         datos_frase = {"dia": idiomas.dia_semana(_fecha(d["f"])), "ventas": _dinero(d["ing"], moneda),
                        "pedidos": _pedidos(d["ped"])}
-        texto = (gettext("Su mejor día fue el %(dia)s: %(ventas)s en ventas atribuidas según el Pixel y %(pedidos)s.",
-                         **datos_frase) if fuente == "anuncios"
-                 else gettext("Tu mejor día fue el %(dia)s: %(ventas)s en ventas y %(pedidos)s.", **datos_frase))
+        if fuente == "anuncios":
+            texto = gettext("Su mejor día fue el %(dia)s: %(ventas)s en ventas atribuidas según el Pixel y "
+                            "%(pedidos)s.", **datos_frase)
+        elif fuente == "meta":
+            texto = gettext("Su mejor día fue el %(dia)s: %(ventas)s en compras según Meta y %(pedidos)s.",
+                            **datos_frase)
+        else:
+            texto = gettext("Tu mejor día fue el %(dia)s: %(ventas)s en ventas y %(pedidos)s.", **datos_frase)
         frases.append({"tipo": "ok", "icono": "★", "acciones": [{"tipo": "dia", "fecha": d["f"]}], "texto": texto})
 
     conocidos = [d for d in completos if d["f"] in nuevos]
@@ -386,7 +415,8 @@ def _textos(fuente):
         "promedio": gettext("%(m)s (promedio de 7 días)"),
         "grafica": gettext("Gráfica diaria de %(m)s. Usa las flechas para recorrer los días y Enter para abrir uno."),
         "cargando": gettext("Cargando…"), "error_dia": gettext("No se pudo cargar ese día."),
-        "sin_copia": gettext("sin copia de Triple Whale"),
+        "sin_copia": (gettext("sin copia de Meta") if fuente == "meta"
+                      else gettext("sin copia") if fuente == "mixta" else gettext("sin copia de Triple Whale")),
     }
 
 
@@ -395,13 +425,22 @@ def _titulo(fuente, canal):
         return gettext("Resultados de %(canal)s", canal=nombre_canal(canal))
     if fuente == "anuncios":
         return gettext("Resultados de tus anuncios")
+    if fuente == "meta":
+        return gettext("Resultados de tus anuncios en Meta")
+    if fuente == "mixta":
+        return gettext("Resultados de todos tus países")
     return gettext("Resultados de tu tienda")
 
 
-def _subtitulo(dias_periodo, periodo, n_completos, comparar):
+def _subtitulo(dias_periodo, periodo, n_completos, comparar, fuente):
     desde = idiomas.fecha_corta(_fecha(periodo[0]["f"]))
     hasta = idiomas.fecha_corta(_fecha(periodo[-1]["f"]))
     if not dias_periodo:
+        if fuente == "meta":
+            return gettext("Del %(desde)s al %(hasta)s: todo lo copiado de Meta", desde=desde, hasta=hasta)
+        if fuente == "mixta":
+            return gettext("Del %(desde)s al %(hasta)s: desde que hay datos de todas tus fuentes", desde=desde,
+                           hasta=hasta)
         return gettext("Del %(desde)s al %(hasta)s: todo lo copiado de Triple Whale", desde=desde, hasta=hasta)
     if comparar:
         return gettext("Del %(desde)s al %(hasta)s · las variaciones comparan %(n)s días completos con los %(n)s "
@@ -414,13 +453,25 @@ def _hoy_texto(hoy_d, hoy, moneda, ultima_copia, fin_datos, fuente):
     cuándo faltan días (esos días no cuentan como ventas en cero)."""
     hoy_iso = _iso(_fecha(hoy))
     if fin_datos and fin_datos < hoy_iso:
+        fecha = idiomas.dia_semana(_fecha(fin_datos))
+        if fuente == "meta":
+            return gettext("La última copia de Meta trae datos hasta el %(fecha)s: los días que faltan no entran en "
+                           "las cifras ni en las comparaciones.", fecha=fecha)
+        if fuente == "mixta":
+            return gettext("La última copia trae datos hasta el %(fecha)s: los días que faltan no entran en las "
+                           "cifras ni en las comparaciones.", fecha=fecha)
         return gettext("La última copia de Triple Whale trae datos hasta el %(fecha)s: los días que faltan no entran "
-                       "en las cifras ni en las comparaciones.", fecha=idiomas.dia_semana(_fecha(fin_datos)))
+                       "en las cifras ni en las comparaciones.", fecha=fecha)
     datos_frase = {"ventas": _dinero(hoy_d["ing"], moneda), "pedidos": _pedidos(hoy_d["ped"]),
                    "gasto": _dinero(hoy_d["gas"], moneda)}
-    base = (gettext("Hoy van %(ventas)s en ventas atribuidas según el Pixel y %(pedidos)s, con %(gasto)s de gasto.",
-                    **datos_frase) if fuente == "anuncios"
-            else gettext("Hoy va en %(ventas)s y %(pedidos)s, con %(gasto)s de gasto.", **datos_frase))
+    if fuente == "anuncios":
+        base = gettext("Hoy van %(ventas)s en ventas atribuidas según el Pixel y %(pedidos)s, con %(gasto)s de gasto.",
+                       **datos_frase)
+    elif fuente == "meta":
+        base = gettext("Hoy van %(ventas)s en compras según Meta y %(pedidos)s, con %(gasto)s de gasto.",
+                       **datos_frase)
+    else:
+        base = gettext("Hoy va en %(ventas)s y %(pedidos)s, con %(gasto)s de gasto.", **datos_frase)
     hora = str(ultima_copia)[11:16] if ultima_copia and len(str(ultima_copia)) >= 16 else None
     if hora:
         return base + " " + gettext("Es un día a medias (última copia a las %(hora)s): no entra en las comparaciones.",
@@ -429,7 +480,8 @@ def _hoy_texto(hoy_d, hoy, moneda, ultima_copia, fin_datos, fuente):
 
 
 def armar(dias_periodo, serie_larga, inicio, hoy, fuente, moneda, nuevos, canales, cohortes, inicio_copia,
-          meta_roas, canal, url_dia, ultima_copia, inicio_datos=None, fin_datos=None, inicio_edad=None):
+          meta_roas, canal, url_dia, ultima_copia, inicio_datos=None, fin_datos=None, inicio_edad=None,
+          con_detalle=True):
     """Todo lo de la sección. `serie_larga` = `por_dia` desde `inicio` días antes del periodo (el periodo anterior
     y las 4 semanas de los días raros) hasta hoy; el periodo es `serie_larga[inicio:]` y su último punto es hoy.
 
@@ -439,6 +491,10 @@ def armar(dias_periodo, serie_larga, inicio, hoy, fuente, moneda, nuevos, canale
       tampoco son ventas en cero: van vacíos en la gráfica y fuera de cifras, comparaciones y días raros.
     - `inicio_edad`: desde cuándo la copia cubre todo el alcance (`datos.inicio_para_antiguedad`); la antigüedad
       de un anuncio se conoce 14 días después. Sin él, `inicio_copia`.
+    - `fuente`: "tienda" | "anuncios" (el Pixel de Triple Whale) | "meta" (el Pixel de Meta) | "mixta" (varios países
+      con fuentes distintas); decide las etiquetas, las ayudas y las frases.
+    - `con_detalle`: falso cuando no hay detalle del día (Meta y la mezcla): ninguna frase ofrece abrir un día y
+      `datos["url_dia"]` va vacío, así la plantilla no pinta el recuadro del detalle y el JS no pide nada.
     None si no hay días."""
     periodo = serie_larga[inicio:]
     if not periodo:
@@ -474,7 +530,7 @@ def armar(dias_periodo, serie_larga, inicio, hoy, fuente, moneda, nuevos, canale
 
     con_dato = [d for d in periodo if d["f"] not in sin_copia]
     claves = list(METRICAS) + (["clientes_nuevos"] if fuente == "tienda" and sum(d["nc"] for d in con_dato) else [])
-    ayudas = _AYUDAS["anuncios" if fuente == "anuncios" else "tienda"]
+    ayudas = _AYUDAS.get(fuente, _AYUDAS["tienda"])
     tot = totales(con_dato)
     tarjetas = []
     for clave in claves:
@@ -505,18 +561,23 @@ def armar(dias_periodo, serie_larga, inicio, hoy, fuente, moneda, nuevos, canale
                         nuevos=_pct(_div(d["nue"], d["gas"])) if d["nue"] is not None and d["gas"] else "—")
         tabla.append(fila)
 
+    frases = lectura(completos, previos, comparar, nue_conocidos, canales if fuente == "tienda" else {}, moneda, fuente)
+    if not con_detalle:
+        for frase in frases:
+            frase["acciones"] = [a for a in frase["acciones"] if a["tipo"] != "dia"]
+
     return {
         "titulo": _titulo(fuente, canal), "fuente": fuente,
-        "subtitulo": _subtitulo(dias_periodo, periodo, n, comparar),
+        "subtitulo": _subtitulo(dias_periodo, periodo, n, comparar, fuente),
         "hoy_texto": _hoy_texto(periodo[-1], hoy, moneda, ultima_copia, fin_datos, fuente),
         "tarjetas": tarjetas,
-        "lectura": lectura(completos, previos, comparar, nue_conocidos, canales if fuente == "tienda" else {},
-                           moneda, fuente),
+        "lectura": frases,
         "creativos": creativos(cohortes, inicio_copia),
         "tabla": tabla,
         "datos": {
             "lang": idiomas.activo(), "moneda": moneda, "fuente": fuente, "comparar": comparar,
-            "meta_roas": meta_roas, "conocido_desde": conocido, "dia_inicial": dia_inicial, "url_dia": url_dia,
+            "meta_roas": meta_roas, "conocido_desde": conocido, "dia_inicial": dia_inicial,
+            "url_dia": url_dia if con_detalle else "",
             "dias": dias_json,
             "previos": [{"f": d["f"], "ing": round(d["ing"], 2), "gas": round(d["gas"], 2), "ped": round(d["ped"], 2),
                          "nc": round(d["nc"], 2)} for d in previos],

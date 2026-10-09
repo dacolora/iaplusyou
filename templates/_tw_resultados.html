@@ -45,7 +45,10 @@
     <p class="twr-hoy">{{ r.hoy_texto }}</p>
   </div>
 
+  {# El detalle de un día existe solo si la sección sabe dónde pedirlo (`url_dia`): con Meta o con fuentes mezcladas no hay. #}
+  {% if r.datos.url_dia %}
   <div class="twr-dia" data-twr-dia aria-live="polite"><p class="twr-nota">{{ _('Cargando…') }}</p></div>
+  {% endif %}
 
   {% if r.lectura %}
   <h4 class="twr-titulo">{{ _('Lo que dicen los números') }}</h4>

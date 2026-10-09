@@ -123,7 +123,7 @@
     var leyenda = seccion.querySelector('[data-twr-leyenda]');
     var caja = seccion.querySelector('[data-twr-grafico]');
     var modo = seccion.querySelector('[data-twr-modo]');
-    var detalle = seccion.querySelector('[data-twr-dia]');
+    var detalle = seccion.querySelector('.twr-dia[data-twr-dia]');   // los botones «Ver qué pasó →» también llevan data-twr-dia
     var geo = null;   // la geometría del último dibujo (para el recuadro y el clic)
 
     function formatear(clave, v) {
@@ -371,7 +371,7 @@
         html('div', 'twr-aviso-sep', aviso);
         fila(aviso, texto(T.antes, { dia: fechaLarga(previo.f) }), formatear(clave, numero(geo.previos[i]) ? geo.previos[i] : valor(clave, previo)));
       }
-      if (!hoy && !d.sin_copia) html('div', 'twr-aviso-pista', aviso, T.pista);
+      if (!hoy && !d.sin_copia && datos.url_dia) html('div', 'twr-aviso-pista', aviso, T.pista);   // la pista invita a abrir el día
       aviso.hidden = false;
       var rLienzo = lienzo.getBoundingClientRect(), rCaja = caja.getBoundingClientRect();
       var escalaX = rLienzo.width / ANCHO;
@@ -393,7 +393,7 @@
 
     // ------------------------------------------------------- detalle del día ---
     function abrir(fecha, conFoco) {
-      if (!fecha) return;
+      if (!fecha || !datos.url_dia || !detalle) return;   // Meta y las fuentes mezcladas no tienen detalle del día
       var i = -1;
       for (var k = 0; k < n; k++) if (dias[k].f === fecha) i = k;
       if (i === n - 1 || (i >= 0 && dias[i].sin_copia)) return;   // hoy va a medias y un día sin copia no tiene detalle

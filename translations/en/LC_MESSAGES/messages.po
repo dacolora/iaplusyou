@@ -4034,6 +4034,9 @@ msgstr "Purchases"
 msgid "Compras (requiere Pixel)"
 msgstr "Purchases (requires Pixel)"
 
+msgid "Compras según Meta"
+msgstr "Purchases per Meta"
+
 msgid "Comprobar Pixel"
 msgstr "Check Pixel"
 
@@ -4890,6 +4893,14 @@ msgstr "From %(desde)s to %(hasta)s · changes compare %(n)s full days with the 
 #, python-format
 msgid "Del %(desde)s al %(hasta)s, contra los %(n)s días anteriores"
 msgstr "From %(desde)s to %(hasta)s, against the previous %(n)s days"
+
+#, python-format
+msgid "Del %(desde)s al %(hasta)s: desde que hay datos de todas tus fuentes"
+msgstr "From %(desde)s to %(hasta)s: since there is data from all your sources"
+
+#, python-format
+msgid "Del %(desde)s al %(hasta)s: todo lo copiado de Meta"
+msgstr "From %(desde)s to %(hasta)s: everything copied from Meta"
 
 #, python-format
 msgid "Del %(desde)s al %(hasta)s: todo lo copiado de Triple Whale"
@@ -6992,6 +7003,9 @@ msgstr "That voice no longer exists."
 msgid "Esas piezas ya se estaban generando."
 msgstr "Those pieces were already being generated."
 
+msgid "Esas ventas entre todo el gasto en publicidad"
+msgstr "Those sales divided by all ad spend"
+
 #, python-format
 msgid "Escalón %(n)s/3"
 msgstr "Step %(n)s/3"
@@ -8479,6 +8493,12 @@ msgstr "Ad spend"
 msgid "Gasto en publicidad entre pedidos"
 msgstr "Ad spend divided by orders"
 
+msgid "Gasto entre compras según Meta"
+msgstr "Spend divided by purchases per Meta"
+
+msgid "Gasto entre pedidos"
+msgstr "Spend divided by orders"
+
 msgid "Gasto entre pedidos atribuidos"
 msgstr "Spend divided by attributed orders"
 
@@ -9096,6 +9116,10 @@ msgstr "How does your product help them achieve that status/characteristics?"
 #, python-format
 msgid "Hoy va en %(ventas)s y %(pedidos)s, con %(gasto)s de gasto."
 msgstr "Today so far: %(ventas)s and %(pedidos)s, with %(gasto)s of spend."
+
+#, python-format
+msgid "Hoy van %(ventas)s en compras según Meta y %(pedidos)s, con %(gasto)s de gasto."
+msgstr "Today so far: %(ventas)s in purchases per Meta and %(pedidos)s, with %(gasto)s of spend."
 
 #, python-format
 msgid "Hoy van %(ventas)s en ventas atribuidas según el Pixel y %(pedidos)s, con %(gasto)s de gasto."
@@ -10061,12 +10085,20 @@ msgid "La última copia de %(tienda)s falló: %(error)s"
 msgstr "The last copy of %(tienda)s failed: %(error)s"
 
 #, python-format
+msgid "La última copia de Meta trae datos hasta el %(fecha)s: los días que faltan no entran en las cifras ni en las comparaciones."
+msgstr "The last Meta copy has data up to %(fecha)s: the missing days are left out of the figures and the comparisons."
+
+#, python-format
 msgid "La última copia de Triple Whale trae datos hasta el %(fecha)s: los días que faltan no entran en las cifras ni en las comparaciones."
 msgstr "The last Triple Whale copy has data up to %(fecha)s: the missing days are left out of the figures and the comparisons."
 
 #, python-format
 msgid "La última copia falló: %(error)s"
 msgstr "The last copy failed: %(error)s"
+
+#, python-format
+msgid "La última copia trae datos hasta el %(fecha)s: los días que faltan no entran en las cifras ni en las comparaciones."
+msgstr "The last copy has data up to %(fecha)s: the missing days are left out of the figures and the comparisons."
 
 #, python-format
 msgid "La última evaluación (%(alcance)s) falló: %(error)s"
@@ -13994,6 +14026,9 @@ msgstr "Minimum ROAS"
 msgid "ROAS no comparable"
 msgstr "ROAS not comparable"
 
+msgid "ROAS según Meta"
+msgstr "ROAS per Meta"
+
 msgid "ROAS: valor de compras / gasto"
 msgstr "ROAS: purchase value / spend"
 
@@ -14526,11 +14561,17 @@ msgstr "Results updated."
 msgid "Resultados de %(canal)s"
 msgstr "%(canal)s results"
 
+msgid "Resultados de todos tus países"
+msgstr "Results for all your countries"
+
 msgid "Resultados de tu tienda"
 msgstr "Your store results"
 
 msgid "Resultados de tus anuncios"
 msgstr "Your ad results"
+
+msgid "Resultados de tus anuncios en Meta"
+msgstr "Your ad results on Meta"
 
 msgid "Resumen"
 msgstr "Summary"
@@ -14543,6 +14584,9 @@ msgstr "Hold"
 
 msgid "Retiene"
 msgstr "Holds attention"
+
+msgid "Retorno"
+msgstr "Return"
 
 msgid "Retorno (MER)"
 msgstr "Return (MER)"
@@ -14997,6 +15041,10 @@ msgid ""
 msgstr ""
 "Second pass with Bria: it raises the resolution <strong>without regenerating</strong> the\n"
 "    image, so it doesn't change the face, the pose or the background."
+
+#, python-format
+msgid "Según Meta, tus anuncios vendieron %(ventas)s que en los %(n)s días anteriores, con %(gasto)s de gasto: cada 1 %(moneda)s trajo %(mer)s %(moneda)s (antes %(mer_antes)s)."
+msgstr "According to Meta, your ads sold %(ventas)s than in the previous %(n)s days, with %(gasto)s spend: every 1 %(moneda)s brought %(mer)s %(moneda)s (before, %(mer_antes)s)."
 
 #, python-format
 msgid "Según el Pixel, estos anuncios vendieron %(ventas)s que en los %(n)s días anteriores, con %(gasto)s de gasto: cada 1 %(moneda)s trajo %(mer)s %(moneda)s atribuidos (antes %(mer_antes)s)."
@@ -15588,6 +15636,10 @@ msgid "Su día a día (una situación por línea)"
 msgstr "Their day to day (one situation per line)"
 
 #, python-format
+msgid "Su mejor día fue el %(dia)s: %(ventas)s en compras según Meta y %(pedidos)s."
+msgstr "Their best day was %(dia)s: %(ventas)s in purchases per Meta and %(pedidos)s."
+
+#, python-format
 msgid "Su mejor día fue el %(dia)s: %(ventas)s en ventas atribuidas según el Pixel y %(pedidos)s."
 msgstr "Their best day was %(dia)s: %(ventas)s in sales attributed by the Pixel and %(pedidos)s."
 
@@ -15997,6 +16049,9 @@ msgstr "Attributed order value"
 
 msgid "Ticket promedio"
 msgstr "Average order value"
+
+msgid "Ticket según Meta"
+msgstr "Order value per Meta"
 
 #, python-format
 msgid "Tiempos con huecos o momentos vacíos en: %(lista)s."
@@ -17245,6 +17300,15 @@ msgstr "Value"
 msgid "Valor de compras"
 msgstr "Purchase value"
 
+msgid "Valor de compras entre compras"
+msgstr "Purchase value divided by purchases"
+
+msgid "Valor de compras que reporta el Pixel de Meta"
+msgstr "Purchase value reported by the Meta Pixel"
+
+msgid "Valor de compras según Meta entre el gasto"
+msgstr "Purchase value per Meta divided by spend"
+
 msgid "Variable"
 msgstr "Variable"
 
@@ -17315,6 +17379,9 @@ msgstr "Sales attributed by the Pixel divided by the spend on these ads"
 msgid "Ventas atribuidas según el Pixel; debajo, el gasto del anuncio ese día y su retorno."
 msgstr "Sales attributed by the Pixel; below, the ad's spend that day and its return."
 
+msgid "Ventas de la tienda donde hay Triple Whale y, donde no, el valor de compras que reporta Meta"
+msgstr "Store sales where Triple Whale is connected and, where it is not, the purchase value Meta reports"
+
 msgid "Ventas de la tienda entre todo el gasto en publicidad"
 msgstr "Store sales divided by all ad spend"
 
@@ -17327,6 +17394,9 @@ msgstr "Sales in %(monedas)s, account in %(moneda)s: ROAS not comparable, using 
 
 msgid "Ventas entre pedidos"
 msgstr "Sales divided by orders"
+
+msgid "Ventas según Meta"
+msgstr "Sales per Meta"
 
 msgid "Venían de la pestaña Campañas. Se siguen midiendo y se pueden pausar/activar; para lanzar algo nuevo crea un experimento."
 msgstr "These came from the Campaigns tab. They're still measured and can be paused/activated; to launch something new, create an experiment."
@@ -20408,6 +20478,9 @@ msgstr "not counting standalone ads"
 
 msgid "sin copia"
 msgstr "no copy"
+
+msgid "sin copia de Meta"
+msgstr "no Meta copy"
 
 msgid "sin copia de Triple Whale"
 msgstr "no Triple Whale copy"

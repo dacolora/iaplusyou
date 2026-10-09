@@ -5,6 +5,7 @@ from datetime import date, timedelta
 import pytest
 
 import idiomas
+from tests.test_rutas_configuracion import app  # noqa: F401  (fixture)
 from triple_whale import resultados as r
 
 
@@ -22,11 +23,12 @@ def _dias(valores, desde="2026-09-01"):
 
 def _armar(serie, dias_periodo=0, inicio=0, hoy=date(2026, 9, 30), nuevos=None, canales=None, cohortes=None,
            inicio_copia="2026-09-01", meta_roas=None, canal=None, fuente="tienda", ultima_copia=None,
-           inicio_datos=None, fin_datos=None):
+           inicio_datos=None, fin_datos=None, con_detalle=True):
     return r.armar(dias_periodo=dias_periodo, serie_larga=serie, inicio=inicio, hoy=hoy, fuente=fuente,
                    moneda="USD", nuevos=nuevos or {}, canales=canales or {}, cohortes=cohortes,
                    inicio_copia=inicio_copia, meta_roas=meta_roas, canal=canal, url_dia="/x/dia?tienda=",
-                   ultima_copia=ultima_copia, inicio_datos=inicio_datos, fin_datos=fin_datos)
+                   ultima_copia=ultima_copia, inicio_datos=inicio_datos, fin_datos=fin_datos,
+                   con_detalle=con_detalle)
 
 
 def test_por_dia_rellena_con_ceros():
@@ -300,3 +302,42 @@ def test_detalle_dia_sin_antiguedad_conocida(es):
     d = r.detalle_dia("2026-09-03", {"ing": 1, "gas": 1, "ped": 1}, None, {}, anuncios, 6, {}, "USD", "tienda",
                       None, None, antiguedad_conocida=False)
     assert d["anuncios"][0]["nuevo"] is False and d["arrancaron"] is None
+
+
+# ---- Rendimiento (2/9): fuente Meta y mezcla, y sin detalle del día ----
+
+def test_fuente_meta_dice_segun_meta_y_no_habla_de_triple_whale(es):
+    out = _armar(_dias([(100, 50, 2)] * 10), fuente="meta")
+    etiquetas = {t["clave"]: t["etiqueta"] for t in out["tarjetas"]}
+    assert etiquetas["ventas"] == "Ventas según Meta" and etiquetas["mer"] == "ROAS según Meta"
+    textos = " ".join([out["titulo"], out["subtitulo"], out["hoy_texto"]] + [f["texto"] for f in out["lectura"]]
+                      + list(out["datos"]["textos"].values()))
+    assert "Triple Whale" not in textos and "Pixel" not in textos
+    assert "clientes_nuevos" not in etiquetas
+
+
+def test_fuente_mixta_usa_ventas_y_retorno_sin_apellido(es):
+    out = _armar(_dias([(100, 50, 2)] * 10), fuente="mixta")
+    etiquetas = {t["clave"]: t["etiqueta"] for t in out["tarjetas"]}
+    assert etiquetas["ventas"] == "Ventas" and etiquetas["mer"] == "Retorno"
+    assert "Triple Whale" not in out["subtitulo"]
+
+
+def test_sin_detalle_ninguna_frase_abre_un_dia(es):
+    out = _armar(_dias([(100, 50, 2)] * 10), fuente="meta", con_detalle=False)
+    assert all(a["tipo"] != "dia" for f in out["lectura"] for a in f["acciones"])
+    con = _armar(_dias([(100, 50, 2)] * 10), fuente="tienda")
+    assert any(a["tipo"] == "dia" for f in con["lectura"] for a in f["acciones"])
+
+
+def test_la_plantilla_pinta_el_recuadro_del_detalle_solo_con_url_dia(app):  # noqa: F811
+    from flask import render_template
+
+    def pintar(**kw):
+        with app["dashboard"].app.test_request_context():
+            return render_template("_tw_resultados.html", tw={"resultados": _armar(_dias([(100, 50, 2)] * 10), **kw)})
+    con = pintar(fuente="tienda")
+    assert 'class="twr-dia"' in con and 'data-twr-dia="2026-' in con                 # recuadro y botón «Ver qué pasó»
+    sin = pintar(fuente="meta", con_detalle=False)
+    assert 'class="twr-dia"' not in sin and "data-twr-dia" not in sin
+    assert "Resultados de tus anuncios en Meta" in sin and "Ventas según Meta" in sin
