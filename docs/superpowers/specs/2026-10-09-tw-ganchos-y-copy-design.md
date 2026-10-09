@@ -135,7 +135,7 @@ muestra con el aviso «revisa antes de publicar», porque copiarlo es decisión 
   de clips y el precio.
 - Sin precio conocido, el botón dice «precio no disponible» y no se puede pedir.
 
-### 4.2 Datos: tabla `tw_gancho` (migración 0035)
+### 4.2 Datos: tabla `tw_gancho` (migración 0036; era la 0035, renumerada al mezclar main el 2026-10-09, que ya tenía 0035_meta_rendimiento)
 
 Una fila por variante. Su único escritor es `triple_whale/datos.py`.
 
@@ -359,7 +359,7 @@ Todo sigue sin `<script>` en el fragmento y con lo de Claude escapado.
 
 - **Nuevo:**
   - `triple_whale/ganchos.py`: `codigo`, `codigo_en`, `documento_gancho`, `formato_cercano`, `aspecto_kling`, `destino`;
-  - `migrations/versions/0035_tw_gancho.py`.
+  - `migrations/versions/0036_tw_gancho.py` (era `0035_tw_gancho.py` antes de mezclar main el 2026-10-09).
 - **Cambian:**
   - `db.py` (tabla);
   - `triple_whale/datos.py` (tanda, mover, consultas);

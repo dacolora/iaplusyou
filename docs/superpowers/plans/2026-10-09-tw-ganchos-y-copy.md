@@ -2873,7 +2873,7 @@ Expected: `PND-189` (el 2026-10-09). Si salió otro, numera desde el siguiente y
 - [ ] **Step 2: La skill**
 
 En `.claude/skills/triple-whale/SKILL.md`, la primera línea de contenido dice «migrations 0023, 0024, 0032, 0034 and
-0035» y, en «Tarjetas de análisis», la viñeta «Out of this change (spec §13, PND-180 to PND-186)» empieza con «Stage 2
+0036» y, en «Tarjetas de análisis», la viñeta «Out of this change (spec §13, PND-180 to PND-186)» empieza con «Stage 2
 (2026-10-09, below) did «change only the hook» (half of PND-180) and «new Meta copy» (half of PND-182).». Al final del
 archivo:
 
@@ -2883,7 +2883,8 @@ archivo:
 Why: Daniel (2026-10-09, «sigue con las siguientes etapas») chose «a new hook» first: an ad that already proved its body
 (product, demo, offer) usually loses its money in the first 3 seconds, and regenerating only those seconds costs a
 fraction of a new video. Spec `docs/superpowers/specs/2026-10-09-tw-ganchos-y-copy-design.md`, plan
-`docs/superpowers/plans/2026-10-09-tw-ganchos-y-copy.md`, migration 0035.
+`docs/superpowers/plans/2026-10-09-tw-ganchos-y-copy.md`, migration 0036 (0035 before merging main on 2026-10-09, which
+already had 0035_meta_rendimiento).
 
 - **The analysis brings two more keys.** `mejorar.PROMPT` asks for `ganchos` (exactly 3 when Claude sees video frames,
   `[]` otherwise) and `copy_nuevo` (title + main text for Meta). `parsear(texto, verificable, duracion_s=None)` never
@@ -3015,5 +3016,5 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 3. **Captura** del detalle con el test client (fragmento con datos sembrados: copy, 3 ganchos, una variante en cada
    estado), en escritorio y a 375 px (memoria «ver la UI sin contraseña»).
 4. **Revisiones:** `revisor` (contra el spec, con mutaciones), `guardian-gasto` y `auditor-seguridad`.
-5. Mezcla a `main` y despliegue con la skill `despliegue`: migración 0035 ensayada en una copia; los DOS servicios
+5. Mezcla a `main` y despliegue con la skill `despliegue`: migración 0036 (era la 0035; renumerada al mezclar main el 2026-10-09) ensayada en una copia; los DOS servicios
    (cambia el worker: tareas y periódica nueva), con la cola vacía comprobada en su propio `ssh`.

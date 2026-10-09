@@ -284,13 +284,6 @@ def test_tienda_woo_no_llama_a_la_red_interna_ni_sigue_redirecciones(monkeypatch
     assert "169.254.169.254" in str(ei.value) and s.llamadas[0]["allow_redirects"] is False
 
 
-def test_nueva_idea_visual_solo_acepta_un_personaje_del_proyecto(app, monkeypatch):
-    d = app["dashboard"]
-    monkeypatch.setattr(d, "_personajes", lambda cliente: [{"nombre": "p.png", "url": "https://r2.test/clientes/acme/personajes/p.png"}])
-    monkeypatch.setattr(d.generador_prompts, "generar_conceptos_imagen", lambda *a, **k: pytest.fail("no debió generar"))
-    c = _ana(app)
-    r = c.post("/cliente/acme/idea/nueva_visual", data={"idea": "x", "image_url": "http://169.254.169.254/latest/"})
-    assert r.status_code == 302
 
 
 # --- Excel con bomba de descompresión -------------------------------------------------------

@@ -38,7 +38,6 @@ from werkzeug.utils import secure_filename
 from datetime import date, datetime
 
 import estado as estado_mod
-import prompts as prompts_mod
 import marca as marca_mod
 import conceptos_imagen
 import catalogo_productos
@@ -70,8 +69,7 @@ import audios
 import voces_propias
 import referencias_link
 import generador_prompts
-from providers import image_provider
-from providers import video_provider, wan3_client, flowplus_modelos
+from providers import wan3_client, flowplus_modelos
 from providers import aspect_ratio as aspect_ratio_mod
 import ads as ads_mod
 from meta_ads import auth as meta_auth
@@ -129,17 +127,7 @@ from providers import fal_audio
 from providers import wavespeed_imagen as wavespeed_imagen_prov
 from tareas.swap import ETAPAS_SWAP_VIDEO, ETAPAS_SWAP_FOTO, ETAPAS_SWAP_FOTO_MEJORADA
 from publicador import publicar_brief
-from higgsfield_client import (
-    generate_video,
-    generate_image,
-    poll_until_done,
-    download_result,
-    download_image_result,
-    extract_video_url,
-    extract_image_url,
-    estimate_video,
-    estimate_image,
-)
+
 from storage import r2_uploader
 
 BASE_DIR = os.path.dirname(__file__)
@@ -364,6 +352,10 @@ from triple_whale import rutas as triple_whale_rutas  # noqa: E402  (Blueprint d
 from triple_whale import panel as triple_whale_panel  # noqa: E402  (la tienda según Triple Whale, en el Tablero)
 from triple_whale import puente as triple_whale_puente  # noqa: E402  (una pieza de Crear nacida de una idea)
 app.register_blueprint(triple_whale_rutas.bp)
+
+from meta_rendimiento import rutas as meta_rendimiento_rutas  # noqa: E402  (Blueprint de la pestaña Meta)
+from meta_rendimiento import cuentas as meta_rend_cuentas  # noqa: E402  (las cuentas que lee el proyecto)
+app.register_blueprint(meta_rendimiento_rutas.bp)
 
 from guiones import rutas as guiones_rutas  # noqa: E402  (Blueprint JSON del chat de Flow Plus en Crear)
 app.register_blueprint(guiones_rutas.bp)
@@ -1122,9 +1114,11 @@ cuando conectas tu cuenta de Meta (Facebook e Instagram) y cómo los protegemos.
 <li>Tu nombre y el identificador de tu usuario de Facebook (para saber quién autorizó la conexión).</li>
 <li>La lista de cuentas publicitarias, Páginas de Facebook y cuentas de Instagram que administras, para que
 elijas cuál conectar al proyecto.</li>
-<li>Un token de acceso de sistema para la cuenta publicitaria y la Página elegidas.</li>
+<li>Un token de acceso de sistema para las cuentas publicitarias y la Página elegidas.</li>
 <li>Datos de tus anuncios y sus resultados (impresiones, alcance, clics, gasto, conversiones) y, cuando
-publiques contenido orgánico, la confirmación de la publicación.</li>
+publiques contenido orgánico, la confirmación de la publicación. Copiamos esas métricas de las cuentas elegidas,
+con los nombres de tus campañas, conjuntos de anuncios y anuncios, a nuestro servidor para mostrártelas sin
+consultar a Meta cada vez.</li>
 </ul>
 <h3>Para qué los usamos</h3>
 <ul>
@@ -1141,8 +1135,9 @@ restringidos en nuestro servidor en la Unión Europea (Hetzner, Núremberg). Sol
 puede leerlos; nunca se muestran en pantalla ni se registran en logs.</p>
 <h3>Cuánto tiempo</h3>
 <p>Mientras el proyecto tenga Meta conectado. Al pulsar «Desconectar» en la plataforma se borran de inmediato
-el token y los identificadores. También puedes revocar el acceso desde Facebook: Configuración › Integraciones
-de negocio, o Configuración › Apps y sitios web.</p>
+el token, los identificadores y las métricas copiadas de las cuentas elegidas (gasto, compras, nombres de
+campañas, conjuntos de anuncios y anuncios). También puedes revocar el acceso desde Facebook: Configuración ›
+Integraciones de negocio, o Configuración › Apps y sitios web.</p>
 <h3>Eliminación de datos</h3>
 <p>Para que eliminemos todos los datos asociados a tu cuenta de Meta escríbenos a dacoloradog@gmail.com
 indicando el nombre del proyecto; lo hacemos en un plazo máximo de 7 días y te confirmamos por correo.</p>
@@ -1162,9 +1157,11 @@ process when you connect your Meta account (Facebook and Instagram) and how we p
 <li>Your name and your Facebook user identifier (to know who authorized the connection).</li>
 <li>The list of ad accounts, Facebook Pages and Instagram accounts you manage, so you can
 choose which one to connect to the project.</li>
-<li>A system access token for the chosen ad account and Page.</li>
+<li>A system access token for the chosen ad accounts and Page.</li>
 <li>Data about your ads and their results (impressions, reach, clicks, spend, conversions) and, when you
-publish organic content, confirmation of the publication.</li>
+publish organic content, confirmation of the publication. We copy those metrics from the chosen accounts, with
+the names of your campaigns, ad sets and ads, to our server so we can show them to you without asking Meta every
+time.</li>
 </ul>
 <h3>What we use it for</h3>
 <ul>
@@ -1181,7 +1178,8 @@ permissions on our server in the European Union (Hetzner, Nuremberg). Only the p
 can read them; they're never shown on screen or logged.</p>
 <h3>How long</h3>
 <p>As long as the project has Meta connected. Clicking “Disconnect” on the platform immediately deletes
-the token and the identifiers. You can also revoke access from Facebook: Settings › Business Integrations,
+the token, the identifiers and the metrics copied from the chosen accounts (spend, purchases, and the names of
+campaigns, ad sets and ads). You can also revoke access from Facebook: Settings › Business Integrations,
 or Settings › Apps and Websites.</p>
 <h3>Data deletion</h3>
 <p>For us to delete all the data associated with your Meta account, write to us at dacoloradog@gmail.com
@@ -1264,14 +1262,16 @@ def eliminar_datos():
     """URL de instrucciones de eliminación de datos que pide Meta."""
     cuerpo = {
         "es": """<p>Para eliminar los datos que Creatv Machine guarda de tu cuenta de Meta:</p>
-<ol><li>Entra a tu proyecto en app.creatvmachine.com › FlowMarketing › <strong>Desconectar</strong>: se borran el token
-y los identificadores de tu cuenta publicitaria, Página e Instagram al instante.</li>
+<ol><li>Entra a tu proyecto en app.creatvmachine.com › FlowMarketing › <strong>Desconectar</strong>: se borran el token,
+los identificadores de tus cuentas publicitarias, Página e Instagram y las métricas copiadas de las cuentas elegidas
+(gasto, compras, nombres de campañas, conjuntos de anuncios y anuncios) al instante.</li>
 <li>Si prefieres, escribe a dacoloradog@gmail.com con el nombre de tu proyecto y lo eliminamos en máximo 7 días,
 con confirmación por correo.</li></ol>
 <p>También puedes revocar el acceso desde Facebook: Configuración › Apps y sitios web › Creatv Machine › Eliminar.</p>""",
         "en": """<p>To delete the data Creatv Machine stores about your Meta account:</p>
-<ol><li>Go to your project at app.creatvmachine.com › FlowMarketing › <strong>Disconnect</strong>: the token
-and the identifiers of your ad account, Page and Instagram are deleted instantly.</li>
+<ol><li>Go to your project at app.creatvmachine.com › FlowMarketing › <strong>Disconnect</strong>: the token,
+the identifiers of your ad accounts, Page and Instagram, and the metrics copied from the chosen accounts
+(spend, purchases, and the names of campaigns, ad sets and ads) are deleted instantly.</li>
 <li>If you prefer, write to dacoloradog@gmail.com with your project's name and we'll delete it within 7 days,
 confirmed by email.</li></ol>
 <p>You can also revoke access from Facebook: Settings › Apps and Websites › Creatv Machine › Remove.</p>""",
@@ -1869,129 +1869,12 @@ def admin_usuario_verificar(usuario):
     return redirect(url_for("panel"))
 
 
-def _job_id_imagen(cliente, prompt_id):
-    return f"{cliente}__{prompt_id}__imagen"
-
-
-def _job_id_video(cliente, prompt_id):
-    return f"{cliente}__{prompt_id}__video"
-
-
 def _job_id_publicar(cliente, brief_id):
     return f"{cliente}__{brief_id}__publicar"
 
 
 def _job_id_creative_flow(cliente, cf_id):
     return flowplus_lanzar.job_id(cliente, cf_id)
-
-
-def _trabajo_de_prompt(cliente, prompt_id, item):
-    """Si hay una generación en curso para este prompt (imagen o video según su
-    etapa), devuelve {"job_id": ...} para que la plantilla muestre la barra de
-    progreso en vez de los botones normales."""
-    if item.get("estado") == "pendiente":
-        job_id = _job_id_imagen(cliente, prompt_id)
-    elif item.get("estado") == "imagen_pendiente":
-        job_id = _job_id_video(cliente, prompt_id)
-    else:
-        return None
-    return {"job_id": job_id} if trabajos.en_curso(job_id) else None
-
-
-def _ideas_pendientes(cliente):
-    """Ideas con al menos un prompt en curso (pendiente o imagen_pendiente),
-    cada una con su costo estimado según en qué etapa está."""
-    data = prompts_mod.cargar(cliente)
-    ideas = []
-    for idea_id, idea in data.items():
-        prompts_en_curso = []
-        for pid, item in idea.get("prompts", {}).items():
-            if item.get("estado") not in ("pendiente", "imagen_pendiente"):
-                continue
-            entry = {"id": pid, **item}
-            entry["trabajo"] = _trabajo_de_prompt(cliente, pid, item)
-            if entry["trabajo"]:
-                entry["credits"] = None
-                entry["usd"] = None
-            else:
-                try:
-                    if item.get("estado") == "imagen_pendiente":
-                        est = estimate_video(
-                            item["imagen_url"],
-                            item["prompt"],
-                            item.get("model", "kling-2.1-pro"),
-                            extra_params=_extra_params_video(item, cliente),
-                        )
-                    else:
-                        est = estimate_image(
-                            item["image_url"],
-                            item["prompt"],
-                            extra_params=_extra_params_image(item, cliente),
-                        )
-                    entry["credits"] = est["credits"]
-                    entry["usd"] = est["usd"]
-                except Exception:
-                    entry["credits"] = None
-                    entry["usd"] = None
-            prompts_en_curso.append(entry)
-
-        if prompts_en_curso:
-            prompts_en_curso.sort(key=lambda e: e.get("creado_en", ""))
-            for i, entry in enumerate(prompts_en_curso, start=1):
-                entry["numero"] = i
-            ideas.append({
-                "id": idea_id,
-                "idea": idea.get("idea"),
-                "creado_en": idea.get("creado_en"),
-                "prompts": prompts_en_curso,
-            })
-
-    return sorted(ideas, key=lambda i: i.get("creado_en", ""), reverse=True)
-
-
-def _extra_params_video(item, cliente=None):
-    """Solo kling-2.1-pro acepta duration/cfg_scale/negative_prompt; dop-standard no
-    los declara. Si el cliente trae un root.json propio (ej. Happyflops), su
-    negative_prompt real se adjunta tal cual."""
-    if item.get("model") != "kling-2.1-pro":
-        return None
-    params = {"duration": int(item.get("duration", 5)), "cfg_scale": float(item.get("cfg_scale", 0.5))}
-    if cliente:
-        neg = marca_mod.negative_prompt_efectivo(cliente)
-        if neg:
-            params["negative_prompt"] = neg
-    return params
-
-
-def _extra_params_image(item, cliente=None):
-    params = {"aspect_ratio": item.get("aspect_ratio", "9:16")}
-    if cliente:
-        marca = marca_mod.cargar(cliente)
-        if marca.get("style_id"):
-            params["style_id"] = marca["style_id"]
-            params["style_strength"] = float(marca.get("style_strength", 0.5))
-    return params
-
-
-def _aplicar_edicion(item, form):
-    """Aplica los campos editables del formulario (si vinieron) sobre el prompt."""
-    if "prompt" in form and form["prompt"].strip():
-        item["prompt"] = form["prompt"].strip()
-    if "model" in form and form["model"] in prompts_mod.MODELOS_VALIDOS:
-        item["model"] = form["model"]
-    if "aspect_ratio" in form and form["aspect_ratio"] in prompts_mod.ASPECT_RATIOS_VALIDOS:
-        item["aspect_ratio"] = form["aspect_ratio"]
-    if "duration" in form:
-        try:
-            item["duration"] = int(form["duration"])
-        except ValueError:
-            pass
-    if "cfg_scale" in form:
-        try:
-            item["cfg_scale"] = float(form["cfg_scale"])
-        except ValueError:
-            pass
-    return item
 
 
 def _modo_de(datos_meta):
@@ -2186,21 +2069,6 @@ def _contexto_meta(cliente, experimentos_lista=None):
 @trabajos.con_vivos_precargados
 @catalogo_productos.con_lecturas_memorizadas
 def ver_cliente(cliente):
-    videos_dict = estado_mod.cargar(cliente)
-    videos = []
-    for brief_id, entry in sorted(
-        videos_dict.items(), key=lambda kv: kv[1].get("generado_en", ""), reverse=True
-    ):
-        job_id = _job_id_publicar(cliente, brief_id)
-        videos.append({
-            "id": brief_id,
-            **entry,
-            "plataformas_estado": _estado_plataformas(cliente, brief_id) if entry.get("estado") == "publicado" else {},
-            "trabajo": {"job_id": job_id} if entry.get("estado") == "pendiente" and trabajos.en_curso(job_id) else None,
-        })
-
-    log = bitacora.leer(cliente=cliente, limit=100)
-
     # Experimentos (centro de resultados, E2): la gestión de cada experimento, sus propuestas y reglas, los anuncios
     # sueltos y lo de Meta salen de contextos que comparten el fragmento de resultados (`exp_resultados`) y
     # «Nuevo experimento» (`exp_nuevo`). Lo orgánico ya viene en `fe_ctx`, y las piezas elegibles (la galería) ya
@@ -2216,6 +2084,11 @@ def ver_cliente(cliente):
     # Las tarjetas de tiendas (spec 2026-10-08 §6.2): país y bandera en el idioma de quien mira.
     tw_tiendas = [dict(t, nombre=triple_whale_panel.nombre_tienda(t), bandera=tw_paises.bandera(t["pais"]))
                   for t in (triple_whale_conectado or {}).get("tiendas", [])]
+    # Pestaña Meta (spec 2026-10-08 meta rendimiento §8): solo lo que decide su estado vacío. Ni Graph ni el panel:
+    # el selector y el panel llegan por fetch al abrirla.
+    meta_rend = {"conectado": bool((meta_conexion.cargar(cliente) or {}).get("token")),
+                 "n_cuentas": len(meta_rend_cuentas.ids(cliente)), "modo": meta_conexion.modo(cliente),
+                 "es_admin": meta_rendimiento_rutas.es_admin()}
     # Catálogo (spec 2026-09-28): la galería y la ficha llegan por fragmento;
     # la página solo trae contadores por categoría y lo que Crear necesita.
     activos_producto = _productos_con_uso(cliente)
@@ -2250,10 +2123,6 @@ def ver_cliente(cliente):
         escenas=_escenas(cliente),
         productos_referencia=_productos_referencia(cliente),
         marca=_marca_contexto(cliente),
-        ideas=_ideas_pendientes(cliente),
-        ideas_visuales=_conceptos_pendientes(cliente),
-        videos=videos,
-        log=log,
         # Solo el admin ve el informe (Configuración › Puesta a punto) y armarlo
         # corre git y lee todo el repo (~100 ms): a un cliente no se le cobra.
         informe=informe.completo(cliente) if session.get("rol") == "admin" else None,
@@ -2269,7 +2138,6 @@ def ver_cliente(cliente):
         presets_cuerpo=mapa_corporal.PRESETS,
         etiquetas_presets=mapa_corporal.ETIQUETAS_PRESETS,
         nombre_proyecto=proyectos.nombre_visible(cliente),
-        aspect_ratios=prompts_mod.ASPECT_RATIOS_VALIDOS,
         swaps=_swap_items(cliente),
         creative_flow_items=cf_items,
         **_listas_crear(cf_items),
@@ -2308,6 +2176,7 @@ def ver_cliente(cliente):
         triple_whale_conectado=triple_whale_conectado,
         tw_modelos=triple_whale.MODELOS, tw_ventanas=triple_whale.VENTANAS, tw_monedas=triple_whale.MONEDAS,
         tw_tiendas=tw_tiendas, tw_paises=tw_paises.paises_opciones(idiomas.activo()),
+        meta_rend=meta_rend,
         trabajos_prod=_trabajos_productos(cliente, tiendas_cliente),
         precio_pedidos=gastos.estimar("pedidos_producto")["texto"],
         cifrado_ok=cifrado.disponible(),
@@ -2349,304 +2218,6 @@ def _aspect_ratio_para_plataformas(platforms):
     if platforms == ["youtube"]:
         return "16:9"
     return "9:16"
-
-
-@app.route("/cliente/<cliente>/idea/nueva", methods=["POST"])
-def nueva_idea(cliente):
-    """Recibe una idea del formulario, genera 5 prompts con Claude, y los deja
-    listos para revisar/editar/aprobar (no gasta créditos de Higgsfield todavía)."""
-    idea_texto = request.form.get("idea", "").strip()
-    image_url = request.form.get("image_url", "").strip()
-    platforms = request.form.getlist("platforms")
-
-    if not idea_texto or not image_url:
-        flash(gettext("Escribe la idea y elige un personaje."), "error")
-        return redirect(url_for("ver_cliente", cliente=cliente))
-
-    guia_estilo = marca_mod.guia_efectiva(cliente)
-    try:
-        textos = generador_prompts.generar_prompts(idea_texto, n=5, guia_estilo=guia_estilo,
-                                                    idioma=idiomas.de_proyecto(cliente))
-    except Exception as e:
-        flash(gettext("No pude generar los prompts: %(error)s", error=e), "error")
-        return redirect(url_for("ver_cliente", cliente=cliente))
-
-    aspect_ratio = _aspect_ratio_para_plataformas(platforms)
-    items = [
-        {"prompt": t, "image_url": image_url, "platforms": platforms, "aspect_ratio": aspect_ratio}
-        for t in textos
-    ]
-    prompts_mod.agregar_idea(cliente, idea_texto, items)
-
-    flash(gettext("Generé %(n)s prompts para la idea. Revísalos y apruébalos abajo.", n=len(items)), "ok")
-    return redirect(url_for("ver_cliente", cliente=cliente))
-
-
-# ---------- flujo imagen-primero (Happy Flops): idea -> N escenas -> cada escena se
-# genera con AMBOS proveedores sin pedir aprobación de texto -> se eligen las imágenes
-# que sirvan -> cada una recibe sus propias propuestas de animación -> video ----------
-
-def _job_id_concepto(cliente, idea_id, concepto_id, proveedor):
-    return f"{cliente}__{idea_id}__{concepto_id}__{proveedor}__imagen"
-
-
-def _job_id_animacion(cliente, idea_id, concepto_id, proveedor, anim_id):
-    return f"{cliente}__{idea_id}__{concepto_id}__{proveedor}__{anim_id}__video"
-
-
-def _lanzar_generacion_concepto(cliente, idea_id, concepto_id, proveedor, prompt, referencia_url):
-    job_id = _job_id_concepto(cliente, idea_id, concepto_id, proveedor)
-
-    def trabajo():
-        imagenes_dir = os.path.join(BASE_DIR, "salidas", cliente, "imagenes")
-        os.makedirs(imagenes_dir, exist_ok=True)
-        nombre = f"{idea_id}_{concepto_id}_{proveedor}.png"
-        local_path = os.path.join(imagenes_dir, nombre)
-        negative_prompt = marca_mod.negative_prompt_efectivo(cliente)
-        extra_params = _extra_params_image({"aspect_ratio": "9:16"}, cliente)
-        video_id = f"{idea_id}_{concepto_id}_{proveedor}"
-
-        try:
-            trabajos.reportar(job_id, etapa=ETAPA_MODELO)
-            est = image_provider.generar_imagen(
-                proveedor, referencia_url, prompt, local_path,
-                negative_prompt=negative_prompt, extra_params=extra_params,
-            )
-            trabajos.reportar(job_id, etapa=ETAPA_GUARDAR_IMAGEN)
-            error_storage = None
-            try:
-                url = r2_uploader.upload_image(local_path, f"clientes/{cliente}/imagenes/{nombre}")
-            except Exception as e:
-                # La imagen existe en disco; lo que falló fue R2. Se registra para
-                # que la plantilla no la reporte como "generación interrumpida".
-                url = None
-                error_storage = str(e)
-                bitacora.registrar(cliente, video_id, "imagen_storage", "error", str(e))
-            campos = {
-                "estado": "listo", "url": url, "local": local_path,
-                "usd": est.get("usd"), "error_storage": error_storage,
-            }
-            if proveedor == "higgsfield":
-                campos["credits"] = est.get("credits")
-            conceptos_imagen.marcar_imagen(cliente, idea_id, concepto_id, proveedor, **campos)
-            bitacora.registrar(cliente, video_id, "imagen", "ok", local_path)
-            return idiomas.N_("Imagen lista.")
-        except Exception as e:
-            conceptos_imagen.marcar_imagen(cliente, idea_id, concepto_id, proveedor, estado="error", error=str(e))
-            bitacora.registrar(cliente, video_id, "imagen", "error", str(e))
-            raise
-
-    return trabajos.iniciar(
-        job_id, trabajo,
-        duracion_estimada=45 if proveedor == "higgsfield" else 20,
-        etapas=ETAPAS_IMAGEN, cliente=cliente,
-    )
-
-
-@app.route("/cliente/<cliente>/idea/nueva_visual", methods=["POST"])
-def nueva_idea_visual(cliente):
-    """De una idea + referencia, genera 5 escenas y lanza cada una con AMBOS
-    proveedores (Nano Banana e Higgsfield) — 10 imágenes en total, sin pedir
-    aprobación de texto antes. El costo no se pregunta: se generan todas."""
-    idea_texto = request.form.get("idea", "").strip()
-    image_url = request.form.get("image_url", "").strip()
-    platforms = request.form.getlist("platforms")
-
-    # Solo uno de los personajes del proyecto (lo que ofrece el selector): la
-    # URL la descarga el servidor, así que una escrita a mano podía apuntar a
-    # una red interna (SSRF, auditoría de seguridad 2026-10-01).
-    if not idea_texto or image_url not in {p["url"] for p in _personajes(cliente) if p.get("url")}:
-        flash(gettext("Escribe la idea y elige un personaje."), "error")
-        return redirect(url_for("ver_cliente", cliente=cliente))
-
-    guia_estilo = marca_mod.guia_efectiva(cliente)
-    try:
-        escenas = generador_prompts.generar_conceptos_imagen(idea_texto, n=5, guia_estilo=guia_estilo,
-                                                              idioma=idiomas.de_proyecto(cliente))
-    except Exception as e:
-        flash(gettext("No pude generar las escenas: %(error)s", error=e), "error")
-        return redirect(url_for("ver_cliente", cliente=cliente))
-
-    idea_id = conceptos_imagen.crear_idea(cliente, idea_texto, escenas)
-
-    data = conceptos_imagen.cargar(cliente)
-    data[idea_id]["platforms"] = platforms
-    conceptos_imagen.guardar(cliente, data)
-
-    for concepto_id, concepto in data[idea_id]["conceptos"].items():
-        for proveedor in conceptos_imagen.PROVEEDORES:
-            _lanzar_generacion_concepto(cliente, idea_id, concepto_id, proveedor, concepto["texto"], image_url)
-
-    flash(gettext("Generando %(n)s escenas x 2 proveedores (10 imágenes)…", n=len(escenas)), "ok")
-    return redirect(url_for("ver_cliente", cliente=cliente))
-
-
-@app.route("/cliente/<cliente>/idea/<idea_id>/concepto/<concepto_id>/<proveedor>/aprobar", methods=["POST"])
-def aprobar_concepto_imagen(cliente, idea_id, concepto_id, proveedor):
-    """Esta imagen sí sirve: genera 5 propuestas de animación (texto, gratis) para
-    ella específicamente. Se puede aprobar más de una imagen por idea."""
-    data = conceptos_imagen.cargar(cliente)
-    concepto = conceptos_imagen.encontrar_concepto(data, idea_id, concepto_id)
-    if not concepto or proveedor not in concepto or not concepto[proveedor].get("url"):
-        flash(gettext("No encontré esa imagen para aprobar."), "error")
-        return redirect(url_for("ver_cliente", cliente=cliente))
-
-    guia_estilo = marca_mod.guia_efectiva(cliente)
-    idea_texto = data[idea_id]["idea"]
-    try:
-        animaciones = generador_prompts.generar_prompts(idea_texto, n=5, guia_estilo=guia_estilo,
-                                                         idioma=idiomas.de_proyecto(cliente))
-    except Exception as e:
-        flash(gettext("No pude generar las propuestas de animación: %(error)s", error=e), "error")
-        return redirect(url_for("ver_cliente", cliente=cliente))
-
-    conceptos_imagen.marcar_imagen(cliente, idea_id, concepto_id, proveedor, estado="aprobado")
-    conceptos_imagen.agregar_animaciones(cliente, idea_id, concepto_id, proveedor, animaciones)
-
-    flash(gettext("Imagen aprobada — elige cómo animarla abajo."), "ok")
-    return redirect(url_for("ver_cliente", cliente=cliente))
-
-
-@app.route("/cliente/<cliente>/idea/<idea_id>/concepto/<concepto_id>/<proveedor>/descartar", methods=["POST"])
-def descartar_concepto_imagen(cliente, idea_id, concepto_id, proveedor):
-    conceptos_imagen.marcar_imagen(cliente, idea_id, concepto_id, proveedor, estado="descartado")
-    flash(gettext("Imagen descartada."), "ok")
-    return redirect(url_for("ver_cliente", cliente=cliente))
-
-
-@app.route(
-    "/cliente/<cliente>/idea/<idea_id>/concepto/<concepto_id>/<proveedor>/animacion/<anim_id>/generar_video",
-    methods=["POST"],
-)
-def generar_video_animacion(cliente, idea_id, concepto_id, proveedor, anim_id):
-    """La imagen ya quedó fija en la ronda anterior — esto solo anima. Genera el
-    video directo, sin paso intermedio de imagen candidata."""
-    data = conceptos_imagen.cargar(cliente)
-    animacion = conceptos_imagen.encontrar_animacion(data, idea_id, concepto_id, proveedor, anim_id)
-    concepto = conceptos_imagen.encontrar_concepto(data, idea_id, concepto_id)
-    if not animacion or not concepto or not concepto[proveedor].get("url"):
-        flash(gettext("No encontré esa animación."), "error")
-        return redirect(url_for("ver_cliente", cliente=cliente))
-
-    imagen_url = concepto[proveedor]["url"]
-    prompt_texto = (request.form.get("prompt") or animacion["prompt"]).strip() or animacion["prompt"]
-    # Higgsfield/Kling es el default: con precio real verificado, sale ~4.7x más
-    # barato que Seedance vía fal.ai ($0.49 vs ~$2.31 por 5s) — ver ROADMAP.md.
-    proveedor_video = request.form.get("proveedor_video", "higgsfield")
-    if proveedor_video not in video_provider.PROVEEDORES_VALIDOS:
-        proveedor_video = "higgsfield"
-    platforms = data[idea_id].get("platforms", [])
-    aspect_ratio = _aspect_ratio_para_plataformas(platforms)
-    video_id = f"{idea_id}_{concepto_id}_{proveedor}_{anim_id}"
-    job_id = _job_id_animacion(cliente, idea_id, concepto_id, proveedor, anim_id)
-
-    def trabajo():
-        out_dir = os.path.join(BASE_DIR, "salidas", cliente)
-        os.makedirs(out_dir, exist_ok=True)
-        out_path = os.path.join(out_dir, f"{video_id}.mp4")
-        negative_prompt = marca_mod.negative_prompt_efectivo(cliente)
-        item2 = {"aspect_ratio": aspect_ratio, "model": "kling-2.1-pro"}
-
-        try:
-            # video_provider.generar_video no recibe on_progreso (no tiene forma
-            # de saber a qué job pertenece), así que acá la señal honesta son las
-            # etapas: descarga incluida, el provider deja el .mp4 en out_path.
-            trabajos.reportar(job_id, etapa=ETAPA_MODELO)
-            est = video_provider.generar_video(
-                proveedor_video, imagen_url, prompt_texto, out_path,
-                aspect_ratio=aspect_ratio, negative_prompt=negative_prompt,
-                extra_params=_extra_params_video(item2, cliente),
-            )
-            bitacora.registrar(cliente, video_id, "generacion", "ok", out_path)
-        except Exception as e:
-            bitacora.registrar(cliente, video_id, "generacion", "error", str(e))
-            raise
-
-        trabajos.reportar(job_id, etapa=ETAPA_GUARDAR_VIDEO)
-        try:
-            video_url = r2_uploader.upload_video(out_path, f"clientes/{cliente}/videos/{video_id}.mp4")
-            bitacora.registrar(cliente, video_id, "storage", "ok", video_url)
-        except Exception as e:
-            video_url = None
-            bitacora.registrar(cliente, video_id, "storage", "error", str(e))
-
-        registro = {
-            "prompt": prompt_texto,
-            "image_url": imagen_url,
-            "title": video_id,
-            "caption": prompt_texto,
-            "platforms": platforms,
-            "video_local": out_path,
-            "video_url": video_url,
-            "estado": "pendiente",
-            "generado_en": datetime.now().isoformat(),
-            "publicado_en": None,
-        }
-        # Con candado (estado.modificar): el worker también escribe este archivo.
-        estado_mod.modificar(cliente, lambda estado: {**estado, video_id: registro})
-
-        data2 = conceptos_imagen.cargar(cliente)
-        animacion2 = conceptos_imagen.encontrar_animacion(data2, idea_id, concepto_id, proveedor, anim_id)
-        if animacion2:
-            animacion2["estado"] = "video_generado"
-            conceptos_imagen.guardar(cliente, data2)
-        return idiomas.N_("Video listo, pendiente de revisión.")
-
-    # ETAPAS_VIDEO sin ETAPA_DESCARGAR: el provider descarga por su cuenta dentro
-    # de generar_video, así que ese paso no se puede anunciar por separado.
-    if trabajos.iniciar(
-        job_id, trabajo, duracion_estimada=130,
-        etapas=[(ETAPA_MODELO, 90), (ETAPA_GUARDAR_VIDEO, 10)], cliente=cliente,
-    ):
-        flash(gettext("Generando video…"), "ok")
-    else:
-        flash(gettext("Ya se está generando ese video — espera a que termine."), "warn")
-    return redirect(url_for("ver_cliente", cliente=cliente))
-
-
-def _conceptos_pendientes(cliente):
-    """Estado del flujo imagen-primero, listo para el template: por idea, sus
-    escenas, y por escena sus dos imágenes (con trabajo en curso si aplica) y las
-    animaciones pendientes de cada imagen ya aprobada."""
-    data = conceptos_imagen.cargar(cliente)
-    ideas = []
-    for idea_id, idea in data.items():
-        conceptos = []
-        for concepto_id, concepto in idea.get("conceptos", {}).items():
-            imagenes = {}
-            for proveedor in conceptos_imagen.PROVEEDORES:
-                img = dict(concepto[proveedor])
-                job_id = _job_id_concepto(cliente, idea_id, concepto_id, proveedor)
-                img["trabajo"] = {"job_id": job_id} if trabajos.en_curso(job_id) else None
-                animaciones = []
-                for anim_id, anim in img.get("animaciones", {}).items():
-                    if anim.get("estado") not in ("pendiente",):
-                        continue
-                    a = {"id": anim_id, **anim}
-                    a_job_id = _job_id_animacion(cliente, idea_id, concepto_id, proveedor, anim_id)
-                    a["trabajo"] = {"job_id": a_job_id} if trabajos.en_curso(a_job_id) else None
-                    animaciones.append(a)
-                img["animaciones_pendientes"] = animaciones
-                imagenes[proveedor] = img
-            conceptos.append({"id": concepto_id, "texto": concepto["texto"], "imagenes": imagenes})
-        if conceptos:
-            ideas.append({
-                "id": idea_id,
-                "idea": idea.get("idea"),
-                "creado_en": idea.get("creado_en"),
-                "conceptos": conceptos,
-            })
-    return sorted(ideas, key=lambda i: i.get("creado_en", ""), reverse=True)
-
-
-@app.route("/cliente/<cliente>/idea/<idea_id>/eliminar_visual", methods=["POST"])
-def eliminar_idea_visual(cliente, idea_id):
-    data = conceptos_imagen.cargar(cliente)
-    if idea_id in data:
-        del data[idea_id]
-        conceptos_imagen.guardar(cliente, data)
-        flash(gettext("Idea eliminada."), "ok")
-    return redirect(url_for("ver_cliente", cliente=cliente))
 
 
 # ---------- flujo "cambiar calzado": una foto real + un producto del catálogo ->
@@ -3571,84 +3142,11 @@ ETAPA_MODELO = idiomas.N_("Generando con el modelo")
 ETAPA_DESCARGAR = idiomas.N_("Descargando el resultado")
 ETAPA_MEZCLA = idiomas.N_("Mezclando sonido")
 ETAPA_GUARDAR_VIDEO = idiomas.N_("Guardando el video")
-ETAPA_GUARDAR_IMAGEN = idiomas.N_("Guardando la imagen")
 # Las etapas propias del swap (subir original, preparar foto, mejorar, guardar
 # y evaluar) viven en tareas/swap.py junto con ETAPAS_SWAP_*.
 
 # ETAPAS_SWAP_* viven en tareas/swap.py (se importan arriba).
 # ETAPAS_CREATIVE_FLOW vive en tareas/flowplus.py (se importa arriba).
-
-# Pipeline clásico (prompt -> imagen candidata -> video) y flujo imagen-primero.
-# Estos trabajos iban SIN etapas y el usuario veía "Generando…" a secas durante
-# minutos, justo en el camino que es el corazón del repo. El descargar/subir es
-# corto comparado con el poll al modelo, de ahí los pesos.
-ETAPAS_IMAGEN = [
-    (ETAPA_MODELO, 78),
-    (ETAPA_GUARDAR_IMAGEN, 22),
-]
-ETAPAS_VIDEO = [
-    (ETAPA_MODELO, 85),
-    (ETAPA_DESCARGAR, 8),
-    (ETAPA_GUARDAR_VIDEO, 7),
-]
-
-# Los proveedores hablan en sus propios códigos de estado; esto es lo único
-# honesto que se puede mostrar de ellos (ninguno da un porcentaje numérico).
-_FASES_PROVEEDOR = {
-    "IN_QUEUE": idiomas.N_("en cola"),
-    "IN_PROGRESS": idiomas.N_("el modelo está trabajando"),
-    "created": idiomas.N_("en cola"),
-    "processing": idiomas.N_("el modelo está trabajando"),
-    "queued": idiomas.N_("en cola"),
-    "starting": idiomas.N_("arrancando"),
-    "running": idiomas.N_("el modelo está trabajando"),
-    "in_progress": idiomas.N_("el modelo está trabajando"),
-    "pending": idiomas.N_("en cola"),
-}
-
-# Estados terminales: el poll también los emite en su última vuelta, pero mostrar
-# "completed" como detalle no le dice nada al usuario — la etapa siguiente ya se
-# encarga de contar qué sigue.
-_FASES_TERMINALES = ("COMPLETED", "completed", "succeeded", "success", "done")
-
-
-def _texto_fase(info, cliente):
-    """Traduce el estado crudo que reporta un proveedor durante el poll, en el
-    idioma del PROYECTO (mensaje de fondo, spec §B8; mismo patrón que
-    tareas/flowplus.py): con el puesto en cola compuesto, estado_trabajo ya no
-    podría traducirlo al responder. Con fallback: si aparece una fase que no
-    conocemos se muestra tal cual en vez de tragarse la información (los
-    proveedores agregan estados sin avisar)."""
-    if not info:
-        return None
-    fase = info.get("fase")
-    if fase in _FASES_TERMINALES:
-        return None
-    texto = _FASES_PROVEEDOR.get(fase, fase)
-    if not texto:
-        return None
-    posicion = info.get("queue_position")
-    with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
-        fase_traducida = gettext(texto)
-        if posicion is not None:
-            return gettext("%(fase)s (puesto %(n)s)", fase=fase_traducida, n=posicion)
-        return fase_traducida
-
-
-def _avisar_fase_de(job_id, cliente):
-    """Devuelve el callback on_progreso que esperan los clientes de proveedores
-    (Higgsfield, fal.ai, WaveSpeed): traduce la fase cruda del poll y la publica
-    como detalle del trabajo. Envuelto en try/except porque un fallo REPORTANDO
-    jamás puede tumbar una generación que ya gastó créditos."""
-    def avisar_fase(info):
-        try:
-            texto = _texto_fase(info, cliente)
-            if texto:
-                trabajos.reportar(job_id, detalle=texto)
-        except Exception:
-            pass
-    return avisar_fase
-
 
 @app.route("/cliente/<cliente>/swap/generar", methods=["POST"])
 def generar_swap(cliente):
@@ -3999,8 +3497,11 @@ def meta_elegir(cliente):
         )
 
     cuenta = next((a for a in cuentas if a["id"] == request.form.get("ad_account_id")), None)
-    pagina = next((p for p in paginas if p["id"] == request.form.get("page_id")), None)
-    if not cuenta or not pagina:
+    # La Página es opcional («solo métricas», 2026-10-08): vacía o ausente guarda la conexión sin Página; una que no
+    # está en la lista sigue siendo un formulario manipulado.
+    page_id = (request.form.get("page_id") or "").strip()
+    pagina = next((p for p in paginas if p["id"] == page_id), None) if page_id else None
+    if not cuenta or (page_id and not pagina):
         flash(gettext("Elige una cuenta publicitaria y una Página de la lista."), "error")
         return redirect(url_for("meta_elegir", cliente=cliente))
 
@@ -4013,7 +3514,11 @@ def meta_elegir(cliente):
         flash(gettext(MENSAJE_MODO_AGENCIA), "error")
         return _ir_a_flowmarketing(cliente)
     meta_conexion.borrar_pendiente(cliente)
-    bitacora.registrar(cliente, "meta", "conexion", "ok", f"{cuenta.get('name')} · {pagina.get('name')}")
+    bitacora.registrar(cliente, "meta", "conexion", "ok", f"{cuenta.get('name')} · {pagina.get('name') if pagina else '—'}")
+    if not pagina:
+        flash(gettext("Meta conectado: %(cuenta)s. %(aviso)s", cuenta=cuenta.get("name"),
+                      aviso=gettext("Conectado solo para métricas: sin Página no se pueden lanzar anuncios ni publicar.")), "ok")
+        return _ir_a_flowmarketing(cliente)
     aviso = "" if pagina.get("ig_user_id") else " " + gettext(
         "Esa Página no tiene Instagram vinculado: los Reels no se van a publicar hasta que lo vincules en Facebook.")
     flash(gettext("Meta conectado: %(cuenta)s · %(pagina)s.%(aviso)s",
@@ -4021,7 +3526,10 @@ def meta_elegir(cliente):
     return _ir_a_flowmarketing(cliente)
 
 
-def _guardar_conexion_propia(cliente, pendiente, cuenta, pagina):
+def _guardar_conexion_propia(cliente, pendiente, cuenta, pagina=None):
+    """`pagina=None` guarda la conexión «solo métricas»: se leen las cuentas publicitarias sin Página, así que
+    page_id, su token e Instagram quedan en None (lanzar y publicar frenan en palabras; ver lanzador y tareas.meta)."""
+    pagina = pagina or {}
     meta_conexion.guardar(cliente, {
         "token": pendiente["token"],
         "tipo_token": pendiente.get("tipo_token", ""),
@@ -4030,7 +3538,7 @@ def _guardar_conexion_propia(cliente, pendiente, cuenta, pagina):
         "ad_account_id": cuenta["id"],
         "ad_account_nombre": cuenta.get("name"),
         "moneda": cuenta.get("currency"),
-        "page_id": pagina["id"],
+        "page_id": pagina.get("id"),
         "page_nombre": pagina.get("name"),
         "page_access_token": pagina.get("access_token"),
         "ig_user_id": pagina.get("ig_user_id"),
@@ -4050,6 +3558,20 @@ def meta_cancelar(cliente):
     return _ir_a_flowmarketing(cliente)
 
 
+def _soltar_cuentas_meta(cliente):
+    """Quitar la conexión de Meta de un proyecto (Desconectar, volver a modo propia, desasignar, desconectar la
+    agencia) también borra las métricas copiadas de sus cuentas y las deja libres para otro proyecto: /privacidad y
+    /eliminar-datos lo prometen (ruling R21, 2026-10-08). Si borrar falla, la desconexión ya hecha se queda: se anota
+    el tipo del error (nunca su texto) y se avisa; la siguiente vez que alguien quite las cuentas se reintenta."""
+    try:
+        meta_rend_cuentas.elegir(cliente, [])
+    except Exception as e:  # noqa: BLE001 — la desconexión no se deshace por esto
+        log.warning("meta rendimiento: no se pudieron borrar las métricas copiadas de %s (%s)", cliente, type(e).__name__)
+        flash(gettext("Meta se desconectó en %(proyecto)s, pero no se pudieron borrar sus métricas copiadas (%(tipo)s). "
+                      "Avisa al administrador.", proyecto=proyectos.nombre_visible(cliente), tipo=type(e).__name__),
+              "warn")
+
+
 @app.route("/cliente/<cliente>/meta/desconectar", methods=["POST"])
 def meta_desconectar(cliente):
     bloqueo = _bloqueo_modo_agencia(cliente)
@@ -4064,6 +3586,7 @@ def meta_desconectar(cliente):
         flash(gettext(MENSAJE_MODO_AGENCIA), "error")
         return _ir_a_flowmarketing(cliente)
     meta_conexion.borrar_pendiente(cliente)
+    _soltar_cuentas_meta(cliente)
     bitacora.registrar(cliente, "meta", "conexion", "ok", "desconectado" + (" y revocado en Meta" if revocado else ""))
     if revocado:
         flash(gettext("Meta desconectado de este proyecto y acceso revocado en Meta."), "ok")
@@ -4225,7 +3748,7 @@ def meta_agencia_conectar(cliente):
     if page_id and not detalle.get("ig_username"):
         flash(gettext("Esa Página no tiene Instagram vinculado: los Reels no se van a publicar hasta que lo vincules en Facebook."), "warn")
     if not page_id:
-        flash(gettext("Sin Página solo se pueden pautar anuncios; la publicación orgánica queda apagada."), "warn")
+        flash(gettext("Sin Página solo se leen métricas: no se pueden lanzar anuncios y la publicación orgánica queda apagada."), "warn")
     return _ir_a_meta(cliente)
 
 
@@ -4295,6 +3818,7 @@ def meta_agencia_salir(cliente):
         flash(motivo, "error")
         return _ir_a_meta(cliente)
     meta_agencia.desasignar(cliente)
+    _soltar_cuentas_meta(cliente)
     restaurada = bool((meta_conexion.cargar(cliente) or {}).get("token"))
     proyectos.guardar_meta_forma(cliente, "propia")
     nombre = proyectos.nombre_visible(cliente)
@@ -4406,6 +3930,7 @@ def admin_meta_desconectar():
     asignados = list(meta_agencia.proyectos_asignados())
     resultado = meta_agencia.desconectar()
     for cid in asignados:
+        _soltar_cuentas_meta(cid)
         bitacora.registrar(cid, "meta", "agencia", "ok", "vuelve a modo propia: la agencia se desconectó")
     n = resultado.get("desasignados", 0)
     if not resultado.get("habia") and not n:
@@ -4481,8 +4006,8 @@ def admin_meta_asignar(cliente):
         flash(gettext("Esa Página no tiene Instagram vinculado: los Reels no se van a publicar hasta que lo vincule en "
                       "Facebook."), "warn")
     if not page_id:
-        flash(gettext("Sin Página asignada solo se pueden pautar anuncios; la publicación orgánica queda apagada para "
-                      "ese proyecto."), "warn")
+        flash(gettext("Sin Página asignada solo se leen métricas: no se pueden lanzar anuncios y la publicación orgánica "
+                      "queda apagada para ese proyecto."), "warn")
     return _volver_admin_meta()
 
 
@@ -4495,6 +4020,7 @@ def admin_meta_desasignar(cliente):
     if not meta_agencia.desasignar(cliente):
         flash(gettext("%(proyecto)s no estaba en modo agencia.", proyecto=proyectos.nombre_visible(cliente)), "warn")
         return _volver_admin_meta()
+    _soltar_cuentas_meta(cliente)
     bitacora.registrar(cliente, "meta", "agencia", "ok", f"vuelve a modo propia (por {session.get('usuario')})")
     flash(gettext("%(proyecto)s volvió a modo propia: si tenía su propia conexión se restauró; "
                   "si no, tendrá que registrar su app y conectar con Meta.", proyecto=proyectos.nombre_visible(cliente)),
@@ -5637,6 +5163,10 @@ def exp_probar(cliente):
     if meta_conexion.estado(cliente).get("estado") != "conectado":
         flash(gettext("Conecta Meta en Configuración › Conexiones antes de probar piezas."), "error")
         return _volver_exp(cliente)   # «Nuevo experimento» sin Meta ya no pinta la galería
+    sin_pagina = meta_conexion.sin_pagina(cliente)   # «solo métricas»: se avisa antes de crear nada
+    if sin_pagina:
+        flash(sin_pagina, "error")
+        return volver
     moneda = (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
     objetivo = request.form.get("objetivo") or ""
     # Sin repetidos y en el orden en que llegan: un POST armado a mano con paises=CO&paises=CO creaba dos
@@ -5889,6 +5419,10 @@ def exp_lanzar(cliente, eid):
         return volver
     if ex["estado"] not in ("armando", "error"):
         flash(gettext("Ese experimento ya fue lanzado."), "error")
+        return volver
+    sin_pagina = meta_conexion.sin_pagina(cliente)   # «solo métricas»: mismo freno que lanzador._validar_para_lanzar
+    if sin_pagina:
+        flash(sin_pagina, "error")
         return volver
     if not ex["piezas"]:
         flash(gettext("El experimento no tiene piezas: agrega al menos una antes de lanzar."), "error")
@@ -7144,223 +6678,6 @@ def cfg_pixel_refrescar(cliente):
     return _volver_config(cliente)
 
 
-@app.route("/cliente/<cliente>/prompt/<prompt_id>/guardar", methods=["POST"])
-def guardar_prompt(cliente, prompt_id):
-    data = prompts_mod.cargar(cliente)
-    idea_id, item = prompts_mod.encontrar_prompt(data, prompt_id)
-    if not item:
-        flash(gettext("No encontré el prompt %(prompt)s", prompt=prompt_id), "error")
-        return redirect(url_for("ver_cliente", cliente=cliente))
-
-    _aplicar_edicion(item, request.form)
-    prompts_mod.guardar(cliente, data)
-    flash(gettext("Cambios guardados en %(prompt)s.", prompt=prompt_id), "ok")
-    return redirect(url_for("ver_cliente", cliente=cliente))
-
-
-def _generar_imagen_candidata(cliente, prompt_id, item, job_id=None, on_progreso=None):
-    """Genera (o regenera) la imagen candidata para un prompt vía soul/reference,
-    la sube a R2 y actualiza el propio dict `item` en el sitio. Devuelve (ok, error).
-
-    job_id/on_progreso son opcionales para que esta función siga sirviendo fuera
-    de un trabajo en segundo plano. Con job_id=None, trabajos.reportar es un
-    no-op silencioso, así que no hace falta condicionar cada llamada."""
-    imagenes_dir = os.path.join(BASE_DIR, "salidas", cliente, "imagenes")
-    os.makedirs(imagenes_dir, exist_ok=True)
-    local_path = os.path.join(imagenes_dir, f"{prompt_id}.png")
-
-    try:
-        trabajos.reportar(job_id, etapa=ETAPA_MODELO)
-        launch = generate_image(
-            image_reference_url=item["image_url"],
-            prompt=item["prompt"],
-            extra_params=_extra_params_image(item, cliente),
-        )
-        # on_progreso hace que el poll de Higgsfield cuente su estado crudo
-        # ("queued", "processing"): sin esto la barra sabía la etapa pero no si
-        # el modelo ya había arrancado.
-        result = poll_until_done(launch["status_url"], on_progreso=on_progreso)
-        trabajos.reportar(job_id, etapa=ETAPA_GUARDAR_IMAGEN)
-        download_image_result(result, local_path)
-        bitacora.registrar(cliente, prompt_id, "imagen", "ok", local_path)
-    except Exception as e:
-        bitacora.registrar(cliente, prompt_id, "imagen", "error", str(e))
-        return False, str(e)
-
-    try:
-        imagen_url = r2_uploader.upload_image(local_path, f"clientes/{cliente}/imagenes/{prompt_id}.png")
-    except Exception as e:
-        imagen_url = extract_image_url(result)
-        bitacora.registrar(cliente, prompt_id, "imagen_storage", "error", str(e))
-
-    item["imagen_url"] = imagen_url
-    item["imagen_local"] = local_path
-    item["estado"] = "imagen_pendiente"
-    return True, None
-
-
-def _lanzar_generacion_imagen(cliente, prompt_id):
-    """Lanza en segundo plano la generación de la imagen candidata para un
-    prompt ya editado/guardado. No hace nada (y avisa) si ya hay una corriendo
-    para ese mismo prompt — así un doble clic no dispara dos llamadas."""
-    job_id = _job_id_imagen(cliente, prompt_id)
-
-    def trabajo():
-        data = prompts_mod.cargar(cliente)
-        _, item = prompts_mod.encontrar_prompt(data, prompt_id)
-        if not item:
-            raise RuntimeError(idiomas.N_("El prompt ya no existe (¿se descartó mientras generaba?)."))
-        ok, error = _generar_imagen_candidata(
-            cliente, prompt_id, item, job_id=job_id,
-            on_progreso=_avisar_fase_de(job_id, cliente),
-        )
-        prompts_mod.guardar(cliente, data)
-        if not ok:
-            raise RuntimeError(error)
-        return idiomas.N_("Imagen candidata lista.")
-
-    return trabajos.iniciar(job_id, trabajo, duracion_estimada=45, etapas=ETAPAS_IMAGEN, cliente=cliente)
-
-
-@app.route("/cliente/<cliente>/prompt/<prompt_id>/aprobar", methods=["POST"])
-def aprobar_prompt(cliente, prompt_id):
-    """Aprueba el texto del prompt y lanza en segundo plano la generación de una
-    imagen de referencia candidata (barata, ~1.5cr) — todavía NO genera el video."""
-    data = prompts_mod.cargar(cliente)
-    idea_id, item = prompts_mod.encontrar_prompt(data, prompt_id)
-    if not item:
-        flash(gettext("No encontré el prompt %(prompt)s", prompt=prompt_id), "error")
-        return redirect(url_for("ver_cliente", cliente=cliente))
-
-    _aplicar_edicion(item, request.form)
-    prompts_mod.guardar(cliente, data)
-
-    if _lanzar_generacion_imagen(cliente, prompt_id):
-        flash(gettext("Generando imagen candidata para %(prompt)s…", prompt=prompt_id), "ok")
-    else:
-        flash(gettext("Ya se está generando la imagen de %(prompt)s — espera a que termine.", prompt=prompt_id), "warn")
-    return redirect(url_for("ver_cliente", cliente=cliente))
-
-
-@app.route("/cliente/<cliente>/prompt/<prompt_id>/regenerar_imagen", methods=["POST"])
-def regenerar_imagen(cliente, prompt_id):
-    """La imagen candidata no gustó: lanza otra en segundo plano (gasta créditos de nuevo)."""
-    data = prompts_mod.cargar(cliente)
-    idea_id, item = prompts_mod.encontrar_prompt(data, prompt_id)
-    if not item:
-        flash(gettext("No encontré el prompt %(prompt)s", prompt=prompt_id), "error")
-        return redirect(url_for("ver_cliente", cliente=cliente))
-
-    _aplicar_edicion(item, request.form)
-    prompts_mod.guardar(cliente, data)
-
-    if _lanzar_generacion_imagen(cliente, prompt_id):
-        flash(gettext("Regenerando imagen candidata para %(prompt)s…", prompt=prompt_id), "ok")
-    else:
-        flash(gettext("Ya se está generando una imagen para %(prompt)s — espera a que termine.", prompt=prompt_id), "warn")
-    return redirect(url_for("ver_cliente", cliente=cliente))
-
-
-@app.route("/cliente/<cliente>/prompt/<prompt_id>/aprobar_imagen", methods=["POST"])
-def aprobar_imagen(cliente, prompt_id):
-    """La imagen candidata sí gustó: lanza en segundo plano el video real a
-    partir de ella (aquí sí se gasta el crédito grande, ~8cr)."""
-    data = prompts_mod.cargar(cliente)
-    idea_id, item = prompts_mod.encontrar_prompt(data, prompt_id)
-    if not item or not item.get("imagen_url"):
-        flash(gettext("No encontré una imagen candidata para %(prompt)s", prompt=prompt_id), "error")
-        return redirect(url_for("ver_cliente", cliente=cliente))
-
-    _aplicar_edicion(item, request.form)
-    prompts_mod.guardar(cliente, data)
-
-    job_id = _job_id_video(cliente, prompt_id)
-
-    def trabajo():
-        data2 = prompts_mod.cargar(cliente)
-        idea_id2, item2 = prompts_mod.encontrar_prompt(data2, prompt_id)
-        if not item2:
-            raise RuntimeError(idiomas.N_("El prompt ya no existe (¿se descartó mientras generaba?)."))
-
-        out_dir = os.path.join(BASE_DIR, "salidas", cliente)
-        os.makedirs(out_dir, exist_ok=True)
-        out_path = os.path.join(out_dir, f"{prompt_id}.mp4")
-
-        trabajos.reportar(job_id, etapa=ETAPA_MODELO)
-        launch = generate_video(
-            image_url=item2["imagen_url"],
-            prompt=item2["prompt"],
-            model=item2.get("model", "kling-2.1-pro"),
-            extra_params=_extra_params_video(item2, cliente),
-        )
-        # on_progreso: el poll de Higgsfield ya sabía contar su fase cruda, pero
-        # ningún llamador se la pedía — la barra se quedaba sin el "en cola / el
-        # modelo está trabajando" durante los ~2 minutos que dura esto.
-        result = poll_until_done(launch["status_url"], on_progreso=_avisar_fase_de(job_id, cliente))
-        higgsfield_url = extract_video_url(result)
-        trabajos.reportar(job_id, etapa=ETAPA_DESCARGAR)
-        try:
-            download_result(result, out_path)
-            bitacora.registrar(cliente, prompt_id, "generacion", "ok", out_path)
-        except Exception as e:
-            bitacora.registrar(cliente, prompt_id, "generacion", "error", str(e))
-            raise
-
-        trabajos.reportar(job_id, etapa=ETAPA_GUARDAR_VIDEO)
-        try:
-            video_url = r2_uploader.upload_video(out_path, f"clientes/{cliente}/videos/{prompt_id}.mp4")
-            bitacora.registrar(cliente, prompt_id, "storage", "ok", video_url)
-        except Exception as e:
-            video_url = higgsfield_url
-            bitacora.registrar(cliente, prompt_id, "storage", "error", str(e))
-
-        registro = {
-            "prompt": item2["prompt"],
-            "image_url": item2["imagen_url"],
-            "title": item2.get("title", prompt_id),
-            "caption": item2.get("caption", item2["prompt"]),
-            "platforms": item2.get("platforms", []),
-            "video_local": out_path,
-            "video_url": video_url,
-            "estado": "pendiente",
-            "generado_en": datetime.now().isoformat(),
-            "publicado_en": None,
-        }
-        # Con candado (estado.modificar): el worker también escribe este archivo.
-        estado_mod.modificar(cliente, lambda estado: {**estado, prompt_id: registro})
-
-        del data2[idea_id2]["prompts"][prompt_id]
-        prompts_mod.guardar(cliente, data2)
-        return idiomas.N_("Video listo, pendiente de revisión.")
-
-    if trabajos.iniciar(job_id, trabajo, duracion_estimada=130, etapas=ETAPAS_VIDEO, cliente=cliente):
-        flash(gettext("Generando el video de %(prompt)s…", prompt=prompt_id), "ok")
-    else:
-        flash(gettext("Ya se está generando el video de %(prompt)s — espera a que termine.", prompt=prompt_id), "warn")
-    return redirect(url_for("ver_cliente", cliente=cliente))
-
-
-@app.route("/cliente/<cliente>/prompt/<prompt_id>/rechazar", methods=["POST"])
-def rechazar_prompt(cliente, prompt_id):
-    data = prompts_mod.cargar(cliente)
-    idea_id, item = prompts_mod.encontrar_prompt(data, prompt_id)
-    if item:
-        del data[idea_id]["prompts"][prompt_id]
-        prompts_mod.guardar(cliente, data)
-        flash(gettext("Prompt %(prompt)s descartado, no se generó video (no gastó créditos).", prompt=prompt_id), "ok")
-    return redirect(url_for("ver_cliente", cliente=cliente))
-
-
-@app.route("/cliente/<cliente>/idea/<idea_id>/eliminar", methods=["POST"])
-def eliminar_idea(cliente, idea_id):
-    data = prompts_mod.cargar(cliente)
-    if idea_id in data:
-        del data[idea_id]
-        prompts_mod.guardar(cliente, data)
-        flash(gettext("Idea eliminada junto con sus prompts."), "ok")
-    return redirect(url_for("ver_cliente", cliente=cliente))
-
-
 @app.route("/cliente/<cliente>/aprobar/<brief_id>", methods=["POST"])
 def aprobar(cliente, brief_id):
     estado = estado_mod.cargar(cliente)
@@ -7531,6 +6848,21 @@ def _precio_form(valor):
         return precio if math.isfinite(precio) else None
     except ValueError:
         return None
+
+
+@app.route("/cliente/<cliente>/creative_flow/<cf_id>/favorito", methods=["POST"])
+def cf_favorito(cliente, cf_id):
+    """El corazón de una tarjeta de Crear (pedido del 2026-10-08): marca o
+    desmarca la pieza para separarla de las versiones que no se van a usar.
+    Form `favorito=1|0` → {ok, favorito}; sin fetch, vuelve a Crear."""
+    favorito = request.form.get("favorito") == "1"
+    if not creative_flow.marcar_favorito(cliente, cf_id, favorito):
+        if request.headers.get("X-Requested-With") == "fetch":
+            return jsonify({"ok": False, "error": gettext("Esa pieza ya no existe.")}), 404
+        abort(404)
+    if request.headers.get("X-Requested-With") == "fetch":
+        return jsonify({"ok": True, "favorito": favorito})
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
 
 @app.route("/cliente/<cliente>/creative_flow/<cf_id>/angulo", methods=["POST"])
@@ -8913,7 +8245,6 @@ def _tomar_puerto_o_none(host, puerto):
               f"para no pisarle el estado al dashboard que ya está corriendo.")
         return None
     return s
-
 
 
 # ---- Triple Whale (atribución y rendimiento; spec 2026-09-28) ----

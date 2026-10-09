@@ -55,6 +55,9 @@
   --fondo-logo: #e9e9f0;
   --fondo-video: #121417;
   --fondo-lienzo: #000000;
+  --velo-media: rgba(17, 17, 24, 0.72); /* botones encima de un video o una imagen (corazón de Crear) */
+  --velo-media-fuerte: rgba(17, 17, 24, 0.88);
+  --sobre-media: #ffffff;
 
   /* Tipografía */
   --font-display: "Space Grotesk", "Helvetica Neue", Arial, sans-serif;

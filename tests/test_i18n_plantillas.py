@@ -62,6 +62,9 @@ PLANTILLAS_TRADUCIDAS = [
     "_tab_triple_whale.html", "_tw_panel.html", "_tw_resultados.html", "_tw_dia.html",
     "_tw_galeria.html", "_tw_galeria_fragmento.html",   # tarjetas de Triple Whale (spec 2026-10-08 tarjetas §5.1)
     "_tw_analisis.html",                                 # «Cómo mejorarlo» de una tarjeta (spec 2026-10-08 tarjetas §6.5)
+    # Pestaña Meta (rendimiento de varias cuentas, 2026-10-08): armazón, panel, selector y filas de «Ver más».
+    "_tab_meta.html", "_meta_panel.html", "_meta_cuentas.html", "_meta_anuncios_filas.html",
+    "_meta_conjuntos_filas.html", "_meta_macros.html",
     "editor.html",   # Fase 6, Task 2: la página del editor
     "_tab_cambiar_calzado.html",   # Fase 6, Task 4: Crear › Cambiar producto
     "admin_meta.html", "admin_referentes.html", "meta_elegir.html",   # Fase 6, Task 5
@@ -83,10 +86,6 @@ PLANTILLAS_TRADUCIDAS = [
     # tarjetas y la ficha del producto reemplazan a _catalogo_lista.html y
     # _catalogo_sin_fotos.html (borradas); ya vienen con _() y su inglés en el catálogo.
     "_catalogo_grid.html", "_catalogo_tarjeta.html", "_catalogo_ficha.html",
-    # Flujo viejo «Nueva idea» (pedido de Daniel, 2026-10-01): sin pantalla viva,
-    # pero traducido igual; tests/test_i18n_nueva_idea.py lo pinta en los dos idiomas.
-    "_seccion_ideas.html", "_idea_card.html", "_idea_visual_card.html", "_prompt_row.html", "_imagen_row.html",
-    "_progreso_row.html", "_seccion_videos.html", "_video_card.html", "_seccion_bitacora.html",
     "_audios_mis_voces.html",   # Audios Europa (2026-09-30): Crear › Audios › Mis voces, ya con _()
     # Anuncio hablado en Crear (2026-10-01): el panel por fetch, su tarjeta de foto, la
     # galería de voces que comparte con Audios y la cáscara de la página (Task 7).

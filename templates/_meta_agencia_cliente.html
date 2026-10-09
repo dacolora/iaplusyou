@@ -37,7 +37,7 @@
         {% for p in agencia_activos.pages %}
         <label><input type="radio" name="page_id" value="{{ p.id }}"{% if loop.first %} checked{% endif %}> {{ p.name }}{% if p.ig_username %} · @{{ p.ig_username }}{% endif %}</label>
         {% endfor %}
-        <label><input type="radio" name="page_id" value=""{% if not agencia_activos.pages %} checked{% endif %}> {{ _('Sin Página (solo anuncios)') }}</label>
+        <label><input type="radio" name="page_id" value=""{% if not agencia_activos.pages %} checked{% endif %}> {{ _('Sin Página (solo métricas)') }}</label>
         {% if agencia_activos.paginas_sin_dueno %}
         <p class="vacio" style="padding-top:0;">{{ _('Meta no nos dijo de quién es cada Página compartida. Conecta sin Página o usa «Avisar a Creatv» (abajo) con el ID de tu Página y la conectamos nosotros.') }}</p>
         {% endif %}

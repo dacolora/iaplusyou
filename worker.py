@@ -1,13 +1,20 @@
 """
 Worker de Creatv Machine: proceso aparte de gunicorn (servicio systemd
-creatv-worker) que ejecuta las tareas de la cola persistente (cola.py) en dos
-carriles (spec 2026-09-28-crear-sin-cola):
+creatv-worker) que ejecuta las tareas de la cola persistente (cola.py) en cuatro
+carriles (spec 2026-09-28-crear-sin-cola; el de lectura, spec 2026-10-08 meta rendimiento):
 
 - **crear**: las generaciones de Crear (`CARRIL_CREAR`) en hasta `HILOS_CREAR`
   hilos a la vez — casi todo su tiempo es esperar al proveedor, y una espera
   colgada (Wan 3.0 llegó a 20 min) ya no deja a las demás en fila. Los lotes de
   Sprints (prioridad < 5) ocupan como mucho `HILOS_LOTE`, así una pieza suelta
   siempre encuentra hilo.
+- **nicho**: las tareas de Nicho que esperan a Apify, Reddit/YouTube o
+  Claude y los barridos de Referentes (`CARRIL_NICHO`), de a una: comparten
+  la RAM de la cuenta de Apify. Sus esperas no ocupan general.
+- **lectura**: la copia de las cuentas de Meta (`CARRIL_LECTURA`, `meta_rend_sincronizar`)
+  en un solo hilo (`HILOS_LECTURA`): la primera copia de una cuenta tarda de 8 a 14 minutos
+  (medido con la API real) y no debe dejar al carril general —lanzar y refrescar
+  experimentos, Triple Whale, tiendas— esperando una hora. Gratis: leer de Meta no cobra.
 - **general**: todo lo demás, de a una y en orden, como siempre (renders con
   1 CPU, Meta, periódicas…).
 
@@ -16,7 +23,9 @@ una tarea, esa tarea vuelve a `pendiente` a los 30 min (recuperar_colgadas) y
 se reintenta — nunca una que este mismo proceso está ejecutando. Al arrancar
 recupera de inmediato lo que quedó en_curso (solo hay un worker: es huérfano
 seguro), y ante SIGINT/SIGTERM deja de repartir, corta las esperas a WaveSpeed
-(pasan la posta a `flowplus_recuperar`) y espera a que terminen los hilos.
+(pasan la posta a `flowplus_recuperar`), y espera a que terminen todos los
+hilos. Nicho y Referentes terminan su tarea y su espera habitual a Apify;
+no se crean puntos de control ni continuaciones nuevas (enmienda 051, 2026-10-08).
 
 Uso: `python worker.py` (carga .env como dashboard.py).
 """
@@ -54,7 +63,9 @@ log = logging.getLogger("creatv.worker")
 # dentro de un mismo tick: los pedidos de las tiendas se sincronizan (y se
 # atribuyen) ANTES de refrescar experimentos, así el snapshot por tienda ve
 # las ventas de este ciclo y no las de hace 2 h; lo mismo Triple Whale.
-PERIODICAS = [("tienda_sync_pedidos_todas", 7200), ("tw_sincronizar_todas", 7200), ("exp_refrescar_todos", 7200),
+PERIODICAS = [("tienda_sync_pedidos_todas", 7200), ("tw_sincronizar_todas", 7200),
+              # Meta rendimiento (spec 2026-10-08 §6): la copia de cada cuenta publicitaria, cada 3 h.
+              ("meta_rend_sincronizar_todas", 10800), ("exp_refrescar_todos", 7200),
               ("exp_decidir_todos", 3600),
               ("exp_avanzar_todos", 600), ("tienda_sync_productos_todas", 21600), ("sprint_qa_pendientes", 300),
               ("materiales_limpiar", 86400),
@@ -63,6 +74,8 @@ PERIODICAS = [("tienda_sync_pedidos_todas", 7200), ("tw_sincronizar_todas", 7200
               ("salidas_limpiar", 86400), ("cola_limpiar", 86400), ("db_respaldar", 86400),
               # Salud (spec 2026-10-01): los errores resueltos viejos no se acumulan.
               ("errores_limpiar", 86400),
+              # Los días de anuncio de Meta se guardan 95 días (spec 2026-10-08 §6).
+              ("meta_rend_limpiar", 86400),
               # Cadena de escenas de Flow Plus (spec 2026-09-30): avanza cada cadena viva
               # cuando su escena en curso termina (gratis; las escenas las cobra Crear).
               ("cadena_vigilar", 60),
@@ -76,9 +89,20 @@ PERIODICAS = [("tienda_sync_pedidos_todas", 7200), ("tw_sincronizar_todas", 7200
 # Carril de Crear: generaciones que casi todo el tiempo esperan al proveedor
 # (también la voz del anuncio hablado, que no debe esperar detrás de un render).
 CARRIL_CREAR = ("flowplus_video", "flowplus_imagen", "flowplus_recuperar", "flowplus_director", "hablado_voz")
+# Un hilo para Nicho y barridos: comparten RAM/corridas de Apify y separados
+# podían recibir 402 por capacidad (enmienda 051, 2026-10-08).
+CARRIL_NICHO = ("nicho_recolectar", "nicho_inv_buscar", "nicho_inv_consultas",
+                "nicho_inv_seleccionar", "nicho_generar_avatares", "nicho_completar_avatares", "referentes_barrer")
 HILOS_CREAR = 4
 HILOS_LOTE = 2
 PRIORIDAD_SUELTA = 5    # flowplus_lanzar.PRIORIDAD_NORMAL: una pieza pedida desde Crear
+
+# Carril de lectura (ruling R16, 2026-10-08): la copia de rendimiento de Meta, UN hilo propio. Las copias de
+# varias cuentas siguen una detrás de otra (los límites de uso de Meta son por usuario y app, no por cuenta), pero
+# ya no ocupan el único hilo general. Las periódicas `meta_rend_sincronizar_todas` y `meta_rend_limpiar` son
+# instantáneas y se quedan en el general.
+CARRIL_LECTURA = ("meta_rend_sincronizar",)
+HILOS_LECTURA = 1
 
 # Parada limpia: SIGINT/SIGTERM (systemd manda SIGINT, TimeoutStopSec=600) solo
 # levantan esta bandera; el supervisor deja de repartir y espera a sus hilos.
@@ -269,7 +293,8 @@ def _terminar_y_encolar(tarea, siguiente):
     for intento in range(4):
         try:
             return cola.terminar_y_encolar(tarea["id"], siguiente.mensaje, {
-                "tipo": siguiente.tipo, "payload": siguiente.payload, "ejecutar_desde": siguiente.ejecutar_desde})
+                "tipo": siguiente.tipo, "payload": siguiente.payload, "ejecutar_desde": siguiente.ejecutar_desde,
+                "max_intentos": getattr(siguiente, "max_intentos", None)})
         except Exception as e:  # noqa: BLE001
             ultimo = e
             time.sleep(1 + intento)
@@ -335,7 +360,9 @@ def _ocupados():
     crear = [v for v in vuelo if v["carril"] == "crear"]
     lotes = [v for v in crear if v["prioridad"] < PRIORIDAD_SUELTA]
     general = [v for v in vuelo if v["carril"] == "general"]
-    return len(crear), len(lotes), len(general)
+    nicho = [v for v in vuelo if v["carril"] == "nicho"]
+    lectura = [v for v in vuelo if v["carril"] == "lectura"]
+    return len(crear), len(lotes), len(general), len(nicho), len(lectura)
 
 
 def repartir():
@@ -347,7 +374,7 @@ def repartir():
     encolar_periodicas()
     arrancadas = 0
     while not debe_parar():
-        crear, lotes, _ = _ocupados()
+        crear, lotes, _, _, _ = _ocupados()
         if crear >= HILOS_CREAR:
             break
         tarea = cola.reclamar(tipos=CARRIL_CREAR, prioridad_min=PRIORIDAD_SUELTA if lotes >= HILOS_LOTE else None)
@@ -356,8 +383,16 @@ def repartir():
         if not _lanzar(tarea, "crear"):
             break
         arrancadas += 1
+    if not debe_parar() and _ocupados()[3] == 0:
+        tarea = cola.reclamar(tipos=CARRIL_NICHO)
+        if tarea is not None and _lanzar(tarea, "nicho"):
+            arrancadas += 1
+    if not debe_parar() and _ocupados()[4] < HILOS_LECTURA:
+        tarea = cola.reclamar(tipos=CARRIL_LECTURA)
+        if tarea is not None and _lanzar(tarea, "lectura"):
+            arrancadas += 1
     if not debe_parar() and _ocupados()[2] == 0:
-        tarea = cola.reclamar(excluir_tipos=CARRIL_CREAR)
+        tarea = cola.reclamar(excluir_tipos=tuple(CARRIL_CREAR) + tuple(CARRIL_NICHO) + tuple(CARRIL_LECTURA))
         if tarea is not None and _lanzar(tarea, "general"):
             arrancadas += 1
     return arrancadas

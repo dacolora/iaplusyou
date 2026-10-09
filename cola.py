@@ -279,6 +279,20 @@ def limpiar_terminadas(dias=7, dias_periodicas=1):
     return int(n or 0)
 
 
+def hay_viva_de(tipos, solo_en_curso=False):
+    """True si alguna tarea de esos tipos (de cualquier proyecto) está pendiente o en curso, aunque la pendiente
+    espere un reintento: una escritura en Meta que reintenta en un minuto sigue siendo una escritura en camino.
+    Con `solo_en_curso=True` solo cuenta la que está corriendo ahora (una periódica pendiente detrás de tareas
+    largas todavía no escribe nada). Una consulta con límite 1."""
+    if not tipos:
+        return False
+    estados = ("en_curso",) if solo_en_curso else ("pendiente", "en_curso")
+    with db.conectar() as con:
+        return con.execute(sa.select(db.tarea.c.id).where(
+            db.tarea.c.tipo.in_(tuple(tipos)), db.tarea.c.estado.in_(estados)).limit(1)
+        ).first() is not None
+
+
 def job_ids_vivos_todos():
     """job_ids de TODAS las tareas pendientes o en_curso, de cualquier cliente y
     tipo: una sola consulta chica (rara vez pasan de diez filas) para que la

@@ -568,7 +568,8 @@ tw_analisis = Table("tw_analisis", metadata,
     sqlite_autoincrement=True,
 )
 
-# Ganchos nuevos de un análisis (spec 2026-10-09-tw-ganchos-y-copy §4.2, migración 0035): una fila por variante de
+# Ganchos nuevos de un análisis (spec 2026-10-09-tw-ganchos-y-copy §4.2, migración 0036; era la 0035 en la rama, se
+# renumeró al mezclar main, que ya tenía 0035_meta_rendimiento): una fila por variante de
 # «Probar los 3 ganchos». Su id es también el código `CV<id>` que va en el nombre del anuncio en Meta: AUTOINCREMENT
 # para que nunca se reuse. Único escritor: triple_whale/datos.py.
 tw_gancho = Table("tw_gancho", metadata,
@@ -1166,6 +1167,113 @@ error_app = Table("error_app", metadata,
     Column("extra", JSON, default=dict),
     sa.Index("ix_error_app_estado_ultima", "estado", "ultima_vez"),
     sa.Index("ix_error_app_ultima", "ultima_vez"),
+)
+
+# --- Meta: rendimiento de varias cuentas por proyecto (spec 2026-10-08 meta rendimiento §4, migración 0035) ---
+# Las cuentas publicitarias que un proyecto LEE (aparte de la única con la que lanza, en meta.json).
+# Único escritor: meta_rendimiento/cuentas.py. Una cuenta solo puede estar en un proyecto.
+meta_cuenta = Table("meta_cuenta", metadata,
+    Column("id", Integer, primary_key=True),
+    *_comunes(),
+    Column("ad_account_id", String(40), nullable=False),     # «act_…»
+    Column("nombre", Text),
+    Column("moneda", String(3)),
+    Column("zona_horaria", String(60)),
+    Column("pais", String(2)),                               # ISO-2 o None (World Wide)
+    Column("estado", String(12), default="nueva"),           # nueva|copiando|ok|error
+    Column("error", Text),
+    Column("ultima_copia", String(19)),
+    Column("agregada_por", String(80)),
+    # Lo que escribe meta_rendimiento/sync.py: cuenta {account_status, disable_reason, amount_spent, spend_cap},
+    # backfill_cuenta / backfill_anuncios (cada mitad de la primera copia hecha), backfill_hecho (las dos; las copias
+    # viejas solo tienen esta), cuenta_desde / anuncios_desde (día más viejo ya copiado de la primera copia en curso),
+    # listado_completo_en (cuándo se hizo el último listado completo de anuncios, con pausados).
+    Column("extra", JSON, default=dict),
+    sa.Index("uq_meta_cuenta_act", "ad_account_id", unique=True),
+    sqlite_autoincrement=True,
+)
+
+# La cuenta por día (level=account): 13 meses. El alcance diario sí es de ese día (no se suma entre días).
+meta_cuenta_dia = Table("meta_cuenta_dia", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("cliente", String(80), nullable=False),
+    Column("ad_account_id", String(40), nullable=False),
+    Column("fecha", String(10), nullable=False),
+    Column("gasto", Float, default=0.0), Column("impresiones", Integer, default=0),
+    Column("alcance", Integer, default=0), Column("clics", Integer, default=0),
+    Column("clics_salida", Integer, default=0), Column("compras", Float, default=0.0),
+    Column("valor", Float, default=0.0), Column("vistas_3s", Integer, default=0),
+    Column("thruplays", Integer, default=0),
+    Column("actualizado_en", String(19), nullable=False),
+    sa.UniqueConstraint("cliente", "ad_account_id", "fecha", name="uq_meta_cuenta_dia"),
+)
+
+# El anuncio por día (level=ad): 90 días (tareas/meta_rendimiento borra lo anterior). Campaña y
+# conjunto van como id; los nombres viven en meta_objeto.
+meta_anuncio_dia = Table("meta_anuncio_dia", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("cliente", String(80), nullable=False),
+    Column("ad_account_id", String(40), nullable=False),
+    Column("fecha", String(10), nullable=False),
+    Column("campaign_id", String(40)), Column("adset_id", String(40)),
+    Column("ad_id", String(40), nullable=False),
+    Column("gasto", Float, default=0.0), Column("impresiones", Integer, default=0),
+    Column("clics", Integer, default=0), Column("clics_salida", Integer, default=0),
+    Column("compras", Float, default=0.0), Column("valor", Float, default=0.0),
+    Column("vistas_3s", Integer, default=0), Column("thruplays", Integer, default=0),
+    Column("p25", Integer, default=0), Column("p50", Integer, default=0),
+    Column("p75", Integer, default=0), Column("p100", Integer, default=0),
+    Column("actualizado_en", String(19), nullable=False),
+    sa.UniqueConstraint("cliente", "ad_account_id", "ad_id", "fecha", name="uq_meta_anuncio_dia"),
+    sa.Index("ix_meta_anuncio_dia_cuenta_fecha", "cliente", "ad_account_id", "fecha"),
+)
+
+# Campañas, conjuntos y anuncios: nombre, estado, presupuesto, aprendizaje, miniatura.
+meta_objeto = Table("meta_objeto", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("cliente", String(80), nullable=False),
+    Column("ad_account_id", String(40), nullable=False),
+    Column("nivel", String(10), nullable=False),             # campana|conjunto|anuncio
+    Column("objeto_id", String(40), nullable=False),
+    Column("padre_id", String(40)),                          # conjunto -> campaña, anuncio -> conjunto
+    Column("campaign_id", String(40)),
+    Column("nombre", Text),
+    Column("estado", String(30)),                            # effective_status; None = no vino (archivado/borrado)
+    Column("objetivo", String(40)), Column("optimizacion", String(40)),
+    Column("presupuesto_diario", Float), Column("presupuesto_total", Float),   # en la moneda de la cuenta
+    Column("estrategia_puja", String(40)),
+    Column("aprendizaje", String(20)),                       # learning_stage_info.status
+    Column("creative_id", String(40)), Column("miniatura_url", Text), Column("video_id", String(40)),
+    Column("creado_en_meta", String(25)),
+    Column("actualizado_en", String(19), nullable=False),
+    Column("extra", JSON, default=dict),
+    sa.UniqueConstraint("cliente", "objeto_id", name="uq_meta_objeto"),
+    sa.Index("ix_meta_objeto_cuenta_nivel", "cliente", "ad_account_id", "nivel"),
+)
+
+# Alcance y frecuencia de una ventana (gente única: no se suma por días).
+meta_alcance = Table("meta_alcance", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("cliente", String(80), nullable=False),
+    Column("ad_account_id", String(40), nullable=False),
+    Column("nivel", String(10), nullable=False),             # cuenta|campana
+    Column("objeto_id", String(40), nullable=False),         # act_… para la cuenta
+    Column("ventana", Integer, nullable=False),              # 7|14|30|90
+    Column("alcance", Integer, default=0),
+    Column("frecuencia", Float),
+    Column("calculado_en", String(19), nullable=False),
+    sa.UniqueConstraint("cliente", "objeto_id", "ventana", name="uq_meta_alcance"),
+)
+
+# Tasa de cambio diaria del BCE (frankfurter): cuántos USD vale una unidad de `moneda`.
+tasa_cambio = Table("tasa_cambio", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("fecha", String(10), nullable=False),
+    Column("moneda", String(3), nullable=False),
+    Column("usd_por_unidad", Float, nullable=False),
+    Column("fuente", String(20), default="bce"),
+    Column("creado_en", String(19), nullable=False),
+    sa.UniqueConstraint("fecha", "moneda", name="uq_tasa_cambio"),
 )
 
 

@@ -14,6 +14,16 @@
         {% set _portada = (item.referencias[0].frame_url if item.referencias else (item.referencias_urls[0] if item.referencias_urls else None)) %}
         {% if _portada %}<img src="{{ _portada }}" alt="" loading="lazy" class="generado-portada">{% endif %}
         {% endif %}
+        {% if item.estado == "video_listo" %}
+        {# Corazón (2026-10-08): separa las versiones que se van a usar. Un <form> real
+           sin JS; con JS lo envía por fetch el delegado de _tab_creativeflowplus.html. #}
+        <form method="post" action="{{ url_for('cf_favorito', cliente=cliente, cf_id=item.id) }}" class="generado-fav-form">
+          <input type="hidden" name="favorito" value="{{ '0' if item.favorito else '1' }}">
+          <button type="submit" class="generado-fav{% if item.favorito %} activo{% endif %}" aria-pressed="{{ 'true' if item.favorito else 'false' }}"
+                  aria-label="{{ _('Me gusta') }}" title="{{ _('Quitar el corazón') if item.favorito else _('Marcar con corazón') }}"
+                  data-titulo-si="{{ _('Quitar el corazón') }}" data-titulo-no="{{ _('Marcar con corazón') }}">{{ '♥' if item.favorito else '♡' }}</button>
+        </form>
+        {% endif %}
         <span class="generado-tipo">{% if item.tipo == "imagen" %}{{ _('Imagen') }}{% if item.aspect_ratio %} · {{ item.aspect_ratio }}{% endif %}{% else %}{{ _('Video') }} · {{ item.duracion_objetivo }}s · {{ item.aspect_ratio or _('formato de la imagen') }}{% endif %}</span>
         {% if item.estado == "video_generando" %}
         <div class="generado-velo">

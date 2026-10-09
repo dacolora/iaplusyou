@@ -176,10 +176,10 @@ a photo is a clip of the principal `video` track with `foto: true` (velocidad 1,
 (`final_edition/fotos.py::preparar`: EXIF, transparency over black, ≤ 4096, JPEG 92 → `rutas["foto:<mid>"]`) and repeats one
 frame with `loop`; a photo counts as one input in `PRESUPUESTO_VIDEOS` (427 MB measured on the Mac for 6 framed photos at
 `-threads 1`; still unmeasured on the VPS), while a VIDEO whose `encuadre` zooms in weighs `ceil(zoom²)` inputs, capped at
-`PRESUPUESTO_VIDEOS` (`tramos.peso_video`, ruling R7: «llenar»/«ajustar» scale the whole frame before the crop on every
-frame — 6 such 1080p clips at zoom 2 = 1.5 GB, zoom 4 = 2.9 GB; crop-first in the compiler is deferred). `encuadre = {modo: llenar|ajustar, zoom 1–4, x, y}` per principal clip, ONE
+`PRESUPUESTO_VIDEOS` (`tramos.peso_video`): this conservative weight remains until measurement on render-vps
+justifies lowering it; the compiler now crops the source before scaling (PND-049, decision 2026-10-07). `encuadre = {modo: llenar|ajustar, zoom 1–4, x, y}` per principal clip, ONE
 integer formula in `final_edition/encuadre.py` and `static/editor/encuadre.js` (`caja`, `fondo`, `par`, parity table
-`encuadre_casos.json`): the compiler turns it into `scale/crop` or `split` + `boxblur` background + `overlay`, the preview
+`encuadre_casos.json`): the compiler turns it into source `crop/scale/crop` or `split` + `boxblur` background + cropped foreground `overlay`, the preview
 into `drawImage` (`lienzo.dibujarPrincipal`); no `encuadre` = the old chain; EVERY principal chain ends in
 `setsar=1,format=yuv420p`. `preparar_rutas` stamps `ancho_px/alto_px` from the prepared photo or from
 `encuadre.medidas_visibles` (rotation-aware ffprobe) and refuses a photo clip whose material isn't an image (and the
@@ -263,6 +263,26 @@ PND-012 (2026-10-08, corrección lote 6A): materiales.actualizar_ficha actualiza
 
 PND-080/128 (2026-10-08, decisiones delegadas): apuntar_final, compartido por los dos caminos de producción, marca producida bajo el candado SQLite si el documento actual coincide con la versión congelada del render. Un documento editado durante el render conserva borrador; guardar vuelve a borrador. PND-128, enmienda 2026-10-08: sin color explícito, documentos nuevos llevan marca.color=None y solo el precio que era morado pasa a negro a 0.6 con texto blanco. Gancho/CTA conservan ESTILO_HOOK/ESTILO_CTA con y sin marca; subtítulos conservan karaoke/resaltado=None. El legado sin marca resalta el karaoke #FFD400. No se migra ningún documento, edición ni estilo guardado, ni se modifica motor/subtitulos.py. Regresiones en test_ediciones.py, test_documento.py y operaciones.test.mjs; no se cambia retención ni url_local.
 
+PND-049, 2026-10-08 (decision 2026-10-07; two clips zoom 2.45 in one transition window exhausted RAM):
+`motor.compilador._ventana_visible` keeps `encuadre.caja` as the geometry contract. For each source axis O scaled
+to S, crop offsets and sizes use multiples of `lcm(O/gcd(O,S), 2)` (doubled when its scaled length is odd),
+so source and scaled offsets are even and the scale ratio and interpolation phase stay unchanged. Expand
+the visible interval outward by four source pixels for interpolation, snap outward to that unit, and clamp
+to the source bounds. `crop=...:exact=1` precedes `scale`; the final canvas crop or overlay removes the guard
+margin. A coprime ratio may require keeping the whole source axis: do not change the ratio to save RAM.
+`ajustar` keeps its original blurred background and only crops the foreground; zoom < 1, photo preparation,
+rotation-aware source dimensions, Ken Burns and transitions retain their existing geometry. Legacy clips
+without framing keep their original filter because their source dimensions may be absent.
+
+Verification: `test_lote6c_crop_paridad.py` compares four lossless frames in each of twelve small real ffmpeg
+renders (including transitions, photos and rotation). Mean absolute RGB difference must be < 0.5 out of 255
+per channel, allowing interpolation without accepting a framing shift: max observed 0.036781, while a
+deliberate two-pixel shift gives 1.493974. Do not edit `tests/fixtures/*.json` to accommodate a discrepancy.
+`deploy/medir_memoria_render.py` compares isolated children with two 1920×1080 clips, zoom 2.45, one window
+and one transition, offline. macOS peak RSS: old 888.45 MiB, new 707.81 MiB (20.33% lower). La medición posterior en render-vps está registrada abajo; el presupuesto de ventanas sigue conservador
+y la medición local no se usa como límite del VPS.
+
+PND-049 (pruebas reforzadas, 2026-10-08): MAE RGB < 0.5 y máximo absoluto por canal ≤ 6/255. En trece casos de paridad el máximo observado fue 5; se deja un nivel para redondeos entre builds. El caso llenar_margen (640×360 → 360×640, zoom 1.125) coincide sin diferencia con el margen; sin los cuatro píxeles de apoyo da MAE 0.006104–0.007419 pero máximo 25–47, que el tope nuevo rechaza. No se cambia compilador, tramos ni fixtures. PND-049 queda abierto para recortar del todo: paridad geométrica exacta conservada; render-vps dos clips en un tramo, zoom 1.0 742→743 MiB, 2.45 969→837, 4.0 1443→898 (mediciones aportadas por Claude). La cuadrícula puede abarcar un eje entero; tolerar fase fraccionaria o cambiar caja necesita decisión de Daniel.
 
 **Producir sin navegador (2026-10-09, ganchos de Triple Whale, spec `2026-10-09-tw-ganchos-y-copy-design.md` §4.6):**
 `rutas_editor.encolar_producciones(cliente, edicion_id, ed, version, destinos)` is the tail of `producir` (per destino:
