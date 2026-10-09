@@ -5,6 +5,7 @@ Los límites de uso de Meta son por usuario + app, y el mismo usuario y la misma
 colorado_forja: cuando una copia recibe un límite (códigos 4/17/32/613/8000x, o un uso de 75 % o más en las
 cabeceras), TODAS las copias esperan hasta `pausada_hasta()` en vez de seguir gastando lo que necesita un lanzamiento.
 La pausa solo se alarga, nunca se acorta: dos copias que chocan con el límite a la vez se quedan con la más larga."""
+import math
 from datetime import datetime, timedelta
 
 import sqlalchemy as sa
@@ -14,18 +15,23 @@ import db
 
 CLAVE = "meta_rend:pausa_hasta"
 MINUTOS_MINIMOS = 30
+MINUTOS_MAXIMOS = 24 * 60     # lo que Meta pida de más no deja las copias paradas más de un día
 _PATRON_FECHA = "[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]"
 
 
 def pausar(minutos=None, ahora=None):
-    """Pausa las copias `max(minutos, 30)` minutos desde ahora (o deja la pausa que ya hubiera si termina después).
+    """Pausa las copias `max(minutos, 30)` minutos (24 h como mucho) desde ahora (o deja la pausa que ya hubiera si
+    termina después). Un valor ilegible, infinito o enorme no lanza nada: cae a 30 o al tope.
     Devuelve hasta cuándo quedó (AAAA-MM-DDTHH:MM:SS, hora del servidor como `db.ahora()`)."""
     try:
         minutos = float(minutos or 0)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         minutos = 0.0
+    if math.isnan(minutos):
+        minutos = 0.0
+    minutos = min(max(minutos, MINUTOS_MINIMOS), MINUTOS_MAXIMOS)      # `inf` también queda en el tope
     ahora = ahora or datetime.now()
-    hasta = (ahora + timedelta(minutes=max(minutos, MINUTOS_MINIMOS))).isoformat(timespec="seconds")
+    hasta = (ahora + timedelta(minutes=minutos)).isoformat(timespec="seconds")
     nuevo = insert_sqlite(db.kv).values(clave=CLAVE, valor=hasta, actualizado_en=db.ahora())
     with db.conectar() as con:
         # Una sola sentencia: se queda lo guardado si es una fecha ISO válida y termina después de lo nuevo (las dos

@@ -37,3 +37,18 @@ def test_un_valor_ilegible_en_la_base_es_sin_pausa(base_temporal):
         con.execute(sa.insert(db.kv).values(clave=pausa.CLAVE, valor="no es una fecha", actualizado_en=db.ahora()))
     assert pausa.pausada_hasta(AHORA) is None and not pausa.activa(AHORA)
     assert pausa.pausar(30, ahora=AHORA) == "2026-10-08T12:30:00"
+
+
+def test_la_pausa_se_topa_en_24_horas_y_un_valor_absurdo_no_lanza(base_temporal):
+    assert pausa.MINUTOS_MAXIMOS == 24 * 60
+    assert pausa.pausar(100000, ahora=AHORA) == "2026-10-09T12:00:00"
+    for basura in (float("inf"), 1e308, 10 ** 400):
+        assert pausa.pausar(basura, ahora=AHORA) == "2026-10-09T12:00:00"
+    assert pausa.pausar(float("nan"), ahora=AHORA) == "2026-10-09T12:00:00"      # no acorta la que ya hay
+    assert pausa.pausar(-5, ahora=AHORA) == "2026-10-09T12:00:00"
+
+
+def test_la_pausa_de_un_valor_absurdo_solo_dura_el_tope(base_temporal):
+    assert pausa.pausar(float("nan"), ahora=AHORA) == "2026-10-08T12:30:00"
+    assert pausa.pausar(float("inf"), ahora=AHORA) == "2026-10-09T12:00:00"
+    assert pausa.activa(AHORA + timedelta(hours=23)) and not pausa.activa(AHORA + timedelta(hours=24, seconds=1))

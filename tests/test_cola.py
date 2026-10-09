@@ -219,3 +219,14 @@ def test_hay_viva_de_cuenta_pendientes_aunque_esperen_un_reintento_y_en_curso_de
     with cola.db.conectar() as con:
         con.execute(cola.db.tarea.update().values(estado="hecha"))
     assert not cola.hay_viva_de(("exp_lanzar",))
+
+
+def test_hay_viva_de_solo_en_curso_ignora_las_pendientes(base_temporal):
+    import cola
+    cola.encolar("exp_avanzar_todos", {}, job_id="periodica__exp_avanzar_todos")
+    assert cola.hay_viva_de(("exp_avanzar_todos",))                              # pendiente: cuenta por defecto
+    assert not cola.hay_viva_de(("exp_avanzar_todos",), solo_en_curso=True)      # ...pero todavía no corre
+    with cola.db.conectar() as con:
+        con.execute(cola.db.tarea.update().values(estado="en_curso"))
+    assert cola.hay_viva_de(("exp_avanzar_todos",), solo_en_curso=True)
+    assert not cola.hay_viva_de((), solo_en_curso=True)
