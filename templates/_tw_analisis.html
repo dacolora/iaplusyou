@@ -41,11 +41,12 @@
     {% if gh.motivo and not gh.sin_precio %}
     <p class="vacio tw-ganchos-motivo">{{ gh.motivo | traducir }}</p>
     {% else %}
-    {% set precio_ganchos = _('precio no disponible') if gh.sin_precio else (gh.precio.usd | precio | usd) %}
+    {#- Arreglo D: el precio ya calculado (`usd_precio`, None si el margen no se pudo leer), nunca `|precio` del costo. -#}
+    {% set precio_ganchos = _('precio no disponible') if gh.sin_precio else (gh.precio.usd_precio | usd) %}
     <form method="post" class="tw-ganchos-probar" data-tw-ganchos
           action="{{ url_for('triple_whale.ganchos_probar', cliente=cliente, aid=fila.id) }}"
           data-confirmar="{{ ngettext('¿Generar %(num)s clip de 3 s con Kling y armar su video? Costo: %(precio)s', '¿Generar %(num)s clips de 3 s con Kling y armar sus videos? Costo: %(precio)s', gh.n, precio=precio_ganchos) }}">
-      <input type="hidden" name="precio_visto" value="{{ '' if gh.sin_precio else gh.precio.usd | precio }}">
+      <input type="hidden" name="precio_visto" value="{{ '' if gh.sin_precio else gh.precio.usd_precio }}">
       <button type="submit" class="btn-generar btn-sm"{% if gh.sin_precio %} disabled{% endif %}>{{ ngettext('Probar %(num)s gancho · %(precio)s', 'Probar los %(num)s ganchos · %(precio)s', gh.n, precio=precio_ganchos) }}</button>
     </form>
     {% endif %}

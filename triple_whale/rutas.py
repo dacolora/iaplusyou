@@ -364,7 +364,11 @@ def _contexto_ganchos(cliente, fila):
     generables = ganchos_tw.ganchos_generables(r)
     filas = datos.ganchos_de_analisis(cliente, fila["id"])
     precio = gastos.estimar_ganchos_tw(len(generables))
-    motivo = ganchos_tw.puede_probar(fila, generables, filas, precio["usd"], mejorar._url_voz(fila.get("foto") or {}))
+    # Arreglo D (revisión del gasto, 2026-10-09): lo que mira el botón es el PRECIO (`usd_precio`), que es None también
+    # cuando el margen no se pudo leer (`gastos._margen_fallido`): entonces el motivo es «precio no disponible», el
+    # botón no se puede pedir y la ruta responde 409. `|precio` caía al costo (margen 1,0) y lo mostraba como precio.
+    motivo = ganchos_tw.puede_probar(fila, generables, filas, precio["usd_precio"],
+                                     mejorar._url_voz(fila.get("foto") or {}))
     tandas = ganchos_tw.tandas(filas)
     vivos = cola.job_ids_vivos_todos() if any(f["estado"] in datos.VIVOS_GANCHO for f in filas) else set()
     for t in tandas:
@@ -450,7 +454,7 @@ def ganchos_probar(cliente, aid):
     if fila is None:
         abort(404)
     gh = _contexto_ganchos(cliente, fila)
-    if gh["motivo"]:
+    if gh["motivo"]:                    # también «precio no disponible» si el margen no se pudo leer (arreglo D)
         motivo = gh["motivo"]
         return _respuesta_ganchos(cliente, False, gettext(motivo), 409)
     usd = gh["precio"]["usd"]

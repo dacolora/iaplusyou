@@ -344,3 +344,32 @@ def test_clip_recuperable_coincide_con_lo_que_crear_deja_recuperar(app, estado, 
         encolada = con.execute(sa.select(sa.func.count()).select_from(db.tarea).where(
             db.tarea.c.tipo == "flowplus_recuperar")).scalar() == 1
     assert encolada is esperado
+
+
+# ------------------------------- arreglo D (revisión del gasto, 2026-10-09): el margen que no se pudo leer ---
+
+def test_sin_poder_leer_el_margen_el_boton_no_muestra_el_costo_y_la_ruta_no_pide_nada(app, monkeypatch):  # noqa: F811
+    """`|precio` caía al costo (margen 1,0) cuando el margen no se podía leer: un proyecto que cobra veía un precio
+    menor al que se le cobraría. Ahora el botón dice «precio no disponible», no se puede pedir y la ruta responde 409."""
+    from cobros import libro
+    aid = _analisis()
+    monkeypatch.setattr(libro, "margen_precio", lambda c: (_ for _ in ()).throw(RuntimeError("base caída")))
+    html = _detalle(app, aid)
+    assert "Probar los 3 ganchos · precio no disponible" in html and "US$ 1,01" not in html
+    assert '<button type="submit" class="btn-generar btn-sm" disabled>' in html
+    assert 'name="precio_visto" value=""' in html and "Costo: precio no disponible" in html
+    r = _probar(app, aid, precio="1.008")                       # el costo, que antes se mostraba como precio
+    assert r.status_code == 409 and r.get_json()["mensaje"] == "precio no disponible"
+    assert datos.ganchos_de_analisis("acme", aid) == [] and _preparaciones() == []
+
+
+def test_con_margen_el_boton_muestra_costo_por_margen_y_la_ruta_acepta_ese_precio(app):  # noqa: F811
+    from cobros import libro
+    aid = _analisis()
+    _cobra(milesimas=5000)
+    libro.configurar("acme", usuario="admin", margen=1.5)
+    html = _detalle(app, aid)
+    assert "Probar los 3 ganchos · US$ 1,51" in html and "Costo: US$ 1,51" in html
+    assert re.search(r'name="precio_visto" value="1\.512"', html)
+    r = _probar(app, aid, precio="1.512")
+    assert r.status_code == 200 and r.get_json()["ok"] and len(_preparaciones()) == 1
