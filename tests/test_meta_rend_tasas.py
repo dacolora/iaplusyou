@@ -1,19 +1,27 @@
 """USD por día (spec §7): BCE por frankfurter, fines de semana con el último día
 publicado, USD = 1 sin pedir nada, y sin tasa = None (nunca inventada)."""
+import json
 from datetime import date
 
 from meta_rendimiento import tasas
 
 
 class _Resp:
-    def __init__(self, datos, status=200):
-        self.status_code, self._d = status, datos
+    """Lo que de verdad devuelve `conectores.url.abrir`: una respuesta de requests abierta con stream=True, de la que
+    el código lee con `iter_content` (nada de `.json()`, que bajaría el cuerpo entero sin tope). `datos` se serializa
+    a JSON; `cuerpo` permite entregar bytes a mano (un cuerpo enorme o roto)."""
 
-    def json(self):
-        return self._d
+    def __init__(self, datos=None, status=200, cuerpo=None):
+        self.status_code = status
+        self._cuerpo = cuerpo if cuerpo is not None else json.dumps(datos).encode()
+        self.cerrada = False
+
+    def iter_content(self, chunk_size=1, decode_unicode=False):
+        for i in range(0, len(self._cuerpo), chunk_size):
+            yield self._cuerpo[i:i + chunk_size]
 
     def close(self):
-        pass
+        self.cerrada = True
 
 
 def test_stored_rates_no_exception_no_refetch(base_temporal, monkeypatch, caplog):
@@ -290,3 +298,111 @@ def test_usd_always_one(base_temporal, monkeypatch):
     tasas.asegurar(["USD"], "2026-10-01", "2026-10-02")
     assert len(pedidas) == 0  # USD never requests
     assert tasas.mapa("USD", "2026-10-01", "2026-10-02") == {"2026-10-01": 1.0, "2026-10-02": 1.0}
+
+
+# --- ruling R24 (relleno de 4 días) y G2 (la respuesta del BCE se trata como ajena) --------------------------------
+
+def _sembrar(moneda, tasas_por_fecha):
+    import db
+    with db.conectar() as con:
+        for fecha, v in tasas_por_fecha.items():
+            con.execute(db.tasa_cambio.insert().values(fecha=fecha, moneda=moneda, usd_por_unidad=v, fuente="bce",
+                                                       creado_en=db.ahora()))
+
+
+def test_weekend_filled_with_friday_rate(base_temporal):
+    """Viernes 2 oct publicado; sábado, domingo y lunes sin publicar toman el del viernes."""
+    _sembrar("SEK", {"2026-10-01": 0.09, "2026-10-02": 0.10})
+    m = tasas.mapa("SEK", "2026-10-02", "2026-10-05")
+    assert m == {"2026-10-02": 0.10, "2026-10-03": 0.10, "2026-10-04": 0.10, "2026-10-05": 0.10}
+
+
+def test_gap_of_five_days_or_more_is_none(base_temporal):
+    """Hasta 4 días después de la última tasa publicada se rellena; el quinto y siguientes son None."""
+    _sembrar("SEK", {"2026-10-01": 0.10})
+    m = tasas.mapa("SEK", "2026-10-01", "2026-10-08")
+    assert [m[f"2026-10-0{d}"] for d in range(1, 6)] == [0.10] * 5      # el 1 y los 4 días siguientes
+    assert [m[f"2026-10-0{d}"] for d in (6, 7, 8)] == [None] * 3        # 5, 6 y 7 días después
+    assert tasas.usd("SEK", "2026-10-06") is None
+
+
+def test_gap_counts_from_last_published_not_from_range_start(base_temporal):
+    """La última publicada anterior al rango (en la holgura) cuenta: un rango que empieza 3 días después aún la usa,
+    uno que empieza 5 días después ya no."""
+    _sembrar("SEK", {"2026-09-30": 0.10})
+    assert tasas.mapa("SEK", "2026-10-03", "2026-10-03") == {"2026-10-03": 0.10}
+    assert tasas.mapa("SEK", "2026-10-05", "2026-10-05") == {"2026-10-05": None}
+
+
+def test_body_over_1mb_is_ignored(base_temporal, monkeypatch, caplog):
+    """Una respuesta de más de 1 MB no se guarda ni lanza: se corta la lectura, queda un aviso y no se re-pide."""
+    tasas._reiniciar_cache()
+    pedidas, respuestas = [], []
+
+    def abrir(url, **_):
+        pedidas.append(url)
+        relleno = "x" * (tasas.MAX_BYTES_RESPUESTA + 100_000)
+        r = _Resp(cuerpo=json.dumps({"rates": {"2026-10-01": {"USD": 0.10}}, "relleno": relleno}).encode())
+        respuestas.append(r)
+        return r
+
+    monkeypatch.setattr(tasas.url_conector, "abrir", abrir)
+
+    tasas.asegurar(["SEK"], "2026-10-01", "2026-10-01", hoy=date(2026, 10, 8))
+    assert len(pedidas) == 1
+    assert tasas._guardadas("SEK", "2026-09-20", "2026-10-08") == {}
+    assert respuestas[0].cerrada
+    assert "respuesta inválida" in caplog.text
+
+    tasas.asegurar(["SEK"], "2026-10-01", "2026-10-01", hoy=date(2026, 10, 8))
+    assert len(pedidas) == 1   # no insiste durante el caché negativo
+
+
+def test_body_not_json_is_ignored(base_temporal, monkeypatch):
+    tasas._reiniciar_cache()
+    monkeypatch.setattr(tasas.url_conector, "abrir", lambda url, **_: _Resp(cuerpo=b"<html>no es json</html>"))
+    tasas.asegurar(["SEK"], "2026-10-01", "2026-10-01", hoy=date(2026, 10, 8))
+    assert tasas._guardadas("SEK", "2026-09-20", "2026-10-08") == {}
+
+
+def test_bad_date_is_skipped(base_temporal, monkeypatch):
+    """Una clave que no es fecha ('2026-13-45', 'ayer', 20261002x) se salta; las buenas se guardan."""
+    tasas._reiniciar_cache()
+    monkeypatch.setattr(tasas.url_conector, "abrir", lambda url, **_: _Resp({"rates": {
+        "2026-13-45": {"USD": 0.10}, "ayer": {"USD": 0.10}, "2026-02-30": {"USD": 0.10},
+        "2026-10-01": {"USD": 0.10}, "2026-10-02": {"USD": 0.11}}}))
+    tasas.asegurar(["SEK"], "2026-10-01", "2026-10-02", hoy=date(2026, 10, 8))
+    assert tasas._guardadas("SEK", "2026-09-01", "2026-10-31") == {"2026-10-01": 0.10, "2026-10-02": 0.11}
+
+
+def test_jump_over_3x_of_previous_stored_rate_is_skipped(base_temporal, monkeypatch, caplog):
+    """Con una tasa guardada anterior, una nueva que se aleja más de 3 veces se descarta con un aviso; la siguiente
+    se compara con la última que sí se guardó."""
+    tasas._reiniciar_cache()
+    _sembrar("SEK", {"2026-10-01": 0.10})
+    monkeypatch.setattr(tasas.url_conector, "abrir", lambda url, **_: _Resp({"rates": {
+        "2026-10-02": {"USD": 0.11},     # normal
+        "2026-10-05": {"USD": 0.50},     # x4,5 sobre 0,11: descartada
+        "2026-10-06": {"USD": 0.12}}}))  # normal respecto de 0,11
+    tasas.asegurar(["SEK"], "2026-10-02", "2026-10-06", hoy=date(2026, 10, 8))
+    assert tasas._guardadas("SEK", "2026-09-01", "2026-10-31") == {"2026-10-01": 0.10, "2026-10-02": 0.11,
+                                                                   "2026-10-06": 0.12}
+    assert "no se guarda" in caplog.text
+
+
+def test_drop_under_a_third_of_previous_stored_rate_is_skipped(base_temporal, monkeypatch):
+    tasas._reiniciar_cache()
+    _sembrar("SEK", {"2026-10-01": 0.10})
+    monkeypatch.setattr(tasas.url_conector, "abrir", lambda url, **_: _Resp({"rates": {
+        "2026-10-02": {"USD": 0.02}, "2026-10-05": {"USD": 0.09}}}))
+    tasas.asegurar(["SEK"], "2026-10-02", "2026-10-05", hoy=date(2026, 10, 8))
+    assert tasas._guardadas("SEK", "2026-09-01", "2026-10-31") == {"2026-10-01": 0.10, "2026-10-05": 0.09}
+
+
+def test_jump_without_stored_rate_compares_to_median_of_the_batch(base_temporal, monkeypatch):
+    """Sin nada guardado, un valor suelto fuera de 3 veces la mediana de lo que llegó se descarta."""
+    tasas._reiniciar_cache()
+    monkeypatch.setattr(tasas.url_conector, "abrir", lambda url, **_: _Resp({"rates": {
+        "2026-10-01": {"USD": 0.10}, "2026-10-02": {"USD": 0.11}, "2026-10-05": {"USD": 5.0}}}))
+    tasas.asegurar(["SEK"], "2026-10-01", "2026-10-05", hoy=date(2026, 10, 8))
+    assert tasas._guardadas("SEK", "2026-09-01", "2026-10-31") == {"2026-10-01": 0.10, "2026-10-02": 0.11}
