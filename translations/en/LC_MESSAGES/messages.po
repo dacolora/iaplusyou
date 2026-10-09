@@ -2390,6 +2390,12 @@ msgstr "Before launching it: what the rules see (free) and, if you ask for it, C
 msgid "Antes y después"
 msgstr "Before and after"
 
+#, python-format
+msgid "Antes: %(num)s tanda · ver"
+msgid_plural "Antes: %(num)s tandas · ver"
+msgstr[0] "Before: %(num)s batch · view"
+msgstr[1] "Before: %(num)s batches · view"
+
 msgid "Anthropic (guiones y prompts)"
 msgstr "Anthropic (scripts and prompts)"
 
@@ -3570,6 +3576,10 @@ msgstr "Five minutes. You don't create anything on Meta."
 msgid "Cinta"
 msgstr "Ribbon"
 
+#, python-format
+msgid "Cita cifras que no están en los datos (%(cifras)s): revisa antes de publicar."
+msgstr "It cites figures that aren't in the data (%(cifras)s): check before publishing."
+
 msgid "Citas textuales"
 msgstr "Verbatim quotes"
 
@@ -4336,11 +4346,20 @@ msgstr "Copied"
 msgid "Copiar"
 msgstr "Copy"
 
+msgid "Copiar el texto"
+msgstr "Copy the text"
+
+msgid "Copiar el título"
+msgstr "Copy the title"
+
 msgid "Copiar enlaces"
 msgstr "Copy links"
 
 msgid "Copy del anuncio"
 msgstr "Ad copy"
+
+msgid "Copy nuevo para Meta"
+msgstr "New copy for Meta"
 
 msgid "Corazón"
 msgstr "Heart"
@@ -5812,6 +5831,10 @@ msgstr "The country must be a 2-letter code, like CO."
 
 msgid "El porqué"
 msgstr "The reason why"
+
+#, python-format
+msgid "El precio cambió: ahora es %(precio)s. Revisa y vuelve a pedirlo."
+msgstr "The price changed: it's now %(precio)s. Check it and ask again."
 
 #, python-format
 msgid "El precio cambió: ahora es ≈ US$ %(precio)s. Revisa y vuelve a aprobar."
@@ -8315,6 +8338,10 @@ msgid "Gancho"
 msgstr "Hook"
 
 #, python-format
+msgid "Gancho %(n)s"
+msgstr "Hook %(n)s"
+
+#, python-format
 msgid "Gancho %(n)s · %(nombre)s"
 msgstr "Hook %(n)s · %(nombre)s"
 
@@ -8340,6 +8367,9 @@ msgstr "Hook: %(g)s"
 
 msgid "Gancho: vistas de 3 segundos / impresiones. Retención: ThruPlays / vistas de 3 segundos."
 msgstr "Hook: 3-second views / impressions. Hold: ThruPlays / 3-second views."
+
+msgid "Ganchos nuevos (primeros 3 s)"
+msgstr "New hooks (first 3 s)"
 
 #, python-format
 msgid "Ganó en %(pais)s: %(quien)s"
@@ -8477,6 +8507,12 @@ msgid "Generando %(n)s swaps…"
 msgstr "Generating %(n)s swaps…"
 
 #, python-format
+msgid "Generando %(num)s gancho…"
+msgid_plural "Generando %(num)s ganchos…"
+msgstr[0] "Generating %(num)s hook…"
+msgstr[1] "Generating %(num)s hooks…"
+
+#, python-format
 msgid "Generando %(que)s con %(modelo)s…"
 msgstr "Generating %(que)s with %(modelo)s…"
 
@@ -8488,6 +8524,9 @@ msgstr "Generating from the reference…"
 
 msgid "Generando desde el referente… cada video arranca solo cuando su imagen esté lista."
 msgstr "Generating from the reference… each video starts on its own once its image is ready."
+
+msgid "Generando el clip"
+msgstr "Generating the clip"
 
 msgid "Generando el swap…"
 msgstr "Generating the swap…"
@@ -11819,6 +11858,10 @@ msgid "No se encontró. Puede que ya no exista."
 msgstr "Not found. It may no longer exist."
 
 #, python-format
+msgid "No se genera: cita cifras que no están en los datos (%(cifras)s)."
+msgstr "Not generated: it cites figures that aren't in the data (%(cifras)s)."
+
+#, python-format
 msgid "No se guardó el guion: %(errores)s"
 msgstr "The script wasn't saved: %(errores)s"
 
@@ -12147,6 +12190,9 @@ msgstr "Couldn't make that change ({error}). The edit stayed as it was."
 msgid "No se pudo hacer ese cambio: el aviso está debajo del video."
 msgstr "Couldn't make that change: the notice is below the video."
 
+msgid "No se pudo hacer este gancho."
+msgstr "This hook couldn't be made."
+
 msgid "No se pudo lanzar el video."
 msgstr "The video couldn't be launched."
 
@@ -12181,6 +12227,12 @@ msgstr "Couldn't queue the clip."
 
 msgid "No se pudo poner la escena en la cola."
 msgstr "The scene couldn't be queued."
+
+msgid "No se pudo poner la preparación en la cola."
+msgstr "Couldn't queue the preparation."
+
+msgid "No se pudo poner la preparación en la cola: vuelve a intentarlo."
+msgstr "Couldn't queue the preparation: try again."
 
 #, python-brace-format
 msgid "No se pudo preparar ese video (error {status})."
@@ -13019,6 +13071,9 @@ msgstr "Put the playhead over the selected clip to split it."
 msgid "Pon el total que estás dispuesto a gastar y los días: Creatv lo reparte entre los países según sus anuncios. Moneda de tu cuenta de Meta: %(moneda)s."
 msgstr "Enter the total you're willing to spend and the days: Creatv splits it across the countries based on their ads. Your Meta account currency: %(moneda)s."
 
+msgid "Pon este código en el nombre del anuncio en Meta: así Creatv lo compara con el original."
+msgstr "Put this code in the ad's name in Meta: that's how Creatv compares it with the original."
+
 msgid "Pon una duración objetivo para poder recortar."
 msgstr "Set a target duration to be able to trim."
 
@@ -13144,6 +13199,9 @@ msgstr "Clothing (sweater, t-shirt, jacket)"
 msgid "Prender"
 msgstr "Turn on"
 
+msgid "Preparando"
+msgstr "Preparing"
+
 msgid "Preparando el audio"
 msgstr "Preparing the audio"
 
@@ -13253,6 +13311,12 @@ msgstr "Priority (0–100)"
 msgid "Privacidad"
 msgstr "Privacy"
 
+#, python-format
+msgid "Probar %(num)s gancho · %(precio)s"
+msgid_plural "Probar los %(num)s ganchos · %(precio)s"
+msgstr[0] "Try %(num)s hook · %(precio)s"
+msgstr[1] "Try the %(num)s hooks · %(precio)s"
+
 msgid "Probar conexión"
 msgstr "Test connection"
 
@@ -13276,6 +13340,9 @@ msgstr "Processing…"
 
 msgid "Proceso"
 msgstr "Process"
+
+msgid "Produciendo"
+msgstr "Producing"
 
 #, python-format
 msgid "Produciendo %(n)s finales… cada una aparece aquí, en Finales, cuando termina."
@@ -13410,6 +13477,9 @@ msgstr "Prompt"
 #, python-format
 msgid "Prompt %(prompt)s descartado, no se generó video (no gastó créditos)."
 msgstr "Prompt %(prompt)s discarded, no video was generated (no credits spent)."
+
+msgid "Prompt del clip"
+msgstr "Clip prompt"
 
 msgid "Prompt elegido"
 msgstr "Chosen prompt"
@@ -17192,6 +17262,9 @@ msgstr "See the full prompt the model received"
 msgid "Ver el saldo y recargar en Configuración › Saldo y recargas"
 msgstr "See the balance and top up in Settings › Balance and top-ups"
 
+msgid "Ver el video"
+msgstr "Watch the video"
+
 msgid "Ver el video de referencia"
 msgstr "View the reference video"
 
@@ -17732,6 +17805,9 @@ msgstr "A suggestion is already in progress for this campaign."
 
 msgid "Ya hay una sugerencia en curso."
 msgstr "A suggestion is already in progress."
+
+msgid "Ya hay una tanda de ganchos en curso para este análisis."
+msgstr "There's already a batch of hooks in progress for this analysis."
 
 msgid "Ya lo quiere: solo le falta la oferta"
 msgstr "Already wants it: only needs the offer"
@@ -20965,6 +21041,12 @@ msgstr "Start from scratch? The text, the settings and the reference tray will b
 #, python-format
 msgid "¿Evaluar %(n)s anuncio(s) con IA? Costo: %(precio)s"
 msgstr "Evaluate %(n)s ad(s) with AI? Cost: %(precio)s"
+
+#, python-format
+msgid "¿Generar %(num)s clip de 3 s con Kling y armar su video? Costo: %(precio)s"
+msgid_plural "¿Generar %(num)s clips de 3 s con Kling y armar sus videos? Costo: %(precio)s"
+msgstr[0] "Generate %(num)s 3-second clip with Kling and build its video? Cost: %(precio)s"
+msgstr[1] "Generate %(num)s 3-second clips with Kling and build their videos? Cost: %(precio)s"
 
 msgid "¿Generar el video con esta animación? Esto gasta el crédito de video de Higgsfield (~8cr)."
 msgstr "Generate the video with this animation? This spends Higgsfield video credit (~8cr)."

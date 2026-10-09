@@ -6,8 +6,10 @@
    formularios (antes eran estilos en línea), y la galería de tarjetas de
    análisis (spec 2026-10-08 tarjetas §2): `.tw-galeria` con un
    `article.tw-tarjeta` por anuncio (_tw_galeria.html), sus anillos `.tw-anillo`,
-   cifras, razones y acciones, y «Ver como tabla» (`.tw-tabla-detalle`). Las
-   reglas viejas de la pestaña (.tw-barra, .tw-aviso…) siguen en legado/06.
+   cifras, razones y acciones, y «Ver como tabla» (`.tw-tabla-detalle`) y,
+   dentro del detalle `.tw-analisis`, los ganchos nuevos y el copy para Meta
+   (spec 2026-10-09 §5). Las reglas viejas de la pestaña (.tw-barra,
+   .tw-aviso…) siguen en legado/06.
    ============================================================ */
 
 .tw-conexion-titulo { margin: 0 0 .5rem; font-size: var(--t-base); }
@@ -275,3 +277,22 @@
 @media (max-width: 480px) {
   .twr-tarjetas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* Ganchos nuevos y copy para Meta (spec 2026-10-09 §5), dentro del detalle `.tw-analisis` (_tw_analisis.html):
+   `.tw-copy-nuevo` (título y texto con «Copiar»), `.tw-ganchos` (los ganchos de Claude), `.tw-ganchos-probar` (el
+   botón con su precio), `.tw-variantes`/`.tw-variante` (cada variante de la última tanda: estado, código, video) y
+   `.tw-tandas-anteriores`. */
+.tw-copy-nuevo { display: flex; flex-direction: column; gap: .35rem; padding: .6rem .7rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel-2); }
+.tw-copy-campo { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; margin: 0; }
+.tw-copy-texto { margin: 0; white-space: pre-line; }
+.tw-ganchos { display: flex; flex-direction: column; gap: .5rem; }
+.tw-gancho { min-width: 0; }
+.tw-gancho p { margin: .2rem 0; }
+.tw-ganchos-probar { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin: .3rem 0 0; }
+.tw-variantes { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 12rem), 1fr)); gap: .6rem; margin-top: .4rem; }
+.tw-variante { display: flex; flex-direction: column; gap: .35rem; min-width: 0; padding: .5rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel); }
+.tw-variante-cabeza { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; margin: 0; }
+.tw-variante code { overflow-wrap: anywhere; }
+.tw-variante video { display: block; width: 100%; max-height: 22rem; border-radius: var(--radius-sm); background: var(--fondo-video); }
+.tw-variante-acciones { display: flex; flex-wrap: wrap; gap: .5rem; margin: 0; font-size: .82rem; }
+.tw-tandas-anteriores ul { margin: .3rem 0 0; padding-left: 1.1rem; overflow-wrap: anywhere; }

@@ -137,6 +137,52 @@
       });
     }
 
+    // Ganchos nuevos (spec 2026-10-09 §5): el detalle de un análisis se vuelve a pedir cuando termina la barra de una
+    // de sus variantes y, mientras una variante viva espera al vigilante (sin trabajo vivo que sondear; el fragmento lo
+    // marca con data-tw-ganchos-esperan), cada ESPERA_DETALLE_MS, a lo sumo MAX_ESPERAS veces seguidas sin que una
+    // barra termine y solo con el detalle abierto. Nunca un bucle: el servidor no pinta una barra sin trabajo vivo.
+    var ESPERA_DETALLE_MS = 20000, MAX_ESPERAS = 30;
+    function programarEspera(caja) {
+      if (caja.dataset.esperando || !caja.querySelector('[data-tw-ganchos-esperan]')) return;
+      var n = parseInt(caja.dataset.esperas || '0', 10);
+      if (n >= MAX_ESPERAS) return;
+      caja.dataset.esperas = String(n + 1);
+      caja.dataset.esperando = '1';
+      setTimeout(function () {
+        delete caja.dataset.esperando;
+        if (caja.isConnected && !caja.hidden) recargarDetalle(caja);
+      }, ESPERA_DETALLE_MS);
+    }
+    // Un aviso corto arriba del detalle (textContent: nunca se interpreta).
+    function avisoDetalle(caja, texto) {
+      var p = document.createElement('p');
+      p.className = 'tag-error';
+      p.setAttribute('role', 'status');
+      p.textContent = texto;
+      caja.insertBefore(p, caja.firstChild);
+    }
+    function recargarDetalle(caja, aviso) {
+      var ver = caja && caja.parentElement ? caja.parentElement.querySelector('[data-tw-ver-analisis]') : null;
+      if (!ver) { if (aviso) window.alert(aviso); return; }
+      // Las tres variantes de una preparación comparten trabajo: sus barras terminan juntas y basta un pedido.
+      if (caja.dataset.recargando) return;
+      caja.dataset.recargando = '1';
+      fetch(ver.dataset.url, { headers: { 'X-Requested-With': 'fetch' } })
+        .then(function (r) { return r.ok ? r.text() : Promise.reject(r.status); })
+        .then(function (html) {
+          delete caja.dataset.recargando;
+          pintarDetalle(caja, html);
+          if (aviso) avisoDetalle(caja, aviso);
+        })
+        .catch(function () { delete caja.dataset.recargando; avisoDetalle(caja, aviso || T_TW.detalle); });
+    }
+    function pintarDetalle(caja, html) {
+      caja.innerHTML = html;
+      caja.dataset.cargado = '1';
+      sondear(caja);
+      programarEspera(caja);
+    }
+
     function cargar() {
       cargado = true;
       galeriaSeq++;   // lo que la galería anterior tenía pendiente ya no tiene dónde caer
@@ -182,11 +228,17 @@
         var caja = ver.parentElement.querySelector('.tw-analisis-detalle');
         if (!caja) return;
         if (!caja.hidden) { caja.hidden = true; return; }
-        if (caja.dataset.cargado) { caja.hidden = false; return; }
+        if (caja.dataset.cargado) {
+          caja.hidden = false;
+          // Cerrado, la espera de los ganchos no pide el detalle: al abrirlo (un clic de la persona) se pide ya y la
+          // cuenta de esperas vuelve a empezar.
+          if (caja.querySelector('[data-tw-ganchos-esperan]')) { caja.dataset.esperas = '0'; recargarDetalle(caja); }
+          return;
+        }
         ver.disabled = true;
         fetch(ver.dataset.url, { headers: { 'X-Requested-With': 'fetch' } })
           .then(function (r) { return r.ok ? r.text() : Promise.reject(r.status); })
-          .then(function (html) { caja.innerHTML = html; caja.dataset.cargado = '1'; caja.hidden = false; })
+          .then(function (html) { pintarDetalle(caja, html); caja.hidden = false; })
           .catch(function () { caja.textContent = T_TW.detalle; caja.hidden = false; })   // sin cargado: otro clic reintenta
           .then(function () { ver.disabled = false; });
         return;
@@ -235,9 +287,30 @@
         });
     });
     // La barra de una tarjeta avisa al terminar (data-poll-al-terminar="evento", base.html) en vez de recargar la página.
+    // Si es la de una variante de ganchos, se vuelve a pedir solo el detalle (repintar la tarjeta lo cerraría).
     cont.addEventListener('trabajo-terminado', function (ev) {
+      var caja = ev.target.closest('.tw-analisis-detalle');
+      if (caja) { caja.dataset.esperas = '0'; recargarDetalle(caja); return; }
       repintarTarjeta(ev.target.closest('article.tw-tarjeta'),
                       { falla: T_TW.tarjeta, mensaje: (ev.detail && ev.detail.mensaje) || '' });
+    });
+    // «Probar los N ganchos»: el oyente de arriba ya pidió la confirmación del precio (si la persona cancela, el evento
+    // llega con defaultPrevented). Un solo POST por clic y nunca repetido: la respuesta, o su falta, solo hace que el
+    // detalle se vuelva a pedir y la persona vea el estado real antes de pagar otra vez (regla 1). 402 = sin saldo:
+    // static/cobros.js ya pinta «Recargar saldo».
+    cont.addEventListener('submit', function (ev) {
+      var f = ev.target.closest('form[data-tw-ganchos]');
+      if (!f || ev.defaultPrevented) return;
+      ev.preventDefault();
+      var caja = f.closest('.tw-analisis-detalle');
+      f.querySelectorAll('button[type="submit"]').forEach(function (b) { b.disabled = true; });
+      fetch(f.action, { method: 'POST', body: new FormData(f),
+                        headers: { 'Accept': 'application/json', 'X-Requested-With': 'fetch' } })
+        .then(function (r) { return (r.ok || r.status === 402 || r.status === 409) ? r.json() : Promise.reject(r.status); })
+        .then(function (d) {
+          if (d && !d.ok && d.mensaje) window.alert(d.mensaje);
+          recargarDetalle(caja);
+        }, function () { recargarDetalle(caja, T_TW.pedido); });
     });
 
     function siActiva() { if (!cargado && pestana.classList.contains('activo')) cargar(); }

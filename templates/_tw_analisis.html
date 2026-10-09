@@ -1,5 +1,6 @@
 {# Detalle de «Cómo mejorarlo» (spec 2026-10-08 tarjetas §6.5), por fetch dentro de la tarjeta
-   (triple_whale.rutas.analisis_detalle). Todo lo que escribió Claude va escapado. Sin <script>. #}
+   (triple_whale.rutas.analisis_detalle). Todo lo que escribió Claude va escapado. Sin <script>.
+   Spec 2026-10-09 §5: ganchos nuevos (con el botón y las variantes de la última tanda) y copy nuevo para Meta. #}
 {% set nombres_anillo = {"gancho": _('Gancho'), "retencion": _('Retención'), "clic": _('Clic'), "compra": _('Compra'), "otro": _('Otro')} %}
 {% set m = fila.medios or {} %}
 <div class="tw-analisis">
@@ -19,6 +20,83 @@
   {% if r.cambios %}
   <h5>{{ _('Tres cambios') }}</h5>
   <ol class="tw-analisis-lista">{% for c in r.cambios %}<li><strong>{{ c.que }}</strong>{% if c.como %}: {{ c.como }}{% endif %}{% if c.mueve %} <span class="tag-estado tag-en-uso">{{ _('mueve: %(anillo)s', anillo=nombres_anillo.get(c.mueve, c.mueve)) }}</span>{% endif %}</li>{% endfor %}</ol>
+  {% endif %}
+  {#- Ganchos nuevos (spec 2026-10-09 §5): cada gancho escapado; el botón con su precio, o por qué no se ofrece; las
+      variantes de la última tanda (barra solo con su trabajo vivo: ruling 4) y las anteriores en un <details>. -#}
+  {% set estados_gancho = {"preparando": _('Preparando'), "generando": _('Generando el clip'), "armando": _('Armando el video'), "produciendo": _('Produciendo')} %}
+  {% if 'ganchos' not in r %}
+  <p class="vacio tw-ganchos-viejo">{{ _('Este análisis es de antes de los ganchos.') }}</p>
+  {% elif r.ganchos %}
+  <div class="tw-ganchos-bloque"{% if gh.esperan %} data-tw-ganchos-esperan{% endif %}>
+    <h5>{{ _('Ganchos nuevos (primeros 3 s)') }}</h5>
+    <ol class="tw-analisis-lista tw-ganchos">{% for x in r.ganchos %}
+      <li class="tw-gancho">
+        <strong>«{{ x.texto }}»</strong>
+        {% if x.escena %}<p class="tw-escena">{{ x.escena }}</p>{% endif %}
+        {% if x.por_que %}<small class="vacio">{{ x.por_que }}</small>{% endif %}
+        {% if x.cifras_sin_dato %}<p class="tag-advertencia tw-aviso">{{ _('No se genera: cita cifras que no están en los datos (%(cifras)s).', cifras=x.cifras_sin_dato | join(', ')) }}</p>{% endif %}
+        <details><summary>{{ _('Prompt del clip') }}</summary><p class="tw-prompt">{{ x.prompt }}</p></details>
+      </li>{% endfor %}
+    </ol>
+    {% if gh.motivo and not gh.sin_precio %}
+    <p class="vacio tw-ganchos-motivo">{{ gh.motivo | traducir }}</p>
+    {% else %}
+    {% set precio_ganchos = _('precio no disponible') if gh.sin_precio else (gh.precio.usd | precio | usd) %}
+    <form method="post" class="tw-ganchos-probar" data-tw-ganchos
+          action="{{ url_for('triple_whale.ganchos_probar', cliente=cliente, aid=fila.id) }}"
+          data-confirmar="{{ ngettext('¿Generar %(num)s clip de 3 s con Kling y armar su video? Costo: %(precio)s', '¿Generar %(num)s clips de 3 s con Kling y armar sus videos? Costo: %(precio)s', gh.n, precio=precio_ganchos) }}">
+      <input type="hidden" name="precio_visto" value="{{ '' if gh.sin_precio else gh.precio.usd | precio }}">
+      <button type="submit" class="btn-generar btn-sm"{% if gh.sin_precio %} disabled{% endif %}>{{ ngettext('Probar %(num)s gancho · %(precio)s', 'Probar los %(num)s ganchos · %(precio)s', gh.n, precio=precio_ganchos) }}</button>
+    </form>
+    {% endif %}
+    {% if gh.ultima %}
+    <div class="tw-variantes">{% for g in gh.ultima %}
+      <div class="tw-variante">
+        <p class="tw-variante-cabeza"><strong>{{ _('Gancho %(n)s', n=g.n) }}</strong> <code>{{ g.codigo }}</code>
+          <button type="button" class="btn-xs" data-copiar="{{ g.codigo }}" onclick="navigator.clipboard && navigator.clipboard.writeText(this.dataset.copiar)">{{ _('Copiar') }}</button></p>
+        {% if g.estado == 'lista' %}
+        <video controls preload="none" data-precarga src="{{ g.url_final }}"></video>
+        <p class="tw-variante-acciones">
+          <a href="{{ g.url_final }}" download>{{ _('Descargar') }}</a>
+          {% if g.edicion_id %}<a href="{{ url_for('editor.ver', cliente=cliente, edicion_id=g.edicion_id) }}">{{ _('Abrir en el editor') }}</a>{% endif %}
+          {% if g.cf_id %}<a href="{{ url_for('ver_cliente', cliente=cliente) }}#creativeflowplus?cf={{ g.cf_id }}">{{ _('Ver en Crear') }}</a>{% endif %}
+        </p>
+        {% elif g.estado == 'error' %}
+        <p class="tag-error">{{ g.error or _('No se pudo hacer este gancho.') }}</p>
+        {% else %}
+        <div class="tw-progreso">
+          {% if g.barra %}<div class="barra-progreso" id="tw-gancho-{{ g.id }}" data-poll-job="{{ g.job_id }}" data-poll-al-terminar="evento"><div class="barra-progreso-fill" style="width:0%"></div></div>{% endif %}
+          <div class="progreso-texto">{{ estados_gancho.get(g.estado, g.estado) }}…</div>
+        </div>
+        {% endif %}
+      </div>{% endfor %}
+    </div>
+    <p class="vacio tw-ganchos-codigo">{{ _('Pon este código en el nombre del anuncio en Meta: así Creatv lo compara con el original.') }}</p>
+    {% endif %}
+    {% if gh.anteriores %}
+    <details class="tw-tandas-anteriores"><summary>{{ ngettext('Antes: %(num)s tanda · ver', 'Antes: %(num)s tandas · ver', gh.anteriores | length) }}</summary>
+      <ul>{% for t in gh.anteriores %}{% for g in t.filas %}
+        <li><code>{{ g.codigo }}</code> «{{ g.texto }}»
+          {% if g.estado == 'lista' %}· <a href="{{ g.url_final }}">{{ _('Ver el video') }}</a>{% if g.edicion_id %} · <a href="{{ url_for('editor.ver', cliente=cliente, edicion_id=g.edicion_id) }}">{{ _('Abrir en el editor') }}</a>{% endif %}
+          {% else %}· <span class="vacio">{{ g.error or estados_gancho.get(g.estado, g.estado) }}</span>{% endif %}</li>{% endfor %}{% endfor %}
+      </ul>
+    </details>
+    {% endif %}
+  </div>
+  {% endif %}
+  {#- Copy nuevo para Meta (spec 2026-10-09 §5), antes de la versión mejorada: va en el idioma del anuncio; copiarlo
+      es decisión de la persona, así que una cifra sin dato se avisa en vez de esconder el copy. -#}
+  {% set cn = r.get('copy_nuevo') %}
+  {% if cn %}
+  <h5>{{ _('Copy nuevo para Meta') }}</h5>
+  <div class="tw-copy-nuevo">
+    {% if cn.cifras_sin_dato %}<p class="tag-advertencia tw-aviso">{{ _('Cita cifras que no están en los datos (%(cifras)s): revisa antes de publicar.', cifras=cn.cifras_sin_dato | join(', ')) }}</p>{% endif %}
+    {% if cn.titulo %}<p class="tw-copy-campo"><strong>{{ cn.titulo }}</strong>
+      <button type="button" class="btn-xs" data-copiar="{{ cn.titulo }}" onclick="navigator.clipboard && navigator.clipboard.writeText(this.dataset.copiar)">{{ _('Copiar el título') }}</button></p>{% endif %}
+    <p class="tw-copy-texto">{{ cn.texto }}</p>
+    <p class="tw-copy-campo"><button type="button" class="btn-xs" data-copiar="{{ cn.texto }}" onclick="navigator.clipboard && navigator.clipboard.writeText(this.dataset.copiar)">{{ _('Copiar el texto') }}</button></p>
+    {% if cn.por_que %}<small class="vacio">{{ cn.por_que }}</small>{% endif %}
+  </div>
   {% endif %}
   {% set v = r.version or {} %}
   {% if v.titulo %}
