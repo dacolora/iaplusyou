@@ -1,6 +1,6 @@
 """Tareas del worker del rendimiento de Meta (spec 2026-10-08 §6): una copia por cuenta, la periódica de 3 h
 y la limpieza diaria."""
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 import pytest
 import sqlalchemy as sa
@@ -8,7 +8,7 @@ import sqlalchemy as sa
 import cola
 import db
 import meta_conexion
-from meta_rendimiento import cuentas, datos, graph, sync
+from meta_rendimiento import cuentas, datos, graph, pausa, sync
 from tareas import meta_rendimiento as t
 
 TOKEN = "EAAtokenSECRETO123"
@@ -120,16 +120,18 @@ def test_sin_token_deja_la_cuenta_en_error_y_no_lanza(hf, monkeypatch):
 
 
 def test_error_de_meta_marca_error_sin_token_y_sube_para_reintentar(hf, monkeypatch):
-    _falla_con(monkeypatch, graph.ErrorGraph(f"Meta pidió esperar (access_token={TOKEN}). Vuelve a intentar", codigo=17))
+    _falla_con(monkeypatch, graph.ErrorGraph(f"Meta rechazó la consulta (access_token={TOKEN}). Vuelve a intentar",
+                                             codigo=100))
     with pytest.raises(RuntimeError) as e:
         t.meta_rend_sincronizar(_tarea())
     c = cuentas.cuenta("hf", "act_1")
-    assert c["estado"] == "error" and "Meta pidió esperar" in c["error"]
+    assert c["estado"] == "error" and "Meta rechazó la consulta" in c["error"]
     assert TOKEN not in c["error"] and TOKEN not in str(e.value)
     assert str(e.value) == c["error"]
     assert e.value.__cause__ is None and e.value.__suppress_context__      # el error original no viaja en el traceback
     # Las demás cuentas del proyecto no se enteran.
     assert cuentas.cuenta("hf", "act_2")["estado"] == "nueva"
+    assert not pausa.activa()          # un error que no es de límite no pone la pausa
 
 
 def test_el_token_pelado_dentro_del_mensaje_tambien_se_tacha(hf, monkeypatch):
@@ -140,14 +142,83 @@ def test_el_token_pelado_dentro_del_mensaje_tambien_se_tacha(hf, monkeypatch):
     assert TOKEN not in cuentas.cuenta("hf", "act_1")["error"]
 
 
-def test_limite_de_uso_tambien_marca_error_y_sube(hf, monkeypatch):
-    # Meta pidió esperar: la cuenta queda en error y el reintento (o la periódica) sigue donde se quedó.
-    error = graph.ErrorGraph("Meta pidió esperar un rato", codigo=17)
+def test_limite_de_uso_marca_error_pone_la_pausa_y_no_sube(hf, monkeypatch):
+    # Meta pidió esperar: la cuenta queda en error con el motivo, TODAS las copias esperan y la tarea termina sin
+    # subir (un reintento inmediato volvería a chocar con el mismo límite).
+    error = graph.ErrorGraph(f"Meta pidió esperar un rato (access_token={TOKEN})", codigo=17)
     assert error.limite
     _falla_con(monkeypatch, error)
-    with pytest.raises(RuntimeError):
-        t.meta_rend_sincronizar(_tarea())
+    texto = t.meta_rend_sincronizar(_tarea())
+    c = cuentas.cuenta("hf", "act_1")
+    assert c["estado"] == "error" and c["error"] == texto and "Meta pidió esperar" in texto and TOKEN not in texto
+    hasta = pausa.pausada_hasta()
+    assert hasta is not None and pausa.activa()
+    minutos = (datetime.fromisoformat(hasta) - datetime.now()).total_seconds() / 60
+    assert 29 <= minutos <= 31                       # sin espera de Meta: 30 minutos
+    assert cuentas.cuenta("hf", "act_2")["estado"] == "nueva"
+
+
+def test_el_limite_con_espera_de_meta_mayor_alarga_la_pausa(hf, monkeypatch):
+    # El freno del 75 % (limite=True, sin código) y los 90 minutos que Meta dice que faltan.
+    _falla_con(monkeypatch, graph.ErrorGraph("Meta está cerca de su límite de uso; la copia sigue más tarde.",
+                                             limite=True, espera_min=90))
+    t.meta_rend_sincronizar(_tarea())
     assert cuentas.cuenta("hf", "act_1")["estado"] == "error"
+    minutos = (datetime.fromisoformat(pausa.pausada_hasta()) - datetime.now()).total_seconds() / 60
+    assert 89 <= minutos <= 91
+
+
+def test_con_la_pausa_vigente_la_copia_no_llama_a_meta_ni_cambia_la_cuenta(hf, monkeypatch):
+    pausa.pausar(30)
+    _falla_con(monkeypatch, AssertionError("con la pausa vigente no se llama a Meta"))
+    texto = t.meta_rend_sincronizar(_tarea())
+    assert "Meta pidió esperar" in texto
+    c = cuentas.cuenta("hf", "act_1")
+    assert c["estado"] == "nueva" and not c.get("error")      # ni error ni «copiando»: cede el turno sin ruido
+
+
+def test_vencida_la_pausa_la_copia_vuelve_a_correr(hf, monkeypatch):
+    pausa.pausar(30, ahora=datetime.now() - timedelta(hours=2))
+    assert not pausa.activa()
+    monkeypatch.setattr(sync, "sincronizar", lambda *a, **k: {"dias_cuenta": 1, "filas_anuncio": 2, "objetos": 3,
+                                                              "desde": "2026-10-01", "hasta": "2026-10-08"})
+    t.meta_rend_sincronizar(_tarea())     # no lanza: llegó a sincronizar
+
+
+def _tarea_viva(tipo, estado="pendiente"):
+    cola.encolar(tipo, {"cliente": "hf"}, cliente="hf", job_id=f"hf__{tipo}__1", duracion_estimada=30,
+                 max_intentos=1)
+    if estado != "pendiente":
+        with db.conectar() as con:
+            con.execute(db.tarea.update().where(db.tarea.c.tipo == tipo).values(estado=estado))
+
+
+@pytest.mark.parametrize("tipo", t.TIPOS_ESCRITURA_META)
+@pytest.mark.parametrize("estado", ["pendiente", "en_curso"])
+def test_una_escritura_en_meta_pendiente_o_corriendo_pospone_la_copia(hf, monkeypatch, tipo, estado):
+    _tarea_viva(tipo, estado)
+    _falla_con(monkeypatch, AssertionError("con una acción en Meta en curso no se copia"))
+    texto = t.meta_rend_sincronizar(_tarea())
+    assert "pospuesta" in texto.lower() and "acción en Meta en curso" in texto
+    c = cuentas.cuenta("hf", "act_1")
+    assert c["estado"] == "nueva" and not c.get("error") and not pausa.activa()
+
+
+def test_las_escrituras_en_meta_son_los_tipos_que_de_verdad_escriben():
+    # Nombres que existen de verdad en el registro del worker (un typo aquí dejaría la guarda sin efecto).
+    import tareas
+    tareas.cargar_todas()
+    assert set(t.TIPOS_ESCRITURA_META) <= set(tareas.REGISTRO)
+    assert {"exp_lanzar", "exp_decidir", "meta_publicar", "organico_publicar"} <= set(t.TIPOS_ESCRITURA_META)
+
+
+def test_una_tarea_que_solo_lee_de_meta_o_ya_terminada_no_pospone_la_copia(hf, monkeypatch):
+    _tarea_viva("exp_refrescar")                      # lee métricas: no escribe
+    _tarea_viva("exp_lanzar", "hecha")                # terminada
+    monkeypatch.setattr(sync, "sincronizar", lambda *a, **k: {"dias_cuenta": 0, "filas_anuncio": 0, "objetos": 0,
+                                                              "desde": "2026-10-01", "hasta": "2026-10-08"})
+    texto = t.meta_rend_sincronizar(_tarea())
+    assert "pospuesta" not in texto.lower()
 
 
 def test_cualquier_otra_excepcion_marca_error_con_su_tipo_y_sin_url(hf, monkeypatch):
@@ -220,6 +291,13 @@ def test_todas_encola_una_por_cuenta_de_cada_proyecto(hf):
     assert "0" in t.meta_rend_sincronizar_todas({"payload": {}})     # ya había una viva por cuenta
 
 
+def test_todas_no_encola_nada_mientras_dura_la_pausa(hf):
+    pausa.pausar(30)
+    texto = t.meta_rend_sincronizar_todas({"payload": {}})
+    assert "Meta pidió esperar" in texto and _filas_cola(t.TIPO_SYNC) == []
+    assert t.encolar_sync("hf") == 2     # a mano (Actualizar ahora) sí se encola; la tarea misma cede el turno
+
+
 def test_limpiar_borra_lo_de_mas_de_95_dias(hf, monkeypatch):
     recibido = []
     monkeypatch.setattr(datos, "purgar_anuncios", lambda antes_de: recibido.append(antes_de) or 4)
@@ -238,6 +316,20 @@ def test_limpiar_de_verdad_conserva_la_frontera(hf):
     with db.conectar() as con:
         quedan = sorted(r[0] for r in con.execute(sa.select(db.meta_anuncio_dia.c.fecha)))
     assert quedan == sorted([(hoy - timedelta(days=95)).isoformat(), (hoy - timedelta(days=3)).isoformat()])
+
+
+def test_limpiar_tambien_borra_los_dias_de_cuenta_de_mas_de_400_dias(hf):
+    hoy = date.today()
+    dia = dict(gasto=1.0, impresiones=10, alcance=5, clics=1, clics_salida=1, compras=0.0, valor=0.0, vistas_3s=0,
+               thruplays=0)
+    fechas = [(hoy - timedelta(days=d)).isoformat() for d in (401, 400, 30)]
+    datos.reemplazar_cuenta_dias("hf", "act_1", fechas[0], fechas[2], [dict(dia, fecha=f) for f in fechas])
+    assert t.DIAS_CUENTA_GUARDADOS == 400
+    texto = t.meta_rend_limpiar({"payload": {}})
+    assert "1 día(s) viejos de cuentas" in texto
+    with db.conectar() as con:
+        quedan = sorted(r[0] for r in con.execute(sa.select(db.meta_cuenta_dia.c.fecha)))
+    assert quedan == sorted(fechas[1:])
 
 
 def test_registradas_y_periodicas_en_el_worker():

@@ -3,11 +3,19 @@
   meta_rend_sincronizar        -> f"{cliente}__meta_rend__{act}"  (max_intentos=2: leer de Meta no cobra).
                                   Una por CUENTA; el payload lleva `cliente` y `ad_account_id`.
   meta_rend_sincronizar_todas  -> periódica (worker.PERIODICAS, 3 h): encola la de cada cuenta de cada proyecto
-  meta_rend_limpiar            -> periódica diaria: borra los días de anuncio de más de 95 días
+  meta_rend_limpiar            -> periódica diaria: borra los días de anuncio de más de 95 días y los de cuenta de
+                                  más de 400
 
 Un error de Meta (o cualquier otro) deja ESA cuenta en estado `error` con el motivo en palabras y sin token, y sube
-para que la cola reintente; las demás cuentas del proyecto no se enteran. Si Meta pidió esperar (límite de uso) pasa
-lo mismo: el reintento o la siguiente periódica sigue donde se quedó, porque la copia inicial se reanuda."""
+para que la cola reintente; las demás cuentas del proyecto no se enteran.
+
+Límites de uso (ruling R22 de la revisión final, 2026-10-08): el mismo usuario y la misma app de Meta lanzan los
+experimentos de colorado_forja, así que leer nunca debe gastar lo que necesita un lanzamiento. Si Meta pide esperar
+(códigos 4/17/32/613/8000x o un uso de 75 % o más en las cabeceras), la copia deja la cuenta en `error` con el motivo,
+pone la pausa compartida (`meta_rendimiento.pausa`, al menos 30 min) y termina SIN subir: un reintento inmediato
+volvería a chocar. Mientras dure la pausa ninguna copia arranca ni la periódica encola, y una copia tampoco arranca
+si en la cola hay una tarea que ESCRIBE en Meta lista o corriendo (`TIPOS_ESCRITURA_META`): cede el turno y la
+siguiente periódica la retoma. Como la copia inicial se reanuda desde su marcador, nada se pierde."""
 from datetime import date, timedelta
 
 from flask_babel import gettext
@@ -15,7 +23,7 @@ from flask_babel import gettext
 import cola
 import meta_conexion
 import trabajos
-from meta_rendimiento import cuentas, datos, graph, sync
+from meta_rendimiento import cuentas, datos, graph, pausa, sync
 from tareas import al_interrumpir, registrar
 
 TIPO_SYNC = "meta_rend_sincronizar"
@@ -24,11 +32,16 @@ TIPO_LIMPIAR = "meta_rend_limpiar"
 # Los nombres son los que emite `sync.sincronizar` por `on_etapa` (así la barra mueve su rango); los pesos suman 100.
 ETAPAS_SYNC = [(sync.ETAPA_CUENTA, 5), (sync.ETAPA_OBJETOS, 15), (sync.ETAPA_METRICAS, 70), (sync.ETAPA_ALCANCE, 10)]
 MAX_INTENTOS_SYNC = 2
-# Mayor = antes (cola.reclamar ordena por prioridad descendente; 5 es lo normal y los lotes de sprint van con 3).
-# Los límites de uso de Meta se comparten entre las cuentas de un usuario y una copia inicial puede tardar minutos
-# en el único hilo general del worker: que Crear, los experimentos y Triple Whale pasen primero.
+# Mayor = antes (cola.reclamar ordena por prioridad descendente; 5 es lo normal). La copia corre en su propio carril
+# (`worker.CARRIL_LECTURA`, un hilo), así que la prioridad solo ordena las copias entre sí; lo que la hace ceder ante
+# los lanzamientos es la pausa compartida y `TIPOS_ESCRITURA_META`.
 PRIORIDAD_SYNC = 2
 DIAS_ANUNCIO_GUARDADOS = 95
+DIAS_CUENTA_GUARDADOS = 400   # la copia inicial trae 395 días de cuenta; lo de más de 13 meses se borra
+# Tareas que ESCRIBEN en Meta con el usuario y la app que también usa la copia: lanzar (y activar al lanzar), el
+# decisor (pausa, escala, activa y ejecuta acciones), las derivaciones que lanzan piezas nuevas, la publicación vieja
+# y la orgánica en Facebook e Instagram. Con una lista o corriendo, la copia no arranca.
+TIPOS_ESCRITURA_META = ("exp_lanzar", "exp_decidir", "exp_avanzar_todos", "meta_publicar", "organico_publicar")
 
 
 def job_id_sync(cliente, act):
@@ -76,6 +89,13 @@ def meta_rend_sincronizar(tarea):
         mensaje = gettext("Meta no está conectado en este proyecto: conéctalo en Configuración › Conexiones.")
         cuentas.actualizar(cliente, act, estado="error", error=mensaje)
         return mensaje
+    # Ceder ante Meta: ni con la pausa vigente ni con una escritura en Meta en cola. La cuenta no cambia de estado.
+    hasta = pausa.pausada_hasta()
+    if hasta:
+        return _mensaje_pausa(hasta)
+    if cola.hay_viva_de(TIPOS_ESCRITURA_META):
+        return gettext("Copia pospuesta: hay una acción en Meta en curso (lanzar, pausar, escalar o publicar). "
+                       "La próxima copia programada la retoma.")
     job_id = tarea.get("job_id") or job_id_sync(cliente, act)
 
     def etapa(nombre, progreso=None):
@@ -86,6 +106,10 @@ def meta_rend_sincronizar(tarea):
     except Exception as e:  # noqa: BLE001 — cualquier fallo deja la cuenta en error y la cola reintenta
         mensaje = _mensaje_error(e, token)
         cuentas.actualizar(cliente, act, estado="error", error=mensaje)
+        if isinstance(e, graph.ErrorGraph) and e.limite:
+            # Meta pidió esperar: pausa para todas las copias y sin subir (un reintento ya volvería a chocar).
+            pausa.pausar(e.espera_min)
+            return mensaje
         # `from None`: el traceback del worker no arrastra la excepción original (su texto puede traer la URL).
         raise RuntimeError(mensaje) from None
     if r.get("omitida"):
@@ -93,6 +117,10 @@ def meta_rend_sincronizar(tarea):
     nombre = (cuentas.cuenta(cliente, act) or {}).get("nombre") or act
     return gettext("Listo (%(cuenta)s): %(dias)s día(s) de la cuenta y %(filas)s fila(s) de anuncios, del %(desde)s al %(hasta)s.",
                    cuenta=nombre, dias=r["dias_cuenta"], filas=r["filas_anuncio"], desde=r["desde"], hasta=r["hasta"])
+
+
+def _mensaje_pausa(hasta):
+    return gettext("Meta pidió esperar: las copias siguen después de las %(hora)s.", hora=str(hasta)[11:16])
 
 
 @al_interrumpir(TIPO_SYNC)
@@ -109,11 +137,16 @@ def _sync_interrumpida(tarea, mensaje):
 
 @registrar(TIPO_TODAS)
 def meta_rend_sincronizar_todas(tarea):
+    hasta = pausa.pausada_hasta()
+    if hasta:
+        return _mensaje_pausa(hasta)
     n = sum(encolar_sync(cliente, act) for cliente, act in cuentas.todas())
     return gettext("%(n)s copia(s) de Meta en cola", n=n)
 
 
 @registrar(TIPO_LIMPIAR)
 def meta_rend_limpiar(tarea):
-    n = datos.purgar_anuncios((date.today() - timedelta(days=DIAS_ANUNCIO_GUARDADOS)).isoformat())
-    return gettext("%(n)s fila(s) viejas de anuncios de Meta borradas", n=n)
+    hoy = date.today()
+    n = datos.purgar_anuncios((hoy - timedelta(days=DIAS_ANUNCIO_GUARDADOS)).isoformat())
+    m = datos.purgar_cuenta_dias((hoy - timedelta(days=DIAS_CUENTA_GUARDADOS)).isoformat())
+    return gettext("%(n)s fila(s) viejas de anuncios y %(m)s día(s) viejos de cuentas de Meta borrados", n=n, m=m)

@@ -207,3 +207,15 @@ def test_terminar_y_encolar_sigue_con_el_mismo_job_sin_hueco(base_temporal):
         ("flowplus_recuperar", "pendiente", "acme__cf_1__creative_flow", "acme", 3, 1)
     assert n["etapas"] == [["Generando", 82]] and n["payload"] == {"cf_id": "cf_1"}
     assert cola.consultar_por_job("acme__cf_1__creative_flow")["id"] == nueva
+
+
+def test_hay_viva_de_cuenta_pendientes_aunque_esperen_un_reintento_y_en_curso_de_cualquier_proyecto(base_temporal):
+    import cola
+    assert not cola.hay_viva_de(("exp_lanzar",)) and not cola.hay_viva_de(())
+    futuro = (datetime.now() + timedelta(hours=1)).isoformat(timespec="seconds")
+    cola.encolar("exp_lanzar", {}, cliente="a", job_id="a__l", ejecutar_desde=futuro)
+    assert cola.hay_viva_de(("exp_lanzar",)) and cola.hay_viva_de(("otro", "exp_lanzar"))
+    assert not cola.hay_viva_de(("exp_decidir",))
+    with cola.db.conectar() as con:
+        con.execute(cola.db.tarea.update().values(estado="hecha"))
+    assert not cola.hay_viva_de(("exp_lanzar",))
