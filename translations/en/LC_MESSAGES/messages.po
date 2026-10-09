@@ -2251,6 +2251,10 @@ msgid "Algo de «%(concepto)s» no llegó. No descontamos %(monto)s de tu saldo.
 msgstr "Something in «%(concepto)s» was not delivered. We did not deduct %(monto)s from your balance."
 
 #, python-format
+msgid "Algo falló al armar el video del gancho (%(error)s)."
+msgstr "Something failed while putting together the hook's video (%(error)s)."
+
+#, python-format
 msgid "Algo falló al preparar el gancho (%(error)s)."
 msgstr "Something failed while preparing the hook (%(error)s)."
 
@@ -5456,6 +5460,9 @@ msgstr "The file is larger than 5 MB; split it."
 #, python-format
 msgid "El archivo tiene más de %(max)s filas; pártelo."
 msgstr "The file has more than %(max)s rows; split it."
+
+msgid "El armado del video se cortó antes de terminar."
+msgstr "Putting the video together stopped before finishing."
 
 #, python-format
 msgid "El arranque «%(lead)s» no es de los recomendados para una audiencia %(consciencia)s: mejor %(opciones)s."
@@ -12222,9 +12229,6 @@ msgstr "Could not pause for reaching the cap: %(error)s"
 msgid "No se pudo poner el armado en la cola."
 msgstr "Couldn't queue the video assembly."
 
-msgid "No se pudo poner el clip en la cola."
-msgstr "Couldn't queue the clip."
-
 msgid "No se pudo poner la escena en la cola."
 msgstr "The scene couldn't be queued."
 
@@ -17277,6 +17281,9 @@ msgstr "See in Ad Library →"
 
 msgid "Ver en Crear"
 msgstr "See in Create"
+
+msgid "Ver en Final edition"
+msgstr "See in Final edition"
 
 msgid "Ver ficha"
 msgstr "See details"
