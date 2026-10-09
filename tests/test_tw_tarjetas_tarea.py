@@ -36,7 +36,7 @@ def _gastos():
 def test_tarea_guarda_el_resultado_y_registra_whisper_y_claude(en_cola, monkeypatch):
     recibido = {}
 
-    def _analizar(texto, imagenes, idioma, verificable_extra=""):
+    def _analizar(texto, imagenes, idioma, verificable_extra="", duracion_s=None):
         recibido.update(texto=texto, imagenes=imagenes, extra=verificable_extra)
         return mejorar.parsear(respuesta(), texto), 10000, 5000
     monkeypatch.setattr(mejorar, "analizar", _analizar)
@@ -95,7 +95,7 @@ def test_whisper_caido_sigue_sin_voz(en_cola, monkeypatch):
     def _cae(foto_):
         raise RuntimeError("fal caído")
     monkeypatch.setattr(mejorar, "transcribir", _cae)
-    monkeypatch.setattr(mejorar, "analizar", lambda texto, imagenes, idioma, verificable_extra="": (
+    monkeypatch.setattr(mejorar, "analizar", lambda texto, imagenes, idioma, verificable_extra="", duracion_s=None: (
         mejorar.parsear(respuesta(), texto), 100, 50))
     en_cola["t"].tw_analizar_anuncio({"id": 3, "payload": {"cliente": "acme", "analisis_id": en_cola["aid"]}})
     fila = datos.analisis_anuncio("acme", en_cola["aid"])
@@ -169,7 +169,7 @@ def test_encolar_rechaza_ids_invalidos_sin_encolar(en_cola):
 
 
 def _analizar_bien(monkeypatch):
-    monkeypatch.setattr(mejorar, "analizar", lambda texto, imagenes, idioma, verificable_extra="": (
+    monkeypatch.setattr(mejorar, "analizar", lambda texto, imagenes, idioma, verificable_extra="", duracion_s=None: (
         mejorar.parsear(respuesta(), texto), 10000, 5000))
 
 
@@ -251,3 +251,22 @@ def test_si_tampoco_se_puede_escribir_el_error_la_tarea_igual_falla_con_palabras
     assert "no se pudo dejar en error" in caplog.text and "RuntimeError" in caplog.text
     assert "base bloqueada" not in caplog.text and "token=abc" not in caplog.text
     assert datos.analisis_anuncio("acme", en_cola["aid"])["estado"] == "analizando"   # colgada: la ruta la cierra
+
+
+def test_la_tarea_pasa_la_duracion_y_sin_fotogramas_no_deja_ganchos(en_cola, monkeypatch):
+    """Spec 2026-10-09 §3.2 y §2: `fotograma_s` se acota con la duración del video, y un anuncio que Claude solo vio
+    como imagen recibe copy pero no ganchos (aunque Claude los mande)."""
+    from tests.test_tw_mejorar import GANCHOS
+    recibido = {}
+
+    def _analizar(texto, imagenes, idioma, verificable_extra="", duracion_s=None):
+        recibido["duracion_s"] = duracion_s
+        return mejorar.parsear(respuesta(ganchos=GANCHOS), texto, duracion_s=duracion_s), 100, 50
+    monkeypatch.setattr(mejorar, "analizar", _analizar)
+    en_cola["t"].tw_analizar_anuncio({"id": 21, "payload": {"cliente": "acme", "analisis_id": en_cola["aid"]}})
+    assert recibido["duracion_s"] == 21.0
+    assert len(datos.analisis_anuncio("acme", en_cola["aid"])["resultado"]["ganchos"]) == 3
+    aid2 = datos.crear_analisis("acme", None, "facebook-ads", "p2", "2026-09-01", "2026-09-30", "USD", _foto())
+    monkeypatch.setattr(mejorar, "visuales", lambda foto_: ({"bloques": [], "clase": "imagen", "fotogramas": 0}, []))
+    en_cola["t"].tw_analizar_anuncio({"id": 22, "payload": {"cliente": "acme", "analisis_id": aid2}})
+    assert datos.analisis_anuncio("acme", aid2)["resultado"]["ganchos"] == []

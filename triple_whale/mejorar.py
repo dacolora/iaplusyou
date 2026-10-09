@@ -3,7 +3,9 @@
 Claude recibe el anuncio tal cual (fotogramas del video real o su miniatura, el texto y la voz transcrita), sus
 números con sus anillos (percentil frente a los anuncios de su canal), los ganadores del mismo canal, el resumen de
 la evaluación de cuenta si la hay, los aprendizajes del proyecto y lo que más vende la tienda; devuelve por qué gana
-o pierde con evidencia, tres cambios y una versión mejorada con su ángulo y un prompt en inglés para Crear.
+o pierde con evidencia, tres cambios y una versión mejorada con su ángulo y un prompt en inglés para Crear. Desde el
+2026-10-09 (spec 2026-10-09-tw-ganchos-y-copy §3) trae también tres `ganchos` (los 3 primeros segundos, solo si Claude
+vio fotogramas del video) y un `copy_nuevo` para Meta; ninguno de los dos vuelve más exigente el parseo.
 
 Es PAGADO: lo encola la ruta con el precio a la vista (`gastos.estimar("analisis_anuncio_tw")`) y lo corre la tarea
 `tw_analizar_anuncio` (max_intentos=1), que registra Whisper y Claude. Nunca genera ni publica nada.
@@ -12,10 +14,12 @@ Texto ajeno (copy, título, nombre, voz) llega a Claude delimitado y marcado com
 llena una tarjeta escapada y un prefill de Crear que la persona revisa antes de pagar.
 """
 import logging
+import math
 import os
 import re
 import subprocess
 import tempfile
+import unicodedata
 
 from flask_babel import gettext
 
@@ -33,6 +37,8 @@ MAX_COPY_GANADOR = 300
 MAX_TRANSCRIPCION = 4000
 CAMPOS_M = analisis.CAMPOS_M
 CORTE_FRASE_S = 1.2
+MAX_GANCHOS = 3
+MAX_TEXTO_GANCHO = 60
 
 
 # ---------------------------------------------------------------- foto ---
@@ -234,7 +240,15 @@ Responde SOLO con un objeto JSON, sin texto antes ni después, con esta forma:
              "angulo": {{"audiencia": "...", "consciencia": "...", "sofisticacion": 3, "deseo": "...", "promesa": "...", "mecanismo": "una frase (o null; obligatorio si sofisticacion es 3 o más)", "pruebas": [{{"texto": "...", "fuente": "demostracion"}}], "lead": "...", "gancho": "...", "faltantes": []}},
              "escena": "qué se ve, plano a plano, máximo 60 palabras",
              "prompt": "prompt en inglés para el modelo de video, 60 a 120 palabras"}},
- "aprendizaje": "una frase de máximo 200 caracteres para este proyecto: en esta cuenta, X funciona o no porque Y"}}
+ "aprendizaje": "una frase de máximo 200 caracteres para este proyecto: en esta cuenta, X funciona o no porque Y",
+ "ganchos": [{{"texto": "texto en pantalla, máximo 8 palabras, en el idioma del TEXTO DEL ANUNCIO",
+              "escena": "qué se ve en esos 3 s, máximo 40 palabras",
+              "prompt": "English prompt for a 3-second image-to-video clip that starts on the chosen frame, 30 to 80 words",
+              "fotograma_s": 4.2,
+              "por_que": "qué arregla frente al gancho actual y por qué debería retener más"}}],
+ "copy_nuevo": {{"titulo": "máximo 40 caracteres, en el idioma del TEXTO DEL ANUNCIO",
+                "texto": "el texto principal del anuncio, máximo 500 caracteres, mismo idioma",
+                "por_que": "qué cambia frente al copy actual"}}}}
 
 Reglas:
 - Hasta 3 en "funciona" y hasta 3 en "falla", la más importante primero; cada una con evidencia: un segundo de los fotogramas, una frase dicha o escrita, o una cifra de los datos de arriba.
@@ -244,7 +258,13 @@ Reglas:
 - Si un anillo no tiene dato, no lo uses como evidencia.
 - Ninguna cifra que no esté en los datos de arriba.
 - La "version" es para {marca}: el mismo producto, la promesa de los ganadores y un gancho nuevo. El "prompt" describe la escena para un modelo de video: nada de logos ni marcas ajenas.
-- Si no hay fotogramas ni imagen, juzga por el texto, la voz y los números, y dilo en "frase"."""
+- Si no hay fotogramas ni imagen, juzga por el texto, la voz y los números, y dilo en "frase".
+- "ganchos": exactamente 3 si ves fotogramas del video (las imágenes con «Segundo N:»); si no los ves (solo una imagen, o nada), "ganchos": []. Los 3 son distintos entre sí (otra pregunta, otro dolor, otra demostración, otra prueba) y llevan la misma promesa del anuncio.
+- El clip de cada gancho reemplaza los 3 primeros segundos y la voz original sigue sonando debajo (es la del bloque VOZ): su "texto" tiene que funcionar con esa voz.
+- "fotograma_s" es el segundo de uno de los fotogramas que viste, uno donde se vea bien el producto: el clip arranca en esa imagen.
+- El "prompt" de cada gancho describe el movimiento y la cámara durante 3 s desde esa imagen; nunca pide textos, subtítulos ni logos (el texto lo pone el editor).
+- "copy_nuevo": usa solo las ofertas, descuentos, precios y plazos que aparecen en el TEXTO DEL ANUNCIO o en los datos de arriba; nunca inventes uno.
+- Idiomas: el "texto" de cada gancho y el "titulo" y el "texto" de "copy_nuevo" van en el idioma del TEXTO DEL ANUNCIO (si no hay texto, en el de la voz); "escena" y "por_que" van en el idioma pedido; el "prompt" de cada gancho, en inglés."""
 
 _ETIQUETAS_ANILLO = {"gancho": "Gancho (se quedan 3 s)", "retencion": "Retención (lo ven completo)",
                      "clic": "Clic (CTR)", "compra": "Compra (pedidos por clic)"}
@@ -358,8 +378,10 @@ def armar(marca, fila, voz=None, evaluacion_cuenta=None, aprendizajes="", produc
 
 
 def system(idioma):
-    extra = ("Todo el texto de la respuesta va en el idioma pedido, salvo el campo \"prompt\" de \"version\", que "
-             "siempre va en inglés porque es para el modelo de video.")
+    extra = ("Todo el texto de la respuesta va en el idioma pedido, con tres excepciones: el campo \"prompt\" de "
+             "\"version\" y el de cada gancho van siempre en inglés, porque son para el modelo de video; y el \"texto\" "
+             "de cada gancho y el \"titulo\" y el \"texto\" de \"copy_nuevo\" van en el idioma del TEXTO DEL ANUNCIO "
+             "(si no hay texto, en el de la voz), porque se publican dentro del anuncio.")
     return doctrina.bloque_system("revisar", "diagnosticar", "angulo", "gancho", "video", extra=extra, idioma=idioma)
 
 
@@ -393,9 +415,83 @@ def _version(v, verificable):
             "angulo": doctrina.anotar_errores(angulo, errores)}
 
 
-def parsear(texto, verificable):
+# ------------------------------------------------- ganchos y copy (spec 2026-10-09 §3.2) ---
+
+def _limpio(valor, tope):
+    """Una línea sin caracteres de control ni de formato (saltos, U+0000…, U+202E…): el texto de un gancho va dentro
+    de un video y su prompt a Kling, y los dos salen de un análisis que leyó texto ajeno."""
+    texto = " ".join(str(valor if valor is not None else "").split())
+    texto = "".join(ch for ch in texto if unicodedata.category(ch) not in ("Cc", "Cf"))
+    return " ".join(texto.split())[:tope]
+
+
+def _texto_largo(valor, tope):
+    """El texto principal de un anuncio: conserva los saltos de línea (Meta los muestra), sin otros caracteres de
+    control ni de formato y sin más de una línea en blanco seguida."""
+    lineas = []
+    for linea in str(valor if valor is not None else "").splitlines():
+        limpia = "".join(ch for ch in " ".join(linea.split()) if unicodedata.category(ch) not in ("Cc", "Cf"))
+        lineas.append(" ".join(limpia.split()))
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(lineas)).strip()[:tope]
+
+
+def segundo_fotograma(valor, duracion_s):
+    """El segundo donde arranca el clip (spec §3.2): un número en [0, duración − 1] queda; si no, la mitad del video.
+    Sin duración conocida, un número ≥ 0 queda (la preparación lo vuelve a acotar contra el video medido) y lo demás es
+    None. Un bool no es un segundo."""
+    try:
+        s = None if isinstance(valor, bool) else float(valor)
+    except (TypeError, ValueError):
+        s = None
+    if s is not None and not math.isfinite(s):
+        s = None
+    try:
+        dur = float(duracion_s) if duracion_s else None
+    except (TypeError, ValueError):
+        dur = None
+    if dur and dur > 0:
+        return round(s, 2) if s is not None and 0 <= s <= dur - 1 else round(dur / 2, 2)
+    return round(s, 2) if s is not None and s >= 0 else None
+
+
+def _ganchos(lista, verificable, duracion_s):
+    """Hasta MAX_GANCHOS ganchos con `texto` y `prompt`. Nunca lanza: uno malo se descarta y un análisis sin ganchos
+    sigue siendo válido (no paga una corrección). Cada uno lleva `cifras_sin_dato` de su texto y su porqué: con alguna
+    no se genera ni entra en el precio (la misma regla que el aprendizaje, revisión B2 del 2026-10-08)."""
+    salida = []
+    for g in lista if isinstance(lista, list) else []:
+        if len(salida) >= MAX_GANCHOS:
+            break
+        if not isinstance(g, dict):
+            continue
+        texto, prompt = _limpio(g.get("texto"), MAX_TEXTO_GANCHO), _limpio(g.get("prompt"), 1000)
+        if not texto or not prompt:
+            continue
+        por_que = analisis._texto(g.get("por_que"), 300)
+        salida.append({"texto": texto, "escena": analisis._texto(g.get("escena"), 300), "prompt": prompt,
+                       "fotograma_s": segundo_fotograma(g.get("fotograma_s"), duracion_s), "por_que": por_que,
+                       "cifras_sin_dato": doctrina.verificar_cifras(f"{texto} {por_que}", verificable)})
+    return salida
+
+
+def _copy_nuevo(d, verificable):
+    """{"titulo", "texto", "por_que", "cifras_sin_dato"}, o None sin texto. Una cifra sin dato no bloquea: el detalle
+    la muestra con «revisa antes de publicar», porque copiarlo es decisión de la persona."""
+    if not isinstance(d, dict):
+        return None
+    texto = _texto_largo(d.get("texto"), 1000)
+    if not texto:
+        return None
+    titulo, por_que = _limpio(d.get("titulo"), 80), analisis._texto(d.get("por_que"), 300)
+    return {"titulo": titulo, "texto": texto, "por_que": por_que,
+            "cifras_sin_dato": doctrina.verificar_cifras(f"{titulo} {texto} {por_que}", verificable)}
+
+
+def parsear(texto, verificable, duracion_s=None):
     """El resultado limpio (forma en el docstring del módulo y spec §6.3). AnalisisInvalido sin frase, sin razones,
-    con menos de 3 cambios o sin versión con título y prompt."""
+    con menos de 3 cambios o sin versión con título y prompt. `ganchos` y `copy_nuevo` (spec 2026-10-09 §3.2) nunca lo
+    vuelven más exigente; los análisis de antes no los traen y se leen con `.get`. `duracion_s` (la del video del
+    anuncio, o None) acota el `fotograma_s` de cada gancho."""
     data = analisis._json(texto)
     frase = analisis._texto(data.get("frase"), 300)
     funciona = _razones(data.get("funciona"), con_anillo=False)
@@ -418,7 +514,9 @@ def parsear(texto, verificable):
     textos = [frase] + [f"{r['texto']} {r['evidencia']}" for r in funciona + falla]
     textos += [f"{c['que']} {c['como']}" for c in cambios] + [version["por_que"], aprendizaje or ""]
     return {"frase": frase, "funciona": funciona, "falla": falla, "cambios": cambios, "version": version,
-            "aprendizaje": aprendizaje, "cifras_sin_dato": doctrina.verificar_cifras(" ".join(textos), verificable)}
+            "aprendizaje": aprendizaje, "cifras_sin_dato": doctrina.verificar_cifras(" ".join(textos), verificable),
+            "ganchos": _ganchos(data.get("ganchos"), verificable, duracion_s),
+            "copy_nuevo": _copy_nuevo(data.get("copy_nuevo"), verificable)}
 
 
 def cifras_del_aprendizaje(resultado):
@@ -462,16 +560,17 @@ def segundos_verificables(bloques, voz):
     return " ".join(textos + [f"Segundo {n}" for n in sorted(set(enteros))])
 
 
-def analizar(texto, imagenes, idioma, verificable_extra=""):
+def analizar(texto, imagenes, idioma, verificable_extra="", duracion_s=None):
     """(resultado, tokens_entrada, tokens_salida). Una corrección si la primera respuesta no sirve; si tampoco,
     AnalisisInvalido con los tokens pagados. `verificable_extra` suma a los datos verificables lo que Claude ve fuera
-    del texto (los segundos de los fotogramas)."""
+    del texto (los segundos de los fotogramas); `duracion_s` (la del video del anuncio, o None) acota el `fotograma_s`
+    de cada gancho (spec 2026-10-09 §3.2)."""
     content = [{"type": "text", "text": texto}] + list(imagenes or [])
     system_ = system(idioma)
     verificable = texto + ("\n" + verificable_extra if verificable_extra else "")
     crudo, entrada, salida = _llamar(content, system_)
     try:
-        return parsear(crudo, verificable), entrada, salida
+        return parsear(crudo, verificable, duracion_s), entrada, salida
     except analisis.AnalisisInvalido as e:
         correccion = content + [{"type": "text", "text": f"Tu respuesta anterior no sirvió ({e}). "
                                                          "Responde solo el JSON pedido."}]
@@ -482,7 +581,7 @@ def analizar(texto, imagenes, idioma, verificable_extra=""):
             raise e
         entrada, salida = entrada + e2, salida + s2
         try:
-            return parsear(crudo, verificable), entrada, salida
+            return parsear(crudo, verificable, duracion_s), entrada, salida
         except analisis.AnalisisInvalido as e3:
             e3.tokens_entrada, e3.tokens_salida = entrada, salida
             raise e3

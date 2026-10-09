@@ -430,6 +430,26 @@ def _estimar_analisis_anuncio_tw(segundos=None, **_):
             "una llamada a Claude con visión y la voz con Whisper")
 
 
+# Ganchos de Triple Whale (spec 2026-10-09-tw-ganchos-y-copy §4.1): cada variante es un clip de Kling O3 Pro, imagen
+# a video, de 3 s y sin sonido; armarlo y producirlo es ffmpeg (gratis).
+GANCHO_TW_MODELO = "kling_o3_pro"
+GANCHO_TW_SEGUNDOS = 3
+
+
+def estimar_ganchos_tw(n):
+    """El precio de «Probar los N ganchos»: n × el clip de Kling, la MISMA cuenta en la ruta y en la plantilla. La
+    misma forma que `estimar` (`usd` es el costo). Sin ganchos o sin tarifa, «precio no disponible» (usd None), nunca
+    US$ 0."""
+    try:
+        n = int(n or 0)
+    except (TypeError, ValueError):
+        n = 0
+    uno = estimar("video", modelo=GANCHO_TW_MODELO, duracion=GANCHO_TW_SEGUNDOS, con_sonido=False)["usd"]
+    if n <= 0 or uno is None:
+        return _estimado(None, "sin ganchos que generar")
+    return _estimado(uno * n, f"{n} clip(s) de {GANCHO_TW_SEGUNDOS} s con Kling O3 Pro, imagen a video")
+
+
 _ESTIMADORES = {
     "video": _estimar_video,
     "regeneracion": _estimar_video,
