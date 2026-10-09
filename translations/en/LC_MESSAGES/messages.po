@@ -181,12 +181,16 @@ msgid "%(cliente)s usó %(usado)s de costo de lo incluido (tope %(tope)s). Desde
 msgstr "%(cliente)s used %(usado)s of included cost (cap %(tope)s). From now on those items are charged at the member price."
 
 #, python-format
-msgid "%(cliente)s: Wompi anuló un pago de plan ya aprobado (%(referencia)s). El periodo sigue abierto: si corresponde, usa «Terminar ya»."
-msgstr "%(cliente)s: Wompi voided an already approved plan payment (%(referencia)s). The period is still open: if needed, use “End now”."
+msgid "%(cliente)s: Wompi anuló un pago de plan ya aprobado (%(referencia)s). El periodo en curso sigue abierto y, si era anual, los meses que faltan ya no se abren: si corresponde, usa «Terminar ya»."
+msgstr "%(cliente)s: Wompi voided an already approved plan payment (%(referencia)s). The current period stays open and, if it was yearly, the remaining months won't open: if needed, use “End now”."
 
 #, python-format
 msgid "%(cliente)s: Wompi aprobó un pago de plan (%(referencia)s) de una suscripción ya terminada. Devuélvelo o actívalo a mano."
 msgstr "%(cliente)s: Wompi approved a plan payment (%(referencia)s) for a subscription that already ended. Refund it or activate it manually."
+
+#, python-format
+msgid "%(cliente)s: Wompi aprobó un pago de plan (%(referencia)s) que ya estaba rechazado, con error o anulado. No se acreditó nada: míralo en el panel de Wompi y devuélvelo si se cobró de más."
+msgstr "%(cliente)s: Wompi approved a plan payment (%(referencia)s) that was already declined, failed or voided. Nothing was credited: check it in the Wompi dashboard and refund it if it was overcharged."
 
 #, python-format
 msgid "%(cliente)s: Wompi informó un pago de plan (%(referencia)s) cuyo monto o moneda no cuadran con lo guardado; no se aplicó."
@@ -5846,6 +5850,9 @@ msgstr "The price changed: it is now ≈ US$ %(precio)s. Check it and approve ag
 
 msgid "El precio cambió: revísalo y vuelve a generar."
 msgstr "The price changed: check it and generate again."
+
+msgid "El precio del plan cambió; revisa y vuelve a intentar"
+msgstr "The plan's price changed; review it and try again"
 
 msgid "El precio mensual"
 msgstr "The monthly price"
@@ -11773,6 +11780,9 @@ msgstr "Not activated: the experiment was no longer launching (it was left “%(
 
 msgid "No se agregó ningún referente."
 msgstr "No reference was added."
+
+msgid "No se cobró: el plan se canceló"
+msgstr "Not charged: the plan was cancelled"
 
 msgid "No se conserva la foto original de esta generación."
 msgstr "The original photo of this generation wasn't kept."
