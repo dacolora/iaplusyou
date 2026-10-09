@@ -354,8 +354,12 @@ fraction of a new video. Spec `docs/superpowers/specs/2026-10-09-tw-ganchos-y-co
   frames, also for a winner, `[]` otherwise) and `copy_nuevo` (title + main text for Meta). `parsear(texto, verificable,
   duracion_s=None)` never gets stricter: `_ganchos` keeps up to 3 with `texto` (one line, no control/format chars, cut
   at a word, ≤ 60) and `prompt` (≤ 1 000), `fotograma_s` through `segundo_fotograma` ([0, duration − 1], else half the
-  video; without a duration a number ≥ 0 stays and preparar re-clamps it against the measured file) and
-  `cifras_sin_dato` of texto + por_que; `_copy_nuevo` is None without text and keeps line breaks. Old results have
+  video; without a duration a number ≥ 0 stays and preparar re-clamps it against the measured file) and then
+  `al_segundo_visto`: the nearest second Claude actually saw (`segundos_vistos`, read by `mejorar.segundos_vistos` from
+  the «Segundo N:» frame labels and passed by the task through `analizar` → `parsear` → `_ganchos`; ties → the earlier;
+  only seen seconds within [0, duration − 1], since preparar would move a later one; none → unchanged; the real run of
+  2026-10-09 returned 13,5 for frames at 0,3 · 4,15 · 8 · 11,84 · 15,7, a second whose burned-in text nobody checked),
+  and `cifras_sin_dato` of texto + por_que; `_copy_nuevo` is None without text and keeps line breaks. Old results have
   neither key: always read with `.get` (`'ganchos' not in r` is how the screen knows an analysis predates hooks). The
   task passes `foto.creativo.duracion_s` and empties `ganchos` when Claude saw no video frames (an image ad gets copy,
   not hooks). **Which frame:** the prompt asks for one WITHOUT burned-in text (subtitles, titles, prices); if all have
@@ -451,7 +455,8 @@ fraction of a new video. Spec `docs/superpowers/specs/2026-10-09-tw-ganchos-y-co
   eval-claude case (PND-224). preparar's own failure path does not show the Crear session's error (PND-226); small
   robustness items in PND-227. «Cómo mejorarlo» and its batch do not compare the price seen (PND-228; Cobros is off
   everywhere today).
-- **Final review fixes (2026-10-09, guardian-gasto and auditor-seguridad, commits db605232..4e4a77a4).** A: cap
+- **Final review fixes (2026-10-09, guardian-gasto and auditor-seguridad, commits db605232..4e4a77a4, plus F and G
+  from the controller's real measurement of A).** A: cap
   20 000 and a cut answer never pays a blind correction (above, «Cómo mejorarlo»). B: offers in words —
   `mejorar.TERMINOS_OFERTA` (a short reviewed heuristic list in es/en/no/sv/pt: gratis/free, envío/shipping/frakt,
   descuento/rabatt, regalo/gift, halv pris/halva priset, 2x1/«2 for 1»…; whole word or phrase, a hyphen is not a border
@@ -460,6 +465,7 @@ fraction of a new video. Spec `docs/superpowers/specs/2026-10-09-tw-ganchos-y-co
   (title and text: «revisa antes de publicar»); `funciona`/`falla`/`cambios` stay digits-only. C: a recoverable clip
   keeps its row (above). D: `usd_precio` in the button and the 409 (above). E: errors copied from the Crear session or
   the final go through `_error_ajeno` (`cola.recortar(cola.sin_token(…), 500)`) and the start frame key has a random
-  suffix. Not changed: the Kling prompt stays folded in a `<details>` (UX), as the auditor allowed.
+  suffix. F: tariff 0.15 (cold single clicks 0,131–0,170, mean 0,142, plus Whisper). G: `fotograma_s` snapped to a
+  frame Claude saw (above). Not changed: the Kling prompt stays folded in a `<details>` (UX), as the auditor allowed.
 - **Out of this change** (spec §11): the chip on the gallery card (PND-215), «Volver a analizar» for an old analysis
   (PND-216), hooks for image ads (PND-217), the hooks in Meta paused with their code (PND-218).

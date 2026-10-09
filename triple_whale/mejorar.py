@@ -494,6 +494,24 @@ def segundo_fotograma(valor, duracion_s):
     return round(s, 2) if s is not None and s >= 0 else None
 
 
+def al_segundo_visto(segundo, segundos_vistos, duracion_s):
+    """El segundo visto más cercano a `segundo` (empate: el de antes), entre los que caben en [0, duración − 1]
+    si se conoce la duración: uno más allá la preparación lo volvería a mover. Sin vistos que quepan, o sin
+    `segundo`, queda como llegó. Motivo (arreglo G, medición real del 2026-10-09): Claude devolvió 13,5 en un video
+    cuyos fotogramas eran 0,3 · 4,15 · 8 · 11,84 · 15,7, un segundo que nunca miró, así que la regla «sin texto
+    quemado» no se le pudo aplicar."""
+    if segundo is None or not segundos_vistos:
+        return segundo
+    try:
+        dur = float(duracion_s) if duracion_s else None
+    except (TypeError, ValueError):
+        dur = None
+    vistos = sorted(v for v in segundos_vistos if v >= 0 and (not dur or dur <= 0 or v <= dur - 1))
+    if not vistos:
+        return segundo
+    return round(min(vistos, key=lambda v: abs(v - segundo)), 2)
+
+
 # Ofertas escritas en palabras (revisión de seguridad del 2026-10-09, «ESCALAR»; OWASP LLM09/LLM01):
 # `doctrina.verificar_cifras` solo ve dígitos, así que «gratis», «envío gratis», «free shipping», «halv pris» o
 # «2 for 1» pasaban a un video o al copy aunque el anuncio no los ofreciera. Es una HEURÍSTICA, no un detector de
@@ -535,11 +553,13 @@ def ofertas_sin_dato(texto, verificable):
     return [t for t in faltan if not any(t != otro and t in otro for otro in faltan)]
 
 
-def _ganchos(lista, verificable, duracion_s):
+def _ganchos(lista, verificable, duracion_s, segundos_vistos=None):
     """Hasta MAX_GANCHOS ganchos con `texto` y `prompt`. Nunca lanza: uno malo se descarta y un análisis sin ganchos
     sigue siendo válido (no paga una corrección). Cada uno lleva `cifras_sin_dato` de su texto y su porqué, más las
     ofertas en palabras de su texto (lo que sale en el video; `ofertas_sin_dato`): con alguna no se genera ni entra en
-    el precio (la misma regla que el aprendizaje, revisión B2 del 2026-10-08)."""
+    el precio (la misma regla que el aprendizaje, revisión B2 del 2026-10-08). Con `segundos_vistos` (los de los
+    fotogramas que Claude recibió), `fotograma_s` se lleva al visto más cercano después de acotarlo
+    (`al_segundo_visto`)."""
     salida = []
     for g in lista if isinstance(lista, list) else []:
         if len(salida) >= MAX_GANCHOS:
@@ -551,7 +571,9 @@ def _ganchos(lista, verificable, duracion_s):
             continue
         por_que = analisis._texto(g.get("por_que"), 300)
         salida.append({"texto": texto, "escena": analisis._texto(g.get("escena"), 300), "prompt": prompt,
-                       "fotograma_s": segundo_fotograma(g.get("fotograma_s"), duracion_s), "por_que": por_que,
+                       "fotograma_s": al_segundo_visto(segundo_fotograma(g.get("fotograma_s"), duracion_s),
+                                                       segundos_vistos, duracion_s),
+                       "por_que": por_que,
                        "cifras_sin_dato": (doctrina.verificar_cifras(f"{texto} {por_que}", verificable)
                                            + ofertas_sin_dato(texto, verificable))})
     return salida
@@ -572,11 +594,12 @@ def _copy_nuevo(d, verificable):
                                 + ofertas_sin_dato(f"{titulo} · {texto}", verificable))}
 
 
-def parsear(texto, verificable, duracion_s=None):
+def parsear(texto, verificable, duracion_s=None, segundos_vistos=None):
     """El resultado limpio (forma en el docstring del módulo y spec §6.3). AnalisisInvalido sin frase, sin razones,
     con menos de 3 cambios o sin versión con título y prompt. `ganchos` y `copy_nuevo` (spec 2026-10-09 §3.2) nunca lo
     vuelven más exigente; los análisis de antes no los traen y se leen con `.get`. `duracion_s` (la del video del
-    anuncio, o None) acota el `fotograma_s` de cada gancho."""
+    anuncio, o None) acota el `fotograma_s` de cada gancho y `segundos_vistos` (los de sus fotogramas, o None) lo lleva
+    al fotograma visto más cercano."""
     data = analisis._json(texto)
     frase = analisis._texto(data.get("frase"), 300)
     funciona = _razones(data.get("funciona"), con_anillo=False)
@@ -600,7 +623,7 @@ def parsear(texto, verificable, duracion_s=None):
     textos += [f"{c['que']} {c['como']}" for c in cambios] + [version["por_que"], aprendizaje or ""]
     return {"frase": frase, "funciona": funciona, "falla": falla, "cambios": cambios, "version": version,
             "aprendizaje": aprendizaje, "cifras_sin_dato": doctrina.verificar_cifras(" ".join(textos), verificable),
-            "ganchos": _ganchos(data.get("ganchos"), verificable, duracion_s),
+            "ganchos": _ganchos(data.get("ganchos"), verificable, duracion_s, segundos_vistos),
             "copy_nuevo": _copy_nuevo(data.get("copy_nuevo"), verificable)}
 
 
@@ -665,7 +688,21 @@ def segundos_verificables(bloques, voz):
     return " ".join(textos + [f"Segundo {n}" for n in sorted(set(enteros))])
 
 
-def analizar(texto, imagenes, idioma, verificable_extra="", duracion_s=None, verificable=None):
+_RE_SEGUNDO_VISTO = re.compile(r"^\s*Segundo\s+(\d+(?:[.,]\d+)?)\s*:")
+
+
+def segundos_vistos(bloques):
+    """Los segundos de los fotogramas que Claude recibió, leídos de sus etiquetas «Segundo 11,84:» (las mismas que
+    `segundos_verificables`), en orden. [] sin fotogramas."""
+    salida = []
+    for b in bloques or []:
+        m = _RE_SEGUNDO_VISTO.match(str(b.get("text") or "")) if b.get("type") == "text" else None
+        if m:
+            salida.append(float(m.group(1).replace(",", ".")))
+    return salida
+
+
+def analizar(texto, imagenes, idioma, verificable_extra="", duracion_s=None, verificable=None, segundos_vistos=None):
     """(resultado, tokens_entrada, tokens_salida). Una corrección si la primera respuesta no sirve; si tampoco,
     AnalisisInvalido con los tokens pagados. Una respuesta cortada por el tope (`stop_reason` = max_tokens) no se
     corrige: la corrección, con el mismo tope, saldría cortada otra vez y se pagaría dos veces (revisión del gasto del
@@ -673,7 +710,8 @@ def analizar(texto, imagenes, idioma, verificable_extra="", duracion_s=None, ver
     lo que Claude ve fuera del texto (los segundos de los fotogramas); `duracion_s` (la del video del anuncio, o None)
     acota el `fotograma_s` de cada gancho (spec 2026-10-09 §3.2). `verificable` (`datos_verificables`: los datos sin
     la plantilla) es contra lo que se contrastan las cifras; sin él, el `texto` entero, con los números de sus
-    instrucciones."""
+    instrucciones. `segundos_vistos` (los de los fotogramas que Claude recibió) lleva cada `fotograma_s` al visto más
+    cercano (arreglo G)."""
     content = [{"type": "text", "text": texto}] + list(imagenes or [])
     system_ = system(idioma)
     verificable = (texto if verificable is None else verificable) + ("\n" + verificable_extra if verificable_extra else "")
@@ -681,7 +719,7 @@ def analizar(texto, imagenes, idioma, verificable_extra="", duracion_s=None, ver
     if parada == "max_tokens":
         raise _cortado(entrada, salida)
     try:
-        return parsear(crudo, verificable, duracion_s), entrada, salida
+        return parsear(crudo, verificable, duracion_s, segundos_vistos), entrada, salida
     except analisis.AnalisisInvalido as e:
         correccion = content + [{"type": "text", "text": f"Tu respuesta anterior no sirvió ({e}). "
                                                          "Responde solo el JSON pedido."}]
@@ -694,7 +732,7 @@ def analizar(texto, imagenes, idioma, verificable_extra="", duracion_s=None, ver
         if parada == "max_tokens":
             raise _cortado(entrada, salida) from None
         try:
-            return parsear(crudo, verificable, duracion_s), entrada, salida
+            return parsear(crudo, verificable, duracion_s, segundos_vistos), entrada, salida
         except analisis.AnalisisInvalido as e3:
             e3.tokens_entrada, e3.tokens_salida = entrada, salida
             raise e3

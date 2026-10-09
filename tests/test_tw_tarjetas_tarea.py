@@ -36,7 +36,7 @@ def _gastos():
 def test_tarea_guarda_el_resultado_y_registra_whisper_y_claude(en_cola, monkeypatch):
     recibido = {}
 
-    def _analizar(texto, imagenes, idioma, verificable_extra="", duracion_s=None, verificable=None):
+    def _analizar(texto, imagenes, idioma, verificable_extra="", duracion_s=None, verificable=None, segundos_vistos=None):
         recibido.update(texto=texto, imagenes=imagenes, extra=verificable_extra)
         return mejorar.parsear(respuesta(), texto), 10000, 5000
     monkeypatch.setattr(mejorar, "analizar", _analizar)
@@ -96,7 +96,7 @@ def test_whisper_caido_sigue_sin_voz(en_cola, monkeypatch):
     def _cae(foto_):
         raise RuntimeError("fal caído")
     monkeypatch.setattr(mejorar, "transcribir", _cae)
-    monkeypatch.setattr(mejorar, "analizar", lambda texto, imagenes, idioma, verificable_extra="", duracion_s=None, verificable=None: (
+    monkeypatch.setattr(mejorar, "analizar", lambda texto, imagenes, idioma, verificable_extra="", duracion_s=None, verificable=None, segundos_vistos=None: (
         mejorar.parsear(respuesta(), texto), 100, 50))
     en_cola["t"].tw_analizar_anuncio({"id": 3, "payload": {"cliente": "acme", "analisis_id": en_cola["aid"]}})
     fila = datos.analisis_anuncio("acme", en_cola["aid"])
@@ -189,7 +189,7 @@ def test_encolar_rechaza_ids_invalidos_sin_encolar(en_cola):
 
 
 def _analizar_bien(monkeypatch):
-    monkeypatch.setattr(mejorar, "analizar", lambda texto, imagenes, idioma, verificable_extra="", duracion_s=None, verificable=None: (
+    monkeypatch.setattr(mejorar, "analizar", lambda texto, imagenes, idioma, verificable_extra="", duracion_s=None, verificable=None, segundos_vistos=None: (
         mejorar.parsear(respuesta(), texto), 10000, 5000))
 
 
@@ -279,7 +279,7 @@ def test_la_tarea_pasa_la_duracion_y_sin_fotogramas_no_deja_ganchos(en_cola, mon
     from tests.test_tw_mejorar import COPY_NUEVO, GANCHOS
     recibido = {}
 
-    def _analizar(texto, imagenes, idioma, verificable_extra="", duracion_s=None, verificable=None):
+    def _analizar(texto, imagenes, idioma, verificable_extra="", duracion_s=None, verificable=None, segundos_vistos=None):
         recibido["duracion_s"] = duracion_s
         return mejorar.parsear(respuesta(ganchos=GANCHOS, copy_nuevo=COPY_NUEVO), texto, duracion_s=duracion_s), 100, 50
     monkeypatch.setattr(mejorar, "analizar", _analizar)
@@ -319,3 +319,27 @@ def test_la_tarea_verifica_las_cifras_contra_los_datos_y_no_contra_las_instrucci
     assert "Tu trabajo" in llamadas[0]                               # y el prompt de Claude sigue siendo el entero
     r = datos.analisis_anuncio("acme", en_cola["aid"])["resultado"]
     assert r["ganchos"][0]["cifras_sin_dato"] == ["60"] and r["copy_nuevo"]["cifras_sin_dato"] == ["700"]
+
+
+
+def test_la_tarea_le_pasa_a_analizar_los_segundos_de_los_fotogramas_que_claude_vio(en_cola, monkeypatch):
+    """Arreglo G (medición real del 2026-10-09): Claude devolvió `fotograma_s` 13,5 en un video cuyos fotogramas eran
+    0,3 · 4,15 · 8 · 11,84 · 15,7: un segundo que nunca miró. La tarea le pasa los segundos vistos y el gancho arranca
+    en el fotograma visto más cercano."""
+    monkeypatch.setattr(mejorar, "visuales", lambda foto_: ({"bloques": [
+        {"type": "text", "text": "Segundo 0,3:"}, {"type": "image", "source": {}},
+        {"type": "text", "text": "Segundo 11,84:"}, {"type": "image", "source": {}},
+        {"type": "text", "text": "Segundo 15,7:"}, {"type": "image", "source": {}}], "clase": "fotogramas",
+        "fotogramas": 3}, []))
+    gancho = {"texto": "Pies cansados", "prompt": "Push in", "fotograma_s": 13.5}
+    monkeypatch.setattr(mejorar, "_llamar", lambda content, system_: (respuesta(ganchos=[gancho]), 100, 50, "end_turn"))
+    recibido = {}
+    original = mejorar.analizar
+
+    def _analizar(*a, **k):
+        recibido.update(k)
+        return original(*a, **k)
+    monkeypatch.setattr(mejorar, "analizar", _analizar)
+    en_cola["t"].tw_analizar_anuncio({"id": 24, "payload": {"cliente": "acme", "analisis_id": en_cola["aid"]}})
+    assert recibido["segundos_vistos"] == [0.3, 11.84, 15.7]
+    assert datos.analisis_anuncio("acme", en_cola["aid"])["resultado"]["ganchos"][0]["fotograma_s"] == 11.84

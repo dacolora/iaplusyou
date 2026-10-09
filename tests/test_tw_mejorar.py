@@ -754,3 +754,44 @@ def test_las_ofertas_en_palabras_no_se_miran_en_el_analisis():
                                   falla=[{"texto": "Sin regalo", "evidencia": "free shipping no aparece", "anillo": "clic"}]),
                         "nada")
     assert r["cifras_sin_dato"] == []
+
+
+
+# ------------------------------- arreglo G (medición real del 2026-10-09): el fotograma que Claude sí vio ---
+
+VISTOS = [0.3, 4.15, 8.0, 11.84, 15.7, 19.55, 23.4]
+
+
+def _fotograma(valor, duracion_s, vistos):
+    gancho = {"texto": "Pies cansados", "prompt": "Push in", "fotograma_s": valor}
+    return mejorar.parsear(respuesta(ganchos=[gancho]), "datos", duracion_s, segundos_vistos=vistos)["ganchos"][0][
+        "fotograma_s"]
+
+
+def test_el_fotograma_de_arranque_se_lleva_al_segundo_visto_mas_cercano():
+    """El caso real: 13,5 en un video de 27,6 s cuyos fotogramas Claude vio en 0,3 · 4,15 · 8 · 11,84 · 15,7…"""
+    assert _fotograma(13.5, 27.6, VISTOS) == 11.84
+    assert _fotograma(13.5, 27.6, None) == 13.5 and _fotograma(13.5, 27.6, []) == 13.5     # sin vistos, como hoy
+    assert _fotograma(3.0, 27.6, [2.0, 4.0]) == 2.0                                         # empate: el de antes
+    assert _fotograma(40, 27.6, VISTOS) == 15.7                    # fuera de rango: la mitad (13,8) y luego el visto
+    assert _fotograma(8.5, 10.0, [0.3, 9.7]) == 0.3                # 9,7 pasa de duración − 1: la preparación lo movería
+    assert _fotograma(13.5, None, VISTOS) == 11.84                 # sin duración también
+    assert _fotograma("raro", None, VISTOS) is None                # sin segundo que acercar, queda como hoy
+
+
+def test_segundos_vistos_lee_las_etiquetas_de_los_fotogramas():
+    bloques = [{"type": "text", "text": "Segundo 0,3:"}, {"type": "image", "source": {}},
+               {"type": "text", "text": "Segundo 11,84:"}, {"type": "text", "text": "Segundo 16:"},
+               {"type": "text", "text": "otra cosa 5"}, {"type": "image", "source": {}}]
+    assert mejorar.segundos_vistos(bloques) == [0.3, 11.84, 16.0]
+    assert mejorar.segundos_vistos([]) == [] and mejorar.segundos_vistos(None) == []
+
+
+def test_analizar_le_pasa_los_segundos_vistos_al_parseo(monkeypatch):
+    gancho = {"texto": "Pies cansados", "prompt": "Push in", "fotograma_s": 13.5}
+    monkeypatch.setattr(mejorar, "_llamar", lambda content, system_: (respuesta(ganchos=[gancho]), 100, 10, "end_turn"))
+    monkeypatch.setattr(mejorar, "system", lambda idioma: "SYSTEM")
+    r, _, _ = mejorar.analizar("DATOS", [], "es", duracion_s=27.6, segundos_vistos=VISTOS)
+    assert r["ganchos"][0]["fotograma_s"] == 11.84
+    r, _, _ = mejorar.analizar("DATOS", [], "es", duracion_s=27.6)
+    assert r["ganchos"][0]["fotograma_s"] == 13.5

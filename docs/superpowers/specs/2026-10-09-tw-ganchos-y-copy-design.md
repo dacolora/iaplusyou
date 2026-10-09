@@ -98,7 +98,11 @@ Reglas nuevas del prompt:
   - recorta `escena` a 300, `por_que` a 300 y `prompt` a 1 000;
   - `fotograma_s` sale de un número; si no está en [0, duracion − 1], queda `duracion / 2`. Sin duración conocida, un
     número ≥ 0 se conserva (la preparación lo vuelve a acotar contra el video medido) y lo demás es `None`. `parsear`
-    y `analizar` reciben `duracion_s=None`; la tarea vacía `ganchos` cuando Claude no vio fotogramas del video;
+    y `analizar` reciben `duracion_s=None`; la tarea vacía `ganchos` cuando Claude no vio fotogramas del video.
+    Después de acotarlo, se lleva al segundo visto más cercano (`segundos_vistos`, de las etiquetas «Segundo N:» de los
+    fotogramas que recibió Claude; empate, el de antes; solo los que caben en [0, duracion − 1]; sin vistos, queda
+    igual): en la medición real del 2026-10-09 Claude devolvió 13,5 con fotogramas en 0,3 · 4,15 · 8 · 11,84 · 15,7, un
+    segundo que nunca miró (tercera ronda, arreglo G);
   - cada gancho lleva `cifras_sin_dato` de `texto` + `por_que` (`doctrina.verificar_cifras`).
 - **`_copy_nuevo(d, verificable)`:** devuelve `None` sin `texto`; si no, `{"titulo", "texto", "por_que",
   "cifras_sin_dato"}`.
