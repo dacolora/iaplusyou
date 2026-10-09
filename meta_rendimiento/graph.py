@@ -39,8 +39,10 @@ class ErrorGraph(Exception):
 
 def _url(edge):
     """La URL de un edge RELATIVO de la Graph API. Nunca una URL completa: el token va en los parámetros y solo debe
-    viajar a graph.facebook.com (una URL que vino de una respuesta, como `paging.next`, ya lo trae adentro)."""
-    return f"{meta_conexion.GRAPH_URL}/{str(edge or '').lstrip('/')}"
+    viajar a graph.facebook.com (una URL que vino de una respuesta, como `paging.next`, ya lo trae adentro).
+    Un edge vacío es la raíz de Graph (`?ids=a,b`): la URL base tal cual, sin una barra de más al final."""
+    ruta = str(edge or "").lstrip("/")
+    return f"{meta_conexion.GRAPH_URL}/{ruta}" if ruta else meta_conexion.GRAPH_URL
 
 
 # --------------------------------------------------------- freno de uso ---

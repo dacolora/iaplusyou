@@ -30,7 +30,9 @@ class FakeGraph:
 
     def __init__(self, monkeypatch, info=None, campanas=None, conjuntos=None, anuncios=None, filas_anuncio=None,
                  falla_informe=None, falla_ventana=None, falla_anuncios=None, anuncios_pausados=None,
-                 falla_pausados=None, falla_informe_n=None, falla_cuenta_n=None, filas_cuenta=None):
+                 falla_pausados=None, falla_informe_n=None, falla_cuenta_n=None, filas_cuenta=None,
+                 miniaturas=None, falla_miniaturas=None, falla_informe_tras_pagina=None,
+                 falla_cuenta_tras_pagina=None):
         self.info = info if info is not None else {
             "name": "HappyFlops SE", "currency": "SEK", "timezone_name": "Europe/Stockholm",
             "account_status": 1, "disable_reason": 0, "amount_spent": "12345", "spend_cap": "0"}
@@ -43,7 +45,7 @@ class FakeGraph:
              "learning_stage_info": {"status": "FAIL"}}]
         self.anuncios = anuncios if anuncios is not None else [
             {"id": "a1", "name": "Video 1", "adset_id": "s1", "campaign_id": "c1", "effective_status": "ACTIVE",
-             "creative": {"id": "cr1", "thumbnail_url": "https://x/1.jpg", "video_id": "v1"}}]
+             "creative": {"id": "cr1", "thumbnail_url": "https://scontent.xx.fbcdn.net/1.jpg", "video_id": "v1"}}]
         self.anuncios_pausados = anuncios_pausados if anuncios_pausados is not None else []
         self.filas_anuncio = filas_anuncio
         self.falla_informe, self.falla_ventana, self.falla_anuncios = falla_informe, falla_ventana, falla_anuncios
@@ -51,6 +53,11 @@ class FakeGraph:
         self.falla_informe_n = falla_informe_n   # solo falla_informe en el informe número N (1 = el primero)
         self.filas_cuenta = filas_cuenta         # si se da, lo único que devuelve la consulta de cuenta por día
         self.falla_cuenta_n = falla_cuenta_n     # un límite de Meta (17) en la consulta de cuenta por día número N
+        self.miniaturas = miniaturas or {}       # {ad_id: creative} que devuelve `?ids=` (los demás vienen sin creativo)
+        self.falla_miniaturas = falla_miniaturas  # una excepción, o una lista con una por llamada a `?ids=` (None = bien)
+        self.falla_informe_tras_pagina = falla_informe_tras_pagina   # el informe entrega UNA página y la siguiente falla
+        self.falla_cuenta_tras_pagina = falla_cuenta_tras_pagina     # el listado de la cuenta falla en su 2.ª página
+        self.paginas_entregadas = 0   # cuántas páginas llegaron al callback de un informe que luego falló
         self.paginas_informe = []   # cuántas páginas entregó cada informe al callback (None = devolvió la lista)
         self.llamadas = []
         self.asegurar = []
@@ -70,6 +77,15 @@ class FakeGraph:
         assert token == "tok"
         if edge == ACT:
             return self.info
+        if edge == "":     # la raíz de Graph: `?ids=` para pedir varios objetos de una vez
+            n = len([1 for t, e, _ in self.llamadas if t == "get" and e == ""]) - 1
+            falla = self.falla_miniaturas
+            if isinstance(falla, list):
+                falla = falla[n] if n < len(falla) else None
+            if falla:
+                raise falla
+            return {i: ({"id": i, "creative": self.miniaturas[i]} if i in self.miniaturas else {"id": i})
+                    for i in params["ids"].split(",")}
         assert edge == f"{ACT}/insights" and params["level"] == "account"
         if self.falla_ventana and params["date_preset"] == self.falla_ventana[0]:
             raise self.falla_ventana[1]
@@ -105,6 +121,8 @@ class FakeGraph:
         assert params["level"] == "account" and params["time_increment"] == 1
         if self.falla_cuenta_n and len(self.de("paginar", "/insights")) - self._de_campana() == self.falla_cuenta_n:
             raise graph.ErrorGraph("Meta pidió esperar", codigo=17)
+        if self.falla_cuenta_tras_pagina:
+            raise self.falla_cuenta_tras_pagina    # `paginar` descarta lo que ya había leído al fallar
         if self.filas_cuenta is not None:
             return self.filas_cuenta
         return [dict(FILA_META, date_start=d) for d in _dias(json.loads(params["time_range"]))]
@@ -127,6 +145,10 @@ class FakeGraph:
             self.paginas_informe.append(None)
             return filas
         paginas = [filas[i:i + 3] for i in range(0, len(filas), 3)]
+        if self.falla_informe_tras_pagina:
+            por_pagina(paginas[0])
+            self.paginas_entregadas += 1
+            raise self.falla_informe_tras_pagina
         for pagina in paginas:   # como Meta: página a página; el llamador no recibe la lista
             por_pagina(pagina)
         self.paginas_informe.append(len(paginas))
@@ -176,14 +198,14 @@ def test_objetos_de_presupuestos_aprendizaje_y_miniatura():
                   "lifetime_budget": "1250000", "optimization_goal": "OFFSITE_CONVERSIONS",
                   "learning_stage_info": {"status": "FAIL"}}]
     anuncios = [{"id": "a1", "name": "Video 1", "adset_id": "s1", "campaign_id": "c1", "effective_status": "ACTIVE",
-                 "creative": {"id": "cr1", "thumbnail_url": "https://x/1.jpg", "video_id": "v1"}}]
+                 "creative": {"id": "cr1", "thumbnail_url": "https://scontent.xx.fbcdn.net/1.jpg", "video_id": "v1"}}]
     por_id = {o["objeto_id"]: o for o in sync.objetos_de(campanas, conjuntos, anuncios, moneda="SEK")}
     c, s, a = por_id["c1"], por_id["s1"], por_id["a1"]
     assert c["nivel"] == "campana" and c["presupuesto_diario"] == 500.0 and c["presupuesto_total"] is None
     assert c["objetivo"] == "OUTCOME_SALES" and c["estrategia_puja"] == "COST_CAP" and c["estado"] == "ACTIVE"
     assert s["nivel"] == "conjunto" and s["padre_id"] == "c1" and s["campaign_id"] == "c1"
     assert s["aprendizaje"] == "FAIL" and s["presupuesto_total"] == 12500.0 and s["optimizacion"] == "OFFSITE_CONVERSIONS"
-    assert a["nivel"] == "anuncio" and a["padre_id"] == "s1" and a["miniatura_url"] == "https://x/1.jpg"
+    assert a["nivel"] == "anuncio" and a["padre_id"] == "s1" and a["miniatura_url"] == "https://scontent.xx.fbcdn.net/1.jpg"
     assert a["creative_id"] == "cr1" and a["video_id"] == "v1"
     # Monedas sin decimales: el monto de Meta ya está en la unidad.
     clp = sync.objetos_de([{"id": "c9", "daily_budget": "50000"}], [], [], moneda="CLP")
@@ -269,7 +291,7 @@ def test_objetos_guardados_con_presupuesto_aprendizaje_y_miniatura(cuenta, monke
     assert c["presupuesto_diario"] == 500.0 and c["objetivo"] == "OUTCOME_SALES" and c["estado"] == "ACTIVE"
     assert s["presupuesto_diario"] == 500.0 and s["aprendizaje"] == "FAIL" and s["padre_id"] == "c1"
     assert s["presupuesto_total"] is None   # «0» de Meta = sin presupuesto total
-    assert a["miniatura_url"] == "https://x/1.jpg" and a["creative_id"] == "cr1" and a["video_id"] == "v1"
+    assert a["miniatura_url"] == "https://scontent.xx.fbcdn.net/1.jpg" and a["creative_id"] == "cr1" and a["video_id"] == "v1"
     assert datos.activos(CLI, [ACT])[ACT] == {"campana": 1, "conjunto": 1, "anuncio": 1, "aprendizaje_limitado": 1}
 
 
@@ -296,7 +318,7 @@ def test_un_anuncio_pausado_muestra_su_estado_real_y_solo_el_archivado_queda_sin
         {"nivel": "anuncio", "objeto_id": "viejo", "nombre": "Viejo", "estado": "ACTIVE"},
         {"nivel": "anuncio", "objeto_id": "archivado", "nombre": "Archivado", "estado": "PAUSED"},
         {"nivel": "anuncio", "objeto_id": "pausado", "nombre": "Pausado", "estado": None,
-         "miniatura_url": "https://x/p.jpg"},
+         "miniatura_url": "https://scontent.xx.fbcdn.net/p.jpg"},
         {"nivel": "campana", "objeto_id": "c_vieja", "nombre": "Campaña vieja", "estado": "PAUSED"},
         {"nivel": "conjunto", "objeto_id": "s_viejo", "nombre": "Conjunto viejo", "estado": "ACTIVE"}])
     FakeGraph(monkeypatch, anuncios_pausados=[
@@ -305,7 +327,7 @@ def test_un_anuncio_pausado_muestra_su_estado_real_y_solo_el_archivado_queda_sin
     sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
     pausado = _objeto("anuncio", "pausado")
     # Un pausado se ve con su estado real (no «sin estado»); la miniatura que ya tenía se conserva.
-    assert pausado["estado"] == "ADSET_PAUSED" and pausado["miniatura_url"] == "https://x/p.jpg"
+    assert pausado["estado"] == "ADSET_PAUSED" and pausado["miniatura_url"] == "https://scontent.xx.fbcdn.net/p.jpg"
     assert _objeto("anuncio", "pausado2")["estado"] == "PAUSED"
     assert _objeto("anuncio", "a1")["estado"] == "ACTIVE"
     # Lo que no salió en NINGUNA de las dos listas ya no existe (archivado o borrado).
@@ -318,7 +340,7 @@ def test_los_nombres_de_los_insights_no_pisan_el_estado_ni_lo_guardado(cuenta, m
     # «pausado» sale en el listado de pausados y además trae un nombre nuevo en los insights de su gasto.
     datos.guardar_objetos(CLI, ACT, [
         {"nivel": "anuncio", "objeto_id": "pausado", "nombre": "Pausado", "estado": "PAUSED",
-         "miniatura_url": "https://x/p.jpg"}])
+         "miniatura_url": "https://scontent.xx.fbcdn.net/p.jpg"}])
     filas = [dict(FILA_META, date_start=HOY.isoformat(), ad_id="pausado", ad_name="Pausado (renombrado)",
                   adset_id="s1", adset_name="Mujeres", campaign_id="c1", campaign_name="Otoño"),
              dict(FILA_META, date_start=HOY.isoformat(), ad_id="solo_insights", ad_name="Solo insights",
@@ -329,7 +351,7 @@ def test_los_nombres_de_los_insights_no_pisan_el_estado_ni_lo_guardado(cuenta, m
         {"id": "pausado", "name": "Pausado", "adset_id": "s1", "campaign_id": "c1", "effective_status": "PAUSED"}])
     sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
     p, n, sn = _objeto("anuncio", "pausado"), _objeto("anuncio", "solo_insights"), _objeto("anuncio", "sin_nombre")
-    assert p["estado"] == "PAUSED" and p["miniatura_url"] == "https://x/p.jpg" and p["nombre"] == "Pausado (renombrado)"
+    assert p["estado"] == "PAUSED" and p["miniatura_url"] == "https://scontent.xx.fbcdn.net/p.jpg" and p["nombre"] == "Pausado (renombrado)"
     assert n["nombre"] == "Solo insights" and n["estado"] is None and n["padre_id"] == "s1"
     assert sn is None   # un anuncio sin nombre en los insights no crea un objeto vacío
     assert _objeto("conjunto", "s1")["estado"] == "ACTIVE" and _objeto("conjunto", "s1")["aprendizaje"] == "FAIL"
@@ -680,3 +702,144 @@ def test_sin_dias_de_cuenta_guardados_las_tasas_usan_el_desde_de_esta_corrida(cu
     assert r["dias_cuenta"] == 0 and datos.primera_fecha(CLI, ACT, "cuenta") is None
     (a, _k), = g.asegurar
     assert a == (["SEK"], (HOY - timedelta(days=395)).isoformat(), HOY.isoformat())
+
+
+# ---------------------------------------- R25: miniaturas de los anuncios con gasto reciente (`?ids=`) ---
+
+def _fila_ad(ad_id, dia=None, **cambios):
+    dia = dia or (HOY - timedelta(days=1))
+    return dict(FILA_META, date_start=dia.isoformat(), ad_id=ad_id, ad_name=f"Anuncio {ad_id}", adset_id="s1",
+                adset_name="Mujeres", campaign_id="c1", campaign_name="Otoño", **cambios)
+
+
+def _creative(ad_id, url=None):
+    return {"id": f"cr_{ad_id}", "thumbnail_url": url or f"https://scontent.xx.fbcdn.net/{ad_id}.jpg",
+            "video_id": f"v_{ad_id}"}
+
+
+def _pedidos_ids(g):
+    """Los params de cada llamada a la raíz de Graph (`?ids=`) de una copia."""
+    return [p for t, e, p in g.llamadas if t == "get" and e == ""]
+
+
+def _pausado(ad_id):
+    return {"id": ad_id, "name": f"Anuncio {ad_id}", "adset_id": "s1", "campaign_id": "c1",
+            "effective_status": "PAUSED"}
+
+
+def test_un_anuncio_pausado_con_gasto_reciente_trae_su_miniatura_en_la_corrida_del_listado_completo(cuenta, monkeypatch):
+    g = FakeGraph(monkeypatch, anuncios_pausados=[_pausado("p1")], filas_anuncio=[_fila_ad("p1"), _fila_ad("a1")],
+                  miniaturas={"p1": _creative("p1")})
+    sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    (pedido,) = _pedidos_ids(g)
+    # a1 (activo) ya trajo su miniatura en el listado de esa misma corrida: solo se pide la del pausado.
+    assert pedido["ids"] == "p1" and pedido["fields"] == "creative{id,thumbnail_url,video_id}"
+    assert pedido["fields"] == sync.CAMPOS_MINIATURA
+    p = _objeto("anuncio", "p1")
+    assert p["miniatura_url"] == "https://scontent.xx.fbcdn.net/p1.jpg" and p["creative_id"] == "cr_p1"
+    assert p["video_id"] == "v_p1" and p["extra"]["miniatura_en"]
+    assert p["estado"] == "PAUSED" and p["nombre"] == "Anuncio p1"      # lo demás del objeto no se toca
+    assert cuentas.cuenta(CLI, ACT)["estado"] == "ok"
+    # Una corrida enseguida (listado liviano de cada 3 horas) no vuelve a pedir nada.
+    g.llamadas.clear()
+    sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    assert _pedidos_ids(g) == []
+
+
+def test_las_miniaturas_se_piden_de_50_en_50(cuenta, monkeypatch):
+    ids = [f"p{i:03d}" for i in range(120)]
+    g = FakeGraph(monkeypatch, filas_anuncio=[_fila_ad(i) for i in ids], miniaturas={i: _creative(i) for i in ids})
+    sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    pedidos = [p["ids"].split(",") for p in _pedidos_ids(g)]
+    assert [len(x) for x in pedidos] == [50, 50, 20] and sorted(i for x in pedidos for i in x) == ids
+    assert _objeto("anuncio", "p000")["miniatura_url"] and _objeto("anuncio", "p119")["miniatura_url"]
+
+
+def test_solo_se_piden_los_anuncios_con_gasto_en_30_dias_y_sin_miniatura_al_dia(cuenta, monkeypatch):
+    miniatura = "https://scontent.xx.fbcdn.net/{}.jpg"
+    datos.guardar_objetos(CLI, ACT, [
+        {"nivel": "anuncio", "objeto_id": "fresca", "nombre": "F", "miniatura_url": miniatura.format("fresca"),
+         "extra": {"miniatura_en": _hace(5)}},
+        {"nivel": "anuncio", "objeto_id": "vieja", "nombre": "V", "miniatura_url": miniatura.format("vieja"),
+         "extra": {"miniatura_en": _hace(21)}},
+        {"nivel": "anuncio", "objeto_id": "sin_marca", "nombre": "S", "miniatura_url": miniatura.format("sin_marca")}])
+    filas = [_fila_ad(i) for i in ("fresca", "vieja", "sin_marca", "nueva")]
+    filas.append(_fila_ad("hace_mucho", HOY - timedelta(days=45)))             # gastó, pero hace más de 30 días
+    filas.append(_fila_ad("sin_gasto", spend="0"))
+    g = FakeGraph(monkeypatch, filas_anuncio=filas, miniaturas={"vieja": _creative("vieja", miniatura.format("nueva_v"))})
+    sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    (pedido,) = _pedidos_ids(g)
+    assert pedido["ids"].split(",") == ["nueva", "sin_marca", "vieja"]
+    assert _objeto("anuncio", "vieja")["miniatura_url"] == miniatura.format("nueva_v")
+    assert _objeto("anuncio", "fresca")["miniatura_url"] == miniatura.format("fresca")
+    assert _objeto("anuncio", "nueva")["miniatura_url"] is None      # Meta no trajo creativo: queda sin miniatura
+
+
+def test_solo_se_guardan_miniaturas_de_hosts_de_meta_y_sin_token(cuenta, monkeypatch):
+    malas = {"p1": "http://scontent.xx.fbcdn.net/p1.jpg", "p2": "https://evil.example/p2.jpg",
+             "p3": "https://scontent.xx.fbcdn.net/p3.jpg?access_token=EAAsecreto"}
+    ids = ["p1", "p2", "p3", "p4", "p5"]
+    g = FakeGraph(monkeypatch, filas_anuncio=[_fila_ad(i) for i in ids],
+                  miniaturas={**{i: _creative(i, u) for i, u in malas.items()},
+                              "p4": {"id": "cr_p4", "video_id": "v_p4"},      # creativo sin thumbnail_url
+                              "p5": _creative("p5")})
+    sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    assert len(_pedidos_ids(g)) == 1
+    for i in ("p1", "p2", "p3", "p4"):
+        o = _objeto("anuncio", i)
+        assert o["miniatura_url"] is None and not (o["extra"] or {}).get("miniatura_en")
+    assert _objeto("anuncio", "p5")["miniatura_url"] == "https://scontent.xx.fbcdn.net/p5.jpg"
+
+
+def test_un_anuncio_activo_con_miniatura_rara_no_la_guarda_ni_marca_la_fecha(cuenta, monkeypatch):
+    activos = [{"id": "a1", "name": "A", "adset_id": "s1", "campaign_id": "c1", "effective_status": "ACTIVE",
+                "creative": {"id": "cr1", "thumbnail_url": "https://evil.example/1.jpg?access_token=EAAx"}},
+               {"id": "a2", "name": "B", "adset_id": "s1", "campaign_id": "c1", "effective_status": "ACTIVE",
+                "creative": {"id": "cr2", "thumbnail_url": "https://scontent.xx.fbcdn.net/2.jpg"}}]
+    g = FakeGraph(monkeypatch, anuncios=activos, filas_anuncio=[_fila_ad("a1"), _fila_ad("a2")])
+    sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    a1, a2 = _objeto("anuncio", "a1"), _objeto("anuncio", "a2")
+    assert a1["miniatura_url"] is None and not (a1["extra"] or {}).get("miniatura_en") and a1["creative_id"] == "cr1"
+    assert a2["miniatura_url"] == "https://scontent.xx.fbcdn.net/2.jpg" and a2["extra"]["miniatura_en"]
+    assert [p["ids"] for p in _pedidos_ids(g)] == ["a1"]       # el de la miniatura rara se vuelve a pedir; el otro no
+
+
+def test_sin_el_listado_completo_no_se_piden_miniaturas(cuenta, monkeypatch):
+    g = FakeGraph(monkeypatch, anuncios_pausados=[_pausado("p1")], filas_anuncio=[_fila_ad("p1")],
+                  miniaturas={"p1": _creative("p1")})
+    cuentas.actualizar_extra(CLI, ACT, {"listado_completo_en": _hace(5)})
+    sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    assert _pedidos_ids(g) == [] and _objeto("anuncio", "p1")["miniatura_url"] is None
+
+
+@pytest.mark.parametrize("falla", [
+    graph.ErrorGraph("Meta rechazó la consulta", codigo=100),
+    graph.ErrorGraph("Meta pidió esperar", codigo=17),
+    RuntimeError("boom access_token=EAAsecreto"),
+    ValueError("respuesta rara")])
+def test_si_las_miniaturas_fallan_la_copia_termina_bien_y_el_registro_solo_dice_el_tipo(cuenta, monkeypatch, caplog, falla):
+    ids = [f"p{i:03d}" for i in range(120)]
+    g = FakeGraph(monkeypatch, filas_anuncio=[_fila_ad(i) for i in ids], miniaturas={i: _creative(i) for i in ids},
+                  falla_miniaturas=[falla, None, None])
+    with caplog.at_level("WARNING", logger="creatv.meta_rendimiento.sync"):
+        r = sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    c = cuentas.cuenta(CLI, ACT)
+    assert c["estado"] == "ok" and not c["error"] and c["extra"]["backfill_hecho"] is True and r["omitida"] is False
+    assert type(falla).__name__ in caplog.text and "EAAsecreto" not in caplog.text and "boom" not in caplog.text
+    # Un límite de uso deja de pedir; cualquier otro fallo salta ese lote y sigue con los demás.
+    if isinstance(falla, graph.ErrorGraph) and falla.limite:
+        assert len(_pedidos_ids(g)) == 1 and _objeto("anuncio", "p119")["miniatura_url"] is None
+    else:
+        assert len(_pedidos_ids(g)) == 3
+        assert _objeto("anuncio", "p000")["miniatura_url"] is None and _objeto("anuncio", "p119")["miniatura_url"]
+
+
+def test_si_no_se_puede_calcular_que_pedir_la_copia_termina_bien(cuenta, monkeypatch, caplog):
+    def mal(*a, **k):
+        raise sa.exc.OperationalError("SELECT", {}, Exception("access_token=EAAsecreto"))
+    monkeypatch.setattr(sync.datos, "anuncios_sin_miniatura_al_dia", mal)
+    g = FakeGraph(monkeypatch)
+    with caplog.at_level("WARNING", logger="creatv.meta_rendimiento.sync"):
+        sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    assert cuentas.cuenta(CLI, ACT)["estado"] == "ok" and _pedidos_ids(g) == []
+    assert "OperationalError" in caplog.text and "EAAsecreto" not in caplog.text

@@ -6,7 +6,9 @@ los últimos 7 días (Meta reatribuye compras de días pasados, así que ese ran
 La primera copia va del tramo más NUEVO al más viejo y apunta hasta dónde llegó (`cuenta_desde`, `anuncios_desde`):
 si Meta pide esperar a mitad (límite de uso), la siguiente corrida repasa lo reciente y sigue desde ahí hacia atrás
 en vez de empezar de nuevo. Leer de Meta cuenta contra el límite de uso de la cuenta, así que el listado completo de
-anuncios (pausados y limpieza de archivados) se hace como mucho una vez cada 20 horas.
+anuncios (pausados y limpieza de archivados) se hace como mucho una vez cada 20 horas, y en esa misma corrida se
+piden las miniaturas de los anuncios con gasto en los últimos 30 días que no la tienen al día (los pausados no la
+traen en el listado de cada 3 horas).
 Una `ErrorGraph` sube tal cual: la tarea la anota en la cuenta; aquí la cuenta queda en «copiando», nunca «ok»
 a medias. Los textos de error ya vienen traducidos y sin token (graph.py)."""
 import json
@@ -55,6 +57,11 @@ CAMPOS_CONJUNTO = ("id,name,campaign_id,effective_status,daily_budget,lifetime_b
                    "bid_strategy,learning_stage_info,created_time")
 CAMPOS_ANUNCIO = "id,name,adset_id,campaign_id,effective_status,created_time,creative{id,thumbnail_url,video_id}"
 CAMPOS_ANUNCIO_LIGERO = "id,name,adset_id,campaign_id,effective_status"
+# Miniaturas de los anuncios con gasto reciente (ruling R25 de la revisión final, 2026-10-08): `?ids=` de 50 en 50
+# (el tope de Meta para pedir varios objetos por id), solo en la corrida del listado completo.
+CAMPOS_MINIATURA = "creative{id,thumbnail_url,video_id}"
+LOTE_MINIATURAS = 50
+DIAS_MINIATURA = 30
 
 ETAPA_CUENTA = idiomas.N_("Leyendo la cuenta")
 ETAPA_OBJETOS = idiomas.N_("Campañas, conjuntos y anuncios")
@@ -133,12 +140,21 @@ def _conjunto(f, moneda):
             "aprendizaje": (f.get("learning_stage_info") or {}).get("status"), "creado_en_meta": _creado(f)}
 
 
+def _con_miniatura_en(o):
+    """`extra.miniatura_en` = cuándo se trajo la miniatura (si es válida): la corrida diaria no la vuelve a pedir
+    antes de 20 horas (`datos.anuncios_sin_miniatura_al_dia`)."""
+    if datos.miniatura_valida(o.get("miniatura_url")):
+        o["extra"] = {"miniatura_en": db.ahora()}
+    return o
+
+
 def _anuncio(f):
     creative = f.get("creative") or {}
-    return {"nivel": "anuncio", "objeto_id": str(f["id"]), "padre_id": f.get("adset_id"),
-            "campaign_id": f.get("campaign_id"), "nombre": f.get("name"), "estado": f.get("effective_status"),
-            "creative_id": creative.get("id"), "miniatura_url": creative.get("thumbnail_url"),
-            "video_id": creative.get("video_id"), "creado_en_meta": _creado(f)}
+    return _con_miniatura_en({
+        "nivel": "anuncio", "objeto_id": str(f["id"]), "padre_id": f.get("adset_id"),
+        "campaign_id": f.get("campaign_id"), "nombre": f.get("name"), "estado": f.get("effective_status"),
+        "creative_id": creative.get("id"), "miniatura_url": creative.get("thumbnail_url"),
+        "video_id": creative.get("video_id"), "creado_en_meta": _creado(f)})
 
 
 def _anuncio_ligero(f):
@@ -263,6 +279,39 @@ def _por_pagina(filas, nombres):
         filas.extend(fila_anuncio(f) for f in crudas)
         _recoger_nombres(nombres, crudas)
     return pagina
+
+
+def _miniaturas(cliente, act, token, hoy):
+    """Pide la miniatura de los anuncios con gasto en los últimos 30 días que no la tienen al día, de 50 en 50 con
+    `?ids=`. Devuelve cuántos objetos guardó. Es un extra de la copia diaria: nada de aquí la hace fallar. Un lote que
+    Meta rechaza (p. ej. un id borrado) se salta y las demás siguen; ante un límite de uso se deja de pedir (el
+    siguiente paso de la copia es el que lo anota y pone la pausa). En el registro va solo el tipo del error."""
+    try:
+        ids = datos.anuncios_sin_miniatura_al_dia(cliente, act, (hoy - timedelta(days=DIAS_MINIATURA - 1)).isoformat(),
+                                                  horas=HORAS_LISTADO_COMPLETO)
+    except Exception as e:  # noqa: BLE001
+        log.warning("meta miniaturas %s: no se pudo calcular qué pedir (%s)", act, type(e).__name__)
+        return 0
+    n = 0
+    for i in range(0, len(ids), LOTE_MINIATURAS):
+        lote = ids[i:i + LOTE_MINIATURAS]
+        try:
+            respuesta = graph.get("", token, {"ids": ",".join(lote), "fields": CAMPOS_MINIATURA})
+            respuesta = respuesta if isinstance(respuesta, dict) else {}
+            objetos = []
+            for ad_id in lote:
+                creative = (respuesta.get(ad_id) or {}).get("creative") or {}
+                if not datos.miniatura_valida(creative.get("thumbnail_url")):
+                    continue
+                objetos.append(_con_miniatura_en({
+                    "nivel": "anuncio", "objeto_id": ad_id, "creative_id": creative.get("id"),
+                    "miniatura_url": creative["thumbnail_url"], "video_id": creative.get("video_id")}))
+            n += datos.guardar_objetos(cliente, act, objetos)
+        except Exception as e:  # noqa: BLE001 — las miniaturas nunca tumban la copia
+            log.warning("meta miniaturas %s: lote de %s saltado (%s)", act, len(lote), type(e).__name__)
+            if isinstance(e, graph.ErrorGraph) and e.limite:
+                break
+    return n
 
 
 def _alcance_de_ventana(act, token, w):
@@ -392,6 +441,11 @@ def sincronizar(cliente, ad_account_id, token, hoy=None, on_etapa=None):
             cuentas.actualizar_extra(cliente, act, {"anuncios_desde": a})
         hecho += 1
     cuentas.actualizar_extra(cliente, act, {"backfill_anuncios": True})
+
+    # Miniaturas de lo que gastó en 30 días (también los pausados), solo en la corrida del listado completo y
+    # después de los días de anuncio: en la primera copia esos días recién se escribieron.
+    if completo:
+        n_objetos += _miniaturas(cliente, act, token, hoy)
 
     # 5. Alcance (gente única: se pide por ventana, no se suma de los días).
     etapa(ETAPA_ALCANCE, 90)

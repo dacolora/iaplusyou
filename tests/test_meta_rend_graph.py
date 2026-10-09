@@ -373,6 +373,19 @@ def test_el_token_nunca_viaja_a_una_url_completa(http):
     assert url.split("/")[2] == "graph.facebook.com"
 
 
+def test_el_edge_vacio_es_la_raiz_de_graph_sin_barra_de_mas_y_los_demas_no_cambian(http):
+    # `?ids=a,b` se pide a la raíz: …/v25.0 y no …/v25.0/ (ni dos barras).
+    http["respuestas"] = [_Resp({"a1": {"id": "a1"}}), _Resp({"ok": 1}), _Resp({"ok": 1})]
+    assert graph.get("", TOKEN, {"ids": "a1,a2", "fields": "creative{thumbnail_url}"}) == {"a1": {"id": "a1"}}
+    graph.get(None, TOKEN)
+    graph.get("/act_1", TOKEN)
+    urls = [u for _m, u, _p in http["llamadas"]]
+    assert urls == [graph.meta_conexion.GRAPH_URL, graph.meta_conexion.GRAPH_URL,
+                    graph.meta_conexion.GRAPH_URL + "/act_1"]
+    assert "//" not in urls[0].split("://", 1)[1]
+    assert http["llamadas"][0][2]["ids"] == "a1,a2" and http["llamadas"][0][2]["access_token"] == TOKEN
+
+
 def test_informe_con_report_run_id_que_no_es_numerico_no_se_usa_como_edge(http):
     http["respuestas"] = [_Resp({"report_run_id": "../me/accounts"})]
     with pytest.raises(graph.ErrorGraph):
