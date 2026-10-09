@@ -1,6 +1,7 @@
 """Los ganchos en el worker (spec 2026-10-09 §4.4–§4.6): preparar, vigilar y armar, con la descarga, ffprobe, ffmpeg y
 R2 simulados. Kling no se llama nunca: `flowplus_lanzar.lanzar` solo encola en la base de prueba."""
 import os
+import re
 import shutil
 import subprocess
 
@@ -102,7 +103,10 @@ def test_preparar_lanza_un_clip_de_kling_por_gancho(entorno):
     for f in filas:
         e = sesiones[f["cf_id"]]
         assert e["modelo"] == "kling_o3_pro" and e["duracion_objetivo"] == 3 and e["con_sonido"] is False
-        assert e["imagen_inicial"] == f["frame_url"] == f"https://r2.test/clientes/acme/triple_whale/ganchos/{f['id']}.jpg"
+        # Arreglo E: la clave lleva un sufijo al azar (un id seguido no deja adivinar el fotograma de otra variante)
+        assert e["imagen_inicial"] == f["frame_url"]
+        assert re.fullmatch(rf"https://r2\.test/clientes/acme/triple_whale/ganchos/{f['id']}_[0-9a-f]{{16}}\.jpg",
+                            f["frame_url"])
         assert e["aspect_ratio"] == "9:16" and e["estado"] == "video_generando" and e["calidad"] == "final"
         assert e["referencias"][0]["titulo"] == f"CV{f['id']}" and e["elementos"] == []
         assert e["tw_gancho"] == {"gancho_id": f["id"], "analisis_id": entorno["aid"], "original_hash": mat["hash"]}
@@ -765,3 +769,37 @@ def test_si_preparar_falla_un_clip_ya_terminado_se_sigue_aunque_su_tarea_ya_no_e
     g1, g2, g3 = _filas(entorno)
     assert g1["estado"] == "generando" and g1["job_id"] == f"acme__{g1['cf_id']}__creative_flow"
     assert g2["estado"] == g3["estado"] == "error" and g2["cf_id"] is None
+
+
+
+# -------------------------------- arreglo E (revisión de seguridad, 2026-10-09): errores ajenos y claves de R2 ---
+
+TOKEN = "https://api.wavespeed.ai/x?key=sk-secreto-123&otro=1 "
+
+
+def test_los_errores_que_se_copian_de_crear_y_de_la_final_van_sin_tokens_y_recortados(entorno):
+    t = entorno["t"]
+    _preparar(entorno)
+    f1, f2, f3 = _filas(entorno)
+    creative_flow.actualizar("acme", f1["cf_id"], estado="error", error=TOKEN + "x" * 900)       # generando
+    fin2 = creative_flow.crear_final("acme", f2["cf_id"], "es", "CO")                               # produciendo
+    assert datos.mover(f2["id"], "generando", "produciendo", final_id=fin2)
+    creative_flow.actualizar_final("acme", fin2, estado="error", error=TOKEN + "y" * 900)
+    assert datos.mover(f3["id"], "generando", "preparando", job_id=t.job_id_preparar("acme", entorno["aid"], 1))
+    _envejecer(f3["id"])                                                                            # preparando
+    creative_flow.actualizar("acme", f3["cf_id"], estado="error", error=TOKEN + "z" * 900)
+    _sin_tarea(flowplus_lanzar.job_id("acme", f3["cf_id"]))
+    _vigilar(entorno)
+    for g in _filas(entorno):
+        assert g["estado"] == "error", g
+        assert "sk-secreto-123" not in g["error"] and "key=***" in g["error"] and len(g["error"]) == 500
+
+
+def test_cada_fotograma_de_arranque_tiene_su_propia_clave_al_azar(entorno, monkeypatch):
+    from storage import r2_uploader
+    claves = []
+    monkeypatch.setattr(r2_uploader, "upload_image", lambda local, key: claves.append(key) or f"https://r2.test/{key}")
+    _preparar(entorno)
+    assert len(claves) == 3 and len(set(claves)) == 3
+    for clave, f in zip(claves, _filas(entorno)):
+        assert re.fullmatch(rf"clientes/acme/triple_whale/ganchos/{f['id']}_[0-9a-f]{{16}}\.jpg", clave)

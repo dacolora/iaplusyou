@@ -24,6 +24,7 @@ corren cuando termina la última copia del proyecto, no en cada una.
 import logging
 import os
 import re
+import secrets
 import shutil
 from datetime import datetime, timedelta
 
@@ -426,6 +427,12 @@ def _texto_error(e, generico=ganchos.ERROR_PREPARAR):
     return gettext(generico, error=type(e).__name__)
 
 
+def _error_ajeno(texto):
+    """El error de otra parte (la sesión de Crear del clip, la final) para guardarlo en la fila del gancho: sin tokens y
+    recortado, como todo error que se guarda (revisión de seguridad del 2026-10-09, arreglo E). None si no hay."""
+    return cola.recortar(cola.sin_token(str(texto)), 500) if texto else None
+
+
 def _fotograma_en(ruta, segundo, destino):
     """El cuadro del segundo `segundo` como JPG (`-ss` antes de `-i`: busca por el índice sin decodificar lo de
     antes). GanchoError si ffmpeg falla o no escribe nada (un segundo más allá del final)."""
@@ -518,7 +525,9 @@ def _lanzar_gancho(cliente, aid, g, foto, ruta, duracion_s, original, carpeta):
     # Ruling 5: sin la duración al analizar, `fotograma_s` llega sin acotar; aquí se acota contra el video medido.
     segundo = mejorar.segundo_fotograma(g["fotograma_s"], duracion_s)
     jpg = _fotograma_en(ruta, segundo, os.path.join(carpeta, f"g{gid}.jpg"))
-    frame_url = r2_uploader.upload_image(jpg, f"clientes/{cliente}/triple_whale/ganchos/{gid}.jpg")
+    # Sufijo al azar (arreglo E): con el id solo, la clave de cada variante se adivinaba contando.
+    clave = f"clientes/{cliente}/triple_whale/ganchos/{gid}_{secrets.token_hex(8)}.jpg"
+    frame_url = r2_uploader.upload_image(jpg, clave)
     if not datos.mover(gid, "preparando", "preparando", frame_url=frame_url):
         log.warning("ganchos: el gancho %s dejó de estar preparando antes de su clip", gid)
         return False
@@ -654,7 +663,8 @@ def vigilar_gancho(cliente, g, sesiones):
             # queda en video_listo, y el camino de siempre la lleva a armar.
             return
         else:
-            datos.mover(gid, "generando", "error", error=entry.get("error") or gettext("El clip no se pudo generar."))
+            datos.mover(gid, "generando", "error",
+                        error=_error_ajeno(entry.get("error")) or gettext("El clip no se pudo generar."))
     elif estado == "produciendo":
         final = creative_flow.final_por_legado(cliente, g["final_id"]) if g["final_id"] else None
         if final is None:
@@ -662,7 +672,8 @@ def vigilar_gancho(cliente, g, sesiones):
         elif final.get("estado") in ("listo", "degradada") and final.get("video_url"):
             datos.mover(gid, "produciendo", "lista", url_final=final["video_url"])
         elif final.get("estado") == "error":
-            datos.mover(gid, "produciendo", "error", error=final.get("error") or gettext("No se pudo producir el video."))
+            datos.mover(gid, "produciendo", "error",
+                        error=_error_ajeno(final.get("error")) or gettext("No se pudo producir el video."))
     elif estado in ("preparando", "armando"):
         # Sin job_id no hay trabajo que esperar (y `en_curso(None)` buscaría tareas sin job_id).
         vivo = bool(g["job_id"]) and trabajos.en_curso(g["job_id"])
@@ -679,7 +690,7 @@ def vigilar_gancho(cliente, g, sesiones):
             # Si el clip llegó a correr y falló, su sesión de Crear dice por qué; si no, la preparación se cortó.
             sesion = (sesiones.get(g["cf_id"]) if g["cf_id"] else None) or {}
             mensaje = ganchos.ERROR_PREPARACION_CORTADA
-            error = sesion.get("error") if sesion.get("estado") == "error" else None
+            error = _error_ajeno(sesion.get("error")) if sesion.get("estado") == "error" else None
             datos.mover(gid, "preparando", "error", error=error or gettext(mensaje))
 
 
