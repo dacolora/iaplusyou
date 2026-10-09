@@ -139,6 +139,48 @@ def test_sin_tasa_un_dia_con_gasto_usd_no_disponible(base_temporal, conectado):
     assert kp["usd_ok"] is True and kp["gasto"] == 0
 
 
+def test_tasa_de_hace_cuatro_dias_aun_sirve_y_de_hace_cinco_ya_no(base_temporal, conectado):
+    """Ruling R24: un día sin tasa publicada usa la última anterior solo si es de hace 4 días o menos."""
+    _cuentas((A, "SEK", "NO"), (B, "SEK", "SE"))
+    _tasa("SEK", "2026-09-30", 0.1)
+    datos.reemplazar_cuenta_dias("hf", A, "2026-10-04", "2026-10-04", [_dia("2026-10-04", 100, 300)])
+    ctx = panel.contexto("hf", hoy=HOY)                                  # el 4 oct está a 4 días del 30 sep
+    assert ctx["usd_ok"] is True and ctx["kpis"]["gasto"] == pytest.approx(10)
+
+
+def test_hueco_de_cinco_dias_con_gasto_usd_no_disponible(base_temporal, conectado):
+    """Con gasto cinco días después de la última tasa publicada no hay USD (ni una tasa de hace semanas)."""
+    _cuentas((A, "SEK", "NO"), (B, "SEK", "SE"))
+    _tasa("SEK", "2026-09-30", 0.1)
+    datos.reemplazar_cuenta_dias("hf", A, "2026-10-05", "2026-10-05", [_dia("2026-10-05", 100, 300)])
+    ctx = panel.contexto("hf", hoy=HOY)                                  # el 5 oct está a 5 días del 30 sep
+    assert ctx["usd_ok"] is False
+    assert ctx["kpis"]["gasto"] is None and ctx["kpis"]["roas"] is None
+    assert ctx["kpis_moneda_comun"]["gasto"] == 100 and ctx["serie"]["moneda"] == "SEK"
+    assert all(f["usd_ok"] is False for f in ctx["por_cuenta"] if f["ad_account_id"] == A)
+
+
+def test_todas_con_una_cuenta_sin_moneda_usd_no_disponible_y_sin_moneda_comun(base_temporal, conectado):
+    """Una cuenta sin moneda conocida no se convierte (no hay tasa para ella) ni se suma como si fuera de la moneda de
+    las demás: «Todas» dice USD no disponible, no hay moneda común y el total de cada moneda la deja aparte."""
+    _cuentas((A, "SEK", "NO"), (B, "", "SE"))
+    datos.reemplazar_cuenta_dias("hf", A, "2026-10-01", "2026-10-01", [_dia("2026-10-01", 100, 300)])
+    datos.reemplazar_cuenta_dias("hf", B, "2026-10-01", "2026-10-01", [_dia("2026-10-01", 50, 100)])
+    _tasa("SEK", "2026-10-01", 0.1)
+    ctx = panel.contexto("hf", hoy=HOY)
+    assert ctx["actual"] is None and ctx["moneda"] == "USD"
+    assert ctx["usd_ok"] is False and ctx["kpis"]["gasto"] is None
+    assert ctx["moneda_comun"] is None and ctx["kpis_moneda_comun"] is None and ctx["serie"] is None
+    # El gasto de la cuenta sin moneda no entra en el total de SEK.
+    assert {m["moneda"]: m["gasto"] for m in ctx["por_moneda"]} == {"SEK": 100, "": 50}
+    filas = {f["ad_account_id"]: f for f in ctx["por_cuenta"]}
+    assert filas[A]["usd_ok"] is True and filas[A]["gasto"] == pytest.approx(10)
+    assert filas[B]["usd_ok"] is False and filas[B]["gasto"] is None
+    # La cuenta con moneda, sola, sí se ve en su moneda.
+    solo = panel.contexto("hf", cuenta=A, hoy=HOY)
+    assert solo["moneda"] == "SEK" and solo["usd_ok"] is True and solo["kpis"]["gasto"] == 100
+
+
 def test_kpis_derivados():
     filas = [dict(_dia("2026-10-01", 100, 300, compras=2, impresiones=10000), ad_account_id=A),
              dict(_dia("2026-10-02", 100, 100, compras=2, impresiones=10000), ad_account_id=A)]
@@ -171,7 +213,7 @@ def test_veredicto_por_anuncio_contra_su_propia_cuenta(base_temporal, conectado,
     datos.reemplazar_anuncio_dias("hf", B, "2026-10-05", "2026-10-05", [
         _ad("2026-10-05", "grande", 10000, 30000, compras=10, campaign="c2", adset="s2")])
     datos.guardar_objetos("hf", A, [{"nivel": "anuncio", "objeto_id": "gana", "nombre": "Video gana",
-                                     "estado": "ACTIVE", "miniatura_url": "https://x/gana.jpg"}])
+                                     "estado": "ACTIVE", "miniatura_url": "https://scontent.xx.fbcdn.net/gana.jpg"}])
     leer = datos.totales_por_anuncio
 
     def con_rastreo_roto(*a, **k):                  # «sin_rastreo» es de Triple Whale: aquí nunca se muestra
@@ -183,7 +225,7 @@ def test_veredicto_por_anuncio_contra_su_propia_cuenta(base_temporal, conectado,
     assert [a["ad_id"] for a in ctx["anuncios"]] == ["grande", "gana", "pierde"]   # veredicto y luego gasto
     assert all("sin_rastreo" not in a["problemas"] for a in ctx["anuncios"])
     assert por_id["gana"]["ad_account_id"] == A and por_id["gana"]["moneda"] == "SEK"
-    assert por_id["gana"]["estado"] == "ACTIVE" and por_id["gana"]["miniatura_url"] == "https://x/gana.jpg"
+    assert por_id["gana"]["estado"] == "ACTIVE" and por_id["gana"]["miniatura_url"] == "https://scontent.xx.fbcdn.net/gana.jpg"
     assert por_id["gana"]["nombre"] == "Video gana" and por_id["grande"]["ad_account_id"] == B
     assert ctx["conteo"]["ganador"] == 2 and ctx["conteo"]["perdedor"] == 1 and ctx["meta_roas"] == 2.0
     # Campañas y conjuntos en la moneda de su cuenta.
@@ -228,7 +270,9 @@ def test_pocas_consultas_con_tres_cuentas(base_temporal, conectado):
                                        for i in range(5)])
         datos.guardar_alcance("hf", act, [{"nivel": "cuenta", "objeto_id": act, "ventana": 30, "alcance": 10,
                                            "frecuencia": 1.0}])
-        _tasa(moneda, "2026-08-14", 0.1)
+        # Una tasa publicada poco antes de cada día con datos (las tasas viejas ya no rellenan: ruling R24).
+        for dia_tasa in ("2026-08-14", "2026-09-24", "2026-10-06"):
+            _tasa(moneda, dia_tasa, 0.1)
     consultas = []
 
     def contar(conn, cursor, statement, parameters, context, executemany):

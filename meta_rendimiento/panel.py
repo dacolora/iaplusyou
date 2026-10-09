@@ -322,8 +322,10 @@ def contexto(cliente, dias=PERIODO_DEFECTO, cuenta=None, hoy=None, pagina_anunci
     en_alcance = [actual] if actual else lista
     ids = [c["ad_account_id"] for c in en_alcance]
     cuentas_por_id = {c["ad_account_id"]: c for c in lista}
-    monedas = {(c.get("moneda") or "").upper() for c in en_alcance} - {""}
-    moneda_comun = next(iter(monedas)) if len(monedas) == 1 else None
+    monedas = {(c.get("moneda") or "").upper() for c in en_alcance}
+    # Una cuenta sin moneda conocida no comparte la de las demás: con ella no hay moneda común (su gasto no se suma
+    # como si fuera de esa moneda).
+    moneda_comun = next(iter(monedas)) if len(monedas) == 1 and "" not in monedas else None
     convertir = actual is None and len(en_alcance) > 1
     moneda = "USD" if convertir else (en_alcance[0].get("moneda") or None)
     jobs_sync = _jobs_sync(cliente, en_alcance)
