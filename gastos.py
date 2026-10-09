@@ -119,7 +119,9 @@ TARIFAS = {
     # US$ 0,067–0,084; 1 de 4 necesitó la corrección (US$ 0,16 en total, la primera con la caché fría: US$ 0,095);
     # Whisper ≤ US$ 0,0014. Esperado ≈ 0,075 × 1,25 + Whisper; redondeado hacia arriba. Informe:
     # docs/superpowers/evals/2026-10-08-tw-como-mejorarlo.md (PND-179).
-    "analisis_anuncio_tw": 0.10,
+    # Desde el 2026-10-09 el análisis trae además tres ganchos y el copy nuevo para Meta (spec tw-ganchos-y-copy §3.3):
+    # medido 2026-10-09 con ganchos y copy: 0,086–0,131, media 0,110 (4 casos, sin correcciones); sube de 0,10 a 0,12.
+    "analisis_anuncio_tw": 0.12,
 }
 
 # Evaluación de anuncios de Triple Whale con IA (spec 2026-09-28 §6): una

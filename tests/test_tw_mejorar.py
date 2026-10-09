@@ -375,11 +375,12 @@ def test_precio_del_analisis():
 
 
 def test_la_tarifa_del_analisis_es_la_medida_en_la_prueba_real():
-    """PND-179: 4 anuncios reales (2026-10-08) costaron US$ 0,067–0,084 por llamada con la caché caliente y 0,095 con la
-    fría; la tarifa es 0,10 (≈ 0,075 × 1,25, hacia arriba) y el precio que ve la persona, 0,10 + Whisper de 30 s."""
-    assert gastos.TARIFAS["analisis_anuncio_tw"] == 0.10
-    assert gastos.estimar("analisis_anuncio_tw", segundos=30)["usd"] == pytest.approx(0.101, abs=1e-6)
-    assert gastos.estimar("analisis_anuncio_tw", segundos=30)["usd"] >= 0.0949 + 0.0014    # cubre la llamada fría + Whisper
+    """PND-179 y spec tw-ganchos-y-copy §3.3. 2026-10-08: 4 anuncios reales costaron US$ 0,067–0,084 por llamada (tarifa
+    0,10). 2026-10-09, ya con tres ganchos y el copy nuevo en la respuesta: 0,086–0,131, media 0,110 (4 casos, sin
+    correcciones) > 0,10, así que la tarifa sube a 0,12 y el precio que ve la persona es 0,12 + Whisper de 30 s."""
+    assert gastos.TARIFAS["analisis_anuncio_tw"] == 0.12
+    assert gastos.estimar("analisis_anuncio_tw", segundos=30)["usd"] == pytest.approx(0.121, abs=1e-6)
+    assert gastos.estimar("analisis_anuncio_tw", segundos=30)["usd"] >= 0.110 + 0.0014      # cubre la media medida + Whisper
 
 
 def test_aprendizaje_desde_un_analisis():
@@ -416,6 +417,9 @@ def test_el_prompt_pide_ganchos_y_copy_con_sus_reglas():
     p = mejorar.PROMPT
     assert '"ganchos": [{"texto"' in p.replace("{{", "{") and '"copy_nuevo": {"titulo"' in p.replace("{{", "{")
     assert "fotograma_s" in p and "exactamente 3" in p and '"ganchos": []' in p
+    # Los ganchos son obligatorios con fotogramas, también en un anuncio ganador; solo sin fotogramas van vacíos.
+    assert "van SIEMPRE que haya fotogramas del video" in p and "también si el anuncio es ganador" in p
+    assert "para escalarlo antes de que se canse); solo si no los ves" in p
     assert "nunca inventes" in p and "la voz original sigue sonando" in p and "subtítulos ni logos" in p
     texto = mejorar.armar("Acme", {"foto": _foto(), "desde": "2026-09-01", "hasta": "2026-09-30", "moneda": "USD",
                                    "canal": "facebook-ads"})
