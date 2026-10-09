@@ -147,6 +147,10 @@ msgid "%(campanas)s · %(piezas)s · %(elegidos)s/%(objetivo)s referentes elegid
 msgstr "%(campanas)s · %(piezas)s · %(elegidos)s/%(objetivo)s references chosen"
 
 #, python-format
+msgid "%(campo)s debe ser un número entero de dólares mayor que 0"
+msgstr "%(campo)s must be a whole number of dollars greater than 0"
+
+#, python-format
 msgid "%(canal)s, %(pct)s del gasto y %(roas)s de retorno"
 msgstr "%(canal)s, %(pct)s of spend and %(roas)s return"
 
@@ -161,6 +165,10 @@ msgstr[0] "%(capas)s charged"
 msgstr[1] "%(capas)s charged"
 
 #, python-format
+msgid "%(cerrados)s periodos cerrados, %(abiertos)s abiertos, %(cobros)s cobros revisados"
+msgstr "%(cerrados)s periods closed, %(abiertos)s opened, %(cobros)s charges checked"
+
+#, python-format
 msgid "%(cliente)s recargó %(monto)s (%(medio)s)."
 msgstr "%(cliente)s topped up %(monto)s (%(medio)s)."
 
@@ -171,6 +179,38 @@ msgstr "%(cliente)s used %(usado)s of included cost (cap %(tope)s)."
 #, python-format
 msgid "%(cliente)s usó %(usado)s de costo de lo incluido (tope %(tope)s). Desde ahora eso se cobra a precio de miembro."
 msgstr "%(cliente)s used %(usado)s of included cost (cap %(tope)s). From now on those items are charged at the member price."
+
+#, python-format
+msgid "%(cliente)s: Wompi anuló un pago de plan ya aprobado (%(referencia)s). El periodo sigue abierto: si corresponde, usa «Terminar ya»."
+msgstr "%(cliente)s: Wompi voided an already approved plan payment (%(referencia)s). The period is still open: if needed, use “End now”."
+
+#, python-format
+msgid "%(cliente)s: Wompi aprobó un pago de plan (%(referencia)s) de una suscripción ya terminada. Devuélvelo o actívalo a mano."
+msgstr "%(cliente)s: Wompi approved a plan payment (%(referencia)s) for a subscription that already ended. Refund it or activate it manually."
+
+#, python-format
+msgid "%(cliente)s: Wompi informó un pago de plan (%(referencia)s) cuyo monto o moneda no cuadran con lo guardado; no se aplicó."
+msgstr "%(cliente)s: Wompi reported a plan payment (%(referencia)s) whose amount or currency doesn't match what we stored; it was not applied."
+
+#, python-format
+msgid "%(cliente)s: el cobro se rechazó tres veces."
+msgstr "%(cliente)s: the charge was declined three times."
+
+#, python-format
+msgid "%(cliente)s: lo canceló sin nada pagado vigente."
+msgstr "%(cliente)s: they cancelled it with nothing paid still running."
+
+#, python-format
+msgid "%(cliente)s: lo terminó un admin (%(nota)s)."
+msgstr "%(cliente)s: an admin ended it (%(nota)s)."
+
+#, python-format
+msgid "%(cliente)s: se acabó lo pagado y no se renueva."
+msgstr "%(cliente)s: the paid time ran out and it doesn't renew."
+
+#, python-format
+msgid "%(cliente)s: un cobro de plan (%(referencia)s) llegó a Wompi pero no sabemos su resultado. Queda pendiente hasta que Wompi avise; míralo en su panel."
+msgstr "%(cliente)s: a plan charge (%(referencia)s) reached Wompi but we don't know its result. It stays pending until Wompi reports back; check it in their dashboard."
 
 #, python-format
 msgid "%(color)s: sin fotos en la tienda; revisa el catálogo."
@@ -3538,6 +3578,9 @@ msgstr "The %(dias)s-day window closed without enough evidence (%(imp)s impressi
 msgid "Chile"
 msgstr "Chile"
 
+msgid "Ciclo de plan inválido"
+msgstr "Invalid plan cycle"
+
 msgid "Cierre"
 msgstr "Close"
 
@@ -5723,6 +5766,9 @@ msgstr "The sprint batch “%(nombre)s” finished: %(listas)s piece(s) ready an
 msgid "El lugar y la luz; el producto entra a cuadro y se ve funcionando ahí."
 msgstr "The place and the light; the product enters the frame and is seen working there."
 
+msgid "El margen de miembro debe estar entre 1,00 y 5,00"
+msgstr "The member markup must be between 1.00 and 5.00"
+
 #, python-format
 msgid "El margen va de %(min)s a %(max)s."
 msgstr "The markup ranges from %(min)s to %(max)s."
@@ -5781,8 +5827,18 @@ msgstr "The country %(pais)s was left without pieces: remove the country or sele
 msgid "El país debe ser un código de 2 letras, como CO."
 msgstr "The country must be a 2-letter code, like CO."
 
+#, python-format
+msgid "El plan de %(cliente)s terminó"
+msgstr "%(cliente)s's plan ended"
+
+msgid "El plan necesita un nombre (hasta 60 letras)"
+msgstr "The plan needs a name (up to 60 characters)"
+
 msgid "El porqué"
 msgstr "The reason why"
+
+msgid "El precio anual"
+msgstr "The yearly price"
 
 #, python-format
 msgid "El precio cambió: ahora es ≈ US$ %(precio)s. Revisa y vuelve a aprobar."
@@ -5790,6 +5846,9 @@ msgstr "The price changed: it is now ≈ US$ %(precio)s. Check it and approve ag
 
 msgid "El precio cambió: revísalo y vuelve a generar."
 msgstr "The price changed: check it and generate again."
+
+msgid "El precio mensual"
+msgstr "The monthly price"
 
 msgid "El precio tiene que ser un número positivo (ej. 89900 o 25,50); no lo guardé."
 msgstr "The price has to be a positive number (e.g. 89900 or 25.50); I didn't save it."
@@ -6000,6 +6059,9 @@ msgstr "The type must be top-up or adjustment."
 #, python-format
 msgid "El token no ve el Business %(business)s (%(error)s). Revisa que el usuario del sistema pertenezca a ese Business Manager y tenga permiso business_management."
 msgstr "The token can't see the Business %(business)s (%(error)s). Check that the system user belongs to that Business Manager and has the business_management permission."
+
+msgid "El tope de lo incluido debe ser 0 o más dólares"
+msgstr "The included cap must be 0 or more dollars"
 
 msgid "El umbral no puede ser negativo."
 msgstr "The threshold cannot be negative."
@@ -7194,6 +7256,15 @@ msgstr "That country has no ad set on Meta."
 msgid "Ese pedido ya no está abierto."
 msgstr "That request is no longer open."
 
+msgid "Ese plan no está disponible"
+msgstr "That plan isn't available"
+
+msgid "Ese plan no existe"
+msgstr "That plan doesn't exist"
+
+msgid "Ese plan no tiene opción anual"
+msgstr "That plan doesn't have a yearly option"
+
 msgid "Ese portafolio ya está conectado a otro proyecto de Creatv. Si es tuyo, usa «Avisar a Creatv» y lo revisamos."
 msgstr "That portfolio is already connected to another Creatv project. If it's yours, use “Let Creatv know” and we'll review it."
 
@@ -7511,6 +7582,9 @@ msgstr "This project hasn't registered its Meta app — it's needed to %(para_qu
 msgid "Este proyecto no tiene saldo: desde ahora no podrá generar nada que cueste hasta que recargue."
 msgstr "This project has no balance: from now on it cannot generate anything that costs money until it tops up."
 
+msgid "Este proyecto no tiene un plan"
+msgstr "This project doesn't have a plan"
+
 msgid "Este proyecto no usa saldo prepagado."
 msgstr "This project does not use a prepaid balance."
 
@@ -7525,6 +7599,9 @@ msgstr "This project does not charge usage yet: the balance stays saved for when
 
 msgid "Este proyecto usa la conexión de agencia de Creatv: no tienes que registrar una app ni conectar nada."
 msgstr "This project uses Creatv's agency connection: you don't have to register an app or connect anything."
+
+msgid "Este proyecto ya tiene un plan"
+msgstr "This project already has a plan"
 
 msgid "Este sprint todavía no tiene campañas"
 msgstr "This sprint doesn't have campaigns yet"
@@ -8826,6 +8903,9 @@ msgstr "There are pending Bold top-ups and no Bold event has arrived in 7 days. 
 msgid "Hay textos sin traducir para algún destino."
 msgstr "Some texts aren't translated for a market."
 
+msgid "Hay un cobro con tarjeta en curso para este plan; espera a que Wompi responda"
+msgstr "A card charge for this plan is in progress; wait for Wompi to respond"
+
 msgid "Hay un problema con el proveedor y ya le avisamos a Creatv. Vuelve a intentarlo en un rato: los intentos fallidos no se cobran."
 msgstr "There is a problem with the provider and Creatv has already been notified. Try again in a while: failed attempts are not charged."
 
@@ -9611,6 +9691,9 @@ msgstr "Final cut %(final_id)s does not exist in pieza; the route must create it
 msgid "La final %(final_id)s no existe; la ruta debe crearla con creative_flow.crear_final antes de encolar."
 msgstr "Final cut %(final_id)s does not exist; the route must create it with creative_flow.crear_final before queuing."
 
+msgid "La fuente de pago guardada no es válida"
+msgstr "The saved payment method isn't valid"
+
 msgid "La generación de videos e imágenes está en pausa"
 msgstr "Video and image generation is paused"
 
@@ -10242,6 +10325,10 @@ msgstr "%(cliente)s has used up the included items of its plan"
 msgid "Lo incluido del plan de %(cliente)s va en el 80 %%"
 msgstr "%(cliente)s has used 80 %% of the included items of its plan"
 
+#, python-format
+msgid "Lo pagado de tu plan termina el %(fecha)s. Para seguir con el plan, escríbenos o registra una tarjeta en Configuración › Plan."
+msgstr "Your plan's paid time ends on %(fecha)s. To keep the plan, write to us or add a card in Settings › Plan."
+
 msgid "Lo que Claude necesita"
 msgstr "What Claude needs"
 
@@ -10399,6 +10486,9 @@ msgstr "Models perform best up to 15 s; for something longer, generate two piece
 
 msgid "Los nuevos vienen de tus estudios y esperan tu aprobación. Los aprobados son las personas que usa toda la app: Sprints, ideas y guiones."
 msgstr "New ones come from your studies and wait for your approval. Approved ones are the personas the whole app uses: Sprints, ideas and scripts."
+
+msgid "Los pagos con tarjeta no están disponibles ahora; escríbenos para activar tu plan"
+msgstr "Card payments aren't available right now; write to us to activate your plan"
 
 msgid "Los primeros 3 segundos no detienen el scroll: prueba otro arranque y deja el resto igual."
 msgstr "The first 3 seconds don't stop the scroll: try another opening and keep the rest as is."
@@ -11642,6 +11732,10 @@ msgstr "I couldn't translate the word into English; write it another way."
 msgid "No pude traducir la palabra al inglés; intenta de nuevo en un momento."
 msgstr "I couldn't translate the word into English; try again in a moment."
 
+#, python-format
+msgid "No pudimos cobrar tu plan %(plan)s"
+msgstr "We couldn't charge your %(plan)s plan"
+
 msgid "No pudimos leer la tasa de cambio; intenta en unos minutos"
 msgstr "We couldn't read the exchange rate; try again in a few minutes"
 
@@ -12509,6 +12603,9 @@ msgstr "For whom"
 
 msgid "Para rehacer desde esa escena hace falta el último cuadro de la anterior."
 msgstr "To redo from that scene, the last frame of the previous one is needed."
+
+msgid "Para suscribirte tienes que aceptar los términos de Wompi, el tratamiento de datos y el cobro automático"
+msgstr "To subscribe you need to accept Wompi's terms, the data processing and the automatic charge"
 
 msgid "Para vender"
 msgstr "Promo labels"
@@ -15616,6 +15713,10 @@ msgid "Te mandamos un enlace para confirmarlo; con él también recuperas la con
 msgstr "We'll send you a link to confirm it; you can also use it to recover your password if you forget it."
 
 #, python-format
+msgid "Te quedan %(monto)s del saldo del plan hasta el %(fecha)s; lo que no uses no se acumula."
+msgstr "You have %(monto)s of plan balance left until %(fecha)s; what you don't use doesn't roll over."
+
+#, python-format
 msgid "Te quedan %(monto)s. Recarga para seguir creando."
 msgstr "You have %(monto)s left. Top up to keep creating."
 
@@ -16494,8 +16595,34 @@ msgstr "Your moment"
 msgid "Tu máquina de contenido con IA.<br>De la foto del producto al anuncio publicado."
 msgstr "Your AI content machine.<br>From the product photo to the published ad."
 
+#, python-format
+msgid "Tu plan %(plan)s está activo"
+msgstr "Your %(plan)s plan is active"
+
+#, python-format
+msgid "Tu plan %(plan)s se renovó"
+msgstr "Your %(plan)s plan renewed"
+
+#, python-format
+msgid "Tu plan %(plan)s se renueva pronto"
+msgstr "Your %(plan)s plan renews soon"
+
+#, python-format
+msgid "Tu plan %(plan)s termina pronto"
+msgstr "Your %(plan)s plan ends soon"
+
 msgid "Tu plan de TrendTrack no incluye la API (hace falta el plan Pro o superior)."
 msgstr "Your TrendTrack plan doesn't include the API (the Pro plan or higher is required)."
+
+#, python-format
+msgid "Tu plan se renueva el %(fecha)s por %(monto)s (en pesos a la TRM del día). El saldo del plan que no uses antes de esa fecha no se acumula."
+msgstr "Your plan renews on %(fecha)s for %(monto)s (in Colombian pesos at the day's official exchange rate). Plan balance you don't use before that date doesn't roll over."
+
+msgid "Tu plan terminó"
+msgstr "Your plan ended"
+
+msgid "Tu plan terminó. Tu saldo propio sigue disponible y tus generaciones se cobran a la carta. Puedes volver a suscribirte en Configuración › Plan."
+msgstr "Your plan ended. Your own balance is still available and your generations are charged pay-as-you-go. You can subscribe again in Settings › Plan."
 
 #, python-format
 msgid "Tu proyecto %(nombre)s ya está conectado a Meta: cuenta %(cuenta)s · Página %(pagina)s. Ya puedes probar piezas en Experimentos y publicar contenido."
@@ -16685,6 +16812,10 @@ msgstr "A Wompi payment does not match any top-up"
 
 msgid "Un pago de Wompi no cuadra con su recarga"
 msgstr "A Wompi payment does not match its top-up"
+
+#, python-format
+msgid "Un pago de plan de %(cliente)s pide revisión"
+msgstr "A plan payment from %(cliente)s needs review"
 
 msgid "Un proyecto que cobra paga cada pieza con su saldo prepagado: costo del proveedor × margen. Un proyecto que no cobra sigue igual que siempre."
 msgstr "A project that charges usage pays for each piece from its prepaid balance: provider cost × markup. A project that does not charge works the same as always."
@@ -17466,6 +17597,10 @@ msgstr "Wompi did not return the expected data"
 msgid "Wompi no pudo abrir el pago: %(motivo)s. Intenta de nuevo en un rato."
 msgstr "Wompi could not open the payment: %(motivo)s. Try again in a while."
 
+#, python-format
+msgid "Wompi rechazó el cobro de %(monto)s (%(motivo)s). Lo intentaremos otra vez el %(proximo)s. Si no se puede cobrar antes del %(limite)s, el plan termina. Puedes cambiar la tarjeta en Configuración › Plan. Mientras tanto, tus generaciones se cobran a la carta con tu saldo propio."
+msgstr "Wompi declined the %(monto)s charge (%(motivo)s). We'll try again on %(proximo)s. If it can't be charged before %(limite)s, the plan ends. You can change the card in Settings › Plan. Meanwhile, your generations are charged pay-as-you-go from your own balance."
+
 msgid "Wompi rechazó el pago. No se te cobró nada."
 msgstr "Wompi declined the payment. You were not charged."
 
@@ -17737,6 +17872,18 @@ msgstr "I already have an account"
 
 msgid "Ya tenías este audio con ese texto, voz y música: está en Tus audios."
 msgstr "You already had this audio with that text, voice and music: it is in Your audios."
+
+#, python-format
+msgid "Ya tienes el saldo del plan de este mes. Lo pagado te cubre hasta el %(fecha)s."
+msgstr "You now have this month's plan balance. What you paid covers you until %(fecha)s."
+
+#, python-format
+msgid "Ya tienes el saldo del plan del nuevo periodo. Lo pagado te cubre hasta el %(fecha)s."
+msgstr "You now have the new period's plan balance. What you paid covers you until %(fecha)s."
+
+#, python-format
+msgid "Ya usaste el %(porcentaje)s %% del saldo de tu plan"
+msgstr "You've used %(porcentaje)s%% of your plan balance"
 
 msgid "Ya vio cómo funciona en otros: hay que mejorar el cómo"
 msgstr "They've seen how it works elsewhere: you have to improve the how"
