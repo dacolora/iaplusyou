@@ -328,3 +328,32 @@ production. It must work for ANY ad, not only Creatv's: in happyflops only 4 pie
   `language: null` (`fal_audio.transcribir_palabras(url, None)`): fal accepted it in the real run of 2026-10-08 (3 of 4
   ads transcribed, Norwegian and English), so PND-185 is closed; if fal ever rejects it, the task goes on without
   voice.
+
+## NVP en la pestaña (2026-10-09)
+
+Pedido del cliente de HappyFlops (spec `2026-10-09-nvp-visitantes-nuevos` §4.1): el % de visitantes nuevos dice si un
+anuncio es TOF, MOF o BOF. Siempre con el chip `cx.nvp(nuevos, visitantes)` (skill `ui`) y las SUMAS del periodo.
+- «Resultados de tu tienda»: `resultados.tarjeta_nvp` arma el KPI «Visitantes nuevos (NVP)» (`r.nvp`), una celda más de
+  `.twr-tarjetas` que NO es pestaña (no se grafica, spec §5): las pestañas viven en `.twr-pestanas` (role="tablist",
+  `display: contents`), así `role="tab"` sigue contando 6 o 7. `por_dia` trae `vis`/`vnu` (no van al JSON del JS). El
+  cambio va en puntos («▲ 20 pts», tono siempre neutro) con la regla de las demás tarjetas (días completos contra los
+  anteriores), y solo si los dos lados tienen `visitantes.MIN_VISITANTES`. Con fuente «anuncios» (un canal o sin datos
+  de tienda) es lo que el Pixel atribuye a los anuncios de la evaluación (`panel._resultados` suma `ev["anuncios"]`, sin
+  consulta nueva) y no compara. Sin visitantes (copia de antes de 0036) el chip dice «—»; el KPI no se esconde.
+- «Ver como tabla» lleva la columna NVP y cada tarjeta de análisis una cifra más en `.tw-cifras`, las dos de `a.m`
+  (`evaluacion.metricas` ya suma visitantes).
+- `evaluacion.resumen_tienda` suma `visitantes`/`visitantes_nuevos`, así `panel.resumen_total_tienda` (el `tienda_tw`
+  del Tablero en Experimentos) los trae. Pruebas: `tests/test_tw_nvp_pantallas.py`.
+- La copia (spec §3): `tw_anuncio_dia`/`tw_tienda_dia` tienen `visitantes` y `visitantes_nuevos` (0036). El Pixel tiene
+  TRES versiones (`consultas_pixel` = con visitantes, sin visitantes, mínima; `sync.NOMBRES_CONSULTA_PIXEL`): si una
+  cuenta no conoce las columnas, baja a la de antes y solo falta el NVP. La tienda los trae aparte de
+  `web_analytics_table` (`consultas_visitantes_tienda`; si falla, `fallos.visitantes` y la tienda se guarda igual).
+  Cada tienda vuelve a traer 90 días una vez (`extra.backfill_visitantes`, se escribe aunque Triple Whale no dé
+  visitantes). La regla vive solo en `triple_whale/visitantes.py`; `datos.visitantes_por(cliente, campo, ids, …)` es la
+  lectura compartida de Meta y Experimentos (una consulta; ~55 ms por nivel con las 61 218 filas de happyflops).
+- La IA (spec §4.5): «Evaluar con IA» y «Cómo mejorarlo» reciben por anuncio `visitantes.texto_prompt(...)` y la regla
+  `visitantes.REGLA_PROMPT`; la `etapa` de cada anuncio es la medida. Medido en
+  `docs/superpowers/evals/2026-10-09-nvp-en-la-ia.md`: sin NVP acertaba la etapa en 4 de 10, con NVP en 10 de 10. En la
+  misma medición el tope de 16 000 de `analisis.MAX_TOKENS` ya cortaba la primera respuesta de 10 anuncios: subió a
+  32 000 con `TIMEOUT_CLAUDE_S = 900` (sin `timeout` explícito el SDK exige streaming arriba de ~21 000). PND-210
+  (costo contra el precio a la vista) y PND-211 (idioma de la respuesta) quedaron abiertos.

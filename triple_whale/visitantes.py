@@ -73,3 +73,25 @@ def de_fila(fila):
     """`resumen` de una fila o dict con `visitantes_nuevos` y `visitantes`."""
     fila = fila or {}
     return resumen(fila.get("visitantes_nuevos"), fila.get("visitantes"))
+
+
+# ------------------------------------------------- para los prompts ---
+# Los prompts de «Evaluar con IA» y «Cómo mejorarlo» van en español (el system pide el idioma de la respuesta).
+
+REGLA_PROMPT = (
+    f"NVP = % de visitantes nuevos que trajo el anuncio según el Pixel de Triple Whale (visitantes nuevos ÷ "
+    f"visitantes únicos). Dice a quién le llega: TOF (arriba del embudo, gente que no conocía la tienda) desde "
+    f"{UMBRAL_TOF:.0f} %, MOF de {UMBRAL_BOF:.0f} a {UMBRAL_TOF:.0f} %, BOF (gente que ya visitó la tienda) por "
+    f"debajo de {UMBRAL_BOF:.0f} %; con menos de {MIN_VISITANTES} visitantes no hay etapa medida.")
+
+
+def texto_prompt(nuevos, visitantes):
+    """Una línea con el NVP para Claude: «visitantes 1.234 · NVP 72 % → TOF (medido)»."""
+    import idiomas
+    r = resumen(nuevos, visitantes)
+    if r["estado"] == "sin_datos":
+        return "visitantes: sin datos del Pixel (no se puede medir la etapa)"
+    base = f"visitantes {idiomas.numero(r['visitantes'])} · NVP {idiomas.numero(r['nvp'])} %"
+    if r["estado"] == "pocos":
+        return base + " (muy pocos visitantes para decir la etapa)"
+    return f"{base} → {r['etapa']} (medido)"

@@ -107,3 +107,64 @@ def test_visitantes_por_campana_cuenta_tambien_los_dias_sin_campana(copia):
             objeto: {"visitantes": 160, "visitantes_nuevos": 95}}
     with pytest.raises(ValueError):
         copia.visitantes_por("acme", "anuncio; DROP", ["x"])
+
+
+# ------------------------------------------------------- prompts de IA ---
+
+def test_texto_para_claude_dice_la_etapa_solo_si_hay_datos_suficientes(base_temporal):
+    import dashboard
+    with dashboard.app.test_request_context("/"):
+        assert vis.texto_prompt(300, 400) == "visitantes 400 · NVP 75 % → TOF (medido)"
+        assert "muy pocos" in vis.texto_prompt(9, 10) and "→" not in vis.texto_prompt(9, 10)
+        assert "sin datos del Pixel" in vis.texto_prompt(0, 0)
+    assert "70 %" in vis.REGLA_PROMPT and "40 %" in vis.REGLA_PROMPT and "50 visitantes" in vis.REGLA_PROMPT
+
+
+def _anuncio_muestra(ref, visitantes, nuevos):
+    m = {k: 1.0 for k in ("gasto", "impresiones", "clics", "ctr", "cpm", "gancho", "retencion", "pedidos", "ingresos",
+                          "roas", "cpa", "conversion", "ticket", "nc_pedidos")}
+    m.update(visitantes=visitantes, visitantes_nuevos=nuevos)
+    return {"ref": ref, "canal": "facebook-ads", "ad_id": ref, "nombre": f"Anuncio {ref}", "campana": "Prospección",
+            "veredicto": "ganador", "motivo": "ROAS alto", "problemas": [], "fortalezas": [], "m": m}
+
+
+def test_evaluar_con_ia_le_pasa_a_claude_el_nvp_de_cada_anuncio_y_la_regla(base_temporal):
+    import dashboard
+    from triple_whale import analisis
+    assert {"visitantes", "visitantes_nuevos", "nvp"} <= set(analisis.CAMPOS_M)
+    with dashboard.app.test_request_context("/"):
+        texto, _ = analisis.armar("Acme", {"desde": "2026-10-01", "hasta": "2026-10-07"},
+                                  [_anuncio_muestra("A1", 1000, 800), _anuncio_muestra("A2", 0, 0)], {}, bloques={})
+    assert vis.REGLA_PROMPT in texto
+    assert "visitantes 1.000 · NVP 80 % → TOF (medido)" in texto or "visitantes 1,000 · NVP 80 % → TOF (medido)" in texto
+    assert "sin datos del Pixel" in texto
+    assert "etapa medida no cuadra" in texto
+
+
+def test_como_mejorarlo_le_pasa_a_claude_el_nvp_del_anuncio_y_de_los_ganadores(base_temporal):
+    import dashboard
+    from triple_whale import mejorar
+    a = _anuncio_muestra("A1", 200, 30)
+    ganador = {"nombre": "Ganador", "m": {"roas": 3, "pedidos": 4, "ctr": 1, "gancho": .3, "visitantes": 500,
+                                          "visitantes_nuevos": 400}}
+    fila = {"desde": "2026-10-01", "hasta": "2026-10-07", "moneda": "USD", "canal": "facebook-ads",
+            "foto": {"nombre": a["nombre"], "campana": a["campana"], "veredicto": "perdedor", "motivo": "x",
+                     "m": a["m"], "anillos": {}, "creativo": {}, "cuenta": {}, "ganadores": [ganador]}}
+    with dashboard.app.test_request_context("/"):
+        texto = mejorar.armar("Acme", fila)
+    assert vis.REGLA_PROMPT in texto
+    assert "NVP 15 % → BOF (medido)" in texto
+    assert "NVP 80 % → TOF (medido)" in texto
+
+
+def test_evaluar_con_ia_pide_tope_amplio_con_timeout_explicito(monkeypatch):
+    """Con 16 000 la respuesta de 10 anuncios llegaba cortada (eval 2026-10-09); 32 000 sin `timeout` haría que el SDK
+    exigiera streaming."""
+    from sprints import analisis as sprints_analisis
+    from triple_whale import analisis
+    recibido = {}
+    monkeypatch.setattr(sprints_analisis, "_llamar_contando",
+                        lambda content, **kw: recibido.update(kw) or ("{}", 1, 1))
+    analisis._llamar([{"type": "text", "text": "x"}], "SYSTEM")
+    assert recibido == {"max_tokens": 32000, "system": "SYSTEM", "timeout": analisis.TIMEOUT_CLAUDE_S}
+    assert 600 < analisis.TIMEOUT_CLAUDE_S
