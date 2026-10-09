@@ -507,6 +507,12 @@ msgid "%(n)s comentario(s) nuevos"
 msgstr "%(n)s new comment(s)"
 
 #, python-format
+msgid "%(n)s compra"
+msgid_plural "%(n)s compras"
+msgstr[0] "%(n)s purchase"
+msgstr[1] "%(n)s purchases"
+
+#, python-format
 msgid "%(n)s con 5xx"
 msgstr "%(n)s with 5xx"
 
@@ -9118,12 +9124,12 @@ msgid "Hoy va en %(ventas)s y %(pedidos)s, con %(gasto)s de gasto."
 msgstr "Today so far: %(ventas)s and %(pedidos)s, with %(gasto)s of spend."
 
 #, python-format
-msgid "Hoy van %(ventas)s en compras según Meta y %(pedidos)s, con %(gasto)s de gasto."
-msgstr "Today so far: %(ventas)s in purchases per Meta and %(pedidos)s, with %(gasto)s of spend."
-
-#, python-format
 msgid "Hoy van %(ventas)s en ventas atribuidas según el Pixel y %(pedidos)s, con %(gasto)s de gasto."
 msgstr "Today so far: %(ventas)s in sales attributed by the Pixel and %(pedidos)s, with %(gasto)s of spend."
+
+#, python-format
+msgid "Hoy van %(ventas)s en ventas según Meta y %(compras)s, con %(gasto)s de gasto."
+msgstr "Today so far: %(ventas)s in sales per Meta and %(compras)s, with %(gasto)s of spend."
 
 msgid "ID de Creatv"
 msgstr "Creatv's ID"
@@ -15636,12 +15642,12 @@ msgid "Su día a día (una situación por línea)"
 msgstr "Their day to day (one situation per line)"
 
 #, python-format
-msgid "Su mejor día fue el %(dia)s: %(ventas)s en compras según Meta y %(pedidos)s."
-msgstr "Their best day was %(dia)s: %(ventas)s in purchases per Meta and %(pedidos)s."
-
-#, python-format
 msgid "Su mejor día fue el %(dia)s: %(ventas)s en ventas atribuidas según el Pixel y %(pedidos)s."
 msgstr "Their best day was %(dia)s: %(ventas)s in sales attributed by the Pixel and %(pedidos)s."
+
+#, python-format
+msgid "Su mejor día fue el %(dia)s: %(ventas)s en ventas según Meta y %(compras)s."
+msgstr "Their best day was %(dia)s: %(ventas)s in sales per Meta and %(compras)s."
 
 msgid "Su propia conexión:"
 msgstr "Its own connection:"

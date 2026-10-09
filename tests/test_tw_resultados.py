@@ -341,3 +341,19 @@ def test_la_plantilla_pinta_el_recuadro_del_detalle_solo_con_url_dia(app):  # no
     sin = pintar(fuente="meta", con_detalle=False)
     assert 'class="twr-dia"' not in sin and "data-twr-dia" not in sin
     assert "Resultados de tus anuncios en Meta" in sin and "Ventas según Meta" in sin
+
+
+def test_fuente_meta_llama_compras_al_conteo_y_nunca_pedidos(es):
+    # Las tarjetas dicen «Ventas según Meta» (valor) y «Compras según Meta» (conteo): las frases también.
+    serie = _dias([(100, 50, 1)] * 5 + [(100, 50, 1), (240, 50, 2), (100, 50, 1), (100, 50, 1), (90, 30, 1)])
+    out = _armar(serie, dias_periodo=5, inicio=5, fuente="meta")
+    frases = [f["texto"] for f in out["lectura"]]
+    mejor = next(t for t in frases if t.startswith("Su mejor día"))
+    assert mejor.endswith("en ventas según Meta y 2 compras.") and "compras según Meta y" not in mejor
+    assert out["hoy_texto"].startswith("Hoy van 90 USD en ventas según Meta y 1 compra, con 30 USD de gasto.")
+    assert any(t.startswith("Según Meta, tus anuncios vendieron") for t in frases)       # la comparación no mezcla
+    todo = " ".join(frases + [out["hoy_texto"]] + [t["etiqueta"] + " " + t["ayuda"] for t in out["tarjetas"]])
+    assert "pedido" not in todo.lower() and "Compras según Meta" in todo
+    # El mismo texto en la fuente mezclada sí habla de pedidos (no cambió).
+    mixta = _armar(serie, dias_periodo=5, inicio=5, fuente="mixta")
+    assert "2 pedidos" in " ".join(f["texto"] for f in mixta["lectura"]) and "1 pedido" in mixta["hoy_texto"]

@@ -268,6 +268,13 @@ def _pedidos(n):
     return ngettext("%(n)s pedido", "%(n)s pedidos", entero, n=_num(n))
 
 
+def _compras(n):
+    """Lo mismo que `_pedidos` para la fuente Meta, donde el conteo se llama «compras» (la tarjeta dice «Compras
+    según Meta»): una misma cifra nunca se llama de dos maneras en la misma pantalla."""
+    entero = int(round(_f(n)))
+    return ngettext("%(n)s compra", "%(n)s compras", entero, n=_num(n))
+
+
 # ------------------------------------------------------------- lectura ---
 
 def lectura(completos, previos, comparar, nuevos, canales, moneda, fuente):
@@ -300,12 +307,12 @@ def lectura(completos, previos, comparar, nuevos, canales, moneda, fuente):
     if i is not None:
         d = completos[i]
         datos_frase = {"dia": idiomas.dia_semana(_fecha(d["f"])), "ventas": _dinero(d["ing"], moneda),
-                       "pedidos": _pedidos(d["ped"])}
+                       "pedidos": _pedidos(d["ped"]), "compras": _compras(d["ped"])}
         if fuente == "anuncios":
             texto = gettext("Su mejor día fue el %(dia)s: %(ventas)s en ventas atribuidas según el Pixel y "
                             "%(pedidos)s.", **datos_frase)
         elif fuente == "meta":
-            texto = gettext("Su mejor día fue el %(dia)s: %(ventas)s en compras según Meta y %(pedidos)s.",
+            texto = gettext("Su mejor día fue el %(dia)s: %(ventas)s en ventas según Meta y %(compras)s.",
                             **datos_frase)
         else:
             texto = gettext("Tu mejor día fue el %(dia)s: %(ventas)s en ventas y %(pedidos)s.", **datos_frase)
@@ -463,12 +470,12 @@ def _hoy_texto(hoy_d, hoy, moneda, ultima_copia, fin_datos, fuente):
         return gettext("La última copia de Triple Whale trae datos hasta el %(fecha)s: los días que faltan no entran "
                        "en las cifras ni en las comparaciones.", fecha=fecha)
     datos_frase = {"ventas": _dinero(hoy_d["ing"], moneda), "pedidos": _pedidos(hoy_d["ped"]),
-                   "gasto": _dinero(hoy_d["gas"], moneda)}
+                   "compras": _compras(hoy_d["ped"]), "gasto": _dinero(hoy_d["gas"], moneda)}
     if fuente == "anuncios":
         base = gettext("Hoy van %(ventas)s en ventas atribuidas según el Pixel y %(pedidos)s, con %(gasto)s de gasto.",
                        **datos_frase)
     elif fuente == "meta":
-        base = gettext("Hoy van %(ventas)s en compras según Meta y %(pedidos)s, con %(gasto)s de gasto.",
+        base = gettext("Hoy van %(ventas)s en ventas según Meta y %(compras)s, con %(gasto)s de gasto.",
                        **datos_frase)
     else:
         base = gettext("Hoy va en %(ventas)s y %(pedidos)s, con %(gasto)s de gasto.", **datos_frase)
