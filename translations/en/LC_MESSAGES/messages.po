@@ -5672,6 +5672,9 @@ msgstr "The clip would be too short at that speed."
 msgid "El clip siguiente empieza así: %(estado)s"
 msgstr "The next clip starts like this: %(estado)s"
 
+msgid "El clip ya está pagado: recupéralo en Crear."
+msgstr "The clip is already paid for: recover it in Create."
+
 #, python-format
 msgid "El clip «%(clip)s» del video no es un video."
 msgstr "Clip “%(clip)s” of the video is not a video."

@@ -115,3 +115,17 @@ def test_el_documento_compila_con_el_audio_entero_del_original_en_su_pista():
     assert plan.duracion_ms == 20000
     assert "atrim=start=0.000:end=20.000" in plan.filtergraph
     assert "concat=n=2:v=1:a=0" in plan.filtergraph
+
+
+def test_clip_recuperable_es_la_condicion_con_que_crear_ofrece_recuperar():
+    """Arreglo C (revisión del gasto, 2026-10-09): la MISMA condición que `dashboard.cf_recuperar` y
+    `_crear_detalle.html`: la sesión en error, con el id de su predicción y que no sea una imagen."""
+    pred = {"id": "p1", "modelo": "kling_o3_pro"}
+    assert ganchos.clip_recuperable({"estado": "error", "prediccion": pred, "tipo": "video"})
+    assert ganchos.clip_recuperable({"estado": "error", "prediccion": pred})                      # sin tipo: video
+    assert not ganchos.clip_recuperable({"estado": "error", "prediccion": pred, "tipo": "imagen"})
+    assert not ganchos.clip_recuperable({"estado": "error", "prediccion": None})
+    assert not ganchos.clip_recuperable({"estado": "error", "prediccion": {"id": ""}})
+    assert not ganchos.clip_recuperable({"estado": "video_generando", "prediccion": pred})
+    assert not ganchos.clip_recuperable({"estado": "video_listo", "prediccion": pred})
+    assert not ganchos.clip_recuperable(None) and not ganchos.clip_recuperable({})

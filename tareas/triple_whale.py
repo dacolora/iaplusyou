@@ -388,6 +388,10 @@ PRIORIDAD_GANCHOS = 3
 # Una fila recién creada tiene unos milisegundos sin su trabajo en la cola (la ruta guarda el job_id después de
 # crear la tanda; el vigilante mueve a «armando» antes de encolar): solo se da por cortada pasado esto sin cambios.
 GRACIA_S = 120
+# Un clip que Crear todavía puede recuperar («Recuperar el video», sin pagar de nuevo) ya está pagado: su fila sigue en
+# «generando» hasta 24 h desde su último cambio, esperando a que la persona lo recupere; después se cierra con el error
+# de la sesión (revisión del gasto del 2026-10-09, arreglo C; antes PND-221).
+ESPERA_RECUPERABLE_S = 24 * 3600
 ETAPAS_GANCHOS = [(idiomas.N_("Bajando el video"), 40), (idiomas.N_("Lanzando los clips"), 60)]
 ETAPAS_ARMAR = [(idiomas.N_("Armando el video"), 100)]
 
@@ -581,10 +585,17 @@ def tw_ganchos_preparar(tarea):
     except Exception as e:
         log.exception("ganchos: no se pudo preparar la tanda %s del análisis %s", tanda, aid)
         mensaje = _texto_error(e)
+        try:
+            # Con las sesiones, `_clip_salio` ve también un clip cuya tarea ya terminó (con su video, o en un error
+            # que Crear puede recuperar): está pagado y su fila no pasa a error (arreglo C).
+            sesiones = creative_flow.cargar(cliente)
+        except Exception:  # noqa: BLE001 — sin sesiones queda lo que dice la cola
+            log.exception("ganchos: no se pudieron leer las sesiones de %s", cliente)
+            sesiones = {}
         for g in datos.ganchos_de_analisis(cliente, aid):
             if g["tanda"] != tanda or g["estado"] != "preparando":
                 continue
-            if _clip_salio(cliente, g):
+            if _clip_salio(cliente, g, sesiones):
                 # Spec §4.4.4: solo las filas sin clip pasan a error; la que ya lo tiene en la cola (pagado o
                 # pagándose) sigue su camino con el vigilante.
                 datos.mover(g["id"], "preparando", "generando", job_id=flowplus_lanzar.job_id(cliente, g["cf_id"]))
@@ -607,13 +618,15 @@ def _quieto(g, segundos=GRACIA_S):
 
 def _clip_salio(cliente, g, sesiones=None):
     """¿El clip de esta fila ya salió (pagado o pagándose)? Su tarea de Crear sigue viva en la cola o, con las
-    `sesiones` del proyecto, su sesión ya tiene el video. Solo lee: nunca lanza ni cobra nada. Lo usan la preparación
-    que falla y el vigilante, para que una fila con su clip en camino no se dé por perdida (nada pagado se pierde)."""
+    `sesiones` del proyecto, su sesión ya tiene el video o quedó en un error que Crear puede recuperar sin pagar de
+    nuevo (`ganchos.clip_recuperable`, arreglo C). Solo lee: nunca lanza ni cobra nada. Lo usan la preparación que
+    falla y el vigilante, para que una fila con su clip en camino no se dé por perdida (nada pagado se pierde)."""
     if not g.get("cf_id"):
         return False
     if trabajos.en_curso(flowplus_lanzar.job_id(cliente, g["cf_id"])):
         return True
-    return ((sesiones or {}).get(g["cf_id"]) or {}).get("estado") == "video_listo"
+    sesion = (sesiones or {}).get(g["cf_id"]) or {}
+    return sesion.get("estado") == "video_listo" or ganchos.clip_recuperable(sesion)
 
 
 def vigilar_gancho(cliente, g, sesiones):
@@ -635,6 +648,11 @@ def vigilar_gancho(cliente, g, sesiones):
                 except Exception:  # noqa: BLE001 — sin tarea nadie la armaría: queda en error con su motivo
                     log.exception("ganchos: no se pudo encolar el armado del gancho %s", gid)
                     datos.mover(gid, "armando", "error", error=gettext("No se pudo poner el armado en la cola."))
+        elif ganchos.clip_recuperable(entry) and not _quieto(g, ESPERA_RECUPERABLE_S):
+            # Crear ofrece «Recuperar el video» (sin pagar de nuevo): el clip ya está pagado. La fila espera a la persona
+            # sin escribir nada (escribir reiniciaría las 24 h); cuando lo recupera, la sesión vuelve a generar y luego
+            # queda en video_listo, y el camino de siempre la lleva a armar.
+            return
         else:
             datos.mover(gid, "generando", "error", error=entry.get("error") or gettext("El clip no se pudo generar."))
     elif estado == "produciendo":

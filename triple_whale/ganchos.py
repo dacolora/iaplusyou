@@ -105,6 +105,16 @@ def destino(pais_tienda, pais_proyecto):
     return tipos.PAISES[PAIS_DEFECTO]["idioma"], PAIS_DEFECTO
 
 
+def clip_recuperable(sesion):
+    """¿Crear ofrece «Recuperar el video (sin pagar de nuevo)» para la sesión del clip? La MISMA condición que
+    `dashboard.cf_recuperar` y `templates/_crear_detalle.html`: en error, con el id de su predicción guardado y que no
+    sea una imagen. Ese clip ya está pagado (WaveSpeed lo termina y lo cobra igual): su gancho no se da por perdido
+    (revisión del gasto del 2026-10-09, arreglo C; antes PND-221)."""
+    s = sesion if isinstance(sesion, dict) else {}
+    return (s.get("estado") == "error" and bool((s.get("prediccion") or {}).get("id"))
+            and (s.get("tipo") or "video") != "imagen")
+
+
 def ganchos_generables(resultado):
     """Los ganchos del análisis que se pueden pedir: con texto y prompt y SIN cifras que no están en los datos (spec
     §3.2: una cifra inventada no entra a un video ni al precio). `n` es su posición (1–3) en la lista de Claude."""

@@ -291,3 +291,56 @@ def test_ver_en_final_edition_solo_con_su_sesion(app):  # noqa: F811
     assert datos.mover(f1["id"], "preparando", "lista", edicion_id=5, url_final="https://r2.test/final.mp4")
     html = _detalle(app, aid)
     assert "Ver en Final edition" not in html and "#final?cf=" not in html
+
+
+# ------------------------------- arreglo C (revisión del gasto, 2026-10-09): un clip pagado y recuperable ---
+
+def _sesion(estado="error", prediccion=True, tipo=None):
+    import creative_flow
+    cf = creative_flow.crear("acme", [], [], [], "Gancho 1", 3, "", "A", referencias_urls=[], platforms=[])
+    campos = {"estado": estado, "error": "WaveSpeed tardó más de lo esperado."}
+    if prediccion:
+        campos["prediccion"] = {"id": "p1", "modelo": "kling_o3_pro", "en": "2026-10-09T10:00:00"}
+    if tipo:
+        campos["tipo"] = tipo
+    creative_flow.actualizar("acme", cf, **campos)
+    return cf
+
+
+def test_una_variante_con_su_clip_recuperable_lleva_a_recuperarlo_en_crear(app):  # noqa: F811
+    aid = _analisis()
+    f1, f2, f3 = datos.crear_tanda("acme", aid, _generables(aid))
+    cf = _sesion()
+    assert datos.mover(f1["id"], "preparando", "generando", cf_id=cf, job_id=f"acme__{cf}__creative_flow")
+    for f in (f2, f3):
+        assert datos.mover(f["id"], "preparando", "error", error="x")
+    html = _detalle(app, aid)
+    assert "El clip ya está pagado: recupéralo en Crear." in html
+    assert f'href="/cliente/acme#creativeflowplus?cf={cf}">Abrir en Crear</a>' in html
+    assert "Generando el clip" not in html and "data-poll-job" not in html
+    assert "data-tw-ganchos-esperan" not in html and "<script" not in html       # espera a la persona, no al vigilante
+
+
+def test_una_variante_que_espera_al_vigilante_no_habla_de_recuperar(app):  # noqa: F811
+    aid = _analisis()
+    f1, f2, f3 = datos.crear_tanda("acme", aid, _generables(aid))
+    cf = _sesion(estado="video_listo", prediccion=True)
+    assert datos.mover(f1["id"], "preparando", "generando", cf_id=cf, job_id=f"acme__{cf}__creative_flow")
+    for f in (f2, f3):
+        assert datos.mover(f["id"], "preparando", "error", error="x")
+    html = _detalle(app, aid)
+    assert "recupéralo en Crear" not in html and "Generando el clip" in html and "data-tw-ganchos-esperan" in html
+
+
+@pytest.mark.parametrize("estado, prediccion, tipo", [("error", True, None), ("error", True, "imagen"),
+                                                      ("error", False, None), ("video_listo", True, None)])
+def test_clip_recuperable_coincide_con_lo_que_crear_deja_recuperar(app, estado, prediccion, tipo):  # noqa: F811
+    """La condición de los ganchos es la de `cf_recuperar`: si una dice que sí, la otra encola la recuperación."""
+    import creative_flow
+    cf = _sesion(estado=estado, prediccion=prediccion, tipo=tipo)
+    esperado = ganchos_tw.clip_recuperable(creative_flow.cargar("acme")[cf])
+    app["c"].post(f"/cliente/acme/creative_flow/{cf}/recuperar")
+    with db.conectar() as con:
+        encolada = con.execute(sa.select(sa.func.count()).select_from(db.tarea).where(
+            db.tarea.c.tipo == "flowplus_recuperar")).scalar() == 1
+    assert encolada is esperado

@@ -65,6 +65,10 @@
         </p>
         {% elif g.estado == 'error' %}
         <p class="tag-error">{{ g.error or _('No se pudo hacer este gancho.') }}</p>
+        {% elif g.recuperable %}
+        {#- Arreglo C: el clip ya está pagado y Crear lo recupera sin pagar de nuevo; la fila lo espera hasta 24 h. -#}
+        <p class="tag-advertencia tw-aviso">{{ _('El clip ya está pagado: recupéralo en Crear.') }}
+          <a href="{{ url_for('ver_cliente', cliente=cliente) }}#creativeflowplus?cf={{ g.cf_id | urlencode }}">{{ _('Abrir en Crear') }}</a></p>
         {% else %}
         <div class="tw-progreso">
           {% if g.barra %}<div class="barra-progreso" id="tw-gancho-{{ g.id }}" data-poll-job="{{ g.job_id }}" data-poll-al-terminar="evento"><div class="barra-progreso-fill" style="width:0%"></div></div>{% endif %}

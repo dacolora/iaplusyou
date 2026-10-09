@@ -38,6 +38,7 @@ from flask import Blueprint, abort, flash, redirect, render_template, request, s
 from flask_babel import gettext, ngettext
 
 import cola
+import creative_flow
 import gastos
 import idiomas
 import proyectos
@@ -370,9 +371,18 @@ def _contexto_ganchos(cliente, fila):
         for g in t["filas"]:
             g["barra"] = g["estado"] in datos.VIVOS_GANCHO and bool(g.get("job_id")) and g["job_id"] in vivos
     ultima = tandas[0]["filas"] if tandas else []
+    # Arreglo C (revisión del gasto, 2026-10-09): una variante «generando» sin su trabajo vivo puede tener el clip en un
+    # error que Crear recupera sin pagar de nuevo; entonces el detalle lleva a recuperarlo. Las sesiones se leen UNA
+    # vez y solo si hay alguna variante así (regla 8: nada de una consulta por variante).
+    sin_trabajo = {g["id"] for g in ultima if g["estado"] == "generando" and g.get("cf_id") and not g["barra"]}
+    sesiones = creative_flow.cargar(cliente) if sin_trabajo else {}
+    for g in ultima:
+        g["recuperable"] = g["id"] in sin_trabajo and ganchos_tw.clip_recuperable(sesiones.get(g["cf_id"]))
     return {"generables": generables, "n": len(generables), "precio": precio, "motivo": motivo,
             "sin_precio": motivo == ganchos_tw.MOTIVO_SIN_PRECIO, "ultima": ultima, "anteriores": tandas[1:],
-            "esperan": any(g["estado"] in datos.VIVOS_GANCHO and not g["barra"] for g in ultima)}
+            # una recuperable espera a la persona, no al vigilante: la pestaña no vuelve a pedir el detalle por ella
+            "esperan": any(g["estado"] in datos.VIVOS_GANCHO and not g["barra"] and not g["recuperable"]
+                           for g in ultima)}
 
 
 def _respuesta_ganchos(cliente, ok, mensaje, estado=200):

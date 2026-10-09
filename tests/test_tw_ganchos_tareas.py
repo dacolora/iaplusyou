@@ -666,3 +666,102 @@ def test_un_reintento_con_el_render_ya_en_cola_solo_anota_y_termina(entorno, mon
     fila = datos.gancho("acme", g["id"])
     assert fila["estado"] == "produciendo" and fila["edicion_id"] == ed["id"] and fila["final_id"] == final_id
     assert fila["job_id"] == f"acme__ed{ed['id']}__es_CO__producir"
+
+
+# ------------------------------- arreglo C (revisión del gasto, 2026-10-09): un clip pagado y recuperable ---
+
+def _recuperable(cf_id, error="WaveSpeed sigue trabajando en el video."):
+    """La sesión como la deja Crear cuando ofrece «Recuperar el video (sin pagar de nuevo)»."""
+    creative_flow.actualizar("acme", cf_id, estado="error", error=error,
+                             prediccion={"id": "p1", "modelo": "kling_o3_pro", "en": "2026-10-09T10:00:00"})
+
+
+def _sin_tarea(job_id, estado="error"):
+    with db.conectar() as con:
+        con.execute(db.tarea.update().where(db.tarea.c.job_id == job_id).values(estado=estado))
+
+
+def _hace(gid, horas):
+    from datetime import datetime, timedelta
+    with db.conectar() as con:
+        con.execute(db.tw_gancho.update().where(db.tw_gancho.c.id == gid).values(
+            actualizado_en=(datetime.now() - timedelta(hours=horas)).isoformat(timespec="seconds")))
+
+
+def test_un_clip_que_crear_puede_recuperar_deja_la_fila_generando_y_al_recuperarlo_se_arma(entorno):
+    _preparar(entorno)
+    f1 = _filas(entorno)[0]
+    _recuperable(f1["cf_id"])
+    _sin_tarea(f1["job_id"])
+    _hace(f1["id"], 23)                                                     # dentro de las 24 h
+    antes = datos.gancho("acme", f1["id"])
+    _vigilar(entorno)
+    g1 = datos.gancho("acme", f1["id"])
+    assert g1["estado"] == "generando" and g1["error"] is None
+    assert g1["actualizado_en"] == antes["actualizado_en"]                  # nada escrito: las 24 h no se reinician
+    creative_flow.actualizar("acme", f1["cf_id"], estado="video_generando")  # la persona pulsó «Recuperar el video»
+    _vigilar(entorno)
+    assert datos.gancho("acme", f1["id"])["estado"] == "generando"
+    creative_flow.actualizar("acme", f1["cf_id"], estado="video_listo", video_url="https://r2.test/clip.mp4")
+    _vigilar(entorno)
+    g1 = datos.gancho("acme", f1["id"])
+    assert g1["estado"] == "armando" and g1["job_id"] == f"acme__tw_gancho_{g1['id']}_armar"
+    assert len(_cola("tw_gancho_armar")) == 1
+
+
+def test_pasadas_24_horas_un_clip_recuperable_cierra_la_fila_con_el_error_de_crear(entorno):
+    _preparar(entorno)
+    f1, f2, _f3 = _filas(entorno)
+    _recuperable(f1["cf_id"], error="WaveSpeed tardó más de lo esperado.")
+    _sin_tarea(f1["job_id"])
+    _hace(f1["id"], 25)
+    creative_flow.actualizar("acme", f2["cf_id"], estado="error", error="Kling: contenido sensible")  # sin predicción
+    _vigilar(entorno)
+    g1, g2, g3 = _filas(entorno)
+    assert g1["estado"] == "error" and g1["error"] == "WaveSpeed tardó más de lo esperado."
+    assert g2["estado"] == "error" and g2["error"] == "Kling: contenido sensible"     # nada que recuperar: enseguida
+    assert g3["estado"] == "generando"
+
+
+def test_una_preparacion_cortada_cuyo_clip_es_recuperable_sigue_a_generando(entorno):
+    t = entorno["t"]
+    _preparar(entorno)
+    f1 = _filas(entorno)[0]
+    assert datos.mover(f1["id"], "generando", "preparando", job_id=t.job_id_preparar("acme", entorno["aid"], 1))
+    _envejecer(f1["id"])
+    _recuperable(f1["cf_id"])
+    _sin_tarea(flowplus_lanzar.job_id("acme", f1["cf_id"]))
+    _vigilar(entorno)
+    g1 = datos.gancho("acme", f1["id"])
+    assert g1["estado"] == "generando" and g1["job_id"] == f"acme__{f1['cf_id']}__creative_flow" and g1["error"] is None
+
+
+@pytest.mark.parametrize("sesion", ["video_listo", "recuperable"])
+def test_si_preparar_falla_un_clip_ya_terminado_se_sigue_aunque_su_tarea_ya_no_este_viva(entorno, monkeypatch, sesion):
+    """Arreglo C: el except de preparar le da las sesiones a `_clip_salio`. Un clip cuya tarea de Crear ya terminó
+    (con su video, o en un error que Crear puede recuperar) está pagado: su fila sigue a «generando», no a error."""
+    t = entorno["t"]
+    real_lanzar, real_mover = flowplus_lanzar.lanzar, datos.mover
+    veces = []
+
+    def _lanzar(cliente, cf_id, entry, prioridad=5):
+        ok = real_lanzar(cliente, cf_id, entry, prioridad=prioridad)
+        _sin_tarea(flowplus_lanzar.job_id(cliente, cf_id), estado="ok")      # terminó enseguida
+        if sesion == "video_listo":
+            creative_flow.actualizar(cliente, cf_id, estado="video_listo", video_url="https://r2.test/clip.mp4")
+        else:
+            _recuperable(cf_id)
+        return ok
+
+    def _mover(gid, de, a, **campos):
+        if a == "generando" and not veces:
+            veces.append(gid)
+            raise RuntimeError("database is locked")
+        return real_mover(gid, de, a, **campos)
+    monkeypatch.setattr(t.flowplus_lanzar, "lanzar", _lanzar)
+    monkeypatch.setattr(datos, "mover", _mover)
+    with pytest.raises(RuntimeError):
+        _preparar(entorno)
+    g1, g2, g3 = _filas(entorno)
+    assert g1["estado"] == "generando" and g1["job_id"] == f"acme__{g1['cf_id']}__creative_flow"
+    assert g2["estado"] == g3["estado"] == "error" and g2["cf_id"] is None
