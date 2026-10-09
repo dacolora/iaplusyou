@@ -300,6 +300,8 @@
     zona.addEventListener('click', function (e) {
       var mas = e.target.closest('[data-siguiente]');
       if (mas) { cargarMas(mas); return; }
+      var fav = e.target.closest('.generado-fav');
+      if (fav) { e.preventDefault(); alternarFavorito(fav); return; }
       var card = e.target.closest('.generado');
       if (card && !e.target.closest('form, a, button')) abrir(card);
     });
@@ -322,6 +324,26 @@
       var v = card.querySelector('.generado-media video');
       if (v) { v.pause(); v.currentTime = 0; }
     });
+    // Corazón de la tarjeta (2026-10-08): cambia al instante y vuelve atrás si falla.
+    function pintarFavorito(boton, si) {
+      boton.classList.toggle('activo', si);
+      boton.setAttribute('aria-pressed', si ? 'true' : 'false');
+      boton.textContent = si ? '♥' : '♡';
+      boton.title = si ? boton.dataset.tituloSi : boton.dataset.tituloNo;
+      boton.form.elements.favorito.value = si ? '0' : '1';
+    }
+    function alternarFavorito(boton) {
+      if (boton.disabled) return;
+      var si = boton.getAttribute('aria-pressed') !== 'true';
+      var datos = new FormData(boton.form);
+      pintarFavorito(boton, si);
+      boton.disabled = true;
+      fetch(boton.form.action, { method: 'POST', body: datos, headers: { 'X-Requested-With': 'fetch' } })
+        .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+        .then(function (j) { pintarFavorito(boton, !!j.favorito); })
+        .catch(function () { pintarFavorito(boton, !si); })
+        .then(function () { boton.disabled = false; });
+    }
     function cargarMas(boton) {
       var grid = boton.closest('.generados-grid');
       boton.disabled = true;
