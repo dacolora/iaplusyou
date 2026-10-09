@@ -36,6 +36,15 @@ MOTIVO_SIN_PRECIO = gastos.SIN_PRECIO
 ERROR_BAJAR = N_("No se pudo bajar el video original.")
 ERROR_NO_MP4 = N_("El video original no es un mp4: no se puede editar.")
 ERROR_FOTOGRAMA = N_("No se pudo sacar el fotograma de arranque.")
+# Un material que entró por otra vía con los mismos bytes puede no traer su duración (revisión de la tarea 3:
+# `documento_gancho` la necesita); si tampoco se puede medir, este es el motivo.
+ERROR_DURACION = N_("No se pudo medir la duración del video.")
+# Lo que no es nuestro, solo con el tipo de la excepción (sin rutas ni tokens), y cada etapa con sus palabras
+# (revisión de la tarea 5: un fallo al armar no decía «preparar»).
+ERROR_PREPARAR = N_("Algo falló al preparar el gancho (%(error)s).")
+ERROR_ARMAR = N_("Algo falló al armar el video del gancho (%(error)s).")
+ERROR_PREPARACION_CORTADA = N_("La preparación se cortó antes de terminar.")
+ERROR_ARMADO_CORTADO = N_("El armado del video se cortó antes de terminar.")
 
 _RE_CODIGO = re.compile(r"\bCV(\d+)\b", re.IGNORECASE)
 _AUDIO = {"volumen": 1.0, "fundido_entrada_ms": 0, "fundido_salida_ms": 0, "ducking": True}

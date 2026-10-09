@@ -390,9 +390,6 @@ PRIORIDAD_GANCHOS = 3
 GRACIA_S = 120
 ETAPAS_GANCHOS = [(idiomas.N_("Bajando el video"), 40), (idiomas.N_("Lanzando los clips"), 60)]
 ETAPAS_ARMAR = [(idiomas.N_("Armando el video"), 100)]
-# Un material que entró por otra vía con los mismos bytes puede no traer su duración (revisión de la tarea 3:
-# `ganchos.documento_gancho` la necesita); si tampoco se puede medir, este es el motivo.
-ERROR_DURACION = idiomas.N_("No se pudo medir la duración del video.")
 
 
 def job_id_preparar(cliente, analisis_id, tanda):
@@ -412,16 +409,17 @@ def encolar_preparar(cliente, analisis_id, tanda):
                             prioridad=PRIORIDAD_GANCHOS)
 
 
-def _texto_error(e):
+def _texto_error(e, generico=ganchos.ERROR_PREPARAR):
     """El motivo en palabras, en el idioma del proyecto (el worker ya lo pone), sin rutas ni tokens: lo nuestro
-    (`ganchos.GanchoError`, un msgid) traducido; una descarga que falla, en palabras; lo demás, solo el tipo."""
+    (`ganchos.GanchoError`, un msgid) traducido; una descarga que falla, en palabras; lo demás, `generico` (el msgid
+    de la etapa: preparar o armar) con solo el tipo de la excepción."""
     if isinstance(e, ganchos.GanchoError):
         mensaje = str(e)
         return gettext(mensaje)
     if isinstance(e, ErrorConector):
         mensaje = ganchos.ERROR_BAJAR
         return gettext(mensaje)
-    return gettext("Algo falló al preparar el gancho (%(error)s).", error=type(e).__name__)
+    return gettext(generico, error=type(e).__name__)
 
 
 def _fotograma_en(ruta, segundo, destino):
@@ -456,14 +454,20 @@ def _bajar_original(foto, carpeta):
     return ruta
 
 
-def _material_original(cliente, ruta, foto):
-    """El original como material del editor (spec §4.4.2): gratis, deduplicado por hash, en «Medios» (origen
-    triple_whale) y con su proxy en cola si aún no lo tiene. Si los mismos bytes ya habían entrado por otra vía (una
-    subida del editor) sin sus medidas o sin `tiene_audio`, se completan: sin `tiene_audio` el gancho saldría mudo."""
+def _medidas(ruta):
+    """Duración y tamaño del video bajado (ffprobe, sin subir nada): {"duracion_ms", "ancho", "alto"}."""
     info = cortes.ffprobe_json(ruta)
     video = next((s for s in info.get("streams") or [] if s.get("codec_type") == "video"), {})
     ancho, alto = encuadre.medidas_visibles(video)
-    medidas = {"duracion_ms": borrador.ms(cortes.duracion(ruta)), "ancho": ancho or None, "alto": alto or None}
+    return {"duracion_ms": borrador.ms(cortes.duracion(ruta)), "ancho": ancho or None, "alto": alto or None}
+
+
+def _material_original(cliente, ruta, foto, medidas=None):
+    """El original como material del editor (spec §4.4.2): gratis, deduplicado por hash, en «Medios» (origen
+    triple_whale) y con su proxy en cola si aún no lo tiene. Si los mismos bytes ya habían entrado por otra vía (una
+    subida del editor) sin sus medidas o sin `tiene_audio`, se completan: sin `tiene_audio` el gancho saldría mudo.
+    `medidas`: las de `_medidas(ruta)` si quien llama ya las tomó (la preparación mide antes de subir nada)."""
+    medidas = medidas or _medidas(ruta)
     tiene_audio = mezcla.tiene_audio(ruta)
     h = materiales.hash_archivo(ruta)
     mat = materiales.subir(cliente, ruta, f"clientes/{cliente}/materiales/{h}.mp4", "video/mp4", tipo="video",
@@ -494,9 +498,9 @@ def _con_duracion(cliente, mat, carpeta):
         duracion_ms = borrador.ms(cortes.duracion(local))
     except Exception:  # noqa: BLE001 — el motivo va en palabras, sin la ruta ni el error crudo
         log.exception("ganchos: no se pudo medir el material %s", mat.get("id"))
-        raise ganchos.GanchoError(ERROR_DURACION) from None
+        raise ganchos.GanchoError(ganchos.ERROR_DURACION) from None
     if duracion_ms <= 0:
-        raise ganchos.GanchoError(ERROR_DURACION)
+        raise ganchos.GanchoError(ganchos.ERROR_DURACION)
     return materiales.actualizar_ficha(cliente, mat["hash"], duracion_ms=duracion_ms) or dict(mat, duracion_ms=duracion_ms)
 
 
@@ -525,14 +529,16 @@ def _lanzar_gancho(cliente, aid, g, foto, ruta, duracion_s, original, carpeta):
                              referencias=[{"tipo": "imagen", "url": frame_url, "frame_url": frame_url,
                                            "etiqueta": "@Imagen 1", "titulo": ganchos.codigo(gid)}],
                              tw_gancho={"gancho_id": gid, "analisis_id": aid, "original_hash": original["hash"]})
-    if not datos.mover(gid, "preparando", "preparando", cf_id=cf_id):
+    # `vacios`: si otra corrida ya le anotó su clip a la fila, este no la pisa.
+    if not datos.mover(gid, "preparando", "preparando", vacios=("cf_id",), cf_id=cf_id):
         creative_flow.eliminar(cliente, cf_id)      # sin lanzar: nada reservado ni cobrado
-        log.warning("ganchos: el gancho %s dejó de estar preparando antes de lanzar su clip", gid)
+        log.warning("ganchos: el gancho %s dejó de estar preparando (o ya tenía su clip) antes de lanzarlo", gid)
         return False
     entry = creative_flow.cargar(cliente).get(cf_id)
     if not flowplus_lanzar.lanzar(cliente, cf_id, entry, prioridad=PRIORIDAD_GANCHOS):
-        datos.mover(gid, "preparando", "error", error=gettext("No se pudo poner el clip en la cola."))
-        return False
+        # Contrato de `lanzar`: False = ya había una tarea viva de esa sesión, un clip que se está pagando. Se sigue
+        # como en `_clip_salio`: la fila va a «generando» y nunca a error (nada pagado se pierde).
+        log.warning("ganchos: el clip %s del gancho %s ya estaba en la cola", cf_id, gid)
     if not datos.mover(gid, "preparando", "generando", job_id=flowplus_lanzar.job_id(cliente, cf_id)):
         log.warning("ganchos: el clip %s del gancho %s quedó en la cola pero la fila ya no estaba preparando",
                     cf_id, gid)
@@ -554,10 +560,12 @@ def tw_ganchos_preparar(tarea):
         foto = (datos.analisis_anuncio(cliente, aid) or {}).get("foto") or {}
         trabajos.reportar(job_id, etapa=idiomas.N_("Bajando el video"))
         ruta = _bajar_original(foto, carpeta)
-        original = _material_original(cliente, ruta, foto)
-        duracion_s = (original.get("duracion_ms") or 0) / 1000
+        # Se mide antes de subir: un original corto no deja nada en R2 ni un proxy en la cola.
+        medidas = _medidas(ruta)
+        duracion_s = (medidas["duracion_ms"] or 0) / 1000
         if duracion_s < ganchos.MIN_ORIGINAL_S:
             raise ganchos.GanchoError(ganchos.MOTIVO_CORTO)
+        original = _material_original(cliente, ruta, foto, medidas)
         trabajos.reportar(job_id, etapa=idiomas.N_("Lanzando los clips"))
         for i, g in enumerate(pendientes):
             try:
@@ -642,12 +650,19 @@ def vigilar_gancho(cliente, g, sesiones):
         vivo = bool(g["job_id"]) and trabajos.en_curso(g["job_id"])
         if vivo or not _quieto(g):
             return
-        if estado == "preparando" and _clip_salio(cliente, g, sesiones):
+        if estado == "armando":
+            mensaje = ganchos.ERROR_ARMADO_CORTADO
+            datos.mover(gid, "armando", "error", error=gettext(mensaje))
+        elif _clip_salio(cliente, g, sesiones):
             # La preparación murió entre lanzar este clip y mover la fila: el clip ya se está pagando, se sigue
             # como cualquier otro.
             datos.mover(gid, "preparando", "generando", job_id=flowplus_lanzar.job_id(cliente, g["cf_id"]))
         else:
-            datos.mover(gid, estado, "error", error=gettext("La preparación se cortó antes de terminar."))
+            # Si el clip llegó a correr y falló, su sesión de Crear dice por qué; si no, la preparación se cortó.
+            sesion = (sesiones.get(g["cf_id"]) if g["cf_id"] else None) or {}
+            mensaje = ganchos.ERROR_PREPARACION_CORTADA
+            error = sesion.get("error") if sesion.get("estado") == "error" else None
+            datos.mover(gid, "preparando", "error", error=error or gettext(mensaje))
 
 
 @registrar(TIPO_GANCHOS_VIGILAR)
@@ -697,21 +712,32 @@ def _armar(cliente, g):
         doc = ganchos.documento_gancho(clip, original, g["texto"],
                                        ganchos.formato_cercano(original.get("ancho"), original.get("alto")),
                                        idioma, pais, analisis_id=g["analisis_id"], gancho_id=g["id"])
+        # Los recortes se revisan ANTES de crear la edición: un documento que no se puede producir no deja un
+        # borrador huérfano en Final edition (revisión de la tarea 5).
+        compilador.verificar_recortes(documento_mod.resolver(doc, idioma, pais),
+                                      {int(clip["id"]): int(clip["duracion_ms"]),
+                                       int(original["id"]): int(original["duracion_ms"])})
         # El nombre del anuncio se recorta, el código no: es lo que une la edición con su variante.
         sufijo = f" · {ganchos.codigo(g['id'])}"
         nombre = str(foto.get("nombre") or foto.get("ad_id") or "")[:120 - len(sufijo)] + sufijo
         ed = ediciones.crear(cliente, "video", nombre, doc, cf_id=g["cf_id"], creada_por="triple_whale")
-        compilador.verificar_recortes(documento_mod.resolver(ed["documento"], idioma, pais),
-                                      {int(clip["id"]): int(clip["duracion_ms"]),
-                                       int(original["id"]): int(original["duracion_ms"])})
-        version = ediciones.versionar(cliente, ed["id"], motivo="producir")
-        destino = f"{idioma}_{pais}"
-        [producida] = rutas_editor.encolar_producciones(cliente, ed["id"], ed, version, [destino])
+        try:
+            version = ediciones.versionar(cliente, ed["id"], motivo="producir")
+            [producida] = rutas_editor.encolar_producciones(cliente, ed["id"], ed, version, [f"{idioma}_{pais}"])
+        except Exception:
+            # Sin una función del editor que borre una edición, el borrador queda; el reintento hará otro.
+            log.warning("ganchos: la edición %s del gancho %s quedó como borrador sin producir", ed["id"], g["id"])
+            raise
     finally:
         shutil.rmtree(carpeta, ignore_errors=True)
-    if not datos.mover(g["id"], "armando", "produciendo", edicion_id=ed["id"], final_id=producida["final_id"],
-                       job_id=tareas_edicion.job_id_producir(cliente, ed["id"], idioma, pais)):
-        log.warning("ganchos: el gancho %s dejó de estar armando mientras se armaba", g["id"])
+    # Desde aquí el render ya está en la cola: nada sube, porque un reintento crearía otra edición y reiniciaría la
+    # final que ya se está produciendo. Se anotan los ids en la fila y se termina.
+    try:
+        if not datos.mover(g["id"], "armando", "produciendo", edicion_id=ed["id"], final_id=producida["final_id"],
+                           job_id=tareas_edicion.job_id_producir(cliente, ed["id"], idioma, pais)):
+            log.warning("ganchos: el gancho %s dejó de estar armando mientras se armaba", g["id"])
+    except Exception:  # noqa: BLE001 — con el render en cola, nunca un segundo intento
+        log.exception("ganchos: el render del gancho %s está en la cola pero no se pudo anotar en su fila", g["id"])
     return ganchos.codigo(g["id"])
 
 
@@ -726,7 +752,7 @@ def tw_gancho_armar(tarea):
         codigo = _armar(cliente, g)
     except Exception as e:
         log.exception("ganchos: no se pudo armar el gancho %s", gid)
-        mensaje = _texto_error(e)
+        mensaje = _texto_error(e, ganchos.ERROR_ARMAR)
         if _ultimo_intento(tarea):
             # Con max_intentos=2 el primer fallo deja la fila en «armando» y la cola vuelve a intentar desde el
             # principio (spec §4.6.5); el último deja el motivo en la fila.

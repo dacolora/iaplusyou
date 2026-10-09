@@ -843,15 +843,18 @@ def crear_tanda(cliente, analisis_id, ganchos, pedido_por=None):
     return [dict(f._mapping) for f in filas]
 
 
-def mover(gancho_id, de, a, **campos):
+def mover(gancho_id, de, a, *, vacios=(), **campos):
     """CAS de estado: `UPDATE … WHERE id = ? AND estado = de`. True si cambió: el vigilante y las tareas nunca
-    avanzan dos veces la misma variante (spec §4.2)."""
+    avanzan dos veces la misma variante (spec §4.2). `vacios`: columnas de `CAMPOS_GANCHO` que además tienen que
+    seguir en NULL (el cf_id de una variante se anota una sola vez: otra corrida no lo pisa)."""
     if de not in ESTADOS_GANCHO or a not in ESTADOS_GANCHO:
         raise ValueError(f"estado inválido: {de} → {a}")
     _campos_gancho(campos)
+    _campos_gancho(dict.fromkeys(vacios))
     t = db.tw_gancho
     with db.conectar() as con:
-        return con.execute(t.update().where(t.c.id == int(gancho_id), t.c.estado == de)
+        return con.execute(t.update().where(t.c.id == int(gancho_id), t.c.estado == de,
+                                            *(t.c[c].is_(None) for c in vacios))
                            .values(estado=a, actualizado_en=db.ahora(), **campos)).rowcount == 1
 
 

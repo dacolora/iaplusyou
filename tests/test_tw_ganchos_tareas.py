@@ -488,3 +488,119 @@ def test_vigilar_sigue_el_clip_de_una_preparacion_que_murio_despues_de_lanzarlo(
     assert g3["estado"] == "error" and g3["error"] == "La preparación se cortó antes de terminar."
     _vigilar(entorno)
     assert datos.gancho("acme", g2["id"])["estado"] == "armando"
+
+
+# -------------------------------------------------- endurecimiento (revisiones de las tareas 5 y 6) ---
+
+def test_si_ya_habia_un_clip_vivo_de_esa_sesion_la_fila_lo_sigue_y_no_queda_en_error(entorno, monkeypatch):
+    """`flowplus_lanzar.lanzar` devuelve False cuando ya hay una tarea viva para esa sesión: un clip pagándose. La fila
+    lo sigue como `_clip_salio`, nunca queda en error."""
+    t = entorno["t"]
+    real = flowplus_lanzar.lanzar
+    veces = []
+
+    def _lanzar(cliente, cf_id, entry, prioridad=5):
+        if not veces:
+            veces.append(cf_id)
+            return False
+        return real(cliente, cf_id, entry, prioridad=prioridad)
+    monkeypatch.setattr(t.flowplus_lanzar, "lanzar", _lanzar)
+    assert "3" in _preparar(entorno)
+    g1 = _filas(entorno)[0]
+    assert g1["estado"] == "generando" and g1["cf_id"] == veces[0] and g1["error"] is None
+    assert g1["job_id"] == f"acme__{g1['cf_id']}__creative_flow"
+
+
+def test_el_cf_id_solo_se_anota_si_la_fila_no_tenia_uno(entorno, monkeypatch):
+    """Otra corrida ya le puso su clip a la fila: esta no la pisa, borra su sesión sin lanzar y no cobra nada."""
+    f1 = entorno["filas"][0]
+    real = creative_flow.crear
+    hecho = []
+
+    def _crear(cliente, *a, **k):
+        cf = real(cliente, *a, **k)
+        if not hecho:
+            hecho.append(cf)
+            datos.actualizar_gancho(f1["id"], cf_id="cf_de_otra_corrida")
+        return cf
+    monkeypatch.setattr(creative_flow, "crear", _crear)
+    _preparar(entorno)
+    g1 = datos.gancho("acme", f1["id"])
+    assert g1["cf_id"] == "cf_de_otra_corrida" and g1["estado"] == "preparando"
+    assert hecho[0] not in creative_flow.cargar("acme")
+    assert len(_cola("flowplus_video")) == 2
+
+
+def test_un_original_corto_no_sube_nada(entorno):
+    entorno["probe"]["info"] = dict(FFPROBE, format={"duration": "4.0"})
+    with pytest.raises(RuntimeError):
+        _preparar(entorno)
+    assert _materiales_tw() == [] and _cola("edicion_proxy") == []
+
+
+def test_armar_revisa_los_recortes_antes_de_crear_la_edicion(entorno, monkeypatch):
+    from final_edition.motor import compilador
+    g, _clip, _ = _listo_para_armar(entorno, monkeypatch)
+
+    def _cae(doc, duraciones):
+        raise ValueError("el clip pide más material del que hay")
+    monkeypatch.setattr(compilador, "verificar_recortes", _cae)
+    with pytest.raises(RuntimeError):
+        _armar(entorno, g["id"], intentos=1)
+    assert ediciones.listar("acme", cf_id=g["cf_id"]) == []                # nada huérfano en Final edition
+    assert _cola("edicion_producir") == []
+
+
+def test_armar_con_el_render_ya_en_cola_no_se_reintenta(entorno, monkeypatch):
+    """Si anotar los ids falla después de encolar el render, la tarea no sube el error: un reintento crearía otra
+    edición y reiniciaría la final que ya se está produciendo."""
+    g, _clip, _ = _listo_para_armar(entorno, monkeypatch)
+    real = datos.mover
+
+    def _mover(gid, de, a, **campos):
+        if a == "produciendo":
+            raise RuntimeError("database is locked")
+        return real(gid, de, a, **campos)
+    monkeypatch.setattr(datos, "mover", _mover)
+    _armar(entorno, g["id"], intentos=1)                                  # no sube: no hay segundo intento
+    assert len(ediciones.listar("acme", cf_id=g["cf_id"])) == 1 and len(_cola("edicion_producir")) == 1
+
+
+def test_armar_que_falla_lo_dice_con_sus_palabras(entorno, monkeypatch):
+    from final_edition import biblioteca
+    g, _clip, _ = _listo_para_armar(entorno, monkeypatch)
+    monkeypatch.setattr(biblioteca, "materializar_pieza",
+                        lambda c, cf, carpeta: (_ for _ in ()).throw(RuntimeError("/srv/x")))
+    with pytest.raises(RuntimeError):
+        _armar(entorno, g["id"], intentos=2)
+    assert datos.gancho("acme", g["id"])["error"] == "Algo falló al armar el video del gancho (RuntimeError)."
+
+
+def test_un_armado_cortado_lo_dice_y_no_habla_de_la_preparacion(entorno, monkeypatch):
+    g, _clip, _ = _listo_para_armar(entorno, monkeypatch)
+    with db.conectar() as con:                                            # el armado murió sin tarea viva
+        con.execute(db.tarea.delete().where(db.tarea.c.job_id == g["job_id"]))
+    _envejecer(g["id"])
+    _vigilar(entorno)
+    g = datos.gancho("acme", g["id"])
+    assert g["estado"] == "error" and g["error"] == "El armado del video se cortó antes de terminar."
+
+
+def test_una_preparacion_cortada_cuyo_clip_fallo_muestra_el_error_del_clip(entorno):
+    t = entorno["t"]
+    _preparar(entorno)
+    f1 = _filas(entorno)[0]
+    assert datos.mover(f1["id"], "generando", "preparando", job_id=t.job_id_preparar("acme", entorno["aid"], 1))
+    _envejecer(f1["id"])
+    creative_flow.actualizar("acme", f1["cf_id"], estado="error", error="Kling: contenido sensible")
+    with db.conectar() as con:                                            # el clip corrió y falló: ya no está vivo
+        con.execute(db.tarea.update().where(db.tarea.c.job_id == f1["job_id"]).values(estado="error"))
+    _vigilar(entorno)
+    g1 = datos.gancho("acme", f1["id"])
+    assert g1["estado"] == "error" and g1["error"] == "Kling: contenido sensible"
+
+
+def test_el_error_de_duracion_vive_con_los_demas():
+    from tareas import triple_whale as t
+    assert ganchos.ERROR_DURACION == "No se pudo medir la duración del video."
+    assert not hasattr(t, "ERROR_DURACION")

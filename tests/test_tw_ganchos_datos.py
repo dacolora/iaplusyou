@@ -184,3 +184,14 @@ def test_es_choque_de_tanda_solo_reconoce_el_unique_de_la_tanda(base_temporal):
     ajeno = "NOT NULL constraint failed: tw_gancho.cliente\n[parameters: ('uq_tw_gancho_tanda',)]"
     assert datos._es_choque_de_tanda(Exception(ajeno)) is False
     assert datos._es_choque_de_tanda(Exception("constraint uq_tw_gancho_tanda failed")) is True   # otro motor, por nombre
+
+
+def test_mover_puede_exigir_columnas_vacias(base_temporal):
+    """Revisión de la tarea 5: el cf_id de una variante se anota solo si todavía no tiene uno (otra corrida no lo pisa)."""
+    aid = _analisis()
+    f1, _ = datos.crear_tanda("acme", aid, GANCHOS_T)
+    assert datos.mover(f1["id"], "preparando", "preparando", vacios=("cf_id",), cf_id="cf_a")
+    assert not datos.mover(f1["id"], "preparando", "preparando", vacios=("cf_id",), cf_id="cf_b")
+    assert datos.gancho("acme", f1["id"])["cf_id"] == "cf_a"
+    with pytest.raises(ValueError):
+        datos.mover(f1["id"], "preparando", "preparando", vacios=("texto",), cf_id="cf_c")
