@@ -4355,6 +4355,9 @@ msgstr "Email confirmed. Thanks!"
 msgid "Correo de avisos"
 msgstr "Notification email"
 
+msgid "Correo de cobro inválido"
+msgstr "Invalid billing email"
+
 msgid "Correo de la plataforma (cuentas y avisos)"
 msgstr "Platform email (accounts and notices)"
 
@@ -5447,6 +5450,9 @@ msgstr "The catalog comes from the no-keys connection; this connection brings in
 
 msgid "El catálogo sigue llegando desde la conexión sin llaves; la Admin API agrega pedidos y atribución."
 msgstr "The catalog still comes from the no-keys connection; the Admin API adds orders and attribution."
+
+msgid "El celular de Nequi debe tener 10 dígitos y empezar por 3"
+msgstr "The Nequi mobile number must have 10 digits and start with 3"
 
 #, python-format
 msgid "El clic sale caro con un CTR normal: CPC %(cpc)s (máximo %(max)s); es la subasta, no el creativo."
@@ -7947,8 +7953,14 @@ msgstr "Missing data: objective, at least one country, days (1–90), cap, ages 
 msgid "Faltan la llave o el dominio de la tienda (por ejemplo mitienda.myshopify.com)."
 msgstr "The key or the store domain is missing (for example mystore.myshopify.com)."
 
+msgid "Faltan las aceptaciones de Wompi"
+msgstr "The Wompi acceptances are missing"
+
 msgid "Faltan las llaves de Bold"
 msgstr "The Bold keys are missing"
+
+msgid "Faltan las llaves de Wompi"
+msgstr "The Wompi keys are missing"
 
 msgid "Faltan los datos de la campaña."
 msgstr "The campaign's data is missing."
@@ -8175,6 +8187,9 @@ msgstr "Source"
 msgctxt "editor"
 msgid "Fuente"
 msgstr "Font"
+
+msgid "Fuente de pago inválida"
+msgstr "Invalid payment source"
 
 #, python-format
 msgid "Fuente desconocida: %(fuente)s"
@@ -8970,6 +8985,9 @@ msgstr "App id"
 msgid "Identificador de link inválido"
 msgstr "Invalid link identifier"
 
+msgid "Identificador de transacción inválido"
+msgstr "Invalid transaction ID"
+
 msgid "Idioma"
 msgstr "Language"
 
@@ -9512,6 +9530,9 @@ msgstr "The ad account has no Pixel."
 msgid "La descarga terminó vacía."
 msgstr "The download came back empty."
 
+msgid "La dirección de vuelta del pago no es válida"
+msgstr "The payment return address is not valid"
+
 msgid "La duración debe ser un número."
 msgstr "Duration must be a number."
 
@@ -9956,6 +9977,12 @@ msgstr "Winners can't be published on Instagram, Facebook, TikTok or YouTube: co
 
 msgid "Las imágenes y los videos salen de r2.dev: tiene límite de tráfico, no pasa por el CDN de Cloudflare y no es para producción. Conecta un dominio propio al bucket y ponlo en R2_PUBLIC_BASE_URL."
 msgstr "Images and videos are served from r2.dev: it is rate-limited, does not go through Cloudflare's CDN and is not meant for production. Connect a custom domain to the bucket and put it in R2_PUBLIC_BASE_URL."
+
+msgid "Las llaves de Wompi no son válidas o mezclan pruebas y producción"
+msgstr "The Wompi keys are not valid or mix test and production"
+
+msgid "Las llaves de pruebas de Wompi solo sirven en un servidor local"
+msgstr "Wompi test keys only work on a local server"
 
 msgid "Las líneas a quitar tienen que ser números."
 msgstr "The lines to remove have to be numbers."
@@ -10562,6 +10589,9 @@ msgstr "Dimensions and fonts"
 msgid "Medio"
 msgstr "Method"
 
+msgid "Medio de pago no soportado"
+msgstr "Payment method not supported"
+
 msgid "Medios"
 msgstr "Media"
 
@@ -10906,6 +10936,9 @@ msgstr "Amount in US$ (negative only for an adjustment)"
 #, python-format
 msgid "Monto en dólares (de %(min)s a %(max)s, sin centavos)"
 msgstr "Amount in dollars (%(min)s to %(max)s, no cents)"
+
+msgid "Monto inválido para Wompi"
+msgstr "Invalid amount for Wompi"
 
 msgid "Montos sugeridos"
 msgstr "Suggested amounts"
@@ -11591,6 +11624,9 @@ msgstr "I couldn't translate the word into English; write it another way."
 msgid "No pude traducir la palabra al inglés; intenta de nuevo en un momento."
 msgstr "I couldn't translate the word into English; try again in a moment."
 
+msgid "No pudimos leer la tasa de cambio; intenta en unos minutos"
+msgstr "We couldn't read the exchange rate; try again in a few minutes"
+
 msgid "No quedó ningún anuncio por analizar."
 msgstr "No ads were left to analyze."
 
@@ -11950,6 +11986,10 @@ msgstr "Could not reach Bold (%(tipo)s)"
 
 msgid "No se pudo hablar con Notion; intenta de nuevo en un momento."
 msgstr "Couldn't reach Notion; try again in a moment."
+
+#, python-format
+msgid "No se pudo hablar con Wompi (%(tipo)s)"
+msgstr "Couldn't reach Wompi (%(tipo)s)"
 
 #, python-format
 msgid "No se pudo hacer el análisis: %(error)s"
@@ -13913,6 +13953,9 @@ msgstr "Reference added from the link."
 
 msgid "Referencia analizada."
 msgstr "Reference analyzed."
+
+msgid "Referencia de pago inválida"
+msgstr "Invalid payment reference"
 
 msgid "Referencia quitada"
 msgstr "Reference removed"
@@ -16059,6 +16102,9 @@ msgstr "All projects."
 msgid "Token"
 msgstr "Token"
 
+msgid "Token de pago inválido"
+msgstr "Invalid payment token"
+
 msgid "Token del usuario del sistema"
 msgstr "System-user token"
 
@@ -17345,6 +17391,30 @@ msgstr "What does the prospect want to achieve in society?"
 #, python-format
 msgid "Whisper · %(s)s s de audio"
 msgstr "Whisper · %(s)s s of audio"
+
+msgid "Wompi dice que esa referencia de pago ya se usó"
+msgstr "Wompi says that payment reference was already used"
+
+#, python-format
+msgid "Wompi no aceptó el medio de pago (%(estado)s)"
+msgstr "Wompi did not accept the payment method (%(estado)s)"
+
+#, python-format
+msgid "Wompi no aceptó el pedido (HTTP %(codigo)s)"
+msgstr "Wompi did not accept the request (HTTP %(codigo)s)"
+
+msgid "Wompi no devolvió los contratos para aceptar"
+msgstr "Wompi did not return the agreements to accept"
+
+msgid "Wompi no devolvió los datos esperados"
+msgstr "Wompi did not return the expected data"
+
+#, python-format
+msgid "Wompi respondió algo inesperado (HTTP %(codigo)s)"
+msgstr "Wompi returned something unexpected (HTTP %(codigo)s)"
+
+msgid "Wompi respondió algo que no es JSON"
+msgstr "Wompi returned something that is not JSON"
 
 msgid "WooCommerce"
 msgstr "WooCommerce"
