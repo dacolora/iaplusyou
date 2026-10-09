@@ -283,4 +283,6 @@ def test_pocas_consultas_con_tres_cuentas(base_temporal, conectado):
     finally:
         event.remove(db.engine(), "before_cursor_execute", contar)
     assert len(ctx["anuncios"]) == 15 and ctx["usd_ok"] is True and len(ctx["por_cuenta"]) == 3
-    assert len(consultas) <= 15, consultas
+    # 15 de siempre + 1 para saber si el proyecto tiene Triple Whale (NVP, 2026-10-09: sin tienda no pide visitantes;
+    # con tienda son 4 más, constantes: tests/test_meta_rend_nvp.py).
+    assert len(consultas) <= 16, consultas

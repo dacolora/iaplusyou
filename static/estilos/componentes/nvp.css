@@ -18,3 +18,5 @@
 .chip-nvp-bof .chip-nvp-etapa { color: var(--muted); }
 .chip-nvp-pocos { color: var(--muted); border-style: dashed; }
 .chip-nvp-vacio { color: var(--muted); border-color: transparent; padding-inline: 0; }
+/* En una tarjeta de cifra (KPI) el chip va del tamaño de las otras cifras. */
+.kpi-tile .chip-nvp { font-size: var(--t-base); }

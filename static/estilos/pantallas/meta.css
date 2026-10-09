@@ -33,3 +33,8 @@
 .tb-dia:hover .tb-blanco { fill: var(--panel-hover); }
 .tb-dia:hover .tb-marcador { opacity: 1; }
 .tb-dia:hover .tb-barra { fill: var(--accent-2); }
+
+/* NVP en el KPI (2026-10-09, pedido del cliente de HappyFlops; spec 2026-10-09-nvp-visitantes-nuevos §4.2): el chip
+   del componente `nvp` va dentro del <strong> de su tarjeta y crece a la letra base para leerse junto a las cifras de
+   las demás. En las tablas queda a su tamaño de siempre. */
+.meta-kpi-nvp .chip-nvp { font-size: var(--t-base); }

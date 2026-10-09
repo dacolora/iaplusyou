@@ -4,6 +4,8 @@
    `data-tarjeta-url` lleva el alcance como query aparte (`|urlencode`): en esa ruta `<canal>` del camino es el
    canal del anuncio y `canal` de la query es el filtro del panel, y url_for no admite los dos. #}
 
+{% import "_componentes.html" as cx %}
+
 {#- `detalle` es la cifra cruda en palabras («30 % se queda 3 s») o "" si no hay valor. Sin percentil (cuenta chica,
     pocos datos) el anillo dice «—» pero la cifra y el porqué siguen debajo y en el aria-label. -#}
 {% macro anillo_tw(r, etiqueta, detalle, canal_nombre, tw) -%}
@@ -61,6 +63,8 @@
     <dl class="tw-cifras">
       <div><dt>{{ _('Costo por venta') }}</dt><dd>{% if am.cpa %}{{ am.cpa | dinero(moneda) }}{% else %}—{% endif %}{% if a.cpa_canal %} <small>{{ _('canal: %(c)s', c=a.cpa_canal | dinero(moneda)) }}</small>{% endif %}</dd></div>
       <div><dt>{{ _('Tendencia (7 días)') }}</dt><dd class="tw-tendencia-{{ a.tendencia or 'nada' }}">{% if a.tendencia %}{{ tw.tendencias[a.tendencia] | traducir }}{% else %}—{% endif %}</dd></div>
+      {#- NVP (spec 2026-10-09-nvp-visitantes-nuevos §4.1): las sumas del periodo de ESTE anuncio, ya en `a.m`. -#}
+      <div><dt>{{ _('Visitantes nuevos (NVP)') }}</dt><dd>{{ cx.nvp(am.visitantes_nuevos, am.visitantes) }}</dd></div>
     </dl>
     {% if a.fortalezas or a.problemas %}
     <ul class="tw-razones">

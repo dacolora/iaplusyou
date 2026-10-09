@@ -3,6 +3,7 @@
    El servidor pinta tarjetas, lectura, «Tus creativos» y la tabla (se leen aunque el JS falle); la gráfica, las
    minigráficas, el recuadro de cada día y el detalle del día los dibuja static/tw_resultados.js con el JSON del
    final (los <script> de este fragmento no corren: _tab_triple_whale.html llama TwResultados.iniciar). #}
+{% import "_componentes.html" as cx %}
 {% set r = tw.resultados %}
 {% if r %}
 <section class="tb-seccion twr" id="tw-resultados" data-twr>
@@ -17,16 +18,28 @@
     </div>
   </div>
 
-  <div class="twr-tarjetas" role="tablist" aria-label="{{ _('Qué muestra la gráfica') }}">
-    {% for t in r.tarjetas %}
-    <button type="button" role="tab" class="twr-tarjeta" data-twr-metrica="{{ t.clave }}"
-            aria-selected="{{ 'true' if loop.first else 'false' }}"{% if t.ayuda %} title="{{ t.ayuda }}"{% endif %}>
-      <span class="twr-tarjeta-k">{{ t.etiqueta }}</span>
-      <strong class="twr-tarjeta-v">{{ t.texto }}</strong>
-      {% if t.variacion is not none %}<small class="twr-tarjeta-d twr-{{ t.tono }}" title="{{ _('Días completos contra el mismo número de días anteriores') }}">{{ '▲' if t.variacion >= 0 else '▼' }} {{ t.variacion_texto }}</small>{% endif %}
-      <svg class="twr-spark" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true" data-twr-spark="{{ t.clave }}"></svg>
-    </button>
-    {% endfor %}
+  {#- Las pestañas de la gráfica (role="tablist", `display: contents`: sus botones son celdas de la misma rejilla) y,
+      al final, el NVP (spec 2026-10-09-nvp-visitantes-nuevos §4.1), que no es pestaña porque no se grafica. -#}
+  <div class="twr-tarjetas">
+    <div class="twr-pestanas" role="tablist" aria-label="{{ _('Qué muestra la gráfica') }}">
+      {% for t in r.tarjetas %}
+      <button type="button" role="tab" class="twr-tarjeta" data-twr-metrica="{{ t.clave }}"
+              aria-selected="{{ 'true' if loop.first else 'false' }}"{% if t.ayuda %} title="{{ t.ayuda }}"{% endif %}>
+        <span class="twr-tarjeta-k">{{ t.etiqueta }}</span>
+        <strong class="twr-tarjeta-v">{{ t.texto }}</strong>
+        {% if t.variacion is not none %}<small class="twr-tarjeta-d twr-{{ t.tono }}" title="{{ _('Días completos contra el mismo número de días anteriores') }}">{{ '▲' if t.variacion >= 0 else '▼' }} {{ t.variacion_texto }}</small>{% endif %}
+        <svg class="twr-spark" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true" data-twr-spark="{{ t.clave }}"></svg>
+      </button>
+      {% endfor %}
+    </div>
+    {% set n = r.nvp %}
+    {% if n %}
+    <div class="twr-tarjeta twr-tarjeta-fija" data-twr-nvp>
+      <span class="twr-tarjeta-k" title="{{ n.ayuda }}">{{ _('Visitantes nuevos (NVP)') }}</span>
+      <strong class="twr-tarjeta-v">{{ cx.nvp(n.nuevos, n.visitantes) }}</strong>
+      {% if n.variacion is not none %}<small class="twr-tarjeta-d twr-{{ n.tono }}" title="{{ _('Cambio del NVP en puntos porcentuales: días completos contra el mismo número de días anteriores') }}">{{ '▲' if n.variacion >= 0 else '▼' }} {{ n.variacion_texto }}</small>{% endif %}
+    </div>
+    {% endif %}
   </div>
 
   <div class="twr-grafico" data-twr-grafico>

@@ -435,8 +435,11 @@ def resumen_tienda(serie, serie_previa=None):
     contra el periodo anterior de igual largo. None si no hay días."""
     if not serie:
         return None
+    # `visitantes`/`visitantes_nuevos` (0036): las sumas para el NVP de la tienda (`cx.nvp`; spec
+    # 2026-10-09-nvp-visitantes-nuevos §4.4), nunca un promedio de porcentajes.
     t = {k: sum(_f(d.get(k)) for d in serie) for k in ("gasto", "ingresos", "pedidos", "nc_pedidos", "nc_ingresos",
-                                                       "reembolsos", "cogs", "utilidad_neta")}
+                                                       "reembolsos", "cogs", "utilidad_neta", "visitantes",
+                                                       "visitantes_nuevos")}
     salida = dict(t, dias=len(serie), mer=_div(t["ingresos"], t["gasto"]), nc_roas=_div(t["nc_ingresos"], t["gasto"]),
                   ticket=_div(t["ingresos"], t["pedidos"]), cpa=_div(t["gasto"], t["pedidos"]),
                   pct_nuevos=_div(t["nc_pedidos"], t["pedidos"]), variacion={})
