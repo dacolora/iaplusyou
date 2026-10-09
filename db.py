@@ -568,6 +568,33 @@ tw_analisis = Table("tw_analisis", metadata,
     sqlite_autoincrement=True,
 )
 
+# Ganchos nuevos de un análisis (spec 2026-10-09-tw-ganchos-y-copy §4.2, migración 0035): una fila por variante de
+# «Probar los 3 ganchos». Su id es también el código `CV<id>` que va en el nombre del anuncio en Meta: AUTOINCREMENT
+# para que nunca se reuse. Único escritor: triple_whale/datos.py.
+tw_gancho = Table("tw_gancho", metadata,
+    Column("id", Integer, primary_key=True),
+    *_comunes(),
+    Column("analisis_id", Integer, nullable=False),
+    Column("tanda", Integer, nullable=False),
+    Column("n", Integer, nullable=False),
+    Column("estado", String(12), nullable=False, default="preparando"),  # preparando|generando|armando|produciendo|lista|error
+    Column("texto", String(200)),
+    Column("prompt", Text),
+    Column("fotograma_s", Float),
+    Column("frame_url", String(2000)),
+    Column("cf_id", String(80)),
+    Column("edicion_id", Integer),
+    Column("final_id", String(200)),
+    Column("url_final", String(2000)),
+    Column("job_id", String(255)),
+    Column("error", Text),
+    Column("pedido_por", String(80)),
+    sa.UniqueConstraint("analisis_id", "tanda", "n", name="uq_tw_gancho_tanda"),
+    sa.Index("ix_tw_gancho_analisis", "cliente", "analisis_id", "tanda"),
+    sa.Index("ix_tw_gancho_estado", "estado"),
+    sqlite_autoincrement=True,
+)
+
 pedido = Table("pedido", metadata,
     Column("id", Integer, primary_key=True),
     Column("cliente", String(80), nullable=False, index=True),

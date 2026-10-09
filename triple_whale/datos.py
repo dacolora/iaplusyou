@@ -1,7 +1,8 @@
 """Único escritor (y lector) de `tw_anuncio_dia`, `tw_tienda_dia`,
 `tw_producto_dia`, `tw_evaluacion` (spec 2026-09-28 §3), `tw_creativo` y
-`tw_analisis` (tarjetas, spec 2026-10-08 §3). Solo SQLAlchemy Core; nada de
-Flask ni de la API de Triple Whale.
+`tw_analisis` (tarjetas, spec 2026-10-08 §3) y `tw_gancho` (ganchos, spec
+2026-10-09 §4.2). Solo SQLAlchemy Core; nada de Flask ni de la API de Triple
+Whale.
 
 Desde 2026-10-08 (spec de varias tiendas §6.1) cada copia es de una tienda
 (`tienda_id`): las escrituras reciben la tienda y las lecturas `tienda_id`
@@ -758,3 +759,97 @@ def piezas_de_analisis(cliente, analisis_ids):
                 "cf_id": cf_id, "pieza_id": pid, "titulo": titulo,
                 "estado": extra.get("estado_legado") or creative_flow._PIEZA_A_ESTADO.get(estado, estado)})
     return salida
+
+
+# ------------------------------------------------- ganchos (spec 2026-10-09 §4.2) ---
+ESTADOS_GANCHO = ("preparando", "generando", "armando", "produciendo", "lista", "error")
+VIVOS_GANCHO = ("preparando", "generando", "armando", "produciendo")
+# Lo que las tareas anotan en una variante. El texto, el prompt y el fotograma son la copia del gancho al pedirlo y no
+# se reescriben; el estado solo cambia con `mover`.
+CAMPOS_GANCHO = ("frame_url", "cf_id", "edicion_id", "final_id", "url_final", "job_id", "error")
+
+
+class TandaViva(Exception):
+    """Ese análisis ya tiene una tanda de ganchos en curso: no se pide otra (doble clic, dos pestañas)."""
+
+
+def _campos_gancho(campos):
+    raros = set(campos) - set(CAMPOS_GANCHO)
+    if raros:
+        raise ValueError(f"campos de tw_gancho no permitidos: {sorted(raros)}")
+
+
+def crear_tanda(cliente, analisis_id, ganchos, pedido_por=None):
+    """Las filas de una tanda nueva del análisis, en `preparando` (spec §4.2). `ganchos` = [{"n", "texto", "prompt",
+    "fotograma_s"}] (`triple_whale.ganchos.ganchos_generables`). El candado de escritura de SQLite se toma ANTES de
+    leer (BEGIN IMMEDIATE, como referentes.datos.guardar_referente): dos clics a la vez no leen los dos «sin tanda
+    viva». Con alguna fila viva del análisis lanza TandaViva; si no, inserta la tanda max + 1 en la misma transacción
+    y devuelve sus filas por `n`. El UNIQUE (analisis_id, tanda, n) es la red si algo se cuela."""
+    if not ganchos:
+        raise ValueError("crear_tanda: sin ganchos no hay tanda")
+    t = db.tw_gancho
+    aid = int(analisis_id)
+    ahora = db.ahora()
+    try:
+        with db.conectar() as con:
+            con.exec_driver_sql("BEGIN IMMEDIATE")
+            vivas = con.execute(sa.select(sa.func.count()).select_from(t).where(
+                t.c.cliente == cliente, t.c.analisis_id == aid, t.c.estado.in_(VIVOS_GANCHO))).scalar()
+            if vivas:
+                raise TandaViva()
+            tanda = int(con.execute(sa.select(sa.func.coalesce(sa.func.max(t.c.tanda), 0)).where(
+                t.c.cliente == cliente, t.c.analisis_id == aid)).scalar() or 0) + 1
+            ids = [con.execute(t.insert().values(
+                cliente=cliente, creado_en=ahora, actualizado_en=ahora, analisis_id=aid, tanda=tanda, n=int(g["n"]),
+                estado="preparando", texto=g["texto"], prompt=g["prompt"], fotograma_s=g.get("fotograma_s"),
+                pedido_por=pedido_por)).inserted_primary_key[0] for g in ganchos]
+            filas = con.execute(sa.select(t).where(t.c.id.in_(ids)).order_by(t.c.n)).all()
+    except sa.exc.IntegrityError:
+        raise TandaViva() from None
+    return [dict(f._mapping) for f in filas]
+
+
+def mover(gancho_id, de, a, **campos):
+    """CAS de estado: `UPDATE … WHERE id = ? AND estado = de`. True si cambió: el vigilante y las tareas nunca
+    avanzan dos veces la misma variante (spec §4.2)."""
+    if de not in ESTADOS_GANCHO or a not in ESTADOS_GANCHO:
+        raise ValueError(f"estado inválido: {de} → {a}")
+    _campos_gancho(campos)
+    t = db.tw_gancho
+    with db.conectar() as con:
+        return con.execute(t.update().where(t.c.id == int(gancho_id), t.c.estado == de)
+                           .values(estado=a, actualizado_en=db.ahora(), **campos)).rowcount == 1
+
+
+def actualizar_gancho(gancho_id, **campos):
+    """Anota `CAMPOS_GANCHO` sin tocar el estado. True si la fila existe."""
+    _campos_gancho(campos)
+    t = db.tw_gancho
+    with db.conectar() as con:
+        return con.execute(t.update().where(t.c.id == int(gancho_id))
+                           .values(actualizado_en=db.ahora(), **campos)).rowcount == 1
+
+
+def ganchos_de_analisis(cliente, analisis_id):
+    """Todas las variantes del análisis, la tanda más nueva primero y por `n` dentro de cada una: UNA consulta (el
+    detalle pinta la última tanda y resume las anteriores)."""
+    t = db.tw_gancho
+    with db.conectar() as con:
+        return [dict(f._mapping) for f in con.execute(
+            sa.select(t).where(t.c.cliente == cliente, t.c.analisis_id == int(analisis_id))
+            .order_by(t.c.tanda.desc(), t.c.n))]
+
+
+def ganchos_vivos():
+    """Las variantes vivas de todos los proyectos (el vigilante), en una consulta."""
+    t = db.tw_gancho
+    with db.conectar() as con:
+        return [dict(f._mapping) for f in con.execute(
+            sa.select(t).where(t.c.estado.in_(VIVOS_GANCHO)).order_by(t.c.id))]
+
+
+def gancho(cliente, gancho_id):
+    t = db.tw_gancho
+    with db.conectar() as con:
+        fila = con.execute(sa.select(t).where(t.c.id == int(gancho_id), t.c.cliente == cliente)).first()
+    return dict(fila._mapping) if fila else None
