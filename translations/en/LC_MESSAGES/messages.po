@@ -3983,8 +3983,8 @@ msgstr "Desktop"
 msgid "Con %(n)s comentarios pegados a mano ya salen avatares: el formulario está justo abajo."
 msgstr "With %(n)s comments pasted by hand you already get avatars: the form is right below."
 
-msgid "Con Meta conectado eliges qué cuentas publicitarias leer y traemos sus últimos 13 meses: gasto, compras y ROAS por cuenta, campaña, conjunto y anuncio. Leer de Meta no cuesta nada y no cambia nada en tus anuncios."
-msgstr "With Meta connected you choose which ad accounts to read and we pull their last 13 months: spend, purchases and ROAS by account, campaign, ad set and ad. Reading from Meta costs nothing and doesn't change anything in your ads."
+msgid "Con Meta conectado, un administrador de Creatv elige qué cuentas publicitarias leer y traemos sus últimos 13 meses: gasto, compras y ROAS por cuenta, campaña, conjunto y anuncio. Leer de Meta no cuesta nada y no cambia nada en tus anuncios."
+msgstr "Once Meta is connected, a Creatv administrator chooses which ad accounts to read and we bring in their last 13 months: spend, purchases and ROAS by account, campaign, ad set and ad. Reading from Meta costs nothing and changes nothing in your ads."
 
 msgid "Con al menos"
 msgstr "With at least"
