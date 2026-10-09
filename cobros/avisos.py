@@ -152,3 +152,153 @@ def tope_incluido(cliente, periodo, usado_usd, agotado=False):
             "%(cliente)s usó %(usado)s de costo de lo incluido (tope %(tope)s).",
             cliente=cliente, usado=usado, tope=tope_txt)
     return admin("tope_incluido", asunto, cuerpo, cliente=cliente)
+
+
+# ------------------------------------------------------------- planes ---
+# Spec planes 2026-10-09 §7.6. Las fechas van en palabras del idioma del proyecto
+# («jueves 15 de noviembre»); el monto del plan en dólares (se cobra en pesos a la
+# TRM del día). Las marcas de «una sola vez» van en `kv`.
+
+def _fecha(iso):
+    from datetime import datetime  # noqa: PLC0415
+    try:
+        return idiomas.dia_semana(datetime.fromisoformat(str(iso)[:19]))
+    except (TypeError, ValueError):
+        return str(iso or "")
+
+
+def _usd(usd):
+    import gastos  # noqa: PLC0415
+    return gastos.formatear(usd)
+
+
+def _nombre_plan(cliente):
+    from cobros import planes  # noqa: PLC0415
+    sus = planes.suscripcion(cliente)
+    plan = planes.leer_plan(sus["plan_id"]) if sus else None
+    return sus, (plan or {}).get("nombre") or ""
+
+
+def plan(tipo, cliente, **datos):
+    """Los avisos de un pago o un cambio de estado del plan, ya confirmado:
+    `renovado` (y el alta), `rechazado` (con lo que falta para perderlo),
+    `terminado` (al proyecto y a los admins) y, solo a los admins,
+    `no_cuadra`, `huerfano` y `anulado`. Nunca lanza."""
+    try:
+        if tipo == "renovado":
+            sus, nombre = _nombre_plan(cliente)
+            if sus is None:
+                return False
+            hasta = sus["cubierto_hasta"]
+
+            def armar():
+                if datos.get("primero"):
+                    return (gettext("Tu plan %(plan)s está activo", plan=nombre),
+                            gettext("Ya tienes el saldo del plan de este mes. Lo pagado te cubre hasta el %(fecha)s.",
+                                    fecha=_fecha(hasta)))
+                return (gettext("Tu plan %(plan)s se renovó", plan=nombre),
+                        gettext("Ya tienes el saldo del plan del nuevo periodo. Lo pagado te cubre hasta el "
+                                "%(fecha)s.", fecha=_fecha(hasta)))
+            return _al_proyecto(cliente, "plan_renovado", armar)
+        if tipo == "rechazado":
+            _sus, nombre = _nombre_plan(cliente)
+
+            def armar():
+                return (gettext("No pudimos cobrar tu plan %(plan)s", plan=nombre),
+                        gettext("Wompi rechazó el cobro de %(monto)s (%(motivo)s). Lo intentaremos otra vez el "
+                                "%(proximo)s. Si no se puede cobrar antes del %(limite)s, el plan termina. Puedes "
+                                "cambiar la tarjeta en Configuración › Plan. Mientras tanto, tus generaciones se "
+                                "cobran a la carta con tu saldo propio.",
+                                monto=_usd(datos.get("usd") or 0), motivo=datos.get("motivo") or "—",
+                                proximo=_fecha(datos.get("proximo")), limite=_fecha(datos.get("limite"))))
+            return _al_proyecto(cliente, "plan_rechazado", armar)
+        if tipo == "terminado":
+            def armar():
+                return (gettext("Tu plan terminó"),
+                        gettext("Tu plan terminó. Tu saldo propio sigue disponible y tus generaciones se cobran a "
+                                "la carta. Puedes volver a suscribirte en Configuración › Plan."))
+            _al_proyecto(cliente, "plan_terminado", armar)
+            motivo = datos.get("motivo")
+            return admin(
+                "plan_terminado",
+                lambda: gettext("El plan de %(cliente)s terminó", cliente=cliente),
+                lambda: {"rechazos": gettext("%(cliente)s: el cobro se rechazó tres veces.", cliente=cliente),
+                         "cancelado": gettext("%(cliente)s: lo canceló sin nada pagado vigente.", cliente=cliente),
+                         "admin": gettext("%(cliente)s: lo terminó un admin (%(nota)s).", cliente=cliente,
+                                          nota=datos.get("nota") or "—"),
+                         }.get(motivo, gettext("%(cliente)s: se acabó lo pagado y no se renueva.", cliente=cliente)),
+                cliente=cliente)
+        if tipo in ("no_cuadra", "huerfano", "anulado"):
+            return plan_admin(tipo, cliente, referencia=datos.get("referencia") or "")
+    except Exception:  # noqa: BLE001
+        log.exception("aviso de plan %s a %s no salió", tipo, cliente)
+    return False
+
+
+def plan_admin(tipo, cliente, referencia=""):
+    """A los admins: un pago de plan que pide mirar a mano."""
+    textos = {
+        "no_cuadra": lambda: gettext("%(cliente)s: Wompi informó un pago de plan (%(referencia)s) cuyo monto o "
+                                     "moneda no cuadran con lo guardado; no se aplicó.",
+                                     cliente=cliente, referencia=referencia),
+        "huerfano": lambda: gettext("%(cliente)s: Wompi aprobó un pago de plan (%(referencia)s) de una suscripción "
+                                    "ya terminada. Devuélvelo o actívalo a mano.",
+                                    cliente=cliente, referencia=referencia),
+        "anulado": lambda: gettext("%(cliente)s: Wompi anuló un pago de plan ya aprobado (%(referencia)s). El "
+                                   "periodo sigue abierto: si corresponde, usa «Terminar ya».",
+                                   cliente=cliente, referencia=referencia),
+        "incierto": lambda: gettext("%(cliente)s: un cobro de plan (%(referencia)s) llegó a Wompi pero no sabemos "
+                                    "su resultado. Queda pendiente hasta que Wompi avise; míralo en su panel.",
+                                    cliente=cliente, referencia=referencia),
+    }
+    return admin("plan_admin", lambda: gettext("Un pago de plan de %(cliente)s pide revisión", cliente=cliente),
+                 textos.get(tipo, textos["incierto"]), cliente=cliente)
+
+
+def plan_admin_una_vez(clave, tipo, cliente, referencia=""):
+    try:
+        if not _marcar_una_vez(clave):
+            return False
+    except Exception:  # noqa: BLE001
+        log.exception("no se pudo anotar el aviso de plan %s", clave)
+        return False
+    return plan_admin(tipo, cliente, referencia=referencia)
+
+
+def plan_por_renovar(cliente, clave, fecha, usd, renueva=True):
+    """3 días antes del fin de lo pagado, una sola vez (§7.6): «se renueva el
+    …, por US$ X» o, sin tarjeta (activado a mano), «termina el …»."""
+    try:
+        if not _marcar_una_vez(clave):
+            return False
+    except Exception:  # noqa: BLE001
+        log.exception("no se pudo anotar el aviso de renovación de %s", cliente)
+        return False
+    _sus, nombre = _nombre_plan(cliente)
+
+    def armar():
+        if renueva:
+            return (gettext("Tu plan %(plan)s se renueva pronto", plan=nombre),
+                    gettext("Tu plan se renueva el %(fecha)s por %(monto)s (en pesos a la TRM del día). El saldo del "
+                            "plan que no uses antes de esa fecha no se acumula.",
+                            fecha=_fecha(fecha), monto=_usd(usd)))
+        return (gettext("Tu plan %(plan)s termina pronto", plan=nombre),
+                gettext("Lo pagado de tu plan termina el %(fecha)s. Para seguir con el plan, escríbenos o registra una "
+                        "tarjeta en Configuración › Plan.", fecha=_fecha(fecha)))
+    return _al_proyecto(cliente, "plan_por_renovar", armar)
+
+
+def plan_bolsa(cliente, clave, restante, fin):
+    """La bolsa del periodo va en el 80 %: una vez por periodo (§7.6)."""
+    try:
+        if not _marcar_una_vez(clave):
+            return False
+    except Exception:  # noqa: BLE001
+        log.exception("no se pudo anotar el aviso de la bolsa del plan de %s", cliente)
+        return False
+
+    def armar():
+        return (gettext("Ya usaste el %(porcentaje)s %% del saldo de tu plan", porcentaje=80),
+                gettext("Te quedan %(monto)s del saldo del plan hasta el %(fecha)s; lo que no uses no se acumula.",
+                        monto=_monto(max(0, restante)), fecha=_fecha(fin)))
+    return _al_proyecto(cliente, "plan_bolsa", armar)

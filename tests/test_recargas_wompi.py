@@ -740,3 +740,28 @@ def test_la_vuelta_sin_id_ni_transaccion_no_se_queda_verificando(entorno, client
     assert "Si pagaste, lo acreditamos apenas Wompi lo confirme." in html
     assert "Verificando tu pago" not in html and "data-estado-url" not in html
     assert "Volver al saldo" in html and entorno["consultas"] == []
+
+
+def test_evento_de_un_plan_de_punta_a_punta_abre_el_periodo_una_sola_vez(entorno, monkeypatch):
+    """El gancho `pl-` con el `planes.aplicar_transaccion` de verdad (planes 5/8): un evento con todo firmado
+    aprueba el pago y abre el periodo; el mismo pago en otro evento (otro cuerpo) no acredita dos veces."""
+    from cobros import avisos, planes
+    monkeypatch.setattr(avisos, "plan", lambda *a, **k: None)
+    db = entorno["db"]
+    plan_id = planes.crear_plan("Pro", 1000, 1.25, 25, usuario="admin")
+    ahora = db.ahora()
+    with db.conectar() as con:
+        sid = con.execute(db.suscripcion.insert().values(
+            cliente="acme", plan_id=plan_id, ciclo="mensual", estado="activa", renovar=True, fuente_pago_id="3891",
+            medio_fuente="CARD", correo="pagos@acme.co", proximo_cobro=ahora, intentos_fallidos=0, usuario="u",
+            creada_en=ahora, actualizada_en=ahora)).inserted_primary_key[0]
+        ref = f"pl-{sid}-{ahora[:10].replace('-', '')}-1"
+        con.execute(db.pago_plan.insert().values(
+            cliente="acme", suscripcion_id=sid, ciclo="mensual", usd=1000, trm=TRM, monto_cop_centavos=391_241_000,
+            referencia=ref, estado="pendiente", creado_en=ahora, actualizado_en=ahora, medio="wompi"))
+    tx = _tx(ref, centavos=391_241_000)
+    assert _ev(entorno, _evento(tx, props=TODAS)) == (200, "aprobado")
+    assert _ev(entorno, _evento(tx, props=TODAS, ts=1760000999)) == (200, "ya_aplicada")
+    assert len([m for m in _movimientos(db) if m["tipo"] == "plan"]) == 1
+    assert planes.periodo_abierto(None, "acme", ahora=db.ahora()) is not None
+    assert entorno["consultas"] == []

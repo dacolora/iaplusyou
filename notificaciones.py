@@ -31,8 +31,9 @@ TIPOS = ("propuesta", "ganador", "rechazo_meta", "error_lanzamiento", "tope", "t
          "cobro_no_anotado", "recarga_admin", "anulacion_bold", "pago_sin_recarga",
          # Wompi (planes 4/8, spec 2026-10-09 §5.1 y §5.3): a los admins
          "anulacion_wompi", "wompi_no_cuadra",
-         # planes (spec 2026-10-09 §4): a los admins
-         "tope_incluido")
+         # planes (spec 2026-10-09 §4 y §7.6): al proyecto y a los admins
+         "tope_incluido", "plan_renovado", "plan_rechazado", "plan_terminado", "plan_por_renovar", "plan_bolsa",
+         "plan_admin")
 
 
 def _config():
