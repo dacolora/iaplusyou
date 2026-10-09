@@ -86,6 +86,14 @@ Meta never charges, `max_intentos=2`, and all three `meta_rend_*` types are in `
 with «Cobrar» on still syncs). `meta_rend_sincronizar_todas` and `meta_rend_limpiar` stay in the general
 lane (instant). The area's own skill is `meta-rendimiento`. A new long, free, read-only sync can join this lane; anything that charges stays out of it.
 
+**Three worker types for the Triple Whale hooks (2026-10-09, skill `triple-whale`, «Ganchos y copy»):** `tw_ganchos_preparar`
+(`<c>__tw_ganchos_<aid>_t<tanda>`, `max_intentos=1`, prioridad 3: downloads the original and launches one Crear piece per
+hook), `tw_ganchos_vigilar` (periodic, 60 s, after `cadena_vigilar` in `worker.PERIODICAS`: moves each live variant) and
+`tw_gancho_armar` (`<c>__tw_gancho_<gid>_armar`, `max_intentos=2`, prioridad 1: ffmpeg and the editor on an already-paid
+clip). All three are in `TIPOS_EXENTOS_DE_COBRO` and none calls a paid provider: each clip is charged by
+`flowplus_video` when Crear closes it, with its own reservation, and the price was approved once in the route.
+`tw_gancho_armar` may retry because nothing in it charges; `tw_ganchos_preparar` stays at one attempt so a failure never launches a clip twice.
+
 **Higgsfield API wrapper** (`higgsfield_client.py`): all calls follow launch ->
 `poll_until_done(status_url)` -> extract-result, for both video (`kling-2.1-pro`,
 `extract_video_url`) and image (`soul-reference`, `extract_image_url`) generation.

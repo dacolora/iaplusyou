@@ -8,8 +8,8 @@ description: "Triple Whale: conexión, sincronización por SQL, la pestaña de r
 > Parte de la guía del repositorio; hasta el 2026-10-01 vivía dentro de CLAUDE.md. **Si cambias esta área, actualiza este archivo** en el mismo cambio (no CLAUDE.md). Si el código y este texto no coinciden, manda el código: corrige el texto.
 
 **Triple Whale** (package `triple_whale/`, `triple_whale_tiendas.py`, `tareas/triple_whale.py`; spec
-`docs/superpowers/specs/2026-09-28-triple-whale-rendimiento-design.md`, migrations 0023, 0024, 0032 and 0034; the
-per-ad cards are in «Tarjetas de análisis» at the end): connected from
+`docs/superpowers/specs/2026-09-28-triple-whale-rendimiento-design.md`, migrations 0023, 0024, 0032, 0034 and 0036; the
+per-ad cards are in «Tarjetas de análisis» and the hooks and new copy in «Ganchos y copy» at the end): connected from
 the Triple Whale tab itself (`_triple_whale_conectar.html`, included by `_tab_triple_whale.html` in both states;
 until 2026-09-28 the form sat in Configuración › Conexiones, and the `cfg_triple_whale_*` routes now return to
 `#triplewhale`) (one Fernet-encrypted API key PER STORE; `cfg_triple_whale_conectar` adds a store: requires a verified correo, same
@@ -230,10 +230,15 @@ production. It must work for ANY ad, not only Creatv's: in happyflops only 4 pie
   (`mejorar.es_mp4`, B4: it is a third-party file and an odd demuxer must not get it; ffprobe runs with
   `-protocol_whitelist file` and fails closed); otherwise the thumbnail.
 - **«Cómo mejorarlo» (`triple_whale/mejorar.py`, task `tw_analizar_anuncio`).** Price first:
-  `gastos.estimar("analisis_anuncio_tw", segundos=)` = tariff 0.10 + Whisper by the video's duration (30 s when
-  unknown). The 0.10 is measured (real run 2026-10-08, 4 happyflops ads, `docs/superpowers/evals/2026-10-08-tw-como-mejorarlo.md`):
-  one call US$ 0,067–0,084 with a warm cache, US$ 0,095 cold (the cache write), US$ 0,16 when the correction call was
-  needed (1 of 4); Whisper ≤ US$ 0,0014 (PND-179). `max_intentos=1`, `job_id`
+  `gastos.estimar("analisis_anuncio_tw", segundos=)` = tariff 0.14 + Whisper by the video's duration (30 s when
+  unknown). The tariff was 0.10 until 2026-10-09, measured on the real run of 2026-10-08 (4 happyflops ads,
+  `docs/superpowers/evals/2026-10-08-tw-como-mejorarlo.md`): one call US$ 0,067–0,084 with a warm cache, US$ 0,095 cold
+  (the cache write), US$ 0,16 when the correction call was needed (1 of 4); Whisper ≤ US$ 0,0014 (PND-179). It is 0.14
+  since the analysis also brings hooks and copy («Ganchos y copy», below): the output grew about 50 %, and the same 4
+  ads measured US$ 0,086–0,111 with a warm cache and US$ 0,131–0,142 cold
+  (`docs/superpowers/evals/2026-10-09-tw-ganchos-y-copy.md`). The price shown is the one of a cold single click, which
+  is the normal case (a tanda of 4 reads the cache and costs less); Cobros charges the real cost × margin, the tariff
+  is only the price seen beforehand. `max_intentos=1`, `job_id`
   `<cliente>__tw_anuncio__<canal>__<ad_id>`: a second click launches nothing. `id_valido` is a `fullmatch` because `$`
   lets a trailing newline through and «p1%0A» would be its own job, a second paid analysis; `encolar_analisis` refuses
   invalid ids. Spend: Whisper as `transcripcion`/fal `tw_anuncio:<aid>:t<tarea>:voz`, Claude as `evaluacion`/anthropic
@@ -262,9 +267,11 @@ production. It must work for ANY ad, not only Creatv's: in happyflops only 4 pie
   title/copy and the account evaluation's summary and patterns go through `mejorar._linea` (`_dato` + one line; B3: a
   newline in a name opened what looked like a new part of the prompt and split the card's `data-confirmar`).
   `verificar_cifras` runs over the phrase, reasons with evidence, changes, `por_que` and the learning
-  (`cifras_sin_dato`, non-blocking) against the prompt text plus `mejorar.segundos_verificables` (the «Segundo 12,6:»
-  frame labels AND the integer part of every frame and voice-phrase second: «el segundo 31» for a phrase at 31,1 s is
-  not an invented figure; the real test flagged 31 and 37 that way, 2026-10-08). `NOMBRES_CANAL` lives in `triple_whale/__init__.py` so the worker never imports the
+  (`cifras_sin_dato`, non-blocking) against the DATA of the prompt (`mejorar.datos_verificables`: the same values
+  without a word of the template; until 2026-10-09 it was the whole prompt, whose instruction numbers («3 cambios»,
+  «60 a 120 palabras», «500 caracteres») let «60 días de prueba» pass into a video) plus `mejorar.segundos_verificables`
+  (the «Segundo 12,6:» frame labels AND the integer part of every frame and voice-phrase second: «el segundo 31» for a
+  phrase at 31,1 s is not an invented figure; the real test flagged 31 and 37 that way, 2026-10-08). `NOMBRES_CANAL` lives in `triple_whale/__init__.py` so the worker never imports the
   blueprint (`resultados.NOMBRES_CANAL` and `rutas.NOMBRES_CANAL` are that same dict).
 - **Gallery.** Tab order: bar, «Resultados de tu tienda» (main's section, 2026-10-08), «Por tienda», alerts, «Tus
   anuncios» (tiles + gallery), «Lo que hace ganar en tu cuenta», «Dónde se va el gasto», «Lo que más se vende», «Ver como
@@ -323,8 +330,111 @@ production. It must work for ANY ad, not only Creatv's: in happyflops only 4 pie
   is one extra click (PND-184). The card's «Costo por venta» compares with the ad's CHANNEL (`cpa_canal`), not the
   account (spec §2.1, D4): the rings already measure inside the channel and the account's figure is mostly Meta's, so a
   Snapchat or TikTok ad looked cheap or expensive just for its channel; the verdict still uses the account's CPA.
-- **Out of this change (spec §13, PND-180 to PND-186).** «v1 vs v2 ring by ring» and «change only the hook»; predict
-  before spending; new Meta copy; TikTok videos without frames; the retention-by-quarters curve; Whisper
+- **Out of this change (spec §13, PND-180 to PND-186).** Stage 2 (2026-10-09, «Ganchos y copy» below) did «change only
+  the hook» (half of PND-180) and «new Meta copy» (half of PND-182). What stays: «v1 vs v2 ring by ring»; predict
+  before spending; duplicate the ad in Meta with the new copy; TikTok videos without frames; the retention-by-quarters curve; Whisper
   `language: null` (`fal_audio.transcribir_palabras(url, None)`): fal accepted it in the real run of 2026-10-08 (3 of 4
   ads transcribed, Norwegian and English), so PND-185 is closed; if fal ever rejects it, the task goes on without
   voice.
+
+## Ganchos y copy (2026-10-09)
+
+Why: Daniel (2026-10-09, «sigue con las siguientes etapas») chose «a new hook» first: an ad that already proved its body
+(product, demo, offer) usually loses its money in the first 3 seconds, and regenerating only those seconds costs a
+fraction of a new video. Spec `docs/superpowers/specs/2026-10-09-tw-ganchos-y-copy-design.md`, plan
+`docs/superpowers/plans/2026-10-09-tw-ganchos-y-copy.md`, migration 0036 (it was 0035 until main was merged on
+2026-10-09, which already had `0035_meta_rendimiento`), eval `docs/superpowers/evals/2026-10-09-tw-ganchos-y-copy.md`.
+
+- **The analysis brings two more keys.** `mejorar.PROMPT` asks for `ganchos` (exactly 3 whenever Claude sees video
+  frames, also for a winner, `[]` otherwise) and `copy_nuevo` (title + main text for Meta). `parsear(texto, verificable,
+  duracion_s=None)` never gets stricter: `_ganchos` keeps up to 3 with `texto` (one line, no control/format chars, cut
+  at a word, ≤ 60) and `prompt` (≤ 1 000), `fotograma_s` through `segundo_fotograma` ([0, duration − 1], else half the
+  video; without a duration a number ≥ 0 stays and preparar re-clamps it against the measured file) and
+  `cifras_sin_dato` of texto + por_que; `_copy_nuevo` is None without text and keeps line breaks. Old results have
+  neither key: always read with `.get` (`'ganchos' not in r` is how the screen knows an analysis predates hooks). The
+  task passes `foto.creativo.duracion_s` and empties `ganchos` when Claude saw no video frames (an image ad gets copy,
+  not hooks). **Which frame:** the prompt asks for one WITHOUT burned-in text (subtitles, titles, prices); if all have
+  it, the first one (second 0,3), because its subtitle is the one of the voice that plays under the hook. The real test
+  (below) showed why: the clip starts on the chosen frame with its subtitle, and a frame from second 18 showed another
+  moment's subtitle for 3 s against the voice. It is an instruction to the model, not a guarantee: code cannot know
+  whether a frame has subtitles. **Languages:** hook text and copy in the AD's language (a Norwegian ad gets Norwegian
+  text even in a Spanish project, an explicit exception to «what is saved goes in the project's language»),
+  escena/por_que in the project's, prompts in English (`system()` says the three exceptions, and that they win over
+  the IDIOMA line).
+- **Money.** `gastos.estimar_ganchos_tw(n)` = n × Kling O3 Pro image-to-video, 3 s, no sound (US$ 0,336 each); the
+  detail shows it with `|precio|usd`, `data-confirmar` and a hidden `precio_visto` (the PRICE, back to cost once with
+  `gastos.costo_de_precio`, ±0,005, else 409). A hook with `cifras_sin_dato` is shown with its warning and is neither
+  generated nor priced. `libro.exigir` of the total before creating anything; each clip reserves its own when
+  `flowplus_lanzar.lanzar` queues it and Crear's closing (`flowplus_video`) charges it. Preparar, vigilar and armar
+  never call a paid provider (all three in `TIPOS_EXENTOS_DE_COBRO`); armar and the render are ffmpeg. The analysis
+  itself costs the 0.14 tariff of «Tarjetas de análisis».
+- **Table `tw_gancho`** (one row per variant; AUTOINCREMENT because its id IS the code `CV<id>`), single writer
+  `triple_whale/datos.py`. `crear_tanda` takes SQLite's write lock (BEGIN IMMEDIATE) BEFORE reading, checks inside that
+  transaction that the analysis is the cliente's (`AnalisisAjeno`, a LookupError → the route answers 404), raises
+  `TandaViva` (409) while any row of the analysis is alive, and numbers tandas per analysis; UNIQUE (analisis_id, tanda,
+  n), and only THAT clash becomes `TandaViva` (`_es_choque_de_tanda`); a repeated `n` is a `ValueError` (400). `n` is
+  the hook's position in Claude's list (a hook left out keeps the others' numbers). `mover` is a CAS on `estado` (with
+  `vacios=` for columns that must still be NULL), so the vigilante and the tasks never advance a variant twice;
+  `actualizar_gancho` never touches `estado` and has no state guard: use it only on live rows.
+- **Flow.** Route `ganchos_probar` (same origin, the analysis of this cliente or 404, `int(max=AID_MAX)`) → task
+  `tw_ganchos_preparar` (`<c>__tw_ganchos_<aid>_t<tanda>`, max_intentos=1, prioridad 3): downloads the original with
+  `conectores.url.descargar_archivo` only from `mejorar._url_voz`, ffprobe must say mp4/mov (`es_mp4`), measures it
+  BEFORE uploading anything (a video under `MIN_ORIGINAL_S` = 5 s leaves nothing in R2 or in the queue), stores it as a
+  material (origen `triple_whale`, deduped by hash, shown in «Medios»), and for each row WITHOUT `cf_id` extracts the
+  frame at `fotograma_s` (`-ss` before `-i`) to `clientes/<c>/triple_whale/ganchos/<gid>.jpg`, creates the Crear session
+  like `tareas.cadena.lanzar_escena` (kling_o3_pro, `imagen_inicial`, 3 s, no sound, `tw_gancho={gancho_id, analisis_id,
+  original_hash}`), writes `cf_id` BEFORE launching (a CAS with `vacios=("cf_id",)`: a second run never launches the
+  same row twice) and launches with prioridad 3. `lanzar` answering False means the clip is already in the queue (a
+  clip being paid): the row goes on to `generando`, never to error. `SaldoInsuficiente` mid-way: that row and the rest
+  → error with `frase_proyecto()`; the launched ones go on. If preparar fails, only rows WITHOUT a clip go to error
+  (`_clip_salio`: the clip's job is alive or its session already has the video); a row whose clip is on its way goes to
+  `generando`: nothing paid is lost. The periodic `tw_ganchos_vigilar` (60 s, after `cadena_vigilar`, one failing row or
+  project never stops the others) moves `generando` → `armando` when the session is `video_listo` (enqueues
+  `tw_gancho_armar`, `<c>__tw_gancho_<gid>_armar`, max_intentos=2, prioridad 1), `produciendo` → `lista`/`error` from the
+  final, and closes a `preparando`/`armando` row whose job is gone only after `GRACIA_S` (120 s) without changes (the
+  route stores the job_id right after creating the rows and the vigilante moves to `armando` before enqueuing, so a
+  fresh row has a moment with no job in the queue). In `preparando` it shows the Crear session's error when the clip
+  ran and failed. `tw_gancho_armar` builds the edition (`ganchos.documento_gancho`), runs `verificar_recortes` BEFORE
+  creating it (an unproducible document leaves no draft in Final edition), `versionar` and
+  `rutas_editor.encolar_producciones` (the same tail as the editor's «Producir»; it takes the version the caller froze);
+  it writes `edicion_id` on the row right after `ediciones.crear` and a retry REUSES that edition (saving the new
+  document) instead of leaving an orphan draft and creating another; if the retry finds the render already queued or
+  done it only records the ids. Only its last attempt writes the error to the row.
+- **The document.** `v0` = the clip from 0 to g = min(clip, 3 000 ms), `v1` = the original from g to its end (both
+  muted), the original's WHOLE audio in its own track `p_original` (rol `sonido`) from 0, and the hook text (literal,
+  `borrador.ESTILO_HOOK`/`POS_HOOK`) from 0 to g: at second g the same seconds of the original are seen and heard and
+  the voice stays in sync. Not in `p_sonido`: the editor's `normalizar` rebuilds `p_sonido` as a mirror of the
+  principal on every operation (`sincronizarSonido`), which would silence the first 3 s the first time someone edits the
+  text. Without audio in the original there is no `p_original`. The original material is found by the `original_hash`
+  stored in the clip's Crear session (if the base was cleaned, it is downloaded again). Format = the closest of
+  `documento.FORMATOS`; destino = the store's country if it is in `tipos.PAISES`, else the project's, else CO;
+  `origen = {"tipo": "triple_whale", "pais", "analisis_id", "gancho_id"}`; the edition is named
+  `<ad name> · CV<gid>` (the name is cut, the code never).
+- **Screen** (`_tw_analisis.html`, by fetch, no `<script>`): «Copy nuevo para Meta» (copy buttons; a warning with figures
+  not in the data, «revisa antes de publicar»), «Ganchos nuevos (primeros 3 s)» with the button or the reason in words
+  (`ganchos.puede_probar`), and the latest tanda's variants (state, code with «Copiar» only when it is not in error,
+  `<video preload="none" data-precarga>`, «Descargar» and the video in another tab with `rel="noopener"`, «Abrir en el
+  editor», «Ver en Final edition» = the existing deep link `#final?cf=<cf_id>`); older tandas fold into one
+  `<details>`. Variant rows come in ONE query (`ganchos_de_analisis`); a bar is painted only when its job is alive in
+  the queue (`cola.job_ids_vivos_todos`): a bar over a finished job would fire `trabajo-terminado` at once and the tab
+  would re-ask the detail in a loop. The tab JS re-asks the detail when a variant's bar ends and, while a live variant
+  waits for the vigilante (`data-tw-ganchos-esperan`), every 20 s, at most 30 times in a row and only with the detail
+  open. The POST is one fetch after the price confirmation and is never repeated (`tests/test_tw_tarjetas_js.py`).
+- **The code.** `ganchos.codigo(gid) = "CV<gid>"`; `codigo_en(nombre)` (regex `\bCV(\d+)\b`, case-insensitive) is written
+  and tested for stage 3, which will read it from the ad name in the sync to compare v1 with v2 ring by ring.
+- **Real test (2026-10-09, one variant, ad 3 of the eval: HappyFluffs UGC 42,96 s).** preparar → Kling O3 Pro image to
+  video accepted 3 s (clip 1080×1920 3,04 s without audio, US$ 0,336 recorded as `video:cf_…:t3`) → vigilar → armar →
+  `edicion_producir` → `lista`, all in 120 s. Final 42,964 s 1080×1920 30 fps with the hook text on top; the cut at
+  second 3 lands on the original's second 3 and the audio correlates 0,999 at zero offset (measured at 0,5, 5, 20 and
+  38 s). The only problem was the start frame with another moment's subtitle (rule above).
+- **Known gaps (all in `docs/pendientes.md`).** The figure gate is weaker than it looks: `doctrina._numeros` merges the
+  digits of a decimal («4,0» → 40; PND-219, shared with Sprints and Nicho, changing it needs eval-claude), the
+  copy can claim urgency or scarcity without a number («Lageret tømmes raskt») and the verifier cannot see it
+  (PND-220), and the hook's `por_que` counts toward the check so a guessed figure there blocks a clean hook (PND-225).
+  A clip Crear can still recover («Recuperar el video») leaves its row in `error` for good (PND-221). The originals
+  count toward the 2 GB quota but «Medios» cannot delete origen `triple_whale` (PND-222). The `|precio` filter keeps
+  showing the cost when the margin read fails (PND-223). The analysis output reached 11 323 of the 12 000 tokens in one
+  real run (PND-224). preparar's own failure path does not show the Crear session's error (PND-226); small robustness
+  items in PND-227.
+- **Out of this change** (spec §11): the chip on the gallery card (PND-215), «Volver a analizar» for an old analysis
+  (PND-216), hooks for image ads (PND-217), the hooks in Meta paused with their code (PND-218).
