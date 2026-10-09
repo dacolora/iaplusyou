@@ -604,3 +604,65 @@ def test_el_error_de_duracion_vive_con_los_demas():
     from tareas import triple_whale as t
     assert ganchos.ERROR_DURACION == "No se pudo medir la duración del video."
     assert not hasattr(t, "ERROR_DURACION")
+
+
+# ------------------------------- ruling del orquestador sobre el arreglo 2: el reintento reusa su edición ---
+
+def test_un_reintento_tras_fallar_entre_crear_y_encolar_reusa_la_misma_edicion(entorno, monkeypatch):
+    """La edición se anota en la fila apenas se crea; si después falla el encolado, el segundo intento la reusa
+    (actualiza su documento) en vez de dejar un borrador huérfano y crear otro."""
+    from final_edition import rutas_editor
+    g, _clip, _ = _listo_para_armar(entorno, monkeypatch)
+    real = rutas_editor.encolar_producciones
+    veces = []
+
+    def _encolar(*a, **k):
+        if not veces:
+            veces.append(1)
+            raise RuntimeError("database is locked")
+        return real(*a, **k)
+    monkeypatch.setattr(rutas_editor, "encolar_producciones", _encolar)
+    with pytest.raises(RuntimeError):
+        _armar(entorno, g["id"], intentos=1)
+    [primera] = ediciones.listar("acme", cf_id=g["cf_id"])
+    fila = datos.gancho("acme", g["id"])
+    assert fila["estado"] == "armando" and fila["edicion_id"] == primera["id"]
+    _armar(entorno, g["id"], intentos=2)
+    [unica] = ediciones.listar("acme", cf_id=g["cf_id"])                  # no aparece una segunda edición
+    assert unica["id"] == primera["id"] and unica["version_n"] == primera["version_n"] + 1
+    fila = datos.gancho("acme", g["id"])
+    assert fila["estado"] == "produciendo" and fila["edicion_id"] == primera["id"]
+    assert fila["job_id"] == f"acme__ed{primera['id']}__es_CO__producir"
+    assert len(_cola("edicion_producir")) == 1
+
+
+@pytest.mark.parametrize("render_terminado", [False, True])
+def test_un_reintento_con_el_render_ya_en_cola_solo_anota_y_termina(entorno, monkeypatch, render_terminado):
+    """El worker murió después de encolar el render y antes de anotarlo: el reintento no crea otra edición, no
+    vuelve a encolar ni reinicia la final; anota los ids en la fila y termina. Vale con el render todavía en la cola
+    y con el render ya terminado (la final lista)."""
+    g, _clip, _ = _listo_para_armar(entorno, monkeypatch)
+    real = datos.mover
+    caido = [True]
+
+    def _mover(gid, de, a, **campos):
+        if a == "produciendo" and caido[0]:
+            raise RuntimeError("database is locked")
+        return real(gid, de, a, **campos)
+    monkeypatch.setattr(datos, "mover", _mover)
+    _armar(entorno, g["id"], intentos=1)
+    caido[0] = False
+    [ed] = ediciones.listar("acme", cf_id=g["cf_id"])
+    final_id = f"{g['cf_id']}__es_CO"
+    if render_terminado:
+        creative_flow.actualizar_final("acme", final_id, estado="listo", url_video="https://r2.test/final.mp4")
+        with db.conectar() as con:
+            con.execute(db.tarea.update().where(db.tarea.c.tipo == "edicion_producir").values(estado="ok"))
+    _armar(entorno, g["id"], intentos=2)
+    assert [(e["id"], e["version_n"]) for e in ediciones.listar("acme", cf_id=g["cf_id"])] == [(ed["id"], ed["version_n"])]
+    assert len(_cola("edicion_producir")) == 1 and len(ediciones.versiones("acme", ed["id"])) == 1
+    # la final no se reinició
+    assert creative_flow.final_por_legado("acme", final_id)["estado"] == ("listo" if render_terminado else "generando")
+    fila = datos.gancho("acme", g["id"])
+    assert fila["estado"] == "produciendo" and fila["edicion_id"] == ed["id"] and fila["final_id"] == final_id
+    assert fila["job_id"] == f"acme__ed{ed['id']}__es_CO__producir"

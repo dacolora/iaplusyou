@@ -692,9 +692,39 @@ def _ultimo_intento(tarea):
     return int(tarea.get("intentos") or 1) >= int(tarea.get("max_intentos") or 1)
 
 
+def _edicion_previa(cliente, g, idioma, pais):
+    """La edición que un intento anterior ya anotó en la fila (ruling del arreglo 2): (edición, ya_encolada), o
+    (None, False) si no hay o ya no es de este clip. «Ya encolada» = su render está vivo en la cola, la edición quedó
+    producida o la final del clip ya pasó por un render (lista, degradada o en error): entonces no se vuelve a producir.
+    Solo lee."""
+    if not g.get("edicion_id"):
+        return None, False
+    previa = ediciones.cargar(cliente, g["edicion_id"])
+    if previa is None or previa.get("cf_id") != g["cf_id"]:
+        return None, False
+    final = creative_flow.final_por_legado(cliente, f"{g['cf_id']}__{idioma}_{pais}")
+    encolada = (previa.get("estado") == "producida"
+                or trabajos.en_curso(tareas_edicion.job_id_producir(cliente, previa["id"], idioma, pais))
+                or (final or {}).get("estado") in ("listo", "degradada", "error"))
+    return previa, bool(encolada)
+
+
+def _anotar_produciendo(cliente, g, edicion_id, final_id, idioma, pais):
+    """La fila pasa a «produciendo» con los ids de su render. Con el render ya en la cola nada sube: un reintento
+    crearía otra edición y reiniciaría la final que ya se está produciendo."""
+    try:
+        if not datos.mover(g["id"], "armando", "produciendo", edicion_id=edicion_id, final_id=final_id,
+                           job_id=tareas_edicion.job_id_producir(cliente, edicion_id, idioma, pais)):
+            log.warning("ganchos: el gancho %s dejó de estar armando mientras se armaba", g["id"])
+    except Exception:  # noqa: BLE001 — con el render en cola, nunca un segundo intento
+        log.exception("ganchos: el render del gancho %s está en la cola pero no se pudo anotar en su fila", g["id"])
+
+
 def _armar(cliente, g):
     """Spec §4.6: el material del clip, el del original (por su hash; si ya no está, se vuelve a bajar), el documento,
-    la edición, la versión congelada y su render. Nada de esto cobra."""
+    la edición, la versión congelada y su render. Nada de esto cobra. La edición se anota en la fila apenas se crea:
+    un reintento la reusa (le guarda el documento nuevo) en vez de dejar un borrador huérfano y crear otra, y si su
+    render ya salió solo anota los ids y termina."""
     from final_edition import biblioteca, rutas_editor  # tardío: arrastran el blueprint del editor
     fila = datos.analisis_anuncio(cliente, g["analisis_id"]) or {}
     foto = fila.get("foto") or {}
@@ -717,27 +747,30 @@ def _armar(cliente, g):
         compilador.verificar_recortes(documento_mod.resolver(doc, idioma, pais),
                                       {int(clip["id"]): int(clip["duracion_ms"]),
                                        int(original["id"]): int(original["duracion_ms"])})
-        # El nombre del anuncio se recorta, el código no: es lo que une la edición con su variante.
-        sufijo = f" · {ganchos.codigo(g['id'])}"
-        nombre = str(foto.get("nombre") or foto.get("ad_id") or "")[:120 - len(sufijo)] + sufijo
-        ed = ediciones.crear(cliente, "video", nombre, doc, cf_id=g["cf_id"], creada_por="triple_whale")
-        try:
-            version = ediciones.versionar(cliente, ed["id"], motivo="producir")
-            [producida] = rutas_editor.encolar_producciones(cliente, ed["id"], ed, version, [f"{idioma}_{pais}"])
-        except Exception:
-            # Sin una función del editor que borre una edición, el borrador queda; el reintento hará otro.
-            log.warning("ganchos: la edición %s del gancho %s quedó como borrador sin producir", ed["id"], g["id"])
-            raise
+        previa, encolada = _edicion_previa(cliente, g, idioma, pais)
+        if encolada:
+            # Un intento anterior ya encoló su render (y murió antes de anotarlo): ni otra edición ni otro render.
+            _anotar_produciendo(cliente, g, previa["id"], f"{g['cf_id']}__{idioma}_{pais}", idioma, pais)
+            return ganchos.codigo(g["id"])
+        if previa is not None:
+            ediciones.guardar(cliente, previa["id"], doc, previa["version_n"])
+            ed = ediciones.cargar(cliente, previa["id"])
+        else:
+            # El nombre del anuncio se recorta, el código no: es lo que une la edición con su variante.
+            sufijo = f" · {ganchos.codigo(g['id'])}"
+            nombre = str(foto.get("nombre") or foto.get("ad_id") or "")[:120 - len(sufijo)] + sufijo
+            ed = ediciones.crear(cliente, "video", nombre, doc, cf_id=g["cf_id"], creada_por="triple_whale")
+            # Anotada apenas existe (CAS: la fila sigue «armando»): si algo falla antes del render, el reintento la reusa.
+            if not datos.mover(g["id"], "armando", "armando", edicion_id=ed["id"]):
+                log.warning("ganchos: el gancho %s dejó de estar armando; su edición %s no se produce", g["id"],
+                            ed["id"])
+                return ganchos.codigo(g["id"])
+        version = ediciones.versionar(cliente, ed["id"], motivo="producir")
+        [producida] = rutas_editor.encolar_producciones(cliente, ed["id"], ed, version, [f"{idioma}_{pais}"])
     finally:
         shutil.rmtree(carpeta, ignore_errors=True)
-    # Desde aquí el render ya está en la cola: nada sube, porque un reintento crearía otra edición y reiniciaría la
-    # final que ya se está produciendo. Se anotan los ids en la fila y se termina.
-    try:
-        if not datos.mover(g["id"], "armando", "produciendo", edicion_id=ed["id"], final_id=producida["final_id"],
-                           job_id=tareas_edicion.job_id_producir(cliente, ed["id"], idioma, pais)):
-            log.warning("ganchos: el gancho %s dejó de estar armando mientras se armaba", g["id"])
-    except Exception:  # noqa: BLE001 — con el render en cola, nunca un segundo intento
-        log.exception("ganchos: el render del gancho %s está en la cola pero no se pudo anotar en su fila", g["id"])
+    # Desde aquí el render ya está en la cola: se anotan los ids en la fila y se termina, sin subir nada.
+    _anotar_produciendo(cliente, g, ed["id"], producida["final_id"], idioma, pais)
     return ganchos.codigo(g["id"])
 
 
