@@ -5403,6 +5403,9 @@ msgstr "The analysis with Claude failed: try again from the campaign."
 msgid "El análisis falló."
 msgstr "The analysis failed."
 
+msgid "El análisis todavía no está listo."
+msgstr "The analysis isn't ready yet."
+
 msgid "El archivo es demasiado grande."
 msgstr "The file is too large."
 
@@ -6044,8 +6047,14 @@ msgstr "The video is longer than 2 min."
 msgid "El video encima de otro video todavía no se puede producir."
 msgstr "A video on top of another video can't be produced yet."
 
+msgid "El video es muy corto: dura menos de 5 s."
+msgstr "The video is too short: it lasts less than 5 s."
+
 msgid "El video final no muestra este clip: aquí solo se puede borrar."
 msgstr "The final video doesn't show this clip: here you can only delete it."
+
+msgid "El video original no es un mp4: no se puede editar."
+msgstr "The original video isn't an mp4: it can't be edited."
 
 #, python-brace-format
 msgid "El video pesa más de {mb} MB."
@@ -7453,6 +7462,12 @@ msgstr "This ad doesn't work"
 
 msgid "Este anuncio sí funciona"
 msgstr "This ad works"
+
+msgid "Este análisis es de antes de los ganchos."
+msgstr "This analysis is from before hooks."
+
+msgid "Este análisis no trae ganchos que se puedan generar."
+msgstr "This analysis has no hooks that can be generated."
 
 msgid "Este clip dura más que el video: no cabe una copia. Acórtalo primero."
 msgstr "This clip is longer than the video: a copy doesn't fit. Shorten it first."
@@ -8879,6 +8894,9 @@ msgstr "There's a saved connection but it can't be read (did FLASK_SECRET_KEY ch
 
 msgid "Hay una investigación en curso en este estudio: espera a que termine o cancélala."
 msgstr "There's research in progress on this study: wait for it to finish or cancel it."
+
+msgid "Hay una tanda en curso: espera a que termine."
+msgstr "A batch is in progress: wait for it to finish."
 
 msgid "Hechas"
 msgstr "Done"
@@ -11870,6 +11888,9 @@ msgstr "A charge could not be recorded"
 msgid "No se pudo avanzar la derivación: %(error)s"
 msgstr "Could not advance the derivation: %(error)s"
 
+msgid "No se pudo bajar el video original."
+msgstr "Couldn't download the original video."
+
 #, python-brace-format
 msgid "No se pudo borrar (error {status})."
 msgstr "Couldn't delete (error {status})."
@@ -12168,6 +12189,9 @@ msgstr "Could not refresh %(nombre)s (%(pais)s): %(error)s"
 #, python-format
 msgid "No se pudo revisar %(fuente)s"
 msgstr "Couldn't check %(fuente)s"
+
+msgid "No se pudo sacar el fotograma de arranque."
+msgstr "Couldn't extract the starting frame."
 
 msgid "No se pudo sacar ningún fotograma del video."
 msgstr "Couldn't get a single frame from the video."
@@ -15133,6 +15157,9 @@ msgstr "No sales yet"
 
 msgid "Sin verificar ahora (Meta no respondió)."
 msgstr "Not verified right now (Meta didn't respond)."
+
+msgid "Sin video que se pueda bajar: los ganchos necesitan el video original."
+msgstr "No video that can be downloaded: hooks need the original video."
 
 msgid "Sin voz/música"
 msgstr "No voice/music"
