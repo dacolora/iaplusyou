@@ -375,12 +375,18 @@ def test_precio_del_analisis():
 
 
 def test_la_tarifa_del_analisis_es_la_medida_en_la_prueba_real():
-    """PND-179 y spec tw-ganchos-y-copy §3.3. 2026-10-08: 4 anuncios reales costaron US$ 0,067–0,084 por llamada (tarifa
-    0,10). 2026-10-09, ya con tres ganchos y el copy nuevo en la respuesta: 0,086–0,131, media 0,110 (4 casos, sin
-    correcciones) > 0,10, así que la tarifa sube a 0,12 y el precio que ve la persona es 0,12 + Whisper de 30 s."""
-    assert gastos.TARIFAS["analisis_anuncio_tw"] == 0.12
-    assert gastos.estimar("analisis_anuncio_tw", segundos=30)["usd"] == pytest.approx(0.121, abs=1e-6)
-    assert gastos.estimar("analisis_anuncio_tw", segundos=30)["usd"] >= 0.110 + 0.0014      # cubre la media medida + Whisper
+    """PND-179 y spec tw-ganchos-y-copy §3.3. 2026-10-08: 4 anuncios reales a US$ 0,067–0,084 por llamada (tarifa 0,10).
+    2026-10-09, ya con tres ganchos y el copy nuevo: 0,086–0,111 con la caché caliente (una tanda) y 0,131–0,142 con la
+    caché fría, que es lo que cuesta un clic suelto sobre una tarjeta (el caso normal). El precio que se muestra antes de
+    cobrar es el de un clic suelto: tarifa 0,14 + Whisper de 30 s."""
+    assert gastos.TARIFAS["analisis_anuncio_tw"] == 0.14
+    precio = gastos.estimar("analisis_anuncio_tw", segundos=30)["usd"]
+    assert precio == pytest.approx(0.141, abs=1e-6)
+    en_frio = (0.1309, 0.1333, 0.1324)            # tres clics sueltos con la caché fría (re-medición del 2026-10-09)
+    assert precio >= max(en_frio) + 0.0014        # cubren la llamada fría + el Whisper más caro medido
+    assert precio >= 0.111 + 0.0014               # y con holgura la caliente de la tanda
+    # La corrida más cara (0,1424, 9 647 tokens de salida) queda ≈ US$ 0,003 por encima de la tarifa sola: no entra aquí.
+    assert 0.1424 - gastos.TARIFAS["analisis_anuncio_tw"] < 0.0025
 
 
 def test_aprendizaje_desde_un_analisis():
