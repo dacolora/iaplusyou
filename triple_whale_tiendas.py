@@ -235,14 +235,15 @@ def agregar(cliente, llave, dominio, pais=None, moneda="USD", modelo_atribucion=
     """Conecta una tienda al proyecto y devuelve su id.
 
     * Sin `pais` (None o vacío) se adivina por el dominio; si no hay pista y la tienda ya existía, conserva el suyo.
-    * Si el proyecto no tenía ajustes los crea con `moneda`/`modelo_atribucion`/`ventana_atribucion`; si ya
-      los tenía, los IGNORA (son del proyecto y se cambian con `cambiar_ajustes`).
+    * Si no hay tiendas, guarda los ajustes del formulario, incluso si ya existe su fila. Con tiendas conserva
+      los del proyecto (se cambian con `cambiar_ajustes`).
     * Si ya hay una tienda con ese dominio la reconecta: llave nueva, estado `conectada`, sin tocar sus cifras.
     * Si OTRA tienda del proyecto usa el país, lanza `PaisOcupado` y no escribe nada."""
     ahora = db.ahora()
     dom = triple_whale.normalizar_dominio(dominio) or (dominio or "").strip()
     t, a = db.tw_tienda, db.triple_whale
     with db.conectar() as con:
+        con.execute(a.update().where(a.c.cliente == cliente).values(id=a.c.id))
         existente = con.execute(sa.select(t.c.id, t.c.pais).where(t.c.cliente == cliente, t.c.dominio == dom)).first()
         elegido = _pais(pais) or adivinar_pais(dom) or (existente.pais if existente else None)
         _pais_libre(con, cliente, elegido, existente.id if existente else None)
@@ -250,6 +251,11 @@ def agregar(cliente, llave, dominio, pais=None, moneda="USD", modelo_atribucion=
             con.execute(a.insert().values(
                 cliente=cliente, creado_en=ahora, actualizado_en=ahora, extra={},
                 moneda=triple_whale.normalizar_moneda(moneda),
+                modelo_atribucion=triple_whale.normalizar_modelo(modelo_atribucion),
+                ventana_atribucion=triple_whale.normalizar_ventana(ventana_atribucion)))
+        elif not con.execute(sa.select(t.c.id).where(t.c.cliente == cliente)).first():
+            con.execute(a.update().where(a.c.cliente == cliente).values(
+                actualizado_en=ahora, moneda=triple_whale.normalizar_moneda(moneda),
                 modelo_atribucion=triple_whale.normalizar_modelo(modelo_atribucion),
                 ventana_atribucion=triple_whale.normalizar_ventana(ventana_atribucion)))
         valores = {"actualizado_en": ahora, "llave": cifrado.cifrar(llave), "dominio": dom, "pais": elegido,
@@ -310,12 +316,40 @@ def actualizar_extra(cliente, cambios):
     """Mezcla `cambios` en el `extra` del PROYECTO (avisados, aviso_sin_ventas)."""
     a = db.triple_whale
     with db.conectar() as con:
+        con.execute(a.update().where(a.c.cliente == cliente).values(id=a.c.id))
         fila = con.execute(sa.select(a.c.extra).where(a.c.cliente == cliente)).first()
         if not fila:
             return
         extra = dict(fila.extra or {})
         extra.update(cambios)
         con.execute(a.update().where(a.c.cliente == cliente).values(extra=extra, actualizado_en=db.ahora()))
+
+
+def reservar_aviso_sync(cliente, job_id):
+    """Marca esta copia terminada y reserva el aviso para la última, antes de que el worker cierre su tarea.
+    SQLite toma el candado ANTES de leer tareas/extra: dos finales simultáneos no se omiten entre sí ni avisan dos
+    veces. Los ids de tareas distinguen nuevas copias con el mismo job_id; solo se conservan los aún vivos.
+    Escribe únicamente los ajustes aquí (un solo escritor); no cambia el estado ni el progreso de la cola.
+    """
+    a, t = db.triple_whale, db.tarea
+    with db.conectar() as con:
+        con.execute(a.update().where(a.c.cliente == cliente).values(id=a.c.id))
+        fila = con.execute(sa.select(a.c.extra).where(a.c.cliente == cliente)).first()
+        if not fila:
+            return False
+        vivos = {f"{i}:{fecha}": j for i, j, fecha in con.execute(sa.select(t.c.id, t.c.job_id, t.c.creada_en).where(t.c.cliente == cliente,
+                     t.c.tipo == "tw_sincronizar", t.c.estado.in_(("pendiente", "en_curso")))).all()}
+        actual = next((i for i, j in vivos.items() if j == job_id), None)
+        if actual is None:
+            return not vivos  # invocaciones sin tarea (herramientas/pruebas)
+        extra = dict(fila.extra or {})
+        terminadas = set(extra.get("syncs_terminadas") or []) & vivos.keys()
+        if actual in terminadas:
+            return False
+        terminadas.add(actual)
+        extra["syncs_terminadas"] = sorted(terminadas)
+        con.execute(a.update().where(a.c.cliente == cliente).values(extra=extra, actualizado_en=db.ahora()))
+        return not (vivos.keys() - terminadas)
 
 
 def cambiar_ajustes(cliente, moneda=None, modelo_atribucion=None, ventana_atribucion=None):

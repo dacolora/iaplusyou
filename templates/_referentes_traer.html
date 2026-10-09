@@ -92,10 +92,10 @@
       <div class="modal-form-fila" data-solo-fuente="apify">
         <label class="modal-form-campo">{{ _('País de los anuncios') }}
           <select name="pais">
-            {% set opciones_pais = [('ALL', _('Todos los países')), ('CO', 'Colombia'), ('MX', _('México')), ('AR', 'Argentina'), ('CL', 'Chile'), ('PE', _('Perú')), ('EC', 'Ecuador'), ('US', _('Estados Unidos')), ('ES', _('España'))] %}
             {% set pais = consulta.pais or 'ALL' %}
-            {% for cod, nombre in opciones_pais %}<option value="{{ cod }}" {% if cod == pais %}selected{% endif %}>{{ nombre }}</option>{% endfor %}
-            {% if pais not in opciones_pais | map('first') | list %}<option value="{{ pais }}" selected>{{ pais }}</option>{% endif %}
+            <option value="ALL" {% if pais == 'ALL' %}selected{% endif %}>{{ _('Todos los países') }}</option>
+            {% for cod, info in paises_publicacion.items() %}<option value="{{ cod }}" {% if cod == pais %}selected{% endif %}>{{ info.nombre|traducir }}</option>{% endfor %}
+            {% if pais != 'ALL' and pais not in paises_publicacion %}<option value="{{ pais }}" selected>{{ pais }}</option>{% endif %}
           </select>
         </label>
       </div>

@@ -35,7 +35,7 @@
     {% endfor %}
   </div>
   <div class="fe-opciones">
-    <label>{{ _('O pega un link (TikTok, Instagram, YouTube)') }} <input type="url" name="link" placeholder="https://..." style="width: 22rem;"></label>
+    <label class="sprint-link-campo">{{ _('O pega un link (TikTok, Instagram, YouTube)') }} <input type="url" name="link" placeholder="https://..."></label>
     <button type="submit" class="btn-generar btn-sm">{{ _('Subir') }} · {{ _('Análisis por referencia:') }} {{ precio_analisis_sprint }}</button>
   </div>
   {% if trabajo_link %}

@@ -163,3 +163,6 @@ PND-166/190 (2026-10-09, decisión delegada): acciones Sprints muestran precio_a
 Enmiendas lote 7 (2026-10-09): botones nuevos usan textos de estimación que fallan a precio no disponible. Fotos: cantidad faltante y total; sin acción si cero. Panel Armar: cada fallo tiene fila fuera de figure y de la grilla, texto largo envuelve, botón con precio y ✕ separada. Inspección a 375/1280 px por Claude; desbordes previos de campaña y Detenida quedan registrados, sin arreglo.
 
 Segunda ronda lote 7 (2026-10-09, encargo de Daniel): filas de análisis fallido identifican la referencia por título o id y usan campo-error de la Base visual común. El formulario de reintento dentro de panel-analisis-error conserva volver=tablero. Ambos formularios de fotos mandan n_visto; sin imagen no ofrecen un reintento pagado. La inspección a 375/1280 px sigue a cargo de Claude.
+
+
+PND-209/210/032 (2026-10-09, decisión del lote 8): pantallas/sprints.css limita el campo del link a 100%, permite envolver sprint-aviso (también Detenida de Nicho) y coloca los filtros de revisión en una grilla: campaña ocupa la fila completa en celular, Tipo/QA la siguiente. Reutiliza los campos de la Base visual común, sin colores nuevos. tests/test_lote8_ui.py; capturas a 375/1280 px en es/en a cargo de Claude.

@@ -252,7 +252,7 @@ def tw_sincronizar(tarea):
     # Los avisos miran «Todas las tiendas»: solo corren cuando no queda otra
     # copia del proyecto en cola o en curso, así la última que termina avisa
     # una vez y con todo al día. Un fallo aquí no tumba la copia.
-    if [j for j in syncs_en_curso(cliente) if j != job_id]:
+    if not triple_whale_tiendas.reservar_aviso_sync(cliente, job_id):
         return texto
     try:
         c = avisos.revisar_y_avisar(cliente)

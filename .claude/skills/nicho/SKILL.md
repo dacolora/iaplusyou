@@ -150,3 +150,6 @@ PND-190/159 (2026-10-09, decisiones delegadas): consultas y selección llevan ma
 Enmiendas lote 7 (2026-10-09, decisión delegada): Reanudar muestra hasta la suma de _costo_paso de todos los pasos retomables, sin limitar el total por aprobado menos gastado (segunda ronda 2026-10-09: ese límite solo lo respeta generar), con margen; cualquier estimado desconocido o margen fallido deja precio no disponible. Hooks consultan gasto del intento: una corrida ya anotada conserva error para que Reanudar no vuelva a pagar ese paso.
 
 Segunda ronda lote 7 (2026-10-09, encargo de Daniel): _costo_paso devuelve 0 para redes:* (gratis); Reanudar suma todos los pasos pendientes. El margen y los estimados desconocidos conservan su tratamiento de precio no disponible.
+
+
+PND-155(1)/210 (2026-10-09, decisión del lote 8): precios NOK/SEK y kr con cualquier combinación de mayúsculas conservan el número y la corona local. Los símbolos anteriores siguen leyéndose; tests/test_lote8_locales.py y test_nicho_plataformas.py. Detenida usa sprint-aviso con max-width y ajuste de líneas en pantallas/sprints.css; captura a cargo de Claude.

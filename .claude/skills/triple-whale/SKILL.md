@@ -52,7 +52,7 @@ rejected because it would split catalog, pieces and sprints. Spec
   (`tw_anuncio_dia`, `tw_tienda_dia`, `tw_producto_dia`) carry `tienda_id` (NOT NULL, no FK) inside their unique keys.
 - **Single writer.** `triple_whale_tiendas.py` writes `tw_tienda` and `triple_whale`: `agregar(cliente, llave, dominio,
   pais=None, moneda, modelo_atribucion, ventana_atribucion, zona_horaria)` (guesses the country from the domain; a
-  second connect of the same domain reconnects; the project's settings are only created, never overwritten),
+  second connect of the same domain reconnects; with no stores the form's settings are saved even if their row already exists; with stores they are preserved),
   `cambiar_pais(cliente, tienda_id, pais)`, `actualizar_tienda`, `actualizar_extra_tienda`, `actualizar_extra`
   (project's), `cambiar_ajustes`, `quitar(cliente, tienda_id)`; reads `ajustes`, `tiendas`, `tienda(cliente,
   tienda_id)`, `tienda_de_pais`, `obtener` (settings + `tiendas`, None without stores), `obtener_llave(cliente,
@@ -72,7 +72,7 @@ rejected because it would split catalog, pieces and sprints. Spec
   `triple_whale_tiendas.tiendas`, the selector's order). The panel (`panel.contexto(cliente, dias,
   canal, tienda_id)`, `?tienda=` in `ver_panel`) has a store selector; with one store it is always that one.
 - **Avisos** (`triple_whale/avisos.py`) always look at «Todas»: `tw_sincronizar` calls `avisos.revisar_y_avisar`
-  only when no OTHER sync of the project is still queued or running (`syncs_en_curso`), so the LAST one to finish
+  only after `triple_whale_tiendas.reservar_aviso_sync` atomically marks its completion and finds no other unfinished sync, so the LAST one to finish
   warns once with everything fresh. «Evaluar con IA» evaluates the selected scope and saves it in
   `tw_evaluacion.extra` (`tienda_id`, `pais`; None = Todas).
 - **Atribución de experimentos** by the store of the piece's country: see below (`lanzador._tienda_tw_de`). A single
@@ -330,3 +330,6 @@ production. It must work for ANY ad, not only Creatv's: in happyflops only 4 pie
   voice.
 
 PND-187 (2026-10-09, decisión delegada): nuevas miniaturas de a_referente pasan cliente a guardar_en_r2 y usan clientes/<cliente>/referentes/tw_<ad_id>.jpg. Una fila con imagen ok no se vuelve a subir ni migra. anuncio_id ya es único por proyecto por 0030; test_lote7_tw_aislamiento guarda el mismo anuncio en dos proyectos con filas y claves distintas y comprueba biblioteca e imagen histórica.
+
+
+PND-149(2–6) (2026-10-09, decisión del lote 8): serie_tienda solo resta duplicados de anuncios entre tiendas que tienen fila de tienda ese día; gasto_duplicado conserva su diagnóstico de todos los anuncios. Al refrescar un experimento, se limpian las marcas antiguas/nuevas de países cuya tienda ya está conectada, también si ninguna pieza queda sin tienda. uk al final del dominio da GB. agregar guarda los ajustes del formulario si no hay tiendas (aunque exista la fila); con tiendas conserva los ajustes anteriores. reservar_aviso_sync toma UPDATE sin efecto antes de leer extra/cola y marca ids+creada_en aún vivos en syncs_terminadas: la última reserva el aviso una sola vez aunque ambos hilos sigan vivos hasta volver al worker. actualizar_extra toma el mismo candado antes de leer. tests/test_lote8_tw.py cubre cifras, reconexión, dos finales simultáneos y el ciclo siguiente; sin red. Se dejan (1) países repetidos por tarjeta y (7) ajustes durante copia por decisión; (8) sigue para la primera copia real.
