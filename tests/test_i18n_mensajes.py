@@ -31,6 +31,7 @@ RUTAS += ["dashboard.py", "guiones/rutas.py", "guiones/rutas_pipeline.py", "nich
 RUTAS += ["triple_whale/rutas.py"]   # Fase 6, Task 6: llegó con una fusión de main (pestaña Triple Whale)
 RUTAS += ["hablado_rutas.py"]   # Anuncio hablado en Crear (2026-10-01)
 RUTAS += ["cobros/rutas.py"]   # Cobros 7/11: recargas con Bold y su webhook (2026-10-08)
+RUTAS += ["meta_rendimiento/rutas.py"]   # Pestaña Meta (2026-10-08)
 WORKER = ["ediciones.py", "final_edition/edicion_clon.py", "final_edition/motor/__init__.py", "tareas/edicion.py",
           "final_edition/biblioteca.py"]
 WORKER += ["final_edition/__init__.py", "final_edition/produccion.py", "final_edition/borrador.py",

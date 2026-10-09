@@ -58,7 +58,9 @@ import decisor
 import doctrina
 from doctrina import aprendizajes as doctrina_aprendizajes
 import experimentos
+import idiomas as modulo_idiomas   # `idiomas` es también una variable local de varias funciones
 import lanzador
+import meta_conexion
 import proyectos
 import gastos
 import trabajos
@@ -89,6 +91,25 @@ ETIQUETAS_TIPO = {"derivar": N_("derivar"), "rescatar": N_("rescatar")}
 
 
 # ------------------------------------------------------------ helpers ---
+
+class SinPagina(ValueError):
+    """La conexión de Meta del proyecto es «solo métricas» (token sin Página): una pieza nueva no tendría dónde
+    lanzarse (`lanzador.lanzar_piezas_nuevas` se negaría al final). Se detecta ANTES de producir nada de pago."""
+
+
+def _exigir_pagina(cliente, guardado=False):
+    """Lanza SinPagina (con el texto de `meta_conexion.error_solo_metricas`) si el proyecto tiene Meta conectado sin
+    Página. Ruling R23 (revisión final 2026-10-08): derivar y rescatar producen anuncios NUEVOS, y producir (clon,
+    finales) cobra; sin Página el lanzamiento falla al final, con todo ya pagado. `guardado=True`: el texto se
+    guarda (error de un item) y va en el idioma del proyecto, no en el de quien mira."""
+    if guardado:
+        with modulo_idiomas.en_idioma(modulo_idiomas.de_proyecto(cliente)):
+            aviso = meta_conexion.sin_pagina(cliente)
+    else:
+        aviso = meta_conexion.sin_pagina(cliente)
+    if aviso:
+        raise SinPagina(aviso)
+
 
 def _experimento(cliente, experimento_id):
     ex = experimentos.obtener(cliente, experimento_id)
@@ -373,6 +394,9 @@ def planificar(cliente, experimento_id, tipo, payload):
     ex = _experimento(cliente, experimento_id)
     pz = _pieza(ex, payload["ep_id"])
     motivo = payload.get("motivo") or ""
+    if tipo in ("derivar", "rescatar"):
+        # Antes de crear el hijo, marcar la pieza o encolar nada: sin Página no hay a dónde lanzar lo producido.
+        _exigir_pagina(cliente)
     if tipo == "derivar":
         return _planificar_derivar(cliente, ex, pz, motivo)
     if tipo == "rescatar":
@@ -465,6 +489,7 @@ def _encolar_clon(cliente, cf_id, tipo="video"):
     job_id = f"{cliente}__{cf_id}__creative_flow"
     if trabajos.en_curso(job_id):
         return False
+    _exigir_pagina(cliente, guardado=True)   # antes de marcar la sesión «generando» y de reservar
     import flowplus_lanzar  # perezoso: el estimado vive con el lanzamiento de Crear
     costo = flowplus_lanzar.costo_estimado(_sesion(cliente, cf_id))
     creative_flow.actualizar(cliente, cf_id, estado="video_generando")
@@ -497,6 +522,7 @@ def _encolar_final(cliente, cf_id, idioma, pais, opciones):
     existente = creative_flow.final_por_legado(cliente, legado)
     if existente is not None and existente.get("estado") != "error":
         return legado
+    _exigir_pagina(cliente, guardado=True)   # antes de crear la fila de la final y de reservar
     final_id = creative_flow.crear_final(cliente, cf_id, idioma, pais, variante=variante)
     try:
         trabajos.encolar(job_id, "final_producir",
@@ -620,6 +646,10 @@ def _avanzar_item(cliente, experimento_id, d, item):
         # decisor); sin saldo el item falla con la frase y nada se encola. Un
         # rescate fallido vuelve como propuesta para reintentarlo tras recargar.
         _fallar(cliente, experimento_id, d, item, e.frase_proyecto())
+    except SinPagina as e:
+        # Conexión «solo métricas» (R23): la Página se quitó con la derivación en marcha. Nada se encoló ni se reservó
+        # (la guarda va antes); el item falla con el texto y un rescate vuelve como propuesta (`_cerrar_si_lista`).
+        _fallar(cliente, experimento_id, d, item, str(e))
 
 
 def _lanzar_piezas(cliente, experimento_id):

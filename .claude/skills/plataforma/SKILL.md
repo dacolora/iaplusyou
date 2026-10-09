@@ -60,7 +60,7 @@ PND-190; the lane change does not alter that paid retry policy. A queued task st
 30 minutes is either re-queued (if it still has attempts left) or marked `error`
 (once `max_intentos` is exhausted) — never one this worker is running right now
 (`cola.recuperar_colgadas(excluir=worker.en_vuelo())`). Since 2026-09-28 (spec
-`2026-09-28-crear-sin-cola`, «en Crear nada queda en cola») the worker has three lanes (PND-051, decisión delegada 2026-10-07, implementada 2026-10-08):
+`2026-09-28-crear-sin-cola`, «en Crear nada queda en cola») the worker runs in lanes; since 2026-10-08 there are four: crear, nicho (PND-051, decisión delegada 2026-10-07, implementada 2026-10-08), `lectura` (below) and general:
 `CARRIL_CREAR` (`flowplus_video`, `flowplus_imagen`, `flowplus_recuperar`, `flowplus_director`, `hablado_voz`)
 runs up to `HILOS_CREAR = 4` at once — Sprints batches (`prioridad < 5`) take at most
 `HILOS_LOTE = 2`, so a single piece from Crear always finds a thread — and everything else
@@ -75,6 +75,16 @@ transaction (`cola.terminar_y_encolar`, retried; if it still fails the task goes
 start gives its task back (`cola.devolver`). **`dashboard.py` runs with `use_reloader=False`
 on purpose**: Flask's auto-reloader kills the whole process on file changes, which
 would silently abort any in-flight background generation.
+
+**Lane `lectura` (2026-10-08, ruling R16 of «Meta rendimiento»):** `CARRIL_LECTURA = ("meta_rend_sincronizar",)`
+runs in its own single thread (`HILOS_LECTURA = 1`), and the general lane excludes `CARRIL_CREAR`, `CARRIL_NICHO`
+and `CARRIL_LECTURA`. Why: the first copy of one Meta ad account measured on the real API takes 8 min (Norway) to
+14 min (Netherlands), about an hour for happyflops' 7 accounts; on the single general thread that would have
+blocked experiment launches and refreshes, Triple Whale and the stores for that long. Copies of different accounts
+still run one after another (Meta's rate limits are per user+app, shared across accounts). It is free (reading
+Meta never charges, `max_intentos=2`, and all three `meta_rend_*` types are in `TIPOS_EXENTOS_DE_COBRO`, so a project
+with «Cobrar» on still syncs). `meta_rend_sincronizar_todas` and `meta_rend_limpiar` stay in the general
+lane (instant). The area's own skill is `meta-rendimiento`. A new long, free, read-only sync can join this lane; anything that charges stays out of it.
 
 **Higgsfield API wrapper** (`higgsfield_client.py`): all calls follow launch ->
 `poll_until_done(status_url)` -> extract-result, for both video (`kling-2.1-pro`,
@@ -144,4 +154,4 @@ S3 (2026-10-08, auditoría lote 6B): la periódica diaria cola_limpiar llama man
 
 PND-068 (2026-10-08, decisión 2026-09-18: nada nuevo a Higgsfield): retirados productores y rutas de Nueva idea y sus nueve plantillas. No eran tareas de cola, sino hilos de Flask. Un tipo desconocido queda en error en palabras sin llamar al proveedor (tests/test_lote6c_retirar_ideas.py); proveedores/CLI y datos históricos conservados.
 
-PND-051 (enmienda 2026-10-08): el carril Nicho tiene un solo hilo para sus seis tareas que esperan proveedor y referentes_barrer. Los barridos comparten la RAM y el límite de corridas de Apify con Nicho; repartirlos en paralelo daba 402 por capacidad. General excluye Crear + Nicho, y en_vuelo, esperar_hilos y recuperación son comunes a los tres carriles. En SIGINT/SIGTERM no se interrumpe el sondeo de Apify: el hilo termina la tarea y esperar_hilos lo espera. En un despliegue la cola debe estar vacía antes de reiniciar. No hay puntos de control ni continuaciones nuevas de Apify: se conserva el contrato anterior del proveedor y del gasto. Pruebas: tests/test_lote6c_nicho_carril.py, incluido un 402 sin cobro seguido de un segundo clic explícito con el mismo job_id que sí termina. No cambia max_intentos ni la política de cobro.
+PND-051 (enmienda 2026-10-08): el carril Nicho tiene un solo hilo para sus seis tareas que esperan proveedor y referentes_barrer. Los barridos comparten la RAM y el límite de corridas de Apify con Nicho; repartirlos en paralelo daba 402 por capacidad. General excluye Crear + Nicho (+ lectura, el carril de Meta rendimiento), y en_vuelo, esperar_hilos y recuperación son comunes a los cuatro carriles. En SIGINT/SIGTERM no se interrumpe el sondeo de Apify: el hilo termina la tarea y esperar_hilos lo espera. En un despliegue la cola debe estar vacía antes de reiniciar. No hay puntos de control ni continuaciones nuevas de Apify: se conserva el contrato anterior del proveedor y del gasto. Pruebas: tests/test_lote6c_nicho_carril.py, incluido un 402 sin cobro seguido de un segundo clic explícito con el mismo job_id que sí termina. No cambia max_intentos ni la política de cobro.

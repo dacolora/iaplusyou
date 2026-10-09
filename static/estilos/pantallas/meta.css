@@ -1,0 +1,35 @@
+/* ============================================================
+   Meta: la pestaña de rendimiento de varias cuentas (spec 2026-10-08 meta rendimiento §8). Uso:
+   _tab_meta.html y sus fragmentos. El selector «Elegir cuentas» (#meta-cuentas, _meta_cuentas.html) abierto
+   encima del panel se separa de él con su propia línea; el resto del panel reutiliza las clases de la pestaña
+   Triple Whale (.tw-barra, .tw-tabla…) y del Tablero (.tb-seccion, .kpi-tile…).
+   ============================================================ */
+
+.meta-cuentas:not([hidden]):not(:empty) { margin: 0 0 1.4rem; padding-bottom: 1.1rem; border-bottom: 1px solid var(--border); }
+.meta-cuentas .tb-seccion { margin-top: 0; padding-top: 0; border-top: 0; }
+.meta-cuentas select { min-width: 10rem; }
+.tw-tabla img.meta-mini { display: block; width: 48px; height: 48px; max-width: none; object-fit: cover; border-radius: 6px; }
+
+/* «Día a día» (meta_rendimiento/grafico.py): un solo eje (gasto y valor de compras son dinero en la misma moneda),
+   rejilla recesiva, barras finas con 2px de aire, línea de 2px y marcadores solo al pasar el ratón. Eran las reglas
+   del gráfico del viejo Tablero en legado/02; main las borró el 2026-10-08 con «Resultados de tu tienda» y la pestaña
+   Meta, la única que las seguía usando, se las trajo al mezclar main. Los colores de la leyenda y de la serie son
+   los mismos tokens (--tb-gasto, --tb-ingresos). */
+.tb-leyenda { list-style: none; margin: 0; padding: 0; display: flex; gap: 1rem; font-size: .78rem; color: var(--muted); }
+.tb-leyenda li { display: inline-flex; align-items: center; gap: .4rem; }
+.tb-leyenda-moneda { color: var(--muted-2); }
+.tb-muestra { display: inline-block; width: 12px; height: 12px; border-radius: 3px; }
+.tb-muestra-gasto { background: var(--tb-gasto); }
+.tb-muestra-ingresos { height: 2px; width: 16px; border-radius: 1px; background: var(--tb-ingresos); position: relative; }
+.tb-muestra-ingresos::after { content: ""; position: absolute; left: 4px; top: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--tb-ingresos); }
+.tb-grafico { width: 100%; height: auto; display: block; font-family: var(--font-body); }
+.tb-rejilla { stroke: var(--border); stroke-width: 1; }
+.tb-base { stroke: var(--muted-2); stroke-width: 1; }
+.tb-eje { fill: var(--muted); font-size: 11px; }
+.tb-blanco { fill: transparent; }
+.tb-barra { fill: var(--tb-gasto); }
+.tb-linea { fill: none; stroke: var(--tb-ingresos); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; pointer-events: none; }
+.tb-marcador { fill: var(--tb-ingresos); stroke: var(--panel); stroke-width: 2; opacity: 0; transition: opacity .12s; pointer-events: none; }
+.tb-dia:hover .tb-blanco { fill: var(--panel-hover); }
+.tb-dia:hover .tb-marcador { opacity: 1; }
+.tb-dia:hover .tb-barra { fill: var(--accent-2); }

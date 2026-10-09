@@ -14,7 +14,7 @@ excepciones de `wavespeed_common` (marcadas `proveedor = "fal"`):
     sin video es `ErrorProveedor`.
 `providers/fal_client.py` (audio) no hace nada de eso y se deja como está.
 
-Contrato verificado el 2026-10-09 con un pedido real (PND-192):
+Contrato verificado el 2026-10-09 con un pedido real (PND-209):
   POST {COLA}/{ruta}                          -> {"request_id", "status_url", "response_url", ...}
   GET  {COLA}/{app}/requests/{id}/status      -> 202 {"status": IN_QUEUE|IN_PROGRESS, "queue_position"?} / 200 COMPLETED
   GET  {COLA}/{app}/requests/{id}             -> {"video": {"url"}, "seed"} (o el error, si falló;

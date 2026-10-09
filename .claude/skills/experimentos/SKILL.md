@@ -302,6 +302,8 @@ Meta (ya sin token): se muestra con `meta_errores.explicar` y con el autoescape 
 alcance y la frecuencia **diarios no se suman** entre días: la frecuencia del periodo o de la pieza sale del último
 `metrica_snapshot` (acumulada de por vida) y se rotula «acumulada»; la regla de fatiga usa esa, no la diaria.
 
+Derivar y rescatar producen un anuncio NUEVO para lanzar, así que con Meta conectado SIN Página («solo métricas») se frenan ANTES de cobrar, reservar o encolar nada (R23, 2026-10-08): `acciones._exigir_pagina` (antes de `_exigir_saldo`) y `derivaciones._exigir_pagina` (en `planificar` y antes de encolar un clon o una final) lanzan el texto de `meta_conexion.error_solo_metricas`, y `acciones.pedir` deja la acción como propuesta con ese texto en el motivo (en auto no se intenta); escalar y pausar no se frenan.
+
 PND-003 (revisión 2026-10-02): el precio de rescatar/derivar pasa musica_estilo de la sesión a gastos.estimar para cada regeneración; no cambia decisiones ni autorizaciones de pauta.
 
 PND-039/044/113 (2026-10-03): regenerar conserva las voces originales por destino en el item; un destino nuevo hereda la última voz original conocida. El payload explícito mantiene esa elección al producir. La cuadrícula conserva desmarcadas por combinación. Antes de la primera activación (experimento, país o pieza), lanzador reserva fin_primera_activacion bajo el escritor de extra y envía end_time a todos los conjuntos; solo después activa. Reanudar no extiende el plazo ni cambia presupuestos. Una reserva tras un fallo conserva la misma fecha en el próximo intento; los experimentos ya activados mantienen su fecha previa. PND-043 sigue esperando la decisión de reserva de arranques entre experimentos.
