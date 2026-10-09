@@ -494,10 +494,52 @@ def segundo_fotograma(valor, duracion_s):
     return round(s, 2) if s is not None and s >= 0 else None
 
 
+# Ofertas escritas en palabras (revisión de seguridad del 2026-10-09, «ESCALAR»; OWASP LLM09/LLM01):
+# `doctrina.verificar_cifras` solo ve dígitos, así que «gratis», «envío gratis», «free shipping», «halv pris» o
+# «2 for 1» pasaban a un video o al copy aunque el anuncio no los ofreciera. Es una HEURÍSTICA, no un detector de
+# ofertas: una lista corta y revisada a mano (español, inglés, noruego, sueco, portugués), en minúsculas, que se busca
+# como palabra o frase entera. Quedan fuera a propósito palabras sueltas que casi siempre significan otra cosa:
+# «off», «sale», «present(e)», «gave» (en inglés, «dio»), «mitad» y «half» solos. Agregar un término cambia qué
+# ganchos se bloquean: se mira con casos reales antes.
+TERMINOS_OFERTA = (
+    # gratis
+    "gratis", "gratuito", "gratuita", "grátis", "free", "kostenlos",
+    # envío
+    "envío", "envio", "shipping", "frakt", "fri frakt", "fraktfritt", "frete",
+    # descuento
+    "descuento", "rebaja", "rebajas", "discount", "rabatt", "desconto",
+    # regalo
+    "regalo", "gift", "gåva", "brinde",
+    # mitad de precio
+    "mitad de precio", "half price", "half-price", "half off", "halv pris", "halva priset", "metade do preço",
+    # dos por uno
+    "2x1", "2 x 1", "dos por uno", "2 for 1", "to for en", "2 för 1", "två för en", "buy one get one", "bogo",
+)
+
+
+def _patron_oferta(termino):
+    """El término como palabra o frase entera, sin distinguir mayúsculas y con cualquier espacio entre palabras. Un
+    guion pegado no cuenta como borde: «pain-free» no es «free»."""
+    cuerpo = r"\s+".join(re.escape(p) for p in termino.split())
+    return re.compile(r"(?<![\w-])" + cuerpo + r"(?![\w-])", re.IGNORECASE)
+
+
+_PATRONES_OFERTA = tuple((t, _patron_oferta(t)) for t in TERMINOS_OFERTA)
+
+
+def ofertas_sin_dato(texto, verificable):
+    """Los términos de `TERMINOS_OFERTA` que están en `texto` y NO en `verificable` (los datos que Claude recibió). Uno
+    que va dentro de otro marcado no se repite («fri frakt» sin «frakt»)."""
+    texto, verificable = str(texto or ""), str(verificable or "")
+    faltan = [t for t, p in _PATRONES_OFERTA if p.search(texto) and not p.search(verificable)]
+    return [t for t in faltan if not any(t != otro and t in otro for otro in faltan)]
+
+
 def _ganchos(lista, verificable, duracion_s):
     """Hasta MAX_GANCHOS ganchos con `texto` y `prompt`. Nunca lanza: uno malo se descarta y un análisis sin ganchos
-    sigue siendo válido (no paga una corrección). Cada uno lleva `cifras_sin_dato` de su texto y su porqué: con alguna
-    no se genera ni entra en el precio (la misma regla que el aprendizaje, revisión B2 del 2026-10-08)."""
+    sigue siendo válido (no paga una corrección). Cada uno lleva `cifras_sin_dato` de su texto y su porqué, más las
+    ofertas en palabras de su texto (lo que sale en el video; `ofertas_sin_dato`): con alguna no se genera ni entra en
+    el precio (la misma regla que el aprendizaje, revisión B2 del 2026-10-08)."""
     salida = []
     for g in lista if isinstance(lista, list) else []:
         if len(salida) >= MAX_GANCHOS:
@@ -510,13 +552,15 @@ def _ganchos(lista, verificable, duracion_s):
         por_que = analisis._texto(g.get("por_que"), 300)
         salida.append({"texto": texto, "escena": analisis._texto(g.get("escena"), 300), "prompt": prompt,
                        "fotograma_s": segundo_fotograma(g.get("fotograma_s"), duracion_s), "por_que": por_que,
-                       "cifras_sin_dato": doctrina.verificar_cifras(f"{texto} {por_que}", verificable)})
+                       "cifras_sin_dato": (doctrina.verificar_cifras(f"{texto} {por_que}", verificable)
+                                           + ofertas_sin_dato(texto, verificable))})
     return salida
 
 
 def _copy_nuevo(d, verificable):
-    """{"titulo", "texto", "por_que", "cifras_sin_dato"}, o None sin texto. Una cifra sin dato no bloquea: el detalle
-    la muestra con «revisa antes de publicar», porque copiarlo es decisión de la persona."""
+    """{"titulo", "texto", "por_que", "cifras_sin_dato"}, o None sin texto. Una cifra sin dato (o una oferta en
+    palabras del título o el texto, lo que se publica: `ofertas_sin_dato`) no bloquea: el detalle la muestra con
+    «revisa antes de publicar», porque copiarlo es decisión de la persona."""
     if not isinstance(d, dict):
         return None
     texto = _texto_largo(d.get("texto"), 1000)
@@ -524,7 +568,8 @@ def _copy_nuevo(d, verificable):
         return None
     titulo, por_que = _limpio(d.get("titulo"), 80), analisis._texto(d.get("por_que"), 300)
     return {"titulo": titulo, "texto": texto, "por_que": por_que,
-            "cifras_sin_dato": doctrina.verificar_cifras(f"{titulo} {texto} {por_que}", verificable)}
+            "cifras_sin_dato": (doctrina.verificar_cifras(f"{titulo} {texto} {por_que}", verificable)
+                                + ofertas_sin_dato(f"{titulo} · {texto}", verificable))}
 
 
 def parsear(texto, verificable, duracion_s=None):

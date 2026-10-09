@@ -548,7 +548,8 @@ def test_copy_nuevo_conserva_saltos_limpia_y_avisa_cifras():
                             "datos")
     assert len(c["titulo"]) == 80 and c["texto"] == "Línea 1\n\nLínea 2" and c["por_que"] == "Porque sí"
     assert c["cifras_sin_dato"] == []
-    assert mejorar._copy_nuevo({"texto": "Hasta 50 % de descuento"}, "datos")["cifras_sin_dato"] == ["50 %"]
+    # desde el arreglo B (2026-10-09) la oferta escrita en palabras también se marca
+    assert mejorar._copy_nuevo({"texto": "Hasta 50 % de descuento"}, "datos")["cifras_sin_dato"] == ["50 %", "descuento"]
     assert mejorar._copy_nuevo({"texto": "Hasta 50 % de descuento"}, "descuento 50 %")["cifras_sin_dato"] == []
 
 
@@ -706,3 +707,48 @@ def test_un_emoji_compuesto_conserva_su_zwj_y_el_resto_de_caracteres_de_formato_
     c = mejorar._copy_nuevo({"titulo": f"Pies {familia}", "texto": f"Línea {familia}\n‮otra línea​"}, "datos")
     assert familia in c["titulo"] and familia in c["texto"] and c["texto"].endswith("otra línea")
     assert "‮" not in c["texto"] and "​" not in c["texto"]
+
+
+# ------------------------------- arreglo B (revisión de seguridad, 2026-10-09): ofertas escritas en palabras ---
+
+def test_una_oferta_en_palabras_que_no_esta_en_los_datos_se_marca():
+    """`doctrina.verificar_cifras` solo ve dígitos: «fri frakt», «gratis» o «2 for 1» en palabras pasaban sin dato."""
+    assert mejorar.ofertas_sin_dato("Fri frakt hele uka", "Kjøp nå") == ["fri frakt"]       # sin «frakt» repetido
+    assert mejorar.ofertas_sin_dato("Fri frakt hele uka", "Copy: FRI FRAKT på alt") == []
+    assert mejorar.ofertas_sin_dato("Free shipping today", "nada") == ["free", "shipping"]
+    assert mejorar.ofertas_sin_dato("Envío gratis y 2x1", "envío a todo el país") == ["gratis", "2x1"]
+    assert mejorar.ofertas_sin_dato("Halva priset!", "") == ["halva priset"]
+    # palabra o frase entera: ni «freedom» ni «pain-free» ni «12x10» son una oferta
+    assert mejorar.ofertas_sin_dato("Freedom for pain-free feet, 12x10 cm", "nada") == []
+    assert mejorar.ofertas_sin_dato("", "x") == [] and mejorar.ofertas_sin_dato(None, None) == []
+
+
+def test_un_gancho_con_una_oferta_sin_dato_no_se_genera_y_si_esta_en_el_copy_del_anuncio_si():
+    from triple_whale import ganchos as ganchos_tw
+    gancho = {"texto": "Fri frakt hele uka", "prompt": "Push in", "fotograma_s": 4}
+    sin = mejorar.parsear(respuesta(ganchos=[gancho, GANCHOS[1]]), mejorar.datos_verificables("Acme", _fila_real()), 20.0)
+    assert sin["ganchos"][0]["cifras_sin_dato"] == ["fri frakt"] and sin["ganchos"][1]["cifras_sin_dato"] == []
+    assert [g["n"] for g in ganchos_tw.ganchos_generables(sin)] == [2]
+    con = mejorar.parsear(respuesta(ganchos=[gancho]),
+                          mejorar.datos_verificables("Acme", _fila_real(copy="Fri frakt på alle ordre")), 20.0)
+    assert con["ganchos"][0]["cifras_sin_dato"] == []
+
+
+def test_el_caso_real_kjop_2_fa_1_gratis_marca_gratis_en_el_copy():
+    """La voz dice «kjøp 2 for 1 tilbudet» y el copy nuevo promete «få 1 gratis»: «gratis» no está en los datos."""
+    voz = {"texto": "kjøp 2 for 1 tilbudet", "frases": [{"segundo": 2.0, "texto": "kjøp 2 for 1 tilbudet"}],
+           "costo_usd": 0}
+    datos_ = mejorar.datos_verificables("Acme", _fila_real(copy="Myke tøfler"), voz=voz)
+    r = mejorar.parsear(respuesta(copy_nuevo={"titulo": "Myke tøfler", "texto": "Kjøp 2, få 1 gratis i dag."}),
+                        datos_, 20.0)
+    assert r["copy_nuevo"]["cifras_sin_dato"] == ["gratis"]
+    bien = mejorar.parsear(respuesta(copy_nuevo={"titulo": "Myke tøfler", "texto": "Kjøp 2 for 1 i dag."}), datos_, 20.0)
+    assert bien["copy_nuevo"]["cifras_sin_dato"] == []
+
+
+def test_las_ofertas_en_palabras_no_se_miran_en_el_analisis():
+    """Fuera de alcance (arreglo B): la frase, las razones y los cambios siguen con la comprobación de cifras sola."""
+    r = mejorar.parsear(respuesta(frase="Pierde porque no dice envío gratis",
+                                  falla=[{"texto": "Sin regalo", "evidencia": "free shipping no aparece", "anillo": "clic"}]),
+                        "nada")
+    assert r["cifras_sin_dato"] == []
