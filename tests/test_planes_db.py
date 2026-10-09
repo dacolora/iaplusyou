@@ -134,6 +134,7 @@ def test_migracion_0035_sube_y_baja(tmp_path, monkeypatch):
             assert "pasarela_ref" in {c["name"] for c in insp.get_columns("recarga")}
             assert "uq_suscripcion_viva" in {i["name"] for i in insp.get_indexes("suscripcion")}
             assert "AUTOINCREMENT" in _ddl(con, "suscripcion").upper()
+            assert {"precio_usd", "precio_anual_usd"} <= {c["name"] for c in insp.get_columns("suscripcion")}
             # el índice parcial funciona de verdad
             alta = dict(cliente="acme", plan_id=1, ciclo="mensual", estado="activa", renovar=True,
                         intentos_fallidos=0, usuario="u", creada_en=AHORA)

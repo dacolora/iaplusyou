@@ -64,6 +64,8 @@ def upgrade() -> None:
         sa.Column("cubierto_hasta", sa.String(19)),
         sa.Column("proximo_cobro", sa.String(19)),
         sa.Column("intentos_fallidos", sa.Integer, nullable=False),
+        sa.Column("precio_usd", sa.Integer),          # precio aceptado al suscribirse (mensual)
+        sa.Column("precio_anual_usd", sa.Integer),    # y el anual: las renovaciones cobran esto, nunca el del plan
         sa.Column("usuario", sa.String(80), nullable=False),
         sa.Column("creada_en", sa.String(19)),
         sa.Column("actualizada_en", sa.String(19)),
