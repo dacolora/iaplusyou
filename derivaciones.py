@@ -223,12 +223,18 @@ def _contexto_variante(cliente, cf_id, sesion, k=None, n=1, diagnostico=None, ex
 def modelo_regeneracion(sesion, k):
     """Modelo de video que usaría la k-ésima regeneración (k >= 0) de
     `sesion` (dict con `modelo`, como lo guarda `creative_flow`): el mismo
-    que elige `_item_regeneracion` (`_otro` sobre `flowplus_modelos.VIDEO`,
-    nunca el modelo original). Expuesto para que `acciones._precio_estimado`
+    que elige `_item_regeneracion` (`_otro` sobre `flowplus_modelos.video_rotables()`,
+    nunca el modelo original; Seedance 2.5 con varias referencias, por fal,
+    solo sale si alguien lo elige). Expuesto para que `acciones._precio_estimado`
     valore cada regeneración con el modelo que de verdad se va a pagar, en
     vez del modelo de la pieza original (I1: sin esto el estimado podía
     quedar 2,5× por debajo del real)."""
-    return _otro(flowplus_modelos.VIDEO, sesion.get("modelo") or flowplus_modelos.VIDEO_POR_DEFECTO, k)
+    # Nunca un modelo que dejaría referencias sin usar (revisión del guardián de
+    # gasto, 2026-10-09: una pieza de Seedance con 6 imágenes rotaba a la
+    # Seedance de una sola y se cobraba entera con 5 descartadas en silencio).
+    refs = sesion.get("referencias") or []
+    caben = [m for m in flowplus_modelos.video_rotables() if not flowplus_modelos.referencias_de_mas(m, refs)]
+    return _otro(caben, sesion.get("modelo") or flowplus_modelos.VIDEO_POR_DEFECTO, k)
 
 
 def _voz_vigente(cliente, voz):

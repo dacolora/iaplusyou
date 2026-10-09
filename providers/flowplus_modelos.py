@@ -39,6 +39,19 @@ que la ruta con referencias): alibaba/wan-3.0/text-to-video (480p/720p,
 SÍ elige formato: `formatos_texto`, `generate_audio`) y
 bytedance/seedream-v5.0-pro (text-to-image, sin sufijo).
 
+Seedance 2.5 con varias referencias (2026-10-09, pedido de Daniel: «en
+Higgsfield Seedance acepta más de 3 imágenes»): WaveSpeed solo tiene su
+image-to-video (`image` de arranque + `last_image`), así que `seedance25_ref`
+va por fal (`proveedor: "fal"`, providers/fal_video.py):
+bytedance/seedance-2.5/reference-to-video (`image_urls`, que el prompt nombra
+@Image1, @Image2…; `duration` es TEXTO "4".."30"; formato elegible) y, sin
+ninguna imagen, bytedance/seedance-2.5/text-to-video. Precio verificado el
+2026-10-09 en la API de precios de fal (0,0214 USD por 1 000 tokens en las dos
+rutas) y en sus páginas: ~0,4730 USD/s a 720p, con o sin sonido. Videos de referencia como
+video quedan fuera por ahora (fal los factura aparte): entran por su
+fotograma, como en Kling. No entra en la rotación automática de modelos de
+las derivaciones (`rotar: False`): solo se usa si alguien lo elige.
+
 Anuncio hablado (spec 2026-10-01): `HABLADO` es un registro aparte (foto +
 voz → video que habla, P-Video-Avatar). Ningún selector, Sprints, derivación
 ni CIERRE_SONIDO lo recorre; `estimate_video` delega en `estimate_hablado`
@@ -49,7 +62,7 @@ import math
 import requests
 
 from idiomas import N_
-from providers import wavespeed_common, wan3_client, wavespeed_imagen
+from providers import fal_video, wavespeed_common, wan3_client, wavespeed_imagen
 
 VIDEO = {
     "wan3": {
@@ -105,6 +118,29 @@ VIDEO = {
         "max_videos": 0,
         "audio_nativo": {"parametro": "generate_audio", "recargo_usd_s": 0.0},
         "nota": N_("Usa SOLO la primera imagen como fotograma de arranque; el encuadre y el formato salen de esa imagen. Hasta 30 s. Calidad cinematográfica, el más caro. Sonido de la escena incluido."),
+    },
+    "seedance25_ref": {
+        "nombre": N_("Seedance 2.5 · varias referencias"),
+        "familia": "seedance_ref",
+        "proveedor": "fal",
+        "path": "bytedance/seedance-2.5/reference-to-video",
+        "path_texto": "bytedance/seedance-2.5/text-to-video",
+        # fal admite 30; Crear manda hasta 10 imágenes (dashboard.cf_crear_video).
+        "max_referencias": 10,
+        "usd_por_segundo": 0.473,
+        "duraciones": (5, 8, 10, 12, 15, 20, 25, 30),
+        "min_duracion": 4,
+        "max_duracion": 30,
+        # fal cobra por píxeles de salida: 0,473 USD/s es su cifra de 720p (16:9 y
+        # 9:16; 1:1 tiene menos píxeles). 4:3 y 3:4 quedan fuera hasta medir su
+        # cobro real (PND-192): podrían pasar de esa cifra.
+        "formatos": ("9:16", "16:9", "1:1"),
+        "max_videos": 0,
+        # Cómo nombra fal cada imagen en el prompt (esquema de reference-to-video).
+        "token_imagen": "@Image{n}",
+        "rotar": False,
+        "audio_nativo": {"parametro": "generate_audio", "recargo_usd_s": 0.0},
+        "nota": N_("Hasta 10 imágenes de referencia (personajes, producto, lugar) que nombras en el texto con @Imagen 1, @Imagen 2…; de un video usa solo un fotograma. Hasta 30 s, en el formato que elijas. Va por fal y es el más caro. Sonido de la escena incluido."),
     },
 }
 
@@ -194,6 +230,19 @@ for _info in VIDEO.values():
 VIDEO_POR_DEFECTO = "wan3"
 IMAGEN_POR_DEFECTO = "seedream_v5_pro"
 
+
+def proveedor_de(modelo_id):
+    """Quién genera (y cobra) con ese modelo: "wavespeed", salvo los que
+    declaran otro (`seedance25_ref` → "fal")."""
+    info = VIDEO.get(modelo_id) or IMAGEN.get(modelo_id) or HABLADO.get(modelo_id) or {}
+    return info.get("proveedor", "wavespeed")
+
+
+def video_rotables():
+    """Los modelos de video que una regeneración automática puede elegir
+    (derivaciones._otro): todos menos los que piden `rotar: False`."""
+    return [m for m, info in VIDEO.items() if info.get("rotar", True)]
+
 # Anuncio hablado (spec 2026-10-01): foto + voz → un video donde la persona de
 # la foto dice la voz. Registro aparte a propósito: ningún selector de modelos,
 # Sprints, derivación ni CIERRE_SONIDO recorre HABLADO (por eso no va en
@@ -242,6 +291,7 @@ CIERRE_SONIDO = {
     "wan": "No dialogue. No background music.",
     "kling": "No dialogue. No music.",
     "seedance": "No BGM; generate only environmental sounds and action sounds. No dialogue.",
+    "seedance_ref": "No BGM; generate only environmental sounds and action sounds. No dialogue.",
 }
 
 # Calidad de la generación: "borrador" pide a Wan 3.0 480p (mitad de precio)
@@ -371,6 +421,17 @@ def _lanzar(path, payload, nombre, timeout_seconds=1200, on_progreso=None):
     return outputs[0]
 
 
+def esperar_fal(modelo_id, request_id, con_referencias, timeout_seconds, on_progreso=None, interval_seconds=5):
+    """«Recuperar el video» de un modelo de fal: vuelve a preguntar por el
+    pedido ya lanzado, en la misma ruta que eligió `generar_video` (con
+    imágenes, `path`; sin ninguna, `path_texto`). Devuelve la URL del video;
+    nunca lanza otro pedido."""
+    info = VIDEO[modelo_id]
+    ruta = info["path"] if con_referencias else info["path_texto"]
+    return fal_video.esperar(ruta, request_id, info["nombre"], interval_seconds=interval_seconds,
+                             timeout_seconds=timeout_seconds, on_progreso=on_progreso)
+
+
 def generar_video(modelo_id, prompt, referencias, duration, aspect_ratio="9:16", on_progreso=None,
                   videos=None, con_sonido=True, calidad="final", mejorar_prompt=False, imagen_inicial=None,
                   elementos=None):
@@ -416,6 +477,12 @@ def generar_video(modelo_id, prompt, referencias, duration, aspect_ratio="9:16",
             "resolution": "720p", "generate_audio": bool(con_sonido),
         }
         return _lanzar(info["path"], payload, info["nombre"], on_progreso=on_progreso)
+    if modelo_id == "seedance25_ref":
+        payload = {
+            "prompt": prompt, "image_urls": refs, "duration": str(int(duration)), "resolution": "720p",
+            "aspect_ratio": aspect_ratio or FORMATO_DEFECTO, "generate_audio": bool(con_sonido),
+        }
+        return fal_video.lanzar(info["path"], payload, info["nombre"], on_progreso=on_progreso)
     raise ValueError(f"Modelo de video desconocido: {modelo_id}")
 
 
@@ -425,6 +492,10 @@ def _generar_video_texto(modelo_id, prompt, duration, aspect_ratio, on_progreso,
     audio va siempre explícito (Kling lo trae apagado por defecto); Kling no
     acepta resolución; sin `aspect_ratio` el modelo usa el suyo (16:9)."""
     info = VIDEO[modelo_id]
+    if proveedor_de(modelo_id) == "fal":
+        payload = {"prompt": prompt, "duration": str(int(duration)), "resolution": "720p",
+                   "aspect_ratio": aspect_ratio or FORMATO_DEFECTO, "generate_audio": bool(con_sonido)}
+        return fal_video.lanzar(info["path_texto"], payload, info["nombre"], on_progreso=on_progreso)
     payload = {"prompt": prompt, "duration": int(duration)}
     if modelo_id == "wan3":
         payload["resolution"] = _resolucion_wan(calidad)

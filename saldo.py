@@ -31,6 +31,10 @@ log = logging.getLogger("creatv.saldo")
 
 PROVEEDORES = {
     "wavespeed": {"nombre": "WaveSpeed", "recarga": "https://wavespeed.ai/top-up"},
+    # Seedance 2.5 con varias referencias va por fal (2026-10-09). El aviso de la
+    # página de Crear sigue siendo el de WaveSpeed: sin saldo en fal solo falla
+    # ese modelo, y su tarjeta lo dice.
+    "fal": {"nombre": "fal.ai", "recarga": "https://fal.ai/dashboard/billing"},
 }
 REAVISO_S = 6 * 3600       # un correo al administrador cada 6 h como mucho
 VIGENCIA_S = 12 * 3600     # sin fallos nuevos en 12 h el aviso se da por viejo
@@ -126,10 +130,15 @@ def limpiar(proveedor):
         log.error("no se pudo limpiar la falta de saldo de %s: %s", proveedor, type(error).__name__)
 
 
+def nombre_proveedor(proveedor):
+    """Nombre visible del proveedor («WaveSpeed», «fal.ai»); el id si no se conoce."""
+    return (PROVEEDORES.get(proveedor) or {}).get("nombre") or proveedor
+
+
 def mensaje_tarjeta(proveedor="wavespeed"):
     """Lo que muestra la tarjeta de la pieza que falló (en el idioma que el
     llamador puso con idiomas.en_idioma): en palabras, sin el JSON del
     proveedor, y diciendo que no se cobró."""
-    nombre = (PROVEEDORES.get(proveedor) or {}).get("nombre") or proveedor
+    nombre = nombre_proveedor(proveedor)
     return gettext("%(proveedor)s, el proveedor de videos e imágenes, se quedó sin saldo: no se generó ni se cobró "
                    "nada. Ya se avisó a Creatv; vuelve a intentarlo cuando lo recargue.", proveedor=nombre)

@@ -78,7 +78,7 @@ se sumaban a lo que hubiera y las referencias «del pasado» se colaban), su pre
 el texto y los ajustes en blanco (para el clip siguiente con los mismos personajes). Y **ningún modelo recibe menos
 referencias de las que la persona ve**: `flowplus_modelos.referencias_de_mas(modelo, referencias, tipo)` cuenta como
 `_preparar`/`generar_video` (Wan: imágenes y videos aparte; Kling: el fotograma del video cuenta como imagen;
-Seedance 2.5: SOLO la primera; Seedream: 10) y `cf_crear_video` avisa y no genera si sobra alguna (incidente «mira lo
+Seedance 2.5: SOLO la primera; Seedance 2.5 con varias referencias: 10; Seedream: 10) y `cf_crear_video` avisa y no genera si sobra alguna (incidente «mira lo
 que sacó»: cuatro referencias con Seedance, tres descartadas en silencio, US$ 3,6 cobrados); el compositor muestra el
 mismo aviso en vivo (`#fp-aviso-refs`, `data-max`/`data-max-videos` de los radios de modelo) y frena el envío.
 **Sin saldo y Wan con videos de referencia (incidente 2026-09-30):** WaveSpeed se quedó sin saldo y los videos
@@ -143,7 +143,28 @@ degradable (the paid video is never lost) — it only reports, never regenerates
 `docs/superpowers/specs/2026-09-16-final-edition-estudio-design.md` S1 (done except
 `proveedor_v2a` and style previews, which belong to S3/S5).
 
-**Pedido rechazado al lanzar (2026-10-02, PND-107):** toda respuesta no-ok de WaveSpeed que no es de saldo es `wavespeed_common.PedidoRechazado` (RuntimeError, mismo `str(e)` técnico de siempre para la bitácora y `tarea.error`, más `status` y `mensaje` del proveedor); `tareas/flowplus._mensaje_error` la cuenta en palabras: «WaveSpeed no aceptó el pedido y no se cobró nada: <motivo>…» (o, sin mensaje legible, con el código de respuesta). Antes la tarjeta mostraba el JSON crudo. Cada tipo tiene su frase: 401/403 «rechazó la llave de Creatv», 429 «demasiados pedidos», 5xx «falla de su lado» SIN prometer que no se cobró (WaveSpeed pudo crear la predicción sin devolver su id), y un 4xx con o sin el motivo del proveedor. Un `PedidoRechazado`, como `SinSaldo`, no persigue la `prediccion` que haya en la sesión: es de un intento anterior, no de este video.
+**Seedance 2.5 con varias referencias, vía fal (2026-10-09, pedido de Daniel: «en Higgsfield Seedance acepta más de
+3 imágenes y en el nuestro solo una»):** WaveSpeed solo tiene la imagen-a-video de Seedance 2.5 (`image` de arranque +
+`last_image`; su reference-to-video no existe, 404 verificado ese día), así que `seedance25_ref` es la ÚNICA entrada de
+`VIDEO` que no va por WaveSpeed: `proveedor: "fal"` (`flowplus_modelos.proveedor_de`), ruta
+`bytedance/seedance-2.5/reference-to-video` (`image_urls`, `duration` como TEXTO "4".."30", `aspect_ratio` 9:16/16:9/1:1
+—4:3 y 3:4 fuera hasta medir su cobro, fal cobra por píxeles—, 720p, `generate_audio`) y sin imágenes `bytedance/seedance-2.5/text-to-video`. Hasta 10 imágenes (fal admite 30, pero
+`cf_crear_video` corta `referencias_urls[:10]`; subir el tope exige subir esos cortes). Las menciones se vuelven
+`@Image1`, `@Image2`… (`token_imagen` del registro, `flowplus_prompt.asignar_tokens`) y el director tiene su familia
+`seedance_ref` (`director._TOKEN` acepta las dos formas). Precio 0,473 USD/s a 720p (API de precios de fal: 0,0214 USD por
+1 000 tokens; la página de fal da ~0,4730 USD/s), con o sin sonido. `providers/fal_video.py` repite las garantías de
+WaveSpeed con las MISMAS excepciones de `wavespeed_common` (subclases con `proveedor = "fal"`): el `request_id` sale por
+`avisar_lanzada` y queda en `prediccion`, `cortable()` acorta o corta la espera (`plazo_cortable`, `hay_que_cortar`), y
+«Recuperar el video» pregunta a la cola de fal (`flowplus_modelos.esperar_fal`, en `path` o `path_texto` según haya
+imágenes) sin volver a lanzar. El gasto se anota con `proveedor="fal"`, `saldo.limpiar`/`marcar` van por proveedor
+(`saldo.PROVEEDORES["fal"]`) y `_mensaje_error` nombra al proveedor (`saldo.nombre_proveedor`). No entra en la
+rotación automática de regeneraciones (`rotar: False`, `flowplus_modelos.video_rotables`), y una regeneración nunca va a
+un modelo que dejaría referencias sin usar (`derivaciones.modelo_regeneracion` filtra con `referencias_de_mas`). Un video
+que fal ya terminó y cobró pero cuyo resultado no se pudo traer (429, 5xx, red) sale como error de red y conserva el id;
+`ErrorProveedor` es solo para un 4xx con motivo (revisión del guardián de gasto, 2026-10-09). Pendientes: prueba real
+(PND-192), videos de referencia como video (PND-193), aviso de Crear sin saldo en fal (PND-194).
+
+**Pedido rechazado al lanzar (2026-10-02, PND-107):** toda respuesta no-ok de WaveSpeed que no es de saldo es `wavespeed_common.PedidoRechazado` (RuntimeError, mismo `str(e)` técnico de siempre para la bitácora y `tarea.error`, más `status` y `mensaje` del proveedor); `tareas/flowplus._mensaje_error` la cuenta en palabras: «<proveedor> no aceptó el pedido y no se cobró nada: <motivo>…» (WaveSpeed o fal.ai, `saldo.nombre_proveedor`) (o, sin mensaje legible, con el código de respuesta). Antes la tarjeta mostraba el JSON crudo. Cada tipo tiene su frase: 401/403 «rechazó la llave de Creatv», 429 «demasiados pedidos», 5xx «falla de su lado» SIN prometer que no se cobró (WaveSpeed pudo crear la predicción sin devolver su id), y un 4xx con o sin el motivo del proveedor. Un `PedidoRechazado`, como `SinSaldo`, no persigue la `prediccion` que haya en la sesión: es de un intento anterior, no de este video.
 
 **Gasto y duplicación (2026-10-02, PND-004/014/109):** `duplicar(..., variante="B")` toma `BEGIN IMMEDIATE` antes de buscar y crear; dos clics obtienen la misma hija. El director cuenta `usage` con caché y conserva el costo en `DirectorError`; la ayuda gratis se anota bajo `_creatv` con el proyecto en `extra`, antes de guardar la sesión. Sus tareas van con `max_intentos=1`. La predicción conserva `referencia_gasto`: recuperar una descarga pagada mantiene la referencia del intento original, y una música nueva se registra aparte con la tarea de recuperación.
 

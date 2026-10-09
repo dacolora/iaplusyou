@@ -7783,7 +7783,8 @@ def cf_crear_video(cliente):
         if int(info_modelo.get("max_referencias") or 0) == 1:
             primera = next((r["etiqueta"] for r in referencias if r["etiqueta"] not in sobran), "")
             flash(gettext("%(modelo)s solo usa la primera referencia (%(primera)s): no usaría %(sobran)s. "
-                          "Elige Wan 3.0 o Kling O3 Pro para usarlas todas, o deja solo una — no se cobró nada.",
+                          "Elige Wan 3.0, Kling O3 Pro o Seedance 2.5 · varias referencias para usarlas todas, o deja "
+                          "solo una — no se cobró nada.",
                           modelo=nombre_modelo, primera=primera, sobran=", ".join(sobran)), "error")
         else:
             flash(gettext("%(modelo)s usa hasta %(n)s referencias: no usaría %(sobran)s. "
@@ -7983,7 +7984,10 @@ def cf_recuperar(cliente, cf_id):
         max_intentos=1, prioridad=flowplus_lanzar.PRIORIDAD_NORMAL,
     )
     if encolado:
-        flash(gettext("Preguntando a WaveSpeed por el video… si ya terminó, aparece aquí sin pagar de nuevo."), "ok")
+        proveedor = saldo.nombre_proveedor(flowplus_modelos.proveedor_de((entry.get("prediccion") or {}).get("modelo")
+                                                                        or entry.get("modelo")))
+        flash(gettext("Preguntando a %(proveedor)s por el video… si ya terminó, aparece aquí sin pagar de nuevo.",
+                      proveedor=proveedor), "ok")
     else:
         flash(gettext("Ya se estaba recuperando — espera a que termine."), "warn")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
