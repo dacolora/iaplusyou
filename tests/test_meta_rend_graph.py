@@ -390,3 +390,17 @@ def test_la_ultima_pagina_real_de_meta_cursor_sin_next_se_detiene_tras_una_llama
     http["respuestas"] = [_Resp({"data": [{"id": 1}], "paging": {"cursors": {"before": "B", "after": "A"}}})]
     assert graph.paginar("act_1/ads", TOKEN) == [{"id": 1}]
     assert len(http["llamadas"]) == 1
+
+
+def test_la_ultima_pagina_real_de_meta_tambien_se_detiene_con_por_pagina_y_con_el_informe(http):
+    # Misma última página (cursors.after sin next) por los otros dos caminos: nunca una segunda llamada.
+    paginas = []
+    http["respuestas"] = [_Resp({"data": [{"id": 1}, {"id": 2}], "paging": {"cursors": {"before": "B", "after": "A"}}})]
+    assert graph.paginar("act_1/ads", TOKEN, {"limit": 2}, por_pagina=paginas.append) == 2
+    assert paginas == [[{"id": 1}, {"id": 2}]] and len(http["llamadas"]) == 1
+    http["llamadas"].clear()
+    http["respuestas"] = [_Resp({"report_run_id": 777}), _Resp({"async_status": "Job Completed"}),
+                          _Resp({"data": [{"id": 1}], "paging": {"cursors": {"before": "B", "after": "A"}}})]
+    assert graph.informe("act_1", TOKEN, {}, dormir=lambda s: None) == [{"id": 1}]
+    assert len(http["llamadas"]) == 3          # crear, sondear y UNA página de resultados
+    assert http["respuestas"] == []
