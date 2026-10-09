@@ -14,7 +14,8 @@ import sqlalchemy as sa
 T0 = "2026-10-09T10:00:00"
 TRM = 4000.5
 CENTAVOS_MES = 400_050_000          # ceil(1 000 × 4 000,5) × 100
-ACEPTACION = {"acceptance_token": "eyJ.acepta.prueba", "personal_token": "eyJ.datos.prueba", "autoriza_cobro": True}
+ACEPTACION = {"acceptance_token": "eyJ.acepta.prueba", "personal_token": "eyJ.datos.prueba",
+              "acepta_terminos": True, "acepta_datos": True, "autoriza_cobro": True}
 
 
 class WompiFalso:
@@ -99,9 +100,19 @@ def pro(planes):
     return planes.crear_plan("Pro", 1000, 1.25, 25, precio_anual_usd=10000, usuario="admin")
 
 
-def _suscribir(planes, pro, ahora=T0, ciclo="mensual", cliente="acme"):
+def _suscribir(planes, pro, ahora=T0, ciclo="mensual", cliente="acme", precio_visto=None):
+    if precio_visto is None:
+        precio_visto = 10000 if ciclo == "anual" else 1000
     return planes.suscribir(cliente, pro, ciclo, "CARD", "tok_prueba_4242", "pagos@acme.co", dict(ACEPTACION),
-                            "user_acme", ahora=ahora)
+                            "user_acme", precio_visto, ahora=ahora)
+
+
+def _envejecer(db):
+    """El «en vuelo» de un pendiente se mide con el reloj de verdad: aquí lo hacemos viejo (como si el envío se
+    hubiera cortado hace rato)."""
+    with db.conectar() as con:
+        con.execute(db.pago_plan.update().where(db.pago_plan.c.estado == "pendiente")
+                    .values(actualizado_en="2000-01-01T00:00:00"))
 
 
 def _filas(db, tabla, **filtro):
@@ -207,9 +218,12 @@ def test_alta_rechazada_queda_terminada_sin_periodo_y_se_puede_reintentar(base_t
 
 
 def test_alta_exige_las_aceptaciones_y_un_solo_plan(base_temporal, planes, pro, falso, avisos):
-    for mala in ({}, {**ACEPTACION, "autoriza_cobro": False}, {**ACEPTACION, "personal_token": ""}):
+    malas = ({}, {**ACEPTACION, "autoriza_cobro": False}, {**ACEPTACION, "personal_token": ""},
+             {**ACEPTACION, "autoriza_cobro": "on"}, {**ACEPTACION, "acepta_terminos": 1},
+             {k: v for k, v in ACEPTACION.items() if k != "acepta_datos"})
+    for mala in malas:
         with pytest.raises(planes.ErrorPlan):
-            planes.suscribir("acme", pro, "mensual", "CARD", "tok_x", "a@b.co", mala, "u", ahora=T0)
+            planes.suscribir("acme", pro, "mensual", "CARD", "tok_x", "a@b.co", mala, "u", 1000, ahora=T0)
     _suscribir(planes, pro)
     with pytest.raises(planes.ErrorPlan):
         _suscribir(planes, pro)
@@ -362,7 +376,9 @@ def test_cobro_incierto_se_reintenta_con_la_misma_referencia(base_temporal, plan
     # Al minuto: otro hilo podría estar cobrando todavía; no se reintenta encima.
     assert planes.cobrar_periodo(1, ahora=_despues(ahora, minutos=1)) == "en_curso"
     # Después: se reintenta con la MISMA referencia; Wompi dice que ya se usó → sigue pendiente y el admin lo sabe.
+    _envejecer(base_temporal)
     assert planes.cobrar_periodo(1, ahora=_despues(ahora, minutos=5)) == "incierto"
+    _envejecer(base_temporal)
     assert planes.cobrar_periodo(1, ahora=_despues(ahora, minutos=10)) == "incierto"
     assert [p["referencia"] for p in falso.posts[1:]] == ["pl-1-20261109-1"] * 3
     assert len(_filas(base_temporal, "pago_plan")) == 2
@@ -380,6 +396,9 @@ def test_cobro_que_no_salio_se_reintenta_con_la_misma_referencia_y_cobra(base_te
     ahora = _antes("2026-11-09T10:00:00", 30)
     falso.error = (falso.wompi.ErrorWompi("sin red", caida=True), False)   # no llegó a conectar
     assert planes.cobrar_periodo(1, ahora=ahora) == "caida"
+    assert _filas(base_temporal, "pago_plan")[1].motivo == planes.MOTIVO_NO_SALIO
+    assert planes.cobrar_periodo(1, ahora=_despues(ahora, minutos=1)) == "en_curso"
+    _envejecer(base_temporal)
     assert planes.cobrar_periodo(1, ahora=_despues(ahora, minutos=5)) == "aprobado"
     assert [p["referencia"] for p in falso.posts[1:]] == ["pl-1-20261109-1"] * 2
     assert len(_filas(base_temporal, "pago_plan", estado="aprobado")) == 2
@@ -584,3 +603,197 @@ def test_la_periodica_esta_registrada_y_exenta():
 
 def test_estado_cliente_sin_plan(planes):
     assert planes.estado_cliente("acme")["suscripcion"] is None
+
+
+# ----------------------------------------------- revisión 1 (dinero) ---
+
+def test_cancelar_tras_una_caida_en_el_alta_no_cobra(base_temporal, planes, pro, falso, avisos):
+    """C1: el primer cobro no salió (no conectó); cancelar antes del reintento → nunca se reenvía."""
+    falso.error = (falso.wompi.ErrorWompi("sin red", caida=True), False)
+    assert _suscribir(planes, pro)["estado"] == "caida"
+    planes.cancelar("acme", "user_acme", ahora=_despues(T0, minutos=1))
+    assert _sus(base_temporal).estado == "cancelada"
+    _envejecer(base_temporal)
+    planes.renovar_todo(ahora=_despues(T0, minutos=10))
+    planes.renovar_todo(ahora=_despues(T0, minutos=40))
+    assert len(falso.posts) == 1
+    (pago,) = _filas(base_temporal, "pago_plan")
+    assert pago.estado == "error" and pago.motivo != planes.MOTIVO_NO_SALIO
+    assert _filas(base_temporal, "pago_plan", estado="aprobado") == []
+    assert _sus(base_temporal).estado == "terminada"
+    assert _filas(base_temporal, "periodo_plan") == []
+
+
+def test_renovacion_caida_y_cancelada_no_se_reenvia(base_temporal, planes, pro, falso, avisos):
+    _suscribir(planes, pro)
+    fin = "2026-11-09T10:00:00"
+    falso.error = (falso.wompi.ErrorWompi("sin red", caida=True), False)
+    planes.renovar_todo(ahora=_antes(fin, 30))
+    planes.cancelar("acme", "user_acme", ahora=_antes(fin, 20))
+    _envejecer(base_temporal)
+    planes.renovar_todo(ahora=_antes(fin, 10))
+    planes.renovar_todo(ahora=_despues(fin, minutos=1))
+    assert [p["referencia"] for p in falso.posts] == ["pl-1-20261009-1", "pl-1-20261109-1"]
+    assert [p.estado for p in _filas(base_temporal, "pago_plan")] == ["aprobado", "error"]
+    assert _sus(base_temporal).estado == "terminada"
+
+
+def test_un_cobro_incierto_nunca_se_reenvia_tras_cancelar(base_temporal, planes, pro, falso, avisos):
+    _suscribir(planes, pro)
+    fin = "2026-11-09T10:00:00"
+    falso.error = (falso.wompi.ErrorWompi("cortado", caida=True, incierto=True), True)
+    planes.renovar_todo(ahora=_antes(fin, 30))
+    planes.cancelar("acme", "user_acme", ahora=_antes(fin, 25))
+    _envejecer(base_temporal)
+    planes.renovar_todo(ahora=_antes(fin, 10))
+    planes.renovar_todo(ahora=_despues(fin, minutos=1))
+    assert len(falso.posts) == 2                                   # ni un reenvío
+    assert _filas(base_temporal, "pago_plan")[1].estado == "pendiente"
+    assert _sus(base_temporal).estado == "cancelada"               # espera el evento: no termina con un cobro en el aire
+    assert _tipos(avisos).count("admin:plan_admin") == 1
+    # Llega el evento: sí se cobró, y lo pagado vale aunque esté cancelada.
+    tx = {"id": "1292-77-1", "reference": "pl-1-20261109-1", "status": "APPROVED",
+          "amount_in_cents": CENTAVOS_MES, "currency": "COP"}
+    assert planes.aplicar_transaccion(tx, ahora=_despues(fin, minutos=5)) == "aprobado"
+    s = _sus(base_temporal)
+    assert s.estado == "cancelada" and s.cubierto_hasta == "2026-12-09T10:05:00"
+
+
+def test_la_renovacion_cobra_el_precio_aceptado_no_el_del_plan(base_temporal, planes, pro, falso, avisos):
+    """I1: el admin sube el plan; quien ya está suscrito sigue pagando lo que aceptó (y su bolsa es esa)."""
+    _suscribir(planes, pro)
+    s = _sus(base_temporal)
+    assert (s.precio_usd, s.precio_anual_usd) == (1000, 10000)
+    planes.editar_plan(pro, usuario="admin", precio_usd=1500, precio_anual_usd=15000)
+    planes.renovar_todo(ahora="2026-11-06T10:30:00")
+    aviso = [e for e in avisos if e[0] == "plan_por_renovar"]
+    assert "1.000" in aviso[0][3] and "1.500" not in aviso[0][3]
+    planes.renovar_todo(ahora=_antes("2026-11-09T10:00:00", 30))
+    assert falso.posts[-1]["centavos"] == CENTAVOS_MES
+    assert _filas(base_temporal, "pago_plan")[-1].usd == 1000
+    assert _filas(base_temporal, "periodo_plan")[-1].credito_milesimas == 1_000_000
+    assert planes.estado_cliente("acme", ahora=T0)["monto_renovacion_usd"] == 1000
+
+
+@pytest.mark.parametrize("ciclo,visto", [("mensual", 900), ("mensual", 10000), ("anual", 1000), ("mensual", None),
+                                         ("mensual", "mil"), ("mensual", True)])
+def test_alta_con_un_precio_que_ya_no_es_el_del_plan_se_niega(base_temporal, planes, pro, falso, avisos, ciclo, visto):
+    with pytest.raises(planes.ErrorPlan) as e:
+        planes.suscribir("acme", pro, ciclo, "CARD", "tok_x", "pagos@acme.co", dict(ACEPTACION), "u", visto, ahora=T0)
+    assert "cambió" in str(e.value)
+    assert falso.fuentes == [] and falso.posts == []
+    assert _filas(base_temporal, "suscripcion") == []
+
+
+def test_alta_guarda_el_precio_y_el_ciclo_aceptados_como_evidencia(base_temporal, planes, pro, falso, avisos):
+    import json
+    _suscribir(planes, pro, ciclo="anual")
+    with base_temporal.conectar() as con:
+        (acepta,) = json.loads(con.execute(sa.select(base_temporal.kv.c.valor)
+                                           .where(base_temporal.kv.c.clave == "planes:aceptacion:1")).scalar())
+    assert (acepta["usd"], acepta["ciclo"]) == (10000, "anual")
+    assert acepta["acepta_terminos"] is True and acepta["acepta_datos"] is True and acepta["autoriza_cobro"] is True
+
+
+def test_un_plan_editado_mientras_se_crea_la_fuente_se_niega(base_temporal, planes, pro, falso, avisos, monkeypatch):
+    original = falso.crear_fuente
+
+    def crear_y_editar(*a, **k):
+        r = original(*a, **k)
+        planes.editar_plan(pro, usuario="admin", precio_usd=1500)
+        return r
+    monkeypatch.setattr(falso.wompi, "crear_fuente", crear_y_editar)
+    with pytest.raises(planes.ErrorPlan):
+        _suscribir(planes, pro)
+    assert falso.posts == [] and _filas(base_temporal, "suscripcion") == []
+
+
+def test_activacion_manual_guarda_el_precio(base_temporal, planes, pro, falso, avisos):
+    planes.activar_manual("acme", pro, "mensual", "admin", "mes 1", ahora=T0)
+    assert _sus(base_temporal).precio_usd == 1000
+    planes.editar_plan(pro, usuario="admin", precio_usd=1500)
+    planes.activar_manual("acme", pro, "mensual", "admin", "mes 2", ahora=_despues(T0, dias=20))
+    assert [p.usd for p in _filas(base_temporal, "pago_plan")] == [1000, 1000]
+
+
+def test_un_anual_anulado_no_abre_mas_meses(base_temporal, planes, pro, falso, avisos):
+    """I2: tras anular el pago anual, el mes en curso sigue pero no se abre ni uno más."""
+    inicio = "2027-01-31T10:00:00"
+    _suscribir(planes, pro, ahora=inicio, ciclo="anual")
+    tx = {**falso.txs["1292-1-1"], "status": "VOIDED"}
+    assert planes.aplicar_transaccion(tx, ahora=_despues(inicio, dias=1)) == "anulado"
+    for mes in range(1, 4):
+        frontera = planes.sumar_meses(inicio, mes)
+        planes.renovar_todo(ahora=_antes(frontera, 20))
+        planes.renovar_todo(ahora=_despues(frontera, minutos=1))
+    assert len(_filas(base_temporal, "periodo_plan")) == 1
+    assert len(_filas(base_temporal, "movimiento_saldo", tipo="plan")) == 1
+    assert _sus(base_temporal).cubierto_hasta == "2028-01-31T10:00:00"   # queda como estaba; el admin decide
+    assert any(e[0] == "admin:plan_admin" and "anuló" in e[3] for e in avisos)
+    assert len(falso.posts) == 1
+
+
+def test_un_aprobado_de_un_pago_ya_rechazado_no_acredita(base_temporal, planes, pro, falso, avisos):
+    """I3: el 2.º intento ya se cobró y abrió el periodo; un APPROVED tardío del 1.º no vuelve a acreditar."""
+    _suscribir(planes, pro)
+    falso.respuestas["pl-1-20261109-1"] = "DECLINED"
+    planes.cobrar_periodo(1, ahora=_antes("2026-11-09T10:00:00", 30))
+    planes.cobrar_periodo(1, ahora=_despues("2026-11-09T10:00:00", horas=24))
+    cubierto = _sus(base_temporal).cubierto_hasta
+    tx = [t for t in falso.txs.values() if t["reference"] == "pl-1-20261109-1"][0]
+    assert planes.aplicar_transaccion({**tx, "status": "APPROVED"}) == "aprobado_tras_final"
+    assert [p.estado for p in _filas(base_temporal, "pago_plan")] == ["aprobado", "rechazado", "aprobado"]
+    assert _sus(base_temporal).cubierto_hasta == cubierto
+    assert len(_filas(base_temporal, "movimiento_saldo", tipo="plan")) == 2
+    assert any(e[0] == "admin:plan_admin" and "No se acreditó" in e[3] for e in avisos)
+
+
+def test_un_rechazo_forzado_no_corre_la_gracia_mas_alla_de_48_horas(base_temporal, planes, pro, falso, avisos):
+    """M5: primer rechazo en T; un cambio de tarjeta rechazado en T+40 h deja el último intento en T+48 h."""
+    _suscribir(planes, pro)
+    for i in (1, 2):
+        falso.respuestas[f"pl-1-20261109-{i}"] = "DECLINED"
+    t = _antes("2026-11-09T10:00:00", 30)
+    planes.renovar_todo(ahora=t)
+    planes.cambiar_fuente("acme", "CARD", "tok_otra", "pagos@acme.co", dict(ACEPTACION), "user_acme",
+                          ahora=_despues(t, horas=40))
+    s = _sus(base_temporal)
+    assert (s.estado, s.intentos_fallidos, s.proximo_cobro) == ("morosa", 2, _despues(t, horas=48))
+    aviso = [e for e in avisos if e[0] == "plan_rechazado"][-1]
+    assert "miércoles 11 de noviembre" in aviso[3]      # el límite sigue siendo T + 48 h
+
+
+def test_una_suscripcion_que_falla_no_frena_las_demas(base_temporal, planes, pro, falso, avisos, monkeypatch):
+    """M3."""
+    _suscribir(planes, pro, cliente="otro")
+    _suscribir(planes, pro, cliente="acme")
+    original = planes.cobrar_periodo
+
+    def falla_para_la_primera(sid, **k):
+        if sid == 1:
+            raise RuntimeError("base ocupada")
+        return original(sid, **k)
+    monkeypatch.setattr(planes, "cobrar_periodo", falla_para_la_primera)
+    r = planes.renovar_todo(ahora=_antes("2026-11-09T10:00:00", 30))
+    assert r["fallos"] == 1 and r["cobros"].get("aprobado") == 1
+
+
+def test_la_renovacion_normal_no_deja_advertencias(base_temporal, planes, pro, falso, avisos, caplog):
+    """M2: la hora antes de cobrar no es una anomalía."""
+    import logging
+    _suscribir(planes, pro)
+    fin = "2026-11-09T10:00:00"
+    with caplog.at_level(logging.WARNING, logger="cobros.planes"):
+        planes.renovar_todo(ahora=_antes(fin, 59))
+        planes.renovar_todo(ahora=_antes(fin, 30))
+        planes.renovar_todo(ahora=_despues(fin, minutos=1))
+    assert [r for r in caplog.records if r.name == "cobros.planes"] == []
+
+
+def test_un_pendiente_nuevo_lleva_la_hora_real(base_temporal, planes, pro, falso, avisos):
+    """M1: la vuelta de la periódica usa un `ahora` fijo; el pendiente y su reclamo, el reloj de verdad."""
+    import db as db_
+    falso.defecto = "PENDING"
+    _suscribir(planes, pro, ahora="2026-01-01T00:00:00")
+    (pago,) = _filas(base_temporal, "pago_plan")
+    assert pago.creado_en[:10] == db_.ahora()[:10]

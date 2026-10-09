@@ -183,7 +183,7 @@ def plan(tipo, cliente, **datos):
     """Los avisos de un pago o un cambio de estado del plan, ya confirmado:
     `renovado` (y el alta), `rechazado` (con lo que falta para perderlo),
     `terminado` (al proyecto y a los admins) y, solo a los admins,
-    `no_cuadra`, `huerfano` y `anulado`. Nunca lanza."""
+    `no_cuadra`, `huerfano`, `anulado` y `aprobado_tras_final`. Nunca lanza."""
     try:
         if tipo == "renovado":
             sus, nombre = _nombre_plan(cliente)
@@ -228,7 +228,7 @@ def plan(tipo, cliente, **datos):
                                           nota=datos.get("nota") or "—"),
                          }.get(motivo, gettext("%(cliente)s: se acabó lo pagado y no se renueva.", cliente=cliente)),
                 cliente=cliente)
-        if tipo in ("no_cuadra", "huerfano", "anulado"):
+        if tipo in ("no_cuadra", "huerfano", "anulado", "aprobado_tras_final"):
             return plan_admin(tipo, cliente, referencia=datos.get("referencia") or "")
     except Exception:  # noqa: BLE001
         log.exception("aviso de plan %s a %s no salió", tipo, cliente)
@@ -245,8 +245,13 @@ def plan_admin(tipo, cliente, referencia=""):
                                     "ya terminada. Devuélvelo o actívalo a mano.",
                                     cliente=cliente, referencia=referencia),
         "anulado": lambda: gettext("%(cliente)s: Wompi anuló un pago de plan ya aprobado (%(referencia)s). El "
-                                   "periodo sigue abierto: si corresponde, usa «Terminar ya».",
+                                   "periodo en curso sigue abierto y, si era anual, los meses que faltan ya no se "
+                                   "abren: si corresponde, usa «Terminar ya».",
                                    cliente=cliente, referencia=referencia),
+        "aprobado_tras_final": lambda: gettext("%(cliente)s: Wompi aprobó un pago de plan (%(referencia)s) que ya "
+                                               "estaba rechazado, con error o anulado. No se acreditó nada: míralo en "
+                                               "el panel de Wompi y devuélvelo si se cobró de más.",
+                                               cliente=cliente, referencia=referencia),
         "incierto": lambda: gettext("%(cliente)s: un cobro de plan (%(referencia)s) llegó a Wompi pero no sabemos "
                                     "su resultado. Queda pendiente hasta que Wompi avise; míralo en su panel.",
                                     cliente=cliente, referencia=referencia),

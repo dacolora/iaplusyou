@@ -754,6 +754,7 @@ def test_evento_de_un_plan_de_punta_a_punta_abre_el_periodo_una_sola_vez(entorno
         sid = con.execute(db.suscripcion.insert().values(
             cliente="acme", plan_id=plan_id, ciclo="mensual", estado="activa", renovar=True, fuente_pago_id="3891",
             medio_fuente="CARD", correo="pagos@acme.co", proximo_cobro=ahora, intentos_fallidos=0, usuario="u",
+            precio_usd=1000,
             creada_en=ahora, actualizada_en=ahora)).inserted_primary_key[0]
         ref = f"pl-{sid}-{ahora[:10].replace('-', '')}-1"
         con.execute(db.pago_plan.insert().values(

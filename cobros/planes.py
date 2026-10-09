@@ -169,6 +169,10 @@ ADELANTO_COBRO = timedelta(hours=1)
 # Un pago pendiente sin transacción más nuevo que esto lo está cobrando otro hilo (el POST tarda ≤ 15 s): no se
 # reintenta encima. Más viejo: el envío se cortó y se reintenta con la MISMA referencia.
 EN_VUELO = timedelta(minutes=2)
+# Marca en `pago_plan.motivo` de un pendiente cuyo envío se sabe que NO salió (no conectó, 429, 401/403: Wompi no
+# creó transacción). Ese se puede reenviar con su referencia mientras la suscripción siga viva; si se canceló, se
+# da por no cobrado. Un pendiente sin la marca es incierto (pudo cobrar): después de cancelar nunca se reenvía.
+MOTIVO_NO_SALIO = "no_salio"
 AVISO_ANTES = timedelta(days=3)
 FRACCION_AVISO_BOLSA = 0.8
 CLAVE_ACEPTACION = "planes:aceptacion:{suscripcion}"
@@ -331,6 +335,7 @@ def _sus_dict(f):
             "renovar": bool(f.renovar), "fuente_pago_id": f.fuente_pago_id, "medio_fuente": f.medio_fuente,
             "fuente_resumen": f.fuente_resumen, "correo": f.correo, "cubierto_hasta": f.cubierto_hasta,
             "proximo_cobro": f.proximo_cobro, "intentos_fallidos": int(f.intentos_fallidos or 0),
+            "precio_usd": f.precio_usd, "precio_anual_usd": f.precio_anual_usd,
             "usuario": f.usuario, "creada_en": f.creada_en}
 
 
@@ -399,6 +404,14 @@ def _precio_ciclo(plan, ciclo):
     return plan["precio_usd"]
 
 
+def _precio_aceptado(sus):
+    """Lo que se cobra en cada renovación: el precio que la persona aceptó al
+    suscribirse (guardado en la suscripción), nunca el precio actual del plan
+    (revisión de la Task 5: el admin edita el plan y la tarjeta se cobraba con
+    el precio nuevo sin que nadie lo viera). None si no quedó guardado: no se cobra."""
+    return _precio_ciclo(sus, sus["ciclo"]) or None
+
+
 # ------------------------------------------------------------ periodos ---
 
 def _periodo_vivo_de(con, sid, ahora):
@@ -408,11 +421,14 @@ def _periodo_vivo_de(con, sid, ahora):
     return _desde_fila(f) if f is not None else None
 
 
-def _foto_plan(con, plan_id):
-    plan_ = _leer_plan(con, plan_id)
+def _foto_plan(con, sus):
+    """La foto de un periodo nuevo: el precio mensual aceptado (la bolsa es lo
+    que paga cada mes) y el margen de miembro y el tope del plan de hoy."""
+    plan_ = _leer_plan(con, sus["plan_id"])
     if plan_ is None:
         raise ErrorPlan(gettext("Ese plan no existe"))
-    return {"precio_usd": plan_["precio_usd"], "margen": plan_["margen"], "tope_incluido_usd": plan_["tope_incluido_usd"]}
+    return {"precio_usd": sus.get("precio_usd") or plan_["precio_usd"], "margen": plan_["margen"],
+            "tope_incluido_usd": plan_["tope_incluido_usd"]}
 
 
 def _abrir_periodo(con, sus, pago_id, inicio, fin, foto):
@@ -449,6 +465,8 @@ def _abrir_cubierto(con, sus, ahora):
     if ultimo.fin > horizonte:
         return None   # el último sigue más allá de la próxima vuelta
     inicio_libre = ultimo.fin
+    if inicio_libre >= cub:
+        return None   # lo pagado termina con el último periodo (lo normal antes de cobrar la renovación)
     foto, pago_id, ancla, meses = None, None, None, None
     if ultimo.pago_id is not None:
         pago_ult = con.execute(sa.select(pp).where(pp.c.id == ultimo.pago_id)).first()
@@ -457,6 +475,10 @@ def _abrir_cubierto(con, sus, ahora):
         if pago_ult is not None and primero is not None:
             n = MESES_CICLO.get(pago_ult.ciclo, 1)
             if inicio_libre < sumar_meses(primero.inicio, n):   # el mismo pago sigue cubriendo (anual)
+                if pago_ult.estado != "aprobado":
+                    # Anulado (o lo que sea menos aprobado): no se abre ni un mes más sobre ese pago. Lo pagado
+                    # (`cubierto_hasta`) queda como estaba; el admin ya recibió el aviso de la anulación.
+                    return None
                 ancla, meses, pago_id = primero.inicio, n, int(pago_ult.id)
                 foto = {"precio_usd": primero.precio_usd, "margen": primero.margen,
                         "tope_incluido_usd": primero.tope_incluido_usd}
@@ -466,10 +488,10 @@ def _abrir_cubierto(con, sus, ahora):
         siguiente = con.execute(sa.select(pp).where(pp.c.suscripcion_id == sus["id"], pp.c.estado == "aprobado",
                                                     pp.c.id.notin_(usados)).order_by(pp.c.id).limit(1)).first()
         if siguiente is None:
-            log.warning("suscripción %s cubierta hasta %s sin un pago que abra el periodo", sus["id"], cub)
+            log.info("suscripción %s cubierta hasta %s sin un pago aprobado que abra el periodo", sus["id"], cub)
             return None
         ancla, meses, pago_id = inicio_libre, MESES_CICLO.get(siguiente.ciclo, 1), int(siguiente.id)
-        foto = _foto_plan(con, sus["plan_id"])
+        foto = _foto_plan(con, sus)
     i = 0
     while sumar_meses(ancla, i) < inicio_libre:
         i += 1
@@ -505,7 +527,7 @@ def _aprobar(con, sus, pago, ahora):
     if desde > _mas(ahora, ADELANTO_COBRO) or (desde == ahora and _periodo_vivo_de(con, sus["id"], ahora)):
         return None   # más adelante lo abre la periódica (_abrir_cubierto); nunca dos periodos encimados
     return _abrir_periodo(con, sus, pago["id"], desde, min(sumar_meses(desde, 1), hasta),
-                          _foto_plan(con, sus["plan_id"]))
+                          _foto_plan(con, sus))
 
 
 def _es_primer_cobro(con, sus):
@@ -531,11 +553,17 @@ def _fallo(con, sus, ahora):
         _actualizar_sus(con, sus["id"], ahora, estado="terminada", renovar=False, proximo_cobro=None,
                         intentos_fallidos=intentos)
         return ("terminado", sus["cliente"], {"motivo": "rechazos"})
-    proximo = _mas(ahora, ESPERA_REINTENTO)
+    # La gracia se cuenta desde el PRIMER rechazo de esta renovación (intentos a las 0, 24 y 48 h): un intento
+    # forzado de más (cambio de tarjeta en morosa) no corre la ventana más allá de las 48 h.
+    pp = db.pago_plan
+    primero = con.execute(sa.select(sa.func.min(pp.c.actualizado_en)).where(
+        pp.c.suscripcion_id == sus["id"], pp.c.estado.in_(("rechazado", "error")),
+        pp.c.referencia.like(f"pl-{sus['id']}-{_clave_renovacion(sus)}-%"))).scalar() or ahora
+    fin_gracia = _mas(primero, ESPERA_REINTENTO * (INTENTOS_MAXIMOS - 1))
+    proximo = max(min(_mas(ahora, ESPERA_REINTENTO), fin_gracia), ahora)
     estado = "morosa" if sus["estado"] in ("activa", "morosa") else sus["estado"]
     _actualizar_sus(con, sus["id"], ahora, estado=estado, intentos_fallidos=intentos, proximo_cobro=proximo)
-    limite = _mas(ahora, ESPERA_REINTENTO * (INTENTOS_MAXIMOS - intentos))
-    return ("rechazado", sus["cliente"], {"proximo": proximo, "limite": limite})
+    return ("rechazado", sus["cliente"], {"proximo": proximo, "limite": max(fin_gracia, proximo)})
 
 
 # ------------------------------------------------- aplicar una transacción ---
@@ -590,10 +618,14 @@ def _aplicar_estado(con, pago, estado_wompi, tx_id, motivo, ahora):
     if estado_wompi == "APPROVED":
         if pago["estado"] == "aprobado":
             return "ya_aplicada", None
+        if pago["estado"] != "pendiente":
+            # Un pago ya rechazado, con error o anulado no vuelve a acreditar (otro intento de esa renovación pudo
+            # cobrarse y abrir el periodo): sin crédito, y el admin mira el caso en el panel de Wompi.
+            return "aprobado_tras_final", ("aprobado_tras_final", pago["cliente"], {"referencia": pago["referencia"]})
         valores = {"estado": "aprobado", "actualizado_en": ahora, "motivo": None}
         if tx_id:
             valores["transaccion_id"] = tx_id
-        n = con.execute(pp.update().where(pp.c.id == pago["id"], pp.c.estado != "aprobado").values(**valores)).rowcount
+        n = con.execute(pp.update().where(pp.c.id == pago["id"], pp.c.estado == "pendiente").values(**valores)).rowcount
         if not n:
             return "ya_aplicada", None
         if sus is None or sus["estado"] == "terminada":
@@ -621,7 +653,8 @@ def _aplicar_estado(con, pago, estado_wompi, tx_id, motivo, ahora):
             return "ya_aplicada", None
         n = con.execute(pp.update().where(pp.c.id == pago["id"], pp.c.estado == "aprobado")
                         .values(estado="anulado", actualizado_en=ahora, motivo=motivo)).rowcount
-        # El periodo ya acreditado no se toca solo: el admin decide si lo corta («Terminar ya»).
+        # El periodo ya acreditado no se toca solo: el admin decide si lo corta («Terminar ya»). Los meses que
+        # faltan de un anual anulado ya no se abren (`_abrir_cubierto` exige el pago aprobado).
         return ("anulado", ("anulado", pago["cliente"], {"referencia": pago["referencia"]})) if n else ("ya_aplicada", None)
     if estado_wompi == "PENDING":
         if pago["estado"] == "pendiente" and tx_id and not pago["transaccion_id"]:
@@ -648,22 +681,37 @@ def _decidir(con, sus, ahora, tasa, forzar):
     pendiente = next((p for p in pagos if p["estado"] == "pendiente"), None)
     if pendiente is not None:
         if pendiente["transaccion_id"]:
-            return "consultar", pendiente
-        if pendiente["actualizado_en"] and pendiente["actualizado_en"] > _iso(_dt(ahora) - EN_VUELO):
-            return "en_curso", None
+            return "consultar", pendiente      # consultar no cobra: vale también tras cancelar
         pp = db.pago_plan
+        no_salio = pendiente["motivo"] == MOTIVO_NO_SALIO
+        if not (sus["renovar"] and sus["estado"] in ("activa", "morosa")):
+            # Cancelada (o sin renovar): nada se reenvía. Lo que no salió se da por no cobrado; lo incierto
+            # espera el evento de Wompi o al admin.
+            if not no_salio:
+                return "esperar_evento", pendiente
+            con.execute(pp.update().where(pp.c.id == pendiente["id"], pp.c.estado == "pendiente",
+                                          pp.c.motivo == MOTIVO_NO_SALIO)
+                        .values(estado="error", motivo=gettext("No se cobró: el plan se canceló"),
+                                actualizado_en=db.ahora()))
+            return "cancelado_sin_cobro", None
+        real = db.ahora()   # el reloj de verdad: el «en vuelo» es de la red, no de la vuelta de la periódica
+        if pendiente["actualizado_en"] and pendiente["actualizado_en"] > _iso(_dt(real) - EN_VUELO):
+            return "en_curso", None
+        # Se reclama (y se quita la marca: mientras va en camino es incierto, y un cancelar a la vez no lo da
+        # por no cobrado).
         n = con.execute(pp.update().where(pp.c.id == pendiente["id"], pp.c.estado == "pendiente",
                                           pp.c.actualizado_en == pendiente["actualizado_en"])
-                        .values(actualizado_en=ahora)).rowcount
-        return ("reintentar", pendiente) if n else ("en_curso", None)
+                        .values(actualizado_en=real, motivo=None)).rowcount
+        if not n:
+            return "en_curso", None
+        return ("cobrar" if no_salio else "reintentar"), {**pendiente, "motivo": None}
     if sus["estado"] not in ("activa", "morosa"):
         return "no_toca", None
     if not forzar and (not sus["renovar"] or not sus["proximo_cobro"] or sus["proximo_cobro"] > ahora):
         return "no_toca", None
     if sus["intentos_fallidos"] >= INTENTOS_MAXIMOS:
         return "no_toca", None
-    plan_ = _leer_plan(con, sus["plan_id"])
-    usd = _precio_ciclo(plan_, sus["ciclo"]) if plan_ else None
+    usd = _precio_aceptado(sus)
     if not usd:
         return "sin_precio", None
     if tasa is None:
@@ -671,10 +719,11 @@ def _decidir(con, sus, ahora, tasa, forzar):
     from cobros.recargas import centavos_cop  # noqa: PLC0415 — recargas importa libro, que importa este módulo
     pp = db.pago_plan
     referencia = f"pl-{sus['id']}-{clave}-{len(pagos) + 1}"
+    real = db.ahora()
     pid = int(con.execute(pp.insert().values(
         cliente=sus["cliente"], suscripcion_id=sus["id"], ciclo=sus["ciclo"], usd=int(usd), trm=float(tasa),
-        monto_cop_centavos=centavos_cop(usd, tasa), referencia=referencia, estado="pendiente", creado_en=ahora,
-        actualizado_en=ahora, medio="wompi", usuario=None)).inserted_primary_key[0])
+        monto_cop_centavos=centavos_cop(usd, tasa), referencia=referencia, estado="pendiente", creado_en=real,
+        actualizado_en=real, medio="wompi", usuario=None)).inserted_primary_key[0])
     return "cobrar", _pago_dict(con.execute(sa.select(pp).where(pp.c.id == pid)).first())
 
 
@@ -682,6 +731,9 @@ def _enviar(accion, pago, sus, ahora, acceptance_token=None):
     """Fuera de toda transacción: habla con Wompi y aplica la respuesta.
     Devuelve el estado (aprobado, pendiente, rechazado, error, incierto, caida…)."""
     from cobros import wompi  # noqa: PLC0415
+    if accion == "esperar_evento":
+        _aviso_incierto(pago)
+        return "incierto"
     if accion == "consultar":
         try:
             tx = wompi.transaccion(pago["transaccion_id"])
@@ -698,6 +750,12 @@ def _enviar(accion, pago, sus, ahora, acceptance_token=None):
             # de la transacción no hay cómo consultarlo: queda pendiente (bloquea otro cobro) y el admin lo sabe.
             _aviso_incierto(pago)
             return "incierto"
+        if accion == "cobrar" and not e.incierto and (e.caida or e.codigo in (401, 403, 429)):
+            # Wompi no creó la transacción (no conectó, cupo, llaves): se sabe que no cobró.
+            _marcar_no_salio(pago)
+            if e.codigo in (401, 403):
+                _aviso_incierto(pago)
+            return "caida"
         if e.caida or e.codigo == 429:
             return "caida"      # el pago queda pendiente; la periódica no sigue cobrando a otros en esta vuelta
         if e.incierto:
@@ -714,6 +772,13 @@ def _enviar(accion, pago, sus, ahora, acceptance_token=None):
     if not tx.get("reference"):
         tx = {**tx, "reference": pago["referencia"]}
     return aplicar_transaccion(tx, ahora=ahora)
+
+
+def _marcar_no_salio(pago):
+    pp = db.pago_plan
+    with db.conectar() as con:
+        con.execute(pp.update().where(pp.c.id == pago["id"], pp.c.estado == "pendiente",
+                                      pp.c.transaccion_id.is_(None)).values(motivo=MOTIVO_NO_SALIO))
 
 
 def _fallo_definitivo(pago, motivo, ahora):
@@ -793,18 +858,25 @@ def verificar_pago(cliente, pago_id):
 
 # --------------------------------------------------------------- alta ---
 
+CONSENTIMIENTOS = ("acepta_terminos", "acepta_datos", "autoriza_cobro")   # las tres casillas de §5.2.1
+
+
 def _validar_aceptacion(aceptacion):
+    """Los dos tokens de Wompi y las tres casillas, cada una exactamente `True`
+    (un «on», un 1 o un texto no valen: la ruta convierte la casilla marcada)."""
     a = aceptacion if isinstance(aceptacion, dict) else {}
     tokens = [a.get("acceptance_token"), a.get("personal_token")]
-    if not all(isinstance(t, str) and t.strip() and len(t) <= 8000 for t in tokens) or not a.get("autoriza_cobro"):
+    if (not all(isinstance(t, str) and t.strip() and len(t) <= 8000 for t in tokens)
+            or not all(a.get(c) is True for c in CONSENTIMIENTOS)):
         raise ErrorPlan(gettext("Para suscribirte tienes que aceptar los términos de Wompi, el tratamiento de datos "
                                 "y el cobro automático"))
     return a
 
 
-def _guardar_aceptacion(con, sid, aceptacion, usuario, ahora):
-    """§10: cuándo y quién aceptó, con los dos tokens de Wompi (en `kv`: la
-    tabla `suscripcion` no tiene `extra`). Una entrada por alta o cambio de tarjeta."""
+def _guardar_aceptacion(con, sid, aceptacion, usuario, ahora, usd, ciclo):
+    """§10: cuándo y quién aceptó, con los dos tokens de Wompi, las casillas y
+    el precio y el ciclo que vio (en `kv`: la tabla `suscripcion` no tiene
+    `extra`). Una entrada por alta o cambio de tarjeta."""
     clave = CLAVE_ACEPTACION.format(suscripcion=sid)
     previo = con.execute(sa.select(db.kv.c.valor).where(db.kv.c.clave == clave)).scalar()
     try:
@@ -813,7 +885,8 @@ def _guardar_aceptacion(con, sid, aceptacion, usuario, ahora):
         lista = []
     lista = lista if isinstance(lista, list) else []
     lista.append({"acceptance_token": aceptacion["acceptance_token"].strip(),
-                  "personal_token": aceptacion["personal_token"].strip(), "autoriza_cobro": True,
+                  "personal_token": aceptacion["personal_token"].strip(),
+                  **{c: True for c in CONSENTIMIENTOS}, "usd": usd, "ciclo": ciclo,
                   "usuario": usuario, "aceptada_en": ahora})
     texto = json.dumps(lista[-10:])
     if previo is None:
@@ -832,9 +905,12 @@ def _crear_fuente(tipo, token, correo, aceptacion):
         raise ErrorPlan(str(e)) from None
 
 
-def suscribir(cliente, plan_id, ciclo, tipo_fuente, token, correo, aceptacion, usuario, ahora=None):
+def suscribir(cliente, plan_id, ciclo, tipo_fuente, token, correo, aceptacion, usuario, precio_visto_usd, ahora=None):
     """El alta (spec §5.2): crea la fuente en Wompi, la suscripción y cobra el
-    primer periodo en el acto. Devuelve {suscripcion_id, pago_id, estado,
+    primer periodo en el acto. `precio_visto_usd` es el precio del ciclo que la
+    persona vio y aceptó: si el plan cambió desde entonces se niega sin hablar
+    con Wompi; la suscripción guarda ese precio y TODA renovación lo cobra a
+    él, nunca el precio actual del plan. Devuelve {suscripcion_id, pago_id, estado,
     motivo}: `aprobado` (periodo abierto y bolsa acreditada), `pendiente`
     (llega por evento; la pantalla sondea `verificar_pago`), `rechazado`/
     `error` (la suscripción queda terminada y se puede intentar con otra
@@ -848,6 +924,8 @@ def suscribir(cliente, plan_id, ciclo, tipo_fuente, token, correo, aceptacion, u
         raise ErrorPlan(gettext("Ese plan no está disponible"))
     if not _precio_ciclo(plan_, ciclo):
         raise ErrorPlan(gettext("Ese plan no tiene opción anual"))
+    if not _mismo_precio(plan_, ciclo, precio_visto_usd):
+        raise ErrorPlan(gettext("El precio del plan cambió; revisa y vuelve a intentar"))
     if suscripcion(cliente) is not None:
         raise ErrorPlan(gettext("Este proyecto ya tiene un plan"))
     tasa = _tasa_o_none()
@@ -859,12 +937,16 @@ def suscribir(cliente, plan_id, ciclo, tipo_fuente, token, correo, aceptacion, u
         _libro()._candado(con)
         if _sus_viva(con, cliente) is not None:
             raise ErrorPlan(gettext("Este proyecto ya tiene un plan"))
+        plan_ = _leer_plan(con, plan_id)   # otra vez con el candado: el admin pudo editarlo mientras se creaba la fuente
+        if plan_ is None or not plan_["activo"] or not _mismo_precio(plan_, ciclo, precio_visto_usd):
+            raise ErrorPlan(gettext("El precio del plan cambió; revisa y vuelve a intentar"))
         sid = int(con.execute(s.insert().values(
             cliente=cliente, plan_id=plan_["id"], ciclo=ciclo, estado="activa", renovar=True,
+            precio_usd=plan_["precio_usd"], precio_anual_usd=plan_["precio_anual_usd"],
             fuente_pago_id=str(fuente["id"]), medio_fuente=fuente["tipo"], fuente_resumen=fuente["resumen"][:40] or None,
             correo=str(correo).strip()[:120], cubierto_hasta=None, proximo_cobro=ahora, intentos_fallidos=0,
             usuario=str(usuario or "")[:80], creada_en=ahora, actualizada_en=ahora)).inserted_primary_key[0])
-        _guardar_aceptacion(con, sid, aceptacion, usuario, ahora)
+        _guardar_aceptacion(con, sid, aceptacion, usuario, ahora, _precio_ciclo(plan_, ciclo), ciclo)
         sus = _sus_por_id(con, sid)
         accion, pago = _decidir(con, sus, ahora, tasa, forzar=True)
     if pago is None:   # sin precio: no debería pasar (se validó arriba)
@@ -873,7 +955,15 @@ def suscribir(cliente, plan_id, ciclo, tipo_fuente, token, correo, aceptacion, u
     with db.conectar() as con:
         final = _pago_dict(con.execute(sa.select(db.pago_plan).where(db.pago_plan.c.id == pago["id"])).first())
     return {"suscripcion_id": sid, "pago_id": pago["id"], "estado": estado if estado in ("incierto", "caida")
-            else final["estado"], "motivo": final["motivo"]}
+            else final["estado"], "motivo": None if final["motivo"] == MOTIVO_NO_SALIO else final["motivo"]}
+
+
+def _mismo_precio(plan_, ciclo, precio_visto_usd):
+    try:
+        visto = int(precio_visto_usd)
+    except (TypeError, ValueError):
+        return False
+    return not isinstance(precio_visto_usd, bool) and visto == _precio_ciclo(plan_, ciclo)
 
 
 # ------------------------------------------------- cancelar y terminar ---
@@ -955,7 +1045,7 @@ def cambiar_fuente(cliente, tipo, token, correo, aceptacion, usuario, ahora=None
         if sus["estado"] != "morosa":
             valores["proximo_cobro"] = _proximo_normal(nueva, sus["cubierto_hasta"])
         _actualizar_sus(con, sus["id"], ahora, **valores)
-        _guardar_aceptacion(con, sus["id"], aceptacion, usuario, ahora)
+        _guardar_aceptacion(con, sus["id"], aceptacion, usuario, ahora, _precio_aceptado(sus), sus["ciclo"])
     cobro = None
     if sus["estado"] == "morosa":
         cobro = cobrar_periodo(sus["id"], ahora=ahora, forzar=True,
@@ -982,14 +1072,19 @@ def activar_manual(cliente, plan_id, ciclo, usuario, nota="", ahora=None):
         if not usd:
             raise ErrorPlan(gettext("Ese plan no tiene opción anual"))
         sus = _sus_viva(con, cliente)
+        precios = {"precio_usd": plan_["precio_usd"], "precio_anual_usd": plan_["precio_anual_usd"]}
         if sus is None:
             sid = int(con.execute(s.insert().values(
-                cliente=cliente, plan_id=plan_["id"], ciclo=ciclo, estado="activa", renovar=False,
+                cliente=cliente, plan_id=plan_["id"], ciclo=ciclo, estado="activa", renovar=False, **precios,
                 cubierto_hasta=None, proximo_cobro=None, intentos_fallidos=0, usuario=str(usuario or "")[:80],
                 creada_en=ahora, actualizada_en=ahora)).inserted_primary_key[0])
         else:
             sid = sus["id"]
-            _actualizar_sus(con, sid, ahora, plan_id=plan_["id"], ciclo=ciclo)
+            if sus["plan_id"] == plan_["id"] and _precio_ciclo(sus, ciclo):
+                usd = _precio_ciclo(sus, ciclo)   # el mismo plan: sigue el precio que ya tenía guardado
+                _actualizar_sus(con, sid, ahora, ciclo=ciclo)
+            else:
+                _actualizar_sus(con, sid, ahora, plan_id=plan_["id"], ciclo=ciclo, **precios)
         sus = _sus_por_id(con, sid)
         clave = _clave_renovacion(sus)
         pagos = _pagos_de_renovacion(con, sus, clave)
@@ -1019,42 +1114,59 @@ def renovar_todo(ahora=None):
     Wompi (o un 429) deja los demás cobros para la próxima vuelta. Devuelve un
     resumen con conteos."""
     ahora = ahora or db.ahora()
-    resumen = {"cerrados": 0, "abiertos": 0, "terminadas": 0, "cobros": Counter(), "avisos": 0}
+    resumen = {"cerrados": 0, "abiertos": 0, "terminadas": 0, "cobros": Counter(), "avisos": 0, "fallos": 0}
     p, s = db.periodo_plan, db.suscripcion
     with db.conectar() as con:
         vencidos = [int(r[0]) for r in con.execute(sa.select(p.c.id).where(p.c.cerrado == sa.false(),
                                                                            p.c.fin <= ahora).order_by(p.c.fin))]
     for pid in vencidos:
-        with db.conectar() as con:
-            _libro()._candado(con)
-            actual = periodo(con, pid)
-            if actual is None or actual["cerrado"]:
-                continue
-            resumen["cerrados"] += _cerrar_periodo(con, pid)
+        try:
+            with db.conectar() as con:
+                _libro()._candado(con)
+                actual = periodo(con, pid)
+                if actual is None or actual["cerrado"]:
+                    continue
+                resumen["cerrados"] += _cerrar_periodo(con, pid)
+        except Exception:  # noqa: BLE001 — un periodo que falla no frena el cierre de los demás
+            resumen["fallos"] += 1
+            log.exception("planes_renovar: no se pudo cerrar el periodo %s", pid)
     with db.conectar() as con:
         vivas = [int(r[0]) for r in con.execute(sa.select(s.c.id).where(s.c.estado != "terminada").order_by(s.c.id))]
-    caida = False
+    estado_vuelta = {"caida": False}
     for sid in vivas:
-        avisos_ = []
-        with db.conectar() as con:
-            _libro()._candado(con)
-            sus = _sus_por_id(con, sid)
-            if sus is None or sus["estado"] == "terminada":
-                continue
-            if _abrir_cubierto(con, sus, ahora):
-                resumen["abiertos"] += 1
-            if _terminar_si_toca(con, sus, ahora):
-                resumen["terminadas"] += 1
-                avisos_.append(("terminado", sus["cliente"], {"motivo": "fin"}))
-        _mandar(avisos_)
-        if caida or not sus["fuente_pago_id"] or sus["estado"] not in ("activa", "morosa", "cancelada"):
-            continue
-        estado = cobrar_periodo(sid, ahora=ahora)
-        resumen["cobros"][estado] += 1
-        caida = estado == "caida"
-    resumen["avisos"] = _avisar_por_renovar(ahora) + _avisar_bolsa(ahora)
+        try:
+            _renovar_una(sid, ahora, resumen, estado_vuelta)
+        except Exception:  # noqa: BLE001 — una suscripción que falla no frena a las demás (los cobros son idempotentes)
+            resumen["fallos"] += 1
+            log.exception("planes_renovar: falló la suscripción %s", sid)
+    for aviso in (_avisar_por_renovar, _avisar_bolsa):
+        try:
+            resumen["avisos"] += aviso(ahora)
+        except Exception:  # noqa: BLE001
+            resumen["fallos"] += 1
+            log.exception("planes_renovar: fallaron los avisos (%s)", aviso.__name__)
     resumen["cobros"] = dict(resumen["cobros"])
     return resumen
+
+
+def _renovar_una(sid, ahora, resumen, estado_vuelta):
+    avisos_ = []
+    with db.conectar() as con:
+        _libro()._candado(con)
+        sus = _sus_por_id(con, sid)
+        if sus is None or sus["estado"] == "terminada":
+            return
+        if _abrir_cubierto(con, sus, ahora):
+            resumen["abiertos"] += 1
+        if _terminar_si_toca(con, sus, ahora):
+            resumen["terminadas"] += 1
+            avisos_.append(("terminado", sus["cliente"], {"motivo": "fin"}))
+    _mandar(avisos_)
+    if estado_vuelta["caida"] or not sus["fuente_pago_id"] or sus["estado"] not in ("activa", "morosa", "cancelada"):
+        return
+    estado = cobrar_periodo(sid, ahora=ahora)
+    resumen["cobros"][estado] += 1
+    estado_vuelta["caida"] = estado == "caida"
 
 
 def _avisar_por_renovar(ahora):
@@ -1065,13 +1177,11 @@ def _avisar_por_renovar(ahora):
         filas = [_sus_dict(f) for f in con.execute(sa.select(s).where(
             s.c.estado == "activa", s.c.cubierto_hasta.isnot(None), s.c.cubierto_hasta > ahora,
             s.c.cubierto_hasta <= limite))]
-        planes_ = {pid: _leer_plan(con, pid) for pid in {f["plan_id"] for f in filas}}
     n = 0
     for sus in filas:
-        plan_ = planes_.get(sus["plan_id"]) or {}
         if _avisos().plan_por_renovar(sus["cliente"], CLAVE_AVISO_RENOVAR.format(suscripcion=sus["id"],
                                                                                 hasta=sus["cubierto_hasta"]),
-                                      fecha=sus["cubierto_hasta"], usd=_precio_ciclo(plan_, sus["ciclo"]) or 0,
+                                      fecha=sus["cubierto_hasta"], usd=_precio_aceptado(sus) or 0,
                                       renueva=bool(sus["renovar"] and sus["fuente_pago_id"])):
             n += 1
     return n
@@ -1182,9 +1292,10 @@ def estado_cliente(cliente, ahora=None):
         "plan": plan_, "periodo": per, "bolsa": bolsa, "incluido_pct": incluido_pct, "ahorro_milesimas": ahorro,
         "renueva": renueva, "renueva_el": sus["cubierto_hasta"] if renueva else None,
         "termina_el": None if renueva else sus["cubierto_hasta"],
-        "monto_renovacion_usd": _precio_ciclo(plan_, sus["ciclo"]) if plan_ else None,
+        "monto_renovacion_usd": _precio_aceptado(sus),
         "morosa": sus["estado"] == "morosa", "reintento_el": sus["proximo_cobro"] if sus["estado"] == "morosa" else None,
         "intentos_restantes": restantes,
-        "pagos": [{k: p[k] for k in ("id", "creado_en", "usd", "estado", "medio", "motivo", "ciclo")} for p in pagos],
+        "pagos": [{**{k: p[k] for k in ("id", "creado_en", "usd", "estado", "medio", "ciclo")},
+                   "motivo": None if p["motivo"] == MOTIVO_NO_SALIO else p["motivo"]} for p in pagos],
         "pendiente": any(p["estado"] == "pendiente" for p in pagos),
     }
