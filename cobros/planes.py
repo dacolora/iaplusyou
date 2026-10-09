@@ -375,7 +375,7 @@ def _pago_dict(f):
     return {"id": int(f.id), "cliente": f.cliente, "suscripcion_id": int(f.suscripcion_id), "ciclo": f.ciclo,
             "usd": int(f.usd), "trm": f.trm, "monto_cop_centavos": f.monto_cop_centavos, "referencia": f.referencia,
             "transaccion_id": f.transaccion_id, "estado": f.estado, "motivo": f.motivo, "creado_en": f.creado_en,
-            "actualizado_en": f.actualizado_en, "medio": f.medio}
+            "actualizado_en": f.actualizado_en, "medio": f.medio, "precio_mes_usd": f.precio_mes_usd}
 
 
 def _pagos_de_renovacion(con, sus, clave):
@@ -421,15 +421,16 @@ def _periodo_vivo_de(con, sid, ahora):
     return _desde_fila(f) if f is not None else None
 
 
-def _foto_plan(con, sus, medio="wompi"):
+def _foto_plan(con, sus, pago):
     """La foto de un periodo nuevo: el margen de miembro y el tope del plan de
-    hoy, y el precio mensual que es la bolsa: el aceptado con la tarjeta para un
-    pago de Wompi; para un pago a mano, el del plan de hoy (su propia foto: la
-    activación a mano nunca toca los precios aceptados para la tarjeta)."""
+    hoy, y la bolsa: la que compró el pago (`pago_plan.precio_mes_usd`, fijada
+    al insertarlo: el precio aceptado con la tarjeta, o el del plan el día del
+    pago a mano), aunque el periodo abra meses después. Sin esa foto (filas
+    viejas), el aceptado o el del plan."""
     plan_ = _leer_plan(con, sus["plan_id"])
     if plan_ is None:
         raise ErrorPlan(gettext("Ese plan no existe"))
-    precio = plan_["precio_usd"] if medio == "manual" else (sus.get("precio_usd") or plan_["precio_usd"])
+    precio = (pago or {}).get("precio_mes_usd") or sus.get("precio_usd") or plan_["precio_usd"]
     return {"precio_usd": precio, "margen": plan_["margen"], "tope_incluido_usd": plan_["tope_incluido_usd"]}
 
 
@@ -493,7 +494,7 @@ def _abrir_cubierto(con, sus, ahora):
             log.info("suscripción %s cubierta hasta %s sin un pago aprobado que abra el periodo", sus["id"], cub)
             return None
         ancla, meses, pago_id = inicio_libre, MESES_CICLO.get(siguiente.ciclo, 1), int(siguiente.id)
-        foto = _foto_plan(con, sus, siguiente.medio)
+        foto = _foto_plan(con, sus, _pago_dict(siguiente))
     i = 0
     while sumar_meses(ancla, i) < inicio_libre:
         i += 1
@@ -529,7 +530,7 @@ def _aprobar(con, sus, pago, ahora):
     if desde > _mas(ahora, ADELANTO_COBRO) or (desde == ahora and _periodo_vivo_de(con, sus["id"], ahora)):
         return None   # más adelante lo abre la periódica (_abrir_cubierto); nunca dos periodos encimados
     return _abrir_periodo(con, sus, pago["id"], desde, min(sumar_meses(desde, 1), hasta),
-                          _foto_plan(con, sus, pago.get("medio") or "wompi"))
+                          _foto_plan(con, sus, pago))
 
 
 def _es_primer_cobro(con, sus):
@@ -715,7 +716,10 @@ def _decidir(con, sus, ahora, tasa, forzar):
         return ("cobrar" if no_salio else "reintentar"), {**pendiente, "motivo": None}
     if sus["estado"] not in ("activa", "morosa"):
         return "no_toca", None
-    if not forzar and (not sus["renovar"] or not sus["proximo_cobro"] or sus["proximo_cobro"] > ahora):
+    # `forzar` (el alta, el cambio de tarjeta en morosa) solo salta la espera de `proximo_cobro`: NUNCA una
+    # suscripción que no se renueva (activada a mano, cancelada, anulada), releída aquí con el candado
+    # (revisión 3: el admin pudo activar a mano mientras se leía la TRM).
+    if not sus["renovar"] or (not forzar and (not sus["proximo_cobro"] or sus["proximo_cobro"] > ahora)):
         return "no_toca", None
     if sus["intentos_fallidos"] >= INTENTOS_MAXIMOS:
         return "no_toca", None
@@ -731,7 +735,8 @@ def _decidir(con, sus, ahora, tasa, forzar):
     pid = int(con.execute(pp.insert().values(
         cliente=sus["cliente"], suscripcion_id=sus["id"], ciclo=sus["ciclo"], usd=int(usd), trm=float(tasa),
         monto_cop_centavos=centavos_cop(usd, tasa), referencia=referencia, estado="pendiente", creado_en=real,
-        actualizado_en=real, medio="wompi", usuario=None)).inserted_primary_key[0])
+        actualizado_en=real, medio="wompi", usuario=None,
+        precio_mes_usd=sus["precio_usd"] or usd)).inserted_primary_key[0])
     return "cobrar", _pago_dict(con.execute(sa.select(pp).where(pp.c.id == pid)).first())
 
 
@@ -1102,7 +1107,8 @@ def activar_manual(cliente, plan_id, ciclo, usuario, nota="", ahora=None):
         pago_id = int(con.execute(pp.insert().values(
             cliente=cliente, suscripcion_id=sid, ciclo=ciclo, usd=int(usd), trm=None, monto_cop_centavos=None,
             referencia=referencia, estado="aprobado", motivo=str(nota or "")[:300] or None, creado_en=ahora,
-            actualizado_en=ahora, medio="manual", usuario=str(usuario or "")[:80])).inserted_primary_key[0])
+            actualizado_en=ahora, medio="manual", usuario=str(usuario or "")[:80],
+            precio_mes_usd=plan_["precio_usd"])).inserted_primary_key[0])
         pago = _pago_dict(con.execute(sa.select(pp).where(pp.c.id == pago_id)).first())
         primero = _es_primer_cobro(con, sus)
         periodo_id = _aprobar(con, sus, pago, ahora)

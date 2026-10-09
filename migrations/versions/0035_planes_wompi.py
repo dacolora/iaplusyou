@@ -112,6 +112,7 @@ def upgrade() -> None:
         sa.Column("actualizado_en", sa.String(19)),
         sa.Column("medio", sa.String(12), nullable=False),
         sa.Column("usuario", sa.String(80)),
+        sa.Column("precio_mes_usd", sa.Integer),      # la bolsa mensual que compró este pago (su foto)
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("referencia"),
         sa.UniqueConstraint("transaccion_id"),

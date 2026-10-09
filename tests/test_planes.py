@@ -904,3 +904,48 @@ def test_cancelada_con_un_cobro_en_vuelo_no_avisa_antes_de_tiempo(base_temporal,
     assert planes.cobrar_periodo(1, ahora=_despues("2026-11-09T10:00:00", horas=1)) == "incierto"
     assert _tipos(avisos).count("admin:plan_admin") == 1
     assert len(falso.posts) == 2
+
+
+# ----------------------------------------------- revisión 3 (dinero) ---
+
+def test_carrera_cambio_de_tarjeta_en_morosa_y_activacion_manual(base_temporal, planes, pro, falso, avisos,
+                                                                monkeypatch):
+    """El cliente cambia la tarjeta estando morosa; mientras se lee la TRM (fuera del candado) el admin activa a
+    mano el mismo periodo. El cobro forzado relee con el candado: sin renovación, no hay cobro."""
+    _suscribir(planes, pro)
+    falso.respuestas["pl-1-20261109-1"] = "DECLINED"
+    planes.renovar_todo(ahora=_antes("2026-11-09T10:00:00", 60))
+    assert _sus(base_temporal).estado == "morosa"
+    original = planes._necesita_tasa
+    hecho = []
+
+    def entre(sid, ahora, forzar):
+        if not hecho:
+            hecho.append(1)
+            planes.activar_manual("acme", pro, "mensual", "admin", "transferencia", ahora=ahora)
+        return original(sid, ahora, forzar)
+    monkeypatch.setattr(planes, "_necesita_tasa", entre)
+    r = planes.cambiar_fuente("acme", "CARD", "tok2", "pagos@acme.co", dict(ACEPTACION), "user_acme",
+                              ahora=_antes("2026-11-09T10:00:00", 40))
+    assert r["cobro"] == "no_toca"
+    assert [p["referencia"] for p in falso.posts] == ["pl-1-20261009-1", "pl-1-20261109-1"]
+    assert [(p.medio, p.estado) for p in _filas(base_temporal, "pago_plan")] == [
+        ("wompi", "aprobado"), ("wompi", "rechazado"), ("manual", "aprobado")]
+    s = _sus(base_temporal)
+    assert (s.estado, s.renovar) == ("activa", False)
+
+
+def test_un_periodo_a_mano_que_abre_despues_acredita_lo_pagado(base_temporal, planes, pro, falso, avisos):
+    """Minor 2: la bolsa de un periodo pagado a mano es su foto del día del pago, aunque abra meses después."""
+    planes.activar_manual("acme", pro, "mensual", "admin", "mes 1", ahora=T0)
+    planes.activar_manual("acme", pro, "anual", "admin", "año siguiente", ahora=_despues(T0, dias=10))
+    planes.editar_plan(pro, usuario="admin", precio_usd=1500, precio_anual_usd=15000)
+    fin = "2026-11-09T10:00:00"
+    for mes in range(0, 3):
+        frontera = planes.sumar_meses(fin, mes)
+        planes.renovar_todo(ahora=_antes(frontera, 20))
+        planes.renovar_todo(ahora=_despues(frontera, minutos=1))
+    periodos = _filas(base_temporal, "periodo_plan")
+    assert len(periodos) == 4
+    assert [p.credito_milesimas for p in periodos] == [1_000_000] * 4
+    assert [p.usd for p in _filas(base_temporal, "pago_plan")] == [1000, 10000]

@@ -779,6 +779,9 @@ pago_plan = Table("pago_plan", metadata,
     Column("actualizado_en", String(19)),
     Column("medio", String(12), nullable=False),               # wompi|manual
     Column("usuario", String(80)),
+    # La bolsa mensual que compró este pago (revisión 3 de la Task 5): cada periodo que abre, aunque abra meses
+    # después, acredita esto y no el precio del plan de ese día.
+    Column("precio_mes_usd", Integer),
     sqlite_autoincrement=True,
 )
 
