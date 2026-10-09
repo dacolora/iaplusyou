@@ -1,16 +1,25 @@
-"""Recargas del saldo (spec 2026-10-08 §9): con Bold (link de pago, webhook
-firmado y verificación de respaldo) y a mano por el admin (§10). ÚNICO
+"""Recargas del saldo (spec 2026-10-08 §9): con Wompi (Web Checkout, la vuelta
+verificada y los eventos firmados; spec planes 2026-10-09 §5.1 y §5.3) o con
+Bold (link de pago, webhook firmado y verificación de respaldo), según
+`cobros.pasarela.para_recargas()`, y a mano por el admin (§10). ÚNICO
 escritor de `recarga` y `pago_evento`; los movimientos del libro los escribe
 `cobros.libro.acreditar`, dentro de la transacción de aquí.
 
-Una recarga solo se acredita por lo que dice Bold desde el servidor (el
-webhook con firma válida o la consulta del link), nunca por los parámetros de
-la URL de vuelta. Acreditar dos veces lo impiden el cambio de estado
-condicional (`UPDATE … WHERE estado IN …`, con el candado de escritura tomado
-antes de leer), `UNIQUE(tipo, recarga_id)` del libro y `UNIQUE(pago_id)`.
+Una recarga solo se acredita por lo que dice la pasarela desde el servidor
+(el evento o webhook con firma válida, o la consulta de la transacción o del
+link), nunca por los parámetros de la URL de vuelta: el `?id=` de Wompi solo
+dice QUÉ transacción consultar, y se acredita solo si su referencia, su monto
+en centavos y su moneda son los de la recarga. Acreditar dos veces lo impiden
+el cambio de estado condicional (`UPDATE … WHERE estado IN …`, con el candado
+de escritura tomado antes de leer), `UNIQUE(tipo, recarga_id)` del libro y
+`UNIQUE(pago_id)` (Bold) / `UNIQUE(pasarela_ref)` (Wompi).
 
-Montos: la recarga guarda los USD que eligió la persona en milésimas; lo que
-Bold cobra en pesos (`total_pago`, `moneda_pago`) queda solo como registro."""
+Montos: la recarga guarda los USD que eligió la persona en milésimas, y eso es
+lo que se acredita. Lo que se cobra en pesos queda de registro: Bold en
+`total_pago`/`moneda_pago` al pagarse; Wompi, desde que se crea, los centavos
+de COP en `total_pago` (lo que se compara con la transacción) y la TRM usada
+en `nota` (`trm=<valor>`)."""
+import hashlib
 import json
 import logging
 import os
@@ -18,7 +27,7 @@ import threading
 import time
 import uuid
 from datetime import datetime, timedelta
-from decimal import Decimal, InvalidOperation
+from decimal import ROUND_CEILING, Decimal, InvalidOperation
 from urllib.parse import quote
 
 import sqlalchemy as sa
@@ -28,7 +37,7 @@ import cola
 import cuentas
 import db
 import idiomas
-from cobros import avisos, bold, libro
+from cobros import avisos, bold, libro, pasarela, trm, wompi
 
 log = logging.getLogger(__name__)
 
@@ -46,11 +55,20 @@ TOPE_SIN_FIRMA_HORA = 50
 DIAS_SIN_FIRMA = 30          # la limpieza diaria borra los más viejos
 TOPE_VUELTA_S = 60           # verificar_pendientes no retiene el carril general más que esto
 _reloj = time.monotonic
-_SIN_FIRMA = {"desde": None, "n": 0, "avisado": False}
+_SIN_FIRMA = {"desde": None, "n": 0, "avisado": False}          # Bold
+_SIN_FIRMA_WOMPI = {"desde": None, "n": 0, "avisado": False}    # Wompi: cupo aparte
 _CANDADO_SIN_FIRMA = threading.Lock()
 PROVEEDOR = "bold"
+PROVEEDOR_WOMPI = "wompi"
 MEDIO_BOLD = "Bold"
+MEDIO_WOMPI = "Wompi"
 MEDIO_MANUAL = "manual"
+# Lo que se guarda de la transacción de un evento de Wompi (lista blanca: ni
+# customer_email, ni redirect_url, ni shipping_address).
+CAMPOS_WOMPI = ("id", "reference", "status", "amount_in_cents", "currency", "payment_method_type")
+# Avisos «no cuadra» ya mandados por este proceso (recarga, transacción): la
+# página de vuelta sondea cada 3 s y no debe mandar un correo por sondeo.
+_AVISADOS_NO_CUADRA = set()
 # Estados desde los que un SALE_APPROVED acredita: además de `pendiente`, un
 # `rechazada` (la persona reintentó con otra tarjeta en el mismo link: Bold
 # manda SALE_REJECTED y después SALE_APPROVED) y un `expirada` (el webhook llegó
@@ -118,15 +136,25 @@ def validar_usd(usd):
     return valor
 
 
+def centavos_cop(usd, tasa):
+    """`ceil(usd × trm) × 100` (spec planes §5.1): al peso hacia arriba, en
+    centavos. En Decimal: el float de 50 × 3912.41 no debe subir un peso."""
+    pesos = (Decimal(int(usd)) * Decimal(str(tasa))).to_integral_value(rounding=ROUND_CEILING)
+    return int(pesos) * 100
+
+
 def crear(cliente, usd, usuario, correo=None):
-    """Inserta la recarga `pendiente`, crea el link en Bold y devuelve
-    {"id", "url"} (la url del checkout de Bold). Lanza ValueError (monto o
-    configuración, sin escribir nada) o bold.ErrorBold (la recarga queda
-    `rechazada` con el motivo en `nota`)."""
+    """Inserta la recarga `pendiente` con la pasarela que toque
+    (`pasarela.para_recargas()`: Wompi si tiene sus llaves, si no Bold) y
+    devuelve {"id", "url"} (la url del checkout). Lanza ValueError (monto,
+    configuración o la TRM, sin escribir nada), bold.ErrorBold o
+    wompi.ErrorWompi (la recarga queda `rechazada` con el motivo en `nota`)."""
     usd = validar_usd(usd)
     base = _plataforma_url()
     if not base:
         raise ValueError(gettext("Falta PLATAFORMA_URL en el servidor"))
+    if pasarela.para_recargas() == "wompi":
+        return _crear_wompi(cliente, usd, usuario, correo, base)
     if not bold.configurado():
         raise bold.ErrorBold(gettext("Faltan las llaves de Bold"))
     if bold.pruebas_fuera_de_local():
@@ -159,6 +187,36 @@ def crear(cliente, usd, usuario, correo=None):
         con.execute(db.recarga.update().where(db.recarga.c.id == rid)
                     .values(link_id=link["link_id"], actualizada_en=db.ahora()))
     return {"id": rid, "url": link["url"]}
+
+
+def _crear_wompi(cliente, usd, usuario, correo, base):
+    """La recarga con el Web Checkout de Wompi (spec planes §5.1). La TRM se lee
+    ANTES de escribir: sin tasa no queda ninguna recarga pendiente. La URL del
+    checkout no llama a la red (es una firma local)."""
+    try:
+        tasa = trm.actual()
+    except trm.SinTasa:
+        raise ValueError(gettext("No pudimos leer la tasa de cambio; intenta en unos minutos.")) from None
+    centavos = centavos_cop(usd, tasa)
+    ahora = db.ahora()
+    with db.conectar() as con:   # el INSERT toma el candado; no hay lectura previa
+        rid = int(con.execute(db.recarga.insert().values(
+            cliente=cliente, creada_en=ahora, actualizada_en=ahora, medio="wompi", estado="pendiente",
+            milesimas=usd * 1000, referencia=f"tmp-{uuid.uuid4().hex[:20]}", usuario=usuario,
+            moneda_pago=wompi.MONEDA, total_pago=centavos, nota=f"trm={tasa}",
+        )).inserted_primary_key[0])
+        referencia = f"cv-{rid}-{int(time.time())}"
+        con.execute(db.recarga.update().where(db.recarga.c.id == rid).values(referencia=referencia))
+    try:
+        url = wompi.url_checkout(referencia, centavos, f"{base}/cliente/{quote(cliente, safe='')}/saldo/recarga/{rid}",
+                                 correo=correo or None)
+    except Exception as e:
+        motivo = cola.sin_token(str(e)) if isinstance(e, wompi.ErrorWompi) else type(e).__name__
+        with db.conectar() as con:
+            con.execute(db.recarga.update().where(db.recarga.c.id == rid, db.recarga.c.estado == "pendiente")
+                        .values(estado="rechazada", nota=f"{motivo} · trm={tasa}"[:300], actualizada_en=db.ahora()))
+        raise
+    return {"id": rid, "url": url}
 
 
 # ----------------------------------------------------------------- webhook ---
@@ -226,28 +284,30 @@ def _aplicar(con, tipo, ref, pago_id, data):
     return "anulada", fila
 
 
-def _cupo_sin_firma():
+def _cupo_sin_firma(proveedor=PROVEEDOR):
     """¿Se puede anotar otro evento sin firma? Primero un contador en memoria
     (sin tocar la base: pasado el cupo del proceso, ni el candado), después el
-    global en kv (`cuentas.limite_ok`), que cuenta todos los procesos."""
+    global en kv (`cuentas.limite_ok`), que cuenta todos los procesos. Cada
+    pasarela tiene su cupo (`bold:sinfirma`, `wompi:sinfirma`)."""
+    cupo = _SIN_FIRMA if proveedor == PROVEEDOR else _SIN_FIRMA_WOMPI
     ahora = _reloj()
     with _CANDADO_SIN_FIRMA:
-        if _SIN_FIRMA["desde"] is None or ahora - _SIN_FIRMA["desde"] >= 3600:
-            _SIN_FIRMA.update(desde=ahora, n=0, avisado=False)
-        if _SIN_FIRMA["n"] >= TOPE_SIN_FIRMA_HORA:
-            if not _SIN_FIRMA["avisado"]:
-                _SIN_FIRMA["avisado"] = True
-                log.warning("más de %s eventos de Bold con firma inválida en una hora: no se anotan más",
-                            TOPE_SIN_FIRMA_HORA)
+        if cupo["desde"] is None or ahora - cupo["desde"] >= 3600:
+            cupo.update(desde=ahora, n=0, avisado=False)
+        if cupo["n"] >= TOPE_SIN_FIRMA_HORA:
+            if not cupo["avisado"]:
+                cupo["avisado"] = True
+                log.warning("más de %s eventos de %s con firma inválida en una hora: no se anotan más",
+                            TOPE_SIN_FIRMA_HORA, proveedor)
             return False
-        _SIN_FIRMA["n"] += 1
+        cupo["n"] += 1
     try:
-        if cuentas.limite_ok("bold:sinfirma", TOPE_SIN_FIRMA_HORA, 3600):
+        if cuentas.limite_ok(f"{proveedor}:sinfirma", TOPE_SIN_FIRMA_HORA, 3600):
             return True
     except Exception:  # noqa: BLE001 — sin contador no se anota; la respuesta sigue siendo 401
-        log.exception("no se pudo contar un evento de Bold con firma inválida")
+        log.exception("no se pudo contar un evento de %s con firma inválida", proveedor)
         return False
-    log.warning("cupo global de eventos de Bold con firma inválida agotado: no se anota")
+    log.warning("cupo global de eventos de %s con firma inválida agotado: no se anota", proveedor)
     return False
 
 
@@ -260,7 +320,7 @@ def limpiar_eventos_sin_firma(dias=DIAS_SIN_FIRMA):
         return con.execute(pe.delete().where(pe.c.firma_ok.is_(False), pe.c.recibido_en < limite)).rowcount
 
 
-def _guardar_sin_firma(evento_id, tipo, ref):
+def _guardar_sin_firma(evento_id, tipo, ref, proveedor=PROVEEDOR):
     """Un evento con firma inválida queda anotado, sin el cuerpo. Su evento_id
     propio es único (no el que dice traer): quien mande sin firma el id de un
     evento verdadero no puede hacer que ese llegue después como «duplicado»."""
@@ -268,11 +328,11 @@ def _guardar_sin_firma(evento_id, tipo, ref):
     try:
         with db.conectar() as con:
             con.execute(pe.insert().values(
-                proveedor=PROVEEDOR, evento_id=f"sinfirma:{uuid.uuid4().hex}", tipo=tipo or "?", referencia=ref,
+                proveedor=proveedor, evento_id=f"sinfirma:{uuid.uuid4().hex}", tipo=tipo or "?", referencia=ref,
                 recibido_en=db.ahora(), firma_ok=False, resultado="firma_invalida",
                 cuerpo={"evento_id": evento_id} if evento_id else None))
     except Exception:  # noqa: BLE001 — anotarlo es un extra; la respuesta sigue siendo 401
-        log.exception("no se pudo anotar un evento de Bold con firma inválida")
+        log.exception("no se pudo anotar un evento de %s con firma inválida", proveedor)
 
 
 def procesar_webhook(cuerpo, firma):
@@ -344,33 +404,337 @@ def _avisar_evento(resultado, tipo, ref, fila):
                             "recarga de Creatv. Revísalo en el panel de Bold.", tipo=tipo, ref=ref or "—")))
 
 
+# ------------------------------------------------------------------- Wompi ---
+
+def _cuadra(fila, tx):
+    """¿La transacción es la de esta recarga? Referencia, centavos y moneda
+    contra lo guardado al crearla. La referencia de un evento no siempre va
+    firmada (wompi-api.md §8): por eso se compara y, si no cuadra, se relee."""
+    return (fila is not None and bool(tx.get("id")) and len(str(tx.get("id"))) <= 40
+            and tx.get("reference") == fila["referencia"]
+            and tx.get("amount_in_cents") is not None and tx.get("amount_in_cents") == fila["total_pago"]
+            and tx.get("currency") == wompi.MONEDA)
+
+
+def _ref_de_otra(con, tx_id, rid):
+    r = db.recarga
+    return con.execute(sa.select(r.c.id).where(r.c.pasarela_ref == tx_id, r.c.id != rid)).first() is not None
+
+
+def _por_referencia_wompi(con, ref):
+    if not ref:
+        return None
+    fila = con.execute(sa.select(db.recarga).where(db.recarga.c.medio == "wompi",
+                                                   db.recarga.c.referencia == ref)).first()
+    return dict(fila._mapping) if fila else None
+
+
+def _aplicar_wompi(con, fila, tx):
+    """Aplica una transacción de Wompi a su recarga, con el candado ya tomado
+    (antes de leer `fila`). Devuelve el resultado: `acreditada`, `duplicada`,
+    `rechazada`, `anulada`, `pendiente`, `ignorada` o `no_cuadra` (no se toca
+    nada). APPROVED acredita los USD de la recarga (no los pesos) desde
+    `pendiente`, `rechazada` o `expirada`, una sola vez."""
+    if fila is None:
+        return "sin_recarga"
+    if not _cuadra(fila, tx):
+        return "no_cuadra"
+    r = db.recarga
+    tx_id, status, rid = str(tx["id"]), tx.get("status"), fila["id"]
+    if status == "APPROVED":
+        if fila["estado"] not in ACREDITABLES or _ref_de_otra(con, tx_id, rid):
+            return "duplicada"
+        n = con.execute(r.update().where(r.c.id == rid, r.c.estado.in_(ACREDITABLES)).values(
+            estado="aprobada", pasarela_ref=tx_id, moneda_pago=wompi.MONEDA,
+            medio_pago=str(tx.get("payment_method_type") or "")[:20] or None, actualizada_en=db.ahora())).rowcount
+        if n != 1:
+            return "duplicada"
+        libro.acreditar(con, fila["cliente"], "recarga", fila["milesimas"], "recarga_wompi", recarga_id=rid)
+        return "acreditada"
+    if _ref_de_otra(con, tx_id, rid):
+        return "ignorada"
+    if status in ("DECLINED", "ERROR"):
+        n = con.execute(r.update().where(r.c.id == rid, r.c.estado == "pendiente")
+                        .values(estado="rechazada", pasarela_ref=tx_id, actualizada_en=db.ahora())).rowcount
+        return "rechazada" if n == 1 else "ignorada"
+    if status == "VOIDED":
+        n = con.execute(r.update().where(r.c.id == rid, r.c.estado == "aprobada", r.c.pasarela_ref == tx_id)
+                        .values(estado="anulada", actualizada_en=db.ahora())).rowcount
+        if n != 1:
+            return "ignorada"
+        libro.acreditar(con, fila["cliente"], "anulacion", -fila["milesimas"], "anulacion_wompi", recarga_id=rid)
+        return "anulada"
+    if status == "PENDING":
+        # Se guarda cuál es su transacción: la periódica la consulta aunque no vuelva nadie.
+        con.execute(r.update().where(r.c.id == rid, r.c.estado == "pendiente", r.c.pasarela_ref.is_(None))
+                    .values(pasarela_ref=tx_id, actualizada_en=db.ahora()))
+        return "pendiente"
+    return "ignorada"
+
+
+def _avisar_no_cuadra(rid, cliente, referencia, tx, origen):
+    """Al admin, una vez por (recarga, transacción) en este proceso: algo dijo
+    que una transacción de Wompi es de una recarga y no cuadra."""
+    clave = (rid, str(tx.get("id") or ""), origen)
+    if clave in _AVISADOS_NO_CUADRA:
+        return
+    if len(_AVISADOS_NO_CUADRA) > 1000:
+        _AVISADOS_NO_CUADRA.clear()
+    _AVISADOS_NO_CUADRA.add(clave)
+    tx_ref, tx_id = str(tx.get("reference") or "—")[:60], str(tx.get("id") or "—")[:64]
+    log.warning("transacción de Wompi %s no cuadra con la recarga %s (%s)", tx_id, rid, origen)
+    _en_segundo_plano(lambda: avisos.admin(
+        "wompi_no_cuadra",
+        lambda: gettext("Un pago de Wompi no cuadra con su recarga"),
+        lambda: gettext("La transacción %(tx)s de Wompi (referencia «%(ref_tx)s») llegó para la recarga "
+                        "«%(ref)s», pero su referencia, su monto o su moneda no son los de la recarga. No se "
+                        "acreditó nada; revísalo en el panel de Wompi.", tx=tx_id, ref_tx=tx_ref, ref=referencia or "—"),
+        cliente=cliente or ""))
+
+
+def _avisar_wompi(resultado, fila, tx):
+    if fila is None:
+        if resultado == "sin_recarga" and tx.get("status") in ("APPROVED", "VOIDED"):
+            ref = str(tx.get("reference") or "—")[:60]
+            _en_segundo_plano(lambda: avisos.admin(
+                "pago_sin_recarga",
+                lambda: gettext("Un pago de Wompi no corresponde a ninguna recarga"),
+                lambda: gettext("Llegó una transacción de Wompi con la referencia «%(ref)s», que no es de ninguna "
+                                "recarga de Creatv. Revísalo en el panel de Wompi.", ref=ref)))
+        return
+    if resultado == "acreditada":
+        _avisar_acreditada(fila["cliente"], fila["milesimas"], MEDIO_WOMPI)
+    elif resultado == "anulada":
+        cliente, milesimas, referencia = fila["cliente"], fila["milesimas"], fila["referencia"]
+        _en_segundo_plano(lambda: avisos.admin(
+            "anulacion_wompi",
+            lambda: gettext("Wompi anuló una recarga de %(cliente)s", cliente=cliente),
+            lambda: gettext("Wompi anuló la recarga %(ref)s de %(cliente)s: descontamos %(monto)s de su saldo.",
+                            ref=referencia, cliente=cliente, monto=_monto(milesimas)),
+            cliente=cliente))
+
+
+def _evento_id_wompi(cuerpo):
+    """Wompi no manda un id de evento: el sha256 del cuerpo crudo (spec §5.3)."""
+    return hashlib.sha256(cuerpo).hexdigest()
+
+
+def _guardado_wompi(ev, tx):
+    return {"event": str(ev.get("event") or "")[:40], "sent_at": str(ev.get("sent_at") or "")[:40],
+            "transaction": {k: tx.get(k) for k in CAMPOS_WOMPI}}
+
+
+def _es_duplicado(evento_id):
+    pe = db.pago_evento
+    with db.conectar() as con:
+        return con.execute(sa.select(pe.c.id).where(pe.c.proveedor == PROVEEDOR_WOMPI,
+                                                    pe.c.evento_id == evento_id)).first() is not None
+
+
+def _anotar_wompi(evento_id, tipo, ref, guardado, resultado):
+    """Un evento firmado que no toca una recarga (otro tipo, de un plan, ajeno).
+    Devuelve False si otro proceso ya lo anotó (UNIQUE)."""
+    try:
+        with db.conectar() as con:
+            con.execute(db.pago_evento.insert().values(
+                proveedor=PROVEEDOR_WOMPI, evento_id=evento_id, tipo=tipo, referencia=ref, recibido_en=db.ahora(),
+                firma_ok=True, resultado=str(resultado or "ignorada")[:40], cuerpo=guardado))
+    except sa.exc.IntegrityError:
+        return False
+    return True
+
+
+def _plan_de_evento(tx):
+    """El gancho del pago de un plan (`pl-…`): `planes.aplicar_transaccion` si
+    existe (planes 5/8); si no, el evento se anota como ignorado."""
+    from cobros import planes  # noqa: PLC0415 — planes importa libro, que no importa recargas
+    aplicar = getattr(planes, "aplicar_transaccion", None)
+    if aplicar is None:
+        return "ignorada"
+    return str(aplicar(dict(tx)) or "ignorada")[:40]
+
+
+def procesar_evento_wompi(cuerpo, checksum=None):
+    """`POST /pagos/wompi/eventos` (spec planes §5.3): el cuerpo crudo y la
+    cabecera X-Event-Checksum. Devuelve (status HTTP, resultado): 200 para
+    todo evento con firma válida que se pudo anotar (también los repetidos y
+    los ajenos: Wompi reintenta todo lo que no sea exactamente 200), 401 con
+    firma inválida, 400/413 para un cuerpo inválido y 500 si algo falló sin
+    escribir nada (la base, o Wompi caído al releer una transacción que no
+    cuadra): Wompi reintenta a los 30 min, 3 h y 24 h.
+
+    `transaction.updated` con referencia `cv-` → recarga: si la referencia, los
+    centavos o la moneda no son los de la recarga guardada, se relee la
+    transacción en Wompi y solo vale esa (y se avisa al admin). `pl-` → el pago
+    de un plan (`planes.aplicar_transaccion`)."""
+    cuerpo = cuerpo or b""
+    if len(cuerpo) > MAX_CUERPO:
+        return 413, "invalido"
+    try:
+        ev = json.loads(cuerpo.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError, RecursionError):   # RecursionError: «[[[[…» anidado sin fin
+        return 400, "invalido"
+    if not isinstance(ev, dict):
+        return 400, "invalido"
+    tipo = str(ev.get("event") or "")[:24]
+    data = _dict(ev.get("data"))
+    tx = wompi.normalizar(data.get("transaction"))
+    ref = (tx.get("reference") or "")[:60] or None
+    if not wompi.evento_valido(ev, checksum):
+        if _cupo_sin_firma(PROVEEDOR_WOMPI):
+            _guardar_sin_firma(None, tipo, ref, proveedor=PROVEEDOR_WOMPI)
+        return 401, "firma_invalida"
+    evento_id = _evento_id_wompi(cuerpo)
+    try:
+        if _es_duplicado(evento_id):
+            return 200, "duplicada"
+        if tipo != "transaction.updated" or not ref or not ref.startswith(("cv-", "pl-")):
+            ok = _anotar_wompi(evento_id, tipo, ref, _guardado_wompi(ev, tx), "ignorada")
+            return 200, ("ignorada" if ok else "duplicada")
+        if ref.startswith("pl-"):
+            resultado = _plan_de_evento(tx)
+            ok = _anotar_wompi(evento_id, tipo, ref, _guardado_wompi(ev, tx), resultado)
+            return 200, (resultado if ok else "duplicada")
+        return _evento_recarga_wompi(evento_id, tipo, ev, tx)
+    except Exception:  # noqa: BLE001 — 500: nada quedó escrito y Wompi reintenta
+        log.exception("no se pudo procesar el evento de Wompi (%s)", tipo)
+        return 500, "error"
+
+
+# Lo que tiene que ir firmado en un evento para creerle sin releer la
+# transacción cuando mueve plata (APPROVED, VOIDED). Wompi firma por defecto
+# id, status y amount_in_cents (wompi-api.md §8): la referencia y la moneda
+# casi nunca, y un evento verdadero con la referencia cambiada (que no rompe la
+# firma) acreditaría la recarga de otro por el mismo monto.
+_FIRMADO_PARA_CREER = frozenset(("transaction.id", "transaction.status", "transaction.reference",
+                                 "transaction.amount_in_cents", "transaction.currency"))
+
+
+def _hay_que_releer(ev, fila, tx):
+    if not _cuadra(fila, tx):
+        return True
+    if tx.get("status") not in ("APPROVED", "VOIDED"):
+        return False   # rechazar o anotar «pendiente» no mueve plata (una rechazada sigue acreditable)
+    propiedades = _dict(ev.get("signature")).get("properties")
+    firmadas = {p for p in propiedades if isinstance(p, str)} if isinstance(propiedades, list) else set()
+    return not _FIRMADO_PARA_CREER <= firmadas
+
+
+def _evento_recarga_wompi(evento_id, tipo, ev, tx):
+    """`transaction.updated` de una recarga (`cv-`). Primero, sin candado,
+    se mira si el evento cuadra con la recarga de su referencia; si no
+    cuadra, o si mueve plata y su referencia y su moneda no van firmadas, se
+    relee la transacción en Wompi (fuera de toda transacción de la base) y
+    solo vale lo releído. Después, con el candado tomado antes de leer, se
+    anota el evento y se aplica."""
+    with db.conectar() as con:
+        fila_evento = _por_referencia_wompi(con, tx.get("reference"))
+    fiable, releido = tx, _hay_que_releer(ev, fila_evento, tx)
+    if releido:
+        try:
+            fiable = wompi.transaccion(str(tx.get("id") or ""), tiempo=wompi.TIEMPO_INTERACTIVO)
+        except wompi.ErrorWompi as e:
+            if e.caida or e.codigo == 429:
+                log.warning("Wompi no responde al releer la transacción de un evento: se reintentará")
+                return 500, "error"
+            fiable = None   # la transacción no existe o es inválida: no se aplica nada
+    pe = db.pago_evento
+    try:
+        with db.conectar() as con:
+            libro._candado(con)   # antes de leer: el evento, la vuelta y la periódica a la vez no pasan las tres
+            if con.execute(sa.select(pe.c.id).where(pe.c.proveedor == PROVEEDOR_WOMPI,
+                                                    pe.c.evento_id == evento_id)).first():
+                return 200, "duplicada"
+            eid = con.execute(pe.insert().values(
+                proveedor=PROVEEDOR_WOMPI, evento_id=evento_id, tipo=tipo, referencia=(tx.get("reference") or "")[:60],
+                recibido_en=db.ahora(), firma_ok=True, resultado="recibido",
+                cuerpo=_guardado_wompi(ev, tx))).inserted_primary_key[0]
+            if fiable is None:
+                resultado, fila = "no_cuadra", None
+            else:
+                fila = _por_referencia_wompi(con, fiable.get("reference"))
+                resultado = _aplicar_wompi(con, fila, fiable)
+            con.execute(pe.update().where(pe.c.id == eid).values(resultado=resultado))
+    except sa.exc.IntegrityError:
+        log.info("evento de Wompi ya procesado por otro proceso")
+        return 200, "duplicada"
+    if releido:
+        if resultado == "sin_recarga" and fila_evento is None:
+            # Ni el evento ni Wompi hablan de una recarga nuestra.
+            _avisar_wompi(resultado, None, fiable)
+        elif resultado in ("no_cuadra", "sin_recarga") or _distinta(tx, fiable):
+            # El evento decía otra cosa que Wompi, o nada cuadra con lo guardado: al admin.
+            destino = fila or fila_evento or {"id": None, "cliente": "", "referencia": tx.get("reference")}
+            _avisar_no_cuadra(destino["id"], destino["cliente"], destino["referencia"], fiable or tx, "evento")
+    if fila is not None:
+        _avisar_wompi(resultado, fila, fiable)
+    return 200, resultado
+
+
+def _distinta(a, b):
+    return any(a.get(k) != b.get(k) for k in ("id", "reference", "status", "amount_in_cents", "currency"))
+
+
 # ----------------------------------------------------- verificar (respaldo) ---
 
 def _limite_vigente():
     return (datetime.now() - timedelta(hours=HORAS_VIGENTE)).isoformat(timespec="seconds")
 
 
-def consultable(recarga):
-    """¿Vale preguntarle a Bold por el link de esta recarga? Una `pendiente`
+def consultable(recarga, transaccion_id=None):
+    """¿Vale preguntarle a la pasarela por esta recarga? Bold: una `pendiente`
     con link siempre; una `rechazada` o `expirada` con link de menos de
     HORAS_VIGENTE también: la persona pudo reintentar y pagar en el mismo link
     sin que llegara el SALE_APPROVED (ruling de la tarea 7, completado en la
-    revisión final 2026-10-08). Solo lee el dict."""
-    if not recarga or recarga.get("medio") != "bold" or not recarga.get("link_id"):
+    revisión final 2026-10-08). Wompi: lo mismo, con una transacción que
+    consultar (la guardada o el `?id=` de la vuelta, `transaccion_id`). Solo
+    lee el dict."""
+    if not recarga:
+        return False
+    if recarga.get("medio") == "wompi":
+        if not (recarga.get("pasarela_ref") or wompi.id_valido(transaccion_id)):
+            return False
+    elif recarga.get("medio") != "bold" or not recarga.get("link_id"):
         return False
     if recarga.get("estado") == "pendiente":
         return True
     return recarga.get("estado") in ("rechazada", "expirada") and str(recarga.get("creada_en") or "") >= _limite_vigente()
 
 
-def _verificar(recarga_id, tiempo=bold.TIEMPO):
-    """(estado, error): error = el ErrorBold si Bold no respondió, o None."""
+def _verificar_wompi(fila, tiempo, transaccion_id):
+    """La vuelta del checkout, el botón «Verificar» y la periódica para una
+    recarga de Wompi: consulta la transacción (el `?id=` de la vuelta o la
+    guardada) y la aplica solo si cuadra. (estado, error)."""
+    tx_id = transaccion_id if wompi.id_valido(transaccion_id) else fila["pasarela_ref"]
+    try:
+        tx = wompi.transaccion(tx_id, tiempo=wompi.TIEMPO if tiempo is None else tiempo)
+    except wompi.ErrorWompi as e:
+        log.warning("no se pudo verificar la recarga %s con Wompi: %s", fila["id"], cola.sin_token(str(e)))
+        return fila["estado"], e
+    with db.conectar() as con:
+        libro._candado(con)   # antes de leer: la vuelta y el evento a la vez acreditan una sola vez
+        actual = _fila(con, fila["id"])
+        resultado = _aplicar_wompi(con, actual, tx)
+    if resultado == "no_cuadra":
+        _avisar_no_cuadra(fila["id"], fila["cliente"], fila["referencia"], tx, "consulta")
+    else:
+        _avisar_wompi(resultado, actual, tx)
+    with db.conectar() as con:
+        return (_fila(con, fila["id"]) or {}).get("estado"), None
+
+
+def _verificar(recarga_id, tiempo=None, transaccion_id=None):
+    """(estado, error): error = el ErrorBold/ErrorWompi si la pasarela no
+    respondió, o None. `tiempo` None = la espera larga de cada pasarela."""
     with db.conectar() as con:
         fila = _fila(con, recarga_id)
     if fila is None:
         return None, None
-    if not consultable(fila):
+    if not consultable(fila, transaccion_id):
         return fila["estado"], None
+    if fila["medio"] == "wompi":
+        return _verificar_wompi(fila, tiempo, transaccion_id)
+    tiempo = bold.TIEMPO if tiempo is None else tiempo
     try:
         est = bold.estado_link(fila["link_id"], tiempo=tiempo)
     except bold.ErrorBold as e:
@@ -407,18 +771,23 @@ def _verificar(recarga_id, tiempo=bold.TIEMPO):
         return (_fila(con, recarga_id) or {}).get("estado"), None
 
 
-def verificar(recarga_id, tiempo=bold.TIEMPO):
-    """Pregunta a Bold por el link de una recarga `consultable` (pendiente, o
-    rechazada/expirada de menos de HORAS_VIGENTE) y aplica lo que diga: PAID acredita (mismo cambio condicional que el webhook, así que
-    correr los dos no acredita dos veces), EXPIRED la vence. Con Bold caído la
-    deja pendiente. Devuelve el estado (None si la recarga no existe).
-    `tiempo`: la espera de la consulta; la página pasa bold.TIEMPO_INTERACTIVO."""
-    return _verificar(recarga_id, tiempo=tiempo)[0]
+def verificar(recarga_id, tiempo=None, transaccion_id=None):
+    """Pregunta a la pasarela por una recarga `consultable` (pendiente, o
+    rechazada/expirada de menos de HORAS_VIGENTE) y aplica lo que diga. Bold:
+    PAID acredita (mismo cambio condicional que el webhook, así que correr los
+    dos no acredita dos veces), EXPIRED la vence. Wompi: la transacción
+    (`transaccion_id`, el `?id=` de la vuelta, o la guardada) acredita con
+    APPROVED si su referencia, sus centavos y su moneda son los de la recarga.
+    Con la pasarela caída la deja como estaba. Devuelve el estado (None si la
+    recarga no existe). `tiempo`: la espera de la consulta (None = la larga de
+    cada pasarela); la página pasa el TIEMPO_INTERACTIVO de la suya."""
+    return _verificar(recarga_id, tiempo=tiempo, transaccion_id=transaccion_id)[0]
 
 
 def verificar_pendientes():
-    """La tarea periódica: consulta cada recarga `bold/pendiente` y vence las
-    de más de HORAS_VIGENTE que Bold no dio por pagadas. Una vieja se consulta
+    """La tarea periódica: consulta cada recarga pendiente (de Bold, o de Wompi
+    con transacción conocida) y vence las de más de HORAS_VIGENTE que la
+    pasarela no dio por pagadas. Una vieja se consulta
     una última vez antes de vencerla (el pago pudo entrar sin que llegara el
     webhook) y, si Bold no responde, se deja para la próxima vuelta.
 
@@ -432,10 +801,19 @@ def verificar_pendientes():
     # pago pudo entrar en el mismo link sin que llegara el webhook (revisión
     # final 2026-10-08). Esas se consultan, nunca se vencen ni se tocan si Bold
     # no dice PAID.
+    # Wompi (planes 4/8): las pendientes (con transacción conocida se consultan;
+    # sin ella, solo se vencen pasadas HORAS_VIGENTE: el evento tardío igual
+    # acredita desde `expirada`) y las rechazadas/vencidas recientes con transacción.
     with db.conectar() as con:
-        filas = con.execute(sa.select(r.c.id, r.c.creada_en, r.c.estado).where(r.c.medio == "bold", sa.or_(
-            r.c.estado == "pendiente",
-            sa.and_(r.c.estado.in_(("rechazada", "expirada")), r.c.link_id.is_not(None), r.c.creada_en >= limite)))
+        filas = con.execute(sa.select(r.c.id, r.c.creada_en, r.c.estado, r.c.medio).where(sa.or_(
+            sa.and_(r.c.medio == "bold", sa.or_(
+                r.c.estado == "pendiente",
+                sa.and_(r.c.estado.in_(("rechazada", "expirada")), r.c.link_id.is_not(None),
+                        r.c.creada_en >= limite))),
+            sa.and_(r.c.medio == "wompi", sa.or_(
+                r.c.estado == "pendiente",
+                sa.and_(r.c.estado.in_(("rechazada", "expirada")), r.c.pasarela_ref.is_not(None),
+                        r.c.creada_en >= limite)))))
             .order_by(r.c.id)).all()
     revisadas = 0
     inicio = _reloj()
@@ -448,8 +826,8 @@ def verificar_pendientes():
         except Exception:  # noqa: BLE001 — una recarga rara no frena las demás
             log.exception("no se pudo verificar la recarga %s", fila.id)
             continue
-        if error is not None and error.caida:
-            log.warning("verificar recargas: Bold no responde; la vuelta para aquí")
+        if error is not None and (error.caida or getattr(error, "codigo", None) == 429):
+            log.warning("verificar recargas: %s no responde; la vuelta para aquí", fila.medio)
             break
         revisadas += 1
         if fila.estado == "pendiente" and estado == "pendiente" and error is None and str(fila.creada_en) < limite:

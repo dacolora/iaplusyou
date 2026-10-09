@@ -4,10 +4,11 @@
 - Las de /cliente/<cliente>/saldo/… las protegen los guards de la app: la
   sesión (`_verificar_sesion`), el proyecto de la URL (`_guard_por_cliente`) y
   la barrera CSRF (`_solo_mismo_origen`) en los POST.
-- `POST /pagos/bold/webhook` es el ÚNICO POST de la app que acepta otro origen
-  y no lleva sesión: dashboard lo exime por nombre de endpoint
-  (`ENDPOINTS_OTRO_ORIGEN`, `ENDPOINTS_SIN_GUARD_SESION`). Lo protege la firma
-  HMAC de Bold (`recargas.procesar_webhook`) y responde sin cuerpo.
+- `POST /pagos/bold/webhook` y `POST /pagos/wompi/eventos` son los ÚNICOS POST
+  de la app que aceptan otro origen y no llevan sesión: dashboard los exime por
+  nombre de endpoint (`ENDPOINTS_OTRO_ORIGEN`, `ENDPOINTS_SIN_GUARD_SESION`).
+  Los protege la firma de cada pasarela (`recargas.procesar_webhook`,
+  `recargas.procesar_evento_wompi`) y responden sin cuerpo.
 - Las de /admin/cobros (spec §10) son solo del admin (`_solo_admin`, la misma
   regla que `dashboard.requiere_admin`) y sus POST pasan por la barrera CSRF.
   Escriben a través de `libro.configurar`, `libro.guardar_margen_global` y
@@ -30,7 +31,7 @@ import gastos
 import idiomas
 import proyectos
 import usuarios
-from cobros import bold, libro, recargas, vista
+from cobros import bold, libro, pasarela, recargas, vista, wompi
 
 bp = Blueprint("cobros", __name__)
 
@@ -66,10 +67,17 @@ def _toca_verificar(recarga_id):
         return True
 
 
-def _verificar_si_toca(recarga):
-    """Pregunta a Bold si toca y hay cupo; si no, devuelve la recarga tal cual."""
+def _id_vuelta():
+    """El `?id=` que agrega Wompi a la vuelta del checkout, solo si tiene forma
+    de id de transacción (lo escribe quien sea: solo dice QUÉ consultar)."""
+    valor = request.values.get("id")
+    return valor if wompi.id_valido(valor) else None
+
+
+def _verificar_si_toca(recarga, transaccion_id=None):
+    """Pregunta a la pasarela si toca y hay cupo; si no, devuelve la recarga tal cual."""
     rid = recarga["id"]
-    if not recargas.consultable(recarga):   # pendiente, o rechazada/vencida de menos de 26 h
+    if not recargas.consultable(recarga, transaccion_id):   # pendiente, o rechazada/vencida de menos de 26 h
         return recarga
     with _CANDADO:
         if rid in _EN_CURSO:
@@ -84,7 +92,8 @@ def _verificar_si_toca(recarga):
                 return recarga
             _EN_CURSO.add(rid)
         try:
-            recargas.verificar(rid, tiempo=bold.TIEMPO_INTERACTIVO)
+            tiempo = wompi.TIEMPO_INTERACTIVO if recarga.get("medio") == "wompi" else bold.TIEMPO_INTERACTIVO
+            recargas.verificar(rid, tiempo=tiempo, transaccion_id=transaccion_id)
         finally:
             with _CANDADO:
                 _EN_CURSO.discard(rid)
@@ -96,13 +105,20 @@ def _verificar_si_toca(recarga):
 def texto_estado(recarga):
     """La frase de la página de vuelta (spec §9.4), en el idioma de quien mira."""
     estado = recarga["estado"]
+    es_wompi = recarga.get("medio") == "wompi"
     if estado == "aprobada":
         return gettext("Listo: sumamos %(monto)s a tu saldo.", monto=gastos.formatear(recarga["milesimas"] / 1000))
     if estado == "rechazada":
+        if es_wompi:
+            return gettext("Wompi rechazó el pago. No se te cobró nada.")
         return gettext("Bold rechazó el pago. No se te cobró nada.")
     if estado == "expirada":
+        if es_wompi:
+            return gettext("El pago no se completó a tiempo.")
         return gettext("El link de pago venció sin pagarse.")
     if estado == "anulada":
+        if es_wompi:
+            return gettext("Wompi anuló este pago y lo descontamos de tu saldo.")
         return gettext("Bold anuló este pago y lo descontamos de tu saldo.")
     return gettext("Verificando tu pago…")
 
@@ -126,7 +142,7 @@ def saldo_panel(cliente):
     return render_template("_saldo_panel.html", cliente=cliente, e=e, tono=vista.tono(e),
                            movs=vista.movimientos(cliente), pagina=1, recargas=lista,
                            consultables={r["id"] for r in lista if recargas.consultable(r)},
-                           estados_recarga=vista.ESTADOS_RECARGA, bold_ok=bold.configurado(),
+                           estados_recarga=vista.ESTADOS_RECARGA, pasarela=pasarela.para_recargas(),
                            min_usd=recargas.MIN_USD, max_usd=recargas.MAX_USD, solo_filas=False)
 
 
@@ -154,12 +170,13 @@ def saldo_movimientos_csv(cliente):
 
 @bp.post("/cliente/<cliente>/saldo/recargar")
 def recargar(cliente):
-    """Crea la recarga y manda a la persona al checkout de Bold. El monto lo
-    valida el servidor; nada se acredita aquí."""
+    """Crea la recarga y manda a la persona al checkout de la pasarela (Wompi
+    si tiene sus llaves, si no Bold). El monto lo valida el servidor; nada se
+    acredita aquí."""
     if not (libro.cobra(cliente) or session.get("rol") == "admin"):
         flash(gettext("Este proyecto no usa saldo prepagado."), "error")
         return _volver(cliente)
-    if not bold.configurado():
+    if pasarela.para_recargas() is None:
         flash(gettext("Las recargas en línea todavía no están disponibles; escríbenos para recargar."), "error")
         return _volver(cliente)
     try:
@@ -182,18 +199,29 @@ def recargar(cliente):
         flash(gettext("Bold no pudo abrir el pago: %(motivo)s. Intenta de nuevo en un rato.",
                       motivo=cola.sin_token(str(e))), "error")
         return _volver(cliente)
-    return redirect(r["url"])   # checkout.bold.co (bold.crear_link lo comprueba)
+    except wompi.ErrorWompi as e:
+        flash(gettext("Wompi no pudo abrir el pago: %(motivo)s. Intenta de nuevo en un rato.",
+                      motivo=cola.sin_token(str(e))), "error")
+        return _volver(cliente)
+    return redirect(r["url"])   # checkout.bold.co (bold.crear_link lo comprueba) o wompi.CHECKOUT
 
 
 @bp.get("/cliente/<cliente>/saldo/recarga/<int:rid>")
 def recarga_vuelta(cliente, rid):
-    """La vuelta del checkout. Nunca acredita, ni lee los parámetros que Bold
-    agrega a la URL (bold-tx-status…): el estado lo da el servidor de Bold."""
+    """La vuelta del checkout. Bold: nunca acredita ni lee los parámetros que
+    Bold agrega a la URL (bold-tx-status…); el estado lo da su servidor (el
+    sondeo de /estado). Wompi vuelve con `?id=<transacción>`: se consulta esa
+    transacción en Wompi (bajo el mismo cupo y la misma consulta en vuelo que
+    el sondeo) y solo se acredita si su referencia, sus centavos y su moneda
+    son los de la recarga y está APPROVED; el `id` sigue en el sondeo."""
     recarga = recargas.obtener(cliente, rid)
     if recarga is None:
         abort(404)
+    tx_id = _id_vuelta() if recarga["medio"] == "wompi" else None
+    if tx_id:
+        recarga = _verificar_si_toca(recarga, tx_id)
     return render_template("saldo_recarga.html", cliente=cliente, recarga=recarga, texto=texto_estado(recarga),
-                           consultable=recargas.consultable(recarga))
+                           consultable=recargas.consultable(recarga, tx_id), tx_id=tx_id)
 
 
 @bp.get("/cliente/<cliente>/saldo/recarga/<int:rid>/estado")
@@ -201,7 +229,7 @@ def recarga_estado(cliente, rid):
     recarga = recargas.obtener(cliente, rid)
     if recarga is None:
         abort(404)
-    recarga = _verificar_si_toca(recarga)
+    recarga = _verificar_si_toca(recarga, _id_vuelta() if recarga["medio"] == "wompi" else None)
     return jsonify({"estado": recarga["estado"], "texto": texto_estado(recarga),
                     "saldo_texto": gastos.formatear(libro.saldo(cliente) / 1000)})
 
@@ -211,7 +239,7 @@ def recarga_verificar(cliente, rid):
     recarga = recargas.obtener(cliente, rid)
     if recarga is None:
         abort(404)
-    recarga = _verificar_si_toca(recarga)
+    recarga = _verificar_si_toca(recarga, _id_vuelta() if recarga["medio"] == "wompi" else None)
     flash(texto_estado(recarga), "ok" if recarga["estado"] in ("aprobada", "pendiente") else "error")
     return _volver(cliente)
 
@@ -227,6 +255,22 @@ def bold_webhook():
     if len(cuerpo) > recargas.MAX_CUERPO:
         return "", 413
     status, _resultado = recargas.procesar_webhook(cuerpo, request.headers.get("x-bold-signature"))
+    return "", status
+
+
+@bp.post("/pagos/wompi/eventos")
+def wompi_eventos():
+    """Wompi avisa una transacción (spec planes §5.3). Cuerpo crudo con tope de
+    64 KB (por Content-Length antes de leer y por lo leído después), firma de
+    eventos verificada en recargas, respuesta sin cuerpo: exactamente 200 a
+    todo evento firmado (Wompi reintenta cualquier otro código), 401 sin firma,
+    400 cuerpo inválido, 413 demasiado grande."""
+    if (request.content_length or 0) > recargas.MAX_CUERPO:
+        return "", 413
+    cuerpo = request.get_data(cache=False, as_text=False)
+    if len(cuerpo) > recargas.MAX_CUERPO:
+        return "", 413
+    status, _resultado = recargas.procesar_evento_wompi(cuerpo, request.headers.get("X-Event-Checksum"))
     return "", status
 
 

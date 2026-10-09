@@ -33,6 +33,8 @@ CONCEPTOS = {
     "recarga_manual": N_("Recarga"),
     "ajuste": N_("Ajuste"),
     "anulacion_bold": N_("Pago anulado por Bold"),
+    "recarga_wompi": N_("Recarga con Wompi"),
+    "anulacion_wompi": N_("Pago anulado por Wompi"),
 }
 ESTADOS_RECARGA = {
     "pendiente": N_("Pendiente"), "aprobada": N_("Aprobada"), "rechazada": N_("Rechazada"),
@@ -488,6 +490,7 @@ RESULTADOS_EVENTO = {
     "acreditada": N_("Acreditada"), "duplicada": N_("Repetido"), "sin_recarga": N_("Sin recarga"),
     "rechazada": N_("Rechazada"), "anulada": N_("Anulada"), "ignorada": N_("Ignorado"),
     "recibido": N_("Recibido"), "error": N_("Error"),
+    "no_cuadra": N_("No cuadra"), "pendiente": N_("Pendiente"),
 }
 
 

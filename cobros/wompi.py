@@ -361,10 +361,23 @@ def aceptaciones(tiempo=TIEMPO):
 
 # ------------------------------------------------------- transacciones ---
 
+def id_valido(transaccion_id):
+    """¿Tiene forma de id de transacción de Wompi («1292-1602113476-10985»)?
+    Para el `?id=` que agrega Wompi a la vuelta del checkout (lo escribe quien
+    sea): solo con esto se consulta."""
+    return isinstance(transaccion_id, str) and len(transaccion_id) <= 64 and bool(_TX_ID.fullmatch(transaccion_id))
+
+
+def normalizar(datos):
+    """La transacción de un evento (`data.transaction`) con la misma forma que
+    devuelve `transaccion()`; un dict vacío si no es un objeto."""
+    return _transaccion(datos if isinstance(datos, dict) else {})
+
+
 def transaccion(transaccion_id, tiempo=TIEMPO):
     """`GET /transactions/<id>` con la llave privada: la verdad sobre un pago
     (la vuelta del checkout nunca acredita sin esto)."""
-    if not isinstance(transaccion_id, str) or len(transaccion_id) > 64 or not _TX_ID.fullmatch(transaccion_id):
+    if not id_valido(transaccion_id):
         raise ErrorWompi(gettext("Identificador de transacción inválido"))
     d = _pedir("get", f"/transactions/{transaccion_id}", llave=_privada(), tiempo=tiempo)
     return _transaccion(d)

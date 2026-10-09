@@ -30,7 +30,8 @@ if SMTP is missing the flows still work and the admin panel shows the warning.
 **Seguridad (auditoría 2026-10-01)**: reglas que valen para todo lo nuevo. (1) CSRF: `dashboard._solo_mismo_origen`
 (before_request de la app, corre también para los Blueprints) rechaza todo POST/PUT/PATCH/DELETE que el navegador marque
 de otro sitio (`Sec-Fetch-Site` distinto de `same-origin`/`none`; JSON a un fetch, 403 al resto); desde el 2026-10-08
-(cobros 7/11) la app recibe UN webhook, el de Bold (`POST /pagos/bold/webhook`): exento por nombre de endpoint en
+(cobros 7/11; planes 4/8, 2026-10-09) la app recibe DOS webhooks, el de Bold (`POST /pagos/bold/webhook`) y los eventos de Wompi
+(`POST /pagos/wompi/eventos`, firma `cobros.wompi.evento_valido`, ver la skill `cobros`): exentos por nombre de endpoint en
 `dashboard.ENDPOINTS_OTRO_ORIGEN` y `ENDPOINTS_SIN_GUARD_SESION`, protegido por su firma HMAC (`cobros.bold.firma_valida`,
 `compare_digest`) sobre el cuerpo crudo con tope de 64 KB; un evento con firma inválida se anota sin cuerpo y con cupo por hora (`recargas._cupo_sin_firma`), para que nadie infle `pago_evento` ni compita por el candado de escritura; otro webhook nuevo necesita lo mismo: su excepción por nombre exacto de endpoint (nunca por prefijo) Y su firma. Detalle y trampas en la skill `cobros`. (2) Cabeceras:
 `_cabeceras_seguridad` pone `nosniff`, `X-Frame-Options: DENY`, una CSP que solo cierra `frame-ancestors`/`object-src`/

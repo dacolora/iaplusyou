@@ -409,6 +409,10 @@ msgid "%(monto)s con Bold"
 msgstr "%(monto)s with Bold"
 
 #, python-format
+msgid "%(monto)s con Wompi"
+msgstr "%(monto)s with Wompi"
+
+#, python-format
 msgid "%(monto)s generación"
 msgstr "%(monto)s generation"
 
@@ -5767,6 +5771,9 @@ msgstr "The reference target must be a whole number."
 msgid "El objetivo de referencias no puede pasar de %(n)s."
 msgstr "The reference target can't exceed %(n)s."
 
+msgid "El pago no se completó a tiempo."
+msgstr "The payment was not completed in time."
+
 #, python-format
 msgid "El país %(pais)s quedó sin piezas: quita el país o marca una pieza para él."
 msgstr "The country %(pais)s was left without pieces: remove the country or select a piece for it."
@@ -9836,6 +9843,10 @@ msgstr "The store has no saved credentials. Connect it again."
 msgid "La tienda «%(nombre)s» dejó de sincronizar"
 msgstr "The store “%(nombre)s” stopped syncing"
 
+#, python-format
+msgid "La transacción %(tx)s de Wompi (referencia «%(ref_tx)s») llegó para la recarga «%(ref)s», pero su referencia, su monto o su moneda no son los de la recarga. No se acreditó nada; revísalo en el panel de Wompi."
+msgstr "Wompi transaction %(tx)s (reference “%(ref_tx)s”) arrived for top-up “%(ref)s”, but its reference, amount or currency do not match the top-up. Nothing was credited; check it in the Wompi dashboard."
+
 #, python-brace-format
 msgid "La transición quedó de {duracion}: no hay más video al final del primer clip."
 msgstr "The transition ended up at {duracion}: there's no more video at the end of the first clip."
@@ -10184,6 +10195,10 @@ msgstr "You reached 5 minutes: the recording stopped."
 #, python-format
 msgid "Llegó un evento %(tipo)s de Bold con la referencia «%(ref)s», que no es de ninguna recarga de Creatv. Revísalo en el panel de Bold."
 msgstr "A Bold %(tipo)s event arrived with the reference “%(ref)s”, which does not belong to any Creatv top-up. Check it in the Bold dashboard."
+
+#, python-format
+msgid "Llegó una transacción de Wompi con la referencia «%(ref)s», que no es de ninguna recarga de Creatv. Revísalo en el panel de Wompi."
+msgstr "A Wompi transaction arrived with the reference “%(ref)s”, which does not belong to any Creatv top-up. Check it in the Wompi dashboard."
 
 msgid "Llenar"
 msgstr "Fill"
@@ -11225,6 +11240,9 @@ msgstr "Does not charge"
 msgid "No cobrado: %(concepto)s"
 msgstr "Not charged: %(concepto)s"
 
+msgid "No cuadra"
+msgstr "Mismatch"
+
 msgid "No describas a una persona real ni pidas imitar a alguien famoso."
 msgstr "Don't describe a real person or ask to imitate someone famous."
 
@@ -11626,6 +11644,9 @@ msgstr "I couldn't translate the word into English; try again in a moment."
 
 msgid "No pudimos leer la tasa de cambio; intenta en unos minutos"
 msgstr "We couldn't read the exchange rate; try again in a few minutes"
+
+msgid "No pudimos leer la tasa de cambio; intenta en unos minutos."
+msgstr "We could not read the exchange rate; try again in a few minutes."
 
 msgid "No quedó ningún anuncio por analizar."
 msgstr "No ads were left to analyze."
@@ -12395,8 +12416,14 @@ msgstr "Other"
 msgid "Pagar con Bold"
 msgstr "Pay with Bold"
 
+msgid "Pagar con Wompi"
+msgstr "Pay with Wompi"
+
 msgid "Pago anulado por Bold"
 msgstr "Payment voided by Bold"
+
+msgid "Pago anulado por Wompi"
+msgstr "Payment voided by Wompi"
 
 msgid "Palabra clave"
 msgstr "Keyword"
@@ -13766,6 +13793,9 @@ msgstr "Top-up credited to %(cliente)s"
 
 msgid "Recarga con Bold"
 msgstr "Top-up with Bold"
+
+msgid "Recarga con Wompi"
+msgstr "Top-up with Wompi"
 
 msgid "Recarga de saldo"
 msgstr "Balance top-up"
@@ -15561,6 +15591,9 @@ msgstr "Tasks in the last 24 h by type"
 msgid "Tareas en espera"
 msgstr "Tasks waiting"
 
+msgid "Tarjeta, PSE, Nequi o Bancolombia. Wompi cobra en pesos colombianos a la TRM del día; se acreditan los dólares que elegiste."
+msgstr "Card, PSE, Nequi or Bancolombia. Wompi charges in Colombian pesos at the day's official exchange rate (TRM); the dollars you chose are credited."
+
 msgid "Tarjetas de cualquier país; en Colombia también PSE y Nequi. Bold cobra en pesos colombianos a la tasa del día."
 msgstr "Cards from any country; in Colombia also PSE and Nequi. Bold charges in Colombian pesos at the day's rate."
 
@@ -16644,6 +16677,12 @@ msgstr "A real fact"
 msgid "Un pago de Bold no corresponde a ninguna recarga"
 msgstr "A Bold payment does not match any top-up"
 
+msgid "Un pago de Wompi no corresponde a ninguna recarga"
+msgstr "A Wompi payment does not match any top-up"
+
+msgid "Un pago de Wompi no cuadra con su recarga"
+msgstr "A Wompi payment does not match its top-up"
+
 msgid "Un proyecto que cobra paga cada pieza con su saldo prepagado: costo del proveedor × margen. Un proyecto que no cobra sigue igual que siempre."
 msgstr "A project that charges usage pays for each piece from its prepaid balance: provider cost × markup. A project that does not charge works the same as always."
 
@@ -17392,6 +17431,17 @@ msgstr "What does the prospect want to achieve in society?"
 msgid "Whisper · %(s)s s de audio"
 msgstr "Whisper · %(s)s s of audio"
 
+msgid "Wompi anuló este pago y lo descontamos de tu saldo."
+msgstr "Wompi voided this payment and we deducted it from your balance."
+
+#, python-format
+msgid "Wompi anuló la recarga %(ref)s de %(cliente)s: descontamos %(monto)s de su saldo."
+msgstr "Wompi voided top-up %(ref)s for %(cliente)s: we deducted %(monto)s from its balance."
+
+#, python-format
+msgid "Wompi anuló una recarga de %(cliente)s"
+msgstr "Wompi voided a top-up for %(cliente)s"
+
 msgid "Wompi dice que esa referencia de pago ya se usó"
 msgstr "Wompi says that payment reference was already used"
 
@@ -17410,11 +17460,21 @@ msgid "Wompi no devolvió los datos esperados"
 msgstr "Wompi did not return the expected data"
 
 #, python-format
+msgid "Wompi no pudo abrir el pago: %(motivo)s. Intenta de nuevo en un rato."
+msgstr "Wompi could not open the payment: %(motivo)s. Try again in a while."
+
+msgid "Wompi rechazó el pago. No se te cobró nada."
+msgstr "Wompi declined the payment. You were not charged."
+
+#, python-format
 msgid "Wompi respondió algo inesperado (HTTP %(codigo)s)"
 msgstr "Wompi returned something unexpected (HTTP %(codigo)s)"
 
 msgid "Wompi respondió algo que no es JSON"
 msgstr "Wompi returned something that is not JSON"
+
+msgid "Wompi todavía no confirma el pago; te avisaremos cuando llegue. Puedes cerrar esta página."
+msgstr "Wompi has not confirmed the payment yet; we will let you know when it arrives. You can close this page."
 
 msgid "WooCommerce"
 msgstr "WooCommerce"

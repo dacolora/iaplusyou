@@ -1,28 +1,31 @@
-{# Vuelta del checkout de Bold (cobros, spec 2026-10-08 §9.4). Nunca acredita:
-   muestra el estado que dio el servidor de Bold. static/cobros.js (lo carga
+{# Vuelta del checkout de Bold o de Wompi (cobros, spec 2026-10-08 §9.4; planes
+   2026-10-09 §5.1). Nunca acredita por la URL: muestra el estado que dio el
+   servidor de la pasarela (con Wompi, la transacción del `?id=` consultada en
+   Wompi; tx_id la sigue pasando al sondeo). static/cobros.js (lo carga
    base.html) sondea data-estado-url cada 3 s hasta 60 s y cambia el texto con
    lo que responde la ruta (ya traducido); los textos de «tarde» y los enlaces
    viven aquí ocultos. Sin JS queda «Verificar» y «Volver al saldo». #}
 {% extends "base.html" %}
 {% block title %}{{ _('Recarga') }}{% endblock %}
 {% block content %}
-{% set esperando = recarga.estado == 'pendiente' and recarga.medio == 'bold' %}
+{% set es_wompi = recarga.medio == 'wompi' %}
+{% set esperando = recarga.estado == 'pendiente' and (recarga.medio == 'bold' or (es_wompi and (tx_id or recarga.pasarela_ref))) %}
 {% set volver = url_for('ver_cliente', cliente=cliente) ~ '#config-ap-saldo' %}
-<div class="recarga-vuelta" id="recarga-vuelta" data-estado="{{ recarga.estado }}"{% if esperando %} data-estado-url="{{ url_for('cobros.recarga_estado', cliente=cliente, rid=recarga.id) }}"{% endif %}>
+<div class="recarga-vuelta" id="recarga-vuelta" data-estado="{{ recarga.estado }}"{% if esperando %} data-estado-url="{{ url_for('cobros.recarga_estado', cliente=cliente, rid=recarga.id, id=tx_id) if tx_id else url_for('cobros.recarga_estado', cliente=cliente, rid=recarga.id) }}"{% endif %}>
   <div class="panel-cabecera">
     <div>
       <h2>{{ _('Recarga de saldo') }}</h2>
-      <p class="panel-cabecera-desc">{{ _('%(monto)s con Bold', monto=((recarga.milesimas / 1000) | usd)) }}</p>
+      <p class="panel-cabecera-desc">{% if es_wompi %}{{ _('%(monto)s con Wompi', monto=((recarga.milesimas / 1000) | usd)) }}{% else %}{{ _('%(monto)s con Bold', monto=((recarga.milesimas / 1000) | usd)) }}{% endif %}</p>
     </div>
   </div>
   <div class="recarga-caja">
     <p class="recarga-texto" data-recarga-texto aria-live="polite">{{ texto }}</p>
     <div class="barra-progreso" data-recarga-barra{% if not esperando %} hidden{% endif %}><div class="barra-progreso-fill barra-progreso-indeterminada"></div></div>
     <p class="vacio" data-recarga-saldo hidden>{{ _('Tu saldo ahora:') }} <strong></strong></p>
-    <p class="vacio" data-recarga-tarde hidden>{{ _('Bold todavía no confirma el pago; te avisaremos cuando llegue. Puedes cerrar esta página.') }}</p>
+    <p class="vacio" data-recarga-tarde hidden>{% if es_wompi %}{{ _('Wompi todavía no confirma el pago; te avisaremos cuando llegue. Puedes cerrar esta página.') }}{% else %}{{ _('Bold todavía no confirma el pago; te avisaremos cuando llegue. Puedes cerrar esta página.') }}{% endif %}</p>
     <div class="acciones">
       {% if esperando or consultable %}
-      <form method="post" action="{{ url_for('cobros.recarga_verificar', cliente=cliente, rid=recarga.id) }}" data-recarga-verificar>
+      <form method="post" action="{{ url_for('cobros.recarga_verificar', cliente=cliente, rid=recarga.id, id=tx_id) if tx_id else url_for('cobros.recarga_verificar', cliente=cliente, rid=recarga.id) }}" data-recarga-verificar>
         <button type="submit" class="btn-sm">{{ _('Verificar') }}</button>
       </form>
       {% endif %}
