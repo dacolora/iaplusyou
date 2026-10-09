@@ -191,3 +191,30 @@ miniaturas `loading="lazy"`, número fijo de consultas por página (una por bloq
 
 PND-157 (se cierra en E1), PND-196 (se cierra en E1), PND-192 (pasa a E2 de este spec), PND-194 (E2), PND-158 (sin
 cambio), PND-149 (8) (el supuesto del gasto compartido lo comprueba E0).
+
+## 9. Enmiendas al planear (2026-10-09, con «ejecuta todo» de Daniel: «vamos con las 3 entregas, no te detengas»)
+
+Salieron al leer el código de las dos pestañas; se anotan como decisiones y se le cuentan a Daniel al final.
+
+- **A1. La galería se une en E2, no en E1.** La galería de Triple Whale carga «Cómo mejorarlo», el lote «Analizar los
+  N», sus precios y la regla de no cobrar dos veces lo mismo, todo atado a su alcance (`tienda_id`, `canal`, `dias`).
+  Mezclarla con anuncios de Meta antes de que esos anuncios tengan su propio análisis arriesga lo que cobra. En E1,
+  «04 Tus anuncios» muestra la galería de Triple Whale tal cual (la parte Triple Whale del alcance) y, debajo, las
+  tarjetas de los anuncios cuya fuente es Meta, con un subtítulo solo cuando hay de los dos. Ningún anuncio aparece dos
+  veces (R5). E2 junta todo en una sola galería con un solo lote, por gasto en USD, y ahí se cierra PND-196.
+- **A2. R7 vale para «01 Resultados» y «02 Por país».** Los bloques de cada fuente (anuncios, campañas) usan el
+  «Desde el inicio» de su propia copia.
+- **A3. Detalle del día y filtro «Canal».** En E1 el detalle de un día y el selector «Canal» existen cuando el alcance
+  es solo Triple Whale (es la pantalla de hoy). Con Meta o mezcla, la gráfica no abre días; el detalle del día de Meta
+  llega en E2.
+- **A4. R10 y R11 en el código.** El código no cambia `triple_whale.VENTANA_DEFECTO` ni el ajuste de happyflops: los
+  dos cambian lo que decide el decisor de Experimentos. E0 deja la recomendación con números y Daniel la aplica desde
+  «Ajustes» (`cfg_triple_whale_ajustes`), que ya existe. Lo inflado se arregla en E1 con R8 y R9, que no tocan al
+  decisor (`lanzador._mezclar_ventas_triple_whale` lee `totales_anuncio` de anuncios de Meta, que siempre tienen gasto).
+- **A5. «Actualizar ahora».** Una sola ruta (`rendimiento.actualizar`) encola las copias de Triple Whale y de Meta del
+  alcance, con las reglas de cada una (la pausa compartida de Meta y la espera de 30 minutos de quien no es admin). Las
+  dos rutas viejas de «Sincronizar» se retiran con sus pantallas.
+- **A6. Alcance de E2.** «Cómo mejorarlo» y «Evaluar con IA» para anuncios de fuente Meta usando la misma tabla
+  (`tw_analisis`/`tw_evaluacion`) y la misma tarea con una marca de fuente, para que la galería quede una sola; las
+  reglas de PND-192 sobre la copia que ya existe; el detalle del día de Meta. La copia diaria de desgloses
+  (`meta_desglose`) y los avisos por correo de Meta quedan como pendiente nuevo.
