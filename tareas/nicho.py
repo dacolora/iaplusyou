@@ -253,10 +253,13 @@ def _gasto_recoleccion(cliente, eid, tarea, fuente, params, nota=""):
     if not tarifa:
         return 0.0
     usd = plataformas.costo(n, len(corridas), tarifa)
+    referencia = f"recoleccion:{eid}{ref_sufijo(tarea)}"
     if usd <= 0:
-        return 0.0
+        from tareas.investigacion import corrida_anotada
+        if not corrida_anotada(cliente, referencia):
+            return 0.0
     detalle = gettext("Apify %(actor)s: %(n)s resultado(s) aprox.", actor=idiomas.traducir(tarifa["nombre"]), n=n)
-    gastos.registrar_seguro(cliente, "recoleccion", usd, f"recoleccion:{eid}{ref_sufijo(tarea)}",
+    gastos.registrar_seguro(cliente, "recoleccion", usd, referencia,
                             detalle=detalle + (f" — {nota}" if nota else ""),
                             proveedor="apify",
                             extra={"actor": tarifa["actor"], "resultados": n, "usd_por_resultado": tarifa["usd_por_resultado"],
@@ -323,6 +326,7 @@ def ejecutar_recolectar(tarea):
 
     try:
         fuente = fuentes_registro.por_tipo(tipo)()          # adentro del try: si esto revienta, el paso igual cierra (R17)
+        fuente.registrar_inicio = lambda: _gasto_recoleccion(cliente, eid, tarea, fuente, params)
         for c in fuente.recolectar(params, avanzar):
             lote.append(c)
             if len(lote) >= LOTE:
@@ -368,8 +372,10 @@ def interrumpida_recolectar(tarea, mensaje):
     datos.recalcular(cliente, eid)
     if p.get("investigacion"):
         from nicho import investigacion as inv
+        from tareas.investigacion import corrida_anotada
+        pagado = corrida_anotada(cliente, f"recoleccion:{eid}{ref_sufijo(tarea)}")
         paso = ("resenas:" if p.get("fuente") in fuentes_registro.PLATAFORMAS else "redes:") + str(p.get("fuente"))
-        datos.actualizar_investigacion(cliente, eid, lambda i: {**inv.marcar_paso(i, paso, "pendiente"), "estado": "interrumpida", "ultimo_error": aviso})
+        datos.actualizar_investigacion(cliente, eid, lambda i: {**inv.marcar_paso(i, paso, "error" if pagado else "pendiente"), "estado": "interrumpida", "ultimo_error": aviso})
 
 
 # ------------------------------------------------ nicho_completar_avatares ---

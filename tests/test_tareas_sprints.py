@@ -31,7 +31,7 @@ def test_analizar_referencia_guarda_analisis(base_temporal, monkeypatch):
     assert tareas.REGISTRO["sprint_analizar_referencia"]({"payload": {"cliente": "acme", "referencia_id": 999}}) == "La referencia ya no existe."
 
 
-def test_analizar_referencia_error_deja_rastro(base_temporal, monkeypatch):
+def test_analizar_referencia_error_deja_rastro(base_temporal, monkeypatch, caplog):
     import tareas
     from sprints import analisis, datos
     sid, cid, rid = _referencia(datos)
@@ -42,7 +42,8 @@ def test_analizar_referencia_error_deja_rastro(base_temporal, monkeypatch):
     with pytest.raises(RuntimeError):
         tareas.REGISTRO["sprint_analizar_referencia"]({"payload": {"cliente": "acme", "referencia_id": rid}})
     r = datos.referencia("acme", rid)
-    assert r["analisis_estado"] == "error" and "Claude caído" in r["analisis"]["error"]
+    assert r["analisis_estado"] == "error" and r["analisis"]["error"]
+    assert "Claude caído" not in r["analisis"]["error"] and "Claude caído" in caplog.text
     datos.actualizar_referencia("acme", rid, analisis_estado="pendiente")
     tareas.AL_INTERRUMPIR["sprint_analizar_referencia"]({"payload": {"cliente": "acme", "referencia_id": rid}}, "reinicio")
     assert datos.referencia("acme", rid)["analisis_estado"] == "error"

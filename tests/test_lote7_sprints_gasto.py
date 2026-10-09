@@ -64,7 +64,9 @@ def test_pnd166_gasto_con_usage_incluso_si_falla(base_temporal, claude, monkeypa
     assert filas[0]['usd'] == pytest.approx(round(costo_real(1520*n, 200*n), 4))
     assert filas[0]['referencia'].endswith(':t44')
     assert filas[0]['proveedor'] == 'anthropic'
-    assert claude['opciones']['max_retries'] == 0
+    assert filas[0]['detalle']
+    assert ('·' in filas[0]['detalle']) == bool(fallo)
+    assert 'max_retries' not in claude['opciones']
     with base_temporal.conectar() as con:
         m = con.execute(base_temporal.movimiento_saldo.select()).mappings().all()
     assert len(m) == 1 and m[0]['tipo'] == ('no_cobrado' if fallo else 'cobro')

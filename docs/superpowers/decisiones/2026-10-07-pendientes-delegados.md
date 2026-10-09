@@ -70,6 +70,8 @@ mala, se cambia aquí y en la fila.
 | 178 | `limpiar_reservas_muertas` solo borra reservas sin tarea viva con más de 10 minutos. | Cierra la ventana entre reservar y encolar. | Ninguno. |
 | 191 | Se investiga la prueba de orgánico que falla a veces (reloj u orden) y se arregla la PRUEBA o su aislamiento, sin cambiar la publicación. | Una suite que falla a veces esconde fallos reales. | Ninguno. |
 
+*Enmiendas del 2026-10-09 tras la revisión del lote 7 (guardian-gasto + revisor):* «Reanudar» de Nicho muestra lo que puede costar TODO lo que falta (suma de los pasos pendientes, con tope en lo aprobado menos lo gastado; «precio no disponible» si un paso no tiene estimado), no solo el siguiente paso. «Traer las fotos del producto» muestra cuántas fotos se van a analizar y el total. El botón «Sugerir personas» de la cabecera de Sprints NO vuelve (Daniel lo quitó el 2026-09-22): la ruta queda sin pantalla. Los botones con precio usan el texto de `gastos.estimar` («precio no disponible» si falla el margen). Las llamadas de analizar y sugerir conservan los reintentos del SDK de Anthropic, como las demás. Un 429 al arrancar una corrida de Apify sí se reintenta (no arranca nada); la red caída y los 5xx no. La corrida de Apify se anota con su estimado apenas se conoce su id y la anotación final corrige el monto.
+
 ## Se dejan como están (cerradas con su motivo)
 
 | PND | Decisión | Por qué |

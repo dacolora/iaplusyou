@@ -11,9 +11,6 @@
     <p class="panel-cabecera-desc">{{ _('Un sprint es el plan de contenido de un mes para todos tus países: pones el mes y en su tablero armas una campaña por persona y producto con los anuncios que va a seguir. Se trabaja en inglés; cada país e idioma se adapta después en la edición final. Nada se genera sin tu aprobación y sin ver el costo antes.') }}</p>
   </div>
   <div class="panel-cabecera-acciones">
-    <form method="post" action="{{ url_for('sprints.personas_sugerir', cliente=cliente) }}" class="inline">
-      <button type="submit" class="btn-sm">{{ _('Sugerir personas') }} · {{ costo_personas_sprint|precio|usd }}</button>
-    </form>
     <button type="button" class="btn-generar btn-sm" data-abrir-detalle="alta-sprint">+ {{ _('Nuevo sprint') }}</button>
   </div>
 </div>

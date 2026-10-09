@@ -211,7 +211,10 @@ def _normalizar(item):
     }
 
 
-def traer(consulta, tope, avanzar, cursor=None):
+AVISA_CORRIDA = True
+
+
+def traer(consulta, tope, avanzar, cursor=None, on_ids=None):
     """Una sola corrida de Apify entrega hasta `tope` anuncios de una vez
     (resultsLimit los topea del lado de Apify) -- no hay cursor que
     retomar, así que esta fuente siempre hace un único yield y termina.
@@ -239,6 +242,9 @@ def traer(consulta, tope, avanzar, cursor=None):
     def guardar_ids(run, dataset):
         nonlocal run_id, dataset_id
         run_id, dataset_id = run, dataset
+        if run and on_ids:
+            on_ids(round(tope * apify_actores.USD_POR_RESULTADO, 4),
+                   {"run_id": run, "dataset_id": dataset, "estimado": True, "conciliacion_pendiente": True})
 
     def cobro(contados):
         cantidades = []

@@ -117,18 +117,20 @@
         <img src="{{ r.frame_url or r.url }}" alt="" loading="lazy">
         <button type="button" class="panel-quitar" data-quitar-ref="{{ url_for('sprints.referencia_quitar', cliente=cliente, rid=r.id) }}"
                 aria-label="{{ _('Quitar este referente') }}" title="{{ _('Quitar') }}">✕</button>
-        {% if r.analisis_estado == 'error' %}
-        <figcaption><p class="tag-error">{{ _('No se pudo analizar') }}{% if r.analisis.error %}: {{ r.analisis.error }}{% endif %}</p>
-          <form method="post" action="{{ url_for('sprints.referencia_reanalizar', cliente=cliente, rid=r.id) }}" class="inline">
-            <input type="hidden" name="volver" value="tablero">
-            <button type="submit" class="btn-sm">{{ _('Reintentar análisis') }} · {{ costo_analisis_sprint|precio|usd }}</button>
-          </form></figcaption>
-        {% endif %}
         {% if r.estado != 'lista' %}<figcaption><button type="button" class="enlace-describir" data-abrir-describir="{{ r.id }}">{{ _('Falta describir ✎') }}</button></figcaption>{% endif %}
       </figure>
       {% endfor %}
       {% for _ in range([0, (c.referencias_objetivo or 1) - (c.referencias_lista | length)] | max) %}<span class="panel-elegido panel-elegido-vacio"></span>{% endfor %}
     </div>
+    {% for r in c.referencias_lista if r.analisis_estado == 'error' %}
+    <div class="panel-analisis-error">
+      <p class="tag-error">{{ _('No se pudo analizar') }}: {{ _('Claude no respondió; intenta de nuevo') }}</p>
+      <form method="post" action="{{ url_for('sprints.referencia_reanalizar', cliente=cliente, rid=r.id) }}">
+        <input type="hidden" name="volver" value="tablero">
+        <button type="submit" class="btn-sm">{{ _('Reintentar análisis') }} · {{ precio_analisis_sprint }}</button>
+      </form>
+    </div>
+    {% endfor %}
     {% for r in c.referencias_lista if r.estado != 'lista' %}
     <div class="panel-describir" data-describir="{{ r.id }}" data-url="{{ url_for('sprints.referencia_editar', cliente=cliente, rid=r.id) }}" hidden>
       <div class="panel-describir-cab"><img src="{{ r.frame_url or r.url }}" alt="" loading="lazy">
@@ -164,11 +166,12 @@
         <input type="hidden" name="volver" value="tablero">
         <label>{{ _('Archivos (jpg, png, webp, mp4, mov, webm)') }} <input type="file" name="archivos" multiple accept="image/*,video/*"></label>
         <label>{{ _('O un link (Instagram, TikTok, YouTube…)') }} <input type="url" name="link" placeholder="https://"></label>
-        <button type="submit" class="btn-sm">{{ _('Agregar') }} · {{ _('Análisis por referencia:') }} {{ costo_analisis_sprint|precio|usd }}</button>
+        <button type="submit" class="btn-sm">{{ _('Agregar') }} · {{ _('Análisis por referencia:') }} {{ precio_analisis_sprint }}</button>
       </form>
       <form method="post" action="{{ url_for('sprints.referencias_catalogo', cliente=cliente, sid=sprint.id, cid=c.id) }}">
         <input type="hidden" name="volver" value="tablero">
-        <button type="submit" class="btn-sm">{{ _('Traer las fotos del producto') }} · {{ _('Análisis por referencia:') }} {{ costo_analisis_sprint|precio|usd }}</button>
+        {% if c.fotos_catalogo.n %}<button type="submit" class="btn-sm">{{ _('Traer las fotos del producto') }} · {{ _('%(n)s fotos · %(precio)s', n=c.fotos_catalogo.n, precio=c.fotos_catalogo.texto) }}</button>
+        {% else %}<p class="vacio">{{ _('No hay fotos nuevas que traer') }}</p>{% endif %}
       </form>
     </details>
   </section>

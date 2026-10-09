@@ -150,7 +150,7 @@ def analizar(referencia, marca="", idioma="es", uso=None):
         if uso is None:
             return _llamar(bloques, max_tokens=4000, system=_system(idioma))
         return _llamar_contando(bloques, max_tokens=4000, system=_system(idioma),
-                               max_retries=0, uso=uso)[0]
+                               uso=uso)[0]
     try:
         return _parsear_json(llamar(content))
     except AnalisisInvalido as e:

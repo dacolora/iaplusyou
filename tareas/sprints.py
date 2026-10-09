@@ -25,6 +25,7 @@ campaña, con el gasto real registrado tanto si acierta como si la respuesta
 no parsea.
 """
 import os
+import logging
 from datetime import datetime
 
 import sqlalchemy as sa
@@ -92,10 +93,10 @@ def encolar_link(cliente, campana_id, url):
                             duracion_estimada=60, max_intentos=2)
 
 
-def _gasto_uso(cliente, uso, referencia, entregado=True):
+def _gasto_uso(cliente, uso, referencia, detalle, entregado=True):
     if uso.get("entrada") or uso.get("salida"):
         gastos.registrar_seguro(cliente, "ideas", costo_real(uso["entrada"], uso["salida"]), referencia,
-                                proveedor="anthropic", entregado=entregado,
+                                proveedor="anthropic", detalle=detalle, entregado=entregado,
                                 extra={"tokens_entrada": uso["entrada"], "tokens_salida": uso["salida"], "modelo": modelo_actual()})
 
 
@@ -112,13 +113,14 @@ def ejecutar_analizar(tarea):
         resultado = analisis.analizar(ref, marca=proyectos.nombre_visible(cliente), idioma=idiomas.de_proyecto(cliente), uso=uso)
         datos.actualizar_referencia(cliente, rid, analisis=resultado, analisis_estado="listo")
     except Exception as e:
-        _gasto_uso(cliente, uso, referencia, entregado=False)
+        logging.getLogger(__name__).warning("Análisis de referencia %s: %s", rid, cola.sin_token(str(e)))
+        _gasto_uso(cliente, uso, referencia, gettext("analizar referencia · la respuesta no sirvió"), entregado=False)
         try:
-            datos.actualizar_referencia(cliente, rid, analisis_estado="error", analisis={"error": cola.sin_token(str(e))})
+            datos.actualizar_referencia(cliente, rid, analisis_estado="error", analisis={"error": gettext("Claude no respondió; intenta de nuevo")})
         except Exception:
             pass  # conserva el fallo original; el hook del worker también deja el análisis en error
         raise
-    _gasto_uso(cliente, uso, referencia)
+    _gasto_uso(cliente, uso, referencia, gettext("analizar referencia"))
     return gettext("Referencia analizada.")
 
 
@@ -126,7 +128,7 @@ def ejecutar_analizar(tarea):
 def interrumpida_analizar(tarea, mensaje):
     p = tarea["payload"]
     datos.actualizar_referencia(p["cliente"], int(p["referencia_id"]), analisis_estado="error",
-                                analisis={"error": mensaje})
+                                analisis={"error": gettext("Claude no respondió; intenta de nuevo")})
 
 
 @registrar("sprint_sugerir_personas")
@@ -145,9 +147,9 @@ def ejecutar_sugerir(tarea):
                                 origen="sugerida_ia",
                                 extra={"conciencia": persona["conciencia"]} if persona.get("conciencia") else None)
     except Exception:
-        _gasto_uso(cliente, uso, referencia, entregado=False)
+        _gasto_uso(cliente, uso, referencia, gettext("sugerir personas · la respuesta no sirvió"), entregado=False)
         raise
-    _gasto_uso(cliente, uso, referencia)
+    _gasto_uso(cliente, uso, referencia, gettext("sugerir personas"))
     return gettext("%(n)s personas sugeridas — revísalas y edítalas.", n=len(propuestas))
 
 

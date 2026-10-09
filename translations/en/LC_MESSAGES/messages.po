@@ -583,6 +583,10 @@ msgid "%(n)s foto(s) no se pudieron descargar."
 msgstr "%(n)s photo(s) couldn't be downloaded."
 
 #, python-format
+msgid "%(n)s fotos · %(precio)s"
+msgstr "%(n)s photos · %(precio)s"
+
+#, python-format
 msgid "%(n)s ganador(es)"
 msgstr "%(n)s winner(s)"
 
@@ -2522,6 +2526,9 @@ msgstr "Apify: %(estado)s · run %(corrida)s"
 msgid "Apify: %(estado)s · corrida %(corrida)s (%(hechas)s/%(total)s)"
 msgstr "Apify: %(estado)s · run %(corrida)s (%(hechas)s/%(total)s)"
 
+msgid "Apify: corrida anotada al arrancar"
+msgstr "Apify: run recorded at startup"
+
 msgid "App ID de Meta de tu app"
 msgstr "Meta App ID of your app"
 
@@ -3695,6 +3702,9 @@ msgstr "Claude didn't answer in the expected format. Send your message again."
 
 msgid "Claude no respondió en el formato esperado. Vuelve a intentarlo."
 msgstr "Claude didn't answer in the expected format. Try again."
+
+msgid "Claude no respondió; intenta de nuevo"
+msgstr "Claude did not respond; try again"
 
 msgid "Claude no vio el anuncio: juzgó por los números"
 msgstr "Claude did not see the ad: it judged by the numbers"
@@ -11323,6 +11333,9 @@ msgstr "There are no runs to launch."
 msgid "No hay familias sin descripción en inglés."
 msgstr "There are no families missing an English description."
 
+msgid "No hay fotos nuevas que traer"
+msgstr "There are no new photos to bring in"
+
 msgid "No hay ideas aprobadas sin generar. Aprueba ideas para poder generarlas."
 msgstr "There are no approved ideas left to generate. Approve ideas so you can generate them."
 
@@ -11592,6 +11605,9 @@ msgstr "We lost track of the voice: reload the page; if it's ready, it gets adde
 
 msgid "No sabemos cómo terminó: recarga la página para ver los subtítulos."
 msgstr "We don't know how it ended: reload the page to see the subtitles."
+
+msgid "No sabemos si la corrida arrancó; revisa en Apify antes de reintentar."
+msgstr "We do not know whether the run started; check Apify before retrying."
 
 #, python-brace-format
 msgid "No sale en el video: «{caracteres}» (esta fuente no los tiene)."
@@ -15429,9 +15445,6 @@ msgstr "Suggest with AI (%(precio)s)"
 msgid "Sugerir de la biblioteca (gratis)"
 msgstr "Suggest from the library (free)"
 
-msgid "Sugerir personas"
-msgstr "Suggest personas"
-
 #, python-format
 msgid "Sumamos %(monto)s a tu saldo (%(medio)s)."
 msgstr "We added %(monto)s to your balance (%(medio)s)."
@@ -17721,6 +17734,12 @@ msgstr "friendly"
 msgid "analizado el %(fecha)s"
 msgstr "analyzed on %(fecha)s"
 
+msgid "analizar referencia"
+msgstr "analyze reference"
+
+msgid "analizar referencia · la respuesta no sirvió"
+msgstr "analyze reference · the response was unusable"
+
 msgid "animada"
 msgstr "upbeat"
 
@@ -18119,8 +18138,8 @@ msgid "corrida %(corrida)s (%(etiqueta)s) %(estado)s: %(n)s resultado(s)%(motivo
 msgstr "run %(corrida)s (%(etiqueta)s) %(estado)s: %(n)s result(s)%(motivo)s"
 
 #, python-format
-msgid "corrida no lanzada (%(etiqueta)s): %(motivo)s"
-msgstr "run not launched (%(etiqueta)s): %(motivo)s"
+msgid "corrida sin id (%(etiqueta)s): %(motivo)s"
+msgstr "run without an ID (%(etiqueta)s): %(motivo)s"
 
 msgid "corriendo"
 msgstr "running"
@@ -18869,6 +18888,10 @@ msgid "hasta %(num)s referencia"
 msgid_plural "hasta %(num)s referencias"
 msgstr[0] "up to %(num)s reference"
 msgstr[1] "up to %(num)s references"
+
+#, python-format
+msgid "hasta %(precio)s"
+msgstr "up to %(precio)s"
 
 #, python-format
 msgid "hasta el %(hasta)s · todos los proyectos"
@@ -20164,6 +20187,12 @@ msgstr "successor to Luma Ray3 Modify, cheaper per second"
 
 msgid "sueco"
 msgstr "Swedish"
+
+msgid "sugerir personas"
+msgstr "suggest personas"
+
+msgid "sugerir personas · la respuesta no sirvió"
+msgstr "suggest personas · the response was unusable"
 
 msgid "sí"
 msgstr "yes"

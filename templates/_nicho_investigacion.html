@@ -51,7 +51,7 @@
     </form>
     {% elif inv.estado in ('detenida', 'interrumpida') and not estudio.archivado %}
     <form method="post" action="{{ url_for('nicho.investigacion_reanudar', cliente=cliente, eid=estudio.id) }}" class="inline">
-      <button type="submit" class="btn-generar btn-sm">{{ _('Reanudar') }} · {{ precio_reanudar }}</button>
+      <button type="submit" class="btn-generar btn-sm">{{ _('Reanudar') }} · {{ _('hasta %(precio)s', precio=precio_reanudar) if precio_reanudar != _('precio no disponible') else precio_reanudar }}</button>
     </form>
     {% endif %}
   </div>

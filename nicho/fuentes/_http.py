@@ -45,7 +45,7 @@ def _espera_429(respuesta):
     return max(0.5, min(segundos, MAX_ESPERA_429))
 
 
-def pedir(sesion, metodo, url, nombre, reintentar=True, **kw):
+def pedir(sesion, metodo, url, nombre, reintentar=True, reintentar_429=True, **kw):
     kw.setdefault("timeout", TIMEOUT)
     reintento_5xx = reintento_red = False
     veces_429 = 0
@@ -60,8 +60,8 @@ def pedir(sesion, metodo, url, nombre, reintentar=True, **kw):
             dormir(ESPERA_5XX)
             continue
         if r.status_code == 429:
-            if veces_429 >= MAX_429 or not reintentar:
-                raise Error429(gettext("%(nombre)s limitó las llamadas (429) y no cedió tras %(n)s esperas.", nombre=nombre, n=MAX_429))
+            if veces_429 >= MAX_429 or not reintentar_429:
+                raise Error429(gettext("%(nombre)s limitó las llamadas (429) y no cedió tras %(n)s esperas.", nombre=nombre, n=veces_429))
             veces_429 += 1
             dormir(_espera_429(r))
             continue

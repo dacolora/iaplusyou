@@ -215,10 +215,11 @@ def ver(cliente, eid):
     precio_reanudar = None
     if investigacion.puede_reanudar(inv_actual.get("estado")):
         retomada = investigacion.reanudar(inv_actual)
-        siguiente = investigacion.siguiente_paso(retomada)
-        costo = tareas_investigacion._costo_paso(est, retomada, siguiente) if siguiente else 0.0
-        if siguiente == "seleccionar" and not datos.productos_nicho(cliente, eid, solo_sin_juzgar=True):
-            costo = 0.0
+        pendientes = [paso for paso in investigacion._orden(retomada)
+                      if ((retomada.get("pasos") or {}).get(paso) or {}).get("estado") in (None, "pendiente", "en_curso")]
+        costos = [tareas_investigacion._costo_paso(est, retomada, paso) for paso in pendientes]
+        costo = None if any(c is None for c in costos) else min(
+            sum(costos), max(0.0, float(retomada.get("aprobado_usd") or 0) - float(retomada.get("gastado_usd") or 0)))
         precio_reanudar = gastos.texto_precio(costo)
     nucleos = datos.avatares(cliente, eid)
     for n in nucleos:

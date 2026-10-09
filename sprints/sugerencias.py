@@ -80,7 +80,7 @@ def sugerir_personas(cliente, cuantas=3, uso=None):
     content = [{"type": "text", "text": texto}]
     system = doctrina.bloque_system("investigar", idioma=idioma)
     respuesta = (analisis._llamar(content, max_tokens=6000, system=system) if uso is None else
-                 analisis._llamar_contando(content, max_tokens=6000, system=system, max_retries=0, uso=uso)[0])
+                 analisis._llamar_contando(content, max_tokens=6000, system=system, uso=uso)[0])
     personas = _parsear(respuesta)[:cuantas]
     for i, p in enumerate(personas):
         p["color"] = COLORES[i % len(COLORES)]

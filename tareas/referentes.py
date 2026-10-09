@@ -433,8 +433,16 @@ def _fase_trayendo(tarea, p, bid, avanzar):
             return
         avanzar(etapa=etapa, detalle=detalle)
 
+    opciones = {"cursor": cursor}
+    if getattr(fuente_mod, "AVISA_CORRIDA", False):
+        def registrar_inicio(usd, extra):
+            gastos.registrar_seguro(cliente_gasto, "recoleccion", usd,
+                                    f"referentes:barrer:{bid}:{consulta['fuente']}:t{tarea.get('id')}",
+                                    detalle=gettext("Apify: corrida anotada al arrancar"), proveedor="apify", extra=extra)
+        opciones["on_ids"] = registrar_inicio
+
     try:
-        for pagina, cursor_siguiente, meta in fuente_mod.traer(consulta, tope - traidos_total, avanzar_trayendo, cursor=cursor):
+        for pagina, cursor_siguiente, meta in fuente_mod.traer(consulta, tope - traidos_total, avanzar_trayendo, **opciones):
             if (meta or {}).get("aviso"):
                 aviso_parcial = meta["aviso"]
             costo_real = (meta or {}).get("costo_real")
@@ -445,7 +453,7 @@ def _fase_trayendo(tarea, p, bid, avanzar):
             # (Atria: meta siempre {}; toda fuente de pago futura debe reportar
             # costo_real en, a lo sumo, un yield por llamada a traer(), o la
             # referencia necesita variar por página).
-            if costo_real:
+            if costo_real is not None:
                 gastos.registrar_seguro(cliente_gasto, "recoleccion", costo_real,
                                         f"referentes:barrer:{bid}:{consulta['fuente']}:t{tarea.get('id')}",
                                         detalle=gettext("%(fuente)s: %(n)s anuncio(s) reales", fuente=consulta["fuente"],
@@ -474,7 +482,7 @@ def _fase_trayendo(tarea, p, bid, avanzar):
         # ANTES de decidir si es error total o entrega parcial: el costo se
         # registra en los dos casos.
         costo_real = getattr(e, "costo_real", None)
-        if costo_real:
+        if costo_real is not None:
             gastos.registrar_seguro(cliente_gasto, "recoleccion", costo_real,
                                     f"referentes:barrer:{bid}:{consulta['fuente']}:t{tarea.get('id')}",
                                     detalle=gettext("%(fuente)s: corrida cobrada pero no se pudo leer del todo",
