@@ -210,7 +210,9 @@ def guardar_cuentas(cliente):
     existentes, nuevas, cambios_pais, ajenas = [], [], [], 0
     for valor in dict.fromkeys(request.form.getlist("cuenta")):
         act = cuentas.normalizar_id(valor)
-        pais = _pais(request.form.get(f"pais_{act}"))
+        # Un campo que no llegó deja el país guardado; solo uno enviado vacío lo borra (y uno inválido no cambia nada).
+        crudo = request.form.get(f"pais_{act}")
+        pais = None if crudo is None else _pais(crudo)
         if lanzamiento.get(act) not in (None, cliente):
             ajenas += 1      # la cuenta con la que lanza otro proyecto no se lee desde este (ruling R20)
         elif act in propias:

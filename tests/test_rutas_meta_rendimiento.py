@@ -616,3 +616,16 @@ def test_sin_correo_verificado_un_cliente_no_escribe_nada(conectado, app):
     usuarios.actualizar("admin", correo_verificado=False)
     conectado["c"].post("/cliente/acme/meta-rendimiento/sincronizar", data={"act": B})
     assert sorted(t["job_id"] for t in _tareas()) == ["acme__meta_rend__act_1", "acme__meta_rend__act_2"]
+
+
+def test_guardar_cuentas_sin_el_campo_de_pais_no_borra_el_pais_guardado(conectado, monkeypatch):
+    _dos_cuentas()
+    monkeypatch.setattr(conectado["dashboard"].meta_conexion, "listar_activos",
+                        lambda t: _activos((A, "HappyFlops Norway"), (B, "HappyFlops Sweden")))
+    c = conectado["c"]
+    c.post("/cliente/acme/meta-rendimiento/cuentas", data={"cuenta": [A, B]})             # sin ningún pais_<act>
+    assert cuentas.cuenta("acme", A)["pais"] == "NO" and cuentas.cuenta("acme", B)["pais"] == "SE"
+    c.post("/cliente/acme/meta-rendimiento/cuentas", data={"cuenta": [A, B], f"pais_{A}": "ZZ"})   # inválido: igual
+    assert cuentas.cuenta("acme", A)["pais"] == "NO"
+    c.post("/cliente/acme/meta-rendimiento/cuentas", data={"cuenta": [A, B], f"pais_{A}": ""})     # enviado vacío: borra
+    assert cuentas.cuenta("acme", A)["pais"] is None and cuentas.cuenta("acme", B)["pais"] == "SE"
