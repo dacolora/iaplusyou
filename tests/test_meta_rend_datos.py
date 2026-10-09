@@ -1,7 +1,9 @@
 """Copias de Meta en la base (spec §4 y §6): reemplazar un tramo es idempotente,
 las lecturas agregan en una consulta y quitar una cuenta borra sus copias."""
 import re
+from datetime import datetime
 
+import pytest
 import sqlalchemy as sa
 
 import db
@@ -71,7 +73,7 @@ def test_anuncios_campanas_y_conjuntos_con_nombres(base_temporal):
         {"nivel": "conjunto", "objeto_id": "s1", "padre_id": "c1", "campaign_id": "c1", "nombre": "Mujeres",
          "estado": "ACTIVE", "aprendizaje": "FAIL"},
         {"nivel": "anuncio", "objeto_id": "a1", "padre_id": "s1", "campaign_id": "c1", "nombre": "Video 1",
-         "estado": "ACTIVE", "miniatura_url": "https://x/1.jpg"}])
+         "estado": "ACTIVE", "miniatura_url": "https://scontent.xx.fbcdn.net/1.jpg"}])
     datos.reemplazar_anuncio_dias("hf", A, "2026-10-01", "2026-10-02",
                                   [_ad("2026-10-01", "a1", 30, 90), _ad("2026-10-02", "a1", 20, 0, compras=0),
                                    _ad("2026-10-02", "a2", 5, 0, compras=0)])
@@ -91,13 +93,13 @@ def test_anuncio_trae_estado_miniatura_y_nombres_del_arbol(base_temporal):
         {"nivel": "campana", "objeto_id": "c1", "nombre": "Otoño"},
         {"nivel": "conjunto", "objeto_id": "s1", "campaign_id": "c1", "nombre": "Mujeres"},
         {"nivel": "anuncio", "objeto_id": "a1", "padre_id": "s1", "campaign_id": "c1", "nombre": "Video 1",
-         "estado": "PAUSED", "miniatura_url": "https://x/1.jpg"}])
+         "estado": "PAUSED", "miniatura_url": "https://scontent.xx.fbcdn.net/1.jpg"}])
     datos.reemplazar_anuncio_dias("hf", A, "2026-10-01", "2026-10-02",
                                   [_ad("2026-10-01", "a1", 30, 90), _ad("2026-10-02", "a2", 5, 0)])
     ads = _ads("hf", [A])
     a1, a2 = ads["a1"], ads["a2"]
     assert (a1["estado"], a1["miniatura_url"], a1["campana"], a1["conjunto"]) == \
-        ("PAUSED", "https://x/1.jpg", "Otoño", "Mujeres")
+        ("PAUSED", "https://scontent.xx.fbcdn.net/1.jpg", "Otoño", "Mujeres")
     assert a1["ad_account_id"] == A and a1["campaign_id"] == "c1" and a1["adset_id"] == "s1"
     assert (a1["primera_fecha"], a1["ultima_fecha"]) == ("2026-10-01", "2026-10-01")
     # Sin fila en meta_objeto: todo lo del árbol es None, pero el anuncio sale con sus números.
@@ -166,7 +168,7 @@ def test_objeto_solo_con_nombre_conserva_lo_guardado(base_temporal):
         {"nivel": "conjunto", "objeto_id": "s1", "padre_id": "c1", "campaign_id": "c1", "nombre": "Mujeres",
          "estado": "ACTIVE", "aprendizaje": "FAIL", "presupuesto_diario": 300.0},
         {"nivel": "anuncio", "objeto_id": "a1", "nombre": "Video 1", "estado": "ACTIVE",
-         "miniatura_url": "https://x/1.jpg"}])
+         "miniatura_url": "https://scontent.xx.fbcdn.net/1.jpg"}])
     # Lo que llega de los insights: solo nivel, id, padre, campaña y nombre (sin «estado»).
     n = datos.guardar_objetos("hf", A, [
         {"nivel": "conjunto", "objeto_id": "s1", "campaign_id": "c1", "nombre": "Mujeres 25-34"},
@@ -178,7 +180,7 @@ def test_objeto_solo_con_nombre_conserva_lo_guardado(base_temporal):
     assert (o["s1"].nombre, o["s1"].estado, o["s1"].aprendizaje, o["s1"].presupuesto_diario, o["s1"].padre_id) == \
         ("Mujeres 25-34", "ACTIVE", "FAIL", 300.0, "c1")
     assert (o["a1"].nombre, o["a1"].estado, o["a1"].miniatura_url, o["a1"].padre_id) == \
-        ("Video 1", "ACTIVE", "https://x/1.jpg", "s1")
+        ("Video 1", "ACTIVE", "https://scontent.xx.fbcdn.net/1.jpg", "s1")
     assert (o["a2"].nombre, o["a2"].estado, o["a2"].extra) == ("Nuevo", None, {})
     assert datos.activos("hf", [A])[A] == {"campana": 0, "conjunto": 1, "anuncio": 1, "aprendizaje_limitado": 1}
 
@@ -194,6 +196,16 @@ def test_alcance_borrar_y_purgar(base_temporal):
     assert datos.purgar_anuncios("2026-07-01") == 1
     datos.borrar_cuenta("hf", A)
     assert datos.alcance("hf", [A], 30) == {} and datos.totales_por_anuncio("hf", [A], "2026-01-01", "2026-12-31") == []
+
+
+def test_purgar_cuenta_dias_borra_lo_anterior_a_la_fecha_en_todos_los_proyectos(base_temporal):
+    for cliente, act in (("hf", A), ("otro", B)):
+        datos.reemplazar_cuenta_dias(cliente, act, "2025-01-01", "2026-10-01",
+                                     [_dia("2025-01-01", 1, 0), _dia("2025-09-01", 2, 0), _dia("2026-10-01", 3, 0)])
+    assert datos.purgar_cuenta_dias("2025-09-01") == 2          # la frontera (2025-09-01) se conserva
+    assert [d["fecha"] for d in datos.cuenta_por_dia("hf", [A], "2020-01-01", "2030-01-01")] == ["2025-09-01", "2026-10-01"]
+    assert [d["fecha"] for d in datos.cuenta_por_dia("otro", [B], "2020-01-01", "2030-01-01")] == ["2025-09-01", "2026-10-01"]
+    assert datos.purgar_cuenta_dias("2025-09-01") == 0
 
 
 def test_alcance_de_cada_proyecto_es_solo_suyo(base_temporal):
@@ -220,14 +232,14 @@ def test_nombres_y_estados_de_los_objetos_no_se_cruzan_entre_proyectos(base_temp
             {"nivel": "conjunto", "objeto_id": "s1", "campaign_id": "c1", "nombre": f"Conjunto {sufijo}",
              "estado": estado, "aprendizaje": apr},
             {"nivel": "anuncio", "objeto_id": "a1", "campaign_id": "c1", "nombre": f"Anuncio {sufijo}",
-             "estado": estado, "miniatura_url": f"https://x/{sufijo}.jpg"}])
+             "estado": estado, "miniatura_url": f"https://scontent.xx.fbcdn.net/{sufijo}.jpg"}])
         datos.reemplazar_anuncio_dias(cliente, A, "2026-10-01", "2026-10-01", [_ad("2026-10-01", "a1", 10, 0)])
     for cliente, sufijo, estado in (("hf", "propio", "ACTIVE"), ("otro", "ajeno", "PAUSED")):
         ads = datos.totales_por_anuncio(cliente, [A], "2026-10-01", "2026-10-01")
         assert len(ads) == 1
         assert (ads[0]["anuncio"], ads[0]["conjunto"], ads[0]["campana"], ads[0]["estado"],
                 ads[0]["miniatura_url"]) == (f"Anuncio {sufijo}", f"Conjunto {sufijo}", f"Campaña {sufijo}", estado,
-                                             f"https://x/{sufijo}.jpg")
+                                             f"https://scontent.xx.fbcdn.net/{sufijo}.jpg")
         conj = datos.totales_por_conjunto(cliente, [A], "2026-10-01", "2026-10-01")
         assert len(conj) == 1
         assert (conj[0]["nombre"], conj[0]["campana"], conj[0]["estado"]) == (f"Conjunto {sufijo}",
@@ -381,3 +393,59 @@ def test_cada_lectura_es_una_consulta_y_usa_el_indice_de_cuenta_y_fecha(base_tem
             # ya viene ordenado para agrupar y la fecha se filtra dentro del índice.
             assert re.search(r"SEARCH meta_anuncio_dia USING (COVERING )?INDEX \w+ \(cliente=\? AND ad_account_id=\?",
                              plan), plan
+
+
+# --- miniaturas: solo https de los servidores de imágenes de Meta y sin token ---------------------------------------
+
+@pytest.mark.parametrize("url", ["https://scontent.xx.fbcdn.net/v/1.jpg", "https://fbcdn.net/1.jpg",
+                                 "https://www.facebook.com/ads/image/?d=x", "https://lookaside.fbsbx.com/1.jpg"])
+def test_miniatura_valida_acepta_los_hosts_de_meta(url):
+    assert datos.miniatura_valida(url) is True
+
+
+@pytest.mark.parametrize("url", ["http://scontent.xx.fbcdn.net/1.jpg", "https://evil.com/fbcdn.net/1.jpg",
+                                 "https://fbcdn.net.evil.com/1.jpg", "https://notfbcdn.net/1.jpg",
+                                 "https://scontent.xx.fbcdn.net/1.jpg?access_token=ABC",
+                                 "https://scontent.xx.fbcdn.net/1.jpg?ACCESS_TOKEN=ABC", "javascript:alert(1)",
+                                 "https://x/1.jpg", "", None, 5, "https://[::1"])
+def test_miniatura_valida_rechaza_lo_demas(url):
+    assert datos.miniatura_valida(url) is False
+
+
+def test_guardar_objetos_descarta_la_miniatura_rara_sin_pisar_la_buena(base_temporal):
+    buena = "https://scontent.xx.fbcdn.net/buena.jpg"
+    datos.guardar_objetos("hf", A, [{"nivel": "anuncio", "objeto_id": "a1", "nombre": "Video", "miniatura_url": buena}])
+    datos.guardar_objetos("hf", A, [{"nivel": "anuncio", "objeto_id": "a1", "nombre": "Video 2",
+                                     "miniatura_url": "https://evil.com/x.jpg?access_token=ABC"},
+                                    {"nivel": "anuncio", "objeto_id": "a2", "nombre": "Otro",
+                                     "miniatura_url": "http://scontent.xx.fbcdn.net/2.jpg"}])
+    with db.conectar() as con:
+        o = {r.objeto_id: r for r in con.execute(sa.select(db.meta_objeto)).all()}
+    assert (o["a1"].nombre, o["a1"].miniatura_url) == ("Video 2", buena)     # el nombre sí se actualiza
+    assert (o["a2"].nombre, o["a2"].miniatura_url) == ("Otro", None)
+
+
+def test_anuncios_sin_miniatura_al_dia(base_temporal):
+    ahora = datetime(2026, 10, 8, 12, 0)
+    fbcdn = "https://scontent.xx.fbcdn.net/{}.jpg"
+    datos.reemplazar_anuncio_dias("hf", A, "2026-09-01", "2026-10-07", [
+        _ad("2026-10-05", "fresca", 10, 0), _ad("2026-10-05", "vieja", 10, 0), _ad("2026-10-05", "sin_objeto", 10, 0),
+        _ad("2026-10-05", "sin_fecha", 10, 0), _ad("2026-10-05", "sin_gasto", 0, 0), _ad("2026-09-01", "antigua", 10, 0),
+        _ad("2026-10-05", "sin_miniatura", 10, 0)])
+    datos.reemplazar_anuncio_dias("hf", B, "2026-10-05", "2026-10-05", [_ad("2026-10-05", "de_otra_cuenta", 10, 0)])
+    datos.guardar_objetos("hf", A, [
+        {"nivel": "anuncio", "objeto_id": "fresca", "miniatura_url": fbcdn.format("f"),
+         "extra": {"miniatura_en": "2026-10-08T05:00:00"}},                      # hace 7 h: al día
+        {"nivel": "anuncio", "objeto_id": "vieja", "miniatura_url": fbcdn.format("v"),
+         "extra": {"miniatura_en": "2026-10-07T10:00:00"}},                      # hace 26 h: toca de nuevo
+        {"nivel": "anuncio", "objeto_id": "sin_fecha", "miniatura_url": fbcdn.format("s")},   # sin «miniatura_en»
+        {"nivel": "anuncio", "objeto_id": "sin_gasto", "miniatura_url": None},
+        {"nivel": "anuncio", "objeto_id": "antigua", "miniatura_url": None},
+        {"nivel": "anuncio", "objeto_id": "sin_miniatura", "miniatura_url": None,
+         "extra": {"miniatura_en": "2026-10-08T05:00:00"}}])
+    assert datos.anuncios_sin_miniatura_al_dia("hf", A, "2026-10-01", ahora=ahora) == \
+        ["sin_fecha", "sin_miniatura", "sin_objeto", "vieja"]
+    assert datos.anuncios_sin_miniatura_al_dia("hf", A, "2026-10-01", horas=48, ahora=ahora) == \
+        ["sin_fecha", "sin_miniatura", "sin_objeto"]
+    assert datos.anuncios_sin_miniatura_al_dia("hf", B, "2026-10-01", ahora=ahora) == ["de_otra_cuenta"]
+    assert datos.anuncios_sin_miniatura_al_dia("otro", A, "2026-10-01", ahora=ahora) == []

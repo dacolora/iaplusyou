@@ -7,6 +7,9 @@ que la copia de los últimos 7 días siempre pisa lo anterior. Cada lectura es
 UNA consulta agregada (la pestaña nunca hace una consulta por fila): filtra por
 proyecto + cuentas + fechas, así que usa el índice (cliente, cuenta, fecha), y
 una lista de cuentas vacía devuelve vacío sin tocar la base."""
+from datetime import datetime, timedelta
+from urllib.parse import urlsplit
+
 import sqlalchemy as sa
 from sqlalchemy.dialects.sqlite import insert as insert_sqlite
 
@@ -24,6 +27,22 @@ _COLUMNAS_OBJETO = ("nivel", "padre_id", "campaign_id", "nombre", "estado", "obj
 _NIVELES = ("campana", "conjunto", "anuncio")
 # Un NOT IN / IN con miles de ids no cabe en el tope de variables de SQLite: se parte en tandas.
 _TANDA_IDS = 500
+# Una miniatura se enlaza directo en la pestaña (`<img src>`): solo se guarda una URL https de los servidores de
+# imágenes de Meta y nunca una que lleve un token (revisión final de seguridad, 2026-10-08).
+_HOSTS_MINIATURA = ("fbcdn.net", "facebook.com", "fbsbx.com")
+
+
+def miniatura_valida(url):
+    """True si `url` es una miniatura que se puede guardar y mostrar: https, de un host de Meta (fbcdn.net,
+    facebook.com, fbsbx.com o un subdominio) y sin `access_token` en ninguna parte."""
+    if not isinstance(url, str) or not url or "access_token" in url.lower():
+        return False
+    try:
+        partes = urlsplit(url)
+        host = (partes.hostname or "").lower()
+    except ValueError:
+        return False
+    return partes.scheme == "https" and any(host == h or host.endswith("." + h) for h in _HOSTS_MINIATURA)
 
 
 # ------------------------------------------------------------ números ---
@@ -102,7 +121,8 @@ def guardar_objetos(cliente, act, objetos):
     PRESENTES en cada dict: un objeto que llega solo con su nombre (viene de los insights, sin «estado») no borra
     el estado, el presupuesto, el aprendizaje ni la miniatura ya guardados. Un `nombre` None tampoco pisa el
     guardado. Claves: `nivel`, `objeto_id` y las columnas de meta_objeto (sin id/cliente/ad_account_id/
-    actualizado_en). Los objetos con el mismo juego de claves se escriben juntos en una tanda. Devuelve cuántos."""
+    actualizado_en). Los objetos con el mismo juego de claves se escriben juntos en una tanda. Una `miniatura_url` que
+    no pasa `miniatura_valida` se descarta (las demás columnas del objeto sí se guardan). Devuelve cuántos."""
     t = db.meta_objeto
     ahora = db.ahora()
     grupos = {}
@@ -110,6 +130,9 @@ def guardar_objetos(cliente, act, objetos):
         if not o.get("objeto_id") or o.get("nivel") not in _NIVELES:
             continue
         valores = {c: o[c] for c in _COLUMNAS_OBJETO if c in o}
+        if valores.get("miniatura_url") is not None and not miniatura_valida(valores["miniatura_url"]):
+            # Una miniatura rara no se guarda (y no pisa la buena que ya hubiera).
+            del valores["miniatura_url"]
         valores["objeto_id"] = str(o["objeto_id"])
         grupos.setdefault(frozenset(valores), []).append(valores)
     n = 0
@@ -189,6 +212,14 @@ def purgar_anuncios(antes_de):
         return con.execute(t.delete().where(t.c.fecha < antes_de)).rowcount
 
 
+def purgar_cuenta_dias(antes_de):
+    """Borra los días de cuenta anteriores a `antes_de` (AAAA-MM-DD) de todos los proyectos: la copia trae 13 meses
+    y lo más viejo no se muestra en ningún período. Devuelve cuántas filas quitó."""
+    t = db.meta_cuenta_dia
+    with db.conectar() as con:
+        return con.execute(t.delete().where(t.c.fecha < antes_de)).rowcount
+
+
 # -------------------------------------------------------------- leer ---
 
 def _donde(t, cliente, cuentas, desde, hasta):
@@ -232,6 +263,27 @@ def primera_fecha(cliente, act, tabla="cuenta"):
     """La fecha más antigua ya copiada de ESA cuenta (ver `ultima_fecha`); None si no hay ninguna. La copia la usa
     para pedir las tasas de cambio de TODOS los días guardados, no solo los de esta corrida."""
     return _extremo_fecha(sa.func.min, cliente, act, tabla)
+
+
+def anuncios_sin_miniatura_al_dia(cliente, act, desde, horas=20, ahora=None):
+    """Los ad_id de ESA cuenta con gasto desde `desde` (AAAA-MM-DD) cuya miniatura falta o se trajo hace más de
+    `horas` (`extra.miniatura_en`): los que la copia diaria vuelve a pedir, incluidos los pausados, que el listado de
+    cada 3 horas ya no trae con su creativo. Una consulta (días de anuncio con gasto + su objeto)."""
+    a, o = db.meta_anuncio_dia, db.meta_objeto
+    con_gasto = (sa.select(a.c.ad_id).where(a.c.cliente == cliente, a.c.ad_account_id == act, a.c.fecha >= desde,
+                                            a.c.gasto > 0, a.c.ad_id.is_not(None)).distinct().subquery("g"))
+    q = (sa.select(con_gasto.c.ad_id, o.c.miniatura_url, o.c.extra)
+         .select_from(con_gasto.outerjoin(o, sa.and_(o.c.cliente == cliente, o.c.objeto_id == con_gasto.c.ad_id)))
+         .order_by(con_gasto.c.ad_id))
+    limite = ((ahora or datetime.now()) - timedelta(hours=horas)).isoformat(timespec="seconds")
+    with db.conectar() as con:
+        filas = con.execute(q).all()
+    salida = []
+    for ad_id, miniatura, extra in filas:
+        traida = (extra or {}).get("miniatura_en") if isinstance(extra, dict) else None
+        if not miniatura or not traida or str(traida) < limite:
+            salida.append(str(ad_id))
+    return salida
 
 
 def cuenta_por_dia(cliente, cuentas, desde, hasta):
