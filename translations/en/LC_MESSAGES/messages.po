@@ -575,8 +575,8 @@ msgid "%(n)s experimentos en cola."
 msgstr "%(n)s experiments queued."
 
 #, python-format
-msgid "%(n)s fila(s) viejas de anuncios de Meta borradas"
-msgstr "%(n)s old Meta ad row(s) deleted"
+msgid "%(n)s fila(s) viejas de anuncios y %(m)s día(s) viejos de cuentas de Meta borrados"
+msgstr "%(n)s old ad row(s) and %(m)s old account day(s) from Meta deleted"
 
 #, python-format
 msgid "%(n)s firmas no se pudieron traducir; reintenta la importación más tarde."
@@ -4365,6 +4365,9 @@ msgstr "Copy both values: the Key ID and the Key Secret (the secret is only show
 
 msgid "Copia los enlaces:"
 msgstr "Copy the links:"
+
+msgid "Copia pospuesta: hay una acción en Meta en curso (lanzar, pausar, escalar o publicar). La próxima copia programada la retoma."
+msgstr "Copy postponed: an action on Meta is in progress (launching, pausing, scaling or publishing). The next scheduled copy picks it up."
 
 msgid "Copiado"
 msgstr "Copied"
@@ -10129,6 +10132,10 @@ msgstr "Brands must be a list."
 msgid "Las más lentas (más de 1 s)"
 msgstr "The slowest (over 1 s)"
 
+#, python-format
+msgid "Las métricas de Meta se acaban de actualizar: espera %(minutos)s minutos para volver a pedirlo."
+msgstr "The Meta metrics were just updated: wait %(minutos)s minutes before asking again."
+
 msgid "Las pone quien administra el servidor en el archivo <code>.env</code>; no se escriben desde aquí."
 msgstr "Whoever administers the server sets them in the <code>.env</code> file; they're not written from here."
 
@@ -10792,6 +10799,9 @@ msgstr "Meta returned more pages than expected; the copy will be retried later."
 msgid "Meta en modo agencia."
 msgstr "Meta in agency mode."
 
+msgid "Meta está cerca de su límite de uso; la copia sigue más tarde."
+msgstr "Meta is close to its usage limit; the copy continues later."
+
 msgid "Meta está frenando las llamadas por un rato (límite de uso): reintenta en unos minutos."
 msgstr "Meta is throttling calls for a while (usage limit): try again in a few minutes."
 
@@ -10862,6 +10872,10 @@ msgstr "Meta asked us to wait (API usage limit). The next copy will retry on its
 msgid "Meta pidió esperar: el detalle se reintenta en 30 minutos (reintento %(n)s de %(total)s)."
 msgstr "Meta asked us to wait: the detail will be retried in 30 minutes (retry %(n)s of %(total)s)."
 
+#, python-format
+msgid "Meta pidió esperar: las copias siguen después de las %(hora)s."
+msgstr "Meta asked us to wait: copies resume after %(hora)s."
+
 msgid "Meta quedó conectado en Creatv"
 msgstr "Meta is now connected in Creatv"
 
@@ -10909,6 +10923,10 @@ msgstr "Meta replied: %(mensaje)s"
 
 msgid "Meta revisa cada anuncio nuevo antes de mostrarlo (normalmente menos de 24 h). Cuando empiece a circular, «Actualizar métricas» trae las cifras."
 msgstr "Meta reviews every new ad before showing it (usually under 24 h). Once it starts running, “Update metrics” brings in the numbers."
+
+#, python-format
+msgid "Meta se desconectó en %(proyecto)s, pero no se pudieron borrar sus métricas copiadas (%(tipo)s). Avisa al administrador."
+msgstr "Meta was disconnected in %(proyecto)s, but its copied metrics could not be deleted (%(tipo)s). Let the administrator know."
 
 msgid "Meta siguió pidiendo esperar después de varios intentos: el detalle quedó incompleto. Actualiza el experimento más tarde para completarlo."
 msgstr "Meta kept asking us to wait after several attempts: the detail is incomplete. Update the experiment later to complete it."
@@ -16124,6 +16142,9 @@ msgstr "No charges recorded yet. They'll show up here once you generate somethin
 msgid "Todavía no hay comentarios. Pega texto o sube un archivo arriba."
 msgstr "No comments yet. Paste text or upload a file above."
 
+msgid "Todavía no hay cuentas publicitarias elegidas"
+msgstr "No ad accounts have been chosen yet"
+
 msgid "Todavía no hay cuentas publicitarias elegidas: usa «Elegir cuentas»."
 msgstr "No ad accounts chosen yet: use “Choose accounts”."
 
@@ -16854,6 +16875,9 @@ msgstr "Warning threshold"
 msgid "Umbral de aviso en dólares"
 msgstr "Warning threshold in dollars"
 
+msgid "Un administrador de Creatv tiene que elegir las cuentas."
+msgstr "A Creatv administrator has to choose the accounts."
+
 msgid "Un ajuste necesita una nota."
 msgstr "An adjustment needs a note."
 
@@ -16895,6 +16919,12 @@ msgstr "A real fact"
 
 msgid "Un pago de Bold no corresponde a ninguna recarga"
 msgstr "A Bold payment does not match any top-up"
+
+#, python-format
+msgid "Un proyecto lee como máximo %(tope)s cuentas: %(num)s cuenta no se agregó."
+msgid_plural "Un proyecto lee como máximo %(tope)s cuentas: %(num)s cuentas no se agregaron."
+msgstr[0] "A project reads at most %(tope)s accounts: %(num)s account was not added."
+msgstr[1] "A project reads at most %(tope)s accounts: %(num)s accounts were not added."
 
 msgid "Un proyecto que cobra paga cada pieza con su saldo prepagado: costo del proveedor × margen. Un proyecto que no cobra sigue igual que siempre."
 msgstr "A project that charges usage pays for each piece from its prepaid balance: provider cost × markup. A project that does not charge works the same as always."
