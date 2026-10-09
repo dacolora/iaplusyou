@@ -1126,9 +1126,11 @@ cuando conectas tu cuenta de Meta (Facebook e Instagram) y cómo los protegemos.
 <li>Tu nombre y el identificador de tu usuario de Facebook (para saber quién autorizó la conexión).</li>
 <li>La lista de cuentas publicitarias, Páginas de Facebook y cuentas de Instagram que administras, para que
 elijas cuál conectar al proyecto.</li>
-<li>Un token de acceso de sistema para la cuenta publicitaria y la Página elegidas.</li>
+<li>Un token de acceso de sistema para las cuentas publicitarias y la Página elegidas.</li>
 <li>Datos de tus anuncios y sus resultados (impresiones, alcance, clics, gasto, conversiones) y, cuando
-publiques contenido orgánico, la confirmación de la publicación.</li>
+publiques contenido orgánico, la confirmación de la publicación. Copiamos esas métricas de las cuentas elegidas,
+con los nombres de tus campañas, conjuntos de anuncios y anuncios, a nuestro servidor para mostrártelas sin
+consultar a Meta cada vez.</li>
 </ul>
 <h3>Para qué los usamos</h3>
 <ul>
@@ -1145,8 +1147,9 @@ restringidos en nuestro servidor en la Unión Europea (Hetzner, Núremberg). Sol
 puede leerlos; nunca se muestran en pantalla ni se registran en logs.</p>
 <h3>Cuánto tiempo</h3>
 <p>Mientras el proyecto tenga Meta conectado. Al pulsar «Desconectar» en la plataforma se borran de inmediato
-el token y los identificadores. También puedes revocar el acceso desde Facebook: Configuración › Integraciones
-de negocio, o Configuración › Apps y sitios web.</p>
+el token, los identificadores y las métricas copiadas de las cuentas elegidas (gasto, compras, nombres de
+campañas, conjuntos de anuncios y anuncios). También puedes revocar el acceso desde Facebook: Configuración ›
+Integraciones de negocio, o Configuración › Apps y sitios web.</p>
 <h3>Eliminación de datos</h3>
 <p>Para que eliminemos todos los datos asociados a tu cuenta de Meta escríbenos a dacoloradog@gmail.com
 indicando el nombre del proyecto; lo hacemos en un plazo máximo de 7 días y te confirmamos por correo.</p>
@@ -1166,9 +1169,11 @@ process when you connect your Meta account (Facebook and Instagram) and how we p
 <li>Your name and your Facebook user identifier (to know who authorized the connection).</li>
 <li>The list of ad accounts, Facebook Pages and Instagram accounts you manage, so you can
 choose which one to connect to the project.</li>
-<li>A system access token for the chosen ad account and Page.</li>
+<li>A system access token for the chosen ad accounts and Page.</li>
 <li>Data about your ads and their results (impressions, reach, clicks, spend, conversions) and, when you
-publish organic content, confirmation of the publication.</li>
+publish organic content, confirmation of the publication. We copy those metrics from the chosen accounts, with
+the names of your campaigns, ad sets and ads, to our server so we can show them to you without asking Meta every
+time.</li>
 </ul>
 <h3>What we use it for</h3>
 <ul>
@@ -1185,7 +1190,8 @@ permissions on our server in the European Union (Hetzner, Nuremberg). Only the p
 can read them; they're never shown on screen or logged.</p>
 <h3>How long</h3>
 <p>As long as the project has Meta connected. Clicking “Disconnect” on the platform immediately deletes
-the token and the identifiers. You can also revoke access from Facebook: Settings › Business Integrations,
+the token, the identifiers and the metrics copied from the chosen accounts (spend, purchases, and the names of
+campaigns, ad sets and ads). You can also revoke access from Facebook: Settings › Business Integrations,
 or Settings › Apps and Websites.</p>
 <h3>Data deletion</h3>
 <p>For us to delete all the data associated with your Meta account, write to us at dacoloradog@gmail.com
@@ -1268,14 +1274,16 @@ def eliminar_datos():
     """URL de instrucciones de eliminación de datos que pide Meta."""
     cuerpo = {
         "es": """<p>Para eliminar los datos que Creatv Machine guarda de tu cuenta de Meta:</p>
-<ol><li>Entra a tu proyecto en app.creatvmachine.com › FlowMarketing › <strong>Desconectar</strong>: se borran el token
-y los identificadores de tu cuenta publicitaria, Página e Instagram al instante.</li>
+<ol><li>Entra a tu proyecto en app.creatvmachine.com › FlowMarketing › <strong>Desconectar</strong>: se borran el token,
+los identificadores de tus cuentas publicitarias, Página e Instagram y las métricas copiadas de las cuentas elegidas
+(gasto, compras, nombres de campañas, conjuntos de anuncios y anuncios) al instante.</li>
 <li>Si prefieres, escribe a dacoloradog@gmail.com con el nombre de tu proyecto y lo eliminamos en máximo 7 días,
 con confirmación por correo.</li></ol>
 <p>También puedes revocar el acceso desde Facebook: Configuración › Apps y sitios web › Creatv Machine › Eliminar.</p>""",
         "en": """<p>To delete the data Creatv Machine stores about your Meta account:</p>
-<ol><li>Go to your project at app.creatvmachine.com › FlowMarketing › <strong>Disconnect</strong>: the token
-and the identifiers of your ad account, Page and Instagram are deleted instantly.</li>
+<ol><li>Go to your project at app.creatvmachine.com › FlowMarketing › <strong>Disconnect</strong>: the token,
+the identifiers of your ad accounts, Page and Instagram, and the metrics copied from the chosen accounts
+(spend, purchases, and the names of campaigns, ad sets and ads) are deleted instantly.</li>
 <li>If you prefer, write to dacoloradog@gmail.com with your project's name and we'll delete it within 7 days,
 confirmed by email.</li></ol>
 <p>You can also revoke access from Facebook: Settings › Apps and Websites › Creatv Machine › Remove.</p>""",
@@ -4070,6 +4078,20 @@ def meta_cancelar(cliente):
     return _ir_a_flowmarketing(cliente)
 
 
+def _soltar_cuentas_meta(cliente):
+    """Quitar la conexión de Meta de un proyecto (Desconectar, volver a modo propia, desasignar, desconectar la
+    agencia) también borra las métricas copiadas de sus cuentas y las deja libres para otro proyecto: /privacidad y
+    /eliminar-datos lo prometen (ruling R21, 2026-10-08). Si borrar falla, la desconexión ya hecha se queda: se anota
+    el tipo del error (nunca su texto) y se avisa; la siguiente vez que alguien quite las cuentas se reintenta."""
+    try:
+        meta_rend_cuentas.elegir(cliente, [])
+    except Exception as e:  # noqa: BLE001 — la desconexión no se deshace por esto
+        log.warning("meta rendimiento: no se pudieron borrar las métricas copiadas de %s (%s)", cliente, type(e).__name__)
+        flash(gettext("Meta se desconectó en %(proyecto)s, pero no se pudieron borrar sus métricas copiadas (%(tipo)s). "
+                      "Avisa al administrador.", proyecto=proyectos.nombre_visible(cliente), tipo=type(e).__name__),
+              "warn")
+
+
 @app.route("/cliente/<cliente>/meta/desconectar", methods=["POST"])
 def meta_desconectar(cliente):
     bloqueo = _bloqueo_modo_agencia(cliente)
@@ -4084,6 +4106,7 @@ def meta_desconectar(cliente):
         flash(gettext(MENSAJE_MODO_AGENCIA), "error")
         return _ir_a_flowmarketing(cliente)
     meta_conexion.borrar_pendiente(cliente)
+    _soltar_cuentas_meta(cliente)
     bitacora.registrar(cliente, "meta", "conexion", "ok", "desconectado" + (" y revocado en Meta" if revocado else ""))
     if revocado:
         flash(gettext("Meta desconectado de este proyecto y acceso revocado en Meta."), "ok")
@@ -4315,6 +4338,7 @@ def meta_agencia_salir(cliente):
         flash(motivo, "error")
         return _ir_a_meta(cliente)
     meta_agencia.desasignar(cliente)
+    _soltar_cuentas_meta(cliente)
     restaurada = bool((meta_conexion.cargar(cliente) or {}).get("token"))
     proyectos.guardar_meta_forma(cliente, "propia")
     nombre = proyectos.nombre_visible(cliente)
@@ -4426,6 +4450,7 @@ def admin_meta_desconectar():
     asignados = list(meta_agencia.proyectos_asignados())
     resultado = meta_agencia.desconectar()
     for cid in asignados:
+        _soltar_cuentas_meta(cid)
         bitacora.registrar(cid, "meta", "agencia", "ok", "vuelve a modo propia: la agencia se desconectó")
     n = resultado.get("desasignados", 0)
     if not resultado.get("habia") and not n:
@@ -4515,6 +4540,7 @@ def admin_meta_desasignar(cliente):
     if not meta_agencia.desasignar(cliente):
         flash(gettext("%(proyecto)s no estaba en modo agencia.", proyecto=proyectos.nombre_visible(cliente)), "warn")
         return _volver_admin_meta()
+    _soltar_cuentas_meta(cliente)
     bitacora.registrar(cliente, "meta", "agencia", "ok", f"vuelve a modo propia (por {session.get('usuario')})")
     flash(gettext("%(proyecto)s volvió a modo propia: si tenía su propia conexión se restauró; "
                   "si no, tendrá que registrar su app y conectar con Meta.", proyecto=proyectos.nombre_visible(cliente)),

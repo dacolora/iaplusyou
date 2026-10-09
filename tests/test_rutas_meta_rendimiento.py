@@ -500,3 +500,61 @@ def test_un_proyecto_lee_como_maximo_veinte_cuentas(conectado, monkeypatch):
     # Con el cupo lleno, las que ya estaban se quedan y las nuevas no entran.
     conectado["c"].post("/cliente/acme/meta-rendimiento/cuentas", data={"cuenta": [a for a, _ in todas]})
     assert len(cuentas.ids("acme")) == 20
+
+
+# ---- desconectar Meta borra las copias y libera las cuentas (ruling R21) --------------------------------------
+
+def _filas_copiadas(cliente="acme"):
+    """Cuántas filas de métricas copiadas quedan del proyecto, en las cuatro tablas de datos."""
+    total = 0
+    with db.conectar() as con:
+        for tabla in (db.meta_cuenta_dia, db.meta_anuncio_dia, db.meta_objeto, db.meta_alcance):
+            total += con.execute(sa.select(sa.func.count()).select_from(tabla).where(tabla.c.cliente == cliente)).scalar()
+    return total
+
+
+def test_desconectar_meta_borra_las_copias_y_deja_libres_las_cuentas(conectado, monkeypatch):
+    _sembrar()
+    assert _filas_copiadas() > 0
+    mc = conectado["dashboard"].meta_conexion
+    llamadas = []
+    monkeypatch.setattr(mc, "revocar", lambda c: False)
+    monkeypatch.setattr(mc, "borrar", lambda c: llamadas.append(c) or True)
+    r = conectado["c"].post("/cliente/acme/meta/desconectar")
+    assert r.status_code == 302 and llamadas == ["acme"]
+    assert cuentas.ids("acme") == [] and _filas_copiadas() == 0
+    # Las cuentas quedaron libres: otro proyecto ya puede leerlas.
+    assert cuentas.elegir("otro", [{"id": A, "name": "HappyFlops Norway"}])["agregadas"] == [A]
+
+
+def test_si_borrar_las_copias_falla_la_desconexion_se_queda_y_se_avisa(conectado, monkeypatch):
+    _sembrar()
+    mc = conectado["dashboard"].meta_conexion
+    llamadas = []
+    monkeypatch.setattr(mc, "revocar", lambda c: False)
+    monkeypatch.setattr(mc, "borrar", lambda c: llamadas.append(c) or True)
+
+    def falla(cliente, act):
+        raise RuntimeError(f"disco lleno con {TOKEN}")
+    monkeypatch.setattr(cuentas, "_borrar_copias", falla)
+    r = conectado["c"].post("/cliente/acme/meta/desconectar")
+    assert r.status_code == 302 and llamadas == ["acme"]
+    mensajes = _flashes(conectado["c"])
+    assert any("no se pudieron borrar sus métricas copiadas (RuntimeError)" in m for m in mensajes)
+    assert any("Meta desconectado de este proyecto" in m for m in mensajes)
+    assert all("disco lleno" not in m for m in mensajes)           # solo el tipo, nunca el texto
+    assert sorted(cuentas.ids("acme")) == [A, B]                    # nada se perdió: se reintenta después
+
+
+def test_la_politica_de_privacidad_promete_borrar_las_metricas_copiadas(app):  # noqa: F811
+    import idiomas
+    c = app["c"]
+    for ruta in ("/privacidad", "/eliminar-datos"):
+        es = " ".join(c.get(ruta).get_data(as_text=True).split())
+        assert "métricas copiadas de las cuentas elegidas" in es and "nombres de campañas, conjuntos de anuncios y anuncios" in es
+        assert "la cuenta elegida" not in es
+    assert "las cuentas publicitarias y la Página elegidas" in " ".join(c.get("/privacidad").get_data(as_text=True).split())
+    idiomas.guardar_de_usuario("admin", "en")
+    for ruta in ("/privacidad", "/eliminar-datos"):
+        en = " ".join(c.get(ruta).get_data(as_text=True).split())
+        assert "metrics copied from the chosen accounts" in en and "names of campaigns, ad sets and ads" in en
