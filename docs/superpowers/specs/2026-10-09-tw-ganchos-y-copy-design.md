@@ -144,8 +144,9 @@ copy con cifras sin dato se muestra con el aviso «revisa antes de publicar», p
 - `precio = n × gastos.estimar("video", modelo="kling_o3_pro", duracion=3, con_sonido=False)["usd"]`, donde `n` es el
   número de ganchos que se generan (hoy 0,336 cada uno: 3 = US$ 1,01).
 - `gastos.estimar_ganchos_tw(n)` lo envuelve, así la ruta y la plantilla calculan lo mismo.
-- La plantilla lo muestra con `|precio|usd` (con el margen de Cobros) en el botón, más `data-confirmar` con el número
-  de clips y el precio.
+- La plantilla lo muestra con su `usd_precio` (con el margen de Cobros) en el botón, más `data-confirmar` con el
+  número de clips y el precio. Nunca `|precio` del costo: con el margen sin leer ese filtro cae a 1,0 y muestra el costo
+  como precio; `usd_precio` es None y el botón dice «precio no disponible» (revisión final, arreglo D).
 - Sin precio conocido, el botón dice «precio no disponible» y no se puede pedir.
 
 ### 4.2 Datos: tabla `tw_gancho` (migración 0036; era la 0035, renumerada al mezclar main el 2026-10-09, que ya tenía 0035_meta_rendimiento)
@@ -215,7 +216,8 @@ Crear; cada pieza la cobra flowplus_video».
      «Medios» del editor y se puede reusar.
 3. **Por cada fila de la tanda que todavía no tenga `cf_id`** (así una corrida repetida no lanza dos veces):
    1. Saca el fotograma en `fotograma_s` con ffmpeg (`-ss` antes de `-i`, un cuadro, jpg) y lo sube con
-      `r2_uploader.upload_image(jpg, f"clientes/{c}/triple_whale/ganchos/{gid}.jpg")`. Lo guarda en `frame_url`.
+      `r2_uploader.upload_image(jpg, f"clientes/{c}/triple_whale/ganchos/{gid}_{secrets.token_hex(8)}.jpg")` (el
+      sufijo al azar es de la revisión final, arreglo E). Lo guarda en `frame_url`.
    2. Crea la sesión de Crear como `tareas.cadena.lanzar_escena` hace con una escena con imagen de arranque:
       ```python
       cf_id = creative_flow.crear(cliente, [], [], [], accion, 3, "", "A", referencias_urls=[], platforms=[])
@@ -251,7 +253,11 @@ Va en `worker.py` con las periódicas, junto a `cadena_vigilar`. Para cada fila 
   - si la sesión sigue en `VIVOS_CREAR`, no hace nada;
   - si está en `video_listo`, mueve la fila a `armando` y encola `tw_gancho_armar`
     (`f"{cliente}__tw_gancho_{gid}_armar"`, `max_intentos=2`, prioridad 1);
-  - si la sesión ya no está o terminó en otro estado, la fila pasa a `error` con el error de la sesión.
+  - si la sesión está en un error que Crear puede recuperar («Recuperar el video», sin pagar de nuevo:
+    `ganchos.clip_recuperable`, la condición de `cf_recuperar`), la fila sigue en `generando` sin escribir nada hasta
+    24 h desde su `actualizado_en`, y el detalle lleva a recuperarlo en Crear (revisión final, arreglo C);
+  - si la sesión ya no está o terminó en otro estado, la fila pasa a `error` con el error de la sesión (sin tokens y
+    recortado a 500, arreglo E).
 - **`produciendo`:** mira la final (`creative_flow.final_por_legado(cliente, final_id)`).
   - Con `video_url` y estado listo o degradada, la fila pasa a `lista` con `url_final`.
   - Si la final está en `error`, la fila pasa a `error` con su motivo.
@@ -474,3 +480,9 @@ Cosas que el spec no tenía y quedaron como pendientes (cada una en `docs/pendie
 - La salida del análisis llegó a 11 323 de 12 000 tokens en una corrida real (PND-224).
 - El `por_que` de un gancho cuenta para su comprobación de cifras (PND-225); el camino de falla de preparar no muestra
   el error de la sesión de Crear (PND-226); tres detalles menores de robustez (PND-227).
+- Revisión final (guardian-gasto y auditor-seguridad, 2026-10-09), arreglos A a E: tope de 20 000 y una respuesta
+  cortada no paga una corrección a ciegas (PND-224); las ofertas escritas en palabras («gratis», «fri frakt», «2 for 1»)
+  que no están en los datos cuentan como cifras sin dato en el texto del gancho y en el copy; el clip recuperable
+  (PND-221 para los ganchos); `usd_precio` en el botón y 409 sin margen (PND-223 para los ganchos); errores ajenos sin
+  tokens y la clave del fotograma con sufijo al azar. Detalle en la skill `triple-whale`. Queda: el análisis y su lote
+  no comparan el precio visto (PND-228).

@@ -260,7 +260,11 @@ production. It must work for ANY ad, not only Creatv's: in happyflops only 4 pie
   frames with their second (a Creatv piece's from R2, else the video, else the thumbnail), the ad text, the Whisper
   voice, rings, trend, the attribution model and window, up to 3 winners of the channel, the account evaluation, the
   project's learnings and top products; doctrina `revisar`+`diagnosticar`+`angulo`+`gancho`+`video`, the project's
-  language, `max_tokens` 12 000, one correction call (rule 7). Ad text, names and voice are someone else's text: `_dato`
+  language, `max_tokens` 20 000 (12 000 until 2026-10-09, when a real run reached 11 323; only the tokens used are
+  paid), one correction call (rule 7) except when the answer was cut by the cap: `mejorar._llamar` is its own call
+  (same cache accounting as `_llamar_contando`) that also returns the `stop_reason`, and `max_tokens` raises
+  `AnalisisCortado` with the paid tokens and no second call («La respuesta de Claude salió cortada; vuelve a
+  intentarlo.»). Ad text, names and voice are someone else's text: `_dato`
   strips every run of 2+ `<`/`>` in one regex pass (two chained `replace` calls could be dodged) so a «<<<FIN>>>» in a
   copy cannot close the DATOS block, and the output only fills an escaped card and a Crear prefill the person reviews.
   Names, campaign and conjunto arrive in one line (`evaluacion._una_linea`), and in the prompt the names, the winners'
@@ -362,8 +366,10 @@ fraction of a new video. Spec `docs/superpowers/specs/2026-10-09-tw-ganchos-y-co
   escena/por_que in the project's, prompts in English (`system()` says the three exceptions, and that they win over
   the IDIOMA line).
 - **Money.** `gastos.estimar_ganchos_tw(n)` = n × Kling O3 Pro image-to-video, 3 s, no sound (US$ 0,336 each); the
-  detail shows it with `|precio|usd`, `data-confirmar` and a hidden `precio_visto` (the PRICE, back to cost once with
-  `gastos.costo_de_precio`, ±0,005, else 409). A hook with `cifras_sin_dato` is shown with its warning and is neither
+  detail shows its `usd_precio` (cost × margin; None when the margin read failed, `gastos._margen_fallido`: then the
+  reason is «precio no disponible», the button is disabled and the route answers 409) in the button, `data-confirmar`
+  and a hidden `precio_visto` (the PRICE, back to cost once with `gastos.costo_de_precio`, ±0,005, else 409). Never
+  `usd|precio`: that filter falls back to margin 1,0 and shows the cost as the price (PND-223). A hook with `cifras_sin_dato` is shown with its warning and is neither
   generated nor priced. `libro.exigir` of the total before creating anything; each clip reserves its own when
   `flowplus_lanzar.lanzar` queues it and Crear's closing (`flowplus_video`) charges it. Preparar, vigilar and armar
   never call a paid provider (all three in `TIPOS_EXENTOS_DE_COBRO`); armar and the render are ffmpeg. The analysis
@@ -381,16 +387,20 @@ fraction of a new video. Spec `docs/superpowers/specs/2026-10-09-tw-ganchos-y-co
   `conectores.url.descargar_archivo` only from `mejorar._url_voz`, ffprobe must say mp4/mov (`es_mp4`), measures it
   BEFORE uploading anything (a video under `MIN_ORIGINAL_S` = 5 s leaves nothing in R2 or in the queue), stores it as a
   material (origen `triple_whale`, deduped by hash, shown in «Medios»), and for each row WITHOUT `cf_id` extracts the
-  frame at `fotograma_s` (`-ss` before `-i`) to `clientes/<c>/triple_whale/ganchos/<gid>.jpg`, creates the Crear session
+  frame at `fotograma_s` (`-ss` before `-i`) to `clientes/<c>/triple_whale/ganchos/<gid>_<token_hex(8)>.jpg` (random
+  suffix: the bare id let anyone guess the other variants' keys), creates the Crear session
   like `tareas.cadena.lanzar_escena` (kling_o3_pro, `imagen_inicial`, 3 s, no sound, `tw_gancho={gancho_id, analisis_id,
   original_hash}`), writes `cf_id` BEFORE launching (a CAS with `vacios=("cf_id",)`: a second run never launches the
   same row twice) and launches with prioridad 3. `lanzar` answering False means the clip is already in the queue (a
   clip being paid): the row goes on to `generando`, never to error. `SaldoInsuficiente` mid-way: that row and the rest
   → error with `frase_proyecto()`; the launched ones go on. If preparar fails, only rows WITHOUT a clip go to error
-  (`_clip_salio`: the clip's job is alive or its session already has the video); a row whose clip is on its way goes to
-  `generando`: nothing paid is lost. The periodic `tw_ganchos_vigilar` (60 s, after `cadena_vigilar`, one failing row or
+  (`_clip_salio`, with the project's sessions: the clip's job is alive, or its session already has the video or is in
+  an error Crear can recover); a row whose clip is on its way goes to `generando`: nothing paid is lost. The periodic `tw_ganchos_vigilar` (60 s, after `cadena_vigilar`, one failing row or
   project never stops the others) moves `generando` → `armando` when the session is `video_listo` (enqueues
-  `tw_gancho_armar`, `<c>__tw_gancho_<gid>_armar`, max_intentos=2, prioridad 1), `produciendo` → `lista`/`error` from the
+  `tw_gancho_armar`, `<c>__tw_gancho_<gid>_armar`, max_intentos=2, prioridad 1), keeps it in `generando` WITHOUT writing
+  anything while the session is in an error Crear can recover (`ganchos.clip_recuperable`, the exact condition of
+  `cf_recuperar`) for up to `ESPERA_RECUPERABLE_S` = 24 h since the row's `actualizado_en` (then error with the
+  session's error), `produciendo` → `lista`/`error` from the
   final, and closes a `preparando`/`armando` row whose job is gone only after `GRACIA_S` (120 s) without changes (the
   route stores the job_id right after creating the rows and the vigilante moves to `armando` before enqueuing, so a
   fresh row has a moment with no job in the queue). In `preparando` it shows the Crear session's error when the clip
@@ -413,7 +423,10 @@ fraction of a new video. Spec `docs/superpowers/specs/2026-10-09-tw-ganchos-y-co
 - **Screen** (`_tw_analisis.html`, by fetch, no `<script>`): «Copy nuevo para Meta» (copy buttons; a warning with figures
   not in the data, «revisa antes de publicar»), «Ganchos nuevos (primeros 3 s)» with the button or the reason in words
   (`ganchos.puede_probar`), and the latest tanda's variants (state, code with «Copiar» only when it is not in error,
-  `<video preload="none" data-precarga>`, «Descargar» and the video in another tab with `rel="noopener"`, «Abrir en el
+  `<video preload="none" data-precarga>`, «Descargar» and the video in another tab with `rel="noopener"`; a `generando`
+  variant whose clip Crear can recover says «El clip ya está pagado: recupéralo en Crear.» with «Abrir en Crear»
+  (`#creativeflowplus?cf=<cf_id>`, which opens that piece's detail; sessions read once, only when such a variant
+  exists, and it does not make the tab re-ask the detail), «Abrir en el
   editor», «Ver en Final edition» = the existing deep link `#final?cf=<cf_id>`); older tandas fold into one
   `<details>`. Variant rows come in ONE query (`ganchos_de_analisis`); a bar is painted only when its job is alive in
   the queue (`cola.job_ids_vivos_todos`): a bar over a finished job would fire `trabajo-terminado` at once and the tab
@@ -431,10 +444,21 @@ fraction of a new video. Spec `docs/superpowers/specs/2026-10-09-tw-ganchos-y-co
   digits of a decimal («4,0» → 40; PND-219, shared with Sprints and Nicho, changing it needs eval-claude), the
   copy can claim urgency or scarcity without a number («Lageret tømmes raskt») and the verifier cannot see it
   (PND-220), and the hook's `por_que` counts toward the check so a guessed figure there blocks a clean hook (PND-225).
-  A clip Crear can still recover («Recuperar el video») leaves its row in `error` for good (PND-221). The originals
-  count toward the 2 GB quota but «Medios» cannot delete origen `triple_whale` (PND-222). The `|precio` filter keeps
-  showing the cost when the margin read fails (PND-223). The analysis output reached 11 323 of the 12 000 tokens in one
-  real run (PND-224). preparar's own failure path does not show the Crear session's error (PND-226); small robustness
-  items in PND-227.
+  The scene chain still closes a recoverable clip as an error (PND-221; the hooks no longer do, fix C below). The
+  originals count toward the 2 GB quota but «Medios» cannot delete origen `triple_whale` (PND-222). The `|precio` filter
+  keeps showing the cost when the margin read fails in ~25 other templates (PND-223). The 20 000 cap still needs one
+  eval-claude case (PND-224). preparar's own failure path does not show the Crear session's error (PND-226); small
+  robustness items in PND-227. «Cómo mejorarlo» and its batch do not compare the price seen (PND-228; Cobros is off
+  everywhere today).
+- **Final review fixes (2026-10-09, guardian-gasto and auditor-seguridad, commits db605232..4e4a77a4).** A: cap
+  20 000 and a cut answer never pays a blind correction (above, «Cómo mejorarlo»). B: offers in words —
+  `mejorar.TERMINOS_OFERTA` (a short reviewed heuristic list in es/en/no/sv/pt: gratis/free, envío/shipping/frakt,
+  descuento/rabatt, regalo/gift, halv pris/halva priset, 2x1/«2 for 1»…; whole word or phrase, a hyphen is not a border
+  so «pain-free» is not «free») and `ofertas_sin_dato(texto, verificable)` add the terms that are not in the data to the
+  hook's `cifras_sin_dato` (only its `texto`, what goes in the video: the hook is not generated) and to the new copy's
+  (title and text: «revisa antes de publicar»); `funciona`/`falla`/`cambios` stay digits-only. C: a recoverable clip
+  keeps its row (above). D: `usd_precio` in the button and the 409 (above). E: errors copied from the Crear session or
+  the final go through `_error_ajeno` (`cola.recortar(cola.sin_token(…), 500)`) and the start frame key has a random
+  suffix. Not changed: the Kling prompt stays folded in a `<details>` (UX), as the auditor allowed.
 - **Out of this change** (spec §11): the chip on the gallery card (PND-215), «Volver a analizar» for an old analysis
   (PND-216), hooks for image ads (PND-217), the hooks in Meta paused with their code (PND-218).
