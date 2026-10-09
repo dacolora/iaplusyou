@@ -582,3 +582,12 @@ def test_sticker_es_por_proyecto_y_el_material_lo_manda_como_tenible(entorno, r2
 def test_sticker_desconocido_o_mal_escrito_es_none_y_no_sube_nada(entorno, r2, malo):
     assert entorno.sticker("acme", malo) is None
     assert r2 == []
+
+
+def test_listar_incluye_el_original_de_un_anuncio_de_triple_whale(entorno):
+    """Spec 2026-10-09 §4.4.2: el video original que bajan los ganchos queda en «Medios» y se puede reusar."""
+    import materiales
+    m = materiales.registrar("acme", tipo="video", origen="triple_whale", url="https://r2/o.mp4", hash="h-tw",
+                             bytes=1, duracion_ms=20000, extra={"nombre": "Anuncio p1", "ad_id": "p1"})
+    assert m["id"] in {x["id"] for x in entorno.listar("acme")["materiales"]}
+    assert m["id"] not in {x["id"] for x in entorno.listar("otro")["materiales"]}

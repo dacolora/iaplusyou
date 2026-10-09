@@ -51,7 +51,9 @@ EXTENSIONES = {
 # proyecto se guarda con origen «marca» (`insumos.logo`). Capa 5a (Task 6):
 # «grabacion» (el micrófono del editor) y «locucion» (los audios terminados
 # de Crear › Audios, voz + música) se suman a la lista.
-ORIGENES_BIBLIOTECA = ("subida", "crear", "musica", "voz", "marca", "grabacion", "locucion")
+# Spec 2026-10-09 (ganchos de Triple Whale): «triple_whale», el video original de un anuncio, bajado una vez y
+# deduplicado por hash.
+ORIGENES_BIBLIOTECA = ("subida", "crear", "musica", "voz", "marca", "grabacion", "locucion", "triple_whale")
 TOPE_MATERIALES = 200
 
 

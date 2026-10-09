@@ -262,3 +262,12 @@ PND-012 (2026-10-08, corrección lote 6A): materiales.actualizar_ficha actualiza
 
 
 PND-080/128 (2026-10-08, decisiones delegadas): apuntar_final, compartido por los dos caminos de producción, marca producida bajo el candado SQLite si el documento actual coincide con la versión congelada del render. Un documento editado durante el render conserva borrador; guardar vuelve a borrador. PND-128, enmienda 2026-10-08: sin color explícito, documentos nuevos llevan marca.color=None y solo el precio que era morado pasa a negro a 0.6 con texto blanco. Gancho/CTA conservan ESTILO_HOOK/ESTILO_CTA con y sin marca; subtítulos conservan karaoke/resaltado=None. El legado sin marca resalta el karaoke #FFD400. No se migra ningún documento, edición ni estilo guardado, ni se modifica motor/subtitulos.py. Regresiones en test_ediciones.py, test_documento.py y operaciones.test.mjs; no se cambia retención ni url_local.
+
+
+**Producir sin navegador (2026-10-09, ganchos de Triple Whale, spec `2026-10-09-tw-ganchos-y-copy-design.md` §4.6):**
+`rutas_editor.encolar_producciones(cliente, edicion_id, ed, version, destinos)` is the tail of `producir` (per destino:
+skip a live render, `creative_flow.crear_final`, `edicion_producir` of the FROZEN version, `max_intentos=1`); the route
+and `tareas/triple_whale.tw_gancho_armar` share it, so a task that builds a document produces exactly as the button
+does, after its own `verificar_recortes` and `versionar` (the route keeps its `version_n` CAS and its 409). Materials
+with origen `triple_whale` (an ad's original video, downloaded once and deduped by hash) are in `ORIGENES_BIBLIOTECA`:
+they show in «Medios» and can be reused, but they are not in `ORIGENES_BORRABLES`.
