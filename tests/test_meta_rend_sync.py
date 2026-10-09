@@ -843,3 +843,48 @@ def test_si_no_se_puede_calcular_que_pedir_la_copia_termina_bien(cuenta, monkeyp
         sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
     assert cuentas.cuenta(CLI, ACT)["estado"] == "ok" and _pedidos_ids(g) == []
     assert "OperationalError" in caplog.text and "EAAsecreto" not in caplog.text
+
+
+# ------------------------------ un tramo que falla a medias no deja filas a medias (revisión final, H1) ---
+
+def _foto(tabla):
+    """Todas las filas de la tabla (con id y marca de tiempo): lo que NO debe cambiar si un tramo falla."""
+    with db.conectar() as con:
+        return [dict(r) for r in con.execute(sa.select(tabla).where(tabla.c.cliente == CLI)
+                                              .order_by(tabla.c.id)).mappings()]
+
+
+def _siete_dias(**cambios):
+    seis = HOY - timedelta(days=6)
+    return [dict(FILA_META, date_start=d, **cambios) for d in _dias({"since": seis.isoformat(), "until": HOY.isoformat()})]
+
+
+def test_un_informe_de_anuncios_que_falla_despues_de_entregar_una_pagina_deja_intacto_el_tramo(cuenta, monkeypatch):
+    FakeGraph(monkeypatch)
+    sync.sincronizar(CLI, ACT, "tok", hoy=HOY)               # copia buena que deja el tramo sembrado
+    antes, extra_antes = _foto(db.meta_anuncio_dia), cuentas.cuenta(CLI, ACT)["extra"]
+    assert len(antes) >= 7
+    nuevas = [dict(f, ad_id="a1", ad_name="Video 1", adset_id="s1", adset_name="Mujeres", campaign_id="c1",
+                   campaign_name="Otoño") for f in _siete_dias(spend="999")]
+    g = FakeGraph(monkeypatch, filas_anuncio=nuevas,
+                  falla_informe_tras_pagina=graph.ErrorGraph("Meta pidió esperar", codigo=17))
+    with pytest.raises(graph.ErrorGraph):
+        sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    assert g.paginas_entregadas == 1                          # sí llegó una página (3 filas) antes del error
+    assert _foto(db.meta_anuncio_dia) == antes                # ni filas nuevas, ni borradas, ni cambiadas
+    assert cuentas.cuenta(CLI, ACT)["extra"]["anuncios_desde"] == extra_antes["anuncios_desde"]
+    assert cuentas.cuenta(CLI, ACT)["estado"] != "ok"
+
+
+def test_un_listado_de_cuenta_que_falla_a_medias_deja_intacto_el_tramo(cuenta, monkeypatch):
+    FakeGraph(monkeypatch)
+    sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    antes_cuenta, antes_anuncio = _foto(db.meta_cuenta_dia), _foto(db.meta_anuncio_dia)
+    assert len(antes_cuenta) >= 7
+    FakeGraph(monkeypatch, filas_cuenta=_siete_dias(spend="999"),
+              falla_cuenta_tras_pagina=graph.ErrorGraph("Meta pidió esperar", codigo=17))
+    with pytest.raises(graph.ErrorGraph):
+        sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    assert _foto(db.meta_cuenta_dia) == antes_cuenta
+    assert _foto(db.meta_anuncio_dia) == antes_anuncio        # los anuncios ni se alcanzaron a pedir
+    assert cuentas.cuenta(CLI, ACT)["estado"] != "ok"
