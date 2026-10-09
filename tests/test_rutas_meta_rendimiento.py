@@ -595,3 +595,24 @@ def test_el_admin_no_espera_y_una_cuenta_sin_copia_tampoco(conectado, app):
     c = _como_cliente(app)
     c.post("/cliente/acme/meta-rendimiento/sincronizar", data={"act": B})        # B nunca se copió
     assert sorted(t["job_id"] for t in _tareas()) == ["acme__meta_rend__act_1", "acme__meta_rend__act_2"]
+
+
+# ---- los POST piden correo verificado, como las rutas que conectan Meta -------------------------------------------
+
+def test_sin_correo_verificado_un_cliente_no_escribe_nada(conectado, app):
+    import usuarios
+    _dos_cuentas()
+    usuarios.actualizar("user_acme", correo_verificado=False)
+    c = _como_cliente(app)
+    r = c.post("/cliente/acme/meta-rendimiento/sincronizar")
+    assert r.status_code == 302 and r.headers["Location"].endswith("/cliente/acme#settings")
+    assert _tareas() == [] and any("Confirma tu correo primero" in m for m in _flashes(c))
+    # Leer el panel no es escribir: sigue funcionando.
+    assert c.get("/cliente/acme/meta-rendimiento/panel").status_code == 200
+    # Verificado, sí; el admin no necesita verificar nada.
+    usuarios.actualizar("user_acme", correo_verificado=True)
+    c.post("/cliente/acme/meta-rendimiento/sincronizar", data={"act": A})
+    assert [t["job_id"] for t in _tareas()] == ["acme__meta_rend__act_1"]
+    usuarios.actualizar("admin", correo_verificado=False)
+    conectado["c"].post("/cliente/acme/meta-rendimiento/sincronizar", data={"act": B})
+    assert sorted(t["job_id"] for t in _tareas()) == ["acme__meta_rend__act_1", "acme__meta_rend__act_2"]

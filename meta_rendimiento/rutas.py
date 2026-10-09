@@ -19,7 +19,8 @@ cada POST además exige el mismo origen (Sec-Fetch-Site), la barrera CSRF del re
 AISLAMIENTO (ruling R20, revisión final 2026-10-08): elegir cuentas (GET y POST) y cambiar el país son SOLO del admin
 (403 al resto). El token de un proyecto puede ver cuentas de otros clientes, y quien las elige las lee: por eso lo
 decide una persona de Creatv. Una cuenta con la que LANZA otro proyecto (`meta.json`) cuenta como «En otro proyecto»
-igual que una que otro ya lee: no se lista habilitada ni se acepta.
+igual que una que otro ya lee: no se lista habilitada ni se acepta. Todo POST de la pestaña exige además correo
+verificado (como las rutas que conectan Meta); el admin está exento.
 
 En modo agencia el selector dice «Todavía no disponible» (spec §2.10). Ningún token llega a una respuesta: los
 errores de Meta pasan por `cola.sin_token` y además se tacha el valor exacto del token."""
@@ -33,6 +34,7 @@ import cola
 import db
 import idiomas
 import meta_conexion
+import usuarios
 from idiomas import N_
 from meta_rendimiento import cuentas, grafico, panel
 from tareas import meta_rendimiento as tareas_mr
@@ -70,6 +72,19 @@ def solo_admin(fn):
             abort(403)
         return fn(*args, **kwargs)
     return envuelta
+
+
+@bp.before_request
+def _correo_verificado():
+    """Sin correo verificado una persona con rol cliente no escribe nada aquí (como las rutas que conectan Meta o
+    una tienda: `dashboard._requiere_correo_verificado`, que este Blueprint no puede importar). El admin pasa."""
+    if request.method != "POST" or es_admin():
+        return None
+    entry = usuarios.obtener(session.get("usuario") or "")
+    if entry and entry.get("correo_verificado"):
+        return None
+    flash(gettext("Confirma tu correo primero (Configuración › Cuenta)."), "error")
+    return redirect(url_for("ver_cliente", cliente=request.view_args["cliente"], _anchor="settings"))
 
 
 def _volver(cliente):
