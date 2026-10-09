@@ -523,6 +523,24 @@ def test_un_proyecto_lee_como_maximo_veinte_cuentas(conectado, monkeypatch):
     assert len(cuentas.ids("acme")) == 20
 
 
+def test_con_dieciocho_cuentas_ya_elegidas_cinco_nuevas_no_desplazan_a_ninguna_de_las_que_estaban(conectado, monkeypatch):
+    # Mutación A7: `(nuevas + existentes)[:20]` quitaría tres de las 18 (y borraría sus copias).
+    viejas = [(f"act_{100 + i}", f"Vieja {i}") for i in range(18)]
+    nuevas = [(f"act_{200 + i}", f"Nueva {i}") for i in range(5)]
+    cuentas.elegir("acme", [{"id": a, "name": n, "currency": "SEK"} for a, n in viejas])
+    monkeypatch.setattr(conectado["dashboard"].meta_conexion, "listar_activos", lambda t: _activos(*viejas, *nuevas))
+    # Las nuevas van PRIMERO en el formulario: aun así el cupo es de las que ya estaban.
+    r = conectado["c"].post("/cliente/acme/meta-rendimiento/cuentas",
+                            data={"cuenta": [a for a, _ in nuevas + viejas]})
+    assert r.status_code == 302
+    ids = cuentas.ids("acme")
+    assert len(ids) == 20 and {a for a, _ in viejas} <= set(ids)
+    assert [a for a, _ in nuevas[:2]] == [a for a in ids if a.startswith("act_2")]      # entran las 2 que caben
+    assert not any(cuentas.cuenta("acme", a) for a, _ in nuevas[2:])                     # y las 3 de más se rechazan
+    assert any("máximo 20 cuentas" in m and "3 cuentas no se agregaron" in m for m in _flashes(conectado["c"]))
+    assert sorted(t["job_id"] for t in _tareas()) == sorted(f"acme__meta_rend__{a}" for a, _ in nuevas[:2])
+
+
 # ---- desconectar Meta borra las copias y libera las cuentas (ruling R21) --------------------------------------
 
 def _filas_copiadas(cliente="acme"):
