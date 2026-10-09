@@ -261,7 +261,7 @@ Reglas:
 - Si no hay fotogramas ni imagen, juzga por el texto, la voz y los números, y dilo en "frase".
 - "ganchos": exactamente 3, y van SIEMPRE que haya fotogramas del video (las imágenes con «Segundo N:»), también si el anuncio es ganador (para escalarlo antes de que se canse); solo si no los ves (solo una imagen, o nada), "ganchos": []. Los 3 son distintos entre sí (otra pregunta, otro dolor, otra demostración, otra prueba) y llevan la misma promesa del anuncio.
 - El clip de cada gancho reemplaza los 3 primeros segundos y la voz original sigue sonando debajo (es la del bloque VOZ): su "texto" tiene que funcionar con esa voz.
-- "fotograma_s" es el segundo de uno de los fotogramas que viste, uno donde se vea bien el producto: el clip arranca en esa imagen.
+- "fotograma_s" es el segundo de uno de los fotogramas que viste, uno donde se vea bien el producto: el clip arranca en esa imagen. Elige un fotograma SIN texto quemado (subtítulos, títulos, precios); si todos tienen texto o subtítulos quemados, usa el primero (el del segundo 0,3): su subtítulo es el de la voz que suena debajo del gancho.
 - El "prompt" de cada gancho describe el movimiento y la cámara durante 3 s desde esa imagen; nunca pide textos, subtítulos ni logos (el texto lo pone el editor).
 - "copy_nuevo": usa solo las ofertas, descuentos, precios y plazos que aparecen en el TEXTO DEL ANUNCIO o en los datos de arriba; nunca inventes uno.
 - Idiomas: el "texto" de cada gancho y el "titulo" y el "texto" de "copy_nuevo" van en el idioma del TEXTO DEL ANUNCIO (si no hay texto, en el de la voz); "escena" y "por_que" van en el idioma pedido; el "prompt" de cada gancho, en inglés."""

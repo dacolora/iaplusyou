@@ -420,6 +420,9 @@ def test_el_prompt_pide_ganchos_y_copy_con_sus_reglas():
     # Los ganchos son obligatorios con fotogramas, también en un anuncio ganador; solo sin fotogramas van vacíos.
     assert "van SIEMPRE que haya fotogramas del video" in p and "también si el anuncio es ganador" in p
     assert "para escalarlo antes de que se canse); solo si no los ves" in p
+    # El clip arranca en un fotograma sin subtítulos quemados; si todos los traen, en el primero, que es el de la voz.
+    assert "Elige un fotograma SIN texto quemado (subtítulos, títulos, precios)" in p
+    assert "usa el primero (el del segundo 0,3): su subtítulo es el de la voz que suena debajo del gancho" in p
     assert "nunca inventes" in p and "la voz original sigue sonando" in p and "subtítulos ni logos" in p
     texto = mejorar.armar("Acme", {"foto": _foto(), "desde": "2026-09-01", "hasta": "2026-09-30", "moneda": "USD",
                                    "canal": "facebook-ads"})
