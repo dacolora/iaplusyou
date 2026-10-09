@@ -23,6 +23,15 @@ def base_temporal(monkeypatch):
 
 
 @pytest.fixture()
+def margen_1_5(base_temporal):
+    """El margen global que suponen los tests de cobros que no hablan del margen. El defecto del código es 2,0
+    (a la carta, planes 2026-10-09); estos tests escriben su lógica con 1,5 y lo fijan aquí, explícito."""
+    from cobros import libro
+    libro.guardar_margen_global(1.5, "test")
+    yield
+
+
+@pytest.fixture()
 def escritor_en_medio(base_temporal):
     """`escritor_en_medio(patron, sql)`: justo antes del primer statement que
     contenga `patron`, OTRA conexión (otro hilo, el worker) ejecuta `sql` y

@@ -15,7 +15,7 @@ import db
 
 log = logging.getLogger(__name__)
 
-MARGEN_DEFECTO = 1.5
+MARGEN_DEFECTO = 2.0   # a la carta (spec planes 2026-10-09 §12.7); era 1,5 hasta 0035
 MARGEN_MIN, MARGEN_MAX = 1.0, 5.0
 UMBRAL_DEFECTO = 5000
 CLAVE_MARGEN = "cobros:margen_global"

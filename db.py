@@ -644,10 +644,11 @@ movimiento_saldo = Table("movimiento_saldo", metadata,
     Column("id", Integer, primary_key=True),
     Column("cliente", String(80), nullable=False),
     Column("creado_en", String(19), nullable=False),
-    Column("tipo", String(16), nullable=False),                # recarga|cobro|reverso|no_cobrado|ajuste|anulacion
+    Column("tipo", String(16), nullable=False),                # recarga|cobro|reverso|no_cobrado|ajuste|anulacion|plan|vencimiento|incluido
     Column("milesimas", Integer, nullable=False),              # con signo
     Column("gasto_id", Integer),
     Column("recarga_id", Integer),
+    Column("periodo_id", Integer),                             # periodo_plan: plan|vencimiento (0035)
     Column("job_id", String(160)),
     Column("tarea_id", Integer),
     Column("concepto", String(120), nullable=False),           # código; se traduce al pintar
@@ -656,6 +657,7 @@ movimiento_saldo = Table("movimiento_saldo", metadata,
     Column("extra", JSON),
     sa.UniqueConstraint("tipo", "gasto_id", name="uq_movimiento_gasto"),
     sa.UniqueConstraint("tipo", "recarga_id", name="uq_movimiento_recarga"),
+    sa.UniqueConstraint("tipo", "periodo_id", name="uq_movimiento_periodo"),
     sa.Index("ix_movimiento_cliente_creado", "cliente", "creado_en"),
     sa.Index("ix_movimiento_job", "job_id"),
     sqlite_autoincrement=True,
@@ -673,12 +675,13 @@ recarga = Table("recarga", metadata,
     Column("cliente", String(80), nullable=False, index=True),
     Column("creada_en", String(19), nullable=False),
     Column("actualizada_en", String(19)),
-    Column("medio", String(12), nullable=False),               # bold|manual
+    Column("medio", String(12), nullable=False),               # bold|wompi|manual
     Column("estado", String(12), nullable=False),              # pendiente|aprobada|rechazada|expirada|anulada
     Column("milesimas", Integer, nullable=False),
     Column("referencia", String(60), nullable=False, unique=True),
     Column("link_id", String(40)),
     Column("pago_id", String(40), unique=True),
+    Column("pasarela_ref", String(40), unique=True),           # id de la transacción de Wompi (0035)
     Column("moneda_pago", String(3)),
     Column("total_pago", Integer),
     Column("medio_pago", String(20)),
@@ -699,6 +702,81 @@ pago_evento = Table("pago_evento", metadata,
     Column("cuerpo", JSON),
     sa.UniqueConstraint("proveedor", "evento_id", name="uq_pago_evento"),
     sa.Index("ix_pago_evento_recibido", "recibido_en"),
+)
+
+# --- Planes mensuales (docs/superpowers/specs/2026-10-09-planes-mensuales-wompi-design.md §2, migración 0035) ---
+# Escritor único: cobros/planes.py (plan, suscripcion, periodo_plan, pago_plan). Los movimientos que
+# acreditan o vencen un periodo los escribe cobros/libro.py.
+
+plan = Table("plan", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("nombre", String(60), nullable=False),
+    Column("precio_usd", Integer, nullable=False),             # mensual, dólares enteros
+    Column("precio_anual_usd", Integer),                       # NULL = sin opción anual
+    Column("margen", Float, nullable=False),                   # el de miembro, 1,00–5,00
+    Column("tope_incluido_usd", Float, nullable=False, default=25.0),   # costo de proveedor regalado por mes
+    Column("activo", Boolean, nullable=False, default=True),   # archivado = no se ofrece
+    Column("orden", Integer, nullable=False, default=0),
+    Column("creado_en", String(19)),
+    Column("actualizado_en", String(19)),
+    sqlite_autoincrement=True,
+)
+
+suscripcion = Table("suscripcion", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("cliente", String(80), nullable=False, index=True),
+    Column("plan_id", Integer, nullable=False),
+    Column("ciclo", String(8), nullable=False),                # mensual|anual
+    Column("estado", String(12), nullable=False),              # activa|cancelada|morosa|terminada
+    Column("renovar", Boolean, nullable=False, default=True),
+    Column("fuente_pago_id", String(40)),                      # payment_source de Wompi
+    Column("medio_fuente", String(12)),                        # CARD|NEQUI
+    Column("fuente_resumen", String(40)),                      # «Visa ···4242»; nunca el número
+    Column("correo", String(120)),
+    Column("cubierto_hasta", String(19)),
+    Column("proximo_cobro", String(19)),
+    Column("intentos_fallidos", Integer, nullable=False, default=0),
+    Column("usuario", String(80), nullable=False),
+    Column("creada_en", String(19)),
+    Column("actualizada_en", String(19)),
+    # A lo más una suscripción no terminada por cliente.
+    sa.Index("uq_suscripcion_viva", "cliente", unique=True, sqlite_where=sa.text("estado != 'terminada'")),
+    sqlite_autoincrement=True,
+)
+
+periodo_plan = Table("periodo_plan", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("cliente", String(80), nullable=False, index=True),
+    Column("suscripcion_id", Integer, nullable=False),
+    Column("inicio", String(19), nullable=False),
+    Column("fin", String(19), nullable=False),
+    Column("precio_usd", Integer, nullable=False),             # foto del plan para ese mes
+    Column("margen", Float, nullable=False),
+    Column("tope_incluido_usd", Float, nullable=False),
+    Column("credito_milesimas", Integer, nullable=False),
+    Column("pago_id", Integer),                                # pago_plan que lo cubre; NULL = activado a mano
+    Column("cerrado", Boolean, nullable=False, default=False),
+    sa.UniqueConstraint("suscripcion_id", "inicio", name="uq_periodo_suscripcion_inicio"),
+    sqlite_autoincrement=True,
+)
+
+pago_plan = Table("pago_plan", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("cliente", String(80), nullable=False, index=True),
+    Column("suscripcion_id", Integer, nullable=False),
+    Column("ciclo", String(8), nullable=False),
+    Column("usd", Integer, nullable=False),
+    Column("trm", Float),
+    Column("monto_cop_centavos", Integer),
+    Column("referencia", String(60), nullable=False, unique=True),   # pl-<suscripcion>-<AAAAMMDD>-<intento>
+    Column("transaccion_id", String(40), unique=True),
+    Column("estado", String(12), nullable=False),              # pendiente|aprobado|rechazado|error|anulado
+    Column("motivo", String(300)),
+    Column("creado_en", String(19)),
+    Column("actualizado_en", String(19)),
+    Column("medio", String(12), nullable=False),               # wompi|manual
+    Column("usuario", String(80)),
+    sqlite_autoincrement=True,
 )
 
 # ---------------------------------------------------- referentes ---

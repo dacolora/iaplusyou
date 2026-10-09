@@ -1,5 +1,8 @@
 """El cobro se escribe en la misma puerta que el costo (spec §3)."""
+import pytest
 import sqlalchemy as sa
+
+pytestmark = pytest.mark.usefixtures("margen_1_5")   # estos tests suponen el margen 1,5 (el defecto ahora es 2,0)
 
 
 def _movs(db):
