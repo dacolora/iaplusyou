@@ -602,6 +602,15 @@ def _despues_del_cobro(cliente, resultado, gasto_id, usd, tipo, referencia):
             s = libro.saldo(cliente)
             if s < c["umbral"]:
                 avisos.saldo_bajo(cliente, s)
+        # Planes (spec 2026-10-09 §4): lo incluido no le avisa nada al cliente; al admin, al 80 % y al 100 % del
+        # tope. Un `cobro` de un tipo incluido con el periodo abierto es uno que ya no cupo en el tope.
+        if resultado in ("incluido", "cobro"):
+            from cobros import planes  # noqa: PLC0415
+            if tipo in planes.TIPOS_INCLUIDOS:
+                periodo = planes.periodo_abierto(None, cliente, ahora=db.ahora())
+                if periodo is not None:
+                    avisos.tope_incluido(cliente, periodo, planes.incluido_usado(cliente, periodo),
+                                         agotado=resultado == "cobro")
     except Exception:  # noqa: BLE001
         log.exception("aviso del cobro de %s falló", referencia)
 

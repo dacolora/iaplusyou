@@ -12,6 +12,7 @@ import sqlalchemy as sa
 from flask_babel import gettext
 
 import db
+from cobros import planes
 
 log = logging.getLogger(__name__)
 
@@ -114,13 +115,27 @@ def guardar_margen_global(valor, usuario):
     log.info("margen global → %s (por %s)", valor, usuario)
 
 
-def _cuenta(con, cliente):
+def _cuenta_y_periodo(con, cliente):
+    """La cuenta y el periodo de plan abierto ahora (o None). Margen efectivo
+    (spec planes §4): el del periodo abierto (la foto del plan de ese mes); si no
+    hay, el propio del proyecto o el global. Sin fila en cuenta_saldo no se mira
+    el periodo, ni con «Cobrar» apagado: un proyecto que no cobra no paga ni una
+    lectura de más (tests/test_cobros_alertas.py cuenta las consultas)."""
     fila = con.execute(sa.select(db.cuenta_saldo).where(db.cuenta_saldo.c.cliente == cliente)).first()
     glob = _margen_global(con)
     if fila is None:
-        return {"cobrar": False, "margen": glob, "margen_propio": None, "umbral": UMBRAL_DEFECTO}
-    return {"cobrar": bool(fila.cobrar), "margen": float(fila.margen) if fila.margen is not None else glob,
-            "margen_propio": fila.margen, "umbral": int(fila.umbral_aviso)}
+        return {"cobrar": False, "margen": glob, "margen_propio": None, "umbral": UMBRAL_DEFECTO}, None
+    periodo = planes.periodo_abierto(con, cliente) if fila.cobrar else None
+    if periodo is not None:
+        margen = periodo["margen"]
+    else:
+        margen = float(fila.margen) if fila.margen is not None else glob
+    return {"cobrar": bool(fila.cobrar), "margen": margen, "margen_propio": fila.margen,
+            "umbral": int(fila.umbral_aviso)}, periodo
+
+
+def _cuenta(con, cliente):
+    return _cuenta_y_periodo(con, cliente)[0]
 
 
 def cuenta(cliente):
@@ -210,8 +225,13 @@ def estado(cliente, siempre=False):
 
 # ------------------------------------------------------------ freno previo ---
 
-def exigir(cliente, costo_usd, job_id=None, excluir_job=None):
+def exigir(cliente, costo_usd, job_id=None, excluir_job=None, tipo=None):
     """§4. Lanza SaldoInsuficiente o devuelve lo reservado (0 si no cobra).
+
+    `tipo`: el tipo de GASTO que va a anotar (opcional). Con un periodo de plan
+    abierto, un tipo de `planes.TIPOS_INCLUIDOS` cuyo costo cabe en lo que queda
+    del tope de lo incluido no exige saldo ni reserva: devuelve 0 (spec planes
+    §4). Sin precio (`costo_usd` None) no se sabe si cabe: se frena como siempre.
 
     `excluir_job`: el job_id de la tarea del worker que pide el paso SIGUIENTE
     de su cadena mientras sigue corriendo (fases del barrido, tramos de
@@ -226,9 +246,12 @@ def exigir(cliente, costo_usd, job_id=None, excluir_job=None):
         if not _cuenta(con, cliente)["cobrar"]:
             return 0   # un proyecto que no cobra ni siquiera toma el candado
         _candado(con)
-        c = _cuenta(con, cliente)   # releída con el candado: nadie la cambia hasta confirmar
+        c, periodo = _cuenta_y_periodo(con, cliente)   # releída con el candado: nadie la cambia hasta confirmar
         if not c["cobrar"]:
             return 0
+        if (periodo is not None and tipo in planes.TIPOS_INCLUIDOS and costo_usd is not None
+                and planes.cabe_incluido(planes.incluido_usado(cliente, periodo, con=con), costo_usd, periodo)):
+            return 0   # incluido en el plan: no pide saldo
         precio = precio_milesimas(costo_usd, c["margen"]) if costo_usd is not None else 1
         precio = max(precio, 1)
         if job_id:
@@ -331,8 +354,16 @@ def cobrar_gasto(con, gasto_id, cliente, usd, tipo, entregado=True, nuevo=True):
     prender «Cobrar» no cobra hacia atrás); si lo tenía, se recalcula."""
     m = db.movimiento_saldo
     _candado(con)   # gastos ya lo tiene (INSERT/UPDATE del gasto); para cualquier otro llamador
-    previo = con.execute(sa.select(m).where(m.c.gasto_id == gasto_id, m.c.tipo.in_(("cobro", "no_cobrado")))).first()
+    previo = con.execute(sa.select(m).where(m.c.gasto_id == gasto_id,
+                                            m.c.tipo.in_(("cobro", "no_cobrado", "incluido")))).first()
     if previo is not None:
+        if previo.tipo == "incluido":
+            # Corrección de algo incluido: sigue incluido (no se vuelve a mirar el tope); el extra dice el costo nuevo.
+            extra = dict(previo.extra or {})
+            margen = float(extra.get("margen") or MARGEN_DEFECTO)
+            extra.update(costo=_costo(usd), precio=precio_milesimas(usd, margen))
+            con.execute(m.update().where(m.c.id == previo.id).values(extra=extra))
+            return "incluido"
         if previo.tipo != "cobro":
             return None
         margen = float((previo.extra or {}).get("margen") or MARGEN_DEFECTO)
@@ -349,7 +380,7 @@ def cobrar_gasto(con, gasto_id, cliente, usd, tipo, entregado=True, nuevo=True):
         return "recalculado"
     if not nuevo:
         return None
-    c = _cuenta(con, cliente)
+    c, periodo = _cuenta_y_periodo(con, cliente)
     if not c["cobrar"]:
         return None
     precio = precio_milesimas(usd, c["margen"])
@@ -359,8 +390,17 @@ def cobrar_gasto(con, gasto_id, cliente, usd, tipo, entregado=True, nuevo=True):
     if not entregado:
         _insertar(con, tipo="no_cobrado", milesimas=0, extra={"margen": c["margen"], "precio": precio}, **comunes)
         return "no_cobrado"
+    if (periodo is not None and tipo in planes.TIPOS_INCLUIDOS
+            and planes.cabe_incluido(planes.incluido_usado(cliente, periodo, con=con), usd, periodo)):
+        _insertar(con, tipo="incluido", milesimas=0,
+                  extra={"precio": precio, "costo": _costo(usd), "margen": c["margen"]}, **comunes)
+        return "incluido"
     _insertar(con, tipo="cobro", milesimas=-precio, extra={"margen": c["margen"]}, **comunes)
     return "cobro"
+
+
+def _costo(usd):
+    return round(float(usd or 0), 6)
 
 
 def tiene_cobros(cliente, job_id, desde_tarea=None):
@@ -428,6 +468,87 @@ def acreditar(con, cliente, tipo, milesimas, concepto, *, recarga_id=None, usuar
         raise ValueError(f"monto inválido para {tipo}: {milesimas}")
     return _insertar(con, cliente=cliente, tipo=tipo, milesimas=milesimas, recarga_id=recarga_id,
                      concepto=concepto, usuario=usuario, detalle=str(detalle or "")[:300], extra={})
+
+
+# ------------------------------------------------------------- planes ---
+# Spec planes 2026-10-09 §3: el saldo sigue siendo UNA suma; la bolsa del plan se
+# calcula primero-el-plan sobre los cobros y reversos del periodo.
+
+def _gastado(con, cliente, inicio, fin):
+    """Lo gastado en [inicio, fin): −SUM de cobros y reversos (no recargas,
+    ajustes, anulaciones, incluidos ni vencimientos). Un reverso solo cuenta si
+    su cobro también es del periodo: devolver un cobro del mes anterior devuelve
+    saldo propio, no infla la bolsa por encima de su crédito (que después vencería
+    plata del cliente)."""
+    m = db.movimiento_saldo
+    cobro = m.alias("cobro_del_reverso")
+    del_periodo = sa.and_(m.c.cliente == cliente, m.c.creado_en >= inicio, m.c.creado_en < fin)
+    cobrado = con.execute(sa.select(sa.func.coalesce(sa.func.sum(m.c.milesimas), 0))
+                          .where(del_periodo, m.c.tipo == "cobro")).scalar()
+    devuelto = con.execute(sa.select(sa.func.coalesce(sa.func.sum(m.c.milesimas), 0)).where(
+        del_periodo, m.c.tipo == "reverso",
+        sa.exists().where(cobro.c.gasto_id == m.c.gasto_id, cobro.c.tipo == "cobro",
+                          cobro.c.creado_en >= inicio, cobro.c.creado_en < fin))).scalar()
+    return -(int(cobrado) + int(devuelto))
+
+
+def _bolsa(con, cliente, periodo):
+    gastado = _gastado(con, cliente, periodo["inicio"], periodo["fin"])
+    credito = int(periodo["credito_milesimas"])
+    return {"periodo_id": periodo["id"], "credito": credito, "gastado": gastado,
+            "restante": max(0, credito - gastado), "fin": periodo["fin"]}
+
+
+def bolsa_plan(cliente, ahora=None):
+    """La bolsa del periodo abierto: {periodo_id, credito, gastado, restante,
+    fin}, o None si no hay periodo. Solo lee. El saldo propio es
+    `saldo − restante`."""
+    if not cliente:
+        return None
+    with db.conectar() as con:
+        periodo = planes.periodo_abierto(con, cliente, ahora=ahora)
+        return _bolsa(con, cliente, periodo) if periodo is not None else None
+
+
+def acreditar_plan(con, periodo_id):
+    """Movimiento `plan` por el crédito del periodo, dentro de la transacción de
+    quien abre el periodo (cobros.planes). Idempotente (UNIQUE(tipo, periodo_id)):
+    devuelve el id del movimiento nuevo, o None si ya estaba (o el periodo no existe)."""
+    m = db.movimiento_saldo
+    _candado(con)
+    p = planes.periodo(con, periodo_id)
+    if p is None:
+        log.warning("acreditar_plan: el periodo %s no existe", periodo_id)
+        return None
+    if con.execute(sa.select(m.c.id).where(m.c.tipo == "plan", m.c.periodo_id == p["id"])).first():
+        return None
+    if p["credito_milesimas"] <= 0:
+        return None
+    return _insertar(con, cliente=p["cliente"], tipo="plan", milesimas=int(p["credito_milesimas"]),
+                     periodo_id=p["id"], concepto="plan", extra={})
+
+
+def vencer_periodo(con, periodo_id):
+    """Movimiento `vencimiento` por lo que sobró de la bolsa (spec planes §3),
+    limitado a no dejar el saldo por debajo de 0 por el vencimiento (una
+    anulación o un ajuste negativo pudo bajarlo). Devuelve las milésimas
+    vencidas (positivas; 0 si se gastó todo, y se escribe igual: así queda
+    hecho). Idempotente: un segundo llamado devuelve lo ya vencido sin escribir.
+    Marcar el periodo `cerrado` lo hace `planes.marcar_cerrado` en este mismo `con`."""
+    m = db.movimiento_saldo
+    _candado(con)
+    p = planes.periodo(con, periodo_id)
+    if p is None:
+        raise ValueError(f"el periodo {periodo_id} no existe")
+    previo = con.execute(sa.select(m.c.milesimas).where(m.c.tipo == "vencimiento",
+                                                        m.c.periodo_id == p["id"])).first()
+    if previo is not None:
+        return -int(previo.milesimas)
+    restante = _bolsa(con, p["cliente"], p)["restante"]
+    monto = min(restante, max(0, _saldo(con, p["cliente"])))
+    _insertar(con, cliente=p["cliente"], tipo="vencimiento", milesimas=-monto, periodo_id=p["id"],
+              concepto="vencimiento", extra={"restante": restante})
+    return monto
 
 
 def limpiar_reservas_muertas():

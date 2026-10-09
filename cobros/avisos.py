@@ -16,6 +16,7 @@ import notificaciones
 log = logging.getLogger(__name__)
 
 CLAVE_AVISO_BAJO = "cobros:aviso_bajo:{cliente}"
+CLAVE_TOPE_INCLUIDO = "cobros:tope_incluido:{periodo}:{nivel}"
 
 
 def _monto(milesimas):
@@ -104,3 +105,50 @@ def limpiar_aviso_bajo(cliente):
             con.execute(db.kv.delete().where(db.kv.c.clave == CLAVE_AVISO_BAJO.format(cliente=cliente)))
     except Exception:  # noqa: BLE001
         log.exception("no se pudo limpiar el aviso de saldo bajo de %s", cliente)
+
+
+def _marcar_una_vez(clave):
+    """True si esta llamada anotó la marca (la primera); False si ya estaba."""
+    try:
+        with db.conectar() as con:
+            if con.execute(sa.select(db.kv.c.clave).where(db.kv.c.clave == clave)).first():
+                return False
+            con.execute(db.kv.insert().values(clave=clave, valor="1", actualizado_en=db.ahora()))
+        return True
+    except sa.exc.IntegrityError:
+        return False   # otro proceso acaba de anotarla: él avisa
+
+
+def tope_incluido(cliente, periodo, usado_usd, agotado=False):
+    """Al admin (nunca al cliente, spec planes §4), una vez por periodo y nivel:
+    lo incluido del plan llegó al 80 % o al 100 % del tope (o algo incluido ya
+    no cupo: `agotado`). Al avisar el 100 % se da por dicho también el 80 %."""
+    try:
+        tope = float(periodo["tope_incluido_usd"])
+        fraccion = float(usado_usd) / tope if tope > 0 else 1.0
+        if agotado or fraccion >= 1 - 1e-9:
+            nivel = 100
+        elif fraccion >= 0.8 - 1e-9:
+            nivel = 80
+        else:
+            return False
+        if not _marcar_una_vez(CLAVE_TOPE_INCLUIDO.format(periodo=periodo["id"], nivel=nivel)):
+            return False
+        if nivel == 100:
+            _marcar_una_vez(CLAVE_TOPE_INCLUIDO.format(periodo=periodo["id"], nivel=80))
+    except Exception:  # noqa: BLE001
+        log.exception("no se pudo anotar el aviso del tope de lo incluido de %s", cliente)
+        return False
+    import gastos  # noqa: PLC0415 — gastos importa este módulo dentro de registrar
+    usado, tope_txt = gastos.formatear(usado_usd), gastos.formatear(tope)
+    if nivel == 100:
+        asunto = lambda: gettext("Lo incluido del plan de %(cliente)s se acabó", cliente=cliente)  # noqa: E731
+        cuerpo = lambda: gettext(  # noqa: E731
+            "%(cliente)s usó %(usado)s de costo de lo incluido (tope %(tope)s). Desde ahora eso se cobra a "
+            "precio de miembro.", cliente=cliente, usado=usado, tope=tope_txt)
+    else:
+        asunto = lambda: gettext("Lo incluido del plan de %(cliente)s va en el 80 %%", cliente=cliente)  # noqa: E731
+        cuerpo = lambda: gettext(  # noqa: E731
+            "%(cliente)s usó %(usado)s de costo de lo incluido (tope %(tope)s).",
+            cliente=cliente, usado=usado, tope=tope_txt)
+    return admin("tope_incluido", asunto, cuerpo, cliente=cliente)

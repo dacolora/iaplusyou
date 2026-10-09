@@ -216,7 +216,7 @@ def _pedir_analisis(cliente, alc, a):
     # manejador común (402 al fetch de la tarjeta, aviso con «Recargar saldo» al formulario). `usd` es el COSTO, el
     # mismo del botón (`panel.precio_analisis`); la reserva la hace el encolado.
     usd = panel.precio_analisis(creativos.get(clave))["usd"]
-    libro.exigir(cliente, usd)
+    libro.exigir(cliente, usd, tipo="evaluacion")
     if any(f["estado"] in panel.EN_CURSO for f in filas):
         with idiomas.en_idioma(idiomas.de_proyecto(cliente)):        # lo que se guarda, en el idioma del proyecto
             interrumpido = gettext("Se interrumpió antes de terminar.")
@@ -462,7 +462,7 @@ def evaluar(cliente):
     # Cobros (spec 2026-10-08 §5): sin saldo no se crea la evaluación; el
     # manejador común responde. La reserva la hace el encolado.
     usd = gastos.estimar("evaluacion_tw", n=len(muestra))["usd"]
-    libro.exigir(cliente, usd)
+    libro.exigir(cliente, usd, tipo="evaluacion")
     eid = datos.crear_evaluacion(cliente, desde, hasta, config["moneda"], muestra,
                                  pedido_por=session.get("usuario"))
     datos.actualizar_evaluacion(eid, extra={"modelo": config["modelo_atribucion"],

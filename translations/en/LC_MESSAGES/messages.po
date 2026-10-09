@@ -165,6 +165,14 @@ msgid "%(cliente)s recargó %(monto)s (%(medio)s)."
 msgstr "%(cliente)s topped up %(monto)s (%(medio)s)."
 
 #, python-format
+msgid "%(cliente)s usó %(usado)s de costo de lo incluido (tope %(tope)s)."
+msgstr "%(cliente)s used %(usado)s of included cost (cap %(tope)s)."
+
+#, python-format
+msgid "%(cliente)s usó %(usado)s de costo de lo incluido (tope %(tope)s). Desde ahora eso se cobra a precio de miembro."
+msgstr "%(cliente)s used %(usado)s of included cost (cap %(tope)s). From now on those items are charged at the member price."
+
+#, python-format
 msgid "%(color)s: sin fotos en la tienda; revisa el catálogo."
 msgstr "%(color)s: no photos in the store; check the catalog."
 
@@ -10183,6 +10191,14 @@ msgstr "What’s on top stays where it is. Tap to make it follow its video."
 
 msgid "Lo esencial"
 msgstr "The essentials"
+
+#, python-format
+msgid "Lo incluido del plan de %(cliente)s se acabó"
+msgstr "%(cliente)s has used up the included items of its plan"
+
+#, python-format
+msgid "Lo incluido del plan de %(cliente)s va en el 80 %%"
+msgstr "%(cliente)s has used 80 %% of the included items of its plan"
 
 msgid "Lo que Claude necesita"
 msgstr "What Claude needs"

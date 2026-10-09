@@ -40,7 +40,7 @@ def _exigir(cliente, paso, palabras=0):
     esta misma petición (`trabajos.iniciar`), no en el worker: el saldo se pide
     aquí, antes de cambiar el estado y de lanzar el hilo. Sin saldo,
     SaldoInsuficiente y el manejador común responde 402."""
-    libro.exigir(cliente, gastos.estimar("guion_clips", paso=paso, palabras=palabras)["usd"])
+    libro.exigir(cliente, gastos.estimar("guion_clips", paso=paso, palabras=palabras)["usd"], tipo="guion_clips")
 
 
 def _palabras(v):

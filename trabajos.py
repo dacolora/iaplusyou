@@ -347,17 +347,37 @@ def encolar(job_id, tipo, payload, duracion_estimada=60, etapas=None, cliente=No
     cobros.SaldoInsuficiente sin encolar nada. Un job_id ya vivo no exige: el
     clic repetido no hace nada. Un proyecto que no cobra no cambia.
     `excluir_job`: el job_id de la tarea que encola el paso siguiente de su
-    cadena mientras corre; su propia reserva no cuenta (ver `libro.exigir`)."""
+    cadena mientras corre; su propia reserva no cuenta (ver `libro.exigir`).
+
+    Planes (spec 2026-10-09 §4): si el tipo de tarea anota un tipo de gasto
+    incluido (`planes.GASTO_DE_TAREA`), `exigir` lo recibe y, con plan y dentro
+    del tope, no pide saldo. Un proyecto con periodo de plan abierto sube a 6 la
+    prioridad normal (5); la de un lote (< 5) o una pedida a mano no cambia."""
     import tareas  # noqa: PLC0415 — tareas/__init__ no importa nada: sin ciclo
-    from cobros import libro  # noqa: PLC0415
+    from cobros import libro, planes  # noqa: PLC0415
     if job_id and cola.viva(job_id):
         return False
     if tipo in tareas.TIPOS_QUE_COBRAN:
-        libro.exigir(cliente, costo_estimado, job_id=job_id, excluir_job=excluir_job)
+        tipo_gasto = planes.GASTO_DE_TAREA.get(tipo)
+        libro.exigir(cliente, costo_estimado, job_id=job_id, excluir_job=excluir_job,
+                     **({"tipo": tipo_gasto} if tipo_gasto else {}))
+    if prioridad == 5 and cliente:
+        prioridad = _prioridad_de_plan(cliente)
     tid = cola.encolar(tipo, payload, cliente=cliente, job_id=job_id,
                        duracion_estimada=duracion_estimada, etapas=etapas or [],
                        max_intentos=max_intentos, prioridad=prioridad)
     return tid is not None
+
+
+def _prioridad_de_plan(cliente):
+    """6 si el proyecto tiene un periodo de plan abierto, 5 si no. Si la lectura
+    falla, 5: la prioridad nunca frena un encolado."""
+    from cobros import planes  # noqa: PLC0415
+    try:
+        return 6 if planes.periodo_abierto(None, cliente) is not None else 5
+    except Exception:  # noqa: BLE001
+        log.warning("no se pudo leer el plan de %s para la prioridad", cliente, exc_info=True)
+        return 5
 
 
 def _desde_fila(fila):

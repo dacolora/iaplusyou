@@ -28,7 +28,9 @@ TIPOS = ("propuesta", "ganador", "rechazo_meta", "error_lanzamiento", "tope", "t
          "sin_saldo", "error_app",
          # cobros (spec 2026-10-08): al proyecto y a los admins
          "pieza_no_cobrada", "recarga_acreditada", "saldo_bajo",
-         "cobro_no_anotado", "recarga_admin", "anulacion_bold", "pago_sin_recarga")
+         "cobro_no_anotado", "recarga_admin", "anulacion_bold", "pago_sin_recarga",
+         # planes (spec 2026-10-09 §4): a los admins
+         "tope_incluido")
 
 
 def _config():
