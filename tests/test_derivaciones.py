@@ -844,3 +844,96 @@ def test_r3_hermanas_de_la_misma_derivacion_reservan_arranques(ent, monkeypatch)
     arranques = [i['contexto_variante']['lead_objetivo'] for i in items]
     assert len(items) >= 2 and all(arranques)
     assert len(set(arranques)) == len(items)
+
+
+# ---- sin Página no se produce nada de pago (R23, revisión final 2026-10-08) -----------------------------------
+# «Solo métricas» (token sin Página): una pieza nueva no se podría lanzar, así que ni se planifica ni se encola.
+
+SIN_PAGINA = {"token": "t", "ad_account_id": "act_1", "page_id": None}
+CON_PAGINA = {"token": "t", "ad_account_id": "act_1", "page_id": "9"}
+
+
+def _conexion(monkeypatch, datos):
+    import idiomas
+    import meta_conexion
+    monkeypatch.setattr(meta_conexion, "cargar", lambda c: dict(datos))
+    monkeypatch.setattr(idiomas, "de_proyecto", lambda c: "es")
+
+
+def _regeneracion_en_marcha(ent):
+    """Una derivación con una sola regeneración (clon encolado, todavía sin finales): (hijo, cf_id del clon)."""
+    dv, ex, eid, ep = ent["dv"], ent["ex"], ent["eid"], ent["ep"]
+    ex.actualizar("acme", eid, reglas={"n_reediciones": 0, "n_regeneraciones": 1})
+    hijo = dv.planificar("acme", eid, "derivar", {"ep_id": ep, "motivo": "ganadora"})
+    (regen,) = _derivacion(ex, hijo)["items"]
+    return hijo, regen["cf_id"]
+
+
+@pytest.mark.parametrize("tipo", ["derivar", "rescatar"])
+def test_planificar_sin_pagina_no_crea_hijo_ni_marca_ni_encola(ent, monkeypatch, tipo):
+    dv, ex, cf, eid, ep = ent["dv"], ent["ex"], ent["cf"], ent["eid"], ent["ep"]
+    _conexion(monkeypatch, SIN_PAGINA)
+    experimentos_antes, sesiones_antes = len(ex.cargar("acme")), set(cf.cargar("acme"))
+    with pytest.raises(dv.SinPagina, match="solo para métricas"):
+        dv.planificar("acme", eid, tipo, {"ep_id": ep, "motivo": "x"})
+    assert ent["encolados"] == []
+    assert len(ex.cargar("acme")) == experimentos_antes and set(cf.cargar("acme")) == sesiones_antes
+    pz = next(p for p in ex.piezas("acme", eid) if p["id"] == ep)
+    assert not (pz.get("extra") or {}).get("derivado") and (pz.get("extra") or {}).get("rescatado_en_escalon") is None
+    assert pz["escalon_rescate"] == 0
+    assert "derivaciones" not in (ex.obtener("acme", eid)["extra"] or {})
+
+
+@pytest.mark.parametrize("tipo", ["derivar", "rescatar"])
+def test_planificar_con_pagina_sigue_como_antes(ent, monkeypatch, tipo):
+    _conexion(monkeypatch, CON_PAGINA)
+    ent["dv"].planificar("acme", ent["eid"], tipo, {"ep_id": ent["ep"], "motivo": "x"})
+    assert ent["encolados"]
+
+
+def test_avanzar_con_la_pagina_quitada_no_encola_las_finales_y_falla_el_item(ent, monkeypatch):
+    """La Página se quitó con una derivación en marcha: el clon terminó, pero sus finales (que cobran) no se encolan."""
+    dv, ex, cf = ent["dv"], ent["ex"], ent["cf"]
+    hijo, nuevo = _regeneracion_en_marcha(ent)
+    cf.actualizar("acme", nuevo, estado="video_listo", video_url="https://r2/nuevo.mp4")
+    encolados = len(ent["encolados"])
+    _conexion(monkeypatch, SIN_PAGINA)
+    resumen = dv.avanzar("acme", hijo)
+    (item,) = _derivacion(ex, hijo)["items"]
+    assert item["estado"] == "error" and "solo para métricas" in item["error"]
+    assert resumen["estado"] == "error"
+    assert len(ent["encolados"]) == encolados and cf.finales("acme", nuevo) == []
+    assert any(e["tipo"] == "error" and "solo para métricas" in e["mensaje"] for e in ex.eventos("acme", hijo))
+
+
+@pytest.mark.parametrize("pagina,se_encola", [(SIN_PAGINA, False), (CON_PAGINA, True)], ids=["sin_pagina", "con_pagina"])
+def test_avanzar_no_reencola_el_clon_sin_pagina(ent, monkeypatch, pagina, se_encola):
+    """Una sesión del clon que hay que volver a encolar (no `video_generando`) solo se encola con Página."""
+    dv, ex, cf = ent["dv"], ent["ex"], ent["cf"]
+    hijo, nuevo = _regeneracion_en_marcha(ent)
+    cf.actualizar("acme", nuevo, estado="prompt_listo")
+    encolados = len(ent["encolados"])
+    _conexion(monkeypatch, pagina)
+    dv.avanzar("acme", hijo)
+    (item,) = _derivacion(ex, hijo)["items"]
+    if se_encola:
+        assert len(ent["encolados"]) == encolados + 1 and cf.cargar("acme")[nuevo]["estado"] == "video_generando"
+        assert item["estado"] == "produciendo_clon"
+    else:
+        assert len(ent["encolados"]) == encolados and cf.cargar("acme")[nuevo]["estado"] == "prompt_listo"
+        assert item["estado"] == "error" and "solo para métricas" in item["error"]
+
+
+def test_rescate_sin_pagina_en_marcha_falla_y_vuelve_como_propuesta(ent, monkeypatch):
+    import propuestas
+    dv, ex, cf, eid, ep = ent["dv"], ent["ex"], ent["cf"], ent["eid"], ent["ep"]
+    ex.actualizar_pieza("acme", ep, escalon_rescate=2)   # escalón 3: regeneración
+    dv.planificar("acme", eid, "rescatar", {"ep_id": ep, "motivo": "perdedora"})
+    (item,) = _derivacion(ex, eid)["items"]
+    cf.actualizar("acme", item["cf_id"], estado="video_listo", video_url="https://r2/nuevo.mp4")
+    encolados = len(ent["encolados"])
+    _conexion(monkeypatch, SIN_PAGINA)
+    dv.avanzar("acme", eid)
+    assert len(ent["encolados"]) == encolados
+    (pend,) = [p for p in propuestas.pendientes("acme", eid) if p["accion"] == "rescatar"]
+    assert "solo para métricas" in pend["payload"]["motivo"]

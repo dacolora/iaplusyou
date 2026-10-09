@@ -324,3 +324,130 @@ def test_sin_pagina_en_agencia_lo_dice_el_lanzador(entorno, monkeypatch):   # no
     monkeypatch.setattr(lanzador.meta_conexion, "modo", lambda c: "agencia")
     with pytest.raises(ValueError, match="administrador de Creatv"):
         lanzador._validar_para_lanzar("acme", entorno["eid"])
+
+
+# ---- derivar y rescatar no producen sin Página (R23, revisión final 2026-10-08) -------------------------------
+# Producir (clon + finales) cobra; sin Página `lanzar_piezas_nuevas` se negaría al final, con todo ya pagado.
+
+from tests.test_acciones import ent  # noqa: E402,F401 — fixture de experimentos con Meta falso
+
+
+def _con_saldo(milesimas=1_000_000):
+    import db
+    from cobros import libro
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    if milesimas:
+        with db.conectar() as con:
+            libro.acreditar(con, "acme", "ajuste", milesimas, "ajuste", usuario="admin", detalle="prueba")
+
+
+def _nada_cobrado_ni_encolado():
+    """Ni una tarea, ni una reserva, ni un gasto anotado."""
+    import db
+    import sqlalchemy as sa
+    with db.conectar() as con:
+        return [con.execute(sa.select(sa.func.count()).select_from(t)).scalar()
+                for t in (db.tarea, db.reserva_saldo, db.gasto)] == [0, 0, 0]
+
+
+@pytest.fixture()
+def sin_pagina(ent, monkeypatch):   # noqa: F811
+    """Token y cuenta, pero ninguna Página («solo métricas»); `libro.exigir` avisa si algo llega a pedir saldo."""
+    import acciones
+    import idiomas
+    import meta_conexion
+    monkeypatch.setattr(meta_conexion, "cargar", lambda c: dict(SIN_PAGINA))
+    monkeypatch.setattr(idiomas, "de_proyecto", lambda c: "es")
+    pidieron = []
+    exigir = acciones.libro.exigir
+    monkeypatch.setattr(acciones.libro, "exigir", lambda *a, **k: (pidieron.append(a), exigir(*a, **k))[1])
+    ent["pidieron_saldo"] = pidieron
+    ent["texto"] = meta_conexion.error_solo_metricas("acme")
+    return ent
+
+
+def _pieza_ep(ent):
+    return next(p for p in ent["ex"].piezas("acme", ent["eid"]) if p["id"] == ent["ep"])
+
+
+def _sin_efectos(ent):
+    extra = _pieza_ep(ent).get("extra") or {}
+    assert not extra.get("derivado") and extra.get("rescatado_en_escalon") is None
+    assert not [l for l in ent["llamadas"] if l[0] in ("planificar", "pausar")]
+    assert ent["pidieron_saldo"] == []
+    assert _nada_cobrado_ni_encolado()
+
+
+@pytest.mark.parametrize("accion", ["derivar", "rescatar"])
+@pytest.mark.parametrize("saldo", [1_000_000, 0], ids=["con_saldo", "sin_saldo"])
+def test_ejecutar_sin_pagina_lanza_el_texto_antes_de_pedir_saldo(sin_pagina, accion, saldo):
+    """El texto es el de «solo métricas» aunque además falte saldo: la Página se mira ANTES."""
+    _con_saldo(saldo)
+    with pytest.raises(ValueError) as e:
+        sin_pagina["ac"].ejecutar("acme", sin_pagina["eid"], accion, {"ep_id": sin_pagina["ep"]})
+    assert str(e.value) == sin_pagina["texto"] and "solo para métricas" in str(e.value)
+    _sin_efectos(sin_pagina)
+
+
+@pytest.mark.parametrize("accion", ["derivar", "rescatar"])
+def test_aprobar_a_mano_sin_pagina_devuelve_el_texto_y_deja_la_propuesta_abierta(sin_pagina, accion):
+    import dashboard
+    import propuestas
+    _con_saldo()
+    pid = propuestas.crear("acme", sin_pagina["eid"], accion, {"ep_id": sin_pagina["ep"]}, "ganador")
+    pr = propuestas.resolver("acme", pid, "aprobada")
+    with dashboard.app.test_request_context("/"):
+        error = dashboard._ejecutar_propuesta("acme", pr)
+    assert error == sin_pagina["texto"]
+    assert propuestas.obtener("acme", pid)["estado"] == "pendiente"
+    _sin_efectos(sin_pagina)
+
+
+@pytest.mark.parametrize("accion", ["derivar", "rescatar"])
+def test_modo_auto_sin_pagina_queda_como_propuesta_con_el_texto_y_no_gasta(sin_pagina, accion):
+    import propuestas
+    sin_pagina["ex"].actualizar("acme", sin_pagina["eid"], modo="auto")
+    _con_saldo()
+    estado, mensaje = sin_pagina["ac"].pedir("acme", sin_pagina["eid"], accion, {"ep_id": sin_pagina["ep"]}, "ganador")
+    assert estado == "propuesta" and "solo para métricas" in mensaje
+    (pend,) = [p for p in propuestas.pendientes("acme", sin_pagina["eid"]) if p["accion"] == accion]
+    assert pend["payload"]["motivo"] == f"{sin_pagina['texto']} ganador"
+    _sin_efectos(sin_pagina)
+
+
+@pytest.mark.parametrize("accion", ["derivar", "rescatar"])
+def test_modo_semi_sin_pagina_propone_con_el_texto_en_el_motivo(sin_pagina, accion):
+    import propuestas
+    estado, _ = sin_pagina["ac"].pedir("acme", sin_pagina["eid"], accion, {"ep_id": sin_pagina["ep"]}, "perdedora")
+    assert estado == "propuesta"
+    (pend,) = [p for p in propuestas.pendientes("acme", sin_pagina["eid"]) if p["accion"] == accion]
+    assert pend["payload"]["motivo"].startswith(sin_pagina["texto"]) and pend["payload"]["motivo"].endswith("perdedora")
+    _sin_efectos(sin_pagina)
+
+
+@pytest.mark.parametrize("accion", ["derivar", "rescatar"])
+@pytest.mark.parametrize("conexion", [None, {"token": "t", "ad_account_id": "act_1", "page_id": "9"}],
+                         ids=["sin_conexion", "con_pagina"])
+def test_con_pagina_o_sin_conexion_derivar_y_rescatar_siguen_como_antes(ent, monkeypatch, accion, conexion):   # noqa: F811
+    import meta_conexion
+    monkeypatch.setattr(meta_conexion, "cargar", lambda c: conexion)
+    ent["ex"].actualizar("acme", ent["eid"], modo="auto")
+    estado, _ = ent["ac"].pedir("acme", ent["eid"], accion, {"ep_id": ent["ep"]}, "ganador")
+    assert estado == "ejecutada" and ("planificar", accion, ent["ep"]) in ent["llamadas"]
+
+
+def test_escalar_y_pausar_sin_pagina_no_se_frenan(sin_pagina):
+    """Solo cambian presupuestos y estados de anuncios que ya existen: no producen nada."""
+    sin_pagina["ex"].actualizar("acme", sin_pagina["eid"], modo="auto")
+    ac, eid, ep = sin_pagina["ac"], sin_pagina["eid"], sin_pagina["ep"]
+    assert ac.pedir("acme", eid, "escalar", {"pais": "CO", "ep_id": ep}, "ganador")[0] == "ejecutada"
+    assert ac.pedir("acme", eid, "pausar", {"ep_id": ep}, "perdedora")[0] == "ejecutada"
+
+
+def test_rescate_ya_planificado_sin_pagina_solo_asegura_la_pausa(sin_pagina):
+    """La rama idempotente no produce nada: sigue pausando aunque ya no haya Página."""
+    ep, eid = sin_pagina["ep"], sin_pagina["eid"]
+    sin_pagina["ex"].marcar_pieza("acme", ep, rescatado_en_escalon=1)
+    sin_pagina["ex"].actualizar_pieza("acme", ep, escalon_rescate=1)
+    mensaje = sin_pagina["ac"].ejecutar("acme", eid, "rescatar", {"ep_id": ep})
+    assert "ya rescatada" in mensaje and ("pausar", ep) in sin_pagina["llamadas"]
