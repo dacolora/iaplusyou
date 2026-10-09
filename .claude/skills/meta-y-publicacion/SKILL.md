@@ -85,5 +85,5 @@ hay Páginas). `meta.json` queda con `page_id`, `page_nombre`, `page_access_toke
 llamar a Meta con `meta_conexion.sin_pagina(cliente)` (exige token, para no confundirlo con «sin conexión»; el texto es
 `error_solo_metricas(cliente)`, que en modo agencia manda al admin de Creatv): `lanzador._validar_para_lanzar`,
 `lanzador.lanzar_piezas_nuevas`, las rutas `exp_lanzar` y `exp_probar` (antes de crear o encolar nada) y la tarea legado
-`meta_publicar`. Leer métricas (`meta_refrescar`, la copia de `meta_rendimiento/`, skill `meta-rendimiento`) no
+`meta_publicar`; derivar y rescatar, que producen anuncios nuevos, frenan antes de cobrar (skill `experimentos`). Leer métricas (`meta_refrescar`, la copia de `meta_rendimiento/`, skill `meta-rendimiento`) no
 necesita Página y no se frena. La tarjeta de Configuración › Conexiones muestra «Solo métricas» con un enlace a `#meta`.
