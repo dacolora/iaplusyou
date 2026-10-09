@@ -1,6 +1,6 @@
-"""Migración 0034 (spec 2026-10-08 meta rendimiento §4; era la 0033 antes de mezclar main, que trajo
-0033_cobros): las seis tablas existen con sus restricciones únicas, y el downgrade las borra sin tocar las de
-Cobros."""
+"""Migración 0035 (spec 2026-10-08 meta rendimiento §4; era la 0033 en la rama, la 0034 tras mezclar main, que
+trajo 0033_cobros, y la 0035 tras la segunda mezcla, que trajo 0034_tw_tarjetas): las seis tablas existen con sus
+restricciones únicas, y el downgrade las borra sin tocar las de Cobros ni las de las tarjetas de Triple Whale."""
 import os
 import subprocess
 import sys
@@ -27,10 +27,11 @@ def test_upgrade_crea_las_tablas_y_downgrade_las_borra(tmp_path):
     indices = {i["name"]: i for i in sa.inspect(eng).get_indexes("meta_cuenta")}
     assert indices["uq_meta_cuenta_act"]["unique"]
     eng.dispose()
-    eng = _alembic(tmp_path, "downgrade", "0033")
+    eng = _alembic(tmp_path, "downgrade", "0034")
     nombres = set(sa.inspect(eng).get_table_names())
     assert not set(TABLAS) & nombres
     assert "cuenta_saldo" in nombres   # la 0033 (Cobros) sigue en pie
+    assert {"tw_creativo", "tw_analisis"} <= nombres   # y la 0034 (tarjetas de Triple Whale) también
 
 
 def test_db_crear_todo_coincide(base_temporal):

@@ -22,6 +22,7 @@ from flask_babel import gettext, ngettext
 
 import idiomas
 import tablero
+import triple_whale
 from idiomas import N_
 
 DIAS_NUEVO = 14
@@ -36,9 +37,9 @@ MIN_PCT_CANAL = 0.01
 MAX_MESES = 5
 SEMANAS_EXTRA = SEMANAS_RARO * 7          # días hacia atrás que pide la serie para juzgar los días raros
 
-# Nombres de los canales estandarizados de Triple Whale ("ads-standardized-channel-ids").
-NOMBRES_CANAL = {"facebook-ads": "Meta", "google-ads": "Google Ads", "tiktok-ads": "TikTok", "bing": "Microsoft Ads",
-                 "pinterest-ads": "Pinterest", "snapchat-ads": "Snapchat", "twitter-ads": "X"}
+# Nombres de los canales estandarizados de Triple Whale ("ads-standardized-channel-ids"): un solo registro, en el
+# paquete (lo usan también las tarjetas de análisis y `mejorar`, que corre en el worker).
+NOMBRES_CANAL = triple_whale.NOMBRES_CANAL
 # Clase de color de cada canal en la gráfica (pantallas/triple-whale.css); el resto va junto en «otros».
 CLASE_CANAL = {"facebook-ads": "meta", "google-ads": "google", "snapchat-ads": "snapchat", "tiktok-ads": "tiktok"}
 ORDEN_CLASES = ("meta", "google", "snapchat", "tiktok", "otros")

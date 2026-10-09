@@ -8,7 +8,8 @@ description: "Triple Whale: conexión, sincronización por SQL, la pestaña de r
 > Parte de la guía del repositorio; hasta el 2026-10-01 vivía dentro de CLAUDE.md. **Si cambias esta área, actualiza este archivo** en el mismo cambio (no CLAUDE.md). Si el código y este texto no coinciden, manda el código: corrige el texto.
 
 **Triple Whale** (package `triple_whale/`, `triple_whale_tiendas.py`, `tareas/triple_whale.py`; spec
-`docs/superpowers/specs/2026-09-28-triple-whale-rendimiento-design.md`, migrations 0023, 0024 and 0032): connected from
+`docs/superpowers/specs/2026-09-28-triple-whale-rendimiento-design.md`, migrations 0023, 0024, 0032 and 0034; the
+per-ad cards are in «Tarjetas de análisis» at the end): connected from
 the Triple Whale tab itself (`_triple_whale_conectar.html`, included by `_tab_triple_whale.html` in both states;
 until 2026-09-28 the form sat in Configuración › Conexiones, and the `cfg_triple_whale_*` routes now return to
 `#triplewhale`) (one Fernet-encrypted API key PER STORE; `cfg_triple_whale_conectar` adds a store: requires a verified correo, same
@@ -23,12 +24,14 @@ normalized on read); every query has a full and a minimal version (`consultar_co
 on `ErrorConsulta`). On connect `tw_sincronizar` (ONE job per store, `job_id` `<cliente>__tw_sync__<tienda_id>`, payload `cliente` +
 `tienda_id`; `max_intentos=2`, it only reads) copies 90 days of that store into `tw_anuncio_dia` (per
 canal/ad/day: what the platform reports from `ads_table` + what the Triple Pixel attributes from `pixel_joined_tvf()`
-with the project's model/window) and `tw_tienda_dia` (`blended_stats_tvf()`); the periodic `tw_sincronizar_todas`
+with the project's model/window) and `tw_tienda_dia` (`blended_stats_tvf()`), plus products and the ads as they came
+(five queries per tramo, below); the periodic `tw_sincronizar_todas`
 (2 h, before `exp_refrescar_todos`) enqueues `encolar_sync(cliente, tienda_id)` for every `conectadas()` store and
 each re-pulls its last 7 days because Triple Whale re-attributes; each `triple_whale.datos.reemplazar_*(cliente,
 tienda_id, desde, hasta, registros)` zeroes/deletes only THAT store's range before writing. Changing
 currency/model/window (`cambiar_ajustes`) deletes the copies of ALL stores; removing a store (`quitar`) deletes only its
-copies, and the project's `triple_whale` settings row goes with the last one (never the paid evaluations).
+copies, and the project's `triple_whale` settings row and the ads as they came (`tw_creativo`) go with the last one
+(never the paid evaluations and analyses).
 
 ## Varias tiendas, una por país (2026-10-08)
 
@@ -93,13 +96,16 @@ rejected because it would split catalog, pieces and sprints. Spec
 
 The **Triple Whale tab** (`_tab_triple_whale.html`, `data-tab="triplewhale"`, after Alertas; since E2, 2026-10-03, there is
 no Tablero tab) fetches its panel
-(`triple_whale.rutas.ver_panel` → `_tw_panel.html`) only when opened: «Resultados de tu tienda» (cards + the
-interactive day-by-day chart + day detail + reading + «Tus creativos», see the paragraph at the end; it replaced the
-store KPI tiles and the old SVG chart on 2026-10-08), ad KPIs, alerts, spend by
-verdict/channel and every ad with a verdict and a diagnosis from the pure `triple_whale/evaluacion.py`
-(compared with the account's own medians; `ganador`/`prometedor`/`en_prueba`/`perdedor`/`sin_datos`; weak
+(`triple_whale.rutas.ver_panel` → `_tw_panel.html`) only when opened, in this order: «Resultados de tu tienda» (cards +
+the interactive day-by-day chart + day detail + reading + «Tus creativos», see the paragraph below; it replaced the
+store KPI tiles «Tu tienda» and the old SVG «Día a día» on 2026-10-08), «Por tienda» (only «Todas» with 2+ stores),
+alerts, «Tus anuncios» (the account's ad KPI tiles + the card gallery, see «Tarjetas de análisis»), the account's AI
+evaluation, spend by verdict/channel, «Lo que más se vende» and, inside «Ver como tabla» (a closed `<details
+id="tw-cada-anuncio">`, opened by the day detail's «Ver todos los anuncios →»), every ad with a verdict and a diagnosis
+from the pure `triple_whale/evaluacion.py` (compared with the medians of its own channel, or the account's when the
+channel has fewer than `BENCH_MIN_ANUNCIOS` comparable ads; `ganador`/`prometedor`/`en_prueba`/`perdedor`/`sin_datos`; weak
 hook, low hold, few clicks, clicks without sales, expensive CPM, fatigue 7d vs 7d, no TW tracking).
-«Evaluar con IA» (`tw_evaluar`, `max_intentos=1`, price `gastos.estimar("evaluacion_tw", n=)`, real spend as
+«Evaluar con IA» (now «Lo que hace ganar en tu cuenta»; `tw_evaluar`, `max_intentos=1`, price `gastos.estimar("evaluacion_tw", n=)`, real spend as
 tipo `evaluacion`) sends Claude up to 6 winners + 4 losers with their Meta thumbnail (`analisis.medios_meta`,
 read-only Graph) and doctrina `clasificar/angulo/gancho/video`; the result (`tw_evaluacion`) has patterns,
 per-ad «why», and new ad ideas with a validated ángulo and an English video prompt. `triple_whale/puente.py`:
@@ -179,3 +185,146 @@ periodo anterior fuera de la copia); `/dia` usa `datos.primer_dia_copia` y valid
 recorrer la copia en cada clic.
 
 PND-142 (2026-10-08, decisión delegada enmendada): fuente_ventas_fija se fija al lanzar según la atribución: triple_whale solo con atribución triple_whale y tiendas conectadas (sin tiendas, meta); tienda para pedidos por UTM, meta para Pixel y ninguna si no mide ventas. Una fuente fijada no se cambia por conectar/desconectar después. La lectura corrige las marcas antiguas que ignoraban tienda/Pixel/ninguna. Con ninguna, ninguna foto marca ventas medibles, aunque Meta reporte compras. Si la fuente fija no está disponible, ventas_no_disponibles y ventas no comparables (—), sin respaldo a Meta; todavía se permite el cierre sin evidencia y el perdedor por tráfico del decisor, pero no ganar/escalar por ventas. Triple Whale lee solo la tienda del país. El aviso nuevo aviso_ventas_no_comparables_tw no se deduplica contra el viejo aviso de respaldo. tests/test_lote6_ventas.py, test_atribucion.py y test_lote6_decisor.py vigilan la regla, pedidos e aislamiento.
+
+## Tarjetas de análisis (2026-10-08)
+
+Why: Daniel (2026-10-08, three screenshots of an Instagram post) asked for one card per ad with the real creative, a
+verdict, rings and «how to improve it»; the tab was a table and «Evaluar con IA» (whole account) had never been used in
+production. It must work for ANY ad, not only Creatv's: in happyflops only 4 pieces have a `meta_ad_id`. Spec
+`docs/superpowers/specs/2026-10-08-triple-whale-tarjetas-analisis-design.md`, plan in `docs/superpowers/plans/`.
+
+- **Tables (migration 0034; it was 0033 until main brought `0033_cobros` on 2026-10-08).** `tw_creativo` = the ad as
+  `ads_table` gives it (type, thumbnail, mp4, title, copy, duration), one row per (cliente, canal, ad_id) with NO
+  store: the same ad arrives identical through every store that shares an ad account. `tw_analisis` = one paid «Cómo
+  mejorarlo» (state, `foto` = the ad as it looked when asked, `resultado`, `medios`, `usd`), AUTOINCREMENT, never
+  deleted with stores: it is money already spent, like `tw_evaluacion`. Only `triple_whale/datos.py` writes them; the
+  one other delete is `tw_creativo` in `triple_whale_tiendas.quitar`/`desconectar` (`_borrar_creativos`) when the LAST
+  store goes. It is not in `_borrar_copias`, so changing currency/model/window or removing one of several stores keeps
+  it: it depends on neither. Reads for a page of ads go through `datos._por_claves`, a flat `(canal, ad_id) IN (…)` in
+  chunks of 400: a chain of ORs hit SQLite's expression-depth limit with ~2 500 ads («Expression tree is too large»).
+- **Sync.** `triple_whale.consultas_creativos()` (full/minimal) is the fifth query of each tramo, in its own step. A
+  failure goes to `ultimo_resumen.fallos["creativos"]` (key struck) and the copy continues, and it is not retried in
+  later tramos: a card without its creative still has its numbers, and the ads must never be lost for this.
+- **Free calculation (`evaluacion.py`, pure).** The diagnosis uses medians PER CHANNEL (a Snapchat ad was being measured
+  with Meta's CTR), falling back to the account's when the channel has fewer than `BENCH_MIN_ANUNCIOS` comparables; the
+  verdict keeps the account's bench and CPA, because the business looks at its total cost per sale. Rings = percentile
+  inside the ad's own channel and scope: `gancho`, `retencion`, `clic`, `compra`. Empty-ring codes: `sin_video` (the
+  channel reports no video metrics; the spec said `es_imagen`, but a video with zero 3 s views is not an image),
+  `pocos_datos`, `pocas_comparables`, `sin_ventas`, `pocos_clics`. The raw figure still shows without a percentile; the
+  `clic` value is a percentage, the others are fractions, so format each accordingly. Trend: `cansando`, `mejorando`,
+  `sin_gasto`, `estable`, or None without evidence.
+- **Media allow-list.** Only `triple_whale.medio_permitido(url)` (https, no userinfo or odd port, host exactly
+  `files.triplewhale.com` or the R2 host) is embedded or downloaded: the URLs arrive inside ad-platform data and our
+  server fetches them and hands them to ffmpeg and fal (SSRF). A TikTok video arrives as a page, so it is a «Ver en
+  TikTok» link: `enlace_permitido(url, canal)` accepts only the ad's own platform and refuses redirectors (`l.`/`lm.`
+  hosts; paths `/l.php`, `/redirect`, `/link` (TikTok), `/offsite` (Pinterest), `/flx/warn` (Facebook), read as the
+  server would (`_ruta_como_la_lee_el_servidor`: %-decoded, `\` as `/`, `.`/`..` segments resolved with
+  `posixpath.normpath`, one leading slash, lowercase): `l.facebook.com/l.php?u=…` would send anywhere; the last three
+  and `//l.php` slipped through until the final review, B8, and `/./l.php`, `/a/../l.php`, `/%2e/l.php` until its last
+  pass). `conectores.url.descargar_archivo` streams to `ruta + ".part"` and
+  renames on success (a cut download never destroys a good file), 60 MB cap, `tiempo_max` = 120 s for the whole
+  download, enforced by a watchdog `threading.Timer` that shuts the socket down (B5: `timeout` is per read, and a
+  check «between chunks» never runs while `iter_content(65536)` waits for its 64 KB, so a server dripping 1 byte every
+  0.25 s held the worker 12 s with `tiempo_max=2`; proved against a real slow-drip `http.server`,
+  `tests/test_conectores_descarga_lenta.py`), `video/*` only, SSRF check on every redirect. ffmpeg opens the downloaded file only if ffprobe says mp4/mov
+  (`mejorar.es_mp4`, B4: it is a third-party file and an odd demuxer must not get it; ffprobe runs with
+  `-protocol_whitelist file` and fails closed); otherwise the thumbnail.
+- **«Cómo mejorarlo» (`triple_whale/mejorar.py`, task `tw_analizar_anuncio`).** Price first:
+  `gastos.estimar("analisis_anuncio_tw", segundos=)` = tariff 0.10 + Whisper by the video's duration (30 s when
+  unknown). The 0.10 is measured (real run 2026-10-08, 4 happyflops ads, `docs/superpowers/evals/2026-10-08-tw-como-mejorarlo.md`):
+  one call US$ 0,067–0,084 with a warm cache, US$ 0,095 cold (the cache write), US$ 0,16 when the correction call was
+  needed (1 of 4); Whisper ≤ US$ 0,0014 (PND-179). `max_intentos=1`, `job_id`
+  `<cliente>__tw_anuncio__<canal>__<ad_id>`: a second click launches nothing. `id_valido` is a `fullmatch` because `$`
+  lets a trailing newline through and «p1%0A» would be its own job, a second paid analysis; `encolar_analisis` refuses
+  invalid ids. Spend: Whisper as `transcripcion`/fal `tw_anuncio:<aid>:t<tarea>:voz`, Claude as `evaluacion`/anthropic
+  `tw_anuncio:<aid>:t<tarea>`, once, also when it fails after paying (the tokens ride the exception). The Claude call has
+  `timeout=300, max_retries=0` (A6: a retry by the SDK could be paid without being recorded; a failure ends in error
+  and the person asks again with the price in view). **Cobros** (main's prepaid balance, wired in when main was merged on
+  2026-10-08; skill `cobros`): `tw_analizar_anuncio` is in `tareas.TIPOS_QUE_COBRAN`; `_pedir_analisis` reads the
+  creative, takes the button's COST (`panel.precio_analisis(...)["usd"]`) and calls `libro.exigir(cliente, usd)` BEFORE
+  closing stale rows or creating the `tw_analisis` row, then `encolar_analisis(..., costo_estimado=usd)` reserves it;
+  `SaldoInsuficiente` goes up to `dashboard._saldo_insuficiente` (402 JSON to the card's fetch, which treats 402 as a
+  known answer and only re-enables its buttons, since `static/cobros.js` paints «Recargar saldo»; flash to the form).
+  The batch stops at the first ad without balance: the ones already queued keep their reservation, the flash says how
+  many, and the exception is re-raised for the common handler. Claude's spend after a failed call goes with
+  `entregado=False` (paid, not delivered: never charged), like `tw_evaluar`. The detail's figure is
+  `fila.usd | cobrado('tw_anuncio:' ~ fila.id)`: `cobros.vista.clave_de` folds `…:t<id>` and `…:t<id>:voz` into that
+  key, so a client of a charging project sees what was charged, never the cost. Tests:
+  `tests/test_tw_tarjetas_rutas.py` (`test_sin_saldo_…`, `test_con_saldo_…`, `test_el_lote_sin_saldo_…`). The task reads its row inside the `try` and guards the `except`'s
+  own write (A4), so any failure leaves the row in `error`, with words: a row stuck in `en_cola` would block that ad. Claude gets up to 8
+  frames with their second (a Creatv piece's from R2, else the video, else the thumbnail), the ad text, the Whisper
+  voice, rings, trend, the attribution model and window, up to 3 winners of the channel, the account evaluation, the
+  project's learnings and top products; doctrina `revisar`+`diagnosticar`+`angulo`+`gancho`+`video`, the project's
+  language, `max_tokens` 12 000, one correction call (rule 7). Ad text, names and voice are someone else's text: `_dato`
+  strips every run of 2+ `<`/`>` in one regex pass (two chained `replace` calls could be dodged) so a «<<<FIN>>>» in a
+  copy cannot close the DATOS block, and the output only fills an escaped card and a Crear prefill the person reviews.
+  Names, campaign and conjunto arrive in one line (`evaluacion._una_linea`), and in the prompt the names, the winners'
+  title/copy and the account evaluation's summary and patterns go through `mejorar._linea` (`_dato` + one line; B3: a
+  newline in a name opened what looked like a new part of the prompt and split the card's `data-confirmar`).
+  `verificar_cifras` runs over the phrase, reasons with evidence, changes, `por_que` and the learning
+  (`cifras_sin_dato`, non-blocking) against the prompt text plus `mejorar.segundos_verificables` (the «Segundo 12,6:»
+  frame labels AND the integer part of every frame and voice-phrase second: «el segundo 31» for a phrase at 31,1 s is
+  not an invented figure; the real test flagged 31 and 37 that way, 2026-10-08). `NOMBRES_CANAL` lives in `triple_whale/__init__.py` so the worker never imports the
+  blueprint (`resultados.NOMBRES_CANAL` and `rutas.NOMBRES_CANAL` are that same dict).
+- **Gallery.** Tab order: bar, «Resultados de tu tienda» (main's section, 2026-10-08), «Por tienda», alerts, «Tus
+  anuncios» (tiles + gallery), «Lo que hace ganar en tu cuenta», «Dónde se va el gasto», «Lo que más se vende», «Ver como
+  tabla». The gallery, card, analyze and batch routes resolve their scope with `panel.alcance` → `evaluar_periodo`, the
+  same as the panel, «Desde el inicio» (`dias=0`, from the first copied day) included. 12 cards per page by spend (`panel.POR_PAGINA`), filters (`Muy pocos datos` is not in
+  «Todos»), and a fixed number of queries whatever the cards (`panel.enriquecer`, `datos.analisis_de_anuncios`;
+  `test_las_consultas_no_crecen_con_las_tarjetas`): a query per card was what made project pages take 1 158 queries
+  (2026-09-28 audit). Routes: `galeria` (`entera=1`
+  returns the whole block for a filter, so the batch's keys and price follow the filter; without it only the cards of
+  «Ver más»), `tarjeta`, `analizar_anuncio` (JSON for the tab JS), `analizar_lote`, `analisis_detalle`,
+  `analisis_crear`, `analisis_aprendizaje`, `anuncio_referente` (same thumbnail as the card). A card's bar carries
+  `data-poll-al-terminar="evento"` and dispatches `trabajo-terminado` instead of reloading (ten analyses would be ten
+  reloads); the tab JS repaints only that card. The async «Cómo mejorarlo» never re-POSTs on a failure: it repaints the
+  card and shows a message, and paying again takes a fresh click and confirm (rule 1). The analisis routes take
+  `<int(max=2**63-1):aid>` (`rutas.AID_MAX`, B7): a bigger id overflowed SQLite and gave a 500, now a 404. Whole sales
+  show without a decimal (`tw_ventas`: «10 ventas», not «10,0»; D2) and «Ya se hizo N piezas con esta mejora» ends
+  with the Crear state of the latest one (`panel.ETIQUETAS_PIEZA`, spec §7.1; D3).
+- **Which analysis a card shows (final review A2 and A4, 2026-10-08).** `datos.analisis_de_anuncios` reads ALL rows
+  of the page's keys, newest first (one query per chunk), and `panel.elegir_analisis(a, filas, alcance)` picks: `vivo`
+  = the ad's deterministic job is alive (`tareas_tw.analisis_vivos`) → its bar; else `mismo` = newest row of THIS scope
+  (ready → phrase + «Ver el análisis»; stale → «Analizar otra vez»; error → «Intentar otra vez»); else `otro` = newest
+  READY row of another scope → neutral note + «Analizar con estos datos». Another scope's ERROR is ignored. Why: only
+  the newest row was read, so a fresh analysis was hidden by a newer one of another scope, and another scope's error
+  offered «Intentar otra vez» and put the ad back in the batch. A row in `en_cola`/`analizando` whose job is NOT alive
+  is shown as an error («Se interrumpió antes de terminar.») and never blocks; the route closes such orphans
+  (`datos.cerrar_colgados`) before creating the new row (A4: a task that died before its `try` blocked the ad forever).
+- **The route never pays twice for the same data (A1).** `_pedir_analisis` refuses without charging when the ad has a
+  live task or a READY analysis of this scope that is not stale («Ese anuncio ya tiene un análisis con estos datos.»;
+  the JSON path returns the card): a stale tab, or the 7-day tab after visiting 30 days, still shows the button.
+- **Old analysis.** `panel.es_viejo` applies only inside the same scope (`panel.mismo_alcance`: same store AND either the
+  same period length or the same `desde`): a changed verdict or ≥ 1.5× the spend. «Desde el inicio» grows one day every
+  day but always starts on the first copied day, so yesterday's analysis is still this scope (merge with «Resultados de
+  tu tienda», 2026-10-08). The panel's CHANNEL filter is part of the scope too (A3): `foto.alcance_canal` is stored when
+  asking (None or missing = «Todos»), because the verdict depends on the filter; without it an analysis looked stale
+  under a filter and the batch charged it again. From another scope the card shows a neutral note and a secondary
+  «Analizar con estos datos»; moving from 7 to 30 days must not nudge a second payment.
+- **Batch.** «Analizar los N que más gastaron» (`panel.N_LOTE` = 10) takes exactly the ads whose card shows the primary
+  paid button (`a.ofrecer_analisis`: not `sin_datos`, no live task, no fresh analysis of this scope and no ready one of
+  another scope), posts the `clave=<canal>:<ad_id>` inputs the form showed with their total price, and the route
+  charges only posted ∩ still-eligible, never «the next N»: a second submit of the same form charges nothing (rules 1
+  and 4). The total is the sum of each card's price at the ad's real duration (A5); with any price unknown it says
+  «precio no disponible», never «US$ 0». `_claves_confirmadas` dedupes with a set and stops at N_LOTE valid keys (B6).
+- **From analysis to Crear and learnings.** `analisis_crear` sends `origen_tw = a<aid>`, stored as
+  `concepto.extra.tw_idea = {"analisis_id", "titulo"}`; the cards list the pieces born from each analysis. The
+  `aprendizaje` is saved only on click (`analisis_aprendizaje`, id `tw<aid>`, in the project's language: rule 3): saved
+  learnings feed every future prompt, and the id makes two clicks or two tabs one line. `doctrina.aprendizajes._limpio`
+  removes every `<` and `>` (the data tags whole, in any case; a numeric comparison of the decisor such as «8% < 25%»
+  becomes «8% ＜ 25%») and the detail shows next to the button the EXACT text that will be saved («Se guarda así: …»).
+  Why (B1, security audit): the ad name is third-party text and a single case-sensitive `replace("</aprendizajes>")`
+  let `</APRENDIZAJES>` and `</aprend</aprendizajes>izajes>` close the block in every future prompt (ideas, guiones,
+  derivaciones in auto mode). Invented figures (B2): when `cifras_sin_dato` is not empty the detail says «Claude citó
+  cifras que no están en los datos: …», and an `aprendizaje` that contains one of them is neither offered nor saved
+  (`mejorar.cifras_del_aprendizaje`, also in the route against an old form): it would enter every prompt as a fact.
+- **Rulings that differ from the spec.** Ring code `sin_video` (above). «Pausar/Activar en Meta» stays only in «Ver como
+  tabla» (the spec listed it on the card): 4 Creatv pieces live in production and the table keeps the action; the cost
+  is one extra click (PND-184). The card's «Costo por venta» compares with the ad's CHANNEL (`cpa_canal`), not the
+  account (spec §2.1, D4): the rings already measure inside the channel and the account's figure is mostly Meta's, so a
+  Snapchat or TikTok ad looked cheap or expensive just for its channel; the verdict still uses the account's CPA.
+- **Out of this change (spec §13, PND-180 to PND-186).** «v1 vs v2 ring by ring» and «change only the hook»; predict
+  before spending; new Meta copy; TikTok videos without frames; the retention-by-quarters curve; Whisper
+  `language: null` (`fal_audio.transcribir_palabras(url, None)`): fal accepted it in the real run of 2026-10-08 (3 of 4
+  ads transcribed, Norwegian and English), so PND-185 is closed; if fal ever rejects it, the task goes on without
+  voice.

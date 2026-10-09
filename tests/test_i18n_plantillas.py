@@ -60,6 +60,8 @@ PLANTILLAS_TRADUCIDAS = [
     # Merge de main (2026-09-28, PR #1 Triple Whale): la pestaña y su panel ya
     # vienen con _() y su inglés en el catálogo; entran a la guardia al fusionar.
     "_tab_triple_whale.html", "_tw_panel.html", "_tw_resultados.html", "_tw_dia.html",
+    "_tw_galeria.html", "_tw_galeria_fragmento.html",   # tarjetas de Triple Whale (spec 2026-10-08 tarjetas §5.1)
+    "_tw_analisis.html",                                 # «Cómo mejorarlo» de una tarjeta (spec 2026-10-08 tarjetas §6.5)
     # Pestaña Meta (rendimiento de varias cuentas, 2026-10-08): armazón, panel, selector y filas de «Ver más».
     "_tab_meta.html", "_meta_panel.html", "_meta_cuentas.html", "_meta_anuncios_filas.html",
     "_meta_conjuntos_filas.html", "_meta_macros.html",

@@ -27,6 +27,7 @@ TIPOS_QUE_COBRAN = frozenset({
     # Doctrina, Sprints y Triple Whale (Claude)
     "producto_pedidos", "pieza_revisar", "sprint_analizar_referencia", "sprint_sugerir_personas",
     "sprint_reescribir_idea", "sprint_proponer_ideas", "sprint_qa_pieza", "referentes_sugerir_ia", "tw_evaluar",
+    "tw_analizar_anuncio",      # «Cómo mejorarlo» de un anuncio: Whisper (fal) y Claude
     # Nicho e investigación (Apify y Claude)
     "nicho_recolectar", "nicho_generar_avatares", "nicho_completar_avatares",
     "nicho_inv_consultas", "nicho_inv_buscar", "nicho_inv_seleccionar",

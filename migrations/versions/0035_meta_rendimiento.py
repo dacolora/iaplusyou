@@ -1,10 +1,11 @@
 """Meta: rendimiento de varias cuentas por proyecto (spec 2026-10-08 meta rendimiento §4)
 
-Revision ID: 0034
-Revises: 0033
+Revision ID: 0035
+Revises: 0034
 Create Date: 2026-10-08 12:00:00.000000
 
-Era la 0033 en la rama; se renumeró a 0034 al mezclar main (2026-10-08), que ya tenía 0033_cobros.
+Era la 0033 en la rama; se renumeró a 0034 al mezclar main (2026-10-08), que ya tenía 0033_cobros, y a 0035 en
+la segunda mezcla de main (2026-10-09), que trajo 0034_tw_tarjetas.
 
 Seis tablas nuevas, sin tocar las existentes: meta_cuenta (las cuentas que un proyecto lee;
 una cuenta en un solo proyecto), meta_cuenta_dia, meta_anuncio_dia, meta_objeto, meta_alcance
@@ -15,8 +16,8 @@ from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
 
-revision: str = '0034'
-down_revision: Union[str, Sequence[str], None] = '0033'
+revision: str = '0035'
+down_revision: Union[str, Sequence[str], None] = '0034'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

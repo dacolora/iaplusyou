@@ -527,6 +527,47 @@ tw_producto_dia = Table("tw_producto_dia", metadata,
     sa.Index("ix_tw_producto_dia_cliente_tienda_fecha", "cliente", "tienda_id", "fecha"),
 )
 
+# Tarjetas de análisis (spec 2026-10-08-triple-whale-tarjetas-analisis §3.1, migración 0034): el anuncio tal cual lo
+# da ads_table (miniatura, video, título, copy). Una fila por (proyecto, canal, anuncio), SIN tienda: el mismo anuncio
+# llega igual por todas las tiendas que comparten cuenta. Único escritor: triple_whale/datos.py (el borrado al quitar
+# la última tienda, en triple_whale_tiendas.py como las copias).
+tw_creativo = Table("tw_creativo", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("cliente", String(80), nullable=False),
+    Column("canal", String(40), nullable=False),
+    Column("ad_id", String(64), nullable=False),
+    Column("tipo", String(20)),                               # ad_type en minúsculas: video, image, carousel…
+    Column("imagen_url", String(2000)),                       # ad_image_url (files.triplewhale.com)
+    Column("video_url", String(2000)),
+    Column("titulo", String(300)),
+    Column("copy", Text),
+    Column("cta", String(60)),
+    Column("duracion_s", Float),
+    Column("actualizado_en", String(19), nullable=False),
+    sa.UniqueConstraint("cliente", "canal", "ad_id", name="uq_tw_creativo"),
+)
+
+# «Cómo mejorarlo» de un anuncio (spec §3.2): pagado, nunca se borra al quitar tiendas (como tw_evaluacion).
+tw_analisis = Table("tw_analisis", metadata,
+    Column("id", Integer, primary_key=True),
+    *_comunes(),
+    Column("tienda_id", Integer),                             # alcance pedido; None = «Todas»
+    Column("canal", String(40), nullable=False),
+    Column("ad_id", String(64), nullable=False),
+    Column("estado", String(12), nullable=False, default="en_cola"),   # en_cola|analizando|lista|error
+    Column("desde", String(10)), Column("hasta", String(10)),
+    Column("moneda", String(3)),
+    Column("foto", JSON, default=dict),                       # el anuncio cuando se pidió (spec §3.2)
+    Column("resultado", JSON, default=dict),
+    Column("medios", JSON, default=dict),                     # qué vio Claude
+    Column("usd", Float, default=0.0),
+    Column("error", Text),
+    Column("tarea_id", Integer),
+    Column("pedido_por", String(80)),
+    sa.Index("ix_tw_analisis_anuncio", "cliente", "canal", "ad_id", "id"),
+    sqlite_autoincrement=True,
+)
+
 pedido = Table("pedido", metadata,
     Column("id", Integer, primary_key=True),
     Column("cliente", String(80), nullable=False, index=True),
@@ -1100,7 +1141,7 @@ error_app = Table("error_app", metadata,
     sa.Index("ix_error_app_ultima", "ultima_vez"),
 )
 
-# --- Meta: rendimiento de varias cuentas por proyecto (spec 2026-10-08 meta rendimiento §4, migración 0034) ---
+# --- Meta: rendimiento de varias cuentas por proyecto (spec 2026-10-08 meta rendimiento §4, migración 0035) ---
 # Las cuentas publicitarias que un proyecto LEE (aparte de la única con la que lanza, en meta.json).
 # Único escritor: meta_rendimiento/cuentas.py. Una cuenta solo puede estar en un proyecto.
 meta_cuenta = Table("meta_cuenta", metadata,

@@ -4,10 +4,12 @@ gasta: solo deja las cosas donde el resto de Creatv ya sabe usarlas.
 - `prefill_crear`: una idea del análisis → el formulario de Crear precargado
   (mismo `session["fp_prefill"]` que «Editar y crear otra»). Generar sigue
   siendo el clic de siempre, con su precio a la vista. El prefill lleva
-  `origen_tw` («<evaluación>:<índice>»): el formulario lo manda de vuelta
-  en un campo oculto y `cf_crear_video` lo guarda como `tw_idea` en la
-  sesión (`origen_desde_formulario` lo valida), así la pestaña enlaza cada
-  idea con las piezas que salieron de ella y cada anuncio con su idea.
+  `origen_tw` («<evaluación>:<índice>» para una idea de la evaluación de
+  cuenta, «a<análisis>» para la versión mejorada de un anuncio): el
+  formulario lo manda de vuelta en un campo oculto y `cf_crear_video` lo
+  guarda como `tw_idea` en la sesión (`origen_desde_formulario` lo valida),
+  así la pestaña enlaza cada idea (o cada análisis) con las piezas que
+  salieron de ella y cada anuncio con su idea.
 - `a_referente`: un anuncio propio que ganó → un referente del proyecto
   (fuente `triple_whale`, solo visible para él) con su miniatura copiada a
   R2, la clasificación que dio Claude y sus métricas en `extra.triple_whale`.
@@ -28,8 +30,9 @@ class PuenteError(ValueError):
     """Algo que la persona tiene que saber (el mensaje se muestra tal cual)."""
 
 
-def prefill_crear(cliente, idea, evaluacion_id=None, indice=None):
-    """Lo que `_tab_creativeflowplus.html` lee de `fp_prefill`."""
+def prefill_crear(cliente, idea, evaluacion_id=None, indice=None, analisis_id=None):
+    """Lo que `_tab_creativeflowplus.html` lee de `fp_prefill`. `origen_tw` es «<evaluación>:<índice>» para una idea
+    de la evaluación de cuenta y «a<análisis>» para la versión mejorada de un anuncio (spec tarjetas §7.1)."""
     if not idea or not str(idea.get("prompt") or "").strip():
         raise PuenteError(gettext("Esa idea no tiene prompt."))
     pref = proyectos.preferencias_flowplus(cliente)
@@ -38,17 +41,29 @@ def prefill_crear(cliente, idea, evaluacion_id=None, indice=None):
               "con_sonido": proyectos.preferencias_sonido(cliente).get("con_sonido", True) is not False}
     if evaluacion_id is not None and indice is not None:
         salida["origen_tw"] = f"{int(evaluacion_id)}:{int(indice)}"
+    elif analisis_id is not None:
+        salida["origen_tw"] = f"a{int(analisis_id)}"
     return salida
 
 
 _ORIGEN = re.compile(r"^(\d{1,12}):(\d{1,4})$")
+_ORIGEN_ANALISIS = re.compile(r"^a(\d{1,12})$")
 
 
 def origen_desde_formulario(cliente, valor):
     """El `origen_tw` que devuelve el formulario de Crear → `{"evaluacion_id",
-    "idea", "titulo"}` para guardar en la sesión, o None si no viene, no tiene
-    la forma, la evaluación no es de este proyecto o la idea no existe. Nunca
-    lanza: un origen raro solo se ignora, la pieza se crea igual."""
+    "idea", "titulo"}` (una idea de la evaluación) o `{"analisis_id", "titulo"}`
+    (la versión mejorada de un anuncio) para guardar en la sesión, o None si no
+    viene, no tiene la forma, la evaluación o el análisis no es de este
+    proyecto o la idea no existe. Nunca lanza: un origen raro solo se ignora,
+    la pieza se crea igual."""
+    ma = _ORIGEN_ANALISIS.match(str(valor or "").strip())
+    if ma:
+        fila = datos.analisis_anuncio(cliente, int(ma.group(1)))
+        version = ((fila or {}).get("resultado") or {}).get("version") or {}
+        if not fila or fila.get("estado") != "lista" or not version:
+            return None
+        return {"analisis_id": fila["id"], "titulo": str(version.get("titulo") or "").strip()[:120]}
     m = _ORIGEN.match(str(valor or "").strip())
     if not m:
         return None

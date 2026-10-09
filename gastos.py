@@ -113,6 +113,13 @@ TARIFAS = {
     # Doctrina, bloque 4: el diagnóstico de una perdedora (una llamada sin visión).
     # Inicial; se ajusta con lo medido en la prueba real.
     "diagnostico_pieza": 0.03,
+    # Triple Whale, «Cómo mejorarlo» (spec 2026-10-08 tarjetas §6.1): una llamada con visión (hasta 8 fotogramas),
+    # la doctrina en el system (caché) y hasta 12 000 tokens de salida.
+    # Medido en la prueba real (2026-10-08, claude-sonnet-5, 4 anuncios de happyflops, caché caliente): una llamada
+    # US$ 0,067–0,084; 1 de 4 necesitó la corrección (US$ 0,16 en total, la primera con la caché fría: US$ 0,095);
+    # Whisper ≤ US$ 0,0014. Esperado ≈ 0,075 × 1,25 + Whisper; redondeado hacia arriba. Informe:
+    # docs/superpowers/evals/2026-10-08-tw-como-mejorarlo.md (PND-179).
+    "analisis_anuncio_tw": 0.10,
 }
 
 # Evaluación de anuncios de Triple Whale con IA (spec 2026-09-28 §6): una
@@ -409,6 +416,20 @@ def _estimar_voz_editor(caracteres=0, solo_subtitulos=False, duracion_ms=None, *
     return usd_voz + fal_audio.costo_whisper(segundos * 1000), f"{n} caracteres con ElevenLabs y sus subtítulos"
 
 
+DURACION_ANUNCIO_DEFECTO_S = 30
+
+
+def _estimar_analisis_anuncio_tw(segundos=None, **_):
+    """Claude con visión + Whisper por la duración del video (sin duración, 30 s)."""
+    from providers import fal_audio
+    try:
+        s = float(segundos) if segundos else DURACION_ANUNCIO_DEFECTO_S
+    except (TypeError, ValueError):
+        s = DURACION_ANUNCIO_DEFECTO_S
+    return (round(TARIFAS["analisis_anuncio_tw"] + fal_audio.costo_whisper(s * 1000), 4),
+            "una llamada a Claude con visión y la voz con Whisper")
+
+
 _ESTIMADORES = {
     "video": _estimar_video,
     "regeneracion": _estimar_video,
@@ -439,6 +460,7 @@ _ESTIMADORES = {
     "evaluacion_tw": lambda n=1, **_: (EVALUACION_TW_BASE_USD + EVALUACION_TW_POR_ANUNCIO_USD * max(1, int(n or 0)),
                                        f"{max(1, int(n or 0))} anuncio(s) con Claude"),
     "diagnostico_pieza": lambda **_: (TARIFAS["diagnostico_pieza"], "una llamada a Claude"),
+    "analisis_anuncio_tw": _estimar_analisis_anuncio_tw,
     "proponer_ideas": lambda n=1, **_: (IDEAS_BASE_USD + IDEAS_POR_IDEA_USD * max(1, int(n or 0)),
                                         f"{max(1, int(n or 0))} idea(s) con Claude"),
 }

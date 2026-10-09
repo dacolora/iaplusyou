@@ -24,7 +24,15 @@ Veredicto (reglas del decisor del proyecto: `impresiones_min`, `roas_min`):
 Sin NINGÚN pedido atribuido en la cuenta (Pixel sin rastreo, o la ventana
 es corta) no hay ganadores ni perdedores: solo señales de tráfico, y una
 alerta lo dice.
+
+Tarjetas de análisis (spec 2026-10-08 §4): el DIAGNÓSTICO de cada anuncio usa las
+medianas de SU canal (`ev["benchmarks_canal"]`) cuando ese canal tiene al menos
+`BENCH_MIN_ANUNCIOS` comparables; el veredicto y el CPA siguen siendo de toda la
+cuenta. `anillos()` pone el percentil del anuncio dentro de su canal (gancho,
+retención, clic, compra) y `tendencia()` compara los últimos 7 días con los 7
+anteriores.
 """
+import bisect
 import statistics
 
 from flask_babel import gettext, ngettext
@@ -67,6 +75,22 @@ PROBLEMAS = {
 FORTALEZAS = {"gancho_fuerte": N_("Gancho fuerte"), "retiene": N_("Retiene"), "clic_fuerte": N_("Mucho clic"),
               "convierte": N_("Convierte"), "barato": N_("Alcance barato")}
 _FORTALEZAS_PROMETEDOR = ("gancho_fuerte", "clic_fuerte", "convierte")
+
+# Tarjetas de análisis (spec 2026-10-08-triple-whale-tarjetas-analisis §4).
+FRASES_VEREDICTO = {"ganador": N_("Este anuncio sí funciona"), "prometedor": N_("Va bien: falta confirmarlo con ventas"),
+                    "en_prueba": N_("Todavía no se sabe"), "perdedor": N_("Este anuncio no funciona"),
+                    "sin_datos": N_("Muy pocos datos para opinar")}
+ANILLOS = ("gancho", "retencion", "clic", "compra")
+_METRICA_ANILLO = {"gancho": "gancho", "retencion": "retencion", "clic": "ctr", "compra": "conversion"}
+VACIOS_ANILLO = {"sin_video": N_("sin datos de video"), "pocos_datos": N_("pocos datos"),
+                 "pocas_comparables": N_("pocos anuncios para comparar"), "sin_ventas": N_("sin ventas en la cuenta"),
+                 "pocos_clics": N_("pocos clics")}
+NIVEL_ALTO = 67
+NIVEL_MEDIO = 34
+TENDENCIAS = {"cansando": N_("Se está cansando"), "mejorando": N_("Mejorando"),
+              "sin_gasto": N_("Sin gasto estos 7 días"), "estable": N_("Estable")}
+SUBIDA_ROAS_MEJORA = 0.20
+SUBIDA_CTR_MEJORA = 0.25
 
 
 # ----------------------------------------------------------- números ---
@@ -213,6 +237,78 @@ def meta_roas(reglas, bench):
     return float(bench.get("roas") or 1.0)
 
 
+def _valor_anillo(nombre, m, hay_ventas):
+    """(valor, código de vacío) de un anillo con las métricas `m`."""
+    if nombre in ("gancho", "retencion") and not m["es_video"]:
+        return None, "sin_video"
+    if nombre == "compra":
+        if not hay_ventas:
+            return None, "sin_ventas"
+        if (m["clics_salida"] or m["clics"]) < CLICS_MIN_CONVERSION:
+            return None, "pocos_clics"
+    valor = m.get(_METRICA_ANILLO[nombre])
+    return (valor, None) if valor is not None else (None, "pocos_datos")
+
+
+def _nivel(pct):
+    return "alto" if pct >= NIVEL_ALTO else "medio" if pct >= NIVEL_MEDIO else "bajo"
+
+
+def anillos(anuncios, impresiones_min=IMPRESIONES_MIN_DEFECTO, hay_ventas=True):
+    """Pone `a["anillos"]` en cada anuncio (spec §4.2): por anillo, el percentil del anuncio entre los de SU canal
+    con al menos `impresiones_min` impresiones, sin contarse a sí mismo:
+    round(100 × (menores + 0,5 × iguales) / otros). Hace falta estar en el grupo y que otros + 1 ≥
+    BENCH_MIN_ANUNCIOS. Ordena una vez por canal y anillo (bisect): la pestaña lo calcula con cientos de anuncios."""
+    grupos = {}
+    for a in anuncios:
+        if a["m"]["impresiones"] >= impresiones_min:
+            grupos.setdefault(a["canal"], []).append(a)
+    ordenados = {}
+    for canal, lista in grupos.items():
+        for nombre in ANILLOS:
+            vals = [v for v, _ in (_valor_anillo(nombre, b["m"], hay_ventas) for b in lista) if v is not None]
+            ordenados[(canal, nombre)] = sorted(vals)
+    for a in anuncios:
+        en_grupo = a["m"]["impresiones"] >= impresiones_min
+        a["anillos"] = {}
+        for nombre in ANILLOS:
+            valor, vacio = _valor_anillo(nombre, a["m"], hay_ventas)
+            pct = None
+            if valor is not None:
+                if not en_grupo:
+                    vacio = "pocos_datos"
+                else:
+                    vals = ordenados.get((a["canal"], nombre)) or []
+                    otros = len(vals) - 1
+                    if otros + 1 < BENCH_MIN_ANUNCIOS or otros <= 0:
+                        vacio = "pocas_comparables"
+                    else:
+                        menores = bisect.bisect_left(vals, valor)
+                        iguales = bisect.bisect_right(vals, valor) - menores - 1
+                        pct = int(round(100 * (menores + 0.5 * iguales) / otros))
+            a["anillos"][nombre] = {"pct": pct, "valor": valor, "nivel": _nivel(pct) if pct is not None else None,
+                                    "vacio": None if pct is not None else vacio}
+    return anuncios
+
+
+def tendencia(reciente, previo, reglas=None, hay_ventas=True, fatiga=False):
+    """Los últimos 7 días contra los 7 anteriores (spec §4.3): cansando, mejorando, sin_gasto, estable o None sin
+    evidencia. `reciente`/`previo` son métricas (`metricas()`) o None si el anuncio no tuvo filas en esa ventana."""
+    if fatiga:
+        return "cansando"
+    if previo and previo["gasto"] > 0 and (not reciente or reciente["gasto"] <= 0):
+        return "sin_gasto"
+    minimo = ((reglas or {}).get("impresiones_min") or IMPRESIONES_MIN_DEFECTO) / 2
+    if not reciente or not previo or reciente["impresiones"] < minimo or previo["impresiones"] < minimo:
+        return None
+    if (hay_ventas and previo["pedidos"] >= PEDIDOS_MIN_GANADOR and (previo["roas"] or 0) > 0
+            and (reciente["roas"] or 0) >= previo["roas"] * (1 + SUBIDA_ROAS_MEJORA)):
+        return "mejorando"
+    if previo["ctr"] and reciente["ctr"] is not None and reciente["ctr"] >= previo["ctr"] * (1 + SUBIDA_CTR_MEJORA):
+        return "mejorando"
+    return "estable"
+
+
 def veredicto(m, bench, reglas, cpa_cuenta, hay_ventas, diag):
     """(veredicto, motivo) — el motivo ya viene traducido."""
     reglas = reglas or {}
@@ -241,6 +337,14 @@ def veredicto(m, bench, reglas, cpa_cuenta, hay_ventas, diag):
 
 # ------------------------------------------------------------ evaluar ---
 
+def _una_linea(texto):
+    """Texto ajeno (nombre del anuncio, campaña, conjunto) en una sola línea, o None si queda vacío. Un salto de línea
+    en un nombre lo sacaba del bloque delimitado del prompt y partía el `data-confirmar` de la tarjeta (revisión
+    final de las tarjetas, B3)."""
+    t = " ".join(str(texto).split()) if texto is not None else ""
+    return t or None
+
+
 def _clave(t):
     return (t.get("canal"), str(t.get("ad_id")))
 
@@ -249,14 +353,20 @@ def evaluar(totales, recientes=None, previos=None, reglas=None):
     """Evalúa cada anuncio. `totales` es la lista de
     `datos.totales_por_anuncio` del periodo; `recientes`/`previos`, las de
     los últimos 7 días y los 7 anteriores (para la fatiga). Devuelve
-    {"anuncios": [...ordenados...], "benchmarks", "cuenta", "conteo",
-    "hay_ventas", "meta_roas"}."""
+    {"anuncios": [...ordenados...], "benchmarks", "benchmarks_canal"
+    ({canal: bench}), "cuenta", "conteo", "hay_ventas", "meta_roas"}."""
     reglas = dict(reglas or {})
     reglas.setdefault("impresiones_min", IMPRESIONES_MIN_DEFECTO)
     rec = {_clave(t): metricas(t) for t in (recientes or [])}
     prev = {_clave(t): metricas(t) for t in (previos or [])}
     filas = [(t, metricas(t)) for t in totales or []]
     bench = benchmarks([m for _, m in filas], reglas["impresiones_min"])
+    por_canal = {}
+    for t, m in filas:
+        por_canal.setdefault(t.get("canal"), []).append(m)
+    # Medianas por canal (spec tarjetas §4.1): un anuncio de Snapchat no se mide con el CTR de Meta. Un canal sin
+    # BENCH_MIN_ANUNCIOS comparables usa las de la cuenta. El veredicto sigue con la meta de toda la cuenta.
+    bench_canal = {c: benchmarks(ms, reglas["impresiones_min"]) for c, ms in por_canal.items()}
     gasto_total = sum(m["gasto"] for _, m in filas)
     pedidos_total = sum(m["pedidos"] for _, m in filas)
     hay_ventas = pedidos_total > 0
@@ -265,23 +375,29 @@ def evaluar(totales, recientes=None, previos=None, reglas=None):
     anuncios = []
     for t, m in filas:
         k = _clave(t)
-        diag = diagnostico(m, bench, reglas, rec.get(k), prev.get(k), hay_ventas, t.get("utm_ok"))
+        bc = bench_canal.get(t.get("canal"))
+        bench_diag = bc if bc and bc["n"] >= BENCH_MIN_ANUNCIOS else bench
+        diag = diagnostico(m, bench_diag, reglas, rec.get(k), prev.get(k), hay_ventas, t.get("utm_ok"))
         ver, motivo = veredicto(m, bench, reglas, cpa_cuenta, hay_ventas, diag)
         anuncios.append({
-            "canal": t.get("canal"), "ad_id": str(t.get("ad_id")), "nombre": t.get("anuncio") or str(t.get("ad_id")),
-            "campana": t.get("campana"), "conjunto": t.get("conjunto"), "creative_id": t.get("creative_id"),
+            "canal": t.get("canal"), "ad_id": str(t.get("ad_id")),
+            "nombre": _una_linea(t.get("anuncio")) or str(t.get("ad_id")),
+            "campana": _una_linea(t.get("campana")), "conjunto": _una_linea(t.get("conjunto")),
+            "creative_id": t.get("creative_id"),
             "video_url": t.get("video_url"), "destino_url": t.get("destino_url"), "utm_ok": t.get("utm_ok"),
             "primera_fecha": t.get("primera_fecha"), "ultima_fecha": t.get("ultima_fecha"),
             "dias_con_gasto": int(t.get("dias_con_gasto") or 0),
             "m": m, "veredicto": ver, "motivo": motivo,
             "problemas": diag["problemas"], "fortalezas": diag["fortalezas"],
             "fatiga": "fatiga" in diag["problemas"],
+            "tendencia": tendencia(rec.get(k), prev.get(k), reglas, hay_ventas, "fatiga" in diag["problemas"]),
         })
+    anillos(anuncios, reglas["impresiones_min"], hay_ventas)
     orden = {v: i for i, v in enumerate(VEREDICTOS)}
     anuncios.sort(key=lambda a: (orden[a["veredicto"]], -a["m"]["ingresos"], -a["m"]["gasto"], a["ad_id"]))
     return {"anuncios": anuncios, "benchmarks": bench, "cuenta": resumen_cuenta(anuncios),
             "conteo": {v: sum(1 for a in anuncios if a["veredicto"] == v) for v in VEREDICTOS},
-            "hay_ventas": hay_ventas, "meta_roas": meta_roas(reglas, bench)}
+            "hay_ventas": hay_ventas, "meta_roas": meta_roas(reglas, bench), "benchmarks_canal": bench_canal}
 
 
 def resumen_cuenta(anuncios):

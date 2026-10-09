@@ -74,7 +74,7 @@ Paquete `meta_rendimiento/` (no `meta_ads/`, que es el submódulo, ni `meta_deta
 | `avisos.py` (E2) | correo tras la copia: ganadores, fatiga, rechazados, cuenta con problemas | `notificaciones` |
 | `tareas/meta_rendimiento.py` | tareas del worker | `sync`, `analisis` |
 
-## 4. Datos (migración 0034; 0033 en el borrador, renumerada al mezclar main el 2026-10-08, que trajo 0033_cobros)
+## 4. Datos (migración 0035; 0033 en el borrador, 0034 al mezclar main el 2026-10-08, que trajo 0033_cobros, y 0035 al mezclarlo otra vez el 2026-10-09, que trajo 0034_tw_tarjetas)
 
 - `meta_cuenta`: id, cliente, ad_account_id (`act_…`, **único global**), nombre, moneda, zona_horaria, pais (ISO-2 o
   NULL), estado (`ok|copiando|error`), error, ultima_copia, extra (JSON: `backfill_hecho`, `cuenta` = account_status,
@@ -219,7 +219,7 @@ el prompt de Claude (E2), nunca como instrucciones.
 Graph con dobles (sin red): paginación, informe asíncrono (en curso → completado → fallido), límites, token roto,
 tipos de compra; `datos.reemplazar_*` idempotente; `tasas` con fin de semana y sin tasa; `panel` con «Todas» en USD,
 una cuenta, sin datos; rutas (mismo origen, cuenta de otro proyecto → 404, proyecto sin Meta); `meta_elegir` sin
-Página; lanzador y orgánico frenan sin Página; migración 0034 en una copia. E2: cada regla de recomendaciones con su
+Página; lanzador y orgánico frenan sin Página; migración 0035 en una copia. E2: cada regla de recomendaciones con su
 caso; análisis con Claude doble; avisos una sola vez. Prueba real con la cuenta de Norway antes de desplegar y captura
 de la pestaña.
 

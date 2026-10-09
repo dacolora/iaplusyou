@@ -235,6 +235,10 @@ msgid "%(error)s No se publicó nada."
 msgstr "%(error)s Nothing was published."
 
 #, python-format
+msgid "%(etiqueta)s: mejor que el %(pct)s %% de tus anuncios de %(canal)s"
+msgstr "%(etiqueta)s: better than %(pct)s %% of your %(canal)s ads"
+
+#, python-format
 msgid "%(fase)s (puesto %(n)s)"
 msgstr "%(fase)s (position %(n)s)"
 
@@ -1387,6 +1391,18 @@ msgstr[0] "%(num)s sold"
 msgstr[1] "%(num)s sold"
 
 #, python-format
+msgid "%(p)s compra"
+msgstr "%(p)s buy"
+
+#, python-format
+msgid "%(p)s lo ve completo"
+msgstr "%(p)s watch it all"
+
+#, python-format
+msgid "%(p)s se queda 3 s"
+msgstr "%(p)s stay 3 s"
+
+#, python-format
 msgid "%(palabras)s palabras · unos %(segundos)s s leído completo a ritmo natural."
 msgstr "%(palabras)s words · about %(segundos)s s read in full at a natural pace."
 
@@ -2338,6 +2354,20 @@ msgstr "Ambience first"
 msgid "Amor y amistad"
 msgstr "Love and Friendship"
 
+#, python-format
+msgid "Analizado con los datos del %(desde)s al %(hasta)s"
+msgstr "Analyzed with data from %(desde)s to %(hasta)s"
+
+#, python-format
+msgid "Analizado en Triple Whale: «%(nombre)s»"
+msgstr "Analyzed in Triple Whale: “%(nombre)s”"
+
+#, python-format
+msgid "Analizando %(num)s anuncio con IA…"
+msgid_plural "Analizando %(num)s anuncios con IA…"
+msgstr[0] "Analyzing %(num)s ad with AI…"
+msgstr[1] "Analyzing %(num)s ads with AI…"
+
 msgid "Analizando con Claude"
 msgstr "Analyzing with Claude"
 
@@ -2352,6 +2382,20 @@ msgstr "Analyzing brand references…"
 
 msgid "Analizando referencias…"
 msgstr "Analyzing references…"
+
+#, python-format
+msgid "Analizando «%(nombre)s» con IA…"
+msgstr "Analyzing “%(nombre)s” with AI…"
+
+msgid "Analizar con estos datos"
+msgstr "Analyze with this data"
+
+#, python-format
+msgid "Analizar los %(n)s que más gastaron · %(precio)s"
+msgstr "Analyze the %(n)s top spenders · %(precio)s"
+
+msgid "Analizar otra vez"
+msgstr "Analyze again"
 
 msgid "Analizar referencias y generar guía de estilo"
 msgstr "Analyze references and generate style guide"
@@ -2469,6 +2513,10 @@ msgstr "Standalone ads (previous)"
 msgid "Anuncios sueltos (de antes)"
 msgstr "Standalone ads (from before)"
 
+#, python-format
+msgid "Análisis listo: %(frase)s"
+msgstr "Analysis ready: %(frase)s"
+
 msgid "Apagar"
 msgstr "Turn off"
 
@@ -2572,6 +2620,9 @@ msgstr "Learning"
 
 msgid "Aprendizaje guardado."
 msgstr "Learning saved."
+
+msgid "Aprendizaje guardado: las próximas ideas y guiones lo tendrán en cuenta."
+msgstr "Learning saved: the next ideas and scripts will take it into account."
 
 msgid "Aprendizaje limitado"
 msgstr "Learning limited"
@@ -2908,6 +2959,9 @@ msgstr "Low"
 msgid "Baja a negro y aparece el siguiente."
 msgstr "It fades to black and the next one appears."
 
+msgid "Bajando el video"
+msgstr "Downloading the video"
+
 msgid "Bajando fotos"
 msgstr "Downloading photos"
 
@@ -3161,6 +3215,10 @@ msgstr "CTR %(ctr)s %%"
 #, python-format
 msgid "CTR %(ctr)s%% < %(ctr_min)s%%"
 msgstr "CTR %(ctr)s%% < %(ctr_min)s%%"
+
+#, python-format
+msgid "CTR %(p)s"
+msgstr "CTR %(p)s"
 
 msgid "CTR de salida"
 msgstr "Outbound CTR"
@@ -3629,6 +3687,10 @@ msgid "Claude agrupa las líneas en clips de 5 a 15 s; el código pega el diálo
 msgstr "Claude groups the lines into 5-to-15-second clips; the code pastes the exact dialogue, calculates the timing and validates everything before showing you anything."
 
 #, python-format
+msgid "Claude citó cifras que no están en los datos: %(cifras)s"
+msgstr "Claude cited figures that are not in the data: %(cifras)s"
+
+#, python-format
 msgid "Claude devolvió menos de %(n)s consultas."
 msgstr "Claude returned fewer than %(n)s searches."
 
@@ -3750,6 +3812,9 @@ msgstr "Claude didn't answer in the expected format. Send your message again."
 msgid "Claude no respondió en el formato esperado. Vuelve a intentarlo."
 msgstr "Claude didn't answer in the expected format. Try again."
 
+msgid "Claude no vio el anuncio: juzgó por los números"
+msgstr "Claude did not see the ad: it judged by the numbers"
+
 msgid "Claude para investigación"
 msgstr "Claude for research"
 
@@ -3758,6 +3823,15 @@ msgstr "Claude declined the request."
 
 msgid "Claude todavía está respondiendo tu mensaje anterior."
 msgstr "Claude is still answering your previous message."
+
+#, python-format
+msgid "Claude vio %(num)s fotograma"
+msgid_plural "Claude vio %(num)s fotogramas"
+msgstr[0] "Claude saw %(num)s frame"
+msgstr[1] "Claude saw %(num)s frames"
+
+msgid "Claude vio la imagen"
+msgstr "Claude saw the image"
 
 msgid "Claude vio los fotogramas del video"
 msgstr "Claude saw the video's frames"
@@ -3768,6 +3842,9 @@ msgstr "Claude · %(origen)s"
 
 msgid "Clave secreta de la app"
 msgstr "App secret"
+
+msgid "Clic"
+msgstr "Click"
 
 msgid "Clic para ver qué pasó ese día"
 msgstr "Click to see what happened that day"
@@ -3967,6 +4044,9 @@ msgstr "Behavior"
 msgid "Composición"
 msgstr "Composition"
 
+msgid "Compra"
+msgstr "Purchase"
+
 msgid "Compras"
 msgstr "Purchases"
 
@@ -4013,6 +4093,10 @@ msgstr "This is what publishes the ads (ad account) and the organic content (Pag
 
 msgid "Con imagen"
 msgstr "With an image"
+
+#, python-format
+msgid "Con los datos del %(desde)s al %(hasta)s; desde entonces cambió."
+msgstr "Based on data from %(desde)s to %(hasta)s; it has changed since."
 
 msgid "Con mi propia app de Meta"
 msgstr "With my own Meta app"
@@ -4742,6 +4826,9 @@ msgstr "How it works"
 msgid "Cómo instalar el Pixel según tu plataforma"
 msgstr "How to install the Pixel depending on your platform"
 
+msgid "Cómo mejorarlo"
+msgstr "How to improve it"
+
 msgid "Cómo nuestro producto la ayuda a lograrlo"
 msgstr "How our product helps them achieve it"
 
@@ -5459,6 +5546,9 @@ msgstr "The ad needs an imagen_origen."
 
 msgid "El análisis con Claude falló: vuelve a intentarlo desde la campaña."
 msgstr "The analysis with Claude failed: try again from the campaign."
+
+msgid "El análisis falló."
+msgstr "The analysis failed."
 
 msgid "El archivo es demasiado grande."
 msgstr "The file is too large."
@@ -7090,6 +7180,9 @@ msgstr "Listen to the voice with the current text and voice before generating."
 msgid "Escucha la voz otra vez."
 msgstr "Listen to the voice again."
 
+msgid "Escuchando la voz"
+msgstr "Listening to the voice"
+
 msgid "Escuchar"
 msgstr "Listen"
 
@@ -7124,6 +7217,24 @@ msgstr "That ad was already in the Swipe file."
 
 msgid "Ese anuncio ya no existe."
 msgstr "That ad no longer exists."
+
+msgid "Ese anuncio ya se está analizando."
+msgstr "That ad is already being analyzed."
+
+msgid "Ese anuncio ya tiene un análisis con estos datos."
+msgstr "That ad already has an analysis with this data."
+
+msgid "Ese análisis no dejó un aprendizaje."
+msgstr "That analysis did not leave a learning."
+
+msgid "Ese análisis ya no existe."
+msgstr "That analysis no longer exists."
+
+msgid "Ese aprendizaje cita cifras que no están en los datos: no se guarda."
+msgstr "That learning cites figures that are not in the data: it is not saved."
+
+msgid "Ese aprendizaje ya estaba guardado."
+msgstr "That learning was already saved."
 
 msgid "Ese aprendizaje ya no existe."
 msgstr "That learning no longer exists."
@@ -7449,6 +7560,9 @@ msgstr "This voice lasts %(n)s s; a talking ad can be up to 30 s. Split it into 
 msgid "Esta voz se borró; no se vuelve a crear."
 msgstr "This voice was deleted; it will not be recreated."
 
+msgid "Estable"
+msgstr "Stable"
+
 msgid "Estado"
 msgstr "Status"
 
@@ -7513,6 +7627,12 @@ msgstr "This item no longer exists"
 
 msgid "Este actor de Apify ahora pide acceso completo a la cuenta y Creatv no se lo da; hay que cambiar de actor."
 msgstr "This Apify actor now requires full account access and Creatv won't grant it; a different actor is needed."
+
+msgid "Este anuncio no funciona"
+msgstr "This ad doesn't work"
+
+msgid "Este anuncio sí funciona"
+msgstr "This ad works"
 
 msgid "Este clip dura más que el video: no cabe una copia. Acórtalo primero."
 msgstr "This clip is longer than the video: a copy doesn't fit. Shorten it first."
@@ -7727,9 +7847,6 @@ msgstr "Invalid stage: %(etapa)s"
 
 msgid "Etiqueta de precio"
 msgstr "Price tag"
-
-msgid "Evaluación con IA"
-msgstr "AI evaluation"
 
 #, python-format
 msgid "Evaluación de %(alcance)s del %(desde)s al %(hasta)s · %(precio)s"
@@ -8107,6 +8224,9 @@ msgstr "Details"
 msgid "Filtrar"
 msgstr "Filter"
 
+msgid "Filtrar anuncios"
+msgstr "Filter ads"
+
 msgid "Filtrar por veredicto"
 msgstr "Filter by verdict"
 
@@ -8337,6 +8457,9 @@ msgstr "Winning"
 msgid "Ganadoras publicadas"
 msgstr "Winners posted"
 
+msgid "Ganadores"
+msgstr "Winners"
+
 msgid "Ganadores que se están cansando (toca hacer variantes)"
 msgstr "Winners that are fatiguing (time to make variants)"
 
@@ -8368,6 +8491,10 @@ msgstr "Hook: 3-second views / impressions. Hold: ThruPlays / 3-second views."
 #, python-format
 msgid "Ganó en %(pais)s: %(quien)s"
 msgstr "Won in %(pais)s: %(quien)s"
+
+#, python-format
+msgid "Ganó en Triple Whale: «%(nombre)s»"
+msgstr "Won in Triple Whale: “%(nombre)s”"
 
 #, python-format
 msgid "Gastado %(gastado)s de %(aprobado)s aprobados"
@@ -8416,6 +8543,10 @@ msgstr "Total spend (US$)"
 #, python-format
 msgid "Gasto total: %(gasto)s"
 msgstr "Total spend: %(gasto)s"
+
+#, python-format
+msgid "Gastó %(g)s sin ventas"
+msgstr "Spent %(g)s with no sales"
 
 #, python-format
 msgid "Gastó lo de %(n)s ventas al costo por venta de la cuenta y su ROAS es %(roas)s× (meta %(meta)s×)."
@@ -8768,6 +8899,9 @@ msgstr "Save global block"
 
 msgid "Guardar cambios"
 msgstr "Save changes"
+
+msgid "Guardar como aprendizaje"
+msgstr "Save as learning"
 
 msgid "Guardar como prueba"
 msgstr "Save as proof"
@@ -9370,6 +9504,9 @@ msgid "Intención inicial (se puede cambiar por referencia):"
 msgstr "Initial intent (can be changed per reference):"
 
 msgid "Intentar de nuevo"
+msgstr "Try again"
+
+msgid "Intentar otra vez"
 msgstr "Try again"
 
 msgid "Intentos"
@@ -10403,14 +10540,23 @@ msgstr "What the AI writes and this project's ads come out in this language."
 msgid "Lo que este proyecto tiene para generar. Cada pieza que llega descuenta su precio; la que falla no se cobra."
 msgstr "What this project has available to generate. Each delivered piece deducts its price; a failed one is not charged."
 
+msgid "Lo que falla"
+msgstr "What is not working"
+
 msgid "Lo que faltó en los datos cuando Claude escribió anuncios de este producto. Cada respuesta queda como prueba y mejora lo que venga."
 msgstr "What was missing from the data when Claude wrote ads for this product. Each answer is saved as proof and improves what comes next."
+
+msgid "Lo que funciona"
+msgstr "What is working"
 
 msgid "Lo que ganó y lo que perdió en tus pruebas. Las ideas nuevas, el guion y las variantes lo leen antes de escribir."
 msgstr "What won and what lost in your tests. New ideas, the script and the variants read it before writing."
 
 msgid "Lo que hace ganar"
 msgstr "What makes them win"
+
+msgid "Lo que hace ganar en tu cuenta"
+msgstr "What wins in your account"
 
 msgid "Lo que hace perder"
 msgstr "What makes them lose"
@@ -10727,6 +10873,9 @@ msgstr "Method"
 
 msgid "Medios"
 msgstr "Media"
+
+msgid "Mejorando"
+msgstr "Improving"
 
 msgid "Mejorando la calidad de la imagen"
 msgstr "Improving the image quality"
@@ -11175,6 +11324,12 @@ msgstr "Too close to the edge of the clip to split there."
 msgid "Muy cerca del borde del clip para cortarlo."
 msgstr "Too close to the edge of the clip to split it."
 
+msgid "Muy pocos datos"
+msgstr "Too little data"
+
+msgid "Muy pocos datos para opinar"
+msgstr "Too little data to tell"
+
 msgid "MÁS VENDIDO"
 msgstr "BEST SELLER"
 
@@ -11349,6 +11504,9 @@ msgstr "None"
 
 msgid "Ningún anuncio con datos en este periodo."
 msgstr "No ads with data in this period."
+
+msgid "Ningún anuncio en este filtro."
+msgstr "No ads in this filter."
 
 msgid "Ningún error en esta lista."
 msgstr "No errors in this list."
@@ -11838,6 +11996,9 @@ msgstr "I couldn't translate the word into English; write it another way."
 msgid "No pude traducir la palabra al inglés; intenta de nuevo en un momento."
 msgstr "I couldn't translate the word into English; try again in a moment."
 
+msgid "No quedó ningún anuncio por analizar."
+msgstr "No ads were left to analyze."
+
 msgid "No retiene"
 msgstr "Doesn't hold"
 
@@ -11887,6 +12048,9 @@ msgstr "The script wasn't saved: %(errores)s"
 #, python-brace-format
 msgid "No se guardó: {mensaje}"
 msgstr "Not saved: {mensaje}"
+
+msgid "No se ofrece guardarlo: cita cifras que no están en los datos."
+msgstr "It can't be saved: it cites figures that are not in the data."
 
 msgid "No se pudieron armar los clips. Vuelve a intentarlo."
 msgstr "Couldn't assemble the clips. Try again."
@@ -11962,6 +12126,9 @@ msgstr "Couldn't open the details. Check your connection and try again."
 msgid "No se pudo activar «%(experimento)s»"
 msgstr "Couldn't activate “%(experimento)s”"
 
+msgid "No se pudo actualizar este anuncio. Recarga la página para ver el resultado."
+msgstr "Couldn't update this ad. Reload the page to see the result."
+
 #, python-format
 msgid "No se pudo adaptar (%(tipo)s)."
 msgstr "Couldn't adapt it (%(tipo)s)."
@@ -12016,6 +12183,9 @@ msgstr "Couldn't change the budget on all of the country's ad sets; it was left 
 
 msgid "No se pudo cambiar el presupuesto en todos los conjuntos del país; se dejó como estaba."
 msgstr "Couldn't change the budget on all of the country's ad sets; it was left as it was."
+
+msgid "No se pudo cargar el análisis. Intenta de nuevo."
+msgstr "Couldn't load the analysis. Try again."
 
 msgid "No se pudo cargar el catálogo. Revisa tu conexión e intenta de nuevo."
 msgstr "Couldn't load the catalog. Check your connection and try again."
@@ -12088,6 +12258,9 @@ msgstr "Couldn't connect to Atria: %(tipo)s."
 msgid "No se pudo conectar con TrendTrack: %(tipo)s."
 msgstr "Couldn't connect to TrendTrack: %(tipo)s."
 
+msgid "No se pudo confirmar el pedido. Revisa la tarjeta antes de intentar otra vez."
+msgstr "Couldn't confirm the request. Check the card before trying again."
+
 #, python-format
 msgid "No se pudo consultar a Claude (%(tipo)s). Vuelve a enviar tu mensaje."
 msgstr "Couldn't reach Claude (%(tipo)s). Send your message again."
@@ -12136,6 +12309,12 @@ msgstr "Couldn't describe it (network)."
 
 msgid "No se pudo describir."
 msgstr "Couldn't describe it."
+
+#, python-format
+msgid "No se pudo encolar %(num)s anuncio: vuelve a intentarlo."
+msgid_plural "No se pudieron encolar %(num)s anuncios: vuelve a intentarlo."
+msgstr[0] "%(num)s ad could not be queued: try again."
+msgstr[1] "%(num)s ads could not be queued: try again."
 
 #, python-format
 msgid "No se pudo encolar la continuación (%(error)s)"
@@ -12909,12 +13088,19 @@ msgstr "Thinking…"
 msgid "Perdedor"
 msgstr "Loser"
 
+msgid "Perdedores"
+msgstr "Losers"
+
 msgid "Perdiendo"
 msgstr "Losing"
 
 #, python-format
 msgid "Perdió en %(pais)s: %(quien)s"
 msgstr "Lost in %(pais)s: %(quien)s"
+
+#, python-format
+msgid "Perdió en Triple Whale: «%(nombre)s»"
+msgstr "Lost in Triple Whale: “%(nombre)s”"
 
 msgid "Periodo"
 msgstr "Period"
@@ -13461,6 +13647,9 @@ msgstr "Similar promises the customer has already seen for %(producto)s:"
 msgid "Prometedor"
 msgstr "Promising"
 
+msgid "Prometedores"
+msgstr "Promising"
+
 msgid "Promoción de la app"
 msgstr "App promotion"
 
@@ -13928,6 +14117,10 @@ msgstr "ROAS %(roas)s×"
 #, python-format
 msgid "ROAS %(roas)s× con %(pedidos)s pedidos (meta %(meta)s×)."
 msgstr "ROAS %(roas)s× with %(pedidos)s orders (target %(meta)s×)."
+
+#, python-format
+msgid "ROAS %(roas)s× · %(n)s ventas"
+msgstr "ROAS %(roas)s× · %(n)s sales"
 
 msgid "ROAS (Pixel)"
 msgstr "ROAS (Pixel)"
@@ -14796,6 +14989,9 @@ msgstr "Fatiguing"
 msgid "Se está escribiendo el guion… la página se recarga sola cuando esté listo."
 msgstr "The script is being written… the page reloads on its own once it's ready."
 
+msgid "Se están cansando"
+msgstr "Fatiguing"
+
 #, python-format
 msgid "Se genera %(num)s escena con Kling O3 Pro por ≈ US$ %(precio)s. Nada más se cobra hasta que la apruebes de nuevo. ¿Generar?"
 msgid_plural "Se generan %(num)s escenas con Kling O3 Pro, una tras otra, por ≈ US$ %(precio)s en total. Si una falla, la cadena se detiene y no cobra lo que sigue. ¿Generar?"
@@ -14810,6 +15006,10 @@ msgid "Se generó, pero no se pudo subir al almacenamiento."
 msgstr "It was generated, but it couldn't be uploaded to storage."
 
 #, python-format
+msgid "Se guarda así: %(texto)s"
+msgstr "It will be saved as: %(texto)s"
+
+#, python-format
 msgid "Se guardó localmente pero falló la subida a R2: %(error)s"
 msgstr "Saved locally but the upload to R2 failed: %(error)s"
 
@@ -14820,6 +15020,9 @@ msgstr "Saved locally but the video upload to R2 failed: %(error)s"
 #, python-format
 msgid "Se interrumpió (llevaba más de %(min)s min en curso). Revisa el resultado y vuelve a intentar."
 msgstr "Interrupted (it had been running for more than %(min)s min). Check the result and try again."
+
+msgid "Se interrumpió antes de terminar."
+msgstr "It was interrupted before it finished."
 
 msgid "Se interrumpió el lanzamiento; revisa Ads Manager y vuelve a intentar."
 msgstr "The launch was interrupted; check Ads Manager and try again."
@@ -15175,6 +15378,9 @@ msgstr "No original photo: entry rebuilt from the log"
 msgid "Sin fotos"
 msgstr "No photos"
 
+msgid "Sin gasto estos 7 días"
+msgstr "No spend in the last 7 days"
+
 msgid "Sin hooks alternativos."
 msgstr "No alternate hooks."
 
@@ -15269,6 +15475,9 @@ msgstr "No transition: it switches at once."
 
 msgid "Sin título"
 msgstr "Untitled"
+
+msgid "Sin ventas todavía"
+msgstr "No sales yet"
 
 msgid "Sin verificar ahora (Meta no respondió)."
 msgstr "Not verified right now (Meta didn't respond)."
@@ -15854,6 +16063,9 @@ msgstr "Season saved."
 msgid "Tendencia"
 msgstr "Trend"
 
+msgid "Tendencia (7 días)"
+msgstr "Trend (7 days)"
+
 #, python-format
 msgid "Termina o cierra primero: %(partes)s"
 msgstr "Finish or close first: %(partes)s"
@@ -15884,6 +16096,9 @@ msgstr "Post text (TikTok doesn't have a separate title)"
 
 msgid "Texto de voz"
 msgstr "Voice text"
+
+msgid "Texto del anuncio"
+msgstr "Ad text"
 
 msgid "Texto en pantalla"
 msgstr "On-screen text"
@@ -16259,6 +16474,9 @@ msgstr "No global sweep has been brought in yet outside copycoders."
 msgid "Todavía no se puede: faltan <code>MELI_APP_ID</code> y <code>MELI_SECRET</code> en el <code>.env</code> del servidor. Quien lo administra crea la app en developers.mercadolibre.com (permiso <code>offline_access</code>, redirect <code>%(redirect)s</code>) — ver la tarjeta MercadoLibre en <em>Puesta a punto</em>."
 msgstr "Not yet possible: <code>MELI_APP_ID</code> and <code>MELI_SECRET</code> are missing in the server's <code>.env</code>. Whoever administers it creates the app at developers.mercadolibre.com (<code>offline_access</code> permission, redirect <code>%(redirect)s</code>) — see the MercadoLibre card in <em>Setup</em>."
 
+msgid "Todavía no se sabe"
+msgstr "Not known yet"
+
 msgid "Todavía no se sabe cuánto dura uno de los archivos: espera un momento y vuelve a intentarlo."
 msgstr "We don't know yet how long one of the files lasts: wait a moment and try again."
 
@@ -16292,6 +16510,9 @@ msgstr "Still no impressions — hit “Update metrics” in a few hours."
 
 msgid "Todavía sin una señal clara ni para bien ni para mal."
 msgstr "No clear signal yet, good or bad."
+
+msgid "Todavía tiene muy pocos datos: espera a que gaste más."
+msgstr "It has very little data yet: wait until it spends more."
 
 msgid "Todo"
 msgstr "All"
@@ -16609,6 +16830,9 @@ msgstr "TrendTrack: the plan's credits have run out."
 
 msgid "TrendTrack: se alcanzó el límite de peticiones del plan; intenta en un rato."
 msgstr "TrendTrack: the plan's request limit was reached; try again in a while."
+
+msgid "Tres cambios"
+msgstr "Three changes"
 
 msgid "Triple Whale"
 msgstr "Triple Whale"
@@ -17148,6 +17372,9 @@ msgstr "VIDEO"
 msgid "Va al final de cada prompt de clip en todos los videos de este proyecto. Déjalo vacío para volver al de fábrica."
 msgstr "Goes at the end of every clip prompt in every video of this project. Leave it empty to go back to the default."
 
+msgid "Va bien: falta confirmarlo con ventas"
+msgstr "Looking good: still needs confirming with sales"
+
 msgid "Va tal cual al modelo. Vacío: la persona solo habla."
 msgstr "Sent to the model as is. Empty: the person just talks."
 
@@ -17273,8 +17500,14 @@ msgstr "See Alerts"
 msgid "Ver análisis completo"
 msgstr "View full analysis"
 
+msgid "Ver como tabla"
+msgstr "View as a table"
+
 msgid "Ver detalle"
 msgstr "View details"
+
+msgid "Ver el análisis"
+msgstr "View the analysis"
 
 msgid "Ver el detalle día por día →"
 msgstr "See the day-by-day detail →"
@@ -17293,6 +17526,10 @@ msgstr "See the balance and top up in Settings › Balance and top-ups"
 
 msgid "Ver el video de referencia"
 msgstr "View the reference video"
+
+#, python-format
+msgid "Ver en %(canal)s"
+msgstr "View on %(canal)s"
 
 msgid "Ver en Ad Library →"
 msgstr "See in Ad Library →"
@@ -17392,6 +17629,12 @@ msgstr "Version B — %(dif)s"
 
 msgid "Versión elegida"
 msgstr "Chosen version"
+
+msgid "Versión mejorada"
+msgstr "Improved version"
+
+msgid "Versión mejorada cargada en Crear: ajusta lo que quieras y genera."
+msgstr "Improved version loaded in Create: tweak what you want and generate."
 
 msgid "Vertical 9:16 (Reels, TikTok, Shorts)"
 msgstr "Vertical 9:16 (Reels, TikTok, Shorts)"
@@ -17948,6 +18191,12 @@ msgid_plural "Ya se hicieron %(n)s piezas con esta idea:"
 msgstr[0] "%(n)s piece was already made from this idea:"
 msgstr[1] "%(n)s pieces were already made from this idea:"
 
+#, python-format
+msgid "Ya se hizo %(num)s pieza con esta mejora"
+msgid_plural "Ya se hicieron %(num)s piezas con esta mejora"
+msgstr[0] "%(num)s piece was already made from this improvement"
+msgstr[1] "%(num)s pieces were already made from this improvement"
+
 msgid "Ya se lo prometieron: hay que prometer más grande"
 msgstr "They've already been promised it: you have to promise bigger"
 
@@ -18075,6 +18324,10 @@ msgstr "ambience first"
 
 msgid "amigable"
 msgstr "friendly"
+
+#, python-format
+msgid "analizado el %(fecha)s"
+msgstr "analyzed on %(fecha)s"
 
 msgid "animada"
 msgstr "upbeat"
@@ -18271,6 +18524,10 @@ msgstr "campaign ready"
 
 msgid "canal nuevo: sin texto, se redacta al aprobar"
 msgstr "new channel: no text yet, it's written on approval"
+
+#, python-format
+msgid "canal: %(c)s"
+msgstr "channel: %(c)s"
 
 msgid "cancelada"
 msgstr "cancelled"
@@ -18532,6 +18789,10 @@ msgstr "dataset %(dataset)s not read (%(motivo)s)"
 
 msgid "dato del producto"
 msgstr "product fact"
+
+#, python-format
+msgid "datos del %(desde)s al %(hasta)s"
+msgstr "data from %(desde)s to %(hasta)s"
 
 msgid "datos viejos"
 msgstr "stale data"
@@ -18832,6 +19093,9 @@ msgstr "used by every project without its own markup; it does not change what wa
 #, python-brace-format
 msgid "el servidor falló (error {status}): se guarda con el próximo cambio."
 msgstr "the server failed (error {status}): it'll be saved with your next change."
+
+msgid "el texto"
+msgstr "the text"
 
 msgid "el video"
 msgstr "the video"
@@ -19438,6 +19702,16 @@ msgstr "the market's sophistication"
 msgid "la tienda no trajo fotos"
 msgstr "the store didn't bring photos"
 
+msgid "la voz"
+msgstr "the voice"
+
+msgid "la voz de un anuncio de Triple Whale"
+msgstr "the voice of a Triple Whale ad"
+
+#, python-format
+msgid "la última: %(estado)s"
+msgstr "the latest: %(estado)s"
+
 msgid "lago"
 msgstr "lake"
 
@@ -19597,6 +19871,10 @@ msgstr "custom voice sample · %(nombre)s · %(idioma)s"
 #, python-format
 msgid "muestra de voz · %(voz)s · %(idioma)s"
 msgstr "voice sample · %(voz)s · %(idioma)s"
+
+#, python-format
+msgid "mueve: %(anillo)s"
+msgstr "moves: %(anillo)s"
 
 msgid "musica"
 msgstr "music"
@@ -19868,6 +20146,15 @@ msgstr "planned"
 
 msgid "planeando"
 msgstr "planning"
+
+msgid "pocos anuncios para comparar"
+msgstr "too few ads to compare"
+
+msgid "pocos clics"
+msgstr "few clicks"
+
+msgid "pocos datos"
+msgstr "little data"
 
 msgid "por revisar"
 msgstr "to review"
@@ -20328,6 +20615,9 @@ msgstr "no dataset"
 msgid "sin datos"
 msgstr "no data"
 
+msgid "sin datos de video"
+msgstr "no video data"
+
 msgid "sin definir"
 msgstr "not set"
 
@@ -20435,6 +20725,9 @@ msgstr "no sales thresholds"
 
 msgid "sin urgencia en el deseo"
 msgstr "no urgency in the desire"
+
+msgid "sin ventas en la cuenta"
+msgstr "no sales in the account"
 
 msgid "sin ventas medibles"
 msgstr "no measurable sales"
@@ -20590,6 +20883,9 @@ msgstr "your average %(pct)s"
 
 msgid "tu@empresa.com"
 msgstr "you@company.com"
+
+msgid "un anuncio de Triple Whale"
+msgstr "a Triple Whale ad"
 
 #, python-format
 msgid "un momento del clip %(i)s no describe qué se ve"
@@ -20893,6 +21189,14 @@ msgstr "· prediction %(id)s"
 #, python-format
 msgid "¿Activar «%(nombre)s» en Meta? Vuelve a gastar presupuesto."
 msgstr "Activate “%(nombre)s” on Meta? It starts spending budget again."
+
+#, python-format
+msgid "¿Analizar con IA los %(n)s anuncios que más gastaron? Costo total: %(precio)s"
+msgstr "Analyze the %(n)s top-spending ads with AI? Total cost: %(precio)s"
+
+#, python-format
+msgid "¿Analizar «%(nombre)s» con IA? Costo: %(precio)s"
+msgstr "Analyze “%(nombre)s” with AI? Cost: %(precio)s"
 
 msgid "¿Archivar este estudio? Se puede desarchivar después."
 msgstr "Archive this study? It can be unarchived later."

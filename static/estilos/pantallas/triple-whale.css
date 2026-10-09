@@ -3,8 +3,11 @@
    _triple_whale_conectar.html dentro de la pestaña #tab-triplewhale: tarjetas
    `.tw-tienda` (una por tienda conectada) en la rejilla `.tw-tiendas`, sus
    acciones y el selector «Cambiar país», más `.tw-campo`/`.tw-nota` de los
-   formularios (antes eran estilos en línea). Las reglas viejas de la pestaña
-   (.tw-barra, .tw-aviso…) siguen en legado/06.
+   formularios (antes eran estilos en línea), y la galería de tarjetas de
+   análisis (spec 2026-10-08 tarjetas §2): `.tw-galeria` con un
+   `article.tw-tarjeta` por anuncio (_tw_galeria.html), sus anillos `.tw-anillo`,
+   cifras, razones y acciones, y «Ver como tabla» (`.tw-tabla-detalle`). Las
+   reglas viejas de la pestaña (.tw-barra, .tw-aviso…) siguen en legado/06.
    ============================================================ */
 
 .tw-conexion-titulo { margin: 0 0 .5rem; font-size: var(--t-base); }
@@ -22,6 +25,70 @@
 .tw-tienda-acciones form.inline { margin: 0; }
 .tw-campo { margin-top: .6rem; }
 .tw-nota { padding-top: .3rem; font-size: .76rem; }
+
+/* Galería de tarjetas (spec 2026-10-08 tarjetas §2): una tarjeta por anuncio con el anuncio real, cuatro anillos,
+   cifras, razones y «Cómo mejorarlo». */
+/* El bloque entero (chips + lote + rejilla) se reemplaza al cambiar de filtro: mientras llega, se ve atenuado. */
+.tw-galeria-bloque[aria-busy="true"] { opacity: .6; transition: opacity .15s; }
+.tw-galeria-barra { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .6rem; margin: .8rem 0; }
+.tw-galeria { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 34rem), 1fr)); gap: .9rem; }
+.tw-tarjeta { display: grid; grid-template-columns: minmax(0, 11rem) minmax(0, 1fr); gap: .9rem; min-width: 0; padding: .9rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); }
+.tw-tarjeta-perdedor { border-color: var(--error); }
+.tw-tarjeta-ganador { border-color: var(--ok); }
+.tw-tarjeta-medio { display: flex; flex-direction: column; gap: .4rem; min-width: 0; }
+/* contain, no cover: un anuncio 1:1 o 4:5 se ve entero (con bandas), nunca recortado (revisión de la tarea 7). */
+.tw-tarjeta-medio video, .tw-tarjeta-medio img { width: 100%; aspect-ratio: 9 / 16; object-fit: contain; border-radius: var(--radius-sm); background: var(--fondo-video); }
+.tw-tarjeta-sin-medio { display: flex; align-items: center; justify-content: center; aspect-ratio: 9 / 16; border-radius: var(--radius-sm); background: var(--panel-2); color: var(--muted); }
+.tw-tarjeta-cuerpo { display: flex; flex-direction: column; gap: .6rem; min-width: 0; }
+.tw-tarjeta-cabeza { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .5rem; }
+.tw-tarjeta-titulos { min-width: 0; }
+.tw-sobretitulo { color: var(--muted); font-size: var(--t-sobretitulo); text-transform: uppercase; letter-spacing: .04em; }
+.tw-tarjeta-nombre { display: block; overflow-wrap: anywhere; }
+.tw-frase { margin: .2rem 0 0; font-family: var(--font-display); font-size: var(--t-titulo); line-height: 1.2; }
+.tw-tarjeta-ganador .tw-frase { color: var(--ok); }
+.tw-tarjeta-perdedor .tw-frase { color: var(--error); }
+.tw-resultado { align-self: flex-start; padding: .2rem .6rem; border-radius: var(--radius-pastilla); background: var(--panel-2); font-size: var(--t-chico); white-space: nowrap; }
+.tw-resultado-ganador { background: var(--ok-fondo); color: var(--ok); }
+.tw-resultado-perdedor { background: var(--error-fondo); color: var(--error); }
+.tw-anillos { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .4rem; text-align: center; }
+.tw-anillo { display: flex; flex-direction: column; align-items: center; gap: .15rem; min-width: 0; font-size: var(--t-chico); }
+.tw-anillo svg { width: 3.6rem; height: 3.6rem; }
+.tw-anillo-fondo { fill: none; stroke: var(--border); stroke-width: 3; }
+.tw-anillo-valor { fill: none; stroke: var(--muted); stroke-width: 3; stroke-linecap: round; }
+.tw-anillo-alto .tw-anillo-valor { stroke: var(--ok); }
+.tw-anillo-medio .tw-anillo-valor { stroke: var(--warn); }
+.tw-anillo-bajo .tw-anillo-valor { stroke: var(--error); }
+.tw-anillo text { fill: currentColor; font-size: 9px; }
+.tw-anillo small { color: var(--muted); }
+.tw-cifras { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .4rem; margin: 0; padding-top: .5rem; border-top: 1px solid var(--border); }
+.tw-cifras dt { color: var(--muted); font-size: var(--t-sobretitulo); text-transform: uppercase; }
+.tw-cifras dd { margin: 0; }
+.tw-tendencia-cansando { color: var(--warn); }
+.tw-tendencia-mejorando { color: var(--ok); }
+.tw-razones { display: flex; flex-wrap: wrap; gap: .3rem; margin: 0; padding: 0; list-style: none; }
+.tw-razon { padding: .15rem .55rem; border-radius: var(--radius-pastilla); font-size: var(--t-chico); }
+.tw-razon-ok { background: var(--ok-fondo); color: var(--ok); }
+.tw-razon-mal { background: var(--error-fondo); color: var(--error); }
+.tw-texto-anuncio summary { cursor: pointer; color: var(--muted); }
+.tw-copy { white-space: pre-line; overflow-wrap: anywhere; }
+.tw-tarjeta-ia { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
+.tw-tarjeta-ia form { margin: 0; }
+.tw-ia-frase { flex-basis: 100%; margin: 0; }
+.tw-analisis-detalle { flex-basis: 100%; }
+.tw-analisis { display: flex; flex-direction: column; gap: .4rem; padding: .6rem 0 0; border-top: 1px solid var(--border); overflow-wrap: anywhere; }
+.tw-analisis h5 { margin: .4rem 0 0; }
+.tw-analisis-lista { margin: 0; padding-left: 1.1rem; }
+/* «Lo que funciona» y «Lo que falla» ya llevan ✓/✗: sin la viñeta de la lista (revisión final, D1). */
+.tw-analisis-marcas { list-style: none; padding-left: 0; }
+.tw-guardar-aprendizaje { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; margin: 0; }
+.tw-tarjeta-ia .tw-progreso { flex-basis: 100%; }
+.tw-ver-mas { grid-column: 1 / -1; justify-self: center; }
+.tw-tabla-detalle summary { cursor: pointer; }
+@media (max-width: 760px) {
+  .tw-tarjeta { grid-template-columns: minmax(0, 1fr); }
+  .tw-tarjeta-medio video, .tw-tarjeta-medio img, .tw-tarjeta-sin-medio { max-height: 60vh; }
+  .tw-anillos { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 
 /* ============================================================
    «Resultados de tu tienda» (spec 2026-10-08-tw-resultados-de-tu-tienda). Uso: _tw_resultados.html (la sección),

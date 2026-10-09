@@ -15,20 +15,39 @@ todo porque la URL lleva `<cliente>`; cada POST además exige el mismo origen
 - `pieza_estado`: pausa o activa en Meta un anuncio hecho en Creatv (una
   pieza de experimento) desde la tabla, con confirmación; usa
   `lanzador.pausar_pieza` / `activar_pieza`, que dejan su evento.
+- `galeria` (GET, spec 2026-10-08 tarjetas §5.2): una página de tarjetas
+  (`dias`, `canal`, `tienda`, `veredicto`, `pagina`) para «Ver más»; con `entera=1`, la galería completa del filtro
+  (chips + formulario del lote + rejilla, página 1) para cambiar de filtro.
+- `tarjeta` (GET, §5.3): una sola tarjeta, para repintarla cuando termina su
+  análisis; un anuncio que no está en el alcance (o un id raro) es 404.
+- `analizar_anuncio` (POST, §6.2): «Cómo mejorarlo» de un anuncio: la foto de hoy, la fila `tw_analisis` y la tarea
+  pagada (`max_intentos=1`, un `job_id` por anuncio). Con `Accept: application/json` devuelve la tarjeta ya en curso.
+- `analizar_lote` (POST, §6.4): lo mismo para los N que más gastaron del filtro. Cobra solo lo que la persona
+  confirmó: las claves `clave=<canal>:<ad_id>` que mostró el formulario Y que hoy siguen siendo elegibles (sin
+  análisis fresco ni en curso), nunca «los próximos N»: un segundo envío del mismo formulario no cobra nada.
+- `analisis_detalle` (GET, §6.5): el fragmento con lo que dijo Claude; `analisis_crear` (§7.1) lleva la versión
+  mejorada a Crear; `analisis_aprendizaje` (§6.3) la guarda como aprendizaje del proyecto con un clic;
+  `anuncio_referente` (§7.2) guarda el anuncio en Referentes.
 """
+import logging
 from datetime import date
 
 from flask import Blueprint, abort, flash, redirect, render_template, request, session, url_for
-from flask_babel import gettext
+from flask_babel import gettext, ngettext
 
 import gastos
 import idiomas
+import proyectos
+import triple_whale
 import triple_whale_tiendas
 from cobros import SaldoInsuficiente, libro
+from doctrina import aprendizajes as doctrina_aprendizajes
 from tareas import triple_whale as tareas_tw
-from triple_whale import analisis, datos, panel, puente, resultados
+from triple_whale import analisis, datos, evaluacion, mejorar, panel, puente
 
 bp = Blueprint("triple_whale", __name__, url_prefix="/cliente/<cliente>/triple-whale")
+AID_MAX = 2 ** 63 - 1           # el mayor entero de SQLite: un id más grande es 404, no un OverflowError (B7)
+log = logging.getLogger("creatv.triple_whale.rutas")
 
 
 @bp.before_request
@@ -39,8 +58,9 @@ def _mismo_origen():
             abort(403)
 
 
-# Nombres de los canales estandarizados de Triple Whale (viven con «Resultados de tu tienda», que los usa en sus frases).
-NOMBRES_CANAL = resultados.NOMBRES_CANAL
+# Los nombres de los canales viven en el paquete (los usan también `mejorar`, que corre en el worker, y
+# «Resultados de tu tienda» en sus frases).
+NOMBRES_CANAL = triple_whale.NOMBRES_CANAL
 
 
 @bp.app_template_filter("tw_num")
@@ -49,6 +69,16 @@ def _tw_num(valor, decimales=0):
     if valor is None:
         return "—"
     return idiomas.numero(float(valor), decimales)
+
+
+@bp.app_template_filter("tw_ventas")
+def _tw_ventas(valor):
+    """Ventas: entero cuando lo es («196 ventas», no «196,0») y un decimal cuando el Pixel reparte fracciones de un
+    pedido (revisión final, D2). «—» si no hay dato."""
+    if valor is None:
+        return "—"
+    v = round(float(valor), 1)
+    return idiomas.numero(v, 0 if v == int(v) else 1)
 
 
 @bp.app_template_filter("tw_pct")
@@ -108,6 +138,288 @@ def ver_dia(cliente):
     if ctx is None:
         return gettext("Ese día no tiene datos completos de Triple Whale."), 400
     return render_template("_tw_dia.html", cliente=cliente, d=ctx)
+
+
+# ------------------------------------------------ galería de tarjetas (spec tarjetas §5) ---
+
+def _alcance_peticion(cliente, fuente):
+    return panel.alcance(cliente, _dias(fuente.get("dias")), (fuente.get("canal") or "").strip() or None,
+                         fuente.get("tienda"))
+
+
+def _contexto_galeria(cliente, alc):
+    """Lo que necesitan las macros de la galería fuera del panel."""
+    return {"cliente": cliente, "moneda": alc["config"]["moneda"], "alcance_params": alc["params"],
+            "etiquetas_veredicto": evaluacion.ETIQUETAS_VEREDICTO,
+            "frases_veredicto": evaluacion.FRASES_VEREDICTO, "tendencias": evaluacion.TENDENCIAS,
+            "vacios_anillo": evaluacion.VACIOS_ANILLO, "problemas": evaluacion.PROBLEMAS,
+            "fortalezas": evaluacion.FORTALEZAS, "etiquetas_pieza": panel.ETIQUETAS_PIEZA}
+
+
+@bp.get("/galeria")
+def galeria(cliente):
+    alc = _alcance_peticion(cliente, request.args)
+    if not alc:
+        abort(404)
+    # `entera=1` (un filtro nuevo): la galería completa de ese filtro, página 1 — chips, formulario del lote (sus claves
+    # y su precio) y rejilla o el aviso de vacío — para que el JS reemplace el bloque entero y no solo las tarjetas.
+    # Sin ella («Ver más»): solo las tarjetas de esa página.
+    entera = request.args.get("entera") == "1"
+    g = panel.galeria(cliente, alc["ev"], request.args.get("veredicto") or "",
+                      1 if entera else request.args.get("pagina"), alcance=alc)
+    return render_template("_tw_galeria_fragmento.html", modo="entera" if entera else "pagina", g=g,
+                           **_contexto_galeria(cliente, alc))
+
+
+@bp.get("/tarjeta/<canal>/<ad_id>")
+def tarjeta(cliente, canal, ad_id):
+    if not (tareas_tw.id_valido(canal) and tareas_tw.id_valido(ad_id)):
+        abort(404)
+    alc = _alcance_peticion(cliente, request.args)
+    a = next((x for x in (alc or {}).get("ev", {}).get("anuncios", []) if x["canal"] == canal and x["ad_id"] == ad_id),
+             None)
+    if a is None:
+        abort(404)
+    panel.enriquecer(cliente, [a], alc["ev"], datos.analisis_de_anuncios(cliente, [(canal, ad_id)]), alcance=alc)
+    return render_template("_tw_galeria_fragmento.html", modo="tarjeta", a=a, **_contexto_galeria(cliente, alc))
+
+
+# ------------------------------------------------ «Cómo mejorarlo» (spec tarjetas §6) ---
+
+def _quiere_json():
+    return "application/json" in (request.headers.get("Accept") or "")
+
+
+def _anuncio_del_alcance(alc, canal, ad_id):
+    return next((x for x in alc["ev"]["anuncios"] if x["canal"] == canal and x["ad_id"] == ad_id), None)
+
+
+def _pedir_analisis(cliente, alc, a):
+    """Crea la fila con la foto y encola la tarea (spec §6.2). (ok, mensaje)."""
+    if a["veredicto"] == "sin_datos":
+        return False, gettext("Todavía tiene muy pocos datos: espera a que gaste más.")
+    # «En curso» es la TAREA viva, no la fila: una fila en_cola/analizando cuya tarea ya no existe (murió antes de su
+    # try, un reinicio) bloqueaba el anuncio para siempre (revisión final, A4).
+    clave = (a["canal"], a["ad_id"])
+    if tareas_tw.job_id_analisis(cliente, *clave) in tareas_tw.analisis_vivos(cliente):
+        return False, gettext("Ese anuncio ya se está analizando.")
+    filas = datos.analisis_de_anuncios(cliente, [clave]).get(clave, [])
+    # Uno listo y fresco de ESTE alcance no se paga otra vez: una pestaña vieja (o la de 7 días después de pasar por
+    # 30) todavía muestra el botón (revisión final, A1).
+    if panel.elegir_analisis(a, filas, alc)["fresco"]:
+        return False, gettext("Ese anuncio ya tiene un análisis con estos datos.")
+    ev = alc["ev"]
+    claves = [(a["canal"], a["ad_id"])] + [(b["canal"], b["ad_id"]) for b in ev["anuncios"]
+                                           if b["veredicto"] == "ganador" and b["canal"] == a["canal"]]
+    creativos = datos.creativos(cliente, claves)
+    # Cobros (spec 2026-10-08-cobros §5): sin saldo no se guarda nada ni se encola; SaldoInsuficiente sube al
+    # manejador común (402 al fetch de la tarjeta, aviso con «Recargar saldo» al formulario). `usd` es el COSTO, el
+    # mismo del botón (`panel.precio_analisis`); la reserva la hace el encolado.
+    usd = panel.precio_analisis(creativos.get(clave))["usd"]
+    libro.exigir(cliente, usd)
+    if any(f["estado"] in panel.EN_CURSO for f in filas):
+        with idiomas.en_idioma(idiomas.de_proyecto(cliente)):        # lo que se guarda, en el idioma del proyecto
+            interrumpido = gettext("Se interrumpió antes de terminar.")
+        datos.cerrar_colgados(cliente, a["canal"], a["ad_id"], interrumpido)
+    canal_info = next((c for c in ev["cuenta"]["canales"] if c["canal"] == a["canal"]), None)
+    cuenta = {"benchmarks": ev.get("benchmarks_canal", {}).get(a["canal"]) or ev["benchmarks"],
+              "meta_roas": ev["meta_roas"],
+              "modelo": alc["config"].get("modelo_atribucion"), "ventana": alc["config"].get("ventana_atribucion"),
+              "cpa_canal": (canal_info["gasto"] / canal_info["pedidos"]) if canal_info and canal_info["pedidos"] else None}
+    if "creatv" not in a and a["canal"] == triple_whale.CANAL_META:
+        a["creatv"] = datos.piezas_creatv(cliente, [a["ad_id"]]).get(a["ad_id"])
+    foto = mejorar.foto(a, creativos.get((a["canal"], a["ad_id"])), cuenta,
+                        mejorar.ganadores_del_canal(ev, a, creativos))
+    foto["alcance_canal"] = alc.get("canal")     # el filtro de canal del panel también es del alcance (revisión final, A3)
+    aid = datos.crear_analisis(cliente, alc["tienda_id"], a["canal"], a["ad_id"], alc["desde"], alc["hasta"],
+                               alc["config"]["moneda"], foto, pedido_por=session.get("usuario"))
+    try:
+        encolada = tareas_tw.encolar_analisis(cliente, aid, a["canal"], a["ad_id"], costo_estimado=usd)
+    except Exception:                             # SaldoInsuficiente incluida: se borra la fila y sigue su camino
+        datos.borrar_analisis(cliente, aid)       # sin tarea no hay quien la termine: una fila en_cola bloquearía el anuncio
+        raise
+    if not encolada:
+        datos.borrar_analisis(cliente, aid)
+        return False, gettext("Ese anuncio ya se está analizando.")
+    return True, gettext("Analizando «%(nombre)s» con IA…", nombre=a["nombre"])
+
+
+@bp.post("/anuncio/<canal>/<ad_id>/analizar")
+def analizar_anuncio(cliente, canal, ad_id):
+    if not (tareas_tw.id_valido(canal) and tareas_tw.id_valido(ad_id)):
+        abort(404)
+    alc = _alcance_peticion(cliente, request.form)
+    if not alc:
+        mensaje = gettext("Triple Whale no está conectado en este proyecto.")
+        if _quiere_json():              # el JS de la tarjeta espera JSON: un redirect lo haría reenviar el formulario
+            return {"ok": False, "mensaje": mensaje, "html": ""}
+        flash(mensaje, "error")
+        return _volver(cliente)
+    a = _anuncio_del_alcance(alc, canal, ad_id)
+    if a is None:
+        abort(404)
+    ok, mensaje = _pedir_analisis(cliente, alc, a)
+    if _quiere_json():
+        panel.enriquecer(cliente, [a], alc["ev"], datos.analisis_de_anuncios(cliente, [(canal, ad_id)]), alcance=alc)
+        html = render_template("_tw_galeria_fragmento.html", modo="tarjeta", a=a, **_contexto_galeria(cliente, alc))
+        return {"ok": ok, "mensaje": mensaje, "html": html}
+    flash(mensaje, "ok" if ok else "warn")
+    return _volver(cliente)
+
+
+def _claves_confirmadas(valores, tope=None):
+    """[(canal, ad_id)] de los `clave=<canal>:<ad_id>` del formulario del lote: cada mitad validada con `id_valido`,
+    lo mal formado se ignora, no se repite ninguna y se para en `tope` claves válidas (por defecto `panel.N_LOTE`).
+    Un conjunto para lo ya visto: un formulario con miles de claves repetidas no cuesta cuadrático (revisión final,
+    B6)."""
+    tope = panel.N_LOTE if tope is None else tope
+    claves, vistas = [], set()
+    for v in valores:
+        if len(claves) >= tope:
+            break
+        canal, dos_puntos, ad_id = str(v or "").partition(":")
+        clave = (canal, ad_id)
+        if dos_puntos and clave not in vistas and tareas_tw.id_valido(canal) and tareas_tw.id_valido(ad_id):
+            vistas.add(clave)
+            claves.append(clave)
+    return claves
+
+
+def _avisos_lote(n, fallos):
+    if n:
+        flash(ngettext("Analizando %(num)s anuncio con IA…", "Analizando %(num)s anuncios con IA…", n), "ok")
+    if fallos:
+        flash(ngettext("No se pudo encolar %(num)s anuncio: vuelve a intentarlo.",
+                       "No se pudieron encolar %(num)s anuncios: vuelve a intentarlo.", fallos), "warn")
+
+
+@bp.post("/analizar-lote")
+def analizar_lote(cliente):
+    alc = _alcance_peticion(cliente, request.form)
+    if not alc:
+        flash(gettext("Triple Whale no está conectado en este proyecto."), "error")
+        return _volver(cliente)
+    g = panel.galeria(cliente, alc["ev"], request.form.get("veredicto") or "", alcance=alc)
+    # Solo lo que se confirmó (el precio que vio la persona) Y que hoy se puede analizar; a lo sumo N_LOTE.
+    elegibles = g["lote"]["elegibles"]
+    claves = [k for k in _claves_confirmadas(request.form.getlist("clave")) if k in elegibles]
+    n = fallos = 0
+    for canal, ad_id in claves:
+        a = _anuncio_del_alcance(alc, canal, ad_id)
+        if a is None:
+            continue
+        try:
+            if _pedir_analisis(cliente, alc, a)[0]:
+                n += 1
+        except SaldoInsuficiente:
+            # Sin saldo para el siguiente (cobros §5.4): los ya encolados siguen con su reserva, los demás no se piden y
+            # el manejador común dice el resto con «Recargar saldo».
+            _avisos_lote(n, fallos)
+            raise
+        except Exception as e:  # noqa: BLE001 — una que falla no tumba las demás (cada una es su propia tarea pagada)
+            fallos += 1
+            log.warning("lote de análisis: %s/%s no se pudo encolar (%s)", canal, ad_id, type(e).__name__)
+    _avisos_lote(n, fallos)
+    if not n and not fallos:
+        flash(gettext("No quedó ningún anuncio por analizar."), "warn")
+    return _volver(cliente)
+
+
+def _analisis_listo(cliente, aid):
+    fila = datos.analisis_anuncio(cliente, aid)
+    if not fila or fila["estado"] != "lista":
+        abort(404)
+    return fila
+
+
+def _aprendizaje_guardado(cliente, aid):
+    return any(x.get("analisis_id") == aid for x in proyectos.aprendizajes(cliente))
+
+
+def _nombre_alcance(cliente, fila):
+    """«Todas las tiendas» o el nombre de la tienda en que se pagó ese análisis ("" si ya no existe)."""
+    if fila.get("tienda_id") is None:
+        return gettext("Todas las tiendas")
+    tienda = triple_whale_tiendas.tienda(cliente, fila["tienda_id"])
+    return panel.nombre_tienda(tienda) if tienda else ""
+
+
+def _aprendizaje_de(cliente, fila):
+    """El aprendizaje (dict) que guardaría «Guardar como aprendizaje», o None. Lo que se guarda va en el idioma del
+    PROYECTO (regla 3), no en el de quien hace el clic; el detalle muestra este mismo texto junto al botón (B1)."""
+    with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+        return doctrina_aprendizajes.desde_analisis_tw(fila)
+
+
+@bp.get(f"/analisis/<int(max={AID_MAX}):aid>")
+def analisis_detalle(cliente, aid):
+    fila = _analisis_listo(cliente, aid)
+    r = fila["resultado"] or {}
+    item = _aprendizaje_de(cliente, fila)
+    return render_template("_tw_analisis.html", cliente=cliente, fila=fila, r=r,
+                           guardado=_aprendizaje_guardado(cliente, aid), alcance_nombre=_nombre_alcance(cliente, fila),
+                           aprendizaje_texto=item["texto"] if item else None,
+                           cifras_aprendizaje=mejorar.cifras_del_aprendizaje(r))
+
+
+@bp.post(f"/analisis/<int(max={AID_MAX}):aid>/crear")
+def analisis_crear(cliente, aid):
+    version = (_analisis_listo(cliente, aid)["resultado"] or {}).get("version")
+    if not version:
+        abort(404)
+    try:
+        session["fp_prefill"] = puente.prefill_crear(cliente, version, analisis_id=aid)
+    except puente.PuenteError as e:
+        flash(str(e), "error")
+        return _volver(cliente)
+    flash(gettext("Versión mejorada cargada en Crear: ajusta lo que quieras y genera."), "ok")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+
+
+@bp.post(f"/analisis/<int(max={AID_MAX}):aid>/aprendizaje")
+def analisis_aprendizaje(cliente, aid):
+    fila = _analisis_listo(cliente, aid)
+    if _aprendizaje_guardado(cliente, aid):
+        flash(gettext("Ese aprendizaje ya estaba guardado."), "ok")
+        return _volver(cliente)
+    # Una cifra que no está en los datos no se guarda como un hecho del proyecto (B2): ni con un formulario viejo.
+    if mejorar.cifras_del_aprendizaje(fila["resultado"]):
+        flash(gettext("Ese aprendizaje cita cifras que no están en los datos: no se guarda."), "warn")
+        return _volver(cliente)
+    item = _aprendizaje_de(cliente, fila)
+    if not item:
+        flash(gettext("Ese análisis no dejó un aprendizaje."), "warn")
+        return _volver(cliente)
+    proyectos.agregar_aprendizaje(cliente, item)
+    flash(gettext("Aprendizaje guardado: las próximas ideas y guiones lo tendrán en cuenta."), "ok")
+    return _volver(cliente)
+
+
+@bp.post("/anuncio/<canal>/<ad_id>/referente")
+def anuncio_referente(cliente, canal, ad_id):
+    if not (tareas_tw.id_valido(canal) and tareas_tw.id_valido(ad_id)):
+        abort(404)
+    alc = _alcance_peticion(cliente, request.form)
+    a = _anuncio_del_alcance(alc, canal, ad_id) if alc else None
+    if a is None:
+        abort(404)
+    c = datos.creativos(cliente, [(canal, ad_id)]).get((canal, ad_id)) or {}
+    # La miniatura es la misma que pinta la tarjeta (`panel.medio_tarjeta`): el botón sale justo cuando esto puede guardar.
+    creatv = datos.piezas_creatv(cliente, [ad_id]).get(ad_id) if canal == triple_whale.CANAL_META else None
+    visto = panel.medio_tarjeta(dict(a, creativo=c, creatv=creatv))
+    imagen = visto.get("imagen") or visto.get("poster")
+    anuncio = dict(a, medio={"imagen": imagen, "titulo": c.get("titulo") or "", "texto": c.get("copy") or "",
+                             "tipo": "video" if (c.get("tipo") or "") == "video" else "imagen"})
+    fila = datos.ultimos_analisis(cliente, [(canal, ad_id)]).get((canal, ad_id))
+    clasif = {"por_que": (fila["resultado"] or {}).get("frase")} if fila and fila["estado"] == "lista" else None
+    try:
+        _, creado = puente.a_referente(cliente, anuncio, clasif)
+    except puente.PuenteError as e:
+        flash(str(e), "error")
+        return _volver(cliente)
+    flash(gettext("Guardado en Referentes: desde ahí puedes recrearlo con tu producto o usarlo en un sprint.")
+          if creado else gettext("Ese anuncio ya estaba en Referentes."), "ok")
+    return _volver(cliente)
 
 
 @bp.post("/sincronizar")

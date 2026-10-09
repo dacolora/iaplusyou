@@ -77,6 +77,8 @@ y en el código. Las sub-decisiones (R4b, R4c, R11b) refinan a la que llevan por
   Página también frenan al lanzar, antes de crear nada — más seguro que antes — si está mal: nada.
 - **R18.** Se fusionó `origin/main` ANTES de la tarea 11 y nuestra migración pasa a ser la 0034 (`down_revision` 0033) —
   `cobros` de main es dueña de la 0033 y puede estar ya desplegada; la nuestra nunca se desplegó — si está mal: nada.
+  (R29, 2026-10-09: en la segunda mezcla de main, que trajo `0034_tw_tarjetas`, la nuestra pasa a ser la 0035,
+  `down_revision` 0034, y sus pendientes se renumeran a PND-190…206, después de los de main.)
 - **R19.** En `docs/pendientes.md`, E2 «Diagnosticar y recomendar» queda `decidido sin hacer` y E3 «Aplicar cambios» queda
   `bloqueado por Daniel` (cambia pauta en Meta) — así lo piden las definiciones de estado de la tabla — si está mal: solo
   cambia el estado de una fila del registro.

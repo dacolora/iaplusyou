@@ -33,6 +33,100 @@
     if (!cont || !pestana) return;
     var cargado = false;
     var filtros = {};
+    // Los textos que el JS escribe en la página salen de la plantilla (catálogo de idiomas), no de aquí.
+    var T_TW = {
+      tarjeta: {{ _('No se pudo actualizar este anuncio. Recarga la página para ver el resultado.')|tojson }},
+      detalle: {{ _('No se pudo cargar el análisis. Intenta de nuevo.')|tojson }},
+      pedido: {{ _('No se pudo confirmar el pedido. Revisa la tarjeta antes de intentar otra vez.')|tojson }}
+    };
+    var galeriaSeq = 0;   // cada pedido de la galería lleva su número: la respuesta que llega tarde no pisa la de ahora
+
+    // Las barras de progreso llevan data-poll-job (no un <script>): lo que se inserta por fetch las arranca aquí.
+    function sondear(raiz) {
+      if (typeof arrancarSondeos === 'function') arrancarSondeos(raiz);
+    }
+
+    function elementoDe(html, selector) {
+      var tmp = document.createElement('div');
+      tmp.innerHTML = html;
+      return tmp.querySelector(selector);
+    }
+
+    function galeria() { return cont.querySelector('#tw-galeria'); }
+    function bloque() { return cont.querySelector('.tw-galeria-bloque'); }
+
+    // Un filtro nuevo (`entera`) trae la galería ENTERA de ese filtro (chips, formulario del lote con sus claves y su
+    // precio, y la rejilla o el aviso de vacío) y reemplaza el bloque; «Ver más» solo agrega las tarjetas de la página
+    // siguiente a la rejilla que ya está. Si el pedido falla, la galería anterior sigue a la vista.
+    function pedirGaleria(params, entera, mas) {
+      var b = bloque(), g = galeria();
+      if (!b || !g) return;
+      var url = new URL((entera ? b : g).dataset.url, window.location.origin);
+      Object.keys(params).forEach(function (k) { url.searchParams.set(k, params[k]); });
+      var mio = ++galeriaSeq;
+      if (entera) b.setAttribute('aria-busy', 'true');
+      if (mas) mas.disabled = true;
+      function liberar() {
+        if (mas && mas.isConnected) mas.disabled = false;
+        if (entera && mio === galeriaSeq && b.isConnected) b.removeAttribute('aria-busy');
+      }
+      fetch(url.toString(), { headers: { 'X-Requested-With': 'fetch' } })
+        .then(function (r) { return r.ok ? r.text() : Promise.reject(r.status); })
+        .then(function (html) {
+          if (mio !== galeriaSeq) { liberar(); return; }
+          if (entera) {
+            var nuevo = elementoDe(html, '.tw-galeria-bloque');
+            if (!nuevo) { liberar(); return; }
+            b.replaceWith(nuevo);
+            sondear(nuevo);
+          } else {
+            if (mas) mas.remove();
+            g.insertAdjacentHTML('beforeend', html);
+            sondear(g);
+          }
+        })
+        .catch(liberar);
+    }
+
+    // Un aviso corto dentro de la tarjeta (textContent: puede venir del servidor o de un trabajo, nunca se interpreta).
+    function avisoEn(tarjeta, texto) {
+      var caja = tarjeta.querySelector('.tw-tarjeta-ia') || tarjeta;
+      var p = caja.querySelector('.tw-aviso-tarjeta');
+      if (!p) {
+        p = document.createElement('p');
+        p.className = 'tag-error tw-aviso-tarjeta';
+        p.setAttribute('role', 'status');
+        caja.insertBefore(p, caja.firstChild);
+      }
+      p.textContent = texto;
+    }
+
+    // Una tarjeta ya dijo su última palabra si muestra el análisis hecho o su error.
+    function tarjetaTerminada(tarjeta) {
+      return !!tarjeta.querySelector('.tw-ia-frase:not(.vacio), .tag-error');
+    }
+
+    // Repinta UNA tarjeta con lo que dice el servidor ahora: el resto de la galería, los filtros y lo que la persona
+    // tenía abierto no se tocan. `op.aviso` va en la tarjeta que quede (la nueva, o la vieja si no se pudo pedir);
+    // `op.falla`, solo si no se pudo pedir; `op.mensaje` (lo que dijo el trabajo al terminar), solo en una tarjeta
+    // nueva que no muestra ni un análisis hecho ni un error ni una barra viva, para que un fallo no pase en silencio.
+    function repintarTarjeta(tarjeta, op) {
+      if (!tarjeta) return;
+      var enFallo = op.aviso || op.falla;
+      function fallo() { if (enFallo) avisoEn(tarjeta, enFallo); }
+      if (!tarjeta.dataset.tarjetaUrl) { fallo(); return; }
+      fetch(tarjeta.dataset.tarjetaUrl, { headers: { 'X-Requested-With': 'fetch' } })
+        .then(function (r) { return r.ok ? r.text() : Promise.reject(r.status); })
+        .then(function (html) {
+          var nueva = elementoDe(html, 'article.tw-tarjeta');
+          if (!nueva) return Promise.reject(0);
+          tarjeta.replaceWith(nueva);
+          sondear(nueva);
+          if (op.aviso) avisoEn(nueva, op.aviso);
+          else if (op.mensaje && !tarjetaTerminada(nueva) && !nueva.querySelector('[data-poll-job]')) avisoEn(nueva, op.mensaje);
+        })
+        .catch(fallo);
+    }
 
     function aplicarVeredicto(v) {
       cont.querySelectorAll('[data-tw-filtro]').forEach(function (b) {
@@ -45,17 +139,17 @@
 
     function cargar() {
       cargado = true;
+      galeriaSeq++;   // lo que la galería anterior tenía pendiente ya no tiene dónde caer
       var q = new URLSearchParams();
       Object.keys(filtros).forEach(function (k) { if (filtros[k]) q.set(k, filtros[k]); });
       fetch(cont.dataset.url + (q.toString() ? '?' + q.toString() : ''), { headers: { 'X-Requested-With': 'fetch' } })
         .then(function (r) { return r.ok ? r.text() : Promise.reject(r.status); })
         .then(function (html) {
           cont.innerHTML = html;
+          // Las barras (data-poll-job) las arranca base.html (arrancarSondeos), sin repetir las que ya sondean.
+          sondear(cont);
           // «Resultados de tu tienda»: la gráfica la dibuja static/tw_resultados.js (los <script> del fragmento no corren).
-          if (window.TwResultados) window.TwResultados.iniciar(cont);
-          cont.querySelectorAll('[data-poll-job]').forEach(function (el) {
-            if (typeof iniciarPolling === 'function') iniciarPolling(el.dataset.pollJob, el.id);
-          });
+          if (window.TwResultados && typeof window.TwResultados.iniciar === 'function') window.TwResultados.iniciar(cont);
           aplicarVeredicto('');
         })
         .catch(function () {
@@ -70,6 +164,33 @@
       cargar();
     });
     cont.addEventListener('click', function (ev) {
+      var gf = ev.target.closest('[data-tw-galeria-filtro]');
+      if (gf) {
+        pedirGaleria({ veredicto: gf.dataset.twGaleriaFiltro || '', entera: 1 }, true);
+        return;
+      }
+      var mas = ev.target.closest('[data-tw-mas]');
+      if (mas) {
+        var b1 = bloque(), g1 = galeria();
+        // Con un filtro nuevo en camino, agregar tarjetas del filtro viejo lo dejaría sin efecto.
+        if (!b1 || !g1 || b1.getAttribute('aria-busy') === 'true') return;
+        pedirGaleria({ veredicto: g1.dataset.veredicto || '', pagina: mas.dataset.pagina }, false, mas);
+        return;
+      }
+      var ver = ev.target.closest('[data-tw-ver-analisis]');
+      if (ver) {
+        var caja = ver.parentElement.querySelector('.tw-analisis-detalle');
+        if (!caja) return;
+        if (!caja.hidden) { caja.hidden = true; return; }
+        if (caja.dataset.cargado) { caja.hidden = false; return; }
+        ver.disabled = true;
+        fetch(ver.dataset.url, { headers: { 'X-Requested-With': 'fetch' } })
+          .then(function (r) { return r.ok ? r.text() : Promise.reject(r.status); })
+          .then(function (html) { caja.innerHTML = html; caja.dataset.cargado = '1'; caja.hidden = false; })
+          .catch(function () { caja.textContent = T_TW.detalle; caja.hidden = false; })   // sin cargado: otro clic reintenta
+          .then(function () { ver.disabled = false; });
+        return;
+      }
       var chip = ev.target.closest('[data-tw-filtro]');
       if (chip) { aplicarVeredicto(chip.dataset.twFiltro); return; }
       var aj = ev.target.closest('[data-tw-ajustes]');
@@ -84,9 +205,39 @@
         if (btn) { ev.preventDefault(); btn.click(); if (ir.dataset.irConfig && window.irAConfig) irAConfig(ir.dataset.irConfig); }
       }
     });
+    // «Cómo mejorarlo» (data-tw-async) se manda por fetch y la respuesta trae la tarjeta ya en curso; el lote y los
+    // demás formularios son POST normales (la página redirige con su aviso). Siempre se confirma el precio antes, y un
+    // pedido que cobra NUNCA se repite solo: si no se sabe cómo terminó (red caída, error, respuesta rara), se mira la
+    // tarjeta tal como está ahora (barra viva si el análisis corre, el botón de nuevo si no) y la persona decide.
     cont.addEventListener('submit', function (ev) {
       var f = ev.target.closest('form[data-confirmar]');
-      if (f && !window.confirm(f.dataset.confirmar)) ev.preventDefault();
+      if (f && !window.confirm(f.dataset.confirmar)) { ev.preventDefault(); return; }
+      var asincrono = ev.target.closest('form[data-tw-async]');
+      if (!asincrono) return;
+      ev.preventDefault();
+      var tarjeta = asincrono.closest('article.tw-tarjeta');
+      // Todos los botones de análisis de la tarjeta: con dos formularios, un segundo clic no manda otro pedido.
+      var botones = (tarjeta || asincrono).querySelectorAll('form[data-tw-async] button[type="submit"]');
+      botones.forEach(function (b) { b.disabled = true; });
+      fetch(asincrono.action, { method: 'POST', body: new FormData(asincrono),
+                                headers: { 'Accept': 'application/json', 'X-Requested-With': 'fetch' } })
+        // 402 = sin saldo: una respuesta conocida (no se guardó ni se encoló nada). static/cobros.js ya pinta el aviso
+        // con «Recargar saldo»; aquí solo vuelven los botones.
+        .then(function (r) { return (r.ok || r.status === 402) ? r.json() : Promise.reject(r.status); })
+        .then(function (d) {
+          var nueva = d && d.html ? elementoDe(d.html, 'article.tw-tarjeta') : null;
+          if (nueva && tarjeta) { tarjeta.replaceWith(nueva); sondear(nueva); }
+          else botones.forEach(function (b) { b.disabled = false; });
+          if (d && !d.ok && d.mensaje) window.alert(d.mensaje);
+        }, function () {
+          // Los botones siguen deshabilitados: solo la tarjeta repintada (o la persona, tras mirarla) los devuelve.
+          repintarTarjeta(tarjeta, { aviso: T_TW.pedido });
+        });
+    });
+    // La barra de una tarjeta avisa al terminar (data-poll-al-terminar="evento", base.html) en vez de recargar la página.
+    cont.addEventListener('trabajo-terminado', function (ev) {
+      repintarTarjeta(ev.target.closest('article.tw-tarjeta'),
+                      { falla: T_TW.tarjeta, mensaje: (ev.detail && ev.detail.mensaje) || '' });
     });
 
     function siActiva() { if (!cargado && pestana.classList.contains('activo')) cargar(); }

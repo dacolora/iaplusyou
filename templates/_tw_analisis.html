@@ -1,0 +1,64 @@
+{# Detalle de «Cómo mejorarlo» (spec 2026-10-08 tarjetas §6.5), por fetch dentro de la tarjeta
+   (triple_whale.rutas.analisis_detalle). Todo lo que escribió Claude va escapado. Sin <script>. #}
+{% set nombres_anillo = {"gancho": _('Gancho'), "retencion": _('Retención'), "clic": _('Clic'), "compra": _('Compra'), "otro": _('Otro')} %}
+{% set m = fila.medios or {} %}
+<div class="tw-analisis">
+  <p class="tw-analisis-frase"><strong>{{ r.frase }}</strong></p>
+  {#- Revisión final B2: una cifra que Claude citó y que no está en los datos se dice, no se muestra como un hecho. -#}
+  {% if r.cifras_sin_dato %}
+  <p class="tag-advertencia tw-aviso">{{ _('Claude citó cifras que no están en los datos: %(cifras)s', cifras=r.cifras_sin_dato | join(', ')) }}</p>
+  {% endif %}
+  {% if r.funciona %}
+  <h5>{{ _('Lo que funciona') }}</h5>
+  <ul class="tw-analisis-lista tw-analisis-marcas">{% for x in r.funciona %}<li>✓ {{ x.texto }}{% if x.evidencia %} <small class="vacio">— {{ x.evidencia }}</small>{% endif %}</li>{% endfor %}</ul>
+  {% endif %}
+  {% if r.falla %}
+  <h5>{{ _('Lo que falla') }}</h5>
+  <ul class="tw-analisis-lista tw-analisis-marcas">{% for x in r.falla %}<li>✗ {{ x.texto }} <span class="tag-estado">{{ nombres_anillo.get(x.anillo, x.anillo) }}</span>{% if x.evidencia %} <small class="vacio">— {{ x.evidencia }}</small>{% endif %}</li>{% endfor %}</ul>
+  {% endif %}
+  {% if r.cambios %}
+  <h5>{{ _('Tres cambios') }}</h5>
+  <ol class="tw-analisis-lista">{% for c in r.cambios %}<li><strong>{{ c.que }}</strong>{% if c.como %}: {{ c.como }}{% endif %}{% if c.mueve %} <span class="tag-estado tag-en-uso">{{ _('mueve: %(anillo)s', anillo=nombres_anillo.get(c.mueve, c.mueve)) }}</span>{% endif %}</li>{% endfor %}</ol>
+  {% endif %}
+  {% set v = r.version or {} %}
+  {% if v.titulo %}
+  <h5>{{ _('Versión mejorada') }}</h5>
+  <div class="tw-analisis-version">
+    <strong>{{ v.titulo }}</strong>
+    {% if v.por_que %}<p>{{ v.por_que }}</p>{% endif %}
+    {% set ang = v.angulo or {} %}
+    {% if ang.gancho or ang.promesa %}
+    <dl class="tw-angulo">
+      {% if ang.gancho %}<dt>{{ _('Gancho') }}</dt><dd>{{ ang.gancho }}</dd>{% endif %}
+      {% if ang.promesa %}<dt>{{ _('Promesa') }}</dt><dd>{{ ang.promesa }}</dd>{% endif %}
+    </dl>
+    {% endif %}
+    {% if v.escena %}<p class="tw-escena">{{ v.escena }}</p>{% endif %}
+    <details><summary>{{ _('Prompt para el video') }}</summary><p class="tw-prompt">{{ v.prompt }}</p></details>
+    <form method="post" action="{{ url_for('triple_whale.analisis_crear', cliente=cliente, aid=fila.id) }}">
+      <button type="submit" class="btn-generar btn-sm">{{ _('Llevar a Crear →') }}</button>
+    </form>
+  </div>
+  {% endif %}
+  {% if r.aprendizaje %}
+  <h5>{{ _('Aprendizaje') }}</h5>
+  <p>{{ r.aprendizaje }}</p>
+  {#- B1: junto al botón va el texto EXACTO que se guardará (y que recibirán los prompts futuros). B2: con una cifra
+      que no está en los datos no se ofrece guardarlo. -#}
+  {% if guardado %}<small class="vacio">{{ _('Guardado') }}</small>
+  {% elif cifras_aprendizaje %}<small class="vacio">{{ _('No se ofrece guardarlo: cita cifras que no están en los datos.') }}</small>
+  {% elif aprendizaje_texto %}
+  <form method="post" class="tw-guardar-aprendizaje" action="{{ url_for('triple_whale.analisis_aprendizaje', cliente=cliente, aid=fila.id) }}">
+    <button type="submit" class="btn-xs">{{ _('Guardar como aprendizaje') }}</button>
+    <small class="vacio">{{ _('Se guarda así: %(texto)s', texto=aprendizaje_texto) }}</small>
+  </form>
+  {% endif %}
+  {% endif %}
+  {#- m.get('copy'): m.copy sería el método dict.copy (siempre verdadero). -#}
+  <p class="tw-analisis-pie"><small class="vacio">
+    {% if m.visual == 'fotogramas' %}{{ ngettext('Claude vio %(num)s fotograma', 'Claude vio %(num)s fotogramas', m.fotogramas or 0) }}{% elif m.visual == 'imagen' %}{{ _('Claude vio la imagen') }}{% else %}{{ _('Claude no vio el anuncio: juzgó por los números') }}{% endif %}
+    {% if m.transcripcion %} · {{ _('la voz') }}{% endif %}{% if m.get('copy') %} · {{ _('el texto') }}{% endif %}
+    · {{ _('datos del %(desde)s al %(hasta)s', desde=fila.desde, hasta=fila.hasta) }}{% if alcance_nombre %} · {{ alcance_nombre }}{% endif %}
+    · {{ _('analizado el %(fecha)s', fecha=(fila.creado_en or '')[:10]) }} · {{ (fila.usd | cobrado('tw_anuncio:' ~ fila.id)) | usd }}
+  </small></p>
+</div>
