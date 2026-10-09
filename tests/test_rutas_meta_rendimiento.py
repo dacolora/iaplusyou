@@ -16,6 +16,33 @@ TOKEN = "tok-llave-de-prueba"   # llave-de-prueba
 A, B = "act_1", "act_2"
 
 
+@pytest.fixture(autouse=True)
+def _carpeta_de_proyectos(tmp_path, monkeypatch):
+    """`meta_conexion.cuentas_de_lanzamiento` lee el meta.json de cada carpeta de proyecto: que sea una temporal."""
+    import meta_conexion
+    monkeypatch.setattr(meta_conexion, "BASE_DIR", str(tmp_path / "base_meta"))
+
+
+def _lanza_con(cliente, act):
+    """El proyecto `cliente` lanza experimentos con la cuenta `act` (su meta.json)."""
+    import json
+
+    import meta_conexion
+    ruta = meta_conexion._path(cliente)
+    import os
+    os.makedirs(os.path.dirname(ruta), exist_ok=True)
+    with open(ruta, "w", encoding="utf-8") as f:
+        json.dump({"ad_account_id": act, "token": "t-" + cliente}, f)
+
+
+def _como_cliente(app, usuario="user_acme", cliente="acme"):
+    """Un navegador con la sesión de una persona con rol cliente (existe en usuarios: conftest USUARIOS_PRUEBA)."""
+    c = app["dashboard"].app.test_client()
+    with c.session_transaction() as s:
+        s.update({"usuario": usuario, "rol": "cliente", "cliente": cliente})
+    return c
+
+
 @pytest.fixture()
 def conectado(app, monkeypatch):  # noqa: F811
     """Meta conectado (sin Página: solo métricas) y una lista de las respuestas para buscar el token en todas."""
@@ -81,7 +108,7 @@ def _sembrar(n_anuncios=4):
         {"nivel": "conjunto", "objeto_id": "s1", "nombre": "Conjunto Mujeres", "estado": "ACTIVE",
          "aprendizaje": "FAIL", "campaign_id": "c1"},
         {"nivel": "anuncio", "objeto_id": "gana", "nombre": "Video gana", "estado": "ACTIVE",
-         "miniatura_url": "https://scontent.example/gana.jpg"}])
+         "miniatura_url": "https://scontent.xx.fbcdn.net/gana.jpg"}])
     datos.guardar_alcance("acme", A, [{"nivel": "campana", "objeto_id": "c1", "ventana": 30, "alcance": 4321,
                                        "frecuencia": 1.2}])
     for d in range(0, 70):
@@ -150,7 +177,7 @@ def test_panel_con_datos(conectado):
     assert 'class="tb-grafico"' in html and "USD" in html
     assert "Campaña Otoño" in html and "Conjunto Mujeres" in html and "Aprendizaje limitado" in html
     assert "<td>4.321</td>" in html                                    # alcance de la campaña (spec §8.4)
-    assert 'src="https://scontent.example/gana.jpg" alt="" loading="lazy" width="48" height="48"' in html
+    assert 'src="https://scontent.xx.fbcdn.net/gana.jpg" alt="" loading="lazy" width="48" height="48"' in html
     assert "Conectado solo para métricas" in html                     # sin Página
     assert "<script" not in html
     # Una cuenta: sin «Por cuenta» y en su moneda.
@@ -379,3 +406,97 @@ def test_panel_y_selector_en_ingles(app, monkeypatch):  # noqa: F811
     assert "Choose accounts" in sel and not espanol_visible(sel), espanol_visible(sel)[:10]
     pagina = c.get("/cliente/acme").get_data(as_text=True)
     assert not espanol_visible(pagina, ["tab-meta"])
+
+
+# ---- aislamiento: elegir cuentas es del admin (ruling R20) ------------------------------------------------
+
+def test_cuentas_de_lanzamiento_lee_el_meta_json_de_cada_proyecto():
+    import meta_conexion
+    assert meta_conexion.cuentas_de_lanzamiento() == {}
+    _lanza_con("acme", "555")
+    _lanza_con("otro", "act_7")
+    assert meta_conexion.cuentas_de_lanzamiento() == {"act_555": "acme", "act_7": "otro"}
+
+
+def test_un_cliente_no_elige_cuentas_ni_cambia_el_pais(conectado, app, monkeypatch):
+    _dos_cuentas()
+    monkeypatch.setattr(conectado["dashboard"].meta_conexion, "listar_activos",
+                        lambda t: pytest.fail("a un cliente no se le lista nada de Meta"))
+    c = _como_cliente(app)
+    assert c.get("/cliente/acme/meta-rendimiento/cuentas").status_code == 403
+    assert c.post("/cliente/acme/meta-rendimiento/cuentas", data={"cuenta": ["act_9"]}).status_code == 403
+    assert c.post(f"/cliente/acme/meta-rendimiento/cuentas/{A}/pais", data={"pais": "FI"}).status_code == 403
+    assert sorted(cuentas.ids("acme")) == [A, B] and cuentas.cuenta("acme", A)["pais"] == "NO"
+    assert _tareas() == []
+
+
+def test_un_cliente_si_ve_el_panel_pero_sin_elegir_cuentas(conectado, app):
+    _sembrar()
+    c = _como_cliente(app)
+    panel_html = c.get("/cliente/acme/meta-rendimiento/panel").get_data(as_text=True)
+    assert c.get("/cliente/acme/meta-rendimiento/panel").status_code == 200
+    assert "Actualizar ahora" in panel_html and "HappyFlops Norway" in panel_html
+    pagina = c.get("/cliente/acme").get_data(as_text=True)
+    pestana = pagina[pagina.index('id="tab-meta"'):pagina.index('id="tab-nicho"')]
+    assert ">Elegir cuentas<" not in pestana and "data-meta-elegir aria-expanded" not in pestana
+    assert "/meta-rendimiento/cuentas" not in pestana and "/meta-rendimiento/panel" in pestana
+    # El admin sí lo ve.
+    pagina = conectado["c"].get("/cliente/acme").get_data(as_text=True)
+    pestana = pagina[pagina.index('id="tab-meta"'):pagina.index('id="tab-nicho"')]
+    assert ">Elegir cuentas<" in pestana and "/meta-rendimiento/cuentas" in pestana
+
+
+def test_un_cliente_sin_cuentas_ve_que_un_administrador_las_elige(conectado, app):
+    c = _como_cliente(app)
+    pagina = c.get("/cliente/acme").get_data(as_text=True)
+    pestana = pagina[pagina.index('id="tab-meta"'):pagina.index('id="tab-nicho"')]
+    assert "Un administrador de Creatv tiene que elegir las cuentas." in pestana
+    assert "/meta-rendimiento/cuentas" not in pestana and "Cargando tus cuentas de Meta" not in pestana
+    assert "Un administrador de Creatv tiene que elegir las cuentas." in c.get(
+        "/cliente/acme/meta-rendimiento/panel").get_data(as_text=True)
+    admin = conectado["c"].get("/cliente/acme").get_data(as_text=True)
+    assert "Elige qué cuentas publicitarias quieres ver" in admin
+
+
+def test_la_cuenta_con_la_que_lanza_otro_proyecto_es_de_ese_proyecto(conectado, monkeypatch):
+    _lanza_con("otro", B)
+    monkeypatch.setattr(conectado["dashboard"].meta_conexion, "listar_activos",
+                        lambda t: _activos((A, "HappyFlops Norway"), (B, "HappyFlops Sweden")))
+    html = conectado["c"].get("/cliente/acme/meta-rendimiento/cuentas").get_data(as_text=True)
+    fila_b, fila_a = _fila(html, f'value="{B}"'), _fila(html, f'value="{A}"')
+    assert "disabled" in fila_b and "En otro proyecto" in fila_b and "checked" not in fila_b
+    assert "disabled" not in fila_a and "En otro proyecto" not in fila_a
+    r = conectado["c"].post("/cliente/acme/meta-rendimiento/cuentas", data={"cuenta": [A, B]})
+    assert r.status_code == 302
+    assert cuentas.ids("acme") == [A]                                   # B no entró
+    assert [t["job_id"] for t in _tareas()] == ["acme__meta_rend__act_1"]
+    assert any("ya está en otro proyecto" in m for m in _flashes(conectado["c"]))
+    # La suya propia sí puede leerla el proyecto que lanza con ella.
+    _lanza_con("acme", A)
+    conectado["c"].post("/cliente/acme/meta-rendimiento/cuentas", data={"cuenta": [A]})
+    assert cuentas.ids("acme") == [A]
+
+
+def test_una_cuenta_ya_elegida_que_otro_proyecto_usa_para_lanzar_se_quita_al_guardar(conectado, monkeypatch):
+    _dos_cuentas()
+    _lanza_con("otro", B)
+    monkeypatch.setattr(conectado["dashboard"].meta_conexion, "listar_activos",
+                        lambda t: _activos((A, "HappyFlops Norway"), (B, "HappyFlops Sweden")))
+    html = conectado["c"].get("/cliente/acme/meta-rendimiento/cuentas").get_data(as_text=True)
+    fila_b = _fila(html, f'value="{B}"')
+    assert "disabled" in fila_b and "checked" not in fila_b
+    conectado["c"].post("/cliente/acme/meta-rendimiento/cuentas", data={"cuenta": [A, B]})
+    assert cuentas.ids("acme") == [A]
+
+
+def test_un_proyecto_lee_como_maximo_veinte_cuentas(conectado, monkeypatch):
+    todas = [(f"act_{100 + i}", f"Cuenta {i}") for i in range(25)]
+    monkeypatch.setattr(conectado["dashboard"].meta_conexion, "listar_activos", lambda t: _activos(*todas))
+    r = conectado["c"].post("/cliente/acme/meta-rendimiento/cuentas", data={"cuenta": [a for a, _ in todas]})
+    assert r.status_code == 302
+    assert len(cuentas.ids("acme")) == cuentas.MAX_POR_PROYECTO == 20
+    assert len(_tareas()) == 20
+    assert any("máximo 20 cuentas" in m for m in _flashes(conectado["c"]))
+    # Con el cupo lleno, las que ya estaban se quedan y las nuevas no entran.
+    conectado["c"].post("/cliente/acme/meta-rendimiento/cuentas", data={"cuenta": [a for a, _ in todas]})
+    assert len(cuentas.ids("acme")) == 20

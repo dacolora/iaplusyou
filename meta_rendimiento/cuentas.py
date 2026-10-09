@@ -13,6 +13,7 @@ import db
 from triple_whale import paises
 
 _C = db.meta_cuenta.c
+MAX_POR_PROYECTO = 20      # tope de cuentas que lee un proyecto (ruling R20): la copia es un hilo y comparte el límite de Meta
 _CAMPOS = {"nombre", "moneda", "zona_horaria", "pais", "estado", "error", "ultima_copia"}
 
 

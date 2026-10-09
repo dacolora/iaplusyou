@@ -415,6 +415,24 @@ def sin_pagina(cliente):
     return None
 
 
+def cuentas_de_lanzamiento():
+    """{ad_account_id (con «act_»): cliente} de la cuenta con la que LANZA cada proyecto (`ad_account_id` de su
+    meta.json, en modo propia o agencia). Meta rendimiento la usa para que ningún proyecto elija leer la cuenta de
+    lanzamiento de otro (ruling R20, revisión final 2026-10-08). Lee el meta.json crudo de cada proyecto: sin token de
+    agencia y sin `propia_respaldo` (una cuenta que ya no se usa no cuenta)."""
+    try:
+        clientes = sorted(d for d in os.listdir(os.path.join(BASE_DIR, "clientes"))
+                          if not d.startswith(".") and os.path.isdir(_dir(d)))
+    except OSError:
+        return {}
+    salida = {}
+    for cliente in clientes:
+        act = str((_cargar_crudo(cliente) or {}).get("ad_account_id") or "").strip()
+        if act:
+            salida.setdefault(act if act.startswith("act_") else f"act_{act}", cliente)
+    return salida
+
+
 # ---------- llamadas a Graph ----------
 
 def _graph_get(edge, token, params=None, timeout=30):

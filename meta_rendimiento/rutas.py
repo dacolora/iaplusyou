@@ -9,12 +9,19 @@ cada POST además exige el mismo origen (Sec-Fetch-Site), la barrera CSRF del re
   (`meta_conexion.listar_activos`), y solo cuando la persona abre el selector.
 - `cuentas` (POST): deja en el proyecto las cuentas marcadas. Una cuenta nueva solo entra si el token la ve
   (`listar_activos` otra vez: un id escrito a mano no sirve); una que ya estaba y sigue marcada se queda aunque el token
-  ya no la vea. Encola la copia de las agregadas (gratis: leer de Meta no cobra).
+  ya no la vea. Encola la copia de las agregadas (gratis: leer de Meta no cobra). Tope: 20 cuentas por proyecto.
 - `cuentas/<act>/pais`: cambia el país de una cuenta del proyecto (404 si es ajena, 400 si el código no es un país).
 - `sincronizar`: «Actualizar ahora»; sin `act`, la copia de todas; con `act`, la de esa (ajena → 404).
 
+AISLAMIENTO (ruling R20, revisión final 2026-10-08): elegir cuentas (GET y POST) y cambiar el país son SOLO del admin
+(403 al resto). El token de un proyecto puede ver cuentas de otros clientes, y quien las elige las lee: por eso lo
+decide una persona de Creatv. Una cuenta con la que LANZA otro proyecto (`meta.json`) cuenta como «En otro proyecto»
+igual que una que otro ya lee: no se lista habilitada ni se acepta.
+
 En modo agencia el selector dice «Todavía no disponible» (spec §2.10). Ningún token llega a una respuesta: los
 errores de Meta pasan por `cola.sin_token` y además se tacha el valor exacto del token."""
+from functools import wraps
+
 from flask import Blueprint, abort, flash, redirect, render_template, request, session, url_for
 from flask_babel import gettext, ngettext
 
@@ -41,6 +48,22 @@ def _mismo_origen():
         sitio = (request.headers.get("Sec-Fetch-Site") or "").strip().lower()
         if sitio and sitio not in ("same-origin", "none"):
             abort(403)
+
+
+def es_admin():
+    """Mismo criterio que el resto de la app (`session["rol"] == "admin"`; así lo leen las plantillas y la ruta de
+    descartar alertas). No se importa `dashboard` aquí: el Blueprint lo importa a él."""
+    return session.get("rol") == "admin"
+
+
+def solo_admin(fn):
+    """403 (nada se escribe y nada se lista) a quien no es admin. Nunca solo ocultar el botón (skill `seguridad`)."""
+    @wraps(fn)
+    def envuelta(*args, **kwargs):
+        if not es_admin():
+            abort(403)
+        return fn(*args, **kwargs)
+    return envuelta
 
 
 def _volver(cliente):
@@ -78,7 +101,7 @@ def _pais(valor):
 def ver_panel(cliente):
     ctx = panel.contexto(cliente, request.args.get("dias"), request.args.get("cuenta"))
     dibujo = grafico.armar(ctx["serie"]) if ctx.get("serie") else None
-    return render_template("_meta_panel.html", cliente=cliente, mr=ctx, grafico=dibujo)
+    return render_template("_meta_panel.html", cliente=cliente, mr=ctx, grafico=dibujo, es_admin=es_admin())
 
 
 @bp.get("/anuncios")
@@ -102,6 +125,7 @@ def _filas_selector(cliente, activos):
     proyecto) y, al final, las del proyecto que el token ya no ve."""
     propias = {c["ad_account_id"]: c for c in cuentas.listar(cliente)}
     dueno_de = {act: cli for cli, act in cuentas.todas()}
+    lanzamiento = meta_conexion.cuentas_de_lanzamiento()
     filas, vistas = [], set()
     for a in activos:
         if not a.get("id"):
@@ -112,8 +136,10 @@ def _filas_selector(cliente, activos):
         vistas.add(act)
         propia = propias.get(act)
         estado = ESTADOS_CUENTA.get(a.get("account_status"), OTRO_ESTADO)
+        # «En otro proyecto»: otro la lee o es la cuenta con la que LANZA otro proyecto (ruling R20).
+        en_otro = dueno_de.get(act) not in (None, cliente) or lanzamiento.get(act) not in (None, cliente)
         filas.append({"id": act, "nombre": a.get("name") or act, "moneda": a.get("currency"), "estado": estado,
-                      "elegida": bool(propia), "en_otro": dueno_de.get(act) not in (None, cliente),
+                      "elegida": bool(propia) and not en_otro, "en_otro": en_otro,
                       "pais": propia["pais"] if propia else cuentas.adivinar_pais(a.get("name")),
                       "no_visible": False})
     filas.sort(key=lambda f: (f["en_otro"], not f["elegida"], (f["nombre"] or "").lower(), f["id"]))
@@ -125,6 +151,7 @@ def _filas_selector(cliente, activos):
 
 
 @bp.get("/cuentas")
+@solo_admin
 def ver_cuentas(cliente):
     token = _token(cliente)
     ctx = {"conectado": bool(token), "agencia": False, "error": None, "filas": [], "paises": []}
@@ -142,6 +169,7 @@ def ver_cuentas(cliente):
 
 
 @bp.post("/cuentas")
+@solo_admin
 def guardar_cuentas(cliente):
     token = _token(cliente)
     if not token:
@@ -157,20 +185,27 @@ def guardar_cuentas(cliente):
         return _volver(cliente)
     visibles = {cuentas.normalizar_id(a["id"]): a for a in activos if a.get("id")}
     propias = {c["ad_account_id"]: c for c in cuentas.listar(cliente)}
-    elegidas, cambios_pais = [], []
+    lanzamiento = meta_conexion.cuentas_de_lanzamiento()
+    existentes, nuevas, cambios_pais, ajenas = [], [], [], 0
     for valor in dict.fromkeys(request.form.getlist("cuenta")):
         act = cuentas.normalizar_id(valor)
         pais = _pais(request.form.get(f"pais_{act}"))
-        if act in propias:
+        if lanzamiento.get(act) not in (None, cliente):
+            ajenas += 1      # la cuenta con la que lanza otro proyecto no se lee desde este (ruling R20)
+        elif act in propias:
             # Ya estaba: se queda aunque el token ya no la vea (quitarla borraría sus copias sin que nadie lo pidiera).
             c = propias[act]
-            elegidas.append({"id": act, "name": c.get("nombre"), "currency": c.get("moneda"), "pais": c.get("pais")})
+            existentes.append({"id": act, "name": c.get("nombre"), "currency": c.get("moneda"), "pais": c.get("pais")})
             if pais is not None and (pais or None) != c.get("pais"):
                 cambios_pais.append((act, pais or None))
         elif act in visibles:
             a = visibles[act]
-            elegidas.append({"id": act, "name": a.get("name"), "currency": a.get("currency"), "pais": pais or None})
+            nuevas.append({"id": act, "name": a.get("name"), "currency": a.get("currency"), "pais": pais or None})
         # Lo que el token no ve y no estaba en el proyecto se ignora: nunca se agrega una cuenta escrita a mano.
+    # Tope por proyecto: las que ya estaban van primero y las nuevas entran hasta llenar el cupo.
+    cupo = max(0, cuentas.MAX_POR_PROYECTO - len(existentes))
+    sobran = max(0, len(nuevas) - cupo)
+    elegidas = existentes + nuevas[:cupo]
     antes = set(propias)
     try:
         r = cuentas.elegir(cliente, elegidas, usuario=session.get("usuario"))
@@ -191,18 +226,23 @@ def guardar_cuentas(cliente):
     if r["quitadas"]:
         mensajes.append(ngettext("%(num)s cuenta quitada (se borraron sus métricas copiadas).",
                                  "%(num)s cuentas quitadas (se borraron sus métricas copiadas).", len(r["quitadas"])))
-    if r["rechazadas"]:
+    ajenas += len(r["rechazadas"])
+    if ajenas:
         mensajes.append(ngettext("%(num)s cuenta ya está en otro proyecto y no se agregó.",
-                                 "%(num)s cuentas ya están en otro proyecto y no se agregaron.",
-                                 len(r["rechazadas"])))
+                                 "%(num)s cuentas ya están en otro proyecto y no se agregaron.", ajenas))
+    if sobran:
+        mensajes.append(ngettext("Un proyecto lee como máximo %(tope)s cuentas: %(num)s cuenta no se agregó.",
+                                 "Un proyecto lee como máximo %(tope)s cuentas: %(num)s cuentas no se agregaron.",
+                                 sobran, tope=cuentas.MAX_POR_PROYECTO))
     if cambios_pais:
         mensajes.append(gettext("País actualizado."))
     flash(" ".join(mensajes) if mensajes else gettext("Sin cambios en las cuentas."),
-          "warn" if r["rechazadas"] else "ok")
+          "warn" if ajenas or sobran else "ok")
     return _volver(cliente)
 
 
 @bp.post("/cuentas/<act>/pais")
+@solo_admin
 def cambiar_pais(cliente, act):
     if not cuentas.cuenta(cliente, act):
         abort(404)

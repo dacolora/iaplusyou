@@ -1,8 +1,9 @@
 {# Pestaña «Meta» (spec 2026-10-08 meta rendimiento §8). Al cargar la página solo se pinta este armazón (contexto
-   barato de ver_cliente: `meta_rend` = conectado, n_cuentas, modo; ni Graph ni el panel): el panel
+   barato de ver_cliente: `meta_rend` = conectado, n_cuentas, modo, es_admin; ni Graph ni el panel): el panel
    (meta_rendimiento.rutas.ver_panel → _meta_panel.html) llega por fetch la primera vez que se abre la pestaña, y el
    selector «Elegir cuentas» (ver_cuentas → _meta_cuentas.html, la única ruta que llama a Meta) al abrirlo. Tres
-   estados: sin conexión → ir a Conexiones; conectado sin cuentas → el selector abierto; con cuentas → el panel.
+   estados: sin conexión → ir a Conexiones; conectado sin cuentas → el selector abierto (solo el admin: los demás ven
+   «Un administrador de Creatv tiene que elegir las cuentas»); con cuentas → el panel.
    Todo el JS vive aquí: los <script> de un fragmento que llega por fetch no corren. Los nombres de los selectores
    del JS evitan palabras que la guardia de idioma lee como español (`data-meta-act`, no `…-cuenta`). #}
 <div class="panel-cabecera">
@@ -10,7 +11,7 @@
     <h2>{{ _('Meta') }}</h2>
     <p class="panel-cabecera-desc">{{ _('Todas tus cuentas publicitarias de Meta en un solo lugar: gasto, ventas y ROAS por cuenta, campaña, conjunto y anuncio, con el veredicto de cada anuncio.') }}</p>
   </div>
-  {% if meta_rend.conectado and meta_rend.n_cuentas %}
+  {% if meta_rend.conectado and meta_rend.n_cuentas and meta_rend.es_admin %}
   <div class="panel-cabecera-acciones">
     <button type="button" class="btn-sm" data-meta-elegir aria-expanded="false" aria-controls="meta-cuentas">{{ _('Elegir cuentas') }}</button>
   </div>
@@ -23,6 +24,11 @@
   <p class="estado-vacio-texto">{{ _('Con Meta conectado eliges qué cuentas publicitarias leer y traemos sus últimos 13 meses: gasto, compras y ROAS por cuenta, campaña, conjunto y anuncio. Leer de Meta no cuesta nada y no cambia nada en tus anuncios.') }}</p>
   <a class="btn-generar btn-sm" href="#settings" data-ir-tab="settings" data-ir-config="config-meta">{{ _('Ir a Conexiones') }}</a>
 </div>
+{% elif not meta_rend.n_cuentas and not meta_rend.es_admin %}
+<div class="estado-vacio">
+  <p class="estado-vacio-titulo">{{ _('Todavía no hay cuentas publicitarias elegidas') }}</p>
+  <p class="estado-vacio-texto">{{ _('Un administrador de Creatv tiene que elegir las cuentas.') }}</p>
+</div>
 {% elif not meta_rend.n_cuentas %}
 <div class="estado-vacio">
   <p class="estado-vacio-titulo">{{ _('Elige qué cuentas publicitarias quieres ver') }}</p>
@@ -32,9 +38,11 @@
   <p class="vacio">{{ _('Cargando tus cuentas de Meta…') }}</p>
 </div>
 {% else %}
+{% if meta_rend.es_admin %}
 <div id="meta-cuentas" class="meta-cuentas" data-url="{{ url_for('meta_rendimiento.ver_cuentas', cliente=cliente) }}" hidden>
   <p class="vacio">{{ _('Cargando tus cuentas de Meta…') }}</p>
 </div>
+{% endif %}
 <div id="meta-panel" data-url="{{ url_for('meta_rendimiento.ver_panel', cliente=cliente) }}">
   <p class="vacio">{{ _('Cargando las métricas de Meta…') }}</p>
 </div>

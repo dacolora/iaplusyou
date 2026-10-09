@@ -2223,7 +2223,8 @@ def ver_cliente(cliente):
     # Pestaña Meta (spec 2026-10-08 meta rendimiento §8): solo lo que decide su estado vacío. Ni Graph ni el panel:
     # el selector y el panel llegan por fetch al abrirla.
     meta_rend = {"conectado": bool((meta_conexion.cargar(cliente) or {}).get("token")),
-                 "n_cuentas": len(meta_rend_cuentas.ids(cliente)), "modo": meta_conexion.modo(cliente)}
+                 "n_cuentas": len(meta_rend_cuentas.ids(cliente)), "modo": meta_conexion.modo(cliente),
+                 "es_admin": meta_rendimiento_rutas.es_admin()}
     # Catálogo (spec 2026-09-28): la galería y la ficha llegan por fragmento;
     # la página solo trae contadores por categoría y lo que Crear necesita.
     activos_producto = _productos_con_uso(cliente)
