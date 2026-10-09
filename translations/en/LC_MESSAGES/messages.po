@@ -10877,6 +10877,10 @@ msgid "Meta pidió esperar: el detalle se reintenta en 30 minutos (reintento %(n
 msgstr "Meta asked us to wait: the detail will be retried in 30 minutes (retry %(n)s of %(total)s)."
 
 #, python-format
+msgid "Meta pidió esperar: la copia sigue a las %(hora)s."
+msgstr "Meta asked us to wait: the copy resumes at %(hora)s."
+
+#, python-format
 msgid "Meta pidió esperar: las copias siguen después de las %(hora)s."
 msgstr "Meta asked us to wait: copies resume after %(hora)s."
 

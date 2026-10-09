@@ -36,7 +36,7 @@ import idiomas
 import meta_conexion
 import usuarios
 from idiomas import N_
-from meta_rendimiento import cuentas, grafico, panel
+from meta_rendimiento import cuentas, grafico, panel, pausa
 from tareas import meta_rendimiento as tareas_mr
 from triple_whale import paises
 
@@ -304,6 +304,9 @@ def sincronizar(cliente):
         flash(gettext("Meta no está conectado en este proyecto."), "error")
     elif not cuentas.ids(cliente):
         flash(gettext("Elige primero qué cuentas publicitarias quieres ver."), "warn")
+    elif pausa.pausada_hasta():
+        # Meta pidió esperar (ruling R22): una copia encolada ahora no correría; se dice la hora en vez de «Trayendo…».
+        flash(gettext("Meta pidió esperar: la copia sigue a las %(hora)s.", hora=pausa.pausada_hasta()[11:16]), "warn")
     elif not es_admin() and _copiada_hace_poco(cliente, act):
         flash(gettext("Las métricas de Meta se acaban de actualizar: espera %(minutos)s minutos para volver a pedirlo.",
                       minutos=int(ESPERA_ACTUALIZAR.total_seconds() // 60)), "warn")

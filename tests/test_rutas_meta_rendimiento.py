@@ -8,7 +8,7 @@ import pytest
 import sqlalchemy as sa
 
 import db
-from meta_rendimiento import cuentas, datos, panel
+from meta_rendimiento import cuentas, datos, panel, pausa
 from tests.test_rutas_configuracion import app  # noqa: F401  (fixture)
 from tests.test_rutas_productos import _flashes
 
@@ -351,6 +351,27 @@ def test_sincronizar(conectado):
     assert [t["job_id"] for t in _tareas()] == ["acme__meta_rend__act_2"]
     c.post("/cliente/acme/meta-rendimiento/sincronizar")
     assert sorted(t["job_id"] for t in _tareas()) == ["acme__meta_rend__act_1", "acme__meta_rend__act_2"]
+
+
+def test_con_la_pausa_de_meta_vigente_actualizar_dice_la_hora_y_no_encola_nada(conectado, app):
+    _dos_cuentas()
+    hasta = pausa.pausar(90)
+    hora = hasta[11:16]
+    for c in (conectado["c"], _como_cliente(app)):             # también el admin: no hay nada que esperar de la cola
+        r = c.post("/cliente/acme/meta-rendimiento/sincronizar", data={"act": A})
+        assert r.status_code == 302
+        mensajes = _flashes(c)
+        assert any(f"Meta pidió esperar: la copia sigue a las {hora}." in m for m in mensajes)
+        assert not any("Trayendo" in m for m in mensajes)
+        c.post("/cliente/acme/meta-rendimiento/sincronizar")
+    assert _tareas() == []
+    # Vencida la pausa, vuelve a encolar como siempre.
+    with db.conectar() as con:
+        con.execute(db.kv.update().where(db.kv.c.clave == pausa.CLAVE).values(
+            valor=(datetime.now() - timedelta(minutes=1)).isoformat(timespec="seconds")))
+    assert not pausa.activa()
+    conectado["c"].post("/cliente/acme/meta-rendimiento/sincronizar", data={"act": A})
+    assert [t["job_id"] for t in _tareas()] == ["acme__meta_rend__act_1"]
 
 
 def test_post_de_otro_sitio_se_rechaza_en_todas(conectado, monkeypatch):
