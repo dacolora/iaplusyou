@@ -4369,6 +4369,10 @@ msgstr "Copy the links:"
 msgid "Copia pospuesta: hay una acción en Meta en curso (lanzar, pausar, escalar o publicar). La próxima copia programada la retoma."
 msgstr "Copy postponed: an action on Meta is in progress (launching, pausing, scaling or publishing). The next scheduled copy picks it up."
 
+#, python-format
+msgid "Copia pospuesta: hay una acción en Meta en curso (lanzar, pausar, escalar o publicar). Se reintenta en 10 minutos (%(n)s de %(total)s)."
+msgstr "Copy postponed: an action on Meta is in progress (launching, pausing, scaling or publishing). Trying again in 10 minutes (%(n)s of %(total)s)."
+
 msgid "Copiado"
 msgstr "Copied"
 

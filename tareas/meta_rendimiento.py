@@ -14,9 +14,11 @@ experimentos de colorado_forja, así que leer nunca debe gastar lo que necesita 
 (códigos 4/17/32/613/8000x o un uso de 75 % o más en las cabeceras), la copia deja la cuenta en `error` con el motivo,
 pone la pausa compartida (`meta_rendimiento.pausa`, al menos 30 min) y termina SIN subir: un reintento inmediato
 volvería a chocar. Mientras dure la pausa ninguna copia arranca ni la periódica encola, y una copia tampoco arranca
-si en la cola hay una tarea que ESCRIBE en Meta lista o corriendo (`TIPOS_ESCRITURA_META`): cede el turno y la
-siguiente periódica la retoma. Como la copia inicial se reanuda desde su marcador, nada se pierde."""
-from datetime import date, timedelta
+si hay una tarea que ESCRIBE en Meta (`TIPOS_ESCRITURA_META`: las disparadas por una persona, en cola o corriendo;
+las periódicas, solo corriendo): cede el turno y se vuelve a encolar sola para dentro de 10 minutos (hasta 6 veces,
+ruling R30); después la retoma la siguiente periódica. Como la copia inicial se reanuda desde su marcador, nada se
+pierde."""
+from datetime import date, datetime, timedelta
 
 from flask_babel import gettext
 
@@ -24,7 +26,7 @@ import cola
 import meta_conexion
 import trabajos
 from meta_rendimiento import cuentas, datos, graph, pausa, sync
-from tareas import al_interrumpir, registrar
+from tareas import Continuar, al_interrumpir, registrar
 
 TIPO_SYNC = "meta_rend_sincronizar"
 TIPO_TODAS = "meta_rend_sincronizar_todas"
@@ -38,10 +40,19 @@ MAX_INTENTOS_SYNC = 2
 PRIORIDAD_SYNC = 2
 DIAS_ANUNCIO_GUARDADOS = 95
 DIAS_CUENTA_GUARDADOS = 400   # la copia inicial trae 395 días de cuenta; lo de más de 13 meses se borra
-# Tareas que ESCRIBEN en Meta con el usuario y la app que también usa la copia: lanzar (y activar al lanzar), el
-# decisor (pausa, escala, activa y ejecuta acciones), las derivaciones que lanzan piezas nuevas, la publicación vieja
-# y la orgánica en Facebook e Instagram. Con una lista o corriendo, la copia no arranca.
-TIPOS_ESCRITURA_META = ("exp_lanzar", "exp_decidir", "exp_avanzar_todos", "meta_publicar", "organico_publicar")
+# Tareas que ESCRIBEN en Meta con el usuario y la app que también usa la copia. Las que una persona dispara (lanzar y
+# activar al lanzar, la publicación vieja y la orgánica en Facebook e Instagram) frenan la copia desde que están en
+# cola. Las periódicas (el decisor: pausa, escala, activa y ejecuta acciones; `exp_avanzar_todos`: las derivaciones
+# que lanzan piezas nuevas) solo mientras CORREN: `exp_avanzar_todos` pasa cada 10 min por el único carril general y
+# casi siempre espera su turno detrás de tareas largas; frenar la copia por eso la dejaría sin correr durante horas
+# (ruling R30, 2026-10-08).
+TIPOS_ESCRITURA_USUARIO = ("exp_lanzar", "meta_publicar", "organico_publicar")
+TIPOS_ESCRITURA_PERIODICAS = ("exp_decidir", "exp_avanzar_todos")
+TIPOS_ESCRITURA_META = TIPOS_ESCRITURA_USUARIO + TIPOS_ESCRITURA_PERIODICAS
+# Una copia que cede el turno se vuelve a encolar sola para dentro de 10 minutos, hasta 6 veces (1 hora); después
+# se rinde y la siguiente periódica la retoma. El contador viaja en el payload.
+ESPERA_POSPUESTA = timedelta(minutes=10)
+MAX_POSPOSICIONES = 6
 
 
 def job_id_sync(cliente, act):
@@ -93,9 +104,8 @@ def meta_rend_sincronizar(tarea):
     hasta = pausa.pausada_hasta()
     if hasta:
         return _mensaje_pausa(hasta)
-    if cola.hay_viva_de(TIPOS_ESCRITURA_META):
-        return gettext("Copia pospuesta: hay una acción en Meta en curso (lanzar, pausar, escalar o publicar). "
-                       "La próxima copia programada la retoma.")
+    if escribiendo_en_meta():
+        return _pospuesta(p)
     job_id = tarea.get("job_id") or job_id_sync(cliente, act)
 
     def etapa(nombre, progreso=None):
@@ -117,6 +127,25 @@ def meta_rend_sincronizar(tarea):
     nombre = (cuentas.cuenta(cliente, act) or {}).get("nombre") or act
     return gettext("Listo (%(cuenta)s): %(dias)s día(s) de la cuenta y %(filas)s fila(s) de anuncios, del %(desde)s al %(hasta)s.",
                    cuenta=nombre, dias=r["dias_cuenta"], filas=r["filas_anuncio"], desde=r["desde"], hasta=r["hasta"])
+
+
+def escribiendo_en_meta():
+    """True si una escritura en Meta está en camino: una disparada por una persona, en cola o corriendo, o una
+    periódica corriendo ahora."""
+    return cola.hay_viva_de(TIPOS_ESCRITURA_USUARIO) or cola.hay_viva_de(TIPOS_ESCRITURA_PERIODICAS, solo_en_curso=True)
+
+
+def _pospuesta(payload):
+    """La copia cede el turno: se vuelve a encolar (mismo job_id, así la barra sigue viva) para dentro de 10 minutos.
+    Tras `MAX_POSPOSICIONES` se rinde y deja el texto de siempre: la siguiente copia programada la retoma."""
+    n = int(payload.get("pospuestas") or 0)
+    if n >= MAX_POSPOSICIONES:
+        return gettext("Copia pospuesta: hay una acción en Meta en curso (lanzar, pausar, escalar o publicar). "
+                       "La próxima copia programada la retoma.")
+    return Continuar(TIPO_SYNC, {**payload, "pospuestas": n + 1}, ejecutar_desde=datetime.now() + ESPERA_POSPUESTA,
+                     max_intentos=MAX_INTENTOS_SYNC,
+                     mensaje=gettext("Copia pospuesta: hay una acción en Meta en curso (lanzar, pausar, escalar o publicar). "
+                                     "Se reintenta en 10 minutos (%(n)s de %(total)s).", n=n + 1, total=MAX_POSPOSICIONES))
 
 
 def _mensaje_pausa(hasta):

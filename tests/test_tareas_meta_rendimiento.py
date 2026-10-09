@@ -193,15 +193,73 @@ def _tarea_viva(tipo, estado="pendiente"):
             con.execute(db.tarea.update().where(db.tarea.c.tipo == tipo).values(estado=estado))
 
 
-@pytest.mark.parametrize("tipo", t.TIPOS_ESCRITURA_META)
-@pytest.mark.parametrize("estado", ["pendiente", "en_curso"])
-def test_una_escritura_en_meta_pendiente_o_corriendo_pospone_la_copia(hf, monkeypatch, tipo, estado):
-    _tarea_viva(tipo, estado)
+def _se_pospone(monkeypatch, payload_extra=None):
+    """Corre la copia con Meta intocable y devuelve lo que devolvió (una `Continuar` si cedió el turno)."""
     _falla_con(monkeypatch, AssertionError("con una acción en Meta en curso no se copia"))
-    texto = t.meta_rend_sincronizar(_tarea())
-    assert "pospuesta" in texto.lower() and "acción en Meta en curso" in texto
+    tarea = _tarea()
+    tarea["payload"].update(payload_extra or {})
+    return t.meta_rend_sincronizar(tarea)
+
+
+@pytest.mark.parametrize("tipo", ["exp_lanzar", "meta_publicar", "organico_publicar"])
+@pytest.mark.parametrize("estado", ["pendiente", "en_curso"])
+def test_una_escritura_disparada_por_una_persona_pospone_la_copia_en_cola_o_corriendo(hf, monkeypatch, tipo, estado):
+    _tarea_viva(tipo, estado)
+    r = _se_pospone(monkeypatch)
+    assert isinstance(r, t.Continuar) and r.tipo == t.TIPO_SYNC
     c = cuentas.cuenta("hf", "act_1")
     assert c["estado"] == "nueva" and not c.get("error") and not pausa.activa()
+
+
+@pytest.mark.parametrize("tipo", ["exp_decidir", "exp_avanzar_todos"])
+def test_una_periodica_que_escribe_pospone_la_copia_solo_mientras_corre(hf, monkeypatch, tipo):
+    # Mutación C9: sacar `exp_avanzar_todos` de la guarda tiene que romper esta prueba.
+    _tarea_viva(tipo, "en_curso")
+    assert isinstance(_se_pospone(monkeypatch), t.Continuar)
+
+
+@pytest.mark.parametrize("tipo", ["exp_decidir", "exp_avanzar_todos"])
+def test_una_periodica_pendiente_no_pospone_la_copia(hf, monkeypatch, tipo):
+    # `exp_avanzar_todos` espera en la cola general detrás de tareas largas: todavía no escribe nada en Meta.
+    _tarea_viva(tipo, "pendiente")
+    monkeypatch.setattr(sync, "sincronizar", lambda *a, **k: {"dias_cuenta": 1, "filas_anuncio": 2, "objetos": 3,
+                                                              "desde": "2026-10-01", "hasta": "2026-10-08"})
+    texto = t.meta_rend_sincronizar(_tarea())
+    assert isinstance(texto, str) and "Listo" in texto
+
+
+def test_la_copia_pospuesta_se_vuelve_a_encolar_sola_en_10_minutos_con_su_contador(hf, monkeypatch):
+    _tarea_viva("exp_lanzar", "en_curso")
+    antes = datetime.now()
+    r = _se_pospone(monkeypatch)
+    assert r.payload == {"cliente": "hf", "ad_account_id": "act_1", "pospuestas": 1}
+    assert antes + timedelta(minutes=9, seconds=50) <= r.ejecutar_desde <= datetime.now() + timedelta(minutes=10)
+    assert r.max_intentos == t.MAX_INTENTOS_SYNC
+    assert "10 minutos" in r.mensaje and "1 de 6" in r.mensaje
+    r2 = _se_pospone(monkeypatch, {"pospuestas": 3})
+    assert r2.payload["pospuestas"] == 4 and "4 de 6" in r2.mensaje
+
+
+def test_tras_seis_posposiciones_se_rinde_y_deja_el_texto_de_la_proxima_copia(hf, monkeypatch):
+    _tarea_viva("exp_lanzar")
+    texto = _se_pospone(monkeypatch, {"pospuestas": t.MAX_POSPOSICIONES})
+    assert isinstance(texto, str) and "pospuesta" in texto.lower() and "acción en Meta en curso" in texto
+    assert "próxima copia programada" in texto
+
+
+def test_el_worker_sigue_la_copia_pospuesta_con_el_mismo_job_y_sus_dos_intentos(hf, monkeypatch):
+    import worker
+    monkeypatch.setattr(t.trabajos, "reportar", lambda *a, **k: None)
+    _tarea_viva("exp_lanzar", "en_curso")
+    t.encolar_sync("hf", "act_1")
+    fila = cola.reclamar()
+    assert fila["tipo"] == t.TIPO_SYNC
+    _falla_con(monkeypatch, AssertionError("con una acción en Meta en curso no se copia"))
+    worker._correr(fila)
+    nueva = cola.consultar_por_job(t.job_id_sync("hf", "act_1"))
+    assert nueva["id"] != fila["id"] and nueva["estado"] == "pendiente" and nueva["max_intentos"] == 2
+    assert nueva["payload"]["pospuestas"] == 1 and cola.consultar_por_id(fila["id"])["estado"] == "hecha"
+    assert cola.reclamar() is None          # todavía no le toca: es para dentro de 10 minutos
 
 
 def test_las_escrituras_en_meta_son_los_tipos_que_de_verdad_escriben():
@@ -210,6 +268,8 @@ def test_las_escrituras_en_meta_son_los_tipos_que_de_verdad_escriben():
     tareas.cargar_todas()
     assert set(t.TIPOS_ESCRITURA_META) <= set(tareas.REGISTRO)
     assert {"exp_lanzar", "exp_decidir", "meta_publicar", "organico_publicar"} <= set(t.TIPOS_ESCRITURA_META)
+    assert set(t.TIPOS_ESCRITURA_USUARIO) == {"exp_lanzar", "meta_publicar", "organico_publicar"}
+    assert set(t.TIPOS_ESCRITURA_PERIODICAS) == {"exp_decidir", "exp_avanzar_todos"}
 
 
 def test_una_tarea_que_solo_lee_de_meta_o_ya_terminada_no_pospone_la_copia(hf, monkeypatch):

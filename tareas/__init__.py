@@ -105,8 +105,9 @@ class Continuar:
     tarjeta sigue viva). Ej.: un video cuya espera se agotó sigue con
     `flowplus_recuperar` (spec 2026-09-28-crear-sin-cola)."""
 
-    def __init__(self, tipo, payload, mensaje=None, ejecutar_desde=None):
+    def __init__(self, tipo, payload, mensaje=None, ejecutar_desde=None, max_intentos=None):
         self.tipo, self.payload, self.mensaje, self.ejecutar_desde = tipo, payload, mensaje, ejecutar_desde
+        self.max_intentos = max_intentos      # None: 1, como siempre (cola.terminar_y_encolar)
 
 
 def ref_sufijo(tarea):

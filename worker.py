@@ -281,7 +281,8 @@ def _terminar_y_encolar(tarea, siguiente):
     for intento in range(4):
         try:
             return cola.terminar_y_encolar(tarea["id"], siguiente.mensaje, {
-                "tipo": siguiente.tipo, "payload": siguiente.payload, "ejecutar_desde": siguiente.ejecutar_desde})
+                "tipo": siguiente.tipo, "payload": siguiente.payload, "ejecutar_desde": siguiente.ejecutar_desde,
+                "max_intentos": getattr(siguiente, "max_intentos", None)})
         except Exception as e:  # noqa: BLE001
             ultimo = e
             time.sleep(1 + intento)
