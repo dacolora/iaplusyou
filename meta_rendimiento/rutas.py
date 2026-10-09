@@ -11,7 +11,10 @@ cada POST además exige el mismo origen (Sec-Fetch-Site), la barrera CSRF del re
   (`listar_activos` otra vez: un id escrito a mano no sirve); una que ya estaba y sigue marcada se queda aunque el token
   ya no la vea. Encola la copia de las agregadas (gratis: leer de Meta no cobra). Tope: 20 cuentas por proyecto.
 - `cuentas/<act>/pais`: cambia el país de una cuenta del proyecto (404 si es ajena, 400 si el código no es un país).
-- `sincronizar`: «Actualizar ahora»; sin `act`, la copia de todas; con `act`, la de esa (ajena → 404).
+- `sincronizar`: «Actualizar ahora»; sin `act`, la copia de todas; con `act`, la de esa (ajena → 404). Quien no es
+  admin espera 30 minutos desde la última copia (de esa cuenta o, sin `act`, de cualquiera del proyecto): el límite de
+  Meta es por usuario y app, lo comparten todos los proyectos que usan el mismo token y un clic repetido lo agotaría
+  (ruling R22, revisión final 2026-10-08). El admin no espera.
 
 AISLAMIENTO (ruling R20, revisión final 2026-10-08): elegir cuentas (GET y POST) y cambiar el país son SOLO del admin
 (403 al resto). El token de un proyecto puede ver cuentas de otros clientes, y quien las elige las lee: por eso lo
@@ -20,12 +23,14 @@ igual que una que otro ya lee: no se lista habilitada ni se acepta.
 
 En modo agencia el selector dice «Todavía no disponible» (spec §2.10). Ningún token llega a una respuesta: los
 errores de Meta pasan por `cola.sin_token` y además se tacha el valor exacto del token."""
+from datetime import datetime, timedelta
 from functools import wraps
 
 from flask import Blueprint, abort, flash, redirect, render_template, request, session, url_for
 from flask_babel import gettext, ngettext
 
 import cola
+import db
 import idiomas
 import meta_conexion
 from idiomas import N_
@@ -40,6 +45,7 @@ ESTADOS_CUENTA = {1: N_("Activa"), 2: N_("Desactivada"), 3: N_("Con pagos pendie
                   8: N_("Con pagos pendientes"), 9: N_("En período de gracia"), 100: N_("Por cerrarse"),
                   101: N_("Cerrada")}
 OTRO_ESTADO = N_("Otro estado")
+ESPERA_ACTUALIZAR = timedelta(minutes=30)      # entre dos «Actualizar ahora» de quien no es admin (ruling R22)
 
 
 @bp.before_request
@@ -256,6 +262,22 @@ def cambiar_pais(cliente, act):
 
 # ------------------------------------------------------------- actualizar ahora ---
 
+def _copiada_hace_poco(cliente, act):
+    """True si la copia de la cuenta `act` (o, sin `act`, de alguna cuenta del proyecto) terminó hace menos de
+    `ESPERA_ACTUALIZAR`. `ultima_copia` se guarda con `db.ahora()` (hora local, sin zona)."""
+    ahora = datetime.fromisoformat(db.ahora())
+    for c in cuentas.listar(cliente):
+        if act and c["ad_account_id"] != cuentas.normalizar_id(act):
+            continue
+        try:
+            copia = datetime.fromisoformat(str(c.get("ultima_copia"))[:19])
+        except ValueError:
+            continue         # sin copia (None) o una marca ilegible: no frena
+        if ahora - copia < ESPERA_ACTUALIZAR:
+            return True
+    return False
+
+
 @bp.post("/sincronizar")
 def sincronizar(cliente):
     act = (request.form.get("act") or "").strip() or None
@@ -265,6 +287,9 @@ def sincronizar(cliente):
         flash(gettext("Meta no está conectado en este proyecto."), "error")
     elif not cuentas.ids(cliente):
         flash(gettext("Elige primero qué cuentas publicitarias quieres ver."), "warn")
+    elif not es_admin() and _copiada_hace_poco(cliente, act):
+        flash(gettext("Las métricas de Meta se acaban de actualizar: espera %(minutos)s minutos para volver a pedirlo.",
+                      minutos=int(ESPERA_ACTUALIZAR.total_seconds() // 60)), "warn")
     elif tareas_mr.encolar_sync(cliente, act):
         flash(gettext("Trayendo las métricas de Meta…"), "ok")
     else:

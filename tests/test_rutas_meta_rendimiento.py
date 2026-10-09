@@ -2,7 +2,7 @@
 Graph ni cálculo), el panel y el selector de cuentas llegan por fetch, «Ver más» trae filas, y los POST (elegir
 cuentas, país, actualizar) frenan lo de otro sitio, lo de otro proyecto y lo que el token no ve. Ningún token llega a
 una respuesta."""
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 import pytest
 import sqlalchemy as sa
@@ -558,3 +558,40 @@ def test_la_politica_de_privacidad_promete_borrar_las_metricas_copiadas(app):  #
     for ruta in ("/privacidad", "/eliminar-datos"):
         en = " ".join(c.get(ruta).get_data(as_text=True).split())
         assert "metrics copied from the chosen accounts" in en and "names of campaigns, ad sets and ads" in en
+
+
+# ---- «Actualizar ahora» espera 30 minutos para quien no es admin (ruling R22) -----------------------------------
+
+def _copiada(act, hace_min):
+    antes = (datetime.now() - timedelta(minutes=hace_min)).isoformat(timespec="seconds")
+    cuentas.actualizar("acme", act, estado="ok", ultima_copia=antes)
+
+
+def test_un_cliente_espera_30_minutos_entre_dos_actualizaciones(conectado, app):
+    _dos_cuentas()
+    c = _como_cliente(app)
+    _copiada(A, 5)
+    _copiada(B, 120)
+    # Con una cuenta: solo cuenta la suya.
+    c.post("/cliente/acme/meta-rendimiento/sincronizar", data={"act": A})
+    assert _tareas() == [] and any("espera 30 minutos" in m for m in _flashes(c))
+    c.post("/cliente/acme/meta-rendimiento/sincronizar", data={"act": B})
+    assert [t["job_id"] for t in _tareas()] == ["acme__meta_rend__act_2"]
+    # Sin cuenta: basta una copiada hace poco para frenar el «todas».
+    cuentas.actualizar("acme", B, ultima_copia=None)
+    c.post("/cliente/acme/meta-rendimiento/sincronizar")
+    assert [t["job_id"] for t in _tareas()] == ["acme__meta_rend__act_2"]
+    # Pasada la espera, sí.
+    _copiada(A, 31)
+    c.post("/cliente/acme/meta-rendimiento/sincronizar")
+    assert sorted(t["job_id"] for t in _tareas()) == ["acme__meta_rend__act_1", "acme__meta_rend__act_2"]
+
+
+def test_el_admin_no_espera_y_una_cuenta_sin_copia_tampoco(conectado, app):
+    _dos_cuentas()
+    _copiada(A, 1)
+    conectado["c"].post("/cliente/acme/meta-rendimiento/sincronizar", data={"act": A})
+    assert [t["job_id"] for t in _tareas()] == ["acme__meta_rend__act_1"]
+    c = _como_cliente(app)
+    c.post("/cliente/acme/meta-rendimiento/sincronizar", data={"act": B})        # B nunca se copió
+    assert sorted(t["job_id"] for t in _tareas()) == ["acme__meta_rend__act_1", "acme__meta_rend__act_2"]
