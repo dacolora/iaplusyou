@@ -124,7 +124,10 @@ copy con cifras sin dato se muestra con el aviso «revisa antes de publicar», p
 - **Resultado (2026-10-09):** los 4 casos validan sin corrección; la salida creció un 50 % y el costo medido fue 0,086 a
   0,111 con la caché caliente y 0,131 a 0,142 con la caché fría (un clic suelto, el caso normal). La media pasó de
   0,10, y el precio que se ve antes de cobrar no puede quedar por debajo de lo que cuesta ese clic: la tarifa quedó en
-  **0,14**, no en 0,12. Con Cobros se cobra lo real × el margen; la tarifa es solo el precio a la vista.
+  0,14, no en 0,12. Con Cobros se cobra lo real × el margen; la tarifa es solo el precio a la vista.
+- **Tercera ronda (2026-10-09, tope de 20 000):** el caso 2 con la caché fría terminó en `end_turn` con 13 013 tokens
+  de salida (el tope viejo de 12 000 lo habría cortado) y US$ 0,1696. Los clics sueltos fríos quedan entre 0,131 y
+  0,170, con media 0,142: la tarifa pasa a **0,15**.
 
 ## 4. «Probar los 3 ganchos»
 

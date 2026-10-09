@@ -230,15 +230,16 @@ production. It must work for ANY ad, not only Creatv's: in happyflops only 4 pie
   (`mejorar.es_mp4`, B4: it is a third-party file and an odd demuxer must not get it; ffprobe runs with
   `-protocol_whitelist file` and fails closed); otherwise the thumbnail.
 - **«Cómo mejorarlo» (`triple_whale/mejorar.py`, task `tw_analizar_anuncio`).** Price first:
-  `gastos.estimar("analisis_anuncio_tw", segundos=)` = tariff 0.14 + Whisper by the video's duration (30 s when
+  `gastos.estimar("analisis_anuncio_tw", segundos=)` = tariff 0.15 + Whisper by the video's duration (30 s when
   unknown). The tariff was 0.10 until 2026-10-09, measured on the real run of 2026-10-08 (4 happyflops ads,
   `docs/superpowers/evals/2026-10-08-tw-como-mejorarlo.md`): one call US$ 0,067–0,084 with a warm cache, US$ 0,095 cold
-  (the cache write), US$ 0,16 when the correction call was needed (1 of 4); Whisper ≤ US$ 0,0014 (PND-179). It is 0.14
+  (the cache write), US$ 0,16 when the correction call was needed (1 of 4); Whisper ≤ US$ 0,0014 (PND-179). It is 0.15
   since the analysis also brings hooks and copy («Ganchos y copy», below): the output grew about 50 %, and the same 4
-  ads measured US$ 0,086–0,111 with a warm cache and US$ 0,131–0,142 cold
-  (`docs/superpowers/evals/2026-10-09-tw-ganchos-y-copy.md`). The price shown is the one of a cold single click, which
-  is the normal case (a tanda of 4 reads the cache and costs less); Cobros charges the real cost × margin, the tariff
-  is only the price seen beforehand. `max_intentos=1`, `job_id`
+  ads measured US$ 0,086–0,111 with a warm cache and US$ 0,131–0,170 cold (mean 0,142; the 0,1696 run is the one with
+  the 20 000 cap, 13 013 output tokens that the old 12 000 cap would have cut)
+  (`docs/superpowers/evals/2026-10-09-tw-ganchos-y-copy.md`). The price shown covers the cold single click's mean plus
+  Whisper, the normal case (a tanda of 4 reads the cache and costs less); Cobros charges the real cost × margin, the
+  tariff is only the price seen beforehand (0.10 → 0.14 → 0.15 on 2026-10-09). `max_intentos=1`, `job_id`
   `<cliente>__tw_anuncio__<canal>__<ad_id>`: a second click launches nothing. `id_valido` is a `fullmatch` because `$`
   lets a trailing newline through and «p1%0A» would be its own job, a second paid analysis; `encolar_analisis` refuses
   invalid ids. Spend: Whisper as `transcripcion`/fal `tw_anuncio:<aid>:t<tarea>:voz`, Claude as `evaluacion`/anthropic
@@ -373,7 +374,7 @@ fraction of a new video. Spec `docs/superpowers/specs/2026-10-09-tw-ganchos-y-co
   generated nor priced. `libro.exigir` of the total before creating anything; each clip reserves its own when
   `flowplus_lanzar.lanzar` queues it and Crear's closing (`flowplus_video`) charges it. Preparar, vigilar and armar
   never call a paid provider (all three in `TIPOS_EXENTOS_DE_COBRO`); armar and the render are ffmpeg. The analysis
-  itself costs the 0.14 tariff of «Tarjetas de análisis».
+  itself costs the 0.15 tariff of «Tarjetas de análisis».
 - **Table `tw_gancho`** (one row per variant; AUTOINCREMENT because its id IS the code `CV<id>`), single writer
   `triple_whale/datos.py`. `crear_tanda` takes SQLite's write lock (BEGIN IMMEDIATE) BEFORE reading, checks inside that
   transaction that the analysis is the cliente's (`AnalisisAjeno`, a LookupError → the route answers 404), raises
