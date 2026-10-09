@@ -208,8 +208,9 @@ def _crear_wompi(cliente, usd, usuario, correo, base):
         referencia = f"cv-{rid}-{int(time.time())}"
         con.execute(db.recarga.update().where(db.recarga.c.id == rid).values(referencia=referencia))
     try:
+        # Un correo que Wompi no aceptaría se omite: el checkout lo pide (no frena la recarga).
         url = wompi.url_checkout(referencia, centavos, f"{base}/cliente/{quote(cliente, safe='')}/saldo/recarga/{rid}",
-                                 correo=correo or None)
+                                 correo=wompi.correo_valido(correo))
     except Exception as e:
         motivo = cola.sin_token(str(e)) if isinstance(e, wompi.ErrorWompi) else type(e).__name__
         with db.conectar() as con:
@@ -434,15 +435,18 @@ def _aplicar_wompi(con, fila, tx):
     (antes de leer `fila`). Devuelve el resultado: `acreditada`, `duplicada`,
     `rechazada`, `anulada`, `pendiente`, `ignorada` o `no_cuadra` (no se toca
     nada). APPROVED acredita los USD de la recarga (no los pesos) desde
-    `pendiente`, `rechazada` o `expirada`, una sola vez."""
+    `pendiente`, `rechazada` o `expirada`, una sola vez. Una transacción ya
+    guardada en OTRA recarga es `no_cuadra` (quien llama avisa al admin)."""
     if fila is None:
         return "sin_recarga"
     if not _cuadra(fila, tx):
         return "no_cuadra"
     r = db.recarga
     tx_id, status, rid = str(tx["id"]), tx.get("status"), fila["id"]
+    if _ref_de_otra(con, tx_id, rid):
+        return "no_cuadra"
     if status == "APPROVED":
-        if fila["estado"] not in ACREDITABLES or _ref_de_otra(con, tx_id, rid):
+        if fila["estado"] not in ACREDITABLES:
             return "duplicada"
         n = con.execute(r.update().where(r.c.id == rid, r.c.estado.in_(ACREDITABLES)).values(
             estado="aprobada", pasarela_ref=tx_id, moneda_pago=wompi.MONEDA,
@@ -451,8 +455,6 @@ def _aplicar_wompi(con, fila, tx):
             return "duplicada"
         libro.acreditar(con, fila["cliente"], "recarga", fila["milesimas"], "recarga_wompi", recarga_id=rid)
         return "acreditada"
-    if _ref_de_otra(con, tx_id, rid):
-        return "ignorada"
     if status in ("DECLINED", "ERROR"):
         n = con.execute(r.update().where(r.c.id == rid, r.c.estado == "pendiente")
                         .values(estado="rechazada", pasarela_ref=tx_id, actualizada_en=db.ahora())).rowcount
@@ -544,14 +546,43 @@ def _anotar_wompi(evento_id, tipo, ref, guardado, resultado):
     return True
 
 
-def _plan_de_evento(tx):
+class _Reintentar(Exception):
+    """Wompi no pudo confirmar la transacción ahora: 500 sin escribir nada."""
+
+
+def _releer(tx):
+    """La transacción leída en Wompi, la única fuente fiable cuando el evento
+    no lo es del todo. None solo si la transacción NO existe (id inválido o
+    404): eso es definitivo. Cualquier otro error (caída, 429, una llave mal
+    puesta o rotada → 401/403, una respuesta rara) lanza `_Reintentar`: el
+    evento no se anota y Wompi lo reintenta; tomarlo por «no cuadra» dejaría
+    una recarga pagada sin acreditar."""
+    tx_id = str(tx.get("id") or "")
+    if not wompi.id_valido(tx_id):
+        return None
+    try:
+        return wompi.transaccion(tx_id, tiempo=wompi.TIEMPO_INTERACTIVO)
+    except wompi.ErrorWompi as e:
+        if e.codigo == 404:
+            return None
+        log.warning("Wompi no confirmó la transacción de un evento (%s): se reintentará",
+                    e.codigo or ("caída" if e.caida else "error"))
+        raise _Reintentar() from None
+
+
+def _plan_de_evento(ev, tx):
     """El gancho del pago de un plan (`pl-…`): `planes.aplicar_transaccion` si
-    existe (planes 5/8); si no, el evento se anota como ignorado."""
+    existe (planes 5/8); si no, el evento se anota como ignorado (sin red).
+    planes solo recibe una transacción fiable: la del evento si van firmados
+    id, status, referencia, monto y moneda; si no, la releída en Wompi."""
     from cobros import planes  # noqa: PLC0415 — planes importa libro, que no importa recargas
     aplicar = getattr(planes, "aplicar_transaccion", None)
     if aplicar is None:
         return "ignorada"
-    return str(aplicar(dict(tx)) or "ignorada")[:40]
+    fiable = tx if _todo_firmado(ev) else _releer(tx)
+    if fiable is None or not str(fiable.get("reference") or "").startswith("pl-"):
+        return "no_cuadra"
+    return str(aplicar(dict(fiable)) or "ignorada")[:40]
 
 
 def procesar_evento_wompi(cuerpo, checksum=None):
@@ -560,13 +591,15 @@ def procesar_evento_wompi(cuerpo, checksum=None):
     todo evento con firma válida que se pudo anotar (también los repetidos y
     los ajenos: Wompi reintenta todo lo que no sea exactamente 200), 401 con
     firma inválida, 400/413 para un cuerpo inválido y 500 si algo falló sin
-    escribir nada (la base, o Wompi caído al releer una transacción que no
-    cuadra): Wompi reintenta a los 30 min, 3 h y 24 h.
+    escribir nada (la base, o Wompi que no confirma al releer una
+    transacción por algo distinto de «no existe»): Wompi reintenta a los
+    30 min, 3 h y 24 h.
 
-    `transaction.updated` con referencia `cv-` → recarga: si la referencia, los
-    centavos o la moneda no son los de la recarga guardada, se relee la
-    transacción en Wompi y solo vale esa (y se avisa al admin). `pl-` → el pago
-    de un plan (`planes.aplicar_transaccion`)."""
+    `transaction.updated` con referencia `cv-` → recarga: si no cuadra con la
+    recarga guardada o no trae firmados id, status, referencia, monto y
+    moneda, se relee la transacción en Wompi y solo vale esa (y se avisa al
+    admin si difiere). `pl-` → el pago de un plan (`planes.aplicar_transaccion`,
+    con la misma regla de relectura)."""
     cuerpo = cuerpo or b""
     if len(cuerpo) > MAX_CUERPO:
         return 413, "invalido"
@@ -592,32 +625,39 @@ def procesar_evento_wompi(cuerpo, checksum=None):
             ok = _anotar_wompi(evento_id, tipo, ref, _guardado_wompi(ev, tx), "ignorada")
             return 200, ("ignorada" if ok else "duplicada")
         if ref.startswith("pl-"):
-            resultado = _plan_de_evento(tx)
+            resultado = _plan_de_evento(ev, tx)
             ok = _anotar_wompi(evento_id, tipo, ref, _guardado_wompi(ev, tx), resultado)
             return 200, (resultado if ok else "duplicada")
         return _evento_recarga_wompi(evento_id, tipo, ev, tx)
+    except _Reintentar:
+        return 500, "error"
     except Exception:  # noqa: BLE001 — 500: nada quedó escrito y Wompi reintenta
         log.exception("no se pudo procesar el evento de Wompi (%s)", tipo)
         return 500, "error"
 
 
 # Lo que tiene que ir firmado en un evento para creerle sin releer la
-# transacción cuando mueve plata (APPROVED, VOIDED). Wompi firma por defecto
-# id, status y amount_in_cents (wompi-api.md §8): la referencia y la moneda
-# casi nunca, y un evento verdadero con la referencia cambiada (que no rompe la
-# firma) acreditaría la recarga de otro por el mismo monto.
+# transacción. Wompi firma por defecto id, status y amount_in_cents
+# (wompi-api.md §8): la referencia y la moneda casi nunca, y un evento
+# verdadero con la referencia cambiada (que no rompe la firma) acreditaría la
+# recarga de otro por el mismo monto, o le pegaría a otra recarga el id de la
+# transacción (un rechazo o un pendiente guardan `pasarela_ref`), y el pago
+# verdadero de esa transacción ya no cuadraría con la suya.
 _FIRMADO_PARA_CREER = frozenset(("transaction.id", "transaction.status", "transaction.reference",
                                  "transaction.amount_in_cents", "transaction.currency"))
 
 
-def _hay_que_releer(ev, fila, tx):
-    if not _cuadra(fila, tx):
-        return True
-    if tx.get("status") not in ("APPROVED", "VOIDED"):
-        return False   # rechazar o anotar «pendiente» no mueve plata (una rechazada sigue acreditable)
+def _todo_firmado(ev):
     propiedades = _dict(ev.get("signature")).get("properties")
     firmadas = {p for p in propiedades if isinstance(p, str)} if isinstance(propiedades, list) else set()
-    return not _FIRMADO_PARA_CREER <= firmadas
+    return _FIRMADO_PARA_CREER <= firmadas
+
+
+def _hay_que_releer(ev, fila, tx):
+    """Todo evento de recarga que escribe algo (acreditar, anular, rechazar o
+    guardar la transacción de un pendiente) se relee salvo que cuadre con lo
+    guardado Y lleve firmado todo `_FIRMADO_PARA_CREER`."""
+    return not _cuadra(fila, tx) or not _todo_firmado(ev)
 
 
 def _evento_recarga_wompi(evento_id, tipo, ev, tx):
@@ -631,13 +671,7 @@ def _evento_recarga_wompi(evento_id, tipo, ev, tx):
         fila_evento = _por_referencia_wompi(con, tx.get("reference"))
     fiable, releido = tx, _hay_que_releer(ev, fila_evento, tx)
     if releido:
-        try:
-            fiable = wompi.transaccion(str(tx.get("id") or ""), tiempo=wompi.TIEMPO_INTERACTIVO)
-        except wompi.ErrorWompi as e:
-            if e.caida or e.codigo == 429:
-                log.warning("Wompi no responde al releer la transacción de un evento: se reintentará")
-                return 500, "error"
-            fiable = None   # la transacción no existe o es inválida: no se aplica nada
+        fiable = _releer(tx)   # None: la transacción no existe; otro error → _Reintentar (500)
     pe = db.pago_evento
     try:
         with db.conectar() as con:
@@ -658,14 +692,14 @@ def _evento_recarga_wompi(evento_id, tipo, ev, tx):
     except sa.exc.IntegrityError:
         log.info("evento de Wompi ya procesado por otro proceso")
         return 200, "duplicada"
-    if releido:
-        if resultado == "sin_recarga" and fila_evento is None:
-            # Ni el evento ni Wompi hablan de una recarga nuestra.
-            _avisar_wompi(resultado, None, fiable)
-        elif resultado in ("no_cuadra", "sin_recarga") or _distinta(tx, fiable):
-            # El evento decía otra cosa que Wompi, o nada cuadra con lo guardado: al admin.
-            destino = fila or fila_evento or {"id": None, "cliente": "", "referencia": tx.get("reference")}
-            _avisar_no_cuadra(destino["id"], destino["cliente"], destino["referencia"], fiable or tx, "evento")
+    if releido and resultado == "sin_recarga" and fila_evento is None:
+        # Ni el evento ni Wompi hablan de una recarga nuestra.
+        _avisar_wompi(resultado, None, fiable)
+    elif resultado == "no_cuadra" or (releido and (resultado == "sin_recarga" or _distinta(tx, fiable))):
+        # El evento decía otra cosa que Wompi, nada cuadra con lo guardado, o
+        # la transacción ya es de otra recarga: al admin.
+        destino = fila or fila_evento or {"id": None, "cliente": "", "referencia": tx.get("reference")}
+        _avisar_no_cuadra(destino["id"], destino["cliente"], destino["referencia"], fiable or tx, "evento")
     if fila is not None:
         _avisar_wompi(resultado, fila, fiable)
     return 200, resultado

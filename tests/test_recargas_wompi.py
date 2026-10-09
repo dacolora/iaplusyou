@@ -390,7 +390,7 @@ def test_evento_de_una_referencia_desconocida_avisa_al_admin(entorno):
 
 def test_evento_rechazado_marca_la_recarga_y_un_aprobado_despues_acredita(entorno):
     rid, ref = _pendiente(entorno)
-    assert _ev(entorno, _evento(_tx(ref, status="DECLINED")))[1] == "rechazada"
+    assert _ev(entorno, _evento(_tx(ref, status="DECLINED"), props=TODAS))[1] == "rechazada"
     assert _recarga(entorno["db"], rid)["estado"] == "rechazada" and entorno["consultas"] == []
     entorno["txs"]["1292-1602113476-20000"] = _tx(ref, tx_id="1292-1602113476-20000")
     assert _ev(entorno, _evento(_tx(ref, tx_id="1292-1602113476-20000")))[1] == "acreditada"
@@ -451,12 +451,14 @@ def test_evento_de_un_plan_sin_planes_se_ignora(entorno, monkeypatch):
     from cobros import planes
     monkeypatch.delattr(planes, "aplicar_transaccion", raising=False)
     assert _ev(entorno, _evento(_tx("pl-3-20261009-1"))) == (200, "ignorada")
+    assert entorno["consultas"] == []   # sin planes, ni siquiera relee en Wompi
 
 
 def test_evento_de_un_plan_llama_a_planes(entorno, monkeypatch):
     from cobros import planes
     vistos = []
     monkeypatch.setattr(planes, "aplicar_transaccion", lambda tx: vistos.append(tx) or "aprobado", raising=False)
+    entorno["txs"]["1292-1602113476-10985"] = _tx("pl-3-20261009-1")
     cuerpo = _evento(_tx("pl-3-20261009-1"))
     assert _ev(entorno, cuerpo) == (200, "aprobado")
     assert vistos[0]["reference"] == "pl-3-20261009-1" and vistos[0]["status"] == "APPROVED"
@@ -470,7 +472,7 @@ def test_evento_de_un_plan_que_falla_responde_500_y_se_reintenta(entorno, monkey
     def falla(tx):
         raise RuntimeError("base ocupada")
     monkeypatch.setattr(planes, "aplicar_transaccion", falla, raising=False)
-    cuerpo = _evento(_tx("pl-3-20261009-1"))
+    cuerpo = _evento(_tx("pl-3-20261009-1"), props=TODAS)
     assert _ev(entorno, cuerpo) == (500, "error") and _eventos(entorno["db"]) == []
 
 
@@ -630,3 +632,111 @@ def test_eventos_400_413_y_405(entorno, cliente_http):
     assert c.post("/pagos/wompi/eventos", data=b"x" * 70000).status_code == 413
     assert c.get("/pagos/wompi/eventos").status_code == 405
     assert _eventos(entorno["db"]) == []
+
+
+# --- ronda de arreglos 1 ----------------------------------------------------------------------
+
+@pytest.mark.parametrize("error", [
+    {"mensaje": "Wompi no aceptó el pedido (HTTP 401)", "codigo": 401},     # llave mal puesta o rotada
+    {"mensaje": "Wompi no aceptó el pedido (HTTP 403)", "codigo": 403},
+    {"mensaje": "Wompi respondió algo inesperado (HTTP 302)", "codigo": 302},
+    {"mensaje": "Wompi respondió algo que no es JSON", "codigo": 200},
+    {"mensaje": "Wompi no devolvió los datos esperados", "codigo": 200},
+    {"mensaje": "Demasiadas", "codigo": 429},
+    {"mensaje": "caída", "caida": True},
+], ids=["401", "403", "302", "no_json", "sin_datos", "429", "caida"])
+def test_si_wompi_no_confirma_al_releer_responde_500_sin_anotar_y_el_reintento_acredita(entorno, error):
+    """Solo «la transacción no existe» es definitivo; cualquier otro error al
+    releer deja el evento sin anotar para que Wompi lo reintente: tomarlo por
+    «no cuadra» dejaría una recarga pagada sin acreditar."""
+    rid, ref = _pendiente(entorno)
+    entorno["txs"]["1292-1602113476-10985"] = entorno["wompi"].ErrorWompi(**error)
+    cuerpo = _evento(_tx(ref))
+    assert _ev(entorno, cuerpo) == (500, "error")
+    assert _eventos(entorno["db"]) == [] and _recarga(entorno["db"], rid)["pasarela_ref"] is None
+    entorno["txs"]["1292-1602113476-10985"] = _tx(ref)
+    assert _ev(entorno, cuerpo) == (200, "acreditada")
+    assert _ev(entorno, cuerpo) == (200, "duplicada")
+    assert entorno["libro"].saldo("acme") == 50000 and len(_movimientos(entorno["db"])) == 1
+
+
+def test_una_transaccion_que_no_existe_en_wompi_es_definitiva(entorno):
+    rid, ref = _pendiente(entorno)
+    assert _ev(entorno, _evento(_tx(ref))) == (200, "no_cuadra")   # el falso responde 404
+    assert _recarga(entorno["db"], rid)["estado"] == "pendiente" and _admin(entorno) == ["wompi_no_cuadra"]
+
+
+def test_una_transaccion_ya_guardada_en_otra_recarga_avisa_al_admin(entorno):
+    db = entorno["db"]
+    rid_a, ref_a = _pendiente(entorno)
+    rid_b, ref_b = _pendiente(entorno)
+    assert _ev(entorno, _evento(_tx(ref_a), props=TODAS))[1] == "acreditada"
+    # Un evento firmado entero que dice que la MISMA transacción es de la otra recarga.
+    assert _ev(entorno, _evento(_tx(ref_b, status="DECLINED"), props=TODAS)) == (200, "no_cuadra")
+    assert _ev(entorno, _evento(_tx(ref_b), props=TODAS)) == (200, "no_cuadra")
+    assert _recarga(db, rid_b)["estado"] == "pendiente" and _recarga(db, rid_b)["pasarela_ref"] is None
+    assert entorno["libro"].saldo("acme") == 50000 and "wompi_no_cuadra" in _admin(entorno)
+
+
+@pytest.mark.parametrize("status", ["PENDING", "DECLINED"])
+def test_un_evento_sin_la_referencia_firmada_no_guarda_la_transaccion_en_otra_recarga(entorno, status):
+    """Un pendiente o un rechazo guardan `pasarela_ref`: con la referencia sin
+    firmar se relee, y la transacción queda en la recarga que dice Wompi; el
+    pago verdadero de esa recarga después sí se acredita."""
+    db = entorno["db"]
+    rid_a, ref_a = _pendiente(entorno)
+    rid_b, ref_b = _pendiente(entorno)
+    entorno["txs"]["1292-1602113476-10985"] = _tx(ref_a, status=status)
+    _ev(entorno, _evento(_tx(ref_b, status=status)))   # referencia cambiada a la de B
+    assert [c[0] for c in entorno["consultas"]] == ["1292-1602113476-10985"]
+    assert _recarga(db, rid_b)["pasarela_ref"] is None and _recarga(db, rid_b)["estado"] == "pendiente"
+    entorno["txs"]["1292-1602113476-10985"] = _tx(ref_a)
+    assert _ev(entorno, _evento(_tx(ref_a)))[1] == "acreditada"
+    assert _recarga(db, rid_a)["estado"] == "aprobada"
+
+
+def test_un_plan_recibe_la_transaccion_releida(entorno, monkeypatch):
+    from cobros import planes
+    vistos = []
+    monkeypatch.setattr(planes, "aplicar_transaccion", lambda tx: vistos.append(tx) or "aprobado", raising=False)
+    entorno["txs"]["1292-1602113476-10985"] = _tx("pl-3-20261009-1", centavos=4_000_000_00)
+    assert _ev(entorno, _evento(_tx("pl-9-20261009-1", centavos=4_000_000_00))) == (200, "aprobado")
+    assert vistos[0]["reference"] == "pl-3-20261009-1"   # lo que dice Wompi, no el evento
+    assert entorno["consultas"][0][0] == "1292-1602113476-10985"
+
+
+def test_un_plan_con_todo_firmado_no_relee(entorno, monkeypatch):
+    from cobros import planes
+    monkeypatch.setattr(planes, "aplicar_transaccion", lambda tx: "aprobado", raising=False)
+    assert _ev(entorno, _evento(_tx("pl-3-20261009-1"), props=TODAS)) == (200, "aprobado")
+    assert entorno["consultas"] == []
+
+
+def test_un_plan_cuya_relectura_falla_responde_500_sin_anotar(entorno, monkeypatch):
+    from cobros import planes
+    llamadas = []
+    monkeypatch.setattr(planes, "aplicar_transaccion", lambda tx: llamadas.append(tx) or "aprobado", raising=False)
+    entorno["txs"]["1292-1602113476-10985"] = entorno["wompi"].ErrorWompi("HTTP 401", codigo=401)
+    assert _ev(entorno, _evento(_tx("pl-3-20261009-1"))) == (500, "error")
+    assert _eventos(entorno["db"]) == [] and llamadas == []
+
+
+def test_un_plan_cuya_transaccion_no_existe_no_llama_a_planes(entorno, monkeypatch):
+    from cobros import planes
+    llamadas = []
+    monkeypatch.setattr(planes, "aplicar_transaccion", lambda tx: llamadas.append(tx) or "aprobado", raising=False)
+    assert _ev(entorno, _evento(_tx("pl-3-20261009-1"))) == (200, "no_cuadra") and llamadas == []
+
+
+def test_un_correo_que_wompi_no_acepta_se_omite(entorno):
+    r = entorno["recargas"].crear("acme", USD, "user_acme", correo="no-es-un-correo")
+    q = dict(parse_qsl(urlsplit(r["url"]).query))
+    assert "customer-data:email" not in q and _recarga(entorno["db"], r["id"])["estado"] == "pendiente"
+
+
+def test_la_vuelta_sin_id_ni_transaccion_no_se_queda_verificando(entorno, cliente_http):
+    rid, _ = _pendiente(entorno)
+    html = cliente_http.como("user_acme").get(f"/cliente/acme/saldo/recarga/{rid}").get_data(as_text=True)
+    assert "Si pagaste, lo acreditamos apenas Wompi lo confirme." in html
+    assert "Verificando tu pago" not in html and "data-estado-url" not in html
+    assert "Volver al saldo" in html and entorno["consultas"] == []

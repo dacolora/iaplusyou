@@ -102,10 +102,14 @@ def _verificar_si_toca(recarga, transaccion_id=None):
     return recargas.obtener(recarga["cliente"], rid)
 
 
-def texto_estado(recarga):
-    """La frase de la página de vuelta (spec §9.4), en el idioma de quien mira."""
+def texto_estado(recarga, tx_id=None):
+    """La frase de la página de vuelta (spec §9.4), en el idioma de quien mira.
+    Una de Wompi pendiente sin transacción que consultar (volvió sin `?id=`,
+    o cerró el checkout) no se queda en «Verificando…»: la acredita el evento."""
     estado = recarga["estado"]
     es_wompi = recarga.get("medio") == "wompi"
+    if es_wompi and estado == "pendiente" and not tx_id and not recarga.get("pasarela_ref"):
+        return gettext("Si pagaste, lo acreditamos apenas Wompi lo confirme.")
     if estado == "aprobada":
         return gettext("Listo: sumamos %(monto)s a tu saldo.", monto=gastos.formatear(recarga["milesimas"] / 1000))
     if estado == "rechazada":
@@ -220,7 +224,7 @@ def recarga_vuelta(cliente, rid):
     tx_id = _id_vuelta() if recarga["medio"] == "wompi" else None
     if tx_id:
         recarga = _verificar_si_toca(recarga, tx_id)
-    return render_template("saldo_recarga.html", cliente=cliente, recarga=recarga, texto=texto_estado(recarga),
+    return render_template("saldo_recarga.html", cliente=cliente, recarga=recarga, texto=texto_estado(recarga, tx_id),
                            consultable=recargas.consultable(recarga, tx_id), tx_id=tx_id)
 
 
@@ -229,8 +233,9 @@ def recarga_estado(cliente, rid):
     recarga = recargas.obtener(cliente, rid)
     if recarga is None:
         abort(404)
-    recarga = _verificar_si_toca(recarga, _id_vuelta() if recarga["medio"] == "wompi" else None)
-    return jsonify({"estado": recarga["estado"], "texto": texto_estado(recarga),
+    tx_id = _id_vuelta() if recarga["medio"] == "wompi" else None
+    recarga = _verificar_si_toca(recarga, tx_id)
+    return jsonify({"estado": recarga["estado"], "texto": texto_estado(recarga, tx_id),
                     "saldo_texto": gastos.formatear(libro.saldo(cliente) / 1000)})
 
 
@@ -239,8 +244,9 @@ def recarga_verificar(cliente, rid):
     recarga = recargas.obtener(cliente, rid)
     if recarga is None:
         abort(404)
-    recarga = _verificar_si_toca(recarga, _id_vuelta() if recarga["medio"] == "wompi" else None)
-    flash(texto_estado(recarga), "ok" if recarga["estado"] in ("aprobada", "pendiente") else "error")
+    tx_id = _id_vuelta() if recarga["medio"] == "wompi" else None
+    recarga = _verificar_si_toca(recarga, tx_id)
+    flash(texto_estado(recarga, tx_id), "ok" if recarga["estado"] in ("aprobada", "pendiente") else "error")
     return _volver(cliente)
 
 

@@ -236,6 +236,14 @@ def _validar_correo(correo):
     return correo.strip()
 
 
+def correo_valido(correo):
+    """El correo limpio si Wompi lo aceptaría; si no, None (el checkout lo pide)."""
+    try:
+        return _validar_correo(correo)
+    except ErrorWompi:
+        return None
+
+
 def _validar_token(token):
     if not isinstance(token, str) or not _TOKEN.fullmatch(token):
         raise ErrorWompi(gettext("Token de pago inválido"))

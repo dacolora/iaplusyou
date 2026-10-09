@@ -14783,6 +14783,9 @@ msgstr "If that email is registered, a link to reset the password will arrive (e
 msgid "Si lo eliges, Claude escribe con ese nivel en ideas, guiones y adaptaciones de este producto."
 msgstr "If you choose it, Claude writes at that level in this product's ideas, scripts and adaptations."
 
+msgid "Si pagaste, lo acreditamos apenas Wompi lo confirme."
+msgstr "If you paid, we will credit it as soon as Wompi confirms it."
+
 msgid "Si tu cliente ya vio tres o más promesas parecidas, hace falta el mecanismo: cómo logra el producto lo que promete."
 msgstr "If your customer has already seen three or more similar promises, you need the mechanism: how the product delivers what it promises."
 
