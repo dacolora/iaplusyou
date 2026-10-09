@@ -27,8 +27,9 @@ class TripleWhaleFalso:
     """Responde según la tabla que nombra la consulta. `fallar` = {tabla: n}
     hace que las primeras n consultas completas de esa tabla den
     ErrorConsulta (columna que la cuenta no tiene)."""
-    def __init__(self, ads=(), pixel=(), tienda=(), fallar=None, error=None, fallar_todo=(), productos=()):
+    def __init__(self, ads=(), pixel=(), tienda=(), fallar=None, error=None, fallar_todo=(), productos=(), creativos=()):
         self.ads, self.pixel, self.tienda, self.productos = list(ads), list(pixel), list(tienda), list(productos)
+        self.creativos = list(creativos)
         self.fallar = dict(fallar or {})
         self.fallar_todo = set(fallar_todo)
         self.error = error
@@ -36,9 +37,10 @@ class TripleWhaleFalso:
 
     def __call__(self, llave, shop, consulta, desde, hasta, moneda=None):
         tabla = ("pixel" if "pixel_joined_tvf" in consulta else "tienda" if "blended_stats_tvf" in consulta
-                 else "productos" if "orders_table" in consulta else "ads")
+                 else "productos" if "orders_table" in consulta else "creativos" if "ad_image_url" in consulta
+                 else "ads")
         completa = ("outbound_clicks" in consulta or "sessions" in consulta or "new_customer_revenue" in consulta
-                    or "net_discount_amount_for_product" in consulta)
+                    or "net_discount_amount_for_product" in consulta or "ad_title" in consulta)
         self.llamadas.append((tabla, "completa" if completa else "minima", desde, hasta, moneda, llave, shop))
         if self.error:
             raise self.error
@@ -47,6 +49,8 @@ class TripleWhaleFalso:
             raise triple_whale.ErrorConsulta("Unknown identifier")
         if tabla in self.fallar_todo:
             raise triple_whale.ErrorConsulta(f"{tabla}: no existe")
+        if tabla == "creativos":      # una fila por anuncio, sin event_date: no se filtra por fecha
+            return list(self.creativos)
         filas = {"ads": self.ads, "pixel": self.pixel, "tienda": self.tienda, "productos": self.productos}[tabla]
         return [f for f in filas if desde <= str(f.get("event_date"))[:10] <= hasta]
 
@@ -118,7 +122,8 @@ def test_sincronizar_copia_anuncios_pixel_y_tienda(conectado, monkeypatch):
     progreso = []
     r = sync.sincronizar("acme", _tienda(), "2026-09-22", "2026-09-28", on_progreso=lambda *a: progreso.append(a), hoy=HOY)
     assert r["anuncios"] == 2 and r["dias_tienda"] == 1 and r["filas_pixel"] == 1 and r["fallos"] == {}
-    assert r["consultas"] == {"anuncios": "completa", "pixel": "completa", "tienda": "completa", "productos": "completa"}
+    assert r["consultas"] == {"anuncios": "completa", "pixel": "completa", "tienda": "completa", "productos": "completa",
+                              "creativos": "completa"}
     assert progreso == [(0, 1, "2026-09-22", "2026-09-28")]
     # La llave, la tienda y la moneda de la conexión van en cada consulta.
     assert {(l[4], l[5], l[6]) for l in falso.llamadas} == {("USD", "tw_secreto", "acme.myshopify.com")}

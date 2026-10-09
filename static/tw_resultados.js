@@ -462,7 +462,11 @@
       var ir = ev.target.closest('[data-twr-ir]');
       if (ir) {
         var destino = document.getElementById(ir.getAttribute('data-twr-ir'));
-        if (destino) { ev.preventDefault(); destino.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+        if (destino) {
+          ev.preventDefault();
+          if (destino.tagName === 'DETAILS') destino.open = true;   // «Cada anuncio» va en «Ver como tabla», cerrado
+          destino.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
       }
     });
     seccion.addEventListener('change', function (ev) {

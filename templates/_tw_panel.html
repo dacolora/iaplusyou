@@ -1,13 +1,23 @@
 {# Panel de la pestaña Triple Whale (fragmento por fetch, triple_whale.rutas.ver_panel).
    Contexto: `tw` (triple_whale.panel.contexto; `tw.resultados` es la sección
-   «Resultados de tu tienda», _tw_resultados.html). Solo lectura salvo tres formularios: sincronizar (gratis), evaluar
-   con IA (precio a la vista y confirmación) y, en una evaluación lista, llevar
-   una idea a Crear o guardar un anuncio en Referentes (nada se genera). Sin
-   <script>: el JS está en _tab_triple_whale.html. Varias tiendas (spec
+   «Resultados de tu tienda», _tw_resultados.html). Sus formularios: sincronizar
+   (gratis); los que cobran, con el precio en el botón y en su confirmación:
+   evaluar con IA, y en la galería «Cómo mejorarlo» por tarjeta y «Analizar los
+   N que más gastaron»; los que no generan nada: llevar una idea a Crear,
+   guardar un anuncio en Referentes y, en la tabla, pausar o activar en Meta una
+   pieza de Creatv (con confirmación). Sin <script>: el JS está en
+   _tab_triple_whale.html. Varias tiendas (spec
    2026-10-08 §6.2): con 2+ tiendas, selector «Tienda» (`data-tw-param="tienda"`),
    «Por tienda» en «Todas», la nota de cuenta compartida si `gasto_duplicado` (del
    alcance que se mira; viendo una tienda, repetida junto a «Evaluar con IA») y
-   una barra `data-poll-job` por copia en curso. #}
+   una barra `data-poll-job` por copia en curso. Tarjetas (spec 2026-10-08
+   tarjetas §2): las alertas van arriba, «Tus anuncios» trae la primera página
+   de la galería (macros de _tw_galeria.html, sin un segundo fetch), justo
+   debajo va la evaluación con IA, ahora «Lo que hace ganar en tu cuenta»,
+   luego reparto y lo que más se vende, y al final la tabla de siempre en «Ver
+   como tabla», un <details> cerrado (id `tw-cada-anuncio`: «Ver todos los
+   anuncios →» del detalle del día lo abre). «Resultados de tu tienda» va
+   arriba, en el lugar de «Tu tienda» y del viejo «Día a día». #}
 {% if not tw.conectado %}
 <p class="vacio">{{ _('Triple Whale ya no está conectado en este proyecto.') }}</p>
 {% else %}
@@ -111,20 +121,6 @@
 <p class="tag-advertencia tw-aviso">{{ _('Estas tiendas comparten cuenta publicitaria: el gasto de cada tienda incluye anuncios de los otros países. «Todas» lo cuenta una sola vez.') }}{% if actual %} {{ _('Aquí el ROAS de cada anuncio solo cuenta las ventas de esta tienda.') }}{% endif %}</p>
 {% endif %}
 
-{# ---------- los anuncios ---------- #}
-{% set m = cuenta.m %}
-<section class="tb-seccion">
-  <div class="tb-seccion-cab"><h3>{{ _('Tus anuncios') }}</h3><small class="vacio">{{ ngettext('%(num)s anuncio con datos', '%(num)s anuncios con datos', cuenta.n) }}{% if tw.canal %} · {{ tw.canal | tw_canal }}{% endif %}</small></div>
-  <div class="tb-tiles">
-    <div class="kpi-tile"><span>{{ _('Gasto') }}</span><strong>{{ m.gasto | dinero(moneda) }}</strong><small>{{ _('%(n)s impresiones', n=m.impresiones | tw_num) }}</small></div>
-    <div class="kpi-tile" title="{{ _('Ingresos que el Triple Pixel atribuye a los anuncios con el modelo y la ventana elegidos') }}"><span>{{ _('Ingresos atribuidos') }}</span><strong>{{ m.ingresos | dinero(moneda) }}</strong><small>{{ _('%(n)s pedidos', n=m.pedidos | tw_num(1)) }}</small></div>
-    <div class="kpi-tile"><span>{{ _('ROAS (Pixel)') }}</span>{% if m.roas %}<strong>{{ m.roas | roas }}×</strong>{% else %}<strong class="tb-sin-dato">—</strong>{% endif %}<small>{{ _('meta %(meta)s×', meta=ev.meta_roas | roas) }}</small></div>
-    <div class="kpi-tile"><span>{{ _('Costo por venta') }}</span><strong>{% if m.cpa %}{{ m.cpa | dinero(moneda) }}{% else %}—{% endif %}</strong><small>{{ _('gasto / pedidos atribuidos') }}</small></div>
-    <div class="kpi-tile"><span>CTR</span><strong>{{ m.ctr | tw_pct(2, false) }}</strong><small>{{ _('CPM %(cpm)s', cpm=(m.cpm | dinero(moneda)) if m.cpm else '—') }}</small></div>
-    <div class="kpi-tile" title="{{ _('Gancho: vistas de 3 segundos / impresiones. Retención: ThruPlays / vistas de 3 segundos.') }}"><span>{{ _('Gancho · retención') }}</span><strong>{{ m.gancho | tw_pct(0) }}</strong><small>{{ _('retención %(r)s', r=m.retencion | tw_pct(0)) }}</small></div>
-  </div>
-</section>
-
 {# ---------- alertas ---------- #}
 {% set nombres_nivel = {"alta": _("alta"), "media": _("media"), "bien": _("bien")} %}
 {% if tw.alertas %}
@@ -141,64 +137,25 @@
 </section>
 {% endif %}
 
-{# ---------- reparto por veredicto y por canal ---------- #}
+{# ---------- los anuncios ---------- #}
+{% set m = cuenta.m %}
 <section class="tb-seccion">
-  <div class="tb-seccion-cab"><h3>{{ _('Dónde se va el gasto') }}</h3></div>
-  <div class="tw-reparto">
-    {% for v in tw.veredictos %}
-    <div class="tw-reparto-item">
-      <span class="tag-estado {{ clases_veredicto[v] }}">{{ tw.etiquetas_veredicto[v] | traducir }}</span>
-      <strong>{{ ev.conteo[v] }}</strong>
-      <small>{{ _('%(pct)s del gasto', pct=cuenta.pct_gasto[v] | tw_pct(0)) }}</small>
-    </div>
-    {% endfor %}
+  <div class="tb-seccion-cab"><h3>{{ _('Tus anuncios') }}</h3><small class="vacio">{{ ngettext('%(num)s anuncio con datos', '%(num)s anuncios con datos', cuenta.n) }}{% if tw.canal %} · {{ tw.canal | tw_canal }}{% endif %}</small></div>
+  <div class="tb-tiles">
+    <div class="kpi-tile"><span>{{ _('Gasto') }}</span><strong>{{ m.gasto | dinero(moneda) }}</strong><small>{{ _('%(n)s impresiones', n=m.impresiones | tw_num) }}</small></div>
+    <div class="kpi-tile" title="{{ _('Ingresos que el Triple Pixel atribuye a los anuncios con el modelo y la ventana elegidos') }}"><span>{{ _('Ingresos atribuidos') }}</span><strong>{{ m.ingresos | dinero(moneda) }}</strong><small>{{ _('%(n)s pedidos', n=m.pedidos | tw_num(1)) }}</small></div>
+    <div class="kpi-tile"><span>{{ _('ROAS (Pixel)') }}</span>{% if m.roas %}<strong>{{ m.roas | roas }}×</strong>{% else %}<strong class="tb-sin-dato">—</strong>{% endif %}<small>{{ _('meta %(meta)s×', meta=ev.meta_roas | roas) }}</small></div>
+    <div class="kpi-tile"><span>{{ _('Costo por venta') }}</span><strong>{% if m.cpa %}{{ m.cpa | dinero(moneda) }}{% else %}—{% endif %}</strong><small>{{ _('gasto / pedidos atribuidos') }}</small></div>
+    <div class="kpi-tile"><span>CTR</span><strong>{{ m.ctr | tw_pct(2, false) }}</strong><small>{{ _('CPM %(cpm)s', cpm=(m.cpm | dinero(moneda)) if m.cpm else '—') }}</small></div>
+    <div class="kpi-tile" title="{{ _('Gancho: vistas de 3 segundos / impresiones. Retención: ThruPlays / vistas de 3 segundos.') }}"><span>{{ _('Gancho · retención') }}</span><strong>{{ m.gancho | tw_pct(0) }}</strong><small>{{ _('retención %(r)s', r=m.retencion | tw_pct(0)) }}</small></div>
   </div>
-  {% if cuenta.canales | length > 1 %}
-  <div class="tw-tabla-scroll">
-    <table class="tw-tabla">
-      <thead><tr><th>{{ _('Canal') }}</th><th>{{ _('Gasto') }}</th><th>{{ _('%% del gasto') }}</th><th>{{ _('Pedidos') }}</th><th>{{ _('Ingresos') }}</th><th>ROAS</th></tr></thead>
-      <tbody>
-        {% for k in cuenta.canales %}
-        <tr><td>{{ k.canal | tw_canal }}</td><td>{{ k.gasto | dinero(moneda) }}</td><td>{{ k.pct_gasto | tw_pct(0) }}</td><td>{{ k.pedidos | tw_num(1) }}</td><td>{{ k.ingresos | dinero(moneda) }}</td><td>{% if k.roas %}{{ k.roas | roas }}×{% else %}—{% endif %}</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  {% endif %}
-  {% if not ev.hay_ventas %}<p class="vacio">{{ _('Sin pedidos atribuidos en el periodo: los veredictos se apoyan solo en el tráfico (gancho, retención, clic), así que no hay ganadores ni perdedores todavía.') }}</p>{% endif %}
+  {% from "_tw_galeria.html" import galeria %}
+  {{ galeria(tw.galeria, cliente, tw.alcance_params, moneda, tw) }}
 </section>
-
-{# ---------- lo que más se vende ---------- #}
-{% if tw.productos %}
-<section class="tb-seccion">
-  <div class="tb-seccion-cab"><h3>{{ _('Lo que más se vende') }}</h3><small class="vacio">{{ _('Según los pedidos de la tienda en Triple Whale; es el producto que conviene empujar en los anuncios nuevos.') }}</small></div>
-  <div class="tw-tabla-scroll">
-    <table class="tw-tabla">
-      <thead><tr><th>{{ _('Producto') }}</th><th>{{ _('Ingresos') }}</th><th>{{ _('%% de la tienda') }}</th><th>{{ _('Pedidos') }}</th><th>{{ _('Unidades') }}</th>{% if tw.dias %}<th>{{ _('vs. periodo anterior') }}</th>{% endif %}</tr></thead>
-      <tbody>
-        {% for p in tw.productos %}
-        <tr>
-          <td class="tw-nombre">
-            <strong>{{ p.nombre or p.sku or p.producto_id }}</strong>
-            {% if p.sku and p.nombre %}<small>{{ p.sku }}</small>{% endif %}
-            {% if p.catalogo %}<small><a href="#catalogo" data-ir-tab="catalogo">{{ _('En tu catálogo: %(nombre)s', nombre=p.catalogo.nombre) }}</a></small>{% endif %}
-          </td>
-          <td>{{ p.ingresos | dinero(moneda) }}</td>
-          <td>{{ p.pct_ingresos | tw_pct(0) }}</td>
-          <td>{{ p.pedidos | tw_num }}</td>
-          <td>{{ p.unidades | tw_num }}</td>
-          {% if tw.dias %}<td>{{ p.variacion | tw_var or '—' }}</td>{% endif %}
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</section>
-{% endif %}
 
 {# ---------- evaluación con IA ---------- #}
 <section class="tb-seccion" id="tw-ia">
-  <div class="tb-seccion-cab"><h3>{{ _('Evaluación con IA') }}</h3></div>
+  <div class="tb-seccion-cab"><h3>{{ _('Lo que hace ganar en tu cuenta') }}</h3></div>
   <p class="vacio">{{ _('Claude mira tus ganadores y tus perdedores (imagen, texto y números), explica qué patrón se repite y propone anuncios nuevos basados en lo que ya vende. No genera nada: cada idea llega a Crear para que decidas.') }}</p>
   {% if tw.job_evaluar %}
   <div class="tw-progreso">
@@ -310,8 +267,64 @@
   {% endif %}
 </section>
 
+{# ---------- reparto por veredicto y por canal ---------- #}
+<section class="tb-seccion">
+  <div class="tb-seccion-cab"><h3>{{ _('Dónde se va el gasto') }}</h3></div>
+  <div class="tw-reparto">
+    {% for v in tw.veredictos %}
+    <div class="tw-reparto-item">
+      <span class="tag-estado {{ clases_veredicto[v] }}">{{ tw.etiquetas_veredicto[v] | traducir }}</span>
+      <strong>{{ ev.conteo[v] }}</strong>
+      <small>{{ _('%(pct)s del gasto', pct=cuenta.pct_gasto[v] | tw_pct(0)) }}</small>
+    </div>
+    {% endfor %}
+  </div>
+  {% if cuenta.canales | length > 1 %}
+  <div class="tw-tabla-scroll">
+    <table class="tw-tabla">
+      <thead><tr><th>{{ _('Canal') }}</th><th>{{ _('Gasto') }}</th><th>{{ _('%% del gasto') }}</th><th>{{ _('Pedidos') }}</th><th>{{ _('Ingresos') }}</th><th>ROAS</th></tr></thead>
+      <tbody>
+        {% for k in cuenta.canales %}
+        <tr><td>{{ k.canal | tw_canal }}</td><td>{{ k.gasto | dinero(moneda) }}</td><td>{{ k.pct_gasto | tw_pct(0) }}</td><td>{{ k.pedidos | tw_num(1) }}</td><td>{{ k.ingresos | dinero(moneda) }}</td><td>{% if k.roas %}{{ k.roas | roas }}×{% else %}—{% endif %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+  {% if not ev.hay_ventas %}<p class="vacio">{{ _('Sin pedidos atribuidos en el periodo: los veredictos se apoyan solo en el tráfico (gancho, retención, clic), así que no hay ganadores ni perdedores todavía.') }}</p>{% endif %}
+</section>
+
+{# ---------- lo que más se vende ---------- #}
+{% if tw.productos %}
+<section class="tb-seccion">
+  <div class="tb-seccion-cab"><h3>{{ _('Lo que más se vende') }}</h3><small class="vacio">{{ _('Según los pedidos de la tienda en Triple Whale; es el producto que conviene empujar en los anuncios nuevos.') }}</small></div>
+  <div class="tw-tabla-scroll">
+    <table class="tw-tabla">
+      <thead><tr><th>{{ _('Producto') }}</th><th>{{ _('Ingresos') }}</th><th>{{ _('%% de la tienda') }}</th><th>{{ _('Pedidos') }}</th><th>{{ _('Unidades') }}</th>{% if tw.dias %}<th>{{ _('vs. periodo anterior') }}</th>{% endif %}</tr></thead>
+      <tbody>
+        {% for p in tw.productos %}
+        <tr>
+          <td class="tw-nombre">
+            <strong>{{ p.nombre or p.sku or p.producto_id }}</strong>
+            {% if p.sku and p.nombre %}<small>{{ p.sku }}</small>{% endif %}
+            {% if p.catalogo %}<small><a href="#catalogo" data-ir-tab="catalogo">{{ _('En tu catálogo: %(nombre)s', nombre=p.catalogo.nombre) }}</a></small>{% endif %}
+          </td>
+          <td>{{ p.ingresos | dinero(moneda) }}</td>
+          <td>{{ p.pct_ingresos | tw_pct(0) }}</td>
+          <td>{{ p.pedidos | tw_num }}</td>
+          <td>{{ p.unidades | tw_num }}</td>
+          {% if tw.dias %}<td>{{ p.variacion | tw_var or '—' }}</td>{% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
 {# ---------- todos los anuncios ---------- #}
-<section class="tb-seccion" id="tw-cada-anuncio">
+<details class="tw-tabla-detalle" id="tw-cada-anuncio"><summary>{{ _('Ver como tabla') }}</summary>
+<section class="tb-seccion">
   <div class="tb-seccion-cab"><h3>{{ _('Cada anuncio') }}</h3></div>
   <div class="tw-filtros" role="group" aria-label="{{ _('Filtrar por veredicto') }}">
     <button type="button" class="chip activo" data-tw-filtro="">{{ _('Todos') }}</button>
@@ -363,5 +376,6 @@
   </div>
   {% if tw.mas_anuncios %}<p class="vacio">{{ _('Y %(n)s anuncio(s) más con poco gasto que no se muestran.', n=tw.mas_anuncios) }}</p>{% endif %}
 </section>
+</details>
 {% endif %}
 {% endif %}

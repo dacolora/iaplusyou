@@ -23,9 +23,12 @@ Ningún mensaje de error lleva la llave. Las consultas de este módulo son la
 mejor lectura del "Data Dictionary"; ninguna se probó todavía contra una
 tienda real (ver el spec 2026-09-28-triple-whale-rendimiento-design.md §9).
 """
+import os
+import posixpath
 import re
 import time
 from datetime import date, timedelta
+from urllib.parse import unquote, urlsplit
 
 import requests
 from flask_babel import gettext
@@ -50,11 +53,117 @@ _VENTANAS_VIEJAS = {"1": "1_day", "1d": "1_day", "7": "7_days", "7d": "7_days", 
                     "28": "28_days", "28d": "28_days", "30": "28_days", "30d": "28_days"}
 # Canal estandarizado de Meta en las tablas de Triple Whale.
 CANAL_META = "facebook-ads"
+# Nombres de los canales estandarizados de Triple Whale ("ads-standardized-channel-ids"). Viven aquí (no en el
+# blueprint) para que `mejorar`, que corre en el worker, no importe `rutas`.
+NOMBRES_CANAL = {"facebook-ads": "Meta", "google-ads": "Google Ads", "tiktok-ads": "TikTok", "bing": "Microsoft Ads",
+                 "pinterest-ads": "Pinterest", "snapchat-ads": "Snapchat", "twitter-ads": "X"}
 # «REQUIRED TRACKING PARAMETERS» de la KB de Meta en Triple Whale: van en los
 # Parámetros de URL del anuncio (url_tags del AdCreative), donde Meta resuelve
 # {{site_source_name}} y {{ad.id}}. Sin ellos Triple Whale igual ve el gasto,
 # pero "attribution accuracy may suffer significantly".
 URL_TAGS = "tw_source={{site_source_name}}&tw_adid={{ad.id}}"
+
+# Tarjetas de análisis (spec 2026-10-08 §8.1): solo se incrusta en la página o se baja un medio de estos hosts, por
+# https. files.triplewhale.com aloja la miniatura y el mp4 de cada anuncio de Meta; el host de R2 (R2_PUBLIC_BASE_URL),
+# los de Creatv. Un video de TikTok llega como página (www.tiktok.com/embed/…) y queda como enlace.
+HOSTS_MEDIOS = ("files.triplewhale.com",)
+
+
+def _host_r2():
+    try:
+        return (urlsplit(os.environ.get("R2_PUBLIC_BASE_URL") or "").hostname or "").lower() or None
+    except ValueError:
+        return None
+
+
+def medio_permitido(url):
+    """¿Se puede incrustar o bajar este medio? https, sin usuario ni puerto raro, y host exacto de HOSTS_MEDIOS o
+    el de R2."""
+    try:
+        p = urlsplit(str(url or "").strip())
+        puerto = p.port
+    except ValueError:
+        return False
+    if p.scheme != "https" or not p.hostname or p.username or p.password or puerto not in (None, 443):
+        return False
+    host = p.hostname.lower()
+    return host in HOSTS_MEDIOS or (host == _host_r2())
+
+
+# Un video que no se puede incrustar (TikTok llega como página) se ofrece como enlace «Ver en …», pero solo a la
+# plataforma del propio anuncio (su `canal`): una URL rara que venga en los datos no se pinta, ni un enlace de otra
+# plataforma, ni un redirector («l.facebook.com/l.php?u=…», «youtube.com/redirect?q=…»), que mandaría a cualquier sitio.
+ENLACES_POR_CANAL = {
+    "tiktok-ads": ("tiktok.com",),
+    "facebook-ads": ("facebook.com", "fb.watch", "instagram.com"),
+    "snapchat-ads": ("snapchat.com",),
+    "google-ads": ("youtube.com",),
+    "pinterest-ads": ("pinterest.com",),
+}
+ENLACES_PLATAFORMAS = tuple(d for dominios in ENLACES_POR_CANAL.values() for d in dominios)
+_HOSTS_REDIRECTOR = ("l.", "lm.")
+# Redirectores de las plataformas: Facebook (/l.php, /flx/warn), TikTok (/link), Pinterest (/offsite) y los genéricos
+# (/redirect). Revisión final de las tarjetas, B8 (2026-10-08): /link, /offsite y /flx/warn se colaban.
+_RUTAS_REDIRECTOR = ("/l.php", "/redirect", "/link", "/offsite", "/flx/warn")
+
+
+def _ruta_decodificada(ruta):
+    """La ruta sin %-codificación (hasta tres vueltas: «/%252e/» también) y con «\\» como «/» (así lo hacen los
+    navegadores en https)."""
+    for _ in range(3):
+        decodificada = unquote(ruta)
+        if decodificada == ruta:
+            break
+        ruta = decodificada
+    return ruta.replace("\\", "/")
+
+
+def _ruta_como_la_lee_el_servidor(ruta):
+    """La ruta de una URL como la resolvería el servidor, para compararla con `_RUTAS_REDIRECTOR`: decodificada
+    (`_ruta_decodificada`), con los segmentos «.» y «..» resueltos y una sola barra al principio, en minúsculas.
+    «//l.php», «/%6C.php», «/./l.php», «/a/../l.php» y «/%2e/l.php» salen todas «/l.php». Revisión final de las
+    tarjetas, B8 (2026-10-08): los puntos y los `..` se colaban."""
+    ruta = "/" + _ruta_decodificada(ruta).lstrip("/")
+    return posixpath.normpath(ruta).lower()
+
+
+def _ruta_sin_segmentos_raros(ruta):
+    """¿La ruta, ya decodificada, no tiene ningún segmento vacío, «.» ni «..»? Se ignora la barra del principio y la
+    del final («/pin/1/»). Un enlace de anuncio de verdad nunca los lleva, y es justo lo que se usa para disfrazar un
+    redirector: `posixpath.normpath` junta «//» ANTES de resolver «..», pero un navegador no, así que
+    «/link//../v2» lo normaliza a «/v2» (pasa) y el navegador lo manda a «/link/v2», el redirector de TikTok.
+    Revisión de las tarjetas, 2026-10-08."""
+    segmentos = _ruta_decodificada(ruta).split("/")
+    if segmentos and segmentos[0] == "":
+        segmentos = segmentos[1:]
+    if segmentos and segmentos[-1] == "":
+        segmentos = segmentos[:-1]
+    return all(s not in ("", ".", "..") for s in segmentos)
+
+
+def enlace_permitido(url, canal=None):
+    """¿Se puede pintar este enlace «Ver en …»? https, sin usuario ni puerto raro, host exacto o subdominio de
+    la plataforma del `canal` del anuncio (canal desconocido: no; sin canal: cualquiera de las conocidas), sin
+    segmentos vacíos, «.» ni «..» en la ruta, y nunca un redirector de enlaces."""
+    try:
+        p = urlsplit(str(url or "").strip())
+        puerto = p.port
+    except ValueError:
+        return False
+    if p.scheme != "https" or not p.hostname or p.username or p.password or puerto not in (None, 443):
+        return False
+    host = p.hostname.lower()
+    if host.startswith(_HOSTS_REDIRECTOR) or not _ruta_sin_segmentos_raros(p.path):
+        return False
+    if _ruta_como_la_lee_el_servidor(p.path).startswith(_RUTAS_REDIRECTOR):
+        return False
+    if canal is None:
+        dominios = ENLACES_PLATAFORMAS
+    else:
+        dominios = ENLACES_POR_CANAL.get(str(canal).strip().lower(), ())
+    return any(host == d or host.endswith("." + d) for d in dominios)
+
+
 MONEDAS = ("USD", "EUR", "GBP", "AUD", "CAD", "MXN", "COP", "BRL", "CLP", "PEN", "ARS", "NOK", "SEK")
 
 _RE_DOMINIO = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$")
@@ -353,6 +462,28 @@ WHERE event_date BETWEEN @startDate AND @endDate
 GROUP BY event_date, p.product_id
 """
 
+# El anuncio tal cual (spec 2026-10-08-triple-whale-tarjetas-analisis §3.3): miniatura, video, título y copy, una
+# fila por anuncio (sin fecha). Probado con la tienda real el 2026-10-08: ad_type, ad_image_url (en
+# files.triplewhale.com, no caduca), video_url, ad_title, ad_copy y video_duration llegan; creative_cta_type vino
+# vacío. Columnas en https://triplewhale.readme.io/docs/ads-table.md.
+_CREATIVOS_COMPLETA = """
+SELECT
+    channel, ad_id,
+    max(ad_type) AS ad_type, max(ad_image_url) AS ad_image_url, max(video_url) AS video_url,
+    max(ad_title) AS ad_title, max(ad_copy) AS ad_copy, max(creative_cta_type) AS creative_cta_type,
+    max(video_duration) AS video_duration
+FROM ads_table
+WHERE event_date BETWEEN @startDate AND @endDate AND ad_id IS NOT NULL AND ad_id != ''
+GROUP BY channel, ad_id
+"""
+
+_CREATIVOS_MINIMA = """
+SELECT channel, ad_id, max(ad_type) AS ad_type, max(ad_image_url) AS ad_image_url, max(video_url) AS video_url
+FROM ads_table
+WHERE event_date BETWEEN @startDate AND @endDate AND ad_id IS NOT NULL AND ad_id != ''
+GROUP BY channel, ad_id
+"""
+
 _PRUEBA = "SELECT SUM(spend) AS spend FROM ads_table WHERE event_date BETWEEN @startDate AND @endDate"
 
 
@@ -372,6 +503,10 @@ def consultas_tienda():
 
 def consultas_productos():
     return [_PRODUCTOS_COMPLETA, _PRODUCTOS_MINIMA]
+
+
+def consultas_creativos():
+    return [_CREATIVOS_COMPLETA, _CREATIVOS_MINIMA]
 
 
 # ------------------------------------------------------------ llamadas ---
