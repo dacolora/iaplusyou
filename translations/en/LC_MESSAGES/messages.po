@@ -181,8 +181,8 @@ msgid "%(cliente)s usó %(usado)s de costo de lo incluido (tope %(tope)s). Desde
 msgstr "%(cliente)s used %(usado)s of included cost (cap %(tope)s). From now on those items are charged at the member price."
 
 #, python-format
-msgid "%(cliente)s: Wompi anuló un pago de plan ya aprobado (%(referencia)s). El periodo en curso sigue abierto y, si era anual, los meses que faltan ya no se abren: si corresponde, usa «Terminar ya»."
-msgstr "%(cliente)s: Wompi voided an already approved plan payment (%(referencia)s). The current period stays open and, if it was yearly, the remaining months won't open: if needed, use “End now”."
+msgid "%(cliente)s: Wompi anuló un pago de plan ya aprobado (%(referencia)s). La renovación automática quedó detenida hasta que actúes: no se volverá a cobrar la tarjeta. El periodo en curso sigue abierto y, si era anual, los meses que faltan ya no se abren; si corresponde, usa «Terminar ya»."
+msgstr "%(cliente)s: Wompi voided an already approved plan payment (%(referencia)s). Automatic renewal is stopped until you act: the card won't be charged again. The current period stays open and, if it was yearly, the remaining months won't open; if needed, use “End now”."
 
 #, python-format
 msgid "%(cliente)s: Wompi aprobó un pago de plan (%(referencia)s) de una suscripción ya terminada. Devuélvelo o actívalo a mano."

@@ -244,9 +244,10 @@ def plan_admin(tipo, cliente, referencia=""):
         "huerfano": lambda: gettext("%(cliente)s: Wompi aprobó un pago de plan (%(referencia)s) de una suscripción "
                                     "ya terminada. Devuélvelo o actívalo a mano.",
                                     cliente=cliente, referencia=referencia),
-        "anulado": lambda: gettext("%(cliente)s: Wompi anuló un pago de plan ya aprobado (%(referencia)s). El "
-                                   "periodo en curso sigue abierto y, si era anual, los meses que faltan ya no se "
-                                   "abren: si corresponde, usa «Terminar ya».",
+        "anulado": lambda: gettext("%(cliente)s: Wompi anuló un pago de plan ya aprobado (%(referencia)s). La "
+                                   "renovación automática quedó detenida hasta que actúes: no se volverá a cobrar "
+                                   "la tarjeta. El periodo en curso sigue abierto y, si era anual, los meses que "
+                                   "faltan ya no se abren; si corresponde, usa «Terminar ya».",
                                    cliente=cliente, referencia=referencia),
         "aprobado_tras_final": lambda: gettext("%(cliente)s: Wompi aprobó un pago de plan (%(referencia)s) que ya "
                                                "estaba rechazado, con error o anulado. No se acreditó nada: míralo en "

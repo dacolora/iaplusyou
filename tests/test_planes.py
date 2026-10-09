@@ -797,3 +797,31 @@ def test_un_pendiente_nuevo_lleva_la_hora_real(base_temporal, planes, pro, falso
     _suscribir(planes, pro, ahora="2026-01-01T00:00:00")
     (pago,) = _filas(base_temporal, "pago_plan")
     assert pago.creado_en[:10] == db_.ahora()[:10]
+
+
+def test_un_mensual_anulado_no_se_renueva(base_temporal, planes, pro, falso, avisos):
+    """Ruling: tras una anulación (o contracargo) no se vuelve a cobrar la tarjeta sola."""
+    _suscribir(planes, pro)
+    tx = {**falso.txs["1292-1-1"], "status": "VOIDED"}
+    assert planes.aplicar_transaccion(tx, ahora=_despues(T0, dias=3)) == "anulado"
+    s = _sus(base_temporal)
+    assert (s.renovar, s.proximo_cobro, s.cubierto_hasta) == (False, None, "2026-11-09T10:00:00")
+    fin = "2026-11-09T10:00:00"
+    planes.renovar_todo(ahora=_antes(fin, 30))
+    planes.renovar_todo(ahora=_despues(fin, minutos=1))
+    assert len(falso.posts) == 1
+    assert _sus(base_temporal).estado == "terminada"
+    assert any(e[0] == "admin:plan_admin" and "detenida" in e[3] for e in avisos)
+
+
+def test_un_anual_anulado_no_se_cobra_al_cumplir_el_año(base_temporal, planes, pro, falso, avisos):
+    inicio = "2027-01-31T10:00:00"
+    _suscribir(planes, pro, ahora=inicio, ciclo="anual")
+    tx = {**falso.txs["1292-1-1"], "status": "VOIDED"}
+    planes.aplicar_transaccion(tx, ahora=_despues(inicio, dias=1))
+    fin = "2028-01-31T10:00:00"
+    planes.renovar_todo(ahora=_antes(fin, 30))
+    planes.renovar_todo(ahora=_despues(fin, minutos=1))
+    assert len(falso.posts) == 1
+    assert len(_filas(base_temporal, "periodo_plan")) == 1
+    assert _sus(base_temporal).estado == "terminada"

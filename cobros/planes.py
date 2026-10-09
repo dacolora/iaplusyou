@@ -653,6 +653,11 @@ def _aplicar_estado(con, pago, estado_wompi, tx_id, motivo, ahora):
             return "ya_aplicada", None
         n = con.execute(pp.update().where(pp.c.id == pago["id"], pp.c.estado == "aprobado")
                         .values(estado="anulado", actualizado_en=ahora, motivo=motivo)).rowcount
+        if n and sus is not None and sus["estado"] != "terminada":
+            # Tras una anulación (o un contracargo) la tarjeta no se vuelve a cobrar sola: sin renovación
+            # automática hasta que el admin actúe (ruling del controlador, revisión de la Task 5). Lo pagado
+            # (`cubierto_hasta`) queda; al acabar, la suscripción termina.
+            _actualizar_sus(con, sus["id"], ahora, renovar=False, proximo_cobro=None)
         # El periodo ya acreditado no se toca solo: el admin decide si lo corta («Terminar ya»). Los meses que
         # faltan de un anual anulado ya no se abren (`_abrir_cubierto` exige el pago aprobado).
         return ("anulado", ("anulado", pago["cliente"], {"referencia": pago["referencia"]})) if n else ("ya_aplicada", None)
