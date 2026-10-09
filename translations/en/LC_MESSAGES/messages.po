@@ -201,6 +201,10 @@ msgid "%(cliente)s: el cobro se rechazó tres veces."
 msgstr "%(cliente)s: the charge was declined three times."
 
 #, python-format
+msgid "%(cliente)s: el periodo a mano apagó la renovación automática con tarjeta. Para volver a la tarjeta, tendrá que suscribirse de nuevo cuando termine lo pagado."
+msgstr "%(cliente)s: the manual period turned off automatic card renewal. To go back to the card, they will have to subscribe again when the paid time ends."
+
+#, python-format
 msgid "%(cliente)s: lo canceló sin nada pagado vigente."
 msgstr "%(cliente)s: they cancelled it with nothing paid still running."
 
@@ -2032,6 +2036,10 @@ msgstr "Activated on launch: ≈ %(diario)s a day"
 #, python-format
 msgid "Activado: %(nombre)s (%(pais)s)"
 msgstr "Activated: %(nombre)s (%(pais)s)"
+
+#, python-format
+msgid "Activamos tu plan %(plan)s a mano hasta el %(fecha)s. Desde ahora no cobraremos tu tarjeta automáticamente. Para volver a pagar con tarjeta, suscríbete de nuevo en Configuración › Plan cuando termine."
+msgstr "We activated your %(plan)s plan manually until %(fecha)s. From now on we won't charge your card automatically. To pay by card again, subscribe again in Settings › Plan when it ends."
 
 msgid "Activar"
 msgstr "Activate"
@@ -9886,6 +9894,9 @@ msgstr "The reference no longer exists."
 msgid "La regla no pide re-ediciones ni regeneraciones: no hay nada que derivar."
 msgstr "The rule doesn't ask for re-edits or regenerations: there's nothing to derive."
 
+msgid "La renovación automática de tu plan quedó apagada"
+msgstr "Automatic renewal of your plan is off"
+
 msgid "La respuesta de Claude salió incompleta. Intenta con un guion más corto."
 msgstr "Claude's answer came back incomplete. Try a shorter script."
 
@@ -12950,6 +12961,10 @@ msgstr "Meta Pixel"
 
 msgid "Pixel sin datos"
 msgstr "Pixel with no data"
+
+#, python-format
+msgid "Plan de %(cliente)s activado a mano"
+msgstr "%(cliente)s's plan activated manually"
 
 msgid "Plataforma"
 msgstr "Platform"
