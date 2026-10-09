@@ -395,6 +395,44 @@ def credenciales_ads(cliente):
     }
 
 
+def error_solo_metricas(cliente=None):
+    """Por qué no se puede lanzar ni publicar con una conexión sin Página («solo métricas», 2026-10-08): el
+    lanzador, las rutas que lo encolan y la tarea legado `meta_publicar` lo usan ANTES de configurar o llamar a
+    Meta. En modo agencia la persona no puede conectar la Página en Conexiones: la asigna un admin de Creatv."""
+    if cliente and modo(cliente) == MODO_AGENCIA:
+        return gettext("Este proyecto está conectado a Meta solo para métricas (sin Página): un administrador de "
+                       "Creatv tiene que asignarle una Página para lanzar anuncios.")
+    return gettext("Este proyecto está conectado a Meta solo para métricas (sin Página): conecta una Página en "
+                   "Configuración › Conexiones para lanzar anuncios.")
+
+
+def sin_pagina(cliente):
+    """El texto de `error_solo_metricas` si el proyecto tiene Meta conectado SIN Página, o None. Se exige token para
+    no confundirlo con «sin conexión» (eso lo dicen `credenciales_ads` y `estado`)."""
+    datos = cargar(cliente) or {}
+    if datos.get("token") and not datos.get("page_id"):
+        return error_solo_metricas(cliente)
+    return None
+
+
+def cuentas_de_lanzamiento():
+    """{ad_account_id (con «act_»): cliente} de la cuenta con la que LANZA cada proyecto (`ad_account_id` de su
+    meta.json, en modo propia o agencia). Meta rendimiento la usa para que ningún proyecto elija leer la cuenta de
+    lanzamiento de otro (ruling R20, revisión final 2026-10-08). Lee el meta.json crudo de cada proyecto: sin token de
+    agencia y sin `propia_respaldo` (una cuenta que ya no se usa no cuenta)."""
+    try:
+        clientes = sorted(d for d in os.listdir(os.path.join(BASE_DIR, "clientes"))
+                          if not d.startswith(".") and os.path.isdir(_dir(d)))
+    except OSError:
+        return {}
+    salida = {}
+    for cliente in clientes:
+        act = str((_cargar_crudo(cliente) or {}).get("ad_account_id") or "").strip()
+        if act:
+            salida.setdefault(act if act.startswith("act_") else f"act_{act}", cliente)
+    return salida
+
+
 # ---------- llamadas a Graph ----------
 
 def _graph_get(edge, token, params=None, timeout=30):

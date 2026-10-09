@@ -352,6 +352,25 @@ def test_desasignar(app, monkeypatch):
     assert any("no estaba en modo agencia" in m for m in _flashes(app["admin"]))
 
 
+def test_desasignar_borra_las_copias_y_libera_las_cuentas(app, monkeypatch):
+    from meta_rendimiento import cuentas
+    cuentas.elegir("acme", [{"id": "act_5", "name": "HappyFlops Norway", "currency": "SEK"}])
+    cuentas.elegir("otro", [{"id": "act_6", "name": "HappyFlops Sweden", "currency": "SEK"}])
+    monkeypatch.setattr(app["ma"], "desasignar", lambda c: True)
+    app["admin"].post("/admin/meta/desasignar/acme", data={}, headers=SAME_ORIGIN)
+    assert cuentas.ids("acme") == [] and cuentas.ids("otro") == ["act_6"]
+
+
+def test_desconectar_la_agencia_borra_las_copias_de_cada_proyecto_asignado(app, monkeypatch):
+    from meta_rendimiento import cuentas
+    cuentas.elegir("acme", [{"id": "act_5", "name": "HappyFlops Norway", "currency": "SEK"}])
+    cuentas.elegir("otro", [{"id": "act_6", "name": "HappyFlops Sweden", "currency": "SEK"}])
+    monkeypatch.setattr(app["ma"], "proyectos_asignados", lambda: {"acme": {}})
+    monkeypatch.setattr(app["ma"], "desconectar", lambda: {"habia": True, "desasignados": 1})
+    app["admin"].post("/admin/meta/desconectar", data={}, headers=SAME_ORIGIN)
+    assert cuentas.ids("acme") == [] and cuentas.ids("otro") == ["act_6"]
+
+
 # ---- vista del proyecto -----------------------------------------------------
 
 def _proyecto_en_agencia(app, monkeypatch, conectada=True):

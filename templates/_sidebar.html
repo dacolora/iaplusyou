@@ -9,6 +9,8 @@
    finales y sus ediciones salieron de Crear a su propia pestaña.
    `triplewhale` (2026-09-28) va después de Alertas: métricas y evaluación
    del contenido con Triple Whale; su panel llega por fetch al abrirla.
+   `meta` (2026-10-08) va después de Triple Whale: todas las cuentas
+   publicitarias de Meta del proyecto; su panel también llega por fetch.
    `productos` ya no es pestaña: vive dentro de Catálogo; `ads` (Campañas)
    tampoco: sus anuncios sueltos viven dentro de Experimentos (cliente.html
    resuelve los hashes viejos). #}
@@ -43,6 +45,10 @@
     <button type="button" class="sidebar-item" data-tab="triplewhale" role="tab" title="{{ _('Triple Whale') }}">
       <svg viewBox="0 0 24 24"><path d="M3 17l5-6 4 3 5-7 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M3 21h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="17" cy="7" r="1.6" fill="currentColor"/></svg>
       <span class="sidebar-texto">{{ _('Triple Whale') }}</span>
+    </button>
+    <button type="button" class="sidebar-item" data-tab="meta" role="tab" title="{{ _('Meta') }}">
+      <svg viewBox="0 0 24 24"><path d="M4 20h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/><path d="M7 16v-5M12 16V6M17 16v-8" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" fill="none"/></svg>
+      <span class="sidebar-texto">{{ _('Meta') }}</span>
     </button>
     <button type="button" class="sidebar-item" data-tab="nicho" role="tab" title="{{ _('Nicho') }}">
       <svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6" stroke="currentColor" stroke-width="2" fill="none"/><path d="M15 15l5.5 5.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M8 10.5h5M10.5 8v5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>

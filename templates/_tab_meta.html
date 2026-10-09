@@ -1,0 +1,156 @@
+{# Pestaña «Meta» (spec 2026-10-08 meta rendimiento §8). Al cargar la página solo se pinta este armazón (contexto
+   barato de ver_cliente: `meta_rend` = conectado, n_cuentas, modo, es_admin; ni Graph ni el panel): el panel
+   (meta_rendimiento.rutas.ver_panel → _meta_panel.html) llega por fetch la primera vez que se abre la pestaña, y el
+   selector «Elegir cuentas» (ver_cuentas → _meta_cuentas.html, la única ruta que llama a Meta) al abrirlo. Tres
+   estados: sin conexión → ir a Conexiones; conectado sin cuentas → el selector abierto (solo el admin: los demás ven
+   «Un administrador de Creatv tiene que elegir las cuentas»); con cuentas → el panel.
+   Todo el JS vive aquí: los <script> de un fragmento que llega por fetch no corren. Los nombres de los selectores
+   del JS evitan palabras que la guardia de idioma lee como español (`data-meta-act`, no `…-cuenta`). #}
+<div class="panel-cabecera">
+  <div>
+    <h2>{{ _('Meta') }}</h2>
+    <p class="panel-cabecera-desc">{{ _('Todas tus cuentas publicitarias de Meta en un solo lugar: gasto, ventas y ROAS por cuenta, campaña, conjunto y anuncio, con el veredicto de cada anuncio.') }}</p>
+  </div>
+  {% if meta_rend.conectado and meta_rend.n_cuentas and meta_rend.es_admin %}
+  <div class="panel-cabecera-acciones">
+    <button type="button" class="btn-sm" data-meta-elegir aria-expanded="false" aria-controls="meta-cuentas">{{ _('Elegir cuentas') }}</button>
+  </div>
+  {% endif %}
+</div>
+
+{% if not meta_rend.conectado %}
+<div class="estado-vacio">
+  <p class="estado-vacio-titulo">{{ _('Conecta Meta para ver tus cuentas') }}</p>
+  <p class="estado-vacio-texto">{{ _('Con Meta conectado, un administrador de Creatv elige qué cuentas publicitarias leer y traemos sus últimos 13 meses: gasto, compras y ROAS por cuenta, campaña, conjunto y anuncio. Leer de Meta no cuesta nada y no cambia nada en tus anuncios.') }}</p>
+  <a class="btn-generar btn-sm" href="#settings" data-ir-tab="settings" data-ir-config="config-meta">{{ _('Ir a Conexiones') }}</a>
+</div>
+{% elif not meta_rend.n_cuentas and not meta_rend.es_admin %}
+<div class="estado-vacio">
+  <p class="estado-vacio-titulo">{{ _('Todavía no hay cuentas publicitarias elegidas') }}</p>
+  <p class="estado-vacio-texto">{{ _('Un administrador de Creatv tiene que elegir las cuentas.') }}</p>
+</div>
+{% elif not meta_rend.n_cuentas %}
+<div class="estado-vacio">
+  <p class="estado-vacio-titulo">{{ _('Elige qué cuentas publicitarias quieres ver') }}</p>
+  <p class="estado-vacio-texto">{{ _('Marca abajo las cuentas de este proyecto y el país de cada una. Las copiamos en segundo plano: la primera vez tarda unos minutos por cuenta.') }}</p>
+</div>
+<div id="meta-cuentas" class="meta-cuentas" data-url="{{ url_for('meta_rendimiento.ver_cuentas', cliente=cliente) }}">
+  <p class="vacio">{{ _('Cargando tus cuentas de Meta…') }}</p>
+</div>
+{% else %}
+{% if meta_rend.es_admin %}
+<div id="meta-cuentas" class="meta-cuentas" data-url="{{ url_for('meta_rendimiento.ver_cuentas', cliente=cliente) }}" hidden>
+  <p class="vacio">{{ _('Cargando tus cuentas de Meta…') }}</p>
+</div>
+{% endif %}
+<div id="meta-panel" data-url="{{ url_for('meta_rendimiento.ver_panel', cliente=cliente) }}">
+  <p class="vacio">{{ _('Cargando las métricas de Meta…') }}</p>
+</div>
+{% endif %}
+<script>
+  (function () {
+    var pestana = document.getElementById('tab-meta');
+    if (!pestana) return;
+    var panel = document.getElementById('meta-panel');
+    var selector = document.getElementById('meta-cuentas');
+    var filtros = {};
+    var panelCargado = false, selectorCargado = false;
+    var T = {
+      errorPanel: {{ _('No se pudo cargar el panel de Meta. Recarga la página.')|tojson }},
+      errorSelector: {{ _('No se pudieron cargar tus cuentas de Meta. Recarga la página.')|tojson }},
+      errorMas: {{ _('No se pudieron traer más filas. Inténtalo de nuevo.')|tojson }},
+      confirmarQuitar: {{ _('Quitar una cuenta borra sus métricas copiadas en Creatv (no toca nada en Meta). ¿Seguir?')|tojson }}
+    };
+
+    function pedir(url) {
+      // Una sesión vencida redirige al login: eso no se pinta como si fuera el panel.
+      return fetch(url, { headers: { 'X-Requested-With': 'fetch' } })
+        .then(function (r) { return (r.ok && !r.redirected) ? r.text() : Promise.reject(r.status); });
+    }
+    function error(cont, texto) {
+      var p = document.createElement('p');
+      p.className = 'tag-error';
+      p.textContent = texto;
+      cont.replaceChildren(p);
+    }
+    function cargarPanel() {
+      if (!panel) return;
+      panelCargado = true;
+      var q = new URLSearchParams();
+      Object.keys(filtros).forEach(function (k) { if (filtros[k]) q.set(k, filtros[k]); });
+      pedir(panel.dataset.url + (q.toString() ? '?' + q.toString() : ''))
+        .then(function (html) {
+          panel.innerHTML = html;
+          if (window.arrancarSondeos) window.arrancarSondeos(panel);
+        })
+        .catch(function () { error(panel, T.errorPanel); });
+    }
+    function cargarSelector() {
+      if (!selector) return;
+      selectorCargado = true;
+      pedir(selector.dataset.url)
+        .then(function (html) { selector.innerHTML = html; })
+        .catch(function () { selectorCargado = false; error(selector, T.errorSelector); });
+    }
+
+    pestana.addEventListener('change', function (ev) {
+      var s = ev.target.closest('select[data-meta-param]');
+      if (!s || !panel) return;
+      filtros[s.dataset.metaParam] = s.value;
+      cargarPanel();
+    });
+    pestana.addEventListener('click', function (ev) {
+      var act = ev.target.closest('[data-meta-act]');
+      if (act) {
+        filtros.cuenta = act.dataset.metaAct;
+        cargarPanel();
+        pestana.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
+      var elegir = ev.target.closest('[data-meta-elegir]');
+      if (elegir && selector) {
+        selector.hidden = !selector.hidden;
+        elegir.setAttribute('aria-expanded', selector.hidden ? 'false' : 'true');
+        if (!selector.hidden && !selectorCargado) cargarSelector();
+        return;
+      }
+      var mas = ev.target.closest('[data-meta-mas]');
+      if (mas) {
+        // «Ver más»: la respuesta son solo filas <tr> (y la fila de su propio botón si quedan más); van en el lugar
+        // de la fila del botón, dentro del mismo <tbody>.
+        var fila = mas.closest('tr');
+        mas.disabled = true;
+        pedir(mas.dataset.metaMas)
+          .then(function (html) {
+            fila.insertAdjacentHTML('beforebegin', html);
+            fila.remove();
+          })
+          .catch(function () { mas.disabled = false; mas.title = T.errorMas; });
+        return;
+      }
+      var ir = ev.target.closest('[data-ir-tab]');
+      if (ir) {
+        var btn = document.querySelector('.sidebar-item[data-tab="' + ir.dataset.irTab + '"]');
+        if (btn) {
+          ev.preventDefault();
+          btn.click();
+          if (ir.dataset.irConfig && window.irAConfig) window.irAConfig(ir.dataset.irConfig);
+        }
+      }
+    });
+    pestana.addEventListener('submit', function (ev) {
+      var f = ev.target.closest('form[data-meta-seleccion]');
+      if (!f) return;
+      var quita = Array.prototype.some.call(f.querySelectorAll('input[data-elegida]'), function (c) { return !c.checked; });
+      if (quita && !window.confirm(T.confirmarQuitar)) ev.preventDefault();
+    });
+
+    function siActiva() {
+      if (!pestana.classList.contains('activo')) return;
+      if (panel && !panelCargado) cargarPanel();
+      if (selector && !selector.hidden && !selectorCargado) cargarSelector();
+    }
+    siActiva();
+    new MutationObserver(siActiva).observe(pestana, { attributes: true, attributeFilter: ['class'] });
+  })();
+</script>

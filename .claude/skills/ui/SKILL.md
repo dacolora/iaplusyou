@@ -144,6 +144,19 @@ Correcciones del lote 5 (2026-10-08, pedido de Daniel): ESTRUCTURA.md y mapa_cod
 
 PND-076/095/124 (2026-10-08, decisiones delegadas): accesos bloqueados reutiliza hero/admin-bloque/tabla-apilada/tabla-admin y data-etiqueta, sin CSS ni colores propios. Audios pagina por 24 con un botón delegado, separado de las tarjetas por el contenedor común acciones (R8, 2026-10-08) y conserva descarga/borrado de las tarjetas agregadas. El fragmento de lista no lleva scripts; el JS permanece en la plantilla completa. Alertas oculta las acciones protegidas sin ocultar sus avisos de plata. Las pantallas a 375 px y escritorio las mira Claude, por el encargo sin navegadores.
 
+**Pestaña Meta (2026-10-08, rendimiento de varias cuentas; spec `2026-10-08-meta-rendimiento-design.md` §8):** `#tab-meta`
+(`data-tab="meta"`, después de Triple Whale; `cliente.html` la registra en `paneles`, así el `href="#meta"` de la
+tarjeta de Conexiones la abre) es solo el armazón `_tab_meta.html` con un contexto barato de `ver_cliente`
+(`meta_rend` = conectado, n_cuentas, modo: ni Graph ni el panel, una prueba lo vigila). El panel
+(`_meta_panel.html`), el selector «Elegir cuentas» (`_meta_cuentas.html`, la única ruta que llama a Meta) y las filas
+de «Ver más» (`_meta_anuncios_filas.html`, `_meta_conjuntos_filas.html`: solo `<tr>`, que el JS pone en el lugar de la
+fila del botón) llegan por fetch; todo el JS vive en el armazón. Reutiliza las clases de Triple Whale y del Tablero;
+lo propio está en `static/estilos/pantallas/meta.css` (separación del selector abierto, la miniatura y, desde
+la mezcla de main del 2026-10-08 que borró el gráfico del viejo Tablero, las reglas `.tb-grafico`/`.tb-barra`… del
+«Día a día», que arma `meta_rendimiento/grafico.py`). Los
+selectores del JS evitan palabras que `tests/i18n_util.py` lee como español (`data-meta-act`, `data-meta-seleccion`:
+«cuenta» y «guardar» están en sus marcas).
+
 PND-166/190 (2026-10-09, decisión delegada): acciones Sprints muestran precio_analisis_sprint, texto seguro de gastos.estimar; Reanudar usa gastos.texto_precio. Reintentar análisis reusa botón/formulario y clases comunes; panel sin scripts. La comprobación visual a 375 px, escritorio y es/en corresponde a Claude (encargo sin navegadores).
 
 
