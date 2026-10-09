@@ -38,6 +38,7 @@ NOMBRES_CONSULTA = ("completa", "minima")
 # El Pixel tiene tres versiones: con visitantes (la completa de hoy), sin visitantes (la completa de antes del NVP,
 # spec 2026-10-09 §3) y la mínima.
 NOMBRES_CONSULTA_PIXEL = ("completa", "sin_visitantes", "minima")
+MAX_INTENTOS_VISITANTES = 3     # copias de 90 días que se intentan para la historia del NVP antes de rendirse
 
 
 # ------------------------------------------------------- normalizar ---
@@ -299,8 +300,10 @@ def sincronizar(cliente, tienda_id, desde=None, hasta=None, on_progreso=None, ho
                     try:
                         registros = _con_visitantes(registros, triple_whale.sql_query(
                             llave, dominio, triple_whale.consultas_visitantes_tienda()[0], d, h, moneda))
-                    except triple_whale.ErrorConsulta as e:   # la tienda se guarda igual, sin su NVP
-                        fallo["visitantes"] = triple_whale.tachar_llave(str(e), llave)
+                    except (triple_whale.ErrorLlave, triple_whale.ErrorTienda):
+                        raise
+                    except triple_whale.ErrorTripleWhale as e:   # consulta, red o límite: la tienda se guarda
+                        fallo["visitantes"] = triple_whale.tachar_llave(str(e), llave)   # igual, sin su NVP
                 datos.reemplazar_tienda(cliente, tienda_id, d, h, registros)
                 cuenta["dias_tienda"] += len(registros)
             except triple_whale.ErrorConsulta as e:
@@ -337,14 +340,28 @@ def sincronizar(cliente, tienda_id, desde=None, hasta=None, on_progreso=None, ho
                       for k, v in indice.items()},
         "fallos": {k: v for k, v in fallo.items() if v},
     }
-    previo = (tienda.get("extra") or {}).get("backfill_desde")
+    extra_previo = tienda.get("extra") or {}
+    previo = extra_previo.get("backfill_desde")
     triple_whale_tiendas.actualizar_tienda(cliente, tienda_id, estado="conectada", error=None,
                                            ultima_sincronizacion=db.ahora())
     triple_whale_tiendas.actualizar_extra_tienda(cliente, tienda_id, {
         "backfill_desde": min(filter(None, (previo, desde))), "ultimo_resumen": resumen,
-        # Queda aunque Triple Whale no haya dado visitantes: si no, una cuenta sin ellos traería 90 días cada 2 h.
-        "backfill_visitantes": (tienda.get("extra") or {}).get("backfill_visitantes") or hoy.isoformat()})
+        **_marca_visitantes(extra_previo, indice, fallo, hoy)})
     return resumen
+
+
+def _marca_visitantes(extra, indice, fallo, hoy):
+    """La marca de la historia del NVP (spec 2026-10-09 §3). Queda cuando la copia trajo visitantes en todo el rango
+    (Pixel en su versión con visitantes y la tienda sin fallo de visitantes) o tras MAX_INTENTOS_VISITANTES copias
+    sin lograrlo: una cuenta que no los tiene no trae 90 días cada 2 h para siempre, y un error pasajero de Triple
+    Whale durante la única copia de 90 días no deja esas semanas en cero (revisión del NVP, 2026-10-09)."""
+    if extra.get("backfill_visitantes"):
+        return {}
+    completa = indice["pixel"] == 0 and not fallo["pixel"] and not fallo["visitantes"]
+    intentos = int(extra.get("intentos_visitantes") or 0) + 1
+    if completa or intentos >= MAX_INTENTOS_VISITANTES:
+        return {"backfill_visitantes": hoy.isoformat(), "intentos_visitantes": intentos}
+    return {"intentos_visitantes": intentos}
 
 
 def sincronizar_si_hace_falta(cliente, tienda_id, minutos=MINUTOS_FRESCO):

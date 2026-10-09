@@ -351,9 +351,13 @@ anuncio es TOF, MOF o BOF. Siempre con el chip `cx.nvp(nuevos, visitantes)` (ski
   Cada tienda vuelve a traer 90 días una vez (`extra.backfill_visitantes`, se escribe aunque Triple Whale no dé
   visitantes). La regla vive solo en `triple_whale/visitantes.py`; `datos.visitantes_por(cliente, campo, ids, …)` es la
   lectura compartida de Meta y Experimentos (una consulta; ~55 ms por nivel con las 61 218 filas de happyflops).
-- La IA (spec §4.5): «Evaluar con IA» y «Cómo mejorarlo» reciben por anuncio `visitantes.texto_prompt(...)` y la regla
-  `visitantes.REGLA_PROMPT`; la `etapa` de cada anuncio es la medida. Medido en
-  `docs/superpowers/evals/2026-10-09-nvp-en-la-ia.md`: sin NVP acertaba la etapa en 4 de 10, con NVP en 10 de 10. En la
-  misma medición el tope de 16 000 de `analisis.MAX_TOKENS` ya cortaba la primera respuesta de 10 anuncios: subió a
-  32 000 con `TIMEOUT_CLAUDE_S = 900` (sin `timeout` explícito el SDK exige streaming arriba de ~21 000). PND-210
-  (costo contra el precio a la vista) y PND-211 (idioma de la respuesta) quedaron abiertos.
+- La IA (spec §4.5): «Cómo mejorarlo» recibe por anuncio (y por cada ganador del canal) `visitantes.texto_prompt(...)` y
+  la regla `visitantes.REGLA_PROMPT`; su tope (12 000) y su costo no cambiaron. «Evaluar con IA» guarda los visitantes en
+  la muestra (`analisis.CAMPOS_M`) pero su PROMPT todavía no los lleva: medido el 2026-10-09
+  (`docs/superpowers/evals/2026-10-09-nvp-en-la-ia.md`), su tope de 16 000 ya corta la primera respuesta con 10 anuncios,
+  y con el NVP una corrida falló en las dos llamadas. Con 32 000 acertaba la etapa de 10 de 10 (sin NVP, 4 de 10), pero
+  subir el tope cambia lo que cuesta: decide Daniel (PND-210). Desde la revisión, `analisis._llamar` va con
+  `max_retries=0`, como «Cómo mejorarlo» (un reintento del SDK podía cobrarse sin anotarse).
+- La copia de 90 días del NVP deja la marca `backfill_visitantes` solo si trajo visitantes en todo el rango, o tras
+  `sync.MAX_INTENTOS_VISITANTES` (3) copias sin lograrlo (`intentos_visitantes`); un error de red o de límite en
+  `web_analytics_table` deja la tienda sin su NVP (`fallos.visitantes`) pero no corta la copia (llave y tienda sí).

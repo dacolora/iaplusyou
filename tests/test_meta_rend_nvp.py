@@ -155,6 +155,25 @@ def test_ver_mas_de_anuncios_y_conjuntos_lleva_la_columna(conectado, monkeypatch
     assert mas.count("<tr") == 1 and "chip-nvp-vacio" in mas               # el segundo conjunto (Sweden): «—»
 
 
+def test_el_kpi_de_varias_cuentas_suma_visitantes_no_promedia_porcentajes(conectado):
+    """Norway 90 de 100 (90 %) y Sweden 90 de 900 (10 %): la suma da 180 de 1 000 = 18 % (BOF); el promedio de
+    porcentajes daría 50 % (revisión del NVP, mutación 2a)."""
+    _sembrar_meta()
+    _sembrar_triple_whale([("gana", 100, 90), ("otra", 900, 90)],
+                          dims={"otra": {"cuenta_id": B, "campana_id": "c2", "conjunto_id": "s2"}})
+    kpi = _kpi(conectado.get("/cliente/acme/meta-rendimiento/panel").get_data(as_text=True))
+    assert "18&nbsp;%" in kpi and "chip-nvp-bof" in kpi and "50&nbsp;%" not in kpi
+
+
+def test_el_nvp_respeta_el_periodo_de_la_pantalla(conectado):
+    """Una visita de hace 20 días cuenta en 30 días y no en 7 (revisión del NVP, mutación 8)."""
+    _sembrar_meta()
+    _sembrar_triple_whale([("gana", 100, 80)], fecha=_hace(20))
+    assert "80&nbsp;%" in _kpi(conectado.get("/cliente/acme/meta-rendimiento/panel?dias=30").get_data(as_text=True))
+    siete = conectado.get("/cliente/acme/meta-rendimiento/panel?dias=7").get_data(as_text=True)
+    assert "chip-nvp-vacio" in _kpi(siete) and "80&nbsp;%" not in _kpi(siete)
+
+
 # ---- sin Triple Whale ---------------------------------------------------------------------------------------
 
 def test_sin_triple_whale_ni_columna_ni_consultas_de_visitantes(conectado, monkeypatch):

@@ -128,17 +128,17 @@ def _anuncio_muestra(ref, visitantes, nuevos):
             "veredicto": "ganador", "motivo": "ROAS alto", "problemas": [], "fortalezas": [], "m": m}
 
 
-def test_evaluar_con_ia_le_pasa_a_claude_el_nvp_de_cada_anuncio_y_la_regla(base_temporal):
+def test_evaluar_con_ia_guarda_los_visitantes_pero_su_prompt_no_cambia_hasta_pnd_210(base_temporal):
+    """El NVP en el prompt de «Evaluar con IA» pide subir su tope y eso cambia lo que cuesta: espera a Daniel
+    (eval 2026-10-09, PND-210). Las cifras sí viajan en la muestra guardada."""
     import dashboard
     from triple_whale import analisis
     assert {"visitantes", "visitantes_nuevos", "nvp"} <= set(analisis.CAMPOS_M)
     with dashboard.app.test_request_context("/"):
         texto, _ = analisis.armar("Acme", {"desde": "2026-10-01", "hasta": "2026-10-07"},
                                   [_anuncio_muestra("A1", 1000, 800), _anuncio_muestra("A2", 0, 0)], {}, bloques={})
-    assert vis.REGLA_PROMPT in texto
-    assert "visitantes 1.000 · NVP 80 % → TOF (medido)" in texto or "visitantes 1,000 · NVP 80 % → TOF (medido)" in texto
-    assert "sin datos del Pixel" in texto
-    assert "etapa medida no cuadra" in texto
+    assert "NVP" not in texto and vis.REGLA_PROMPT not in texto
+    assert analisis.MAX_TOKENS == 16000
 
 
 def test_como_mejorarlo_le_pasa_a_claude_el_nvp_del_anuncio_y_de_los_ganadores(base_temporal):
@@ -157,14 +157,43 @@ def test_como_mejorarlo_le_pasa_a_claude_el_nvp_del_anuncio_y_de_los_ganadores(b
     assert "NVP 80 % → TOF (medido)" in texto
 
 
-def test_evaluar_con_ia_pide_tope_amplio_con_timeout_explicito(monkeypatch):
-    """Con 16 000 la respuesta de 10 anuncios llegaba cortada (eval 2026-10-09); 32 000 sin `timeout` haría que el SDK
-    exigiera streaming."""
+def test_evaluar_con_ia_llama_sin_reintentos_del_cliente(monkeypatch):
+    """Un intento que el SDK repite solo podría cobrarse sin quedar anotado (revisión del NVP, R2; como «Cómo
+    mejorarlo», A6)."""
     from sprints import analisis as sprints_analisis
     from triple_whale import analisis
     recibido = {}
     monkeypatch.setattr(sprints_analisis, "_llamar_contando",
                         lambda content, **kw: recibido.update(kw) or ("{}", 1, 1))
     analisis._llamar([{"type": "text", "text": "x"}], "SYSTEM")
-    assert recibido == {"max_tokens": 32000, "system": "SYSTEM", "timeout": analisis.TIMEOUT_CLAUDE_S}
-    assert 600 < analisis.TIMEOUT_CLAUDE_S
+    assert recibido == {"max_tokens": 16000, "system": "SYSTEM", "max_retries": 0}
+
+
+# ------------------------------------------- el NVP no decide (revisión) ---
+
+def _totales(con_visitas):
+    """Ocho anuncios con cifras distintas (ganadores, perdedores, en prueba). Con visitas: la mitad TOF, la mitad BOF."""
+    filas = []
+    for i in range(8):
+        t = {"canal": "facebook-ads", "ad_id": f"a{i}", "nombre": f"Anuncio {i}", "gasto": 50 + 30 * i,
+             "impresiones": 5000 + 1500 * i, "clics": 60 + 25 * i, "clics_salida": 40 + 20 * i,
+             "vistas_3s": 1200 + 300 * i, "thruplays": 200 + 40 * i, "pedidos": [0, 1, 4, 0, 6, 2, 0, 9][i],
+             "ingresos": [0, 60, 300, 0, 520, 90, 0, 900][i], "con_pixel": True, "utm_ok": True,
+             "dias_con_gasto": 7}
+        if con_visitas:
+            t.update(visitantes=400, visitantes_nuevos=360 if i % 2 else 40)
+        filas.append(t)
+    return filas
+
+
+def test_el_nvp_no_cambia_ningun_veredicto_motivo_ni_senal():
+    """Spec §2: la etapa es una lectura. Mutar evaluacion.evaluar para que TOF/BOF pese en el veredicto tiene que
+    romper esta prueba (revisión del NVP, mutaciones 6a/6b)."""
+    from triple_whale import evaluacion
+    sin = evaluacion.evaluar(_totales(False), _totales(False), _totales(False))
+    con = evaluacion.evaluar(_totales(True), _totales(True), _totales(True))
+    clave = lambda ev: {a["ad_id"]: (a["veredicto"], a["motivo"], list(a["problemas"]), list(a["fortalezas"]))  # noqa: E731
+                        for a in ev["anuncios"]}
+    assert clave(sin) == clave(con)
+    assert {a["m"]["etapa"] for a in con["anuncios"]} == {"TOF", "BOF"}
+    assert len({v for v, *_ in clave(con).values()}) > 1          # la muestra sí tiene veredictos distintos

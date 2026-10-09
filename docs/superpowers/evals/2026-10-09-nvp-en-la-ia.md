@@ -69,5 +69,9 @@ después 0,468 + 0,141 + 0,229), con la llave de Creatv y sin filas en `gasto` (
 US$ 1 de la skill por dos tropiezos: el error del script (una llamada perdida) y la primera corrida después, que
 falló en el tope de 16 000; el resto era necesario para medir el tope nuevo.
 
-**Conclusión:** el NVP en los prompts no rompe ninguna respuesta con el tope nuevo y cambia la lectura de la etapa
-de 4/10 a 10/10. El tope viejo de 16 000 ya estaba al borde en producción: se sube a 32 000 en el mismo cambio.
+**Conclusión:** el NVP en los prompts cambia la lectura de la etapa de 4/10 a 10/10 y no rompe ninguna respuesta con
+el tope de 32 000. Con el tope de 16 000 de producción, «Evaluar con IA» con NVP falló una de dos corridas (un caso que
+antes salía bien, salió mal: rojo según esta skill). Subir el tope cambia lo que cuesta, y las revisiones
+(guardian-gasto y revisor, 2026-10-09) pidieron que lo decida Daniel. **Lo que se despliega:** el NVP en «Cómo
+mejorarlo» (sin cambio de tope ni de costo); «Evaluar con IA» con su prompt y su tope de hoy, más `max_retries=0`. El
+NVP en su prompt y el tope de 32 000 esperan esa decisión (PND-210).

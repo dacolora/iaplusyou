@@ -530,11 +530,59 @@ def test_la_historia_de_visitantes_se_trae_una_sola_vez():
     assert sync.rango_pendiente(con_marca, HOY) == ("2026-09-22", "2026-09-28")
 
 
-def test_la_marca_queda_aunque_triple_whale_no_de_visitantes(conectado, monkeypatch):
-    """Si quedara solo con visitantes, una cuenta que no los tiene traería 90 días cada 2 horas."""
+def test_la_marca_queda_tras_tres_copias_sin_visitantes_y_no_se_trae_90_dias_para_siempre(conectado, monkeypatch):
+    """Una cuenta que no conoce los visitantes: 3 copias de 90 días y se rinde (si no, 90 días cada 2 horas)."""
     falso = TripleWhaleFalso(ads=[_ad("1", "2026-09-28")], sin_visitantes=True, fallar_todo={"web"})
     monkeypatch.setattr(triple_whale, "sql_query", falso)
+    for n in (1, 2):
+        sync.sincronizar("acme", _tienda(), hoy=HOY)
+        extra = triple_whale_tiendas.tienda("acme", _tienda())["extra"]
+        assert "backfill_visitantes" not in extra and extra["intentos_visitantes"] == n
+        assert sync.rango_pendiente(triple_whale_tiendas.tienda("acme", _tienda()), HOY)[0] == "2026-07-01"
     sync.sincronizar("acme", _tienda(), hoy=HOY)
     extra = triple_whale_tiendas.tienda("acme", _tienda())["extra"]
     assert extra["backfill_visitantes"] == HOY.isoformat()
-    assert sync.rango_pendiente(dict(triple_whale_tiendas.tienda("acme", _tienda())), HOY)[0] != "2026-07-01"
+    assert sync.rango_pendiente(triple_whale_tiendas.tienda("acme", _tienda()), HOY)[0] != "2026-07-01"
+
+
+def test_con_visitantes_la_marca_queda_en_la_primera_copia(conectado, monkeypatch):
+    falso = TripleWhaleFalso(ads=[_ad("1", "2026-09-28")], pixel=[_px("1", "2026-09-28")],
+                             tienda=[{"event_date": "2026-09-28", "revenue": 300, "orders": 4}],
+                             web=[{"event_date": "2026-09-28", "unique_visitors": 80, "new_visitors": 40}])
+    monkeypatch.setattr(triple_whale, "sql_query", falso)
+    sync.sincronizar("acme", _tienda(), hoy=HOY)
+    assert triple_whale_tiendas.tienda("acme", _tienda())["extra"]["backfill_visitantes"] == HOY.isoformat()
+
+
+def test_un_error_pasajero_en_la_copia_de_90_dias_no_deja_el_nvp_en_cero_para_siempre(conectado, monkeypatch):
+    """Un 5xx que persiste llega como ErrorConsulta y baja la copia a la versión sin visitantes: esa copia no deja
+    la marca y la siguiente vuelve a traer los 90 días con visitantes."""
+    falso = TripleWhaleFalso(ads=[_ad("1", "2026-09-28")], pixel=[_px("1", "2026-09-28")], sin_visitantes=True)
+    monkeypatch.setattr(triple_whale, "sql_query", falso)
+    sync.sincronizar("acme", _tienda(), hoy=HOY)
+    assert "backfill_visitantes" not in triple_whale_tiendas.tienda("acme", _tienda())["extra"]
+    falso.sin_visitantes = False                     # Triple Whale se recuperó
+    r = sync.sincronizar("acme", _tienda(), hoy=HOY)
+    assert r["desde"] == "2026-07-01" and r["consultas"]["pixel"] == "completa"
+    assert datos.totales_anuncio("acme", _tienda(), "facebook-ads", "1", "2026-09-01")["visitantes"] == 100
+    assert triple_whale_tiendas.tienda("acme", _tienda())["extra"]["backfill_visitantes"] == HOY.isoformat()
+
+
+def test_un_error_de_red_en_los_visitantes_de_la_tienda_no_tumba_la_copia(conectado, monkeypatch):
+    def falso(llave, shop, consulta, desde, hasta, moneda=None):
+        if "web_analytics_table" in consulta:
+            raise triple_whale.ErrorTripleWhale("timeout")
+        return base(llave, shop, consulta, desde, hasta, moneda)
+    base = TripleWhaleFalso(ads=[_ad("1", "2026-09-28")], tienda=[{"event_date": "2026-09-28", "revenue": 300}])
+    monkeypatch.setattr(triple_whale, "sql_query", falso)
+    r = sync.sincronizar("acme", _tienda(), "2026-09-28", "2026-09-28", hoy=HOY)
+    assert "visitantes" in r["fallos"] and r["dias_tienda"] == 1
+    assert datos.serie_tienda("acme", None, "2026-09-28", "2026-09-28")[0]["ingresos"] == 300.0
+    # La llave revocada sí corta, como en cualquier otra consulta.
+    def revocada(llave, shop, consulta, desde, hasta, moneda=None):
+        if "web_analytics_table" in consulta:
+            raise triple_whale.ErrorLlave("401")
+        return base(llave, shop, consulta, desde, hasta, moneda)
+    monkeypatch.setattr(triple_whale, "sql_query", revocada)
+    with pytest.raises(triple_whale.ErrorLlave):
+        sync.sincronizar("acme", _tienda(), "2026-09-28", "2026-09-28", hoy=HOY)

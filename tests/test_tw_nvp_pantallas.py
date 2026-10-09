@@ -86,6 +86,17 @@ def test_tarjeta_nvp_suma_el_periodo_y_compara_en_puntos():
         assert r.tarjeta_nvp("tienda", completos, completos, _dias(6, 100, 59), True)["variacion_texto"] == "1 pt"
 
 
+def test_tarjeta_nvp_suma_dias_desiguales_no_promedia_porcentajes():
+    """Un día 90 de 100 (90 %) y otro 90 de 900 (10 %): 180 de 1 000 = 18 %, no el promedio 50 %; contra un periodo
+    anterior de 50 % el cambio es de 32 pts (revisión del NVP, mutación 2c)."""
+    with idiomas.en_idioma("es"):
+        completos = [dict(_dias(1, 100, 90)[0]), dict(_dias(1, 900, 90)[0])]
+        previos = _dias(2, 500, 250)
+        t = r.tarjeta_nvp("tienda", completos, completos, previos, True)
+        assert (t["nuevos"], t["visitantes"]) == (180, 1000)
+        assert t["variacion"] == pytest.approx(-32.0) and t["variacion_texto"] == "32 pts"
+
+
 def test_tarjeta_nvp_no_compara_con_pocos_visitantes_ni_sin_comparacion():
     completos = _dias(6, 100, 60)
     assert r.tarjeta_nvp("tienda", completos, completos, _dias(6, 5, 1), True)["variacion"] is None   # 30 antes

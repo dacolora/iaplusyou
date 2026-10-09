@@ -54,8 +54,9 @@ no cambia ganador/perdedor, ni el decisor de Experimentos, ni ninguna regla que 
   dentro del bloque de la tienda: se mezcla por fecha en los registros de `tw_tienda_dia` antes de
   `reemplazar_tienda`. Si falla, la tienda se guarda sin visitantes y el resumen lo anota en `fallos`.
 - **Historia:** cada tienda vuelve a traer sus 90 días UNA vez (`rango_pendiente` mira la marca
-  `extra.backfill_visitantes`; se escribe tras cualquier sincronización terminada, aunque Triple Whale no haya
-  dado visitantes, para que nunca se repita cada 2 h).
+  `extra.backfill_visitantes`). Enmienda de la revisión: la marca queda cuando la copia trajo visitantes en todo el
+  rango, o tras 3 copias sin lograrlo (una cuenta sin visitantes no repite 90 días cada 2 h para siempre, y un error
+  pasajero durante la copia de 90 días no deja esas semanas en cero).
 
 ## 4. Dónde se ve
 
@@ -72,7 +73,10 @@ sección en la Guía): «52 % · MOF», gris si son pocos datos, «—» sin dat
 4. **Tablero.** En «Tu tienda según Triple Whale», el NVP de la tienda.
 5. **IA.** «Evaluar con IA» y «Cómo mejorarlo» reciben el NVP y la etapa de cada anuncio (y de la tienda) para
    leer el embudo (p. ej. «una campaña de prospección que llega a gente que ya te conoce»). Se mide con
-   `eval-claude` antes y después; no cambia precio ni topes.
+   `eval-claude` antes y después; no cambia precio ni topes. **Enmienda del mismo día** (eval
+   `2026-10-09-nvp-en-la-ia.md`, revisiones guardian-gasto y revisor): «Cómo mejorarlo» lo lleva; «Evaluar con IA»
+   necesita subir su tope de 16 000 a 32 000 para no cortar la respuesta, eso cambia lo que cuesta y lo decide Daniel
+   (PND-210): hasta entonces su prompt sigue igual (las cifras sí viajan en la muestra guardada).
 
 ## 5. Fuera de alcance
 
