@@ -212,6 +212,23 @@ def plan(tipo, cliente, **datos):
                                 monto=_usd(datos.get("usd") or 0), motivo=datos.get("motivo") or "—",
                                 proximo=_fecha(datos.get("proximo")), limite=_fecha(datos.get("limite"))))
             return _al_proyecto(cliente, "plan_rechazado", armar)
+        if tipo == "renovacion_apagada":
+            sus, nombre = _nombre_plan(cliente)
+            hasta = sus["cubierto_hasta"] if sus else None
+
+            def armar():
+                return (gettext("La renovación automática de tu plan quedó apagada"),
+                        gettext("Activamos tu plan %(plan)s a mano hasta el %(fecha)s. Desde ahora no cobraremos "
+                                "tu tarjeta automáticamente. Para volver a pagar con tarjeta, suscríbete de nuevo "
+                                "en Configuración › Plan cuando termine.", plan=nombre, fecha=_fecha(hasta)))
+            _al_proyecto(cliente, "plan_renovado", armar)
+            return admin(
+                "plan_admin",
+                lambda: gettext("Plan de %(cliente)s activado a mano", cliente=cliente),
+                lambda: gettext("%(cliente)s: el periodo a mano apagó la renovación automática con tarjeta. Para "
+                                "volver a la tarjeta, tendrá que suscribirse de nuevo cuando termine lo pagado.",
+                                cliente=cliente),
+                cliente=cliente)
         if tipo == "terminado":
             def armar():
                 return (gettext("Tu plan terminó"),

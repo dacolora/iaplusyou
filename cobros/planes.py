@@ -421,14 +421,16 @@ def _periodo_vivo_de(con, sid, ahora):
     return _desde_fila(f) if f is not None else None
 
 
-def _foto_plan(con, sus):
-    """La foto de un periodo nuevo: el precio mensual aceptado (la bolsa es lo
-    que paga cada mes) y el margen de miembro y el tope del plan de hoy."""
+def _foto_plan(con, sus, medio="wompi"):
+    """La foto de un periodo nuevo: el margen de miembro y el tope del plan de
+    hoy, y el precio mensual que es la bolsa: el aceptado con la tarjeta para un
+    pago de Wompi; para un pago a mano, el del plan de hoy (su propia foto: la
+    activación a mano nunca toca los precios aceptados para la tarjeta)."""
     plan_ = _leer_plan(con, sus["plan_id"])
     if plan_ is None:
         raise ErrorPlan(gettext("Ese plan no existe"))
-    return {"precio_usd": sus.get("precio_usd") or plan_["precio_usd"], "margen": plan_["margen"],
-            "tope_incluido_usd": plan_["tope_incluido_usd"]}
+    precio = plan_["precio_usd"] if medio == "manual" else (sus.get("precio_usd") or plan_["precio_usd"])
+    return {"precio_usd": precio, "margen": plan_["margen"], "tope_incluido_usd": plan_["tope_incluido_usd"]}
 
 
 def _abrir_periodo(con, sus, pago_id, inicio, fin, foto):
@@ -491,7 +493,7 @@ def _abrir_cubierto(con, sus, ahora):
             log.info("suscripción %s cubierta hasta %s sin un pago aprobado que abra el periodo", sus["id"], cub)
             return None
         ancla, meses, pago_id = inicio_libre, MESES_CICLO.get(siguiente.ciclo, 1), int(siguiente.id)
-        foto = _foto_plan(con, sus)
+        foto = _foto_plan(con, sus, siguiente.medio)
     i = 0
     while sumar_meses(ancla, i) < inicio_libre:
         i += 1
@@ -527,7 +529,7 @@ def _aprobar(con, sus, pago, ahora):
     if desde > _mas(ahora, ADELANTO_COBRO) or (desde == ahora and _periodo_vivo_de(con, sus["id"], ahora)):
         return None   # más adelante lo abre la periódica (_abrir_cubierto); nunca dos periodos encimados
     return _abrir_periodo(con, sus, pago["id"], desde, min(sumar_meses(desde, 1), hasta),
-                          _foto_plan(con, sus))
+                          _foto_plan(con, sus, pago.get("medio") or "wompi"))
 
 
 def _es_primer_cobro(con, sus):
@@ -654,10 +656,10 @@ def _aplicar_estado(con, pago, estado_wompi, tx_id, motivo, ahora):
         n = con.execute(pp.update().where(pp.c.id == pago["id"], pp.c.estado == "aprobado")
                         .values(estado="anulado", actualizado_en=ahora, motivo=motivo)).rowcount
         if n and sus is not None and sus["estado"] != "terminada":
-            # Tras una anulación (o un contracargo) la tarjeta no se vuelve a cobrar sola: sin renovación
-            # automática hasta que el admin actúe (ruling del controlador, revisión de la Task 5). Lo pagado
-            # (`cubierto_hasta`) queda; al acabar, la suscripción termina.
-            _actualizar_sus(con, sus["id"], ahora, renovar=False, proximo_cobro=None)
+            # Tras una anulación (o un contracargo) la tarjeta no se vuelve a cobrar sola: queda CANCELADA, sin
+            # renovación automática, y cambiar de tarjeta no la revive (rulings del controlador, revisión de la
+            # Task 5). Lo pagado (`cubierto_hasta`) queda; al acabar, la suscripción termina.
+            _actualizar_sus(con, sus["id"], ahora, estado="cancelada", renovar=False, proximo_cobro=None)
         # El periodo ya acreditado no se toca solo: el admin decide si lo corta («Terminar ya»). Los meses que
         # faltan de un anual anulado ya no se abren (`_abrir_cubierto` exige el pago aprobado).
         return ("anulado", ("anulado", pago["cliente"], {"referencia": pago["referencia"]})) if n else ("ya_aplicada", None)
@@ -689,18 +691,19 @@ def _decidir(con, sus, ahora, tasa, forzar):
             return "consultar", pendiente      # consultar no cobra: vale también tras cancelar
         pp = db.pago_plan
         no_salio = pendiente["motivo"] == MOTIVO_NO_SALIO
+        real = db.ahora()   # el reloj de verdad: el «en vuelo» es de la red, no de la vuelta de la periódica
+        en_vuelo = bool(pendiente["actualizado_en"]) and pendiente["actualizado_en"] > _iso(_dt(real) - EN_VUELO)
         if not (sus["renovar"] and sus["estado"] in ("activa", "morosa")):
             # Cancelada (o sin renovar): nada se reenvía. Lo que no salió se da por no cobrado; lo incierto
-            # espera el evento de Wompi o al admin.
+            # espera el evento de Wompi o al admin (el aviso, solo pasado el «en vuelo»: antes puede responder).
             if not no_salio:
-                return "esperar_evento", pendiente
+                return ("en_curso", None) if en_vuelo else ("esperar_evento", pendiente)
             con.execute(pp.update().where(pp.c.id == pendiente["id"], pp.c.estado == "pendiente",
                                           pp.c.motivo == MOTIVO_NO_SALIO)
                         .values(estado="error", motivo=gettext("No se cobró: el plan se canceló"),
                                 actualizado_en=db.ahora()))
             return "cancelado_sin_cobro", None
-        real = db.ahora()   # el reloj de verdad: el «en vuelo» es de la red, no de la vuelta de la periódica
-        if pendiente["actualizado_en"] and pendiente["actualizado_en"] > _iso(_dt(real) - EN_VUELO):
+        if en_vuelo:
             return "en_curso", None
         # Se reclama (y se quita la marca: mientras va en camino es incierto, y un cancelar a la vez no lo da
         # por no cobrado).
@@ -964,11 +967,8 @@ def suscribir(cliente, plan_id, ciclo, tipo_fuente, token, correo, aceptacion, u
 
 
 def _mismo_precio(plan_, ciclo, precio_visto_usd):
-    try:
-        visto = int(precio_visto_usd)
-    except (TypeError, ValueError):
-        return False
-    return not isinstance(precio_visto_usd, bool) and visto == _precio_ciclo(plan_, ciclo)
+    """Exacto y entero: la ruta convierte el campo del formulario; aquí un texto, un decimal o un booleano no valen."""
+    return type(precio_visto_usd) is int and precio_visto_usd == _precio_ciclo(plan_, ciclo)
 
 
 # ------------------------------------------------- cancelar y terminar ---
@@ -1029,9 +1029,11 @@ def _terminar_si_toca(con, sus, ahora):
 # --------------------------------------------- cambiar tarjeta y a mano ---
 
 def cambiar_fuente(cliente, tipo, token, correo, aceptacion, usuario, ahora=None):
-    """§7.5: otra tarjeta (o Nequi) reemplaza la fuente. Una suscripción
-    activada a mano pasa a renovarse sola; una cancelada sigue cancelada. Si
-    estaba morosa, cobra en el acto. Devuelve {estado, cobro}."""
+    """§7.5: otra tarjeta (o Nequi) reemplaza la fuente. Nunca prende la
+    renovación automática: una cancelada, una anulada (que queda cancelada) o
+    una activada a mano siguen sin renovarse sola (para volver a la tarjeta,
+    suscribirse de nuevo cuando termine). Si estaba morosa y se renueva, cobra
+    en el acto. Devuelve {estado, cobro}."""
     ahora = ahora or db.ahora()
     aceptacion = _validar_aceptacion(aceptacion)
     if suscripcion(cliente) is None:
@@ -1042,17 +1044,15 @@ def cambiar_fuente(cliente, tipo, token, correo, aceptacion, usuario, ahora=None
         sus = _sus_viva(con, cliente)
         if sus is None:
             raise ErrorPlan(gettext("Este proyecto no tiene un plan"))
-        renovar = sus["renovar"] or sus["estado"] == "activa"
-        nueva = {**sus, "fuente_pago_id": str(fuente["id"]), "renovar": renovar}
+        nueva = {**sus, "fuente_pago_id": str(fuente["id"])}
         valores = {"fuente_pago_id": str(fuente["id"]), "medio_fuente": fuente["tipo"],
-                   "fuente_resumen": fuente["resumen"][:40] or None, "correo": str(correo).strip()[:120],
-                   "renovar": renovar}
+                   "fuente_resumen": fuente["resumen"][:40] or None, "correo": str(correo).strip()[:120]}
         if sus["estado"] != "morosa":
             valores["proximo_cobro"] = _proximo_normal(nueva, sus["cubierto_hasta"])
         _actualizar_sus(con, sus["id"], ahora, **valores)
         _guardar_aceptacion(con, sus["id"], aceptacion, usuario, ahora, _precio_aceptado(sus), sus["ciclo"])
     cobro = None
-    if sus["estado"] == "morosa":
+    if sus["estado"] == "morosa" and sus["renovar"]:
         cobro = cobrar_periodo(sus["id"], ahora=ahora, forzar=True,
                                acceptance_token=aceptacion["acceptance_token"].strip())
     log.info("fuente de pago del plan de %s cambiada por %s", cliente, usuario)
@@ -1061,9 +1061,14 @@ def cambiar_fuente(cliente, tipo, token, correo, aceptacion, usuario, ahora=None
 
 def activar_manual(cliente, plan_id, ciclo, usuario, nota="", ahora=None):
     """§7.7 (admin): un pago por transferencia abre un periodo pagado a mano
-    (`pago_plan.medio = manual`, sin Wompi). Sin suscripción, crea una que no
-    se renueva sola (sin tarjeta); con una vigente, extiende lo pagado desde su
-    fin. Devuelve {suscripcion_id, pago_id, periodo_id}. Lanza `ErrorPlan`."""
+    (`pago_plan.medio = manual`, sin Wompi), con el precio de hoy del plan y
+    ciclo elegidos como su propia foto. Sin suscripción, crea una sin tarjeta;
+    con una vigente, extiende lo pagado desde su fin. SIEMPRE apaga la
+    renovación automática (`renovar = False`, sin `proximo_cobro`) y nunca toca
+    los precios ni el ciclo aceptados con la tarjeta: después de un periodo a
+    mano la tarjeta no se cobra sola (ruling del controlador, revisión 2 de la
+    Task 5); para volver a la tarjeta, suscribirse de nuevo cuando termine.
+    Devuelve {suscripcion_id, pago_id, periodo_id}. Lanza `ErrorPlan`."""
     ahora = ahora or db.ahora()
     if ciclo not in CICLOS:
         raise ErrorPlan(gettext("Ciclo de plan inválido"))
@@ -1077,19 +1082,17 @@ def activar_manual(cliente, plan_id, ciclo, usuario, nota="", ahora=None):
         if not usd:
             raise ErrorPlan(gettext("Ese plan no tiene opción anual"))
         sus = _sus_viva(con, cliente)
-        precios = {"precio_usd": plan_["precio_usd"], "precio_anual_usd": plan_["precio_anual_usd"]}
+        apagada = bool(sus and sus["renovar"] and sus["fuente_pago_id"])
         if sus is None:
+            # Sin precios aceptados con tarjeta (NULL): nunca hubo una tarjeta que cobrar.
             sid = int(con.execute(s.insert().values(
-                cliente=cliente, plan_id=plan_["id"], ciclo=ciclo, estado="activa", renovar=False, **precios,
+                cliente=cliente, plan_id=plan_["id"], ciclo=ciclo, estado="activa", renovar=False,
                 cubierto_hasta=None, proximo_cobro=None, intentos_fallidos=0, usuario=str(usuario or "")[:80],
                 creada_en=ahora, actualizada_en=ahora)).inserted_primary_key[0])
         else:
             sid = sus["id"]
-            if sus["plan_id"] == plan_["id"] and _precio_ciclo(sus, ciclo):
-                usd = _precio_ciclo(sus, ciclo)   # el mismo plan: sigue el precio que ya tenía guardado
-                _actualizar_sus(con, sid, ahora, ciclo=ciclo)
-            else:
-                _actualizar_sus(con, sid, ahora, plan_id=plan_["id"], ciclo=ciclo, **precios)
+            # El plan del periodo a mano decide el margen y el tope; el ciclo y los precios de la tarjeta quedan.
+            _actualizar_sus(con, sid, ahora, plan_id=plan_["id"], renovar=False, proximo_cobro=None)
         sus = _sus_por_id(con, sid)
         clave = _clave_renovacion(sus)
         pagos = _pagos_de_renovacion(con, sus, clave)
@@ -1104,7 +1107,10 @@ def activar_manual(cliente, plan_id, ciclo, usuario, nota="", ahora=None):
         primero = _es_primer_cobro(con, sus)
         periodo_id = _aprobar(con, sus, pago, ahora)
     log.info("plan de %s activado a mano por %s (pago %s)", cliente, usuario, pago_id)
-    _mandar([("renovado", cliente, {"primero": primero, "suscripcion_id": sid})])
+    avisos_ = [("renovado", cliente, {"primero": primero, "suscripcion_id": sid})]
+    if apagada:
+        avisos_.append(("renovacion_apagada", cliente, {}))
+    _mandar(avisos_)
     return {"suscripcion_id": sid, "pago_id": pago_id, "periodo_id": periodo_id}
 
 

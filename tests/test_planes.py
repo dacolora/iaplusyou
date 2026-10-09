@@ -676,7 +676,8 @@ def test_la_renovacion_cobra_el_precio_aceptado_no_el_del_plan(base_temporal, pl
 
 
 @pytest.mark.parametrize("ciclo,visto", [("mensual", 900), ("mensual", 10000), ("anual", 1000), ("mensual", None),
-                                         ("mensual", "mil"), ("mensual", True)])
+                                         ("mensual", "mil"), ("mensual", True), ("mensual", "1000"),
+                                         ("mensual", " 1000 "), ("mensual", 1000.9), ("mensual", 1000.0)])
 def test_alta_con_un_precio_que_ya_no_es_el_del_plan_se_niega(base_temporal, planes, pro, falso, avisos, ciclo, visto):
     with pytest.raises(planes.ErrorPlan) as e:
         planes.suscribir("acme", pro, ciclo, "CARD", "tok_x", "pagos@acme.co", dict(ACEPTACION), "u", visto, ahora=T0)
@@ -708,12 +709,14 @@ def test_un_plan_editado_mientras_se_crea_la_fuente_se_niega(base_temporal, plan
     assert falso.posts == [] and _filas(base_temporal, "suscripcion") == []
 
 
-def test_activacion_manual_guarda_el_precio(base_temporal, planes, pro, falso, avisos):
+def test_activacion_manual_lleva_su_propio_precio(base_temporal, planes, pro, falso, avisos):
+    """Revisión 2: el pago a mano guarda el precio de hoy del plan (su foto); sin tarjeta, nada aceptado que guardar."""
     planes.activar_manual("acme", pro, "mensual", "admin", "mes 1", ahora=T0)
-    assert _sus(base_temporal).precio_usd == 1000
+    s = _sus(base_temporal)
+    assert (s.precio_usd, s.precio_anual_usd, s.renovar) == (None, None, False)
     planes.editar_plan(pro, usuario="admin", precio_usd=1500)
     planes.activar_manual("acme", pro, "mensual", "admin", "mes 2", ahora=_despues(T0, dias=20))
-    assert [p.usd for p in _filas(base_temporal, "pago_plan")] == [1000, 1000]
+    assert [p.usd for p in _filas(base_temporal, "pago_plan")] == [1000, 1500]
 
 
 def test_un_anual_anulado_no_abre_mas_meses(base_temporal, planes, pro, falso, avisos):
@@ -825,3 +828,79 @@ def test_un_anual_anulado_no_se_cobra_al_cumplir_el_año(base_temporal, planes, 
     assert len(falso.posts) == 1
     assert len(_filas(base_temporal, "periodo_plan")) == 1
     assert _sus(base_temporal).estado == "terminada"
+
+
+
+# ----------------------------------------------- revisión 2 (dinero) ---
+
+def test_activacion_manual_anual_sobre_tarjeta_mensual_no_cobra_la_tarjeta(base_temporal, planes, pro, falso, avisos):
+    _suscribir(planes, pro)
+    planes.activar_manual("acme", pro, "anual", "admin", "transferencia", ahora=_despues(T0, dias=1))
+    s = _sus(base_temporal)
+    assert (s.renovar, s.proximo_cobro, s.ciclo, s.precio_usd, s.precio_anual_usd) == (
+        False, None, "mensual", 1000, 10000)
+    assert s.cubierto_hasta == "2027-11-09T10:00:00"
+    assert _filas(base_temporal, "pago_plan")[-1].usd == 10000
+    for antes in (30, 0):
+        planes.renovar_todo(ahora=_antes(s.cubierto_hasta, antes))
+    planes.renovar_todo(ahora=_despues(s.cubierto_hasta, minutos=1))
+    assert len(falso.posts) == 1
+    assert _sus(base_temporal).estado == "terminada"
+    tipos = _tipos(avisos)
+    assert any(e[0] == "plan_renovado" and "apagada" in e[2] for e in avisos) and "admin:plan_admin" in tipos
+
+
+def test_activacion_manual_de_otro_plan_no_cobra_la_tarjeta(base_temporal, planes, pro, falso, avisos):
+    _suscribir(planes, pro)
+    max_ = planes.crear_plan("Max", 3000, 1.5, 40, usuario="admin")
+    planes.activar_manual("acme", max_, "mensual", "admin", "transferencia", ahora=_despues(T0, dias=1))
+    s = _sus(base_temporal)
+    assert (s.plan_id, s.precio_usd, s.renovar) == (max_, 1000, False)
+    planes.renovar_todo(ahora=_antes(s.cubierto_hasta, 30))
+    planes.renovar_todo(ahora=_despues("2026-11-09T10:00:00", minutos=1))   # abre el mes pagado a mano
+    nuevo = _filas(base_temporal, "periodo_plan")[-1]
+    assert (nuevo.credito_milesimas, nuevo.margen, nuevo.tope_incluido_usd) == (3_000_000, 1.5, 40)
+    planes.renovar_todo(ahora=_despues(s.cubierto_hasta, minutos=1))
+    assert len(falso.posts) == 1
+
+
+def test_anulado_y_cambio_de_tarjeta_no_vuelve_a_cobrar(base_temporal, planes, pro, falso, avisos):
+    _suscribir(planes, pro)
+    planes.aplicar_transaccion({**falso.txs["1292-1-1"], "status": "VOIDED"}, ahora=_despues(T0, dias=1))
+    assert (_sus(base_temporal).estado, _sus(base_temporal).renovar) == ("cancelada", False)
+    r = planes.cambiar_fuente("acme", "CARD", "tok2", "pagos@acme.co", dict(ACEPTACION), "user_acme",
+                              ahora=_despues(T0, dias=2))
+    assert r == {"estado": "cancelada", "cobro": None}
+    s = _sus(base_temporal)
+    assert (s.renovar, s.proximo_cobro, s.fuente_pago_id) == (False, None, "3892")
+    planes.renovar_todo(ahora=_antes("2026-11-09T10:00:00", 30))
+    planes.renovar_todo(ahora=_despues("2026-11-09T10:00:00", minutos=1))
+    assert len(falso.posts) == 1 and _sus(base_temporal).estado == "terminada"
+
+
+def test_morosa_anulada_y_cambio_de_tarjeta_no_cobra_en_el_acto(base_temporal, planes, pro, falso, avisos):
+    _suscribir(planes, pro)
+    falso.respuestas["pl-1-20261109-1"] = "DECLINED"
+    planes.renovar_todo(ahora=_antes("2026-11-09T10:00:00", 60))
+    assert _sus(base_temporal).estado == "morosa"
+    planes.aplicar_transaccion({**falso.txs["1292-1-1"], "status": "VOIDED"}, ahora=_antes("2026-11-09T10:00:00", 50))
+    r = planes.cambiar_fuente("acme", "CARD", "tok2", "pagos@acme.co", dict(ACEPTACION), "user_acme",
+                              ahora=_antes("2026-11-09T10:00:00", 40))
+    assert r["cobro"] is None
+    assert [p["referencia"] for p in falso.posts] == ["pl-1-20261009-1", "pl-1-20261109-1"]
+    planes.renovar_todo(ahora=_despues("2026-11-09T10:00:00", horas=24))
+    assert len(falso.posts) == 2
+
+
+def test_cancelada_con_un_cobro_en_vuelo_no_avisa_antes_de_tiempo(base_temporal, planes, pro, falso, avisos):
+    """Minor 3: dentro del «en vuelo» el envío puede responder todavía; el aviso de incierto espera."""
+    _suscribir(planes, pro)
+    falso.error = (falso.wompi.ErrorWompi("read", caida=True, incierto=True), False)
+    planes.renovar_todo(ahora=_antes("2026-11-09T10:00:00", 30))
+    planes.cancelar("acme", "user_acme", ahora=_antes("2026-11-09T10:00:00", 20))
+    assert planes.cobrar_periodo(1, ahora=_antes("2026-11-09T10:00:00", 10)) == "en_curso"
+    assert "admin:plan_admin" not in _tipos(avisos)
+    _envejecer(base_temporal)
+    assert planes.cobrar_periodo(1, ahora=_despues("2026-11-09T10:00:00", horas=1)) == "incierto"
+    assert _tipos(avisos).count("admin:plan_admin") == 1
+    assert len(falso.posts) == 2
