@@ -445,8 +445,10 @@ def estimar_ganchos_tw(n):
     except (TypeError, ValueError):
         n = 0
     uno = estimar("video", modelo=GANCHO_TW_MODELO, duracion=GANCHO_TW_SEGUNDOS, con_sonido=False)["usd"]
-    if n <= 0 or uno is None:
+    if n <= 0:
         return _estimado(None, "sin ganchos que generar")
+    if uno is None:
+        return _estimado(None, f"{SIN_PRECIO}: sin tarifa de Kling O3 Pro")
     return _estimado(uno * n, f"{n} clip(s) de {GANCHO_TW_SEGUNDOS} s con Kling O3 Pro, imagen a video")
 
 

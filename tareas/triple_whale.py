@@ -160,15 +160,19 @@ def tw_analizar_anuncio(tarea):
                                             detalle=gettext("la voz de un anuncio de Triple Whale"))
                 medios["transcripcion"] = (voz.get("texto") or "")[:mejorar.MAX_TRANSCRIPCION] or None
         trabajos.reportar(job_id, etapa=idiomas.N_("Analizando con Claude"))
-        texto = mejorar.armar(proyectos.nombre_visible(cliente), fila, voz=voz,
-                              evaluacion_cuenta=_evaluacion_de_cuenta(cliente, fila["tienda_id"]),
-                              aprendizajes=doctrina_aprendizajes.texto_para_prompt(proyectos.aprendizajes(cliente)),
-                              productos=datos.top_productos(cliente, fila["tienda_id"], fila["desde"], fila["hasta"],
-                                                            limite=analisis.MAX_PRODUCTOS))
+        entradas = dict(voz=voz, evaluacion_cuenta=_evaluacion_de_cuenta(cliente, fila["tienda_id"]),
+                        aprendizajes=doctrina_aprendizajes.texto_para_prompt(proyectos.aprendizajes(cliente)),
+                        productos=datos.top_productos(cliente, fila["tienda_id"], fila["desde"], fila["hasta"],
+                                                      limite=analisis.MAX_PRODUCTOS))
+        marca = proyectos.nombre_visible(cliente)
+        texto = mejorar.armar(marca, fila, **entradas)
         # Los segundos de los fotogramas y de la voz son datos citables, también su parte entera («el segundo 31»).
         resultado, entrada, salida = mejorar.analizar(texto, vis["bloques"], idiomas.de_proyecto(cliente),
                                                       verificable_extra=mejorar.segundos_verificables(vis["bloques"], voz),
-                                                      duracion_s=(foto.get("creativo") or {}).get("duracion_s"))
+                                                      duracion_s=(foto.get("creativo") or {}).get("duracion_s"),
+                                                      # Las cifras se contrastan con los datos que se le dieron, no con
+                                                      # los números de las instrucciones (revisión del 2026-10-09).
+                                                      verificable=mejorar.datos_verificables(marca, fila, **entradas))
         if vis["clase"] != "fotogramas":
             # Spec 2026-10-09 §2: sin fotogramas del video (un anuncio de imagen, o nada) hay copy pero no ganchos,
             # aunque Claude los mande: el clip arranca en un fotograma que Claude tiene que haber visto.

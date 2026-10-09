@@ -295,12 +295,14 @@ def _pct(v):
     return "—" if v is None else idiomas.numero(v * 100, 1) + " %"
 
 
-def _bloque_anuncio(f):
+def _bloque_anuncio(f, solo_datos=False):
+    """Con `solo_datos`, sin los números de las etiquetas («tendencia de 7 días»): ver `datos_verificables`."""
     m = f.get("m") or {}
     c = f.get("creativo") or {}
     lineas = [f"«{_linea(f.get('nombre'))}» · campaña «{_linea(f.get('campana')) or '—'}» · formato {c.get('tipo') or '—'}"
               + (f" · {_num(c.get('duracion_s'), 0)} s" if c.get("duracion_s") else ""),
-              f"veredicto: {f.get('veredicto')} ({f.get('motivo')}) · tendencia de 7 días: {f.get('tendencia') or '—'}",
+              f"veredicto: {f.get('veredicto')} ({f.get('motivo')}) · "
+              f"{'tendencia' if solo_datos else 'tendencia de 7 días'}: {f.get('tendencia') or '—'}",
               f"gasto {_num(m.get('gasto'))} · impresiones {_num(m.get('impresiones'), 0)} · CTR {_num(m.get('ctr'))} % · "
               f"CPM {_num(m.get('cpm'))} · gancho {_pct(m.get('gancho'))} · retención {_pct(m.get('retencion'))}",
               f"pedidos {_num(m.get('pedidos'), 1)} · ingresos {_num(m.get('ingresos'))} · ROAS {_num(m.get('roas'))}× · "
@@ -311,14 +313,16 @@ def _bloque_anuncio(f):
     return "\n".join(lineas)
 
 
-def _bloque_anillos(f):
+def _bloque_anillos(f, solo_datos=False):
+    """Con `solo_datos`, cada anillo por su nombre (la etiqueta «Gancho (se quedan 3 s)» trae un 3 que no es un dato)."""
     lineas = []
     for nombre in evaluacion.ANILLOS:
+        etiqueta = nombre if solo_datos else _ETIQUETAS_ANILLO[nombre]
         r = (f.get("anillos") or {}).get(nombre) or {}
         if r.get("pct") is not None:
-            lineas.append(f"- {_ETIQUETAS_ANILLO[nombre]}: percentil {r['pct']}")
+            lineas.append(f"- {etiqueta}: percentil {r['pct']}")
         else:
-            lineas.append(f"- {_ETIQUETAS_ANILLO[nombre]}: sin dato ({r.get('vacio') or '—'})")
+            lineas.append(f"- {etiqueta}: sin dato ({r.get('vacio') or '—'})")
     return "\n".join(lineas)
 
 
@@ -356,9 +360,10 @@ def _bloque_evaluacion(ev_cuenta):
     return "\n".join(partes)
 
 
-def armar(marca, fila, voz=None, evaluacion_cuenta=None, aprendizajes="", productos=None):
-    """El texto de DATOS + instrucciones para Claude. `fila` es la de `tw_analisis` (usa `foto`, `desde`, `hasta`,
-    `moneda`); `evaluacion_cuenta` es el `resultado` de una `tw_evaluacion` lista del mismo alcance, o None."""
+def _valores(marca, fila, voz=None, evaluacion_cuenta=None, aprendizajes="", productos=None, solo_datos=False):
+    """Los valores que `armar` mete en PROMPT, un dato por clave. Una sola cuenta para el prompt y para lo verificable
+    (`datos_verificables`): lo que Claude puede citar como dato es exactamente lo que se le dio, y no sus instrucciones.
+    `solo_datos` quita de dos bloques los números de sus etiquetas fijas (la ventana «7 días», los «3 s» del gancho)."""
     f = fila.get("foto") or {}
     c = f.get("creativo") or {}
     cuenta = f.get("cuenta") or {}
@@ -366,10 +371,10 @@ def armar(marca, fila, voz=None, evaluacion_cuenta=None, aprendizajes="", produc
     texto_anuncio = _dato("\n".join(x for x in (f"Título: {c['titulo']}" if c.get("titulo") else "",
                                                c.get("copy") or "") if x)) or "(sin texto)"
     canal = triple_whale.NOMBRES_CANAL.get(fila.get("canal") or f.get("canal"), fila.get("canal") or f.get("canal"))
-    return PROMPT.format(
+    return dict(
         marca=marca or "este proyecto", desde=fila.get("desde"), hasta=fila.get("hasta"), moneda=fila.get("moneda") or "",
         modelo=cuenta.get("modelo") or "—", ventana=cuenta.get("ventana") or "—",
-        anuncio=_bloque_anuncio(f), canal=canal, anillos=_bloque_anillos(f),
+        anuncio=_bloque_anuncio(f, solo_datos), canal=canal, anillos=_bloque_anillos(f, solo_datos),
         ctr=_num(b.get("ctr")), gancho=_pct(b.get("gancho")), retencion=_pct(b.get("retencion")), roas=_num(b.get("roas")),
         meta=_num(cuenta.get("meta_roas")), cpa_canal=_num(cuenta.get("cpa_canal")),
         texto_anuncio=texto_anuncio, voz=_bloque_voz(voz), ganadores=_bloque_ganadores(f.get("ganadores")),
@@ -377,11 +382,28 @@ def armar(marca, fila, voz=None, evaluacion_cuenta=None, aprendizajes="", produc
         productos=analisis.texto_productos(productos, fila.get("moneda") or ""))
 
 
+def armar(marca, fila, voz=None, evaluacion_cuenta=None, aprendizajes="", productos=None):
+    """El texto de DATOS + instrucciones para Claude. `fila` es la de `tw_analisis` (usa `foto`, `desde`, `hasta`,
+    `moneda`); `evaluacion_cuenta` es el `resultado` de una `tw_evaluacion` lista del mismo alcance, o None."""
+    return PROMPT.format(**_valores(marca, fila, voz, evaluacion_cuenta, aprendizajes, productos))
+
+
+def datos_verificables(marca, fila, voz=None, evaluacion_cuenta=None, aprendizajes="", productos=None):
+    """Solo los datos del prompt, sin una palabra de la plantilla: contra esto se verifican las cifras de todo lo que
+    Claude escribe (`doctrina.verificar_cifras`). Los números de las instrucciones (3 cambios, 60 a 120 palabras,
+    «92 = mejor que el 92 %», 500 caracteres…) no son datos del anuncio: contrastar contra el prompt entero dejaba
+    pasar «60 días de prueba» a un video (revisión del 2026-10-09; spec §3.2: una cifra inventada no entra a un video)."""
+    return "\n".join(str(v) for v in _valores(marca, fila, voz, evaluacion_cuenta, aprendizajes, productos,
+                                                solo_datos=True).values())
+
+
 def system(idioma):
     extra = ("Todo el texto de la respuesta va en el idioma pedido, con tres excepciones: el campo \"prompt\" de "
              "\"version\" y el de cada gancho van siempre en inglés, porque son para el modelo de video; y el \"texto\" "
              "de cada gancho y el \"titulo\" y el \"texto\" de \"copy_nuevo\" van en el idioma del TEXTO DEL ANUNCIO "
-             "(si no hay texto, en el de la voz), porque se publican dentro del anuncio.")
+             "(si no hay texto, en el de la voz), porque se publican dentro del anuncio. Estas tres excepciones mandan "
+             "sobre la instrucción de IDIOMA que rodea este texto, también sobre la que se repite al final: ahí donde "
+             "esa instrucción diga que todo va en el idioma pedido, estas excepciones siguen valiendo.")
     return doctrina.bloque_system("revisar", "diagnosticar", "angulo", "gancho", "video", extra=extra, idioma=idioma)
 
 
@@ -417,12 +439,29 @@ def _version(v, verificable):
 
 # ------------------------------------------------- ganchos y copy (spec 2026-10-09 §3.2) ---
 
+def _sin_control(texto):
+    """Sin caracteres de control ni de formato (U+0000…, U+202E…), salvo U+200D: el unión de ancho cero que pega las
+    piezas de un emoji compuesto (👩‍👩‍👧). Sin él la familia se deshace en tres personas; con él no pasa nada
+    peor que un carácter invisible entre dos emojis."""
+    return "".join(ch for ch in texto if ch == "\u200d" or unicodedata.category(ch) not in ("Cc", "Cf"))
+
+
 def _limpio(valor, tope):
     """Una línea sin caracteres de control ni de formato (saltos, U+0000…, U+202E…): el texto de un gancho va dentro
     de un video y su prompt a Kling, y los dos salen de un análisis que leyó texto ajeno."""
-    texto = " ".join(str(valor if valor is not None else "").split())
-    texto = "".join(ch for ch in texto if unicodedata.category(ch) not in ("Cc", "Cf"))
+    texto = _sin_control(" ".join(str(valor if valor is not None else "").split()))
     return " ".join(texto.split())[:tope]
+
+
+def _corte_en_palabra(texto, tope):
+    """Hasta `tope` caracteres, sin partir una palabra: el texto de un gancho se imprime en el video. Corta en el
+    último espacio que cabe; una sola «palabra» más larga que el tope se corta a la fuerza."""
+    if len(texto) <= tope:
+        return texto
+    if texto[tope] == " ":
+        return texto[:tope].rstrip()
+    espacio = texto.rfind(" ", 0, tope)
+    return texto[:espacio].rstrip(" ,;:") if espacio > 0 else texto[:tope]
 
 
 def _texto_largo(valor, tope):
@@ -430,8 +469,7 @@ def _texto_largo(valor, tope):
     control ni de formato y sin más de una línea en blanco seguida."""
     lineas = []
     for linea in str(valor if valor is not None else "").splitlines():
-        limpia = "".join(ch for ch in " ".join(linea.split()) if unicodedata.category(ch) not in ("Cc", "Cf"))
-        lineas.append(" ".join(limpia.split()))
+        lineas.append(" ".join(_sin_control(" ".join(linea.split())).split()))
     return re.sub(r"\n{3,}", "\n\n", "\n".join(lineas)).strip()[:tope]
 
 
@@ -464,7 +502,7 @@ def _ganchos(lista, verificable, duracion_s):
             break
         if not isinstance(g, dict):
             continue
-        texto, prompt = _limpio(g.get("texto"), MAX_TEXTO_GANCHO), _limpio(g.get("prompt"), 1000)
+        texto, prompt = _corte_en_palabra(_limpio(g.get("texto"), 1000), MAX_TEXTO_GANCHO), _limpio(g.get("prompt"), 1000)
         if not texto or not prompt:
             continue
         por_que = analisis._texto(g.get("por_que"), 300)
@@ -560,14 +598,15 @@ def segundos_verificables(bloques, voz):
     return " ".join(textos + [f"Segundo {n}" for n in sorted(set(enteros))])
 
 
-def analizar(texto, imagenes, idioma, verificable_extra="", duracion_s=None):
+def analizar(texto, imagenes, idioma, verificable_extra="", duracion_s=None, verificable=None):
     """(resultado, tokens_entrada, tokens_salida). Una corrección si la primera respuesta no sirve; si tampoco,
     AnalisisInvalido con los tokens pagados. `verificable_extra` suma a los datos verificables lo que Claude ve fuera
     del texto (los segundos de los fotogramas); `duracion_s` (la del video del anuncio, o None) acota el `fotograma_s`
-    de cada gancho (spec 2026-10-09 §3.2)."""
+    de cada gancho (spec 2026-10-09 §3.2). `verificable` (`datos_verificables`: los datos sin la plantilla) es contra lo
+    que se contrastan las cifras; sin él, el `texto` entero, con los números de sus instrucciones."""
     content = [{"type": "text", "text": texto}] + list(imagenes or [])
     system_ = system(idioma)
-    verificable = texto + ("\n" + verificable_extra if verificable_extra else "")
+    verificable = (texto if verificable is None else verificable) + ("\n" + verificable_extra if verificable_extra else "")
     crudo, entrada, salida = _llamar(content, system_)
     try:
         return parsear(crudo, verificable, duracion_s), entrada, salida

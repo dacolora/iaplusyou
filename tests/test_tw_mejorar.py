@@ -445,7 +445,7 @@ def test_ganchos_se_limpian_y_se_acotan():
     ]
     g = mejorar._ganchos(crudo, "datos", 20.0)
     assert len(g) == 3
-    assert g[0]["texto"].startswith("Hola mundo y") and len(g[0]["texto"]) == mejorar.MAX_TEXTO_GANCHO
+    assert g[0]["texto"] == "Hola mundo"                 # la "palabra" de 80 letras no cabe: se corta en el espacio
     assert not any(c in g[0]["texto"] for c in ("\n", "\x00", "‮"))
     assert len(g[0]["escena"]) == 300 and len(g[0]["por_que"]) == 300 and len(g[0]["prompt"]) == 1000
     assert [x["fotograma_s"] for x in g] == [4.2, 10.0, 10.0]
@@ -510,4 +510,126 @@ def test_precio_de_los_ganchos_es_n_clips_de_kling():
 def test_sin_tarifa_de_kling_los_ganchos_no_tienen_precio(monkeypatch):
     from providers import flowplus_modelos
     monkeypatch.setattr(flowplus_modelos, "estimate_video", lambda *a, **k: {"usd": None})
-    assert gastos.estimar_ganchos_tw(3)["usd"] is None
+    sin = gastos.estimar_ganchos_tw(3)
+    assert sin["usd"] is None and sin["usd_precio"] is None and sin["texto"] == "precio no disponible"
+    assert "precio no disponible" in sin["detalle"] and "sin ganchos" not in sin["detalle"]       # no es «sin ganchos»
+    assert gastos.estimar_ganchos_tw(0)["detalle"] == "sin ganchos que generar"                    # n ≤ 0 conserva el suyo
+
+
+# ------------------------------------- ronda de arreglos 1: cifras contra los datos, idioma, cortes y ZWJ ---
+
+def _fila_real(copy=None):
+    f = _foto()
+    if copy:
+        f["creativo"]["copy"] = copy
+    return {"foto": f, "desde": "2026-09-01", "hasta": "2026-09-30", "moneda": "USD", "canal": "facebook-ads"}
+
+
+def _fila_minima():
+    """Un anuncio sin una sola cifra suya (fechas aparte): lo que `datos_verificables` deja es solo lo que se le dio."""
+    foto_ = {"nombre": "Anuncio", "canal": "facebook-ads", "ad_id": "a1", "veredicto": "perdedor", "motivo": "m", "m": {}}
+    return {"foto": foto_, "desde": "2026-01-02", "hasta": "2026-02-03", "moneda": "USD", "canal": "facebook-ads"}
+
+
+def _cifras_tras_parsear(datos_, ganchos, copy_nuevo, funciona):
+    return mejorar.parsear(respuesta(funciona=funciona, ganchos=ganchos, copy_nuevo=copy_nuevo), datos_, duracion_s=20.0)
+
+
+def test_las_cifras_se_verifican_contra_los_datos_y_no_contra_las_instrucciones():
+    """Revisión del 2026-10-09 (IMPORTANTE 1): los números de la plantilla (30, 40, 42, 80, 500, 60, 120, 200, 92…)
+    no son datos del anuncio. «Una cifra inventada no entra a un video» (spec §3.2). Con un anuncio sin cifras propias
+    ninguno de esos números está en lo verificable; con el prompt entero, todos."""
+    fila = _fila_minima()
+    datos_, prompt = mejorar.datos_verificables("Acme", fila), mejorar.armar("Acme", fila)
+    plantilla = {"30", "40", "42", "80", "500", "60", "120", "200", "92", "100"}
+    assert plantilla <= set(doctrina_numeros(prompt)) and not plantilla & set(doctrina_numeros(datos_))
+    assert "Tu trabajo" not in datos_ and "percentil 0 a 100" not in datos_ and "Reglas:" not in datos_
+    for verificable, esperado in ((prompt, False), (datos_, True)):        # el defecto de antes y el arreglo
+        r = _cifras_tras_parsear(
+            verificable, ganchos=[{"texto": "40 % menos dolor", "prompt": "Push in", "fotograma_s": 4}],
+            copy_nuevo={"titulo": "Chanclas", "texto": "Más de 500 clientes felices"},
+            funciona=[{"texto": "Prueba larga", "evidencia": "Hasta 60 días de prueba"}])
+        assert bool(r["ganchos"][0]["cifras_sin_dato"]) is esperado
+        assert bool(r["copy_nuevo"]["cifras_sin_dato"]) is esperado and bool(r["cifras_sin_dato"]) is esperado
+    assert r["ganchos"][0]["cifras_sin_dato"] == ["40 %"] and r["copy_nuevo"]["cifras_sin_dato"] == ["500"]
+    assert r["cifras_sin_dato"] == ["60"]
+
+
+def test_con_el_anuncio_real_tambien_se_marcan_las_cifras_que_no_estan():
+    """La fotografía de `_foto()` trae decimales (4.0, 5.00…) que el verificador lee como 40 y 500; las que no
+    coinciden con ninguno siguen marcadas."""
+    datos_ = mejorar.datos_verificables("Acme", _fila_real())
+    r = _cifras_tras_parsear(
+        datos_, ganchos=[{"texto": "70 % menos dolor", "prompt": "Push in", "fotograma_s": 4}],
+        copy_nuevo={"titulo": "Chanclas", "texto": "Más de 700 clientes felices"},
+        funciona=[{"texto": "Prueba larga", "evidencia": "Hasta 60 días de prueba"}])
+    assert r["ganchos"][0]["cifras_sin_dato"] == ["70 %"] and r["copy_nuevo"]["cifras_sin_dato"] == ["700"]
+    assert r["cifras_sin_dato"] == ["60"]
+
+
+def doctrina_numeros(texto):
+    import doctrina
+    return doctrina._numeros(texto)
+
+
+def test_una_cifra_que_si_esta_en_los_datos_no_se_marca():
+    fila = _fila_real(copy="Hasta 60% menos dolor")                     # el copy propio del anuncio trae el 60 %
+    datos_ = mejorar.datos_verificables("Acme", fila)
+    ctr = mejorar._num(fila["foto"]["cuenta"]["benchmarks"]["ctr"])      # la mediana del canal, tal como va al prompt
+    r = mejorar.parsear(respuesta(
+        ganchos=[{"texto": "60 % menos dolor", "prompt": "Push in", "fotograma_s": 4, "por_que": f"CTR {ctr} %"}],
+        copy_nuevo={"titulo": "T", "texto": "Hasta 60 % menos dolor", "por_que": f"Sube del {ctr} %"}), datos_, 20.0)
+    assert r["ganchos"][0]["cifras_sin_dato"] == [] and r["copy_nuevo"]["cifras_sin_dato"] == []
+
+
+def test_datos_verificables_no_cambia_armar():
+    fila = _fila_real()
+    voz = {"texto": "Hola", "frases": [{"segundo": 3.2, "texto": "Hasta 90 días"}], "costo_usd": 0}
+    kw = dict(voz=voz, evaluacion_cuenta={"resumen": "Ganan las demos de 12 s."}, aprendizajes="<aprendizajes>x 77</aprendizajes>",
+              productos=[{"nombre": "Cojín", "pedidos": 3, "unidades": 3, "ingresos": 90}])
+    datos_ = mejorar.datos_verificables("Acme", fila, **kw)
+    assert "[3,2 s] Hasta 90 días" in datos_ and "Ganan las demos de 12 s." in datos_ and "x 77" in datos_ and "Cojín" in datos_
+    assert mejorar.PROMPT.format(**mejorar._valores("Acme", fila, **kw)) == mejorar.armar("Acme", fila, **kw)
+
+
+def test_analizar_verifica_contra_el_verificable_que_se_le_da(monkeypatch):
+    monkeypatch.setattr(mejorar, "_llamar", lambda content, system_: (respuesta(
+        ganchos=[{"texto": "60 % menos dolor", "prompt": "Push in", "fotograma_s": 4}]), 100, 10))
+    monkeypatch.setattr(mejorar, "system", lambda idioma: "SYSTEM")
+    r, _, _ = mejorar.analizar("TEXTO CON 60 EN LAS INSTRUCCIONES", [], "es", duracion_s=8.0)         # como hoy
+    assert r["ganchos"][0]["cifras_sin_dato"] == []
+    r, _, _ = mejorar.analizar("TEXTO CON 60 EN LAS INSTRUCCIONES", [], "es", duracion_s=8.0, verificable="solo datos")
+    assert r["ganchos"][0]["cifras_sin_dato"] == ["60 %"]
+    r, _, _ = mejorar.analizar("TEXTO", [], "es", duracion_s=8.0, verificable="solo datos", verificable_extra="Segundo 60")
+    assert r["ganchos"][0]["cifras_sin_dato"] == []                   # el extra (segundos vistos) sigue sumando
+
+
+def test_system_dice_que_las_excepciones_mandan_sobre_la_orden_de_idioma():
+    for idioma in ("es", "en"):
+        bloques = mejorar.system(idioma)
+        extra = bloques[-1]["text"]
+        assert "mandan sobre la instrucción de IDIOMA" in extra and "TEXTO DEL ANUNCIO" in extra and "copy_nuevo" in extra
+        assert extra.index("mandan sobre la instrucción de IDIOMA") > extra.index("IDIOMA:")      # tras la orden de arriba
+
+
+def test_el_texto_de_un_gancho_se_corta_en_una_palabra_entera():
+    texto = "Descubre por qué miles de mamás ya no sufren al final del día con estas chanclas suaves"
+    g = mejorar._ganchos([{"texto": texto, "prompt": "Push in"}], "datos", 20.0)[0]["texto"]
+    assert len(g) <= mejorar.MAX_TEXTO_GANCHO and texto.startswith(g) and texto[len(g)] == " "
+    assert len(g) > 40 and not g.endswith(" ")
+    justo = ("a" * 59) + " b"                                         # el espacio cae exactamente después de 59… y 60 es «b»
+    assert mejorar._ganchos([{"texto": justo, "prompt": "p"}], "datos", 20.0)[0]["texto"] == "a" * 59
+    exacto = ("a" * 29) + " " + ("b" * 30)                            # 60 caracteres: cabe entero
+    assert mejorar._ganchos([{"texto": exacto, "prompt": "p"}], "datos", 20.0)[0]["texto"] == exacto
+    una = "x" * 80                                                    # sin ningún espacio: corte duro
+    assert mejorar._ganchos([{"texto": una, "prompt": "p"}], "datos", 20.0)[0]["texto"] == "x" * 60
+
+
+def test_un_emoji_compuesto_conserva_su_zwj_y_el_resto_de_caracteres_de_formato_se_quita():
+    familia = "👩‍👩‍👧"
+    g = mejorar._ganchos([{"texto": f"Mamá {familia} descansa‮⁦", "prompt": "Push‍ in‮"}], "datos", 20.0)[0]
+    assert familia in g["texto"] and "‮" not in g["texto"] and "⁦" not in g["texto"]
+    assert g["prompt"] == "Push‍ in"            # ZWJ se conserva (inofensivo); la orden de derecha a izquierda no
+    c = mejorar._copy_nuevo({"titulo": f"Pies {familia}", "texto": f"Línea {familia}\n‮otra línea​"}, "datos")
+    assert familia in c["titulo"] and familia in c["texto"] and c["texto"].endswith("otra línea")
+    assert "‮" not in c["texto"] and "​" not in c["texto"]
