@@ -130,7 +130,13 @@ def _ids(con, cliente, cf_id):
 
 
 def actualizar(cliente, cf_id, **campos):
+    """Fusiona `campos` en la sesión. `BEGIN IMMEDIATE` antes de leer
+    (2026-10-09): sin él, el SELECT corría en autocommit y lo que otro
+    escritor confirmara entre la lectura y el UPDATE (el corazón de la
+    tarjeta, otra tarea del worker) se perdía al reescribir `extra` con la
+    foto vieja. Con `busy_timeout` el segundo escritor espera, no falla."""
     with db.conectar() as con:
+        con.exec_driver_sql("BEGIN IMMEDIATE")
         f = _ids(con, cliente, cf_id)
         if not f:
             return False
