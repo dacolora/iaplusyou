@@ -77,3 +77,5 @@ PND-036 (2026-10-03): organico.crear rechaza tipo imagen antes de insertar una p
 Su subcódigo 1885183/modo Desarrollo tiene mensaje propio por gettext, separado de permisos (#3), sin prometer
 reutilización que ese camino no implementa. `tests/test_tareas_meta.py` provoca el rechazo con dobles; no cambia
 la publicación ni los reintentos.
+
+PND-191 (2026-10-09, decisión delegada): la prueba de reconciliar_subidas fija un mismo reloj propio para db.ahora y organico.datetime. Expectativas y publicación intactas. La sonda con once minutos de desfase reproduce el resultado, pero no confirma la causa natural del fallo de la suite anterior; test_pnd191_reconciliar_aisla_el_reloj cubre los bordes de segundo.

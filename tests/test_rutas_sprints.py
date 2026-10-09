@@ -1119,3 +1119,26 @@ def test_pnd088_repetir_qa_no_borra_ni_encola_aprobadas(con_ideas, monkeypatch, 
     datos.actualizar_idea('acme', ii, revision='pendiente', qa={'veredicto': 'falla'})
     assert c.post(f'/cliente/acme/sprints/ideas/{ii}/qa', headers={'Accept': 'application/json'}).status_code == 200
     assert len(con_ideas['encolados']) == n + 1
+
+
+def test_pnd166_precios_acciones_y_reintento(app):
+    from sprints import datos
+    from cobros import libro
+    import gastos
+    pid, tid = _base(datos)
+    sid, cid = _sprint(datos, pid, tid)
+    rid = datos.agregar_referencia('acme', cid, 'imagen', 'https://r2/foto.jpg')
+    datos.actualizar_referencia('acme', rid, analisis_estado='error', analisis={'error': 'fallo simulado'})
+    libro.configurar('acme', cobrar=True, margen=2, usuario='admin')
+    precio = gastos.formatear(gastos.TARIFAS['analizar_referencia'] * 2)
+    for url in (f'/cliente/acme/sprints/{sid}/campanas/{cid}', f'/cliente/acme/sprints/{sid}/campanas/{cid}/panel'):
+        html = app['c'].get(url).data.decode()
+        assert 'Reintentar análisis' in html
+        assert precio in html
+        assert f'/cliente/acme/sprints/referencias/{rid}/reanalizar' in html
+        if url.endswith('/panel'):
+            assert '<script' not in html
+    html = app['c'].get('/cliente/acme').data.decode()
+    import re
+    form = re.search(r'<form[^>]*action="/cliente/acme/sprints/personas/sugerir"[^>]*>(.*?)</form>', html, re.S).group(1)
+    assert 'Sugerir personas' in form and gastos.formatear(gastos.TARIFAS['sugerir_personas'] * 2) in form

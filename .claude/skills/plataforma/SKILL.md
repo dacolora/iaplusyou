@@ -54,9 +54,7 @@ the same endpoint for both paths — and renders a progress bar via the shared
 `iniciarPolling()` JS in `base.html`, reloading the page on completion. `job_id` is
 deterministic per (cliente, prompt_id/brief_id, acción) so a repeat click no-ops
 instead of double-launching. Tasks that spend credits are queued with
-`max_intentos=1` — they never auto-retry. Exception found 2026-10-08:
-old Nicho consultas/seleccionar callers still pass 2, tracked separately as
-PND-190; the lane change does not alter that paid retry policy. A queued task stuck running for more than
+`max_intentos=1` — they never auto-retry. A queued task stuck running for more than
 30 minutes is either re-queued (if it still has attempts left) or marked `error`
 (once `max_intentos` is exhausted) — never one this worker is running right now
 (`cola.recuperar_colgadas(excluir=worker.en_vuelo())`). Since 2026-09-28 (spec
@@ -145,3 +143,5 @@ S3 (2026-10-08, auditoría lote 6B): la periódica diaria cola_limpiar llama man
 PND-068 (2026-10-08, decisión 2026-09-18: nada nuevo a Higgsfield): retirados productores y rutas de Nueva idea y sus nueve plantillas. No eran tareas de cola, sino hilos de Flask. Un tipo desconocido queda en error en palabras sin llamar al proveedor (tests/test_lote6c_retirar_ideas.py); proveedores/CLI y datos históricos conservados.
 
 PND-051 (enmienda 2026-10-08): el carril Nicho tiene un solo hilo para sus seis tareas que esperan proveedor y referentes_barrer. Los barridos comparten la RAM y el límite de corridas de Apify con Nicho; repartirlos en paralelo daba 402 por capacidad. General excluye Crear + Nicho, y en_vuelo, esperar_hilos y recuperación son comunes a los tres carriles. En SIGINT/SIGTERM no se interrumpe el sondeo de Apify: el hilo termina la tarea y esperar_hilos lo espera. En un despliegue la cola debe estar vacía antes de reiniciar. No hay puntos de control ni continuaciones nuevas de Apify: se conserva el contrato anterior del proveedor y del gasto. Pruebas: tests/test_lote6c_nicho_carril.py, incluido un 402 sin cobro seguido de un segundo clic explícito con el mismo job_id que sí termina. No cambia max_intentos ni la política de cobro.
+
+PND-190/166/159 (2026-10-09, decisiones delegadas lote 7): consultas/selección de Nicho y análisis/personas de Sprints se encolan con un intento y costo estimado. Sprints pasa un acumulador de usage (caché incluida), registra con referencia por tarea también si falla el guardado/JSON y usa entregado=False al fallar. El POST de arranque Apify pasa reintentar=False; los GET conservan su política.

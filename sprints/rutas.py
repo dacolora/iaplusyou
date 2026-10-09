@@ -115,6 +115,12 @@ def _productos(cliente):
     return list(productos_dict.values())
 
 
+@bp.context_processor
+def _precios_sprints():
+    return {"costo_analisis_sprint": gastos.TARIFAS["analizar_referencia"],
+            "costo_personas_sprint": gastos.TARIFAS["sugerir_personas"]}
+
+
 def contexto(cliente):
     """Lo que necesita _tab_sprints.html. Se llama desde dashboard.ver_cliente."""
     lista = []
@@ -127,6 +133,7 @@ def contexto(cliente):
     inicio, fin = tablero.mes_siguiente(date.today())
     anio = int(inicio[:4])
     return {
+        **_precios_sprints(),
         "sprints_lista": lista,
         "pais_calendario": pais,
         "presets_temporadas": calendario.presets(pais, anio),
@@ -1149,6 +1156,9 @@ def referencia_quitar(cliente, rid):
 @bp.post("/referencias/<int:rid>/reanalizar")
 def referencia_reanalizar(cliente, rid):
     r = _referencia_o_404(cliente, rid)
+    if trabajos.en_curso(tareas_sprints.job_id_analizar(cliente, rid)):
+        return jsonify({"ok": True}) if _quiere_json() else _volver(cliente, r["sprint_id"], r["campana_id"])
+    libro.exigir(cliente, gastos.estimar("analizar_referencia")["usd"])
     datos.actualizar_referencia(cliente, rid, analisis_estado="pendiente")
     tareas_sprints.encolar_analisis(cliente, rid)
     if _quiere_json():

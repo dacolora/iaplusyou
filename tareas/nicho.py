@@ -260,7 +260,8 @@ def _gasto_recoleccion(cliente, eid, tarea, fuente, params, nota=""):
                             detalle=detalle + (f" — {nota}" if nota else ""),
                             proveedor="apify",
                             extra={"actor": tarifa["actor"], "resultados": n, "usd_por_resultado": tarifa["usd_por_resultado"],
-                                   "usd_por_corrida": tarifa.get("usd_por_corrida", 0), **_corrida(fuente),
+                                   "usd_por_corrida": tarifa.get("usd_por_corrida", 0),
+                                   **({"estimado": True, "conciliacion_pendiente": True} if any(c.get("estimado") for c in (getattr(fuente, "corridas", None) or [])) else {}), **_corrida(fuente),
                                    **({"corridas": corridas} if corridas else {})})
     return usd
 

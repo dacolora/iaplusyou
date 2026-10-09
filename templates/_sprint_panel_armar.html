@@ -117,6 +117,13 @@
         <img src="{{ r.frame_url or r.url }}" alt="" loading="lazy">
         <button type="button" class="panel-quitar" data-quitar-ref="{{ url_for('sprints.referencia_quitar', cliente=cliente, rid=r.id) }}"
                 aria-label="{{ _('Quitar este referente') }}" title="{{ _('Quitar') }}">✕</button>
+        {% if r.analisis_estado == 'error' %}
+        <figcaption><p class="tag-error">{{ _('No se pudo analizar') }}{% if r.analisis.error %}: {{ r.analisis.error }}{% endif %}</p>
+          <form method="post" action="{{ url_for('sprints.referencia_reanalizar', cliente=cliente, rid=r.id) }}" class="inline">
+            <input type="hidden" name="volver" value="tablero">
+            <button type="submit" class="btn-sm">{{ _('Reintentar análisis') }} · {{ costo_analisis_sprint|precio|usd }}</button>
+          </form></figcaption>
+        {% endif %}
         {% if r.estado != 'lista' %}<figcaption><button type="button" class="enlace-describir" data-abrir-describir="{{ r.id }}">{{ _('Falta describir ✎') }}</button></figcaption>{% endif %}
       </figure>
       {% endfor %}
@@ -157,11 +164,11 @@
         <input type="hidden" name="volver" value="tablero">
         <label>{{ _('Archivos (jpg, png, webp, mp4, mov, webm)') }} <input type="file" name="archivos" multiple accept="image/*,video/*"></label>
         <label>{{ _('O un link (Instagram, TikTok, YouTube…)') }} <input type="url" name="link" placeholder="https://"></label>
-        <button type="submit" class="btn-sm">{{ _('Agregar') }}</button>
+        <button type="submit" class="btn-sm">{{ _('Agregar') }} · {{ _('Análisis por referencia:') }} {{ costo_analisis_sprint|precio|usd }}</button>
       </form>
       <form method="post" action="{{ url_for('sprints.referencias_catalogo', cliente=cliente, sid=sprint.id, cid=c.id) }}">
         <input type="hidden" name="volver" value="tablero">
-        <button type="submit" class="btn-sm">{{ _('Traer las fotos del producto') }}</button>
+        <button type="submit" class="btn-sm">{{ _('Traer las fotos del producto') }} · {{ _('Análisis por referencia:') }} {{ costo_analisis_sprint|precio|usd }}</button>
       </form>
     </details>
   </section>

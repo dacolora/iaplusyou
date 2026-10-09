@@ -121,7 +121,7 @@ def arrancar(sesion, token, actor, entrada, max_items, max_total_charge_usd, on_
     if memoria_mb:
         params["memory"] = memoria_mb
     r = _http.pedir(sesion, "POST", f"{URL_API}/actors/{actor}/runs", "Apify", headers=cabeceras(token),
-                    params=params, json=entrada)
+                    params=params, json=entrada, reintentar=False)
     if r.status_code == 403 and _tipo_apify(r) == "full-permission-actor-not-approved":
         # No es un problema de token (2026-10-01: `axesso_data~amazon-reviews-scraper` empezó a
         # pedir esto): el mensaje de siempre manda a revisar APIFY_TOKEN y no hay nada que revisar
@@ -151,6 +151,18 @@ def arrancar(sesion, token, actor, entrada, max_items, max_total_charge_usd, on_
     run_id, dataset_id = corrida.get("id") or None, corrida.get("defaultDatasetId") or None
     if on_ids:
         on_ids(run_id, dataset_id)
+    if run_id and not dataset_id:
+        # PND-159: el POST ya arrancó; solo se lee, nunca se lanza otra corrida.
+        try:
+            lectura = _http.pedir(sesion, "GET", f"{URL_API}/actor-runs/{run_id}", "Apify", headers=cabeceras(token))
+            dato = _cuerpo(lectura).get("data") if lectura.status_code == 200 else None
+            if isinstance(dato, dict) and dato.get("defaultDatasetId"):
+                dataset_id = dato["defaultDatasetId"]
+                corrida = dato
+                if on_ids:
+                    on_ids(run_id, dataset_id)
+        except (ErrorFuente, ValueError):
+            pass  # quien llama conserva el id y registra el estimado marcado
     if not run_id or not dataset_id:
         # Si el id sí vino, la corrida pudo arrancar (y cobrar) igual.
         raise ErrorFuente(gettext("Apify no devolvió los ids de la corrida (corrida %(corrida)s, "
@@ -326,6 +338,8 @@ def correr_lote(sesion, token, actor, corridas, etapa, avanzar=None, max_simulta
         if crudos is None:
             contados = contar_dataset(sesion, token, reg["dataset_id"]) if reg["dataset_id"] else None
             reg["resultados"] = c["max_items"] if contados is None else contados
+            if contados is None:
+                reg.update(estimado=True, conciliacion_pendiente=True)
             reg["motivo"] = (reg["motivo"] + "; " if reg["motivo"] else "") + gettext("dataset %(dataset)s no leído (%(motivo)s)",
                                                                                      dataset=reg["dataset_id"] or "?", motivo=motivo)
         else:

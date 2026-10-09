@@ -793,3 +793,18 @@ def test_get_estudio_sin_cambios_no_pide_escritura(app, base_temporal):
         r = app['c'].get(f'/cliente/acme/nicho/{eid}')
         assert r.status_code == 200
         otro.rollback()
+
+
+def test_pnd190_reanudar_muestra_precio_con_margen(app, monkeypatch):
+    from nicho import datos, investigacion as inv
+    from tareas import investigacion as ti
+    from cobros import libro
+    import gastos
+    eid = _estudio(datos)
+    i = inv.crear_inicial('lavar', 'CO', ['amazon'], [], inv.TOPES_DEFECTO, estimado={'total_usd': 9})
+    datos.iniciar_investigacion('acme', eid, inv.detener(i, 'fallo simulado'))
+    libro.configurar('acme', cobrar=True, margen=2, usuario='admin')
+    html = app['c'].get(f'/cliente/acme/nicho/{eid}').data.decode()
+    import re
+    form = re.search(r'<form[^>]*action="' + f'/cliente/acme/nicho/{eid}/investigacion/reanudar' + r'"[^>]*>(.*?)</form>', html, re.S).group(1)
+    assert gastos.formatear(ti._costo_paso(datos.estudio('acme', eid), i, 'consultas') * 2) in form

@@ -36,7 +36,7 @@
   </div>
   <div class="fe-opciones">
     <label>{{ _('O pega un link (TikTok, Instagram, YouTube)') }} <input type="url" name="link" placeholder="https://..." style="width: 22rem;"></label>
-    <button type="submit" class="btn-generar btn-sm">{{ _('Subir') }}</button>
+    <button type="submit" class="btn-generar btn-sm">{{ _('Subir') }} · {{ _('Análisis por referencia:') }} {{ costo_analisis_sprint|precio|usd }}</button>
   </div>
   {% if trabajo_link %}
   <div class="barra-progreso" id="trabajo-{{ trabajo_link.job_id }}"><div class="barra-progreso-fill"></div><span class="progreso-texto"></span></div>
@@ -46,7 +46,7 @@
 
 <div class="acciones">
   <form method="post" action="{{ url_for('sprints.referencias_catalogo', cliente=cliente, sid=sprint.id, cid=campana.id) }}" class="inline">
-    <button type="submit" class="btn-sm">{{ _('Traer las fotos del producto') }}</button>
+    <button type="submit" class="btn-sm">{{ _('Traer las fotos del producto') }} · {{ _('Análisis por referencia:') }} {{ costo_analisis_sprint|precio|usd }}</button>
   </form>
   <a class="btn-sm" href="{{ url_for('ver_cliente', cliente=cliente) }}#referentes?etapa={{ campana.funnel.upper() }}&campana={{ campana.id }}">{{ _('Elegir de la biblioteca') }}</a>
   <a class="btn-sm" href="{{ url_for('ver_cliente', cliente=cliente) }}#referentes?etapa={{ campana.funnel.upper() }}&campana={{ campana.id }}&palabra={{ palabra_sugerida | urlencode }}&pais={{ pais_sugerido }}"
@@ -127,7 +127,7 @@
       </div>
       <div class="sprint-ref-acciones">
         <span class="sprint-guardado" hidden>{{ _('Guardado') }}</span>
-        <form method="post" action="{{ url_for('sprints.referencia_reanalizar', cliente=cliente, rid=r.id) }}" class="inline"><button type="submit" class="btn-xs">{{ _('Reanalizar') }}</button></form>
+        <form method="post" action="{{ url_for('sprints.referencia_reanalizar', cliente=cliente, rid=r.id) }}" class="inline"><button type="submit" class="btn-xs">{{ _('Reintentar análisis') if r.analisis_estado == 'error' else _('Reanalizar') }} · {{ costo_analisis_sprint|precio|usd }}</button></form>
         <form method="post" action="{{ url_for('sprints.referencia_quitar', cliente=cliente, rid=r.id) }}" class="inline"
               onsubmit='return confirm({{ _("¿Quitar esta referencia?")|tojson }});'><button type="submit" class="btn-xs btn-peligro">{{ _('Quitar') }}</button></form>
       </div>

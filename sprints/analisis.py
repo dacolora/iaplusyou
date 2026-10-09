@@ -56,7 +56,7 @@ def _llamar(content, max_tokens=700, system=None):
     return "".join(b.text for b in resp.content if b.type == "text").strip()
 
 
-def _llamar_contando(content, max_tokens=700, system=None, timeout=None, max_retries=None):
+def _llamar_contando(content, max_tokens=700, system=None, timeout=None, max_retries=None, uso=None):
     """Como `_llamar`, pero devuelve (texto, tokens_entrada, tokens_salida)
     para registrar el gasto real de una acción pagada. `usage.input_tokens`
     no incluye la caché (la doctrina va en el system con cache_control): se
@@ -71,11 +71,15 @@ def _llamar_contando(content, max_tokens=700, system=None, timeout=None, max_ret
     extra = {"system": system} if system else {}
     resp = client.messages.create(model=MODEL, max_tokens=max_tokens,
                                   messages=[{"role": "user", "content": content}], **extra)
-    texto = "".join(b.text for b in resp.content if b.type == "text").strip()
     u = resp.usage
     escrita = getattr(u, "cache_creation_input_tokens", None) or 0
     leida = getattr(u, "cache_read_input_tokens", None) or 0
-    return texto, u.input_tokens + round(escrita * 1.25 + leida * 0.1), u.output_tokens
+    entrada = u.input_tokens + round(escrita * 1.25 + leida * 0.1)
+    if uso is not None:
+        uso["entrada"] = uso.get("entrada", 0) + entrada
+        uso["salida"] = uso.get("salida", 0) + u.output_tokens
+    texto = "".join(b.text for b in resp.content if b.type == "text").strip()
+    return texto, entrada, u.output_tokens
 
 
 def _parsear_json(texto):
@@ -129,7 +133,7 @@ def _system(idioma="es"):
     return doctrina.bloque_system("clasificar", idioma=idioma)
 
 
-def analizar(referencia, marca="", idioma="es"):
+def analizar(referencia, marca="", idioma="es", uso=None):
     """Devuelve el dict con CLAVES. Reintenta una sola vez si el JSON no sirve."""
     etiquetas = [datos.INTENCIONES_NOMBRE.get(i, i) for i in (referencia.get("intencion") or [])]
     intencion = ", ".join(etiquetas) or "todo lo que valga la pena reutilizar"
@@ -142,8 +146,13 @@ def analizar(referencia, marca="", idioma="es"):
     if not imagenes:
         raise AnalisisInvalido(gettext("La referencia no tiene imagen ni fotograma que analizar."))
     content = [{"type": "text", "text": texto}] + imagenes
+    def llamar(bloques):
+        if uso is None:
+            return _llamar(bloques, max_tokens=4000, system=_system(idioma))
+        return _llamar_contando(bloques, max_tokens=4000, system=_system(idioma),
+                               max_retries=0, uso=uso)[0]
     try:
-        return _parsear_json(_llamar(content, max_tokens=4000, system=_system(idioma)))
+        return _parsear_json(llamar(content))
     except AnalisisInvalido as e:
         content = content + [{"type": "text", "text": f"Tu respuesta anterior no sirvió ({e}). Responde solo el JSON pedido."}]
-        return _parsear_json(_llamar(content, max_tokens=4000, system=_system(idioma)))
+        return _parsear_json(llamar(content))

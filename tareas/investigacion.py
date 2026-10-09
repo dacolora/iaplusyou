@@ -2,9 +2,9 @@
 Tareas de la investigación automática del nicho (spec Parte 3 §1, §9) y el
 motor que encadena los pasos.
 
-  nicho_inv_consultas   -> Claude convierte el tema en búsquedas, hasta el tope aprobado (max_intentos=2)
+  nicho_inv_consultas   -> Claude convierte el tema en búsquedas, hasta el tope aprobado (max_intentos=1)
   nicho_inv_buscar      -> el actor de búsqueda de UNA plataforma trae productos (max_intentos=1: cobra)
-  nicho_inv_seleccionar -> Claude marca cuáles son del nicho y elige los de más reseñas (max_intentos=2)
+  nicho_inv_seleccionar -> Claude marca cuáles son del nicho y elige los de más reseñas (max_intentos=1)
   resenas:<plataforma>, redes:<red> y generar corren en tareas/nicho.py
   (`nicho_recolectar` con `investigacion: true`, `nicho_generar_avatares` con `auto: true`).
 
@@ -165,7 +165,8 @@ def _gasto_apify(cliente, eid, tarea, paso, fuente, tarifa, nota=""):
     gastos.registrar_seguro(cliente, "recoleccion", usd, f"recoleccion:{eid}:{paso}{ref_sufijo(tarea)}",
                             detalle=detalle + (f" — {nota}" if nota else ""),
                             proveedor="apify", extra={"actor": tarifa["actor"], "resultados": n, "usd_por_resultado": tarifa["usd_por_resultado"],
-                                                      "usd_por_corrida": tarifa.get("usd_por_corrida", 0), "corridas": corridas})
+                                                      "usd_por_corrida": tarifa.get("usd_por_corrida", 0),
+                                   **({"estimado": True, "conciliacion_pendiente": True} if any(c.get("estimado") for c in (getattr(fuente, "corridas", None) or [])) else {}), "corridas": corridas})
     return usd
 
 
@@ -285,7 +286,7 @@ def _avanzar(cliente, estudio_id):
         base = {"cliente": cliente, "estudio_id": int(estudio_id)}
         if paso == "consultas":
             trabajos.encolar(datos.job_id_inv(cliente, estudio_id, paso), "nicho_inv_consultas", base, cliente=cliente,
-                             duracion_estimada=60, etapas=ETAPAS_CONSULTAS, max_intentos=2,
+                             duracion_estimada=60, etapas=ETAPAS_CONSULTAS, max_intentos=1,
                              costo_estimado=_costo_paso(est, i, paso), excluir_job=excluir)
             return paso
         if paso.startswith("buscar:"):
@@ -300,7 +301,7 @@ def _avanzar(cliente, estudio_id):
                 _marcar(cliente, estudio_id, paso, "vacio", aviso=N_("sin plataformas"))
                 continue
             trabajos.encolar(datos.job_id_inv(cliente, estudio_id, paso), "nicho_inv_seleccionar", base, cliente=cliente,
-                             duracion_estimada=60, etapas=ETAPAS_SELECCION, max_intentos=2,
+                             duracion_estimada=60, etapas=ETAPAS_SELECCION, max_intentos=1,
                              costo_estimado=_costo_paso(est, i, paso), excluir_job=excluir)
             return paso
         if paso.startswith("resenas:"):

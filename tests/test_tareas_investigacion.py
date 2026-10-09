@@ -571,3 +571,57 @@ def test_seleccion_sin_nada_por_juzgar_no_paga(base_temporal, cola_falsa, monkey
     ti.ejecutar_seleccionar(_tarea("acme", eid, "nicho_inv_seleccionar"))
     i = datos.investigacion("acme", eid)
     assert len(gastos.historial("acme")) == antes and i["pasos"]["seleccionar"]["estado"] == "hecho" and i["elegidos"]["amazon"]
+
+
+@pytest.mark.parametrize('paso,tipo', [('consultas', 'nicho_inv_consultas'), ('seleccionar', 'nicho_inv_seleccionar')])
+def test_pnd190_fallo_unico_y_reintento_manual(base_temporal, monkeypatch, paso, tipo):
+    import cola
+    from nicho import datos, investigacion as inv
+    from tareas import investigacion as ti
+    eid = _estudio(datos)
+    _iniciar(datos, eid, plataformas=('amazon',), redes=())
+    if paso == 'seleccionar':
+        datos.guardar_productos_nicho('acme', eid, 'amazon', _productos(1))
+        datos.actualizar_investigacion('acme', eid, lambda x: inv.marcar_paso(inv.marcar_paso(x, 'consultas', 'hecho'), 'buscar:amazon', 'hecho'))
+    llamadas = []
+    def fallo(*a):
+        llamadas.append(1)
+        raise RuntimeError('fallo simulado')
+    nombre = 'consultas_por_idioma_con_claude' if paso == 'consultas' else 'seleccion_con_claude'
+    monkeypatch.setattr(inv, nombre, fallo)
+    assert ti.avanzar('acme', eid) == paso
+    job = datos.job_id_inv('acme', eid, paso)
+    t = cola.reclamar()
+    assert t['max_intentos'] == 1
+    with pytest.raises(RuntimeError, match='fallo simulado'):
+        getattr(ti, 'ejecutar_' + paso)(t)
+    assert cola.fallar(t['id'], 'fallo simulado') == 'error'
+    assert cola.reclamar() is None
+    i = datos.investigacion('acme', eid)
+    assert i['estado'] == 'detenida' and 'fallo simulado' in i['detenida_por']
+    datos.actualizar_investigacion('acme', eid, inv.reanudar)
+    assert ti.avanzar('acme', eid) == paso
+    assert cola.consultar_por_job(job)['id'] != t['id']
+    assert llamadas == [1]
+
+
+@pytest.mark.parametrize('paso', ['consultas', 'seleccionar'])
+def test_pnd190_reanudar_con_datos_pagados_no_llama_claude(base_temporal, cola_falsa, monkeypatch, paso):
+    from nicho import datos, investigacion as inv
+    from tareas import investigacion as ti
+    eid = _estudio(datos)
+    _iniciar(datos, eid, plataformas=('amazon',), redes=())
+    def prohibido(*a):
+        pytest.fail('Claude se pagó otra vez')
+    monkeypatch.setattr(inv, 'consultas_por_idioma_con_claude', prohibido)
+    monkeypatch.setattr(inv, 'seleccion_con_claude', prohibido)
+    if paso == 'consultas':
+        datos.actualizar_investigacion('acme', eid, lambda x: {**inv.marcar_paso(x, paso, 'hecho'), 'consultas': ['ya pagada'], 'estado': 'interrumpida'})
+    else:
+        datos.guardar_productos_nicho('acme', eid, 'amazon', _productos(1))
+        prod = datos.productos_nicho('acme', eid)[0]
+        datos.marcar_relevancia('acme', eid, {prod['id']: {'relevante': True, 'motivo': 'pagado'}})
+        datos.actualizar_investigacion('acme', eid, lambda x: {**inv.marcar_paso(inv.marcar_paso(inv.marcar_paso(x, 'consultas', 'hecho'), 'buscar:amazon', 'hecho'), paso, 'en_curso'), 'estado': 'interrumpida'})
+    datos.actualizar_investigacion('acme', eid, inv.reanudar)
+    getattr(ti, 'ejecutar_' + paso)(_tarea('acme', eid, 'nicho_inv_' + paso, max_intentos=1))
+    assert cola_falsa[-1]['tipo'] == ('nicho_inv_buscar' if paso == 'consultas' else 'nicho_recolectar')

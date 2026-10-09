@@ -57,6 +57,19 @@ mala, se cambia aquí y en la fila.
 | 094 | Variantes por la Admin API y selectores que cargan al pedirlos pasan a proyectos nuevos (grupo 8 del plan). | Son funciones nuevas, no arreglos. |
 | 136 | Lo que queda del centro de resultados (reparto, destino, ranking, «Activar») pasa a la entrega E3 de Experimentos. | Lo decide ese rediseño. |
 
+## Lote 7 (decidido por Claude el 2026-10-09; Daniel dijo «sí, lánzalo»)
+
+| PND | Decisión | Por qué | Costo si sale mal |
+|---|---|---|---|
+| 190 | `nicho_inv_consultas` y `nicho_inv_seleccionar` pasan a `max_intentos=1`. Si fallan, la investigación queda en error con su motivo y la persona la retoma con el botón que ya existe (o uno nuevo «Reintentar» con el precio a la vista), sin volver a pagar lo ya hecho. | Regla 1: lo que cobra no se reintenta solo. | Un fallo pide un clic más. |
+| 166 | `sprint_analizar_referencia` y `sprint_sugerir_personas` anotan su gasto real (con el `usage` de Claude, como `sprint_proponer_ideas`), pasan a `max_intentos=1` y muestran su precio estimado junto al botón o la acción que las lanza. Si un análisis falla, la referencia ofrece «Reintentar análisis» con su precio. | Hoy cobran saldo para arrancar pero salen gratis y sin aviso; con Cobros, el cliente debe ver y pagar lo que gasta. | Unos centavos por referencia que antes no se anotaban. |
+| 159 | Apify: la corrida se anota apenas se conoce su id. Si el POST responde sin el id del dataset, se lee la corrida (gratis) para obtenerlo; si tampoco se puede, se anota tope × precio marcado `estimado` y `conciliacion_pendiente`. Un POST que arranca una corrida nunca se reintenta solo (los GET sí). | Nunca un cobro sin anotar ni dos corridas por un timeout. | Un fallo de red pide un clic más. |
+| 187 | Las miniaturas que Triple Whale guarda en Referentes van a R2 con el proyecto en la clave (`clientes/<cliente>/referentes/…`). Las ya subidas se quedan donde están; solo cambian las nuevas. | Un proyecto no debe poder pisar el archivo de otro. | Ninguno. |
+| 176 | Se deja como está: una idea descartada no necesita aviso de error. | La persona ya dijo que no la quiere. | Ninguno. |
+| 177 | Se arregla: un `extra` guardado como JSON `null` cuenta como vacío al marcar el cambio de guion. | Arreglo de una línea. | Ninguno. |
+| 178 | `limpiar_reservas_muertas` solo borra reservas sin tarea viva con más de 10 minutos. | Cierra la ventana entre reservar y encolar. | Ninguno. |
+| 191 | Se investiga la prueba de orgánico que falla a veces (reloj u orden) y se arregla la PRUEBA o su aislamiento, sin cambiar la publicación. | Una suite que falla a veces esconde fallos reales. | Ninguno. |
+
 ## Se dejan como están (cerradas con su motivo)
 
 | PND | Decisión | Por qué |

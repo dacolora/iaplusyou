@@ -120,3 +120,5 @@ listo enlazan a `#creativeflowplus?cf=<id>`; el modal carga el detalle aunque no
 las pruebas de fuentes, llaves, ruta por proyecto y JS cubren el cambio; la vista real queda para Claude.
 
 S1/S4 (2026-10-08, enmienda de revisión lote 6B): ganador_sin_publicar y anuncios_rechazados también protegen descartar/restaurar con 403 para cliente. Si sanear/truncar el usuario cambia su nombre exacto, cuenta:correo agrega - y ocho hex del sha256 del nombre exacto; nombres ya limpios mantienen la clave. Esto evita que dos cuentas viejas compartan descartes. R7 prueba que un sprint vivo ajeno con el mismo cf_id no esconde el error de Crear.
+
+PND-176 (2026-10-09, decisión delegada): se conserva la ausencia de aviso para una idea descartada de un sprint vivo, aunque su sesión esté en error: la persona ya dijo que no la quiere. Sin cambio de código.

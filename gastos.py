@@ -90,6 +90,11 @@ TARIFAS = {
     # Inicial; se ajusta con lo medido en la prueba real.
     "leer_referente": 0.01,
     "sugerir_ia": 0.04,
+    # PND-166, 2026-10-09: estimados iniciales con salidas al tope vigente y
+    # ~10k tokens de entrada equivalentes por llamada (doctrina/visión/catálogo).
+    # Análisis: hasta 2 × (4000 salida + entrada); personas: 6000 salida + entrada.
+    "analizar_referencia": 0.12,
+    "sugerir_personas": 0.08,
     "clasificacion": 0.012,
     # La de siempre + la salida del segundo idioma (~60 tokens más por anuncio,
     # redondeado hacia arriba): un referente global sale en español e inglés
@@ -442,6 +447,8 @@ _ESTIMADORES = {
     "caption_organico": lambda **_: (TARIFAS["caption_organico"], "una llamada a Claude"),
     "adaptar_referente": lambda **_: (TARIFAS["adaptar_referente"], "una llamada corta a Claude"),
     "leer_referente": lambda **_: (TARIFAS["leer_referente"], "una llamada corta a Claude con visión"),
+    "analizar_referencia": lambda **_: (TARIFAS["analizar_referencia"], ""),
+    "sugerir_personas": lambda **_: (TARIFAS["sugerir_personas"], ""),
     "sugerir_ia": lambda **_: (TARIFAS["sugerir_ia"], "una llamada a Claude"),
     "refinar_prompt": lambda **_: (TARIFAS["refinar_prompt"], "un mensaje a Claude"),
     "clasificacion": lambda n=1, bilingue=False, **_: (

@@ -82,3 +82,5 @@ Idioma de publicación vs idioma de la app (2026-10-08, spec de Noruega y Suecia
 
 
 Lote 6B (2026-10-08): pantalla de accesos bloqueados, bitácora de desbloqueo, rechazo de QA aprobado pasan por gettext y el catálogo inglés. admin_bloqueos_login.html se incorpora a la guardia de plantillas. Catálogo actualizado y compilado; sin fuzzy. R6 (2026-10-08): el vencimiento del login usa ngettext en minutos redondeados hacia arriba. Verificación visual en es/en corresponde a Claude.
+
+PND-166 (2026-10-09, decisión delegada): Reintentar análisis, Análisis por referencia y Sugerir personas pasan por gettext y catálogo inglés (Retry analysis, Analysis per reference, Suggest personas). Los importes usan el margen de la petición; mensajes de tareas siguen el idioma del proyecto.

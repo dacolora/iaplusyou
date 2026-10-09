@@ -2439,6 +2439,9 @@ msgstr "Standalone ads (from before)"
 msgid "Análisis listo: %(frase)s"
 msgstr "Analysis ready: %(frase)s"
 
+msgid "Análisis por referencia:"
+msgstr "Analysis per reference:"
+
 msgid "Apagar"
 msgstr "Turn off"
 
@@ -14064,6 +14067,9 @@ msgstr "Retry"
 msgid "Reintentar (%(precio)s)"
 msgstr "Retry (%(precio)s)"
 
+msgid "Reintentar análisis"
+msgstr "Retry analysis"
+
 #, python-format
 msgid "Reintentar gasta de nuevo (%(precio)s). ¿Seguir?"
 msgstr "Retrying spends again (%(precio)s). Continue?"
@@ -15422,6 +15428,9 @@ msgstr "Suggest with AI (%(precio)s)"
 
 msgid "Sugerir de la biblioteca (gratis)"
 msgstr "Suggest from the library (free)"
+
+msgid "Sugerir personas"
+msgstr "Suggest personas"
 
 #, python-format
 msgid "Sumamos %(monto)s a tu saldo (%(medio)s)."

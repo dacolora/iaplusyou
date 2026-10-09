@@ -21,7 +21,7 @@ def test_analizar_referencia_guarda_analisis(base_temporal, monkeypatch):
     from sprints import analisis, datos
     from tareas import sprints as ts
     sid, cid, rid = _referencia(datos)
-    monkeypatch.setattr(analisis, "analizar", lambda ref, marca="", idioma="es": {"resumen": "ok", "paleta": ["#000"]})
+    monkeypatch.setattr(analisis, "analizar", lambda ref, marca="", idioma="es", uso=None: {"resumen": "ok", "paleta": ["#000"]})
     tareas.cargar_todas()
     assert "sprint_analizar_referencia" in tareas.REGISTRO
     msg = tareas.REGISTRO["sprint_analizar_referencia"]({"payload": {"cliente": "acme", "referencia_id": rid},
@@ -35,7 +35,7 @@ def test_analizar_referencia_error_deja_rastro(base_temporal, monkeypatch):
     import tareas
     from sprints import analisis, datos
     sid, cid, rid = _referencia(datos)
-    def rompe(ref, marca="", idioma="es"):
+    def rompe(ref, marca="", idioma="es", uso=None):
         raise RuntimeError("Claude caído")
     monkeypatch.setattr(analisis, "analizar", rompe)
     tareas.cargar_todas()
@@ -56,13 +56,13 @@ def test_encolar_analisis_usa_el_worker(base_temporal, monkeypatch):
     assert ts.encolar_analisis("acme", 5) is True
     job_id, tipo, payload, kw = encolados[0]
     assert job_id == "acme__ref5__analizar" and tipo == "sprint_analizar_referencia"
-    assert payload == {"cliente": "acme", "referencia_id": 5} and kw["max_intentos"] == 3 and kw["cliente"] == "acme"
+    assert payload == {"cliente": "acme", "referencia_id": 5} and kw["max_intentos"] == 1 and kw["cliente"] == "acme"
 
 
 def test_sugerir_personas_crea_filas(base_temporal, monkeypatch):
     import tareas
     from sprints import datos, sugerencias
-    monkeypatch.setattr(sugerencias, "sugerir_personas", lambda c, cuantas=3: [
+    monkeypatch.setattr(sugerencias, "sugerir_personas", lambda c, cuantas=3, uso=None: [
         {"nombre": "Cliente Premium", "resumen": "r", "descripcion": "d", "edad_rango": "35-50", "tono": "t",
          "senales_visuales": ["cocina"], "palabras_clave": ["lujo"], "color": "#4d8dff"}])
     tareas.cargar_todas()
@@ -74,7 +74,7 @@ def test_sugerir_personas_crea_filas(base_temporal, monkeypatch):
 def test_sugerir_personas_guarda_la_consciencia_en_extra(base_temporal, monkeypatch):
     import tareas
     from sprints import datos, sugerencias
-    monkeypatch.setattr(sugerencias, "sugerir_personas", lambda c, cuantas=3: [
+    monkeypatch.setattr(sugerencias, "sugerir_personas", lambda c, cuantas=3, uso=None: [
         {"nombre": "Con nivel", "resumen": "", "descripcion": "", "edad_rango": "", "tono": "", "senales_visuales": [],
          "palabras_clave": [], "color": "#4d8dff", "conciencia": {"nivel": "muy_consciente", "detalle": "ya compró"}},
         {"nombre": "Sin nivel", "resumen": "", "descripcion": "", "edad_rango": "", "tono": "", "senales_visuales": [],

@@ -327,3 +327,5 @@ production. It must work for ANY ad, not only Creatv's: in happyflops only 4 pie
   `language: null` (`fal_audio.transcribir_palabras(url, None)`): fal accepted it in the real run of 2026-10-08 (3 of 4
   ads transcribed, Norwegian and English), so PND-185 is closed; if fal ever rejects it, the task goes on without
   voice.
+
+PND-187 (2026-10-09, decisión delegada): nuevas miniaturas de a_referente pasan cliente a guardar_en_r2 y usan clientes/<cliente>/referentes/tw_<ad_id>.jpg. Una fila con imagen ok no se vuelve a subir ni migra. anuncio_id ya es único por proyecto por 0030; test_lote7_tw_aislamiento guarda el mismo anuncio en dos proyectos con filas y claves distintas y comprueba biblioteca e imagen histórica.
