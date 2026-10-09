@@ -401,6 +401,14 @@ msgid "%(modelo)s · %(n)s referencia(s) · falló al descargar; el modelo ya co
 msgstr "%(modelo)s · %(n)s reference(s) · download failed; the model already charged"
 
 #, python-format
+msgid "%(modelos)s está en pausa"
+msgstr "%(modelos)s is paused"
+
+#, python-format
+msgid "%(modelos)s está en pausa."
+msgstr "%(modelos)s is paused."
+
+#, python-format
 msgid "%(monto)s apartados para lo que se está generando"
 msgstr "%(monto)s set aside for what is being generated"
 
@@ -5138,6 +5146,14 @@ msgid "Desde Notion"
 msgstr "From Notion"
 
 #, python-format
+msgid "Desde el %(desde)s fallan %(modelos)s y lo que usa fal en el resto de la app (voces, música y subtítulos automáticos), sin cobrar. Los demás modelos de Crear siguen funcionando. Recarga la cuenta; este aviso se quita solo con la próxima generación de ese modelo que salga bien."
+msgstr "Since %(desde)s, %(modelos)s and whatever uses fal in the rest of the app (voices, music and automatic subtitles) fail, without charging. The other Create models keep working. Top up the account; this notice goes away on its own with the next generation of that model that succeeds."
+
+#, python-format
+msgid "Desde el %(desde)s fallan %(modelos)s y lo que usa fal en el resto de la app (voces, música y subtítulos automáticos), sin cobrar; los demás modelos de Crear siguen. Recarga la cuenta en %(recarga)s; esta alerta se quita sola con la próxima generación de ese modelo que salga bien."
+msgstr "Since %(desde)s, %(modelos)s and whatever uses fal in the rest of the app (voices, music and automatic subtitles) fail, without charging; the other Create models keep working. Top up the account at %(recarga)s; this alert goes away on its own with the next generation of that model that succeeds."
+
+#, python-format
 msgid "Desde el %(desde)s las generaciones de Crear y de Cambiar producto fallan (sin cobrar). Recarga la cuenta en %(recarga)s; esta alerta se quita sola con la próxima generación que salga bien."
 msgstr "Since %(desde)s, generations in Create and Change product fail (without charging). Top up the account at %(recarga)s; this alert goes away on its own with the next generation that works."
 
@@ -9044,6 +9060,9 @@ msgstr "There are pending Bold top-ups and no Bold event has arrived in 7 days. 
 
 msgid "Hay textos sin traducir para algún destino."
 msgstr "Some texts aren't translated for a market."
+
+msgid "Hay un problema con el proveedor y ya le avisamos a Creatv. Mientras tanto elige otro modelo: los intentos fallidos no se cobran."
+msgstr "There is a problem with the provider and Creatv has already been notified. Meanwhile, choose another model: failed attempts are not charged."
 
 msgid "Hay un problema con el proveedor y ya le avisamos a Creatv. Vuelve a intentarlo en un rato: los intentos fallidos no se cobran."
 msgstr "There is a problem with the provider and Creatv has already been notified. Try again in a while: failed attempts are not charged."
@@ -17111,6 +17130,10 @@ msgstr "A photo has no speed: change how long it lasts."
 
 msgid "Una foto o video real de tu cliente, tu producto puesto encima. Misma pose, mismo fondo, mismo movimiento. Ideal para catálogos enteros en una tarde."
 msgstr "A real photo or video of your customer, your product placed on it. Same pose, same background, same motion. Great for whole catalogs in one afternoon."
+
+#, python-format
+msgid "Una generación del proyecto %(cliente)s falló porque la cuenta de %(proveedor)s de Creatv no tiene saldo. Mientras no se recargue en %(recarga)s fallan %(modelos)s en Crear y lo que usa fal en el resto de la app (voces, música y subtítulos automáticos); los demás modelos de Crear siguen funcionando y los intentos fallidos no se cobran. Respuesta del proveedor: %(detalle)s"
+msgstr "A generation in project %(cliente)s failed because Creatv's %(proveedor)s account has no balance. Until it's topped up at %(recarga)s, %(modelos)s in Create and whatever uses fal in the rest of the app (voices, music and automatic subtitles) fail; the other Create models keep working and failed attempts aren't charged. Provider response: %(detalle)s"
 
 #, python-format
 msgid "Una generación del proyecto %(cliente)s falló porque la cuenta de %(proveedor)s de Creatv no tiene saldo. Mientras no se recargue en %(recarga)s, Crear y Cambiar producto no pueden generar; los intentos fallidos no se cobran. Respuesta del proveedor: %(detalle)s"

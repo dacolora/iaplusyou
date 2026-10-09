@@ -2145,6 +2145,9 @@ def ver_cliente(cliente):
         preferencias_flowplus=proyectos.preferencias_flowplus(cliente),
         preferencias_sonido=proyectos.preferencias_sonido(cliente),
         aviso_saldo=saldo.vigente("wavespeed"),
+        # Sin saldo en fal solo se pausan sus modelos (PND-213): aviso aparte, solo en Crear.
+        aviso_saldo_fal=saldo.vigente("fal"),
+        modelos_fal=saldo.nombres_modelos("fal"),
         # Pestaña Alertas: las alertas llegan en `alertas_ctx` (context
         # processor _alertas_sidebar); aquí solo los nombres, constantes N_.
         alertas_grupos=alertas.GRUPOS,

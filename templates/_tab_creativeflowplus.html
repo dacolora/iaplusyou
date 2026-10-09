@@ -10,7 +10,7 @@
 <form method="post" action="{{ url_for('fp_subir_referencias', cliente=cliente) }}" enctype="multipart/form-data" id="fp-form-subir" hidden></form>
 <form method="post" action="{{ url_for('fp_agregar_link', cliente=cliente) }}" id="fp-form-link" hidden></form>
 
-{% include "_aviso_sin_saldo.html" %}
+{% with con_fal = true %}{% include "_aviso_sin_saldo.html" %}{% endwith %}
 <div class="crear-comp" id="crear-comp">
   <div class="crear-comp-arriba">
     <div id="fp-bandeja-wrap">
