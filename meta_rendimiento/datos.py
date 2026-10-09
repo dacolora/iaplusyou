@@ -245,6 +245,19 @@ def rango(cliente, cuentas):
     return {"filas": int(r.filas or 0), "desde": r.desde, "hasta": r.hasta} if r.filas else vacio
 
 
+def primeras_fechas(cliente, cuentas):
+    """{act: primera fecha copiada en meta_cuenta_dia} de esas cuentas (las que no tienen días no aparecen). La
+    pestaña Rendimiento la usa para «Todas desde que hay datos de todas tus fuentes» (spec 2026-10-09 R7). Una
+    consulta agrupada por cuenta."""
+    if not cuentas:
+        return {}
+    t = db.meta_cuenta_dia
+    q = (sa.select(t.c.ad_account_id, sa.func.min(t.c.fecha))
+         .where(t.c.cliente == cliente, t.c.ad_account_id.in_(list(cuentas))).group_by(t.c.ad_account_id))
+    with db.conectar() as con:
+        return {act: str(f)[:10] for act, f in con.execute(q) if f}
+
+
 def _extremo_fecha(funcion, cliente, act, tabla):
     t = {"cuenta": db.meta_cuenta_dia, "anuncio": db.meta_anuncio_dia}[tabla]
     with db.conectar() as con:

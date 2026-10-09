@@ -314,26 +314,23 @@ def contexto(cliente, dias=PERIODO_DEFECTO, cuenta=None, hoy=None, pagina_anunci
         return ctx
     ctx.update(conectado=True, solo_metricas=not conexion.get("page_id"))
 
-    locale = idiomas.activo()
-    lista = [_con_pais(c, locale) for c in cuentas_mod.listar(cliente)]
-    if not lista:
+    todas = lista(cliente)
+    if not todas:
         return ctx
-    actual = cuenta_elegida(lista, cuenta)
-    en_alcance = [actual] if actual else lista
+    actual = cuenta_elegida(todas, cuenta)
+    en_alcance = [actual] if actual else todas
     ids = [c["ad_account_id"] for c in en_alcance]
-    cuentas_por_id = {c["ad_account_id"]: c for c in lista}
+    cuentas_por_id = {c["ad_account_id"]: c for c in todas}
     monedas = {(c.get("moneda") or "").upper() for c in en_alcance}
     # Una cuenta sin moneda conocida no comparte la de las demás: con ella no hay moneda común (su gasto no se suma
     # como si fuera de esa moneda).
     moneda_comun = next(iter(monedas)) if len(monedas) == 1 and "" not in monedas else None
     convertir = actual is None and len(en_alcance) > 1
     moneda = "USD" if convertir else (en_alcance[0].get("moneda") or None)
-    jobs_sync = _jobs_sync(cliente, en_alcance)
-    copias = [c["ultima_copia"] for c in en_alcance if c.get("ultima_copia")]
-    ctx.update(cuentas=lista, actual=actual, ids=ids, varias_cuentas=len(lista) > 1, moneda=moneda,
-               moneda_comun=moneda_comun, jobs_sync=jobs_sync, sync_ocupado=len(jobs_sync) == len(en_alcance),
-               ultima_copia=min(copias) if copias and len(copias) == len(en_alcance) else None,
-               rango=datos.rango(cliente, ids))
+    copia = estado_copia(cliente, en_alcance)
+    ctx.update(cuentas=todas, actual=actual, ids=ids, varias_cuentas=len(todas) > 1, moneda=moneda,
+               moneda_comun=moneda_comun, jobs_sync=copia["jobs_sync"], sync_ocupado=copia["sync_ocupado"],
+               ultima_copia=copia["ultima_copia"], rango=copia["rango"])
     if not ctx["rango"]["filas"]:
         return ctx
 
@@ -348,8 +345,7 @@ def contexto(cliente, dias=PERIODO_DEFECTO, cuenta=None, hoy=None, pagina_anunci
         serie = _serie(desde, hasta, actuales, moneda, conv)
     else:
         serie = _serie(desde, hasta, actuales, moneda_comun) if moneda_comun else None
-    ventana = _ventana_alcance(dias)
-    alcances = datos.alcance(cliente, ids, ventana, "cuenta")
+    alcances = datos.alcance(cliente, ids, _ventana_alcance(dias), "cuenta")
     con_alcance = [alcances[a]["alcance"] for a in ids if a in alcances]
     unica = alcances.get(ids[0]) if len(ids) == 1 else None
     ctx.update(
@@ -357,19 +353,12 @@ def contexto(cliente, dias=PERIODO_DEFECTO, cuenta=None, hoy=None, pagina_anunci
         kpis_moneda_comun=kpis(actuales) if convertir and moneda_comun and moneda_comun != "USD" else None,
         por_moneda=_por_moneda(en_alcance, actuales) if convertir else [],
         alcance=sum(con_alcance) if con_alcance else None, frecuencia=(unica or {}).get("frecuencia"),
-        ventana_alcance=ventana, serie=serie,
-        por_cuenta=_filas_por_cuenta(en_alcance, actuales, conv, moneda, alcances, datos.activos(cliente, ids)),
-        campanas=_campanas(cliente, ids, desde, hasta, ventana, cuentas_por_id))
+        serie=serie,
+        por_cuenta=_filas_por_cuenta(en_alcance, actuales, conv, moneda, alcances, datos.activos(cliente, ids)))
 
-    pagina_c = max(0, _entero(pagina_conjuntos))
-    conjuntos, hay_mas_conjuntos = _conjuntos(cliente, ids, desde, hasta, pagina_c, cuentas_por_id)
-    reglas = decisor.reglas_efectivas(proyectos.reglas_defecto(cliente), {})
-    anuncios, conteo, meta_roas = evaluar_anuncios(cliente, ids, desde, hasta, hoy, cuentas_por_id, reglas)
-    pagina_a = max(0, _entero(pagina_anuncios))
-    inicio = pagina_a * POR_PAGINA
-    ctx.update(conjuntos=conjuntos, hay_mas_conjuntos=hay_mas_conjuntos, pagina_conjuntos=pagina_c,
-               anuncios=anuncios[inicio:inicio + POR_PAGINA], hay_mas_anuncios=len(anuncios) > inicio + POR_PAGINA,
-               n_anuncios=len(anuncios), pagina_anuncios=pagina_a, conteo=conteo, meta_roas=meta_roas)
+    # Campañas, conjuntos y anuncios: las mismas lecturas por partes que usa la pestaña Rendimiento.
+    ctx.update(estructura(cliente, ids, desde, hasta, dias, cuentas_por_id, pagina_conjuntos))
+    ctx.update(_pagina_de_anuncios(cliente, ids, desde, hasta, hoy, cuentas_por_id, pagina_anuncios)[0])
     return ctx
 
 
@@ -384,14 +373,14 @@ def _alcance_pagina(cliente, dias, cuenta, hoy):
     ctx = _base(dias, desde, hasta)
     if not (meta_conexion.cargar(cliente) or {}).get("token"):
         return ctx, [], {}
-    lista = [_con_pais(c, idiomas.activo()) for c in cuentas_mod.listar(cliente)]
-    if not lista:
+    todas = lista(cliente)
+    if not todas:
         return ctx, [], {}
-    actual = cuenta_elegida(lista, cuenta)
-    en_alcance = [actual] if actual else lista
-    ctx.update(conectado=True, cuentas=lista, actual=actual, ids=[c["ad_account_id"] for c in en_alcance],
-               varias_cuentas=len(lista) > 1)
-    return ctx, en_alcance, {c["ad_account_id"]: c for c in lista}
+    actual = cuenta_elegida(todas, cuenta)
+    en_alcance = [actual] if actual else todas
+    ctx.update(conectado=True, cuentas=todas, actual=actual, ids=[c["ad_account_id"] for c in en_alcance],
+               varias_cuentas=len(todas) > 1)
+    return ctx, en_alcance, {c["ad_account_id"]: c for c in todas}
 
 
 def _pagina_valida(valor):
@@ -407,13 +396,7 @@ def anuncios_pagina(cliente, dias=PERIODO_DEFECTO, cuenta=None, pagina=1, hoy=No
     ctx, en_alcance, cuentas_por_id = _alcance_pagina(cliente, dias, cuenta, hoy)
     if not en_alcance:
         return ctx
-    reglas = decisor.reglas_efectivas(proyectos.reglas_defecto(cliente), {})
-    anuncios, conteo, meta_roas = evaluar_anuncios(cliente, ctx["ids"], ctx["desde"], ctx["hasta"], hoy,
-                                                   cuentas_por_id, reglas)
-    pagina = _pagina_valida(pagina)
-    inicio = pagina * POR_PAGINA
-    ctx.update(anuncios=anuncios[inicio:inicio + POR_PAGINA], hay_mas_anuncios=len(anuncios) > inicio + POR_PAGINA,
-               n_anuncios=len(anuncios), pagina_anuncios=pagina, conteo=conteo, meta_roas=meta_roas)
+    ctx.update(_pagina_de_anuncios(cliente, ctx["ids"], ctx["desde"], ctx["hasta"], hoy, cuentas_por_id, pagina)[0])
     return ctx
 
 
@@ -426,3 +409,68 @@ def conjuntos_pagina(cliente, dias=PERIODO_DEFECTO, cuenta=None, pagina=1, hoy=N
     conjuntos, hay_mas = _conjuntos(cliente, ctx["ids"], ctx["desde"], ctx["hasta"], pagina, cuentas_por_id)
     ctx.update(conjuntos=conjuntos, hay_mas_conjuntos=hay_mas, pagina_conjuntos=pagina)
     return ctx
+
+
+# ----------------------------------------- por partes (pestaña Rendimiento) ---
+# Spec 2026-10-09 §4. La pestaña Rendimiento pide cada parte sobre una LISTA de cuentas cualquiera (las de un país, las
+# que Triple Whale no cubre en «Todas»…) y con el periodo 0 = «Desde el inicio»; `contexto` y las páginas de «Ver más»
+# las reusan donde coinciden, así que hay un solo cálculo.
+
+PERIODOS_RENDIMIENTO = (0, 7, 14, 30, 90)   # 0 = desde el inicio (regla de Daniel del 2026-10-08)
+
+
+def lista(cliente):
+    """Las cuentas del proyecto con su país en palabras y su bandera (en el idioma de quien mira)."""
+    locale = idiomas.activo()
+    return [_con_pais(c, locale) for c in cuentas_mod.listar(cliente)]
+
+
+def rango_fechas(cliente, ids, dias, hoy):
+    """(desde, hasta, desde_previo, hasta_previo) de esas cuentas. `dias` 0 (o uno que no es de
+    PERIODOS_RENDIMIENTO) = desde el primer día de cuenta copiado entre ellas."""
+    dias = dias if dias in PERIODOS_RENDIMIENTO else 0
+    primero = datos.rango(cliente, ids)["desde"] if dias == 0 else None
+    return periodo(dias, hoy, primero)
+
+
+def estructura(cliente, ids, desde, hasta, dias, cuentas_por_id, pagina_conjuntos=0):
+    """Campañas (con su alcance) y la página de conjuntos de esas cuentas: {"campanas", "conjuntos",
+    "hay_mas_conjuntos", "pagina_conjuntos", "ventana_alcance"}. `dias` 0 (desde el inicio) usa la ventana de alcance
+    más larga copiada (90 días): es la más cercana a «todo»."""
+    ventana = _ventana_alcance(dias or 90)
+    pagina = _pagina_valida(pagina_conjuntos)
+    conjuntos, hay_mas = _conjuntos(cliente, ids, desde, hasta, pagina, cuentas_por_id)
+    return {"campanas": _campanas(cliente, ids, desde, hasta, ventana, cuentas_por_id), "conjuntos": conjuntos,
+            "hay_mas_conjuntos": hay_mas, "pagina_conjuntos": pagina, "ventana_alcance": ventana}
+
+
+def _pagina_de_anuncios(cliente, ids, desde, hasta, hoy, cuentas_por_id, pagina):
+    """(la página pedida de anuncios evaluados, todos los evaluados): las claves `anuncios`, `hay_mas_anuncios`,
+    `n_anuncios`, `pagina_anuncios`, `conteo` y `meta_roas`. Tres lecturas para todas las cuentas y una evaluación
+    por cuenta (`evaluar_anuncios`)."""
+    reglas = decisor.reglas_efectivas(proyectos.reglas_defecto(cliente), {})
+    todos, conteo, meta_roas = evaluar_anuncios(cliente, ids, desde, hasta, hoy, cuentas_por_id, reglas)
+    pagina = _pagina_valida(pagina)
+    inicio = pagina * POR_PAGINA
+    return {"anuncios": todos[inicio:inicio + POR_PAGINA], "hay_mas_anuncios": len(todos) > inicio + POR_PAGINA,
+            "n_anuncios": len(todos), "pagina_anuncios": pagina, "conteo": conteo, "meta_roas": meta_roas}, todos
+
+
+def anuncios_evaluados(cliente, ids, desde, hasta, hoy, cuentas_por_id, pagina=0):
+    """Los anuncios de esas cuentas con su veredicto y diagnóstico contra SU cuenta: la página pedida más `ev`, lo
+    que pide `triple_whale.evaluacion.alertas` ({"anuncios": todos, "conteo", "cuenta", "hay_ventas"})."""
+    salida, todos = _pagina_de_anuncios(cliente, ids, desde, hasta, hoy, cuentas_por_id, pagina)
+    salida["ev"] = {"anuncios": todos, "conteo": salida["conteo"], "cuenta": evaluacion.resumen_cuenta(todos),
+                    "hay_ventas": any(a["m"]["pedidos"] for a in todos)}
+    return salida
+
+
+def estado_copia(cliente, cuentas):
+    """El estado de la copia de esas cuentas (dicts del alcance): copias en cola o en curso, la última copia
+    completa de todas, los días copiados y las cuentas que fallaron (`estado == "error"` con su `error`)."""
+    jobs = _jobs_sync(cliente, cuentas)
+    copias = [c["ultima_copia"] for c in cuentas if c.get("ultima_copia")]
+    return {"jobs_sync": jobs, "sync_ocupado": bool(cuentas) and len(jobs) == len(cuentas),
+            "ultima_copia": min(copias) if copias and len(copias) == len(cuentas) else None,
+            "rango": datos.rango(cliente, [c["ad_account_id"] for c in cuentas]),
+            "errores": [c for c in cuentas if c.get("estado") == "error" and c.get("error")]}
