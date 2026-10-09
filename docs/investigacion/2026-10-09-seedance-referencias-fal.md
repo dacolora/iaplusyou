@@ -32,7 +32,7 @@ plano de los zapatos.` + `SONIDO: olfateo, patitas sobre piedra y viento suave.`
    ser creados con IA.
 3. «Recuperar el video» (`flowplus_modelos.esperar_fal`) trajo el mismo video del intento 2 por su id, sin volver a lanzar.
 
-## Lo que falta (PND-209)
+## Lo que falta (PND-211)
 
 - Ver en la factura de fal que el intento 2 costó ≈ US$ 1,89 y el 1 nada (hace falta una llave de administrador o el
   panel de fal).

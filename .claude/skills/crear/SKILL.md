@@ -162,7 +162,7 @@ rotación automática de regeneraciones (`rotar: False`, `flowplus_modelos.video
 un modelo que dejaría referencias sin usar (`derivaciones.modelo_regeneracion` filtra con `referencias_de_mas`). Un video
 que fal ya terminó y cobró pero cuyo resultado no se pudo traer (429, 5xx, red) sale como error de red y conserva el id;
 `ErrorProveedor` es solo para un 4xx con motivo (revisión del guardián de gasto, 2026-10-09). Pendientes: prueba real
-(PND-209), videos de referencia como video (PND-210), aviso de Crear sin saldo en fal (PND-211).
+(PND-211), videos de referencia como video (PND-212), aviso de Crear sin saldo en fal (PND-213).
 
 **Pedido rechazado al lanzar (2026-10-02, PND-107):** toda respuesta no-ok de WaveSpeed que no es de saldo es `wavespeed_common.PedidoRechazado` (RuntimeError, mismo `str(e)` técnico de siempre para la bitácora y `tarea.error`, más `status` y `mensaje` del proveedor); `tareas/flowplus._mensaje_error` la cuenta en palabras: «<proveedor> no aceptó el pedido y no se cobró nada: <motivo>…» (WaveSpeed o fal.ai, `saldo.nombre_proveedor`) (o, sin mensaje legible, con el código de respuesta). Antes la tarjeta mostraba el JSON crudo. Cada tipo tiene su frase: 401/403 «rechazó la llave de Creatv», 429 «demasiados pedidos», 5xx «falla de su lado» SIN prometer que no se cobró (WaveSpeed pudo crear la predicción sin devolver su id), y un 4xx con o sin el motivo del proveedor. Un `PedidoRechazado`, como `SinSaldo`, no persigue la `prediccion` que haya en la sesión: es de un intento anterior, no de este video.
 

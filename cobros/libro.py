@@ -7,6 +7,7 @@ import contextlib
 import contextvars
 import logging
 import math
+from datetime import datetime, timedelta
 
 import sqlalchemy as sa
 from flask_babel import gettext
@@ -433,4 +434,5 @@ def acreditar(con, cliente, tipo, milesimas, concepto, *, recarga_id=None, usuar
 def limpiar_reservas_muertas():
     r = db.reserva_saldo
     with db.conectar() as con:
-        return con.execute(r.delete().where(r.c.job_id.notin_(_vivas(con)))).rowcount
+        limite = (datetime.fromisoformat(db.ahora()) - timedelta(minutes=10)).isoformat(timespec="seconds")
+        return con.execute(r.delete().where(r.c.job_id.notin_(_vivas(con)), r.c.creada_en < limite)).rowcount

@@ -611,6 +611,10 @@ msgid "%(n)s foto(s) no se pudieron descargar."
 msgstr "%(n)s photo(s) couldn't be downloaded."
 
 #, python-format
+msgid "%(n)s fotos · %(precio)s"
+msgstr "%(n)s photos · %(precio)s"
+
+#, python-format
 msgid "%(n)s ganador(es)"
 msgstr "%(n)s winner(s)"
 
@@ -2543,6 +2547,9 @@ msgstr "Standalone ads (from before)"
 msgid "Análisis listo: %(frase)s"
 msgstr "Analysis ready: %(frase)s"
 
+msgid "Análisis por referencia:"
+msgstr "Analysis per reference:"
+
 msgid "Apagar"
 msgstr "Turn off"
 
@@ -2622,6 +2629,9 @@ msgstr "Apify: %(estado)s · run %(corrida)s"
 #, python-format
 msgid "Apify: %(estado)s · corrida %(corrida)s (%(hechas)s/%(total)s)"
 msgstr "Apify: %(estado)s · run %(corrida)s (%(hechas)s/%(total)s)"
+
+msgid "Apify: corrida anotada al arrancar"
+msgstr "Apify: run recorded at startup"
 
 msgid "App ID de Meta de tu app"
 msgstr "Meta App ID of your app"
@@ -3824,6 +3834,9 @@ msgstr "Claude didn't answer in the expected format. Send your message again."
 
 msgid "Claude no respondió en el formato esperado. Vuelve a intentarlo."
 msgstr "Claude didn't answer in the expected format. Try again."
+
+msgid "Claude no respondió; intenta de nuevo"
+msgstr "Claude did not respond; try again"
 
 msgid "Claude no vio el anuncio: juzgó por los números"
 msgstr "Claude did not see the ad: it judged by the numbers"
@@ -5553,6 +5566,9 @@ msgstr "The analysis with Claude failed: try again from the campaign."
 
 msgid "El análisis falló."
 msgstr "The analysis failed."
+
+msgid "El análisis se interrumpió; intenta de nuevo"
+msgstr "The analysis was interrupted; try again"
 
 msgid "El archivo es demasiado grande."
 msgstr "The file is too large."
@@ -9659,6 +9675,9 @@ msgstr "The box opens, the product comes out and is looked at up close."
 msgid "La canción dura más de 10 min."
 msgstr "The song is longer than 10 min."
 
+msgid "La cantidad de fotos cambió; revisa el precio antes de traerlas."
+msgstr "The number of photos changed; check the price before bringing them in."
+
 msgid "La cara de la marca: una persona real, un embajador o un personaje creado que debe verse igual siempre."
 msgstr "The face of the brand: a real person, an ambassador or a created character that has to look the same every time."
 
@@ -9998,6 +10017,9 @@ msgstr "The reference no longer exists."
 
 msgid "La regla no pide re-ediciones ni regeneraciones: no hay nada que derivar."
 msgstr "The rule doesn't ask for re-edits or regenerations: there's nothing to derive."
+
+msgid "La respuesta de Claude no sirvió; intenta de nuevo"
+msgstr "Claude's response was unusable; try again"
 
 msgid "La respuesta de Claude salió incompleta. Intenta con un guion más corto."
 msgstr "Claude's answer came back incomplete. Try a shorter script."
@@ -11647,6 +11669,9 @@ msgstr "There are no runs to launch."
 msgid "No hay familias sin descripción en inglés."
 msgstr "There are no families missing an English description."
 
+msgid "No hay fotos nuevas que traer"
+msgstr "There are no new photos to bring in"
+
 msgid "No hay ideas aprobadas sin generar. Aprueba ideas para poder generarlas."
 msgstr "There are no approved ideas left to generate. Approve ideas so you can generate them."
 
@@ -11917,6 +11942,9 @@ msgstr "We lost track of the voice: reload the page; if it's ready, it gets adde
 msgid "No sabemos cómo terminó: recarga la página para ver los subtítulos."
 msgstr "We don't know how it ended: reload the page to see the subtitles."
 
+msgid "No sabemos si la corrida arrancó; revisa en Apify antes de reintentar."
+msgstr "We do not know whether the run started; check Apify before retrying."
+
 #, python-brace-format
 msgid "No sale en el video: «{caracteres}» (esta fuente no los tiene)."
 msgstr "Won't show in the video: “{caracteres}” (this font doesn't have them)."
@@ -12147,6 +12175,9 @@ msgstr "Couldn't load. Close and try again."
 msgid "No se pudo completar (error %(status)s)."
 msgstr "Couldn't complete (error %(status)s)."
 
+msgid "No se pudo completar el análisis; intenta de nuevo"
+msgstr "The analysis could not be completed; try again"
+
 msgid "No se pudo completar el trabajo."
 msgstr "The task couldn't be completed."
 
@@ -12249,6 +12280,9 @@ msgstr "Couldn't generate the voice (check the chosen voice, '%(voz)s'): %(error
 #, python-brace-format
 msgid "No se pudo guardar (error {status})."
 msgstr "Couldn't save (error {status})."
+
+msgid "No se pudo guardar el análisis; intenta de nuevo"
+msgstr "The analysis could not be saved; try again"
 
 msgid "No se pudo guardar esa imagen."
 msgstr "That image couldn't be saved."
@@ -14282,6 +14316,10 @@ msgid "Referencia"
 msgstr "Reference"
 
 #, python-format
+msgid "Referencia %(n)s"
+msgstr "Reference %(n)s"
+
+#, python-format
 msgid "Referencia agregada (%(tipo)s, %(origen)s)"
 msgstr "Reference added (%(tipo)s, %(origen)s)"
 
@@ -14456,6 +14494,9 @@ msgstr "Retry"
 #, python-format
 msgid "Reintentar (%(precio)s)"
 msgstr "Retry (%(precio)s)"
+
+msgid "Reintentar análisis"
+msgstr "Retry analysis"
 
 #, python-format
 msgid "Reintentar gasta de nuevo (%(precio)s). ¿Seguir?"
@@ -18156,6 +18197,12 @@ msgstr "friendly"
 msgid "analizado el %(fecha)s"
 msgstr "analyzed on %(fecha)s"
 
+msgid "analizar referencia"
+msgstr "analyze reference"
+
+msgid "analizar referencia · la respuesta no sirvió"
+msgstr "analyze reference · the response was unusable"
+
 msgid "animada"
 msgstr "upbeat"
 
@@ -18554,8 +18601,8 @@ msgid "corrida %(corrida)s (%(etiqueta)s) %(estado)s: %(n)s resultado(s)%(motivo
 msgstr "run %(corrida)s (%(etiqueta)s) %(estado)s: %(n)s result(s)%(motivo)s"
 
 #, python-format
-msgid "corrida no lanzada (%(etiqueta)s): %(motivo)s"
-msgstr "run not launched (%(etiqueta)s): %(motivo)s"
+msgid "corrida sin id (%(etiqueta)s): %(motivo)s"
+msgstr "run without an ID (%(etiqueta)s): %(motivo)s"
 
 msgid "corriendo"
 msgstr "running"
@@ -19308,6 +19355,10 @@ msgid "hasta %(num)s referencia"
 msgid_plural "hasta %(num)s referencias"
 msgstr[0] "up to %(num)s reference"
 msgstr[1] "up to %(num)s references"
+
+#, python-format
+msgid "hasta %(precio)s"
+msgstr "up to %(precio)s"
 
 #, python-format
 msgid "hasta el %(hasta)s · todos los proyectos"
@@ -20606,6 +20657,12 @@ msgstr "successor to Luma Ray3 Modify, cheaper per second"
 
 msgid "sueco"
 msgstr "Swedish"
+
+msgid "sugerir personas"
+msgstr "suggest personas"
+
+msgid "sugerir personas · la respuesta no sirvió"
+msgstr "suggest personas · the response was unusable"
 
 msgid "sí"
 msgstr "yes"

@@ -133,7 +133,7 @@ VIDEO = {
         "max_duracion": 30,
         # fal cobra por píxeles de salida: 0,473 USD/s es su cifra de 720p (16:9 y
         # 9:16; 1:1 tiene menos píxeles). 4:3 y 3:4 quedan fuera hasta medir su
-        # cobro real (PND-209): podrían pasar de esa cifra.
+        # cobro real (PND-211): podrían pasar de esa cifra.
         "formatos": ("9:16", "16:9", "1:1"),
         "max_videos": 0,
         # Cómo nombra fal cada imagen en el prompt (esquema de reference-to-video).

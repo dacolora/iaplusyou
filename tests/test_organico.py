@@ -736,6 +736,16 @@ def test_reconciliar_subidas_cierra_lo_viejo_y_consulta_tiktok(proyecto, monkeyp
     import experimentos as ex
     org = proyecto["organico"]
     db = proyecto["db"]
+    # PND-191, 2026-10-09: escritura y reconciliación comparten un reloj propio.
+    # El caso prueba el margen; el tiempo que tarda la suite no forma parte de él.
+    from datetime import datetime
+    ahora = datetime(2026, 10, 9, 12, 0, 0, 999999)
+    class Reloj(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return ahora
+    monkeypatch.setattr(db, "ahora", lambda: ahora.isoformat(timespec="seconds"))
+    monkeypatch.setattr(org, "datetime", Reloj)
     pid = _pieza(db)
     eid = ex.crear("acme", "X", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP")
     ep = ex.agregar_pieza("acme", eid, pid, "CO")
@@ -1004,3 +1014,18 @@ def test_pnd036_imagen_no_crea_publicacion(base_temporal):
         organico.crear('acme', pid, 'instagram', 'Texto')
     with base_temporal.conectar() as con:
         assert con.execute(sa.select(sa.func.count()).select_from(base_temporal.publicacion)).scalar() == 0
+
+
+@pytest.mark.parametrize("microsegundo", [0, 999999])
+def test_pnd191_reconciliar_aisla_el_reloj(proyecto, monkeypatch, microsegundo):
+    """Un reloj previo/desfasado no debe alterar los datos de este caso."""
+    from datetime import datetime, timedelta
+    db, org = proyecto["db"], proyecto["organico"]
+    base = datetime(2026, 10, 9, 12, 0, 0, microsegundo)
+    class RelojAjeno(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return base + timedelta(minutes=11, microseconds=1)
+    monkeypatch.setattr(db, "ahora", lambda: base.isoformat(timespec="seconds"))
+    monkeypatch.setattr(org, "datetime", RelojAjeno)
+    test_reconciliar_subidas_cierra_lo_viejo_y_consulta_tiktok(proyecto, monkeypatch)
