@@ -1,6 +1,6 @@
 # Meta rendimiento E1: decisiones del 2026-10-08
 
-Registro de las decisiones («rulings» R1 a R27) que se tomaron al construir y revisar la pestaña Meta (varias cuentas
+Registro de las decisiones («rulings» R1 a R30) que se tomaron al construir y revisar la pestaña Meta (varias cuentas
 publicitarias leídas por proyecto). Salen del libro de trabajo de la construcción (`.superpowers/sdd/…`, carpeta ignorada
 por git, por eso se copian aquí). Spec: `docs/superpowers/specs/2026-10-08-meta-rendimiento-design.md`. Plan:
 `docs/superpowers/plans/2026-10-08-meta-rendimiento-e1.md`. Skill del área: `.claude/skills/meta-rendimiento/SKILL.md`.
@@ -116,6 +116,21 @@ y en el código. Las sub-decisiones (R4b, R4c, R11b) refinan a la que llevan por
 - **R27.** La ola de arreglos de la revisión final se parte en tres encargos más chicos (P1: copia, tasas, panel; P2: rutas,
   desconexión, privacidad, catálogo; P3: derivar/rescatar sin Página y esta documentación), con un commit por letra — el
   implementador único se atascó dos veces sin dejar commits — si está mal: más encargos.
+- **R28.** `acciones.pedir` sin Página deja derivar y rescatar como propuestas con el texto de «solo métricas» en el motivo,
+  en todos los modos (en auto tampoco se intenta ejecutarlas) — es más seguro que omitirlas: la persona ve que existen y por
+  qué no corren — si está mal: una propuesta que la persona descarta.
+- **R29.** Segunda mezcla de `origin/main` (trajo `0034_tw_tarjetas` y PND-179…189): se revisa primero la ola de arreglos y
+  después se mezcla; nuestra migración pasa a ser la 0035 (`down_revision` 0034) y nuestros pendientes se renumeran a
+  PND-190…206, después del máximo de main — la nuestra nunca se desplegó — si está mal: nada.
+- **R30.** Las copias de Meta ya no se pierden por ceder el turno: los tipos periódicos que escriben en Meta (`exp_decidir`,
+  `exp_avanzar_todos`) frenan la copia solo mientras CORREN y los que dispara una persona (`exp_lanzar`, `meta_publicar`,
+  `organico_publicar`) mientras están en cola o corriendo; una copia pospuesta se vuelve a encolar sola para dentro de 10
+  minutos (`tareas.Continuar` con `max_intentos` opcional, conserva los 2 de la copia), como mucho 6 veces
+  (`MAX_POSPOSICIONES`, el contador viaja en el payload) y después deja que la retome la periódica de 3 h; la pausa
+  compartida por el límite de uso de Meta tiene un tope de 24 h; «Actualizar ahora» durante la pausa avisa «Meta pidió
+  esperar: la copia sigue a las HH:MM» y no encola nada — la revisión encontró que `exp_avanzar_todos` (cada 10 min, en
+  el único carril general) casi siempre estaba en cola y dejaba cuentas horas sin copiar (PND-206) — si está mal: unas
+  pocas filas extra en la cola.
 
 ## Hechos medidos contra la API real de Meta
 
