@@ -56,7 +56,7 @@ deterministic per (cliente, prompt_id/brief_id, acción) so a repeat click no-op
 instead of double-launching. Tasks that spend credits are queued with
 `max_intentos=1` — they never auto-retry. Exception found 2026-10-08:
 old Nicho consultas/seleccionar callers still pass 2, tracked separately as
-PND-179; the lane change does not alter that paid retry policy. A queued task stuck running for more than
+PND-190; the lane change does not alter that paid retry policy. A queued task stuck running for more than
 30 minutes is either re-queued (if it still has attempts left) or marked `error`
 (once `max_intentos` is exhausted) — never one this worker is running right now
 (`cola.recuperar_colgadas(excluir=worker.en_vuelo())`). Since 2026-09-28 (spec

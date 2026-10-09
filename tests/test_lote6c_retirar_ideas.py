@@ -28,6 +28,7 @@ def test_proyecto_con_legado_responde_200_sin_leer_conceptos_retirados(app, monk
     (carpeta / 'prompts_pendientes.json').write_text(json.dumps({'p1': {'estado': 'aprobado'}}))
     archivos = {p: p.read_bytes() for p in carpeta.glob('*.json')}
     monkeypatch.setattr(conceptos_imagen, 'cargar', lambda c: pytest.fail('la página lee conceptos que no pinta'))
+    monkeypatch.setattr(estado, 'cargar', lambda c: pytest.fail('la página lee videos viejos que no pinta'))
     assert app['c'].get('/cliente/acme').status_code == 200
     assert all(p.read_bytes() == original for p, original in archivos.items())
 
