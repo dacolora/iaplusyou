@@ -108,5 +108,25 @@ queda en **0,14**, y no en 0,12. Con Cobros se cobra lo real × margen; la tarif
 **Gasto total de esta medición:** US$ 0,8487 (0,7063 de la primera ronda + 0,1424). La prueba real de Kling se anota
 aparte: US$ 0,336.
 
+## Tercera ronda: tope de salida 20 000 (revisión de gasto, riesgo 1)
+
+La revisión de `guardian-gasto` vio que la salida llegó a 11 323 de 12 000 tokens. Con eso, una respuesta cortada
+pagaría la llamada de corrección con el mismo tope. Los cambios son dos:
+
+- `MAX_TOKENS` sube a 20 000 (solo se paga lo usado).
+- Si la respuesta corta por `max_tokens`, ya no se reintenta a ciegas: el análisis queda en error con lo pagado anotado.
+
+**Medición** con el caso 2 (el que más salida dio), la caché fría y el tope de 20 000:
+
+- end_turn · **13 013** de salida · US$ 0,1696 · válido, con 3 ganchos y copy;
+- con el tope viejo de 12 000, esta respuesta habría llegado cortada y pagada dos veces;
+- Claude devolvió `fotograma_s` 13,5, que no es un segundo que haya visto (sus fotogramas eran 0,3 · 4,15 · 8 · 11,84 ·
+  15,7…). Por eso el código ahora lleva el segundo al fotograma visto más cercano;
+- los clics sueltos medidos con la caché fría quedan entre 0,131 y 0,170, con media de 0,142. La tarifa mostrada pasa a
+  **0,15**.
+
+**Gasto total de esta medición:** US$ 1,0183 (0,8487 + 0,1696). El último caso lo pasó por US$ 0,02 del tope de
+US$ 1 del eval: lo midió el orquestador porque cambiar `max_tokens` exige medir (skill `eval-claude`), y se anota aquí.
+
 **Conclusión:** se cierra. El análisis con ganchos y copy es válido en los 4 casos reales, sin correcciones, en el
-idioma correcto y sin cifras inventadas. La tarifa queda en US$ 0,14 (ver la segunda ronda).
+idioma correcto y sin cifras inventadas. La tarifa queda en US$ 0,15 (ver la tercera ronda).
