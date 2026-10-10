@@ -58,7 +58,9 @@ MINUTOS_WORKER = 30                                  # más de esto sin señal d
 MINUTOS_PROMPT_LISTO = 60                            # un prompt listo más nuevo que esto no molesta: la persona sigue trabajando
 DIAS_FALLOS = 30                                     # un fallo más viejo que esto es historia, no una alerta
 DIAS_NO_COBRADO = 7                                  # una pieza que no se cobró avisa esta cantidad de días
-MINUTOS_RECARGA_PENDIENTE = 15                       # una recarga de Bold pendiente más vieja que esto avisa
+MINUTOS_RECARGA_PENDIENTE = 15                       # una recarga de Bold o Wompi pendiente más vieja que esto avisa
+DIAS_AVISO_RENOVACION = 3                            # el plan avisa que se renueva (o termina) con esta anticipación
+PORCENTAJE_BOLSA_PLAN = 80                           # la bolsa del plan avisa al usarse este porcentaje del periodo
 TOPE_COBROS = 20                                     # lo más que se lista de piezas no cobradas o recargas pendientes
 IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".webp")      # lo que cuenta como logo en clientes/<c>/logos/
 
@@ -602,10 +604,10 @@ def _fuente_nicho(cliente, ahora):
 
 def _fuente_cobros(cliente, ahora):
     """Saldo prepagado del proyecto (spec 2026-10-08-cobros §8), solo si el proyecto cobra: sin saldo, saldo bajo,
-    piezas que no se cobraron (un `reverso` o `no_cobrado` de los últimos DIAS_NO_COBRADO días) y recargas de Bold
-    que siguen pendientes. Son del cliente (nada de aquí es solo_admin) y todas llevan a Configuración › Saldo y recargas.
+    piezas que no se cobraron (un `reverso` o `no_cobrado` de los últimos DIAS_NO_COBRADO días), recargas de Bold o
+    Wompi que siguen pendientes y el plan mensual (`_alertas_plan`). Son del cliente (nada de aquí es solo_admin) y todas llevan a Configuración › Saldo y recargas.
     Una consulta por tipo de dato (la cuenta con el saldo, los movimientos, las recargas), sin importar cuántos
-    haya; un proyecto que no cobra sale tras leer la cuenta. Las huellas son de cifras, nunca de texto traducido:
+    haya; un proyecto que no cobra sale tras leer la cuenta y uno sin plan tras una consulta más. Las huellas son de cifras, nunca de texto traducido:
     la de «saldo bajo» sigue al saldo en dólares, para que un descarte no esconda un saldo que siguió bajando."""
     from cobros import libro, vista  # noqa: PLC0415
     import gastos  # noqa: PLC0415
@@ -637,8 +639,8 @@ def _fuente_cobros(cliente, ahora):
                 m.c.creado_en >= _hace(ahora, days=DIAS_NO_COBRADO))
          .order_by(m.c.id.desc()).limit(TOPE_COBROS))
     r = db.recarga
-    qr = (sa.select(r.c.id, r.c.milesimas)
-          .where(r.c.cliente == cliente, r.c.medio == "bold", r.c.estado == "pendiente",
+    qr = (sa.select(r.c.id, r.c.milesimas, r.c.medio)
+          .where(r.c.cliente == cliente, r.c.medio.in_(("bold", "wompi")), r.c.estado == "pendiente",
                  r.c.creada_en <= _hace(ahora, minutes=MINUTOS_RECARGA_PENDIENTE))
           .order_by(r.c.id.desc()).limit(TOPE_COBROS))
     with db.conectar() as con:
@@ -655,10 +657,69 @@ def _fuente_cobros(cliente, ahora):
     for f in recargas:
         out.append(_alerta(f"cobros:recarga_pendiente:{f.id}", huella(f.id), "info", "decision",
                            gettext("Tienes una recarga sin terminar"),
-                           gettext("Una recarga de %(monto)s con Bold sigue pendiente. Si ya pagaste, se acredita "
+                           gettext("Una recarga de %(monto)s con %(pasarela)s sigue pendiente. Si ya pagaste, se acredita "
                                    "sola en unos minutos; si no, genera un link nuevo en Configuración › Saldo y recargas.",
-                                   monto=monto(f.milesimas)),
+                                   monto=monto(f.milesimas), pasarela="Wompi" if f.medio == "wompi" else "Bold"),
                            "settings", ancla="config-ap-saldo", entidad=f.id))
+    out.extend(_alertas_plan(cliente, ahora, monto))
+    return out
+
+
+def _alertas_plan(cliente, ahora, monto):
+    """El plan mensual del proyecto (spec planes 2026-10-09 §7.6): `plan_morosa` (bloquea: no se pudo cobrar),
+    `plan_renueva` (info: se renueva en DIAS_AVISO_RENOVACION días, con la fecha y el monto aceptado),
+    `plan_cancelada` (info: el plan termina en tal fecha) y `plan_bolsa_80` (atención: ya se usó el
+    PORCENTAJE_BOLSA_PLAN % de la bolsa del periodo). Un proyecto sin plan (o con la suscripción terminada) no
+    tiene ninguna; con plan son 1 consulta (la suscripción) más 2 (la bolsa del periodo abierto), sin importar
+    cuánto haya pasado. Huellas de números y fechas, nunca de texto traducido. Todas llevan a Configuración › Plan."""
+    from cobros import libro, planes, vista  # noqa: PLC0415
+    sus = planes.suscripcion(cliente)
+    if sus is None:
+        return []
+    out = []
+    estado, hasta = sus["estado"], sus["cubierto_hasta"]
+    if estado == "morosa":
+        quedan = max(0, planes.INTENTOS_MAXIMOS - int(sus["intentos_fallidos"]))
+        out.append(_alerta("cobros:plan_morosa", huella("plan_morosa", sus["intentos_fallidos"]), "bloquea",
+                           "puesta_a_punto",
+                           gettext("No pudimos cobrar tu plan"),
+                           ngettext("No pudimos cobrar tu tarjeta. Mientras tanto usas tu saldo propio al precio a la carta. "
+                                    "Actualiza la tarjeta en Configuración › Plan; si no, queda %(num)s reintento antes "
+                                    "de que el plan termine.",
+                                    "No pudimos cobrar tu tarjeta. Mientras tanto usas tu saldo propio al precio a la carta. "
+                                    "Actualiza la tarjeta en Configuración › Plan; si no, quedan %(num)s reintentos antes "
+                                    "de que el plan termine.",
+                                    quedan),
+                           "settings", ancla="config-ap-plan"))
+        return out
+    if hasta and str(hasta) > ahora:
+        pronto = str(hasta) <= (datetime.fromisoformat(str(ahora)[:19])
+                                + timedelta(days=DIAS_AVISO_RENOVACION)).isoformat(timespec="seconds")
+        fecha = vista.fecha_larga(hasta)
+        renueva = bool(sus["renovar"] and sus["fuente_pago_id"])
+        if estado == "activa" and renueva and pronto:
+            usd = planes._precio_aceptado(sus) or 0
+            out.append(_alerta("cobros:plan_renueva", huella("plan_renueva", hasta, usd), "info", "decision",
+                               gettext("Tu plan se renueva pronto"),
+                               gettext("Tu plan se renueva el %(fecha)s por %(monto)s (en pesos a la TRM del día). El saldo del "
+                                       "plan que no uses antes de esa fecha no se acumula.",
+                                       fecha=fecha, monto=monto(usd * 1000)),
+                               "settings", ancla="config-ap-plan"))
+        elif estado == "cancelada" or (estado == "activa" and not renueva and pronto):
+            out.append(_alerta("cobros:plan_cancelada", huella("plan_cancelada", hasta), "info", "decision",
+                               gettext("Tu plan termina el %(fecha)s", fecha=fecha),
+                               gettext("No se renueva ni se cobra más. Hasta esa fecha sigues con el precio de miembro y "
+                                       "el saldo del plan; para seguir con el plan, vuelve a suscribirte en Configuración › Plan."),
+                               "settings", ancla="config-ap-plan"))
+    bolsa = libro.bolsa_plan(cliente, ahora) if estado in ("activa", "cancelada") else None
+    if bolsa and bolsa["credito"] > 0 and bolsa["gastado"] * 100 >= PORCENTAJE_BOLSA_PLAN * bolsa["credito"]:
+        usado = min(100, round(100 * bolsa["gastado"] / bolsa["credito"]))
+        out.append(_alerta("cobros:plan_bolsa_80", huella("plan_bolsa_80", bolsa["periodo_id"]), "atencion",
+                           "puesta_a_punto",
+                           gettext("Ya usaste el %(porcentaje)s %% del saldo de tu plan", porcentaje=usado),
+                           gettext("Te quedan %(monto)s del saldo del plan hasta el %(fecha)s; lo que no uses no se acumula.",
+                                   monto=monto(bolsa["restante"]), fecha=vista.fecha_larga(bolsa["fin"])),
+                           "settings", ancla="config-ap-plan"))
     return out
 
 

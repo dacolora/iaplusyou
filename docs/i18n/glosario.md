@@ -92,6 +92,7 @@ partida a revisar por Daniel. Lo usa quien traduzca `translations/en/LC_MESSAGES
 | «Cobrar» (el interruptor de un proyecto) | Charge usage |
 | Plan (mensual, planes 2026-10-09) | Plan |
 | Suscripción | Subscription |
+| Periodo (del plan: un mes pagado) | Period |
 | Saldo del plan (la bolsa del mes) | Plan balance |
 | Saldo propio (saldo − lo que queda del plan) | Own balance |
 | Precio de miembro | Member price |

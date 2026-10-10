@@ -12096,12 +12096,21 @@ msgstr "I couldn't translate the word into English; write it another way."
 msgid "No pude traducir la palabra al inglés; intenta de nuevo en un momento."
 msgstr "I couldn't translate the word into English; try again in a moment."
 
+msgid "No pudimos cobrar tu plan"
+msgstr "We couldn't charge your plan"
+
 #, python-format
 msgid "No pudimos cobrar tu plan %(plan)s"
 msgstr "We couldn't charge your %(plan)s plan"
 
 msgid "No pudimos cobrar tu plan."
 msgstr "We could not charge your plan."
+
+#, python-format
+msgid "No pudimos cobrar tu tarjeta. Mientras tanto usas tu saldo propio al precio a la carta. Actualiza la tarjeta en Configuración › Plan; si no, queda %(num)s reintento antes de que el plan termine."
+msgid_plural "No pudimos cobrar tu tarjeta. Mientras tanto usas tu saldo propio al precio a la carta. Actualiza la tarjeta en Configuración › Plan; si no, quedan %(num)s reintentos antes de que el plan termine."
+msgstr[0] "We couldn't charge your card. Meanwhile you use your own balance at the pay-as-you-go price. Update the card in Settings › Plan; otherwise %(num)s retry is left before the plan ends."
+msgstr[1] "We couldn't charge your card. Meanwhile you use your own balance at the pay-as-you-go price. Update the card in Settings › Plan; otherwise %(num)s retries are left before the plan ends."
 
 #, python-format
 msgid "No pudimos consultar la transacción en Wompi: %(error)s"
@@ -12628,6 +12637,9 @@ msgstr "Couldn't pause it again on Meta: %(motivo)s"
 
 msgid "No se renueva más; sigue hasta el fin de lo pagado, sin devolución."
 msgstr "It no longer renews; it lasts until the end of what is paid, with no refund."
+
+msgid "No se renueva ni se cobra más. Hasta esa fecha sigues con el precio de miembro y el saldo del plan; para seguir con el plan, vuelve a suscribirte en Configuración › Plan."
+msgstr "It won't renew or be charged again. Until then you keep the member price and your plan balance; to stay on the plan, subscribe again in Settings › Plan."
 
 msgid "No se subió"
 msgstr "Not uploaded"
@@ -17247,6 +17259,13 @@ msgstr "Your TrendTrack plan doesn't include the API (the Pro plan or higher is 
 msgid "Tu plan se renueva el %(fecha)s por %(monto)s (en pesos a la TRM del día). El saldo del plan que no uses antes de esa fecha no se acumula."
 msgstr "Your plan renews on %(fecha)s for %(monto)s (in Colombian pesos at the day's official exchange rate). Plan balance you don't use before that date doesn't roll over."
 
+msgid "Tu plan se renueva pronto"
+msgstr "Your plan renews soon"
+
+#, python-format
+msgid "Tu plan termina el %(fecha)s"
+msgstr "Your plan ends on %(fecha)s"
+
 msgid "Tu plan terminó"
 msgstr "Your plan ended"
 
@@ -17555,8 +17574,8 @@ msgid "Una por línea; por ejemplo, los diálogos exactos del guion. Claude no l
 msgstr "One per line; for example, the exact dialogue lines from the script. Claude can't touch them."
 
 #, python-format
-msgid "Una recarga de %(monto)s con Bold sigue pendiente. Si ya pagaste, se acredita sola en unos minutos; si no, genera un link nuevo en Configuración › Saldo y recargas."
-msgstr "A %(monto)s top-up with Bold is still pending. If you already paid, it is credited on its own in a few minutes; if not, create a new link in Settings › Balance and top-ups."
+msgid "Una recarga de %(monto)s con %(pasarela)s sigue pendiente. Si ya pagaste, se acredita sola en unos minutos; si no, genera un link nuevo en Configuración › Saldo y recargas."
+msgstr "A %(monto)s top-up with %(pasarela)s is still pending. If you already paid, it is credited on its own in a few minutes; if not, create a new link in Settings › Balance and top-ups."
 
 msgid "Una recarga manual es positiva; para descontar, usa un ajuste."
 msgstr "A manual top-up is positive; to deduct, use an adjustment."
@@ -18947,8 +18966,8 @@ msgstr "closed"
 msgid "cf_id inválido: %(cf)s"
 msgstr "invalid cf_id: %(cf)s"
 
-msgid "cifras del mes por la fecha del gasto; ganancia = cobrado + saldo del plan vencido − costo de lo que se intentó cobrar o el plan incluyó"
-msgstr "month figures by spend date; profit = charged + expired plan balance − cost of what we tried to charge or the plan included"
+msgid "cifras del mes por la fecha del gasto; ganancia = cobrado + saldo del plan vencido − costo de lo que se intentó cobrar o el plan incluyó − descuento del plan (lo que la bolsa del mes regala frente a lo que el cliente pagó por ese mes; en un plan anual, un doceavo del pago)"
+msgstr "month figures by spend date; profit = charged + expired plan balance − cost of what we tried to charge or the plan included − plan discount (what the month's plan balance gives away versus what the client paid for that month; on an annual plan, one twelfth of the payment)"
 
 #, python-format
 msgid "cifras en %(moneda)s"
@@ -18971,8 +18990,8 @@ msgid "clon limpio"
 msgstr "clean clone"
 
 #, python-format
-msgid "cobrado %(cobrado)s · costo %(costo)s"
-msgstr "charged %(cobrado)s · cost %(costo)s"
+msgid "cobrado %(cobrado)s · costo %(costo)s · descuento del plan %(descuento)s"
+msgstr "charged %(cobrado)s · cost %(costo)s · plan discount %(descuento)s"
 
 #, python-format
 msgid "color «%(nombre)s»"
@@ -19281,6 +19300,10 @@ msgstr "unknown"
 msgid "descripción de familias copycoders"
 msgstr "copycoders format family descriptions"
 
+#, python-format
+msgid "descuento del plan %(monto)s"
+msgstr "plan discount %(monto)s"
+
 msgid "desde"
 msgstr "since"
 
@@ -19483,8 +19506,8 @@ msgstr "the engine proposes, you approve"
 msgid "el más barato de los editores reales, buena opción cuando el video tiene una sola persona en cuadro"
 msgstr "the cheapest of the real editors, a good option when the video has only one person in frame"
 
-msgid "el periodo en curso; lo incluido va en costo de proveedor; ganancia del periodo = cobrado − costo, con lo incluido como costo"
-msgstr "the current period; included usage is in provider cost; period profit = charged − cost, with included usage as cost"
+msgid "el periodo en curso; lo incluido va en costo de proveedor; ganancia del periodo = cobrado − costo − descuento del plan, con lo incluido como costo"
+msgstr "the current period; included usage is in provider cost; period profit = charged − cost − plan discount, with included usage as cost"
 
 msgid "el producto no tiene fotos descargables."
 msgstr "the product has no downloadable photos."

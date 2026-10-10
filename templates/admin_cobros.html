@@ -71,7 +71,7 @@
 <section class="admin-bloque aparece" id="cobros-proyectos">
   <div class="admin-cabecera">
     <h2>{{ _('Proyectos') }}</h2>
-    <span class="vacio">{{ _('cifras del mes por la fecha del gasto; ganancia = cobrado + saldo del plan vencido − costo de lo que se intentó cobrar o el plan incluyó') }}</span>
+    <span class="vacio">{{ _('cifras del mes por la fecha del gasto; ganancia = cobrado + saldo del plan vencido − costo de lo que se intentó cobrar o el plan incluyó − descuento del plan (lo que la bolsa del mes regala frente a lo que el cliente pagó por ese mes; en un plan anual, un doceavo del pago)') }}</span>
   </div>
   {% if filas %}
   <div class="admin-scroll">
@@ -114,7 +114,7 @@
           <td class="num">{{ (f.recargado_mes / 1000) | usd }}</td>
           <td class="num">{{ (f.cobrado_mes / 1000) | usd }}</td>
           <td class="num">{{ (f.costo_mes / 1000) | usd }}</td>
-          <td class="num{{ ' cobros-admin-perdida' if f.ganancia_mes < 0 else '' }}">{% if f.ganancia_mes < 0 %}▼ {% endif %}{{ (f.ganancia_mes / 1000) | usd }}</td>
+          <td class="num{{ ' cobros-admin-perdida' if f.ganancia_mes < 0 else '' }}">{% if f.ganancia_mes < 0 %}▼ {% endif %}{{ (f.ganancia_mes / 1000) | usd }}{% if f.descuento_plan_mes %}<br><span class="cobros-admin-nota">{{ _('descuento del plan %(monto)s', monto=(f.descuento_plan_mes / 1000) | usd) }}</span>{% endif %}</td>
           <td>
             <details class="cobros-admin-recarga">
               <summary>{{ _('Recarga manual o ajuste') }}</summary>
@@ -228,7 +228,7 @@
 <section class="admin-bloque aparece" id="cobros-suscripciones">
   <div class="admin-cabecera">
     <h2>{{ _('Planes de los proyectos') }}</h2>
-    <span class="vacio">{{ _('el periodo en curso; lo incluido va en costo de proveedor; ganancia del periodo = cobrado − costo, con lo incluido como costo') }}</span>
+    <span class="vacio">{{ _('el periodo en curso; lo incluido va en costo de proveedor; ganancia del periodo = cobrado − costo − descuento del plan, con lo incluido como costo') }}</span>
   </div>
   {% if filas %}
   <div class="admin-scroll">
@@ -265,7 +265,7 @@
           {% if f.plan.periodo %}
           <td class="num">{{ (f.plan.bolsa_restante / 1000) | usd }}<br><span class="cobros-admin-nota">{{ _('de %(monto)s · vence el %(fecha)s', monto=(f.plan.bolsa_credito / 1000) | usd, fecha=f.plan.periodo.fin | fecha_larga) }}</span></td>
           <td class="num">{{ f.plan.incluido_usado_usd | usd }}<br><span class="cobros-admin-nota">{{ _('de %(monto)s', monto=f.plan.tope_incluido_usd | usd) }}</span></td>
-          <td class="num{{ ' cobros-admin-perdida' if f.plan.ganancia_periodo < 0 else '' }}">{% if f.plan.ganancia_periodo < 0 %}▼ {% endif %}{{ (f.plan.ganancia_periodo / 1000) | usd }}<br><span class="cobros-admin-nota">{{ _('cobrado %(cobrado)s · costo %(costo)s', cobrado=(f.plan.cobrado_periodo / 1000) | usd, costo=(f.plan.costo_periodo / 1000) | usd) }}</span></td>
+          <td class="num{{ ' cobros-admin-perdida' if f.plan.ganancia_periodo < 0 else '' }}">{% if f.plan.ganancia_periodo < 0 %}▼ {% endif %}{{ (f.plan.ganancia_periodo / 1000) | usd }}<br><span class="cobros-admin-nota">{{ _('cobrado %(cobrado)s · costo %(costo)s · descuento del plan %(descuento)s', cobrado=(f.plan.cobrado_periodo / 1000) | usd, costo=(f.plan.costo_periodo / 1000) | usd, descuento=(f.plan.descuento_periodo / 1000) | usd) }}</span></td>
           {% else %}
           <td class="num">—</td><td class="num">—</td><td class="num">—</td>
           {% endif %}

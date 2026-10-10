@@ -716,3 +716,15 @@ def test_un_aprobado_tardio_tras_no_se_cobro_del_alta_no_revive(http, pro, entor
     assert planes.aplicar_transaccion(tx) == "aprobado_tras_final"
     assert _filas("movimiento_saldo", tipo="plan") == [] and len(_filas("suscripcion")) == 1
     assert _filas("suscripcion")[0].estado == "terminada" and planes.suscripcion("acme") is None
+
+
+def test_el_descuento_del_plan_se_ve_junto_a_la_ganancia_para_que_cuadre_en_anuales(http, pro):
+    """Planes 8/8: un anual recarga 1/12 y acredita la bolsa entera; el admin ve el descuento (166,67) en el pie de la
+    ganancia del mes y del periodo, y los dos encabezados lo dicen."""
+    from cobros import planes
+    _cobrar()
+    planes.activar_manual("acme", pro, "anual", "admin")
+    html = http.como("admin").get("/admin/cobros").get_data(as_text=True)
+    assert html.count("descuento del plan US$ 166,67") == 2
+    assert "ganancia del periodo = cobrado − costo − descuento del plan" in html
+    assert "− descuento del plan (" in html

@@ -637,8 +637,8 @@ def _anclas_de_alertas():
 
 # Anclas que solo usan alertas `solo_admin` (worker parado): no existen en la página de un cliente.
 SOLO_ADMIN = {"config-puesta-a-punto"}
-# El apartado Saldo solo existe para un cliente cuyo proyecto cobra (lo comprueba tests/test_cobros_alertas.py).
-SOLO_SI_COBRA = {"config-ap-saldo"}
+# Los apartados Saldo y Plan solo existen para un cliente cuyo proyecto cobra (lo comprueba tests/test_cobros_alertas.py).
+SOLO_SI_COBRA = {"config-ap-saldo", "config-ap-plan"}
 
 
 def test_cada_ancla_de_alertas_existe_en_la_pagina(app, monkeypatch):
