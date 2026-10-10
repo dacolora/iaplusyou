@@ -48,8 +48,8 @@ already translated for the viewer, appended to Rendimiento's «Lo que necesita t
 → `meta["recomendaciones"]`, one line in `_atencion`). Six rules, thresholds as module constants: limited learning
 (media, ≥ 30 % of the ACTIVE ad sets' spend, below that silent; never summed across currencies: with several, one line
 per currency), rejected/with issues ads or ad sets (alta), account `account_status` ≠ 1 (alta, `disable_reason` in words
-only for the codes in `MOTIVOS_DESACTIVACION`, the status labels are `rutas.ESTADOS_CUENTA`) and `spend_cap` with < 10 %
-left (media; `amount_spent`/`spend_cap` arrive in minor units as text, `MONEDAS_SIN_DECIMALES` applies), a winner whose
+only for the codes in `MOTIVOS_DESACTIVACION`; the status labels live in `constantes.py`, shared with `rutas`, so the pure module never imports the blueprint) and `spend_cap` with < 10 %
+left (media; `amount_spent`/`spend_cap` arrive in minor units as text, `MONEDAS_SIN_DECIMALES` applies), an ACTIVE winner (a paused one neither triggers nor counts: the raise would go to the set's other ads) whose
 active ad set has its own daily budget below the median of its ACCOUNT's active ad sets with budget (bien; a CBO ad set
 has none and is skipped), one active ad with ≥ 60 % of its active ad set's spend when the set has ≥ 3 active ads
 (media), and a fatiguing non-loser ad whose campaign's 7-day frequency is ≥ 3 (media). Rules 4 and 6 need Meta-evaluated

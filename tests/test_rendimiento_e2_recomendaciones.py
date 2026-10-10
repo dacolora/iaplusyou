@@ -159,8 +159,14 @@ def _tres_conjuntos_con_presupuesto(act="act_1", escala=1):
             _conjunto("s3", 10, presupuesto=200 * escala, act=act), _conjunto("s4", 10, presupuesto=None, act=act)]
 
 
+def _activos_de(*pares, act="act_1"):
+    """Las filas de anuncios ACTIVOS (ad_id, conjunto): la regla 4 solo cuenta un ganador que entrega hoy."""
+    return [_anuncio(ad, conjunto, act=act) for ad, conjunto in pares]
+
+
 def test_ganador_en_un_conjunto_con_presupuesto_bajo_la_mediana_es_bien():
-    salida = _recomendar(objetos=_tres_conjuntos_con_presupuesto(), anuncios=[_ev("a1", "s1", "ganador")])
+    salida = _recomendar(objetos=_tres_conjuntos_con_presupuesto() + _activos_de(("a1", "s1")),
+                         anuncios=[_ev("a1", "s1", "ganador")])
     assert salida == [{"nivel": "bien", "texto": "Sube el presupuesto de «Conjunto s1»: tiene 1 anuncio ganador y su "
                                                  "presupuesto diario (50 SEK) está por debajo de la mediana de los "
                                                  "conjuntos activos de su cuenta (100 SEK). Súbelo de a 20% para no "
@@ -168,7 +174,7 @@ def test_ganador_en_un_conjunto_con_presupuesto_bajo_la_mediana_es_bien():
 
 
 def test_ganador_con_presupuesto_igual_a_la_mediana_o_sin_presupuesto_propio_no_dice_nada():
-    objetos = _tres_conjuntos_con_presupuesto()
+    objetos = _tres_conjuntos_con_presupuesto() + _activos_de(("a1", "s1"), ("a2", "s2"), ("a4", "s4"))
     assert _recomendar(objetos=objetos, anuncios=[_ev("a2", "s2", "ganador")]) == []      # 100 = la mediana
     assert _recomendar(objetos=objetos, anuncios=[_ev("a4", "s4", "ganador")]) == []      # presupuesto en la campaña
     assert _recomendar(objetos=objetos, anuncios=[_ev("a1", "s1", "prometedor")]) == []   # no es ganador
@@ -180,12 +186,25 @@ def test_la_mediana_es_la_de_la_cuenta_del_ganador_y_varios_conjuntos_van_juntos
     objetos = _tres_conjuntos_con_presupuesto("act_1") + [
         _conjunto("t1", 10, presupuesto=500, act="act_2"), _conjunto("t2", 10, presupuesto=1000, act="act_2"),
         _conjunto("t3", 10, presupuesto=2000, act="act_2")]
+    objetos += _activos_de(("a1", "s1"), ("a9", "s1")) + _activos_de(("b1", "t1"), act="act_2")
     salida = _recomendar(cuentas, objetos, [_ev("a1", "s1", "ganador"), _ev("a9", "s1", "ganador"),
                                             _ev("b1", "t1", "ganador", act="act_2")])
     assert _textos(salida) == [
         "Sube el presupuesto de 2 conjuntos con anuncios ganadores y presupuesto diario por debajo de la mediana de "
         "los conjuntos activos de su cuenta: «Conjunto s1», «Conjunto t1». Súbelos de a 20% para no reiniciar el "
         "aprendizaje."]
+
+
+def test_un_ganador_en_pausa_no_pide_subir_el_presupuesto_ni_se_cuenta():
+    """Revisión de la tarea 6 (2026-10-10): subir el presupuesto por un ganador en pausa gastaría en los otros anuncios
+    del conjunto. Un ganador en pausa (o que ya no está en las filas: archivado, borrado) no da línea ni suma."""
+    objetos = _tres_conjuntos_con_presupuesto() + [_anuncio("a1", "s1", estado="PAUSED")]
+    assert _recomendar(objetos=objetos, anuncios=[_ev("a1", "s1", "ganador")]) == []
+    assert _recomendar(objetos=_tres_conjuntos_con_presupuesto(), anuncios=[_ev("a1", "s1", "ganador")]) == []
+    # Con uno activo y otro en pausa en el mismo conjunto, el texto dice 1 ganador, no 2.
+    objetos += _activos_de(("a2", "s1"))
+    textos = _textos(_recomendar(objetos=objetos, anuncios=[_ev("a1", "s1", "ganador"), _ev("a2", "s1", "ganador")]))
+    assert len(textos) == 1 and "tiene 1 anuncio ganador" in textos[0]
 
 
 # ---- 5. Concentración ---------------------------------------------------------------------------------------
@@ -242,7 +261,8 @@ def test_varios_anuncios_cansados_dicen_la_frecuencia_mas_alta():
 # ---- orden e idioma -------------------------------------------------------------------------------------------
 
 def test_primero_lo_alto_despues_lo_medio_y_al_final_lo_bueno():
-    objetos = _tres_conjuntos_con_presupuesto() + [_anuncio("a7", "s2", estado="DISAPPROVED")]
+    objetos = (_tres_conjuntos_con_presupuesto() + [_anuncio("a7", "s2", estado="DISAPPROVED")]
+               + _activos_de(("a1", "s1")))
     objetos[0]["aprendizaje"] = "FAIL"
     objetos[0]["gasto"] = 30
     salida = _recomendar([_cuenta(account_status=3)], objetos, [_ev("a1", "s1", "ganador")])

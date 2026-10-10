@@ -34,18 +34,13 @@ import db
 import idiomas
 import meta_conexion
 import usuarios
-from idiomas import N_
 from meta_rendimiento import cuentas, pausa
+from meta_rendimiento.constantes import ESTADOS_CUENTA, OTRO_ESTADO
 from tareas import meta_rendimiento as tareas_mr
 from triple_whale import paises
 
 bp = Blueprint("meta_rendimiento", __name__, url_prefix="/cliente/<cliente>/meta-rendimiento")
 
-# account_status de una cuenta publicitaria (Graph /me/adaccounts); otro código se muestra como «Otro estado».
-ESTADOS_CUENTA = {1: N_("Activa"), 2: N_("Desactivada"), 3: N_("Con pagos pendientes"), 7: N_("En revisión de Meta"),
-                  8: N_("Con pagos pendientes"), 9: N_("En período de gracia"), 100: N_("Por cerrarse"),
-                  101: N_("Cerrada")}
-OTRO_ESTADO = N_("Otro estado")
 ESPERA_ACTUALIZAR = timedelta(minutes=30)      # entre dos «Actualizar ahora» de quien no es admin (ruling R22)
 
 

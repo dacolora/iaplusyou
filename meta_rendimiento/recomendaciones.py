@@ -21,8 +21,10 @@ Reglas, cada una con su umbral (spec §9; las de los desgloses quedan fuera, A6 
 2. Rechazados o con problemas (alta): anuncios y conjuntos con `estado` DISAPPROVED o WITH_ISSUES.
 3. Cuenta (alta / media): `account_status` distinto de 1, con el motivo de Meta en palabras si se conoce; un límite
    de gasto (`spend_cap`) al que le queda menos del 10 % (`amount_spent`).
-4. Ganadores con poco presupuesto (bien): un ganador cuyo conjunto activo tiene presupuesto diario propio menor que
-   la mediana de los conjuntos activos CON presupuesto de SU cuenta (cada cuenta tiene su moneda y su escala).
+4. Ganadores con poco presupuesto (bien): un ganador ACTIVO (un ganador en pausa no cuenta: subir el presupuesto
+   gastaría en los otros anuncios del conjunto; revisión de la tarea 6, 2026-10-10) cuyo conjunto activo tiene
+   presupuesto diario propio menor que la mediana de los conjuntos activos CON presupuesto de SU cuenta (cada cuenta
+   tiene su moneda y su escala).
 5. Concentración (media): en un conjunto activo con 3 o más anuncios activos, uno se lleva el 60 % o más del gasto
    del conjunto en el período.
 6. Fatiga con frecuencia (media): un anuncio activo que se está cansando (`fatiga`) y cuya campaña tiene frecuencia
@@ -37,7 +39,7 @@ from flask_babel import gettext, ngettext
 import idiomas
 import tablero
 from idiomas import N_
-from meta_rendimiento.rutas import ESTADOS_CUENTA, OTRO_ESTADO
+from meta_rendimiento.constantes import ESTADOS_CUENTA, OTRO_ESTADO
 from tareas.meta import MONEDAS_SIN_DECIMALES
 
 UMBRAL_APRENDIZAJE = 0.30          # parte del gasto de los conjuntos activos en aprendizaje limitado
@@ -206,9 +208,11 @@ def _ganadores_con_poco_presupuesto(objetos, anuncios, monedas):
         if _monto(o.get("presupuesto_diario")) > 0:
             presupuestos.setdefault(o.get("ad_account_id"), []).append(_monto(o.get("presupuesto_diario")))
     medianas = {act: statistics.median(v) for act, v in presupuestos.items()}
+    # Solo un ganador que entrega hoy: subir el presupuesto por uno en pausa gastaría en los otros anuncios del conjunto.
+    activos = {o["objeto_id"] for o in _activos(objetos, "anuncio")}
     elegidos = {}                         # adset_id -> (conjunto, mediana, ganadores); en el orden de los anuncios
     for a in anuncios:
-        if a.get("veredicto") != "ganador":
+        if a.get("veredicto") != "ganador" or str(a.get("ad_id") or "") not in activos:
             continue
         s = conjuntos.get(str(a.get("adset_id") or ""))
         presupuesto = _monto((s or {}).get("presupuesto_diario"))
