@@ -297,6 +297,60 @@ def test_evaluaciones_es_una_sola_consulta(base_temporal):
     assert len(consultas) == 1
 
 
+def _consultas_de(funcion, *args, **kwargs):
+    consultas = []
+
+    @sa.event.listens_for(db.engine(), "before_cursor_execute")
+    def _cuenta(conn, cursor, statement, params, context, executemany):
+        consultas.append(statement)
+
+    try:
+        return funcion(*args, **kwargs), consultas
+    finally:
+        sa.event.remove(db.engine(), "before_cursor_execute", _cuenta)
+
+
+def test_evaluaciones_panel_es_una_consulta_con_lo_pesado_solo_de_la_ultima_lista(base_temporal):
+    ids = [_crear("hf") for _ in range(4)]
+    datos.actualizar_evaluacion(ids[0], estado="error", error="falló")
+    for e in ids[1:3]:
+        datos.actualizar_evaluacion(e, estado="lista", resultado={"resumen": str(e)})
+    _crear("otro")
+    (recientes, entera), consultas = _consultas_de(datos.evaluaciones_panel, "hf", limite=3)
+    assert len(consultas) == 1
+    assert [e["id"] for e in recientes] == ids[::-1][:3]                  # la más nueva primero, con su límite
+    # Las de la lista no traen lo pesado; la última lista sí, entera (es la ids[2]: la más nueva con estado `lista`).
+    assert all(not {"muestra", "recomendaciones", "resultado"} & set(e) for e in recientes)
+    assert entera["id"] == ids[2] and entera["resultado"] == {"resumen": str(ids[2])}
+    assert entera["muestra"] == MUESTRA and entera["recomendaciones"] == RECOS and entera["cliente"] == "hf"
+    assert "es_ultima" not in entera and all("es_ultima" not in e for e in recientes)
+    assert {"id", "creado_en", "estado", "desde", "hasta", "error", "extra", "usd", "cuentas"} <= set(recientes[0])
+    assert datos.evaluaciones_panel("nadie") == ([], None)
+
+
+def test_evaluaciones_panel_la_ultima_lista_sale_aunque_la_sigan_muchas_que_fallaron(base_temporal):
+    vieja, buena = _crear("hf"), _crear("hf")
+    for e in (vieja, buena):
+        datos.actualizar_evaluacion(e, estado="lista", resultado={"resumen": str(e)})
+    fallos = [_crear("hf") for _ in range(12)]
+    for e in fallos:
+        datos.actualizar_evaluacion(e, estado="error", error="falló")
+    en_marcha = _crear("hf")
+    datos.actualizar_evaluacion(en_marcha, estado="analizando")
+    ajena = _crear("otro")
+    datos.actualizar_evaluacion(ajena, estado="lista")
+    (recientes, entera), consultas = _consultas_de(datos.evaluaciones_panel, "hf", limite=8)
+    assert len(consultas) == 1
+    # Las ocho más nuevas son la que corre y siete fallidas: la lista buena queda fuera de la ventana y aun así llega.
+    assert [e["id"] for e in recientes] == [en_marcha] + fallos[::-1][:7] and len(recientes) == 8
+    assert entera["id"] == buena and entera["resultado"] == {"resumen": str(buena)}
+    # Sin ninguna lista, solo las recientes.
+    assert datos.evaluaciones_panel("otro")[1]["id"] == ajena
+    solo_fallos = _crear("solo")
+    datos.actualizar_evaluacion(solo_fallos, estado="error")
+    assert datos.evaluaciones_panel("solo")[1] is None
+
+
 def test_borrar_evaluaciones_borra_todas_las_del_proyecto_y_solo_esas(base_temporal):
     mias = [_crear("hf") for _ in range(3)]
     ajena = _crear("otro")

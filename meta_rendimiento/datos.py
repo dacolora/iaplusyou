@@ -631,3 +631,36 @@ def evaluaciones(cliente, limite=5):
     q = sa.select(t).where(t.c.cliente == cliente).order_by(t.c.creado_en.desc(), t.c.id.desc()).limit(limite)
     with db.conectar() as con:
         return [dict(f._mapping) for f in con.execute(q)]
+
+
+_PESADAS_EVALUACION = ("muestra", "recomendaciones", "resultado")
+
+
+def evaluaciones_panel(cliente, limite=8):
+    """Lo que lee el panel de las evaluaciones, en UNA consulta: (recientes, ultima_lista). `recientes` son las
+    últimas `limite` (la más nueva primero) SIN `muestra`, `recomendaciones` ni `resultado` — lo pesado, que el panel no
+    necesita para la lista de anteriores — y `ultima_lista` es la fila ENTERA de la evaluación `lista` más nueva del
+    proyecto (o None), aunque esté fuera de esas `limite` porque las que vinieron después fallaron. Lo pesado solo
+    lo trae la fila de `ultima_lista`: a las demás la propia base les deja NULL (`CASE`), no el código después de
+    leerlas."""
+    t = db.meta_evaluacion
+    u, r = t.alias("u"), t.alias("r")
+    ultima = (sa.select(u.c.id).where(u.c.cliente == cliente, u.c.estado == "lista")
+              .order_by(u.c.creado_en.desc(), u.c.id.desc()).limit(1).scalar_subquery())
+    ventana = (sa.select(r.c.id).where(r.c.cliente == cliente)
+               .order_by(r.c.creado_en.desc(), r.c.id.desc()).limit(limite))
+    es_ultima = t.c.id == ultima
+    columnas = ([c for c in t.c if c.name not in _PESADAS_EVALUACION]
+                + [sa.case((es_ultima, t.c[n])).label(n) for n in _PESADAS_EVALUACION]
+                + [es_ultima.label("es_ultima")])
+    q = (sa.select(*columnas).where(t.c.cliente == cliente, sa.or_(es_ultima, t.c.id.in_(ventana)))
+         .order_by(t.c.creado_en.desc(), t.c.id.desc()))
+    with db.conectar() as con:
+        filas = [dict(f._mapping) for f in con.execute(q)]
+    entera = None
+    for f in filas:
+        if f.pop("es_ultima"):
+            entera = f
+    # La fila de fuera de la ventana (si la hay) es la más vieja de todas: va al final, y `[:limite]` la deja fuera.
+    recientes = [{c: v for c, v in f.items() if c not in _PESADAS_EVALUACION} for f in filas[:limite]]
+    return recientes, entera

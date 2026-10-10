@@ -275,9 +275,13 @@ def test_pocas_consultas_con_tres_cuentas(base_temporal, conectado):
             _tasa(moneda, dia_tasa, 0.1)
     # E1 eran 15 consultas. E2 (Diagnóstico y Segmentos) suma a lo sumo 3: los objetos activos, los desgloses (las
     # dos ventanas en una) y los anuncios de 30 días (salvo con el período de 30, que ya los lee). «Evaluación con IA»
-    # suma UNA (las últimas evaluaciones); su barra sale de la misma lectura de las copias vivas y su N de la
-    # evaluación ya hecha. Y el alcance (período por cuenta y por campaña, 7 días por campaña) es UNA lectura, no tres.
-    # Ninguna crece con las cuentas ni las filas.
+    # suma UNA (las últimas evaluaciones, sin su muestra ni su resultado, y la fila entera de la última lista); su
+    # barra sale de la misma lectura de las copias vivas y su N de la evaluación ya hecha. Y el alcance (período por
+    # cuenta y por campaña, 7 días por campaña) es UNA lectura, no tres. Ninguna crece con las cuentas ni las filas ni
+    # con las evaluaciones guardadas: se mide con diez, la peor forma (una lista tras nueve que fallaron).
+    _ev("lista", resultado={"resumen": "vieja", "plan": []})
+    for _ in range(9):
+        _ev("error", error="falló")
     for dias in (30, 14, 7, 90):
         consultas = []
 
@@ -291,6 +295,7 @@ def test_pocas_consultas_con_tres_cuentas(base_temporal, conectado):
         assert len(ctx["por_cuenta"]) == 3 and ctx["usd_ok"] is True
         assert len(consultas) <= 18, (dias, len(consultas))
         assert sum("FROM meta_evaluacion" in q for q in consultas) == 1
+        assert ctx["evaluacion"]["ultima_lista"]["resultado"]["resumen"] == "vieja"
         assert sum("FROM meta_alcance" in q for q in consultas) == 1 and ctx["evaluacion"]["n"] > 0
         if dias == 30:
             assert len(ctx["anuncios"]) == 15 and len(consultas) <= 17
@@ -509,6 +514,37 @@ def test_la_seccion_trae_la_ultima_lista_la_que_fallo_despues_y_las_anteriores(b
         _ev("lista", resultado={"resumen": "n", "plan": []})
     ev = panel.contexto("hf", hoy=HOY)["evaluacion"]
     assert len(ev["anteriores"]) == panel.MAX_EVALUACIONES_ANTERIORES and ev["fallida"] is None
+
+
+def test_la_ultima_lista_se_ve_aunque_la_sigan_muchas_que_fallaron(base_temporal, conectado):
+    """Revisión de E2 (tarea 6): antes se leían ocho filas y la última buena quedaba escondida tras ocho fallos."""
+    _sembrar_muestra()
+    buena = _ev("lista", resultado={"resumen": "la última buena", "plan": []})
+    fallos = [_ev("error", error=f"falla {i}") for i in range(panel.MAX_EVALUACIONES_ANTERIORES + 6)]
+    ev = panel.contexto("hf", hoy=HOY)["evaluacion"]
+    assert ev["ultima_lista"]["id"] == buena and ev["ultima_lista"]["resultado"]["resumen"] == "la última buena"
+    assert ev["fallida"]["id"] == fallos[-1] and ev["fallida"]["error"] == f"falla {len(fallos) - 1}"
+    assert [e["id"] for e in ev["anteriores"]] == fallos[::-1][1:1 + panel.MAX_EVALUACIONES_ANTERIORES]
+
+
+def test_las_evaluaciones_del_panel_son_una_sola_lectura_ligera_con_la_fila_entera_de_la_ultima_lista(base_temporal,
+                                                                                                      conectado):
+    _sembrar_muestra()
+    for i in range(5):
+        _ev("lista", resultado={"resumen": f"n{i}", "plan": []})
+    consultas = []
+
+    def contar(conn, cursor, statement, parameters, context, executemany):
+        if "FROM meta_evaluacion" in statement:
+            consultas.append(statement)
+    event.listen(db.engine(), "before_cursor_execute", contar)
+    try:
+        ev = panel.contexto("hf", hoy=HOY)["evaluacion"]
+        panel.evaluacion_panel("sin_evaluaciones", [], set())
+    finally:
+        event.remove(db.engine(), "before_cursor_execute", contar)
+    assert ev["ultima_lista"]["resultado"]["resumen"] == "n4" and len(ev["anteriores"]) == 4
+    assert len(consultas) == 2                  # una por llamada: el proyecto con evaluaciones y el que no tiene ninguna
 
 
 def test_una_evaluacion_en_curso_da_su_barra_y_no_sale_entre_las_anteriores(base_temporal, conectado):

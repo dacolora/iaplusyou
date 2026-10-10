@@ -553,21 +553,23 @@ def evaluacion_panel(cliente, evaluados, vivos):
     (no la página de 24): de ahí sale N con `analisis.tamano_muestra`, el mismo N que cobrará la ruta con
     `analisis.preparar` (E2-R6), y el precio `gastos.estimar("evaluacion_meta", n=N)` (su `texto` y `usd_precio` ya
     llevan el margen). `vivos`: los job ids de `tareas_mr.trabajos_del_panel` (la barra, sin otra consulta). UNA
-    lectura de `meta_evaluacion`: la última lista se pinta entera, la última si falló después va como aviso y las
-    anteriores (hasta MAX_EVALUACIONES_ANTERIORES) solo con su fecha y alcance, para pedirlas por fetch."""
+    lectura de `meta_evaluacion` (`datos.evaluaciones_panel`): las últimas ocho SIN muestra ni resultado (fecha,
+    estado, período, error y alcance) y la fila ENTERA de la última lista, aunque la hayan seguido varias que fallaron.
+    Esa se pinta entera, la última si falló después va como aviso y las anteriores (hasta MAX_EVALUACIONES_ANTERIORES)
+    solo con su fecha y alcance, para pedirlas por fetch."""
     n = analisis.tamano_muestra(evaluados)
     job = tareas_mr.job_id_evaluar(cliente)
     corriendo = job in vivos
-    recientes = datos.evaluaciones(cliente, limite=MAX_EVALUACIONES_ANTERIORES + 3)
-    ultima_lista = next((e for e in recientes if e["estado"] == "lista"), None)
+    recientes, entera = datos.evaluaciones_panel(cliente, limite=MAX_EVALUACIONES_ANTERIORES + 3)
     primera = recientes[0] if recientes else None
     fallida = primera if primera is not None and primera["estado"] == "error" else None
     en_curso = primera if corriendo and primera is not None and primera["estado"] in ("en_cola", "analizando") else None
     anteriores = [{"id": e["id"], "estado": e["estado"], "desde": e["desde"], "hasta": e["hasta"],
                    "creado_en": e["creado_en"], "alcance": _alcance_evaluacion(e)}
-                  for e in recientes if e is not ultima_lista and e is not fallida and e is not en_curso]
+                  for e in recientes
+                  if e["id"] != (entera or {}).get("id") and e is not fallida and e is not en_curso]
     return {"n": n, "estimado": gastos.estimar("evaluacion_meta", n=n) if n else None,
-            "job": job if corriendo else None, "ultima_lista": evaluacion_vista(ultima_lista) if ultima_lista else None,
+            "job": job if corriendo else None, "ultima_lista": evaluacion_vista(entera) if entera else None,
             "fallida": fallida and {"id": fallida["id"], "error": fallida.get("error"),
                                     "alcance": _alcance_evaluacion(fallida)},
             "anteriores": anteriores[:MAX_EVALUACIONES_ANTERIORES]}
@@ -687,10 +689,11 @@ def contexto(cliente, dias=PERIODO_DEFECTO, cuenta=None, hoy=None, pagina_anunci
                anuncios=anuncios[inicio:inicio + POR_PAGINA], hay_mas_anuncios=len(anuncios) > inicio + POR_PAGINA,
                n_anuncios=len(anuncios), pagina_anuncios=pagina_a, conteo=conteo, meta_roas=meta_roas)
 
-    # Diagnóstico y Segmentos (spec E2 §6 y §9): a lo sumo 4 lecturas más que E1 — los objetos activos, los
-    # anuncios de 30 días si el período es otro, la frecuencia de 7 días por campaña si la ventana de alcance es
-    # otra, y los desgloses de las reglas y de «Segmentos» juntos. Lo demás sale de lo ya leído; con el período de 30
-    # días también la evaluación de los anuncios (mismas lecturas, mismas reglas: no se evalúa dos veces).
+    # Diagnóstico y Segmentos (spec E2 §6 y §9) y «Evaluación con IA»: a lo sumo 4 lecturas más que E1 — los objetos
+    # activos, los anuncios de 30 días si el período es otro, los desgloses de las reglas y de «Segmentos» juntos, y las
+    # evaluaciones (una sola, ligera, con la fila entera de la última lista). La frecuencia de 7 días por campaña ya
+    # viene en la lectura única de `alcance_varios`. Lo demás sale de lo ya leído; con el período de 30 días también
+    # la evaluación de los anuncios (mismas lecturas, mismas reglas: no se evalúa dos veces).
     _, recientes, previos = lecturas
     mismo_periodo = dias == DIAS_REGLAS
     a30 = lecturas[0] if mismo_periodo else datos.totales_por_anuncio(cliente, ids, desde_reglas, hasta)
