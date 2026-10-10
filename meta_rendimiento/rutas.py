@@ -251,8 +251,13 @@ def guardar_cuentas(cliente):
                                  sobran, tope=cuentas.MAX_POR_PROYECTO))
     if cambios_pais:
         mensajes.append(gettext("País actualizado."))
+    if r.get("fallos_r2"):
+        # S1 (revisión final de Rendimiento E2, 2026-10-10): los análisis de esa cuenta ya se borraron, pero R2 no borró
+        # alguna imagen o video que copiaron. Solo el tipo del error, nunca su texto.
+        mensajes.append(gettext("No se pudieron borrar de R2 algunas imágenes o videos copiados de esa cuenta (%(tipo)s): "
+                                "avisa al administrador.", tipo=r["fallos_r2"][0]))
     flash(" ".join(mensajes) if mensajes else gettext("Sin cambios en las cuentas."),
-          "warn" if ajenas or sobran else "ok")
+          "warn" if ajenas or sobran or r.get("fallos_r2") else "ok")
     return _volver(cliente)
 
 

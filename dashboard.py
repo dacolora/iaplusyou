@@ -3636,7 +3636,10 @@ def _soltar_cuentas_meta(cliente):
     agencia) también borra las métricas copiadas de sus cuentas y las deja libres para otro proyecto: /privacidad y
     /eliminar-datos lo prometen (ruling R21, 2026-10-08). Borra además sus evaluaciones con IA, que guardan nombres
     y métricas de anuncios de Meta (E2-R2, 2026-10-10; el gasto de esas evaluaciones queda en `gasto`), y las
-    miniaturas que esas evaluaciones copiaron a R2 (`clientes/<c>/meta_rendimiento/…`).
+    miniaturas que esas evaluaciones copiaron a R2 (`clientes/<c>/meta_rendimiento/…`). Quitar las cuentas
+    (`cuentas.elegir(cliente, [])`) borra también los análisis «Cómo mejorarlo» de sus anuncios de fuente Meta y, después
+    de esas filas, la imagen y el video que copiaron a R2 (`clientes/<c>/rendimiento/a<aid>_<ad>.…`; S1 de la revisión
+    final de Rendimiento E2, 2026-10-10); si R2 falla, el mismo aviso.
 
     El orden importa: primero se anotan las claves de R2 (salen de las filas), después se borran las filas (lo que
     guarda los nombres y las métricas) y al final las miniaturas, con un solo cliente de R2: un R2 lento o caído
@@ -3645,7 +3648,9 @@ def _soltar_cuentas_meta(cliente):
     la siguiente vez que alguien desconecte se reintenta (las claves se vuelven a calcular de las filas que queden)."""
     fallo = None
     try:
-        meta_rend_cuentas.elegir(cliente, [])
+        quitadas = meta_rend_cuentas.elegir(cliente, [])
+        if quitadas.get("fallos_r2"):          # las filas ya se borraron; quedaron copias en R2 (S1)
+            fallo = quitadas["fallos_r2"][0]
     except Exception as e:  # noqa: BLE001 — la desconexión no se deshace por esto
         log.warning("meta rendimiento: no se pudieron borrar las métricas copiadas de %s (%s)", cliente,
                     type(e).__name__)

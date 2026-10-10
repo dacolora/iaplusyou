@@ -86,7 +86,7 @@ def test_elegir_idempotente_conserva_lo_ya_copiado_y_acepta_ids_sin_prefijo(base
                        moneda="NOK", inventado="no se guarda")
     # Elegir de nuevo la misma cuenta (sin «act_») no la toca, ni la agrega, ni borra copias.
     r = cuentas.elegir("acme", [{"id": "709406360806038", "name": "Otro nombre", "currency": "EUR"}])
-    assert r == {"agregadas": [], "quitadas": [], "rechazadas": []} and not borradas
+    assert r == {"agregadas": [], "quitadas": [], "rechazadas": [], "fallos_r2": []} and not borradas
     c = cuentas.cuenta("acme", "act_709406360806038")
     assert (c["estado"], c["moneda"], c["nombre"]) == ("ok", "NOK", "HappyFlops Norway")
     assert c["ultima_copia"] == "2026-10-08 10:00:00" and "inventado" not in c
@@ -102,7 +102,7 @@ def test_la_carrera_por_la_misma_cuenta_la_rechaza_el_indice(base_temporal, monk
     cuentas.elegir("happyflops", [HF[0]])
     monkeypatch.setattr(cuentas, "dueno", lambda act: None)
     r = cuentas.elegir("otro", [HF[0]])
-    assert r == {"agregadas": [], "quitadas": [], "rechazadas": ["act_709406360806038"]}
+    assert r == {"agregadas": [], "quitadas": [], "rechazadas": ["act_709406360806038"], "fallos_r2": []}
     assert cuentas.ids("otro") == []
 
 

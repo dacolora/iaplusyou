@@ -59,6 +59,36 @@ def clave_r2(cliente, analisis_id, ad_id, extension):
     return f"clientes/{cliente}/rendimiento/a{int(analisis_id)}_{ad_id}.{extension}"
 
 
+def claves_de_analisis(cliente, filas):
+    """Las claves de R2 que `traer` pudo copiar para esos análisis ([(analisis_id, ad_id)]): la imagen Y el video de
+    cada uno (borrar una clave que no existe no es un error, y la tarea pudo copiar uno antes de fallar)."""
+    claves = []
+    for analisis_id, ad_id in filas or []:
+        ad = _id(ad_id)
+        if ad:
+            claves += [clave_r2(cliente, analisis_id, ad, "jpg"), clave_r2(cliente, analisis_id, ad, "mp4")]
+    return claves
+
+
+def borrar_copias(cliente, filas):
+    """Borra de R2 la imagen y el video que `traer` copió para esos análisis ([(analisis_id, ad_id)]), con un solo
+    cliente de R2. S1 (revisión final de Rendimiento E2, 2026-10-10): soltar una cuenta de Meta borra lo que copió
+    «Cómo mejorarlo»; se llama DESPUÉS de borrar las filas (`triple_whale.datos.borrar_analisis_meta`), como E2-R2, para
+    que un R2 lento o caído nunca deje nombres ni cifras guardados. Nunca lanza: (borradas, fallos) con `fallos` = el
+    tipo de cada error (nunca su texto); sin R2 configurado, todas fallan."""
+    claves = claves_de_analisis(cliente, filas)
+    if not claves:
+        return 0, []
+    try:
+        borradas, fallos = r2_uploader.delete_files(claves)
+    except Exception as e:  # noqa: BLE001 — R2 sin configurar o caído: quien suelta la cuenta sigue y avisa
+        borradas, fallos = 0, [type(e).__name__] * len(claves)
+    if fallos:
+        log.warning("no se pudieron borrar %s copia(s) de anuncios de Meta en R2 (%s)", len(fallos),
+                    ", ".join(sorted(set(fallos))))
+    return borradas, fallos
+
+
 def video_valido(url):
     """True si `url` es un video de Meta que el servidor puede bajar: https, sin usuario ni puerto raro, host que
     termina en `.fbcdn.net` y sin `access_token` en ninguna parte."""

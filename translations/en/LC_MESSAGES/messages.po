@@ -13071,6 +13071,10 @@ msgstr "It can't be saved: it cites figures that are not in the data."
 msgid "No se pudieron armar los clips. Vuelve a intentarlo."
 msgstr "Couldn't assemble the clips. Try again."
 
+#, python-format
+msgid "No se pudieron borrar de R2 algunas imágenes o videos copiados de esa cuenta (%(tipo)s): avisa al administrador."
+msgstr "Some images or videos copied from that account couldn't be deleted from R2 (%(tipo)s): let the administrator know."
+
 msgid "No se pudieron calcular las alertas. Recarga la página; si sigue, avisa a Creatv."
 msgstr "Couldn't work out the alerts. Reload the page; if it keeps happening, let Creatv know."
 

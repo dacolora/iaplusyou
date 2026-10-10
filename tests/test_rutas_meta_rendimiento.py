@@ -1242,6 +1242,97 @@ def test_si_borrar_las_filas_falla_las_miniaturas_se_borran_igual_y_se_reintenta
     assert sum("(ValueError)" in m for m in _flashes(conectado["c"])) == 1
 
 
+# ---- S1 (revisión final de Rendimiento E2, 2026-10-10): lo que copió «Cómo mejorarlo» de un anuncio de Meta ----------
+
+def _analisis_meta(cliente, act, ad, fuente="meta"):
+    """Una fila de «Cómo mejorarlo» de un anuncio de Meta (nombre, campaña, cifras, cuenta, título y copy copiados de Meta;
+    su imagen y su video en R2) o, con `fuente=None`, la de un anuncio de Triple Whale."""
+    from triple_whale import datos as twdatos
+    foto = {"nombre": f"Video {ad}", "campana": "Campaña Otoño", "ad_id": ad, "canal": "facebook-ads",
+            "m": {"gasto": 500.0}, "creativo": {"titulo": "Envío gratis", "copy": "Chanclas que no duelen",
+                                                "imagen_url": f"https://media.test/clientes/{cliente}/rendimiento/x.jpg"}}
+    if fuente:
+        foto.update(fuente=fuente, ad_account_id=act)
+    aid = twdatos.crear_analisis(cliente, None, "facebook-ads", ad, "2026-09-10", "2026-10-09", "SEK", foto)
+    twdatos.actualizar_analisis(aid, estado="lista", resultado={"frase": "Pierde en los 3 primeros segundos."})
+    return aid
+
+
+def _analisis_que_quedan(cliente):
+    with db.conectar() as con:
+        return sorted(r.id for r in con.execute(sa.select(db.tw_analisis.c.id).where(db.tw_analisis.c.cliente == cliente)))
+
+
+def _r2_que_anota(monkeypatch, fallos=()):
+    """`delete_files` falso: anota cada llamada con las filas de `tw_analisis` que quedaban en ese momento."""
+    from storage import r2_uploader
+    llamadas = []
+
+    def borrar(claves):
+        llamadas.append({"claves": list(claves), "filas": _analisis_que_quedan("acme")})
+        return len(claves) - len(fallos), list(fallos)
+    monkeypatch.setattr(r2_uploader, "delete_files", borrar)
+    return llamadas
+
+
+def test_desconectar_meta_borra_lo_que_copio_como_mejorarlo_de_sus_cuentas_y_nada_mas(conectado, monkeypatch):
+    """S1: `/eliminar-datos` promete borrar al instante lo copiado de Meta. Las filas de «Cómo mejorarlo» de fuente Meta
+    de las cuentas que se sueltan se borran PRIMERO y después sus copias en R2 (`a<aid>_<ad>.jpg|.mp4`, como E2-R2); un
+    análisis de Triple Whale (aunque sea del mismo anuncio), el de una cuenta que no se soltó y el de otro proyecto se
+    quedan."""
+    _dos_cuentas()
+    de_a, de_b = _analisis_meta("acme", A, "111"), _analisis_meta("acme", B, "222")
+    de_tw = _analisis_meta("acme", A, "111", fuente=None)            # el mismo anuncio, con números de Triple Whale
+    de_otra = _analisis_meta("acme", "act_9", "333")                 # una cuenta que este proyecto ya no lee
+    ajeno = _analisis_meta("otro", A, "444")
+    r2 = _r2_que_anota(monkeypatch)
+    assert _desconectar(conectado, monkeypatch).status_code == 302
+    assert _analisis_que_quedan("acme") == sorted([de_tw, de_otra]) and _analisis_que_quedan("otro") == [ajeno]
+    base = "clientes/acme/rendimiento"
+    copias = [c for llamada in r2 for c in llamada["claves"] if "/rendimiento/" in c]
+    assert sorted(copias) == sorted([f"{base}/a{de_a}_111.jpg", f"{base}/a{de_a}_111.mp4",
+                                     f"{base}/a{de_b}_222.jpg", f"{base}/a{de_b}_222.mp4"])
+    [llamada] = [x for x in r2 if any("/rendimiento/" in c for c in x["claves"])]
+    assert de_a not in llamada["filas"] and de_b not in llamada["filas"]          # primero las filas, después R2
+    assert not any("no se pudieron borrar" in m for m in _flashes(conectado["c"]))
+
+
+def test_quitar_una_cuenta_borra_lo_que_copio_como_mejorarlo_de_esa_cuenta(conectado, monkeypatch):
+    _dos_cuentas()
+    de_a, de_b, de_tw = _analisis_meta("acme", A, "111"), _analisis_meta("acme", B, "222"), _analisis_meta(
+        "acme", B, "222", fuente=None)
+    r2 = _r2_que_anota(monkeypatch)
+    monkeypatch.setattr(conectado["dashboard"].meta_conexion, "listar_activos",
+                        lambda t: _activos((A, "HappyFlops Norway"), (B, "HappyFlops Sweden")))
+    r = conectado["c"].post("/cliente/acme/meta-rendimiento/cuentas", data={"cuenta": [A]})
+    assert r.status_code == 302 and cuentas.ids("acme") == [A]
+    assert _analisis_que_quedan("acme") == sorted([de_a, de_tw])
+    [llamada] = r2
+    assert sorted(llamada["claves"]) == [f"clientes/acme/rendimiento/a{de_b}_222.jpg",
+                                         f"clientes/acme/rendimiento/a{de_b}_222.mp4"]
+    assert de_b not in llamada["filas"]
+    mensajes = _flashes(conectado["c"])
+    assert any("1 cuenta quitada" in m for m in mensajes) and not any("R2" in m for m in mensajes)
+    # Guardar sin quitar nada no toca R2.
+    conectado["c"].post("/cliente/acme/meta-rendimiento/cuentas", data={"cuenta": [A]})
+    assert len(r2) == 1
+
+
+def test_si_r2_falla_las_filas_de_como_mejorarlo_ya_estaban_borradas_y_se_avisa(conectado, monkeypatch):
+    _dos_cuentas()
+    de_a, de_b = _analisis_meta("acme", A, "111"), _analisis_meta("acme", B, "222")
+    _r2_que_anota(monkeypatch, fallos=["EndpointConnectionError"])
+    monkeypatch.setattr(conectado["dashboard"].meta_conexion, "listar_activos",
+                        lambda t: _activos((A, "HappyFlops Norway"), (B, "HappyFlops Sweden")))
+    conectado["c"].post("/cliente/acme/meta-rendimiento/cuentas", data={"cuenta": [A]})
+    assert _analisis_que_quedan("acme") == [de_a]
+    assert sum("EndpointConnectionError" in m for m in _flashes(conectado["c"])) == 1
+    _desconectar(conectado, monkeypatch)
+    assert _analisis_que_quedan("acme") == []
+    assert sum("no se pudieron borrar sus métricas copiadas (EndpointConnectionError)" in m
+               for m in _flashes(conectado["c"])) == 1
+
+
 # ---- «Evaluación con IA» en el panel (E2, Task 6) ----------------------------------------------------------
 
 PANEL = "/cliente/acme/rendimiento/panel"     # la vieja pestaña Meta se jubiló: su sección vive en Rendimiento

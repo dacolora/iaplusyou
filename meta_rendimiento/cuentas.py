@@ -10,6 +10,7 @@ import sqlalchemy as sa
 from sqlalchemy.exc import IntegrityError
 
 import db
+from triple_whale import datos as tw_datos
 from triple_whale import paises
 
 _C = db.meta_cuenta.c
@@ -79,12 +80,19 @@ def dueno(ad_account_id):
 
 
 def _borrar_copias(cliente, ad_account_id):
+    """Borra las copias de la cuenta: sus métricas (`datos.borrar_cuenta`) y, desde S1 (revisión final de Rendimiento
+    E2, 2026-10-10), los análisis «Cómo mejorarlo» de sus anuncios de fuente Meta, que guardan nombres, cifras, título y
+    copy copiados de Meta. Devuelve [(analisis_id, ad_id)] de esos análisis: sus copias en R2 se borran al final de
+    `elegir`, después de las filas."""
     from meta_rendimiento import datos  # noqa: PLC0415 — datos importa cuentas en sus pruebas
     datos.borrar_cuenta(cliente, ad_account_id)
+    return tw_datos.borrar_analisis_meta(cliente, [ad_account_id])
 
 
 def elegir(cliente, elegidas, usuario=None):
-    """Deja en el proyecto exactamente `elegidas` (las de otro proyecto se rechazan)."""
+    """Deja en el proyecto exactamente `elegidas` (las de otro proyecto se rechazan). Devuelve {"agregadas",
+    "quitadas", "rechazadas", "fallos_r2"}: `fallos_r2`, el tipo de cada copia en R2 de un análisis «Cómo mejorarlo»
+    de una cuenta quitada que no se pudo borrar (S1; quien llama avisa). Sus filas ya se borraron antes de tocar R2."""
     nuevas = {normalizar_id(c["id"]): c for c in elegidas or [] if c.get("id")}
     actuales = set(ids(cliente))
     agregadas, rechazadas = [], []
@@ -106,13 +114,21 @@ def elegir(cliente, elegidas, usuario=None):
         except IntegrityError:
             rechazadas.append(act)
     quitadas = sorted(actuales - set(nuevas))
-    for act in quitadas:
-        # Primero las copias y después la fila: si borrar las copias falla, la cuenta sigue en el proyecto
-        # y el próximo `elegir` reintenta las dos cosas (al revés quedarían copias huérfanas para siempre).
-        _borrar_copias(cliente, act)
-        with db.conectar() as con:
-            con.execute(db.meta_cuenta.delete().where(_C.cliente == cliente, _C.ad_account_id == act))
-    return {"agregadas": agregadas, "quitadas": quitadas, "rechazadas": rechazadas}
+    copiadas, fallos_r2 = [], []
+    try:
+        for act in quitadas:
+            # Primero las copias y después la fila: si borrar las copias falla, la cuenta sigue en el proyecto
+            # y el próximo `elegir` reintenta las dos cosas (al revés quedarían copias huérfanas para siempre).
+            copiadas += _borrar_copias(cliente, act) or []
+            with db.conectar() as con:
+                con.execute(db.meta_cuenta.delete().where(_C.cliente == cliente, _C.ad_account_id == act))
+    finally:
+        # S1: las copias en R2 de los análisis ya borrados, al final y con un solo cliente de R2 (también si otra
+        # cuenta falló después: sus filas ya no están y nadie más sabría esas claves). `borrar_copias` nunca lanza.
+        if copiadas:
+            from meta_rendimiento import creativo  # noqa: PLC0415 — tardío: creativo carga Graph, R2 y triple_whale
+            _, fallos_r2 = creativo.borrar_copias(cliente, copiadas)
+    return {"agregadas": agregadas, "quitadas": quitadas, "rechazadas": rechazadas, "fallos_r2": fallos_r2}
 
 
 def cambiar_pais(cliente, ad_account_id, pais):
