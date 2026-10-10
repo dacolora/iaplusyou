@@ -58,16 +58,25 @@ Detalles que ya costaron una duda:
 - **Nicho**: una investigación `detenida` alerta si tiene motivo y no es `cancelada` (clic de la persona, 2026-10-02); una `interrumpida`, siempre; un estudio, una alerta (la investigación manda sobre el error de generación).
 - **Cobros** (2026-10-08, spec `2026-10-08-cobros-saldo-prepagado` §8): solo si `libro.estado(cliente)["cobrar"]`; un proyecto que no cobra sale tras leer la cuenta y no consulta nada más. `sin_saldo` mira el DISPONIBLE (saldo menos lo reservado) ≤ 0; `saldo_bajo` mira el saldo (0 < saldo < umbral) y no sale si ya hay `sin_saldo`; su huella lleva el saldo en dólares redondeados, así que un descarte no esconde un saldo que siguió bajando. `no_cobrado`: un `reverso` o `no_cobrado` de los últimos `DIAS_NO_COBRADO` (7) días (en el `no_cobrado` el monto es `extra.precio`); `recarga_pendiente`: Bold pendiente de hace más de `MINUTOS_RECARGA_PENDIENTE` (15) min. Dos consultas fijas (movimientos y recargas, tope `TOPE_COBROS` = 20 cada una). El concepto sale de `cobros.vista.nombre_concepto`. Ninguna es `solo_admin`. El apartado `config-ap-saldo` solo existe en la página de un cliente que cobra (el admin siempre lo ve).
 - **Orgánico**: reintentar es una acción de la persona sobre la pieza; aquí solo se avisa.
-- **Meta rendimiento** (E2, 2026-10-10, spec `2026-10-10-meta-rendimiento-e2-design.md` §10): la fuente NO calcula reglas
-  (cargar 30 días de anuncios en cada página sería caro). Al terminar bien cada copia, `tareas.meta_rendimiento._guardar_alertas`
-  guarda en `meta_cuenta.extra.alertas` las recomendaciones «alta» de ESA cuenta como `[{tipo, huella}]` (vía
-  `cuentas.actualizar_extra`; un fallo se anota con su tipo y no tumba la copia). La fuente es UNA consulta
-  (`cuentas.listar`) y arma título y detalle desde `TEXTOS_META_RENDIMIENTO` (un par `N_` por tipo que puede ser alto:
-  `cuenta_estado`, `cuenta_roas_bajo`, `aprendizaje_limitado`, `perdedores_gastando`, `anuncios_con_problemas`) con el
-  nombre de la cuenta pasado por `_limpio`. El título NO se guarda (el spec decía `{tipo, titulo, huella}`): guardado
-  quedaría en el idioma del proyecto y la regla de esta skill es traducir al calcular. Un elemento roto (tipo
-  desconocido, huella que no es sha256, algo que no es un dict) se ignora. Cada cliente puede descartarla (es de su
-  cuenta). Una copia que falla deja lo guardado; quitar la cuenta borra su fila y con ella sus alertas.
+- **Meta rendimiento** (E2, 2026-10-10, spec `2026-10-10-meta-rendimiento-e2-design.md` §10; skill `meta-rendimiento`): la fuente
+  NO calcula reglas (cargar 30 días de anuncios en cada página sería caro) y hace UNA consulta (`cuentas.listar`, una
+  fila por cuenta del proyecto). Al terminar bien cada copia, `tareas.meta_rendimiento._guardar_alertas` guarda en
+  `meta_cuenta.extra.alertas` las recomendaciones de nivel «alta» de ESA cuenta como `[{tipo, huella}]` (calculadas con
+  `panel.recomendaciones_de_cuenta`, guardadas con `cuentas.actualizar_extra`; un fallo se anota con su tipo y no tumba
+  la copia). Lo que puede ser «alta» es `meta_rendimiento.recomendaciones.TIPOS_ALTA` (`cuenta_estado`,
+  `cuenta_roas_bajo`, `aprendizaje_limitado`, `perdedores_gastando`, `anuncios_con_problemas`) y cada tipo tiene su
+  par `N_` (título y detalle) en `alertas.TEXTOS_META_RENDIMIENTO`: la fuente ignora un tipo sin texto, y una prueba
+  exige que las tres listas coincidan. **Un tipo nuevo que pueda ser «alta» se agrega a `TIPOS_ALTA` y a
+  `TEXTOS_META_RENDIMIENTO` (más su traducción), o su alerta se pierde en silencio.** Cada una sale como alerta de
+  nivel `atencion`, grupo `decision`, clave `meta_rendimiento:<tipo>:<act_…>`, a la pestaña `meta` (sin ancla: el
+  «Diagnóstico» llega por fetch), con el nombre de la cuenta (dato de Meta) pasado por `_limpio`. **La huella es la de la
+  recomendación** (ruling E2-R4: `sha256` hex completo, `alertas.HUELLA_VALIDA`): en los tipos que juntan TODO lo de
+  una cuenta es tipo + cuenta + nivel, porque su lista de objetos cambia en cada copia y una alerta descartada no puede
+  volver cada 3 horas (sí vuelve si cambia el nivel); en los demás, tipo + cuenta + los ids de sus objetos. El título NO
+  se guarda (el spec decía `{tipo, titulo, huella}`): guardado quedaría en el idioma del proyecto y la regla de esta
+  skill es traducir al calcular. Un elemento roto (tipo desconocido, huella que no es sha256, algo que no es un dict)
+  se ignora. Cada cliente puede descartarla (es de su cuenta). Una copia que falla deja lo guardado, y las alertas
+  guardadas no caducan (PND-249); quitar la cuenta borra su fila y con ella sus alertas.
 
 ## Quién ve qué: `solo_admin` (2026-10-02)
 
