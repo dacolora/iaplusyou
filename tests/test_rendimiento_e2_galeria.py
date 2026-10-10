@@ -127,6 +127,34 @@ def _analizar(app, fuente, ad, json=True, entrada="", **headers):  # noqa: F811
 
 # ------------------------------------------------------------------------------------- el orden (PND-196) ---
 
+def test_dos_cuentas_de_meta_en_sek_y_eur_cada_tarjeta_en_su_moneda_y_el_orden_en_usd(mixto):
+    """T1 (mutación 27 de la revisión final de Rendimiento E2, 2026-10-10): con dos cuentas de Meta en monedas distintas
+    el alcance no tiene moneda común (`config["moneda"]` None), así que cada tarjeta tiene que llevar la de SU cuenta
+    (`galeria._moneda`) y el orden tiene que ser por gasto en USD con la tasa de cada moneda: por gasto nominal, las
+    coronas irían primero."""
+    import tablero
+    mcuentas.elegir("acme", [{"id": SE, "name": "HappyFlops Sverige", "currency": "SEK", "pais": "SE"},
+                             {"id": "act_de", "name": "HappyFlops Deutschland", "currency": "EUR", "pais": "DE"}])
+    for n in range(5):
+        f = _hace(n)
+        for act in (SE, "act_de"):
+            mdatos.reemplazar_cuenta_dias("acme", act, f, f, [_dia(f, 700, 1400, compras=3)])
+        _tasa(f, 0.1, "SEK")
+        _tasa(f, 1.1, "EUR")
+        mdatos.reemplazar_anuncio_dias("acme", SE, f, f, [_ad(f, "s1", 1000, 2000, compras=4)])        # 100 USD/día
+        mdatos.reemplazar_anuncio_dias("acme", "act_de", f, f, [_ad(f, "e1", 150, 300, compras=3)])    # 165 USD/día
+    al = _alcances()
+    assert al["tw"] is None and al["meta"]["config"]["moneda"] is None
+    g = _armar()
+    assert _orden(g) == [("meta", "e1"), ("meta", "s1")]                       # nominal: 1 000 SEK antes que 150 EUR
+    assert {a["ad_id"]: a["moneda"] for a in g["tarjetas"]} == {"e1": "EUR", "s1": "SEK"}
+    html = _panel(mixto)
+    e1, s1 = _tarjeta_de(html, "meta-facebook-ads-e1"), _tarjeta_de(html, "meta-facebook-ads-s1")
+    assert tablero.dinero(50, "EUR") in e1 and "SEK" not in e1                  # costo por venta: 750 / 15
+    assert tablero.dinero(250, "SEK") in s1 and "EUR" not in s1                 # 5 000 / 20
+    assert html.index('id="tw-tarjeta-meta-facebook-ads-e1"') < html.index('id="tw-tarjeta-meta-facebook-ads-s1"')
+
+
 def test_la_galeria_ordena_por_gasto_en_usd_con_dos_monedas(mixto):
     _sembrar()
     g = _armar()

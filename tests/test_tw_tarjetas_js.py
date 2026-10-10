@@ -116,3 +116,20 @@ def test_los_ganchos_vuelven_a_pedir_el_detalle_y_nunca_reenvian_el_post():
     assert "data-tw-ganchos-esperan" in espera
     detalle = _sin_comentarios(_leer("_tw_analisis.html"))
     assert "<script" not in detalle and 'preload="none" data-precarga' in detalle
+
+
+def test_probar_los_ganchos_frena_el_envio_del_navegador_y_va_por_fetch():
+    """T2 (mutación 25 de la revisión final de Rendimiento E2, 2026-10-10): el manejador de «Probar los N ganchos» tiene
+    que frenar el envío del navegador (`ev.preventDefault()`) ANTES de su único fetch; sin eso salen dos POST que cobran
+    (el del navegador y el del fetch) y la página se va a la redirección. Solo se salta si la confirmación del precio ya
+    lo frenó (`ev.defaultPrevented`: la persona canceló)."""
+    tab = _sin_comentarios(_leer("_tab_rendimiento.html"))
+    ganchos = _manejador(tab, "closest('form[data-tw-ganchos]')", "function siActiva()")
+    assert "ev.preventDefault()" in ganchos
+    assert ganchos.index("ev.defaultPrevented") < ganchos.index("ev.preventDefault()") < ganchos.index("fetch(")
+    assert re.search(r"if \(!f \|\| ev\.defaultPrevented\) return;\s*ev\.preventDefault\(\);", ganchos)
+    assert "fetch(f.action, { method: 'POST', body: new FormData(f)" in ganchos and ganchos.count("fetch(") == 1
+    # El formulario que pinta el detalle es el que escucha este manejador, y confirma el precio antes (`data-confirmar`).
+    detalle = _leer("_tw_analisis.html")
+    form = detalle[detalle.index('class="tw-ganchos-probar"') - 40:detalle.index("</form>", detalle.index('class="tw-ganchos-probar"'))]
+    assert 'method="post"' in form and "data-tw-ganchos" in form and "data-confirmar=" in form
