@@ -1265,8 +1265,9 @@ meta_desglose = Table("meta_desglose", metadata,
     sa.UniqueConstraint("cliente", "ad_account_id", "ventana", "dimension", "clave", name="uq_meta_desglose"),
 )
 
-# «Evaluación con IA» del rendimiento de Meta: PAGADA, así que nunca se borra al quitar una cuenta (como
-# tw_analisis); AUTOINCREMENT para que un id borrado no se reuse. Único escritor: meta_rendimiento/datos.py.
+# «Evaluación con IA» del rendimiento de Meta: PAGADA, así que no se borra al quitar o cambiar cuentas (como
+# tw_analisis); solo desconectar Meta la borra (E2-R2: guarda nombres y métricas de Meta). AUTOINCREMENT para que un id
+# borrado no se reuse. Único escritor: meta_rendimiento/datos.py.
 meta_evaluacion = Table("meta_evaluacion", metadata,
     Column("id", Integer, primary_key=True),
     Column("cliente", String(80), nullable=False),
