@@ -783,6 +783,35 @@ def test_evaluar_si_claude_no_responde_anota_el_estimado_sin_cobrarlo(evaluacion
     assert fila["estado"] == "error" and "APITimeoutError" in fila["error"] and "anthropic.com" not in str(e.value)
 
 
+def _rechazo(codigo):
+    """Una respuesta de error de la API de Anthropic (`APIStatusError`): Anthropic SÍ contestó, y con un 4xx/5xx no
+    cobra la llamada."""
+    import anthropic
+    import httpx
+    peticion = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+    return anthropic.APIStatusError("rechazada", response=httpx.Response(codigo, request=peticion), body=None)
+
+
+@pytest.mark.parametrize("codigo", [400, 429, 500, 529])
+def test_evaluar_si_la_api_rechaza_la_llamada_no_anota_ningun_estimado(evaluacion, monkeypatch, codigo):
+    """Distinto de «no responde»: con un `APIStatusError` Anthropic contestó que no (saturada, petición inválida) y no
+    cobró. Anotar el estimado de la tarifa sería inventar un gasto (y sumarlo al del cliente): no se anota nada y la
+    fila queda en error."""
+    import anthropic
+    eid = evaluacion["eid"]
+    _cobra_hf()
+
+    def _llamar(content, system_):
+        raise _rechazo(codigo)
+    monkeypatch.setattr(analisis, "_llamar", _llamar)
+    assert isinstance(_rechazo(codigo), anthropic.APIStatusError) and not tw_analisis.sin_respuesta(_rechazo(codigo))
+    with pytest.raises(RuntimeError):
+        t.meta_rend_evaluar(_tarea_eval(eid))
+    assert _gastos_eval() == [] and _movimientos_hf() == []
+    fila = datos.evaluacion("hf", eid)
+    assert fila["estado"] == "error" and fila["usd"] in (None, 0, 0.0)
+
+
 def test_evaluar_si_la_correccion_no_responde_anota_lo_exacto_mas_el_estimado(evaluacion, monkeypatch):
     eid = evaluacion["eid"]
     llamadas = []
