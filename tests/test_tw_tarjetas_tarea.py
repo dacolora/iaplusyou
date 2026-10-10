@@ -318,7 +318,8 @@ def test_la_tarea_verifica_las_cifras_contra_los_datos_y_no_contra_las_instrucci
     assert "[0,4 s] Det er offisielt" in verificable                 # los datos de verdad: la voz, el anuncio…
     assert "Tu trabajo" in llamadas[0]                               # y el prompt de Claude sigue siendo el entero
     r = datos.analisis_anuncio("acme", en_cola["aid"])["resultado"]
-    assert r["ganchos"][0]["cifras_sin_dato"] == ["60"] and r["copy_nuevo"]["cifras_sin_dato"] == ["700"]
+    # «días de prueba» es además una oferta de prueba que los datos no traen (revisión final, 2026-10-10)
+    assert r["ganchos"][0]["cifras_sin_dato"] == ["60", "prueba"] and r["copy_nuevo"]["cifras_sin_dato"] == ["700"]
 
 
 
