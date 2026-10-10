@@ -7319,6 +7319,12 @@ msgstr "No new ad started that day."
 msgid "Ese día no tiene datos completos de Triple Whale."
 msgstr "That day has no complete Triple Whale data."
 
+msgid "Ese día no tiene datos completos."
+msgstr "That day has no complete data."
+
+msgid "Ese día todavía no está en la copia de todas tus fuentes."
+msgstr "That day is not in the copy of all your sources yet."
+
 msgid "Ese enlace de verificación no sirve: ya se usó o venció. Pide uno nuevo desde tu cuenta."
 msgstr "That verification link doesn't work: it was already used or it expired. Request a new one from your account."
 
@@ -8186,6 +8192,9 @@ msgstr "Missing data: objective, at least one country, days (1–90), cap and ag
 
 msgid "Faltan datos: objetivo, al menos un país, días (1–90), tope, edades (13–65) y una URL de destino http(s)."
 msgstr "Missing data: objective, at least one country, days (1–90), cap, ages (13–65) and a http(s) destination URL."
+
+msgid "Faltan en la copia los anuncios de una de tus fuentes ese día: la lista no está completa."
+msgstr "The copy is missing one of your sources' ads for that day: the list is not complete."
 
 msgid "Faltan la llave o el dominio de la tienda (por ejemplo mitienda.myshopify.com)."
 msgstr "The key or the store domain is missing (for example mystore.myshopify.com)."
@@ -10606,6 +10615,9 @@ msgstr "Official logos"
 msgid "Los anuncios de Meta cubren los últimos 90 días."
 msgstr "Meta ads cover the last 90 days."
 
+msgid "Los anuncios de ese día ya no están en la copia (la de Meta guarda los últimos 90 días): las cifras de arriba son los totales."
+msgstr "That day's ads are no longer in the copy (Meta's keeps the last 90 days): the figures above are the totals."
+
 #, python-format
 msgid "Los anuncios nuevos se quedaron sin presupuesto: %(ult)s del gasto de los últimos 2 días (en el periodo, %(per)s). Sin pruebas nuevas no aparece el próximo ganador."
 msgstr "New ads ran out of budget: %(ult)s of spend in the last 2 days (%(per)s across the period). Without new tests, the next winner never shows up."
@@ -10621,6 +10633,9 @@ msgstr "Clips on the main track get reordered, not moved to a free time."
 
 msgid "Los clips quedaron armados pero no se pudieron pasar al chat. Crea una versión nueva."
 msgstr "The clips were assembled but couldn't be sent to chat. Create a new version."
+
+msgid "Los de las dos fuentes, ordenados por sus ventas en la moneda de arriba; cada uno en la suya y según su fuente, y debajo su gasto ese día y su retorno."
+msgstr "Ads from both sources, sorted by their sales in the currency above; each in its own and per its source, with its spend that day and its return below."
 
 msgid "Los de mayor prioridad van primero al loop de prueba"
 msgstr "The ones with higher priority go first in the test loop"
@@ -17045,6 +17060,9 @@ msgstr "USD %(usd)s spent"
 msgid "USD no disponible"
 msgstr "USD not available"
 
+msgid "USD no disponible ese día: falta la tasa de cambio de una de tus monedas."
+msgstr "USD not available that day: the exchange rate for one of your currencies is missing."
+
 msgid "USD no disponible para algunos días: elige un país para ver sus cifras."
 msgstr "USD not available for some days: choose a country to see its figures."
 
@@ -17363,6 +17381,9 @@ msgstr "Purchase value reported by the Meta Pixel"
 
 msgid "Valor de compras según Meta entre el gasto"
 msgstr "Purchase value per Meta divided by spend"
+
+msgid "Valor de compras según Meta; debajo, el gasto del anuncio ese día y su retorno."
+msgstr "Purchase value per Meta; below, the ad's spend that day and its return."
 
 msgid "Variable"
 msgstr "Variable"
@@ -20509,6 +20530,12 @@ msgstr "confident"
 
 msgid "segura, británica"
 msgstr "confident, British"
+
+msgid "según Meta"
+msgstr "per Meta"
+
+msgid "según Triple Whale"
+msgstr "per Triple Whale"
 
 msgid "seleccionando"
 msgstr "selecting"

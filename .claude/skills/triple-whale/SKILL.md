@@ -206,6 +206,12 @@ cuenta desde la tienda que empezó a copiarse MÁS TARDE (`datos.inicio_para_ant
 hoy dicen «según el Pixel»; la alerta «el MER de la tienda cayó» toma la variación de la tarjeta (días completos, sin
 periodo anterior fuera de la copia); `/dia` usa `datos.primer_dia_copia` y valida el canal por su forma, sin
 recorrer la copia en cada clic.
+Rendimiento E2 tarea 7 (2026-10-10; skill `rendimiento`): el «Qué pasó el …» de Meta y de la mezcla reusa
+`resultados.detalle_dia` y `_tw_dia.html` (motivo: una sola forma del detalle). Por eso `detalle_dia` acepta en cada
+anuncio `moneda` (en una mezcla cada uno va en la suya), `fuente` ("tw" | "meta") y `edad_conocida` (la antigüedad de SU
+copia), `arrancaron` None (no se sabe) y devuelve `fuente`; sin esas claves el detalle de Triple Whale sale idéntico
+(`test_solo_triple_whale_es_el_detalle_de_siempre` compara el HTML de las dos rutas). `armar(..., con_detalle=)`
+sigue existiendo, pero hoy todas las fuentes lo ofrecen.
 
 PND-142 (2026-10-08, decisión delegada enmendada): fuente_ventas_fija se fija al lanzar según la atribución: triple_whale solo con atribución triple_whale y tiendas conectadas (sin tiendas, meta); tienda para pedidos por UTM, meta para Pixel y ninguna si no mide ventas. Una fuente fijada no se cambia por conectar/desconectar después. La lectura corrige las marcas antiguas que ignoraban tienda/Pixel/ninguna. Con ninguna, ninguna foto marca ventas medibles, aunque Meta reporte compras. Si la fuente fija no está disponible, ventas_no_disponibles y ventas no comparables (—), sin respaldo a Meta; todavía se permite el cierre sin evidencia y el perdedor por tráfico del decisor, pero no ganar/escalar por ventas. Triple Whale lee solo la tienda del país. El aviso nuevo aviso_ventas_no_comparables_tw no se deduplica contra el viejo aviso de respaldo. tests/test_lote6_ventas.py, test_atribucion.py y test_lote6_decisor.py vigilan la regla, pedidos e aislamiento.
 

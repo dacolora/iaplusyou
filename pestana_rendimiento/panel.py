@@ -42,8 +42,14 @@ Reglas, cada una con su motivo:
    que pinta la galería (`analisis.muestra`, la que vuelve a armar `rutas.evaluar` con `alcances`). Nunca uno que
    mezcle las dos: el Pixel de Triple Whale y el de Meta atribuyen distinto y sus números no se comparan en un mismo
    prompt. La evaluación sigue siendo una por proyecto (un `job_id`): mientras corre, la barra y ningún botón.
+9. El detalle de un día de «Resultados» (`dia`, E2 tarea 7, spec A3) resuelve el alcance con la misma `_resolver`:
+   con solo Triple Whale es `triple_whale.panel.contexto_dia` tal cual (la tienda de la entrada; el panel sigue
+   pidiéndolo a `triple_whale.ver_dia`), con Meta o mezcla `resumen.dia`. Una `entrada` que ya no es la clave de
+   ninguna entrada (de otro proyecto, una pestaña vieja) no se ensancha a «Todas»: no lee nada y lo dice.
 """
 from datetime import date
+
+from flask_babel import gettext
 
 import gastos
 import idiomas
@@ -334,6 +340,25 @@ def alcance_para_copias(cliente, entrada=None):
     s = _resolver(cliente, entrada)
     return {"tw_cfg": s["tw_cfg"], "meta_ok": s["meta_ok"], "actual": s["actual"], "alcance": s["alcance"],
             "ids_cuentas": list(s["cuentas_por_id"])}
+
+
+# ------------------------------------------------------- el detalle de un día ---
+
+def dia(cliente, fecha, entrada=None, canal=None, hoy=None):
+    """«Qué pasó el …» de la entrada pedida (regla 9): (contexto de `_tw_dia.html`, None) o (None, motivo en palabras)
+    para un 400. `canal` solo cuenta con alcance solo Triple Whale (A3)."""
+    hoy = hoy or date.today()
+    s = _resolver(cliente, entrada)
+    alc, actual = s["alcance"], s["actual"]
+    valor = str(entrada or "").strip()
+    if valor and (actual is None or actual["clave"] != valor):
+        return None, gettext("Esa vista ya no existe: recarga la pestaña.")
+    if alc["fuente"] == "tw":
+        detalle = tw_panel.contexto_dia(cliente, fecha, canal, tienda_id=alc["tw"]["tienda_id"], hoy=hoy)
+        return (detalle, None) if detalle else (None, gettext("Ese día no tiene datos completos de Triple Whale."))
+    if alc["fuente"] not in ("meta", "mixta"):
+        return None, gettext("Conecta Triple Whale o Meta para ver tu rendimiento.")
+    return resumen.dia(cliente, s["entradas"], alc, fecha, hoy, s["tw_cfg"]["moneda"] if s["tw_cfg"] else "USD")
 
 
 # -------------------------------------------------- la galería y lo que cobra ---

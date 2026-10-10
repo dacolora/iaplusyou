@@ -488,3 +488,77 @@ def objetos_para_recomendar(cliente, cuentas, desde, hasta):
                    aprendizaje=f["aprendizaje"], presupuesto_diario=f["presupuesto_diario"], gasto=_monto(f["gasto"]),
                    frecuencia_7=None if f["frecuencia_7"] is None else float(f["frecuencia_7"])) for f in filas]
     return sorted(salida, key=lambda f: (f["ad_account_id"], f["nivel"], f["objeto_id"]))
+
+
+# ------------------------------------------------- el detalle de un día (Rendimiento E2 tarea 7) ---
+# La misma regla que `triple_whale.datos` (spec 2026-10-08-tw-resultados §3.4): un anuncio es «nuevo» sus primeros 14
+# días desde su primer día con gasto en la copia de su cuenta, y la antigüedad solo se conoce desde el primer día de
+# anuncios copiado + 14 (antes pudo arrancar antes de la copia). La copia de anuncios guarda 90 días (`purgar_anuncios`),
+# así que un anuncio más viejo tiene por primer día el borde de la copia y nunca pasa por nuevo pasados esos 14 días.
+
+DIAS_NUEVO = 14
+
+
+def _primeros_dias(cliente, cuentas):
+    """Subconsulta (ad_account_id, ad_id, primer_dia): el primer día con gasto de cada anuncio de esas cuentas en la
+    copia. Va por el índice (cliente, cuenta, fecha)."""
+    a = db.meta_anuncio_dia
+    return (sa.select(a.c.ad_account_id, a.c.ad_id, sa.func.min(a.c.fecha).label("primer_dia"))
+            .where(a.c.cliente == cliente, a.c.ad_account_id.in_(list(cuentas)), a.c.gasto > 0)
+            .group_by(a.c.ad_account_id, a.c.ad_id).subquery("p"))
+
+
+def anuncios_del_dia(cliente, cuentas, fecha, limite=5):
+    """Los anuncios de esas cuentas con gasto ese día (AAAA-MM-DD), los `limite` de más valor de compras DE CADA
+    CUENTA (después más gasto, después el id), con su nombre (meta_objeto), su cuenta, su primer día con gasto y si
+    eran nuevos. Con las claves de `triple_whale.datos.anuncios_del_dia` (`ingresos` = valor, `pedidos` = compras) y
+    `canal` «meta», como `totales_por_anuncio`.
+
+    El tope es por cuenta y no total: con cuentas en monedas distintas el orden por valor nominal no es el orden por
+    valor (500 SEK valen menos que 100 EUR), y quien llama ordena en USD. Así ninguna cuenta queda fuera por su moneda.
+    UNA consulta (ventana `row_number` por cuenta); una lista vacía no toca la base."""
+    if not cuentas:
+        return []
+    a, o = db.meta_anuncio_dia, db.meta_objeto
+    p = _primeros_dias(cliente, cuentas)
+    puesto = sa.func.row_number().over(partition_by=a.c.ad_account_id,
+                                       order_by=(a.c.valor.desc(), a.c.gasto.desc(), a.c.ad_id))
+    dia = (sa.select(a.c.ad_account_id, a.c.ad_id, a.c.fecha, a.c.gasto, a.c.valor, a.c.compras,
+                     puesto.label("puesto"))
+           .where(a.c.cliente == cliente, a.c.ad_account_id.in_(list(cuentas)), a.c.fecha == fecha, a.c.gasto > 0)
+           .subquery("d"))
+    q = (sa.select(dia.c.ad_account_id, dia.c.ad_id, o.c.nombre.label("anuncio"), dia.c.gasto, dia.c.valor,
+                   dia.c.compras, p.c.primer_dia,
+                   (dia.c.fecha <= sa.func.date(p.c.primer_dia, f"+{DIAS_NUEVO - 1} day")).label("nuevo"))
+         .select_from(dia.join(p, sa.and_(p.c.ad_account_id == dia.c.ad_account_id, p.c.ad_id == dia.c.ad_id))
+                      .outerjoin(o, sa.and_(o.c.cliente == cliente, o.c.objeto_id == dia.c.ad_id)))
+         .where(dia.c.puesto <= int(limite))
+         .order_by(dia.c.valor.desc(), dia.c.gasto.desc(), dia.c.ad_id))
+    with db.conectar() as con:
+        filas = con.execute(q).mappings().all()
+    return [{"canal": "meta", "ad_id": f["ad_id"], "ad_account_id": f["ad_account_id"], "anuncio": f["anuncio"],
+             "gasto": _monto(f["gasto"]), "ingresos": _monto(f["valor"]), "pedidos": _monto(f["compras"]),
+             "primer_dia": f["primer_dia"], "nuevo": bool(f["nuevo"])} for f in filas]
+
+
+def arrancaron_el(cliente, cuentas, fecha):
+    """Cuántos anuncios de esas cuentas tuvieron su primer día con gasto ese día. Una consulta."""
+    if not cuentas:
+        return 0
+    p = _primeros_dias(cliente, cuentas)
+    with db.conectar() as con:
+        return int(con.execute(sa.select(sa.func.count()).select_from(p).where(p.c.primer_dia == fecha)).scalar() or 0)
+
+
+def inicio_para_antiguedad(cliente, cuentas):
+    """Desde qué día la copia de anuncios cubre TODAS esas cuentas: el primer día de anuncios copiado de la cuenta que
+    empezó MÁS TARDE (como `triple_whale.datos.inicio_para_antiguedad`: con el más viejo, los anuncios de una cuenta
+    agregada después pasarían por nuevos). None sin anuncios copiados. Un MIN por cuenta, sobre el índice."""
+    if not cuentas:
+        return None
+    a = db.meta_anuncio_dia
+    q = (sa.select(sa.func.min(a.c.fecha)).where(a.c.cliente == cliente, a.c.ad_account_id.in_(list(cuentas)))
+         .group_by(a.c.ad_account_id))
+    with db.conectar() as con:
+        inicios = [str(r[0])[:10] for r in con.execute(q) if r[0]]
+    return max(inicios) if inicios else None

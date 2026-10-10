@@ -16,8 +16,9 @@ Reglas que fija (spec §3):
   entre sí y siempre dice «según el Pixel»; los totales de la tienda salen de `tw_tienda_dia`;
 - la pestaña Rendimiento (spec 2026-10-09-pestana-rendimiento §3 R6–R8) usa la misma sección con otras fuentes:
   `"meta"` (el Pixel de Meta de una cuenta: «según Meta», sin Triple Whale en ninguna frase) y `"mixta"` (varios
-  países con fuentes distintas: «Ventas» y «Retorno» sin apellido). Ninguna de las dos tiene detalle del día
-  (`con_detalle=False`): sus frases no ofrecen abrir un día.
+  países con fuentes distintas: «Ventas» y «Retorno» sin apellido). Desde Rendimiento E2 tarea 7 (2026-10-10) las dos
+  tienen detalle del día (`pestana_rendimiento.resumen.dia` → `detalle_dia`); `con_detalle=False` queda para quien no
+  pueda ofrecerlo: entonces sus frases no ofrecen abrir un día.
 """
 import statistics
 from datetime import date, timedelta
@@ -500,8 +501,9 @@ def armar(dias_periodo, serie_larga, inicio, hoy, fuente, moneda, nuevos, canale
       de un anuncio se conoce 14 días después. Sin él, `inicio_copia`.
     - `fuente`: "tienda" | "anuncios" (el Pixel de Triple Whale) | "meta" (el Pixel de Meta) | "mixta" (varios países
       con fuentes distintas); decide las etiquetas, las ayudas y las frases.
-    - `con_detalle`: falso cuando no hay detalle del día (Meta y la mezcla): ninguna frase ofrece abrir un día y
-      `datos["url_dia"]` va vacío, así la plantilla no pinta el recuadro del detalle y el JS no pide nada.
+    - `con_detalle`: falso cuando no hay detalle del día: ninguna frase ofrece abrir un día y `datos["url_dia"]` va
+      vacío, así la plantilla no pinta el recuadro del detalle y el JS no pide nada. (Hasta E2 tarea 7, Meta y la
+      mezcla; hoy todas las fuentes lo tienen.)
     None si no hay días."""
     periodo = serie_larga[inicio:]
     if not periodo:
@@ -605,7 +607,11 @@ def detalle_dia(fecha, dia, dia_antes, canales, anuncios, arrancaron, creatv, mo
     """«Qué pasó el …» (spec §2.3). `dia` y `dia_antes` = {"ing", "gas", "ped"} (el mismo día de la semana
     anterior puede faltar); `canales` = {canal: {"gasto", "ingresos"}}; `anuncios` = `datos.anuncios_del_dia`;
     `creatv` = `datos.piezas_creatv` de esos anuncios. Sin `antiguedad_conocida` (los primeros 14 días de la
-    copia) no se marca ningún anuncio como nuevo ni se dice cuántos arrancaron: no se puede saber."""
+    copia) no se marca ningún anuncio como nuevo ni se dice cuántos arrancaron: no se puede saber.
+
+    Rendimiento (E2 tarea 7, spec 2026-10-09 A3) lo usa también con `fuente` "meta" y "mixta": cada anuncio puede
+    traer su `moneda` (en una mezcla cada uno se muestra en la suya; sin ella, `moneda`), su `fuente` ("tw" | "meta")
+    y `edad_conocida` (la antigüedad de SU copia: sin ella no es nuevo), y `arrancaron` None dice que no se sabe."""
     fecha = _fecha(fecha)
     stats = []
     for clave in ("ventas", "pedidos", "gasto", "mer"):
@@ -624,14 +630,16 @@ def detalle_dia(fecha, dia, dia_antes, canales, anuncios, arrancaron, creatv, mo
                      for c, v in sorted((canales or {}).items(), key=lambda cv: -_f(cv[1].get("gasto")))
                      if _f(v.get("gasto")) > 0]
     lista_anuncios = [{"nombre": a.get("anuncio") or a["ad_id"], "canal_nombre": nombre_canal(a["canal"]),
-                       "canal_clase": clase_canal(a["canal"]), "nuevo": bool(a.get("nuevo")) and antiguedad_conocida,
-                       "ingresos_texto": _dinero(a["ingresos"], moneda), "gasto_texto": _dinero(a["gasto"], moneda),
+                       "canal_clase": clase_canal(a["canal"]), "fuente": a.get("fuente"),
+                       "nuevo": bool(a.get("nuevo")) and antiguedad_conocida and a.get("edad_conocida", True),
+                       "ingresos_texto": _dinero(a["ingresos"], a.get("moneda") or moneda),
+                       "gasto_texto": _dinero(a["gasto"], a.get("moneda") or moneda),
                        "roas_texto": _veces(_div(a["ingresos"], a["gasto"])),
                        "creatv": (creatv or {}).get(a["ad_id"]) if a["canal"] == CANAL_META else None}
                       for a in anuncios]
     return {"fecha": _iso(fecha), "titulo": gettext("Qué pasó el %(dia)s", dia=idiomas.dia_semana(fecha)),
             "comparado": (gettext("Comparado con el %(dia)s, el mismo día de la semana anterior",
                                   dia=idiomas.dia_semana(fecha - timedelta(days=7))) if dia_antes else None),
-            "stats": stats, "canales": lista_canales, "anuncios": lista_anuncios,
-            "arrancaron": int(arrancaron or 0) if antiguedad_conocida else None,
+            "stats": stats, "canales": lista_canales, "anuncios": lista_anuncios, "fuente": fuente,
+            "arrancaron": int(arrancaron or 0) if antiguedad_conocida and arrancaron is not None else None,
             "anterior": anterior, "siguiente": siguiente}

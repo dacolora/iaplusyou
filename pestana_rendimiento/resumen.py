@@ -20,16 +20,29 @@ Reglas, cada una con su motivo:
    _primer_dia`, cada tienda desde su primer día), el mismo de sus Resultados y de la galería que cobra, así «Por
    país» suma lo que dicen los Resultados de arriba.
 4. Resultados (R8). Es la misma sección de «Resultados de tu tienda» (`triple_whale.resultados.armar`) con la
-   fuente «meta» o «mixta» y sin detalle del día. No recibe antigüedad de anuncios ni cohortes (`inicio_copia`
-   None): sin ellas la sección no dibuja una serie «A anuncios nuevos 0 %» que no sería cierta.
+   fuente «meta» o «mixta». No recibe antigüedad de anuncios ni cohortes (`inicio_copia` None): sin ellas la sección
+   no dibuja una serie «A anuncios nuevos 0 %» que no sería cierta. Desde E2 tarea 7 (2026-10-10, spec A3) trae el
+   detalle del día (`con_detalle=True`; `rutas.ver_panel` le pone la URL de `rendimiento.ver_dia`).
 5. Por país (R5). Una fila por entrada, cada una con su fuente, su moneda y su equivalente en USD; las entradas
    cuyas cuentas llegan dentro de una tienda salen marcadas (`fuera_de_todas`) para que la nota explique por qué
    «Todas» no es la suma de las filas.
 6. Moneda de «Por país» (R6, revisión final de E1). La cifra principal va en la moneda común de todas las filas
    (`moneda_pais`; entonces no se convierte nada ni se piden tasas) o, si no la hay, en USD; una fila sin USD
    (`sin_usd`) lo dice y la página avisa (`por_pais_sin_usd`): nunca «—» callado ni una tasa inventada.
+7. El detalle de un día (`dia`, E2 tarea 7, 2026-10-10; spec A3: con alcance solo Triple Whale sigue siendo
+   `triple_whale.panel.contexto_dia`). Un día del inicio común de la regla 3 a ayer (hoy va a medias) y no después
+   del último día que todas las fuentes ya traen (`_fin_datos`: la gráfica no abre esos días); fuera, un motivo en
+   palabras para un 400. Las cifras van en la moneda de los Resultados (regla 2): en USD con la tasa de ESE día y,
+   sin ella, «USD no disponible ese día», nunca una inventada; el mismo día de la semana anterior sin tasa no se
+   compara. Los anuncios: los 5 que más vendieron entre las dos fuentes por ventas en USD (Triple Whale: lo que el
+   Pixel atribuye a anuncios con gasto ese día; Meta: el valor de compras), cada uno mostrado en su moneda; «nuevo» es
+   hasta su primer día con gasto en SU copia + 13, y solo pasados 14 días del inicio de esa copia. Una fuente con
+   gasto ese día y sin ningún anuncio copiado (la copia de anuncios de Meta guarda 90 días) lo dice
+   (`anuncios_fuera`) en vez de «ningún anuncio tuvo gasto». Consultas fijas: una por lectura, nunca por anuncio.
 """
 from datetime import date, timedelta
+
+from flask_babel import gettext
 
 import idiomas
 from meta_rendimiento import datos as mdatos
@@ -104,6 +117,22 @@ def _unir_por_dia(filas, convertir, tasa):
         dia["ingresos"] += ingresos
         dia["pedidos"] += f["pedidos"]
     return por_dia, usd_ok
+
+
+def _monedas(alc, cuentas_por_id, moneda_tw):
+    """(convertir, moneda) de las cifras del alcance (regla 2): la moneda que comparten todas las partes que suman, o
+    "USD" convertido día por día si no la comparten. Una cuenta sin moneda conocida no comparte la de nadie."""
+    monedas = ({moneda_tw} if alc["tw"] else set()) | {
+        _moneda_de(cuentas_por_id.get(a, {}).get("moneda")) for a in alc["meta_fuente"]}
+    convertir = len(monedas) > 1
+    return convertir, "USD" if convertir else next(iter(monedas), moneda_tw)
+
+
+def _primeros(cliente, alc, tiendas):
+    """(primeros días de las tiendas del alcance, {act: primer día} de sus cuentas de Meta que suman): de aquí sale el
+    inicio común de R7 (regla 3). Una fuente sin ningún día copiado no aparece."""
+    primeros_tw = [p for p in (twdatos.primer_dia_copia(cliente, t["id"]) for t in tiendas) if p]
+    return primeros_tw, mdatos.primeras_fechas(cliente, alc["meta_fuente"])
 
 
 def _nombre(entrada):
@@ -212,7 +241,7 @@ def _resultados(cliente, alc, dias, hoy, desde, hasta, ancho, inicio_real, moned
         dias, serie, (d_desde - ancho).days, hoy, alc["fuente"], moneda, {}, {}, None, None, None, None, "",
         _ultima_copia(tiendas, alc["meta_fuente"], cuentas_por_id),
         inicio_datos=inicio_real, fin_datos=_fin_datos(filas, lee, origen_tw, con_datos, tiendas, cuentas_por_id),
-        con_detalle=False)
+        con_detalle=True)
     return {"resultados": r, "usd_ok": True}
 
 
@@ -328,10 +357,7 @@ def contexto(cliente, entradas_, actual, alc, dias, hoy, moneda_tw):
     moneda_tw = _moneda_de(moneda_tw)
     cuentas_por_id = {c["ad_account_id"]: c for e in entradas_ for c in e["cuentas"]}
     tiendas = _tiendas_del_alcance(entradas_, alc)
-    monedas = ({moneda_tw} if alc["tw"] else set()) | {
-        _moneda_de(cuentas_por_id.get(a, {}).get("moneda")) for a in alc["meta_fuente"]}
-    convertir = len(monedas) > 1
-    moneda = "USD" if convertir else next(iter(monedas), moneda_tw)
+    convertir, moneda = _monedas(alc, cuentas_por_id, moneda_tw)
 
     solo_tw = alc["fuente"] == "tw"
     if solo_tw:
@@ -340,8 +366,7 @@ def contexto(cliente, entradas_, actual, alc, dias, hoy, moneda_tw):
         primeros_tw, primeros_meta, primeros = [], {}, []
         inicio_real = _primer_dia(cliente, alc["tw"]["tienda_id"])
     else:
-        primeros_tw = [p for p in (twdatos.primer_dia_copia(cliente, t["id"]) for t in tiendas) if p]
-        primeros_meta = mdatos.primeras_fechas(cliente, alc["meta_fuente"])
+        primeros_tw, primeros_meta = _primeros(cliente, alc, tiendas)
         primeros = primeros_tw + list(primeros_meta.values())
         inicio_real = max(primeros) if primeros else None
     desde, hasta = periodo(dias, hoy, inicio_real if dias == 0 else None)[:2]
@@ -364,3 +389,100 @@ def contexto(cliente, entradas_, actual, alc, dias, hoy, moneda_tw):
                                                               cuentas_por_id, tasa)
         salida["por_pais_sin_usd"] = any(f["sin_usd"] for f in salida["por_pais"])
     return salida
+
+
+# --------------------------------------------------------------------- el detalle de un día (regla 7) ---
+
+LIMITE_ANUNCIOS_DIA = 5
+
+
+def _totales_dia(filas, fecha, convertir, tasa):
+    """({"ing", "gas", "ped"} de ese día o None si ninguna fuente tiene fila ese día, usd_ok)."""
+    por_dia, usd_ok = _unir_por_dia([f for f in filas if f["fecha"] == fecha], convertir, tasa)
+    d = por_dia.get(fecha)
+    return ({"ing": d["ingresos"], "gas": d["gasto"], "ped": d["pedidos"]} if d else None), usd_ok
+
+
+def _edad_conocida(inicio, fecha):
+    """True si la antigüedad de un anuncio de esa copia se conoce ese día: 14 días después de su primer día copiado."""
+    return bool(inicio) and fecha >= date.fromisoformat(str(inicio)[:10]) + timedelta(days=resultados.DIAS_NUEVO)
+
+
+def dia(cliente, entradas_, alc, fecha, hoy, moneda_tw):
+    """«Qué pasó el …» con Meta o con fuentes mezcladas (regla 7): (detalle, None) con el contexto de
+    `triple_whale.resultados.detalle_dia` más `anuncios_fuera` e `ir_a` (el bloque que abre «Ver todos los anuncios →»),
+    o (None, motivo en palabras) para un 400. `alc` es el de `pestana_rendimiento.entradas.alcance` con fuente "meta" o
+    "mixta"; con solo Triple Whale el detalle es `triple_whale.panel.contexto_dia`."""
+    moneda_tw = _moneda_de(moneda_tw)
+    cuentas_por_id = {c["ad_account_id"]: c for e in entradas_ for c in e["cuentas"]}
+    tiendas = _tiendas_del_alcance(entradas_, alc)
+    convertir, moneda = _monedas(alc, cuentas_por_id, moneda_tw)
+    primeros_tw, primeros_meta = _primeros(cliente, alc, tiendas)
+    primeros = primeros_tw + list(primeros_meta.values())
+    inicio = max(primeros) if primeros else None
+    f, f_antes = fecha.isoformat(), (fecha - timedelta(days=7)).isoformat()
+    if not inicio or f < inicio or fecha >= hoy:
+        return None, gettext("Ese día no tiene datos completos.")
+
+    # Las cifras del día y del mismo día de la semana anterior: una lectura por fuente, como los Resultados.
+    tienda_id = alc["tw"]["tienda_id"] if alc["tw"] else None
+    origen_tw = ("tienda" if twdatos.hay_tienda(cliente, tienda_id) else "pixel_tw") if alc["tw"] else None
+    filas = []
+    if alc["tw"]:
+        leer = twdatos.serie_tienda if origen_tw == "tienda" else twdatos.serie_anuncios
+        filas += _filas_tw(leer(cliente, tienda_id, f_antes, f), moneda_tw)
+    if alc["meta_fuente"]:
+        filas += _filas_meta(mdatos.cuenta_por_dia(cliente, alc["meta_fuente"], f_antes, f), cuentas_por_id)
+    con_datos = ([None] if primeros_tw else []) + list(primeros_meta)
+    fin = _fin_datos(filas, f_antes, origen_tw, con_datos, tiendas, cuentas_por_id)
+    if fin and f > fin:
+        # La gráfica no abre los días que una fuente todavía no trae (van «sin copia»): sumar solo la que llegó daría
+        # una caída que no existe.
+        return None, gettext("Ese día todavía no está en la copia de todas tus fuentes.")
+    tasa = _Tasas(f_antes, f)
+    del_dia, usd_ok = _totales_dia(filas, f, convertir, tasa)
+    if not usd_ok:
+        return None, gettext("USD no disponible ese día: falta la tasa de cambio de una de tus monedas.")
+    antes, antes_ok = _totales_dia(filas, f_antes, convertir, tasa) if f_antes >= inicio else (None, True)
+    if not antes_ok:
+        antes = None                       # sin tasa ese día no se compara (nunca una tasa inventada)
+
+    # Los anuncios de cada fuente: una lectura por fuente (Triple Whale en la moneda del proyecto; Meta, los mejores de
+    # cada cuenta) y el orden final por ventas en USD.
+    anuncios, arranques, fuera = [], [], False
+    gasto_tw = sum(x["gasto"] for x in filas if x["fecha"] == f and x["act"] is None)
+    gasto_meta = sum(x["gasto"] for x in filas if x["fecha"] == f and x["act"] is not None)
+    if alc["tw"]:
+        conocida = _edad_conocida(twdatos.inicio_para_antiguedad(cliente, tienda_id), fecha)
+        propios = twdatos.anuncios_del_dia(cliente, tienda_id, f, limite=LIMITE_ANUNCIOS_DIA)
+        anuncios += [dict(a, fuente="tw", moneda=moneda_tw, edad_conocida=conocida) for a in propios]
+        arranques.append(twdatos.arrancaron_el(cliente, tienda_id, f) if conocida else None)
+        fuera = fuera or (gasto_tw > 0 and not propios)
+    if alc["meta_fuente"]:
+        conocida = _edad_conocida(mdatos.inicio_para_antiguedad(cliente, alc["meta_fuente"]), fecha)
+        propios = mdatos.anuncios_del_dia(cliente, alc["meta_fuente"], f, limite=LIMITE_ANUNCIOS_DIA)
+        anuncios += [dict(a, canal=resultados.CANAL_META, fuente="meta", edad_conocida=conocida,
+                          moneda=_moneda_de(cuentas_por_id.get(a["ad_account_id"], {}).get("moneda")))
+                     for a in propios]
+        arranques.append(mdatos.arrancaron_el(cliente, alc["meta_fuente"], f) if conocida else None)
+        fuera = fuera or (gasto_meta > 0 and not propios)
+
+    def en_usd(a, clave):
+        if not convertir:
+            return a[clave]
+        factor = tasa.factor(a["moneda"], f)
+        return None if factor is None else a[clave] * factor
+
+    # Sin tasa (una cuenta sin moneda conocida: su gasto ya habría frenado el día) al final, nunca convertida a ojo.
+    anuncios.sort(key=lambda a: (en_usd(a, "ingresos") is None, -(en_usd(a, "ingresos") or 0),
+                                 -(en_usd(a, "gasto") or 0), a["ad_id"]))
+    anuncios = anuncios[:LIMITE_ANUNCIOS_DIA]
+    creatv = twdatos.piezas_creatv(cliente, [a["ad_id"] for a in anuncios if a["canal"] == resultados.CANAL_META])
+    anterior, siguiente = fecha - timedelta(days=1), fecha + timedelta(days=1)
+    detalle = resultados.detalle_dia(
+        fecha, del_dia or {"ing": 0.0, "gas": 0.0, "ped": 0.0}, antes, {}, anuncios,
+        None if None in arranques else sum(arranques), creatv, moneda, alc["fuente"],
+        anterior.isoformat() if anterior.isoformat() >= inicio else None,
+        siguiente.isoformat() if siguiente < hoy and not (fin and siguiente.isoformat() > fin) else None)
+    detalle.update(anuncios_fuera=fuera, ir_a="tw-galeria")
+    return detalle, None

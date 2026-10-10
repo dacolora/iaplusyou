@@ -36,10 +36,13 @@ def test_una_entrada_tw_trae_su_galeria_y_su_detalle_del_dia(meta_on):  # noqa: 
     assert 'id="tw-galeria"' in html and "/triple-whale/dia" in html and 'data-twr-dia' in html
 
 
-def test_la_mezcla_no_ofrece_abrir_dias(meta_on):  # noqa: F811
+def test_la_mezcla_abre_sus_dias_en_la_ruta_de_rendimiento(meta_on):  # noqa: F811
+    """A3: hasta E2 tarea 7 la mezcla no abría días; desde entonces los pide a `rendimiento.ver_dia` (nunca a la ruta
+    de Triple Whale, que solo sabe de una tienda). Detalle en tests/test_rendimiento_e2_dia.py."""
     _sembrar()
     html = _panel(meta_on)
-    assert "/triple-whale/dia" not in html
+    assert "/triple-whale/dia" not in html and "/cliente/acme/rendimiento/dia?entrada=" in html
+    assert 'class="twr-dia" data-twr-dia' in html
 
 
 def test_el_armazon_tiene_ajustes_con_la_conexion_de_triple_whale(meta_on):  # noqa: F811

@@ -1,7 +1,9 @@
 {# «Qué pasó el …»: el detalle de un día de «Resultados de tu tienda» (spec 2026-10-08-tw-resultados §2.3).
    Fragmento que pide static/tw_resultados.js a triple_whale.rutas.ver_dia (contexto `d` =
-   triple_whale.resultados.detalle_dia + canal y tienda). Solo lectura: los nombres de los anuncios son texto
-   ajeno y salen escapados por Jinja. Sin <script> (los de un fragmento por fetch no corren). #}
+   triple_whale.resultados.detalle_dia + canal y tienda) y, desde Rendimiento E2 tarea 7, a rendimiento.ver_dia con
+   Meta o mezcla (`d.fuente` "meta" | "mixta", + `anuncios_fuera` e `ir_a` de pestana_rendimiento.resumen.dia: cada
+   anuncio en su moneda, sin «Por canal»). Solo lectura: los nombres de los anuncios son texto ajeno y salen escapados
+   por Jinja. Sin <script> (los de un fragmento por fetch no corren). #}
 <div class="twr-dia-cab">
   <div>
     <h4>{{ d.titulo }}</h4>
@@ -46,19 +48,24 @@
       <li>
         <span class="twr-dia-anuncio">
           <strong title="{{ a.nombre }}">{{ a.nombre }}</strong>
-          <small><span class="twr-t-{{ a.canal_clase }}">{{ a.canal_nombre }}</span>{% if a.nuevo %} <span class="twr-chip-nuevo">{{ _('nuevo') }}</span>{% endif %}{% if a.creatv %} · <a href="#experimentos?exp={{ a.creatv.experimento_id }}">{{ _('Hecho en Creatv · %(exp)s', exp=a.creatv.experimento) }}</a>{% endif %}</small>
+          <small><span class="twr-t-{{ a.canal_clase }}">{{ a.canal_nombre }}</span>{% if d.fuente == 'mixta' %} · {{ _('según Meta') if a.fuente == 'meta' else _('según Triple Whale') }}{% endif %}{% if a.nuevo %} <span class="twr-chip-nuevo">{{ _('nuevo') }}</span>{% endif %}{% if a.creatv %} · <a href="#experimentos?exp={{ a.creatv.experimento_id }}">{{ _('Hecho en Creatv · %(exp)s', exp=a.creatv.experimento) }}</a>{% endif %}</small>
         </span>
         <span class="twr-dia-valor"><strong>{{ a.ingresos_texto }}</strong><small>{{ a.gasto_texto }} · {{ a.roas_texto }}</small></span>
       </li>
       {% endfor %}
     </ol>
+    {% elif d.anuncios_fuera %}
+    <p class="vacio">{{ _('Los anuncios de ese día ya no están en la copia (la de Meta guarda los últimos 90 días): las cifras de arriba son los totales.') }}</p>
     {% else %}
     <p class="vacio">{{ _('Ese día ningún anuncio tuvo gasto.') }}</p>
     {% endif %}
+    {% if d.anuncios and d.anuncios_fuera %}<p class="twr-nota">{{ _('Faltan en la copia los anuncios de una de tus fuentes ese día: la lista no está completa.') }}</p>{% endif %}
     <p class="twr-nota">
-      {{ _('Ventas atribuidas según el Pixel; debajo, el gasto del anuncio ese día y su retorno.') }}
+      {% if d.fuente == 'meta' %}{{ _('Valor de compras según Meta; debajo, el gasto del anuncio ese día y su retorno.') }}
+      {% elif d.fuente == 'mixta' %}{{ _('Los de las dos fuentes, ordenados por sus ventas en la moneda de arriba; cada uno en la suya y según su fuente, y debajo su gasto ese día y su retorno.') }}
+      {% else %}{{ _('Ventas atribuidas según el Pixel; debajo, el gasto del anuncio ese día y su retorno.') }}{% endif %}
       {% if d.arrancaron is none %}{# los primeros 14 días de la copia: no se sabe qué anuncio era nuevo #}{% elif d.arrancaron %}{{ ngettext('Ese día arrancó %(num)s anuncio nuevo.', 'Ese día arrancaron %(num)s anuncios nuevos.', d.arrancaron) }}{% else %}{{ _('Ese día no arrancó ningún anuncio nuevo.') }}{% endif %}
     </p>
-    <button type="button" class="btn-xs" data-twr-ir="tw-cada-anuncio">{{ _('Ver todos los anuncios →') }}</button>
+    <button type="button" class="btn-xs" data-twr-ir="{{ d.ir_a or 'tw-cada-anuncio' }}">{{ _('Ver todos los anuncios →') }}</button>
   </div>
 </div>

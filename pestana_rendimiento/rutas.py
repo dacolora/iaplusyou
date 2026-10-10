@@ -5,6 +5,8 @@ Triple Whale y de Meta.
 
 - `panel` (GET): el fragmento que la pestaña pide por fetch (solo lee la copia local). `entrada` = la clave de una
   entrada del selector; vacía, ajena o rara = «Todas». `tienda`/`cuenta` son los parámetros de las pestañas viejas.
+- `dia` (GET, E2 tarea 7): el detalle de un día de «Resultados» con Meta o mezcla (`panel.dia` → `resumen.dia`); con
+  alcance solo Triple Whale, `triple_whale.panel.contexto_dia` como siempre. Una `entrada` ajena no lee nada (400).
 - `conjuntos` (GET): «Ver más» de la tabla de conjuntos; devuelve solo filas `<tr>`.
 - `actualizar` (POST): «Actualizar ahora» encola las copias de Triple Whale y de Meta del alcance (una `entrada` que
   no existe no encola nada: solo la vacía es «Todas») con sus `job_id` de siempre y las reglas de cada una (`triple_whale.rutas.pedir_copia`, `meta_rendimiento.rutas.pedir_copia`: la
@@ -35,6 +37,8 @@ Hasta el 2026-10-10 la galería, la tarjeta, «Cómo mejorarlo», el lote y «Ev
 `triple_whale/rutas.py` (solo Triple Whale) y los anuncios de Meta tenían su bloque aparte (`anuncios-meta`, sin IA): se
 jubilaron con la galería única y con la evaluación de las dos fuentes. «Guardar en Referentes», el detalle de un
 análisis, «Llevar a Crear» (también de una idea de la evaluación) y Pausar/Activar siguen allá."""
+from datetime import date
+
 from flask import Blueprint, abort, flash, redirect, render_template, request, session, url_for
 from flask_babel import gettext, ngettext
 
@@ -105,7 +109,27 @@ def ver_panel(cliente):
         tienda = tw["tienda_actual"]["id"] if tw.get("tienda_actual") else ""
         tw["resultados"]["datos"]["url_dia"] = url_for("triple_whale.ver_dia", cliente=cliente, tienda=tienda,
                                                        canal=ctx["canal"] or "")
+    # Con Meta o mezcla el detalle del día es de esta pestaña (E2 tarea 7, A3): la entrada que se está mirando.
+    if ctx["resumen"]["resultados"]:
+        ctx["resumen"]["resultados"]["datos"]["url_dia"] = url_for("rendimiento.ver_dia", cliente=cliente,
+                                                                   entrada=ctx["params"]["entrada"])
     return render_template("_rend_panel.html", cliente=cliente, r=ctx, es_admin=meta_rutas.es_admin())
+
+
+@bp.get("/dia")
+def ver_dia(cliente):
+    """«Qué pasó el …» de «Resultados» (fragmento `_tw_dia.html` que pide static/tw_resultados.js; E2 tarea 7, spec
+    A3). Solo lectura y solo GET: `entrada` es la de la pestaña (una ajena no lee nada: 400) y `fecha` un día del
+    primero del alcance a ayer; con alcance solo Triple Whale, el detalle de `triple_whale.panel.contexto_dia` tal cual
+    (con su `canal`). Cualquier otra cosa, 400 con el motivo en palabras."""
+    try:
+        fecha = date.fromisoformat(_texto("fecha")[:10])
+    except ValueError:
+        return gettext("Fecha no válida."), 400
+    ctx, motivo = panel.dia(cliente, fecha, _texto("entrada"), canal=_texto("canal") or None)
+    if ctx is None:
+        return motivo, 400
+    return render_template("_tw_dia.html", cliente=cliente, d=ctx)
 
 
 @bp.get("/conjuntos")

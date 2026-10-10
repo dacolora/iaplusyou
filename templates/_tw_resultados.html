@@ -46,7 +46,8 @@
     <p class="twr-hoy">{{ r.hoy_texto }}</p>
   </div>
 
-  {# El detalle de un día existe solo si la sección sabe dónde pedirlo (`url_dia`): con Meta o con fuentes mezcladas no hay. #}
+  {# El detalle de un día existe solo si la sección sabe dónde pedirlo (`url_dia`, que pone la ruta del panel: el de
+     Triple Whale o, con Meta o mezcla, `rendimiento.ver_dia` desde E2 tarea 7). #}
   {% if r.datos.url_dia %}
   <div class="twr-dia" data-twr-dia aria-live="polite"><p class="twr-nota">{{ _('Cargando…') }}</p></div>
   {% endif %}

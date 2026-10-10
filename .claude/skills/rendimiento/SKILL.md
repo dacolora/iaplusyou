@@ -19,7 +19,7 @@ los clientes». Las dos pestañas daban números distintos para el mismo anuncio
 
 - `pestana_rendimiento/entradas.py` (puro): entradas del selector y su fuente (R2–R5).
 - `pestana_rendimiento/resumen.py`: «Resultados» y «Por país» cuando hay Meta o mezcla (R5–R8), en USD con
-  `meta_rendimiento.tasas.mapa`.
+  `meta_rendimiento.tasas.mapa`, y desde E2 tarea 7 el detalle de un día con Meta o mezcla (`dia`).
 - `pestana_rendimiento/panel.py`: `contexto(cliente, dias, entrada, canal, tienda=, cuenta=)` junta todo con UNA
   resolución del alcance (`_resolver`), la misma que usan el «Ver más» de conjuntos (`conjuntos_pagina`), la galería y
   lo que cobra (`alcances`, E2 tarea 4) y «Actualizar ahora» (`alcance_para_copias`): un «Ver más» nunca lee otras
@@ -39,7 +39,8 @@ los clientes». Las dos pestañas daban números distintos para el mismo anuncio
   `ver_conjuntos` (GET `/conjuntos`, solo `<tr>`), `actualizar` (POST) y, desde E2 tarea 4, la galería y lo que cobra:
   `ver_galeria` (GET `/galeria`, `entera=1` o `pagina`), `ver_tarjeta` (GET `/tarjeta/<fuente>/<canal>/<ad_id>`),
   `analizar_anuncio` (POST `/anuncio/<fuente>/<canal>/<ad_id>/analizar`) y `analizar_lote` (POST `/analizar-lote`);
-  desde E2 tarea 5, `evaluar` (POST `/evaluar`, «Evaluar con IA» de una fuente). El
+  desde E2 tarea 5, `evaluar` (POST `/evaluar`, «Evaluar con IA» de una fuente); desde E2 tarea 7, `ver_dia` (GET
+  `/dia`, el detalle de un día de «Resultados»). El
   nombre `rendimiento/` ya era de las pruebas de carga (skill `escala-y-salud`).
 - Pantalla: `_tab_rendimiento.html` (armazón + TODO el JS; el panel llega por fetch), `_rend_panel.html`,
   `_rend_macros.html`; la galería de las dos fuentes, `_tw_galeria.html` (macros) y `_tw_galeria_fragmento.html` (sus
@@ -103,6 +104,8 @@ los clientes». Las dos pestañas daban números distintos para el mismo anuncio
   análisis arriesgaba lo que cobra. Se unieron en E2 tarea 4 (2026-10-10, ver abajo) y ahí se cerró PND-196.
 - **A2.** R7 vale para «Resultados» y «Por país»; anuncios y campañas usan el «Desde el inicio» de su propia copia.
 - **A3.** Detalle del día y filtro «Canal» solo con alcance solo Triple Whale; con Meta o mezcla la gráfica no abre días.
+  El detalle del día con Meta y mezcla llegó en E2 tarea 7 (2026-10-10, ver abajo); el filtro «Canal» sigue siendo solo
+  de Triple Whale.
 - **A5.** «Actualizar ahora» es una ruta (`rendimiento.actualizar`) que llama a `triple_whale.rutas.pedir_copia` y
   `meta_rendimiento.rutas.pedir_copia` con los `job_id` de siempre, la pausa compartida de Meta y la espera de 30
   minutos de quien no es admin. Solo la entrada VACÍA es «Todas»: una que ya no existe (pestaña vieja, país quitado,
@@ -202,6 +205,46 @@ de `_tw_secciones.html` (recibe `r.ia` y `r.params`, ya no `tw`); pruebas `tests
   de Meta» (`triple_whale.panel._alcance_evaluacion`), no «Todas las tiendas».
 - **Se jubiló** `triple_whale.rutas.evaluar` (sin el correo verificado de esta pestaña); sus pruebas apuntan a
   `/rendimiento/evaluar` con `fuente=tw`. Una entrada que no es del proyecto ya no evalúa «Todas»: no evalúa nada.
+
+## E2 tarea 7 (2026-10-10): el detalle del día con Meta y con mezcla
+
+Por qué: A3 dejó para E2 el «Qué pasó el …» de Meta; con Meta o mezcla la gráfica no abría días y la lectura no ofrecía
+«Ver qué pasó →» del mejor día. Código: `pestana_rendimiento/resumen.py::dia` (regla 7 del módulo), `panel.dia`
+(regla 9), `rutas.ver_dia`, las lecturas nuevas de `meta_rendimiento/datos.py` (skill `meta-rendimiento`) y
+`triple_whale.resultados.detalle_dia` con anuncios en su moneda (skill `triple-whale`); pruebas
+`tests/test_rendimiento_e2_dia.py` (13 mutaciones atrapadas: orden nominal, tope por cuenta, tope 5, antigüedad por
+fuente, +13, entrada ajena, sin tasa, día sin copia, rango, comparación sin tasa, anuncios fuera, inicio común,
+arranques desconocidos).
+
+- **Una ruta, `GET /rendimiento/dia?entrada=&fecha=`** (solo GET, solo lectura). Con alcance solo Triple Whale llama a
+  `triple_whale.panel.contexto_dia` con la tienda de la entrada (el mismo HTML que `/triple-whale/dia`; el panel de
+  esas entradas sigue pidiendo el día a `triple_whale.ver_dia`, sin cambios). Con Meta o mezcla, `resumen.dia`, y
+  `rutas.ver_panel` pone su URL en `r.resumen.resultados.datos.url_dia` (`armar(..., con_detalle=True)`). Una `entrada`
+  que no es la clave de ninguna entrada (otro proyecto, pestaña vieja) es 400 «Esa vista ya no existe» sin leer nada:
+  como en la galería, nunca se ensancha a «Todas».
+- **El rango**: del inicio común de R7 (el más tardío de los primeros días de las fuentes; con Meta sola, el de sus
+  cuentas) a ayer, y no después del último día que todas las fuentes traen (`_fin_datos`: esos días van «sin copia» en
+  la gráfica; sumar solo la fuente que llegó daría una caída que no existe). Fuera, 400 con el motivo.
+- **La moneda** es la de los Resultados (R6): la común, o USD con la tasa de ESE día. Sin tasa ese día, 400 «USD no
+  disponible ese día…», nunca una tasa inventada; el mismo día de la semana anterior sin tasa simplemente no se compara.
+  (El JS muestra «No se pudo cargar ese día.» ante cualquier 400; con Resultados en USD todo día del periodo ya tenía
+  tasa, así que ese 400 solo llega con una petición armada o una tasa borrada entre medias.)
+- **Los anuncios**: los 5 que más vendieron entre las dos fuentes por ventas en USD (Triple Whale: el Pixel de los
+  anuncios con gasto ese día; Meta: el valor de compras), cada uno mostrado en su moneda y, en la mezcla, «según Meta» o
+  «según Triple Whale». La consulta de Meta trae los 5 mejores de CADA cuenta (con monedas distintas el orden nominal no
+  es el orden en USD) y Python ordena y corta. Sin «Por canal» (es de la vista de una tienda). «Ver todos los anuncios →»
+  va a la galería (`d.ir_a = "tw-galeria"`; con Triple Whale solo, a «Ver como tabla»). Ese botón no hacía nada
+  desde el 2026-10-08, tampoco con Triple Whale: el recuadro del detalle lleva `data-twr-dia` vacío y el clic lo tomaba
+  por «abrir un día»; `static/tw_resultados.js` ahora solo abre días desde un `button[data-twr-dia]` (visto en el
+  navegador, 2026-10-10).
+- **«Nuevo»** = hasta el primer día con gasto en SU copia + 13, y solo pasados 14 días del inicio de esa copia
+  (`edad_conocida` por anuncio); «Ese día arrancaron N» solo si todas las fuentes del alcance lo saben (si no, nada).
+- **Una fuente con gasto ese día y sin anuncios copiados** (la copia de anuncios de Meta guarda 90 días; las cuentas,
+  400) lo dice (`anuncios_fuera`) en vez de «Ese día ningún anuncio tuvo gasto»: con «Desde el inicio» la lectura puede
+  ofrecer un mejor día de hace meses.
+- **Consultas fijas**: una lectura por fuente (serie, anuncios, arranques, inicio de la copia, primeros días), una de
+  piezas de Creatv y una de tasas por moneda, crezcan o no los anuncios
+  (`test_las_consultas_no_crecen_con_los_anuncios`).
 
 ## Trampas
 

@@ -393,7 +393,7 @@
 
     // ------------------------------------------------------- detalle del día ---
     function abrir(fecha, conFoco) {
-      if (!fecha || !datos.url_dia || !detalle) return;   // Meta y las fuentes mezcladas no tienen detalle del día
+      if (!fecha || !datos.url_dia || !detalle) return;   // sin `url_dia` (la plantilla no lo dio) no hay detalle del día
       var i = -1;
       for (var k = 0; k < n; k++) if (dias[k].f === fecha) i = k;
       if (i === n - 1 || (i >= 0 && dias[i].sin_copia)) return;   // hoy va a medias y un día sin copia no tiene detalle
@@ -457,7 +457,9 @@
         dibujar();
         return;
       }
-      var dia = ev.target.closest('[data-twr-dia]');
+      // Solo un BOTÓN con data-twr-dia abre un día: el recuadro del detalle también lleva el atributo (vacío) y, con
+      // `closest` a secas, todo clic dentro de él («Ver todos los anuncios →») terminaba aquí y no hacía nada.
+      var dia = ev.target.closest('button[data-twr-dia]');
       if (dia) { ev.preventDefault(); abrir(dia.getAttribute('data-twr-dia'), true); return; }
       var ir = ev.target.closest('[data-twr-ir]');
       if (ir) {
