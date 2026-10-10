@@ -355,6 +355,7 @@ app.register_blueprint(triple_whale_rutas.bp)
 
 from meta_rendimiento import rutas as meta_rendimiento_rutas  # noqa: E402  (Blueprint de la pestaña Meta)
 from meta_rendimiento import cuentas as meta_rend_cuentas  # noqa: E402  (las cuentas que lee el proyecto)
+from meta_rendimiento import datos as meta_rend_datos  # noqa: E402  (sus copias y evaluaciones)
 app.register_blueprint(meta_rendimiento_rutas.bp)
 
 from guiones import rutas as guiones_rutas  # noqa: E402  (Blueprint JSON del chat de Flow Plus en Crear)
@@ -3564,14 +3565,26 @@ def meta_cancelar(cliente):
 def _soltar_cuentas_meta(cliente):
     """Quitar la conexión de Meta de un proyecto (Desconectar, volver a modo propia, desasignar, desconectar la
     agencia) también borra las métricas copiadas de sus cuentas y las deja libres para otro proyecto: /privacidad y
-    /eliminar-datos lo prometen (ruling R21, 2026-10-08). Si borrar falla, la desconexión ya hecha se queda: se anota
-    el tipo del error (nunca su texto) y se avisa; la siguiente vez que alguien quite las cuentas se reintenta."""
+    /eliminar-datos lo prometen (ruling R21, 2026-10-08). Borra además sus evaluaciones con IA, que guardan nombres
+    y métricas de anuncios de Meta (E2-R2, 2026-10-10; el gasto de esas evaluaciones queda en `gasto`). Los dos
+    borrados son independientes: si uno falla, el otro se hace igual. Si algo falla, la desconexión ya hecha se
+    queda: se anota el tipo del error (nunca su texto) y se avisa una vez; la siguiente vez que alguien desconecte
+    se reintenta."""
+    fallo = None
     try:
         meta_rend_cuentas.elegir(cliente, [])
     except Exception as e:  # noqa: BLE001 — la desconexión no se deshace por esto
-        log.warning("meta rendimiento: no se pudieron borrar las métricas copiadas de %s (%s)", cliente, type(e).__name__)
+        log.warning("meta rendimiento: no se pudieron borrar las métricas copiadas de %s (%s)", cliente,
+                    type(e).__name__)
+        fallo = type(e).__name__
+    try:
+        meta_rend_datos.borrar_evaluaciones(cliente)
+    except Exception as e:  # noqa: BLE001 — ídem; el borrado de arriba no depende de este ni este de aquel
+        log.warning("meta rendimiento: no se pudieron borrar las evaluaciones de %s (%s)", cliente, type(e).__name__)
+        fallo = fallo or type(e).__name__
+    if fallo:
         flash(gettext("Meta se desconectó en %(proyecto)s, pero no se pudieron borrar sus métricas copiadas (%(tipo)s). "
-                      "Avisa al administrador.", proyecto=proyectos.nombre_visible(cliente), tipo=type(e).__name__),
+                      "Avisa al administrador.", proyecto=proyectos.nombre_visible(cliente), tipo=fallo),
               "warn")
 
 

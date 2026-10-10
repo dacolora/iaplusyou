@@ -283,6 +283,16 @@ def borrar_evaluacion(cliente, evaluacion_id):
         return con.execute(t.delete().where(t.c.id == evaluacion_id, t.c.cliente == cliente)).rowcount == 1
 
 
+def borrar_evaluaciones(cliente):
+    """Borra TODAS las evaluaciones de ese proyecto (E2-R2: desconectar Meta borra las métricas copiadas y una
+    evaluación guarda nombres y métricas de anuncios de Meta). Solo la llama `dashboard._soltar_cuentas_meta`: ni
+    `borrar_cuenta` ni `cuentas.elegir` la usan, porque también corren al cambiar las cuentas elegidas, y lo que se
+    pagó no se pierde por eso. No toca la tabla `gasto`. Devuelve cuántas borró."""
+    t = db.meta_evaluacion
+    with db.conectar() as con:
+        return con.execute(t.delete().where(t.c.cliente == cliente)).rowcount
+
+
 def borrar_cuenta(cliente, act):
     """Quita las copias de esa cuenta en ese proyecto: los días de cuenta y de anuncio, los objetos, el alcance y los
     desgloses (nunca `meta_cuenta`, lo de otro proyecto ni las evaluaciones: se pagaron y se conservan)."""

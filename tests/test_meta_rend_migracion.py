@@ -75,10 +75,34 @@ def test_0036_arriba_abajo_arriba(tmp_path):
     eng.dispose()
 
 
+def _esquema(eng, tabla):
+    """Todo lo que importa de una tabla, igual para la base migrada y para la creada desde `db.py`: columnas con
+    tipo, nulabilidad y llave primaria; restricciones únicas; índices; y si es AUTOINCREMENT."""
+    insp = sa.inspect(eng)
+    with eng.connect() as con:
+        ddl = con.execute(sa.text("SELECT sql FROM sqlite_master WHERE type='table' AND name=:t"), {"t": tabla}).scalar()
+    return {
+        "columnas": {c["name"]: (str(c["type"]), c["nullable"], bool(c["primary_key"]))
+                     for c in insp.get_columns(tabla)},
+        "unicas": {(u["name"], tuple(u["column_names"])) for u in insp.get_unique_constraints(tabla)},
+        "indices": {(i["name"], tuple(i["column_names"]), bool(i["unique"])) for i in insp.get_indexes(tabla)},
+        "autoincrement": "AUTOINCREMENT" in ddl.upper(),
+    }
+
+
 def test_0036_coincide_con_db_py(tmp_path, base_temporal):
-    """Las columnas de la base migrada son las de `db.py` (lo que usan las pruebas): sin deriva entre los dos."""
+    """La base migrada y la creada desde `db.py` (lo que usan las pruebas) son la misma: columnas, tipos,
+    nulabilidad, llave primaria, la restricción única, los índices y AUTOINCREMENT. Sin deriva entre los dos."""
     eng = _alembic(tmp_path, "upgrade", "head")
-    real, modelo = sa.inspect(eng), sa.inspect(base_temporal.engine())
-    for tabla in TABLAS_E2:
-        assert {c["name"] for c in real.get_columns(tabla)} == {c["name"] for c in modelo.get_columns(tabla)}
-    eng.dispose()
+    try:
+        for tabla in TABLAS_E2:
+            real, modelo = _esquema(eng, tabla), _esquema(base_temporal.engine(), tabla)
+            assert real == modelo, tabla
+        # Y lo prometido por el spec E2 §4 está en las dos.
+        assert ("uq_meta_desglose", ("cliente", "ad_account_id", "ventana", "dimension", "clave")) \
+            in _esquema(eng, "meta_desglose")["unicas"]
+        assert ("ix_meta_evaluacion_cliente_creado", ("cliente", "creado_en"), False) \
+            in _esquema(eng, "meta_evaluacion")["indices"]
+        assert _esquema(eng, "meta_evaluacion")["autoincrement"] and not _esquema(eng, "meta_desglose")["autoincrement"]
+    finally:
+        eng.dispose()

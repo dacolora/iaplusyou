@@ -250,6 +250,17 @@ def test_evaluaciones_es_una_sola_consulta(base_temporal):
     assert len(consultas) == 1
 
 
+def test_borrar_evaluaciones_borra_todas_las_del_proyecto_y_solo_esas(base_temporal):
+    mias = [_crear("hf") for _ in range(3)]
+    ajena = _crear("otro")
+    datos.reemplazar_desgloses("hf", A, 30, "pais", [_seg("NO", 1)])
+    assert datos.borrar_evaluaciones("hf") == 3
+    assert datos.evaluaciones("hf", limite=50) == [] and all(datos.evaluacion("hf", i) is None for i in mias)
+    assert datos.evaluacion("otro", ajena) is not None
+    assert [f["clave"] for f in datos.desgloses("hf", [A], 30)] == ["NO"]   # los desgloses no son suyos
+    assert datos.borrar_evaluaciones("hf") == 0 and datos.borrar_evaluaciones("nadie") == 0
+
+
 def test_borrar_evaluacion_solo_la_del_proyecto(base_temporal):
     a, b = _crear("hf"), _crear("hf")
     assert datos.borrar_evaluacion("hf", a) is True

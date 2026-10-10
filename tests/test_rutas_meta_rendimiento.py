@@ -544,17 +544,19 @@ def test_con_dieciocho_cuentas_ya_elegidas_cinco_nuevas_no_desplazan_a_ninguna_d
 # ---- desconectar Meta borra las copias y libera las cuentas (ruling R21) --------------------------------------
 
 def _filas_copiadas(cliente="acme"):
-    """Cuántas filas de métricas copiadas quedan del proyecto, en las cuatro tablas de datos."""
+    """Cuántas filas de métricas copiadas quedan del proyecto, en las cinco tablas de datos (E2 sumó los desgloses)."""
     total = 0
     with db.conectar() as con:
-        for tabla in (db.meta_cuenta_dia, db.meta_anuncio_dia, db.meta_objeto, db.meta_alcance):
+        for tabla in (db.meta_cuenta_dia, db.meta_anuncio_dia, db.meta_objeto, db.meta_alcance, db.meta_desglose):
             total += con.execute(sa.select(sa.func.count()).select_from(tabla).where(tabla.c.cliente == cliente)).scalar()
     return total
 
 
 def test_desconectar_meta_borra_las_copias_y_deja_libres_las_cuentas(conectado, monkeypatch):
     _sembrar()
-    assert _filas_copiadas() > 0
+    datos.reemplazar_desgloses("acme", A, 30, "pais", [dict(clave="NO", gasto=10, impresiones=1, clics=1,
+                                                            clics_salida=1, compras=1, valor=3)])
+    assert _filas_copiadas() > 0 and datos.desgloses("acme", [A], 30)
     mc = conectado["dashboard"].meta_conexion
     llamadas = []
     monkeypatch.setattr(mc, "revocar", lambda c: False)
@@ -564,6 +566,78 @@ def test_desconectar_meta_borra_las_copias_y_deja_libres_las_cuentas(conectado, 
     assert cuentas.ids("acme") == [] and _filas_copiadas() == 0
     # Las cuentas quedaron libres: otro proyecto ya puede leerlas.
     assert cuentas.elegir("otro", [{"id": A, "name": "HappyFlops Norway"}])["agregadas"] == [A]
+
+
+def _evaluar(cliente):
+    return datos.crear_evaluacion(cliente, [A], "2026-09-10", "2026-10-09", "SEK",
+                                  [{"ref": "a1", "anuncio": "Video gana"}], [], "ana")
+
+
+def _filas_gasto(cliente):
+    with db.conectar() as con:
+        return con.execute(sa.select(sa.func.count()).select_from(db.gasto).where(db.gasto.c.cliente == cliente)).scalar()
+
+
+def _desconectar(conectado, monkeypatch):
+    mc = conectado["dashboard"].meta_conexion
+    monkeypatch.setattr(mc, "revocar", lambda c: False)
+    monkeypatch.setattr(mc, "borrar", lambda c: True)
+    return conectado["c"].post("/cliente/acme/meta/desconectar")
+
+
+def test_desconectar_meta_borra_las_evaluaciones_de_ese_proyecto_y_no_las_de_otro(conectado, monkeypatch):
+    # E2-R2: una evaluación guarda nombres y métricas de anuncios de Meta; desconectar las borra (no el gasto).
+    import gastos
+    _sembrar()
+    mias = [_evaluar("acme"), _evaluar("acme")]
+    ajena = _evaluar("otro")
+    assert gastos.registrar_seguro("acme", "evaluacion", 0.4, f"meta_eval:{mias[0]}") is not None
+    assert _filas_gasto("acme") == 1
+    r = _desconectar(conectado, monkeypatch)
+    assert r.status_code == 302
+    assert datos.evaluaciones("acme") == [] and all(datos.evaluacion("acme", i) is None for i in mias)
+    assert datos.evaluacion("otro", ajena) is not None                     # el otro proyecto sigue igual
+    assert _filas_gasto("acme") == 1                                       # lo que se pagó queda en el gasto
+    assert not any("no se pudieron borrar" in m for m in _flashes(conectado["c"]))
+
+
+def test_cambiar_las_cuentas_elegidas_no_borra_las_evaluaciones(conectado):
+    # `cuentas.elegir` también corre al cambiar la selección: lo pagado no se pierde por eso.
+    _sembrar()
+    e = _evaluar("acme")
+    cuentas.elegir("acme", [])
+    datos.borrar_cuenta("acme", A)
+    assert datos.evaluacion("acme", e) is not None
+
+
+def test_si_falla_borrar_las_copias_las_evaluaciones_se_borran_igual(conectado, monkeypatch):
+    _sembrar()
+    e = _evaluar("acme")
+
+    def falla(cliente, act):
+        raise RuntimeError(f"disco lleno con {TOKEN}")
+    monkeypatch.setattr(cuentas, "_borrar_copias", falla)
+    _desconectar(conectado, monkeypatch)
+    assert datos.evaluacion("acme", e) is None
+    mensajes = _flashes(conectado["c"])
+    assert sum("no se pudieron borrar sus métricas copiadas (RuntimeError)" in m for m in mensajes) == 1
+    assert all("disco lleno" not in m for m in mensajes)
+    assert sorted(cuentas.ids("acme")) == [A, B]
+
+
+def test_si_falla_borrar_las_evaluaciones_las_copias_se_borran_igual_y_se_avisa_una_vez(conectado, monkeypatch):
+    _sembrar()
+    e = _evaluar("acme")
+
+    def falla(cliente):
+        raise ValueError(f"base bloqueada con {TOKEN}")
+    monkeypatch.setattr(datos, "borrar_evaluaciones", falla)
+    _desconectar(conectado, monkeypatch)
+    assert cuentas.ids("acme") == [] and _filas_copiadas() == 0           # lo de las cuentas no se saltó
+    assert datos.evaluacion("acme", e) is not None                         # y la evaluación se reintenta después
+    mensajes = _flashes(conectado["c"])
+    assert sum("no se pudieron borrar sus métricas copiadas (ValueError)" in m for m in mensajes) == 1
+    assert all("base bloqueada" not in m for m in mensajes)
 
 
 def test_si_borrar_las_copias_falla_la_desconexion_se_queda_y_se_avisa(conectado, monkeypatch):
