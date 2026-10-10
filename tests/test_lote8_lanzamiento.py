@@ -1,5 +1,7 @@
 """PND-160: dos POST de tarjeta con el primer trabajo vivo, sin Meta real."""
 import pytest
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier, Event, Thread
 from flask import has_request_context, request
 from tests.test_lanzador import entorno  # noqa: F401
 from tests.test_lanzar_activa import tarea_lanzar  # noqa: F401
@@ -54,9 +56,96 @@ def test_segundo_post_avisa_y_no_escribe(app, entorno, monkeypatch, json):
     respuesta = app['c'].post(url, headers={'Accept': 'application/json'} if json else {})
     if json:
         assert respuesta.is_json
-        assert respuesta.json['mensaje'] == 'Ya se está lanzando ese experimento.'
+        assert respuesta.json['ok'] is True
+        assert respuesta.json['mensaje']
     else:
         with app['c'].session_transaction() as s:
-            assert ('warn', 'Ya se está lanzando ese experimento.') in s['_flashes']
+            assert s['_flashes'][-1][0] == 'warn'
+            assert s['_flashes'][-1][1]
     assert ex.obtener('acme', eid) == antes
     assert app['encolados'] == [t.job_id_lanzar('acme', eid)]
+
+
+def test_ayudante_con_tarea_viva_no_escribe_ni_encola(app, entorno, monkeypatch):
+    d, ex, eid = app['dashboard'], entorno['ex'], entorno['eid']
+    antes = ex.obtener('acme', eid)
+    monkeypatch.setattr(d.trabajos, 'en_curso', lambda job: True)
+    escrituras = []
+    monkeypatch.setattr(ex, 'actualizar', lambda *a, **kw: escrituras.append(kw))
+    assert d._encolar_lanzamiento('acme', eid, 'armando', None) is False
+    assert ex.obtener('acme', eid) == antes
+    assert escrituras == app['encolados'] == []
+
+
+@pytest.mark.parametrize('estado', ['corriendo', 'pausado', 'cerrado', 'lanzando'])
+def test_ayudante_relee_estado_y_rechaza_lectura_vieja(app, entorno, monkeypatch, estado):
+    d, ex, eid = app['dashboard'], entorno['ex'], entorno['eid']
+    ex.actualizar('acme', eid, estado=estado)
+    antes = ex.obtener('acme', eid)
+    escrituras = []
+    monkeypatch.setattr(ex, 'actualizar', lambda *a, **kw: escrituras.append(kw))
+    assert d._encolar_lanzamiento('acme', eid, 'armando', None) is False
+    assert ex.obtener('acme', eid) == antes
+    assert escrituras == app['encolados'] == []
+
+
+def test_dos_hilos_solo_encolan_una_vez(app, entorno):
+    d, ex, eid = app['dashboard'], entorno['ex'], entorno['eid']
+    inicio = Barrier(2)
+    # La tarea aún no aparece viva: la relectura protegida también debe impedir el duplicado.
+    def lanzar():
+        inicio.wait(timeout=5)
+        return d._encolar_lanzamiento('acme', eid, 'armando', None)
+    with ThreadPoolExecutor(max_workers=2) as hilos:
+        resultados = list(hilos.map(lambda _: lanzar(), range(2)))
+    assert sorted(resultados) == [False, True]
+    assert len(app['encolados']) == 1
+    assert ex.obtener('acme', eid)['estado'] == 'lanzando'
+
+
+def test_post_lanzar_no_espera_candado_de_publicacion(app, entorno):
+    d, eid = app['dashboard'], entorno['eid']
+    tomado, soltar, terminado = Event(), Event(), Event()
+    respuestas, errores = [], []
+    def publicacion():
+        with d._ENV_LOCK:
+            tomado.set()
+            soltar.wait(timeout=10)
+    def post():
+        try:
+            respuestas.append(app['c'].post(f'/cliente/acme/experimentos/{eid}/lanzar'))
+        except Exception as error:
+            errores.append(error)
+        finally:
+            terminado.set()
+    publicador, peticion = Thread(target=publicacion), Thread(target=post)
+    publicador.start()
+    try:
+        assert tomado.wait(timeout=5)
+        peticion.start()
+        assert terminado.wait(timeout=2), 'El POST espera el candado de publicación'
+        assert not errores
+        assert respuestas[0].status_code == 302
+        assert len(app['encolados']) == 1
+    finally:
+        soltar.set()
+        publicador.join(timeout=5)
+        if peticion.ident is not None:
+            peticion.join(timeout=5)
+
+
+def test_json_del_else_si_la_tarea_arranca_despues_de_leer(app, entorno, monkeypatch):
+    d, ex, eid = app['dashboard'], entorno['ex'], entorno['eid']
+    consultas = []
+    def en_curso(job):
+        consultas.append(job)
+        return len(consultas) > 1  # pasa la ruta; el ayudante ya encuentra la tarea viva
+    monkeypatch.setattr(d.trabajos, 'en_curso', en_curso)
+    antes = ex.obtener('acme', eid)
+    respuesta = app['c'].post(f'/cliente/acme/experimentos/{eid}/lanzar',
+                            headers={'Accept': 'application/json'})
+    assert len(consultas) == 2
+    assert respuesta.status_code == 200 and respuesta.is_json
+    assert respuesta.json['ok'] is True and respuesta.json['mensaje']
+    assert ex.obtener('acme', eid) == antes
+    assert app['encolados'] == []

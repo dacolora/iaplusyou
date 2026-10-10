@@ -126,4 +126,4 @@ Enmienda PND-159 (2026-10-09): on_ids avisa al worker para registrar YA tope × 
 Segunda ronda lote 7 (2026-10-09, regresión del estimado temprano): Apify entrega meta con costo_real también para una lista vacía y monto cero. La final corrige la misma fila y su saldo, y quita las marcas del estimado; un costo_real desconocido conserva el estimado marcado, según PND-007.
 
 
-PND-155(3) (2026-10-09, decisión del lote 8): el país de Traer referentes usa final_edition.tipos.PAISES desde el contexto común (paises_publicacion), incluidos NO y SE, más ALL y el país prellenado si no está en esa lista. Nombres por catálogo; tests/test_lote8_locales.py.
+PND-155(3) (2026-10-09, decisión del lote 8): el país de Traer referentes conserva exactamente ALL, CO, MX, AR, CL, PE, EC, US, ES y añade solo NO y SE (enmienda 2026-10-10: se había perdido EC y agregado BR al recorrer toda la lista de publicación). Los nombres usan paises_publicacion; Ecuador, ausente de esa lista, pasa por gettext. Nombres por catálogo; tests/test_lote8_locales.py.

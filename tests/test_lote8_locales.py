@@ -39,3 +39,24 @@ def test_pnd155_referentes_paises_centrales(app, monkeypatch):
         html = render_template_string(_selector('_referentes_traer.html','pais'), consulta={'pais':'NO'})
     assert 'value="NO" selected' in html and 'value="SE"' in html
     assert 'central-no' in html and 'central-se' in html
+
+
+@pytest.mark.parametrize('codigo', ['no', 'sv'])
+def test_pnd155_nombres_reales_sin_monkeypatch(app, codigo):
+    import idiomas
+    from babel import Locale
+    nombre = idiomas.NOMBRES_PUBLICACION[codigo]
+    assert nombre.casefold() != codigo
+    assert len(nombre.strip()) > len(codigo)
+    assert nombre.casefold().startswith(Locale.parse(codigo).get_language_name().casefold())
+    with app['dashboard'].app.test_request_context('/cliente/acme'):
+        html = render_template_string(_selector('_final_detalle.html', 'idioma_base'), idiomas_fe=[codigo])
+    assert re.search(r'<option[^>]*value="' + codigo + r'"[^>]*>(.*?)</option>', html, re.S).group(1).strip() == nombre
+
+
+@pytest.mark.parametrize('pais', ['ALL', 'EC', 'NO', 'SE', 'BR'])
+def test_pnd155_paises_solo_lista_decidida(app, pais):
+    with app['dashboard'].app.test_request_context('/cliente/acme'):
+        html = render_template_string(_selector('_referentes_traer.html', 'pais'), consulta={'pais': pais})
+    codigos = re.findall(r'<option[^>]*value="([A-Z]+)"', html)
+    assert codigos == ['ALL', 'CO', 'MX', 'AR', 'CL', 'PE', 'EC', 'US', 'ES', 'NO', 'SE']

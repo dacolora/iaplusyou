@@ -166,3 +166,5 @@ Segunda ronda lote 7 (2026-10-09, encargo de Daniel): filas de análisis fallido
 
 
 PND-209/210/032 (2026-10-09, decisión del lote 8): pantallas/sprints.css limita el campo del link a 100%, permite envolver sprint-aviso (también Detenida de Nicho) y coloca los filtros de revisión en una grilla: campaña ocupa la fila completa en celular, Tipo/QA la siguiente. Reutiliza los campos de la Base visual común, sin colores nuevos. tests/test_lote8_ui.py; capturas a 375/1280 px en es/en a cargo de Claude.
+
+Enmienda PND-032/210 (2026-10-10, pedido de Daniel): sprint-filtros tiene margen superior para separar las acciones a 375 px. La guardia de Detenida comprueba su propio párrafo; la de filtros exige grilla de escritorio y reglas dentro de @media max-width. Capturas en es/en a 375/1280 px por Claude.

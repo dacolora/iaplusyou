@@ -4231,7 +4231,7 @@ body:has(#exp-nuevo) main { margin-left: 0; max-width: 1440px; width: 100%; }
 /* Referencias de campaña y filtros de revisión; campos de la Base visual común. */
 .sprint-link-campo { width: 22rem; max-width: 100%; min-width: 0; }
 .sprint-aviso { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
-.sprint-filtros { display: grid; grid-template-columns: minmax(0, 2fr) repeat(2, minmax(0, 1fr)); gap: .8rem; margin-bottom: 1rem; }
+.sprint-filtros { display: grid; grid-template-columns: minmax(0, 2fr) repeat(2, minmax(0, 1fr)); gap: .8rem; margin-top: 1rem; margin-bottom: 1rem; }
 .sprint-filtros > label { min-width: 0; }
 .sprint-filtros select { width: 100%; max-width: 100%; }
 /* Lote 8: filtros de revisión en celular. */

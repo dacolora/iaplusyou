@@ -378,6 +378,8 @@ app.register_blueprint(cobros_rutas.bp)
 # lock serializa esa sección crítica (cargar credenciales + usarlas) para que
 # eso no pase.
 _ENV_LOCK = threading.Lock()
+# El encolado no espera publicaciones largas ni usa sus credenciales (PND-160, 2026-10-10).
+_LANZAMIENTO_LOCK = threading.Lock()
 
 
 def _sesion():
@@ -5299,12 +5301,17 @@ def _encolar_lanzamiento(cliente, eid, estado_previo, error_previo):
     como estaba. Al revés (encolar y después escribir «lanzando», el M2 de antes) un worker rápido podía activar y
     dejarlo «corriendo» antes de que la ruta escribiera, y esa escritura tardía lo pisaba con anuncios gastando (ronda 2
     de guardian-gasto, 2026-10-08). Lo que M2 cuidaba (quedar en «lanzando» sin tarea) lo cubre la vuelta atrás."""
-    with _ENV_LOCK:
-        if trabajos.en_curso(tareas_exp.job_id_lanzar(cliente, eid)):
+    with _LANZAMIENTO_LOCK:
+        job_id = tareas_exp.job_id_lanzar(cliente, eid)
+        if trabajos.en_curso(job_id):
             return False
+        actual = experimentos.obtener(cliente, eid)
+        if not actual or actual["estado"] not in ("armando", "error"):
+            return False
+        estado_previo, error_previo = actual["estado"], actual["error"]
         experimentos.actualizar(cliente, eid, estado="lanzando", error=None)
         try:
-            arranco = trabajos.encolar(tareas_exp.job_id_lanzar(cliente, eid), "exp_lanzar",
+            arranco = trabajos.encolar(job_id, "exp_lanzar",
                                        {"cliente": cliente, "experimento_id": eid, "activar": True}, cliente=cliente,
                                        duracion_estimada=120, etapas=lanzador.ETAPAS_LANZAR_Y_ACTIVAR, max_intentos=1)
         except Exception:
