@@ -1120,6 +1120,85 @@ def activar_manual(cliente, plan_id, ciclo, usuario, nota="", ahora=None):
     return {"suscripcion_id": sid, "pago_id": pago_id, "periodo_id": periodo_id}
 
 
+def resolver_pendiente(cliente, pago_id, cobrado, usuario, transaccion_id=None, nota="", ahora=None):
+    """Admin (planes 7/8): un pago de plan con Wompi que se quedó `pendiente`
+    (incierto: la referencia ya llegó a Wompi pero no sabemos el resultado, o
+    no hay id de transacción que consultar). Dos salidas, nunca un crédito sin
+    que Wompi lo confirme:
+
+    - `cobrado=True` con el id de la transacción (el del panel de Wompi, o el
+      ya guardado): se RELEE en Wompi, su referencia tiene que ser la de este
+      pago, y se aplica con `aplicar_transaccion` (que además compara centavos
+      y moneda). Lo que diga Wompi manda: aprobado abre el periodo; rechazado
+      lo da por fallido; pendiente guarda el id.
+    - `cobrado=False` («no se cobró»: el admin vio en Wompi que no hay
+      transacción con esa referencia), con nota: el pago pasa a `error` como un
+      fallo definitivo de Wompi (`_fallo`: el primero termina la suscripción;
+      una renovación queda morosa con su reintento). Se niega si el pago tiene
+      transacción (hay que consultarla) o si va en camino (`EN_VUELO`).
+
+    Devuelve la palabra de `aplicar_transaccion` / `_aplicar_estado`. Lanza
+    `ErrorPlan` en palabras."""
+    from cobros import wompi  # noqa: PLC0415
+    ahora = ahora or db.ahora()
+    nota = " ".join(str(nota or "").split())[:300]
+    pp = db.pago_plan
+    try:
+        pid = int(pago_id)
+    except (TypeError, ValueError):
+        pid = None
+    with db.conectar() as con:
+        f = con.execute(sa.select(pp).where(pp.c.id == pid)).first() if pid is not None else None
+    if f is None or f.cliente != cliente:
+        raise ErrorPlan(gettext("Ese pago de plan no existe"))
+    pago = _pago_dict(f)
+    if pago["estado"] != "pendiente" or pago["medio"] != "wompi":
+        raise ErrorPlan(gettext("Ese pago ya no está pendiente"))
+    real = db.ahora()
+    if pago["actualizado_en"] and pago["actualizado_en"] > _iso(_dt(real) - EN_VUELO):
+        raise ErrorPlan(gettext("Ese cobro va en camino a Wompi; espera unos minutos y vuelve a mirar"))
+    if cobrado:
+        tx_id = str(transaccion_id or "").strip() or pago["transaccion_id"]
+        if not wompi.id_valido(tx_id):
+            raise ErrorPlan(gettext("Escribe el id de la transacción tal como sale en el panel de Wompi"))
+        if pago["transaccion_id"] and tx_id != pago["transaccion_id"]:
+            raise ErrorPlan(gettext("Ese no es el id de la transacción guardada para este pago"))
+        try:
+            tx = wompi.transaccion(tx_id, tiempo=wompi.TIEMPO_INTERACTIVO)
+        except wompi.ErrorWompi as e:
+            import cola  # noqa: PLC0415
+            raise ErrorPlan(gettext("No pudimos consultar la transacción en Wompi: %(error)s",
+                                    error=cola.sin_token(str(e))[:200])) from None
+        if tx.get("reference") != pago["referencia"]:
+            raise ErrorPlan(gettext("Esa transacción de Wompi es de otro pago: su referencia no es %(referencia)s",
+                                    referencia=pago["referencia"]))
+        resultado = aplicar_transaccion(tx, ahora=ahora)
+        log.info("pago de plan %s resuelto a mano por %s con la transacción releída: %s (%s)", pid, usuario,
+                 resultado, nota)
+        return resultado
+    if not nota:
+        raise ErrorPlan(gettext("Escribe una nota: cómo supiste que no se cobró"))
+    if pago["transaccion_id"]:
+        raise ErrorPlan(gettext("Este pago tiene una transacción en Wompi: consúltala con «Sí se cobró»"))
+    import idiomas  # noqa: PLC0415
+    with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+        motivo = gettext("No se cobró (lo revisó un administrador)")   # lo ve el cliente en su historial
+    avisos_ = []
+    with db.conectar() as con:
+        _libro()._candado(con)
+        actual = _por_referencia(con, pago["referencia"])
+        if (actual is None or actual["estado"] != "pendiente" or actual["transaccion_id"]
+                or actual["actualizado_en"] != pago["actualizado_en"]):
+            raise ErrorPlan(gettext("Ese pago cambió mientras lo mirabas; vuelve a cargar la página"))
+        resultado, aviso = _aplicar_estado(con, actual, "ERROR", None, motivo, ahora)
+        con.execute(pp.update().where(pp.c.id == actual["id"]).values(usuario=str(usuario or "")[:80]))
+        if aviso:
+            avisos_.append(aviso)
+    _mandar(avisos_)
+    log.info("pago de plan %s marcado «no se cobró» por %s: %s", pid, usuario, nota)
+    return resultado
+
+
 # ---------------------------------------------------------- renovación ---
 
 def renovar_todo(ahora=None):

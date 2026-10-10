@@ -123,6 +123,12 @@ def configurado():
     return _estado()[1] is None
 
 
+def problema():
+    """Por qué Wompi no está listo, en palabras y sin ningún valor de llave
+    (para el aviso de /admin/cobros), o None si está configurado."""
+    return _estado()[1]
+
+
 def llave_publica():
     """La llave pública para el widget de tokenización (planes 6/8: va en el
     HTML del formulario de alta, `data-public-key`; es pública por diseño), o

@@ -11,8 +11,9 @@
   `recargas.procesar_evento_wompi`) y responden sin cuerpo.
 - Las de /admin/cobros (spec §10) son solo del admin (`_solo_admin`, la misma
   regla que `dashboard.requiere_admin`) y sus POST pasan por la barrera CSRF.
-  Escriben a través de `libro.configurar`, `libro.guardar_margen_global` y
-  `recargas.manual`, nunca directo en las tablas."""
+  Escriben a través de `libro.configurar`, `libro.guardar_margen_global`,
+  `recargas.manual` y, los de planes y suscripciones (planes 7/8), `cobros.planes`,
+  nunca directo en las tablas."""
 import json
 import logging
 import os
@@ -752,20 +753,49 @@ def _avisos_bold():
             "pruebas_fuera_de_local": bold.pruebas_fuera_de_local()}
 
 
+def _avisos_wompi():
+    """Lo que el admin tiene que saber de Wompi (planes 7/8), sin ningún valor
+    de llave: sin llaves o mal puestas, llaves de pruebas en un servidor que no
+    es local, o en modo de pruebas (local)."""
+    fuera = wompi.pruebas_fuera_de_local()
+    problema = None if fuera else wompi.problema()
+    return {"problema": problema, "pruebas_fuera_de_local": fuera,
+            "sandbox": problema is None and not fuera and wompi.pruebas()}
+
+
 @bp.get("/admin/cobros")
 @_solo_admin
 def admin_cobros():
     filas = vista.resumen_admin()
+    datos_planes = vista.planes_admin()
+    margen = libro.margen_global()
     for f in filas:
         f["nombre"] = proyectos.nombre_visible(f["cliente"])
         f["margen_propio_texto"] = _campo(f["margen_propio"]) if f["margen_propio"] is not None else ""
         f["umbral_texto"] = _campo(f["umbral"] / 1000)
+        f["margen_plan_texto"] = idiomas.numero(f["margen_plan"], 2) if f["margen_plan"] is not None else None
+        f["plan"] = datos_planes["por_cliente"].get(f["cliente"]) or {"suscripcion": None, "periodo": None,
+                                                                        "pendientes": []}
+        sus = f["plan"]["suscripcion"]
+        if sus is not None:
+            sus["precio_aceptado_texto"] = (vista.usd_entero(sus["precio_aceptado_usd"])
+                                            if sus["precio_aceptado_usd"] else None)
+    for pl in datos_planes["planes"]:
+        pl["precio_texto"] = vista.usd_entero(pl["precio_usd"])
+        pl["anual_texto"] = vista.usd_entero(pl["precio_anual_usd"]) if pl["precio_anual_usd"] else None
+        pl["margen_texto"] = idiomas.numero(pl["margen"], 2)
+        pl["margen_campo"] = _campo(pl["margen"])
+        pl["tope_campo"] = _campo(pl["tope_incluido_usd"])
+        pl["descuento_pct"] = vista.descuento_miembro(pl["margen"], margen)
     eventos = vista.ultimos_eventos()
     for e in eventos:
         e["resultado_texto"] = vista.nombre_resultado(e["resultado"])
-    margen = libro.margen_global()
-    return render_template("admin_cobros.html", filas=filas, margen_global=margen,
+        e["proveedor_texto"] = vista.nombre_proveedor(e["proveedor"])
+        e["monto_texto"] = vista.monto_evento(e)
+        e["usd_texto"] = vista.usd_evento(e)
+    return render_template("admin_cobros.html", filas=filas, margen_global=margen, planes=datos_planes["planes"],
                            eventos=eventos, webhook_callado=vista.webhook_callado(), avisos_bold=_avisos_bold(),
+                           avisos_wompi=_avisos_wompi(),
                            margen_global_texto=idiomas.numero(margen, 2), margen_global_campo=_campo(margen),
                            margen_min_texto=idiomas.numero(libro.MARGEN_MIN, 2),
                            margen_max_texto=idiomas.numero(libro.MARGEN_MAX, 2))
@@ -843,3 +873,183 @@ def admin_recarga(cliente):
         flash(gettext("%(proyecto)s todavía no cobra: el saldo queda guardado para cuando prendas «Cobrar».",
                       proyecto=nombre), "warn")
     return _volver_admin(cliente)
+
+
+# ------------------------------------------- /admin/cobros: planes (planes 7/8) ---
+# Spec planes §9. Escriben a través de `cobros.planes` (escritor único de plan, suscripcion, periodo_plan y
+# pago_plan); los POST pasan por la barrera CSRF de la app como todo /admin/cobros.
+
+def _volver_planes(ancla="cobros-planes"):
+    return redirect(url_for("cobros.admin_cobros") + f"#{ancla}")
+
+
+def _volver_suscripcion(cliente):
+    return redirect(url_for("cobros.admin_cobros") + f"#suscripcion-{cliente}")
+
+
+def _numero_form(nombre):
+    """El campo tal como lo escribió el admin, con coma o punto decimal (sin miles)."""
+    return (request.form.get(nombre) or "").strip().replace(",", ".")
+
+
+def _campos_plan():
+    return {"nombre": request.form.get("nombre") or "", "precio_usd": _numero_form("precio_usd"),
+            "precio_anual_usd": _numero_form("precio_anual_usd") or None, "margen": _numero_form("margen"),
+            "tope_incluido_usd": _numero_form("tope_incluido_usd"), "orden": _numero_form("orden") or 0}
+
+
+@bp.post("/admin/cobros/planes")
+@_solo_admin
+def admin_plan_crear():
+    """Un plan nuevo. Nace archivado si no se marca «Ofrecerlo»: así se revisa antes de que lo vean los clientes."""
+    try:
+        planes.crear_plan(**_campos_plan(), activo=request.form.get("activo") == "1", usuario=session.get("usuario"))
+    except planes.ErrorPlan as e:
+        flash(str(e), "error")
+        return _volver_planes()
+    flash(gettext("Plan creado: %(plan)s.", plan=(request.form.get("nombre") or "").strip()), "ok")
+    return _volver_planes()
+
+
+@bp.post("/admin/cobros/planes/<int:plan_id>")
+@_solo_admin
+def admin_plan_editar(plan_id):
+    """Cambia nombre, precios, margen, tope y orden. El precio nuevo solo vale para suscripciones nuevas (cada
+    suscripción renueva al precio que aceptó); margen y tope, desde el próximo periodo."""
+    try:
+        planes.editar_plan(plan_id, usuario=session.get("usuario"), **_campos_plan())
+    except planes.ErrorPlan as e:
+        flash(str(e), "error")
+        return _volver_planes(f"plan-{plan_id}")
+    flash(gettext("Plan guardado. Quien ya está suscrito sigue con el precio que aceptó; el margen y el tope "
+                  "valen desde su próximo periodo."), "ok")
+    return _volver_planes(f"plan-{plan_id}")
+
+
+@bp.post("/admin/cobros/planes/<int:plan_id>/activo")
+@_solo_admin
+def admin_plan_activo(plan_id):
+    """Ofrecer (activo=1) o archivar (activo=0): archivado no se ofrece; las suscripciones siguen."""
+    activo = request.form.get("activo") == "1"
+    try:
+        planes.archivar_plan(plan_id, session.get("usuario"), activo=activo)
+    except planes.ErrorPlan as e:
+        flash(str(e), "error")
+        return _volver_planes()
+    if activo:
+        flash(gettext("El plan ya se ofrece a los proyectos que cobran."), "ok")
+    else:
+        flash(gettext("Plan archivado: ya no se ofrece. Las suscripciones que tiene siguen igual."), "ok")
+    return _volver_planes(f"plan-{plan_id}")
+
+
+def _exigir_proyecto(cliente):
+    if not _existe(cliente):
+        abort(404)
+    return proyectos.nombre_visible(cliente)
+
+
+@bp.post("/admin/cobros/<cliente>/plan/activar")
+@_solo_admin
+def admin_plan_activar(cliente):
+    """«Activar a mano» (§7.7): un pago por transferencia abre un periodo pagado con el precio de hoy del plan
+    y ciclo elegidos. Apaga siempre la renovación automática con tarjeta (la pantalla lo dice)."""
+    nombre = _exigir_proyecto(cliente)
+    if not libro.cobra(cliente):
+        flash(gettext("%(proyecto)s no cobra: prende «Cobrar» antes de activarle un plan.", proyecto=nombre), "error")
+        return _volver_suscripcion(cliente)
+    ciclo = request.form.get("ciclo") or ""
+    try:
+        r = planes.activar_manual(cliente, request.form.get("plan_id"), ciclo, session.get("usuario"),
+                                  nota=" ".join((request.form.get("nota") or "").split())[:300])
+    except planes.ErrorPlan as e:
+        flash(str(e), "error")
+        return _volver_suscripcion(cliente)
+    if r.get("periodo_id"):
+        flash(gettext("Plan de %(proyecto)s activado a mano: el periodo quedó abierto y su saldo acreditado.",
+                      proyecto=nombre), "ok")
+    else:
+        flash(gettext("Pago a mano anotado en %(proyecto)s: extiende lo pagado y su periodo se abre cuando "
+                      "termine el actual.", proyecto=nombre), "ok")
+    return _volver_suscripcion(cliente)
+
+
+@bp.post("/admin/cobros/<cliente>/plan/cancelar")
+@_solo_admin
+def admin_plan_cancelar(cliente):
+    """Como el cliente (§7.4): no se renueva más y sigue hasta el fin de lo pagado, sin devolución."""
+    nombre = _exigir_proyecto(cliente)
+    if request.form.get("confirmo") != "1":
+        flash(gettext("Marca la casilla para confirmar que quieres cancelar el plan."), "error")
+        return _volver_suscripcion(cliente)
+    try:
+        r = planes.cancelar(cliente, session.get("usuario"))
+    except planes.ErrorPlan as e:
+        flash(str(e), "error")
+        return _volver_suscripcion(cliente)
+    fecha = vista.fecha_larga(r.get("termina_el"))
+    if r.get("estado") == "terminada" or not fecha:
+        flash(gettext("Plan de %(proyecto)s cancelado y terminado: no tenía nada pagado vigente.", proyecto=nombre),
+              "ok")
+    else:
+        flash(gettext("Plan de %(proyecto)s cancelado: no se renueva y sigue hasta el %(fecha)s.", proyecto=nombre,
+                      fecha=fecha), "ok")
+    return _volver_suscripcion(cliente)
+
+
+@bp.post("/admin/cobros/<cliente>/plan/terminar")
+@_solo_admin
+def admin_plan_terminar(cliente):
+    """«Terminar ya» (§9): corta el plan ahora, sin devolución; vence la bolsa. Nota obligatoria."""
+    nombre = _exigir_proyecto(cliente)
+    nota = " ".join((request.form.get("nota") or "").split())[:300]
+    if not nota:
+        flash(gettext("Escribe una nota con el motivo para terminar el plan ya."), "error")
+        return _volver_suscripcion(cliente)
+    if request.form.get("confirmo") != "1":
+        flash(gettext("Marca la casilla para confirmar que quieres terminar el plan ya."), "error")
+        return _volver_suscripcion(cliente)
+    try:
+        planes.terminar_ya(cliente, session.get("usuario"), nota=nota)
+    except planes.ErrorPlan as e:
+        flash(str(e), "error")
+        return _volver_suscripcion(cliente)
+    flash(gettext("Plan de %(proyecto)s terminado: el saldo del plan que quedaba venció y desde ahora genera a la "
+                  "carta.", proyecto=nombre), "ok")
+    return _volver_suscripcion(cliente)
+
+
+_RESUELTO = {
+    "aprobado": idiomas.N_("Wompi confirmó el cobro: el pago quedó aprobado y el plan, al día."),
+    "rechazado": idiomas.N_("Wompi dice que ese cobro se rechazó: quedó como rechazado."),
+    "error": idiomas.N_("Quedó como no cobrado."),
+    "pendiente": idiomas.N_("Wompi todavía no resuelve esa transacción: guardamos su id y se aplica cuando responda."),
+    "no_cuadra": idiomas.N_("El monto o la moneda de esa transacción no cuadran con este pago: no se aplicó nada."),
+    "aprobado_sin_suscripcion": idiomas.N_("Wompi lo aprobó, pero la suscripción ya terminó: no se acreditó nada. "
+                                   "Devuélvelo en Wompi o activa el plan a mano."),
+    "ya_aplicada": idiomas.N_("Ese pago ya estaba resuelto: no cambió nada."),
+}
+
+
+@bp.post("/admin/cobros/<cliente>/plan/pago/<int:pago_id>/resolver")
+@_solo_admin
+def admin_plan_resolver(cliente, pago_id):
+    """Resolver a mano un pago de plan pendiente (`planes.resolver_pendiente`): «Sí se cobró» relee la
+    transacción en Wompi y aplica lo que diga; «No se cobró» (con nota) lo da por fallido. Nunca se acredita
+    sin que Wompi lo confirme."""
+    _exigir_proyecto(cliente)
+    resultado = request.form.get("resultado")
+    if resultado not in ("cobrado", "no_cobrado"):
+        flash(gettext("Elige si el cobro se hizo o no."), "error")
+        return _volver_suscripcion(cliente)
+    try:
+        r = planes.resolver_pendiente(cliente, pago_id, resultado == "cobrado", session.get("usuario"),
+                                      transaccion_id=request.form.get("transaccion_id"),
+                                      nota=request.form.get("nota") or "")
+    except planes.ErrorPlan as e:
+        flash(cola.sin_token(str(e)), "error")
+        return _volver_suscripcion(cliente)
+    mensaje = _RESUELTO.get(r)
+    flash(gettext(mensaje) if mensaje else gettext("Resultado: %(resultado)s.", resultado=r),
+          "ok" if r in ("aprobado", "error", "pendiente") else "warn")
+    return _volver_suscripcion(cliente)

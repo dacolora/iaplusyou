@@ -532,18 +532,26 @@ def chip(cliente, es_admin):
 # ------------------------------------------------------------ /admin/cobros ---
 
 DIAS_WEBHOOK = 7
-TIPOS_RECARGADO = ("recarga", "anulacion")
-TIPOS_CON_COSTO = ("cobro", "no_cobrado")
+# Entra plata: recargas (Bold, Wompi, manuales) menos sus anulaciones, y el crédito de cada periodo de plan (planes
+# 7/8: lo pagó con Wompi o por transferencia). Los ajustes no cuentan.
+TIPOS_RECARGADO = ("recarga", "anulacion", "plan")
+# Lo que le cuesta a Creatv: lo que se intentó cobrar y lo que el plan regaló (`incluido`, planes 7/8).
+TIPOS_CON_COSTO = ("cobro", "no_cobrado", "incluido")
 RESULTADOS_EVENTO = {
     "acreditada": N_("Acreditada"), "duplicada": N_("Repetido"), "sin_recarga": N_("Sin recarga"),
     "rechazada": N_("Rechazada"), "anulada": N_("Anulada"), "ignorada": N_("Ignorado"),
     "recibido": N_("Recibido"), "error": N_("Error"),
     "no_cuadra": N_("No cuadra"), "pendiente": N_("Pendiente"),
 }
+PROVEEDORES_EVENTO = {"bold": "Bold", "wompi": "Wompi"}
 
 
 def _por_cliente(con, q):
     return {c: v for c, v in con.execute(q)}
+
+
+def _abiertos(p, ahora):
+    return sa.and_(p.c.cerrado == sa.false(), p.c.inicio <= ahora, p.c.fin > ahora)
 
 
 def resumen_admin(ahora_iso=None):
@@ -554,35 +562,50 @@ def resumen_admin(ahora_iso=None):
 
     Las cifras del mes van por la fecha del GASTO, como Configuración › Gasto
     del cliente (`resumen_mes_cobrado`):
-    - `recargado_mes`: recargas (Bold y manuales) menos las anulaciones de Bold
-      del mes; los ajustes no cuentan (no entra plata).
+    - `recargado_mes`: recargas (Bold, Wompi y manuales) menos sus anulaciones
+      del mes, más el crédito de los periodos de plan abiertos en el mes; los
+      ajustes no cuentan (no entra plata).
     - `cobrado_mes`: cobros menos reversos de los gastos del mes.
     - `costo_mes`: lo que costaron los gastos del mes que pasaron por el libro
-      con un `cobro` (revertido o no) o un `no_cobrado`: lo que se intentó
-      cobrar. Un gasto de antes de prender «Cobrar» no tiene fila en el libro
-      y no entra.
-    - `ganancia_mes = cobrado_mes − costo_mes`: un cobro revertido o una pieza
-      no cobrada aporta 0 cobrado y su costo entero como pérdida."""
+      con un `cobro` (revertido o no), un `no_cobrado` o un `incluido` (lo que
+      el plan regaló lo paga Creatv): lo que se intentó cobrar o se regaló. Un
+      gasto de antes de prender «Cobrar» no tiene fila en el libro y no entra.
+    - `vencido_mes`: el saldo del plan que venció sin usarse en el mes (el
+      cliente lo pagó y no lo gastó: es de Creatv).
+    - `ganancia_mes = cobrado_mes + vencido_mes − costo_mes`: un cobro
+      revertido o una pieza no cobrada aporta 0 cobrado y su costo entero como
+      pérdida; lo incluido, solo su costo.
+    - `margen`: el que se cobra hoy: con un periodo de plan abierto, el de
+      miembro del periodo (`margen_plan`); si no, el propio o el global."""
     import estado as estado_mod  # noqa: PLC0415 — estado importa media app; solo lo usa el admin
     hasta = gastos._ahora(ahora_iso)
     desde = gastos._inicio_mes(hasta)
-    m, g, r = db.movimiento_saldo, db.gasto, db.reserva_saldo
+    m, g, r, p = db.movimiento_saldo, db.gasto, db.reserva_saldo, db.periodo_plan
     suma = sa.func.coalesce(sa.func.sum(m.c.milesimas), 0)
     del_mes = sa.and_(g.c.creado_en >= desde, g.c.creado_en <= hasta)
+
+    def suma_si(condicion):
+        return sa.func.coalesce(sa.func.sum(sa.case((condicion, m.c.milesimas), else_=0)), 0)
+
     with db.conectar() as con:
         glob = libro._margen_global(con)
         cuentas = {f.cliente: f for f in con.execute(sa.select(db.cuenta_saldo))}
         saldos = _por_cliente(con, sa.select(m.c.cliente, suma).group_by(m.c.cliente))
         reservas = _por_cliente(con, sa.select(r.c.cliente, sa.func.coalesce(sa.func.sum(r.c.milesimas), 0))
                                 .where(r.c.job_id.in_(libro._vivas(con))).group_by(r.c.cliente))
-        recargado = _por_cliente(con, sa.select(m.c.cliente, suma)
-                                 .where(m.c.tipo.in_(TIPOS_RECARGADO), m.c.creado_en >= desde, m.c.creado_en <= hasta)
-                                 .group_by(m.c.cliente))
+        recargado, vencido = {}, {}
+        for c, entro, vence in con.execute(
+                sa.select(m.c.cliente, suma_si(m.c.tipo.in_(TIPOS_RECARGADO)), suma_si(m.c.tipo == "vencimiento"))
+                .where(m.c.tipo.in_(TIPOS_RECARGADO + ("vencimiento",)), m.c.creado_en >= desde,
+                       m.c.creado_en <= hasta).group_by(m.c.cliente)):
+            recargado[c], vencido[c] = entro, vence
         cobrado = _por_cliente(con, sa.select(m.c.cliente, -suma).select_from(m.join(g, g.c.id == m.c.gasto_id))
                                .where(m.c.tipo.in_(TIPOS_COBRADOS), del_mes).group_by(m.c.cliente))
         costo = _por_cliente(con, sa.select(m.c.cliente, sa.func.coalesce(sa.func.sum(g.c.usd), 0))
                              .select_from(m.join(g, g.c.id == m.c.gasto_id))
                              .where(m.c.tipo.in_(TIPOS_CON_COSTO), del_mes).group_by(m.c.cliente))
+        margen_plan = _por_cliente(con, sa.select(p.c.cliente, sa.func.max(p.c.margen))
+                                   .where(_abiertos(p, hasta)).group_by(p.c.cliente))
     clientes = sorted(set(estado_mod.listar_clientes()) | set(cuentas))
     filas = []
     for c in clientes:
@@ -590,26 +613,157 @@ def resumen_admin(ahora_iso=None):
         saldo = int(saldos.get(c) or 0)
         cobrado_mes = int(cobrado.get(c) or 0)
         costo_mes = int(round(float(costo.get(c) or 0) * 1000))
+        vencido_mes = -int(vencido.get(c) or 0)
+        propio = float(cta.margen) if cta is not None and cta.margen is not None else None
+        plan_m = float(margen_plan[c]) if margen_plan.get(c) is not None else None
         filas.append({
             "cliente": c, "cobrar": bool(cta.cobrar) if cta else False,
-            "margen_propio": float(cta.margen) if cta is not None and cta.margen is not None else None,
-            "margen": float(cta.margen) if cta is not None and cta.margen is not None else glob,
+            "margen_propio": propio,
+            "margen": plan_m if plan_m is not None else (propio if propio is not None else glob),
+            "margen_plan": plan_m,
             "umbral": int(cta.umbral_aviso) if cta else libro.UMBRAL_DEFECTO,
             "saldo": saldo, "disponible": saldo - int(reservas.get(c) or 0),
             "recargado_mes": int(recargado.get(c) or 0), "cobrado_mes": cobrado_mes,
-            "costo_mes": costo_mes, "ganancia_mes": cobrado_mes - costo_mes,
+            "costo_mes": costo_mes, "vencido_mes": vencido_mes,
+            "ganancia_mes": cobrado_mes + vencido_mes - costo_mes,
         })
     return filas
 
 
+def planes_admin(ahora_iso=None):
+    """Los planes y la suscripción de cada proyecto para /admin/cobros (spec
+    planes §9), con un número FIJO de consultas (planes, suscripciones vivas,
+    periodos abiertos con sus sumas, pagos pendientes), sin importar cuántos
+    proyectos haya. Al admin sí se le muestra el costo: lo incluido usado va en
+    dólares de costo de proveedor contra su tope. Montos en milésimas.
+
+    Devuelve {"planes": [plan + suscripciones], "por_cliente": {cliente:
+    {suscripcion…, periodo, bolsa_*, incluido_*, *_periodo, pendientes}}}. La
+    ganancia del periodo es lo cobrado en el periodo (cobros − reversos, por la
+    fecha del movimiento) − el costo de lo cobrado, lo no cobrado y lo
+    incluido."""
+    from cobros import planes  # noqa: PLC0415
+    ahora = gastos._ahora(ahora_iso)
+    s, p, m, g, pp = db.suscripcion, db.periodo_plan, db.movimiento_saldo, db.gasto, db.pago_plan
+    cobro = m.alias("cobro_del_reverso")
+    en_periodo = sa.and_(m.c.cliente == p.c.cliente, m.c.creado_en >= p.c.inicio, m.c.creado_en < p.c.fin)
+    # Como `libro._gastado`: un reverso solo descuenta de la bolsa si su cobro también es del periodo.
+    reverso_de_bolsa = sa.and_(m.c.tipo == "reverso", sa.exists().where(
+        cobro.c.gasto_id == m.c.gasto_id, cobro.c.tipo == "cobro", cobro.c.creado_en >= p.c.inicio,
+        cobro.c.creado_en < p.c.fin))
+
+    def suma(condicion, valor):
+        return sa.func.coalesce(sa.func.sum(sa.case((condicion, valor), else_=0)), 0)
+
+    with db.conectar() as con:
+        lista = [planes._plan_dict(f) for f in con.execute(sa.select(db.plan).order_by(db.plan.c.orden, db.plan.c.id))]
+        vivas = [planes._sus_dict(f) for f in con.execute(sa.select(s).where(s.c.estado != "terminada")
+                                                           .order_by(s.c.id))]
+        periodos = {int(f.suscripcion_id): f for f in con.execute(sa.select(p).where(_abiertos(p, ahora)))}
+        sumas = {int(f[0]): f for f in con.execute(
+            sa.select(p.c.id,
+                      suma(m.c.tipo == "cobro", m.c.milesimas),
+                      suma(reverso_de_bolsa, m.c.milesimas),
+                      suma(m.c.tipo == "reverso", m.c.milesimas),
+                      suma(m.c.tipo == "incluido", sa.func.json_extract(m.c.extra, "$.costo")),
+                      suma(m.c.tipo.in_(TIPOS_CON_COSTO), g.c.usd))
+            .select_from(p.join(m, en_periodo).outerjoin(g, g.c.id == m.c.gasto_id))
+            .where(_abiertos(p, ahora)).group_by(p.c.id))}
+        pendientes = [planes._pago_dict(f) for f in con.execute(sa.select(pp).where(pp.c.estado == "pendiente")
+                                                                 .order_by(pp.c.id))]
+    por_plan = {pl["id"]: pl for pl in lista}
+    for pl in lista:
+        pl["suscripciones"] = 0
+    por_cliente = {}
+    en_vuelo = (datetime.fromisoformat(db.ahora()) - planes.EN_VUELO).isoformat(timespec="seconds")
+    for pago in pendientes:
+        fila = por_cliente.setdefault(pago["cliente"], {"suscripcion": None, "periodo": None, "pendientes": []})
+        fila["pendientes"].append({
+            **{k: pago[k] for k in ("id", "referencia", "usd", "ciclo", "creado_en", "transaccion_id")},
+            "en_vuelo": bool(pago["actualizado_en"]) and pago["actualizado_en"] > en_vuelo,
+            "no_salio": pago["motivo"] == planes.MOTIVO_NO_SALIO})
+    for sus in vivas:
+        plan_ = por_plan.get(sus["plan_id"])
+        if plan_ is not None:
+            plan_["suscripciones"] += 1
+        renueva = bool(sus["renovar"] and sus["fuente_pago_id"] and sus["estado"] in ("activa", "morosa"))
+        if sus["estado"] in ("morosa", "cancelada"):
+            situacion = sus["estado"]
+        else:
+            situacion = "activa" if sus["renovar"] else "manual"
+        fila = por_cliente.setdefault(sus["cliente"], {"suscripcion": None, "periodo": None, "pendientes": []})
+        fila["suscripcion"] = {
+            "id": sus["id"], "plan_id": sus["plan_id"], "plan_nombre": plan_["nombre"] if plan_ else "—",
+            "ciclo": sus["ciclo"], "estado": sus["estado"], "situacion": situacion, "renueva": renueva,
+            "con_tarjeta": bool(sus["fuente_pago_id"]), "fuente_resumen": sus["fuente_resumen"],
+            "renueva_el": sus["cubierto_hasta"] if renueva else None,
+            "termina_el": None if renueva else sus["cubierto_hasta"],
+            "reintento_el": sus["proximo_cobro"] if sus["estado"] == "morosa" else None,
+            "intentos_fallidos": sus["intentos_fallidos"], "precio_aceptado_usd": planes._precio_aceptado(sus),
+        }
+        per = periodos.get(sus["id"])
+        if per is None:
+            fila["periodo"] = None
+            continue
+        _id, cobros_, reversos_bolsa, reversos, incluido, costo = sumas.get(int(per.id)) or (per.id, 0, 0, 0, 0, 0)
+        credito = int(per.credito_milesimas)
+        gastado = -(int(cobros_) + int(reversos_bolsa))
+        cobrado = -(int(cobros_) + int(reversos))
+        costo_m = int(round(float(costo or 0) * 1000))
+        fila.update({
+            "periodo": {"id": int(per.id), "inicio": per.inicio, "fin": per.fin, "margen": float(per.margen),
+                        "tope_incluido_usd": float(per.tope_incluido_usd)},
+            "bolsa_credito": credito, "bolsa_restante": max(0, credito - gastado),
+            "incluido_usado_usd": float(incluido or 0), "tope_incluido_usd": float(per.tope_incluido_usd),
+            "cobrado_periodo": cobrado, "costo_periodo": costo_m, "ganancia_periodo": cobrado - costo_m,
+        })
+    return {"planes": lista, "por_cliente": por_cliente}
+
+
 def ultimos_eventos(limite=20):
-    """Los últimos eventos de Bold con firma válida (los sin firma son basura
-    con cupo, `recargas._cupo_sin_firma`), el más nuevo primero. Sin el cuerpo."""
-    pe = db.pago_evento
-    q = (sa.select(pe.c.id, pe.c.recibido_en, pe.c.tipo, pe.c.referencia, pe.c.resultado)
+    """Los últimos eventos de Bold y de Wompi con firma válida (los sin firma
+    son basura con cupo, `recargas._cupo_sin_firma`), el más nuevo primero. Sin
+    el cuerpo. Cada uno trae lo que se le cobró a la persona, de la recarga o
+    del pago de plan de su referencia (`moneda_pago`, `total_pago`, `medio`,
+    `centavos_plan`), para `monto_evento`."""
+    pe, rc, pp = db.pago_evento, db.recarga, db.pago_plan
+    q = (sa.select(pe.c.id, pe.c.proveedor, pe.c.recibido_en, pe.c.tipo, pe.c.referencia, pe.c.resultado,
+                   rc.c.medio, rc.c.moneda_pago, rc.c.total_pago, rc.c.milesimas,
+                   pp.c.monto_cop_centavos.label("centavos_plan"), pp.c.usd.label("usd_plan"))
+         .select_from(pe.outerjoin(rc, rc.c.referencia == pe.c.referencia)
+                      .outerjoin(pp, pp.c.referencia == pe.c.referencia))
          .where(pe.c.firma_ok.is_(True)).order_by(pe.c.id.desc()).limit(int(limite)))
     with db.conectar() as con:
         return [dict(f._mapping) for f in con.execute(q)]
+
+
+def monto_evento(e):
+    """Lo que pagó la persona en la pasarela, para la tabla de eventos:
+    «COP 4.000.500». `recarga.total_pago` guarda CENTAVOS de COP en una
+    recarga de Wompi y pesos (en `moneda_pago`) en una de Bold; un pago de plan
+    guarda `monto_cop_centavos`. None si no se sabe."""
+    if e.get("centavos_plan") is not None:
+        return f"COP {idiomas.numero(int(e['centavos_plan']) / 100, 0)}"
+    total = e.get("total_pago")
+    if total is None:
+        return None
+    if e.get("medio") == "wompi":
+        return f"COP {idiomas.numero(int(total) / 100, 0)}"
+    moneda = (e.get("moneda_pago") or "COP").upper()[:3]
+    return f"{moneda} {idiomas.numero(total, 0 if moneda == 'COP' else 2)}"
+
+
+def usd_evento(e):
+    """Los dólares que acredita (recarga) o compra (plan) la referencia del evento; None si no se sabe."""
+    if e.get("usd_plan") is not None:
+        return usd_entero(e["usd_plan"])
+    if e.get("milesimas") is not None:
+        return gastos.formatear(int(e["milesimas"]) / 1000)
+    return None
+
+
+def nombre_proveedor(codigo):
+    return PROVEEDORES_EVENTO.get(codigo) or str(codigo or "")
 
 
 def nombre_resultado(codigo):
