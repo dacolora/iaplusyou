@@ -394,10 +394,12 @@ def test_origen_desde_formulario(hf):
 def test_estimado_de_la_evaluacion_de_meta():
     est = gastos.estimar("evaluacion_meta", n=10)
     assert est["usd"] == pytest.approx(gastos.TARIFAS["evaluacion_meta"] + 10 * gastos.TARIFAS["evaluacion_meta_por_anuncio"])
-    # Medida el 2026-10-10 (docs/superpowers/evals/2026-10-10-meta-evaluacion.md): con 10 anuncios lo más caro fue
-    # US$ 0,3772 (primera llamada en max_tokens + la corrección); el estimado nunca queda por debajo.
-    assert est["usd"] == pytest.approx(0.40)
-    assert est["usd"] >= 0.3772
+    # Segunda medición, 2026-10-10 (docs/superpowers/evals/2026-10-10-meta-evaluacion.md): con 48 000 de tope y 10
+    # anuncios lo más caro fue US$ 0,2527 (una sola llamada, end_turn); el estimado nunca queda por debajo.
+    assert est["usd"] == pytest.approx(0.30)
+    assert est["usd"] >= 0.2527
+    # La salida con pensamiento no crece con N: la base sola ya cubre esa parte (≈ 0,23 medida) con una muestra chica.
+    assert gastos.estimar("evaluacion_meta", n=1)["usd"] >= 0.25
 
 
 def test_si_algo_falla_despues_de_que_claude_respondio_salen_los_tokens(monkeypatch):

@@ -96,3 +96,66 @@ pesa más porque casi todo el costo es la salida con pensamiento, que no crece c
 **Conclusión:** la llamada no se puede cerrar así. Las 3 primeras respuestas llegaron a `max_tokens` (una vacía) y 2
 de 3 correcciones salieron sin ideas. Hay que subir `MAX_TOKENS` (a 32 000, por ejemplo), volver a medir con estos
 mismos casos y recalcular la tarifa. La de 0,40 cubre el código de hoy.
+
+## Segunda medición (E2-R8, Task 7b, 2026-10-10)
+
+**Cambio medido** (commit `b0f0db00`): `MAX_TOKENS` 16 000 → 48 000, con el mismo `timeout` de 600 s. `parsear` ahora
+rechaza una respuesta sin `resumen`, sin ningún paso de plan o con menos de 3 ideas válidas, y deja 5 como mucho. La
+corrección pide el JSON COMPLETO con todas sus secciones (`analisis.correccion`); Triple Whale sigue con su texto. Las
+instrucciones piden de 3 a 5 ideas, un plan de 8 pasos como mucho y una sola frase corta por anuncio. El esquema del
+JSON no cambió. La barra calcula 360 s (`DURACION_EVALUAR`).
+
+**Cómo:** igual que la primera medición. El código de la rama fue a `/tmp/creatv-e2b` y la base de producción se copió
+con `sqlite3.backup`. Una diferencia: `alembic upgrade head` sobre la copia falló porque la copia está en la `0037` de
+`main` («Can't locate revision identified by '0037'»). Las dos tablas de E2 se crearon entonces con
+`db.metadata.create_all(engine, tables=[db.meta_desglose, db.meta_evaluacion])` y la marca de alembic de la copia no
+se tocó. Se corrió con el `.env` de producción sin imprimir ningún valor. Las miniaturas eran reales: se copiaron a R2
+y después se borraron (20 borradas, 0 fallidas; `eval1_A1.jpg` y `eval2_A1.jpg` dan 404). `/tmp/creatv-e2b` también se
+borró. Los mismos alcances que los casos 1 y 4 de la primera medición: `happyflops`, idioma `en`, muestra de 10
+anuncios (6 ganadores y 4 perdedores), 5 con imagen y sin segmentos (`meta_desglose` sigue sin desplegar).
+
+| caso | antes (7a): 1.ª stop · entrada / salida · US$ · s · valida · ideas | después (7b): 1.ª stop · entrada / salida · US$ · s · valida · ideas | lo que se buscaba |
+|---|---|---|---|
+| «Todas», 30 días (7a caso 1 → 7b c1) | max_tokens (vacía) + corrección · 32 094 / 31 306 · 0,3772 · 320,8 · sí, tras la corrección · 4 | **end_turn**, sin corrección · 20 881 / 21 094 · **0,2527** · **204,8** · sí · **4** | que la primera llamada termine sola y una sola llamada pague |
+| Netherlands, 30 días (7a caso 4 → 7b c2) | max_tokens (JSON cortado) + corrección · 26 287 / 23 391 · 0,2865 · 232,8 · sí, tras la corrección · **0** | **end_turn**, sin corrección · 8 418 / 20 763 · **0,2245** · **214,3** · sí · **4** | lo mismo, y que no llegue sin ideas |
+
+«Entrada» es la entrada equivalente (caché: escribir 1,25× y leer 0,1×). En el c1 la caché se escribió (8 303) y en
+el c2 se leyó. Los US$ salen de `costo_real` a 2 y 10 US$ por millón.
+
+| caso | cifras_sin_dato | plan | ideas | diagnóstico | patrones + / − | por anuncio (palabras, la más larga) | pasos con enlace |
+|---|---|---|---|---|---|---|---|
+| c1 | 4 (`47`, `4,100`, `2,092`, `556`) | 8 | 4 | 5 | 3 / 2 | 10 de 10 (22) | 4 |
+| c2 | 3 (`1,210`, `9,124`, `15%`) | 8 | 4 | 5 | 2 / 2 | 10 de 10 (16) | 7 |
+
+- **Verde en los dos casos.** La primera llamada termina sola, con ≈ 21 000 tokens de salida: el 44 % del tope nuevo.
+  Las respuestas pesan 18 084 y 15 304 caracteres. Ninguna pidió corrección, así que cada evaluación paga una sola
+  llamada. Con 16 000 de tope esa salida nunca cabía: por eso fallaban las tres de la primera medición.
+- **Lo que trae cada respuesta:** 4 ideas, cada una con su ángulo sin errores y un prompt en inglés de 74 a 96
+  palabras. Hay 8 pasos de plan y una nota por cada uno de los 10 anuncios, de una frase de 16 a 22 palabras. Antes, 2
+  de las 3 correcciones llegaban sin ideas y con nota solo para 4 de los 10 anuncios.
+- **Calidad igual de buena.** El c1 consolida NL, SE y NO por su aprendizaje limitado, pausa los perdedores de las
+  cuatro cuentas (R7–R9, R12), cierra World Wide y revisa los anuncios marcados. El c2 pausa A7–A10 y consolida. Además
+  escala un 20 % los tres conjuntos que ya salieron del aprendizaje, pide variantes de los que se desgastan y
+  replantea los anuncios de whitelisting. Las ideas siguen los ganadores (pies fríos o cansados → alivio, oferta
+  directa) y nombran en `basada_en` los anuncios de los que salen.
+- **Las cifras sin dato siguen siendo derivadas.** Son sumas de «en juego» de varias R (4 100, 2 092 y 556 SEK por
+  día), el total de perdedores (47 = 13 + 18 + 12 + 4), la suma de los aumentos de presupuesto (1 210), el gasto de A8
+  más A9 (9 124) o un umbral redondo para el patrón (15 %). Ninguna es inventada, y el aviso de la pantalla basta (E2-R5).
+- **Latencia:** 205 y 214 s, una sola llamada en cada caso. Antes la tarea entera tardaba de 233 a 321 s. Una
+  respuesta que llegara al tope de 48 000 tardaría unos 500 s a esta velocidad (≈ 100 tokens por segundo), así que el
+  `timeout` de 600 s alcanza. La barra calcula 360 s.
+
+**Gasto de esta medición:** US$ 0,4772 (0,2527 + 0,2245), todo Claude. Está anotado en la `gasto` de producción como
+`_creatv` / `evaluacion` / `eval:meta_eval_b:c1` y `:c2` (ids 1652 y 1653, detalle «medición eval-claude E2 (segunda,
+E2-R8)»). Entre las dos mediciones van US$ 1,4502.
+
+**Tarifa nueva:** `TARIFAS["evaluacion_meta"]` = 0,25 de base y `evaluacion_meta_por_anuncio` = 0,005. Con N = 10 da
+US$ 0,30, cuando antes daba 0,40. La base cubre lo que no crece con N: la salida con pensamiento (≈ 0,21) y la doctrina
+escrita en caché (≈ 0,02). Cada anuncio suma su bloque de DATOS, su imagen y su nota (≈ 0,004). 0,30 queda por encima
+de lo más caro que se midió (0,2527). También queda por encima de lo peor esperable sin corrección: 10 imágenes, caché
+fría y segmentos dan ≈ 0,28. Una corrección, que desde E2-R8 solo llega si la respuesta no sirve, costaría otra llamada
+(≈ 0,5 en total). En un proyecto que cobra, el saldo puede quedar por debajo de la reserva, como dice la skill `cobros`.
+
+**Conclusión:** se puede cerrar. En los dos casos la primera llamada termina sola, la respuesta valida, trae 4 ideas y
+el plan completo, y paga una sola llamada. La evaluación sale a US$ 0,22–0,25, contra 0,29–0,38 antes, y tarda unos
+210 s, contra 233–321 s. No medido: `<segmentos>` (sin desplegar) y una muestra con menos de 10 anuncios.

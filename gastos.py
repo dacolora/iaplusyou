@@ -126,14 +126,15 @@ TARIFAS = {
     # docs/superpowers/evals/2026-10-08-tw-como-mejorarlo.md (PND-179).
     "analisis_anuncio_tw": 0.10,
     # Meta rendimiento, «Evaluar con IA» (spec E2 §8): base + por anuncio de la muestra (estimador «evaluacion_meta»).
-    # Una llamada con visión, la doctrina en el system (caché) y hasta 16 000 tokens de salida.
-    # Medido en la prueba real (2026-10-10, claude-sonnet-5, happyflops, muestra de 10 anuncios): en los 3 casos la
-    # primera llamada llegó a `max_tokens` y la corrección la pagó otra vez: US$ 0,2865–0,3772 por evaluación. Casi
-    # todo es la salida con pensamiento, que no crece con N: por eso la base pesa más que el por anuncio. Con N = 10
-    # da 0,40 (lo peor de este código, las dos llamadas en el tope, es ≈ 0,39). Informe:
-    # docs/superpowers/evals/2026-10-10-meta-evaluacion.md.
-    "evaluacion_meta": 0.30,
-    "evaluacion_meta_por_anuncio": 0.01,
+    # Una llamada con visión, la doctrina en el system (caché) y hasta 48 000 tokens de salida (E2-R8).
+    # Segunda medición (2026-10-10, claude-sonnet-5, happyflops, muestra de 10 anuncios, 5 con imagen): una sola
+    # llamada que termina sola (end_turn), ≈ 21 000 tokens de salida (pensamiento + JSON): US$ 0,2245–0,2527. Lo que no
+    # crece con N (la salida, ≈ 0,21, y la doctrina escrita en caché, ≈ 0,02) va en la base; cada anuncio suma su
+    # bloque de DATOS, su imagen y su nota (≈ 0,004). Con N = 10 da 0,30, sobre lo más caro medido y lo peor esperable
+    # sin corrección (10 imágenes, caché fría, segmentos: ≈ 0,28). Una corrección (rara desde E2-R8) cuesta otra
+    # llamada. Informe: docs/superpowers/evals/2026-10-10-meta-evaluacion.md («Segunda medición»).
+    "evaluacion_meta": 0.25,
+    "evaluacion_meta_por_anuncio": 0.005,
 }
 
 # Evaluación de anuncios de Triple Whale con IA (spec 2026-09-28 §6): una
