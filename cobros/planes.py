@@ -1091,6 +1091,14 @@ def apagar_renovacion(cliente, usuario, ahora=None):
     return True
 
 
+def sin_renovar(sus, ahora):
+    """¿La suscripción quedó sin renovar? Sin periodo vivo y sin un pago
+    pendiente (la alerta `cobros:plan_sin_renovar` del admin, cuando lo pagado
+    ya terminó). Dos lecturas; solo lee."""
+    with db.conectar() as con:
+        return _periodo_vivo_de(con, sus["id"], ahora) is None and not _hay_pendiente(con, sus["id"])
+
+
 def _terminar_si_toca(con, sus, ahora):
     """Una suscripción que no se renueva (cancelada, o activada a mano sin
     tarjeta) termina cuando ya no le queda nada pagado ni un cobro en curso."""

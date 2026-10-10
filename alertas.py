@@ -75,7 +75,7 @@ HUELLA_VALIDA = r"^[0-9a-f]{64}$"
 # frenan con `es_solo_admin` (fix de la revisión de la Task 5, 2026-10-02);
 # `tests/test_rutas_alertas.py` comprueba que toda alerta `solo_admin` que
 # producen las fuentes empiece por uno de estos prefijos.
-PREFIJOS_SOLO_ADMIN = ("llave:", "worker:", "revision:", "saldo:wavespeed_recarga")
+PREFIJOS_SOLO_ADMIN = ("llave:", "worker:", "revision:", "saldo:wavespeed_recarga", "cobros:plan_sin_renovar")
 
 # PND-124 (decisión 2026-10-07): visibles para todos, descartes solo admin.
 TIPOS_DESCARTE_ADMIN = {"tablero:tope_alcanzado", "tablero:propuestas_pendientes",
@@ -667,11 +667,13 @@ def _fuente_cobros(cliente, ahora):
 
 def _alertas_plan(cliente, ahora, monto):
     """El plan mensual del proyecto (spec planes 2026-10-09 §7.6): `plan_morosa` (bloquea: no se pudo cobrar),
-    `plan_renueva` (info: se renueva en DIAS_AVISO_RENOVACION días, con la fecha y el monto aceptado),
-    `plan_cancelada` (info: el plan termina en tal fecha) y `plan_bolsa_80` (atención: ya se usó el
-    PORCENTAJE_BOLSA_PLAN % de la bolsa del periodo). Un proyecto sin plan (o con la suscripción terminada) no
-    tiene ninguna; con plan son 1 consulta (la suscripción) más 2 (la bolsa del periodo abierto), sin importar
-    cuánto haya pasado. Huellas de números y fechas, nunca de texto traducido. Todas llevan a Configuración › Plan."""
+    `plan_renueva` (info: se renueva en DIAS_AVISO_RENOVACION días, con el momento real del cobro y el monto
+    aceptado), `plan_cancelada` (info: el plan termina en tal fecha), `plan_bolsa_80` (atención: ya se usó el
+    PORCENTAJE_BOLSA_PLAN % de la bolsa del periodo) y, solo para el admin, `plan_sin_renovar` (lo pagado de una
+    suscripción activa ya terminó y no hay periodo abierto ni cobro en curso: la periódica no la renovó). Un
+    proyecto sin plan (o con la suscripción terminada) no tiene ninguna; con plan son 1 consulta (la suscripción)
+    más 2 (la bolsa del periodo abierto, o mirar si quedó sin renovar), sin importar cuánto haya pasado. Huellas
+    de números y fechas, nunca de texto traducido. Todas llevan a Configuración › Plan."""
     from cobros import libro, planes, vista  # noqa: PLC0415
     sus = planes.suscripcion(cliente)
     if sus is None:
@@ -680,17 +682,27 @@ def _alertas_plan(cliente, ahora, monto):
     estado, hasta = sus["estado"], sus["cubierto_hasta"]
     if estado == "morosa":
         quedan = max(0, planes.INTENTOS_MAXIMOS - int(sus["intentos_fallidos"]))
-        out.append(_alerta("cobros:plan_morosa", huella("plan_morosa", sus["intentos_fallidos"]), "bloquea",
+        # Sirve para tarjeta o Nequi; la huella lleva la renovación (cubierto_hasta): un descarte de la morosa de
+        # este mes no esconde la del mes siguiente aunque el número de intentos coincida.
+        out.append(_alerta("cobros:plan_morosa", huella("plan_morosa", sus["intentos_fallidos"], hasta), "bloquea",
                            "puesta_a_punto",
                            gettext("No pudimos cobrar tu plan"),
-                           ngettext("No pudimos cobrar tu tarjeta. Mientras tanto usas tu saldo propio al precio a la carta. "
-                                    "Actualiza la tarjeta en Configuración › Plan; si no, queda %(num)s reintento antes "
-                                    "de que el plan termine.",
-                                    "No pudimos cobrar tu tarjeta. Mientras tanto usas tu saldo propio al precio a la carta. "
-                                    "Actualiza la tarjeta en Configuración › Plan; si no, quedan %(num)s reintentos antes "
-                                    "de que el plan termine.",
+                           ngettext("No pudimos cobrar tu medio de pago. Mientras tanto usas tu saldo propio al precio a "
+                                    "la carta. Actualiza tu medio de pago en Configuración › Plan; si no, queda %(num)s "
+                                    "reintento antes de que el plan termine.",
+                                    "No pudimos cobrar tu medio de pago. Mientras tanto usas tu saldo propio al precio a "
+                                    "la carta. Actualiza tu medio de pago en Configuración › Plan; si no, quedan %(num)s "
+                                    "reintentos antes de que el plan termine.",
                                     quedan),
                            "settings", ancla="config-ap-plan"))
+        return out
+    if estado == "activa" and hasta and str(hasta) <= ahora and planes.sin_renovar(sus, ahora):
+        out.append(_alerta("cobros:plan_sin_renovar", huella("plan_sin_renovar", hasta), "atencion", "puesta_a_punto",
+                           gettext("El plan de este proyecto venció sin renovarse"),
+                           gettext("Lo pagado terminó el %(fecha)s y no hay un periodo abierto ni un cobro en curso: la "
+                                   "renovación periódica no lo renovó (¿el worker está parado, «Cobrar» apagado o no hay "
+                                   "tasa de cambio?). Revísalo en /admin/cobros.", fecha=vista.fecha_larga(hasta)),
+                           "settings", ancla="config-ap-plan", solo_admin=True))
         return out
     if hasta and str(hasta) > ahora:
         pronto = str(hasta) <= (datetime.fromisoformat(str(ahora)[:19])
@@ -699,11 +711,19 @@ def _alertas_plan(cliente, ahora, monto):
         renueva = bool(sus["renovar"] and sus["fuente_pago_id"])
         if estado == "activa" and renueva and pronto:
             usd = planes._precio_aceptado(sus) or 0
+            # El momento real del cobro (una hora antes del fin de lo pagado: ruling 2026-10-10).
+            momento = vista.fecha_hora_larga(sus["proximo_cobro"] or hasta)
+            if sus["ciclo"] == "anual":
+                detalle = gettext("Tu plan anual se renueva el %(momento)s: a esa hora cobramos %(monto)s (en pesos a "
+                                  "la TRM del día). Si cancelas antes, no se cobra. El saldo del plan se renueva cada "
+                                  "mes y lo que no uses en un mes no pasa al siguiente.",
+                                  momento=momento, monto=monto(usd * 1000))
+            else:
+                detalle = gettext("Tu plan se renueva el %(momento)s: a esa hora cobramos %(monto)s (en pesos a la TRM "
+                                  "del día). Si cancelas antes, no se cobra. El saldo del plan que no uses antes de "
+                                  "esa fecha no se acumula.", momento=momento, monto=monto(usd * 1000))
             out.append(_alerta("cobros:plan_renueva", huella("plan_renueva", hasta, usd), "info", "decision",
-                               gettext("Tu plan se renueva pronto"),
-                               gettext("Tu plan se renueva el %(fecha)s por %(monto)s (en pesos a la TRM del día). El saldo del "
-                                       "plan que no uses antes de esa fecha no se acumula.",
-                                       fecha=fecha, monto=monto(usd * 1000)),
+                               gettext("Tu plan se renueva pronto"), detalle,
                                "settings", ancla="config-ap-plan"))
         elif estado == "cancelada" or (estado == "activa" and not renueva and pronto):
             out.append(_alerta("cobros:plan_cancelada", huella("plan_cancelada", hasta), "info", "decision",

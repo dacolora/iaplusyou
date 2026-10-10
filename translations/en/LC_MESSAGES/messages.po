@@ -6025,6 +6025,9 @@ msgstr "Your yearly plan renews on %(momento)s: that's when we charge %(monto)s.
 msgid "El plan de %(cliente)s terminó"
 msgstr "%(cliente)s's plan ended"
 
+msgid "El plan de este proyecto venció sin renovarse"
+msgstr "This project's plan ran out without renewing"
+
 msgid "El plan necesita un nombre (hasta 60 letras)"
 msgstr "The plan needs a name (up to 60 characters)"
 
@@ -10655,6 +10658,10 @@ msgstr[1] "We will try again on %(fecha)s; %(num)s attempts are left before you 
 msgid "Lo pagado de tu plan termina el %(fecha)s. Para seguir con el plan, escríbenos o registra una tarjeta en Configuración › Plan."
 msgstr "Your plan's paid time ends on %(fecha)s. To keep the plan, write to us or add a card in Settings › Plan."
 
+#, python-format
+msgid "Lo pagado terminó el %(fecha)s y no hay un periodo abierto ni un cobro en curso: la renovación periódica no lo renovó (¿el worker está parado, «Cobrar» apagado o no hay tasa de cambio?). Revísalo en /admin/cobros."
+msgstr "What was paid ended on %(fecha)s and there is no open period or charge in progress: the periodic renewal did not renew it (is the worker stopped, “Charge usage” off, or is there no exchange rate?). Check it in /admin/cobros."
+
 msgid "Lo que Claude necesita"
 msgstr "What Claude needs"
 
@@ -12110,6 +12117,12 @@ msgstr "I couldn't translate the word into English; write it another way."
 msgid "No pude traducir la palabra al inglés; intenta de nuevo en un momento."
 msgstr "I couldn't translate the word into English; try again in a moment."
 
+#, python-format
+msgid "No pudimos cobrar tu medio de pago. Mientras tanto usas tu saldo propio al precio a la carta. Actualiza tu medio de pago en Configuración › Plan; si no, queda %(num)s reintento antes de que el plan termine."
+msgid_plural "No pudimos cobrar tu medio de pago. Mientras tanto usas tu saldo propio al precio a la carta. Actualiza tu medio de pago en Configuración › Plan; si no, quedan %(num)s reintentos antes de que el plan termine."
+msgstr[0] "We couldn't charge your payment method. Meanwhile you use your own balance at the pay-as-you-go price. Update your payment method in Settings › Plan; otherwise %(num)s retry is left before the plan ends."
+msgstr[1] "We couldn't charge your payment method. Meanwhile you use your own balance at the pay-as-you-go price. Update your payment method in Settings › Plan; otherwise %(num)s retries are left before the plan ends."
+
 msgid "No pudimos cobrar tu plan"
 msgstr "We couldn't charge your plan"
 
@@ -12119,12 +12132,6 @@ msgstr "We couldn't charge your %(plan)s plan"
 
 msgid "No pudimos cobrar tu plan."
 msgstr "We could not charge your plan."
-
-#, python-format
-msgid "No pudimos cobrar tu tarjeta. Mientras tanto usas tu saldo propio al precio a la carta. Actualiza la tarjeta en Configuración › Plan; si no, queda %(num)s reintento antes de que el plan termine."
-msgid_plural "No pudimos cobrar tu tarjeta. Mientras tanto usas tu saldo propio al precio a la carta. Actualiza la tarjeta en Configuración › Plan; si no, quedan %(num)s reintentos antes de que el plan termine."
-msgstr[0] "We couldn't charge your card. Meanwhile you use your own balance at the pay-as-you-go price. Update the card in Settings › Plan; otherwise %(num)s retry is left before the plan ends."
-msgstr[1] "We couldn't charge your card. Meanwhile you use your own balance at the pay-as-you-go price. Update the card in Settings › Plan; otherwise %(num)s retries are left before the plan ends."
 
 #, python-format
 msgid "No pudimos consultar la transacción en Wompi: %(error)s"
@@ -17282,10 +17289,6 @@ msgstr "Your yearly plan renews on %(momento)s: that's when we charge %(monto)s 
 
 msgid "Tu plan de TrendTrack no incluye la API (hace falta el plan Pro o superior)."
 msgstr "Your TrendTrack plan doesn't include the API (the Pro plan or higher is required)."
-
-#, python-format
-msgid "Tu plan se renueva el %(fecha)s por %(monto)s (en pesos a la TRM del día). El saldo del plan que no uses antes de esa fecha no se acumula."
-msgstr "Your plan renews on %(fecha)s for %(monto)s (in Colombian pesos at the day's official exchange rate). Plan balance you don't use before that date doesn't roll over."
 
 #, python-format
 msgid "Tu plan se renueva el %(momento)s: a esa hora cobramos %(monto)s (en pesos a la TRM del día). Si cancelas antes, no se cobra. El saldo del plan que no uses antes de esa fecha no se acumula."

@@ -109,10 +109,16 @@ def test_morosa_bloquea_y_lleva_a_actualizar_la_tarjeta(cobra, planes, pro, fals
     assert a["clave"] == "cobros:plan_morosa" and a["nivel"] == "bloquea" and a["solo_admin"] is False
     assert a["tab"] == "settings" and a["ancla"] == "config-ap-plan" and a["grupo"] == "puesta_a_punto"
     assert "2 reintentos" in a["detalle"] and "Configuración › Plan" in a["detalle"]
+    assert "medio de pago" in a["detalle"] and "tarjeta" not in a["detalle"]   # vale para tarjeta o Nequi
     with db.conectar() as con:
         con.execute(db.suscripcion.update().values(intentos_fallidos=2))
     b, = _plan_de(CLAVES, _alertas("acme", _despues(T0, dias=30)))
     assert "1 reintento" in b["detalle"] and b["huella"] != a["huella"]       # un descarte no esconde el siguiente intento
+    # La huella lleva la renovación: la morosa del mes siguiente con el mismo número de intentos no queda escondida.
+    with db.conectar() as con:
+        con.execute(db.suscripcion.update().values(cubierto_hasta="2026-12-09T10:00:00"))
+    c, = _plan_de(CLAVES, _alertas("acme", _despues(T0, dias=30)))
+    assert c["huella"] != b["huella"]
 
 
 def test_la_bolsa_avisa_al_80_por_ciento_una_huella_por_periodo(cobra, planes, pro, falso, avisos):
@@ -179,3 +185,70 @@ def test_una_recarga_de_wompi_pendiente_tambien_avisa_y_dice_con_cual(cobra, bas
     assert set(por) == {f"cobros:recarga_pendiente:{wompi}", f"cobros:recarga_pendiente:{bold}"}
     assert "Wompi" in por[f"cobros:recarga_pendiente:{wompi}"]["detalle"]
     assert "Bold" in por[f"cobros:recarga_pendiente:{bold}"]["detalle"]
+
+
+
+# --- revisión final 2026-10-10 ------------------------------------------------------------
+
+def test_renueva_dice_el_momento_del_cobro_y_el_anual_no_dice_antes_de_esa_fecha(cobra, planes, pro, falso, avisos):
+    _suscribir(planes, pro)                                   # cobro: 2026-11-09 09:00
+    a, = _plan_de(CLAVES, _alertas("acme", _despues(T0, dias=30)))
+    assert "a las 09:00" in a["detalle"] or "9:00 AM" in a["detalle"]
+    assert "antes de esa fecha no se acumula" in a["detalle"]
+    import db
+    with db.conectar() as con:
+        con.execute(db.suscripcion.update().values(ciclo="anual"))
+    b, = _plan_de(CLAVES, _alertas("acme", _despues(T0, dias=30)))
+    assert "anual" in b["detalle"] and "antes de esa fecha" not in b["detalle"]
+    assert "lo que no uses en un mes no pasa al siguiente" in b["detalle"]
+
+
+def test_una_activa_que_vencio_sin_renovarse_avisa_solo_al_admin(cobra, planes, pro, falso, avisos):
+    import alertas
+    import db
+    _suscribir(planes, pro)                                   # pagado hasta 2026-11-09 10:00
+    tarde = _despues(T0, dias=32)
+    with db.conectar() as con:                                # el periodo ya cerró y no hubo cobro (worker parado)
+        con.execute(db.periodo_plan.update().values(cerrado=True))
+    a, = [x for x in _alertas("acme", tarde) if x["clave"] == "cobros:plan_sin_renovar"]
+    assert a["solo_admin"] is True and a["nivel"] == "atencion" and a["ancla"] == "config-ap-plan"
+    assert "9 de noviembre de 2026" in a["detalle"] or "November 9, 2026" in a["detalle"]
+    assert a["huella"] == alertas.huella("plan_sin_renovar", "2026-11-09T10:00:00")
+    assert alertas.es_solo_admin("cobros:plan_sin_renovar", [])
+    assert "cobros:plan_sin_renovar" not in [x["clave"] for x in alertas.visibles("acme", tarde, rol="cliente")["visibles"]]
+    _, n = _consultas(db, alertas._alertas_plan, "acme", tarde, str)
+    assert n <= 3
+    # Con un cobro en curso no es «sin renovar».
+    with db.conectar() as con:
+        con.execute(db.pago_plan.insert().values(
+            cliente="acme", suscripcion_id=1, ciclo="mensual", usd=1000, referencia="pl-1-20261109-1",
+            estado="pendiente", medio="wompi", creado_en=tarde, actualizado_en=tarde))
+    assert "cobros:plan_sin_renovar" not in [x["clave"] for x in _alertas("acme", tarde)]
+
+
+def test_una_activa_que_todavia_tiene_lo_pagado_no_es_sin_renovar(cobra, planes, pro, falso, avisos):
+    _suscribir(planes, pro)
+    assert "cobros:plan_sin_renovar" not in [x["clave"] for x in _alertas("acme", _despues(T0, dias=10))]
+
+
+def test_el_ancla_del_plan_solo_existe_si_el_proyecto_cobra(cobra, planes, pro, falso, avisos, monkeypatch):
+    import alertas
+    import dashboard
+    import db
+    import referencias_flowplus
+    from cobros import libro
+    monkeypatch.setattr(referencias_flowplus, "listar", lambda c: [])
+    dashboard.app.config["TESTING"] = True
+    _suscribir(planes, pro)
+    with db.conectar() as con:
+        con.execute(db.suscripcion.update().values(estado="morosa", intentos_fallidos=1))
+    c = dashboard.app.test_client()
+    with c.session_transaction() as s_:
+        s_["usuario"] = "user_acme"; s_["rol"] = "cliente"; s_["cliente"] = "acme"
+    html = c.get("/cliente/acme").get_data(as_text=True)
+    anclas = {a["ancla"] for a in alertas._fuente_cobros("acme", db.ahora())}
+    assert "config-ap-plan" in anclas and 'id="config-ap-plan"' in html
+    libro.configurar("acme", usuario="admin", cobrar=False)
+    html = c.get("/cliente/acme").get_data(as_text=True)
+    assert 'id="config-ap-plan"' not in html
+    assert not [a for a in alertas._fuente_cobros("acme", db.ahora()) if a["ancla"] == "config-ap-plan"]

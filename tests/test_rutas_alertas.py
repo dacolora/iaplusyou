@@ -366,6 +366,19 @@ def test_una_clave_de_admin_que_ya_no_esta_decide_por_su_prefijo(app, monkeypatc
     assert _flashes(c) == ([] if status == 403 else ["Esa alerta ya no está."])
 
 
+def _plan_sin_renovar(cliente):
+    """Un proyecto que cobra con una suscripción activa cuyo pagado ya terminó, sin periodo ni cobro en curso
+    (la alerta `cobros:plan_sin_renovar`, solo del admin)."""
+    import db
+    from cobros import libro, planes
+    libro.configurar(cliente, usuario="admin", cobrar=True)
+    pid = planes.crear_plan("Pro", 1000, 1.25, 25, usuario="admin")
+    with db.conectar() as con:
+        con.execute(db.suscripcion.insert().values(
+            cliente=cliente, plan_id=pid, ciclo="mensual", estado="activa", renovar=True, fuente_pago_id="1",
+            cubierto_hasta="2026-01-01T10:00:00", intentos_fallidos=0, usuario="u", precio_usd=1000))
+
+
 def test_toda_alerta_solo_admin_de_las_fuentes_lleva_prefijo_de_admin(app, monkeypatch):
     """`PREFIJOS_SOLO_ADMIN` decide cuando la alerta ya no está calculada: tiene que cubrir toda alerta `solo_admin`
     que producen las fuentes de verdad (llaves, worker, recarga del saldo, una fuente caída), y ninguna otra."""
@@ -381,6 +394,7 @@ def test_toda_alerta_solo_admin_de_las_fuentes_lleva_prefijo_de_admin(app, monke
     def rota(cliente, ahora):
         raise RuntimeError("x")
     monkeypatch.setattr(al, "FUENTES", al.FUENTES + [("rota", rota)])
+    _plan_sin_renovar("acme")
     lista = al.calcular("acme")
     de_admin = [a["clave"] for a in lista if a["solo_admin"]]
     assert all(c.startswith(al.PREFIJOS_SOLO_ADMIN) for c in de_admin), de_admin
