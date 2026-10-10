@@ -390,7 +390,8 @@ def ver_evaluacion(cliente, eid):
     fila = datos.evaluacion(cliente, eid)
     if not fila:
         abort(404)
-    return render_template("_meta_evaluacion.html", cliente=cliente, ev=fila)
+    return render_template("_meta_evaluacion.html", cliente=cliente, ev=panel.evaluacion_vista(fila),
+                           nombres_accion=panel.NOMBRES_ACCION, etiquetas_veredicto=panel.evaluacion.ETIQUETAS_VEREDICTO)
 
 
 @bp.post(f"/evaluacion/<int(max={ID_MAX}):eid>/idea/<int(max=1000):indice>/crear")

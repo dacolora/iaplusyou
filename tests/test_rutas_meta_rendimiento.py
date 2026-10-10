@@ -1122,3 +1122,122 @@ def test_si_r2_falla_las_evaluaciones_se_borran_igual(conectado, monkeypatch):
     _evaluacion_con_miniaturas("acme", "lista", [{"ref": "A1", "medio": COPIADA}])
     assert _desconectar(conectado, monkeypatch).status_code == 302
     assert datos.evaluaciones("acme") == []
+
+
+# ---- «Evaluación con IA» en el panel (E2, Task 6) ----------------------------------------------------------
+
+PANEL = "/cliente/acme/meta-rendimiento/panel"
+
+
+def _ocultos(html):
+    """Los campos ocultos del formulario «Evaluar con IA» del panel, como los mandaría el navegador."""
+    import re
+    i = html.index('id="meta-evaluacion"')
+    form = html[html.index("<form", i):html.index("</form>", i)]
+    return dict(re.findall(r'<input type="hidden" name="([a-z_]+)" value="([^"]*)"', form)), form
+
+
+def test_el_panel_trae_evaluar_con_ia_tras_el_diagnostico_con_el_precio_de_lo_que_cobra(conectado):
+    import gastos
+    from meta_rendimiento import analisis
+    _sembrar()
+    html = conectado["c"].get(PANEL).get_data(as_text=True)
+    assert html.index('id="meta-diagnostico"') < html.index('id="meta-evaluacion"') < html.index("Día a día")
+    n = len(analisis.preparar("acme", 30, "")["muestra"])
+    precio = gastos.estimar("evaluacion_meta", n=n)
+    campos, form = _ocultos(html)
+    assert campos == {"dias": "30", "cuenta": "", "n": str(n), "precio_visto": str(precio["usd_precio"])}
+    assert f"Evaluar {n} anuncio(s) con IA · {precio['texto']}" in form
+    assert f"data-confirmar=\"¿Evaluar {n} anuncio(s) con IA? Precio: {precio['texto']}\"" in form
+    assert "Evalúa lo que ves arriba: Todas las cuentas, últimos 30 días." in form
+    assert "<script" not in html
+    # Lo que manda ese formulario es justo lo que la ruta acepta: crea la evaluación y la encola.
+    r = conectado["c"].post(EVALUAR, data=campos)
+    assert r.status_code == 302 and len(_evaluaciones()) == 1 and len(_tareas("meta_rend_evaluar")) == 1
+
+
+def test_el_boton_de_una_cuenta_y_otro_periodo_manda_ese_alcance(conectado):
+    _sembrar()
+    html = conectado["c"].get(PANEL + f"?cuenta={A}&dias=7").get_data(as_text=True)
+    campos, form = _ocultos(html)
+    assert campos["dias"] == "7" and campos["cuenta"] == A and "HappyFlops Norway, últimos 7 días" in form
+    conectado["c"].post(EVALUAR, data=campos)
+    ev, = _evaluaciones()
+    assert ev["cuentas"] == [A] and ev["extra"]["dias"] == 7
+
+
+def test_sin_muestra_el_panel_lo_dice_sin_boton(conectado):
+    _dos_cuentas()
+    f = _hace(2)
+    datos.reemplazar_cuenta_dias("acme", A, f, f, [_dia(f, 400, 1000, compras=5)])
+    html = conectado["c"].get(PANEL).get_data(as_text=True)
+    seccion = html[html.index('id="meta-evaluacion"'):]
+    assert "Todavía no hay anuncios con datos suficientes para evaluar con IA." in seccion
+    assert EVALUAR not in html
+
+
+def test_con_una_evaluacion_viva_el_panel_pinta_su_barra_y_no_el_boton(conectado):
+    _sembrar()
+    conectado["c"].post(EVALUAR, data=_visto())
+    html = conectado["c"].get(PANEL).get_data(as_text=True)
+    seccion = html[html.index('id="meta-evaluacion"'):html.index("</section>", html.index('id="meta-evaluacion"'))]
+    assert 'data-poll-job="acme__meta_eval"' in seccion and 'data-poll-al-terminar="evento"' in seccion
+    assert 'id="meta-eval-barra-acme"' in seccion and "Evaluando con IA…" in seccion
+    assert EVALUAR not in seccion and "<script" not in html
+
+
+def test_el_panel_muestra_la_ultima_lista_entera_y_las_anteriores_por_fetch(conectado):
+    _sembrar()
+    vieja = _evaluacion_lista()
+    fallo_viejo = datos.crear_evaluacion("acme", [A], _hace(29), _hace(0), "SEK", [], [])
+    datos.actualizar_evaluacion(fallo_viejo, estado="error", error="Se cortó la conexión.")
+    lista = _evaluacion_lista()
+    fallo = datos.crear_evaluacion("acme", [A], _hace(29), _hace(0), "SEK", [], [])
+    datos.actualizar_evaluacion(fallo, estado="error", error="Claude no devolvió un análisis que se pueda usar.")
+    html = conectado["c"].get(PANEL).get_data(as_text=True)
+    seccion = html[html.index('id="meta-evaluacion"'):html.index("Día a día")]
+    assert "La última evaluación (Todas las cuentas) falló: Claude no devolvió" in seccion
+    assert f'id="meta-eval-{lista}"' in seccion and "Pausa el perdedor" in seccion and "Sandalia en la lluvia" in seccion
+    assert f"/cliente/acme/meta-rendimiento/evaluacion/{lista}/idea/0/crear" in seccion
+    assert "Norway vende con &lt;script&gt;" in seccion and "<script>un video" not in seccion
+    # Las anteriores no vienen pintadas: cada una se pide al abrirla.
+    assert "2 evaluaciones anteriores" in seccion and f'id="meta-eval-{vieja}"' not in seccion
+    for eid in (vieja, fallo_viejo):
+        assert f'data-meta-ev="/cliente/acme/meta-rendimiento/evaluacion/{eid}"' in seccion
+        assert f'aria-controls="meta-ev-{eid}"' in seccion and f'id="meta-ev-{eid}" hidden' in seccion
+    assert f'data-meta-ev="/cliente/acme/meta-rendimiento/evaluacion/{fallo}"' not in seccion
+    # La que falló hace tiempo, abierta sola, no dice que es «la última».
+    vieja_html = conectado["c"].get(f"/cliente/acme/meta-rendimiento/evaluacion/{fallo_viejo}").get_data(as_text=True)
+    assert "Esta evaluación falló: Se cortó la conexión." in vieja_html and "La última evaluación" not in vieja_html
+
+
+def test_el_plan_nombra_sus_objetos_marca_las_cifras_sin_dato_y_solo_enlaza_al_administrador(conectado):
+    eid = datos.crear_evaluacion(
+        "acme", [A], _hace(29), _hace(0), "SEK",
+        [{"ref": "A1", "ad_id": "9", "nombre": "Video <b>gana</b>", "veredicto": "ganador",
+          "medio": {"imagen": "https://scontent.xx.fbcdn.net/gana.jpg"}},
+         {"ref": "A2", "ad_id": "8", "nombre": "Foto pierde", "veredicto": "perdedor",
+          "medio": {"imagen": "https://malo.example/x.jpg"}}],
+        [{"ref": "R1", "titulo": "Consolida <i>los conjuntos</i>"}], extra={"cuenta": A, "resumen": [
+            {"ad_account_id": A, "nombre": "HappyFlops Norway"}]})
+    datos.actualizar_evaluacion(eid, estado="lista", usd=0.2, resultado={
+        "resumen": "Va bien.", "diagnostico": [{"causa": "Fatiga", "evidencia": "frecuencia 4,1"}],
+        "plan": [{"prioridad": 1, "accion": "consolidar", "objetos": ["A1", "R1"], "que_hacer": "Junta los conjuntos",
+                  "por_que": "Hay 461 en aprendizaje limitado", "impacto": "1.200 SEK por semana",
+                  "enlace": "https://adsmanager.facebook.com/adsmanager/manage/ads?act=1&selected_ad_ids=9"},
+                 {"prioridad": 2, "accion": "otro", "objetos": [], "que_hacer": "Revisa la página",
+                  "por_que": "", "impacto": None, "enlace": "javascript:alert(1)"}],
+        "patrones_ganadores": [{"patron": "Demostración", "anuncios": ["A1"]}], "patrones_perdedores": [],
+        "anuncios": {"A1": {"por_que": "Muestra el producto en uso", "gancho": "pies mojados"}}, "ideas": [],
+        "cifras_sin_dato": ["461", "1.200 SEK"]})
+    html = conectado["c"].get(f"/cliente/acme/meta-rendimiento/evaluacion/{eid}").get_data(as_text=True)
+    assert "Evaluación de HappyFlops Norway del" in html
+    assert "Claude citó cifras que no están en los datos: 461, 1.200 SEK" in html
+    paso1 = html[html.index("Junta los conjuntos") - 400:html.index("Revisa la página")]
+    assert "Consolidar" in paso1 and "Video &lt;b&gt;gana&lt;/b&gt;" in paso1
+    assert "Consolida &lt;i&gt;los conjuntos&lt;/i&gt;" in paso1 and "Recomendación" in paso1
+    assert 'href="https://adsmanager.facebook.com/adsmanager/manage/ads?act=1&amp;selected_ad_ids=9"' in paso1
+    assert "javascript:" not in html and html.count("Ver en el Administrador de anuncios") == 1
+    # «Anuncio por anuncio»: la miniatura de Meta válida sí, la de otro host no.
+    assert 'src="https://scontent.xx.fbcdn.net/gana.jpg"' in html and "malo.example" not in html
+    assert "Muestra el producto en uso" in html and "<script" not in html

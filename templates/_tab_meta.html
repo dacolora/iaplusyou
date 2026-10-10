@@ -4,7 +4,9 @@
    selector «Elegir cuentas» (ver_cuentas → _meta_cuentas.html, la única ruta que llama a Meta) al abrirlo. Tres
    estados: sin conexión → ir a Conexiones; conectado sin cuentas → el selector abierto (solo el admin: los demás ven
    «Un administrador de Creatv tiene que elegir las cuentas»); con cuentas → el panel.
-   Todo el JS vive aquí: los <script> de un fragmento que llega por fetch no corren. Los nombres de los selectores
+   Todo el JS vive aquí: los <script> de un fragmento que llega por fetch no corren. «Evaluar con IA» (E2): confirma
+   el precio antes de mandar, abre las evaluaciones anteriores por fetch (`data-meta-ev`) y, cuando su barra avisa que
+   terminó, vuelve a pedir el panel. Los nombres de los selectores
    del JS evitan palabras que la guardia de idioma lee como español (`data-meta-act`, no `…-cuenta`). #}
 <div class="panel-cabecera">
   <div>
@@ -59,6 +61,7 @@
       errorPanel: {{ _('No se pudo cargar el panel de Meta. Recarga la página.')|tojson }},
       errorSelector: {{ _('No se pudieron cargar tus cuentas de Meta. Recarga la página.')|tojson }},
       errorMas: {{ _('No se pudieron traer más filas. Inténtalo de nuevo.')|tojson }},
+      errorEvaluacion: {{ _('No se pudo cargar esa evaluación. Inténtalo de nuevo.')|tojson }},
       confirmarQuitar: {{ _('Quitar una cuenta borra sus métricas copiadas en Creatv (no toca nada en Meta). ¿Seguir?')|tojson }}
     };
 
@@ -114,6 +117,23 @@
         if (!selector.hidden && !selectorCargado) cargarSelector();
         return;
       }
+      var anterior = ev.target.closest('[data-meta-ev]');
+      if (anterior) {
+        // Una evaluación anterior: la primera vez se pide (HTML del servidor, ya escapado: nunca se arma aquí con el
+        // JSON de Claude); después solo se muestra u oculta.
+        var caja = document.getElementById(anterior.getAttribute('aria-controls'));
+        if (!caja) return;
+        var abrir = caja.hidden;
+        caja.hidden = !abrir;
+        anterior.setAttribute('aria-expanded', abrir ? 'true' : 'false');
+        if (abrir && !caja.dataset.cargada) {
+          caja.dataset.cargada = '1';
+          pedir(anterior.dataset.metaEv)
+            .then(function (html) { caja.innerHTML = html; })
+            .catch(function () { delete caja.dataset.cargada; error(caja, T.errorEvaluacion); });
+        }
+        return;
+      }
       var mas = ev.target.closest('[data-meta-mas]');
       if (mas) {
         // «Ver más»: la respuesta son solo filas <tr> (y la fila de su propio botón si quedan más); van en el lugar
@@ -139,10 +159,23 @@
       }
     });
     pestana.addEventListener('submit', function (ev) {
+      // «Evaluar con IA» cobra: se confirma con su precio antes de mandar (el texto lo arma el servidor). Un segundo
+      // clic no lanza otra: la ruta ve la evaluación viva (job_id determinista) y lo dice.
+      var cobra = ev.target.closest('form[data-confirmar]');
+      if (cobra) {
+        if (!window.confirm(cobra.dataset.confirmar)) ev.preventDefault();
+        return;
+      }
       var f = ev.target.closest('form[data-meta-seleccion]');
       if (!f) return;
       var quita = Array.prototype.some.call(f.querySelectorAll('input[data-elegida]'), function (c) { return !c.checked; });
       if (quita && !window.confirm(T.confirmarQuitar)) ev.preventDefault();
+    });
+
+    // La barra de «Evaluar con IA» avisa al terminar (data-poll-al-terminar="evento", base.html): se vuelve a pedir
+    // el panel con los mismos filtros, en vez de recargar la página entera.
+    pestana.addEventListener('trabajo-terminado', function (ev) {
+      if (ev.target.closest('#meta-evaluacion')) cargarPanel();
     });
 
     function siActiva() {

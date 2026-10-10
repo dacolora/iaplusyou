@@ -1,0 +1,64 @@
+{# «Evaluación con IA» de la pestaña Meta (spec E2 §8 «Mostrarla» y §9), incluida por _meta_panel.html justo después
+   del «Diagnóstico» (sus tarjetas de fatiga enlazan aquí: id="meta-evaluacion"). Contexto: `mr` (panel.contexto;
+   `mr.evaluacion` = panel.evaluacion_panel) y `cliente`.
+   COBRA (regla 1 del repo): el botón dice cuántos anuncios y el precio (`estimado.texto`, con el margen si el proyecto
+   cobra), se confirma antes (data-confirmar; el JS vive en _tab_meta.html) y manda `n` y `precio_visto` =
+   `estimado.usd_precio` (el precio que vio, nunca el costo: la ruta lo vuelve costo una vez y, si la muestra o el
+   margen cambiaron, no crea nada y dice el precio de ahora, E2-R6). Sin precio conocido el botón no se puede usar.
+   Mientras corre: la barra data-poll-job (`<cliente>__meta_eval`) con data-poll-al-terminar="evento"; al terminar,
+   _tab_meta.html vuelve a pedir el panel. La última evaluación lista va entera (_meta_evaluacion.html); la última, si
+   falló después, como aviso; las anteriores (hasta 5) se piden por fetch al abrirlas (data-meta-ev). Sin <script>. #}
+{% import "_meta_macros.html" as mx %}
+{% set ia = mr.evaluacion %}
+<section class="tb-seccion meta-ia" id="meta-evaluacion">
+  <div class="tb-seccion-cab">
+    <h3>{{ _('Evaluación con IA') }}</h3>
+    <small class="vacio">{{ _('Claude lee tus cuentas, las recomendaciones de arriba y una muestra de anuncios ganadores y perdedores: explica qué pasa, arma un plan de cambios por prioridad y propone anuncios nuevos. No cambia nada en Meta y no genera nada: cada idea llega a Crear solo si la llevas.') }}</small>
+  </div>
+  {% if ia.job %}
+  <div class="tw-progreso">
+    <div class="barra-progreso" id="meta-eval-barra-{{ cliente }}" data-poll-job="{{ ia.job }}" data-poll-al-terminar="evento"><div class="barra-progreso-fill" style="width:0%"></div></div>
+    <div class="progreso-texto">{{ _('Evaluando con IA…') }}</div>
+  </div>
+  {% elif ia.n %}
+  {% set est = ia.estimado %}
+  {% set alcance = mx.cuenta(mr.actual) if mr.actual else _('Todas las cuentas') %}
+  <form method="post" action="{{ url_for('meta_rendimiento.evaluar', cliente=cliente) }}" class="meta-ia-pedir"
+        data-confirmar="{{ _('¿Evaluar %(n)s anuncio(s) con IA? Precio: %(precio)s', n=ia.n, precio=est.texto) }}">
+    <input type="hidden" name="dias" value="{{ mr.dias }}">
+    <input type="hidden" name="cuenta" value="{{ mr.actual.ad_account_id if mr.actual else '' }}">
+    <input type="hidden" name="n" value="{{ ia.n }}">
+    <input type="hidden" name="precio_visto" value="{{ est.usd_precio if est.usd_precio is not none else '' }}">
+    <button type="submit" class="btn-generar btn-sm"{% if est.usd_precio is none %} disabled{% endif %}>{{ _('Evaluar %(n)s anuncio(s) con IA · %(precio)s', n=ia.n, precio=est.texto) }}</button>
+    <small class="vacio">{{ _('Evalúa lo que ves arriba: %(alcance)s, últimos %(n)s días.', alcance=alcance | trim, n=mr.dias) }}</small>
+  </form>
+  {% else %}
+  <p class="vacio">{{ _('Todavía no hay anuncios con datos suficientes para evaluar con IA.') }}</p>
+  {% endif %}
+
+  {% if ia.fallida %}
+  <p class="tag-error tw-aviso">{{ _('La última evaluación (%(alcance)s) falló: %(error)s', alcance=ia.fallida.alcance, error=ia.fallida.error or '—') }}</p>
+  {% endif %}
+
+  {% if ia.ultima_lista %}
+  {% with ev=ia.ultima_lista, nombres_accion=mr.nombres_accion, etiquetas_veredicto=mr.etiquetas_veredicto %}
+  {% include "_meta_evaluacion.html" %}
+  {% endwith %}
+  {% endif %}
+
+  {% if ia.anteriores %}
+  <details class="meta-ia-anteriores">
+    <summary>{{ ngettext('%(num)s evaluación anterior', '%(num)s evaluaciones anteriores', ia.anteriores | length) }}</summary>
+    <ul class="meta-ia-lista">
+      {% for e in ia.anteriores %}
+      <li>
+        <button type="button" class="btn-xs" data-meta-ev="{{ url_for('meta_rendimiento.ver_evaluacion', cliente=cliente, eid=e.id) }}"
+                aria-expanded="false" aria-controls="meta-ev-{{ e.id }}">{{ _('%(fecha)s · %(alcance)s · del %(desde)s al %(hasta)s', fecha=(e.creado_en or '')[:10], alcance=e.alcance, desde=e.desde, hasta=e.hasta) }}</button>
+        <span class="tag-estado {{ {'lista': 'tag-en-uso', 'error': 'tag-descartado'}.get(e.estado, 'tag-en-curso') }}">{{ (mr.estados_evaluacion[e.estado] | traducir) if e.estado in mr.estados_evaluacion else e.estado }}</span>
+        <div class="meta-ia-anterior" id="meta-ev-{{ e.id }}" hidden></div>
+      </li>
+      {% endfor %}
+    </ul>
+  </details>
+  {% endif %}
+</section>

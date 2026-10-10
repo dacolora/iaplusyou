@@ -1,10 +1,11 @@
 {# Panel de la pestaña «Meta» (fragmento por fetch, meta_rendimiento.rutas.ver_panel). Contexto: `mr`
    (meta_rendimiento.panel.contexto), `es_admin` (solo el admin elige cuentas) y `grafico` (meta_rendimiento.grafico.armar, el cálculo del viejo Tablero).
-   Solo lee la copia local; el único formulario es «Actualizar ahora» (leer de Meta no cobra). Sin <script>: el JS
+   Solo lee la copia local; «Actualizar ahora» lee de Meta (no cobra) y «Evaluar con IA» cobra con su precio a la vista. Sin <script>: el JS
    está en _tab_meta.html (`data-meta-param` cambia el filtro, `data-meta-act` elige una cuenta, `data-meta-mas`
    trae más filas). «Todas» (2+ cuentas) va en USD con la tasa de cada día; una cuenta, en su moneda; campañas,
-   conjuntos y anuncios, siempre en la moneda de su cuenta. «Diagnóstico» (_meta_diagnostico.html, tras los KPIs) y
-   «Segmentos» (_meta_segmentos.html, al final) son de E2. #}
+   conjuntos y anuncios, siempre en la moneda de su cuenta. «Diagnóstico» (_meta_diagnostico.html, tras los KPIs),
+   «Evaluación con IA» (_meta_evaluar.html, tras el Diagnóstico: el único botón que cobra) y «Segmentos»
+   (_meta_segmentos.html, al final) son de E2. #}
 {% import "_meta_macros.html" as mx %}
 {% if not mr.conectado %}
 <p class="vacio">{{ _('Meta no está conectado en este proyecto.') }}</p>
@@ -101,6 +102,9 @@
 
 {# ---------- diagnóstico (E2: reglas gratis de 7 y 30 días) ---------- #}
 {% include "_meta_diagnostico.html" %}
+
+{# ---------- evaluación con IA (E2: cobra; botón con precio, barra, la última y las anteriores por fetch) ---------- #}
+{% include "_meta_evaluar.html" %}
 
 {# ---------- día a día ---------- #}
 {% if grafico %}

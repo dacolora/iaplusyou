@@ -137,6 +137,48 @@ def test_un_proyecto_que_cobra_muestra_precios_y_no_costos(libro, pagina, usuari
     assert f'data-usd-caracter="{_num(fal_audio.COSTO_USD_POR_CARACTER * MARGEN)}"' in html
 
 
+@pytest.mark.parametrize("usuario,rol,proyecto", [("user_acme", "cliente", "acme"), ("admin", "admin", None)])
+def test_evaluar_con_ia_de_meta_muestra_el_precio_y_lo_cobrado_nunca_el_costo(libro, pagina, monkeypatch, usuario,
+                                                                               rol, proyecto):
+    """El panel de la pestaña Meta (por fetch, no viene en la página): el botón «Evaluar con IA» y su `precio_visto`
+    llevan el margen; lo ya gastado de una evaluación es lo cobrado para el cliente. Y lo que manda el botón es lo que
+    la ruta acepta: crea la evaluación y reserva el precio."""
+    import dashboard
+    import db
+    import gastos
+    import sqlalchemy as sa
+    from meta_rendimiento import analisis, datos
+    from tests.test_rutas_meta_rendimiento import A, _hace, _sembrar
+    monkeypatch.setattr(dashboard.meta_conexion, "cargar",
+                        lambda c: {"token": "tok-prueba", "ad_account_id": A, "page_id": None})
+    _cobra(libro, milesimas=50_000)
+    _sembrar()
+    eid = datos.crear_evaluacion("acme", [A], _hace(29), _hace(0), "SEK", [], [], extra={"cuenta": None})
+    datos.actualizar_evaluacion(eid, estado="lista", usd=0.2, resultado={
+        "resumen": "Va bien.", "plan": [{"prioridad": 1, "accion": "revisar", "objetos": [], "que_hacer": "Mira",
+                                         "por_que": "", "impacto": None, "enlace": None}]})
+    gastos.registrar("acme", "evaluacion", 0.2, f"meta_eval:{eid}:t1")     # costo 0,20 → cobrado 0,30
+    c = pagina(usuario, rol, proyecto)
+    html = c.get("/cliente/acme/meta-rendimiento/panel").get_data(as_text=True)
+    n = len(analisis.preparar("acme", 30, "")["muestra"])
+    costo = gastos.estimar("evaluacion_meta", n=n)["usd"]
+    assert f'name="precio_visto" value="{round(costo * MARGEN, 4)}"' in html
+    assert f"Evaluar {n} anuncio(s) con IA · {gastos.formatear(costo * MARGEN)}" in html
+    assert gastos.formatear(costo) not in html and f'value="{costo}"' not in html
+    cabecera = html[html.index(f'id="meta-eval-{eid}"'):]
+    cabecera = cabecera[:cabecera.index("</p>")]
+    if rol == "cliente":
+        assert "US$ 0,30" in cabecera and "US$ 0,20" not in cabecera
+    else:
+        assert "US$ 0,20" in cabecera
+    campos = dict(re.findall(r'<input type="hidden" name="([a-z_]+)" value="([^"]*)"',
+                             html[html.index('id="meta-evaluacion"'):html.index("</form>", html.index('id="meta-evaluacion"'))]))
+    assert c.post("/cliente/acme/meta-rendimiento/evaluar", data=campos).status_code == 302
+    with db.conectar() as con:
+        reserva, = con.execute(sa.select(db.reserva_saldo)).mappings().all()
+    assert reserva["job_id"] == "acme__meta_eval" and reserva["milesimas"] == libro.precio_milesimas(costo, MARGEN)
+
+
 def test_un_proyecto_que_no_cobra_muestra_lo_de_hoy(libro, pagina):
     from providers import flowplus_modelos
     html = pagina().get("/cliente/acme").get_data(as_text=True)

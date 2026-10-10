@@ -67,6 +67,7 @@ PLANTILLAS_TRADUCIDAS = [
     "_meta_conjuntos_filas.html", "_meta_macros.html",
     "_meta_diagnostico.html", "_meta_segmentos.html",   # Meta rendimiento E2: Diagnóstico y Segmentos
     "_meta_evaluacion.html",   # Meta rendimiento E2: una «Evaluación con IA» (fragmento)
+    "_meta_evaluar.html",      # Meta rendimiento E2: la sección «Evaluación con IA» del panel (botón, barra, anteriores)
     "editor.html",   # Fase 6, Task 2: la página del editor
     "_tab_cambiar_calzado.html",   # Fase 6, Task 4: Crear › Cambiar producto
     "admin_meta.html", "admin_referentes.html", "meta_elegir.html",   # Fase 6, Task 5

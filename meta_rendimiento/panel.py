@@ -74,6 +74,9 @@ MAX_EVALUACIONES_ANTERIORES = 5
 NOMBRES_ACCION = {"pausar": N_("Pausar"), "escalar": N_("Escalar"), "consolidar": N_("Consolidar"),
                   "variantes": N_("Probar variantes"), "excluir_segmento": N_("Excluir un segmento"),
                   "revisar": N_("Revisar"), "otro": N_("Otro cambio")}
+# El estado de una evaluación anterior en la lista que se abre por fetch.
+ESTADOS_EVALUACION = {"en_cola": N_("En cola"), "analizando": N_("Analizando"), "lista": N_("Lista"),
+                      "error": N_("Falló")}
 
 _CLAVES_VARIACION = ("gasto", "valor", "compras", "impresiones", "clics_salida", "roas", "cpa", "cpm", "ctr_salida")
 _MONTOS_KPI = ("gasto", "valor", "roas", "cpa", "cpm")
@@ -599,7 +602,7 @@ def _base(dias, desde, hasta):
         "max_recomendaciones": MAX_RECOMENDACIONES_VISIBLES, "niveles_recomendacion": recomendaciones.NIVELES,
         "nombres_prioridad": NOMBRES_PRIORIDAD,
         "segmentos": {"bloques": [], "viejos": []}, "ventana_segmentos": None,
-        "evaluacion": None, "nombres_accion": NOMBRES_ACCION,
+        "evaluacion": None, "nombres_accion": NOMBRES_ACCION, "estados_evaluacion": ESTADOS_EVALUACION,
         "estados": ESTADOS, "aprendizaje": APRENDIZAJE, "objetivos": OBJETIVOS,
         "etiquetas_veredicto": evaluacion.ETIQUETAS_VEREDICTO,
         "veredictos": evaluacion.VEREDICTOS, "problemas": evaluacion.PROBLEMAS, "fortalezas": evaluacion.FORTALEZAS,

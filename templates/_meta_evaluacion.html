@@ -1,69 +1,101 @@
-{# Una «Evaluación con IA» de la pestaña Meta (spec E2 §8), la que devuelve `GET …/meta-rendimiento/evaluacion/<id>`.
-   Contexto: `ev` (fila de meta_evaluacion) y `cliente`. Fragmento base: la Task 6 lo incluye en la sección
-   «Evaluación con IA» del panel (botón con precio, barra data-poll-job y las anteriores por fetch) y le da su estilo.
-   Resumen, diagnóstico, plan y patrones los escribe Claude con nombres de Meta (texto ajeno): solo el autoescape,
-   nunca |safe. Los enlaces al Administrador los arma `administrador` (solo ids): pestaña nueva, rel="noopener
-   noreferrer". El monto es lo cobrado a quien no es admin en un proyecto que cobra (`|cobrado`). Sin <script>. #}
+{# Una «Evaluación con IA» de la pestaña Meta (spec E2 §8 «Mostrarla»). La pintan dos: la sección del panel
+   (_meta_evaluar.html, la última lista) y `GET …/meta-rendimiento/evaluacion/<id>` (una anterior, por fetch).
+   Contexto: `ev` (meta_rendimiento.panel.evaluacion_vista: la fila con `alcance`, `nombres` {ref: nombre}, cada paso del
+   plan con `objetos_vista` y su `enlace` ya validado, y `anuncios_vista`), `cliente`, `nombres_accion`
+   (panel.NOMBRES_ACCION) y `etiquetas_veredicto`.
+   Resumen, causas, plan, patrones e ideas los escribe Claude con nombres de Meta (texto ajeno): solo el autoescape,
+   nunca |safe. Los enlaces al Administrador los arma `administrador` y la vista deja solo los suyos: pestaña nueva,
+   rel="noopener noreferrer". Una miniatura solo si es la copia en R2 o una de Meta válida. El monto es lo cobrado a
+   quien no es admin en un proyecto que cobra (`|cobrado`). Las cifras que Claude citó y no están en los datos se
+   marcan arriba (E2-R5: no se corrigen con otra llamada pagada). Sin <script>. #}
+{% import "_meta_macros.html" as mx %}
 {% set r = ev.resultado or {} %}
-{% set por_ref = {} %}{% for a in ev.muestra or [] %}{% set _x = por_ref.update({a.ref: a}) %}{% endfor %}
-<div class="meta-eval" id="meta-eval-{{ ev.id }}">
-  <p class="meta-eval-cab"><small>{{ _('Evaluación del %(desde)s al %(hasta)s · %(precio)s', desde=ev.desde, hasta=ev.hasta, precio=(ev.usd | cobrado('meta_eval:' ~ ev.id)) | usd) }}</small></p>
+{% set nombres = ev.nombres or {} %}
+<article class="meta-eval" id="meta-eval-{{ ev.id }}">
+  <p class="meta-eval-cab"><small>
+    {%- if ev.estado == 'lista' -%}
+    {{ _('Evaluación de %(alcance)s del %(desde)s al %(hasta)s · %(precio)s', alcance=ev.alcance, desde=ev.desde, hasta=ev.hasta, precio=(ev.usd | cobrado('meta_eval:' ~ ev.id)) | usd) }}
+    {%- else -%}
+    {{ _('Evaluación de %(alcance)s del %(desde)s al %(hasta)s', alcance=ev.alcance, desde=ev.desde, hasta=ev.hasta) }}
+    {%- endif %} · {{ _('pedida el %(fecha)s', fecha=(ev.creado_en or '')[:10]) }}</small></p>
   {% if ev.estado in ('en_cola', 'analizando') %}
   <p class="vacio">{{ _('Evaluando con IA…') }}</p>
   {% elif ev.estado == 'error' %}
-  <p class="tag-error">{{ _('La última evaluación falló: %(error)s', error=ev.error or '—') }}</p>
+  <p class="tag-error tw-aviso">{{ _('Esta evaluación falló: %(error)s', error=ev.error or '—') }}</p>
   {% else %}
   {% if r.cifras_sin_dato %}
-  <p class="tag-advertencia">{{ _('Claude citó cifras que no están en los datos: %(cifras)s', cifras=r.cifras_sin_dato | join(', ')) }}</p>
+  <p class="tag-advertencia tw-aviso meta-eval-cifras">{{ _('Claude citó cifras que no están en los datos: %(cifras)s', cifras=r.cifras_sin_dato | join(', ')) }} {{ _('Compruébalas en el Administrador de anuncios antes de actuar.') }}</p>
   {% endif %}
   {% if r.resumen %}<p class="meta-eval-resumen">{{ r.resumen }}</p>{% endif %}
 
   {% if r.diagnostico %}
-  <h4>{{ _('Diagnóstico') }}</h4>
-  <ul class="meta-eval-diagnostico">
+  <h4>{{ _('Por qué rinden así') }}</h4>
+  <ul class="meta-eval-causas">
     {% for d in r.diagnostico %}
-    <li><strong>{{ d.causa }}</strong>{% if d.evidencia %} <small>{{ d.evidencia }}</small>{% endif %}</li>
+    <li><strong>{{ d.causa }}</strong>{% if d.evidencia %}<small>{{ d.evidencia }}</small>{% endif %}</li>
     {% endfor %}
   </ul>
   {% endif %}
 
   {% if r.plan %}
   <h4>{{ _('Plan de cambios') }}</h4>
+  <p class="vacio meta-eval-nota">{{ _('Lo haces tú en el Administrador de anuncios, en este orden: Creatv no cambia nada en Meta.') }}</p>
   <ol class="meta-eval-plan">
     {% for p in r.plan %}
-    <li>
-      <strong>{{ p.que_hacer }}</strong>
-      {% if p.por_que %}<p><span>{{ _('Por qué:') }}</span> {{ p.por_que }}</p>{% endif %}
-      {% if p.impacto %}<p class="meta-eval-impacto">{{ p.impacto }}</p>{% endif %}
-      {% if p.enlace %}<a class="btn-sm" href="{{ p.enlace }}" target="_blank" rel="noopener noreferrer">{{ _('Ver en el Administrador de anuncios') }} ↗</a>{% endif %}
+    <li class="meta-eval-paso">
+      <span class="meta-eval-num" aria-hidden="true">{{ p.prioridad }}</span>
+      <div class="meta-eval-paso-cuerpo">
+        <span class="tag-estado">{{ (nombres_accion[p.accion] | traducir) if p.accion in nombres_accion else p.accion }}</span>
+        <strong>{{ p.que_hacer }}</strong>
+        {% if p.objetos_vista %}
+        <ul class="meta-eval-objetos">
+          {% for o in p.objetos_vista %}<li><small>{% if o.tipo == 'anuncio' %}{{ _('Anuncio') }}{% else %}{{ _('Recomendación') }}{% endif %}</small> {{ o.nombre }}</li>{% endfor %}
+        </ul>
+        {% endif %}
+        {% if p.por_que %}<p><span>{{ _('Por qué:') }}</span> {{ p.por_que }}</p>{% endif %}
+        {% if p.impacto %}<p class="meta-eval-impacto">{{ p.impacto }}</p>{% endif %}
+        {% if p.enlace %}<a class="btn-sm" href="{{ p.enlace }}" target="_blank" rel="noopener noreferrer">{{ _('Ver en el Administrador de anuncios') }} ↗</a>{% endif %}
+      </div>
     </li>
     {% endfor %}
   </ol>
   {% endif %}
 
-  {% for titulo, lista in [(_('Lo que hace ganar'), r.patrones_ganadores), (_('Lo que hace perder'), r.patrones_perdedores)] %}
-  {% if lista %}
-  <h4>{{ titulo }}</h4>
-  <ul>
-    {% for p in lista %}
-    <li>{{ p.patron }}{% if p.anuncios %} <small class="vacio">({% for ref in p.anuncios %}{{ (por_ref.get(ref) or {}).get('nombre') or ref }}{% if not loop.last %}, {% endif %}{% endfor %})</small>{% endif %}</li>
+  {% if r.patrones_ganadores or r.patrones_perdedores %}
+  <div class="tw-patrones">
+    {% for titulo, lista in [(_('Lo que hace ganar'), r.patrones_ganadores), (_('Lo que hace perder'), r.patrones_perdedores)] %}
+    {% if lista %}
+    <div>
+      <h4>{{ titulo }}</h4>
+      <ul>
+        {% for p in lista %}
+        <li>{{ p.patron }}{% if p.anuncios %} <small class="vacio">({% for ref in p.anuncios %}{{ nombres.get(ref) or ref }}{% if not loop.last %}, {% endif %}{% endfor %})</small>{% endif %}</li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
     {% endfor %}
-  </ul>
+  </div>
   {% endif %}
-  {% endfor %}
 
   {% if r.ideas %}
   <h4>{{ _('Anuncios nuevos para probar') }}</h4>
-  <div class="meta-eval-ideas">
+  <div class="tw-ideas">
     {% for idea in r.ideas %}
-    <article class="meta-eval-idea">
+    <article class="tw-idea">
       <strong>{{ idea.titulo }}</strong>
+      {% if idea.basada_en %}{% set base = [] %}{% for ref in idea.basada_en %}{% set _x = base.append(nombres.get(ref) or ref) %}{% endfor %}<small class="vacio">{{ _('Basada en: %(anuncios)s', anuncios=base | join(', ')) }}</small>{% endif %}
       {% if idea.por_que %}<p>{{ idea.por_que }}</p>{% endif %}
       {% set ang = idea.angulo or {} %}
-      {% if ang.gancho %}<p><span>{{ _('Gancho') }}:</span> {{ ang.gancho }}</p>{% endif %}
-      {% if ang.promesa %}<p><span>{{ _('Promesa') }}:</span> {{ ang.promesa }}</p>{% endif %}
-      {% if idea.escena %}<p>{{ idea.escena }}</p>{% endif %}
-      <details><summary>{{ _('Prompt para el video') }}</summary><p>{{ idea.prompt }}</p></details>
+      {% if ang.gancho or ang.promesa %}
+      <dl class="tw-angulo">
+        {% if ang.gancho %}<dt>{{ _('Gancho') }}</dt><dd>{{ ang.gancho }}</dd>{% endif %}
+        {% if ang.promesa %}<dt>{{ _('Promesa') }}</dt><dd>{{ ang.promesa }}</dd>{% endif %}
+        {% if ang.audiencia %}<dt>{{ _('Para quién') }}</dt><dd>{{ ang.audiencia }}</dd>{% endif %}
+      </dl>
+      {% endif %}
+      {% if idea.escena %}<p class="tw-escena">{{ idea.escena }}</p>{% endif %}
+      <details><summary>{{ _('Prompt para el video') }}</summary><p class="tw-prompt">{{ idea.prompt }}</p></details>
       <form method="post" action="{{ url_for('meta_rendimiento.idea_crear', cliente=cliente, eid=ev.id, indice=loop.index0) }}">
         <button type="submit" class="btn-sm">{{ _('Llevar a Crear →') }}</button>
       </form>
@@ -71,5 +103,27 @@
     {% endfor %}
   </div>
   {% endif %}
+
+  {% if ev.anuncios_vista %}
+  <details class="meta-eval-anuncios">
+    <summary>{{ _('Anuncio por anuncio (%(n)s)', n=ev.anuncios_vista | length) }}</summary>
+    <div class="tw-analizados">
+      {% for a in ev.anuncios_vista %}
+      {% set cl = a.analisis %}
+      <article class="tw-analizado">
+        {% if a.imagen %}<img src="{{ a.imagen }}" alt="" loading="lazy" referrerpolicy="no-referrer">{% endif %}
+        <div>
+          <strong>{{ a.nombre }}</strong>
+          {% if a.veredicto in etiquetas_veredicto %}<span class="tag-estado {{ mx.clase_veredicto(a.veredicto) }}">{{ etiquetas_veredicto[a.veredicto] | traducir }}</span>{% endif %}
+          {% if a.visual == 'fotogramas' %}<small class="vacio">{{ _('Claude vio los fotogramas del video') }}</small>{% elif not a.visual and not a.imagen %}<small class="vacio">{{ _('Sin imagen: Claude juzgó por texto y números') }}</small>{% endif %}
+          {% if cl.por_que %}<p>{{ cl.por_que }}</p>{% endif %}
+          {% if cl.gancho %}<p><small>{{ _('Gancho: %(g)s', g=cl.gancho) }}</small></p>{% endif %}
+          {% if cl.formato %}<p><small>{{ _('Formato: %(f)s', f=cl.formato) }}</small></p>{% endif %}
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+  </details>
   {% endif %}
-</div>
+  {% endif %}
+</article>
