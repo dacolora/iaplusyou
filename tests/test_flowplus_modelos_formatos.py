@@ -76,10 +76,14 @@ def test_seedream_solo_manda_aspect_ratio_cuando_se_pide(monkeypatch):
 
 def test_cada_modelo_de_video_declara_familia_y_cierre_de_sonido():
     from providers import flowplus_modelos as fm
-    assert {m["familia"] for m in fm.VIDEO.values()} == {"wan", "kling", "seedance"}
+    import director
+    assert {m["familia"] for m in fm.VIDEO.values()} == {"wan", "kling", "seedance", "seedance_ref"}
     assert fm.cierre_sonido("wan3") == "No dialogue. No background music."
     assert fm.cierre_sonido("kling_o3_pro") == "No dialogue. No music."
     assert fm.cierre_sonido("seedance25") == "No BGM; generate only environmental sounds and action sounds. No dialogue."
+    assert fm.cierre_sonido("seedance25_ref") == fm.cierre_sonido("seedance25")
+    # El director (opcional) sabe escribir para cada familia: si no, cae siempre al prompt fijo.
+    assert {m["familia"] for m in fm.VIDEO.values()} <= set(director._FAMILIAS)
 
 
 def test_duracion_por_defecto_es_8_y_sigue_en_las_opciones():

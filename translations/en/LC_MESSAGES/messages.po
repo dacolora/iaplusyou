@@ -365,6 +365,10 @@ msgid "%(modelo)s llega a %(aviso)s s: se generará de %(aviso)s s."
 msgstr "%(modelo)s tops out at %(aviso)s s: it'll be generated at %(aviso)s s."
 
 #, python-format
+msgid "%(modelo)s no acepta fotos de personas reales como referencia (regla de ByteDance): usa un personaje creado con IA o quita esa foto. No se cobró. Detalle: %(detalle)s"
+msgstr "%(modelo)s doesn't accept photos of real people as references (ByteDance rule): use a character created with AI or remove that photo. Nothing was charged. Detail: %(detalle)s"
+
+#, python-format
 msgid "%(modelo)s no pasa de %(total)s s sumando tus videos de referencia (%(s)s s): el resultado puede durar hasta %(max)s s. Baja la duración o usa un video más corto — no se cobró nada."
 msgstr "%(modelo)s can't go past %(total)s s counting your reference videos (%(s)s s): the result can last up to %(max)s s. Lower the duration or use a shorter video — nothing was charged."
 
@@ -385,8 +389,8 @@ msgid "%(modelo)s rechazó el contenido por sensible (el texto o las imágenes):
 msgstr "%(modelo)s rejected the content as sensitive (the text or the images): change the scene and generate again. Nothing was charged. Detail: %(detalle)s"
 
 #, python-format
-msgid "%(modelo)s solo usa la primera referencia (%(primera)s): no usaría %(sobran)s. Elige Wan 3.0 o Kling O3 Pro para usarlas todas, o deja solo una — no se cobró nada."
-msgstr "%(modelo)s only uses the first reference (%(primera)s): it would not use %(sobran)s. Choose Wan 3.0 or Kling O3 Pro to use them all, or keep just one — nothing was charged."
+msgid "%(modelo)s solo usa la primera referencia (%(primera)s): no usaría %(sobran)s. Elige Wan 3.0, Kling O3 Pro o Seedance 2.5 · varias referencias para usarlas todas, o deja solo una — no se cobró nada."
+msgstr "%(modelo)s only uses the first reference (%(primera)s): it would not use %(sobran)s. Choose Wan 3.0, Kling O3 Pro or Seedance 2.5 · multiple references to use them all, or keep just one — nothing was charged."
 
 #, python-format
 msgid "%(modelo)s usa hasta %(n)s referencias: no usaría %(sobran)s. Quita las que sobran o cambia de modelo — no se cobró nada."
@@ -399,6 +403,14 @@ msgstr "%(modelo)s · %(n)s reference(s)"
 #, python-format
 msgid "%(modelo)s · %(n)s referencia(s) · falló al descargar; el modelo ya cobró"
 msgstr "%(modelo)s · %(n)s reference(s) · download failed; the model already charged"
+
+#, python-format
+msgid "%(modelos)s está en pausa"
+msgstr "%(modelos)s is paused"
+
+#, python-format
+msgid "%(modelos)s está en pausa."
+msgstr "%(modelos)s is paused."
 
 #, python-format
 msgid "%(monto)s apartados para lo que se está generando"
@@ -609,6 +621,10 @@ msgstr "%(n)s product photo(s) brought in from the catalog."
 #, python-format
 msgid "%(n)s foto(s) no se pudieron descargar."
 msgstr "%(n)s photo(s) couldn't be downloaded."
+
+#, python-format
+msgid "%(n)s fotos · %(precio)s"
+msgstr "%(n)s photos · %(precio)s"
 
 #, python-format
 msgid "%(n)s ganador(es)"
@@ -1477,12 +1493,40 @@ msgid "%(producto)s · %(familia)s · respuesta inválida"
 msgstr "%(producto)s · %(familia)s · invalid response"
 
 #, python-format
+msgid "%(proveedor)s está recibiendo demasiados pedidos (respuesta 429): no se generó ni se cobró nada. Vuelve a intentarlo en unos minutos."
+msgstr "%(proveedor)s is receiving too many requests (response 429): nothing was generated or charged. Try again in a few minutes."
+
+#, python-format
+msgid "%(proveedor)s no aceptó el pedido (respuesta %(status)s) y no se cobró nada. Vuelve a intentarlo en unos minutos; si se repite, cambia de modelo."
+msgstr "%(proveedor)s did not accept the request (response %(status)s) and nothing was charged. Try again in a few minutes; if it happens again, switch models."
+
+#, python-format
+msgid "%(proveedor)s no aceptó el pedido y no se cobró nada: %(motivo)s. Ajusta la duración, el formato o las referencias y vuelve a generar."
+msgstr "%(proveedor)s did not accept the request and nothing was charged: %(motivo)s. Adjust the duration, the format or the references and generate again."
+
+#, python-format
+msgid "%(proveedor)s rechazó la llave de Creatv (respuesta %(status)s): no se generó ni se cobró nada. Avísale al administrador."
+msgstr "%(proveedor)s rejected Creatv's key (response %(status)s): nothing was generated or charged. Let the administrator know."
+
+#, python-format
 msgid "%(proveedor)s se quedó sin saldo"
 msgstr "%(proveedor)s ran out of credit"
 
 #, python-format
 msgid "%(proveedor)s se quedó sin saldo."
 msgstr "%(proveedor)s ran out of credit."
+
+#, python-format
+msgid "%(proveedor)s seguía trabajando en %(modelo)s después de %(min)s min (predicción %(id)s). El video suele terminar igual y se cobra: espera unos minutos y toca «Recuperar el video» — no se paga de nuevo."
+msgstr "%(proveedor)s was still working on %(modelo)s after %(min)s min (prediction %(id)s). The video usually finishes anyway and is charged: wait a few minutes and tap “Recover the video” — you don't pay again."
+
+#, python-format
+msgid "%(proveedor)s sigue trabajando en la predicción %(id)s; vuelve a intentar en unos minutos."
+msgstr "%(proveedor)s is still working on prediction %(id)s; try again in a few minutes."
+
+#, python-format
+msgid "%(proveedor)s tuvo una falla de su lado (respuesta %(status)s) y no confirmó el pedido. Espera unos minutos antes de volver a generar; si se repite, cambia de modelo."
+msgstr "%(proveedor)s had a failure on its side (response %(status)s) and did not confirm the request. Wait a few minutes before generating again; if it happens again, switch models."
 
 #, python-format
 msgid "%(proveedor)s, el proveedor de videos e imágenes, se quedó sin saldo: no se generó ni se cobró nada. Ya se avisó a Creatv; vuelve a intentarlo cuando lo recargue."
@@ -2528,6 +2572,9 @@ msgstr "Standalone ads (from before)"
 msgid "Análisis listo: %(frase)s"
 msgstr "Analysis ready: %(frase)s"
 
+msgid "Análisis por referencia:"
+msgstr "Analysis per reference:"
+
 msgid "Apagar"
 msgstr "Turn off"
 
@@ -2607,6 +2654,9 @@ msgstr "Apify: %(estado)s · run %(corrida)s"
 #, python-format
 msgid "Apify: %(estado)s · corrida %(corrida)s (%(hechas)s/%(total)s)"
 msgstr "Apify: %(estado)s · run %(corrida)s (%(hechas)s/%(total)s)"
+
+msgid "Apify: corrida anotada al arrancar"
+msgstr "Apify: run recorded at startup"
 
 msgid "App ID de Meta de tu app"
 msgstr "Meta App ID of your app"
@@ -3815,6 +3865,9 @@ msgstr "Claude didn't answer in the expected format. Send your message again."
 
 msgid "Claude no respondió en el formato esperado. Vuelve a intentarlo."
 msgstr "Claude didn't answer in the expected format. Try again."
+
+msgid "Claude no respondió; intenta de nuevo"
+msgstr "Claude did not respond; try again"
 
 msgid "Claude no vio el anuncio: juzgó por los números"
 msgstr "Claude did not see the ad: it judged by the numbers"
@@ -5120,6 +5173,14 @@ msgid "Desde Notion"
 msgstr "From Notion"
 
 #, python-format
+msgid "Desde el %(desde)s fallan %(modelos)s y lo que usa fal en el resto de la app (voces, música y subtítulos automáticos), sin cobrar. Los demás modelos de Crear siguen funcionando. Recarga la cuenta; este aviso se quita solo con la próxima generación de ese modelo que salga bien."
+msgstr "Since %(desde)s, %(modelos)s and whatever uses fal in the rest of the app (voices, music and automatic subtitles) fail, without charging. The other Create models keep working. Top up the account; this notice goes away on its own with the next generation of that model that succeeds."
+
+#, python-format
+msgid "Desde el %(desde)s fallan %(modelos)s y lo que usa fal en el resto de la app (voces, música y subtítulos automáticos), sin cobrar; los demás modelos de Crear siguen. Recarga la cuenta en %(recarga)s; esta alerta se quita sola con la próxima generación de ese modelo que salga bien."
+msgstr "Since %(desde)s, %(modelos)s and whatever uses fal in the rest of the app (voices, music and automatic subtitles) fail, without charging; the other Create models keep working. Top up the account at %(recarga)s; this alert goes away on its own with the next generation of that model that succeeds."
+
+#, python-format
 msgid "Desde el %(desde)s las generaciones de Crear y de Cambiar producto fallan (sin cobrar). Recarga la cuenta en %(recarga)s; esta alerta se quita sola con la próxima generación que salga bien."
 msgstr "Since %(desde)s, generations in Create and Change product fail (without charging). Top up the account at %(recarga)s; this alert goes away on its own with the next generation that works."
 
@@ -5553,6 +5614,9 @@ msgstr "The analysis with Claude failed: try again from the campaign."
 msgid "El análisis falló."
 msgstr "The analysis failed."
 
+msgid "El análisis se interrumpió; intenta de nuevo"
+msgstr "The analysis was interrupted; try again"
+
 msgid "El archivo es demasiado grande."
 msgstr "The file is too large."
 
@@ -5900,6 +5964,9 @@ msgstr "The message is too long (maximum %(maximo)s characters)."
 #, python-format
 msgid "El mercado ya vio promesas parecidas (sofisticación %(sof)s) y el ángulo no dice por qué funciona el producto (el mecanismo)."
 msgstr "The market has already seen similar promises (sophistication %(sof)s) and the angle doesn't say why the product works (the mechanism)."
+
+msgid "El modelo sigue trabajando: se sigue esperando el mismo video, sin pagar de nuevo."
+msgstr "The model is still working: we keep waiting for the same video, without paying again."
 
 msgid "El momento del mes no es válido."
 msgstr "The moment of the month isn't valid."
@@ -8990,6 +9057,9 @@ msgstr "Halloween"
 msgid "Hasta"
 msgstr "To"
 
+msgid "Hasta 10 imágenes de referencia (personajes, producto, lugar) que nombras en el texto con @Imagen 1, @Imagen 2…; de un video usa solo un fotograma. No acepta fotos de personas reales: los personajes tienen que ser creados con IA. Hasta 30 s, en el formato que elijas. Va por fal y es el más caro. Sonido de la escena incluido."
+msgstr "Up to 10 reference images (characters, product, place) that you name in the text with @Imagen 1, @Imagen 2…; from a video it only uses one frame. It doesn't accept photos of real people: characters have to be created with AI. Up to 30 s, in the format you choose. Runs on fal and is the most expensive. Scene sound included."
+
 msgid "Hasta 10 imágenes y 5 videos de referencia (1-15 s), 720p, hasta 30 s (con videos de referencia, sus segundos más los del resultado no pasan de 30). El único que usa videos tal cual. Sonido de la escena incluido."
 msgstr "Up to 10 images and 5 reference videos (1-15 s), 720p, up to 30 s (with reference videos, their seconds plus the result's don't exceed 30). The only one that uses videos as-is. Scene sound included."
 
@@ -9021,6 +9091,9 @@ msgstr "There are pending Bold top-ups and no Bold event has arrived in 7 days. 
 
 msgid "Hay textos sin traducir para algún destino."
 msgstr "Some texts aren't translated for a market."
+
+msgid "Hay un problema con el proveedor y ya le avisamos a Creatv. Mientras tanto elige otro modelo: los intentos fallidos no se cobran."
+msgstr "There is a problem with the provider and Creatv has already been notified. Meanwhile, choose another model: failed attempts are not charged."
 
 msgid "Hay un problema con el proveedor y ya le avisamos a Creatv. Vuelve a intentarlo en un rato: los intentos fallidos no se cobran."
 msgstr "There is a problem with the provider and Creatv has already been notified. Try again in a while: failed attempts are not charged."
@@ -9652,6 +9725,9 @@ msgstr "The box opens, the product comes out and is looked at up close."
 msgid "La canción dura más de 10 min."
 msgstr "The song is longer than 10 min."
 
+msgid "La cantidad de fotos cambió; revisa el precio antes de traerlas."
+msgstr "The number of photos changed; check the price before bringing them in."
+
 msgid "La cara de la marca: una persona real, un embajador o un personaje creado que debe verse igual siempre."
 msgstr "The face of the brand: a real person, an ambassador or a created character that has to look the same every time."
 
@@ -9991,6 +10067,9 @@ msgstr "The reference no longer exists."
 
 msgid "La regla no pide re-ediciones ni regeneraciones: no hay nada que derivar."
 msgstr "The rule doesn't ask for re-edits or regenerations: there's nothing to derive."
+
+msgid "La respuesta de Claude no sirvió; intenta de nuevo"
+msgstr "Claude's response was unusable; try again"
 
 msgid "La respuesta de Claude salió incompleta. Intenta con un guion más corto."
 msgstr "Claude's answer came back incomplete. Try a shorter script."
@@ -11658,6 +11737,9 @@ msgstr "There are no runs to launch."
 msgid "No hay familias sin descripción en inglés."
 msgstr "There are no families missing an English description."
 
+msgid "No hay fotos nuevas que traer"
+msgstr "There are no new photos to bring in"
+
 msgid "No hay ideas aprobadas sin generar. Aprueba ideas para poder generarlas."
 msgstr "There are no approved ideas left to generate. Approve ideas so you can generate them."
 
@@ -11928,6 +12010,9 @@ msgstr "We lost track of the voice: reload the page; if it's ready, it gets adde
 msgid "No sabemos cómo terminó: recarga la página para ver los subtítulos."
 msgstr "We don't know how it ended: reload the page to see the subtitles."
 
+msgid "No sabemos si la corrida arrancó; revisa en Apify antes de reintentar."
+msgstr "We do not know whether the run started; check Apify before retrying."
+
 #, python-brace-format
 msgid "No sale en el video: «{caracteres}» (esta fuente no los tiene)."
 msgstr "Won't show in the video: “{caracteres}” (this font doesn't have them)."
@@ -12158,6 +12243,9 @@ msgstr "Couldn't load. Close and try again."
 msgid "No se pudo completar (error %(status)s)."
 msgstr "Couldn't complete (error %(status)s)."
 
+msgid "No se pudo completar el análisis; intenta de nuevo"
+msgstr "The analysis could not be completed; try again"
+
 msgid "No se pudo completar el trabajo."
 msgstr "The task couldn't be completed."
 
@@ -12260,6 +12348,9 @@ msgstr "Couldn't generate the voice (check the chosen voice, '%(voz)s'): %(error
 #, python-brace-format
 msgid "No se pudo guardar (error {status})."
 msgstr "Couldn't save (error {status})."
+
+msgid "No se pudo guardar el análisis; intenta de nuevo"
+msgstr "The analysis could not be saved; try again"
 
 msgid "No se pudo guardar esa imagen."
 msgstr "That image couldn't be saved."
@@ -13286,8 +13377,9 @@ msgstr "Prices include the scene sound."
 msgid "Preferencias de sonido guardadas."
 msgstr "Sound preferences saved."
 
-msgid "Preguntando a WaveSpeed por el video… si ya terminó, aparece aquí sin pagar de nuevo."
-msgstr "Asking WaveSpeed for the video… if it already finished, it shows up here without paying again."
+#, python-format
+msgid "Preguntando a %(proveedor)s por el video… si ya terminó, aparece aquí sin pagar de nuevo."
+msgstr "Asking %(proveedor)s for the video… if it already finished, it shows up here without paying again."
 
 msgid "Prenda de vestir (saco, camiseta, chaqueta)"
 msgstr "Clothing (sweater, t-shirt, jacket)"
@@ -14292,6 +14384,10 @@ msgid "Referencia"
 msgstr "Reference"
 
 #, python-format
+msgid "Referencia %(n)s"
+msgstr "Reference %(n)s"
+
+#, python-format
 msgid "Referencia agregada (%(tipo)s, %(origen)s)"
 msgstr "Reference added (%(tipo)s, %(origen)s)"
 
@@ -14466,6 +14562,9 @@ msgstr "Retry"
 #, python-format
 msgid "Reintentar (%(precio)s)"
 msgstr "Retry (%(precio)s)"
+
+msgid "Reintentar análisis"
+msgstr "Retry analysis"
 
 #, python-format
 msgid "Reintentar gasta de nuevo (%(precio)s). ¿Seguir?"
@@ -15024,6 +15123,9 @@ msgstr "Seedance 2.5"
 
 msgid "Seedance 2.5 Video Edit"
 msgstr "Seedance 2.5 Video Edit"
+
+msgid "Seedance 2.5 · varias referencias"
+msgstr "Seedance 2.5 · multiple references"
 
 msgid "Seedream V5.0 Pro"
 msgstr "Seedream V5.0 Pro"
@@ -17085,6 +17187,10 @@ msgid "Una foto o video real de tu cliente, tu producto puesto encima. Misma pos
 msgstr "A real photo or video of your customer, your product placed on it. Same pose, same background, same motion. Great for whole catalogs in one afternoon."
 
 #, python-format
+msgid "Una generación del proyecto %(cliente)s falló porque la cuenta de %(proveedor)s de Creatv no tiene saldo. Mientras no se recargue en %(recarga)s fallan %(modelos)s en Crear y lo que usa fal en el resto de la app (voces, música y subtítulos automáticos); los demás modelos de Crear siguen funcionando y los intentos fallidos no se cobran. Respuesta del proveedor: %(detalle)s"
+msgstr "A generation in project %(cliente)s failed because Creatv's %(proveedor)s account has no balance. Until it's topped up at %(recarga)s, %(modelos)s in Create and whatever uses fal in the rest of the app (voices, music and automatic subtitles) fail; the other Create models keep working and failed attempts aren't charged. Provider response: %(detalle)s"
+
+#, python-format
 msgid "Una generación del proyecto %(cliente)s falló porque la cuenta de %(proveedor)s de Creatv no tiene saldo. Mientras no se recargue en %(recarga)s, Crear y Cambiar producto no pueden generar; los intentos fallidos no se cobran. Respuesta del proveedor: %(detalle)s"
 msgstr "A generation in project %(cliente)s failed because Creatv's %(proveedor)s account has no credit. Until it is topped up at %(recarga)s, Create and Change product cannot generate; failed attempts are not charged. Provider response: %(detalle)s"
 
@@ -17776,36 +17882,6 @@ msgstr "Wan-2.2 Animate Replace"
 msgid "WaveSpeed (videos e imágenes de Crear)"
 msgstr "WaveSpeed (videos and images in Create)"
 
-msgid "WaveSpeed está recibiendo demasiados pedidos (respuesta 429): no se generó ni se cobró nada. Vuelve a intentarlo en unos minutos."
-msgstr "WaveSpeed is receiving too many requests (response 429): nothing was generated or charged. Try again in a few minutes."
-
-#, python-format
-msgid "WaveSpeed no aceptó el pedido (respuesta %(status)s) y no se cobró nada. Vuelve a intentarlo en unos minutos; si se repite, cambia de modelo."
-msgstr "WaveSpeed did not accept the request (response %(status)s) and nothing was charged. Try again in a few minutes; if it happens again, switch models."
-
-#, python-format
-msgid "WaveSpeed no aceptó el pedido y no se cobró nada: %(motivo)s. Ajusta la duración, el formato o las referencias y vuelve a generar."
-msgstr "WaveSpeed did not accept the request and nothing was charged: %(motivo)s. Adjust the duration, the format or the references and generate again."
-
-#, python-format
-msgid "WaveSpeed rechazó la llave de Creatv (respuesta %(status)s): no se generó ni se cobró nada. Avísale al administrador."
-msgstr "WaveSpeed rejected Creatv's key (response %(status)s): nothing was generated or charged. Let the administrator know."
-
-#, python-format
-msgid "WaveSpeed seguía trabajando en %(modelo)s después de %(min)s min (predicción %(id)s). El video suele terminar igual y se cobra: espera unos minutos y toca «Recuperar el video» — no se paga de nuevo."
-msgstr "WaveSpeed was still working on %(modelo)s after %(min)s min (prediction %(id)s). The video usually finishes anyway and is charged: wait a few minutes and tap “Recover the video” — you don't pay again."
-
-#, python-format
-msgid "WaveSpeed sigue trabajando en la predicción %(id)s; vuelve a intentar en unos minutos."
-msgstr "WaveSpeed is still working on prediction %(id)s; try again in a few minutes."
-
-msgid "WaveSpeed sigue trabajando: se sigue esperando el mismo video, sin pagar de nuevo."
-msgstr "WaveSpeed is still working: we keep waiting for the same video, without paying again."
-
-#, python-format
-msgid "WaveSpeed tuvo una falla de su lado (respuesta %(status)s) y no confirmó el pedido. Espera unos minutos antes de volver a generar; si se repite, cambia de modelo."
-msgstr "WaveSpeed had a failure on its side (response %(status)s) and did not confirm the request. Wait a few minutes before generating again; if it happens again, switch models."
-
 msgid "Web (páginas)"
 msgstr "Web (pages)"
 
@@ -18137,8 +18213,8 @@ msgstr "Slow zoom"
 msgid "__MODELO__ no pasa de __TOTAL__ s sumando tus videos de referencia (__S__ s): el resultado puede durar hasta __MAX__ s. Baja la duración o usa un video más corto."
 msgstr "__MODELO__ can't go past __TOTAL__ s counting your reference videos (__S__ s): the result can last up to __MAX__ s. Lower the duration or use a shorter video."
 
-msgid "__MODELO__ solo usa la primera referencia (__PRIMERA__): no usaría __SOBRAN__. Elige Wan 3.0 o Kling O3 Pro para usarlas todas, o deja solo una."
-msgstr "__MODELO__ only uses the first reference (__PRIMERA__): it would not use __SOBRAN__. Choose Wan 3.0 or Kling O3 Pro to use them all, or keep just one."
+msgid "__MODELO__ solo usa la primera referencia (__PRIMERA__): no usaría __SOBRAN__. Elige Wan 3.0, Kling O3 Pro o Seedance 2.5 · varias referencias para usarlas todas, o deja solo una."
+msgstr "__MODELO__ only uses the first reference (__PRIMERA__): it would not use __SOBRAN__. Choose Wan 3.0, Kling O3 Pro or Seedance 2.5 · multiple references to use them all, or keep just one."
 
 msgid "__MODELO__ usa hasta __N__ referencias: no usaría __SOBRAN__. Quita las que sobran o cambia de modelo."
 msgstr "__MODELO__ uses up to __N__ references: it would not use __SOBRAN__. Remove the extra ones or change the model."
@@ -18210,6 +18286,12 @@ msgstr "friendly"
 #, python-format
 msgid "analizado el %(fecha)s"
 msgstr "analyzed on %(fecha)s"
+
+msgid "analizar referencia"
+msgstr "analyze reference"
+
+msgid "analizar referencia · la respuesta no sirvió"
+msgstr "analyze reference · the response was unusable"
 
 msgid "animada"
 msgstr "upbeat"
@@ -18609,8 +18691,8 @@ msgid "corrida %(corrida)s (%(etiqueta)s) %(estado)s: %(n)s resultado(s)%(motivo
 msgstr "run %(corrida)s (%(etiqueta)s) %(estado)s: %(n)s result(s)%(motivo)s"
 
 #, python-format
-msgid "corrida no lanzada (%(etiqueta)s): %(motivo)s"
-msgstr "run not launched (%(etiqueta)s): %(motivo)s"
+msgid "corrida sin id (%(etiqueta)s): %(motivo)s"
+msgstr "run without an ID (%(etiqueta)s): %(motivo)s"
 
 msgid "corriendo"
 msgstr "running"
@@ -19363,6 +19445,10 @@ msgid "hasta %(num)s referencia"
 msgid_plural "hasta %(num)s referencias"
 msgstr[0] "up to %(num)s reference"
 msgstr[1] "up to %(num)s references"
+
+#, python-format
+msgid "hasta %(precio)s"
+msgstr "up to %(precio)s"
 
 #, python-format
 msgid "hasta el %(hasta)s · todos los proyectos"
@@ -20662,6 +20748,12 @@ msgstr "successor to Luma Ray3 Modify, cheaper per second"
 msgid "sueco"
 msgstr "Swedish"
 
+msgid "sugerir personas"
+msgstr "suggest personas"
+
+msgid "sugerir personas · la respuesta no sirvió"
+msgstr "suggest personas · the response was unusable"
+
 msgid "sí"
 msgstr "yes"
 
@@ -20674,6 +20766,9 @@ msgstr "ended in %(estado)s"
 
 msgid "terminó sin ninguna salida"
 msgstr "finished without any output"
+
+msgid "terminó sin ningún video"
+msgstr "finished without any video"
 
 msgid "terraza"
 msgstr "terrace"

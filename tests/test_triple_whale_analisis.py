@@ -340,7 +340,7 @@ def test_a_referente_guarda_un_referente_propio_con_miniatura_en_r2(base_tempora
     from referentes import imagenes
     monkeypatch.setattr(proyectos, "cargar", lambda cliente: {"nombre": "Acme"})
     subidas = []
-    monkeypatch.setattr(imagenes, "guardar_en_r2", lambda aid, url, carpeta: subidas.append((aid, url)) or
+    monkeypatch.setattr(imagenes, "guardar_en_r2", lambda aid, url, carpeta, cliente=None: subidas.append((aid, url)) or
                         f"https://r2/referentes/{aid}.jpg")
     a = {"ref": "A1", "canal": "facebook-ads", "ad_id": "120000111", "nombre": "Caja", "campana": "C",
          "veredicto": "ganador", "motivo": "ROAS 4", "m": {"roas": 4.0, "pedidos": 5, "gasto": 100, "ctr": 2},

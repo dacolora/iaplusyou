@@ -20,8 +20,9 @@ class ImagenInvalida(RuntimeError):
     """No se pudo bajar o no es una imagen; la fila queda en estado_imagen=error."""
 
 
-def clave_r2(anuncio_id):
-    return f"referentes/{anuncio_id}.jpg"
+def clave_r2(anuncio_id, cliente=None):
+    prefijo = f"clientes/{cliente}/" if cliente else ""
+    return f"{prefijo}referentes/{anuncio_id}.jpg"
 
 
 def _bajar(url):
@@ -49,7 +50,7 @@ def _bajar(url):
             cerrar()
 
 
-def guardar_en_r2(anuncio_id, url_origen, carpeta):
+def guardar_en_r2(anuncio_id, url_origen, carpeta, cliente=None):
     crudo = _bajar(url_origen)
     try:
         with Image.open(io.BytesIO(crudo)) as im:
@@ -62,7 +63,7 @@ def guardar_en_r2(anuncio_id, url_origen, carpeta):
     except (UnidentifiedImageError, OSError, ValueError) as e:
         raise ImagenInvalida(f"No es una imagen válida: {e.__class__.__name__}") from e
     try:
-        return r2_uploader.upload_image(local, clave_r2(anuncio_id))
+        return r2_uploader.upload_image(local, clave_r2(anuncio_id, cliente=cliente))
     finally:
         try:
             os.remove(local)

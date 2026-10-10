@@ -128,9 +128,9 @@ def _anuncio_muestra(ref, visitantes, nuevos):
             "veredicto": "ganador", "motivo": "ROAS alto", "problemas": [], "fortalezas": [], "m": m}
 
 
-def test_evaluar_con_ia_guarda_los_visitantes_pero_su_prompt_no_cambia_hasta_pnd_210(base_temporal):
+def test_evaluar_con_ia_guarda_los_visitantes_pero_su_prompt_no_cambia_hasta_pnd_217(base_temporal):
     """El NVP en el prompt de «Evaluar con IA» pide subir su tope y eso cambia lo que cuesta: espera a Daniel
-    (eval 2026-10-09, PND-210). Las cifras sí viajan en la muestra guardada."""
+    (eval 2026-10-09, PND-217). Las cifras sí viajan en la muestra guardada."""
     import dashboard
     from triple_whale import analisis
     assert {"visitantes", "visitantes_nuevos", "nvp"} <= set(analisis.CAMPOS_M)

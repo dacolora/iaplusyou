@@ -82,3 +82,10 @@ Idioma de publicación vs idioma de la app (2026-10-08, spec de Noruega y Suecia
 
 
 Lote 6B (2026-10-08): pantalla de accesos bloqueados, bitácora de desbloqueo, rechazo de QA aprobado pasan por gettext y el catálogo inglés. admin_bloqueos_login.html se incorpora a la guardia de plantillas. Catálogo actualizado y compilado; sin fuzzy. R6 (2026-10-08): el vencimiento del login usa ngettext en minutos redondeados hacia arriba. Verificación visual en es/en corresponde a Claude.
+
+PND-166 (2026-10-09, decisión delegada): Reintentar análisis, Análisis por referencia y Sugerir personas pasan por gettext y catálogo inglés (Retry analysis, Analysis per reference, Suggest personas). Los importes usan el margen de la petición; mensajes de tareas siguen el idioma del proyecto.
+
+
+Enmiendas lote 7 (2026-10-09): mensajes de arranque incierto de Apify, detalles de gasto de análisis/personas, hasta, cantidad de fotos y error breve de Claude pasan por catálogo. Sugerir personas solo conserva su detalle de gasto y ruta, sin botón en pantalla.
+
+Segunda ronda lote 7 (2026-10-09): motivos del análisis se guardan con clave reconocida y mensaje en el idioma del proyecto; error_visible los traduce para quien mira. El catálogo incluye respuesta no útil, interrupción, fallos de guardado/preparación, Referencia N y aviso de cantidad de fotos cambiada.

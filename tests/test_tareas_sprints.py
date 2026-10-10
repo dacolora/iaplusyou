@@ -21,7 +21,7 @@ def test_analizar_referencia_guarda_analisis(base_temporal, monkeypatch):
     from sprints import analisis, datos
     from tareas import sprints as ts
     sid, cid, rid = _referencia(datos)
-    monkeypatch.setattr(analisis, "analizar", lambda ref, marca="", idioma="es": {"resumen": "ok", "paleta": ["#000"]})
+    monkeypatch.setattr(analisis, "analizar", lambda ref, marca="", idioma="es", uso=None: {"resumen": "ok", "paleta": ["#000"]})
     tareas.cargar_todas()
     assert "sprint_analizar_referencia" in tareas.REGISTRO
     msg = tareas.REGISTRO["sprint_analizar_referencia"]({"payload": {"cliente": "acme", "referencia_id": rid},
@@ -31,18 +31,19 @@ def test_analizar_referencia_guarda_analisis(base_temporal, monkeypatch):
     assert tareas.REGISTRO["sprint_analizar_referencia"]({"payload": {"cliente": "acme", "referencia_id": 999}}) == "La referencia ya no existe."
 
 
-def test_analizar_referencia_error_deja_rastro(base_temporal, monkeypatch):
+def test_analizar_referencia_error_deja_rastro(base_temporal, monkeypatch, caplog):
     import tareas
     from sprints import analisis, datos
     sid, cid, rid = _referencia(datos)
-    def rompe(ref, marca="", idioma="es"):
+    def rompe(ref, marca="", idioma="es", uso=None):
         raise RuntimeError("Claude caído")
     monkeypatch.setattr(analisis, "analizar", rompe)
     tareas.cargar_todas()
     with pytest.raises(RuntimeError):
         tareas.REGISTRO["sprint_analizar_referencia"]({"payload": {"cliente": "acme", "referencia_id": rid}})
     r = datos.referencia("acme", rid)
-    assert r["analisis_estado"] == "error" and "Claude caído" in r["analisis"]["error"]
+    assert r["analisis_estado"] == "error" and r["analisis"]["error"]
+    assert "Claude caído" not in r["analisis"]["error"] and "Claude caído" in caplog.text
     datos.actualizar_referencia("acme", rid, analisis_estado="pendiente")
     tareas.AL_INTERRUMPIR["sprint_analizar_referencia"]({"payload": {"cliente": "acme", "referencia_id": rid}}, "reinicio")
     assert datos.referencia("acme", rid)["analisis_estado"] == "error"
@@ -56,13 +57,13 @@ def test_encolar_analisis_usa_el_worker(base_temporal, monkeypatch):
     assert ts.encolar_analisis("acme", 5) is True
     job_id, tipo, payload, kw = encolados[0]
     assert job_id == "acme__ref5__analizar" and tipo == "sprint_analizar_referencia"
-    assert payload == {"cliente": "acme", "referencia_id": 5} and kw["max_intentos"] == 3 and kw["cliente"] == "acme"
+    assert payload == {"cliente": "acme", "referencia_id": 5} and kw["max_intentos"] == 1 and kw["cliente"] == "acme"
 
 
 def test_sugerir_personas_crea_filas(base_temporal, monkeypatch):
     import tareas
     from sprints import datos, sugerencias
-    monkeypatch.setattr(sugerencias, "sugerir_personas", lambda c, cuantas=3: [
+    monkeypatch.setattr(sugerencias, "sugerir_personas", lambda c, cuantas=3, uso=None: [
         {"nombre": "Cliente Premium", "resumen": "r", "descripcion": "d", "edad_rango": "35-50", "tono": "t",
          "senales_visuales": ["cocina"], "palabras_clave": ["lujo"], "color": "#4d8dff"}])
     tareas.cargar_todas()
@@ -74,7 +75,7 @@ def test_sugerir_personas_crea_filas(base_temporal, monkeypatch):
 def test_sugerir_personas_guarda_la_consciencia_en_extra(base_temporal, monkeypatch):
     import tareas
     from sprints import datos, sugerencias
-    monkeypatch.setattr(sugerencias, "sugerir_personas", lambda c, cuantas=3: [
+    monkeypatch.setattr(sugerencias, "sugerir_personas", lambda c, cuantas=3, uso=None: [
         {"nombre": "Con nivel", "resumen": "", "descripcion": "", "edad_rango": "", "tono": "", "senales_visuales": [],
          "palabras_clave": [], "color": "#4d8dff", "conciencia": {"nivel": "muy_consciente", "detalle": "ya compró"}},
         {"nombre": "Sin nivel", "resumen": "", "descripcion": "", "edad_rango": "", "tono": "", "senales_visuales": [],
@@ -669,3 +670,40 @@ def test_r2_aprobada_recibe_solo_su_primer_qa(base_temporal, monkeypatch, qa_pre
     assert ('acme', cp) not in ts._piezas_listas_sin_qa()
     if qa_previo:
         assert datos.idea('acme', cp)['qa'] == qa_previo
+
+
+@pytest.mark.parametrize('fallo,motivo', [('parser', 'respuesta_invalida'), ('llamada', 'sin_respuesta'),
+                                       ('guardar', 'guardar'), ('preparar', 'incompleto')])
+def test_r2_analisis_guarda_causa_segura_y_el_hook_la_conserva(base_temporal, monkeypatch, caplog, fallo, motivo):
+    import json
+    from sprints import datos, analisis
+    from tareas import sprints as ts
+    _, _, rid = _referencia(datos)
+    texto = json.dumps({k: ([] if k in ('paleta', 'elementos') else 'ok') for k in analisis.CLAVES})
+    def llamar(*a, uso=None, **kw):
+        if fallo == 'llamada':
+            raise RuntimeError('Error code: 529 - {"detalle": "crudo"}')
+        uso['entrada'] += 10
+        uso['salida'] += 5
+        return ('{"resumen":' if fallo == 'parser' else texto), 10, 5
+    monkeypatch.setattr(analisis, '_llamar_contando', llamar)
+    if fallo == 'guardar':
+        guardar = datos.actualizar_referencia
+        def actualizar(*a, **kw):
+            if kw.get('analisis_estado') == 'listo':
+                raise RuntimeError('fallo de persistencia')
+            return guardar(*a, **kw)
+        monkeypatch.setattr(datos, 'actualizar_referencia', actualizar)
+    if fallo == 'preparar':
+        def romper(*a):
+            raise OSError('fallo preparando fotogramas')
+        monkeypatch.setattr(analisis, '_bloques_imagen', romper)
+    tarea = {'id': 102, 'payload': {'cliente': 'acme', 'referencia_id': rid}}
+    with pytest.raises(Exception) as e:
+        ts.ejecutar_analizar(tarea)
+    guardado = datos.referencia('acme', rid)['analisis']
+    assert guardado.get('motivo') == motivo
+    assert guardado['error'] and str(e.value) not in guardado['error']
+    assert str(e.value) in caplog.text
+    ts.interrumpida_analizar(tarea, 'fin del intento')
+    assert datos.referencia('acme', rid)['analisis'] == guardado

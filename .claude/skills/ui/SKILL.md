@@ -160,3 +160,10 @@ la mezcla de main del 2026-10-08 que borró el gráfico del viejo Tablero, las r
 «Día a día», que arma `meta_rendimiento/grafico.py`). Los
 selectores del JS evitan palabras que `tests/i18n_util.py` lee como español (`data-meta-act`, `data-meta-seleccion`:
 «cuenta» y «guardar» están en sus marcas).
+
+PND-166/190 (2026-10-09, decisión delegada): acciones Sprints muestran precio_analisis_sprint, texto seguro de gastos.estimar; Reanudar usa gastos.texto_precio. Reintentar análisis reusa botón/formulario y clases comunes; panel sin scripts. La comprobación visual a 375 px, escritorio y es/en corresponde a Claude (encargo sin navegadores).
+
+
+Enmiendas lote 7 (2026-10-09): botones nuevos usan textos de estimación que fallan a precio no disponible. Fotos: cantidad faltante y total; sin acción si cero. Panel Armar: cada fallo tiene fila fuera de figure y de la grilla, texto largo envuelve, botón con precio y ✕ separada. Inspección a 375/1280 px por Claude; desbordes previos de campaña y Detenida quedan registrados, sin arreglo.
+
+Segunda ronda lote 7 (2026-10-09, encargo de Daniel): filas de análisis fallido identifican la referencia por título o id y usan campo-error de la Base visual común. El formulario de reintento dentro de panel-analisis-error conserva volver=tablero. Ambos formularios de fotos mandan n_visto; sin imagen no ofrecen un reintento pagado. La inspección a 375/1280 px sigue a cargo de Claude.

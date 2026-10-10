@@ -116,3 +116,5 @@ En un proyecto que cobra **toda persona que lo mira ve precios, no costos** (tam
 ## Pendientes de esta área
 
 `docs/pendientes.md` PND-161 a PND-175: DIAN e IVA, la prueba real con Bold, suscripción y recarga automática, otra pasarela, promociones, y los bordes y la higiene que dejó la revisión de cada tarea.
+
+PND-178 (2026-10-09, decisión delegada): limpiar_reservas_muertas solo elimina reservas sin tarea pendiente/en_curso cuya creada_en sea estrictamente anterior a ahora menos diez minutos. Cubre la ventana reservar→encolar; el disponible y el cobro real conservan sus reglas. test_lote7_estado prueba recién creada, diez, once minutos y tarea viva.

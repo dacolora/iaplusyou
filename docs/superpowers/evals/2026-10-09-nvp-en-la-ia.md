@@ -60,9 +60,9 @@ tokens que devolvió la llamada.
   la respuesta llegó entera en una llamada de 20 859. Por eso `MAX_TOKENS = 32000` (regla 7 de CLAUDE.md).
 - **Costo**: una llamada sola salió entre US$ 0,14 y 0,23 contra US$ 0,20 que se muestra (`evaluacion_tw`, n = 10);
   con corrección, 0,30. El tope nuevo debería quitar la mayoría de las correcciones; falta un promedio de corridas
-  reales antes de tocar el precio (PND-210).
+  reales antes de tocar el precio (PND-217).
 - **Idioma**: con `idioma="en"`, 2 de 6 respuestas salieron en español, una de ellas con el prompt de producción: ya
-  pasaba (PND-211).
+  pasaba (PND-218).
 
 **Gasto total de la medición:** ≈ US$ 1,57 en Anthropic (antes 0,128 + 0,303 + ≈ 0,30 de la corrida mal leída;
 después 0,468 + 0,141 + 0,229), con la llave de Creatv y sin filas en `gasto` (corrió fuera de la app). Pasó el
@@ -74,4 +74,4 @@ el tope de 32 000. Con el tope de 16 000 de producción, «Evaluar con IA» con 
 antes salía bien, salió mal: rojo según esta skill). Subir el tope cambia lo que cuesta, y las revisiones
 (guardian-gasto y revisor, 2026-10-09) pidieron que lo decida Daniel. **Lo que se despliega:** el NVP en «Cómo
 mejorarlo» (sin cambio de tope ni de costo); «Evaluar con IA» con su prompt y su tope de hoy, más `max_retries=0`. El
-NVP en su prompt y el tope de 32 000 esperan esa decisión (PND-210).
+NVP en su prompt y el tope de 32 000 esperan esa decisión (PND-217).

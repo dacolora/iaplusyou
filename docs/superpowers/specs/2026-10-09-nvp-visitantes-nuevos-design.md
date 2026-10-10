@@ -76,7 +76,7 @@ sección en la Guía): «52 % · MOF», gris si son pocos datos, «—» sin dat
    `eval-claude` antes y después; no cambia precio ni topes. **Enmienda del mismo día** (eval
    `2026-10-09-nvp-en-la-ia.md`, revisiones guardian-gasto y revisor): «Cómo mejorarlo» lo lleva; «Evaluar con IA»
    necesita subir su tope de 16 000 a 32 000 para no cortar la respuesta, eso cambia lo que cuesta y lo decide Daniel
-   (PND-210): hasta entonces su prompt sigue igual (las cifras sí viajan en la muestra guardada).
+   (PND-217): hasta entonces su prompt sigue igual (las cifras sí viajan en la muestra guardada).
 
 ## 5. Fuera de alcance
 
