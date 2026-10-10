@@ -309,6 +309,34 @@ def test_la_tarea_trae_el_anuncio_de_meta_una_vez_y_el_prompt_dice_meta(tarea_me
     assert detalles[f"tw_anuncio:{aid}:t21:voz"] == "la voz de un anuncio de Meta"
 
 
+def test_el_prompt_de_un_anuncio_de_meta_no_trae_la_evaluacion_de_triple_whale(tarea_meta, monkeypatch):
+    """G4 (revisión final de Rendimiento E2, guardián de gasto, 2026-10-10): la evaluación de cuenta de Triple Whale
+    habla del Pixel de Triple Whale; en el prompt pagado de un anuncio de fuente Meta mezclaba los dos Pixel. Para la
+    fuente Meta no va (los productos más vendidos sí se siguen pidiendo); un anuncio de Triple Whale la sigue recibiendo."""
+    eid = datos.crear_evaluacion("acme", "2026-09-01", "2026-09-30", "USD", [])
+    datos.actualizar_evaluacion(eid, estado="lista", extra={"tienda_id": None},
+                                resultado={"resumen": "Gana el UGC con oferta en Noruega",
+                                           "patrones_ganadores": [{"patron": "Prueba social en los 3 primeros s"}]})
+    productos = []
+    monkeypatch.setattr(datos, "top_productos", lambda *a, **k: productos.append(a) or [])
+    monkeypatch.setattr(creativo, "traer", lambda cliente, ad_id, aid: {"tipo": "imagen", "copy": "Chanclas",
+                                                                        "imagen_url": None, "video_url": None})
+    t, aid = tarea_meta["t"], tarea_meta["aid"]
+    t.tw_analizar_anuncio({"id": 23, "payload": {"cliente": "acme", "analisis_id": aid}})
+    assert datos.analisis_anuncio("acme", aid)["estado"] == "lista"
+    texto = tarea_meta["recibido"]["texto"]
+    assert "con sus números de Meta del" in texto
+    assert "Gana el UGC con oferta" not in texto and "Prueba social en los 3 primeros s" not in texto
+    assert "Resumen de la evaluación de la cuenta" not in texto
+    assert productos                                                  # los productos más vendidos se quedan
+    # Control: el mismo anuncio con números de Triple Whale sí recibe la evaluación de su cuenta.
+    foto = _foto()
+    foto["creativo"] = {"tipo": "imagen", "copy": "Chanclas"}
+    tw = datos.crear_analisis("acme", None, "facebook-ads", "p1", "2026-09-01", "2026-09-30", "USD", foto)
+    t.tw_analizar_anuncio({"id": 24, "payload": {"cliente": "acme", "analisis_id": tw}})
+    assert "Gana el UGC con oferta en Noruega" in tarea_meta["recibido"]["texto"]
+
+
 def test_una_foto_de_meta_con_creativo_no_lo_vuelve_a_traer(tarea_meta, monkeypatch):
     aid = tarea_meta["aid"]
     fila = datos.analisis_anuncio("acme", aid)

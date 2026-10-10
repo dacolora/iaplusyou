@@ -204,7 +204,9 @@ def tw_analizar_anuncio(tarea):
                                                      else gettext("la voz de un anuncio de Triple Whale")))
                 medios["transcripcion"] = (voz.get("texto") or "")[:mejorar.MAX_TRANSCRIPCION] or None
         trabajos.reportar(job_id, etapa=idiomas.N_("Analizando con Claude"))
-        entradas = dict(voz=voz, evaluacion_cuenta=_evaluacion_de_cuenta(cliente, fila["tienda_id"]),
+        # G4 (revisión final de Rendimiento E2, 2026-10-10): la evaluación de cuenta es del Pixel de Triple Whale; en el
+        # prompt de un anuncio de fuente Meta mezclaba los dos Pixel. Los productos más vendidos sí van.
+        entradas = dict(voz=voz, evaluacion_cuenta=None if de_meta else _evaluacion_de_cuenta(cliente, fila["tienda_id"]),
                         aprendizajes=doctrina_aprendizajes.texto_para_prompt(proyectos.aprendizajes(cliente)),
                         productos=datos.top_productos(cliente, fila["tienda_id"], fila["desde"], fila["hasta"],
                                                       limite=analisis.MAX_PRODUCTOS))
