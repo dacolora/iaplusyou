@@ -382,6 +382,23 @@ WHERE event_date BETWEEN @startDate AND @endDate
 GROUP BY channel, ad_id, event_date
 """
 
+# La completa más los visitantes únicos y nuevos que el Pixel atribuye a cada anuncio: el NVP (spec
+# 2026-10-09-nvp-visitantes-nuevos §3; comprobado contra happyflops-norge el 2026-10-09). Va como versión
+# aparte, la primera: si una cuenta no los conoce, la copia baja a la completa de siempre y solo falta el NVP
+# (una columna de más tumbaba la copia entera a la mínima, PND-150).
+_PIXEL_CON_VISITANTES = """
+SELECT
+    channel, ad_id, event_date,
+    SUM(orders_quantity) AS orders, SUM(order_revenue) AS revenue,
+    SUM(new_customer_orders) AS nc_orders, SUM(new_customer_order_revenue) AS nc_revenue,
+    SUM(sessions) AS sessions, SUM(add_to_carts) AS add_to_carts, SUM(checkouts) AS checkouts,
+    SUM(unique_visitors) AS unique_visitors, SUM(new_visitors) AS new_visitors
+FROM pixel_joined_tvf()
+WHERE event_date BETWEEN @startDate AND @endDate
+    AND model = {modelo} AND attribution_window = {ventana}
+GROUP BY channel, ad_id, event_date
+"""
+
 _PIXEL_COMPLETA = """
 SELECT
     channel, ad_id, event_date,
@@ -421,6 +438,17 @@ GROUP BY event_date
 _TIENDA_MINIMA = """
 SELECT event_date, SUM(spend) AS spend, SUM(order_revenue) AS revenue, SUM(orders_count) AS orders
 FROM blended_stats_tvf()
+WHERE event_date BETWEEN @startDate AND @endDate
+GROUP BY event_date
+"""
+
+# Visitantes únicos y nuevos de la tienda por día (`blended_stats_tvf` no los tiene). `web_analytics_table` los
+# cuenta por página de entrada, dispositivo, navegador, país y ciudad: la suma cuenta dos veces a quien entra por
+# dos de ellos, igual en el numerador y el denominador, así que el NVP es aproximado (spec §1).
+_VISITANTES_TIENDA = """
+SELECT
+    event_date, SUM(unique_visitors) AS unique_visitors, SUM(new_visitors) AS new_visitors
+FROM web_analytics_table
 WHERE event_date BETWEEN @startDate AND @endDate
 GROUP BY event_date
 """
@@ -494,11 +522,15 @@ def consultas_anuncios():
 def consultas_pixel(modelo, ventana):
     lit = {"modelo": _literal(normalizar_modelo(modelo), MODELOS),
            "ventana": _literal(normalizar_ventana(ventana), VENTANAS)}
-    return [_PIXEL_COMPLETA.format(**lit), _PIXEL_MINIMA.format(**lit)]
+    return [_PIXEL_CON_VISITANTES.format(**lit), _PIXEL_COMPLETA.format(**lit), _PIXEL_MINIMA.format(**lit)]
 
 
 def consultas_tienda():
     return [_TIENDA_COMPLETA, _TIENDA_MINIMA]
+
+
+def consultas_visitantes_tienda():
+    return [_VISITANTES_TIENDA]
 
 
 def consultas_productos():

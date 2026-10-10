@@ -20,6 +20,8 @@ PLANTILLAS_TRADUCIDAS = [
     "_tab_settings.html", "_seccion_marca.html", "_comparacion_modelos.html",
     "_tab_flowplus.html", "_tab_creativeflowplus.html", "_flowplus_bandeja.html", "_aviso_sin_saldo.html",
     "_selector_productos.html", "_selector_productos_nuevo.html", "_mi_musica.html",
+    "_selector_productos_grilla.html", "_swaps_lista.html",
+    "_gasto_filas.html", "_gasto_lista.html", "_gasto_mas.html",
     "_crear_flowplus.html", "_crear_flowplus_guiones.html", "_gpg_panel.html", "_gpg_notion.html",
     "_gpg_guion.html", "_gpg_video.html", "_gpg_clips.html", "_gpg_imagenes.html", "_gpg_macros.html",
     "_tab_catalogo.html", "_catalogo_campos_comerciales.html", "_catalogo_importar.html",
@@ -68,12 +70,14 @@ PLANTILLAS_TRADUCIDAS = [
     "_meta_diagnostico.html", "_meta_segmentos.html",   # Meta rendimiento E2: Diagnóstico y Segmentos
     "_meta_evaluacion.html",   # Meta rendimiento E2: una «Evaluación con IA» (fragmento)
     "_meta_evaluar.html",      # Meta rendimiento E2: la sección «Evaluación con IA» del panel (botón, barra, anteriores)
+    "_componentes.html",   # componentes con marcado propio; el primero, el chip del NVP (spec 2026-10-09)
     "editor.html",   # Fase 6, Task 2: la página del editor
     "_tab_cambiar_calzado.html",   # Fase 6, Task 4: Crear › Cambiar producto
     "admin_meta.html", "admin_referentes.html", "meta_elegir.html",   # Fase 6, Task 5
     "saldo_recarga.html",   # Cobros 7/11 y 8/11: la vuelta del checkout de Bold
     "_config_saldo.html", "_saldo_panel.html",   # Cobros 8/11: Configuración › Saldo y recargas
     "admin_cobros.html",   # Cobros 10/11: /admin/cobros
+    "_config_plan.html", "_plan_panel.html", "plan_alta.html",   # Planes 6/8: Configuración › Plan y el alta con Wompi
     "admin_salud.html", "admin_registros.html", "admin_estilos.html",   # Salud de la plataforma (spec 2026-10-01-escala-y-monitoreo)
     # Fase 6, Task 6: llegaron con fusiones de main ya traducidas y solo faltaba
     # sumarlas a la guardia — Crear › Audios (worktree-crear-audios, 82491a6) y el

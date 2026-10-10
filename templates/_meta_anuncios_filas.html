@@ -1,7 +1,9 @@
 {# Filas de la tabla «Anuncios» de la pestaña «Meta»: incluidas en _meta_panel.html (la primera página) y solas como
    respuesta de «Ver más» (meta_rendimiento.rutas.ver_anuncios). Solo <tr>: el JS de _tab_meta.html las pone en el
-   lugar de la fila del botón. Contexto: `mr` (panel.contexto o panel.anuncios_pagina) y `cliente`. Sin <script>. #}
+   lugar de la fila del botón. Contexto: `mr` (panel.contexto o panel.anuncios_pagina) y `cliente`. Sin <script>.
+   Con Triple Whale (`mr.nvp_activo`) lleva la columna NVP después del ROAS. #}
 {% import "_meta_macros.html" as mx %}
+{% import "_componentes.html" as cx %}
 {% for a in mr.anuncios %}
 {% set am = a.m %}
 <tr data-veredicto="{{ a.veredicto }}">
@@ -19,6 +21,7 @@
   </td>
   <td>{{ mx.monto(am.gasto, a.moneda) }}</td>
   <td>{{ mx.roas(am.roas) }}</td>
+  {% if mr.nvp_activo %}<td>{{ cx.nvp(a.visitantes_nuevos, a.visitantes) }}</td>{% endif %}
   <td>{{ am.ctr | tw_pct(2, false) }}</td>
   <td>{{ am.gancho | tw_pct(0) }}</td>
   <td>{{ am.retencion | tw_pct(0) }}</td>
@@ -26,6 +29,6 @@
 {% endfor %}
 {% if mr.hay_mas_anuncios %}
 <tr class="meta-mas">
-  <td colspan="9"><button type="button" class="btn-sm" data-meta-mas="{{ url_for('meta_rendimiento.ver_anuncios', cliente=cliente, dias=mr.dias, cuenta=mr.actual.ad_account_id if mr.actual else none, pagina=mr.pagina_anuncios + 1) }}">{{ _('Ver más') }}</button></td>
+  <td colspan="{{ 10 if mr.nvp_activo else 9 }}"><button type="button" class="btn-sm" data-meta-mas="{{ url_for('meta_rendimiento.ver_anuncios', cliente=cliente, dias=mr.dias, cuenta=mr.actual.ad_account_id if mr.actual else none, pagina=mr.pagina_anuncios + 1) }}">{{ _('Ver más') }}</button></td>
 </tr>
 {% endif %}

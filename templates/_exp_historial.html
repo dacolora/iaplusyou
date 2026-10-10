@@ -1,6 +1,7 @@
 {# Totales, monedas separadas y tienda TW del Tablero original (el «Historial» plegado del centro de
    resultados desde E2; el Tablero ya no es pestaña). #}
 {% set tb = tablero %}
+{% import "_componentes.html" as cx %}
 {% macro tile_generacion(gen) %}
 <a class="kpi-tile kpi-tile-enlace" href="#settings" data-ir-tab="settings" title="{{ _('Videos, imágenes, guiones, finales y textos con IA pagados desde el inicio; detalle en Configuración › Gasto') }}">
   <span>{{ _('Generación total') }}</span>
@@ -139,6 +140,12 @@
     <span>MER</span>
     {% if t.mer %}<strong>{{ t.mer | roas }}×</strong>{% else %}<strong class="tb-sin-dato">—</strong>{% endif %}
     <small>{{ _('gasto %(gasto)s', gasto=t.gasto | dinero(t.moneda)) }}</small>
+  </div>
+  {# NVP de la tienda (spec 2026-10-09-nvp-visitantes-nuevos §4.4): las sumas de visitantes desde el inicio. #}
+  <div class="kpi-tile">
+    <span>{{ _('Visitantes nuevos (NVP)') }}</span>
+    <strong>{{ cx.nvp(t.visitantes_nuevos, t.visitantes) }}</strong>
+    {% if t.visitantes %}<small>{{ _('%(n)s visitantes', n=t.visitantes | tw_num) }}</small>{% endif %}
   </div>
   <a class="kpi-tile kpi-tile-enlace" href="#triplewhale" data-ir-tab="triplewhale">
     <span>{{ _('Triple Whale') }}</span>

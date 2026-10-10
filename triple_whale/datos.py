@@ -1,7 +1,8 @@
 """Único escritor (y lector) de `tw_anuncio_dia`, `tw_tienda_dia`,
 `tw_producto_dia`, `tw_evaluacion` (spec 2026-09-28 §3), `tw_creativo` y
-`tw_analisis` (tarjetas, spec 2026-10-08 §3). Solo SQLAlchemy Core; nada de
-Flask ni de la API de Triple Whale.
+`tw_analisis` (tarjetas, spec 2026-10-08 §3) y `tw_gancho` (ganchos, spec
+2026-10-09 §4.2). Solo SQLAlchemy Core; nada de Flask ni de la API de Triple
+Whale.
 
 Desde 2026-10-08 (spec de varias tiendas §6.1) cada copia es de una tienda
 (`tienda_id`): las escrituras reciben la tienda y las lecturas `tienda_id`
@@ -24,8 +25,12 @@ COLUMNAS_DIMENSION = ("cuenta_id", "campana_id", "campana", "conjunto_id", "conj
                       "creative_id", "video_url", "destino_url", "utm_ok")
 COLUMNAS_CANAL = ("gasto", "impresiones", "clics", "clics_salida", "compras_canal", "valor_canal", "thruplays",
                   "vistas_3s", "p25", "p50", "p75", "p100")
-COLUMNAS_PIXEL = ("pedidos", "ingresos", "nc_pedidos", "nc_ingresos", "sesiones", "carritos", "checkouts")
-COLUMNAS_TIENDA = ("gasto", "ingresos", "pedidos", "nc_pedidos", "nc_ingresos", "reembolsos", "cogs", "utilidad_neta")
+# `visitantes` y `visitantes_nuevos` (0036) dan el NVP: se suman como el resto y el % se calcula después con
+# `triple_whale.visitantes` (nunca un promedio de porcentajes).
+COLUMNAS_PIXEL = ("pedidos", "ingresos", "nc_pedidos", "nc_ingresos", "sesiones", "carritos", "checkouts",
+                  "visitantes", "visitantes_nuevos")
+COLUMNAS_TIENDA = ("gasto", "ingresos", "pedidos", "nc_pedidos", "nc_ingresos", "reembolsos", "cogs", "utilidad_neta",
+                   "visitantes", "visitantes_nuevos")
 COLUMNAS_PRODUCTO = ("unidades", "ingresos", "pedidos")
 COLUMNAS_POR_TIENDA = ("ingresos", "pedidos", "gasto", "nc_pedidos", "nc_ingresos")   # por_tienda
 _LLAVE_ANUNCIO = ["cliente", "tienda_id", "canal", "ad_id", "fecha"]   # uq_tw_anuncio_dia
@@ -205,6 +210,42 @@ def totales_anuncio(cliente, tienda_id, canal, ad_id, desde, hasta=None):
     return fila
 
 
+CAMPOS_VISITANTES = ("ad_id", "conjunto_id", "campana_id", "cuenta_id")
+
+
+def visitantes_por(cliente, campo, ids, desde=None, hasta=None, canal="facebook-ads"):
+    """Visitantes únicos y nuevos sumados por anuncio, conjunto, campaña o cuenta (`campo`), para el NVP de
+    pantallas que no leen esta copia (pestaña Meta, Experimentos; spec 2026-10-09-nvp-visitantes-nuevos §4).
+    UNA consulta para todos los `ids`: {id: {"visitantes": n, "visitantes_nuevos": n}}, solo los que tienen
+    visitas; lista vacía -> {} sin tocar la base. Todas las tiendas del proyecto se suman (cada Pixel cuenta las
+    visitas de su sitio). Las filas que solo trajo el Pixel no tienen campaña ni conjunto: el anuncio se ubica
+    con el valor que tenga en CUALQUIER día de la copia (un anuncio no cambia de campaña)."""
+    if campo not in CAMPOS_VISITANTES:
+        raise ValueError(f"campo fuera de la lista: {campo!r}")
+    ids = sorted({str(i) for i in ids or () if i})
+    if not ids:
+        return {}
+    t = db.tw_anuncio_dia
+    cond = [t.c.cliente == cliente, t.c.canal == canal]
+    if desde:
+        cond.append(t.c.fecha >= desde)
+    if hasta:
+        cond.append(t.c.fecha <= hasta)
+    sumas = [sa.func.coalesce(sa.func.sum(t.c.visitantes), 0).label("visitantes"),
+             sa.func.coalesce(sa.func.sum(t.c.visitantes_nuevos), 0).label("visitantes_nuevos")]
+    if campo == "ad_id":
+        q = sa.select(t.c.ad_id.label("objeto"), *sumas).where(*cond, t.c.ad_id.in_(ids)).group_by(t.c.ad_id)
+    else:
+        col = getattr(t.c, campo)
+        mapa = (sa.select(t.c.ad_id, sa.func.max(col).label("objeto"))
+                .where(t.c.cliente == cliente, t.c.canal == canal, col.in_(ids)).group_by(t.c.ad_id).subquery())
+        q = (sa.select(mapa.c.objeto, *sumas).select_from(t.join(mapa, mapa.c.ad_id == t.c.ad_id))
+             .where(*cond).group_by(mapa.c.objeto))
+    with db.conectar() as con:
+        return {r.objeto: {"visitantes": int(r.visitantes), "visitantes_nuevos": int(r.visitantes_nuevos)}
+                for r in con.execute(q) if r.visitantes}
+
+
 def serie_anuncios(cliente, tienda_id, desde, hasta, canal=None):
     """Por día: gasto de anuncios e ingresos atribuidos por el Pixel (de un canal, si se pide)."""
     d = _anuncio_dia(cliente, tienda_id, desde, hasta, canal)
@@ -341,13 +382,18 @@ def cohortes(cliente, tienda_id, desde, hasta, canal=None, conocido_desde=None):
             "probados": probados}
 
 
-def _duplicado_por_dia(cliente, desde, hasta):
+def _duplicado_por_dia(cliente, desde, hasta, solo_con_fila_tienda=False):
     """Subconsulta (fecha, duplicado): por día, Σ por anuncio de (suma − máximo)
     de su gasto entre las tiendas. Es lo que «Todas» contaría de más si sumara
     el gasto de cada tienda con una cuenta publicitaria compartida."""
     t = db.tw_anuncio_dia
+    cond = []
+    if solo_con_fila_tienda:
+        tienda = db.tw_tienda_dia
+        cond.append(sa.select(tienda.c.id).where(tienda.c.cliente == cliente,
+                    tienda.c.tienda_id == t.c.tienda_id, tienda.c.fecha == t.c.fecha).exists())
     por_anuncio = (sa.select(t.c.fecha, (sa.func.sum(t.c.gasto) - sa.func.max(t.c.gasto)).label("duplicado"))
-                   .where(t.c.cliente == cliente, t.c.fecha >= desde, t.c.fecha <= hasta)
+                   .where(t.c.cliente == cliente, t.c.fecha >= desde, t.c.fecha <= hasta, *cond)
                    .group_by(t.c.canal, t.c.ad_id, t.c.fecha).subquery())
     return (sa.select(por_anuncio.c.fecha, sa.func.sum(por_anuncio.c.duplicado).label("duplicado"))
             .group_by(por_anuncio.c.fecha).subquery())
@@ -421,7 +467,7 @@ def serie_tienda(cliente, tienda_id, desde, hasta):
     else:
         s = (sa.select(t.c.fecha, *[sa.func.sum(getattr(t.c, c)).label(c) for c in COLUMNAS_TIENDA])
              .where(*cond).group_by(t.c.fecha).subquery())
-        d = _duplicado_por_dia(cliente, desde, hasta)
+        d = _duplicado_por_dia(cliente, desde, hasta, solo_con_fila_tienda=True)
         dup = sa.func.coalesce(d.c.duplicado, 0)
         columnas = [(s.c[c] - dup).label(c) if c == "gasto" else (s.c[c] + dup).label(c) if c == "utilidad_neta"
                     else s.c[c] for c in COLUMNAS_TIENDA]
@@ -758,3 +804,134 @@ def piezas_de_analisis(cliente, analisis_ids):
                 "cf_id": cf_id, "pieza_id": pid, "titulo": titulo,
                 "estado": extra.get("estado_legado") or creative_flow._PIEZA_A_ESTADO.get(estado, estado)})
     return salida
+
+
+# ------------------------------------------------- ganchos (spec 2026-10-09 §4.2) ---
+ESTADOS_GANCHO = ("preparando", "generando", "armando", "produciendo", "lista", "error")
+VIVOS_GANCHO = ("preparando", "generando", "armando", "produciendo")
+# Lo que las tareas anotan en una variante. El texto, el prompt y el fotograma son la copia del gancho al pedirlo y no
+# se reescriben; el estado solo cambia con `mover`.
+CAMPOS_GANCHO = ("frame_url", "cf_id", "edicion_id", "final_id", "url_final", "job_id", "error")
+
+
+class TandaViva(Exception):
+    """Ese análisis ya tiene una tanda de ganchos en curso: no se pide otra (doble clic, dos pestañas)."""
+
+
+class AnalisisAjeno(LookupError):
+    """El análisis no existe o es de otro proyecto: una tanda nunca se cuelga de un análisis que no es del `cliente`
+    (aislamiento entre proyectos; sin esto `otro` bloquearía al dueño con TandaViva)."""
+
+
+_COLUMNAS_TANDA = frozenset({"tw_gancho.analisis_id", "tw_gancho.tanda", "tw_gancho.n"})
+
+
+def _es_choque_de_tanda(exc):
+    """True solo si `exc` es el UNIQUE `uq_tw_gancho_tanda` (analisis_id, tanda, n). SQLite no dice el nombre del
+    constraint, dice sus columnas («UNIQUE constraint failed: tw_gancho.analisis_id, tw_gancho.tanda, tw_gancho.n»);
+    otros motores sí dicen el nombre. Se lee solo la primera línea: el resto del texto de SQLAlchemy trae el SQL y
+    los parámetros, que pueden llevar texto ajeno. Cualquier otro error de la base (un NOT NULL, otro UNIQUE) NO es
+    «ya hay una tanda en curso»."""
+    linea = (str(getattr(exc, "orig", None) or exc).split("\n") or [""])[0]
+    if "uq_tw_gancho_tanda" in linea:
+        return True
+    marca = "UNIQUE constraint failed:"
+    if marca not in linea:
+        return False
+    return {c.strip() for c in linea.split(marca, 1)[1].split(",")} == _COLUMNAS_TANDA
+
+
+def _campos_gancho(campos):
+    raros = set(campos) - set(CAMPOS_GANCHO)
+    if raros:
+        raise ValueError(f"campos de tw_gancho no permitidos: {sorted(raros)}")
+
+
+def crear_tanda(cliente, analisis_id, ganchos, pedido_por=None):
+    """Las filas de una tanda nueva del análisis, en `preparando` (spec §4.2). `ganchos` = [{"n", "texto", "prompt",
+    "fotograma_s"}] (`triple_whale.ganchos.ganchos_generables`). El candado de escritura de SQLite se toma ANTES de
+    leer (BEGIN IMMEDIATE, como referentes.datos.guardar_referente): dos clics a la vez no leen los dos «sin tanda
+    viva». Con el candado ya tomado comprueba que el análisis es de `cliente` (si no, `AnalisisAjeno`, una
+    LookupError, y no inserta nada); con alguna fila viva del análisis lanza TandaViva; si no, inserta la tanda
+    max + 1 en la misma transacción y devuelve sus filas por `n`. Un `n` repetido en la lista es un dato malo
+    (ValueError, antes del candado). El UNIQUE (analisis_id, tanda, n) es la red si algo se cuela y SOLO ese choque se
+    traduce a TandaViva (`_es_choque_de_tanda`); cualquier otro IntegrityError sale tal cual."""
+    if not ganchos:
+        raise ValueError("crear_tanda: sin ganchos no hay tanda")
+    ns = [int(g["n"]) for g in ganchos]
+    if len(set(ns)) != len(ns):
+        raise ValueError(f"crear_tanda: n repetido en los ganchos: {sorted(ns)}")
+    t = db.tw_gancho
+    aid = int(analisis_id)
+    ahora = db.ahora()
+    try:
+        with db.conectar() as con:
+            con.exec_driver_sql("BEGIN IMMEDIATE")
+            if con.execute(sa.select(db.tw_analisis.c.id).where(
+                    db.tw_analisis.c.id == aid, db.tw_analisis.c.cliente == cliente)).first() is None:
+                raise AnalisisAjeno(f"el análisis {aid} no es del proyecto {cliente}")
+            vivas = con.execute(sa.select(sa.func.count()).select_from(t).where(
+                t.c.cliente == cliente, t.c.analisis_id == aid, t.c.estado.in_(VIVOS_GANCHO))).scalar()
+            if vivas:
+                raise TandaViva()
+            tanda = int(con.execute(sa.select(sa.func.coalesce(sa.func.max(t.c.tanda), 0)).where(
+                t.c.cliente == cliente, t.c.analisis_id == aid)).scalar() or 0) + 1
+            ids = [con.execute(t.insert().values(
+                cliente=cliente, creado_en=ahora, actualizado_en=ahora, analisis_id=aid, tanda=tanda, n=int(g["n"]),
+                estado="preparando", texto=g["texto"], prompt=g["prompt"], fotograma_s=g.get("fotograma_s"),
+                pedido_por=pedido_por)).inserted_primary_key[0] for g in ganchos]
+            filas = con.execute(sa.select(t).where(t.c.id.in_(ids)).order_by(t.c.n)).all()
+    except sa.exc.IntegrityError as e:
+        if _es_choque_de_tanda(e):
+            raise TandaViva() from None
+        raise
+    return [dict(f._mapping) for f in filas]
+
+
+def mover(gancho_id, de, a, *, vacios=(), **campos):
+    """CAS de estado: `UPDATE … WHERE id = ? AND estado = de`. True si cambió: el vigilante y las tareas nunca
+    avanzan dos veces la misma variante (spec §4.2). `vacios`: columnas de `CAMPOS_GANCHO` que además tienen que
+    seguir en NULL (el cf_id de una variante se anota una sola vez: otra corrida no lo pisa)."""
+    if de not in ESTADOS_GANCHO or a not in ESTADOS_GANCHO:
+        raise ValueError(f"estado inválido: {de} → {a}")
+    _campos_gancho(campos)
+    _campos_gancho(dict.fromkeys(vacios))
+    t = db.tw_gancho
+    with db.conectar() as con:
+        return con.execute(t.update().where(t.c.id == int(gancho_id), t.c.estado == de,
+                                            *(t.c[c].is_(None) for c in vacios))
+                           .values(estado=a, actualizado_en=db.ahora(), **campos)).rowcount == 1
+
+
+def actualizar_gancho(gancho_id, **campos):
+    """Anota `CAMPOS_GANCHO` sin tocar el estado. True si la fila existe."""
+    _campos_gancho(campos)
+    t = db.tw_gancho
+    with db.conectar() as con:
+        return con.execute(t.update().where(t.c.id == int(gancho_id))
+                           .values(actualizado_en=db.ahora(), **campos)).rowcount == 1
+
+
+def ganchos_de_analisis(cliente, analisis_id):
+    """Todas las variantes del análisis, la tanda más nueva primero y por `n` dentro de cada una: UNA consulta (el
+    detalle pinta la última tanda y resume las anteriores)."""
+    t = db.tw_gancho
+    with db.conectar() as con:
+        return [dict(f._mapping) for f in con.execute(
+            sa.select(t).where(t.c.cliente == cliente, t.c.analisis_id == int(analisis_id))
+            .order_by(t.c.tanda.desc(), t.c.n))]
+
+
+def ganchos_vivos():
+    """Las variantes vivas de todos los proyectos (el vigilante), en una consulta."""
+    t = db.tw_gancho
+    with db.conectar() as con:
+        return [dict(f._mapping) for f in con.execute(
+            sa.select(t).where(t.c.estado.in_(VIVOS_GANCHO)).order_by(t.c.id))]
+
+
+def gancho(cliente, gancho_id):
+    t = db.tw_gancho
+    with db.conectar() as con:
+        fila = con.execute(sa.select(t).where(t.c.id == int(gancho_id), t.c.cliente == cliente)).first()
+    return dict(fila._mapping) if fila else None

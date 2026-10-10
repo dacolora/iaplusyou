@@ -6,6 +6,10 @@
    JSON de las gráficas (`#cr-datos`), que el JS lee con textContent. #}
 {% from "_exp_macros.html" import valor, cabecera, veredicto, kpis, barras, tabla, dona_ubicacion with context %}
 {% from "_exp_gestionar.html" import propuestas with context %}
+{# NVP (spec 2026-10-09-nvp-visitantes-nuevos §4.3, pedido del cliente de HappyFlops): con Triple Whale en el proyecto
+   (`r.nvp` no es None) el chip `cx.nvp` va en el resumen, el ranking, «Por país» y cada experimento, siempre con las
+   SUMAS de visitantes del periodo; sin Triple Whale no aparece en ningún lado. Solo se muestra: no decide nada. #}
+{% import "_componentes.html" as cx %}
 {# La query de un enlace que cambia `clave` (v = None la quita) y conserva lo demás del filtro. #}
 {% macro consulta(clave, v) -%}
 {%- set q = namespace(pares=[]) -%}
@@ -129,6 +133,7 @@
     {% if r.indicadores|selectattr('ventas_cambiaron')|list %} · {{ _('Las ventas cambiaron de fuente en este período') }}{% elif r.indicadores|selectattr('roas_no_comparable')|list %} · {{ _('ROAS no comparable') }} · {{ _('No sumamos ingresos de otra moneda; el costo por compra sigue usando las ventas y el gasto en la moneda de la cuenta.') }}{% endif %}
     {% if tablero.tienda_tw %}· <a href="#triplewhale" data-ir-tab="triplewhale">{{ _('Tu tienda según Triple Whale') }}</a>: {{ _('ingresos %(ingresos)s · MER %(mer)s', ingresos=tablero.tienda_tw.ingresos|dinero(tablero.tienda_tw.moneda), mer=valor(tablero.tienda_tw.mer, 'veces')) }}{% endif %}
   </p>
+  {% if r.nvp %}<p class="cr-nota cr-nvp-total"><span title="{{ _('Visitantes nuevos / visitantes únicos que el Pixel de Triple Whale atribuye a tus anuncios de Meta. Los únicos se cuentan por día: en periodos largos es aproximado.') }}">{{ _('Visitantes nuevos (NVP)') }}</span> {{ cx.nvp(r.nvp.visitantes_nuevos, r.nvp.visitantes) }}</p>{% endif %}
 </section>
 
 {# ---------- 02 Día a día ---------- #}
@@ -191,7 +196,7 @@
   <div class="cr-tarjeta cr-tabla-contenedor">
     {% set mayor = namespace(ctr=0) %}{% for p in r.piezas %}{% if p.ctr and p.ctr > mayor.ctr %}{% set mayor.ctr = p.ctr %}{% endif %}{% endfor %}
     <table class="cr-ranking cr-tabla tabla-apilada">
-      <thead><tr><th>{{ _('Pieza') }}</th><th>{{ _('País') }}</th><th>{{ _('Gasto') }}</th><th>{{ _('CTR') }}</th><th>{{ _('Gancho') }}</th><th>{{ _('CPC') }}</th><th>{{ _('ROAS') }}</th><th>{{ _('Δ ROAS') }}</th></tr></thead>
+      <thead><tr><th>{{ _('Pieza') }}</th><th>{{ _('País') }}</th><th>{{ _('Gasto') }}</th><th>{{ _('CTR') }}</th><th>{{ _('Gancho') }}</th><th>{{ _('CPC') }}</th><th>{{ _('ROAS') }}</th><th>{{ _('Δ ROAS') }}</th>{% if r.nvp %}<th title="{{ _('%% de visitantes nuevos: TOF, MOF o BOF según el Pixel de Triple Whale') }}">{{ _('NVP') }}</th>{% endif %}</tr></thead>
       <tbody>
         {% for p in r.piezas %}
         <tr class="cr-fila-{{ p.veredicto.clase }}" data-cr-pieza="{{ url_pieza(p.ep_id) }}">
@@ -206,9 +211,10 @@
           <td class="cr-cifra">{{ valor(p.cpc, 'dinero', corto=true) }}</td>
           <td class="cr-cifra cr-roas">{{ valor(p.roas, 'veces') }}</td>
           <td class="cr-cifra {{ 'cr-mejor' if p.delta_roas and p.delta_roas > 0 else 'cr-peor' if p.delta_roas and p.delta_roas < 0 else 'cr-neutro' }}">{% if p.delta_roas %}{{ '▲' if p.delta_roas > 0 else '▼' }} {{ (p.delta_roas|abs)|roas }}{% else %}{{ valor(p.delta_roas, 'decimal') }}{% endif %}</td>
+          {% if r.nvp %}<td class="cr-cifra">{{ cx.nvp(p.visitantes_nuevos, p.visitantes) }}</td>{% endif %}
         </tr>
         {% else %}
-        <tr><td colspan="8" class="cr-vacio">{{ _('Sin piezas en este filtro') }}</td></tr>
+        <tr><td colspan="{{ 9 if r.nvp else 8 }}" class="cr-vacio">{{ _('Sin piezas en este filtro') }}</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -228,10 +234,10 @@
     <section class="cr-tarjeta cr-desglose">
       <h4>{{ _('Por país') }} <small>· {{ _('periodo seleccionado') }}</small></h4>
       <table class="cr-tabla cr-tabla-corta">
-        <thead><tr><th>{{ _('País') }}</th><th>{{ _('Gasto') }}</th><th>{{ _('ROAS') }}</th><th>{{ _('CTR') }}</th></tr></thead>
+        <thead><tr><th>{{ _('País') }}</th><th>{{ _('Gasto') }}</th><th>{{ _('ROAS') }}</th><th>{{ _('CTR') }}</th>{% if r.nvp %}<th title="{{ _('%% de visitantes nuevos: TOF, MOF o BOF según el Pixel de Triple Whale') }}">{{ _('NVP') }}</th>{% endif %}</tr></thead>
         <tbody>
-          {% for f in r.paises %}<tr><th scope="row">{{ paises_fe.get(f.pais, {}).get('bandera', '') }} {{ f.pais }}</th><td class="cr-cifra">{{ valor(f.gasto, 'dinero', corto=true) }}</td><td class="cr-cifra">{{ valor(f.roas, 'veces') }}</td><td class="cr-cifra">{{ valor(f.ctr, 'pct') }}</td></tr>
-          {% else %}<tr><td colspan="4" class="cr-vacio">{{ _('Sin datos en este periodo') }}</td></tr>{% endfor %}
+          {% for f in r.paises %}<tr><th scope="row">{{ paises_fe.get(f.pais, {}).get('bandera', '') }} {{ f.pais }}</th><td class="cr-cifra">{{ valor(f.gasto, 'dinero', corto=true) }}</td><td class="cr-cifra">{{ valor(f.roas, 'veces') }}</td><td class="cr-cifra">{{ valor(f.ctr, 'pct') }}</td>{% if r.nvp %}<td class="cr-cifra">{{ cx.nvp(f.visitantes_nuevos, f.visitantes) }}</td>{% endif %}</tr>
+          {% else %}<tr><td colspan="{{ 5 if r.nvp else 4 }}" class="cr-vacio">{{ _('Sin datos en este periodo') }}</td></tr>{% endfor %}
         </tbody>
       </table>
     </section>
@@ -251,7 +257,7 @@
         <span class="cr-experimento-titulo"><strong>{{ e.nombre }}</strong>
           <small>{{ etiquetas_exp.estado.get(e.estado, e.estado)|traducir }}{% if e.datos_viejos and e.estado == "corriendo" %} · {{ _('datos viejos') }}{% endif %}{% if e.dia is not none and e.dias %} · {{ _('día %(dia)s de %(dias)s', dia=e.dia, dias=e.dias) }}{% endif %}</small></span>
       </span>
-      <span class="cr-experimento-linea">{{ ngettext('%(num)s pieza', '%(num)s piezas', e.n_piezas) }} · {{ e.paises|join(' · ') }} · {{ _('ROAS') if e.metrica == 'roas' else _('CTR') }} {{ _('ROAS no comparable') if e.metrica == 'roas' and not e.roas_comparable else valor(e.valor, 'veces' if e.metrica == 'roas' else 'pct') }}{% if e.metrica == 'roas' and not e.mide_ventas %} ({{ _('sin ventas medibles') }}){% endif %}{% if e.ganadoras %} · {{ ngettext('%(num)s ganadora', '%(num)s ganadoras', e.ganadoras) }}{% endif %}</span>
+      <span class="cr-experimento-linea">{{ ngettext('%(num)s pieza', '%(num)s piezas', e.n_piezas) }} · {{ e.paises|join(' · ') }} · {{ _('ROAS') if e.metrica == 'roas' else _('CTR') }} {{ _('ROAS no comparable') if e.metrica == 'roas' and not e.roas_comparable else valor(e.valor, 'veces' if e.metrica == 'roas' else 'pct') }}{% if e.metrica == 'roas' and not e.mide_ventas %} ({{ _('sin ventas medibles') }}){% endif %}{% if e.ganadoras %} · {{ ngettext('%(num)s ganadora', '%(num)s ganadoras', e.ganadoras) }}{% endif %}{% if e.visitantes is not none %} · {{ _('NVP') }} {{ cx.nvp(e.visitantes_nuevos, e.visitantes) }}{% endif %}</span>
       <small class="cr-muted">{{ _('Gastado %(gasto)s de %(tope)s', gasto=valor(e.gasto, 'dinero', corto=true), tope=e.tope|dinero(r.moneda)) }}{% if e.mejor %} · {{ _('mejor: %(nombre)s', nombre=e.mejor) }}{% endif %}</small>
     </a>
     {% else %}

@@ -278,7 +278,9 @@ def test_pocas_consultas_con_tres_cuentas(base_temporal, conectado):
     # suma UNA (las últimas evaluaciones, sin su muestra ni su resultado, y la fila entera de la última lista); su
     # barra sale de la misma lectura de las copias vivas y su N de la evaluación ya hecha. Y el alcance (período por
     # cuenta y por campaña, 7 días por campaña) es UNA lectura, no tres. Ninguna crece con las cuentas ni las filas ni
-    # con las evaluaciones guardadas: se mide con diez, la peor forma (una lista tras nueve que fallaron).
+    # con las evaluaciones guardadas: se mide con diez, la peor forma (una lista tras nueve que fallaron). Y el NVP
+    # (2026-10-09) suma 1 para saber si el proyecto tiene Triple Whale; sin tienda no pide visitantes (con tienda son 4
+    # más, constantes: tests/test_meta_rend_nvp.py).
     _ev("lista", resultado={"resumen": "vieja", "plan": []})
     for _ in range(9):
         _ev("error", error="falló")
@@ -293,12 +295,12 @@ def test_pocas_consultas_con_tres_cuentas(base_temporal, conectado):
         finally:
             event.remove(db.engine(), "before_cursor_execute", contar)
         assert len(ctx["por_cuenta"]) == 3 and ctx["usd_ok"] is True
-        assert len(consultas) <= 18, (dias, len(consultas))
+        assert len(consultas) <= 19, (dias, len(consultas))
         assert sum("FROM meta_evaluacion" in q for q in consultas) == 1
         assert ctx["evaluacion"]["ultima_lista"]["resultado"]["resumen"] == "vieja"
         assert sum("FROM meta_alcance" in q for q in consultas) == 1 and ctx["evaluacion"]["n"] > 0
         if dias == 30:
-            assert len(ctx["anuncios"]) == 15 and len(consultas) <= 17
+            assert len(ctx["anuncios"]) == 15 and len(consultas) <= 18
 
 
 # ---------------------------------------------------------- Diagnóstico y Segmentos (E2) ---

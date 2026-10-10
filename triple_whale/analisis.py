@@ -40,12 +40,18 @@ MAX_BUENOS = 6
 MAX_MALOS = 4
 MIN_ANUNCIOS = 2
 N_IDEAS = 4
+# Medido el 2026-10-09 (docs/superpowers/evals/2026-10-09-nvp-en-la-ia.md): con 10 anuncios la primera respuesta ya
+# puede llegar cortada en 16 000 y la salva la corrección; subirlo (y poner el NVP en este prompt) cambia lo que cuesta
+# y espera la decisión de Daniel sobre el precio a la vista (PND-217).
 MAX_TOKENS = 16000
 LADO_IMAGEN = 768
 TIMEOUT_META = 20
 MAX_PRODUCTOS = 5
 CAMPOS_M = ("gasto", "impresiones", "clics", "ctr", "cpm", "gancho", "retencion", "pedidos", "ingresos", "roas",
-            "cpa", "conversion", "ticket", "nc_pedidos")
+            "cpa", "conversion", "ticket", "nc_pedidos",
+            # Visitantes del Pixel (NVP, spec 2026-10-09-nvp-visitantes-nuevos §4): «Cómo mejorarlo» (mejorar.CAMPOS_M)
+            # y las tarjetas los leen; el prompt de «Evaluar con IA» todavía no (PND-217).
+            "visitantes", "visitantes_nuevos", "nvp")
 
 
 class AnalisisInvalido(RuntimeError):
@@ -476,7 +482,9 @@ def parsear(texto, validas, datos_texto, origen="triple_whale"):
 
 def _llamar(content, system_):
     from sprints import analisis as sprints_analisis
-    return sprints_analisis._llamar_contando(content, max_tokens=MAX_TOKENS, system=system_)
+    # Sin reintentos del cliente, como «Cómo mejorarlo» (revisión final A6, 2026-10-08): un intento que el SDK repite
+    # solo podría cobrarse sin quedar anotado (se anotan los tokens de la respuesta que llega). Revisión del NVP, R2.
+    return sprints_analisis._llamar_contando(content, max_tokens=MAX_TOKENS, system=system_, max_retries=0)
 
 
 def anotar_tokens(error, entrada, salida):

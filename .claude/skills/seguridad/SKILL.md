@@ -30,7 +30,8 @@ if SMTP is missing the flows still work and the admin panel shows the warning.
 **Seguridad (auditoría 2026-10-01)**: reglas que valen para todo lo nuevo. (1) CSRF: `dashboard._solo_mismo_origen`
 (before_request de la app, corre también para los Blueprints) rechaza todo POST/PUT/PATCH/DELETE que el navegador marque
 de otro sitio (`Sec-Fetch-Site` distinto de `same-origin`/`none`; JSON a un fetch, 403 al resto); desde el 2026-10-08
-(cobros 7/11) la app recibe UN webhook, el de Bold (`POST /pagos/bold/webhook`): exento por nombre de endpoint en
+(cobros 7/11; planes 4/8, 2026-10-09) la app recibe DOS webhooks, el de Bold (`POST /pagos/bold/webhook`) y los eventos de Wompi
+(`POST /pagos/wompi/eventos`, firma `cobros.wompi.evento_valido`, ver la skill `cobros`): exentos por nombre de endpoint en
 `dashboard.ENDPOINTS_OTRO_ORIGEN` y `ENDPOINTS_SIN_GUARD_SESION`, protegido por su firma HMAC (`cobros.bold.firma_valida`,
 `compare_digest`) sobre el cuerpo crudo con tope de 64 KB; un evento con firma inválida se anota sin cuerpo y con cupo por hora (`recargas._cupo_sin_firma`), para que nadie infle `pago_evento` ni compita por el candado de escritura; otro webhook nuevo necesita lo mismo: su excepción por nombre exacto de endpoint (nunca por prefijo) Y su firma. Detalle y trampas en la skill `cobros`. (2) Cabeceras:
 `_cabeceras_seguridad` pone `nosniff`, `X-Frame-Options: DENY`, una CSP que solo cierra `frame-ancestors`/`object-src`/
@@ -61,3 +62,11 @@ PND-076/123/124 (2026-10-08, decisiones delegadas): /admin/cuentas/bloqueos y PO
 R5/R6/S2 (2026-10-08, revisión lote 6B): los topes y la ventana del login se definen solo en cuentas.py y dashboard los lee allí. Usuario: login:u:<nombre en minúsculas, máximo 200 caracteres>; IP: login:ip:<IP>. El parser de desbloqueo acepta u: no vacío hasta 200, incluidos espacios/acentos de cuentas viejas; no acepta otros prefijos. Vencimiento de pantalla en minutos redondeados hacia arriba con ngettext. Permisos, bitácora y datos personales de admin se conservan. S3: cola_limpiar diaria poda limite:* con todas sus marcas mayores de siete días o valor ilegible, bajo candado antes de leer; no toca otras claves. La búsqueda del 2026-10-08 halló ventanas de 900/3600 segundos, ninguna superior a un día.
 
 Meta rendimiento (revisión final 2026-10-08): elegir qué cuentas publicitarias lee un proyecto es SOLO del admin (`meta_rendimiento/rutas.py::solo_admin`, 403 al resto). El token de un usuario de Meta ve las cuentas de OTROS clientes, y quien elige una cuenta lee todo su gasto; la cuenta con la que lanza otro proyecto cuenta como «En otro proyecto». Desconectar Meta, salir del modo agencia o desasignar borra las métricas copiadas (`dashboard._soltar_cuentas_meta`): `/privacidad` y `/eliminar-datos` lo prometen, así que un llamador nuevo de `meta_agencia.desasignar` o `meta_conexion.borrar` tiene que llamarla. Detalle en la skill `meta-rendimiento`.
+
+PND-062, entrega 1 (2026-10-10, pedido de Daniel): `catalogo_selector`, `swaps_lista` y `gasto_lista`
+son GET bajo `<cliente>`, pasan por `_guard_por_cliente` y rechazan con 403 a una sesión sin acceso. El catálogo
+acepta únicamente sel=plus|clone y fija modo/campo en servidor; toda lectura y precarga se resuelve dentro del
+proyecto de la URL. `desde` de Gasto se limita al rango SQLite. El JS rechaza respuestas redirigidas antes de
+insertar HTML. Pruebas con sesión de cliente: 200 propio y 403 ajeno para los tres fragmentos.
+
+Enmiendas PND-062, entrega 1 (2026-10-10, pedido de Daniel tras revisar la entrega): Los shells de catálogo e historiales distinguen 401/403 y redirección al login: muestran sesión vencida y un enlace a login, sin reintento perpetuo ni insertar el HTML redirigido. Se mantienen las guardias de proyecto de las rutas.

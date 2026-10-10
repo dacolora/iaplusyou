@@ -1,7 +1,7 @@
 """Meta rendimiento E2: desgloses y evaluaciones con IA (spec 2026-10-10 meta rendimiento E2 §4)
 
-Revision ID: 0036
-Revises: 0035
+Revision ID: 0039
+Revises: 0038
 Create Date: 2026-10-10 12:00:00.000000
 
 Dos tablas nuevas, sin tocar las existentes: meta_desglose (la copia de los desgloses de una cuenta por ventana y
@@ -14,8 +14,8 @@ from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
 
-revision: str = '0036'
-down_revision: Union[str, Sequence[str], None] = '0035'
+revision: str = '0039'
+down_revision: Union[str, Sequence[str], None] = '0038'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

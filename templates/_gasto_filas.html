@@ -1,0 +1,9 @@
+      {% for g in gastos_historial %}
+      <tr>
+        <td class="gasto-fecha">{{ g.creado_en[:16] | replace("T", " ") }}</td>
+        <td>{{ nombres_tipo_gasto.get(g.tipo, g.tipo)|traducir }}</td>
+        <td class="gasto-detalle" title="{{ g.referencia }}">{{ g.detalle or g.referencia }}{% if g.proveedor %} <small class="vacio" style="display:inline;padding:0;">· {{ g.proveedor }}</small>{% endif %}</td>
+        <td class="num">{{ g.usd | usd }}</td>
+        {% if gasto_modo == 'doble' %}<td class="num">{{ gasto_cobrado.por_gasto.get(g.id, 0) | usd }}</td>{% endif %}
+      </tr>
+      {% endfor %}

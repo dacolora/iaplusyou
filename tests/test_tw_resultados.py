@@ -30,11 +30,12 @@ def _armar(serie, dias_periodo=0, inicio=0, hoy=date(2026, 9, 30), nuevos=None, 
 
 
 def test_por_dia_rellena_con_ceros():
-    filas = [{"fecha": "2026-09-02", "ingresos": 10, "gasto": 4, "pedidos": 1}]
+    filas = [{"fecha": "2026-09-02", "ingresos": 10, "gasto": 4, "pedidos": 1, "visitantes": 80,
+              "visitantes_nuevos": 30}]
     assert r.por_dia("2026-09-01", "2026-09-03", filas) == [
-        {"f": "2026-09-01", "ing": 0.0, "gas": 0.0, "ped": 0.0, "nc": 0.0},
-        {"f": "2026-09-02", "ing": 10.0, "gas": 4.0, "ped": 1.0, "nc": 0.0},
-        {"f": "2026-09-03", "ing": 0.0, "gas": 0.0, "ped": 0.0, "nc": 0.0}]
+        {"f": "2026-09-01", "ing": 0.0, "gas": 0.0, "ped": 0.0, "nc": 0.0, "vis": 0.0, "vnu": 0.0},
+        {"f": "2026-09-02", "ing": 10.0, "gas": 4.0, "ped": 1.0, "nc": 0.0, "vis": 80.0, "vnu": 30.0},
+        {"f": "2026-09-03", "ing": 0.0, "gas": 0.0, "ped": 0.0, "nc": 0.0, "vis": 0.0, "vnu": 0.0}]
 
 
 def test_razones_de_periodo_salen_de_las_sumas_y_divisor_cero_es_none():

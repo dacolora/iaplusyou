@@ -48,7 +48,7 @@ y en el código.
   Crear» — si está mal: una evaluación más cara por pensar de más.
 - **E2-R9.** Las alertas de Meta rendimiento (`meta_rendimiento:<tipo>:<cuenta>`) las puede descartar un cliente, igual
   que cualquier alerta que no sea de `PREFIJOS_SOLO_ADMIN` ni de `TIPOS_DESCARTE_ADMIN`; E2 no las agrega a esas listas y
-  se anota como PND-257 para que Daniel decida — los descartes son del proyecto (PND-124), así que el descarte de un cliente
+  se anota como PND-270 para que Daniel decida — los descartes son del proyecto (PND-124), así que el descarte de un cliente
   también se las esconde al admin, aunque vuelven a salir solas cuando cambia la huella y el admin las ve en «Descartadas»;
   proteger más alertas sin que Daniel lo pida es cambiar lo que ve el cliente — si está mal: una recomendación «alta»
   que el admin no ve como pendiente porque un cliente la descartó.

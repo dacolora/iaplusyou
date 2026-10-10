@@ -26,8 +26,25 @@
     var nuevo = document.getElementById(id + "-add");
     var nuevoBtn = document.getElementById(id + "-add-btn");
     var nuevoCancelar = document.getElementById(id + "-add-cancelar");
-    var opciones = Array.prototype.slice.call(document.querySelectorAll("#" + id + "-grilla .producto-opcion"));
+    var grilla = document.getElementById(id + "-grilla");
+    var precarga = detalle.querySelector('[data-selector-marcados]');
+    var opciones = [];
+    var cargado = false, cargando = false;
+    function leerOpciones() {
+      opciones = Array.prototype.slice.call(detalle.querySelectorAll('.producto-opcion, [data-selector-marcados] label'));
+      total = opciones.length;
+    }
     var modo = detalle.dataset.modo;
+    var sinProducto = document.getElementById(id + '-required');
+    if (modo === 'radio') {
+      detalle.closest('form').addEventListener('submit', function (ev) {
+        if (detalle.querySelector('input[name="producto_id"]:checked')) return;
+        ev.preventDefault();
+        sinProducto.hidden = false;
+        detalle.open = true;
+        cargar();
+      });
+    }
     var total = opciones.length;
     var textoInicial = resumen.textContent;
     // Crear abre el catálogo en un <dialog> (sel_dialogo): el resumen no es un
@@ -40,6 +57,7 @@
       var marcados = opciones.filter(function (l) { return l.querySelector("input").checked; });
       if (!marcados.length) { resumen.textContent = textoInicial; return; }
       if (modo === "radio") {
+        sinProducto.hidden = true;
         resumen.textContent = {{ _('Producto: %(nombre)s — cambiar →', nombre='__NOMBRE__')|tojson }}.replace('__NOMBRE__', marcados[0].querySelector("input").dataset.nombre);
         detalle.open = false;
       } else {
@@ -48,22 +66,73 @@
         resumen.textContent = enDialogo ? {{ _('Elegidos: %(lista)s', lista='__LISTA__')|tojson }}.replace('__LISTA__', lista) : lista + {{ _(' — cambiar →')|tojson }};
       }
     }
-    opciones.forEach(function (l) { l.querySelector("input").addEventListener("change", actualizarResumen); });
+    detalle.addEventListener('change', actualizarResumen);
+    leerOpciones();
     actualizarResumen();
 
-    if (buscador) {
-      buscador.addEventListener("input", function () {
-        var q = buscador.value.trim().toLowerCase();
-        var visibles = 0;
-        opciones.forEach(function (l) {
-          var ok = !q || l.dataset.nombre.indexOf(q) !== -1;
-          l.hidden = !ok;
-          if (ok) visibles++;
-        });
-        document.querySelectorAll("#" + id + "-grilla .producto-grupo").forEach(function (g) { g.hidden = !g.querySelector(".producto-opcion:not([hidden])"); });
-        vacio.style.display = (visibles === 0 && total > 0) ? "block" : "none";
-      });
+    function cargar() {
+      if (cargado || cargando) return;
+      cargando = true;
+      var url = new URL(grilla.dataset.url, location.href);
+      detalle.querySelectorAll('input:checked').forEach(function (input) { url.searchParams.append('marcado', input.value); });
+      grilla.textContent = {{ _('Cargando…')|tojson }};
+      fetch(url.toString(), {headers: {'X-Requested-With': 'fetch'}})
+        .then(function (r) {
+          if (r.status === 401 || r.status === 403 || r.redirected) {
+            var error = new Error(); error.sesionVencida = true; throw error;
+          }
+          if (!r.ok) throw new Error(); return r.text();
+        })
+        .then(function (html) {
+          // El estado actual manda: puede haberse quitado una precarga mientras llegaba el pedido.
+          var marcados = Array.prototype.map.call(detalle.querySelectorAll('input:checked'), function (i) { return i.value; });
+          grilla.innerHTML = html;
+          grilla.querySelectorAll('input').forEach(function (i) { i.checked = marcados.indexOf(i.value) !== -1; });
+          precarga.innerHTML = '';
+          cargado = true;
+          leerOpciones();
+          actualizarResumen();
+          filtrar();
+          detalle.dispatchEvent(new Event('catalogo-cargado', {bubbles: true}));
+        })
+        .catch(function (error) {
+          grilla.innerHTML = '';
+          var aviso = document.createElement('p'); aviso.className = 'vacio';
+          grilla.appendChild(aviso);
+          if (error.sesionVencida) {
+            aviso.textContent = {{ _('Tu sesión venció. Vuelve a entrar para continuar.')|tojson }};
+            var entrar = document.createElement('a'); entrar.className = 'btn-sm';
+            entrar.href = {{ url_for('login')|tojson }}; entrar.textContent = {{ _('Entrar')|tojson }};
+            grilla.appendChild(entrar);
+            return;
+          }
+          aviso.textContent = {{ _('No pude cargar el catálogo. Intenta de nuevo.')|tojson }};
+          var reintentar = document.createElement('button'); reintentar.type = 'button'; reintentar.className = 'btn-sm';
+          reintentar.textContent = {{ _('Reintentar')|tojson }};
+          reintentar.addEventListener('click', cargar);
+          grilla.appendChild(reintentar);
+        })
+        .finally(function () { cargando = false; });
     }
+    if (enDialogo) {
+      var dialogo = detalle.closest('dialog');
+      dialogo.addEventListener('catalogo-abrir', cargar);
+    } else {
+      detalle.addEventListener('toggle', function () { if (detalle.open) cargar(); });
+    }
+
+    function filtrar() {
+      var q = buscador.value.trim().toLowerCase();
+      var visibles = 0;
+      opciones.forEach(function (l) {
+        var ok = !q || (l.dataset.nombre || '').indexOf(q) !== -1;
+        l.hidden = !ok;
+        if (ok) visibles++;
+      });
+      grilla.querySelectorAll('.producto-grupo').forEach(function (g) { g.hidden = !g.querySelector('.producto-opcion:not([hidden])'); });
+      vacio.style.display = (visibles === 0 && total > 0) ? 'block' : 'none';
+    }
+    if (buscador) buscador.addEventListener('input', filtrar);
     nuevoBtn.addEventListener("click", function () {
       if (enDialogo && detalle.closest("dialog")) detalle.closest("dialog").close();
       nuevo.hidden = false;

@@ -84,6 +84,14 @@ Meta never charges, `max_intentos=2`, and all three `meta_rend_*` types are in `
 with «Cobrar» on still syncs). `meta_rend_sincronizar_todas` and `meta_rend_limpiar` stay in the general
 lane (instant). The area's own skill is `meta-rendimiento`. A new long, free, read-only sync can join this lane; anything that charges stays out of it.
 
+**Three worker types for the Triple Whale hooks (2026-10-09, skill `triple-whale`, «Ganchos y copy»):** `tw_ganchos_preparar`
+(`<c>__tw_ganchos_<aid>_t<tanda>`, `max_intentos=1`, prioridad 3: downloads the original and launches one Crear piece per
+hook), `tw_ganchos_vigilar` (periodic, 60 s, after `cadena_vigilar` in `worker.PERIODICAS`: moves each live variant) and
+`tw_gancho_armar` (`<c>__tw_gancho_<gid>_armar`, `max_intentos=2`, prioridad 1: ffmpeg and the editor on an already-paid
+clip). All three are in `TIPOS_EXENTOS_DE_COBRO` and none calls a paid provider: each clip is charged by
+`flowplus_video` when Crear closes it, with its own reservation, and the price was approved once in the route.
+`tw_gancho_armar` may retry because nothing in it charges; `tw_ganchos_preparar` stays at one attempt so a failure never launches a clip twice.
+
 **Higgsfield API wrapper** (`higgsfield_client.py`): all calls follow launch ->
 `poll_until_done(status_url)` -> extract-result, for both video (`kling-2.1-pro`,
 `extract_video_url`) and image (`soul-reference`, `extract_image_url`) generation.
@@ -160,3 +168,11 @@ PND-190/166/159 (2026-10-09, decisiones delegadas lote 7): consultas/selección 
 
 
 Enmiendas lote 7 (2026-10-09, decisión delegada): SDK de Claude conserva sus reintentos. Apify registra estimado al recibir run_id, misma referencia de tarea para corregir al final (también cero si ya se anotó gasto; sin anotación previa, cero no crea fila). POST solo repite 429 con esperas; timeout/5xx leen hasta cinco corridas recientes, siguen una única posterior al inicio o avisan incertidumbre. Fuentes de Nicho propagan on_ids al registro antes del sondeo; hooks con corrida anotada dejan error, no pendiente.
+
+
+PND-149(6)/160 (2026-10-09, decisión del lote 8): reservar_aviso_sync vive en triple_whale_tiendas (único escritor) y toma el candado SQLite antes de leer extra/cola. Recuerda las copias terminadas que el worker aún no cerró y reserva una vez el aviso de la última, sin modificar estado/progreso de tareas; identidad id+creada_en para un nuevo ciclo. actualizar_extra comparte ese candado. El encolador de lanzamiento comprueba tarea viva y relee el estado antes de escribir; solo admite armando/error. Enmienda 2026-10-10: _LANZAMIENTO_LOCK es propio, junto a _ENV_LOCK, para no esperar una publicación larga ni relanzar desde una lectura vieja. La vuelta atrás usa el estado recién leído; no cambia gastos ni reintentos.
+
+PND-062, entrega 1 (2026-10-10, pedido de Daniel): `gastos.historial` acepta `desplazamiento=0`
+para cortar con OFFSET en SQL, ordenado por creado_en/id descendentes; `desde` conserva el filtro por fecha.
+La página pide 25 para pintar 24 y detectar la siguiente página; total y CSV conservan todas las filas.
+Solo cambia la lectura del historial; ningún registro de gasto, cola ni cobro cambia.

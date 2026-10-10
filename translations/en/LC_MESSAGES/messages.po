@@ -99,6 +99,10 @@ msgid "%% de la tienda"
 msgstr "%% of the store"
 
 #, python-format
+msgid "%% de visitantes nuevos: TOF, MOF o BOF según el Pixel de Triple Whale"
+msgstr "%% of new visitors: TOF, MOF or BOF according to the Triple Whale Pixel"
+
+#, python-format
 msgid "%% del gasto"
 msgstr "%% of spend"
 
@@ -147,6 +151,10 @@ msgid "%(campanas)s · %(piezas)s · %(elegidos)s/%(objetivo)s referentes elegid
 msgstr "%(campanas)s · %(piezas)s · %(elegidos)s/%(objetivo)s references chosen"
 
 #, python-format
+msgid "%(campo)s debe ser un número entero de dólares mayor que 0"
+msgstr "%(campo)s must be a whole number of dollars greater than 0"
+
+#, python-format
 msgid "%(canal)s, %(pct)s del gasto y %(roas)s de retorno"
 msgstr "%(canal)s, %(pct)s of spend and %(roas)s return"
 
@@ -161,8 +169,60 @@ msgstr[0] "%(capas)s charged"
 msgstr[1] "%(capas)s charged"
 
 #, python-format
+msgid "%(cerrados)s periodos cerrados, %(abiertos)s abiertos, %(cobros)s cobros revisados"
+msgstr "%(cerrados)s periods closed, %(abiertos)s opened, %(cobros)s charges checked"
+
+#, python-format
 msgid "%(cliente)s recargó %(monto)s (%(medio)s)."
 msgstr "%(cliente)s topped up %(monto)s (%(medio)s)."
+
+#, python-format
+msgid "%(cliente)s usó %(usado)s de costo de lo incluido (tope %(tope)s)."
+msgstr "%(cliente)s used %(usado)s of included cost (cap %(tope)s)."
+
+#, python-format
+msgid "%(cliente)s usó %(usado)s de costo de lo incluido (tope %(tope)s). Desde ahora eso se cobra a precio de miembro."
+msgstr "%(cliente)s used %(usado)s of included cost (cap %(tope)s). From now on those items are charged at the member price."
+
+#, python-format
+msgid "%(cliente)s: Wompi anuló un pago de plan ya aprobado (%(referencia)s). La renovación automática quedó detenida hasta que actúes: no se volverá a cobrar la tarjeta. El periodo en curso sigue abierto y, si era anual, los meses que faltan ya no se abren; si corresponde, usa «Terminar ya»."
+msgstr "%(cliente)s: Wompi voided an already approved plan payment (%(referencia)s). Automatic renewal is stopped until you act: the card won't be charged again. The current period stays open and, if it was yearly, the remaining months won't open; if needed, use “End now”."
+
+#, python-format
+msgid "%(cliente)s: Wompi aprobó un pago de plan (%(referencia)s) de una suscripción ya terminada. Devuélvelo o actívalo a mano."
+msgstr "%(cliente)s: Wompi approved a plan payment (%(referencia)s) for a subscription that already ended. Refund it or activate it manually."
+
+#, python-format
+msgid "%(cliente)s: Wompi aprobó un pago de plan (%(referencia)s) que ya estaba rechazado, con error o anulado. No se acreditó nada: míralo en el panel de Wompi y devuélvelo si se cobró de más."
+msgstr "%(cliente)s: Wompi approved a plan payment (%(referencia)s) that was already declined, failed or voided. Nothing was credited: check it in the Wompi dashboard and refund it if it was overcharged."
+
+#, python-format
+msgid "%(cliente)s: Wompi informó un pago de plan (%(referencia)s) cuyo monto o moneda no cuadran con lo guardado; no se aplicó."
+msgstr "%(cliente)s: Wompi reported a plan payment (%(referencia)s) whose amount or currency doesn't match what we stored; it was not applied."
+
+#, python-format
+msgid "%(cliente)s: el cobro se rechazó tres veces."
+msgstr "%(cliente)s: the charge was declined three times."
+
+#, python-format
+msgid "%(cliente)s: el periodo a mano apagó la renovación automática con tarjeta. Para volver a la tarjeta, tendrá que suscribirse de nuevo cuando termine lo pagado."
+msgstr "%(cliente)s: the manual period turned off automatic card renewal. To go back to the card, they will have to subscribe again when the paid time ends."
+
+#, python-format
+msgid "%(cliente)s: lo canceló sin nada pagado vigente."
+msgstr "%(cliente)s: they cancelled it with nothing paid still running."
+
+#, python-format
+msgid "%(cliente)s: lo terminó un admin (%(nota)s)."
+msgstr "%(cliente)s: an admin ended it (%(nota)s)."
+
+#, python-format
+msgid "%(cliente)s: se acabó lo pagado y no se renueva."
+msgstr "%(cliente)s: the paid time ran out and it doesn't renew."
+
+#, python-format
+msgid "%(cliente)s: un cobro de plan (%(referencia)s) llegó a Wompi pero no sabemos su resultado. Queda pendiente hasta que Wompi avise; míralo en su panel."
+msgstr "%(cliente)s: a plan charge (%(referencia)s) reached Wompi but we don't know its result. It stays pending until Wompi reports back; check it in their dashboard."
 
 #, python-format
 msgid "%(color)s: sin fotos en la tienda; revisa el catálogo."
@@ -425,6 +485,10 @@ msgid "%(monto)s con Bold"
 msgstr "%(monto)s with Bold"
 
 #, python-format
+msgid "%(monto)s con Wompi"
+msgstr "%(monto)s with Wompi"
+
+#, python-format
 msgid "%(monto)s en total"
 msgstr "%(monto)s in total"
 
@@ -545,6 +609,10 @@ msgstr "%(n)s notice(s): %(muestra)s"
 #, python-format
 msgid "%(n)s campaña(s)"
 msgstr "%(n)s campaign(s)"
+
+#, python-format
+msgid "%(n)s cobros rechazados"
+msgstr "%(n)s declined charges"
 
 #, python-format
 msgid "%(n)s color(es) nuevo(s)"
@@ -837,6 +905,12 @@ msgid "%(n)s propuesta(s) pendiente(s)"
 msgstr "%(n)s proposal(s) pending"
 
 #, python-format
+msgid "%(n)s pt"
+msgid_plural "%(n)s pts"
+msgstr[0] "%(n)s pt"
+msgstr[1] "%(n)s pts"
+
+#, python-format
 msgid "%(n)s recargas revisadas"
 msgstr "%(n)s top-ups checked"
 
@@ -899,6 +973,10 @@ msgstr "%(n)s verdict(s)"
 #, python-format
 msgid "%(n)s videos"
 msgstr "%(n)s videos"
+
+#, python-format
+msgid "%(n)s visitantes"
+msgstr "%(n)s visitors"
 
 #, python-format
 msgid "%(n)s zona(s) marcada(s). El modelo va a recibir la ubicación y la proporción exactas."
@@ -1353,6 +1431,12 @@ msgstr[0] "%(num)s winner"
 msgstr[1] "%(num)s winners"
 
 #, python-format
+msgid "%(num)s gancho en camino."
+msgid_plural "%(num)s ganchos en camino."
+msgstr[0] "%(num)s hook on its way."
+msgstr[1] "%(num)s hooks on their way."
+
+#, python-format
 msgid "%(num)s idea por aprobar en el sprint «%(nombre)s»"
 msgid_plural "%(num)s ideas por aprobar en el sprint «%(nombre)s»"
 msgstr[0] "%(num)s idea to approve in the sprint “%(nombre)s”"
@@ -1369,6 +1453,12 @@ msgid "%(num)s lista"
 msgid_plural "%(num)s listas"
 msgstr[0] "%(num)s ready"
 msgstr[1] "%(num)s ready"
+
+#, python-format
+msgid "%(num)s mes gratis"
+msgid_plural "%(num)s meses gratis"
+msgstr[0] "%(num)s month free"
+msgstr[1] "%(num)s months free"
 
 #, python-format
 msgid "%(num)s parte del detalle de Meta no llegó"
@@ -1493,6 +1583,14 @@ msgid "%(palabras)s palabras · unos %(segundos)s s leído completo a ritmo natu
 msgstr "%(palabras)s words · about %(segundos)s s read in full at a natural pace."
 
 #, python-format
+msgid "%(pct)s %% menos"
+msgstr "%(pct)s %% less"
+
+#, python-format
+msgid "%(pct)s %% usado"
+msgstr "%(pct)s %% used"
+
+#, python-format
 msgid "%(pct)s bajo un %(dia)s normal"
 msgstr "%(pct)s below a normal %(dia)s"
 
@@ -1533,8 +1631,28 @@ msgid "%(plataforma)s: un producto elegido no tiene link."
 msgstr "%(plataforma)s: a chosen product has no link."
 
 #, python-format
+msgid "%(precio)s al año"
+msgstr "%(precio)s per year"
+
+#, python-format
+msgid "%(precio)s al año, en pesos colombianos a la TRM del día."
+msgstr "%(precio)s a year, in Colombian pesos at the day's official exchange rate (TRM)."
+
+#, python-format
+msgid "%(precio)s al mes"
+msgstr "%(precio)s per month"
+
+#, python-format
+msgid "%(precio)s al mes, en pesos colombianos a la TRM del día."
+msgstr "%(precio)s a month, in Colombian pesos at the day's official exchange rate (TRM)."
+
+#, python-format
 msgid "%(precio)s aprox."
 msgstr "%(precio)s approx."
+
+#, python-format
+msgid "%(precio)s de saldo del plan cada mes para generar."
+msgstr "%(precio)s of plan balance every month to generate with."
 
 #, python-format
 msgid "%(precio)s solo la primera vez por estilo y duración (después sale de la caché)"
@@ -1601,6 +1719,10 @@ msgid "%(proyecto)s dejó de cobrar: genera sin tocar el saldo."
 msgstr "%(proyecto)s no longer charges usage: it generates without touching the balance."
 
 #, python-format
+msgid "%(proyecto)s no cobra: prende «Cobrar» antes de activarle un plan."
+msgstr "%(proyecto)s does not charge: turn on “Charge usage” before activating a plan."
+
+#, python-format
 msgid "%(proyecto)s no estaba en modo agencia."
 msgstr "%(proyecto)s wasn't in agency mode."
 
@@ -1619,6 +1741,10 @@ msgstr "%(r)s niche product(s); %(e)s chosen to fetch reviews"
 #, python-format
 msgid "%(r)s× el promedio"
 msgstr "%(r)s× the average"
+
+#, python-format
+msgid "%(restante)s restantes"
+msgstr "%(restante)s left"
 
 #, python-format
 msgid "%(sin_revisar)s sin revisar · %(error)s con error · USD %(usd)s"
@@ -1702,9 +1828,6 @@ msgstr "(code %(codigo)s)"
 #, python-format
 msgid "(de %(min)s a %(max)s)"
 msgstr "(from %(min)s to %(max)s)"
-
-msgid "(el CSV trae todos los cobros desde el inicio)"
-msgstr "(the CSV has every charge since the start)"
 
 msgid "(el servidor no tiene correo configurado; avisa al administrador)"
 msgstr "(the server has no email configured; let the administrator know)"
@@ -1961,6 +2084,13 @@ msgstr "<strong>BOLD_PRUEBAS=1 without BOLD_LLAVE_SECRETA.</strong> The webhook 
 msgid "<strong>Faltan llaves de Bold.</strong> Sin BOLD_LLAVE_IDENTIDAD y BOLD_LLAVE_SECRETA en el <code>.env</code> del servidor no hay recargas en línea: los proyectos solo pueden recargar con una recarga manual desde aquí."
 msgstr "<strong>Bold keys are missing.</strong> Without BOLD_LLAVE_IDENTIDAD and BOLD_LLAVE_SECRETA in the server’s <code>.env</code> there are no online top-ups: projects can only be topped up manually from here."
 
+#, python-format
+msgid "<strong>La tasa de cambio de hoy no se usó.</strong> La TRM de datos.gov.co (%(hoy)s COP por dólar) se movió más de 8 %% frente a la última aceptada (%(antes)s COP por dólar). Mientras no la aceptes, no se cobra nada en pesos (recargas con Wompi ni planes)."
+msgstr "<strong>Today's exchange rate was not used.</strong> The official rate (TRM) from datos.gov.co (%(hoy)s COP per dollar) moved more than 8 %% from the last accepted one (%(antes)s COP per dollar). Until you accept it, nothing is charged in pesos (neither Wompi top-ups nor plans)."
+
+msgid "<strong>Llaves de pruebas de Wompi en un servidor que no es local.</strong> Aquí no valen: no se cobran planes ni recargas con Wompi y sus eventos no se aceptan. Pon en el <code>.env</code> del servidor las llaves de producción de Wompi."
+msgstr "<strong>Wompi test keys on a server that is not local.</strong> They do not work here: no plans or top-ups are charged with Wompi and its events are not accepted. Put the Wompi production keys in the server <code>.env</code>."
+
 msgid ""
 "<strong>Límite real confirmado (2 sep 2026, foto real de 3 personas — una\n"
 "      descalza, dos con calzado puesto):</strong> ninguno de los 3 modelos de\n"
@@ -2039,6 +2169,9 @@ msgstr "Official API, free for your own use (100 calls per minute). If this is s
 msgid "Abajo"
 msgstr "Bottom"
 
+msgid "Abajo del embudo: la mayoría de las visitas son de gente que ya visitó la tienda."
+msgstr "Bottom of the funnel: most visits come from people who have already visited the store."
+
 msgid "Abajo, en <em>Conectar tienda › MercadoLibre</em>, pulsa <em>Conectar con MercadoLibre</em>."
 msgstr "Below, in <em>Connect store › MercadoLibre</em>, press <em>Connect with MercadoLibre</em>."
 
@@ -2063,6 +2196,9 @@ msgstr "Open the brand at <a href=\"https://www.facebook.com/ads/library/\" targ
 
 msgid "Abre la sección «API» (o «Developers») de tu cuenta y crea una llave nueva."
 msgstr "Open the “API” (or “Developers”) section of your account and create a new key."
+
+msgid "Abre tu app de Nequi y acepta la suscripción. Esta página sigue sola cuando la apruebes."
+msgstr "Open your Nequi app and accept the subscription. This page continues on its own once you approve it."
 
 msgid "Abre «Traer referentes» ya prellenado con el producto y país de esta campaña — sigue siendo tu decisión lanzarlo y aprobar el costo"
 msgstr "Opens “Bring references” already filled in with this campaign's product and country — it's still your call to launch it and approve the cost"
@@ -2107,6 +2243,9 @@ msgstr "Blocked logins →"
 msgid "Acciones"
 msgstr "Actions"
 
+msgid "Acciones del plan"
+msgstr "Plan actions"
+
 msgid "Acción"
 msgstr "Action"
 
@@ -2116,6 +2255,14 @@ msgstr "Unknown action."
 #, python-format
 msgid "Acción desconocida: %(accion)s."
 msgstr "Unknown action: %(accion)s."
+
+#, python-format
+msgid "Aceptar la tasa de hoy (%(hoy)s COP/USD)"
+msgstr "Accept today's rate (%(hoy)s COP/USD)"
+
+#, python-format
+msgid "Acepto los %(enlace)s."
+msgstr "I accept the %(enlace)s."
 
 msgid "Acerca la imagen para poder moverla."
 msgstr "Zoom in on the image to be able to move it."
@@ -2131,6 +2278,9 @@ msgstr "Credited"
 
 msgid "Activa"
 msgstr "Active"
+
+msgid "Activa a mano"
+msgstr "Activated by hand"
 
 #, python-format
 msgid "Activadas %(n)s pieza(s)."
@@ -2148,6 +2298,10 @@ msgstr "Activated on launch: ≈ %(diario)s a day"
 msgid "Activado: %(nombre)s (%(pais)s)"
 msgstr "Activated: %(nombre)s (%(pais)s)"
 
+#, python-format
+msgid "Activamos tu plan %(plan)s a mano hasta el %(fecha)s. Desde ahora no cobraremos tu tarjeta automáticamente. Para volver a pagar con tarjeta, suscríbete de nuevo en Configuración › Plan cuando termine."
+msgstr "We activated your %(plan)s plan manually until %(fecha)s. From now on we won't charge your card automatically. To pay by card again, subscribe again in Settings › Plan when it ends."
+
 msgid "Activar"
 msgstr "Activate"
 
@@ -2158,6 +2312,9 @@ msgstr "Activate %(pais)s"
 #, python-format
 msgid "Activar %(pais)s: empieza a gastar ≈ %(diario)s al día. ¿Seguir?"
 msgstr "Activate %(pais)s: it starts spending ≈ %(diario)s a day. Continue?"
+
+msgid "Activar a mano"
+msgstr "Activate by hand"
 
 msgid "Activar empieza a gastar presupuesto real en Meta. ¿Seguimos?"
 msgstr "Activating starts spending real budget on Meta. Continue?"
@@ -2218,6 +2375,12 @@ msgstr "Update what Claude needs (%(precio)s)"
 
 msgid "Actualizar métricas"
 msgstr "Update metrics"
+
+msgid "Actualizar tarjeta"
+msgstr "Update card"
+
+msgid "Actualizar tarjeta y pagar el plan"
+msgstr "Update card and pay the plan"
 
 msgid "Adaptar con IA"
 msgstr "Adapt with AI"
@@ -2333,6 +2496,13 @@ msgstr "Grouping desires"
 msgid "Ahora esto se hace con un experimento: crea uno (o usa uno en armado) y mete la pieza."
 msgstr "This is now done with an experiment: create one (or use one being drafted) and add the piece to it."
 
+msgid "Ahora no hay un periodo del plan en curso."
+msgstr "There is no plan period running right now."
+
+#, python-format
+msgid "Ahora pagas con %(tarjeta)s. El nuevo medio se usa desde el próximo cobro del plan."
+msgstr "You currently pay with %(tarjeta)s. The new payment method is used from the next plan charge."
+
 msgid "Ahora se usa el de fábrica."
 msgstr "The default one is being used now."
 
@@ -2377,6 +2547,10 @@ msgstr "When connecting, choose that Page: its page token (<code>page_id</code>)
 msgid "Al dataset le faltan claves: %(claves)s"
 msgstr "The dataset is missing keys: %(claves)s"
 
+#, python-format
+msgid "Al guardar, cobramos ahora %(monto)s (en pesos a la TRM del día) para recuperar tu plan."
+msgstr "When you save, we charge %(monto)s now (in Colombian pesos at the day's official exchange rate) to recover your plan."
+
 msgid "Al lanzar empieza a gastar."
 msgstr "Launching starts spending."
 
@@ -2420,6 +2594,14 @@ msgstr "Alerts"
 #, python-format
 msgid "Algo de «%(concepto)s» no llegó. No descontamos %(monto)s de tu saldo."
 msgstr "Something in «%(concepto)s» was not delivered. We did not deduct %(monto)s from your balance."
+
+#, python-format
+msgid "Algo falló al armar el video del gancho (%(error)s)."
+msgstr "Something failed while putting together the hook's video (%(error)s)."
+
+#, python-format
+msgid "Algo falló al preparar el gancho (%(error)s)."
+msgstr "Something failed while preparing the hook (%(error)s)."
 
 #, python-format
 msgid "Algo falló en el servidor (error %(status)s). Intenta de nuevo en un momento."
@@ -2523,6 +2705,9 @@ msgstr "Animate with"
 msgid "Anota el servidor y el puerto (Gmail: smtp.gmail.com y 587, STARTTLS)."
 msgstr "Note the server and the port (Gmail: smtp.gmail.com and 587, STARTTLS)."
 
+msgid "Anota un pago por transferencia con el precio de hoy del plan y ciclo elegidos y abre su periodo (o lo extiende desde el fin de lo pagado)."
+msgstr "Records a bank transfer payment at today's price for the chosen plan and cycle and opens its period (or extends it from the end of what is paid)."
+
 msgid "Anotar"
 msgstr "Record"
 
@@ -2557,8 +2742,17 @@ msgstr "Before judging a piece"
 msgid "Antes de lanzarla: lo que ven las reglas (gratis) y, si la pides, la revisión de Claude con los 12 puntos de <a href=\"%(url)s#revisar\" target=\"_blank\" rel=\"noopener\">la lista</a>. Solo informa: no bloquea nada."
 msgstr "Before launching it: what the rules see (free) and, if you ask for it, Claude's review with the 12 points on <a href=\"%(url)s#revisar\" target=\"_blank\" rel=\"noopener\">the list</a>. It only informs: it doesn't block anything."
 
+msgid "Antes de pagar"
+msgstr "Before you pay"
+
 msgid "Antes y después"
 msgstr "Before and after"
+
+#, python-format
+msgid "Antes: %(num)s tanda · ver"
+msgid_plural "Antes: %(num)s tandas · ver"
+msgstr[0] "Before: %(num)s batch · view"
+msgstr[1] "Before: %(num)s batches · view"
 
 msgid "Anthropic (guiones y prompts)"
 msgstr "Anthropic (scripts and prompts)"
@@ -2566,7 +2760,14 @@ msgstr "Anthropic (scripts and prompts)"
 msgid "Antigüedad desconocida"
 msgstr "Unknown age"
 
+#, python-format
+msgid "Anual · %(precio)s al año"
+msgstr "Yearly · %(precio)s a year"
+
 msgid "Anulada"
+msgstr "Voided"
+
+msgid "Anulado"
 msgstr "Voided"
 
 msgid "Anuncio"
@@ -2885,6 +3086,9 @@ msgstr "Building the prompt with AI…"
 msgid "Armando el prompt con IA… en unos segundos aparece aquí para que lo revises y generes."
 msgstr "Building the prompt with AI… it'll appear here in a few seconds for you to review and generate."
 
+msgid "Armando el video"
+msgstr "Building the video"
+
 msgid "Armando el zip; el enlace aparecerá aquí al terminar."
 msgstr "Building the zip; the link will appear here when it's done."
 
@@ -2917,6 +3121,9 @@ msgstr "Drag the image to choose which part shows; the corner zooms in."
 
 msgid "Arriba"
 msgstr "Top"
+
+msgid "Arriba del embudo: la mayoría de las visitas son de gente que no conocía la tienda."
+msgstr "Top of the funnel: most visits come from people who didn't know the store."
 
 msgid "Asignar"
 msgstr "Assign"
@@ -3009,6 +3216,18 @@ msgstr "Australia"
 
 msgid "Automático con IA (opcional)"
 msgstr "Automatic with AI (optional)"
+
+#, python-format
+msgid "Autorizo a Wompi el %(enlace)s."
+msgstr "I authorize Wompi's %(enlace)s."
+
+#, python-format
+msgid "Autorizo el cobro automático de %(monto)s cada año (en pesos colombianos a la TRM del día) hasta que cancele. El saldo del plan se renueva cada mes y no se acumula."
+msgstr "I authorize the automatic charge of %(monto)s every year (in Colombian pesos at the day's official exchange rate) until I cancel. The plan balance renews every month and does not roll over."
+
+#, python-format
+msgid "Autorizo el cobro automático de %(monto)s cada mes (en pesos colombianos a la TRM del día) hasta que cancele. El saldo del plan se renueva cada mes y no se acumula."
+msgstr "I authorize the automatic charge of %(monto)s every month (in Colombian pesos at the day's official exchange rate) until I cancel. The plan balance renews every month and does not roll over."
 
 msgid "Avanzado (objetivo, atribución, modo, destino)"
 msgstr "Advanced (objective, attribution, mode, destination)"
@@ -3376,6 +3595,9 @@ msgstr "Each campaign is a persona with a product and the ads it will follow. St
 msgid "Cada casilla es un anuncio (pieza × país). Las finales solo van a su país."
 msgstr "Each checkbox is an ad (piece × country). Final cuts only go to their own country."
 
+msgid "Cada cuánto pagas"
+msgstr "How often you pay"
+
 msgid "Cada experimento es 1 campaña en Meta → 1 conjunto por país → 1 anuncio por pieza. Lanzar crea los anuncios y los activa: desde ahí gasta lo que ves en Revisar."
 msgstr "Each experiment is 1 campaign on Meta → 1 ad set per country → 1 ad per piece. Launching creates the ads and activates them: from then on it spends what you see in Review."
 
@@ -3480,6 +3702,9 @@ msgstr "Change the product in a photo or video"
 msgid "Cambiar la configuración"
 msgstr "Change the configuration"
 
+msgid "Cambiar medio de pago"
+msgstr "Change payment method"
+
 msgid "Cambiar país"
 msgstr "Change country"
 
@@ -3492,8 +3717,14 @@ msgstr "Change product"
 msgid "Cambiar producto en foto o video"
 msgstr "Change product in a photo or video"
 
+msgid "Cambiar tarjeta"
+msgstr "Change card"
+
 msgid "Cambiarlo crea una versión nueva con los mismos clips, sin llamar a Claude (gratis). Esta versión y sus prompts quedan como están."
 msgstr "Changing it creates a new version with the same clips, without calling Claude (free). This version and its prompts stay as they are."
+
+msgid "Cambio del NVP en puntos porcentuales: días completos contra el mismo número de días anteriores"
+msgstr "Change in NVP in percentage points: full days against the same number of previous days"
 
 msgid "Cambios de producto"
 msgstr "Product swaps"
@@ -3616,11 +3847,37 @@ msgstr "Channel"
 msgid "Canales orgánicos"
 msgstr "Organic channels"
 
+msgid "Cancelada"
+msgstr "Canceled"
+
+msgid "Cancelado"
+msgstr "Canceled"
+
 msgid "Cancelar"
 msgstr "Cancel"
 
+msgid "Cancelar el plan"
+msgstr "Cancel the plan"
+
+msgid "Cancelar plan"
+msgstr "Cancel plan"
+
 msgid "Cancelar solicitud"
 msgstr "Cancel request"
+
+msgid "Cancelaste el plan. No se vuelve a cobrar."
+msgstr "You canceled the plan. It will not be charged again."
+
+msgid "Cancelaste el plan: no se vuelve a cobrar."
+msgstr "You canceled the plan: it will not be charged again."
+
+#, python-format
+msgid "Cancelaste el plan: sigue hasta el %(fecha)s y no se vuelve a cobrar."
+msgstr "You canceled the plan: it stays active until %(fecha)s and will not be charged again."
+
+#, python-format
+msgid "Cancelaste el plan: sigue hasta el %(fecha)s y no se vuelve a cobrar. Lo que quede del saldo del plan vence ese día."
+msgstr "You canceled the plan: it stays active until %(fecha)s and will not be charged again. Whatever is left of the plan balance expires that day."
 
 msgid "Canción"
 msgstr "Song"
@@ -3666,6 +3923,9 @@ msgstr "Upload your catalog"
 
 msgid "Cargando el detalle de Meta…"
 msgstr "Loading Meta details…"
+
+msgid "Cargando el plan…"
+msgstr "Loading the plan…"
 
 msgid "Cargando el prompt…"
 msgstr "Loading the prompt…"
@@ -3740,6 +4000,9 @@ msgstr "Mobile (web)"
 msgid "Celular Android"
 msgstr "Android phone"
 
+msgid "Celular de Nequi"
+msgstr "Nequi mobile number"
+
 msgid "Centrar"
 msgstr "Center"
 
@@ -3777,6 +4040,12 @@ msgstr "The %(dias)s-day window closed without enough evidence (%(imp)s impressi
 msgid "Chile"
 msgstr "Chile"
 
+msgid "Ciclo"
+msgstr "Cycle"
+
+msgid "Ciclo de plan inválido"
+msgstr "Invalid plan cycle"
+
 msgid "Cierre"
 msgstr "Close"
 
@@ -3788,6 +4057,10 @@ msgstr "Five minutes. You don't create anything on Meta."
 
 msgid "Cinta"
 msgstr "Ribbon"
+
+#, python-format
+msgid "Cita cifras que no están en los datos (%(cifras)s): revisa antes de publicar."
+msgstr "It cites figures that aren't in the data (%(cifras)s): check before publishing."
 
 msgid "Citas textuales"
 msgstr "Verbatim quotes"
@@ -4312,6 +4585,10 @@ msgstr "Connect Notion first."
 msgid "Conecta Triple Whale para evaluar tu contenido"
 msgstr "Connect Triple Whale to evaluate your content"
 
+#, python-format
+msgid "Conecta Triple Whale para ver el %% de visitantes nuevos (NVP)."
+msgstr "Connect Triple Whale to see the %% of new visitors (NVP)."
+
 msgid "Conecta la agencia arriba para poder asignar cuentas y Páginas; mientras tanto solo se ve el modo de cada proyecto."
 msgstr "Connect the agency above to be able to assign accounts and Pages; meanwhile you only see each project's mode."
 
@@ -4621,11 +4898,20 @@ msgstr "Copied"
 msgid "Copiar"
 msgstr "Copy"
 
+msgid "Copiar el texto"
+msgstr "Copy the text"
+
+msgid "Copiar el título"
+msgstr "Copy the title"
+
 msgid "Copiar enlaces"
 msgstr "Copy links"
 
 msgid "Copy del anuncio"
 msgstr "Ad copy"
+
+msgid "Copy nuevo para Meta"
+msgstr "New copy for Meta"
 
 msgid "Corazón"
 msgstr "Heart"
@@ -4664,6 +4950,9 @@ msgstr "Email confirmed. Thanks!"
 msgid "Correo de avisos"
 msgstr "Notification email"
 
+msgid "Correo de cobro inválido"
+msgstr "Invalid billing email"
+
 msgid "Correo de la plataforma (cuentas y avisos)"
 msgstr "Platform email (accounts and notices)"
 
@@ -4684,6 +4973,12 @@ msgstr "Email saved: %(correo)s. Wait a moment before requesting the confirmatio
 
 msgid "Correo nuevo"
 msgstr "New email"
+
+msgid "Correo para los recibos de Wompi"
+msgstr "Email for Wompi receipts"
+
+msgid "Corta el plan ahora, sin devolución: el saldo del plan que quede vence y el proyecto pasa a la carta."
+msgstr "Ends the plan now, with no refund: the remaining plan balance expires and the project goes pay-as-you-go."
 
 msgid "Corta, textos y música, gratis"
 msgstr "Cuts, text and music, free"
@@ -4827,6 +5122,9 @@ msgstr "Create my project →"
 
 msgid "Crear persona rápida"
 msgstr "Create a quick persona"
+
+msgid "Crear plan"
+msgstr "Create plan"
 
 msgid "Crear producto"
 msgstr "Create product"
@@ -5604,6 +5902,9 @@ msgstr "Edit study"
 msgid "Editar ficha"
 msgstr "Edit profile"
 
+msgid "Editar plan"
+msgstr "Edit plan"
+
 msgid "Editar y crear otra a partir de esta"
 msgstr "Edit and create another one from this"
 
@@ -5624,6 +5925,10 @@ msgstr "E.g.: “I've worn them for three winters and they're still just as warm
 
 msgid "Ej: paleta cálida, tonos tierra, iluminación de atardecer, ambientes rústicos..."
 msgstr "E.g.: warm palette, earth tones, sunset lighting, rustic settings..."
+
+#, python-format
+msgid "El %% de visitantes nuevos y la etapa del embudo: TOF desde 70 %%, MOF desde 40 %%, BOF por debajo; con menos de 50 visitantes, sin etapa."
+msgstr "The %% of new visitors and the funnel stage: TOF from 70%%, MOF from 40%%, BOF below that; with fewer than 50 visitors, no stage."
 
 #, python-format
 msgid "El %(pct)s%% del gasto se fue en anuncios perdedores: pausarlos libera presupuesto para los ganadores."
@@ -5726,6 +6031,9 @@ msgstr "The analysis failed."
 msgid "El análisis se interrumpió; intenta de nuevo"
 msgstr "The analysis was interrupted; try again"
 
+msgid "El análisis todavía no está listo."
+msgstr "The analysis isn't ready yet."
+
 msgid "El archivo es demasiado grande."
 msgstr "The file is too large."
 
@@ -5744,6 +6052,9 @@ msgstr "The file is larger than 5 MB; split it."
 #, python-format
 msgid "El archivo tiene más de %(max)s filas; pártelo."
 msgstr "The file has more than %(max)s rows; split it."
+
+msgid "El armado del video se cortó antes de terminar."
+msgstr "Putting the video together stopped before finishing."
 
 #, python-format
 msgid "El arranque «%(lead)s» no es de los recomendados para una audiencia %(consciencia)s: mejor %(opciones)s."
@@ -5791,6 +6102,9 @@ msgstr "The catalog comes from the no-keys connection; this connection brings in
 msgid "El catálogo sigue llegando desde la conexión sin llaves; la Admin API agrega pedidos y atribución."
 msgstr "The catalog still comes from the no-keys connection; the Admin API adds orders and attribution."
 
+msgid "El celular de Nequi debe tener 10 dígitos y empezar por 3"
+msgstr "The Nequi mobile number must have 10 digits and start with 3"
+
 #, python-format
 msgid "El clic sale caro con un CTR normal: CPC %(cpc)s (máximo %(max)s); es la subasta, no el creativo."
 msgstr "Clicks are expensive with a normal CTR: CPC %(cpc)s (maximum %(max)s); it's the auction, not the creative."
@@ -5814,6 +6128,9 @@ msgstr "Clip 1 has to start with line 1 (the hook)."
 msgid "El clip anterior termina así: %(estado)s"
 msgstr "The previous clip ends like this: %(estado)s"
 
+msgid "El clip de este gancho ya no está en Crear."
+msgstr "This hook's clip is no longer in Create."
+
 #, python-format
 msgid "El clip de texto %(clip)s no está resuelto (¿falta documento.resolver?)."
 msgstr "Text clip %(clip)s isn't resolved (is documento.resolver missing?)."
@@ -5821,12 +6138,18 @@ msgstr "Text clip %(clip)s isn't resolved (is documento.resolver missing?)."
 msgid "El clip final tiene que terminar con HARD CUT sobre un cuadro sostenido."
 msgstr "The final clip has to end with a HARD CUT on a held frame."
 
+msgid "El clip no se pudo generar."
+msgstr "The clip couldn't be generated."
+
 msgid "El clip quedaría demasiado corto a esa velocidad."
 msgstr "The clip would be too short at that speed."
 
 #, python-format
 msgid "El clip siguiente empieza así: %(estado)s"
 msgstr "The next clip starts like this: %(estado)s"
+
+msgid "El clip ya está pagado: recupéralo en Crear."
+msgstr "The clip is already paid for: recover it in Create."
 
 #, python-format
 msgid "El clip «%(clip)s» del video no es un video."
@@ -6059,9 +6382,15 @@ msgstr "The sprint batch “%(nombre)s” finished: %(listas)s piece(s) ready an
 msgid "El lugar y la luz; el producto entra a cuadro y se ve funcionando ahí."
 msgstr "The place and the light; the product enters the frame and is seen working there."
 
+msgid "El margen de miembro debe estar entre 1,00 y 5,00"
+msgstr "The member markup must be between 1.00 and 5.00"
+
 #, python-format
 msgid "El margen va de %(min)s a %(max)s."
 msgstr "The markup ranges from %(min)s to %(max)s."
+
+msgid "El margen y el tope valen desde el próximo periodo de cada suscripción mensual: el periodo en curso guarda los suyos. En una anual, desde su próximo pago: sus doce meses copian la foto del primero."
+msgstr "The markup and the cap apply from the next period of each monthly subscription: the current period keeps its own. On a yearly one, from its next payment: its twelve months copy the snapshot of the first."
 
 msgid "El material de cerca, un giro que muestra la forma completa y un cierre de lucimiento sobre el producto."
 msgstr "The material up close, a turn that shows the whole shape and a hero close on the product."
@@ -6079,6 +6408,9 @@ msgstr "The model is still working: we keep waiting for the same video, without 
 
 msgid "El momento del mes no es válido."
 msgstr "The moment of the month isn't valid."
+
+msgid "El monto o la moneda de esa transacción no cuadran con este pago: no se aplicó nada."
+msgstr "The amount or currency of that transaction does not match this payment: nothing was applied."
 
 msgid "El monto tiene que ser un número distinto de 0, con hasta 2 decimales."
 msgstr "The amount must be a number other than 0, with up to 2 decimals."
@@ -6100,6 +6432,9 @@ msgstr "The engine has nobody to notify about proposals, winners and rejections:
 msgid "El máximo diario permitido es %(maximo)s por los días restantes."
 msgstr "The maximum daily budget is %(maximo)s for the remaining days."
 
+msgid "El nuevo medio se usa desde el próximo cobro del plan."
+msgstr "The new payment method is used from the next plan charge."
+
 msgid "El objetivo de referencias debe ser al menos 1."
 msgstr "The reference target must be at least 1."
 
@@ -6110,6 +6445,9 @@ msgstr "The reference target must be a whole number."
 msgid "El objetivo de referencias no puede pasar de %(n)s."
 msgstr "The reference target can't exceed %(n)s."
 
+msgid "El pago no se completó a tiempo."
+msgstr "The payment was not completed in time."
+
 #, python-format
 msgid "El país %(pais)s quedó sin piezas: quita el país o marca una pieza para él."
 msgstr "The country %(pais)s was left without pieces: remove the country or select a piece for it."
@@ -6117,8 +6455,32 @@ msgstr "The country %(pais)s was left without pieces: remove the country or sele
 msgid "El país debe ser un código de 2 letras, como CO."
 msgstr "The country must be a 2-letter code, like CO."
 
+#, python-format
+msgid "El plan anual se renueva el %(momento)s: a esa hora cobramos %(monto)s."
+msgstr "Your yearly plan renews on %(momento)s: that's when we charge %(monto)s."
+
+#, python-format
+msgid "El plan de %(cliente)s terminó"
+msgstr "%(cliente)s's plan ended"
+
+msgid "El plan de este proyecto venció sin renovarse"
+msgstr "This project's plan ran out without renewing"
+
+msgid "El plan necesita un nombre (hasta 60 letras)"
+msgstr "The plan needs a name (up to 60 characters)"
+
+msgid "El plan ya se ofrece a los proyectos que cobran."
+msgstr "The plan is now offered to projects that charge usage."
+
 msgid "El porqué"
 msgstr "The reason why"
+
+msgid "El precio anual"
+msgstr "The yearly price"
+
+#, python-format
+msgid "El precio cambió: ahora es %(precio)s. Revisa y vuelve a pedirlo."
+msgstr "The price changed: it's now %(precio)s. Check it and ask again."
 
 #, python-format
 msgid "El precio cambió: ahora es ≈ US$ %(precio)s. Revisa y vuelve a aprobar."
@@ -6126,6 +6488,12 @@ msgstr "The price changed: it is now ≈ US$ %(precio)s. Check it and approve ag
 
 msgid "El precio cambió: revísalo y vuelve a generar."
 msgstr "The price changed: check it and generate again."
+
+msgid "El precio del plan cambió; revisa y vuelve a intentar"
+msgstr "The plan's price changed; review it and try again"
+
+msgid "El precio mensual"
+msgstr "The monthly price"
 
 msgid "El precio tiene que ser un número positivo (ej. 89900 o 25,50); no lo guardé."
 msgstr "The price has to be a positive number (e.g. 89900 or 25.50); I didn't save it."
@@ -6266,6 +6634,9 @@ msgstr "The split exceeds the total: lower a country's budget or raise the total
 msgid "El ritmo va entre 1,5 y 4 palabras por segundo."
 msgstr "The pace is between 1.5 and 4 words per second."
 
+msgid "El saldo del plan se renueva cada mes y no se acumula."
+msgstr "The plan balance renews every month and does not roll over."
+
 msgid "El saldo disponible no alcanza el mínimo diario de Meta. No se puede subir el presupuesto."
 msgstr "The available balance is below Meta’s minimum daily budget. The budget cannot be increased."
 
@@ -6337,6 +6708,9 @@ msgstr "The type must be top-up or adjustment."
 msgid "El token no ve el Business %(business)s (%(error)s). Revisa que el usuario del sistema pertenezca a ese Business Manager y tenga permiso business_management."
 msgstr "The token can't see the Business %(business)s (%(error)s). Check that the system user belongs to that Business Manager and has the business_management permission."
 
+msgid "El tope de lo incluido debe ser 0 o más dólares"
+msgstr "The included cap must be 0 or more dollars"
+
 msgid "El umbral no puede ser negativo."
 msgstr "The threshold cannot be negative."
 
@@ -6370,8 +6744,14 @@ msgstr "The video is longer than 2 min."
 msgid "El video encima de otro video todavía no se puede producir."
 msgstr "A video on top of another video can't be produced yet."
 
+msgid "El video es muy corto: dura menos de 5 s."
+msgstr "The video is too short: it lasts less than 5 s."
+
 msgid "El video final no muestra este clip: aquí solo se puede borrar."
 msgstr "The final video doesn't show this clip: here you can only delete it."
+
+msgid "El video original no es un mp4: no se puede editar."
+msgstr "The original video isn't an mp4: it can't be edited."
 
 #, python-brace-format
 msgid "El video pesa más de {mb} MB."
@@ -6496,6 +6876,9 @@ msgstr "Choose which ad accounts you want to see"
 msgid "Elige qué transcribir."
 msgstr "Choose what to transcribe."
 
+msgid "Elige si el cobro se hizo o no."
+msgstr "Choose whether the charge went through or not."
+
 msgid "Elige tu nueva contraseña"
 msgstr "Choose your new password"
 
@@ -6519,6 +6902,9 @@ msgstr "Choose a country"
 
 msgid "Elige un producto"
 msgstr "Choose a product"
+
+msgid "Elige un producto antes de enviar los archivos."
+msgstr "Choose a product before sending the files."
 
 msgid "Elige un producto con fotos."
 msgstr "Pick a product with photos."
@@ -6888,6 +7274,9 @@ msgstr "Send"
 msgid "Enviar a Publicidad"
 msgstr "Send to Standalone ads"
 
+msgid "Enviar a mi Nequi"
+msgstr "Send to my Nequi"
+
 msgid "Enviarme el enlace"
 msgstr "Send me the link"
 
@@ -7160,6 +7549,9 @@ msgstr "That Create session no longer exists."
 msgid "Esa sesión no se puede rearmar ahora."
 msgstr "That session can't be rebuilt right now."
 
+msgid "Esa tasa está fuera del rango posible y no se puede aceptar."
+msgstr "That rate is outside the possible range and can't be accepted."
+
 msgid "Esa temporada no existe en este proyecto."
 msgstr "That season doesn't exist in this project."
 
@@ -7171,6 +7563,10 @@ msgstr "That Triple Whale store is no longer connected."
 
 msgid "Esa tienda no existe."
 msgstr "That store doesn't exist."
+
+#, python-format
+msgid "Esa transacción de Wompi es de otro pago: su referencia no es %(referencia)s"
+msgstr "That Wompi transaction belongs to another payment: its reference is not %(referencia)s"
 
 msgid "Esa transición solo se pone en un clip de la pista principal."
 msgstr "That transition only goes on a clip of the main track."
@@ -7246,6 +7642,9 @@ msgstr "Write the learning."
 msgid "Escribe el correo de tu cuenta y te mandamos un enlace para elegir una nueva. Vence en 1 hora."
 msgstr "Enter your account's email and we'll send you a link to choose a new one. It expires in 1 hour."
 
+msgid "Escribe el id de la transacción tal como sale en el panel de Wompi"
+msgstr "Enter the transaction id exactly as it appears in the Wompi dashboard"
+
 msgid "Escribe el id de tu portafolio comercial (solo números)."
 msgstr "Write your business portfolio's id (numbers only)."
 
@@ -7297,6 +7696,9 @@ msgstr "Describe what should happen"
 msgid "Escribe qué tiene que pasar en el video."
 msgstr "Write what has to happen in the video."
 
+msgid "Escribe un correo válido para los recibos de Wompi."
+msgstr "Enter a valid email for Wompi receipts."
+
 msgid "Escribe un correo válido."
 msgstr "Enter a valid email."
 
@@ -7308,6 +7710,12 @@ msgstr "Write a text, pick the voice and create it. It will show up here to list
 
 msgid "Escribe un texto, elige la voz y, si quieres, una canción de fondo. Sale un mp3 para escuchar y descargar. Nada se cobra hasta que pulses «Crear audio»."
 msgstr "Write a text, pick the voice and, if you like, a background song. You get an mp3 to listen to and download. Nothing is charged until you press \"Create audio\"."
+
+msgid "Escribe una nota con el motivo para terminar el plan ya."
+msgstr "Write a note with the reason to end the plan now."
+
+msgid "Escribe una nota: cómo supiste que no se cobró"
+msgstr "Write a note: how you know it was not charged"
 
 msgid "Escribe una palabra clave."
 msgstr "Type a keyword."
@@ -7350,6 +7758,9 @@ msgstr "Hand-written"
 
 msgid "Escríbela en español o en inglés: se traduce al inglés y se buscan anuncios en inglés, el mercado más grande (la traducción cuesta centavos)."
 msgstr "Write it in Spanish or English: it's translated into English and ads in English are searched, the biggest market (the translation costs cents)."
+
+msgid "Escríbenos si quieres un plan mensual para este proyecto."
+msgstr "Write to us if you want a monthly plan for this project."
 
 msgid "Escucha la voz con el texto y la voz de ahora para poder generar."
 msgstr "Listen to the voice with the current text and voice before generating."
@@ -7448,6 +7859,9 @@ msgstr "That clip doesn't have scene sound yet."
 
 msgid "Ese clip ya no existe en la edición."
 msgstr "That clip no longer exists in the edit."
+
+msgid "Ese cobro va en camino a Wompi; espera unos minutos y vuelve a mirar"
+msgstr "That charge is on its way to Wompi; wait a few minutes and check again"
 
 msgid "Ese color no existe."
 msgstr "That color doesn't exist."
@@ -7551,8 +7965,23 @@ msgstr "That awareness level doesn't exist."
 msgid "Ese nivel no existe."
 msgstr "That level doesn't exist."
 
+msgid "Ese no es el id de la transacción guardada para este pago"
+msgstr "That is not the transaction id saved for this payment"
+
 msgid "Ese nombre no genera un identificador de proyecto válido."
 msgstr "That name doesn't produce a valid project identifier."
+
+msgid "Ese pago cambió mientras lo mirabas; vuelve a cargar la página"
+msgstr "That payment changed while you were looking at it; reload the page"
+
+msgid "Ese pago de plan no existe"
+msgstr "That plan payment does not exist"
+
+msgid "Ese pago ya estaba resuelto: no cambió nada."
+msgstr "That payment was already resolved: nothing changed."
+
+msgid "Ese pago ya no está pendiente"
+msgstr "That payment is no longer pending"
 
 #, python-format
 msgid "Ese país no está en el experimento (elige entre %(paises)s)."
@@ -7566,6 +7995,15 @@ msgstr "That country has no ad set on Meta."
 
 msgid "Ese pedido ya no está abierto."
 msgstr "That request is no longer open."
+
+msgid "Ese plan no está disponible"
+msgstr "That plan isn't available"
+
+msgid "Ese plan no existe"
+msgstr "That plan doesn't exist"
+
+msgid "Ese plan no tiene opción anual"
+msgstr "That plan doesn't have a yearly option"
 
 msgid "Ese portafolio ya está conectado a otro proyecto de Creatv. Si es tuyo, usa «Avisar a Creatv» y lo revisamos."
 msgstr "That portfolio is already connected to another Creatv project. If it's yours, use “Let Creatv know” and we'll review it."
@@ -7815,8 +8253,17 @@ msgstr "This ad doesn't work"
 msgid "Este anuncio sí funciona"
 msgstr "This ad works"
 
+msgid "Este análisis es de antes de los ganchos."
+msgstr "This analysis is from before hooks."
+
+msgid "Este análisis no trae ganchos que se puedan generar."
+msgstr "This analysis has no hooks that can be generated."
+
 msgid "Este clip dura más que el video: no cabe una copia. Acórtalo primero."
 msgstr "This clip is longer than the video: a copy doesn't fit. Shorten it first."
+
+msgid "Este cobro va en camino a Wompi. Espera unos minutos antes de resolverlo."
+msgstr "This charge is on its way to Wompi. Wait a few minutes before resolving it."
 
 msgid "Este color no tiene fotos todavía: súbele una para que el modelo lo reproduzca."
 msgstr "This color has no photos yet: upload one so the model can reproduce it."
@@ -7843,6 +8290,23 @@ msgstr "This browser can't record audio: try an up-to-date Chrome, Edge, Firefox
 #, python-format
 msgid "Este núcleo quedó sin sub-avatares: %(error)s"
 msgstr "This core ended up without sub-avatars: %(error)s"
+
+msgid "Este pago tiene una transacción en Wompi: consúltala con «Sí se cobró»"
+msgstr "This payment has a Wompi transaction: check it with “It was charged”"
+
+#, python-format
+msgid "Este periodo ahorraste %(monto)s frente a la carta."
+msgstr "This period you saved %(monto)s compared with pay-as-you-go."
+
+#, python-format
+msgid "Este plan lo activó Creatv con un pago por transferencia: no se cobra solo y termina el %(fecha)s. Para volver al cobro automático con tarjeta, suscríbete de nuevo cuando termine."
+msgstr "Creatv activated this plan with a bank transfer payment: it is not charged automatically and ends on %(fecha)s. To go back to automatic card charges, subscribe again when it ends."
+
+msgid "Este plan lo activó Creatv con un pago por transferencia: no se cobra solo. Para volver al cobro automático con tarjeta, suscríbete de nuevo cuando termine."
+msgstr "Creatv activated this plan with a bank transfer payment: it is not charged automatically. To go back to automatic card charges, subscribe again when it ends."
+
+msgid "Este plan no se renueva con tarjeta: no hay tarjeta que cambiar."
+msgstr "This plan does not renew with a card: there is no card to change."
 
 msgid "Este producto ya tiene fotos: dime de qué color son para poder agregar otro."
 msgstr "This product already has photos: tell me what color they are so another can be added."
@@ -7897,11 +8361,17 @@ msgstr "This project hasn't registered its Meta app — it's needed to %(para_qu
 msgid "Este proyecto no tiene saldo: desde ahora no podrá generar nada que cueste hasta que recargue."
 msgstr "This project has no balance: from now on it cannot generate anything that costs money until it tops up."
 
+msgid "Este proyecto no tiene un plan"
+msgstr "This project doesn't have a plan"
+
 msgid "Este proyecto no usa saldo prepagado."
 msgstr "This project does not use a prepaid balance."
 
 msgid "Este proyecto no usa saldo prepagado: nada de lo que genera se descuenta. Se prende desde el panel de administración."
 msgstr "This project does not use a prepaid balance: nothing it generates is deducted. It is turned on from the admin panel."
+
+msgid "Este proyecto renueva con tarjeta. Activar a mano APAGA esa renovación automática: la tarjeta no se volverá a cobrar sola y, para volver a pagar con tarjeta, el cliente tendrá que suscribirse de nuevo cuando termine lo pagado. Se le avisa."
+msgstr "This project renews by card. Activating by hand TURNS OFF that automatic renewal: the card will not be charged automatically again and, to pay by card again, the customer will have to subscribe again when what is paid ends. They are notified."
 
 msgid "Este proyecto tiene su propia conexión con Meta. Pasarlo a modo agencia la guarda como respaldo (se restaura con «Volver a propia») y sus anuncios pasan a operarse con la cuenta que asignes. ¿Seguir?"
 msgstr "This project has its own connection with Meta. Switching it to agency mode keeps that as a backup (restored with “Back to own app”) and its ads start running with the account you assign. Continue?"
@@ -7909,8 +8379,14 @@ msgstr "This project has its own connection with Meta. Switching it to agency mo
 msgid "Este proyecto todavía no cobra: el saldo queda guardado para cuando prendas «Cobrar»."
 msgstr "This project does not charge usage yet: the balance stays saved for when you turn on “Charge usage”."
 
+msgid "Este proyecto todavía no cobra: prende «Cobrar» en el panel de cobros antes de suscribirlo a un plan."
+msgstr "This project does not charge usage yet: turn on “Charge usage” in the billing panel before subscribing it to a plan."
+
 msgid "Este proyecto usa la conexión de agencia de Creatv: no tienes que registrar una app ni conectar nada."
 msgstr "This project uses Creatv's agency connection: you don't have to register an app or connect anything."
+
+msgid "Este proyecto ya tiene un plan"
+msgstr "This project already has a plan"
 
 msgid "Este sprint todavía no tiene campañas"
 msgstr "This sprint doesn't have campaigns yet"
@@ -8368,8 +8844,14 @@ msgstr "Missing data: objective, at least one country, days (1–90), cap, ages 
 msgid "Faltan la llave o el dominio de la tienda (por ejemplo mitienda.myshopify.com)."
 msgstr "The key or the store domain is missing (for example mystore.myshopify.com)."
 
+msgid "Faltan las aceptaciones de Wompi"
+msgstr "The Wompi acceptances are missing"
+
 msgid "Faltan las llaves de Bold"
 msgstr "The Bold keys are missing"
+
+msgid "Faltan las llaves de Wompi"
+msgstr "The Wompi keys are missing"
 
 msgid "Faltan los datos de la campaña."
 msgstr "The campaign's data is missing."
@@ -8600,6 +9082,9 @@ msgctxt "editor"
 msgid "Fuente"
 msgstr "Font"
 
+msgid "Fuente de pago inválida"
+msgstr "Invalid payment source"
+
 #, python-format
 msgid "Fuente desconocida: %(fuente)s"
 msgstr "Unknown source: %(fuente)s"
@@ -8669,11 +9154,26 @@ msgstr "Winners that are fatiguing (time to make variants)"
 msgid "Ganancia del mes"
 msgstr "Profit this month"
 
+msgid "Ganancia del periodo"
+msgstr "Period profit"
+
 msgid "Gancho"
 msgstr "Hook"
 
+#, python-format
+msgid "Gancho %(n)s"
+msgstr "Hook %(n)s"
+
+#, python-format
+msgid "Gancho %(n)s · %(nombre)s"
+msgstr "Hook %(n)s · %(nombre)s"
+
 msgid "Gancho (3 s)"
 msgstr "Hook (3 s)"
+
+#, python-format
+msgid "Gancho armado: produciendo %(codigo)s."
+msgstr "Hook built: producing %(codigo)s."
 
 msgid "Gancho débil"
 msgstr "Weak hook"
@@ -8690,6 +9190,9 @@ msgstr "Hook: %(g)s"
 
 msgid "Gancho: vistas de 3 segundos / impresiones. Retención: ThruPlays / vistas de 3 segundos."
 msgstr "Hook: 3-second views / impressions. Hold: ThruPlays / 3-second views."
+
+msgid "Ganchos nuevos (primeros 3 s)"
+msgstr "New hooks (first 3 s)"
 
 #, python-format
 msgid "Ganó en %(pais)s: %(quien)s"
@@ -8836,6 +9339,12 @@ msgid "Generando %(n)s swaps…"
 msgstr "Generating %(n)s swaps…"
 
 #, python-format
+msgid "Generando %(num)s gancho…"
+msgid_plural "Generando %(num)s ganchos…"
+msgstr[0] "Generating %(num)s hook…"
+msgstr[1] "Generating %(num)s hooks…"
+
+#, python-format
 msgid "Generando %(que)s con %(modelo)s…"
 msgstr "Generating %(que)s with %(modelo)s…"
 
@@ -8847,6 +9356,9 @@ msgstr "Generating from the reference…"
 
 msgid "Generando desde el referente… cada video arranca solo cuando su imagen esté lista."
 msgstr "Generating from the reference… each video starts on its own once its image is ready."
+
+msgid "Generando el clip"
+msgstr "Generating the clip"
 
 msgid "Generando el swap…"
 msgstr "Generating the swap…"
@@ -9132,6 +9644,9 @@ msgstr "Save default models"
 msgid "Guardar nombre"
 msgstr "Save name"
 
+msgid "Guardar plan"
+msgstr "Save plan"
+
 msgid "Guardar prompt"
 msgstr "Save prompt"
 
@@ -9263,6 +9778,9 @@ msgstr "There are pending Bold top-ups and no Bold event has arrived in 7 days. 
 msgid "Hay textos sin traducir para algún destino."
 msgstr "Some texts aren't translated for a market."
 
+msgid "Hay un cobro con tarjeta en curso para este plan; espera a que Wompi responda"
+msgstr "A card charge for this plan is in progress; wait for Wompi to respond"
+
 msgid "Hay un problema con el proveedor y ya le avisamos a Creatv. Mientras tanto elige otro modelo: los intentos fallidos no se cobran."
 msgstr "There is a problem with the provider and Creatv has already been notified. Meanwhile, choose another model: failed attempts are not charged."
 
@@ -9274,6 +9792,9 @@ msgstr "There's a saved connection but it can't be read (did FLASK_SECRET_KEY ch
 
 msgid "Hay una investigación en curso en este estudio: espera a que termine o cancélala."
 msgstr "There's research in progress on this study: wait for it to finish or cancel it."
+
+msgid "Hay una tanda en curso: espera a que termine."
+msgstr "A batch is in progress: wait for it to finish."
 
 msgid "Hechas"
 msgstr "Done"
@@ -9376,6 +9897,9 @@ msgstr "Today so far: %(ventas)s and %(pedidos)s, with %(gasto)s of spend."
 msgid "Hoy van %(ventas)s en ventas atribuidas según el Pixel y %(pedidos)s, con %(gasto)s de gasto."
 msgstr "Today so far: %(ventas)s in sales attributed by the Pixel and %(pedidos)s, with %(gasto)s of spend."
 
+msgid "IA incluida (ideas, guiones, análisis y revisiones)"
+msgstr "Included AI (ideas, scripts, analyses and reviews)"
+
 msgid "ID de Creatv"
 msgstr "Creatv's ID"
 
@@ -9390,6 +9914,9 @@ msgstr "Your business portfolio's ID"
 
 msgid "IP"
 msgstr "IP"
+
+msgid "Id de la transacción en Wompi"
+msgstr "Wompi transaction id"
 
 msgid "Id del Business"
 msgstr "Business id"
@@ -9417,6 +9944,9 @@ msgstr "Ideas"
 msgid "Ideas de sprint (IA)"
 msgstr "Sprint ideas (AI)"
 
+msgid "Ideas, guiones, análisis y revisiones con IA incluidos."
+msgstr "AI ideas, scripts, analyses and reviews included."
+
 msgid "Identidad de marca"
 msgstr "Brand identity"
 
@@ -9431,6 +9961,9 @@ msgstr "App id"
 
 msgid "Identificador de link inválido"
 msgstr "Invalid link identifier"
+
+msgid "Identificador de transacción inválido"
+msgstr "Invalid transaction ID"
 
 msgid "Idioma"
 msgstr "Language"
@@ -9597,6 +10130,16 @@ msgstr "Images: %(listas)s ready, %(pendientes)s left to download."
 
 msgid "Incluido en el plan mensual de Atria (1 200 llamadas/mes); no cobra por resultado. El contador de uso está en Referentes (admin)."
 msgstr "Included in Atria's monthly plan (1 200 calls/month); it doesn't charge per result. The usage counter is in Swipe file (admin)."
+
+#, python-format
+msgid "Incluido en el plan: %(concepto)s"
+msgstr "Included in the plan: %(concepto)s"
+
+msgid "Incluido en tu plan"
+msgstr "Included in your plan"
+
+msgid "Incluido usado (costo)"
+msgstr "Included used (cost)"
 
 msgid "Incluir"
 msgstr "Include"
@@ -9827,6 +10370,10 @@ msgstr "Nordic Christmas: gifts, candles, gatherings at home and seasonal food; 
 msgid "La Página %(pagina)s no está entre las que ve el Business de la agencia."
 msgstr "The Page %(pagina)s isn't among the ones the agency's Business can see."
 
+#, python-format
+msgid "La TRM de datos.gov.co no sirve hoy (%(motivo)s). Mientras tanto no se cobra ninguna recarga ni plan en pesos. Si es un salto real del peso, acéptala en /admin/cobros («Aceptar la tasa de hoy»)."
+msgstr "Today's official exchange rate (TRM) from datos.gov.co can't be used (%(motivo)s). Until then no top-up or plan is charged in pesos. If it's a real move of the peso, accept it in /admin/cobros (“Accept today's rate”)."
+
 msgid "La URL de Android tiene que ser un enlace https de Google Play (play.google.com)."
 msgstr "The Android URL has to be an https Google Play link (play.google.com)."
 
@@ -10008,6 +10555,9 @@ msgstr "The account sells less than it spends: ROAS %(roas)s× in 30 days"
 msgid "La descarga terminó vacía."
 msgstr "The download came back empty."
 
+msgid "La dirección de vuelta del pago no es válida"
+msgstr "The payment return address is not valid"
+
 msgid "La duración debe ser un número."
 msgstr "Duration must be a number."
 
@@ -10078,6 +10628,12 @@ msgstr "Final cut %(final_id)s does not exist in pieza; the route must create it
 #, python-format
 msgid "La final %(final_id)s no existe; la ruta debe crearla con creative_flow.crear_final antes de encolar."
 msgstr "Final cut %(final_id)s does not exist; the route must create it with creative_flow.crear_final before queuing."
+
+msgid "La final de este gancho ya no existe."
+msgstr "This hook's final cut no longer exists."
+
+msgid "La fuente de pago guardada no es válida"
+msgstr "The saved payment method isn't valid"
 
 msgid "La generación de videos e imágenes está en pausa"
 msgstr "Video and image generation is paused"
@@ -10206,6 +10762,9 @@ msgstr "The piece no longer exists."
 msgid "La plataforma ya recibió el video; falta confirmar que terminó de procesarlo. Se confirma solo."
 msgstr "The platform already received the video; it still needs to confirm it finished processing it. It confirms itself."
 
+msgid "La preparación se cortó antes de terminar."
+msgstr "The preparation stopped before finishing."
+
 msgid "La primera copia tarda unos minutos por cuenta. Cuando termine, esta pestaña se recarga sola."
 msgstr "The first copy takes a few minutes per account. When it's done, this tab reloads on its own."
 
@@ -10230,6 +10789,10 @@ msgstr "The post was interrupted before it finished; check the platform before r
 msgid "La página de Notion está vacía."
 msgstr "The Notion page is empty."
 
+#, python-format
+msgid "La página de vuelta de la recarga «%(ref)s» de %(cliente)s consultó la transacción %(tx)s (el id lo trajo el navegador) y Wompi la dio por aprobada, pero su evento firmado no llegó en 30 minutos y no se acreditó. Esto NO confirma el pago: antes de acreditar a mano, búscala en el panel de Wompi de Creatv y confirma que es de nuestro comercio, con esa referencia y ese monto. Si está, revisa también la URL de eventos."
+msgstr "The return page of top-up «%(ref)s» for %(cliente)s looked up transaction %(tx)s (the id came from the browser) and Wompi reported it as approved, but its signed event did not arrive within 30 minutes and nothing was credited. This does NOT confirm the payment: before crediting by hand, find it in Creatv's Wompi dashboard and confirm it belongs to our merchant, with that reference and that amount. If it's there, also check the events URL."
+
 msgid "La página es demasiado larga (más de 3000 bloques)."
 msgstr "The page is too long (more than 3000 blocks)."
 
@@ -10242,6 +10805,10 @@ msgstr "The public page of ONE product: I read the name, price and photos from i
 #, python-format
 msgid "La recarga va de US$ %(min)s a US$ %(max)s, en dólares enteros."
 msgstr "A top-up goes from US$ %(min)s to US$ %(max)s, in whole dollars."
+
+#, python-format
+msgid "La recarga «%(ref)s» de %(cliente)s ya estaba acreditada y Wompi aprobó otra transacción (%(tx)s) con la misma referencia. No se acreditó dos veces: revísalo en el panel de Wompi y devuélvelo o acredítalo a mano."
+msgstr "Top-up «%(ref)s» for %(cliente)s was already credited and Wompi approved another transaction (%(tx)s) with the same reference. It was not credited twice: check it in the Wompi dashboard and refund it or credit it manually."
 
 #, python-format
 msgid "La receta «%(receta)s» necesita un video de referencia en la bandeja y el modelo Wan 3.0. Agrégalo o elige otra receta."
@@ -10267,8 +10834,14 @@ msgstr "The reference no longer exists."
 msgid "La regla no pide re-ediciones ni regeneraciones: no hay nada que derivar."
 msgstr "The rule doesn't ask for re-edits or regenerations: there's nothing to derive."
 
+msgid "La renovación automática de tu plan quedó apagada"
+msgstr "Automatic renewal of your plan is off"
+
 msgid "La respuesta de Claude no sirvió; intenta de nuevo"
 msgstr "Claude's response was unusable; try again"
+
+msgid "La respuesta de Claude salió cortada; vuelve a intentarlo."
+msgstr "Claude's answer was cut off; try again."
 
 msgid "La respuesta de Claude salió incompleta. Intenta con un guion más corto."
 msgstr "Claude's answer came back incomplete. Try a shorter script."
@@ -10316,6 +10889,10 @@ msgstr "The store has no saved credentials. Connect it again."
 #, python-format
 msgid "La tienda «%(nombre)s» dejó de sincronizar"
 msgstr "The store “%(nombre)s” stopped syncing"
+
+#, python-format
+msgid "La transacción %(tx)s de Wompi (referencia «%(ref_tx)s») llegó para la recarga «%(ref)s», pero su referencia, su monto o su moneda no son los de la recarga. No se acreditó nada; revísalo en el panel de Wompi."
+msgstr "Wompi transaction %(tx)s (reference “%(ref_tx)s”) arrived for top-up “%(ref)s”, but its reference, amount or currency do not match the top-up. Nothing was credited; check it in the Wompi dashboard."
 
 #, python-brace-format
 msgid "La transición quedó de {duracion}: no hay más video al final del primer clip."
@@ -10408,6 +10985,9 @@ msgstr "Launching the experiment to Meta: if all goes well, it goes active and s
 msgid "Lanzando el video…"
 msgstr "Launching the video…"
 
+msgid "Lanzando los clips"
+msgstr "Launching the clips"
+
 msgid "Lanzando…"
 msgstr "Launching…"
 
@@ -10462,6 +11042,12 @@ msgstr "Winners can't be published on Instagram, Facebook, TikTok or YouTube: co
 
 msgid "Las imágenes y los videos salen de r2.dev: tiene límite de tráfico, no pasa por el CDN de Cloudflare y no es para producción. Conecta un dominio propio al bucket y ponlo en R2_PUBLIC_BASE_URL."
 msgstr "Images and videos are served from r2.dev: it is rate-limited, does not go through Cloudflare's CDN and is not meant for production. Connect a custom domain to the bucket and put it in R2_PUBLIC_BASE_URL."
+
+msgid "Las llaves de Wompi no son válidas o mezclan pruebas y producción"
+msgstr "The Wompi keys are not valid or mix test and production"
+
+msgid "Las llaves de pruebas de Wompi solo sirven en un servidor local"
+msgstr "Wompi test keys only work on a local server"
 
 msgid "Las líneas a quitar tienen que ser números."
 msgstr "The lines to remove have to be numbers."
@@ -10635,6 +11221,9 @@ msgstr "Done: edit it to your liking before generating."
 msgid "Listo: este proyecto vuelve a usar su propia app de Meta. %(detalle)s"
 msgstr "Done: this project is back to using its own Meta app. %(detalle)s"
 
+msgid "Listo: guardamos tu nuevo medio de pago para los próximos cobros del plan."
+msgstr "Done: we saved your new payment method for the next plan charges."
+
 msgid "Listo: la biblioteca de copycoders ya aparece en Referentes."
 msgstr "Done: the copycoders library now shows up in References."
 
@@ -10648,6 +11237,9 @@ msgstr "Done: we added %(monto)s to your balance."
 #, python-format
 msgid "Listo: sumamos %(monto)s al saldo de %(proyecto)s."
 msgstr "Done: we added %(monto)s to the balance of %(proyecto)s."
+
+msgid "Listo: tu plan está activo y el saldo del plan ya está en tu cuenta."
+msgstr "Done: your plan is active and the plan balance is already in your account."
 
 msgid "Listo: volviste al prompt original."
 msgstr "Done: you reverted to the original prompt."
@@ -10674,9 +11266,16 @@ msgstr "Reaching people is expensive (high CPM): the audience is saturated or th
 msgid "Llegaste a los 5 minutos: la grabación se detuvo."
 msgstr "You reached 5 minutes: the recording stopped."
 
+msgid "Llegaste al uso justo de este mes: lo que sigue se cobra a precio de miembro."
+msgstr "You reached this month's fair use: what comes next is charged at member price."
+
 #, python-format
 msgid "Llegó un evento %(tipo)s de Bold con la referencia «%(ref)s», que no es de ninguna recarga de Creatv. Revísalo en el panel de Bold."
 msgstr "A Bold %(tipo)s event arrived with the reference “%(ref)s”, which does not belong to any Creatv top-up. Check it in the Bold dashboard."
+
+#, python-format
+msgid "Llegó una transacción de Wompi con la referencia «%(ref)s», que no es de ninguna recarga de Creatv. Revísalo en el panel de Wompi."
+msgstr "A Wompi transaction arrived with the reference “%(ref)s”, which does not belong to any Creatv top-up. Check it in the Wompi dashboard."
 
 msgid "Llenar"
 msgstr "Fill"
@@ -10714,6 +11313,31 @@ msgstr "The essentials"
 
 msgid "Lo haces tú en el Administrador de anuncios, en este orden: Creatv no cambia nada en Meta."
 msgstr "You make these changes in Ads Manager, in this order: Creatv changes nothing in Meta."
+
+msgid "Lo incluido"
+msgstr "Included"
+
+#, python-format
+msgid "Lo incluido del plan de %(cliente)s se acabó"
+msgstr "%(cliente)s has used up the included items of its plan"
+
+#, python-format
+msgid "Lo incluido del plan de %(cliente)s va en el 80 %%"
+msgstr "%(cliente)s has used 80 %% of the included items of its plan"
+
+#, python-format
+msgid "Lo intentamos otra vez el %(fecha)s; queda %(num)s intento antes de perder el plan."
+msgid_plural "Lo intentamos otra vez el %(fecha)s; quedan %(num)s intentos antes de perder el plan."
+msgstr[0] "We will try again on %(fecha)s; %(num)s attempt is left before you lose the plan."
+msgstr[1] "We will try again on %(fecha)s; %(num)s attempts are left before you lose the plan."
+
+#, python-format
+msgid "Lo pagado de tu plan termina el %(fecha)s. Para seguir con el plan, escríbenos o registra una tarjeta en Configuración › Plan."
+msgstr "Your plan's paid time ends on %(fecha)s. To keep the plan, write to us or add a card in Settings › Plan."
+
+#, python-format
+msgid "Lo pagado terminó el %(fecha)s y no hay un periodo abierto ni un cobro en curso: la renovación periódica no lo renovó (¿el worker está parado, «Cobrar» apagado o no hay tasa de cambio?). Revísalo en /admin/cobros."
+msgstr "What was paid ended on %(fecha)s and there is no open period or charge in progress: the periodic renewal did not renew it (is the worker stopped, “Charge usage” off, or is there no exchange rate?). Check it in /admin/cobros."
 
 msgid "Lo que Claude necesita"
 msgstr "What Claude needs"
@@ -10787,6 +11411,10 @@ msgstr "What needs your attention"
 
 msgid "Lo que necesita tu atención en este proyecto, revisado cada vez que entras. Una alerta descartada vuelve sola si su situación cambia."
 msgstr "What needs your attention in this project, checked every time you come in. A discarded alert comes back on its own if its situation changes."
+
+#, python-format
+msgid "Lo que no uses vence el %(fecha)s y no se acumula."
+msgstr "Whatever you do not use expires on %(fecha)s and does not roll over."
 
 msgid "Lo que nunca debe cambiar en este activo"
 msgstr "What must never change in this asset"
@@ -10872,6 +11500,9 @@ msgstr "Models perform best up to 15 s; for something longer, generate two piece
 
 msgid "Los nuevos vienen de tus estudios y esperan tu aprobación. Los aprobados son las personas que usa toda la app: Sprints, ideas y guiones."
 msgstr "New ones come from your studies and wait for your approval. Approved ones are the personas the whole app uses: Sprints, ideas and scripts."
+
+msgid "Los pagos con tarjeta no están disponibles ahora; escríbenos para activar tu plan"
+msgstr "Card payments aren't available right now; write to us to activate your plan"
 
 msgid "Los primeros 3 segundos no detienen el scroll: prueba otro arranque y deja el resto igual."
 msgstr "The first 3 seconds don't stop the scroll: try another opening and keep the rest as is."
@@ -11001,11 +11632,20 @@ msgstr "Select at least one platform."
 msgid "Marca la casilla de permiso para clonar esta voz."
 msgstr "Tick the permission box to clone this voice."
 
+msgid "Marca la casilla para confirmar que quieres cancelar el plan."
+msgstr "Check the box to confirm that you want to cancel the plan."
+
+msgid "Marca la casilla para confirmar que quieres terminar el plan ya."
+msgstr "Check the box to confirm that you want to end the plan now."
+
 msgid "Marca las cuentas publicitarias que quieres ver aquí y el país de cada una. Las nuevas se copian enseguida; quitar una borra sus métricas copiadas en Creatv, no toca nada en Meta."
 msgstr "Tick the ad accounts you want to see here and the country of each one. New ones are copied right away; removing one deletes its copied metrics in Creatv and doesn't touch anything on Meta."
 
 msgid "Marca las líneas que salen. Se quitan enteras; la línea 1 (el hook) no se puede quitar."
 msgstr "Check the lines that come out. They're removed whole; line 1 (the hook) can't be removed."
+
+msgid "Marca las tres casillas para ingresar la tarjeta."
+msgstr "Tick the three boxes to enter the card."
 
 msgid "Marca lo que Creatv va a operar: en <em>Cuentas publicitarias</em>, tu cuenta con <strong>Administrar campañas</strong>; en <em>Páginas</em>, tu Página con <strong>Crear anuncios</strong> y, si quieres publicar Reels y posts, también <strong>Crear contenido</strong>; en <em>Cuentas de Instagram</em>, tu cuenta con lo mismo (opcional)."
 msgstr "Check what Creatv is going to operate: in <em>Ad accounts</em>, your account with <strong>Manage campaigns</strong>; in <em>Pages</em>, your Page with <strong>Create ads</strong> and, if you want to publish Reels and posts, also <strong>Create content</strong>; in <em>Instagram accounts</em>, your account with the same (optional)."
@@ -11046,6 +11686,13 @@ msgstr "Hand-drawn marks"
 #, python-format
 msgid "Margen (de %(min)s a %(max)s)"
 msgstr "Markup (from %(min)s to %(max)s)"
+
+msgid "Margen de miembro"
+msgstr "Member markup"
+
+#, python-format
+msgid "Margen de miembro (de 1,00 a 5,00; a la carta es %(margen)s)"
+msgstr "Member markup (1.00 to 5.00; pay-as-you-go is %(margen)s)"
 
 msgid "Margen global"
 msgstr "Global markup"
@@ -11089,6 +11736,12 @@ msgstr "Dimensions and fonts"
 msgid "Medio"
 msgstr "Method"
 
+msgid "Medio de pago"
+msgstr "Payment method"
+
+msgid "Medio de pago no soportado"
+msgstr "Payment method not supported"
+
 msgid "Medios"
 msgstr "Media"
 
@@ -11111,6 +11764,10 @@ msgstr "Fewer than %(n)s impressions: it doesn't tell us anything yet."
 
 msgid "Menos de 3 compras entre las piezas del país: ventas inconclusas."
 msgstr "Fewer than 3 purchases among the pieces in this country: inconclusive sales."
+
+#, python-format
+msgid "Mensual · %(precio)s al mes"
+msgstr "Monthly · %(precio)s a month"
 
 msgid "Menú"
 msgstr "Menu"
@@ -11378,6 +12035,13 @@ msgid "Midsommar"
 msgstr "Midsummer (Midsommar)"
 
 #, python-format
+msgid "Mientras no llegues al 100 %%, esto no descuenta de tu saldo."
+msgstr "Until you reach 100 %%, this does not come out of your balance."
+
+msgid "Mientras tanto generas con tu saldo propio a precio a la carta."
+msgstr "Meanwhile you generate with your own balance at pay-as-you-go prices."
+
+#, python-format
 msgid "MiniMax · clonar voz · %(nombre)s"
 msgstr "MiniMax · clone voice · %(nombre)s"
 
@@ -11411,6 +12075,9 @@ msgstr "My voices"
 
 msgid "Mismo mensaje"
 msgstr "Same message"
+
+msgid "Mitad del embudo: mezcla de gente nueva y gente que ya visitó la tienda."
+msgstr "Middle of the funnel: a mix of new people and people who have already visited the store."
 
 msgid "Modelo"
 msgstr "Model"
@@ -11509,8 +12176,14 @@ msgstr "Amount in US$ (negative only for an adjustment)"
 msgid "Monto en dólares (de %(min)s a %(max)s, sin centavos)"
 msgstr "Amount in dollars (%(min)s to %(max)s, no cents)"
 
+msgid "Monto inválido para Wompi"
+msgstr "Invalid amount for Wompi"
+
 msgid "Montos sugeridos"
 msgstr "Suggested amounts"
+
+msgid "Morosa"
+msgstr "Past due"
 
 msgid "Mors dag"
 msgstr "Mother's Day (Mors dag)"
@@ -11659,6 +12332,21 @@ msgstr "Background music"
 msgid "NUEVO"
 msgstr "NEW"
 
+msgid "NVP"
+msgstr "NVP"
+
+#, python-format
+msgid "NVP de las cuentas con Triple Whale: %(cuentas)s"
+msgstr "NVP from the accounts with Triple Whale: %(cuentas)s"
+
+#, python-format
+msgid "NVP: %(nuevos)s visitantes nuevos de %(total)s."
+msgstr "NVP: %(nuevos)s new visitors out of %(total)s."
+
+#, python-format
+msgid "NVP: %(nuevos)s visitantes nuevos de %(total)s. Son muy pocos para decir la etapa del embudo."
+msgstr "NVP: %(nuevos)s new visitors out of %(total)s. Too few to tell the funnel stage."
+
 #, python-format
 msgid "Nació de la idea «%(idea)s» de la evaluación con IA"
 msgstr "Born from the idea “%(idea)s” of the AI evaluation"
@@ -11707,6 +12395,18 @@ msgstr "Needs your decision"
 
 msgid "Negro"
 msgstr "Black"
+
+msgid "Nequi"
+msgstr "Nequi"
+
+msgid "Nequi aprobó. Estamos activando el cobro…"
+msgstr "Nequi approved. We are activating the charge…"
+
+msgid "Nequi no aprobó la suscripción. Puedes intentar de nuevo o pagar con tarjeta."
+msgstr "Nequi did not approve the subscription. You can try again or pay by card."
+
+msgid "Nequi todavía no responde. Revisa tu app y vuelve a intentar."
+msgstr "Nequi has not answered yet. Check your app and try again."
 
 msgid "Neutra"
 msgstr "Neutral"
@@ -11807,6 +12507,9 @@ msgstr "Does not charge"
 msgid "No cobrado: %(concepto)s"
 msgstr "Not charged: %(concepto)s"
 
+msgid "No cuadra"
+msgstr "Mismatch"
+
 msgid "No describas a una persona real ni pidas imitar a alguien famoso."
 msgstr "Don't describe a real person or ask to imitate someone famous."
 
@@ -11890,8 +12593,14 @@ msgstr "Session %(cf_id)s of %(cliente)s does not exist."
 msgid "No había cambios que guardar."
 msgstr "There were no changes to save."
 
+msgid "No había ganchos que preparar."
+msgstr "There were no hooks to prepare."
+
 msgid "No había ideas aprobadas sin generar."
 msgstr "There were no approved ideas left to generate."
+
+msgid "No había nada que armar."
+msgstr "There was nothing to build."
 
 msgid "No había nada que preparar."
 msgstr "There was nothing to prepare."
@@ -12010,6 +12719,12 @@ msgstr "There's no account in this session."
 msgid "No hay una investigación detenida para reanudar."
 msgstr "There's no stopped research to resume."
 
+msgid "No hay una tasa de cambio válida: los cobros en pesos están frenados"
+msgstr "No valid exchange rate: charges in pesos are on hold"
+
+msgid "No hay una tasa rechazada para aceptar."
+msgstr "There is no rejected rate to accept."
+
 msgid "No hay voz en este destino."
 msgstr "There's no voice in this market."
 
@@ -12055,6 +12770,12 @@ msgstr "Couldn't change the status: %(error)s"
 #, python-format
 msgid "No pude cambiar el presupuesto: %(error)s"
 msgstr "Couldn't change the budget: %(error)s"
+
+msgid "No pude cargar el catálogo. Intenta de nuevo."
+msgstr "Could not load the catalog. Try again."
+
+msgid "No pude cargar más resultados. Intenta de nuevo."
+msgstr "Could not load more results. Try again."
 
 #, python-format
 msgid "No pude cerrar el experimento: %(error)s"
@@ -12209,8 +12930,40 @@ msgstr "I couldn't translate the word into English; write it another way."
 msgid "No pude traducir la palabra al inglés; intenta de nuevo en un momento."
 msgstr "I couldn't translate the word into English; try again in a moment."
 
+#, python-format
+msgid "No pudimos cobrar tu medio de pago. Mientras tanto usas tu saldo propio al precio a la carta. Actualiza tu medio de pago en Configuración › Plan; si no, queda %(num)s reintento antes de que el plan termine."
+msgid_plural "No pudimos cobrar tu medio de pago. Mientras tanto usas tu saldo propio al precio a la carta. Actualiza tu medio de pago en Configuración › Plan; si no, quedan %(num)s reintentos antes de que el plan termine."
+msgstr[0] "We couldn't charge your payment method. Meanwhile you use your own balance at the pay-as-you-go price. Update your payment method in Settings › Plan; otherwise %(num)s retry is left before the plan ends."
+msgstr[1] "We couldn't charge your payment method. Meanwhile you use your own balance at the pay-as-you-go price. Update your payment method in Settings › Plan; otherwise %(num)s retries are left before the plan ends."
+
+msgid "No pudimos cobrar tu plan"
+msgstr "We couldn't charge your plan"
+
+#, python-format
+msgid "No pudimos cobrar tu plan %(plan)s"
+msgstr "We couldn't charge your %(plan)s plan"
+
+msgid "No pudimos cobrar tu plan."
+msgstr "We could not charge your plan."
+
+#, python-format
+msgid "No pudimos consultar la transacción en Wompi: %(error)s"
+msgstr "We could not check the transaction in Wompi: %(error)s"
+
+msgid "No pudimos hablar con Nequi. Intenta de nuevo en un rato."
+msgstr "We could not reach Nequi. Try again in a while."
+
+msgid "No pudimos leer la tasa de cambio; intenta en unos minutos"
+msgstr "We couldn't read the exchange rate; try again in a few minutes"
+
+msgid "No pudimos leer la tasa de cambio; intenta en unos minutos."
+msgstr "We could not read the exchange rate; try again in a few minutes."
+
 msgid "No quedó ningún anuncio por analizar."
 msgstr "No ads were left to analyze."
+
+msgid "No recibimos los datos de tu medio de pago. Vuelve a ingresar la tarjeta o a aprobar en Nequi."
+msgstr "We did not receive your payment method details. Enter the card again or approve in Nequi again."
 
 msgid "No retiene"
 msgstr "Doesn't hold"
@@ -12244,6 +12997,15 @@ msgstr "Not activated: the experiment was no longer launching (it was left “%(
 msgid "No se agregó ningún referente."
 msgstr "No reference was added."
 
+msgid "No se cobró"
+msgstr "Not charged"
+
+msgid "No se cobró (lo revisó un administrador)"
+msgstr "Not charged (checked by an administrator)"
+
+msgid "No se cobró: el plan se canceló"
+msgstr "Not charged: the plan was cancelled"
+
 msgid "No se conserva la foto original de esta generación."
 msgstr "The original photo of this generation wasn't kept."
 
@@ -12256,6 +13018,10 @@ msgstr "No words were found in that audio."
 
 msgid "No se encontró. Puede que ya no exista."
 msgstr "Not found. It may no longer exist."
+
+#, python-format
+msgid "No se genera: cita cifras que no están en los datos (%(cifras)s)."
+msgstr "Not generated: it cites figures that aren't in the data (%(cifras)s)."
 
 #, python-format
 msgid "No se guardó el guion: %(errores)s"
@@ -12375,6 +13141,9 @@ msgstr "A charge could not be recorded"
 msgid "No se pudo avanzar la derivación: %(error)s"
 msgstr "Could not advance the derivation: %(error)s"
 
+msgid "No se pudo bajar el video original."
+msgstr "Couldn't download the original video."
+
 #, python-brace-format
 msgid "No se pudo borrar (error {status})."
 msgstr "Couldn't delete (error {status})."
@@ -12417,6 +13186,9 @@ msgstr "The Triple Whale panel couldn't be loaded. Reload the page."
 
 msgid "No se pudo cargar el panel de guiones. Recarga la página."
 msgstr "Couldn't load the scripts panel. Reload the page."
+
+msgid "No se pudo cargar el plan. Vuelve a abrir este apartado en un rato."
+msgstr "The plan could not be loaded. Open this section again in a while."
 
 msgid "No se pudo cargar el prompt."
 msgstr "Couldn't load the prompt."
@@ -12595,6 +13367,10 @@ msgid "No se pudo hablar con Notion; intenta de nuevo en un momento."
 msgstr "Couldn't reach Notion; try again in a moment."
 
 #, python-format
+msgid "No se pudo hablar con Wompi (%(tipo)s)"
+msgstr "Couldn't reach Wompi (%(tipo)s)"
+
+#, python-format
 msgid "No se pudo hacer el análisis: %(error)s"
 msgstr "The analysis couldn't be done: %(error)s"
 
@@ -12604,6 +13380,9 @@ msgstr "Couldn't make that change ({error}). The edit stayed as it was."
 
 msgid "No se pudo hacer ese cambio: el aviso está debajo del video."
 msgstr "Couldn't make that change: the notice is below the video."
+
+msgid "No se pudo hacer este gancho."
+msgstr "This hook couldn't be made."
 
 msgid "No se pudo lanzar el video."
 msgstr "The video couldn't be launched."
@@ -12624,12 +13403,24 @@ msgstr "Couldn't read the reference (%(tipo)s)."
 msgid "No se pudo leer la referencia."
 msgstr "Couldn't read the reference."
 
+msgid "No se pudo medir la duración del video."
+msgstr "Couldn't measure the video's length."
+
 #, python-format
 msgid "No se pudo pausar por tope: %(error)s"
 msgstr "Could not pause for reaching the cap: %(error)s"
 
+msgid "No se pudo poner el armado en la cola."
+msgstr "Couldn't queue the video assembly."
+
 msgid "No se pudo poner la escena en la cola."
 msgstr "The scene couldn't be queued."
+
+msgid "No se pudo poner la preparación en la cola."
+msgstr "Couldn't queue the preparation."
+
+msgid "No se pudo poner la preparación en la cola: vuelve a intentarlo."
+msgstr "Couldn't queue the preparation: try again."
 
 #, python-brace-format
 msgid "No se pudo preparar ese video (error {status})."
@@ -12650,6 +13441,9 @@ msgstr "Couldn't prepare “{nombre}”. Try again."
 #, python-brace-format
 msgid "No se pudo producir (error {status})."
 msgstr "Couldn't produce (error {status})."
+
+msgid "No se pudo producir el video."
+msgstr "Couldn't produce the video."
 
 msgid "No se pudo producir esta final. Vuelve a intentar; si se repite, avísanos."
 msgstr "Couldn't produce this final cut. Try again; if it happens again, let us know."
@@ -12694,6 +13488,9 @@ msgstr "Could not refresh %(nombre)s (%(pais)s): %(error)s"
 msgid "No se pudo revisar %(fuente)s"
 msgstr "Couldn't check %(fuente)s"
 
+msgid "No se pudo sacar el fotograma de arranque."
+msgstr "Couldn't extract the starting frame."
+
 msgid "No se pudo sacar ningún fotograma del video."
 msgstr "Couldn't get a single frame from the video."
 
@@ -12728,6 +13525,12 @@ msgstr "Couldn't use the microphone."
 #, python-format
 msgid "No se pudo volver a pausar en Meta: %(motivo)s"
 msgstr "Couldn't pause it again on Meta: %(motivo)s"
+
+msgid "No se renueva más; sigue hasta el fin de lo pagado, sin devolución."
+msgstr "It no longer renews; it lasts until the end of what is paid, with no refund."
+
+msgid "No se renueva ni se cobra más. Hasta esa fecha sigues con el precio de miembro y el saldo del plan; para seguir con el plan, vuelve a suscribirte en Configuración › Plan."
+msgstr "It won't renew or be charged again. Until then you keep the member price and your plan balance; to stay on the plan, subscribe again in Settings › Plan."
 
 msgid "No se subió"
 msgstr "Not uploaded"
@@ -12818,11 +13621,20 @@ msgstr "Note"
 msgid "Nota (la ve el cliente en sus movimientos)"
 msgstr "Note (the client sees it in their movements)"
 
+msgid "Nota (obligatoria si no se cobró; solo la ven los admins)"
+msgstr "Note (required if it was not charged; only admins see it)"
+
 msgid "Nota (opcional)"
 msgstr "Note (optional)"
 
+msgid "Nota con el motivo (obligatoria; solo la ven los admins)"
+msgstr "Note with the reason (required; only admins see it)"
+
 msgid "Nota de transparencia:"
 msgstr "Transparency note:"
+
+msgid "Nota del pago (solo la ven los admins)"
+msgstr "Payment note (only admins see it)"
 
 msgid "Notas de estilo"
 msgstr "Style notes"
@@ -12863,6 +13675,9 @@ msgstr "New"
 
 msgid "Nuevo experimento"
 msgstr "New experiment"
+
+msgid "Nuevo plan"
+msgstr "New plan"
 
 msgid "Nuevo producto"
 msgstr "New product"
@@ -12917,6 +13732,12 @@ msgstr "Hide it until its situation changes"
 msgid "Oferta"
 msgstr "Offer"
 
+msgid "Ofrecer"
+msgstr "Offer"
+
+msgid "Ofrecerlo ya a los proyectos que cobran (si no, nace archivado)"
+msgstr "Offer it now to projects that charge usage (otherwise it starts archived)"
+
 #, python-format
 msgid "Ojo: la campaña %(numeros)s tiene la misma persona, producto, etapa, consciencia y formato. Si es a propósito, cambia algo para que no salgan piezas repetidas."
 msgstr "Heads up: campaign %(numeros)s has the same persona, product, stage, awareness and format. If that's on purpose, change something so the pieces don't come out repeated."
@@ -12947,6 +13768,9 @@ msgstr "Optimizing for purchases requires an active Pixel and pixel attribution:
 
 msgid "Orden"
 msgstr "Sort"
+
+msgid "Orden en la pantalla del cliente"
+msgstr "Order on the customer's screen"
 
 msgid "Origen"
 msgstr "Source"
@@ -13014,11 +13838,34 @@ msgstr "Pay the outstanding balance before the grace period ends."
 msgid "Paga el saldo pendiente en la facturación de la cuenta."
 msgstr "Pay the outstanding balance in the account’s billing."
 
+msgid "Pagado por transferencia"
+msgstr "Paid by bank transfer"
+
 msgid "Pagar con Bold"
 msgstr "Pay with Bold"
 
+msgid "Pagar con Wompi"
+msgstr "Pay with Wompi"
+
+#, python-format
+msgid "Pago a mano anotado en %(proyecto)s: extiende lo pagado y su periodo se abre cuando termine el actual."
+msgstr "Manual payment recorded for %(proyecto)s: it extends what is paid and its period opens when the current one ends."
+
 msgid "Pago anulado por Bold"
 msgstr "Payment voided by Bold"
+
+msgid "Pago anulado por Wompi"
+msgstr "Payment voided by Wompi"
+
+msgid "Pago pendiente"
+msgstr "Payment due"
+
+#, python-format
+msgid "Pago pendiente %(referencia)s"
+msgstr "Pending payment %(referencia)s"
+
+msgid "Pagos del plan"
+msgstr "Plan payments"
 
 msgid "Palabra clave"
 msgstr "Keyword"
@@ -13061,6 +13908,9 @@ msgstr "For"
 
 msgid "Para aprobar, primero resuelve los problemas de arriba (con Claude o editando a mano)."
 msgstr "To approve, first fix the issues above (with Claude or by editing by hand)."
+
+msgid "Para cancelar, confirma con el botón «Sí, cancelar el plan»."
+msgstr "To cancel, confirm with the “Yes, cancel the plan” button."
 
 msgid "Para comparar anuncios entre sí sirve «Triple Attribution» con 7 días; para cuadrar con las ventas totales, «Linear All» o «Total Impact»."
 msgstr "To compare ads against each other, “Triple Attribution” with 7 days works; to reconcile with total sales, “Linear All” or “Total Impact”."
@@ -13105,6 +13955,9 @@ msgstr "For whom"
 msgid "Para rehacer desde esa escena hace falta el último cuadro de la anterior."
 msgstr "To redo from that scene, the last frame of the previous one is needed."
 
+msgid "Para suscribirte tienes que aceptar los términos de Wompi, el tratamiento de datos y el cobro automático"
+msgstr "To subscribe you need to accept Wompi's terms, the data processing and the automatic charge"
+
 msgid "Para vender"
 msgstr "Promo labels"
 
@@ -13131,6 +13984,9 @@ msgstr "Passes thresholds but is not in the top third of its country (position %
 
 msgid "Pasada 1: Agrupa en núcleos de deseos comunes. Pasada 2: Desglosa cada núcleo en sub-avatares (bases de emoción/experiencia)."
 msgstr "Pass 1: Groups into cores of shared desires. Pass 2: Breaks each core down into sub-avatars (emotion/experience bases)."
+
+msgid "Pasarela"
+msgstr "Gateway"
 
 msgid "Pasos de la campaña"
 msgstr "Campaign steps"
@@ -13455,8 +14311,51 @@ msgstr "Meta Pixel"
 msgid "Pixel sin datos"
 msgstr "Pixel with no data"
 
+msgid "Plan"
+msgstr "Plan"
+
+#, python-format
+msgid "Plan %(nombre)s"
+msgstr "%(nombre)s plan"
+
+msgid "Plan archivado: ya no se ofrece. Las suscripciones que tiene siguen igual."
+msgstr "Plan archived: it is no longer offered. Its subscriptions stay the same."
+
+#, python-format
+msgid "Plan creado: %(plan)s."
+msgstr "Plan created: %(plan)s."
+
+#, python-format
+msgid "Plan de %(cliente)s activado a mano"
+msgstr "%(cliente)s's plan activated manually"
+
+#, python-format
+msgid "Plan de %(proyecto)s activado a mano: el periodo quedó abierto y su saldo acreditado."
+msgstr "Plan for %(proyecto)s activated by hand: the period is open and its balance credited."
+
+#, python-format
+msgid "Plan de %(proyecto)s cancelado y terminado: no tenía nada pagado vigente."
+msgstr "Plan for %(proyecto)s canceled and ended: it had nothing paid in force."
+
+#, python-format
+msgid "Plan de %(proyecto)s cancelado: no se renueva y sigue hasta el %(fecha)s."
+msgstr "Plan for %(proyecto)s canceled: it does not renew and lasts until %(fecha)s."
+
+#, python-format
+msgid "Plan de %(proyecto)s terminado: el saldo del plan que quedaba venció y desde ahora genera a la carta."
+msgstr "Plan for %(proyecto)s ended: the remaining plan balance expired and from now on it generates pay-as-you-go."
+
 msgid "Plan de cambios"
 msgstr "Action plan"
+
+msgid "Plan guardado. Quien ya está suscrito sigue con el precio que aceptó; el margen y el tope valen desde su próximo periodo (en un plan anual, desde su próximo pago)."
+msgstr "Plan saved. Anyone already subscribed keeps the price they accepted; the markup and the cap apply from their next period (on a yearly plan, from their next payment)."
+
+msgid "Planes"
+msgstr "Plans"
+
+msgid "Planes de los proyectos"
+msgstr "Projects' plans"
 
 msgid "Plataforma"
 msgstr "Platform"
@@ -13493,6 +14392,9 @@ msgstr "Put the playhead over the selected clip to split it."
 #, python-format
 msgid "Pon el total que estás dispuesto a gastar y los días: Creatv lo reparte entre los países según sus anuncios. Moneda de tu cuenta de Meta: %(moneda)s."
 msgstr "Enter the total you're willing to spend and the days: Creatv splits it across the countries based on their ads. Your Meta account currency: %(moneda)s."
+
+msgid "Pon este código en el nombre del anuncio en Meta: así Creatv lo compara con el original."
+msgstr "Put this code in the ad's name in Meta: that's how Creatv compares it with the original."
 
 msgid "Pon una duración objetivo para poder recortar."
 msgstr "Set a target duration to be able to trim."
@@ -13612,12 +14514,28 @@ msgstr "Price"
 msgid "Precio (opcional)"
 msgstr "Price (optional)"
 
+msgid "Precio anual"
+msgstr "Yearly price"
+
+msgid "Precio anual en US$ (vacío = sin opción anual)"
+msgstr "Yearly price in US$ (empty = no yearly option)"
+
 msgid "Precio base"
 msgstr "Base price"
 
 #, python-format
+msgid "Precio de miembro: tus generaciones cuestan %(pct)s %% menos que a la carta."
+msgstr "Member price: your generations cost %(pct)s %% less than pay-as-you-go."
+
+#, python-format
 msgid "Precio de referencia: el modelo %(modelo)s no está en la tabla."
 msgstr "Reference price: the model %(modelo)s isn't in the table."
+
+msgid "Precio mensual"
+msgstr "Monthly price"
+
+msgid "Precio mensual en US$ (entero)"
+msgstr "Monthly price in US$ (whole number)"
 
 msgid "Precios con el sonido de la escena incluido."
 msgstr "Prices include the scene sound."
@@ -13632,6 +14550,9 @@ msgstr "Asking %(proveedor)s for the video… if it already finished, it shows u
 msgid "Prenda de vestir (saco, camiseta, chaqueta)"
 msgstr "Clothing (sweater, t-shirt, jacket)"
 
+msgid "Prende «Cobrar» para activarle un plan."
+msgstr "Turn on “Charge usage” to activate a plan."
+
 msgid "Prender"
 msgstr "Turn on"
 
@@ -13639,6 +14560,9 @@ msgid "Prepara variantes antes de que se apague: «Evaluar con IA» propone idea
 msgid_plural "Prepara variantes antes de que se apaguen: «Evaluar con IA» propone ideas a partir de lo que ya funciona."
 msgstr[0] "Prepare variants before it fades: “Evaluate with AI” suggests ideas based on what already works."
 msgstr[1] "Prepare variants before they fade: “Evaluate with AI” suggests ideas based on what already works."
+
+msgid "Preparando"
+msgstr "Preparing"
 
 msgid "Preparando el audio"
 msgstr "Preparing the audio"
@@ -13755,11 +14679,20 @@ msgstr "High priority"
 msgid "Prioridad baja"
 msgstr "Low priority"
 
+msgid "Prioridad en la cola."
+msgstr "Priority in the queue."
+
 msgid "Prioridad media"
 msgstr "Medium priority"
 
 msgid "Privacidad"
 msgstr "Privacy"
+
+#, python-format
+msgid "Probar %(num)s gancho · %(precio)s"
+msgid_plural "Probar los %(num)s ganchos · %(precio)s"
+msgstr[0] "Try %(num)s hook · %(precio)s"
+msgstr[1] "Try the %(num)s hooks · %(precio)s"
 
 msgid "Probar conexión"
 msgstr "Test connection"
@@ -13790,6 +14723,9 @@ msgstr "Processing…"
 
 msgid "Proceso"
 msgstr "Process"
+
+msgid "Produciendo"
+msgstr "Producing"
 
 #, python-format
 msgid "Produciendo %(n)s finales… cada una aparece aquí, en Finales, cuando termina."
@@ -13924,6 +14860,9 @@ msgstr "App promotion"
 msgid "Prompt"
 msgstr "Prompt"
 
+msgid "Prompt del clip"
+msgstr "Clip prompt"
+
 msgid "Prompt elegido"
 msgstr "Chosen prompt"
 
@@ -14028,6 +14967,9 @@ msgstr "Proof"
 
 msgid "Pruebas del producto"
 msgstr "Product proof"
+
+msgid "Próxima renovación"
+msgstr "Next renewal"
 
 msgid "Publicación automática"
 msgstr "Automatic publishing"
@@ -14220,6 +15162,9 @@ msgstr "Memory is running low (%(libre)s available)."
 #, python-format
 msgid "Queda poco disco (%(libre)s libres). Borra salidas/ viejas o amplía el disco."
 msgstr "Disk is running low (%(libre)s free). Delete old salidas/ files or grow the disk."
+
+msgid "Quedó como no cobrado."
+msgstr "Marked as not charged."
 
 msgid "Quedó en Experimentos › Anuncios sueltos — crea un experimento con esa pieza."
 msgstr "It's now in Experiments › Standalone ads — create an experiment with that piece."
@@ -14468,6 +15413,9 @@ msgstr "Top-up credited to %(cliente)s"
 msgid "Recarga con Bold"
 msgstr "Top-up with Bold"
 
+msgid "Recarga con Wompi"
+msgstr "Top-up with Wompi"
+
 msgid "Recarga de saldo"
 msgstr "Balance top-up"
 
@@ -14671,6 +15619,9 @@ msgstr "Reference added from the link."
 msgid "Referencia analizada."
 msgstr "Reference analyzed."
 
+msgid "Referencia de pago inválida"
+msgstr "Invalid payment reference"
+
 msgid "Referencia quitada"
 msgstr "Reference removed"
 
@@ -14857,6 +15808,10 @@ msgstr "Retry launch"
 msgid "Reintento de «%(titulo)s»"
 msgstr "Retry of “%(titulo)s”"
 
+#, python-format
+msgid "Reintento: %(fecha)s"
+msgstr "Retry: %(fecha)s"
+
 msgid "Renderizando"
 msgstr "Rendering"
 
@@ -14914,6 +15869,9 @@ msgstr "Walmart reviews"
 msgid "Reseñas por producto"
 msgstr "Reviews per product"
 
+msgid "Resolver el pago"
+msgstr "Resolve the payment"
+
 #, python-format
 msgid "Respaldo en %(ruta)s."
 msgstr "Backup at %(ruta)s."
@@ -14933,6 +15891,10 @@ msgstr "Resolved"
 
 msgid "Resultado"
 msgstr "Result"
+
+#, python-format
+msgid "Resultado: %(resultado)s."
+msgstr "Result: %(resultado)s."
 
 msgid "Resultados"
 msgstr "Results"
@@ -15141,6 +16103,18 @@ msgstr "Balance"
 msgid "Saldo bajo: te queda menos de %(umbral)s."
 msgstr "Low balance: you have less than %(umbral)s left."
 
+msgid "Saldo del plan"
+msgstr "Plan balance"
+
+msgid "Saldo del plan del mes"
+msgstr "Monthly plan balance"
+
+msgid "Saldo del plan restante"
+msgstr "Plan balance left"
+
+msgid "Saldo del plan sin usar que venció"
+msgstr "Unused plan balance that expired"
+
 msgid "Saldo después"
 msgstr "Balance after"
 
@@ -15152,8 +16126,15 @@ msgstr "Insufficient balance: this costs ≈ %(precio)s and you have %(disponibl
 msgid "Saldo insuficiente: tienes %(disponible)s disponibles. Recarga para seguir."
 msgstr "Insufficient balance: you have %(disponible)s available. Top up to continue."
 
+msgid "Saldo propio"
+msgstr "Own balance"
+
 msgid "Saldo y recargas"
 msgstr "Balance and top-ups"
+
+#, python-format
+msgid "Saldo: %(saldo)s · Plan: %(plan)s restantes · Recargar"
+msgstr "Balance: %(saldo)s · Plan: %(plan)s left · Top up"
 
 #, python-format
 msgid "Saldo: %(saldo)s · Recargar"
@@ -15339,9 +16320,8 @@ msgstr "They take a good share of last week’s spend. Pausing them frees budget
 msgid "Se llevó el %(pct)s %% del gasto de los últimos 30 días (%(gasto)s) con ROAS %(roas)s×, menos de la mitad del de la cuenta (%(roas_cuenta)s×)."
 msgstr "It took %(pct)s%% of the spend of the last 30 days (%(gasto)s) with a ROAS of %(roas)s×, less than half the account’s (%(roas_cuenta)s×)."
 
-#, python-format
-msgid "Se muestran los últimos %(n)s cobros"
-msgstr "Showing the last %(n)s charges"
+msgid "Se ofrece"
+msgstr "Offered"
 
 msgid "Se paga por imagen; el precio estimado se muestra antes de generar."
 msgstr "Paid per image; the estimated price is shown before generating."
@@ -15385,6 +16365,10 @@ msgid "Se quitaron %(n)s comentario(s) de %(fuente)s."
 msgstr "Removed %(n)s comment(s) from %(fuente)s."
 
 #, python-format
+msgid "Se renueva el %(momento)s: a esa hora cobramos %(monto)s."
+msgstr "It renews on %(momento)s: that's when we charge %(monto)s."
+
+#, python-format
 msgid "Se retoma el lanzamiento donde quedó (no se duplican objetos en Meta) y, si termina bien, se activa: empieza a gastar ≈ %(diario)s al día entre todos los países. ¿Seguimos?"
 msgstr "The launch resumes where it left off (no objects get duplicated on Meta) and, if it finishes well, it's activated: it starts spending ≈ %(diario)s a day across all countries. Continue?"
 
@@ -15402,6 +16386,10 @@ msgstr "The photo or video model is used depending on what you upload. Quality e
 
 msgid "Se usa el modelo de fotos o el de videos según lo que subas. Mejora de calidad desactivada (solo fotos); los valores por defecto se cambian en Configuración."
 msgstr "The photo or video model is used depending on what you upload. Quality enhancement off (photos only); the defaults are changed in Settings."
+
+#, python-format
+msgid "Se usa primero. Lo que no uses vence el %(fecha)s y no se acumula."
+msgstr "It is used first. Whatever you do not use expires on %(fecha)s and does not roll over."
 
 msgid "Se ve en el video"
 msgstr "Seen in the video"
@@ -15455,9 +16443,15 @@ msgstr ""
 "Second pass with Bria: it raises the resolution <strong>without regenerating</strong> the\n"
 "    image, so it doesn't change the face, the pose or the background."
 
+msgid "Segundo pago"
+msgstr "Second payment"
+
 #, python-format
 msgid "Según el Pixel, estos anuncios vendieron %(ventas)s que en los %(n)s días anteriores, con %(gasto)s de gasto: cada 1 %(moneda)s trajo %(mer)s %(moneda)s atribuidos (antes %(mer_antes)s)."
 msgstr "According to the Pixel, these ads sold %(ventas)s than in the previous %(n)s days, with %(gasto)s spend: every 1 %(moneda)s brought %(mer)s %(moneda)s attributed (before, %(mer_antes)s)."
+
+msgid "Según el Pixel: visitantes nuevos entre visitantes únicos que llegaron por estos anuncios. Los únicos se cuentan por día, así que en periodos largos es aproximado."
+msgstr "According to the Pixel: new visitors out of unique visitors who came through these ads. Unique visitors are counted per day, so over long periods it is approximate."
 
 msgid "Según los pedidos de la tienda en Triple Whale; es el producto que conviene empujar en los anuncios nuevos."
 msgstr "According to the store's orders in Triple Whale; it's the product worth pushing in new ads."
@@ -15496,6 +16490,17 @@ msgstr "Shopify, step by step"
 msgid "Si %(correo)s es correcto, te llega el enlace en unos minutos (revisa también el spam)."
 msgstr "If %(correo)s is correct, the link will arrive in a few minutes (check spam too)."
 
+#, python-format
+msgid "Si cancelas antes del %(momento)s, no se vuelve a cobrar. Tu plan sigue hasta el %(fecha)s y lo que quede del saldo del plan vence ese día. No se devuelve lo ya pagado."
+msgstr "If you cancel before %(momento)s, it will not be charged again. Your plan stays active until %(fecha)s and whatever is left of the plan balance expires that day. What you already paid is not refunded."
+
+msgid "Si cancelas, no se vuelve a cobrar y el plan termina. No se devuelve lo ya pagado."
+msgstr "If you cancel, it will not be charged again and the plan ends. What you already paid is not refunded."
+
+#, python-format
+msgid "Si cancelas, no se vuelve a cobrar. Tu plan sigue hasta el %(fecha)s y lo que quede del saldo del plan vence ese día. No se devuelve lo ya pagado."
+msgstr "If you cancel, it will not be charged again. Your plan stays active until %(fecha)s and whatever is left of the plan balance expires that day. What you already paid is not refunded."
+
 msgid "Si el botón no funciona, copia este enlace en tu navegador:"
 msgstr "If the button doesn't work, copy this link into your browser:"
 
@@ -15510,6 +16515,9 @@ msgstr "If you choose it, Claude writes at that level in this product's ideas, s
 
 msgid "Si no quieres cerrarla, revísala en Meta; si sí, quítala de las cuentas del proyecto."
 msgstr "If you don’t want to close it, check it in Meta; if you do, remove it from the project’s accounts."
+
+msgid "Si pagaste, lo acreditamos apenas Wompi lo confirme."
+msgstr "If you paid, we will credit it as soon as Wompi confirms it."
 
 msgid "Si tu cliente ya vio tres o más promesas parecidas, hace falta el mecanismo: cómo logra el producto lo que promete."
 msgstr "If your customer has already seen three or more similar promises, you need the mechanism: how the product delivers what it promises."
@@ -15567,6 +16575,9 @@ msgstr "Without a Page only metrics are read: ads can't be launched and organic 
 
 msgid "Sin URL"
 msgstr "No URL"
+
+msgid "Sin WOMPI_LLAVE_PUBLICA, WOMPI_LLAVE_PRIVADA, WOMPI_SECRETO_EVENTOS y WOMPI_SECRETO_INTEGRIDAD del mismo ambiente no se pueden vender planes con tarjeta y las recargas en línea usan Bold (si tiene llaves). Activar un plan a mano sigue funcionando."
+msgstr "Without WOMPI_LLAVE_PUBLICA, WOMPI_LLAVE_PRIVADA, WOMPI_SECRETO_EVENTOS and WOMPI_SECRETO_INTEGRIDAD from the same environment, plans cannot be sold by card and online top-ups use Bold (if it has keys). Activating a plan by hand still works."
 
 msgid "Sin cambios en las cuentas."
 msgstr "No changes to the accounts."
@@ -15690,6 +16701,9 @@ msgstr "No spend in the last 7 days"
 msgid "Sin hooks alternativos."
 msgstr "No alternate hooks."
 
+msgid "Sin id de transacción: su resultado llega con el evento de Wompi."
+msgstr "No transaction id: its result arrives with the Wompi event."
+
 msgid "Sin imagen: Claude juzgó por texto y números"
 msgstr "No image: Claude judged by text and numbers"
 
@@ -15734,6 +16748,9 @@ msgstr "No pieces for: %(faltan)s. Remove that country or mark a piece for it."
 msgid "Sin piezas para: %(paises)s. Agrega una pieza por país o quita el país."
 msgstr "No pieces for: %(paises)s. Add one piece per country or remove the country."
 
+msgid "Sin plan"
+msgstr "No plan"
+
 msgid "Sin precio"
 msgstr "No price"
 
@@ -15773,6 +16790,9 @@ msgstr "No sound: turn it up to hear this video's sound."
 msgid "Sin sub-avatares en este núcleo."
 msgstr "No sub-avatars in this core."
 
+msgid "Sin tarjeta registrada (pago por transferencia)."
+msgstr "No card on file (paid by bank transfer)."
+
 msgid "Sin texto: se redacta con IA al aprobar (o escríbelo aquí)"
 msgstr "No text: it's written with AI on approval (or write it here)"
 
@@ -15790,6 +16810,12 @@ msgstr "No sales yet"
 
 msgid "Sin verificar ahora (Meta no respondió)."
 msgstr "Not verified right now (Meta didn't respond)."
+
+msgid "Sin video que se pueda bajar: los ganchos necesitan el video original."
+msgstr "No video that can be downloaded: hooks need the original video."
+
+msgid "Sin visitas atribuidas por el Pixel de Triple Whale (sin rastreo o sin clics en este periodo)."
+msgstr "No visits attributed by the Triple Whale Pixel (no tracking or no clicks in this period)."
 
 msgid "Sin voz/música"
 msgstr "No voice/music"
@@ -16060,6 +17086,9 @@ msgstr "Their day to day (one situation per line)"
 msgid "Su mejor día fue el %(dia)s: %(ventas)s en ventas atribuidas según el Pixel y %(pedidos)s."
 msgstr "Their best day was %(dia)s: %(ventas)s in sales attributed by the Pixel and %(pedidos)s."
 
+msgid "Su plan ya no se renueva solo: no cobraremos la tarjeta. Para volver a la renovación automática, el proyecto tiene que suscribirse de nuevo."
+msgstr "Its plan no longer renews automatically: we won't charge the card. To go back to automatic renewal, the project has to subscribe again."
+
 msgid "Su propia conexión:"
 msgstr "Its own connection:"
 
@@ -16283,6 +17312,15 @@ msgstr "Its copied metrics don't change."
 msgid "Sus números de los últimos 7 días cayeron frente a los 7 anteriores: prepara variantes antes de que se apague."
 msgstr "Its numbers for the last 7 days dropped against the 7 before: prepare variants before it dies out."
 
+msgid "Suscribirme"
+msgstr "Subscribe"
+
+msgid "Suscribirme al plan"
+msgstr "Subscribe to the plan"
+
+msgid "Suscripciones vigentes"
+msgstr "Active subscriptions"
+
 msgid "Swap listo."
 msgstr "Swap ready."
 
@@ -16291,6 +17329,9 @@ msgstr "Copycoders swipe file"
 
 msgid "Sí"
 msgstr "Yes"
+
+msgid "Sí se cobró"
+msgstr "It was charged"
 
 msgid "Sí — 1 imagen"
 msgstr "Yes — 1 image"
@@ -16319,8 +17360,17 @@ msgstr "Yes — up to 4 reference images"
 msgid "Sí — hasta 9 imágenes y 3 videos de referencia"
 msgstr "Yes — up to 9 images and 3 reference videos"
 
+msgid "Sí, cancelar el plan"
+msgstr "Yes, cancel the plan"
+
+msgid "Sí, cancelar este plan"
+msgstr "Yes, cancel this plan"
+
 msgid "Sí, eliminar"
 msgstr "Yes, delete"
+
+msgid "Sí, terminar el plan ya"
+msgstr "Yes, end the plan now"
 
 msgid "Tabla"
 msgstr "Table"
@@ -16352,8 +17402,18 @@ msgstr "Tasks in the last 24 h by type"
 msgid "Tareas en espera"
 msgstr "Tasks waiting"
 
+msgid "Tarjeta"
+msgstr "Card"
+
+msgid "Tarjeta, PSE, Nequi o Bancolombia. Wompi cobra en pesos colombianos a la TRM del día; se acreditan los dólares que elegiste."
+msgstr "Card, PSE, Nequi or Bancolombia. Wompi charges in Colombian pesos at the day's official exchange rate (TRM); the dollars you chose are credited."
+
 msgid "Tarjetas de cualquier país; en Colombia también PSE y Nequi. Bold cobra en pesos colombianos a la tasa del día."
 msgstr "Cards from any country; in Colombia also PSE and Nequi. Bold charges in Colombian pesos at the day's rate."
+
+#, python-format
+msgid "Tasa de cambio aceptada: %(valor)s COP por dólar. Los cobros en pesos siguen."
+msgstr "Exchange rate accepted: %(valor)s COP per dollar. Charges in pesos resume."
 
 #, python-format
 msgid "Te avisamos cuando baje de %(umbral)s."
@@ -16369,6 +17429,10 @@ msgstr "You're missing camera-movement or transition references and there are %(
 
 msgid "Te mandamos un enlace para confirmarlo; con él también recuperas la contraseña si la olvidas."
 msgstr "We'll send you a link to confirm it; you can also use it to recover your password if you forget it."
+
+#, python-format
+msgid "Te quedan %(monto)s del saldo del plan hasta el %(fecha)s; lo que no uses no se acumula."
+msgstr "You have %(monto)s of plan balance left until %(fecha)s; what you don't use doesn't roll over."
 
 #, python-format
 msgid "Te quedan %(monto)s. Recarga para seguir creando."
@@ -16400,8 +17464,15 @@ msgid "Tendencia (7 días)"
 msgstr "Trend (7 days)"
 
 #, python-format
+msgid "Termina el %(fecha)s"
+msgstr "Ends on %(fecha)s"
+
+#, python-format
 msgid "Termina o cierra primero: %(partes)s"
 msgstr "Finish or close first: %(partes)s"
+
+msgid "Terminar ya"
+msgstr "End now"
 
 msgid "Terminó con error."
 msgstr "Finished with an error."
@@ -16521,6 +17592,9 @@ msgstr "Connected stores"
 #, python-format
 msgid "Tiendas de %(pais)s"
 msgstr "Stores in %(pais)s"
+
+msgid "Tiene transacción en Wompi: se resuelve consultándola, no a mano."
+msgstr "It has a Wompi transaction: it is resolved by checking it, not by hand."
 
 msgid "Tienes cambios sin guardar en esta ficha. ¿Cerrarla igual?"
 msgstr "You have unsaved changes here. Close the details anyway?"
@@ -16677,6 +17751,9 @@ msgstr "You haven't got any references yet."
 msgid "Todavía no hay %(plural)s"
 msgstr "No %(plural)s yet"
 
+msgid "Todavía no hay ahorro en este periodo: aparece cuando generas con precio de miembro."
+msgstr "No savings in this period yet: they show up when you generate at member price."
+
 msgid "Todavía no hay anuncios con datos suficientes para evaluar con IA."
 msgstr "There are no ads with enough data to evaluate with AI yet."
 
@@ -16747,6 +17824,9 @@ msgstr "No metrics yet."
 msgid "Todavía no hay ninguna fuente de anuncios configurada."
 msgstr "No ad source is set up yet."
 
+msgid "Todavía no hay pagos."
+msgstr "No payments yet."
+
 msgid "Todavía no hay personajes para este proyecto."
 msgstr "There are no characters for this project yet."
 
@@ -16758,6 +17838,12 @@ msgstr "No pieces generated in this sprint yet."
 
 msgid "Todavía no hay piezas para probar"
 msgstr "There are no pieces to test yet"
+
+msgid "Todavía no hay planes disponibles"
+msgstr "No plans available yet"
+
+msgid "Todavía no hay planes."
+msgstr "There are no plans yet."
 
 msgid "Todavía no hay productos"
 msgstr "No products yet"
@@ -16801,8 +17887,8 @@ msgstr "No videos yet. Create the first one: choose duration, mode, hook and ref
 msgid "Todavía no le has escrito a Claude. Cuéntale qué salió mal en este prompt y te propone una versión corregida."
 msgstr "You haven't written to Claude yet. Tell it what went wrong with this prompt and it'll suggest a fixed version."
 
-msgid "Todavía no llegó ningún evento de Bold."
-msgstr "No Bold event has arrived yet."
+msgid "Todavía no llegó ningún evento de Bold ni de Wompi."
+msgstr "No Bold or Wompi event has arrived yet."
 
 msgid "Todavía no se ha traído ningún barrido global fuera de copycoders."
 msgstr "No global sweep has been brought in yet outside copycoders."
@@ -16922,6 +18008,9 @@ msgstr "All projects."
 msgid "Token"
 msgstr "Token"
 
+msgid "Token de pago inválido"
+msgstr "Invalid payment token"
+
 msgid "Token del usuario del sistema"
 msgstr "System-user token"
 
@@ -16938,6 +18027,12 @@ msgstr "Cap reached in “%(experimento)s”"
 #, python-format
 msgid "Tope alcanzado: gasto %(gasto)s de %(tope)s %(moneda)s. Se pausa el experimento."
 msgstr "Cap reached: spend %(gasto)s of %(tope)s %(moneda)s. The experiment is paused."
+
+msgid "Tope de lo incluido (costo/mes)"
+msgstr "Included cap (cost/month)"
+
+msgid "Tope de lo incluido en US$ de costo por mes"
+msgstr "Included cap in US$ of cost per month"
 
 msgid "Tope del presupuesto diario al escalar (en la moneda de la cuenta)"
 msgstr "Daily budget cap when scaling (in the account currency)"
@@ -17049,8 +18144,15 @@ msgstr "Bring in and classify ≈ US$ %(total)s"
 msgid "Traer y leer"
 msgstr "Fetch and read"
 
+#, python-format
+msgid "Transacción de Wompi: %(id)s"
+msgstr "Wompi transaction: %(id)s"
+
 msgid "Transcribiendo"
 msgstr "Transcribing"
+
+msgid "Transferencia"
+msgstr "Bank transfer"
 
 msgid "Transiciones"
 msgstr "Transitions"
@@ -17294,8 +18396,45 @@ msgstr "Your moment"
 msgid "Tu máquina de contenido con IA.<br>De la foto del producto al anuncio publicado."
 msgstr "Your AI content machine.<br>From the product photo to the published ad."
 
+#, python-format
+msgid "Tu plan %(plan)s está activo"
+msgstr "Your %(plan)s plan is active"
+
+#, python-format
+msgid "Tu plan %(plan)s se renovó"
+msgstr "Your %(plan)s plan renewed"
+
+#, python-format
+msgid "Tu plan %(plan)s se renueva pronto"
+msgstr "Your %(plan)s plan renews soon"
+
+#, python-format
+msgid "Tu plan %(plan)s termina pronto"
+msgstr "Your %(plan)s plan ends soon"
+
+#, python-format
+msgid "Tu plan anual se renueva el %(momento)s: a esa hora cobramos %(monto)s (en pesos a la TRM del día). Si cancelas antes, no se cobra. El saldo del plan se renueva cada mes y lo que no uses en un mes no pasa al siguiente."
+msgstr "Your yearly plan renews on %(momento)s: that's when we charge %(monto)s (in Colombian pesos at the day's official exchange rate). If you cancel before then, nothing is charged. The plan balance renews every month, and what you don't use in a month doesn't carry over to the next."
+
 msgid "Tu plan de TrendTrack no incluye la API (hace falta el plan Pro o superior)."
 msgstr "Your TrendTrack plan doesn't include the API (the Pro plan or higher is required)."
+
+#, python-format
+msgid "Tu plan se renueva el %(momento)s: a esa hora cobramos %(monto)s (en pesos a la TRM del día). Si cancelas antes, no se cobra. El saldo del plan que no uses antes de esa fecha no se acumula."
+msgstr "Your plan renews on %(momento)s: that's when we charge %(monto)s (in Colombian pesos at the day's official exchange rate). If you cancel before then, nothing is charged. Plan balance you don't use before that date doesn't roll over."
+
+msgid "Tu plan se renueva pronto"
+msgstr "Your plan renews soon"
+
+#, python-format
+msgid "Tu plan termina el %(fecha)s"
+msgstr "Your plan ends on %(fecha)s"
+
+msgid "Tu plan terminó"
+msgstr "Your plan ended"
+
+msgid "Tu plan terminó. Tu saldo propio sigue disponible y tus generaciones se cobran a la carta. Puedes volver a suscribirte en Configuración › Plan."
+msgstr "Your plan ended. Your own balance is still available and your generations are charged pay-as-you-go. You can subscribe again in Settings › Plan."
 
 #, python-format
 msgid "Tu proyecto %(nombre)s ya está conectado a Meta: cuenta %(cuenta)s · Página %(pagina)s. Ya puedes probar piezas en Experimentos y publicar contenido."
@@ -17324,6 +18463,9 @@ msgstr "Your session closed; log in again."
 
 msgid "Tu sesión terminó: recarga la página e inicia sesión."
 msgstr "Your session ended: reload the page and log in."
+
+msgid "Tu sesión venció. Vuelve a entrar para continuar."
+msgstr "Your session has expired. Log in again to continue."
 
 msgid "Tu sesión venció: vuelve a entrar para seguir."
 msgstr "Your session expired: sign in again to keep going."
@@ -17459,6 +18601,9 @@ msgstr "An ad that has been running for weeks, or that the brand duplicated into
 msgid "Un avatar escrito a mano nace aprobado: toda la app lo usa en cuanto lo guardas."
 msgstr "A hand-written avatar is born approved: the whole app uses it as soon as you save it."
 
+msgid "Un año (doce periodos)"
+msgstr "One year (twelve periods)"
+
 msgid "Un clip de audio no tiene posición ni tamaño."
 msgstr "An audio clip has no position or size."
 
@@ -17489,8 +18634,30 @@ msgstr "An experiment with one piece and one country is an ad; with several piec
 msgid "Un hecho real"
 msgstr "A real fact"
 
+msgid "Un mes"
+msgstr "One month"
+
 msgid "Un pago de Bold no corresponde a ninguna recarga"
 msgstr "A Bold payment does not match any top-up"
+
+msgid "Un pago de Wompi no corresponde a ninguna recarga"
+msgstr "A Wompi payment does not match any top-up"
+
+msgid "Un pago de Wompi no cuadra con su recarga"
+msgstr "A Wompi payment does not match its top-up"
+
+#, python-format
+msgid "Un pago de plan de %(cliente)s pide revisión"
+msgstr "A plan payment from %(cliente)s needs review"
+
+msgid "Un plan activado a mano no se renueva solo: cuando termine lo pagado, vuelves a activarlo o el cliente se suscribe con tarjeta."
+msgstr "A plan activated by hand does not renew automatically: when what is paid ends, you activate it again or the customer subscribes by card."
+
+msgid "Un plan mensual te da saldo cada mes, precio de miembro en todo lo que generas y la IA de textos incluida."
+msgstr "A monthly plan gives you balance every month, member price on everything you generate and text AI included."
+
+msgid "Un precio nuevo solo vale para suscripciones nuevas: quien ya está suscrito renueva al precio que aceptó."
+msgstr "A new price only applies to new subscriptions: anyone already subscribed renews at the price they accepted."
 
 #, python-format
 msgid "Un proyecto lee como máximo %(tope)s cuentas: %(num)s cuenta no se agregó."
@@ -17596,8 +18763,12 @@ msgid "Una por línea; por ejemplo, los diálogos exactos del guion. Claude no l
 msgstr "One per line; for example, the exact dialogue lines from the script. Claude can't touch them."
 
 #, python-format
-msgid "Una recarga de %(monto)s con Bold sigue pendiente. Si ya pagaste, se acredita sola en unos minutos; si no, genera un link nuevo en Configuración › Saldo y recargas."
-msgstr "A %(monto)s top-up with Bold is still pending. If you already paid, it is credited on its own in a few minutes; if not, create a new link in Settings › Balance and top-ups."
+msgid "Una recarga de %(cliente)s figura aprobada en la vuelta y no llegó su evento: revísala en el panel de Wompi"
+msgstr "A top-up for %(cliente)s shows as approved on the return page and its event did not arrive: check it in the Wompi dashboard"
+
+#, python-format
+msgid "Una recarga de %(monto)s con %(pasarela)s sigue pendiente. Si ya pagaste, se acredita sola en unos minutos; si no, genera un link nuevo en Configuración › Saldo y recargas."
+msgstr "A %(monto)s top-up with %(pasarela)s is still pending. If you already paid, it is credited on its own in a few minutes; if not, create a new link in Settings › Balance and top-ups."
 
 msgid "Una recarga manual es positiva; para descontar, usa un ajuste."
 msgstr "A manual top-up is positive; to deduct, use an adjustment."
@@ -17671,6 +18842,10 @@ msgstr "Use the recording"
 #, python-format
 msgid "Usar «%(titular)s» en un sprint"
 msgstr "Use “%(titular)s” in a sprint"
+
+#, python-format
+msgid "Usaste %(gastado)s de %(credito)s (%(pct)s %%)."
+msgstr "You used %(gastado)s of %(credito)s (%(pct)s %%)."
 
 msgid "Usuario"
 msgstr "Username"
@@ -17868,6 +19043,9 @@ msgstr "See the full prompt the model received"
 msgid "Ver el saldo y recargar en Configuración › Saldo y recargas"
 msgstr "See the balance and top up in Settings › Balance and top-ups"
 
+msgid "Ver el video"
+msgstr "Watch the video"
+
 msgid "Ver el video de referencia"
 msgstr "View the reference video"
 
@@ -17880,6 +19058,9 @@ msgstr "See in Ad Library →"
 
 msgid "Ver en Crear"
 msgstr "See in Create"
+
+msgid "Ver en Final edition"
+msgstr "See in Final edition"
 
 msgid "Ver en el Administrador de anuncios"
 msgstr "See in Ads Manager"
@@ -18063,6 +19244,18 @@ msgstr "Videos, images, scripts, final cuts and AI text paid for since the start
 msgid "Vincular"
 msgstr "Link"
 
+msgid "Visitantes nuevos (NVP)"
+msgstr "New visitors (NVP)"
+
+msgid "Visitantes nuevos / visitantes únicos que el Pixel de Triple Whale atribuye a tus anuncios de Meta. Los únicos se cuentan por día: en periodos largos es aproximado."
+msgstr "New visitors / unique visitors that the Triple Whale Pixel attributes to your Meta ads. Unique visitors are counted per day: over long periods it is approximate."
+
+msgid "Visitantes nuevos entre visitantes únicos de la tienda, según Triple Whale. Los únicos se cuentan por día, así que en periodos largos es aproximado."
+msgstr "New visitors out of the store's unique visitors, according to Triple Whale. Unique visitors are counted per day, so over long periods it is approximate."
+
+msgid "Visitantes nuevos entre visitantes únicos que el Pixel atribuye al anuncio: TOF, MOF o BOF"
+msgstr "New visitors out of unique visitors that the Pixel attributes to the ad: TOF, MOF or BOF"
+
 msgid "Visitas a la página"
 msgstr "Page visits"
 
@@ -18131,6 +19324,9 @@ msgstr "Revert to the original"
 
 msgid "Volver al panel"
 msgstr "Back to the panel"
+
+msgid "Volver al plan"
+msgstr "Back to the plan"
 
 msgid "Volver al reparto automático"
 msgstr "Back to the automatic split"
@@ -18241,6 +19437,109 @@ msgstr "What does the prospect want to achieve in society?"
 #, python-format
 msgid "Whisper · %(s)s s de audio"
 msgstr "Whisper · %(s)s s of audio"
+
+msgid "Wompi abre su propia ventana para los datos de la tarjeta: el número nunca pasa por Creatv. Visa, Mastercard o American Express, con código de seguridad."
+msgstr "Wompi opens its own window for the card details: the number never goes through Creatv. Visa, Mastercard or American Express, with a security code."
+
+msgid "Wompi anuló este pago y lo descontamos de tu saldo."
+msgstr "Wompi voided this payment and we deducted it from your balance."
+
+#, python-format
+msgid "Wompi anuló la recarga %(ref)s de %(cliente)s: descontamos %(monto)s de su saldo."
+msgstr "Wompi voided top-up %(ref)s for %(cliente)s: we deducted %(monto)s from its balance."
+
+#, python-format
+msgid "Wompi anuló un pago del plan, así que dejamos de cobrarlo solo. El plan sigue hasta el %(fecha)s; para seguir después, escríbenos o suscríbete de nuevo cuando termine."
+msgstr "Wompi voided a plan payment, so we stopped charging it automatically. The plan stays active until %(fecha)s; to continue afterwards, write to us or subscribe again when it ends."
+
+msgid "Wompi anuló un pago del plan, así que dejamos de cobrarlo solo. Escríbenos si quieres seguir con el plan."
+msgstr "Wompi voided a plan payment, so we stopped charging it automatically. Write to us if you want to keep the plan."
+
+#, python-format
+msgid "Wompi anuló una recarga de %(cliente)s"
+msgstr "Wompi voided a top-up for %(cliente)s"
+
+msgid "Wompi aprobó tu pago. Lo sumamos a tu saldo apenas Wompi nos lo confirme; suele tardar unos segundos."
+msgstr "Wompi approved your payment. We'll add it to your balance as soon as Wompi confirms it; it usually takes a few seconds."
+
+#, python-format
+msgid "Wompi aprobó un segundo pago para una recarga de %(cliente)s"
+msgstr "Wompi approved a second payment for a top-up for %(cliente)s"
+
+msgid "Wompi confirmó el cobro: el pago quedó aprobado y el plan, al día."
+msgstr "Wompi confirmed the charge: the payment is approved and the plan is up to date."
+
+msgid "Wompi dice que esa referencia de pago ya se usó"
+msgstr "Wompi says that payment reference was already used"
+
+msgid "Wompi dice que ese cobro se aprobó, pero el pago ya estaba cerrado (rechazado, con error o anulado): no se acreditó nada. Míralo en el panel de Wompi y devuélvelo si se cobró de más."
+msgstr "Wompi says that charge was approved, but the payment was already closed (declined, with an error or voided): nothing was credited. Check it in the Wompi dashboard and refund it if it was overcharged."
+
+msgid "Wompi dice que ese cobro se rechazó: quedó como rechazado."
+msgstr "Wompi says that charge was declined: it is marked as declined."
+
+msgid "Wompi está confirmando el pago. Te avisamos apenas llegue; mientras tanto puedes seguir usando la app."
+msgstr "Wompi is confirming the payment. We will let you know as soon as it arrives; meanwhile you can keep using the app."
+
+msgid "Wompi está confirmando un pago del plan. Esta página se actualiza sola cuando llegue."
+msgstr "Wompi is confirming a plan payment. This page updates on its own when it arrives."
+
+msgid "Wompi está en modo de pruebas (sandbox): los cobros no son reales."
+msgstr "Wompi is in test mode (sandbox): charges are not real."
+
+msgid "Wompi lo aprobó, pero la suscripción ya terminó: no se acreditó nada. Devuélvelo en Wompi o activa el plan a mano."
+msgstr "Wompi approved it, but the subscription had already ended: nothing was credited. Refund it in Wompi or activate the plan by hand."
+
+#, python-format
+msgid "Wompi no aceptó el medio de pago (%(estado)s)"
+msgstr "Wompi did not accept the payment method (%(estado)s)"
+
+#, python-format
+msgid "Wompi no aceptó el pedido (HTTP %(codigo)s)"
+msgstr "Wompi did not accept the request (HTTP %(codigo)s)"
+
+#, python-format
+msgid "Wompi no aprobó el pago (%(motivo)s). No se activó el cobro; puedes intentar con otro medio de pago."
+msgstr "Wompi did not approve the payment (%(motivo)s). The charge was not activated; you can try another payment method."
+
+msgid "Wompi no aprobó el pago. No se activó el cobro; puedes intentar con otro medio de pago."
+msgstr "Wompi did not approve the payment. The charge was not activated; you can try another payment method."
+
+msgid "Wompi no devolvió los contratos para aceptar"
+msgstr "Wompi did not return the agreements to accept"
+
+msgid "Wompi no devolvió los datos esperados"
+msgstr "Wompi did not return the expected data"
+
+#, python-format
+msgid "Wompi no pudo abrir el pago: %(motivo)s. Intenta de nuevo en un rato."
+msgstr "Wompi could not open the payment: %(motivo)s. Try again in a while."
+
+msgid "Wompi no responde en este momento. Intenta de nuevo en unos minutos."
+msgstr "Wompi is not responding right now. Try again in a few minutes."
+
+msgid "Wompi no respondió; lo intentamos de nuevo en unos minutos."
+msgstr "Wompi did not respond; we will try again in a few minutes."
+
+#, python-format
+msgid "Wompi rechazó el cobro de %(monto)s (%(motivo)s). Lo intentaremos otra vez el %(proximo)s. Si no se puede cobrar antes del %(limite)s, el plan termina. Puedes cambiar la tarjeta en Configuración › Plan. Mientras tanto, tus generaciones se cobran a la carta con tu saldo propio."
+msgstr "Wompi declined the %(monto)s charge (%(motivo)s). We'll try again on %(proximo)s. If it can't be charged before %(limite)s, the plan ends. You can change the card in Settings › Plan. Meanwhile, your generations are charged pay-as-you-go from your own balance."
+
+msgid "Wompi rechazó el pago. No se te cobró nada."
+msgstr "Wompi declined the payment. You were not charged."
+
+#, python-format
+msgid "Wompi respondió algo inesperado (HTTP %(codigo)s)"
+msgstr "Wompi returned something unexpected (HTTP %(codigo)s)"
+
+msgid "Wompi respondió algo que no es JSON"
+msgstr "Wompi returned something that is not JSON"
+
+msgid "Wompi todavía no confirma el pago; te avisaremos cuando llegue. Puedes cerrar esta página."
+msgstr "Wompi has not confirmed the payment yet; we will let you know when it arrives. You can close this page."
+
+msgid "Wompi todavía no resuelve esa transacción: guardamos su id y se aplica cuando responda."
+msgstr "Wompi has not resolved that transaction yet: we saved its id and it is applied when Wompi answers."
 
 msgid "WooCommerce"
 msgstr "WooCommerce"
@@ -18395,6 +19694,12 @@ msgstr "A suggestion is already in progress for this campaign."
 msgid "Ya hay una sugerencia en curso."
 msgstr "A suggestion is already in progress."
 
+msgid "Ya hay una tanda de ganchos en curso para este análisis."
+msgstr "There's already a batch of hooks in progress for this analysis."
+
+msgid "Ya intentaste muchas veces en la última hora. Espera un rato o escríbenos."
+msgstr "You tried many times in the last hour. Wait a while or write to us."
+
 msgid "Ya lo quiere: solo le falta la oferta"
 msgstr "Already wants it: only needs the offer"
 
@@ -18403,6 +19708,9 @@ msgstr "They don't believe any of this anymore: you have to speak to who they ar
 
 msgid "Ya no cree en promesas: hay que explicar cómo funciona"
 msgstr "They no longer believe promises: you have to explain how it works"
+
+msgid "Ya pediste muchas veces a Nequi en la última hora. Espera un rato."
+msgstr "You asked Nequi many times in the last hour. Wait a while."
 
 msgid "Ya se estaba armando ese prompt — espera a que termine."
 msgstr "That prompt was already being built — wait for it to finish."
@@ -18514,6 +19822,18 @@ msgstr "I already have an account"
 msgid "Ya tenías este audio con ese texto, voz y música: está en Tus audios."
 msgstr "You already had this audio with that text, voice and music: it is in Your audios."
 
+#, python-format
+msgid "Ya tienes el saldo del plan de este mes. Lo pagado te cubre hasta el %(fecha)s."
+msgstr "You now have this month's plan balance. What you paid covers you until %(fecha)s."
+
+#, python-format
+msgid "Ya tienes el saldo del plan del nuevo periodo. Lo pagado te cubre hasta el %(fecha)s."
+msgstr "You now have the new period's plan balance. What you paid covers you until %(fecha)s."
+
+#, python-format
+msgid "Ya usaste el %(porcentaje)s %% del saldo de tu plan"
+msgstr "You've used %(porcentaje)s%% of your plan balance"
+
 msgid "Ya vio cómo funciona en otros: hay que mejorar el cómo"
 msgstr "They've seen how it works elsewhere: you have to improve the how"
 
@@ -18569,6 +19889,10 @@ msgstr "__MODELO__ only uses the first reference (__PRIMERA__): it would not use
 msgid "__MODELO__ usa hasta __N__ referencias: no usaría __SOBRAN__. Quita las que sobran o cambia de modelo."
 msgstr "__MODELO__ uses up to __N__ references: it would not use __SOBRAN__. Remove the extra ones or change the model."
 
+#, python-format
+msgid "a la carta: %(margen)s (global)"
+msgstr "pay-as-you-go: %(margen)s (global)"
+
 msgid "a los lados"
 msgstr "on the sides"
 
@@ -18618,6 +19942,9 @@ msgstr "right now"
 msgid "aistudio.google.com › Llaves de API"
 msgstr "aistudio.google.com › API keys"
 
+msgid "al mes"
+msgstr "a month"
+
 msgid "alemán"
 msgstr "German"
 
@@ -18645,6 +19972,9 @@ msgstr "analyze reference · the response was unusable"
 
 msgid "animada"
 msgstr "upbeat"
+
+msgid "anual"
+msgstr "yearly"
 
 msgid "anuncio por anuncio, ganadores y evaluación con IA"
 msgstr "ad by ad, winners and AI evaluation"
@@ -18868,8 +20198,8 @@ msgstr "closed"
 msgid "cf_id inválido: %(cf)s"
 msgstr "invalid cf_id: %(cf)s"
 
-msgid "cifras del mes por la fecha del gasto; ganancia = cobrado − costo de lo que se intentó cobrar"
-msgstr "month figures by spend date; profit = charged − cost of what we tried to charge"
+msgid "cifras del mes por la fecha del gasto; ganancia = cobrado + saldo del plan vencido − costo de lo que se intentó cobrar o el plan incluyó − descuento del plan (lo que la bolsa del mes regala frente a lo que el cliente pagó por ese mes; en un plan anual, un doceavo del pago)"
+msgstr "month figures by spend date; profit = charged + expired plan balance − cost of what we tried to charge or the plan included − plan discount (what the month's plan balance gives away versus what the client paid for that month; on an annual plan, one twelfth of the payment)"
 
 #, python-format
 msgid "cifras en %(moneda)s"
@@ -18890,6 +20220,10 @@ msgstr "clip 1 with %(hid)s"
 
 msgid "clon limpio"
 msgstr "clean clone"
+
+#, python-format
+msgid "cobrado %(cobrado)s · costo %(costo)s · descuento del plan %(descuento)s"
+msgstr "charged %(cobrado)s · cost %(costo)s · plan discount %(descuento)s"
 
 #, python-format
 msgid "color «%(nombre)s»"
@@ -19112,6 +20446,14 @@ msgid "de"
 msgstr "of"
 
 #, python-format
+msgid "de %(monto)s"
+msgstr "of %(monto)s"
+
+#, python-format
+msgid "de %(monto)s · vence el %(fecha)s"
+msgstr "of %(monto)s · expires on %(fecha)s"
+
+#, python-format
 msgid "de %(planeadas)s"
 msgstr "of %(planeadas)s"
 
@@ -19189,6 +20531,10 @@ msgstr "unknown"
 
 msgid "descripción de familias copycoders"
 msgstr "copycoders format family descriptions"
+
+#, python-format
+msgid "descuento del plan %(monto)s"
+msgstr "plan discount %(monto)s"
 
 msgid "desde"
 msgstr "since"
@@ -19392,14 +20738,17 @@ msgstr "the engine proposes, you approve"
 msgid "el más barato de los editores reales, buena opción cuando el video tiene una sola persona en cuadro"
 msgstr "the cheapest of the real editors, a good option when the video has only one person in frame"
 
+msgid "el periodo en curso; lo incluido va en costo de proveedor; ganancia del periodo = cobrado − costo − descuento del plan, con lo incluido como costo"
+msgstr "the current period; included usage is in provider cost; period profit = charged − cost − plan discount, with included usage as cost"
+
 msgid "el producto no tiene fotos descargables."
 msgstr "the product has no downloadable photos."
 
 msgid "el producto solo se le puede describir en texto, no mostrárselo"
 msgstr "the product can only be described to it in text, not shown to it"
 
-msgid "el que usa todo proyecto sin margen propio; no cambia lo ya cobrado"
-msgstr "used by every project without its own markup; it does not change what was already charged"
+msgid "el que usa todo proyecto sin margen propio ni plan (a la carta); no cambia lo ya cobrado. Cada plan tiene su margen de miembro, abajo."
+msgstr "the one every project without its own markup or a plan uses (pay-as-you-go); it does not change what was already charged. Each plan has its member markup, below."
 
 #, python-brace-format
 msgid "el servidor falló (error {status}): se guarda con el próximo cambio."
@@ -19841,6 +21190,10 @@ msgstr "hook"
 msgid "hoy"
 msgstr "today"
 
+#, python-format
+msgid "hoy cobra %(margen)s (plan)"
+msgstr "charges %(margen)s today (plan)"
+
 msgid "hoy, a medias"
 msgstr "today, in progress"
 
@@ -20063,6 +21416,10 @@ msgstr "ready to generate"
 msgid "lo grave primero"
 msgstr "most serious first"
 
+#, python-format
+msgid "lo que se vende cada mes; el margen de miembro reemplaza al margen a la carta (%(margen)s) mientras el plan está pagado"
+msgstr "what is sold each month; the member markup replaces the pay-as-you-go markup (%(margen)s) while the plan is paid"
+
 msgid "lo que ve el proceso web en esta máquina"
 msgstr "what the web process sees on this machine"
 
@@ -20131,6 +21488,9 @@ msgstr "best: %(nombre)s"
 
 msgid "mensaje_id inválido."
 msgstr "Invalid mensaje_id."
+
+msgid "mensual"
+msgstr "monthly"
 
 msgid "mesa al aire libre"
 msgstr "outdoor table"
@@ -20326,6 +21686,10 @@ msgstr "never"
 msgid "o"
 msgstr "or"
 
+#, python-format
+msgid "o %(precio)s al año"
+msgstr "or %(precio)s a year"
+
 msgid "o arrastra archivos aquí"
 msgstr "or drag files here"
 
@@ -20377,6 +21741,9 @@ msgstr "e.g. In MX, the price in pesos in the hook lowers the CTR"
 
 msgid "p.ej. 89900"
 msgstr "e.g. 89900"
+
+msgid "pago pendiente"
+msgstr "pending payment"
 
 msgid "pais"
 msgstr "country"
@@ -20471,6 +21838,10 @@ msgstr "few clicks"
 
 msgid "pocos datos"
 msgstr "little data"
+
+#, python-format
+msgid "por %(monto)s (el precio que aceptó)"
+msgstr "for %(monto)s (the price they accepted)"
 
 msgid "por revisar"
 msgstr "to review"
@@ -20728,6 +22099,9 @@ msgstr "watch"
 msgid "render"
 msgstr "render"
 
+msgid "renueva con tarjeta"
+msgstr "renews by card"
+
 msgid "repetición: ya lo vieron"
 msgstr "repetition: they've already seen it"
 
@@ -20871,6 +22245,9 @@ msgstr "selecting"
 msgid "si una tarea espera más de 10 min para empezar, el worker no está corriendo"
 msgstr "if a task waits more than 10 min to start, the worker is not running"
 
+msgid "sigue hasta el fin de lo pagado"
+msgstr "lasts until the end of what is paid"
+
 msgid "sin Instagram vinculado"
 msgstr "no Instagram linked"
 
@@ -20999,6 +22376,9 @@ msgstr "no product"
 
 msgid "sin productos elegidos"
 msgstr "no chosen products"
+
+msgid "sin renovación automática"
+msgstr "no automatic renewal"
 
 msgid "sin respuesta"
 msgstr "no response"
@@ -21192,6 +22572,9 @@ msgstr "copycoders “why it works” translation"
 msgid "trae demasiados clips"
 msgstr "has too many clips"
 
+msgid "tratamiento de mis datos personales"
+msgstr "processing of my personal data"
+
 #, python-format
 msgid "tu meta %(x)s"
 msgstr "your goal %(x)s"
@@ -21202,6 +22585,9 @@ msgstr "your average %(pct)s"
 
 msgid "tu@empresa.com"
 msgstr "you@company.com"
+
+msgid "términos y condiciones de Wompi"
+msgstr "Wompi terms and conditions"
 
 msgid "un anuncio de Triple Whale"
 msgstr "a Triple Whale ad"
@@ -21482,6 +22868,15 @@ msgstr "“How they move” is over 500 characters."
 msgid "«Editar y crear otra» todavía no sirve para un anuncio hablado: haz otra pieza en Crear › Anuncio hablado."
 msgstr "“Edit and create another one from this” doesn't work for a talking ad yet: make another piece in Create › Talking ad."
 
+msgid "«No se cobró» se habilita 30 minutos después del último intento de cobro."
+msgstr "“Not charged” becomes available 30 minutes after the last charge attempt."
+
+msgid "«No se cobró» se puede marcar 30 minutos después del último intento de cobro; antes, Wompi todavía puede responder"
+msgstr "“Not charged” can be marked 30 minutes after the last charge attempt; before that, Wompi may still answer"
+
+msgid "«Sí se cobró» consulta la transacción en Wompi y aplica lo que diga: nunca acredita sin que Wompi lo confirme. «No se cobró» solo si viste en el panel de Wompi que no hay ninguna transacción con esta referencia: cuenta como un cobro fallido (en el alta termina la suscripción; en una renovación queda morosa y se reintenta)."
+msgstr "“It was charged” checks the transaction in Wompi and applies what it says: it never credits without Wompi confirming. “Not charged” only if you saw in the Wompi dashboard that there is no transaction with this reference: it counts as a failed charge (on sign-up it ends the subscription; on a renewal it becomes past due and is retried)."
+
 #, python-format
 msgid "«siguiente» trae un paso que no existe: %(que)s."
 msgstr "“siguiente” has a step that doesn't exist: %(que)s."
@@ -21629,6 +23024,12 @@ msgstr "Evaluate %(n)s ad(s) with AI? Cost: %(precio)s"
 #, python-format
 msgid "¿Evaluar %(n)s anuncio(s) con IA? Precio: %(precio)s"
 msgstr "Evaluate %(n)s ad(s) with AI? Price: %(precio)s"
+
+#, python-format
+msgid "¿Generar %(num)s clip de 3 s con Kling y armar su video? Costo: %(precio)s"
+msgid_plural "¿Generar %(num)s clips de 3 s con Kling y armar sus videos? Costo: %(precio)s"
+msgstr[0] "Generate %(num)s 3-second clip with Kling and build its video? Cost: %(precio)s"
+msgstr[1] "Generate %(num)s 3-second clips with Kling and build their videos? Cost: %(precio)s"
 
 #, python-format
 msgid "¿Marcar a %(usuario)s como verificado sin que abra el enlace del correo?"
@@ -21795,8 +23196,8 @@ msgstr "Last %(n)s days vs previous %(n)s"
 msgid "Últimos cobros"
 msgstr "Latest charges"
 
-msgid "Últimos eventos de Bold"
-msgstr "Latest Bold events"
+msgid "Últimos eventos de Bold y Wompi"
+msgstr "Latest Bold and Wompi events"
 
 msgid "Útiles, uniformes y organización del hogar para el inicio del año escolar."
 msgstr "School supplies, uniforms and home organization for the start of the school year."

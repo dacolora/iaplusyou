@@ -39,20 +39,20 @@ def test_db_crear_todo_coincide(base_temporal):
     assert set(TABLAS) <= nombres
 
 
-# ---------------------------------------------------------------- E2: migración 0036 (spec E2 §4) ---
+# ------------------------------- E2: migración 0039 (spec E2 §4; era la 0036 en la rama, main trajo 0036-0038) ---
 
 TABLAS_E2 = ("meta_desglose", "meta_evaluacion")
 
 
-def test_una_sola_cabeza_de_alembic_y_es_la_0036():
+def test_una_sola_cabeza_de_alembic_y_es_la_0039():
     from alembic.config import Config
     from alembic.script import ScriptDirectory
     cfg = Config(os.path.join(RAIZ, "alembic.ini"))
     cfg.set_main_option("script_location", os.path.join(RAIZ, "migrations"))
-    assert ScriptDirectory.from_config(cfg).get_heads() == ["0036"]
+    assert ScriptDirectory.from_config(cfg).get_heads() == ["0039"]
 
 
-def test_0036_arriba_abajo_arriba(tmp_path):
+def test_0039_arriba_abajo_arriba(tmp_path):
     eng = _alembic(tmp_path, "upgrade", "head")
     insp = sa.inspect(eng)
     assert set(TABLAS_E2) <= set(insp.get_table_names())
@@ -62,8 +62,8 @@ def test_0036_arriba_abajo_arriba(tmp_path):
     assert ix["ix_meta_evaluacion_cliente_creado"]["column_names"] == ["cliente", "creado_en"]
     eng.dispose()
 
-    # Abajo: las dos tablas de E2 se van; las seis de E1 (0035) y la 0034 siguen.
-    eng = _alembic(tmp_path, "downgrade", "0035")
+    # Abajo: las dos tablas de E2 se van; las seis de E1 (0035) y las de antes siguen.
+    eng = _alembic(tmp_path, "downgrade", "0038")
     nombres = set(sa.inspect(eng).get_table_names())
     assert not set(TABLAS_E2) & nombres
     assert set(TABLAS) <= nombres
@@ -90,7 +90,7 @@ def _esquema(eng, tabla):
     }
 
 
-def test_0036_coincide_con_db_py(tmp_path, base_temporal):
+def test_0039_coincide_con_db_py(tmp_path, base_temporal):
     """La base migrada y la creada desde `db.py` (lo que usan las pruebas) son la misma: columnas, tipos,
     nulabilidad, llave primaria, la restricción única, los índices y AUTOINCREMENT. Sin deriva entre los dos."""
     eng = _alembic(tmp_path, "upgrade", "head")

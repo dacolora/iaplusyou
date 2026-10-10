@@ -10,9 +10,16 @@ anuncios van siempre en la moneda de su cuenta (cada fila lleva `moneda`).
 
 Cada anuncio se compara con SU cuenta: `evaluacion.evaluar` corre una vez por cuenta, sobre UNA lectura de
 `datos.totales_por_anuncio` por ventana para todas las cuentas del alcance (nunca una consulta por cuenta ni por
-fila). Con E2 (Diagnóstico, Segmentos y la sección «Evaluación con IA») todo `contexto()` son de 14 a 15 consultas
-según el período (14 con el de 30 días, el de siempre), más una por moneda que haya que convertir en «Todas»;
-ninguna crece con las cuentas ni con las filas (`test_pocas_consultas_con_tres_cuentas`)."""
+fila). Con E2 (Diagnóstico, Segmentos y la sección «Evaluación con IA») todo `contexto()` son de 15 a 16
+consultas según el período (15 con el de 30 días, el de siempre), más una por moneda que haya que convertir en
+«Todas» y, con Triple Whale, las 4 lecturas del NVP; ninguna crece con las cuentas ni con las filas
+(`test_pocas_consultas_con_tres_cuentas`).
+
+NVP (spec 2026-10-09-nvp-visitantes-nuevos §4.2, pedido del cliente de HappyFlops): Meta no da visitantes nuevos;
+salen de la copia de Triple Whale (`tw_anuncio_dia`, canal facebook-ads, mismos ids que Meta). Una consulta para saber
+si el proyecto tiene Triple Whale y, solo si lo tiene, UNA lectura por nivel y página (cuentas —que da también el
+KPI—, campañas, conjuntos, anuncios) que se pega a cada fila (`visitantes`, `visitantes_nuevos`). Es una lectura: se
+pega DESPUÉS de evaluar y no cambia ningún veredicto."""
 from datetime import date, datetime, timedelta
 
 from flask_babel import gettext
@@ -23,11 +30,13 @@ import idiomas
 import meta_conexion
 import proyectos
 import triple_whale
+import triple_whale_tiendas
 from idiomas import N_
 from meta_rendimiento import administrador, analisis, datos, grafico, recomendaciones, tasas
 from meta_rendimiento import cuentas as cuentas_mod
 from meta_rendimiento.sync import VENTANAS_ALCANCE
 from tareas import meta_rendimiento as tareas_mr
+from triple_whale import datos as tw_datos
 from triple_whale import evaluacion, paises
 from triple_whale.panel import periodo
 
@@ -573,6 +582,65 @@ def evaluacion_panel(cliente, evaluados, vivos):
             "fallida": fallida and {"id": fallida["id"], "error": fallida.get("error"),
                                     "alcance": _alcance_evaluacion(fallida)},
             "anteriores": anteriores[:MAX_EVALUACIONES_ANTERIORES]}
+# --------------------------------------------------------------- NVP ---
+
+def con_triple_whale(cliente):
+    """True si el proyecto tiene alguna tienda de Triple Whale (como `lanzador`). Sin ella no hay NVP y no se pide
+    ningún visitante: la columna no se pinta y una línea invita a conectarla. Una consulta."""
+    return bool(triple_whale_tiendas.tiendas(cliente))
+
+
+def _pegar_visitantes(filas, por_id, clave):
+    """Pone en cada fila `visitantes` y `visitantes_nuevos` (0 sin datos) de `por_id[fila[clave]]`. Devuelve las filas."""
+    for f in filas:
+        v = por_id.get(str(f.get(clave))) or {}
+        f["visitantes"] = v.get("visitantes", 0)
+        f["visitantes_nuevos"] = v.get("visitantes_nuevos", 0)
+    return filas
+
+
+def _visitantes(cliente, campo, filas, clave, desde, hasta):
+    """Los visitantes de Triple Whale de unas filas (campañas, conjuntos o anuncios de UNA página), en UNA consulta
+    agrupada por `campo` (`tw_datos.visitantes_por`), pegados a cada fila."""
+    por_id = tw_datos.visitantes_por(cliente, campo, [f.get(clave) for f in filas], desde, hasta)
+    return _pegar_visitantes(filas, por_id, clave)
+
+
+def _visitantes_cuentas(cliente, ids, desde, hasta):
+    """{ad_account_id: {"visitantes", "visitantes_nuevos"}} de las cuentas con visitas en el rango, en UNA consulta.
+    Triple Whale guarda la cuenta como Meta («act_…», visto en producción el 2026-10-09); por si una tienda la trae sin
+    el prefijo se piden las dos formas en la misma consulta y se suman (cada anuncio cae en una sola de ellas)."""
+    forma = {}
+    for act in ids:
+        forma[act] = act
+        forma[act.removeprefix("act_")] = act
+    salida = {}
+    for objeto, v in tw_datos.visitantes_por(cliente, "cuenta_id", list(forma), desde, hasta).items():
+        s = salida.setdefault(forma[objeto], {"visitantes": 0, "visitantes_nuevos": 0})
+        s["visitantes"] += v["visitantes"]
+        s["visitantes_nuevos"] += v["visitantes_nuevos"]
+    return salida
+
+
+def _nvp_panel(cliente, ctx, en_alcance, desde, hasta):
+    """El NVP del panel: con Triple Whale, una lectura por cuentas (el KPI = las SUMAS de las cuentas del alcance, y
+    la columna de «Por cuenta»), otra por las campañas, otra por los conjuntos de la página y otra por los anuncios
+    de la página. `nvp_cuentas` nombra las cuentas de donde sale cuando no son todas las del alcance."""
+    if not con_triple_whale(cliente):
+        return
+    por_act = _visitantes_cuentas(cliente, ctx["ids"], desde, hasta)
+    _pegar_visitantes(ctx["por_cuenta"], por_act, "ad_account_id")
+    _visitantes(cliente, "campana_id", ctx["campanas"], "campaign_id", desde, hasta)
+    _visitantes(cliente, "conjunto_id", ctx["conjuntos"], "adset_id", desde, hasta)
+    _visitantes(cliente, "ad_id", ctx["anuncios"], "ad_id", desde, hasta)
+    con_datos = [c for c in en_alcance if c["ad_account_id"] in por_act]
+    ctx.update(
+        nvp_activo=True,
+        nvp={"visitantes": sum(v["visitantes"] for v in por_act.values()),
+             "visitantes_nuevos": sum(v["visitantes_nuevos"] for v in por_act.values())},
+        nvp_cuentas=([" ".join(x for x in (c.get("bandera"), c.get("nombre_pais") or c.get("nombre")
+                                           or c["ad_account_id"]) if x) for c in con_datos]
+                     if con_datos and len(con_datos) < len(en_alcance) else []))
 
 
 # ---------------------------------------------------------- contexto ---
@@ -605,6 +673,8 @@ def _base(dias, desde, hasta):
         "nombres_prioridad": NOMBRES_PRIORIDAD,
         "segmentos": {"bloques": [], "viejos": []}, "ventana_segmentos": None,
         "evaluacion": None, "nombres_accion": NOMBRES_ACCION, "estados_evaluacion": ESTADOS_EVALUACION,
+        # NVP (spec 2026-10-09-nvp-visitantes-nuevos §4.2): solo con Triple Whale en el proyecto.
+        "nvp_activo": False, "nvp": None, "nvp_cuentas": [],
         "estados": ESTADOS, "aprendizaje": APRENDIZAJE, "objetivos": OBJETIVOS,
         "etiquetas_veredicto": evaluacion.ETIQUETAS_VEREDICTO,
         "veredictos": evaluacion.VEREDICTOS, "problemas": evaluacion.PROBLEMAS, "fortalezas": evaluacion.FORTALEZAS,
@@ -710,6 +780,7 @@ def contexto(cliente, dias=PERIODO_DEFECTO, cuenta=None, hoy=None, pagina_anunci
                segmentos=segmentos([f for f in desgloses if f["ventana"] == ventana_seg], en_alcance, moneda_comun,
                                    recs, ahora),
                evaluacion=evaluacion_panel(cliente, anuncios, vivos))
+    _nvp_panel(cliente, ctx, en_alcance, desde, hasta)
     return ctx
 
 
@@ -754,6 +825,9 @@ def anuncios_pagina(cliente, dias=PERIODO_DEFECTO, cuenta=None, pagina=1, hoy=No
     inicio = pagina * POR_PAGINA
     ctx.update(anuncios=anuncios[inicio:inicio + POR_PAGINA], hay_mas_anuncios=len(anuncios) > inicio + POR_PAGINA,
                n_anuncios=len(anuncios), pagina_anuncios=pagina, conteo=conteo, meta_roas=meta_roas)
+    if con_triple_whale(cliente):
+        _visitantes(cliente, "ad_id", ctx["anuncios"], "ad_id", ctx["desde"], ctx["hasta"])
+        ctx["nvp_activo"] = True
     return ctx
 
 
@@ -765,4 +839,7 @@ def conjuntos_pagina(cliente, dias=PERIODO_DEFECTO, cuenta=None, pagina=1, hoy=N
     pagina = _pagina_valida(pagina)
     conjuntos, hay_mas = _conjuntos(cliente, ctx["ids"], ctx["desde"], ctx["hasta"], pagina, cuentas_por_id)
     ctx.update(conjuntos=conjuntos, hay_mas_conjuntos=hay_mas, pagina_conjuntos=pagina)
+    if con_triple_whale(cliente):
+        _visitantes(cliente, "conjunto_id", ctx["conjuntos"], "adset_id", ctx["desde"], ctx["hasta"])
+        ctx["nvp_activo"] = True
     return ctx

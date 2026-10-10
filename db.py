@@ -471,6 +471,8 @@ tw_anuncio_dia = Table("tw_anuncio_dia", metadata,
     Column("nc_pedidos", Float, default=0.0), Column("nc_ingresos", Float, default=0.0),
     Column("sesiones", Integer, default=0), Column("carritos", Integer, default=0),
     Column("checkouts", Integer, default=0),
+    # Visitantes únicos y nuevos que el Pixel atribuye al anuncio ese día: el NVP (0036, spec 2026-10-09).
+    Column("visitantes", Integer, default=0), Column("visitantes_nuevos", Integer, default=0),
     Column("con_pixel", Boolean, default=False),            # el Pixel respondió para ese día (aunque sin pedidos)
     Column("actualizado_en", String(19), nullable=False),
     sa.UniqueConstraint("cliente", "tienda_id", "canal", "ad_id", "fecha", name="uq_tw_anuncio_dia"),
@@ -488,6 +490,8 @@ tw_tienda_dia = Table("tw_tienda_dia", metadata,
     Column("pedidos", Float, default=0.0), Column("nc_pedidos", Float, default=0.0),
     Column("nc_ingresos", Float, default=0.0), Column("reembolsos", Float, default=0.0),
     Column("cogs", Float, default=0.0), Column("utilidad_neta", Float, default=0.0),
+    # Visitantes únicos y nuevos de la tienda ese día (web_analytics_table): el NVP (0036).
+    Column("visitantes", Integer, default=0), Column("visitantes_nuevos", Integer, default=0),
     Column("actualizado_en", String(19), nullable=False),
     sa.UniqueConstraint("cliente", "tienda_id", "fecha", name="uq_tw_tienda_dia"),
 )
@@ -568,6 +572,35 @@ tw_analisis = Table("tw_analisis", metadata,
     sqlite_autoincrement=True,
 )
 
+# Ganchos nuevos de un análisis (spec 2026-10-09-tw-ganchos-y-copy §4.2, migración 0037; era la 0035 en la rama, la
+# 0036 al mezclar main, que ya tenía 0035_meta_rendimiento, y la 0037 desde que main trajo 0036_tw_visitantes,
+# 2026-10-10): una fila por variante de
+# «Probar los 3 ganchos». Su id es también el código `CV<id>` que va en el nombre del anuncio en Meta: AUTOINCREMENT
+# para que nunca se reuse. Único escritor: triple_whale/datos.py.
+tw_gancho = Table("tw_gancho", metadata,
+    Column("id", Integer, primary_key=True),
+    *_comunes(),
+    Column("analisis_id", Integer, nullable=False),
+    Column("tanda", Integer, nullable=False),
+    Column("n", Integer, nullable=False),
+    Column("estado", String(12), nullable=False, default="preparando"),  # preparando|generando|armando|produciendo|lista|error
+    Column("texto", String(200)),
+    Column("prompt", Text),
+    Column("fotograma_s", Float),
+    Column("frame_url", String(2000)),
+    Column("cf_id", String(80)),
+    Column("edicion_id", Integer),
+    Column("final_id", String(200)),
+    Column("url_final", String(2000)),
+    Column("job_id", String(255)),
+    Column("error", Text),
+    Column("pedido_por", String(80)),
+    sa.UniqueConstraint("analisis_id", "tanda", "n", name="uq_tw_gancho_tanda"),
+    sa.Index("ix_tw_gancho_analisis", "cliente", "analisis_id", "tanda"),
+    sa.Index("ix_tw_gancho_estado", "estado"),
+    sqlite_autoincrement=True,
+)
+
 pedido = Table("pedido", metadata,
     Column("id", Integer, primary_key=True),
     Column("cliente", String(80), nullable=False, index=True),
@@ -644,10 +677,11 @@ movimiento_saldo = Table("movimiento_saldo", metadata,
     Column("id", Integer, primary_key=True),
     Column("cliente", String(80), nullable=False),
     Column("creado_en", String(19), nullable=False),
-    Column("tipo", String(16), nullable=False),                # recarga|cobro|reverso|no_cobrado|ajuste|anulacion
+    Column("tipo", String(16), nullable=False),                # recarga|cobro|reverso|no_cobrado|ajuste|anulacion|plan|vencimiento|incluido
     Column("milesimas", Integer, nullable=False),              # con signo
     Column("gasto_id", Integer),
     Column("recarga_id", Integer),
+    Column("periodo_id", Integer),                             # periodo_plan: plan|vencimiento (0038)
     Column("job_id", String(160)),
     Column("tarea_id", Integer),
     Column("concepto", String(120), nullable=False),           # código; se traduce al pintar
@@ -656,6 +690,7 @@ movimiento_saldo = Table("movimiento_saldo", metadata,
     Column("extra", JSON),
     sa.UniqueConstraint("tipo", "gasto_id", name="uq_movimiento_gasto"),
     sa.UniqueConstraint("tipo", "recarga_id", name="uq_movimiento_recarga"),
+    sa.UniqueConstraint("tipo", "periodo_id", name="uq_movimiento_periodo"),
     sa.Index("ix_movimiento_cliente_creado", "cliente", "creado_en"),
     sa.Index("ix_movimiento_job", "job_id"),
     sqlite_autoincrement=True,
@@ -666,6 +701,13 @@ reserva_saldo = Table("reserva_saldo", metadata,
     Column("job_id", String(160), primary_key=True),
     Column("milesimas", Integer, nullable=False),
     Column("creada_en", String(19), nullable=False),
+    # 0038 (revisión final de planes, 2026-10-10): el precio que se vio al encolar. La generación se cobra con este
+    # margen (y como incluida si lo fue al reservar) aunque termine después de que venza su periodo de plan, y
+    # su cobro cuenta en la bolsa de ESE periodo (`periodo_id`). NULL en las reservas de antes: margen del momento.
+    Column("margen", Float),
+    Column("incluido", Boolean, nullable=False, default=False, server_default=sa.text("0")),
+    Column("periodo_id", Integer),
+    Column("costo_usd", Float),   # el costo estimado al reservar: lo incluido reservado cuenta contra el tope
 )
 
 recarga = Table("recarga", metadata,
@@ -673,12 +715,13 @@ recarga = Table("recarga", metadata,
     Column("cliente", String(80), nullable=False, index=True),
     Column("creada_en", String(19), nullable=False),
     Column("actualizada_en", String(19)),
-    Column("medio", String(12), nullable=False),               # bold|manual
+    Column("medio", String(12), nullable=False),               # bold|wompi|manual
     Column("estado", String(12), nullable=False),              # pendiente|aprobada|rechazada|expirada|anulada
     Column("milesimas", Integer, nullable=False),
     Column("referencia", String(60), nullable=False, unique=True),
     Column("link_id", String(40)),
     Column("pago_id", String(40), unique=True),
+    Column("pasarela_ref", String(40), unique=True),           # id de la transacción de Wompi (0038)
     Column("moneda_pago", String(3)),
     Column("total_pago", Integer),
     Column("medio_pago", String(20)),
@@ -699,6 +742,87 @@ pago_evento = Table("pago_evento", metadata,
     Column("cuerpo", JSON),
     sa.UniqueConstraint("proveedor", "evento_id", name="uq_pago_evento"),
     sa.Index("ix_pago_evento_recibido", "recibido_en"),
+)
+
+# --- Planes mensuales (docs/superpowers/specs/2026-10-09-planes-mensuales-wompi-design.md §2, migración 0038) ---
+# Escritor único: cobros/planes.py (plan, suscripcion, periodo_plan, pago_plan). Los movimientos que
+# acreditan o vencen un periodo los escribe cobros/libro.py.
+
+plan = Table("plan", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("nombre", String(60), nullable=False),
+    Column("precio_usd", Integer, nullable=False),             # mensual, dólares enteros
+    Column("precio_anual_usd", Integer),                       # NULL = sin opción anual
+    Column("margen", Float, nullable=False),                   # el de miembro, 1,00–5,00
+    Column("tope_incluido_usd", Float, nullable=False, default=25.0),   # costo de proveedor regalado por mes
+    Column("activo", Boolean, nullable=False, default=True),   # archivado = no se ofrece
+    Column("orden", Integer, nullable=False, default=0),
+    Column("creado_en", String(19)),
+    Column("actualizado_en", String(19)),
+    sqlite_autoincrement=True,
+)
+
+suscripcion = Table("suscripcion", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("cliente", String(80), nullable=False, index=True),
+    Column("plan_id", Integer, nullable=False),
+    Column("ciclo", String(8), nullable=False),                # mensual|anual
+    Column("estado", String(12), nullable=False),              # activa|cancelada|morosa|terminada
+    Column("renovar", Boolean, nullable=False, default=True),
+    Column("fuente_pago_id", String(40)),                      # payment_source de Wompi
+    Column("medio_fuente", String(12)),                        # CARD|NEQUI
+    Column("fuente_resumen", String(40)),                      # «Visa ···4242»; nunca el número
+    Column("correo", String(120)),
+    Column("cubierto_hasta", String(19)),
+    Column("proximo_cobro", String(19)),
+    Column("intentos_fallidos", Integer, nullable=False, default=0),
+    # Precio que la persona aceptó (planes 5/8, revisión): las renovaciones cobran esto, nunca el precio actual del plan.
+    Column("precio_usd", Integer),
+    Column("precio_anual_usd", Integer),
+    Column("usuario", String(80), nullable=False),
+    Column("creada_en", String(19)),
+    Column("actualizada_en", String(19)),
+    # A lo más una suscripción no terminada por cliente.
+    sa.Index("uq_suscripcion_viva", "cliente", unique=True, sqlite_where=sa.text("estado != 'terminada'")),
+    sqlite_autoincrement=True,
+)
+
+periodo_plan = Table("periodo_plan", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("cliente", String(80), nullable=False, index=True),
+    Column("suscripcion_id", Integer, nullable=False),
+    Column("inicio", String(19), nullable=False),
+    Column("fin", String(19), nullable=False),
+    Column("precio_usd", Integer, nullable=False),             # foto del plan para ese mes
+    Column("margen", Float, nullable=False),
+    Column("tope_incluido_usd", Float, nullable=False),
+    Column("credito_milesimas", Integer, nullable=False),
+    Column("pago_id", Integer),                                # pago_plan que lo cubre; NULL = activado a mano
+    Column("cerrado", Boolean, nullable=False, default=False),
+    sa.UniqueConstraint("suscripcion_id", "inicio", name="uq_periodo_suscripcion_inicio"),
+    sqlite_autoincrement=True,
+)
+
+pago_plan = Table("pago_plan", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("cliente", String(80), nullable=False, index=True),
+    Column("suscripcion_id", Integer, nullable=False),
+    Column("ciclo", String(8), nullable=False),
+    Column("usd", Integer, nullable=False),
+    Column("trm", Float),
+    Column("monto_cop_centavos", Integer),
+    Column("referencia", String(60), nullable=False, unique=True),   # pl-<suscripcion>-<AAAAMMDD>-<intento>
+    Column("transaccion_id", String(40), unique=True),
+    Column("estado", String(12), nullable=False),              # pendiente|aprobado|rechazado|error|anulado
+    Column("motivo", String(300)),
+    Column("creado_en", String(19)),
+    Column("actualizado_en", String(19)),
+    Column("medio", String(12), nullable=False),               # wompi|manual
+    Column("usuario", String(80)),
+    # La bolsa mensual que compró este pago (revisión 3 de la Task 5): cada periodo que abre, aunque abra meses
+    # después, acredita esto y no el precio del plan de ese día.
+    Column("precio_mes_usd", Integer),
+    sqlite_autoincrement=True,
 )
 
 # ---------------------------------------------------- referentes ---
@@ -1248,7 +1372,7 @@ tasa_cambio = Table("tasa_cambio", metadata,
     sa.UniqueConstraint("fecha", "moneda", name="uq_tasa_cambio"),
 )
 
-# --- Meta rendimiento E2: diagnosticar y recomendar (spec 2026-10-10 meta rendimiento E2 §4, migración 0036) ---
+# --- Meta rendimiento E2: diagnosticar y recomendar (spec 2026-10-10 meta rendimiento E2 §4, migración 0039) ---
 # Los desgloses de una cuenta (edad+género, ubicación, país, dispositivo) en ventanas de 7 y 30 días: una copia que
 # se reemplaza por (cuenta, ventana, dimensión). Único escritor: meta_rendimiento/datos.py.
 meta_desglose = Table("meta_desglose", metadata,

@@ -124,7 +124,11 @@ TARIFAS = {
     # US$ 0,067–0,084; 1 de 4 necesitó la corrección (US$ 0,16 en total, la primera con la caché fría: US$ 0,095);
     # Whisper ≤ US$ 0,0014. Esperado ≈ 0,075 × 1,25 + Whisper; redondeado hacia arriba. Informe:
     # docs/superpowers/evals/2026-10-08-tw-como-mejorarlo.md (PND-179).
-    "analisis_anuncio_tw": 0.10,
+    # Desde el 2026-10-09 el análisis trae además tres ganchos y el copy nuevo para Meta (spec tw-ganchos-y-copy §3.3):
+    # medido 2026-10-09 con ganchos y copy: 0,086–0,111 con la caché caliente (tanda) y 0,131–0,170 con la caché fría
+    # (un clic suelto, media 0,142); se muestra 0,17, lo más caro medido de un clic suelto; en una tanda (caché
+    # caliente) se cobra lo real, menos.
+    "analisis_anuncio_tw": 0.17,
     # Meta rendimiento, «Evaluar con IA» (spec E2 §8): base + por anuncio de la muestra (estimador «evaluacion_meta»).
     # Una llamada con visión, la doctrina en el system (caché) y hasta 48 000 tokens de salida (E2-R8).
     # Segunda medición (2026-10-10, claude-sonnet-5, happyflops, muestra de 10 anuncios, 5 con imagen): una sola
@@ -445,6 +449,28 @@ def _estimar_analisis_anuncio_tw(segundos=None, **_):
             "una llamada a Claude con visión y la voz con Whisper")
 
 
+# Ganchos de Triple Whale (spec 2026-10-09-tw-ganchos-y-copy §4.1): cada variante es un clip de Kling O3 Pro, imagen
+# a video, de 3 s y sin sonido; armarlo y producirlo es ffmpeg (gratis).
+GANCHO_TW_MODELO = "kling_o3_pro"
+GANCHO_TW_SEGUNDOS = 3
+
+
+def estimar_ganchos_tw(n):
+    """El precio de «Probar los N ganchos»: n × el clip de Kling, la MISMA cuenta en la ruta y en la plantilla. La
+    misma forma que `estimar` (`usd` es el costo). Sin ganchos o sin tarifa, «precio no disponible» (usd None), nunca
+    US$ 0."""
+    try:
+        n = int(n or 0)
+    except (TypeError, ValueError):
+        n = 0
+    uno = estimar("video", modelo=GANCHO_TW_MODELO, duracion=GANCHO_TW_SEGUNDOS, con_sonido=False)["usd"]
+    if n <= 0:
+        return _estimado(None, "sin ganchos que generar")
+    if uno is None:
+        return _estimado(None, f"{SIN_PRECIO}: sin tarifa de Kling O3 Pro")
+    return _estimado(uno * n, f"{n} clip(s) de {GANCHO_TW_SEGUNDOS} s con Kling O3 Pro, imagen a video")
+
+
 _ESTIMADORES = {
     "video": _estimar_video,
     "regeneracion": _estimar_video,
@@ -486,10 +512,40 @@ _ESTIMADORES = {
 }
 
 
+# Estimador → el tipo de GASTO que anota (solo los de Claude y la transcripción, que un plan puede incluir:
+# cobros.planes.TIPOS_INCLUIDOS). Con plan y tope libre su texto dice «Incluido en tu plan» (spec planes §4 y §8).
+GASTO_DE_ESTIMADOR = {
+    "guion": "guion", "regla_producto": "regla_producto", "caption_organico": "caption_organico",
+    "adaptar_referente": "adaptar_referente", "leer_referente": "adaptar_referente", "sugerir_ia": "sugerir_ia",
+    "refinar_prompt": "refinar_prompt", "clasificacion": "clasificacion", "transcripcion": "transcripcion",
+    "guion_clips": "guion_clips", "reescribir_idea": "ideas", "proponer_ideas": "ideas",
+    "pedidos_producto": "pedidos", "revision_pieza": "revision", "diagnostico_pieza": "revision",
+    "evaluacion_tw": "evaluacion", "analisis_anuncio_tw": "evaluacion",
+}
+INCLUIDO = N_("Incluido en tu plan")
+
+
+def _incluido_aqui(tipo_estimador, usd):
+    """¿En esta petición el gasto entra en lo incluido del plan del proyecto? Nunca lanza."""
+    gasto = GASTO_DE_ESTIMADOR.get(tipo_estimador)
+    if gasto is None or usd is None:
+        return False
+    try:
+        from flask import g, has_request_context  # noqa: PLC0415
+        if not has_request_context():
+            return False
+        from cobros import planes  # noqa: PLC0415
+        return planes.incluye(g.get("cliente_precio"), gasto, usd)
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def estimar(tipo, **params):
     """{"usd": float|None, "texto": "US$ 0,10 aprox." | "precio no disponible",
     "detalle": str}. Nunca lanza: sin tarifa (tipo o modelo desconocido,
-    proveedor que revienta) devuelve usd=None."""
+    proveedor que revienta) devuelve usd=None. Con un plan que lo incluye (y
+    tope libre), `texto` dice «Incluido en tu plan» e `incluido` es True; `usd`
+    sigue siendo el costo."""
     fn = _ESTIMADORES.get(tipo)
     if fn is None:
         return _estimado(None, f"tipo desconocido: {tipo}")
@@ -498,7 +554,10 @@ def estimar(tipo, **params):
     except Exception as e:  # noqa: BLE001 — el precio es informativo, nunca bloquea
         log.warning("estimar(%s, %s) falló: %s", tipo, params, e)
         return _estimado(None, "sin tarifa para esos parámetros")
-    return _estimado(usd, detalle)
+    est = _estimado(usd, detalle)
+    if _incluido_aqui(tipo, est["usd"]):
+        est = {**est, "texto": gettext(INCLUIDO), "incluido": True}
+    return est
 
 
 # ----------------------------------------------------------- registrar ---
@@ -622,6 +681,15 @@ def _despues_del_cobro(cliente, resultado, gasto_id, usd, tipo, referencia):
             s = libro.saldo(cliente)
             if s < c["umbral"]:
                 avisos.saldo_bajo(cliente, s)
+        # Planes (spec 2026-10-09 §4): lo incluido no le avisa nada al cliente; al admin, al 80 % y al 100 % del
+        # tope. Un `cobro` de un tipo incluido con el periodo abierto es uno que ya no cupo en el tope.
+        if resultado in ("incluido", "cobro"):
+            from cobros import planes  # noqa: PLC0415
+            if tipo in planes.TIPOS_INCLUIDOS:
+                periodo = planes.periodo_abierto(None, cliente, ahora=db.ahora())
+                if periodo is not None:
+                    avisos.tope_incluido(cliente, periodo, planes.incluido_usado(cliente, periodo),
+                                         agotado=resultado == "cobro")
     except Exception:  # noqa: BLE001
         log.exception("aviso del cobro de %s falló", referencia)
 
@@ -732,13 +800,13 @@ def por_mes(cliente, ahora_iso=None):
         return {m: {"usd": round(float(suma or 0.0), 4), "n": int(n)} for m, suma, n in con.execute(q)}
 
 
-def historial(cliente, limite=200, desde=None):
+def historial(cliente, limite=200, desde=None, desplazamiento=0):
     """Filas del proyecto, la más nueva primero (`desde` = ISO inclusivo)."""
     g = db.gasto
     q = sa.select(g).where(g.c.cliente == cliente)
     if desde:
         q = q.where(g.c.creado_en >= desde[:19])
-    q = q.order_by(g.c.creado_en.desc(), g.c.id.desc()).limit(int(limite))
+    q = q.order_by(g.c.creado_en.desc(), g.c.id.desc()).limit(int(limite)).offset(int(desplazamiento))
     with db.conectar() as con:
         return [_fila(r) for r in con.execute(q)]
 

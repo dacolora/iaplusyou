@@ -97,6 +97,7 @@ import tiendas
 import triple_whale
 import triple_whale_tiendas
 from triple_whale import paises as tw_paises
+from triple_whale import visitantes as tw_visitantes
 import tablero
 import resultados
 import admin
@@ -218,6 +219,9 @@ app.config["BABEL_TRANSLATION_DIRECTORIES"] = idiomas.DIR_TRADUCCIONES
 Babel(app, locale_selector=idiomas.de_peticion)
 idiomas.instalar_gettext_rapido(app)  # mismo resultado que el de Flask-Babel, sin su costo por `_()`
 app.jinja_env.filters["traducir"] = idiomas.traducir
+# NVP (spec 2026-10-09-nvp-visitantes-nuevos §4): la macro `nvp` de _componentes.html los usa en todas las pantallas.
+app.jinja_env.globals["resumen_nvp"] = tw_visitantes.resumen
+app.jinja_env.globals["explicacion_nvp"] = tw_visitantes.EXPLICACION
 
 # ---------- Monitoreo (spec 2026-10-01-escala-y-monitoreo §6) ----------
 # Registro en data/logs/web.log (lo lee /admin/salud/registros) y cada petición
@@ -380,6 +384,8 @@ app.register_blueprint(cobros_rutas.bp)
 # lock serializa esa sección crítica (cargar credenciales + usarlas) para que
 # eso no pase.
 _ENV_LOCK = threading.Lock()
+# El encolado no espera publicaciones largas ni usa sus credenciales (PND-160, 2026-10-10).
+_LANZAMIENTO_LOCK = threading.Lock()
 
 
 def _sesion():
@@ -428,11 +434,13 @@ def _verificar_host():
 
 METODOS_QUE_ESCRIBEN = frozenset(("POST", "PUT", "PATCH", "DELETE"))
 
-# Los ÚNICOS POST que aceptan otro origen (cobros 7/11, spec 2026-10-08 §11):
-# el webhook de Bold lo manda el servidor de Bold, no un navegador nuestro. Su
-# protección es la firma HMAC del cuerpo (cobros.recargas.procesar_webhook), no
-# la cookie ni Sec-Fetch-Site. Por nombre de endpoint, nunca por prefijo de URL.
-ENDPOINTS_OTRO_ORIGEN = frozenset(("cobros.bold_webhook",))
+# Los ÚNICOS POST que aceptan otro origen (cobros 7/11, spec 2026-10-08 §11;
+# planes 4/8, spec 2026-10-09 §5.3): el webhook de Bold y los eventos de Wompi
+# los manda el servidor de la pasarela, no un navegador nuestro. Su protección
+# es la firma del cuerpo (cobros.recargas.procesar_webhook y
+# procesar_evento_wompi), no la cookie ni Sec-Fetch-Site. Por nombre de
+# endpoint, nunca por prefijo de URL.
+ENDPOINTS_OTRO_ORIGEN = frozenset(("cobros.bold_webhook", "cobros.wompi_eventos"))
 
 
 @app.before_request
@@ -443,8 +451,8 @@ def _solo_mismo_origen():
     un POST desde otro subdominio del mismo sitio ni el «login CSRF» (un
     formulario ajeno que inicia sesión con la cuenta del atacante). La app no
     recibe webhooks ni POST legítimos de otros sitios: los callbacks de OAuth
-    son GET. La única excepción, el webhook firmado de Bold, va en
-    ENDPOINTS_OTRO_ORIGEN."""
+    son GET. Las únicas excepciones, el webhook firmado de Bold y los eventos
+    firmados de Wompi, van en ENDPOINTS_OTRO_ORIGEN."""
     if request.method not in METODOS_QUE_ESCRIBEN or _mismo_origen():
         return None
     if request.endpoint in ENDPOINTS_OTRO_ORIGEN:
@@ -458,12 +466,13 @@ def _solo_mismo_origen():
 # Rutas de cuentas que deben funcionar aunque la sesión esté vencida o el
 # usuario ya no exista (verificar el correo o restablecer la contraseña se
 # abren desde un enlace, muchas veces sin sesión): el guard de sesión no las
-# cierra. El webhook de Bold no tiene sesión (lo llama el servidor de Bold):
-# una cookie vieja que llegara con él no puede convertirlo en un 302.
+# cierra. El webhook de Bold y los eventos de Wompi no tienen sesión (los
+# llama el servidor de la pasarela): una cookie vieja que llegara con ellos no
+# puede convertirlos en un 302.
 ENDPOINTS_SIN_GUARD_SESION = frozenset((
     "static", "login", "logout", "index", "crear_proyecto", "verificar_correo",
     "recuperar", "restablecer", "privacidad", "terminos", "eliminar_datos",
-    "cambiar_idioma", "salud_publica", "cobros.bold_webhook",
+    "cambiar_idioma", "salud_publica", "cobros.bold_webhook", "cobros.wompi_eventos",
 ))
 
 
@@ -523,6 +532,8 @@ def _guard_por_cliente():
         return None
     sesion = _sesion()
     if not usuarios.puede_acceder(sesion, cliente):
+        if request.endpoint in {"catalogo_selector", "swaps_lista", "gasto_lista"}:
+            abort(403)
         if not sesion:
             flash(gettext("Inicia sesión para entrar a este proyecto."), "error")
             return redirect(url_for("login"))
@@ -568,6 +579,8 @@ def _idioma_en_plantillas():
     datos = {
         "idioma_ui": str(get_locale() or idiomas.DEFECTO),
         "idiomas_nombres": idiomas.NOMBRES,
+        "idiomas_publicacion_nombres": idiomas.NOMBRES_PUBLICACION,
+        "paises_publicacion": fe_tipos.PAISES,
         "idioma_selector_visible": bool(sesion) and (idiomas.ACTIVO_PARA_TODOS or sesion["rol"] == "admin"),
         "idioma_enlaces_publicos": idiomas.ACTIVO_PARA_TODOS and not sesion,
     }
@@ -2093,7 +2106,6 @@ def ver_cliente(cliente):
                  "es_admin": meta_rendimiento_rutas.es_admin()}
     # Catálogo (spec 2026-09-28): la galería y la ficha llegan por fragmento;
     # la página solo trae contadores por categoría y lo que Crear necesita.
-    activos_producto = _productos_con_uso(cliente)
     productos_catalogo = catalogo_productos.listar_productos(cliente, "producto")
     _asegurar_filas_producto(cliente, productos_catalogo)
     # Un producto archivado (2026-10-01) no se ofrece en Crear ni en Cambiar
@@ -2101,13 +2113,32 @@ def ver_cliente(cliente):
     # `_prefill_para` consume la precarga: se lee UNA vez, aquí.
     fp_prefill = _prefill_para(cliente)
     archivados = tiendas.activos_archivados(cliente)
-    activos_producto = catalogo_productos.sin_archivados(
-        activos_producto, archivados,
-        conservar=[v.split(":", 1)[1] for v in ((fp_prefill or {}).get("productos_catalogo") or [])
-                   if isinstance(v, str) and v.startswith("producto:")])
-    n_por_categoria = {cid: (sum(1 for p in productos_catalogo if p["id"] not in archivados) if cid == "producto"
-                             else len(catalogo_productos.listar_productos(cliente, cid)))
-                       for cid in catalogo_productos.CATEGORIAS}
+    catalogo_marcados = []
+    for valor in (fp_prefill or {}).get("productos_catalogo") or []:
+        if not isinstance(valor, str):
+            continue
+        cat, _, pid = valor.partition(":")
+        if cat not in catalogo_productos.CATEGORIAS:
+            continue
+        activo = catalogo_productos.encontrar(cliente, pid, categoria=cat)
+        if activo:
+            catalogo_marcados.append(activo)
+    productos_por_categoria = {cid: productos_catalogo if cid == "producto" else catalogo_productos.listar_productos(cliente, cid)
+                              for cid in catalogo_productos.CATEGORIAS}
+    n_por_categoria = {cid: sum(1 for p in productos if cid != "producto" or p["id"] not in archivados)
+                       for cid, productos in productos_por_categoria.items()}
+    # Los selectores cuentan referencias elegibles (cada color con fotos),
+    # mientras Catálogo conserva su contador de productos comerciales. Un
+    # producto archivado que la precarga marca sigue contando, como en la
+    # grilla (`sin_archivados(..., conservar=...)` de catalogo_selector).
+    conservados = {catalogo_productos.producto_base(a["id"]) for a in catalogo_marcados
+                   if a.get("categoria", "producto") == "producto"}
+    n_activos_por_categoria = {
+        cid: sum(sum(bool(c.get("referencias")) for c in p.get("colores", []))
+                 if p.get("tiene_colores") else bool(p.get("referencias"))
+                 for p in productos
+                 if cid != "producto" or p["id"] not in archivados or p["id"] in conservados)
+        for cid, productos in productos_por_categoria.items()}
     # Gasto real (Task 3): el tablero se calcula UNA vez (cacheado) y de ahí
     # sale la pauta por moneda; la generación viene de la tabla `gasto`.
     tablero_ctx = _contexto_tablero(cliente)
@@ -2128,10 +2159,10 @@ def ver_cliente(cliente):
         # Solo el admin ve el informe (Configuración › Puesta a punto) y armarlo
         # corre git y lee todo el repo (~100 ms): a un cliente no se le cobra.
         informe=informe.completo(cliente) if session.get("rol") == "admin" else None,
-        productos=activos_producto,
+        catalogo_marcados=catalogo_marcados,
         categorias=catalogo_productos.CATEGORIAS,
-        activos_por_categoria={cid: (activos_producto if cid == "producto" else catalogo_productos.listar(cliente, cid)) for cid in catalogo_productos.CATEGORIAS},
         n_por_categoria=n_por_categoria,
+        n_activos_por_categoria=n_activos_por_categoria,
         monedas_catalogo=sorted(PRESUPUESTO_MINIMO_DIARIO),
         moneda_catalogo=_moneda_por_defecto(cliente),
         etiquetas_fuente=ETIQUETAS_FUENTE,
@@ -2140,7 +2171,7 @@ def ver_cliente(cliente):
         presets_cuerpo=mapa_corporal.PRESETS,
         etiquetas_presets=mapa_corporal.ETIQUETAS_PRESETS,
         nombre_proyecto=proyectos.nombre_visible(cliente),
-        swaps=_swap_items(cliente),
+        **_pagina_swaps(cliente),
         creative_flow_items=cf_items,
         **_listas_crear(cf_items),
         **_tablero_final(cf_items, fe_ctx["ediciones_por_cf"], cliente=cliente),
@@ -2803,22 +2834,55 @@ def catalogo_ficha(cliente, cat, activo_id):
         con_mapa=catalogo_productos.CATEGORIAS[cat]["con_mapa"], swaps_usos=swaps_usos)
 
 
-def _swap_items(cliente):
-    swaps_dict = swaps_mod.cargar(cliente)
+def _pagina_swaps(cliente, desde=0):
+    # Orden estable: vivos primero, luego fecha/id. Se enriquece SOLO la página.
+    entradas = []
+    for sid, entry in swaps_mod.cargar(cliente).items():
+        jid = f"{cliente}__{sid}__swap"
+        entradas.append((sid, entry, jid, trabajos.en_curso(jid)))
+    entradas.sort(key=lambda e: (e[3], e[1].get("creado_en", ""), e[0]), reverse=True)
+    # Si hay más de 24 vivos, ninguno se oculta detrás de «Ver más».
+    cantidad = max(TARJETAS_POR_PAGINA, sum(e[3] for e in entradas)) if desde == 0 else TARJETAS_POR_PAGINA
+    seleccion = entradas[desde:desde + cantidad]
     items = []
-    for swap_id, entry in sorted(
-        swaps_dict.items(), key=lambda kv: kv[1].get("creado_en", ""), reverse=True
-    ):
-        job_id = f"{cliente}__{swap_id}__swap"
+    for swap_id, entry, job_id, vivo in seleccion:
         producto = catalogo_productos.encontrar(cliente, entry.get("producto_id"))
         items.append({
             "id": swap_id,
             **entry,
             "producto_nombre": producto["nombre"] if producto else entry.get("producto_id"),
             "proveedor_nombre": NOMBRES_PROVEEDOR_SWAP.get(entry.get("proveedor"), entry.get("proveedor")),
-            "trabajo": {"job_id": job_id} if trabajos.en_curso(job_id) else None,
+            "trabajo": {"job_id": job_id} if vivo else None,
         })
-    return items
+    siguiente = desde + cantidad
+    return {"swaps": items, "swaps_total": len(entradas),
+            "swaps_siguiente": siguiente if siguiente < len(entradas) else None}
+
+
+@app.route("/cliente/<cliente>/swaps/lista")
+@trabajos.con_vivos_precargados
+@catalogo_productos.con_lecturas_memorizadas
+def swaps_lista(cliente):
+    return render_template("_swaps_lista.html", cliente=cliente,
+                           **_pagina_swaps(cliente, _pagina_desde(request.args.get("desde"))))
+
+
+@app.route("/cliente/<cliente>/catalogo/selector")
+@catalogo_productos.con_lecturas_memorizadas
+def catalogo_selector(cliente):
+    sel = request.args.get("sel", "plus")
+    if sel not in {"plus", "clone"}:
+        abort(400)
+    modo, campo = ("checkbox", "productos_catalogo") if sel == "plus" else ("radio", "producto_id")
+    marcados = request.args.getlist("marcado")
+    categorias = catalogo_productos.CATEGORIAS
+    activos = {cid: catalogo_productos.listar(cliente, cid)
+               for cid in (categorias if sel == "plus" else ("producto",))}
+    activos["producto"] = catalogo_productos.sin_archivados(
+        activos["producto"], tiendas.activos_archivados(cliente),
+        conservar=[v.split(":", 1)[1] for v in marcados if v.startswith("producto:")] if sel == "plus" else marcados)
+    return render_template("_selector_productos_grilla.html", cliente=cliente, activos_por_categoria=activos,
+                           sel_modo=modo, sel_campo=campo, categorias=categorias, marcados=marcados)
 
 
 TARJETAS_POR_PAGINA = 24
@@ -4843,16 +4907,7 @@ def _total_del_chip(cliente, fuente):
     return fuente["resumen_total"](cliente)
 
 
-def _contexto_gasto(cliente, tablero_ctx):
-    """Todo desde el inicio (Daniel, 2026-10-08: «todas las métricas en la
-    totalidad, no por mes, porque confunden a mis clientes»): gasto_total
-    (resumen_total), pauta_total (por moneda, del tablero), gastos_por_tipo
-    (resumen_todo), gastos_historial (200 últimos), precios (estimados de los
-    botones), gasto_chip y cobros_chip (sidebar) y cobros_cuenta (si el
-    proyecto cobra). Las cifras salen de `cobros.vista.gasto_para`: a quien no
-    es admin, en un proyecto que cobra, lo cobrado; al admin, el costo y
-    (`gasto_modo` "doble") también lo cobrado. Cada parte en su try/except:
-    el gasto informa, nunca tumba la página."""
+def _fuente_gasto(cliente):
     es_admin = session.get("rol") == "admin"
     try:
         fuente = vista_cobros.gasto_para(cliente, es_admin)
@@ -4860,6 +4915,45 @@ def _contexto_gasto(cliente, tablero_ctx):
         print(f"[aviso] Gasto de {cliente}: no pude leer la cuenta del saldo: {type(e).__name__}")
         fuente = ({"modo": "costo", **vista_cobros._COSTO} if vista_cobros.puede_ver_costo(cliente, es_admin)
                   else vista_cobros.OCULTO)
+    return fuente
+
+
+def _pagina_gasto(cliente, desde=0, fuente=None):
+    fuente = fuente if fuente is not None else _fuente_gasto(cliente)
+    filas = fuente["historial"](cliente, limite=TARJETAS_POR_PAGINA + 1, desplazamiento=desde)
+    historial = filas[:TARJETAS_POR_PAGINA]
+    doble = fuente["modo"] == "doble"
+    cobrado = {}
+    modo = fuente["modo"]
+    if doble:
+        try:
+            cobrado = {"por_gasto": vista_cobros.cobrado_por_gasto(cliente, [h["id"] for h in historial])}
+        except Exception as e:  # noqa: BLE001 — el admin conserva el historial de costos
+            print(f"[aviso] Gasto de {cliente}: no pude leer lo cobrado del historial: {type(e).__name__}")
+            modo = "costo"
+    return {"gastos_historial": historial,
+            "gastos_siguiente": desde + TARJETAS_POR_PAGINA if len(filas) > TARJETAS_POR_PAGINA else None,
+            "gasto_modo": modo, "gasto_cobrado": cobrado, "nombres_tipo_gasto": NOMBRES_TIPO_GASTO}
+
+
+@app.route("/cliente/<cliente>/gasto/lista")
+def gasto_lista(cliente):
+    return render_template("_gasto_lista.html", cliente=cliente,
+                           **_pagina_gasto(cliente, min(_pagina_desde(request.args.get("desde")), 2**63 - 1)))
+
+
+def _contexto_gasto(cliente, tablero_ctx):
+    """Todo desde el inicio (Daniel, 2026-10-08: «todas las métricas en la
+    totalidad, no por mes, porque confunden a mis clientes»): gasto_total
+    (resumen_total), pauta_total (por moneda, del tablero), gastos_por_tipo
+    (resumen_todo), gastos_historial (primera página de 24), precios (estimados de los
+    botones), gasto_chip y cobros_chip (sidebar) y cobros_cuenta (si el
+    proyecto cobra). Las cifras salen de `cobros.vista.gasto_para`: a quien no
+    es admin, en un proyecto que cobra, lo cobrado; al admin, el costo y
+    (`gasto_modo` "doble") también lo cobrado. Cada parte en su try/except:
+    el gasto informa, nunca tumba la página."""
+    es_admin = session.get("rol") == "admin"
+    fuente = _fuente_gasto(cliente)
     doble = fuente["modo"] == "doble"
     try:
         gasto_todo = fuente["resumen_todo"](cliente)
@@ -4867,10 +4961,12 @@ def _contexto_gasto(cliente, tablero_ctx):
         print(f"[aviso] Gasto de {cliente}: no pude leer el resumen por tipo: {type(e).__name__}")
         gasto_todo = {"desde": None, "hasta": None, "total": 0.0, "por_tipo": {}, "n": 0, "error": True}
     try:
-        historial = fuente["historial"](cliente, limite=200)
-    except Exception as e:  # noqa: BLE001 — informativo
+        hist_ctx = _pagina_gasto(cliente, fuente=fuente)
+    except Exception as e:  # noqa: BLE001 — el gasto informa, nunca tumba la página
         print(f"[aviso] Gasto de {cliente}: no pude leer el historial: {type(e).__name__}")
-        historial = []
+        hist_ctx = {"gastos_historial": [], "gastos_siguiente": None, "gasto_cobrado": {}}
+    historial = hist_ctx["gastos_historial"]
+    doble = doble and hist_ctx.get("gasto_modo") == "doble"
     try:
         gasto_total = fuente["resumen_total"](cliente)
     except Exception as e:  # noqa: BLE001 — informativo
@@ -4882,7 +4978,7 @@ def _contexto_gasto(cliente, tablero_ctx):
         try:
             c = fuente["cobrado"]
             cobrado = {"todo": c["resumen_todo"](cliente), "total": c["resumen_total"](cliente),
-                       "por_gasto": vista_cobros.cobrado_por_gasto(cliente, [h["id"] for h in historial])}
+                       "por_gasto": hist_ctx["gasto_cobrado"].get("por_gasto", {})}
         except Exception as e:  # noqa: BLE001 — informativo
             print(f"[aviso] Gasto de {cliente}: no pude leer lo cobrado: {type(e).__name__}")
             doble = False
@@ -4903,9 +4999,10 @@ def _contexto_gasto(cliente, tablero_ctx):
         "pauta_total": pauta,
         "precios": _precios_pagina(),
         "gastos_historial": historial,
+        "gastos_siguiente": hist_ctx["gastos_siguiente"],
         "gastos_por_tipo": por_tipo,
         "nombres_tipo_gasto": NOMBRES_TIPO_GASTO,
-        "gasto_modo": "doble" if doble else fuente["modo"],
+        "gasto_modo": "doble" if doble else ("costo" if fuente["modo"] == "doble" else fuente["modo"]),
         "gasto_cobrado": cobrado,
         "gasto_chip": (None if fuente["modo"] == "oculto" or (chip_total or {}).get("error")
                        else _chip_gasto(chip_total, pauta)),
@@ -4925,7 +5022,7 @@ def _chip_gasto_sidebar():
     (1 + 5 consultas) solo para un chip que nadie va a ver. En un proyecto
     que cobra suma el chip del saldo (`cobros_chip`, una lectura del libro)."""
     cliente = request.view_args.get("cliente") if request.view_args else None
-    if not cliente or request.endpoint == "ver_cliente" or _quiere_json():
+    if not cliente or request.endpoint in {"ver_cliente", "catalogo_selector", "swaps_lista", "gasto_lista"} or _quiere_json():
         return {}
     es_admin = session.get("rol") == "admin"
     out = {}
@@ -5332,17 +5429,25 @@ def _encolar_lanzamiento(cliente, eid, estado_previo, error_previo):
     como estaba. Al revés (encolar y después escribir «lanzando», el M2 de antes) un worker rápido podía activar y
     dejarlo «corriendo» antes de que la ruta escribiera, y esa escritura tardía lo pisaba con anuncios gastando (ronda 2
     de guardian-gasto, 2026-10-08). Lo que M2 cuidaba (quedar en «lanzando» sin tarea) lo cubre la vuelta atrás."""
-    experimentos.actualizar(cliente, eid, estado="lanzando", error=None)
-    try:
-        arranco = trabajos.encolar(tareas_exp.job_id_lanzar(cliente, eid), "exp_lanzar",
-                                   {"cliente": cliente, "experimento_id": eid, "activar": True}, cliente=cliente,
-                                   duracion_estimada=120, etapas=lanzador.ETAPAS_LANZAR_Y_ACTIVAR, max_intentos=1)
-    except Exception:
-        experimentos.actualizar(cliente, eid, estado=estado_previo, error=error_previo)
-        raise
-    if not arranco:
-        experimentos.actualizar(cliente, eid, estado=estado_previo, error=error_previo)
-    return arranco
+    with _LANZAMIENTO_LOCK:
+        job_id = tareas_exp.job_id_lanzar(cliente, eid)
+        if trabajos.en_curso(job_id):
+            return False
+        actual = experimentos.obtener(cliente, eid)
+        if not actual or actual["estado"] not in ("armando", "error"):
+            return False
+        estado_previo, error_previo = actual["estado"], actual["error"]
+        experimentos.actualizar(cliente, eid, estado="lanzando", error=None)
+        try:
+            arranco = trabajos.encolar(job_id, "exp_lanzar",
+                                       {"cliente": cliente, "experimento_id": eid, "activar": True}, cliente=cliente,
+                                       duracion_estimada=120, etapas=lanzador.ETAPAS_LANZAR_Y_ACTIVAR, max_intentos=1)
+        except Exception:
+            experimentos.actualizar(cliente, eid, estado=estado_previo, error=error_previo)
+            raise
+        if not arranco:
+            experimentos.actualizar(cliente, eid, estado=estado_previo, error=error_previo)
+        return arranco
 
 
 def _clave_formulario_experimento(token, datos, combinaciones):
@@ -5452,6 +5557,12 @@ def exp_lanzar(cliente, eid):
     if not ex:
         flash(gettext("Ese experimento no existe."), "error")
         return volver
+    if trabajos.en_curso(tareas_exp.job_id_lanzar(cliente, eid)):
+        mensaje = gettext("Ya se está lanzando ese experimento.")
+        if _quiere_json():
+            return jsonify(ok=True, mensaje=mensaje)
+        flash(mensaje, "warn")
+        return volver
     if ex["estado"] not in ("armando", "error"):
         flash(gettext("Ese experimento ya fue lanzado."), "error")
         return volver
@@ -5472,7 +5583,10 @@ def exp_lanzar(cliente, eid):
     if arranco:
         flash(gettext("Lanzando el experimento a Meta: si todo sale bien, queda activo y empieza a gastar…"), "ok")
     else:
-        flash(gettext("Ya se está lanzando ese experimento."), "warn")
+        mensaje = gettext("Ya se está lanzando ese experimento.")
+        if _quiere_json():
+            return jsonify(ok=True, mensaje=mensaje)
+        flash(mensaje, "warn")
     return volver
 
 
@@ -5885,7 +5999,8 @@ def org_redactar(cliente):
         return jsonify({"error": gettext("Elige la pieza y al menos una plataforma.")}), 400
     # Cobros (spec 2026-10-08 §5.2): sin saldo, 402 (organico.redactar
     # caería en silencio al texto determinista, y la persona pidió IA).
-    libro_cobros.exigir(cliente, gastos.TARIFAS["caption_organico"])
+    # Con plan y tope libre es «incluido» y no pide saldo (spec planes §4): por eso el tipo.
+    libro_cobros.exigir(cliente, gastos.TARIFAS["caption_organico"], tipo="caption_organico")
     try:
         textos = organico.redactar(cliente, pieza_id, plataformas)
     except ValueError as e:

@@ -978,7 +978,8 @@ def test_evaluar_si_el_margen_cambio_desde_que_vio_el_precio_no_cobra(conectado)
     _sembrar()
     _cobra(milesimas=50_000)
     visto = _visto()                                   # el precio con el margen de cuando abrió la pestaña
-    libro.configurar("acme", usuario="admin", margen=2.0)
+    # Otro margen que el de ahora (el de defecto cambió con los planes de main, 2026-10-10: no se da por sabido).
+    libro.configurar("acme", usuario="admin", margen=1.5 if libro.margen_precio("acme") != 1.5 else 3.0)
     conectado["c"].post(EVALUAR, data=visto)
     assert _evaluaciones() == []
     with db.conectar() as con:

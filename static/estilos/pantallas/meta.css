@@ -96,3 +96,8 @@
 .meta-ia-lista > li { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; min-width: 0; }
 .meta-ia-lista .btn-xs { max-width: 100%; white-space: normal; text-align: left; }
 .meta-ia-anterior { flex-basis: 100%; min-width: 0; padding: .1rem 0 .4rem .8rem; border-left: 2px solid var(--border); }
+
+/* NVP en el KPI (2026-10-09, pedido del cliente de HappyFlops; spec 2026-10-09-nvp-visitantes-nuevos §4.2): el chip
+   del componente `nvp` va dentro del <strong> de su tarjeta y crece a la letra base para leerse junto a las cifras de
+   las demás. En las tablas queda a su tamaño de siempre. */
+.meta-kpi-nvp .chip-nvp { font-size: var(--t-base); }

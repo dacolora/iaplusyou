@@ -6,7 +6,7 @@
    «pastillas». Cada pastilla abre un menú con los controles REALES (radios y
    selects de siempre), así que el servidor recibe los mismos campos. Subir y
    pegar un link usan los formularios vacíos de aquí abajo vía el atributo form=. #}
-{% set total_catalogo = namespace(n=0) %}{% for cid, lista in activos_por_categoria.items() %}{% set total_catalogo.n = total_catalogo.n + (lista | length) %}{% endfor %}
+{% set total_catalogo = (n_activos_por_categoria | default(n_por_categoria | default({}))).values() | sum %}
 <form method="post" action="{{ url_for('fp_subir_referencias', cliente=cliente) }}" enctype="multipart/form-data" id="fp-form-subir" hidden></form>
 <form method="post" action="{{ url_for('fp_agregar_link', cliente=cliente) }}" id="fp-form-link" hidden></form>
 
@@ -57,7 +57,7 @@
               </div>
               <button type="button" class="crear-menu-item" id="fp-abrir-catalogo">
                 <span class="crear-menu-ico" aria-hidden="true">▦</span>
-                <span><strong>{{ _('Del catálogo') }}</strong><small>{{ _('%(n)s productos, personajes y entornos, con buscador.', n=total_catalogo.n) }}</small></span>
+                <span><strong>{{ _('Del catálogo') }}</strong><small>{{ _('%(n)s productos, personajes y entornos, con buscador.', n=total_catalogo) }}</small></span>
               </button>
             </div>
           </div>
@@ -681,6 +681,7 @@
     document.getElementById('fp-abrir-catalogo').addEventListener('click', function () {
       cerrarMenus();
       dlgCatalogo.showModal();
+      dlgCatalogo.dispatchEvent(new Event('catalogo-abrir'));
     });
     var presionEnFondo = false;
     dlgCatalogo.addEventListener('mousedown', function (e) { presionEnFondo = e.target === dlgCatalogo; });
@@ -715,6 +716,7 @@
       });
       catElegidos.hidden = !marcados.length;
     }
+    form.addEventListener('catalogo-cargado', function () { pintarCatalogo(); refrescar(); });
     pintarCatalogo();
     refrescar();
 

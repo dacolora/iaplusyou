@@ -1554,7 +1554,7 @@ def pieza_qa(cliente, cp_id):
     # Cobros (spec 2026-10-08 §5): sin saldo no se borra el QA anterior; el
     # manejador común responde. Pide lo mismo que `encolar_qa` va a reservar
     # (revisión final 2026-10-08), para no borrar el QA y quedarse sin encolar.
-    libro.exigir(cliente, gastos.TARIFAS["revision_pieza"])
+    libro.exigir(cliente, gastos.TARIFAS["revision_pieza"], tipo="revision")
     if not datos.limpiar_qa_no_aprobada(cliente, cp_id, i["cf_id"]):
         if _quiere_json():
             return jsonify({"ok": False, "error": gettext("Esa pieza ya pasó el QA o está aprobada.")}), 409

@@ -31,8 +31,11 @@ from final_edition import tipos
 # generador de prompts de video).
 MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-5")
 # Sonnet 5 piensa antes de responder y eso sale del mismo tope; con la
-# doctrina y el ángulo en la salida, 1500 se quedaba corto.
-MAX_TOKENS = 4000
+# doctrina y el ángulo en la salida, 1500 se quedaba corto. Medido con 4
+# guiones reales el 2026-10-10 (docs/superpowers/evals/2026-10-10-pruebas-reales.md):
+# la primera pasada usó 3 069–3 562 de 4 000, casi el 90 % (PND-108). Se paga
+# solo lo que se usa, así que subir el tope no cambia el costo.
+MAX_TOKENS = 8000
 
 PALABRAS_POR_SEGUNDO = 2.5
 MAX_PALABRAS_PANTALLA = 6
