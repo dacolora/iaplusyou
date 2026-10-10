@@ -1232,7 +1232,7 @@ def test_el_plan_nombra_sus_objetos_marca_las_cifras_sin_dato_y_solo_enlaza_al_a
         "cifras_sin_dato": ["461", "1.200 SEK"]})
     html = conectado["c"].get(f"/cliente/acme/meta-rendimiento/evaluacion/{eid}").get_data(as_text=True)
     assert "Evaluación de HappyFlops Norway del" in html
-    assert "Claude citó cifras que no están en los datos: 461, 1.200 SEK" in html
+    assert "Claude citó cifras que no están en los datos: 461, 1.200 SEK. Compruébalas" in html
     paso1 = html[html.index("Junta los conjuntos") - 400:html.index("Revisa la página")]
     assert "Consolidar" in paso1 and "Video &lt;b&gt;gana&lt;/b&gt;" in paso1
     assert "Consolida &lt;i&gt;los conjuntos&lt;/i&gt;" in paso1 and "Recomendación" in paso1

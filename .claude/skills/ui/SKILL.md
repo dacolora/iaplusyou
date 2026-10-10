@@ -155,7 +155,9 @@ lo propio está en `static/estilos/pantallas/meta.css` (separación del selector
 la mezcla de main del 2026-10-08 que borró el gráfico del viejo Tablero, las reglas `.tb-grafico`/`.tb-barra`… del
 «Día a día», que arma `meta_rendimiento/grafico.py`). Los
 selectores del JS evitan palabras que `tests/i18n_util.py` lee como español (`data-meta-act`, `data-meta-seleccion`:
-«cuenta» y «guardar» están en sus marcas).
+«cuenta» y «guardar» están en sus marcas). «Evaluación con IA» (E2, 2026-10-10) es la única sección del panel que cobra: botón
+con precio y `data-confirmar`, barra `data-poll-al-terminar="evento"` que al terminar recarga solo el panel, y las
+evaluaciones anteriores por fetch (`data-meta-ev`); detalle en la skill `meta-rendimiento`.
 
 PND-166/190 (2026-10-09, decisión delegada): acciones Sprints muestran precio_analisis_sprint, texto seguro de gastos.estimar; Reanudar usa gastos.texto_precio. Reintentar análisis reusa botón/formulario y clases comunes; panel sin scripts. La comprobación visual a 375 px, escritorio y es/en corresponde a Claude (encargo sin navegadores).
 

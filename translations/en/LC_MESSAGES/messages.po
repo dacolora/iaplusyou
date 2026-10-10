@@ -3823,6 +3823,10 @@ msgid "Claude citó cifras que no están en los datos: %(cifras)s"
 msgstr "Claude cited figures that are not in the data: %(cifras)s"
 
 #, python-format
+msgid "Claude citó cifras que no están en los datos: %(cifras)s. Compruébalas en el Administrador de anuncios antes de actuar."
+msgstr "Claude cited figures that are not in the data: %(cifras)s. Check them in Ads Manager before acting."
+
+#, python-format
 msgid "Claude devolvió menos de %(n)s consultas."
 msgstr "Claude returned fewer than %(n)s searches."
 
@@ -4196,9 +4200,6 @@ msgstr "Purchases (requires Pixel)"
 
 msgid "Comprobar Pixel"
 msgstr "Check Pixel"
-
-msgid "Compruébalas en el Administrador de anuncios antes de actuar."
-msgstr "Check them in Ads Manager before acting."
 
 msgid "Computador"
 msgstr "Desktop"

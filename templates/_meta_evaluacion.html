@@ -24,7 +24,7 @@
   <p class="tag-error tw-aviso">{{ _('Esta evaluación falló: %(error)s', error=ev.error or '—') }}</p>
   {% else %}
   {% if r.cifras_sin_dato %}
-  <p class="tag-advertencia tw-aviso meta-eval-cifras">{{ _('Claude citó cifras que no están en los datos: %(cifras)s', cifras=r.cifras_sin_dato | join(', ')) }} {{ _('Compruébalas en el Administrador de anuncios antes de actuar.') }}</p>
+  <p class="tag-advertencia tw-aviso meta-eval-cifras">{{ _('Claude citó cifras que no están en los datos: %(cifras)s. Compruébalas en el Administrador de anuncios antes de actuar.', cifras=r.cifras_sin_dato | join(', ')) }}</p>
   {% endif %}
   {% if r.resumen %}<p class="meta-eval-resumen">{{ r.resumen }}</p>{% endif %}
 
