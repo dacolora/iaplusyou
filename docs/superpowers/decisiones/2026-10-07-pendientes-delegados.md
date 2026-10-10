@@ -97,6 +97,8 @@ mala, se cambia aquí y en la fila.
 
 ## Pruebas que gastan (grupo 7 del plan): necesitan un sí de Daniel con el precio
 
+**Hechas el 2026-10-10** con el «sí» de Daniel: US$ 3,48 en `colorado_forja` (resultados en `docs/superpowers/evals/2026-10-10-pruebas-reales.md`). PND-074 no se probó porque no está implementado.
+
 Presupuesto propuesto para hacerlas todas juntas: **hasta US$ 15**.
 - `eval-claude` del guion (PND-108) y de los topes nuevos (PND-141): unos US$ 2.
 - Kling con `@Image1` (PND-035), receta del director (PND-071), «Que Wan mejore mi prompt» (PND-073) y Seedance con imagen
