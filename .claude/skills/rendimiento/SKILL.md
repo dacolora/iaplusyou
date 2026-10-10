@@ -171,8 +171,9 @@ la miniatura, el saldo, la fuente en la foto, Referentes y «Meta reporta»).
   con IA» de Meta cuenta para su N con 7, 14 o 90 días (`meta_panel.diagnostico(evaluados_periodo=)`).
 - **Las rutas**: `<fuente>` "tw"/"meta" e ids con `id_valido` (si no, 404 antes de leer); un anuncio que no está en el
   alcance de esa fuente, 404. Sin el alcance de esa fuente (pestaña vieja, desconectada) «Cómo mejorarlo» responde JSON
-  `ok: False` sin cobrar; el correo sin verificar, también JSON al fetch (`_correo_verificado`). El 402 sin saldo es el
-  de `dashboard._saldo_insuficiente`, como antes.
+  `ok: False` sin cobrar. El 402 sin saldo es el de `dashboard._saldo_insuficiente`, como antes. Correo verificado:
+  solo «Actualizar ahora» lo exige (`rutas.CON_CORREO_VERIFICADO`); las que cobran no, como en producción (S2 de la
+  revisión final, abajo).
 - **La tarjeta de Meta** es la misma macro (`_tw_galeria.html`): cuenta con bandera en el sobretítulo, «según Meta» en el
   resultado, sin «Meta reporta» (R12 es de Triple Whale) ni «Guardar en Referentes» (PND-284). Su medio: una pieza de
   Creatv (R2); si no, la imagen que un análisis listo copió a R2; si no, la miniatura de Meta solo si
@@ -193,8 +194,7 @@ la miniatura, el saldo, la fuente en la foto, Referentes y «Meta reporta»).
 
 ## E2 tarea 5 (2026-10-10): «Evaluar con IA» desde la pestaña (su rama Meta se jubiló al integrar main)
 
-Por qué: «Lo que hace ganar en tu cuenta» vivía en `triple_whale.rutas.evaluar`, sin la barrera de correo verificado de
-la pestaña. Código: `panel._ia`, `rutas.evaluar`, la macro `ia` de `_tw_secciones.html` (recibe `r.ia` y `r.params`, ya
+Por qué: «Lo que hace ganar en tu cuenta» vivía en `triple_whale.rutas.evaluar`, aparte de la pestaña. Código: `panel._ia`, `rutas.evaluar`, la macro `ia` de `_tw_secciones.html` (recibe `r.ia` y `r.params`, ya
 no `tw`); pruebas `tests/test_rendimiento_e2_evaluar.py`.
 
 - **La ruta** (`POST /evaluar`, `fuente` "tw" o sin ella; otra, 404; `entrada`/`dias`/`canal`) vuelve a armar la muestra

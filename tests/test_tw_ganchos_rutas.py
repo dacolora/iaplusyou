@@ -205,6 +205,19 @@ def test_probar_crea_la_tanda_y_encola_la_preparacion_una_vez(app):  # noqa: F81
     assert len(_preparaciones()) == 1 and len(datos.ganchos_de_analisis("acme", aid)) == 3
 
 
+def test_probar_no_exige_correo_verificado_como_en_produccion(app):  # noqa: F811
+    """S2 (revisión final de Rendimiento E2, 2026-10-10): sin SMTP en producción no se puede verificar el correo, y
+    `ganchos_probar` nunca lo exigió: una persona del proyecto lo pide igual (el mismo origen y el precio visto, sí)."""
+    import usuarios
+    from tests.test_rutas_meta_rendimiento import _como_cliente
+    aid = _analisis()
+    usuarios.actualizar("user_acme", correo_verificado=False)
+    c = _como_cliente(app)
+    r = c.post(f"/cliente/acme/triple-whale/analisis/{aid}/ganchos", data={"precio_visto": "1.008"},
+               headers={"Accept": "application/json", "Sec-Fetch-Site": "same-origin"})
+    assert r.status_code == 200 and r.get_json()["ok"] and len(_preparaciones()) == 1
+
+
 def test_probar_por_formulario_vuelve_a_la_pestana(app):  # noqa: F811
     aid = _analisis()
     r = _probar(app, aid, json=False)

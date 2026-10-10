@@ -1,7 +1,7 @@
 """Blueprint de la pestaña «Rendimiento» (spec 2026-10-09 §4–§5, A5), bajo `/cliente/<cliente>/rendimiento`.
 `dashboard._guard_por_cliente` protege todo porque la URL lleva `<cliente>`; cada POST además exige el mismo origen
-(Sec-Fetch-Site, la barrera CSRF del resto de la app) y correo verificado (el admin está exento), como las rutas de
-Triple Whale y de Meta.
+(Sec-Fetch-Site, la barrera CSRF del resto de la app), y «Actualizar ahora» correo verificado (el admin está exento),
+como la vieja ruta de Meta. Las que cobran no lo exigen, como en producción (S2 de la revisión final; PND-292).
 
 - `panel` (GET): el fragmento que la pestaña pide por fetch (solo lee la copia local). `entrada` = la clave de una
   entrada del selector; vacía, ajena o rara = «Todas». `tienda`/`cuenta` son los parámetros de las pestañas viejas.
@@ -23,8 +23,8 @@ Todas resuelven el alcance con `entrada`, `dias` y `canal` (este solo si el alca
   que no está en el alcance de esa fuente es 404.
 - `anuncio/<fuente>/<canal>/<ad_id>/analizar` (POST): «Cómo mejorarlo» con `triple_whale.pedidos.pedir_analisis` y el
   alcance de SU fuente (precio a la vista, Cobros, `max_intentos=1`, nunca dos veces lo mismo). Con
-  `Accept: application/json` responde JSON con la tarjeta ya en curso (también sin alcance o sin correo verificado:
-  el JS de la tarjeta espera JSON); sin saldo, el 402 de `dashboard._saldo_insuficiente`.
+  `Accept: application/json` responde JSON con la tarjeta ya en curso (también sin alcance: el JS de la tarjeta espera
+  JSON); sin saldo, el 402 de `dashboard._saldo_insuficiente`.
 - `analizar-lote` (POST): «Analizar los N que más gastaron». Cobra solo las claves `<fuente>:<canal>:<ad_id>` que
   mostró el formulario, recortadas a N entre las dos fuentes y aún elegibles, cada una con su fuente
   (`galeria.pedir_lote`); un segundo envío no cobra nada y la primera fuente sin saldo para todo.
@@ -63,21 +63,25 @@ def _mismo_origen():
             abort(403)
 
 
+# Las rutas que exigen correo verificado: solo «Actualizar ahora», como la vieja ruta de Meta (`meta_rendimiento.rutas`).
+CON_CORREO_VERIFICADO = ("rendimiento.actualizar",)
+
+
 @bp.before_request
 def _correo_verificado():
-    """Sin correo verificado una persona con rol cliente no pide copias ni análisis pagados desde aquí (el mismo
-    criterio que `meta_rendimiento.rutas._correo_verificado`; este Blueprint no puede importar `dashboard`). El admin
-    pasa. Desde E2 tarea 4 también frena «Cómo mejorarlo» y el lote, que antes vivían en `triple_whale/rutas.py` sin
-    esta barrera (regla de seguridad de todo POST nuevo)."""
-    if request.method != "POST" or meta_rutas.es_admin():
+    """Sin correo verificado una persona con rol cliente no pide copias desde aquí (el mismo criterio que
+    `meta_rendimiento.rutas._correo_verificado`; este Blueprint no puede importar `dashboard`). El admin pasa.
+
+    Solo para `CON_CORREO_VERIFICADO`. S2 (revisión final de Rendimiento E2, 2026-10-10): producción no tiene SMTP y 2
+    de 4 usuarios cliente no pueden verificar su correo; «Cómo mejorarlo», el lote y «Evaluar con IA» de Triple Whale no
+    lo exigían cuando vivían en `triple_whale/rutas.py` y siguen sin exigirlo (el mismo origen sí, `_mismo_origen`).
+    Exigirlo en las rutas que cobran cuando el VPS tenga SMTP: PND-292."""
+    if request.method != "POST" or request.endpoint not in CON_CORREO_VERIFICADO or meta_rutas.es_admin():
         return None
     entry = usuarios.obtener(session.get("usuario") or "")
     if entry and entry.get("correo_verificado"):
         return None
-    mensaje = gettext("Confirma tu correo primero (Configuración › Cuenta).")
-    if _quiere_json():          # «Cómo mejorarlo» por fetch: una respuesta conocida, no un redirect que no sabe leer
-        return {"ok": False, "mensaje": mensaje, "html": ""}
-    flash(mensaje, "error")
+    flash(gettext("Confirma tu correo primero (Configuración › Cuenta)."), "error")
     return redirect(url_for("ver_cliente", cliente=request.view_args["cliente"], _anchor="settings"))
 
 

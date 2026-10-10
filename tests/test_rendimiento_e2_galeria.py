@@ -544,20 +544,27 @@ def test_los_post_de_otro_sitio_son_403(mixto):
     assert r.status_code == 403 and _jobs() == []
 
 
-def test_sin_correo_verificado_un_cliente_no_cobra(mixto):
+def test_sin_correo_verificado_un_cliente_pide_igual_como_en_produccion(mixto):
+    """S2 (revisión final de Rendimiento E2, 2026-10-10): producción no tiene SMTP y 2 de 4 usuarios cliente no pueden
+    verificar su correo. «Cómo mejorarlo» y el lote no lo exigían cuando vivían en `triple_whale/rutas.py` y siguen sin
+    exigirlo (el mismo origen sí); exigirlo cuando el VPS tenga SMTP es PND-292. «Actualizar ahora» sí lo exige
+    (`tests/test_rutas_rendimiento.py`)."""
     import usuarios
     from tests.test_rutas_meta_rendimiento import _como_cliente
     _sembrar()
     usuarios.actualizar("user_acme", correo_verificado=False)
     c = _como_cliente(mixto)
-    r = c.post("/cliente/acme/rendimiento/anuncio/meta/facebook-ads/m2/analizar",
-               data={"entrada": "", "dias": "0", "canal": ""}, headers=dict(POST, Accept="application/json"))
-    d = r.get_json()
-    assert r.status_code == 200 and d["ok"] is False and d["html"] == "" and "Confirma tu correo" in d["mensaje"]
-    r = c.post("/cliente/acme/rendimiento/analizar-lote", data={"clave": ["meta:facebook-ads:m2"]}, headers=POST)
-    assert r.status_code == 302 and r.headers["Location"].endswith("#settings")
-    assert _jobs() == [] and _filas() == []
-    assert c.get("/cliente/acme/rendimiento/galeria?entera=1").status_code == 200      # leer no es escribir
+    url = "/cliente/acme/rendimiento/anuncio/meta/facebook-ads/m2/analizar"
+    datos_form = {"entrada": "", "dias": "0", "canal": ""}
+    r = c.post(url, data=datos_form, headers={"Sec-Fetch-Site": "cross-site", "Accept": "application/json"})
+    assert r.status_code == 403 and _jobs() == []                                    # otro sitio, nunca
+    r = c.post(url, data=datos_form, headers=dict(POST, Accept="application/json"))
+    assert r.status_code == 200 and r.get_json()["ok"] is True
+    r = c.post("/cliente/acme/rendimiento/analizar-lote", data=dict(datos_form, veredicto="",
+                                                                     clave=["meta:facebook-ads:m1"]), headers=POST)
+    assert r.status_code == 302 and r.headers["Location"].endswith("#rendimiento")
+    assert _jobs() == ["acme__tw_anuncio__facebook-ads__m1", "acme__tw_anuncio__facebook-ads__m2"]
+    assert {f["pedido_por"] for f in _filas()} == {"user_acme"}
 
 
 def test_una_entrada_que_ya_no_existe_no_cobra(mixto):

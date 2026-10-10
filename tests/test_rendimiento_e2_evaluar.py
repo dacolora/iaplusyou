@@ -7,7 +7,8 @@ de Meta rendimiento E2 (la de producción: `meta_rendimiento.rutas.evaluar`, sus
 `tests/test_rendimiento_meta_e2.py` y `tests/test_rutas_meta_rendimiento.py`). Esta ruta queda para la parte Triple
 Whale del alcance: la muestra se vuelve a armar con `panel.alcances` (lo que se cobra es lo que se vio), el pedido es
 `triple_whale.pedidos.pedir_evaluacion` (precio a la vista, Cobros antes de crear nada, `max_intentos=1`, una por
-proyecto) y exige correo verificado. Claude, Meta y R2 nunca se llaman de verdad."""
+proyecto, el número y el precio que mostró el botón) y, como en producción, no exige correo verificado (S2 de la
+revisión final). Claude, Meta y R2 nunca se llaman de verdad."""
 import pytest
 
 import db
@@ -239,14 +240,18 @@ def test_un_post_de_otro_sitio_es_403_y_no_crea_nada(mixto):
     assert r.status_code == 403 and twdatos.evaluaciones("acme") == [] and _tareas("tw_evaluar") == []
 
 
-def test_sin_correo_verificado_un_cliente_no_evalua(mixto):
+def test_sin_correo_verificado_un_cliente_evalua_igual_como_en_produccion(mixto):
+    """S2 (revisión final de Rendimiento E2, 2026-10-10): «Evaluar con IA» de Triple Whale no exigía correo verificado en
+    producción (sin SMTP no se puede verificar) y sigue sin exigirlo; el mismo origen y el precio visto, sí (PND-292)."""
     import usuarios
     from tests.test_rutas_meta_rendimiento import _como_cliente
     _sembrar()
     usuarios.actualizar("user_acme", correo_verificado=False)
-    r = _evaluar(mixto, "tw", entrada="NO", follow=False, cliente=_como_cliente(mixto))
-    assert r.status_code == 302 and r.headers["Location"].endswith("#settings")
-    assert twdatos.evaluaciones("acme") == [] and _tareas("tw_evaluar") == []
+    c = _como_cliente(mixto)
+    r = _evaluar(mixto, "tw", entrada="NO", follow=False, cliente=c)
+    assert r.status_code == 302 and r.headers["Location"].endswith("#rendimiento")
+    [fila] = twdatos.evaluaciones("acme")
+    assert fila["pedido_por"] == "user_acme" and len(_tareas("tw_evaluar")) == 1
 
 
 def test_otro_proyecto_no_evalua(mixto):
