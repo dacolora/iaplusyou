@@ -944,6 +944,21 @@ def test_evaluar_sin_saldo_responde_402_y_no_crea_nada(conectado):
     assert _evaluaciones() == [] and _tareas("meta_rend_evaluar") == []
 
 
+def test_evaluar_sin_saldo_ni_siquiera_gasta_un_id_de_evaluacion(conectado):
+    """El saldo se exige ANTES de crear la fila (cobros): la tabla es AUTOINCREMENT, así que crear-y-borrar la fila
+    dejaría un hueco en los ids de las evaluaciones del proyecto (y una fila a la vista por un instante)."""
+    _sembrar()
+    _cobra()
+    r = conectado["c"].post(EVALUAR, data=_visto(), headers={"X-Requested-With": "fetch"})
+    assert r.status_code == 402
+    with db.conectar() as con:
+        assert con.execute(sa.text("SELECT seq FROM sqlite_sequence WHERE name = 'meta_evaluacion'")).first() is None
+    _cobra(milesimas=50_000)
+    conectado["c"].post(EVALUAR, data=_visto())
+    ev, = _evaluaciones()
+    assert ev["id"] == 1
+
+
 def test_evaluar_con_saldo_reserva_el_precio(conectado):
     import gastos
     from cobros import libro
@@ -1036,6 +1051,17 @@ def test_llevar_una_idea_a_crear_deja_el_prefill_con_el_origen_de_meta_sin_gener
     sin_prompt = _evaluacion_lista(ideas=[{"titulo": "X", "prompt": ""}])
     r = conectado["c"].post(f"/cliente/acme/meta-rendimiento/evaluacion/{sin_prompt}/idea/0/crear")
     assert r.status_code == 302 and any("no tiene prompt" in m for m in _flashes(conectado["c"]))
+
+
+def test_llevar_una_idea_de_una_evaluacion_fallida_a_crear_es_404(conectado):
+    """Una evaluación en «error» puede traer ideas en `resultado` (una respuesta que se guardó y luego falló al
+    cerrarse): solo las de una evaluación «lista» se llevan a Crear."""
+    eid = _evaluacion_lista()
+    datos.actualizar_evaluacion(eid, estado="error", error="falló al cerrar")
+    assert (datos.evaluacion("acme", eid)["resultado"] or {}).get("ideas")
+    assert conectado["c"].post(f"/cliente/acme/meta-rendimiento/evaluacion/{eid}/idea/0/crear").status_code == 404
+    with conectado["c"].session_transaction() as s:
+        assert "fp_prefill" not in s
 
 
 def test_crear_guarda_la_idea_de_meta_aparte_y_triple_whale_no_la_toma_por_suya(app_crear):
