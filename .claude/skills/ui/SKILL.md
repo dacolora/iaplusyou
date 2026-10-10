@@ -123,9 +123,9 @@ PND-028/031/044 (2026-10-03, lote 2): «Versión A» requiere una hija B real; l
 
 PND-130/133 (2026-10-05, lote 4): en celular las cifras de Final edition colocan el icono encima para que la etiqueta use todo el ancho, sin cortar palabras: overflow-wrap normal solo dentro de @media max-width 760px; escritorio y .fe-flujo small conservan anywhere (revisión de Codex, 2026-10-05). El detalle remoto rechaza respuestas redirigidas (sesión vencida) antes de leer su HTML; conserva el aviso de error y no arranca sondeos. La revisión visual a 375 px la hace Claude.
 
-## Marca Creatv Adstra y fondo galáctico (2026-10-06, nombre de vuelta el 2026-10-10)
+## Marca CREATV Adstra y fondo galáctico (2026-10-06, nombre de vuelta el 2026-10-10)
 
-- La marca es **Creatv Adstra** (pedido de Camilo; fue Creatv Galadsy del 2026-10-06 al 2026-10-10 y volvió a Adstra). El logo son tres máscaras
+- La marca es **CREATV Adstra** (pedido de Camilo; fue Creatv Galadsy del 2026-10-06 al 2026-10-10 y volvió a Adstra). El logo son tres máscaras
   PNG con alfa (`static/img/adstra-simbolo|nombre|logo.png`) que `componentes/marca.css` pinta con `currentColor`
   (`.marca-mark`, `.marca-texto`, `.marca-logo`); el favicon es `adstra-icono.png`. `cuentas.NOMBRE_PLATAFORMA` es el
   nombre de los correos.
@@ -134,10 +134,13 @@ PND-130/133 (2026-10-05, lote 4): en celular las cifras de Final edition colocan
   2026-10-10 (antes en azul). Sus animaciones
   (`galaxia-*`) y las de la portada (`portada-vitrina`, `portada-cadena`) están en `ANIMACIONES_PERMITIDAS`.
 - La barra superior es `--velo-cabecera` con `backdrop-filter`, para que el fondo se vea detrás.
-- La portada (`templates/index.html`, `pantallas/portada.css`, 2026-10-10): banner a todo lo ancho con la vaca
-  (`static/landing/banner*.webp`) y «Run more ADSTRA» encima, «Lo que ya no necesitas» tachado, los seis pasos en
-  cuadrícula (`.bento`), vitrina, planes, cadena, cierre y la tecnología al final. Videos e imágenes livianos en
-  `static/landing/` (480 px, sin audio, ≤ 8 s).
+- La portada (`templates/index.html`, `pantallas/portada.css`, 2026-10-10) sigue la **distribución de klarna.com** (no
+  sus colores), pedido de Camilo: tarjeta grande redondeada con «Run more ADSTRA» a la izquierda y la vaca a la derecha
+  (`static/landing/banner*.webp`; en el celular, la foto arriba y el texto debajo), fila de cifras (solo hechos de la
+  plataforma), título centrado, los seis pasos como lista grande con la pieza fija al lado (el activo cambia al bajar,
+  `IntersectionObserver` con la franja central; en el celular cada paso lleva su pieza), tachados, vitrina, planes,
+  cadena, cierre y la tecnología. En la portada la cabecera suma enlaces a las secciones y «Iniciar sesión» en
+  pastilla (`request.endpoint == 'index'` en `base.html`). En texto la marca se escribe **CREATV Adstra**.
 - **Paleta morada desde el 2026-10-10** (pedido de Camilo; revierte la azul del 2026-10-02): `tokens.css` tiene el
   violeta como acento y superficies oscuras moradas; `test_paleta_morada_sin_el_azul_viejo` vigila que no vuelva el
   azul viejo.

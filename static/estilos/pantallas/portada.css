@@ -1,8 +1,9 @@
-/* Portada Creatv Adstra (templates/index.html, 2026-10-10): banner con la vaca y «Run more ADSTRA», lo que ya no
-   necesitas (tachado), los seis pasos en cuadrícula (bento), vitrina que corre, planes, cadena del ciclo, cierre y la
-   tecnología al final. .landing-cta y .landing-empezar siguen en legado/02. */
+/* Portada CREATV Adstra (templates/index.html, 2026-10-10). Distribución de klarna.com, no sus colores: tarjeta grande
+   con el título a la izquierda y la vaca a la derecha, fila de cifras, título centrado, los pasos como lista grande con
+   la pieza al lado (fija al bajar), lo que ya no necesitas, vitrina, planes, cadena, cierre y la tecnología al final.
+   .landing-cta y .landing-empezar siguen en legado/02. */
 
-/* Las piezas de la vitrina y del bento llevan un video o una foto de fondo. */
+/* Las piezas de la vitrina y de los pasos llevan un video o una foto de fondo. */
 .landing-media { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: -2; display: block; }
 
 /* Lema y bajada (banner y cierre) */
@@ -78,17 +79,6 @@ h2.landing-titulo-chico { font-size: clamp(1.3rem, 2.6vw, 1.8rem); }
   .landing-vitrina-pieza { height: 268px; }
 }
 
-/* Banner: la foto a todo lo ancho (sale del ancho de <main>) con el título encima, abajo y al centro. */
-.landing-banner { position: relative; isolation: isolate; width: 100vw; margin: calc(-1 * var(--esp-7)) 0 var(--esp-7) calc(50% - 50vw); min-height: min(92vh, 820px); display: flex; align-items: flex-end; justify-content: center; text-align: center; overflow: hidden; }
-.landing-banner-foto, .landing-banner-foto img { position: absolute; inset: 0; width: 100%; height: 100%; }
-.landing-banner-foto { z-index: -2; }
-.landing-banner-foto img { object-fit: cover; object-position: 50% 38%; }
-.landing-banner::after { content: ""; position: absolute; inset: 0; z-index: -1; background-image: var(--velo-banner); }
-.landing-banner-texto { padding: 0 var(--esp-4) clamp(var(--esp-6), 8vh, 5rem); max-width: 60rem; }
-.landing-banner .landing-bajada { margin-left: auto; margin-right: auto; max-width: 30ch; }
-.landing-banner .landing-cta { justify-content: center; }
-.landing-banner .landing-lema { text-shadow: 0 6px 40px var(--sombra-media); }
-.landing-chip { display: inline-block; margin-bottom: var(--esp-4); padding: .35rem .9rem; border-radius: var(--radius-pastilla); border: 1px solid var(--resalte-borde); background: var(--panel-velo); color: var(--cian); font-size: var(--t-chico); font-weight: 600; letter-spacing: .02em; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
 
 /* Lo que ya no necesitas: tachado, con «Solo Adstra.» al final. */
 .landing-sin-nada { text-align: center; margin: 0 auto 5rem; max-width: 60rem; }
@@ -96,28 +86,85 @@ h2.landing-titulo-chico { font-size: clamp(1.3rem, 2.6vw, 1.8rem); }
 .landing-tachados s { text-decoration-color: var(--accent-2); text-decoration-thickness: .12em; }
 .landing-solo { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(1.8rem, 4.4vw, 3.2rem); letter-spacing: -0.03em; background-image: var(--degradado-lema); -webkit-background-clip: text; background-clip: text; color: transparent; }
 
-/* Los seis pasos en cuadrícula (bento): 4 columnas; 01 ancho, 03 alto. */
-.landing-bento-seccion { margin: 0 0 5rem; }
-.bento { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: 230px; gap: var(--esp-4); }
-.bento-tarjeta { position: relative; isolation: isolate; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; padding: var(--esp-5); border-radius: var(--radius-lg); border: 1px solid var(--border); background: var(--panel-velo); background-image: radial-gradient(circle at 100% 0%, var(--galaxia-velo-1), transparent 60%); transition: transform .25s, border-color .25s, box-shadow .25s; }
-.bento-tarjeta:hover { transform: translateY(-4px); border-color: var(--resalte-borde-fuerte); box-shadow: var(--shadow-glow); }
-.bento-tarjeta.b-ancho { grid-column: span 2; }
-.bento-tarjeta.b-alto { grid-row: span 2; }
-.bento-con-media::after { content: ""; position: absolute; inset: 0; z-index: -1; background-image: linear-gradient(to top, var(--sombra-media) 10%, transparent 70%); }
-.bento-con-media .landing-media { transition: transform .6s; }
-.bento-con-media:hover .landing-media { transform: scale(1.05); }
-.bento-num { position: absolute; top: var(--esp-4); left: var(--esp-5); font-family: var(--font-display); font-weight: 700; font-size: 2.6rem; letter-spacing: -0.04em; line-height: 1; background-image: var(--degradado-lema); -webkit-background-clip: text; background-clip: text; color: transparent; }
-/* Sobre una foto el número va en una pastilla oscura, si no se pierde. */
-.bento-con-media .bento-num { font-size: 1.3rem; padding: .3rem .7rem; border-radius: var(--radius-pastilla); background: var(--panel-velo); color: var(--text); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
-.bento-texto h3 { margin: 0 0 var(--esp-1); font-family: var(--font-display); font-size: 1.15rem; line-height: 1.2; letter-spacing: -0.01em; }
-.bento-texto p { margin: 0; color: var(--muted); font-size: .86rem; line-height: 1.45; }
-.bento-con-media .bento-texto p { color: var(--text); opacity: .85; }
-@media (max-width: 900px) {
-  .bento { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 210px; }
+/* Cabecera de la portada: enlaces a las secciones y «Iniciar sesión» en pastilla. */
+.header-portada { display: flex; gap: var(--esp-5); margin-left: var(--esp-5); }
+.header-portada a { color: var(--text); text-decoration: none; font-weight: 500; font-size: .95rem; opacity: .85; }
+.header-portada a:hover { opacity: 1; color: var(--accent-texto); }
+.header-entrar { margin-left: auto; text-decoration: none; border-radius: var(--radius-pastilla); padding: .55rem 1.2rem; font-size: .92rem; }
+.header-entrar + .idioma-enlaces { margin-left: var(--esp-4); }
+
+/* Tarjeta del héroe: redondeada, dentro del ancho de la página. La foto ocupa la derecha y se funde hacia la
+   izquierda, donde va el título: así el texto nunca tapa a la vaca. */
+.portada-hero { position: relative; isolation: isolate; overflow: hidden; display: flex; align-items: center; min-height: min(78vh, 680px); margin: 0 0 var(--esp-7); border-radius: 28px; border: 1px solid var(--border); background: var(--panel-velo-2); box-shadow: var(--shadow); }
+.portada-hero-foto { position: absolute; top: 0; right: 0; bottom: 0; width: 64%; z-index: -1; }
+.portada-hero-foto img { width: 100%; height: 100%; object-fit: cover; object-position: 55% 35%;
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, currentColor 32%); mask-image: linear-gradient(to right, transparent 0%, currentColor 32%); }
+.portada-hero-texto { position: relative; padding: clamp(var(--esp-6), 5vw, 4.5rem); max-width: 50%; }
+.portada-lema { font-family: var(--font-display); font-weight: 700; font-size: clamp(3.4rem, 8.4vw, 7.6rem); line-height: .92; letter-spacing: -0.045em; margin: 0 0 var(--esp-5); max-width: none; }
+.portada-lema .landing-degradado { display: block; }
+.portada-hero-sub { margin: 0 0 var(--esp-5); color: var(--text); opacity: .9; font-size: clamp(1.05rem, 1.6vw, 1.3rem); line-height: 1.45; max-width: 32ch; }
+.portada-pildora { border-radius: var(--radius-pastilla); padding: .85rem 1.5rem; }
+
+.landing-chip { display: inline-block; margin-bottom: var(--esp-4); padding: .35rem .9rem; border-radius: var(--radius-pastilla); border: 1px solid var(--resalte-borde); background: var(--panel-velo); color: var(--cian); font-size: var(--t-chico); font-weight: 600; letter-spacing: .02em; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+
+/* Cifras: título con una palabra resaltada a la izquierda, cuatro números a la derecha. */
+.portada-cifras { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--esp-6); margin: 0 0 6rem; padding: 0 var(--esp-4); }
+.portada-cifras-titulo { margin: 0; display: block; text-transform: none; color: var(--text); font-family: var(--font-display); font-weight: 700; font-size: clamp(1.6rem, 3vw, 2.4rem); letter-spacing: -0.03em; line-height: 1.1; max-width: 18ch; }
+.portada-cifras-titulo::before { content: none; }
+.portada-cifras-titulo mark { background: var(--accent); color: var(--text); padding: 0 .2em; border-radius: 6px; }
+.portada-cifras-lista { display: flex; flex-wrap: wrap; gap: var(--esp-6) clamp(var(--esp-5), 4vw, 4rem); margin: 0; }
+.portada-cifras-lista div { text-align: center; }
+.portada-cifras-lista dt { font-family: var(--font-display); font-weight: 700; font-size: clamp(2.4rem, 4.4vw, 3.6rem); letter-spacing: -0.04em; line-height: 1; }
+.portada-cifras-lista dd { margin: var(--esp-2) 0 0; color: var(--muted); font-size: .88rem; max-width: 16ch; }
+
+/* Título centrado de sección */
+.portada-centro { text-align: center; max-width: 52rem; margin: 0 auto var(--esp-7); }
+h2.portada-titulo { display: block; margin: 0 0 var(--esp-4); text-transform: none; color: var(--text); font-family: var(--font-display); font-weight: 700; font-size: clamp(2.2rem, 5vw, 4rem); line-height: 1.02; letter-spacing: -0.04em; }
+h2.portada-titulo::before { content: none; }
+.portada-centro-sub { margin: 0 auto; color: var(--muted); font-size: 1.1rem; line-height: 1.55; max-width: 46rem; }
+
+/* Pasos: puntos | pieza (fija al bajar) | lista grande. El paso activo se ve fuerte y abre su texto. */
+.portada-pasos-seccion { margin: 0 0 6rem; }
+.portada-pasos { display: grid; grid-template-columns: 24px minmax(0, 1fr) minmax(0, 1.15fr); gap: var(--esp-6); align-items: start; }
+.portada-puntos { position: sticky; top: 45vh; list-style: none; margin: 0; padding: 0; display: grid; gap: var(--esp-3); justify-items: center; }
+.portada-puntos li { width: 6px; height: 6px; border-radius: 50%; background: var(--muted-2); transition: height .3s, background .3s; }
+.portada-puntos li.activo { height: 24px; border-radius: var(--radius-pastilla); background: var(--accent-2); }
+.portada-pasos-media { position: sticky; top: 14vh; aspect-ratio: 4 / 5; max-height: 72vh; border-radius: 26px; overflow: hidden; border: 1px solid var(--border); box-shadow: var(--shadow); }
+.portada-paso-media { position: absolute; inset: 0; isolation: isolate; opacity: 0; transition: opacity .45s; }
+.portada-paso-media.activo { opacity: 1; }
+.portada-pasos-lista { list-style: none; margin: 0; padding: 12vh 0; display: grid; gap: var(--esp-2); }
+.portada-paso { min-height: 22vh; display: flex; flex-direction: column; justify-content: center; }
+.portada-paso-titulo { all: unset; cursor: pointer; font-family: var(--font-display); font-weight: 700; font-size: clamp(1.8rem, 3.6vw, 3rem); line-height: 1.05; letter-spacing: -0.035em; color: var(--muted-2); opacity: .55; transition: color .3s, opacity .3s; }
+.portada-paso-titulo:focus-visible { outline: 2px solid var(--accent-texto); outline-offset: 4px; border-radius: 6px; }
+.portada-paso.activo .portada-paso-titulo, .portada-paso-titulo:hover { color: var(--text); opacity: 1; }
+.portada-paso-texto { margin: 0; max-height: 0; overflow: hidden; opacity: 0; color: var(--muted); font-size: 1.05rem; line-height: 1.55; max-width: 38ch; transition: max-height .4s, opacity .4s, margin .4s; }
+.portada-paso.activo .portada-paso-texto { max-height: 8rem; opacity: 1; margin-top: var(--esp-3); }
+.portada-paso-media-movil { display: none; }
+
+@media (max-width: 1000px) {
+  .portada-hero-texto { max-width: 58%; }
+  .portada-hero-foto { width: 72%; }
 }
-@media (max-width: 560px) {
-  .bento { grid-template-columns: 1fr; grid-auto-rows: minmax(180px, auto); }
-  .bento-tarjeta.b-ancho { grid-column: auto; }
-  .bento-tarjeta.b-alto { grid-row: span 2; }
-  .landing-banner { min-height: 78vh; }
+@media (max-width: 760px) {
+  .header-portada { display: none; }
+  .header-entrar { padding: .45rem .9rem; font-size: .85rem; }
+  /* Celular: la foto arriba y el texto debajo, dentro de la misma tarjeta. */
+  .portada-hero { flex-direction: column; align-items: stretch; min-height: 0; border-radius: 22px; }
+  .portada-hero-foto { position: relative; width: 100%; height: 56vw; min-height: 220px; }
+  .portada-hero-foto img { -webkit-mask-image: linear-gradient(to bottom, currentColor 70%, transparent); mask-image: linear-gradient(to bottom, currentColor 70%, transparent); object-position: 52% 40%; }
+  .portada-hero-texto { max-width: none; padding: var(--esp-4) var(--esp-5) var(--esp-6); margin-top: calc(-1 * var(--esp-6)); text-align: center; }
+  .portada-hero-sub { margin-left: auto; margin-right: auto; }
+  .portada-hero .landing-cta { justify-content: center; }
+  .portada-lema { font-size: clamp(3rem, 15vw, 4.6rem); }
+  .portada-lema .landing-degradado { display: inline; }
+  .portada-cifras { flex-direction: column; align-items: flex-start; }
+  .portada-cifras-lista { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
+  /* Pasos en el celular: uno debajo del otro, cada uno con su pieza y su texto abierto. */
+  .portada-pasos { display: block; }
+  .portada-puntos, .portada-pasos-media { display: none; }
+  .portada-pasos-lista { padding: 0; gap: var(--esp-6); }
+  .portada-paso { min-height: 0; }
+  .portada-paso-media-movil { display: block; position: relative; isolation: isolate; aspect-ratio: 4 / 5; border-radius: 22px; overflow: hidden; margin-bottom: var(--esp-4); border: 1px solid var(--border); }
+  .portada-paso-titulo { color: var(--text); opacity: 1; font-size: 1.9rem; }
+  .portada-paso-texto { max-height: none; opacity: 1; margin-top: var(--esp-2); }
 }

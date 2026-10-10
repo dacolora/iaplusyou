@@ -1654,6 +1654,9 @@ msgstr "<a href=\"%(url)s\">Health and errors →</a> platform errors, logs, slo
 msgid "<em>Generar nuevo token</em>: elige la app de Creatv, caducidad <strong>nunca</strong>, y marca los permisos <code>%(permisos)s</code> (los que la app tenga aprobados; mientras esté en modo desarrollo solo sirven cuentas y Páginas de prueba o de los roles de la app)."
 msgstr "<em>Generate new token</em>: choose Creatv's app, expiration <strong>never</strong>, and tick the permissions <code>%(permisos)s</code> (the ones the app has approved; while it's in development mode only test accounts and Pages, or those of the app's roles, work)."
 
+msgid "<mark>Todo</mark> tu equipo creativo en una sola plataforma"
+msgstr "Your <mark>whole</mark> creative team in one platform"
+
 msgid "<strong>Arriba del panel, «Modo de la app»: pásala de Desarrollo a Live.</strong> Sin esto Meta rechaza cada anuncio (subcódigo 1885183). En Live sin App Review solo pueden usar la app las personas con rol en ella: conecta con el Facebook que la administra."
 msgstr "<strong>At the top of the panel, “App mode”: switch it from Development to Live.</strong> Without this Meta rejects every ad (subcode 1885183). In Live without App Review only people with a role on the app can use it: connect with the Facebook that administers it."
 
@@ -4862,6 +4865,9 @@ msgstr "E.g.: the warrior finds an old map in the castle library"
 msgid "Ej: paleta cálida, tonos tierra, iluminación de atardecer, ambientes rústicos..."
 msgstr "E.g.: warm palette, earth tones, sunset lighting, rustic settings..."
 
+msgid "Ejemplos"
+msgstr "Examples"
+
 #, python-format
 msgid "El %(pct)s%% del gasto se fue en anuncios perdedores: pausarlos libera presupuesto para los ganadores."
 msgstr "%(pct)s%% of spend went to losing ads: pausing them frees budget for the winners."
@@ -5016,8 +5022,8 @@ msgstr "The catalog comes from the no-keys connection; this connection brings in
 msgid "El catálogo sigue llegando desde la conexión sin llaves; la Admin API agrega pedidos y atribución."
 msgstr "The catalog still comes from the no-keys connection; the Admin API adds orders and attribution."
 
-msgid "El ciclo de Creatv Adstra"
-msgstr "The Creatv Adstra cycle"
+msgid "El ciclo de CREATV Adstra"
+msgstr "The CREATV Adstra cycle"
 
 #, python-format
 msgid "El clic sale caro con un CTR normal: CPC %(cpc)s (máximo %(max)s); es la subasta, no el creativo."
@@ -5946,6 +5952,9 @@ msgstr "Framing"
 
 msgid "Encuentra referencias ganadoras"
 msgstr "Find winning references"
+
+msgid "Encuentra referencias ganadoras, sube tus productos una vez, genera cientos de estáticos y videos, edítalos, crea variaciones y lánzalos directo a Meta."
+msgstr "Find winning references. Upload your products once. Generate hundreds of high-converting statics and videos, edit them, create variations, and launch directly to Meta."
 
 msgid "Energético"
 msgstr "Energetic"
@@ -7040,8 +7049,8 @@ msgstr "Standard"
 msgid "Estático"
 msgstr "Static"
 
-msgid "Estático generado con Creatv Adstra"
-msgstr "Static made with Creatv Adstra"
+msgid "Estático generado con CREATV Adstra"
+msgstr "Static made with CREATV Adstra"
 
 msgid "Estética"
 msgstr "Aesthetics"
@@ -8201,8 +8210,8 @@ msgstr "There's research in progress on this study: wait for it to finish or can
 msgid "Hechas"
 msgstr "Done"
 
-msgid "Hecho con Creatv Adstra"
-msgstr "Made with Creatv Adstra"
+msgid "Hecho con CREATV Adstra"
+msgstr "Made with CREATV Adstra"
 
 #, python-format
 msgid "Hecho en Creatv · %(exp)s"
@@ -13646,6 +13655,9 @@ msgstr "It will be published again on %(plataforma)s. Check first that it hasn't
 msgid "Se vuelven a generar la escena %(n)s y las siguientes por ≈ US$ %(precio)s. Las anteriores se quedan como están. ¿Rehacer?"
 msgstr "Scene %(n)s and the ones after it will be generated again for ≈ US$ %(precio)s. The earlier ones stay as they are. Redo?"
 
+msgid "Secciones"
+msgstr "Sections"
+
 msgid "Secundario"
 msgstr "Secondary"
 
@@ -13676,9 +13688,6 @@ msgstr ""
 
 msgid "Según los pedidos de la tienda en Triple Whale; es el producto que conviene empujar en los anuncios nuevos."
 msgstr "According to the store's orders in Triple Whale; it's the product worth pushing in new ads."
-
-msgid "Seis pasos, un solo lugar. Así se ve de cerca."
-msgstr "Six steps, one place. Here's how it looks up close."
 
 msgid "Selfie sin voz"
 msgstr "Silent selfie"
@@ -15332,8 +15341,8 @@ msgstr "Your TrendTrack plan doesn't include the API (the Pro plan or higher is 
 msgid "Tu proyecto %(nombre)s ya está conectado a Meta: cuenta %(cuenta)s · Página %(pagina)s. Ya puedes probar piezas en Experimentos y publicar contenido."
 msgstr "Your project %(nombre)s is now connected to Meta: account %(cuenta)s · Page %(pagina)s. You can now test pieces in Experiments and publish content."
 
-msgid "Tu proyecto usa su propia app de Meta: Creatv Adstra opera solo con tus credenciales y tus datos no pasan por ninguna app ajena."
-msgstr "Your project uses its own Meta app: Creatv Adstra operates only with your credentials and your data doesn't pass through any third-party app."
+msgid "Tu proyecto usa su propia app de Meta: CREATV Adstra opera solo con tus credenciales y tus datos no pasan por ninguna app ajena."
+msgstr "Your project uses its own Meta app: CREATV Adstra operates only with your credentials and your data doesn't pass through any third-party app."
 
 msgid "Tu respuesta"
 msgstr "Your answer"
@@ -16918,6 +16927,9 @@ msgstr "created in Sprints"
 msgid "creativos al mes"
 msgstr "ad creatives / month"
 
+msgid "creativos al mes, si los necesitas"
+msgstr "ad creatives a month, if you need them"
+
 msgid "cta"
 msgstr "CTA"
 
@@ -17939,6 +17951,9 @@ msgstr "backpack"
 msgid "modelo de nicho, sin evidencia de que su calidad supere a los editores ya en uso"
 msgstr "niche model, with no evidence that its quality beats the editors already in use"
 
+msgid "modelos de IA líderes"
+msgstr "leading AI models"
+
 msgid "modo"
 msgstr "mode"
 
@@ -18161,6 +18176,9 @@ msgstr "partial"
 
 msgid "pasa"
 msgstr "passes"
+
+msgid "pasos de la referencia al anuncio"
+msgstr "steps from reference to live ad"
 
 msgid "pausado"
 msgstr "paused"
@@ -18411,6 +18429,9 @@ msgstr "recovered"
 
 msgid "redes"
 msgstr "social"
+
+msgid "redes para publicar"
+msgstr "networks to publish on"
 
 msgid "reedición"
 msgstr "re-edit"

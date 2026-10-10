@@ -1,4 +1,4 @@
-/* Marca Creatv Adstra (2026-10-06): el símbolo y el nombre son máscaras (PNG con alfa en static/img/adstra-*)
+/* Marca CREATV Adstra (2026-10-06): el símbolo y el nombre son máscaras (PNG con alfa en static/img/adstra-*)
    pintadas con el color del texto, así siguen el tema sin un segundo juego de archivos. */
 .marca-mark,
 .marca-texto,
@@ -14,21 +14,21 @@
   mask-position: left center;
 }
 .marca-mark {
-  width: 26px;
-  height: 28px;
+  width: 34px;
+  height: 36px;
   -webkit-mask-image: url("img/adstra-simbolo.png");
   mask-image: url("img/adstra-simbolo.png");
 }
 .marca-texto {
-  width: 82px;
-  height: 27px;
+  width: 112px;
+  height: 37px;
   -webkit-mask-image: url("img/adstra-nombre.png");
   mask-image: url("img/adstra-nombre.png");
 }
 /* Logo completo (símbolo + nombre) de las páginas principales: portada, login, recuperar, restablecer, legales. */
 .marca-logo {
-  width: 220px;
-  height: 86px;
+  width: 280px;
+  height: 110px;
   max-width: 100%;
   margin-bottom: var(--esp-4);
   -webkit-mask-image: url("img/adstra-logo.png");

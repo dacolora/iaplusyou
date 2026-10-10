@@ -1,4 +1,4 @@
-/* Fondo galáctico de toda la plataforma (2026-10-06, Creatv Adstra; base.html, .fondo-galaxia): nebulosas en el
+/* Fondo galáctico de toda la plataforma (2026-10-06, CREATV Adstra; base.html, .fondo-galaxia): nebulosas en el
    morado del logo que derivan despacio, un núcleo que gira, dos capas de estrellas que titilan y una retícula tenue.
    Todo son degradados (sin filter: blur), así el movimiento es barato de pintar. Sin movimiento con
    prefers-reduced-motion (base.css apaga todas las animaciones). */

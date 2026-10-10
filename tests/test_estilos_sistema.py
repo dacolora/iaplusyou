@@ -96,7 +96,7 @@ def test_orden_nombra_cada_archivo_una_vez_y_por_capas():
 import glob
 import re
 
-# Paleta morada de Creatv Adstra (pedido de Camilo, 2026-10-10): el violeta vuelve a ser el color principal y revierte
+# Paleta morada de CREATV Adstra (pedido de Camilo, 2026-10-10): el violeta vuelve a ser el color principal y revierte
 # la paleta azul del 2026-10-02 (spec 2026-10-02-sistema-de-estilos §3, nota del 2026-10-10). Lo que se vigila ahora es
 # lo contrario: que no quede el azul de acento ni las superficies azul marino de esa paleta.
 AZULES_VIEJOS = re.compile(r"1d6ae0|2f8cff|5cb4ff|38c8ff|0b1a33|050d1f|10223f|1c3a66|47,\s*140,\s*255|29,\s*106,\s*224", re.I)
@@ -122,7 +122,7 @@ _RE_COLOR_LITERAL = re.compile(r"#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(|\b(?:wh
 _RE_VALOR = re.compile(r":\s*([^;{}]+)")
 ANIMACIONES_PERMITIDAS = {"pulso", "aparece-card", "exp-pulso", "fe-pulso", "flash-in", "girar", "gp-latido",
                           "gp-recien", "rayas-progreso", "shimmer",
-                          # Fondo galáctico de toda la plataforma y la vitrina de la portada (Creatv Adstra, 2026-10-06)
+                          # Fondo galáctico de toda la plataforma y la vitrina de la portada (CREATV Adstra, 2026-10-06)
                           "galaxia-nebulosa-a", "galaxia-nebulosa-b", "galaxia-nebulosa-c", "galaxia-gira",
                           "galaxia-estrellas-1", "galaxia-estrellas-2", "galaxia-titila", "galaxia-reticula",
                           "portada-vitrina", "portada-cadena"}

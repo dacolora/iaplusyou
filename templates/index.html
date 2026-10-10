@@ -1,20 +1,71 @@
 {% extends "base.html" %}
-{% block title %}Creatv Adstra{% endblock %}
+{% block title %}CREATV Adstra{% endblock %}
 {% block content %}
-{# Banner: la foto de la vaca a todo lo ancho y el título encima. #}
-<section class="landing-banner" aria-labelledby="banner-titulo">
-  <picture class="landing-banner-foto">
-    <source media="(max-width: 700px)" srcset="{{ url_for('static', filename='landing/banner-movil.webp') }}">
+{# Distribución inspirada en klarna.com (pedido de Camilo, 2026-10-10): tarjeta grande con el título a la izquierda y la
+   foto a la derecha, fila de cifras, título centrado y los pasos como lista grande con la imagen al lado. #}
+<section class="portada-hero" aria-labelledby="hero-titulo">
+  <picture class="portada-hero-foto">
+    <source media="(max-width: 760px)" srcset="{{ url_for('static', filename='landing/banner-movil.webp') }}">
     <img src="{{ url_for('static', filename='landing/banner.webp') }}" alt="" fetchpriority="high">
   </picture>
-  <div class="landing-banner-texto">
+  <div class="portada-hero-texto">
     <span class="landing-chip">✦ {{ _('Anuncios con IA que sí venden') }}</span>
-    <h1 id="banner-titulo" class="landing-lema">Run more <span class="landing-degradado">ADSTRA</span></h1>
-    <p class="landing-bajada">{{ _('De la referencia al anuncio publicado. Todo en un solo lugar.') }}</p>
+    <h1 id="hero-titulo" class="portada-lema">Run more <span class="landing-degradado">ADSTRA</span></h1>
+    <p class="portada-hero-sub">{{ _('De la referencia al anuncio publicado. Todo en un solo lugar.') }}</p>
     <div class="landing-cta">
-      <a class="btn-generar" href="#planes">{{ _('Empezar a crear anuncios') }}</a>
-      <a class="btn-guardar" href="{{ url_for('login') }}">{{ _('Ya tengo cuenta') }}</a>
+      <a class="btn-generar portada-pildora" href="#planes">{{ _('Empezar a crear anuncios') }}</a>
+      <a class="btn-guardar portada-pildora" href="{{ url_for('login') }}">{{ _('Ya tengo cuenta') }}</a>
     </div>
+  </div>
+</section>
+
+{# Cifras: solo hechos de la plataforma, nada inventado. #}
+<section class="portada-cifras aparece">
+  <h2 class="portada-cifras-titulo">{{ _('<mark>Todo</mark> tu equipo creativo en una sola plataforma') }}</h2>
+  <dl class="portada-cifras-lista">
+    <div><dt>5</dt><dd>{{ _('modelos de IA líderes') }}</dd></div>
+    <div><dt>6</dt><dd>{{ _('pasos de la referencia al anuncio') }}</dd></div>
+    <div><dt>4</dt><dd>{{ _('redes para publicar') }}</dd></div>
+    <div><dt>{{ _('1.000+') }}</dt><dd>{{ _('creativos al mes, si los necesitas') }}</dd></div>
+  </dl>
+</section>
+
+{# Los seis pasos: a la izquierda la pieza del paso activo (fija mientras se baja), a la derecha la lista grande. El paso
+   activo cambia al bajar o al tocarlo. En el celular cada paso lleva su pieza encima. #}
+{% set pasos = [
+  (_('Encuentra referencias ganadoras'), _('Anuncios reales que ya están vendiendo, ordenados por etapa del embudo y nivel de consciencia.'), 'imagen', 2),
+  (_('Sube tus productos una sola vez'), _('Fotos, personajes, espacios y logo. La IA respeta tu marca en cada pieza.'), 'imagen', 1),
+  (_('Genera cientos de estáticos y videos que convierten'), _('Los mejores modelos de video e imagen del mercado, desde un solo formulario.'), 'video', 1),
+  (_('Edítalos'), _('Voz, subtítulos, música y el precio de cada país, en un editor dentro del navegador.'), 'video', 5),
+  (_('Crea variaciones'), _('Ganchos nuevos, otras estructuras y regeneraciones a partir de lo que ya funciona.'), 'video', 3),
+  (_('Lánzalos directo a Meta'), _('Las campañas se crean en pausa: tú decides cuándo gastan y los resultados vuelven aquí.'), 'imagen', 3),
+] %}
+{% macro media_paso(tipo, n) -%}
+{% if tipo == 'video' %}<video class="landing-media" src="{{ url_for('static', filename='landing/video-%d.mp4' % n) }}" poster="{{ url_for('static', filename='landing/video-%d.jpg' % n) }}" muted loop playsinline preload="none"></video>{% else %}<img class="landing-media" src="{{ url_for('static', filename='landing/imagen-%d.webp' % n) }}" alt="" loading="lazy">{% endif %}
+{%- endmacro %}
+<section class="portada-pasos-seccion aparece" aria-labelledby="pasos-titulo">
+  <div class="portada-centro">
+    <h2 id="pasos-titulo" class="portada-titulo">{{ _('Una plataforma. Un flujo. Hecha para vender.') }}</h2>
+    <p class="portada-centro-sub">{{ _('Encuentra referencias ganadoras, sube tus productos una vez, genera cientos de estáticos y videos, edítalos, crea variaciones y lánzalos directo a Meta.') }}</p>
+  </div>
+  <div class="portada-pasos">
+    <ol class="portada-puntos" aria-hidden="true">
+      {% for p in pasos %}<li{% if loop.first %} class="activo"{% endif %}></li>{% endfor %}
+    </ol>
+    <div class="portada-pasos-media" aria-hidden="true">
+      {% for titulo, texto, tipo, n in pasos %}
+      <div class="portada-paso-media{% if loop.first %} activo{% endif %}">{{ media_paso(tipo, n) }}</div>
+      {% endfor %}
+    </div>
+    <ol class="portada-pasos-lista">
+      {% for titulo, texto, tipo, n in pasos %}
+      <li class="portada-paso{% if loop.first %} activo{% endif %}" data-paso="{{ loop.index0 }}">
+        <div class="portada-paso-media-movil">{{ media_paso(tipo, n) }}</div>
+        <button type="button" class="portada-paso-titulo" aria-expanded="{{ 'true' if loop.first else 'false' }}">{{ titulo }}</button>
+        <p class="portada-paso-texto">{{ texto }}</p>
+      </li>
+      {% endfor %}
+    </ol>
   </div>
 </section>
 
@@ -29,39 +80,6 @@
   <p class="landing-solo">{{ _('Solo Adstra.') }}</p>
 </section>
 
-{# Los seis pasos como una cuadrícula de tarjetas: las que tienen video o foto
-   muestran una pieza real; las otras, el número en grande. #}
-{% set pasos = [
-  (_('Encuentra referencias ganadoras'), _('Anuncios reales que ya están vendiendo, ordenados por etapa del embudo y nivel de consciencia.'), 'imagen', 2, 'b-ancho'),
-  (_('Sube tus productos una sola vez'), _('Fotos, personajes, espacios y logo. La IA respeta tu marca en cada pieza.'), '', 0, ''),
-  (_('Genera cientos de estáticos y videos que convierten'), _('Los mejores modelos de video e imagen del mercado, desde un solo formulario.'), 'video', 1, 'b-alto'),
-  (_('Edítalos'), _('Voz, subtítulos, música y el precio de cada país, en un editor dentro del navegador.'), 'video', 5, ''),
-  (_('Crea variaciones'), _('Ganchos nuevos, otras estructuras y regeneraciones a partir de lo que ya funciona.'), '', 0, ''),
-  (_('Lánzalos directo a Meta'), _('Las campañas se crean en pausa: tú decides cuándo gastan y los resultados vuelven aquí.'), 'imagen', 3, ''),
-] %}
-<section class="landing-bento-seccion aparece" aria-labelledby="bento-titulo">
-  <div class="landing-seccion-cabecera">
-    <h2 id="bento-titulo" class="landing-titulo">{{ _('Una plataforma. Un flujo. Hecha para vender.') }}</h2>
-    <p class="landing-seccion-sub">{{ _('Seis pasos, un solo lugar. Así se ve de cerca.') }}</p>
-  </div>
-  <ol class="bento">
-    {% for titulo, texto, tipo, n, forma in pasos %}
-    <li class="bento-tarjeta {{ forma }}{% if tipo %} bento-con-media{% endif %}">
-      {% if tipo == 'video' %}
-      <video class="landing-media" src="{{ url_for('static', filename='landing/video-%d.mp4' % n) }}" poster="{{ url_for('static', filename='landing/video-%d.jpg' % n) }}" muted loop playsinline preload="none"></video>
-      {% elif tipo == 'imagen' %}
-      <img class="landing-media" src="{{ url_for('static', filename='landing/imagen-%d.webp' % n) }}" alt="" loading="lazy">
-      {% endif %}
-      <span class="bento-num">{{ '%02d' % loop.index }}</span>
-      <div class="bento-texto">
-        <h3>{{ titulo }}</h3>
-        <p>{{ texto }}</p>
-      </div>
-    </li>
-    {% endfor %}
-  </ol>
-</section>
-
 {# Vitrina: lo que sale de la plataforma, corriendo de derecha a izquierda.
    La lista va dos veces (la segunda aria-hidden) para que el bucle no salte;
    los videos solo se reproducen mientras se ven (script al final). #}
@@ -73,7 +91,7 @@
                  ('imagen', 7, 480, 853), ('imagen', 14, 640, 800)] %}
 <section class="landing-vitrina aparece" aria-labelledby="vitrina-titulo">
   <div class="landing-seccion-cabecera">
-    <h2 id="vitrina-titulo" class="landing-titulo">{{ _('Hecho con Creatv Adstra') }}</h2>
+    <h2 id="vitrina-titulo" class="landing-titulo">{{ _('Hecho con CREATV Adstra') }}</h2>
     <p class="landing-seccion-sub">{{ _('ADSTRA convierte tus productos y tus ideas ganadoras en anuncios de e‑commerce listos para salir.') }}</p>
   </div>
   <div class="landing-vitrina-carril">
@@ -85,7 +103,7 @@
         <video class="landing-media" src="{{ url_for('static', filename='landing/video-%d.mp4' % n) }}" poster="{{ url_for('static', filename='landing/video-%d.jpg' % n) }}" muted loop playsinline preload="none"></video>
         <span class="generado-tipo">{{ _('Video') }}</span>
         {% else %}
-        <img class="landing-media" src="{{ url_for('static', filename='landing/imagen-%d.webp' % n) }}" alt="{% if not copia %}{{ _('Estático generado con Creatv Adstra') }}{% endif %}" loading="lazy">
+        <img class="landing-media" src="{{ url_for('static', filename='landing/imagen-%d.webp' % n) }}" alt="{% if not copia %}{{ _('Estático generado con CREATV Adstra') }}{% endif %}" loading="lazy">
         <span class="generado-tipo">{{ _('Estático') }}</span>
         {% endif %}
       </li>
@@ -126,7 +144,7 @@
   </div>
 </section>
 
-<section class="landing-cadena aparece" aria-label="{{ _('El ciclo de Creatv Adstra') }}">
+<section class="landing-cadena aparece" aria-label="{{ _('El ciclo de CREATV Adstra') }}">
   {% for palabra in [_('Referencia'), _('Crear'), _('Editar'), _('Lanzar'), _('Escalar')] %}
   <span class="cadena-eslabon" style="--i: {{ loop.index0 }}">{{ palabra }}</span>{% if not loop.last %}<span class="cadena-flecha" aria-hidden="true">→</span>{% endif %}
   {% endfor %}
@@ -176,7 +194,7 @@
 </section>
 
 <footer class="landing-pie vacio">
-  © 2026 Creatv Adstra · <a href="{{ url_for('privacidad') }}">{{ _('Privacidad') }}</a> · <a href="{{ url_for('terminos') }}">{{ _('Términos') }}</a> · <a href="{{ url_for('eliminar_datos') }}">{{ _('Eliminación de datos') }}</a>
+  © 2026 CREATV Adstra · <a href="{{ url_for('privacidad') }}">{{ _('Privacidad') }}</a> · <a href="{{ url_for('terminos') }}">{{ _('Términos') }}</a> · <a href="{{ url_for('eliminar_datos') }}">{{ _('Eliminación de datos') }}</a>
 </footer>
 <script>
   (function () {
@@ -192,7 +210,7 @@
         else { visibles.delete(e.target); e.target.pause(); }
       });
     }, { rootMargin: '100px' }) : null;
-    document.querySelectorAll('.bento video, .landing-vitrina video').forEach(function (v) {
+    document.querySelectorAll('.portada-paso-media-movil video, .landing-vitrina video').forEach(function (v) {
       if (obs) obs.observe(v);
     });
     // Con la pestaña en segundo plano el navegador los pausa; al volver, retoman.
@@ -200,6 +218,32 @@
       if (document.visibilityState === 'visible') visibles.forEach(correr);
     });
 
+
+    // Pasos: el activo cambia al bajar (el que cruza el centro de la pantalla) o al tocar su título.
+    var pasos = Array.prototype.slice.call(document.querySelectorAll('.portada-paso'));
+    var medias = Array.prototype.slice.call(document.querySelectorAll('.portada-paso-media'));
+    var puntos = Array.prototype.slice.call(document.querySelectorAll('.portada-puntos li'));
+    function activar(i) {
+      pasos.forEach(function (p, k) {
+        p.classList.toggle('activo', k === i);
+        p.querySelector('.portada-paso-titulo').setAttribute('aria-expanded', k === i ? 'true' : 'false');
+      });
+      puntos.forEach(function (p, k) { p.classList.toggle('activo', k === i); });
+      medias.forEach(function (m, k) {
+        m.classList.toggle('activo', k === i);
+        var v = m.querySelector('video');
+        if (v) { if (k === i) correr(v); else v.pause(); }
+      });
+    }
+    pasos.forEach(function (p, k) {
+      p.querySelector('.portada-paso-titulo').addEventListener('click', function () { activar(k); });
+    });
+    if ('IntersectionObserver' in window && window.matchMedia('(min-width: 761px)').matches) {
+      var obsPasos = new IntersectionObserver(function (entradas) {
+        entradas.forEach(function (e) { if (e.isIntersecting) activar(pasos.indexOf(e.target)); });
+      }, { rootMargin: '-45% 0px -45% 0px' });
+      pasos.forEach(function (p) { obsPasos.observe(p); });
+    }
   })();
 </script>
 {% endblock %}
