@@ -1,4 +1,5 @@
 import os
+import shutil
 import sys
 import tempfile
 
@@ -20,6 +21,9 @@ def base_temporal(monkeypatch):
     db.crear_todo()
     yield db
     db._reset_para_tests()
+    # El motor ya se soltó: la carpeta (con sus -wal/-shm) se borra. Sin esto
+    # cada test dejaba una carpeta en $TMPDIR (31 000 y 25 GB, 2026-10-10).
+    shutil.rmtree(carpeta, ignore_errors=True)
 
 
 @pytest.fixture()
