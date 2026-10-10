@@ -1,0 +1,144 @@
+{# Fragmento de Configuración › Plan (GET cobros.plan_panel; lo pide
+   static/planes.js al abrir el apartado). Contexto: cliente, error y v
+   (cobros.vista.plan_para_cliente): SOLO precios, porcentajes y fechas ya
+   listos; ni el margen, ni el tope de lo incluido en dólares, ni el costo de
+   nada llegan aquí (spec planes §8). Situaciones: sin_plan, activa, morosa,
+   cancelada, anulada (Wompi anuló un pago y la renovación quedó detenida) y
+   manual (activado por transferencia, no se cobra solo). #}
+{% if error %}
+<p class="tag-error">{{ _('No se pudo cargar el plan. Vuelve a abrir este apartado en un rato.') }}</p>
+{% elif v.situacion == 'sin_plan' %}
+{% if v.planes %}
+<div class="plan-ofertas">
+  {% for p in v.planes %}
+  <article class="plan-oferta">
+    <h3>{{ p.nombre }}</h3>
+    <p class="plan-precio"><strong>{{ p.precio }}</strong> {{ _('al mes') }}</p>
+    {% if p.anual %}
+    <p class="plan-anual">{{ _('o %(precio)s al año', precio=p.anual) }}{% if p.meses_gratis %} · <strong>{{ ngettext('%(num)s mes gratis', '%(num)s meses gratis', p.meses_gratis) }}</strong>{% endif %}</p>
+    {% endif %}
+    <ul class="plan-beneficios">
+      <li>{{ _('%(precio)s de saldo del plan cada mes para generar.', precio=p.precio) }}</li>
+      {% if p.descuento_pct %}<li>{{ _('Precio de miembro: tus generaciones cuestan %(pct)s %% menos que a la carta.', pct=p.descuento_pct) }}</li>{% endif %}
+      {% if p.incluye_ia %}<li>{{ _('Ideas, guiones, análisis y revisiones con IA incluidos.') }}</li>{% endif %}
+      <li>{{ _('Prioridad en la cola.') }}</li>
+      <li>{{ _('El saldo del plan se renueva cada mes y no se acumula.') }}</li>
+    </ul>
+    {% if not v.cobra %}
+    <p class="vacio">{{ _('Este proyecto todavía no cobra: prende «Cobrar» en el panel de cobros antes de suscribirlo a un plan.') }}</p>
+    {% elif v.wompi_listo %}
+    <a class="btn-generar plan-suscribirme" href="{{ url_for('cobros.plan_alta', cliente=cliente, plan=p.id) }}">{{ _('Suscribirme') }}</a>
+    {% else %}
+    <p class="vacio">{{ _('Los pagos con tarjeta no están disponibles ahora; escríbenos para activar tu plan') }}</p>
+    {% endif %}
+  </article>
+  {% endfor %}
+</div>
+{% else %}
+<div class="estado-vacio">
+  <p class="estado-vacio-titulo">{{ _('Todavía no hay planes disponibles') }}</p>
+  <p class="estado-vacio-texto">{{ _('Escríbenos si quieres un plan mensual para este proyecto.') }}</p>
+</div>
+{% endif %}
+{% else %}
+
+{% if v.situacion == 'morosa' %}
+<div class="flash error plan-aviso" role="alert">
+  <p><strong>{{ _('No pudimos cobrar tu plan.') }}</strong>
+  {% if v.reintento_el and v.intentos_restantes %}{{ ngettext('Lo intentamos otra vez el %(fecha)s; queda %(num)s intento antes de perder el plan.', 'Lo intentamos otra vez el %(fecha)s; quedan %(num)s intentos antes de perder el plan.', v.intentos_restantes, fecha=v.reintento_el) }}{% endif %}
+  {{ _('Mientras tanto generas con tu saldo propio a precio a la carta.') }}</p>
+  {% if v.puede_cambiar_tarjeta %}<a class="btn-generar" href="{{ url_for('cobros.plan_tarjeta', cliente=cliente) }}">{{ _('Actualizar tarjeta') }}</a>{% endif %}
+</div>
+{% endif %}
+
+{% if v.pago_pendiente_id %}
+<p class="flash warn plan-esperando" data-plan-sondeo="{{ url_for('cobros.plan_pago_estado', cliente=cliente, pago_id=v.pago_pendiente_id) }}">{{ _('Wompi está confirmando un pago del plan. Esta página se actualiza sola cuando llegue.') }}</p>
+{% endif %}
+
+<div class="plan-cabecera">
+  <h3>{{ _('Plan %(nombre)s', nombre=v.plan.nombre) }}</h3>
+  <span class="tag-estado plan-estado-{{ v.situacion }}">
+    {% if v.situacion == 'activa' %}{{ _('Activo') }}{% elif v.situacion == 'morosa' %}{{ _('Pago pendiente') }}{% elif v.situacion == 'manual' %}{{ _('Pagado por transferencia') }}{% else %}{{ _('Cancelado') }}{% endif %}
+  </span>
+</div>
+
+{% if v.situacion == 'cancelada' %}
+<p class="plan-nota">{% if v.termina_el %}{{ _('Cancelaste el plan: sigue hasta el %(fecha)s y no se vuelve a cobrar. Lo que quede del saldo del plan vence ese día.', fecha=v.termina_el) }}{% else %}{{ _('Cancelaste el plan: no se vuelve a cobrar.') }}{% endif %}</p>
+{% elif v.situacion == 'anulada' %}
+<p class="plan-nota">{% if v.termina_el %}{{ _('Wompi anuló un pago del plan, así que dejamos de cobrarlo solo. El plan sigue hasta el %(fecha)s; para seguir después, escríbenos o suscríbete de nuevo cuando termine.', fecha=v.termina_el) }}{% else %}{{ _('Wompi anuló un pago del plan, así que dejamos de cobrarlo solo. Escríbenos si quieres seguir con el plan.') }}{% endif %}</p>
+{% elif v.situacion == 'manual' %}
+<p class="plan-nota">{% if v.termina_el %}{{ _('Este plan lo activó Creatv con un pago por transferencia: no se cobra solo y termina el %(fecha)s. Para volver al cobro automático con tarjeta, suscríbete de nuevo cuando termine.', fecha=v.termina_el) }}{% else %}{{ _('Este plan lo activó Creatv con un pago por transferencia: no se cobra solo. Para volver al cobro automático con tarjeta, suscríbete de nuevo cuando termine.') }}{% endif %}</p>
+{% endif %}
+
+{% if v.bolsa %}
+<section class="plan-medidor" aria-label="{{ _('Saldo del plan') }}">
+  <div class="plan-medidor-linea">
+    <span>{{ _('Saldo del plan') }}</span>
+    <strong>{{ _('%(restante)s restantes', restante=v.bolsa.restante) }}</strong>
+  </div>
+  <progress class="plan-barra" value="{{ v.bolsa.usado_pct }}" max="100">{{ v.bolsa.usado_pct }} %</progress>
+  <p class="plan-medidor-detalle">{{ _('Usaste %(gastado)s de %(credito)s (%(pct)s %%).', gastado=v.bolsa.gastado, credito=v.bolsa.credito, pct=v.bolsa.usado_pct) }}
+  {% if v.bolsa.vence_el %}{{ _('Lo que no uses vence el %(fecha)s y no se acumula.', fecha=v.bolsa.vence_el) }}{% endif %}</p>
+  {% if v.situacion == 'activa' and v.cobro_el and v.monto_renovacion %}
+  <p class="plan-medidor-detalle">{% if v.ciclo == 'anual' %}{{ _('El plan anual se renueva el %(momento)s: a esa hora cobramos %(monto)s.', momento=v.cobro_el, monto=v.monto_renovacion) }}{% else %}{{ _('Se renueva el %(momento)s: a esa hora cobramos %(monto)s.', momento=v.cobro_el, monto=v.monto_renovacion) }}{% endif %}</p>
+  {% endif %}
+</section>
+
+{% if v.incluido_pct is not none %}
+<section class="plan-medidor" aria-label="{{ _('Lo incluido') }}">
+  <div class="plan-medidor-linea">
+    <span>{{ _('IA incluida (ideas, guiones, análisis y revisiones)') }}</span>
+    <strong>{{ _('%(pct)s %% usado', pct=v.incluido_pct) }}</strong>
+  </div>
+  <progress class="plan-barra plan-barra-incluido" value="{{ v.incluido_pct }}" max="100">{{ v.incluido_pct }} %</progress>
+  <p class="plan-medidor-detalle">{% if v.incluido_pct >= 100 %}{{ _('Llegaste al uso justo de este mes: lo que sigue se cobra a precio de miembro.') }}{% else %}{{ _('Mientras no llegues al 100 %%, esto no descuenta de tu saldo.') }}{% endif %}</p>
+</section>
+{% endif %}
+
+<div class="plan-ahorro">
+  {% if v.ahorro %}<p>{{ _('Este periodo ahorraste %(monto)s frente a la carta.', monto=v.ahorro) }}</p>
+  {% else %}<p class="vacio">{{ _('Todavía no hay ahorro en este periodo: aparece cuando generas con precio de miembro.') }}</p>{% endif %}
+  {% if v.plan.descuento_pct %}<p class="vacio">{{ _('Precio de miembro: tus generaciones cuestan %(pct)s %% menos que a la carta.', pct=v.plan.descuento_pct) }}</p>{% endif %}
+</div>
+{% elif v.situacion != 'morosa' and not v.pago_pendiente_id %}
+<p class="vacio">{{ _('Ahora no hay un periodo del plan en curso.') }}</p>
+{% endif %}
+
+<div class="plan-tarjeta">
+  <h3>{{ _('Medio de pago') }}</h3>
+  {% if v.tarjeta %}<p><strong>{{ v.tarjeta }}</strong></p>{% else %}<p class="vacio">{{ _('Sin tarjeta registrada (pago por transferencia).') }}</p>{% endif %}
+  {% if v.puede_cambiar_tarjeta and v.situacion != 'morosa' %}<a class="btn-sm" href="{{ url_for('cobros.plan_tarjeta', cliente=cliente) }}">{{ _('Cambiar tarjeta') }}</a>{% endif %}
+</div>
+
+<h3>{{ _('Pagos del plan') }}</h3>
+{% if v.pagos %}
+<div class="saldo-tabla-caja">
+  <table class="gasto-tabla plan-pagos">
+    <thead><tr><th>{{ _('Fecha') }}</th><th class="num">{{ _('Monto') }}</th><th>{{ _('Medio') }}</th><th>{{ _('Estado') }}</th></tr></thead>
+    <tbody>
+      {% for p in v.pagos %}
+      <tr>
+        <td class="gasto-fecha">{{ p.fecha or '—' }}</td>
+        <td class="num">{{ p.monto }}</td>
+        <td>{{ p.medio }}</td>
+        <td><span class="tag-estado plan-pago-{{ p.estado }}">{{ p.estado_texto }}</span>{% if p.motivo %}<small class="saldo-detalle">{{ p.motivo }}</small>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="vacio">{{ _('Todavía no hay pagos.') }}</p>
+{% endif %}
+
+{% if v.puede_cancelar %}
+<details class="plan-cancelar">
+  <summary>{{ _('Cancelar plan') }}</summary>
+  <p>{% if v.situacion == 'activa' and v.cobro_el and v.renueva_el %}{{ _('Si cancelas antes del %(momento)s, no se vuelve a cobrar. Tu plan sigue hasta el %(fecha)s y lo que quede del saldo del plan vence ese día. No se devuelve lo ya pagado.', momento=v.cobro_el, fecha=v.renueva_el) }}{% elif v.situacion != 'morosa' and (v.termina_el or v.renueva_el) %}{{ _('Si cancelas, no se vuelve a cobrar. Tu plan sigue hasta el %(fecha)s y lo que quede del saldo del plan vence ese día. No se devuelve lo ya pagado.', fecha=(v.renueva_el or v.termina_el)) }}{% else %}{{ _('Si cancelas, no se vuelve a cobrar y el plan termina. No se devuelve lo ya pagado.') }}{% endif %}</p>
+  <form method="post" action="{{ url_for('cobros.plan_cancelar', cliente=cliente) }}">
+    <input type="hidden" name="confirmo" value="1">
+    <button type="submit" class="btn-sm plan-cancelar-si">{{ _('Sí, cancelar el plan') }}</button>
+  </form>
+</details>
+{% endif %}
+{% endif %}

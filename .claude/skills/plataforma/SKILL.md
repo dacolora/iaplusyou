@@ -54,9 +54,7 @@ the same endpoint for both paths — and renders a progress bar via the shared
 `iniciarPolling()` JS in `base.html`, reloading the page on completion. `job_id` is
 deterministic per (cliente, prompt_id/brief_id, acción) so a repeat click no-ops
 instead of double-launching. Tasks that spend credits are queued with
-`max_intentos=1` — they never auto-retry. Exception found 2026-10-08:
-old Nicho consultas/seleccionar callers still pass 2, tracked separately as
-PND-190; the lane change does not alter that paid retry policy. A queued task stuck running for more than
+`max_intentos=1` — they never auto-retry. A queued task stuck running for more than
 30 minutes is either re-queued (if it still has attempts left) or marked `error`
 (once `max_intentos` is exhausted) — never one this worker is running right now
 (`cola.recuperar_colgadas(excluir=worker.en_vuelo())`). Since 2026-09-28 (spec
@@ -86,6 +84,14 @@ Meta never charges, `max_intentos=2`, and all three `meta_rend_*` types are in `
 with «Cobrar» on still syncs). `meta_rend_sincronizar_todas` and `meta_rend_limpiar` stay in the general
 lane (instant). The area's own skill is `meta-rendimiento`. A new long, free, read-only sync can join this lane; anything that charges stays out of it.
 
+**Three worker types for the Triple Whale hooks (2026-10-09, skill `triple-whale`, «Ganchos y copy»):** `tw_ganchos_preparar`
+(`<c>__tw_ganchos_<aid>_t<tanda>`, `max_intentos=1`, prioridad 3: downloads the original and launches one Crear piece per
+hook), `tw_ganchos_vigilar` (periodic, 60 s, after `cadena_vigilar` in `worker.PERIODICAS`: moves each live variant) and
+`tw_gancho_armar` (`<c>__tw_gancho_<gid>_armar`, `max_intentos=2`, prioridad 1: ffmpeg and the editor on an already-paid
+clip). All three are in `TIPOS_EXENTOS_DE_COBRO` and none calls a paid provider: each clip is charged by
+`flowplus_video` when Crear closes it, with its own reservation, and the price was approved once in the route.
+`tw_gancho_armar` may retry because nothing in it charges; `tw_ganchos_preparar` stays at one attempt so a failure never launches a clip twice.
+
 **Higgsfield API wrapper** (`higgsfield_client.py`): all calls follow launch ->
 `poll_until_done(status_url)` -> extract-result, for both video (`kling-2.1-pro`,
 `extract_video_url`) and image (`soul-reference`, `extract_image_url`) generation.
@@ -99,6 +105,8 @@ images/videos, brand references, candidate images, final videos) is pushed to
 Cloudflare R2 and referenced by its public URL from then on — binaries are never
 committed to git (`.gitignore` excludes `clientes/*/personajes/*`, `clientes/*/marca/*`,
 `salidas/`, the `*.json` state files, all `.env`/token files).
+To delete: `delete_file(key)` builds one boto3 client per call; for a batch use `delete_files(keys)` (ONE client, each key on its
+own, returns `(borradas, tipos_de_error)`, never the error text; no keys = no client).
 
 **Ayudas de marca** (`generador_prompts.py`): calls Anthropic directly. `analizar_marca()` uses Claude's vision input on uploaded
 brand reference images to auto-write that guía de estilo.
@@ -156,8 +164,22 @@ PND-068 (2026-10-08, decisión 2026-09-18: nada nuevo a Higgsfield): retirados p
 
 PND-051 (enmienda 2026-10-08): el carril Nicho tiene un solo hilo para sus seis tareas que esperan proveedor y referentes_barrer. Los barridos comparten la RAM y el límite de corridas de Apify con Nicho; repartirlos en paralelo daba 402 por capacidad. General excluye Crear + Nicho (+ lectura, el carril de Meta rendimiento), y en_vuelo, esperar_hilos y recuperación son comunes a los cuatro carriles. En SIGINT/SIGTERM no se interrumpe el sondeo de Apify: el hilo termina la tarea y esperar_hilos lo espera. En un despliegue la cola debe estar vacía antes de reiniciar. No hay puntos de control ni continuaciones nuevas de Apify: se conserva el contrato anterior del proveedor y del gasto. Pruebas: tests/test_lote6c_nicho_carril.py, incluido un 402 sin cobro seguido de un segundo clic explícito con el mismo job_id que sí termina. No cambia max_intentos ni la política de cobro.
 
-**Base temporal de las pruebas (2026-10-10):** `base_temporal` (`tests/conftest.py`, cuerpo en `abrir_base_temporal`)
-crea una carpeta `creatv_test_*` por prueba y al terminar suelta el motor (`db._reset_para_tests`, dispose: nada sostiene
-la base ni su -wal/-shm) y la BORRA, también si la prueba revienta. Antes no la borraba: se juntaron 781 296 carpetas
-(589 GB) en $TMPDIR y el disco se llenó (ENOSPC). Un fixture nuevo que cree carpetas temporales las borra igual
-(`tests/test_conftest_base_temporal.py` vigila este).
+PND-190/166/159 (2026-10-09, decisiones delegadas lote 7): consultas/selección de Nicho y análisis/personas de Sprints se encolan con un intento y costo estimado. Sprints pasa un acumulador de usage (caché incluida), registra con referencia por tarea también si falla el guardado/JSON y usa entregado=False al fallar. El POST de arranque Apify pasa reintentar=False; los GET conservan su política.
+
+
+Enmiendas lote 7 (2026-10-09, decisión delegada): SDK de Claude conserva sus reintentos. Apify registra estimado al recibir run_id, misma referencia de tarea para corregir al final (también cero si ya se anotó gasto; sin anotación previa, cero no crea fila). POST solo repite 429 con esperas; timeout/5xx leen hasta cinco corridas recientes, siguen una única posterior al inicio o avisan incertidumbre. Fuentes de Nicho propagan on_ids al registro antes del sondeo; hooks con corrida anotada dejan error, no pendiente.
+
+
+PND-149(6)/160 (2026-10-09, decisión del lote 8): reservar_aviso_sync vive en triple_whale_tiendas (único escritor) y toma el candado SQLite antes de leer extra/cola. Recuerda las copias terminadas que el worker aún no cerró y reserva una vez el aviso de la última, sin modificar estado/progreso de tareas; identidad id+creada_en para un nuevo ciclo. actualizar_extra comparte ese candado. El encolador de lanzamiento comprueba tarea viva y relee el estado antes de escribir; solo admite armando/error. Enmienda 2026-10-10: _LANZAMIENTO_LOCK es propio, junto a _ENV_LOCK, para no esperar una publicación larga ni relanzar desde una lectura vieja. La vuelta atrás usa el estado recién leído; no cambia gastos ni reintentos.
+
+PND-062, entrega 1 (2026-10-10, pedido de Daniel): `gastos.historial` acepta `desplazamiento=0`
+para cortar con OFFSET en SQL, ordenado por creado_en/id descendentes; `desde` conserva el filtro por fecha.
+La página pide 25 para pintar 24 y detectar la siguiente página; total y CSV conservan todas las filas.
+Solo cambia la lectura del historial; ningún registro de gasto, cola ni cobro cambia.
+
+**Base temporal de las pruebas (2026-10-10):** `base_temporal` (`tests/conftest.py`) crea una carpeta `creatv_test_*`
+por prueba y al terminar suelta el motor (`db._reset_para_tests`) y la BORRA. Antes no la borraba: se juntaron cientos de
+miles de carpetas en $TMPDIR (31 000 y 25 GB en el Mac de Daniel; 781 296 y 589 GB en un worktree, que llenaron el
+disco). Un fixture nuevo que cree carpetas temporales las borra igual (`tests/test_conftest_limpieza.py` vigila este).
+Lo arreglaron a la vez main y la rama de Rendimiento; al integrarlas (2026-10-10) quedó el de main (INT-2) y la prueba
+propia de la rama (`test_conftest_base_temporal.py`) se fue: vigilaba lo mismo.

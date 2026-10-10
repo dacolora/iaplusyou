@@ -21,6 +21,8 @@ sería peor que reintentarla.
 Los mensajes se muestran a la persona (nunca van a Claude): pasan por
 `gettext` y salen en el idioma del contexto (el del proyecto en el worker).
 """
+from datetime import datetime, timezone
+
 from flask_babel import gettext
 
 from nicho.fuentes import _http
@@ -101,7 +103,34 @@ def probar_token(sesion, token):
     return {"ok": True, "detalle": gettext("Apify aceptó el token.")}
 
 
-def arrancar(sesion, token, actor, entrada, max_items, max_total_charge_usd, on_ids=None, memoria_mb=None):
+class ArranqueIncierto(ErrorFuente):
+    """El POST pudo arrancar; una lectura gratuita no pudo identificar la corrida."""
+
+
+def _ahora():
+    return datetime.now(timezone.utc)
+
+
+def _recuperar_arranque(sesion, token, actor, desde, excluir=()):
+    try:
+        r = _http.pedir(sesion, "GET", f"{URL_API}/actors/{actor}/runs", "Apify",
+                        headers=cabeceras(token), params={"desc": "true", "limit": 5})
+        recientes = []
+        if r.status_code == 200:
+            for corrida in (_cuerpo(r).get("data") or {}).get("items") or []:
+                inicio = datetime.fromisoformat(str(corrida.get("startedAt") or "").replace("Z", "+00:00"))
+                if inicio.tzinfo is None:
+                    inicio = inicio.replace(tzinfo=timezone.utc)
+                if inicio > desde and corrida.get("id") and corrida["id"] not in excluir:
+                    recientes.append(corrida)
+        if len(recientes) == 1:
+            return recientes[0]
+    except (ErrorFuente, ValueError, TypeError, AttributeError):
+        pass
+    raise ArranqueIncierto(gettext("No sabemos si la corrida arrancó; revisa en Apify antes de reintentar."))
+
+
+def arrancar(sesion, token, actor, entrada, max_items, max_total_charge_usd, on_ids=None, memoria_mb=None, excluir=()):
     """POST de la corrida. `max_items`/`max_total_charge_usd` son el tope de
     cobro del lado de Apify — lo que se le mostró a la persona antes de
     lanzar, nada más. `memoria_mb`, si se da, va como `memory` (MB de RAM que
@@ -116,12 +145,31 @@ def arrancar(sesion, token, actor, entrada, max_items, max_total_charge_usd, on_
     es una señal exclusiva de error: sirve para que quien llama guarde el id
     de una corrida que ya pudo cobrar, tanto si `arrancar` devuelve como si
     termina lanzando. Un 2xx cuyo cuerpo no es JSON no trae ids: ErrorFuente
-    sin llamar a `on_ids` (la corrida no consta como lanzada)."""
+    sin llamar a `on_ids` (la corrida no consta como lanzada). `excluir` impide
+    adoptar corridas ya identificadas al recuperar un arranque incierto."""
     params = {"timeout": MAX_ESPERA_S, "maxItems": max_items, "maxTotalChargeUsd": max_total_charge_usd}
     if memoria_mb:
         params["memory"] = memoria_mb
-    r = _http.pedir(sesion, "POST", f"{URL_API}/actors/{actor}/runs", "Apify", headers=cabeceras(token),
-                    params=params, json=entrada)
+    desde = _ahora()
+    recuperada = None
+    try:
+        r = _http.pedir(sesion, "POST", f"{URL_API}/actors/{actor}/runs", "Apify", headers=cabeceras(token),
+                        params=params, json=entrada, reintentar=False)
+    except _http.Error429:
+        raise
+    except ErrorFuente:
+        recuperada = _recuperar_arranque(sesion, token, actor, desde, excluir=excluir)
+        r = None
+    if r is not None and r.status_code >= 500:
+        recuperada = _recuperar_arranque(sesion, token, actor, desde, excluir=excluir)
+        r = None
+    if recuperada is not None:
+        # Adaptador local de la respuesta: la misma validación y on_ids del POST.
+        class RespuestaRecuperada:
+            status_code = 201
+            def json(self):
+                return {"data": recuperada}
+        r = RespuestaRecuperada()
     if r.status_code == 403 and _tipo_apify(r) == "full-permission-actor-not-approved":
         # No es un problema de token (2026-10-01: `axesso_data~amazon-reviews-scraper` empezó a
         # pedir esto): el mensaje de siempre manda a revisar APIFY_TOKEN y no hay nada que revisar
@@ -151,6 +199,18 @@ def arrancar(sesion, token, actor, entrada, max_items, max_total_charge_usd, on_
     run_id, dataset_id = corrida.get("id") or None, corrida.get("defaultDatasetId") or None
     if on_ids:
         on_ids(run_id, dataset_id)
+    if run_id and not dataset_id:
+        # PND-159: el POST ya arrancó; solo se lee, nunca se lanza otra corrida.
+        try:
+            lectura = _http.pedir(sesion, "GET", f"{URL_API}/actor-runs/{run_id}", "Apify", headers=cabeceras(token))
+            dato = _cuerpo(lectura).get("data") if lectura.status_code == 200 else None
+            if isinstance(dato, dict) and dato.get("defaultDatasetId"):
+                dataset_id = dato["defaultDatasetId"]
+                corrida = dato
+                if on_ids:
+                    on_ids(run_id, dataset_id)
+        except (ErrorFuente, ValueError):
+            pass  # quien llama conserva el id y registra el estimado marcado
     if not run_id or not dataset_id:
         # Si el id sí vino, la corrida pudo arrancar (y cobrar) igual.
         raise ErrorFuente(gettext("Apify no devolvió los ids de la corrida (corrida %(corrida)s, "
@@ -236,7 +296,7 @@ def contar_dataset(sesion, token, dataset_id):
         return None
 
 
-def correr_lote(sesion, token, actor, corridas, etapa, avanzar=None, max_simultaneas=MAX_SIMULTANEAS):
+def correr_lote(sesion, token, actor, corridas, etapa, avanzar=None, max_simultaneas=MAX_SIMULTANEAS, on_ids=None):
     """Varias corridas del mismo actor, hasta `max_simultaneas` a la vez.
     `corridas` = [{"entrada", "max_items", "max_usd", "etiqueta"[, "memoria_mb"]}].
     Cada una lleva su propio techo de cobro y, si la trae, su propia `memoria_mb`
@@ -252,7 +312,10 @@ def correr_lote(sesion, token, actor, corridas, etapa, avanzar=None, max_simulta
     ítems crudos totales (lo que Apify cobra), "corridas": [{indice, etiqueta,
     run_id, dataset_id, estado, resultados, motivo}], "aviso": una línea por
     corrida que no terminó en SUCCEEDED o cuyo dataset no se pudo leer}.
-    Levanta ErrorFuente solo si NINGUNA corrida arrancó (nada se cobró)."""
+    Levanta ErrorFuente si no se identificó ninguna corrida; un arranque incierto pudo cobrar.
+    `on_ids(registros)` se avisa apenas llega un id, con resultados al tope y marcas de estimado,
+    para que el worker anote antes del sondeo. La lectura final sustituye ese estimado.
+    La recuperación de un arranque excluye las corridas hermanas ya identificadas."""
     avanzar = avanzar or (lambda etapa, detalle=None: None)
     registros = [{"indice": i, "etiqueta": c.get("etiqueta"), "run_id": None, "dataset_id": None, "estado": None, "resultados": 0, "motivo": ""}
                  for i, c in enumerate(corridas)]
@@ -267,15 +330,20 @@ def correr_lote(sesion, token, actor, corridas, etapa, avanzar=None, max_simulta
 
             def _ids(run_id, dataset_id, reg=reg):
                 reg["run_id"], reg["dataset_id"] = run_id, dataset_id
+                if run_id:
+                    reg.update(resultados=c["max_items"], estimado=True, conciliacion_pendiente=True)
+                    if on_ids:
+                        on_ids(registros)
             try:
                 _, _, estado = arrancar(sesion, token, actor, c["entrada"], c["max_items"], c["max_usd"], on_ids=_ids,
-                                        memoria_mb=c.get("memoria_mb"))
+                                        memoria_mb=c.get("memoria_mb"),
+                                        excluir={x["run_id"] for x in registros if x["run_id"]})
             except ErrorFuente as e:
                 if reg["run_id"]:                       # arrancó pero sin dataset: se sondea igual, ya pudo cobrar
                     reg["estado"], reg["motivo"] = "READY", e.usuario
                     vivas[i] = {"esperado": 0.0, "fallos": 0}
                 else:
-                    reg["estado"], reg["motivo"] = ESTADO_NO_ARRANCO, e.usuario
+                    reg["estado"], reg["motivo"] = (ESTADO_SIN_ESTADO if isinstance(e, ArranqueIncierto) else ESTADO_NO_ARRANCO), e.usuario
                 continue
             reg["estado"] = estado
             if estado in TERMINALES:
@@ -283,7 +351,7 @@ def correr_lote(sesion, token, actor, corridas, etapa, avanzar=None, max_simulta
             vivas[i] = {"esperado": 0.0, "fallos": 0}
 
     _arrancar_siguientes()
-    if all(r["estado"] == ESTADO_NO_ARRANCO for r in registros):
+    if not any(r["run_id"] for r in registros):
         raise ErrorFuente(registros[0]["motivo"] if registros else gettext("No hay corridas que lanzar."))
     while vivas:
         _http.dormir(PAUSA_SONDEO)
@@ -303,6 +371,9 @@ def correr_lote(sesion, token, actor, corridas, etapa, avanzar=None, max_simulta
             if not malo:
                 # un 200 que no es JSON es una lectura mala más: nunca una excepción que pierda el gasto del lote
                 status, malo = _leer_estado(r)
+                if not malo and not reg["dataset_id"]:
+                    dato = _cuerpo(r).get("data") or {}
+                    reg["dataset_id"] = dato.get("defaultDatasetId") or None
             if malo:
                 v["fallos"] += 1
                 if v["fallos"] >= MAX_FALLOS_SONDEO:
@@ -320,12 +391,16 @@ def correr_lote(sesion, token, actor, corridas, etapa, avanzar=None, max_simulta
     items, avisos = [], []
     for reg, c in zip(registros, corridas):
         if not reg["run_id"]:
-            avisos.append(gettext("corrida no lanzada (%(etiqueta)s): %(motivo)s", etiqueta=reg["etiqueta"], motivo=reg["motivo"]))
+            avisos.append(gettext("corrida sin id (%(etiqueta)s): %(motivo)s", etiqueta=reg["etiqueta"], motivo=reg["motivo"]))
             continue
+        reg.pop("estimado", None)
+        reg.pop("conciliacion_pendiente", None)
         crudos, motivo = (None, gettext("sin dataset")) if not reg["dataset_id"] else leer_dataset(sesion, token, reg["dataset_id"], c["max_items"])
         if crudos is None:
             contados = contar_dataset(sesion, token, reg["dataset_id"]) if reg["dataset_id"] else None
             reg["resultados"] = c["max_items"] if contados is None else contados
+            if contados is None:
+                reg.update(estimado=True, conciliacion_pendiente=True)
             reg["motivo"] = (reg["motivo"] + "; " if reg["motivo"] else "") + gettext("dataset %(dataset)s no leído (%(motivo)s)",
                                                                                      dataset=reg["dataset_id"] or "?", motivo=motivo)
         else:

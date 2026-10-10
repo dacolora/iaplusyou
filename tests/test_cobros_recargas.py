@@ -23,6 +23,8 @@ def entorno(base_temporal, monkeypatch, tmp_path):
     monkeypatch.setattr(proyectos, "_path", lambda cliente: str(tmp_path / f"{cliente}.json"))
     monkeypatch.setenv("BOLD_LLAVE_IDENTIDAD", "identidad-falsa")  # llave-de-prueba
     monkeypatch.setenv("BOLD_LLAVE_SECRETA", "")
+    for nombre in ("WOMPI_LLAVE_PUBLICA", "WOMPI_LLAVE_PRIVADA", "WOMPI_SECRETO_EVENTOS", "WOMPI_SECRETO_INTEGRIDAD"):
+        monkeypatch.delenv(nombre, raising=False)   # sin Wompi: estas pruebas son de Bold
     monkeypatch.setenv("BOLD_PRUEBAS", "1")
     # Local: BOLD_PRUEBAS=1 solo vale con PLATAFORMA_URL de una máquina local (revisión final, E1).
     monkeypatch.setenv("PLATAFORMA_URL", "http://localhost:5050/")
@@ -529,8 +531,9 @@ def test_webhook_solo_acepta_post(entorno, cliente_http):
 def test_ninguna_otra_ruta_acepta_un_post_de_otro_sitio(entorno, cliente_http):
     import dashboard
     # B3 (revisión final 2026-10-08): la lista de excepciones a la barrera CSRF
-    # es exactamente el webhook; uno nuevo se agrega aquí a conciencia.
-    assert dashboard.ENDPOINTS_OTRO_ORIGEN == {"cobros.bold_webhook"}
+    # es exactamente los webhooks firmados (Bold y, desde planes 4/8, los
+    # eventos de Wompi); uno nuevo se agrega aquí a conciencia.
+    assert dashboard.ENDPOINTS_OTRO_ORIGEN == {"cobros.bold_webhook", "cobros.wompi_eventos"}
     c = cliente_http.como("user_acme")
     r = c.post("/cliente/acme/saldo/recargar", data={"usd": "50"}, headers={"Sec-Fetch-Site": "cross-site"})
     assert r.status_code == 403

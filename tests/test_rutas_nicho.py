@@ -793,3 +793,53 @@ def test_get_estudio_sin_cambios_no_pide_escritura(app, base_temporal):
         r = app['c'].get(f'/cliente/acme/nicho/{eid}')
         assert r.status_code == 200
         otro.rollback()
+
+
+@pytest.mark.parametrize('aprobado,gastado,esperado', [(9, 1, 3.1), (3, 1, 3.1), (1, 2, 3.1)])
+@pytest.mark.parametrize('desconocido,margen_roto', [(False, False), (True, False), (False, True)])
+def test_pnd190_reanudar_muestra_precio_con_margen(app, monkeypatch, aprobado, gastado, esperado, desconocido, margen_roto):
+    from nicho import datos, investigacion as inv
+    from tareas import investigacion as ti
+    from cobros import libro
+    from tests.html_lote7 import HTML
+    import gastos
+    eid = _estudio(datos)
+    i = inv.crear_inicial('lavar', 'CO', ['amazon'], [], inv.TOPES_DEFECTO, estimado={'total_usd': aprobado})
+    i = inv.marcar_paso(i, 'consultas', 'hecho', usd=gastado)
+    datos.iniciar_investigacion('acme', eid, inv.detener(i, 'fallo simulado'))
+    costos = {'buscar:amazon': .2, 'seleccionar': .3, 'resenas:amazon': .6, 'generar': 2}
+    llamadas = []
+    def estimar(est, inv_, paso):
+        llamadas.append(paso)
+        return None if desconocido and paso == 'generar' else costos[paso]
+    monkeypatch.setattr(ti, '_costo_paso', estimar)
+    libro.configurar('acme', cobrar=True, margen=2, usuario='admin')
+    if margen_roto:
+        monkeypatch.setattr(gastos, '_leer_margen', lambda *a: None)
+    html = app['c'].get(f'/cliente/acme/nicho/{eid}').data.decode()
+    boton, = HTML(html).form(f'/cliente/acme/nicho/{eid}/investigacion/reanudar').todos('button')
+    if desconocido or margen_roto:
+        assert gastos.SIN_PRECIO in boton.texto() and 'US$' not in boton.texto()
+    else:
+        assert gastos.formatear(esperado * 2) in boton.texto()
+    assert llamadas == list(costos)
+
+
+def test_r2_reanudar_redes_pendientes_son_gratis(app):
+    from nicho import datos, investigacion as inv
+    from tareas import investigacion as ti
+    from cobros import libro
+    from tests.html_lote7 import HTML
+    import gastos
+    eid = _estudio(datos)
+    i = inv.crear_inicial('lavar', 'CO', [], ['reddit'], inv.TOPES_DEFECTO, estimado={'total_usd': 5})
+    i = inv.marcar_paso(i, 'consultas', 'hecho', usd=.1)
+    i = inv.marcar_paso(i, 'seleccionar', 'saltado', usd=0)
+    datos.iniciar_investigacion('acme', eid, inv.detener(i, 'fallo simulado'))
+    libro.configurar('acme', cobrar=True, margen=2, usuario='admin')
+    est = datos.estudio('acme', eid)
+    assert ti._costo_paso(est, i, 'redes:reddit') == 0
+    precio = gastos.formatear(ti._costo_paso(est, i, 'generar') * 2)
+    dom = HTML(app['c'].get(f'/cliente/acme/nicho/{eid}').data.decode())
+    boton, = dom.form(f'/cliente/acme/nicho/{eid}/investigacion/reanudar').todos('button')
+    assert precio in boton.texto() and gastos.SIN_PRECIO not in boton.texto()

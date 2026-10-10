@@ -150,6 +150,30 @@ def _duraciones(cliente, doc):
     return out
 
 
+def encolar_producciones(cliente, edicion_id, ed, version, destinos):
+    """El final de «Producir» (capa 4a §6), compartido con la tarea de los ganchos de Triple Whale (spec 2026-10-09
+    §4.6.4), que arma y produce sin navegador: por destino, si su render no está corriendo, crea (o reinicia) la final
+    y encola `edicion_producir` de la versión YA congelada (`version`, de `ediciones.versionar`). Gratis: se produce
+    con materiales ya pagados. Quien llama ya revisó los destinos (`verificar_recortes`) y congeló la versión.
+    Devuelve [{"destino", "final_id", "encolada"}]."""
+    segundos = estimar.segundos(ed["documento"])
+    producidas = []
+    for d in destinos:
+        idioma, pais = d.split("_")
+        job_id = tareas_edicion.job_id_producir(cliente, edicion_id, idioma, pais)
+        if trabajos.en_curso(job_id):
+            producidas.append({"destino": d, "final_id": f"{ed['cf_id']}__{d}", "encolada": False})
+            continue
+        final_id = creative_flow.crear_final(cliente, ed["cf_id"], idioma, pais)
+        encolada = trabajos.encolar(job_id, "edicion_producir",
+                                    {"cliente": cliente, "edicion_id": edicion_id, "version_id": version["id"],
+                                     "final_id": final_id, "idioma": idioma, "pais": pais},
+                                    duracion_estimada=segundos, etapas=list(tareas_edicion.ETAPAS_EDICION),
+                                    cliente=cliente, max_intentos=1)
+        producidas.append({"destino": d, "final_id": final_id, "encolada": bool(encolada)})
+    return producidas
+
+
 @bp.post("/<int:edicion_id>/producir")
 def producir(cliente, edicion_id):
     """Producir desde el editor (spec §6): congela la versión guardada y encola
@@ -223,21 +247,7 @@ def producir(cliente, edicion_id):
         version = ediciones.versionar(cliente, edicion_id, motivo="producir", version_n=cuerpo["version_n"])
     except ediciones.Conflicto as e:
         return jsonify({"error": str(e)}), 409
-    segundos = estimar.segundos(doc)
-    producidas = []
-    for d in destinos:
-        idioma, pais = d.split("_")
-        job_id = tareas_edicion.job_id_producir(cliente, edicion_id, idioma, pais)
-        if trabajos.en_curso(job_id):
-            producidas.append({"destino": d, "final_id": f"{ed['cf_id']}__{d}", "encolada": False})
-            continue
-        final_id = creative_flow.crear_final(cliente, ed["cf_id"], idioma, pais)
-        encolada = trabajos.encolar(job_id, "edicion_producir",
-                                    {"cliente": cliente, "edicion_id": edicion_id, "version_id": version["id"],
-                                     "final_id": final_id, "idioma": idioma, "pais": pais},
-                                    duracion_estimada=segundos, etapas=list(tareas_edicion.ETAPAS_EDICION),
-                                    cliente=cliente, max_intentos=1)
-        producidas.append({"destino": d, "final_id": final_id, "encolada": bool(encolada)})
+    producidas = encolar_producciones(cliente, edicion_id, ed, version, destinos)
     return jsonify({"producidas": producidas,
                     "url": url_for("ver_cliente", cliente=cliente) + f"#final?cf={ed['cf_id']}"})
 

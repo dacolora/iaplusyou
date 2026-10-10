@@ -27,8 +27,11 @@ class TripleWhaleFalso:
     """Responde según la tabla que nombra la consulta. `fallar` = {tabla: n}
     hace que las primeras n consultas completas de esa tabla den
     ErrorConsulta (columna que la cuenta no tiene)."""
-    def __init__(self, ads=(), pixel=(), tienda=(), fallar=None, error=None, fallar_todo=(), productos=(), creativos=()):
+    def __init__(self, ads=(), pixel=(), tienda=(), fallar=None, error=None, fallar_todo=(), productos=(), creativos=(),
+                 web=(), sin_visitantes=False):
         self.ads, self.pixel, self.tienda, self.productos = list(ads), list(pixel), list(tienda), list(productos)
+        self.web = list(web)
+        self.sin_visitantes = sin_visitantes     # la cuenta no conoce new_visitors/unique_visitors en el Pixel
         self.creativos = list(creativos)
         self.fallar = dict(fallar or {})
         self.fallar_todo = set(fallar_todo)
@@ -37,6 +40,7 @@ class TripleWhaleFalso:
 
     def __call__(self, llave, shop, consulta, desde, hasta, moneda=None):
         tabla = ("pixel" if "pixel_joined_tvf" in consulta else "tienda" if "blended_stats_tvf" in consulta
+                 else "web" if "web_analytics_table" in consulta
                  else "productos" if "orders_table" in consulta else "creativos" if "ad_image_url" in consulta
                  else "ads")
         completa = ("outbound_clicks" in consulta or "sessions" in consulta or "new_customer_revenue" in consulta
@@ -44,6 +48,8 @@ class TripleWhaleFalso:
         self.llamadas.append((tabla, "completa" if completa else "minima", desde, hasta, moneda, llave, shop))
         if self.error:
             raise self.error
+        if tabla == "pixel" and "new_visitors" in consulta and self.sin_visitantes:
+            raise triple_whale.ErrorConsulta("Unknown identifier new_visitors")
         if completa and self.fallar.get(tabla):
             self.fallar[tabla] -= 1
             raise triple_whale.ErrorConsulta("Unknown identifier")
@@ -51,8 +57,12 @@ class TripleWhaleFalso:
             raise triple_whale.ErrorConsulta(f"{tabla}: no existe")
         if tabla == "creativos":      # una fila por anuncio, sin event_date: no se filtra por fecha
             return list(self.creativos)
-        filas = {"ads": self.ads, "pixel": self.pixel, "tienda": self.tienda, "productos": self.productos}[tabla]
-        return [f for f in filas if desde <= str(f.get("event_date"))[:10] <= hasta]
+        filas = {"ads": self.ads, "pixel": self.pixel, "tienda": self.tienda, "productos": self.productos,
+                 "web": self.web}[tabla]
+        filas = [f for f in filas if desde <= str(f.get("event_date"))[:10] <= hasta]
+        if tabla == "pixel" and "new_visitors" not in consulta:   # columnas que la consulta no pidió no llegan
+            filas = [{k: v for k, v in f.items() if k not in ("unique_visitors", "new_visitors")} for f in filas]
+        return filas
 
 
 def _ad(ad_id, fecha, **kw):
@@ -96,10 +106,12 @@ def test_rango_pendiente():
     # Nunca se copió: los 90 días.
     assert sync.rango_pendiente({"extra": {}}, HOY) == ("2026-07-01", "2026-09-28")
     # Al día: los últimos 7.
-    reciente = {"extra": {"backfill_desde": "2026-07-01"}, "ultima_sincronizacion": "2026-09-28T08:00:00"}
+    reciente = {"extra": {"backfill_desde": "2026-07-01", "backfill_visitantes": "2026-09-01"},
+                "ultima_sincronizacion": "2026-09-28T08:00:00"}
     assert sync.rango_pendiente(reciente, HOY) == ("2026-09-22", "2026-09-28")
     # El worker estuvo parado 12 días: desde dos días antes de la última copia.
-    parado = {"extra": {"backfill_desde": "2026-06-01"}, "ultima_sincronizacion": "2026-09-16T08:00:00"}
+    parado = {"extra": {"backfill_desde": "2026-06-01", "backfill_visitantes": "2026-09-01"},
+              "ultima_sincronizacion": "2026-09-16T08:00:00"}
     assert sync.rango_pendiente(parado, HOY) == ("2026-09-14", "2026-09-28")
 
 
@@ -167,8 +179,8 @@ def test_sin_pixel_ni_tienda_los_anuncios_igual_llegan(conectado, monkeypatch):
     r = sync.sincronizar("acme", _tienda(), "2026-09-15", "2026-09-28", hoy=HOY)
     assert r["anuncios"] == 1 and set(r["fallos"]) == {"pixel", "tienda"}
     assert r["consultas"]["pixel"] == "sin_datos"
-    # Tras el primer fallo del Pixel no se insiste en cada tramo.
-    assert len([l for l in falso.llamadas if l[0] == "pixel"]) == 2
+    # Tras el primer fallo del Pixel (sus tres versiones) no se insiste en cada tramo.
+    assert len([l for l in falso.llamadas if l[0] == "pixel"]) == 3
     assert datos.totales_anuncio("acme", _tienda(), "facebook-ads", "1", "2026-09-01")["gasto"] == 10.0
 
 
@@ -425,3 +437,152 @@ def test_tareas_registradas_y_periodica_antes_de_refrescar_experimentos():
     assert {"tw_sincronizar", "tw_sincronizar_todas", "tw_evaluar"} <= set(tareas.REGISTRO)
     tipos = [tipo for tipo, _ in worker.PERIODICAS]
     assert tipos.index("tw_sincronizar_todas") < tipos.index("exp_refrescar_todos")
+
+
+# ------------------------------------------- visitantes nuevos (NVP) ---
+# Spec 2026-10-09-nvp-visitantes-nuevos §3.
+
+def _px(ad_id, fecha, **kw):
+    fila = {"channel": "facebook-ads", "ad_id": ad_id, "event_date": fecha, "orders": 1, "revenue": 50,
+            "sessions": 120, "unique_visitors": 100, "new_visitors": 75}
+    fila.update(kw)
+    return fila
+
+
+def test_normalizar_pixel_y_tienda_traen_visitantes():
+    p = sync.normalizar_pixel(_px("5", "2026-09-02", unique_visitors="80.4", new_visitors="20"))
+    assert p["visitantes"] == 80 and p["visitantes_nuevos"] == 20
+    # Sin las columnas (versión sin visitantes): cero, que se lee «sin datos».
+    p = sync.normalizar_pixel({"channel": "facebook-ads", "ad_id": 5, "event_date": "2026-09-02", "orders": 1})
+    assert p["visitantes"] == 0 and p["visitantes_nuevos"] == 0
+    assert sync.normalizar_visitantes_tienda({"event_date": "2026-09-02", "unique_visitors": 300,
+                                              "new_visitors": "120"}) == {
+        "fecha": "2026-09-02", "visitantes": 300, "visitantes_nuevos": 120}
+    assert sync.normalizar_visitantes_tienda({"event_date": None}) is None
+
+
+def test_la_consulta_del_pixel_pide_visitantes_y_tiene_tres_versiones():
+    con_visitantes, completa, minima = triple_whale.consultas_pixel("Last Click", "7_days")
+    assert "new_visitors" in con_visitantes and "unique_visitors" in con_visitantes
+    assert "sessions" in con_visitantes and "sessions" in completa
+    assert "new_visitors" not in completa and "new_visitors" not in minima
+    (web,) = triple_whale.consultas_visitantes_tienda()
+    assert "web_analytics_table" in web and "new_visitors" in web and "@startDate" in web
+
+
+def test_sincronizar_copia_visitantes_por_anuncio_y_de_la_tienda(conectado, monkeypatch):
+    falso = TripleWhaleFalso(
+        ads=[_ad("1", "2026-09-27"), _ad("1", "2026-09-28"), _ad("2", "2026-09-28")],
+        pixel=[_px("1", "2026-09-27"), _px("1", "2026-09-28", unique_visitors=60, new_visitors=15),
+               _px("2", "2026-09-28", unique_visitors=10, new_visitors=9)],
+        tienda=[{"event_date": "2026-09-27", "spend": 5, "revenue": 100, "orders": 1},
+                {"event_date": "2026-09-28", "spend": 25, "revenue": 300, "orders": 4}],
+        web=[{"event_date": "2026-09-27", "unique_visitors": 500, "new_visitors": 200},
+             {"event_date": "2026-09-28", "unique_visitors": 400, "new_visitors": 100}])
+    monkeypatch.setattr(triple_whale, "sql_query", falso)
+    r = sync.sincronizar("acme", _tienda(), "2026-09-22", "2026-09-28", hoy=HOY)
+    assert r["consultas"]["pixel"] == "completa" and r["fallos"] == {}
+    t1 = datos.totales_anuncio("acme", _tienda(), "facebook-ads", "1", "2026-09-01")
+    assert t1["visitantes"] == 160 and t1["visitantes_nuevos"] == 90
+    dias = {d["fecha"]: d for d in datos.serie_tienda("acme", None, "2026-09-27", "2026-09-28")}
+    assert dias["2026-09-27"]["visitantes"] == 500 and dias["2026-09-28"]["visitantes_nuevos"] == 100
+    assert dias["2026-09-28"]["ingresos"] == 300.0
+
+
+def test_si_triple_whale_no_conoce_los_visitantes_baja_a_la_completa_sin_perder_nada(conectado, monkeypatch):
+    falso = TripleWhaleFalso(ads=[_ad("1", "2026-09-28")], pixel=[_px("1", "2026-09-28")],
+                             tienda=[{"event_date": "2026-09-28", "revenue": 300, "orders": 4,
+                                      "new_customer_revenue": 10}],
+                             sin_visitantes=True, fallar_todo={"web"})
+    monkeypatch.setattr(triple_whale, "sql_query", falso)
+    r = sync.sincronizar("acme", _tienda(), "2026-09-28", "2026-09-28", hoy=HOY)
+    assert r["consultas"]["pixel"] == "sin_visitantes" and "pixel" not in r["fallos"]
+    t1 = datos.totales_anuncio("acme", _tienda(), "facebook-ads", "1", "2026-09-01")
+    assert t1["pedidos"] == 1.0 and t1["sesiones"] == 120 and t1["visitantes"] == 0
+    # La tienda se guarda igual; solo falta su NVP, y el resumen lo dice.
+    dia = datos.serie_tienda("acme", None, "2026-09-28", "2026-09-28")[0]
+    assert dia["ingresos"] == 300.0 and dia["visitantes"] == 0
+    assert "visitantes" in r["fallos"] and "tienda" not in r["fallos"]
+    # El segundo tramo no vuelve a probar la versión con visitantes.
+    r = sync.sincronizar("acme", _tienda(), "2026-09-14", "2026-09-28", hoy=HOY)
+    pixeles = [l for l in falso.llamadas if l[0] == "pixel"]
+    # 1.ª copia: rechazada + completa; 2.ª copia (3 tramos): el primero igual, los otros dos directo a la completa.
+    assert len(pixeles) == 2 + (2 + 1 + 1)
+
+
+def test_un_dia_con_visitantes_y_sin_fila_de_tienda_no_se_inventa(conectado, monkeypatch):
+    falso = TripleWhaleFalso(ads=[_ad("1", "2026-09-28")],
+                             tienda=[{"event_date": "2026-09-28", "revenue": 300, "orders": 4}],
+                             web=[{"event_date": "2026-09-27", "unique_visitors": 50, "new_visitors": 20},
+                                  {"event_date": "2026-09-28", "unique_visitors": 80, "new_visitors": 40}])
+    monkeypatch.setattr(triple_whale, "sql_query", falso)
+    sync.sincronizar("acme", _tienda(), "2026-09-27", "2026-09-28", hoy=HOY)
+    dias = datos.serie_tienda("acme", None, "2026-09-27", "2026-09-28")
+    assert [(d["fecha"], d["visitantes"]) for d in dias] == [("2026-09-28", 80)]
+
+
+def test_la_historia_de_visitantes_se_trae_una_sola_vez():
+    al_dia = {"extra": {"backfill_desde": "2026-07-01"}, "ultima_sincronizacion": "2026-09-28T08:00:00"}
+    # Copia de antes del NVP: los 90 días otra vez, para que el NVP tenga historia.
+    assert sync.rango_pendiente(al_dia, HOY) == ("2026-07-01", "2026-09-28")
+    con_marca = {"extra": dict(al_dia["extra"], backfill_visitantes="2026-09-28"),
+                 "ultima_sincronizacion": "2026-09-28T08:00:00"}
+    assert sync.rango_pendiente(con_marca, HOY) == ("2026-09-22", "2026-09-28")
+
+
+def test_la_marca_queda_tras_tres_copias_sin_visitantes_y_no_se_trae_90_dias_para_siempre(conectado, monkeypatch):
+    """Una cuenta que no conoce los visitantes: 3 copias de 90 días y se rinde (si no, 90 días cada 2 horas)."""
+    falso = TripleWhaleFalso(ads=[_ad("1", "2026-09-28")], sin_visitantes=True, fallar_todo={"web"})
+    monkeypatch.setattr(triple_whale, "sql_query", falso)
+    for n in (1, 2):
+        sync.sincronizar("acme", _tienda(), hoy=HOY)
+        extra = triple_whale_tiendas.tienda("acme", _tienda())["extra"]
+        assert "backfill_visitantes" not in extra and extra["intentos_visitantes"] == n
+        assert sync.rango_pendiente(triple_whale_tiendas.tienda("acme", _tienda()), HOY)[0] == "2026-07-01"
+    sync.sincronizar("acme", _tienda(), hoy=HOY)
+    extra = triple_whale_tiendas.tienda("acme", _tienda())["extra"]
+    assert extra["backfill_visitantes"] == HOY.isoformat()
+    assert sync.rango_pendiente(triple_whale_tiendas.tienda("acme", _tienda()), HOY)[0] != "2026-07-01"
+
+
+def test_con_visitantes_la_marca_queda_en_la_primera_copia(conectado, monkeypatch):
+    falso = TripleWhaleFalso(ads=[_ad("1", "2026-09-28")], pixel=[_px("1", "2026-09-28")],
+                             tienda=[{"event_date": "2026-09-28", "revenue": 300, "orders": 4}],
+                             web=[{"event_date": "2026-09-28", "unique_visitors": 80, "new_visitors": 40}])
+    monkeypatch.setattr(triple_whale, "sql_query", falso)
+    sync.sincronizar("acme", _tienda(), hoy=HOY)
+    assert triple_whale_tiendas.tienda("acme", _tienda())["extra"]["backfill_visitantes"] == HOY.isoformat()
+
+
+def test_un_error_pasajero_en_la_copia_de_90_dias_no_deja_el_nvp_en_cero_para_siempre(conectado, monkeypatch):
+    """Un 5xx que persiste llega como ErrorConsulta y baja la copia a la versión sin visitantes: esa copia no deja
+    la marca y la siguiente vuelve a traer los 90 días con visitantes."""
+    falso = TripleWhaleFalso(ads=[_ad("1", "2026-09-28")], pixel=[_px("1", "2026-09-28")], sin_visitantes=True)
+    monkeypatch.setattr(triple_whale, "sql_query", falso)
+    sync.sincronizar("acme", _tienda(), hoy=HOY)
+    assert "backfill_visitantes" not in triple_whale_tiendas.tienda("acme", _tienda())["extra"]
+    falso.sin_visitantes = False                     # Triple Whale se recuperó
+    r = sync.sincronizar("acme", _tienda(), hoy=HOY)
+    assert r["desde"] == "2026-07-01" and r["consultas"]["pixel"] == "completa"
+    assert datos.totales_anuncio("acme", _tienda(), "facebook-ads", "1", "2026-09-01")["visitantes"] == 100
+    assert triple_whale_tiendas.tienda("acme", _tienda())["extra"]["backfill_visitantes"] == HOY.isoformat()
+
+
+def test_un_error_de_red_en_los_visitantes_de_la_tienda_no_tumba_la_copia(conectado, monkeypatch):
+    def falso(llave, shop, consulta, desde, hasta, moneda=None):
+        if "web_analytics_table" in consulta:
+            raise triple_whale.ErrorTripleWhale("timeout")
+        return base(llave, shop, consulta, desde, hasta, moneda)
+    base = TripleWhaleFalso(ads=[_ad("1", "2026-09-28")], tienda=[{"event_date": "2026-09-28", "revenue": 300}])
+    monkeypatch.setattr(triple_whale, "sql_query", falso)
+    r = sync.sincronizar("acme", _tienda(), "2026-09-28", "2026-09-28", hoy=HOY)
+    assert "visitantes" in r["fallos"] and r["dias_tienda"] == 1
+    assert datos.serie_tienda("acme", None, "2026-09-28", "2026-09-28")[0]["ingresos"] == 300.0
+    # La llave revocada sí corta, como en cualquier otra consulta.
+    def revocada(llave, shop, consulta, desde, hasta, moneda=None):
+        if "web_analytics_table" in consulta:
+            raise triple_whale.ErrorLlave("401")
+        return base(llave, shop, consulta, desde, hasta, moneda)
+    monkeypatch.setattr(triple_whale, "sql_query", revocada)
+    with pytest.raises(triple_whale.ErrorLlave):
+        sync.sincronizar("acme", _tienda(), "2026-09-28", "2026-09-28", hoy=HOY)

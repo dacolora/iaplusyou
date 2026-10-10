@@ -85,7 +85,7 @@ IDIOMA_POR_PAIS = {"SE": "sv", "NO": "no", "CO": "es", "MX": "es", "ES": "es", "
                    "IT": "it", "NL": "nl", "JP": "ja"}
 IDIOMAS = IDIOMA_POR_PAIS          # nombre viejo, lo importan nicho.investigacion y nicho.rutas
 _MONEDA_POR_SIMBOLO = {"$": "USD", "US$": "USD", "€": "EUR", "£": "GBP", "kr": "SEK", "R$": "BRL", "¥": "JPY", "₹": "INR", "C$": "CAD",
-                       "A$": "AUD", "MX$": "MXN"}
+                       "A$": "AUD", "MX$": "MXN", "NOK": "NOK", "SEK": "SEK"}
 _RE_HTTP = re.compile(r"^https?://", re.IGNORECASE)      # la misma regla que base.normalizar_comentario
 # «$» a secas en la tienda de estos países es la moneda local (prueba real 2026-09-30:
 # Amazon México devuelve {"value": 149.99, "currency": "$"} y son pesos)
@@ -125,7 +125,7 @@ def _flotante(v):
         return float(v)
     s = str(v).strip().replace(" ", "").replace(" ", "")
     for simbolo in sorted(_MONEDA_POR_SIMBOLO, key=len, reverse=True):
-        s = s.replace(simbolo, "")
+        s = re.sub(re.escape(simbolo), "", s, flags=re.IGNORECASE)
     if "," in s and "." in s:
         # los dos: el que va de último es el decimal ("1.234,56" europeo / "1,234.56" gringo)
         decimal, miles = (",", ".") if s.rfind(",") > s.rfind(".") else (".", ",")
@@ -172,7 +172,7 @@ def _precio_moneda(item):
     moneda = _moneda(item.get("currency"), pais)
     if moneda is None and isinstance(p, str):
         for simbolo in sorted(_MONEDA_POR_SIMBOLO, key=len, reverse=True):
-            if simbolo in p:
+            if re.search(re.escape(simbolo), p, re.IGNORECASE):
                 moneda = _moneda(simbolo, pais) if simbolo in ("$", "kr") else _MONEDA_POR_SIMBOLO[simbolo]
                 break
     return _flotante(p), moneda

@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ _('Guía de estilos') }}{% endblock %}
+{% import "_componentes.html" as cx %}
 {% macro botones() %}
 <div class="guia-fila">
   <button type="button" class="btn-generar">{{ _('Botón principal') }}</button>
@@ -94,6 +95,11 @@
     </div>
   </section>
   <section class="guia-seccion" data-componente="tabla"><h3>{{ _('Tabla') }}</h3>{{ tabla() }}</section>
+  <section class="guia-seccion" data-componente="nvp">
+    <h3>{{ _('Visitantes nuevos (NVP)') }}</h3>
+    <p>{{ _('El %% de visitantes nuevos y la etapa del embudo: TOF desde 70 %%, MOF desde 40 %%, BOF por debajo; con menos de 50 visitantes, sin etapa.') }}</p>
+    <div class="guia-fila">{{ cx.nvp(820, 1000) }} {{ cx.nvp(520, 1000) }} {{ cx.nvp(250, 1000) }} {{ cx.nvp(30, 40) }} {{ cx.nvp(0, 0) }}</div>
+  </section>
 </section>
 <section class="guia-seccion">
   <h2>{{ _('Celular') }}</h2>

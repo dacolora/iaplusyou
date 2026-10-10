@@ -212,6 +212,14 @@ def ver(cliente, eid):
     inv_actual = datos.investigacion(cliente, eid)
     paso_vivo = investigacion.siguiente_paso(inv_actual)
     job_inv = investigacion.job_de_paso(cliente, eid, paso_vivo) if paso_vivo else None
+    precio_reanudar = None
+    if investigacion.puede_reanudar(inv_actual.get("estado")):
+        retomada = investigacion.reanudar(inv_actual)
+        pendientes = [paso for paso in investigacion._orden(retomada)
+                      if ((retomada.get("pasos") or {}).get(paso) or {}).get("estado") in (None, "pendiente", "en_curso")]
+        costos = [tareas_investigacion._costo_paso(est, retomada, paso) for paso in pendientes]
+        costo = None if any(c is None for c in costos) else sum(costos)
+        precio_reanudar = gastos.texto_precio(costo)
     nucleos = datos.avatares(cliente, eid)
     for n in nucleos:
         for s in n["subs"]:
@@ -242,7 +250,7 @@ def ver(cliente, eid):
         # El idioma de BÚSQUEDA de YouTube sale del país del proyecto (spec §B5: no es el idioma
         # de salida; con inglés por defecto, `estudio.idioma` haría buscar en inglés a un cliente LatAm).
         idioma_busqueda=plataformas.idioma(proyectos.pais(cliente) or ""),
-        investigacion=_investigacion_vista(cliente, eid, inv_actual),
+        investigacion=_investigacion_vista(cliente, eid, inv_actual), precio_reanudar=precio_reanudar,
         trabajo_inv=({"job_id": job_inv, "paso": paso_vivo} if job_inv and trabajos.en_curso(job_inv) else None),
         productos_investigados=(datos.productos_nicho(cliente, eid) if inv_actual else []),
         paises_estudio=[(c, datos.NOMBRES_PAIS.get(c, c)) for c in datos.PAISES_ESTUDIO],

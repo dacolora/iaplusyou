@@ -7,6 +7,8 @@ import sqlalchemy as sa
 from tests.test_rutas_referentes import _con_copycoders, _sembrar  # noqa: F401 — fixture autouse
 from tests.test_rutas_referentes import app as app_referentes  # noqa: F401 — fixture
 
+pytestmark = pytest.mark.usefixtures("margen_1_5")   # estos tests suponen el margen 1,5 (el defecto ahora es 2,0)
+
 
 @pytest.fixture()
 def libro(base_temporal):

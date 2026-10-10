@@ -6,6 +6,8 @@
    El único <script> es el JSON de su gráfica (`.cr-datos-pieza`), que el JS lee con textContent. #}
 {% from "_exp_macros.html" import valor, veredicto, kpis, barras, dona_ubicacion with context %}
 {% from "_organico_publicar.html" import bloque_organico with context %}
+{# NVP de Triple Whale (spec 2026-10-09-nvp-visitantes-nuevos §4.3): `p.visitantes` es None sin Triple Whale. #}
+{% import "_componentes.html" as cx %}
 {% set pais = paises_fe.get(p.pais, {}) %}
 {% set pais_ex = p.pais_experimento or {} %}
 <div class="cr-pieza-fragmento">
@@ -14,6 +16,7 @@
       <p class="cr-sobretitulo">{{ p.experimento.nombre }}</p>
       <h3>{{ p.nombre }}{% if p.plataforma %} <span class="tag-estado" title="{{ _('Tienda de la app') }}">{{ p.plataforma }}</span>{% endif %}</h3>
       <p class="cr-muted">{{ pais.bandera }} {{ pais.nombre|traducir if pais.nombre else p.pais }} · {{ _('Imagen') if p.es_imagen else _('Video') }} · {{ _('desde el inicio') if p.periodo.es_todo else _('últimos %(n)s días', n=p.periodo.n) }}</p>
+      {% if p.visitantes is not none %}<p class="cr-muted cr-pieza-nvp"><span title="{{ _('Visitantes nuevos / visitantes únicos que el Pixel de Triple Whale atribuye a tus anuncios de Meta. Los únicos se cuentan por día: en periodos largos es aproximado.') }}">{{ _('Visitantes nuevos (NVP)') }}</span> {{ cx.nvp(p.visitantes_nuevos, p.visitantes) }}</p>{% endif %}
     </div>
     {{ veredicto(p.veredicto) }}
   </header>

@@ -20,6 +20,12 @@ FILA_META = {
     "date_start": "2026-10-01"}
 
 
+VALORES_DESGLOSE = {"age,gender": {"age": "25-34", "gender": "female"},
+                    "publisher_platform,platform_position": {"publisher_platform": "facebook",
+                                                             "platform_position": "feed"},
+                    "country": {"country": "NO"}, "impression_device": {"impression_device": "iphone"}}
+
+
 def _dias(rango):
     a, b = date.fromisoformat(rango["since"]), date.fromisoformat(rango["until"])
     return [(a + timedelta(days=i)).isoformat() for i in range((b - a).days + 1)]
@@ -32,7 +38,7 @@ class FakeGraph:
                  falla_informe=None, falla_ventana=None, falla_anuncios=None, anuncios_pausados=None,
                  falla_pausados=None, falla_informe_n=None, falla_cuenta_n=None, filas_cuenta=None,
                  miniaturas=None, falla_miniaturas=None, falla_informe_tras_pagina=None,
-                 falla_cuenta_tras_pagina=None):
+                 falla_cuenta_tras_pagina=None, falla_desglose=None):
         self.info = info if info is not None else {
             "name": "HappyFlops SE", "currency": "SEK", "timezone_name": "Europe/Stockholm",
             "account_status": 1, "disable_reason": 0, "amount_spent": "12345", "spend_cap": "0"}
@@ -58,6 +64,7 @@ class FakeGraph:
         self.falla_informe_tras_pagina = falla_informe_tras_pagina   # el informe entrega UNA página y la siguiente falla
         self.falla_cuenta_tras_pagina = falla_cuenta_tras_pagina     # el listado de la cuenta falla en su 2.ª página
         self.paginas_entregadas = 0   # cuántas páginas llegaron al callback de un informe que luego falló
+        self.falla_desglose = falla_desglose or {}   # {(date_preset, breakdowns): excepción} de los desgloses
         self.paginas_informe = []   # cuántas páginas entregó cada informe al callback (None = devolvió la lista)
         self.llamadas = []
         self.asegurar = []
@@ -93,6 +100,12 @@ class FakeGraph:
         return {"data": [{"reach": str(w * 100), "frequency": "1.5"}]}
 
     def paginar(self, edge, token, params=None, max_paginas=200, timeout=60, por_pagina=None):
+        if "breakdowns" in params:     # los desgloses (E2): su propio tipo, aparte de los listados y de los días
+            self._marca("desglose", edge, params)
+            assert edge == f"{ACT}/insights" and params["level"] == "account" and "time_increment" not in params
+            if (params["date_preset"], params["breakdowns"]) in self.falla_desglose:
+                raise self.falla_desglose[(params["date_preset"], params["breakdowns"])]
+            return [dict(FILA_META, **VALORES_DESGLOSE[params["breakdowns"]])]
         self._marca("paginar", edge, params)
         assert max_paginas >= 200   # los listados no se cortan por el tope de páginas
         filas = self._filas(edge, params)
@@ -888,3 +901,93 @@ def test_un_listado_de_cuenta_que_falla_a_medias_deja_intacto_el_tramo(cuenta, m
     assert _foto(db.meta_cuenta_dia) == antes_cuenta
     assert _foto(db.meta_anuncio_dia) == antes_anuncio        # los anuncios ni se alcanzaron a pedir
     assert cuentas.cuenta(CLI, ACT)["estado"] != "ok"
+
+
+# ------------------------------------------- E2: los desgloses dentro de la copia (una vez cada 20 horas) ---
+
+def _desgloses_guardados(ventana=30):
+    return {(f["dimension"], f["clave"]): f for f in datos.desgloses(CLI, [ACT], ventana)}
+
+
+def test_la_primera_copia_trae_los_ocho_desgloses_despues_del_alcance_y_los_marca(cuenta, monkeypatch):
+    g = FakeGraph(monkeypatch)
+    etapas = []
+    sync.sincronizar(CLI, ACT, "tok", hoy=HOY, on_etapa=lambda n, p: etapas.append((n, p)))
+    pedidos = g.de("desglose", "/insights")
+    assert len(pedidos) == 8      # el presupuesto de Meta: 2 ventanas × 4 dimensiones por cuenta al día
+    assert {(p["date_preset"], p["breakdowns"]) for _, p in pedidos} == {
+        (f"last_{v}d", b) for v in (7, 30) for b in ("age,gender", "publisher_platform,platform_position",
+                                                     "country", "impression_device")}
+    # Van después del alcance (lo último que se pide de la cuenta antes de las tasas).
+    tipos = [t for t, _, _ in g.llamadas]
+    ultimo_alcance = max(i for i, (t, e, p) in enumerate(g.llamadas) if t == "get" and p.get("fields") == "reach,frequency")
+    assert min(i for i, t in enumerate(tipos) if t == "desglose") > ultimo_alcance
+    for v in (7, 30):
+        assert set(_desgloses_guardados(v)) == {("edad_genero", "25-34|female"), ("ubicacion", "facebook|feed"),
+                                                ("pais", "NO"), ("dispositivo", "iphone")}
+    assert _desgloses_guardados()[("pais", "NO")]["gasto"] == 100.5
+    c = cuentas.cuenta(CLI, ACT)
+    assert c["estado"] == "ok" and c["extra"]["desglose_en"]
+    # La barra sigue creciendo y no aparece una etapa que la tarea no conoce.
+    assert [p for _, p in etapas] == sorted(p for _, p in etapas) and {n for n, _ in etapas} == {
+        sync.ETAPA_CUENTA, sync.ETAPA_OBJETOS, sync.ETAPA_METRICAS, sync.ETAPA_ALCANCE}
+
+
+def test_los_desgloses_no_se_piden_otra_vez_antes_de_20_horas_y_si_despues(cuenta, monkeypatch):
+    g = FakeGraph(monkeypatch)
+    sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    marca = cuentas.cuenta(CLI, ACT)["extra"]["desglose_en"]
+    # Una corrida enseguida (la de cada 3 horas): ni una consulta de desglose, y la marca no se toca.
+    g.llamadas.clear()
+    sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    assert g.de("desglose") == [] and cuentas.cuenta(CLI, ACT)["extra"]["desglose_en"] == marca
+    # Con la marca de hace 19 horas todavía no; con la de hace 21 sí, y la marca se renueva.
+    cuentas.actualizar_extra(CLI, ACT, {"desglose_en": _hace(19)})
+    g.llamadas.clear()
+    sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    assert g.de("desglose") == []
+    vieja = _hace(21)
+    cuentas.actualizar_extra(CLI, ACT, {"desglose_en": vieja})
+    g.llamadas.clear()
+    sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    assert len(g.de("desglose")) == 8 and cuentas.cuenta(CLI, ACT)["extra"]["desglose_en"] > vieja
+    # Una marca ilegible cuenta como vencida.
+    cuentas.actualizar_extra(CLI, ACT, {"desglose_en": "no es una fecha"})
+    g.llamadas.clear()
+    sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    assert len(g.de("desglose")) == 8
+
+
+def test_un_limite_de_meta_en_los_desgloses_sube_sin_marcar_y_la_siguiente_corrida_los_hace(cuenta, monkeypatch):
+    limite = graph.ErrorGraph("Meta pidió esperar", codigo=17)
+    FakeGraph(monkeypatch, falla_desglose={("last_7d", "country"): limite})
+    with pytest.raises(graph.ErrorGraph) as e:
+        sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    assert e.value.limite is True
+    c = cuentas.cuenta(CLI, ACT)
+    assert c["estado"] != "ok" and not c["extra"].get("desglose_en")      # la tarea la deja en error y pone la pausa
+    assert c["extra"]["backfill_anuncios"] is True                         # lo ya copiado no se repite
+    g = FakeGraph(monkeypatch)
+    sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    assert len(g.de("desglose")) == 8 and cuentas.cuenta(CLI, ACT)["extra"]["desglose_en"]
+
+
+def test_otro_error_de_un_desglose_no_tumba_la_copia_y_se_marca_para_no_pasar_de_8_al_dia(cuenta, monkeypatch, caplog):
+    g = FakeGraph(monkeypatch, falla_desglose={
+        ("last_30d", "publisher_platform,platform_position"): graph.ErrorGraph("Meta respondió: no", codigo=100),
+        ("last_7d", "impression_device"): RuntimeError("tok-secreto")})
+    with caplog.at_level("WARNING", logger="creatv.meta_rendimiento.desgloses"):
+        r = sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
+    assert r["omitida"] is False and len(g.de("desglose")) == 8
+    c = cuentas.cuenta(CLI, ACT)
+    assert c["estado"] == "ok" and c["error"] is None
+    assert c["extra"]["desglose_en"]     # marcado: reintentarlo cada 3 horas gastaría 64 consultas al día, no 8
+    assert ("ubicacion", "facebook|feed") not in _desgloses_guardados(30) and ("pais", "NO") in _desgloses_guardados(30)
+    assert ("dispositivo", "iphone") not in _desgloses_guardados(7) and ("pais", "NO") in _desgloses_guardados(7)
+    assert "tok-secreto" not in "\n".join(r.getMessage() for r in caplog.records)
+
+
+def test_una_cuenta_omitida_no_pide_desgloses(base_temporal, monkeypatch):
+    g = FakeGraph(monkeypatch)
+    assert sync.sincronizar(CLI, ACT, "tok", hoy=HOY)["omitida"] is True
+    assert g.de("desglose") == []

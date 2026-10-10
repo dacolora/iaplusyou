@@ -688,15 +688,71 @@ def desgloses(carga):
             "metrica": "roas" if ingresos > 0 else "ctr"}
 
 
+# ---------- NVP: visitantes nuevos según Triple Whale ----------
+# Pedido del cliente de HappyFlops (2026-10-09; spec 2026-10-09-nvp-visitantes-nuevos §4.3): el % de visitantes
+# nuevos de cada pieza para saber si llega arriba, a la mitad o abajo del embudo. Solo se muestra: ni el decisor,
+# ni los snapshots, ni nada que gaste o decida lo lee.
+
+CANAL_NVP = "facebook-ads"          # los anuncios de un experimento son de Meta
+_SIN_VISITAS = {"visitantes": 0, "visitantes_nuevos": 0}
+
+
+def _suma_visitantes(lista):
+    """Suma de {visitantes, visitantes_nuevos} de varias piezas: el NVP de un grupo sale de las SUMAS, nunca de un
+    promedio de porcentajes (triple_whale/visitantes.py)."""
+    out = dict(_SIN_VISITAS)
+    for v in lista:
+        out["visitantes"] += (v or _SIN_VISITAS)["visitantes"]
+        out["visitantes_nuevos"] += (v or _SIN_VISITAS)["visitantes_nuevos"]
+    return out
+
+
+def visitantes(carga):
+    """{ep_id: {"visitantes", "visitantes_nuevos"}}: lo que el Pixel de Triple Whale atribuye al anuncio de Meta de
+    cada pieza (`meta_ad_id`), para todas las piezas de los experimentos de la moneda elegida (las del ranking y
+    las de las tarjetas de experimentos). Una pieza sin anuncio o sin visitas vale cero («—» en pantalla). None si
+    el proyecto no tiene Triple Whale: no se consulta nada y la pantalla no muestra el NVP. UNA consulta por carga
+    (`triple_whale.datos.visitantes_por` con todos los anuncios, nunca una por pieza), con el periodo de la
+    pantalla; «desde el inicio» lee toda la copia (los anuncios los crea Creatv: todas sus filas son de su vida)."""
+    if "visitantes" not in carga._memo:
+        carga._memo["visitantes"] = _leer_visitantes(carga)
+    return carga._memo["visitantes"]
+
+
+def _leer_visitantes(carga):
+    import triple_whale_tiendas  # noqa: PLC0415 — arrastra cifrado; solo hace falta aquí
+    from triple_whale import datos as tw_datos  # noqa: PLC0415
+    cliente = carga.todo.cliente
+    if not triple_whale_tiendas.tiendas(cliente):
+        return None
+    anuncio = {pz["id"]: str(pz["meta_ad_id"]) for ex, pz, _s in carga.todo.filas
+               if tablero._moneda(ex) == carga.moneda and pz.get("meta_ad_id")}
+    per = carga.per
+    desde, hasta = (None, None) if per["es_todo"] else (per["lista"][0].isoformat(), per["lista"][-1].isoformat())
+    por_anuncio = tw_datos.visitantes_por(cliente, "ad_id", anuncio.values(), desde=desde, hasta=hasta,
+                                          canal=CANAL_NVP)
+    return {ep: dict(por_anuncio.get(ad) or _SIN_VISITAS) for ep, ad in anuncio.items()}
+
+
+def _visitantes_de(vis, ep_ids):
+    """La suma de esas piezas, o {visitantes: None, visitantes_nuevos: None} sin Triple Whale (la plantilla no
+    pinta el NVP)."""
+    if vis is None:
+        return {"visitantes": None, "visitantes_nuevos": None}
+    return _suma_visitantes(vis.get(i) for i in ep_ids)
+
+
 # ---------- países ----------
 
 def paises(carga):
     """Una fila por país de las piezas de la carga: gasto y ROAS del motor del Tablero (deltas de los snapshots,
     con la misma ventana y la misma atribución que los indicadores; el ROAS con la regla del Tablero);
-    impresiones, clics y CTR de metrica_dia. Sin filas de detalle del país, lo de Meta queda en None
-    («cargando», no ceros). Ordenados por gasto."""
+    impresiones, clics y CTR de metrica_dia; los visitantes de Triple Whale de sus piezas (`visitantes`, None sin
+    Triple Whale). Sin filas de detalle del país, lo de Meta queda en None («cargando», no ceros). Ordenados por
+    gasto."""
     per = carga.per
     desde = tablero.INICIO if per["es_todo"] else per["desde"]
+    vis = visitantes(carga)
     por_pais, pais_de = {}, {}
     for ex, pz, serie in carga.datos.filas:
         pais = pz.get("pais")
@@ -715,7 +771,8 @@ def paises(carga):
         ventas = tablero.ventas_medidas(m["deltas"])
         out.append({"pais": pais, "impresiones": r["impresiones"], "clics_enlace": a["clics_enlace"] if a["n"] else None,
                     "gasto": round(sum(d["gasto"] for d in m["deltas"]), 2), "ctr": r["ctr"],
-                    "roas": _roas(ventas), "ventas_cambiaron": ventas["ventas_cambiaron"], "roas_comparable": ventas["roas_comparable"]})
+                    "roas": _roas(ventas), "ventas_cambiaron": ventas["ventas_cambiaron"], "roas_comparable": ventas["roas_comparable"],
+                    **_visitantes_de(vis, [i for i, p in pais_de.items() if p == pais])})
     out.sort(key=lambda x: (-x["gasto"], x["pais"]))
     return out
 
@@ -978,10 +1035,12 @@ def piezas(carga, reglas_cliente):
     entero (`serie`/`promedio`: ROAS en un experimento de ventas, CTR del enlace en los demás), el veredicto con
     su nombre humano y la `historia`. El dinero sale del motor del Tablero, lo demás de metrica_dia; sin ventas
     medibles (`mide_ventas` False) el ROAS y las compras son None. «Le faltan…» solo se dice de una pieza que el
-    motor evalúa (`_lo_juzga_el_motor`)."""
+    motor evalúa (`_lo_juzga_el_motor`). `visitantes`/`visitantes_nuevos`: el NVP de Triple Whale (None sin
+    Triple Whale; ver `visitantes`)."""
     per, ahora = carga.per, carga.datos.ahora
     desde = tablero.INICIO if per["es_todo"] else per["desde"]
     dias_pieza, veredictos, reglas_exp, out = _dias_del_proyecto(carga), _veredictos_por_pieza(carga), {}, []
+    vis = visitantes(carga)
     for ex, pz, serie_ in carga.datos.filas:
         ep_id, metrica, es_imagen = pz["id"], _metrica_principal(ex), bool(pz.get("es_imagen"))
         filas_dia = dias_pieza.get(ep_id, [])
@@ -1006,6 +1065,7 @@ def piezas(carga, reglas_cliente):
             "roas": roas, "compras": ventas["compras"] if ventas["mide"] else None, "mide_ventas": ventas["mide"],
             "ventas_cambiaron": ventas["ventas_cambiaron"], "roas_comparable": ventas["roas_comparable"],
             "delta_roas": None if roas is None or roas_previo is None else roas - roas_previo,
+            **_visitantes_de(vis, [ep_id]),     # NVP de Triple Whale: solo se muestra (None sin Triple Whale)
             "veredicto": _veredicto(pz.get("veredicto"), escalon),
             "historia": historia(
                 tramos=_tramos(pz, ex, veredictos.get(ep_id, [])), serie=serie_p, promedio=promedio,
@@ -1034,10 +1094,12 @@ def experimentos_tarjetas(carga):
     `pct_tope`) es el de toda la vida del experimento; `valor` (ROAS en ventas, CTR del enlace en los demás) y
     `mejor` (la pieza que más rinde en esa métrica) son del periodo, del mismo motor y las mismas fuentes que el
     resto de la pantalla. El ROAS sigue la regla del Tablero (`_con_ventas`); sin nada que mida, `valor` es None y
-    `mide_ventas` False («sin ventas medibles»)."""
+    `mide_ventas` False («sin ventas medibles»). `visitantes`/`visitantes_nuevos`: el NVP de Triple Whale de sus
+    piezas en el periodo (la suma, None sin Triple Whale)."""
     per, dias_pieza = carga.per, _dias_del_proyecto(carga)
     desde = tablero.INICIO if per["es_todo"] else per["desde"]
     elegido = carga.filtro.experimento_id if carga.filtro else None
+    vis = visitantes(carga)
     out = []
     for ex in carga.todo.exps:
         if tablero._moneda(ex) != carga.moneda:
@@ -1071,6 +1133,7 @@ def experimentos_tarjetas(carga):
                     "mide_ventas": ventas_ex["mide"],
                     "ventas_cambiaron": ventas_ex["ventas_cambiaron"], "roas_comparable": ventas_ex["roas_comparable"],
                     "mejor": max(candidatas, key=lambda c: (c[0], c[1]))[2] if candidatas else None,
+                    **_visitantes_de(vis, [pz["id"] for pz, _s in _filas_por_experimento(carga).get(ex["id"], [])]),
                     "seleccionado": ex["id"] == elegido})
     return out
 
@@ -1153,6 +1216,7 @@ def contexto(cliente, filtro, ahora_iso=None, total_entre=None):
     per = carga.per
     lista, indic = piezas(carga, proyectos.reglas_defecto(cliente)), indicadores(carga)
     serie_dia, marcas_dia, desglose = serie(carga), marcas(carga), desgloses(carga)
+    vis = visitantes(carga)
     return {
         "filtro": filtro, "query": a_query(filtro), "opciones": _opciones(carga), "periodo": _periodo_json(per),
         "moneda": carga.moneda, "indicadores": indic, "serie": serie_dia, "marcas": marcas_dia,
@@ -1160,6 +1224,8 @@ def contexto(cliente, filtro, ahora_iso=None, total_entre=None):
         "embudo": embudo(carga, promedio_embudo(cliente)), "piezas": lista, "evolucion": lista[:EVOLUCION_PIEZAS],
         "desgloses": desglose, "paises": paises(carga), "experimentos": experimentos_tarjetas(carga),
         "generacion": total_entre(cliente, tablero.INICIO if per["es_todo"] else per["desde"], per["hasta"]),
+        # NVP del filtro (suma de sus piezas); None sin Triple Whale: la pantalla no muestra el NVP en ningún lado.
+        "nvp": None if vis is None else _suma_visitantes(vis.get(pz["id"]) for _ex, pz, _s in carga.datos.filas),
         "detalle_meta": {ex["id"]: (ex.get("extra") or {}).get("detalle_meta") for ex in carga.datos.exps},
         "hay_detalle": bool(carga.dias_act),
         "datos_graficos": {

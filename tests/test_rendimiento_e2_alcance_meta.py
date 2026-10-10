@@ -85,9 +85,7 @@ def test_tiene_las_mismas_claves_que_el_alcance_de_triple_whale(base_temporal):
     assert set(tw) == CLAVES_TW
     _dos_suecas()
     meta = _alc([SE1, SE2])
-    # `cuentas` (E2 tarea 5): los ids del alcance, que «Evaluar con IA» guarda en la evaluación.
-    assert set(meta) == CLAVES_TW | {"fuente", "cuentas"} and meta["fuente"] == "meta" and "fuente" not in tw
-    assert meta["cuentas"] == [SE1, SE2] and "cuentas" not in tw
+    assert set(meta) == CLAVES_TW | {"fuente"} and meta["fuente"] == "meta" and "fuente" not in tw
     assert set(meta["ev"]) == set(tw["ev"])
     assert set(meta["ev"]["cuenta"]) == set(tw["ev"]["cuenta"])
     assert set(meta["ev"]["benchmarks"]) == set(tw["ev"]["benchmarks"])

@@ -1,10 +1,9 @@
 import json
 import os
-import tempfile
 
 
-def _cliente_con_json():
-    base = tempfile.mkdtemp(prefix="creatv_mig_")
+def _cliente_con_json(base):
+    base = str(base)
     c = os.path.join(base, "clientes", "acme"); os.makedirs(c)
     cf = {"cf_20260912_160550_108303": {
         "personajes_ids": [], "productos_ids": ["Rose"], "escenas_ids": [], "accion_central": "camina",
@@ -26,9 +25,9 @@ def _cliente_con_json():
     return base
 
 
-def test_migra_y_es_idempotente(base_temporal):
+def test_migra_y_es_idempotente(base_temporal, tmp_path):
     import ads, creative_flow as cf, migrar_json_a_db as mig
-    base = _cliente_con_json()
+    base = _cliente_con_json(tmp_path)
     r1 = mig.migrar_cliente("acme", base)
     assert r1 == {"conceptos": 1, "anuncios": 1, "saltados": 0}
     e = cf.cargar("acme")["cf_20260912_160550_108303"]
@@ -42,17 +41,17 @@ def test_migra_y_es_idempotente(base_temporal):
     assert len(cf.cargar("acme")) == 1 and len(ads.cargar("acme")) == 1
 
 
-def test_cliente_sin_json(base_temporal):
+def test_cliente_sin_json(base_temporal, tmp_path):
     import migrar_json_a_db as mig
-    base = tempfile.mkdtemp(); os.makedirs(os.path.join(base, "clientes", "vacio"))
+    base = str(tmp_path); os.makedirs(os.path.join(base, "clientes", "vacio"))
     assert mig.migrar_cliente("vacio", base) == {"conceptos": 0, "anuncios": 0, "saltados": 0}
 
 
-def test_migra_estados_a_mitad_de_camino_como_error(base_temporal):
+def test_migra_estados_a_mitad_de_camino_como_error(base_temporal, tmp_path):
     """Un cf en 'video_generando' o un ad en 'publicando' del JSON viejo no
     tienen quién los termine: entran como error con un mensaje claro."""
     import ads, creative_flow as cf, migrar_json_a_db as mig
-    base = _cliente_con_json()
+    base = _cliente_con_json(tmp_path)
     c = os.path.join(base, "clientes", "acme")
     ruta_cf = os.path.join(c, "creative_flow_pendientes.json")
     ruta_ads = os.path.join(c, "ads.json")

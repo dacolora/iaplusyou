@@ -204,7 +204,8 @@ def test_una_campana_con_ventas_de_triple_whale_va_en_su_moneda_y_lo_dice(meta_o
         mdatos.reemplazar_cuenta_dias("acme", "act_no", _hace(n), _hace(n), [_dia(_hace(n), 15, 35, compras=2)])
     html = _panel(meta_on, "?entrada=NO&dias=7")
     cno = _celdas(_fila_tabla(html, "<strong>Campaña NO</strong>"))
-    assert "Triple Whale" in cno[5] and "500 SEK" in cno[3] and cno[4] == "12 USD" and cno[7] == "2 USD"
+    # Con Triple Whale en el proyecto la columna NVP (main, 2026-10-09) va después del ROAS: el costo por compra es la 9.ª.
+    assert "Triple Whale" in cno[5] and "500 SEK" in cno[3] and cno[4] == "12 USD" and cno[8] == "2 USD"
     cno2 = _celdas(_fila_tabla(html, "<strong>cno2</strong>"))
     assert ">Meta<" in cno2[5] and cno2[4] == "15 SEK"
     sno = _celdas(_fila_tabla(html, "<strong>sno</strong>"))
@@ -304,31 +305,38 @@ def test_una_sola_barra_para_las_copias_en_curso_del_alcance(meta_on):  # noqa: 
 
 # ------------------------------------------------------------------------------------------------ R6 ---
 
-def test_atencion_junta_las_dos_fuentes_sin_quitar_repetidos_y_lo_alta_primero():
+def test_atencion_junta_las_dos_fuentes_sin_quitar_repetidos_y_lo_alta_primero(monkeypatch):
     """Una alerta con cuenta (dos ganadores en Triple Whale, dos en Meta) no se esconde detrás de otra con el mismo
-    texto, y una cuenta desactivada («alta») nunca queda debajo de «bien: N anuncios ganadores»."""
+    texto, y una «alta» de los anuncios de Meta nunca queda debajo de «bien: N anuncios ganadores». (Hasta la
+    integración con main la parte Meta traía también las recomendaciones propias de E2 tarea 6; se jubilaron: lo que hay
+    que corregir en las cuentas de Meta es el Diagnóstico de main, que va en su propia sección.)"""
     tw = {"alertas": [{"nivel": "bien", "texto": "2 anuncios ganadores: úsalos como base para los próximos."},
                       {"nivel": "media", "texto": "Uno de Triple Whale"}]}
-    meta = {"anuncios": None,
-            "recomendaciones": [{"nivel": "media", "texto": "Uno de Meta"},
-                                {"nivel": "alta", "texto": "La cuenta HappyFlops Sweden está desactivada."},
-                                {"nivel": "bien", "texto": "2 anuncios ganadores: úsalos como base para los próximos."}]}
+    meta = {"anuncios": {"ev": {"anuncios": []}}}
+    monkeypatch.setattr(panel.evaluacion, "alertas", lambda ev, *a, origen="tw", **k: [
+        {"nivel": "media", "texto": "Uno de Meta"},
+        {"nivel": "alta", "texto": "El 60 % del gasto se fue en anuncios perdedores."},
+        {"nivel": "bien", "texto": "2 anuncios ganadores: úsalos como base para los próximos."}])
     salida = panel._atencion(tw, meta)
     assert [(a["nivel"], a["texto"]) for a in salida] == [
-        ("alta", "La cuenta HappyFlops Sweden está desactivada."),
+        ("alta", "El 60 % del gasto se fue en anuncios perdedores."),
         ("media", "Uno de Triple Whale"), ("media", "Uno de Meta"),
         ("bien", "2 anuncios ganadores: úsalos como base para los próximos."),
         ("bien", "2 anuncios ganadores: úsalos como base para los próximos.")]
 
 
-def test_atencion_con_una_evaluacion_bien_y_una_recomendacion_alta(base_temporal, meta_conectado, monkeypatch):
-    """Lo mismo de punta a punta: la línea «bien» de la evaluación de Triple Whale y una recomendación «alta» de la
-    cuenta de Meta: la alta va primero."""
-    from meta_rendimiento import panel as meta_panel
+def test_atencion_con_una_evaluacion_bien_y_una_alerta_alta_de_meta(base_temporal, meta_conectado, monkeypatch):
+    """Lo mismo de punta a punta: la línea «bien» de la evaluación de Triple Whale y una alerta «alta» de los anuncios
+    de la cuenta de Meta: la alta va primero."""
     from tests.test_rutas_rendimiento import _con_anuncios
     _con_anuncios()
-    monkeypatch.setattr(meta_panel, "recomendaciones",
-                        lambda *a, **k: [{"nivel": "alta", "texto": "La cuenta HappyFlops Sweden está desactivada."}])
+    original = panel.evaluacion.alertas
+
+    def alertas(ev, *args, origen="tw", **kwargs):
+        if origen == "meta":
+            return [{"nivel": "alta", "texto": "El 60 % del gasto se fue en anuncios perdedores."}]
+        return original(ev, *args, origen=origen, **kwargs)
+    monkeypatch.setattr(panel.evaluacion, "alertas", alertas)
     atencion = _ctx(dias=0)["atencion"]
     niveles = [a["nivel"] for a in atencion]
     assert "bien" in niveles and niveles[0] == "alta"

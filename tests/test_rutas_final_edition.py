@@ -414,6 +414,7 @@ def _entorno_plantilla():
 
 def _contexto_minimo(items, activos_por_categoria=None, categorias=None, productos=None):
     import gastos
+    import idiomas
     from final_edition import tipos
     from providers import fal_audio
     return dict(
@@ -424,6 +425,7 @@ def _contexto_minimo(items, activos_por_categoria=None, categorias=None, product
         fp_prefill=None, activos_por_categoria=activos_por_categoria if activos_por_categoria is not None else {},
         categorias=categorias if categorias is not None else {}, productos=productos if productos is not None else [],
         referencias_bandeja=[], trabajo_link=None, capacidades_meta={},
+        idiomas_publicacion_nombres=idiomas.NOMBRES_PUBLICACION,
         paises_fe=tipos.PAISES, idiomas_fe=("es", "en", "pt", "sv", "no"), voces_fe=fal_audio.VOCES, estilos_fe=list(tipos.ESTILOS_MUSICA),
         nombres_estilo_musica=tipos.NOMBRES_ESTILO_MUSICA,
         presets_mezcla=["equilibrada", "voz_protagonista", "ambiente_protagonista"],
@@ -497,9 +499,10 @@ def test_tab_crear_con_catalogo_agrupa_los_colores():
         {"id": "original/beige", "producto_id": "original", "nombre_producto": "Original",
          "nombre": "Original — Beige", "variante": "beige", "categoria": "producto"},
     ]
-    html = _tab_crear(env, [], activos_por_categoria={"producto": catalogo},
-                      categorias=catalogo_productos.CATEGORIAS, productos=catalogo)
-    dialogo = html.split('id="fp-catalogo"', 1)[1].split("</dialog>", 1)[0]
+    # Desde la página por partes (PND-062, 2026-10-10) la grilla del diálogo es su propia plantilla (llega por fetch).
+    dialogo = env.get_template("_selector_productos_grilla.html").render(
+        cliente="acme", activos_por_categoria={"producto": catalogo}, categorias=catalogo_productos.CATEGORIAS,
+        sel_modo="checkbox", sel_campo="productos_catalogo", marcados=[])
     assert 'class="producto-grupo"' in dialogo
     assert 'value="producto:original/pink"' in dialogo and 'value="producto:original/beige"' in dialogo
 

@@ -69,9 +69,13 @@ def asignar_tokens(referencias, modelo_id):
     modelo: con Wan 3.0 los videos viajan aparte (`Video N`) y las imágenes
     (activos, vistas y logos incluidos) se numeran `Image N`; con los demás
     modelos el video entra por su fotograma, así que cuenta como una imagen
-    más. Devuelve la misma lista."""
+    más. Un modelo que nombra sus imágenes de otra forma lo declara en
+    `token_imagen` (Seedance 2.5 con varias referencias, vía fal: `@Image1`).
+    Devuelve la misma lista."""
     from providers import flowplus_modelos
-    videos_aparte = flowplus_modelos.VIDEO.get(modelo_id, {}).get("max_videos", 0) > 0
+    info = flowplus_modelos.VIDEO.get(modelo_id, {})
+    videos_aparte = info.get("max_videos", 0) > 0
+    token_imagen = info.get("token_imagen") or "Image {n}"
     n_img = n_vid = 0
     for r in referencias:
         if r.get("tipo") == "video" and videos_aparte:
@@ -79,7 +83,7 @@ def asignar_tokens(referencias, modelo_id):
             r["token"] = f"Video {n_vid}"
         else:
             n_img += 1
-            r["token"] = f"Image {n_img}"
+            r["token"] = token_imagen.format(n=n_img)
     return referencias
 
 

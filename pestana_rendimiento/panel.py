@@ -24,11 +24,13 @@ Reglas, cada una con su motivo:
    (`moneda_presupuesto`, en todas las filas). Un grupo que Triple Whale no tiene en su copia conserva lo que dice
    Meta y queda marcado `origen = "meta"`: poner cero ventas sería una cifra falsa, y la fila dice de dónde sale su
    número.
-5. «Lo que necesita tu atención» junta, en este orden, las alertas de Triple Whale, las de los anuncios de fuente Meta
-   y las recomendaciones de las cuentas de Meta (E2, tarea 6), SIN quitar textos repetidos: una alerta con cuenta
-   («2 anuncios ganadores…») de cada fuente es otra cosa, y quitar una escondía la mitad (revisión final de E1,
-   2026-10-10). Después, un orden estable por nivel: alta → media → bien, así una cuenta desactivada o anuncios
-   rechazados nunca quedan debajo de «N anuncios ganadores» (revisión de E2 tarea 6).
+5. «Lo que necesita tu atención» junta, en este orden, las alertas de Triple Whale y las de los anuncios de fuente
+   Meta, SIN quitar textos repetidos: una alerta con cuenta («2 anuncios ganadores…») de cada fuente es otra cosa, y
+   quitar una escondía la mitad (revisión final de E1, 2026-10-10). Después, un orden estable por nivel: alta → media
+   → bien. Lo que hay que corregir en las cuentas de Meta es el «Diagnóstico» de Meta rendimiento E2 (el de main, en
+   producción desde el 2026-10-10: tarjetas con prioridad, por qué y enlace al Administrador de anuncios), que el
+   panel pinta justo debajo con su propia forma (`meta["e2"]`, regla 10). Las recomendaciones propias de E2 tarea 6
+   se jubilaron en la integración con main (INT-2: una sola implementación, gana la de producción).
 6. Una sola barra para las copias en curso del alcance (`copias_vivas`, spec §5.1 «una sola barra data-poll-job»): la
    barra de un trabajo que termina recarga la página, y con una por tienda y por cuenta eran varias recargas seguidas
    (revisión final de E1). La barra sigue al primer trabajo vivo; al recargar, la siguiente sigue al que quede.
@@ -37,29 +39,37 @@ Reglas, cada una con su motivo:
    de `alcance_meta`, que también da los anuncios de las alertas y las recomendaciones), y las rutas de la galería y de
    lo que cobra resuelven el mismo con `alcances` (la misma `_resolver`): lo que se cobra es lo que se vio. Una
    `entrada` que ya no es la clave de ninguna entrada no se ensancha a «Todas» para cobrar (como «Actualizar ahora»).
-8. «Lo que hace ganar en tu cuenta» (Evaluar con IA, `_ia`, E2 tarea 5) ofrece UN formulario por fuente del alcance,
-   cada uno con SU muestra y SU precio: la de Triple Whale sale de su contexto y la de Meta del mismo alcance de Meta
-   que pinta la galería (`analisis.muestra`, la que vuelve a armar `rutas.evaluar` con `alcances`). Nunca uno que
-   mezcle las dos: el Pixel de Triple Whale y el de Meta atribuyen distinto y sus números no se comparan en un mismo
-   prompt. La evaluación sigue siendo una por proyecto (un `job_id`): mientras corre, la barra y ningún botón.
+8. «Lo que hace ganar en tu cuenta» (Evaluar con IA de Triple Whale, `_ia`) es de la parte Triple Whale del alcance
+   (`rendimiento.evaluar`, que vuelve a armar la muestra con `alcances`); con mezcla una línea lo dice. La de las
+   cuentas de Meta es la «Evaluación con IA» de Meta rendimiento E2 (la de main: `meta_rend_evaluar`, su tabla
+   `meta_evaluacion` y su precio `evaluacion_meta`), que el panel pinta con `_meta_evaluar.html` sobre las cuentas cuya
+   fuente es Meta (`meta["e2"]["evaluacion"]`, regla 10). Nunca un prompt con las dos fuentes: el Pixel de Triple Whale
+   y el de Meta atribuyen distinto. La rama Meta de E2 tarea 5 (evaluar Meta por `tw_evaluacion`) se jubiló en la
+   integración con main (INT-2).
 9. El detalle de un día de «Resultados» (`dia`, E2 tarea 7, spec A3) resuelve el alcance con la misma `_resolver`:
    con solo Triple Whale es `triple_whale.panel.contexto_dia` tal cual (la tienda de la entrada; el panel sigue
    pidiéndolo a `triple_whale.ver_dia`), con Meta o mezcla `resumen.dia`. Una `entrada` que ya no es la clave de
    ninguna entrada (de otro proyecto, una pestaña vieja) no se ensancha a «Todas»: no lee nada y lo dice.
+10. Meta rendimiento E2 (integración con main, 2026-10-10, INT-1): lo que la vieja pestaña «Meta» mostraba en
+   producción sigue alcanzable aquí, con los parciales de main tal cual (`_meta_diagnostico.html`,
+   `_meta_segmentos.html`, `_meta_evaluar.html`, `_meta_evaluacion.html`) y su contexto armado por
+   `meta_panel.diagnostico`: el Diagnóstico y los Segmentos de TODAS las cuentas de Meta del alcance (la estructura,
+   cubiertas incluidas: hablan de cómo está armada la cuenta en Meta) y la «Evaluación con IA» de las cuentas cuya
+   fuente es Meta, con el periodo que tomará la ruta (`meta_rendimiento.rutas.evaluar` con `entrada`,
+   `cuentas_evaluacion_meta`): el N y el precio del botón son los que cobra (E2-R6). El NVP de campañas y conjuntos
+   sale de la copia de Triple Whale (`meta_panel.nvp_estructura`) solo si el proyecto tiene Triple Whale.
 """
 from datetime import date
 
 from flask_babel import gettext
 
-import gastos
 import idiomas
 import meta_conexion
-import trabajos
 import triple_whale_tiendas
 from meta_rendimiento import panel as meta_panel
 from pestana_rendimiento import alcance_meta, entradas, galeria, resumen
-from tareas import triple_whale as tareas_tw
-from triple_whale import analisis, evaluacion, paises
+from tareas import meta_rendimiento as tareas_mr
+from triple_whale import evaluacion, paises
 from triple_whale import datos as twdatos
 from triple_whale import panel as tw_panel
 
@@ -166,11 +176,12 @@ def _moneda_comun(cuentas, filas=()):
 
 def _meta(cliente, s, dias, hoy, params, pagina_conjuntos):
     """La parte Meta del alcance, o None si el alcance no tiene cuentas de Meta: {"ids_fuente", "ids_estructura",
-    "estado", "estructura", "alcance" (el de las cuentas cuya fuente es Meta, `alcance_meta.alcance`: lo pinta la
-    galería; None sin ellas), "anuncios" ({"ev", "desde", "hasta", "n_anuncios"} de ese alcance, para las alertas;
-    None sin ellas), "recomendaciones" (qué hacer en las cuentas de la estructura, `meta_panel.recomendaciones`:
-    [{"nivel", "texto"}]), "moneda" (la común de las cuentas de la estructura y de las filas que van en la moneda de
-    Triple Whale; None si difieren: cada fila lleva la suya)}."""
+    "estado", "estructura" (campañas y conjuntos con su NVP, `meta_panel.nvp_estructura`), "alcance" (el de las cuentas
+    cuya fuente es Meta, `alcance_meta.alcance`: lo pinta la galería; None sin ellas), "anuncios" ({"ev", "desde",
+    "hasta", "n_anuncios"} de ese alcance, para las alertas; None sin ellas), "e2" (Diagnóstico, Segmentos y
+    «Evaluación con IA» de Meta rendimiento E2, `meta_panel.diagnostico`, regla 10), "moneda" (la común de las cuentas
+    de la estructura y de las filas que van en la moneda de Triple Whale; None si difieren: cada fila lleva la suya)}.
+    Los trabajos vivos (copias y evaluación de Meta) se leen UNA vez (`tareas_mr.trabajos_del_panel`)."""
     alc, cuentas_por_id = s["alcance"], s["cuentas_por_id"]
     ids_estructura, ids_fuente = list(alc["meta_estructura"]), list(alc["meta_fuente"])
     if not ids_estructura:
@@ -182,17 +193,23 @@ def _meta(cliente, s, dias, hoy, params, pagina_conjuntos):
     _con_ventas_tw(cliente, alc, desde, hasta, estructura["campanas"], "campana", "campaign_id", moneda_tw)
     _con_ventas_tw(cliente, alc, desde, hasta, estructura["conjuntos"], "conjunto", "adset_id", moneda_tw)
     estructura.update(_marco_estructura(ids_estructura, cuentas_por_id, dias, params), desde=desde, hasta=hasta)
+    estructura.update(meta_panel.nvp_estructura(cliente, estructura["campanas"], estructura["conjuntos"], en_estructura,
+                                                desde, hasta, bool(s["tiendas"])))
     # Los anuncios de fuente Meta se evalúan UNA vez, en su alcance con la forma de Triple Whale (regla 7): la galería
     # lo usa tal cual y las alertas y las recomendaciones leen sus mismos anuncios.
     alc_meta = alcance_meta.alcance(cliente, ids_fuente, dias, hoy, params, cuentas_por_id) if ids_fuente else None
     anuncios = ({"ev": alc_meta["ev"], "desde": alc_meta["desde"], "hasta": alc_meta["hasta"],
                  "n_anuncios": len(alc_meta["ev"]["anuncios"])} if alc_meta else None)
-    return {"ids_fuente": ids_fuente, "ids_estructura": ids_estructura,
-            "estado": meta_panel.estado_copia(cliente, en_estructura), "estructura": estructura,
-            "alcance": alc_meta, "anuncios": anuncios,
-            "recomendaciones": meta_panel.recomendaciones(cliente, ids_estructura, estructura["desde"],
-                                                          estructura["hasta"], cuentas_por_id,
-                                                          anuncios["ev"]["anuncios"] if anuncios else ()),
+    vivos = set(tareas_mr.trabajos_del_panel(cliente))
+    estado = meta_panel.estado_copia(cliente, en_estructura, vivos)
+    # Meta rendimiento E2 (regla 10) solo con días copiados: sin copia no hay reglas, desgloses ni muestra que mostrar.
+    e2 = (meta_panel.diagnostico(cliente, en_estructura, ids_fuente, dias, hoy, cuentas_por_id, vivos,
+                                 evaluados_periodo=alc_meta["ev"]["anuncios"] if alc_meta else None)
+          if estado["rango"]["filas"] else None)
+    if e2:
+        e2.update(entrada=params["entrada"], periodo_panel=dias)    # el formulario de la evaluación los manda
+    return {"ids_fuente": ids_fuente, "ids_estructura": ids_estructura, "estado": estado, "estructura": estructura,
+            "alcance": alc_meta, "anuncios": anuncios, "e2": e2,
             "moneda": _moneda_comun(en_estructura, estructura["campanas"] + estructura["conjuntos"])}
 
 
@@ -210,12 +227,11 @@ ORDEN_NIVEL = {"alta": 0, "media": 1, "bien": 2}
 
 
 def _atencion(tw, meta):
-    """Las alertas de Triple Whale, las de los anuncios de fuente Meta y las recomendaciones de las cuentas de Meta,
-    todas (sin quitar textos repetidos) y en orden estable por nivel: alta, media, bien (regla 5 del módulo)."""
+    """Las alertas de Triple Whale y las de los anuncios de fuente Meta, todas (sin quitar textos repetidos) y en orden
+    estable por nivel: alta, media, bien (regla 5 del módulo; el Diagnóstico de Meta va aparte, regla 10)."""
     lista = list(tw["alertas"]) if tw else []
     if meta and meta["anuncios"]:
         lista += evaluacion.alertas(meta["anuncios"]["ev"], origen="meta")
-    lista += meta["recomendaciones"] if meta else []      # qué hacer en las cuentas de Meta (E2, tarea 6)
     return sorted(lista, key=lambda a: ORDEN_NIVEL.get(a.get("nivel"), len(ORDEN_NIVEL)))
 
 
@@ -231,40 +247,19 @@ def _copias_vivas(tw, meta):
     return vivas
 
 
-def _ia(cliente, tw, meta):
-    """«Lo que hace ganar en tu cuenta» (regla 8 del módulo), o None si el alcance no tiene anuncios de Triple Whale ni
-    de cuentas de Meta sin tienda: {"formularios" ([{"fuente": "tw"|"meta", "muestra", "estimado"}], solo los que
-    tienen muestra), "mixta" (el alcance tiene las dos fuentes: cada botón dice la suya), "job_evaluar",
+def _ia(tw, meta):
+    """«Lo que hace ganar en tu cuenta» de Triple Whale (regla 8 del módulo), o None si el alcance no tiene Triple
+    Whale: {"formularios" ([{"fuente": "tw", "muestra", "estimado"}] si hay muestra), "mixta" (el alcance también tiene
+    cuentas de Meta cuya fuente es Meta: una línea dice que se evalúa la parte Triple Whale), "job_evaluar",
     "evaluaciones", "ultima_lista", "tienda_actual", "gasto_duplicado" y los textos de veredicto y de estado de una
-    pieza}. Con Triple Whale reusa lo que su contexto ya leyó (evaluaciones, la barra); sin él lo lee aquí: una
-    consulta de evaluaciones y una de las piezas nacidas de la última lista."""
-    alc_meta = meta["alcance"] if meta else None
-    if not tw and not alc_meta:
+    pieza}. Todo sale de lo que el contexto de Triple Whale ya leyó: sin consultas."""
+    if not tw:
         return None
-    formularios = []
-    if tw:
-        formularios.append({"fuente": galeria.TW, "muestra": tw["muestra_ia"], "estimado": tw["estimado_ia"]})
-    if alc_meta:
-        muestra = analisis.muestra(alc_meta["ev"])
-        formularios.append({"fuente": galeria.META, "muestra": muestra,
-                            "estimado": gastos.estimar("evaluacion_tw", n=len(muestra)) if muestra else None})
-    if tw:
-        evaluaciones, ultima, job = tw["evaluaciones"], tw["ultima_lista"], tw["job_evaluar"]
-    else:
-        locale = idiomas.activo()
-        evaluaciones = twdatos.evaluaciones(cliente, limite=5)
-        for e in evaluaciones:
-            e["alcance"] = tw_panel._alcance_evaluacion(e, {}, locale)
-        ultima = next((e for e in evaluaciones if e["estado"] == "lista"), None)
-        # Las piezas nacidas de cada idea, con su estado en Crear. Sin el veredicto en Meta: los anuncios de Meta del
-        # alcance no traen todavía su pieza de Creatv (eso lo pone la galería, solo a las tarjetas de la página).
-        tw_panel.enlazar_ideas(cliente, [], ultima)
-        job_id = tareas_tw.job_id_evaluar(cliente)
-        job = job_id if trabajos.en_curso(job_id) else None
-    return {"formularios": [f for f in formularios if f["muestra"]], "mixta": len(formularios) > 1,
-            "job_evaluar": job, "evaluaciones": evaluaciones, "ultima_lista": ultima,
-            "tienda_actual": tw["tienda_actual"] if tw else None,
-            "gasto_duplicado": tw["gasto_duplicado"] if tw else 0.0,
+    formularios = ([{"fuente": galeria.TW, "muestra": tw["muestra_ia"], "estimado": tw["estimado_ia"]}]
+                   if tw["muestra_ia"] else [])
+    return {"formularios": formularios, "mixta": bool(meta and meta["alcance"]),
+            "job_evaluar": tw["job_evaluar"], "evaluaciones": tw["evaluaciones"], "ultima_lista": tw["ultima_lista"],
+            "tienda_actual": tw["tienda_actual"], "gasto_duplicado": tw["gasto_duplicado"],
             "etiquetas_veredicto": evaluacion.ETIQUETAS_VEREDICTO, "etiquetas_pieza": tw_panel.ETIQUETAS_PIEZA}
 
 
@@ -305,7 +300,7 @@ def contexto(cliente, dias=0, entrada=None, canal=None, hoy=None, pagina_conjunt
         "params_tw": alc_tw["params"] if alc_tw else {},
         "resumen": resumen.contexto(cliente, s["entradas"], actual, alc, dias, hoy,
                                     tw_cfg["moneda"] if tw_cfg else "USD"),
-        "atencion": _atencion(tw, meta), "copias_vivas": _copias_vivas(tw, meta), "ia": _ia(cliente, tw, meta),
+        "atencion": _atencion(tw, meta), "copias_vivas": _copias_vivas(tw, meta), "ia": _ia(tw, meta),
         "modo_meta": meta_conexion.modo(cliente) if s["con_conexion_meta"] else None,
         "solo_metricas": s["solo_metricas"],
         **etiquetas(),
@@ -331,6 +326,9 @@ def conjuntos_pagina(cliente, dias=0, entrada=None, pagina=0, hoy=None):
     mr.update(meta_panel.conjuntos_de(cliente, ids, desde, hasta, cuentas_por_id, pagina))
     _con_ventas_tw(cliente, alc, desde, hasta, mr["conjuntos"], "conjunto", "adset_id",
                    s["tw_cfg"]["moneda"] if s["tw_cfg"] else None)
+    if s["tiendas"]:                     # el NVP de las filas (una lectura), como en el panel (regla 10)
+        meta_panel._visitantes(cliente, "conjunto_id", mr["conjuntos"], "adset_id", desde, hasta)
+    mr["nvp_activo"] = bool(s["tiendas"])
     return mr
 
 
@@ -367,8 +365,7 @@ def alcances(cliente, dias=0, entrada=None, canal=None, hoy=None):
     """El alcance de cada fuente para las rutas de la galería y de lo que cobra (E2 tarea 4), con la MISMA resolución
     que el panel (regla 7): {"tw": `triple_whale.panel.alcance` de la tienda de la entrada o None, "meta":
     `alcance_meta.alcance` de las cuentas cuya fuente es Meta o None, "params" (los de la pestaña: entrada, dias,
-    canal), "params_tw" (los de las rutas de Triple Whale), "existe", "hay_tw", "pais" (el de la entrada; None en
-    «Todas» o sin país)}. `canal` solo cuenta si el alcance es
+    canal), "params_tw" (los de las rutas de Triple Whale), "existe", "hay_tw"}. `canal` solo cuenta si el alcance es
     solo Triple Whale (A3). `existe` es False si `entrada` no es vacía y no es la clave de ninguna entrada (una pestaña
     vieja): entonces no hay alcances y nada se cobra, en vez de ensancharla a «Todas» (revisión de la tarea 8)."""
     hoy = hoy or date.today()
@@ -385,4 +382,16 @@ def alcances(cliente, dias=0, entrada=None, canal=None, hoy=None):
     if existe and alc["meta_fuente"]:
         alc_meta = alcance_meta.alcance(cliente, list(alc["meta_fuente"]), dias, hoy, params, s["cuentas_por_id"])
     return {"tw": alc_tw, "meta": alc_meta, "params": params, "params_tw": alc_tw["params"] if alc_tw else {},
-            "existe": existe, "hay_tw": bool(s["tw_cfg"]), "pais": actual["pais"] if actual else None}
+            "existe": existe, "hay_tw": bool(s["tw_cfg"])}
+
+
+def cuentas_evaluacion_meta(cliente, entrada=None):
+    """Las cuentas que evalúa la «Evaluación con IA» de Meta pedida desde esta pestaña (regla 10;
+    `meta_rendimiento.rutas.evaluar` con `entrada`): las de la entrada cuya fuente es Meta (`meta_fuente`), con la
+    misma resolución que el panel. None si `entrada` no es vacía y no es la clave de ninguna entrada (una pestaña
+    vieja, la de otro proyecto): no se ensancha a «Todas» y nada se cobra. Solo la conexión y las listas."""
+    s = _resolver(cliente, entrada)
+    valor = str(entrada or "").strip()
+    if valor and (s["actual"] is None or s["actual"]["clave"] != valor):
+        return None
+    return list(s["alcance"]["meta_fuente"])

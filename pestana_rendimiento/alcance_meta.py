@@ -1,6 +1,6 @@
 """El alcance de las cuentas de Meta con la forma del de Triple Whale (Rendimiento E2, tarea 3, 2026-10-10).
 
-Por qué existe: «Cómo mejorarlo», el lote y «Evaluar con IA» (`triple_whale/pedidos.py`) y la galería
+Por qué existe: «Cómo mejorarlo» y el lote (`triple_whale/pedidos.py`) y la galería
 (`triple_whale.panel.galeria`) leen un «alcance» con la forma de `triple_whale.panel.alcance` (`config`, `tienda`,
 `tienda_id`, `canal`, `dias`, `ev`, `desde`, `hasta`, `params`). Los anuncios de las cuentas de Meta que no cubre ninguna
 tienda (fuente "meta") reusan ese flujo entero, con sus garantías de precio y de no cobrar dos veces, si les armamos
@@ -30,8 +30,6 @@ Lo que cambia respecto del de Triple Whale, cada cosa con su motivo:
    costo por venta del canal (`ev["cuenta"]["canales"]` queda vacío: `pedidos` y la tarjeta lo leen como «sin dato»).
 6. `meta_roas`: la meta de ROAS del proyecto; apagada, cada cuenta se mide con su mediana y el alcance de varias da
    UNA, la de todos sus anuncios.
-7. `cuentas`: los ids de las cuentas del alcance (las del proyecto, sin repetir). «Evaluar con IA» los guarda en la
-   evaluación (`extra["cuentas"]`, E2 tarea 5) para que se sepa de qué cuentas era la muestra.
 """
 from datetime import date
 
@@ -94,4 +92,4 @@ def alcance(cliente, ids, dias, hoy, params, cuentas_por_id=None):
     return {"config": {"moneda": moneda, "modelo_atribucion": MODELO_ATRIBUCION,
                        "ventana_atribucion": VENTANA_ATRIBUCION},
             "tienda": None, "tienda_id": None, "dias": dias, "canal": None, "ev": ev, "desde": desde, "hasta": hasta,
-            "params": dict(params or {}), "fuente": FUENTE, "cuentas": ids}
+            "params": dict(params or {}), "fuente": FUENTE}

@@ -54,3 +54,20 @@
 .cobros-admin-tabla td:last-child { white-space: normal; min-width: 15rem; }
 .cobros-admin-recarga summary { white-space: nowrap; }
 .cobros-admin-perdida { color: var(--error); font-weight: 600; }
+
+/* /admin/cobros, planes y suscripciones (planes 7/8): notas cortas bajo una cifra, casillas en línea, un pago
+   pendiente por resolver y el formulario de un plan nuevo. Los formularios de acciones van dentro de un <details>
+   de la última columna (cobros-admin-recarga), cada uno separado por una línea. */
+.cobros-admin-nota { color: var(--muted); font-size: .8rem; white-space: normal; }
+.cobros-admin-casilla { display: flex !important; align-items: center; gap: var(--esp-1); }
+.cobros-admin-recarga .agencia-form + .agencia-form { border-top: 1px solid var(--border); padding-top: var(--esp-2); }
+.cobros-admin-recarga .agencia-form p { margin: 0; }
+.cobros-admin-pendiente { border-left: 3px solid var(--error); padding-left: var(--esp-2); }
+.cobros-admin-nuevo { margin-top: var(--esp-3); }
+.cobros-admin-junto { white-space: nowrap; }
+/* La tabla de planes por proyecto envuelve el texto (ocho columnas con fechas largas): sin esto la columna de
+   acciones quedaba fuera de la caja en un escritorio de 1366 px (visto en la captura del 2026-10-10). */
+.cobros-admin-planes td { white-space: normal; }
+.cobros-admin-planes td:last-child { min-width: 17rem; }
+.cobros-admin-planes .agencia-form { grid-template-columns: minmax(0, 1fr); max-width: 100%; }
+.cobros-admin-planes .agencia-form select, .cobros-admin-planes .agencia-form input[type="text"] { width: 100%; min-width: 0; }

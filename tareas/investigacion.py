@@ -2,9 +2,9 @@
 Tareas de la investigación automática del nicho (spec Parte 3 §1, §9) y el
 motor que encadena los pasos.
 
-  nicho_inv_consultas   -> Claude convierte el tema en búsquedas, hasta el tope aprobado (max_intentos=2)
+  nicho_inv_consultas   -> Claude convierte el tema en búsquedas, hasta el tope aprobado (max_intentos=1)
   nicho_inv_buscar      -> el actor de búsqueda de UNA plataforma trae productos (max_intentos=1: cobra)
-  nicho_inv_seleccionar -> Claude marca cuáles son del nicho y elige los de más reseñas (max_intentos=2)
+  nicho_inv_seleccionar -> Claude marca cuáles son del nicho y elige los de más reseñas (max_intentos=1)
   resenas:<plataforma>, redes:<red> y generar corren en tareas/nicho.py
   (`nicho_recolectar` con `investigacion: true`, `nicho_generar_avatares` con `auto: true`).
 
@@ -18,6 +18,9 @@ Todo gasto se registra con el id de la tarea; Claude va por
 import contextvars
 import functools
 import logging
+
+import sqlalchemy as sa
+import db
 
 from flask_babel import gettext
 
@@ -159,13 +162,15 @@ def _gasto_apify(cliente, eid, tarea, paso, fuente, tarifa, nota=""):
     n = int(getattr(fuente, "resultados", 0) or 0)
     corridas = [c.get("run_id") for c in (getattr(fuente, "corridas", None) or []) if c.get("run_id")]
     usd = plataformas.costo(n, len(corridas), tarifa)
-    if usd <= 0:
+    referencia = f"recoleccion:{eid}:{paso}{ref_sufijo(tarea)}"
+    if usd <= 0 and not corrida_anotada(cliente, referencia):
         return 0.0
     detalle = gettext("Apify %(actor)s: %(n)s resultado(s) aprox.", actor=idiomas.traducir(tarifa["nombre"]), n=n)
-    gastos.registrar_seguro(cliente, "recoleccion", usd, f"recoleccion:{eid}:{paso}{ref_sufijo(tarea)}",
+    gastos.registrar_seguro(cliente, "recoleccion", usd, referencia,
                             detalle=detalle + (f" — {nota}" if nota else ""),
                             proveedor="apify", extra={"actor": tarifa["actor"], "resultados": n, "usd_por_resultado": tarifa["usd_por_resultado"],
-                                                      "usd_por_corrida": tarifa.get("usd_por_corrida", 0), "corridas": corridas})
+                                                      "usd_por_corrida": tarifa.get("usd_por_corrida", 0),
+                                   **({"estimado": True, "conciliacion_pendiente": True} if any(c.get("estimado") for c in (getattr(fuente, "corridas", None) or [])) else {}), "corridas": corridas})
     return usd
 
 
@@ -252,6 +257,8 @@ def _costo_paso(est, i, paso, n_productos=None):
         topes = {**inv.TOPES_DEFECTO, **(i.get("topes") or {})}
         pais = i.get("pais") or est.get("pais") or ""
         plat = i.get("plataformas") or []
+        if paso.startswith("redes:"):
+            return 0.0
         if paso in ("consultas", "seleccionar"):
             entrada, salida = inv._tokens_claude(len(plat), topes, len(inv.idiomas_necesarios(pais, plat)))
             return inv.costo_claude(entrada, salida)
@@ -285,7 +292,7 @@ def _avanzar(cliente, estudio_id):
         base = {"cliente": cliente, "estudio_id": int(estudio_id)}
         if paso == "consultas":
             trabajos.encolar(datos.job_id_inv(cliente, estudio_id, paso), "nicho_inv_consultas", base, cliente=cliente,
-                             duracion_estimada=60, etapas=ETAPAS_CONSULTAS, max_intentos=2,
+                             duracion_estimada=60, etapas=ETAPAS_CONSULTAS, max_intentos=1,
                              costo_estimado=_costo_paso(est, i, paso), excluir_job=excluir)
             return paso
         if paso.startswith("buscar:"):
@@ -300,7 +307,7 @@ def _avanzar(cliente, estudio_id):
                 _marcar(cliente, estudio_id, paso, "vacio", aviso=N_("sin plataformas"))
                 continue
             trabajos.encolar(datos.job_id_inv(cliente, estudio_id, paso), "nicho_inv_seleccionar", base, cliente=cliente,
-                             duracion_estimada=60, etapas=ETAPAS_SELECCION, max_intentos=2,
+                             duracion_estimada=60, etapas=ETAPAS_SELECCION, max_intentos=1,
                              costo_estimado=_costo_paso(est, i, paso), excluir_job=excluir)
             return paso
         if paso.startswith("resenas:"):
@@ -419,6 +426,7 @@ def ejecutar_buscar(tarea):
     productos, guardado = [], {"nuevos": 0, "actualizados": 0}
     try:
         fuente = fuentes_registro.por_tipo(plat)()               # adentro del try: si esto revienta, el paso igual cierra (R17)
+        fuente.registrar_inicio = lambda: _gasto_apify(cliente, eid, tarea, paso, fuente, fuente.tarifa_busqueda())
         for prod in fuente.buscar(consultas, pais, topes["productos_por_consulta"], reportar):
             productos.append(prod)
         reportar(N_("Guardando"))
@@ -499,13 +507,23 @@ def ejecutar_seleccionar(tarea):
     return gettext("%(r)s producto(s) del nicho; %(e)s elegido(s) para traer reseñas", r=len(relevantes), e=sum(len(v) for v in elegidos.values()))
 
 
+def corrida_anotada(cliente, referencia):
+    with db.conectar() as con:
+        extra = con.execute(sa.select(db.gasto.c.extra).where(
+            db.gasto.c.cliente == cliente, db.gasto.c.referencia == referencia,
+            db.gasto.c.proveedor == "apify")).scalar()
+    return bool(extra and (extra.get("corridas") or extra.get("corrida") or extra.get("run_id")))
+
+
 def _hook(paso_de):
     def hook(tarea, mensaje):
         p = tarea["payload"]
         cliente, eid = p["cliente"], int(p["estudio_id"])
         with idiomas.en_idioma(idiomas.de_proyecto(cliente)):        # el hook no pasa por worker.ejecutar
             error = cola.recortar(cola.sin_token(mensaje), 300)
-        datos.actualizar_investigacion(cliente, eid, lambda i: {**inv.marcar_paso(i, paso_de(p), "pendiente"), "estado": "interrumpida", "ultimo_error": error})
+        paso = paso_de(p)
+        pagado = corrida_anotada(cliente, f"recoleccion:{eid}:{paso}{ref_sufijo(tarea)}")
+        datos.actualizar_investigacion(cliente, eid, lambda i: {**inv.marcar_paso(i, paso, "error" if pagado else "pendiente"), "estado": "interrumpida", "ultimo_error": error})
     return hook
 
 

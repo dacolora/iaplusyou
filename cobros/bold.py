@@ -11,10 +11,11 @@ import hmac
 import os
 import re
 import time
-from urllib.parse import urlsplit
 
 import requests
 from flask_babel import gettext
+
+from cobros._entorno import host_local
 
 BASE = "https://integrations.api.bold.co"
 CHECKOUT = "https://checkout.bold.co/"
@@ -41,16 +42,6 @@ def _secreta():
     # strip(): una secreta de solo espacios es una clave adivinable, y un
     # espacio de más al final hacía fallar todas las firmas (revisión final B1).
     return (os.environ.get("BOLD_LLAVE_SECRETA") or "").strip()
-
-
-def host_local(url):
-    """¿El host de `url` es de una máquina local? (localhost, 127.0.0.1, ::1,
-    *.localhost, *.test, como la regla de pruebas del repo)."""
-    try:
-        host = (urlsplit(str(url or "").strip()).hostname or "").lower().rstrip(".")
-    except ValueError:
-        return False
-    return host in ("localhost", "127.0.0.1", "::1") or host.endswith((".localhost", ".test"))
 
 
 def marca_pruebas():

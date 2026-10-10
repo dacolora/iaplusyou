@@ -8,7 +8,8 @@ si Meta pide esperar a mitad (límite de uso), la siguiente corrida repasa lo re
 en vez de empezar de nuevo. Leer de Meta cuenta contra el límite de uso de la cuenta, así que el listado completo de
 anuncios (pausados y limpieza de archivados) se hace como mucho una vez cada 20 horas, y en esa misma corrida se
 piden las miniaturas de los anuncios con gasto en los últimos 30 días que no la tienen al día (los pausados no la
-traen en el listado de cada 3 horas).
+traen en el listado de cada 3 horas). Los desgloses (edad y género, ubicación, país, dispositivo; 8 consultas) siguen
+la misma regla de las 20 horas (`extra.desglose_en`): el límite de uso de Meta es de todos los proyectos.
 Una `ErrorGraph` sube tal cual: la tarea la anota en la cuenta; aquí la cuenta queda en «copiando», nunca «ok»
 a medias. Los textos de error ya vienen traducidos y sin token (graph.py)."""
 import json
@@ -18,7 +19,7 @@ from zoneinfo import ZoneInfo
 
 import db
 import idiomas
-from meta_rendimiento import cuentas, datos, graph, tasas
+from meta_rendimiento import cuentas, datos, desgloses, graph, tasas
 from tareas.meta import MONEDAS_SIN_DECIMALES
 
 log = logging.getLogger("creatv.meta_rendimiento.sync")
@@ -459,6 +460,15 @@ def sincronizar(cliente, ad_account_id, token, hoy=None, on_etapa=None):
     if moneda:
         tasas.asegurar([moneda], datos.primera_fecha(cliente, act, "cuenta") or desde_cuenta.isoformat(),
                        hoy.isoformat(), hoy=hoy)
+
+    # 7. Desgloses (spec E2 §5), como mucho una vez cada 20 horas: 8 consultas por cuenta al día es lo que se le
+    # pide al límite compartido de Meta. Un límite sube (la tarea pone la pausa y no se marca: la próxima corrida
+    # los hace); cualquier otro fallo de una combinación se anota dentro de `desgloses.copiar` y la marca se pone
+    # igual, porque reintentarlo en cada corrida de 3 horas serían 64 consultas al día en vez de 8.
+    if _listado_vencido(extra.get("desglose_en")):   # la misma regla de las 20 horas del listado completo
+        etapa(ETAPA_ALCANCE, 95)
+        desgloses.copiar(cliente, act, token)
+        cuentas.actualizar_extra(cliente, act, {"desglose_en": db.ahora()})
 
     cuentas.actualizar(cliente, act, estado="ok", error=None, ultima_copia=db.ahora())
     cuentas.actualizar_extra(cliente, act, {"backfill_hecho": True})

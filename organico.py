@@ -543,7 +543,7 @@ def redactar(cliente, pieza_id, plataformas):
         # el texto determinista. La ruta «Escribir con IA» pide el saldo antes
         # (y responde 402); esto cubre la publicación de una ganadora, que no
         # se frena por un texto.
-        libro.exigir(cliente, gastos.TARIFAS["caption_organico"])
+        libro.exigir(cliente, gastos.TARIFAS["caption_organico"], tipo="caption_organico")
         textos = generador_prompts.caption_organico(contexto, plataformas)
         if not isinstance(textos, dict):
             textos = {}

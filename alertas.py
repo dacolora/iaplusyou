@@ -52,13 +52,16 @@ NOMBRES_GRUPO = {"puesta_a_punto": idiomas.N_("Puesta a punto pendiente"), "falt
                  "decision": idiomas.N_("Esperan tu decisión"), "fallos": idiomas.N_("Fallos y errores")}
 NOMBRES_NIVEL = {"bloquea": idiomas.N_("bloquea"), "atencion": idiomas.N_("atención"), "info": idiomas.N_("info")}
 NOMBRES_TAB = {"settings": idiomas.N_("Configuración"), "catalogo": idiomas.N_("Catálogo"), "creativeflowplus": idiomas.N_("Crear"),
-               "experimentos": idiomas.N_("Experimentos"), "sprints": idiomas.N_("Sprints"), "nicho": idiomas.N_("Nicho")}
+               "experimentos": idiomas.N_("Experimentos"), "sprints": idiomas.N_("Sprints"), "nicho": idiomas.N_("Nicho"),
+               "meta": idiomas.N_("Meta")}
 
 MINUTOS_WORKER = 30                                  # más de esto sin señal de vida y el worker está parado
 MINUTOS_PROMPT_LISTO = 60                            # un prompt listo más nuevo que esto no molesta: la persona sigue trabajando
 DIAS_FALLOS = 30                                     # un fallo más viejo que esto es historia, no una alerta
 DIAS_NO_COBRADO = 7                                  # una pieza que no se cobró avisa esta cantidad de días
-MINUTOS_RECARGA_PENDIENTE = 15                       # una recarga de Bold pendiente más vieja que esto avisa
+MINUTOS_RECARGA_PENDIENTE = 15                       # una recarga de Bold o Wompi pendiente más vieja que esto avisa
+DIAS_AVISO_RENOVACION = 3                            # el plan avisa que se renueva (o termina) con esta anticipación
+PORCENTAJE_BOLSA_PLAN = 80                           # la bolsa del plan avisa al usarse este porcentaje del periodo
 TOPE_COBROS = 20                                     # lo más que se lista de piezas no cobradas o recargas pendientes
 IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".webp")      # lo que cuenta como logo en clientes/<c>/logos/
 
@@ -73,7 +76,8 @@ HUELLA_VALIDA = r"^[0-9a-f]{64}$"
 # frenan con `es_solo_admin` (fix de la revisión de la Task 5, 2026-10-02);
 # `tests/test_rutas_alertas.py` comprueba que toda alerta `solo_admin` que
 # producen las fuentes empiece por uno de estos prefijos.
-PREFIJOS_SOLO_ADMIN = ("llave:", "worker:", "revision:", "saldo:wavespeed_recarga")
+PREFIJOS_SOLO_ADMIN = ("llave:", "worker:", "revision:", "saldo:wavespeed_recarga", "saldo:fal_recarga",
+                       "cobros:plan_sin_renovar")
 
 # PND-124 (decisión 2026-10-07): visibles para todos, descartes solo admin.
 TIPOS_DESCARTE_ADMIN = {"tablero:tope_alcanzado", "tablero:propuestas_pendientes",
@@ -240,11 +244,13 @@ def _fuente_saldo(cliente, ahora):
     """WaveSpeed sin saldo (`saldo.vigente`, el mismo aviso de Crear). DOS
     alertas con la misma huella (`desde`): la del cliente, neutra (la cuenta es
     de Creatv, no suya: sin enlace de recarga, sin respuesta del proveedor ni
-    el proyecto que falló) y la del admin, con desde cuándo y dónde recargar."""
+    el proyecto que falló) y la del admin, con desde cuándo y dónde recargar.
+    Después, las de fal (`_alertas_saldo_fal`), si las hay."""
     import saldo  # noqa: PLC0415
+    alertas_saldo = _alertas_saldo_fal(saldo)
     aviso = saldo.vigente("wavespeed")
     if not aviso:
-        return []
+        return alertas_saldo
     h = huella(aviso.get("desde"))
     desde = (aviso.get("desde") or "")[:16].replace("T", " ")
     return [
@@ -258,6 +264,33 @@ def _fuente_saldo(cliente, ahora):
                 gettext("Desde el %(desde)s las generaciones de Crear y de Cambiar producto fallan (sin cobrar). "
                         "Recarga la cuenta en %(recarga)s; esta alerta se quita sola con la próxima generación que "
                         "salga bien.", desde=desde, recarga=aviso["recarga"]),
+                "creativeflowplus", solo_admin=True),
+    ] + alertas_saldo
+
+
+def _alertas_saldo_fal(saldo):
+    """fal sin saldo (2026-10-09, PND-213): solo se pausan sus modelos de Crear
+    (Seedance 2.5 con varias referencias) y lo que usa fal en el resto de la app;
+    `atencion`, no `bloquea`: los demás modelos siguen. Igual que WaveSpeed, una
+    neutra para todos y otra con la recarga solo para el admin."""
+    aviso = saldo.vigente("fal")
+    if not aviso:
+        return []
+    h = huella(aviso.get("desde"))
+    desde = (aviso.get("desde") or "")[:16].replace("T", " ")
+    modelos = saldo.nombres_modelos("fal")
+    return [
+        _alerta("saldo:fal", h, "atencion", "puesta_a_punto",
+                gettext("%(modelos)s está en pausa", modelos=modelos),
+                gettext("Hay un problema con el proveedor y ya le avisamos a Creatv. Mientras tanto elige otro modelo: "
+                        "los intentos fallidos no se cobran."),
+                "creativeflowplus"),
+        _alerta("saldo:fal_recarga", h, "atencion", "puesta_a_punto",
+                gettext("%(proveedor)s se quedó sin saldo", proveedor=aviso["nombre"]),
+                gettext("Desde el %(desde)s fallan %(modelos)s y lo que usa fal en el resto de la app (voces, música y "
+                        "subtítulos automáticos), sin cobrar; los demás modelos de Crear siguen. Recarga la cuenta en "
+                        "%(recarga)s; esta alerta se quita sola con la próxima generación de ese modelo que salga bien.",
+                        desde=desde, modelos=modelos, recarga=aviso["recarga"]),
                 "creativeflowplus", solo_admin=True),
     ]
 
@@ -317,6 +350,58 @@ def _fuente_meta(cliente, ahora):
                     gettext("Revisa el método de pago de tu cuenta publicitaria de Meta"),
                     gettext("La cuenta publicitaria necesita un método de pago en business.facebook.com › Facturación: "
                             "sin él Meta no activa ningún anuncio."), "settings")]
+
+
+# Meta rendimiento (spec E2 §10): el título y el detalle de cada tipo de recomendación que puede ser «alta»
+# (`meta_rendimiento.recomendaciones`). La copia guarda solo tipo y huella; las cifras y los nombres de campañas
+# están en el «Diagnóstico» de Meta, que desde la integración con main (2026-10-10) pinta la pestaña Rendimiento, adonde
+# lleva la alerta (la pestaña «Meta» se jubiló el 2026-10-09; su clave `meta` abre Rendimiento, pero nada nuevo apunta a
+# ella: R1 del spec de la pestaña Rendimiento).
+TEXTOS_META_RENDIMIENTO = {
+    "cuenta_estado": (idiomas.N_("«%(cuenta)s» no está activa en Meta o llega a su tope de gasto"),
+                      idiomas.N_("Meta puede dejar de entregar sus anuncios. El motivo y qué hacer están en el "
+                                 "Diagnóstico de la pestaña Rendimiento.")),
+    "cuenta_roas_bajo": (idiomas.N_("«%(cuenta)s» vende menos de lo que gasta"),
+                         idiomas.N_("En los últimos 30 días vendió menos de la mitad de lo que gastó: pausa o rehace "
+                                    "la cuenta. Las cifras están en el Diagnóstico de la pestaña Rendimiento.")),
+    "aprendizaje_limitado": (idiomas.N_("Muchos conjuntos de «%(cuenta)s» en aprendizaje limitado"),
+                             idiomas.N_("Sin salir del aprendizaje, Meta no estabiliza su entrega. El Diagnóstico de "
+                                        "la pestaña Rendimiento dice qué campañas consolidar primero.")),
+    "perdedores_gastando": (idiomas.N_("Anuncios perdedores siguen gastando en «%(cuenta)s»"),
+                            idiomas.N_("Se llevan buena parte del gasto de la última semana. Pausarlos libera "
+                                       "presupuesto para los que venden: la lista está en el Diagnóstico de la "
+                                       "pestaña Rendimiento.")),
+    "anuncios_con_problemas": (idiomas.N_("Anuncios rechazados siguen gastando en «%(cuenta)s»"),
+                               idiomas.N_("Meta los rechazó y gastaron en los últimos 7 días. Revísalos en el "
+                                          "Administrador de anuncios desde el Diagnóstico de la pestaña Rendimiento.")),
+}
+_ACT_VALIDA = r"act_[0-9]{1,30}"
+
+
+def _fuente_meta_rendimiento(cliente, ahora):
+    """Las recomendaciones de nivel «alta» de cada cuenta de Meta que lee el proyecto, tal como las guardó su última
+    copia buena en `meta_cuenta.extra.alertas` ([{tipo, huella}]; `tareas.meta_rendimiento._guardar_alertas`): aquí
+    no se calcula ninguna regla, es UNA consulta a `meta_cuenta` del proyecto. Una alerta por elemento, de decisión y
+    `atencion`, a la pestaña Rendimiento (el «Diagnóstico» llega por fetch: no hay ancla en la página). La huella es la de la
+    recomendación (tipo + cuenta + nivel en las que juntan toda la cuenta): un descarte vale hasta que la situación
+    cambie. El título lleva el nombre de la cuenta (dato de Meta, pasado por `_limpio`) y se arma aquí, en el idioma
+    de quien mira. Un elemento roto (otro tipo, otra huella, algo que no es un dict) se ignora."""
+    from meta_rendimiento import cuentas  # noqa: PLC0415
+    out = []
+    for c in cuentas.listar(cliente):
+        act = c.get("ad_account_id") or ""
+        guardadas = (c.get("extra") or {}).get("alertas")
+        if not re.fullmatch(_ACT_VALIDA, act) or not isinstance(guardadas, list):
+            continue
+        nombre = _limpio(c.get("nombre") or act, 120)
+        for g in guardadas:
+            if not isinstance(g, dict) or g.get("tipo") not in TEXTOS_META_RENDIMIENTO \
+                    or not re.fullmatch(HUELLA_VALIDA, str(g.get("huella") or "")):
+                continue
+            titulo, detalle = TEXTOS_META_RENDIMIENTO[g["tipo"]]
+            out.append(_alerta(f"meta_rendimiento:{g['tipo']}:{act}", g["huella"], "atencion", "decision",
+                               gettext(titulo, cuenta=nombre), gettext(detalle), "rendimiento", entidad=act))
+    return out
 
 
 # ---------- fuentes: faltantes del proyecto ----------
@@ -602,10 +687,10 @@ def _fuente_nicho(cliente, ahora):
 
 def _fuente_cobros(cliente, ahora):
     """Saldo prepagado del proyecto (spec 2026-10-08-cobros §8), solo si el proyecto cobra: sin saldo, saldo bajo,
-    piezas que no se cobraron (un `reverso` o `no_cobrado` de los últimos DIAS_NO_COBRADO días) y recargas de Bold
-    que siguen pendientes. Son del cliente (nada de aquí es solo_admin) y todas llevan a Configuración › Saldo y recargas.
+    piezas que no se cobraron (un `reverso` o `no_cobrado` de los últimos DIAS_NO_COBRADO días), recargas de Bold o
+    Wompi que siguen pendientes y el plan mensual (`_alertas_plan`). Son del cliente (nada de aquí es solo_admin) y todas llevan a Configuración › Saldo y recargas.
     Una consulta por tipo de dato (la cuenta con el saldo, los movimientos, las recargas), sin importar cuántos
-    haya; un proyecto que no cobra sale tras leer la cuenta. Las huellas son de cifras, nunca de texto traducido:
+    haya; un proyecto que no cobra sale tras leer la cuenta y uno sin plan tras una consulta más. Las huellas son de cifras, nunca de texto traducido:
     la de «saldo bajo» sigue al saldo en dólares, para que un descarte no esconda un saldo que siguió bajando."""
     from cobros import libro, vista  # noqa: PLC0415
     import gastos  # noqa: PLC0415
@@ -637,8 +722,8 @@ def _fuente_cobros(cliente, ahora):
                 m.c.creado_en >= _hace(ahora, days=DIAS_NO_COBRADO))
          .order_by(m.c.id.desc()).limit(TOPE_COBROS))
     r = db.recarga
-    qr = (sa.select(r.c.id, r.c.milesimas)
-          .where(r.c.cliente == cliente, r.c.medio == "bold", r.c.estado == "pendiente",
+    qr = (sa.select(r.c.id, r.c.milesimas, r.c.medio)
+          .where(r.c.cliente == cliente, r.c.medio.in_(("bold", "wompi")), r.c.estado == "pendiente",
                  r.c.creada_en <= _hace(ahora, minutes=MINUTOS_RECARGA_PENDIENTE))
           .order_by(r.c.id.desc()).limit(TOPE_COBROS))
     with db.conectar() as con:
@@ -655,10 +740,89 @@ def _fuente_cobros(cliente, ahora):
     for f in recargas:
         out.append(_alerta(f"cobros:recarga_pendiente:{f.id}", huella(f.id), "info", "decision",
                            gettext("Tienes una recarga sin terminar"),
-                           gettext("Una recarga de %(monto)s con Bold sigue pendiente. Si ya pagaste, se acredita "
+                           gettext("Una recarga de %(monto)s con %(pasarela)s sigue pendiente. Si ya pagaste, se acredita "
                                    "sola en unos minutos; si no, genera un link nuevo en Configuración › Saldo y recargas.",
-                                   monto=monto(f.milesimas)),
+                                   monto=monto(f.milesimas), pasarela="Wompi" if f.medio == "wompi" else "Bold"),
                            "settings", ancla="config-ap-saldo", entidad=f.id))
+    out.extend(_alertas_plan(cliente, ahora, monto))
+    return out
+
+
+def _alertas_plan(cliente, ahora, monto):
+    """El plan mensual del proyecto (spec planes 2026-10-09 §7.6): `plan_morosa` (bloquea: no se pudo cobrar),
+    `plan_renueva` (info: se renueva en DIAS_AVISO_RENOVACION días, con el momento real del cobro y el monto
+    aceptado), `plan_cancelada` (info: el plan termina en tal fecha), `plan_bolsa_80` (atención: ya se usó el
+    PORCENTAJE_BOLSA_PLAN % de la bolsa del periodo) y, solo para el admin, `plan_sin_renovar` (lo pagado de una
+    suscripción activa ya terminó y no hay periodo abierto ni cobro en curso: la periódica no la renovó). Un
+    proyecto sin plan (o con la suscripción terminada) no tiene ninguna; con plan son 1 consulta (la suscripción)
+    más 2 (la bolsa del periodo abierto, o mirar si quedó sin renovar), sin importar cuánto haya pasado. Huellas
+    de números y fechas, nunca de texto traducido. Todas llevan a Configuración › Plan."""
+    from cobros import libro, planes, vista  # noqa: PLC0415
+    sus = planes.suscripcion(cliente)
+    if sus is None:
+        return []
+    out = []
+    estado, hasta = sus["estado"], sus["cubierto_hasta"]
+    if estado == "morosa":
+        quedan = max(0, planes.INTENTOS_MAXIMOS - int(sus["intentos_fallidos"]))
+        # Sirve para tarjeta o Nequi; la huella lleva la renovación (cubierto_hasta): un descarte de la morosa de
+        # este mes no esconde la del mes siguiente aunque el número de intentos coincida.
+        out.append(_alerta("cobros:plan_morosa", huella("plan_morosa", sus["intentos_fallidos"], hasta), "bloquea",
+                           "puesta_a_punto",
+                           gettext("No pudimos cobrar tu plan"),
+                           ngettext("No pudimos cobrar tu medio de pago. Mientras tanto usas tu saldo propio al precio a "
+                                    "la carta. Actualiza tu medio de pago en Configuración › Plan; si no, queda %(num)s "
+                                    "reintento antes de que el plan termine.",
+                                    "No pudimos cobrar tu medio de pago. Mientras tanto usas tu saldo propio al precio a "
+                                    "la carta. Actualiza tu medio de pago en Configuración › Plan; si no, quedan %(num)s "
+                                    "reintentos antes de que el plan termine.",
+                                    quedan),
+                           "settings", ancla="config-ap-plan"))
+        return out
+    if estado == "activa" and hasta and str(hasta) <= ahora and planes.sin_renovar(sus, ahora):
+        out.append(_alerta("cobros:plan_sin_renovar", huella("plan_sin_renovar", hasta), "atencion", "puesta_a_punto",
+                           gettext("El plan de este proyecto venció sin renovarse"),
+                           gettext("Lo pagado terminó el %(fecha)s y no hay un periodo abierto ni un cobro en curso: la "
+                                   "renovación periódica no lo renovó (¿el worker está parado, «Cobrar» apagado o no hay "
+                                   "tasa de cambio?). Revísalo en /admin/cobros.", fecha=vista.fecha_larga(hasta)),
+                           "settings", ancla="config-ap-plan", solo_admin=True))
+        return out
+    if hasta and str(hasta) > ahora:
+        pronto = str(hasta) <= (datetime.fromisoformat(str(ahora)[:19])
+                                + timedelta(days=DIAS_AVISO_RENOVACION)).isoformat(timespec="seconds")
+        fecha = vista.fecha_larga(hasta)
+        renueva = bool(sus["renovar"] and sus["fuente_pago_id"])
+        if estado == "activa" and renueva and pronto:
+            usd = planes._precio_aceptado(sus) or 0
+            # El momento real del cobro (una hora antes del fin de lo pagado: ruling 2026-10-10).
+            momento = vista.fecha_hora_larga(sus["proximo_cobro"] or hasta)
+            if sus["ciclo"] == "anual":
+                detalle = gettext("Tu plan anual se renueva el %(momento)s: a esa hora cobramos %(monto)s (en pesos a "
+                                  "la TRM del día). Si cancelas antes, no se cobra. El saldo del plan se renueva cada "
+                                  "mes y lo que no uses en un mes no pasa al siguiente.",
+                                  momento=momento, monto=monto(usd * 1000))
+            else:
+                detalle = gettext("Tu plan se renueva el %(momento)s: a esa hora cobramos %(monto)s (en pesos a la TRM "
+                                  "del día). Si cancelas antes, no se cobra. El saldo del plan que no uses antes de "
+                                  "esa fecha no se acumula.", momento=momento, monto=monto(usd * 1000))
+            out.append(_alerta("cobros:plan_renueva", huella("plan_renueva", hasta, usd), "info", "decision",
+                               gettext("Tu plan se renueva pronto"), detalle,
+                               "settings", ancla="config-ap-plan"))
+        elif estado == "cancelada" or (estado == "activa" and not renueva and pronto):
+            out.append(_alerta("cobros:plan_cancelada", huella("plan_cancelada", hasta), "info", "decision",
+                               gettext("Tu plan termina el %(fecha)s", fecha=fecha),
+                               gettext("No se renueva ni se cobra más. Hasta esa fecha sigues con el precio de miembro y "
+                                       "el saldo del plan; para seguir con el plan, vuelve a suscribirte en Configuración › Plan."),
+                               "settings", ancla="config-ap-plan"))
+    bolsa = libro.bolsa_plan(cliente, ahora) if estado in ("activa", "cancelada") else None
+    if bolsa and bolsa["credito"] > 0 and bolsa["gastado"] * 100 >= PORCENTAJE_BOLSA_PLAN * bolsa["credito"]:
+        usado = min(100, round(100 * bolsa["gastado"] / bolsa["credito"]))
+        out.append(_alerta("cobros:plan_bolsa_80", huella("plan_bolsa_80", bolsa["periodo_id"]), "atencion",
+                           "puesta_a_punto",
+                           gettext("Ya usaste el %(porcentaje)s %% del saldo de tu plan", porcentaje=usado),
+                           gettext("Te quedan %(monto)s del saldo del plan hasta el %(fecha)s; lo que no uses no se acumula.",
+                                   monto=monto(bolsa["restante"]), fecha=vista.fecha_larga(bolsa["fin"])),
+                           "settings", ancla="config-ap-plan"))
     return out
 
 
@@ -783,4 +947,5 @@ FUENTES.extend([
     ("nicho", _fuente_nicho),
     ("cobros", _fuente_cobros),
     ("meta", _fuente_meta),
+    ("meta_rendimiento", _fuente_meta_rendimiento),
 ])

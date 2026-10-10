@@ -26,10 +26,15 @@ Reglas, cada una con su motivo:
 4. Tarjeta de Meta: la misma macro que la de Triple Whale (`_tw_galeria.html`). Su medio: lo de `panel.medio_tarjeta`
    (una pieza de Creatv en R2); si no, la imagen que un análisis listo copió a R2 (`foto.creativo.imagen_url`); si no,
    la miniatura de Meta solo si su host es de Meta (`meta_rendimiento.datos.miniatura_valida`, al pintar y no solo al
-   guardar: PND-220). Sin «Guardar en Referentes» (PND-222) y sin «Meta reporta» (R12 es de Triple Whale).
+   guardar: PND-282). Sin «Guardar en Referentes» (PND-284) y sin «Meta reporta» (R12 es de Triple Whale).
+5. NVP de una tarjeta de Meta (integración con main, 2026-10-10; spec NVP §4.2, la columna NVP de la vieja tabla de
+   anuncios de Meta): los visitantes salen de la copia de Triple Whale (`tw_anuncio_dia`, canal facebook-ads, mismo
+   `ad_id`), UNA lectura para las tarjetas de Meta de la página y solo si el proyecto tiene Triple Whale; sin él la
+   tarjeta no dice NVP (`sin_nvp`), como la vieja tabla sin su columna. Las de Triple Whale ya lo traen en `m`.
 """
 import gastos
 import triple_whale
+import triple_whale_tiendas
 from cobros import SaldoInsuficiente
 from meta_rendimiento import datos as meta_datos
 from meta_rendimiento import tasas
@@ -93,6 +98,22 @@ def medio_meta(a):
     return {"imagen": mini, "miniatura": True} if meta_datos.miniatura_valida(mini) else {}
 
 
+def _nvp_meta(cliente, suyas, alc, con_tw=None):
+    """Regla 5: pega a las tarjetas de Meta `suyas` los visitantes de la copia de Triple Whale (en `m`, como las de
+    Triple Whale) o, sin Triple Whale en el proyecto, `sin_nvp`. `con_tw`: si quien llama ya lo sabe (sin consulta)."""
+    if not suyas:
+        return
+    if con_tw is None:
+        con_tw = bool(triple_whale_tiendas.tiendas(cliente))
+    por_id = (twdatos.visitantes_por(cliente, "ad_id", [a["ad_id"] for a in suyas], alc.get("desde"), alc.get("hasta"))
+              if con_tw else {})
+    for a in suyas:
+        v = por_id.get(str(a["ad_id"])) or {}
+        a["m"]["visitantes"] = v.get("visitantes", 0)
+        a["m"]["visitantes_nuevos"] = v.get("visitantes_nuevos", 0)
+        a["sin_nvp"] = not con_tw
+
+
 def _elegible(cliente, a, por_clave, vivos, alc):
     job = tareas_tw.job_id_analisis(cliente, a["canal"], a["ad_id"])
     return tw_panel.elegir_analisis(a, por_clave.get((a["canal"], a["ad_id"])), alc, vivo=job in vivos)["ofrecer"]
@@ -129,6 +150,7 @@ def armar(cliente, alc_tw, alc_meta, veredicto="", pagina=1):
         if fuente == META:
             for a in suyas:
                 a["medio"] = medio_meta(a)
+            _nvp_meta(cliente, suyas, alc, True if alc_tw else None)
     precios = [tw_panel.precio_analisis(creativos.get((a["canal"], a["ad_id"])))["usd"] for a in lote]
     # Sin precio de alguno, el total es «precio no disponible», nunca «US$ 0» (regla 1 del repo).
     total = None if any(p is None for p in precios) else sum(precios)
@@ -150,6 +172,7 @@ def tarjeta(cliente, fuente, alc, a):
                         alcance=alc)
     if fuente == META:
         a["medio"] = medio_meta(a)
+        _nvp_meta(cliente, [a], alc)
     return a
 
 

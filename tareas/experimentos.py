@@ -317,7 +317,7 @@ def _diagnosticar(cliente, ex, pz, v, snaps, reglas, ctx, tarea):
         # Cobros (revisión final 2026-10-08): el decisor corre solo, cada hora.
         # En un proyecto que cobra y no tiene saldo, la llamada a Claude NO se
         # hace (no se paga ni se cobra): quedan las pistas, que no cuestan.
-        libro.exigir(cliente, gastos.TARIFAS["diagnostico_pieza"])
+        libro.exigir(cliente, gastos.TARIFAS["diagnostico_pieza"], tipo="revision")
     except SaldoInsuficiente as e:
         sin_saldo = {"error": e.frase_proyecto(), "sin_saldo": True, "pistas": doctrina_diagnostico.pistas(
             snaps or [], reglas or {}, contexto_pistas), "en": db.ahora()}

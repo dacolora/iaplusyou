@@ -1,6 +1,6 @@
 ---
 name: rendimiento
-description: "Rendimiento: la pestaña que junta Triple Whale y Meta (pestana_rendimiento/), el selector por país, la fuente de cada cifra, «Resultados» y «Por país» mezclados, «Actualizar ahora» y los alias de las pestañas viejas. Cargar antes de tocar pestana_rendimiento/, _tab_rendimiento.html, los _rend_*.html, _tw_secciones.html, _meta_secciones.html, pantallas/rendimiento.css, o al decidir de qué fuente sale una cifra."
+description: "Rendimiento: la pestaña que junta Triple Whale y Meta (pestana_rendimiento/), el selector por país, la fuente de cada cifra, «Resultados» y «Por país» mezclados, «Actualizar ahora», los alias de las pestañas viejas y, desde la integración con main, el Diagnóstico, los Segmentos y la «Evaluación con IA» de Meta rendimiento E2. Cargar antes de tocar pestana_rendimiento/, _tab_rendimiento.html, los _rend_*.html, _tw_secciones.html, _meta_secciones.html, pantallas/rendimiento.css, o al decidir de qué fuente sale una cifra."
 ---
 
 # Rendimiento: Triple Whale y Meta en una sola pestaña
@@ -39,7 +39,8 @@ los clientes». Las dos pestañas daban números distintos para el mismo anuncio
   `ver_conjuntos` (GET `/conjuntos`, solo `<tr>`), `actualizar` (POST) y, desde E2 tarea 4, la galería y lo que cobra:
   `ver_galeria` (GET `/galeria`, `entera=1` o `pagina`), `ver_tarjeta` (GET `/tarjeta/<fuente>/<canal>/<ad_id>`),
   `analizar_anuncio` (POST `/anuncio/<fuente>/<canal>/<ad_id>/analizar`) y `analizar_lote` (POST `/analizar-lote`);
-  desde E2 tarea 5, `evaluar` (POST `/evaluar`, «Evaluar con IA» de una fuente); desde E2 tarea 7, `ver_dia` (GET
+  desde E2 tarea 5, `evaluar` (POST `/evaluar`, «Evaluar con IA» de la parte Triple Whale; la de Meta es
+  `meta_rendimiento.rutas.evaluar` con `entrada` desde la integración con main); desde E2 tarea 7, `ver_dia` (GET
   `/dia`, el detalle de un día de «Resultados»). El
   nombre `rendimiento/` ya era de las pruebas de carga (skill `escala-y-salud`).
 - Pantalla: `_tab_rendimiento.html` (armazón + TODO el JS; el panel llega por fetch), `_rend_panel.html`,
@@ -87,11 +88,12 @@ los clientes». Las dos pestañas daban números distintos para el mismo anuncio
 - **R13. Lo pagado no se reescribe.** Referentes, «Llevar a Crear» y Pausar/Activar siguen en
   `triple_whale/rutas.py` con su alcance y sus garantías; esta pestaña solo les pasa la tienda de la entrada (o
   `None`). «Cómo mejorarlo» y «Analizar los N» pasaron en E2 tarea 4 a las rutas de la pestaña (la galería es una con
-  las dos fuentes), y «Evaluar con IA» en E2 tarea 5 (un botón por fuente), pero cobran con el mismo
+  las dos fuentes), y «Evaluar con IA» de Triple Whale en E2 tarea 5, pero cobran con el mismo
   `triple_whale/pedidos.py` y el alcance de cada fuente, con todas sus garantías. El JS de la galería se trajo tal cual (`tests/test_tw_tarjetas_js.py` lo lee aquí) y no cambió
   al unir la galería: cada URL sale de la plantilla.
 - **R14. Anuncios de fuente Meta sin IA** solo en E1 (tarjeta sin botón, ni apagado). Desde E2 (tareas 1 a 4) tienen
-  «Cómo mejorarlo» con la misma tarjeta y el mismo flujo pagado, y desde la tarea 5 su propio «Evaluar con IA».
+  «Cómo mejorarlo» con la misma tarjeta y el mismo flujo pagado; su «Evaluar con IA» es la «Evaluación con IA» de Meta
+  rendimiento E2 (main; ver «Integración con main»).
 - **R15. Conexión en «Ajustes».** El formulario de Triple Whale (`_triple_whale_conectar.html`, un `div`: una
   `section` cortaba la de la pestaña) y «Elegir cuentas de Meta» (solo admin, R20 de Meta) viven en `#rend-ajustes`; la
   conexión con Meta sigue en Configuración › Conexiones.
@@ -111,8 +113,10 @@ los clientes». Las dos pestañas daban números distintos para el mismo anuncio
   minutos de quien no es admin. Solo la entrada VACÍA es «Todas»: una que ya no existe (pestaña vieja, país quitado,
   la de otro proyecto) no encola nada y dice «Esa vista ya no existe: recarga la pestaña.» (revisión de la tarea 8:
   ensanchada a «Todas» copiaba todas las cuentas y gastaba el límite de uso de Meta que necesitan los lanzamientos).
-- **A6.** E2 (PND-192) trae «Cómo mejorarlo»/«Evaluar con IA» para Meta con la misma tabla y tarea; la copia de
-  desgloses `meta_desglose` y los avisos por correo de Meta quedaron aparte (PND-209).
+- **A6.** E2 trae «Cómo mejorarlo» para Meta con la misma tabla y tarea (`tw_analisis`, `tw_analizar_anuncio`); la
+  copia de desgloses `meta_desglose` y los avisos por correo de Meta quedaron aparte (PND-271). Al integrar main
+  (2026-10-10) los desgloses ya los había hecho Meta rendimiento E2 en producción (PND-271 se cerró; los correos son
+  PND-259) y su «Evaluación con IA» reemplazó a la nuestra de E2 tarea 5 (INT-2).
 - **A7 (revisión final de E1, 2026-10-10; enmienda R7 en un borde).** Con SOLO tiendas de Triple Whale en «Todas»
   (fuente "tw"), «Desde el inicio» es el de Triple Whale (`triple_whale.panel._primer_dia`: cada tienda desde su primer
   día) para Resultados Y para «Por país», sin `inicio_comun` ni línea «Desde el …»; el inicio común de R7 es solo para
@@ -128,7 +132,9 @@ los clientes». Las dos pestañas daban números distintos para el mismo anuncio
 - **Una sola barra para las copias** (`panel.contexto()["copias_vivas"]`, las del alcance: la barra sigue al primer
   trabajo vivo y dice «Trayendo N copias…»). Motivo: spec §5.1, y cada barra que termina recarga la página: con una por
   tienda y por cuenta eran varias recargas seguidas.
-- **«Lo que necesita tu atención»** junta alertas de Triple Whale, de los anuncios de Meta y recomendaciones de Meta SIN
+- **«Lo que necesita tu atención»** junta alertas de Triple Whale y de los anuncios de Meta (hasta la integración con
+  main, también las recomendaciones propias de E2 tarea 6, jubiladas: lo que hay que corregir en las cuentas de Meta es
+  el Diagnóstico de main, en su sección justo debajo) SIN
   quitar textos repetidos y en orden estable alta → media → bien (`panel._atencion`). Motivo: «2 anuncios ganadores» de
   cada fuente son cosas distintas y quitar una escondía la mitad; una cuenta desactivada no puede quedar debajo de «bien».
 - **El filtro «Canal»** solo ofrece canales con gasto en el periodo (`triple_whale.datos.canales`, alineado con R9): uno
@@ -136,7 +142,7 @@ los clientes». Las dos pestañas daban números distintos para el mismo anuncio
 - **Análisis pagados antes de R9** no se vuelven a ofrecer por un veredicto que movió R9 (`foto["metodo"]`; skill
   `triple-whale`, «Old analysis»). Motivo: pagar dos veces lo mismo (guardián de gasto).
 - Pruebas de la revisión: `tests/test_rendimiento_revision_final.py` (con las mutaciones 22–28 del revisor) y
-  `tests/test_rendimiento_r9_plata.py`. Lo diferido: PND-210 a PND-221.
+  `tests/test_rendimiento_r9_plata.py`. Lo diferido: PND-272 a PND-283.
 
 ## E2 tarea 4 (2026-10-10): una sola galería y un solo lote
 
@@ -161,15 +167,16 @@ la miniatura, el saldo, la fuente en la foto, Referentes y «Meta reporta»).
   Triple Whale). Una `entrada` no vacía que ya no es la clave de ninguna entrada (pestaña vieja) no se ensancha a
   «Todas»: no hay alcance y nada se cobra (como «Actualizar ahora», A5). En el panel, el alcance de Triple Whale sale
   de su contexto (`_alcance_tw_de`) y el de Meta de `_meta`, que lo arma con `alcance_meta` UNA vez y de ahí salen
-  también las alertas y las recomendaciones de los anuncios de Meta (`meta["anuncios"]["ev"]`).
+  también las alertas de los anuncios de Meta (`meta["anuncios"]["ev"]`) y los anuncios ya evaluados que la «Evaluación
+  con IA» de Meta cuenta para su N con 7, 14 o 90 días (`meta_panel.diagnostico(evaluados_periodo=)`).
 - **Las rutas**: `<fuente>` "tw"/"meta" e ids con `id_valido` (si no, 404 antes de leer); un anuncio que no está en el
   alcance de esa fuente, 404. Sin el alcance de esa fuente (pestaña vieja, desconectada) «Cómo mejorarlo» responde JSON
   `ok: False` sin cobrar; el correo sin verificar, también JSON al fetch (`_correo_verificado`). El 402 sin saldo es el
   de `dashboard._saldo_insuficiente`, como antes.
 - **La tarjeta de Meta** es la misma macro (`_tw_galeria.html`): cuenta con bandera en el sobretítulo, «según Meta» en el
-  resultado, sin «Meta reporta» (R12 es de Triple Whale) ni «Guardar en Referentes» (PND-222). Su medio: una pieza de
+  resultado, sin «Meta reporta» (R12 es de Triple Whale) ni «Guardar en Referentes» (PND-284). Su medio: una pieza de
   Creatv (R2); si no, la imagen que un análisis listo copió a R2; si no, la miniatura de Meta solo si
-  `meta_rendimiento.datos.miniatura_valida` (al pintar: PND-220), a su tamaño (`.tw-medio-miniatura`: llega de 64 px y
+  `meta_rendimiento.datos.miniatura_valida` (al pintar: PND-282), a su tamaño (`.tw-medio-miniatura`: llega de 64 px y
   agrandada se vería borrosa).
 - **Un análisis es de SU fuente** (revisión de la tarea 4): `triple_whale.panel.mismo_alcance` compara la fuente de la
   foto (`foto["fuente"]`, sin ella = Triple Whale) con la del alcance. Una cuenta cubierta por una tienda (R5), vista
@@ -184,27 +191,23 @@ la miniatura, el saldo, la fuente en la foto, Referentes y «Meta reporta»).
   JS de `data-rend-mas` y las reglas `.rend-tarjeta*`/`.rend-anuncios-meta`/`.rend-subtitulo`. Sus pruebas apuntan a las
   rutas nuevas y vigilan lo mismo (A1, A3, A4, A5, B6, 402, ajenos 404, mismo origen, aislamiento).
 
-## E2 tarea 5 (2026-10-10): «Evaluar con IA» también para Meta
+## E2 tarea 5 (2026-10-10): «Evaluar con IA» desde la pestaña (su rama Meta se jubiló al integrar main)
 
-Por qué: «Lo que hace ganar en tu cuenta» solo existía con Triple Whale (spec §5 punto 6); los anuncios de las cuentas
-de Meta sin tienda se quedaban sin patrones ni ideas (A6, PND-192). Código: `panel._ia`, `rutas.evaluar`, la macro `ia`
-de `_tw_secciones.html` (recibe `r.ia` y `r.params`, ya no `tw`); pruebas `tests/test_rendimiento_e2_evaluar.py`.
+Por qué: «Lo que hace ganar en tu cuenta» vivía en `triple_whale.rutas.evaluar`, sin la barrera de correo verificado de
+la pestaña. Código: `panel._ia`, `rutas.evaluar`, la macro `ia` de `_tw_secciones.html` (recibe `r.ia` y `r.params`, ya
+no `tw`); pruebas `tests/test_rendimiento_e2_evaluar.py`.
 
-- **Un botón por fuente del alcance, cada uno con SU muestra y SU precio** (`gastos.estimar("evaluacion_tw", n=)`):
-  con mezcla, «Evaluar los N de tus tiendas» y «Evaluar los N de tus cuentas de Meta» y una línea que dice que se evalúan
-  por separado; con una fuente, el botón de siempre. Nunca un prompt con las dos: el Pixel de Triple Whale y el de Meta
-  atribuyen distinto y sus números no se comparan. La sección aparece también sin Triple Whale (`r.ia` lee entonces
-  las evaluaciones él mismo).
-- **La ruta** (`POST /evaluar`, `fuente` "tw" | "meta" o 404, `entrada`/`dias`/`canal`) vuelve a armar la muestra con
-  `panel.alcances` (la misma resolución que el panel: se cobra lo que se vio) y llama a `pedidos.pedir_evaluacion`
-  (Cobros antes de crear la fila, `max_intentos=1`). Una evaluación en curso, de cualquier fuente, bloquea otra (un
-  `job_id` por proyecto); una vista sin esa fuente (pestaña vieja, Meta desconectado) no cobra: «Esa vista ya no existe».
-- **Lo que guarda una de Meta**: `extra = {fuente: "meta", cuentas, modelo: "Pixel de Meta", ventana: "Meta", benchmarks,
-  meta_roas, tienda_id: None, pais}` (el de la entrada; `alcance_meta` devuelve ahora `cuentas` y `panel.alcances` el
-  `pais`). La de Triple Whale guarda lo de siempre, sin `fuente`. En la lista se rotula «Suecia en Meta» o «tus cuentas
-  de Meta» (`triple_whale.panel._alcance_evaluacion`), no «Todas las tiendas».
-- **Se jubiló** `triple_whale.rutas.evaluar` (sin el correo verificado de esta pestaña); sus pruebas apuntan a
-  `/rendimiento/evaluar` con `fuente=tw`. Una entrada que no es del proyecto ya no evalúa «Todas»: no evalúa nada.
+- **La ruta** (`POST /evaluar`, `fuente` "tw" o sin ella; otra, 404; `entrada`/`dias`/`canal`) vuelve a armar la muestra
+  con `panel.alcances` (la misma resolución que el panel: se cobra lo que se vio) y llama a `pedidos.pedir_evaluacion`
+  (Cobros antes de crear la fila, `max_intentos=1`, `libro.exigir(..., tipo="evaluacion")` de main). Una evaluación en
+  curso bloquea otra (un `job_id` por proyecto); una vista sin Triple Whale (pestaña vieja) no cobra: «Esa vista ya no
+  existe». Con mezcla, una línea dice que mira las tiendas de Triple Whale.
+- **Se jubiló** `triple_whale.rutas.evaluar`; sus pruebas apuntan a `/rendimiento/evaluar`. Una entrada que no es del
+  proyecto ya no evalúa «Todas»: no evalúa nada.
+- **La rama Meta** (un botón por fuente, `extra["fuente"] = "meta"`, «con sus métricas de Meta», la etiqueta «Suecia en
+  Meta», `alcance_meta` con `cuentas`, `alcances()["pais"]`, `medios_meta` con `meta_conexion.cargar` y `muestra`
+  reordenando por ingresos) **se jubiló al integrar main** (INT-2: una sola implementación por función, gana la de
+  producción): la evaluación de las cuentas de Meta es la «Evaluación con IA» de Meta rendimiento E2 (ver abajo).
 
 ## E2 tarea 7 (2026-10-10): el detalle del día con Meta y con mezcla
 
@@ -246,10 +249,49 @@ arranques desconocidos).
   piezas de Creatv y una de tasas por moneda, crezcan o no los anuncios
   (`test_las_consultas_no_crecen_con_los_anuncios`).
 
+## Integración con main (2026-10-10): lo de producción, dentro de Rendimiento
+
+Por qué: mientras esta rama jubilaba las pestañas «Triple Whale» y «Meta», otras conversaciones sacaron a producción
+(main 7bb9208b, alembic 0039) Meta rendimiento E2, los ganchos y el copy de Triple Whale, el NVP y la página por partes,
+encima de esas pestañas. Rulings INT-1..8 en `.superpowers/sdd/2026-10-10-pestana-rendimiento-e2/integracion-main.md`;
+el informe de la integración, al lado (`integracion-report.md`). Dónde vive cada cosa:
+
+- **Diagnóstico y Segmentos de Meta** (main E2): los parciales `_meta_diagnostico.html` (después de «Lo que necesita tu
+  atención») y `_meta_segmentos.html` (después de «Campañas» y «Conjuntos»), con `mr` = `r.meta.e2` de
+  `meta_panel.diagnostico` sobre TODAS las cuentas de Meta del alcance (`meta_estructura`, cubiertas incluidas). Sus
+  enlaces al Administrador de anuncios van tal cual. Las alertas «alta» de Meta (Alertas) llevan a `#rendimiento`.
+- **«Evaluación con IA» de Meta** (main E2, cobra): `_meta_evaluar.html` y `_meta_evaluacion.html` después de «Lo que
+  hace ganar en tu cuenta». Evalúa las cuentas de la entrada cuya fuente es Meta (`meta_fuente`; nunca las dos fuentes
+  en un prompt): el formulario manda `entrada`, y `meta_rendimiento.rutas.evaluar` las resuelve con
+  `panel.cuentas_evaluacion_meta` (la misma `_resolver`; una entrada vieja no se ensancha a «Todas») y se las pasa a
+  `analisis.preparar(ids=)`. «Desde el inicio» evalúa los últimos 30 días (el defecto de la vieja pestaña; el texto lo
+  dice); con 7, 14, 30 o 90, ese periodo. El N y el precio del botón salen del mismo cálculo que la ruta (E2-R6;
+  `tests/test_rendimiento_meta_e2.py`). Una entrada cuyas cuentas de Meta cubre una tienda dice que su evaluación es la
+  de Triple Whale. Precio, `n`/`precio_visto`, `max_intentos=1` y el gasto son los de main, sin tocar.
+- **NVP**: en Resultados de Triple Whale (fuente «tienda» o «anuncios»; con Meta o mezcla no hay tarjeta NVP: sería de
+  una parte del alcance), en «Ver como tabla» y en cada tarjeta de la galería (las de Meta, de la copia de Triple Whale
+  por `ad_id`; sin Triple Whale, sin la línea), y para las cuentas de Meta una línea arriba de «Campañas y conjuntos»
+  más la columna en esas tablas (`meta_panel.nvp_estructura`). El KPI de la vieja pestaña Meta y su «Por cuenta» no
+  tienen lugar aquí (PND-281).
+- **Ganchos y copy de Triple Whale**: el detalle de un análisis (`_tw_analisis.html`, de `triple_whale.analisis_detalle`)
+  se abre desde la galería única; su JS (esperas, «Probar los N ganchos» por fetch) vive en `_tab_rendimiento.html`.
+  Un análisis de un anuncio de Meta sin tienda también los ofrece si su video está en R2 (PND-289).
+- **Lo jubilado de esta rama**: las recomendaciones propias de E2 tarea 6 (`meta_rendimiento/recomendaciones.py` nuestro,
+  `datos.objetos_para_recomendar`, `meta_rendimiento/constantes.py`, `tests/test_rendimiento_e2_recomendaciones.py`;
+  dos reglas sin equivalente quedaron como PND-287), la rama Meta de E2 tarea 5 (arriba) y la limpieza propia de la base
+  de pruebas (quedó la de main: `tests/test_conftest_limpieza.py`).
+- **Pendientes renumerados** (INT-6: main llegó al PND-270): los de esta rama, del 209 al 224, pasaron al 271–286 (209 →
+  271, 210 → 272, …, 224 → 286); 271 y 282 están cerrados.
+- Dos arreglos de la revisión de E2 tarea 7: `rutas.ver_dia` rechaza una fecha fuera de 2000–2100 y `resumen.dia` mira el
+  rango antes de restar días (0001-01-02 daba 500), y `anuncios_fuera` dice qué fuente no trae sus anuncios ("tw",
+  "meta" o "ambas") para que el aviso no culpe siempre a la copia de 90 días de Meta.
+
 ## Trampas
 
-- Lo que se jubiló el 2026-10-10 con la galería única (no lo revivas): ver «E2 tarea 4»; con la evaluación de las dos
-  fuentes, `triple_whale.rutas.evaluar` (ver «E2 tarea 5»).
+- Lo que se jubiló el 2026-10-10 con la galería única (no lo revivas): ver «E2 tarea 4»; con la evaluación de la
+  pestaña, `triple_whale.rutas.evaluar` (ver «E2 tarea 5»); al integrar main, lo de «Integración con main».
+- Cuando main vuelva a tocar algo de las pestañas jubiladas, se porta a Rendimiento y se incluye su parcial tal cual,
+  armándole el contexto desde `pestana_rendimiento/panel.py` (como E2 de Meta); nunca se revive la pestaña.
 - Lo que se jubiló el 2026-10-09 (no lo revivas): `_tab_triple_whale.html`, `_tab_meta.html`, `_tw_panel.html`,
   `_meta_panel.html`, `_meta_anuncios_filas.html`, `meta_rendimiento/grafico.py`, las rutas `triple_whale.ver_panel`,
   `triple_whale.sincronizar`, `meta_rendimiento.ver_panel`/`ver_anuncios`/`ver_conjuntos`/`sincronizar` y

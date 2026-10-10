@@ -211,7 +211,10 @@ def _normalizar(item):
     }
 
 
-def traer(consulta, tope, avanzar, cursor=None):
+AVISA_CORRIDA = True
+
+
+def traer(consulta, tope, avanzar, cursor=None, on_ids=None):
     """Una sola corrida de Apify entrega hasta `tope` anuncios de una vez
     (resultsLimit los topea del lado de Apify) -- no hay cursor que
     retomar, así que esta fuente siempre hace un único yield y termina.
@@ -236,6 +239,13 @@ def traer(consulta, tope, avanzar, cursor=None):
     conciliacion = None
     consultada = False
 
+    def guardar_ids(run, dataset):
+        nonlocal run_id, dataset_id
+        run_id, dataset_id = run, dataset
+        if run and on_ids:
+            on_ids(round(tope * apify_actores.USD_POR_RESULTADO, 4),
+                   {"run_id": run, "dataset_id": dataset, "estimado": True, "conciliacion_pendiente": True})
+
     def cobro(contados):
         cantidades = []
         if conciliacion:
@@ -244,14 +254,14 @@ def traer(consulta, tope, avanzar, cursor=None):
             cantidades.append(round(contados * apify_actores.USD_POR_RESULTADO, 4))
         extra = {"run_id": run_id, "dataset_id": dataset_id,
                  **({k: v for k, v in conciliacion.items() if k != "costo_real"} if conciliacion else {})}
-        if not cantidades:
+        if not cantidades or not dataset_id:
             extra.update(estimado=True, conciliacion_pendiente=True)
             return round(tope * apify_actores.USD_POR_RESULTADO, 4), extra
         return max(cantidades), extra
 
     try:
         run_id, dataset_id, estado = apify_api.arrancar(
-            sesion, token, apify_actores.ACTOR, entrada, tope, estimado["usd_fuente"])
+            sesion, token, apify_actores.ACTOR, entrada, tope, estimado["usd_fuente"], on_ids=guardar_ids)
         estado = apify_api.sondear(sesion, token, run_id, estado, ETAPA_LEER, avanzar)
         consultada = True
         conciliacion = apify_api.costo_corrida(sesion, token, run_id)
@@ -281,7 +291,7 @@ def traer(consulta, tope, avanzar, cursor=None):
                                       estado=apify_api.frase_estado(estado), corrida=run_id),
                               costo_real=costo_real, extra_gasto=extra_gasto)
         avanzar(etapa=ETAPA_BUSCAR, detalle=ngettext("%(num)d anuncio", "%(num)d anuncios", 0))
-        yield [], None, {**extra_gasto, "costo_real": costo_real} if costo_real else {}
+        yield [], None, {**extra_gasto, "costo_real": costo_real}
         return
     try:
         pagina = [_normalizar(it) for it in crudos if isinstance(it, dict)]

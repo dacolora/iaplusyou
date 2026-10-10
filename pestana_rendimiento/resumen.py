@@ -410,7 +410,7 @@ def _edad_conocida(inicio, fecha):
 
 def dia(cliente, entradas_, alc, fecha, hoy, moneda_tw):
     """«Qué pasó el …» con Meta o con fuentes mezcladas (regla 7): (detalle, None) con el contexto de
-    `triple_whale.resultados.detalle_dia` más `anuncios_fuera` e `ir_a` (el bloque que abre «Ver todos los anuncios →»),
+    `triple_whale.resultados.detalle_dia` más `anuncios_fuera` ("tw" | "meta" | "ambas" | "") e `ir_a` (el bloque que abre «Ver todos los anuncios →»),
     o (None, motivo en palabras) para un 400. `alc` es el de `pestana_rendimiento.entradas.alcance` con fuente "meta" o
     "mixta"; con solo Triple Whale el detalle es `triple_whale.panel.contexto_dia`."""
     moneda_tw = _moneda_de(moneda_tw)
@@ -420,9 +420,12 @@ def dia(cliente, entradas_, alc, fecha, hoy, moneda_tw):
     primeros_tw, primeros_meta = _primeros(cliente, alc, tiendas)
     primeros = primeros_tw + list(primeros_meta.values())
     inicio = max(primeros) if primeros else None
-    f, f_antes = fecha.isoformat(), (fecha - timedelta(days=7)).isoformat()
+    f = fecha.isoformat()
     if not inicio or f < inicio or fecha >= hoy:
         return None, gettext("Ese día no tiene datos completos.")
+    # Después del chequeo del rango: una fecha absurda (0001-01-02) haría que restar 7 días reventara (OverflowError, un
+    # 500 en vez del 400 de las demás; revisión de la tarea 7).
+    f_antes = (fecha - timedelta(days=7)).isoformat()
 
     # Las cifras del día y del mismo día de la semana anterior: una lectura por fuente, como los Resultados.
     tienda_id = alc["tw"]["tienda_id"] if alc["tw"] else None
@@ -449,7 +452,7 @@ def dia(cliente, entradas_, alc, fecha, hoy, moneda_tw):
 
     # Los anuncios de cada fuente: una lectura por fuente (Triple Whale en la moneda del proyecto; Meta, los mejores de
     # cada cuenta) y el orden final por ventas en USD.
-    anuncios, arranques, fuera = [], [], False
+    anuncios, arranques, fuera = [], [], []
     gasto_tw = sum(x["gasto"] for x in filas if x["fecha"] == f and x["act"] is None)
     gasto_meta = sum(x["gasto"] for x in filas if x["fecha"] == f and x["act"] is not None)
     if alc["tw"]:
@@ -457,7 +460,8 @@ def dia(cliente, entradas_, alc, fecha, hoy, moneda_tw):
         propios = twdatos.anuncios_del_dia(cliente, tienda_id, f, limite=LIMITE_ANUNCIOS_DIA)
         anuncios += [dict(a, fuente="tw", moneda=moneda_tw, edad_conocida=conocida) for a in propios]
         arranques.append(twdatos.arrancaron_el(cliente, tienda_id, f) if conocida else None)
-        fuera = fuera or (gasto_tw > 0 and not propios)
+        if gasto_tw > 0 and not propios:
+            fuera.append("tw")
     if alc["meta_fuente"]:
         conocida = _edad_conocida(mdatos.inicio_para_antiguedad(cliente, alc["meta_fuente"]), fecha)
         propios = mdatos.anuncios_del_dia(cliente, alc["meta_fuente"], f, limite=LIMITE_ANUNCIOS_DIA)
@@ -465,7 +469,8 @@ def dia(cliente, entradas_, alc, fecha, hoy, moneda_tw):
                           moneda=_moneda_de(cuentas_por_id.get(a["ad_account_id"], {}).get("moneda")))
                      for a in propios]
         arranques.append(mdatos.arrancaron_el(cliente, alc["meta_fuente"], f) if conocida else None)
-        fuera = fuera or (gasto_meta > 0 and not propios)
+        if gasto_meta > 0 and not propios:
+            fuera.append("meta")
 
     def en_usd(a, clave):
         if not convertir:
@@ -484,5 +489,7 @@ def dia(cliente, entradas_, alc, fecha, hoy, moneda_tw):
         None if None in arranques else sum(arranques), creatv, moneda, alc["fuente"],
         anterior.isoformat() if anterior.isoformat() >= inicio else None,
         siguiente.isoformat() if siguiente < hoy and not (fin and siguiente.isoformat() > fin) else None)
-    detalle.update(anuncios_fuera=fuera, ir_a="tw-galeria")
+    # `anuncios_fuera`: qué fuente tuvo gasto ese día y no trae sus anuncios ("tw", "meta" o "ambas"; "" si ninguna).
+    # El aviso culpa a la que falta: antes siempre culpaba a la copia de 90 días de Meta (revisión de la tarea 7).
+    detalle.update(anuncios_fuera="ambas" if len(fuera) > 1 else (fuera[0] if fuera else ""), ir_a="tw-galeria")
     return detalle, None

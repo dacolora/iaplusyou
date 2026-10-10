@@ -30,16 +30,26 @@ class PuenteError(ValueError):
     """Algo que la persona tiene que saber (el mensaje se muestra tal cual)."""
 
 
-def prefill_crear(cliente, idea, evaluacion_id=None, indice=None, analisis_id=None):
+def prefill_crear(cliente, idea, evaluacion_id=None, indice=None, analisis_id=None, origen=None):
     """Lo que `_tab_creativeflowplus.html` lee de `fp_prefill`. `origen_tw` es «<evaluación>:<índice>» para una idea
-    de la evaluación de cuenta y «a<análisis>» para la versión mejorada de un anuncio (spec tarjetas §7.1)."""
+    de la evaluación de cuenta y «a<análisis>» para la versión mejorada de un anuncio (spec tarjetas §7.1).
+
+    `origen` es un origen de otra pestaña, ya armado y con su propio prefijo (Meta rendimiento: «meta:<id>:<i>»,
+    `meta_rendimiento.analisis.origen`). Va en la misma clave porque es el campo oculto que Crear devuelve tal cual;
+    `origen_desde_formulario` solo reconoce las formas de Triple Whale (solo dígitos o «a<dígitos>»), así que un
+    origen con prefijo nunca se toma por una evaluación de Triple Whale."""
     if not idea or not str(idea.get("prompt") or "").strip():
         raise PuenteError(gettext("Esa idea no tiene prompt."))
     pref = proyectos.preferencias_flowplus(cliente)
-    salida = {"texto": str(idea["prompt"]).strip(), "tipo": "video", "modelo": pref.get("modelo_video") or "",
+    # `cliente`: `dashboard._prefill_para` usa la precarga solo en el proyecto donde se pidió (sin él, abrir Crear
+    # en otro proyecto la tomaba como propia: revisión de seguridad de E2, 2026-10-10).
+    salida = {"cliente": cliente, "texto": str(idea["prompt"]).strip(), "tipo": "video",
+              "modelo": pref.get("modelo_video") or "",
               "duracion": pref.get("duracion_defecto") or 8, "aspect_ratio": "9:16",
               "con_sonido": proyectos.preferencias_sonido(cliente).get("con_sonido", True) is not False}
-    if evaluacion_id is not None and indice is not None:
+    if origen:
+        salida["origen_tw"] = str(origen)
+    elif evaluacion_id is not None and indice is not None:
         salida["origen_tw"] = f"{int(evaluacion_id)}:{int(indice)}"
     elif analisis_id is not None:
         salida["origen_tw"] = f"a{int(analisis_id)}"
@@ -79,7 +89,7 @@ def origen_desde_formulario(cliente, valor):
 
 
 def anuncio_id_referente(canal, ad_id):
-    """`referente.anuncio_id` es único global y de 40 caracteres: «tw:<ad_id>»
+    """`referente.anuncio_id` es único por proyecto y de 40 caracteres: «tw:<ad_id>»
     para Meta, «tw:<canal>:<ad_id>» para los demás (recortado)."""
     base = f"tw:{ad_id}" if canal == "facebook-ads" else f"tw:{canal}:{ad_id}"
     return base[:40]
@@ -111,7 +121,7 @@ def a_referente(cliente, anuncio, clasif=None):
     if fila and fila.get("estado_imagen") != "ok":
         try:
             with tempfile.TemporaryDirectory(prefix="tw_ref_") as carpeta:
-                url = referentes_imagenes.guardar_en_r2(aid.replace(":", "_"), medio["imagen"], carpeta)
+                url = referentes_imagenes.guardar_en_r2(aid.replace(":", "_"), medio["imagen"], carpeta, cliente=cliente)
         except referentes_imagenes.ImagenInvalida as e:
             referentes_datos.marcar_imagen(rid, "error")
             raise PuenteError(gettext("No se pudo copiar la miniatura: %(error)s", error=str(e))) from None

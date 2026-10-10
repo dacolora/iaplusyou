@@ -2,6 +2,8 @@
 import pytest
 import sqlalchemy as sa
 
+pytestmark = pytest.mark.usefixtures("margen_1_5")   # estos tests suponen el margen 1,5 (el defecto ahora es 2,0)
+
 AHORA = "2026-10-08T10:00:00"
 
 
@@ -231,6 +233,9 @@ def test_limpiar_reservas_muertas(libro, base_temporal):
     libro.exigir("acme", 1.0, job_id="viva")
     libro.exigir("acme", 1.0, job_id="muerta")
     _tarea(db, "viva", "en_curso")
+    # PND-178: la limpieza solo recoge reservas muertas de más de diez minutos.
+    with db.conectar() as con:
+        con.execute(db.reserva_saldo.update().values(creada_en="2020-01-01T00:00:00"))
     assert libro.limpiar_reservas_muertas() == 1
 
 
@@ -333,6 +338,8 @@ def test_configurar_no_choca_con_otro_que_crea_la_cuenta_en_medio(libro, base_te
 
 
 def test_guardar_margen_global_no_choca_con_otro_en_medio(libro, base_temporal, escritor_en_medio):
+    with base_temporal.conectar() as con:      # esta prueba es del INSERT de la primera vez: sin el margen que fija el módulo
+        con.execute(base_temporal.kv.delete().where(base_temporal.kv.c.clave == libro.CLAVE_MARGEN))
     otro = escritor_en_medio("INSERT INTO kv",
                              f"insert into kv(clave, valor, actualizado_en) values ('{libro.CLAVE_MARGEN}', '2.0', 'ahora')")
     libro.guardar_margen_global(1.8, "admin")

@@ -104,7 +104,7 @@ def prompt_mensaje(cliente, pid):
         return _sin_cuerpo()
     # Cobros (spec 2026-10-08 §5.2): Claude responde en un hilo de esta
     # petición; sin saldo no se guarda el mensaje ni se lanza el hilo.
-    libro.exigir(cliente, gastos.estimar("refinar_prompt")["usd"])
+    libro.exigir(cliente, gastos.estimar("refinar_prompt")["usd"], tipo="refinar_prompt")
     try:
         mensaje_id = refinador.pedir_cambio(cliente, pid, cuerpo.get("mensaje"), usuario=session.get("usuario"))
     except refinador.ErrorRefinador as e:

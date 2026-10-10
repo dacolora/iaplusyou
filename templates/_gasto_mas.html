@@ -1,0 +1,3 @@
+{% if gastos_siguiente is not none %}
+<div class="acciones"><button type="button" class="btn-sm" data-lista-mas="gasto-filas" data-url="{{ url_for('gasto_lista', cliente=cliente, desde=gastos_siguiente) }}">{{ _('Ver más') }}</button></div>
+{% endif %}

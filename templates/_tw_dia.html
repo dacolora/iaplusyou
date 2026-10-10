@@ -1,7 +1,8 @@
 {# «Qué pasó el …»: el detalle de un día de «Resultados de tu tienda» (spec 2026-10-08-tw-resultados §2.3).
    Fragmento que pide static/tw_resultados.js a triple_whale.rutas.ver_dia (contexto `d` =
    triple_whale.resultados.detalle_dia + canal y tienda) y, desde Rendimiento E2 tarea 7, a rendimiento.ver_dia con
-   Meta o mezcla (`d.fuente` "meta" | "mixta", + `anuncios_fuera` e `ir_a` de pestana_rendimiento.resumen.dia: cada
+   Meta o mezcla (`d.fuente` "meta" | "mixta", + `anuncios_fuera` ("tw" | "meta" | "ambas": la fuente que tuvo gasto y
+   no trae sus anuncios, y el aviso la nombra) e `ir_a` de pestana_rendimiento.resumen.dia: cada
    anuncio en su moneda, sin «Por canal»). Solo lectura: los nombres de los anuncios son texto ajeno y salen escapados
    por Jinja. Sin <script> (los de un fragmento por fetch no corren). #}
 <div class="twr-dia-cab">
@@ -54,8 +55,12 @@
       </li>
       {% endfor %}
     </ol>
-    {% elif d.anuncios_fuera %}
+    {% elif d.anuncios_fuera == 'meta' %}
     <p class="vacio">{{ _('Los anuncios de ese día ya no están en la copia (la de Meta guarda los últimos 90 días): las cifras de arriba son los totales.') }}</p>
+    {% elif d.anuncios_fuera == 'tw' %}
+    <p class="vacio">{{ _('Los anuncios de ese día no están en la copia de Triple Whale: las cifras de arriba son los totales.') }}</p>
+    {% elif d.anuncios_fuera %}
+    <p class="vacio">{{ _('Los anuncios de ese día no están en la copia: las cifras de arriba son los totales.') }}</p>
     {% else %}
     <p class="vacio">{{ _('Ese día ningún anuncio tuvo gasto.') }}</p>
     {% endif %}

@@ -10,7 +10,7 @@
    `data-tarjeta-url` lleva el alcance como query aparte (`|urlencode`): en esa ruta `<canal>` del camino es el
    canal del anuncio y `canal` de la query es el filtro del panel, y url_for no admite los dos.
    Una tarjeta de Meta (regla 4 de la galería): la misma macro, con su cuenta en el sobretítulo, «según Meta» en el
-   resultado y sin «Meta reporta» (R12) ni «Guardar en Referentes» (PND-222). #}
+   resultado y sin «Meta reporta» (R12) ni «Guardar en Referentes» (PND-284). #}
 
 {% import "_meta_macros.html" as mx %}
 
@@ -18,6 +18,8 @@
 {% macro campos_alcance(params) -%}
 {% for k, v in params.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
 {%- endmacro %}
+
+{% import "_componentes.html" as cx %}
 
 {#- `detalle` es la cifra cruda en palabras («30 % se queda 3 s») o "" si no hay valor. Sin percentil (cuenta chica,
     pocos datos) el anillo dice «—» pero la cifra y el porqué siguen debajo y en el aria-label. -#}
@@ -84,6 +86,9 @@
       {#- R12 (spec 2026-10-09): lo que Meta le informa a Triple Whale de este anuncio (valor_canal / gasto); sin dato, nada.
           Solo en tarjetas de Triple Whale: en una de Meta la cifra de arriba ya es la de Meta. -#}
       {% if not de_meta and a.canal == 'facebook-ads' and am.roas_canal %}<div><dt>{{ _('Meta reporta') }}</dt><dd>{{ am.roas_canal | roas }}× <small>{{ _('cada uno cuenta las ventas con su propio Pixel') }}</small></dd></div>{% endif %}
+      {#- NVP (spec 2026-10-09-nvp-visitantes-nuevos §4.1): las sumas del periodo de ESTE anuncio, ya en `a.m`. En una
+          tarjeta de Meta salen de la copia de Triple Whale (galeria.py, regla 5) y sin Triple Whale no se dice. -#}
+      {% if not a.sin_nvp %}<div><dt>{{ _('Visitantes nuevos (NVP)') }}</dt><dd>{{ cx.nvp(am.visitantes_nuevos, am.visitantes) }}</dd></div>{% endif %}
     </dl>
     {% if a.fortalezas or a.problemas %}
     <ul class="tw-razones">
@@ -138,7 +143,7 @@
         <button type="submit" class="btn-xs">{{ _('Analizar con estos datos') }} · {{ precio_otro }}</button>
       </form>
       {% endif %}
-      {#- «Guardar en Referentes» sigue en triple_whale/rutas.py con el alcance de Triple Whale; para Meta, PND-222. -#}
+      {#- «Guardar en Referentes» sigue en triple_whale/rutas.py con el alcance de Triple Whale; para Meta, PND-284. -#}
       {% if not de_meta and a.veredicto in ('ganador', 'prometedor') and (a.medio.imagen or a.medio.poster) %}
       <form method="post" action="{{ url_for('triple_whale.anuncio_referente', cliente=cliente, canal=a.canal, ad_id=a.ad_id) }}">
         {{ campos_alcance(params_tw) }}

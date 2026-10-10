@@ -36,7 +36,7 @@ def _gastos():
 def test_tarea_guarda_el_resultado_y_registra_whisper_y_claude(en_cola, monkeypatch):
     recibido = {}
 
-    def _analizar(texto, imagenes, idioma, verificable_extra=""):
+    def _analizar(texto, imagenes, idioma, verificable_extra="", duracion_s=None, verificable=None, segundos_vistos=None):
         recibido.update(texto=texto, imagenes=imagenes, extra=verificable_extra)
         return mejorar.parsear(respuesta(), texto), 10000, 5000
     monkeypatch.setattr(mejorar, "analizar", _analizar)
@@ -65,7 +65,8 @@ def test_los_segundos_de_los_fotogramas_y_de_la_voz_son_citables_con_su_parte_en
                                                                   "en el segundo 12", "anillo": "gancho"}])
     pedido = {}
     # `analizar` de verdad (arma el verificable con lo extra); solo la llamada a Claude es falsa
-    monkeypatch.setattr(mejorar, "_llamar", lambda content, system_: (pedido.update(content=content) or cita, 100, 50))
+    monkeypatch.setattr(mejorar, "_llamar", lambda content, system_: (pedido.update(content=content) or cita, 100, 50,
+                                                                       "end_turn"))
     visto = {}
     original = mejorar.segundos_verificables
     monkeypatch.setattr(mejorar, "segundos_verificables", lambda b, v: visto.setdefault("extra", original(b, v)))
@@ -95,7 +96,7 @@ def test_whisper_caido_sigue_sin_voz(en_cola, monkeypatch):
     def _cae(foto_):
         raise RuntimeError("fal caído")
     monkeypatch.setattr(mejorar, "transcribir", _cae)
-    monkeypatch.setattr(mejorar, "analizar", lambda texto, imagenes, idioma, verificable_extra="": (
+    monkeypatch.setattr(mejorar, "analizar", lambda texto, imagenes, idioma, verificable_extra="", duracion_s=None, verificable=None, segundos_vistos=None: (
         mejorar.parsear(respuesta(), texto), 100, 50))
     en_cola["t"].tw_analizar_anuncio({"id": 3, "payload": {"cliente": "acme", "analisis_id": en_cola["aid"]}})
     fila = datos.analisis_anuncio("acme", en_cola["aid"])
@@ -118,6 +119,25 @@ def test_claude_invalido_queda_en_error_y_registra_lo_pagado(en_cola, monkeypatc
     assert g["evaluacion"]["usd"] == pytest.approx(costo_real(1000, 500), abs=1e-4) and costo_real(1000, 500) > 0
     assert g["transcripcion"]["usd"] == pytest.approx(0.001)
     assert fila["usd"] == pytest.approx(g["evaluacion"]["usd"] + 0.001)
+
+
+def test_una_respuesta_cortada_queda_en_error_en_palabras_y_registra_lo_pagado_una_vez(en_cola, monkeypatch):
+    """Arreglo A (revisión del gasto, 2026-10-09): una respuesta cortada por el tope es UNA llamada pagada, sin
+    corrección a ciegas; la fila lo dice en palabras y el gasto real queda anotado como pagado y no entregado."""
+    llamadas = []
+
+    def _llamar(content, system_):
+        llamadas.append(1)
+        return '{"frase": "Pierde', 1000, 20000, "max_tokens"
+    monkeypatch.setattr(mejorar, "_llamar", _llamar)
+    with pytest.raises(RuntimeError):
+        en_cola["t"].tw_analizar_anuncio({"id": 5, "payload": {"cliente": "acme", "analisis_id": en_cola["aid"]}})
+    fila = datos.analisis_anuncio("acme", en_cola["aid"])
+    assert len(llamadas) == 1
+    assert fila["estado"] == "error" and fila["error"] == "La respuesta de Claude salió cortada; vuelve a intentarlo."
+    g = {x["tipo"]: x for x in _gastos()}
+    assert g["evaluacion"]["usd"] == pytest.approx(costo_real(1000, 20000), abs=1e-4)
+    assert g["evaluacion"]["referencia"] == f"tw_anuncio:{en_cola['aid']}:t5"
 
 
 def test_los_temporales_se_borran_siempre(en_cola, monkeypatch, tmp_path):
@@ -169,7 +189,7 @@ def test_encolar_rechaza_ids_invalidos_sin_encolar(en_cola):
 
 
 def _analizar_bien(monkeypatch):
-    monkeypatch.setattr(mejorar, "analizar", lambda texto, imagenes, idioma, verificable_extra="": (
+    monkeypatch.setattr(mejorar, "analizar", lambda texto, imagenes, idioma, verificable_extra="", duracion_s=None, verificable=None, segundos_vistos=None: (
         mejorar.parsear(respuesta(), texto), 10000, 5000))
 
 
@@ -251,3 +271,76 @@ def test_si_tampoco_se_puede_escribir_el_error_la_tarea_igual_falla_con_palabras
     assert "no se pudo dejar en error" in caplog.text and "RuntimeError" in caplog.text
     assert "base bloqueada" not in caplog.text and "token=abc" not in caplog.text
     assert datos.analisis_anuncio("acme", en_cola["aid"])["estado"] == "analizando"   # colgada: la ruta la cierra
+
+
+def test_la_tarea_pasa_la_duracion_y_sin_fotogramas_no_deja_ganchos(en_cola, monkeypatch):
+    """Spec 2026-10-09 §3.2 y §2: `fotograma_s` se acota con la duración del video, y un anuncio que Claude solo vio
+    como imagen recibe copy pero no ganchos (aunque Claude los mande)."""
+    from tests.test_tw_mejorar import COPY_NUEVO, GANCHOS
+    recibido = {}
+
+    def _analizar(texto, imagenes, idioma, verificable_extra="", duracion_s=None, verificable=None, segundos_vistos=None):
+        recibido["duracion_s"] = duracion_s
+        return mejorar.parsear(respuesta(ganchos=GANCHOS, copy_nuevo=COPY_NUEVO), texto, duracion_s=duracion_s), 100, 50
+    monkeypatch.setattr(mejorar, "analizar", _analizar)
+    en_cola["t"].tw_analizar_anuncio({"id": 21, "payload": {"cliente": "acme", "analisis_id": en_cola["aid"]}})
+    assert recibido["duracion_s"] == 21.0
+    video = datos.analisis_anuncio("acme", en_cola["aid"])["resultado"]
+    assert len(video["ganchos"]) == 3 and video["copy_nuevo"]["titulo"] == COPY_NUEVO["titulo"]
+    aid2 = datos.crear_analisis("acme", None, "facebook-ads", "p2", "2026-09-01", "2026-09-30", "USD", _foto())
+    monkeypatch.setattr(mejorar, "visuales", lambda foto_: ({"bloques": [], "clase": "imagen", "fotogramas": 0}, []))
+    en_cola["t"].tw_analizar_anuncio({"id": 22, "payload": {"cliente": "acme", "analisis_id": aid2}})
+    imagen = datos.analisis_anuncio("acme", aid2)["resultado"]
+    assert imagen["ganchos"] == []
+    assert imagen["copy_nuevo"] and imagen["copy_nuevo"]["texto"] == video["copy_nuevo"]["texto"]   # el copy sí queda
+
+
+def test_la_tarea_verifica_las_cifras_contra_los_datos_y_no_contra_las_instrucciones(en_cola, monkeypatch):
+    """Revisión del 2026-10-09 (IMPORTANTE 1): lo que la tarea le da a `analizar` como verificable son los datos del
+    anuncio, sin una palabra de la plantilla; un «60 días» inventado en un gancho sale marcado de punta a punta."""
+    llamadas = []
+
+    def _llamar(content, system_):
+        llamadas.append(content[0]["text"])
+        return respuesta(ganchos=[{"texto": "Hasta 60 días de prueba", "prompt": "Push in", "fotograma_s": 4}],
+                         copy_nuevo={"titulo": "T", "texto": "Más de 700 clientes"}), 100, 50, "end_turn"
+    monkeypatch.setattr(mejorar, "_llamar", _llamar)
+    recibido = {}
+    original = mejorar.analizar
+
+    def _analizar(*a, **k):
+        recibido.update(k)
+        return original(*a, **k)
+    monkeypatch.setattr(mejorar, "analizar", _analizar)
+    en_cola["t"].tw_analizar_anuncio({"id": 23, "payload": {"cliente": "acme", "analisis_id": en_cola["aid"]}})
+    verificable = recibido["verificable"]
+    assert "Tu trabajo" not in verificable and "Reglas:" not in verificable and "Anuncio p1" in verificable
+    assert "[0,4 s] Det er offisielt" in verificable                 # los datos de verdad: la voz, el anuncio…
+    assert "Tu trabajo" in llamadas[0]                               # y el prompt de Claude sigue siendo el entero
+    r = datos.analisis_anuncio("acme", en_cola["aid"])["resultado"]
+    # «días de prueba» es además una oferta de prueba que los datos no traen (revisión final, 2026-10-10)
+    assert r["ganchos"][0]["cifras_sin_dato"] == ["60", "prueba"] and r["copy_nuevo"]["cifras_sin_dato"] == ["700"]
+
+
+
+def test_la_tarea_le_pasa_a_analizar_los_segundos_de_los_fotogramas_que_claude_vio(en_cola, monkeypatch):
+    """Arreglo G (medición real del 2026-10-09): Claude devolvió `fotograma_s` 13,5 en un video cuyos fotogramas eran
+    0,3 · 4,15 · 8 · 11,84 · 15,7: un segundo que nunca miró. La tarea le pasa los segundos vistos y el gancho arranca
+    en el fotograma visto más cercano."""
+    monkeypatch.setattr(mejorar, "visuales", lambda foto_: ({"bloques": [
+        {"type": "text", "text": "Segundo 0,3:"}, {"type": "image", "source": {}},
+        {"type": "text", "text": "Segundo 11,84:"}, {"type": "image", "source": {}},
+        {"type": "text", "text": "Segundo 15,7:"}, {"type": "image", "source": {}}], "clase": "fotogramas",
+        "fotogramas": 3}, []))
+    gancho = {"texto": "Pies cansados", "prompt": "Push in", "fotograma_s": 13.5}
+    monkeypatch.setattr(mejorar, "_llamar", lambda content, system_: (respuesta(ganchos=[gancho]), 100, 50, "end_turn"))
+    recibido = {}
+    original = mejorar.analizar
+
+    def _analizar(*a, **k):
+        recibido.update(k)
+        return original(*a, **k)
+    monkeypatch.setattr(mejorar, "analizar", _analizar)
+    en_cola["t"].tw_analizar_anuncio({"id": 24, "payload": {"cliente": "acme", "analisis_id": en_cola["aid"]}})
+    assert recibido["segundos_vistos"] == [0.3, 11.84, 15.7]
+    assert datos.analisis_anuncio("acme", en_cola["aid"])["resultado"]["ganchos"][0]["fotograma_s"] == 11.84

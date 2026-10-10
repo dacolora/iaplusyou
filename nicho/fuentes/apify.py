@@ -86,14 +86,14 @@ class FuenteApify(Fuente):
         actor = apify_actores.ACTORES[p["actor"]]
         avanzar(N_("Buscando"), actor["nombre"])
         corridas = apify_actores.corridas(p["actor"], p["links"], p["max_resultados"])
-        res = apify_api.correr_lote(sesion, token, actor["actor"], corridas, N_("Leyendo comentarios"), avanzar)
+        res = apify_api.correr_lote(sesion, token, actor["actor"], corridas, N_("Leyendo comentarios"), avanzar, on_ids=self._anotar_corridas)
         self.resultados, self.aviso, self.corridas = res["resultados"], res["aviso"], res["corridas"]
         # La primera corrida lanzada (pudo cobrar aunque las demás no arrancaran o el lote
         # termine en error): queda en la fuente para poder rastrearla en console.apify.com.
         lanzadas = [c for c in res["corridas"] if c["run_id"]]
         if lanzadas:
             self.run_id, self.dataset_id = lanzadas[0]["run_id"], lanzadas[0]["dataset_id"]
-        # `correr_lote` ya levanta ErrorFuente si NINGUNA corrida arrancó (nada se cobró). Acá
+        # `correr_lote` levanta ErrorFuente si no identifica ninguna corrida; un arranque incierto pudo cobrar. Acá
         # además: sin ítems que guardar y con alguna corrida que no terminó en SUCCEEDED o cuyo
         # dataset no se pudo leer (`motivo`), es el mismo "sin resultados" de siempre.
         if not res["items"] and any(c["estado"] != "SUCCEEDED" or c["motivo"] for c in res["corridas"]):

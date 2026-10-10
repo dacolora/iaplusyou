@@ -249,12 +249,13 @@ def consultar_por_job(job_id):
 
 
 def job_ids_vivos(cliente, tipo):
-    """job_ids de las tareas pendientes o en_curso de ese cliente y tipo — una
-    sola consulta, para pintar una barra por fila (p. ej. «Crear activo» por
-    producto) sin una consulta por fila."""
+    """job_ids de las tareas pendientes o en_curso de ese cliente y tipo (o
+    tipos: una tupla o lista) — una sola consulta, para pintar una barra por
+    fila (p. ej. «Crear activo» por producto) sin una consulta por fila."""
+    tipos = [tipo] if isinstance(tipo, str) else list(tipo)
     with db.conectar() as con:
         filas = con.execute(sa.select(db.tarea.c.job_id).where(
-            db.tarea.c.cliente == cliente, db.tarea.c.tipo == tipo,
+            db.tarea.c.cliente == cliente, db.tarea.c.tipo.in_(tipos),
             db.tarea.c.estado.in_(("pendiente", "en_curso")), db.tarea.c.job_id.isnot(None))).all()
     return {f[0] for f in filas}
 

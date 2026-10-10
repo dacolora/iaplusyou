@@ -51,6 +51,8 @@ class PedidoRechazado(RuntimeError):
     el proveedor, para contarlo en palabras en la tarjeta (PND-107: antes la
     tarjeta mostraba el JSON crudo)."""
 
+    proveedor = "wavespeed"
+
     def __init__(self, path, status, mensaje, texto):
         self.path, self.status, self.mensaje = path, status, mensaje
         super().__init__(f"WaveSpeed ({path}) respondió {status}: {texto[:500]}")
@@ -81,7 +83,10 @@ class ErrorProveedor(RuntimeError):
     cancelled, timeout, deleted). Lleva lo que la persona necesita leer — el
     mensaje del proveedor, su código y el id de la predicción — en vez del
     dict crudo (incidente 2026-09-28: la tarjeta mostraba el JSON entero de
-    Kling con «Content flagged as potentially sensitive» perdido adentro)."""
+    Kling con «Content flagged as potentially sensitive» perdido adentro).
+    `proveedor` dice quién la dio («fal» en providers/fal_video.py)."""
+
+    proveedor = "wavespeed"
 
     def __init__(self, nombre_modelo, estado, detalle=None, codigo=None, prediction_id=None, datos=None):
         self.nombre_modelo, self.estado, self.detalle = nombre_modelo, estado, detalle
@@ -101,6 +106,8 @@ class EsperaAgotada(TimeoutError):
     predicción (`prediction_id`) suele terminar y cobrarse igual. Quien la
     atrape guarda el id para recuperar el resultado después sin pagar de
     nuevo (tareas/flowplus.recuperar_video)."""
+
+    proveedor = "wavespeed"
 
     def __init__(self, nombre_modelo, prediction_id, timeout_seconds):
         self.nombre_modelo, self.prediction_id, self.timeout_seconds = nombre_modelo, prediction_id, timeout_seconds
@@ -154,11 +161,20 @@ def en_cortable():
     return bool(getattr(_LOCAL, "cortable", False))
 
 
-def _hay_que_cortar():
+def plazo_cortable():
+    """El `plazo_s` del `cortable()` en curso en este hilo, o None. Lo leen
+    las esperas de WaveSpeed y de fal (providers/fal_video.py)."""
+    return getattr(_LOCAL, "plazo", None) if en_cortable() else None
+
+
+def hay_que_cortar():
+    """True si el worker se está deteniendo y la espera de este hilo está
+    dentro de `cortable()`."""
     try:
         return en_cortable() and _DETENER is not None and bool(_DETENER())
     except Exception:  # noqa: BLE001 — preguntar nunca tumba una espera
         return False
+
 
 
 def avisar_lanzada(on_progreso, prediction_id):
@@ -186,7 +202,7 @@ def poll_hasta_listo(prediction_id, nombre_modelo, interval_seconds=5, timeout_s
     con el id para recuperar el resultado después)."""
     url = f"{BASE_URL}/predictions/{prediction_id}/result"
     inicio = time.time()
-    plazo = getattr(_LOCAL, "plazo", None) if en_cortable() else None
+    plazo = plazo_cortable()
     limite = timeout_seconds if plazo is None else min(timeout_seconds, plazo)
     fallos = 0
     while time.time() - inicio < limite:
@@ -219,7 +235,7 @@ def poll_hasta_listo(prediction_id, nombre_modelo, interval_seconds=5, timeout_s
                                  prediction_id=prediction_id, datos=data)
         # Después de avisar el progreso (el id ya quedó guardado): si el worker
         # se detiene, la espera se corta y otra tarea la retoma por el id.
-        if _hay_que_cortar():
+        if hay_que_cortar():
             raise EsperaInterrumpida(nombre_modelo, prediction_id, time.time() - inicio)
         time.sleep(interval_seconds)
     raise EsperaAgotada(nombre_modelo, prediction_id, limite)

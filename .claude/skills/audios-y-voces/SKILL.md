@@ -101,3 +101,9 @@ Finales en noruego (2026-10-08, spec de Noruega y Suecia §4; motivo: el públic
 
 
 PND-095 (2026-10-08, decisión delegada): la lista inicial y au_lista leen 24 audios con corte SQL (25 para saber si hay siguiente), por proyecto y más reciente primero. Ver más pide ?desde=24,48... y agrega las tarjetas con delegación; una respuesta que llegó tras reemplazar el botón se descarta. au_crear/au_borrar y el fin del sondeo vuelven a la primera página. Fragmento sin scripts; lista de datos y HTML tienen el mismo corte. Las muestras de Final edition y la validación vp: quedan como estaban por el alcance delegado. test_rutas_audios.py incluye SQL/HTML/Node y aislamiento.
+
+PND-062, entrega 2 (2026-10-10, pedido de Daniel): el JS de Audios vive en `static/crear-audios.js`
+(`defer`, versión de estáticos). `#crear-audios-datos` contiene los once textos traducidos, el ejemplo USD
+para el separador y las mismas tablas de clon/diseño con margen; los data-url y data-usd-caracter permanecen
+en `#au`. Las pruebas anteriores de permiso, sondeo y precio leen ahora el archivo enlazado, con idénticas
+expectativas. Node comprueba la inicialización y los eventos del módulo completo.

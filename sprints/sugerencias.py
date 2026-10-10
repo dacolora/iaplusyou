@@ -64,7 +64,7 @@ def _parsear(texto):
     return limpias
 
 
-def sugerir_personas(cliente, cuantas=3):
+def sugerir_personas(cliente, cuantas=3, uso=None):
     cuantas = max(1, int(cuantas or 3))
     idioma = idiomas.de_proyecto(cliente)
     guia = (marca.guia_efectiva(cliente) or "").strip() or "(sin guía de estilo todavía)"
@@ -77,8 +77,11 @@ def sugerir_personas(cliente, cuantas=3):
                                    productos=lista or "- (catálogo vacío)", cuantas=cuantas,
                                    niveles=", ".join(f'"{n}"' for n in doctrina.CONSCIENCIAS),
                                    idioma=idiomas.nombre_para_claude(idioma))
-    personas = _parsear(analisis._llamar([{"type": "text", "text": texto}], max_tokens=6000,
-                                         system=doctrina.bloque_system("investigar", idioma=idioma)))[:cuantas]
+    content = [{"type": "text", "text": texto}]
+    system = doctrina.bloque_system("investigar", idioma=idioma)
+    respuesta = (analisis._llamar(content, max_tokens=6000, system=system) if uso is None else
+                 analisis._llamar_contando(content, max_tokens=6000, system=system, uso=uso)[0])
+    personas = _parsear(respuesta)[:cuantas]
     for i, p in enumerate(personas):
         p["color"] = COLORES[i % len(COLORES)]
     return personas

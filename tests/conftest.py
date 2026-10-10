@@ -10,27 +10,29 @@ if RAIZ not in sys.path:
     sys.path.insert(0, RAIZ)
 
 
-def abrir_base_temporal(monkeypatch):
-    """El cuerpo de `base_temporal`, aparte para poder probar que limpia. Al terminar suelta el motor (dispose: ninguna
-    conexión sigue abierta sobre la base ni sobre su -wal/-shm) y BORRA la carpeta. Antes no la borraba: el 2026-10-10
-    se habían juntado 781 296 carpetas `creatv_test_*` (589 GB) en $TMPDIR y el disco se llenó (ENOSPC)."""
+@pytest.fixture()
+def base_temporal(monkeypatch):
+    """Base SQLite nueva por test, en archivo (WAL necesita archivo, no :memory:)."""
     carpeta = tempfile.mkdtemp(prefix="creatv_test_")
     ruta = os.path.join(carpeta, "creatv.db")
     monkeypatch.setenv("CREATV_DB_URL", f"sqlite:///{ruta}")
     import db
     db._reset_para_tests()
-    try:
-        db.crear_todo()
-        yield db
-    finally:
-        db._reset_para_tests()
-        shutil.rmtree(carpeta, ignore_errors=True)
+    db.crear_todo()
+    yield db
+    db._reset_para_tests()
+    # El motor ya se soltó: la carpeta (con sus -wal/-shm) se borra. Sin esto
+    # cada test dejaba una carpeta en $TMPDIR (31 000 y 25 GB, 2026-10-10).
+    shutil.rmtree(carpeta, ignore_errors=True)
 
 
 @pytest.fixture()
-def base_temporal(monkeypatch):
-    """Base SQLite nueva por test, en archivo (WAL necesita archivo, no :memory:); se borra al terminar."""
-    yield from abrir_base_temporal(monkeypatch)
+def margen_1_5(base_temporal):
+    """El margen global que suponen los tests de cobros que no hablan del margen. El defecto del código es 2,0
+    (a la carta, planes 2026-10-09); estos tests escriben su lógica con 1,5 y lo fijan aquí, explícito."""
+    from cobros import libro
+    libro.guardar_margen_global(1.5, "test")
+    yield
 
 
 @pytest.fixture()

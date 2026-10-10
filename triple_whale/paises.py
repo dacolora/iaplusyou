@@ -79,6 +79,8 @@ def adivinar_pais(dominio):
             if codigo:
                 return codigo
     ultimo = trozos[-1].upper()
+    if ultimo == "UK":
+        return "GB"
     if len(ultimo) == 2 and ultimo.isalpha() and ultimo in validos:
         return ultimo
     return None

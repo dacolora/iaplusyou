@@ -65,18 +65,19 @@ def test_modelos_y_ventanas_viejos_se_traducen_al_vocabulario_de_triple_whale():
 
 
 def test_consultas_del_pixel_solo_llevan_valores_de_la_lista_blanca():
-    completa, minima = triple_whale.consultas_pixel("Last Click", "7_days")
-    assert "model = 'Last Click'" in completa and "attribution_window = '7_days'" in completa
-    assert "pixel_joined_tvf()" in completa and "orders_quantity" in minima
+    for consulta in triple_whale.consultas_pixel("Last Click", "7_days"):
+        assert "model = 'Last Click'" in consulta and "attribution_window = '7_days'" in consulta
+        assert "pixel_joined_tvf()" in consulta and "orders_quantity" in consulta
     # Un valor raro nunca entra a la consulta: cae al defecto.
-    raro, _ = triple_whale.consultas_pixel("x' OR 1=1 --", "lifetime'--")
+    raro, *_ = triple_whale.consultas_pixel("x' OR 1=1 --", "lifetime'--")
     assert "OR 1=1" not in raro and "model = 'Triple Attribution'" in raro and "= 'lifetime'" in raro
     with pytest.raises(ValueError):
         triple_whale._literal("otro", triple_whale.MODELOS)
 
 
 def test_las_consultas_nombran_columnas_y_nunca_select_asterisco():
-    for q in triple_whale.consultas_anuncios() + triple_whale.consultas_tienda() + triple_whale.consultas_pixel("", ""):
+    for q in (triple_whale.consultas_anuncios() + triple_whale.consultas_tienda() + triple_whale.consultas_pixel("", "")
+              + triple_whale.consultas_visitantes_tienda()):
         assert "SELECT *" not in q.upper().replace("  ", " ")
         assert "@startDate" in q and "@endDate" in q
 

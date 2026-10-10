@@ -25,13 +25,12 @@ def test_conectar_hace_commit(base_temporal):
     assert valor == "1"
 
 
-def test_asegurar_carpeta_crea_el_directorio(monkeypatch):
+def test_asegurar_carpeta_crea_el_directorio(monkeypatch, tmp_path):
     """migrations/env.py la llama antes de abrir su propio engine: en un
     checkout limpio data/ no existe y sqlite no crea carpetas."""
     import os
-    import tempfile
     import db
-    base = tempfile.mkdtemp(prefix="creatv_dir_")
+    base = str(tmp_path)
     carpeta = os.path.join(base, "sub", "data")
     monkeypatch.setenv("CREATV_DB_URL", f"sqlite:///{os.path.join(carpeta, 'creatv.db')}")
     assert not os.path.isdir(carpeta)

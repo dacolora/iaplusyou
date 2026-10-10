@@ -28,6 +28,7 @@ TIPOS_QUE_COBRAN = frozenset({
     "producto_pedidos", "pieza_revisar", "sprint_analizar_referencia", "sprint_sugerir_personas",
     "sprint_reescribir_idea", "sprint_proponer_ideas", "sprint_qa_pieza", "referentes_sugerir_ia", "tw_evaluar",
     "tw_analizar_anuncio",      # «Cómo mejorarlo» de un anuncio: Whisper (fal) y Claude
+    "meta_rend_evaluar",        # Meta rendimiento, «Evaluar con IA» de las cuentas de Meta: Claude (Anthropic)
     # Nicho e investigación (Apify y Claude)
     "nicho_recolectar", "nicho_generar_avatares", "nicho_completar_avatares",
     "nicho_inv_consultas", "nicho_inv_buscar", "nicho_inv_seleccionar",
@@ -75,11 +76,15 @@ TIPOS_EXENTOS_DE_COBRO = {
     "tienda_sync_pedidos_todas": "periódica: solo encola tienda_sync_pedidos",
     "tw_sincronizar": "lee datos de Triple Whale",
     "tw_sincronizar_todas": "periódica: solo encola tw_sincronizar",
+    "tw_ganchos_preparar": "baja el video y lanza piezas de Crear; cada pieza la cobra flowplus_video",
+    "tw_ganchos_vigilar": "periódica: mueve las variantes de los ganchos; cada clip lo cobra flowplus_video",
+    "tw_gancho_armar": "arma con ffmpeg y el editor un clip ya pagado y el original",
     "salidas_limpiar": "periódica de mantenimiento",
     "cola_limpiar": "periódica de mantenimiento",
     "db_respaldar": "periódica de mantenimiento",
     "errores_limpiar": "periódica de mantenimiento",
     "cobros_verificar_recargas": "consulta a Bold, no cobra",
+    "planes_renovar": "cobra la renovación del plan en Wompi: es ingreso de Creatv, no gasto de un proveedor; no pasa por el saldo",
 }
 
 
@@ -126,4 +131,4 @@ def cargar_todas():
     """Importa los módulos con tareas reales. Se llama desde worker.main(), no
     al importar el paquete, para que los tests puedan registrar tareas falsas
     sin arrastrar proveedores externos."""
-    from tareas import audios, cadena, cobros, director, doctrina, edicion, experimentos, final_edition, flowplus, hablado, investigacion, mantenimiento, meta, meta_rendimiento, musica, nicho, organico, referentes, sprints, swap, tiendas, triple_whale, voces_propias  # noqa: F401
+    from tareas import audios, cadena, cobros, director, doctrina, edicion, experimentos, final_edition, flowplus, hablado, investigacion, mantenimiento, meta, meta_rendimiento, musica, nicho, organico, planes, referentes, sprints, swap, tiendas, triple_whale, voces_propias  # noqa: F401

@@ -82,3 +82,23 @@ def test_sin_corazon_mientras_se_genera(base_temporal):
     cf.actualizar("acme", cf_id, estado="video_generando")
     html = _cliente_admin(dashboard).get("/cliente/acme/crear/tarjetas").get_data(as_text=True)
     assert f'id="cf-{cf_id}"' in html and "generado-fav" not in html
+
+
+def test_el_worker_no_borra_el_corazon_que_llega_en_medio(escritor_en_medio):
+    """2026-10-09: `actualizar` (lo que usa el worker) leía `extra` sin
+    candado; un corazón confirmado entre su lectura y su UPDATE se perdía al
+    reescribir el extra viejo. Ahora el candado está tomado antes de leer: el
+    otro escritor espera (aquí, con timeout corto, queda bloqueado) en vez de
+    escribir en medio."""
+    import creative_flow as cf
+    cf_id = _sesion_video_listo()
+    otro = escritor_en_medio("UPDATE concepto",
+                             "UPDATE concepto SET extra = json_set(extra, '$.favorito', json('true')) "
+                             f"WHERE legado_id = '{cf_id}'")
+    assert cf.actualizar("acme", cf_id, revision_doctrina={"veredicto": "ok"})
+    assert otro["resultado"].startswith("bloqueado")
+    assert cf.cargar("acme")[cf_id]["revision_doctrina"] == {"veredicto": "ok"}
+    # Lo que el otro escritor quería hacer ahora pasa, y la siguiente escritura del worker lo conserva.
+    assert cf.marcar_favorito("acme", cf_id, True)
+    assert cf.actualizar("acme", cf_id, sonido={"pista": "x"})
+    assert cf.cargar("acme")[cf_id]["favorito"] is True

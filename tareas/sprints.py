@@ -1,13 +1,13 @@
 """
 Tareas del worker para Sprints: analizar una referencia con Claude, sugerir
-personas, traer una referencia desde un link (Parte 1, baratas — centavos, sin
-generación de video, por eso llevan reintentos), proponer ideas por campaña
+personas (un intento por tarea paga), traer una referencia desde un link
+(Parte 1, sin generación de video), proponer ideas por campaña
 con el prompt maestro (Parte 2, también solo texto) y el control de calidad
 automático de una pieza ya generada (también Parte 2, centavos de visión).
 
 Ids de trabajo (los mismos que usan las rutas para encolar y consultar):
-  sprint_analizar_referencia -> f"{cliente}__ref{referencia_id}__analizar"          (max_intentos=3)
-  sprint_sugerir_personas    -> f"{cliente}__sprints__sugerir_personas"             (max_intentos=2)
+  sprint_analizar_referencia -> f"{cliente}__ref{referencia_id}__analizar"          (max_intentos=1)
+  sprint_sugerir_personas    -> f"{cliente}__sprints__sugerir_personas"             (max_intentos=1)
   sprint_referencia_link     -> f"{cliente}__campana{campana_id}__link"             (max_intentos=2)
   sprint_proponer_ideas      -> f"{cliente}__campana{campana_id}__ideas"            (max_intentos=1, pagada)
   sprint_qa_pieza            -> f"{cliente}__cp{cp_id}__qa"                         (max_intentos=3)
@@ -25,6 +25,7 @@ campaña, con el gasto real registrado tanto si acierta como si la respuesta
 no parsea.
 """
 import os
+import logging
 from datetime import datetime
 
 import sqlalchemy as sa
@@ -71,7 +72,8 @@ def encolar_analisis(cliente, referencia_id):
     try:
         return trabajos.encolar(job_id_analizar(cliente, referencia_id), "sprint_analizar_referencia",
                                 {"cliente": cliente, "referencia_id": referencia_id}, cliente=cliente,
-                                duracion_estimada=20, max_intentos=3)
+                                duracion_estimada=20, max_intentos=1,
+                                costo_estimado=gastos.estimar("analizar_referencia")["usd"])
     except SaldoInsuficiente as e:
         datos.actualizar_referencia(cliente, referencia_id, analisis_estado="error",
                                     analisis={"error": e.frase_proyecto()})
@@ -81,13 +83,21 @@ def encolar_analisis(cliente, referencia_id):
 def encolar_sugerir(cliente, cuantas=3):
     return trabajos.encolar(job_id_sugerir(cliente), "sprint_sugerir_personas",
                             {"cliente": cliente, "cuantas": int(cuantas)}, cliente=cliente,
-                            duracion_estimada=25, max_intentos=2)
+                            duracion_estimada=25, max_intentos=1,
+                            costo_estimado=gastos.estimar("sugerir_personas")["usd"])
 
 
 def encolar_link(cliente, campana_id, url):
     return trabajos.encolar(job_id_link(cliente, campana_id), "sprint_referencia_link",
                             {"cliente": cliente, "campana_id": campana_id, "url": url}, cliente=cliente,
                             duracion_estimada=60, max_intentos=2)
+
+
+def _gasto_uso(cliente, uso, referencia, detalle, entregado=True):
+    if uso.get("entrada") or uso.get("salida"):
+        gastos.registrar_seguro(cliente, "ideas", costo_real(uso["entrada"], uso["salida"]), referencia,
+                                proveedor="anthropic", detalle=detalle, entregado=entregado,
+                                extra={"tokens_entrada": uso["entrada"], "tokens_salida": uso["salida"], "modelo": modelo_actual()})
 
 
 @registrar("sprint_analizar_referencia")
@@ -97,34 +107,64 @@ def ejecutar_analizar(tarea):
     ref = datos.referencia(cliente, rid)
     if not ref:
         return gettext("La referencia ya no existe.")
+    uso = {"entrada": 0, "salida": 0}
+    referencia = f"sprint:referencia:{rid}{ref_sufijo(tarea)}"
+    resultado_recibido = False
     try:
-        resultado = analisis.analizar(ref, marca=proyectos.nombre_visible(cliente), idioma=idiomas.de_proyecto(cliente))
+        resultado = analisis.analizar(ref, marca=proyectos.nombre_visible(cliente), idioma=idiomas.de_proyecto(cliente), uso=uso)
+        resultado_recibido = True
+        datos.actualizar_referencia(cliente, rid, analisis=resultado, analisis_estado="listo")
     except Exception as e:
-        datos.actualizar_referencia(cliente, rid, analisis_estado="error", analisis={"error": str(e)})
+        logging.getLogger(__name__).warning("Análisis de referencia %s: %s", rid, cola.sin_token(str(e)))
+        _gasto_uso(cliente, uso, referencia, gettext("analizar referencia · la respuesta no sirvió"), entregado=False)
+        if isinstance(e, analisis.ReferenciaSinImagen):
+            motivo = "sin_imagen"
+        elif isinstance(e, analisis.AnalisisInvalido):
+            motivo = "respuesta_invalida"
+        elif resultado_recibido:
+            motivo = "guardar"
+        else:
+            motivo = "sin_respuesta" if uso.get("fallo_llamada") else "incompleto"
+        try:
+            datos.actualizar_referencia(cliente, rid, analisis_estado="error", analisis=analisis.error_guardado(motivo))
+        except Exception:
+            pass  # conserva el fallo original; el hook del worker también deja el análisis en error
         raise
-    datos.actualizar_referencia(cliente, rid, analisis=resultado, analisis_estado="listo")
+    _gasto_uso(cliente, uso, referencia, gettext("analizar referencia"))
     return gettext("Referencia analizada.")
 
 
 @al_interrumpir("sprint_analizar_referencia")
 def interrumpida_analizar(tarea, mensaje):
     p = tarea["payload"]
+    ref = datos.referencia(p["cliente"], int(p["referencia_id"]))
+    guardado = ref.get("analisis") if ref else None
+    motivo = guardado.get("motivo") if isinstance(guardado, dict) else None
+    if ref and ref["analisis_estado"] == "error" and isinstance(motivo, str) and motivo in analisis.MOTIVOS_ERROR:
+        return  # conserva la causa que ejecutar_analizar ya dejó, también la falta de imagen
     datos.actualizar_referencia(p["cliente"], int(p["referencia_id"]), analisis_estado="error",
-                                analisis={"error": mensaje})
+                                analisis=analisis.error_guardado("interrumpido"))
 
 
 @registrar("sprint_sugerir_personas")
 def ejecutar_sugerir(tarea):
     p = tarea["payload"]
     cliente = p["cliente"]
-    propuestas = sugerencias.sugerir_personas(cliente, cuantas=int(p.get("cuantas") or 3))
-    for persona in propuestas:
-        datos.crear_persona(cliente, persona["nombre"], resumen=persona.get("resumen", ""),
-                            descripcion=persona.get("descripcion", ""), edad_rango=persona.get("edad_rango", ""),
-                            tono=persona.get("tono", ""), senales_visuales=persona.get("senales_visuales"),
-                            palabras_clave=persona.get("palabras_clave"), color=persona.get("color"),
-                            origen="sugerida_ia",
-                            extra={"conciencia": persona["conciencia"]} if persona.get("conciencia") else None)
+    uso = {"entrada": 0, "salida": 0}
+    referencia = f"sprint:personas{ref_sufijo(tarea)}"
+    try:
+        propuestas = sugerencias.sugerir_personas(cliente, cuantas=int(p.get("cuantas") or 3), uso=uso)
+        for persona in propuestas:
+            datos.crear_persona(cliente, persona["nombre"], resumen=persona.get("resumen", ""),
+                                descripcion=persona.get("descripcion", ""), edad_rango=persona.get("edad_rango", ""),
+                                tono=persona.get("tono", ""), senales_visuales=persona.get("senales_visuales"),
+                                palabras_clave=persona.get("palabras_clave"), color=persona.get("color"),
+                                origen="sugerida_ia",
+                                extra={"conciencia": persona["conciencia"]} if persona.get("conciencia") else None)
+    except Exception:
+        _gasto_uso(cliente, uso, referencia, gettext("sugerir personas · la respuesta no sirvió"), entregado=False)
+        raise
+    _gasto_uso(cliente, uso, referencia, gettext("sugerir personas"))
     return gettext("%(n)s personas sugeridas — revísalas y edítalas.", n=len(propuestas))
 
 

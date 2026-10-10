@@ -76,8 +76,12 @@ def test_sube_crea_la_tienda_con_su_pais_y_llena_las_copias(base):
         v = con.execute(sa.text("SELECT llave, extra FROM triple_whale WHERE cliente='acme'")).mappings().one()
         assert v["llave"] == "cifrada" and json.loads(v["extra"])["avisados"] == {"k": 1}
     insp = sa.inspect(db.engine())
+    # Las columnas que llegaron después (0036: visitantes para el NVP) no son de esta migración.
+    posteriores = {"tw_anuncio_dia": {"visitantes", "visitantes_nuevos"},
+                   "tw_tienda_dia": {"visitantes", "visitantes_nuevos"}}
     for tabla in ("tw_tienda", "tw_anuncio_dia", "tw_tienda_dia", "tw_producto_dia", "triple_whale"):
-        assert {c["name"] for c in insp.get_columns(tabla)} == {c.name for c in db.metadata.tables[tabla].columns}
+        assert {c["name"] for c in insp.get_columns(tabla)} == (
+            {c.name for c in db.metadata.tables[tabla].columns} - posteriores.get(tabla, set()))
     for tabla in ("tw_anuncio_dia", "tw_tienda_dia", "tw_producto_dia"):
         col = next(c for c in insp.get_columns(tabla) if c["name"] == "tienda_id")
         assert col["nullable"] is False

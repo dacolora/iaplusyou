@@ -11,11 +11,16 @@
    entradas o más, también cuando todas son tiendas: reemplaza a «Por tienda»), «Lo que necesita tu atención» (las
    dos fuentes), «Tus anuncios» (UNA galería con los anuncios de las dos fuentes por gasto en USD y un solo lote,
    `r.galeria`, E2 tarea 4: la enmienda A1 la dejó para E2; los tiles de Triple Whale encima solo con alcance solo
-   Triple Whale), «Lo que hace ganar en tu cuenta» (un botón por fuente del alcance, `r.ia`), «Campañas» y «Conjuntos» (con la fuente
+   Triple Whale), «Lo que hace ganar en tu cuenta» (la parte Triple Whale, `r.ia`), «Campañas» y «Conjuntos» (con la fuente
    del ROAS de cada fila) y, de Triple Whale, reparto, productos y «Ver como tabla».
    Lo que cobra: la galería (_tw_galeria.html) postea a las rutas de la pestaña con el alcance de `r.params` y la
-   fuente de cada anuncio (pestana_rendimiento/rutas.py, que cobran con triple_whale/pedidos.py); «Evaluar con IA»,
-   también a la pestaña (`rendimiento.evaluar`) con `r.params` y la fuente de cada botón. Una parte cuya copia todavía no tiene días no pinta sus
+   fuente de cada anuncio (pestana_rendimiento/rutas.py, que cobran con triple_whale/pedidos.py); «Evaluar con IA» de
+   Triple Whale, también a la pestaña (`rendimiento.evaluar`) con `r.params`; la «Evaluación con IA» de Meta, a
+   `meta_rendimiento.evaluar` con la entrada (precio visto y `n`, E2-R6).
+   Meta rendimiento E2 (integración con main, 2026-10-10, INT-1): lo que la vieja pestaña «Meta» mostraba en producción
+   va con los parciales de main tal cual, con `mr` = `r.meta.e2`: «Diagnóstico» (_meta_diagnostico.html) justo
+   después de «Lo que necesita tu atención», «Evaluación con IA» (_meta_evaluar.html) después de «Lo que hace ganar en
+   tu cuenta», y «Segmentos» (_meta_segmentos.html) después de «Campañas» y «Conjuntos» (que llevan su NVP). Una parte cuya copia todavía no tiene días no pinta sus
    secciones: dice que se está trayendo o que falta pulsar «Actualizar ahora». #}
 {% import "_tw_secciones.html" as tws %}
 {% import "_meta_macros.html" as mx %}
@@ -175,8 +180,10 @@
 {% endif %}
 {% if r.tw %}{{ tws.gasto_compartido(r.tw) }}{% endif %}
 
-{# ---------- 03 Lo que necesita tu atención (las dos fuentes) ---------- #}
+{# ---------- 03 Lo que necesita tu atención (las dos fuentes) y el Diagnóstico de Meta (Meta rendimiento E2) ---------- #}
 {{ tws.alertas(r.atencion) }}
+{% set e2 = r.meta.e2 if con_meta else none %}
+{% if e2 %}{% with mr=e2, actual=e2.actual %}{% include "_meta_diagnostico.html" %}{% endwith %}{% endif %}
 
 {# ---------- 04 Tus anuncios: UNA galería con las dos fuentes, por gasto en USD (E2 tarea 4; A1, PND-196) ---------- #}
 {% set g = r.galeria %}
@@ -188,11 +195,13 @@
 </section>
 {% endif %}
 
-{# ---------- 05 Lo que hace ganar en tu cuenta (un botón por fuente del alcance, E2 tarea 5) ---------- #}
-{% if r.ia and (con_tw or con_meta) %}{{ tws.ia(r.ia, cliente, r.params) }}{% endif %}
+{# ---------- 05 Lo que hace ganar en tu cuenta (Triple Whale) y la Evaluación con IA de Meta (Meta rendimiento E2) ---------- #}
+{% if r.ia and con_tw %}{{ tws.ia(r.ia, cliente, r.params) }}{% endif %}
+{% if e2 %}{% with mr=e2 %}{% include "_meta_evaluar.html" %}{% endwith %}{% endif %}
 
-{# ---------- 06 Campañas y conjuntos (todas las cuentas del alcance, cubiertas incluidas: R5) ---------- #}
+{# ---------- 06 Campañas y conjuntos (todas las cuentas del alcance, cubiertas incluidas: R5) y Segmentos ---------- #}
 {% if con_meta %}{% with mr=r.meta.estructura %}{% include "_meta_secciones.html" %}{% endwith %}{% endif %}
+{% if e2 %}{% with mr=e2, actual=e2.actual %}{% include "_meta_segmentos.html" %}{% endwith %}{% endif %}
 
 {# ---------- 07 Dónde se va el gasto, 08 Lo que más se vende, Ver como tabla (Triple Whale) ---------- #}
 {% if con_tw %}{{ tws.resto(r.tw, cliente) }}{% endif %}

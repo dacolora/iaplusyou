@@ -89,12 +89,11 @@ def _job_id(cliente, cf_id):
     return f"{cliente}__{cf_id}__creative_flow"
 
 
-# Todos los modelos de FlowPlus (video e imagen) van vía WaveSpeed
-# (providers/flowplus_modelos.py) — un solo proveedor real. El `proveedor`
-# de `gasto` guarda eso (agrupable en Task 3, igual que "anthropic" o
+# Los modelos de FlowPlus van vía WaveSpeed salvo los que declaran otro
+# proveedor (`seedance25_ref` → fal, 2026-10-09): `flowplus_modelos.proveedor_de`.
+# El `proveedor` de `gasto` guarda eso (agrupable, igual que "anthropic" o
 # "fal/anthropic" en los demás tipos); el modelo elegido ("wan3",
 # "kling_o3_pro", ...) va en `extra.modelo`.
-PROVEEDOR = "wavespeed"
 
 
 def _registrar_gasto(cliente, tipo, costo, referencia, modelo, detalle, usd_musica=0.0, entregado=True):
@@ -107,7 +106,7 @@ def _registrar_gasto(cliente, tipo, costo, referencia, modelo, detalle, usd_musi
     gastos.registrar_seguro(
         cliente, tipo, round(usd_modelo + float(usd_musica or 0.0), 4), referencia, detalle=detalle,
         conservar_mayor=True, entregado=entregado,
-        proveedor=PROVEEDOR,
+        proveedor=flowplus_modelos.proveedor_de(modelo),
         extra={"modelo": modelo, "usd_modelo": round(usd_modelo, 4), "usd_musica": round(float(usd_musica or 0.0), 4),
                "credits": (costo or {}).get("credits")},
     )
@@ -158,7 +157,7 @@ def _seguir_esperando(cliente, cf_id, pred_id, modelo, entry, pausa_s=PAUSA_RECU
     creative_flow.actualizar(cliente, cf_id, **campos)
     desde = (datetime.now() + timedelta(seconds=pausa_s)).isoformat(timespec="seconds") if pausa_s else None
     return Continuar("flowplus_recuperar", {"cliente": cliente, "cf_id": cf_id}, ejecutar_desde=desde,
-                     mensaje=N_("WaveSpeed sigue trabajando: se sigue esperando el mismo video, sin pagar de nuevo."))
+                     mensaje=N_("El modelo sigue trabajando: se sigue esperando el mismo video, sin pagar de nuevo."))
 
 
 def _sesion_o_vacia(cliente, cf_id):
@@ -239,17 +238,25 @@ def _mensaje_error(e, cliente):
     proyecto (mensaje de fondo, spec 2026-09-26 §B8). Un rechazo del
     proveedor se cuenta en palabras (antes salía el JSON crudo de Kling); el
     tiempo agotado dice que el video suele terminar igual y cómo recuperarlo."""
+    proveedor = saldo.nombre_proveedor(getattr(e, "proveedor", None) or "wavespeed")
     with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
         if isinstance(e, wavespeed_common.SinSaldo):
             # Incidente 2026-09-30: antes salía el JSON crudo de WaveSpeed.
             return saldo.mensaje_tarjeta(e.proveedor)
         if isinstance(e, wavespeed_common.EsperaAgotada):
-            return gettext("WaveSpeed seguía trabajando en %(modelo)s después de %(min)s min (predicción %(id)s). "
+            return gettext("%(proveedor)s seguía trabajando en %(modelo)s después de %(min)s min (predicción %(id)s). "
                            "El video suele terminar igual y se cobra: espera unos minutos y toca «Recuperar el video» "
-                           "— no se paga de nuevo.",
+                           "— no se paga de nuevo.", proveedor=proveedor,
                            modelo=e.nombre_modelo, min=int(e.timeout_seconds // 60), id=e.prediction_id)
         if isinstance(e, wavespeed_common.ErrorProveedor):
-            if e.codigo == 1200 or "sensitive" in (e.detalle or "").lower():
+            detalle = (e.detalle or "").lower()
+            if "likeness" in detalle or "real people" in detalle:
+                # Prueba real 2026-10-09 (Seedance 2.5 vía fal): ByteDance rechaza con 422 las
+                # referencias que parecen fotos de personas reales.
+                return gettext("%(modelo)s no acepta fotos de personas reales como referencia (regla de ByteDance): "
+                               "usa un personaje creado con IA o quita esa foto. No se cobró. Detalle: %(detalle)s",
+                               modelo=e.nombre_modelo, detalle=e.detalle)
+            if e.codigo == 1200 or "sensitive" in detalle or "content policy" in detalle or "content_policy" in detalle:
                 return gettext("%(modelo)s rechazó el contenido por sensible (el texto o las imágenes): cambia la "
                                "escena y vuelve a generar. No se cobró. Detalle: %(detalle)s",
                                modelo=e.nombre_modelo, detalle=e.detalle)
@@ -261,23 +268,24 @@ def _mensaje_error(e, cliente):
                            modelo=e.nombre_modelo, detalle=e.detalle or e.estado)
         if isinstance(e, wavespeed_common.PedidoRechazado):
             # PND-107: antes salía el JSON crudo de WaveSpeed en la tarjeta. Cada tipo de
-            # rechazo dice lo suyo; un 5xx NO promete que no se cobró (WaveSpeed pudo
+            # rechazo dice lo suyo; un 5xx NO promete que no se cobró (el proveedor pudo
             # haber creado la predicción sin devolver su id).
             if e.status in (401, 403):
-                return gettext("WaveSpeed rechazó la llave de Creatv (respuesta %(status)s): no se generó ni se cobró "
-                               "nada. Avísale al administrador.", status=e.status)
+                return gettext("%(proveedor)s rechazó la llave de Creatv (respuesta %(status)s): no se generó ni se "
+                               "cobró nada. Avísale al administrador.", proveedor=proveedor, status=e.status)
             if e.status == 429:
-                return gettext("WaveSpeed está recibiendo demasiados pedidos (respuesta 429): no se generó ni se "
-                               "cobró nada. Vuelve a intentarlo en unos minutos.")
+                return gettext("%(proveedor)s está recibiendo demasiados pedidos (respuesta 429): no se generó ni se "
+                               "cobró nada. Vuelve a intentarlo en unos minutos.", proveedor=proveedor)
             if e.status >= 500:
-                return gettext("WaveSpeed tuvo una falla de su lado (respuesta %(status)s) y no confirmó el pedido. "
-                               "Espera unos minutos antes de volver a generar; si se repite, cambia de modelo.",
-                               status=e.status)
+                return gettext("%(proveedor)s tuvo una falla de su lado (respuesta %(status)s) y no confirmó el "
+                               "pedido. Espera unos minutos antes de volver a generar; si se repite, cambia de modelo.",
+                               proveedor=proveedor, status=e.status)
             if e.mensaje:
-                return gettext("WaveSpeed no aceptó el pedido y no se cobró nada: %(motivo)s. Ajusta la duración, el "
-                               "formato o las referencias y vuelve a generar.", motivo=e.mensaje)
-            return gettext("WaveSpeed no aceptó el pedido (respuesta %(status)s) y no se cobró nada. Vuelve a "
-                           "intentarlo en unos minutos; si se repite, cambia de modelo.", status=e.status)
+                return gettext("%(proveedor)s no aceptó el pedido y no se cobró nada: %(motivo)s. Ajusta la duración, "
+                               "el formato o las referencias y vuelve a generar.", proveedor=proveedor, motivo=e.mensaje)
+            return gettext("%(proveedor)s no aceptó el pedido (respuesta %(status)s) y no se cobró nada. Vuelve a "
+                           "intentarlo en unos minutos; si se repite, cambia de modelo.", proveedor=proveedor,
+                           status=e.status)
         return str(e)
 
 
@@ -532,25 +540,33 @@ def recuperar_video(tarea):
     if pred.get("modelo") in flowplus_modelos.VIDEO or flowplus_modelos.es_hablado(pred.get("modelo")):
         modelo = pred["modelo"]
     nombre = flowplus_modelos.nombre_modelo(modelo) or modelo
+    proveedor = flowplus_modelos.proveedor_de(modelo)
     avisar_fase = _avisar_fase_de(job_id, cliente)
     trabajos.reportar(job_id, etapa=ETAPA_MODELO)
     try:
         with wavespeed_common.cortable():
-            resultado = wavespeed_common.poll_hasta_listo(pred["id"], nombre, timeout_seconds=TIEMPO_RECUPERAR,
-                                                          on_progreso=avisar_fase, interval_seconds=5)
-        outputs = resultado.get("outputs") or []
-        if not outputs:
-            raise wavespeed_common.ErrorProveedor(nombre, resultado.get("status") or "completed",
-                                                  detalle=gettext("terminó sin ninguna salida"), prediction_id=pred["id"],
-                                                  datos=resultado)
+            if proveedor == "fal":
+                # Seedance 2.5 con varias referencias: el pedido vive en la cola de fal.
+                outputs = [flowplus_modelos.esperar_fal(modelo, pred["id"], bool(referencias),
+                                                        timeout_seconds=TIEMPO_RECUPERAR, on_progreso=avisar_fase)]
+            else:
+                resultado = wavespeed_common.poll_hasta_listo(pred["id"], nombre, timeout_seconds=TIEMPO_RECUPERAR,
+                                                              on_progreso=avisar_fase, interval_seconds=5)
+                outputs = resultado.get("outputs") or []
+                if not outputs:
+                    raise wavespeed_common.ErrorProveedor(nombre, resultado.get("status") or "completed",
+                                                          detalle=gettext("terminó sin ninguna salida"),
+                                                          prediction_id=pred["id"], datos=resultado)
     except wavespeed_common.EsperaAgotada:
         edad = _edad_s(pred)
         if edad < ESPERA_MAXIMA:
             return _seguir_esperando(cliente, cf_id, pred["id"], modelo, entry)
         # Más de 2 h: se deja de esperar solo; la tarjeta conserva el botón y el id.
         agotada = wavespeed_common.EsperaAgotada(nombre, pred["id"], edad)
+        agotada.proveedor = proveedor
         creative_flow.actualizar(cliente, cf_id, estado="error", error=_mensaje_error(agotada, cliente))
-        return gettext("WaveSpeed sigue trabajando en la predicción %(id)s; vuelve a intentar en unos minutos.", id=pred["id"])
+        return gettext("%(proveedor)s sigue trabajando en la predicción %(id)s; vuelve a intentar en unos minutos.",
+                       proveedor=saldo.nombre_proveedor(proveedor), id=pred["id"])
     except Exception as e:
         bitacora.registrar(cliente, cf_id, "generacion", "error", str(e))
         if isinstance(e, wavespeed_common.ErrorProveedor):
@@ -729,7 +745,8 @@ def _terminar_video(cliente, cf_id, job_id, ref, entry, referencias, duracion, p
         revision_doctrina=None, revision_doctrina_error=None,
     )
     if not recuperado:
-        saldo.limpiar("wavespeed")   # un video nuevo salió bien: hay saldo (uno recuperado ya estaba pagado)
+        # Un video nuevo salió bien: ese proveedor tiene saldo (uno recuperado ya estaba pagado).
+        saldo.limpiar(flowplus_modelos.proveedor_de(modelo))
 
     registro = {
         "prompt": prompt_texto,

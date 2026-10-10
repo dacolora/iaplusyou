@@ -286,6 +286,13 @@ def test_alcance_por_ventana_y_nivel(base_temporal):
     assert datos.alcance("hf", [A], 7) == {A: {"alcance": 100, "frecuencia": 1.1}}
     assert datos.alcance("hf", [A], 30, nivel="campana") == {"c1": {"alcance": 50, "frecuencia": None}}
     assert datos.alcance("hf", [], 30) == {}
+    # Varias ventanas y niveles en una lectura: lo mismo que cada `alcance`, y cada combinación pedida está.
+    varios = datos.alcance_varios("hf", [A, B], (30, 7))
+    assert varios[("cuenta", 30)] == datos.alcance("hf", [A, B], 30)
+    assert varios[("cuenta", 7)] == datos.alcance("hf", [A, B], 7)
+    assert varios[("campana", 30)] == {"c1": {"alcance": 50, "frecuencia": None}} and varios[("campana", 7)] == {}
+    assert datos.alcance_varios("otro", [A], (30,)) == {("cuenta", 30): {}, ("campana", 30): {}}
+    assert datos.alcance_varios("hf", [], (30,)) == {("cuenta", 30): {}, ("campana", 30): {}}
 
 
 def test_reemplazar_ignora_fechas_fuera_del_rango_y_cuenta_lo_escrito(base_temporal):

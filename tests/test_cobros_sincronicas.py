@@ -131,3 +131,24 @@ def test_regla_de_un_producto_importado_sin_saldo_no_llama_a_claude(libro, monke
     _cobra(libro, milesimas=10_000)
     assert importador._regla_si_hay_saldo("acme", "Espejo", "redondo", "producto") == "Idéntico."
     assert len(llamadas) == 1
+
+
+def test_escribir_con_ia_de_un_miembro_sin_saldo_con_tope_libre_no_es_402(app_organico, base_temporal, monkeypatch,
+                                                                          libro):
+    """Con plan, el caption orgánico es incluido: sin saldo propio y con tope libre, se redacta (revisión final
+    de planes, 2026-10-10: la ruta pasaba el `exigir` sin `tipo`)."""
+    import db
+    from tests.test_experimentos_db import _pieza
+    pid = _pieza(base_temporal)
+    pedidas = []
+    monkeypatch.setattr(app_organico["dashboard"].organico, "redactar", lambda *a: pedidas.append(a) or {})
+    _cobra(libro)
+    ahora = db.ahora()
+    with db.conectar() as con:
+        con.execute(db.periodo_plan.insert().values(
+            cliente="acme", suscripcion_id=1, inicio=ahora[:10] + "T00:00:00", fin="2099-01-01T00:00:00",
+            precio_usd=0, margen=1.25, tope_incluido_usd=25.0, credito_milesimas=0, cerrado=False))
+    r = app_organico["c"].post("/cliente/acme/organico/redactar",
+                               data={"pieza_id": str(pid), "plataformas": ["instagram"]},
+                               headers={"X-Requested-With": "fetch"})
+    assert r.status_code == 200 and len(pedidas) == 1

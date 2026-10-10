@@ -82,3 +82,26 @@ Idioma de publicación vs idioma de la app (2026-10-08, spec de Noruega y Suecia
 
 
 Lote 6B (2026-10-08): pantalla de accesos bloqueados, bitácora de desbloqueo, rechazo de QA aprobado pasan por gettext y el catálogo inglés. admin_bloqueos_login.html se incorpora a la guardia de plantillas. Catálogo actualizado y compilado; sin fuzzy. R6 (2026-10-08): el vencimiento del login usa ngettext en minutos redondeados hacia arriba. Verificación visual en es/en corresponde a Claude.
+
+PND-166 (2026-10-09, decisión delegada): Reintentar análisis, Análisis por referencia y Sugerir personas pasan por gettext y catálogo inglés (Retry analysis, Analysis per reference, Suggest personas). Los importes usan el margen de la petición; mensajes de tareas siguen el idioma del proyecto.
+
+
+Enmiendas lote 7 (2026-10-09): mensajes de arranque incierto de Apify, detalles de gasto de análisis/personas, hasta, cantidad de fotos y error breve de Claude pasan por catálogo. Sugerir personas solo conserva su detalle de gasto y ruta, sin botón en pantalla.
+
+Segunda ronda lote 7 (2026-10-09): motivos del análisis se guardan con clave reconocida y mensaje en el idioma del proyecto; error_visible los traduce para quien mira. El catálogo incluye respuesta no útil, interrupción, fallos de guardado/preparación, Referencia N y aviso de cantidad de fotos cambiada.
+
+
+PND-155 (2026-10-09, decisión del lote 8): idiomas.NOMBRES_PUBLICACION centraliza los nombres nativos del selector de idioma base de Final edition. NOMBRES e IDIOMAS de la interfaz siguen en es/en. Los nombres de países de Traer referentes vienen de tipos.PAISES con traducir, salvo Ecuador por gettext (enmienda 2026-10-10: conservar la lista anterior más NO/SE); el aviso duplicado al lanzar reutiliza el texto ya catalogado.
+
+PND-062, entrega 1 (2026-10-10, pedido de Daniel): los avisos de fallo del catálogo y de Ver más
+pasan por gettext en los shells y viajan al JS con tojson; Reintentar reutiliza el catálogo. Los cinco fragmentos
+nuevos están inscritos en `PLANTILLAS_TRADUCIDAS`; catálogo actualizado, traducido con el glosario y compilado,
+sin fuzzy. La comprobación visual en es/en queda a cargo de Claude.
+
+Enmiendas PND-062, entrega 1 (2026-10-10, pedido de Daniel tras revisar la entrega): El aviso de producto obligatorio y el de sesión vencida pasan por gettext y tojson. El enlace Entrar reutiliza el catálogo. Catálogo actualizado, traducciones según glosario y compilación sin fuzzy; los ids internos usan required para no confundir la guarda de texto visible.
+
+PND-062, entrega 2 (2026-10-10, pedido de Daniel): los textos de los cuatro scripts extraídos siguen
+con `_()` y `tojson` en sus plantillas, dentro de JSON `crear-<módulo>-datos`. Los archivos static usan el
+objeto `T`, sin español visible suelto. `test_i18n_estaticos_crear.py` vigila los cuatro archivos y
+`test_pagina_por_partes.py` renderiza y ejecuta es/en sin fijar las traducciones. No se añadieron msgids;
+actualizar → comprobar con glosario (0 pendientes) → compilar, sin fuzzy y sin diferencias en el catálogo.

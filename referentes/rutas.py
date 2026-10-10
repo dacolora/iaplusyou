@@ -347,7 +347,7 @@ def recrear_leer(cliente, rid):
         return jsonify({"error": gettext("Ese referente no existe.")}), 404
     if lectura.de(r):
         return jsonify({"ok": True, "cobrado": False})
-    libro.exigir(cliente, gastos.estimar("leer_referente")["usd"])     # cobros §5.2: antes de llamar a Claude
+    libro.exigir(cliente, gastos.estimar("leer_referente")["usd"], tipo="adaptar_referente")     # cobros §5.2: antes de llamar a Claude
     try:
         lec, ent, sal = lectura.leer(r)
     except lectura.LecturaInvalida as e:
@@ -384,7 +384,7 @@ def recrear_adaptar(cliente, rid):
     lec = lectura.de(r)
     crudos = cuerpo.get("textos")
     campos = {f"texto_{i}": str(v or "") for i, v in enumerate(crudos)} if isinstance(crudos, list) else {}
-    libro.exigir(cliente, gastos.estimar("adaptar_referente")["usd"])     # cobros §5.2: antes de llamar a Claude
+    libro.exigir(cliente, gastos.estimar("adaptar_referente")["usd"], tipo="adaptar_referente")     # cobros §5.2: antes de llamar a Claude
     try:
         resultado, ent, sal = recrear.adaptar(datos.localizado(r, idioma), familia, producto,
                                               str(cuerpo.get("titular") or ""), marca_mod.guia_efectiva(cliente),

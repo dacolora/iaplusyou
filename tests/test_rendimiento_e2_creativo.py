@@ -236,19 +236,24 @@ def test_la_foto_lleva_la_fuente_y_con_meta_la_cuenta():
 def test_el_prompt_dice_de_que_fuente_son_los_numeros():
     fila = {"desde": "2026-09-01", "hasta": "2026-09-30", "moneda": "SEK", "canal": "facebook-ads"}
     con_meta = mejorar.armar("Acme", dict(fila, foto=_foto(fuente="meta", ad_account_id="act_42")))
-    assert "con sus números de Meta del" in con_meta and "Triple Whale" not in con_meta
+    # «Triple Whale» todavía sale en la regla del NVP (los visitantes son del Pixel de Triple Whale, main 2026-10-09):
+    # lo que vigila esta prueba es la fuente de los números.
+    assert "con sus números de Meta del" in con_meta and "con sus números de Triple Whale" not in con_meta
     viejo = _foto()
     viejo.pop("fuente")                                  # las fotos de Triple Whale ya guardadas no la tienen
     assert "con sus números de Triple Whale del" in mejorar.armar("Acme", dict(fila, foto=viejo))
 
 
-def test_la_evaluacion_de_cuenta_dice_de_que_fuente_son_las_metricas():
+def test_la_evaluacion_de_cuenta_es_siempre_de_triple_whale():
+    """La rama Meta de «Evaluar con IA» por `tw_evaluacion` (E2 tarea 5) se jubiló al integrar main (INT-2: la de Meta
+    es `meta_rendimiento/analisis.py`): el prompt de la evaluación de Triple Whale volvió a ser el de main y una
+    `fuente` en el contexto ya no cambia nada."""
     from tests.test_triple_whale_analisis import _ev as ev_cuenta
     m = analisis.muestra(ev_cuenta())
-    texto, _ = analisis.armar("Acme", {"desde": "a", "hasta": "b", "moneda": "SEK", "fuente": "meta"}, m, {}, bloques={})
-    assert "con sus métricas de Meta del" in texto and "Triple Whale" not in texto
-    texto, _ = analisis.armar("Acme", {"desde": "a", "hasta": "b", "moneda": "USD"}, m, {}, bloques={})
-    assert "con sus métricas de Triple Whale del" in texto
+    for contexto in ({"desde": "a", "hasta": "b", "moneda": "USD"},
+                     {"desde": "a", "hasta": "b", "moneda": "SEK", "fuente": "meta"}):
+        texto, _ = analisis.armar("Acme", contexto, m, {}, bloques={})
+        assert "con sus métricas de Triple Whale del" in texto and "de Meta del" not in texto
 
 
 # ------------------------------------------------------------------------------------------------- la tarea ---
@@ -272,7 +277,7 @@ def tarea_meta(base_temporal, monkeypatch, tmp_path):
         return {"bloques": [{"type": "text", "text": "Segundo 0,3:"}], "clase": "fotogramas", "fotogramas": 1}, []
     monkeypatch.setattr(mejorar, "visuales", _visuales)
 
-    def _analizar(texto, imagenes, idioma, verificable_extra=""):
+    def _analizar(texto, imagenes, idioma, verificable_extra="", **_):      # main pasa duracion_s, verificable…
         recibido["texto"] = texto
         return mejorar.parsear(respuesta(), texto), 1000, 500
     monkeypatch.setattr(mejorar, "analizar", _analizar)
@@ -294,7 +299,7 @@ def test_la_tarea_trae_el_anuncio_de_meta_una_vez_y_el_prompt_dice_meta(tarea_me
     # los visuales y la voz usan la foto con el creativo ya traído
     assert tarea_meta["recibido"]["visuales"][0]["creativo"] == traido
     texto = tarea_meta["recibido"]["texto"]
-    assert "con sus números de Meta del" in texto and "Triple Whale" not in texto
+    assert "con sus números de Meta del" in texto and "con sus números de Triple Whale" not in texto
     assert "Chanclas que no duelen" in texto
     import db
     import sqlalchemy as sa
@@ -328,7 +333,7 @@ def test_una_foto_de_triple_whale_sin_fuente_no_llama_a_meta_y_dice_triple_whale
     monkeypatch.setattr(mejorar, "visuales", lambda foto_: ({"bloques": [], "clase": None, "fotogramas": 0}, []))
     monkeypatch.setattr(creativo, "traer", lambda *a: pytest.fail("una foto de Triple Whale no llama a Meta"))
     recibido = {}
-    monkeypatch.setattr(mejorar, "analizar", lambda texto, imagenes, idioma, verificable_extra="": (
+    monkeypatch.setattr(mejorar, "analizar", lambda texto, imagenes, idioma, verificable_extra="", **_: (
         recibido.update(texto=texto) or mejorar.parsear(respuesta(), texto), 100, 50))
     t.tw_analizar_anuncio({"id": 23, "payload": {"cliente": "acme", "analisis_id": aid}})
     assert "con sus números de Triple Whale del" in recibido["texto"]

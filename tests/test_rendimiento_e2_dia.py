@@ -195,6 +195,21 @@ def test_un_dia_fuera_del_rango_es_400(meta_on, entrada):
     assert _get(meta_on, q + _hace(9)).status_code == 200                  # el primer día
     assert _get(meta_on, q + "ayer").status_code == 400
     assert _get(meta_on, f"entrada={entrada}").status_code == 400
+    # Una fecha absurda es 400 como las demás, no un 500 (restar 7 días a 0001-01-02 revienta; revisión de la tarea 7).
+    for absurda in ("0001-01-02", "0001-01-01", "9999-12-31"):
+        assert _get(meta_on, q + absurda).status_code == 400
+
+
+def test_una_fecha_absurda_es_400_tambien_con_solo_triple_whale(meta_on):
+    _sembrar(dias=10)
+    assert _get(meta_on, "entrada=NO&fecha=0001-01-02").status_code == 400
+
+
+def test_resumen_dia_con_una_fecha_absurda_dice_el_motivo_sin_reventar(meta_on):
+    """La guarda de la ruta no es la única: `resumen.dia` mira el rango antes de restar días."""
+    _sembrar(dias=10)
+    d, motivo = _dia_ctx(meta_on, "SE", "0001-01-02")
+    assert d is None and motivo
 
 
 def test_la_mezcla_arranca_en_el_inicio_comun(meta_on):
@@ -258,9 +273,27 @@ def test_un_dia_sin_anuncios_en_la_copia_no_dice_que_ninguno_gasto(meta_on):
     """La cuenta gastó ese día pero la copia de anuncios (90 días) ya no lo tiene."""
     _sembrar()
     d, _ = _dia_ctx(meta_on, "SE", _hace(20))
-    assert d["anuncios"] == [] and d["anuncios_fuera"] is True
+    assert d["anuncios"] == [] and d["anuncios_fuera"] == "meta"
     html = _get(meta_on, f"entrada=SE&fecha={_hace(20)}").data.decode()
-    assert "ya no están en la copia" in html and "ningún anuncio tuvo gasto" not in html
+    assert "ya no están en la copia (la de Meta guarda los últimos 90 días)" in html
+    assert "ningún anuncio tuvo gasto" not in html
+
+
+def test_el_aviso_nombra_la_fuente_que_no_trae_sus_anuncios(meta_on):
+    """Revisión de la tarea 7: el aviso culpaba siempre a la copia de 90 días de Meta. En «Todas», un día en que la
+    tienda gastó y Triple Whale no trae sus anuncios dice que faltan los de Triple Whale; si faltan los de las dos,
+    un texto neutro."""
+    _sembrar()
+    _anuncios_meta({1: [("m1", 10, 300)]})
+    d, _ = _dia_ctx(meta_on, "", _hace(1))
+    assert d["anuncios_fuera"] == "tw" and d["anuncios"]                       # la lista lleva solo los de Meta
+    html = _get(meta_on, f"fecha={_hace(1)}").data.decode()
+    assert "Faltan en la copia los anuncios de una de tus fuentes ese día" in html
+    d, _ = _dia_ctx(meta_on, "", _hace(5))                                     # ninguna de las dos trae anuncios
+    assert d["anuncios_fuera"] == "ambas" and d["anuncios"] == []
+    html = _get(meta_on, f"fecha={_hace(5)}").data.decode()
+    assert "Los anuncios de ese día no están en la copia: las cifras de arriba son los totales." in html
+    assert "la de Meta guarda los últimos 90 días" not in html
 
 
 # ------------------------------------------------------------------------------ solo Triple Whale ---

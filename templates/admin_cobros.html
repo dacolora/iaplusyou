@@ -5,7 +5,9 @@
    (cobros.vista.resumen_admin + nombre; montos en milésimas), margen_global,
    eventos (vista.ultimos_eventos, solo firmados, con resultado_texto),
    webhook_callado, avisos_bold {sin_llaves, pruebas_abiertas, pruebas_fuera_de_local} (nunca un valor
-   de llave). Los *_texto y *_campo ya vienen con el separador decimal de quien mira. Todo POST va al Blueprint
+   de llave). Planes (planes 7/8, spec planes §9): planes (vista.planes_admin + *_texto), cada fila con
+   f.plan {suscripcion, periodo, bolsa_*, incluido_*, *_periodo, pendientes} y f.margen_plan_texto,
+   avisos_wompi {problema, pruebas_fuera_de_local, sandbox}; eventos con proveedor_texto, monto_texto y usd_texto. Los *_texto y *_campo ya vienen con el separador decimal de quien mira. Todo POST va al Blueprint
    cobros y pasa por la barrera CSRF. #}
 <section class="hero aparece">
   <div class="hero-texto">
@@ -32,6 +34,31 @@
   {{ _('<strong>Faltan llaves de Bold.</strong> Sin BOLD_LLAVE_IDENTIDAD y BOLD_LLAVE_SECRETA en el <code>.env</code> del servidor no hay recargas en línea: los proyectos solo pueden recargar con una recarga manual desde aquí.') }}
 </div>
 {% endif %}
+{% if avisos_wompi.pruebas_fuera_de_local %}
+<div class="flash error" id="aviso-wompi-pruebas-servidor">
+  {{ _('<strong>Llaves de pruebas de Wompi en un servidor que no es local.</strong> Aquí no valen: no se cobran planes ni recargas con Wompi y sus eventos no se aceptan. Pon en el <code>.env</code> del servidor las llaves de producción de Wompi.') }}
+</div>
+{% endif %}
+{% if avisos_wompi.problema %}
+<div class="flash warn" id="aviso-wompi-llaves">
+  <strong>{{ avisos_wompi.problema }}.</strong>
+  {{ _('Sin WOMPI_LLAVE_PUBLICA, WOMPI_LLAVE_PRIVADA, WOMPI_SECRETO_EVENTOS y WOMPI_SECRETO_INTEGRIDAD del mismo ambiente no se pueden vender planes con tarjeta y las recargas en línea usan Bold (si tiene llaves). Activar un plan a mano sigue funcionando.') }}
+</div>
+{% endif %}
+{% if trm_rechazada %}
+<div class="flash error" id="aviso-trm-rechazada">
+  {{ _('<strong>La tasa de cambio de hoy no se usó.</strong> La TRM de datos.gov.co (%(hoy)s COP por dólar) se movió más de 8 %% frente a la última aceptada (%(antes)s COP por dólar). Mientras no la aceptes, no se cobra nada en pesos (recargas con Wompi ni planes).', hoy=trm_rechazada.valor_texto, antes=trm_rechazada.anterior_texto) }}
+  <form method="post" action="{{ url_for('cobros.admin_trm_aceptar') }}">
+    <input type="hidden" name="valor" value="{{ trm_rechazada.valor }}">
+    <button type="submit" class="btn-sm">{{ _('Aceptar la tasa de hoy (%(hoy)s COP/USD)', hoy=trm_rechazada.valor_texto) }}</button>
+  </form>
+</div>
+{% endif %}
+{% if avisos_wompi.sandbox %}
+<div class="flash warn" id="aviso-wompi-sandbox">
+  {{ _('Wompi está en modo de pruebas (sandbox): los cobros no son reales.') }}
+</div>
+{% endif %}
 {% if webhook_callado %}
 <div class="flash warn" id="aviso-webhook">
   {{ _('Hay recargas de Bold pendientes y no llegó ningún evento de Bold en 7 días. Revisa la URL del webhook en el panel de Bold.') }}
@@ -41,7 +68,7 @@
 <section class="admin-bloque aparece" id="cobros-margen">
   <div class="admin-cabecera">
     <h2>{{ _('Margen global') }}</h2>
-    <span class="vacio">{{ _('el que usa todo proyecto sin margen propio; no cambia lo ya cobrado') }}</span>
+    <span class="vacio">{{ _('el que usa todo proyecto sin margen propio ni plan (a la carta); no cambia lo ya cobrado. Cada plan tiene su margen de miembro, abajo.') }}</span>
   </div>
   <form method="post" action="{{ url_for('cobros.admin_margen') }}" class="cobros-admin-linea">
     <label>{{ _('Margen (de %(min)s a %(max)s)', min=margen_min_texto, max=margen_max_texto) }}
@@ -53,7 +80,7 @@
 <section class="admin-bloque aparece" id="cobros-proyectos">
   <div class="admin-cabecera">
     <h2>{{ _('Proyectos') }}</h2>
-    <span class="vacio">{{ _('cifras del mes por la fecha del gasto; ganancia = cobrado − costo de lo que se intentó cobrar') }}</span>
+    <span class="vacio">{{ _('cifras del mes por la fecha del gasto; ganancia = cobrado + saldo del plan vencido − costo de lo que se intentó cobrar o el plan incluyó − descuento del plan (lo que la bolsa del mes regala frente a lo que el cliente pagó por ese mes; en un plan anual, un doceavo del pago)') }}</span>
   </div>
   {% if filas %}
   <div class="admin-scroll">
@@ -82,6 +109,7 @@
             <input type="text" inputmode="decimal" name="margen" form="cuenta-{{ f.cliente }}" class="cobros-admin-num"
                    value="{{ f.margen_propio_texto }}"
                    placeholder="{{ _('global (%(margen)s)', margen=margen_global_texto) }}" aria-label="{{ _('Margen propio') }}">
+            {% if f.margen_plan_texto %}<br><span class="tag-estado tag-en-uso">{{ _('hoy cobra %(margen)s (plan)', margen=f.margen_plan_texto) }}</span>{% endif %}
           </td>
           <td>
             <div class="cobros-admin-celda">
@@ -95,7 +123,7 @@
           <td class="num">{{ (f.recargado_mes / 1000) | usd }}</td>
           <td class="num">{{ (f.cobrado_mes / 1000) | usd }}</td>
           <td class="num">{{ (f.costo_mes / 1000) | usd }}</td>
-          <td class="num{{ ' cobros-admin-perdida' if f.ganancia_mes < 0 else '' }}">{% if f.ganancia_mes < 0 %}▼ {% endif %}{{ (f.ganancia_mes / 1000) | usd }}</td>
+          <td class="num{{ ' cobros-admin-perdida' if f.ganancia_mes < 0 else '' }}">{% if f.ganancia_mes < 0 %}▼ {% endif %}{{ (f.ganancia_mes / 1000) | usd }}{% if f.descuento_plan_mes %}<br><span class="cobros-admin-nota">{{ _('descuento del plan %(monto)s', monto=(f.descuento_plan_mes / 1000) | usd) }}</span>{% endif %}</td>
           <td>
             <details class="cobros-admin-recarga">
               <summary>{{ _('Recarga manual o ajuste') }}</summary>
@@ -124,24 +152,238 @@
   {% endif %}
 </section>
 
-<section class="admin-bloque aparece" id="cobros-eventos">
+<section class="admin-bloque aparece" id="cobros-planes">
   <div class="admin-cabecera">
-    <h2>{{ _('Últimos eventos de Bold') }}</h2>
-    <span class="vacio">{{ _('solo los que llegaron con firma válida') }}</span>
+    <h2>{{ _('Planes') }}</h2>
+    <span class="vacio">{{ _('lo que se vende cada mes; el margen de miembro reemplaza al margen a la carta (%(margen)s) mientras el plan está pagado', margen=margen_global_texto) }}</span>
   </div>
-  {% if eventos %}
+  {% if planes %}
   <div class="admin-scroll">
-    <table class="tabla-admin">
-      <thead><tr><th>{{ _('Hora') }}</th><th>{{ _('Tipo') }}</th><th>{{ _('Referencia') }}</th><th>{{ _('Resultado') }}</th></tr></thead>
+    <table class="tabla-admin cobros-admin-tabla">
+      <thead>
+        <tr>
+          <th>{{ _('Plan') }}</th><th>{{ _('Precio mensual') }}</th><th>{{ _('Precio anual') }}</th>
+          <th>{{ _('Margen de miembro') }}</th><th>{{ _('Tope de lo incluido (costo/mes)') }}</th><th>{{ _('Estado') }}</th>
+          <th>{{ _('Suscripciones vigentes') }}</th><th>{{ _('Editar') }}</th>
+        </tr>
+      </thead>
       <tbody>
-        {% for e in eventos %}
-        <tr><td>{{ e.recibido_en | replace('T', ' ') }}</td><td><code>{{ e.tipo }}</code></td><td><code>{{ e.referencia or '—' }}</code></td><td>{{ e.resultado_texto }}</td></tr>
+        {% for pl in planes %}
+        <tr id="plan-{{ pl.id }}">
+          <td><strong>{{ pl.nombre }}</strong></td>
+          <td class="num">{{ pl.precio_texto }}</td>
+          <td class="num">{{ pl.anual_texto or '—' }}</td>
+          <td class="num">{{ pl.margen_texto }}<br><span class="cobros-admin-nota cobros-admin-junto">{{ _('a la carta: %(margen)s (global)', margen=margen_global_texto) }}</span>{% if pl.descuento_pct %}<br><span class="cobros-admin-nota cobros-admin-junto">{{ _('%(pct)s %% menos', pct=pl.descuento_pct) }}</span>{% endif %}</td>
+          <td class="num">{{ pl.tope_incluido_usd | usd }}</td>
+          <td>
+            <form method="post" action="{{ url_for('cobros.admin_plan_activo', plan_id=pl.id) }}" class="cobros-admin-celda">
+              <input type="hidden" name="activo" value="{{ '0' if pl.activo else '1' }}">
+              <span class="tag-estado {{ 'tag-en-uso' if pl.activo else 'tag-descartado' }}">{{ _('Se ofrece') if pl.activo else _('Archivado') }}</span>
+              <button type="submit" class="btn-sm">{{ _('Archivar') if pl.activo else _('Ofrecer') }}</button>
+            </form>
+          </td>
+          <td class="num">{{ pl.suscripciones }}</td>
+          <td>
+            <details class="cobros-admin-recarga">
+              <summary>{{ _('Editar plan') }}</summary>
+              <form method="post" action="{{ url_for('cobros.admin_plan_editar', plan_id=pl.id) }}" class="agencia-form">
+                <label>{{ _('Nombre') }}
+                  <input type="text" name="nombre" value="{{ pl.nombre }}" maxlength="60" required></label>
+                <label>{{ _('Precio mensual en US$ (entero)') }}
+                  <input type="text" inputmode="numeric" name="precio_usd" value="{{ pl.precio_usd }}" required></label>
+                <label>{{ _('Precio anual en US$ (vacío = sin opción anual)') }}
+                  <input type="text" inputmode="numeric" name="precio_anual_usd" value="{{ pl.precio_anual_usd or '' }}"></label>
+                <p class="cobros-admin-nota">{{ _('Un precio nuevo solo vale para suscripciones nuevas: quien ya está suscrito renueva al precio que aceptó.') }}</p>
+                <label>{{ _('Margen de miembro (de 1,00 a 5,00; a la carta es %(margen)s)', margen=margen_global_texto) }}
+                  <input type="text" inputmode="decimal" name="margen" value="{{ pl.margen_campo }}" required></label>
+                <label>{{ _('Tope de lo incluido en US$ de costo por mes') }}
+                  <input type="text" inputmode="decimal" name="tope_incluido_usd" value="{{ pl.tope_campo }}" required></label>
+                <label>{{ _('Orden en la pantalla del cliente') }}
+                  <input type="text" inputmode="numeric" name="orden" value="{{ pl.orden }}"></label>
+                <p class="cobros-admin-nota">{{ _('El margen y el tope valen desde el próximo periodo de cada suscripción mensual: el periodo en curso guarda los suyos. En una anual, desde su próximo pago: sus doce meses copian la foto del primero.') }}</p>
+                <button type="submit" class="btn-generar">{{ _('Guardar plan') }}</button>
+              </form>
+            </details>
+          </td>
+        </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
   {% else %}
-  <p class="estado-vacio">{{ _('Todavía no llegó ningún evento de Bold.') }}</p>
+  <p class="estado-vacio">{{ _('Todavía no hay planes.') }}</p>
+  {% endif %}
+  <details class="cobros-admin-recarga cobros-admin-nuevo">
+    <summary>{{ _('Nuevo plan') }}</summary>
+    <form method="post" action="{{ url_for('cobros.admin_plan_crear') }}" class="agencia-form">
+      <label>{{ _('Nombre') }}
+        <input type="text" name="nombre" maxlength="60" required></label>
+      <label>{{ _('Precio mensual en US$ (entero)') }}
+        <input type="text" inputmode="numeric" name="precio_usd" required></label>
+      <label>{{ _('Precio anual en US$ (vacío = sin opción anual)') }}
+        <input type="text" inputmode="numeric" name="precio_anual_usd"></label>
+      <label>{{ _('Margen de miembro (de 1,00 a 5,00; a la carta es %(margen)s)', margen=margen_global_texto) }}
+        <input type="text" inputmode="decimal" name="margen" required></label>
+      <label>{{ _('Tope de lo incluido en US$ de costo por mes') }}
+        <input type="text" inputmode="decimal" name="tope_incluido_usd" value="25" required></label>
+      <label>{{ _('Orden en la pantalla del cliente') }}
+        <input type="text" inputmode="numeric" name="orden" value="0"></label>
+      <label class="cobros-admin-casilla"><input type="checkbox" name="activo" value="1"> {{ _('Ofrecerlo ya a los proyectos que cobran (si no, nace archivado)') }}</label>
+      <button type="submit" class="btn-generar">{{ _('Crear plan') }}</button>
+    </form>
+  </details>
+</section>
+
+<section class="admin-bloque aparece" id="cobros-suscripciones">
+  <div class="admin-cabecera">
+    <h2>{{ _('Planes de los proyectos') }}</h2>
+    <span class="vacio">{{ _('el periodo en curso; lo incluido va en costo de proveedor; ganancia del periodo = cobrado − costo − descuento del plan, con lo incluido como costo') }}</span>
+  </div>
+  {% if filas %}
+  <div class="admin-scroll">
+    <table class="tabla-admin cobros-admin-tabla cobros-admin-planes">
+      <thead>
+        <tr>
+          <th>{{ _('Proyecto') }}</th><th>{{ _('Plan') }}</th><th>{{ _('Estado') }}</th><th>{{ _('Próxima renovación') }}</th>
+          <th>{{ _('Saldo del plan restante') }}</th><th>{{ _('Incluido usado (costo)') }}</th><th>{{ _('Ganancia del periodo') }}</th>
+          <th>{{ _('Acciones del plan') }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in filas %}
+        {% set sus = f.plan.suscripcion %}
+        <tr id="suscripcion-{{ f.cliente }}">
+          <td><strong>{{ f.nombre }}</strong>{% if f.nombre != f.cliente %} <code>{{ f.cliente }}</code>{% endif %}</td>
+          <td>{% if sus %}{{ sus.plan_nombre }}<br><span class="cobros-admin-nota">{{ _('anual') if sus.ciclo == 'anual' else _('mensual') }}{% if sus.fuente_resumen %} · {{ sus.fuente_resumen }}{% endif %}</span>{% else %}—{% endif %}</td>
+          <td>
+            {% if not sus %}
+              {% if f.cobrar %}<span class="tag-estado tag-descartado">{{ _('Sin plan') }}</span>{% else %}<span class="tag-estado tag-descartado">{{ _('No cobra') }}</span>{% endif %}
+            {% elif sus.situacion == 'activa' %}<span class="tag-estado tag-en-uso">{{ _('Activa') }}</span><br><span class="cobros-admin-nota">{{ _('renueva con tarjeta') }}</span>
+            {% elif sus.situacion == 'manual' %}<span class="tag-estado tag-en-uso">{{ _('Activa a mano') }}</span><br><span class="cobros-admin-nota">{{ _('sin renovación automática') }}</span>
+            {% elif sus.situacion == 'morosa' %}<span class="tag-estado tag-descartado">{{ _('Morosa') }}</span><br><span class="cobros-admin-nota">{{ _('%(n)s cobros rechazados', n=sus.intentos_fallidos) }}</span>
+            {% else %}<span class="tag-estado tag-descartado">{{ _('Cancelada') }}</span><br><span class="cobros-admin-nota">{{ _('sigue hasta el fin de lo pagado') }}</span>
+            {% endif %}
+            {% if f.plan.pendientes %}<br><span class="tag-estado tag-descartado">{{ _('pago pendiente') }}</span>{% endif %}
+          </td>
+          <td>
+            {% if sus and sus.reintento_el %}{{ _('Reintento: %(fecha)s', fecha=sus.reintento_el | fecha_larga) }}
+            {% elif sus and sus.renueva_el %}{{ sus.renueva_el | fecha_larga }}{% if sus.precio_aceptado_texto %}<br><span class="cobros-admin-nota">{{ _('por %(monto)s (el precio que aceptó)', monto=sus.precio_aceptado_texto) }}</span>{% endif %}
+            {% elif sus and sus.termina_el %}{{ _('Termina el %(fecha)s', fecha=sus.termina_el | fecha_larga) }}
+            {% else %}—{% endif %}
+          </td>
+          {% if f.plan.periodo %}
+          <td class="num">{{ (f.plan.bolsa_restante / 1000) | usd }}<br><span class="cobros-admin-nota">{{ _('de %(monto)s · vence el %(fecha)s', monto=(f.plan.bolsa_credito / 1000) | usd, fecha=f.plan.periodo.fin | fecha_larga) }}</span></td>
+          <td class="num">{{ f.plan.incluido_usado_usd | usd }}<br><span class="cobros-admin-nota">{{ _('de %(monto)s', monto=f.plan.tope_incluido_usd | usd) }}</span></td>
+          <td class="num{{ ' cobros-admin-perdida' if f.plan.ganancia_periodo < 0 else '' }}">{% if f.plan.ganancia_periodo < 0 %}▼ {% endif %}{{ (f.plan.ganancia_periodo / 1000) | usd }}<br><span class="cobros-admin-nota">{{ _('cobrado %(cobrado)s · costo %(costo)s · descuento del plan %(descuento)s', cobrado=(f.plan.cobrado_periodo / 1000) | usd, costo=(f.plan.costo_periodo / 1000) | usd, descuento=(f.plan.descuento_periodo / 1000) | usd) }}</span></td>
+          {% else %}
+          <td class="num">—</td><td class="num">—</td><td class="num">—</td>
+          {% endif %}
+          <td>
+            {% if sus or f.cobrar or f.plan.pendientes %}
+            <details class="cobros-admin-recarga">
+              <summary>{{ _('Acciones del plan') }}</summary>
+              {% for pago in f.plan.pendientes %}
+              <form method="post" action="{{ url_for('cobros.admin_plan_resolver', cliente=f.cliente, pago_id=pago.id) }}" class="agencia-form cobros-admin-pendiente">
+                <p><strong>{{ _('Pago pendiente %(referencia)s', referencia=pago.referencia) }}</strong> · US$ {{ pago.usd }} · {{ pago.creado_en | replace('T', ' ') }}<br>
+                  <span class="cobros-admin-nota">{% if pago.transaccion_id %}{{ _('Transacción de Wompi: %(id)s', id=pago.transaccion_id) }}{% else %}{{ _('Sin id de transacción: su resultado llega con el evento de Wompi.') }}{% endif %}</span></p>
+                {% if pago.en_vuelo %}
+                <p class="cobros-admin-nota">{{ _('Este cobro va en camino a Wompi. Espera unos minutos antes de resolverlo.') }}</p>
+                {% else %}
+                <p class="cobros-admin-nota">{{ _('«Sí se cobró» consulta la transacción en Wompi y aplica lo que diga: nunca acredita sin que Wompi lo confirme. «No se cobró» solo si viste en el panel de Wompi que no hay ninguna transacción con esta referencia: cuenta como un cobro fallido (en el alta termina la suscripción; en una renovación queda morosa y se reintenta).') }}</p>
+                <label class="cobros-admin-casilla"><input type="radio" name="resultado" value="cobrado" required> {{ _('Sí se cobró') }}</label>
+                <label>{{ _('Id de la transacción en Wompi') }}
+                  <input type="text" name="transaccion_id" value="{{ pago.transaccion_id or '' }}" maxlength="64" autocomplete="off"></label>
+                {% if pago.puede_no_cobrado %}
+                <label class="cobros-admin-casilla"><input type="radio" name="resultado" value="no_cobrado"> {{ _('No se cobró') }}</label>
+                <label>{{ _('Nota (obligatoria si no se cobró; solo la ven los admins)') }}
+                  <input type="text" name="nota" maxlength="300"></label>
+                {% elif pago.transaccion_id %}
+                <p class="cobros-admin-nota">{{ _('Tiene transacción en Wompi: se resuelve consultándola, no a mano.') }}</p>
+                {% else %}
+                <p class="cobros-admin-nota">{{ _('«No se cobró» se habilita 30 minutos después del último intento de cobro.') }}</p>
+                {% endif %}
+                <button type="submit" class="btn-generar">{{ _('Resolver el pago') }}</button>
+                {% endif %}
+              </form>
+              {% endfor %}
+              {% if f.cobrar %}
+              <form method="post" action="{{ url_for('cobros.admin_plan_activar', cliente=f.cliente) }}" class="agencia-form">
+                <p><strong>{{ _('Activar a mano') }}</strong></p>
+                <p class="cobros-admin-nota">{{ _('Anota un pago por transferencia con el precio de hoy del plan y ciclo elegidos y abre su periodo (o lo extiende desde el fin de lo pagado).') }}</p>
+                {% if sus and sus.renueva %}
+                <p class="flash warn">{{ _('Este proyecto renueva con tarjeta. Activar a mano APAGA esa renovación automática: la tarjeta no se volverá a cobrar sola y, para volver a pagar con tarjeta, el cliente tendrá que suscribirse de nuevo cuando termine lo pagado. Se le avisa.') }}</p>
+                {% else %}
+                <p class="cobros-admin-nota">{{ _('Un plan activado a mano no se renueva solo: cuando termine lo pagado, vuelves a activarlo o el cliente se suscribe con tarjeta.') }}</p>
+                {% endif %}
+                <label>{{ _('Plan') }}
+                  <select name="plan_id" required>
+                    {% for pl in planes %}
+                    <option value="{{ pl.id }}"{% if sus and sus.plan_id == pl.id %} selected{% endif %}>{{ pl.nombre }} · {{ _('%(precio)s al mes', precio=pl.precio_texto) }}{% if pl.anual_texto %} · {{ _('%(precio)s al año', precio=pl.anual_texto) }}{% endif %}{% if not pl.activo %} ({{ _('archivado') }}){% endif %}</option>
+                    {% endfor %}
+                  </select></label>
+                <label>{{ _('Ciclo') }}
+                  <select name="ciclo">
+                    <option value="mensual">{{ _('Un mes') }}</option>
+                    <option value="anual">{{ _('Un año (doce periodos)') }}</option>
+                  </select></label>
+                <label>{{ _('Nota del pago (solo la ven los admins)') }}
+                  <input type="text" name="nota" maxlength="300"></label>
+                <button type="submit" class="btn-generar"{% if not planes %} disabled{% endif %}>{{ _('Activar a mano') }}</button>
+              </form>
+              {% endif %}
+              {% if sus and sus.estado in ('activa', 'morosa') %}
+              <form method="post" action="{{ url_for('cobros.admin_plan_cancelar', cliente=f.cliente) }}" class="agencia-form">
+                <p><strong>{{ _('Cancelar') }}</strong></p>
+                <p class="cobros-admin-nota">{{ _('No se renueva más; sigue hasta el fin de lo pagado, sin devolución.') }}</p>
+                <label class="cobros-admin-casilla"><input type="checkbox" name="confirmo" value="1" required> {{ _('Sí, cancelar este plan') }}</label>
+                <button type="submit" class="btn-sm">{{ _('Cancelar el plan') }}</button>
+              </form>
+              {% endif %}
+              {% if sus %}
+              <form method="post" action="{{ url_for('cobros.admin_plan_terminar', cliente=f.cliente) }}" class="agencia-form">
+                <p><strong>{{ _('Terminar ya') }}</strong></p>
+                <p class="cobros-admin-nota">{{ _('Corta el plan ahora, sin devolución: el saldo del plan que quede vence y el proyecto pasa a la carta.') }}</p>
+                <label>{{ _('Nota con el motivo (obligatoria; solo la ven los admins)') }}
+                  <input type="text" name="nota" maxlength="300" required></label>
+                <label class="cobros-admin-casilla"><input type="checkbox" name="confirmo" value="1" required> {{ _('Sí, terminar el plan ya') }}</label>
+                <button type="submit" class="btn-sm">{{ _('Terminar ya') }}</button>
+              </form>
+              {% endif %}
+            </details>
+            {% else %}
+            <span class="cobros-admin-nota">{{ _('Prende «Cobrar» para activarle un plan.') }}</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="estado-vacio">{{ _('Todavía no hay proyectos.') }}</p>
+  {% endif %}
+</section>
+
+<section class="admin-bloque aparece" id="cobros-eventos">
+  <div class="admin-cabecera">
+    <h2>{{ _('Últimos eventos de Bold y Wompi') }}</h2>
+    <span class="vacio">{{ _('solo los que llegaron con firma válida') }}</span>
+  </div>
+  {% if eventos %}
+  <div class="admin-scroll">
+    <table class="tabla-admin">
+      <thead><tr><th>{{ _('Hora') }}</th><th>{{ _('Pasarela') }}</th><th>{{ _('Tipo') }}</th><th>{{ _('Referencia') }}</th><th>{{ _('Monto') }}</th><th>{{ _('Resultado') }}</th></tr></thead>
+      <tbody>
+        {% for e in eventos %}
+        <tr><td>{{ e.recibido_en | replace('T', ' ') }}</td><td>{{ e.proveedor_texto }}</td><td><code>{{ e.tipo }}</code></td><td><code>{{ e.referencia or '—' }}</code></td>
+          <td class="num">{% if e.usd_texto %}{{ e.usd_texto }}{% endif %}{% if e.monto_texto %}{% if e.usd_texto %}<br>{% endif %}<span class="cobros-admin-nota">{{ e.monto_texto }}</span>{% endif %}{% if not e.usd_texto and not e.monto_texto %}—{% endif %}</td>
+          <td>{{ e.resultado_texto }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="estado-vacio">{{ _('Todavía no llegó ningún evento de Bold ni de Wompi.') }}</p>
   {% endif %}
 </section>
 </div>

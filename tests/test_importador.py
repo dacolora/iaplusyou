@@ -707,6 +707,7 @@ def test_proyecto_que_cobra_con_saldo_paga_la_regla(entorno):
     import importador
     from cobros import libro
     _cobra_con_saldo(1000)
+    libro.guardar_margen_global(1.5, "test")   # el defecto es 2,0 (planes 2026-10-09); esta prueba suma con 1,5
     importador.importar_lista("acme", "shopify", [_prod()])
     assert catalogo_productos.encontrar("acme", "cojin_azul", "producto")["regla_propia"]
     assert entorno["reglas"] == ["Cojín Azul"]

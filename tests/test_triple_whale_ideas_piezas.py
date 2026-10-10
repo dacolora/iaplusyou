@@ -6,6 +6,7 @@ import pytest
 
 import creative_flow as cf
 import experimentos as ex
+from tests.js_de_pagina import con_script_estatico
 from tests.test_rutas_experimentos import _cliente_admin
 from tests.test_rutas_triple_whale import _conectar, _evaluacion_lista, _sembrar
 from triple_whale import datos, puente
@@ -44,6 +45,7 @@ def test_el_prefill_lleva_el_origen_y_el_formulario_lo_devuelve(app):
     with app["c"].session_transaction() as s:
         assert s["fp_prefill"]["origen_tw"] == f"{eid}:0"
     html = app["c"].get("/cliente/acme").data.decode()
+    html = con_script_estatico(html, 'crear-compositor.js')
     assert 'name="origen_tw"' in html and "prefill.origen_tw" in html
 
 

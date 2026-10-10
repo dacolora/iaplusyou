@@ -70,6 +70,16 @@ def test_syncs_en_curso_lista_los_job_ids_vivos_del_proyecto(hf):
     assert t.syncs_en_curso("otro") == []
 
 
+def test_trabajos_del_panel_trae_las_copias_y_la_evaluacion_en_una_lectura(hf):
+    assert t.trabajos_del_panel("hf") == set()
+    t.encolar_sync("hf", "act_1")
+    t.encolar_evaluacion("hf", 7)
+    cola.encolar("tw_sincronizar", {}, job_id="hf__otra_cosa", cliente="hf")
+    assert t.trabajos_del_panel("hf") == {"hf__meta_rend__act_1", "hf__meta_eval"}
+    assert t.trabajos_del_panel("otro") == set()
+    assert cola.job_ids_vivos("hf", t.TIPO_SYNC) == {"hf__meta_rend__act_1"}     # un tipo solo, como siempre
+
+
 def test_la_copia_de_meta_va_despues_de_lo_normal_en_la_cola(hf):
     t.encolar_sync("hf")
     cola.encolar("tw_sincronizar", {}, job_id="x__normal")        # prioridad 5 por defecto, llegó DESPUÉS
@@ -104,6 +114,77 @@ def test_copia_ok_reporta_las_etapas_y_cuenta_lo_copiado(hf, monkeypatch):
     assert "Listo" in texto and "HappyFlops Norway" in texto and "345" in texto and "12" in texto
     assert "2026-07-10" in texto and "2026-10-08" in texto
     assert TOKEN not in texto
+
+
+def _copia_ok(monkeypatch):
+    monkeypatch.setattr(sync, "sincronizar", lambda *a, **k: {
+        "omitida": False, "dias_cuenta": 1, "filas_anuncio": 1, "objetos": 1, "desde": "2026-10-08",
+        "hasta": "2026-10-08"})
+
+
+def _rec(tipo, nivel, huella):
+    return {"id": huella, "nivel": nivel, "tipo": tipo, "cuenta": "act_1", "titulo": f"Título {tipo}"}
+
+
+def test_copia_ok_guarda_las_recomendaciones_altas_de_esa_cuenta_para_alertas(hf, monkeypatch):
+    from meta_rendimiento import panel
+    _copia_ok(monkeypatch)
+    pedidas = []
+
+    def _recs(cliente, act, hoy=None):
+        pedidas.append((cliente, act))
+        return [_rec("cuenta_roas_bajo", "alta", "a" * 64), _rec("escalar", "media", "b" * 64),
+                _rec("perdedores_gastando", "alta", "c" * 64), _rec("concentracion", "baja", "d" * 64)]
+    monkeypatch.setattr(panel, "recomendaciones_de_cuenta", _recs)
+    t.meta_rend_sincronizar(_tarea())
+    assert pedidas == [("hf", "act_1")]
+    extra = cuentas.cuenta("hf", "act_1")["extra"]
+    # Solo tipo y huella: el título lo arma Alertas en el idioma de quien mira (skill alertas).
+    assert extra["alertas"] == [{"tipo": "cuenta_roas_bajo", "huella": "a" * 64},
+                                {"tipo": "perdedores_gastando", "huella": "c" * 64}]
+    assert "alertas" not in cuentas.cuenta("hf", "act_2")["extra"]
+    # La copia siguiente sin nada alto deja la lista vacía (la alerta desaparece sola).
+    monkeypatch.setattr(panel, "recomendaciones_de_cuenta", lambda *a, **k: [_rec("escalar", "media", "b" * 64)])
+    t.meta_rend_sincronizar(_tarea())
+    assert cuentas.cuenta("hf", "act_1")["extra"]["alertas"] == []
+
+
+def test_si_calcular_las_alertas_falla_la_copia_igual_termina_bien(hf, monkeypatch, caplog):
+    from meta_rendimiento import panel
+    _copia_ok(monkeypatch)
+    cuentas.actualizar_extra("hf", "act_1", {"alertas": [{"tipo": "cuenta_roas_bajo", "huella": "a" * 64}]})
+
+    def _revienta(*a, **k):
+        raise ValueError(f"algo con el token {TOKEN}")
+    monkeypatch.setattr(panel, "recomendaciones_de_cuenta", _revienta)
+    texto = t.meta_rend_sincronizar(_tarea())
+    assert "Listo" in texto
+    # Lo guardado antes se queda (no se inventa que no hay alertas) y el registro dice solo el tipo del error.
+    assert cuentas.cuenta("hf", "act_1")["extra"]["alertas"] == [{"tipo": "cuenta_roas_bajo", "huella": "a" * 64}]
+    assert "ValueError" in caplog.text and TOKEN not in caplog.text
+
+
+def test_una_copia_que_falla_no_toca_las_alertas_guardadas(hf, monkeypatch):
+    from meta_rendimiento import panel
+    _falla_con(monkeypatch, graph.ErrorGraph("Meta rechazó la consulta", codigo=100))
+    monkeypatch.setattr(panel, "recomendaciones_de_cuenta", lambda *a, **k: pytest.fail("solo tras una copia buena"))
+    with pytest.raises(RuntimeError):
+        t.meta_rend_sincronizar(_tarea())
+
+
+def test_la_copia_guarda_las_alertas_con_las_reglas_de_verdad(hf, monkeypatch):
+    """Sin dobles en el cálculo: una cuenta que vende menos de la mitad de lo que gasta deja `cuenta_roas_bajo`."""
+    from meta_rendimiento import recomendaciones
+    _copia_ok(monkeypatch)
+    hoy = date.today()
+    dias = [(hoy - timedelta(days=i)).isoformat() for i in range(10)]
+    datos.reemplazar_cuenta_dias("hf", "act_1", dias[-1], dias[0], [
+        dict(fecha=f, gasto=500, impresiones=1000, alcance=500, clics=10, clics_salida=5, compras=1, valor=100,
+             vistas_3s=0, thruplays=0) for f in dias])
+    t.meta_rend_sincronizar(_tarea())
+    alerta, = cuentas.cuenta("hf", "act_1")["extra"]["alertas"]
+    assert alerta == {"tipo": "cuenta_roas_bajo",
+                      "huella": recomendaciones.huella_recomendacion("cuenta_roas_bajo", "act_1", "alta")}
 
 
 def test_sin_token_deja_la_cuenta_en_error_y_no_lanza(hf, monkeypatch):
@@ -403,3 +484,394 @@ def test_registradas_y_periodicas_en_el_worker():
     assert periodicas["meta_rend_sincronizar_todas"] == 10800 and periodicas["meta_rend_limpiar"] == 86400
     tipos = [tipo for tipo, _ in worker.PERIODICAS]
     assert tipos.index("tw_sincronizar_todas") < tipos.index("meta_rend_sincronizar_todas") < tipos.index("exp_refrescar_todos")
+
+
+# ---------------------------------------------------------- «Evaluar con IA» (spec E2 §8) ---
+
+import json  # noqa: E402
+
+import gastos  # noqa: E402
+from meta_rendimiento import analisis  # noqa: E402
+from nicho.avatares import costo_real  # noqa: E402
+from triple_whale import analisis as tw_analisis  # noqa: E402
+
+def _respuesta(n_ideas=3):
+    return json.dumps({
+        "resumen": "Norway vende con un solo video; los perdedores se comen el presupuesto.",
+        "diagnostico": [{"causa": "Perdedores activos", "evidencia": "A2 gastó sin ventas"}],
+        "plan": [{"prioridad": 1, "accion": "pausar", "objetos": ["A2", "R1"], "que_hacer": "Pausa el perdedor",
+                  "por_que": "gasta sin vender", "impacto": None}],
+        "patrones_ganadores": [{"patron": "Demostración del producto", "anuncios": ["A1"]}],
+        "patrones_perdedores": [], "anuncios": [{"id": "A1", "por_que": "Muestra el producto"}],
+        "ideas": [{"titulo": f"Sandalia en la lluvia {i}", "basada_en": ["A1"], "por_que": "repite la demostración",
+                   "angulo": {}, "escena": "Pies en un charco", "prompt": "Close-up of feet in a puddle..."}
+                  for i in range(1, n_ideas + 1)]})
+
+
+RESPUESTA_OK = _respuesta()
+
+
+def _jpeg():
+    import io
+    from PIL import Image
+    buf = io.BytesIO()
+    Image.new("RGB", (4, 4), (200, 30, 30)).save(buf, format="JPEG")
+    return buf.getvalue()
+
+
+@pytest.fixture()
+def evaluacion(hf, monkeypatch):
+    """Una evaluación «en_cola» de hf con dos anuncios de la cuenta 1 (uno con miniatura de Meta) y una
+    recomendación; R2 y la descarga de la miniatura son falsas."""
+    datos.guardar_objetos("hf", "act_1", [{"nivel": "anuncio", "objeto_id": "1001", "nombre": "Video gana",
+                                           "estado": "ACTIVE", "miniatura_url": "https://scontent.xx.fbcdn.net/g.jpg"}])
+    m = {k: 1.0 for k in tw_analisis.CAMPOS_M}
+    muestra = [dict(ref="A1", canal="meta", ad_id="1001", nombre="Video gana", veredicto="ganador", motivo="ROAS",
+                    problemas=[], fortalezas=[], m=m, ad_account_id="act_1", moneda="SEK", cuenta_nombre="N"),
+               dict(ref="A2", canal="meta", ad_id="2001", nombre="Pierde", veredicto="perdedor", motivo="sin ventas",
+                    problemas=[], fortalezas=[], m=m, ad_account_id="act_1", moneda="SEK", cuenta_nombre="N")]
+    recs = [{"ref": "R1", "id": "f" * 64, "nivel": "alta", "tipo": "perdedores_gastando", "cuenta": "act_1",
+             "cuenta_nombre": "N", "titulo": "Un perdedor gasta", "que_hacer": "Páusalo", "por_que": "gasta",
+             "impacto": None, "objetos": [], "enlace": None}]
+    eid = datos.crear_evaluacion("hf", ["act_1"], "2026-09-09", "2026-10-08", "SEK", muestra, recs, pedido_por="u",
+                                 extra={"dias": 30, "cuenta": None, "resumen": [], "segmentos": {}})
+    subidas, borradas = [], []
+    monkeypatch.setattr(tw_analisis.r2_uploader, "upload_image",
+                        lambda local, clave: subidas.append(clave) or f"https://r2/{clave}")
+    monkeypatch.setattr(tw_analisis.r2_uploader, "delete_files",
+                        lambda claves: (borradas.extend(claves), (len(claves), []))[1])
+    from referentes import imagenes
+    monkeypatch.setattr(imagenes, "_bajar", lambda url: _jpeg())
+    return {"eid": eid, "subidas": subidas, "borradas": borradas}
+
+
+def _tarea_eval(eid, cliente="hf"):
+    return {"id": 7, "payload": {"cliente": cliente, "evaluacion_id": eid}, "job_id": t.job_id_evaluar(cliente)}
+
+
+def _gastos_eval():
+    with db.conectar() as con:
+        return [dict(r._mapping) for r in con.execute(
+            sa.select(db.gasto.c.tipo, db.gasto.c.usd, db.gasto.c.referencia, db.gasto.c.proveedor))]
+
+
+def test_evaluar_encola_una_por_proyecto_con_un_intento_en_el_carril_general(hf):
+    import tareas
+    import worker
+    assert t.encolar_evaluacion("hf", 5, costo_estimado=0.2) is True
+    fila, = _filas_cola(t.TIPO_EVALUAR)
+    assert fila.job_id == "hf__meta_eval" and fila.max_intentos == 1 and fila.cliente == "hf"
+    assert fila.duracion_estimada == t.DURACION_EVALUAR == 360      # E2-R8: lo medido, para que la barra no mienta
+    assert fila.payload == {"cliente": "hf", "evaluacion_id": 5}
+    assert t.evaluacion_en_curso("hf") and not t.evaluacion_en_curso("otro")
+    assert t.encolar_evaluacion("hf", 6) is False and len(_filas_cola(t.TIPO_EVALUAR)) == 1
+    tareas.cargar_todas()
+    assert tareas.REGISTRO[t.TIPO_EVALUAR] is t.meta_rend_evaluar
+    assert tareas.AL_INTERRUMPIR[t.TIPO_EVALUAR] is t._evaluar_interrumpida
+    assert t.TIPO_EVALUAR in tareas.TIPOS_QUE_COBRAN and t.TIPO_EVALUAR not in worker.CARRIL_LECTURA
+
+
+def test_evaluar_guarda_el_resultado_las_miniaturas_en_r2_y_el_gasto_real(evaluacion, monkeypatch):
+    eid = evaluacion["eid"]
+    visto = {}
+
+    def _llamar(content, system_):
+        visto["content"] = content
+        return RESPUESTA_OK, 10000, 5000
+    monkeypatch.setattr(analisis, "_llamar", _llamar)
+    texto = t.meta_rend_evaluar(_tarea_eval(eid))
+    assert "1 paso(s)" in texto and "3 idea(s)" in texto
+    fila = datos.evaluacion("hf", eid)
+    usd = costo_real(10000, 5000)
+    assert fila["estado"] == "lista" and fila["error"] is None and fila["usd"] == pytest.approx(usd)
+    assert fila["tarea_id"] == 7 and fila["resultado"]["plan"][0]["enlace"].endswith("selected_ad_ids=2001")
+    # La miniatura de Meta quedó copiada a R2 en la carpeta de Meta (la de Meta caduca) y Claude la vio.
+    clave = f"clientes/hf/meta_rendimiento/eval{eid}_A1.jpg"
+    assert evaluacion["subidas"] == [clave]
+    a1, a2 = fila["muestra"]
+    assert a1["medio"]["imagen"] == f"https://r2/{clave}" and a1["visual"] == "imagen"
+    assert a2["medio"]["imagen"] is None and "visual" not in a2
+    assert [b["type"] for b in visto["content"]] == ["text", "text", "image"]
+    assert "<anuncios>" in visto["content"][0]["text"]
+    assert evaluacion["borradas"] == []                  # con la fila en su lugar, las miniaturas se quedan
+    assert _gastos_eval() == [{"tipo": "evaluacion", "usd": pytest.approx(usd), "referencia": f"meta_eval:{eid}:t7",
+                               "proveedor": "anthropic"}]
+
+
+def test_evaluar_con_respuesta_invalida_dos_veces_queda_en_error_y_anota_lo_pagado(evaluacion, monkeypatch):
+    eid = evaluacion["eid"]
+    monkeypatch.setattr(analisis, "_llamar", lambda c, s: ("no es JSON", 3000, 800))
+    with pytest.raises(RuntimeError) as e:
+        t.meta_rend_evaluar(_tarea_eval(eid))
+    fila = datos.evaluacion("hf", eid)
+    usd = costo_real(6000, 1600)
+    assert fila["estado"] == "error" and fila["error"] == str(e.value) and "Claude" in fila["error"]
+    assert fila["usd"] == pytest.approx(usd)
+    assert _gastos_eval() == [{"tipo": "evaluacion", "usd": pytest.approx(usd), "referencia": f"meta_eval:{eid}:t7",
+                               "proveedor": "anthropic"}]
+
+
+def test_evaluar_si_falla_tras_pagar_anota_el_gasto_y_el_error_va_sin_token(evaluacion, monkeypatch):
+    eid = evaluacion["eid"]
+
+    class Fallo(RuntimeError):
+        tokens_entrada, tokens_salida = 4000, 900
+
+    def _analizar(*a, **k):
+        raise Fallo(f"Meta devolvió https://graph.facebook.com/x?access_token={TOKEN}")
+    monkeypatch.setattr(analisis, "analizar", _analizar)
+    with pytest.raises(RuntimeError) as e:
+        t.meta_rend_evaluar(_tarea_eval(eid))
+    fila = datos.evaluacion("hf", eid)
+    assert fila["estado"] == "error" and TOKEN not in fila["error"] and TOKEN not in str(e.value)
+    assert e.value.__cause__ is None and e.value.__suppress_context__
+    assert _gastos_eval()[0]["usd"] == pytest.approx(costo_real(4000, 900))
+
+
+def _cobra_hf():
+    from cobros import libro
+    libro.configurar("hf", usuario="admin", cobrar=True)
+    with db.conectar() as con:
+        libro.acreditar(con, "hf", "ajuste", 50_000, "ajuste", usuario="admin", detalle="prueba")
+
+
+def _movimientos_hf():
+    with db.conectar() as con:
+        return [r.tipo for r in con.execute(sa.select(db.movimiento_saldo.c.tipo).where(
+            db.movimiento_saldo.c.cliente == "hf", db.movimiento_saldo.c.tipo != "ajuste"))]
+
+
+def test_evaluar_en_un_proyecto_que_cobra_cobra_lo_entregado(evaluacion, monkeypatch):
+    _cobra_hf()
+    monkeypatch.setattr(analisis, "_llamar", lambda c, s: (RESPUESTA_OK, 10000, 5000))
+    t.meta_rend_evaluar(_tarea_eval(evaluacion["eid"]))
+    assert _movimientos_hf() == ["cobro"]
+
+
+def test_evaluar_invalida_en_un_proyecto_que_cobra_no_se_le_cobra(evaluacion, monkeypatch):
+    _cobra_hf()
+    monkeypatch.setattr(analisis, "_llamar", lambda c, s: ("no es JSON", 3000, 800))
+    with pytest.raises(RuntimeError):
+        t.meta_rend_evaluar(_tarea_eval(evaluacion["eid"]))
+    assert _movimientos_hf() == ["no_cobrado"] and _gastos_eval()[0]["usd"] == pytest.approx(costo_real(6000, 1600))
+
+
+def test_evaluar_si_la_fila_se_borra_a_mitad_igual_anota_lo_que_claude_cobro(evaluacion, monkeypatch):
+    """Desconectar Meta borra las evaluaciones del proyecto: si pasa mientras Claude responde, lo pagado se anota (sin
+    entregar: nadie va a ver ese resultado, al cliente no se le cobra)."""
+    eid = evaluacion["eid"]
+    _cobra_hf()
+
+    def _llamar(content, system_):
+        datos.borrar_evaluaciones("hf")
+        return RESPUESTA_OK, 10000, 5000
+    monkeypatch.setattr(analisis, "_llamar", _llamar)
+    assert t.meta_rend_evaluar(_tarea_eval(eid)) == "Esa evaluación ya no existe."
+    assert datos.evaluacion("hf", eid) is None
+    assert _gastos_eval()[0]["usd"] == pytest.approx(costo_real(10000, 5000))
+    assert _movimientos_hf() == ["no_cobrado"]
+
+
+def test_evaluar_si_la_fila_se_borra_a_mitad_borra_tambien_las_miniaturas_que_copio(evaluacion, monkeypatch):
+    """Revisión de privacidad de E2: desconectar Meta ya borró las filas, y las miniaturas que la tarea subió a R2
+    después no las encontraría nadie."""
+    eid = evaluacion["eid"]
+
+    def _llamar(content, system_):
+        datos.borrar_evaluaciones("hf")
+        return RESPUESTA_OK, 10000, 5000
+    monkeypatch.setattr(analisis, "_llamar", _llamar)
+    t.meta_rend_evaluar(_tarea_eval(eid))
+    base = "clientes/hf/meta_rendimiento"
+    assert evaluacion["subidas"] == [f"{base}/eval{eid}_A1.jpg"]
+    assert sorted(evaluacion["borradas"]) == [f"{base}/eval{eid}_A1.jpg", f"{base}/eval{eid}_A2.jpg"]
+    assert _gastos_eval()[0]["usd"] == pytest.approx(costo_real(10000, 5000))        # y lo pagado se anota igual
+
+
+def test_evaluar_si_la_fila_se_borra_y_ademas_claude_falla_borra_las_miniaturas_y_anota_lo_pagado(evaluacion,
+                                                                                                   monkeypatch):
+    eid = evaluacion["eid"]
+
+    def _llamar(content, system_):
+        datos.borrar_evaluaciones("hf")
+        return "no es JSON", 3000, 800
+    monkeypatch.setattr(analisis, "_llamar", _llamar)
+    with pytest.raises(RuntimeError):
+        t.meta_rend_evaluar(_tarea_eval(eid))
+    base = "clientes/hf/meta_rendimiento"
+    assert sorted(evaluacion["borradas"]) == [f"{base}/eval{eid}_A1.jpg", f"{base}/eval{eid}_A2.jpg"]
+    assert _gastos_eval()[0]["usd"] == pytest.approx(costo_real(6000, 1600))
+
+
+def test_evaluar_si_r2_falla_al_soltar_las_miniaturas_la_tarea_termina_igual_y_anota_el_gasto(evaluacion, monkeypatch):
+    eid = evaluacion["eid"]
+
+    def _llamar(content, system_):
+        datos.borrar_evaluaciones("hf")
+        return RESPUESTA_OK, 10000, 5000
+
+    def _falla(claves):
+        raise RuntimeError(f"Faltan R2_ACCOUNT_ID {TOKEN}")
+    monkeypatch.setattr(analisis, "_llamar", _llamar)
+    monkeypatch.setattr(tw_analisis.r2_uploader, "delete_files", _falla)
+    assert t.meta_rend_evaluar(_tarea_eval(eid)) == "Esa evaluación ya no existe."
+    assert _gastos_eval()[0]["usd"] == pytest.approx(costo_real(10000, 5000))
+
+
+def test_evaluar_si_guardar_el_resultado_falla_anota_lo_pagado_sin_cobrarlo(evaluacion, monkeypatch):
+    eid = evaluacion["eid"]
+    _cobra_hf()
+    monkeypatch.setattr(analisis, "_llamar", lambda c, s: (RESPUESTA_OK, 10000, 5000))
+    original = datos.actualizar_evaluacion
+
+    def _falla_al_guardar(evaluacion_id, **campos):
+        if campos.get("estado") == "lista":
+            raise RuntimeError("database is locked")
+        return original(evaluacion_id, **campos)
+    monkeypatch.setattr(datos, "actualizar_evaluacion", _falla_al_guardar)
+    with pytest.raises(RuntimeError):
+        t.meta_rend_evaluar(_tarea_eval(eid))
+    assert datos.evaluacion("hf", eid)["estado"] == "error"
+    assert len(_gastos_eval()) == 1 and _movimientos_hf() == ["no_cobrado"]
+
+
+def test_evaluar_una_que_no_existe_o_es_de_otro_proyecto_no_llama_a_claude(evaluacion, monkeypatch):
+    monkeypatch.setattr(analisis, "_llamar", lambda c, s: pytest.fail("no debía llamar a Claude"))
+    assert t.meta_rend_evaluar(_tarea_eval(evaluacion["eid"], cliente="otro")) == "Esa evaluación ya no existe."
+    assert t.meta_rend_evaluar(_tarea_eval(999)) == "Esa evaluación ya no existe."
+    assert datos.evaluacion("hf", evaluacion["eid"])["estado"] == "en_cola" and _gastos_eval() == []
+
+
+def test_evaluacion_interrumpida_queda_en_error_sin_token(evaluacion):
+    eid = evaluacion["eid"]
+    t._evaluar_interrumpida(_tarea_eval(eid, cliente="otro"), "x")         # otro proyecto: no la toca
+    assert datos.evaluacion("hf", eid)["estado"] == "en_cola"
+    t._evaluar_interrumpida(_tarea_eval(eid), f"Interrumpida: access_token={TOKEN}")
+    fila = datos.evaluacion("hf", eid)
+    assert fila["estado"] == "error" and TOKEN not in fila["error"] and fila["error"].startswith("Interrumpida")
+    datos.actualizar_evaluacion(eid, estado="lista")
+    t._evaluar_interrumpida(_tarea_eval(eid), "otra vez")                 # una lista no vuelve a error
+    assert datos.evaluacion("hf", eid)["estado"] == "lista"
+
+
+def _timeout():
+    import anthropic
+    import httpx
+    return anthropic.APITimeoutError(request=httpx.Request("POST", "https://api.anthropic.com/v1/messages"))
+
+
+def _detalles():
+    with db.conectar() as con:
+        return [r.detalle for r in con.execute(sa.select(db.gasto.c.detalle))]
+
+
+def test_evaluar_si_claude_no_responde_anota_el_estimado_sin_cobrarlo(evaluacion, monkeypatch):
+    """E2-R7: un tope de tiempo o una conexión cortada no traen `usage`, pero Anthropic pudo cobrar: se anota el
+    estimado de la tarifa, sin entregar (al cliente no se le cobra)."""
+    eid = evaluacion["eid"]
+    _cobra_hf()
+
+    def _llamar(content, system_):
+        raise _timeout()
+    monkeypatch.setattr(analisis, "_llamar", _llamar)
+    with pytest.raises(RuntimeError) as e:
+        t.meta_rend_evaluar(_tarea_eval(eid))
+    estimado = gastos.estimar("evaluacion_meta", n=2)["usd"]
+    assert _gastos_eval()[0]["usd"] == pytest.approx(estimado)
+    assert _detalles() == ["estimado: sin respuesta de Claude"] and _movimientos_hf() == ["no_cobrado"]
+    fila = datos.evaluacion("hf", eid)
+    assert fila["estado"] == "error" and "APITimeoutError" in fila["error"] and "anthropic.com" not in str(e.value)
+
+
+def _rechazo(codigo):
+    """Una respuesta de error de la API de Anthropic (`APIStatusError`): Anthropic SÍ contestó, y con un 4xx/5xx no
+    cobra la llamada."""
+    import anthropic
+    import httpx
+    peticion = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+    return anthropic.APIStatusError("rechazada", response=httpx.Response(codigo, request=peticion), body=None)
+
+
+@pytest.mark.parametrize("codigo", [400, 429, 500, 529])
+def test_evaluar_si_la_api_rechaza_la_llamada_no_anota_ningun_estimado(evaluacion, monkeypatch, codigo):
+    """Distinto de «no responde»: con un `APIStatusError` Anthropic contestó que no (saturada, petición inválida) y no
+    cobró. Anotar el estimado de la tarifa sería inventar un gasto (y sumarlo al del cliente): no se anota nada y la
+    fila queda en error."""
+    import anthropic
+    eid = evaluacion["eid"]
+    _cobra_hf()
+
+    def _llamar(content, system_):
+        raise _rechazo(codigo)
+    monkeypatch.setattr(analisis, "_llamar", _llamar)
+    assert isinstance(_rechazo(codigo), anthropic.APIStatusError) and not tw_analisis.sin_respuesta(_rechazo(codigo))
+    with pytest.raises(RuntimeError):
+        t.meta_rend_evaluar(_tarea_eval(eid))
+    assert _gastos_eval() == [] and _movimientos_hf() == []
+    fila = datos.evaluacion("hf", eid)
+    assert fila["estado"] == "error" and fila["usd"] in (None, 0, 0.0)
+
+
+def test_evaluar_si_la_correccion_no_responde_anota_lo_exacto_mas_el_estimado(evaluacion, monkeypatch):
+    eid = evaluacion["eid"]
+    llamadas = []
+
+    def _llamar(content, system_):
+        llamadas.append(1)
+        if len(llamadas) > 1:
+            raise _timeout()
+        return "no es JSON", 3000, 800
+    monkeypatch.setattr(analisis, "_llamar", _llamar)
+    with pytest.raises(RuntimeError):
+        t.meta_rend_evaluar(_tarea_eval(eid))
+    esperado = costo_real(3000, 800) + gastos.estimar("evaluacion_meta", n=2)["usd"]
+    assert _gastos_eval()[0]["usd"] == pytest.approx(esperado) and _detalles() == ["estimado: sin respuesta de Claude"]
+
+
+def test_un_fallo_antes_de_llamar_a_claude_no_anota_ningun_estimado(evaluacion, monkeypatch):
+    eid = evaluacion["eid"]
+
+    def _sin_red(*a, **k):
+        raise _timeout()            # p. ej. armar los DATOS falla con algo que parece de red: Claude no se llamó
+    monkeypatch.setattr(analisis, "armar", _sin_red)
+    with pytest.raises(RuntimeError):
+        t.meta_rend_evaluar(_tarea_eval(eid))
+    assert _gastos_eval() == [] and datos.evaluacion("hf", eid)["estado"] == "error"
+
+
+# ------------------------------------------------- E2-R8: sin ideas no hay evaluación (2026-10-10) ---
+
+def test_evaluar_sin_ideas_pide_la_correccion_con_el_json_completo(evaluacion, monkeypatch):
+    """La eval del 2026-10-10: 2 de 3 correcciones llegaron sin ideas y se aceptaban. Ahora menos de 3 ideas no sirve:
+    se paga UNA corrección, que pide el JSON completo, y se cobran las dos llamadas."""
+    eid = evaluacion["eid"]
+    respuestas = [(_respuesta(n_ideas=0), 3000, 800), (RESPUESTA_OK, 3100, 900)]
+    pedidos = []
+
+    def _llamar(content, system_):
+        pedidos.append(content)
+        return respuestas.pop(0)
+    monkeypatch.setattr(analisis, "_llamar", _llamar)
+    assert "3 idea(s)" in t.meta_rend_evaluar(_tarea_eval(eid))
+    assert len(pedidos) == 2 and "JSON COMPLETO" in pedidos[1][-1]["text"] and "ideas" in pedidos[1][-1]["text"]
+    fila = datos.evaluacion("hf", eid)
+    usd = costo_real(6100, 1700)
+    assert fila["estado"] == "lista" and len(fila["resultado"]["ideas"]) == 3 and fila["usd"] == pytest.approx(usd)
+    assert _gastos_eval()[0]["usd"] == pytest.approx(usd)
+
+
+def test_evaluar_sin_ideas_tambien_tras_la_correccion_queda_en_error_y_anota_lo_pagado(evaluacion, monkeypatch):
+    eid = evaluacion["eid"]
+    _cobra_hf()
+    respuestas = [(_respuesta(n_ideas=0), 3000, 800), (_respuesta(n_ideas=2), 3100, 900)]
+    monkeypatch.setattr(analisis, "_llamar", lambda c, s: respuestas.pop(0))
+    with pytest.raises(RuntimeError) as e:
+        t.meta_rend_evaluar(_tarea_eval(eid))
+    assert respuestas == []                      # una corrección y nada más
+    fila = datos.evaluacion("hf", eid)
+    usd = costo_real(6100, 1700)
+    assert fila["estado"] == "error" and fila["error"] == str(e.value) and fila["resultado"] in (None, {})
+    assert fila["usd"] == pytest.approx(usd)
+    assert _gastos_eval() == [{"tipo": "evaluacion", "usd": pytest.approx(usd), "referencia": f"meta_eval:{eid}:t7",
+                               "proveedor": "anthropic"}]
+    assert _detalles() == ["sin resultado usable"] and _movimientos_hf() == ["no_cobrado"]

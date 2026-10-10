@@ -138,7 +138,8 @@ def test_traer_sin_resultados_no_lanza(monkeypatch):
     monkeypatch.setattr(apify_adlibrary, "_sesion", lambda: sesion)
     gen = apify_adlibrary.traer({"modo": "marca", "pagina_id": "1", "pais": "ALL"}, 10, lambda **kw: None)
     pagina, cursor, meta = next(gen)
-    assert pagina == [] and cursor is None and meta == {}
+    assert pagina == [] and cursor is None
+    assert meta == {"costo_real": 0.0, "run_id": "run1", "dataset_id": "ds1"}
 
 
 def test_traer_dataset_no_entregado_lanza_error_fuente(monkeypatch):

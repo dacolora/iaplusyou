@@ -401,7 +401,7 @@ def test_meta_sin_referentes_ni_meta_reporta(mixto):
 
 
 def test_el_medio_de_la_tarjeta_de_meta(mixto, monkeypatch):
-    """Regla 4: la miniatura de Meta solo si su host es de Meta (también al pintarla: PND-220); con un análisis listo,
+    """Regla 4: la miniatura de Meta solo si su host es de Meta (también al pintarla: PND-282); con un análisis listo,
     la imagen que el análisis copió a R2."""
     monkeypatch.setenv("R2_PUBLIC_BASE_URL", "https://media.creatv.test")
     _sembrar()

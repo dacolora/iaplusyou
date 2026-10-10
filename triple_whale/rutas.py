@@ -13,6 +13,9 @@ origen (Sec-Fetch-Site), la barrera CSRF del resto de la app. Todas vuelven a `#
 - `analisis_detalle` (GET, §6.5): el fragmento con lo que dijo Claude; `analisis_crear` (§7.1) lleva la versión
   mejorada a Crear; `analisis_aprendizaje` (§6.3) la guarda como aprendizaje del proyecto con un clic;
   `anuncio_referente` (§7.2) guarda el anuncio en Referentes.
+- `ganchos_probar` (POST, spec 2026-10-09 §4.3): «Probar los N ganchos» de un análisis: revisa, compara el precio
+  visto, pide saldo, crea la tanda (`tw_gancho`) y encola su preparación (gratis; cada clip lo cobra su pieza de Crear).
+  Lo pide el detalle de un análisis de la galería de «Rendimiento» (JS en `_tab_rendimiento.html`).
 
 El pedido pagado en sí (la foto, Cobros, la fila y la tarea de «Cómo mejorarlo», del lote y de «Evaluar con IA») vive
 en `triple_whale/pedidos.py` desde Rendimiento E2 (2026-10-10), para que la pestaña Rendimiento lo use también con los
@@ -25,21 +28,28 @@ Meta y sus rutas son de la pestaña (`pestana_rendimiento/rutas.py`: `ver_galeri
 allá en E2 tarea 5 (`rendimiento.evaluar`, un botón por fuente del alcance); lo que se hace con una evaluación lista
 (`idea_crear`, `a_referente`) sigue aquí.
 """
+import logging
 from datetime import date
 
 from flask import Blueprint, abort, flash, redirect, render_template, request, session, url_for
-from flask_babel import gettext
+from flask_babel import gettext, ngettext
 
+import cola
+import creative_flow
+import gastos
 import idiomas
 import proyectos
 import triple_whale
 import triple_whale_tiendas
+from cobros import libro
 from doctrina import aprendizajes as doctrina_aprendizajes
 from tareas import triple_whale as tareas_tw
 from triple_whale import datos, mejorar, panel, pedidos, puente
+from triple_whale import ganchos as ganchos_tw
 
 bp = Blueprint("triple_whale", __name__, url_prefix="/cliente/<cliente>/triple-whale")
 AID_MAX = 2 ** 63 - 1           # el mayor entero de SQLite: un id más grande es 404, no un OverflowError (B7)
+log = logging.getLogger("creatv.triple_whale.rutas")
 
 
 @bp.before_request
@@ -93,6 +103,10 @@ def _tw_var(valor):
 @bp.app_template_filter("tw_canal")
 def _tw_canal(canal):
     return NOMBRES_CANAL.get(canal, canal or "—")
+
+
+def _quiere_json():
+    return "application/json" in (request.headers.get("Accept") or "")
 
 
 def _volver(cliente):
@@ -155,6 +169,47 @@ def _aprendizaje_de(cliente, fila):
         return doctrina_aprendizajes.desde_analisis_tw(fila)
 
 
+def _contexto_ganchos(cliente, fila):
+    """Lo que el detalle pinta de los ganchos (spec 2026-10-09 §4.1 y §5) y lo que la ruta revisa antes de pedir:
+    los generables, su precio, por qué no se ofrece el botón (o None) y las tandas. UNA consulta a tw_gancho, y una a
+    la cola solo si hay variantes vivas: una barra se pinta solo si su trabajo sigue vivo (ruling 4)."""
+    r = fila.get("resultado") or {}
+    generables = ganchos_tw.ganchos_generables(r)
+    filas = datos.ganchos_de_analisis(cliente, fila["id"])
+    precio = gastos.estimar_ganchos_tw(len(generables))
+    # Arreglo D (revisión del gasto, 2026-10-09): lo que mira el botón es el PRECIO (`usd_precio`), que es None también
+    # cuando el margen no se pudo leer (`gastos._margen_fallido`): entonces el motivo es «precio no disponible», el
+    # botón no se puede pedir y la ruta responde 409. `|precio` caía al costo (margen 1,0) y lo mostraba como precio.
+    motivo = ganchos_tw.puede_probar(fila, generables, filas, precio["usd_precio"],
+                                     mejorar._url_voz(fila.get("foto") or {}))
+    tandas = ganchos_tw.tandas(filas)
+    vivos = cola.job_ids_vivos_todos() if any(f["estado"] in datos.VIVOS_GANCHO for f in filas) else set()
+    for t in tandas:
+        for g in t["filas"]:
+            g["barra"] = g["estado"] in datos.VIVOS_GANCHO and bool(g.get("job_id")) and g["job_id"] in vivos
+    ultima = tandas[0]["filas"] if tandas else []
+    # Arreglo C (revisión del gasto, 2026-10-09): una variante «generando» sin su trabajo vivo puede tener el clip en un
+    # error que Crear recupera sin pagar de nuevo; entonces el detalle lleva a recuperarlo. Las sesiones se leen UNA
+    # vez y solo si hay alguna variante así (regla 8: nada de una consulta por variante).
+    sin_trabajo = {g["id"] for g in ultima if g["estado"] == "generando" and g.get("cf_id") and not g["barra"]}
+    sesiones = creative_flow.cargar(cliente) if sin_trabajo else {}
+    for g in ultima:
+        g["recuperable"] = g["id"] in sin_trabajo and ganchos_tw.clip_recuperable(sesiones.get(g["cf_id"]))
+    return {"generables": generables, "n": len(generables), "precio": precio, "motivo": motivo,
+            "sin_precio": motivo == ganchos_tw.MOTIVO_SIN_PRECIO, "ultima": ultima, "anteriores": tandas[1:],
+            # una recuperable espera a la persona, no al vigilante: la pestaña no vuelve a pedir el detalle por ella
+            "esperan": any(g["estado"] in datos.VIVOS_GANCHO and not g["barra"] and not g["recuperable"]
+                           for g in ultima)}
+
+
+def _respuesta_ganchos(cliente, ok, mensaje, estado=200):
+    """JSON {"ok", "mensaje"} al fetch de la pestaña (que nunca reenvía el POST); al formulario, aviso y vuelta."""
+    if _quiere_json():
+        return {"ok": ok, "mensaje": mensaje}, estado
+    flash(mensaje, "ok" if ok else "warn")
+    return _volver(cliente)
+
+
 @bp.get(f"/analisis/<int(max={AID_MAX}):aid>")
 def analisis_detalle(cliente, aid):
     fila = _analisis_listo(cliente, aid)
@@ -163,7 +218,8 @@ def analisis_detalle(cliente, aid):
     return render_template("_tw_analisis.html", cliente=cliente, fila=fila, r=r,
                            guardado=_aprendizaje_guardado(cliente, aid), alcance_nombre=_nombre_alcance(cliente, fila),
                            aprendizaje_texto=item["texto"] if item else None,
-                           cifras_aprendizaje=mejorar.cifras_del_aprendizaje(r))
+                           cifras_aprendizaje=mejorar.cifras_del_aprendizaje(r),
+                           gh=_contexto_ganchos(cliente, fila))
 
 
 @bp.post(f"/analisis/<int(max={AID_MAX}):aid>/crear")
@@ -197,6 +253,54 @@ def analisis_aprendizaje(cliente, aid):
     proyectos.agregar_aprendizaje(cliente, item)
     flash(gettext("Aprendizaje guardado: las próximas ideas y guiones lo tendrán en cuenta."), "ok")
     return _volver(cliente)
+
+
+@bp.post(f"/analisis/<int(max={AID_MAX}):aid>/ganchos")
+def ganchos_probar(cliente, aid):
+    """«Probar los N ganchos» (spec 2026-10-09 §4.3). Revisa §4.1 (409 con el motivo), compara `precio_visto` (es
+    PRECIO: vuelve a costo una vez) con el recalculado ±0,005 (409 «El precio cambió…»), pide el total al libro
+    (SaldoInsuficiente sube al manejador común: 402 / «Recargar saldo», sin guardar ni encolar), crea la tanda
+    (TandaViva → 409; el análisis ya no es del proyecto → 404; un gancho repetido → 400) y encola su preparación con
+    un job_id determinista. Si el encolado falla, la tanda queda en error con el motivo (en el idioma del proyecto) y
+    el botón vuelve."""
+    fila = datos.analisis_anuncio(cliente, aid)
+    if fila is None:
+        abort(404)
+    gh = _contexto_ganchos(cliente, fila)
+    if gh["motivo"]:                    # también «precio no disponible» si el margen no se pudo leer (arreglo D)
+        motivo = gh["motivo"]
+        return _respuesta_ganchos(cliente, False, gettext(motivo), 409)
+    usd = gh["precio"]["usd"]
+    visto = gastos.costo_de_precio(request.form.get("precio_visto"))
+    if visto is None or abs(visto - usd) > 0.005:
+        return _respuesta_ganchos(cliente, False, gettext(
+            "El precio cambió: ahora es %(precio)s. Revisa y vuelve a pedirlo.",
+            precio=gastos.formatear(gastos.precio(usd))), 409)
+    libro.exigir(cliente, usd)                          # sin saldo: nada se guarda ni se encola (cobros §5)
+    try:
+        filas = datos.crear_tanda(cliente, aid, gh["generables"], pedido_por=session.get("usuario"))
+    except datos.TandaViva:
+        return _respuesta_ganchos(cliente, False, gettext("Ya hay una tanda de ganchos en curso para este análisis."), 409)
+    except datos.AnalisisAjeno:
+        abort(404)
+    except ValueError:                                  # un `n` repetido: un dato malo, no se pide nada
+        abort(400)
+    tanda = filas[0]["tanda"]
+    job_id = tareas_tw.job_id_preparar(cliente, aid, tanda)
+    for g in filas:
+        datos.actualizar_gancho(g["id"], job_id=job_id)
+    try:
+        encolada = tareas_tw.encolar_preparar(cliente, aid, tanda)
+    except Exception as e:  # noqa: BLE001 — sin tarea nadie terminaría la tanda: queda en error y el botón vuelve
+        log.warning("ganchos: no se pudo encolar la tanda %s del análisis %s (%s)", tanda, aid, type(e).__name__)
+        encolada = False
+    if not encolada:
+        with idiomas.en_idioma(idiomas.de_proyecto(cliente)):          # lo que se guarda, en el idioma del proyecto
+            error = gettext("No se pudo poner la preparación en la cola.")
+        for g in filas:
+            datos.mover(g["id"], "preparando", "error", error=error)
+        return _respuesta_ganchos(cliente, False, gettext("No se pudo poner la preparación en la cola: vuelve a intentarlo."), 409)
+    return _respuesta_ganchos(cliente, True, ngettext("Generando %(num)s gancho…", "Generando %(num)s ganchos…", len(filas)))
 
 
 @bp.post("/anuncio/<canal>/<ad_id>/referente")

@@ -9,6 +9,8 @@ import pytest
 import sqlalchemy as sa
 from sqlalchemy import event
 
+pytestmark = pytest.mark.usefixtures("margen_1_5")   # estos tests suponen el margen 1,5 (el defecto ahora es 2,0)
+
 MISMO = {"Sec-Fetch-Site": "same-origin"}
 
 

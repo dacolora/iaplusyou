@@ -3,9 +3,22 @@
    2026-10-09 con su pestaña). Contexto: `mr` (campanas, conjuntos y lo que pide _meta_conjuntos_filas.html: estados, aprendizaje,
    objetivos, actual, y en Rendimiento `params` para su «Ver más») y `cliente`. Cada fila va en la moneda de SUS
    montos (`moneda`), nunca una de la tabla. En Rendimiento cada fila trae `origen` ("tw" | "meta"): de dónde salen sus
-   ventas y su ROAS, y una etiqueta chica lo dice (spec 2026-10-09 R3). Sin <script>. #}
+   ventas y su ROAS, y una etiqueta chica lo dice (spec 2026-10-09 R3). Sin <script>.
+   NVP (spec 2026-10-09-nvp-visitantes-nuevos §4.2, integración con main 2026-10-10): con Triple Whale en el proyecto
+   (`mr.nvp_activo`, meta_rendimiento.panel.nvp_estructura) la columna NVP va después del ROAS y, arriba de las
+   tablas, el NVP de las cuentas (las sumas del periodo; `mr.nvp_cuentas` nombra de qué cuentas sale si no son
+   todas); sin Triple Whale, una línea que invita a conectarlo (en «Ajustes»). Era el KPI y las columnas de la vieja
+   pestaña «Meta». #}
 {% import "_meta_macros.html" as mx %}
 {% import "_rend_macros.html" as rm %}
+{% import "_componentes.html" as cx %}
+{% if mr.campanas or mr.conjuntos %}
+{% if mr.nvp_activo %}
+<p class="vacio rend-nvp-cuentas" title="{{ _('Visitantes nuevos / visitantes únicos que el Pixel de Triple Whale atribuye a tus anuncios de Meta. Los únicos se cuentan por día: en periodos largos es aproximado.') }}">{{ _('Visitantes nuevos (NVP)') }}: {{ cx.nvp(mr.nvp.visitantes_nuevos, mr.nvp.visitantes) }} · {{ _('%(n)s visitantes', n=mr.nvp.visitantes | tw_num) }}{% if mr.nvp_cuentas %} · {{ _('NVP de las cuentas con Triple Whale: %(cuentas)s', cuentas=mr.nvp_cuentas | join(', ')) }}{% endif %}</p>
+{% else %}
+<p class="vacio"><a href="#rend-ajustes" data-rend-ajustes>{{ _('Conecta Triple Whale para ver el %% de visitantes nuevos (NVP).') }}</a></p>
+{% endif %}
+{% endif %}
 {# ---------- campañas ---------- #}
 {% if mr.campanas %}
 {% set campanas = mr.campanas[:50] %}
@@ -13,7 +26,7 @@
   <div class="tb-seccion-cab"><h3>{{ _('Campañas') }}</h3><small class="vacio">{{ ngettext('%(num)s campaña con gasto en el periodo', '%(num)s campañas con gasto en el periodo', mr.campanas | length) }}</small></div>
   <div class="tw-tabla-scroll">
     <table class="tw-tabla">
-      <thead><tr><th>{{ _('Campaña') }}</th><th>{{ _('Estado') }}</th><th>{{ _('Objetivo') }}</th><th>{{ _('Presupuesto') }}</th><th>{{ _('Gasto') }}</th><th>ROAS</th><th>{{ _('Compras') }}</th><th>{{ _('Costo por compra') }}</th><th>{{ _('Alcance') }}</th></tr></thead>
+      <thead><tr><th>{{ _('Campaña') }}</th><th>{{ _('Estado') }}</th><th>{{ _('Objetivo') }}</th><th>{{ _('Presupuesto') }}</th><th>{{ _('Gasto') }}</th><th>ROAS</th>{% if mr.nvp_activo %}{{ mx.th_nvp() }}{% endif %}<th>{{ _('Compras') }}</th><th>{{ _('Costo por compra') }}</th><th>{{ _('Alcance') }}</th></tr></thead>
       <tbody>
         {% for c in campanas %}
         <tr>
@@ -23,6 +36,7 @@
           <td>{{ mx.presupuesto(c) }}</td>
           <td>{{ mx.monto(c.gasto, c.moneda) }}</td>
           <td>{{ mx.roas(c.m.roas) }}{% if c.origen %}<small class="rend-fuente">{{ rm.fuente(c.origen) }}</small>{% endif %}</td>
+          {% if mr.nvp_activo %}<td>{{ cx.nvp(c.visitantes_nuevos, c.visitantes) }}</td>{% endif %}
           <td>{{ c.compras | tw_num }}</td>
           <td>{{ mx.monto(c.m.cpa, c.moneda) }}</td>
           <td>{{ c.alcance | tw_num }}</td>
@@ -41,7 +55,7 @@
   <div class="tb-seccion-cab"><h3>{{ _('Conjuntos') }}</h3><small class="vacio">{{ _('Por gasto en el periodo') }}</small></div>
   <div class="tw-tabla-scroll">
     <table class="tw-tabla">
-      <thead><tr><th>{{ _('Conjunto') }}</th><th>{{ _('Estado') }}</th><th>{{ _('Aprendizaje') }}</th><th>{{ _('Presupuesto') }}</th><th>{{ _('Gasto') }}</th><th>ROAS</th><th>{{ _('Costo por compra') }}</th></tr></thead>
+      <thead><tr><th>{{ _('Conjunto') }}</th><th>{{ _('Estado') }}</th><th>{{ _('Aprendizaje') }}</th><th>{{ _('Presupuesto') }}</th><th>{{ _('Gasto') }}</th><th>ROAS</th>{% if mr.nvp_activo %}{{ mx.th_nvp() }}{% endif %}<th>{{ _('Costo por compra') }}</th></tr></thead>
       <tbody>
         {% include "_meta_conjuntos_filas.html" %}
       </tbody>

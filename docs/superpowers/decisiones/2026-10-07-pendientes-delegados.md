@@ -57,6 +57,32 @@ mala, se cambia aquí y en la fila.
 | 094 | Variantes por la Admin API y selectores que cargan al pedirlos pasan a proyectos nuevos (grupo 8 del plan). | Son funciones nuevas, no arreglos. |
 | 136 | Lo que queda del centro de resultados (reparto, destino, ranking, «Activar») pasa a la entrega E3 de Experimentos. | Lo decide ese rediseño. |
 
+## Lote 7 (decidido por Claude el 2026-10-09; Daniel dijo «sí, lánzalo»)
+
+| PND | Decisión | Por qué | Costo si sale mal |
+|---|---|---|---|
+| 190 | `nicho_inv_consultas` y `nicho_inv_seleccionar` pasan a `max_intentos=1`. Si fallan, la investigación queda en error con su motivo y la persona la retoma con el botón que ya existe (o uno nuevo «Reintentar» con el precio a la vista), sin volver a pagar lo ya hecho. | Regla 1: lo que cobra no se reintenta solo. | Un fallo pide un clic más. |
+| 166 | `sprint_analizar_referencia` y `sprint_sugerir_personas` anotan su gasto real (con el `usage` de Claude, como `sprint_proponer_ideas`), pasan a `max_intentos=1` y muestran su precio estimado junto al botón o la acción que las lanza. Si un análisis falla, la referencia ofrece «Reintentar análisis» con su precio. | Hoy cobran saldo para arrancar pero salen gratis y sin aviso; con Cobros, el cliente debe ver y pagar lo que gasta. | Unos centavos por referencia que antes no se anotaban. |
+| 159 | Apify: la corrida se anota apenas se conoce su id. Si el POST responde sin el id del dataset, se lee la corrida (gratis) para obtenerlo; si tampoco se puede, se anota tope × precio marcado `estimado` y `conciliacion_pendiente`. Un POST que arranca una corrida nunca se reintenta solo (los GET sí). | Nunca un cobro sin anotar ni dos corridas por un timeout. | Un fallo de red pide un clic más. |
+| 187 | Las miniaturas que Triple Whale guarda en Referentes van a R2 con el proyecto en la clave (`clientes/<cliente>/referentes/…`). Las ya subidas se quedan donde están; solo cambian las nuevas. | Un proyecto no debe poder pisar el archivo de otro. | Ninguno. |
+| 176 | Se deja como está: una idea descartada no necesita aviso de error. | La persona ya dijo que no la quiere. | Ninguno. |
+| 177 | Se arregla: un `extra` guardado como JSON `null` cuenta como vacío al marcar el cambio de guion. | Arreglo de una línea. | Ninguno. |
+| 178 | `limpiar_reservas_muertas` solo borra reservas sin tarea viva con más de 10 minutos. | Cierra la ventana entre reservar y encolar. | Ninguno. |
+| 191 | Se investiga la prueba de orgánico que falla a veces (reloj u orden) y se arregla la PRUEBA o su aislamiento, sin cambiar la publicación. | Una suite que falla a veces esconde fallos reales. | Ninguno. |
+
+*Enmiendas del 2026-10-09 tras la revisión del lote 7 (guardian-gasto + revisor):* «Reanudar» de Nicho muestra lo que puede costar TODO lo que falta (suma de los pasos pendientes, con tope en lo aprobado menos lo gastado; «precio no disponible» si un paso no tiene estimado), no solo el siguiente paso. «Traer las fotos del producto» muestra cuántas fotos se van a analizar y el total. El botón «Sugerir personas» de la cabecera de Sprints NO vuelve (Daniel lo quitó el 2026-09-22): la ruta queda sin pantalla. Los botones con precio usan el texto de `gastos.estimar` («precio no disponible» si falla el margen). Las llamadas de analizar y sugerir conservan los reintentos del SDK de Anthropic, como las demás. Un 429 al arrancar una corrida de Apify sí se reintenta (no arranca nada); la red caída y los 5xx no. La corrida de Apify se anota con su estimado apenas se conoce su id y la anotación final corrige el monto.
+
+## Lote 8 (decidido por Claude el 2026-10-09; Daniel dijo «sí, arregla meta_ads y lanza el lote 8»)
+
+| PND | Decisión | Por qué | Costo si sale mal |
+|---|---|---|---|
+| 152 | Hecho por Claude el 2026-10-09: `instalaciones-app` quedó mezclada en el main de dacolora/CreaTvMetaAds (fe88fff, mismo código que 8a21bc5); el puntero de producción ya vive en main. | Que un despliegue no dependa de una rama suelta. | Ninguno. |
+| 160 | Un segundo clic en «Lanzar a Meta» mientras el lanzamiento corre no toca el estado del experimento: responde «ya se está lanzando» y el experimento termina activo como pidió el primer clic. | Lanzar ya activa (pedido de Daniel, 2026-10-08); un doble clic no puede dejarlo en pausa. | Ninguno. |
+| 209, 210, 032 | Se arreglan los desbordes y los filtros apretados a 375 px con la Base visual común (el CSS en `static/estilos/`). Claude los mira en captura antes de desplegar. | Regla 8: en el celular nada empuja la página de lado. | Ninguno. |
+| 155 | Se arreglan (1) «299 Kr» y «NOK 299» como precio en Nicho, (2) `_final_detalle.html` usa la lista central de idiomas y (3) «Traer referentes» ofrece Noruega y Suecia. (4) se deja: el país del calendario sale del país del proyecto; la ruta queda para el admin. | Noruega y Suecia ya están en producción. | Ninguno. |
+| 149 | Se arreglan (2) «Todas» no resta gasto duplicado un día en que solo una tienda tiene fila, (3) la marca `aviso_sin_tienda_tw` se limpia al conectar la tienda de ese país, (4) «uk» se adivina como GB, (5) los ajustes sin tiendas no se ignoran en silencio y (6) «la última avisa» es atómica. Se dejan (1) la lista de países por tarjeta (pocas tiendas por proyecto), (7) cambiar ajustes con una copia en curso (anterior y raro) y (8), que necesita la primera copia real. | Que el MER de «Todas» no salga inflado y los avisos sean ciertos. | Ninguno. |
+| 023 | Se cierra sin código: el cambio de subtítulos es del 2026-10-01 y los clientes ya llevan días produciendo con él; un aviso ahora sería ruido. Si Daniel quiere avisarles, lo hace él en persona. | Evitar avisos tardíos. | Ninguno. |
+
 ## Se dejan como están (cerradas con su motivo)
 
 | PND | Decisión | Por qué |
@@ -70,6 +96,8 @@ mala, se cambia aquí y en la fila.
 | 110 | Las tarifas de guion y final se calibran cuando haya un mes de gasto real (desde el 2026-11-02). | Hace falta el dato. |
 
 ## Pruebas que gastan (grupo 7 del plan): necesitan un sí de Daniel con el precio
+
+**Hechas el 2026-10-10** con el «sí» de Daniel: US$ 3,48 en `colorado_forja` (resultados en `docs/superpowers/evals/2026-10-10-pruebas-reales.md`). PND-074 no se probó porque no está implementado.
 
 Presupuesto propuesto para hacerlas todas juntas: **hasta US$ 15**.
 - `eval-claude` del guion (PND-108) y de los topes nuevos (PND-141): unos US$ 2.

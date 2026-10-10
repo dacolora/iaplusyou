@@ -317,6 +317,57 @@
         iniciarPolling(el.dataset.pollJob, el.id);
       });
     }
+
+    // Página por partes: solo estos dos historiales. Los anuncios sueltos
+    // también usan swaps-lista, pero no participan de esta delegación.
+    document.addEventListener('click', function (ev) {
+      var mas = ev.target.closest('[data-lista-mas]');
+      if (!mas || mas.disabled) return;
+      var lista = document.getElementById(mas.dataset.listaMas);
+      if (!lista) return;
+      mas.disabled = true;
+      var aviso = mas.parentElement.querySelector('[data-lista-error]');
+      if (aviso) aviso.remove();
+      fetch(mas.dataset.url, {headers: {'X-Requested-With': 'fetch'}})
+        .then(function (r) {
+          if (r.status === 401 || r.status === 403 || r.redirected) {
+            var error = new Error(); error.sesionVencida = true; throw error;
+          }
+          if (!r.ok) throw new Error(); return r.text();
+        })
+        .then(function (html) {
+          if (!mas.isConnected) return;
+          var fragmento = document.createElement('template');
+          // Un tbody conserva filas sueltas al analizar el fragmento de gasto.
+          fragmento.innerHTML = lista.tagName === 'TBODY' ? '<table><tbody>' + html + '</tbody></table>' : html;
+          var selector = lista.tagName === 'TBODY' ? 'tr' : '.swap-card';
+          var antes = mas.parentElement.parentElement === lista ? mas.parentElement : null;
+          fragmento.content.querySelectorAll(selector).forEach(function (item) {
+            if (antes) lista.insertBefore(item, antes); else lista.appendChild(item);
+          });
+          var siguiente = fragmento.content.querySelector('[data-lista-mas]');
+          if (siguiente) mas.replaceWith(siguiente); else mas.parentElement.remove();
+          arrancarSondeos(lista);
+        })
+        .catch(function (error) {
+          if (!mas.isConnected) return;
+          var p = document.createElement('p'); p.className = 'vacio'; p.dataset.listaError = '1';
+          if (error.sesionVencida) {
+            p.textContent = {{ _('Tu sesión venció. Vuelve a entrar para continuar.')|tojson }} + ' ';
+            var entrar = document.createElement('a'); entrar.className = 'btn-sm';
+            entrar.href = {{ url_for('login')|tojson }}; entrar.textContent = {{ _('Entrar')|tojson }};
+            // El enlace va dentro del mensaje, después del texto: suelto junto al
+            // botón quedaba antes del aviso y se estiraba a lo alto (revisión 2026-10-10).
+            p.appendChild(entrar); mas.replaceWith(p);
+            return;
+          }
+          p.textContent = {{ _('No pude cargar más resultados. Intenta de nuevo.')|tojson }};
+          mas.parentElement.appendChild(p);
+          mas.textContent = {{ _('Reintentar')|tojson }};
+          mas.disabled = false;
+        });
+    });
+
     window.arrancarSondeos = arrancarSondeos;
     document.addEventListener('DOMContentLoaded', function () { arrancarSondeos(document); });
 

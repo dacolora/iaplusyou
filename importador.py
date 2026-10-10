@@ -486,7 +486,7 @@ def _regla_si_hay_saldo(cliente, nombre, descripcion, categoria):
     tienda (periódica, exenta del respaldo del worker) sigue y la persona puede
     escribirla a mano después. Un proyecto que no cobra no cambia."""
     try:
-        libro.exigir(cliente, gastos.TARIFAS["regla_producto"])
+        libro.exigir(cliente, gastos.TARIFAS["regla_producto"], tipo="regla_producto")
     except libro.SaldoInsuficiente:
         log.info("%s sin saldo: «%s» queda sin regla de fidelidad", cliente, nombre)
         return ""

@@ -5,9 +5,10 @@
    sus diccionarios traducidos (un {% set %} de módulo en una plantilla importada se cachea en un idioma, skill idioma).
    Rendimiento las llama en el orden del spec: copias, gasto_compartido, alertas (con las de las dos fuentes),
    tiles_anuncios (encima de la galería única de «Tus anuncios», que pinta _rend_panel.html desde E2 tarea 4), ia
-   («Lo que hace ganar en tu cuenta», con las dos fuentes desde E2 tarea 5: recibe `r.ia`, no `tw`) y, después de
+   («Lo que hace ganar en tu cuenta» de Triple Whale: recibe `r.ia`, no `tw`) y, después de
    Campañas y conjuntos, resto (reparto, productos, «Ver como tabla»). «Evaluar con IA», «Cómo mejorarlo» y el lote
    postean a las rutas de la pestaña (pestana_rendimiento/rutas.py) con sus `params`. #}
+{% import "_componentes.html" as cx %}
 
 {#- Los errores de copia de las tiendas del alcance. La barra de las copias en curso la pinta _rend_panel.html: una sola
     para las dos fuentes (`r.copias_vivas`, revisión final de E1). -#}
@@ -65,18 +66,18 @@
 </div>
 {%- endmacro %}
 
-{#- «Lo que hace ganar en tu cuenta» (Evaluar con IA, cobra con el precio a la vista). `ia`: el de
-    pestana_rendimiento.panel._ia (un formulario por fuente del alcance, cada uno con su muestra y su precio; las
-    evaluaciones y la barra). `params`: los de la pestaña (entrada, dias, canal), los mismos con los que la ruta
-    `rendimiento.evaluar` vuelve a armar la muestra que se cobra. Con las dos fuentes, un botón por fuente: los números
-    de Triple Whale y los del Pixel de Meta no van juntos en un prompt (E2 tarea 5). -#}
+{#- «Lo que hace ganar en tu cuenta» (Evaluar con IA de Triple Whale, cobra con el precio a la vista). `ia`: el de
+    pestana_rendimiento.panel._ia (el formulario de la parte Triple Whale del alcance, las evaluaciones y la barra).
+    `params`: los de la pestaña (entrada, dias, canal), los mismos con los que la ruta `rendimiento.evaluar` vuelve a
+    armar la muestra que se cobra. La evaluación de las cuentas de Meta es otra sección (`_meta_evaluar.html`, Meta
+    rendimiento E2): los números de Triple Whale y los del Pixel de Meta no van juntos en un prompt. -#}
 {% macro ia(ia, cliente, params) -%}
 {%- set clases_veredicto = {"ganador": "tag-en-uso", "prometedor": "tag-en-curso", "en_prueba": "", "perdedor": "tag-descartado", "sin_datos": "tag-advertencia"} -%}
 {% set actual = ia.tienda_actual %}
 <section class="tb-seccion" id="tw-ia">
   <div class="tb-seccion-cab"><h3>{{ _('Lo que hace ganar en tu cuenta') }}</h3></div>
   <p class="vacio">{{ _('Claude mira tus ganadores y tus perdedores (imagen, texto y números), explica qué patrón se repite y propone anuncios nuevos basados en lo que ya vende. No genera nada: cada idea llega a Crear para que decidas.') }}</p>
-  {% if ia.mixta %}<p class="vacio">{{ _('Triple Whale y Meta miden distinto: los anuncios de cada fuente se evalúan por separado.') }}</p>{% endif %}
+  {% if ia.mixta %}<p class="vacio">{{ _('La evaluación con IA mira los anuncios de tus tiendas en Triple Whale.') }}</p>{% endif %}
   {% if ia.job_evaluar %}
   <div class="tw-progreso">
     <div class="barra-progreso" id="tw-evaluar-{{ cliente }}" data-poll-job="{{ ia.job_evaluar }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
@@ -86,16 +87,8 @@
   {% for f in ia.formularios %}
   {% set precio = f.estimado.texto if f.estimado else '' %}
   {% set n = f.muestra | length %}
-  {% if not ia.mixta %}
   {% set confirmar = _('¿Evaluar %(n)s anuncio(s) con IA? Costo: %(precio)s', n=n, precio=precio) %}
   {% set boton = _('Evaluar %(n)s anuncio(s) con IA · %(precio)s', n=n, precio=precio) %}
-  {% elif f.fuente == 'tw' %}
-  {% set confirmar = _('¿Evaluar %(n)s anuncio(s) de tus tiendas con IA? Costo: %(precio)s', n=n, precio=precio) %}
-  {% set boton = _('Evaluar los %(n)s de tus tiendas · %(precio)s', n=n, precio=precio) %}
-  {% else %}
-  {% set confirmar = _('¿Evaluar %(n)s anuncio(s) de tus cuentas de Meta con IA? Costo: %(precio)s', n=n, precio=precio) %}
-  {% set boton = _('Evaluar los %(n)s de tus cuentas de Meta · %(precio)s', n=n, precio=precio) %}
-  {% endif %}
   <form method="post" action="{{ url_for('rendimiento.evaluar', cliente=cliente) }}" class="tw-evaluar" data-confirmar="{{ confirmar }}">
     <input type="hidden" name="fuente" value="{{ f.fuente }}">
     <input type="hidden" name="entrada" value="{{ params.entrada }}">
@@ -274,7 +267,8 @@
     <table class="tw-tabla tw-anuncios">
       <thead><tr>
         <th>{{ _('Anuncio') }}</th><th>{{ _('Veredicto') }}</th><th>{{ _('Gasto') }}</th><th>{{ _('Pedidos') }}</th>
-        <th>ROAS</th><th>{{ _('Costo por venta') }}</th><th>CTR</th><th>{{ _('Gancho') }}</th><th>{{ _('Retención') }}</th><th>{{ _('Señales') }}</th>
+        <th>ROAS</th><th>{{ _('Costo por venta') }}</th><th>CTR</th><th>{{ _('Gancho') }}</th><th>{{ _('Retención') }}</th>
+        <th title="{{ _('Visitantes nuevos entre visitantes únicos que el Pixel atribuye al anuncio: TOF, MOF o BOF') }}">NVP</th><th>{{ _('Señales') }}</th>
       </tr></thead>
       <tbody>
         {% for a in tw.anuncios %}
@@ -305,6 +299,7 @@
           <td>{{ am.ctr | tw_pct(2, false) }}</td>
           <td>{{ am.gancho | tw_pct(0) }}</td>
           <td>{{ am.retencion | tw_pct(0) }}</td>
+          <td>{{ cx.nvp(am.visitantes_nuevos, am.visitantes) }}</td>
           <td class="tw-senales">
             {% for p in a.problemas %}<span class="tag-estado tag-descartado" title="{{ tw.problemas[p][1] | traducir }}">{{ tw.problemas[p][0] | traducir }}</span>{% endfor %}
             {% for f in a.fortalezas %}<span class="tag-estado tag-en-uso">{{ tw.fortalezas[f] | traducir }}</span>{% endfor %}
