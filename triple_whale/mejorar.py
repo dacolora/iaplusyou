@@ -513,12 +513,14 @@ def al_segundo_visto(segundo, segundos_vistos, duracion_s):
 
 
 # Ofertas escritas en palabras (revisión de seguridad del 2026-10-09, «ESCALAR»; OWASP LLM09/LLM01):
-# `doctrina.verificar_cifras` solo ve dígitos, así que «gratis», «envío gratis», «free shipping», «halv pris» o
-# «2 for 1» pasaban a un video o al copy aunque el anuncio no los ofreciera. Es una HEURÍSTICA, no un detector de
-# ofertas: una lista corta y revisada a mano (español, inglés, noruego, sueco, portugués), en minúsculas, que se busca
-# como palabra o frase entera. Quedan fuera a propósito palabras sueltas que casi siempre significan otra cosa:
-# «off», «sale», «present(e)», «gave» (en inglés, «dio»), «mitad» y «half» solos. Agregar un término cambia qué
-# ganchos se bloquean: se mira con casos reales antes.
+# `doctrina.verificar_cifras` solo ve dígitos de dos o más cifras, así que «gratis», «envío gratis», «free shipping»,
+# «halv pris», «2 for 1» o «Últimas 3 unidades» pasaban a un video o al copy aunque el anuncio no los ofreciera. Es una
+# HEURÍSTICA, no un detector de ofertas: una lista corta y revisada a mano (español, inglés, noruego, sueco, portugués),
+# en minúsculas, que se busca como palabra o frase entera, más dos patrones con número (abajo). Quedan fuera a propósito
+# palabras sueltas que casi siempre significan otra cosa: «off», «sale», «present(e)», «gave» (en inglés, «dio»),
+# «mitad» y «half» solos. «prueba» sí está (la revisión final del 2026-10-10 vio pasar «Prueba 7 días sin riesgo»),
+# aunque también es «prueba social» o «la prueba»: un falso positivo solo deja un gancho sin generar. Agregar un término
+# cambia qué ganchos se bloquean: se mira con casos reales antes (las respuestas del eval, sin pagar nada).
 TERMINOS_OFERTA = (
     # gratis
     "gratis", "gratuito", "gratuita", "grátis", "free", "kostenlos",
@@ -530,8 +532,12 @@ TERMINOS_OFERTA = (
     "regalo", "gift", "gåva", "brinde",
     # mitad de precio
     "mitad de precio", "half price", "half-price", "half off", "halv pris", "halva priset", "metade do preço",
-    # dos por uno
-    "2x1", "2 x 1", "dos por uno", "2 for 1", "to for en", "2 för 1", "två för en", "buy one get one", "bogo",
+    # dos por uno en palabras (con números: `_LLEVA_PAGA`)
+    "dos por uno", "to for en", "två för en", "buy one get one", "bogo",
+    # prueba, garantía y devolución (revisión final del 2026-10-10)
+    "prueba", "garantía", "garantia", "devolución", "devoluciones", "devolução", "reembolso", "sin riesgo",
+    "trial", "warranty", "guarantee", "guaranteed", "money back", "money-back", "refund", "risk-free", "risk free",
+    "garanti", "pengene tilbake", "åpent kjøp", "returrett", "fri retur", "öppet köp", "pengarna tillbaka",
 )
 
 
@@ -545,12 +551,56 @@ def _patron_oferta(termino):
 _PATRONES_OFERTA = tuple((t, _patron_oferta(t)) for t in TERMINOS_OFERTA)
 
 
+def _con_numero(cuerpo):
+    return re.compile(r"(?<![\w.,-])" + cuerpo + r"(?![\w.,%-])", re.IGNORECASE)
+
+
+_N = r"(\d{1,2})"
+_SEP = r"\s*,?\s+"
+# «Lleva N, paga M» en todas sus formas, cada una con cómo sale (lleva, paga): así «3x2» y «3 por 2» son la MISMA
+# oferta y no se marcan entre sí, y «3x2» frente a un «2x1» de los datos sí. «NxM» solo con una cifra a cada lado: «12x10
+# cm» es una medida.
+_LLEVA_PAGA = (
+    (_con_numero(r"([1-9])\s*[x×]\s*([1-9])"), lambda n, m: (n, m)),
+    (_con_numero(_N + r"\s+(?:por|for|för)\s+" + _N), lambda n, m: (n, m)),
+    (_con_numero(r"kjøp\s+" + _N + _SEP + r"betal\s+for\s+" + _N), lambda n, m: (n, m)),
+    (_con_numero(r"köp\s+" + _N + _SEP + r"betala\s+för\s+" + _N), lambda n, m: (n, m)),
+    (_con_numero(r"lleva\s+" + _N + _SEP + r"paga\s+" + _N), lambda n, m: (n, m)),
+    (_con_numero(r"leve\s+" + _N + _SEP + r"pague\s+" + _N), lambda n, m: (n, m)),
+    (_con_numero(r"pague\s+" + _N + _SEP + r"lleve\s+" + _N), lambda n, m: (m, n)),
+    (_con_numero(r"buy\s+" + _N + _SEP + r"get\s+" + _N), lambda n, m: (n + m, n)),
+)
+# Escasez con un número: «últimas 3», «last 2», «siste 5», «sista 4».
+_ESCASEZ = _con_numero(r"(?:últimas|últimos|last|siste|sista)\s+\d{1,4}")
+
+
+def _ofertas_con_numero(texto):
+    """[(clave, cómo se lee)] de las ofertas con número del texto. La clave compara la oferta y no la forma: (lleva,
+    paga) para «N por M» en cualquier idioma, el texto en minúsculas para la escasez."""
+    salida = []
+    for patron, lleva_paga in _LLEVA_PAGA:
+        for m in patron.finditer(texto):
+            salida.append((("lleva_paga",) + lleva_paga(int(m.group(1)), int(m.group(2))),
+                           " ".join(m.group(0).lower().split())))
+    for m in _ESCASEZ.finditer(texto):
+        visto = " ".join(m.group(0).lower().split())
+        salida.append((("escasez", visto), visto))
+    return salida
+
+
 def ofertas_sin_dato(texto, verificable):
-    """Los términos de `TERMINOS_OFERTA` que están en `texto` y NO en `verificable` (los datos que Claude recibió). Uno
-    que va dentro de otro marcado no se repite («fri frakt» sin «frakt»)."""
+    """Lo que `texto` ofrece y `verificable` (los datos que Claude recibió) no: los términos de `TERMINOS_OFERTA` que
+    no están en los datos y las ofertas con número (`_ofertas_con_numero`) cuya oferta no está. Uno que va dentro de
+    otro marcado no se repite («fri frakt» sin «frakt»)."""
     texto, verificable = str(texto or ""), str(verificable or "")
     faltan = [t for t, p in _PATRONES_OFERTA if p.search(texto) and not p.search(verificable)]
-    return [t for t in faltan if not any(t != otro and t in otro for otro in faltan)]
+    faltan = [t for t in faltan if not any(t != otro and t in otro for otro in faltan)]
+    en_datos = {clave for clave, _ in _ofertas_con_numero(verificable)}
+    for clave, visto in _ofertas_con_numero(texto):
+        if clave not in en_datos:
+            en_datos.add(clave)             # la misma oferta escrita dos veces se marca una
+            faltan.append(visto)
+    return faltan
 
 
 def _ganchos(lista, verificable, duracion_s, segundos_vistos=None):

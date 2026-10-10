@@ -795,3 +795,39 @@ def test_analizar_le_pasa_los_segundos_vistos_al_parseo(monkeypatch):
     assert r["ganchos"][0]["fotograma_s"] == 11.84
     r, _, _ = mejorar.analizar("DATOS", [], "es", duracion_s=27.6)
     assert r["ganchos"][0]["fotograma_s"] == 13.5
+
+
+# ---------------- revisión final (revisor, 2026-10-10): N por M, prueba y garantía, escasez con número ---
+
+EJEMPLOS_REVISOR = ["Kjøp 3 betal for 2", "Köp 3 betala för 2", "Lleva 3x2 hoy", "Pague 1, lleve 2",
+                    "Prueba 7 días sin riesgo", "Garantía de 5 años", "Últimas 3 unidades",
+                    "Prøv i 7 dager, pengene tilbake"]
+
+
+@pytest.mark.parametrize("texto", EJEMPLOS_REVISOR)
+def test_las_ofertas_que_el_revisor_vio_pasar_se_marcan_sin_dato_y_no_con_el(texto):
+    assert mejorar.ofertas_sin_dato(texto, "Myke tøfler til kalde gulv"), texto
+    assert mejorar.ofertas_sin_dato(texto, f"Título: Tøfler\n{texto} på alle ordre") == [], texto
+
+
+def test_lleva_n_paga_m_compara_la_oferta_y_no_la_forma():
+    """La misma oferta escrita de otra forma no se marca; otra oferta (otros números) sí."""
+    assert mejorar.ofertas_sin_dato("Lleva 3x2 hoy", "Promo 3 por 2 en todo") == []
+    assert mejorar.ofertas_sin_dato("Pague 1, lleve 2", "Oferta 2x1") == []
+    assert mejorar.ofertas_sin_dato("Lleva 3x2 hoy", "Oferta 2x1") == ["3x2"]
+    assert mejorar.ofertas_sin_dato("Buy 1 get 1 today", "nada") == ["buy 1 get 1"]
+    assert mejorar.ofertas_sin_dato("Kjøp 3 betal for 2", "nada") == ["kjøp 3 betal for 2"]
+    assert mejorar.ofertas_sin_dato("Últimas 3 unidades", "Últimas 5 unidades") == ["últimas 3"]
+    assert mejorar.ofertas_sin_dato("Last 2 left", "nada") == ["last 2"]
+    # ni una medida ni un número suelto son una oferta
+    assert mejorar.ofertas_sin_dato("Mide 12x10 cm, 3 capas, 24/7", "nada") == []
+
+
+def test_las_ofertas_nuevas_solo_miran_el_gancho_y_el_copy():
+    r = mejorar.parsear(respuesta(frase="Pierde porque no ofrece garantía ni prueba",
+                                  ganchos=[{"texto": "Garantía de 5 años", "prompt": "Push in", "fotograma_s": 4}],
+                                  copy_nuevo={"titulo": "Tøfler", "texto": "Prøv i 7 dager, pengene tilbake"}),
+                        "nada", 20.0)
+    assert r["cifras_sin_dato"] == []
+    assert r["ganchos"][0]["cifras_sin_dato"] == ["garantía"]
+    assert r["copy_nuevo"]["cifras_sin_dato"] == ["pengene tilbake"]
