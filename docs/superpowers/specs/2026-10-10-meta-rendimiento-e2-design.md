@@ -165,3 +165,31 @@ desplegar.
 ## 13. Pendientes nuevos
 
 «Cómo mejorarlo» por anuncio de Meta; motivo de `WITH_ISSUES` (`issues_info`); avisos por correo cuando haya SMTP; E3.
+
+## 14. Cambios tras la construcción
+
+Lo que cambió respecto a lo escrito arriba al construir, revisar y medir (2026-10-10). Si algo de arriba contradice
+esta sección, manda esta. Las razones y lo que cuesta si están mal, en
+`docs/superpowers/decisiones/2026-10-10-meta-rendimiento-e2.md`.
+
+- **E2-R5: sin corrección pagada por cifras.** §8 decía «una corrección; si persiste, se marca en `faltantes`». No:
+  una cifra fuerte del texto que no está en los DATOS no pide otra llamada de Claude (el precio visto tiene que
+  sostenerse). Se guarda en `cifras_sin_dato` y la pantalla la marca. La única corrección pagada es por JSON roto o con
+  la estructura equivocada, como en Triple Whale.
+- **E2-R6: el botón manda lo que vio.** `POST /evaluar` exige `n` (cuántos anuncios evaluó el botón) y `precio_visto`
+  (comparado con `gastos.costo_de_precio` como en la cadena de escenas); si falta alguno o no coinciden con lo que la
+  ruta calcula ahora, avisa y vuelve sin cobrar. Una pestaña vieja pide recargar.
+- **E2-R7: tope de 600 s y un estimado si Claude no responde.** La llamada espera hasta 600 s. Si falla por tiempo o
+  conexión cortada y no hay `usage`, se anota como gasto el estimado de `evaluacion_meta` (`entregado=False`, detalle
+  «estimado: sin respuesta de Claude»): nada que Anthropic pudo cobrar se pierde de la cuenta.
+- **E2-R8: tope de salida de 48 000 y mínimo de 3 ideas.** §8 decía `max_tokens` 16 000. El pensamiento adaptativo gasta
+  del mismo tope y con 16 000 las tres primeras llamadas reales llegaron al límite. Ahora `MAX_TOKENS` = 48 000; una
+  respuesta sin `resumen`, sin ningún paso de plan o con menos de 3 ideas no vale (se quedan 5 como mucho); la nota por
+  anuncio es una frase; la corrección pide el JSON COMPLETO; la barra calcula 360 s.
+- **Precio medido** (skill `eval-claude`, `docs/superpowers/evals/2026-10-10-meta-evaluacion.md`): `evaluacion_meta`
+  = 0,25 de base + 0,005 por anuncio (US$ 0,30 con 10 anuncios; sin margen). Antes de E2-R8 era 0,30 + 0,01 (0,40).
+- **Desconectar Meta borra también las evaluaciones** (E2-R2): sus filas, y de R2 las miniaturas que copiaron. Primero se
+  borran las filas y al final R2, con un solo cliente; el gasto de esas evaluaciones se queda. Una tarea que perdió su
+  fila a mitad borra las miniaturas que subió.
+- **El panel lee las evaluaciones en una sola consulta** (`datos.evaluaciones_panel`): las últimas ocho sin muestra ni
+  resultado y la fila entera de la última lista, aunque la hayan seguido varias que fallaron.
