@@ -121,8 +121,9 @@ TARIFAS = {
     # docs/superpowers/evals/2026-10-08-tw-como-mejorarlo.md (PND-179).
     # Desde el 2026-10-09 el análisis trae además tres ganchos y el copy nuevo para Meta (spec tw-ganchos-y-copy §3.3):
     # medido 2026-10-09 con ganchos y copy: 0,086–0,111 con la caché caliente (tanda) y 0,131–0,170 con la caché fría
-    # (un clic suelto, media 0,142); se muestra 0,15.
-    "analisis_anuncio_tw": 0.15,
+    # (un clic suelto, media 0,142); se muestra 0,17, lo más caro medido de un clic suelto; en una tanda (caché
+    # caliente) se cobra lo real, menos.
+    "analisis_anuncio_tw": 0.17,
 }
 
 # Evaluación de anuncios de Triple Whale con IA (spec 2026-09-28 §6): una

@@ -122,11 +122,15 @@ pagaría la llamada de corrección con el mismo tope. Los cambios son dos:
 - con el tope viejo de 12 000, esta respuesta habría llegado cortada y pagada dos veces;
 - Claude devolvió `fotograma_s` 13,5, que no es un segundo que haya visto (sus fotogramas eran 0,3 · 4,15 · 8 · 11,84 ·
   15,7…). Por eso el código ahora lleva el segundo al fotograma visto más cercano;
-- los clics sueltos medidos con la caché fría quedan entre 0,131 y 0,170, con media de 0,142. La tarifa mostrada pasa a
-  **0,15**.
+- los clics sueltos medidos con la caché fría quedan entre 0,131 y 0,170, con media de 0,142. La tarifa mostrada pasó a
+  0,15 (y en el cierre, a 0,17).
 
 **Gasto total de esta medición:** US$ 1,0183 (0,8487 + 0,1696). El último caso lo pasó por US$ 0,02 del tope de
 US$ 1 del eval: lo midió el orquestador porque cambiar `max_tokens` exige medir (skill `eval-claude`), y se anota aquí.
 
 **Conclusión:** se cierra. El análisis con ganchos y copy es válido en los 4 casos reales, sin correcciones, en el
-idioma correcto y sin cifras inventadas. La tarifa queda en US$ 0,15 (ver la tercera ronda).
+idioma correcto y sin cifras inventadas. La tarifa queda en US$ 0,17 (ver el cierre).
+
+**Cierre (2026-10-10):** por el ruling del controlador, el precio que se ve antes de cobrar no puede quedar por debajo
+de lo que costó un clic suelto medido (0,1696): `analisis_anuncio_tw` queda en **0,17**; una tanda con la caché
+caliente cuesta menos y se cobra lo real.

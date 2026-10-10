@@ -438,17 +438,15 @@ def test_la_tarifa_del_analisis_es_la_medida_en_la_prueba_real():
     """PND-179 y spec tw-ganchos-y-copy §3.3. 2026-10-08: 4 anuncios reales a US$ 0,067–0,084 por llamada (tarifa 0,10).
     2026-10-09, ya con tres ganchos y el copy nuevo: 0,086–0,111 con la caché caliente (una tanda) y 0,131–0,170 con la
     caché fría, que es lo que cuesta un clic suelto sobre una tarjeta (el caso normal; media 0,142). La de 0,1696 es la
-    del tope de 20 000 (13 013 tokens de salida, que el tope viejo de 12 000 habría cortado). El precio que se muestra
-    antes de cobrar cubre la media fría más el Whisper: tarifa 0,15 + Whisper de 30 s."""
-    assert gastos.TARIFAS["analisis_anuncio_tw"] == 0.15
+    del tope de 20 000 (13 013 tokens de salida, que el tope viejo de 12 000 habría cortado). Ruling del 2026-10-10: el
+    precio que se ve antes de cobrar no queda por debajo de lo que costó un clic suelto medido: tarifa 0,17 + Whisper."""
+    assert gastos.TARIFAS["analisis_anuncio_tw"] == 0.17
     precio = gastos.estimar("analisis_anuncio_tw", segundos=30)["usd"]
-    assert precio == pytest.approx(0.151, abs=1e-6)
+    assert precio == pytest.approx(0.171, abs=1e-6)
     en_frio = (0.1309, 0.1333, 0.1324, 0.1424, 0.1696)   # los clics sueltos con la caché fría (2026-10-09)
-    assert precio >= sum(en_frio) / len(en_frio) + 0.0014  # cubre la media fría + el Whisper más caro medido
-    assert precio >= 0.111 + 0.0014                      # y con holgura la caliente de la tanda
-    # La corrida más cara (0,1696) queda ≈ US$ 0,02 por encima de la tarifa sola: el precio es «aprox.» y con Cobros se
-    # cobra lo real × el margen.
-    assert 0.1696 - gastos.TARIFAS["analisis_anuncio_tw"] < 0.02
+    assert gastos.TARIFAS["analisis_anuncio_tw"] >= max(en_frio)   # ni el clic más caro medido queda por encima
+    assert precio >= max(en_frio) + 0.001                # ni con el Whisper de 30 s
+    assert precio >= 0.111 + 0.0014                      # y la tanda (caché caliente) cuesta menos: se cobra lo real
 
 
 def test_aprendizaje_desde_un_analisis():
