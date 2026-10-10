@@ -126,11 +126,14 @@ TARIFAS = {
     # docs/superpowers/evals/2026-10-08-tw-como-mejorarlo.md (PND-179).
     "analisis_anuncio_tw": 0.10,
     # Meta rendimiento, «Evaluar con IA» (spec E2 §8): base + por anuncio de la muestra (estimador «evaluacion_meta»).
-    # Una llamada con visión, la doctrina en el system (caché) y hasta 16 000 tokens de salida, como la de Triple
-    # Whale: hasta medirla con la skill eval-claude sobre datos reales de HappyFlops (Task 7 de E2) usa los valores de
-    # `evaluacion_tw` (EVALUACION_TW_BASE_USD y EVALUACION_TW_POR_ANUNCIO_USD).
-    "evaluacion_meta": 0.08,
-    "evaluacion_meta_por_anuncio": 0.012,
+    # Una llamada con visión, la doctrina en el system (caché) y hasta 16 000 tokens de salida.
+    # Medido en la prueba real (2026-10-10, claude-sonnet-5, happyflops, muestra de 10 anuncios): en los 3 casos la
+    # primera llamada llegó a `max_tokens` y la corrección la pagó otra vez: US$ 0,2865–0,3772 por evaluación. Casi
+    # todo es la salida con pensamiento, que no crece con N: por eso la base pesa más que el por anuncio. Con N = 10
+    # da 0,40 (lo peor de este código, las dos llamadas en el tope, es ≈ 0,39). Informe:
+    # docs/superpowers/evals/2026-10-10-meta-evaluacion.md.
+    "evaluacion_meta": 0.30,
+    "evaluacion_meta_por_anuncio": 0.01,
 }
 
 # Evaluación de anuncios de Triple Whale con IA (spec 2026-09-28 §6): una
