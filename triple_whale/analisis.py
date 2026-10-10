@@ -481,56 +481,54 @@ def anotar_tokens(error, entrada, salida):
     return error
 
 
-def llamar_con_correccion(content, system_, parsear_fn, revisar=None, llamar=None):
-    """(resultado, tokens_entrada, tokens_salida) de una llamada a Claude con UNA corrección como mucho: la de Triple
-    Whale y la de Meta rendimiento comparten este camino (no se copia).
+def sin_respuesta(error):
+    """True si la llamada a Claude falló SIN respuesta (tope de tiempo o conexión cortada después de enviarla): no hay
+    `usage`, pero Anthropic pudo haberla cobrado. Quien anota el gasto usa entonces el estimado."""
+    try:
+        import anthropic
+        tipos = (anthropic.APITimeoutError, anthropic.APIConnectionError)
+    except Exception:  # noqa: BLE001 — sin el SDK no hay llamada que pudo cobrarse
+        tipos = ()
+    return bool(getattr(error, "sin_respuesta", False)) or (bool(tipos) and isinstance(error, tipos))
 
-    `parsear_fn(texto)` devuelve el resultado limpio o lanza AnalisisInvalido. `revisar(resultado)` (opcional) puede
-    pedir la corrección aunque el resultado sirva: devuelve el motivo (p. ej. cifras que no están en los DATOS) o None.
-    `llamar(content, system_) -> (texto, entrada, salida)`; por defecto `_llamar`.
 
-    Si la primera respuesta no sirve y la corrección tampoco (o la llamada de corrección falla), AnalisisInvalido con
-    los tokens ya pagados. Si la primera sí servía y solo se pidió corregir por `revisar`, nunca se pierde: si la
-    corrección no sirve o falla, queda la primera (lo pagado no se tira). Cualquier otra excepción después de que
-    Claude respondió (un parser que revienta) sale también con los tokens pagados (`anotar_tokens`)."""
+def llamar_con_correccion(content, system_, parsear_fn, llamar=None):
+    """(resultado, tokens_entrada, tokens_salida) de una llamada a Claude con UNA corrección como mucho, y solo si la
+    respuesta no sirve (no es JSON o le falta lo pedido: `parsear_fn` lanza AnalisisInvalido). La de Triple Whale y la
+    de Meta rendimiento comparten este camino (no se copia). Una respuesta que sirve nunca se paga dos veces: lo que
+    haya que marcar en ella (p. ej. cifras sin dato) se marca, no se corrige con otra llamada (E2-R5).
+
+    `llamar(content, system_) -> (texto, entrada, salida)`; por defecto `_llamar`. Si la corrección tampoco sirve, o
+    su llamada falla, AnalisisInvalido con los tokens ya pagados (`sin_respuesta=True` si la corrección se quedó sin
+    respuesta: pudo cobrarse). Cualquier otra excepción después de que Claude respondió (un parser que revienta) sale
+    también con los tokens pagados (`anotar_tokens`)."""
     llamar = llamar or _llamar
     crudo, entrada, salida = llamar(content, system_)
     pagado = [entrada, salida]
     try:
-        return _con_una_correccion(content, system_, parsear_fn, revisar, llamar, crudo, pagado)
+        return _con_una_correccion(content, system_, parsear_fn, llamar, crudo, pagado)
     except Exception as e:
         anotar_tokens(e, *pagado)
         raise
 
 
-def _con_una_correccion(content, system_, parsear_fn, revisar, llamar, crudo, pagado):
+def _con_una_correccion(content, system_, parsear_fn, llamar, crudo, pagado):
     """El cuerpo de `llamar_con_correccion` tras la primera respuesta; `pagado` ([entrada, salida]) se actualiza en
     su lugar con lo que cobra la corrección."""
-    primero = None
     try:
-        primero = parsear_fn(crudo)
+        return parsear_fn(crudo), pagado[0], pagado[1]
     except AnalisisInvalido as e:
-        error, motivo = e, str(e)
-    else:
-        motivo = revisar(primero) if revisar else None
-        if not motivo:
-            return primero, pagado[0], pagado[1]
-        error = None
-    correccion = content + [{"type": "text", "text": f"Tu respuesta anterior no sirvió ({motivo}). "
+        error = e
+    correccion = content + [{"type": "text", "text": f"Tu respuesta anterior no sirvió ({error}). "
                                                      "Responde solo el JSON pedido."}]
     try:
         crudo, e2, s2 = llamar(correccion, system_)
-    except Exception:
-        if primero is not None:
-            return primero, pagado[0], pagado[1]
+    except Exception as e_llamada:
+        if sin_respuesta(e_llamada):
+            error.sin_respuesta = True
         raise error from None
     pagado[0], pagado[1] = pagado[0] + e2, pagado[1] + s2
-    try:
-        return parsear_fn(crudo), pagado[0], pagado[1]
-    except AnalisisInvalido:
-        if primero is not None:
-            return primero, pagado[0], pagado[1]
-        raise
+    return parsear_fn(crudo), pagado[0], pagado[1]
 
 
 def analizar(marca, contexto, anuncios, medios, idioma, bloques=None, productos=None):

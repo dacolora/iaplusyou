@@ -17,8 +17,10 @@ cada POST además exige el mismo origen (Sec-Fetch-Site), la barrera CSRF del re
   (ruling R22, revisión final 2026-10-08). El admin no espera.
 - `evaluar` (spec E2 §8): «Evaluar con IA», que COBRA. Cualquier persona del proyecto la puede pedir (paga su saldo,
   como en Triple Whale). Arma la muestra y los DATOS con el alcance pedido (`dias`, `cuenta`, como el panel), calcula
-  el precio con `gastos.estimar("evaluacion_meta", n=)` y, si el formulario dice cuántos anuncios vio (`n`) y ya no
-  son esos, no cobra y lo dice con el precio nuevo; pide saldo ANTES de crear la fila (`libro.exigir`) y la encola con
+  el precio con `gastos.estimar("evaluacion_meta", n=)` y exige que el formulario traiga cuántos anuncios mostró el
+  botón (`n`) y el precio que la persona vio (`precio_visto`): si falta alguno o ya no coinciden (la copia cambió la
+  muestra, el margen cambió), no crea ni reserva nada y dice el precio de ahora (E2-R6); pide saldo ANTES de crear la
+  fila (`libro.exigir`) y la encola con
   `costo_estimado` (reserva). `SaldoInsuficiente` la responde el manejador único de dashboard (402 a un fetch, aviso a
   un formulario). Una viva por proyecto (`<cliente>__meta_eval`).
 - `evaluacion/<id>` (GET): el fragmento de una evaluación (404 si es de otro proyecto).
@@ -355,14 +357,16 @@ def evaluar(cliente):
         flash(gettext("Todavía no hay anuncios con datos suficientes para evaluar con IA."), "error")
         return _volver(cliente)
     precio = gastos.estimar("evaluacion_meta", n=n)
-    visto = request.form.get("n")
-    if visto is not None and _entero(visto) != n:
-        # Primero el precio, después el cobro: si la copia cambió la muestra desde que la persona vio el botón, el
-        # precio es otro y no se cobra uno que no vio.
-        flash(gettext("La muestra cambió desde que abriste la pestaña: ahora son %(n)s anuncio(s) por %(precio)s. "
-                      "Revisa y vuelve a confirmar.", n=n, precio=precio["texto"]), "warn")
-        return _volver(cliente)
     usd = precio["usd"]
+    # Primero el precio, después el cobro (E2-R6): el botón manda cuántos anuncios mostró (`n`) y el precio que la
+    # persona vio (`precio_visto`, con el margen si el proyecto cobra; vuelve a costo una sola vez con
+    # `gastos.costo_de_precio`). Si falta alguno, o la muestra o el precio (el margen) cambiaron desde que lo vio,
+    # no se crea ni se reserva nada y se dice el precio de ahora.
+    visto = gastos.costo_de_precio(request.form.get("precio_visto"))
+    if _entero(request.form.get("n")) != n or visto is None or usd is None or abs(visto - usd) > 0.005:
+        flash(gettext("Revisa el precio y vuelve a confirmar: ahora son %(n)s anuncio(s) por %(precio)s.",
+                      n=n, precio=precio["texto"]), "warn")
+        return _volver(cliente)
     # Cobros: sin saldo no se crea la fila (el manejador único responde); la reserva la hace el encolado.
     libro.exigir(cliente, usd)
     eid = datos.crear_evaluacion(cliente, prep["cuentas"], prep["desde"], prep["hasta"], prep["moneda"],

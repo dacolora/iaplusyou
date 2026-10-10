@@ -43,7 +43,7 @@ MAX_RECOMENDACIONES = 12     # las primeras de las reglas (ya vienen por nivel e
 MAX_SEGMENTOS = 5            # por cuenta, los de más gasto
 SEGMENTO_TODO = 0.99         # un segmento con todo el gasto de su dimensión (un solo país) no dice nada
 MAX_TOKENS = 16000
-TIMEOUT_CLAUDE_S = 300
+TIMEOUT_CLAUDE_S = 600       # E2-R7: 16 000 tokens de salida con pensamiento pueden pasar de 5 minutos
 N_IDEAS = tw_analisis.N_IDEAS
 CARPETA_R2 = "meta_rendimiento"
 ORIGEN_ANGULO = "meta"
@@ -424,15 +424,6 @@ def parsear(texto, refs_validas, refs_recomendaciones, datos_texto):
     return resultado
 
 
-def _revisar_cifras(resultado):
-    """El motivo de la (única) corrección cuando Claude citó cifras que no están en los DATOS, o None."""
-    cifras = resultado.get("cifras_sin_dato") or []
-    if not cifras:
-        return None
-    return ("estas cifras no están en los DATOS: " + ", ".join(cifras[:10]) +
-            "; usa solo cifras de los DATOS o quítalas")
-
-
 def enlazar_plan(resultado, elegidos, recs):
     """A cada paso del plan, `recomendaciones` (los ids de las R… que cita) y `enlace`: el Administrador de anuncios
     con los anuncios de la muestra que cita seleccionados (si son de una sola cuenta) o, si no cita anuncios y cita
@@ -457,22 +448,23 @@ def enlazar_plan(resultado, elegidos, recs):
 
 def _llamar(content, system_):
     """Sin reintentos del cliente y con un tope de tiempo (como «Cómo mejorarlo», revisión A6 de Triple Whale): un
-    intento que el SDK repite solo podría cobrarse sin quedar anotado. Modelo `generador_prompts.MODEL`."""
+    intento que el SDK repite solo podría cobrarse sin quedar anotado. Si el tope se cumple sin respuesta, la tarea
+    anota el ESTIMADO (E2-R7). Modelo `generador_prompts.MODEL`."""
     from sprints import analisis as sprints_analisis  # noqa: PLC0415
     return sprints_analisis._llamar_contando(content, max_tokens=MAX_TOKENS, system=system_,
                                              timeout=TIMEOUT_CLAUDE_S, max_retries=0)
 
 
 def analizar(datos_texto, imagenes, idioma, elegidos, recs):
-    """(resultado, tokens_entrada, tokens_salida). Una corrección como mucho (`triple_whale.analisis.
-    llamar_con_correccion`): si la respuesta no sirve, o si sirve pero cita cifras que no están en los DATOS (si
-    persisten quedan en `cifras_sin_dato`). Si tampoco sirve, AnalisisInvalido con los tokens pagados."""
+    """(resultado, tokens_entrada, tokens_salida). Una corrección como mucho y solo si la respuesta no sirve
+    (`triple_whale.analisis.llamar_con_correccion`); si tampoco sirve, AnalisisInvalido con los tokens pagados. Las
+    cifras que no están en los DATOS NO piden otra llamada pagada (E2-R5): quedan en `cifras_sin_dato` y la pantalla
+    las marca."""
     content = [{"type": "text", "text": datos_texto}] + list(imagenes or [])
     refs = {a["ref"] for a in elegidos or []}
     refs_rec = {r["ref"] for r in recs or [] if r.get("ref")}
     resultado, entrada, salida = tw_analisis.llamar_con_correccion(
-        content, system(idioma), lambda crudo: parsear(crudo, refs, refs_rec, datos_texto),
-        revisar=_revisar_cifras, llamar=_llamar)
+        content, system(idioma), lambda crudo: parsear(crudo, refs, refs_rec, datos_texto), llamar=_llamar)
     try:
         return enlazar_plan(resultado, elegidos, recs), entrada, salida
     except Exception as e:

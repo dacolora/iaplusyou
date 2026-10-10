@@ -10127,10 +10127,6 @@ msgstr "Currency goes as a 3-letter code (COP, MXN, USD…)."
 msgid "La moneda va en código de 3 letras (COP, MXN, USD…); no la guardé."
 msgstr "Currency goes as a 3-letter code (COP, MXN, USD…); I didn't save it."
 
-#, python-format
-msgid "La muestra cambió desde que abriste la pestaña: ahora son %(n)s anuncio(s) por %(precio)s. Revisa y vuelve a confirmar."
-msgstr "The sample changed since you opened the tab: it is now %(n)s ad(s) for %(precio)s. Review and confirm again."
-
 msgid "La paleta, las medidas y los componentes reales de Creatv, en un solo lugar."
 msgstr "Creatv’s palette, dimensions and real components, all in one place."
 
@@ -14932,6 +14928,10 @@ msgstr "Check the account’s status in Meta."
 msgid "Revisa el método de pago de tu cuenta publicitaria de Meta"
 msgstr "Check the payment method of your Meta ad account"
 
+#, python-format
+msgid "Revisa el precio y vuelve a confirmar: ahora son %(n)s anuncio(s) por %(precio)s."
+msgstr "Check the price and confirm again: it is now %(n)s ad(s) for %(precio)s."
+
 msgid "Revisa el worker o refresca el experimento."
 msgstr "Check the worker or refresh the experiment."
 
@@ -19462,6 +19462,9 @@ msgstr "seasonality"
 
 msgid "estado"
 msgstr "status"
+
+msgid "estimado: sin respuesta de Claude"
+msgstr "estimated: no response from Claude"
 
 msgid "estructura"
 msgstr "structure"

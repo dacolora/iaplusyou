@@ -687,3 +687,59 @@ def test_evaluacion_interrumpida_queda_en_error_sin_token(evaluacion):
     datos.actualizar_evaluacion(eid, estado="lista")
     t._evaluar_interrumpida(_tarea_eval(eid), "otra vez")                 # una lista no vuelve a error
     assert datos.evaluacion("hf", eid)["estado"] == "lista"
+
+
+def _timeout():
+    import anthropic
+    import httpx
+    return anthropic.APITimeoutError(request=httpx.Request("POST", "https://api.anthropic.com/v1/messages"))
+
+
+def _detalles():
+    with db.conectar() as con:
+        return [r.detalle for r in con.execute(sa.select(db.gasto.c.detalle))]
+
+
+def test_evaluar_si_claude_no_responde_anota_el_estimado_sin_cobrarlo(evaluacion, monkeypatch):
+    """E2-R7: un tope de tiempo o una conexión cortada no traen `usage`, pero Anthropic pudo cobrar: se anota el
+    estimado de la tarifa, sin entregar (al cliente no se le cobra)."""
+    eid = evaluacion["eid"]
+    _cobra_hf()
+
+    def _llamar(content, system_):
+        raise _timeout()
+    monkeypatch.setattr(analisis, "_llamar", _llamar)
+    with pytest.raises(RuntimeError) as e:
+        t.meta_rend_evaluar(_tarea_eval(eid))
+    estimado = gastos.estimar("evaluacion_meta", n=2)["usd"]
+    assert _gastos_eval()[0]["usd"] == pytest.approx(estimado)
+    assert _detalles() == ["estimado: sin respuesta de Claude"] and _movimientos_hf() == ["no_cobrado"]
+    fila = datos.evaluacion("hf", eid)
+    assert fila["estado"] == "error" and "APITimeoutError" in fila["error"] and "anthropic.com" not in str(e.value)
+
+
+def test_evaluar_si_la_correccion_no_responde_anota_lo_exacto_mas_el_estimado(evaluacion, monkeypatch):
+    eid = evaluacion["eid"]
+    llamadas = []
+
+    def _llamar(content, system_):
+        llamadas.append(1)
+        if len(llamadas) > 1:
+            raise _timeout()
+        return "no es JSON", 3000, 800
+    monkeypatch.setattr(analisis, "_llamar", _llamar)
+    with pytest.raises(RuntimeError):
+        t.meta_rend_evaluar(_tarea_eval(eid))
+    esperado = costo_real(3000, 800) + gastos.estimar("evaluacion_meta", n=2)["usd"]
+    assert _gastos_eval()[0]["usd"] == pytest.approx(esperado) and _detalles() == ["estimado: sin respuesta de Claude"]
+
+
+def test_un_fallo_antes_de_llamar_a_claude_no_anota_ningun_estimado(evaluacion, monkeypatch):
+    eid = evaluacion["eid"]
+
+    def _sin_red(*a, **k):
+        raise _timeout()            # p. ej. armar los DATOS falla con algo que parece de red: Claude no se llamó
+    monkeypatch.setattr(analisis, "armar", _sin_red)
+    with pytest.raises(RuntimeError):
+        t.meta_rend_evaluar(_tarea_eval(eid))
+    assert _gastos_eval() == [] and datos.evaluacion("hf", eid)["estado"] == "error"

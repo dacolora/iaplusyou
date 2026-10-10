@@ -247,8 +247,8 @@ def meta_rend_evaluar(tarea):
     referencia = f"meta_eval:{eid}{ref_sufijo(tarea)}"
     entrada = salida = 0
     usd = 0.0
-    claude_anotado = False
-    temporales = []
+    claude_anotado = llamada_hecha = False
+    temporales, elegidos = [], []
     ya_no_existe = gettext("Esa evaluación ya no existe.")
     try:
         fila = datos.evaluacion(cliente, eid)
@@ -266,6 +266,7 @@ def meta_rend_evaluar(tarea):
         bloques, temporales = tw_analisis.visuales(cliente, elegidos, medios, creatv)
         trabajos.reportar(job_id, etapa=idiomas.N_("Analizando con Claude"))
         texto, imagenes = analisis.armar(cliente, fila, medios, bloques)
+        llamada_hecha = True
         resultado, entrada, salida = analisis.analizar(texto, imagenes, idiomas.de_proyecto(cliente), elegidos,
                                                        fila["recomendaciones"] or [])
         usd = costo_real(entrada, salida)
@@ -295,9 +296,15 @@ def meta_rend_evaluar(tarea):
             except Exception:  # noqa: BLE001 — sin precio no se inventa uno; el error de la fila sigue en palabras
                 log.exception("sin precio para los tokens de la evaluación de Meta %s", eid)
                 usd = 0.0
+            # E2-R7: una llamada que se quedó sin respuesta (tope de tiempo, conexión cortada) no trae `usage`, pero
+            # Anthropic pudo cobrarla: se anota el estimado de la tarifa (sobre lo exacto que ya se sepa).
+            estimado = llamada_hecha and tw_analisis.sin_respuesta(e)
+            if estimado:
+                usd += float(gastos.estimar("evaluacion_meta", n=len(elegidos))["usd"] or 0.0)
             if usd:     # pagado y sin entregar: en un proyecto que cobra no se le cobra (skill `cobros`)
                 gastos.registrar_seguro(cliente, "evaluacion", usd, referencia, proveedor="anthropic",
-                                        detalle=gettext("sin resultado usable"), entregado=False)
+                                        detalle=gettext("estimado: sin respuesta de Claude") if estimado
+                                        else gettext("sin resultado usable"), entregado=False)
         mensaje = cola.recortar(cola.sin_token(analisis.texto_error(e)), 500)
         try:
             datos.actualizar_evaluacion(eid, estado="error", error=mensaje, usd=usd)

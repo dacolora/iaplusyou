@@ -838,6 +838,17 @@ def _evaluaciones(cliente="acme"):
     return datos.evaluaciones(cliente, limite=50)
 
 
+def _visto(dias="30", cuenta="", cliente="acme"):
+    """Lo que manda el botón (E2-R6): cuántos anuncios mostró y el precio que la persona vio (con el margen)."""
+    import gastos
+    from cobros import libro
+    from meta_rendimiento import analisis
+    prep = analisis.preparar(cliente, dias, cuenta)
+    n = len((prep or {}).get("muestra") or [])
+    usd = gastos.estimar("evaluacion_meta", n=n)["usd"]
+    return {"dias": dias, "cuenta": cuenta, "n": str(n), "precio_visto": repr(usd * libro.margen_precio(cliente))}
+
+
 def _encolados(monkeypatch):
     """Lo que la ruta pasa a `trabajos.encolar` (sigue encolando de verdad)."""
     from tareas import meta_rendimiento as tmr
@@ -855,7 +866,7 @@ def test_evaluar_crea_la_fila_y_la_encola_con_su_precio(conectado, monkeypatch):
     import gastos
     _sembrar()
     llamadas = _encolados(monkeypatch)
-    r = conectado["c"].post(EVALUAR, data={"dias": "30", "cuenta": ""})
+    r = conectado["c"].post(EVALUAR, data=_visto())
     assert r.status_code == 302 and r.headers["Location"].endswith("/cliente/acme#meta")
     ev, = _evaluaciones()
     n = len(ev["muestra"])
@@ -872,43 +883,48 @@ def test_evaluar_crea_la_fila_y_la_encola_con_su_precio(conectado, monkeypatch):
 
 def test_evaluar_de_una_cuenta_guarda_ese_alcance(conectado):
     _sembrar()
-    conectado["c"].post(EVALUAR, data={"dias": "7", "cuenta": A})
+    conectado["c"].post(EVALUAR, data=_visto("7", A))
     ev, = _evaluaciones()
     assert ev["cuentas"] == [A] and ev["extra"]["cuenta"] == A and ev["extra"]["dias"] == 7
 
 
 def test_evaluar_sin_anuncios_suficientes_lo_dice_y_no_cobra_nada(conectado):
     _dos_cuentas()
-    r = conectado["c"].post(EVALUAR, data={"dias": "30"})
+    r = conectado["c"].post(EVALUAR, data=_visto())
     assert r.status_code == 302 and _evaluaciones() == [] and _tareas("meta_rend_evaluar") == []
     assert any("Todavía no hay anuncios con datos suficientes" in m for m in _flashes(conectado["c"]))
 
 
 def test_evaluar_sin_cuentas_o_sin_meta_no_crea_nada(conectado, app, monkeypatch):  # noqa: F811
-    conectado["c"].post(EVALUAR, data={"dias": "30"})
+    conectado["c"].post(EVALUAR, data=_visto())
     assert _evaluaciones() == [] and any("Elige primero" in m for m in _flashes(conectado["c"]))
     monkeypatch.setattr(conectado["dashboard"].meta_conexion, "cargar", lambda c: {})
     _sembrar()
-    conectado["c"].post(EVALUAR, data={"dias": "30"})
+    conectado["c"].post(EVALUAR, data=_visto())
     assert _evaluaciones() == [] and any("Meta no está conectado" in m for m in _flashes(conectado["c"]))
 
 
 def test_una_sola_evaluacion_viva_por_proyecto(conectado):
     _sembrar()
-    conectado["c"].post(EVALUAR, data={"dias": "30"})
-    conectado["c"].post(EVALUAR, data={"dias": "30"})
+    conectado["c"].post(EVALUAR, data=_visto())
+    conectado["c"].post(EVALUAR, data=_visto())
     assert len(_evaluaciones()) == 1 and len(_tareas("meta_rend_evaluar")) == 1
     assert any("Ya hay una evaluación con IA en curso" in m for m in _flashes(conectado["c"]))
 
 
-def test_evaluar_si_la_muestra_cambio_no_cobra_y_dice_el_precio_nuevo(conectado):
+@pytest.mark.parametrize("cambio", [{"n": None}, {"precio_visto": None}, {"n": "99"}, {"precio_visto": "0.01"},
+                                    {"precio_visto": "abc"}, {"precio_visto": "inf"}])
+def test_evaluar_sin_el_precio_visto_o_si_cambio_no_crea_ni_reserva_nada(conectado, cambio):
+    """E2-R6: sin `n` o sin `precio_visto`, o si ya no coinciden con la muestra y el precio de ahora, nada se crea ni
+    se reserva y el aviso dice el precio de ahora."""
     _sembrar()
-    conectado["c"].post(EVALUAR, data={"dias": "30", "n": "99"})
-    assert _evaluaciones() == [] and _tareas("meta_rend_evaluar") == []
-    assert any("La muestra cambió" in m and "US$" in m for m in _flashes(conectado["c"]))
-    from meta_rendimiento import analisis
-    vista = len(analisis.preparar("acme", 30, None)["muestra"])
-    conectado["c"].post(EVALUAR, data={"dias": "30", "n": str(vista)})
+    data = {k: v for k, v in dict(_visto(), **cambio).items() if v is not None}
+    r = conectado["c"].post(EVALUAR, data=data)
+    assert r.status_code == 302 and _evaluaciones() == [] and _tareas("meta_rend_evaluar") == []
+    with db.conectar() as con:
+        assert con.execute(sa.select(sa.func.count()).select_from(db.reserva_saldo)).scalar() == 0
+    assert any("Revisa el precio y vuelve a confirmar" in m and "US$" in m for m in _flashes(conectado["c"]))
+    conectado["c"].post(EVALUAR, data=_visto())
     assert len(_evaluaciones()) == 1
 
 
@@ -923,7 +939,7 @@ def _cobra(milesimas=0):
 def test_evaluar_sin_saldo_responde_402_y_no_crea_nada(conectado):
     _sembrar()
     _cobra()
-    r = conectado["c"].post(EVALUAR, data={"dias": "30"}, headers={"X-Requested-With": "fetch"})
+    r = conectado["c"].post(EVALUAR, data=_visto(), headers={"X-Requested-With": "fetch"})
     assert r.status_code == 402 and r.get_json()["saldo_insuficiente"] is True
     assert _evaluaciones() == [] and _tareas("meta_rend_evaluar") == []
 
@@ -933,13 +949,28 @@ def test_evaluar_con_saldo_reserva_el_precio(conectado):
     from cobros import libro
     _sembrar()
     _cobra(milesimas=50_000)
-    conectado["c"].post(EVALUAR, data={"dias": "30"})
+    conectado["c"].post(EVALUAR, data=_visto())
     ev, = _evaluaciones()
     usd = gastos.estimar("evaluacion_meta", n=len(ev["muestra"]))["usd"]
     with db.conectar() as con:
         reserva, = con.execute(sa.select(db.reserva_saldo)).mappings().all()
     assert reserva["job_id"] == "acme__meta_eval"
     assert reserva["milesimas"] == libro.precio_milesimas(usd, libro.margen_precio("acme"))
+
+
+def test_evaluar_si_el_margen_cambio_desde_que_vio_el_precio_no_cobra(conectado):
+    from cobros import libro
+    _sembrar()
+    _cobra(milesimas=50_000)
+    visto = _visto()                                   # el precio con el margen de cuando abrió la pestaña
+    libro.configurar("acme", usuario="admin", margen=2.0)
+    conectado["c"].post(EVALUAR, data=visto)
+    assert _evaluaciones() == []
+    with db.conectar() as con:
+        assert con.execute(sa.select(sa.func.count()).select_from(db.reserva_saldo)).scalar() == 0
+    assert any("Revisa el precio" in m for m in _flashes(conectado["c"]))
+    conectado["c"].post(EVALUAR, data=_visto())        # con el precio de ahora, sí
+    assert len(_evaluaciones()) == 1
 
 
 def test_evaluar_si_encolar_falla_por_saldo_borra_la_fila(conectado, monkeypatch):
@@ -950,7 +981,7 @@ def test_evaluar_si_encolar_falla_por_saldo_borra_la_fila(conectado, monkeypatch
     def _sin_saldo(*a, **k):
         raise SaldoInsuficiente("acme", 1000, 0)
     monkeypatch.setattr(tmr, "encolar_evaluacion", _sin_saldo)
-    r = conectado["c"].post(EVALUAR, data={"dias": "30"}, headers={"X-Requested-With": "fetch"})
+    r = conectado["c"].post(EVALUAR, data=_visto(), headers={"X-Requested-With": "fetch"})
     assert r.status_code == 402 and _evaluaciones() == []
 
 
@@ -1030,9 +1061,9 @@ def test_los_post_de_la_evaluacion_frenan_otro_sitio_y_el_correo_sin_verificar(c
     for url in (EVALUAR, f"/cliente/acme/meta-rendimiento/evaluacion/{eid}/idea/0/crear"):
         assert conectado["c"].post(url, data={"dias": "30"}, headers={"Sec-Fetch-Site": "cross-site"}).status_code == 403
     usuarios.actualizar("user_acme", correo_verificado=False)
-    r = _como_cliente(app).post(EVALUAR, data={"dias": "30"})
+    r = _como_cliente(app).post(EVALUAR, data=_visto())
     assert r.headers["Location"].endswith("/cliente/acme#settings") and len(_evaluaciones()) == 1
     # Cualquier persona del proyecto con su correo verificado la puede pedir (paga su saldo): no es solo del admin.
     usuarios.actualizar("user_acme", correo_verificado=True)
-    _como_cliente(app).post(EVALUAR, data={"dias": "30"})
+    _como_cliente(app).post(EVALUAR, data=_visto())
     assert len(_evaluaciones()) == 2 and _evaluaciones()[0]["pedido_por"] == "user_acme"

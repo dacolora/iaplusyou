@@ -272,24 +272,29 @@ def _recs():
     return [{"ref": "R1", "id": "f" * 64, "enlace": administrador.enlace_cuenta(A)}]
 
 
-def test_analizar_pide_una_correccion_por_cifras_inventadas_y_suma_los_tokens(monkeypatch):
-    respuestas = [(respuesta(resumen="Cayó un 37 %."), 100, 50), (respuesta(resumen="Cayó."), 120, 60)]
+def test_las_cifras_sin_dato_se_marcan_sin_pagar_otra_llamada(monkeypatch):
+    """E2-R5: una respuesta que sirve no se corrige con otra llamada pagada; sus cifras sin dato quedan marcadas."""
     llamadas = []
 
     def _llamar(content, system_):
         llamadas.append((content, system_))
-        return respuestas.pop(0)
+        return respuesta(resumen="Cayó un 37 %."), 100, 50
     monkeypatch.setattr(analisis, "_llamar", _llamar)
     r, ent, sal = analisis.analizar("DATOS ROAS 2", [{"type": "image"}], "es", _muestra(), _recs())
-    assert (ent, sal) == (220, 110) and r["resumen"] == "Cayó." and r["cifras_sin_dato"] == []
-    assert "37 %" in llamadas[1][0][-1]["text"] and llamadas[0][0][1] == {"type": "image"}
-    assert llamadas[0][0][0]["text"] == "DATOS ROAS 2"
+    assert len(llamadas) == 1 and (ent, sal) == (100, 50) and r["cifras_sin_dato"] == ["37 %"]
+    assert llamadas[0][0][0]["text"] == "DATOS ROAS 2" and llamadas[0][0][1] == {"type": "image"}
 
 
-def test_analizar_si_las_cifras_persisten_quedan_marcadas(monkeypatch):
-    monkeypatch.setattr(analisis, "_llamar", lambda c, s: (respuesta(resumen="Cayó un 37 %."), 100, 50))
-    r, ent, sal = analisis.analizar("DATOS", [], "es", _muestra(), _recs())
-    assert r["cifras_sin_dato"] == ["37 %"] and (ent, sal) == (200, 100)
+def test_analizar_corrige_una_vez_si_la_respuesta_no_sirve(monkeypatch):
+    respuestas = [("basura", 100, 50), (respuesta(), 120, 60)]
+    llamadas = []
+
+    def _llamar(content, system_):
+        llamadas.append(content)
+        return respuestas.pop(0)
+    monkeypatch.setattr(analisis, "_llamar", _llamar)
+    r, ent, sal = analisis.analizar("DATOS 1", [], "es", _muestra(), _recs())
+    assert (ent, sal) == (220, 110) and r["plan"] and "no sirvió" in llamadas[1][-1]["text"]
 
 
 def test_analizar_invalido_dos_veces_lleva_los_tokens_pagados(monkeypatch):

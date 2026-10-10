@@ -362,43 +362,37 @@ def test_a_referente_guarda_un_referente_propio_con_miniatura_en_r2(base_tempora
 
 # ------------------------------------------ lo que comparte con Meta rendimiento (E2, 2026-10-10) ---
 
-def test_llamar_con_correccion_corrige_por_revisar_y_se_queda_con_la_corregida():
-    respuestas = [("primera", 100, 50), ("segunda", 120, 60)]
+def test_llamar_con_correccion_una_respuesta_que_sirve_no_se_paga_dos_veces():
+    """E2-R5: la corrección solo se pide si la respuesta no sirve; nunca para mejorar una que sí sirve."""
     llamadas = []
 
     def llamar(content, system_):
         llamadas.append(content)
-        return respuestas.pop(0)
-    r, ent, sal = analisis.llamar_con_correccion(
-        [{"type": "text", "text": "DATOS"}], "S", lambda crudo: {"texto": crudo},
-        revisar=lambda r: "cifras inventadas" if r["texto"] == "primera" else None, llamar=llamar)
-    assert r == {"texto": "segunda"} and (ent, sal) == (220, 110)
-    assert "cifras inventadas" in llamadas[1][-1]["text"]
+        return "primera", 100, 50
+    assert analisis.llamar_con_correccion([], "S", lambda crudo: {"texto": crudo}, llamar=llamar) == (
+        {"texto": "primera"}, 100, 50)
+    assert len(llamadas) == 1
 
 
-def test_llamar_con_correccion_no_tira_la_primera_que_servia():
-    """Si la primera respuesta servía y solo se pidió corregirla, una corrección que no sirve o que falla no tira lo
-    pagado: queda la primera (con los tokens de las dos llamadas que sí respondieron)."""
+def test_si_la_correccion_se_queda_sin_respuesta_lo_dice_para_anotar_el_estimado():
+    import anthropic
+    import httpx
+
     def parsear(crudo):
-        if crudo == "basura":
-            raise analisis.AnalisisInvalido("no es JSON")
-        return {"texto": crudo}
-    respuestas = [("primera", 100, 50), ("basura", 120, 60)]
-    r, ent, sal = analisis.llamar_con_correccion([], "S", parsear, revisar=lambda r: "corrige",
-                                                 llamar=lambda c, s: respuestas.pop(0))
-    assert r == {"texto": "primera"} and (ent, sal) == (220, 110)
+        raise analisis.AnalisisInvalido("no es JSON")
 
-    def falla_la_segunda(c, s, _n=[]):
+    def llamar(c, s, _n=[]):
         _n.append(1)
         if len(_n) > 1:
-            raise RuntimeError("red")
-        return "primera", 100, 50
-    r, ent, sal = analisis.llamar_con_correccion([], "S", parsear, revisar=lambda r: "corrige",
-                                                 llamar=falla_la_segunda)
-    assert r == {"texto": "primera"} and (ent, sal) == (100, 50)
+            raise anthropic.APITimeoutError(request=httpx.Request("POST", "https://api.anthropic.com/v1/messages"))
+        return "basura", 100, 40
+    with pytest.raises(analisis.AnalisisInvalido) as e:
+        analisis.llamar_con_correccion([], "S", parsear, llamar=llamar)
+    assert (e.value.tokens_entrada, e.value.tokens_salida) == (100, 40) and analisis.sin_respuesta(e.value)
+    assert not analisis.sin_respuesta(analisis.AnalisisInvalido("x")) and not analisis.sin_respuesta(KeyError())
 
 
-def test_llamar_con_correccion_sin_revisar_ni_llamar_usa_el_camino_de_siempre(monkeypatch):
+def test_llamar_con_correccion_sin_llamar_usa_el_camino_de_siempre(monkeypatch):
     monkeypatch.setattr(analisis, "_llamar", lambda content, system_: ("ok", 10, 5))
     assert analisis.llamar_con_correccion([], "S", lambda crudo: crudo) == ("ok", 10, 5)
 
