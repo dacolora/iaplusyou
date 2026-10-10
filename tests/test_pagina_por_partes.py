@@ -563,7 +563,8 @@ def test_entrega2_cuerpo_fuera_del_html_y_estatico_versionado(pagina, archivo, f
     assert firma not in html, f'Sigue inline: {archivo}'
     url = f'/static/{archivo}.js?v={int(Path("static", archivo + ".js").stat().st_mtime)}'
     nodo = next((n for n in sopa(pagina['c'].get('/cliente/acme')).select('script') if n.get('src') == url), None)
-    assert nodo and nodo.has_attr('defer')
+    # El compositor corre en su sitio, sin defer (guardas de cobro, re-revisión 2026-10-10); los demás, con defer.
+    assert nodo and nodo.has_attr('defer') == (archivo != 'crear-compositor')
     assert parse_qs(urlparse(nodo['src']).query)['v']
     respuesta = pagina['c'].get(nodo['src'])
     assert respuesta.status_code == 200
