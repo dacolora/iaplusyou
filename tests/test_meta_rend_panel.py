@@ -341,10 +341,55 @@ def test_el_diagnostico_trae_las_reglas_de_cada_cuenta(base_temporal, conectado)
     assert una["recomendaciones"] == []
 
 
-def test_las_reglas_miran_siempre_7_y_30_dias_sea_cual_sea_el_periodo(base_temporal, conectado):
+def _sembrar_ventanas_distintas():
+    """`_sembrar_diagnostico` más tres anuncios que cada ventana ve distinto (hoy 2026-10-08): `rechazado`
+    (DISAPPROVED) gastó SOLO hace 20 días, así que lo ven los 30 días y no los 7; `viejo` (WITH_ISSUES) gastó hace 49
+    días, así que solo lo ve una ventana de 90; `mixto` (activo) gastó 3 000 sin vender hace 20 días y 100 con ROAS 10
+    hace 2: en 30 días es perdedor que sigue gastando, en 7 días es ganador."""
     _sembrar_diagnostico()
-    ids = {d: [r["id"] for r in panel.contexto("hf", dias=d, hoy=HOY)["recomendaciones"]] for d in panel.PERIODOS}
-    assert ids[7] == ids[14] == ids[30] == ids[90] and ids[30]
+    datos.reemplazar_anuncio_dias("hf", A, "2026-09-18", "2026-09-18", [
+        _ad("2026-09-18", "rechazado", 500, 0), _ad("2026-09-18", "mixto", 3000, 0)])
+    datos.reemplazar_anuncio_dias("hf", A, "2026-10-06", "2026-10-06", [_ad("2026-10-06", "mixto", 100, 1000, compras=5)])
+    datos.reemplazar_anuncio_dias("hf", A, "2026-08-20", "2026-08-20", [_ad("2026-08-20", "viejo", 400, 0)])
+    datos.guardar_objetos("hf", A, [
+        {"nivel": "anuncio", "objeto_id": "rechazado", "nombre": "Video rechazado", "estado": "DISAPPROVED"},
+        {"nivel": "anuncio", "objeto_id": "viejo", "nombre": "Video viejo", "estado": "WITH_ISSUES"},
+        {"nivel": "anuncio", "objeto_id": "mixto", "nombre": "Video mixto", "estado": "ACTIVE"}])
+
+
+def _objetos_de(recs, tipo):
+    return sorted(o["id"] for r in recs if r["tipo"] == tipo for o in r["objetos"])
+
+
+def test_las_reglas_miran_siempre_7_y_30_dias_sea_cual_sea_el_periodo(base_temporal, conectado):
+    """Lo que el período cambia es la tabla de anuncios, no el Diagnóstico: sus recomendaciones COMPLETAS (texto,
+    cifras, objetos) son las mismas con 7, 14, 30 y 90 días. Los datos sembrados dan resultados distintos según la
+    ventana (un rechazado de hace 20 días, uno con problemas de hace 49, un perdedor de 30 días que en 7 gana): una
+    regla que mirara el período en vez de 7 y 30 daría otra lista."""
+    _sembrar_ventanas_distintas()
+    por_periodo = {d: panel.contexto("hf", dias=d, hoy=HOY)["recomendaciones"] for d in panel.PERIODOS}
+    base = por_periodo[30]
+    # Lo esperado de las ventanas de 7 y 30 días: el rechazado (solo gastó en los 30) y el perdedor de 30 días que
+    # gastó esta semana cuentan; el de hace 49 días no entra en ninguna.
+    assert _objetos_de(base, "anuncios_con_problemas") == ["rechazado"]
+    assert _objetos_de(base, "perdedores_gastando") == ["mixto", "pierde"]
+    for dias in (7, 14, 90):
+        assert por_periodo[dias] == base, dias
+
+
+def test_el_analisis_de_ia_lee_las_mismas_recomendaciones_que_el_diagnostico_sea_cual_sea_el_periodo(
+        base_temporal, conectado):
+    """La evaluación con IA (`analisis.preparar`) y el Diagnóstico del panel calculan las reglas por separado: con
+    cualquier período tienen que dar las mismas (si no, Claude comentaría recomendaciones que la persona no ve)."""
+    from meta_rendimiento import analisis
+    _sembrar_ventanas_distintas()
+    for dias in panel.PERIODOS:
+        del_panel = panel.contexto("hf", dias=dias, hoy=HOY)["recomendaciones"]
+        prep = analisis.preparar("hf", dias=dias, hoy=HOY)
+        assert del_panel and [r["id"] for r in prep["recomendaciones"]] == \
+            [r["id"] for r in del_panel][:analisis.MAX_RECOMENDACIONES], dias
+    assert [r["id"] for r in analisis.preparar("hf", dias=7, hoy=HOY)["recomendaciones"]] == \
+        [r["id"] for r in panel.contexto("hf", dias=7, hoy=HOY)["recomendaciones"]]
 
 
 def test_con_el_periodo_de_30_dias_los_anuncios_se_evaluan_una_sola_vez(base_temporal, conectado, monkeypatch):
