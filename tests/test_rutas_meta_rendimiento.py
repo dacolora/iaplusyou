@@ -1098,8 +1098,14 @@ COPIADA = {"imagen": "https://r2.example/x.jpg", "imagen_origen": "https://scont
 def test_desconectar_meta_borra_de_r2_las_miniaturas_de_sus_evaluaciones(conectado, monkeypatch):
     """Revisión de seguridad E2: lo que la evaluación copió de Meta a R2 se va con la desconexión, como sus filas."""
     from storage import r2_uploader
-    borradas = []
-    monkeypatch.setattr(r2_uploader, "delete_file", lambda clave: borradas.append(clave))
+    borradas, momentos = [], []
+
+    def borrar(claves):
+        # Las filas con los nombres y las métricas ya no están cuando se tocan las miniaturas (E2, orden de borrado).
+        momentos.append(datos.evaluaciones("acme", limite=50))
+        borradas.extend(claves)
+        return len(claves), []
+    monkeypatch.setattr(r2_uploader, "delete_files", borrar)
     lista = _evaluacion_con_miniaturas("acme", "lista", [
         {"ref": "A1", "medio": COPIADA}, {"ref": "A2", "medio": {"imagen": None}},
         {"ref": "A3", "medio": {"imagen": "https://r2.example/p.jpg", "imagen_origen": "https://r2.example/p.jpg",
@@ -1111,17 +1117,61 @@ def test_desconectar_meta_borra_de_r2_las_miniaturas_de_sus_evaluaciones(conecta
     assert sorted(borradas) == sorted([f"{base}/eval{lista}_A1.jpg", f"{base}/eval{fallida}_A1.jpg",
                                        f"{base}/eval{fallida}_A2.jpg"])
     assert datos.evaluaciones("acme") == [] and datos.evaluacion("otro", ajena) is not None
+    assert momentos == [[]]                                                # una sola llamada, con las filas ya borradas
+    assert not any("no se pudieron borrar" in m for m in _flashes(conectado["c"]))
 
 
-def test_si_r2_falla_las_evaluaciones_se_borran_igual(conectado, monkeypatch):
+def test_si_r2_falla_las_evaluaciones_ya_estaban_borradas_y_se_avisa_una_vez(conectado, monkeypatch):
+    """Un R2 caído o lento no deja nombres ni métricas guardados: las filas se borran ANTES de tocar R2."""
     from storage import r2_uploader
+    vistas = []
 
-    def _falla(clave):
-        raise RuntimeError("Faltan R2_ACCOUNT_ID")
-    monkeypatch.setattr(r2_uploader, "delete_file", _falla)
+    def _falla(claves):
+        vistas.append(datos.evaluaciones("acme", limite=50))
+        raise RuntimeError(f"Faltan R2_ACCOUNT_ID {TOKEN}")
+    monkeypatch.setattr(r2_uploader, "delete_files", _falla)
     _evaluacion_con_miniaturas("acme", "lista", [{"ref": "A1", "medio": COPIADA}])
     assert _desconectar(conectado, monkeypatch).status_code == 302
+    assert datos.evaluaciones("acme") == [] and vistas == [[]]
+    mensajes = _flashes(conectado["c"])
+    assert sum("no se pudieron borrar sus métricas copiadas (RuntimeError)" in m for m in mensajes) == 1
+    assert all(TOKEN not in m and "R2_ACCOUNT_ID" not in m for m in mensajes)        # solo el tipo, nunca el texto
+
+
+def test_si_a_r2_se_le_quedan_algunas_claves_se_avisa_con_el_tipo_y_las_filas_se_borraron(conectado, monkeypatch):
+    from storage import r2_uploader
+    monkeypatch.setattr(r2_uploader, "delete_files", lambda claves: (len(claves) - 1, ["EndpointConnectionError"]))
+    _evaluacion_con_miniaturas("acme", "lista", [{"ref": "A1", "medio": COPIADA}, {"ref": "A2", "medio": COPIADA}])
+    _desconectar(conectado, monkeypatch)
     assert datos.evaluaciones("acme") == []
+    assert sum("no se pudieron borrar sus métricas copiadas (EndpointConnectionError)" in m
+               for m in _flashes(conectado["c"])) == 1
+
+
+def test_sin_miniaturas_que_borrar_no_se_toca_r2(conectado, monkeypatch):
+    from storage import r2_uploader
+    llamadas = []
+    monkeypatch.setattr(r2_uploader, "_client", lambda: llamadas.append(1))      # armar un cliente sería un error
+    monkeypatch.delenv("R2_BUCKET_NAME", raising=False)
+    _evaluacion_con_miniaturas("acme", "lista", [{"ref": "A1", "medio": {"imagen": None}}])
+    _desconectar(conectado, monkeypatch)
+    assert datos.evaluaciones("acme") == [] and llamadas == []
+    assert not any("no se pudieron borrar" in m for m in _flashes(conectado["c"]))
+
+
+def test_si_borrar_las_filas_falla_las_miniaturas_se_borran_igual_y_se_reintenta_con_las_filas_que_queden(
+        conectado, monkeypatch):
+    from storage import r2_uploader
+    borradas = []
+    monkeypatch.setattr(r2_uploader, "delete_files", lambda claves: (borradas.extend(claves), (len(claves), []))[1])
+
+    def _falla(cliente):
+        raise ValueError("base bloqueada")
+    monkeypatch.setattr(datos, "borrar_evaluaciones", _falla)
+    eid = _evaluacion_con_miniaturas("acme", "lista", [{"ref": "A1", "medio": COPIADA}])
+    _desconectar(conectado, monkeypatch)
+    assert borradas == [f"clientes/acme/meta_rendimiento/eval{eid}_A1.jpg"] and datos.evaluacion("acme", eid)
+    assert sum("(ValueError)" in m for m in _flashes(conectado["c"])) == 1
 
 
 # ---- «Evaluación con IA» en el panel (E2, Task 6) ----------------------------------------------------------

@@ -539,38 +539,46 @@ texto_error = tw_analisis.texto_error
 _REF = re.compile(r"A\d{1,3}", re.ASCII)
 
 
-def claves_miniaturas(cliente):
-    """Las claves de R2 de las miniaturas que copiaron las evaluaciones del proyecto
-    (`clientes/<c>/meta_rendimiento/eval<id>_<ref>.jpg`), en una consulta. De una evaluación lista, solo las de los
-    anuncios cuya miniatura se copió (`medio.imagen_origen`; las de una pieza de Creatv ya vivían en R2 y no son
-    suyas); de una que no terminó, las de todos sus anuncios: la tarea pudo copiarlas antes de fallar."""
+def claves_de_evaluacion(cliente, evaluacion_id, muestra, solo_copiadas=False):
+    """Las claves de R2 (`clientes/<c>/meta_rendimiento/eval<id>_<ref>.jpg`) de las miniaturas de una muestra.
+    `solo_copiadas`: únicamente las de los anuncios cuya miniatura se copió (`medio.imagen_origen`; las de una pieza
+    de Creatv ya vivían en R2 y no son suyas). Sin eso, las de todos los anuncios: la tarea pudo copiarlas antes de
+    fallar o de que la fila desapareciera, y borrar una clave que no existe no es un error."""
     claves = []
-    for ev in datos.evaluaciones(cliente, limite=None):
-        lista = ev.get("estado") == "lista"
-        for a in ev.get("muestra") or []:
-            ref = str((a or {}).get("ref") or "")
-            medio = (a or {}).get("medio") or {}
-            copiada = bool(medio.get("imagen_origen")) and medio.get("origen") != "creatv"
-            if _REF.fullmatch(ref) and (copiada or not lista):
-                claves.append(tw_analisis.clave_miniatura(cliente, ev["id"], ref, CARPETA_R2))
+    for a in muestra or []:
+        ref = str((a or {}).get("ref") or "")
+        medio = (a or {}).get("medio") or {}
+        copiada = bool(medio.get("imagen_origen")) and medio.get("origen") != "creatv"
+        if _REF.fullmatch(ref) and (copiada or not solo_copiadas):
+            claves.append(tw_analisis.clave_miniatura(cliente, evaluacion_id, ref, CARPETA_R2))
     return claves
 
 
-def borrar_miniaturas(cliente):
-    """Borra de R2 las miniaturas copiadas por las evaluaciones del proyecto (desconectar Meta borra lo copiado de
-    Meta: E2-R2 y la revisión de seguridad de E2). Hay que llamarla ANTES de borrar las filas: las claves salen de
-    ellas. Cada borrado va aparte (uno que falla no frena los demás) y se anota solo el tipo del error. Devuelve
-    (borradas, fallidas)."""
+def claves_miniaturas(cliente):
+    """Las claves de R2 de las miniaturas que copiaron las evaluaciones del proyecto, en una consulta. De una
+    evaluación lista, solo las de los anuncios cuya miniatura se copió; de una que no terminó, las de todos sus
+    anuncios (ver `claves_de_evaluacion`). Hay que pedirlas ANTES de borrar las filas: las claves salen de ellas."""
+    claves = []
+    for ev in datos.evaluaciones(cliente, limite=None):
+        claves += claves_de_evaluacion(cliente, ev["id"], ev.get("muestra"), solo_copiadas=ev.get("estado") == "lista")
+    return claves
+
+
+def borrar_claves(claves):
+    """Borra de R2 esas claves con un solo cliente (desconectar Meta borra lo copiado de Meta: E2-R2 y la revisión de
+    seguridad de E2; también la tarea que perdió su fila a mitad). Nunca lanza: cada borrado va aparte y se anota solo
+    el tipo del error. Devuelve (borradas, fallos) con `fallos` = el tipo de cada error. Si R2 ni está configurado,
+    todas cuentan como fallidas."""
     from storage import r2_uploader  # noqa: PLC0415
-    borradas = fallidas = 0
-    for clave in claves_miniaturas(cliente):
-        try:
-            r2_uploader.delete_file(clave)
-            borradas += 1
-        except Exception as e:  # noqa: BLE001 — R2 sin configurar o caído: la desconexión sigue
-            fallidas += 1
-            log.warning("no se pudo borrar una miniatura de evaluación de %s en R2 (%s)", cliente, type(e).__name__)
-    return borradas, fallidas
+    claves = list(claves or [])
+    try:
+        borradas, fallos = r2_uploader.delete_files(claves)
+    except Exception as e:  # noqa: BLE001 — R2 sin configurar o caído: la desconexión sigue
+        borradas, fallos = 0, [type(e).__name__] * len(claves)
+    if fallos:
+        log.warning("no se pudieron borrar %s miniatura(s) de evaluación de Meta en R2 (%s)", len(fallos),
+                    ", ".join(sorted(set(fallos))))
+    return borradas, fallos
 
 
 # ------------------------------------------------------------ a Crear ---

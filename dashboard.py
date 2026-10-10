@@ -3567,11 +3567,14 @@ def _soltar_cuentas_meta(cliente):
     """Quitar la conexión de Meta de un proyecto (Desconectar, volver a modo propia, desasignar, desconectar la
     agencia) también borra las métricas copiadas de sus cuentas y las deja libres para otro proyecto: /privacidad y
     /eliminar-datos lo prometen (ruling R21, 2026-10-08). Borra además sus evaluaciones con IA, que guardan nombres
-    y métricas de anuncios de Meta (E2-R2, 2026-10-10; el gasto de esas evaluaciones queda en `gasto`), y antes las
-    miniaturas que esas evaluaciones copiaron a R2 (`clientes/<c>/meta_rendimiento/…`). Los
-    borrados son independientes: si uno falla, el otro se hace igual. Si algo falla, la desconexión ya hecha se
-    queda: se anota el tipo del error (nunca su texto) y se avisa una vez; la siguiente vez que alguien desconecte
-    se reintenta."""
+    y métricas de anuncios de Meta (E2-R2, 2026-10-10; el gasto de esas evaluaciones queda en `gasto`), y las
+    miniaturas que esas evaluaciones copiaron a R2 (`clientes/<c>/meta_rendimiento/…`).
+
+    El orden importa: primero se anotan las claves de R2 (salen de las filas), después se borran las filas (lo que
+    guarda los nombres y las métricas) y al final las miniaturas, con un solo cliente de R2: un R2 lento o caído
+    nunca deja nombres ni métricas guardados. Los borrados son independientes: si uno falla, los otros se hacen igual.
+    Si algo falla, la desconexión ya hecha se queda: se anota el tipo del error (nunca su texto) y se avisa una vez;
+    la siguiente vez que alguien desconecte se reintenta (las claves se vuelven a calcular de las filas que queden)."""
     fallo = None
     try:
         meta_rend_cuentas.elegir(cliente, [])
@@ -3579,16 +3582,24 @@ def _soltar_cuentas_meta(cliente):
         log.warning("meta rendimiento: no se pudieron borrar las métricas copiadas de %s (%s)", cliente,
                     type(e).__name__)
         fallo = type(e).__name__
+    claves = []
     try:
-        # Las miniaturas que copiaron las evaluaciones a R2 se borran ANTES que las filas (las claves salen de ellas).
-        # Un fallo aquí no frena el borrado de las filas, que guardan los nombres y las métricas.
-        meta_rend_analisis.borrar_miniaturas(cliente)
-    except Exception as e:  # noqa: BLE001 — la desconexión no se deshace por esto
-        log.warning("meta rendimiento: no se pudieron borrar las miniaturas de %s (%s)", cliente, type(e).__name__)
+        claves = meta_rend_analisis.claves_miniaturas(cliente)
+    except Exception as e:  # noqa: BLE001 — sin las claves no se borran las miniaturas, pero las filas sí
+        log.warning("meta rendimiento: no se pudieron leer las miniaturas de %s (%s)", cliente, type(e).__name__)
+        fallo = fallo or type(e).__name__
     try:
         meta_rend_datos.borrar_evaluaciones(cliente)
     except Exception as e:  # noqa: BLE001 — ídem; el borrado de arriba no depende de este ni este de aquel
         log.warning("meta rendimiento: no se pudieron borrar las evaluaciones de %s (%s)", cliente, type(e).__name__)
+        fallo = fallo or type(e).__name__
+    try:
+        # Después de las filas y fuera de su camino: lo lento de R2 no retrasa el borrado de lo que guarda los nombres.
+        _, fallos_r2 = meta_rend_analisis.borrar_claves(claves)
+        if fallos_r2:
+            fallo = fallo or fallos_r2[0]
+    except Exception as e:  # noqa: BLE001 — `borrar_claves` no lanza; por si acaso, la desconexión sigue
+        log.warning("meta rendimiento: no se pudieron borrar las miniaturas de %s (%s)", cliente, type(e).__name__)
         fallo = fallo or type(e).__name__
     if fallo:
         flash(gettext("Meta se desconectó en %(proyecto)s, pero no se pudieron borrar sus métricas copiadas (%(tipo)s). "

@@ -123,3 +123,25 @@ def delete_file(key):
     if not bucket:
         raise RuntimeError("Falta R2_BUCKET_NAME en tu .env. Ver SETUP.md.")
     _client().delete_object(Bucket=bucket, Key=key)
+
+
+def delete_files(keys):
+    """Borra varias claves con UN solo cliente (`delete_file` arma uno por llamada: con decenas de miniaturas, decenas
+    de sesiones de boto3). Cada clave va aparte: una que falla no frena las demás. Devuelve (borradas, fallos) con
+    `fallos` = el tipo de error de cada clave que no se pudo borrar (nunca su texto). Sin claves no abre cliente; si
+    R2 no está configurado lanza como `delete_file`."""
+    keys = list(keys or [])
+    if not keys:
+        return 0, []
+    bucket = os.environ.get("R2_BUCKET_NAME")
+    if not bucket:
+        raise RuntimeError("Falta R2_BUCKET_NAME en tu .env. Ver SETUP.md.")
+    cliente = _client()
+    borradas, fallos = 0, []
+    for key in keys:
+        try:
+            cliente.delete_object(Bucket=bucket, Key=key)
+            borradas += 1
+        except Exception as e:  # noqa: BLE001 — R2 caído o una clave que no se deja: las demás se intentan igual
+            fallos.append(type(e).__name__)
+    return borradas, fallos

@@ -479,3 +479,57 @@ def test_los_datos_llevan_la_meta_de_roas_las_ventanas_de_las_reglas_y_la_parte_
     prep = analisis.preparar("hf", 30, None, hoy=HOY)
     texto, _ = analisis.armar("hf", _fila(prep), {}, {})
     assert prep["extra"]["meta_roas_proyecto"] is False and "El proyecto no tiene meta de ROAS" in texto
+
+
+# ------------------------------------------- las miniaturas en R2 y su borrado (revisión final de E2, tarea 7c) ---
+
+COPIADA = {"imagen": "https://r2.example/x.jpg", "imagen_origen": "https://scontent.xx.fbcdn.net/x.jpg"}
+BASE_R2 = "clientes/hf/meta_rendimiento"
+
+
+def test_las_claves_de_una_muestra_son_las_copiadas_o_todas_y_nunca_una_ref_rara():
+    muestra = [{"ref": "A1", "medio": COPIADA}, {"ref": "A2", "medio": {"imagen": None}},
+               {"ref": "A3", "medio": dict(COPIADA, origen="creatv")},          # la pieza de Creatv no es de Meta
+               {"ref": "../x", "medio": COPIADA}, {"ref": "A٣", "medio": COPIADA}, {"ref": "A4"}, None]
+    assert analisis.claves_de_evaluacion("hf", 7, muestra, solo_copiadas=True) == [f"{BASE_R2}/eval7_A1.jpg"]
+    todas = analisis.claves_de_evaluacion("hf", 7, muestra)
+    assert todas == [f"{BASE_R2}/eval7_{r}.jpg" for r in ("A1", "A2", "A3", "A4")]
+    assert analisis.claves_de_evaluacion("hf", 7, None) == []
+
+
+def test_borrar_claves_no_lanza_y_cuenta_las_borradas_y_los_tipos_de_error(monkeypatch):
+    from storage import r2_uploader
+    monkeypatch.setattr(r2_uploader, "delete_files", lambda claves: (len(claves) - 1, ["ClientError"]))
+    assert analisis.borrar_claves(["a", "b", "c"]) == (2, ["ClientError"])
+
+    def falla(claves):
+        raise RuntimeError("Faltan R2_ACCOUNT_ID")
+    monkeypatch.setattr(r2_uploader, "delete_files", falla)
+    assert analisis.borrar_claves(["a", "b"]) == (0, ["RuntimeError", "RuntimeError"])      # sin R2: todas fallidas
+    assert analisis.borrar_claves([]) == (0, [])
+
+
+def test_delete_files_usa_un_solo_cliente_sigue_tras_un_fallo_y_no_cuenta_el_texto(monkeypatch):
+    from storage import r2_uploader
+
+    class Cliente:
+        def __init__(self):
+            self.borradas = []
+
+        def delete_object(self, Bucket, Key):          # noqa: N803 — la firma de boto3
+            if Key.endswith("malo.jpg"):
+                raise ConnectionError("tok-llave-de-prueba")          # llave-de-prueba
+            self.borradas.append((Bucket, Key))
+    armados = []
+
+    def armar():
+        armados.append(Cliente())
+        return armados[-1]
+    monkeypatch.setattr(r2_uploader, "_client", armar)
+    monkeypatch.setenv("R2_BUCKET_NAME", "bucket")
+    assert r2_uploader.delete_files([]) == (0, []) and armados == []                       # sin claves, sin cliente
+    assert r2_uploader.delete_files(["a.jpg", "malo.jpg", "c.jpg"]) == (2, ["ConnectionError"])
+    assert len(armados) == 1 and armados[0].borradas == [("bucket", "a.jpg"), ("bucket", "c.jpg")]
+    monkeypatch.delenv("R2_BUCKET_NAME")
+    with pytest.raises(RuntimeError):
+        r2_uploader.delete_files(["a.jpg"])
