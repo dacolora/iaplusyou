@@ -179,7 +179,7 @@ def test_aprendizaje_dice_cuantos_conjuntos_caben_y_lista_las_3_campanas_con_mas
     assert r["enlace"] == administrador.enlace(ACT, "campana", ["801", "802", "803"])
     # 260 compras por semana / 50 = 5 conjuntos.
     assert "260" in r["que_hacer"] and "~5 " in r["que_hacer"]
-    assert "Prospecting (4)" in r["que_hacer"] and "Broad (2)" in r["que_hacer"] and "DPA" not in r["que_hacer"]
+    assert "«Prospecting» (4)" in r["que_hacer"] and "«Broad» (2)" in r["que_hacer"] and "DPA" not in r["que_hacer"]
     assert "10" in r["titulo"] and "11" in r["titulo"]     # 10 de 11 conjuntos activos
 
 

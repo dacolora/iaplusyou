@@ -279,7 +279,7 @@ def _aprendizaje_limitado(cx):
         "para ~%(cabe)s conjuntos que salgan del aprendizaje (Meta pide unas %(meta)s por conjunto).",
         cabe, compras=_num(cx.compras_7), cabe=_num(cabe), meta=_num(COMPRAS_SEMANA_POR_CONJUNTO))
     if top:
-        lista = ", ".join(f"{nombre(cid)} ({_num(n)})" for cid, n in top)
+        lista = ", ".join(f"«{nombre(cid)}» ({_num(n)})" for cid, n in top)
         que_hacer += " " + gettext("Empieza por las campañas con más conjuntos limitados: %(campanas)s.",
                                    campanas=lista)
     por_que = gettext(
@@ -392,8 +392,8 @@ def _fatiga(cx):
     por_que = ngettext(
         "Su ROAS o su CTR cayó frente a la semana anterior y su campaña ya muestra cada anuncio %(frecuencia)s veces "
         "por persona en 7 días (desde %(minimo)s se nota el cansancio).",
-        "Su ROAS o su CTR cayó frente a la semana anterior y sus campañas ya muestran cada anuncio hasta "
-        "%(frecuencia)s veces por persona en 7 días (desde %(minimo)s se nota el cansancio).",
+        "A cada uno le cayó el ROAS o el CTR frente a la semana anterior y sus campañas ya muestran cada anuncio "
+        "hasta %(frecuencia)s veces por persona en 7 días (desde %(minimo)s se nota el cansancio).",
         n, frecuencia=_num(frecuencia, 1), minimo=_num(FATIGA_FRECUENCIA_MIN))
     objetos = [_objeto("anuncio", a["ad_id"], a.get("nombre")) for a in cansados]
     return [cx.rec("fatiga", "media", titulo, que_hacer, por_que, objetos)]

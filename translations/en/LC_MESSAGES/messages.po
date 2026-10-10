@@ -169,6 +169,10 @@ msgid "%(color)s: sin fotos en la tienda; revisa el catálogo."
 msgstr "%(color)s: no photos in the store; check the catalog."
 
 #, python-format
+msgid "%(compras)s compras en los últimos 7 días con ROAS %(roas)s×, %(veces)s veces el de la cuenta (%(roas_cuenta)s×), y fuera del aprendizaje limitado."
+msgstr "%(compras)s purchases in the last 7 days with a ROAS of %(roas)s×, %(veces)s times the account’s (%(roas_cuenta)s×), and out of learning limited."
+
+#, python-format
 msgid "%(correo)s: abre el enlace que te mandamos o pide uno nuevo en Configuración › Cuenta. Sin correo confirmado no puedes conectar Meta ni una tienda."
 msgstr "%(correo)s: open the link we sent you or ask for a new one in Settings › Account. Without a confirmed email you can't connect Meta or a store."
 
@@ -429,6 +433,10 @@ msgid "%(monto)s pauta"
 msgstr "%(monto)s ad spend"
 
 #, python-format
+msgid "%(monto)s por día en juego"
+msgstr "%(monto)s per day at stake"
+
+#, python-format
 msgid "%(monto)s/día"
 msgstr "%(monto)s/day"
 
@@ -453,6 +461,30 @@ msgstr "%(n)s action(s) with error"
 #, python-format
 msgid "%(n)s actualizado(s)"
 msgstr "%(n)s updated"
+
+#, python-format
+msgid "%(n)s anuncio con problemas en Meta"
+msgid_plural "%(n)s anuncios con problemas en Meta"
+msgstr[0] "%(n)s ad with issues in Meta"
+msgstr[1] "%(n)s ads with issues in Meta"
+
+#, python-format
+msgid "%(n)s anuncio con problemas o rechazado gastó %(gasto)s en los últimos 30 días."
+msgid_plural "%(n)s anuncios con problemas o rechazados gastaron %(gasto)s en los últimos 30 días."
+msgstr[0] "%(n)s ad with issues or rejected spent %(gasto)s in the last 30 days."
+msgstr[1] "%(n)s ads with issues or rejected spent %(gasto)s in the last 30 days."
+
+#, python-format
+msgid "%(n)s anuncio perdedor sigue gastando"
+msgid_plural "%(n)s anuncios perdedores siguen gastando"
+msgstr[0] "%(n)s losing ad is still spending"
+msgstr[1] "%(n)s losing ads are still spending"
+
+#, python-format
+msgid "%(n)s anuncio que funciona se está cansando"
+msgid_plural "%(n)s anuncios que funcionan se están cansando"
+msgstr[0] "%(n)s working ad is wearing out"
+msgstr[1] "%(n)s working ads are wearing out"
 
 #, python-format
 msgid "%(n)s anuncio(s)"
@@ -527,6 +559,12 @@ msgid "%(n)s con activo en el catálogo"
 msgstr "%(n)s with an asset in the catalog"
 
 #, python-format
+msgid "%(n)s conjunto depende de un solo anuncio"
+msgid_plural "%(n)s conjuntos dependen de un solo anuncio"
+msgstr[0] "%(n)s ad set depends on a single ad"
+msgstr[1] "%(n)s ad sets depend on a single ad"
+
+#, python-format
 msgid "%(n)s consultas"
 msgstr "%(n)s queries"
 
@@ -541,6 +579,16 @@ msgstr "%(n)s of %(m)s"
 #, python-format
 msgid "%(n)s de %(t)s avatar(es) completados."
 msgstr "%(n)s of %(t)s avatar(s) completed."
+
+#, python-format
+msgid "%(n)s de %(total)s conjunto activo en aprendizaje limitado"
+msgid_plural "%(n)s de %(total)s conjuntos activos en aprendizaje limitado"
+msgstr[0] "%(n)s of %(total)s active ad set in learning limited"
+msgstr[1] "%(n)s of %(total)s active ad sets in learning limited"
+
+#, python-format
+msgid "%(n)s de %(total)s conjuntos activos (%(pct_conjuntos)s %%) están en aprendizaje limitado y se llevaron %(gasto)s de los %(gasto_cuenta)s de los últimos 7 días (%(pct_gasto)s %%): sin salir del aprendizaje, Meta no estabiliza su entrega."
+msgstr "%(n)s of %(total)s active ad sets (%(pct_conjuntos)s %%) are in learning limited and took %(gasto)s of the %(gasto_cuenta)s of the last 7 days (%(pct_gasto)s %%): until they exit learning, Meta can’t stabilize their delivery."
 
 #, python-format
 msgid "%(n)s del nicho"
@@ -573,6 +621,12 @@ msgstr "%(n)s in the last hour"
 #, python-format
 msgid "%(n)s errores viejos borrados."
 msgstr "%(n)s old errors deleted."
+
+#, python-format
+msgid "%(n)s está rechazado y gastó %(gasto)s en los últimos 7 días."
+msgid_plural "%(n)s están rechazados y gastaron %(gasto)s en los últimos 7 días."
+msgstr[0] "%(n)s is rejected and spent %(gasto)s in the last 7 days."
+msgstr[1] "%(n)s are rejected and spent %(gasto)s in the last 7 days."
 
 #, python-format
 msgid "%(n)s excluidos"
@@ -4034,6 +4088,9 @@ msgstr "Compare"
 msgid "Comparte tu cuenta publicitaria y tu Página con Creatv desde tu Business Suite, como con cualquier agencia. Creatv solo ve lo que compartas y lo puedes revocar cuando quieras."
 msgstr "Share your ad account and your Page with Creatv from your Business Suite, just like with any agency. Creatv only sees what you share and you can revoke it whenever you want."
 
+msgid "Completa lo que Meta pida en la cuenta y espera su revisión."
+msgstr "Complete whatever Meta asks for in the account and wait for its review."
+
 msgid "Completa los datos y pulsa «Ver precio» para calcular el costo antes de traer."
 msgstr "Fill in the details and press “See price” to work out the cost before bringing anything in."
 
@@ -4377,6 +4434,12 @@ msgstr "Invalid awareness: %(consciencia)s"
 
 msgid "Consistencia visual"
 msgstr "Visual consistency"
+
+#, python-format
+msgid "Consolida conjuntos parecidos dentro de la misma campaña: con %(compras)s compras por semana, esta cuenta da para ~%(cabe)s conjunto que salga del aprendizaje (Meta pide unas %(meta)s por conjunto)."
+msgid_plural "Consolida conjuntos parecidos dentro de la misma campaña: con %(compras)s compras por semana, esta cuenta da para ~%(cabe)s conjuntos que salgan del aprendizaje (Meta pide unas %(meta)s por conjunto)."
+msgstr[0] "Consolidate similar ad sets within the same campaign: with %(compras)s purchases a week, this account has room for ~%(cabe)s ad set to exit learning (Meta asks for about %(meta)s per ad set)."
+msgstr[1] "Consolidate similar ad sets within the same campaign: with %(compras)s purchases a week, this account has room for ~%(cabe)s ad sets to exit learning (Meta asks for about %(meta)s per ad set)."
 
 msgid "Consulta"
 msgstr "Query"
@@ -4958,6 +5021,10 @@ msgstr "From the catalog"
 msgid "Del catálogo (opcional, %(n)s) →"
 msgstr "From the catalog (optional, %(n)s) →"
 
+#, python-format
+msgid "Del gasto de los últimos 7 días de su conjunto: %(ejemplos)s. Cada conjunto pesa %(minimo)s %% o más del gasto de la cuenta."
+msgstr "Of their ad set’s spend in the last 7 days: %(ejemplos)s. Each ad set weighs %(minimo)s %% or more of the account’s spend."
+
 msgid "Del guion"
 msgstr "From the script"
 
@@ -4973,6 +5040,12 @@ msgstr "Too many sign-ups in a row from this connection. Wait a while and try ag
 
 msgid "Demographics (ASL)"
 msgstr "Demographics (ASL)"
+
+#, python-format
+msgid "Depende de un solo creativo: prepara variantes de este anuncio antes de que se canse."
+msgid_plural "Dependen de un solo creativo: prepara variantes de estos %(n)s anuncios antes de que se cansen."
+msgstr[0] "It depends on a single creative: prepare variants of this ad before it wears out."
+msgstr[1] "They depend on a single creative: prepare variants of these %(n)s ads before they wear out."
 
 msgid "Depende del proveedor de correo; con una cuenta normal no cuesta."
 msgstr "Depends on the email provider; with a normal account it costs nothing."
@@ -5297,6 +5370,9 @@ msgstr "Available as soon as Creatv finishes activating it."
 msgid "Disposición inicial (opcional)"
 msgstr "Initial layout (optional)"
 
+msgid "Dispositivo"
+msgstr "Device"
+
 msgid "Diálogo a cámara"
 msgstr "On-camera dialogue"
 
@@ -5434,6 +5510,9 @@ msgstr "Ecuador"
 
 msgid "Edad"
 msgstr "Age"
+
+msgid "Edad y género"
+msgstr "Age and gender"
 
 #, python-format
 msgid "Edición %(id)s lista para editar."
@@ -6503,6 +6582,10 @@ msgstr "Starts at second"
 
 msgid "Empieza hoy"
 msgstr "Get started today"
+
+#, python-format
+msgid "Empieza por las campañas con más conjuntos limitados: %(campanas)s."
+msgstr "Start with the campaigns with the most limited ad sets: %(campanas)s."
 
 #, python-format
 msgid "En %(moneda)s, la moneda de la cuenta de Meta"
@@ -7929,6 +8012,10 @@ msgstr "Exclamation"
 msgid "Excluir"
 msgstr "Exclude"
 
+#, python-format
+msgid "Excluye o baja el peso de %(segmento)s (%(dimension)s) en los conjuntos de esta cuenta."
+msgstr "Exclude or reduce the weight of %(segmento)s (%(dimension)s) in this account’s ad sets."
+
 msgid "Experimento cerrado"
 msgstr "Experiment closed"
 
@@ -8571,6 +8658,16 @@ msgstr "Total spend: %(gasto)s"
 #, python-format
 msgid "Gastó %(g)s sin ventas"
 msgstr "Spent %(g)s with no sales"
+
+#, python-format
+msgid "Gastó %(gastado)s de su tope de %(tope)s (%(pct)s %%): al llegar al tope, Meta deja de entregar sus anuncios."
+msgstr "It spent %(gastado)s of its %(tope)s spending limit (%(pct)s %%): when it reaches the limit, Meta stops delivering its ads."
+
+#, python-format
+msgid "Gastó %(gasto)s en los últimos 7 días (%(pct)s %% del gasto de la cuenta) y es perdedor: gastó lo de dos ventas o más con un ROAS de menos de la mitad de la meta."
+msgid_plural "Gastaron %(gasto)s en los últimos 7 días (%(pct)s %% del gasto de la cuenta) y son perdedores: cada uno gastó lo de dos ventas o más con un ROAS de menos de la mitad de la meta."
+msgstr[0] "It spent %(gasto)s in the last 7 days (%(pct)s %% of the account’s spend) and it’s a loser: it spent the cost of two sales or more with a ROAS below half the target."
+msgstr[1] "They spent %(gasto)s in the last 7 days (%(pct)s %% of the account’s spend) and they’re losers: each spent the cost of two sales or more with a ROAS below half the target."
 
 #, python-format
 msgid "Gastó lo de %(n)s ventas al costo por venta de la cuenta y su ROAS es %(roas)s× (meta %(meta)s×)."
@@ -9759,6 +9856,18 @@ msgstr "The account %(usuario)s has no email"
 msgid "La cuenta de Instagram no está vinculada a la Página"
 msgstr "The Instagram account isn't linked to the Page"
 
+msgid "La cuenta está cerrada."
+msgstr "The account is closed."
+
+msgid "La cuenta está en período de gracia por un pago: si no se paga, Meta la desactiva."
+msgstr "The account is in a grace period for a payment: if it isn’t paid, Meta disables it."
+
+msgid "La cuenta está por llegar a su tope de gasto"
+msgstr "The account is about to reach its spending limit"
+
+msgid "La cuenta no está activa en Meta"
+msgstr "The account isn’t active in Meta"
+
 #, python-format
 msgid "La cuenta publicitaria %(cuenta)s no está entre las que ve el Business de la agencia."
 msgstr "The ad account %(cuenta)s isn't among the ones the agency's Business can see."
@@ -9774,6 +9883,19 @@ msgstr "The ad account needs a payment method at business.facebook.com › Billi
 
 msgid "La cuenta publicitaria no tiene ningún Pixel."
 msgstr "The ad account has no Pixel."
+
+msgid "La cuenta se está cerrando."
+msgstr "The account is being closed."
+
+msgid "La cuenta tiene un pago pendiente de liquidar."
+msgstr "The account has a payment pending settlement."
+
+msgid "La cuenta tiene un saldo sin pagar: Meta no entrega anuncios hasta que se pague."
+msgstr "The account has an unpaid balance: Meta delivers no ads until it is paid."
+
+#, python-format
+msgid "La cuenta vende menos de lo que gasta: ROAS %(roas)s× en 30 días"
+msgstr "The account sells less than it spends: ROAS %(roas)s× in 30 days"
 
 msgid "La descarga terminó vacía."
 msgstr "The download came back empty."
@@ -10922,6 +11044,9 @@ msgstr "Meta connected: %(cuenta)s · %(pagina)s.%(aviso)s"
 msgid "Meta conectado: %(cuenta)s. %(aviso)s"
 msgstr "Meta connected: %(cuenta)s. %(aviso)s"
 
+msgid "Meta desactivó la cuenta: no entrega anuncios."
+msgstr "Meta disabled the account: it delivers no ads."
+
 msgid "Meta desconectado de este proyecto y acceso revocado en Meta."
 msgstr "Meta disconnected from this project and access revoked on Meta."
 
@@ -10939,6 +11064,17 @@ msgstr "Meta is close to its usage limit; the copy continues later."
 
 msgid "Meta está frenando las llamadas por un rato (límite de uso): reintenta en unos minutos."
 msgstr "Meta is throttling calls for a while (usage limit): try again in a few minutes."
+
+msgid "Meta está revisando la cuenta por riesgo y puede frenar la entrega."
+msgstr "Meta is reviewing the account for risk and may slow delivery."
+
+#, python-format
+msgid "Meta le atribuye %(valor)s en ventas por %(gasto)s de gasto: por debajo de %(minimo)s× se pierde dinero casi seguro."
+msgstr "Meta attributes %(valor)s in sales to it for %(gasto)s of spend: below %(minimo)s× you are almost surely losing money."
+
+#, python-format
+msgid "Meta marca la cuenta con el estado %(codigo)s: no está activa."
+msgstr "Meta marks the account with status %(codigo)s: it isn’t active."
 
 #, python-format
 msgid "Meta no aceptó el cambio: %(error)s"
@@ -12736,6 +12872,12 @@ msgstr "Other text"
 msgid "Otros"
 msgstr "Other"
 
+msgid "Paga el saldo pendiente antes de que termine el período de gracia."
+msgstr "Pay the outstanding balance before the grace period ends."
+
+msgid "Paga el saldo pendiente en la facturación de la cuenta."
+msgstr "Pay the outstanding balance in the account’s billing."
+
 msgid "Pagar con Bold"
 msgstr "Pay with Bold"
 
@@ -12870,6 +13012,16 @@ msgstr "Passed traffic but not sales: ROAS %(roas)s (minimum %(roas_min)s), CPA 
 #, python-format
 msgid "Pasó tráfico; esperando %(ventana)s h para medir ventas (%(horas)s h)."
 msgstr "Passed traffic; waiting %(ventana)s h to measure sales (%(horas)s h)."
+
+#, python-format
+msgid "Pausa este anuncio: libera su presupuesto para los que venden."
+msgid_plural "Pausa estos %(n)s anuncios: libera su presupuesto para los que venden."
+msgstr[0] "Pause this ad: free its budget for the ones that sell."
+msgstr[1] "Pause these %(n)s ads: free their budget for the ones that sell."
+
+#, python-format
+msgid "Pausa o rehace esta cuenta: gastó %(gasto)s con ROAS %(roas)s× en los últimos 30 días."
+msgstr "Pause or rebuild this account: it spent %(gasto)s with a ROAS of %(roas)s× in the last 30 days."
 
 #, python-format
 msgid "Pausada %(nombre)s (%(pais)s)."
@@ -13337,6 +13489,11 @@ msgstr "Clothing (sweater, t-shirt, jacket)"
 
 msgid "Prender"
 msgstr "Turn on"
+
+msgid "Prepara variantes antes de que se apague: «Evaluar con IA» propone ideas a partir de lo que ya funciona."
+msgid_plural "Prepara variantes antes de que se apaguen: «Evaluar con IA» propone ideas a partir de lo que ya funciona."
+msgstr[0] "Prepare variants before it fades: “Evaluate with AI” suggests ideas based on what already works."
+msgstr[1] "Prepare variants before they fade: “Evaluate with AI” suggests ideas based on what already works."
 
 msgid "Preparando el audio"
 msgstr "Preparing the audio"
@@ -14045,6 +14202,9 @@ msgstr "What to fetch"
 msgid "Qué vendemos"
 msgstr "What we sell"
 
+msgid "Quítala de las cuentas del proyecto o usa otra."
+msgstr "Remove it from the project’s accounts or use another one."
+
 msgid "Qwen Image Edit Plus"
 msgstr "Qwen Image Edit Plus"
 
@@ -14662,15 +14822,24 @@ msgstr "Reuse from another campaign"
 msgid "Revisa %(campo)s: ese valor no es válido."
 msgstr "Check %(campo)s: that value isn't valid."
 
+msgid "Revisa el estado de la cuenta en Meta."
+msgstr "Check the account’s status in Meta."
+
 msgid "Revisa el método de pago de tu cuenta publicitaria de Meta"
 msgstr "Check the payment method of your Meta ad account"
 
 msgid "Revisa el worker o refresca el experimento."
 msgstr "Check the worker or refresh the experiment."
 
+msgid "Revisa en Meta por qué la desactivó y pide una revisión si no corresponde."
+msgstr "Check in Meta why it was disabled and request a review if it shouldn’t be."
+
 #, python-format
 msgid "Revisa estos valores, deben ser números: %(nombres)s. No se guardó nada."
 msgstr "Check these values, they must be numbers: %(nombres)s. Nothing was saved."
+
+msgid "Revisa la facturación de la cuenta y salda el pago pendiente."
+msgstr "Check the account’s billing and settle the pending payment."
 
 msgid "Revisa la facturación del proyecto de Google asociado a la llave."
 msgstr "Check billing for the Google project associated with the key."
@@ -14761,6 +14930,11 @@ msgstr "Review ready: the piece passes everything."
 
 msgid "Revisión rápida (gratis)"
 msgstr "Quick review (free)"
+
+msgid "Revísalo en el Administrador de anuncios: Meta le marca un problema que frena o detiene su entrega."
+msgid_plural "Revísalos en el Administrador de anuncios: Meta les marca un problema que frena o detiene su entrega."
+msgstr[0] "Check it in Ads Manager: Meta flags an issue that slows or stops its delivery."
+msgstr[1] "Check them in Ads Manager: Meta flags an issue that slows or stops their delivery."
 
 msgid "Ritmo de lectura (palabras por segundo; 2,4 es natural)"
 msgstr "Reading pace (words per second; 2.4 is natural)"
@@ -14989,6 +15163,10 @@ msgid "Se interrumpió; vuelve a intentarlo."
 msgstr "It was interrupted; try again."
 
 #, python-format
+msgid "Se llevó el %(pct)s %% del gasto de los últimos 30 días (%(gasto)s) con ROAS %(roas)s×, menos de la mitad del de la cuenta (%(roas_cuenta)s×)."
+msgstr "It took %(pct)s %% of the spend of the last 30 days (%(gasto)s) with a ROAS of %(roas)s×, less than half the account’s (%(roas_cuenta)s×)."
+
+#, python-format
 msgid "Se muestran los últimos %(n)s cobros"
 msgstr "Showing the last %(n)s charges"
 
@@ -15087,6 +15265,10 @@ msgstr "Seedream V5.0 Pro Edit (2k)"
 msgid "Segmento"
 msgstr "Segment"
 
+#, python-format
+msgid "Segmento caro: %(segmento)s (%(dimension)s)"
+msgstr "Expensive segment: %(segmento)s (%(dimension)s)"
+
 msgid "Segunda opción"
 msgstr "Second option"
 
@@ -15149,6 +15331,9 @@ msgstr "If that email is registered, a link to reset the password will arrive (e
 
 msgid "Si lo eliges, Claude escribe con ese nivel en ideas, guiones y adaptaciones de este producto."
 msgstr "If you choose it, Claude writes at that level in this product's ideas, scripts and adaptations."
+
+msgid "Si no quieres cerrarla, revísala en Meta; si sí, quítala de las cuentas del proyecto."
+msgstr "If you don’t want to close it, check it in Meta; if you do, remove it from the project’s accounts."
 
 msgid "Si tu cliente ya vio tres o más promesas parecidas, hace falta el mecanismo: cómo logra el producto lo que promete."
 msgstr "If your customer has already seen three or more similar promises, you need the mechanism: how the product delivers what it promises."
@@ -15680,6 +15865,12 @@ msgstr "Stickers"
 msgid "Storytelling"
 msgstr "Storytelling"
 
+#, python-format
+msgid "Su ROAS o su CTR cayó frente a la semana anterior y su campaña ya muestra cada anuncio %(frecuencia)s veces por persona en 7 días (desde %(minimo)s se nota el cansancio)."
+msgid_plural "A cada uno le cayó el ROAS o el CTR frente a la semana anterior y sus campañas ya muestran cada anuncio hasta %(frecuencia)s veces por persona en 7 días (desde %(minimo)s se nota el cansancio)."
+msgstr[0] "Its ROAS or CTR dropped against the previous week and its campaign already shows each ad %(frecuencia)s times per person in 7 days (fatigue shows from %(minimo)s)."
+msgstr[1] "Each one’s ROAS or CTR dropped against the previous week and their campaigns already show each ad up to %(frecuencia)s times per person in 7 days (fatigue shows from %(minimo)s)."
+
 msgid "Su día a día (situaciones)"
 msgstr "Their day to day (situations)"
 
@@ -15701,6 +15892,14 @@ msgstr "Its video was already launched: look for it as “%(titulo)s”."
 msgid "Sub-avatar %(n)s: %(nombre)s (%(base)s · %(estado)s)"
 msgstr "Sub-avatar %(n)s: %(nombre)s (%(base)s · %(estado)s)"
 
+#, python-format
+msgid "Sube %(pct)s %% el presupuesto de la campaña (de %(antes)s a %(despues)s por día); más de %(pct)s %% reinicia el aprendizaje."
+msgstr "Raise the campaign budget by %(pct)s %% (from %(antes)s to %(despues)s per day); more than %(pct)s %% restarts learning."
+
+#, python-format
+msgid "Sube %(pct)s %% el presupuesto del conjunto (de %(antes)s a %(despues)s por día); más de %(pct)s %% reinicia el aprendizaje."
+msgstr "Raise the ad set budget by %(pct)s %% (from %(antes)s to %(despues)s per day); more than %(pct)s %% restarts learning."
+
 msgid "Sube al menos una foto o video primero."
 msgstr "Upload at least one photo or video first."
 
@@ -15711,8 +15910,15 @@ msgid "Sube al menos una referencia de marca (imagen o video) primero."
 msgstr "Upload at least one brand reference (image or video) first."
 
 #, python-format
+msgid "Sube el presupuesto de «%(nombre)s»"
+msgstr "Raise the budget of “%(nombre)s”"
+
+#, python-format
 msgid "Sube máximo %(n)s archivos a la vez."
 msgstr "Upload at most %(n)s files at a time."
+
+msgid "Sube o quita el tope de gasto en la configuración de pagos de la cuenta."
+msgstr "Raise or remove the spending limit in the account’s payment settings."
 
 msgid "Sube solo música tuya o con licencia."
 msgstr "Upload only music you own or have licensed."
@@ -17036,6 +17242,9 @@ msgstr "USD not available"
 
 msgid "USD no disponible para algunos días: los totales en USD pueden estar incompletos."
 msgstr "USD not available for some days: the USD totals may be incomplete."
+
+msgid "Ubicación"
+msgstr "Placement"
 
 msgid "Ubicación (gasto)"
 msgstr "Placement (spend)"
@@ -19415,6 +19624,9 @@ msgstr "gunicorn threads busy at the peak"
 msgid "historia"
 msgstr "story"
 
+msgid "hombres"
+msgstr "men"
+
 msgid "hook"
 msgstr "hook"
 
@@ -19767,6 +19979,9 @@ msgstr "voice sample · %(voz)s · %(idioma)s"
 #, python-format
 msgid "mueve: %(anillo)s"
 msgstr "moves: %(anillo)s"
+
+msgid "mujeres"
+msgstr "women"
 
 msgid "musica"
 msgstr "music"
@@ -20501,6 +20716,9 @@ msgstr "no email"
 msgid "sin dataset"
 msgstr "no dataset"
 
+msgid "sin dato"
+msgstr "no data"
+
 msgid "sin datos"
 msgstr "no data"
 
@@ -20964,6 +21182,10 @@ msgstr "ONLY A FEW LEFT!"
 #, python-format
 msgid "«%(accion)s» gasta en Meta o en generación. ¿Aprobar?"
 msgstr "“%(accion)s” spends on Meta or on generation. Approve?"
+
+#, python-format
+msgid "«%(anuncio)s» lleva el %(pct)s %% de «%(conjunto)s»"
+msgstr "“%(anuncio)s” takes %(pct)s %% of “%(conjunto)s”"
 
 #, python-format
 msgid "«%(campo)s» debe ser un número entero."
