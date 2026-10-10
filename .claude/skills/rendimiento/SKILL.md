@@ -23,6 +23,15 @@ los clientes». Las dos pestañas daban números distintos para el mismo anuncio
 - `pestana_rendimiento/panel.py`: `contexto(cliente, dias, entrada, canal, tienda=, cuenta=)` junta todo con UNA
   resolución del alcance (`_resolver`), la misma que usan los «Ver más» (`conjuntos_pagina`, `anuncios_meta_pagina`) y
   «Actualizar ahora» (`alcance_para_copias`): un «Ver más» nunca lee otras cuentas que las del panel.
+- `pestana_rendimiento/alcance_meta.py` (E2 tarea 3, 2026-10-10): `alcance(cliente, ids, dias, hoy, params)` arma para
+  esas cuentas de Meta el MISMO dict que `triple_whale.panel.alcance` (más `fuente = "meta"`), para que el flujo pagado
+  (`triple_whale/pedidos.py`) y la galería lo lean sin saber de qué fuente son los números. Cada anuncio lleva
+  `canal = "facebook-ads"` (la copia de Meta dice `meta`; las llaves `(canal, ad_id)` de `tw_analisis` son las de
+  Triple Whale), su `ad_account_id` y su `moneda`. Veredicto y anillos son contra SU cuenta; las medianas, el costo por
+  venta y la meta de ROAS que lee el prompt pagado son las de todo el alcance (con una cuenta, las de esa cuenta; para
+  el contexto exacto de la cuenta de un anuncio, el alcance de esa cuenta sola). Con monedas distintas (o una cuenta
+  sin moneda) `config["moneda"]` es None, el CPM mediano queda None y `ev["cuenta"]["canales"]` vacío: ni una moneda ni
+  un costo inventados (R6). Solo lee la copia: no cobra ni llama a Meta. Pruebas: `tests/test_rendimiento_e2_alcance_meta.py`.
 - `pestana_rendimiento/rutas.py`: blueprint `rendimiento` bajo `/cliente/<c>/rendimiento`: `ver_panel` (GET `/panel`),
   `ver_conjuntos` (GET `/conjuntos`, solo `<tr>`), `ver_anuncios_meta` (GET `/anuncios-meta`, solo tarjetas) y
   `actualizar` (POST). El nombre `rendimiento/` ya era de las pruebas de carga (skill `escala-y-salud`).
