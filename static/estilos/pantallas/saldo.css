@@ -64,3 +64,10 @@
 .cobros-admin-recarga .agencia-form p { margin: 0; }
 .cobros-admin-pendiente { border-left: 3px solid var(--error); padding-left: var(--esp-2); }
 .cobros-admin-nuevo { margin-top: var(--esp-3); }
+.cobros-admin-junto { white-space: nowrap; }
+/* La tabla de planes por proyecto envuelve el texto (ocho columnas con fechas largas): sin esto la columna de
+   acciones quedaba fuera de la caja en un escritorio de 1366 px (visto en la captura del 2026-10-10). */
+.cobros-admin-planes td { white-space: normal; }
+.cobros-admin-planes td:last-child { min-width: 17rem; }
+.cobros-admin-planes .agencia-form { grid-template-columns: minmax(0, 1fr); max-width: 100%; }
+.cobros-admin-planes .agencia-form select, .cobros-admin-planes .agencia-form input[type="text"] { width: 100%; min-width: 0; }

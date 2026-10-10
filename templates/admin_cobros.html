@@ -164,7 +164,7 @@
           <td><strong>{{ pl.nombre }}</strong></td>
           <td class="num">{{ pl.precio_texto }}</td>
           <td class="num">{{ pl.anual_texto or '—' }}</td>
-          <td class="num">{{ pl.margen_texto }}<br><span class="cobros-admin-nota">{{ _('a la carta: %(margen)s (global)', margen=margen_global_texto) }}{% if pl.descuento_pct %} · {{ _('%(pct)s %% menos', pct=pl.descuento_pct) }}{% endif %}</span></td>
+          <td class="num">{{ pl.margen_texto }}<br><span class="cobros-admin-nota cobros-admin-junto">{{ _('a la carta: %(margen)s (global)', margen=margen_global_texto) }}</span>{% if pl.descuento_pct %}<br><span class="cobros-admin-nota cobros-admin-junto">{{ _('%(pct)s %% menos', pct=pl.descuento_pct) }}</span>{% endif %}</td>
           <td class="num">{{ pl.tope_incluido_usd | usd }}</td>
           <td>
             <form method="post" action="{{ url_for('cobros.admin_plan_activo', plan_id=pl.id) }}" class="cobros-admin-celda">
@@ -232,7 +232,7 @@
   </div>
   {% if filas %}
   <div class="admin-scroll">
-    <table class="tabla-admin cobros-admin-tabla">
+    <table class="tabla-admin cobros-admin-tabla cobros-admin-planes">
       <thead>
         <tr>
           <th>{{ _('Proyecto') }}</th><th>{{ _('Plan') }}</th><th>{{ _('Estado') }}</th><th>{{ _('Próxima renovación') }}</th>
@@ -271,7 +271,7 @@
           {% endif %}
           <td>
             {% if sus or f.cobrar or f.plan.pendientes %}
-            <details class="cobros-admin-recarga"{% if f.plan.pendientes %} open{% endif %}>
+            <details class="cobros-admin-recarga">
               <summary>{{ _('Acciones del plan') }}</summary>
               {% for pago in f.plan.pendientes %}
               <form method="post" action="{{ url_for('cobros.admin_plan_resolver', cliente=f.cliente, pago_id=pago.id) }}" class="agencia-form cobros-admin-pendiente">
