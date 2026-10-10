@@ -467,8 +467,13 @@ eval `docs/superpowers/evals/2026-10-09-tw-ganchos-y-copy.md`.
   tilbake/åpent kjøp/öppet köp…; whole word or phrase, a hyphen is not a border so «pain-free» is not «free»), plus two
   patterns with a number added by the last review (revisor, 2026-10-10): «take N pay M» in any form (`_LLEVA_PAGA`:
   «NxM» with one digit each side, since «12x10 cm» is a size; «N por/for/för M», «kjøp N betal for M», «köp N betala för
-  M», «lleva N paga M», «leve N pague M», «pague N lleve M», «buy N get M»), compared by the offer (take, pay) and not by
-  its form, so «3x2» and «3 por 2» are the same; and scarcity with a number (`_ESCASEZ`: «últimas/last/siste/sista N»).
+  M», «lleva N (y) paga M», «leve N pague M», «pague N lleve M», «buy N get M (free)», and since the re-review «kjøp/köp
+  N, få M gratis», «compra N y llévate M gratis», «compre N e leve M grátis», read as take N + M pay N), compared by the
+  offer (take, pay) and not by its form, so «3x2» and «3 por 2» are the same and «kjøp 3, få 1 gratis» is not the data's
+  «2 for 1» even when «gratis» is in the data; scarcity with a number (`_ESCASEZ`: «últimas/last/siste/sista N»); and a
+  trial with its days (`_PRUEBA_DIAS`: «prøv i N dager», «prova i N dagar», «try for N days»; never a bare «prøv»: the
+  real hook «Prøv denne – aldri kalde føtter igjen» offers nothing). A sentence-ending period after the offer is read
+  («Promo 3x2.»); a decimal is not («3x2,5 m»).
   Checked free against the 4 real eval answers: no hook newly blocked. `ofertas_sin_dato(texto, verificable)` adds the
   terms and offers that are not in the data to the
   hook's `cifras_sin_dato` (only its `texto`, what goes in the video: the hook is not generated) and to the new copy's

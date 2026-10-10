@@ -558,11 +558,14 @@ _PATRONES_OFERTA = tuple((t, _patron_oferta(t)) for t in TERMINOS_OFERTA)
 
 
 def _con_numero(cuerpo):
-    return re.compile(r"(?<![\w.,-])" + cuerpo + r"(?![\w.,%-])", re.IGNORECASE)
+    """Palabra o frase entera. Detrás no puede venir un decimal («3x2,5 m» es una medida), pero sí el punto o la coma
+    que cierran la frase («Promo 3x2.»)."""
+    return re.compile(r"(?<![\w.,-])" + cuerpo + r"(?![\w%-]|[.,]\d)", re.IGNORECASE)
 
 
 _N = r"(\d{1,2})"
-_SEP = r"\s*,?\s+"
+# Entre «compra N» y «paga M» / «llévate M»: coma opcional y una «y» (es), «e» (pt), «og» (no), «och» (sv) o «and» (en).
+_SEP = r"\s*,?\s+(?:(?:y|e|og|och|and)\s+)?"
 # «Lleva N, paga M» en todas sus formas, cada una con cómo sale (lleva, paga): así «3x2» y «3 por 2» son la MISMA
 # oferta y no se marcan entre sí, y «3x2» frente a un «2x1» de los datos sí. «NxM» solo con una cifra a cada lado: «12x10
 # cm» es una medida.
@@ -574,15 +577,26 @@ _LLEVA_PAGA = (
     (_con_numero(r"lleva\s+" + _N + _SEP + r"paga\s+" + _N), lambda n, m: (n, m)),
     (_con_numero(r"leve\s+" + _N + _SEP + r"pague\s+" + _N), lambda n, m: (n, m)),
     (_con_numero(r"pague\s+" + _N + _SEP + r"lleve\s+" + _N), lambda n, m: (m, n)),
-    (_con_numero(r"buy\s+" + _N + _SEP + r"get\s+" + _N), lambda n, m: (n + m, n)),
+    # «compra N y llévate M gratis» = lleva N + M y paga N (re-revisión del 2026-10-10): así «kjøp 3, få 1 gratis» no
+    # pasa por el «2 for 1» de los datos aunque «gratis» esté en ellos.
+    (_con_numero(r"buy\s+" + _N + _SEP + r"get\s+" + _N + r"(?:\s+free)?"), lambda n, m: (n + m, n)),
+    (_con_numero(r"kjøp\s+" + _N + _SEP + r"få\s+" + _N + r"\s+gratis"), lambda n, m: (n + m, n)),
+    (_con_numero(r"köp\s+" + _N + _SEP + r"få\s+" + _N + r"\s+gratis"), lambda n, m: (n + m, n)),
+    (_con_numero(r"compra\s+" + _N + _SEP + r"llévate\s+" + _N + r"\s+gratis"), lambda n, m: (n + m, n)),
+    (_con_numero(r"compre\s+" + _N + _SEP + r"leve\s+" + _N + r"\s+grátis"), lambda n, m: (n + m, n)),
 )
-# Escasez con un número: «últimas 3», «last 2», «siste 5», «sista 4».
+# Escasez con un número: «últimas 3», «last 2», «siste 5», «sista 4». Heurística: una frase de tiempo («los últimos 3
+# inviernos») también se marca (falso positivo sin plata en juego, PND de las brechas de la heurística).
 _ESCASEZ = _con_numero(r"(?:últimas|últimos|last|siste|sista)\s+\d{1,4}")
+# Prueba con su número de días: «prøv i 30 dager», «prova i 30 dagar», «try for 30 days». Nunca «prøv» suelto: el
+# gancho real «Prøv denne – aldri kalde føtter igjen» (eval del 2026-10-09) no ofrece nada.
+_PRUEBA_DIAS = _con_numero(r"(?:prøv\s+i|prova\s+i|try\s+(?:it\s+)?for)\s+(\d{1,3})\s+(?:dager|dagar|days)")
 
 
 def _ofertas_con_numero(texto):
     """[(clave, cómo se lee)] de las ofertas con número del texto. La clave compara la oferta y no la forma: (lleva,
-    paga) para «N por M» en cualquier idioma, el texto en minúsculas para la escasez."""
+    paga) para «N por M» y «compra N, llévate M gratis» en cualquier idioma, el texto en minúsculas para la escasez y
+    los días para una prueba."""
     salida = []
     for patron, lleva_paga in _LLEVA_PAGA:
         for m in patron.finditer(texto):
@@ -591,6 +605,8 @@ def _ofertas_con_numero(texto):
     for m in _ESCASEZ.finditer(texto):
         visto = " ".join(m.group(0).lower().split())
         salida.append((("escasez", visto), visto))
+    for m in _PRUEBA_DIAS.finditer(texto):
+        salida.append((("prueba_dias", int(m.group(1))), " ".join(m.group(0).lower().split())))
     return salida
 
 

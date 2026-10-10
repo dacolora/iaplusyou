@@ -741,7 +741,8 @@ def test_el_caso_real_kjop_2_fa_1_gratis_marca_gratis_en_el_copy():
     datos_ = mejorar.datos_verificables("Acme", _fila_real(copy="Myke tøfler"), voz=voz)
     r = mejorar.parsear(respuesta(copy_nuevo={"titulo": "Myke tøfler", "texto": "Kjøp 2, få 1 gratis i dag."}),
                         datos_, 20.0)
-    assert r["copy_nuevo"]["cifras_sin_dato"] == ["gratis"]
+    # «gratis» no está en los datos y «kjøp 2, få 1» (lleva 3, paga 2) no es el «2 for 1» de la voz (re-revisión)
+    assert r["copy_nuevo"]["cifras_sin_dato"] == ["gratis", "kjøp 2, få 1 gratis"]
     bien = mejorar.parsear(respuesta(copy_nuevo={"titulo": "Myke tøfler", "texto": "Kjøp 2 for 1 i dag."}), datos_, 20.0)
     assert bien["copy_nuevo"]["cifras_sin_dato"] == []
 
@@ -828,7 +829,7 @@ def test_las_ofertas_nuevas_solo_miran_el_gancho_y_el_copy():
                         "nada", 20.0)
     assert r["cifras_sin_dato"] == []
     assert r["ganchos"][0]["cifras_sin_dato"] == ["garantía"]
-    assert r["copy_nuevo"]["cifras_sin_dato"] == ["pengene tilbake"]
+    assert r["copy_nuevo"]["cifras_sin_dato"] == ["pengene tilbake", "prøv i 7 dager"]
 
 
 def test_datos_verificables_no_trae_los_numeros_de_las_etiquetas():
@@ -850,3 +851,35 @@ def test_la_regla_del_nvp_es_una_instruccion_y_no_entra_en_lo_verificable():
     assert visitantes.REGLA_PROMPT in mejorar.armar("Acme", fila)
     datos_ = mejorar.datos_verificables("Acme", fila)
     assert visitantes.REGLA_PROMPT not in datos_ and "NVP = % de visitantes nuevos" not in datos_
+
+
+# ------------------- re-revisión (2026-10-10): «compra N, llévate M gratis» y «prueba N días» con su número ---
+
+@pytest.mark.parametrize("texto, visto", [
+    ("Kjøp 3, få 1 gratis", "kjøp 3, få 1 gratis"), ("Köp 3, få 1 gratis", "köp 3, få 1 gratis"),
+    ("Compra 3 y llévate 1 gratis", "compra 3 y llévate 1 gratis"), ("Buy 3 get 1 free", "buy 3 get 1 free"),
+    ("Compre 3 e leve 1 grátis", "compre 3 e leve 1 grátis"), ("Lleva 3 y paga 2", "lleva 3 y paga 2"),
+    ("Prøv i 30 dager", "prøv i 30 dager"), ("Prova i 30 dagar", "prova i 30 dagar"),
+    ("Try for 30 days", "try for 30 days")])
+def test_compra_n_llevate_m_gratis_y_la_prueba_con_dias_se_marcan_por_su_oferta(texto, visto):
+    assert visto in mejorar.ofertas_sin_dato(texto, "Myke tøfler"), texto
+    assert mejorar.ofertas_sin_dato(texto, f"Copy: {texto}.") == [], texto
+
+
+def test_compra_3_llevate_1_no_es_el_2_por_1_de_los_datos_aunque_gratis_si_este():
+    assert mejorar.ofertas_sin_dato("Kjøp 3, få 1 gratis", "kjøp 2 for 1 tilbudet, gratis frakt") == ["kjøp 3, få 1 gratis"]
+    assert mejorar.ofertas_sin_dato("Kjøp 1, få 1 gratis", "kjøp 2 for 1 tilbudet, gratis frakt") == []   # el mismo 2×1
+    assert mejorar.ofertas_sin_dato("Lleva 3 y paga 2", "Promo 3x2") == []
+
+
+def test_prov_suelto_no_es_una_prueba():
+    """El gancho real «Prøv denne – aldri kalde føtter igjen» (eval del 2026-10-09) no lleva oferta."""
+    assert mejorar.ofertas_sin_dato("Prøv denne – aldri kalde føtter igjen", "Myke tøfler") == []
+
+
+def test_una_oferta_al_final_de_una_frase_tambien_se_lee():
+    """El punto que cierra la frase no es un decimal: «Promo 3x2.» en los datos sí trae la oferta."""
+    assert mejorar.ofertas_sin_dato("Lleva 3x2.", "Promo 3x2.") == []
+    assert mejorar.ofertas_sin_dato("Lleva 3x2.", "nada") == ["3x2"]
+    assert mejorar.ofertas_sin_dato("Últimas 3.", "nada") == ["últimas 3"]
+    assert mejorar.ofertas_sin_dato("Tela de 3x2,5 m", "nada") == []        # una medida con decimal no es oferta
