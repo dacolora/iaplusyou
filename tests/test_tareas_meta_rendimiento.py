@@ -535,12 +535,14 @@ def evaluacion(hf, monkeypatch):
              "impacto": None, "objetos": [], "enlace": None}]
     eid = datos.crear_evaluacion("hf", ["act_1"], "2026-09-09", "2026-10-08", "SEK", muestra, recs, pedido_por="u",
                                  extra={"dias": 30, "cuenta": None, "resumen": [], "segmentos": {}})
-    subidas = []
+    subidas, borradas = [], []
     monkeypatch.setattr(tw_analisis.r2_uploader, "upload_image",
                         lambda local, clave: subidas.append(clave) or f"https://r2/{clave}")
+    monkeypatch.setattr(tw_analisis.r2_uploader, "delete_files",
+                        lambda claves: (borradas.extend(claves), (len(claves), []))[1])
     from referentes import imagenes
     monkeypatch.setattr(imagenes, "_bajar", lambda url: _jpeg())
-    return {"eid": eid, "subidas": subidas}
+    return {"eid": eid, "subidas": subidas, "borradas": borradas}
 
 
 def _tarea_eval(eid, cliente="hf"):
@@ -591,6 +593,7 @@ def test_evaluar_guarda_el_resultado_las_miniaturas_en_r2_y_el_gasto_real(evalua
     assert a2["medio"]["imagen"] is None and "visual" not in a2
     assert [b["type"] for b in visto["content"]] == ["text", "text", "image"]
     assert "<anuncios>" in visto["content"][0]["text"]
+    assert evaluacion["borradas"] == []                  # con la fila en su lugar, las miniaturas se quedan
     assert _gastos_eval() == [{"tipo": "evaluacion", "usd": pytest.approx(usd), "referencia": f"meta_eval:{eid}:t7",
                                "proveedor": "anthropic"}]
 
@@ -667,6 +670,52 @@ def test_evaluar_si_la_fila_se_borra_a_mitad_igual_anota_lo_que_claude_cobro(eva
     assert datos.evaluacion("hf", eid) is None
     assert _gastos_eval()[0]["usd"] == pytest.approx(costo_real(10000, 5000))
     assert _movimientos_hf() == ["no_cobrado"]
+
+
+def test_evaluar_si_la_fila_se_borra_a_mitad_borra_tambien_las_miniaturas_que_copio(evaluacion, monkeypatch):
+    """Revisión de privacidad de E2: desconectar Meta ya borró las filas, y las miniaturas que la tarea subió a R2
+    después no las encontraría nadie."""
+    eid = evaluacion["eid"]
+
+    def _llamar(content, system_):
+        datos.borrar_evaluaciones("hf")
+        return RESPUESTA_OK, 10000, 5000
+    monkeypatch.setattr(analisis, "_llamar", _llamar)
+    t.meta_rend_evaluar(_tarea_eval(eid))
+    base = "clientes/hf/meta_rendimiento"
+    assert evaluacion["subidas"] == [f"{base}/eval{eid}_A1.jpg"]
+    assert sorted(evaluacion["borradas"]) == [f"{base}/eval{eid}_A1.jpg", f"{base}/eval{eid}_A2.jpg"]
+    assert _gastos_eval()[0]["usd"] == pytest.approx(costo_real(10000, 5000))        # y lo pagado se anota igual
+
+
+def test_evaluar_si_la_fila_se_borra_y_ademas_claude_falla_borra_las_miniaturas_y_anota_lo_pagado(evaluacion,
+                                                                                                   monkeypatch):
+    eid = evaluacion["eid"]
+
+    def _llamar(content, system_):
+        datos.borrar_evaluaciones("hf")
+        return "no es JSON", 3000, 800
+    monkeypatch.setattr(analisis, "_llamar", _llamar)
+    with pytest.raises(RuntimeError):
+        t.meta_rend_evaluar(_tarea_eval(eid))
+    base = "clientes/hf/meta_rendimiento"
+    assert sorted(evaluacion["borradas"]) == [f"{base}/eval{eid}_A1.jpg", f"{base}/eval{eid}_A2.jpg"]
+    assert _gastos_eval()[0]["usd"] == pytest.approx(costo_real(6000, 1600))
+
+
+def test_evaluar_si_r2_falla_al_soltar_las_miniaturas_la_tarea_termina_igual_y_anota_el_gasto(evaluacion, monkeypatch):
+    eid = evaluacion["eid"]
+
+    def _llamar(content, system_):
+        datos.borrar_evaluaciones("hf")
+        return RESPUESTA_OK, 10000, 5000
+
+    def _falla(claves):
+        raise RuntimeError(f"Faltan R2_ACCOUNT_ID {TOKEN}")
+    monkeypatch.setattr(analisis, "_llamar", _llamar)
+    monkeypatch.setattr(tw_analisis.r2_uploader, "delete_files", _falla)
+    assert t.meta_rend_evaluar(_tarea_eval(eid)) == "Esa evaluación ya no existe."
+    assert _gastos_eval()[0]["usd"] == pytest.approx(costo_real(10000, 5000))
 
 
 def test_evaluar_si_guardar_el_resultado_falla_anota_lo_pagado_sin_cobrarlo(evaluacion, monkeypatch):

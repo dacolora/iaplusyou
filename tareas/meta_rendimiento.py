@@ -244,12 +244,24 @@ def evaluacion_en_curso(cliente):
     return trabajos.en_curso(job_id_evaluar(cliente))
 
 
+def _soltar_miniaturas(cliente, eid, elegidos):
+    """La fila de la evaluación ya no existe (desconectar Meta la borró mientras la tarea trabajaba): las miniaturas
+    que esta tarea copió a R2 son datos de Meta sin ninguna fila que las encuentre, así que se borran aquí. Se
+    piden las claves de TODOS sus anuncios (borrar una que no se subió no es un error). Nunca lanza: lo pagado a
+    Claude ya se anotó o se anota aparte."""
+    try:
+        analisis.borrar_claves(analisis.claves_de_evaluacion(cliente, eid, elegidos))
+    except Exception as e:  # noqa: BLE001 — las miniaturas sueltas no tumban la tarea
+        log.warning("no se pudieron soltar las miniaturas de la evaluación de Meta %s (%s)", eid, type(e).__name__)
+
+
 @registrar(TIPO_EVALUAR)
 def meta_rend_evaluar(tarea):
     """Miniaturas de la muestra (de la copia, copiadas a R2) → fotogramas o imagen → Claude → gasto real → fila
     `lista`. Cualquier fallo deja la fila en `error` con palabras y sin token, y el gasto de lo que Claude sí cobró
     queda anotado (con `entregado=False` si no hubo resultado: en un proyecto que cobra no se le cobra al cliente).
-    Si la fila desapareció a mitad (desconectar Meta borra las evaluaciones), el gasto ya pagado igual se anota."""
+    Si la fila desapareció a mitad (desconectar Meta borra las evaluaciones), el gasto ya pagado igual se anota y las
+    miniaturas que la tarea copió a R2 se borran (nada las encontraría después)."""
     p = tarea["payload"]
     cliente, eid = p["cliente"], int(p["evaluacion_id"])
     job_id = tarea.get("job_id") or job_id_evaluar(cliente)
@@ -294,6 +306,7 @@ def meta_rend_evaluar(tarea):
                                 else gettext("sin resultado usable"))
         claude_anotado = True
         if not guardada:
+            _soltar_miniaturas(cliente, eid, elegidos)
             return ya_no_existe
     except Exception as e:
         if not claude_anotado:
@@ -316,7 +329,8 @@ def meta_rend_evaluar(tarea):
                                         else gettext("sin resultado usable"), entregado=False)
         mensaje = cola.recortar(cola.sin_token(analisis.texto_error(e)), 500)
         try:
-            datos.actualizar_evaluacion(eid, estado="error", error=mensaje, usd=usd)
+            if not datos.actualizar_evaluacion(eid, estado="error", error=mensaje, usd=usd):
+                _soltar_miniaturas(cliente, eid, elegidos)       # la fila ya no estaba: sus miniaturas tampoco se quedan
         except Exception as e_fila:  # noqa: BLE001 — la tarea igual termina en error con su mensaje
             log.warning("la evaluación de Meta %s no se pudo dejar en error: %s", eid, type(e_fila).__name__)
         # `from None`: el traceback del worker no arrastra la excepción original (su texto podría traer un token).
