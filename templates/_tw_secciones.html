@@ -8,14 +8,9 @@
    (reparto, productos, «Ver como tabla»). Lo que cobra (Evaluar con IA, la galería con «Cómo mejorarlo» y el lote) postea a triple_whale/rutas.py
    con el alcance de `tw` (R13). #}
 
-{#- Las copias en curso (una barra data-poll-job por tienda) y los errores de copia de las tiendas del alcance. -#}
+{#- Los errores de copia de las tiendas del alcance. La barra de las copias en curso la pinta _rend_panel.html: una sola
+    para las dos fuentes (`r.copias_vivas`, revisión final de E1). -#}
 {% macro copias(tw, cliente) -%}
-{% for j in tw.jobs_sync %}
-<div class="tw-progreso">
-  <div class="barra-progreso" id="tw-sync-{{ cliente }}-{{ j.tienda.id }}" data-poll-job="{{ j.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
-  <div class="progreso-texto">{% if tw.varias_tiendas %}{{ _('Trayendo métricas de %(tienda)s…', tienda=j.tienda.nombre) }}{% else %}{{ _('Trayendo métricas de Triple Whale…') }}{% endif %}</div>
-</div>
-{% endfor %}
 {% for t in tw.en_alcance %}
 {% if t.estado == 'error' and t.error %}
 <p class="tag-error">{% if tw.varias_tiendas %}{{ _('La última copia de %(tienda)s falló: %(error)s', tienda=t.nombre, error=t.error) }}{% else %}{{ _('La última copia falló: %(error)s', error=t.error) }}{% endif %}</p>

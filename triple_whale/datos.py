@@ -525,10 +525,12 @@ def rango(cliente, tienda_id=None):
 
 
 def canales(cliente, tienda_id, desde, hasta):
-    """Canales con gasto o impresiones en el rango, del que más gastó al que menos."""
+    """Canales con gasto en el rango, del que más gastó al que menos. Uno con impresiones y sin gasto (o solo con lo
+    que atribuye el Pixel) no se ofrece en el filtro «Canal»: R9 deja fuera los canales sin gasto y su galería saldría
+    vacía (revisión final de E1, 2026-10-10)."""
     d = _anuncio_dia(cliente, tienda_id, desde, hasta)
     q = (sa.select(d.c.canal).group_by(d.c.canal)
-         .having(sa.or_(sa.func.sum(d.c.gasto) > 0, sa.func.sum(d.c.impresiones) > 0))
+         .having(sa.func.sum(d.c.gasto) > 0)
          .order_by(sa.func.sum(d.c.gasto).desc()))
     with db.conectar() as con:
         return [r[0] for r in con.execute(q)]

@@ -85,7 +85,7 @@ _AYUDAS = {
              "cpp": N_("Gasto entre compras según Meta")},
     "mixta": {"ventas": N_("Ventas de la tienda donde hay Triple Whale y, donde no, el valor de compras que "
                            "reporta Meta"),
-              "mer": N_("Esas ventas entre todo el gasto en publicidad"),
+              "mer": N_("Las ventas entre todo el gasto en publicidad"),
               "ticket": N_("Ventas entre pedidos"),
               "cpp": N_("Gasto entre pedidos")},
 }

@@ -487,15 +487,19 @@ def test_sincronizar_sin_tienda_encola_todas_y_con_tienda_solo_esa(app):  # noqa
         assert _tareas("tw_sincronizar") == [], valor
 
 
-def test_una_barra_por_copia_en_curso_con_el_pais(app):  # noqa: F811
+def test_una_sola_barra_para_las_copias_en_curso(app):  # noqa: F811
+    """Spec 2026-10-09 §5.1 (revisión final de E1, R5): una barra para todas las copias del alcance, la del primer
+    trabajo vivo; cada barra que termina recarga la página, y una por tienda eran varias recargas seguidas."""
     from tareas import triple_whale as tareas_tw
     no, se = _dos_tiendas()
     assert tareas_tw.encolar_sync("acme") == 2
     html = app["c"].get("/cliente/acme/rendimiento/panel").data.decode()
-    assert html.count("data-poll-job=") == 2
-    assert f'data-poll-job="acme__tw_sync__{no}"' in html and f'data-poll-job="acme__tw_sync__{se}"' in html
-    assert f'id="tw-sync-acme-{no}"' in html and f'id="tw-sync-acme-{se}"' in html
-    assert "Trayendo métricas de Noruega" in html and "Trayendo métricas de Suecia" in html
+    assert html.count("data-poll-job=") == 1
+    assert f'data-poll-job="acme__tw_sync__{no}"' in html and 'id="rend-copias-acme"' in html
+    assert "Trayendo 2 copias…" in html
+    # Viendo Suecia, solo su copia.
+    solo_se = app["c"].get("/cliente/acme/rendimiento/panel?entrada=SE").data.decode()
+    assert f'data-poll-job="acme__tw_sync__{se}"' in solo_se and "Trayendo 1 copia…" in solo_se
     # Ningún <script> que corra (rule 8): el único es el JSON inerte que lee static/tw_resultados.js.
     assert "<script" not in html.replace('<script type="application/json" id="tw-resultados-datos">', "")
 

@@ -197,7 +197,11 @@ def test_panel_con_datos(conectado):
     assert "Todas (2)" in html and "HappyFlops Norway" in html and "HappyFlops Sweden" in html
     assert "Ganador" in html and "Perdedor" in html and "Video gana" in html
     assert "Por país" in html and 'data-rend-entrada="NO"' in html and 'data-rend-entrada="SE"' in html
-    assert 'id="tw-resultados-datos"' in html and "USD" in html            # «Resultados» con la gráfica de siempre
+    assert 'id="tw-resultados-datos"' in html                               # «Resultados» con la gráfica de siempre
+    # Las dos cuentas van en SEK: «Resultados» y «Por país» van en SEK, sin USD (R6; revisión final de E1, R2).
+    por_pais = html[html.index('id="rend-por-pais"'):]
+    por_pais = por_pais[:por_pais.index("</section>")]
+    assert "SEK" in por_pais and "USD" not in por_pais
     assert "Campaña Otoño" in html and "Conjunto Mujeres" in html and "Aprendizaje limitado" in html
     # El alcance de la campaña (spec §8.4), de la ventana copiada más cercana al periodo: la de 30 días.
     treinta = conectado["c"].get("/cliente/acme/rendimiento/panel?dias=30").get_data(as_text=True)
@@ -220,8 +224,10 @@ def test_panel_sin_datos_y_con_una_cuenta_en_error(conectado):
     from tareas import meta_rendimiento as tareas_mr
     assert tareas_mr.encolar_sync("acme") == 2
     html = conectado["c"].get("/cliente/acme/rendimiento/panel").get_data(as_text=True)
-    assert html.count("data-poll-job=") == 2 and "Trayendo los últimos 13 meses" in html
-    assert 'data-poll-job="acme__meta_rend__act_1"' in html and 'id="meta-sync-acme-act_1"' in html
+    # UNA barra para las copias del alcance, la del primer trabajo vivo (revisión final de E1, R5).
+    assert html.count("data-poll-job=") == 1 and "Trayendo los últimos 13 meses" in html
+    assert 'data-poll-job="acme__meta_rend__act_1"' in html and 'id="rend-copias-acme"' in html
+    assert "Trayendo 2 copias…" in html
 
 
 def test_ver_mas_anuncios_trae_solo_tarjetas(conectado):

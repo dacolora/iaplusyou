@@ -2002,6 +2002,9 @@ msgstr "Opens “Bring references” already filled in with this campaign's prod
 msgid "Abriendo el editor…"
 msgstr "Opening the editor…"
 
+msgid "Abrir Ajustes"
+msgstr "Open Settings"
+
 msgid "Abrir el menú"
 msgstr "Open the menu"
 
@@ -6461,6 +6464,9 @@ msgstr "Delete campaign"
 msgid "Eliminar permanentemente"
 msgstr "Delete permanently"
 
+msgid "Elígelas en Ajustes, con «Elegir cuentas de Meta»."
+msgstr "Choose them in Settings, with “Choose Meta accounts”."
+
 msgid "Emiratos Árabes Unidos"
 msgstr "United Arab Emirates"
 
@@ -7046,9 +7052,6 @@ msgstr "That voice no longer exists."
 
 msgid "Esas piezas ya se estaban generando."
 msgstr "Those pieces were already being generated."
-
-msgid "Esas ventas entre todo el gasto en publicidad"
-msgstr "Those sales divided by all ad spend"
 
 #, python-format
 msgid "Escalón %(n)s/3"
@@ -10269,6 +10272,9 @@ msgstr "The rules found nothing."
 
 msgid "Las ventas cambiaron de fuente en este período"
 msgstr "Sales changed source during this period"
+
+msgid "Las ventas entre todo el gasto en publicidad"
+msgstr "Sales divided by all ad spend"
 
 msgid "Las zonas son para videos verticales (9:16)."
 msgstr "Zones are for vertical videos (9:16)."
@@ -16319,9 +16325,6 @@ msgstr "No comments yet. Paste text or upload a file above."
 msgid "Todavía no hay cuentas publicitarias elegidas"
 msgstr "No ad accounts have been chosen yet"
 
-msgid "Todavía no hay cuentas publicitarias elegidas: usa «Elegir cuentas»."
-msgstr "No ad accounts chosen yet: use “Choose accounts”."
-
 msgid "Todavía no hay datos de retención de Meta para este video."
 msgstr "There is no Meta retention data for this video yet."
 
@@ -16683,6 +16686,12 @@ msgstr "“{nombre}” transition: {descripcion}"
 msgid "Transición: {nombre}"
 msgstr "Transition: {nombre}"
 
+#, python-format
+msgid "Trayendo %(num)s copia…"
+msgid_plural "Trayendo %(num)s copias…"
+msgstr[0] "Pulling %(num)s copy…"
+msgstr[1] "Pulling %(num)s copies…"
+
 msgid "Trayendo anuncios"
 msgstr "Getting ads"
 
@@ -16703,17 +16712,6 @@ msgstr "Pulling the last 90 days…"
 
 msgid "Trayendo métricas"
 msgstr "Fetching metrics"
-
-#, python-format
-msgid "Trayendo métricas de %(cuenta)s…"
-msgstr "Pulling metrics for %(cuenta)s…"
-
-#, python-format
-msgid "Trayendo métricas de %(tienda)s…"
-msgstr "Pulling metrics for %(tienda)s…"
-
-msgid "Trayendo métricas de Triple Whale…"
-msgstr "Pulling Triple Whale metrics…"
 
 msgid "Trayendo referentes globales; aparecerán en la tabla de barridos a medida que avanza."
 msgstr "Bringing in global references; they'll show up in the sweeps table as it goes."
@@ -17042,6 +17040,9 @@ msgstr "US$ %(usd)s per result"
 #, python-format
 msgid "USD %(usd)s gastado"
 msgstr "USD %(usd)s spent"
+
+msgid "USD no disponible"
+msgstr "USD not available"
 
 msgid "USD no disponible para algunos días: elige un país para ver sus cifras."
 msgstr "USD not available for some days: choose a country to see its figures."

@@ -24,7 +24,14 @@ Reglas, cada una con su motivo:
    (`moneda_presupuesto`, en todas las filas). Un grupo que Triple Whale no tiene en su copia conserva lo que dice
    Meta y queda marcado `origen = "meta"`: poner cero ventas sería una cifra falsa, y la fila dice de dónde sale su
    número.
-5. «Lo que necesita tu atención» junta las alertas de las dos fuentes sin repetir el mismo texto.
+5. «Lo que necesita tu atención» junta, en este orden, las alertas de Triple Whale, las de los anuncios de fuente Meta
+   y las recomendaciones de las cuentas de Meta (E2, tarea 6), SIN quitar textos repetidos: una alerta con cuenta
+   («2 anuncios ganadores…») de cada fuente es otra cosa, y quitar una escondía la mitad (revisión final de E1,
+   2026-10-10). Después, un orden estable por nivel: alta → media → bien, así una cuenta desactivada o anuncios
+   rechazados nunca quedan debajo de «N anuncios ganadores» (revisión de E2 tarea 6).
+6. Una sola barra para las copias en curso del alcance (`copias_vivas`, spec §5.1 «una sola barra data-poll-job»): la
+   barra de un trabajo que termina recarga la página, y con una por tienda y por cuenta eran varias recargas seguidas
+   (revisión final de E1). La barra sigue al primer trabajo vivo; al recargar, la siguiente sigue al que quede.
 """
 from datetime import date
 
@@ -139,8 +146,10 @@ def _moneda_comun(cuentas, filas=()):
 
 def _meta(cliente, s, dias, hoy, params, pagina_conjuntos, pagina_anuncios):
     """La parte Meta del alcance, o None si el alcance no tiene cuentas de Meta: {"ids_fuente", "ids_estructura",
-    "estado", "estructura", "anuncios" (None sin cuentas cuya fuente sea Meta), "moneda" (la común de las cuentas de
-    la estructura y de las filas que van en la moneda de Triple Whale; None si difieren: cada fila lleva la suya)}."""
+    "estado", "estructura", "anuncios" (None sin cuentas cuya fuente sea Meta), "recomendaciones" (qué hacer en las
+    cuentas de la estructura, `meta_panel.recomendaciones`: [{"nivel", "texto"}]), "moneda" (la común de las cuentas
+    de la estructura y de las filas que van en la moneda de Triple Whale; None si difieren: cada fila lleva la
+    suya)}."""
     alc, cuentas_por_id = s["alcance"], s["cuentas_por_id"]
     ids_estructura, ids_fuente = list(alc["meta_estructura"]), list(alc["meta_fuente"])
     if not ids_estructura:
@@ -168,18 +177,29 @@ def _meta(cliente, s, dias, hoy, params, pagina_conjuntos, pagina_anuncios):
             "moneda": _moneda_comun(en_estructura, estructura["campanas"] + estructura["conjuntos"])}
 
 
+ORDEN_NIVEL = {"alta": 0, "media": 1, "bien": 2}
+
+
 def _atencion(tw, meta):
-    """Las alertas de Triple Whale y las de los anuncios de fuente Meta, sin repetir el mismo texto."""
+    """Las alertas de Triple Whale, las de los anuncios de fuente Meta y las recomendaciones de las cuentas de Meta,
+    todas (sin quitar textos repetidos) y en orden estable por nivel: alta, media, bien (regla 5 del módulo)."""
     lista = list(tw["alertas"]) if tw else []
     if meta and meta["anuncios"]:
         lista += evaluacion.alertas(meta["anuncios"]["ev"], origen="meta")
     lista += meta["recomendaciones"] if meta else []      # qué hacer en las cuentas de Meta (E2, tarea 6)
-    salida, vistos = [], set()
-    for a in lista:
-        if a["texto"] not in vistos:
-            vistos.add(a["texto"])
-            salida.append(a)
-    return salida
+    return sorted(lista, key=lambda a: ORDEN_NIVEL.get(a.get("nivel"), len(ORDEN_NIVEL)))
+
+
+def _copias_vivas(tw, meta):
+    """Los job_id de las copias en cola o en curso del alcance, primero las de Triple Whale (regla 6 del módulo).
+    `triple_whale.panel.contexto` trae las de todas las tiendas del proyecto: aquí solo cuentan las del alcance."""
+    vivas = []
+    if tw:
+        en_alcance = {t["id"] for t in tw["en_alcance"]}
+        vivas += [j["job_id"] for j in tw["jobs_sync"] if j["tienda"]["id"] in en_alcance]
+    if meta:
+        vivas += [j["job_id"] for j in meta["estado"]["jobs_sync"]]
+    return vivas
 
 
 # --------------------------------------------------------------- contexto ---
@@ -190,8 +210,8 @@ def contexto(cliente, dias=0, entrada=None, canal=None, hoy=None, pagina_conjunt
     o rara = «Todas»; `tienda`/`cuenta`, los parámetros de las pestañas viejas). Claves: `conectado`, `hay_tw`,
     `hay_meta`, `entradas`, `actual`, `alcance`, `fuente`, `dias`, `periodos`, `canal` y `canales` (solo con fuente
     "tw": el filtro «Canal» es de Triple Whale, A3), `params`, `tw` (contexto de `triple_whale.panel.contexto` o
-    None), `meta` (ver `_meta`), `resumen` (`pestana_rendimiento.resumen.contexto`), `atencion`, `modo_meta`,
-    `solo_metricas` y los textos de `evaluacion`."""
+    None), `meta` (ver `_meta`), `resumen` (`pestana_rendimiento.resumen.contexto`), `atencion`, `copias_vivas`
+    (regla 6), `modo_meta`, `solo_metricas` y los textos de `evaluacion`."""
     hoy = hoy or date.today()
     dias = periodo_valido(dias)
     s = _resolver(cliente, entrada, tienda, cuenta)
@@ -214,7 +234,7 @@ def contexto(cliente, dias=0, entrada=None, canal=None, hoy=None, pagina_conjunt
         "params": params, "tw": tw, "meta": meta,
         "resumen": resumen.contexto(cliente, s["entradas"], actual, alc, dias, hoy,
                                     tw_cfg["moneda"] if tw_cfg else "USD"),
-        "atencion": _atencion(tw, meta),
+        "atencion": _atencion(tw, meta), "copias_vivas": _copias_vivas(tw, meta),
         "modo_meta": meta_conexion.modo(cliente) if s["con_conexion_meta"] else None,
         "solo_metricas": s["solo_metricas"],
         **_etiquetas(),

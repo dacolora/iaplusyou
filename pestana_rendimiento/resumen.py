@@ -15,13 +15,19 @@ Reglas, cada una con su motivo:
 3. Inicio común (R7, A2). Sumar tres meses de una tienda con trece días de una cuenta daría un total que no es de
    nadie, así que «Desde el inicio» arranca el día en que TODAS las fuentes del alcance ya tienen datos (el más
    tardío de sus primeros días). Una fuente sin ningún día copiado todavía no atrasa a las demás. Con un periodo
-   fijo no hay inicio común: es el periodo que pidió la persona.
+   fijo no hay inicio común: es el periodo que pidió la persona. Con fuente solo Triple Whale (enmienda A7, revisión
+   final de E1, 2026-10-10) no hay inicio común: «Desde el inicio» es el de Triple Whale (`triple_whale.panel.
+   _primer_dia`, cada tienda desde su primer día), el mismo de sus Resultados y de la galería que cobra, así «Por
+   país» suma lo que dicen los Resultados de arriba.
 4. Resultados (R8). Es la misma sección de «Resultados de tu tienda» (`triple_whale.resultados.armar`) con la
    fuente «meta» o «mixta» y sin detalle del día. No recibe antigüedad de anuncios ni cohortes (`inicio_copia`
    None): sin ellas la sección no dibuja una serie «A anuncios nuevos 0 %» que no sería cierta.
 5. Por país (R5). Una fila por entrada, cada una con su fuente, su moneda y su equivalente en USD; las entradas
    cuyas cuentas llegan dentro de una tienda salen marcadas (`fuera_de_todas`) para que la nota explique por qué
    «Todas» no es la suma de las filas.
+6. Moneda de «Por país» (R6, revisión final de E1). La cifra principal va en la moneda común de todas las filas
+   (`moneda_pais`; entonces no se convierte nada ni se piden tasas) o, si no la hay, en USD; una fila sin USD
+   (`sin_usd`) lo dice y la página avisa (`por_pais_sin_usd`): nunca «—» callado ni una tasa inventada.
 """
 from datetime import date, timedelta
 
@@ -30,7 +36,7 @@ from meta_rendimiento import datos as mdatos
 from meta_rendimiento import tasas
 from triple_whale import datos as twdatos
 from triple_whale import paises, resultados
-from triple_whale.panel import PERIODOS, periodo
+from triple_whale.panel import PERIODOS, _primer_dia, periodo
 
 
 def _flotante(v):
@@ -217,10 +223,35 @@ def _fila_pais(entrada, origen, moneda, gasto, ventas, pedidos, usd):
             "gasto_usd": gasto_usd, "ventas_usd": ventas_usd, "fuera_de_todas": bool(entrada["cubierta"])}
 
 
-def _filas_pais_tw(cliente, entradas_tw, desde, hasta, origen_tw, moneda_tw, tasa):
+def _moneda_pais(entradas_, moneda_tw):
+    """La moneda de la cifra principal de «Por país» (regla 6): la que comparten TODAS las filas, o "USD". Se sabe
+    antes de leer nada: una entrada con tienda va en la moneda del proyecto en Triple Whale, una de Meta en la de sus
+    cuentas (con varias, en USD). Una cuenta sin moneda conocida no comparte la de nadie."""
+    monedas = set()
+    for e in entradas_:
+        if e["fuente"] == "tw":
+            monedas.add(moneda_tw)
+        else:
+            propias = {_moneda_de(c.get("moneda")) for c in e["cuentas"]}
+            monedas.add(next(iter(propias)) if len(propias) == 1 else "USD")
+    return next(iter(monedas)) if len(monedas) == 1 and "" not in monedas else "USD"
+
+
+def _en_moneda_pais(fila, moneda_pais):
+    """La cifra principal de la fila en `moneda_pais` (`gasto_vista`, `ventas_vista`) y `sin_usd` si hacía falta USD
+    y no hay tasa."""
+    if fila["moneda"] == moneda_pais:
+        fila.update(gasto_vista=fila["gasto"], ventas_vista=fila["ventas"], sin_usd=False)
+    else:
+        fila.update(gasto_vista=fila["gasto_usd"], ventas_vista=fila["ventas_usd"], sin_usd=fila["gasto_usd"] is None)
+    return fila
+
+
+def _filas_pais_tw(cliente, entradas_tw, desde, hasta, origen_tw, moneda_tw, tasa, con_usd=True):
     """Las filas de las entradas con tienda: los totales de todas las tiendas en UNA consulta (`por_tienda`); solo
     sin totales de tienda (Pixel de anuncios pagados) o con la tienda en otra moneda hace falta su serie diaria, que
-    es lo único que se puede convertir día por día."""
+    es lo único que se puede convertir día por día. Sin `con_usd` (todas las filas comparten una moneda que no es USD)
+    no se convierte nada: `gasto_usd` queda en None."""
     por_tienda = ({x["tienda_id"]: x["actual"] for x in twdatos.por_tienda(cliente, desde, hasta, desde, hasta)}
                   if origen_tw == "tienda" and entradas_tw else {})
     filas = []
@@ -235,6 +266,8 @@ def _filas_pais_tw(cliente, entradas_tw, desde, hasta, origen_tw, moneda_tw, tas
             gasto, ventas, pedidos = (sum(f[k] for f in diarias) for k in ("gasto", "ingresos", "pedidos"))
         if moneda_tw == "USD":
             usd = (gasto, ventas)
+        elif not con_usd:
+            usd = None
         else:
             if diarias is None:
                 diarias = _filas_tw(twdatos.serie_tienda(cliente, tienda_id, desde, hasta), moneda_tw)
@@ -243,9 +276,10 @@ def _filas_pais_tw(cliente, entradas_tw, desde, hasta, origen_tw, moneda_tw, tas
     return filas
 
 
-def _filas_pais_meta(cliente, entradas_meta, desde, hasta, cuentas_por_id, tasa):
+def _filas_pais_meta(cliente, entradas_meta, desde, hasta, cuentas_por_id, tasa, con_usd=True):
     """Las filas de las entradas de Meta: una sola lectura diaria de todas sus cuentas, agrupada en Python. Una
-    entrada cuyas cuentas tienen monedas distintas se muestra en USD (no hay una moneda propia que sumar)."""
+    entrada cuyas cuentas tienen monedas distintas se muestra en USD (no hay una moneda propia que sumar). Sin
+    `con_usd`, como en `_filas_pais_tw`."""
     ids = [c["ad_account_id"] for e in entradas_meta for c in e["cuentas"]]
     por_cuenta = {}
     for f in _filas_meta(mdatos.cuenta_por_dia(cliente, ids, desde, hasta), cuentas_por_id):
@@ -255,7 +289,7 @@ def _filas_pais_meta(cliente, entradas_meta, desde, hasta, cuentas_por_id, tasa)
         propias = [f for c in e["cuentas"] for f in por_cuenta.get(c["ad_account_id"], [])]
         monedas = {_moneda_de(c.get("moneda")) for c in e["cuentas"]}
         gasto, ventas, pedidos = (sum(f[k] for f in propias) for k in ("gasto", "ingresos", "pedidos"))
-        usd = _a_usd(propias, tasa)
+        usd = _a_usd(propias, tasa) if con_usd else None
         moneda = next(iter(monedas), "")
         if len(monedas) > 1:
             moneda = "USD"
@@ -265,12 +299,16 @@ def _filas_pais_meta(cliente, entradas_meta, desde, hasta, cuentas_por_id, tasa)
 
 
 def _por_pais(cliente, entradas_, desde, hasta, origen_tw, moneda_tw, cuentas_por_id, tasa):
+    """(filas, moneda_pais): las filas de «Por país» en el orden del selector, cada una con su cifra principal en
+    `moneda_pais` (regla 6)."""
+    moneda_pais = _moneda_pais(entradas_, moneda_tw)
+    con_usd = moneda_pais == "USD"
     filas = {f["entrada"]["clave"]: f for f in
              _filas_pais_tw(cliente, [e for e in entradas_ if e["fuente"] == "tw"], desde, hasta, origen_tw, moneda_tw,
-                            tasa)
+                            tasa, con_usd)
              + _filas_pais_meta(cliente, [e for e in entradas_ if e["fuente"] == "meta"], desde, hasta, cuentas_por_id,
-                                tasa)}
-    return [filas[e["clave"]] for e in entradas_]
+                                tasa, con_usd)}
+    return [_en_moneda_pais(filas[e["clave"]], moneda_pais) for e in entradas_], moneda_pais
 
 
 def contexto(cliente, entradas_, actual, alc, dias, hoy, moneda_tw):
@@ -284,7 +322,8 @@ def contexto(cliente, entradas_, actual, alc, dias, hoy, moneda_tw):
       primeros días distintos (R7); "desde" y "hasta": el periodo que se leyó.
     - "origen": [{"nombre", "origen": "tienda"|"pixel_tw"|"pixel_meta"}] de las entradas que suman (R8).
     - "por_pais": las filas de «Por país» (solo «Todas» con dos entradas o más); "fuera_de_todas" marca las
-      entradas cuyas cuentas llegan dentro de una tienda (R5)."""
+      entradas cuyas cuentas llegan dentro de una tienda (R5); "gasto_vista"/"ventas_vista", su cifra en
+      "moneda_pais" (regla 6), y "sin_usd" si hacía falta USD y no hay tasa ("por_pais_sin_usd": alguna)."""
     dias = dias if dias in PERIODOS else 0
     moneda_tw = _moneda_de(moneda_tw)
     cuentas_por_id = {c["ad_account_id"]: c for e in entradas_ for c in e["cuentas"]}
@@ -294,10 +333,17 @@ def contexto(cliente, entradas_, actual, alc, dias, hoy, moneda_tw):
     convertir = len(monedas) > 1
     moneda = "USD" if convertir else next(iter(monedas), moneda_tw)
 
-    primeros_tw = [p for p in (twdatos.primer_dia_copia(cliente, t["id"]) for t in tiendas) if p]
-    primeros_meta = mdatos.primeras_fechas(cliente, alc["meta_fuente"])
-    primeros = primeros_tw + list(primeros_meta.values())
-    inicio_real = max(primeros) if primeros else None
+    solo_tw = alc["fuente"] == "tw"
+    if solo_tw:
+        # A7: con solo Triple Whale, su propio «Desde el inicio» (cada tienda desde su primer día), el de sus
+        # Resultados y el de la galería que cobra; el inicio común de R7 es para mezclas (regla 3).
+        primeros_tw, primeros_meta, primeros = [], {}, []
+        inicio_real = _primer_dia(cliente, alc["tw"]["tienda_id"])
+    else:
+        primeros_tw = [p for p in (twdatos.primer_dia_copia(cliente, t["id"]) for t in tiendas) if p]
+        primeros_meta = mdatos.primeras_fechas(cliente, alc["meta_fuente"])
+        primeros = primeros_tw + list(primeros_meta.values())
+        inicio_real = max(primeros) if primeros else None
     desde, hasta = periodo(dias, hoy, inicio_real if dias == 0 else None)[:2]
     d_desde = date.fromisoformat(desde)
     ancho = d_desde - timedelta(days=max((date.fromisoformat(hasta) - d_desde).days if dias else 0,
@@ -307,11 +353,14 @@ def contexto(cliente, entradas_, actual, alc, dias, hoy, moneda_tw):
 
     salida = {"resultados": None, "usd_ok": True, "moneda": moneda, "desde": desde, "hasta": hasta,
               "inicio_comun": inicio_real if dias == 0 and len(set(primeros)) > 1 else None,
-              "origen": _origen(entradas_, actual, origen_tw), "por_pais": []}
+              "origen": _origen(entradas_, actual, origen_tw), "por_pais": [], "moneda_pais": moneda,
+              "por_pais_sin_usd": False}
     if alc["fuente"] in ("meta", "mixta"):
         salida.update(_resultados(cliente, alc, dias, hoy, desde, hasta, ancho, inicio_real, moneda, convertir,
                                   origen_tw, moneda_tw, tiendas, cuentas_por_id,
                                   ([None] if primeros_tw else []) + list(primeros_meta), tasa))
     if actual is None and len(entradas_) >= 2:
-        salida["por_pais"] = _por_pais(cliente, entradas_, desde, hasta, origen_tw, moneda_tw, cuentas_por_id, tasa)
+        salida["por_pais"], salida["moneda_pais"] = _por_pais(cliente, entradas_, desde, hasta, origen_tw, moneda_tw,
+                                                              cuentas_por_id, tasa)
+        salida["por_pais_sin_usd"] = any(f["sin_usd"] for f in salida["por_pais"])
     return salida

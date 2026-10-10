@@ -4,8 +4,8 @@
    elige una entrada desde «Por país», `data-rend-mas` y `data-meta-mas` traen más tarjetas o filas).
 
    Orden: barra (entrada, periodo, «Canal» solo con fuente Triple Whale, atribución, última copia, «Actualizar ahora»,
-   «Ajustes»), barras de las copias en curso y sus errores, avisos, Resultados (los de Triple Whale con su detalle del
-   día cuando el alcance es solo Triple Whale; si no, los de `r.resumen`, que nunca abren días: A3), la línea de
+   «Ajustes»), UNA barra para las copias en curso del alcance y sus errores, avisos, Resultados (los de Triple Whale
+   con su detalle del día cuando el alcance es solo Triple Whale; si no, los de `r.resumen`, que nunca abren días: A3), la línea de
    origen de las ventas (R8) y desde cuándo cuentan todas las fuentes (R7), «Por país» (solo «Todas» con dos
    entradas o más, también cuando todas son tiendas: reemplaza a «Por tienda»), «Lo que necesita tu atención» (las
    dos fuentes), «Tus anuncios» (la galería de Triple Whale tal cual, A1, y debajo las tarjetas de los anuncios cuya
@@ -22,7 +22,12 @@
 {% elif not r.entradas %}
 <div class="estado-vacio">
   <p class="estado-vacio-titulo">{{ _('Todavía no hay cuentas publicitarias elegidas') }}</p>
-  <p class="estado-vacio-texto">{% if es_admin %}{{ _('Todavía no hay cuentas publicitarias elegidas: usa «Elegir cuentas».') }}{% else %}{{ _('Un administrador de Creatv tiene que elegir las cuentas.') }}{% endif %}</p>
+  {% if es_admin %}
+  <p class="estado-vacio-texto">{{ _('Elígelas en Ajustes, con «Elegir cuentas de Meta».') }}</p>
+  <div class="acciones"><a class="btn-sm" href="#rend-ajustes" data-rend-ajustes>{{ _('Abrir Ajustes') }}</a></div>
+  {% else %}
+  <p class="estado-vacio-texto">{{ _('Un administrador de Creatv tiene que elegir las cuentas.') }}</p>
+  {% endif %}
 </div>
 {% else %}
 {% set vacio_tw = r.tw and r.tw.rango.filas == 0 %}
@@ -70,15 +75,15 @@
   </div>
 </div>
 
-{# ---------- copias en curso y sus errores ---------- #}
+{# ---------- copias en curso (UNA barra, la del primer trabajo vivo: cada barra que termina recarga) y sus errores ---------- #}
+{% if r.copias_vivas %}
+<div class="tw-progreso">
+  <div class="barra-progreso" id="rend-copias-{{ cliente }}" data-poll-job="{{ r.copias_vivas[0] }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
+  <div class="progreso-texto">{{ ngettext('Trayendo %(num)s copia…', 'Trayendo %(num)s copias…', r.copias_vivas | length) }}</div>
+</div>
+{% endif %}
 {% if r.tw %}{{ tws.copias(r.tw, cliente) }}{% endif %}
 {% if r.meta %}
-{% for j in r.meta.estado.jobs_sync %}
-<div class="tw-progreso">
-  <div class="barra-progreso" id="meta-sync-{{ cliente }}-{{ j.cuenta.ad_account_id }}" data-poll-job="{{ j.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
-  <div class="progreso-texto">{{ _('Trayendo métricas de %(cuenta)s…', cuenta=j.cuenta.nombre or j.cuenta.ad_account_id) }}</div>
-</div>
-{% endfor %}
 {% for c in r.meta.estado.errores %}
 <p class="tag-error tag-descartado tw-aviso">{{ _('La última copia de %(cuenta)s falló: %(error)s', cuenta=c.nombre or c.ad_account_id, error=c.error) }}</p>
 {% endfor %}
@@ -88,7 +93,7 @@
 {% if r.solo_metricas %}
 <p class="tag-advertencia tw-aviso">{{ _('Conectado solo para métricas: sin Página no se pueden lanzar anuncios desde Creatv.') }}</p>
 {% endif %}
-{% if not r.resumen.usd_ok %}
+{% if not r.resumen.usd_ok or r.resumen.por_pais_sin_usd %}
 <p class="tag-advertencia tw-aviso">{{ _('USD no disponible para algunos días: elige un país para ver sus cifras.') }}</p>
 {% endif %}
 
@@ -153,8 +158,9 @@
             {% if f.fuera_de_todas %}<small class="tw-motivo">{{ _('Sus anuncios llegan dentro de la tienda de Triple Whale: «Todas» no los suma aparte.') }}</small>{% endif %}
           </td>
           <td>{{ rm.fuente(f.fuente) }}</td>
-          <td>{{ mx.monto(f.gasto_usd, 'USD') }}{% if f.moneda and f.moneda != 'USD' %}<small class="tw-motivo">{{ mx.monto(f.gasto, f.moneda) }}</small>{% endif %}</td>
-          <td>{{ mx.monto(f.ventas_usd, 'USD') }}{% if f.moneda and f.moneda != 'USD' %}<small class="tw-motivo">{{ mx.monto(f.ventas, f.moneda) }}</small>{% endif %}</td>
+          {# La cifra principal en la moneda común de todas las filas (USD si no la hay); debajo, la de la fila (R6). #}
+          <td>{% if f.sin_usd %}<span class="vacio">{{ _('USD no disponible') }}</span>{% else %}{{ mx.monto(f.gasto_vista, r.resumen.moneda_pais) }}{% endif %}{% if f.moneda and f.moneda != r.resumen.moneda_pais %}<small class="tw-motivo">{{ mx.monto(f.gasto, f.moneda) }}</small>{% endif %}</td>
+          <td>{% if f.sin_usd %}<span class="vacio">{{ _('USD no disponible') }}</span>{% else %}{{ mx.monto(f.ventas_vista, r.resumen.moneda_pais) }}{% endif %}{% if f.moneda and f.moneda != r.resumen.moneda_pais %}<small class="tw-motivo">{{ mx.monto(f.ventas, f.moneda) }}</small>{% endif %}</td>
           <td>{{ mx.roas(f.retorno) }}</td>
         </tr>
         {% endfor %}
