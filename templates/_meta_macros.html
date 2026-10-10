@@ -24,9 +24,11 @@
 {% if valor in etiquetas %}<span class="tag-estado {{ clases.get(valor, '') }}">{{ etiquetas[valor] | traducir }}</span>{% else %}—{% endif %}
 {%- endmacro %}
 
-{# Presupuesto de una campaña o un conjunto: diario, total o «—» (el de un conjunto con presupuesto de campaña). #}
+{# Presupuesto de una campaña o un conjunto: diario, total o «—» (el de un conjunto con presupuesto de campaña). En
+   Rendimiento una fila con cifras de Triple Whale va en la moneda de Triple Whale y su presupuesto (de Meta) en la de
+   la cuenta: `moneda_presupuesto`. #}
 {% macro presupuesto(f) -%}
-{% if f.presupuesto_diario %}{{ _('%(monto)s/día', monto=f.presupuesto_diario | dinero(f.moneda or '')) }}{% elif f.presupuesto_total %}{{ _('%(monto)s en total', monto=f.presupuesto_total | dinero(f.moneda or '')) }}{% else %}—{% endif %}
+{% if f.presupuesto_diario %}{{ _('%(monto)s/día', monto=f.presupuesto_diario | dinero(f.moneda_presupuesto or f.moneda or '')) }}{% elif f.presupuesto_total %}{{ _('%(monto)s en total', monto=f.presupuesto_total | dinero(f.moneda_presupuesto or f.moneda or '')) }}{% else %}—{% endif %}
 {%- endmacro %}
 
 {# Clase del veredicto de un anuncio (la misma de la pestaña Triple Whale). #}

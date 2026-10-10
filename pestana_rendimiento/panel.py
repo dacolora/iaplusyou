@@ -15,10 +15,15 @@ Reglas, cada una con su motivo:
 3. Meta (`meta`) separa estructura y fuente (R5): campañas y conjuntos de TODAS las cuentas del alcance (la
    estructura sirve siempre), anuncios solo de las cuentas cuyas ventas salen de Meta. Cada parte usa el «Desde el
    inicio» de su propia copia (A2).
-4. Las campañas y los conjuntos de las cuentas cuyas ventas cuenta Triple Whale (`cubiertas_tw`) llevan las ventas
-   de Triple Whale (R3: una entrada muestra el mismo número en todas sus secciones). Un grupo que Triple Whale no
-   tiene en su copia conserva lo que dice Meta y queda marcado `origen = "meta"`: poner cero ventas sería una cifra
-   falsa, y la fila dice de dónde sale su número.
+4. Las campañas y los conjuntos de las cuentas cuyas ventas cuenta Triple Whale (`cubiertas_tw`) llevan las cifras
+   de Triple Whale (R3: una entrada muestra el mismo número en todas sus secciones): gasto, ventas y pedidos, TODO de
+   `totales_por_grupo` y en la moneda del proyecto en Triple Whale. Mezclar ventas de Triple Whale (USD) con el gasto
+   de la cuenta (SEK) daba un ROAS diez veces mal y «240 SEK» que eran dólares (revisión de la tarea 6, 2026-10-10);
+   leer los dos del mismo lado también evita comparar el gasto de un rango con las ventas de otro cuando las copias
+   empiezan en fechas distintas. El presupuesto sigue siendo de Meta y va en la moneda de la cuenta
+   (`moneda_presupuesto`, en todas las filas). Un grupo que Triple Whale no tiene en su copia conserva lo que dice
+   Meta y queda marcado `origen = "meta"`: poner cero ventas sería una cifra falsa, y la fila dice de dónde sale su
+   número.
 5. «Lo que necesita tu atención» junta las alertas de las dos fuentes sin repetir el mismo texto.
 """
 from datetime import date
@@ -56,7 +61,7 @@ def _resolver(cliente, entrada=None, tienda=None, cuenta=None):
     `tienda`/`cuenta` son los `?tienda=`/`?cuenta=` de las pestañas viejas: solo cuentan si `entrada` viene vacía."""
     locale = idiomas.activo()
     tw_cfg = triple_whale_tiendas.obtener(cliente)
-    conexion = meta_conexion.cargar(cliente) or {}
+    conexion = meta_conexion.cargar(cliente) or {}     # trae el token: no sale de esta función
     meta_ok = bool(conexion.get("token"))
     tiendas = [tw_panel._con_nombre(t, locale) for t in tw_cfg["tiendas"]] if tw_cfg else []
     cuentas = meta_panel.lista(cliente) if meta_ok else []
@@ -69,7 +74,8 @@ def _resolver(cliente, entrada=None, tienda=None, cuenta=None):
     if not valor and (tienda or cuenta):
         valor = entradas.de_legado(entradas_, tienda=tienda, cuenta=cuenta)
     actual = entradas.elegir(entradas_, valor)
-    return {"tw_cfg": tw_cfg, "conexion": conexion, "meta_ok": meta_ok, "tiendas": tiendas, "cuentas": cuentas,
+    return {"tw_cfg": tw_cfg, "meta_ok": meta_ok, "con_conexion_meta": bool(conexion),
+            "solo_metricas": meta_ok and not conexion.get("page_id"), "tiendas": tiendas, "cuentas": cuentas,
             "cuentas_por_id": {c["ad_account_id"]: c for c in cuentas}, "entradas": entradas_, "actual": actual,
             "alcance": entradas.alcance(entradas_, actual)}
 
@@ -90,20 +96,25 @@ def _etiquetas():
 
 # ------------------------------------------------------------------- Meta ---
 
-def _con_ventas_tw(cliente, alc, desde, hasta, filas, nivel, clave):
-    """Pone las ventas de Triple Whale en las filas (campañas o conjuntos de Meta) de las cuentas `cubiertas_tw` y
-    marca `origen` en todas: "tw" donde manda Triple Whale, "meta" en las demás (regla 4 del módulo). A lo sumo una
+def _con_ventas_tw(cliente, alc, desde, hasta, filas, nivel, clave, moneda_tw):
+    """Pone las cifras de Triple Whale en las filas (campañas o conjuntos de Meta) de las cuentas `cubiertas_tw` y
+    marca `origen` en todas: "tw" donde manda Triple Whale, "meta" en las demás (regla 4 del módulo). En las "tw"
+    gasto, ventas y pedidos salen TODOS de Triple Whale y `moneda` pasa a `moneda_tw` (la del proyecto en Triple
+    Whale); `moneda_presupuesto` guarda en todas la moneda de la cuenta, la del presupuesto de Meta. A lo sumo una
     consulta, y ninguna si ninguna fila es de una cuenta cubierta."""
     cubiertas = set(alc["cubiertas_tw"])
     de_tw = ({} if not any(f["ad_account_id"] in cubiertas for f in filas) else
              twdatos.totales_por_grupo(cliente, alc["tw"]["tienda_id"] if alc["tw"] else None, desde, hasta, nivel))
     for f in filas:
+        f["moneda_presupuesto"] = f.get("moneda")
         t = de_tw.get(str(f.get(clave) or "")) if f["ad_account_id"] in cubiertas else None
         if t is None:
             f["origen"] = "meta"
             continue
+        f["gasto"] = t["gasto"]
         f["compras"] = f["pedidos"] = t["pedidos"]
         f["valor"] = f["ingresos"] = t["ingresos"]
+        f["moneda"] = moneda_tw
         f["m"] = evaluacion.metricas(f)
         f["origen"] = "tw"
     return filas
@@ -118,15 +129,18 @@ def _marco_estructura(ids, cuentas_por_id, dias, params):
             "por_pagina": meta_panel.POR_PAGINA}
 
 
-def _moneda_comun(cuentas):
+def _moneda_comun(cuentas, filas=()):
+    """La moneda común de las cuentas y de las filas que ya pasaron a la de Triple Whale; None si hay más de una (cada
+    fila lleva la suya en `moneda`)."""
     monedas = {(c.get("moneda") or "").upper() for c in cuentas}
+    monedas |= {(f.get("moneda") or "").upper() for f in filas if f.get("origen") == "tw"}
     return next(iter(monedas)) if len(monedas) == 1 and "" not in monedas else None
 
 
 def _meta(cliente, s, dias, hoy, params, pagina_conjuntos, pagina_anuncios):
     """La parte Meta del alcance, o None si el alcance no tiene cuentas de Meta: {"ids_fuente", "ids_estructura",
     "estado", "estructura", "anuncios" (None sin cuentas cuya fuente sea Meta), "moneda" (la común de las cuentas de
-    la estructura, None si difieren)}."""
+    la estructura y de las filas que van en la moneda de Triple Whale; None si difieren: cada fila lleva la suya)}."""
     alc, cuentas_por_id = s["alcance"], s["cuentas_por_id"]
     ids_estructura, ids_fuente = list(alc["meta_estructura"]), list(alc["meta_fuente"])
     if not ids_estructura:
@@ -134,8 +148,9 @@ def _meta(cliente, s, dias, hoy, params, pagina_conjuntos, pagina_anuncios):
     en_estructura = [cuentas_por_id[a] for a in ids_estructura if a in cuentas_por_id]
     desde, hasta, _, _ = meta_panel.rango_fechas(cliente, ids_estructura, dias, hoy)
     estructura = meta_panel.estructura(cliente, ids_estructura, desde, hasta, dias, cuentas_por_id, pagina_conjuntos)
-    _con_ventas_tw(cliente, alc, desde, hasta, estructura["campanas"], "campana", "campaign_id")
-    _con_ventas_tw(cliente, alc, desde, hasta, estructura["conjuntos"], "conjunto", "adset_id")
+    moneda_tw = s["tw_cfg"]["moneda"] if s["tw_cfg"] else None
+    _con_ventas_tw(cliente, alc, desde, hasta, estructura["campanas"], "campana", "campaign_id", moneda_tw)
+    _con_ventas_tw(cliente, alc, desde, hasta, estructura["conjuntos"], "conjunto", "adset_id", moneda_tw)
     estructura.update(_marco_estructura(ids_estructura, cuentas_por_id, dias, params), desde=desde, hasta=hasta)
     anuncios = None
     if ids_fuente:
@@ -146,7 +161,8 @@ def _meta(cliente, s, dias, hoy, params, pagina_conjuntos, pagina_anuncios):
         anuncios.update(desde=desde, hasta=hasta)
     return {"ids_fuente": ids_fuente, "ids_estructura": ids_estructura,
             "estado": meta_panel.estado_copia(cliente, en_estructura), "estructura": estructura,
-            "anuncios": anuncios, "moneda": _moneda_comun(en_estructura)}
+            "anuncios": anuncios,
+            "moneda": _moneda_comun(en_estructura, estructura["campanas"] + estructura["conjuntos"])}
 
 
 def _atencion(tw, meta):
@@ -186,7 +202,7 @@ def contexto(cliente, dias=0, entrada=None, canal=None, hoy=None, pagina_conjunt
     canal_ok = tw["canal"] if tw and fuente == "tw" else None
     params = _params(actual, dias, canal_ok)
     meta = _meta(cliente, s, dias, hoy, params, pagina_conjuntos, pagina_anuncios)
-    tw_cfg, conexion = s["tw_cfg"], s["conexion"]
+    tw_cfg = s["tw_cfg"]
     return {
         "conectado": bool(s["tiendas"]) or s["meta_ok"], "hay_tw": bool(s["tiendas"]), "hay_meta": s["meta_ok"],
         "entradas": s["entradas"], "actual": actual, "alcance": alc, "fuente": fuente, "dias": dias,
@@ -195,8 +211,8 @@ def contexto(cliente, dias=0, entrada=None, canal=None, hoy=None, pagina_conjunt
         "resumen": resumen.contexto(cliente, s["entradas"], actual, alc, dias, hoy,
                                     tw_cfg["moneda"] if tw_cfg else "USD"),
         "atencion": _atencion(tw, meta),
-        "modo_meta": meta_conexion.modo(cliente) if conexion else None,
-        "solo_metricas": s["meta_ok"] and not conexion.get("page_id"),
+        "modo_meta": meta_conexion.modo(cliente) if s["con_conexion_meta"] else None,
+        "solo_metricas": s["solo_metricas"],
         **_etiquetas(),
     }
 
@@ -218,7 +234,8 @@ def conjuntos_pagina(cliente, dias=0, entrada=None, pagina=0, hoy=None):
         return mr
     desde, hasta, _, _ = meta_panel.rango_fechas(cliente, ids, dias, hoy)
     mr.update(meta_panel.conjuntos_de(cliente, ids, desde, hasta, cuentas_por_id, pagina))
-    _con_ventas_tw(cliente, alc, desde, hasta, mr["conjuntos"], "conjunto", "adset_id")
+    _con_ventas_tw(cliente, alc, desde, hasta, mr["conjuntos"], "conjunto", "adset_id",
+                   s["tw_cfg"]["moneda"] if s["tw_cfg"] else None)
     return mr
 
 
