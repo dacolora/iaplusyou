@@ -58,6 +58,9 @@ OBJETIVOS = {
     "LINK_CLICKS": N_("Clics en el enlace"), "PRODUCT_CATALOG_SALES": N_("Ventas del catálogo"),
 }
 
+# Prioridad de una recomendación del «Diagnóstico» (recomendaciones.NIVELES) en palabras.
+NOMBRES_PRIORIDAD = {"alta": N_("Prioridad alta"), "media": N_("Prioridad media"), "baja": N_("Prioridad baja")}
+
 _CLAVES_VARIACION = ("gasto", "valor", "compras", "impresiones", "clics_salida", "roas", "cpa", "cpm", "ctr_salida")
 _MONTOS_KPI = ("gasto", "valor", "roas", "cpa", "cpm")
 
@@ -494,6 +497,7 @@ def _base(dias, desde, hasta):
         "ultima_copia": None, "por_pagina": POR_PAGINA,
         "recomendaciones": [], "conteo_recomendaciones": {n: 0 for n in recomendaciones.NIVELES},
         "max_recomendaciones": MAX_RECOMENDACIONES_VISIBLES, "niveles_recomendacion": recomendaciones.NIVELES,
+        "nombres_prioridad": NOMBRES_PRIORIDAD,
         "segmentos": {"bloques": [], "viejos": []}, "ventana_segmentos": None,
         "estados": ESTADOS, "aprendizaje": APRENDIZAJE, "objetivos": OBJETIVOS,
         "etiquetas_veredicto": evaluacion.ETIQUETAS_VEREDICTO,

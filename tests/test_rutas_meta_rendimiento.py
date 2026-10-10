@@ -404,6 +404,89 @@ def test_el_panel_no_hace_una_consulta_por_anuncio(conectado):
     assert muchas.n - pocas.n <= 2, (pocas.n, muchas.n)
 
 
+# ---- Diagnóstico y Segmentos (E2) ----------------------------------------------------------------------------
+
+def _rec(i, nivel="media", tipo="perdedores_gastando", titulo=None, enlace="https://adsmanager.facebook.com/adsmanager/manage/ads?act=1&selected_ad_ids=9"):
+    return {"id": f"{i:064x}", "nivel": nivel, "tipo": tipo, "cuenta": A, "cuenta_nombre": "HappyFlops Norway",
+            "titulo": titulo or f"Recomendación {i}", "que_hacer": f"Haz la cosa {i}", "por_que": f"Porque {i}",
+            "impacto": {"monto": 10.0, "moneda": "SEK", "texto": "10 SEK por día en juego"} if i % 2 else None,
+            "objetos": [], "enlace": enlace}
+
+
+def test_el_diagnostico_va_tras_los_kpis_con_enlaces_al_administrador(conectado):
+    _sembrar()
+    f = _hace(2)
+    # La cuenta 1 vende menos de lo que gasta: la regla `cuenta_roas_bajo` (alta) sale con su enlace.
+    datos.reemplazar_cuenta_dias("acme", A, f, f, [_dia(f, 4000, 1000, compras=5)])
+    html = conectado["c"].get("/cliente/acme/meta-rendimiento/panel").get_data(as_text=True)
+    assert 'id="meta-diagnostico"' in html and "Diagnóstico" in html
+    assert html.index("CTR de salida") < html.index('id="meta-diagnostico"') < html.index("Día a día")
+    # Alta: la cuenta vende menos de lo que gasta y su único conjunto activo está en aprendizaje limitado.
+    assert "La cuenta vende menos de lo que gasta" in html and "Prioridad alta · 2" in html
+    tarjeta = html[html.rindex("<article", 0, html.index("La cuenta vende menos de lo que gasta")):]
+    tarjeta = tarjeta[:tarjeta.index("</article>")]
+    assert 'class="meta-diag meta-diag-alta"' in tarjeta and "133 SEK por día en juego" in tarjeta
+    # Los ids de prueba no son numéricos: el enlace es el de las campañas de la cuenta, sin selección.
+    assert 'href="https://adsmanager.facebook.com/adsmanager/manage/campaigns?act=1"' in tarjeta
+    assert 'target="_blank" rel="noopener noreferrer"' in tarjeta and "HappyFlops Norway" in tarjeta
+    assert "<script" not in html
+
+
+def test_mas_de_seis_recomendaciones_el_resto_va_plegado_y_lo_de_meta_se_escapa(conectado, monkeypatch):
+    _sembrar()
+    recs = [_rec(i, nivel="alta" if i < 2 else "media") for i in range(8)]
+    recs[0]["titulo"] = '<img src=x onerror=alert(1)> Campaña "rara"'
+    recs.append(_rec(9, nivel="baja", tipo="fatiga"))
+    monkeypatch.setattr(panel.recomendaciones, "calcular", lambda entrada: recs)
+    html = conectado["c"].get("/cliente/acme/meta-rendimiento/panel").get_data(as_text=True)
+    diag = html[html.index('id="meta-diagnostico"'):html.index("</section>", html.index('id="meta-diagnostico"'))]
+    visibles, plegadas = diag.split('<details class="meta-diag-mas">')
+    assert visibles.count("<article") == 6 and plegadas.count("<article") == 3
+    assert "Ver todas (9)" in plegadas
+    assert "Prioridad alta · 2" in diag and "Prioridad media · 6" in diag and "Prioridad baja · 1" in diag
+    assert "<img src=x" not in diag and "&lt;img src=x onerror=alert(1)&gt;" in diag
+    assert diag.count('rel="noopener noreferrer"') == 9 and diag.count('target="_blank"') == 9
+    assert 'href="#meta-evaluacion"' in plegadas and diag.count('href="#meta-evaluacion"') == 1
+    assert "10 SEK por día en juego" in diag
+
+
+def test_sin_recomendaciones_lo_dice(conectado, monkeypatch):
+    _sembrar()
+    monkeypatch.setattr(panel.recomendaciones, "calcular", lambda entrada: [])
+    html = conectado["c"].get("/cliente/acme/meta-rendimiento/panel").get_data(as_text=True)
+    assert "Las reglas no encontraron nada que corregir" in html and "meta-diag-mas" not in html
+
+
+def test_segmentos_al_final_con_los_caros_marcados_y_los_viejos_avisados(conectado):
+    _sembrar()
+    seg = lambda clave, gasto, valor, compras: dict(clave=clave, gasto=gasto, impresiones=1000, clics=40,  # noqa: E731
+                                                    clics_salida=25, compras=compras, valor=valor)
+    datos.reemplazar_desgloses("acme", A, 30, "pais", [seg("NO", 800, 2400, 8), seg("SE", 200, 0, 0)])
+    datos.reemplazar_desgloses("acme", B, 30, "edad_genero", [seg("25-34|female", 50, 100, 1)])
+    html = conectado["c"].get("/cliente/acme/meta-rendimiento/panel").get_data(as_text=True)
+    assert 'id="meta-segmentos"' in html and html.index("Anuncios") < html.index('id="meta-segmentos"')
+    segs = html[html.index('id="meta-segmentos"'):]
+    assert "País" in segs and "Edad y género" in segs and "25–34 · Mujeres" in segs
+    fila = _fila(segs, "Suecia")
+    assert 'class="meta-seg-caro"' in fila and "Caro en HappyFlops Norway" in fila and "20 %" in fila
+    assert "Caro" not in _fila(segs, "Noruega")
+    # Más de 48 h: no se muestra y se dice de cuándo es.
+    viejo = (datetime.now() - timedelta(hours=80)).isoformat(timespec="seconds")
+    with db.conectar() as con:
+        con.execute(db.meta_desglose.update().where(db.meta_desglose.c.ad_account_id == A).values(calculado_en=viejo))
+    segs = conectado["c"].get("/cliente/acme/meta-rendimiento/panel").get_data(as_text=True)
+    segs = segs[segs.index('id="meta-segmentos"'):]
+    assert "Suecia" not in segs and "Hay desgloses de HappyFlops Norway con datos de hace 3 días" in segs
+    assert "25–34 · Mujeres" in segs
+    assert "<script" not in segs
+
+
+def test_segmentos_sin_desgloses_lo_dice(conectado):
+    _sembrar()
+    html = conectado["c"].get("/cliente/acme/meta-rendimiento/panel").get_data(as_text=True)
+    assert "Todavía no hay desgloses: la copia los trae una vez al día." in html
+
+
 # ---- en inglés ----------------------------------------------------------------------------------------------
 
 def test_panel_y_selector_en_ingles(app, monkeypatch):  # noqa: F811

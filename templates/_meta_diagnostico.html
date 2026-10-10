@@ -1,0 +1,54 @@
+{# «Diagnóstico» de la pestaña Meta (spec E2 §6 y §9), incluido por _meta_panel.html justo después de los KPIs.
+   Contexto: `mr` (meta_rendimiento.panel.contexto: recomendaciones, conteo_recomendaciones, max_recomendaciones,
+   niveles_recomendacion, nombres_prioridad) y `actual` (None = «Todas»). Son reglas puras y gratis sobre la copia,
+   siempre de los últimos 7 y 30 días: nada se aplica solo, cada tarjeta lleva al Administrador de anuncios con los
+   objetos ya filtrados (pestaña nueva, rel="noopener noreferrer"). Títulos y textos traen nombres de Meta (texto
+   ajeno): solo el autoescape, nunca |safe. Más de `max_recomendaciones` → el resto en un <details>. Sin <script>. #}
+{% macro clase_prioridad(nivel) -%}
+{{ {"alta": "tag-descartado", "media": "tag-advertencia", "baja": "tag-en-curso"}.get(nivel, '') }}
+{%- endmacro %}
+
+{% macro tarjeta(r, nombres, con_cuenta) %}
+<article class="meta-diag meta-diag-{{ r.nivel }}">
+  <div class="meta-diag-cabeza">
+    <span class="tag-estado {{ clase_prioridad(r.nivel) }}">{{ nombres[r.nivel] | traducir }}</span>
+    {% if con_cuenta %}<small class="meta-diag-cuenta">{{ r.cuenta_nombre }}</small>{% endif %}
+  </div>
+  <strong class="meta-diag-titulo">{{ r.titulo }}</strong>
+  <p class="meta-diag-que">{{ r.que_hacer }}</p>
+  <p class="meta-diag-porque"><span>{{ _('Por qué:') }}</span> {{ r.por_que }}</p>
+  {% if r.impacto %}<p class="meta-diag-impacto">{{ r.impacto.texto }}</p>{% endif %}
+  <div class="meta-diag-acciones">
+    {% if r.enlace %}<a class="btn-sm" href="{{ r.enlace }}" target="_blank" rel="noopener noreferrer">{{ _('Ver en el Administrador de anuncios') }} ↗</a>{% endif %}
+    {% if r.tipo == 'fatiga' %}<a class="btn-sm" href="#meta-evaluacion">{{ _('Ir a «Evaluar con IA»') }}</a>{% endif %}
+  </div>
+</article>
+{% endmacro %}
+
+{% set recs = mr.recomendaciones %}
+{% set tope = mr.max_recomendaciones %}
+{% set con_cuenta = not actual %}
+<section class="tb-seccion" id="meta-diagnostico">
+  <div class="tb-seccion-cab">
+    <h3>{{ _('Diagnóstico') }}</h3>
+    <small class="vacio">{{ _('Reglas sobre los últimos 7 y 30 días, sin costo. Nada se aplica solo: cada una lleva al Administrador de anuncios.') }}</small>
+  </div>
+  {% if recs %}
+  <div class="tw-filtros" aria-label="{{ _('Recomendaciones por prioridad') }}">
+    {% for n in mr.niveles_recomendacion %}{% if mr.conteo_recomendaciones[n] %}<span class="tag-estado {{ clase_prioridad(n) }}">{{ mr.nombres_prioridad[n] | traducir }} · {{ mr.conteo_recomendaciones[n] }}</span>{% endif %}{% endfor %}
+  </div>
+  <div class="meta-diag-lista">
+    {% for r in recs[:tope] %}{{ tarjeta(r, mr.nombres_prioridad, con_cuenta) }}{% endfor %}
+  </div>
+  {% if recs | length > tope %}
+  <details class="meta-diag-mas">
+    <summary>{{ _('Ver todas (%(n)s)', n=recs | length) }}</summary>
+    <div class="meta-diag-lista">
+      {% for r in recs[tope:] %}{{ tarjeta(r, mr.nombres_prioridad, con_cuenta) }}{% endfor %}
+    </div>
+  </details>
+  {% endif %}
+  {% else %}
+  <p class="vacio">{{ _('Las reglas no encontraron nada que corregir en los últimos 30 días.') }}</p>
+  {% endif %}
+</section>

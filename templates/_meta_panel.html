@@ -3,7 +3,8 @@
    Solo lee la copia local; el único formulario es «Actualizar ahora» (leer de Meta no cobra). Sin <script>: el JS
    está en _tab_meta.html (`data-meta-param` cambia el filtro, `data-meta-act` elige una cuenta, `data-meta-mas`
    trae más filas). «Todas» (2+ cuentas) va en USD con la tasa de cada día; una cuenta, en su moneda; campañas,
-   conjuntos y anuncios, siempre en la moneda de su cuenta. #}
+   conjuntos y anuncios, siempre en la moneda de su cuenta. «Diagnóstico» (_meta_diagnostico.html, tras los KPIs) y
+   «Segmentos» (_meta_segmentos.html, al final) son de E2. #}
 {% import "_meta_macros.html" as mx %}
 {% if not mr.conectado %}
 <p class="vacio">{{ _('Meta no está conectado en este proyecto.') }}</p>
@@ -97,6 +98,9 @@
     <div class="kpi-tile" title="{{ _('Clics que salen hacia tu web / impresiones') }}"><span>{{ _('CTR de salida') }}</span><strong>{{ k.ctr_salida | tw_pct(2, false) }}</strong><small>{{ var.get('ctr_salida') | tw_var }}</small></div>
   </div>
 </section>
+
+{# ---------- diagnóstico (E2: reglas gratis de 7 y 30 días) ---------- #}
+{% include "_meta_diagnostico.html" %}
 
 {# ---------- día a día ---------- #}
 {% if grafico %}
@@ -226,5 +230,8 @@
   <p class="vacio">{{ _('Ningún anuncio con datos en este periodo.') }}</p>
   {% endif %}
 </section>
+
+{# ---------- segmentos (E2: desgloses de la ventana más cercana) ---------- #}
+{% include "_meta_segmentos.html" %}
 {% endif %}
 {% endif %}

@@ -1,0 +1,50 @@
+{# «Segmentos» de la pestaña Meta (spec E2 §9), incluido al final de _meta_panel.html. Contexto: `mr`
+   (panel.contexto: segmentos = {bloques, viejos}, ventana_segmentos) y `actual`. Una tabla por dimensión (edad y
+   género, ubicación, país, dispositivo) con gasto, compras, ROAS y costo por compra; en «Todas» las cuentas se suman
+   por segmento solo si comparten moneda (si no, una tabla por cuenta). Una fila que la regla `segmento_caro` marcó
+   lleva «Caro». Los desgloses de más de 48 h no se muestran: se avisa con su edad. Sin <script>. #}
+{% import "_meta_macros.html" as mx %}
+{% set sg = mr.segmentos %}
+<section class="tb-seccion" id="meta-segmentos">
+  <div class="tb-seccion-cab">
+    <h3>{{ _('Segmentos') }}</h3>
+    {% if mr.ventana_segmentos %}<small class="vacio">{{ _('Toda la cuenta en los últimos %(n)s días, por segmento.', n=mr.ventana_segmentos) }}</small>{% endif %}
+  </div>
+  {% for v in sg.viejos %}
+  <p class="tag-advertencia tw-aviso">{% if v.dias is none %}{{ _('Hay desgloses de %(cuenta)s sin fecha legible: no se muestran ni cuentan en el Diagnóstico hasta que la copia los traiga de nuevo.', cuenta=v.cuenta.nombre or v.cuenta.ad_account_id) }}{% else %}{{ ngettext('Hay desgloses de %(cuenta)s con datos de hace %(num)s día: no se muestran ni cuentan en el Diagnóstico hasta que la copia los traiga de nuevo.', 'Hay desgloses de %(cuenta)s con datos de hace %(num)s días: no se muestran ni cuentan en el Diagnóstico hasta que la copia los traiga de nuevo.', v.dias, cuenta=v.cuenta.nombre or v.cuenta.ad_account_id) }}{% endif %}</p>
+  {% endfor %}
+  {% if sg.bloques %}
+  <div class="meta-seg-bloques">
+    {% for b in sg.bloques %}
+    <div class="meta-seg-bloque">
+      <h4>{{ b.nombre | traducir }}</h4>
+      {% for g in b.grupos %}
+      {% if g.cuenta and not actual %}<p class="meta-seg-cuenta">{{ mx.cuenta(g.cuenta) }} · {{ g.moneda or '—' }}</p>{% endif %}
+      <div class="tw-tabla-scroll">
+        <table class="tw-tabla meta-seg-tabla">
+          <thead><tr><th>{{ _('Segmento') }}</th><th>{{ _('Gasto') }}</th><th>{{ _('Compras') }}</th><th>ROAS</th><th>{{ _('Costo por compra') }}</th></tr></thead>
+          <tbody>
+            {% for f in g.filas %}
+            <tr{% if f.caro_en %} class="meta-seg-caro"{% endif %}>
+              <td class="tw-nombre">
+                <strong>{{ f.nombre }}</strong>{% if f.caro_en %} <span class="tag-estado tag-advertencia" title="{{ _('Gasta mucho con poco retorno: mira el Diagnóstico.') }}">{% if g.cuenta %}{{ _('Caro') }}{% else %}{{ _('Caro en %(cuentas)s', cuentas=f.caro_en | join(', ')) }}{% endif %}</span>{% endif %}
+                {% if f.pct is not none %}<small>{{ _('%(pct)s del gasto', pct=f.pct | tw_pct(0)) }}</small>{% endif %}
+              </td>
+              <td>{{ mx.monto(f.gasto, g.moneda) }}</td>
+              <td>{{ f.compras | tw_num }}</td>
+              <td>{% if f.roas is none %}—{% else %}{{ f.roas | roas }}×{% endif %}</td>
+              <td>{{ mx.monto(f.cpa, g.moneda) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% if g.mas %}<p class="vacio">{{ ngettext('Y %(num)s segmento más con menos gasto.', 'Y %(num)s segmentos más con menos gasto.', g.mas) }}</p>{% endif %}
+      {% endfor %}
+    </div>
+    {% endfor %}
+  </div>
+  {% elif not sg.viejos %}
+  <p class="vacio">{{ _('Todavía no hay desgloses: la copia los trae una vez al día.') }}</p>
+  {% endif %}
+</section>
