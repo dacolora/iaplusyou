@@ -126,6 +126,29 @@ def test_preparar_con_una_cuenta_y_otro_periodo(hf):
     assert all(a["ad_account_id"] == A for a in prep["muestra"]) and prep["recomendaciones"]
 
 
+def _envejecer_desgloses(act, horas):
+    from datetime import datetime
+    import db
+    viejo = (datetime.now() - timedelta(hours=horas)).isoformat(timespec="seconds")
+    with db.conectar() as con:
+        con.execute(db.meta_desglose.update().where(db.meta_desglose.c.ad_account_id == act).values(
+            calculado_en=viejo))
+
+
+def test_preparar_no_manda_desgloses_de_mas_de_48_horas_a_los_datos(hf):
+    """Un desglose que lleva más de 48 horas sin recalcularse no entra en `extra.segmentos` (lo que Claude lee como
+    «segmentos de 30 días»): Claude no puede dar por actual lo que la regla y el panel ya descartan. Los de 47 horas
+    sí."""
+    _sembrar()
+    assert [s["nombre"] for s in analisis.preparar("hf", 30, None, hoy=HOY)["extra"]["segmentos"][A]] == \
+        ["25–34 · Mujeres", "35–44 · Mujeres"]
+    _envejecer_desgloses(A, 47)
+    assert A in analisis.preparar("hf", 30, None, hoy=HOY)["extra"]["segmentos"]
+    _envejecer_desgloses(A, 75)
+    for dias in (7, 30):
+        assert analisis.preparar("hf", dias, None, hoy=HOY)["extra"]["segmentos"] == {}, dias
+
+
 def test_preparar_sin_cuentas_es_none_y_sin_anuncios_la_muestra_vacia(hf):
     assert analisis.preparar("hf", 30, None, hoy=HOY) is None
     cuentas.elegir("hf", [{"id": A, "name": "N", "currency": "SEK"}])
