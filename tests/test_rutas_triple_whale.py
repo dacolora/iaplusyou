@@ -466,9 +466,9 @@ def test_evaluar_todas_y_tienda_ajena(app):  # noqa: F811
 
 
 def test_sincronizar_sin_tienda_encola_todas_y_con_tienda_solo_esa(app):  # noqa: F811
-    """«Actualizar ahora» de Rendimiento (A5): «Todas» encola la copia de cada tienda; una entrada, solo la de su
-    tienda. Una entrada que no es del proyecto (la tienda de otro, texto raro) es «Todas»: nunca encola la tienda de
-    otro proyecto."""
+    """«Actualizar ahora» de Rendimiento (A5): «Todas» (entrada vacía) encola la copia de cada tienda; una entrada,
+    solo la de su tienda. Una entrada que no es del proyecto (la tienda de otro, texto raro) no encola nada: ni la
+    tienda de otro proyecto ni, ensanchada, todas las del proyecto."""
     no, se = _dos_tiendas()
     sitio = {"Sec-Fetch-Site": "same-origin"}
     app["c"].post("/cliente/acme/rendimiento/actualizar", data={"entrada": ""}, headers=sitio)
@@ -484,8 +484,7 @@ def test_sincronizar_sin_tienda_encola_todas_y_con_tienda_solo_esa(app):  # noqa
             con.execute(db.tarea.delete())
         assert app["c"].post("/cliente/acme/rendimiento/actualizar", data={"entrada": valor},
                              headers=sitio).status_code == 302
-        payloads = [t["payload"] for t in _tareas("tw_sincronizar")]
-        assert all(p["cliente"] == "acme" and p["tienda_id"] in (no, se) for p in payloads), (valor, payloads)
+        assert _tareas("tw_sincronizar") == [], valor
 
 
 def test_una_barra_por_copia_en_curso_con_el_pais(app):  # noqa: F811

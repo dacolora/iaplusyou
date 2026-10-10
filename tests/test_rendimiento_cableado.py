@@ -1,5 +1,6 @@
 """La pestaña Rendimiento reemplaza a Triple Whale y Meta en el menú y en todos los enlaces (spec 2026-10-09 R1)."""
 import json
+import os
 import pathlib
 import re
 import subprocess
@@ -22,19 +23,44 @@ def test_las_claves_viejas_abren_rendimiento(app):  # noqa: F811
     assert re.search(r"\bmeta['\"]?\s*:\s*['\"]rendimiento", html)
 
 
+# Carpetas que no son código de la app: pruebas, agentes, dependencias, datos y salidas (venv es un enlace al del
+# checkout principal: recorrerlo no sirve y tarda).
+NO_SE_REVISA = {"tests", "venv", ".venv", "node_modules", "__pycache__", "worktrees", "data", "clientes", "salidas",
+                "migrations", "docs"}
+# Toda forma en que una plantilla, una ruta o un script nombran una pestaña: el ancla, el hash entre comillas
+# (simples o dobles), el «Ir a…» y la clave del menú.
+ENLACES_VIEJOS = tuple(
+    forma.format(clave=clave)
+    for clave in ("triplewhale", "meta")
+    for forma in ('_anchor="{clave}"', "_anchor='{clave}'", 'href="#{clave}"', "href='#{clave}'",
+                  '"#{clave}"', "'#{clave}'", 'data-ir-tab="{clave}"', "data-ir-tab='{clave}'",
+                  'data-tab="{clave}"', "data-tab='{clave}'"))
+
+
+def _archivos_de_la_app():
+    """Plantillas, Python y JS de la app, recorridos sin seguir enlaces y sin las carpetas de NO_SE_REVISA ni las
+    ocultas (.claude, .git…). Las rutas son relativas a la raíz: en un worktree la raíz vive dentro de `.claude/`."""
+    for carpeta, subcarpetas, archivos in os.walk(RAIZ):
+        subcarpetas[:] = [d for d in subcarpetas if not d.startswith(".") and d not in NO_SE_REVISA]
+        for nombre in archivos:
+            if nombre.endswith((".py", ".html", ".js", ".mjs")):
+                yield pathlib.Path(carpeta) / nombre
+
+
 def test_ningun_enlace_apunta_a_las_pestanas_viejas():
     malos = []
-    for ruta in list((RAIZ / "templates").glob("*.html")) + list(RAIZ.glob("*.py")) + list(RAIZ.glob("*/*.py")):
-        # Las partes relativas a la raíz: en un worktree la raíz misma vive dentro de `.claude/worktrees/`.
-        partes = ruta.relative_to(RAIZ).parts
-        if "tests" in partes or ".claude" in partes:
-            continue
-        texto = ruta.read_text(encoding="utf-8")
-        for patron in ('_anchor="triplewhale"', '_anchor="meta"', 'href="#triplewhale"', 'href="#meta"',
-                       'data-ir-tab="triplewhale"', 'data-ir-tab="meta"'):
-            if patron in texto:
-                malos.append(f"{ruta.name}: {patron}")
+    revisados = set()
+    for ruta in _archivos_de_la_app():
+        rel = ruta.relative_to(RAIZ).as_posix()
+        revisados.add(rel)
+        texto = ruta.read_text(encoding="utf-8", errors="replace")
+        malos += [f"{rel}: {patron}" for patron in ENLACES_VIEJOS if patron in texto]
     assert malos == []
+    # El recorrido sí mira lo que tiene que mirar (si no, la prueba pasaría en vacío, como pasó en un worktree).
+    for esperado in ("dashboard.py", "templates/cliente.html", "triple_whale/rutas.py", "meta_rendimiento/rutas.py",
+                     "pestana_rendimiento/rutas.py", "static/tw_resultados.js", "static/exp_resultados.js"):
+        assert esperado in revisados, esperado
+    assert not any(r.startswith(("tests/", "venv/", ".claude/")) for r in revisados)
 
 
 def test_las_rutas_viejas_del_panel_ya_no_existen(app):  # noqa: F811

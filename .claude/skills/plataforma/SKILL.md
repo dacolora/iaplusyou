@@ -155,3 +155,9 @@ S3 (2026-10-08, auditoría lote 6B): la periódica diaria cola_limpiar llama man
 PND-068 (2026-10-08, decisión 2026-09-18: nada nuevo a Higgsfield): retirados productores y rutas de Nueva idea y sus nueve plantillas. No eran tareas de cola, sino hilos de Flask. Un tipo desconocido queda en error en palabras sin llamar al proveedor (tests/test_lote6c_retirar_ideas.py); proveedores/CLI y datos históricos conservados.
 
 PND-051 (enmienda 2026-10-08): el carril Nicho tiene un solo hilo para sus seis tareas que esperan proveedor y referentes_barrer. Los barridos comparten la RAM y el límite de corridas de Apify con Nicho; repartirlos en paralelo daba 402 por capacidad. General excluye Crear + Nicho (+ lectura, el carril de Meta rendimiento), y en_vuelo, esperar_hilos y recuperación son comunes a los cuatro carriles. En SIGINT/SIGTERM no se interrumpe el sondeo de Apify: el hilo termina la tarea y esperar_hilos lo espera. En un despliegue la cola debe estar vacía antes de reiniciar. No hay puntos de control ni continuaciones nuevas de Apify: se conserva el contrato anterior del proveedor y del gasto. Pruebas: tests/test_lote6c_nicho_carril.py, incluido un 402 sin cobro seguido de un segundo clic explícito con el mismo job_id que sí termina. No cambia max_intentos ni la política de cobro.
+
+**Base temporal de las pruebas (2026-10-10):** `base_temporal` (`tests/conftest.py`, cuerpo en `abrir_base_temporal`)
+crea una carpeta `creatv_test_*` por prueba y al terminar suelta el motor (`db._reset_para_tests`, dispose: nada sostiene
+la base ni su -wal/-shm) y la BORRA, también si la prueba revienta. Antes no la borraba: se juntaron 781 296 carpetas
+(589 GB) en $TMPDIR y el disco se llenó (ENOSPC). Un fixture nuevo que cree carpetas temporales las borra igual
+(`tests/test_conftest_base_temporal.py` vigila este).

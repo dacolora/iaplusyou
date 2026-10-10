@@ -84,7 +84,9 @@ los clientes». Las dos pestañas daban números distintos para el mismo anuncio
 - **A3.** Detalle del día y filtro «Canal» solo con alcance solo Triple Whale; con Meta o mezcla la gráfica no abre días.
 - **A5.** «Actualizar ahora» es una ruta (`rendimiento.actualizar`) que llama a `triple_whale.rutas.pedir_copia` y
   `meta_rendimiento.rutas.pedir_copia` con los `job_id` de siempre, la pausa compartida de Meta y la espera de 30
-  minutos de quien no es admin. Una entrada ajena es «Todas»: nunca encola la tienda o la cuenta de otro proyecto.
+  minutos de quien no es admin. Solo la entrada VACÍA es «Todas»: una que ya no existe (pestaña vieja, país quitado,
+  la de otro proyecto) no encola nada y dice «Esa vista ya no existe: recarga la pestaña.» (revisión de la tarea 8:
+  ensanchada a «Todas» copiaba todas las cuentas y gastaba el límite de uso de Meta que necesitan los lanzamientos).
 - **A6.** E2 (PND-192) trae «Cómo mejorarlo»/«Evaluar con IA» para Meta con la misma tabla y tarea; la copia de
   desgloses `meta_desglose` y los avisos por correo de Meta quedaron aparte (PND-209).
 

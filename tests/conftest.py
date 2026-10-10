@@ -1,4 +1,5 @@
 import os
+import shutil
 import sys
 import tempfile
 
@@ -9,17 +10,27 @@ if RAIZ not in sys.path:
     sys.path.insert(0, RAIZ)
 
 
-@pytest.fixture()
-def base_temporal(monkeypatch):
-    """Base SQLite nueva por test, en archivo (WAL necesita archivo, no :memory:)."""
+def abrir_base_temporal(monkeypatch):
+    """El cuerpo de `base_temporal`, aparte para poder probar que limpia. Al terminar suelta el motor (dispose: ninguna
+    conexión sigue abierta sobre la base ni sobre su -wal/-shm) y BORRA la carpeta. Antes no la borraba: el 2026-10-10
+    se habían juntado 781 296 carpetas `creatv_test_*` (589 GB) en $TMPDIR y el disco se llenó (ENOSPC)."""
     carpeta = tempfile.mkdtemp(prefix="creatv_test_")
     ruta = os.path.join(carpeta, "creatv.db")
     monkeypatch.setenv("CREATV_DB_URL", f"sqlite:///{ruta}")
     import db
     db._reset_para_tests()
-    db.crear_todo()
-    yield db
-    db._reset_para_tests()
+    try:
+        db.crear_todo()
+        yield db
+    finally:
+        db._reset_para_tests()
+        shutil.rmtree(carpeta, ignore_errors=True)
+
+
+@pytest.fixture()
+def base_temporal(monkeypatch):
+    """Base SQLite nueva por test, en archivo (WAL necesita archivo, no :memory:); se borra al terminar."""
+    yield from abrir_base_temporal(monkeypatch)
 
 
 @pytest.fixture()

@@ -6969,6 +6969,9 @@ msgstr "That version doesn't exist."
 msgid "Esa versión rompe reglas que no se negocian; pídele a Claude que la corrija."
 msgstr "That version breaks non-negotiable rules; ask Claude to fix it."
 
+msgid "Esa vista ya no existe: recarga la pestaña."
+msgstr "That view no longer exists: reload the tab."
+
 msgid "Esa voz no está disponible en el editor."
 msgstr "That voice isn't available in the editor."
 

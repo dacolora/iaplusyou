@@ -366,7 +366,8 @@ def test_cambiar_pais(conectado):
 
 def test_sincronizar(conectado):
     """«Actualizar ahora» (Rendimiento, A5): de otro sitio, nada; una entrada que no es del proyecto (la cuenta de
-    otro, texto raro) es «Todas» y nunca encola la cuenta de otro proyecto; un país, solo su cuenta; «Todas», todas."""
+    otro, texto raro) no encola nada (ni la cuenta de otro proyecto ni, ensanchada, todas las del proyecto); un país,
+    solo su cuenta; «Todas» (entrada vacía), todas."""
     _dos_cuentas()
     _cuentas("otro", ("act_7", "Ajena", "MX"))
     c = conectado["c"]
@@ -374,9 +375,7 @@ def test_sincronizar(conectado):
     assert r.status_code == 403 and _tareas() == []
     for ajena in ("act_7", "cuenta:act_7", "MX", "x y"):
         assert _actualizar(c, ajena).status_code == 302
-        assert all(t["cliente"] == "acme" and "act_7" not in t["job_id"] for t in _tareas()), ajena
-    with db.conectar() as con:
-        con.execute(db.tarea.delete())
+        assert _tareas() == [], ajena
     r = _actualizar(c, "SE")
     assert r.status_code == 302 and r.headers["Location"].endswith("#rendimiento")
     assert [t["job_id"] for t in _tareas()] == ["acme__meta_rend__act_2"]

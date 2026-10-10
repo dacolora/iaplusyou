@@ -141,3 +141,34 @@ def test_un_cliente_de_otro_proyecto_no_ve_ni_actualiza(meta_on):
     assert r.status_code == 302 and "Noruega" not in r.data.decode()
     r = c.post("/cliente/acme/rendimiento/actualizar", headers={"Sec-Fetch-Site": "same-origin"})
     assert r.status_code == 302 and _jobs() == []
+
+
+def test_una_entrada_que_ya_no_existe_no_encola_nada(meta_on):
+    """Revisión de la tarea 8: solo la entrada vacía es «Todas». Una pestaña vieja (un país que se quitó, una tienda
+    de otro proyecto, texto raro) no ensancha la copia a todo: ensanchada gastaría el límite de uso de Meta que
+    necesitan los lanzamientos. Dice que hay que recargar y no encola nada."""
+    from tests.test_rutas_productos import _flashes
+    _sembrar()
+    c = meta_on["c"]
+    for valor in ("DK", "cuenta:act_de_otro", "tienda:99999", "x y", "act_se"):
+        r = c.post("/cliente/acme/rendimiento/actualizar", data={"entrada": valor},
+                   headers={"Sec-Fetch-Site": "same-origin"})
+        assert r.status_code == 302 and r.headers["Location"].endswith("#rendimiento"), valor
+        assert _jobs() == [], valor
+        assert "Esa vista ya no existe: recarga la pestaña." in _flashes(c), valor
+    # La vacía sigue siendo «Todas» y una clave de verdad, su entrada.
+    c.post("/cliente/acme/rendimiento/actualizar", data={"entrada": "SE"}, headers={"Sec-Fetch-Site": "same-origin"})
+    assert _jobs() == ["acme__meta_rend__act_se"]
+
+
+def test_con_una_sola_entrada_una_clave_vieja_tampoco_encola(app):  # noqa: F811
+    """Con una sola entrada `entradas.elegir` siempre la devuelve: igual una clave que no es la suya no encola nada."""
+    from tests.test_rutas_productos import _flashes
+    from tests.test_rutas_triple_whale import _conectar
+    tid = _conectar()                                      # una tienda sin país: la entrada «tienda:<id>»
+    c = app["c"]
+    c.post("/cliente/acme/rendimiento/actualizar", data={"entrada": "NO"}, headers={"Sec-Fetch-Site": "same-origin"})
+    assert _jobs() == [] and "Esa vista ya no existe: recarga la pestaña." in _flashes(c)
+    c.post("/cliente/acme/rendimiento/actualizar", data={"entrada": f"tienda:{tid}"},
+           headers={"Sec-Fetch-Site": "same-origin"})
+    assert _jobs() == [f"acme__tw_sync__{tid}"]

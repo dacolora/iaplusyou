@@ -7,8 +7,8 @@ Triple Whale y de Meta.
   entrada del selector; vacía, ajena o rara = «Todas». `tienda`/`cuenta` son los parámetros de las pestañas viejas.
 - `conjuntos` (GET): «Ver más» de la tabla de conjuntos; devuelve solo filas `<tr>`.
 - `anuncios-meta` (GET): «Ver más» de los anuncios cuya fuente es Meta; devuelve solo tarjetas.
-- `actualizar` (POST): «Actualizar ahora» encola las copias de Triple Whale y de Meta del alcance con sus `job_id`
-  de siempre y las reglas de cada una (`triple_whale.rutas.pedir_copia`, `meta_rendimiento.rutas.pedir_copia`: la
+- `actualizar` (POST): «Actualizar ahora» encola las copias de Triple Whale y de Meta del alcance (una `entrada` que
+  no existe no encola nada: solo la vacía es «Todas») con sus `job_id` de siempre y las reglas de cada una (`triple_whale.rutas.pedir_copia`, `meta_rendimiento.rutas.pedir_copia`: la
   pausa compartida de Meta y la espera de 30 minutos de quien no es admin). Leer no cobra.
 
 Las rutas que cobran («Cómo mejorarlo», «Analizar los N», «Evaluar con IA») siguen en `triple_whale/rutas.py` (R13):
@@ -92,11 +92,19 @@ def ver_anuncios_meta(cliente):
 def actualizar(cliente):
     """«Actualizar ahora»: las copias de la entrada del formulario. Triple Whale: la tienda de la entrada, o todas
     (`None`) en «Todas». Meta: cada cuenta del alcance, o todas (`None`) cuando el alcance las tiene todas; en
-    «Todas» sin cuentas elegidas, `pedir_copia` dice que falta elegirlas. Cada mensaje distinto se dice una vez."""
-    s = panel.alcance_para_copias(cliente, request.form.get("entrada"))
+    «Todas» sin cuentas elegidas, `pedir_copia` dice que falta elegirlas. Cada mensaje distinto se dice una vez.
+    «Todas» es solo la entrada vacía: una entrada que no existe no encola nada y pide recargar."""
+    valor = (request.form.get("entrada") or "").strip()
+    s = panel.alcance_para_copias(cliente, valor)
     alc = s["alcance"]
     if not s["tw_cfg"] and not s["meta_ok"]:
         flash(gettext("Conecta Triple Whale o Meta para ver tu rendimiento."), "warn")
+        return _volver(cliente)
+    # Solo una `entrada` VACÍA es «Todas». Una que ya no es la clave de ninguna entrada (una pestaña vieja, un país que
+    # se quitó, la de otro proyecto) no encola nada: ensanchada a «Todas» copiaría todas las cuentas y gastaría el
+    # límite de uso de Meta por usuario y app, el mismo que necesitan los lanzamientos (revisión de la tarea 8, R22).
+    if valor and (s["actual"] is None or s["actual"]["clave"] != valor):
+        flash(gettext("Esa vista ya no existe: recarga la pestaña."), "warn")
         return _volver(cliente)
     mensajes = []
     if s["tw_cfg"] and alc["tw"]:

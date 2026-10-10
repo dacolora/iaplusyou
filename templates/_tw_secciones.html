@@ -1,6 +1,6 @@
-{# Secciones de la pestaña Triple Whale que también pinta la pestaña Rendimiento (spec 2026-10-09 §5): se movieron
-   tal cual desde _tw_panel.html para que las dos las compartan sin duplicar marcado. Solo macros, sin <script> (el JS
-   vive en _tab_triple_whale.html y en _tab_rendimiento.html). Cada macro recibe `tw` (triple_whale.panel.contexto) y
+{# Secciones de Triple Whale que pinta la pestaña Rendimiento (spec 2026-10-09 §5): se movieron tal cual desde el
+   panel de la pestaña Triple Whale (_tw_panel.html, jubilado el 2026-10-09 con su pestaña). Solo macros, sin <script>
+   (el JS vive en _tab_rendimiento.html). Cada macro recibe `tw` (triple_whale.panel.contexto) y
    `cliente`; arma dentro lo que antes eran variables de la plantilla (moneda, ev, cuenta, la tienda del alcance) y
    sus diccionarios traducidos (un {% set %} de módulo en una plantilla importada se cachea en un idioma, skill idioma).
    Rendimiento las llama en el orden del spec: copias, gasto_compartido, alertas (con las de las dos fuentes),

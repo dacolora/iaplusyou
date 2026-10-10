@@ -522,12 +522,11 @@
     _puro: { pasoRedondo: pasoRedondo, escala: escala, promedio7: promedio7, valor: valor, posicionAviso: posicionAviso,
              indiceEn: indiceEn, dinero: dinero, veces: veces, pct: pct, texto: texto }
   };
-  // Si el panel llegó antes que este archivo (va con defer), se inicia aquí; `data-twr-listo` evita hacerlo dos veces.
-  // Lo mismo en la pestaña Rendimiento (_tab_rendimiento.html, spec 2026-10-09), que pinta su panel en #rend-panel.
+  // Si el panel de Rendimiento (#rend-panel, _tab_rendimiento.html) llegó antes que este archivo (va con defer), se
+  // inicia aquí; `data-twr-listo` evita hacerlo dos veces. (#tw-panel, el de la pestaña Triple Whale, se jubiló el
+  // 2026-10-09.)
   if (document.getElementById) {
-    ['tw-panel', 'rend-panel'].forEach(function (id) {
-      var panel = document.getElementById(id);
-      if (panel) iniciar(panel);
-    });
+    var panel = document.getElementById('rend-panel');
+    if (panel) iniciar(panel);
   }
 })();

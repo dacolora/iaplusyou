@@ -255,3 +255,22 @@ def test_fuentes_que_no_se_cruzan_no_rompen_la_seccion(base_temporal):
     c = _ctx()
     assert c["usd_ok"] is True and all(_sin_copia(c))
     assert _tarjetas(c)["gasto"] == 0
+
+
+def test_un_dia_sin_montos_no_necesita_tasa_y_uno_con_gasto_si(base_temporal):
+    """R6 (migrada del panel viejo de Meta, revisión de la tarea 8): «Todas» con la tienda en USD y Meta en SEK. Un día
+    de Meta en 0/0 en una fecha sin tasa no deja «USD no disponible» (no hay nada que convertir), ni en «Resultados»
+    ni en «Por país»; el mismo día CON gasto y sin tasa sí, y nunca con una tasa inventada."""
+    _sembrar(dias_tw=5, dias_meta=5)                       # tasas de SEK solo en los últimos 5 días
+    f = _hace(15)                                          # sin tasa publicada ni una de hasta 4 días antes
+    mdatos.reemplazar_cuenta_dias("acme", "act_se", f, f, [_dia(f, 0, 0, compras=0)])
+    c = _ctx(dias=30)
+    assert c["moneda"] == "USD" and c["usd_ok"] is True and c["resultados"] is not None
+    assert round(_tarjetas(c)["gasto"], 2) == 50 + 100
+    se = next(x for x in c["por_pais"] if x["entrada"]["clave"] == "SE")
+    assert round(se["gasto_usd"], 2) == 50
+    mdatos.reemplazar_cuenta_dias("acme", "act_se", f, f, [_dia(f, 100, 0, compras=0)])
+    c = _ctx(dias=30)
+    assert c["usd_ok"] is False and c["resultados"] is None
+    se = next(x for x in c["por_pais"] if x["entrada"]["clave"] == "SE")
+    assert se["gasto"] == 600 and se["gasto_usd"] is None
