@@ -609,9 +609,39 @@ def test_evaluar_si_falla_tras_pagar_anota_el_gasto_y_el_error_va_sin_token(eval
     assert _gastos_eval()[0]["usd"] == pytest.approx(costo_real(4000, 900))
 
 
+def _cobra_hf():
+    from cobros import libro
+    libro.configurar("hf", usuario="admin", cobrar=True)
+    with db.conectar() as con:
+        libro.acreditar(con, "hf", "ajuste", 50_000, "ajuste", usuario="admin", detalle="prueba")
+
+
+def _movimientos_hf():
+    with db.conectar() as con:
+        return [r.tipo for r in con.execute(sa.select(db.movimiento_saldo.c.tipo).where(
+            db.movimiento_saldo.c.cliente == "hf", db.movimiento_saldo.c.tipo != "ajuste"))]
+
+
+def test_evaluar_en_un_proyecto_que_cobra_cobra_lo_entregado(evaluacion, monkeypatch):
+    _cobra_hf()
+    monkeypatch.setattr(analisis, "_llamar", lambda c, s: (RESPUESTA_OK, 10000, 5000))
+    t.meta_rend_evaluar(_tarea_eval(evaluacion["eid"]))
+    assert _movimientos_hf() == ["cobro"]
+
+
+def test_evaluar_invalida_en_un_proyecto_que_cobra_no_se_le_cobra(evaluacion, monkeypatch):
+    _cobra_hf()
+    monkeypatch.setattr(analisis, "_llamar", lambda c, s: ("no es JSON", 3000, 800))
+    with pytest.raises(RuntimeError):
+        t.meta_rend_evaluar(_tarea_eval(evaluacion["eid"]))
+    assert _movimientos_hf() == ["no_cobrado"] and _gastos_eval()[0]["usd"] == pytest.approx(costo_real(6000, 1600))
+
+
 def test_evaluar_si_la_fila_se_borra_a_mitad_igual_anota_lo_que_claude_cobro(evaluacion, monkeypatch):
-    """Desconectar Meta borra las evaluaciones del proyecto: si pasa mientras Claude responde, lo pagado se anota."""
+    """Desconectar Meta borra las evaluaciones del proyecto: si pasa mientras Claude responde, lo pagado se anota (sin
+    entregar: nadie va a ver ese resultado, al cliente no se le cobra)."""
     eid = evaluacion["eid"]
+    _cobra_hf()
 
     def _llamar(content, system_):
         datos.borrar_evaluaciones("hf")
@@ -620,6 +650,24 @@ def test_evaluar_si_la_fila_se_borra_a_mitad_igual_anota_lo_que_claude_cobro(eva
     assert t.meta_rend_evaluar(_tarea_eval(eid)) == "Esa evaluación ya no existe."
     assert datos.evaluacion("hf", eid) is None
     assert _gastos_eval()[0]["usd"] == pytest.approx(costo_real(10000, 5000))
+    assert _movimientos_hf() == ["no_cobrado"]
+
+
+def test_evaluar_si_guardar_el_resultado_falla_anota_lo_pagado_sin_cobrarlo(evaluacion, monkeypatch):
+    eid = evaluacion["eid"]
+    _cobra_hf()
+    monkeypatch.setattr(analisis, "_llamar", lambda c, s: (RESPUESTA_OK, 10000, 5000))
+    original = datos.actualizar_evaluacion
+
+    def _falla_al_guardar(evaluacion_id, **campos):
+        if campos.get("estado") == "lista":
+            raise RuntimeError("database is locked")
+        return original(evaluacion_id, **campos)
+    monkeypatch.setattr(datos, "actualizar_evaluacion", _falla_al_guardar)
+    with pytest.raises(RuntimeError):
+        t.meta_rend_evaluar(_tarea_eval(eid))
+    assert datos.evaluacion("hf", eid)["estado"] == "error"
+    assert len(_gastos_eval()) == 1 and _movimientos_hf() == ["no_cobrado"]
 
 
 def test_evaluar_una_que_no_existe_o_es_de_otro_proyecto_no_llama_a_claude(evaluacion, monkeypatch):

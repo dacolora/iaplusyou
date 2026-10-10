@@ -268,18 +268,22 @@ def meta_rend_evaluar(tarea):
         texto, imagenes = analisis.armar(cliente, fila, medios, bloques)
         resultado, entrada, salida = analisis.analizar(texto, imagenes, idiomas.de_proyecto(cliente), elegidos,
                                                        fila["recomendaciones"] or [])
-        # El gasto de Claude se anota UNA vez, antes de la última escritura: si esa falla, el except no lo repite.
         usd = costo_real(entrada, salida)
-        gastos.registrar_seguro(cliente, "evaluacion", usd, referencia, proveedor="anthropic",
-                                detalle=gettext("%(n)s anuncio(s) de Meta", n=len(elegidos)))
-        claude_anotado = True
         for a in elegidos:
             if medios.get(a["ad_id"]):
                 a["medio"] = medios[a["ad_id"]]
             if a["ad_id"] in bloques:
                 a["visual"] = bloques[a["ad_id"]]["clase"]
-        if not datos.actualizar_evaluacion(eid, estado="lista", resultado=resultado, usd=usd, muestra=elegidos,
-                                           error=None):
+        guardada = datos.actualizar_evaluacion(eid, estado="lista", resultado=resultado, usd=usd, muestra=elegidos,
+                                               error=None)
+        # El gasto de Claude se anota UNA vez (`registrar_seguro` nunca lanza). Si la fila ya no estaba (desconectar
+        # Meta borra las evaluaciones mientras Claude respondía), lo pagado se anota igual pero sin entregar: nadie
+        # va a ver ese resultado, así que en un proyecto que cobra no se le cobra.
+        gastos.registrar_seguro(cliente, "evaluacion", usd, referencia, proveedor="anthropic", entregado=guardada,
+                                detalle=gettext("%(n)s anuncio(s) de Meta", n=len(elegidos)) if guardada
+                                else gettext("sin resultado usable"))
+        claude_anotado = True
+        if not guardada:
             return ya_no_existe
     except Exception as e:
         if not claude_anotado:
