@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Creatv Galadsy{% endblock %}
+{% block title %}Creatv Adstra{% endblock %}
 {% block content %}
 <section class="landing-hero aparece">
   <div class="landing-hero-texto">
-    <span class="marca-logo" role="img" aria-label="Creatv Galadsy"></span>
-    <h1 class="landing-lema">Run more <span class="landing-degradado">GALADSY</span></h1>
+    <span class="marca-logo" role="img" aria-label="Creatv Adstra"></span>
+    <h1 class="landing-lema">Run more <span class="landing-degradado">ADSTRA</span></h1>
     <p class="landing-bajada">{{ _('De la referencia al anuncio publicado. Todo en un solo lugar.') }}</p>
     <ul class="landing-sin">
       <li>{{ _('Sin agencias.') }}</li>
@@ -84,8 +84,8 @@
                  ('imagen', 7, 480, 853), ('imagen', 14, 640, 800)] %}
 <section class="landing-vitrina aparece" aria-labelledby="vitrina-titulo">
   <div class="landing-seccion-cabecera">
-    <h2 id="vitrina-titulo" class="landing-titulo">{{ _('Hecho con Creatv Galadsy') }}</h2>
-    <p class="landing-seccion-sub">{{ _('GALADSY convierte tus productos y tus ideas ganadoras en anuncios de e‑commerce listos para salir.') }}</p>
+    <h2 id="vitrina-titulo" class="landing-titulo">{{ _('Hecho con Creatv Adstra') }}</h2>
+    <p class="landing-seccion-sub">{{ _('ADSTRA convierte tus productos y tus ideas ganadoras en anuncios de e‑commerce listos para salir.') }}</p>
   </div>
   <div class="landing-vitrina-carril">
     <ul class="landing-vitrina-pista">
@@ -96,7 +96,7 @@
         <video class="landing-media" src="{{ url_for('static', filename='landing/video-%d.mp4' % n) }}" poster="{{ url_for('static', filename='landing/video-%d.jpg' % n) }}" muted loop playsinline preload="none"></video>
         <span class="generado-tipo">{{ _('Video') }}</span>
         {% else %}
-        <img class="landing-media" src="{{ url_for('static', filename='landing/imagen-%d.webp' % n) }}" alt="{% if not copia %}{{ _('Estático generado con Creatv Galadsy') }}{% endif %}" loading="lazy">
+        <img class="landing-media" src="{{ url_for('static', filename='landing/imagen-%d.webp' % n) }}" alt="{% if not copia %}{{ _('Estático generado con Creatv Adstra') }}{% endif %}" loading="lazy">
         <span class="generado-tipo">{{ _('Estático') }}</span>
         {% endif %}
       </li>
@@ -132,19 +132,19 @@
       <span class="plan-cifra plan-cifra-texto">Business Custom</span>
       <span class="plan-unidad">{{ _('Plan a tu medida') }}</span>
       <p>{{ _('Volumen, marcas y países a tu medida, con acompañamiento directo de nuestro equipo.') }}</p>
-      <a class="btn-guardar plan-boton" href="mailto:dacoloradog@gmail.com?subject=Creatv%20Galadsy%20Business%20Custom">{{ _('Hablar con nosotros') }}</a>
+      <a class="btn-guardar plan-boton" href="mailto:dacoloradog@gmail.com?subject=Creatv%20Adstra%20Business%20Custom">{{ _('Hablar con nosotros') }}</a>
     </article>
   </div>
 </section>
 
-<section class="landing-cadena aparece" aria-label="{{ _('El ciclo de Creatv Galadsy') }}">
+<section class="landing-cadena aparece" aria-label="{{ _('El ciclo de Creatv Adstra') }}">
   {% for palabra in [_('Referencia'), _('Crear'), _('Editar'), _('Lanzar'), _('Escalar')] %}
   <span class="cadena-eslabon" style="--i: {{ loop.index0 }}">{{ palabra }}</span>{% if not loop.last %}<span class="cadena-flecha" aria-hidden="true">→</span>{% endif %}
   {% endfor %}
 </section>
 
 <section class="landing-final aparece">
-  <h2 class="landing-lema">Run more <span class="landing-degradado">GALADSY</span></h2>
+  <h2 class="landing-lema">Run more <span class="landing-degradado">ADSTRA</span></h2>
   <p class="landing-bajada">{{ _('Solo más anuncios. Más pruebas. Más ganadores.') }}</p>
   <div class="landing-cta">
     <a class="btn-generar" href="#planes">{{ _('Empezar a crear anuncios') }}</a>
@@ -187,7 +187,7 @@
 </section>
 
 <footer class="landing-pie vacio">
-  © 2026 Creatv Galadsy · <a href="{{ url_for('privacidad') }}">{{ _('Privacidad') }}</a> · <a href="{{ url_for('terminos') }}">{{ _('Términos') }}</a> · <a href="{{ url_for('eliminar_datos') }}">{{ _('Eliminación de datos') }}</a>
+  © 2026 Creatv Adstra · <a href="{{ url_for('privacidad') }}">{{ _('Privacidad') }}</a> · <a href="{{ url_for('terminos') }}">{{ _('Términos') }}</a> · <a href="{{ url_for('eliminar_datos') }}">{{ _('Eliminación de datos') }}</a>
 </footer>
 <script>
   (function () {

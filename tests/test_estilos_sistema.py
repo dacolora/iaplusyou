@@ -121,7 +121,7 @@ _RE_COLOR_LITERAL = re.compile(r"#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(|\b(?:wh
 _RE_VALOR = re.compile(r":\s*([^;{}]+)")
 ANIMACIONES_PERMITIDAS = {"pulso", "aparece-card", "exp-pulso", "fe-pulso", "flash-in", "girar", "gp-latido",
                           "gp-recien", "rayas-progreso", "shimmer",
-                          # Fondo galáctico de toda la plataforma y la vitrina de la portada (Creatv Galadsy, 2026-10-06)
+                          # Fondo galáctico de toda la plataforma y la vitrina de la portada (Creatv Adstra, 2026-10-06)
                           "galaxia-nebulosa-a", "galaxia-nebulosa-b", "galaxia-nebulosa-c", "galaxia-gira",
                           "galaxia-estrellas-1", "galaxia-estrellas-2", "galaxia-titila", "galaxia-reticula",
                           "portada-vitrina", "portada-cadena"}

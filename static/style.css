@@ -94,7 +94,7 @@
     radial-gradient(700px 380px at -10% 110%, rgba(56, 200, 255, 0.08), transparent 60%),
     radial-gradient(rgba(120, 170, 255, 0.07) 1px, transparent 1.5px) 0 0 / 22px 22px;
 
-  /* Fondo galáctico (2026-10-06, Creatv Galadsy): nebulosas en los azules del logo, estrellas y retícula. Solo
+  /* Fondo galáctico (2026-10-06, Creatv Adstra): nebulosas en los azules del logo, estrellas y retícula. Solo
      fondo detrás de todo, con alfa: compuestos sobre --bg quedan oscuros. */
   --galaxia-azul: rgba(29, 90, 230, 0.55);
   --galaxia-azul-suave: rgba(29, 90, 230, 0.34);
@@ -3313,7 +3313,7 @@ body.panel-abierto { overflow: hidden; }
    :where() no suma especificidad, así que cualquier clase con su propio color le gana. */
 :where(a) { color: var(--accent-texto); }
 /* ── estilos/componentes/marca.css ── */
-/* Marca Creatv Galadsy (2026-10-06): el símbolo y el nombre son máscaras (PNG con alfa en static/img/galadsy-*)
+/* Marca Creatv Adstra (2026-10-06): el símbolo y el nombre son máscaras (PNG con alfa en static/img/adstra-*)
    pintadas con el color del texto, así siguen el tema sin un segundo juego de archivos. */
 .marca-mark,
 .marca-texto,
@@ -3331,26 +3331,26 @@ body.panel-abierto { overflow: hidden; }
 .marca-mark {
   width: 26px;
   height: 28px;
-  -webkit-mask-image: url("img/galadsy-simbolo.png");
-  mask-image: url("img/galadsy-simbolo.png");
+  -webkit-mask-image: url("img/adstra-simbolo.png");
+  mask-image: url("img/adstra-simbolo.png");
 }
 .marca-texto {
-  width: 80px;
+  width: 82px;
   height: 27px;
-  -webkit-mask-image: url("img/galadsy-nombre.png");
-  mask-image: url("img/galadsy-nombre.png");
+  -webkit-mask-image: url("img/adstra-nombre.png");
+  mask-image: url("img/adstra-nombre.png");
 }
 /* Logo completo (símbolo + nombre) de las páginas principales: portada, login, recuperar, restablecer, legales. */
 .marca-logo {
-  width: 250px;
-  height: 68px;
+  width: 220px;
+  height: 86px;
   max-width: 100%;
   margin-bottom: var(--esp-4);
-  -webkit-mask-image: url("img/galadsy-logo.png");
-  mask-image: url("img/galadsy-logo.png");
+  -webkit-mask-image: url("img/adstra-logo.png");
+  mask-image: url("img/adstra-logo.png");
 }
 /* ── estilos/componentes/fondo-galaxia.css ── */
-/* Fondo galáctico de toda la plataforma (2026-10-06, Creatv Galadsy; base.html, .fondo-galaxia): nebulosas en los
+/* Fondo galáctico de toda la plataforma (2026-10-06, Creatv Adstra; base.html, .fondo-galaxia): nebulosas en los
    azules del logo que derivan despacio, un núcleo que gira, dos capas de estrellas que titilan y una retícula tenue.
    Todo son degradados (sin filter: blur), así el movimiento es barato de pintar. Sin movimiento con
    prefers-reduced-motion (base.css apaga todas las animaciones). */
@@ -3947,7 +3947,7 @@ body:has(#exp-nuevo) main { margin-left: 0; max-width: 1440px; width: 100%; }
 #exp-nuevo [hidden] { display: none !important; }
 @media (max-width: 760px) { #exp-nuevo .exp-recorrido { gap: 4px; } #exp-nuevo .exp-recorrido span { flex: 1 1 40%; } #exp-nuevo .fe-opciones { flex-wrap: wrap; } #exp-nuevo .exp-resumen { padding: 16px; } }
 /* ── estilos/pantallas/portada.css ── */
-/* Portada Creatv Galadsy (templates/index.html, 2026-10-06): «Run more GALADSY», flujo interactivo, vitrina que corre,
+/* Portada Creatv Adstra (templates/index.html, 2026-10-06): «Run more ADSTRA», flujo interactivo, vitrina que corre,
    planes, cadena del ciclo, cierre y la tecnología al final. Lo base del héroe (.landing-hero, .landing-cta,
    .landing-tarjeta, .landing-empezar) sigue en legado/02. */
 

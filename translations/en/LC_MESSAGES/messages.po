@@ -1726,6 +1726,9 @@ msgstr "From which character"
 msgid "A quién le habla"
 msgstr "Who it speaks to"
 
+msgid "ADSTRA convierte tus productos y tus ideas ganadoras en anuncios de e‑commerce listos para salir."
+msgstr "ADSTRA turns your products and winning ideas into ready to run e‑commerce ads."
+
 msgid "API oficial, gratis para uso propio (100 llamadas por minuto). Si esto se vende como producto, Reddit pide permiso comercial."
 msgstr "Official API, free for your own use (100 calls per minute). If this is sold as a product, Reddit requires commercial permission."
 
@@ -5001,8 +5004,8 @@ msgstr "The catalog comes from the no-keys connection; this connection brings in
 msgid "El catálogo sigue llegando desde la conexión sin llaves; la Admin API agrega pedidos y atribución."
 msgstr "The catalog still comes from the no-keys connection; the Admin API adds orders and attribution."
 
-msgid "El ciclo de Creatv Galadsy"
-msgstr "The Creatv Galadsy cycle"
+msgid "El ciclo de Creatv Adstra"
+msgstr "The Creatv Adstra cycle"
 
 #, python-format
 msgid "El clic sale caro con un CTR normal: CPC %(cpc)s (máximo %(max)s); es la subasta, no el creativo."
@@ -7028,8 +7031,8 @@ msgstr "Standard"
 msgid "Estático"
 msgstr "Static"
 
-msgid "Estático generado con Creatv Galadsy"
-msgstr "Static made with Creatv Galadsy"
+msgid "Estático generado con Creatv Adstra"
+msgstr "Static made with Creatv Adstra"
 
 msgid "Estética"
 msgstr "Aesthetics"
@@ -7597,9 +7600,6 @@ msgstr "Fade out"
 #, python-format
 msgid "Funnel inválido: %(funnel)s. Opciones: %(opciones)s"
 msgstr "Invalid funnel: %(funnel)s. Options: %(opciones)s"
-
-msgid "GALADSY convierte tus productos y tus ideas ganadoras en anuncios de e‑commerce listos para salir."
-msgstr "GALADSY turns your products and winning ideas into ready to run e‑commerce ads."
 
 msgid "Gafas"
 msgstr "Glasses"
@@ -8192,8 +8192,8 @@ msgstr "There's research in progress on this study: wait for it to finish or can
 msgid "Hechas"
 msgstr "Done"
 
-msgid "Hecho con Creatv Galadsy"
-msgstr "Made with Creatv Galadsy"
+msgid "Hecho con Creatv Adstra"
+msgstr "Made with Creatv Adstra"
 
 #, python-format
 msgid "Hecho en Creatv · %(exp)s"
@@ -15323,8 +15323,8 @@ msgstr "Your TrendTrack plan doesn't include the API (the Pro plan or higher is 
 msgid "Tu proyecto %(nombre)s ya está conectado a Meta: cuenta %(cuenta)s · Página %(pagina)s. Ya puedes probar piezas en Experimentos y publicar contenido."
 msgstr "Your project %(nombre)s is now connected to Meta: account %(cuenta)s · Page %(pagina)s. You can now test pieces in Experiments and publish content."
 
-msgid "Tu proyecto usa su propia app de Meta: Creatv Galadsy opera solo con tus credenciales y tus datos no pasan por ninguna app ajena."
-msgstr "Your project uses its own Meta app: Creatv Galadsy operates only with your credentials and your data doesn't pass through any third-party app."
+msgid "Tu proyecto usa su propia app de Meta: Creatv Adstra opera solo con tus credenciales y tus datos no pasan por ninguna app ajena."
+msgstr "Your project uses its own Meta app: Creatv Adstra operates only with your credentials and your data doesn't pass through any third-party app."
 
 msgid "Tu respuesta"
 msgstr "Your answer"

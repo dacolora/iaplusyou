@@ -123,11 +123,11 @@ PND-028/031/044 (2026-10-03, lote 2): «Versión A» requiere una hija B real; l
 
 PND-130/133 (2026-10-05, lote 4): en celular las cifras de Final edition colocan el icono encima para que la etiqueta use todo el ancho, sin cortar palabras: overflow-wrap normal solo dentro de @media max-width 760px; escritorio y .fe-flujo small conservan anywhere (revisión de Codex, 2026-10-05). El detalle remoto rechaza respuestas redirigidas (sesión vencida) antes de leer su HTML; conserva el aviso de error y no arranca sondeos. La revisión visual a 375 px la hace Claude.
 
-## Marca Creatv Galadsy y fondo galáctico (2026-10-06)
+## Marca Creatv Adstra y fondo galáctico (2026-10-06, nombre de vuelta el 2026-10-10)
 
-- La marca es **Creatv Galadsy** (pedido de Camilo, 2026-10-06; antes Creatv Machine/Flow). El logo son tres máscaras
-  PNG con alfa (`static/img/galadsy-simbolo|nombre|logo.png`) que `componentes/marca.css` pinta con `currentColor`
-  (`.marca-mark`, `.marca-texto`, `.marca-logo`); el favicon es `galadsy-icono.png`. `cuentas.NOMBRE_PLATAFORMA` es el
+- La marca es **Creatv Adstra** (pedido de Camilo; fue Creatv Galadsy del 2026-10-06 al 2026-10-10 y volvió a Adstra). El logo son tres máscaras
+  PNG con alfa (`static/img/adstra-simbolo|nombre|logo.png`) que `componentes/marca.css` pinta con `currentColor`
+  (`.marca-mark`, `.marca-texto`, `.marca-logo`); el favicon es `adstra-icono.png`. `cuentas.NOMBRE_PLATAFORMA` es el
   nombre de los correos.
 - `componentes/fondo-galaxia.css` + el bloque `.fondo-galaxia` de `base.html` (reemplazó a `.fondo-ambiente`): nebulosas,
   núcleo, estrellas y retícula, solo degradados con tokens `--galaxia-*`, `--estrella*`, `--reticula`. Va **en azul**:

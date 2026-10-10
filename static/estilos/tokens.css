@@ -92,7 +92,7 @@
     radial-gradient(700px 380px at -10% 110%, rgba(56, 200, 255, 0.08), transparent 60%),
     radial-gradient(rgba(120, 170, 255, 0.07) 1px, transparent 1.5px) 0 0 / 22px 22px;
 
-  /* Fondo galáctico (2026-10-06, Creatv Galadsy): nebulosas en los azules del logo, estrellas y retícula. Solo
+  /* Fondo galáctico (2026-10-06, Creatv Adstra): nebulosas en los azules del logo, estrellas y retícula. Solo
      fondo detrás de todo, con alfa: compuestos sobre --bg quedan oscuros. */
   --galaxia-azul: rgba(29, 90, 230, 0.55);
   --galaxia-azul-suave: rgba(29, 90, 230, 0.34);
