@@ -10,7 +10,9 @@ anuncios van siempre en la moneda de su cuenta (cada fila lleva `moneda`).
 
 Cada anuncio se compara con SU cuenta: `evaluacion.evaluar` corre una vez por cuenta, sobre UNA lectura de
 `datos.totales_por_anuncio` por ventana para todas las cuentas del alcance (nunca una consulta por cuenta ni por
-fila). Todo `contexto()` son unas 12 consultas más una por moneda que haya que convertir."""
+fila). Todo `contexto()` son de 14 a 16 consultas según el período (15 con el de 30 días, el de siempre), más
+una por moneda que haya que convertir en «Todas»; ninguna crece con las cuentas ni con las filas
+(`test_pocas_consultas_con_tres_cuentas`)."""
 from datetime import date, datetime, timedelta
 
 import decisor
@@ -340,11 +342,13 @@ def _por_conjunto(filas_anuncio):
 
 
 def _entrada_reglas(cliente, en_alcance, hoy, reglas, filas_dia=None, anuncios=None, frecuencia_7=None,
-                    desgloses_30=None, ahora=None):
+                    desgloses_30=None, ahora=None, evaluados=None):
     """La `entrada` de `recomendaciones.calcular` (forma en su docstring) para esas cuentas, sobre los últimos 7 y 30
     días hasta `hoy`. Lo que el panel ya leyó llega aquí y no se vuelve a pedir: `filas_dia` (días de cuenta que
     cubran los últimos 30), `anuncios` ((30 días, últimos 7, los 7 anteriores) de `_leer_anuncios`), `frecuencia_7`
-    y `desgloses_30`. Sin ellos son 6 lecturas (la copia, que no tiene panel). Los desgloses viejos (más de
+    y `desgloses_30`. Sin ellos son 6 lecturas (la copia, que no tiene panel). `evaluados` es la salida de `_evaluar`
+    sobre esos mismos `anuncios` (el panel con el período de 30 días ya la tiene: evaluar dos veces lo mismo costaba
+    un cuarto de la carga, revisión de la Task 4 de E2); sin ella se evalúa aquí. Los desgloses viejos (más de
     `HORAS_DESGLOSE_VIGENTE`) no entran."""
     ids = [c["ad_account_id"] for c in en_alcance]
     hasta = _iso(hoy)
@@ -354,7 +358,10 @@ def _entrada_reglas(cliente, en_alcance, hoy, reglas, filas_dia=None, anuncios=N
     if anuncios is None:
         anuncios = _leer_anuncios(cliente, ids, desde_30, hasta, hoy)
     a30, a7, previos = anuncios
-    evaluados, _, _ = _evaluar(ids, a30, a7, previos, {c["ad_account_id"]: c for c in en_alcance}, reglas)
+    if evaluados is None:
+        evaluados, _, _ = _evaluar(ids, a30, a7, previos, {c["ad_account_id"]: c for c in en_alcance}, reglas)
+    # Copias: `gasto_7` y `gasto_30` son de las reglas y no se cuelan en las filas de anuncios que pinta el panel.
+    evaluados = [dict(a) for a in evaluados]
     gasto_7 = {(f["ad_account_id"], str(f["ad_id"])): float(f.get("gasto") or 0) for f in a7}
     for a in evaluados:
         a["gasto_7"] = gasto_7.get((a["ad_account_id"], a["ad_id"]), 0.0)
@@ -582,16 +589,19 @@ def contexto(cliente, dias=PERIODO_DEFECTO, cuenta=None, hoy=None, pagina_anunci
 
     # Diagnóstico y Segmentos (spec E2 §6 y §9): a lo sumo 4 lecturas más que E1 — los objetos activos, los
     # anuncios de 30 días si el período es otro, la frecuencia de 7 días por campaña si la ventana de alcance es
-    # otra, y los desgloses de las reglas y de «Segmentos» juntos. Lo demás sale de lo ya leído.
+    # otra, y los desgloses de las reglas y de «Segmentos» juntos. Lo demás sale de lo ya leído; con el período de 30
+    # días también la evaluación de los anuncios (mismas lecturas, mismas reglas: no se evalúa dos veces).
     _, recientes, previos = lecturas
-    a30 = lecturas[0] if dias == DIAS_REGLAS else datos.totales_por_anuncio(cliente, ids, desde_reglas, hasta)
+    mismo_periodo = dias == DIAS_REGLAS
+    a30 = lecturas[0] if mismo_periodo else datos.totales_por_anuncio(cliente, ids, desde_reglas, hasta)
     ventana_seg = _ventana_segmentos(dias)
     desgloses = datos.desgloses(cliente, ids, sorted({DIAS_REGLAS, ventana_seg}))
     ahora = _ahora()
     entrada = _entrada_reglas(
         cliente, en_alcance, hoy, reglas, filas_dia=filas, anuncios=(a30, recientes, previos),
         frecuencia_7=alcances_campana if ventana == DIAS_SEMANA else None,
-        desgloses_30=[f for f in desgloses if f["ventana"] == DIAS_REGLAS], ahora=ahora)
+        desgloses_30=[f for f in desgloses if f["ventana"] == DIAS_REGLAS], ahora=ahora,
+        evaluados=anuncios if mismo_periodo else None)
     recs = recomendaciones.calcular(entrada)
     ctx.update(recomendaciones=recs, conteo_recomendaciones=_conteo_niveles(recs), ventana_segmentos=ventana_seg,
                segmentos=segmentos([f for f in desgloses if f["ventana"] == ventana_seg], en_alcance, moneda_comun,

@@ -519,6 +519,24 @@ def test_orden_alta_media_baja_y_luego_impacto():
     assert recs[2]["impacto"]["moneda"] == "SEK" and recs[1]["impacto"]["moneda"] == "NOK"
 
 
+def test_tipos_alta_son_los_que_alguna_regla_puede_marcar_alta():
+    """`TIPOS_ALTA` (lo que la copia guarda para Alertas, cada uno con su texto en `alertas.TEXTOS_META_RENDIMIENTO`)
+    sale de las reglas: si una regla nueva o cambiada puede dar «alta», esta prueba obliga a sumarla ahí y a darle su
+    texto (test_alertas_fuentes), en vez de que Alertas la ignore en silencio."""
+    import inspect
+    import re
+    altos, todos = set(), set()
+    for regla in rec._REGLAS:
+        fuente = inspect.getsource(regla)
+        tipos = set(re.findall(r'cx\.rec\(\s*"(\w+)"', fuente))
+        assert tipos, regla.__name__
+        todos |= tipos
+        if '"alta"' in fuente:
+            altos |= tipos
+    assert todos == set(rec.TIPOS)
+    assert altos == set(rec.TIPOS_ALTA)
+
+
 def test_sin_impacto_va_despues_dentro_de_su_nivel():
     e = _abo()
     e["anuncios"] = [anuncio("1", veredicto="perdedor", gasto_7=7.0)]

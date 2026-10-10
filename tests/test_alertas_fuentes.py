@@ -1472,8 +1472,9 @@ def test_meta_rendimiento_una_alerta_por_recomendacion_alta_guardada(base_tempor
 def test_meta_rendimiento_cada_tipo_alto_tiene_su_texto(base_temporal):
     import alertas
     from meta_rendimiento import recomendaciones
-    altos = ("cuenta_estado", "cuenta_roas_bajo", "aprendizaje_limitado", "perdedores_gastando",
-             "anuncios_con_problemas")
+    # Un tipo que puede ser «alta» sin su texto aquí se perdería en silencio (la fuente lo ignora): tienen que
+    # coincidir con `recomendaciones.TIPOS_ALTA`, que a su vez coincide con las reglas (test_meta_rend_recomendaciones).
+    altos = recomendaciones.TIPOS_ALTA
     assert set(alertas.TEXTOS_META_RENDIMIENTO) == set(altos) and set(altos) <= set(recomendaciones.TIPOS)
     _cuenta_meta("act_1", "Norway", [{"tipo": t, "huella": f"{i:064x}"} for i, t in enumerate(altos)])
     a = alertas._fuente_meta_rendimiento("acme", AHORA)

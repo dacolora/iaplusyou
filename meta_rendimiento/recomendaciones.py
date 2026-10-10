@@ -96,6 +96,11 @@ TIPOS = ("cuenta_estado", "cuenta_roas_bajo", "aprendizaje_limitado", "perdedore
 # Tipos que juntan todo lo de una cuenta en una sola recomendación: su huella no lleva los objetos (ruling E2-R4).
 AGREGADOS = ("aprendizaje_limitado", "perdedores_gastando", "anuncios_con_problemas", "cuenta_roas_bajo",
              "cuenta_estado")
+# Tipos que alguna regla puede marcar «alta»: los que la copia guarda para Alertas, y cada uno tiene su título en
+# `alertas.TEXTOS_META_RENDIMIENTO` (la fuente ignora un tipo sin texto). Una prueba exige que coincidan con las
+# reglas y con esos textos, para que un «alta» nuevo no se pierda en silencio (revisión de la Task 4 de E2).
+TIPOS_ALTA = ("cuenta_estado", "cuenta_roas_bajo", "aprendizaje_limitado", "perdedores_gastando",
+              "anuncios_con_problemas")
 # effective_status de un anuncio que entrega (o puede entregar): WITH_ISSUES sigue gastando en muchos casos.
 ESTADOS_ENTREGA = ("ACTIVE", "WITH_ISSUES")
 ESTADOS_PROBLEMA = ("WITH_ISSUES", "DISAPPROVED")

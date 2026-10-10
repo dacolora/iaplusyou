@@ -338,6 +338,29 @@ def test_las_reglas_miran_siempre_7_y_30_dias_sea_cual_sea_el_periodo(base_tempo
     assert ids[7] == ids[14] == ids[30] == ids[90] and ids[30]
 
 
+def test_con_el_periodo_de_30_dias_los_anuncios_se_evaluan_una_sola_vez(base_temporal, conectado, monkeypatch):
+    """Con el período de 30 días el Diagnóstico reusa la evaluación de la tabla de anuncios (mismas lecturas, mismas
+    reglas): evaluar dos veces lo mismo era un cuarto de la carga (revisión de la Task 4 de E2). Con otro período las
+    reglas miran otros 30 días y sí evalúan aparte. Lo que sale es lo mismo."""
+    _sembrar_diagnostico()
+    sin_reuso = panel.recomendaciones_de_cuenta("hf", A, hoy=HOY)
+    original, llamadas = panel._evaluar, []
+
+    def contar(*args, **kwargs):
+        llamadas.append(1)
+        return original(*args, **kwargs)
+    monkeypatch.setattr(panel, "_evaluar", contar)
+    for dias, esperadas in ((30, 1), (7, 2), (90, 2)):
+        llamadas.clear()
+        ctx = panel.contexto("hf", dias=dias, hoy=HOY)
+        assert len(llamadas) == esperadas, (dias, len(llamadas))
+        assert [r["id"] for r in ctx["recomendaciones"] if r["cuenta"] == A] == [r["id"] for r in sin_reuso]
+        if dias == 30:
+            assert [r for r in ctx["recomendaciones"] if r["cuenta"] == A] == sin_reuso
+            # Las cifras de las reglas no se cuelan en las filas de la tabla de anuncios.
+            assert ctx["anuncios"] and not any("gasto_7" in a or "gasto_30" in a for a in ctx["anuncios"])
+
+
 def test_recomendaciones_de_cuenta_son_las_del_panel_sin_flask(base_temporal, conectado):
     _sembrar_diagnostico()
     del_panel = [r for r in panel.contexto("hf", hoy=HOY)["recomendaciones"] if r["cuenta"] == A]
