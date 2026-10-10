@@ -238,7 +238,7 @@ def _ventana_texto(nombre, t, prev, moneda):
 
 
 def _bloque_cuenta(c):
-    moneda = c.get("moneda") or ""
+    moneda = _ajeno(c.get("moneda"), 8)
     lineas = [f"- [{_ajeno(c['ad_account_id'], 40)}] «{_ajeno(c.get('nombre'))}» · país {c.get('pais') or '—'} · "
               f"moneda {moneda or '—'}",
               _ventana_texto("últimos 7 días", c["u7"], c["p7"], moneda),
@@ -264,7 +264,7 @@ def _bloque_recomendacion(r):
 
 
 def _bloque_anuncio(a, clase):
-    m, moneda = a.get("m") or {}, a.get("moneda") or ""
+    m, moneda = a.get("m") or {}, _ajeno(a.get("moneda"), 8)
     lineas = [f"[{a['ref']}] «{_ajeno(a.get('nombre'))}» · cuenta «{_ajeno(a.get('cuenta_nombre'))}» · campaña "
               f"«{_ajeno(a.get('campana')) or '—'}» · conjunto «{_ajeno(a.get('conjunto')) or '—'}» · estado "
               f"{_ajeno(a.get('estado'), 30) or '—'} · veredicto {a['veredicto']} ({_ajeno(a.get('motivo'), 300)})",
@@ -442,7 +442,7 @@ def enlazar_plan(resultado, elegidos, recs):
     for paso in resultado.get("plan") or []:
         anuncios = [por_ref[x] for x in paso["objetos"] if x in por_ref]
         rs = [por_rec[x] for x in paso["objetos"] if x in por_rec]
-        paso["recomendaciones"] = [r["id"] for r in rs]
+        paso["recomendaciones"] = [r.get("id") for r in rs if r.get("id")]
         enlace = None
         cuentas_ = {a.get("ad_account_id") for a in anuncios}
         if anuncios and len(cuentas_) == 1:
@@ -473,7 +473,10 @@ def analizar(datos_texto, imagenes, idioma, elegidos, recs):
     resultado, entrada, salida = tw_analisis.llamar_con_correccion(
         content, system(idioma), lambda crudo: parsear(crudo, refs, refs_rec, datos_texto),
         revisar=_revisar_cifras, llamar=_llamar)
-    return enlazar_plan(resultado, elegidos, recs), entrada, salida
+    try:
+        return enlazar_plan(resultado, elegidos, recs), entrada, salida
+    except Exception as e:
+        raise tw_analisis.anotar_tokens(e, entrada, salida)    # Claude ya cobró: la tarea anota el gasto
 
 
 texto_error = tw_analisis.texto_error

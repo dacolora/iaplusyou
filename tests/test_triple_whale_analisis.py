@@ -423,3 +423,22 @@ def test_prefill_crear_con_un_origen_de_otra_pestana_y_triple_whale_no_lo_toma_p
     # La forma de Triple Whale con el mismo id sí es suya; la de Meta nunca.
     assert puente.origen_desde_formulario("acme", f"{eid}:0")["evaluacion_id"] == eid
     assert puente.origen_desde_formulario("acme", f"meta:{eid}:0") is None
+
+
+def test_llamar_con_correccion_un_parser_que_revienta_sale_con_los_tokens_pagados():
+    """Claude ya cobró: cualquier excepción después de su respuesta lleva los tokens para que la tarea anote el gasto."""
+    def parsear(crudo):
+        raise KeyError("bug")
+    with pytest.raises(KeyError) as e:
+        analisis.llamar_con_correccion([], "S", parsear, llamar=lambda c, s: ("x", 100, 40))
+    assert (e.value.tokens_entrada, e.value.tokens_salida) == (100, 40)
+
+    def falla_la_correccion(c, s, _n=[]):
+        _n.append(1)
+        if len(_n) > 1:
+            raise RuntimeError("red")
+        return "basura", 100, 40
+    with pytest.raises(analisis.AnalisisInvalido) as e:
+        analisis.llamar_con_correccion([], "S", lambda crudo: (_ for _ in ()).throw(analisis.AnalisisInvalido("no")),
+                                       llamar=falla_la_correccion)
+    assert (e.value.tokens_entrada, e.value.tokens_salida) == (100, 40) and e.value.__cause__ is None

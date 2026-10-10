@@ -471,6 +471,16 @@ def _llamar(content, system_):
     return sprints_analisis._llamar_contando(content, max_tokens=MAX_TOKENS, system=system_)
 
 
+def anotar_tokens(error, entrada, salida):
+    """Deja en `error` los tokens ya pagados (`tokens_entrada`, `tokens_salida`), que la tarea lee para anotar el
+    gasto real aunque falle. Nunca lanza."""
+    try:
+        error.tokens_entrada, error.tokens_salida = int(entrada or 0), int(salida or 0)
+    except Exception:  # noqa: BLE001 — una excepción que no acepta atributos sigue su camino sin ellos
+        pass
+    return error
+
+
 def llamar_con_correccion(content, system_, parsear_fn, revisar=None, llamar=None):
     """(resultado, tokens_entrada, tokens_salida) de una llamada a Claude con UNA corrección como mucho: la de Triple
     Whale y la de Meta rendimiento comparten este camino (no se copia).
@@ -481,9 +491,21 @@ def llamar_con_correccion(content, system_, parsear_fn, revisar=None, llamar=Non
 
     Si la primera respuesta no sirve y la corrección tampoco (o la llamada de corrección falla), AnalisisInvalido con
     los tokens ya pagados. Si la primera sí servía y solo se pidió corregir por `revisar`, nunca se pierde: si la
-    corrección no sirve o falla, queda la primera (lo pagado no se tira)."""
+    corrección no sirve o falla, queda la primera (lo pagado no se tira). Cualquier otra excepción después de que
+    Claude respondió (un parser que revienta) sale también con los tokens pagados (`anotar_tokens`)."""
     llamar = llamar or _llamar
     crudo, entrada, salida = llamar(content, system_)
+    pagado = [entrada, salida]
+    try:
+        return _con_una_correccion(content, system_, parsear_fn, revisar, llamar, crudo, pagado)
+    except Exception as e:
+        anotar_tokens(e, *pagado)
+        raise
+
+
+def _con_una_correccion(content, system_, parsear_fn, revisar, llamar, crudo, pagado):
+    """El cuerpo de `llamar_con_correccion` tras la primera respuesta; `pagado` ([entrada, salida]) se actualiza en
+    su lugar con lo que cobra la corrección."""
     primero = None
     try:
         primero = parsear_fn(crudo)
@@ -492,7 +514,7 @@ def llamar_con_correccion(content, system_, parsear_fn, revisar=None, llamar=Non
     else:
         motivo = revisar(primero) if revisar else None
         if not motivo:
-            return primero, entrada, salida
+            return primero, pagado[0], pagado[1]
         error = None
     correccion = content + [{"type": "text", "text": f"Tu respuesta anterior no sirvió ({motivo}). "
                                                      "Responde solo el JSON pedido."}]
@@ -500,17 +522,15 @@ def llamar_con_correccion(content, system_, parsear_fn, revisar=None, llamar=Non
         crudo, e2, s2 = llamar(correccion, system_)
     except Exception:
         if primero is not None:
-            return primero, entrada, salida
-        error.tokens_entrada, error.tokens_salida = entrada, salida
-        raise error
-    entrada, salida = entrada + e2, salida + s2
+            return primero, pagado[0], pagado[1]
+        raise error from None
+    pagado[0], pagado[1] = pagado[0] + e2, pagado[1] + s2
     try:
-        return parsear_fn(crudo), entrada, salida
-    except AnalisisInvalido as e3:
+        return parsear_fn(crudo), pagado[0], pagado[1]
+    except AnalisisInvalido:
         if primero is not None:
-            return primero, entrada, salida
-        e3.tokens_entrada, e3.tokens_salida = entrada, salida
-        raise e3
+            return primero, pagado[0], pagado[1]
+        raise
 
 
 def analizar(marca, contexto, anuncios, medios, idioma, bloques=None, productos=None):

@@ -347,3 +347,11 @@ def test_estimado_de_la_evaluacion_de_meta():
     assert est["usd"] == pytest.approx(gastos.TARIFAS["evaluacion_meta"] + 10 * gastos.TARIFAS["evaluacion_meta_por_anuncio"])
     # Hasta medirla (Task 7 de E2) cuesta lo mismo que la de Triple Whale.
     assert est["usd"] == pytest.approx(gastos.estimar("evaluacion_tw", n=10)["usd"])
+
+
+def test_si_algo_falla_despues_de_que_claude_respondio_salen_los_tokens(monkeypatch):
+    monkeypatch.setattr(analisis, "_llamar", lambda c, s: (respuesta(), 100, 40))
+    monkeypatch.setattr(analisis, "enlazar_plan", lambda *a: {}["no"])
+    with pytest.raises(KeyError) as e:
+        analisis.analizar("DATOS 1", [], "es", _muestra(), _recs())
+    assert (e.value.tokens_entrada, e.value.tokens_salida) == (100, 40)
