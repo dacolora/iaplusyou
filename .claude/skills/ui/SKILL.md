@@ -130,9 +130,14 @@ PND-130/133 (2026-10-05, lote 4): en celular las cifras de Final edition colocan
   (`.marca-mark`, `.marca-texto`, `.marca-logo`); el favicon es `adstra-icono.png`. `cuentas.NOMBRE_PLATAFORMA` es el
   nombre de los correos.
 - `componentes/fondo-galaxia.css` + el bloque `.fondo-galaxia` de `base.html` (reemplazó a `.fondo-ambiente`): nebulosas,
-  núcleo, estrellas y retícula, solo degradados con tokens `--galaxia-*`, `--estrella*`, `--reticula`. Va **en azul**:
-  Camilo eligió respetar la decisión de Daniel del 2026-10-02 (sin morado) en vez del violeta del logo. Sus animaciones
+  núcleo, estrellas y retícula, solo degradados con tokens `--galaxia-*`, `--estrella*`, `--reticula`. Va **en morado** desde el
+  2026-10-10 (antes en azul). Sus animaciones
   (`galaxia-*`) y las de la portada (`portada-vitrina`, `portada-cadena`) están en `ANIMACIONES_PERMITIDAS`.
 - La barra superior es `--velo-cabecera` con `backdrop-filter`, para que el fondo se vea detrás.
-- La portada (`templates/index.html`, `pantallas/portada.css`): videos e imágenes livianos en `static/landing/`
-  (480 px, sin audio, ≤ 8 s); la barrita del flujo es una transición de ancho que dispara `.flujo-llena`.
+- La portada (`templates/index.html`, `pantallas/portada.css`, 2026-10-10): banner a todo lo ancho con la vaca
+  (`static/landing/banner*.webp`) y «Run more ADSTRA» encima, «Lo que ya no necesitas» tachado, los seis pasos en
+  cuadrícula (`.bento`), vitrina, planes, cadena, cierre y la tecnología al final. Videos e imágenes livianos en
+  `static/landing/` (480 px, sin audio, ≤ 8 s).
+- **Paleta morada desde el 2026-10-10** (pedido de Camilo; revierte la azul del 2026-10-02): `tokens.css` tiene el
+  violeta como acento y superficies oscuras moradas; `test_paleta_morada_sin_el_azul_viejo` vigila que no vuelva el
+  azul viejo.

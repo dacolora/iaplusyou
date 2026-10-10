@@ -1587,6 +1587,9 @@ msgstr "1. The photo"
 msgid "1.000+"
 msgstr "1,000+"
 
+msgid "10 herramientas de IA distintas"
+msgstr "10 different AI tools"
+
 msgid "100, 250, 500 o incluso más de 1.000 creativos al mes — sin agrandar tu equipo creativo."
 msgstr "100, 250, 500 or even 1,000+ ad creatives every month — without growing your creative team."
 
@@ -1922,6 +1925,9 @@ msgstr[1] "Agency disconnected. %(num)s projects went back to own-app mode and s
 msgid "Agencia desconectada. Ningún proyecto estaba asignado."
 msgstr "Agency disconnected. No project was assigned."
 
+msgid "Agencias"
+msgstr "Agencies"
+
 msgid "Agrega al menos una referencia (personaje, entorno o producto)."
 msgstr "Add at least one reference (character, environment or product)."
 
@@ -2188,6 +2194,9 @@ msgstr "Ad published (paused; review it in Meta Ads Manager before activating it
 
 msgid "Anuncios"
 msgstr "Ads"
+
+msgid "Anuncios con IA que sí venden"
+msgstr "AI ads that actually sell"
 
 msgid "Anuncios nuevos para probar"
 msgstr "New ads to test"
@@ -4823,6 +4832,9 @@ msgstr "Edit study"
 msgid "Editar ficha"
 msgstr "Edit profile"
 
+msgid "Editar sin fin"
+msgstr "Endless editing"
+
 msgid "Editar y crear otra a partir de esta"
 msgstr "Edit and create another one from this"
 
@@ -6943,9 +6955,6 @@ msgstr "This video was already generated or is being generated — it can't be t
 
 msgid "Estilo"
 msgstr "Style"
-
-msgid "Estilo animado"
-msgstr "Animated style"
 
 msgid "Estilo del hook"
 msgstr "Hook's style"
@@ -9585,6 +9594,9 @@ msgstr "What you sell: shoes, clothes, home decor, food, anything."
 
 msgid "Lo que ya aprendió el proyecto"
 msgstr "What the project has already learned"
+
+msgid "Lo que ya no necesitas"
+msgstr "What you don't need anymore"
 
 msgid "Lo saca de la galería y de los selectores de Crear, Sprints y Nicho sin borrar nada. Se deshace con «Desarchivar»."
 msgstr "Takes it out of the gallery and the product pickers in Create, Sprints and Niche without deleting anything. Undo it with “Unarchive”."
@@ -13665,6 +13677,9 @@ msgstr ""
 msgid "Según los pedidos de la tienda en Triple Whale; es el producto que conviene empujar en los anuncios nuevos."
 msgstr "According to the store's orders in Triple Whale; it's the product worth pushing in new ads."
 
+msgid "Seis pasos, un solo lugar. Así se ve de cerca."
+msgstr "Six steps, one place. Here's how it looks up close."
+
 msgid "Selfie sin voz"
 msgstr "Silent selfie"
 
@@ -13768,9 +13783,6 @@ msgstr "No URL"
 msgid "Sin actividad registrada todavía."
 msgstr "No activity recorded yet."
 
-msgid "Sin agencias."
-msgstr "No agencies."
-
 #, python-format
 msgid "Sin canal conectado: %(canales)s. Actívalo en Configuración › Canales orgánicos. No se publicó nada."
 msgstr "No channel connected: %(canales)s. Turn it on in Settings › Organic channels. Nothing was published."
@@ -13831,9 +13843,6 @@ msgstr "Not enough data"
 
 msgid "Sin diferencia clara"
 msgstr "No clear difference"
-
-msgid "Sin editar sin fin."
-msgstr "No endless editing."
 
 msgid "Sin ella cada prompt sale sin el estilo de la marca: súbela o genérala en Configuración › Identidad de marca."
 msgstr "Without it every prompt comes out without the brand's style: upload it or generate it in Settings › Brand identity."
@@ -13952,9 +13961,6 @@ msgstr "No brand references yet."
 msgid "Sin referencias ni producto: el modelo recibe el texto tal cual, sin marca ni logos."
 msgstr "No references or product: the model gets the text as-is, with no brand or logos."
 
-msgid "Sin saltar entre 10 herramientas de IA distintas."
-msgstr "No switching between 10 different AI tools."
-
 msgid "Sin sonido: súbelo para oír el sonido de este video."
 msgstr "No sound: turn it up to hear this video's sound."
 
@@ -14030,6 +14036,9 @@ msgstr "Request sent on %(fecha)s: Creatv is reviewing it and will email you."
 
 msgid "Solicitudes de clientes"
 msgstr "Client requests"
+
+msgid "Solo Adstra."
+msgstr "Just Adstra."
 
 msgid "Solo Wan 3.0, mitad de precio: para probar el prompt antes de la versión final."
 msgstr "Wan 3.0 only, half price: to test the prompt before the final version."
@@ -15896,12 +15905,6 @@ msgstr "Video without a frame —<br>can't be used yet"
 #, python-format
 msgid "Video subido y fotograma de referencia extraído: %(nombre)s"
 msgstr "Video uploaded and reference frame extracted: %(nombre)s"
-
-msgid "Video · 10s"
-msgstr "Video · 10s"
-
-msgid "Video · 15s"
-msgstr "Video · 15s"
 
 msgid "Videos"
 msgstr "Videos"

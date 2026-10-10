@@ -1,20 +1,14 @@
-/* Portada Creatv Adstra (templates/index.html, 2026-10-06): «Run more ADSTRA», flujo interactivo, vitrina que corre,
-   planes, cadena del ciclo, cierre y la tecnología al final. Lo base del héroe (.landing-hero, .landing-cta,
-   .landing-tarjeta, .landing-empezar) sigue en legado/02. */
+/* Portada Creatv Adstra (templates/index.html, 2026-10-10): banner con la vaca y «Run more ADSTRA», lo que ya no
+   necesitas (tachado), los seis pasos en cuadrícula (bento), vitrina que corre, planes, cadena del ciclo, cierre y la
+   tecnología al final. .landing-cta y .landing-empezar siguen en legado/02. */
 
-/* Las tarjetas del héroe y la vitrina llevan un video o una imagen de fondo; el velo de abajo deja leer el título. */
-.landing-tarjeta { overflow: hidden; isolation: isolate; }
-.landing-tarjeta::after { content: ""; position: absolute; inset: 0; z-index: -1; background-image: linear-gradient(to top, var(--sombra-media), transparent 45%); }
+/* Las piezas de la vitrina y del bento llevan un video o una foto de fondo. */
 .landing-media { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: -2; display: block; }
-.landing-tarjeta strong { text-shadow: 0 1px 6px var(--sombra-media); }
 
-/* Héroe */
-.landing-lema { font-size: clamp(2.8rem, 6.4vw, 5rem); line-height: 1; letter-spacing: -0.035em; margin: 0 0 var(--esp-4); max-width: none; }
+/* Lema y bajada (banner y cierre) */
+.landing-lema { font-size: clamp(3rem, 8vw, 6.5rem); line-height: 1; letter-spacing: -0.035em; margin: 0 0 var(--esp-4); max-width: none; }
 .landing-degradado { background-image: var(--degradado-lema); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .landing-bajada { font-family: var(--font-display); font-weight: 600; font-size: clamp(1.25rem, 2.4vw, 1.85rem); line-height: 1.2; letter-spacing: -0.015em; margin: 0 0 var(--esp-5); max-width: 24ch; }
-.landing-sin { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--esp-2); color: var(--muted); font-size: var(--t-base); }
-.landing-sin li { display: flex; align-items: center; gap: var(--esp-3); }
-.landing-sin li::before { content: "✕"; display: inline-flex; width: 1.4rem; height: 1.4rem; align-items: center; justify-content: center; border-radius: 50%; font-size: .7rem; color: var(--accent-texto); background: var(--resalte-fondo); border: 1px solid var(--resalte-borde); flex: 0 0 auto; }
 
 /* Encabezados de sección: la misma letra del título principal. */
 .landing-seccion-cabecera { margin-bottom: var(--esp-5); max-width: 60ch; }
@@ -23,27 +17,6 @@ h2.landing-titulo { font-family: var(--font-display); font-size: clamp(1.8rem, 3
 h2.landing-titulo::before { content: none; }
 .landing-seccion-sub { margin: 0; color: var(--muted); font-size: 1.05rem; line-height: 1.5; }
 
-/* Flujo interactivo: cada paso es un botón; el panel muestra el activo y avanza solo (index.html). */
-.landing-flujo { margin: var(--esp-4) 0 5rem; }
-.flujo-cuerpo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: var(--esp-5); align-items: stretch; }
-.flujo-pasos { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--esp-2); }
-.flujo-paso { position: relative; width: 100%; display: grid; grid-template-columns: auto 1fr; gap: var(--esp-4); align-items: center; text-align: left; padding: var(--esp-4) 1.1rem; border-radius: var(--radius); border: 1px solid var(--border); background: var(--panel-velo); color: var(--muted); font: inherit; cursor: pointer; overflow: hidden; transition: border-color .2s, background .2s, color .2s, transform .2s; }
-.flujo-paso:hover { color: var(--text); border-color: var(--resalte-borde); }
-.flujo-paso.activo { color: var(--text); border-color: var(--resalte-borde-fuerte); background: var(--resalte-fondo); box-shadow: var(--shadow-glow); transform: translateX(4px); }
-.flujo-num { font-family: var(--font-display); font-weight: 700; font-size: .8rem; letter-spacing: .06em; color: var(--accent-texto); }
-.flujo-paso-titulo { font-family: var(--font-display); font-weight: 600; font-size: 1.02rem; }
-/* La barrita de avance es una transición de ancho (no una animación): la clase .flujo-llena la dispara. */
-.flujo-barra { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; }
-.flujo-barra::after { content: ""; display: block; height: 100%; width: 0; background: var(--accent-grad); }
-.flujo-auto:not(.flujo-manual) .flujo-paso.activo.flujo-llena .flujo-barra::after { width: 100%; transition: width var(--flujo-duracion, 5000ms) linear; }
-.flujo-panel { position: relative; border-radius: var(--radius-lg); border: 1px solid var(--border); background: var(--panel-velo); overflow: hidden; min-height: 420px; }
-.flujo-vista { position: absolute; inset: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-.flujo-vista[hidden] { display: none; }
-.flujo-vista.activo { animation: aparece-card .45s ease; }
-.flujo-media { position: relative; isolation: isolate; overflow: hidden; }
-.flujo-texto { padding: var(--esp-6) var(--esp-5); display: flex; flex-direction: column; justify-content: flex-end; gap: var(--esp-3); background-image: linear-gradient(to top, var(--resalte-fondo), transparent 60%); }
-.flujo-texto h3 { margin: 0; font-family: var(--font-display); font-size: 1.5rem; line-height: 1.15; letter-spacing: -0.02em; }
-.flujo-texto p { margin: 0; color: var(--muted); line-height: 1.55; }
 
 /* Vitrina: una cinta que corre de derecha a izquierda. La lista va dos veces: correr la mitad (más medio espacio)
    cierra el bucle sin salto. */
@@ -100,13 +73,51 @@ h2.landing-titulo-chico { font-size: clamp(1.3rem, 2.6vw, 1.8rem); }
   .planes-grilla { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .plan-custom { grid-column: 1 / -1; }
 }
-@media (max-width: 900px) {
-  .flujo-cuerpo { grid-template-columns: 1fr; }
-  .flujo-panel { min-height: 380px; }
-}
 @media (max-width: 560px) {
   .planes-grilla { grid-template-columns: 1fr; }
-  .flujo-vista { grid-template-columns: 1fr; grid-template-rows: 220px auto; }
-  .flujo-panel { min-height: 440px; }
   .landing-vitrina-pieza { height: 268px; }
+}
+
+/* Banner: la foto a todo lo ancho (sale del ancho de <main>) con el título encima, abajo y al centro. */
+.landing-banner { position: relative; isolation: isolate; width: 100vw; margin: calc(-1 * var(--esp-7)) 0 var(--esp-7) calc(50% - 50vw); min-height: min(92vh, 820px); display: flex; align-items: flex-end; justify-content: center; text-align: center; overflow: hidden; }
+.landing-banner-foto, .landing-banner-foto img { position: absolute; inset: 0; width: 100%; height: 100%; }
+.landing-banner-foto { z-index: -2; }
+.landing-banner-foto img { object-fit: cover; object-position: 50% 38%; }
+.landing-banner::after { content: ""; position: absolute; inset: 0; z-index: -1; background-image: var(--velo-banner); }
+.landing-banner-texto { padding: 0 var(--esp-4) clamp(var(--esp-6), 8vh, 5rem); max-width: 60rem; }
+.landing-banner .landing-bajada { margin-left: auto; margin-right: auto; max-width: 30ch; }
+.landing-banner .landing-cta { justify-content: center; }
+.landing-banner .landing-lema { text-shadow: 0 6px 40px var(--sombra-media); }
+.landing-chip { display: inline-block; margin-bottom: var(--esp-4); padding: .35rem .9rem; border-radius: var(--radius-pastilla); border: 1px solid var(--resalte-borde); background: var(--panel-velo); color: var(--cian); font-size: var(--t-chico); font-weight: 600; letter-spacing: .02em; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+
+/* Lo que ya no necesitas: tachado, con «Solo Adstra.» al final. */
+.landing-sin-nada { text-align: center; margin: 0 auto 5rem; max-width: 60rem; }
+.landing-tachados { list-style: none; margin: var(--esp-5) 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: var(--esp-3) var(--esp-6); font-family: var(--font-display); font-weight: 700; font-size: clamp(1.4rem, 3.4vw, 2.4rem); letter-spacing: -0.02em; color: var(--muted-2); }
+.landing-tachados s { text-decoration-color: var(--accent-2); text-decoration-thickness: .12em; }
+.landing-solo { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(1.8rem, 4.4vw, 3.2rem); letter-spacing: -0.03em; background-image: var(--degradado-lema); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+/* Los seis pasos en cuadrícula (bento): 4 columnas; 01 ancho, 03 alto. */
+.landing-bento-seccion { margin: 0 0 5rem; }
+.bento { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: 230px; gap: var(--esp-4); }
+.bento-tarjeta { position: relative; isolation: isolate; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; padding: var(--esp-5); border-radius: var(--radius-lg); border: 1px solid var(--border); background: var(--panel-velo); background-image: radial-gradient(circle at 100% 0%, var(--galaxia-velo-1), transparent 60%); transition: transform .25s, border-color .25s, box-shadow .25s; }
+.bento-tarjeta:hover { transform: translateY(-4px); border-color: var(--resalte-borde-fuerte); box-shadow: var(--shadow-glow); }
+.bento-tarjeta.b-ancho { grid-column: span 2; }
+.bento-tarjeta.b-alto { grid-row: span 2; }
+.bento-con-media::after { content: ""; position: absolute; inset: 0; z-index: -1; background-image: linear-gradient(to top, var(--sombra-media) 10%, transparent 70%); }
+.bento-con-media .landing-media { transition: transform .6s; }
+.bento-con-media:hover .landing-media { transform: scale(1.05); }
+.bento-num { position: absolute; top: var(--esp-4); left: var(--esp-5); font-family: var(--font-display); font-weight: 700; font-size: 2.6rem; letter-spacing: -0.04em; line-height: 1; background-image: var(--degradado-lema); -webkit-background-clip: text; background-clip: text; color: transparent; }
+/* Sobre una foto el número va en una pastilla oscura, si no se pierde. */
+.bento-con-media .bento-num { font-size: 1.3rem; padding: .3rem .7rem; border-radius: var(--radius-pastilla); background: var(--panel-velo); color: var(--text); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+.bento-texto h3 { margin: 0 0 var(--esp-1); font-family: var(--font-display); font-size: 1.15rem; line-height: 1.2; letter-spacing: -0.01em; }
+.bento-texto p { margin: 0; color: var(--muted); font-size: .86rem; line-height: 1.45; }
+.bento-con-media .bento-texto p { color: var(--text); opacity: .85; }
+@media (max-width: 900px) {
+  .bento { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 210px; }
+}
+@media (max-width: 560px) {
+  .bento { grid-template-columns: 1fr; grid-auto-rows: minmax(180px, auto); }
+  .bento-tarjeta.b-ancho { grid-column: auto; }
+  .bento-tarjeta.b-alto { grid-row: span 2; }
+  .landing-banner { min-height: 78vh; }
 }

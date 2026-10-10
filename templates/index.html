@@ -1,76 +1,65 @@
 {% extends "base.html" %}
 {% block title %}Creatv Adstra{% endblock %}
 {% block content %}
-<section class="landing-hero aparece">
-  <div class="landing-hero-texto">
-    <span class="marca-logo" role="img" aria-label="Creatv Adstra"></span>
-    <h1 class="landing-lema">Run more <span class="landing-degradado">ADSTRA</span></h1>
+{# Banner: la foto de la vaca a todo lo ancho y el título encima. #}
+<section class="landing-banner" aria-labelledby="banner-titulo">
+  <picture class="landing-banner-foto">
+    <source media="(max-width: 700px)" srcset="{{ url_for('static', filename='landing/banner-movil.webp') }}">
+    <img src="{{ url_for('static', filename='landing/banner.webp') }}" alt="" fetchpriority="high">
+  </picture>
+  <div class="landing-banner-texto">
+    <span class="landing-chip">✦ {{ _('Anuncios con IA que sí venden') }}</span>
+    <h1 id="banner-titulo" class="landing-lema">Run more <span class="landing-degradado">ADSTRA</span></h1>
     <p class="landing-bajada">{{ _('De la referencia al anuncio publicado. Todo en un solo lugar.') }}</p>
-    <ul class="landing-sin">
-      <li>{{ _('Sin agencias.') }}</li>
-      <li>{{ _('Sin editar sin fin.') }}</li>
-      <li>{{ _('Sin saltar entre 10 herramientas de IA distintas.') }}</li>
-    </ul>
     <div class="landing-cta">
       <a class="btn-generar" href="#planes">{{ _('Empezar a crear anuncios') }}</a>
       <a class="btn-guardar" href="{{ url_for('login') }}">{{ _('Ya tengo cuenta') }}</a>
     </div>
   </div>
-  <div class="landing-hero-visual" aria-hidden="true">
-    {% for n, tipo, titulo in [(1, _('Video · 10s'), _('Solo producto')), (2, _('Video · 10s'), _('Con persona')), (4, _('Video · 15s'), _('Estilo animado'))] %}
-    <div class="landing-tarjeta t{{ loop.index }}">
-      <video class="landing-media" src="{{ url_for('static', filename='landing/video-%d.mp4' % n) }}" poster="{{ url_for('static', filename='landing/video-%d.jpg' % n) }}" muted loop playsinline preload="none"></video>
-      <span class="generado-tipo">{{ tipo }}</span><strong>{{ titulo }}</strong>
-    </div>
-    {% endfor %}
-  </div>
 </section>
 
-{# El flujo de trabajo: cada paso es un botón; el panel de la derecha muestra
-   el que está activo y avanza solo (se detiene cuando la persona elige uno). #}
+{# Lo que ya no hace falta, tachado. #}
+<section class="landing-sin-nada aparece" aria-labelledby="sin-titulo">
+  <h2 id="sin-titulo" class="landing-titulo landing-titulo-chico">{{ _('Lo que ya no necesitas') }}</h2>
+  <ul class="landing-tachados">
+    <li><s>{{ _('Agencias') }}</s></li>
+    <li><s>{{ _('Editar sin fin') }}</s></li>
+    <li><s>{{ _('10 herramientas de IA distintas') }}</s></li>
+  </ul>
+  <p class="landing-solo">{{ _('Solo Adstra.') }}</p>
+</section>
+
+{# Los seis pasos como una cuadrícula de tarjetas: las que tienen video o foto
+   muestran una pieza real; las otras, el número en grande. #}
 {% set pasos = [
-  (_('Encuentra referencias ganadoras'), _('Anuncios reales que ya están vendiendo, ordenados por etapa del embudo y nivel de consciencia.'), 'imagen', 2),
-  (_('Sube tus productos una sola vez'), _('Fotos, personajes, espacios y logo. La IA respeta tu marca en cada pieza.'), 'imagen', 1),
-  (_('Genera cientos de estáticos y videos que convierten'), _('Los mejores modelos de video e imagen del mercado, desde un solo formulario.'), 'video', 1),
-  (_('Edítalos'), _('Voz, subtítulos, música y el precio de cada país, en un editor dentro del navegador.'), 'video', 5),
-  (_('Crea variaciones'), _('Ganchos nuevos, otras estructuras y regeneraciones a partir de lo que ya funciona.'), 'video', 3),
-  (_('Lánzalos directo a Meta'), _('Las campañas se crean en pausa: tú decides cuándo gastan y los resultados vuelven aquí.'), 'imagen', 3),
+  (_('Encuentra referencias ganadoras'), _('Anuncios reales que ya están vendiendo, ordenados por etapa del embudo y nivel de consciencia.'), 'imagen', 2, 'b-ancho'),
+  (_('Sube tus productos una sola vez'), _('Fotos, personajes, espacios y logo. La IA respeta tu marca en cada pieza.'), '', 0, ''),
+  (_('Genera cientos de estáticos y videos que convierten'), _('Los mejores modelos de video e imagen del mercado, desde un solo formulario.'), 'video', 1, 'b-alto'),
+  (_('Edítalos'), _('Voz, subtítulos, música y el precio de cada país, en un editor dentro del navegador.'), 'video', 5, ''),
+  (_('Crea variaciones'), _('Ganchos nuevos, otras estructuras y regeneraciones a partir de lo que ya funciona.'), '', 0, ''),
+  (_('Lánzalos directo a Meta'), _('Las campañas se crean en pausa: tú decides cuándo gastan y los resultados vuelven aquí.'), 'imagen', 3, ''),
 ] %}
-<section class="landing-flujo aparece" aria-labelledby="flujo-titulo">
+<section class="landing-bento-seccion aparece" aria-labelledby="bento-titulo">
   <div class="landing-seccion-cabecera">
-    <h2 id="flujo-titulo" class="landing-titulo">{{ _('Una plataforma. Un flujo. Hecha para vender.') }}</h2>
+    <h2 id="bento-titulo" class="landing-titulo">{{ _('Una plataforma. Un flujo. Hecha para vender.') }}</h2>
+    <p class="landing-seccion-sub">{{ _('Seis pasos, un solo lugar. Así se ve de cerca.') }}</p>
   </div>
-  <div class="flujo-cuerpo">
-    <ol class="flujo-pasos">
-      {% for titulo, texto, tipo, n in pasos %}
-      <li>
-        <button type="button" class="flujo-paso{% if loop.first %} activo{% endif %}" data-paso="{{ loop.index0 }}" aria-controls="flujo-panel" aria-pressed="{{ 'true' if loop.first else 'false' }}">
-          <span class="flujo-num">{{ '%02d' % loop.index }}</span>
-          <span class="flujo-paso-titulo">{{ titulo }}</span>
-          <span class="flujo-barra" aria-hidden="true"></span>
-        </button>
-      </li>
-      {% endfor %}
-    </ol>
-    <div class="flujo-panel" id="flujo-panel" aria-live="polite">
-      {% for titulo, texto, tipo, n in pasos %}
-      <div class="flujo-vista{% if loop.first %} activo{% endif %}" data-vista="{{ loop.index0 }}"{% if not loop.first %} hidden{% endif %}>
-        <div class="flujo-media">
-          {% if tipo == 'video' %}
-          <video class="landing-media" src="{{ url_for('static', filename='landing/video-%d.mp4' % n) }}" poster="{{ url_for('static', filename='landing/video-%d.jpg' % n) }}" muted loop playsinline preload="none"></video>
-          {% else %}
-          <img class="landing-media" src="{{ url_for('static', filename='landing/imagen-%d.webp' % n) }}" alt="" loading="lazy">
-          {% endif %}
-        </div>
-        <div class="flujo-texto">
-          <span class="flujo-num">{{ '%02d' % loop.index }} / {{ '%02d' % loop.length }}</span>
-          <h3>{{ titulo }}</h3>
-          <p>{{ texto }}</p>
-        </div>
+  <ol class="bento">
+    {% for titulo, texto, tipo, n, forma in pasos %}
+    <li class="bento-tarjeta {{ forma }}{% if tipo %} bento-con-media{% endif %}">
+      {% if tipo == 'video' %}
+      <video class="landing-media" src="{{ url_for('static', filename='landing/video-%d.mp4' % n) }}" poster="{{ url_for('static', filename='landing/video-%d.jpg' % n) }}" muted loop playsinline preload="none"></video>
+      {% elif tipo == 'imagen' %}
+      <img class="landing-media" src="{{ url_for('static', filename='landing/imagen-%d.webp' % n) }}" alt="" loading="lazy">
+      {% endif %}
+      <span class="bento-num">{{ '%02d' % loop.index }}</span>
+      <div class="bento-texto">
+        <h3>{{ titulo }}</h3>
+        <p>{{ texto }}</p>
       </div>
-      {% endfor %}
-    </div>
-  </div>
+    </li>
+    {% endfor %}
+  </ol>
 </section>
 
 {# Vitrina: lo que sale de la plataforma, corriendo de derecha a izquierda.
@@ -203,7 +192,7 @@
         else { visibles.delete(e.target); e.target.pause(); }
       });
     }, { rootMargin: '100px' }) : null;
-    document.querySelectorAll('.landing-hero video, .landing-vitrina video').forEach(function (v) {
+    document.querySelectorAll('.bento video, .landing-vitrina video').forEach(function (v) {
       if (obs) obs.observe(v);
     });
     // Con la pestaña en segundo plano el navegador los pausa; al volver, retoman.
@@ -211,52 +200,6 @@
       if (document.visibilityState === 'visible') visibles.forEach(correr);
     });
 
-    // Flujo: un paso activo a la vez. Avanza solo cada DURACION ms mientras la
-    // sección se ve; al elegir un paso a mano, deja de avanzar.
-    var DURACION = 5000;
-    var seccion = document.querySelector('.landing-flujo');
-    if (!seccion) return;
-    var botones = Array.prototype.slice.call(seccion.querySelectorAll('.flujo-paso'));
-    var vistas = Array.prototype.slice.call(seccion.querySelectorAll('.flujo-vista'));
-    var actual = 0, reloj = null, manual = false;
-    seccion.style.setProperty('--flujo-duracion', DURACION + 'ms');
-    function mostrar(i) {
-      actual = i;
-      botones.forEach(function (b, k) {
-        b.classList.toggle('activo', k === i);
-        b.classList.remove('flujo-llena');
-        b.setAttribute('aria-pressed', k === i ? 'true' : 'false');
-      });
-      // La barrita es una transición de ancho: se vacía y, en el cuadro siguiente, se llena durante DURACION.
-      var activo = botones[i];
-      requestAnimationFrame(function () { requestAnimationFrame(function () { activo.classList.add('flujo-llena'); }); });
-      vistas.forEach(function (v, k) {
-        var video = v.querySelector('video');
-        v.hidden = k !== i;
-        v.classList.toggle('activo', k === i);
-        if (video) { if (k === i) correr(video); else video.pause(); }
-      });
-    }
-    function programar() {
-      clearInterval(reloj);
-      if (manual || quieto) return;
-      reloj = setInterval(function () { mostrar((actual + 1) % botones.length); }, DURACION);
-    }
-    botones.forEach(function (b, k) {
-      b.addEventListener('click', function () {
-        manual = true; clearInterval(reloj);
-        seccion.classList.add('flujo-manual');
-        mostrar(k);
-      });
-    });
-    if ('IntersectionObserver' in window) {
-      new IntersectionObserver(function (entradas) {
-        entradas.forEach(function (e) {
-          seccion.classList.toggle('flujo-auto', e.isIntersecting);
-          if (e.isIntersecting) { mostrar(actual); programar(); } else clearInterval(reloj);
-        });
-      }, { threshold: 0.3 }).observe(seccion);
-    }
   })();
 </script>
 {% endblock %}
