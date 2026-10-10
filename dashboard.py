@@ -3567,7 +3567,8 @@ def _soltar_cuentas_meta(cliente):
     """Quitar la conexión de Meta de un proyecto (Desconectar, volver a modo propia, desasignar, desconectar la
     agencia) también borra las métricas copiadas de sus cuentas y las deja libres para otro proyecto: /privacidad y
     /eliminar-datos lo prometen (ruling R21, 2026-10-08). Borra además sus evaluaciones con IA, que guardan nombres
-    y métricas de anuncios de Meta (E2-R2, 2026-10-10; el gasto de esas evaluaciones queda en `gasto`). Los dos
+    y métricas de anuncios de Meta (E2-R2, 2026-10-10; el gasto de esas evaluaciones queda en `gasto`), y antes las
+    miniaturas que esas evaluaciones copiaron a R2 (`clientes/<c>/meta_rendimiento/…`). Los
     borrados son independientes: si uno falla, el otro se hace igual. Si algo falla, la desconexión ya hecha se
     queda: se anota el tipo del error (nunca su texto) y se avisa una vez; la siguiente vez que alguien desconecte
     se reintenta."""
@@ -3578,6 +3579,12 @@ def _soltar_cuentas_meta(cliente):
         log.warning("meta rendimiento: no se pudieron borrar las métricas copiadas de %s (%s)", cliente,
                     type(e).__name__)
         fallo = type(e).__name__
+    try:
+        # Las miniaturas que copiaron las evaluaciones a R2 se borran ANTES que las filas (las claves salen de ellas).
+        # Un fallo aquí no frena el borrado de las filas, que guardan los nombres y las métricas.
+        meta_rend_analisis.borrar_miniaturas(cliente)
+    except Exception as e:  # noqa: BLE001 — la desconexión no se deshace por esto
+        log.warning("meta rendimiento: no se pudieron borrar las miniaturas de %s (%s)", cliente, type(e).__name__)
     try:
         meta_rend_datos.borrar_evaluaciones(cliente)
     except Exception as e:  # noqa: BLE001 — ídem; el borrado de arriba no depende de este ni este de aquel

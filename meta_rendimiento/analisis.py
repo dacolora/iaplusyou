@@ -482,6 +482,45 @@ def analizar(datos_texto, imagenes, idioma, elegidos, recs):
 texto_error = tw_analisis.texto_error
 
 
+# ------------------------------------------------- desconectar Meta ---
+
+_REF = re.compile(r"A\d{1,3}", re.ASCII)
+
+
+def claves_miniaturas(cliente):
+    """Las claves de R2 de las miniaturas que copiaron las evaluaciones del proyecto
+    (`clientes/<c>/meta_rendimiento/eval<id>_<ref>.jpg`), en una consulta. De una evaluación lista, solo las de los
+    anuncios cuya miniatura se copió (`medio.imagen_origen`; las de una pieza de Creatv ya vivían en R2 y no son
+    suyas); de una que no terminó, las de todos sus anuncios: la tarea pudo copiarlas antes de fallar."""
+    claves = []
+    for ev in datos.evaluaciones(cliente, limite=None):
+        lista = ev.get("estado") == "lista"
+        for a in ev.get("muestra") or []:
+            ref = str((a or {}).get("ref") or "")
+            medio = (a or {}).get("medio") or {}
+            copiada = bool(medio.get("imagen_origen")) and medio.get("origen") != "creatv"
+            if _REF.fullmatch(ref) and (copiada or not lista):
+                claves.append(tw_analisis.clave_miniatura(cliente, ev["id"], ref, CARPETA_R2))
+    return claves
+
+
+def borrar_miniaturas(cliente):
+    """Borra de R2 las miniaturas copiadas por las evaluaciones del proyecto (desconectar Meta borra lo copiado de
+    Meta: E2-R2 y la revisión de seguridad de E2). Hay que llamarla ANTES de borrar las filas: las claves salen de
+    ellas. Cada borrado va aparte (uno que falla no frena los demás) y se anota solo el tipo del error. Devuelve
+    (borradas, fallidas)."""
+    from storage import r2_uploader  # noqa: PLC0415
+    borradas = fallidas = 0
+    for clave in claves_miniaturas(cliente):
+        try:
+            r2_uploader.delete_file(clave)
+            borradas += 1
+        except Exception as e:  # noqa: BLE001 — R2 sin configurar o caído: la desconexión sigue
+            fallidas += 1
+            log.warning("no se pudo borrar una miniatura de evaluación de %s en R2 (%s)", cliente, type(e).__name__)
+    return borradas, fallidas
+
+
 # ------------------------------------------------------------ a Crear ---
 
 def origen(evaluacion_id, indice):

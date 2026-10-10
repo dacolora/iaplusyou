@@ -1084,3 +1084,41 @@ def test_una_idea_llevada_a_crear_en_un_proyecto_no_se_usa_en_otro(conectado):
         assert dashboard._prefill_para("otro") is None and "fp_prefill" not in flask.session
         flask.session["fp_prefill"] = dict(prefill)
         assert dashboard._prefill_para("acme")["texto"] == "Close-up of feet"
+
+
+def _evaluacion_con_miniaturas(cliente, estado, muestra):
+    eid = datos.crear_evaluacion(cliente, [A], "2026-09-10", "2026-10-09", "SEK", muestra, [], "ana")
+    datos.actualizar_evaluacion(eid, estado=estado)
+    return eid
+
+
+COPIADA = {"imagen": "https://r2.example/x.jpg", "imagen_origen": "https://scontent.xx.fbcdn.net/x.jpg"}
+
+
+def test_desconectar_meta_borra_de_r2_las_miniaturas_de_sus_evaluaciones(conectado, monkeypatch):
+    """Revisión de seguridad E2: lo que la evaluación copió de Meta a R2 se va con la desconexión, como sus filas."""
+    from storage import r2_uploader
+    borradas = []
+    monkeypatch.setattr(r2_uploader, "delete_file", lambda clave: borradas.append(clave))
+    lista = _evaluacion_con_miniaturas("acme", "lista", [
+        {"ref": "A1", "medio": COPIADA}, {"ref": "A2", "medio": {"imagen": None}},
+        {"ref": "A3", "medio": {"imagen": "https://r2.example/p.jpg", "imagen_origen": "https://r2.example/p.jpg",
+                                "origen": "creatv"}}])                   # la pieza de Creatv no es suya: no se borra
+    fallida = _evaluacion_con_miniaturas("acme", "error", [{"ref": "A1"}, {"ref": "A2"}])   # pudo copiar antes de fallar
+    ajena = _evaluacion_con_miniaturas("otro", "lista", [{"ref": "A1", "medio": COPIADA}])
+    _desconectar(conectado, monkeypatch)
+    base = "clientes/acme/meta_rendimiento"
+    assert sorted(borradas) == sorted([f"{base}/eval{lista}_A1.jpg", f"{base}/eval{fallida}_A1.jpg",
+                                       f"{base}/eval{fallida}_A2.jpg"])
+    assert datos.evaluaciones("acme") == [] and datos.evaluacion("otro", ajena) is not None
+
+
+def test_si_r2_falla_las_evaluaciones_se_borran_igual(conectado, monkeypatch):
+    from storage import r2_uploader
+
+    def _falla(clave):
+        raise RuntimeError("Faltan R2_ACCOUNT_ID")
+    monkeypatch.setattr(r2_uploader, "delete_file", _falla)
+    _evaluacion_con_miniaturas("acme", "lista", [{"ref": "A1", "medio": COPIADA}])
+    assert _desconectar(conectado, monkeypatch).status_code == 302
+    assert datos.evaluaciones("acme") == []
