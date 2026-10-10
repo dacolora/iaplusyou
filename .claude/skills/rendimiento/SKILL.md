@@ -286,6 +286,42 @@ el informe de la integración, al lado (`integracion-report.md`). Dónde vive ca
   rango antes de restar días (0001-01-02 daba 500), y `anuncios_fuera` dice qué fuente no trae sus anuncios ("tw",
   "meta" o "ambas") para que el aviso no culpe siempre a la copia de 90 días de Meta.
 
+## Revisión final de E2 e integración (2026-10-10): lo que cambió
+
+Revisores `revisor`, `guardian-gasto` y `auditor-seguridad` sobre `git diff origin/main HEAD`; decisiones del
+coordinador en `.superpowers/sdd/2026-10-10-pestana-rendimiento-e2/final-fixes.md`, informe al lado
+(`final-fixes-report.md`). Cada punto con su prueba:
+
+- **G1. Ganchos de un anuncio de Meta, apagados.** «Probar los 3 ganchos» de un análisis de fuente Meta cobraría unos
+  US$ 1,01 de Kling por un camino sin prueba real: `triple_whale.ganchos.puede_probar` da `MOTIVO_META`, el detalle
+  no pinta el botón y `ganchos_probar` responde 409 sin crear ni reservar. Se activa tras una prueba real (PND-289).
+- **G2. El precio de «Cómo mejorarlo» de un anuncio de Meta** usa la duración que guardó un análisis anterior del
+  mismo anuncio (`triple_whale.panel.precio_analisis(creativo, filas, fuente)` + `duracion_vista`): un anuncio de
+  una cuenta sin tienda no tiene `tw_creativo` y suponía 30 s. La misma llamada alimenta la tarjeta, el total del lote
+  (`galeria.armar`) y el cobro (`pedidos.pedir_analisis`), con las filas ya leídas.
+- **G3. «Evaluar con IA» de Triple Whale compara el precio visto** (la guarda E2-R6 de la de Meta): el formulario de
+  la macro `ia` manda `n` y `precio_visto` (`usd_precio`; sin él, el botón apagado) y
+  `pedidos.pedir_evaluacion(..., n_visto=, precio_visto=)` (obligatorios, por nombre) no crea ni reserva nada si no
+  coinciden: el aviso dice el precio de ahora.
+- **G4.** El prompt de «Cómo mejorarlo» de un anuncio de fuente Meta no recibe la evaluación de cuenta de Triple
+  Whale (`evaluacion_cuenta=None`; los productos más vendidos sí).
+- **S1.** Soltar una cuenta de Meta (quitarla o desconectar) borra los análisis de fuente Meta de esa cuenta y,
+  después, su imagen y su video en R2 (skill `meta-rendimiento`, «Disconnecting»). **S3.** La imagen copiada de Meta
+  solo se abre como JPEG/PNG/WEBP/GIF.
+- **S2. Correo verificado solo en «Actualizar ahora»** (`rutas.CON_CORREO_VERIFICADO`): producción no tiene SMTP y
+  la mitad de los usuarios cliente no pueden verificar; las rutas que cobran no lo exigían allá y siguen sin exigirlo
+  (el mismo origen sí). Cuando haya SMTP: PND-292.
+- **B1.** Un análisis de fuente Meta dice Meta: el aprendizaje («Ganó en Meta…», `origen: "meta"`) y el alcance del
+  detalle (la cuenta, o «tus cuentas de Meta»; nunca «Todas las tiendas»).
+- **B2. «Desde el inicio» de los anuncios de Meta** arranca en el primer día de la copia de ANUNCIOS
+  (`meta_rendimiento.datos.primer_dia_anuncios`, 90 días), no en el de cuentas (A2). Esa ventana corre cada día: el
+  análisis guarda `foto.alcance_dias` y `triple_whale.panel.mismo_alcance` da por el mismo alcance uno de Meta pedido
+  en «Desde el inicio» (ni viejo ni de vuelta en el lote por eso; uno sin la marca cae en «otro alcance», nota
+  neutra). Triple Whale no cambia.
+- **T1/T2.** Pruebas para las mutaciones 27 (cada tarjeta de Meta en la moneda de SU cuenta, orden en USD) y 25 (el
+  envío de «Probar los ganchos» se frena antes del fetch).
+- Diferido: PND-290 a PND-295.
+
 ## Trampas
 
 - Lo que se jubiló el 2026-10-10 con la galería única (no lo revivas): ver «E2 tarea 4»; con la evaluación de la

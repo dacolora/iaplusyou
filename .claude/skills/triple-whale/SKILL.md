@@ -120,8 +120,11 @@ hook, low hold, few clicks, clicks without sales, expensive CPM, fatigue 7d vs 7
 tipo `evaluacion`) sends Claude up to 6 winners + 4 losers with their Meta thumbnail (`analisis.medios_meta`,
 read-only Graph) and doctrina `clasificar/angulo/gancho/video`; the result (`tw_evaluacion`) has patterns,
 per-ad «why», and new ad ideas with a validated ángulo and an English video prompt. Its route is the Rendimiento tab's
-`rendimiento.evaluar` (`fuente` "tw"; `triple_whale.rutas.evaluar` was retired in Rendimiento E2 task 5 because the tab's
-route asks for a verified email) over the Triple Whale part of the entry. Rendimiento E2 task 5 had also made it evaluate
+`rendimiento.evaluar` (`fuente` "tw"; `triple_whale.rutas.evaluar` was retired in Rendimiento E2 task 5) over the
+Triple Whale part of the entry. Since the final review of Rendimiento E2 (G3, 2026-10-10) the form sends `n` and
+`precio_visto` (the price with the margin; without it the button is disabled) and `pedidos.pedir_evaluacion(...,
+n_visto=, precio_visto=)` (keyword-only, required) creates and reserves nothing when they differ from what it computes
+(E2-R6, like Meta's evaluation); the route does not ask for a verified email (S2: production has no SMTP; PND-292). Rendimiento E2 task 5 had also made it evaluate
 the ads of Meta accounts without a store (`extra["fuente"] = "meta"`, «con sus métricas de Meta», `medios_meta` with
 `meta_conexion.cargar`, `muestra` re-sorting the winners by revenue); at the integration with main (2026-10-10, INT-2)
 that branch was retired in favour of main's «Evaluación con IA» of Meta (`meta_rendimiento/analisis.py`,
@@ -259,7 +262,9 @@ production. It must work for ANY ad, not only Creatv's: in happyflops only 4 pie
   `-protocol_whitelist file` and fails closed); otherwise the thumbnail.
 - **«Cómo mejorarlo» (`triple_whale/mejorar.py`, task `tw_analizar_anuncio`).** Price first:
   `gastos.estimar("analisis_anuncio_tw", segundos=)` = tariff 0.17 + Whisper by the video's duration (30 s when
-  unknown). The tariff was 0.10 until 2026-10-09, measured on the real run of 2026-10-08 (4 happyflops ads,
+  unknown; `panel.precio_analisis(creativo, filas, fuente)`: the `tw_creativo` duration and, for a Meta-source ad
+  without one, the `foto.creativo.duracion_s` an earlier analysis of the same ad saved — G2 of Rendimiento E2's final
+  review, 2026-10-10 — with the rows the caller already read, for the card, the batch total and the charge alike). The tariff was 0.10 until 2026-10-09, measured on the real run of 2026-10-08 (4 happyflops ads,
   `docs/superpowers/evals/2026-10-08-tw-como-mejorarlo.md`): one call US$ 0,067–0,084 with a warm cache, US$ 0,095 cold
   (the cache write), US$ 0,16 when the correction call was needed (1 of 4); Whisper ≤ US$ 0,0014 (PND-179). It is 0.17
   since the analysis also brings hooks and copy («Ganchos y copy», below): the output grew about 50 %, and the same 4
@@ -288,8 +293,9 @@ production. It must work for ANY ad, not only Creatv's: in happyflops only 4 pie
   `tests/test_tw_tarjetas_rutas.py` (`test_sin_saldo_…`, `test_con_saldo_…`, `test_el_lote_sin_saldo_…`). The task reads its row inside the `try` and guards the `except`'s
   own write (A4), so any failure leaves the row in `error`, with words: a row stuck in `en_cola` would block that ad. Claude gets up to 8
   frames with their second (a Creatv piece's from R2, else the video, else the thumbnail), the ad text, the Whisper
-  voice, rings, trend, the attribution model and window, up to 3 winners of the channel, the account evaluation, the
-  project's learnings and top products; doctrina `revisar`+`diagnosticar`+`angulo`+`gancho`+`video`, the project's
+  voice, rings, trend, the attribution model and window, up to 3 winners of the channel, the account evaluation (never
+  for a Meta-source ad: it is Triple Whale's Pixel, G4 of Rendimiento E2's final review), the project's learnings and
+  top products; doctrina `revisar`+`diagnosticar`+`angulo`+`gancho`+`video`, the project's
   language, `max_tokens` 20 000 (12 000 until 2026-10-09, when a real run reached 11 323; only the tokens used are
   paid), one correction call (rule 7) except when the answer was cut by the cap: `mejorar._llamar` is its own call
   (same cache accounting as `_llamar_contando`) that also returns the `stop_reason`, and `max_tokens` raises
@@ -397,10 +403,14 @@ production. It must work for ANY ad, not only Creatv's: in happyflops only 4 pie
   rutas alias `_claves_confirmadas` went with the batch route. `usuario` comes in explicitly (no `session`) and the routes keep
   `flash` and redirects; `pedir_lote` takes the gallery's `veredicto` (what is eligible depends on the filter) and
   re-raises `SaldoInsuficiente` with `.lote = (queued, failed)`; `pedir_evaluacion` returns `ok=None` when there is
-  nothing to evaluate (the route flashes it as an error, as before).
+  nothing to evaluate (the route flashes it as an error, as before) and `ok=False` when the button showed another N or
+  price (G3, above). `pedir_analisis` stores `foto.alcance_dias` (the period asked for, B2: see «mismo_alcance» in the
+  skill `rendimiento`).
 - **From analysis to Crear and learnings.** `analisis_crear` sends `origen_tw = a<aid>`, stored as
   `concepto.extra.tw_idea = {"analisis_id", "titulo"}`; the cards list the pieces born from each analysis. The
-  `aprendizaje` is saved only on click (`analisis_aprendizaje`, id `tw<aid>`, in the project's language: rule 3): saved
+  `aprendizaje` is saved only on click (`analisis_aprendizaje`, id `tw<aid>`, in the project's language: rule 3; for a
+  Meta-source analysis it says «Ganó/Perdió/Analizado en Meta» with `origen: "meta"`, and the detail names its Meta
+  account instead of «Todas las tiendas»: B1 of Rendimiento E2's final review): saved
   learnings feed every future prompt, and the id makes two clicks or two tabs one line. `doctrina.aprendizajes._limpio`
   removes every `<` and `>` (the data tags whole, in any case; a numeric comparison of the decisor such as «8% < 25%»
   becomes «8% ＜ 25%») and the detail shows next to the button the EXACT text that will be saved («Se guarda así: …»).
@@ -548,8 +558,11 @@ eval `docs/superpowers/evals/2026-10-09-tw-ganchos-y-copy.md`.
   open. The POST is one fetch after the price confirmation and is never repeated (`tests/test_tw_tarjetas_js.py`). Since
   the integration with Rendimiento (2026-10-10) that JS lives in `_tab_rendimiento.html` (the Triple Whale tab was retired
   on 2026-10-09) and the detail opens from the single gallery of «Tus anuncios», so an analysis of an ad of a Meta account
-  without a store (Rendimiento E2, `foto.fuente = "meta"`, its video copied to R2) offers «Probar los 3 ganchos» too when
-  `mejorar._url_voz` finds its video; not tried in real yet (PND-289).
+  without a store (Rendimiento E2, `foto.fuente = "meta"`, its video copied to R2) does NOT offer «Probar los 3 ganchos»
+  since the final review of Rendimiento E2 (G1, 2026-10-10): it would charge ~US$ 1,01 of Kling through a path never
+  tried in real, so `puede_probar` returns `MOTIVO_META` («Para anuncios de Meta todavía no: falta una prueba real.»)
+  right after «sin ganchos», the detail shows that reason and the route answers 409 without rows or reservation. Turn it
+  on after a real test (PND-289).
 - **The code.** `ganchos.codigo(gid) = "CV<gid>"`; `codigo_en(nombre)` (regex `\bCV(\d+)\b`, case-insensitive) is written
   and tested for stage 3, which will read it from the ad name in the sync to compare v1 with v2 ring by ring.
 - **Real test (2026-10-09, one variant, ad 3 of the eval: HappyFluffs UGC 42,96 s).** preparar → Kling O3 Pro image to
