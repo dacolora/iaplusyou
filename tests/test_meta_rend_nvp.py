@@ -143,6 +143,9 @@ def test_con_triple_whale_el_chip_en_la_linea_y_en_cada_nivel(conectado):
     assert "55&nbsp;%" in _linea(una) and "NVP de las cuentas con Triple Whale" not in una
     otra = conectado.get(RPANEL + "?entrada=SE").get_data(as_text=True)
     assert "chip-nvp-vacio" in _linea(otra) and "NVP de las cuentas con Triple Whale" not in otra
+    # La tarjeta NVP de «Resultados» es de Triple Whale (fuente tienda o anuncios): con Meta («SE») o mezcla («Todas»)
+    # describiría solo una parte del alcance y no se pinta; en la entrada de la tienda («NO»), sí.
+    assert "data-twr-nvp" not in otra and "data-twr-nvp" not in html and "data-twr-nvp" in una
 
 
 def test_pocos_visitantes_en_gris_y_cuenta_sin_prefijo_act(conectado):

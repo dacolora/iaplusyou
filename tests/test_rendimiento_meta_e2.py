@@ -131,7 +131,7 @@ def test_el_boton_de_meta_cobra_lo_que_muestra(mixto, entrada, dias):
     if dias == 0:
         assert f"en los últimos {dias_eval} días." in form and "lo que ves arriba" not in form
     else:
-        assert f"Evalúa lo que ves arriba:" in form and f"últimos {dias_eval} días." in form
+        assert "Evalúa lo que ves arriba:" in form and f"últimos {dias_eval} días." in form
     r = mixto["c"].post(EVALUAR, data=campos, headers=POST)
     assert r.status_code == 302 and r.headers["Location"].endswith("#rendimiento")
     ev, = _evaluaciones()
