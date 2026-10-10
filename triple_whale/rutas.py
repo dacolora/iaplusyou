@@ -1,12 +1,10 @@
-"""Blueprint de la pestaña Triple Whale (spec 2026-09-28 §8), bajo
-`/cliente/<cliente>/triple-whale`. `dashboard._guard_por_cliente` protege
-todo porque la URL lleva `<cliente>`; cada POST además exige el mismo origen
-(Sec-Fetch-Site), la barrera CSRF del resto de la app.
+"""Blueprint de Triple Whale (spec 2026-09-28 §8), bajo `/cliente/<cliente>/triple-whale`. Desde el 2026-10-09 la
+pestaña es «Rendimiento» (`pestana_rendimiento/`, spec 2026-10-09): su panel y «Actualizar ahora» viven allá, y aquí
+quedan las rutas que la pestaña llama con el alcance de Triple Whale de la entrada (R13: lo que cobra no cambió de
+lugar). `dashboard._guard_por_cliente` protege todo porque la URL lleva `<cliente>`; cada POST además exige el mismo
+origen (Sec-Fetch-Site), la barrera CSRF del resto de la app. Todas vuelven a `#rendimiento`.
 
-- `panel`: el fragmento que la pestaña pide por fetch (solo lectura). Lee
-  `tienda` (spec 2026-10-08 §6.2): una tienda del proyecto; ajena o inválida = «Todas».
-- `sincronizar`: encola la copia de Triple Whale (gratis): sin `tienda_id`, la
-  de cada tienda; con él, la de esa (ajena o inválida → 404).
+- `dia`: el detalle de un día de «Resultados de tu tienda» (lo pide static/tw_resultados.js).
 - `evaluar`: encola el análisis con IA con la muestra del periodo Y la tienda
   que se están viendo (`tienda`, como en el panel); `extra` guarda `tienda_id`
   y `pais`. El precio ya estaba a la vista en el botón (y en su confirmación).
@@ -104,7 +102,7 @@ def _tw_canal(canal):
 
 
 def _volver(cliente):
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="triplewhale"))
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="rendimiento"))
 
 
 def _dias(valor):
@@ -112,17 +110,6 @@ def _dias(valor):
         return int(valor)
     except (TypeError, ValueError):
         return panel.PERIODO_DEFECTO
-
-
-@bp.get("/panel")
-def ver_panel(cliente):
-    ctx = panel.contexto(cliente, _dias(request.args.get("dias")), (request.args.get("canal") or "").strip() or None,
-                         tienda_id=request.args.get("tienda"))
-    if ctx.get("resultados"):
-        tienda = ctx["tienda_actual"]["id"] if ctx.get("tienda_actual") else ""
-        ctx["resultados"]["datos"]["url_dia"] = url_for("triple_whale.ver_dia", cliente=cliente, tienda=tienda,
-                                                        canal=ctx.get("canal") or "")
-    return render_template("_tw_panel.html", cliente=cliente, tw=ctx)
 
 
 @bp.get("/dia")
@@ -424,28 +411,14 @@ def anuncio_referente(cliente, canal, ad_id):
 
 def pedir_copia(cliente, tienda_id=None):
     """(texto ya traducido, categoría de flash) de pedir la copia de Triple Whale (gratis): la de esa tienda o, sin
-    `tienda_id`, la de cada tienda del proyecto. El llamador ya comprobó que la tienda es del proyecto. La usan
-    «Sincronizar» de esta pestaña y «Actualizar ahora» de Rendimiento (spec 2026-10-09 A5)."""
+    `tienda_id`, la de cada tienda del proyecto. El llamador ya comprobó que la tienda es del proyecto. La usa
+    «Actualizar ahora» de Rendimiento (`rendimiento.actualizar`, spec 2026-10-09 A5), que reemplazó a la ruta
+    `sincronizar` de la pestaña vieja."""
     if not triple_whale_tiendas.obtener(cliente):
         return gettext("Triple Whale no está conectado en este proyecto."), "error"
     if tareas_tw.encolar_sync(cliente, tienda_id):
         return gettext("Trayendo las métricas de Triple Whale…"), "ok"
     return gettext("Ya se están trayendo las métricas de Triple Whale."), "warn"
-
-
-@bp.post("/sincronizar")
-def sincronizar(cliente):
-    tienda_id = None
-    valor = (request.form.get("tienda_id") or "").strip()
-    if valor:
-        try:
-            tienda_id = int(valor)
-        except ValueError:
-            abort(404)
-        if not triple_whale_tiendas.tienda(cliente, tienda_id):
-            abort(404)
-    flash(*pedir_copia(cliente, tienda_id))
-    return _volver(cliente)
 
 
 @bp.post("/evaluar")

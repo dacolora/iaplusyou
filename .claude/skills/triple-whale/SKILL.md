@@ -1,18 +1,26 @@
 ---
 name: triple-whale
-description: "Triple Whale: conexión, sincronización por SQL, la pestaña de rendimiento con veredictos y diagnóstico, «Evaluar con IA», avisos y la atribución de experimentos por Triple Whale. Cargar antes de tocar triple_whale/, triple_whale_tiendas.py, tareas/triple_whale.py o _tab_triple_whale.html."
+description: "Triple Whale: conexión, sincronización por SQL, veredictos y diagnóstico por anuncio, las tarjetas con «Cómo mejorarlo», «Evaluar con IA», avisos y la atribución de experimentos por Triple Whale (su pantalla es la pestaña Rendimiento, skill rendimiento). Cargar antes de tocar triple_whale/, triple_whale_tiendas.py, tareas/triple_whale.py, _tw_secciones.html, _tw_galeria.html o _triple_whale_conectar.html."
 ---
 
 # Triple Whale
 
 > Parte de la guía del repositorio; hasta el 2026-10-01 vivía dentro de CLAUDE.md. **Si cambias esta área, actualiza este archivo** en el mismo cambio (no CLAUDE.md). Si el código y este texto no coinciden, manda el código: corrige el texto.
 
+**La pantalla es la pestaña Rendimiento desde el 2026-10-09** (Triple Whale y Meta juntos; skill `rendimiento`,
+spec `2026-10-09-pestana-rendimiento-design.md`): la pestaña «Triple Whale» (`_tab_triple_whale.html`, `_tw_panel.html`,
+`triple_whale.rutas.ver_panel` y `sincronizar`) se jubiló y sus enlaces viejos (`#triplewhale`) abren Rendimiento. Lo de
+abajo que habla de «la pestaña» o «el panel» describe hoy las secciones de Triple Whale dentro de Rendimiento
+(`_tw_secciones.html`, `_tw_galeria.html`), que siguen leyendo `triple_whale.panel.contexto` y posteando a
+`triple_whale/rutas.py` con el alcance de la entrada (R13). Todo `_volver` de este paquete y de `cfg_triple_whale_*`
+vuelve a `#rendimiento`.
+
 **Triple Whale** (package `triple_whale/`, `triple_whale_tiendas.py`, `tareas/triple_whale.py`; spec
 `docs/superpowers/specs/2026-09-28-triple-whale-rendimiento-design.md`, migrations 0023, 0024, 0032 and 0034; the
 per-ad cards are in «Tarjetas de análisis» at the end): connected from
-the Triple Whale tab itself (`_triple_whale_conectar.html`, included by `_tab_triple_whale.html` in both states;
-until 2026-09-28 the form sat in Configuración › Conexiones, and the `cfg_triple_whale_*` routes now return to
-`#triplewhale`) (one Fernet-encrypted API key PER STORE; `cfg_triple_whale_conectar` adds a store: requires a verified correo, same
+«Ajustes» of the Rendimiento tab (`_triple_whale_conectar.html`, included by `_tab_triple_whale.html` until
+2026-10-09 and by `_tab_rendimiento.html` since; until 2026-09-28 the form sat in Configuración › Conexiones, and the
+`cfg_triple_whale_*` routes now return to `#rendimiento`) (one Fernet-encrypted API key PER STORE; `cfg_triple_whale_conectar` adds a store: requires a verified correo, same
 origin, a country (the form's or the one guessed from the domain) and tests the key AND a short SQL query before
 saving; `cfg_triple_whale_ajustes` changes the project's currency/model/window; `cfg_triple_whale_probar`,
 `cfg_triple_whale_pais` and `cfg_triple_whale_desconectar` act on ONE store through its `tienda_id`, 404 if it is not
@@ -68,9 +76,10 @@ rejected because it would split catalog, pieces and sprints. Spec
   a store with its own ad account shows no note, and a store that shares one repeats a line next to «Evaluar con IA»
   recommending «Todas las tiendas» (2026-10-08, spend guardian: evaluating one store alone reads the other countries'
   ad spend). `top_productos(None)` groups by normalized name (each store has its own
-  product ids); `por_tienda` is the «Por tienda» table in one query (the panel orders its rows like
-  `triple_whale_tiendas.tiendas`, the selector's order). The panel (`panel.contexto(cliente, dias,
-  canal, tienda_id)`, `?tienda=` in `ver_panel`) has a store selector; with one store it is always that one.
+  product ids); `por_tienda` gives every store's totals in one query (Rendimiento's «Por país» reads it, in the
+  selector's order; the old «Por tienda» table went with its tab on 2026-10-09). `panel.contexto(cliente, dias, canal,
+  tienda_id)` reads one store or «Todas»; the selector is Rendimiento's (one entry per country; the old `?tienda=`
+  still works there through `entradas.de_legado`).
 - **Avisos** (`triple_whale/avisos.py`) always look at «Todas»: `tw_sincronizar` calls `avisos.revisar_y_avisar`
   only when no OTHER sync of the project is still queued or running (`syncs_en_curso`), so the LAST one to finish
   warns once with everything fresh. «Evaluar con IA» evaluates the selected scope and saves it in
@@ -94,15 +103,13 @@ rejected because it would split catalog, pieces and sprints. Spec
   accounts per project (PND-148), the residuals of the final reviews (PND-149), and no SQL has run against a real
   store: the first copy of happyflops-norge after the deploy is the test.
 
-The **Triple Whale tab** (`_tab_triple_whale.html`, `data-tab="triplewhale"`, after Alertas; since E2, 2026-10-03, there is
-no Tablero tab) fetches its panel
-(`triple_whale.rutas.ver_panel` → `_tw_panel.html`) only when opened, in this order: «Resultados de tu tienda» (cards +
-the interactive day-by-day chart + day detail + reading + «Tus creativos», see the paragraph below; it replaced the
-store KPI tiles «Tu tienda» and the old SVG «Día a día» on 2026-10-08), «Por tienda» (only «Todas» with 2+ stores),
-alerts, «Tus anuncios» (the account's ad KPI tiles + the card gallery, see «Tarjetas de análisis»), the account's AI
-evaluation, spend by verdict/channel, «Lo que más se vende» and, inside «Ver como tabla» (a closed `<details
-id="tw-cada-anuncio">`, opened by the day detail's «Ver todos los anuncios →»), every ad with a verdict and a diagnosis
-from the pure `triple_whale/evaluacion.py` (compared with the medians of its own channel, or the account's when the
+The **Triple Whale sections of the Rendimiento tab** (until 2026-10-09 the «Triple Whale» tab, `data-tab="triplewhale"`;
+order and layout in the skill `rendimiento`): «Resultados de tu tienda» (cards + the interactive day-by-day chart + day
+detail + reading + «Tus creativos», see the paragraph below; it replaced the store KPI tiles «Tu tienda» and the old SVG
+«Día a día» on 2026-10-08), alerts, «Tus anuncios» (the account's ad KPI tiles + the card gallery, see «Tarjetas de
+análisis»), the account's AI evaluation, spend by verdict/channel, «Lo que más se vende» and, inside «Ver como tabla» (a
+closed `<details id="tw-cada-anuncio">`, opened by the day detail's «Ver todos los anuncios →»), every ad with a verdict
+and a diagnosis from the pure `triple_whale/evaluacion.py` (compared with the medians of its own channel, or the account's when the
 channel has fewer than `BENCH_MIN_ANUNCIOS` comparable ads; `ganador`/`prometedor`/`en_prueba`/`perdedor`/`sin_datos`; weak
 hook, low hold, few clicks, clicks without sales, expensive CPM, fatigue 7d vs 7d, no TW tracking).
 «Evaluar con IA» (now «Lo que hace ganar en tu cuenta»; `tw_evaluar`, `max_intentos=1`, price `gastos.estimar("evaluacion_tw", n=)`, real spend as
@@ -160,7 +167,8 @@ Coronas (2026-10-08, spec de Noruega y Suecia §3; motivo: las tiendas de happyf
 **«Resultados de tu tienda»** (spec `docs/superpowers/specs/2026-10-08-tw-resultados-de-tu-tienda-design.md`, pedido
 de Daniel 2026-10-08 con la captura de «Día a día»): reemplazó a «Tu tienda» (tiles) y «Día a día» (el SVG de
 `dashboard._grafico_tablero`, que se borró de `dashboard.py`; la pestaña Meta, que también lo usaba, se llevó el
-cálculo y sus estilos a `meta_rendimiento/grafico.py` y `pantallas/meta.css` al mezclar main el 2026-10-08). `panel._resultados` arma UNA serie ancha (periodo +
+cálculo y sus estilos a `meta_rendimiento/grafico.py` y `pantallas/meta.css` al mezclar main el 2026-10-08, y se
+borraron con ella el 2026-10-09). `panel._resultados` arma UNA serie ancha (periodo +
 anterior + 28 días para los días raros) y llama a `triple_whale/resultados.py` (puro: tarjetas, variaciones con días
 completos — hoy va aparte —, días raros contra la mediana del mismo día de la semana, mejor día, lectura con reglas,
 «Tus creativos» por mes de arranque, la tabla y el JSON). Las consultas nuevas de `datos.py` (`gasto_por_antiguedad`,
@@ -171,7 +179,7 @@ con gasto de cada anuncio en la copia: nuevo = hasta ese día + 13; la antigüed
 `<script type="application/json" id="tw-resultados-datos">`; `static/tw_resultados.js` (ES5, como
 `exp_resultados.js`, textos en el JSON, números con los separadores de la app) dibuja la gráfica al ancho real del
 contenedor y pide el detalle del día a `GET /triple-whale/dia` (`panel.contexto_dia` → `_tw_dia.html`; del primer día
-copiado a ayer, 400 si no). `_tab_triple_whale.html` llama `TwResultados.iniciar(cont)` tras pintar el panel. Trampas:
+copiado a ayer, 400 si no). `_tab_rendimiento.html` llama `TwResultados.iniciar(cont)` tras pintar el panel. Trampas:
 un periodo anterior que empieza antes del primer día copiado NO se compara (serían ceros que no son ventas; con 10
 días de prueba, «7 días» no compara); «Desde el inicio» nunca compara (5fce2658); lo atribuido del Pixel suma más que
 la tienda (PND-157) y solo se usa para comparar anuncios y canales; el CSS heredado tenía un comentario cerrado con
@@ -266,13 +274,13 @@ production. It must work for ANY ad, not only Creatv's: in happyflops only 4 pie
   frame labels AND the integer part of every frame and voice-phrase second: «el segundo 31» for a phrase at 31,1 s is
   not an invented figure; the real test flagged 31 and 37 that way, 2026-10-08). `NOMBRES_CANAL` lives in `triple_whale/__init__.py` so the worker never imports the
   blueprint (`resultados.NOMBRES_CANAL` and `rutas.NOMBRES_CANAL` are that same dict).
-- **Shared sections (2026-10-09).** Everything of `_tw_panel.html` after «Por tienda» (copy bars, the shared-account
+- **Shared sections (2026-10-09).** What `_tw_panel.html` painted after «Por tienda» (copy bars, the shared-account
   note, alerts, «Tus anuncios», «Lo que hace ganar», reparto, productos, «Ver como tabla») lives as macros in
-  `_tw_secciones.html`, which the Rendimiento tab (`_rend_panel.html`) calls too; a card of a `facebook-ads` ad shows
+  `_tw_secciones.html`, which `_rend_panel.html` calls (`_tw_panel.html` itself was retired with its tab the same
+  day); a card of a `facebook-ads` ad shows
   «Meta reporta N×» from `m.roas_canal` (`valor_canal` / gasto) when there is that figure (spec 2026-10-09 R12).
-- **Gallery.** Tab order: bar, «Resultados de tu tienda» (main's section, 2026-10-08), «Por tienda», alerts, «Tus
-  anuncios» (tiles + gallery), «Lo que hace ganar en tu cuenta», «Dónde se va el gasto», «Lo que más se vende», «Ver como
-  tabla». The gallery, card, analyze and batch routes resolve their scope with `panel.alcance` → `evaluar_periodo`, the
+- **Gallery.** The order of the sections is Rendimiento's (skill `rendimiento`); the gallery is «Tus anuncios»
+  (tiles + gallery), shown as is (A1). The gallery, card, analyze and batch routes resolve their scope with `panel.alcance` → `evaluar_periodo`, the
   same as the panel, «Desde el inicio» (`dias=0`, from the first copied day) included. 12 cards per page by spend (`panel.POR_PAGINA`), filters (`Muy pocos datos` is not in
   «Todos»), and a fixed number of queries whatever the cards (`panel.enriquecer`, `datos.analisis_de_anuncios`;
   `test_las_consultas_no_crecen_con_las_tarjetas`): a query per card was what made project pages take 1 158 queries
@@ -281,7 +289,7 @@ production. It must work for ANY ad, not only Creatv's: in happyflops only 4 pie
   «Ver más»), `tarjeta`, `analizar_anuncio` (JSON for the tab JS), `analizar_lote`, `analisis_detalle`,
   `analisis_crear`, `analisis_aprendizaje`, `anuncio_referente` (same thumbnail as the card). A card's bar carries
   `data-poll-al-terminar="evento"` and dispatches `trabajo-terminado` instead of reloading (ten analyses would be ten
-  reloads); the tab JS repaints only that card. The async «Cómo mejorarlo» never re-POSTs on a failure: it repaints the
+  reloads); the tab JS (`_tab_rendimiento.html`) repaints only that card. The async «Cómo mejorarlo» never re-POSTs on a failure: it repaints the
   card and shows a message, and paying again takes a fresh click and confirm (rule 1). The analisis routes take
   `<int(max=2**63-1):aid>` (`rutas.AID_MAX`, B7): a bigger id overflowed SQLite and gave a 500, now a 404. Whole sales
   show without a decimal (`tw_ventas`: «10 ventas», not «10,0»; D2) and «Ya se hizo N piezas con esta mejora» ends
@@ -350,7 +358,11 @@ lo atribuido por el Pixel sumaba 2,5 veces las ventas reales de la tienda (PND-1
 - **Parámetros.** `evaluacion.alertas(..., origen="tw"|"meta")`: con `"meta"` la alerta «sin ventas» habla del Pixel de Meta
   y no de los parámetros de rastreo. `panel.contexto(..., con_resultados=False)` no calcula «Resultados de tu tienda»
   (`"resultados"` es None); la pestaña Rendimiento arma los suyos cuando el alcance mezcla fuentes.
-- **Pedir la copia.** `rutas.pedir_copia(cliente, tienda_id=None)` → (texto traducido, categoría de flash): la usan `sincronizar` de esta pestaña y «Actualizar ahora» de Rendimiento (`rendimiento.actualizar`), así los dos dicen lo mismo y encolan con el mismo `job_id` (2026-10-09, tarea 6).
+- **Pedir la copia.** `rutas.pedir_copia(cliente, tienda_id=None)` → (texto traducido, categoría de flash): la usa «Actualizar ahora» de Rendimiento (`rendimiento.actualizar`), con el mismo `job_id` de siempre (2026-10-09, tarea 6); la ruta `sincronizar` de la pestaña vieja se retiró en la tarea 8.
+- **Lo de Meta que lee Rendimiento** vive en `meta_rendimiento.panel` por partes (`lista`, `rango_fechas`, `estructura`,
+  `conjuntos_de`, `anuncios_evaluados`, `estado_copia`; skill `meta-rendimiento`); qué cuenta de Meta queda «dentro» de
+  una tienda lo decide `cuentas_meta_de_tiendas` (R5), y las campañas y conjuntos de esas cuentas toman sus cifras de
+  `totales_por_grupo` en la moneda de Triple Whale (skill `rendimiento`, R3).
 - **Tasas.** Al terminar bien una copia, `tareas.triple_whale._asegurar_tasas(cliente)` pide a `meta_rendimiento.tasas` las
   tasas USD de la moneda del proyecto (si no es USD) desde el primer día copiado, para que «Todas» sume en dólares; nunca
   tumba la copia.

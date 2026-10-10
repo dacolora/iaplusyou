@@ -3,6 +3,9 @@ import os
 import re
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# La pestaña que trae el JS de la galería: Rendimiento desde el 2026-10-09 (spec 2026-10-09 R1), que se trajo tal cual el
+# de la pestaña Triple Whale, ya jubilada. Estas pruebas vigilan lo mismo que vigilaban allá.
+PESTANA = "_tab_rendimiento.html"
 
 
 def _leer(nombre):
@@ -32,14 +35,14 @@ def test_iniciar_polling_avisa_con_un_evento_si_la_barra_lo_pide():
 
 
 def test_la_pestana_maneja_filtros_ver_mas_post_por_fetch_y_detalle():
-    tab = _leer("_tab_triple_whale.html")
+    tab = _leer(PESTANA)
     for marca in ("data-tw-galeria-filtro", "data-tw-mas", "data-tw-async", "trabajo-terminado",
                   "data-tw-ver-analisis", "arrancarSondeos", "tarjetaUrl", "'Accept': 'application/json'"):
         assert marca in tab, marca
 
 
 def test_el_filtro_reemplaza_el_bloque_entero_y_ver_mas_solo_agrega_tarjetas():
-    tab = _leer("_tab_triple_whale.html")
+    tab = _leer(PESTANA)
     # Un filtro pide `entera=1` y reemplaza el bloque (chips + lote + rejilla); «Ver más» no lo pide y agrega.
     assert "entera" in tab and ".tw-galeria-bloque" in tab and "replaceWith" in tab
     assert "insertAdjacentHTML" in tab
@@ -50,7 +53,7 @@ def test_el_filtro_reemplaza_el_bloque_entero_y_ver_mas_solo_agrega_tarjetas():
 
 
 def test_los_textos_del_js_vienen_de_la_plantilla_y_no_hay_script_en_los_fragmentos():
-    tab = _leer("_tab_triple_whale.html")
+    tab = _leer(PESTANA)
     galeria = _sin_comentarios(_leer("_tw_galeria.html"))
     fragmento = _sin_comentarios(_leer("_tw_galeria_fragmento.html"))
     assert "|tojson" in tab and "No se pudo" in tab
@@ -65,7 +68,7 @@ def _manejador(tab, desde, hasta):
 def test_un_pedido_que_cobra_nunca_se_repite_solo():
     """Repo, regla 1: ni un reintento automático ni un envío de respaldo. Si no se sabe cómo terminó el POST, la
     tarjeta se repinta con lo que dice el servidor y la persona vuelve a confirmar el precio."""
-    tab = _leer("_tab_triple_whale.html")
+    tab = _leer(PESTANA)
     manejador = _manejador(tab, "cont.addEventListener('submit'", "cont.addEventListener('trabajo-terminado'")
     assert ".submit(" not in manejador and ".submit(" not in tab
     # Se confirma el precio ANTES del único fetch (el POST) del manejador.
@@ -78,7 +81,7 @@ def test_un_pedido_que_cobra_nunca_se_repite_solo():
 
 
 def test_la_tarjeta_repintada_que_no_termino_muestra_lo_que_dijo_el_trabajo():
-    tab = _leer("_tab_triple_whale.html")
+    tab = _leer(PESTANA)
     repintar = _manejador(tab, "function repintarTarjeta(", "function aplicarVeredicto(")
     assert "tarjetaTerminada(nueva)" in repintar and "op.mensaje" in repintar and "avisoEn(nueva, op.mensaje)" in repintar
     assert "ev.detail.mensaje" in tab

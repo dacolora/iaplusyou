@@ -224,7 +224,9 @@ def test_guardar_preferencias_sonido(app, monkeypatch, tmp_path):
 
 
 def _pestana_tw(html):
-    ini = html.index('<section id="tab-triplewhale"')
+    """La pestaña donde vive la conexión de Triple Whale: Rendimiento desde el 2026-10-09 (spec 2026-10-09 R15, en su
+    «Ajustes»); del 2026-09-28 a esa fecha, la pestaña Triple Whale."""
+    ini = html.index('<section id="tab-rendimiento"')
     sig = html.find('<section id="tab-', ini + 10)
     return html[ini:sig if sig > 0 else len(html)]
 
@@ -233,7 +235,7 @@ def test_triple_whale_formulario_vive_en_su_pestana(app):
     """Entre 9d3c580 y 05c254d el formulario no estuvo en ningún lado (se quitó
     de Configuración sin destino). Desde 2026-09-28 vive en la pestaña Triple
     Whale — movido en un solo commit, con el destino ya existente — y ya no
-    está en Configuración."""
+    está en Configuración. Desde 2026-10-09, en «Ajustes» de Rendimiento."""
     html = app["c"].get("/cliente/acme").data.decode()
     cfg = _config(html)
     fin = cfg.find('<section id="tab-', 10)
@@ -268,7 +270,7 @@ def test_triple_whale_conectar_guarda_normaliza_y_encola_la_primera_copia(app, m
                             "pais": "co", "moneda": "cop", "modelo_atribucion": "First Touch",
                             "ventana_atribucion": "30"},
                       follow_redirects=False)
-    assert r.status_code == 302 and r.headers["Location"].endswith("#triplewhale")
+    assert r.status_code == 302 and r.headers["Location"].endswith("#rendimiento")
     conectado = triple_whale_tiendas.obtener("acme")
     [tienda] = conectado["tiendas"]
     assert tienda["dominio"] == "acme.myshopify.com" and tienda["pais"] == "CO" and conectado["moneda"] == "COP"
@@ -527,7 +529,7 @@ def test_triple_whale_cambiar_pais_conserva_las_cifras(app, monkeypatch):
     sin = triple_whale_tiendas.agregar("acme", "tw_x", "acme.myshopify.com")
     tw_datos.reemplazar_tienda("acme", sin, "2026-09-01", "2026-09-01", [{"fecha": "2026-09-01", "ingresos": 10}])
     r = app["c"].post("/cliente/acme/cfg_triple_whale/pais", data={"tienda_id": sin, "pais": "dk"})
-    assert r.status_code == 302 and r.headers["Location"].endswith("#triplewhale")
+    assert r.status_code == 302 and r.headers["Location"].endswith("#rendimiento")
     assert triple_whale_tiendas.tienda("acme", sin)["pais"] == "DK" and tw_datos.hay_tienda("acme")
     _flashes(app["c"])
     with app["c"].session_transaction() as s:

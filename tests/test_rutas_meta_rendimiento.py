@@ -1,7 +1,8 @@
-"""Pestaña «Meta» (spec 2026-10-08 meta rendimiento §5 y §8): la página del proyecto solo pinta el armazón (sin
-Graph ni cálculo), el panel y el selector de cuentas llegan por fetch, «Ver más» trae filas, y los POST (elegir
-cuentas, país, actualizar) frenan lo de otro sitio, lo de otro proyecto y lo que el token no ve. Ningún token llega a
-una respuesta."""
+"""Meta en la pestaña Rendimiento (spec 2026-10-08 meta rendimiento §5 y §8; desde el 2026-10-09 la pestaña «Meta»
+es «Rendimiento», spec 2026-10-09 R1): la página del proyecto solo pinta el armazón (sin Graph ni cálculo), el panel
+(`/rendimiento/panel`, que acepta el `?cuenta=` de la pestaña vieja) y el selector de cuentas llegan por fetch,
+«Ver más» trae filas o tarjetas, y los POST (elegir cuentas, país, «Actualizar ahora») frenan lo de otro sitio, lo de
+otro proyecto y lo que el token no ve. Ningún token llega a una respuesta."""
 from datetime import date, datetime, timedelta
 
 import pytest
@@ -9,6 +10,7 @@ import sqlalchemy as sa
 
 import db
 from meta_rendimiento import cuentas, datos, panel, pausa
+from pestana_rendimiento import panel as rend_panel
 from tests.test_rutas_configuracion import app  # noqa: F401  (fixture)
 from tests.test_rutas_productos import _flashes
 
@@ -127,6 +129,21 @@ def _fila(html, marca):
     return html[html.rindex("<tr", 0, i):html.index("</tr>", i)]
 
 
+def _pestana(html):
+    """La pestaña Rendimiento de la página del proyecto (hasta la siguiente, Nicho)."""
+    return html[html.index('id="tab-rendimiento"'):html.index('id="tab-nicho"')]
+
+
+def _sin_scripts(html):
+    """El HTML sin el único <script> que el panel puede traer: el JSON inerte que lee static/tw_resultados.js."""
+    return html.replace('<script type="application/json" id="tw-resultados-datos">', "")
+
+
+def _actualizar(c, entrada="", **headers):
+    """«Actualizar ahora» de Rendimiento (spec 2026-10-09 A5): reemplazó a la ruta `sincronizar` de la pestaña Meta."""
+    return c.post("/cliente/acme/rendimiento/actualizar", data={"entrada": entrada}, headers=headers)
+
+
 def _activos(*cuentas_meta):
     return {"ad_accounts": [{"id": act, "name": nombre, "currency": "SEK", "account_status": 1}
                             for act, nombre in cuentas_meta], "pages": []}
@@ -135,94 +152,104 @@ def _activos(*cuentas_meta):
 # ---- la página del proyecto -------------------------------------------------------------------------------
 
 def test_sin_conectar_la_pestana_invita_a_conectar_y_no_calcula_el_panel(app, monkeypatch):  # noqa: F811
-    monkeypatch.setattr(panel, "contexto", lambda *a, **k: pytest.fail("el panel va por fetch"))
+    monkeypatch.setattr(rend_panel, "contexto", lambda *a, **k: pytest.fail("el panel va por fetch"))
     monkeypatch.setattr(app["dashboard"].meta_conexion, "listar_activos", lambda t: pytest.fail("nada de Graph"))
     html = app["c"].get("/cliente/acme").get_data(as_text=True)
-    assert 'data-tab="meta"' in html and 'id="tab-meta"' in html
-    pestana = html[html.index('id="tab-meta"'):html.index('id="tab-nicho"')]
-    assert "Conecta Meta para ver tus cuentas" in pestana and 'data-ir-tab="settings"' in pestana
-    assert "/meta-rendimiento/panel" not in pestana and "/meta-rendimiento/cuentas" not in pestana
-    # El enlace «#meta» de la tarjeta de Conexiones abre esta pestaña (cliente.html la conoce).
-    assert "meta: document.getElementById('tab-meta')" in html
-    # La pestaña va justo después de Triple Whale en la barra lateral.
-    assert html.index('data-tab="triplewhale"') < html.index('data-tab="meta"') < html.index('data-tab="nicho"')
+    assert 'data-tab="rendimiento"' in html and 'id="tab-rendimiento"' in html
+    pestana = _pestana(html)
+    assert "Conecta Meta o Triple Whale para ver tu rendimiento" in pestana and 'data-ir-tab="settings"' in pestana
+    assert "/rendimiento/panel" not in pestana and "/meta-rendimiento/cuentas" not in pestana
+    # El enlace «#meta» de la tarjeta de Conexiones (y uno guardado) abre Rendimiento (cliente.html lo traduce).
+    assert "meta: 'rendimiento'" in html
+    # La pestaña va donde estaban Triple Whale y Meta en la barra lateral: después de Alertas, antes de Nicho.
+    assert html.index('data-tab="alertas"') < html.index('data-tab="rendimiento"') < html.index('data-tab="nicho"')
 
 
 def test_conectado_sin_cuentas_pide_el_selector(conectado, monkeypatch):
-    monkeypatch.setattr(panel, "contexto", lambda *a, **k: pytest.fail("el panel va por fetch"))
+    """Con Meta y sin cuentas, «Ajustes» abre con el selector a la vista (lo pide por fetch). El panel también llega,
+    y dice que faltan cuentas (antes la pestaña Meta no lo pedía: Rendimiento puede tener Triple Whale)."""
+    contexto = rend_panel.contexto
+    monkeypatch.setattr(rend_panel, "contexto", lambda *a, **k: pytest.fail("el panel va por fetch"))
     html = conectado["c"].get("/cliente/acme").get_data(as_text=True)
-    pestana = html[html.index('id="tab-meta"'):html.index('id="tab-nicho"')]
-    assert "Elige qué cuentas publicitarias quieres ver" in pestana
+    pestana = _pestana(html)
+    assert "Marca abajo las cuentas de este proyecto" in pestana
     assert 'data-url="/cliente/acme/meta-rendimiento/cuentas"' in pestana
-    assert "/meta-rendimiento/panel" not in pestana
+    assert 'data-url="/cliente/acme/meta-rendimiento/cuentas" hidden' not in pestana
+    monkeypatch.setattr(rend_panel, "contexto", contexto)
+    assert "Todavía no hay cuentas publicitarias elegidas" in conectado["c"].get(
+        "/cliente/acme/rendimiento/panel").get_data(as_text=True)
 
 
 def test_conectado_con_cuentas_pide_el_panel_por_fetch(conectado, monkeypatch):
     _dos_cuentas()
-    monkeypatch.setattr(panel, "contexto", lambda *a, **k: pytest.fail("el panel va por fetch"))
+    monkeypatch.setattr(rend_panel, "contexto", lambda *a, **k: pytest.fail("el panel va por fetch"))
     html = conectado["c"].get("/cliente/acme").get_data(as_text=True)
-    pestana = html[html.index('id="tab-meta"'):html.index('id="tab-nicho"')]
-    assert 'data-url="/cliente/acme/meta-rendimiento/panel"' in pestana
-    assert 'data-url="/cliente/acme/meta-rendimiento/cuentas"' in pestana and "Elegir cuentas" in pestana
+    pestana = _pestana(html)
+    assert 'data-url="/cliente/acme/rendimiento/panel"' in pestana
+    assert 'data-url="/cliente/acme/meta-rendimiento/cuentas"' in pestana and "Elegir cuentas de Meta" in pestana
 
 
 # ---- el panel ---------------------------------------------------------------------------------------------
 
 def test_panel_con_datos(conectado):
     _sembrar()
-    html = conectado["c"].get("/cliente/acme/meta-rendimiento/panel").get_data(as_text=True)
-    assert "Todas las cuentas (2)" in html and "HappyFlops Norway" in html and "HappyFlops Sweden" in html
+    html = conectado["c"].get("/cliente/acme/rendimiento/panel").get_data(as_text=True)
+    assert "Todas (2)" in html and "HappyFlops Norway" in html and "HappyFlops Sweden" in html
     assert "Ganador" in html and "Perdedor" in html and "Video gana" in html
-    assert "Por cuenta" in html and f'data-meta-act="{A}"' in html
-    assert 'class="tb-grafico"' in html and "USD" in html
+    assert "Por país" in html and 'data-rend-entrada="NO"' in html and 'data-rend-entrada="SE"' in html
+    assert 'id="tw-resultados-datos"' in html and "USD" in html            # «Resultados» con la gráfica de siempre
     assert "Campaña Otoño" in html and "Conjunto Mujeres" in html and "Aprendizaje limitado" in html
-    assert "<td>4.321</td>" in html                                    # alcance de la campaña (spec §8.4)
-    assert 'src="https://scontent.xx.fbcdn.net/gana.jpg" alt="" loading="lazy" width="48" height="48"' in html
+    # El alcance de la campaña (spec §8.4), de la ventana copiada más cercana al periodo: la de 30 días.
+    treinta = conectado["c"].get("/cliente/acme/rendimiento/panel?dias=30").get_data(as_text=True)
+    assert "<td>4.321</td>" in treinta
+    assert 'src="https://scontent.xx.fbcdn.net/gana.jpg" alt="" loading="lazy"' in html
     assert "Conectado solo para métricas" in html                     # sin Página
-    assert "<script" not in html
-    # Una cuenta: sin «Por cuenta» y en su moneda.
-    una = conectado["c"].get(f"/cliente/acme/meta-rendimiento/panel?cuenta={A}&dias=7").get_data(as_text=True)
-    assert "Por cuenta" not in una and "HappyFlops Sweden</option>" in una and "SEK" in una
-    assert f'<option value="{A}" selected' in una and '<option value="7" selected>' in una
+    assert "<script" not in _sin_scripts(html)
+    # Una cuenta (el `?cuenta=` de la pestaña vieja abre su país): sin «Por país» y en su moneda.
+    una = conectado["c"].get(f"/cliente/acme/rendimiento/panel?cuenta={A}&dias=7").get_data(as_text=True)
+    assert "Por país" not in una and "Suecia — Meta</option>" in una and "SEK" in una
+    assert '<option value="NO" selected' in una and '<option value="7" selected>' in una
 
 
 def test_panel_sin_datos_y_con_una_cuenta_en_error(conectado):
     _dos_cuentas()
     cuentas.actualizar("acme", B, estado="error", error="Meta pidió esperar")
-    html = conectado["c"].get("/cliente/acme/meta-rendimiento/panel").get_data(as_text=True)
+    html = conectado["c"].get("/cliente/acme/rendimiento/panel").get_data(as_text=True)
     assert "Actualizar ahora" in html and "Todavía no hay métricas copiadas" in html
     assert "HappyFlops Sweden" in html and "Meta pidió esperar" in html
     from tareas import meta_rendimiento as tareas_mr
     assert tareas_mr.encolar_sync("acme") == 2
-    html = conectado["c"].get("/cliente/acme/meta-rendimiento/panel").get_data(as_text=True)
+    html = conectado["c"].get("/cliente/acme/rendimiento/panel").get_data(as_text=True)
     assert html.count("data-poll-job=") == 2 and "Trayendo los últimos 13 meses" in html
     assert 'data-poll-job="acme__meta_rend__act_1"' in html and 'id="meta-sync-acme-act_1"' in html
 
 
-def test_ver_mas_anuncios_trae_solo_filas(conectado):
+def test_ver_mas_anuncios_trae_solo_tarjetas(conectado):
+    """«Ver más» de los anuncios de Meta: en la pestaña vieja eran filas de una tabla; en Rendimiento son tarjetas
+    (R14), con su propio botón si quedan más."""
     _sembrar(n_anuncios=30)
-    html = conectado["c"].get("/cliente/acme/meta-rendimiento/panel").get_data(as_text=True)
-    assert 'data-meta-mas="' in html
-    assert "/cliente/acme/meta-rendimiento/anuncios?dias=30&amp;pagina=1" in html
-    mas = conectado["c"].get("/cliente/acme/meta-rendimiento/anuncios?dias=30&pagina=1")
+    html = conectado["c"].get("/cliente/acme/rendimiento/panel").get_data(as_text=True)
+    assert 'data-rend-mas="' in html
+    assert "/cliente/acme/rendimiento/anuncios-meta?entrada=&amp;dias=0&amp;pagina=1" in html
+    mas = conectado["c"].get("/cliente/acme/rendimiento/anuncios-meta?entrada=&dias=0&pagina=1")
     assert mas.status_code == 200
-    filas = mas.get_data(as_text=True)
+    tarjetas = mas.get_data(as_text=True)
     # 31 anuncios en total (30 de la cuenta 1 + 1 de la 2): la segunda página trae 7 y ya no ofrece más.
-    assert filas.count('<tr data-veredicto=') == 7 and "data-meta-mas" not in filas
-    assert "<script" not in filas and "<table" not in filas
+    assert tarjetas.count('<article class="rend-tarjeta') == 7 and "data-rend-mas" not in tarjetas
+    assert "<script" not in tarjetas and "<table" not in tarjetas and "<section" not in tarjetas
 
 
 def test_ver_mas_conjuntos(conectado, monkeypatch):
     _sembrar()
     monkeypatch.setattr(panel, "POR_PAGINA", 1)
-    html = conectado["c"].get("/cliente/acme/meta-rendimiento/panel").get_data(as_text=True)
-    assert "/cliente/acme/meta-rendimiento/conjuntos?dias=30&amp;pagina=1" in html
-    mas = conectado["c"].get("/cliente/acme/meta-rendimiento/conjuntos?dias=30&pagina=1").get_data(as_text=True)
+    html = conectado["c"].get("/cliente/acme/rendimiento/panel").get_data(as_text=True)
+    assert "/cliente/acme/rendimiento/conjuntos?entrada=&amp;dias=0&amp;pagina=1" in html
+    mas = conectado["c"].get("/cliente/acme/rendimiento/conjuntos?entrada=&dias=0&pagina=1").get_data(as_text=True)
     assert mas.count("<tr") == 1 and "<script" not in mas
     # Una página absurda (o que no es un número) no revienta: un OFFSET enorme no cabe en SQLite.
     for pagina in ("99999999999999999999999", "-3", "x"):
-        for lista in ("conjuntos", "anuncios"):
-            r = conectado["c"].get(f"/cliente/acme/meta-rendimiento/{lista}?pagina={pagina}")
+        for lista in ("conjuntos", "anuncios-meta"):
+            r = conectado["c"].get(f"/cliente/acme/rendimiento/{lista}?pagina={pagina}")
             assert r.status_code == 200, (lista, pagina)
 
 
@@ -231,10 +258,10 @@ def test_otro_proyecto_no_ve_el_panel(app):  # noqa: F811
     c = app["dashboard"].app.test_client()
     with c.session_transaction() as s:
         s.update({"usuario": "otro", "rol": "cliente", "cliente": "otro"})
-    for url in ("/cliente/acme/meta-rendimiento/panel", "/cliente/acme/meta-rendimiento/cuentas",
-                "/cliente/acme/meta-rendimiento/anuncios?pagina=1"):
+    for url in ("/cliente/acme/rendimiento/panel", "/cliente/acme/meta-rendimiento/cuentas",
+                "/cliente/acme/rendimiento/anuncios-meta?pagina=1", "/cliente/acme/rendimiento/conjuntos?pagina=1"):
         assert c.get(url).status_code in (302, 403, 404)
-    assert c.post("/cliente/acme/meta-rendimiento/sincronizar").status_code in (302, 403, 404)
+    assert c.post("/cliente/acme/rendimiento/actualizar").status_code in (302, 403, 404)
     assert _tareas() == []
 
 
@@ -258,7 +285,7 @@ def test_guardar_cuentas_valida_contra_lo_que_ve_el_token_y_encola(conectado, mo
     monkeypatch.setattr(conectado["dashboard"].meta_conexion, "listar_activos",
                         lambda t: _activos((A, "HappyFlops Norway")))
     r = conectado["c"].post("/cliente/acme/meta-rendimiento/cuentas", data={"cuenta": ["act_9"], "pais_act_9": "NO"})
-    assert r.status_code == 302 and r.headers["Location"].endswith("#meta")
+    assert r.status_code == 302 and r.headers["Location"].endswith("#rendimiento")
     assert cuentas.ids("acme") == [] and _tareas() == []
     r = conectado["c"].post("/cliente/acme/meta-rendimiento/cuentas",
                             data={"cuenta": [A, "act_9"], f"pais_{A}": "NL"})
@@ -338,18 +365,22 @@ def test_cambiar_pais(conectado):
 # ---- actualizar ahora -------------------------------------------------------------------------------------
 
 def test_sincronizar(conectado):
+    """«Actualizar ahora» (Rendimiento, A5): de otro sitio, nada; una entrada que no es del proyecto (la cuenta de
+    otro, texto raro) es «Todas» y nunca encola la cuenta de otro proyecto; un país, solo su cuenta; «Todas», todas."""
     _dos_cuentas()
     _cuentas("otro", ("act_7", "Ajena", "MX"))
     c = conectado["c"]
-    r = c.post("/cliente/acme/meta-rendimiento/sincronizar", headers={"Sec-Fetch-Site": "cross-site"})
+    r = _actualizar(c, **{"Sec-Fetch-Site": "cross-site"})
     assert r.status_code == 403 and _tareas() == []
-    assert c.post("/cliente/acme/meta-rendimiento/sincronizar", data={"act": "act_7"}).status_code == 404
-    assert c.post("/cliente/acme/meta-rendimiento/sincronizar", data={"act": "x y"}).status_code == 404
-    assert _tareas() == []
-    r = c.post("/cliente/acme/meta-rendimiento/sincronizar", data={"act": B})
-    assert r.status_code == 302 and r.headers["Location"].endswith("#meta")
+    for ajena in ("act_7", "cuenta:act_7", "MX", "x y"):
+        assert _actualizar(c, ajena).status_code == 302
+        assert all(t["cliente"] == "acme" and "act_7" not in t["job_id"] for t in _tareas()), ajena
+    with db.conectar() as con:
+        con.execute(db.tarea.delete())
+    r = _actualizar(c, "SE")
+    assert r.status_code == 302 and r.headers["Location"].endswith("#rendimiento")
     assert [t["job_id"] for t in _tareas()] == ["acme__meta_rend__act_2"]
-    c.post("/cliente/acme/meta-rendimiento/sincronizar")
+    _actualizar(c)
     assert sorted(t["job_id"] for t in _tareas()) == ["acme__meta_rend__act_1", "acme__meta_rend__act_2"]
 
 
@@ -358,19 +389,19 @@ def test_con_la_pausa_de_meta_vigente_actualizar_dice_la_hora_y_no_encola_nada(c
     hasta = pausa.pausar(90)
     hora = hasta[11:16]
     for c in (conectado["c"], _como_cliente(app)):             # también el admin: no hay nada que esperar de la cola
-        r = c.post("/cliente/acme/meta-rendimiento/sincronizar", data={"act": A})
+        r = _actualizar(c, "NO")
         assert r.status_code == 302
         mensajes = _flashes(c)
         assert any(f"Meta pidió esperar: la copia sigue a las {hora}." in m for m in mensajes)
         assert not any("Trayendo" in m for m in mensajes)
-        c.post("/cliente/acme/meta-rendimiento/sincronizar")
+        _actualizar(c)
     assert _tareas() == []
     # Vencida la pausa, vuelve a encolar como siempre.
     with db.conectar() as con:
         con.execute(db.kv.update().where(db.kv.c.clave == pausa.CLAVE).values(
             valor=(datetime.now() - timedelta(minutes=1)).isoformat(timespec="seconds")))
     assert not pausa.activa()
-    conectado["c"].post("/cliente/acme/meta-rendimiento/sincronizar", data={"act": A})
+    _actualizar(conectado["c"], "NO")
     assert [t["job_id"] for t in _tareas()] == ["acme__meta_rend__act_1"]
 
 
@@ -385,10 +416,10 @@ def test_post_de_otro_sitio_se_rechaza_en_todas(conectado, monkeypatch):
 
 
 def test_sin_meta_el_panel_y_sincronizar_lo_dicen(app):  # noqa: F811
-    html = app["c"].get("/cliente/acme/meta-rendimiento/panel").get_data(as_text=True)
-    assert "Meta no está conectado" in html
+    html = app["c"].get("/cliente/acme/rendimiento/panel").get_data(as_text=True)
+    assert "Conecta Meta o Triple Whale para ver tu rendimiento" in html
     _dos_cuentas()
-    r = app["c"].post("/cliente/acme/meta-rendimiento/sincronizar")
+    r = _actualizar(app["c"])
     assert r.status_code == 302 and _tareas() == []
 
 
@@ -396,11 +427,11 @@ def test_el_panel_no_hace_una_consulta_por_anuncio(conectado):
     from tests.test_escala import _Consultas
     _sembrar(n_anuncios=3)
     with _Consultas() as pocas:
-        assert conectado["c"].get("/cliente/acme/meta-rendimiento/panel").status_code == 200
+        assert conectado["c"].get("/cliente/acme/rendimiento/panel").status_code == 200
     f = _hace(2)
     datos.reemplazar_anuncio_dias("acme", A, f, f, [_ad(f, f"x{i}", 5 + i, 0, adset=f"s{i}") for i in range(40)])
     with _Consultas() as muchas:
-        assert conectado["c"].get("/cliente/acme/meta-rendimiento/panel").status_code == 200
+        assert conectado["c"].get("/cliente/acme/rendimiento/panel").status_code == 200
     assert muchas.n - pocas.n <= 2, (pocas.n, muchas.n)
 
 
@@ -418,15 +449,15 @@ def test_panel_y_selector_en_ingles(app, monkeypatch):  # noqa: F811
     cuentas.actualizar("acme", B, estado="error", error="Meta asked us to wait")
     idiomas.guardar_de_usuario("admin", "en")      # usuarios.json es temporal por test (conftest)
     c = app["c"]
-    panel_en = c.get("/cliente/acme/meta-rendimiento/panel").get_data(as_text=True)
-    assert "All accounts (2)" in panel_en and "Learning limited" in panel_en and "Sales" in panel_en
+    panel_en = c.get("/cliente/acme/rendimiento/panel").get_data(as_text=True)
+    assert "All (2)" in panel_en and "Learning limited" in panel_en and "Sales" in panel_en
     # Los nombres de campañas y conjuntos son datos de la persona (sembrados en español): no cuentan.
     fugas = [t for t in espanol_visible(panel_en) if "Campaña Otoño" not in t and "Conjunto Mujeres" not in t]
     assert not fugas, fugas[:10]
     sel = c.get("/cliente/acme/meta-rendimiento/cuentas").get_data(as_text=True)
     assert "Choose accounts" in sel and not espanol_visible(sel), espanol_visible(sel)[:10]
     pagina = c.get("/cliente/acme").get_data(as_text=True)
-    assert not espanol_visible(pagina, ["tab-meta"])
+    assert not espanol_visible(pagina, ["tab-rendimiento"])
 
 
 # ---- aislamiento: elegir cuentas es del admin (ruling R20) ------------------------------------------------
@@ -454,29 +485,27 @@ def test_un_cliente_no_elige_cuentas_ni_cambia_el_pais(conectado, app, monkeypat
 def test_un_cliente_si_ve_el_panel_pero_sin_elegir_cuentas(conectado, app):
     _sembrar()
     c = _como_cliente(app)
-    panel_html = c.get("/cliente/acme/meta-rendimiento/panel").get_data(as_text=True)
-    assert c.get("/cliente/acme/meta-rendimiento/panel").status_code == 200
+    panel_html = c.get("/cliente/acme/rendimiento/panel").get_data(as_text=True)
+    assert c.get("/cliente/acme/rendimiento/panel").status_code == 200
     assert "Actualizar ahora" in panel_html and "HappyFlops Norway" in panel_html
-    pagina = c.get("/cliente/acme").get_data(as_text=True)
-    pestana = pagina[pagina.index('id="tab-meta"'):pagina.index('id="tab-nicho"')]
-    assert ">Elegir cuentas<" not in pestana and "data-meta-elegir aria-expanded" not in pestana
-    assert "/meta-rendimiento/cuentas" not in pestana and "/meta-rendimiento/panel" in pestana
+    pestana = _pestana(c.get("/cliente/acme").get_data(as_text=True))
+    marcado = pestana[:pestana.index("<script")]
+    assert ">Elegir cuentas de Meta<" not in marcado and "data-meta-elegir aria-expanded" not in marcado
+    assert "/meta-rendimiento/cuentas" not in pestana and "/rendimiento/panel" in pestana
     # El admin sí lo ve.
-    pagina = conectado["c"].get("/cliente/acme").get_data(as_text=True)
-    pestana = pagina[pagina.index('id="tab-meta"'):pagina.index('id="tab-nicho"')]
-    assert ">Elegir cuentas<" in pestana and "/meta-rendimiento/cuentas" in pestana
+    pestana = _pestana(conectado["c"].get("/cliente/acme").get_data(as_text=True))
+    assert ">Elegir cuentas de Meta<" in pestana and "/meta-rendimiento/cuentas" in pestana
 
 
 def test_un_cliente_sin_cuentas_ve_que_un_administrador_las_elige(conectado, app):
     c = _como_cliente(app)
-    pagina = c.get("/cliente/acme").get_data(as_text=True)
-    pestana = pagina[pagina.index('id="tab-meta"'):pagina.index('id="tab-nicho"')]
-    assert "Un administrador de Creatv tiene que elegir las cuentas." in pestana
+    pestana = _pestana(c.get("/cliente/acme").get_data(as_text=True))
+    assert "Un administrador de Creatv elige qué cuentas de Meta se leen." in pestana
     assert "/meta-rendimiento/cuentas" not in pestana and "Cargando tus cuentas de Meta" not in pestana
     assert "Un administrador de Creatv tiene que elegir las cuentas." in c.get(
-        "/cliente/acme/meta-rendimiento/panel").get_data(as_text=True)
+        "/cliente/acme/rendimiento/panel").get_data(as_text=True)
     admin = conectado["c"].get("/cliente/acme").get_data(as_text=True)
-    assert "Elige qué cuentas publicitarias quieres ver" in admin
+    assert "Marca abajo las cuentas de este proyecto" in admin
 
 
 def test_la_cuenta_con_la_que_lanza_otro_proyecto_es_de_ese_proyecto(conectado, monkeypatch):
@@ -611,28 +640,28 @@ def test_un_cliente_espera_30_minutos_entre_dos_actualizaciones(conectado, app):
     c = _como_cliente(app)
     _copiada(A, 5)
     _copiada(B, 120)
-    # Con una cuenta: solo cuenta la suya.
-    c.post("/cliente/acme/meta-rendimiento/sincronizar", data={"act": A})
+    # Con un país (una cuenta): solo cuenta la suya.
+    _actualizar(c, "NO")
     assert _tareas() == [] and any("espera 30 minutos" in m for m in _flashes(c))
-    c.post("/cliente/acme/meta-rendimiento/sincronizar", data={"act": B})
+    _actualizar(c, "SE")
     assert [t["job_id"] for t in _tareas()] == ["acme__meta_rend__act_2"]
-    # Sin cuenta: basta una copiada hace poco para frenar el «todas».
+    # «Todas»: basta una copiada hace poco para frenar el «todas».
     cuentas.actualizar("acme", B, ultima_copia=None)
-    c.post("/cliente/acme/meta-rendimiento/sincronizar")
+    _actualizar(c)
     assert [t["job_id"] for t in _tareas()] == ["acme__meta_rend__act_2"]
     # Pasada la espera, sí.
     _copiada(A, 31)
-    c.post("/cliente/acme/meta-rendimiento/sincronizar")
+    _actualizar(c)
     assert sorted(t["job_id"] for t in _tareas()) == ["acme__meta_rend__act_1", "acme__meta_rend__act_2"]
 
 
 def test_el_admin_no_espera_y_una_cuenta_sin_copia_tampoco(conectado, app):
     _dos_cuentas()
     _copiada(A, 1)
-    conectado["c"].post("/cliente/acme/meta-rendimiento/sincronizar", data={"act": A})
+    _actualizar(conectado["c"], "NO")
     assert [t["job_id"] for t in _tareas()] == ["acme__meta_rend__act_1"]
     c = _como_cliente(app)
-    c.post("/cliente/acme/meta-rendimiento/sincronizar", data={"act": B})        # B nunca se copió
+    _actualizar(c, "SE")                                              # B nunca se copió
     assert sorted(t["job_id"] for t in _tareas()) == ["acme__meta_rend__act_1", "acme__meta_rend__act_2"]
 
 
@@ -643,17 +672,17 @@ def test_sin_correo_verificado_un_cliente_no_escribe_nada(conectado, app):
     _dos_cuentas()
     usuarios.actualizar("user_acme", correo_verificado=False)
     c = _como_cliente(app)
-    r = c.post("/cliente/acme/meta-rendimiento/sincronizar")
+    r = _actualizar(c)
     assert r.status_code == 302 and r.headers["Location"].endswith("/cliente/acme#settings")
     assert _tareas() == [] and any("Confirma tu correo primero" in m for m in _flashes(c))
     # Leer el panel no es escribir: sigue funcionando.
-    assert c.get("/cliente/acme/meta-rendimiento/panel").status_code == 200
+    assert c.get("/cliente/acme/rendimiento/panel").status_code == 200
     # Verificado, sí; el admin no necesita verificar nada.
     usuarios.actualizar("user_acme", correo_verificado=True)
-    c.post("/cliente/acme/meta-rendimiento/sincronizar", data={"act": A})
+    _actualizar(c, "NO")
     assert [t["job_id"] for t in _tareas()] == ["acme__meta_rend__act_1"]
     usuarios.actualizar("admin", correo_verificado=False)
-    conectado["c"].post("/cliente/acme/meta-rendimiento/sincronizar", data={"act": B})
+    _actualizar(conectado["c"], "SE")
     assert sorted(t["job_id"] for t in _tareas()) == ["acme__meta_rend__act_1", "acme__meta_rend__act_2"]
 
 

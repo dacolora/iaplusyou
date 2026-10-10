@@ -368,7 +368,7 @@
       }
       cargar(query.toString());
     }
-    // Compatibilidad con los enlaces viejos ?exp=<id>#experimentos (p. ej. _tw_panel.html): se pasa UNA vez al hash y
+    // Compatibilidad con los enlaces viejos ?exp=<id>#experimentos (p. ej. el del viejo _tw_panel.html): se pasa UNA vez al hash y
     // se quita de la dirección. Si navegar() lo releyera de location.search, el filtro no se podría quitar nunca
     // (ni con su «×», ni con «Todos los experimentos», ni con el menú lateral). Revisión de R2, 2026-10-03.
     function consumirExpViejo() {

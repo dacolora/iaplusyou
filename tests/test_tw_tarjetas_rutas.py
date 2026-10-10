@@ -30,7 +30,7 @@ def test_analizar_crea_la_fila_con_la_foto_y_encola_una_vez(app):  # noqa: F811
     _conectar()
     _sembrar()
     r = _analizar(app)
-    assert r.status_code == 302 and r.headers["Location"].endswith("#triplewhale")
+    assert r.status_code == 302 and r.headers["Location"].endswith("#rendimiento")
     [fila] = datos.ultimos_analisis("acme", [("facebook-ads", "p1")]).values()
     assert fila["estado"] == "en_cola" and fila["pedido_por"] == "admin" and fila["moneda"] == "USD"
     assert fila["foto"]["nombre"] == "Anuncio p1" and fila["foto"]["veredicto"] and "anillos" in fila["foto"]
@@ -83,7 +83,7 @@ def test_un_anuncio_sin_datos_por_fetch_no_cobra_y_dice_por_que(app):  # noqa: F
 
 def _form_del_lote(app, **extra):  # noqa: F811
     """Lo que manda el formulario del lote tal como la pestaña lo pinta: el alcance y una `clave` por anuncio mostrado."""
-    html = app["c"].get("/cliente/acme/triple-whale/panel").data.decode()
+    html = app["c"].get("/cliente/acme/rendimiento/panel").data.decode()
     claves = re.findall(r'<input type="hidden" name="clave" value="([^"]+)">', html)
     return dict({"dias": "30", "canal": "", "tienda": "", "veredicto": "", "clave": claves}, **extra), claves, html
 
@@ -665,7 +665,7 @@ def test_la_tarjeta_dice_el_estado_en_crear_de_la_pieza_mas_reciente(app, monkey
     html = " ".join(app["c"].get("/cliente/acme/triple-whale/tarjeta/facebook-ads/p1?dias=30").data.decode().split())
     assert "Ya se hicieron 2 piezas con esta mejora · la última: generando" in html and "con error" not in html
     # El panel (no solo el fragmento) también tiene las etiquetas.
-    panel_html = " ".join(app["c"].get("/cliente/acme/triple-whale/panel?dias=30").data.decode().split())
+    panel_html = " ".join(app["c"].get("/cliente/acme/rendimiento/panel?dias=30").data.decode().split())
     assert "la última: generando" in panel_html
 
 

@@ -605,7 +605,7 @@ setTimeout(() => {
 
 @pytest.mark.skipif(not shutil.which("node"), reason="sin Node no se corre el JS (el VPS no lo tiene)")
 def test_el_exp_de_un_enlace_viejo_se_consume_una_vez_y_se_puede_quitar():
-    """`?exp=<id>#experimentos` (el enlace viejo de _tw_panel.html) se pasa UNA vez al hash y sale de la dirección;
+    """`?exp=<id>#experimentos` (el enlace viejo del panel de Triple Whale, ya jubilado) se pasa UNA vez al hash y sale de la dirección;
     después, quitar el filtro de verdad lo quita (antes navegar() lo volvía a leer de location.search)."""
     import json
     r = subprocess.run([shutil.which("node"), "-e", _ARNES_JS], capture_output=True, text=True)

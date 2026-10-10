@@ -1,8 +1,6 @@
 """La pantalla de Rendimiento (spec 2026-10-09 §5, A1–A3, R12, R14)."""
 import re
 
-import pytest
-
 from tests.test_rutas_configuracion import app  # noqa: F401  (fixture)
 from tests.test_rutas_rendimiento import _con_anuncios as _sembrar
 from tests.test_rutas_rendimiento import meta_on  # noqa: F401  (fixture)
@@ -39,7 +37,6 @@ def test_la_mezcla_no_ofrece_abrir_dias(meta_on):  # noqa: F811
     assert "/triple-whale/dia" not in html
 
 
-@pytest.mark.xfail(reason="se cablea en la tarea 8", strict=True)
 def test_el_armazon_tiene_ajustes_con_la_conexion_de_triple_whale(meta_on):  # noqa: F811
     _sembrar()
     html = meta_on["c"].get("/cliente/acme").data.decode()
@@ -52,8 +49,9 @@ def test_el_armazon_tiene_ajustes_con_la_conexion_de_triple_whale(meta_on):  # n
 # ---- más allá del brief ------------------------------------------------------------------------------------------
 
 def _armazon(app, **rendimiento):  # noqa: F811
-    """`_tab_rendimiento.html` dentro de una <section> como la pondrá `cliente.html` (tarea 8), con el contexto que
-    `ver_cliente` ya arma para la conexión de Triple Whale. Hasta la tarea 8 es la única forma de mirarla."""
+    """`_tab_rendimiento.html` dentro de una <section> como la pone `cliente.html`, con el contexto que `ver_cliente`
+    arma para la conexión de Triple Whale. Así se prueban estados del armazón (admin o no, con o sin Meta) sin sembrar
+    las conexiones de verdad."""
     import flask
 
     import triple_whale
@@ -77,8 +75,8 @@ def _pestana(html):
 
 
 def test_el_armazon_ya_trae_ajustes_y_el_panel_por_fetch(app):  # noqa: F811
-    """La misma condición que la prueba de la tarea 8, sobre la plantilla sola: la conexión de Triple Whale no abre
-    otra <section>, así la pestaña entera queda antes de la siguiente."""
+    """La misma condición que `test_el_armazon_tiene_ajustes_con_la_conexion_de_triple_whale`, sobre la plantilla
+    sola: la conexión de Triple Whale no abre otra <section>, así la pestaña entera queda antes de la siguiente."""
     pestana = _pestana(_armazon(app))
     assert 'id="rend-ajustes"' in pestana and 'id="tw-conexion"' in pestana
     assert 'data-url="/cliente/acme/rendimiento/panel"' in pestana
@@ -168,12 +166,12 @@ def test_solo_triple_whale_en_todas_muestra_por_pais_y_no_por_tienda(app):  # no
     assert 'id="tw-galeria"' in html and "Lo que hace ganar en tu cuenta" in html
 
 
-def test_el_js_de_lo_pagado_sigue_igual_en_la_pestana_nueva(monkeypatch):
+def test_el_js_de_lo_pagado_sigue_igual_en_la_pestana_nueva():
     """Las pruebas del JS de la galería de Triple Whale (lo que protege lo que cobra: confirmar antes, nunca repetir
-    solo un pedido, 402 como respuesta conocida, la tarjeta que se repinta) corren otra vez sobre la pestaña nueva."""
+    solo un pedido, 402 como respuesta conocida, la tarjeta que se repinta) corren sobre la pestaña nueva: desde la
+    tarea 8 `test_tw_tarjetas_js.py` lee `_tab_rendimiento.html` (la pestaña Triple Whale se jubiló)."""
     from tests import test_tw_tarjetas_js as js
     leer = js._leer
-    monkeypatch.setattr(js, "_leer", lambda n: leer("_tab_rendimiento.html" if n == "_tab_triple_whale.html" else n))
     for prueba in (js.test_la_pestana_maneja_filtros_ver_mas_post_por_fetch_y_detalle,
                    js.test_el_filtro_reemplaza_el_bloque_entero_y_ver_mas_solo_agrega_tarjetas,
                    js.test_los_textos_del_js_vienen_de_la_plantilla_y_no_hay_script_en_los_fragmentos,

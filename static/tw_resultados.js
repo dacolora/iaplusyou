@@ -1,11 +1,11 @@
-/* «Resultados de tu tienda» (spec 2026-10-08-tw-resultados-de-tu-tienda): la gráfica de la pestaña Triple Whale.
+/* «Resultados de tu tienda» (spec 2026-10-08-tw-resultados-de-tu-tienda): la gráfica de la pestaña Rendimiento.
    Lee el JSON que pinta _tw_resultados.html (#tw-resultados-datos) y dibuja en SVG la métrica de la tarjeta
    elegida: barras de gasto (por antigüedad o por canal), línea con área, hoy punteado y aparte, comparación con el
    periodo anterior, tendencia de 7 días, días fuera de lo normal, mejor día, el recuadro de cada día y el detalle
    del día (fragmento del servidor: triple_whale.rutas.ver_dia). ES5, sin librerías, como exp_resultados.js: los
    datos entran solo con textContent/setAttribute; innerHTML solo con el fragmento del servidor (ya escapado por
    Jinja); los colores van por clases (estilos/pantallas/triple-whale.css). Lo puro vive en TwResultados._puro
-   (tests/js/tw_resultados.test.mjs). _tab_triple_whale.html y _tab_rendimiento.html llaman TwResultados.iniciar(cont)
+   (tests/js/tw_resultados.test.mjs). _tab_rendimiento.html llama TwResultados.iniciar(cont)
    cada vez que pintan el panel, porque los <script> de un fragmento que llega por fetch no corren. */
 (function () {
   'use strict';

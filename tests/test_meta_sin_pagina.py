@@ -115,7 +115,7 @@ def test_tarjeta_conectada_sin_pagina_dice_solo_metricas_y_enlaza_a_la_pestana(a
     assert "Cuenta SEK" in html
     assert "Solo métricas" in html
     assert "Conectado solo para métricas: sin Página no se pueden lanzar anuncios ni publicar." in html
-    assert 'href="#meta"' in html and "Ver métricas en la pestaña Meta" in html
+    assert 'href="#rendimiento"' in html and "Ver métricas en la pestaña Rendimiento" in html
     assert "sin Instagram vinculado" not in html.split("Solo métricas")[1].split("Desconectar")[0]
     assert "None" not in html.split("Solo métricas")[1].split("Desconectar")[0]
 

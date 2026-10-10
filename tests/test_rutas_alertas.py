@@ -508,7 +508,7 @@ def test_pestana_pinta_grupos_resumen_botones_y_descartar(app, monkeypatch):
     # Panel justo después de Experimentos (el primero; ahí se fundió el Tablero) y antes de Configuración (los tests de
     # Configuración recortan desde ahí).
     assert html.index('<section id="tab-experimentos"') < html.index('<section id="tab-alertas"') \
-        < html.index('<section id="tab-triplewhale"') < html.index('<section id="tab-settings"')
+        < html.index('<section id="tab-rendimiento"') < html.index('<section id="tab-settings"')
     assert "<h2>Alertas</h2>" in tab and 'class="panel-cabecera-desc"' in tab
     assert "1 bloquea · 3 piden atención · 1 informativa" in tab
     pos = []
@@ -579,9 +579,9 @@ def test_un_cliente_no_ve_las_alertas_solo_admin(app, monkeypatch):
 def test_burbuja_del_sidebar_roja_ambar_u_oculta(app, monkeypatch):
     _fijas(app, monkeypatch, [_alerta(app, "llave:r2", "bloquea", "puesta_a_punto"), _alerta(app, "proyecto:logo", "info")])
     sb = _sidebar(_html(app["c"]))
-    assert sb.index('data-tab="experimentos"') < sb.index('data-tab="alertas"') < sb.index('data-tab="triplewhale"')
+    assert sb.index('data-tab="experimentos"') < sb.index('data-tab="alertas"') < sb.index('data-tab="rendimiento"')
     assert 'data-tab="tablero"' not in sb
-    item = sb[sb.index('data-tab="alertas"'):sb.index('data-tab="triplewhale"')]
+    item = sb[sb.index('data-tab="alertas"'):sb.index('data-tab="rendimiento"')]
     assert re.search(r'<span class="sidebar-burbuja bloquea"[^>]*>2</span>', item)
     _fijas(app, monkeypatch, [_alerta(app, "proyecto:logo", "info")])
     sb = _sidebar(_html(app["c"]))

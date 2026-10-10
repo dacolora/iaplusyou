@@ -59,14 +59,15 @@ PLANTILLAS_TRADUCIDAS = [
     "cliente.html", "_etiquetas_estado.html",
     # Merge de main (2026-09-28, PR #1 Triple Whale): la pestaña y su panel ya
     # vienen con _() y su inglés en el catálogo; entran a la guardia al fusionar.
-    "_tab_triple_whale.html", "_tw_panel.html", "_tw_resultados.html", "_tw_dia.html",
+    # (La pestaña y su panel se jubilaron el 2026-10-09 con la pestaña Rendimiento.)
+    "_tw_resultados.html", "_tw_dia.html",
     "_tw_galeria.html", "_tw_galeria_fragmento.html",   # tarjetas de Triple Whale (spec 2026-10-08 tarjetas §5.1)
     "_tw_analisis.html",                                 # «Cómo mejorarlo» de una tarjeta (spec 2026-10-08 tarjetas §6.5)
-    # Pestaña Meta (rendimiento de varias cuentas, 2026-10-08): armazón, panel, selector y filas de «Ver más».
-    "_tab_meta.html", "_meta_panel.html", "_meta_cuentas.html", "_meta_anuncios_filas.html",
-    "_meta_conjuntos_filas.html", "_meta_macros.html",
+    # Pestaña Meta (rendimiento de varias cuentas, 2026-10-08): el selector, las filas de «Ver más» y sus macros, que
+    # hoy pinta la pestaña Rendimiento (el armazón y el panel de Meta se jubilaron el 2026-10-09).
+    "_meta_cuentas.html", "_meta_conjuntos_filas.html", "_meta_macros.html",
     # Pestaña Rendimiento (spec 2026-10-09): armazón, panel, tarjetas de anuncios de fuente Meta («Ver más»), sus
-    # macros y las secciones que comparte con las pestañas Triple Whale y Meta.
+    # macros y las secciones que heredó de las pestañas Triple Whale y Meta.
     "_tab_rendimiento.html", "_rend_panel.html", "_rend_anuncios_meta.html", "_rend_macros.html",
     "_tw_secciones.html", "_meta_secciones.html",
     "editor.html",   # Fase 6, Task 2: la página del editor

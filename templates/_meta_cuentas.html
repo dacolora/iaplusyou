@@ -1,8 +1,9 @@
-{# «Elegir cuentas» de la pestaña «Meta» (fragmento por fetch, meta_rendimiento.rutas.ver_cuentas; spec 2026-10-08 §5).
+{# «Elegir cuentas» de Meta (fragmento por fetch, meta_rendimiento.rutas.ver_cuentas; spec 2026-10-08 §5), dentro de
+   «Ajustes» de la pestaña Rendimiento (spec 2026-10-09 R15).
    Contexto: `sel` = conectado, agencia, error (ya sin token), filas (las cuentas que ve el token, con `elegida`,
    `en_otro`, `pais` guardado o adivinado y `no_visible` para una del proyecto que el token ya no ve) y paises
    ([(código, «🇳🇴 Noruega»)]). Una cuenta de otro proyecto se ve deshabilitada (nunca el nombre de ese proyecto).
-   Sin <script>: _tab_meta.html confirma antes de quitar una cuenta (`data-elegida`). Los selectores de país van con
+   Sin <script>: _tab_rendimiento.html confirma antes de quitar una cuenta (`data-elegida`). Los selectores de país van con
    translate="no": los nombres ya vienen de Babel en el idioma de quien mira. #}
 <section class="tb-seccion">
   <div class="tb-seccion-cab"><h3>{{ _('Elegir cuentas') }}</h3></div>

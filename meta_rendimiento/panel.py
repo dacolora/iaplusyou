@@ -1,32 +1,26 @@
-"""Lo que pinta la pestaña «Meta» (spec 2026-10-08 meta rendimiento §8). Lee la copia local (nunca llama a Meta,
-ni a Claude, ni pide tasas al BCE: solo lee las guardadas con `tasas.mapa`) y arma, para el alcance que pide la
-persona («Todas» o una cuenta), los KPIs contra el período anterior, la serie diaria, la tabla de cuentas, las
-campañas, los conjuntos y los anuncios con su veredicto y diagnóstico de `triple_whale.evaluacion`.
+"""Las partes de Meta que pinta la pestaña «Rendimiento» (spec 2026-10-09 §4; antes, la pestaña «Meta» del spec
+2026-10-08 meta rendimiento §8, que se jubiló el 2026-10-09 con su `contexto` y sus «Ver más»). Lee la copia local
+(nunca llama a Meta, ni a Claude, ni pide tasas al BCE) y entrega cada parte sobre UNA lista de cuentas cualquiera:
+la lista del proyecto con país y bandera, el rango de fechas («Desde el inicio» = 0), campañas y conjuntos con su
+alcance, los anuncios con su veredicto y diagnóstico de `triple_whale.evaluacion` y el estado de la copia.
 
-Monedas (spec §2.2 y §7): una cuenta se ve en su moneda; «Todas» (dos cuentas o más) en USD con la tasa de CADA día
-de cada cuenta. Sin tasa para un día con gasto, los montos en USD quedan en None (`usd_ok=False`: «USD no
-disponible», nunca una tasa inventada) y la serie cae a la moneda común sin convertir. Campañas, conjuntos y
-anuncios van siempre en la moneda de su cuenta (cada fila lleva `moneda`).
-
-Cada anuncio se compara con SU cuenta: `evaluacion.evaluar` corre una vez por cuenta, sobre UNA lectura de
-`datos.totales_por_anuncio` por ventana para todas las cuentas del alcance (nunca una consulta por cuenta ni por
-fila). Todo `contexto()` son unas 12 consultas más una por moneda que haya que convertir."""
-from datetime import date, timedelta
+Campañas, conjuntos y anuncios van siempre en la moneda de su cuenta (cada fila lleva `moneda`); sumar cuentas en USD
+es cosa de `pestana_rendimiento.resumen`. Cada anuncio se compara con SU cuenta: `evaluacion.evaluar` corre una vez
+por cuenta, sobre UNA lectura de `datos.totales_por_anuncio` por ventana para todas las cuentas (nunca una consulta
+por cuenta ni por fila)."""
+from datetime import timedelta
 
 import decisor
 import idiomas
-import meta_conexion
 import proyectos
 from idiomas import N_
 from meta_rendimiento import cuentas as cuentas_mod
-from meta_rendimiento import datos, grafico, tasas
+from meta_rendimiento import datos
 from meta_rendimiento.sync import VENTANAS_ALCANCE
 from tareas import meta_rendimiento as tareas_mr
 from triple_whale import evaluacion, paises
 from triple_whale.panel import periodo
 
-PERIODOS = (7, 14, 30, 90)
-PERIODO_DEFECTO = 30
 POR_PAGINA = 24
 PAGINA_MAXIMA = 100_000
 
@@ -48,9 +42,6 @@ OBJETIVOS = {
     "LINK_CLICKS": N_("Clics en el enlace"), "PRODUCT_CATALOG_SALES": N_("Ventas del catálogo"),
 }
 
-_CLAVES_VARIACION = ("gasto", "valor", "compras", "impresiones", "clics_salida", "roas", "cpa", "cpm", "ctr_salida")
-_MONTOS_KPI = ("gasto", "valor", "roas", "cpa", "cpm")
-
 
 def _iso(d):
     return d.isoformat()
@@ -65,140 +56,14 @@ def _entero(valor, defecto=0):
         return defecto
 
 
-def _dias_periodo(dias):
-    dias = _entero(dias, PERIODO_DEFECTO)
-    return dias if dias in PERIODOS else PERIODO_DEFECTO
-
-
 def _ventana_alcance(dias):
     """La ventana de alcance copiada (7, 14, 30 o 90 días) más cercana al período."""
     return min(VENTANAS_ALCANCE, key=lambda v: (abs(v - dias), v))
 
 
-# ------------------------------------------------------------ alcance ---
-
-def cuenta_elegida(cuentas_lista, valor):
-    """La cuenta (dict) del alcance pedido, o None = «Todas». `cuentas_lista` son las del proyecto
-    (`cuentas.listar`): un id que no está ahí, o un valor que no es un id, es «Todas»; con una sola cuenta siempre
-    es esa. Acepta el id con o sin «act_»."""
-    if len(cuentas_lista) == 1:
-        return cuentas_lista[0]
-    if isinstance(valor, bool) or not isinstance(valor, (str, int)) or not str(valor).strip():
-        return None
-    act = cuentas_mod.normalizar_id(valor)
-    return next((c for c in cuentas_lista if c["ad_account_id"] == act), None)
-
-
 def _con_pais(c, locale):
     pais = c.get("pais")
     return dict(c, nombre_pais=paises.nombre_pais(pais, locale) if pais else "", bandera=paises.bandera(pais))
-
-
-# ------------------------------------------------------------- montos ---
-
-def kpis(filas_dia, conv=None):
-    """Los KPIs de unas filas de `datos.cuenta_por_dia`: gasto, valor, compras, impresiones, clics_salida, roas, cpa,
-    cpm, ctr_salida y `usd_ok`. Con `conv` ({(ad_account_id, fecha): factor|None}) los montos se convierten día por
-    día; si un día con gasto o valor no tiene factor, `usd_ok=False` y los montos (y lo que sale de ellos) quedan en
-    None: nunca una suma a medias. El alcance no está aquí: es gente única y no se suma por días."""
-    gasto = valor = compras = 0.0
-    impresiones = clics = clics_salida = 0
-    usd_ok = True
-    for f in filas_dia or []:
-        g, v = float(f.get("gasto") or 0), float(f.get("valor") or 0)
-        if conv is not None:
-            factor = conv.get((f.get("ad_account_id"), f.get("fecha")))
-            if factor is None:
-                usd_ok = usd_ok and not (g or v)
-                g = v = 0.0
-            else:
-                g, v = g * factor, v * factor
-        gasto += g
-        valor += v
-        compras += float(f.get("compras") or 0)
-        impresiones += int(f.get("impresiones") or 0)
-        clics += int(f.get("clics") or 0)
-        clics_salida += int(f.get("clics_salida") or 0)
-    m = evaluacion.metricas({"gasto": gasto, "impresiones": impresiones, "clics": clics, "clics_salida": clics_salida,
-                             "pedidos": compras, "ingresos": valor})
-    salida = {"gasto": gasto, "valor": valor, "compras": compras, "impresiones": impresiones, "clics": clics,
-              "clics_salida": clics_salida, "roas": m["roas"], "cpa": m["cpa"], "cpm": m["cpm"],
-              "ctr_salida": m["ctr_salida"], "usd_ok": usd_ok}
-    if not usd_ok:
-        salida.update({k: None for k in _MONTOS_KPI})
-    return salida
-
-
-def _variacion(actual, previo):
-    """{clave: fracción} contra el período anterior (como `tw_var`): solo donde hay con qué comparar."""
-    salida = {}
-    for k in _CLAVES_VARIACION:
-        a, p = actual.get(k), previo.get(k)
-        if p and a is not None:
-            salida[k] = a / p - 1
-    return salida
-
-
-def _conversion(cuentas_alcance, desde, hasta):
-    """{(ad_account_id, fecha): USD por unidad|None} de cada cuenta y cada día del rango: una lectura de
-    `tasa_cambio` por moneda (nunca pide al BCE)."""
-    mapas = {}
-    conv = {}
-    for c in cuentas_alcance:
-        moneda = (c.get("moneda") or "").upper()
-        if not moneda:
-            continue
-        if moneda not in mapas:
-            mapas[moneda] = tasas.mapa(moneda, desde, hasta)
-        for fecha, factor in mapas[moneda].items():
-            conv[(c["ad_account_id"], fecha)] = factor
-    return conv
-
-
-def _serie(desde, hasta, filas, moneda, conv=None):
-    """La serie diaria para `grafico.armar`: gasto contra valor de compras, sumando las cuentas de cada día."""
-    por_fecha = {}
-    for f in filas:
-        g, v = float(f["gasto"] or 0), float(f["valor"] or 0)
-        if conv is not None:
-            factor = conv.get((f["ad_account_id"], f["fecha"]))
-            g, v = (g * factor, v * factor) if factor is not None else (0.0, 0.0)
-        d = por_fecha.setdefault(f["fecha"], {"fecha": f["fecha"], "gasto": 0.0, "valor": 0.0, "compras": 0.0})
-        d["gasto"] += g
-        d["valor"] += v
-        d["compras"] += float(f["compras"] or 0)
-    return {"dias": grafico.serie_dias(desde, hasta, list(por_fecha.values()), clave_ingresos="valor",
-                                       clave_pedidos="compras"), "moneda": moneda}
-
-
-def _por_moneda(cuentas_alcance, filas):
-    """[{"moneda", "gasto", "valor"}]: el total de cada moneda sin convertir (lo que se ve sin tasa)."""
-    moneda_de = {c["ad_account_id"]: c.get("moneda") or "" for c in cuentas_alcance}
-    totales = {}
-    for f in filas:
-        t = totales.setdefault(moneda_de.get(f["ad_account_id"], ""), {"gasto": 0.0, "valor": 0.0})
-        t["gasto"] += float(f["gasto"] or 0)
-        t["valor"] += float(f["valor"] or 0)
-    return [{"moneda": m, **t} for m, t in sorted(totales.items())]
-
-
-def _filas_por_cuenta(cuentas_alcance, filas, conv, moneda, alcances, activos):
-    """«Por cuenta»: una fila por cuenta del alcance, en el orden del selector. Los montos en la moneda del panel
-    (USD en «Todas»), y `gasto_cuenta`/`valor_cuenta` en la de la cuenta."""
-    por_act = {}
-    for f in filas:
-        por_act.setdefault(f["ad_account_id"], []).append(f)
-    salida = []
-    for c in cuentas_alcance:
-        act = c["ad_account_id"]
-        propias = por_act.get(act, [])
-        local = kpis(propias)
-        alc = alcances.get(act) or {}
-        salida.append(dict(kpis(propias, conv), cuenta=c, ad_account_id=act, moneda=moneda,
-                           moneda_cuenta=c.get("moneda"), gasto_cuenta=local["gasto"], valor_cuenta=local["valor"],
-                           alcance=alc.get("alcance"), frecuencia=alc.get("frecuencia"),
-                           activos=activos.get(act) or {}))
-    return salida
 
 
 # ---------------------------------------------------------- objetos ---
@@ -269,7 +134,7 @@ def evaluar_anuncios(cliente, ids, desde, hasta, hoy, cuentas_por_id, reglas):
     return anuncios, conteo, meta_roas
 
 
-# ---------------------------------------------------------- contexto ---
+# ------------------------------------------------- la copia y las páginas ---
 
 def _jobs_sync(cliente, cuentas_alcance):
     """[{"job_id", "cuenta"}] de las copias en cola o en curso de las cuentas del alcance (una consulta)."""
@@ -282,139 +147,16 @@ def _jobs_sync(cliente, cuentas_alcance):
     return salida
 
 
-def _base(dias, desde, hasta):
-    """Todas las claves con su valor vacío: cada estado (sin conexión, sin cuentas, sin datos) las trae todas."""
-    return {
-        "conectado": False, "modo": None, "solo_metricas": False, "cuentas": [], "actual": None, "ids": [],
-        "varias_cuentas": False, "dias": dias, "periodos": PERIODOS, "desde": desde, "hasta": hasta,
-        "moneda": None, "moneda_comun": None, "usd_ok": True, "kpis": None, "kpis_prev": None, "variacion": {},
-        "kpis_moneda_comun": None, "por_moneda": [], "alcance": None, "frecuencia": None, "ventana_alcance": None,
-        "serie": None, "por_cuenta": [], "campanas": [], "conjuntos": [], "hay_mas_conjuntos": False,
-        "pagina_conjuntos": 0, "anuncios": [], "hay_mas_anuncios": False, "n_anuncios": 0, "pagina_anuncios": 0,
-        "conteo": {v: 0 for v in evaluacion.VEREDICTOS}, "meta_roas": None,
-        "rango": {"filas": 0, "desde": None, "hasta": None}, "jobs_sync": [], "sync_ocupado": False,
-        "ultima_copia": None, "por_pagina": POR_PAGINA,
-        "estados": ESTADOS, "aprendizaje": APRENDIZAJE, "objetivos": OBJETIVOS,
-        "etiquetas_veredicto": evaluacion.ETIQUETAS_VEREDICTO,
-        "veredictos": evaluacion.VEREDICTOS, "problemas": evaluacion.PROBLEMAS, "fortalezas": evaluacion.FORTALEZAS,
-    }
-
-
-def contexto(cliente, dias=PERIODO_DEFECTO, cuenta=None, hoy=None, pagina_anuncios=0, pagina_conjuntos=0):
-    """Todo lo que pinta la pestaña «Meta» en el alcance pedido (`cuenta`: una del proyecto, o None = «Todas»; un
-    id ajeno o raro es «Todas»). Sin token no calcula nada; sin cuentas, solo la lista vacía; con cuentas pero sin
-    días copiados, sin KPIs, serie ni evaluación."""
-    hoy = hoy or date.today()
-    dias = _dias_periodo(dias)
-    desde, hasta, desde_prev, hasta_prev = periodo(dias, hoy)
-    ctx = _base(dias, desde, hasta)
-    conexion = meta_conexion.cargar(cliente) or {}
-    ctx["modo"] = meta_conexion.modo(cliente) if conexion else None
-    if not conexion.get("token"):
-        return ctx
-    ctx.update(conectado=True, solo_metricas=not conexion.get("page_id"))
-
-    todas = lista(cliente)
-    if not todas:
-        return ctx
-    actual = cuenta_elegida(todas, cuenta)
-    en_alcance = [actual] if actual else todas
-    ids = [c["ad_account_id"] for c in en_alcance]
-    cuentas_por_id = {c["ad_account_id"]: c for c in todas}
-    monedas = {(c.get("moneda") or "").upper() for c in en_alcance}
-    # Una cuenta sin moneda conocida no comparte la de las demás: con ella no hay moneda común (su gasto no se suma
-    # como si fuera de esa moneda).
-    moneda_comun = next(iter(monedas)) if len(monedas) == 1 and "" not in monedas else None
-    convertir = actual is None and len(en_alcance) > 1
-    moneda = "USD" if convertir else (en_alcance[0].get("moneda") or None)
-    copia = estado_copia(cliente, en_alcance)
-    ctx.update(cuentas=todas, actual=actual, ids=ids, varias_cuentas=len(todas) > 1, moneda=moneda,
-               moneda_comun=moneda_comun, jobs_sync=copia["jobs_sync"], sync_ocupado=copia["sync_ocupado"],
-               ultima_copia=copia["ultima_copia"], rango=copia["rango"])
-    if not ctx["rango"]["filas"]:
-        return ctx
-
-    # KPIs, serie y «por cuenta»: una lectura de los días de cuenta de los dos períodos.
-    filas = datos.cuenta_por_dia(cliente, ids, desde_prev, hasta)
-    actuales = [f for f in filas if f["fecha"] >= desde]
-    previas = [f for f in filas if f["fecha"] <= hasta_prev]
-    conv = _conversion(en_alcance, desde_prev, hasta) if convertir else None
-    k, k_prev = kpis(actuales, conv), kpis(previas, conv)
-    usd_ok = k["usd_ok"]
-    if usd_ok:
-        serie = _serie(desde, hasta, actuales, moneda, conv)
-    else:
-        serie = _serie(desde, hasta, actuales, moneda_comun) if moneda_comun else None
-    alcances = datos.alcance(cliente, ids, _ventana_alcance(dias), "cuenta")
-    con_alcance = [alcances[a]["alcance"] for a in ids if a in alcances]
-    unica = alcances.get(ids[0]) if len(ids) == 1 else None
-    ctx.update(
-        usd_ok=usd_ok, kpis=k, kpis_prev=k_prev, variacion=_variacion(k, k_prev),
-        kpis_moneda_comun=kpis(actuales) if convertir and moneda_comun and moneda_comun != "USD" else None,
-        por_moneda=_por_moneda(en_alcance, actuales) if convertir else [],
-        alcance=sum(con_alcance) if con_alcance else None, frecuencia=(unica or {}).get("frecuencia"),
-        serie=serie,
-        por_cuenta=_filas_por_cuenta(en_alcance, actuales, conv, moneda, alcances, datos.activos(cliente, ids)))
-
-    # Campañas, conjuntos y anuncios: las mismas lecturas por partes que usa la pestaña Rendimiento.
-    ctx.update(estructura(cliente, ids, desde, hasta, dias, cuentas_por_id, pagina_conjuntos))
-    ctx.update(_pagina_de_anuncios(cliente, ids, desde, hasta, hoy, cuentas_por_id, pagina_anuncios)[0])
-    return ctx
-
-
-# ---------------------------------------------------------- «Ver más» ---
-
-def _alcance_pagina(cliente, dias, cuenta, hoy):
-    """Lo común de las páginas de «Ver más»: (ctx base, en_alcance, cuentas_por_id), con `en_alcance` vacío si no hay
-    token o cuentas. No lee días de cuenta, alcance ni tasas: solo la conexión y la lista de cuentas."""
-    hoy = hoy or date.today()
-    dias = _dias_periodo(dias)
-    desde, hasta, _, _ = periodo(dias, hoy)
-    ctx = _base(dias, desde, hasta)
-    if not (meta_conexion.cargar(cliente) or {}).get("token"):
-        return ctx, [], {}
-    todas = lista(cliente)
-    if not todas:
-        return ctx, [], {}
-    actual = cuenta_elegida(todas, cuenta)
-    en_alcance = [actual] if actual else todas
-    ctx.update(conectado=True, cuentas=todas, actual=actual, ids=[c["ad_account_id"] for c in en_alcance],
-               varias_cuentas=len(todas) > 1)
-    return ctx, en_alcance, {c["ad_account_id"]: c for c in todas}
-
-
 def _pagina_valida(valor):
     """El número de página de «Ver más» (viene de la URL): entero entre 0 y PAGINA_MAXIMA. Uno enorme haría un OFFSET
     que no cabe en un entero de SQLite (OverflowError → 500)."""
     return min(max(0, _entero(valor)), PAGINA_MAXIMA)
 
 
-def anuncios_pagina(cliente, dias=PERIODO_DEFECTO, cuenta=None, pagina=1, hoy=None):
-    """Una página más de anuncios evaluados («Ver más»): las mismas claves que `contexto`, pero solo calcula la
-    evaluación (tres lecturas para todas las cuentas del alcance), sin KPIs, serie, campañas ni conjuntos."""
-    hoy = hoy or date.today()
-    ctx, en_alcance, cuentas_por_id = _alcance_pagina(cliente, dias, cuenta, hoy)
-    if not en_alcance:
-        return ctx
-    ctx.update(_pagina_de_anuncios(cliente, ctx["ids"], ctx["desde"], ctx["hasta"], hoy, cuentas_por_id, pagina)[0])
-    return ctx
-
-
-def conjuntos_pagina(cliente, dias=PERIODO_DEFECTO, cuenta=None, pagina=1, hoy=None):
-    """Una página más de conjuntos («Ver más»): una lectura agregada con su `limit`/`offset`."""
-    ctx, en_alcance, cuentas_por_id = _alcance_pagina(cliente, dias, cuenta, hoy)
-    if not en_alcance:
-        return ctx
-    pagina = _pagina_valida(pagina)
-    conjuntos, hay_mas = _conjuntos(cliente, ctx["ids"], ctx["desde"], ctx["hasta"], pagina, cuentas_por_id)
-    ctx.update(conjuntos=conjuntos, hay_mas_conjuntos=hay_mas, pagina_conjuntos=pagina)
-    return ctx
-
-
 # ----------------------------------------- por partes (pestaña Rendimiento) ---
 # Spec 2026-10-09 §4. La pestaña Rendimiento pide cada parte sobre una LISTA de cuentas cualquiera (las de un país, las
-# que Triple Whale no cubre en «Todas»…) y con el periodo 0 = «Desde el inicio»; `contexto` y las páginas de «Ver más»
-# las reusan donde coinciden, así que hay un solo cálculo.
+# que Triple Whale no cubre en «Todas»…) y con el periodo 0 = «Desde el inicio»; su panel y sus «Ver más» llaman a
+# estas mismas funciones, así que hay un solo cálculo.
 
 PERIODOS_RENDIMIENTO = (0, 7, 14, 30, 90)   # 0 = desde el inicio (regla de Daniel del 2026-10-08)
 

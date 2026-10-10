@@ -94,7 +94,7 @@
   {% if cm.detalle.conectado_en %}· {{ _('desde') }} {{ cm.detalle.conectado_en[:10] }}{% endif %}
   {% if not cm.verificado %}· <em>{{ _('sin verificar ahora (Meta no respondió)') }}</em>{% endif %}
   {% if not cm.detalle.page_id %}
-  <br><small>{{ _('Conectado solo para métricas: sin Página no se pueden lanzar anuncios ni publicar.') }} <a href="#meta">{{ _('Ver métricas en la pestaña Meta') }}</a></small><br>
+  <br><small>{{ _('Conectado solo para métricas: sin Página no se pueden lanzar anuncios ni publicar.') }} <a href="#rendimiento">{{ _('Ver métricas en la pestaña Rendimiento') }}</a></small><br>
   {% endif %}
   <form method="post" action="{{ url_for('meta_desconectar', cliente=cliente) }}" style="display:inline;margin-left:.5rem;" onsubmit='return confirm({{ _('¿Desconectar Meta de este proyecto? No se borra nada en Meta.')|tojson }});'>
     <button type="submit" class="btn-rechazar btn-sm">{{ _('Desconectar') }}</button>

@@ -144,21 +144,18 @@ Correcciones del lote 5 (2026-10-08, pedido de Daniel): ESTRUCTURA.md y mapa_cod
 
 PND-076/095/124 (2026-10-08, decisiones delegadas): accesos bloqueados reutiliza hero/admin-bloque/tabla-apilada/tabla-admin y data-etiqueta, sin CSS ni colores propios. Audios pagina por 24 con un botón delegado, separado de las tarjetas por el contenedor común acciones (R8, 2026-10-08) y conserva descarga/borrado de las tarjetas agregadas. El fragmento de lista no lleva scripts; el JS permanece en la plantilla completa. Alertas oculta las acciones protegidas sin ocultar sus avisos de plata. Las pantallas a 375 px y escritorio las mira Claude, por el encargo sin navegadores.
 
-**Pestaña Meta (2026-10-08, rendimiento de varias cuentas; spec `2026-10-08-meta-rendimiento-design.md` §8):** `#tab-meta`
-(`data-tab="meta"`, después de Triple Whale; `cliente.html` la registra en `paneles`, así el `href="#meta"` de la
-tarjeta de Conexiones la abre) es solo el armazón `_tab_meta.html` con un contexto barato de `ver_cliente`
-(`meta_rend` = conectado, n_cuentas, modo: ni Graph ni el panel, una prueba lo vigila). El panel
-(`_meta_panel.html`), el selector «Elegir cuentas» (`_meta_cuentas.html`, la única ruta que llama a Meta) y las filas
-de «Ver más» (`_meta_anuncios_filas.html`, `_meta_conjuntos_filas.html`: solo `<tr>`, que el JS pone en el lugar de la
-fila del botón) llegan por fetch; todo el JS vive en el armazón. Reutiliza las clases de Triple Whale y del Tablero;
-lo propio está en `static/estilos/pantallas/meta.css` (separación del selector abierto, la miniatura y, desde
-la mezcla de main del 2026-10-08 que borró el gráfico del viejo Tablero, las reglas `.tb-grafico`/`.tb-barra`… del
-«Día a día», que arma `meta_rendimiento/grafico.py`). Los
-selectores del JS evitan palabras que `tests/i18n_util.py` lee como español (`data-meta-act`, `data-meta-seleccion`:
-«cuenta» y «guardar» están en sus marcas).
+**Pestañas Triple Whale y Meta (jubiladas el 2026-10-09):** las reemplazó «Rendimiento» (abajo; spec
+`2026-10-09-pestana-rendimiento-design.md` R1). `_tab_triple_whale.html`, `_tab_meta.html`, `_tw_panel.html`,
+`_meta_panel.html`, `_meta_anuncios_filas.html` y el gráfico «Día a día» de Meta (`meta_rendimiento/grafico.py` y sus
+reglas `.tb-grafico`… de `pantallas/meta.css`) se borraron; `pantallas/meta.css` quedó solo con el selector
+`#meta-cuentas`. Los selectores del JS siguen evitando palabras que `tests/i18n_util.py` lee como español
+(`data-meta-act`, `data-meta-seleccion`: «cuenta» y «guardar» están en sus marcas).
 
-**Pestaña Rendimiento (2026-10-09, spec `2026-10-09-pestana-rendimiento-design.md` §5; se cablea en `cliente.html` en la
-tarea 8 del plan):** `_tab_rendimiento.html` es el armazón (cabecera, «Ajustes» con la conexión de Triple Whale y
+**Pestaña Rendimiento (2026-10-09, spec `2026-10-09-pestana-rendimiento-design.md` §5; skill `rendimiento`):**
+`#tab-rendimiento` (`data-tab="rendimiento"`, después de Alertas, donde estaba Triple Whale; `cliente.html` la registra en
+`paneles` y traduce las claves viejas `triplewhale` y `meta` con `JUBILADAS`, así un hash, un `localStorage` o un
+`redirect(_anchor=…)` viejo la abren) recibe de `ver_cliente` un contexto barato (`rendimiento` = conectado, hay_tw,
+hay_meta, n_cuentas, es_admin: ni Graph ni el panel). `_tab_rendimiento.html` es el armazón (cabecera, «Ajustes» con la conexión de Triple Whale y
 «Elegir cuentas de Meta», `#rend-panel` por fetch) y trae TODO el JS de las dos pestañas viejas; el panel es
 `_rend_panel.html`. No duplica marcado: las secciones que comparte con las pestañas viejas son macros de
 `_tw_secciones.html` (copias, cuenta compartida, alertas, anuncios, ia, resto) y el include `_meta_secciones.html`

@@ -47,7 +47,7 @@ def test_sin_meta_con_triple_whale_dice_que_hace_falta_meta(app, monkeypatch, ba
         "id": 1, "moneda": "USD", "modelo_atribucion": triple_whale.MODELO_DEFECTO,
         "ventana_atribucion": triple_whale.VENTANA_DEFECTO, "extra": {}, "actualizado_en": None, "tiendas": []})
     _html, tab = _pestana(app)
-    assert "Triple Whale ya está conectado" in tab and 'data-ir-tab="triplewhale"' in tab
+    assert "Triple Whale ya está conectado" in tab and 'data-ir-tab="rendimiento"' in tab
 
 
 def test_meta_rota_sin_historial_pide_reconectar(app, monkeypatch, base_temporal):

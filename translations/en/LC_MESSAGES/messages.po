@@ -195,10 +195,6 @@ msgid "%(cuenta)s «en prueba» %(verbo)s en ningún experimento abierto."
 msgstr "%(cuenta)s marked “in testing” %(verbo)s in any open experiment."
 
 #, python-format
-msgid "%(dd)s/%(mm)s · gasto %(gasto)s · ingresos %(ingresos)s"
-msgstr "%(dd)s/%(mm)s · spend %(gasto)s · revenue %(ingresos)s"
-
-#, python-format
 msgid "%(destino)s · %(capas)s"
 msgstr "%(destino)s · %(capas)s"
 
@@ -527,10 +523,6 @@ msgstr "%(n)s queries"
 #, python-format
 msgid "%(n)s copia(s) de Meta en cola"
 msgstr "%(n)s Meta copy job(s) queued"
-
-#, python-format
-msgid "%(n)s de %(m)s"
-msgstr "%(n)s of %(m)s"
 
 #, python-format
 msgid "%(n)s de %(t)s avatar(es) completados."
@@ -2078,9 +2070,6 @@ msgstr "Catalog asset for Image %(n)s"
 msgid "Activo «%(activo_id)s» listo en el Catálogo."
 msgstr "Asset “%(activo_id)s” ready in the Catalog."
 
-msgid "Activos"
-msgstr "Active"
-
 #, python-format
 msgid "Activos actualizados: %(cuentas)s cuenta(s) publicitaria(s) y %(paginas)s Página(s)."
 msgstr "Assets updated: %(cuentas)s ad account(s) and %(paginas)s Page(s)."
@@ -2522,9 +2511,6 @@ msgstr "Turn off"
 
 msgid "Apartados de Configuración"
 msgstr "Settings sections"
-
-msgid "Apenas lo conectes traemos los últimos 90 días: gasto, impresiones, clics, vistas de 3 segundos, ThruPlays, pedidos e ingresos atribuidos por el Triple Pixel, por anuncio y por día, más las ventas de la tienda. Con eso cada anuncio recibe un veredicto (ganador, prometedor, perdedor) y un diagnóstico: gancho, retención, clic, conversión o fatiga."
-msgstr "As soon as you connect it we pull the last 90 days: spend, impressions, clicks, 3-second views, ThruPlays, orders and revenue attributed by the Triple Pixel, per ad and per day, plus the store's sales. With that every ad gets a verdict (winner, promising, loser) and a diagnosis: hook, hold, click, conversion or fatigue."
 
 #, python-format
 msgid "Apify %(actor)s: %(n)s resultado(s) aprox."
@@ -3211,9 +3197,6 @@ msgstr "CTR %(ctr)s%% < %(ctr_min)s%%"
 msgid "CTR %(p)s"
 msgstr "CTR %(p)s"
 
-msgid "CTR de salida"
-msgstr "Outbound CTR"
-
 msgid "CTR del enlace"
 msgstr "Link CTR"
 
@@ -3263,13 +3246,6 @@ msgstr "Every idea, script and caption follows Creatv's sales doctrine:"
 
 msgid "Cada marca necesita un nombre."
 msgstr "Each brand needs a name."
-
-#, python-format
-msgid "Cada país contra sus %(n)s días anteriores: dónde conviene poner el presupuesto."
-msgstr "Each country against its previous %(n)s days: where the budget pays off."
-
-msgid "Cada país desde el inicio: dónde conviene poner el presupuesto."
-msgstr "Each country since the start: where the budget pays off."
 
 #, python-format
 msgid "Cada país tiene su presupuesto diario. Además, el total se manda a Meta como tope de la campaña desde %(minimo)s, el mínimo que Meta acepta para un tope; con un total menor, el límite lo dan el presupuesto diario y la fecha de cierre."
@@ -3447,10 +3423,6 @@ msgstr "Campaigns no longer exists: create an experiment with that piece."
 msgid "Campañas, conjuntos y anuncios"
 msgstr "Campaigns, ad sets and ads"
 
-#, python-format
-msgid "Campañas: %(c)s · conjuntos: %(s)s"
-msgstr "Campaigns: %(c)s · ad sets: %(s)s"
-
 msgid "Campo"
 msgstr "Field"
 
@@ -3546,12 +3518,6 @@ msgstr "Loading the campaign…"
 
 msgid "Cargando la pieza…"
 msgstr "Loading the piece…"
-
-msgid "Cargando las métricas de Meta…"
-msgstr "Loading Meta metrics…"
-
-msgid "Cargando las métricas de Triple Whale…"
-msgstr "Loading the Triple Whale metrics…"
 
 msgid "Cargando referentes…"
 msgstr "Loading references…"
@@ -3848,9 +3814,6 @@ msgstr "Clicks"
 msgid "Clics en el enlace"
 msgstr "Link clicks"
 
-msgid "Clics que salen hacia tu web / impresiones"
-msgstr "Clicks out to your website / impressions"
-
 msgid "Clientes nuevos"
 msgstr "New customers"
 
@@ -4056,9 +4019,6 @@ msgstr "Desktop"
 msgid "Con %(n)s comentarios pegados a mano ya salen avatares: el formulario está justo abajo."
 msgstr "With %(n)s comments pasted by hand you already get avatars: the form is right below."
 
-msgid "Con Meta conectado, un administrador de Creatv elige qué cuentas publicitarias leer y traemos sus últimos 13 meses: gasto, compras y ROAS por cuenta, campaña, conjunto y anuncio. Leer de Meta no cuesta nada y no cambia nada en tus anuncios."
-msgstr "Once Meta is connected, a Creatv administrator chooses which ad accounts to read and we bring in their last 13 months: spend, purchases and ROAS by account, campaign, ad set and ad. Reading from Meta costs nothing and changes nothing in your ads."
-
 msgid "Con Triple Whale vemos las ventas de tu tienda; con Meta, tus campañas, conjuntos y anuncios. Cada país muestra la cifra de una sola fuente."
 msgstr "With Triple Whale we see your store sales; with Meta, your campaigns, ad sets and ads. Each country shows the figure from a single source."
 
@@ -4157,17 +4117,11 @@ msgstr "Connect Meta or Triple Whale to see your performance"
 msgid "Conecta Meta para probar tus piezas"
 msgstr "Connect Meta to test your pieces"
 
-msgid "Conecta Meta para ver tus cuentas"
-msgstr "Connect Meta to see your accounts"
-
 msgid "Conecta Notion primero."
 msgstr "Connect Notion first."
 
 msgid "Conecta Triple Whale o Meta para ver tu rendimiento."
 msgstr "Connect Triple Whale or Meta to see your performance."
-
-msgid "Conecta Triple Whale para evaluar tu contenido"
-msgstr "Connect Triple Whale to evaluate your content"
 
 msgid "Conecta la agencia arriba para poder asignar cuentas y Páginas; mientras tanto solo se ve el modo de cada proyecto."
 msgstr "Connect the agency above to be able to assign accounts and Pages; meanwhile you only see each project's mode."
@@ -4921,10 +4875,6 @@ msgid "Del %(desde)s al %(hasta)s · las variaciones comparan %(n)s días comple
 msgstr "From %(desde)s to %(hasta)s · changes compare %(n)s full days with the previous %(n)s"
 
 #, python-format
-msgid "Del %(desde)s al %(hasta)s, contra los %(n)s días anteriores"
-msgstr "From %(desde)s to %(hasta)s, against the previous %(n)s days"
-
-#, python-format
 msgid "Del %(desde)s al %(hasta)s: desde que hay datos de todas tus fuentes"
 msgstr "From %(desde)s to %(hasta)s: since there is data from all your sources"
 
@@ -5174,9 +5124,6 @@ msgstr "Slide"
 
 msgid "Desplegable"
 msgstr "Disclosure"
-
-msgid "Después, un análisis con IA mira tus ganadores y tus perdedores, explica qué patrón se repite y propone anuncios nuevos que puedes llevar a Crear con un clic."
-msgstr "Then an AI analysis looks at your winners and your losers, explains which pattern repeats and suggests new ads you can take to Create with one click."
 
 msgid "Destellos"
 msgstr "Sparkles"
@@ -6330,9 +6277,6 @@ msgstr "Pick pieces, countries and a total: in Review you see how much it spends
 
 msgid "Elige primero qué cuentas publicitarias quieres ver."
 msgstr "First choose which ad accounts you want to see."
-
-msgid "Elige qué cuentas publicitarias quieres ver"
-msgstr "Choose which ad accounts you want to see"
 
 msgid "Elige qué transcribir."
 msgstr "Choose what to transcribe."
@@ -8524,9 +8468,6 @@ msgstr "Daily spend as bars and the chosen metric as a line"
 msgid "Gasto en anuncios"
 msgstr "Ad spend"
 
-msgid "Gasto en publicidad"
-msgstr "Ad spend"
-
 msgid "Gasto en publicidad entre pedidos"
 msgstr "Ad spend divided by orders"
 
@@ -8742,9 +8683,6 @@ msgstr "Generate video"
 
 msgid "Gente que lava en casa y odia cargar garrafas; mercado sueco; reseñas de Via, Ariel y pods"
 msgstr "People who do laundry at home and hate carrying jugs; Swedish market; reviews of Via, Ariel and pods"
-
-msgid "Gente única: en «Todas», la suma de las cuentas"
-msgstr "Unique people: in “All”, the sum of the accounts"
 
 msgid "Gestionado por Creatv"
 msgstr "Managed by Creatv"
@@ -9524,9 +9462,6 @@ msgstr "Go to %(tab)s →"
 
 msgid "Ir a Catálogo →"
 msgstr "Go to Catalog →"
-
-msgid "Ir a Conexiones"
-msgstr "Go to Connections"
 
 msgid "Ir a Conexiones →"
 msgstr "Go to Connections →"
@@ -11095,10 +11030,6 @@ msgstr "Meta no longer accepts the agency's connection"
 msgid "Meta: Resumen en %(moneda)s"
 msgstr "Meta: Summary in %(moneda)s"
 
-#, python-format
-msgid "Meta: gasto (barras) y valor de compras (línea) por día en %(moneda)s"
-msgstr "Meta: spend (bars) and purchase value (line) per day in %(moneda)s"
-
 msgid "Meter en experimento"
 msgstr "Add to experiment"
 
@@ -11134,9 +11065,6 @@ msgstr "MiniMax · design voice · %(nombre)s"
 #, python-format
 msgid "MiniMax · estreno · %(nombre)s"
 msgstr "MiniMax · try-out · %(nombre)s"
-
-msgid "Miniatura"
-msgstr "Thumbnail"
 
 #, python-format
 msgid "Mira el detalle en la pestaña Triple Whale del proyecto %(cliente)s."
@@ -12141,12 +12069,6 @@ msgstr "Couldn't load the catalog. Check your connection and try again."
 
 msgid "No se pudo cargar el detalle. Recarga la página."
 msgstr "The detail could not be loaded. Reload the page."
-
-msgid "No se pudo cargar el panel de Meta. Recarga la página."
-msgstr "Couldn't load the Meta panel. Reload the page."
-
-msgid "No se pudo cargar el panel de Triple Whale. Recarga la página."
-msgstr "The Triple Whale panel couldn't be loaded. Reload the page."
 
 msgid "No se pudo cargar el panel de guiones. Recarga la página."
 msgstr "Couldn't load the scripts panel. Reload the page."
@@ -13247,9 +13169,6 @@ msgstr "To create (I'll describe it)"
 msgid "Por créditos: ~1.5 por imagen y ~8 por video; se compran por paquetes."
 msgstr "By credits: ~1.5 per image and ~8 per video; bought in packages."
 
-msgid "Por cuenta"
-msgstr "By account"
-
 msgid "Por dispositivo"
 msgstr "By device"
 
@@ -13291,9 +13210,6 @@ msgstr "To review"
 
 msgid "Por segundo de video y por imagen: el precio se muestra antes de cada generación."
 msgstr "Per second of video and per image: the price is shown before each generation."
-
-msgid "Por tienda"
-msgstr "By store"
 
 msgid "Por tipo"
 msgstr "By type"
@@ -13799,9 +13715,6 @@ msgstr "Press <em>Install app</em> and confirm."
 msgid "Pulsa un país para verlo solo."
 msgstr "Press a country to see it on its own."
 
-msgid "Pulsa una cuenta para verla sola."
-msgstr "Press an account to see it on its own."
-
 msgid "Pulsa «Actualizar ahora» para traer los últimos 13 meses de Meta."
 msgstr "Press “Update now” to pull the last 13 months from Meta."
 
@@ -13810,9 +13723,6 @@ msgstr "Press “Update now” to pull the last 90 days from Triple Whale."
 
 msgid "Pulsa «Proponer las que faltan»: Claude las escribe con la persona, el producto, el enfoque y los referentes elegidos."
 msgstr "Click “Propose the missing ones”: Claude writes them using the persona, product, focus and the references you chose."
-
-msgid "Pulsa «Sincronizar ahora» para traer los últimos 90 días de Triple Whale."
-msgstr "Press “Sync now” to pull the last 90 days from Triple Whale."
 
 msgid "Página"
 msgstr "Page"
@@ -14097,9 +14007,6 @@ msgstr "ROAS not comparable"
 
 msgid "ROAS según Meta"
 msgstr "ROAS per Meta"
-
-msgid "ROAS: valor de compras / gasto"
-msgstr "ROAS: purchase value / spend"
 
 msgid "Ranking de piezas"
 msgstr "Piece ranking"
@@ -16263,13 +16170,6 @@ msgstr "All"
 msgid "Todas (%(n)s)"
 msgstr "All (%(n)s)"
 
-msgid "Todas las cuentas"
-msgstr "All accounts"
-
-#, python-format
-msgid "Todas las cuentas (%(n)s)"
-msgstr "All accounts (%(n)s)"
-
 msgid "Todas las escenas están listas."
 msgstr "All scenes are ready."
 
@@ -16282,21 +16182,11 @@ msgstr "All sources"
 msgid "Todas las marcas"
 msgstr "All brands"
 
-msgid "Todas las métricas de tus anuncios y de tu tienda según Triple Whale, una evaluación de cada anuncio (qué gana, qué pierde y por qué) y, con IA, ideas de anuncios nuevos basadas en lo que ya funciona."
-msgstr "All the metrics of your ads and your store according to Triple Whale, an evaluation of each ad (what wins, what loses and why) and, with AI, new ad ideas based on what already works."
-
 msgid "Todas las piezas"
 msgstr "All pieces"
 
 msgid "Todas las tiendas"
 msgstr "All stores"
-
-#, python-format
-msgid "Todas las tiendas (%(n)s)"
-msgstr "All stores (%(n)s)"
-
-msgid "Todas tus cuentas publicitarias de Meta en un solo lugar: gasto, ventas y ROAS por cuenta, campaña, conjunto y anuncio, con el veredicto de cada anuncio."
-msgstr "All your Meta ad accounts in one place: spend, sales and ROAS by account, campaign, ad set and ad, with each ad's verdict."
 
 msgid "Todavía no consultamos el Pixel de esta cuenta. Comprobarlo tarda unos segundos y también actualiza la atribución sugerida al crear experimentos."
 msgstr "We haven't checked this account's Pixel yet. Checking it takes a few seconds and also updates the suggested attribution when creating experiments."
@@ -16374,9 +16264,6 @@ msgstr "No ideas yet"
 
 msgid "Todavía no hay movimientos."
 msgstr "No movements yet."
-
-msgid "Todavía no hay métricas copiadas"
-msgstr "No metrics copied yet"
 
 msgid "Todavía no hay métricas copiadas de Meta"
 msgstr "No Meta metrics copied yet"
@@ -16868,9 +16755,6 @@ msgstr "Triple Whale answered something that isn't JSON."
 msgid "Triple Whale ya está conectado: cuando tus anuncios corran en Meta, aquí verás las ventas que trae cada uno. Mientras tanto, los números de tu tienda están en la pestaña"
 msgstr "Triple Whale is already connected: once your ads run on Meta, you will see here the sales each one brings. In the meantime, your store numbers are in the tab"
 
-msgid "Triple Whale ya no está conectado en este proyecto."
-msgstr "Triple Whale is no longer connected in this project."
-
 #, python-format
 msgid "Triple Whale: %(n)s cambio(s) en tus anuncios"
 msgstr "Triple Whale: %(n)s change(s) in your ads"
@@ -17072,14 +16956,8 @@ msgstr "US$ %(usd)s per result"
 msgid "USD %(usd)s gastado"
 msgstr "USD %(usd)s spent"
 
-msgid "USD no disponible"
-msgstr "USD not available"
-
 msgid "USD no disponible para algunos días: elige un país para ver sus cifras."
 msgstr "USD not available for some days: choose a country to see its figures."
-
-msgid "USD no disponible para algunos días: los totales en USD pueden estar incompletos."
-msgstr "USD not available for some days: the USD totals may be incomplete."
 
 msgid "Ubicación (gasto)"
 msgstr "Placement (spend)"
@@ -17388,9 +17266,6 @@ msgstr "Validations"
 msgid "Valor"
 msgstr "Value"
 
-msgid "Valor de compras"
-msgstr "Purchase value"
-
 msgid "Valor de compras entre compras"
 msgstr "Purchase value divided by purchases"
 
@@ -17561,8 +17436,8 @@ msgstr "Show more"
 msgid "Ver más (quedan %(n)s)"
 msgstr "Show more (%(n)s left)"
 
-msgid "Ver métricas en la pestaña Meta"
-msgstr "See metrics in the Meta tab"
+msgid "Ver métricas en la pestaña Rendimiento"
+msgstr "See metrics in the Performance tab"
 
 msgid "Ver o editar los prompts"
 msgstr "See or edit the prompts"
@@ -19349,10 +19224,6 @@ msgstr "lifestyle photos"
 
 msgid "francés"
 msgstr "French"
-
-#, python-format
-msgid "frecuencia %(f)s"
-msgstr "frequency %(f)s"
 
 msgid "frente, perfil y cuerpo entero — 3 a 6"
 msgstr "front, profile and full body — 3 to 6"
@@ -21382,15 +21253,6 @@ msgstr "Last activity"
 #, python-format
 msgid "Última actualización: %(fecha)s"
 msgstr "Last updated: %(fecha)s"
-
-#, python-format
-msgid "Última copia hace %(num)s h"
-msgid_plural "Última copia hace %(num)s h"
-msgstr[0] "Last copy %(num)s h ago"
-msgstr[1] "Last copy %(num)s h ago"
-
-msgid "Última copia hace menos de 1 h"
-msgstr "Last copy less than 1 h ago"
 
 #, python-format
 msgid "Última copia: %(fecha)s"

@@ -103,9 +103,10 @@ incidente. Si la tarea cruza dos áreas, carga las dos.
 | Editor: documento, render, materiales, `static/editor/`, subtítulos, voz en off | [`editor`](.claude/skills/editor/SKILL.md) |
 | Experimentos, lanzador, decisor, derivaciones, Tablero | [`experimentos`](.claude/skills/experimentos/SKILL.md) |
 | Meta (propia/agencia), publicador, uploaders, publicación orgánica | [`meta-y-publicacion`](.claude/skills/meta-y-publicacion/SKILL.md) |
-| la pestaña Meta, varias cuentas publicitarias por proyecto, `meta_rendimiento/`, la copia de métricas de Meta, las tasas USD | [`meta-rendimiento`](.claude/skills/meta-rendimiento/SKILL.md) |
+| varias cuentas publicitarias de Meta por proyecto, `meta_rendimiento/`, la copia de métricas de Meta, las tasas USD | [`meta-rendimiento`](.claude/skills/meta-rendimiento/SKILL.md) |
 | Catálogo: productos y colores, conectores de tiendas, importador, ficha | [`catalogo`](.claude/skills/catalogo/SKILL.md) |
-| Triple Whale: sincronización, pestaña, evaluación con IA, atribución | [`triple-whale`](.claude/skills/triple-whale/SKILL.md) |
+| Triple Whale: sincronización, galería y análisis pagados, evaluación con IA, atribución | [`triple-whale`](.claude/skills/triple-whale/SKILL.md) |
+| la pestaña Rendimiento (Triple Whale + Meta juntos), `pestana_rendimiento/` | [`rendimiento`](.claude/skills/rendimiento/SKILL.md) |
 | el saldo prepagado, el margen, el interruptor «Cobrar», las recargas, Bold, `cobros/`, el precio que ve un cliente | [`cobros`](.claude/skills/cobros/SKILL.md) |
 | Alertas: la pestaña, las fuentes, los descartes, la burbuja del sidebar, las tarjetas de Puesta a punto (`llaves.py`) | [`alertas`](.claude/skills/alertas/SKILL.md) |
 | una ruta nueva, una subida, una URL ajena, el login, las cuentas | [`seguridad`](.claude/skills/seguridad/SKILL.md) |

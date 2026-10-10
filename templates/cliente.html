@@ -9,12 +9,9 @@
   {% include "_tab_alertas.html" %}
 </section>
 
-<section id="tab-triplewhale" class="tab-panel" role="tabpanel">
-  {% include "_tab_triple_whale.html" %}
-</section>
-
-<section id="tab-meta" class="tab-panel" role="tabpanel">
-  {% include "_tab_meta.html" %}
+{# Rendimiento (spec 2026-10-09 R1): Triple Whale y Meta en una sola pestaña, en el lugar de las dos viejas. #}
+<section id="tab-rendimiento" class="tab-panel" role="tabpanel">
+  {% include "_tab_rendimiento.html" %}
 </section>
 
 <section id="tab-nicho" class="tab-panel" role="tabpanel">
@@ -56,10 +53,10 @@
     // Las claves siguen siendo las viejas ('calzado', 'idea', ...) a propósito:
     // son las que usan los redirect(_anchor=...) de dashboard.py y las que ya
     // están guardadas en el localStorage de la gente. Solo cambió la etiqueta.
+    // Las de una pestaña que se jubiló las traduce resolver() más abajo.
     var paneles = {
       alertas: document.getElementById('tab-alertas'),
-      triplewhale: document.getElementById('tab-triplewhale'),
-      meta: document.getElementById('tab-meta'),
+      rendimiento: document.getElementById('tab-rendimiento'),
       nicho: document.getElementById('tab-nicho'),
       referentes: document.getElementById('tab-referentes'),
       creativeflowplus: document.getElementById('tab-creativeflowplus'),
@@ -106,7 +103,11 @@
     // hash viejo (o el guardado) abre Catálogo.
     // 'ads' (Campañas) se fundió en Experimentos: el hash viejo (o el
     // guardado) abre Experimentos, donde quedan los anuncios sueltos.
+    // 'triplewhale' y 'meta' (2026-10-09) se juntaron en Rendimiento: el hash
+    // viejo, el guardado y los redirect(_anchor=...) viejos abren esa pestaña.
+    var JUBILADAS = { triplewhale: 'rendimiento', meta: 'rendimiento' };
     function resolver(t) {
+      if (t && Object.prototype.hasOwnProperty.call(JUBILADAS, t)) return JUBILADAS[t];
       // «#config-ap-saldo» (el «Recargar» de un aviso sin saldo, la vuelta del
       // pago): un apartado de Configuración abre esa pestaña; su script lo enfoca.
       if (t && t.indexOf('config-') === 0) return 'settings';

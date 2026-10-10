@@ -225,26 +225,6 @@ def enlazar_ideas(cliente, anuncios, evaluacion_lista):
     evaluacion_lista["piezas_por_idea"] = piezas
 
 
-def _por_tienda(cliente, tiendas_por_id, desde, hasta, desde_prev, hasta_prev):
-    """«Por tienda»: una fila por tienda con sus totales, su MER y la variación
-    de sus ingresos contra el periodo anterior (una consulta). En el orden de
-    `tiendas_por_id` (el de `triple_whale_tiendas.tiendas`: país, luego id),
-    el mismo del selector; la consulta devuelve por id (revisión 2026-10-08)."""
-    por_id = {f["tienda_id"]: f for f in datos.por_tienda(cliente, desde, hasta, desde_prev, hasta_prev)}
-    filas = []
-    for tienda_id, tienda in tiendas_por_id.items():
-        f = por_id.get(tienda_id)
-        if not f:
-            continue
-        a, p = f["actual"], f["previo"]
-        ingresos, ingresos_prev = float(a["ingresos"] or 0), float(p["ingresos"] or 0)
-        gasto = float(a["gasto"] or 0)
-        filas.append({"tienda": tienda, "actual": a, "previo": p,
-                      "mer": ingresos / gasto if gasto else None,
-                      "variacion_ingresos": (ingresos / ingresos_prev - 1) if ingresos_prev else None})
-    return filas
-
-
 def _alcance_evaluacion(ev, tiendas_por_id, locale):
     """Lo que la lista de evaluaciones dice de cada una: «Noruega», «Todas las
     tiendas» o "" (una evaluación de antes de las varias tiendas)."""
@@ -561,8 +541,9 @@ def contexto_dia(cliente, fecha, canal=None, tienda_id=None, hoy=None):
 
 
 def contexto(cliente, dias=PERIODO_DEFECTO, canal=None, tienda_id=None, hoy=None, con_resultados=True):
-    """Todo lo que pinta `_tw_panel.html` en el alcance pedido (`tienda_id`:
-    una tienda del proyecto, o None = «Todas»; un id ajeno se ignora).
+    """Lo de Triple Whale que pinta la pestaña Rendimiento (`_rend_panel.html`, macros de `_tw_secciones.html`) en
+    el alcance pedido (`tienda_id`: una tienda del proyecto, o None = «Todas»; un id ajeno se ignora). Hasta el
+    2026-10-09 lo pintaba el panel de la pestaña Triple Whale.
 
     Con `con_resultados=False`, `"resultados"` es None y «Resultados de tu tienda» no se calcula: la pestaña
     Rendimiento arma sus propios Resultados cuando el alcance mezcla fuentes (spec 2026-10-09)."""
@@ -621,8 +602,6 @@ def contexto(cliente, dias=PERIODO_DEFECTO, canal=None, tienda_id=None, hoy=None
         "desde": desde, "hasta": hasta, "canal": canal, "canales": canales,
         "tiendas": tiendas, "tienda_actual": tienda_actual, "varias_tiendas": varias, "en_alcance": en_alcance,
         "ultima_copia": ultima_copia,
-        "por_tienda": (_por_tienda(cliente, tiendas_por_id, desde, hasta, desde_prev, hasta_prev)
-                       if varias and tienda_actual is None else []),
         # La nota de cuenta compartida mira el alcance: una tienda con cuenta propia no la lleva.
         "gasto_duplicado": datos.gasto_duplicado(cliente, desde, hasta, tienda_id) if varias else 0.0,
         "jobs_sync": jobs_sync,

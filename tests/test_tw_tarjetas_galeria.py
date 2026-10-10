@@ -34,7 +34,7 @@ def _tarjetas(html):
 def test_el_panel_trae_la_primera_pagina_de_la_galeria_con_el_anuncio_real(app):  # noqa: F811
     _conectar()
     _sembrar_muchos(15)
-    html = app["c"].get("/cliente/acme/triple-whale/panel").data.decode()
+    html = app["c"].get("/cliente/acme/rendimiento/panel").data.decode()
     assert len(_tarjetas(html)) == 12 and "Ver más" in html
     assert '<video' in html and 'preload="none"' in html and "data-precarga" in html
     assert 'poster="https://files.triplewhale.com/thumbnails/' in html
@@ -73,7 +73,7 @@ def test_la_url_de_la_tarjeta_lleva_el_alcance(app):  # noqa: F811
     import html as html_mod
     tid = _conectar()
     _sembrar()
-    panel_html = app["c"].get("/cliente/acme/triple-whale/panel?canal=facebook-ads&dias=7").data.decode()
+    panel_html = app["c"].get("/cliente/acme/rendimiento/panel?canal=facebook-ads&dias=7").data.decode()
     url = html_mod.unescape(re.search(r'id="tw-tarjeta-facebook-ads-g1"\s+data-tarjeta-url="([^"]+)"', panel_html).group(1))
     assert url == f"/cliente/acme/triple-whale/tarjeta/facebook-ads/g1?dias=7&canal=facebook-ads&tienda={tid}"
     assert app["c"].get(url).status_code == 200
@@ -365,7 +365,7 @@ def _claves_del_lote(html):
 def test_el_panel_envuelve_la_galeria_en_un_bloque_con_su_url(app):  # noqa: F811
     _conectar()
     _sembrar()
-    html = app["c"].get("/cliente/acme/triple-whale/panel?dias=7").data.decode()
+    html = app["c"].get("/cliente/acme/rendimiento/panel?dias=7").data.decode()
     m = re.search(r'<div class="tw-galeria-bloque" data-url="([^"]+)"', html)
     assert m and "/cliente/acme/triple-whale/galeria?" in m.group(1) and "dias=7" in m.group(1)
     # Chips, formulario del lote y rejilla viven dentro del bloque.

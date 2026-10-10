@@ -1,8 +1,9 @@
 {# «Resultados de tu tienda» (spec 2026-10-08-tw-resultados-de-tu-tienda): la sección que reemplazó a «Tu tienda»
-   y «Día a día» del panel de Triple Whale. Contexto: `tw.resultados` (triple_whale.resultados.armar).
+   y «Día a día» del panel de Triple Whale (hoy, «Resultados» de la pestaña Rendimiento). Contexto: `tw.resultados`
+   (triple_whale.resultados.armar).
    El servidor pinta tarjetas, lectura, «Tus creativos» y la tabla (se leen aunque el JS falle); la gráfica, las
    minigráficas, el recuadro de cada día y el detalle del día los dibuja static/tw_resultados.js con el JSON del
-   final (los <script> de este fragmento no corren: _tab_triple_whale.html llama TwResultados.iniciar). #}
+   final (los <script> de este fragmento no corren: _tab_rendimiento.html llama TwResultados.iniciar). #}
 {% set r = tw.resultados %}
 {% if r %}
 <section class="tb-seccion twr" id="tw-resultados" data-twr>

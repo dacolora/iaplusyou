@@ -348,12 +348,12 @@ app.register_blueprint(nicho_rutas.bp)
 from referentes import rutas as referentes_rutas  # noqa: E402  (Blueprint de la pestaña Referentes)
 app.register_blueprint(referentes_rutas.bp)
 
-from triple_whale import rutas as triple_whale_rutas  # noqa: E402  (Blueprint de la pestaña Triple Whale)
+from triple_whale import rutas as triple_whale_rutas  # noqa: E402  (Triple Whale: galería, análisis pagados, día)
 from triple_whale import panel as triple_whale_panel  # noqa: E402  (la tienda según Triple Whale, en el Tablero)
 from triple_whale import puente as triple_whale_puente  # noqa: E402  (una pieza de Crear nacida de una idea)
 app.register_blueprint(triple_whale_rutas.bp)
 
-from meta_rendimiento import rutas as meta_rendimiento_rutas  # noqa: E402  (Blueprint de la pestaña Meta)
+from meta_rendimiento import rutas as meta_rendimiento_rutas  # noqa: E402  (Meta rendimiento: «Elegir cuentas»)
 from meta_rendimiento import cuentas as meta_rend_cuentas  # noqa: E402  (las cuentas que lee el proyecto)
 app.register_blueprint(meta_rendimiento_rutas.bp)
 
@@ -2087,11 +2087,12 @@ def ver_cliente(cliente):
     # Las tarjetas de tiendas (spec 2026-10-08 §6.2): país y bandera en el idioma de quien mira.
     tw_tiendas = [dict(t, nombre=triple_whale_panel.nombre_tienda(t), bandera=tw_paises.bandera(t["pais"]))
                   for t in (triple_whale_conectado or {}).get("tiendas", [])]
-    # Pestaña Meta (spec 2026-10-08 meta rendimiento §8): solo lo que decide su estado vacío. Ni Graph ni el panel:
-    # el selector y el panel llegan por fetch al abrirla.
-    meta_rend = {"conectado": bool((meta_conexion.cargar(cliente) or {}).get("token")),
-                 "n_cuentas": len(meta_rend_cuentas.ids(cliente)), "modo": meta_conexion.modo(cliente),
-                 "es_admin": meta_rendimiento_rutas.es_admin()}
+    # Pestaña Rendimiento (spec 2026-10-09 §5, R15): solo lo que decide su armazón y su estado vacío. Ni Graph ni el
+    # panel: el panel y «Elegir cuentas de Meta» llegan por fetch al abrirla.
+    hay_meta = bool((meta_conexion.cargar(cliente) or {}).get("token"))
+    rendimiento = {"conectado": bool(triple_whale_conectado) or hay_meta, "hay_tw": bool(triple_whale_conectado),
+                   "hay_meta": hay_meta, "n_cuentas": len(meta_rend_cuentas.ids(cliente)) if hay_meta else 0,
+                   "es_admin": meta_rendimiento_rutas.es_admin()}
     # Catálogo (spec 2026-09-28): la galería y la ficha llegan por fragmento;
     # la página solo trae contadores por categoría y lo que Crear necesita.
     activos_producto = _productos_con_uso(cliente)
@@ -2179,7 +2180,7 @@ def ver_cliente(cliente):
         triple_whale_conectado=triple_whale_conectado,
         tw_modelos=triple_whale.MODELOS, tw_ventanas=triple_whale.VENTANAS, tw_monedas=triple_whale.MONEDAS,
         tw_tiendas=tw_tiendas, tw_paises=tw_paises.paises_opciones(idiomas.activo()),
-        meta_rend=meta_rend,
+        rendimiento=rendimiento,
         trabajos_prod=_trabajos_productos(cliente, tiendas_cliente),
         precio_pedidos=gastos.estimar("pedidos_producto")["texto"],
         cifrado_ok=cifrado.disponible(),
@@ -8253,8 +8254,9 @@ def _tomar_puerto_o_none(host, puerto):
 # ---- Triple Whale (atribución y rendimiento; spec 2026-09-28) ----
 
 def _volver_tw(cliente):
-    # La conexión vive en la pestaña Triple Whale (2026-09-28), ya no en Configuración.
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="triplewhale"))
+    # La conexión vive en «Ajustes» de la pestaña Rendimiento (spec 2026-10-09 R15; antes, desde el 2026-09-28, en la
+    # pestaña Triple Whale), ya no en Configuración.
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="rendimiento"))
 
 
 def _probar_triple_whale(llave, dominio, moneda):

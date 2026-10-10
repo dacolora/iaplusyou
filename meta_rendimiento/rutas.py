@@ -1,25 +1,24 @@
-"""Blueprint de la pestaña «Meta» (spec 2026-10-08 meta rendimiento §5 y §8), bajo
-`/cliente/<cliente>/meta-rendimiento`. `dashboard._guard_por_cliente` protege todo porque la URL lleva `<cliente>`;
-cada POST además exige el mismo origen (Sec-Fetch-Site), la barrera CSRF del resto de la app.
+"""Blueprint de Meta rendimiento (spec 2026-10-08 meta rendimiento §5 y §8), bajo `/cliente/<cliente>/meta-rendimiento`.
+Desde el 2026-10-09 la pestaña es «Rendimiento» (`pestana_rendimiento/`, spec 2026-10-09): su panel, sus «Ver más» y
+«Actualizar ahora» viven allá; aquí quedan «Elegir cuentas» (que la pestaña pide en «Ajustes»), el país de una cuenta y
+`pedir_copia`, y todo vuelve a `#rendimiento`. `dashboard._guard_por_cliente` protege todo porque la URL lleva
+`<cliente>`; cada POST además exige el mismo origen (Sec-Fetch-Site), la barrera CSRF del resto de la app.
 
-- `panel`: el fragmento que la pestaña pide por fetch (solo lee la copia local: nunca Meta). `cuenta` = una cuenta del
-  proyecto; ajena o inválida = «Todas».
-- `anuncios` / `conjuntos`: «Ver más» por fetch; devuelven solo filas `<tr>` (y la fila del botón si quedan más).
 - `cuentas` (GET): el selector «Elegir cuentas». Es la ÚNICA ruta que llama a Meta al abrirse
   (`meta_conexion.listar_activos`), y solo cuando la persona abre el selector.
 - `cuentas` (POST): deja en el proyecto las cuentas marcadas. Una cuenta nueva solo entra si el token la ve
   (`listar_activos` otra vez: un id escrito a mano no sirve); una que ya estaba y sigue marcada se queda aunque el token
   ya no la vea. Encola la copia de las agregadas (gratis: leer de Meta no cobra). Tope: 20 cuentas por proyecto.
 - `cuentas/<act>/pais`: cambia el país de una cuenta del proyecto (404 si es ajena, 400 si el código no es un país).
-- `sincronizar`: «Actualizar ahora»; sin `act`, la copia de todas; con `act`, la de esa (ajena → 404). Quien no es
-  admin espera 30 minutos desde la última copia (de esa cuenta o, sin `act`, de cualquiera del proyecto): el límite de
-  Meta es por usuario y app, lo comparten todos los proyectos que usan el mismo token y un clic repetido lo agotaría
-  (ruling R22, revisión final 2026-10-08). El admin no espera.
+- `pedir_copia` (no es ruta): «Actualizar ahora» de Rendimiento; sin `act`, la copia de todas; con `act`, la de esa.
+  Quien no es admin espera 30 minutos desde la última copia (de esa cuenta o, sin `act`, de cualquiera del proyecto):
+  el límite de Meta es por usuario y app, lo comparten todos los proyectos que usan el mismo token y un clic repetido
+  lo agotaría (ruling R22, revisión final 2026-10-08). El admin no espera.
 
 AISLAMIENTO (ruling R20, revisión final 2026-10-08): elegir cuentas (GET y POST) y cambiar el país son SOLO del admin
 (403 al resto). El token de un proyecto puede ver cuentas de otros clientes, y quien las elige las lee: por eso lo
 decide una persona de Creatv. Una cuenta con la que LANZA otro proyecto (`meta.json`) cuenta como «En otro proyecto»
-igual que una que otro ya lee: no se lista habilitada ni se acepta. Todo POST de la pestaña exige además correo
+igual que una que otro ya lee: no se lista habilitada ni se acepta. Todo POST de este Blueprint exige además correo
 verificado (como las rutas que conectan Meta); el admin está exento.
 
 En modo agencia el selector dice «Todavía no disponible» (spec §2.10). Ningún token llega a una respuesta: los
@@ -36,7 +35,7 @@ import idiomas
 import meta_conexion
 import usuarios
 from idiomas import N_
-from meta_rendimiento import cuentas, grafico, panel, pausa
+from meta_rendimiento import cuentas, pausa
 from tareas import meta_rendimiento as tareas_mr
 from triple_whale import paises
 
@@ -88,7 +87,7 @@ def _correo_verificado():
 
 
 def _volver(cliente):
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="meta"))
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="rendimiento"))
 
 
 def _token(cliente):
@@ -114,29 +113,6 @@ def _pais(valor):
     if not v:
         return ""
     return v if paises.es_pais(v) else None
-
-
-# ------------------------------------------------------------------- lectura ---
-
-@bp.get("/panel")
-def ver_panel(cliente):
-    ctx = panel.contexto(cliente, request.args.get("dias"), request.args.get("cuenta"))
-    dibujo = grafico.armar(ctx["serie"]) if ctx.get("serie") else None
-    return render_template("_meta_panel.html", cliente=cliente, mr=ctx, grafico=dibujo, es_admin=es_admin())
-
-
-@bp.get("/anuncios")
-def ver_anuncios(cliente):
-    ctx = panel.anuncios_pagina(cliente, request.args.get("dias"), request.args.get("cuenta"),
-                                request.args.get("pagina"))
-    return render_template("_meta_anuncios_filas.html", cliente=cliente, mr=ctx)
-
-
-@bp.get("/conjuntos")
-def ver_conjuntos(cliente):
-    ctx = panel.conjuntos_pagina(cliente, request.args.get("dias"), request.args.get("cuenta"),
-                                 request.args.get("pagina"))
-    return render_template("_meta_conjuntos_filas.html", cliente=cliente, mr=ctx)
 
 
 # -------------------------------------------------------------- elegir cuentas ---
@@ -298,8 +274,9 @@ def _copiada_hace_poco(cliente, act):
 def pedir_copia(cliente, act=None):
     """(texto ya traducido, categoría de flash) de pedir la copia de Meta (gratis): la de la cuenta `act` o, sin
     ella, la de todas las del proyecto. El llamador ya comprobó que la cuenta es del proyecto. Respeta la pausa
-    compartida y la espera de 30 minutos de quien no es admin (ruling R22). La usan «Actualizar ahora» de esta
-    pestaña y el de Rendimiento (spec 2026-10-09 A5)."""
+    compartida y la espera de 30 minutos de quien no es admin (ruling R22). La usa «Actualizar ahora» de
+    Rendimiento (`rendimiento.actualizar`, spec 2026-10-09 A5), que reemplazó a la ruta `sincronizar` de la pestaña
+    vieja."""
     if not _token(cliente):
         return gettext("Meta no está conectado en este proyecto."), "error"
     if not cuentas.ids(cliente):
@@ -314,12 +291,3 @@ def pedir_copia(cliente, act=None):
     if tareas_mr.encolar_sync(cliente, act):
         return gettext("Trayendo las métricas de Meta…"), "ok"
     return gettext("Ya se están trayendo las métricas de Meta."), "warn"
-
-
-@bp.post("/sincronizar")
-def sincronizar(cliente):
-    act = (request.form.get("act") or "").strip() or None
-    if act and not cuentas.cuenta(cliente, act):
-        abort(404)
-    flash(*pedir_copia(cliente, act))
-    return _volver(cliente)

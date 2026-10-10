@@ -1,5 +1,6 @@
-{# Conexión con Triple Whale: vive en la pestaña Triple Whale desde 2026-09-28
-   (hasta entonces estaba en Configuración › Conexiones). Varias tiendas, una
+{# Conexión con Triple Whale: vive en «Ajustes» de la pestaña Rendimiento desde
+   2026-10-09 (spec 2026-10-09 R15; del 2026-09-28 a esa fecha, en la pestaña
+   Triple Whale; antes, en Configuración › Conexiones). Varias tiendas, una
    por país (spec 2026-10-08 §6.2): una tarjeta por tienda (bandera, país,
    dominio, estado, error, última copia) con «Probar conexión», «Cambiar país»
    (<details> con el selector; abierto en una tienda sin país) y «Quitar»;
@@ -7,13 +8,11 @@
    «Ajustes» del panel); y «+ Agregar otra tienda» (#tw-agregar), abierto si no
    hay ninguna, con llave, dominio y país. Sin tiendas ese formulario trae
    también moneda, modelo y ventana. El JS que adivina el país al salir del
-   dominio vive en _tab_triple_whale.html. La sincronización y su barra viven
-   en el panel (_tw_panel.html). Contexto de ver_cliente: tw_tiendas,
+   dominio vive en _tab_rendimiento.html. La copia y su barra viven en el panel
+   (_rend_panel.html, «Actualizar ahora»). Contexto de ver_cliente: tw_tiendas,
    tw_paises, triple_whale_conectado, cifrado_ok, tw_monedas, tw_modelos,
-   tw_ventanas. Desde 2026-10-09 también la incluye «Ajustes» de la pestaña
-   Rendimiento (_tab_rendimiento.html, que trae el mismo JS); el bloque es un
-   div y no una section: así no corta la section de la pestaña que lo
-   incluye. #}
+   tw_ventanas. El bloque es un div y no una section: así no corta la section
+   de la pestaña que lo incluye. #}
 {% macro tw_opciones_atribucion(modelo_actual, ventana_actual, moneda_actual) %}
     <label class="campo-label tw-campo">{{ _('Moneda de las cifras') }}</label>
     <select name="moneda" {% if not cifrado_ok %}disabled{% endif %}>

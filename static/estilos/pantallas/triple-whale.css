@@ -1,6 +1,6 @@
 /* ============================================================
    Triple Whale: la conexión con varias tiendas (spec 2026-10-08 §6.2). Uso:
-   _triple_whale_conectar.html dentro de la pestaña #tab-triplewhale: tarjetas
+   _triple_whale_conectar.html dentro de «Ajustes» de #tab-rendimiento: tarjetas
    `.tw-tienda` (una por tienda conectada) en la rejilla `.tw-tiendas`, sus
    acciones y el selector «Cambiar país», más `.tw-campo`/`.tw-nota` de los
    formularios (antes eran estilos en línea), y la galería de tarjetas de
