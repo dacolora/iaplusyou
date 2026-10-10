@@ -356,6 +356,7 @@ app.register_blueprint(triple_whale_rutas.bp)
 from meta_rendimiento import rutas as meta_rendimiento_rutas  # noqa: E402  (Blueprint de la pestaña Meta)
 from meta_rendimiento import cuentas as meta_rend_cuentas  # noqa: E402  (las cuentas que lee el proyecto)
 from meta_rendimiento import datos as meta_rend_datos  # noqa: E402  (sus copias y evaluaciones)
+from meta_rendimiento import analisis as meta_rend_analisis  # noqa: E402  (una pieza de Crear nacida de su evaluación)
 app.register_blueprint(meta_rendimiento_rutas.bp)
 
 from guiones import rutas as guiones_rutas  # noqa: E402  (Blueprint JSON del chat de Flow Plus en Crear)
@@ -7926,6 +7927,12 @@ def cf_crear_video(cliente):
     origen_tw = triple_whale_puente.origen_desde_formulario(cliente, request.form.get("origen_tw"))
     if origen_tw:
         campos["tw_idea"] = origen_tw
+    else:
+        # Meta rendimiento (spec E2 §8): una idea de su evaluación vuelve con «meta:<id>:<i>» en el mismo campo
+        # oculto; Triple Whale nunca la toma por suya y se guarda aparte, como `meta_idea`.
+        origen_meta = meta_rend_analisis.origen_desde_formulario(cliente, request.form.get("origen_tw"))
+        if origen_meta:
+            campos["meta_idea"] = origen_meta
     directo = dict(campos, enfoque_nombre=info["nombre"] if solo_texto else idiomas.N_("Tu texto, tal cual"))
     if tipo == "imagen":
         # La imagen no pasa por el director (spec §2.2): va el texto tal cual.

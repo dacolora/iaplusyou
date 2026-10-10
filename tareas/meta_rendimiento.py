@@ -5,6 +5,9 @@
   meta_rend_sincronizar_todas  -> periódica (worker.PERIODICAS, 3 h): encola la de cada cuenta de cada proyecto
   meta_rend_limpiar            -> periódica diaria: borra los días de anuncio de más de 95 días y los de cuenta de
                                   más de 400
+  meta_rend_evaluar            -> f"{cliente}__meta_eval"  (max_intentos=1: paga a Claude; «Evaluar con IA», spec E2
+                                  §8). Una viva por proyecto, en el carril general (no en el de lectura). El gasto
+                                  real se anota como tipo `evaluacion` también si la respuesta no sirvió.
 
 Un error de Meta (o cualquier otro) deja ESA cuenta en estado `error` con el motivo en palabras y sin token, y sube
 para que la cola reintente; las demás cuentas del proyecto no se enteran.
@@ -27,10 +30,15 @@ from datetime import date, datetime, timedelta
 from flask_babel import gettext
 
 import cola
+import gastos
+import idiomas
 import meta_conexion
 import trabajos
-from meta_rendimiento import cuentas, datos, graph, pausa, sync
-from tareas import Continuar, al_interrumpir, registrar
+from meta_rendimiento import analisis, cuentas, datos, graph, pausa, sync
+from nicho.avatares import costo_real
+from tareas import Continuar, al_interrumpir, ref_sufijo, registrar
+from triple_whale import analisis as tw_analisis
+from triple_whale import datos as tw_datos
 
 log = logging.getLogger(__name__)
 TIPO_SYNC = "meta_rend_sincronizar"
@@ -201,3 +209,110 @@ def meta_rend_limpiar(tarea):
     n = datos.purgar_anuncios((hoy - timedelta(days=DIAS_ANUNCIO_GUARDADOS)).isoformat())
     m = datos.purgar_cuenta_dias((hoy - timedelta(days=DIAS_CUENTA_GUARDADOS)).isoformat())
     return gettext("%(n)s fila(s) viejas de anuncios y %(m)s día(s) viejos de cuentas de Meta borrados", n=n, m=m)
+
+
+# ---------------------------------------------------------- «Evaluar con IA» (spec E2 §8) ---
+
+TIPO_EVALUAR = "meta_rend_evaluar"
+ETAPAS_EVALUAR = [(idiomas.N_("Buscando miniaturas"), 10), (idiomas.N_("Sacando fotogramas"), 15),
+                  (idiomas.N_("Analizando con Claude"), 75)]
+
+
+def job_id_evaluar(cliente):
+    return f"{cliente}__meta_eval"
+
+
+def encolar_evaluacion(cliente, evaluacion_id, costo_estimado=None):
+    """max_intentos=1: paga a Claude (una tarea que cobra nunca se reintenta sola). `costo_estimado` (USD del
+    proveedor, sin margen): en un proyecto que cobra, `trabajos.encolar` exige y reserva ese precio (skill `cobros`) y
+    puede lanzar `SaldoInsuficiente`. False si ya había una evaluación viva en el proyecto."""
+    return trabajos.encolar(job_id_evaluar(cliente), TIPO_EVALUAR, {"cliente": cliente, "evaluacion_id": int(evaluacion_id)},
+                            cliente=cliente, duracion_estimada=150, etapas=ETAPAS_EVALUAR, max_intentos=1,
+                            costo_estimado=costo_estimado)
+
+
+def evaluacion_en_curso(cliente):
+    return trabajos.en_curso(job_id_evaluar(cliente))
+
+
+@registrar(TIPO_EVALUAR)
+def meta_rend_evaluar(tarea):
+    """Miniaturas de la muestra (de la copia, copiadas a R2) → fotogramas o imagen → Claude → gasto real → fila
+    `lista`. Cualquier fallo deja la fila en `error` con palabras y sin token, y el gasto de lo que Claude sí cobró
+    queda anotado (con `entregado=False` si no hubo resultado: en un proyecto que cobra no se le cobra al cliente).
+    Si la fila desapareció a mitad (desconectar Meta borra las evaluaciones), el gasto ya pagado igual se anota."""
+    p = tarea["payload"]
+    cliente, eid = p["cliente"], int(p["evaluacion_id"])
+    job_id = tarea.get("job_id") or job_id_evaluar(cliente)
+    referencia = f"meta_eval:{eid}{ref_sufijo(tarea)}"
+    entrada = salida = 0
+    usd = 0.0
+    claude_anotado = False
+    temporales = []
+    ya_no_existe = gettext("Esa evaluación ya no existe.")
+    try:
+        fila = datos.evaluacion(cliente, eid)
+        if fila is None or not datos.actualizar_evaluacion(eid, estado="analizando", tarea_id=tarea.get("id"),
+                                                           error=None):
+            return ya_no_existe
+        elegidos = list(fila["muestra"] or [])
+        trabajos.reportar(job_id, etapa=idiomas.N_("Buscando miniaturas"),
+                          detalle=gettext("%(n)s anuncio(s)", n=len(elegidos)))
+        medios = analisis.medios(cliente, elegidos)
+        creatv = tw_datos.piezas_creatv(cliente, [a["ad_id"] for a in elegidos])
+        tw_analisis.con_piezas_creatv(elegidos, medios, creatv)
+        medios = tw_analisis.copiar_miniaturas(cliente, eid, elegidos, medios, carpeta=analisis.CARPETA_R2)
+        trabajos.reportar(job_id, etapa=idiomas.N_("Sacando fotogramas"))
+        bloques, temporales = tw_analisis.visuales(cliente, elegidos, medios, creatv)
+        trabajos.reportar(job_id, etapa=idiomas.N_("Analizando con Claude"))
+        texto, imagenes = analisis.armar(cliente, fila, medios, bloques)
+        resultado, entrada, salida = analisis.analizar(texto, imagenes, idiomas.de_proyecto(cliente), elegidos,
+                                                       fila["recomendaciones"] or [])
+        # El gasto de Claude se anota UNA vez, antes de la última escritura: si esa falla, el except no lo repite.
+        usd = costo_real(entrada, salida)
+        gastos.registrar_seguro(cliente, "evaluacion", usd, referencia, proveedor="anthropic",
+                                detalle=gettext("%(n)s anuncio(s) de Meta", n=len(elegidos)))
+        claude_anotado = True
+        for a in elegidos:
+            if medios.get(a["ad_id"]):
+                a["medio"] = medios[a["ad_id"]]
+            if a["ad_id"] in bloques:
+                a["visual"] = bloques[a["ad_id"]]["clase"]
+        if not datos.actualizar_evaluacion(eid, estado="lista", resultado=resultado, usd=usd, muestra=elegidos,
+                                           error=None):
+            return ya_no_existe
+    except Exception as e:
+        if not claude_anotado:
+            # Los tokens vienen de la excepción (AnalisisInvalido) o, si Claude sí contestó y falló el precio, de aquí.
+            entrada = int(getattr(e, "tokens_entrada", entrada) or 0)
+            salida = int(getattr(e, "tokens_salida", salida) or 0)
+            try:
+                usd = costo_real(entrada, salida) if (entrada or salida) else 0.0
+            except Exception:  # noqa: BLE001 — sin precio no se inventa uno; el error de la fila sigue en palabras
+                log.exception("sin precio para los tokens de la evaluación de Meta %s", eid)
+                usd = 0.0
+            if usd:     # pagado y sin entregar: en un proyecto que cobra no se le cobra (skill `cobros`)
+                gastos.registrar_seguro(cliente, "evaluacion", usd, referencia, proveedor="anthropic",
+                                        detalle=gettext("sin resultado usable"), entregado=False)
+        mensaje = cola.recortar(cola.sin_token(analisis.texto_error(e)), 500)
+        try:
+            datos.actualizar_evaluacion(eid, estado="error", error=mensaje, usd=usd)
+        except Exception as e_fila:  # noqa: BLE001 — la tarea igual termina en error con su mensaje
+            log.warning("la evaluación de Meta %s no se pudo dejar en error: %s", eid, type(e_fila).__name__)
+        # `from None`: el traceback del worker no arrastra la excepción original (su texto podría traer un token).
+        raise RuntimeError(mensaje) from None
+    finally:
+        tw_analisis.borrar_temporales(temporales)
+    return gettext("Evaluación lista: %(pasos)s paso(s) en el plan y %(ideas)s idea(s) de anuncios nuevos.",
+                   pasos=len(resultado["plan"]), ideas=len(resultado["ideas"]))
+
+
+@al_interrumpir(TIPO_EVALUAR)
+def _evaluar_interrumpida(tarea, mensaje):
+    """Un reinicio (o el respaldo sin saldo del worker) mató la evaluación: la fila no se queda «analizando»."""
+    p = tarea.get("payload") or {}
+    if not (p.get("cliente") and p.get("evaluacion_id")):
+        return
+    fila = datos.evaluacion(p["cliente"], int(p["evaluacion_id"]))
+    if fila and fila["estado"] in ("en_cola", "analizando"):
+        datos.actualizar_evaluacion(fila["id"], estado="error", error=cola.recortar(cola.sin_token(str(mensaje)), 500))

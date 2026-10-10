@@ -15,6 +15,15 @@ cada POST además exige el mismo origen (Sec-Fetch-Site), la barrera CSRF del re
   admin espera 30 minutos desde la última copia (de esa cuenta o, sin `act`, de cualquiera del proyecto): el límite de
   Meta es por usuario y app, lo comparten todos los proyectos que usan el mismo token y un clic repetido lo agotaría
   (ruling R22, revisión final 2026-10-08). El admin no espera.
+- `evaluar` (spec E2 §8): «Evaluar con IA», que COBRA. Cualquier persona del proyecto la puede pedir (paga su saldo,
+  como en Triple Whale). Arma la muestra y los DATOS con el alcance pedido (`dias`, `cuenta`, como el panel), calcula
+  el precio con `gastos.estimar("evaluacion_meta", n=)` y, si el formulario dice cuántos anuncios vio (`n`) y ya no
+  son esos, no cobra y lo dice con el precio nuevo; pide saldo ANTES de crear la fila (`libro.exigir`) y la encola con
+  `costo_estimado` (reserva). `SaldoInsuficiente` la responde el manejador único de dashboard (402 a un fetch, aviso a
+  un formulario). Una viva por proyecto (`<cliente>__meta_eval`).
+- `evaluacion/<id>` (GET): el fragmento de una evaluación (404 si es de otro proyecto).
+- `evaluacion/<id>/idea/<i>/crear`: «Llevar a Crear» de una idea: deja el prefill con el origen «meta:<id>:<i>» y
+  no genera nada (generar sigue siendo el botón de Crear con su precio).
 
 AISLAMIENTO (ruling R20, revisión final 2026-10-08): elegir cuentas (GET y POST) y cambiar el país son SOLO del admin
 (403 al resto). El token de un proyecto puede ver cuentas de otros clientes, y quien las elige las lee: por eso lo
@@ -32,13 +41,15 @@ from flask_babel import gettext, ngettext
 
 import cola
 import db
+import gastos
 import idiomas
 import meta_conexion
 import usuarios
+from cobros import libro
 from idiomas import N_
-from meta_rendimiento import cuentas, grafico, panel, pausa
+from meta_rendimiento import analisis, cuentas, datos, grafico, panel, pausa
 from tareas import meta_rendimiento as tareas_mr
-from triple_whale import paises
+from triple_whale import paises, puente
 
 bp = Blueprint("meta_rendimiento", __name__, url_prefix="/cliente/<cliente>/meta-rendimiento")
 
@@ -48,6 +59,7 @@ ESTADOS_CUENTA = {1: N_("Activa"), 2: N_("Desactivada"), 3: N_("Con pagos pendie
                   101: N_("Cerrada")}
 OTRO_ESTADO = N_("Otro estado")
 ESPERA_ACTUALIZAR = timedelta(minutes=30)      # entre dos «Actualizar ahora» de quien no es admin (ruling R22)
+ID_MAX = 2 ** 63 - 1     # el mayor entero de SQLite: un id más grande es 404, no un OverflowError (como Triple Whale)
 
 
 @bp.before_request
@@ -315,3 +327,80 @@ def sincronizar(cliente):
     else:
         flash(gettext("Ya se están trayendo las métricas de Meta."), "warn")
     return _volver(cliente)
+
+
+# ------------------------------------------------------------- evaluar con IA ---
+
+def _entero(valor):
+    try:
+        return int(str(valor).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+@bp.post("/evaluar")
+def evaluar(cliente):
+    if not _token(cliente):
+        flash(gettext("Meta no está conectado en este proyecto."), "error")
+        return _volver(cliente)
+    if tareas_mr.evaluacion_en_curso(cliente):
+        flash(gettext("Ya hay una evaluación con IA en curso."), "warn")
+        return _volver(cliente)
+    prep = analisis.preparar(cliente, request.form.get("dias"), request.form.get("cuenta"))
+    if prep is None:
+        flash(gettext("Elige primero qué cuentas publicitarias quieres ver."), "warn")
+        return _volver(cliente)
+    n = len(prep["muestra"])
+    if not n:
+        flash(gettext("Todavía no hay anuncios con datos suficientes para evaluar con IA."), "error")
+        return _volver(cliente)
+    precio = gastos.estimar("evaluacion_meta", n=n)
+    visto = request.form.get("n")
+    if visto is not None and _entero(visto) != n:
+        # Primero el precio, después el cobro: si la copia cambió la muestra desde que la persona vio el botón, el
+        # precio es otro y no se cobra uno que no vio.
+        flash(gettext("La muestra cambió desde que abriste la pestaña: ahora son %(n)s anuncio(s) por %(precio)s. "
+                      "Revisa y vuelve a confirmar.", n=n, precio=precio["texto"]), "warn")
+        return _volver(cliente)
+    usd = precio["usd"]
+    # Cobros: sin saldo no se crea la fila (el manejador único responde); la reserva la hace el encolado.
+    libro.exigir(cliente, usd)
+    eid = datos.crear_evaluacion(cliente, prep["cuentas"], prep["desde"], prep["hasta"], prep["moneda"],
+                                 prep["muestra"], prep["recomendaciones"], pedido_por=session.get("usuario"),
+                                 extra=prep["extra"])
+    try:
+        encolada = tareas_mr.encolar_evaluacion(cliente, eid, costo_estimado=usd)
+    except Exception:          # SaldoInsuficiente incluida: la fila se borra y la excepción sigue su camino
+        datos.borrar_evaluacion(cliente, eid)
+        raise
+    if not encolada:
+        datos.borrar_evaluacion(cliente, eid)
+        flash(gettext("Ya hay una evaluación con IA en curso."), "warn")
+        return _volver(cliente)
+    flash(gettext("Evaluando %(n)s anuncio(s) con IA…", n=n), "ok")
+    return _volver(cliente)
+
+
+@bp.get(f"/evaluacion/<int(max={ID_MAX}):eid>")
+def ver_evaluacion(cliente, eid):
+    fila = datos.evaluacion(cliente, eid)
+    if not fila:
+        abort(404)
+    return render_template("_meta_evaluacion.html", cliente=cliente, ev=fila)
+
+
+@bp.post(f"/evaluacion/<int(max={ID_MAX}):eid>/idea/<int(max=1000):indice>/crear")
+def idea_crear(cliente, eid, indice):
+    fila = datos.evaluacion(cliente, eid)
+    if not fila or fila["estado"] != "lista":
+        abort(404)
+    ideas = (fila["resultado"] or {}).get("ideas") or []
+    if not 0 <= indice < len(ideas):
+        abort(404)
+    try:
+        session["fp_prefill"] = puente.prefill_crear(cliente, ideas[indice], origen=analisis.origen(eid, indice))
+    except puente.PuenteError as e:
+        flash(str(e), "error")
+        return _volver(cliente)
+    flash(gettext("Idea cargada en Crear: ajusta lo que quieras y genera."), "ok")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
