@@ -430,3 +430,161 @@ def test_el_saldo_muestra_aparte_el_propio_y_el_del_plan(base, pagina, pro, fals
     texto = _texto(pagina().get("/cliente/acme/saldo/panel").get_data(as_text=True))
     assert "Saldo propio US$ 50,00" in texto and "Saldo del plan US$ 1.000,00" in texto
     assert "Lo que no uses vence el" in texto and "Saldo del plan del mes" in texto   # el movimiento, con nombre
+
+
+# --- revisión 1 (2026-10-10) ---------------------------------------------------------------
+
+def _flashes(c):
+    with c.session_transaction() as s:
+        return [m for _cat, m in s.get("_flashes", [])]
+
+
+def test_morosa_el_cambio_de_tarjeta_dice_que_cobra_ahora(base, pagina, pro, falso, avisos):
+    import db
+    _suscrito(pro)
+    normal = _texto(pagina().get("/cliente/acme/plan/tarjeta").get_data(as_text=True))
+    assert "cobramos ahora" not in normal and "El nuevo medio se usa desde el próximo cobro" in normal
+    with db.conectar() as con:
+        con.execute(db.suscripcion.update().values(estado="morosa", intentos_fallidos=1,
+                                                   proximo_cobro="2099-01-01T10:00:00"))
+    texto = _texto(pagina().get("/cliente/acme/plan/tarjeta").get_data(as_text=True))
+    assert "Actualizar tarjeta y pagar el plan" in texto
+    assert ("Al guardar, cobramos ahora US$ 1.000 (en pesos a la TRM del día) para recuperar tu plan." in texto)
+    assert "El nuevo medio se usa desde el próximo cobro" not in texto
+    # el rechazo de ese cobro vuelve con lo que dijo Wompi
+    falso.defecto = "DECLINED"
+    c = pagina()
+    c.post("/cliente/acme/plan/tarjeta", data=_form_alta(pro, token="tok_test_90_Mor"))
+    assert any("Wompi no aprobó el pago" in m for m in _flashes(c))
+
+
+def test_morosa_el_rechazo_trae_el_motivo(base, pagina, pro, falso, avisos, monkeypatch):
+    import db
+    from cobros import planes
+    _suscrito(pro)
+    with db.conectar() as con:
+        con.execute(db.suscripcion.update().values(estado="morosa", intentos_fallidos=1,
+                                                   proximo_cobro="2099-01-01T10:00:00"))
+    real = falso.cobrar_fuente
+
+    def rechaza(*a, **k):
+        tx = real(*a, **k)
+        tx["status"], tx["status_message"] = "DECLINED", "Fondos insuficientes"
+        falso.txs[tx["id"]] = dict(tx)
+        return tx
+    from cobros import wompi
+    monkeypatch.setattr(wompi, "cobrar_fuente", rechaza)
+    c = pagina()
+    c.post("/cliente/acme/plan/tarjeta", data=_form_alta(pro, token="tok_test_91_Mor"))
+    assert any("Fondos insuficientes" in m for m in _flashes(c)), _flashes(c)
+    assert planes.suscripcion("acme")["estado"] == "morosa"
+
+
+def test_sin_cobrar_no_se_suscribe_ni_el_admin(base, pagina, pro, falso, avisos):
+    from cobros import planes
+    admin = pagina("admin", "admin", None)
+    panel = admin.get("/cliente/acme/plan/panel").get_data(as_text=True)
+    assert "Suscribirme" not in panel and "Este proyecto todavía no cobra" in panel
+    r = admin.get(f"/cliente/acme/plan/alta?plan={pro}")
+    assert r.status_code == 302 and r.headers["Location"].endswith("#config-ap-plan")
+    admin.post("/cliente/acme/plan/alta", data=_form_alta(pro))
+    assert falso.fuentes == [] and planes.suscripcion("acme") is None
+    assert any("Este proyecto todavía no cobra" in m for m in _flashes(admin))
+
+
+def test_si_wompi_no_responde_lo_dice_distinto_de_confirmando(base, pagina, pro, falso, avisos):
+    from cobros import wompi
+    _cobra()
+    falso.error = (wompi.ErrorWompi("caída", caida=True), False)
+    c = pagina()
+    c.post("/cliente/acme/plan/alta", data=_form_alta(pro))
+    assert any("Wompi no respondió; lo intentamos de nuevo en unos minutos." in m for m in _flashes(c))
+    assert not any("Wompi está confirmando" in m for m in _flashes(c))
+
+
+def test_el_saldo_propio_nunca_se_pinta_negativo(base, pagina, pro, falso, avisos):
+    import db
+    from cobros import libro
+    _suscrito(pro)
+    with db.conectar() as con:
+        libro.acreditar(con, "acme", "ajuste", -300_000, "ajuste", usuario="admin", detalle="corrección")
+    html = pagina().get("/cliente/acme").get_data(as_text=True)
+    assert "Saldo: US$ 0,00 · Plan: US$ 1.000,00 restantes" in html
+    texto = _texto(pagina().get("/cliente/acme/saldo/panel").get_data(as_text=True))
+    assert "Saldo propio US$ 0,00" in texto and "-US$" not in texto
+
+
+def test_la_bolsa_reusa_el_periodo_memorizado(base, pro, falso, avisos, monkeypatch):
+    import dashboard
+    from cobros import planes, vista
+    _suscrito(pro)
+    leidas = []
+    real = planes._leer_periodo_nuevo
+    monkeypatch.setattr(planes, "_leer_periodo_nuevo", lambda c: leidas.append(c) or real(c))
+    with dashboard.app.test_request_context("/cliente/acme"):
+        planes.periodo_abierto("acme")
+        assert vista.bolsa("acme")["restante"] == 1_000_000
+    assert leidas == ["acme"]
+
+
+def test_las_casillas_son_una_frase_con_el_enlace_adentro(base, pagina, pro, falso):
+    import dashboard
+    import idiomas
+    from flask_babel import gettext
+    _cobra()
+    html = pagina().get(f"/cliente/acme/plan/alta?plan={pro}").get_data(as_text=True)
+    assert ('Autorizo a Wompi el <a href="https://wompi.com/datos.pdf" target="_blank" rel="noopener noreferrer">'
+            'tratamiento de mis datos personales</a>.') in html
+    assert 'Acepto los <a href="https://wompi.co/terminos.pdf"' in html and "&lt;a" not in html
+    with dashboard.app.test_request_context("/"), idiomas.en_idioma("en"):
+        assert gettext("Autorizo a Wompi el %(enlace)s.", enlace="X") == "I authorize Wompi's X."
+        assert gettext("tratamiento de mis datos personales") == "processing of my personal data"
+
+
+def test_el_formulario_solo_recibe_id_nombre_y_precios_del_plan(base, pagina, pro, falso):
+    import dashboard
+    from flask import template_rendered
+    _cobra()
+    vistos = []
+
+    def anotar(sender, template, context, **extra):
+        if template.name == "plan_alta.html":
+            vistos.append(context["plan"])
+    template_rendered.connect(anotar, dashboard.app)
+    try:
+        pagina().get(f"/cliente/acme/plan/alta?plan={pro}")
+    finally:
+        template_rendered.disconnect(anotar, dashboard.app)
+    assert vistos and set(vistos[0]) == {"id", "nombre", "precio_usd", "precio_anual_usd"}
+
+
+def test_los_contratos_de_wompi_se_reusan_10_minutos(base, monkeypatch):
+    from cobros import wompi
+    pedidos = []
+    datos = {"acceptance_token": "eyJ.a", "acceptance_url": "https://wompi.co/t.pdf",
+             "personal_token": "eyJ.b", "personal_url": "https://wompi.com/d.pdf"}
+
+    def pedir(tiempo=None):
+        pedidos.append(1)
+        if len(pedidos) > 1:
+            raise wompi.ErrorWompi("caída", caida=True)
+        return dict(datos)
+    monkeypatch.setattr(wompi, "aceptaciones", pedir)
+    assert wompi.aceptaciones_recientes(ahora=1000) == datos
+    assert wompi.aceptaciones_recientes(ahora=1000 + 599) == datos and len(pedidos) == 1     # fresco: sin pedir
+    assert wompi.aceptaciones_recientes(ahora=1000 + 1200) == datos and len(pedidos) == 2    # Wompi falla: lo guardado
+    with pytest.raises(wompi.ErrorWompi):
+        wompi.aceptaciones_recientes(ahora=1000 + 46 * 60)                                  # ya no sirve
+
+
+def test_con_tope_cero_no_se_promete_ia_incluida(base, pagina, falso, avisos):
+    from cobros import planes
+    sin_ia = planes.crear_plan("Básico", 300, 1.5, 0, usuario="admin")
+    _cobra()
+    texto = _texto(_panel(pagina))
+    assert "Básico" in texto and "con IA incluidos" not in texto
+    import db
+    planes.suscribir("acme", sin_ia, "mensual", "CARD", "tok_test_1_prueba", "pagos@acme.co", dict(ACEPTACION),
+                     "user_acme", 300, ahora=db.ahora())
+    texto = _texto(_panel(pagina))
+    assert "Plan Básico" in texto and "IA incluida" not in texto

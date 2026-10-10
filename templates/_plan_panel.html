@@ -20,11 +20,13 @@
     <ul class="plan-beneficios">
       <li>{{ _('%(precio)s de saldo del plan cada mes para generar.', precio=p.precio) }}</li>
       {% if p.descuento_pct %}<li>{{ _('Precio de miembro: tus generaciones cuestan %(pct)s %% menos que a la carta.', pct=p.descuento_pct) }}</li>{% endif %}
-      <li>{{ _('Ideas, guiones, análisis y revisiones con IA incluidos.') }}</li>
+      {% if p.incluye_ia %}<li>{{ _('Ideas, guiones, análisis y revisiones con IA incluidos.') }}</li>{% endif %}
       <li>{{ _('Prioridad en la cola.') }}</li>
       <li>{{ _('El saldo del plan se renueva cada mes y no se acumula.') }}</li>
     </ul>
-    {% if v.wompi_listo %}
+    {% if not v.cobra %}
+    <p class="vacio">{{ _('Este proyecto todavía no cobra: prende «Cobrar» en el panel de cobros antes de suscribirlo a un plan.') }}</p>
+    {% elif v.wompi_listo %}
     <a class="btn-generar plan-suscribirme" href="{{ url_for('cobros.plan_alta', cliente=cliente, plan=p.id) }}">{{ _('Suscribirme') }}</a>
     {% else %}
     <p class="vacio">{{ _('Los pagos con tarjeta no están disponibles ahora; escríbenos para activar tu plan') }}</p>

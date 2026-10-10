@@ -316,6 +316,21 @@ def _exigir_plan(cliente):
         abort(404)
 
 
+def _sin_cobrar(cliente):
+    """Suscribirse solo en un proyecto que cobra, también si lo pide el admin
+    (mirar el apartado sí puede): sin «Cobrar», la bolsa del plan no se usaría
+    y el plan se pagaría en vano. Devuelve la respuesta de vuelta, o None."""
+    try:
+        cobra = vista.cobra(cliente)
+    except Exception:  # noqa: BLE001 — ante la duda, no se suscribe
+        cobra = False
+    if cobra:
+        return None
+    flash(gettext("Este proyecto todavía no cobra: prende «Cobrar» en el panel de cobros antes de suscribirlo a "
+                  "un plan."), "error")
+    return _volver_plan(cliente)
+
+
 @bp.get("/cliente/<cliente>/plan/panel")
 def plan_panel(cliente):
     """El fragmento de Configuración › Plan que pide static/planes.js al abrir
@@ -343,18 +358,22 @@ def _correo_sugerido(sus=None):
 
 def _formulario(cliente, modo, plan_, ciclo, precio_usd, sus=None):
     """plan_alta.html: el alta (`modo="alta"`) o el cambio de tarjeta
-    (`"tarjeta"`). Los contratos de Wompi se piden al pintar (sus tokens duran
-    ≈1 h) con espera corta; sin Wompi, el aviso y ningún formulario."""
+    (`"tarjeta"`; con la suscripción morosa, guardar COBRA en el acto y la
+    página lo dice). Los contratos de Wompi salen de `wompi.aceptaciones_recientes`
+    (caché de 10 min en kv, espera corta); sin Wompi, el aviso y ningún
+    formulario. Del plan solo pasan id, nombre y precios."""
     llave = wompi.llave_publica()
     aceptaciones, problema = None, None
     if llave is None:
         problema = gettext("Los pagos con tarjeta no están disponibles ahora; escríbenos para activar tu plan")
     else:
         try:
-            aceptaciones = wompi.aceptaciones(tiempo=wompi.TIEMPO_INTERACTIVO)
+            aceptaciones = wompi.aceptaciones_recientes()
         except wompi.ErrorWompi:
             problema = gettext("Wompi no responde en este momento. Intenta de nuevo en unos minutos.")
+    plan_ = ({k: plan_.get(k) for k in ("id", "nombre", "precio_usd", "precio_anual_usd")} if plan_ else None)
     return render_template("plan_alta.html", cliente=cliente, modo=modo, plan=plan_, ciclo=ciclo,
+                           morosa=bool(sus and sus.get("estado") == "morosa"),
                            precio_usd=precio_usd, precio_texto=vista.usd_entero(precio_usd) if precio_usd else None,
                            mensual_texto=vista.usd_entero(plan_["precio_usd"]) if plan_ else None,
                            anual_texto=(vista.usd_entero(plan_["precio_anual_usd"])
@@ -370,6 +389,9 @@ def plan_alta(cliente):
     el precio del ciclo, el correo de cobro, las tres casillas y el medio de
     pago (el widget de Wompi para tarjeta, o Nequi)."""
     _exigir_plan(cliente)
+    fuera = _sin_cobrar(cliente)
+    if fuera is not None:
+        return fuera
     plan_ = planes.leer_plan(request.args.get("plan"))
     if plan_ is None or not plan_["activo"]:
         flash(gettext("Ese plan no está disponible"), "error")
@@ -499,6 +521,9 @@ def _tras_cobro(cliente, estado, motivo, volver):
             flash(gettext("Wompi no aprobó el pago. No se activó el cobro; puedes intentar con otro medio de pago."),
                   "error")
         return volver
+    if estado == "caida":
+        flash(gettext("Wompi no respondió; lo intentamos de nuevo en unos minutos."), "warn")
+        return _volver_plan(cliente)
     flash(gettext("Wompi está confirmando el pago. Te avisamos apenas llegue; mientras tanto puedes seguir usando "
                   "la app."), "warn")
     return _volver_plan(cliente)
@@ -511,6 +536,9 @@ def plan_suscribir(cliente):
     enteros); `planes.suscribir` se niega sin hablar con Wompi si falta algo o
     si el precio cambió, crea la fuente y cobra el primer periodo."""
     _exigir_plan(cliente)
+    fuera = _sin_cobrar(cliente)
+    if fuera is not None:
+        return fuera
     plan_id, ciclo = request.form.get("plan_id"), request.form.get("ciclo") or "mensual"
     volver = redirect(url_for("cobros.plan_alta", cliente=cliente, plan=plan_id, ciclo=ciclo))
     pedido = _pedido_de_medio(cliente, volver)
@@ -548,7 +576,8 @@ def plan_cambiar_tarjeta(cliente):
     if r.get("cobro") is None:
         flash(gettext("Listo: guardamos tu nuevo medio de pago para los próximos cobros del plan."), "ok")
         return _volver_plan(cliente)
-    return _tras_cobro(cliente, r["cobro"], None, volver)
+    motivo = vista.motivo_ultimo_pago(cliente) if r["cobro"] in ("rechazado", "error") else None
+    return _tras_cobro(cliente, r["cobro"], motivo, volver)
 
 
 @bp.post("/cliente/<cliente>/plan/cancelar")

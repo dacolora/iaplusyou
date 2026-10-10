@@ -477,8 +477,24 @@ def tono(e):
 
 def bolsa(cliente):
     """La bolsa del periodo de plan abierto ({credito, gastado, restante, fin…})
-    o None, una vez por petición. Solo lee."""
-    return _memo(("bolsa", cliente), lambda: libro.bolsa_plan(cliente))
+    o None, una vez por petición. Solo lee. El periodo sale de la lectura
+    memorizada de `planes.periodo_abierto(cliente)` (la misma de toda la
+    petición): sin periodo no hay ninguna consulta de más."""
+    def leer():
+        from cobros import planes  # noqa: PLC0415
+        periodo = planes.periodo_abierto(cliente)
+        if periodo is None:
+            return None
+        with db.conectar() as con:
+            return libro._bolsa(con, cliente, periodo)
+    return _memo(("bolsa", cliente), leer)
+
+
+def saldo_propio(saldo, b):
+    """Lo que se muestra como «saldo propio»: saldo − lo que queda de la bolsa,
+    nunca menos de 0 (un saldo entero por debajo de la bolsa —una anulación, un
+    ajuste— no se pinta como una deuda propia: el tono del chip ya avisa)."""
+    return max(0, int(saldo) - int(b["restante"])) if b else int(saldo)
 
 
 def bolsa_o_none(cliente):
@@ -503,7 +519,7 @@ def chip(cliente, es_admin):
     b = bolsa_o_none(cliente)
     if b is not None:
         texto = gettext("Saldo: %(saldo)s · Plan: %(plan)s restantes · Recargar",
-                        saldo=gastos.formatear((e["saldo"] - b["restante"]) / 1000),
+                        saldo=gastos.formatear(saldo_propio(e["saldo"], b) / 1000),
                         plan=gastos.formatear(b["restante"] / 1000))
     else:
         texto = gettext("Saldo: %(saldo)s · Recargar", saldo=gastos.formatear(e["saldo"] / 1000))
@@ -642,6 +658,17 @@ def fecha_larga(valor):
         return None
 
 
+def motivo_ultimo_pago(cliente):
+    """El motivo del último pago de plan con Wompi de `cliente` (lo que dijo
+    Wompi de un rechazo), limpio, o None. Solo lee."""
+    pp = db.pago_plan
+    with db.conectar() as con:
+        f = con.execute(sa.select(pp.c.motivo).where(pp.c.cliente == cliente, pp.c.medio == "wompi")
+                        .order_by(pp.c.id.desc()).limit(1)).first()
+    from cobros import planes  # noqa: PLC0415
+    return _limpio(f.motivo) if f is not None and f.motivo != planes.MOTIVO_NO_SALIO else None
+
+
 def margen_carta(cliente):
     """El margen a la carta del proyecto (el propio o el global), o None si no se pudo leer (entonces la
     pantalla no dice cuánto menos cuesta ser miembro: nunca una cifra inventada)."""
@@ -719,7 +746,8 @@ def oferta(planes_activos, carta):
         out.append({"id": p["id"], "nombre": p["nombre"], "precio": usd_entero(p["precio_usd"]),
                     "precio_usd": int(p["precio_usd"]),
                     "anual": usd_entero(p["precio_anual_usd"]) if p.get("precio_anual_usd") else None,
-                    "meses_gratis": meses_gratis(p), "descuento_pct": descuento_miembro(p["margen"], carta)})
+                    "meses_gratis": meses_gratis(p), "descuento_pct": descuento_miembro(p["margen"], carta),
+                    "incluye_ia": float(p.get("tope_incluido_usd") or 0) > 0})
     return out
 
 
@@ -734,7 +762,11 @@ def plan_para_cliente(cliente):
     carta = margen_carta(cliente)
     situacion = _situacion(e)
     sus, plan_ = e["suscripcion"], e["plan"]
-    vista_ = {"situacion": situacion, "wompi_listo": wompi.configurado(), "planes": [], "plan": None,
+    try:
+        cobra_ = cobra(cliente)
+    except Exception:  # noqa: BLE001 — ante la duda, no se ofrece suscribirse
+        cobra_ = False
+    vista_ = {"situacion": situacion, "wompi_listo": wompi.configurado(), "cobra": cobra_, "planes": [], "plan": None,
               "bolsa": None, "incluido_pct": None, "ahorro": None, "pagos": [], "pago_pendiente_id": None}
     if sus is None:
         vista_["planes"] = oferta(planes.listar(), carta)
@@ -752,7 +784,8 @@ def plan_para_cliente(cliente):
         "puede_cancelar": sus["estado"] in ("activa", "morosa"),
         "reintento_el": fecha_larga(e.get("reintento_el")),
         "intentos_restantes": e.get("intentos_restantes"),
-        "incluido_pct": e.get("incluido_pct"),
+        # Con tope 0 el plan no incluye IA: ni barra ni promesa (el tope en dólares nunca sale de aquí).
+        "incluido_pct": e.get("incluido_pct") if e["periodo"] and e["periodo"]["tope_incluido_usd"] > 0 else None,
         "ahorro": gastos.formatear(e["ahorro_milesimas"] / 1000) if e.get("ahorro_milesimas") else None,
         "pagos": [_pago_visible(p) for p in e["pagos"]],
         "pago_pendiente_id": pendientes[0]["id"] if pendientes else None,

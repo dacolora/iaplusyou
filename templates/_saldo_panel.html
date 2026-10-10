@@ -6,7 +6,7 @@
    de menos de 26 h), estados_recarga, pasarela (pasarela.para_recargas():
    "wompi", "bold" o None), min_usd, max_usd, bolsa (planes 6/8:
    vista.bolsa_o_none, la bolsa del periodo de plan abierto o None; con ella el
-   saldo se muestra partido en «Saldo propio» = saldo − restante y «Saldo del
+   saldo se muestra partido en «Saldo propio» = max(0, saldo − restante) y «Saldo del
    plan» = restante). #}
 {% macro filas_movimientos(filas) %}
 {% for f in filas %}
@@ -25,7 +25,7 @@
 <div class="tb-tiles saldo-tiles">
   <div class="kpi-tile saldo-tile saldo-{{ tono }}">
     <span>{% if bolsa %}{{ _('Saldo propio') }}{% else %}{{ _('Saldo') }}{% endif %}</span>
-    <strong>{{ (((e.saldo - bolsa.restante) if bolsa else e.saldo) / 1000) | usd }}</strong>
+    <strong>{{ ((([e.saldo - bolsa.restante, 0] | max) if bolsa else e.saldo) / 1000) | usd }}</strong>
     <small>
       {% if tono == 'bloqueo' %}{{ _('Sin saldo: recarga para seguir generando.') }}
       {% elif tono == 'aviso' %}{{ _('Saldo bajo: te queda menos de %(umbral)s.', umbral=((e.umbral / 1000) | usd)) }}

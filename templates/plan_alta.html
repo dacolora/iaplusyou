@@ -13,7 +13,7 @@
    del widget hasta marcar las tres casillas (el servidor las exige igual) y
    lleva el camino de Nequi. #}
 {% extends "base.html" %}
-{% block title %}{% if modo == 'alta' %}{{ _('Suscribirme al plan') }}{% else %}{{ _('Cambiar medio de pago') }}{% endif %}{% endblock %}
+{% block title %}{% if modo == 'alta' %}{{ _('Suscribirme al plan') }}{% elif morosa %}{{ _('Actualizar tarjeta y pagar el plan') }}{% else %}{{ _('Cambiar medio de pago') }}{% endif %}{% endblock %}
 {% block content %}
 {% set volver = url_for('ver_cliente', cliente=cliente) ~ '#config-ap-plan' %}
 <div class="plan-alta" id="plan-alta"
@@ -27,6 +27,10 @@
       {% if modo == 'alta' %}
       <h2>{{ _('Plan %(nombre)s', nombre=plan.nombre) }}</h2>
       <p class="panel-cabecera-desc">{% if ciclo == 'anual' %}{{ _('%(precio)s al año, en pesos colombianos a la TRM del día.', precio=precio_texto) }}{% else %}{{ _('%(precio)s al mes, en pesos colombianos a la TRM del día.', precio=precio_texto) }}{% endif %}</p>
+      {% elif morosa %}
+      {# Morosa: guardar el medio nuevo cobra en el acto (planes.cambiar_fuente fuerza el cobro). #}
+      <h2>{{ _('Actualizar tarjeta y pagar el plan') }}</h2>
+      <p class="panel-cabecera-desc plan-cobro-ahora"><strong>{{ _('Al guardar, cobramos ahora %(monto)s (en pesos a la TRM del día) para recuperar tu plan.', monto=precio_texto) }}</strong></p>
       {% else %}
       <h2>{{ _('Cambiar medio de pago') }}</h2>
       <p class="panel-cabecera-desc">{% if tarjeta %}{{ _('Ahora pagas con %(tarjeta)s. El nuevo medio se usa desde el próximo cobro del plan.', tarjeta=tarjeta) }}{% else %}{{ _('El nuevo medio se usa desde el próximo cobro del plan.') }}{% endif %}</p>
@@ -61,10 +65,14 @@
 
     <fieldset class="plan-casillas">
       <legend>{{ _('Antes de pagar') }}</legend>
+      {# Una frase por casilla con el enlace como variable (un `{% set %}` de bloque es Markup y no se escapa): así
+         el inglés puede ordenar la frase a su modo. #}
+      {% set enlace_terminos %}<a href="{{ aceptaciones.acceptance_url }}" target="_blank" rel="noopener noreferrer">{{ _('términos y condiciones de Wompi') }}</a>{% endset %}
+      {% set enlace_datos %}<a href="{{ aceptaciones.personal_url }}" target="_blank" rel="noopener noreferrer">{{ _('tratamiento de mis datos personales') }}</a>{% endset %}
       <label><input type="checkbox" name="acepta_terminos" value="1" required data-plan-casilla>
-        <span>{{ _('Acepto los') }} <a href="{{ aceptaciones.acceptance_url }}" target="_blank" rel="noopener noreferrer">{{ _('términos y condiciones de Wompi') }}</a>.</span></label>
+        <span>{{ _('Acepto los %(enlace)s.', enlace=enlace_terminos) }}</span></label>
       <label><input type="checkbox" name="acepta_datos" value="1" required data-plan-casilla>
-        <span>{{ _('Autorizo a Wompi el') }} <a href="{{ aceptaciones.personal_url }}" target="_blank" rel="noopener noreferrer">{{ _('tratamiento de mis datos personales') }}</a>.</span></label>
+        <span>{{ _('Autorizo a Wompi el %(enlace)s.', enlace=enlace_datos) }}</span></label>
       <label><input type="checkbox" name="autoriza_cobro" value="1" required data-plan-casilla>
         <span>{% if ciclo == 'anual' %}{{ _('Autorizo el cobro automático de %(monto)s cada año (en pesos colombianos a la TRM del día) hasta que cancele. El saldo del plan se renueva cada mes y no se acumula.', monto=precio_texto) }}{% else %}{{ _('Autorizo el cobro automático de %(monto)s cada mes (en pesos colombianos a la TRM del día) hasta que cancele. El saldo del plan se renueva cada mes y no se acumula.', monto=precio_texto) }}{% endif %}</span></label>
     </fieldset>

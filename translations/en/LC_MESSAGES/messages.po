@@ -2038,8 +2038,9 @@ msgstr "Unknown action."
 msgid "Acción desconocida: %(accion)s."
 msgstr "Unknown action: %(accion)s."
 
-msgid "Acepto los"
-msgstr "I accept the"
+#, python-format
+msgid "Acepto los %(enlace)s."
+msgstr "I accept the %(enlace)s."
 
 msgid "Acerca la imagen para poder moverla."
 msgstr "Zoom in on the image to be able to move it."
@@ -2140,6 +2141,9 @@ msgstr "Update metrics"
 
 msgid "Actualizar tarjeta"
 msgstr "Update card"
+
+msgid "Actualizar tarjeta y pagar el plan"
+msgstr "Update card and pay the plan"
 
 msgid "Adaptar con IA"
 msgstr "Adapt with AI"
@@ -2305,6 +2309,10 @@ msgstr "When connecting, choose that Page: its page token (<code>page_id</code>)
 #, python-format
 msgid "Al dataset le faltan claves: %(claves)s"
 msgstr "The dataset is missing keys: %(claves)s"
+
+#, python-format
+msgid "Al guardar, cobramos ahora %(monto)s (en pesos a la TRM del día) para recuperar tu plan."
+msgstr "When you save, we charge %(monto)s now (in Colombian pesos at the day's official exchange rate) to recover your plan."
 
 msgid "Al lanzar empieza a gastar."
 msgstr "Launching starts spending."
@@ -2913,8 +2921,9 @@ msgstr "Australia"
 msgid "Automático con IA (opcional)"
 msgstr "Automatic with AI (optional)"
 
-msgid "Autorizo a Wompi el"
-msgstr "I authorize Wompi to the"
+#, python-format
+msgid "Autorizo a Wompi el %(enlace)s."
+msgstr "I authorize Wompi's %(enlace)s."
 
 #, python-format
 msgid "Autorizo el cobro automático de %(monto)s cada año (en pesos colombianos a la TRM del día) hasta que cancele. El saldo del plan se renueva cada mes y no se acumula."
@@ -7748,6 +7757,9 @@ msgstr "This project has its own connection with Meta. Switching it to agency mo
 
 msgid "Este proyecto todavía no cobra: el saldo queda guardado para cuando prendas «Cobrar»."
 msgstr "This project does not charge usage yet: the balance stays saved for when you turn on “Charge usage”."
+
+msgid "Este proyecto todavía no cobra: prende «Cobrar» en el panel de cobros antes de suscribirlo a un plan."
+msgstr "This project does not charge usage yet: turn on “Charge usage” in the billing panel before subscribing it to a plan."
 
 msgid "Este proyecto usa la conexión de agencia de Creatv: no tienes que registrar una app ni conectar nada."
 msgstr "This project uses Creatv's agency connection: you don't have to register an app or connect anything."
@@ -17957,6 +17969,9 @@ msgstr "Wompi could not open the payment: %(motivo)s. Try again in a while."
 
 msgid "Wompi no responde en este momento. Intenta de nuevo en unos minutos."
 msgstr "Wompi is not responding right now. Try again in a few minutes."
+
+msgid "Wompi no respondió; lo intentamos de nuevo en unos minutos."
+msgstr "Wompi did not respond; we will try again in a few minutes."
 
 #, python-format
 msgid "Wompi rechazó el cobro de %(monto)s (%(motivo)s). Lo intentaremos otra vez el %(proximo)s. Si no se puede cobrar antes del %(limite)s, el plan termina. Puedes cambiar la tarjeta en Configuración › Plan. Mientras tanto, tus generaciones se cobran a la carta con tu saldo propio."

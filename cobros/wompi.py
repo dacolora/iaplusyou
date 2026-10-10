@@ -377,6 +377,55 @@ def aceptaciones(tiempo=TIEMPO):
     return salida
 
 
+CLAVE_ACEPTACIONES = "wompi:aceptaciones"   # kv: único escritor, `aceptaciones_recientes`
+FRESCAS = 600            # s: se reusan los contratos pedidos hace menos de 10 min
+VALIDAS = 45 * 60        # s: si Wompi no responde, sirven los de menos de 45 min (el token dura ≈1 h)
+
+
+def aceptaciones_recientes(tiempo=TIEMPO_INTERACTIVO, ahora=None):
+    """`aceptaciones()` con un caché en `kv` (planes 6/8): cada vista del
+    formulario de alta no le pregunta a Wompi; los tokens (públicos: van al
+    navegador) se reusan 10 min y, si Wompi falla, hasta 45 min. Lanza
+    `ErrorWompi` si no hay nada que sirva. Upsert de un statement; si guardar
+    falla, se devuelve lo leído igual."""
+    import json  # noqa: PLC0415
+    import time  # noqa: PLC0415
+
+    import sqlalchemy as sa  # noqa: PLC0415
+    from sqlalchemy.dialects.sqlite import insert as insert_sqlite  # noqa: PLC0415
+
+    import db  # noqa: PLC0415
+    ahora = time.time() if ahora is None else ahora
+    guardado = None
+    try:
+        with db.conectar() as con:
+            crudo = con.execute(sa.select(db.kv.c.valor).where(db.kv.c.clave == CLAVE_ACEPTACIONES)).scalar()
+        guardado = json.loads(crudo) if crudo else None
+        if not (isinstance(guardado, dict) and isinstance(guardado.get("datos"), dict)
+                and isinstance(guardado.get("t"), (int, float))):
+            guardado = None
+    except Exception:  # noqa: BLE001 — sin caché, se pide a Wompi
+        guardado = None
+    edad = ahora - guardado["t"] if guardado else None
+    if guardado and 0 <= edad < FRESCAS:
+        return guardado["datos"]
+    try:
+        datos = aceptaciones(tiempo=tiempo)
+    except ErrorWompi:
+        if guardado and 0 <= edad < VALIDAS:
+            return guardado["datos"]
+        raise
+    try:
+        with db.conectar() as con:
+            texto = json.dumps({"t": ahora, "datos": datos})
+            con.execute(insert_sqlite(db.kv).values(clave=CLAVE_ACEPTACIONES, valor=texto, actualizado_en=db.ahora())
+                        .on_conflict_do_update(index_elements=["clave"],
+                                               set_={"valor": texto, "actualizado_en": db.ahora()}))
+    except Exception:  # noqa: BLE001
+        pass
+    return datos
+
+
 # ------------------------------------------------------- transacciones ---
 
 def id_valido(transaccion_id):
