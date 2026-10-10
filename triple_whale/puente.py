@@ -30,16 +30,23 @@ class PuenteError(ValueError):
     """Algo que la persona tiene que saber (el mensaje se muestra tal cual)."""
 
 
-def prefill_crear(cliente, idea, evaluacion_id=None, indice=None, analisis_id=None):
+def prefill_crear(cliente, idea, evaluacion_id=None, indice=None, analisis_id=None, origen=None):
     """Lo que `_tab_creativeflowplus.html` lee de `fp_prefill`. `origen_tw` es «<evaluación>:<índice>» para una idea
-    de la evaluación de cuenta y «a<análisis>» para la versión mejorada de un anuncio (spec tarjetas §7.1)."""
+    de la evaluación de cuenta y «a<análisis>» para la versión mejorada de un anuncio (spec tarjetas §7.1).
+
+    `origen` es un origen de otra pestaña, ya armado y con su propio prefijo (Meta rendimiento: «meta:<id>:<i>»,
+    `meta_rendimiento.analisis.origen`). Va en la misma clave porque es el campo oculto que Crear devuelve tal cual;
+    `origen_desde_formulario` solo reconoce las formas de Triple Whale (solo dígitos o «a<dígitos>»), así que un
+    origen con prefijo nunca se toma por una evaluación de Triple Whale."""
     if not idea or not str(idea.get("prompt") or "").strip():
         raise PuenteError(gettext("Esa idea no tiene prompt."))
     pref = proyectos.preferencias_flowplus(cliente)
     salida = {"texto": str(idea["prompt"]).strip(), "tipo": "video", "modelo": pref.get("modelo_video") or "",
               "duracion": pref.get("duracion_defecto") or 8, "aspect_ratio": "9:16",
               "con_sonido": proyectos.preferencias_sonido(cliente).get("con_sonido", True) is not False}
-    if evaluacion_id is not None and indice is not None:
+    if origen:
+        salida["origen_tw"] = str(origen)
+    elif evaluacion_id is not None and indice is not None:
         salida["origen_tw"] = f"{int(evaluacion_id)}:{int(indice)}"
     elif analisis_id is not None:
         salida["origen_tw"] = f"a{int(analisis_id)}"

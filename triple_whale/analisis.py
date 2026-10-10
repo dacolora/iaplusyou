@@ -204,6 +204,22 @@ def visuales(cliente, anuncios, medios, creatv=None):
     return salida, temporales
 
 
+def con_piezas_creatv(anuncios, medios, creatv):
+    """Las piezas hechas en Creatv (`creatv`, de `datos.piezas_creatv`) tienen su video y su miniatura en R2: su
+    miniatura sirve tal cual (no se copia: `imagen_origen` ya está puesta) y `visuales` les saca los fotogramas.
+    Cambia `medios` en su lugar y lo devuelve."""
+    for a in anuncios:
+        pieza = (creatv or {}).get(a["ad_id"])
+        if not pieza:
+            continue
+        imagen = pieza.get("url_video") if pieza.get("tipo") == "imagen" else pieza.get("url_miniatura")
+        medio = medios.setdefault(a["ad_id"], {"imagen": None, "titulo": "", "texto": "", "tipo": pieza.get("tipo")})
+        if imagen:
+            medio.update(imagen=imagen, imagen_origen=imagen)
+        medio["origen"] = "creatv"
+    return medios
+
+
 def borrar_temporales(rutas):
     for ruta in rutas or []:
         try:
@@ -212,14 +228,18 @@ def borrar_temporales(rutas):
             pass
 
 
-def clave_miniatura(cliente, evaluacion_id, ref):
-    return f"clientes/{cliente}/triple_whale/eval{int(evaluacion_id)}_{ref}.jpg"
+def clave_miniatura(cliente, evaluacion_id, ref, carpeta="triple_whale"):
+    """La clave en R2 de la miniatura de `ref` en una evaluación. `carpeta` separa las evaluaciones de cada pestaña:
+    la de Meta rendimiento (`meta_rendimiento`) tiene sus propios ids, y con la misma carpeta la evaluación 3 de
+    Meta pisaría las miniaturas de la evaluación 3 de Triple Whale."""
+    return f"clientes/{cliente}/{carpeta}/eval{int(evaluacion_id)}_{ref}.jpg"
 
 
-def copiar_miniaturas(cliente, evaluacion_id, anuncios, medios):
+def copiar_miniaturas(cliente, evaluacion_id, anuncios, medios, carpeta="triple_whale"):
     """Las URL de miniatura de Meta caducan: la de cada anuncio se copia a R2
     y `medio["imagen"]` pasa a ser esa copia (`imagen_origen` guarda la de
-    Meta). Lo que no se pueda copiar queda como estaba. Nunca lanza."""
+    Meta). Lo que no se pueda copiar queda como estaba. Nunca lanza.
+    `carpeta`: ver `clave_miniatura`."""
     from PIL import Image
     from referentes import imagenes
     for a in anuncios:
@@ -228,13 +248,13 @@ def copiar_miniaturas(cliente, evaluacion_id, anuncios, medios):
             continue
         try:
             crudo = imagenes._bajar(medio["imagen"])
-            with tempfile.TemporaryDirectory(prefix="tw_mini_") as carpeta:
-                local = os.path.join(carpeta, f"{a['ref']}.jpg")
+            with tempfile.TemporaryDirectory(prefix="tw_mini_") as temporal:
+                local = os.path.join(temporal, f"{a['ref']}.jpg")
                 with Image.open(io.BytesIO(crudo)) as im:
                     im = im.convert("RGB")
                     im.thumbnail((LADO_IMAGEN, LADO_IMAGEN))
                     im.save(local, format="JPEG", quality=85)
-                url = r2_uploader.upload_image(local, clave_miniatura(cliente, evaluacion_id, a["ref"]))
+                url = r2_uploader.upload_image(local, clave_miniatura(cliente, evaluacion_id, a["ref"], carpeta))
         except Exception as e:  # noqa: BLE001 — se queda la URL de Meta mientras dure
             log.info("no pude copiar la miniatura de %s a R2: %s", a.get("ref"), type(e).__name__)
             continue
@@ -332,6 +352,12 @@ def armar(marca, contexto, anuncios, medios, bloques=None, productos=None):
         roas=_num(b.get("roas")), meta=_num(contexto.get("meta_roas")),
         bloques="\n\n".join(_bloque(a, con_visual.get(a["ad_id"])) for a in anuncios), n_ideas=N_IDEAS,
         productos=texto_productos(productos, contexto.get("moneda") or ""))
+    return texto, imagenes_para(anuncios, bloques)
+
+
+def imagenes_para(anuncios, bloques):
+    """Los bloques de visión que siguen a los DATOS: por cada anuncio con imagen o fotogramas (`bloques`, de
+    `visuales`), una línea que dice de cuál es y después sus bloques. La usan Triple Whale y Meta rendimiento."""
     imagenes = []
     for a in anuncios:
         v = bloques.get(a["ad_id"])
@@ -342,7 +368,7 @@ def armar(marca, contexto, anuncios, medios, bloques=None, productos=None):
         else:
             imagenes.append({"type": "text", "text": f"Imagen de {a['ref']} ({a['veredicto']}):"})
         imagenes.extend(v["bloques"])
-    return texto, imagenes
+    return imagenes
 
 
 def system(idioma):
@@ -398,8 +424,9 @@ def _patrones(lista, validas):
     return salida[:5]
 
 
-def parsear(texto, validas, datos_texto):
-    """El resultado limpio. AnalisisInvalido si no trae ni patrones ni ideas."""
+def parsear(texto, validas, datos_texto, origen="triple_whale"):
+    """El resultado limpio. AnalisisInvalido si no trae ni patrones ni ideas. `origen` es el de cada ángulo de las
+    ideas («triple_whale», o «meta» cuando lo usa la evaluación de Meta rendimiento)."""
     data = _json(texto)
     anuncios = {}
     for a in data.get("anuncios") if isinstance(data.get("anuncios"), list) else []:
@@ -423,7 +450,7 @@ def parsear(texto, validas, datos_texto):
             continue
         angulo, errores = doctrina.validar_angulo(i.get("angulo") if isinstance(i.get("angulo"), dict) else {},
                                                   datos_texto)
-        angulo["origen"] = "triple_whale"
+        angulo["origen"] = origen
         ideas.append({"titulo": titulo, "prompt": prompt, "por_que": _texto(i.get("por_que"), 300),
                       "escena": _texto(i.get("escena"), 600), "basada_en": _refs(i.get("basada_en"), validas),
                       "producto": _texto(i.get("producto"), 120) or None,
@@ -444,30 +471,55 @@ def _llamar(content, system_):
     return sprints_analisis._llamar_contando(content, max_tokens=MAX_TOKENS, system=system_)
 
 
+def llamar_con_correccion(content, system_, parsear_fn, revisar=None, llamar=None):
+    """(resultado, tokens_entrada, tokens_salida) de una llamada a Claude con UNA corrección como mucho: la de Triple
+    Whale y la de Meta rendimiento comparten este camino (no se copia).
+
+    `parsear_fn(texto)` devuelve el resultado limpio o lanza AnalisisInvalido. `revisar(resultado)` (opcional) puede
+    pedir la corrección aunque el resultado sirva: devuelve el motivo (p. ej. cifras que no están en los DATOS) o None.
+    `llamar(content, system_) -> (texto, entrada, salida)`; por defecto `_llamar`.
+
+    Si la primera respuesta no sirve y la corrección tampoco (o la llamada de corrección falla), AnalisisInvalido con
+    los tokens ya pagados. Si la primera sí servía y solo se pidió corregir por `revisar`, nunca se pierde: si la
+    corrección no sirve o falla, queda la primera (lo pagado no se tira)."""
+    llamar = llamar or _llamar
+    crudo, entrada, salida = llamar(content, system_)
+    primero = None
+    try:
+        primero = parsear_fn(crudo)
+    except AnalisisInvalido as e:
+        error, motivo = e, str(e)
+    else:
+        motivo = revisar(primero) if revisar else None
+        if not motivo:
+            return primero, entrada, salida
+        error = None
+    correccion = content + [{"type": "text", "text": f"Tu respuesta anterior no sirvió ({motivo}). "
+                                                     "Responde solo el JSON pedido."}]
+    try:
+        crudo, e2, s2 = llamar(correccion, system_)
+    except Exception:
+        if primero is not None:
+            return primero, entrada, salida
+        error.tokens_entrada, error.tokens_salida = entrada, salida
+        raise error
+    entrada, salida = entrada + e2, salida + s2
+    try:
+        return parsear_fn(crudo), entrada, salida
+    except AnalisisInvalido as e3:
+        if primero is not None:
+            return primero, entrada, salida
+        e3.tokens_entrada, e3.tokens_salida = entrada, salida
+        raise e3
+
+
 def analizar(marca, contexto, anuncios, medios, idioma, bloques=None, productos=None):
     """(resultado, tokens_entrada, tokens_salida). Una corrección si la primera
     respuesta no sirve; si tampoco, AnalisisInvalido con los tokens pagados."""
     texto, imagenes = armar(marca, contexto, anuncios, medios, bloques=bloques, productos=productos)
     content = [{"type": "text", "text": texto}] + imagenes
-    system_ = system(idioma)
     validas = {a["ref"] for a in anuncios}
-    crudo, entrada, salida = _llamar(content, system_)
-    try:
-        return parsear(crudo, validas, texto), entrada, salida
-    except AnalisisInvalido as e:
-        correccion = content + [{"type": "text", "text": f"Tu respuesta anterior no sirvió ({e}). "
-                                                         "Responde solo el JSON pedido."}]
-        try:
-            crudo, e2, s2 = _llamar(correccion, system_)
-        except Exception:
-            e.tokens_entrada, e.tokens_salida = entrada, salida
-            raise e
-        entrada, salida = entrada + e2, salida + s2
-        try:
-            return parsear(crudo, validas, texto), entrada, salida
-        except AnalisisInvalido as e3:
-            e3.tokens_entrada, e3.tokens_salida = entrada, salida
-            raise e3
+    return llamar_con_correccion(content, system(idioma), lambda crudo: parsear(crudo, validas, texto))
 
 
 def texto_error(error):

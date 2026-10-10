@@ -247,17 +247,18 @@ def reemplazar_desgloses(cliente, act, ventana, dimension, filas):
     return len(registros)
 
 
-def crear_evaluacion(cliente, cuentas, desde, hasta, moneda, muestra, recomendaciones, pedido_por=None):
+def crear_evaluacion(cliente, cuentas, desde, hasta, moneda, muestra, recomendaciones, pedido_por=None, extra=None):
     """Una «Evaluación con IA» nueva, en estado `en_cola`: guarda el alcance pedido (`cuentas`, `desde`, `hasta`,
     `moneda`), lo que se enviará a Claude (`muestra`) y las recomendaciones de las reglas gratis de ese momento.
-    Devuelve su id."""
+    `extra`: el resto de los DATOS armados al pedirla (`analisis.preparar`: resumen por cuenta, segmentos…), así la
+    tarea no depende de cómo esté el panel cuando le toque. Devuelve su id."""
     t = db.meta_evaluacion
     ahora = db.ahora()
     with db.conectar() as con:
         return con.execute(t.insert().values(
             cliente=cliente, creado_en=ahora, actualizado_en=ahora, estado="en_cola", cuentas=list(cuentas or []),
             desde=desde, hasta=hasta, moneda=moneda, muestra=list(muestra or []),
-            recomendaciones=list(recomendaciones or []), resultado={}, usd=0.0, extra={},
+            recomendaciones=list(recomendaciones or []), resultado={}, usd=0.0, extra=dict(extra or {}),
             pedido_por=pedido_por)).inserted_primary_key[0]
 
 
@@ -580,6 +581,20 @@ def gasto_por_conjunto(cliente, cuentas, desde, hasta):
     with db.conectar() as con:
         filas = con.execute(q).mappings().all()
     return {f["adset_id"]: _medidas(f, ("gasto", "compras", "valor")) for f in filas}
+
+
+def medios_anuncios(cliente, ad_ids):
+    """{ad_id: {"miniatura_url", "video_id"}} de los anuncios de ese proyecto que están en `meta_objeto`, en UNA
+    consulta (la evaluación con IA manda a Claude la miniatura de cada anuncio de su muestra). La URL va tal cual se
+    guardó: quien la use la vuelve a pasar por `miniatura_valida`."""
+    ids = list(dict.fromkeys(str(a) for a in ad_ids or () if a))[:_TANDA_IDS]
+    if not ids:
+        return {}
+    t = db.meta_objeto
+    q = sa.select(t.c.objeto_id, t.c.miniatura_url, t.c.video_id).where(
+        t.c.cliente == cliente, t.c.nivel == "anuncio", t.c.objeto_id.in_(ids))
+    with db.conectar() as con:
+        return {r.objeto_id: {"miniatura_url": r.miniatura_url, "video_id": r.video_id} for r in con.execute(q)}
 
 
 def evaluacion(cliente, evaluacion_id):

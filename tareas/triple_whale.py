@@ -287,15 +287,7 @@ def tw_evaluar(tarea):
     # Las piezas hechas en Creatv tienen su video y su miniatura en R2: la
     # miniatura sirve tal cual y Claude recibe los fotogramas del video.
     creatv = datos.piezas_creatv(cliente, [a["ad_id"] for a in anuncios if a.get("canal") == triple_whale.CANAL_META])
-    for a in anuncios:
-        pieza = creatv.get(a["ad_id"])
-        if not pieza:
-            continue
-        imagen = pieza.get("url_video") if pieza.get("tipo") == "imagen" else pieza.get("url_miniatura")
-        medio = medios.setdefault(a["ad_id"], {"imagen": None, "titulo": "", "texto": "", "tipo": pieza.get("tipo")})
-        if imagen:
-            medio.update(imagen=imagen, imagen_origen=imagen)
-        medio["origen"] = "creatv"
+    analisis.con_piezas_creatv(anuncios, medios, creatv)
     medios = analisis.copiar_miniaturas(cliente, eid, anuncios, medios)
     trabajos.reportar(job_id, etapa=idiomas.N_("Sacando fotogramas"))
     bloques, temporales = analisis.visuales(cliente, anuncios, medios, creatv)

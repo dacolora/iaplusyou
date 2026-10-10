@@ -358,3 +358,68 @@ def test_a_referente_guarda_un_referente_propio_con_miniatura_en_r2(base_tempora
     assert puente.a_referente("acme", a, None) == (rid, False) and len(subidas) == 1
     with pytest.raises(puente.PuenteError):
         puente.a_referente("acme", dict(a, medio={}), None)
+
+
+# ------------------------------------------ lo que comparte con Meta rendimiento (E2, 2026-10-10) ---
+
+def test_llamar_con_correccion_corrige_por_revisar_y_se_queda_con_la_corregida():
+    respuestas = [("primera", 100, 50), ("segunda", 120, 60)]
+    llamadas = []
+
+    def llamar(content, system_):
+        llamadas.append(content)
+        return respuestas.pop(0)
+    r, ent, sal = analisis.llamar_con_correccion(
+        [{"type": "text", "text": "DATOS"}], "S", lambda crudo: {"texto": crudo},
+        revisar=lambda r: "cifras inventadas" if r["texto"] == "primera" else None, llamar=llamar)
+    assert r == {"texto": "segunda"} and (ent, sal) == (220, 110)
+    assert "cifras inventadas" in llamadas[1][-1]["text"]
+
+
+def test_llamar_con_correccion_no_tira_la_primera_que_servia():
+    """Si la primera respuesta servía y solo se pidió corregirla, una corrección que no sirve o que falla no tira lo
+    pagado: queda la primera (con los tokens de las dos llamadas que sí respondieron)."""
+    def parsear(crudo):
+        if crudo == "basura":
+            raise analisis.AnalisisInvalido("no es JSON")
+        return {"texto": crudo}
+    respuestas = [("primera", 100, 50), ("basura", 120, 60)]
+    r, ent, sal = analisis.llamar_con_correccion([], "S", parsear, revisar=lambda r: "corrige",
+                                                 llamar=lambda c, s: respuestas.pop(0))
+    assert r == {"texto": "primera"} and (ent, sal) == (220, 110)
+
+    def falla_la_segunda(c, s, _n=[]):
+        _n.append(1)
+        if len(_n) > 1:
+            raise RuntimeError("red")
+        return "primera", 100, 50
+    r, ent, sal = analisis.llamar_con_correccion([], "S", parsear, revisar=lambda r: "corrige",
+                                                 llamar=falla_la_segunda)
+    assert r == {"texto": "primera"} and (ent, sal) == (100, 50)
+
+
+def test_llamar_con_correccion_sin_revisar_ni_llamar_usa_el_camino_de_siempre(monkeypatch):
+    monkeypatch.setattr(analisis, "_llamar", lambda content, system_: ("ok", 10, 5))
+    assert analisis.llamar_con_correccion([], "S", lambda crudo: crudo) == ("ok", 10, 5)
+
+
+def test_la_clave_de_la_miniatura_separa_la_carpeta_de_cada_pestana():
+    assert analisis.clave_miniatura("acme", 3, "A1") == "clientes/acme/triple_whale/eval3_A1.jpg"
+    assert analisis.clave_miniatura("acme", 3, "A1", "meta_rendimiento") == "clientes/acme/meta_rendimiento/eval3_A1.jpg"
+
+
+def test_parsear_con_otro_origen_lo_pone_en_el_angulo_de_cada_idea():
+    r = analisis.parsear(respuesta(), {"A1", "A2", "A3"}, "datos", origen="meta")
+    assert r["ideas"][0]["angulo"]["origen"] == "meta"
+
+
+def test_prefill_crear_con_un_origen_de_otra_pestana_y_triple_whale_no_lo_toma_por_suyo(base_temporal, monkeypatch):
+    import proyectos
+    monkeypatch.setattr(proyectos, "cargar", lambda cliente: {})
+    eid = datos.crear_evaluacion("acme", "2026-09-01", "2026-09-28", "USD", [])
+    datos.actualizar_evaluacion(eid, estado="lista", resultado={"ideas": [{"titulo": "T", "prompt": "p"}]})
+    p = puente.prefill_crear("acme", {"prompt": "Top-down shot"}, origen=f"meta:{eid}:0")
+    assert p["origen_tw"] == f"meta:{eid}:0"
+    # La forma de Triple Whale con el mismo id sí es suya; la de Meta nunca.
+    assert puente.origen_desde_formulario("acme", f"{eid}:0")["evaluacion_id"] == eid
+    assert puente.origen_desde_formulario("acme", f"meta:{eid}:0") is None

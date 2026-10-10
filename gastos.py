@@ -125,6 +125,12 @@ TARIFAS = {
     # Whisper ≤ US$ 0,0014. Esperado ≈ 0,075 × 1,25 + Whisper; redondeado hacia arriba. Informe:
     # docs/superpowers/evals/2026-10-08-tw-como-mejorarlo.md (PND-179).
     "analisis_anuncio_tw": 0.10,
+    # Meta rendimiento, «Evaluar con IA» (spec E2 §8): base + por anuncio de la muestra (estimador «evaluacion_meta»).
+    # Una llamada con visión, la doctrina en el system (caché) y hasta 16 000 tokens de salida, como la de Triple
+    # Whale: hasta medirla con la skill eval-claude sobre datos reales de HappyFlops (Task 7 de E2) usa los valores de
+    # `evaluacion_tw` (EVALUACION_TW_BASE_USD y EVALUACION_TW_POR_ANUNCIO_USD).
+    "evaluacion_meta": 0.08,
+    "evaluacion_meta_por_anuncio": 0.012,
 }
 
 # Evaluación de anuncios de Triple Whale con IA (spec 2026-09-28 §6): una
@@ -466,6 +472,9 @@ _ESTIMADORES = {
     "revision_pieza": lambda **_: (TARIFAS["revision_pieza"], "una llamada a Claude con visión"),
     "evaluacion_tw": lambda n=1, **_: (EVALUACION_TW_BASE_USD + EVALUACION_TW_POR_ANUNCIO_USD * max(1, int(n or 0)),
                                        f"{max(1, int(n or 0))} anuncio(s) con Claude"),
+    "evaluacion_meta": lambda n=1, **_: (
+        TARIFAS["evaluacion_meta"] + TARIFAS["evaluacion_meta_por_anuncio"] * max(1, int(n or 0)),
+        f"{max(1, int(n or 0))} anuncio(s) de Meta con Claude"),
     "diagnostico_pieza": lambda **_: (TARIFAS["diagnostico_pieza"], "una llamada a Claude"),
     "analisis_anuncio_tw": _estimar_analisis_anuncio_tw,
     "proponer_ideas": lambda n=1, **_: (IDEAS_BASE_USD + IDEAS_POR_IDEA_USD * max(1, int(n or 0)),
