@@ -170,7 +170,7 @@ msgstr "%(color)s: no photos in the store; check the catalog."
 
 #, python-format
 msgid "%(compras)s compras en los últimos 7 días con ROAS %(roas)s×, %(veces)s veces el de la cuenta (%(roas_cuenta)s×), y fuera del aprendizaje limitado."
-msgstr "%(compras)s purchases in the last 7 days with a ROAS of %(roas)s×, %(veces)s times the account’s (%(roas_cuenta)s×), and out of learning limited."
+msgstr "%(compras)s purchases in the last 7 days with a ROAS of %(roas)s×, %(veces)s times the account’s (%(roas_cuenta)s×), and out of Learning limited."
 
 #, python-format
 msgid "%(correo)s: abre el enlace que te mandamos o pide uno nuevo en Configuración › Cuenta. Sin correo confirmado no puedes conectar Meta ni una tienda."
@@ -581,14 +581,16 @@ msgid "%(n)s de %(t)s avatar(es) completados."
 msgstr "%(n)s of %(t)s avatar(s) completed."
 
 #, python-format
-msgid "%(n)s de %(total)s conjunto activo en aprendizaje limitado"
-msgid_plural "%(n)s de %(total)s conjuntos activos en aprendizaje limitado"
-msgstr[0] "%(n)s of %(total)s active ad set in learning limited"
-msgstr[1] "%(n)s of %(total)s active ad sets in learning limited"
+msgid "%(n)s de %(total)s conjunto activo (%(pct_conjuntos)s %%) está en aprendizaje limitado y se llevó %(gasto)s de los %(gasto_cuenta)s de los últimos 7 días (%(pct_gasto)s %%): sin salir del aprendizaje, Meta no estabiliza su entrega."
+msgid_plural "%(n)s de %(total)s conjuntos activos (%(pct_conjuntos)s %%) están en aprendizaje limitado y se llevaron %(gasto)s de los %(gasto_cuenta)s de los últimos 7 días (%(pct_gasto)s %%): sin salir del aprendizaje, Meta no estabiliza su entrega."
+msgstr[0] "%(n)s of %(total)s active ad set (%(pct_conjuntos)s%%) is Learning limited and took %(gasto)s of the %(gasto_cuenta)s of the last 7 days (%(pct_gasto)s%%): until it exits learning, Meta can’t stabilize its delivery."
+msgstr[1] "%(n)s of %(total)s active ad sets (%(pct_conjuntos)s%%) are Learning limited and took %(gasto)s of the %(gasto_cuenta)s of the last 7 days (%(pct_gasto)s%%): until they exit learning, Meta can’t stabilize their delivery."
 
 #, python-format
-msgid "%(n)s de %(total)s conjuntos activos (%(pct_conjuntos)s %%) están en aprendizaje limitado y se llevaron %(gasto)s de los %(gasto_cuenta)s de los últimos 7 días (%(pct_gasto)s %%): sin salir del aprendizaje, Meta no estabiliza su entrega."
-msgstr "%(n)s of %(total)s active ad sets (%(pct_conjuntos)s %%) are in learning limited and took %(gasto)s of the %(gasto_cuenta)s of the last 7 days (%(pct_gasto)s %%): until they exit learning, Meta can’t stabilize their delivery."
+msgid "%(n)s de %(total)s conjunto activo en aprendizaje limitado"
+msgid_plural "%(n)s de %(total)s conjuntos activos en aprendizaje limitado"
+msgstr[0] "%(n)s of %(total)s active ad set in Learning limited"
+msgstr[1] "%(n)s of %(total)s active ad sets in Learning limited"
 
 #, python-format
 msgid "%(n)s del nicho"
@@ -2581,6 +2583,9 @@ msgstr "Ads"
 msgid "Anuncios con más de 14 días"
 msgstr "Ads older than 14 days"
 
+msgid "Anuncios en Reels"
+msgstr "Ads on Reels"
+
 msgid "Anuncios nuevos (menos de 14 días)"
 msgstr "New ads (under 14 days)"
 
@@ -3056,6 +3061,9 @@ msgstr "Downloading the video"
 
 msgid "Bajando fotos"
 msgstr "Downloading photos"
+
+msgid "Bandeja de entrada"
+msgstr "Inbox"
 
 #, python-format
 msgid "Barrido terminado: %(n)s referentes clasificados."
@@ -3692,6 +3700,9 @@ msgstr "Mobile (app)"
 
 msgid "Celular (web)"
 msgstr "Mobile (web)"
+
+msgid "Celular Android"
+msgstr "Android phone"
 
 msgid "Centrar"
 msgstr "Center"
@@ -4441,6 +4452,10 @@ msgid_plural "Consolida conjuntos parecidos dentro de la misma campaña: con %(c
 msgstr[0] "Consolidate similar ad sets within the same campaign: with %(compras)s purchases a week, this account has room for ~%(cabe)s ad set to exit learning (Meta asks for about %(meta)s per ad set)."
 msgstr[1] "Consolidate similar ad sets within the same campaign: with %(compras)s purchases a week, this account has room for ~%(cabe)s ad sets to exit learning (Meta asks for about %(meta)s per ad set)."
 
+#, python-format
+msgid "Consolida conjuntos parecidos dentro de la misma campaña: con %(compras)s compras por semana, ningún conjunto llega a las %(meta)s que Meta necesita para salir del aprendizaje; concentra el presupuesto en 1 o 2 conjuntos."
+msgstr "Consolidate similar ad sets within the same campaign: with %(compras)s purchases a week, no ad set reaches the %(meta)s Meta needs to exit learning; concentrate the budget in 1 or 2 ad sets."
+
 msgid "Consulta"
 msgstr "Query"
 
@@ -5023,7 +5038,7 @@ msgstr "From the catalog (optional, %(n)s) →"
 
 #, python-format
 msgid "Del gasto de los últimos 7 días de su conjunto: %(ejemplos)s. Cada conjunto pesa %(minimo)s %% o más del gasto de la cuenta."
-msgstr "Of their ad set’s spend in the last 7 days: %(ejemplos)s. Each ad set weighs %(minimo)s %% or more of the account’s spend."
+msgstr "Of their ad set’s spend in the last 7 days: %(ejemplos)s. Each ad set weighs %(minimo)s%% or more of the account’s spend."
 
 msgid "Del guion"
 msgstr "From the script"
@@ -8329,6 +8344,9 @@ msgstr "Invalid date."
 msgid "Feed"
 msgstr "Feed"
 
+msgid "Feed del perfil"
+msgstr "Profile feed"
+
 msgid "Fellesferie"
 msgstr "Summer holidays (Fellesferie)"
 
@@ -8661,13 +8679,13 @@ msgstr "Spent %(g)s with no sales"
 
 #, python-format
 msgid "Gastó %(gastado)s de su tope de %(tope)s (%(pct)s %%): al llegar al tope, Meta deja de entregar sus anuncios."
-msgstr "It spent %(gastado)s of its %(tope)s spending limit (%(pct)s %%): when it reaches the limit, Meta stops delivering its ads."
+msgstr "It spent %(gastado)s of its %(tope)s spending limit (%(pct)s%%): when it reaches the limit, Meta stops delivering its ads."
 
 #, python-format
 msgid "Gastó %(gasto)s en los últimos 7 días (%(pct)s %% del gasto de la cuenta) y es perdedor: gastó lo de dos ventas o más con un ROAS de menos de la mitad de la meta."
 msgid_plural "Gastaron %(gasto)s en los últimos 7 días (%(pct)s %% del gasto de la cuenta) y son perdedores: cada uno gastó lo de dos ventas o más con un ROAS de menos de la mitad de la meta."
-msgstr[0] "It spent %(gasto)s in the last 7 days (%(pct)s %% of the account’s spend) and it’s a loser: it spent the cost of two sales or more with a ROAS below half the target."
-msgstr[1] "They spent %(gasto)s in the last 7 days (%(pct)s %% of the account’s spend) and they’re losers: each spent the cost of two sales or more with a ROAS below half the target."
+msgstr[0] "It spent %(gasto)s in the last 7 days (%(pct)s%% of the account’s spend) and it’s a loser: it spent the cost of two sales or more with a ROAS below half the target."
+msgstr[1] "They spent %(gasto)s in the last 7 days (%(pct)s%% of the account’s spend) and they’re losers: each spent the cost of two sales or more with a ROAS below half the target."
 
 #, python-format
 msgid "Gastó lo de %(n)s ventas al costo por venta de la cuenta y su ROAS es %(roas)s× (meta %(meta)s×)."
@@ -11572,6 +11590,9 @@ msgstr "Nano Banana Pro Ultra (4k)"
 msgid "Nano Banana necesita esta llave; los modelos de WaveSpeed usan su propia llave."
 msgstr "Nano Banana needs this key; WaveSpeed models use their own key."
 
+msgid "Nativo, banner e intersticial"
+msgstr "Native, banner and interstitial"
+
 msgid "Navidad"
 msgstr "Christmas"
 
@@ -12699,6 +12720,9 @@ msgstr "Style notes"
 
 msgid "Notas de estilo:"
 msgstr "Style notes:"
+
+msgid "Notificaciones"
+msgstr "Notifications"
 
 msgid "Notion está conectado."
 msgstr "Notion is connected."
@@ -15164,7 +15188,7 @@ msgstr "It was interrupted; try again."
 
 #, python-format
 msgid "Se llevó el %(pct)s %% del gasto de los últimos 30 días (%(gasto)s) con ROAS %(roas)s×, menos de la mitad del de la cuenta (%(roas_cuenta)s×)."
-msgstr "It took %(pct)s %% of the spend of the last 30 days (%(gasto)s) with a ROAS of %(roas)s×, less than half the account’s (%(roas_cuenta)s×)."
+msgstr "It took %(pct)s%% of the spend of the last 30 days (%(gasto)s) with a ROAS of %(roas)s×, less than half the account’s (%(roas_cuenta)s×)."
 
 #, python-format
 msgid "Se muestran los últimos %(n)s cobros"
@@ -15866,10 +15890,10 @@ msgid "Storytelling"
 msgstr "Storytelling"
 
 #, python-format
-msgid "Su ROAS o su CTR cayó frente a la semana anterior y su campaña ya muestra cada anuncio %(frecuencia)s veces por persona en 7 días (desde %(minimo)s se nota el cansancio)."
-msgid_plural "A cada uno le cayó el ROAS o el CTR frente a la semana anterior y sus campañas ya muestran cada anuncio hasta %(frecuencia)s veces por persona en 7 días (desde %(minimo)s se nota el cansancio)."
-msgstr[0] "Its ROAS or CTR dropped against the previous week and its campaign already shows each ad %(frecuencia)s times per person in 7 days (fatigue shows from %(minimo)s)."
-msgstr[1] "Each one’s ROAS or CTR dropped against the previous week and their campaigns already show each ad up to %(frecuencia)s times per person in 7 days (fatigue shows from %(minimo)s)."
+msgid "Su ROAS o su CTR cayó frente a la semana anterior, y las personas de su campaña ya vieron sus anuncios %(frecuencia)s veces en promedio en los últimos 7 días (desde %(minimo)s se nota el cansancio)."
+msgid_plural "A cada uno le cayó el ROAS o el CTR frente a la semana anterior, y las personas de sus campañas ya vieron sus anuncios hasta %(frecuencia)s veces en promedio en los últimos 7 días (desde %(minimo)s se nota el cansancio)."
+msgstr[0] "Its ROAS or CTR dropped against the previous week, and the people in its campaign have already seen its ads %(frecuencia)s times on average in the last 7 days (fatigue shows from %(minimo)s)."
+msgstr[1] "Each one’s ROAS or CTR dropped against the previous week, and the people in their campaigns have already seen their ads up to %(frecuencia)s times on average in the last 7 days (fatigue shows from %(minimo)s)."
 
 msgid "Su día a día (situaciones)"
 msgstr "Their day to day (situations)"
@@ -15894,11 +15918,11 @@ msgstr "Sub-avatar %(n)s: %(nombre)s (%(base)s · %(estado)s)"
 
 #, python-format
 msgid "Sube %(pct)s %% el presupuesto de la campaña (de %(antes)s a %(despues)s por día); más de %(pct)s %% reinicia el aprendizaje."
-msgstr "Raise the campaign budget by %(pct)s %% (from %(antes)s to %(despues)s per day); more than %(pct)s %% restarts learning."
+msgstr "Raise the campaign budget by %(pct)s%% (from %(antes)s to %(despues)s per day); more than %(pct)s%% restarts learning."
 
 #, python-format
 msgid "Sube %(pct)s %% el presupuesto del conjunto (de %(antes)s a %(despues)s por día); más de %(pct)s %% reinicia el aprendizaje."
-msgstr "Raise the ad set budget by %(pct)s %% (from %(antes)s to %(despues)s per day); more than %(pct)s %% restarts learning."
+msgstr "Raise the ad set budget by %(pct)s%% (from %(antes)s to %(despues)s per day); more than %(pct)s%% restarts learning."
 
 msgid "Sube al menos una foto o video primero."
 msgstr "Upload at least one photo or video first."
@@ -16149,6 +16173,9 @@ msgstr "Table"
 msgid "Tablero"
 msgstr "Dashboard"
 
+msgid "Tableta Android"
+msgstr "Android tablet"
+
 msgid "Tachado"
 msgstr "Strikethrough"
 
@@ -16198,6 +16225,9 @@ msgstr "You have %(saldo)s left. Top up in Settings › Balance and top-ups befo
 
 msgid "Te quedaste sin saldo"
 msgstr "You are out of balance"
+
+msgid "Televisor conectado"
+msgstr "Connected TV"
 
 msgid "Temporada agregada desde el calendario."
 msgstr "Season added from the calendar."
@@ -17808,6 +17838,9 @@ msgstr "Video + image"
 
 msgid "Video completo"
 msgstr "Full video"
+
+msgid "Video con recompensa"
+msgstr "Rewarded video"
 
 msgid "Video de Crear"
 msgstr "Video from Create"
@@ -19624,9 +19657,6 @@ msgstr "gunicorn threads busy at the peak"
 msgid "historia"
 msgstr "story"
 
-msgid "hombres"
-msgstr "men"
-
 msgid "hook"
 msgstr "hook"
 
@@ -19979,9 +20009,6 @@ msgstr "voice sample · %(voz)s · %(idioma)s"
 #, python-format
 msgid "mueve: %(anillo)s"
 msgstr "moves: %(anillo)s"
-
-msgid "mujeres"
-msgstr "women"
 
 msgid "musica"
 msgstr "music"
@@ -20716,9 +20743,6 @@ msgstr "no email"
 msgid "sin dataset"
 msgstr "no dataset"
 
-msgid "sin dato"
-msgstr "no data"
-
 msgid "sin datos"
 msgstr "no data"
 
@@ -21185,7 +21209,7 @@ msgstr "“%(accion)s” spends on Meta or on generation. Approve?"
 
 #, python-format
 msgid "«%(anuncio)s» lleva el %(pct)s %% de «%(conjunto)s»"
-msgstr "“%(anuncio)s” takes %(pct)s %% of “%(conjunto)s”"
+msgstr "“%(anuncio)s” takes %(pct)s%% of “%(conjunto)s”"
 
 #, python-format
 msgid "«%(campo)s» debe ser un número entero."
@@ -21194,6 +21218,10 @@ msgstr "“%(campo)s” must be a whole number."
 #, python-format
 msgid "«%(lead)s»"
 msgstr "“%(lead)s”"
+
+#, python-format
+msgid "«%(nombre)s» (%(n)s)"
+msgstr "“%(nombre)s” (%(n)s)"
 
 #, python-format
 msgid "«%(nombre)s» alcanzó su tope: %(gastado)s gastados de %(tope)s. Ciérralo o súbele el tope."

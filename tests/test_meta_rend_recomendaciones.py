@@ -183,9 +183,22 @@ def test_aprendizaje_dice_cuantos_conjuntos_caben_y_lista_las_3_campanas_con_mas
     assert "10" in r["titulo"] and "11" in r["titulo"]     # 10 de 11 conjuntos activos
 
 
-def test_aprendizaje_da_para_al_menos_un_conjunto():
-    r = una(rec.calcular(_aprendizaje(300.0, compras_7=12.0)), "aprendizaje_limitado")
-    assert "~1 " in r["que_hacer"]
+@pytest.mark.parametrize("compras", [0.0, 12.0, 49.9])
+def test_aprendizaje_sin_50_compras_por_semana_no_promete_conjuntos(compras):
+    r = una(rec.calcular(_aprendizaje(300.0, compras_7=compras)), "aprendizaje_limitado")
+    assert "ningún conjunto llega a las 50" in r["que_hacer"] and "~" not in r["que_hacer"]
+    assert "concentra el presupuesto en 1 o 2 conjuntos" in r["que_hacer"]
+
+
+def test_aprendizaje_con_50_compras_da_para_un_conjunto():
+    r = una(rec.calcular(_aprendizaje(300.0, compras_7=50.0)), "aprendizaje_limitado")
+    assert "~1 conjunto que salga del aprendizaje" in r["que_hacer"]
+
+
+def test_aprendizaje_concuerda_en_singular():
+    r = una(rec.calcular(entrada(objetos=[campana("800"), conjunto("900", "800", "FAIL")])), "aprendizaje_limitado")
+    assert r["titulo"] == "1 de 1 conjunto activo en aprendizaje limitado"
+    assert r["por_que"].startswith("1 de 1 conjunto activo (100 %) está en aprendizaje limitado y se llevó ")
 
 
 def test_aprendizaje_con_miles_usa_separador():
@@ -434,7 +447,8 @@ def _segmentos(valor_a=99.0, gasto_a=100.0, clave_a="NO", dimension="pais"):
 def test_segmento_caro_con_10_por_ciento_del_gasto_y_menos_de_la_mitad_del_roas():
     r = una(rec.calcular(_segmentos()), "segmento_caro")
     assert r["nivel"] == "media" and rec.SEGMENTO_GASTO_MIN == 0.10 and rec.SEGMENTO_FACTOR_ROAS == 0.5
-    assert "NO" in r["que_hacer"] and "País" in r["que_hacer"]
+    assert r["titulo"] == "Segmento caro: Noruega (País)"
+    assert "Excluye o baja el peso de Noruega (País)" in r["que_hacer"]
     assert r["objetos"] == [] and r["enlace"] == administrador.enlace_cuenta(ACT)
     assert r["impacto"]["monto"] == pytest.approx(100 / 30)
 
@@ -453,7 +467,7 @@ def test_segmento_caro_ignora_lo_que_meta_no_sabe_clasificar():
 
 def test_segmento_caro_edad_y_genero_en_palabras_y_huella_por_segmento():
     r = una(rec.calcular(_segmentos(clave_a="55-64|female", dimension="edad_genero")), "segmento_caro")
-    assert "55-64 · mujeres" in r["que_hacer"]
+    assert "55–64 · Mujeres" in r["que_hacer"]
     otra = una(rec.calcular(_segmentos(clave_a="65+|female", dimension="edad_genero")), "segmento_caro")
     assert r["id"] != otra["id"]
 
@@ -511,16 +525,65 @@ def test_sin_impacto_va_despues_dentro_de_su_nivel():
     assert [r["tipo"] for r in rec.calcular(e)] == ["perdedores_gastando", "escalar"]
 
 
-def test_huella_estable_y_sin_importar_el_orden_de_los_objetos():
-    anuncios = [anuncio("1", veredicto="perdedor", gasto_7=10.0), anuncio("2", veredicto="perdedor", gasto_7=20.0)]
-    a = una(rec.calcular(entrada(anuncios=anuncios)), "perdedores_gastando")["id"]
-    b = una(rec.calcular(entrada(anuncios=list(reversed(anuncios)))), "perdedores_gastando")["id"]
-    assert a == b and isinstance(a, str) and len(a) == 16
-    # El mismo gasto con otros anuncios, u otra cuenta: otra huella.
-    c = una(rec.calcular(entrada(anuncios=anuncios[:1])), "perdedores_gastando")["id"]
-    assert c != a
-    assert rec.huella("perdedores_gastando", ACT, ["2", "1"]) == a
-    assert rec.huella("perdedores_gastando", ACT2, ["1", "2"]) != a
+def _id(e, tipo):
+    return una(rec.calcular(e), tipo)["id"]
+
+
+def test_huella_es_la_de_alertas_sha256_completo():
+    """Ruling E2-R4: el id ES la huella de la alerta: 64 hex (alertas.HUELLA_VALIDA; la ruta de descartar responde 400
+    a otra cosa) con la misma fórmula que alertas.huella."""
+    import re
+
+    import alertas
+    r = una(rec.calcular(entrada(anuncios=[anuncio("1", veredicto="perdedor", gasto_7=10.0)])), "perdedores_gastando")
+    assert re.fullmatch(alertas.HUELLA_VALIDA, r["id"])
+    assert rec.huella("a", "b", 3) == alertas.huella("a", "b", 3)
+    assert r["id"] == alertas.huella("perdedores_gastando", ACT, "media")
+    assert rec.AGREGADOS == ("aprendizaje_limitado", "perdedores_gastando", "anuncios_con_problemas",
+                             "cuenta_roas_bajo", "cuenta_estado")
+    for x in rec.calcular(_segmentos()) + rec.calcular(_abo()) + rec.calcular(_fatiga()):
+        assert re.fullmatch(alertas.HUELLA_VALIDA, x["id"])
+
+
+def test_huella_de_un_agregado_no_cambia_con_sus_objetos_y_si_con_el_nivel():
+    dos = [anuncio("1", veredicto="perdedor", gasto_7=10.0), anuncio("2", veredicto="perdedor", gasto_7=20.0)]
+    media = _id(entrada(anuncios=dos), "perdedores_gastando")
+    assert _id(entrada(anuncios=dos[:1]), "perdedores_gastando") == media
+    alta = _id(entrada(anuncios=[anuncio("1", veredicto="perdedor", gasto_7=500.0)]), "perdedores_gastando")
+    assert alta != media
+    otra = entrada(cuentas=[cuenta(ACT2)], totales_7={ACT2: {"gasto": 1000.0}}, totales_30={ACT2: {"gasto": 4000.0}},
+                   anuncios=[anuncio("1", veredicto="perdedor", gasto_7=10.0, act=ACT2)])
+    assert _id(otra, "perdedores_gastando") != media
+    # Un anuncio con problemas que sale de los 30 días no hace volver una alerta descartada.
+    con_dos = entrada(anuncios=[anuncio("1", estado="WITH_ISSUES", gasto_30=60.0),
+                                anuncio("2", estado="WITH_ISSUES", gasto_30=10.0)])
+    con_uno = entrada(anuncios=[anuncio("1", estado="WITH_ISSUES", gasto_30=60.0),
+                                anuncio("2", estado="WITH_ISSUES", gasto_30=0.0)])
+    assert _id(con_dos, "anuncios_con_problemas") == _id(con_uno, "anuncios_con_problemas")
+    # Aprendizaje limitado: otras campañas en el top 3, misma huella.
+    a = entrada(objetos=[campana("801"), conjunto("910", "801", "FAIL"), conjunto("911", "801", "FAIL")])
+    b = entrada(objetos=[campana("802"), conjunto("920", "802", "FAIL"), conjunto("921", "802", "FAIL")])
+    assert _id(a, "aprendizaje_limitado") == _id(b, "aprendizaje_limitado")
+
+
+def _fatigados(gastos):
+    return entrada(anuncios=[anuncio(i, campaign_id="800", veredicto="ganador", problemas=("fatiga",), gasto_7=g)
+                             for i, g in gastos],
+                   frecuencia_7={"800": {"alcance": 900, "frecuencia": 3.5}})
+
+
+def test_huella_por_objeto_mismo_conjunto_en_otro_orden_de_gasto_igual():
+    a = una(rec.calcular(_fatigados([("1", 10.0), ("2", 20.0)])), "fatiga")
+    b = una(rec.calcular(_fatigados([("1", 20.0), ("2", 10.0)])), "fatiga")
+    assert [o["id"] for o in a["objetos"]] == ["2", "1"] and [o["id"] for o in b["objetos"]] == ["1", "2"]
+    assert a["id"] == b["id"]
+    assert _id(_fatigados([("1", 10.0)]), "fatiga") != a["id"]
+    # Escalar, uno por objeto: dos conjuntos, dos huellas.
+    e = _abo()
+    e["objetos"].append(conjunto("901", "800", "SUCCESS", 100.0))
+    e["conjuntos_7"]["901"] = dict(e["conjuntos_7"]["900"])
+    ids = [r["id"] for r in de_tipo(rec.calcular(e), "escalar")]
+    assert len(ids) == 2 and len(set(ids)) == 2
 
 
 def test_huellas_unicas_en_una_lista_grande():
@@ -545,8 +608,47 @@ def test_cada_cuenta_con_su_moneda_y_sus_objetos():
 
 def test_textos_en_ingles_con_el_catalogo():
     import idiomas
-    e = entrada(anuncios=[anuncio("1", veredicto="perdedor", gasto_7=1234.6)],
-                totales_7={ACT: {"gasto": 10000.0, "valor": 20000.0}})
+    e = _segmentos()
+    e["anuncios"] = [anuncio("1", veredicto="perdedor", gasto_7=1234.6)]
+    e["totales_7"] = {ACT: {"gasto": 10000.0, "valor": 20000.0}}
+    e["objetos"] = [campana("801", "Prospecting"), conjunto("910", "801", "FAIL"), conjunto("911", "801", "FAIL")]
     with idiomas.en_idioma("en"):
-        r = una(rec.calcular(e), "perdedores_gastando")
+        recs = rec.calcular(e)
+    r = una(recs, "perdedores_gastando")
     assert "1,235 SEK" in r["por_que"] and "Pause" in r["que_hacer"]
+    r = una(recs, "aprendizaje_limitado")
+    assert "Learning limited" in r["titulo"] and "“Prospecting” (2)" in r["que_hacer"]
+    assert "(100%)" in r["por_que"]
+    assert una(recs, "segmento_caro")["titulo"] == "Expensive segment: Norway (Country)"
+    for x in recs:
+        for k in ("titulo", "que_hacer", "por_que"):
+            assert "«" not in x[k] and " %" not in x[k], (k, x[k])
+
+
+# ------------------------------------------------------------ segmentos en palabras ---
+
+@pytest.mark.parametrize("dimension, clave, nombre", [
+    ("pais", "NO", "Noruega"), ("pais", "unknown", "Sin dato"), ("pais", "XZ", "XZ"),
+    ("edad_genero", "25-34|female", "25–34 · Mujeres"), ("edad_genero", "65+|male", "65+ · Hombres"),
+    ("edad_genero", "unknown|unknown", "Sin dato · Sin dato"),
+    ("ubicacion", "facebook|feed", "Facebook · Feed"), ("ubicacion", "instagram|instagram_reels", "Instagram · Reels"),
+    ("ubicacion", "instagram|instagram_stories", "Instagram · Historias"),
+    ("ubicacion", "instagram|instagram_explore_grid_home", "Instagram · Explorar"),
+    ("ubicacion", "audience_network|classic", "Audience Network · Nativo, banner e intersticial"),
+    ("ubicacion", "messenger|messenger_inbox", "Messenger · Bandeja de entrada"),
+    ("ubicacion", "facebook|video_feeds", "Facebook · Videos"),
+    ("ubicacion", "new_platform|new_spot", "New platform · New spot"),
+    ("dispositivo", "mobile_app", "Celular (app)"), ("dispositivo", "iphone", "iPhone"),
+    ("dispositivo", "android_smartphone", "Celular Android"), ("dispositivo", "desktop", "Computador"),
+    ("dispositivo", "smart_fridge", "Smart fridge"), ("dispositivo", "unknown", "Sin dato")])
+def test_nombre_segmento_en_palabras(dimension, clave, nombre):
+    assert rec.nombre_segmento(dimension, clave) == nombre
+
+
+def test_nombre_segmento_en_el_idioma_de_quien_mira():
+    import idiomas
+    assert rec.nombre_segmento("pais", "SE", "en") == "Sweden"
+    with idiomas.en_idioma("en"):
+        assert rec.nombre_segmento("pais", "NO") == "Norway"
+        assert rec.nombre_segmento("edad_genero", "25-34|female") == "25–34 · Women"
+        assert rec.nombre_segmento("ubicacion", "instagram|instagram_stories") == "Instagram · Stories"

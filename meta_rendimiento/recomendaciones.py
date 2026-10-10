@@ -34,8 +34,11 @@ ordenadas por nivel y luego por impacto (los que no tienen van después en su ni
 la cuenta: en «Todas» el orden por impacto es nominal entre monedas (como PND-196). `impacto.monto` es siempre «por
 día» (lo que está en juego cada día), para que se puedan comparar. `objetos` trae como mucho `MAX_OBJETOS` (los de
 más gasto) y `enlace` es el Administrador de anuncios con ellos seleccionados (`administrador.enlace`) o, para lo que
-es de toda la cuenta, sus campañas. `id` es la huella (`huella`): tipo + cuenta + TODOS los ids de los objetos,
-ordenados; las de toda la cuenta (ROAS bajo, estado) solo tipo + cuenta, y un segmento su dimensión y clave.
+es de toda la cuenta, sus campañas. `id` es la huella de Alertas (ruling E2-R4: sha256 hex completo, el formato de
+`alertas.huella` y `alertas.HUELLA_VALIDA`; `huella_recomendacion`): en los tipos que juntan TODO lo de una cuenta
+(`AGREGADOS`) es tipo + cuenta + nivel, porque su lista de objetos cambia en cada copia (un anuncio con problemas que
+sale de los 30 días) y una alerta descartada no debe volver cada 3 horas; en los demás, tipo + cuenta + los ids de
+sus objetos ordenados (un segmento: su dimensión y clave).
 
 Textos con gettext/ngettext (en el idioma de quien mira, o el del proyecto si se arman dentro de `idiomas.en_idioma`)
 y cifras con `idiomas.numero`."""
@@ -47,6 +50,7 @@ from flask_babel import gettext, ngettext
 import idiomas
 from idiomas import N_
 from meta_rendimiento import administrador
+from triple_whale import paises
 
 # ---------------------------------------------------------------- umbrales (spec E2 §6) ---
 # aprendizaje_limitado: alta si los conjuntos FAIL llevan ≥ 30 % del gasto de 7 días o son ≥ 50 % de los activos;
@@ -89,6 +93,9 @@ MAX_OBJETOS = administrador.MAX_IDS
 NIVELES = ("alta", "media", "baja")
 TIPOS = ("cuenta_estado", "cuenta_roas_bajo", "aprendizaje_limitado", "perdedores_gastando", "anuncios_con_problemas",
          "escalar", "fatiga", "segmento_caro", "concentracion")
+# Tipos que juntan todo lo de una cuenta en una sola recomendación: su huella no lleva los objetos (ruling E2-R4).
+AGREGADOS = ("aprendizaje_limitado", "perdedores_gastando", "anuncios_con_problemas", "cuenta_roas_bajo",
+             "cuenta_estado")
 # effective_status de un anuncio que entrega (o puede entregar): WITH_ISSUES sigue gastando en muchos casos.
 ESTADOS_ENTREGA = ("ACTIVE", "WITH_ISSUES")
 ESTADOS_PROBLEMA = ("WITH_ISSUES", "DISAPPROVED")
@@ -115,7 +122,26 @@ OTRO_ESTADO = (N_("Meta marca la cuenta con el estado %(codigo)s: no está activ
 # Dimensiones de los desgloses en palabras (las usa también la sección «Segmentos» del panel).
 DIMENSIONES = {"edad_genero": N_("Edad y género"), "ubicacion": N_("Ubicación"), "pais": N_("País"),
                "dispositivo": N_("Dispositivo")}
-GENEROS = {"female": N_("mujeres"), "male": N_("hombres"), SIN_VALOR: N_("sin dato")}
+# Las claves de Meta en palabras (`nombre_segmento`). Mismos textos que las etiquetas de los desgloses de Experimentos
+# (`resultados._PLATAFORMAS`, `_POSICIONES`, `_GENEROS`, `_DISPOSITIVOS`): las dos pantallas dicen lo mismo y comparten
+# la traducción. No se importan de ahí porque `resultados` arrastra la base y el Tablero. Los nombres de marca
+# (Facebook, iPhone…) no pasan por el catálogo.
+SIN_DATO = N_("Sin dato")
+GENEROS = {"female": N_("Mujeres"), "male": N_("Hombres")}
+PLATAFORMAS = {"facebook": "Facebook", "instagram": "Instagram", "messenger": "Messenger",
+               "audience_network": "Audience Network", "threads": "Threads", "whatsapp": "WhatsApp"}
+POSICIONES = {"feed": N_("Feed"), "marketplace": N_("Marketplace"), "video_feeds": N_("Videos"),
+              "instream_video": N_("En el video"), "search": N_("Búsqueda"), "instagram_search": N_("Búsqueda"),
+              "right_hand_column": N_("Columna derecha"), "profile_feed": N_("Feed del perfil"),
+              "instagram_profile_feed": N_("Feed del perfil"), "facebook_reels_overlay": N_("Anuncios en Reels"),
+              "messenger_inbox": N_("Bandeja de entrada"), "an_classic": N_("Nativo, banner e intersticial"),
+              "classic": N_("Nativo, banner e intersticial"), "rewarded_video": N_("Video con recompensa"),
+              "notification": N_("Notificaciones"), "threads_feed": N_("Feed")}
+POSICION_REELS, POSICION_HISTORIAS, POSICION_EXPLORAR = N_("Reels"), N_("Historias"), N_("Explorar")
+DISPOSITIVOS = {"mobile_app": N_("Celular (app)"), "mobile_web": N_("Celular (web)"), "desktop": N_("Computador"),
+                "iphone": "iPhone", "ipad": "iPad", "ipod": "iPod", "android_smartphone": N_("Celular Android"),
+                "android_tablet": N_("Tableta Android"), "connected_tv": N_("Televisor conectado"),
+                "other": N_("Otro")}
 
 
 # ---------------------------------------------------------------- utilidades ---
@@ -176,10 +202,19 @@ def _monto_menor(valor, moneda):
     return v if (moneda or "").upper() in MONEDAS_SIN_DECIMALES else v / 100
 
 
-def huella(tipo, act, claves):
-    """El id estable de una recomendación: tipo + cuenta + las claves (ids de objetos) ordenadas y sin repetir."""
-    texto = "|".join((str(tipo), str(act), ",".join(sorted({str(c) for c in claves or ()}))))
-    return hashlib.sha1(texto.encode("utf-8")).hexdigest()[:16]
+def huella(*partes):
+    """sha256 hex (64) de las partes unidas con «|»: la misma fórmula que `alertas.huella` (una prueba lo compara), sin
+    importar `alertas`, que arrastra la base."""
+    return hashlib.sha256("|".join(str(p) for p in partes).encode("utf-8")).hexdigest()
+
+
+def huella_recomendacion(tipo, act, nivel, claves=()):
+    """El id estable de una recomendación (= la huella de su alerta, ruling E2-R4). Tipos `AGREGADOS`: tipo + cuenta +
+    nivel (una alerta descartada vuelve solo si sube o baja de nivel, no porque cambió su lista de anuncios). Los
+    demás: tipo + cuenta + las claves (ids de objetos) ordenadas y sin repetir."""
+    if tipo in AGREGADOS:
+        return huella(tipo, act, nivel)
+    return huella(tipo, act, ",".join(sorted({str(c) for c in claves or ()})))
 
 
 def _impacto(monto_dia, moneda):
@@ -226,14 +261,14 @@ class _Cuenta:
 
     def rec(self, tipo, nivel, titulo, que_hacer, por_que, objetos=(), impacto=None, claves=None, enlace=None):
         """Una recomendación. `objetos` ya ordenados (los de más peso primero): se guardan los primeros
-        MAX_OBJETOS, pero la huella usa TODOS (o `claves`, si se dan)."""
+        MAX_OBJETOS, pero la huella usa TODOS (o `claves`, si se dan; los `AGREGADOS` no usan ninguno)."""
         objetos = list(objetos)
         ids = [o["id"] for o in objetos] if claves is None else claves
         visibles = objetos[:MAX_OBJETOS]
         if enlace is None:
             enlace = (administrador.enlace(self.act, visibles[0]["nivel"], [o["id"] for o in visibles])
                       if visibles else None) or administrador.enlace_cuenta(self.act)
-        return {"id": huella(tipo, self.act, ids), "nivel": nivel, "tipo": tipo, "cuenta": self.act,
+        return {"id": huella_recomendacion(tipo, self.act, nivel, ids), "nivel": nivel, "tipo": tipo, "cuenta": self.act,
                 "cuenta_nombre": self.nombre, "titulo": titulo, "que_hacer": que_hacer, "por_que": por_que,
                 "impacto": impacto, "objetos": visibles, "enlace": enlace}
 
@@ -267,26 +302,35 @@ def _aprendizaje_limitado(cx):
         return _una_linea((cx.campanas.get(cid) or {}).get("nombre")) or cid
 
     top = sorted(por_campana.items(), key=lambda kv: (-kv[1], nombre(kv[0]), kv[0]))[:APRENDIZAJE_CAMPANAS]
-    cabe = max(1, int(cx.compras_7 // COMPRAS_SEMANA_POR_CONJUNTO))
+    cabe = int(cx.compras_7 // COMPRAS_SEMANA_POR_CONJUNTO)
     total = len(activos)
     titulo = ngettext("%(n)s de %(total)s conjunto activo en aprendizaje limitado",
                       "%(n)s de %(total)s conjuntos activos en aprendizaje limitado", total,
                       n=_num(len(fail)), total=_num(total))
-    que_hacer = ngettext(
-        "Consolida conjuntos parecidos dentro de la misma campaña: con %(compras)s compras por semana, esta cuenta da "
-        "para ~%(cabe)s conjunto que salga del aprendizaje (Meta pide unas %(meta)s por conjunto).",
-        "Consolida conjuntos parecidos dentro de la misma campaña: con %(compras)s compras por semana, esta cuenta da "
-        "para ~%(cabe)s conjuntos que salgan del aprendizaje (Meta pide unas %(meta)s por conjunto).",
-        cabe, compras=_num(cx.compras_7), cabe=_num(cabe), meta=_num(COMPRAS_SEMANA_POR_CONJUNTO))
+    if cabe < 1:
+        que_hacer = gettext(
+            "Consolida conjuntos parecidos dentro de la misma campaña: con %(compras)s compras por semana, ningún "
+            "conjunto llega a las %(meta)s que Meta necesita para salir del aprendizaje; concentra el presupuesto en 1 "
+            "o 2 conjuntos.", compras=_num(cx.compras_7), meta=_num(COMPRAS_SEMANA_POR_CONJUNTO))
+    else:
+        que_hacer = ngettext(
+            "Consolida conjuntos parecidos dentro de la misma campaña: con %(compras)s compras por semana, esta "
+            "cuenta da para ~%(cabe)s conjunto que salga del aprendizaje (Meta pide unas %(meta)s por conjunto).",
+            "Consolida conjuntos parecidos dentro de la misma campaña: con %(compras)s compras por semana, esta "
+            "cuenta da para ~%(cabe)s conjuntos que salgan del aprendizaje (Meta pide unas %(meta)s por conjunto).",
+            cabe, compras=_num(cx.compras_7), cabe=_num(cabe), meta=_num(COMPRAS_SEMANA_POR_CONJUNTO))
     if top:
-        lista = ", ".join(f"«{nombre(cid)}» ({_num(n)})" for cid, n in top)
+        lista = ", ".join(gettext("«%(nombre)s» (%(n)s)", nombre=nombre(cid), n=_num(n)) for cid, n in top)
         que_hacer += " " + gettext("Empieza por las campañas con más conjuntos limitados: %(campanas)s.",
                                    campanas=lista)
-    por_que = gettext(
+    por_que = ngettext(
+        "%(n)s de %(total)s conjunto activo (%(pct_conjuntos)s %%) está en aprendizaje limitado y se llevó "
+        "%(gasto)s de los %(gasto_cuenta)s de los últimos 7 días (%(pct_gasto)s %%): sin salir del aprendizaje, Meta "
+        "no estabiliza su entrega.",
         "%(n)s de %(total)s conjuntos activos (%(pct_conjuntos)s %%) están en aprendizaje limitado y se llevaron "
         "%(gasto)s de los %(gasto_cuenta)s de los últimos 7 días (%(pct_gasto)s %%): sin salir del aprendizaje, Meta "
         "no estabiliza su entrega.",
-        n=_num(len(fail)), total=_num(total), pct_conjuntos=_pct(frac_conjuntos), gasto=cx.dinero(gasto_fail),
+        total, n=_num(len(fail)), total=_num(total), pct_conjuntos=_pct(frac_conjuntos), gasto=cx.dinero(gasto_fail),
         gasto_cuenta=cx.dinero(cx.gasto_7), pct_gasto=_pct(frac_gasto))
     objetos = [_objeto("campana", cid, nombre(cid)) for cid, _ in top]
     return [cx.rec("aprendizaje_limitado", nivel, titulo, que_hacer, por_que, objetos,
@@ -390,10 +434,11 @@ def _fatiga(cx):
                          "Prepara variantes antes de que se apaguen: «Evaluar con IA» propone ideas a partir de lo que "
                          "ya funciona.", n)
     por_que = ngettext(
-        "Su ROAS o su CTR cayó frente a la semana anterior y su campaña ya muestra cada anuncio %(frecuencia)s veces "
-        "por persona en 7 días (desde %(minimo)s se nota el cansancio).",
-        "A cada uno le cayó el ROAS o el CTR frente a la semana anterior y sus campañas ya muestran cada anuncio "
-        "hasta %(frecuencia)s veces por persona en 7 días (desde %(minimo)s se nota el cansancio).",
+        "Su ROAS o su CTR cayó frente a la semana anterior, y las personas de su campaña ya vieron sus anuncios "
+        "%(frecuencia)s veces en promedio en los últimos 7 días (desde %(minimo)s se nota el cansancio).",
+        "A cada uno le cayó el ROAS o el CTR frente a la semana anterior, y las personas de sus campañas ya vieron "
+        "sus anuncios hasta %(frecuencia)s veces en promedio en los últimos 7 días (desde %(minimo)s se nota el "
+        "cansancio).",
         n, frecuencia=_num(frecuencia, 1), minimo=_num(FATIGA_FRECUENCIA_MIN))
     objetos = [_objeto("anuncio", a["ad_id"], a.get("nombre")) for a in cansados]
     return [cx.rec("fatiga", "media", titulo, que_hacer, por_que, objetos)]
@@ -446,7 +491,7 @@ def _cuenta_roas_bajo(cx):
     campanas = sorted(cx.campanas.items(), key=lambda kv: (-gasto_campana[kv[0]], kv[0]))
     objetos = [_objeto("campana", cid, c.get("nombre")) for cid, c in campanas]
     return [cx.rec("cuenta_roas_bajo", "alta", titulo, que_hacer, por_que, objetos,
-                   cx.impacto(cx.gasto_30 / DIAS_MES), claves=[])]
+                   cx.impacto(cx.gasto_30 / DIAS_MES))]
 
 
 def _cuenta_estado(cx):
@@ -468,16 +513,54 @@ def _cuenta_estado(cx):
         titulo = titulo or gettext("La cuenta está por llegar a su tope de gasto")
     if not motivos:
         return []
-    return [cx.rec("cuenta_estado", "alta", titulo, " ".join(acciones), " ".join(motivos), claves=[])]
+    return [cx.rec("cuenta_estado", "alta", titulo, " ".join(acciones), " ".join(motivos))]
 
 
-def nombre_segmento(dimension, clave):
-    """«55-64 · mujeres», «facebook · feed», «NO»: la clave de un desglose en palabras (las partes unidas con «·»;
-    el género traducido)."""
-    partes = str(clave or "").split("|")
+def _legible(valor):
+    """Una clave de Meta que no está en los diccionarios: guiones bajos a espacios y la primera letra en mayúscula."""
+    texto = str(valor).replace("_", " ").strip()
+    return texto[:1].upper() + texto[1:]
+
+
+def _parte(valor, diccionario):
+    if valor.lower() == SIN_VALOR:
+        return gettext(SIN_DATO)
+    texto = diccionario.get(valor.lower())
+    return gettext(texto) if texto else _legible(valor)
+
+
+def _posicion(valor):
+    k = valor.lower()
+    if k == SIN_VALOR:
+        return gettext(SIN_DATO)
+    texto = POSICIONES.get(k) or (POSICION_REELS if k.endswith("reels") else
+                                  POSICION_HISTORIAS if k.endswith(("stories", "story")) else
+                                  POSICION_EXPLORAR if "explore" in k else None)
+    return gettext(texto) if texto else _legible(valor)
+
+
+def nombre_segmento(dimension, clave, locale=None):
+    """Un segmento de desglose en palabras, para la regla `segmento_caro` y la sección «Segmentos» del panel:
+    «25–34 · Mujeres», «Instagram · Reels», «Noruega» (el país en el idioma `locale`; por defecto el activo, el de
+    quien mira o el de `idiomas.en_idioma`), «Celular (app)». Lo que Meta no sabe clasificar es «Sin dato» y una
+    clave desconocida va legible (guiones bajos a espacios)."""
+    partes = [p.strip() for p in str(clave or "").split("|")]
     if dimension == "edad_genero" and len(partes) == 2:
-        partes[1] = gettext(GENEROS[partes[1]]) if partes[1] in GENEROS else partes[1]
-    return " · ".join(p if p != SIN_VALOR else gettext(GENEROS[SIN_VALOR]) for p in partes)
+        edad, genero = partes
+        edad = gettext(SIN_DATO) if edad.lower() == SIN_VALOR else edad.replace("-", "–")
+        return " · ".join((edad, _parte(genero, GENEROS)))
+    if dimension == "ubicacion":
+        plataforma, posicion = (partes + [""])[:2]
+        return " · ".join(t for t in (_parte(plataforma, PLATAFORMAS) if plataforma else "",
+                                      _posicion(posicion) if posicion else "") if t)
+    if dimension == "pais" and len(partes) == 1:
+        codigo = partes[0]
+        if not codigo or codigo.lower() == SIN_VALOR:
+            return gettext(SIN_DATO)
+        return paises.nombre_pais(codigo, locale or idiomas.activo())
+    if dimension == "dispositivo" and len(partes) == 1:
+        return _parte(partes[0], DISPOSITIVOS)
+    return " · ".join(_legible(p) for p in partes)
 
 
 def _segmento_caro(cx):
