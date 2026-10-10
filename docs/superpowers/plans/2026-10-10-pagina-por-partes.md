@@ -27,5 +27,7 @@ Meta: la página de happyflops baja de 910 KB a menos de 600 KB, sin cambiar lo 
 Los cuatro scripts inline de Crear pasan a archivos en `static/` con `?v=` (se cachean un año); los valores de Jinja que
 usan llegan por atributos `data-*` o un `<script type="application/json">`. Meta: −120 KB por visita repetida.
 
+**Entrega 2 hecha el 2026-10-10** (Codex + revisor en el navegador contra main + una ronda): los cuatro scripts de Crear en `static/crear-{compositor,flowplus,guiones,audios}.js` con ?v=; textos y datos en un JSON por script. El compositor va SIN `defer`, justo después del formulario: con `defer` el botón «Generar video» quedaba usable sin precio ni guardas hasta el final de la carga. Página sembrada 516 → 406 KB.
+
 ## Entrega 3 — solo si hace falta
 Pestañas enteras por fetch al abrirlas. Se decide con las cifras después de las entregas 1 y 2.
