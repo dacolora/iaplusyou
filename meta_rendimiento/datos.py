@@ -1,5 +1,6 @@
 """Copias de Meta en la base y sus lecturas agregadas (spec §4, §6 y §8). Único
-escritor de meta_cuenta_dia, meta_anuncio_dia, meta_objeto y meta_alcance.
+escritor de meta_cuenta_dia, meta_anuncio_dia, meta_objeto, meta_alcance y, desde E2 (spec E2 §4),
+meta_desglose y meta_evaluacion.
 
 Cada escritura es UNA transacción. Reemplazar un tramo borra ese rango de la
 cuenta y lo vuelve a escribir: Meta reatribuye compras de días pasados, así
@@ -30,6 +31,16 @@ _TANDA_IDS = 500
 # Una miniatura se enlaza directo en la pestaña (`<img src>`): solo se guarda una URL https de los servidores de
 # imágenes de Meta y nunca una que lleve un token (revisión final de seguridad, 2026-10-08).
 _HOSTS_MINIATURA = ("fbcdn.net", "facebook.com", "fbsbx.com")
+
+# E2 (spec E2 §4 y §5): los desgloses se piden por ventana (días) y dimensión; la clave es texto libre
+# («25-34|female», «facebook|feed», «NO», «mobile_app»).
+DIMENSIONES = ("edad_genero", "ubicacion", "pais", "dispositivo")
+VENTANAS_DESGLOSE = (7, 30)
+METRICAS_DESGLOSE = ("gasto", "impresiones", "clics", "clics_salida", "compras", "valor")
+_LARGO_CLAVE = 120
+# La «Evaluación con IA» (spec E2 §8). Lo que nunca se cambia después de crearla.
+ESTADOS_EVALUACION = ("en_cola", "analizando", "lista", "error")
+_FIJOS_EVALUACION = ("id", "cliente", "creado_en", "actualizado_en")
 
 
 def miniatura_valida(url):
@@ -197,10 +208,86 @@ def guardar_alcance(cliente, act, filas):
     return len(registros)
 
 
-def borrar_cuenta(cliente, act):
-    """Quita las cuatro copias de esa cuenta en ese proyecto (nunca `meta_cuenta` ni lo de otro proyecto)."""
+def _ventana_desglose(ventana):
+    try:
+        v = int(ventana)
+    except (TypeError, ValueError):
+        v = None
+    if v not in VENTANAS_DESGLOSE:
+        raise ValueError(f"ventana de desglose inválida: {ventana!r}")
+    return v
+
+
+def reemplazar_desgloses(cliente, act, ventana, dimension, filas):
+    """Los desgloses de UNA cuenta para una ventana (7|30 días) y una dimensión (`DIMENSIONES`): borra esa
+    combinación y escribe `filas` en una transacción (una lista vacía la deja vacía). Las otras ventanas,
+    dimensiones y cuentas no se tocan. Claves de fila: `clave` (texto; una fila sin clave se ignora y, si llega
+    repetida, gana la última) y `METRICAS_DESGLOSE`. Una ventana o dimensión fuera de lo conocido levanta
+    ValueError antes de tocar nada. Devuelve cuántas filas escribió."""
+    ventana = _ventana_desglose(ventana)
+    if dimension not in DIMENSIONES:
+        raise ValueError(f"dimensión de desglose inválida: {dimension!r}")
+    t = db.meta_desglose
+    ahora = db.ahora()
+    por_clave = {}
+    for f in filas or []:
+        clave = f.get("clave")
+        if clave is None or not str(clave).strip():
+            continue
+        clave = str(clave)[:_LARGO_CLAVE]
+        por_clave[clave] = dict({c: _valor(c, f.get(c)) for c in METRICAS_DESGLOSE}, cliente=cliente,
+                                ad_account_id=act, ventana=ventana, dimension=dimension, clave=clave,
+                                calculado_en=ahora)
+    registros = list(por_clave.values())
     with db.conectar() as con:
-        for t in (db.meta_cuenta_dia, db.meta_anuncio_dia, db.meta_objeto, db.meta_alcance):
+        con.execute(t.delete().where(t.c.cliente == cliente, t.c.ad_account_id == act, t.c.ventana == ventana,
+                                     t.c.dimension == dimension))
+        if registros:
+            con.execute(t.insert(), registros)
+    return len(registros)
+
+
+def crear_evaluacion(cliente, cuentas, desde, hasta, moneda, muestra, recomendaciones, pedido_por=None):
+    """Una «Evaluación con IA» nueva, en estado `en_cola`: guarda el alcance pedido (`cuentas`, `desde`, `hasta`,
+    `moneda`), lo que se enviará a Claude (`muestra`) y las recomendaciones de las reglas gratis de ese momento.
+    Devuelve su id."""
+    t = db.meta_evaluacion
+    ahora = db.ahora()
+    with db.conectar() as con:
+        return con.execute(t.insert().values(
+            cliente=cliente, creado_en=ahora, actualizado_en=ahora, estado="en_cola", cuentas=list(cuentas or []),
+            desde=desde, hasta=hasta, moneda=moneda, muestra=list(muestra or []),
+            recomendaciones=list(recomendaciones or []), resultado={}, usd=0.0, extra={},
+            pedido_por=pedido_por)).inserted_primary_key[0]
+
+
+def actualizar_evaluacion(evaluacion_id, **campos):
+    """Cambia SOLO las columnas dadas de una evaluación (la tarea del worker y la ruta escriben columnas distintas:
+    `estado`/`resultado`/`usd`/`error` y `extra`). `actualizado_en` lo pone esta capa; `id`, `cliente` y `creado_en`
+    no se cambian, y un `estado` o una columna desconocida levanta ValueError. True si la evaluación existe."""
+    t = db.meta_evaluacion
+    if "estado" in campos and campos["estado"] not in ESTADOS_EVALUACION:
+        raise ValueError(f"estado inválido: {campos['estado']}")
+    for c in campos:
+        if c in _FIJOS_EVALUACION or c not in t.c:
+            raise ValueError(f"columna que no se cambia: {c}")
+    with db.conectar() as con:
+        return con.execute(t.update().where(t.c.id == evaluacion_id)
+                           .values(actualizado_en=db.ahora(), **campos)).rowcount == 1
+
+
+def borrar_evaluacion(cliente, evaluacion_id):
+    """Borra la evaluación SI es de ese proyecto. True si la borró."""
+    t = db.meta_evaluacion
+    with db.conectar() as con:
+        return con.execute(t.delete().where(t.c.id == evaluacion_id, t.c.cliente == cliente)).rowcount == 1
+
+
+def borrar_cuenta(cliente, act):
+    """Quita las copias de esa cuenta en ese proyecto: los días de cuenta y de anuncio, los objetos, el alcance y los
+    desgloses (nunca `meta_cuenta`, lo de otro proyecto ni las evaluaciones: se pagaron y se conservan)."""
+    with db.conectar() as con:
+        for t in (db.meta_cuenta_dia, db.meta_anuncio_dia, db.meta_objeto, db.meta_alcance, db.meta_desglose):
             con.execute(t.delete().where(t.c.cliente == cliente, t.c.ad_account_id == act))
 
 
@@ -432,3 +519,51 @@ def activos(cliente, cuentas):
             if r.nivel == "conjunto":
                 salida[r.ad_account_id]["aprendizaje_limitado"] = int(r.fail or 0)
     return salida
+
+
+def desgloses(cliente, cuentas, ventana):
+    """Los desgloses copiados de esas cuentas para una ventana (7|30 días), en UNA consulta: una fila por
+    (cuenta, dimensión, clave) con `ad_account_id`, `dimension`, `clave`, `METRICAS_DESGLOSE` y `calculado_en`.
+    Orden: cuenta, dimensión y gasto descendente."""
+    if not cuentas:
+        return []
+    t = db.meta_desglose
+    q = (sa.select(t.c.ad_account_id, t.c.dimension, t.c.clave, *[t.c[c] for c in METRICAS_DESGLOSE],
+                   t.c.calculado_en)
+         .where(t.c.cliente == cliente, t.c.ad_account_id.in_(list(cuentas)), t.c.ventana == int(ventana))
+         .order_by(t.c.ad_account_id, t.c.dimension, t.c.gasto.desc(), t.c.clave))
+    with db.conectar() as con:
+        filas = con.execute(q).mappings().all()
+    return [dict(ad_account_id=f["ad_account_id"], dimension=f["dimension"], clave=f["clave"],
+                 calculado_en=f["calculado_en"], **_medidas(f, METRICAS_DESGLOSE)) for f in filas]
+
+
+def gasto_por_conjunto(cliente, cuentas, desde, hasta):
+    """{adset_id: {"gasto", "compras", "valor"}}: lo que gastó cada conjunto en el rango, de meta_anuncio_dia, en
+    UNA consulta agregada (las reglas de aprendizaje limitado y de escalar miran el gasto de 7 días). Los días sin
+    conjunto no cuentan."""
+    if not cuentas:
+        return {}
+    a = db.meta_anuncio_dia
+    q = (sa.select(a.c.adset_id, *_sumas(a, ("gasto", "compras", "valor")))
+         .where(*_donde(a, cliente, cuentas, desde, hasta), a.c.adset_id.is_not(None), a.c.adset_id != "")
+         .group_by(a.c.adset_id))
+    with db.conectar() as con:
+        filas = con.execute(q).mappings().all()
+    return {f["adset_id"]: _medidas(f, ("gasto", "compras", "valor")) for f in filas}
+
+
+def evaluacion(cliente, evaluacion_id):
+    """La evaluación como dict, o None si no existe o es de otro proyecto."""
+    t = db.meta_evaluacion
+    with db.conectar() as con:
+        fila = con.execute(sa.select(t).where(t.c.id == evaluacion_id, t.c.cliente == cliente)).first()
+    return dict(fila._mapping) if fila else None
+
+
+def evaluaciones(cliente, limite=5):
+    """Las últimas `limite` evaluaciones del proyecto (la más nueva primero), en UNA consulta."""
+    t = db.meta_evaluacion
+    q = sa.select(t).where(t.c.cliente == cliente).order_by(t.c.creado_en.desc(), t.c.id.desc()).limit(limite)
+    with db.conectar() as con:
+        return [dict(f._mapping) for f in con.execute(q)]

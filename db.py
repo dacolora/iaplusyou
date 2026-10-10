@@ -1248,6 +1248,46 @@ tasa_cambio = Table("tasa_cambio", metadata,
     sa.UniqueConstraint("fecha", "moneda", name="uq_tasa_cambio"),
 )
 
+# --- Meta rendimiento E2: diagnosticar y recomendar (spec 2026-10-10 meta rendimiento E2 §4, migración 0036) ---
+# Los desgloses de una cuenta (edad+género, ubicación, país, dispositivo) en ventanas de 7 y 30 días: una copia que
+# se reemplaza por (cuenta, ventana, dimensión). Único escritor: meta_rendimiento/datos.py.
+meta_desglose = Table("meta_desglose", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("cliente", String(80), nullable=False),
+    Column("ad_account_id", String(40), nullable=False),
+    Column("ventana", Integer, nullable=False),              # 7|30
+    Column("dimension", String(20), nullable=False),         # edad_genero|ubicacion|pais|dispositivo
+    Column("clave", String(120), nullable=False),            # «25-34|female», «facebook|feed», «NO», «mobile_app»
+    Column("gasto", Float, default=0.0), Column("impresiones", Integer, default=0),
+    Column("clics", Integer, default=0), Column("clics_salida", Integer, default=0),
+    Column("compras", Float, default=0.0), Column("valor", Float, default=0.0),
+    Column("calculado_en", String(19), nullable=False),
+    sa.UniqueConstraint("cliente", "ad_account_id", "ventana", "dimension", "clave", name="uq_meta_desglose"),
+)
+
+# «Evaluación con IA» del rendimiento de Meta: PAGADA, así que nunca se borra al quitar una cuenta (como
+# tw_analisis); AUTOINCREMENT para que un id borrado no se reuse. Único escritor: meta_rendimiento/datos.py.
+meta_evaluacion = Table("meta_evaluacion", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("cliente", String(80), nullable=False),
+    Column("creado_en", String(19), nullable=False),
+    Column("actualizado_en", String(19), nullable=False),
+    Column("estado", String(12), nullable=False, default="en_cola"),   # en_cola|analizando|lista|error
+    Column("cuentas", JSON, default=list),                   # las «act_…» del alcance pedido
+    Column("desde", String(10)), Column("hasta", String(10)),
+    Column("moneda", String(3)),
+    Column("muestra", JSON, default=list),                   # los anuncios que se enviaron a Claude
+    Column("recomendaciones", JSON, default=list),           # las de las reglas gratis al pedirla
+    Column("resultado", JSON, default=dict),
+    Column("usd", Float, default=0.0),
+    Column("error", Text),
+    Column("tarea_id", Integer),
+    Column("pedido_por", String(80)),
+    Column("extra", JSON, default=dict),
+    sa.Index("ix_meta_evaluacion_cliente_creado", "cliente", "creado_en"),
+    sqlite_autoincrement=True,
+)
+
 
 def crear_todo():
     """Solo para tests y scripts locales. En producción manda Alembic."""

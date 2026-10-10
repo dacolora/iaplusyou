@@ -37,3 +37,48 @@ def test_upgrade_crea_las_tablas_y_downgrade_las_borra(tmp_path):
 def test_db_crear_todo_coincide(base_temporal):
     nombres = set(sa.inspect(base_temporal.engine()).get_table_names())
     assert set(TABLAS) <= nombres
+
+
+# ---------------------------------------------------------------- E2: migración 0036 (spec E2 §4) ---
+
+TABLAS_E2 = ("meta_desglose", "meta_evaluacion")
+
+
+def test_una_sola_cabeza_de_alembic_y_es_la_0036():
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+    cfg = Config(os.path.join(RAIZ, "alembic.ini"))
+    cfg.set_main_option("script_location", os.path.join(RAIZ, "migrations"))
+    assert ScriptDirectory.from_config(cfg).get_heads() == ["0036"]
+
+
+def test_0036_arriba_abajo_arriba(tmp_path):
+    eng = _alembic(tmp_path, "upgrade", "head")
+    insp = sa.inspect(eng)
+    assert set(TABLAS_E2) <= set(insp.get_table_names())
+    uq = {u["name"]: u for u in insp.get_unique_constraints("meta_desglose")}
+    assert uq["uq_meta_desglose"]["column_names"] == ["cliente", "ad_account_id", "ventana", "dimension", "clave"]
+    ix = {i["name"]: i for i in insp.get_indexes("meta_evaluacion")}
+    assert ix["ix_meta_evaluacion_cliente_creado"]["column_names"] == ["cliente", "creado_en"]
+    eng.dispose()
+
+    # Abajo: las dos tablas de E2 se van; las seis de E1 (0035) y la 0034 siguen.
+    eng = _alembic(tmp_path, "downgrade", "0035")
+    nombres = set(sa.inspect(eng).get_table_names())
+    assert not set(TABLAS_E2) & nombres
+    assert set(TABLAS) <= nombres
+    eng.dispose()
+
+    # Arriba otra vez: vuelven (la migración se puede repetir).
+    eng = _alembic(tmp_path, "upgrade", "head")
+    assert set(TABLAS_E2) <= set(sa.inspect(eng).get_table_names())
+    eng.dispose()
+
+
+def test_0036_coincide_con_db_py(tmp_path, base_temporal):
+    """Las columnas de la base migrada son las de `db.py` (lo que usan las pruebas): sin deriva entre los dos."""
+    eng = _alembic(tmp_path, "upgrade", "head")
+    real, modelo = sa.inspect(eng), sa.inspect(base_temporal.engine())
+    for tabla in TABLAS_E2:
+        assert {c["name"] for c in real.get_columns(tabla)} == {c["name"] for c in modelo.get_columns(tabla)}
+    eng.dispose()
