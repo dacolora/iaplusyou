@@ -1,0 +1,20 @@
+{# Panel de la pestaña «Rendimiento» (spec 2026-10-09). PROVISIONAL de la tarea 6 del plan
+   docs/superpowers/plans/2026-10-09-pestana-rendimiento-e1.md: la tarea 7 lo reemplaza entero y conserva tres marcas
+   que ya prueban las rutas: el selector `data-rend-param="entrada"`, el título de «Resultados» y `id="tw-galeria"`
+   cuando hay parte Triple Whale. Contexto: `r` (pestana_rendimiento.panel.contexto), `cliente`, `es_admin`.
+   Sin <script>. #}
+{% if not r.conectado %}
+<p class="vacio">{{ _('Conecta Triple Whale o Meta para ver tu rendimiento.') }}</p>
+{% else %}
+<div class="tw-barra">
+  <select data-rend-param="entrada" aria-label="{{ _('País') }}">
+    {% if r.entradas|length > 1 %}<option value=""{% if not r.actual %} selected{% endif %}>{{ _('Todas') }}</option>{% endif %}
+    {% for e in r.entradas %}
+    <option value="{{ e.clave }}"{% if r.actual and r.actual.clave == e.clave %} selected{% endif %}>{{ e.bandera }} {{ e.nombre }}</option>
+    {% endfor %}
+  </select>
+</div>
+{% set res = r.tw.resultados if r.tw and r.tw.resultados else r.resumen.resultados %}
+{% if res %}<h3>{{ res.titulo }}</h3>{% endif %}
+{% if r.tw %}<div id="tw-galeria"></div>{% endif %}
+{% endif %}

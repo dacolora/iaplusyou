@@ -357,6 +357,9 @@ from meta_rendimiento import rutas as meta_rendimiento_rutas  # noqa: E402  (Blu
 from meta_rendimiento import cuentas as meta_rend_cuentas  # noqa: E402  (las cuentas que lee el proyecto)
 app.register_blueprint(meta_rendimiento_rutas.bp)
 
+from pestana_rendimiento import rutas as rendimiento_rutas  # noqa: E402  (Blueprint de la pestaña Rendimiento)
+app.register_blueprint(rendimiento_rutas.bp)
+
 from guiones import rutas as guiones_rutas  # noqa: E402  (Blueprint JSON del chat de Flow Plus en Crear)
 app.register_blueprint(guiones_rutas.bp)
 

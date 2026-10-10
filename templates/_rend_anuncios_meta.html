@@ -1,0 +1,16 @@
+{# Tarjetas de los anuncios cuya fuente es Meta en «Rendimiento» (spec 2026-10-09 R14). PROVISIONAL de la tarea 6
+   del plan docs/superpowers/plans/2026-10-09-pestana-rendimiento-e1.md, para que la ruta
+   `rendimiento.ver_anuncios_meta` responda: la tarea 7 lo reemplaza con las tarjetas de verdad. Contexto: `r`
+   (pestana_rendimiento.panel.contexto o anuncios_meta_pagina) y `cliente`. Sin botón de IA. Sin <script>. #}
+{% set pag = r.meta.anuncios if r.meta else none %}
+{% if pag %}
+{% for a in pag.anuncios %}
+<article class="tarjeta" data-veredicto="{{ a.veredicto }}">
+  <strong>{{ a.nombre or a.ad_id }}</strong>
+  <small>{{ r.etiquetas_veredicto[a.veredicto] | traducir }}</small>
+</article>
+{% endfor %}
+{% if pag.hay_mas_anuncios %}
+<button type="button" class="btn-sm" data-rend-mas="{{ url_for('rendimiento.ver_anuncios_meta', cliente=cliente, entrada=r.params.entrada, dias=r.params.dias, pagina=pag.pagina_anuncios + 1) }}">{{ _('Ver más') }}</button>
+{% endif %}
+{% endif %}

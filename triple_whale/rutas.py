@@ -422,6 +422,17 @@ def anuncio_referente(cliente, canal, ad_id):
     return _volver(cliente)
 
 
+def pedir_copia(cliente, tienda_id=None):
+    """(texto ya traducido, categoría de flash) de pedir la copia de Triple Whale (gratis): la de esa tienda o, sin
+    `tienda_id`, la de cada tienda del proyecto. El llamador ya comprobó que la tienda es del proyecto. La usan
+    «Sincronizar» de esta pestaña y «Actualizar ahora» de Rendimiento (spec 2026-10-09 A5)."""
+    if not triple_whale_tiendas.obtener(cliente):
+        return gettext("Triple Whale no está conectado en este proyecto."), "error"
+    if tareas_tw.encolar_sync(cliente, tienda_id):
+        return gettext("Trayendo las métricas de Triple Whale…"), "ok"
+    return gettext("Ya se están trayendo las métricas de Triple Whale."), "warn"
+
+
 @bp.post("/sincronizar")
 def sincronizar(cliente):
     tienda_id = None
@@ -433,12 +444,7 @@ def sincronizar(cliente):
             abort(404)
         if not triple_whale_tiendas.tienda(cliente, tienda_id):
             abort(404)
-    if not triple_whale_tiendas.obtener(cliente):
-        flash(gettext("Triple Whale no está conectado en este proyecto."), "error")
-    elif tareas_tw.encolar_sync(cliente, tienda_id):
-        flash(gettext("Trayendo las métricas de Triple Whale…"), "ok")
-    else:
-        flash(gettext("Ya se están trayendo las métricas de Triple Whale."), "warn")
+    flash(*pedir_copia(cliente, tienda_id))
     return _volver(cliente)
 
 

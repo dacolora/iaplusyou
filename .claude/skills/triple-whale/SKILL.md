@@ -346,6 +346,7 @@ lo atribuido por el Pixel sumaba 2,5 veces las ventas reales de la tienda (PND-1
 - **Parámetros.** `evaluacion.alertas(..., origen="tw"|"meta")`: con `"meta"` la alerta «sin ventas» habla del Pixel de Meta
   y no de los parámetros de rastreo. `panel.contexto(..., con_resultados=False)` no calcula «Resultados de tu tienda»
   (`"resultados"` es None); la pestaña Rendimiento arma los suyos cuando el alcance mezcla fuentes.
+- **Pedir la copia.** `rutas.pedir_copia(cliente, tienda_id=None)` → (texto traducido, categoría de flash): la usan `sincronizar` de esta pestaña y «Actualizar ahora» de Rendimiento (`rendimiento.actualizar`), así los dos dicen lo mismo y encolan con el mismo `job_id` (2026-10-09, tarea 6).
 - **Tasas.** Al terminar bien una copia, `tareas.triple_whale._asegurar_tasas(cliente)` pide a `meta_rendimiento.tasas` las
   tasas USD de la moneda del proyecto (si no es USD) desde el primer día copiado, para que «Todas» sume en dólares; nunca
   tumba la copia.

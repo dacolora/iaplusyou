@@ -1,6 +1,8 @@
 {# Filas de la tabla «Conjuntos» de la pestaña «Meta»: incluidas en _meta_panel.html (la primera página) y solas como
    respuesta de «Ver más» (meta_rendimiento.rutas.ver_conjuntos). Solo <tr>. Contexto: `mr` (panel.contexto o
-   panel.conjuntos_pagina) y `cliente`. Sin <script>. #}
+   panel.conjuntos_pagina) y `cliente`. Sin <script>.
+   En la pestaña Rendimiento (spec 2026-10-09) `mr` trae `params` (la entrada y el periodo) y su «Ver más» va a
+   rendimiento.ver_conjuntos, que resuelve el mismo alcance que el panel. #}
 {% import "_meta_macros.html" as mx %}
 {% for s in mr.conjuntos %}
 <tr>
@@ -19,6 +21,11 @@
 {% endfor %}
 {% if mr.hay_mas_conjuntos %}
 <tr class="meta-mas">
-  <td colspan="7"><button type="button" class="btn-sm" data-meta-mas="{{ url_for('meta_rendimiento.ver_conjuntos', cliente=cliente, dias=mr.dias, cuenta=mr.actual.ad_account_id if mr.actual else none, pagina=mr.pagina_conjuntos + 1) }}">{{ _('Ver más') }}</button></td>
+  {% if mr.params is defined %}
+  {% set url_mas = url_for('rendimiento.ver_conjuntos', cliente=cliente, entrada=mr.params.entrada, dias=mr.params.dias, pagina=mr.pagina_conjuntos + 1) %}
+  {% else %}
+  {% set url_mas = url_for('meta_rendimiento.ver_conjuntos', cliente=cliente, dias=mr.dias, cuenta=mr.actual.ad_account_id if mr.actual else none, pagina=mr.pagina_conjuntos + 1) %}
+  {% endif %}
+  <td colspan="7"><button type="button" class="btn-sm" data-meta-mas="{{ url_mas }}">{{ _('Ver más') }}</button></td>
 </tr>
 {% endif %}

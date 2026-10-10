@@ -295,23 +295,31 @@ def _copiada_hace_poco(cliente, act):
     return False
 
 
+def pedir_copia(cliente, act=None):
+    """(texto ya traducido, categoría de flash) de pedir la copia de Meta (gratis): la de la cuenta `act` o, sin
+    ella, la de todas las del proyecto. El llamador ya comprobó que la cuenta es del proyecto. Respeta la pausa
+    compartida y la espera de 30 minutos de quien no es admin (ruling R22). La usan «Actualizar ahora» de esta
+    pestaña y el de Rendimiento (spec 2026-10-09 A5)."""
+    if not _token(cliente):
+        return gettext("Meta no está conectado en este proyecto."), "error"
+    if not cuentas.ids(cliente):
+        return gettext("Elige primero qué cuentas publicitarias quieres ver."), "warn"
+    hasta = pausa.pausada_hasta()
+    if hasta:
+        # Meta pidió esperar (ruling R22): una copia encolada ahora no correría; se dice la hora en vez de «Trayendo…».
+        return gettext("Meta pidió esperar: la copia sigue a las %(hora)s.", hora=hasta[11:16]), "warn"
+    if not es_admin() and _copiada_hace_poco(cliente, act):
+        return gettext("Las métricas de Meta se acaban de actualizar: espera %(minutos)s minutos para volver a "
+                       "pedirlo.", minutos=int(ESPERA_ACTUALIZAR.total_seconds() // 60)), "warn"
+    if tareas_mr.encolar_sync(cliente, act):
+        return gettext("Trayendo las métricas de Meta…"), "ok"
+    return gettext("Ya se están trayendo las métricas de Meta."), "warn"
+
+
 @bp.post("/sincronizar")
 def sincronizar(cliente):
     act = (request.form.get("act") or "").strip() or None
     if act and not cuentas.cuenta(cliente, act):
         abort(404)
-    if not _token(cliente):
-        flash(gettext("Meta no está conectado en este proyecto."), "error")
-    elif not cuentas.ids(cliente):
-        flash(gettext("Elige primero qué cuentas publicitarias quieres ver."), "warn")
-    elif (hasta := pausa.pausada_hasta()):
-        # Meta pidió esperar (ruling R22): una copia encolada ahora no correría; se dice la hora en vez de «Trayendo…».
-        flash(gettext("Meta pidió esperar: la copia sigue a las %(hora)s.", hora=hasta[11:16]), "warn")
-    elif not es_admin() and _copiada_hace_poco(cliente, act):
-        flash(gettext("Las métricas de Meta se acaban de actualizar: espera %(minutos)s minutos para volver a pedirlo.",
-                      minutos=int(ESPERA_ACTUALIZAR.total_seconds() // 60)), "warn")
-    elif tareas_mr.encolar_sync(cliente, act):
-        flash(gettext("Trayendo las métricas de Meta…"), "ok")
-    else:
-        flash(gettext("Ya se están trayendo las métricas de Meta."), "warn")
+    flash(*pedir_copia(cliente, act))
     return _volver(cliente)

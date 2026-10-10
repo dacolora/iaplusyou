@@ -433,15 +433,22 @@ def rango_fechas(cliente, ids, dias, hoy):
     return periodo(dias, hoy, primero)
 
 
+def conjuntos_de(cliente, ids, desde, hasta, cuentas_por_id, pagina=0):
+    """Una página de conjuntos de esas cuentas, sin campañas ni alcance (el «Ver más» de la pestaña Rendimiento):
+    {"conjuntos", "hay_mas_conjuntos", "pagina_conjuntos"}. Una lectura agregada con su `limit`/`offset`."""
+    pagina = _pagina_valida(pagina)
+    conjuntos, hay_mas = _conjuntos(cliente, ids, desde, hasta, pagina, cuentas_por_id)
+    return {"conjuntos": conjuntos, "hay_mas_conjuntos": hay_mas, "pagina_conjuntos": pagina}
+
+
 def estructura(cliente, ids, desde, hasta, dias, cuentas_por_id, pagina_conjuntos=0):
     """Campañas (con su alcance) y la página de conjuntos de esas cuentas: {"campanas", "conjuntos",
     "hay_mas_conjuntos", "pagina_conjuntos", "ventana_alcance"}. `dias` 0 (desde el inicio) usa la ventana de alcance
     más larga copiada (90 días): es la más cercana a «todo»."""
     ventana = _ventana_alcance(dias or 90)
-    pagina = _pagina_valida(pagina_conjuntos)
-    conjuntos, hay_mas = _conjuntos(cliente, ids, desde, hasta, pagina, cuentas_por_id)
-    return {"campanas": _campanas(cliente, ids, desde, hasta, ventana, cuentas_por_id), "conjuntos": conjuntos,
-            "hay_mas_conjuntos": hay_mas, "pagina_conjuntos": pagina, "ventana_alcance": ventana}
+    salida = conjuntos_de(cliente, ids, desde, hasta, cuentas_por_id, pagina_conjuntos)
+    salida.update(campanas=_campanas(cliente, ids, desde, hasta, ventana, cuentas_por_id), ventana_alcance=ventana)
+    return salida
 
 
 def _pagina_de_anuncios(cliente, ids, desde, hasta, hoy, cuentas_por_id, pagina):
