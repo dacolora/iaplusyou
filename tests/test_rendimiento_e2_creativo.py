@@ -99,6 +99,28 @@ def test_traer_arma_el_texto_y_sube_imagen_y_video_a_r2(meta):
     assert (VIDEO, {"fields": "source,length"}) in meta["llamadas"]
 
 
+@pytest.mark.parametrize("formato", ["BMP", "TIFF", "ICO"])
+def test_una_imagen_en_un_formato_no_permitido_no_se_abre_ni_se_sube(meta, monkeypatch, formato):
+    """S3 (revisión final de Rendimiento E2, auditor de seguridad, 2026-10-10): la imagen llega de un tercero y Pillow
+    abriría cualquier formato que conozca. Solo JPEG, PNG, WEBP y GIF (`Image.open(..., formats=)`); otro deja la
+    imagen en None, sin excepción ni subida a R2."""
+    def _descargar(url, ruta, **_):
+        Image.new("RGB", (64, 64), (10, 200, 10)).save(ruta, format=formato)
+        return 1
+    monkeypatch.setattr(conector_url, "descargar_archivo", _descargar)
+    assert creativo._copiar_imagen(IMG_META, "clientes/acme/rendimiento/a1_1.jpg", AD) is None
+    assert meta["subidas"] == []
+
+
+def test_una_imagen_png_o_webp_si_se_sube(meta, monkeypatch):
+    for formato in ("PNG", "WEBP", "GIF", "JPEG"):
+        def _descargar(url, ruta, _f=formato, **_):
+            Image.new("RGB", (64, 64), (10, 200, 10)).save(ruta, format=_f)
+            return 1
+        monkeypatch.setattr(conector_url, "descargar_archivo", _descargar)
+        assert creativo._copiar_imagen(IMG_META, f"k_{formato}.jpg", AD) == f"https://media.test/k_{formato}.jpg"
+
+
 def test_sin_body_ni_title_el_texto_sale_de_object_story_spec(meta):
     meta["anuncio"] = _anuncio(body=None, title=None, video_id=None, object_type="SHARE", image_url=None,
                                object_story_spec={"link_data": {"message": "Copy del link", "name": "Título del link"}})

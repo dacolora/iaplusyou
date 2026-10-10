@@ -42,6 +42,7 @@ MAX_TITULO = 300        # como tw_creativo (`triple_whale.sync.normalizar_creati
 MAX_COPY = 3000
 MAX_CTA = 60
 MAX_BYTES_IMAGEN = 8 * 1024 * 1024
+FORMATOS_IMAGEN = ("JPEG", "PNG", "WEBP", "GIF")
 TIMEOUT_GRAPH = 20
 
 
@@ -183,7 +184,9 @@ def _copiar_imagen(url, clave, ad_id):
         conector_url.descargar_archivo(url, crudo, max_bytes=MAX_BYTES_IMAGEN, tipos=("image/",))
         with tempfile.TemporaryDirectory(prefix="meta_img_") as carpeta:
             local = os.path.join(carpeta, "imagen.jpg")
-            with Image.open(crudo) as im:
+            # S3 (revisión final de Rendimiento E2, 2026-10-10): un archivo de un tercero; Pillow abriría cualquier
+            # formato que conozca. Solo los de imagen de anuncio; otro sale por el `except` (sin imagen).
+            with Image.open(crudo, formats=FORMATOS_IMAGEN) as im:
                 im = im.convert("RGB")
                 im.thumbnail((analisis.LADO_IMAGEN, analisis.LADO_IMAGEN))
                 im.save(local, format="JPEG", quality=85)

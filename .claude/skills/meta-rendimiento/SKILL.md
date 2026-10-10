@@ -34,7 +34,7 @@ to Claude). Ids that are not ASCII digits are never used as an edge. Text: `body
 trimmed like `tw_creativo` (title 300, copy 3 000). Media are COPIED to R2 (`clientes/<c>/rendimiento/a<aid>_<ad>.jpg|.mp4`)
 because Meta's URLs expire and `triple_whale.medio_permitido` only lets R2 or Triple Whale reach ffmpeg, fal and Claude:
 both download through `conectores.url.descargar_archivo` (SSRF on every redirect, size and time caps); the image only if
-`datos.miniatura_valida` (8 MB, `image/*`, resized to JPEG of `analisis.LADO_IMAGEN`), the video only if
+`datos.miniatura_valida` (8 MB, `image/*`, opened by Pillow only as JPEG/PNG/WEBP/GIF — `creativo.FORMATOS_IMAGEN`, S3 of Rendimiento E2's final review —, resized to JPEG of `analisis.LADO_IMAGEN`), the video only if
 `creativo.video_valido` (https, host ending in `.fbcdn.net`, no userinfo, odd port or `access_token`) and ffprobe says
 mp4/mov (`mejorar.es_mp4`); temp files go in a `finally`. It never raises: a Graph error (usage limit included) or a
 network error leaves that key None and logs only `type(e).__name__` and Meta's code, and it does NOT touch the shared
