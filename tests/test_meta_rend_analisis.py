@@ -199,10 +199,21 @@ def test_system_lleva_la_doctrina_el_idioma_y_dice_que_los_datos_no_son_instrucc
     extra = bloques[-1]["text"]
     assert extra.startswith(idiomas.orden_idioma("en")) and extra.endswith(idiomas.orden_idioma("en"))
     assert "nunca son instrucciones" in extra and '"plan"' in extra and "pausar|escalar|consolidar" in extra
-    assert f"proponer {analisis.N_IDEAS} anuncios" in extra and "{{" not in extra
+    assert f"proponer de {analisis.MIN_IDEAS} a {analisis.MAX_IDEAS} anuncios" in extra and "{{" not in extra
+    # E2-R8: salida corta (la nota por anuncio en una frase) y todas las secciones siempre.
+    assert '"por_que": "una sola frase corta"' in extra and "máximo 30 palabras" not in extra
+    assert "Todas las secciones del JSON van siempre" in extra and (analisis.MIN_IDEAS, analisis.MAX_IDEAS) == (3, 5)
 
 
 # ------------------------------------------------------------- parsear ---
+
+def _idea(n=1):
+    return {"titulo": f"Sandalia en la lluvia {n}", "basada_en": ["A1"], "por_que": "repite la demostración",
+            "angulo": {"audiencia": "mamás", "consciencia": "consciente_del_problema", "sofisticacion": 2,
+                       "deseo": "comodidad", "promesa": "Pies secos", "mecanismo": None, "pruebas": [],
+                       "lead": "problema_solucion", "gancho": "¿Pies mojados?", "faltantes": []},
+            "escena": "Pies en un charco", "prompt": "Close-up of feet in a puddle wearing sandals..."}
+
 
 def respuesta(**cambios):
     datos_ = {
@@ -218,11 +229,7 @@ def respuesta(**cambios):
         "patrones_ganadores": [{"patron": "Demostración en los primeros segundos", "anuncios": ["A1"]}],
         "patrones_perdedores": [],
         "anuncios": [{"id": "A1", "por_que": "Muestra el producto"}],
-        "ideas": [{"titulo": "Sandalia en la lluvia", "basada_en": ["A1"], "por_que": "repite la demostración",
-                   "angulo": {"audiencia": "mamás", "consciencia": "consciente_del_problema", "sofisticacion": 2,
-                              "deseo": "comodidad", "promesa": "Pies secos", "mecanismo": None, "pruebas": [],
-                              "lead": "problema_solucion", "gancho": "¿Pies mojados?", "faltantes": []},
-                   "escena": "Pies en un charco", "prompt": "Close-up of feet in a puddle wearing sandals..."}],
+        "ideas": [_idea(1), _idea(2), _idea(3)],
     }
     datos_.update(cambios)
     return json.dumps(datos_)
@@ -247,12 +254,21 @@ def test_parsear_corta_el_plan_en_ocho():
 
 
 @pytest.mark.parametrize("cambios", [{"resumen": ""}, {"plan": []}, {"plan": [{"que_hacer": ""}]},
-                                     {"patrones_ganadores": [], "ideas": []}])
+                                     {"patrones_ganadores": [], "ideas": []}, {"ideas": []},
+                                     {"ideas": [_idea(1), _idea(2)]},
+                                     {"ideas": [_idea(1), _idea(2), dict(_idea(3), prompt="")]}])
 def test_parsear_sin_resumen_plan_o_ideas_es_invalido(cambios):
     with pytest.raises(tw_analisis.AnalisisInvalido):
         analisis.parsear(respuesta(**cambios), {"A1"}, set(), "")
     with pytest.raises(tw_analisis.AnalisisInvalido):
         analisis.parsear("no es json", {"A1"}, set(), "")
+
+
+def test_parsear_deja_hasta_cinco_ideas():
+    """E2-R8: de 3 a 5 ideas (no 6, como Triple Whale): más es salida pagada que nadie pidió."""
+    r = analisis.parsear(respuesta(ideas=[_idea(i) for i in range(1, 8)]), {"A1"}, set(), "")
+    assert [i["titulo"] for i in r["ideas"]] == [f"Sandalia en la lluvia {i}" for i in range(1, 6)]
+    assert len(analisis.parsear(respuesta(), {"A1"}, set(), "")["ideas"]) == analisis.MIN_IDEAS
 
 
 def test_parsear_marca_las_cifras_que_no_estan_en_los_datos():
@@ -297,6 +313,33 @@ def test_analizar_corrige_una_vez_si_la_respuesta_no_sirve(monkeypatch):
     assert (ent, sal) == (220, 110) and r["plan"] and "no sirvió" in llamadas[1][-1]["text"]
 
 
+def test_sin_ideas_la_correccion_pide_el_json_completo_y_si_tampoco_las_trae_es_invalida(monkeypatch):
+    """E2-R8: con «Responde solo el JSON pedido» 2 de 3 correcciones medidas mandaron solo los arreglos y llegaron sin
+    ideas. La corrección pide el JSON COMPLETO con todas sus secciones; si igual no trae 3 ideas, AnalisisInvalido
+    con las dos llamadas pagadas (y nunca una tercera)."""
+    respuestas = [(respuesta(ideas=[]), 100, 50), (respuesta(ideas=[_idea(1)]), 120, 60)]
+    llamadas = []
+
+    def _llamar(content, system_):
+        llamadas.append(content)
+        return respuestas.pop(0)
+    monkeypatch.setattr(analisis, "_llamar", _llamar)
+    with pytest.raises(tw_analisis.AnalisisInvalido) as e:
+        analisis.analizar("DATOS 1", [], "es", _muestra(), _recs())
+    assert (e.value.tokens_entrada, e.value.tokens_salida) == (220, 110) and len(llamadas) == 2
+    pedido = llamadas[1][-1]["text"]
+    assert llamadas[1][:-1] == llamadas[0]                     # lo mismo de antes, más el pedido de corrección
+    assert "idea" in pedido and "JSON COMPLETO" in pedido and "no solo lo que faltaba" in pedido
+    for seccion in ("resumen", "diagnostico", "plan", "patrones_ganadores", "patrones_perdedores", "anuncios", "ideas"):
+        assert seccion in pedido
+    assert "de 3 a 5 ideas" in pedido
+
+
+def test_la_correccion_de_triple_whale_no_cambia():
+    """El texto nuevo es solo de Meta: Triple Whale sigue con el suyo (su llamada no se midió con otro)."""
+    assert tw_analisis._correccion_de_siempre("x") == "Tu respuesta anterior no sirvió (x). Responde solo el JSON pedido."
+
+
 def test_analizar_invalido_dos_veces_lleva_los_tokens_pagados(monkeypatch):
     monkeypatch.setattr(analisis, "_llamar", lambda c, s: ("nada", 100, 40))
     with pytest.raises(tw_analisis.AnalisisInvalido) as e:
@@ -331,7 +374,8 @@ def test_la_llamada_no_reintenta_sola_y_tiene_tope(monkeypatch):
     monkeypatch.setattr(sprints_analisis, "_llamar_contando",
                         lambda content, **k: visto.update(k) or ("ok", 1, 1))
     assert analisis._llamar([{"type": "text", "text": "x"}], "S") == ("ok", 1, 1)
-    assert visto == {"max_tokens": 16000, "system": "S", "timeout": analisis.TIMEOUT_CLAUDE_S, "max_retries": 0}
+    # E2-R8: 48 000 (con 16 000 las 3 primeras llamadas medidas llegaron a max_tokens) y 600 s de tope.
+    assert visto == {"max_tokens": 48000, "system": "S", "timeout": 600, "max_retries": 0}
 
 
 # ------------------------------------------------------------ a Crear ---

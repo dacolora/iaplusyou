@@ -222,6 +222,9 @@ def meta_rend_limpiar(tarea):
 TIPO_EVALUAR = "meta_rend_evaluar"
 ETAPAS_EVALUAR = [(idiomas.N_("Buscando miniaturas"), 10), (idiomas.N_("Sacando fotogramas"), 15),
                   (idiomas.N_("Analizando con Claude"), 75)]
+# Lo que la barra cree que tarda (E2-R8): la eval del 2026-10-10 midió 233–321 s con dos llamadas de 16 000 tokens;
+# con 48 000 y una sola llamada la respuesta entera (pensamiento + JSON) sigue en ese orden.
+DURACION_EVALUAR = 360
 
 
 def job_id_evaluar(cliente):
@@ -233,7 +236,7 @@ def encolar_evaluacion(cliente, evaluacion_id, costo_estimado=None):
     proveedor, sin margen): en un proyecto que cobra, `trabajos.encolar` exige y reserva ese precio (skill `cobros`) y
     puede lanzar `SaldoInsuficiente`. False si ya había una evaluación viva en el proyecto."""
     return trabajos.encolar(job_id_evaluar(cliente), TIPO_EVALUAR, {"cliente": cliente, "evaluacion_id": int(evaluacion_id)},
-                            cliente=cliente, duracion_estimada=150, etapas=ETAPAS_EVALUAR, max_intentos=1,
+                            cliente=cliente, duracion_estimada=DURACION_EVALUAR, etapas=ETAPAS_EVALUAR, max_intentos=1,
                             costo_estimado=costo_estimado)
 
 

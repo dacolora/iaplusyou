@@ -500,13 +500,19 @@ def sin_respuesta(error):
     return bool(getattr(error, "sin_respuesta", False)) or (bool(tipos) and isinstance(error, tipos))
 
 
-def llamar_con_correccion(content, system_, parsear_fn, llamar=None):
+def _correccion_de_siempre(error):
+    return f"Tu respuesta anterior no sirvió ({error}). Responde solo el JSON pedido."
+
+
+def llamar_con_correccion(content, system_, parsear_fn, llamar=None, correccion=None):
     """(resultado, tokens_entrada, tokens_salida) de una llamada a Claude con UNA corrección como mucho, y solo si la
     respuesta no sirve (no es JSON o le falta lo pedido: `parsear_fn` lanza AnalisisInvalido). La de Triple Whale y la
     de Meta rendimiento comparten este camino (no se copia). Una respuesta que sirve nunca se paga dos veces: lo que
     haya que marcar en ella (p. ej. cifras sin dato) se marca, no se corrige con otra llamada (E2-R5).
 
-    `llamar(content, system_) -> (texto, entrada, salida)`; por defecto `_llamar`. Si la corrección tampoco sirve, o
+    `llamar(content, system_) -> (texto, entrada, salida)`; por defecto `_llamar`. `correccion(error) -> texto` es lo
+    que se le pide a Claude en la corrección; por defecto «Responde solo el JSON pedido» (Meta pide el JSON completo:
+    con ese texto 2 de 3 correcciones medidas llegaron sin ideas, eval 2026-10-10). Si la corrección tampoco sirve, o
     su llamada falla, AnalisisInvalido con los tokens ya pagados (`sin_respuesta=True` si la corrección se quedó sin
     respuesta: pudo cobrarse). Cualquier otra excepción después de que Claude respondió (un parser que revienta) sale
     también con los tokens pagados (`anotar_tokens`)."""
@@ -514,23 +520,23 @@ def llamar_con_correccion(content, system_, parsear_fn, llamar=None):
     crudo, entrada, salida = llamar(content, system_)
     pagado = [entrada, salida]
     try:
-        return _con_una_correccion(content, system_, parsear_fn, llamar, crudo, pagado)
+        return _con_una_correccion(content, system_, parsear_fn, llamar, crudo, pagado,
+                                   correccion or _correccion_de_siempre)
     except Exception as e:
         anotar_tokens(e, *pagado)
         raise
 
 
-def _con_una_correccion(content, system_, parsear_fn, llamar, crudo, pagado):
+def _con_una_correccion(content, system_, parsear_fn, llamar, crudo, pagado, correccion):
     """El cuerpo de `llamar_con_correccion` tras la primera respuesta; `pagado` ([entrada, salida]) se actualiza en
     su lugar con lo que cobra la corrección."""
     try:
         return parsear_fn(crudo), pagado[0], pagado[1]
     except AnalisisInvalido as e:
         error = e
-    correccion = content + [{"type": "text", "text": f"Tu respuesta anterior no sirvió ({error}). "
-                                                     "Responde solo el JSON pedido."}]
+    pedido = content + [{"type": "text", "text": correccion(error)}]
     try:
-        crudo, e2, s2 = llamar(correccion, system_)
+        crudo, e2, s2 = llamar(pedido, system_)
     except Exception as e_llamada:
         if sin_respuesta(e_llamada):
             error.sin_respuesta = True

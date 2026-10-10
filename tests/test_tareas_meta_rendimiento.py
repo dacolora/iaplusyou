@@ -495,15 +495,20 @@ from meta_rendimiento import analisis  # noqa: E402
 from nicho.avatares import costo_real  # noqa: E402
 from triple_whale import analisis as tw_analisis  # noqa: E402
 
-RESPUESTA_OK = json.dumps({
-    "resumen": "Norway vende con un solo video; los perdedores se comen el presupuesto.",
-    "diagnostico": [{"causa": "Perdedores activos", "evidencia": "A2 gastó sin ventas"}],
-    "plan": [{"prioridad": 1, "accion": "pausar", "objetos": ["A2", "R1"], "que_hacer": "Pausa el perdedor",
-              "por_que": "gasta sin vender", "impacto": None}],
-    "patrones_ganadores": [{"patron": "Demostración del producto", "anuncios": ["A1"]}],
-    "patrones_perdedores": [], "anuncios": [{"id": "A1", "por_que": "Muestra el producto"}],
-    "ideas": [{"titulo": "Sandalia en la lluvia", "basada_en": ["A1"], "por_que": "repite la demostración",
-               "angulo": {}, "escena": "Pies en un charco", "prompt": "Close-up of feet in a puddle..."}]})
+def _respuesta(n_ideas=3):
+    return json.dumps({
+        "resumen": "Norway vende con un solo video; los perdedores se comen el presupuesto.",
+        "diagnostico": [{"causa": "Perdedores activos", "evidencia": "A2 gastó sin ventas"}],
+        "plan": [{"prioridad": 1, "accion": "pausar", "objetos": ["A2", "R1"], "que_hacer": "Pausa el perdedor",
+                  "por_que": "gasta sin vender", "impacto": None}],
+        "patrones_ganadores": [{"patron": "Demostración del producto", "anuncios": ["A1"]}],
+        "patrones_perdedores": [], "anuncios": [{"id": "A1", "por_que": "Muestra el producto"}],
+        "ideas": [{"titulo": f"Sandalia en la lluvia {i}", "basada_en": ["A1"], "por_que": "repite la demostración",
+                   "angulo": {}, "escena": "Pies en un charco", "prompt": "Close-up of feet in a puddle..."}
+                  for i in range(1, n_ideas + 1)]})
+
+
+RESPUESTA_OK = _respuesta()
 
 
 def _jpeg():
@@ -554,6 +559,7 @@ def test_evaluar_encola_una_por_proyecto_con_un_intento_en_el_carril_general(hf)
     assert t.encolar_evaluacion("hf", 5, costo_estimado=0.2) is True
     fila, = _filas_cola(t.TIPO_EVALUAR)
     assert fila.job_id == "hf__meta_eval" and fila.max_intentos == 1 and fila.cliente == "hf"
+    assert fila.duracion_estimada == t.DURACION_EVALUAR == 360      # E2-R8: lo medido, para que la barra no mienta
     assert fila.payload == {"cliente": "hf", "evaluacion_id": 5}
     assert t.evaluacion_en_curso("hf") and not t.evaluacion_en_curso("otro")
     assert t.encolar_evaluacion("hf", 6) is False and len(_filas_cola(t.TIPO_EVALUAR)) == 1
@@ -572,7 +578,7 @@ def test_evaluar_guarda_el_resultado_las_miniaturas_en_r2_y_el_gasto_real(evalua
         return RESPUESTA_OK, 10000, 5000
     monkeypatch.setattr(analisis, "_llamar", _llamar)
     texto = t.meta_rend_evaluar(_tarea_eval(eid))
-    assert "1 paso(s)" in texto and "1 idea(s)" in texto
+    assert "1 paso(s)" in texto and "3 idea(s)" in texto
     fila = datos.evaluacion("hf", eid)
     usd = costo_real(10000, 5000)
     assert fila["estado"] == "lista" and fila["error"] is None and fila["usd"] == pytest.approx(usd)
@@ -753,3 +759,41 @@ def test_un_fallo_antes_de_llamar_a_claude_no_anota_ningun_estimado(evaluacion, 
     with pytest.raises(RuntimeError):
         t.meta_rend_evaluar(_tarea_eval(eid))
     assert _gastos_eval() == [] and datos.evaluacion("hf", eid)["estado"] == "error"
+
+
+# ------------------------------------------------- E2-R8: sin ideas no hay evaluación (2026-10-10) ---
+
+def test_evaluar_sin_ideas_pide_la_correccion_con_el_json_completo(evaluacion, monkeypatch):
+    """La eval del 2026-10-10: 2 de 3 correcciones llegaron sin ideas y se aceptaban. Ahora menos de 3 ideas no sirve:
+    se paga UNA corrección, que pide el JSON completo, y se cobran las dos llamadas."""
+    eid = evaluacion["eid"]
+    respuestas = [(_respuesta(n_ideas=0), 3000, 800), (RESPUESTA_OK, 3100, 900)]
+    pedidos = []
+
+    def _llamar(content, system_):
+        pedidos.append(content)
+        return respuestas.pop(0)
+    monkeypatch.setattr(analisis, "_llamar", _llamar)
+    assert "3 idea(s)" in t.meta_rend_evaluar(_tarea_eval(eid))
+    assert len(pedidos) == 2 and "JSON COMPLETO" in pedidos[1][-1]["text"] and "ideas" in pedidos[1][-1]["text"]
+    fila = datos.evaluacion("hf", eid)
+    usd = costo_real(6100, 1700)
+    assert fila["estado"] == "lista" and len(fila["resultado"]["ideas"]) == 3 and fila["usd"] == pytest.approx(usd)
+    assert _gastos_eval()[0]["usd"] == pytest.approx(usd)
+
+
+def test_evaluar_sin_ideas_tambien_tras_la_correccion_queda_en_error_y_anota_lo_pagado(evaluacion, monkeypatch):
+    eid = evaluacion["eid"]
+    _cobra_hf()
+    respuestas = [(_respuesta(n_ideas=0), 3000, 800), (_respuesta(n_ideas=2), 3100, 900)]
+    monkeypatch.setattr(analisis, "_llamar", lambda c, s: respuestas.pop(0))
+    with pytest.raises(RuntimeError) as e:
+        t.meta_rend_evaluar(_tarea_eval(eid))
+    assert respuestas == []                      # una corrección y nada más
+    fila = datos.evaluacion("hf", eid)
+    usd = costo_real(6100, 1700)
+    assert fila["estado"] == "error" and fila["error"] == str(e.value) and fila["resultado"] in (None, {})
+    assert fila["usd"] == pytest.approx(usd)
+    assert _gastos_eval() == [{"tipo": "evaluacion", "usd": pytest.approx(usd), "referencia": f"meta_eval:{eid}:t7",
+                               "proveedor": "anthropic"}]
+    assert _detalles() == ["sin resultado usable"] and _movimientos_hf() == ["no_cobrado"]
