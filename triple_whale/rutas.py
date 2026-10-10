@@ -1,7 +1,7 @@
 """Blueprint de Triple Whale (spec 2026-09-28 §8), bajo `/cliente/<cliente>/triple-whale`. Desde el 2026-10-09 la
 pestaña es «Rendimiento» (`pestana_rendimiento/`, spec 2026-10-09): su panel y «Actualizar ahora» viven allá, y aquí
-quedan las rutas que la pestaña llama con el alcance de Triple Whale de la entrada (R13: lo que cobra no cambió de
-lugar). `dashboard._guard_por_cliente` protege todo porque la URL lleva `<cliente>`; cada POST además exige el mismo
+quedan las rutas que la pestaña llama con el alcance de Triple Whale de la entrada (R13; «Cómo mejorarlo» y el lote
+pasaron a la pestaña en E2, ver abajo). `dashboard._guard_por_cliente` protege todo porque la URL lleva `<cliente>`; cada POST además exige el mismo
 origen (Sec-Fetch-Site), la barrera CSRF del resto de la app. Todas vuelven a `#rendimiento`.
 
 - `dia`: el detalle de un día de «Resultados de tu tienda» (lo pide static/tw_resultados.js).
@@ -13,16 +13,6 @@ origen (Sec-Fetch-Site), la barrera CSRF del resto de la app. Todas vuelven a `#
 - `pieza_estado`: pausa o activa en Meta un anuncio hecho en Creatv (una
   pieza de experimento) desde la tabla, con confirmación; usa
   `lanzador.pausar_pieza` / `activar_pieza`, que dejan su evento.
-- `galeria` (GET, spec 2026-10-08 tarjetas §5.2): una página de tarjetas
-  (`dias`, `canal`, `tienda`, `veredicto`, `pagina`) para «Ver más»; con `entera=1`, la galería completa del filtro
-  (chips + formulario del lote + rejilla, página 1) para cambiar de filtro.
-- `tarjeta` (GET, §5.3): una sola tarjeta, para repintarla cuando termina su
-  análisis; un anuncio que no está en el alcance (o un id raro) es 404.
-- `analizar_anuncio` (POST, §6.2): «Cómo mejorarlo» de un anuncio: la foto de hoy, la fila `tw_analisis` y la tarea
-  pagada (`max_intentos=1`, un `job_id` por anuncio). Con `Accept: application/json` devuelve la tarjeta ya en curso.
-- `analizar_lote` (POST, §6.4): lo mismo para los N que más gastaron del filtro. Cobra solo lo que la persona
-  confirmó: las claves `clave=<canal>:<ad_id>` que mostró el formulario Y que hoy siguen siendo elegibles (sin
-  análisis fresco ni en curso), nunca «los próximos N»: un segundo envío del mismo formulario no cobra nada.
 - `analisis_detalle` (GET, §6.5): el fragmento con lo que dijo Claude; `analisis_crear` (§7.1) lleva la versión
   mejorada a Crear; `analisis_aprendizaje` (§6.3) la guarda como aprendizaje del proyecto con un clic;
   `anuncio_referente` (§7.2) guarda el anuncio en Referentes.
@@ -30,20 +20,24 @@ origen (Sec-Fetch-Site), la barrera CSRF del resto de la app. Todas vuelven a `#
 El pedido pagado en sí (la foto, Cobros, la fila y la tarea de «Cómo mejorarlo», del lote y de «Evaluar con IA») vive
 en `triple_whale/pedidos.py` desde Rendimiento E2 (2026-10-10), para que la pestaña Rendimiento lo use también con los
 anuncios de Meta; aquí quedan el alcance de la petición, los avisos y las redirecciones.
+
+La galería, la tarjeta sola, «Cómo mejorarlo» de un anuncio y el lote («Analizar los N que más gastaron») ya no viven
+aquí: desde Rendimiento E2 (tarea 4, 2026-10-10) «Tus anuncios» es UNA galería con los anuncios de Triple Whale y de
+Meta y sus rutas son de la pestaña (`pestana_rendimiento/rutas.py`: `ver_galeria`, `ver_tarjeta`, `analizar_anuncio`,
+`analizar_lote`), que cobran con `pedidos` y el alcance de cada fuente.
 """
 from datetime import date
 
 from flask import Blueprint, abort, flash, redirect, render_template, request, session, url_for
-from flask_babel import gettext, ngettext
+from flask_babel import gettext
 
 import idiomas
 import proyectos
 import triple_whale
 import triple_whale_tiendas
-from cobros import SaldoInsuficiente
 from doctrina import aprendizajes as doctrina_aprendizajes
 from tareas import triple_whale as tareas_tw
-from triple_whale import datos, evaluacion, mejorar, panel, pedidos, puente
+from triple_whale import datos, mejorar, panel, pedidos, puente
 
 bp = Blueprint("triple_whale", __name__, url_prefix="/cliente/<cliente>/triple-whale")
 AID_MAX = 2 ** 63 - 1           # el mayor entero de SQLite: un id más grande es 404, no un OverflowError (B7)
@@ -128,108 +122,12 @@ def ver_dia(cliente):
     return render_template("_tw_dia.html", cliente=cliente, d=ctx)
 
 
-# ------------------------------------------------ galería de tarjetas (spec tarjetas §5) ---
+# ------------------------------------------------ alcance de la petición ---
 
 def _alcance_peticion(cliente, fuente):
+    """El alcance de Triple Whale de un formulario (`dias`, `canal`, `tienda`): lo usa «Guardar en Referentes»."""
     return panel.alcance(cliente, _dias(fuente.get("dias")), (fuente.get("canal") or "").strip() or None,
                          fuente.get("tienda"))
-
-
-def _contexto_galeria(cliente, alc):
-    """Lo que necesitan las macros de la galería fuera del panel."""
-    return {"cliente": cliente, "moneda": alc["config"]["moneda"], "alcance_params": alc["params"],
-            "etiquetas_veredicto": evaluacion.ETIQUETAS_VEREDICTO,
-            "frases_veredicto": evaluacion.FRASES_VEREDICTO, "tendencias": evaluacion.TENDENCIAS,
-            "vacios_anillo": evaluacion.VACIOS_ANILLO, "problemas": evaluacion.PROBLEMAS,
-            "fortalezas": evaluacion.FORTALEZAS, "etiquetas_pieza": panel.ETIQUETAS_PIEZA}
-
-
-@bp.get("/galeria")
-def galeria(cliente):
-    alc = _alcance_peticion(cliente, request.args)
-    if not alc:
-        abort(404)
-    # `entera=1` (un filtro nuevo): la galería completa de ese filtro, página 1 — chips, formulario del lote (sus claves
-    # y su precio) y rejilla o el aviso de vacío — para que el JS reemplace el bloque entero y no solo las tarjetas.
-    # Sin ella («Ver más»): solo las tarjetas de esa página.
-    entera = request.args.get("entera") == "1"
-    g = panel.galeria(cliente, alc["ev"], request.args.get("veredicto") or "",
-                      1 if entera else request.args.get("pagina"), alcance=alc)
-    return render_template("_tw_galeria_fragmento.html", modo="entera" if entera else "pagina", g=g,
-                           **_contexto_galeria(cliente, alc))
-
-
-@bp.get("/tarjeta/<canal>/<ad_id>")
-def tarjeta(cliente, canal, ad_id):
-    if not (tareas_tw.id_valido(canal) and tareas_tw.id_valido(ad_id)):
-        abort(404)
-    alc = _alcance_peticion(cliente, request.args)
-    a = next((x for x in (alc or {}).get("ev", {}).get("anuncios", []) if x["canal"] == canal and x["ad_id"] == ad_id),
-             None)
-    if a is None:
-        abort(404)
-    panel.enriquecer(cliente, [a], alc["ev"], datos.analisis_de_anuncios(cliente, [(canal, ad_id)]), alcance=alc)
-    return render_template("_tw_galeria_fragmento.html", modo="tarjeta", a=a, **_contexto_galeria(cliente, alc))
-
-
-# ------------------------------------------------ «Cómo mejorarlo» (spec tarjetas §6) ---
-
-def _quiere_json():
-    return "application/json" in (request.headers.get("Accept") or "")
-
-
-@bp.post("/anuncio/<canal>/<ad_id>/analizar")
-def analizar_anuncio(cliente, canal, ad_id):
-    if not (tareas_tw.id_valido(canal) and tareas_tw.id_valido(ad_id)):
-        abort(404)
-    alc = _alcance_peticion(cliente, request.form)
-    if not alc:
-        mensaje = gettext("Triple Whale no está conectado en este proyecto.")
-        if _quiere_json():              # el JS de la tarjeta espera JSON: un redirect lo haría reenviar el formulario
-            return {"ok": False, "mensaje": mensaje, "html": ""}
-        flash(mensaje, "error")
-        return _volver(cliente)
-    a = pedidos.anuncio_del_alcance(alc, canal, ad_id)
-    if a is None:
-        abort(404)
-    ok, mensaje = pedidos.pedir_analisis(cliente, alc, a, session.get("usuario"))
-    if _quiere_json():
-        panel.enriquecer(cliente, [a], alc["ev"], datos.analisis_de_anuncios(cliente, [(canal, ad_id)]), alcance=alc)
-        html = render_template("_tw_galeria_fragmento.html", modo="tarjeta", a=a, **_contexto_galeria(cliente, alc))
-        return {"ok": ok, "mensaje": mensaje, "html": html}
-    flash(mensaje, "ok" if ok else "warn")
-    return _volver(cliente)
-
-
-_claves_confirmadas = pedidos.claves_confirmadas      # el nombre de antes (lo usa la prueba de B6)
-
-
-def _avisos_lote(n, fallos):
-    if n:
-        flash(ngettext("Analizando %(num)s anuncio con IA…", "Analizando %(num)s anuncios con IA…", n), "ok")
-    if fallos:
-        flash(ngettext("No se pudo encolar %(num)s anuncio: vuelve a intentarlo.",
-                       "No se pudieron encolar %(num)s anuncios: vuelve a intentarlo.", fallos), "warn")
-
-
-@bp.post("/analizar-lote")
-def analizar_lote(cliente):
-    alc = _alcance_peticion(cliente, request.form)
-    if not alc:
-        flash(gettext("Triple Whale no está conectado en este proyecto."), "error")
-        return _volver(cliente)
-    # Cobra solo lo confirmado Y aún elegible con el filtro que lo mostró, y para en el primero sin saldo
-    # (`pedidos.pedir_lote`).
-    try:
-        n, fallos = pedidos.pedir_lote(cliente, alc, pedidos.claves_confirmadas(request.form.getlist("clave")),
-                                       session.get("usuario"), veredicto=request.form.get("veredicto") or "")
-    except SaldoInsuficiente as e:
-        _avisos_lote(*getattr(e, "lote", (0, 0)))   # los que sí salieron; el manejador común dice el resto
-        raise
-    _avisos_lote(n, fallos)
-    if not n and not fallos:
-        flash(gettext("No quedó ningún anuncio por analizar."), "warn")
-    return _volver(cliente)
 
 
 def _analisis_listo(cliente, aid):

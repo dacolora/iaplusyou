@@ -14,6 +14,10 @@ Galería de tarjetas (spec 2026-10-08-triple-whale-tarjetas-analisis §2, §5):
 tarjeta; `galeria` arma una página (12, por gasto) y el lote «Analizar los N
 que más gastaron»; `enriquecer` agrega a cada tarjeta su creativo, su pieza de
 Creatv, su análisis, su barra viva y su precio con un número fijo de consultas.
+Desde Rendimiento E2 (tarea 4, 2026-10-10) la galería que se pinta es UNA con
+los anuncios de las dos fuentes (`pestana_rendimiento.galeria`, que usa
+`enriquecer`, `elegir_analisis`, `filtrar` y `precio_analisis`); `galeria`
+queda como lo elegible de una fuente que recalcula `pedidos.pedir_lote`.
 """
 import re
 from datetime import date, timedelta
@@ -625,8 +629,9 @@ def contexto(cliente, dias=PERIODO_DEFECTO, canal=None, tienda_id=None, hoy=None
                         if trabajos.en_curso(tareas_tw.job_id_evaluar(cliente)) else None),
         "etiquetas_veredicto": evaluacion.ETIQUETAS_VEREDICTO, "problemas": evaluacion.PROBLEMAS,
         "fortalezas": evaluacion.FORTALEZAS, "veredictos": evaluacion.VEREDICTOS,
-        # La galería de tarjetas (spec tarjetas §2): su primera página llega con el panel, sin un segundo fetch.
-        "galeria": galeria(cliente, ev, alcance={"tienda_id": tienda_id, "canal": canal, "desde": desde, "hasta": hasta}),
+        # La galería de tarjetas ya no sale de aquí: desde Rendimiento E2 (tarea 4) es UNA con los anuncios de las dos
+        # fuentes (`pestana_rendimiento.galeria`), que lee este `ev`. `alcance_params` son los de las rutas de Triple
+        # Whale («Guardar en Referentes», «Evaluar con IA»).
         "alcance_params": {"dias": dias, "canal": canal or "", "tienda": tienda_id if tienda_id is not None else ""},
         "frases_veredicto": evaluacion.FRASES_VEREDICTO, "tendencias": evaluacion.TENDENCIAS,
         "vacios_anillo": evaluacion.VACIOS_ANILLO,

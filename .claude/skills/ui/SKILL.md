@@ -160,8 +160,8 @@ hay_meta, n_cuentas, es_admin: ni Graph ni el panel). `_tab_rendimiento.html` es
 `_rend_panel.html`. No duplica marcado: las secciones que comparte con las pestañas viejas son macros de
 `_tw_secciones.html` (copias —solo sus errores: la barra de las copias en curso es una sola para las dos fuentes,
 `r.copias_vivas`—, cuenta compartida, alertas, anuncios, ia, resto) y el include `_meta_secciones.html`
-(campañas y conjuntos); las tarjetas de anuncios de fuente Meta son `_rend_anuncios_meta.html` (sin IA, R14) y el
-estado vacío y la etiqueta de fuente, `_rend_macros.html`. `_triple_whale_conectar.html` es un `div#tw-conexion` y no
+(campañas y conjuntos); «Tus anuncios» es UNA galería con las tarjetas de las dos fuentes (`_tw_galeria.html`, E2
+tarea 4: las `.rend-tarjeta` de Meta de E1 y `_rend_anuncios_meta.html` se fueron; la miniatura de Meta, de 64 px, va a
+su tamaño con `.tw-medio-miniatura`) y el estado vacío y la etiqueta de fuente, `_rend_macros.html`. `_triple_whale_conectar.html` es un `div#tw-conexion` y no
 una section: dentro de «Ajustes» cortaba la section de la pestaña (la prueba del armazón la busca hasta la siguiente).
-Estilos en `static/estilos/pantallas/rendimiento.css` (`rend-*`; la rejilla de tarjetas de Meta pasa a 2 columnas
-≤ 760 px y «Por país» es `tabla-apilada`). `static/tw_resultados.js` también arranca solo sobre `#rend-panel`.
+Estilos en `static/estilos/pantallas/rendimiento.css` (`rend-*`; «Por país» es `tabla-apilada`). `static/tw_resultados.js` también arranca solo sobre `#rend-panel`.

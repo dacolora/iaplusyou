@@ -89,8 +89,10 @@ def evaluacion_en_curso(cliente):
 
 
 TIPO_ANALIZAR = "tw_analizar_anuncio"
-ETAPAS_ANALIZAR = [(idiomas.N_("Bajando el video"), 15), (idiomas.N_("Escuchando la voz"), 15),
-                   (idiomas.N_("Analizando con Claude"), 70)]
+# «Trayendo el anuncio de Meta» solo corre con un anuncio de una cuenta de Meta sin tienda (Rendimiento E2): declarada,
+# la barra se mueve mientras se lee; un anuncio de Triple Whale salta de la primera a «Bajando el video».
+ETAPAS_ANALIZAR = [(idiomas.N_("Trayendo el anuncio de Meta"), 10), (idiomas.N_("Bajando el video"), 15),
+                   (idiomas.N_("Escuchando la voz"), 15), (idiomas.N_("Analizando con Claude"), 70)]
 _RE_ID = re.compile(r"^[A-Za-z0-9_.-]{1,80}$")
 
 

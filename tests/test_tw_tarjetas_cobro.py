@@ -1,7 +1,9 @@
 """«Cómo mejorarlo» no se cobra dos veces por lo mismo (revisión final de tw-tarjetas, sección A): el filtro de canal
 es parte del alcance (A3), la ruta rechaza uno fresco del mismo alcance (A1), la tarjeta y el lote eligen entre TODOS
 los análisis del anuncio (A2), una fila colgada sin tarea no bloquea (A4) y el precio del lote es la suma de las
-tarjetas (A5)."""
+tarjetas (A5). Desde Rendimiento E2 (tarea 4, 2026-10-10) «Cómo mejorarlo», la tarjeta y la galería son rutas de la
+pestaña (`/rendimiento/…` con `entrada`, `dias` y el filtro `canal`, que sigue siendo del alcance cuando este es solo
+Triple Whale): las garantías se prueban contra ellas."""
 import pytest
 import sqlalchemy as sa
 
@@ -40,8 +42,8 @@ def _sembrar_con_snapchat(dias=10):
 
 
 def _analizar(app, ad_id, canal="facebook-ads", filtro="", dias="30", json=False):  # noqa: F811
-    return app["c"].post(f"/cliente/acme/triple-whale/anuncio/{canal}/{ad_id}/analizar",
-                         data={"dias": dias, "canal": filtro, "tienda": ""},
+    return app["c"].post(f"/cliente/acme/rendimiento/anuncio/tw/{canal}/{ad_id}/analizar",
+                         data={"entrada": "", "dias": dias, "canal": filtro},
                          headers={"Accept": "application/json"} if json else {})
 
 
@@ -63,7 +65,7 @@ def _n_filas():
 
 
 def _tarjeta(app, ad_id, canal="facebook-ads", filtro="", dias="30"):  # noqa: F811
-    return app["c"].get(f"/cliente/acme/triple-whale/tarjeta/{canal}/{ad_id}?dias={dias}&canal={filtro}").data.decode()
+    return app["c"].get(f"/cliente/acme/rendimiento/tarjeta/tw/{canal}/{ad_id}?entrada=&dias={dias}&canal={filtro}").data.decode()
 
 
 def _anuncio(alc, ad_id):
@@ -290,7 +292,7 @@ def test_el_precio_del_lote_es_la_suma_de_las_tarjetas(app):  # noqa: F811
     assert g["lote"]["precio"]["usd"] == pytest.approx(total, abs=1e-4)
     treinta = panel.precio_analisis({})["usd"]
     assert g["lote"]["precio"]["usd"] != pytest.approx(treinta * len(claves), abs=1e-4)
-    html = app["c"].get("/cliente/acme/triple-whale/galeria?entera=1&dias=30").data.decode()
+    html = app["c"].get("/cliente/acme/rendimiento/galeria?entera=1&dias=30").data.decode()
     assert f"Analizar los {len(claves)} que más gastaron · {g['lote']['precio']['texto']}" in html
 
 
@@ -302,6 +304,6 @@ def test_sin_precio_el_lote_dice_precio_no_disponible(app, monkeypatch):  # noqa
     alc = panel.alcance("acme", 30)
     g = panel.galeria("acme", alc["ev"], alcance=alc)
     assert g["lote"]["n"] and g["lote"]["precio"]["usd"] is None
-    html = app["c"].get("/cliente/acme/triple-whale/galeria?entera=1&dias=30").data.decode()
+    html = app["c"].get("/cliente/acme/rendimiento/galeria?entera=1&dias=30").data.decode()
     assert "que más gastaron · precio no disponible" in html and "Costo total: precio no disponible" in html
     assert "US$ 0" not in html

@@ -206,7 +206,8 @@ def test_panel_con_datos(conectado):
     # El alcance de la campaña (spec §8.4), de la ventana copiada más cercana al periodo: la de 30 días.
     treinta = conectado["c"].get("/cliente/acme/rendimiento/panel?dias=30").get_data(as_text=True)
     assert "<td>4.321</td>" in treinta
-    assert 'src="https://scontent.xx.fbcdn.net/gana.jpg" alt="" loading="lazy"' in html
+    # La miniatura de Meta en la tarjeta de la galería única (E2 tarea 4), con el nombre del anuncio como texto.
+    assert 'src="https://scontent.xx.fbcdn.net/gana.jpg" alt="Video gana" loading="lazy"' in html
     assert "Conectado solo para métricas" in html                     # sin Página
     assert "<script" not in _sin_scripts(html)
     # Una cuenta (el `?cuenta=` de la pestaña vieja abre su país): sin «Por país» y en su moneda.
@@ -231,17 +232,17 @@ def test_panel_sin_datos_y_con_una_cuenta_en_error(conectado):
 
 
 def test_ver_mas_anuncios_trae_solo_tarjetas(conectado):
-    """«Ver más» de los anuncios de Meta: en la pestaña vieja eran filas de una tabla; en Rendimiento son tarjetas
-    (R14), con su propio botón si quedan más."""
+    """«Ver más» de los anuncios de Meta: en la pestaña vieja eran filas de una tabla; en Rendimiento son tarjetas.
+    Desde E2 tarea 4 son las de la galería única (12 por página, el «Ver más» de la galería)."""
     _sembrar(n_anuncios=30)
     html = conectado["c"].get("/cliente/acme/rendimiento/panel").get_data(as_text=True)
-    assert 'data-rend-mas="' in html
-    assert "/cliente/acme/rendimiento/anuncios-meta?entrada=&amp;dias=0&amp;pagina=1" in html
-    mas = conectado["c"].get("/cliente/acme/rendimiento/anuncios-meta?entrada=&dias=0&pagina=1")
+    assert html.count('<article class="tw-tarjeta') == 12 and 'data-tw-mas data-pagina="2"' in html
+    assert 'data-url="/cliente/acme/rendimiento/galeria?entrada=&amp;dias=0&amp;canal="' in html
+    # 31 anuncios en total (30 de la cuenta 1 + 1 de la 2): la tercera página trae 7 y ya no ofrece más.
+    mas = conectado["c"].get("/cliente/acme/rendimiento/galeria?entrada=&dias=0&canal=&pagina=3")
     assert mas.status_code == 200
     tarjetas = mas.get_data(as_text=True)
-    # 31 anuncios en total (30 de la cuenta 1 + 1 de la 2): la segunda página trae 7 y ya no ofrece más.
-    assert tarjetas.count('<article class="rend-tarjeta') == 7 and "data-rend-mas" not in tarjetas
+    assert tarjetas.count('<article class="tw-tarjeta') == 7 and "data-tw-mas" not in tarjetas
     assert "<script" not in tarjetas and "<table" not in tarjetas and "<section" not in tarjetas
 
 
@@ -254,7 +255,7 @@ def test_ver_mas_conjuntos(conectado, monkeypatch):
     assert mas.count("<tr") == 1 and "<script" not in mas
     # Una página absurda (o que no es un número) no revienta: un OFFSET enorme no cabe en SQLite.
     for pagina in ("99999999999999999999999", "-3", "x"):
-        for lista in ("conjuntos", "anuncios-meta"):
+        for lista in ("conjuntos", "galeria"):
             r = conectado["c"].get(f"/cliente/acme/rendimiento/{lista}?pagina={pagina}")
             assert r.status_code == 200, (lista, pagina)
 
@@ -265,7 +266,7 @@ def test_otro_proyecto_no_ve_el_panel(app):  # noqa: F811
     with c.session_transaction() as s:
         s.update({"usuario": "otro", "rol": "cliente", "cliente": "otro"})
     for url in ("/cliente/acme/rendimiento/panel", "/cliente/acme/meta-rendimiento/cuentas",
-                "/cliente/acme/rendimiento/anuncios-meta?pagina=1", "/cliente/acme/rendimiento/conjuntos?pagina=1"):
+                "/cliente/acme/rendimiento/galeria?pagina=1", "/cliente/acme/rendimiento/conjuntos?pagina=1"):
         assert c.get(url).status_code in (302, 403, 404)
     assert c.post("/cliente/acme/rendimiento/actualizar").status_code in (302, 403, 404)
     assert _tareas() == []

@@ -1,4 +1,5 @@
-"""La pantalla de Rendimiento (spec 2026-10-09 §5, A1–A3, R12, R14)."""
+"""La pantalla de Rendimiento (spec 2026-10-09 §5, A1–A3, R12, R14; desde E2 tarea 4, «Tus anuncios» es UNA galería con
+las dos fuentes y los anuncios de Meta tienen «Cómo mejorarlo»)."""
 import re
 
 from tests.test_rutas_configuracion import app  # noqa: F401  (fixture)
@@ -16,13 +17,17 @@ def test_orden_de_las_secciones_en_todas(meta_on):  # noqa: F811
     orden = ["Resultados de todos tus países", "Por país", "Tus anuncios", "Campañas"]
     posiciones = [html.index(t) for t in orden]
     assert posiciones == sorted(posiciones)
-    assert "De tus cuentas de Meta sin tienda en Triple Whale" in html
+    # E2 tarea 4: una sola galería con los anuncios de las dos fuentes, sin el subtítulo ni el bloque aparte de E1.
+    assert "De tus cuentas de Meta sin tienda en Triple Whale" not in html and html.count('id="tw-galeria"') == 1
+    assert 'data-fuente="tw"' in html and 'data-fuente="meta"' in html
 
 
-def test_los_anuncios_de_meta_no_tienen_boton_de_ia(meta_on):  # noqa: F811
+def test_los_anuncios_de_meta_tienen_como_mejorarlo_desde_e2(meta_on):  # noqa: F811
+    """R14 era de E1 (sin botón de IA); E2 tarea 4 les da «Cómo mejorarlo» con la ruta de la pestaña y su fuente."""
     _sembrar()
     html = _panel(meta_on, "?entrada=SE")
-    assert "Cómo mejorarlo" not in html and 'data-tw-async' not in html
+    assert "Cómo mejorarlo" in html and 'data-tw-async' in html
+    assert 'action="/cliente/acme/rendimiento/anuncio/meta/facebook-ads/se1/analizar"' in html
 
 
 def test_una_entrada_tw_trae_su_galeria_y_su_detalle_del_dia(meta_on):  # noqa: F811
@@ -144,17 +149,20 @@ def test_cada_fila_de_campana_dice_de_donde_sale_su_roas(meta_on):  # noqa: F811
     assert '<small class="rend-fuente">Meta</small>' in campanas[:campanas.index("</table>")]
 
 
-def test_las_tarjetas_de_meta_tienen_veredicto_anillos_y_ver_mas_propio(meta_on):  # noqa: F811
+def test_las_tarjetas_de_meta_tienen_veredicto_anillos_y_se_repintan_solas(meta_on):  # noqa: F811
+    """Desde E2 tarea 4 una tarjeta de Meta es la misma de la galería (`.tw-tarjeta`, `data-fuente="meta"`); su «Ver
+    más» es el de la galería y se repinta sola por la ruta de la pestaña."""
     _sembrar()
     html = _panel(meta_on, "?entrada=SE")
-    tarjetas = html.split('<article class="rend-tarjeta')[1:]
+    tarjetas = re.split(r'<article class="tw-tarjeta[^"]*" id="[^"]+" data-fuente="meta"', html)[1:]
     assert tarjetas and "según Meta" in html and "Los anuncios de Meta cubren los últimos 90 días." in html
     for t in tarjetas:
         cuerpo = t.split("</article>")[0]
         assert cuerpo.count("<div") == cuerpo.count("</div>") and 'class="tw-anillo' in cuerpo
-    assert "De tus cuentas de Meta sin tienda en Triple Whale" not in html     # el subtítulo, solo con las dos
-    sola = meta_on["c"].get("/cliente/acme/rendimiento/anuncios-meta?entrada=SE").data.decode()
-    assert '<article class="rend-tarjeta' in sola and "<section" not in sola
+    assert "rend-tarjeta" not in html and 'data-fuente="tw"' not in html
+    sola = meta_on["c"].get("/cliente/acme/rendimiento/tarjeta/meta/facebook-ads/se1?entrada=SE").data.decode()
+    assert sola.count('<article class="tw-tarjeta') == 1 and "<section" not in sola
+    assert meta_on["c"].get("/cliente/acme/rendimiento/anuncios-meta?entrada=SE").status_code == 404   # jubilada
 
 
 def test_solo_triple_whale_en_todas_muestra_por_pais_y_no_por_tienda(app):  # noqa: F811
@@ -180,9 +188,11 @@ def test_el_js_de_lo_pagado_sigue_igual_en_la_pestana_nueva():
         prueba()
     tab = leer("_tab_rendimiento.html")
     assert "r.status === 402" in tab and "getElementById('tab-rendimiento')" in tab
-    for marca in ("select[data-rend-param]", "[data-rend-entrada]", "[data-rend-mas]", "[data-meta-mas]",
+    for marca in ("select[data-rend-param]", "[data-rend-entrada]", "[data-meta-mas]",
                   "data-meta-seleccion", "TwResultados.iniciar(cont)", "tw-conexion"):
         assert marca in tab, marca
+    # El «Ver más» propio de las tarjetas de Meta de E1 se fue con ellas (E2 tarea 4: una sola galería).
+    assert "[data-rend-mas]" not in tab and "rendMas" not in tab
 
 
 def test_una_parte_sin_dias_copiados_lo_dice_sin_tapar_la_otra(meta_on):  # noqa: F811

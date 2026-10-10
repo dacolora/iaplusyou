@@ -3,7 +3,8 @@
 Es una mudanza desde `triple_whale/rutas.py` para que la pestaña Rendimiento lo llame también con anuncios de Meta sin
 copiarlo. Estas pruebas llaman a las funciones movidas directamente (sin ruta): conservan su contrato, `usuario` llega
 explícito (el módulo no lee `session` ni hace `flash`) y siguen sin cobrar dos veces. Las pruebas de las rutas
-(`test_tw_tarjetas_rutas.py`, `test_rutas_triple_whale.py`) siguen igual, sin tocarlas."""
+(`test_tw_tarjetas_rutas.py`, `test_rutas_triple_whale.py`) siguieron igual, sin tocarlas, hasta E2 tarea 4: desde
+entonces «Cómo mejorarlo» y el lote son rutas de la pestaña Rendimiento y esas pruebas apuntan allá."""
 import ast
 import inspect
 
@@ -71,9 +72,11 @@ def test_el_dominio_no_lee_la_sesion_ni_avisa_y_las_rutas_ya_no_tienen_la_copia(
     assert not importados & {"session", "flash", "redirect", "request", "url_for"}
     nombres = {n.id for n in ast.walk(arbol) if isinstance(n, ast.Name)}
     assert not nombres & {"session", "flash", "request"}
-    # Una sola copia del pedido pagado: la de las rutas se fue (queda el alias que usa la prueba de B6).
+    # Una sola copia del pedido pagado: la de las rutas se fue. Desde E2 tarea 4 también las rutas de «Cómo mejorarlo»
+    # y del lote (y el alias `_claves_confirmadas` de la prueba de B6): la galería única las tiene en la pestaña.
     assert not hasattr(rutas, "_pedir_analisis") and not hasattr(rutas, "_anuncio_del_alcance")
-    assert rutas._claves_confirmadas is pedidos.claves_confirmadas
+    for nombre in ("_claves_confirmadas", "galeria", "tarjeta", "analizar_anuncio", "analizar_lote"):
+        assert not hasattr(rutas, nombre), nombre
 
 
 def test_sus_textos_pasan_por_el_catalogo():

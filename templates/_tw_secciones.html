@@ -4,9 +4,10 @@
    `cliente`; arma dentro lo que antes eran variables de la plantilla (moneda, ev, cuenta, la tienda del alcance) y
    sus diccionarios traducidos (un {% set %} de módulo en una plantilla importada se cachea en un idioma, skill idioma).
    Rendimiento las llama en el orden del spec: copias, gasto_compartido, alertas (con las de las dos fuentes),
-   anuncios (tiles + galería), ia («Lo que hace ganar en tu cuenta») y, después de Campañas y conjuntos, resto
-   (reparto, productos, «Ver como tabla»). Lo que cobra (Evaluar con IA, la galería con «Cómo mejorarlo» y el lote) postea a triple_whale/rutas.py
-   con el alcance de `tw` (R13). #}
+   tiles_anuncios (encima de la galería única de «Tus anuncios», que pinta _rend_panel.html desde E2 tarea 4), ia
+   («Lo que hace ganar en tu cuenta») y, después de Campañas y conjuntos, resto (reparto, productos, «Ver como
+   tabla»). «Evaluar con IA» postea a triple_whale/rutas.py con el alcance de `tw` (R13); «Cómo mejorarlo» y el lote,
+   a las rutas de la galería de la pestaña (pestana_rendimiento/rutas.py). #}
 
 {#- Los errores de copia de las tiendas del alcance. La barra de las copias en curso la pinta _rend_panel.html: una sola
     para las dos fuentes (`r.copias_vivas`, revisión final de E1). -#}
@@ -47,25 +48,21 @@
 {% endif %}
 {%- endmacro %}
 
-{#- «Tus anuncios»: los tiles de la cuenta y la galería de tarjetas (macro galeria de _tw_galeria.html, intacta). -#}
-{% macro anuncios(tw, cliente) -%}
+{#- Los tiles de los anuncios de Triple Whale (gasto, ingresos atribuidos, ROAS del Pixel, costo por venta, CTR, gancho).
+    Desde Rendimiento E2 (tarea 4) «Tus anuncios» es UNA galería con las dos fuentes y la pinta _rend_panel.html; estos
+    tiles van encima solo cuando el alcance es solo Triple Whale (con Meta o mezcla describirían solo una parte). -#}
+{% macro tiles_anuncios(tw) -%}
 {% set moneda = tw.moneda %}
 {% set ev = tw.ev %}
-{% set cuenta = ev.cuenta %}
-{% set m = cuenta.m %}
-<section class="tb-seccion">
-  <div class="tb-seccion-cab"><h3>{{ _('Tus anuncios') }}</h3><small class="vacio">{{ ngettext('%(num)s anuncio con datos', '%(num)s anuncios con datos', cuenta.n) }}{% if tw.canal %} · {{ tw.canal | tw_canal }}{% endif %}</small></div>
-  <div class="tb-tiles">
-    <div class="kpi-tile"><span>{{ _('Gasto') }}</span><strong>{{ m.gasto | dinero(moneda) }}</strong><small>{{ _('%(n)s impresiones', n=m.impresiones | tw_num) }}</small></div>
-    <div class="kpi-tile" title="{{ _('Ingresos que el Triple Pixel atribuye a los anuncios con el modelo y la ventana elegidos') }}"><span>{{ _('Ingresos atribuidos') }}</span><strong>{{ m.ingresos | dinero(moneda) }}</strong><small>{{ _('%(n)s pedidos', n=m.pedidos | tw_num(1)) }}</small></div>
-    <div class="kpi-tile"><span>{{ _('ROAS (Pixel)') }}</span>{% if m.roas %}<strong>{{ m.roas | roas }}×</strong>{% else %}<strong class="tb-sin-dato">—</strong>{% endif %}<small>{{ _('meta %(meta)s×', meta=ev.meta_roas | roas) }}</small></div>
-    <div class="kpi-tile"><span>{{ _('Costo por venta') }}</span><strong>{% if m.cpa %}{{ m.cpa | dinero(moneda) }}{% else %}—{% endif %}</strong><small>{{ _('gasto / pedidos atribuidos') }}</small></div>
-    <div class="kpi-tile"><span>CTR</span><strong>{{ m.ctr | tw_pct(2, false) }}</strong><small>{{ _('CPM %(cpm)s', cpm=(m.cpm | dinero(moneda)) if m.cpm else '—') }}</small></div>
-    <div class="kpi-tile" title="{{ _('Gancho: vistas de 3 segundos / impresiones. Retención: ThruPlays / vistas de 3 segundos.') }}"><span>{{ _('Gancho · retención') }}</span><strong>{{ m.gancho | tw_pct(0) }}</strong><small>{{ _('retención %(r)s', r=m.retencion | tw_pct(0)) }}</small></div>
-  </div>
-  {% from "_tw_galeria.html" import galeria %}
-  {{ galeria(tw.galeria, cliente, tw.alcance_params, moneda, tw) }}
-</section>
+{% set m = ev.cuenta.m %}
+<div class="tb-tiles">
+  <div class="kpi-tile"><span>{{ _('Gasto') }}</span><strong>{{ m.gasto | dinero(moneda) }}</strong><small>{{ _('%(n)s impresiones', n=m.impresiones | tw_num) }}</small></div>
+  <div class="kpi-tile" title="{{ _('Ingresos que el Triple Pixel atribuye a los anuncios con el modelo y la ventana elegidos') }}"><span>{{ _('Ingresos atribuidos') }}</span><strong>{{ m.ingresos | dinero(moneda) }}</strong><small>{{ _('%(n)s pedidos', n=m.pedidos | tw_num(1)) }}</small></div>
+  <div class="kpi-tile"><span>{{ _('ROAS (Pixel)') }}</span>{% if m.roas %}<strong>{{ m.roas | roas }}×</strong>{% else %}<strong class="tb-sin-dato">—</strong>{% endif %}<small>{{ _('meta %(meta)s×', meta=ev.meta_roas | roas) }}</small></div>
+  <div class="kpi-tile"><span>{{ _('Costo por venta') }}</span><strong>{% if m.cpa %}{{ m.cpa | dinero(moneda) }}{% else %}—{% endif %}</strong><small>{{ _('gasto / pedidos atribuidos') }}</small></div>
+  <div class="kpi-tile"><span>CTR</span><strong>{{ m.ctr | tw_pct(2, false) }}</strong><small>{{ _('CPM %(cpm)s', cpm=(m.cpm | dinero(moneda)) if m.cpm else '—') }}</small></div>
+  <div class="kpi-tile" title="{{ _('Gancho: vistas de 3 segundos / impresiones. Retención: ThruPlays / vistas de 3 segundos.') }}"><span>{{ _('Gancho · retención') }}</span><strong>{{ m.gancho | tw_pct(0) }}</strong><small>{{ _('retención %(r)s', r=m.retencion | tw_pct(0)) }}</small></div>
+</div>
 {%- endmacro %}
 
 {#- «Lo que hace ganar en tu cuenta» (Evaluar con IA, cobra con el precio a la vista). `nota`: una línea más bajo la

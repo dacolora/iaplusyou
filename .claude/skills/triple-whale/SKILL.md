@@ -12,8 +12,11 @@ spec `2026-10-09-pestana-rendimiento-design.md`): la pestaña «Triple Whale» (
 `triple_whale.rutas.ver_panel` y `sincronizar`) se jubiló y sus enlaces viejos (`#triplewhale`) abren Rendimiento. Lo de
 abajo que habla de «la pestaña» o «el panel» describe hoy las secciones de Triple Whale dentro de Rendimiento
 (`_tw_secciones.html`, `_tw_galeria.html`), que siguen leyendo `triple_whale.panel.contexto` y posteando a
-`triple_whale/rutas.py` con el alcance de la entrada (R13). Todo `_volver` de este paquete y de `cfg_triple_whale_*`
-vuelve a `#rendimiento`.
+`triple_whale/rutas.py` con el alcance de la entrada (R13). Excepción desde Rendimiento E2 tarea 4 (2026-10-10): la
+galería de tarjetas es UNA con los anuncios de Triple Whale y de Meta, y sus rutas (galería, tarjeta, «Cómo
+mejorarlo», lote) son de la pestaña (`pestana_rendimiento/rutas.py`, skill `rendimiento`); cobran con
+`triple_whale/pedidos.py` y el alcance de Triple Whale para cada anuncio de Triple Whale. Todo `_volver` de este paquete
+y de `cfg_triple_whale_*` vuelve a `#rendimiento`.
 
 **Triple Whale** (package `triple_whale/`, `triple_whale_tiendas.py`, `tareas/triple_whale.py`; spec
 `docs/superpowers/specs/2026-09-28-triple-whale-rendimiento-design.md`, migrations 0023, 0024, 0032 and 0034; the
@@ -282,7 +285,8 @@ production. It must work for ANY ad, not only Creatv's: in happyflops only 4 pie
   (image and video copied to R2, never raises; skill `meta-rendimiento`), saves the foto with it and recomputes
   `medios["copy"]` before `mejorar.visuales`. If it brought nothing to look at (`creativo.sin_contenido`: no copy,
   title, image or video — an expired token, a network error, Meta's 75 % usage limit) the task raises
-  `mejorar.AnuncioIlegible` BEFORE Whisper and Claude: the row ends in `error` with «No pude leer el anuncio en Meta; no
+  `mejorar.AnuncioIlegible` BEFORE Whisper and Claude (the stage is declared first in `ETAPAS_ANALIZAR` since E2 task 4,
+  so the bar moves while it reads): the row ends in `error` with «No pude leer el anuncio en Meta; no
   se cobró nada. Inténtalo más tarde.» and no `gasto` row (fix of the task 1 review, 2026-10-10: otherwise each one paid
   ~US$ 0,10 for an analysis blind to the ad, and the batch multiplied it). Copy alone, without media, goes on; the spend `detalle` says «un anuncio de Meta» / «la voz de un anuncio de
   Meta». The only prompt change: «con sus números de {fuente}» (`mejorar.PROMPT`, from `foto["fuente"]`) and «con sus
@@ -294,17 +298,24 @@ production. It must work for ANY ad, not only Creatv's: in happyflops only 4 pie
 - **Shared sections (2026-10-09).** What `_tw_panel.html` painted after «Por tienda» (copy bars, the shared-account
   note, alerts, «Tus anuncios», «Lo que hace ganar», reparto, productos, «Ver como tabla») lives as macros in
   `_tw_secciones.html`, which `_rend_panel.html` calls (`_tw_panel.html` itself was retired with its tab the same
-  day); a card of a `facebook-ads` ad shows
-  «Meta reporta N×» from `m.roas_canal` (`valor_canal` / gasto) when there is that figure (spec 2026-10-09 R12).
-- **Gallery.** The order of the sections is Rendimiento's (skill `rendimiento`); the gallery is «Tus anuncios»
-  (tiles + gallery), shown as is (A1). The gallery, card, analyze and batch routes resolve their scope with `panel.alcance` → `evaluar_periodo`, the
-  same as the panel, «Desde el inicio» (`dias=0`, from the first copied day) included. 12 cards per page by spend (`panel.POR_PAGINA`), filters (`Muy pocos datos` is not in
-  «Todos»), and a fixed number of queries whatever the cards (`panel.enriquecer`, `datos.analisis_de_anuncios`;
-  `test_las_consultas_no_crecen_con_las_tarjetas`): a query per card was what made project pages take 1 158 queries
-  (2026-09-28 audit). Routes: `galeria` (`entera=1`
-  returns the whole block for a filter, so the batch's keys and price follow the filter; without it only the cards of
-  «Ver más»), `tarjeta`, `analizar_anuncio` (JSON for the tab JS), `analizar_lote`, `analisis_detalle`,
-  `analisis_crear`, `analisis_aprendizaje`, `anuncio_referente` (same thumbnail as the card). A card's bar carries
+  day; since E2 task 4 «Tus anuncios» is only `tiles_anuncios` there, shown when the scope is Triple Whale only, and the
+  gallery is painted by `_rend_panel.html`); a Triple Whale card of a `facebook-ads` ad shows
+  «Meta reporta N×» from `m.roas_canal` (`valor_canal` / gasto) when there is that figure (spec 2026-10-09 R12; never on
+  a Meta-source card).
+- **Gallery.** The order of the sections is Rendimiento's (skill `rendimiento`). Since Rendimiento E2 task 4
+  (2026-10-10) «Tus anuncios» is ONE gallery with the ads of both sources, ordered by spend in USD
+  (`pestana_rendimiento/galeria.py`; it closed PND-196), and `panel.contexto` no longer builds a Triple Whale-only
+  gallery; `panel.galeria` stays as the per-source eligibility that `pedidos.pedir_lote` recomputes. Its routes moved to
+  the tab's blueprint (`pestana_rendimiento/rutas.py`: `ver_galeria`, `ver_tarjeta`, `analizar_anuncio`,
+  `analizar_lote`, with `<fuente>` "tw"/"meta" in the URL) and resolve the Triple Whale scope with `panel.alcance` →
+  `evaluar_periodo` from the tab's `entrada`/`dias`/`canal` (same as the panel, «Desde el inicio» included). 12 cards
+  per page (`panel.POR_PAGINA`), filters (`Muy pocos datos` is not in «Todos»), and a fixed number of queries whatever
+  the cards (`panel.enriquecer` once per source, `datos.analisis_de_anuncios` once for both;
+  `test_las_consultas_no_crecen_con_las_tarjetas`, in both test files): a query per card was what made project pages take
+  1 158 queries (2026-09-28 audit). `ver_galeria` with `entera=1` returns the whole block for a filter, so the batch's
+  keys and price follow the filter; without it only the cards of «Ver más». What stays here: `analisis_detalle`,
+  `analisis_crear`, `analisis_aprendizaje`, `anuncio_referente` (same thumbnail as the card; the card posts the Triple
+  Whale scope to it, `params_tw`). A card's bar carries
   `data-poll-al-terminar="evento"` and dispatches `trabajo-terminado` instead of reloading (ten analyses would be ten
   reloads); the tab JS (`_tab_rendimiento.html`) repaints only that card. The async «Cómo mejorarlo» never re-POSTs on a failure: it repaints the
   card and shows a message, and paying again takes a fresh click and confirm (rule 1). The analisis routes take
@@ -336,14 +347,21 @@ production. It must work for ANY ad, not only Creatv's: in happyflops only 4 pie
   so the card offered «Analizar otra vez» and the batch charged them again; `tests/test_rendimiento_r9_plata.py`).
 - **Batch.** «Analizar los N que más gastaron» (`panel.N_LOTE` = 10) takes exactly the ads whose card shows the primary
   paid button (`a.ofrecer_analisis`: not `sin_datos`, no live task, no fresh analysis of this scope and no ready one of
-  another scope), posts the `clave=<canal>:<ad_id>` inputs the form showed with their total price, and the route
+  another scope), posts the `clave` inputs the form showed with their total price, and the route
   charges only posted ∩ still-eligible, never «the next N»: a second submit of the same form charges nothing (rules 1
   and 4). The total is the sum of each card's price at the ad's real duration (A5); with any price unknown it says
   «precio no disponible», never «US$ 0». `pedidos.claves_confirmadas` dedupes with a set and stops at N_LOTE valid keys (B6).
+  Since E2 task 4 each key is `<fuente>:<canal>:<ad_id>` (both sources in one batch): `pestana_rendimiento.galeria`
+  caps the confirmed keys at N_LOTE BETWEEN the two sources before splitting them (otherwise each source could charge
+  N) and calls `pedidos.pedir_lote` per source with its own scope; the first source without balance stops everything.
 - **Where the paid request lives (Rendimiento E2 task 2, 2026-10-10).** `triple_whale/pedidos.py`
   (`pedir_analisis`, `pedir_lote`, `pedir_evaluacion`, `claves_confirmadas`, `anuncio_del_alcance`), moved verbatim
   from `rutas.py` with their A1/A3/A4/B6/Cobros comments, so the Rendimiento blueprint charges a Meta-source ad
-  through these same guarantees instead of a copy. `usuario` comes in explicitly (no `session`) and the routes keep
+  through these same guarantees instead of a copy. Since E2 task 4, `pedir_analisis` passes the scope's source to the
+  photo (`mejorar.foto(..., fuente=alc.get("fuente", "triple_whale"), ad_account_id=a.get("ad_account_id"))`: without it
+  the paid task never fetched a Meta ad's media) and stores the analysis currency as `a.get("moneda") or
+  alc["config"]["moneda"]` (a Meta scope with accounts in different currencies has no common one and saved None). The
+  rutas alias `_claves_confirmadas` went with the batch route. `usuario` comes in explicitly (no `session`) and the routes keep
   `flash` and redirects; `pedir_lote` takes the gallery's `veredicto` (what is eligible depends on the filter) and
   re-raises `SaldoInsuficiente` with `.lote = (queued, failed)`; `pedir_evaluacion` returns `ok=None` when there is
   nothing to evaluate (the route flashes it as an error, as before).

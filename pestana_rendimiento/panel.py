@@ -32,6 +32,11 @@ Reglas, cada una con su motivo:
 6. Una sola barra para las copias en curso del alcance (`copias_vivas`, spec §5.1 «una sola barra data-poll-job»): la
    barra de un trabajo que termina recarga la página, y con una por tienda y por cuenta eran varias recargas seguidas
    (revisión final de E1). La barra sigue al primer trabajo vivo; al recargar, la siguiente sigue al que quede.
+7. «Tus anuncios» es UNA galería con los anuncios de las dos fuentes (`pestana_rendimiento.galeria`, E2 tarea 4). El
+   panel le pasa el alcance de cada fuente sin volver a calcularlo (el de Triple Whale sale de su contexto, el de Meta
+   de `alcance_meta`, que también da los anuncios de las alertas y las recomendaciones), y las rutas de la galería y de
+   lo que cobra resuelven el mismo con `alcances` (la misma `_resolver`): lo que se cobra es lo que se vio. Una
+   `entrada` que ya no es la clave de ninguna entrada no se ensancha a «Todas» para cobrar (como «Actualizar ahora»).
 """
 from datetime import date
 
@@ -39,7 +44,7 @@ import idiomas
 import meta_conexion
 import triple_whale_tiendas
 from meta_rendimiento import panel as meta_panel
-from pestana_rendimiento import entradas, resumen
+from pestana_rendimiento import alcance_meta, entradas, galeria, resumen
 from triple_whale import datos as twdatos
 from triple_whale import evaluacion, paises
 from triple_whale import panel as tw_panel
@@ -92,13 +97,14 @@ def _params(actual, dias, canal=None):
     return {"entrada": actual["clave"] if actual else "", "dias": dias, "canal": canal or ""}
 
 
-def _etiquetas():
-    """Los textos del veredicto y del diagnóstico de `triple_whale.evaluacion` (los usan las tarjetas de las dos
-    fuentes, también cuando no hay Triple Whale)."""
+def etiquetas():
+    """Los textos del veredicto y del diagnóstico de `triple_whale.evaluacion` y los estados en Crear de una pieza
+    (`etiquetas_pieza`): los usan las tarjetas de las dos fuentes, también cuando no hay Triple Whale, y los fragmentos
+    de la galería (`rutas.ver_galeria`, `ver_tarjeta`)."""
     return {"etiquetas_veredicto": evaluacion.ETIQUETAS_VEREDICTO, "frases_veredicto": evaluacion.FRASES_VEREDICTO,
             "veredictos": evaluacion.VEREDICTOS, "problemas": evaluacion.PROBLEMAS,
             "fortalezas": evaluacion.FORTALEZAS, "tendencias": evaluacion.TENDENCIAS,
-            "vacios_anillo": evaluacion.VACIOS_ANILLO}
+            "vacios_anillo": evaluacion.VACIOS_ANILLO, "etiquetas_pieza": tw_panel.ETIQUETAS_PIEZA}
 
 
 # ------------------------------------------------------------------- Meta ---
@@ -144,12 +150,13 @@ def _moneda_comun(cuentas, filas=()):
     return next(iter(monedas)) if len(monedas) == 1 and "" not in monedas else None
 
 
-def _meta(cliente, s, dias, hoy, params, pagina_conjuntos, pagina_anuncios):
+def _meta(cliente, s, dias, hoy, params, pagina_conjuntos):
     """La parte Meta del alcance, o None si el alcance no tiene cuentas de Meta: {"ids_fuente", "ids_estructura",
-    "estado", "estructura", "anuncios" (None sin cuentas cuya fuente sea Meta), "recomendaciones" (qué hacer en las
-    cuentas de la estructura, `meta_panel.recomendaciones`: [{"nivel", "texto"}]), "moneda" (la común de las cuentas
-    de la estructura y de las filas que van en la moneda de Triple Whale; None si difieren: cada fila lleva la
-    suya)}."""
+    "estado", "estructura", "alcance" (el de las cuentas cuya fuente es Meta, `alcance_meta.alcance`: lo pinta la
+    galería; None sin ellas), "anuncios" ({"ev", "desde", "hasta", "n_anuncios"} de ese alcance, para las alertas;
+    None sin ellas), "recomendaciones" (qué hacer en las cuentas de la estructura, `meta_panel.recomendaciones`:
+    [{"nivel", "texto"}]), "moneda" (la común de las cuentas de la estructura y de las filas que van en la moneda de
+    Triple Whale; None si difieren: cada fila lleva la suya)}."""
     alc, cuentas_por_id = s["alcance"], s["cuentas_por_id"]
     ids_estructura, ids_fuente = list(alc["meta_estructura"]), list(alc["meta_fuente"])
     if not ids_estructura:
@@ -161,20 +168,28 @@ def _meta(cliente, s, dias, hoy, params, pagina_conjuntos, pagina_anuncios):
     _con_ventas_tw(cliente, alc, desde, hasta, estructura["campanas"], "campana", "campaign_id", moneda_tw)
     _con_ventas_tw(cliente, alc, desde, hasta, estructura["conjuntos"], "conjunto", "adset_id", moneda_tw)
     estructura.update(_marco_estructura(ids_estructura, cuentas_por_id, dias, params), desde=desde, hasta=hasta)
-    anuncios = None
-    if ids_fuente:
-        if ids_fuente != ids_estructura:
-            desde, hasta, _, _ = meta_panel.rango_fechas(cliente, ids_fuente, dias, hoy)
-        anuncios = meta_panel.anuncios_evaluados(cliente, ids_fuente, desde, hasta, hoy, cuentas_por_id,
-                                                 pagina_anuncios)
-        anuncios.update(desde=desde, hasta=hasta)
+    # Los anuncios de fuente Meta se evalúan UNA vez, en su alcance con la forma de Triple Whale (regla 7): la galería
+    # lo usa tal cual y las alertas y las recomendaciones leen sus mismos anuncios.
+    alc_meta = alcance_meta.alcance(cliente, ids_fuente, dias, hoy, params, cuentas_por_id) if ids_fuente else None
+    anuncios = ({"ev": alc_meta["ev"], "desde": alc_meta["desde"], "hasta": alc_meta["hasta"],
+                 "n_anuncios": len(alc_meta["ev"]["anuncios"])} if alc_meta else None)
     return {"ids_fuente": ids_fuente, "ids_estructura": ids_estructura,
             "estado": meta_panel.estado_copia(cliente, en_estructura), "estructura": estructura,
-            "anuncios": anuncios,
+            "alcance": alc_meta, "anuncios": anuncios,
             "recomendaciones": meta_panel.recomendaciones(cliente, ids_estructura, estructura["desde"],
                                                           estructura["hasta"], cuentas_por_id,
                                                           anuncios["ev"]["anuncios"] if anuncios else ()),
             "moneda": _moneda_comun(en_estructura, estructura["campanas"] + estructura["conjuntos"])}
+
+
+def _alcance_tw_de(tw):
+    """El alcance de Triple Whale (la forma de `triple_whale.panel.alcance`) armado con lo que su contexto ya calculó:
+    la misma tienda, el mismo filtro de canal, el mismo periodo y la misma evaluación que resolverán las rutas de la
+    galería con los `params` que el panel pinta (regla 7), sin evaluar dos veces."""
+    actual = tw["tienda_actual"]
+    return {"config": tw["config"], "tienda": actual, "tienda_id": actual["id"] if actual else None,
+            "dias": tw["dias"], "canal": tw["canal"], "ev": tw["ev"], "desde": tw["desde"], "hasta": tw["hasta"],
+            "params": tw["alcance_params"]}
 
 
 ORDEN_NIVEL = {"alta": 0, "media": 1, "bien": 2}
@@ -204,14 +219,15 @@ def _copias_vivas(tw, meta):
 
 # --------------------------------------------------------------- contexto ---
 
-def contexto(cliente, dias=0, entrada=None, canal=None, hoy=None, pagina_conjuntos=0, pagina_anuncios=0,
-             tienda=None, cuenta=None):
+def contexto(cliente, dias=0, entrada=None, canal=None, hoy=None, pagina_conjuntos=0, tienda=None, cuenta=None):
     """Todo lo que pinta `_rend_panel.html` para la entrada pedida (`entrada`: la clave de una entrada; vacía, ajena
     o rara = «Todas»; `tienda`/`cuenta`, los parámetros de las pestañas viejas). Claves: `conectado`, `hay_tw`,
     `hay_meta`, `entradas`, `actual`, `alcance`, `fuente`, `dias`, `periodos`, `canal` y `canales` (solo con fuente
     "tw": el filtro «Canal» es de Triple Whale, A3), `params`, `tw` (contexto de `triple_whale.panel.contexto` o
-    None), `meta` (ver `_meta`), `resumen` (`pestana_rendimiento.resumen.contexto`), `atencion`, `copias_vivas`
-    (regla 6), `modo_meta`, `solo_metricas` y los textos de `evaluacion`."""
+    None), `meta` (ver `_meta`), `galeria` («Tus anuncios» de las dos fuentes, `pestana_rendimiento.galeria.armar`,
+    regla 7), `params_tw` (el alcance de Triple Whale en las URL de sus rutas, para «Guardar en Referentes»), `resumen`
+    (`pestana_rendimiento.resumen.contexto`), `atencion`, `copias_vivas` (regla 6), `modo_meta`, `solo_metricas` y los
+    textos de `evaluacion`."""
     hoy = hoy or date.today()
     dias = periodo_valido(dias)
     s = _resolver(cliente, entrada, tienda, cuenta)
@@ -225,19 +241,23 @@ def contexto(cliente, dias=0, entrada=None, canal=None, hoy=None, pagina_conjunt
             tw["resultados"]["datos"]["url_dia"] = ""      # la ruta la completa (aquí no hay petición garantizada)
     canal_ok = tw["canal"] if tw and fuente == "tw" else None
     params = _params(actual, dias, canal_ok)
-    meta = _meta(cliente, s, dias, hoy, params, pagina_conjuntos, pagina_anuncios)
+    meta = _meta(cliente, s, dias, hoy, params, pagina_conjuntos)
     tw_cfg = s["tw_cfg"]
+    alc_tw = _alcance_tw_de(tw) if tw else None
+    alc_meta = meta["alcance"] if meta else None
     return {
         "conectado": bool(s["tiendas"]) or s["meta_ok"], "hay_tw": bool(s["tiendas"]), "hay_meta": s["meta_ok"],
         "entradas": s["entradas"], "actual": actual, "alcance": alc, "fuente": fuente, "dias": dias,
         "periodos": PERIODOS, "canal": canal_ok, "canales": tw["canales"] if tw and fuente == "tw" else [],
         "params": params, "tw": tw, "meta": meta,
+        "galeria": galeria.armar(cliente, alc_tw, alc_meta) if (alc_tw or alc_meta) else None,
+        "params_tw": alc_tw["params"] if alc_tw else {},
         "resumen": resumen.contexto(cliente, s["entradas"], actual, alc, dias, hoy,
                                     tw_cfg["moneda"] if tw_cfg else "USD"),
         "atencion": _atencion(tw, meta), "copias_vivas": _copias_vivas(tw, meta),
         "modo_meta": meta_conexion.modo(cliente) if s["con_conexion_meta"] else None,
         "solo_metricas": s["solo_metricas"],
-        **_etiquetas(),
+        **etiquetas(),
     }
 
 
@@ -263,26 +283,35 @@ def conjuntos_pagina(cliente, dias=0, entrada=None, pagina=0, hoy=None):
     return mr
 
 
-def anuncios_meta_pagina(cliente, dias=0, entrada=None, pagina=0, hoy=None):
-    """Una página más de anuncios de fuente Meta de la entrada pedida, con la forma de `contexto` en lo que pintan
-    sus tarjetas (`meta.anuncios`, `params`, `actual`, los textos de `evaluacion`). Tres lecturas para todas las
-    cuentas cuya fuente es Meta; nada de Triple Whale ni de la estructura."""
-    hoy = hoy or date.today()
-    dias = periodo_valido(dias)
-    s = _resolver(cliente, entrada)
-    ids = list(s["alcance"]["meta_fuente"])
-    anuncios = None
-    if ids:
-        desde, hasta, _, _ = meta_panel.rango_fechas(cliente, ids, dias, hoy)
-        anuncios = meta_panel.anuncios_evaluados(cliente, ids, desde, hasta, hoy, s["cuentas_por_id"], pagina)
-        anuncios.update(desde=desde, hasta=hasta)
-    return {"actual": s["actual"], "dias": dias, "params": _params(s["actual"], dias),
-            "meta": {"ids_fuente": ids, "anuncios": anuncios}, **_etiquetas()}
-
-
 def alcance_para_copias(cliente, entrada=None):
     """Lo que «Actualizar ahora» necesita para encolar las copias de la entrada pedida: {"tw_cfg", "meta_ok",
     "actual", "alcance", "ids_cuentas" (todas las cuentas de Meta del proyecto)}. Solo la conexión y las listas."""
     s = _resolver(cliente, entrada)
     return {"tw_cfg": s["tw_cfg"], "meta_ok": s["meta_ok"], "actual": s["actual"], "alcance": s["alcance"],
             "ids_cuentas": list(s["cuentas_por_id"])}
+
+
+# -------------------------------------------------- la galería y lo que cobra ---
+
+def alcances(cliente, dias=0, entrada=None, canal=None, hoy=None):
+    """El alcance de cada fuente para las rutas de la galería y de lo que cobra (E2 tarea 4), con la MISMA resolución
+    que el panel (regla 7): {"tw": `triple_whale.panel.alcance` de la tienda de la entrada o None, "meta":
+    `alcance_meta.alcance` de las cuentas cuya fuente es Meta o None, "params" (los de la pestaña: entrada, dias,
+    canal), "params_tw" (los de las rutas de Triple Whale), "existe", "hay_tw"}. `canal` solo cuenta si el alcance es
+    solo Triple Whale (A3). `existe` es False si `entrada` no es vacía y no es la clave de ninguna entrada (una pestaña
+    vieja): entonces no hay alcances y nada se cobra, en vez de ensancharla a «Todas» (revisión de la tarea 8)."""
+    hoy = hoy or date.today()
+    dias = periodo_valido(dias)
+    s = _resolver(cliente, entrada)
+    alc, actual = s["alcance"], s["actual"]
+    valor = str(entrada or "").strip()
+    existe = not valor or (actual is not None and actual["clave"] == valor)
+    alc_tw = alc_meta = None
+    if existe and alc["tw"]:
+        alc_tw = tw_panel.alcance(cliente, dias, canal if alc["fuente"] == "tw" else None,
+                                  tienda=alc["tw"]["tienda_id"], hoy=hoy)
+    params = _params(actual, dias, alc_tw["canal"] if alc_tw and alc["fuente"] == "tw" else None)
+    if existe and alc["meta_fuente"]:
+        alc_meta = alcance_meta.alcance(cliente, list(alc["meta_fuente"]), dias, hoy, params, s["cuentas_por_id"])
+    return {"tw": alc_tw, "meta": alc_meta, "params": params, "params_tw": alc_tw["params"] if alc_tw else {},
+            "existe": existe, "hay_tw": bool(s["tw_cfg"])}

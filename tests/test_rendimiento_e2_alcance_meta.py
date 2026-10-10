@@ -363,12 +363,17 @@ def test_pedir_analisis_guarda_lo_de_la_cuenta_y_la_moneda_del_alcance(peticion)
 
 
 def test_pedir_analisis_con_monedas_mezcladas_no_guarda_una_moneda_ni_un_costo_inventados(peticion):  # noqa: F811
+    """Sin moneda común en el alcance, el análisis guarda la de la cuenta del anuncio (E2 tarea 4: `pedir_analisis`
+    toma `a["moneda"]` antes que la del alcance; hasta entonces guardaba None), y ni un costo por venta ni un CPM de
+    monedas mezcladas."""
     _con_euros()
     alc = _alc([SE1, EUR])
     ok, mensaje = pedidos.pedir_analisis("acme", alc, pedidos.anuncio_del_alcance(alc, "facebook-ads", "a2"), "daniel")
     assert ok is True, mensaje
     [fila] = twdatos.ultimos_analisis("acme", [("facebook-ads", "a2")]).values()
-    assert fila["moneda"] is None and fila["foto"]["cuenta"]["cpa_canal"] is None
+    assert alc["config"]["moneda"] is None
+    assert fila["moneda"] == "SEK" and fila["foto"]["cuenta"]["cpa_canal"] is None
+    assert fila["foto"]["fuente"] == "meta" and fila["foto"]["ad_account_id"] == SE1 and fila["foto"]["metodo"] == 2
     assert fila["foto"]["cuenta"]["benchmarks"]["cpm"] is None
     assert fila["foto"]["m"]["gasto"] == 400          # la cifra del anuncio es la suya, en la moneda de su cuenta
 

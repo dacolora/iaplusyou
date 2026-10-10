@@ -131,7 +131,8 @@ def test_una_entrada_de_meta_no_lleva_ventas_de_triple_whale(base_temporal, meta
     assert r["fuente"] == "meta" and r["tw"] is None
     assert [(c["campaign_id"], c["origen"], c["valor"]) for c in r["meta"]["estructura"]["campanas"]] == [
         ("cse", "meta", 90)]
-    assert [a["ad_id"] for a in r["meta"]["anuncios"]["anuncios"]] == ["se1"]
+    assert [a["ad_id"] for a in r["meta"]["anuncios"]["ev"]["anuncios"]] == ["se1"]
+    assert [(a["fuente"], a["ad_id"]) for a in r["galeria"]["tarjetas"]] == [("meta", "se1")]   # la galería única
     assert r["params"] == {"entrada": "SE", "dias": 7, "canal": ""} and r["canales"] == []
     assert r["meta"]["moneda"] == "SEK"
 

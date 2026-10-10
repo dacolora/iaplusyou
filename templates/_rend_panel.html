@@ -1,22 +1,25 @@
 {# Panel de la pestaña «Rendimiento» (fragmento por fetch, pestana_rendimiento.rutas.ver_panel; spec 2026-10-09 §5 con
    las enmiendas A1–A3). Contexto: `r` (pestana_rendimiento.panel.contexto), `cliente` y `es_admin`. Solo lee la copia
    local. Sin <script>: el JS vive en _tab_rendimiento.html (`data-rend-param` cambia un filtro, `data-rend-entrada`
-   elige una entrada desde «Por país», `data-rend-mas` y `data-meta-mas` traen más tarjetas o filas).
+   elige una entrada desde «Por país», `data-meta-mas` trae más filas; la galería, sus `data-tw-*`).
 
    Orden: barra (entrada, periodo, «Canal» solo con fuente Triple Whale, atribución, última copia, «Actualizar ahora»,
    «Ajustes»), UNA barra para las copias en curso del alcance y sus errores, avisos, Resultados (los de Triple Whale
    con su detalle del día cuando el alcance es solo Triple Whale; si no, los de `r.resumen`, que nunca abren días: A3), la línea de
    origen de las ventas (R8) y desde cuándo cuentan todas las fuentes (R7), «Por país» (solo «Todas» con dos
    entradas o más, también cuando todas son tiendas: reemplaza a «Por tienda»), «Lo que necesita tu atención» (las
-   dos fuentes), «Tus anuncios» (la galería de Triple Whale tal cual, A1, y debajo las tarjetas de los anuncios cuya
-   fuente es Meta, sin IA: R14), «Lo que hace ganar en tu cuenta» (solo con Triple Whale), «Campañas» y «Conjuntos»
-   (con la fuente del ROAS de cada fila) y, de Triple Whale, reparto, productos y «Ver como tabla».
-   Lo que cobra está solo en las secciones de Triple Whale (_tw_secciones.html, _tw_galeria.html) y postea a
+   dos fuentes), «Tus anuncios» (UNA galería con los anuncios de las dos fuentes por gasto en USD y un solo lote,
+   `r.galeria`, E2 tarea 4: la enmienda A1 la dejó para E2; los tiles de Triple Whale encima solo con alcance solo
+   Triple Whale), «Lo que hace ganar en tu cuenta» (solo con Triple Whale), «Campañas» y «Conjuntos» (con la fuente
+   del ROAS de cada fila) y, de Triple Whale, reparto, productos y «Ver como tabla».
+   Lo que cobra: la galería (_tw_galeria.html) postea a las rutas de la pestaña con el alcance de `r.params` y la
+   fuente de cada anuncio (pestana_rendimiento/rutas.py, que cobran con triple_whale/pedidos.py); «Evaluar con IA», a
    triple_whale/rutas.py con el alcance de `r.tw` (R13). Una parte cuya copia todavía no tiene días no pinta sus
    secciones: dice que se está trayendo o que falta pulsar «Actualizar ahora». #}
 {% import "_tw_secciones.html" as tws %}
 {% import "_meta_macros.html" as mx %}
 {% import "_rend_macros.html" as rm %}
+{% from "_tw_galeria.html" import galeria %}
 {% if not r.conectado %}
 {{ rm.sin_conexion() }}
 {% elif not r.entradas %}
@@ -174,23 +177,13 @@
 {# ---------- 03 Lo que necesita tu atención (las dos fuentes) ---------- #}
 {{ tws.alertas(r.atencion) }}
 
-{# ---------- 04 Tus anuncios (A1: la galería de Triple Whale tal cual y, debajo, los de fuente Meta) ---------- #}
-{% if con_tw %}{{ tws.anuncios(r.tw, cliente) }}{% endif %}
-{% set pag = r.meta.anuncios if con_meta else none %}
-{% if pag %}
-<section class="tb-seccion" id="rend-anuncios-meta">
-  <div class="tb-seccion-cab">
-    {% if con_tw %}<h4 class="rend-subtitulo">{{ _('De tus cuentas de Meta sin tienda en Triple Whale') }}</h4>{% else %}<h3>{{ _('Tus anuncios') }}</h3>{% endif %}
-    <small class="vacio">{{ ngettext('%(num)s anuncio con datos, cada uno comparado con su cuenta', '%(num)s anuncios con datos, cada uno comparado con su cuenta', pag.n_anuncios) }} · {{ _('Los anuncios de Meta cubren los últimos 90 días.') }}</small>
-  </div>
-  <div class="tw-filtros" aria-label="{{ _('Anuncios por veredicto') }}">
-    {% for v in r.veredictos %}{% if pag.conteo[v] %}<span class="tag-estado {{ mx.clase_veredicto(v) }}">{{ r.etiquetas_veredicto[v] | traducir }} · {{ pag.conteo[v] }}</span>{% endif %}{% endfor %}
-  </div>
-  {% if pag.anuncios %}
-  <div class="rend-anuncios-meta">{% include "_rend_anuncios_meta.html" %}</div>
-  {% else %}
-  <p class="vacio">{{ _('Ningún anuncio con datos en este periodo.') }}</p>
-  {% endif %}
+{# ---------- 04 Tus anuncios: UNA galería con las dos fuentes, por gasto en USD (E2 tarea 4; A1, PND-196) ---------- #}
+{% set g = r.galeria %}
+{% if g %}
+<section class="tb-seccion">
+  <div class="tb-seccion-cab"><h3>{{ _('Tus anuncios') }}</h3><small class="vacio">{{ ngettext('%(num)s anuncio con datos', '%(num)s anuncios con datos', g.n_anuncios) }}{% if r.canal %} · {{ r.canal | tw_canal }}{% endif %}{% if g.hay_meta %} · {{ _('Los anuncios de Meta cubren los últimos 90 días.') }}{% endif %}</small></div>
+  {% if r.fuente == 'tw' and con_tw %}{{ tws.tiles_anuncios(r.tw) }}{% endif %}
+  {{ galeria(g, cliente, r.params, r.params_tw, r) }}
 </section>
 {% endif %}
 

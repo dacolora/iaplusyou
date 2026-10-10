@@ -5,7 +5,7 @@
 - R2 (R6 en «Por país»): la cifra principal va en la moneda común de todas las filas (USD si no la hay); una fila sin
   USD dice «USD no disponible» y aparece el aviso de la página.
 - R3: pruebas que matan las mutaciones que sobrevivieron (22–28).
-- R4: el panel hace el mismo número de consultas con 12 y con 24 tarjetas por fuente.
+- R4: el panel hace el mismo número de consultas con 12 y con 24 anuncios por fuente.
 - R5: una sola barra para las copias en curso del alcance.
 - R6: «Lo que necesita tu atención» junta las dos fuentes sin quitar textos repetidos, con lo «alta» primero.
 - R7: el filtro «Canal» solo ofrece canales con gasto en el periodo.
@@ -226,18 +226,18 @@ def test_la_alerta_sin_compras_de_un_anuncio_de_meta_habla_de_meta(base_temporal
 
 
 def test_ver_mas_de_meta_en_todas_no_trae_los_anuncios_de_una_cuenta_cubierta(meta_on):  # noqa: F811
-    """Mutación 27: la cuenta World Wide llega dentro de la tienda (R5); sus anuncios ya están en la galería de Triple
-    Whale y el «Ver más» de los anuncios de fuente Meta no los repite."""
+    """Mutación 27: la cuenta World Wide llega dentro de la tienda (R5); sus anuncios ya están en la parte de Triple
+    Whale y la galería no los repite como anuncios de fuente Meta (desde E2 tarea 4, una sola galería: su ruta)."""
     _sembrar(cubierta_ww=True)
     for n in range(3):
         f = _hace(n)
         mdatos.reemplazar_anuncio_dias("acme", "act_ww", f, f, [_ad(f, "ww9", 80, 100, compras=1, campaign="cww")])
         mdatos.reemplazar_anuncio_dias("acme", "act_se", f, f, [_ad(f, "se9", 60, 90, compras=1, campaign="cse")])
-    html = meta_on["c"].get("/cliente/acme/rendimiento/anuncios-meta?entrada=&pagina=0").data.decode()
-    assert "se9" in html and "ww9" not in html
+    html = meta_on["c"].get("/cliente/acme/rendimiento/galeria?entera=1&entrada=").data.decode()
+    assert 'id="tw-tarjeta-meta-facebook-ads-se9"' in html and "ww9" not in html
     panel_html = _panel(meta_on)
-    meta = panel_html[panel_html.index('id="rend-anuncios-meta"'):]
-    assert "se9" in meta and "ww9" not in meta[:meta.index("</section>")]
+    galeria = panel_html[panel_html.index('id="tw-galeria"'):]
+    assert "se9" in galeria and "ww9" not in galeria[:galeria.index("</section>")]
 
 
 def test_sin_token_de_meta_no_se_leen_sus_cuentas(base_temporal, sin_meta):
@@ -271,14 +271,14 @@ def test_el_panel_hace_las_mismas_consultas_con_12_y_con_24_tarjetas_por_fuente(
     from tests.test_escala import _Consultas
     _sembrar()
     _anuncios_por_fuente(12)
-    assert _panel(meta_on).count('<article class="rend-tarjeta') == 12
+    # Desde E2 tarea 4, UNA galería con las dos fuentes: su primera página (12) y «Ver más».
+    assert _panel(meta_on).count('<article class="tw-tarjeta') == 12
     with _Consultas() as doce:
         assert meta_on["c"].get("/cliente/acme/rendimiento/panel").status_code == 200
     _anuncios_por_fuente(24)
     with _Consultas() as veinticuatro:
         html = _panel(meta_on)
-    # 24 tarjetas de Meta (su página es de 24) y la galería de Triple Whale con su primera página de 12 y «Ver más».
-    assert html.count('<article class="rend-tarjeta') == 24 and 'id="tw-galeria"' in html
+    assert html.count('<article class="tw-tarjeta') == 12 and html.count('id="tw-galeria"') == 1 and "data-tw-mas" in html
     assert doce.n == veinticuatro.n, (doce.n, veinticuatro.n)
 
 

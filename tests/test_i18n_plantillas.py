@@ -66,9 +66,9 @@ PLANTILLAS_TRADUCIDAS = [
     # Pestaña Meta (rendimiento de varias cuentas, 2026-10-08): el selector, las filas de «Ver más» y sus macros, que
     # hoy pinta la pestaña Rendimiento (el armazón y el panel de Meta se jubilaron el 2026-10-09).
     "_meta_cuentas.html", "_meta_conjuntos_filas.html", "_meta_macros.html",
-    # Pestaña Rendimiento (spec 2026-10-09): armazón, panel, tarjetas de anuncios de fuente Meta («Ver más»), sus
-    # macros y las secciones que heredó de las pestañas Triple Whale y Meta.
-    "_tab_rendimiento.html", "_rend_panel.html", "_rend_anuncios_meta.html", "_rend_macros.html",
+    # Pestaña Rendimiento (spec 2026-10-09): armazón, panel, sus macros y las secciones que heredó de las pestañas
+    # Triple Whale y Meta (las tarjetas de fuente Meta de E1 se fueron con la galería única de E2, tarea 4).
+    "_tab_rendimiento.html", "_rend_panel.html", "_rend_macros.html",
     "_tw_secciones.html", "_meta_secciones.html",
     "editor.html",   # Fase 6, Task 2: la página del editor
     "_tab_cambiar_calzado.html",   # Fase 6, Task 4: Crear › Cambiar producto

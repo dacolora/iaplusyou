@@ -11,7 +11,8 @@ sin saldo. Lo único que cambió es la frontera: `usuario` llega explícito en v
 petición) y cuentas.
 
 `alc` es el dict de `triple_whale.panel.alcance` (`config`, `tienda`, `tienda_id`, `dias`, `canal`, `ev`, `desde`,
-`hasta`, `params`). `alc_eval` es lo que guarda una evaluación: `{"ev", "desde", "hasta", "moneda", "extra"}`.
+`hasta`, `params`) o el de `pestana_rendimiento.alcance_meta.alcance` (la misma forma, más `fuente = "meta"`): desde
+Rendimiento E2 (tarea 4) la galería única de la pestaña pide cada anuncio con el alcance de SU fuente. `alc_eval` es lo que guarda una evaluación: `{"ev", "desde", "hasta", "moneda", "extra"}`.
 """
 import logging
 
@@ -65,11 +66,16 @@ def pedir_analisis(cliente, alc, a, usuario):
               "cpa_canal": (canal_info["gasto"] / canal_info["pedidos"]) if canal_info and canal_info["pedidos"] else None}
     if "creatv" not in a and a["canal"] == triple_whale.CANAL_META:
         a["creatv"] = datos.piezas_creatv(cliente, [a["ad_id"]]).get(a["ad_id"])
+    # La fuente de los números va en la foto (Rendimiento E2): con "meta" la tarea trae el anuncio de Meta antes de
+    # mirarlo, con la cuenta del anuncio; el alcance de Triple Whale no trae `fuente`.
     foto = mejorar.foto(a, creativos.get((a["canal"], a["ad_id"])), cuenta,
-                        mejorar.ganadores_del_canal(ev, a, creativos))
+                        mejorar.ganadores_del_canal(ev, a, creativos),
+                        fuente=alc.get("fuente", analisis.FUENTE_DEFECTO), ad_account_id=a.get("ad_account_id"))
     foto["alcance_canal"] = alc.get("canal")     # el filtro de canal del panel también es del alcance (revisión final, A3)
+    # La moneda del anuncio si la trae (Meta: la de su cuenta); si no, la del alcance. Un alcance de Meta con cuentas en
+    # monedas distintas no tiene una común (None) y el análisis guardaría None aunque el anuncio sí la sepa.
     aid = datos.crear_analisis(cliente, alc["tienda_id"], a["canal"], a["ad_id"], alc["desde"], alc["hasta"],
-                               alc["config"]["moneda"], foto, pedido_por=usuario)
+                               a.get("moneda") or alc["config"]["moneda"], foto, pedido_por=usuario)
     try:
         encolada = tareas_tw.encolar_analisis(cliente, aid, a["canal"], a["ad_id"], costo_estimado=usd)
     except Exception:                             # SaldoInsuficiente incluida: se borra la fila y sigue su camino

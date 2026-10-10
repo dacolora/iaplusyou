@@ -6,19 +6,39 @@ Triple Whale y de Meta.
 - `panel` (GET): el fragmento que la pestaña pide por fetch (solo lee la copia local). `entrada` = la clave de una
   entrada del selector; vacía, ajena o rara = «Todas». `tienda`/`cuenta` son los parámetros de las pestañas viejas.
 - `conjuntos` (GET): «Ver más» de la tabla de conjuntos; devuelve solo filas `<tr>`.
-- `anuncios-meta` (GET): «Ver más» de los anuncios cuya fuente es Meta; devuelve solo tarjetas.
 - `actualizar` (POST): «Actualizar ahora» encola las copias de Triple Whale y de Meta del alcance (una `entrada` que
   no existe no encola nada: solo la vacía es «Todas») con sus `job_id` de siempre y las reglas de cada una (`triple_whale.rutas.pedir_copia`, `meta_rendimiento.rutas.pedir_copia`: la
   pausa compartida de Meta y la espera de 30 minutos de quien no es admin). Leer no cobra.
 
-Las rutas que cobran («Cómo mejorarlo», «Analizar los N», «Evaluar con IA») siguen en `triple_whale/rutas.py` (R13):
-esta pestaña solo les pasa el alcance de Triple Whale de la entrada."""
+«Tus anuncios», UNA galería con los anuncios de las dos fuentes (E2 tarea 4, 2026-10-10; `pestana_rendimiento.galeria`).
+Todas resuelven el alcance con `entrada`, `dias` y `canal` (este solo si el alcance es solo Triple Whale) por
+`panel.alcances`, la misma resolución que el panel; `<fuente>` es "tw" o "meta" y `<canal>`/`<ad_id>` pasan por
+`tareas.triple_whale.id_valido` (si no, 404, antes de leer nada):
+
+- `galeria` (GET): con `entera=1`, el bloque entero de un filtro (chips, formulario del lote con sus claves y su precio,
+  y la rejilla, página 1); sin ella («Ver más»), solo las tarjetas de `pagina`.
+- `tarjeta/<fuente>/<canal>/<ad_id>` (GET): una tarjeta sola, para repintarla cuando termina su análisis; un anuncio
+  que no está en el alcance de esa fuente es 404.
+- `anuncio/<fuente>/<canal>/<ad_id>/analizar` (POST): «Cómo mejorarlo» con `triple_whale.pedidos.pedir_analisis` y el
+  alcance de SU fuente (precio a la vista, Cobros, `max_intentos=1`, nunca dos veces lo mismo). Con
+  `Accept: application/json` responde JSON con la tarjeta ya en curso (también sin alcance o sin correo verificado:
+  el JS de la tarjeta espera JSON); sin saldo, el 402 de `dashboard._saldo_insuficiente`.
+- `analizar-lote` (POST): «Analizar los N que más gastaron». Cobra solo las claves `<fuente>:<canal>:<ad_id>` que
+  mostró el formulario, recortadas a N entre las dos fuentes y aún elegibles, cada una con su fuente
+  (`galeria.pedir_lote`); un segundo envío no cobra nada y la primera fuente sin saldo para todo.
+
+Hasta el 2026-10-10 la galería, la tarjeta, «Cómo mejorarlo» y el lote vivían en `triple_whale/rutas.py` (solo Triple
+Whale) y los anuncios de Meta tenían su bloque aparte (`anuncios-meta`, sin IA): se jubilaron con la galería única.
+«Evaluar con IA», «Guardar en Referentes», el detalle de un análisis, «Llevar a Crear» y Pausar/Activar siguen allá."""
 from flask import Blueprint, abort, flash, redirect, render_template, request, session, url_for
-from flask_babel import gettext
+from flask_babel import gettext, ngettext
 
 import usuarios
+from cobros import SaldoInsuficiente
 from meta_rendimiento import rutas as meta_rutas
-from pestana_rendimiento import panel
+from pestana_rendimiento import galeria, panel
+from tareas import triple_whale as tareas_tw
+from triple_whale import pedidos
 from triple_whale import rutas as tw_rutas
 
 bp = Blueprint("rendimiento", __name__, url_prefix="/cliente/<cliente>/rendimiento")
@@ -34,15 +54,24 @@ def _mismo_origen():
 
 @bp.before_request
 def _correo_verificado():
-    """Sin correo verificado una persona con rol cliente no pide copias desde aquí (el mismo criterio que
-    `meta_rendimiento.rutas._correo_verificado`; este Blueprint no puede importar `dashboard`). El admin pasa."""
+    """Sin correo verificado una persona con rol cliente no pide copias ni análisis pagados desde aquí (el mismo
+    criterio que `meta_rendimiento.rutas._correo_verificado`; este Blueprint no puede importar `dashboard`). El admin
+    pasa. Desde E2 tarea 4 también frena «Cómo mejorarlo» y el lote, que antes vivían en `triple_whale/rutas.py` sin
+    esta barrera (regla de seguridad de todo POST nuevo)."""
     if request.method != "POST" or meta_rutas.es_admin():
         return None
     entry = usuarios.obtener(session.get("usuario") or "")
     if entry and entry.get("correo_verificado"):
         return None
-    flash(gettext("Confirma tu correo primero (Configuración › Cuenta)."), "error")
+    mensaje = gettext("Confirma tu correo primero (Configuración › Cuenta).")
+    if _quiere_json():          # «Cómo mejorarlo» por fetch: una respuesta conocida, no un redirect que no sabe leer
+        return {"ok": False, "mensaje": mensaje, "html": ""}
+    flash(mensaje, "error")
     return redirect(url_for("ver_cliente", cliente=request.view_args["cliente"], _anchor="settings"))
+
+
+def _quiere_json():
+    return "application/json" in (request.headers.get("Accept") or "")
 
 
 def _volver(cliente):
@@ -81,13 +110,6 @@ def ver_conjuntos(cliente):
     return render_template("_meta_conjuntos_filas.html", cliente=cliente, mr=ctx)
 
 
-@bp.get("/anuncios-meta")
-def ver_anuncios_meta(cliente):
-    ctx = panel.anuncios_meta_pagina(cliente, _entero(request.args.get("dias")), _texto("entrada"),
-                                     _entero(request.args.get("pagina")))
-    return render_template("_rend_anuncios_meta.html", cliente=cliente, r=ctx)
-
-
 @bp.post("/actualizar")
 def actualizar(cliente):
     """«Actualizar ahora»: las copias de la entrada del formulario. Triple Whale: la tienda de la entrada, o todas
@@ -117,4 +139,102 @@ def actualizar(cliente):
             mensajes.extend(meta_rutas.pedir_copia(cliente, act) for act in ids)
     for texto, categoria in dict.fromkeys(mensajes):
         flash(texto, categoria)
+    return _volver(cliente)
+
+
+# ------------------------------------------------ «Tus anuncios»: la galería y lo que cobra (E2 tarea 4) ---
+
+def _alcances(cliente, datos):
+    return panel.alcances(cliente, _entero(datos.get("dias")), (datos.get("entrada") or "").strip(),
+                          (datos.get("canal") or "").strip() or None)
+
+
+def _render_galeria(cliente, al, **ctx):
+    """El fragmento de la galería (`_tw_galeria_fragmento.html`) con lo que piden sus macros fuera del panel."""
+    return render_template("_tw_galeria_fragmento.html", cliente=cliente, params=al["params"],
+                           params_tw=al["params_tw"], textos=panel.etiquetas(), **ctx)
+
+
+def _anuncio_valido(fuente, canal, ad_id):
+    """404 antes de leer nada si la fuente no es "tw"/"meta" o un id no puede ir en una URL ni en un job_id."""
+    if fuente not in galeria.FUENTES or not (tareas_tw.id_valido(canal) and tareas_tw.id_valido(ad_id)):
+        abort(404)
+
+
+@bp.get("/galeria")
+def ver_galeria(cliente):
+    al = _alcances(cliente, request.args)
+    if not (al["tw"] or al["meta"]):
+        abort(404)
+    # `entera=1` (un filtro nuevo): el bloque entero de ese filtro, página 1, para que el JS lo reemplace y el lote
+    # (sus claves y su precio) sea siempre el del filtro que se ve. Sin ella («Ver más»): solo las tarjetas.
+    entera = request.args.get("entera") == "1"
+    g = galeria.armar(cliente, al["tw"], al["meta"], request.args.get("veredicto") or "",
+                      1 if entera else request.args.get("pagina"))
+    return _render_galeria(cliente, al, modo="entera" if entera else "pagina", g=g)
+
+
+@bp.get("/tarjeta/<fuente>/<canal>/<ad_id>")
+def ver_tarjeta(cliente, fuente, canal, ad_id):
+    _anuncio_valido(fuente, canal, ad_id)
+    al = _alcances(cliente, request.args)
+    a = pedidos.anuncio_del_alcance(al[fuente], canal, ad_id) if al[fuente] else None
+    if a is None:
+        abort(404)
+    galeria.tarjeta(cliente, fuente, al[fuente], a)
+    return _render_galeria(cliente, al, modo="tarjeta", a=a)
+
+
+@bp.post("/anuncio/<fuente>/<canal>/<ad_id>/analizar")
+def analizar_anuncio(cliente, fuente, canal, ad_id):
+    _anuncio_valido(fuente, canal, ad_id)
+    al = _alcances(cliente, request.form)
+    alc = al[fuente]
+    if not alc:
+        # Sin el alcance de esa fuente no se cobra: una pestaña vieja, Triple Whale o Meta desconectados después de
+        # pintar. El JS de la tarjeta espera JSON: un redirect no lo sabría leer.
+        mensaje = (gettext("Triple Whale no está conectado en este proyecto.") if fuente == galeria.TW and al["existe"]
+                   and not al["hay_tw"] else gettext("Esa vista ya no existe: recarga la pestaña."))
+        if _quiere_json():
+            return {"ok": False, "mensaje": mensaje, "html": ""}
+        flash(mensaje, "error")
+        return _volver(cliente)
+    a = pedidos.anuncio_del_alcance(alc, canal, ad_id)
+    if a is None:
+        abort(404)
+    ok, mensaje = pedidos.pedir_analisis(cliente, alc, a, session.get("usuario"))
+    if _quiere_json():
+        galeria.tarjeta(cliente, fuente, alc, a)
+        return {"ok": ok, "mensaje": mensaje, "html": _render_galeria(cliente, al, modo="tarjeta", a=a)}
+    flash(mensaje, "ok" if ok else "warn")
+    return _volver(cliente)
+
+
+def _avisos_lote(n, fallos):
+    if n:
+        flash(ngettext("Analizando %(num)s anuncio con IA…", "Analizando %(num)s anuncios con IA…", n), "ok")
+    if fallos:
+        flash(ngettext("No se pudo encolar %(num)s anuncio: vuelve a intentarlo.",
+                       "No se pudieron encolar %(num)s anuncios: vuelve a intentarlo.", fallos), "warn")
+
+
+@bp.post("/analizar-lote")
+def analizar_lote(cliente):
+    al = _alcances(cliente, request.form)
+    if not (al["tw"] or al["meta"]):
+        flash(gettext("Esa vista ya no existe: recarga la pestaña.") if not al["existe"]
+              else gettext("Conecta Triple Whale o Meta para ver tu rendimiento."), "warn")
+        return _volver(cliente)
+    # Lo confirmado, a lo sumo N entre las dos fuentes (recortado ANTES de separarlas); cada fuente cobra solo lo suyo
+    # aún elegible con el filtro que lo mostró y la primera sin saldo para todo (`galeria.pedir_lote`).
+    claves = galeria.claves_confirmadas(request.form.getlist("clave"))
+    try:
+        n, fallos = galeria.pedir_lote(cliente, al, claves, session.get("usuario"),
+                                       veredicto=request.form.get("veredicto") or "")
+    except SaldoInsuficiente as e:
+        _avisos_lote(*getattr(e, "lote", (0, 0)))   # los que sí salieron; el manejador común dice el resto
+        raise
+    _avisos_lote(n, fallos)
+    if not n and not fallos:
+        flash(gettext("No quedó ningún anuncio por analizar."), "warn")
     return _volver(cliente)

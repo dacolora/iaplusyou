@@ -1,4 +1,8 @@
-"""La galería de tarjetas (spec tarjetas §2, §5)."""
+"""La galería de tarjetas (spec tarjetas §2, §5). Desde Rendimiento E2 (tarea 4, 2026-10-10) la galería y la tarjeta
+sola son rutas de la pestaña (`/rendimiento/galeria`, `/rendimiento/tarjeta/tw/<canal>/<ad_id>`) con el alcance de la
+pestaña (`entrada`, `dias`, `canal`), y cada clave del lote lleva su fuente (`tw:<canal>:<ad_id>`): estas pruebas,
+de un proyecto solo con Triple Whale, vigilan lo mismo que antes contra ellas. La galería con las dos fuentes:
+`tests/test_rendimiento_e2_galeria.py`."""
 import re
 
 import sqlalchemy as sa
@@ -48,24 +52,24 @@ def test_el_panel_trae_la_primera_pagina_de_la_galeria_con_el_anuncio_real(app):
 def test_galeria_pagina_dos_y_filtros(app):  # noqa: F811
     _conectar()
     _sembrar_muchos(15)
-    p2 = app["c"].get("/cliente/acme/triple-whale/galeria?pagina=2").data.decode()
+    p2 = app["c"].get("/cliente/acme/rendimiento/galeria?pagina=2").data.decode()
     assert len(_tarjetas(p2)) == 3 and "Ver más" not in p2
     _sembrar()
-    todos = app["c"].get("/cliente/acme/triple-whale/galeria").data.decode()
+    todos = app["c"].get("/cliente/acme/rendimiento/galeria").data.decode()
     assert 'id="tw-tarjeta-facebook-ads-n1"' not in todos                     # «Muy pocos datos» no entra en Todos
-    pocos = app["c"].get("/cliente/acme/triple-whale/galeria?veredicto=sin_datos").data.decode()
+    pocos = app["c"].get("/cliente/acme/rendimiento/galeria?veredicto=sin_datos").data.decode()
     assert 'id="tw-tarjeta-facebook-ads-n1"' in pocos
-    raro = app["c"].get("/cliente/acme/triple-whale/galeria?veredicto=<script>").data.decode()
+    raro = app["c"].get("/cliente/acme/rendimiento/galeria?veredicto=<script>").data.decode()
     assert "<script>" not in raro and raro == todos                         # un filtro desconocido es «Todos»
 
 
 def test_tarjeta_sola_y_anuncio_ajeno(app):  # noqa: F811
     _conectar()
     _sembrar()
-    r = app["c"].get("/cliente/acme/triple-whale/tarjeta/facebook-ads/g1")
+    r = app["c"].get("/cliente/acme/rendimiento/tarjeta/tw/facebook-ads/g1")
     assert r.status_code == 200 and len(_tarjetas(r.data.decode())) == 1
-    assert app["c"].get("/cliente/acme/triple-whale/tarjeta/facebook-ads/no-existe").status_code == 404
-    assert app["c"].get("/cliente/acme/triple-whale/tarjeta/facebook-ads/a%2Fb").status_code == 404
+    assert app["c"].get("/cliente/acme/rendimiento/tarjeta/tw/facebook-ads/no-existe").status_code == 404
+    assert app["c"].get("/cliente/acme/rendimiento/tarjeta/tw/facebook-ads/a%2Fb").status_code == 404
 
 
 def test_la_url_de_la_tarjeta_lleva_el_alcance(app):  # noqa: F811
@@ -74,15 +78,20 @@ def test_la_url_de_la_tarjeta_lleva_el_alcance(app):  # noqa: F811
     tid = _conectar()
     _sembrar()
     panel_html = app["c"].get("/cliente/acme/rendimiento/panel?canal=facebook-ads&dias=7").data.decode()
-    url = html_mod.unescape(re.search(r'id="tw-tarjeta-facebook-ads-g1"\s+data-tarjeta-url="([^"]+)"', panel_html).group(1))
-    assert url == f"/cliente/acme/triple-whale/tarjeta/facebook-ads/g1?dias=7&canal=facebook-ads&tienda={tid}"
+    from urllib.parse import parse_qs, urlsplit
+    url = html_mod.unescape(re.search(r'id="tw-tarjeta-facebook-ads-g1" data-fuente="tw"\s+data-tarjeta-url="([^"]+)"',
+                                      panel_html).group(1))
+    partes = urlsplit(url)
+    assert partes.path == "/cliente/acme/rendimiento/tarjeta/tw/facebook-ads/g1"
+    assert parse_qs(partes.query, keep_blank_values=True) == {"entrada": [f"tienda:{tid}"], "dias": ["7"],
+                                                              "canal": ["facebook-ads"]}
     assert app["c"].get(url).status_code == 200
 
 
 def test_tarjeta_muestra_anillos_frase_y_costo_por_venta(app):  # noqa: F811
     _conectar()
     _sembrar()
-    html = app["c"].get("/cliente/acme/triple-whale/tarjeta/facebook-ads/g1").data.decode()
+    html = app["c"].get("/cliente/acme/rendimiento/tarjeta/tw/facebook-ads/g1").data.decode()
     assert "Este anuncio sí funciona" in html or "Va bien" in html or "Todavía no se sabe" in html
     for etiqueta in ("Gancho", "Retención", "Clic", "Compra"):
         assert etiqueta in html
@@ -99,16 +108,16 @@ def test_tiktok_es_enlace_y_un_host_raro_no_se_incrusta(app):  # noqa: F811
         {"canal": "tiktok-ads", "ad_id": "t1", "tipo": "video", "video_url": "https://www.tiktok.com/embed/v1"},
         {"canal": "facebook-ads", "ad_id": "g1", "tipo": "video", "video_url": "https://evil.test/v.mp4",
          "imagen_url": "https://evil.test/t.jpg"}])
-    t1 = app["c"].get("/cliente/acme/triple-whale/tarjeta/tiktok-ads/t1").data.decode()
+    t1 = app["c"].get("/cliente/acme/rendimiento/tarjeta/tw/tiktok-ads/t1").data.decode()
     assert 'href="https://www.tiktok.com/embed/v1"' in t1 and 'rel="noopener noreferrer"' in t1 and "<video" not in t1
-    g1 = app["c"].get("/cliente/acme/triple-whale/tarjeta/facebook-ads/g1").data.decode()
+    g1 = app["c"].get("/cliente/acme/rendimiento/tarjeta/tw/facebook-ads/g1").data.decode()
     assert "evil.test" not in g1
 
 
 def test_cada_tarjeta_cierra_sus_div(app):  # noqa: F811
     _conectar()
     _sembrar_muchos(5)
-    html = app["c"].get("/cliente/acme/triple-whale/galeria").data.decode()
+    html = app["c"].get("/cliente/acme/rendimiento/galeria").data.decode()
     for bloque in html.split('<article class="tw-tarjeta')[1:]:
         tarjeta = bloque.split("</article>")[0]
         assert tarjeta.count("<div") == tarjeta.count("</div>")
@@ -131,7 +140,7 @@ def _galeria_fria(app):  # noqa: F811
     d = app["dashboard"]
     d._TABLERO_CACHE.clear()
     d.invalidar_alertas("acme")
-    return app["c"].get("/cliente/acme/triple-whale/galeria")
+    return app["c"].get("/cliente/acme/rendimiento/galeria")
 
 
 def test_las_consultas_no_crecen_con_las_tarjetas(app):  # noqa: F811
@@ -192,7 +201,7 @@ def _lista(alc, ad_id, foto, tienda_id="mismo", desde=None, hasta=None, frase="G
 
 
 def _tarjeta(app, ad_id, canal="facebook-ads", q=""):  # noqa: F811
-    return app["c"].get(f"/cliente/acme/triple-whale/tarjeta/{canal}/{ad_id}{q}").data.decode()
+    return app["c"].get(f"/cliente/acme/rendimiento/tarjeta/tw/{canal}/{ad_id}{q}").data.decode()
 
 
 def test_un_analisis_de_otro_alcance_no_es_viejo_ni_vuelve_a_cobrarse(app):  # noqa: F811
@@ -212,7 +221,7 @@ def test_un_analisis_de_otro_alcance_no_es_viejo_ni_vuelve_a_cobrarse(app):  # n
         assert "Analizado con los datos del" in html and "desde entonces cambió" not in html
         assert "Analizar otra vez" not in html and "Ver el análisis" in html
         # Discreto y neutro: un botón chico para pagar con los datos de ahora, sin decir que «cambió» algo.
-        assert f"/anuncio/facebook-ads/{ad}/analizar" in html and "Analizar con estos datos" in html
+        assert f"/rendimiento/anuncio/tw/facebook-ads/{ad}/analizar" in html and "Analizar con estos datos" in html
         assert 'class="btn-xs">Analizar con estos datos' in html and "data-tw-async" in html
     g = panel.galeria("acme", alc["ev"], alcance=alc)
     assert ("facebook-ads", "g1") not in g["lote"]["claves"] and ("facebook-ads", "p1") not in g["lote"]["claves"]
@@ -370,7 +379,8 @@ def test_el_panel_envuelve_la_galeria_en_un_bloque_con_su_url(app):  # noqa: F81
     _sembrar()
     html = app["c"].get("/cliente/acme/rendimiento/panel?dias=7").data.decode()
     m = re.search(r'<div class="tw-galeria-bloque" data-url="([^"]+)"', html)
-    assert m and "/cliente/acme/triple-whale/galeria?" in m.group(1) and "dias=7" in m.group(1)
+    assert m and "/cliente/acme/rendimiento/galeria?" in m.group(1) and "dias=7" in m.group(1)
+    assert "/triple-whale/galeria" not in html
     # Chips, formulario del lote y rejilla viven dentro del bloque.
     bloque = html[m.start():html.index('id="tw-ia"')]
     assert "tw-galeria-barra" in bloque and "tw-analizar-lote" in bloque and 'id="tw-galeria"' in bloque
@@ -379,16 +389,16 @@ def test_el_panel_envuelve_la_galeria_en_un_bloque_con_su_url(app):  # noqa: F81
 def test_filtrar_pide_la_galeria_entera_con_los_chips_y_el_lote_de_ese_filtro(app):  # noqa: F811
     _conectar()
     _sembrar()
-    todos = app["c"].get("/cliente/acme/triple-whale/galeria?entera=1").data.decode()
-    assert _claves_del_lote(todos) and "facebook-ads:g1" in _claves_del_lote(todos)
-    r = app["c"].get("/cliente/acme/triple-whale/galeria?entera=1&veredicto=perdedor")
+    todos = app["c"].get("/cliente/acme/rendimiento/galeria?entera=1").data.decode()
+    assert _claves_del_lote(todos) and "tw:facebook-ads:g1" in _claves_del_lote(todos)
+    r = app["c"].get("/cliente/acme/rendimiento/galeria?entera=1&veredicto=perdedor")
     html = r.data.decode()
     assert r.status_code == 200 and html.lstrip().startswith('<div class="tw-galeria-bloque"')
     # Chips (con «Perdedores» activo), el formulario del lote de ESE filtro y la rejilla.
     assert 'data-tw-galeria-filtro="perdedor"' in html and 'data-tw-galeria-filtro="ganador"' in html
     assert re.search(r'class="chip activo" data-tw-galeria-filtro="perdedor"', html)
     claves = _claves_del_lote(html)
-    assert sorted(claves) == ["facebook-ads:p1", "facebook-ads:p2"]
+    assert sorted(claves) == ["tw:facebook-ads:p1", "tw:facebook-ads:p2"]
     assert 'name="veredicto" value="perdedor"' in html and "tw-analizar-lote" in html
     assert 'id="tw-galeria"' in html and 'data-veredicto="perdedor"' in html
     assert 'id="tw-tarjeta-facebook-ads-p1"' in html and 'id="tw-tarjeta-facebook-ads-g1"' not in html
@@ -399,7 +409,7 @@ def test_filtrar_pide_la_galeria_entera_con_los_chips_y_el_lote_de_ese_filtro(ap
 def test_un_filtro_vacio_dice_que_no_hay_anuncios_y_sin_lote(app):  # noqa: F811
     _conectar()
     _sembrar()
-    html = app["c"].get("/cliente/acme/triple-whale/galeria?entera=1&veredicto=cansando").data.decode()
+    html = app["c"].get("/cliente/acme/rendimiento/galeria?entera=1&veredicto=cansando").data.decode()
     assert "Ningún anuncio en este filtro." in html
     assert "tw-analizar-lote" not in html and "<article" not in html
     assert 'id="tw-galeria"' in html and 'data-veredicto="cansando"' in html
@@ -409,19 +419,19 @@ def test_sin_entera_la_galeria_sigue_siendo_solo_tarjetas(app):  # noqa: F811
     """«Ver más» agrega tarjetas a la rejilla que ya está: sin chips, sin lote, sin bloque."""
     _conectar()
     _sembrar_muchos(15)
-    p2 = app["c"].get("/cliente/acme/triple-whale/galeria?pagina=2").data.decode()
+    p2 = app["c"].get("/cliente/acme/rendimiento/galeria?pagina=2").data.decode()
     assert "tw-galeria-bloque" not in p2 and "tw-galeria-barra" not in p2 and "tw-analizar-lote" not in p2
     # `entera=1` siempre arranca en la primera página aunque pidan otra.
-    e = app["c"].get("/cliente/acme/triple-whale/galeria?entera=1&pagina=2").data.decode()
+    e = app["c"].get("/cliente/acme/rendimiento/galeria?entera=1&pagina=2").data.decode()
     assert len(_tarjetas(e)) == 12 and 'data-pagina="2"' in e
 
 
 def test_la_galeria_entera_respeta_el_alcance_y_un_filtro_raro_es_todos(app):  # noqa: F811
     _conectar()
     _sembrar()
-    raro = app["c"].get("/cliente/acme/triple-whale/galeria?entera=1&veredicto=<script>").data.decode()
+    raro = app["c"].get("/cliente/acme/rendimiento/galeria?entera=1&veredicto=<script>").data.decode()
     assert "<script>" not in raro and 'data-veredicto=""' in raro
-    sin_conexion = app["c"].get("/cliente/otro/triple-whale/galeria?entera=1")
+    sin_conexion = app["c"].get("/cliente/otro/rendimiento/galeria?entera=1")
     assert sin_conexion.status_code in (403, 404)
 
 

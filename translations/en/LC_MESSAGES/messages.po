@@ -1195,12 +1195,6 @@ msgstr[0] "%(num)s ad with data"
 msgstr[1] "%(num)s ads with data"
 
 #, python-format
-msgid "%(num)s anuncio con datos, cada uno comparado con su cuenta"
-msgid_plural "%(num)s anuncios con datos, cada uno comparado con su cuenta"
-msgstr[0] "%(num)s ad with data, each compared with its own account"
-msgstr[1] "%(num)s ads with data, each compared with its own account"
-
-#, python-format
 msgid "%(num)s anuncio ganador: úsalo como base para los próximos."
 msgid_plural "%(num)s anuncios ganadores: úsalos como base para los próximos."
 msgstr[0] "%(num)s winning ad: use it as the base for the next ones."
@@ -2537,9 +2531,6 @@ msgstr "New ads to test"
 
 msgid "Anuncios nuevos probados"
 msgstr "New ads tested"
-
-msgid "Anuncios por veredicto"
-msgstr "Ads by verdict"
 
 msgid "Anuncios que hablan de un tema o producto"
 msgstr "Ads about a topic or product"
@@ -4911,9 +4902,6 @@ msgstr "From the ready ones in Create"
 
 msgid "De otros mercados"
 msgstr "From other markets"
-
-msgid "De tus cuentas de Meta sin tienda en Triple Whale"
-msgstr "From your Meta accounts with no store in Triple Whale"
 
 msgid "De una marca"
 msgstr "From a brand"
@@ -11490,9 +11478,6 @@ msgstr "No store connected yet."
 
 msgid "Ninguno"
 msgstr "None"
-
-msgid "Ningún anuncio con datos en este periodo."
-msgstr "No ads with data in this period."
 
 msgid "Ningún anuncio en este filtro."
 msgstr "No ads in this filter."

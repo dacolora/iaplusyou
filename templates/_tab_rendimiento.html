@@ -10,7 +10,10 @@
    Todo el JS vive aquí (los <script> de un fragmento que llega por fetch no corren). Junta el de las dos pestañas
    viejas: el de Triple Whale (galería, «Cómo mejorarlo» por fetch con su confirmación y el 402, la tarjeta que se
    repinta, `trabajo-terminado`, los chips de la tabla) se trajo tal cual, con las reglas que protegen lo que cobra
-   y sus comentarios; el de Meta («Elegir cuentas», confirmar antes de quitar una, «Ver más» de filas) también. Los
+   y sus comentarios; el de Meta («Elegir cuentas», confirmar antes de quitar una, «Ver más» de filas) también.
+   Desde E2 (tarea 4) la galería es UNA con los anuncios de las dos fuentes: este JS no cambió, porque cada URL (la
+   del bloque, la de la rejilla, la de cada tarjeta y la acción de cada formulario) sale de la plantilla y hoy apunta
+   a las rutas de la pestaña; el «Ver más» propio de las tarjetas de Meta de E1 (`data-rend-mas`) se fue con ellas. Los
    textos del JS salen de la plantilla con |tojson. Los nombres de los selectores evitan palabras que la guardia de
    idioma lee como español (`data-meta-act`, no `…-cuenta`). #}
 {% import "_rend_macros.html" as rm %}
@@ -285,19 +288,6 @@
         }
         var chip = ev.target.closest('[data-tw-filtro]');
         if (chip) { aplicarVeredicto(chip.dataset.twFiltro); return; }
-        // «Ver más» de los anuncios de fuente Meta: la respuesta son tarjetas (y su propio botón si quedan más), que van
-        // en el lugar del botón, dentro de la misma rejilla.
-        var masMeta = ev.target.closest('[data-rend-mas]');
-        if (masMeta) {
-          masMeta.disabled = true;
-          pedir(masMeta.dataset.rendMas)
-            .then(function (html) {
-              masMeta.insertAdjacentHTML('beforebegin', html);
-              masMeta.remove();
-            })
-            .catch(function () { masMeta.disabled = false; masMeta.title = T.errorMas; });
-          return;
-        }
         var masFilas = ev.target.closest('[data-meta-mas]');
         if (masFilas) {
           // «Ver más» de conjuntos: la respuesta son solo filas <tr> (y la fila de su propio botón si quedan más); van

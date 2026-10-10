@@ -21,8 +21,9 @@ los clientes». Las dos pestañas daban números distintos para el mismo anuncio
 - `pestana_rendimiento/resumen.py`: «Resultados» y «Por país» cuando hay Meta o mezcla (R5–R8), en USD con
   `meta_rendimiento.tasas.mapa`.
 - `pestana_rendimiento/panel.py`: `contexto(cliente, dias, entrada, canal, tienda=, cuenta=)` junta todo con UNA
-  resolución del alcance (`_resolver`), la misma que usan los «Ver más» (`conjuntos_pagina`, `anuncios_meta_pagina`) y
-  «Actualizar ahora» (`alcance_para_copias`): un «Ver más» nunca lee otras cuentas que las del panel.
+  resolución del alcance (`_resolver`), la misma que usan el «Ver más» de conjuntos (`conjuntos_pagina`), la galería y
+  lo que cobra (`alcances`, E2 tarea 4) y «Actualizar ahora» (`alcance_para_copias`): un «Ver más» nunca lee otras
+  cuentas que las del panel, y lo que se cobra es lo que se vio.
 - `pestana_rendimiento/alcance_meta.py` (E2 tarea 3, 2026-10-10): `alcance(cliente, ids, dias, hoy, params)` arma para
   esas cuentas de Meta el MISMO dict que `triple_whale.panel.alcance` (más `fuente = "meta"`), para que el flujo pagado
   (`triple_whale/pedidos.py`) y la galería lo lean sin saber de qué fuente son los números. Cada anuncio lleva
@@ -32,13 +33,18 @@ los clientes». Las dos pestañas daban números distintos para el mismo anuncio
   el contexto exacto de la cuenta de un anuncio, el alcance de esa cuenta sola). Con monedas distintas (o una cuenta
   sin moneda) `config["moneda"]` es None, el CPM mediano queda None y `ev["cuenta"]["canales"]` vacío: ni una moneda ni
   un costo inventados (R6). Solo lee la copia: no cobra ni llama a Meta. Pruebas: `tests/test_rendimiento_e2_alcance_meta.py`.
+- `pestana_rendimiento/galeria.py` (E2 tarea 4, 2026-10-10): «Tus anuncios» = UNA galería con los anuncios de las dos
+  fuentes y UN lote (`armar`, `tarjeta`, `claves_confirmadas`, `pedir_lote`, `medio_meta`; ver «E2 tarea 4» abajo).
 - `pestana_rendimiento/rutas.py`: blueprint `rendimiento` bajo `/cliente/<c>/rendimiento`: `ver_panel` (GET `/panel`),
-  `ver_conjuntos` (GET `/conjuntos`, solo `<tr>`), `ver_anuncios_meta` (GET `/anuncios-meta`, solo tarjetas) y
-  `actualizar` (POST). El nombre `rendimiento/` ya era de las pruebas de carga (skill `escala-y-salud`).
+  `ver_conjuntos` (GET `/conjuntos`, solo `<tr>`), `actualizar` (POST) y, desde E2 tarea 4, la galería y lo que cobra:
+  `ver_galeria` (GET `/galeria`, `entera=1` o `pagina`), `ver_tarjeta` (GET `/tarjeta/<fuente>/<canal>/<ad_id>`),
+  `analizar_anuncio` (POST `/anuncio/<fuente>/<canal>/<ad_id>/analizar`) y `analizar_lote` (POST `/analizar-lote`). El
+  nombre `rendimiento/` ya era de las pruebas de carga (skill `escala-y-salud`).
 - Pantalla: `_tab_rendimiento.html` (armazón + TODO el JS; el panel llega por fetch), `_rend_panel.html`,
-  `_rend_macros.html`, `_rend_anuncios_meta.html`; secciones heredadas como macros en `_tw_secciones.html` e include
-  `_meta_secciones.html`; estilos `static/estilos/pantallas/rendimiento.css`; la gráfica, `static/tw_resultados.js`.
-  Detalle de pantalla en la skill `ui`.
+  `_rend_macros.html`; la galería de las dos fuentes, `_tw_galeria.html` (macros) y `_tw_galeria_fragmento.html` (sus
+  fragmentos por fetch); secciones heredadas como macros en `_tw_secciones.html` e include `_meta_secciones.html`;
+  estilos `static/estilos/pantallas/rendimiento.css`; la gráfica, `static/tw_resultados.js`. Detalle de pantalla en la
+  skill `ui`.
 - Cableado (2026-10-09, tarea 8): `_sidebar.html` (botón `data-tab="rendimiento"` donde estaba Triple Whale; Meta
   salió), `cliente.html` (`#tab-rendimiento` y el alias), `dashboard.ver_cliente` (contexto barato `rendimiento` =
   `conectado`, `hay_tw`, `hay_meta`, `n_cuentas`, `es_admin`: ni Graph ni el panel al cargar la página).
@@ -76,10 +82,14 @@ los clientes». Las dos pestañas daban números distintos para el mismo anuncio
   `MODELO_DEFECTO` ni el ajuste de un proyecto: mueven lo que decide el decisor de Experimentos (plata).
 - **R12. «Meta reporta».** En la tarjeta de un anuncio `facebook-ads` de Triple Whale, «Meta reporta N×» sale de
   `valor_canal / gasto`; sin dato no aparece.
-- **R13. Lo pagado no se mueve.** «Cómo mejorarlo», «Analizar los N», «Evaluar con IA», Referentes, «Llevar a Crear» y
-  Pausar/Activar siguen en `triple_whale/rutas.py` con su alcance y sus garantías; esta pestaña solo les pasa la tienda
-  de la entrada (o `None`). El JS de la galería se trajo tal cual (`tests/test_tw_tarjetas_js.py` lo lee aquí).
-- **R14. Anuncios de fuente Meta sin IA** en E1: tarjeta con veredicto contra SU cuenta y sin botón (ni apagado).
+- **R13. Lo pagado no se reescribe.** «Evaluar con IA», Referentes, «Llevar a Crear» y Pausar/Activar siguen en
+  `triple_whale/rutas.py` con su alcance y sus garantías; esta pestaña solo les pasa la tienda de la entrada (o
+  `None`). «Cómo mejorarlo» y «Analizar los N» pasaron en E2 tarea 4 a las rutas de la pestaña (la galería es una con
+  las dos fuentes), pero cobran con el mismo `triple_whale/pedidos.py` y el alcance de la fuente de cada anuncio, con
+  todas sus garantías. El JS de la galería se trajo tal cual (`tests/test_tw_tarjetas_js.py` lo lee aquí) y no cambió
+  al unir la galería: cada URL sale de la plantilla.
+- **R14. Anuncios de fuente Meta sin IA** solo en E1 (tarjeta sin botón, ni apagado). Desde E2 (tareas 1 a 4) tienen
+  «Cómo mejorarlo» con la misma tarjeta y el mismo flujo pagado.
 - **R15. Conexión en «Ajustes».** El formulario de Triple Whale (`_triple_whale_conectar.html`, un `div`: una
   `section` cortaba la de la pestaña) y «Elegir cuentas de Meta» (solo admin, R20 de Meta) viven en `#rend-ajustes`; la
   conexión con Meta sigue en Configuración › Conexiones.
@@ -89,7 +99,7 @@ los clientes». Las dos pestañas daban números distintos para el mismo anuncio
 ## Enmiendas al planear
 
 - **A1.** La galería de Triple Whale va tal cual y debajo las tarjetas de fuente Meta: mezclarlas antes de que tengan su
-  análisis arriesgaba lo que cobra. Se unen en E2 (y ahí se cierra PND-196, orden por USD).
+  análisis arriesgaba lo que cobra. Se unieron en E2 tarea 4 (2026-10-10, ver abajo) y ahí se cerró PND-196.
 - **A2.** R7 vale para «Resultados» y «Por país»; anuncios y campañas usan el «Desde el inicio» de su propia copia.
 - **A3.** Detalle del día y filtro «Canal» solo con alcance solo Triple Whale; con Meta o mezcla la gráfica no abre días.
 - **A5.** «Actualizar ahora» es una ruta (`rendimiento.actualizar`) que llama a `triple_whale.rutas.pedir_copia` y
@@ -124,8 +134,49 @@ los clientes». Las dos pestañas daban números distintos para el mismo anuncio
 - Pruebas de la revisión: `tests/test_rendimiento_revision_final.py` (con las mutaciones 22–28 del revisor) y
   `tests/test_rendimiento_r9_plata.py`. Lo diferido: PND-210 a PND-221.
 
+## E2 tarea 4 (2026-10-10): una sola galería y un solo lote
+
+Por qué: con «Cómo mejorarlo» para Meta (E2 tareas 1 a 3) las tarjetas de fuente Meta de E1 eran la misma tarjeta con
+el mismo flujo pagado; dos galerías daban dos órdenes, dos filtros y dos lotes (A1 la dejó para E2). Código:
+`pestana_rendimiento/galeria.py`, pruebas `tests/test_rendimiento_e2_galeria.py` (con mutaciones del orden, el tope,
+la miniatura, el saldo, la fuente en la foto, Referentes y «Meta reporta»).
+
+- **Orden por gasto en USD** (cierra PND-196): cada anuncio en su moneda (Triple Whale: la del proyecto; Meta: la de su
+  cuenta) con la tasa del último día del periodo de su alcance (`meta_rendimiento.tasas.usd`, una lectura por moneda).
+  Sin tasa o sin moneda, al final en su orden nominal: jamás una tasa inventada (R6). Las tarjetas llevan `fuente`
+  ("tw" | "meta"), `moneda` y `gasto_usd`.
+- **Una página = 12 mezcladas** y un número fijo de consultas: análisis, tareas vivas y creativos se leen una vez para
+  las dos fuentes y `triple_whale.panel.enriquecer` corre una vez por fuente. `triple_whale.panel.contexto` ya no arma
+  la galería de Triple Whale (la une esta).
+- **El lote**: los `N_LOTE` de más gasto en USD entre las dos fuentes a los que su tarjeta les ofrece el botón; cada clave
+  es `"<fuente>:<canal>:<ad_id>"`. Al cobrar, `galeria.claves_confirmadas` recorta a N ENTRE LAS DOS fuentes ANTES de
+  separar (si no, cada fuente cobraría hasta N: B6) y `galeria.pedir_lote` llama a `pedidos.pedir_lote` por fuente
+  (confirmadas ∩ aún elegibles), en el orden de su primera clave; la primera fuente sin saldo para todo y el aviso dice
+  cuántos salieron. Un segundo envío no cobra.
+- **El alcance de cada ruta** sale de `panel.alcances` (la misma `_resolver` que el panel; `canal` solo con alcance solo
+  Triple Whale). Una `entrada` no vacía que ya no es la clave de ninguna entrada (pestaña vieja) no se ensancha a
+  «Todas»: no hay alcance y nada se cobra (como «Actualizar ahora», A5). En el panel, el alcance de Triple Whale sale
+  de su contexto (`_alcance_tw_de`) y el de Meta de `_meta`, que lo arma con `alcance_meta` UNA vez y de ahí salen
+  también las alertas y las recomendaciones de los anuncios de Meta (`meta["anuncios"]["ev"]`).
+- **Las rutas**: `<fuente>` "tw"/"meta" e ids con `id_valido` (si no, 404 antes de leer); un anuncio que no está en el
+  alcance de esa fuente, 404. Sin el alcance de esa fuente (pestaña vieja, desconectada) «Cómo mejorarlo» responde JSON
+  `ok: False` sin cobrar; el correo sin verificar, también JSON al fetch (`_correo_verificado`). El 402 sin saldo es el
+  de `dashboard._saldo_insuficiente`, como antes.
+- **La tarjeta de Meta** es la misma macro (`_tw_galeria.html`): cuenta con bandera en el sobretítulo, «según Meta» en el
+  resultado, sin «Meta reporta» (R12 es de Triple Whale) ni «Guardar en Referentes» (PND-222). Su medio: una pieza de
+  Creatv (R2); si no, la imagen que un análisis listo copió a R2; si no, la miniatura de Meta solo si
+  `meta_rendimiento.datos.miniatura_valida` (al pintar: PND-220), a su tamaño (`.tw-medio-miniatura`: llega de 64 px y
+  agrandada se vería borrosa).
+- **Los tiles de Triple Whale** («Gasto», «Ingresos atribuidos»…) van encima de la galería solo con alcance solo Triple
+  Whale: con Meta o mezcla describirían solo una parte de lo que muestra la galería.
+- Se jubilaron: `triple_whale.rutas.galeria`, `tarjeta`, `analizar_anuncio`, `analizar_lote` (y el alias
+  `_claves_confirmadas`), `rendimiento.ver_anuncios_meta`, `panel.anuncios_meta_pagina`, `_rend_anuncios_meta.html`, el
+  JS de `data-rend-mas` y las reglas `.rend-tarjeta*`/`.rend-anuncios-meta`/`.rend-subtitulo`. Sus pruebas apuntan a las
+  rutas nuevas y vigilan lo mismo (A1, A3, A4, A5, B6, 402, ajenos 404, mismo origen, aislamiento).
+
 ## Trampas
 
+- Lo que se jubiló el 2026-10-10 con la galería única (no lo revivas): ver «E2 tarea 4».
 - Lo que se jubiló el 2026-10-09 (no lo revivas): `_tab_triple_whale.html`, `_tab_meta.html`, `_tw_panel.html`,
   `_meta_panel.html`, `_meta_anuncios_filas.html`, `meta_rendimiento/grafico.py`, las rutas `triple_whale.ver_panel`,
   `triple_whale.sincronizar`, `meta_rendimiento.ver_panel`/`ver_anuncios`/`ver_conjuntos`/`sincronizar` y

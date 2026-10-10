@@ -4192,12 +4192,13 @@ body:has(#exp-nuevo) main { margin-left: 0; max-width: 1440px; width: 100%; }
 /* ── estilos/pantallas/rendimiento.css ── */
 /* ============================================================
    Rendimiento: la pestaña única de Triple Whale + Meta (spec 2026-10-09 §5). Uso: _tab_rendimiento.html (el armazón
-   y «Ajustes», `.rend-ajustes`), _rend_panel.html (la línea de origen de las ventas bajo Resultados, `.rend-origen`;
-   el subtítulo de los anuncios de Meta, `.rend-subtitulo`), _meta_secciones.html y _meta_conjuntos_filas.html (la
-   fuente del ROAS de cada fila, `.rend-fuente`) y _rend_anuncios_meta.html (las tarjetas de los anuncios cuya fuente
-   es Meta, `.rend-tarjeta` en la rejilla `.rend-anuncios-meta`). El resto del panel reutiliza las clases de Triple
-   Whale (.tw-barra, .tw-tabla, .tw-anillo…), del Tablero (.tb-seccion, .kpi-tile…) y de Meta (.meta-cuentas). Las
-   tablas se desplazan dentro de .tw-tabla-scroll: nada empuja la página de lado en el celular. Solo tokens.
+   y «Ajustes», `.rend-ajustes`), _rend_panel.html (la línea de origen de las ventas bajo Resultados, `.rend-origen`)
+   y _meta_secciones.html y _meta_conjuntos_filas.html (la fuente del ROAS de cada fila, `.rend-fuente`). El resto del
+   panel reutiliza las clases de Triple Whale (.tw-barra, .tw-tabla, .tw-anillo…; desde E2 tarea 4 «Tus anuncios» es
+   UNA galería de .tw-tarjeta con los anuncios de las dos fuentes: las .rend-tarjeta de Meta de E1 se fueron; aquí
+   solo `.tw-medio-miniatura`, la miniatura chica de Meta), del
+   Tablero (.tb-seccion, .kpi-tile…) y de Meta (.meta-cuentas). Las tablas se desplazan dentro de .tw-tabla-scroll:
+   nada empuja la página de lado en el celular. Solo tokens.
    ============================================================ */
 
 /* «Ajustes»: un <details> con el borde y el fondo de una tarjeta; abierto, las dos conexiones una debajo de otra. */
@@ -4213,28 +4214,9 @@ body:has(#exp-nuevo) main { margin-left: 0; max-width: 1440px; width: 100%; }
 /* La fuente de una cifra en una fila (Triple Whale | Meta), chica bajo el número. */
 .rend-fuente { display: block; color: var(--muted); font-size: var(--t-sobretitulo); text-transform: uppercase; letter-spacing: .04em; }
 
-/* «De tus cuentas de Meta sin tienda en Triple Whale»: subtítulo dentro de «Tus anuncios». */
-.rend-subtitulo { margin: 0; font-size: var(--t-base); }
-
-/* Tarjetas de los anuncios de fuente Meta: la miniatura de Meta es chica (64 px), así que va al lado del nombre y no
-   como un medio grande; debajo, frase, resultado, anillos, cifras y razones con las clases de Triple Whale. */
-.rend-anuncios-meta { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: .9rem; }
-.rend-tarjeta { display: flex; flex-direction: column; gap: .6rem; min-width: 0; padding: .9rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); }
-.rend-tarjeta-cabeza { display: flex; align-items: flex-start; gap: .7rem; min-width: 0; }
-.rend-tarjeta-mini { flex: none; width: 64px; height: 64px; object-fit: cover; border-radius: var(--radius-sm); background: var(--fondo-video); }
-.rend-tarjeta-grupo { display: block; color: var(--muted); font-size: var(--t-chico); overflow-wrap: anywhere; }
-/* La tarjeta es más angosta que la de Triple Whale (260 px y no 34rem): la frase va a tamaño de texto y los cuatro
-   anillos, un poco más chicos, para que quepan en una fila sin pisarse las etiquetas. */
-.rend-tarjeta .tw-frase { margin: 0; font-size: var(--t-base); }
-.rend-tarjeta .tw-resultado { white-space: normal; }
-.rend-tarjeta .tw-anillo svg { width: 3rem; height: 3rem; }
-
-@media (max-width: 760px) {
-  .rend-anuncios-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .rend-tarjeta { padding: .7rem; }
-  .rend-tarjeta-cabeza { flex-direction: column; }
-  .rend-tarjeta .tw-cifras { grid-template-columns: minmax(0, 1fr); }
-}
+/* La miniatura de Meta de un anuncio de fuente Meta sin análisis (la galería única de «Tus anuncios», E2 tarea 4) llega
+   de 64 px: dentro del recuadro 9:16 de la tarjeta se ve a su tamaño, centrada, y nunca agrandada (se vería borrosa). */
+.tw-tarjeta-medio img.tw-medio-miniatura { object-fit: scale-down; }
 /* ── estilos/pantallas/crear.css ── */
 /* Crear: el corazón de cada tarjeta (2026-10-08), para separar las versiones que se van a usar. */
 .generado-fav-form { position: absolute; right: .45rem; top: .4rem; margin: 0; z-index: 1; }

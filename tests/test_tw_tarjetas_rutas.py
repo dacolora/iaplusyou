@@ -1,4 +1,8 @@
-"""Rutas de «Cómo mejorarlo» (spec tarjetas §6.2, §6.4, §6.5, §7)."""
+"""Rutas de «Cómo mejorarlo» (spec tarjetas §6.2, §6.4, §6.5, §7). Desde Rendimiento E2 (tarea 4, 2026-10-10) «Cómo
+mejorarlo», el lote y la tarjeta son rutas de la pestaña (`/rendimiento/anuncio/tw/<canal>/<ad_id>/analizar`,
+`/rendimiento/analizar-lote`, `/rendimiento/tarjeta/tw/…`) con el alcance de la pestaña (`entrada`, `dias`, `canal`) y
+cada clave del lote lleva su fuente (`tw:<canal>:<ad_id>`); estas pruebas siguen vigilando lo mismo contra ellas. El
+detalle, «Llevar a Crear», el aprendizaje y Referentes siguen en `/triple-whale/…`."""
 import re
 
 import pytest
@@ -22,8 +26,8 @@ def _analizar(app, ad_id="p1", json=False, **headers):  # noqa: F811
     h = dict(headers)
     if json:
         h["Accept"] = "application/json"
-    return app["c"].post(f"/cliente/acme/triple-whale/anuncio/facebook-ads/{ad_id}/analizar",
-                         data={"dias": "30", "canal": "", "tienda": ""}, headers=h)
+    return app["c"].post(f"/cliente/acme/rendimiento/anuncio/tw/facebook-ads/{ad_id}/analizar",
+                         data={"entrada": "", "dias": "30", "canal": ""}, headers=h)
 
 
 def test_analizar_crea_la_fila_con_la_foto_y_encola_una_vez(app):  # noqa: F811
@@ -58,7 +62,8 @@ def test_analizar_rechaza_otro_origen_ajenos_invalidos_y_sin_datos(app):  # noqa
     _sembrar()
     assert _analizar(app, **{"Sec-Fetch-Site": "cross-site"}).status_code == 403
     assert _analizar(app, ad_id="no-existe").status_code == 404
-    assert app["c"].post("/cliente/acme/triple-whale/anuncio/facebook-ads/a%2Fb/analizar").status_code == 404
+    assert app["c"].post("/cliente/acme/rendimiento/anuncio/tw/facebook-ads/a%2Fb/analizar").status_code == 404
+    assert app["c"].post("/cliente/acme/rendimiento/anuncio/x/facebook-ads/p1/analizar").status_code == 404
     r = _analizar(app, ad_id="n1")                                   # sin datos: no cobra
     assert r.status_code == 302 and _tareas("tw_analizar_anuncio") == []
 
@@ -69,7 +74,7 @@ def test_sin_triple_whale_no_cobra_y_el_fetch_recibe_json(app):  # noqa: F811
     assert r.status_code == 200 and d["ok"] is False and d["html"] == "" and "no está conectado" in d["mensaje"]
     r = _analizar(app)
     assert r.status_code == 302 and _tareas("tw_analizar_anuncio") == []
-    assert app["c"].post("/cliente/acme/triple-whale/analizar-lote").status_code == 302
+    assert app["c"].post("/cliente/acme/rendimiento/analizar-lote").status_code == 302
     assert app["c"].post("/cliente/acme/triple-whale/anuncio/facebook-ads/g1/referente").status_code == 404
 
 
@@ -85,11 +90,11 @@ def _form_del_lote(app, **extra):  # noqa: F811
     """Lo que manda el formulario del lote tal como la pestaña lo pinta: el alcance y una `clave` por anuncio mostrado."""
     html = app["c"].get("/cliente/acme/rendimiento/panel").data.decode()
     claves = re.findall(r'<input type="hidden" name="clave" value="([^"]+)">', html)
-    return dict({"dias": "30", "canal": "", "tienda": "", "veredicto": "", "clave": claves}, **extra), claves, html
+    return dict({"entrada": "", "dias": "30", "canal": "", "veredicto": "", "clave": claves}, **extra), claves, html
 
 
 def _lote(app, data):  # noqa: F811
-    return app["c"].post("/cliente/acme/triple-whale/analizar-lote", data=data, follow_redirects=True)
+    return app["c"].post("/cliente/acme/rendimiento/analizar-lote", data=data, follow_redirects=True)
 
 
 def _jobs():
@@ -106,9 +111,9 @@ def test_lote_encola_los_que_mas_gastaron_sin_repetir(app):  # noqa: F811
     _sembrar()
     _analizar(app, ad_id="p1")
     data, claves, html = _form_del_lote(app)
-    assert claves and "facebook-ads:p1" not in claves and "facebook-ads:n1" not in claves   # ni lo vivo ni sin datos
+    assert claves and "tw:facebook-ads:p1" not in claves and "tw:facebook-ads:n1" not in claves   # ni lo vivo ni sin datos
     assert f"Analizar los {len(claves)} que más gastaron" in html
-    r = app["c"].post("/cliente/acme/triple-whale/analizar-lote", data=data)
+    r = app["c"].post("/cliente/acme/rendimiento/analizar-lote", data=data)
     assert r.status_code == 302
     jobs = {t["job_id"] for t in _tareas("tw_analizar_anuncio")}
     assert "acme__tw_anuncio__facebook-ads__p1" in jobs and len(jobs) == 1 + len(claves) and len(jobs) >= 3
@@ -127,7 +132,7 @@ def test_el_segundo_envio_del_mismo_lote_no_cobra_los_siguientes(app):  # noqa: 
     _lote(app, data)                                         # el mismo formulario otra vez: ya están en cola
     assert len(_jobs()) == 5 and _filas_analisis() == 5
     _el_worker_termino()
-    for fila in datos.ultimos_analisis("acme", [tuple(c.split(":")) for c in claves]).values():
+    for fila in datos.ultimos_analisis("acme", [tuple(c.split(":")[1:]) for c in claves]).values():
         datos.actualizar_analisis(fila["id"], estado="lista", resultado={"frase": "x"})
     r = _lote(app, data)                                      # y ya terminados (frescos) tampoco se vuelven a pedir
     assert len(_jobs()) == 5 and _filas_analisis() == 5
@@ -140,8 +145,8 @@ def test_el_lote_cobra_a_lo_sumo_lo_que_se_confirmo(app):  # noqa: F811
     _sembrar()
     _, claves, _ = _form_del_lote(app)
     assert len(claves) == 5
-    r = _lote(app, {"dias": "30", "canal": "", "tienda": "", "veredicto": "", "clave": claves[:3]})
-    esperados = sorted(f"acme__tw_anuncio__{c.replace(':', '__')}" for c in claves[:3])
+    r = _lote(app, {"entrada": "", "dias": "30", "canal": "", "veredicto": "", "clave": claves[:3]})
+    esperados = sorted(f"acme__tw_anuncio__{c.split(':', 1)[1].replace(':', '__')}" for c in claves[:3])
     assert _jobs() == esperados and _filas_analisis() == 3
     assert "Analizando 3 anuncios con IA" in r.data.decode()
 
@@ -149,7 +154,7 @@ def test_el_lote_cobra_a_lo_sumo_lo_que_se_confirmo(app):  # noqa: F811
 def test_un_lote_sin_claves_no_analiza_nada(app):  # noqa: F811
     _conectar()
     _sembrar()
-    r = _lote(app, {"dias": "30", "canal": "", "tienda": "", "veredicto": ""})
+    r = _lote(app, {"entrada": "", "dias": "30", "canal": "", "veredicto": ""})
     assert _jobs() == [] and _filas_analisis() == 0 and "No quedó ningún anuncio por analizar" in r.data.decode()
 
 
@@ -157,15 +162,18 @@ def test_el_lote_ignora_claves_inventadas_o_que_no_son_elegibles(app):  # noqa: 
     _conectar()
     _sembrar()
     datos.crear_analisis("otro", None, "facebook-ads", "g1", "2026-09-01", "2026-09-30", "USD", {})
-    falsas = ["facebook-ads:n1",                    # sin datos: nunca se cobra
-              "facebook-ads:no-existe", "tiktok-ads:g1",         # no existe en el proyecto
-              "otro:g1", "x", ":", "a:b:c", "facebook-ads:", ":p1", "facebook-ads:p1\n", "facebook-ads:a/b", "", "facebook-ads: p1"]
-    r = _lote(app, {"dias": "30", "canal": "", "tienda": "", "veredicto": "", "clave": falsas})
+    falsas = ["tw:facebook-ads:n1",                 # sin datos: nunca se cobra
+              "tw:facebook-ads:no-existe", "tw:tiktok-ads:g1",   # no existe en el proyecto
+              "tw:otro:g1", "x", ":", "tw:a:b:c", "tw:facebook-ads:", "tw::p1", "tw:facebook-ads:p1\n",
+              "tw:facebook-ads:a/b", "", "tw:facebook-ads: p1",
+              "facebook-ads:p1",                    # la clave de antes de E2, sin fuente: ya no vale
+              "meta:facebook-ads:p1"]               # p1 es de Triple Whale: con la fuente de Meta no está en ese alcance
+    r = _lote(app, {"entrada": "", "dias": "30", "canal": "", "veredicto": "", "clave": falsas})
     assert _jobs() == [] and _filas_analisis() == 1                    # solo la fila ajena que sembré
     assert "No quedó ningún anuncio por analizar" in r.data.decode()
     # Y una buena mezclada con las falsas sí pasa, una sola vez aunque venga repetida.
-    _lote(app, {"dias": "30", "canal": "", "tienda": "", "veredicto": "",
-                "clave": falsas + ["facebook-ads:p1", "facebook-ads:p1"]})
+    _lote(app, {"entrada": "", "dias": "30", "canal": "", "veredicto": "",
+                "clave": falsas + ["tw:facebook-ads:p1", "tw:facebook-ads:p1"]})
     assert _jobs() == ["acme__tw_anuncio__facebook-ads__p1"]
 
 
@@ -175,8 +183,8 @@ def test_el_lote_nunca_pasa_de_diez_aunque_manden_mas(app):  # noqa: F811
     _sembrar_muchos(15)
     data, claves, _ = _form_del_lote(app)
     assert len(claves) == 10                                           # el botón ofrece 10
-    todas = [f"facebook-ads:m{i:02d}" for i in range(15)]              # y un POST a mano manda las 15
-    _lote(app, {"dias": "30", "canal": "", "tienda": "", "veredicto": "", "clave": todas})
+    todas = [f"tw:facebook-ads:m{i:02d}" for i in range(15)]           # y un POST a mano manda las 15
+    _lote(app, {"entrada": "", "dias": "30", "canal": "", "veredicto": "", "clave": todas})
     assert len(_jobs()) == 10 and _filas_analisis() == 10
 
 
@@ -208,9 +216,9 @@ def test_en_el_lote_una_que_falla_no_tumba_las_demas(app, monkeypatch, caplog): 
         return real(cliente, aid, canal, ad_id, **k)
     monkeypatch.setattr(tareas_tw, "encolar_analisis", a_veces)
     _, claves, _ = _form_del_lote(app)
-    assert "facebook-ads:p1" in claves and len(claves) == 5
-    with caplog.at_level("WARNING", logger="creatv.triple_whale.rutas"):
-        r = _lote(app, {"dias": "30", "canal": "", "tienda": "", "veredicto": "", "clave": claves})
+    assert "tw:facebook-ads:p1" in claves and len(claves) == 5
+    with caplog.at_level("WARNING", logger="creatv.triple_whale.pedidos"):
+        r = _lote(app, {"entrada": "", "dias": "30", "canal": "", "veredicto": "", "clave": claves})
     html = r.data.decode()
     assert len(_jobs()) == 4 and "acme__tw_anuncio__facebook-ads__p1" not in _jobs() and _filas_analisis() == 4
     assert "Analizando 4 anuncios con IA" in html and "No se pudo encolar 1 anuncio" in html
@@ -269,7 +277,7 @@ def test_el_lote_sin_saldo_para_todos_encola_los_que_alcanzan_y_lo_dice(app):  #
     data, claves, _ = _form_del_lote(app)
     assert len(claves) == 5
     libro = _cobra()
-    dos = [c.split(":")[1] for c in claves[:2]]
+    dos = [c.split(":")[2] for c in claves[:2]]
     with db.conectar() as con:
         libro.acreditar(con, "acme", "ajuste", sum(_precio(libro, a) for a in dos), "ajuste", usuario="admin",
                         detalle="prueba")
@@ -493,7 +501,7 @@ def test_la_pieza_hecha_con_el_origen_del_analisis_se_cuenta_en_la_tarjeta(app, 
     lanzadas = []
     monkeypatch.setattr(dashboard, "_lanzar_video_cf", lambda c, cf_id, entry: lanzadas.append(cf_id) or True)
     monkeypatch.setattr(dashboard.trabajos, "encolar", lambda job_id, tipo, payload, **kw: True)
-    html = app["c"].get("/cliente/acme/triple-whale/tarjeta/facebook-ads/p1?dias=30").data.decode()
+    html = app["c"].get("/cliente/acme/rendimiento/tarjeta/tw/facebook-ads/p1?dias=30").data.decode()
     assert "Ya se hizo" not in html
     app["c"].post(f"/cliente/acme/triple-whale/analisis/{aid}/crear")
     r = app["c"].post("/cliente/acme/creative_flow/crear", data={
@@ -502,7 +510,7 @@ def test_la_pieza_hecha_con_el_origen_del_analisis_se_cuenta_en_la_tarjeta(app, 
     assert r.status_code == 302
     [(cf_id, entry)] = cf.cargar("acme").items()
     assert entry["tw_idea"] == {"analisis_id": aid, "titulo": "Pies cansados al final del día"} and lanzadas == [cf_id]
-    html = app["c"].get("/cliente/acme/triple-whale/tarjeta/facebook-ads/p1?dias=30").data.decode()
+    html = app["c"].get("/cliente/acme/rendimiento/tarjeta/tw/facebook-ads/p1?dias=30").data.decode()
     assert "Ya se hizo 1 pieza con esta mejora · la última: " in " ".join(html.split())
 
 
@@ -523,15 +531,15 @@ def test_el_lote_no_repite_lo_analizado_en_otro_periodo_pero_la_tarjeta_si_lo_of
     assert len(antes) == 4
     _el_worker_termino()                                                  # sin tarea viva: solo el alcance los frena
     data, claves, _ = _form_del_lote(app)
-    assert not {f"facebook-ads:{ad}" for ad in ("g1", "g2", "p1", "p2")} & set(claves)    # el botón no los ofrece
-    forzado = dict(data, clave=claves + [f"facebook-ads:{ad}" for ad in ("g1", "g2", "p1", "p2")])
+    assert not {f"tw:facebook-ads:{ad}" for ad in ("g1", "g2", "p1", "p2")} & set(claves)    # el botón no los ofrece
+    forzado = dict(data, clave=claves + [f"tw:facebook-ads:{ad}" for ad in ("g1", "g2", "p1", "p2")])
     r = _lote(app, forzado)                                               # ni aunque alguien los mande a mano
     assert de_los_cuatro() == antes                                       # ya tenían análisis: el lote no los repite
     assert "Analizando 1 anuncio con IA" in r.data.decode()               # solo t1 (TikTok), que no tenía ninguno
     antes_todas = len(_tareas("tw_analizar_anuncio"))
     # Y la tarjeta ofrece, a propósito, uno nuevo con los datos de ahora; ese sí cobra otro análisis.
-    r = app["c"].post("/cliente/acme/triple-whale/anuncio/facebook-ads/p1/analizar",
-                      data={"dias": "30", "canal": "", "tienda": ""}, headers={"Accept": "application/json"})
+    r = app["c"].post("/cliente/acme/rendimiento/anuncio/tw/facebook-ads/p1/analizar",
+                      data={"entrada": "", "dias": "30", "canal": ""}, headers={"Accept": "application/json"})
     assert r.get_json()["ok"] and len(_tareas("tw_analizar_anuncio")) == antes_todas + 1
 
 
@@ -547,7 +555,7 @@ def test_el_boton_de_referentes_sale_solo_si_la_ruta_puede_guardarlo(app, base_t
     monkeypatch.setattr(imagenes, "guardar_en_r2", lambda aid, url, carpeta: guardadas.append(url) or f"https://r2/{aid}.jpg")
 
     def boton(ad):
-        html = app["c"].get(f"/cliente/acme/triple-whale/tarjeta/facebook-ads/{ad}?dias=30").data.decode()
+        html = app["c"].get(f"/cliente/acme/rendimiento/tarjeta/tw/facebook-ads/{ad}?dias=30").data.decode()
         return f"/anuncio/facebook-ads/{ad}/referente" in html
     assert not boton("g1") and not boton("g2")                            # ganadores, pero sin ninguna miniatura
     eid = ex.crear("acme", "Cojín otoño", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "USD")
@@ -641,14 +649,16 @@ def test_un_id_de_analisis_enorme_es_404_no_500(app):  # noqa: F811
 
 
 def test_las_claves_del_lote_no_se_repiten_y_paran_en_el_tope():
-    """Revisión final B6: un conjunto para lo ya visto y nunca más de N_LOTE claves válidas."""
-    from triple_whale import panel, rutas
+    """Revisión final B6: un conjunto para lo ya visto y nunca más de N_LOTE claves válidas. Desde E2 (tarea 4) la
+    función vive en `pedidos` (la usa `pestana_rendimiento.galeria.claves_confirmadas` para cada `<canal>:<ad_id>`,
+    con el tope entre las dos fuentes: `test_rendimiento_e2_galeria.py::test_claves_confirmadas`)."""
+    from triple_whale import panel, pedidos
     valores = ["facebook-ads:p1"] * 5000 + ["mal", "facebook-ads:a/b", ":p2", "facebook-ads:"] + \
         [f"facebook-ads:x{i}" for i in range(50)]
-    claves = rutas._claves_confirmadas(valores)
+    claves = pedidos.claves_confirmadas(valores)
     assert claves[0] == ("facebook-ads", "p1") and len(claves) == panel.N_LOTE == len(set(claves))
     assert claves[1:] == [("facebook-ads", f"x{i}") for i in range(panel.N_LOTE - 1)]
-    assert rutas._claves_confirmadas(["tiktok-ads:1", "tiktok-ads:1", "tiktok-ads:2"], tope=5) == \
+    assert pedidos.claves_confirmadas(["tiktok-ads:1", "tiktok-ads:1", "tiktok-ads:2"], tope=5) == \
         [("tiktok-ads", "1"), ("tiktok-ads", "2")]
 
 
@@ -662,7 +672,7 @@ def test_la_tarjeta_dice_el_estado_en_crear_de_la_pieza_mas_reciente(app, monkey
     monkeypatch.setattr(datos, "piezas_de_analisis", lambda cliente, ids: {aid: [
         {"cf_id": "cf1", "pieza_id": 1, "titulo": "Vieja", "estado": "error"},
         {"cf_id": "cf2", "pieza_id": 2, "titulo": "Nueva", "estado": "video_generando"}]})
-    html = " ".join(app["c"].get("/cliente/acme/triple-whale/tarjeta/facebook-ads/p1?dias=30").data.decode().split())
+    html = " ".join(app["c"].get("/cliente/acme/rendimiento/tarjeta/tw/facebook-ads/p1?dias=30").data.decode().split())
     assert "Ya se hicieron 2 piezas con esta mejora · la última: generando" in html and "con error" not in html
     # El panel (no solo el fragmento) también tiene las etiquetas.
     panel_html = " ".join(app["c"].get("/cliente/acme/rendimiento/panel?dias=30").data.decode().split())

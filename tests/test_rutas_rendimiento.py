@@ -86,14 +86,16 @@ def test_ver_mas_de_conjuntos_va_a_la_ruta_de_rendimiento(meta_on):
     assert siguiente.count("<tr>") == 1 and "s24" in siguiente
 
 
-def test_ver_mas_de_anuncios_de_meta_solo_trae_los_de_fuente_meta(meta_on):
+def test_la_galeria_de_una_entrada_solo_trae_los_anuncios_de_su_fuente(meta_on):
+    """Desde E2 tarea 4 los anuncios de fuente Meta están en la galería única (`/rendimiento/galeria`): una entrada de
+    Meta trae los suyos; Noruega tiene tienda y sus ventas salen de Triple Whale (ningún anuncio de fuente Meta)."""
     _con_anuncios()
     c = meta_on["c"]
-    r = c.get("/cliente/acme/rendimiento/anuncios-meta?entrada=SE&pagina=0")
-    assert r.status_code == 200 and "se1" in r.data.decode()
-    # Noruega tiene tienda: sus ventas salen de Triple Whale y no tiene anuncios de fuente Meta. Una página rara es 0.
-    r = c.get("/cliente/acme/rendimiento/anuncios-meta?entrada=NO&pagina=abc")
-    assert r.status_code == 200 and "se1" not in r.data.decode()
+    r = c.get("/cliente/acme/rendimiento/galeria?entrada=SE&pagina=1")
+    assert r.status_code == 200 and 'id="tw-tarjeta-meta-facebook-ads-se1"' in r.data.decode()
+    # Una página rara es la primera.
+    r = c.get("/cliente/acme/rendimiento/galeria?entrada=NO&pagina=abc")
+    assert r.status_code == 200 and "se1" not in r.data.decode() and 'id="tw-tarjeta-facebook-ads-n1"' in r.data.decode()
 
 
 def test_actualizar_una_entrada_solo_pide_sus_copias(meta_on):

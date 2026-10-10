@@ -54,8 +54,8 @@ def _p1():
 
 
 def _pedir(app):  # noqa: F811
-    return app["c"].post("/cliente/acme/triple-whale/anuncio/facebook-ads/p1/analizar",
-                         data={"dias": "0", "canal": "", "tienda": ""})
+    return app["c"].post("/cliente/acme/rendimiento/anuncio/tw/facebook-ads/p1/analizar",
+                         data={"entrada": "", "dias": "0", "canal": ""})
 
 
 def _n_analisis():
@@ -102,7 +102,7 @@ def test_un_analisis_pagado_antes_de_r9_no_se_vuelve_a_ofrecer_por_el_veredicto(
     e = panel.elegir_analisis(p1_r9, filas, alc)
     assert e["viejo"] is False and e["fresco"] is True and e["ofrecer"] is False
     assert ("facebook-ads", "p1") not in panel.galeria("acme", alc["ev"], "", alcance=alc)["lote"]["elegibles"]
-    html = app["c"].get("/cliente/acme/triple-whale/tarjeta/facebook-ads/p1").data.decode()
+    html = app["c"].get("/cliente/acme/rendimiento/tarjeta/tw/facebook-ads/p1").data.decode()
     assert "desde entonces cambió" not in html and "Analizar otra vez" not in html
     _pedir(app)                                                       # un segundo clic (una pestaña vieja)
     assert _n_analisis() == 1                                         # no se paga otra vez
