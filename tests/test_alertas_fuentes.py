@@ -1434,3 +1434,120 @@ def test_r7_sprint_vivo_ajeno_no_oculta_error_con_mismo_cf_id(base_temporal):
     cp = _idea(_campana(sid, cliente='otro'), cliente='otro')
     datos.actualizar_idea('otro', cp, cf_id='cf_compartido')
     assert 'crear:error:cf_compartido' in _claves(alertas._fuente_crear('acme', AHORA))
+
+
+# ---------- Meta rendimiento (E2 §10): lo que la copia guardó en cada cuenta ----------
+
+H1, H2, H3 = "1" * 64, "2" * 64, "3" * 64
+
+
+def _cuenta_meta(act, nombre, alertas_=None, cliente="acme", moneda="SEK"):
+    from meta_rendimiento import cuentas
+    cuentas.elegir(cliente, [*({"id": c["ad_account_id"], "name": c["nombre"], "currency": c["moneda"]}
+                               for c in cuentas.listar(cliente)), {"id": act, "name": nombre, "currency": moneda}])
+    if alertas_ is not None:
+        cuentas.actualizar_extra(cliente, act, {"alertas": alertas_})
+
+
+def test_meta_rendimiento_una_alerta_por_recomendacion_alta_guardada(base_temporal):
+    import alertas
+    _cuenta_meta("act_1", "HappyFlops Norway", [{"tipo": "cuenta_roas_bajo", "huella": H1},
+                                               {"tipo": "aprendizaje_limitado", "huella": H2}])
+    _cuenta_meta("act_2", "HappyFlops Sweden", [])
+    _cuenta_meta("act_3", "HappyFlops Finland")                      # sin copia todavía: sin `alertas`
+    a = alertas._fuente_meta_rendimiento("acme", AHORA)
+    assert _claves(a) == ["meta_rendimiento:cuenta_roas_bajo:act_1", "meta_rendimiento:aprendizaje_limitado:act_1"]
+    roas, aprendizaje = a
+    assert roas["huella"] == H1 and aprendizaje["huella"] == H2
+    assert all(x["nivel"] == "atencion" and x["grupo"] == "decision" and x["tab"] == "meta" and x["ancla"] is None
+               and x["url"] is None and x["entidad"] == "act_1" and x["solo_admin"] is False for x in a)
+    assert roas["titulo"] == "«HappyFlops Norway» vende menos de lo que gasta"
+    assert "HappyFlops Norway" in aprendizaje["titulo"] and "aprendizaje limitado" in aprendizaje["titulo"]
+    assert all(x["detalle"] and "Diagnóstico" in x["detalle"] for x in a)
+    import re
+    assert all(re.fullmatch(alertas.CLAVE_VALIDA, x["clave"]) and re.fullmatch(alertas.HUELLA_VALIDA, x["huella"])
+               for x in a)
+
+
+def test_meta_rendimiento_cada_tipo_alto_tiene_su_texto(base_temporal):
+    import alertas
+    from meta_rendimiento import recomendaciones
+    altos = ("cuenta_estado", "cuenta_roas_bajo", "aprendizaje_limitado", "perdedores_gastando",
+             "anuncios_con_problemas")
+    assert set(alertas.TEXTOS_META_RENDIMIENTO) == set(altos) and set(altos) <= set(recomendaciones.TIPOS)
+    _cuenta_meta("act_1", "Norway", [{"tipo": t, "huella": f"{i:064x}"} for i, t in enumerate(altos)])
+    a = alertas._fuente_meta_rendimiento("acme", AHORA)
+    assert len(a) == 5 and len({x["titulo"] for x in a}) == 5 and all("Norway" in x["titulo"] for x in a)
+
+
+def test_meta_rendimiento_ignora_lo_guardado_que_no_vale(base_temporal):
+    """`extra` es JSON: un elemento roto (otro tipo, una huella que no es sha256, algo que no es un dict) no llega a
+    una alerta ni tumba la fuente."""
+    import alertas
+    _cuenta_meta("act_1", "Norway", [{"tipo": "escalar", "huella": H1}, {"tipo": "cuenta_roas_bajo", "huella": "x"},
+                                     "basura", {"tipo": "cuenta_roas_bajo"}, {"tipo": "cuenta_roas_bajo", "huella": H3}])
+    from meta_rendimiento import cuentas
+    _cuenta_meta("act_2", "Sweden")
+    cuentas.actualizar_extra("acme", "act_2", {"alertas": "no es una lista"})
+    assert _claves(alertas._fuente_meta_rendimiento("acme", AHORA)) == ["meta_rendimiento:cuenta_roas_bajo:act_1"]
+
+
+def test_meta_rendimiento_el_nombre_de_meta_sale_sin_tokens_y_acotado(base_temporal):
+    import alertas
+    _cuenta_meta("act_1", "Shop https://x.com/?access_token=EAAsecreto123456 " + "y" * 300,
+                 [{"tipo": "cuenta_roas_bajo", "huella": H1}])
+    a, = alertas._fuente_meta_rendimiento("acme", AHORA)
+    assert "EAAsecreto123456" not in a["titulo"] and len(a["titulo"]) < 200
+
+
+def test_meta_rendimiento_no_mezcla_proyectos(base_temporal):
+    import alertas
+    _cuenta_meta("act_1", "Norway", [{"tipo": "cuenta_roas_bajo", "huella": H1}])
+    _cuenta_meta("act_9", "Ajena", [{"tipo": "perdedores_gastando", "huella": H2}], cliente="otro")
+    assert _claves(alertas._fuente_meta_rendimiento("acme", AHORA)) == ["meta_rendimiento:cuenta_roas_bajo:act_1"]
+    assert _claves(alertas._fuente_meta_rendimiento("otro", AHORA)) == ["meta_rendimiento:perdedores_gastando:act_9"]
+    assert alertas._fuente_meta_rendimiento("nadie", AHORA) == []
+
+
+def test_meta_rendimiento_una_consulta_con_1_o_con_6_cuentas(base_temporal):
+    import alertas
+    _cuenta_meta("act_1", "C1", [{"tipo": "cuenta_roas_bajo", "huella": H1}])
+    a1, con_1 = _consultas(base_temporal, alertas._fuente_meta_rendimiento, "acme", AHORA)
+    for i in range(2, 7):
+        _cuenta_meta(f"act_{i}", f"C{i}", [{"tipo": "perdedores_gastando", "huella": f"{i:064x}"}])
+    a6, con_6 = _consultas(base_temporal, alertas._fuente_meta_rendimiento, "acme", AHORA)
+    assert con_1 == con_6 == 1 and len(a1) == 1 and len(a6) == 6
+
+
+def test_meta_rendimiento_descartar_vale_mientras_la_huella_sea_la_misma(base_temporal):
+    import alertas
+    _cuenta_meta("act_1", "Norway", [{"tipo": "cuenta_roas_bajo", "huella": H1}])
+    clave = "meta_rendimiento:cuenta_roas_bajo:act_1"
+    alertas.descartar("acme", clave, H1)
+    r = alertas.visibles("acme", AHORA, rol="cliente")
+    assert clave not in _claves(r["visibles"]) and clave in _claves(r["descartadas"])
+    assert [a["puede_descartar"] for a in r["descartadas"] if a["clave"] == clave] == [True]
+    # La copia siguiente da otra huella (cambió la situación): vuelve sola.
+    from meta_rendimiento import cuentas
+    cuentas.actualizar_extra("acme", "act_1", {"alertas": [{"tipo": "cuenta_roas_bajo", "huella": H2}]})
+    assert clave in _claves(alertas.visibles("acme", AHORA, rol="cliente")["visibles"])
+
+
+def test_meta_rendimiento_la_huella_no_depende_del_idioma_y_el_texto_si(base_temporal):
+    import alertas
+    import idiomas
+    _cuenta_meta("act_1", "Norway", [{"tipo": t, "huella": f"{i:064x}"} for i, t in enumerate(
+        alertas.TEXTOS_META_RENDIMIENTO)])
+    es = _por_clave(alertas._fuente_meta_rendimiento("acme", AHORA))
+    with idiomas.en_idioma("en"):
+        en = _por_clave(alertas._fuente_meta_rendimiento("acme", AHORA))
+    assert set(es) == set(en) and len(en) == 5
+    assert all(en[c]["huella"] == es[c]["huella"] for c in en)
+    assert [(c, campo) for c in en for campo in ("titulo", "detalle") if en[c][campo] == es[c][campo]] == []
+    assert en["meta_rendimiento:cuenta_roas_bajo:act_1"]["titulo"] == "“Norway” sells less than it spends"
+
+
+def test_meta_rendimiento_esta_registrada_y_la_pestana_meta_tiene_nombre():
+    import alertas
+    assert ("meta_rendimiento", alertas._fuente_meta_rendimiento) in alertas.FUENTES
+    assert "meta" in alertas.NOMBRES_TAB

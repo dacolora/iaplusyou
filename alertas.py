@@ -52,7 +52,8 @@ NOMBRES_GRUPO = {"puesta_a_punto": idiomas.N_("Puesta a punto pendiente"), "falt
                  "decision": idiomas.N_("Esperan tu decisión"), "fallos": idiomas.N_("Fallos y errores")}
 NOMBRES_NIVEL = {"bloquea": idiomas.N_("bloquea"), "atencion": idiomas.N_("atención"), "info": idiomas.N_("info")}
 NOMBRES_TAB = {"settings": idiomas.N_("Configuración"), "catalogo": idiomas.N_("Catálogo"), "creativeflowplus": idiomas.N_("Crear"),
-               "experimentos": idiomas.N_("Experimentos"), "sprints": idiomas.N_("Sprints"), "nicho": idiomas.N_("Nicho")}
+               "experimentos": idiomas.N_("Experimentos"), "sprints": idiomas.N_("Sprints"), "nicho": idiomas.N_("Nicho"),
+               "meta": idiomas.N_("Meta")}
 
 MINUTOS_WORKER = 30                                  # más de esto sin señal de vida y el worker está parado
 MINUTOS_PROMPT_LISTO = 60                            # un prompt listo más nuevo que esto no molesta: la persona sigue trabajando
@@ -346,6 +347,56 @@ def _fuente_meta(cliente, ahora):
                     gettext("Revisa el método de pago de tu cuenta publicitaria de Meta"),
                     gettext("La cuenta publicitaria necesita un método de pago en business.facebook.com › Facturación: "
                             "sin él Meta no activa ningún anuncio."), "settings")]
+
+
+# Meta rendimiento (spec E2 §10): el título y el detalle de cada tipo de recomendación que puede ser «alta»
+# (`meta_rendimiento.recomendaciones`). La copia guarda solo tipo y huella; las cifras y los nombres de campañas
+# están en el «Diagnóstico» de la pestaña Meta, adonde lleva la alerta.
+TEXTOS_META_RENDIMIENTO = {
+    "cuenta_estado": (idiomas.N_("«%(cuenta)s» no está activa en Meta o llega a su tope de gasto"),
+                      idiomas.N_("Meta puede dejar de entregar sus anuncios. El motivo y qué hacer están en el "
+                                 "Diagnóstico de la pestaña Meta.")),
+    "cuenta_roas_bajo": (idiomas.N_("«%(cuenta)s» vende menos de lo que gasta"),
+                         idiomas.N_("En los últimos 30 días vendió menos de la mitad de lo que gastó: pausa o rehace "
+                                    "la cuenta. Las cifras están en el Diagnóstico de la pestaña Meta.")),
+    "aprendizaje_limitado": (idiomas.N_("Muchos conjuntos de «%(cuenta)s» en aprendizaje limitado"),
+                             idiomas.N_("Sin salir del aprendizaje, Meta no estabiliza su entrega. El Diagnóstico de "
+                                        "la pestaña Meta dice qué campañas consolidar primero.")),
+    "perdedores_gastando": (idiomas.N_("Anuncios perdedores siguen gastando en «%(cuenta)s»"),
+                            idiomas.N_("Se llevan buena parte del gasto de la última semana. Pausarlos libera "
+                                       "presupuesto para los que venden: la lista está en el Diagnóstico de la "
+                                       "pestaña Meta.")),
+    "anuncios_con_problemas": (idiomas.N_("Anuncios rechazados siguen gastando en «%(cuenta)s»"),
+                               idiomas.N_("Meta los rechazó y gastaron en los últimos 7 días. Revísalos en el "
+                                          "Administrador de anuncios desde el Diagnóstico de la pestaña Meta.")),
+}
+_ACT_VALIDA = r"act_[0-9]{1,30}"
+
+
+def _fuente_meta_rendimiento(cliente, ahora):
+    """Las recomendaciones de nivel «alta» de cada cuenta de Meta que lee el proyecto, tal como las guardó su última
+    copia buena en `meta_cuenta.extra.alertas` ([{tipo, huella}]; `tareas.meta_rendimiento._guardar_alertas`): aquí
+    no se calcula ninguna regla, es UNA consulta a `meta_cuenta` del proyecto. Una alerta por elemento, de decisión y
+    `atencion`, a la pestaña Meta (el «Diagnóstico» llega por fetch: no hay ancla en la página). La huella es la de la
+    recomendación (tipo + cuenta + nivel en las que juntan toda la cuenta): un descarte vale hasta que la situación
+    cambie. El título lleva el nombre de la cuenta (dato de Meta, pasado por `_limpio`) y se arma aquí, en el idioma
+    de quien mira. Un elemento roto (otro tipo, otra huella, algo que no es un dict) se ignora."""
+    from meta_rendimiento import cuentas  # noqa: PLC0415
+    out = []
+    for c in cuentas.listar(cliente):
+        act = c.get("ad_account_id") or ""
+        guardadas = (c.get("extra") or {}).get("alertas")
+        if not re.fullmatch(_ACT_VALIDA, act) or not isinstance(guardadas, list):
+            continue
+        nombre = _limpio(c.get("nombre") or act, 120)
+        for g in guardadas:
+            if not isinstance(g, dict) or g.get("tipo") not in TEXTOS_META_RENDIMIENTO \
+                    or not re.fullmatch(HUELLA_VALIDA, str(g.get("huella") or "")):
+                continue
+            titulo, detalle = TEXTOS_META_RENDIMIENTO[g["tipo"]]
+            out.append(_alerta(f"meta_rendimiento:{g['tipo']}:{act}", g["huella"], "atencion", "decision",
+                               gettext(titulo, cuenta=nombre), gettext(detalle), "meta", entidad=act))
+    return out
 
 
 # ---------- fuentes: faltantes del proyecto ----------
@@ -812,4 +863,5 @@ FUENTES.extend([
     ("nicho", _fuente_nicho),
     ("cobros", _fuente_cobros),
     ("meta", _fuente_meta),
+    ("meta_rendimiento", _fuente_meta_rendimiento),
 ])

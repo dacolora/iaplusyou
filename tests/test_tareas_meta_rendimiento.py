@@ -106,6 +106,77 @@ def test_copia_ok_reporta_las_etapas_y_cuenta_lo_copiado(hf, monkeypatch):
     assert TOKEN not in texto
 
 
+def _copia_ok(monkeypatch):
+    monkeypatch.setattr(sync, "sincronizar", lambda *a, **k: {
+        "omitida": False, "dias_cuenta": 1, "filas_anuncio": 1, "objetos": 1, "desde": "2026-10-08",
+        "hasta": "2026-10-08"})
+
+
+def _rec(tipo, nivel, huella):
+    return {"id": huella, "nivel": nivel, "tipo": tipo, "cuenta": "act_1", "titulo": f"Título {tipo}"}
+
+
+def test_copia_ok_guarda_las_recomendaciones_altas_de_esa_cuenta_para_alertas(hf, monkeypatch):
+    from meta_rendimiento import panel
+    _copia_ok(monkeypatch)
+    pedidas = []
+
+    def _recs(cliente, act, hoy=None):
+        pedidas.append((cliente, act))
+        return [_rec("cuenta_roas_bajo", "alta", "a" * 64), _rec("escalar", "media", "b" * 64),
+                _rec("perdedores_gastando", "alta", "c" * 64), _rec("concentracion", "baja", "d" * 64)]
+    monkeypatch.setattr(panel, "recomendaciones_de_cuenta", _recs)
+    t.meta_rend_sincronizar(_tarea())
+    assert pedidas == [("hf", "act_1")]
+    extra = cuentas.cuenta("hf", "act_1")["extra"]
+    # Solo tipo y huella: el título lo arma Alertas en el idioma de quien mira (skill alertas).
+    assert extra["alertas"] == [{"tipo": "cuenta_roas_bajo", "huella": "a" * 64},
+                                {"tipo": "perdedores_gastando", "huella": "c" * 64}]
+    assert "alertas" not in cuentas.cuenta("hf", "act_2")["extra"]
+    # La copia siguiente sin nada alto deja la lista vacía (la alerta desaparece sola).
+    monkeypatch.setattr(panel, "recomendaciones_de_cuenta", lambda *a, **k: [_rec("escalar", "media", "b" * 64)])
+    t.meta_rend_sincronizar(_tarea())
+    assert cuentas.cuenta("hf", "act_1")["extra"]["alertas"] == []
+
+
+def test_si_calcular_las_alertas_falla_la_copia_igual_termina_bien(hf, monkeypatch, caplog):
+    from meta_rendimiento import panel
+    _copia_ok(monkeypatch)
+    cuentas.actualizar_extra("hf", "act_1", {"alertas": [{"tipo": "cuenta_roas_bajo", "huella": "a" * 64}]})
+
+    def _revienta(*a, **k):
+        raise ValueError(f"algo con el token {TOKEN}")
+    monkeypatch.setattr(panel, "recomendaciones_de_cuenta", _revienta)
+    texto = t.meta_rend_sincronizar(_tarea())
+    assert "Listo" in texto
+    # Lo guardado antes se queda (no se inventa que no hay alertas) y el registro dice solo el tipo del error.
+    assert cuentas.cuenta("hf", "act_1")["extra"]["alertas"] == [{"tipo": "cuenta_roas_bajo", "huella": "a" * 64}]
+    assert "ValueError" in caplog.text and TOKEN not in caplog.text
+
+
+def test_una_copia_que_falla_no_toca_las_alertas_guardadas(hf, monkeypatch):
+    from meta_rendimiento import panel
+    _falla_con(monkeypatch, graph.ErrorGraph("Meta rechazó la consulta", codigo=100))
+    monkeypatch.setattr(panel, "recomendaciones_de_cuenta", lambda *a, **k: pytest.fail("solo tras una copia buena"))
+    with pytest.raises(RuntimeError):
+        t.meta_rend_sincronizar(_tarea())
+
+
+def test_la_copia_guarda_las_alertas_con_las_reglas_de_verdad(hf, monkeypatch):
+    """Sin dobles en el cálculo: una cuenta que vende menos de la mitad de lo que gasta deja `cuenta_roas_bajo`."""
+    from meta_rendimiento import recomendaciones
+    _copia_ok(monkeypatch)
+    hoy = date.today()
+    dias = [(hoy - timedelta(days=i)).isoformat() for i in range(10)]
+    datos.reemplazar_cuenta_dias("hf", "act_1", dias[-1], dias[0], [
+        dict(fecha=f, gasto=500, impresiones=1000, alcance=500, clics=10, clics_salida=5, compras=1, valor=100,
+             vistas_3s=0, thruplays=0) for f in dias])
+    t.meta_rend_sincronizar(_tarea())
+    alerta, = cuentas.cuenta("hf", "act_1")["extra"]["alertas"]
+    assert alerta == {"tipo": "cuenta_roas_bajo",
+                      "huella": recomendaciones.huella_recomendacion("cuenta_roas_bajo", "act_1", "alta")}
+
+
 def test_sin_token_deja_la_cuenta_en_error_y_no_lanza(hf, monkeypatch):
     monkeypatch.setattr(meta_conexion, "cargar", lambda cliente: {"token": None})
     _falla_con(monkeypatch, AssertionError("sin token no se llama a Meta"))

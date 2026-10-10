@@ -17,7 +17,11 @@ volvería a chocar. Mientras dure la pausa ninguna copia arranca ni la periódic
 si hay una tarea que ESCRIBE en Meta (`TIPOS_ESCRITURA_META`: las disparadas por una persona, en cola o corriendo;
 las periódicas, solo corriendo): cede el turno y se vuelve a encolar sola para dentro de 10 minutos (hasta 6 veces,
 ruling R30); después la retoma la siguiente periódica. Como la copia inicial se reanuda desde su marcador, nada se
-pierde."""
+pierde.
+
+Al terminar bien, la copia guarda en la cuenta las recomendaciones de nivel «alta» de sus reglas (`extra.alertas`, spec
+E2 §10) para la pestaña Alertas."""
+import logging
 from datetime import date, datetime, timedelta
 
 from flask_babel import gettext
@@ -28,6 +32,7 @@ import trabajos
 from meta_rendimiento import cuentas, datos, graph, pausa, sync
 from tareas import Continuar, al_interrumpir, registrar
 
+log = logging.getLogger(__name__)
 TIPO_SYNC = "meta_rend_sincronizar"
 TIPO_TODAS = "meta_rend_sincronizar_todas"
 TIPO_LIMPIAR = "meta_rend_limpiar"
@@ -124,9 +129,26 @@ def meta_rend_sincronizar(tarea):
         raise RuntimeError(mensaje) from None
     if r.get("omitida"):
         return ya_no_esta
+    _guardar_alertas(cliente, act)
     nombre = (cuentas.cuenta(cliente, act) or {}).get("nombre") or act
     return gettext("Listo (%(cuenta)s): %(dias)s día(s) de la cuenta y %(filas)s fila(s) de anuncios, del %(desde)s al %(hasta)s.",
                    cuenta=nombre, dias=r["dias_cuenta"], filas=r["filas_anuncio"], desde=r["desde"], hasta=r["hasta"])
+
+
+def _guardar_alertas(cliente, act):
+    """Tras una copia buena, las recomendaciones de nivel «alta» de ESA cuenta quedan en `extra.alertas` como
+    [{tipo, huella}] para la fuente de Alertas, que así no calcula nada pesado en cada página (spec E2 §10). El título
+    no se guarda: Alertas lo arma al vuelo en el idioma de quien mira con el tipo y el nombre de la cuenta (skill
+    `alertas`: los textos se traducen al calcular y la huella nunca sale de un texto). Un fallo aquí no tumba la copia:
+    se anota solo el tipo del error (su texto podría arrastrar un token) y lo guardado antes se queda."""
+    from meta_rendimiento import panel  # noqa: PLC0415 — tardío: panel importa este módulo
+    try:
+        recs = panel.recomendaciones_de_cuenta(cliente, act)
+        cuentas.actualizar_extra(cliente, act, {"alertas": [{"tipo": r["tipo"], "huella": r["id"]}
+                                                            for r in recs if r["nivel"] == "alta"]})
+    except Exception as e:  # noqa: BLE001 — las alertas son un extra: la copia ya terminó bien
+        log.warning("Meta rendimiento: no se calcularon las alertas de %s en %s (%s)", act, cliente,
+                    type(e).__name__)
 
 
 def escribiendo_en_meta():
