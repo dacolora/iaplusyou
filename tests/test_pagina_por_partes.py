@@ -398,6 +398,29 @@ def test_contadores_selector_igual_que_main_con_colores(pagina):
     assert re.findall(r'\d+', html.select_one('#fp-abrir-catalogo small').get_text()) == [str(sum(cantidades_main.values()))]
 
 
+
+@pytest.mark.parametrize('marcado', ['producto:archivado/gray', 'producto:archivado'])
+def test_contadores_con_precarga_de_un_archivado_cuentan_como_main(pagina, marcado):
+    """Main contaba lo que la precarga conserva (`sin_archivados(..., conservar=...)`): un producto archivado
+    marcado por «Crear con este producto» sigue contando con sus colores (re-revisión, 2026-10-10)."""
+    from tests.test_rutas_catalogo import _con_colores
+    import catalogo_productos as cp
+    import tiendas
+    _con_colores(pagina, colores=('Pink', 'Beige', 'Blue'))
+    _con_colores(pagina, pid='archivado', colores=('Gray', 'Black'))
+    pagina['c'].get('/cliente/acme')
+    tiendas.archivar_activo('acme', 'archivado')
+    conservar = [marcado.split(':', 1)[1]]
+    cantidades_main = {cid: len(cp.sin_archivados(cp.listar('acme', cid), tiendas.activos_archivados('acme'), conservar=conservar))
+                       if cid == 'producto' else len(cp.listar('acme', cid)) for cid in cp.CATEGORIAS}
+    assert cantidades_main['producto'] == 5
+    with pagina['c'].session_transaction() as s:
+        s['fp_prefill'] = {'cliente': 'acme', 'productos_catalogo': [marcado]}
+    html = sopa(pagina['c'].get('/cliente/acme'))
+    assert re.findall(r'\d+', html.select_one('#sel-clone-resumen').get_text()) == [str(cantidades_main['producto'])]
+    assert re.findall(r'\d+', html.select_one('#fp-abrir-catalogo small').get_text()) == [str(sum(cantidades_main.values()))]
+
+
 def _gasto_variado(pagina, rol):
     import db
     import gastos

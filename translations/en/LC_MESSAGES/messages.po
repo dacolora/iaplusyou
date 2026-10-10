@@ -17146,7 +17146,7 @@ msgid "Tu sesión terminó: recarga la página e inicia sesión."
 msgstr "Your session ended: reload the page and log in."
 
 msgid "Tu sesión venció. Vuelve a entrar para continuar."
-msgstr "Your session has expired. Sign in again to continue."
+msgstr "Your session has expired. Log in again to continue."
 
 msgid "Tu sesión venció: vuelve a entrar para seguir."
 msgstr "Your session expired: sign in again to keep going."

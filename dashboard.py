@@ -2123,12 +2123,16 @@ def ver_cliente(cliente):
     n_por_categoria = {cid: sum(1 for p in productos if cid != "producto" or p["id"] not in archivados)
                        for cid, productos in productos_por_categoria.items()}
     # Los selectores cuentan referencias elegibles (cada color con fotos),
-    # mientras Catálogo conserva su contador de productos comerciales.
+    # mientras Catálogo conserva su contador de productos comerciales. Un
+    # producto archivado que la precarga marca sigue contando, como en la
+    # grilla (`sin_archivados(..., conservar=...)` de catalogo_selector).
+    conservados = {catalogo_productos.producto_base(a["id"]) for a in catalogo_marcados
+                   if a.get("categoria", "producto") == "producto"}
     n_activos_por_categoria = {
         cid: sum(sum(bool(c.get("referencias")) for c in p.get("colores", []))
                  if p.get("tiene_colores") else bool(p.get("referencias"))
                  for p in productos
-                 if cid != "producto" or p["id"] not in archivados)
+                 if cid != "producto" or p["id"] not in archivados or p["id"] in conservados)
         for cid, productos in productos_por_categoria.items()}
     # Gasto real (Task 3): el tablero se calcula UNA vez (cacheado) y de ahí
     # sale la pauta por moneda; la generación viene de la tabla `gasto`.

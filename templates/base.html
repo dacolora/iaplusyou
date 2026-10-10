@@ -353,10 +353,12 @@
           if (!mas.isConnected) return;
           var p = document.createElement('p'); p.className = 'vacio'; p.dataset.listaError = '1';
           if (error.sesionVencida) {
-            p.textContent = {{ _('Tu sesión venció. Vuelve a entrar para continuar.')|tojson }};
+            p.textContent = {{ _('Tu sesión venció. Vuelve a entrar para continuar.')|tojson }} + ' ';
             var entrar = document.createElement('a'); entrar.className = 'btn-sm';
             entrar.href = {{ url_for('login')|tojson }}; entrar.textContent = {{ _('Entrar')|tojson }};
-            mas.parentElement.appendChild(p); mas.replaceWith(entrar);
+            // El enlace va dentro del mensaje, después del texto: suelto junto al
+            // botón quedaba antes del aviso y se estiraba a lo alto (revisión 2026-10-10).
+            p.appendChild(entrar); mas.replaceWith(p);
             return;
           }
           p.textContent = {{ _('No pude cargar más resultados. Intenta de nuevo.')|tojson }};
