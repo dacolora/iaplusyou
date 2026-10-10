@@ -185,7 +185,7 @@ Una fila por variante. Su único escritor es `triple_whale/datos.py`.
 - **`mover(gid, de, a, vacios=(), **campos)`:** `UPDATE … WHERE id = ? AND estado = ?`. Devuelve si cambió, así el
   vigilante y las tareas nunca avanzan dos veces la misma variante. `vacios` nombra columnas que además tienen que
   seguir en NULL (el `cf_id` de una variante se anota una sola vez).
-- **`actualizar_gancho(gid, **campos)`:** anota campos sin tocar el estado y sin mirarlo (PND-234): solo para filas vivas.
+- **`actualizar_gancho(gid, **campos)`:** anota campos sin tocar el estado y sin mirarlo (PND-235): solo para filas vivas.
 - **`ganchos_de_analisis(cliente, analisis_id)`, `ganchos_vivos()`:** para el detalle y para el vigilante, con una
   consulta cada una.
 
@@ -471,28 +471,28 @@ Todo sigue sin `<script>` en el fragmento y con lo de Claude escapado.
 
 ## 11. Pendientes que nacen
 
-- **Chip en la tarjeta de la galería** («2 ganchos listos») para verlos sin abrir el análisis (PND-222).
+- **Chip en la tarjeta de la galería** («2 ganchos listos») para verlos sin abrir el análisis (PND-223).
 - **«Volver a analizar»** para un análisis viejo sin ganchos aunque esté fresco (hoy el panel no ofrece pagar dos veces
-  el mismo alcance) (PND-223).
-- **Ganchos para anuncios de imagen:** otra imagen de portada en vez de un clip (PND-224).
-- **Los 3 ganchos en Meta en pausa con su código,** si Daniel lo quiere (toca lo público: se pregunta antes) (PND-225).
+  el mismo alcance) (PND-224).
+- **Ganchos para anuncios de imagen:** otra imagen de portada en vez de un clip (PND-225).
+- **Los 3 ganchos en Meta en pausa con su código,** si Daniel lo quiere (toca lo público: se pregunta antes) (PND-226).
 
 ## 12. Lo que apareció al construirlo
 
 Cosas que el spec no tenía y quedaron como pendientes (cada una en `docs/pendientes.md`, con el motivo):
 
 - `doctrina._numeros` junta los dígitos de un decimal («4,0» pasa a 40) y debilita la comprobación de cifras, que
-  también cuida Sprints y Nicho (PND-226).
-- El copy y el texto de un gancho pueden afirmar urgencia o escasez sin un número y nada lo marca (PND-227).
-- Un clip que Crear aún puede recuperar deja la fila del gancho en `error` para siempre (PND-228).
-- El original que baja un gancho cuenta para la cuota de 2 GB y «Medios» no lo puede borrar (PND-229).
-- El filtro `precio` no mira una lectura fallida del margen (PND-230).
-- La salida del análisis llegó a 11 323 de 12 000 tokens en una corrida real (PND-231).
-- El `por_que` de un gancho cuenta para su comprobación de cifras (PND-232); el camino de falla de preparar no muestra
-  el error de la sesión de Crear (PND-233); tres detalles menores de robustez (PND-234).
+  también cuida Sprints y Nicho (PND-227).
+- El copy y el texto de un gancho pueden afirmar urgencia o escasez sin un número y nada lo marca (PND-228).
+- Un clip que Crear aún puede recuperar deja la fila del gancho en `error` para siempre (PND-229).
+- El original que baja un gancho cuenta para la cuota de 2 GB y «Medios» no lo puede borrar (PND-230).
+- El filtro `precio` no mira una lectura fallida del margen (PND-231).
+- La salida del análisis llegó a 11 323 de 12 000 tokens en una corrida real (PND-232).
+- El `por_que` de un gancho cuenta para su comprobación de cifras (PND-233); el camino de falla de preparar no muestra
+  el error de la sesión de Crear (PND-234); tres detalles menores de robustez (PND-235).
 - Revisión final (guardian-gasto y auditor-seguridad, 2026-10-09), arreglos A a E: tope de 20 000 y una respuesta
-  cortada no paga una corrección a ciegas (PND-231); las ofertas escritas en palabras («gratis», «fri frakt», «2 for 1»)
+  cortada no paga una corrección a ciegas (PND-232); las ofertas escritas en palabras («gratis», «fri frakt», «2 for 1»)
   que no están en los datos cuentan como cifras sin dato en el texto del gancho y en el copy; el clip recuperable
-  (PND-228 para los ganchos); `usd_precio` en el botón y 409 sin margen (PND-230 para los ganchos); errores ajenos sin
+  (PND-229 para los ganchos); `usd_precio` en el botón y 409 sin margen (PND-231 para los ganchos); errores ajenos sin
   tokens y la clave del fotograma con sufijo al azar. Detalle en la skill `triple-whale`. Queda: el análisis y su lote
-  no comparan el precio visto (PND-235).
+  no comparan el precio visto (PND-236).

@@ -166,3 +166,6 @@ PND-190/166/159 (2026-10-09, decisiones delegadas lote 7): consultas/selección 
 
 
 Enmiendas lote 7 (2026-10-09, decisión delegada): SDK de Claude conserva sus reintentos. Apify registra estimado al recibir run_id, misma referencia de tarea para corregir al final (también cero si ya se anotó gasto; sin anotación previa, cero no crea fila). POST solo repite 429 con esperas; timeout/5xx leen hasta cinco corridas recientes, siguen una única posterior al inicio o avisan incertidumbre. Fuentes de Nicho propagan on_ids al registro antes del sondeo; hooks con corrida anotada dejan error, no pendiente.
+
+
+PND-149(6)/160 (2026-10-09, decisión del lote 8): reservar_aviso_sync vive en triple_whale_tiendas (único escritor) y toma el candado SQLite antes de leer extra/cola. Recuerda las copias terminadas que el worker aún no cerró y reserva una vez el aviso de la última, sin modificar estado/progreso de tareas; identidad id+creada_en para un nuevo ciclo. actualizar_extra comparte ese candado. El encolador de lanzamiento comprueba tarea viva y relee el estado antes de escribir; solo admite armando/error. Enmienda 2026-10-10: _LANZAMIENTO_LOCK es propio, junto a _ENV_LOCK, para no esperar una publicación larga ni relanzar desde una lectura vieja. La vuelta atrás usa el estado recién leído; no cambia gastos ni reintentos.

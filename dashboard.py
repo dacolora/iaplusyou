@@ -382,6 +382,8 @@ app.register_blueprint(cobros_rutas.bp)
 # lock serializa esa sección crítica (cargar credenciales + usarlas) para que
 # eso no pase.
 _ENV_LOCK = threading.Lock()
+# El encolado no espera publicaciones largas ni usa sus credenciales (PND-160, 2026-10-10).
+_LANZAMIENTO_LOCK = threading.Lock()
 
 
 def _sesion():
@@ -570,6 +572,8 @@ def _idioma_en_plantillas():
     datos = {
         "idioma_ui": str(get_locale() or idiomas.DEFECTO),
         "idiomas_nombres": idiomas.NOMBRES,
+        "idiomas_publicacion_nombres": idiomas.NOMBRES_PUBLICACION,
+        "paises_publicacion": fe_tipos.PAISES,
         "idioma_selector_visible": bool(sesion) and (idiomas.ACTIVO_PARA_TODOS or sesion["rol"] == "admin"),
         "idioma_enlaces_publicos": idiomas.ACTIVO_PARA_TODOS and not sesion,
     }
@@ -5304,17 +5308,25 @@ def _encolar_lanzamiento(cliente, eid, estado_previo, error_previo):
     como estaba. Al revés (encolar y después escribir «lanzando», el M2 de antes) un worker rápido podía activar y
     dejarlo «corriendo» antes de que la ruta escribiera, y esa escritura tardía lo pisaba con anuncios gastando (ronda 2
     de guardian-gasto, 2026-10-08). Lo que M2 cuidaba (quedar en «lanzando» sin tarea) lo cubre la vuelta atrás."""
-    experimentos.actualizar(cliente, eid, estado="lanzando", error=None)
-    try:
-        arranco = trabajos.encolar(tareas_exp.job_id_lanzar(cliente, eid), "exp_lanzar",
-                                   {"cliente": cliente, "experimento_id": eid, "activar": True}, cliente=cliente,
-                                   duracion_estimada=120, etapas=lanzador.ETAPAS_LANZAR_Y_ACTIVAR, max_intentos=1)
-    except Exception:
-        experimentos.actualizar(cliente, eid, estado=estado_previo, error=error_previo)
-        raise
-    if not arranco:
-        experimentos.actualizar(cliente, eid, estado=estado_previo, error=error_previo)
-    return arranco
+    with _LANZAMIENTO_LOCK:
+        job_id = tareas_exp.job_id_lanzar(cliente, eid)
+        if trabajos.en_curso(job_id):
+            return False
+        actual = experimentos.obtener(cliente, eid)
+        if not actual or actual["estado"] not in ("armando", "error"):
+            return False
+        estado_previo, error_previo = actual["estado"], actual["error"]
+        experimentos.actualizar(cliente, eid, estado="lanzando", error=None)
+        try:
+            arranco = trabajos.encolar(job_id, "exp_lanzar",
+                                       {"cliente": cliente, "experimento_id": eid, "activar": True}, cliente=cliente,
+                                       duracion_estimada=120, etapas=lanzador.ETAPAS_LANZAR_Y_ACTIVAR, max_intentos=1)
+        except Exception:
+            experimentos.actualizar(cliente, eid, estado=estado_previo, error=error_previo)
+            raise
+        if not arranco:
+            experimentos.actualizar(cliente, eid, estado=estado_previo, error=error_previo)
+        return arranco
 
 
 def _clave_formulario_experimento(token, datos, combinaciones):
@@ -5424,6 +5436,12 @@ def exp_lanzar(cliente, eid):
     if not ex:
         flash(gettext("Ese experimento no existe."), "error")
         return volver
+    if trabajos.en_curso(tareas_exp.job_id_lanzar(cliente, eid)):
+        mensaje = gettext("Ya se está lanzando ese experimento.")
+        if _quiere_json():
+            return jsonify(ok=True, mensaje=mensaje)
+        flash(mensaje, "warn")
+        return volver
     if ex["estado"] not in ("armando", "error"):
         flash(gettext("Ese experimento ya fue lanzado."), "error")
         return volver
@@ -5444,7 +5462,10 @@ def exp_lanzar(cliente, eid):
     if arranco:
         flash(gettext("Lanzando el experimento a Meta: si todo sale bien, queda activo y empieza a gastar…"), "ok")
     else:
-        flash(gettext("Ya se está lanzando ese experimento."), "warn")
+        mensaje = gettext("Ya se está lanzando ese experimento.")
+        if _quiere_json():
+            return jsonify(ok=True, mensaje=mensaje)
+        flash(mensaje, "warn")
     return volver
 
 

@@ -25,11 +25,14 @@
   {% if sprint.estado == "completado" %}
   <a class="btn-generar btn-sm" href="{{ url_for('sprints.entrega', cliente=cliente, sid=sprint.id) }}">{{ _('Entrega') }}</a>
   {% endif %}
-  <label class="fe-check">{{ _('Campaña') }}
+</div>
+
+<div class="sprint-filtros">
+  <label>{{ _('Campaña') }}
     <select id="filtro-campana"><option value="">{{ _('todas') }}</option>{% for c in sprint.campanas %}<option value="{{ c.id }}">{{ c.orden + 1 }} · {{ (c.funnel or 'tof') | upper }} · {{ c.persona_nombre }} · {{ (productos_por_id.get(c.catalogo_id) or {}).get('nombre') or c.catalogo_id }}</option>{% endfor %}</select>
   </label>
-  <label class="fe-check">{{ _('Tipo') }} <select id="filtro-tipo"><option value="">{{ _('todos') }}</option><option value="video">{{ _('video') }}</option><option value="imagen">{{ _('imagen') }}</option></select></label>
-  <label class="fe-check">QA <select id="filtro-qa"><option value="">{{ _('todos') }}</option><option value="pasa">{{ _('pasa') }}</option><option value="revisar">{{ _('revisar') }}</option><option value="falla">{{ _('falla') }}</option><option value="error">{{ _('QA falló') }}</option><option value="sin">{{ _('sin evaluar') }}</option></select></label>
+  <label>{{ _('Tipo') }} <select id="filtro-tipo"><option value="">{{ _('todos') }}</option><option value="video">{{ _('video') }}</option><option value="imagen">{{ _('imagen') }}</option></select></label>
+  <label>QA <select id="filtro-qa"><option value="">{{ _('todos') }}</option><option value="pasa">{{ _('pasa') }}</option><option value="revisar">{{ _('revisar') }}</option><option value="falla">{{ _('falla') }}</option><option value="error">{{ _('QA falló') }}</option><option value="sin">{{ _('sin evaluar') }}</option></select></label>
 </div>
 
 <div class="sprint-revision-grid" id="revision-grid">

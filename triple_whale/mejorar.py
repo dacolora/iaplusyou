@@ -30,7 +30,7 @@ from triple_whale import analisis, evaluacion, visitantes
 
 log = logging.getLogger("creatv.triple_whale.mejorar")
 
-# Una corrida real llegó a 11 323 de 12 000 tokens de salida con ganchos y copy (PND-231, 2026-10-09). Solo se pagan
+# Una corrida real llegó a 11 323 de 12 000 tokens de salida con ganchos y copy (PND-232, 2026-10-09). Solo se pagan
 # los tokens usados: un tope amplio no encarece nada y evita la respuesta cortada (regla 7).
 MAX_TOKENS = 20000
 TIMEOUT_CLAUDE_S = 300

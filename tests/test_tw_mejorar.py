@@ -223,7 +223,7 @@ def test_la_llamada_a_claude_no_se_reintenta_sola_y_tiene_tope_de_tiempo(monkeyp
 
 
 def test_el_tope_de_salida_es_amplio():
-    """Una corrida real llegó a 11 323 de 12 000 tokens (PND-231); solo se pagan los tokens usados."""
+    """Una corrida real llegó a 11 323 de 12 000 tokens (PND-232); solo se pagan los tokens usados."""
     assert mejorar.MAX_TOKENS == 20000
 
 

@@ -382,13 +382,18 @@ def cohortes(cliente, tienda_id, desde, hasta, canal=None, conocido_desde=None):
             "probados": probados}
 
 
-def _duplicado_por_dia(cliente, desde, hasta):
+def _duplicado_por_dia(cliente, desde, hasta, solo_con_fila_tienda=False):
     """Subconsulta (fecha, duplicado): por día, Σ por anuncio de (suma − máximo)
     de su gasto entre las tiendas. Es lo que «Todas» contaría de más si sumara
     el gasto de cada tienda con una cuenta publicitaria compartida."""
     t = db.tw_anuncio_dia
+    cond = []
+    if solo_con_fila_tienda:
+        tienda = db.tw_tienda_dia
+        cond.append(sa.select(tienda.c.id).where(tienda.c.cliente == cliente,
+                    tienda.c.tienda_id == t.c.tienda_id, tienda.c.fecha == t.c.fecha).exists())
     por_anuncio = (sa.select(t.c.fecha, (sa.func.sum(t.c.gasto) - sa.func.max(t.c.gasto)).label("duplicado"))
-                   .where(t.c.cliente == cliente, t.c.fecha >= desde, t.c.fecha <= hasta)
+                   .where(t.c.cliente == cliente, t.c.fecha >= desde, t.c.fecha <= hasta, *cond)
                    .group_by(t.c.canal, t.c.ad_id, t.c.fecha).subquery())
     return (sa.select(por_anuncio.c.fecha, sa.func.sum(por_anuncio.c.duplicado).label("duplicado"))
             .group_by(por_anuncio.c.fecha).subquery())
@@ -462,7 +467,7 @@ def serie_tienda(cliente, tienda_id, desde, hasta):
     else:
         s = (sa.select(t.c.fecha, *[sa.func.sum(getattr(t.c, c)).label(c) for c in COLUMNAS_TIENDA])
              .where(*cond).group_by(t.c.fecha).subquery())
-        d = _duplicado_por_dia(cliente, desde, hasta)
+        d = _duplicado_por_dia(cliente, desde, hasta, solo_con_fila_tienda=True)
         dup = sa.func.coalesce(d.c.duplicado, 0)
         columnas = [(s.c[c] - dup).label(c) if c == "gasto" else (s.c[c] + dup).label(c) if c == "utilidad_neta"
                     else s.c[c] for c in COLUMNAS_TIENDA]

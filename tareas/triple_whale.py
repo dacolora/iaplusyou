@@ -285,7 +285,7 @@ def tw_sincronizar(tarea):
     # Los avisos miran «Todas las tiendas»: solo corren cuando no queda otra
     # copia del proyecto en cola o en curso, así la última que termina avisa
     # una vez y con todo al día. Un fallo aquí no tumba la copia.
-    if [j for j in syncs_en_curso(cliente) if j != job_id]:
+    if not triple_whale_tiendas.reservar_aviso_sync(cliente, job_id):
         return texto
     try:
         c = avisos.revisar_y_avisar(cliente)
@@ -393,7 +393,7 @@ PRIORIDAD_GANCHOS = 3
 GRACIA_S = 120
 # Un clip que Crear todavía puede recuperar («Recuperar el video», sin pagar de nuevo) ya está pagado: su fila sigue en
 # «generando» hasta 24 h desde su último cambio, esperando a que la persona lo recupere; después se cierra con el error
-# de la sesión (revisión del gasto del 2026-10-09, arreglo C; antes PND-228).
+# de la sesión (revisión del gasto del 2026-10-09, arreglo C; antes PND-229).
 ESPERA_RECUPERABLE_S = 24 * 3600
 ETAPAS_GANCHOS = [(idiomas.N_("Bajando el video"), 40), (idiomas.N_("Lanzando los clips"), 60)]
 ETAPAS_ARMAR = [(idiomas.N_("Armando el video"), 100)]

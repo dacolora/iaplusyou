@@ -103,9 +103,8 @@
                 {% set _idioma_def = idioma_proyecto or "es" %}
                 <label>{{ _('Idioma base') }}
                   <select name="idioma_base">
-                    {% set _nombres_idioma_fe = {"es": "Español", "en": "English", "pt": "Português", "sv": "Svenska", "no": "Norsk (bokmål)"} %}
                     {% for _cod in idiomas_fe %}
-                    <option value="{{ _cod }}"{% if _idioma_def == _cod %} selected{% endif %}>{{ _nombres_idioma_fe.get(_cod, _cod) }}</option>
+                    <option value="{{ _cod }}"{% if _idioma_def == _cod %} selected{% endif %}>{{ idiomas_publicacion_nombres.get(_cod, _cod) }}</option>
                     {% endfor %}
                   </select>
                 </label>

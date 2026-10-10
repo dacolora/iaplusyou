@@ -52,7 +52,7 @@ rejected because it would split catalog, pieces and sprints. Spec
   (`tw_anuncio_dia`, `tw_tienda_dia`, `tw_producto_dia`) carry `tienda_id` (NOT NULL, no FK) inside their unique keys.
 - **Single writer.** `triple_whale_tiendas.py` writes `tw_tienda` and `triple_whale`: `agregar(cliente, llave, dominio,
   pais=None, moneda, modelo_atribucion, ventana_atribucion, zona_horaria)` (guesses the country from the domain; a
-  second connect of the same domain reconnects; the project's settings are only created, never overwritten),
+  second connect of the same domain reconnects; with no stores the form's settings are saved even if their row already exists; with stores they are preserved),
   `cambiar_pais(cliente, tienda_id, pais)`, `actualizar_tienda`, `actualizar_extra_tienda`, `actualizar_extra`
   (project's), `cambiar_ajustes`, `quitar(cliente, tienda_id)`; reads `ajustes`, `tiendas`, `tienda(cliente,
   tienda_id)`, `tienda_de_pais`, `obtener` (settings + `tiendas`, None without stores), `obtener_llave(cliente,
@@ -72,7 +72,7 @@ rejected because it would split catalog, pieces and sprints. Spec
   `triple_whale_tiendas.tiendas`, the selector's order). The panel (`panel.contexto(cliente, dias,
   canal, tienda_id)`, `?tienda=` in `ver_panel`) has a store selector; with one store it is always that one.
 - **Avisos** (`triple_whale/avisos.py`) always look at «Todas»: `tw_sincronizar` calls `avisos.revisar_y_avisar`
-  only when no OTHER sync of the project is still queued or running (`syncs_en_curso`), so the LAST one to finish
+  only after `triple_whale_tiendas.reservar_aviso_sync` atomically marks its completion and finds no other unfinished sync, so the LAST one to finish
   warns once with everything fresh. «Evaluar con IA» evaluates the selected scope and saves it in
   `tw_evaluacion.extra` (`tienda_id`, `pais`; None = Todas).
 - **Atribución de experimentos** by the store of the piece's country: see below (`lanzador._tienda_tw_de`). A single
@@ -376,7 +376,7 @@ eval `docs/superpowers/evals/2026-10-09-tw-ganchos-y-copy.md`.
   detail shows its `usd_precio` (cost × margin; None when the margin read failed, `gastos._margen_fallido`: then the
   reason is «precio no disponible», the button is disabled and the route answers 409) in the button, `data-confirmar`
   and a hidden `precio_visto` (the PRICE, back to cost once with `gastos.costo_de_precio`, ±0,005, else 409). Never
-  `usd|precio`: that filter falls back to margin 1,0 and shows the cost as the price (PND-230). A hook with `cifras_sin_dato` is shown with its warning and is neither
+  `usd|precio`: that filter falls back to margin 1,0 and shows the cost as the price (PND-231). A hook with `cifras_sin_dato` is shown with its warning and is neither
   generated nor priced. `libro.exigir` of the total before creating anything; each clip reserves its own when
   `flowplus_lanzar.lanzar` queues it and Crear's closing (`flowplus_video`) charges it. Preparar, vigilar and armar
   never call a paid provider (all three in `TIPOS_EXENTOS_DE_COBRO`); armar and the render are ffmpeg. The analysis
@@ -448,17 +448,17 @@ eval `docs/superpowers/evals/2026-10-09-tw-ganchos-y-copy.md`.
   second 3 lands on the original's second 3 and the audio correlates 0,999 at zero offset (measured at 0,5, 5, 20 and
   38 s). The only problem was the start frame with another moment's subtitle (rule above).
 - **Known gaps (all in `docs/pendientes.md`).** The figure gate is weaker than it looks: `doctrina._numeros` merges the
-  digits of a decimal («4,0» → 40; PND-226, shared with Sprints and Nicho, changing it needs eval-claude), the
+  digits of a decimal («4,0» → 40; PND-227, shared with Sprints and Nicho, changing it needs eval-claude), the
   copy can claim urgency or scarcity without a number («Lageret tømmes raskt») and the verifier cannot see it
-  (PND-227), and the hook's `por_que` counts toward the check so a guessed figure there blocks a clean hook (PND-232).
-  The scene chain still closes a recoverable clip as an error (PND-228; the hooks no longer do, fix C below). The
-  originals count toward the 2 GB quota but «Medios» cannot delete origen `triple_whale` (PND-229). The `|precio` filter
-  keeps showing the cost when the margin read fails in ~25 other templates (PND-230). preparar's own failure path does
-  not show the Crear session's error (PND-233); small robustness items in PND-234. «Cómo mejorarlo» and its batch do
-  not compare the price seen (PND-235; Cobros is off everywhere today). `doctrina.verificar_cifras` does not check
-  single-digit figures («en 2 días»), shared with Sprints and Nicho (PND-236). When `SaldoInsuficiente` hits a clip, its
-  Crear session, already created, stays orphan in error (PND-237; no money). The 20 000 cap was measured in real
-  (end_turn, 13 013 output tokens, US$ 0,1696; PND-231 closed).
+  (PND-228), and the hook's `por_que` counts toward the check so a guessed figure there blocks a clean hook (PND-233).
+  The scene chain still closes a recoverable clip as an error (PND-229; the hooks no longer do, fix C below). The
+  originals count toward the 2 GB quota but «Medios» cannot delete origen `triple_whale` (PND-230). The `|precio` filter
+  keeps showing the cost when the margin read fails in ~25 other templates (PND-231). preparar's own failure path does
+  not show the Crear session's error (PND-234); small robustness items in PND-235. «Cómo mejorarlo» and its batch do
+  not compare the price seen (PND-236; Cobros is off everywhere today). `doctrina.verificar_cifras` does not check
+  single-digit figures («en 2 días»), shared with Sprints and Nicho (PND-237). When `SaldoInsuficiente` hits a clip, its
+  Crear session, already created, stays orphan in error (PND-238; no money). The 20 000 cap was measured in real
+  (end_turn, 13 013 output tokens, US$ 0,1696; PND-232 closed).
 - **Final review fixes (2026-10-09, guardian-gasto and auditor-seguridad, commits db605232..4e4a77a4, plus F and G
   from the controller's real measurement of A).** A: cap
   20 000 and a cut answer never pays a blind correction (above, «Cómo mejorarlo»). B: offers in words —
@@ -477,8 +477,8 @@ eval `docs/superpowers/evals/2026-10-09-tw-ganchos-y-copy.md`.
   the final go through `_error_ajeno` (`cola.recortar(cola.sin_token(…), 500)`) and the start frame key has a random
   suffix. F: tariff 0.15 (cold single clicks 0,131–0,170, mean 0,142, plus Whisper), then 0.17 by the controller's ruling (the most expensive measured single click). G: `fotograma_s` snapped to a
   frame Claude saw (above). Not changed: the Kling prompt stays folded in a `<details>` (UX), as the auditor allowed.
-- **Out of this change** (spec §11): the chip on the gallery card (PND-222), «Volver a analizar» for an old analysis
-  (PND-223), hooks for image ads (PND-224), the hooks in Meta paused with their code (PND-225).
+- **Out of this change** (spec §11): the chip on the gallery card (PND-223), «Volver a analizar» for an old analysis
+  (PND-224), hooks for image ads (PND-225), the hooks in Meta paused with their code (PND-226).
 
 PND-187 (2026-10-09, decisión delegada): nuevas miniaturas de a_referente pasan cliente a guardar_en_r2 y usan clientes/<cliente>/referentes/tw_<ad_id>.jpg. Una fila con imagen ok no se vuelve a subir ni migra. anuncio_id ya es único por proyecto por 0030; test_lote7_tw_aislamiento guarda el mismo anuncio en dos proyectos con filas y claves distintas y comprueba biblioteca e imagen histórica.
 
@@ -515,3 +515,5 @@ anuncio es TOF, MOF o BOF. Siempre con el chip `cx.nvp(nuevos, visitantes)` (ski
 - La copia de 90 días del NVP deja la marca `backfill_visitantes` solo si trajo visitantes en todo el rango, o tras
   `sync.MAX_INTENTOS_VISITANTES` (3) copias sin lograrlo (`intentos_visitantes`); un error de red o de límite en
   `web_analytics_table` deja la tienda sin su NVP (`fallos.visitantes`) pero no corta la copia (llave y tienda sí).
+
+PND-149(2–6) (2026-10-09, decisión del lote 8): serie_tienda solo resta duplicados de anuncios entre tiendas que tienen fila de tienda ese día; gasto_duplicado conserva su diagnóstico de todos los anuncios. Al refrescar un experimento, se limpian las marcas antiguas/nuevas de países cuya tienda ya está conectada, también si ninguna pieza queda sin tienda. uk al final del dominio da GB. agregar guarda los ajustes del formulario si no hay tiendas (aunque exista la fila); con tiendas conserva los ajustes anteriores. reservar_aviso_sync toma UPDATE sin efecto antes de leer extra/cola y marca ids+creada_en aún vivos en syncs_terminadas: la última reserva el aviso una sola vez aunque ambos hilos sigan vivos hasta volver al worker. actualizar_extra toma el mismo candado antes de leer. tests/test_lote8_tw.py cubre cifras, reconexión, dos finales simultáneos y el ciclo siguiente; sin red. Se dejan (1) países repetidos por tarjeta y (7) ajustes durante copia por decisión; (8) sigue para la primera copia real.
