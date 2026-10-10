@@ -104,6 +104,10 @@ EN PRODUCCIÓN desde 2026-10-05 (main 878fcaf, sin migración, los dos servicios
   revisor (precios que dicen todo lo que se gasta, Apify anotado desde el arranque, errores en palabras). Lección: Claude
   borró con `git checkout` cambios sin commit de Codex al deshacer una mutación; desde entonces se commitea un WIP apenas
   Codex termina y las mutaciones van en una copia.
+- Lote 8 EN PRODUCCIÓN (main ed291b4, 2026-10-10 10:16 UTC; sección «Lote 8» de las decisiones): PND-160, 209, 210, 032,
+  155 (1-3) y 149 (2-6) cerrados; 152 lo hizo Claude (instalaciones-app mezclada en el main de CreaTvMetaAds, fe88fff);
+  023 cerrado sin código; PND-222 (candados de Triple Whale) abierto. Una ronda de arreglos: Codex había usado `_ENV_LOCK`
+  (lo sostiene una publicación entera) para el doble clic de Lanzar; quedó `_LANZAMIENTO_LOCK` con relectura del estado.
 - Lecciones del lote 6:
   - Codex resuelve «parada limpia» inventando mecanismos grandes (puntos de control). Pedir lo mínimo y decir qué NO
     construir.
