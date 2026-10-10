@@ -14,6 +14,7 @@ legado/10-crear-anuncio-hablado-2026-10-01-crear-h.css
 legado/11-final-edition-tablero-2026-10-02-daniel.css
 legado/12-alertas-2026-10-02-spec-docs-superpowers.css
 base.css
+componentes/nvp.css
 pantallas/guia-estilos.css
 pantallas/experimentos.css
 pantallas/experimento-nuevo.css

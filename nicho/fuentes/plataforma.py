@@ -60,7 +60,7 @@ class FuentePlataforma(Fuente):
 
     def _correr(self, actor, corridas, etapa, avanzar):
         self.resultados, self.aviso, self.corridas, self.run_id, self.dataset_id = 0, "", [], None, None
-        res = apify_api.correr_lote(_http.sesion(), _token(), actor, corridas, etapa, avanzar)
+        res = apify_api.correr_lote(_http.sesion(), _token(), actor, corridas, etapa, avanzar, on_ids=self._anotar_corridas)
         self.resultados, self.aviso, self.corridas = res["resultados"], res["aviso"], res["corridas"]
         lanzadas = [c for c in res["corridas"] if c["run_id"]]
         if lanzadas:

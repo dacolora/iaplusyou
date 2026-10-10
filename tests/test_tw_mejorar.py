@@ -223,7 +223,7 @@ def test_la_llamada_a_claude_no_se_reintenta_sola_y_tiene_tope_de_tiempo(monkeyp
 
 
 def test_el_tope_de_salida_es_amplio():
-    """Una corrida real llegó a 11 323 de 12 000 tokens (PND-224); solo se pagan los tokens usados."""
+    """Una corrida real llegó a 11 323 de 12 000 tokens (PND-231); solo se pagan los tokens usados."""
     assert mejorar.MAX_TOKENS == 20000
 
 
@@ -840,3 +840,13 @@ def test_datos_verificables_no_trae_los_numeros_de_las_etiquetas():
     assert "tendencia de 7 días" in prompt and "(se quedan 3 s)" in prompt
     assert "7 días" not in datos_ and "(se quedan 3 s)" not in datos_ and "se quedan" not in datos_
     assert "tendencia: cansando" in datos_ and "- gancho: " in datos_
+
+
+def test_la_regla_del_nvp_es_una_instruccion_y_no_entra_en_lo_verificable():
+    """Al mezclar main (2026-10-10) el PROMPT ganó `{regla_nvp}`: sus cortes de etapa (TOF desde X %, BOF por debajo de
+    Y %) son de la plantilla, no del anuncio. Si entraran en `datos_verificables`, un «70 %» inventado pasaría."""
+    from triple_whale import visitantes
+    fila = _fila_real()
+    assert visitantes.REGLA_PROMPT in mejorar.armar("Acme", fila)
+    datos_ = mejorar.datos_verificables("Acme", fila)
+    assert visitantes.REGLA_PROMPT not in datos_ and "NVP = % de visitantes nuevos" not in datos_

@@ -115,6 +115,17 @@ class Fuente:
     # parcial (429 persistente, cuota agotada): la tarea termina bien, con aviso.
     aviso = ""
 
+    def _anotar_corridas(self, registros):
+        """Estado temprano del lote; el worker anota su gasto antes del sondeo."""
+        self.corridas = registros
+        self.resultados = sum(c["resultados"] for c in registros if c.get("run_id"))
+        lanzadas = [c for c in registros if c.get("run_id")]
+        if lanzadas:
+            self.run_id, self.dataset_id = lanzadas[0]["run_id"], lanzadas[0]["dataset_id"]
+        registrar = getattr(self, "registrar_inicio", None)
+        if registrar:
+            registrar()
+
     def probar(self):
         """Verifica llaves sin gastar. {"ok", "detalle"}."""
         return {"ok": True, "detalle": f"Fuente {self.tipo or 'base'} lista."}

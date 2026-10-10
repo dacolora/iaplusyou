@@ -8,7 +8,7 @@ description: "Triple Whale: conexión, sincronización por SQL, la pestaña de r
 > Parte de la guía del repositorio; hasta el 2026-10-01 vivía dentro de CLAUDE.md. **Si cambias esta área, actualiza este archivo** en el mismo cambio (no CLAUDE.md). Si el código y este texto no coinciden, manda el código: corrige el texto.
 
 **Triple Whale** (package `triple_whale/`, `triple_whale_tiendas.py`, `tareas/triple_whale.py`; spec
-`docs/superpowers/specs/2026-09-28-triple-whale-rendimiento-design.md`, migrations 0023, 0024, 0032, 0034 and 0036; the
+`docs/superpowers/specs/2026-09-28-triple-whale-rendimiento-design.md`, migrations 0023, 0024, 0032, 0034, 0036 (NVP) and 0037 (hooks); the
 per-ad cards are in «Tarjetas de análisis» and the hooks and new copy in «Ganchos y copy» at the end): connected from
 the Triple Whale tab itself (`_triple_whale_conectar.html`, included by `_tab_triple_whale.html` in both states;
 until 2026-09-28 the form sat in Configuración › Conexiones, and the `cfg_triple_whale_*` routes now return to
@@ -348,8 +348,9 @@ production. It must work for ANY ad, not only Creatv's: in happyflops only 4 pie
 Why: Daniel (2026-10-09, «sigue con las siguientes etapas») chose «a new hook» first: an ad that already proved its body
 (product, demo, offer) usually loses its money in the first 3 seconds, and regenerating only those seconds costs a
 fraction of a new video. Spec `docs/superpowers/specs/2026-10-09-tw-ganchos-y-copy-design.md`, plan
-`docs/superpowers/plans/2026-10-09-tw-ganchos-y-copy.md`, migration 0036 (it was 0035 until main was merged on
-2026-10-09, which already had `0035_meta_rendimiento`), eval `docs/superpowers/evals/2026-10-09-tw-ganchos-y-copy.md`.
+`docs/superpowers/plans/2026-10-09-tw-ganchos-y-copy.md`, migration 0037 (it was 0035 until main was merged on
+2026-10-09, which already had `0035_meta_rendimiento`, and 0036 until main brought `0036_tw_visitantes` on 2026-10-10),
+eval `docs/superpowers/evals/2026-10-09-tw-ganchos-y-copy.md`.
 
 - **The analysis brings two more keys.** `mejorar.PROMPT` asks for `ganchos` (exactly 3 whenever Claude sees video
   frames, also for a winner, `[]` otherwise) and `copy_nuevo` (title + main text for Meta). `parsear(texto, verificable,
@@ -375,7 +376,7 @@ fraction of a new video. Spec `docs/superpowers/specs/2026-10-09-tw-ganchos-y-co
   detail shows its `usd_precio` (cost × margin; None when the margin read failed, `gastos._margen_fallido`: then the
   reason is «precio no disponible», the button is disabled and the route answers 409) in the button, `data-confirmar`
   and a hidden `precio_visto` (the PRICE, back to cost once with `gastos.costo_de_precio`, ±0,005, else 409). Never
-  `usd|precio`: that filter falls back to margin 1,0 and shows the cost as the price (PND-223). A hook with `cifras_sin_dato` is shown with its warning and is neither
+  `usd|precio`: that filter falls back to margin 1,0 and shows the cost as the price (PND-230). A hook with `cifras_sin_dato` is shown with its warning and is neither
   generated nor priced. `libro.exigir` of the total before creating anything; each clip reserves its own when
   `flowplus_lanzar.lanzar` queues it and Crear's closing (`flowplus_video`) charges it. Preparar, vigilar and armar
   never call a paid provider (all three in `TIPOS_EXENTOS_DE_COBRO`); armar and the render are ffmpeg. The analysis
@@ -447,17 +448,17 @@ fraction of a new video. Spec `docs/superpowers/specs/2026-10-09-tw-ganchos-y-co
   second 3 lands on the original's second 3 and the audio correlates 0,999 at zero offset (measured at 0,5, 5, 20 and
   38 s). The only problem was the start frame with another moment's subtitle (rule above).
 - **Known gaps (all in `docs/pendientes.md`).** The figure gate is weaker than it looks: `doctrina._numeros` merges the
-  digits of a decimal («4,0» → 40; PND-219, shared with Sprints and Nicho, changing it needs eval-claude), the
+  digits of a decimal («4,0» → 40; PND-226, shared with Sprints and Nicho, changing it needs eval-claude), the
   copy can claim urgency or scarcity without a number («Lageret tømmes raskt») and the verifier cannot see it
-  (PND-220), and the hook's `por_que` counts toward the check so a guessed figure there blocks a clean hook (PND-225).
-  The scene chain still closes a recoverable clip as an error (PND-221; the hooks no longer do, fix C below). The
-  originals count toward the 2 GB quota but «Medios» cannot delete origen `triple_whale` (PND-222). The `|precio` filter
-  keeps showing the cost when the margin read fails in ~25 other templates (PND-223). preparar's own failure path does
-  not show the Crear session's error (PND-226); small robustness items in PND-227. «Cómo mejorarlo» and its batch do
-  not compare the price seen (PND-228; Cobros is off everywhere today). `doctrina.verificar_cifras` does not check
-  single-digit figures («en 2 días»), shared with Sprints and Nicho (PND-229). When `SaldoInsuficiente` hits a clip, its
-  Crear session, already created, stays orphan in error (PND-230; no money). The 20 000 cap was measured in real
-  (end_turn, 13 013 output tokens, US$ 0,1696; PND-224 closed).
+  (PND-227), and the hook's `por_que` counts toward the check so a guessed figure there blocks a clean hook (PND-232).
+  The scene chain still closes a recoverable clip as an error (PND-228; the hooks no longer do, fix C below). The
+  originals count toward the 2 GB quota but «Medios» cannot delete origen `triple_whale` (PND-229). The `|precio` filter
+  keeps showing the cost when the margin read fails in ~25 other templates (PND-230). preparar's own failure path does
+  not show the Crear session's error (PND-233); small robustness items in PND-234. «Cómo mejorarlo» and its batch do
+  not compare the price seen (PND-235; Cobros is off everywhere today). `doctrina.verificar_cifras` does not check
+  single-digit figures («en 2 días»), shared with Sprints and Nicho (PND-236). When `SaldoInsuficiente` hits a clip, its
+  Crear session, already created, stays orphan in error (PND-237; no money). The 20 000 cap was measured in real
+  (end_turn, 13 013 output tokens, US$ 0,1696; PND-231 closed).
 - **Final review fixes (2026-10-09, guardian-gasto and auditor-seguridad, commits db605232..4e4a77a4, plus F and G
   from the controller's real measurement of A).** A: cap
   20 000 and a cut answer never pays a blind correction (above, «Cómo mejorarlo»). B: offers in words —
@@ -476,5 +477,41 @@ fraction of a new video. Spec `docs/superpowers/specs/2026-10-09-tw-ganchos-y-co
   the final go through `_error_ajeno` (`cola.recortar(cola.sin_token(…), 500)`) and the start frame key has a random
   suffix. F: tariff 0.15 (cold single clicks 0,131–0,170, mean 0,142, plus Whisper), then 0.17 by the controller's ruling (the most expensive measured single click). G: `fotograma_s` snapped to a
   frame Claude saw (above). Not changed: the Kling prompt stays folded in a `<details>` (UX), as the auditor allowed.
-- **Out of this change** (spec §11): the chip on the gallery card (PND-215), «Volver a analizar» for an old analysis
-  (PND-216), hooks for image ads (PND-217), the hooks in Meta paused with their code (PND-218).
+- **Out of this change** (spec §11): the chip on the gallery card (PND-222), «Volver a analizar» for an old analysis
+  (PND-223), hooks for image ads (PND-224), the hooks in Meta paused with their code (PND-225).
+
+PND-187 (2026-10-09, decisión delegada): nuevas miniaturas de a_referente pasan cliente a guardar_en_r2 y usan clientes/<cliente>/referentes/tw_<ad_id>.jpg. Una fila con imagen ok no se vuelve a subir ni migra. anuncio_id ya es único por proyecto por 0030; test_lote7_tw_aislamiento guarda el mismo anuncio en dos proyectos con filas y claves distintas y comprueba biblioteca e imagen histórica.
+
+## NVP en la pestaña (2026-10-09)
+
+Pedido del cliente de HappyFlops (spec `2026-10-09-nvp-visitantes-nuevos` §4.1): el % de visitantes nuevos dice si un
+anuncio es TOF, MOF o BOF. Siempre con el chip `cx.nvp(nuevos, visitantes)` (skill `ui`) y las SUMAS del periodo.
+- «Resultados de tu tienda»: `resultados.tarjeta_nvp` arma el KPI «Visitantes nuevos (NVP)» (`r.nvp`), una celda más de
+  `.twr-tarjetas` que NO es pestaña (no se grafica, spec §5): las pestañas viven en `.twr-pestanas` (role="tablist",
+  `display: contents`), así `role="tab"` sigue contando 6 o 7. `por_dia` trae `vis`/`vnu` (no van al JSON del JS). El
+  cambio va en puntos («▲ 20 pts», tono siempre neutro) con la regla de las demás tarjetas (días completos contra los
+  anteriores), y solo si los dos lados tienen `visitantes.MIN_VISITANTES`. Con fuente «anuncios» (un canal o sin datos
+  de tienda) es lo que el Pixel atribuye a los anuncios de la evaluación (`panel._resultados` suma `ev["anuncios"]`, sin
+  consulta nueva) y no compara. Sin visitantes (copia de antes de 0036) el chip dice «—»; el KPI no se esconde.
+- «Ver como tabla» lleva la columna NVP y cada tarjeta de análisis una cifra más en `.tw-cifras`, las dos de `a.m`
+  (`evaluacion.metricas` ya suma visitantes).
+- `evaluacion.resumen_tienda` suma `visitantes`/`visitantes_nuevos`, así `panel.resumen_total_tienda` (el `tienda_tw`
+  del Tablero en Experimentos) los trae. Pruebas: `tests/test_tw_nvp_pantallas.py`.
+- La copia (spec §3): `tw_anuncio_dia`/`tw_tienda_dia` tienen `visitantes` y `visitantes_nuevos` (0036). El Pixel tiene
+  TRES versiones (`consultas_pixel` = con visitantes, sin visitantes, mínima; `sync.NOMBRES_CONSULTA_PIXEL`): si una
+  cuenta no conoce las columnas, baja a la de antes y solo falta el NVP. La tienda los trae aparte de
+  `web_analytics_table` (`consultas_visitantes_tienda`; si falla, `fallos.visitantes` y la tienda se guarda igual).
+  Cada tienda vuelve a traer 90 días una vez (`extra.backfill_visitantes`; cuándo queda, en el último punto). La regla vive solo en `triple_whale/visitantes.py`; `datos.visitantes_por(cliente, campo, ids, …)` es la
+  lectura compartida de Meta y Experimentos (una consulta; ~55 ms por nivel con las 61 218 filas de happyflops).
+- La IA (spec §4.5): «Cómo mejorarlo» recibe por anuncio (y por cada ganador del canal) `visitantes.texto_prompt(...)` y
+  la regla `visitantes.REGLA_PROMPT`; el NVP no le cambió el tope ni el costo (los de «Ganchos y copy»: 20 000 y 0,17).
+  La regla es una instrucción y no entra en `mejorar.datos_verificables` (sus cortes no son cifras del anuncio; al
+  mezclar main en tw-ganchos el 2026-10-10). «Evaluar con IA» guarda los visitantes en
+  la muestra (`analisis.CAMPOS_M`) pero su PROMPT todavía no los lleva: medido el 2026-10-09
+  (`docs/superpowers/evals/2026-10-09-nvp-en-la-ia.md`), su tope de 16 000 ya corta la primera respuesta con 10 anuncios,
+  y con el NVP una corrida falló en las dos llamadas. Con 32 000 acertaba la etapa de 10 de 10 (sin NVP, 4 de 10), pero
+  subir el tope cambia lo que cuesta: decide Daniel (PND-217). Desde la revisión, `analisis._llamar` va con
+  `max_retries=0`, como «Cómo mejorarlo» (un reintento del SDK podía cobrarse sin anotarse).
+- La copia de 90 días del NVP deja la marca `backfill_visitantes` solo si trajo visitantes en todo el rango, o tras
+  `sync.MAX_INTENTOS_VISITANTES` (3) copias sin lograrlo (`intentos_visitantes`); un error de red o de límite en
+  `web_analytics_table` deja la tienda sin su NVP (`fallos.visitantes`) pero no corta la copia (llave y tienda sí).

@@ -79,7 +79,7 @@ def origen_desde_formulario(cliente, valor):
 
 
 def anuncio_id_referente(canal, ad_id):
-    """`referente.anuncio_id` es único global y de 40 caracteres: «tw:<ad_id>»
+    """`referente.anuncio_id` es único por proyecto y de 40 caracteres: «tw:<ad_id>»
     para Meta, «tw:<canal>:<ad_id>» para los demás (recortado)."""
     base = f"tw:{ad_id}" if canal == "facebook-ads" else f"tw:{canal}:{ad_id}"
     return base[:40]
@@ -111,7 +111,7 @@ def a_referente(cliente, anuncio, clasif=None):
     if fila and fila.get("estado_imagen") != "ok":
         try:
             with tempfile.TemporaryDirectory(prefix="tw_ref_") as carpeta:
-                url = referentes_imagenes.guardar_en_r2(aid.replace(":", "_"), medio["imagen"], carpeta)
+                url = referentes_imagenes.guardar_en_r2(aid.replace(":", "_"), medio["imagen"], carpeta, cliente=cliente)
         except referentes_imagenes.ImagenInvalida as e:
             referentes_datos.marcar_imagen(rid, "error")
             raise PuenteError(gettext("No se pudo copiar la miniatura: %(error)s", error=str(e))) from None

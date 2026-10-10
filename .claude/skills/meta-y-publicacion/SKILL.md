@@ -87,3 +87,5 @@ llamar a Meta con `meta_conexion.sin_pagina(cliente)` (exige token, para no conf
 `lanzador.lanzar_piezas_nuevas`, las rutas `exp_lanzar` y `exp_probar` (antes de crear o encolar nada) y la tarea legado
 `meta_publicar`; derivar y rescatar, que producen anuncios nuevos, frenan antes de cobrar (skill `experimentos`). Leer métricas (`meta_refrescar`, la copia de `meta_rendimiento/`, skill `meta-rendimiento`) no
 necesita Página y no se frena. La tarjeta de Configuración › Conexiones muestra «Solo métricas» con un enlace a `#meta`.
+
+PND-191 (2026-10-09, decisión delegada): la prueba de reconciliar_subidas fija un mismo reloj propio para db.ahora y organico.datetime. Expectativas y publicación intactas. La sonda con once minutos de desfase reproduce el resultado, pero no confirma la causa natural del fallo de la suite anterior; test_pnd191_reconciliar_aisla_el_reloj cubre los bordes de segundo.

@@ -393,7 +393,7 @@ PRIORIDAD_GANCHOS = 3
 GRACIA_S = 120
 # Un clip que Crear todavía puede recuperar («Recuperar el video», sin pagar de nuevo) ya está pagado: su fila sigue en
 # «generando» hasta 24 h desde su último cambio, esperando a que la persona lo recupere; después se cierra con el error
-# de la sesión (revisión del gasto del 2026-10-09, arreglo C; antes PND-221).
+# de la sesión (revisión del gasto del 2026-10-09, arreglo C; antes PND-228).
 ESPERA_RECUPERABLE_S = 24 * 3600
 ETAPAS_GANCHOS = [(idiomas.N_("Bajando el video"), 40), (idiomas.N_("Lanzando los clips"), 60)]
 ETAPAS_ARMAR = [(idiomas.N_("Armando el video"), 100)]

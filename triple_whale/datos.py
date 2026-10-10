@@ -25,8 +25,12 @@ COLUMNAS_DIMENSION = ("cuenta_id", "campana_id", "campana", "conjunto_id", "conj
                       "creative_id", "video_url", "destino_url", "utm_ok")
 COLUMNAS_CANAL = ("gasto", "impresiones", "clics", "clics_salida", "compras_canal", "valor_canal", "thruplays",
                   "vistas_3s", "p25", "p50", "p75", "p100")
-COLUMNAS_PIXEL = ("pedidos", "ingresos", "nc_pedidos", "nc_ingresos", "sesiones", "carritos", "checkouts")
-COLUMNAS_TIENDA = ("gasto", "ingresos", "pedidos", "nc_pedidos", "nc_ingresos", "reembolsos", "cogs", "utilidad_neta")
+# `visitantes` y `visitantes_nuevos` (0036) dan el NVP: se suman como el resto y el % se calcula después con
+# `triple_whale.visitantes` (nunca un promedio de porcentajes).
+COLUMNAS_PIXEL = ("pedidos", "ingresos", "nc_pedidos", "nc_ingresos", "sesiones", "carritos", "checkouts",
+                  "visitantes", "visitantes_nuevos")
+COLUMNAS_TIENDA = ("gasto", "ingresos", "pedidos", "nc_pedidos", "nc_ingresos", "reembolsos", "cogs", "utilidad_neta",
+                   "visitantes", "visitantes_nuevos")
 COLUMNAS_PRODUCTO = ("unidades", "ingresos", "pedidos")
 COLUMNAS_POR_TIENDA = ("ingresos", "pedidos", "gasto", "nc_pedidos", "nc_ingresos")   # por_tienda
 _LLAVE_ANUNCIO = ["cliente", "tienda_id", "canal", "ad_id", "fecha"]   # uq_tw_anuncio_dia
@@ -204,6 +208,42 @@ def totales_anuncio(cliente, tienda_id, canal, ad_id, desde, hasta=None):
         return None
     fila["con_pixel"] = bool(fila["con_pixel"])
     return fila
+
+
+CAMPOS_VISITANTES = ("ad_id", "conjunto_id", "campana_id", "cuenta_id")
+
+
+def visitantes_por(cliente, campo, ids, desde=None, hasta=None, canal="facebook-ads"):
+    """Visitantes únicos y nuevos sumados por anuncio, conjunto, campaña o cuenta (`campo`), para el NVP de
+    pantallas que no leen esta copia (pestaña Meta, Experimentos; spec 2026-10-09-nvp-visitantes-nuevos §4).
+    UNA consulta para todos los `ids`: {id: {"visitantes": n, "visitantes_nuevos": n}}, solo los que tienen
+    visitas; lista vacía -> {} sin tocar la base. Todas las tiendas del proyecto se suman (cada Pixel cuenta las
+    visitas de su sitio). Las filas que solo trajo el Pixel no tienen campaña ni conjunto: el anuncio se ubica
+    con el valor que tenga en CUALQUIER día de la copia (un anuncio no cambia de campaña)."""
+    if campo not in CAMPOS_VISITANTES:
+        raise ValueError(f"campo fuera de la lista: {campo!r}")
+    ids = sorted({str(i) for i in ids or () if i})
+    if not ids:
+        return {}
+    t = db.tw_anuncio_dia
+    cond = [t.c.cliente == cliente, t.c.canal == canal]
+    if desde:
+        cond.append(t.c.fecha >= desde)
+    if hasta:
+        cond.append(t.c.fecha <= hasta)
+    sumas = [sa.func.coalesce(sa.func.sum(t.c.visitantes), 0).label("visitantes"),
+             sa.func.coalesce(sa.func.sum(t.c.visitantes_nuevos), 0).label("visitantes_nuevos")]
+    if campo == "ad_id":
+        q = sa.select(t.c.ad_id.label("objeto"), *sumas).where(*cond, t.c.ad_id.in_(ids)).group_by(t.c.ad_id)
+    else:
+        col = getattr(t.c, campo)
+        mapa = (sa.select(t.c.ad_id, sa.func.max(col).label("objeto"))
+                .where(t.c.cliente == cliente, t.c.canal == canal, col.in_(ids)).group_by(t.c.ad_id).subquery())
+        q = (sa.select(mapa.c.objeto, *sumas).select_from(t.join(mapa, mapa.c.ad_id == t.c.ad_id))
+             .where(*cond).group_by(mapa.c.objeto))
+    with db.conectar() as con:
+        return {r.objeto: {"visitantes": int(r.visitantes), "visitantes_nuevos": int(r.visitantes_nuevos)}
+                for r in con.execute(q) if r.visitantes}
 
 
 def serie_anuncios(cliente, tienda_id, desde, hasta, canal=None):

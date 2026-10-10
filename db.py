@@ -471,6 +471,8 @@ tw_anuncio_dia = Table("tw_anuncio_dia", metadata,
     Column("nc_pedidos", Float, default=0.0), Column("nc_ingresos", Float, default=0.0),
     Column("sesiones", Integer, default=0), Column("carritos", Integer, default=0),
     Column("checkouts", Integer, default=0),
+    # Visitantes únicos y nuevos que el Pixel atribuye al anuncio ese día: el NVP (0036, spec 2026-10-09).
+    Column("visitantes", Integer, default=0), Column("visitantes_nuevos", Integer, default=0),
     Column("con_pixel", Boolean, default=False),            # el Pixel respondió para ese día (aunque sin pedidos)
     Column("actualizado_en", String(19), nullable=False),
     sa.UniqueConstraint("cliente", "tienda_id", "canal", "ad_id", "fecha", name="uq_tw_anuncio_dia"),
@@ -488,6 +490,8 @@ tw_tienda_dia = Table("tw_tienda_dia", metadata,
     Column("pedidos", Float, default=0.0), Column("nc_pedidos", Float, default=0.0),
     Column("nc_ingresos", Float, default=0.0), Column("reembolsos", Float, default=0.0),
     Column("cogs", Float, default=0.0), Column("utilidad_neta", Float, default=0.0),
+    # Visitantes únicos y nuevos de la tienda ese día (web_analytics_table): el NVP (0036).
+    Column("visitantes", Integer, default=0), Column("visitantes_nuevos", Integer, default=0),
     Column("actualizado_en", String(19), nullable=False),
     sa.UniqueConstraint("cliente", "tienda_id", "fecha", name="uq_tw_tienda_dia"),
 )
@@ -568,8 +572,9 @@ tw_analisis = Table("tw_analisis", metadata,
     sqlite_autoincrement=True,
 )
 
-# Ganchos nuevos de un análisis (spec 2026-10-09-tw-ganchos-y-copy §4.2, migración 0036; era la 0035 en la rama, se
-# renumeró al mezclar main, que ya tenía 0035_meta_rendimiento): una fila por variante de
+# Ganchos nuevos de un análisis (spec 2026-10-09-tw-ganchos-y-copy §4.2, migración 0037; era la 0035 en la rama, la
+# 0036 al mezclar main, que ya tenía 0035_meta_rendimiento, y la 0037 desde que main trajo 0036_tw_visitantes,
+# 2026-10-10): una fila por variante de
 # «Probar los 3 ganchos». Su id es también el código `CV<id>` que va en el nombre del anuncio en Meta: AUTOINCREMENT
 # para que nunca se reuse. Único escritor: triple_whale/datos.py.
 tw_gancho = Table("tw_gancho", metadata,

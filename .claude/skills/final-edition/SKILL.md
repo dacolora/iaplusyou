@@ -109,3 +109,5 @@ Precio de la voz en noruego (2026-10-08, spec de Noruega y Suecia §4): el preci
 
 
 PND-112/128 (2026-10-08, decisiones delegadas): guardar_guion_base solo marca guion_modificado_en cuando cambia el contenido, bajo candado SQLite; el tablero lo compara con la última final lista. El borrador automático sigue sin contar como edición de persona. PND-128, enmienda 2026-10-08: sin color de marca solo el precio que antes era morado usa texto blanco/caja negra a 0.6. Gancho y CTA conservan ESTILO_HOOK/ESTILO_CTA; subtítulos conservan karaoke y resaltado=None. En el legado, solo el badge sin marca cambia a negro a 153/255 y el karaoke sin marca resalta amarillo #FFD400, como el motor. No se modifican subtítulos del motor ni documentos/ediciones guardados. _color_acento no inventa un color. Los colores explícitos y los documentos/finales existentes se conservan. Pruebas Python, PNG y operaciones JS; verificación visual por Claude.
+
+PND-177 (2026-10-09, decisión delegada): guardar_guion_base trata también el texto JSON null como extra vacío antes de json_set(guion_modificado_en), bajo el mismo candado. Prueba con sa.JSON.NULL en test_lote7_estado.

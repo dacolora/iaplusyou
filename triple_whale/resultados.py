@@ -24,6 +24,7 @@ import idiomas
 import tablero
 import triple_whale
 from idiomas import N_
+from triple_whale import visitantes
 
 DIAS_NUEVO = 14
 UMBRAL_RARO = 0.25
@@ -98,14 +99,16 @@ def clase_canal(canal):
 
 
 def por_dia(desde, hasta, filas):
-    """Un punto por día de [desde, hasta] (ceros donde no hay fila) con ventas, gasto, pedidos y pedidos de
-    clientes nuevos. Sirve igual para `serie_tienda` que para `serie_anuncios` (que no trae `nc_pedidos`)."""
+    """Un punto por día de [desde, hasta] (ceros donde no hay fila) con ventas, gasto, pedidos, pedidos de
+    clientes nuevos y visitantes únicos y nuevos (`vis`/`vnu`, para el NVP). Sirve igual para `serie_tienda` que
+    para `serie_anuncios` (que no trae `nc_pedidos` ni visitantes)."""
     por_fecha = {str(f["fecha"])[:10]: f for f in filas}
     d, fin, salida = _fecha(desde), _fecha(hasta), []
     while d <= fin:
         f = por_fecha.get(_iso(d)) or {}
         salida.append({"f": _iso(d), "ing": _f(f.get("ingresos")), "gas": _f(f.get("gasto")),
-                       "ped": _f(f.get("pedidos")), "nc": _f(f.get("nc_pedidos"))})
+                       "ped": _f(f.get("pedidos")), "nc": _f(f.get("nc_pedidos")),
+                       "vis": _f(f.get("visitantes")), "vnu": _f(f.get("visitantes_nuevos"))})
         d += timedelta(days=1)
     return salida
 
@@ -357,6 +360,45 @@ def creativos(c, inicio_copia):
             "roas_establecidos": _div(_f(establecidos.get("ingresos")), _f(establecidos.get("gasto")))}
 
 
+# ---------------------------------------------------------------- NVP ---
+
+def _visitas(dias):
+    """(nuevos, únicos) sumados de unos días de `por_dia`: el NVP sale de las sumas, nunca de un promedio de %."""
+    return sum(_f(d.get("vnu")) for d in dias), sum(_f(d.get("vis")) for d in dias)
+
+
+def _pts(x):
+    """«4 pts» (puntos porcentuales; con un decimal por debajo de 10 si no es entero)."""
+    decimales = 1 if abs(x) < 10 and abs(x - round(x)) >= 0.05 else 0
+    return ngettext("%(n)s pt", "%(n)s pts", 1 if round(x, decimales) == 1 else 2, n=idiomas.numero(x, decimales))
+
+
+def tarjeta_nvp(fuente, con_dato, completos, previos, comparar, visitas_anuncios=None):
+    """El KPI «Visitantes nuevos (NVP)» (spec 2026-10-09-nvp-visitantes-nuevos §4.1): las SUMAS del periodo para el
+    chip (`cx.nvp`) y, con comparación, el cambio del NVP en puntos porcentuales con la regla de las demás tarjetas
+    (días completos contra los mismos días anteriores), solo si los dos lados tienen visitantes suficientes para una
+    etapa (`visitantes.MIN_VISITANTES`): con pocos, un cambio de puntos engaña. Con fuente «anuncios» (un canal
+    elegido o sin datos de tienda) son las visitas que el Pixel atribuye a los anuncios del alcance
+    (`visitas_anuncios` = {"visitantes", "visitantes_nuevos"}, de la evaluación), sin comparación. Es una lectura:
+    el tono es siempre neutro (ninguna etapa es buena o mala por sí sola). No se grafica (spec §5)."""
+    var = None
+    if fuente == "anuncios":
+        v = visitas_anuncios or {}
+        nuevos, total = _f(v.get("visitantes_nuevos")), _f(v.get("visitantes"))
+        ayuda = gettext("Según el Pixel: visitantes nuevos entre visitantes únicos que llegaron por estos anuncios. "
+                        "Los únicos se cuentan por día, así que en periodos largos es aproximado.")
+    else:
+        nuevos, total = _visitas(con_dato)
+        ayuda = gettext("Visitantes nuevos entre visitantes únicos de la tienda, según Triple Whale. Los únicos se "
+                        "cuentan por día, así que en periodos largos es aproximado.")
+        if comparar and previos:
+            a, b = visitantes.resumen(*_visitas(completos)), visitantes.resumen(*_visitas(previos))
+            if a["estado"] == "ok" and b["estado"] == "ok":
+                var = a["nvp"] - b["nvp"]
+    return {"nuevos": nuevos, "visitantes": total, "ayuda": ayuda, "variacion": var,
+            "variacion_texto": _pts(abs(var)) if var is not None else "", "tono": "neutro" if var is not None else None}
+
+
 # -------------------------------------------------------------- armar ---
 
 def _canales_del_dia(por_canal):
@@ -429,7 +471,8 @@ def _hoy_texto(hoy_d, hoy, moneda, ultima_copia, fin_datos, fuente):
 
 
 def armar(dias_periodo, serie_larga, inicio, hoy, fuente, moneda, nuevos, canales, cohortes, inicio_copia,
-          meta_roas, canal, url_dia, ultima_copia, inicio_datos=None, fin_datos=None, inicio_edad=None):
+          meta_roas, canal, url_dia, ultima_copia, inicio_datos=None, fin_datos=None, inicio_edad=None,
+          visitas_anuncios=None):
     """Todo lo de la sección. `serie_larga` = `por_dia` desde `inicio` días antes del periodo (el periodo anterior
     y las 4 semanas de los días raros) hasta hoy; el periodo es `serie_larga[inicio:]` y su último punto es hoy.
 
@@ -439,6 +482,8 @@ def armar(dias_periodo, serie_larga, inicio, hoy, fuente, moneda, nuevos, canale
       tampoco son ventas en cero: van vacíos en la gráfica y fuera de cifras, comparaciones y días raros.
     - `inicio_edad`: desde cuándo la copia cubre todo el alcance (`datos.inicio_para_antiguedad`); la antigüedad
       de un anuncio se conoce 14 días después. Sin él, `inicio_copia`.
+    - `visitas_anuncios`: {"visitantes", "visitantes_nuevos"} que el Pixel atribuye a los anuncios del alcance, para
+      el NVP con fuente «anuncios» (`tarjeta_nvp`).
     None si no hay días."""
     periodo = serie_larga[inicio:]
     if not periodo:
@@ -510,6 +555,7 @@ def armar(dias_periodo, serie_larga, inicio, hoy, fuente, moneda, nuevos, canale
         "subtitulo": _subtitulo(dias_periodo, periodo, n, comparar),
         "hoy_texto": _hoy_texto(periodo[-1], hoy, moneda, ultima_copia, fin_datos, fuente),
         "tarjetas": tarjetas,
+        "nvp": tarjeta_nvp(fuente, con_dato, completos, previos, comparar, visitas_anuncios),
         "lectura": lectura(completos, previos, comparar, nue_conocidos, canales if fuente == "tienda" else {},
                            moneda, fuente),
         "creativos": creativos(cohortes, inicio_copia),

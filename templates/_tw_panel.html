@@ -18,6 +18,7 @@
    como tabla», un <details> cerrado (id `tw-cada-anuncio`: «Ver todos los
    anuncios →» del detalle del día lo abre). «Resultados de tu tienda» va
    arriba, en el lugar de «Tu tienda» y del viejo «Día a día». #}
+{% import "_componentes.html" as cx %}
 {% if not tw.conectado %}
 <p class="vacio">{{ _('Triple Whale ya no está conectado en este proyecto.') }}</p>
 {% else %}
@@ -334,7 +335,8 @@
     <table class="tw-tabla tw-anuncios">
       <thead><tr>
         <th>{{ _('Anuncio') }}</th><th>{{ _('Veredicto') }}</th><th>{{ _('Gasto') }}</th><th>{{ _('Pedidos') }}</th>
-        <th>ROAS</th><th>{{ _('Costo por venta') }}</th><th>CTR</th><th>{{ _('Gancho') }}</th><th>{{ _('Retención') }}</th><th>{{ _('Señales') }}</th>
+        <th>ROAS</th><th>{{ _('Costo por venta') }}</th><th>CTR</th><th>{{ _('Gancho') }}</th><th>{{ _('Retención') }}</th>
+        <th title="{{ _('Visitantes nuevos entre visitantes únicos que el Pixel atribuye al anuncio: TOF, MOF o BOF') }}">NVP</th><th>{{ _('Señales') }}</th>
       </tr></thead>
       <tbody>
         {% for a in tw.anuncios %}
@@ -365,6 +367,7 @@
           <td>{{ am.ctr | tw_pct(2, false) }}</td>
           <td>{{ am.gancho | tw_pct(0) }}</td>
           <td>{{ am.retencion | tw_pct(0) }}</td>
+          <td>{{ cx.nvp(am.visitantes_nuevos, am.visitantes) }}</td>
           <td class="tw-senales">
             {% for p in a.problemas %}<span class="tag-estado tag-descartado" title="{{ tw.problemas[p][1] | traducir }}">{{ tw.problemas[p][0] | traducir }}</span>{% endfor %}
             {% for f in a.fortalezas %}<span class="tag-estado tag-en-uso">{{ tw.fortalezas[f] | traducir }}</span>{% endfor %}

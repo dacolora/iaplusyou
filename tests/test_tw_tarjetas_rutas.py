@@ -372,7 +372,7 @@ def test_anuncio_a_referentes_desde_la_tarjeta(app, monkeypatch):  # noqa: F811
     _sembrar()
     datos.reemplazar_creativos("acme", tid, [{"canal": "facebook-ads", "ad_id": "g1", "tipo": "video",
                                               "imagen_url": "https://files.triplewhale.com/t/g1.jpg", "titulo": "T", "copy": "C"}])
-    monkeypatch.setattr(imagenes, "guardar_en_r2", lambda aid, url, carpeta: f"https://r2/{aid}.jpg")
+    monkeypatch.setattr(imagenes, "guardar_en_r2", lambda aid, url, carpeta, cliente=None: f"https://r2/{aid}.jpg")
     r = app["c"].post("/cliente/acme/triple-whale/anuncio/facebook-ads/g1/referente", data={"dias": "30"},
                       follow_redirects=True)
     assert "Guardado en Referentes" in r.data.decode()
@@ -544,7 +544,7 @@ def test_el_boton_de_referentes_sale_solo_si_la_ruta_puede_guardarlo(app, base_t
     _conectar()
     _sembrar()
     guardadas = []
-    monkeypatch.setattr(imagenes, "guardar_en_r2", lambda aid, url, carpeta: guardadas.append(url) or f"https://r2/{aid}.jpg")
+    monkeypatch.setattr(imagenes, "guardar_en_r2", lambda aid, url, carpeta, cliente=None: guardadas.append(url) or f"https://r2/{aid}.jpg")
 
     def boton(ad):
         html = app["c"].get(f"/cliente/acme/triple-whale/tarjeta/facebook-ads/{ad}?dias=30").data.decode()

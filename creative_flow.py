@@ -184,7 +184,7 @@ def guardar_guion_base(cliente, cf_id, guion):
             ahora = db.ahora()
             con.execute(co.update().where(condicion).values(
                 actualizado_en=ahora, guion_base=guion,
-                extra=sa.func.json_set(sa.func.coalesce(co.c.extra, "{}"), "$.guion_modificado_en", ahora)))
+                extra=sa.func.json_set(sa.func.coalesce(sa.func.nullif(co.c.extra, "null"), "{}"), "$.guion_modificado_en", ahora)))
     return True
 
 

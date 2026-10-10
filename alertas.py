@@ -73,7 +73,7 @@ HUELLA_VALIDA = r"^[0-9a-f]{64}$"
 # frenan con `es_solo_admin` (fix de la revisión de la Task 5, 2026-10-02);
 # `tests/test_rutas_alertas.py` comprueba que toda alerta `solo_admin` que
 # producen las fuentes empiece por uno de estos prefijos.
-PREFIJOS_SOLO_ADMIN = ("llave:", "worker:", "revision:", "saldo:wavespeed_recarga")
+PREFIJOS_SOLO_ADMIN = ("llave:", "worker:", "revision:", "saldo:wavespeed_recarga", "saldo:fal_recarga")
 
 # PND-124 (decisión 2026-10-07): visibles para todos, descartes solo admin.
 TIPOS_DESCARTE_ADMIN = {"tablero:tope_alcanzado", "tablero:propuestas_pendientes",
@@ -240,11 +240,13 @@ def _fuente_saldo(cliente, ahora):
     """WaveSpeed sin saldo (`saldo.vigente`, el mismo aviso de Crear). DOS
     alertas con la misma huella (`desde`): la del cliente, neutra (la cuenta es
     de Creatv, no suya: sin enlace de recarga, sin respuesta del proveedor ni
-    el proyecto que falló) y la del admin, con desde cuándo y dónde recargar."""
+    el proyecto que falló) y la del admin, con desde cuándo y dónde recargar.
+    Después, las de fal (`_alertas_saldo_fal`), si las hay."""
     import saldo  # noqa: PLC0415
+    alertas_saldo = _alertas_saldo_fal(saldo)
     aviso = saldo.vigente("wavespeed")
     if not aviso:
-        return []
+        return alertas_saldo
     h = huella(aviso.get("desde"))
     desde = (aviso.get("desde") or "")[:16].replace("T", " ")
     return [
@@ -258,6 +260,33 @@ def _fuente_saldo(cliente, ahora):
                 gettext("Desde el %(desde)s las generaciones de Crear y de Cambiar producto fallan (sin cobrar). "
                         "Recarga la cuenta en %(recarga)s; esta alerta se quita sola con la próxima generación que "
                         "salga bien.", desde=desde, recarga=aviso["recarga"]),
+                "creativeflowplus", solo_admin=True),
+    ] + alertas_saldo
+
+
+def _alertas_saldo_fal(saldo):
+    """fal sin saldo (2026-10-09, PND-213): solo se pausan sus modelos de Crear
+    (Seedance 2.5 con varias referencias) y lo que usa fal en el resto de la app;
+    `atencion`, no `bloquea`: los demás modelos siguen. Igual que WaveSpeed, una
+    neutra para todos y otra con la recarga solo para el admin."""
+    aviso = saldo.vigente("fal")
+    if not aviso:
+        return []
+    h = huella(aviso.get("desde"))
+    desde = (aviso.get("desde") or "")[:16].replace("T", " ")
+    modelos = saldo.nombres_modelos("fal")
+    return [
+        _alerta("saldo:fal", h, "atencion", "puesta_a_punto",
+                gettext("%(modelos)s está en pausa", modelos=modelos),
+                gettext("Hay un problema con el proveedor y ya le avisamos a Creatv. Mientras tanto elige otro modelo: "
+                        "los intentos fallidos no se cobran."),
+                "creativeflowplus"),
+        _alerta("saldo:fal_recarga", h, "atencion", "puesta_a_punto",
+                gettext("%(proveedor)s se quedó sin saldo", proveedor=aviso["nombre"]),
+                gettext("Desde el %(desde)s fallan %(modelos)s y lo que usa fal en el resto de la app (voces, música y "
+                        "subtítulos automáticos), sin cobrar; los demás modelos de Crear siguen. Recarga la cuenta en "
+                        "%(recarga)s; esta alerta se quita sola con la próxima generación de ese modelo que salga bien.",
+                        desde=desde, modelos=modelos, recarga=aviso["recarga"]),
                 "creativeflowplus", solo_admin=True),
     ]
 

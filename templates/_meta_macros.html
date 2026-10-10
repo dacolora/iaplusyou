@@ -33,3 +33,6 @@
 {% macro clase_veredicto(v) -%}
 {{ {"ganador": "tag-en-uso", "prometedor": "tag-en-curso", "en_prueba": "", "perdedor": "tag-descartado", "sin_datos": "tag-advertencia"}.get(v, '') }}
 {%- endmacro %}
+
+{# Cabecera de la columna NVP (spec 2026-10-09-nvp-visitantes-nuevos §4.2); la celda es `cx.nvp(nuevos, visitantes)`. #}
+{% macro th_nvp() %}<th title="{{ _('%% de visitantes nuevos: TOF, MOF o BOF según el Pixel de Triple Whale') }}">NVP</th>{% endmacro %}
