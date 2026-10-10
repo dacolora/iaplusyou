@@ -1,6 +1,6 @@
 ---
 name: alertas
-description: "Alertas del proyecto: la pestaña que junta lo que necesita atención (puesta a punto, faltantes, decisiones y fallos) con once fuentes calculadas al vuelo, descartes por huella, alertas solo para el admin, caché de 60 s y la burbuja del sidebar; y la lista de tarjetas de Puesta a punto (llaves.py). Cargar antes de agregar una fuente de alertas, tocar alertas.py, llaves.py, _tab_alertas.html o la burbuja del sidebar."
+description: "Alertas del proyecto: la pestaña que junta lo que necesita atención (puesta a punto, faltantes, decisiones y fallos) con trece fuentes calculadas al vuelo, descartes por huella, alertas solo para el admin, caché de 60 s y la burbuja del sidebar; y la lista de tarjetas de Puesta a punto (llaves.py). Cargar antes de agregar una fuente de alertas, tocar alertas.py, llaves.py, _tab_alertas.html o la burbuja del sidebar."
 ---
 
 # Alertas: lo que necesita la atención de la persona
@@ -30,7 +30,7 @@ Una alerta es un dict armado por `alertas._alerta` (nunca a mano):
 
 `calcular(cliente)` corre cada fuente de `FUENTES` en su propio `try/except` y ordena por grupo, luego nivel, y dentro de eso en el orden de las fuentes. Si una fuente revienta sale `revision:<fuente>` (`info`, `solo_admin`) con SOLO el nombre de la clase de la excepción, nunca el mensaje (podría arrastrar un token), y las demás se calculan igual. Los nombres de grupo, nivel y pestaña son constantes `idiomas.N_` (`NOMBRES_GRUPO`, `NOMBRES_NIVEL`, `NOMBRES_TAB`) que la plantilla traduce con `|traducir`.
 
-## Las once fuentes (en el orden de `FUENTES`)
+## Las trece fuentes (en el orden de `FUENTES`)
 
 | # | Fuente | Claves | Grupo · nivel | Huella |
 |---|---|---|---|---|
@@ -45,6 +45,8 @@ Una alerta es un dict armado por `alertas._alerta` (nunca a mano):
 | 9 | `sprints` | `sprint:{ideas,revision,fallos,referencias}:<sprint_id>` | decision / fallos | los ids (o el conteo) |
 | 10 | `nicho` | `nicho:avatares`, `nicho:error:<estudio_id>` | decision / fallos · `atencion` | el conteo / el error guardado |
 | 11 | `cobros` | `cobros:sin_saldo`, `cobros:saldo_bajo`, `cobros:no_cobrado:<mov_id>`, `cobros:recarga_pendiente:<id>` | puesta_a_punto `bloquea` / puesta_a_punto `atencion` / fallos `info` / decision `info`; todas del cliente, a Configuración › Saldo y recargas (`config-ap-saldo`) | `sin_saldo` constante; `saldo_bajo` el saldo en dólares redondeados; las otras, tipo y monto o el id |
+| 12 | `meta` | `meta:metodo_pago` | puesta_a_punto · `info`, solo con la app propia de Meta conectada (no en modo agencia) | vacía |
+| 13 | `meta_rendimiento` | `meta_rendimiento:<tipo>:<act_…>` | decision · `atencion`, a la pestaña Meta (sin ancla: el «Diagnóstico» llega por fetch) | la de la recomendación (`recomendaciones.huella_recomendacion`), guardada por la copia |
 
 Detalles que ya costaron una duda:
 
@@ -56,6 +58,16 @@ Detalles que ya costaron una duda:
 - **Nicho**: una investigación `detenida` alerta si tiene motivo y no es `cancelada` (clic de la persona, 2026-10-02); una `interrumpida`, siempre; un estudio, una alerta (la investigación manda sobre el error de generación).
 - **Cobros** (2026-10-08, spec `2026-10-08-cobros-saldo-prepagado` §8): solo si `libro.estado(cliente)["cobrar"]`; un proyecto que no cobra sale tras leer la cuenta y no consulta nada más. `sin_saldo` mira el DISPONIBLE (saldo menos lo reservado) ≤ 0; `saldo_bajo` mira el saldo (0 < saldo < umbral) y no sale si ya hay `sin_saldo`; su huella lleva el saldo en dólares redondeados, así que un descarte no esconde un saldo que siguió bajando. `no_cobrado`: un `reverso` o `no_cobrado` de los últimos `DIAS_NO_COBRADO` (7) días (en el `no_cobrado` el monto es `extra.precio`); `recarga_pendiente`: Bold pendiente de hace más de `MINUTOS_RECARGA_PENDIENTE` (15) min. Dos consultas fijas (movimientos y recargas, tope `TOPE_COBROS` = 20 cada una). El concepto sale de `cobros.vista.nombre_concepto`. Ninguna es `solo_admin`. El apartado `config-ap-saldo` solo existe en la página de un cliente que cobra (el admin siempre lo ve).
 - **Orgánico**: reintentar es una acción de la persona sobre la pieza; aquí solo se avisa.
+- **Meta rendimiento** (E2, 2026-10-10, spec `2026-10-10-meta-rendimiento-e2-design.md` §10): la fuente NO calcula reglas
+  (cargar 30 días de anuncios en cada página sería caro). Al terminar bien cada copia, `tareas.meta_rendimiento._guardar_alertas`
+  guarda en `meta_cuenta.extra.alertas` las recomendaciones «alta» de ESA cuenta como `[{tipo, huella}]` (vía
+  `cuentas.actualizar_extra`; un fallo se anota con su tipo y no tumba la copia). La fuente es UNA consulta
+  (`cuentas.listar`) y arma título y detalle desde `TEXTOS_META_RENDIMIENTO` (un par `N_` por tipo que puede ser alto:
+  `cuenta_estado`, `cuenta_roas_bajo`, `aprendizaje_limitado`, `perdedores_gastando`, `anuncios_con_problemas`) con el
+  nombre de la cuenta pasado por `_limpio`. El título NO se guarda (el spec decía `{tipo, titulo, huella}`): guardado
+  quedaría en el idioma del proyecto y la regla de esta skill es traducir al calcular. Un elemento roto (tipo
+  desconocido, huella que no es sha256, algo que no es un dict) se ignora. Cada cliente puede descartarla (es de su
+  cuenta). Una copia que falla deja lo guardado; quitar la cuenta borra su fila y con ella sus alertas.
 
 ## Quién ve qué: `solo_admin` (2026-10-02)
 
