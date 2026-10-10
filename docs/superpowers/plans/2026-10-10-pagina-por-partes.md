@@ -21,6 +21,8 @@ servidor la arma en 0,3 s en caliente (1,3 s en frío), así que el peso está e
 3. El historial de gasto pagina de a 24 con «Ver más»; el CSV sigue trayendo todo.
 Meta: la página de happyflops baja de 910 KB a menos de 600 KB, sin cambiar lo que se ve al abrir cada cosa.
 
+**Entrega 1 hecha el 2026-10-10** (Codex + revisor con capturas + dos rondas de arreglos): página sembrada 948 → 516 KB (−46 %); la grilla del catálogo llega por `/cliente/<c>/catalogo/selector`; swaps y gasto de a 24 con «Ver más»; «Cambiar producto» no se envía sin producto; conteos iguales a main (con la precarga de un archivado incluida).
+
 ## Entrega 2 — los scripts grandes a `static/` (después de la 1)
 Los cuatro scripts inline de Crear pasan a archivos en `static/` con `?v=` (se cachean un año); los valores de Jinja que
 usan llegan por atributos `data-*` o un `<script type="application/json">`. Meta: −120 KB por visita repetida.
