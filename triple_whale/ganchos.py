@@ -33,6 +33,11 @@ MOTIVO_SIN_VIDEO = N_("Sin video que se pueda bajar: los ganchos necesitan el vi
 MOTIVO_CORTO = N_("El video es muy corto: dura menos de 5 s.")
 MOTIVO_TANDA_VIVA = N_("Hay una tanda en curso: espera a que termine.")
 MOTIVO_SIN_PRECIO = gastos.SIN_PRECIO
+# G1 (revisión final de Rendimiento E2, guardián de gasto, 2026-10-10): un análisis de un anuncio de una cuenta de Meta
+# sin tienda (`foto.fuente == "meta"`, su video copiado a R2) cobraría unos US$ 1,01 de Kling por un camino que nadie
+# probó en real. Se rechaza aquí, la misma revisión que pinta el botón y que la ruta mira antes de cobrar (409), hasta
+# que una prueba real lo active (PND-289).
+MOTIVO_META = N_("Para anuncios de Meta todavía no: falta una prueba real.")
 ERROR_BAJAR = N_("No se pudo bajar el video original.")
 ERROR_NO_MP4 = N_("El video original no es un mp4: no se puede editar.")
 ERROR_FOTOGRAMA = N_("No se pudo sacar el fotograma de arranque.")
@@ -129,8 +134,9 @@ def ganchos_generables(resultado):
 
 def puede_probar(fila, generables, filas_ganchos, precio_usd, url_video):
     """None si el botón se ofrece; si no, el motivo (spec §4.1), en este orden: el análisis no está listo, es de antes
-    de los ganchos, no trae ninguno generable, no hay video que bajar (`url_video` = `mejorar._url_voz(foto)`), el
-    video conocido dura menos de MIN_ORIGINAL_S, hay una tanda viva, o no hay precio."""
+    de los ganchos, no trae ninguno generable, es de un anuncio de fuente Meta (G1: todavía sin prueba real), no hay
+    video que bajar (`url_video` = `mejorar._url_voz(foto)`), el video conocido dura menos de MIN_ORIGINAL_S, hay una
+    tanda viva, o no hay precio."""
     f = fila or {}
     r = f.get("resultado") or {}
     if f.get("estado") != "lista":
@@ -139,6 +145,8 @@ def puede_probar(fila, generables, filas_ganchos, precio_usd, url_video):
         return MOTIVO_VIEJO
     if not generables:
         return MOTIVO_SIN_GANCHOS
+    if (f.get("foto") or {}).get("fuente") == "meta":
+        return MOTIVO_META
     if not url_video:
         return MOTIVO_SIN_VIDEO
     try:

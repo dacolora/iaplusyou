@@ -20,11 +20,14 @@ def _proyecto_aislado(tmp_path, monkeypatch):
     monkeypatch.setattr(proyectos, "BASE_DIR", str(tmp_path))
 
 
-def _analisis(cliente="acme", lista_ganchos=None, video=True, duracion=20.0, copy_nuevo=True, estado="lista"):
+def _analisis(cliente="acme", lista_ganchos=None, video=True, duracion=20.0, copy_nuevo=True, estado="lista",
+              fuente=None, video_url="https://files.triplewhale.com/v/p1.mp4"):
     foto = {"nombre": "Anuncio p1", "ad_id": "p1", "canal": "facebook-ads",
-            "creativo": {"tipo": "video", "video_url": "https://files.triplewhale.com/v/p1.mp4" if video else None,
+            "creativo": {"tipo": "video", "video_url": video_url if video else None,
                          "imagen_url": "https://files.triplewhale.com/t/p1.jpg", "duracion_s": duracion,
                          "titulo": "Título", "copy": "Copy"}}
+    if fuente:
+        foto.update(fuente=fuente, ad_account_id="act_1")
     aid = datos.crear_analisis(cliente, None, "facebook-ads", "p1", "2026-09-01", "2026-09-30", "USD", foto)
     cambios = {"ganchos": GANCHOS if lista_ganchos is None else lista_ganchos}
     if copy_nuevo:
@@ -112,6 +115,26 @@ def test_sin_video_o_con_video_corto_dice_por_que_y_no_cobra(app, kw, motivo):  
     r = _probar(app, aid)
     assert r.status_code == 409 and motivo in r.get_json()["mensaje"]
     assert datos.ganchos_de_analisis("acme", aid) == [] and _preparaciones() == []
+
+
+def test_un_analisis_de_un_anuncio_de_meta_no_ofrece_los_ganchos_ni_cobra(app, monkeypatch):  # noqa: F811
+    """G1 (revisión final de Rendimiento E2, guardián de gasto, 2026-10-10): «Probar los 3 ganchos» de un anuncio de una
+    cuenta de Meta sin tienda (su video copiado a R2) cobraría unos US$ 1,01 de Kling por un camino que nadie probó en
+    real (PND-289). Hasta esa prueba el detalle dice por qué, sin botón ni precio, y un POST directo es 409 sin crear
+    variantes, sin encolar y sin reservar, aunque el proyecto cobre y tenga saldo."""
+    monkeypatch.setenv("R2_PUBLIC_BASE_URL", "https://media.test")
+    aid = _analisis(fuente="meta", video_url="https://media.test/clientes/acme/rendimiento/a1_p1.mp4")
+    assert mejorar._url_voz(datos.analisis_anuncio("acme", aid)["foto"])      # sin la regla, el botón saldría
+    html = _detalle(app, aid)
+    assert "Para anuncios de Meta todavía no: falta una prueba real." in html
+    assert "tw-ganchos-probar" not in html and 'name="precio_visto"' not in html and "Probar los 3" not in html
+    assert "Ganchos nuevos (primeros 3 s)" in html                     # los ganchos se leen igual: solo no se generan
+    _cobra(10_000)
+    r = _probar(app, aid)
+    assert r.status_code == 409 and r.get_json()["mensaje"] == "Para anuncios de Meta todavía no: falta una prueba real."
+    assert datos.ganchos_de_analisis("acme", aid) == [] and _preparaciones() == []
+    with db.conectar() as con:
+        assert con.execute(sa.select(sa.func.count()).select_from(db.reserva_saldo)).scalar() == 0
 
 
 def test_el_detalle_muestra_cada_variante_segun_su_estado(app):  # noqa: F811

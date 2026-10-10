@@ -13937,6 +13937,9 @@ msgstr "Pants"
 msgid "Para"
 msgstr "For"
 
+msgid "Para anuncios de Meta todavía no: falta una prueba real."
+msgstr "Not for Meta ads yet: it still needs a real test."
+
 msgid "Para aprobar, primero resuelve los problemas de arriba (con Claude o editando a mano)."
 msgstr "To approve, first fix the issues above (with Claude or by editing by hand)."
 
