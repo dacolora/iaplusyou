@@ -91,7 +91,8 @@ def test_panel_con_datos_muestra_tienda_veredictos_diagnostico_e_ia(app):  # noq
     assert 'id="tw-resultados-datos"' in html and 'class="tb-grafico"' not in html
     assert "Sin rastreo de Triple Whale" in html            # p2 no lleva los parámetros
     assert "TikTok" in html and 'data-rend-param="canal"' in html
-    assert "/cliente/acme/triple-whale/evaluar" in html and "aprox." in html
+    assert "/cliente/acme/rendimiento/evaluar" in html and "aprox." in html          # «Evaluar con IA» (E2 tarea 5)
+    assert "/triple-whale/evaluar" not in html
     assert "tw_secreto_123" not in html
     # Filtro por canal: solo TikTok.
     solo_tt = app["c"].get("/cliente/acme/rendimiento/panel?canal=tiktok-ads&dias=7").data.decode()
@@ -131,10 +132,17 @@ def test_sincronizar_encola(app):  # noqa: F811
                                           "max_intentos": 2}]
 
 
+def _evaluar(app, entrada="", dias="30", **headers):  # noqa: F811
+    """«Evaluar con IA» de Triple Whale: desde Rendimiento E2 (tarea 5) es la ruta de la pestaña con `fuente=tw` y la
+    entrada del selector (la de `triple_whale/rutas.py` se jubiló)."""
+    return app["c"].post("/cliente/acme/rendimiento/evaluar",
+                         data={"fuente": "tw", "entrada": entrada, "dias": dias, "canal": ""}, headers=headers)
+
+
 def test_evaluar_crea_la_evaluacion_con_la_muestra_y_encola_una_sola_vez(app):  # noqa: F811
     _conectar()
     _sembrar()
-    r = app["c"].post("/cliente/acme/triple-whale/evaluar", data={"dias": "30", "canal": ""})
+    r = _evaluar(app)
     assert r.status_code == 302
     [fila] = datos.evaluaciones("acme")
     assert fila["estado"] == "en_cola" and fila["moneda"] == "USD" and fila["pedido_por"] == "admin"
@@ -143,13 +151,14 @@ def test_evaluar_crea_la_evaluacion_con_la_muestra_y_encola_una_sola_vez(app):  
     [tarea] = _tareas("tw_evaluar")
     assert tarea["max_intentos"] == 1 and tarea["payload"] == {"cliente": "acme", "evaluacion_id": fila["id"]}
     # Un segundo clic mientras la primera sigue viva no crea otra ni paga dos veces.
-    app["c"].post("/cliente/acme/triple-whale/evaluar", data={"dias": "30"})
+    _evaluar(app)
     assert len(datos.evaluaciones("acme")) == 1 and len(_tareas("tw_evaluar")) == 1
 
 
 def test_evaluar_sin_datos_no_encola(app):  # noqa: F811
     _conectar()
-    r = app["c"].post("/cliente/acme/triple-whale/evaluar", data={"dias": "30"}, follow_redirects=True)
+    r = app["c"].post("/cliente/acme/rendimiento/evaluar", data={"fuente": "tw", "entrada": "", "dias": "30"},
+                      follow_redirects=True)
     assert "datos suficientes" in r.data.decode()
     assert datos.evaluaciones("acme") == [] and _tareas("tw_evaluar") == []
 
@@ -214,7 +223,7 @@ def test_post_de_otro_sitio_se_rechaza(app):  # noqa: F811
     _sembrar()
     r = app["c"].post("/cliente/acme/rendimiento/actualizar", headers={"Sec-Fetch-Site": "cross-site"})
     assert r.status_code == 403 and _tareas("tw_sincronizar") == []
-    r = app["c"].post("/cliente/acme/triple-whale/evaluar", data={"dias": "30"}, headers={"Sec-Fetch-Site": "cross-site"})
+    r = _evaluar(app, **{"Sec-Fetch-Site": "cross-site"})
     assert r.status_code == 403 and _tareas("tw_evaluar") == [] and datos.evaluaciones("acme") == []
 
 
@@ -360,8 +369,9 @@ def test_panel_de_una_tienda_sin_por_tienda_y_con_el_aviso_del_roas(app):  # noq
     assert '<option value="SE" selected>' in html and "Por país" not in html
     assert "Anuncio s1" in html and "Anuncio p1" not in html          # p1 solo corre en Noruega
     assert NOTA_COMPARTIDA in html and "solo cuenta las ventas de esta tienda" in html
-    # El formulario de «Evaluar con IA» manda la tienda que se está viendo.
-    assert f'name="tienda" value="{se}"' in html
+    # El formulario de «Evaluar con IA» manda la entrada que se está viendo (desde E2 tarea 5, a la ruta de la pestaña).
+    ia = html[html.index('id="tw-ia"'):]
+    assert 'name="fuente" value="tw"' in ia and 'name="entrada" value="SE"' in ia
 
 
 def test_panel_sin_cuenta_compartida_no_pone_la_nota(app):  # noqa: F811
@@ -439,7 +449,7 @@ def test_con_una_sola_tienda_no_hay_selector(app):  # noqa: F811
 
 def test_evaluar_una_tienda_guarda_su_alcance_y_su_muestra(app):  # noqa: F811
     no, se = _dos_tiendas()
-    app["c"].post("/cliente/acme/triple-whale/evaluar", data={"dias": "30", "tienda": str(se)})
+    _evaluar(app, entrada="SE")
     [fila] = datos.evaluaciones("acme")
     assert fila["extra"]["tienda_id"] == se and fila["extra"]["pais"] == "SE"
     ids = {a["ad_id"] for a in fila["anuncios"]}
@@ -453,9 +463,14 @@ def test_evaluar_una_tienda_guarda_su_alcance_y_su_muestra(app):  # noqa: F811
 
 
 def test_evaluar_todas_y_tienda_ajena(app):  # noqa: F811
+    """«Todas» (entrada vacía) evalúa las dos tiendas. Una entrada que no es del proyecto (la tienda de otro, un país
+    que ya no está) no evalúa nada: ensancharla a «Todas» cobraría otro alcance (desde E2 tarea 5, como el lote)."""
     _dos_tiendas()
     ajena = _conectar(cliente="otro", dominio="otro-norge.myshopify.com")
-    app["c"].post("/cliente/acme/triple-whale/evaluar", data={"dias": "30", "tienda": str(ajena)})
+    for entrada in (f"tienda:{ajena}", "DK"):
+        _evaluar(app, entrada=entrada)
+        assert datos.evaluaciones("acme") == [] and _tareas("tw_evaluar") == [], entrada
+    _evaluar(app, entrada="")
     [fila] = datos.evaluaciones("acme")
     assert fila["extra"]["tienda_id"] is None and fila["extra"]["pais"] is None
     assert {"s1", "p1"} <= {a["ad_id"] for a in fila["anuncios"]}

@@ -37,16 +37,24 @@ Reglas, cada una con su motivo:
    de `alcance_meta`, que también da los anuncios de las alertas y las recomendaciones), y las rutas de la galería y de
    lo que cobra resuelven el mismo con `alcances` (la misma `_resolver`): lo que se cobra es lo que se vio. Una
    `entrada` que ya no es la clave de ninguna entrada no se ensancha a «Todas» para cobrar (como «Actualizar ahora»).
+8. «Lo que hace ganar en tu cuenta» (Evaluar con IA, `_ia`, E2 tarea 5) ofrece UN formulario por fuente del alcance,
+   cada uno con SU muestra y SU precio: la de Triple Whale sale de su contexto y la de Meta del mismo alcance de Meta
+   que pinta la galería (`analisis.muestra`, la que vuelve a armar `rutas.evaluar` con `alcances`). Nunca uno que
+   mezcle las dos: el Pixel de Triple Whale y el de Meta atribuyen distinto y sus números no se comparan en un mismo
+   prompt. La evaluación sigue siendo una por proyecto (un `job_id`): mientras corre, la barra y ningún botón.
 """
 from datetime import date
 
+import gastos
 import idiomas
 import meta_conexion
+import trabajos
 import triple_whale_tiendas
 from meta_rendimiento import panel as meta_panel
 from pestana_rendimiento import alcance_meta, entradas, galeria, resumen
+from tareas import triple_whale as tareas_tw
+from triple_whale import analisis, evaluacion, paises
 from triple_whale import datos as twdatos
-from triple_whale import evaluacion, paises
 from triple_whale import panel as tw_panel
 
 PERIODOS = (0, 7, 14, 30, 90)        # 0 = desde el inicio (regla de Daniel del 2026-10-08: métricas en total)
@@ -217,6 +225,43 @@ def _copias_vivas(tw, meta):
     return vivas
 
 
+def _ia(cliente, tw, meta):
+    """«Lo que hace ganar en tu cuenta» (regla 8 del módulo), o None si el alcance no tiene anuncios de Triple Whale ni
+    de cuentas de Meta sin tienda: {"formularios" ([{"fuente": "tw"|"meta", "muestra", "estimado"}], solo los que
+    tienen muestra), "mixta" (el alcance tiene las dos fuentes: cada botón dice la suya), "job_evaluar",
+    "evaluaciones", "ultima_lista", "tienda_actual", "gasto_duplicado" y los textos de veredicto y de estado de una
+    pieza}. Con Triple Whale reusa lo que su contexto ya leyó (evaluaciones, la barra); sin él lo lee aquí: una
+    consulta de evaluaciones y una de las piezas nacidas de la última lista."""
+    alc_meta = meta["alcance"] if meta else None
+    if not tw and not alc_meta:
+        return None
+    formularios = []
+    if tw:
+        formularios.append({"fuente": galeria.TW, "muestra": tw["muestra_ia"], "estimado": tw["estimado_ia"]})
+    if alc_meta:
+        muestra = analisis.muestra(alc_meta["ev"])
+        formularios.append({"fuente": galeria.META, "muestra": muestra,
+                            "estimado": gastos.estimar("evaluacion_tw", n=len(muestra)) if muestra else None})
+    if tw:
+        evaluaciones, ultima, job = tw["evaluaciones"], tw["ultima_lista"], tw["job_evaluar"]
+    else:
+        locale = idiomas.activo()
+        evaluaciones = twdatos.evaluaciones(cliente, limite=5)
+        for e in evaluaciones:
+            e["alcance"] = tw_panel._alcance_evaluacion(e, {}, locale)
+        ultima = next((e for e in evaluaciones if e["estado"] == "lista"), None)
+        # Las piezas nacidas de cada idea, con su estado en Crear. Sin el veredicto en Meta: los anuncios de Meta del
+        # alcance no traen todavía su pieza de Creatv (eso lo pone la galería, solo a las tarjetas de la página).
+        tw_panel.enlazar_ideas(cliente, [], ultima)
+        job_id = tareas_tw.job_id_evaluar(cliente)
+        job = job_id if trabajos.en_curso(job_id) else None
+    return {"formularios": [f for f in formularios if f["muestra"]], "mixta": len(formularios) > 1,
+            "job_evaluar": job, "evaluaciones": evaluaciones, "ultima_lista": ultima,
+            "tienda_actual": tw["tienda_actual"] if tw else None,
+            "gasto_duplicado": tw["gasto_duplicado"] if tw else 0.0,
+            "etiquetas_veredicto": evaluacion.ETIQUETAS_VEREDICTO, "etiquetas_pieza": tw_panel.ETIQUETAS_PIEZA}
+
+
 # --------------------------------------------------------------- contexto ---
 
 def contexto(cliente, dias=0, entrada=None, canal=None, hoy=None, pagina_conjuntos=0, tienda=None, cuenta=None):
@@ -226,8 +271,8 @@ def contexto(cliente, dias=0, entrada=None, canal=None, hoy=None, pagina_conjunt
     "tw": el filtro «Canal» es de Triple Whale, A3), `params`, `tw` (contexto de `triple_whale.panel.contexto` o
     None), `meta` (ver `_meta`), `galeria` («Tus anuncios» de las dos fuentes, `pestana_rendimiento.galeria.armar`,
     regla 7), `params_tw` (el alcance de Triple Whale en las URL de sus rutas, para «Guardar en Referentes»), `resumen`
-    (`pestana_rendimiento.resumen.contexto`), `atencion`, `copias_vivas` (regla 6), `modo_meta`, `solo_metricas` y los
-    textos de `evaluacion`."""
+    (`pestana_rendimiento.resumen.contexto`), `atencion`, `copias_vivas` (regla 6), `ia` («Evaluar con IA», regla 8),
+    `modo_meta`, `solo_metricas` y los textos de `evaluacion`."""
     hoy = hoy or date.today()
     dias = periodo_valido(dias)
     s = _resolver(cliente, entrada, tienda, cuenta)
@@ -254,7 +299,7 @@ def contexto(cliente, dias=0, entrada=None, canal=None, hoy=None, pagina_conjunt
         "params_tw": alc_tw["params"] if alc_tw else {},
         "resumen": resumen.contexto(cliente, s["entradas"], actual, alc, dias, hoy,
                                     tw_cfg["moneda"] if tw_cfg else "USD"),
-        "atencion": _atencion(tw, meta), "copias_vivas": _copias_vivas(tw, meta),
+        "atencion": _atencion(tw, meta), "copias_vivas": _copias_vivas(tw, meta), "ia": _ia(cliente, tw, meta),
         "modo_meta": meta_conexion.modo(cliente) if s["con_conexion_meta"] else None,
         "solo_metricas": s["solo_metricas"],
         **etiquetas(),
@@ -297,7 +342,8 @@ def alcances(cliente, dias=0, entrada=None, canal=None, hoy=None):
     """El alcance de cada fuente para las rutas de la galería y de lo que cobra (E2 tarea 4), con la MISMA resolución
     que el panel (regla 7): {"tw": `triple_whale.panel.alcance` de la tienda de la entrada o None, "meta":
     `alcance_meta.alcance` de las cuentas cuya fuente es Meta o None, "params" (los de la pestaña: entrada, dias,
-    canal), "params_tw" (los de las rutas de Triple Whale), "existe", "hay_tw"}. `canal` solo cuenta si el alcance es
+    canal), "params_tw" (los de las rutas de Triple Whale), "existe", "hay_tw", "pais" (el de la entrada; None en
+    «Todas» o sin país)}. `canal` solo cuenta si el alcance es
     solo Triple Whale (A3). `existe` es False si `entrada` no es vacía y no es la clave de ninguna entrada (una pestaña
     vieja): entonces no hay alcances y nada se cobra, en vez de ensancharla a «Todas» (revisión de la tarea 8)."""
     hoy = hoy or date.today()
@@ -314,4 +360,4 @@ def alcances(cliente, dias=0, entrada=None, canal=None, hoy=None):
     if existe and alc["meta_fuente"]:
         alc_meta = alcance_meta.alcance(cliente, list(alc["meta_fuente"]), dias, hoy, params, s["cuentas_por_id"])
     return {"tw": alc_tw, "meta": alc_meta, "params": params, "params_tw": alc_tw["params"] if alc_tw else {},
-            "existe": existe, "hay_tw": bool(s["tw_cfg"])}
+            "existe": existe, "hay_tw": bool(s["tw_cfg"]), "pais": actual["pais"] if actual else None}

@@ -5,9 +5,9 @@
    sus diccionarios traducidos (un {% set %} de módulo en una plantilla importada se cachea en un idioma, skill idioma).
    Rendimiento las llama en el orden del spec: copias, gasto_compartido, alertas (con las de las dos fuentes),
    tiles_anuncios (encima de la galería única de «Tus anuncios», que pinta _rend_panel.html desde E2 tarea 4), ia
-   («Lo que hace ganar en tu cuenta») y, después de Campañas y conjuntos, resto (reparto, productos, «Ver como
-   tabla»). «Evaluar con IA» postea a triple_whale/rutas.py con el alcance de `tw` (R13); «Cómo mejorarlo» y el lote,
-   a las rutas de la galería de la pestaña (pestana_rendimiento/rutas.py). #}
+   («Lo que hace ganar en tu cuenta», con las dos fuentes desde E2 tarea 5: recibe `r.ia`, no `tw`) y, después de
+   Campañas y conjuntos, resto (reparto, productos, «Ver como tabla»). «Evaluar con IA», «Cómo mejorarlo» y el lote
+   postean a las rutas de la pestaña (pestana_rendimiento/rutas.py) con sus `params`. #}
 
 {#- Los errores de copia de las tiendas del alcance. La barra de las copias en curso la pinta _rend_panel.html: una sola
     para las dos fuentes (`r.copias_vivas`, revisión final de E1). -#}
@@ -65,42 +65,58 @@
 </div>
 {%- endmacro %}
 
-{#- «Lo que hace ganar en tu cuenta» (Evaluar con IA, cobra con el precio a la vista). `nota`: una línea más bajo la
-    explicación (Rendimiento la usa cuando el alcance mezcla fuentes). -#}
-{% macro ia(tw, cliente, nota='') -%}
+{#- «Lo que hace ganar en tu cuenta» (Evaluar con IA, cobra con el precio a la vista). `ia`: el de
+    pestana_rendimiento.panel._ia (un formulario por fuente del alcance, cada uno con su muestra y su precio; las
+    evaluaciones y la barra). `params`: los de la pestaña (entrada, dias, canal), los mismos con los que la ruta
+    `rendimiento.evaluar` vuelve a armar la muestra que se cobra. Con las dos fuentes, un botón por fuente: los números
+    de Triple Whale y los del Pixel de Meta no van juntos en un prompt (E2 tarea 5). -#}
+{% macro ia(ia, cliente, params) -%}
 {%- set clases_veredicto = {"ganador": "tag-en-uso", "prometedor": "tag-en-curso", "en_prueba": "", "perdedor": "tag-descartado", "sin_datos": "tag-advertencia"} -%}
-{% set actual = tw.tienda_actual %}
+{% set actual = ia.tienda_actual %}
 <section class="tb-seccion" id="tw-ia">
   <div class="tb-seccion-cab"><h3>{{ _('Lo que hace ganar en tu cuenta') }}</h3></div>
   <p class="vacio">{{ _('Claude mira tus ganadores y tus perdedores (imagen, texto y números), explica qué patrón se repite y propone anuncios nuevos basados en lo que ya vende. No genera nada: cada idea llega a Crear para que decidas.') }}</p>
-  {% if nota %}<p class="vacio">{{ nota }}</p>{% endif %}
-  {% if tw.job_evaluar %}
+  {% if ia.mixta %}<p class="vacio">{{ _('Triple Whale y Meta miden distinto: los anuncios de cada fuente se evalúan por separado.') }}</p>{% endif %}
+  {% if ia.job_evaluar %}
   <div class="tw-progreso">
-    <div class="barra-progreso" id="tw-evaluar-{{ cliente }}" data-poll-job="{{ tw.job_evaluar }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
+    <div class="barra-progreso" id="tw-evaluar-{{ cliente }}" data-poll-job="{{ ia.job_evaluar }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
     <div class="progreso-texto">{{ _('Evaluando con IA…') }}</div>
   </div>
-  {% elif tw.muestra_ia %}
-  {% set precio = tw.estimado_ia.texto if tw.estimado_ia else '' %}
-  <form method="post" action="{{ url_for('triple_whale.evaluar', cliente=cliente) }}" class="tw-evaluar"
-        data-confirmar="{{ _('¿Evaluar %(n)s anuncio(s) con IA? Costo: %(precio)s', n=tw.muestra_ia | length, precio=precio) }}">
-    <input type="hidden" name="dias" value="{{ tw.dias }}">
-    <input type="hidden" name="canal" value="{{ tw.canal or '' }}">
-    <input type="hidden" name="tienda" value="{{ actual.id if actual else '' }}">
-    <button type="submit" class="btn-generar btn-sm">{{ _('Evaluar %(n)s anuncio(s) con IA · %(precio)s', n=tw.muestra_ia | length, precio=precio) }}</button>
+  {% elif ia.formularios %}
+  {% for f in ia.formularios %}
+  {% set precio = f.estimado.texto if f.estimado else '' %}
+  {% set n = f.muestra | length %}
+  {% if not ia.mixta %}
+  {% set confirmar = _('¿Evaluar %(n)s anuncio(s) con IA? Costo: %(precio)s', n=n, precio=precio) %}
+  {% set boton = _('Evaluar %(n)s anuncio(s) con IA · %(precio)s', n=n, precio=precio) %}
+  {% elif f.fuente == 'tw' %}
+  {% set confirmar = _('¿Evaluar %(n)s anuncio(s) de tus tiendas con IA? Costo: %(precio)s', n=n, precio=precio) %}
+  {% set boton = _('Evaluar los %(n)s de tus tiendas · %(precio)s', n=n, precio=precio) %}
+  {% else %}
+  {% set confirmar = _('¿Evaluar %(n)s anuncio(s) de tus cuentas de Meta con IA? Costo: %(precio)s', n=n, precio=precio) %}
+  {% set boton = _('Evaluar los %(n)s de tus cuentas de Meta · %(precio)s', n=n, precio=precio) %}
+  {% endif %}
+  <form method="post" action="{{ url_for('rendimiento.evaluar', cliente=cliente) }}" class="tw-evaluar" data-confirmar="{{ confirmar }}">
+    <input type="hidden" name="fuente" value="{{ f.fuente }}">
+    <input type="hidden" name="entrada" value="{{ params.entrada }}">
+    <input type="hidden" name="dias" value="{{ params.dias }}">
+    <input type="hidden" name="canal" value="{{ params.canal or '' }}">
+    <button type="submit" class="btn-generar btn-sm">{{ boton }}</button>
   </form>
-  {% if actual and tw.gasto_duplicado > 0 %}
+  {% endfor %}
+  {% if actual and ia.gasto_duplicado > 0 %}
   <p class="tag-advertencia tw-aviso">{{ _('Esta tienda comparte cuenta publicitaria: para evaluar anuncios conviene «Todas las tiendas».') }}</p>
   {% endif %}
   {% else %}
   <p class="vacio">{{ _('Hacen falta al menos dos anuncios con datos en este periodo para evaluar con IA.') }}</p>
   {% endif %}
 
-  {% set fallida = (tw.evaluaciones | selectattr('estado', 'equalto', 'error') | first) if tw.evaluaciones else none %}
-  {% if fallida and (not tw.ultima_lista or fallida.id > tw.ultima_lista.id) %}
+  {% set fallida = (ia.evaluaciones | selectattr('estado', 'equalto', 'error') | first) if ia.evaluaciones else none %}
+  {% if fallida and (not ia.ultima_lista or fallida.id > ia.ultima_lista.id) %}
   <p class="tag-error">{% if fallida.alcance %}{{ _('La última evaluación (%(alcance)s) falló: %(error)s', alcance=fallida.alcance, error=fallida.error or '—') }}{% else %}{{ _('La última evaluación falló: %(error)s', error=fallida.error or '—') }}{% endif %}</p>
   {% endif %}
 
-  {% set e = tw.ultima_lista %}
+  {% set e = ia.ultima_lista %}
   {% if e %}
   {% set r = e.resultado %}
   {% set por_ref = {} %}{% for a in e.anuncios %}{% set _x = por_ref.update({a.ref: a}) %}{% endfor %}
@@ -149,7 +165,7 @@
         <p class="tw-idea-hechas"><small>{{ ngettext('Ya se hizo %(n)s pieza con esta idea:', 'Ya se hicieron %(n)s piezas con esta idea:', hechas | length, n=hechas | length) }}</small></p>
         <ul class="tw-idea-piezas">
           {% for p in hechas %}
-          <li><a href="#creativeflowplus">{{ p.titulo }}</a> · {{ tw.etiquetas_pieza.get(p.estado, p.estado) | traducir }}{% if p.anuncio %} · <span class="tag-estado {{ clases_veredicto.get(p.anuncio.veredicto, '') }}">{{ _('en Meta: %(v)s', v=tw.etiquetas_veredicto.get(p.anuncio.veredicto, p.anuncio.veredicto) | traducir) }}</span>{% endif %}</li>
+          <li><a href="#creativeflowplus">{{ p.titulo }}</a> · {{ ia.etiquetas_pieza.get(p.estado, p.estado) | traducir }}{% if p.anuncio %} · <span class="tag-estado {{ clases_veredicto.get(p.anuncio.veredicto, '') }}">{{ _('en Meta: %(v)s', v=ia.etiquetas_veredicto.get(p.anuncio.veredicto, p.anuncio.veredicto) | traducir) }}</span>{% endif %}</li>
           {% endfor %}
         </ul>
         {% endif %}
@@ -166,7 +182,7 @@
         {% if a.medio and a.medio.imagen %}<img src="{{ a.medio.imagen }}" alt="" loading="lazy" referrerpolicy="no-referrer">{% endif %}
         <div>
           <strong>{{ a.nombre }}</strong>
-          <span class="tag-estado {{ clases_veredicto.get(a.veredicto, '') }}">{{ tw.etiquetas_veredicto.get(a.veredicto, a.veredicto) | traducir }}</span>
+          <span class="tag-estado {{ clases_veredicto.get(a.veredicto, '') }}">{{ ia.etiquetas_veredicto.get(a.veredicto, a.veredicto) | traducir }}</span>
           {% if a.visual == 'fotogramas' %}<small class="vacio">{{ _('Claude vio los fotogramas del video') }}</small>{% elif not a.visual and not (a.medio and a.medio.imagen) %}<small class="vacio">{{ _('Sin imagen: Claude juzgó por texto y números') }}</small>{% endif %}
           {% if cl.por_que %}<p>{{ cl.por_que }}</p>{% endif %}
           {% if cl.gancho %}<p><small>{{ _('Gancho: %(g)s', g=cl.gancho) }}</small></p>{% endif %}

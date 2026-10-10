@@ -33,6 +33,7 @@ import doctrina
 import idiomas
 from referentes import datos as referentes_datos
 from storage import r2_uploader
+from triple_whale import evaluacion
 
 log = logging.getLogger("creatv.triple_whale.analisis")
 
@@ -77,13 +78,25 @@ def _redondear(v):
     return round(float(v), 4)
 
 
+def _orden_buenos(a):
+    """El orden de Triple Whale (`evaluacion.evaluar`): veredicto, ingresos, gasto."""
+    return (evaluacion.VEREDICTOS.index(a["veredicto"]), -(a["m"].get("ingresos") or 0), -(a["m"].get("gasto") or 0),
+            str(a.get("ad_id")))
+
+
 def muestra(ev):
     """Qué anuncios ve Claude: hasta MAX_BUENOS ganadores/prometedores (por
     ingresos) y hasta MAX_MALOS perdedores (los que más gastaron), con una
     referencia corta (A1, A2…). Si no hay de ambos lados se completa con los
-    que más gastaron «en prueba». Lista vacía si hay menos de MIN_ANUNCIOS."""
+    que más gastaron «en prueba». Lista vacía si hay menos de MIN_ANUNCIOS.
+
+    Los buenos se ordenan aquí (ganadores primero, luego por ingresos) y no se
+    confía en el orden de `ev`: el alcance de Meta (`pestana_rendimiento.alcance_meta`)
+    llega por veredicto y gasto, y la muestra se habría quedado con los que más
+    gastan en vez de con los que más venden (Rendimiento E2, 2026-10-10). Con el
+    orden de Triple Whale el resultado es el mismo de siempre."""
     anuncios = ev.get("anuncios") or []
-    buenos = [a for a in anuncios if a["veredicto"] in ("ganador", "prometedor")][:MAX_BUENOS]
+    buenos = sorted((a for a in anuncios if a["veredicto"] in ("ganador", "prometedor")), key=_orden_buenos)[:MAX_BUENOS]
     malos = sorted((a for a in anuncios if a["veredicto"] == "perdedor"), key=lambda a: -a["m"]["gasto"])[:MAX_MALOS]
     elegidos = buenos + malos
     if len(elegidos) < MAX_BUENOS + MAX_MALOS:
@@ -123,11 +136,21 @@ def _graph(ruta, token, params):
 def medios_meta(cliente, anuncios):
     """{ad_id: {"imagen", "titulo", "texto", "tipo"}} de los anuncios de Meta
     que la conexión del proyecto puede leer. Nunca lanza: lo que falla queda
-    fuera (un anuncio de otra cuenta, Meta sin conectar)."""
+    fuera (un anuncio de otra cuenta, Meta sin conectar).
+
+    El token sale de `meta_conexion.cargar` (Rendimiento E2, 2026-10-10), no de
+    `credenciales_ads`, que exige una cuenta de lanzamiento: un proyecto «solo
+    métricas» (sin Página, como happyflops) se quedaba sin miniaturas, también al
+    evaluar sus anuncios de Meta. `imagen` solo si es de un host de Meta
+    (`meta_rendimiento.datos.miniatura_valida`): la URL se baja en el servidor y
+    se muestra en la evaluación si su copia a R2 falla."""
     import meta_conexion
+    from meta_rendimiento import datos as meta_datos
     try:
-        token = meta_conexion.credenciales_ads(cliente)["token"]
-    except Exception:  # noqa: BLE001 — sin Meta, la evaluación sigue sin miniaturas
+        token = (meta_conexion.cargar(cliente) or {}).get("token")
+    except Exception:  # noqa: BLE001 — sin Meta legible, la evaluación sigue sin miniaturas
+        return {}
+    if not token:
         return {}
     salida = {}
     for a in anuncios:
@@ -145,7 +168,7 @@ def medios_meta(cliente, anuncios):
             log.info("sin miniatura para %s/%s: %s", cliente, a.get("ad_id"), e)
             continue
         imagen = c.get("image_url") or c.get("thumbnail_url")
-        if not str(imagen or "").startswith("https://"):
+        if not meta_datos.miniatura_valida(imagen):
             imagen = None
         salida[a["ad_id"]] = {
             "imagen": imagen, "titulo": (c.get("title") or "")[:200], "texto": (c.get("body") or "")[:600],

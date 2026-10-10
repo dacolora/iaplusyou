@@ -343,9 +343,13 @@ def tw_evaluar(tarea):
     productos = datos.top_productos(cliente, extra.get("tienda_id"), fila["desde"], fila["hasta"],
                                     limite=analisis.MAX_PRODUCTOS)
     trabajos.reportar(job_id, etapa=idiomas.N_("Analizando con Claude"))
+    # `fuente`: de dónde salen los números (Rendimiento E2, 2026-10-10). Una evaluación de los anuncios de las cuentas
+    # de Meta sin tienda guarda "meta" y el prompt dice «de Meta»; sin la marca (Triple Whale, o una de antes) dice
+    # «de Triple Whale». La muestra ya viene guardada en la fila: no hace falta volver a leer las cuentas.
+    fuente = extra.get("fuente")
     contexto = {"desde": fila["desde"], "hasta": fila["hasta"], "moneda": fila["moneda"],
                 "modelo": extra.get("modelo"), "ventana": extra.get("ventana"),
-                "benchmarks": extra.get("benchmarks") or {}, "meta_roas": extra.get("meta_roas")}
+                "benchmarks": extra.get("benchmarks") or {}, "meta_roas": extra.get("meta_roas"), "fuente": fuente}
     referencia = f"tw_eval:{eid}{ref_sufijo(tarea)}"
     try:
         resultado, entrada, salida = analisis.analizar(proyectos.nombre_visible(cliente), contexto, anuncios,
@@ -364,8 +368,9 @@ def tw_evaluar(tarea):
     finally:
         analisis.borrar_temporales(temporales)
     usd = costo_real(entrada, salida)
-    gastos.registrar_seguro(cliente, "evaluacion", usd, referencia, proveedor="anthropic",
-                            detalle=gettext("%(n)s anuncio(s) de Triple Whale", n=len(anuncios)))
+    detalle = (gettext("%(n)s anuncio(s) de Meta", n=len(anuncios)) if fuente == "meta"
+               else gettext("%(n)s anuncio(s) de Triple Whale", n=len(anuncios)))
+    gastos.registrar_seguro(cliente, "evaluacion", usd, referencia, proveedor="anthropic", detalle=detalle)
     for a in anuncios:
         medio = medios.get(a["ad_id"])
         if medio:

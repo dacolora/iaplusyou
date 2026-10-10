@@ -10,11 +10,11 @@
    entradas o más, también cuando todas son tiendas: reemplaza a «Por tienda»), «Lo que necesita tu atención» (las
    dos fuentes), «Tus anuncios» (UNA galería con los anuncios de las dos fuentes por gasto en USD y un solo lote,
    `r.galeria`, E2 tarea 4: la enmienda A1 la dejó para E2; los tiles de Triple Whale encima solo con alcance solo
-   Triple Whale), «Lo que hace ganar en tu cuenta» (solo con Triple Whale), «Campañas» y «Conjuntos» (con la fuente
+   Triple Whale), «Lo que hace ganar en tu cuenta» (un botón por fuente del alcance, `r.ia`), «Campañas» y «Conjuntos» (con la fuente
    del ROAS de cada fila) y, de Triple Whale, reparto, productos y «Ver como tabla».
    Lo que cobra: la galería (_tw_galeria.html) postea a las rutas de la pestaña con el alcance de `r.params` y la
-   fuente de cada anuncio (pestana_rendimiento/rutas.py, que cobran con triple_whale/pedidos.py); «Evaluar con IA», a
-   triple_whale/rutas.py con el alcance de `r.tw` (R13). Una parte cuya copia todavía no tiene días no pinta sus
+   fuente de cada anuncio (pestana_rendimiento/rutas.py, que cobran con triple_whale/pedidos.py); «Evaluar con IA»,
+   también a la pestaña (`rendimiento.evaluar`) con `r.params` y la fuente de cada botón. Una parte cuya copia todavía no tiene días no pinta sus
    secciones: dice que se está trayendo o que falta pulsar «Actualizar ahora». #}
 {% import "_tw_secciones.html" as tws %}
 {% import "_meta_macros.html" as mx %}
@@ -187,8 +187,8 @@
 </section>
 {% endif %}
 
-{# ---------- 05 Lo que hace ganar en tu cuenta (solo la parte Triple Whale) ---------- #}
-{% if con_tw %}{{ tws.ia(r.tw, cliente, _('La evaluación con IA mira los anuncios de tus tiendas en Triple Whale.') if r.fuente == 'mixta' else '') }}{% endif %}
+{# ---------- 05 Lo que hace ganar en tu cuenta (un botón por fuente del alcance, E2 tarea 5) ---------- #}
+{% if r.ia and (con_tw or con_meta) %}{{ tws.ia(r.ia, cliente, r.params) }}{% endif %}
 
 {# ---------- 06 Campañas y conjuntos (todas las cuentas del alcance, cubiertas incluidas: R5) ---------- #}
 {% if con_meta %}{% with mr=r.meta.estructura %}{% include "_meta_secciones.html" %}{% endwith %}{% endif %}

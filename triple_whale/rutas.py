@@ -5,9 +5,6 @@ pasaron a la pestaña en E2, ver abajo). `dashboard._guard_por_cliente` protege 
 origen (Sec-Fetch-Site), la barrera CSRF del resto de la app. Todas vuelven a `#rendimiento`.
 
 - `dia`: el detalle de un día de «Resultados de tu tienda» (lo pide static/tw_resultados.js).
-- `evaluar`: encola el análisis con IA con la muestra del periodo Y la tienda
-  que se están viendo (`tienda`, como en el panel); `extra` guarda `tienda_id`
-  y `pais`. El precio ya estaba a la vista en el botón (y en su confirmación).
 - `idea_crear`: una idea del análisis → Crear precargado (nada se genera).
 - `a_referente`: un anuncio de una evaluación → Referentes del proyecto.
 - `pieza_estado`: pausa o activa en Meta un anuncio hecho en Creatv (una
@@ -24,7 +21,9 @@ anuncios de Meta; aquí quedan el alcance de la petición, los avisos y las redi
 La galería, la tarjeta sola, «Cómo mejorarlo» de un anuncio y el lote («Analizar los N que más gastaron») ya no viven
 aquí: desde Rendimiento E2 (tarea 4, 2026-10-10) «Tus anuncios» es UNA galería con los anuncios de Triple Whale y de
 Meta y sus rutas son de la pestaña (`pestana_rendimiento/rutas.py`: `ver_galeria`, `ver_tarjeta`, `analizar_anuncio`,
-`analizar_lote`), que cobran con `pedidos` y el alcance de cada fuente.
+`analizar_lote`), que cobran con `pedidos` y el alcance de cada fuente. «Evaluar con IA» (`evaluar`) también se fue
+allá en E2 tarea 5 (`rendimiento.evaluar`, un botón por fuente del alcance); lo que se hace con una evaluación lista
+(`idea_crear`, `a_referente`) sigue aquí.
 """
 from datetime import date
 
@@ -237,30 +236,6 @@ def pedir_copia(cliente, tienda_id=None):
     if tareas_tw.encolar_sync(cliente, tienda_id):
         return gettext("Trayendo las métricas de Triple Whale…"), "ok"
     return gettext("Ya se están trayendo las métricas de Triple Whale."), "warn"
-
-
-@bp.post("/evaluar")
-def evaluar(cliente):
-    config = triple_whale_tiendas.obtener(cliente)
-    if not config:
-        flash(gettext("Triple Whale no está conectado en este proyecto."), "error")
-        return _volver(cliente)
-    if tareas_tw.evaluacion_en_curso(cliente):
-        flash(gettext("Ya hay una evaluación con IA en curso."), "warn")
-        return _volver(cliente)
-    canal = (request.form.get("canal") or "").strip() or None
-    tienda = panel.tienda_elegida(config["tiendas"], request.form.get("tienda"))
-    tienda_id = tienda["id"] if tienda else None
-    ev, desde, hasta = panel.evaluar_periodo(cliente, _dias(request.form.get("dias")), canal, tienda_id=tienda_id)
-    # La muestra, el precio, Cobros, la fila y la tarea: `pedidos.pedir_evaluacion`. Sin muestra el aviso es un error
-    # (ok None); con otra en curso, una advertencia.
-    ok, mensaje = pedidos.pedir_evaluacion(cliente, {
-        "ev": ev, "desde": desde, "hasta": hasta, "moneda": config["moneda"],
-        "extra": {"modelo": config["modelo_atribucion"], "ventana": config["ventana_atribucion"], "canal": canal,
-                  "tienda_id": tienda_id, "pais": tienda["pais"] if tienda else None,
-                  "benchmarks": ev["benchmarks"], "meta_roas": ev["meta_roas"]}}, session.get("usuario"))
-    flash(mensaje, "ok" if ok else ("error" if ok is None else "warn"))
-    return _volver(cliente)
 
 
 def _evaluacion_lista(cliente, eid):

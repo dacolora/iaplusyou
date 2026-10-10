@@ -231,8 +231,14 @@ def enlazar_ideas(cliente, anuncios, evaluacion_lista):
 
 def _alcance_evaluacion(ev, tiendas_por_id, locale):
     """Lo que la lista de evaluaciones dice de cada una: «Noruega», «Todas las
-    tiendas» o "" (una evaluación de antes de las varias tiendas)."""
+    tiendas» o "" (una evaluación de antes de las varias tiendas). Una de los
+    anuncios de Meta (Rendimiento E2, `extra["fuente"] == "meta"`) dice «Suecia en
+    Meta» o «tus cuentas de Meta»: su `tienda_id` None no es «Todas las tiendas»."""
     extra = ev.get("extra") or {}
+    if extra.get("fuente") == "meta":
+        if extra.get("pais"):
+            return gettext("%(pais)s en Meta", pais=paises.nombre_pais(extra["pais"], locale))
+        return gettext("tus cuentas de Meta")
     if "tienda_id" not in extra:
         return ""
     if extra["tienda_id"] is None:

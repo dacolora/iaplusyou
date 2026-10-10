@@ -465,6 +465,10 @@ msgid "%(n)s anuncio(s)"
 msgstr "%(n)s ad(s)"
 
 #, python-format
+msgid "%(n)s anuncio(s) de Meta"
+msgstr "%(n)s Meta ad(s)"
+
+#, python-format
 msgid "%(n)s anuncio(s) de Meta no llevan los parámetros de Triple Whale (%(pct)s%% del gasto): sus ventas pueden quedar sin atribuir."
 msgstr "%(n)s Meta ad(s) don't carry the Triple Whale parameters (%(pct)s%% of spend): their sales may go unattributed."
 
@@ -1437,6 +1441,10 @@ msgstr "%(p)s watch it all"
 #, python-format
 msgid "%(p)s se queda 3 s"
 msgstr "%(p)s stay 3 s"
+
+#, python-format
+msgid "%(pais)s en Meta"
+msgstr "%(pais)s on Meta"
 
 #, python-format
 msgid "%(palabras)s palabras · unos %(segundos)s s leído completo a ritmo natural."
@@ -7895,6 +7903,14 @@ msgstr "Evaluate now"
 msgid "Evaluar con IA"
 msgstr "Evaluate with AI"
 
+#, python-format
+msgid "Evaluar los %(n)s de tus cuentas de Meta · %(precio)s"
+msgstr "Evaluate the %(n)s from your Meta accounts · %(precio)s"
+
+#, python-format
+msgid "Evaluar los %(n)s de tus tiendas · %(precio)s"
+msgstr "Evaluate the %(n)s from your stores · %(precio)s"
+
 msgid "Eventos en bitácora"
 msgstr "Log events"
 
@@ -9799,9 +9815,6 @@ msgstr "The scene being generated will finish (it has already been charged); the
 
 msgid "La etapa debe ser TOF, MOF o BOF."
 msgstr "The stage must be TOF, MOF or BOF."
-
-msgid "La evaluación con IA mira los anuncios de tus tiendas en Triple Whale."
-msgstr "The AI evaluation looks at the ads of your stores in Triple Whale."
 
 msgid "La evidencia no se edita a mano."
 msgstr "Evidence can't be edited by hand."
@@ -16822,6 +16835,9 @@ msgstr "Triple Whale answered %(codigo)s: %(detalle)s"
 msgid "Triple Whale respondió algo que no es JSON."
 msgstr "Triple Whale answered something that isn't JSON."
 
+msgid "Triple Whale y Meta miden distinto: los anuncios de cada fuente se evalúan por separado."
+msgstr "Triple Whale and Meta measure differently: each source's ads are evaluated separately."
+
 msgid "Triple Whale ya está conectado: cuando tus anuncios corran en Meta, aquí verás las ventas que trae cada uno. Mientras tanto, los números de tu tienda están en la pestaña"
 msgstr "Triple Whale is already connected: once your ads run on Meta, you will see here the sales each one brings. In the meantime, your store numbers are in the tab"
 
@@ -20830,6 +20846,9 @@ msgstr "your average %(pct)s"
 msgid "tu@empresa.com"
 msgstr "you@company.com"
 
+msgid "tus cuentas de Meta"
+msgstr "your Meta accounts"
+
 msgid "un anuncio de Meta"
 msgstr "a Meta ad"
 
@@ -21239,6 +21258,14 @@ msgstr "Start from scratch? The text, the settings and the reference tray will b
 #, python-format
 msgid "¿Evaluar %(n)s anuncio(s) con IA? Costo: %(precio)s"
 msgstr "Evaluate %(n)s ad(s) with AI? Cost: %(precio)s"
+
+#, python-format
+msgid "¿Evaluar %(n)s anuncio(s) de tus cuentas de Meta con IA? Costo: %(precio)s"
+msgstr "Evaluate %(n)s ad(s) from your Meta accounts with AI? Cost: %(precio)s"
+
+#, python-format
+msgid "¿Evaluar %(n)s anuncio(s) de tus tiendas con IA? Costo: %(precio)s"
+msgstr "Evaluate %(n)s ad(s) from your stores with AI? Cost: %(precio)s"
 
 #, python-format
 msgid "¿Marcar a %(usuario)s como verificado sin que abra el enlace del correo?"

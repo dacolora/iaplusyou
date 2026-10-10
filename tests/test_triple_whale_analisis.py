@@ -119,13 +119,16 @@ def test_medios_meta_sin_meta_conectado_no_falla(monkeypatch):
 
     def _sin(cliente):
         raise meta_conexion.MetaConexionError("sin Meta")
-    monkeypatch.setattr(meta_conexion, "credenciales_ads", _sin)
+    # Desde Rendimiento E2 el token sale de `cargar` (sin conexión, None), no de `credenciales_ads`.
+    monkeypatch.setattr(meta_conexion, "cargar", _sin)
+    assert analisis.medios_meta("acme", [{"canal": "facebook-ads", "ad_id": "1"}]) == {}
+    monkeypatch.setattr(meta_conexion, "cargar", lambda c: None)
     assert analisis.medios_meta("acme", [{"canal": "facebook-ads", "ad_id": "1"}]) == {}
 
 
 def test_medios_meta_lee_la_miniatura_y_se_salta_lo_que_falla(monkeypatch):
     import meta_conexion
-    monkeypatch.setattr(meta_conexion, "credenciales_ads", lambda c: {"token": "EAAB-secreto"})
+    monkeypatch.setattr(meta_conexion, "cargar", lambda c: {"token": "EAAB-secreto"})
     pedidos = []
 
     def _graph(ruta, token, params):
@@ -134,14 +137,16 @@ def test_medios_meta_lee_la_miniatura_y_se_salta_lo_que_falla(monkeypatch):
             raise RuntimeError("Meta respondió 400")
         if ruta == "ad_1":
             return {"creative": {"id": "cr_1"}}
-        return {"thumbnail_url": "https://x/t.jpg", "image_url": None, "title": "T", "body": "B", "object_type": "VIDEO"}
+        return {"thumbnail_url": "https://scontent.xx.fbcdn.net/t.jpg", "image_url": None, "title": "T", "body": "B",
+                "object_type": "VIDEO"}
     monkeypatch.setattr(analisis, "_graph", _graph)
     medios = analisis.medios_meta("acme", [{"canal": "facebook-ads", "ad_id": "ad_1"},
                                            {"canal": "facebook-ads", "ad_id": "ad_2", "creative_id": "cr_2"},
                                            {"canal": "facebook-ads", "ad_id": "ad_malo"},
                                            {"canal": "tiktok-ads", "ad_id": "tt"}])
     assert set(medios) == {"ad_1", "ad_2"}
-    assert medios["ad_1"] == {"imagen": "https://x/t.jpg", "titulo": "T", "texto": "B", "tipo": "video"}
+    assert medios["ad_1"] == {"imagen": "https://scontent.xx.fbcdn.net/t.jpg", "titulo": "T", "texto": "B",
+                              "tipo": "video"}
     assert [r for r, _ in pedidos] == ["ad_1", "cr_1", "cr_2", "ad_malo"]
     assert pedidos[1][1]["thumbnail_width"] == 600
 

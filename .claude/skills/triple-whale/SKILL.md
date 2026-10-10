@@ -15,7 +15,8 @@ abajo que habla de «la pestaña» o «el panel» describe hoy las secciones de 
 `triple_whale/rutas.py` con el alcance de la entrada (R13). Excepción desde Rendimiento E2 tarea 4 (2026-10-10): la
 galería de tarjetas es UNA con los anuncios de Triple Whale y de Meta, y sus rutas (galería, tarjeta, «Cómo
 mejorarlo», lote) son de la pestaña (`pestana_rendimiento/rutas.py`, skill `rendimiento`); cobran con
-`triple_whale/pedidos.py` y el alcance de Triple Whale para cada anuncio de Triple Whale. Todo `_volver` de este paquete
+`triple_whale/pedidos.py` y el alcance de Triple Whale para cada anuncio de Triple Whale. Desde la tarea 5, también
+«Evaluar con IA» (`rendimiento.evaluar`, un botón por fuente). Todo `_volver` de este paquete
 y de `cfg_triple_whale_*` vuelve a `#rendimiento`.
 
 **Triple Whale** (package `triple_whale/`, `triple_whale_tiendas.py`, `tareas/triple_whale.py`; spec
@@ -118,7 +119,18 @@ hook, low hold, few clicks, clicks without sales, expensive CPM, fatigue 7d vs 7
 «Evaluar con IA» (now «Lo que hace ganar en tu cuenta»; `tw_evaluar`, `max_intentos=1`, price `gastos.estimar("evaluacion_tw", n=)`, real spend as
 tipo `evaluacion`) sends Claude up to 6 winners + 4 losers with their Meta thumbnail (`analisis.medios_meta`,
 read-only Graph) and doctrina `clasificar/angulo/gancho/video`; the result (`tw_evaluacion`) has patterns,
-per-ad «why», and new ad ideas with a validated ángulo and an English video prompt. `triple_whale/puente.py`:
+per-ad «why», and new ad ideas with a validated ángulo and an English video prompt. Since Rendimiento E2 task 5
+(2026-10-10) it also evaluates the ads of Meta accounts without a store, from the tab's route `rendimiento.evaluar`
+(`triple_whale.rutas.evaluar` was retired; one button per source of the scope, never both sources in one prompt; skill
+`rendimiento`, «E2 tarea 5»): the row stores `extra["fuente"] = "meta"` (plus `cuentas`), `tw_evaluar` passes it as
+`contexto["fuente"]` so the prompt says «con sus métricas de Meta» (the only prompt change, ruled in the E2 plan: no new
+`eval-claude` run; the first real run is noted for Daniel) and the spend `detalle` says «N anuncio(s) de Meta». What
+else changed for every evaluation: `analisis.muestra` sorts the winners/promising itself (verdict → revenue → spend,
+Triple Whale's key; Meta's scope arrives verdict → spend and the sample kept the biggest spenders instead of the best
+sellers; with Triple Whale's order the sample is the same as before), and `medios_meta` reads the token with
+`meta_conexion.cargar` (`credenciales_ads` demands a launch account, so a metrics-only project like happyflops got no
+thumbnails) and keeps an image only if `meta_rendimiento.datos.miniatura_valida` (a Meta host). A Meta evaluation still
+reads `top_productos` of «Todas» (`tienda_id` None): same brand and catalog, as the E2 task 1 ruling. `triple_whale/puente.py`:
 «Llevar a Crear» sets `session["fp_prefill"]` (nothing is generated) and «Guardar en Referentes» stores a
 winning own ad as a project referente (fuente `triple_whale`, `anuncio_id = tw:<ad_id>`, thumbnail in R2).
 Experiments with `atribucion="triple_whale"`: `lanzador.refrescar` keeps traffic, spend and ad status from

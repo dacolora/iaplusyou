@@ -30,6 +30,8 @@ Lo que cambia respecto del de Triple Whale, cada cosa con su motivo:
    costo por venta del canal (`ev["cuenta"]["canales"]` queda vacío: `pedidos` y la tarjeta lo leen como «sin dato»).
 6. `meta_roas`: la meta de ROAS del proyecto; apagada, cada cuenta se mide con su mediana y el alcance de varias da
    UNA, la de todos sus anuncios.
+7. `cuentas`: los ids de las cuentas del alcance (las del proyecto, sin repetir). «Evaluar con IA» los guarda en la
+   evaluación (`extra["cuentas"]`, E2 tarea 5) para que se sepa de qué cuentas era la muestra.
 """
 from datetime import date
 
@@ -92,4 +94,4 @@ def alcance(cliente, ids, dias, hoy, params, cuentas_por_id=None):
     return {"config": {"moneda": moneda, "modelo_atribucion": MODELO_ATRIBUCION,
                        "ventana_atribucion": VENTANA_ATRIBUCION},
             "tienda": None, "tienda_id": None, "dias": dias, "canal": None, "ev": ev, "desde": desde, "hasta": hasta,
-            "params": dict(params or {}), "fuente": FUENTE}
+            "params": dict(params or {}), "fuente": FUENTE, "cuentas": ids}

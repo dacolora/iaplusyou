@@ -27,16 +27,21 @@ Todas resuelven el alcance con `entrada`, `dias` y `canal` (este solo si el alca
   mostró el formulario, recortadas a N entre las dos fuentes y aún elegibles, cada una con su fuente
   (`galeria.pedir_lote`); un segundo envío no cobra nada y la primera fuente sin saldo para todo.
 
-Hasta el 2026-10-10 la galería, la tarjeta, «Cómo mejorarlo» y el lote vivían en `triple_whale/rutas.py` (solo Triple
-Whale) y los anuncios de Meta tenían su bloque aparte (`anuncios-meta`, sin IA): se jubilaron con la galería única.
-«Evaluar con IA», «Guardar en Referentes», el detalle de un análisis, «Llevar a Crear» y Pausar/Activar siguen allá."""
+- `evaluar` (POST, E2 tarea 5): «Evaluar con IA» de UNA fuente del alcance (`fuente` "tw" | "meta"), con
+  `triple_whale.pedidos.pedir_evaluacion` (la muestra, el precio de su botón, Cobros, `max_intentos=1`, una por
+  proyecto). Con el alcance mezclado hay un botón por fuente: nunca un prompt con las dos.
+
+Hasta el 2026-10-10 la galería, la tarjeta, «Cómo mejorarlo», el lote y «Evaluar con IA» vivían en
+`triple_whale/rutas.py` (solo Triple Whale) y los anuncios de Meta tenían su bloque aparte (`anuncios-meta`, sin IA): se
+jubilaron con la galería única y con la evaluación de las dos fuentes. «Guardar en Referentes», el detalle de un
+análisis, «Llevar a Crear» (también de una idea de la evaluación) y Pausar/Activar siguen allá."""
 from flask import Blueprint, abort, flash, redirect, render_template, request, session, url_for
 from flask_babel import gettext, ngettext
 
 import usuarios
 from cobros import SaldoInsuficiente
 from meta_rendimiento import rutas as meta_rutas
-from pestana_rendimiento import galeria, panel
+from pestana_rendimiento import alcance_meta, galeria, panel
 from tareas import triple_whale as tareas_tw
 from triple_whale import pedidos
 from triple_whale import rutas as tw_rutas
@@ -185,6 +190,14 @@ def ver_tarjeta(cliente, fuente, canal, ad_id):
     return _render_galeria(cliente, al, modo="tarjeta", a=a)
 
 
+def _sin_alcance(al, fuente):
+    """Por qué no hay alcance de esa fuente (nada se cobra): Triple Whale desconectado, o una vista que ya no existe
+    (una pestaña vieja, Meta desconectado después de pintar, una entrada sin esa fuente)."""
+    if fuente == galeria.TW and al["existe"] and not al["hay_tw"]:
+        return gettext("Triple Whale no está conectado en este proyecto.")
+    return gettext("Esa vista ya no existe: recarga la pestaña.")
+
+
 @bp.post("/anuncio/<fuente>/<canal>/<ad_id>/analizar")
 def analizar_anuncio(cliente, fuente, canal, ad_id):
     _anuncio_valido(fuente, canal, ad_id)
@@ -193,8 +206,7 @@ def analizar_anuncio(cliente, fuente, canal, ad_id):
     if not alc:
         # Sin el alcance de esa fuente no se cobra: una pestaña vieja, Triple Whale o Meta desconectados después de
         # pintar. El JS de la tarjeta espera JSON: un redirect no lo sabría leer.
-        mensaje = (gettext("Triple Whale no está conectado en este proyecto.") if fuente == galeria.TW and al["existe"]
-                   and not al["hay_tw"] else gettext("Esa vista ya no existe: recarga la pestaña."))
+        mensaje = _sin_alcance(al, fuente)
         if _quiere_json():
             return {"ok": False, "mensaje": mensaje, "html": ""}
         flash(mensaje, "error")
@@ -237,4 +249,44 @@ def analizar_lote(cliente):
     _avisos_lote(n, fallos)
     if not n and not fallos:
         flash(gettext("No quedó ningún anuncio por analizar."), "warn")
+    return _volver(cliente)
+
+
+# ------------------------------------------------ «Lo que hace ganar en tu cuenta»: Evaluar con IA (E2 tarea 5) ---
+
+def _alc_eval(fuente, alc, pais):
+    """Lo que guarda la evaluación de esa fuente (`pedidos.pedir_evaluacion`): {"ev", "desde", "hasta", "moneda",
+    "extra"}. Triple Whale: el mismo `extra` de siempre (sin `fuente`, que se lee como Triple Whale). Meta: `fuente`
+    "meta" (el prompt dice «de Meta»), las cuentas del alcance, el modelo y la ventana de Meta y el país de la entrada;
+    la moneda es la de las cuentas, None si difieren (R6: nunca una inventada)."""
+    ev, config = alc["ev"], alc["config"]
+    extra = {"modelo": config["modelo_atribucion"], "ventana": config["ventana_atribucion"],
+             "benchmarks": ev["benchmarks"], "meta_roas": ev["meta_roas"], "tienda_id": alc["tienda_id"]}
+    if fuente == galeria.META:
+        extra.update(fuente=alcance_meta.FUENTE, cuentas=list(alc["cuentas"]), pais=pais)
+    else:
+        extra.update(canal=alc["canal"], pais=alc["tienda"]["pais"] if alc["tienda"] else None)
+    return {"ev": ev, "desde": alc["desde"], "hasta": alc["hasta"], "moneda": config["moneda"], "extra": extra}
+
+
+@bp.post("/evaluar")
+def evaluar(cliente):
+    """«Evaluar con IA» de UNA fuente del alcance (`fuente` "tw" | "meta"): su muestra, el precio que mostró su botón,
+    Cobros, la fila y la tarea (`triple_whale.pedidos.pedir_evaluacion`, `max_intentos=1`). Con el alcance mezclado la
+    sección ofrece un botón por fuente y nunca se mezclan en un prompt. Una evaluación en curso (de cualquier fuente: un
+    `job_id` por proyecto) bloquea otra, y una vista que ya no tiene esa fuente no cobra nada."""
+    fuente = (request.form.get("fuente") or "").strip()
+    if fuente not in galeria.FUENTES:
+        abort(404)
+    if tareas_tw.evaluacion_en_curso(cliente):
+        flash(gettext("Ya hay una evaluación con IA en curso."), "warn")
+        return _volver(cliente)
+    al = _alcances(cliente, request.form)
+    alc = al[fuente]
+    if not alc:
+        flash(_sin_alcance(al, fuente), "error")
+        return _volver(cliente)
+    # Sin muestra el aviso es un error (ok None); con otra en curso (carrera con el encolado), una advertencia.
+    ok, mensaje = pedidos.pedir_evaluacion(cliente, _alc_eval(fuente, alc, al["pais"]), session.get("usuario"))
+    flash(mensaje, "ok" if ok else ("error" if ok is None else "warn"))
     return _volver(cliente)
