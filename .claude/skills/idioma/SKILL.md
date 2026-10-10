@@ -99,3 +99,9 @@ nuevos están inscritos en `PLANTILLAS_TRADUCIDAS`; catálogo actualizado, tradu
 sin fuzzy. La comprobación visual en es/en queda a cargo de Claude.
 
 Enmiendas PND-062, entrega 1 (2026-10-10, pedido de Daniel tras revisar la entrega): El aviso de producto obligatorio y el de sesión vencida pasan por gettext y tojson. El enlace Entrar reutiliza el catálogo. Catálogo actualizado, traducciones según glosario y compilación sin fuzzy; los ids internos usan required para no confundir la guarda de texto visible.
+
+PND-062, entrega 2 (2026-10-10, pedido de Daniel): los textos de los cuatro scripts extraídos siguen
+con `_()` y `tojson` en sus plantillas, dentro de JSON `crear-<módulo>-datos`. Los archivos static usan el
+objeto `T`, sin español visible suelto. `test_i18n_estaticos_crear.py` vigila los cuatro archivos y
+`test_pagina_por_partes.py` renderiza y ejecuta es/en sin fijar las traducciones. No se añadieron msgids;
+actualizar → comprobar con glosario (0 pendientes) → compilar, sin fuzzy y sin diferencias en el catálogo.

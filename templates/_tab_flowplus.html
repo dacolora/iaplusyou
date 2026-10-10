@@ -85,7 +85,10 @@
     var guardado = null;
     try { guardado = localStorage.getItem(KEY); } catch (e) {}
     // #flowplus: este script abre el modo; el de cliente.html abre la pestaña Crear.
-    activar(modoDelHash() || guardado || 'referencias');
+    // Los módulos de Crear son defer: registrar sus listeners antes del primer crear:modo.
+    function iniciarModo() { activar(modoDelHash() || guardado || 'referencias'); }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciarModo, { once: true });
+    else iniciarModo();
     // Un enlace a un modo estando ya en la página cambia solo el hash: sin esto
     // cliente.html abría la pestaña Crear pero el modo seguía siendo el de antes.
     window.addEventListener('hashchange', function () {

@@ -465,3 +465,196 @@ def test_gasto_total_grande_incluye_todas_las_paginas(pagina, rol):
     esperado = sum(costos.values()) if rol == 'admin' else sum(libro.precio_milesimas(c, 1.5) / 1000 for c in costos.values())
     html = sopa(pagina['c'].get('/cliente/acme'))
     assert html.select_one('#gasto-desde-inicio strong').get_text() == gastos.formatear(esperado)
+
+
+# Entrega 2: el código se sirve aparte; la página conserva solo sus valores.
+SCRIPTS_CREAR = [
+    ('crear-compositor', '// Tipo (video/imagen), modelo elegido y costo'),
+    ('crear-flowplus', "var raiz = document.getElementById('gp')"),
+    ('crear-audios', "var raiz = document.getElementById('au')"),
+    ('crear-guiones', "var panel = document.getElementById('gpg-panel')"),
+]
+
+
+def _config_crear(html, archivo):
+    import json
+    patron = r'<script type="application/json" id="' + archivo + r'-datos">(.*?)</script>'
+    m = re.search(patron, html, re.S)
+    assert m, f'Falta el JSON de {archivo}'
+    return json.loads(m[1])
+
+
+def test_entrega2_compositor_sin_defer_en_su_lugar(pagina):
+    respuesta = pagina['c'].get('/cliente/acme')
+    html = respuesta.get_data(as_text=True)
+    nodo = next(n for n in sopa(respuesta).select('script')
+                if (n.get('src') or '').startswith('/static/crear-compositor.js?'))
+    assert not nodo.has_attr('defer'), 'El compositor debe registrar las guardas al terminar su sección'
+    assert not nodo.has_attr('async')
+    script = html.index('<script src="' + nodo['src'] + '"')
+    formulario = html.index('id="form-flowplus"')
+    assert formulario < html.index('</form>', formulario) < script
+    assert html.index('id="crear-compositor-datos"') < script
+    assert html.index('function formatearUSD(') < script
+    # Guiones, chat, Audios y el selector de modos aparecen después del compositor.
+    for dependencia in ('/static/crear-guiones.js?', '/static/crear-flowplus.js?',
+                        '/static/crear-audios.js?', "var KEY = 'crear-modo-"):
+        assert script < html.index(dependencia), dependencia
+
+
+@pytest.mark.parametrize('cliente', ['acme', 'otro'])
+@pytest.mark.parametrize('campo,endpoint', [('urlBandeja', 'fp_bandeja'),
+                                          ('urlDescribir', 'fp_describir'),
+                                          ('urlVaciar', 'fp_vaciar_referencias')])
+def test_entrega2_urls_json_del_proyecto(pagina, cliente, campo, endpoint):
+    from flask import url_for
+    respuesta = pagina['c'].get(f'/cliente/{cliente}')
+    sopa(respuesta)
+    datos = _config_crear(respuesta.get_data(as_text=True), 'crear-compositor')['datos']
+    with pagina['dashboard'].app.test_request_context():
+        esperado = url_for(endpoint, cliente=cliente)
+    assert datos[campo] == esperado
+
+
+def _sesion_cliente_con_margen(pagina):
+    from cobros import libro
+    libro.configurar('acme', usuario='admin', cobrar=True, margen=1.5)
+    with pagina['c'].session_transaction() as s:
+        s.update(usuario='user_acme', rol='cliente', cliente='acme')
+
+
+def test_entrega2_tarifa_musica_json_es_precio_para_cliente(pagina):
+    import gastos
+    _sesion_cliente_con_margen(pagina)
+    costo = gastos.costo_musica_estimada('generada')
+    assert costo > 0
+    respuesta = pagina['c'].get('/cliente/acme')
+    sopa(respuesta)
+    datos = _config_crear(respuesta.get_data(as_text=True), 'crear-compositor')['datos']
+    assert datos['tarifaMusica'] == pytest.approx(costo * 1.5)
+    assert datos['tarifaMusica'] != costo
+
+
+@pytest.mark.parametrize('campo,clave', [('preciosClon', 'precios_clon'),
+                                       ('preciosDisenar', 'precios_disenar')])
+def test_entrega2_tablas_voces_json_sin_cruzarse(pagina, monkeypatch, campo, clave):
+    _sesion_cliente_con_margen(pagina)
+    d = pagina['dashboard']
+    original = d._contexto_mis_voces
+    contextos = {}
+    def capturar(cliente):
+        contexto = original(cliente)
+        contextos[cliente] = contexto
+        return contexto
+    monkeypatch.setattr(d, '_contexto_mis_voces', capturar)
+    respuesta = pagina['c'].get('/cliente/acme')
+    sopa(respuesta)
+    contexto = contextos['acme']
+    assert contexto['precios_clon'] != contexto['precios_disenar']
+    datos = _config_crear(respuesta.get_data(as_text=True), 'crear-audios')['datos']
+    assert datos[campo] == contexto[clave]
+
+
+@pytest.mark.parametrize('archivo,firma', SCRIPTS_CREAR)
+def test_entrega2_cuerpo_fuera_del_html_y_estatico_versionado(pagina, archivo, firma):
+    from pathlib import Path
+    from urllib.parse import urlparse, parse_qs
+    html = pagina['c'].get('/cliente/acme').get_data(as_text=True)
+    assert firma not in html, f'Sigue inline: {archivo}'
+    url = f'/static/{archivo}.js?v={int(Path("static", archivo + ".js").stat().st_mtime)}'
+    nodo = next((n for n in sopa(pagina['c'].get('/cliente/acme')).select('script') if n.get('src') == url), None)
+    # El compositor corre en su sitio, sin defer (guardas de cobro, re-revisión 2026-10-10); los demás, con defer.
+    assert nodo and nodo.has_attr('defer') == (archivo != 'crear-compositor')
+    assert parse_qs(urlparse(nodo['src']).query)['v']
+    respuesta = pagina['c'].get(nodo['src'])
+    assert respuesta.status_code == 200
+    assert firma in respuesta.get_data(as_text=True)
+    assert 'immutable' in respuesta.headers['Cache-Control']
+    assert 'max-age=31536000' in respuesta.headers['Cache-Control']
+
+
+@pytest.mark.parametrize('archivo,firma', SCRIPTS_CREAR)
+def test_entrega2_node_check(archivo, firma):
+    import subprocess
+    r = subprocess.run(['node', '--check', f'static/{archivo}.js'], text=True, capture_output=True)
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+@pytest.mark.parametrize('archivo,firma', SCRIPTS_CREAR)
+def test_entrega2_textos_de_pagina_traducidos_y_usados(pagina, monkeypatch, archivo, firma):
+    from pathlib import Path
+    import idiomas
+    from tests.i18n_util import _SCRIPT_TOKEN, _con_marca
+    valores = {}
+    for idioma in ('es', 'en'):
+        monkeypatch.setattr(idiomas, 'de_usuario', lambda *a, idioma=idioma: idioma)
+        html = pagina['c'].get('/cliente/acme').get_data(as_text=True)
+        valores[idioma] = _config_crear(html, archivo)['textos']
+    assert valores['es'] and valores['es'].keys() == valores['en'].keys()
+    assert valores['es'] != valores['en'], 'El objeto no cambió de idioma'
+    # Símbolos y nombres compartidos no tienen traducción; las frases con español sí cambian.
+    for clave, texto in valores['es'].items():
+        if _con_marca(texto):
+            assert valores['en'][clave] != texto, f'{archivo}.{clave} no cambió de idioma'
+    js = Path('static', archivo + '.js').read_text()
+    assert '{{' not in js and '{%' not in js
+    literales = [t for t in _SCRIPT_TOKEN.findall(js) if t[0] in ("'", '"', '`') and _con_marca(t)]
+    assert not literales, literales
+    claves_usadas = set(re.findall(r'\bT\.(\w+)', js))
+    assert claves_usadas == set(valores['es']), 'Textos perdidos o sin objeto de la página'
+
+
+@pytest.mark.parametrize('origen', ['producto', 'reusar'])
+def test_entrega2_precarga_llega_al_compositor(pagina, monkeypatch, origen):
+    import creative_flow
+    sembrar(pagina, 1)
+    d, c = pagina['dashboard'], pagina['c']
+    if origen == 'producto':
+        r = c.post('/cliente/acme/catalogo/producto/propio/crear-con')
+        # El contrato de la ruta se comprueba además abajo con su selección.
+        assert r.status_code == 302
+    else:
+        r = c.post('/cliente/acme/creative_flow/crear', data={'accion_central': 'Girando', 'modelo': 'wan3', 'duracion_objetivo': '10', 'tipo': 'video', 'modo_prompt': 'director', 'bandeja_vista': '1'})
+        assert r.status_code == 302
+        cf, = creative_flow.cargar('acme')
+        r = c.post(f'/cliente/acme/flowplus/reusar/{cf}')
+        assert r.status_code == 302
+    html = c.get('/cliente/acme').get_data(as_text=True)
+    prefill = _config_crear(html, 'crear-compositor')['datos']['prefill']
+    assert prefill
+    if origen == 'producto':
+        assert prefill['productos_catalogo'] == ['producto:propio']
+    else:
+        assert prefill['texto'] == 'Girando' and prefill['modelo'] == 'wan3' and prefill['duracion'] == 10
+    _ejecutar_crear(html)
+
+
+def _ejecutar_crear(html, hash='#referencias', guardado=None):
+    import json
+    import subprocess
+    from pathlib import Path
+    arbol = HTML(html).raiz
+    def serializar(n):
+        return {'tag': n.tag, 'attrs': n.attrs, 'textos': n.textos, 'hijos': [serializar(h) for h in n.hijos]}
+    nodos_scripts = Arbol(arbol).select('script')
+    scripts = [{'archivo': nombre, 'codigo': Path('static', nombre + '.js').read_text(),
+                'defer': next(n for n in nodos_scripts
+                              if (n.get('src') or '').startswith('/static/' + nombre + '.js?')).has_attr('defer')}
+               for nombre in ('crear-compositor', 'crear-guiones', 'crear-flowplus', 'crear-audios')]
+    modo = (hash[1:].split('?')[0] if hash != '#creativeflowplus' else guardado) or 'referencias'
+    modos = next(s for s in re.findall(r'<script>(.*?)</script>', html, re.S) if "var KEY = 'crear-modo-" in s)
+    formato = next(s for s in re.findall(r'<script>(.*?)</script>', html, re.S) if 'function formatearUSD(' in s)
+    scripts.insert(0, {'archivo': 'formatearUSD-inline', 'codigo': formato, 'defer': False})
+    r = subprocess.run(['node', 'tests/js/crear_estaticos.cjs'], text=True, capture_output=True,
+                       input=json.dumps({'dom': serializar(arbol), 'scripts': scripts, 'modos': modos,
+                                         'hash': hash, 'modo': modo, 'guardado': guardado}))
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+@pytest.mark.parametrize('idioma', ['es', 'en'])
+@pytest.mark.parametrize('hash,guardado', [('#flowplus', None), ('#creativeflowplus', 'flowplus'),
+                                          ('#referencias', 'flowplus'), ('#audios', None)])
+def test_entrega2_inicializacion_defer_y_eventos_en_node(pagina, monkeypatch, hash, guardado, idioma):
+    import idiomas
+    monkeypatch.setattr(idiomas, 'de_usuario', lambda *a: idioma)
+    _ejecutar_crear(pagina['c'].get('/cliente/acme').get_data(as_text=True), hash, guardado)

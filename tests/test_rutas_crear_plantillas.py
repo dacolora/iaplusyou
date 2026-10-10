@@ -2,6 +2,8 @@
 cuenta con «Crear super prompt con IA»; «Generar video» manda el texto tal cual."""
 import re
 
+from tests.js_de_pagina import con_script_estatico
+
 from tests.test_rutas_crear_director import _crear, app  # noqa: F401  (fixture: admin en /cliente/acme)
 
 IMAGEN = {"tipo": "imagen", "url": "https://x/1.png", "frame_url": "https://x/1.png", "etiqueta": "@Imagen 1"}
@@ -101,6 +103,7 @@ def _form(app):
 
 def test_formulario_trae_la_receta_junto_al_super_prompt(app):
     form, crear = _form(app)
+    crear = con_script_estatico(crear, 'crear-compositor.js')
     assert '<select name="plantilla" id="fp-plantilla">' in form
     # Va después de «Crear super prompt» (el único camino que la usa), no en la barra de «Generar».
     assert form.index('id="fp-armar"') < form.index('id="fp-plantilla"')
