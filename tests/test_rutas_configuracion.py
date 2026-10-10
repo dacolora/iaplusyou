@@ -8,6 +8,7 @@ import re
 
 import pytest
 
+from tests.js_de_pagina import con_script_estatico
 from tests.test_rutas_productos import _cliente_admin
 
 # (variable, valor distintivo que NUNCA debe aparecer en el HTML)
@@ -745,6 +746,7 @@ def test_precios_en_botones_crear_y_catalogo(app, monkeypatch):
     assert 'data-plantilla="Producir {n} finales ≈ US$ 0,20 c/u"' in detalle
     assert ">Producir finales ≈ US$ 0,20 c/u</button>" in detalle
     html = app["c"].get("/cliente/acme").data.decode()
+    html = con_script_estatico(html, 'crear-compositor.js')
     # Costo real de la pieza, con el mismo formato (en la tarjeta).
     assert "costó US$ 0,85" in html
     # Generar video/imagen: el estimado se calcula en JS con el formato «≈ US$ 1,00»

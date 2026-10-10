@@ -1,6 +1,8 @@
 """Rutas de Audios en Crear (spec 2026-09-28 §4): JSON con la lista ya pintada."""
 import re
 
+from tests.js_de_pagina import con_script_estatico
+
 import pytest
 
 import audios
@@ -294,6 +296,7 @@ def test_la_pagina_trae_mis_voces_el_panel_y_diez_idiomas(app):
     for forma in ("clonar", "disenar"):
         panel = re.search(rf'<div[^>]*data-vp-form="{forma}"[^>]*>', html).group(0)
         assert 'role="tabpanel"' in panel and f'id="au-vp-form-{forma}"' in panel
+    html = con_script_estatico(html, 'crear-audios.js')
     # No hay arnés de JS: como en test_base_visual/test_movil, se mira el
     # script de la página. Un clon que salió desmarca la casilla de permiso
     # (cada clon pide su propio permiso) y elegir otro archivo también la
@@ -331,6 +334,7 @@ def test_tabla_clon_coincide_con_estimador_y_se_calcula_una_vez(app, monkeypatch
         for nombre, idioma in [('Ana', 'es'), ('Dániel Pérez', 'en'), ('李雷', 'de')]:
             assert contexto['precios_clon'][idioma][len(nombre)] == original('voz_clonada', nombre=nombre, idioma=idioma)['usd']
         html = app['c'].get('/cliente/acme').get_data(as_text=True)
+        html = con_script_estatico(html, 'crear-audios.js')
         d._contexto_mis_voces('acme')
         assert cantidad == len(audios.IDIOMAS) * (voces_propias.MAX_NOMBRE + 1)
         assert len(calculos) == cantidad
@@ -344,6 +348,7 @@ def test_clonar_refresca_precio_al_vaciar_nombre(app):
     import json
     import subprocess
     html = app['c'].get('/cliente/acme').get_data(as_text=True)
+    html = con_script_estatico(html, 'crear-audios.js')
     funcion = re.search(r'function refrescarPrecioClon\(\) \{.*?\n  \}', html, re.S).group()
     accion = html.split('enviarVoz(raiz.dataset.urlVpClonar, fd).then(function (ok) {', 1)[1].split('    });', 1)[0]
     tabla = app['dashboard']._contexto_mis_voces('acme')['precios_clon']
@@ -369,6 +374,7 @@ def test_diseno_refresca_precio_por_nombre_e_idioma_en_node(app):
     import json
     import subprocess
     html = app['c'].get('/cliente/acme').get_data(as_text=True)
+    html = con_script_estatico(html, 'crear-audios.js')
     assert 'id="au-vp-disenar-precio"' in html
     tabla = app['dashboard']._contexto_mis_voces('acme')['precios_disenar']
     funcion = html[html.index('function refrescarPrecioDisenar('):html.index('function refrescarPrecioClon(')]
@@ -469,6 +475,7 @@ def test_r8_ver_mas_usa_espaciado_comun(app):
 def test_pnd095_ver_mas_agrega_tarjetas_en_node(app):
     import subprocess
     html = app['c'].get('/cliente/acme').get_data(as_text=True)
+    html = con_script_estatico(html, 'crear-audios.js')
     ini = html.index("    var mas = ev.target.closest('.au-mas');")
     fin = html.index("    var b = ev.target.closest('.au-borrar');", ini)
     script = html[ini:fin]

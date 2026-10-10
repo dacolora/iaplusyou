@@ -1,6 +1,8 @@
 """Rutas de Crear con el director (spec 2026-09-18 §7)."""
 import pytest
 
+from tests.js_de_pagina import con_script_estatico, config_script
+
 from tests.test_rutas_experimentos import _cliente_admin
 
 
@@ -435,12 +437,14 @@ def _precio_js_compositor(html):
     import json
     import re
     import subprocess
+    datos = config_script(html, 'crear-compositor.js')['datos']
+    html = con_script_estatico(html, 'crear-compositor.js')
     entrada = re.search(r'<input[^>]*name="modelo_video"[^>]*value="wan3"[^>]*>', html).group()
     attrs = dict(re.findall(r'([\w-]+)="([^"]*)"', entrada))
     dataset = {'usdSeg': attrs['data-usd-seg'], 'usdBorrador': attrs['data-usd-borrador'], 'recargo': attrs['data-recargo']}
     codigo = html.split('var usd = 0;', 1)[1].split('// «Generar»', 1)[0]
     tarifa = re.search(r'var usdMusica = ([^;]+);', html)
-    prefijo = ('const m = ' + json.dumps({'value': 'wan3', 'dataset': dataset}) + ';\n'
+    prefijo = ('const D = ' + json.dumps(datos) + ';\nconst m = ' + json.dumps({'value': 'wan3', 'dataset': dataset}) + ';\n'
                "const esImagen=false, duracion={value:'8'}, musicaSel={value:'calmado'};\n"
                "const document={getElementById: id => ({checked:true})};\n"
                "const esPropia=()=>false, facturablesEntrada=()=>0, segundosVideosBandeja=()=>0;\n"

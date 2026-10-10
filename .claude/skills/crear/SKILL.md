@@ -201,3 +201,9 @@ Los archivados solo vuelven si están marcados. Historial de swaps: 24, vivos pr
 Ver más por fetch sin scripts. Las pruebas envían los inputs del fragmento a ambas rutas con proveedores dobles.
 
 Enmiendas PND-062, entrega 1 (2026-10-10, pedido de Daniel tras revisar la entrega): Cambiar producto comprueba la elección antes de enviar archivos aunque el selector siga cerrado: cancela submit, abre sel-clone y muestra el aviso por catálogo. No cambia producto_id ni la ruta de generación. Los contadores del selector y del compositor vuelven a contar activos/colores elegibles, como antes de paginar.
+
+PND-062, entrega 2 (2026-10-10, pedido de Daniel): el compositor se carga con `defer` desde
+`static/crear-compositor.js`; `_tab_creativeflowplus.html` conserva sus textos traducidos y los seis datos
+interpolados en `#crear-compositor-datos` (JSON). `fp_prefill`, las etiquetas de la bandeja, las rutas y la
+misma tarifa con margen llegan intactos. Las precargas de Crear con este producto y Editar y crear otra
+siguen aplicándose antes del primer evento de modo; modelos, precios, DOM y POST no cambian.
