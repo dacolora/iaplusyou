@@ -52,6 +52,9 @@ def wompi(monkeypatch):
         raise AssertionError("la prueba no debe llamar a la red")
     for verbo in ("get", "post", "put", "request"):
         monkeypatch.setattr(mod.requests, verbo, _sin_red)
+    # El reloj de los eventos: un minuto después del `timestamp` del ejemplo de la doc (1530291411), así el
+    # vector de la doc sigue valiendo dentro de la ventana de 72 h (revisión final 2026-10-10).
+    monkeypatch.setattr(mod, "_ahora", lambda: 1530291411 + 60)
     return mod
 
 
@@ -571,3 +574,13 @@ def test_pasarela_con_llaves_de_pruebas_en_produccion_cae_a_bold(wompi, monkeypa
     monkeypatch.setenv("PLATAFORMA_URL", "https://app.creatvmachine.com")
     monkeypatch.setenv("BOLD_LLAVE_IDENTIDAD", "bold-de-prueba")  # llave-de-prueba
     assert pasarela.para_recargas() == "bold"
+
+
+
+@pytest.mark.parametrize("desfase,valido", [
+    (-72 * 3600 - 1, False), (-72 * 3600 + 1, True), (0, True), (5 * 60, True), (5 * 60 + 1, False)])
+def test_evento_fuera_de_la_ventana_de_tiempo_no_vale(wompi, monkeypatch, desfase, valido):
+    """Un evento verdadero repetido más de 72 h después (o con la hora más de 5 min adelante) no vale."""
+    ts = 1530291411
+    monkeypatch.setattr(wompi, "_ahora", lambda: ts - desfase)
+    assert wompi.evento_valido(_evento(ts=ts)) is valido

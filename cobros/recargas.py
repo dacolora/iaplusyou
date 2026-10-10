@@ -447,6 +447,8 @@ def _aplicar_wompi(con, fila, tx):
         return "no_cuadra"
     if status == "APPROVED":
         if fila["estado"] not in ACREDITABLES:
+            if fila["estado"] == "aprobada" and fila.get("pasarela_ref") and fila["pasarela_ref"] != tx_id:
+                return "otro_pago"   # otra transacción aprobada para una recarga ya acreditada: al admin
             return "duplicada"
         n = con.execute(r.update().where(r.c.id == rid, r.c.estado.in_(ACREDITABLES)).values(
             estado="aprobada", pasarela_ref=tx_id, moneda_pago=wompi.MONEDA,
@@ -506,6 +508,8 @@ def _avisar_wompi(resultado, fila, tx):
         return
     if resultado == "acreditada":
         _avisar_acreditada(fila["cliente"], fila["milesimas"], MEDIO_WOMPI)
+    elif resultado == "otro_pago":
+        _avisar_otro_pago(fila, tx)
     elif resultado == "anulada":
         cliente, milesimas, referencia = fila["cliente"], fila["milesimas"], fila["referencia"]
         _en_segundo_plano(lambda: avisos.admin(
@@ -514,6 +518,25 @@ def _avisar_wompi(resultado, fila, tx):
             lambda: gettext("Wompi anuló la recarga %(ref)s de %(cliente)s: descontamos %(monto)s de su saldo.",
                             ref=referencia, cliente=cliente, monto=_monto(milesimas)),
             cliente=cliente))
+
+
+def _avisar_otro_pago(fila, tx):
+    """Al admin, una vez por (recarga, transacción) en este proceso: Wompi aprobó OTRA transacción para una
+    recarga ya acreditada (dos pestañas pagando el mismo checkout). No se acredita dos veces; la plata entró y
+    hay que devolverla o acreditarla a mano (revisión final 2026-10-10, como los pagos de plan)."""
+    clave = (fila["id"], str(tx.get("id") or ""), "otro_pago")
+    if clave in _AVISADOS_NO_CUADRA:
+        return
+    _AVISADOS_NO_CUADRA.add(clave)
+    cliente, referencia, tx_id = fila["cliente"], fila["referencia"], str(tx.get("id") or "—")[:64]
+    log.warning("la recarga %s ya aprobada recibió otra transacción aprobada (%s)", fila["id"], tx_id)
+    _en_segundo_plano(lambda: avisos.admin(
+        "wompi_no_cuadra",
+        lambda: gettext("Wompi aprobó un segundo pago para una recarga de %(cliente)s", cliente=cliente),
+        lambda: gettext("La recarga «%(ref)s» de %(cliente)s ya estaba acreditada y Wompi aprobó otra transacción "
+                        "(%(tx)s) con la misma referencia. No se acreditó dos veces: revísalo en el panel de Wompi "
+                        "y devuélvelo o acredítalo a mano.", ref=referencia, cliente=cliente, tx=tx_id),
+        cliente=cliente))
 
 
 def _evento_id_wompi(cuerpo):

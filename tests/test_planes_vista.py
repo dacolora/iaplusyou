@@ -594,3 +594,36 @@ def test_con_tope_cero_no_se_promete_ia_incluida(base, pagina, falso, avisos):
                      "user_acme", 300, ahora=db.ahora())
     texto = _texto(_panel(pagina))
     assert "Plan Básico" in texto and "IA incluida" not in texto
+
+
+# --- revisión final 2026-10-10: seguridad --------------------------------------------------
+
+def test_un_json_anidado_sin_fin_en_el_formulario_no_es_500(base, pagina, pro, falso, avisos):
+    from cobros import rutas
+    hondo = '{"a":' + "[" * 4990
+    assert rutas._token_en(hondo) is None
+    _cobra()
+    r = pagina().post("/cliente/acme/plan/alta", data=_form_alta(pro, token="", otro=hondo))
+    assert r.status_code == 302 and falso.fuentes == []
+
+
+def test_la_constancia_guarda_ip_y_navegador_y_nunca_recorta_el_alta(base, pagina, pro, falso, avisos):
+    import json
+    import db
+    from cobros import planes
+    _cobra()
+    pagina().post("/cliente/acme/plan/alta", data=_form_alta(pro),
+                  headers={"User-Agent": "Navegador/1.0 " + "x" * 400}, environ_base={"REMOTE_ADDR": "203.0.113.7"})
+    sid = planes.suscripcion("acme")["id"]
+    for i in range(12):
+        planes.cambiar_fuente("acme", "CARD", f"tok_test_{i}_cambio", "pagos@acme.co", dict(ACEPTACION), "user_acme")
+
+    def constancia():
+        with db.conectar() as con:
+            return json.loads(con.execute(sa.select(db.kv.c.valor)
+                                          .where(db.kv.c.clave == f"planes:aceptacion:{sid}")).scalar())
+    lista = constancia()
+    assert len(lista) == 10
+    assert lista[0]["ip"] == "203.0.113.7" and lista[0]["user_agent"].startswith("Navegador/1.0")
+    assert len(lista[0]["user_agent"]) == 300 and lista[0]["acceptance_token"] == "eyJ.acepta.widget"
+    assert lista[-1]["aceptada_en"] >= lista[0]["aceptada_en"]

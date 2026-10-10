@@ -942,7 +942,8 @@ def _validar_aceptacion(aceptacion):
 def _guardar_aceptacion(con, sid, aceptacion, usuario, ahora, usd, ciclo):
     """§10: cuándo y quién aceptó, con los dos tokens de Wompi, las casillas y
     el precio y el ciclo que vio (en `kv`: la tabla `suscripcion` no tiene
-    `extra`). Una entrada por alta o cambio de tarjeta."""
+    `extra`), con la ip y el navegador. Una entrada por alta o cambio de
+    tarjeta; la del alta nunca se recorta."""
     clave = CLAVE_ACEPTACION.format(suscripcion=sid)
     previo = con.execute(sa.select(db.kv.c.valor).where(db.kv.c.clave == clave)).scalar()
     try:
@@ -953,8 +954,11 @@ def _guardar_aceptacion(con, sid, aceptacion, usuario, ahora, usd, ciclo):
     lista.append({"acceptance_token": aceptacion["acceptance_token"].strip(),
                   "personal_token": aceptacion["personal_token"].strip(),
                   **{c: True for c in CONSENTIMIENTOS}, "usd": usd, "ciclo": ciclo,
-                  "usuario": usuario, "aceptada_en": ahora})
-    texto = json.dumps(lista[-10:])
+                  "usuario": usuario, "aceptada_en": ahora,
+                  "ip": str(aceptacion.get("ip") or "")[:64] or None,
+                  "user_agent": str(aceptacion.get("user_agent") or "")[:300] or None})
+    # La primera (el alta) nunca se recorta: es la que autorizó los cobros; de las demás, las 9 últimas.
+    texto = json.dumps(lista if len(lista) <= 10 else lista[:1] + lista[-9:])
     if previo is None:
         con.execute(db.kv.insert().values(clave=clave, valor=texto, actualizado_en=ahora))
     else:

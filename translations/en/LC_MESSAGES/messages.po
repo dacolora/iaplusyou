@@ -10157,6 +10157,10 @@ msgid "La recarga va de US$ %(min)s a US$ %(max)s, en dólares enteros."
 msgstr "A top-up goes from US$ %(min)s to US$ %(max)s, in whole dollars."
 
 #, python-format
+msgid "La recarga «%(ref)s» de %(cliente)s ya estaba acreditada y Wompi aprobó otra transacción (%(tx)s) con la misma referencia. No se acreditó dos veces: revísalo en el panel de Wompi y devuélvelo o acredítalo a mano."
+msgstr "Top-up «%(ref)s» for %(cliente)s was already credited and Wompi approved another transaction (%(tx)s) with the same reference. It was not credited twice: check it in the Wompi dashboard and refund it or credit it manually."
+
+#, python-format
 msgid "La receta «%(receta)s» necesita un video de referencia en la bandeja y el modelo Wan 3.0. Agrégalo o elige otra receta."
 msgstr "The “%(receta)s” recipe needs a reference video in the tray and the Wan 3.0 model. Add one or pick another recipe."
 
@@ -15400,6 +15404,9 @@ msgstr ""
 "Second pass with Bria: it raises the resolution <strong>without regenerating</strong> the\n"
 "    image, so it doesn't change the face, the pose or the background."
 
+msgid "Segundo pago"
+msgstr "Second payment"
+
 #, python-format
 msgid "Según el Pixel, estos anuncios vendieron %(ventas)s que en los %(n)s días anteriores, con %(gasto)s de gasto: cada 1 %(moneda)s trajo %(mer)s %(moneda)s atribuidos (antes %(mer_antes)s)."
 msgstr "According to the Pixel, these ads sold %(ventas)s than in the previous %(n)s days, with %(gasto)s spend: every 1 %(moneda)s brought %(mer)s %(moneda)s attributed (before, %(mer_antes)s)."
@@ -18283,6 +18290,10 @@ msgstr "Wompi voided a top-up for %(cliente)s"
 
 msgid "Wompi aprobó tu pago. Lo sumamos a tu saldo apenas Wompi nos lo confirme; suele tardar unos segundos."
 msgstr "Wompi approved your payment. We'll add it to your balance as soon as Wompi confirms it; it usually takes a few seconds."
+
+#, python-format
+msgid "Wompi aprobó un segundo pago para una recarga de %(cliente)s"
+msgstr "Wompi approved a second payment for a top-up for %(cliente)s"
 
 msgid "Wompi confirmó el cobro: el pago quedó aprobado y el plan, al día."
 msgstr "Wompi confirmed the charge: the payment is approved and the plan is up to date."

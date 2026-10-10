@@ -18,6 +18,7 @@ import hashlib
 import hmac
 import os
 import re
+import time
 from urllib.parse import urlencode, urlsplit
 
 import requests
@@ -293,13 +294,22 @@ def firma_integridad(referencia, centavos, moneda=MONEDA, expiracion=None):
     return hashlib.sha256(cadena.encode("utf-8")).hexdigest()
 
 
+VIEJO_S = 72 * 3600        # un evento firmado hace más de 72 h no se acepta (Wompi reintenta hasta 24 h)
+FUTURO_S = 5 * 60          # ni uno con la hora más de 5 min adelante
+
+
+def _ahora():
+    return time.time()
+
+
 def evento_valido(cuerpo, checksum_header=None):
     """Firma de un evento (wompi-api.md §8): sha256 de los valores de
     `signature.properties` (rutas dentro de `data`, en orden) + `timestamp` +
     secreto de eventos, comparado en tiempo constante (sin importar
     mayúsculas) con `signature.checksum` y, si viene, con X-Event-Checksum.
     Cualquier forma rara → False, nunca una excepción. Con llaves de pruebas
-    fuera de local (o sin secreto) → False."""
+    fuera de local (o sin secreto) → False. Un `timestamp` de hace más de 72 h
+    o de más de 5 min en el futuro → False."""
     if not configurado():
         return False
     if not isinstance(cuerpo, dict):
@@ -311,6 +321,9 @@ def evento_valido(cuerpo, checksum_header=None):
     if not isinstance(propiedades, list) or not propiedades or not isinstance(suma, str) or not suma.strip():
         return False
     if _entero(marca) is None:
+        return False
+    # Ventana de tiempo (revisión final 2026-10-10): un evento verdadero repetido días después no vale.
+    if not _ahora() - VIEJO_S <= marca <= _ahora() + FUTURO_S:
         return False
     valores = []
     for prop in propiedades:

@@ -50,6 +50,8 @@ _CANDADO = threading.Lock()
 # (bold.TIEMPO_INTERACTIVO). La tarea periódica del worker usa la espera larga.
 _EN_CURSO = set()
 _SEMAFORO = threading.BoundedSemaphore(2)
+# Los ids de las URL llevan `<int(max=9223372036854775807):…>` (el entero más grande de SQLite): uno más largo es
+# 404, no un OverflowError (500) al consultarlo (revisión final 2026-10-10).
 
 
 def _volver(cliente):
@@ -244,7 +246,7 @@ def recargar(cliente):
     return redirect(r["url"])   # checkout.bold.co (bold.crear_link lo comprueba) o wompi.CHECKOUT
 
 
-@bp.get("/cliente/<cliente>/saldo/recarga/<int:rid>")
+@bp.get("/cliente/<cliente>/saldo/recarga/<int(max=9223372036854775807):rid>")
 def recarga_vuelta(cliente, rid):
     """La vuelta del checkout. Bold: nunca acredita ni lee los parámetros que
     Bold agrega a la URL (bold-tx-status…); el estado lo da su servidor (el
@@ -264,7 +266,7 @@ def recarga_vuelta(cliente, rid):
                            consultable=recargas.consultable(recarga, tx_id), tx_id=tx_id)
 
 
-@bp.get("/cliente/<cliente>/saldo/recarga/<int:rid>/estado")
+@bp.get("/cliente/<cliente>/saldo/recarga/<int(max=9223372036854775807):rid>/estado")
 def recarga_estado(cliente, rid):
     recarga = recargas.obtener(cliente, rid)
     if recarga is None:
@@ -275,7 +277,7 @@ def recarga_estado(cliente, rid):
                     "saldo_texto": gastos.formatear(libro.saldo(cliente) / 1000)})
 
 
-@bp.post("/cliente/<cliente>/saldo/recarga/<int:rid>/verificar")
+@bp.post("/cliente/<cliente>/saldo/recarga/<int(max=9223372036854775807):rid>/verificar")
 def recarga_verificar(cliente, rid):
     recarga = recargas.obtener(cliente, rid)
     if recarga is None:
@@ -286,15 +288,22 @@ def recarga_verificar(cliente, rid):
     return _volver(cliente)
 
 
+def _cuerpo_con_tope():
+    """El cuerpo crudo leyendo como mucho MAX_CUERPO + 1 bytes del stream (revisión final 2026-10-10): con un
+    envío por trozos (chunked) no hay Content-Length que mirar antes. None si pasa el tope."""
+    cuerpo = request.stream.read(recargas.MAX_CUERPO + 1)
+    return None if len(cuerpo) > recargas.MAX_CUERPO else cuerpo
+
+
 @bp.post("/pagos/bold/webhook")
 def bold_webhook():
     """Bold avisa un pago. Cuerpo crudo con tope de 64 KB (por Content-Length
     antes de leer y por lo leído después), firma verificada en recargas,
-    respuesta sin cuerpo."""
+    respuesta sin cuerpo. Con un envío por trozos, el tope lo pone la lectura."""
     if (request.content_length or 0) > recargas.MAX_CUERPO:
         return "", 413
-    cuerpo = request.get_data(cache=False, as_text=False)
-    if len(cuerpo) > recargas.MAX_CUERPO:
+    cuerpo = _cuerpo_con_tope()
+    if cuerpo is None:
         return "", 413
     status, _resultado = recargas.procesar_webhook(cuerpo, request.headers.get("x-bold-signature"))
     return "", status
@@ -309,8 +318,8 @@ def wompi_eventos():
     400 cuerpo inválido, 413 demasiado grande."""
     if (request.content_length or 0) > recargas.MAX_CUERPO:
         return "", 413
-    cuerpo = request.get_data(cache=False, as_text=False)
-    if len(cuerpo) > recargas.MAX_CUERPO:
+    cuerpo = _cuerpo_con_tope()
+    if cuerpo is None:
         return "", 413
     status, _resultado = recargas.procesar_evento_wompi(cuerpo, request.headers.get("X-Event-Checksum"))
     return "", status
@@ -454,7 +463,9 @@ def _aceptacion(form):
     las tres casillas, cada una `True` solo si vino marcada con «1»."""
     return {"acceptance_token": (form.get("acceptance_token") or "").strip(),
             "personal_token": (form.get("personal_token") or "").strip(),
-            **{c: form.get(c) == "1" for c in planes.CONSENTIMIENTOS}}
+            **{c: form.get(c) == "1" for c in planes.CONSENTIMIENTOS},
+            # Para la constancia (revisión final 2026-10-10): la ip ya pasó por ProxyFix; el navegador, recortado.
+            "ip": (request.remote_addr or "")[:64], "user_agent": (request.headers.get("User-Agent") or "")[:300]}
 
 
 def _token_en(valor):
@@ -467,7 +478,7 @@ def _token_en(valor):
         return None
     try:
         d = json.loads(texto)
-    except ValueError:
+    except (ValueError, RecursionError):   # un JSON anidado sin fin no es un 500
         return None
     for bloque in (d, d.get("data") if isinstance(d, dict) else None):
         if isinstance(bloque, dict):
@@ -632,7 +643,7 @@ def plan_cancelar(cliente):
     return _volver_plan(cliente)
 
 
-@bp.get("/cliente/<cliente>/plan/pago/<int:pago_id>/estado")
+@bp.get("/cliente/<cliente>/plan/pago/<int(max=9223372036854775807):pago_id>/estado")
 def plan_pago_estado(cliente, pago_id):
     """El sondeo del panel mientras Wompi confirma un cobro: el estado guardado
     y, como mucho una vez cada 3 s por pago y con cupo, una consulta corta a
@@ -944,7 +955,7 @@ def admin_plan_crear():
     return _volver_planes()
 
 
-@bp.post("/admin/cobros/planes/<int:plan_id>")
+@bp.post("/admin/cobros/planes/<int(max=9223372036854775807):plan_id>")
 @_solo_admin
 def admin_plan_editar(plan_id):
     """Cambia nombre, precios, margen, tope y orden. El precio nuevo solo vale para suscripciones nuevas (cada
@@ -959,7 +970,7 @@ def admin_plan_editar(plan_id):
     return _volver_planes(f"plan-{plan_id}")
 
 
-@bp.post("/admin/cobros/planes/<int:plan_id>/activo")
+@bp.post("/admin/cobros/planes/<int(max=9223372036854775807):plan_id>/activo")
 @_solo_admin
 def admin_plan_activo(plan_id):
     """Ofrecer (activo=1) o archivar (activo=0): archivado no se ofrece; las suscripciones siguen."""
@@ -1067,7 +1078,7 @@ _RESUELTO = {
 }
 
 
-@bp.post("/admin/cobros/<cliente>/plan/pago/<int:pago_id>/resolver")
+@bp.post("/admin/cobros/<cliente>/plan/pago/<int(max=9223372036854775807):pago_id>/resolver")
 @_solo_admin
 def admin_plan_resolver(cliente, pago_id):
     """Resolver a mano un pago de plan pendiente (`planes.resolver_pendiente`): «Sí se cobró» relee la

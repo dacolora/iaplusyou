@@ -3,6 +3,7 @@ el Web Checkout firmado, la vuelta con `?id=` verificada en Wompi, los eventos
 firmados y la periódica. Wompi y la TRM siempre falsos: ninguna prueba sale a
 la red. Las llaves son falsas y cada línea que trae una lleva la marca."""
 import hashlib
+import io
 import json
 from datetime import datetime, timedelta
 from urllib.parse import parse_qsl, urlsplit
@@ -803,7 +804,64 @@ def test_evento_de_un_plan_de_punta_a_punta_abre_el_periodo_una_sola_vez(entorno
             referencia=ref, estado="pendiente", creado_en=ahora, actualizado_en=ahora, medio="wompi"))
     tx = _tx(ref, centavos=391_241_000)
     assert _ev(entorno, _evento(tx, props=TODAS)) == (200, "aprobado")
-    assert _ev(entorno, _evento(tx, props=TODAS, ts=1760000999)) == (200, "ya_aplicada")
+    assert _ev(entorno, _evento(tx, props=TODAS, ts=_ahora_ts() + 1)) == (200, "ya_aplicada")
     assert len([m for m in _movimientos(db) if m["tipo"] == "plan"]) == 1
     assert planes.periodo_abierto(None, "acme", ahora=db.ahora()) is not None
     assert entorno["consultas"] == []
+
+
+# --- revisión final 2026-10-10: seguridad ------------------------------------------------------
+
+class _Contado(io.BytesIO):
+    """Un cuerpo enviado por trozos (sin Content-Length); `leido` es hasta dónde se leyó (sea cual sea el método
+    de lectura que use Werkzeug)."""
+
+    def __init__(self, n):
+        super().__init__(b"x" * n)
+
+    @property
+    def leido(self):
+        return self.tell()
+
+
+@pytest.mark.parametrize("ruta", ["/pagos/wompi/eventos", "/pagos/bold/webhook"])
+def test_un_cuerpo_por_trozos_se_corta_en_el_tope_sin_leerlo_entero(entorno, cliente_http, ruta):
+    from cobros import recargas
+    cuerpo = _Contado(5 * 1024 * 1024)
+    r = cliente_http.como(None).post(ruta, input_stream=cuerpo,
+                                     headers={"Transfer-Encoding": "chunked", "Content-Type": "application/json"},
+                                     environ_overrides={"wsgi.input_terminated": True})
+    assert r.status_code == 413
+    assert cuerpo.leido <= recargas.MAX_CUERPO + 1
+    assert _eventos(entorno["db"]) == []
+
+
+@pytest.mark.parametrize("url", [
+    "/cliente/acme/saldo/recarga/99999999999999999999",
+    "/cliente/acme/saldo/recarga/99999999999999999999/estado",
+    "/cliente/acme/plan/pago/99999999999999999999/estado",
+])
+def test_un_id_enorme_en_la_url_es_404_no_500(entorno, cliente_http, url):
+    assert cliente_http.como("user_acme").get(url).status_code == 404
+
+
+def test_un_id_enorme_en_las_rutas_del_admin_es_404(entorno, cliente_http):
+    c = cliente_http.como("admin")
+    for url in ("/admin/cobros/planes/99999999999999999999", "/admin/cobros/planes/99999999999999999999/activo",
+                "/admin/cobros/acme/plan/pago/99999999999999999999/resolver"):
+        assert c.post(url, headers=MISMO).status_code == 404, url
+
+
+def test_un_segundo_aprobado_con_otra_transaccion_avisa_al_admin(entorno):
+    db = entorno["db"]
+    rid, ref = _pendiente(entorno)
+    entorno["txs"]["1292-1602113476-10985"] = _tx(ref)
+    assert _ev(entorno, _evento(_tx(ref)))[1] == "acreditada"
+    entorno["avisos"].clear()
+    otra = _tx(ref, tx_id="1292-1602113476-55555")
+    entorno["txs"]["1292-1602113476-55555"] = otra
+    assert _ev(entorno, _evento(otra))[1] == "otro_pago"
+    assert _admin(entorno) == ["wompi_no_cuadra"]
+    assert entorno["libro"].saldo("acme") == 50000 and len(_movimientos(db)) == 1   # no se acredita dos veces
+    assert _recarga(db, rid)["pasarela_ref"] == "1292-1602113476-10985"
+    assert _ev(entorno, _evento(_tx(ref)))[1] == "duplicada"        # la misma transacción: nada que avisar

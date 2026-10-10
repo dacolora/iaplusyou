@@ -541,7 +541,7 @@ RESULTADOS_EVENTO = {
     "acreditada": N_("Acreditada"), "duplicada": N_("Repetido"), "sin_recarga": N_("Sin recarga"),
     "rechazada": N_("Rechazada"), "anulada": N_("Anulada"), "ignorada": N_("Ignorado"),
     "recibido": N_("Recibido"), "error": N_("Error"),
-    "no_cuadra": N_("No cuadra"), "pendiente": N_("Pendiente"),
+    "no_cuadra": N_("No cuadra"), "pendiente": N_("Pendiente"), "otro_pago": N_("Segundo pago"),
 }
 PROVEEDORES_EVENTO = {"bold": "Bold", "wompi": "Wompi"}
 
