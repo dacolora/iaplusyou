@@ -124,3 +124,5 @@ PND-062, entrega 1 (2026-10-10, pedido de Daniel): historial de Configuración �
 no se usa el costo como respaldo para quien no puede verlo. El modo doble conserva Costo/Cobrado también en las
 páginas siguientes y `cobrado_por_gasto` consulta solo los ids de esa página. Totales y CSV siguen completos.
 `tests/test_pagina_por_partes.py` verifica precios, columnas, páginas sucesivas y aislamiento con SQLite temporal.
+
+Enmiendas PND-062, entrega 1 (2026-10-10, pedido de Daniel tras revisar la entrega): Si cobrado_por_gasto falla para el admin en modo doble, _pagina_gasto conserva las filas y pasa a modo costo sin la columna Cobrado. El contexto respeta ese modo. Las pruebas de la segunda página comparan cada costo/cobro con importes distintos y las del total grande exigen todas las páginas; las mutaciones corren en una copia.

@@ -180,3 +180,5 @@ y permite Reintentar con textos del catálogo. Swaps y Gasto pintan 24 por pági
 `data-lista-mas` y destinos por id (no `.swaps-lista`, que también usan anuncios sueltos). Swaps vivos van primero;
 si superan 24, la primera página incluye todos para conservar sus barras. Fragmentos sin script; barras con
 `data-poll-job`, medios diferidos y tablas atendidas por `static/tablas.js`. Inspección a 375 px a cargo de Claude.
+
+Enmiendas PND-062, entrega 1 (2026-10-10, pedido de Daniel tras revisar la entrega): El envío de Cambiar producto se bloquea en el shell si falta producto, abre el selector y conserva los archivos locales. Ver más inserta las tarjetas antes de sus acciones; la prueba usa un árbol del HTML renderizado con orden y parentesco reales. Un 401/403 o una redirección deja aviso y enlace a entrar, sin botón de reintento.

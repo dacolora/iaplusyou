@@ -39,6 +39,7 @@ async function catalogo() {
   const id = 'sel-' + datos.sel;
   const nodos = { [id]: detalle, [id + '-grilla']: grilla, [id + '-resumen']: resumen,
     [id + '-buscador']: buscador, [id + '-vacio']: new Nodo(), [id + '-add']: new Nodo(),
+    [id + '-required']: new Nodo(),
     [id + '-add-btn']: new Nodo(), [id + '-add-cancelar']: new Nodo() };
   const urls = [];
   let fallar = true;

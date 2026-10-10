@@ -329,21 +329,36 @@
       var aviso = mas.parentElement.querySelector('[data-lista-error]');
       if (aviso) aviso.remove();
       fetch(mas.dataset.url, {headers: {'X-Requested-With': 'fetch'}})
-        .then(function (r) { if (!r.ok || r.redirected) throw new Error(); return r.text(); })
+        .then(function (r) {
+          if (r.status === 401 || r.status === 403 || r.redirected) {
+            var error = new Error(); error.sesionVencida = true; throw error;
+          }
+          if (!r.ok) throw new Error(); return r.text();
+        })
         .then(function (html) {
           if (!mas.isConnected) return;
           var fragmento = document.createElement('template');
           // Un tbody conserva filas sueltas al analizar el fragmento de gasto.
           fragmento.innerHTML = lista.tagName === 'TBODY' ? '<table><tbody>' + html + '</tbody></table>' : html;
           var selector = lista.tagName === 'TBODY' ? 'tr' : '.swap-card';
-          fragmento.content.querySelectorAll(selector).forEach(function (item) { lista.appendChild(item); });
+          var antes = mas.parentElement.parentElement === lista ? mas.parentElement : null;
+          fragmento.content.querySelectorAll(selector).forEach(function (item) {
+            if (antes) lista.insertBefore(item, antes); else lista.appendChild(item);
+          });
           var siguiente = fragmento.content.querySelector('[data-lista-mas]');
           if (siguiente) mas.replaceWith(siguiente); else mas.parentElement.remove();
           arrancarSondeos(lista);
         })
-        .catch(function () {
+        .catch(function (error) {
           if (!mas.isConnected) return;
           var p = document.createElement('p'); p.className = 'vacio'; p.dataset.listaError = '1';
+          if (error.sesionVencida) {
+            p.textContent = {{ _('Tu sesión venció. Vuelve a entrar para continuar.')|tojson }};
+            var entrar = document.createElement('a'); entrar.className = 'btn-sm';
+            entrar.href = {{ url_for('login')|tojson }}; entrar.textContent = {{ _('Entrar')|tojson }};
+            mas.parentElement.appendChild(p); mas.replaceWith(entrar);
+            return;
+          }
           p.textContent = {{ _('No pude cargar más resultados. Intenta de nuevo.')|tojson }};
           mas.parentElement.appendChild(p);
           mas.textContent = {{ _('Reintentar')|tojson }};

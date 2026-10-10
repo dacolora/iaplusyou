@@ -67,3 +67,5 @@ son GET bajo `<cliente>`, pasan por `_guard_por_cliente` y rechazan con 403 a un
 acepta únicamente sel=plus|clone y fija modo/campo en servidor; toda lectura y precarga se resuelve dentro del
 proyecto de la URL. `desde` de Gasto se limita al rango SQLite. El JS rechaza respuestas redirigidas antes de
 insertar HTML. Pruebas con sesión de cliente: 200 propio y 403 ajeno para los tres fragmentos.
+
+Enmiendas PND-062, entrega 1 (2026-10-10, pedido de Daniel tras revisar la entrega): Los shells de catálogo e historiales distinguen 401/403 y redirección al login: muestran sesión vencida y un enlace a login, sin reintento perpetuo ni insertar el HTML redirigido. Se mantienen las guardias de proyecto de las rutas.

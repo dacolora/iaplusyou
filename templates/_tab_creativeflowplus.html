@@ -6,7 +6,7 @@
    «pastillas». Cada pastilla abre un menú con los controles REALES (radios y
    selects de siempre), así que el servidor recibe los mismos campos. Subir y
    pegar un link usan los formularios vacíos de aquí abajo vía el atributo form=. #}
-{% set total_catalogo = (n_por_categoria | default({})).values() | sum %}
+{% set total_catalogo = (n_activos_por_categoria | default(n_por_categoria | default({}))).values() | sum %}
 <form method="post" action="{{ url_for('fp_subir_referencias', cliente=cliente) }}" enctype="multipart/form-data" id="fp-form-subir" hidden></form>
 <form method="post" action="{{ url_for('fp_agregar_link', cliente=cliente) }}" id="fp-form-link" hidden></form>
 

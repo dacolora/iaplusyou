@@ -2118,9 +2118,18 @@ def ver_cliente(cliente):
         activo = catalogo_productos.encontrar(cliente, pid, categoria=cat)
         if activo:
             catalogo_marcados.append(activo)
-    n_por_categoria = {cid: (sum(1 for p in productos_catalogo if p["id"] not in archivados) if cid == "producto"
-                             else len(catalogo_productos.listar_productos(cliente, cid)))
-                       for cid in catalogo_productos.CATEGORIAS}
+    productos_por_categoria = {cid: productos_catalogo if cid == "producto" else catalogo_productos.listar_productos(cliente, cid)
+                              for cid in catalogo_productos.CATEGORIAS}
+    n_por_categoria = {cid: sum(1 for p in productos if cid != "producto" or p["id"] not in archivados)
+                       for cid, productos in productos_por_categoria.items()}
+    # Los selectores cuentan referencias elegibles (cada color con fotos),
+    # mientras Catálogo conserva su contador de productos comerciales.
+    n_activos_por_categoria = {
+        cid: sum(sum(bool(c.get("referencias")) for c in p.get("colores", []))
+                 if p.get("tiene_colores") else bool(p.get("referencias"))
+                 for p in productos
+                 if cid != "producto" or p["id"] not in archivados)
+        for cid, productos in productos_por_categoria.items()}
     # Gasto real (Task 3): el tablero se calcula UNA vez (cacheado) y de ahí
     # sale la pauta por moneda; la generación viene de la tabla `gasto`.
     tablero_ctx = _contexto_tablero(cliente)
@@ -2144,6 +2153,7 @@ def ver_cliente(cliente):
         catalogo_marcados=catalogo_marcados,
         categorias=catalogo_productos.CATEGORIAS,
         n_por_categoria=n_por_categoria,
+        n_activos_por_categoria=n_activos_por_categoria,
         monedas_catalogo=sorted(PRESUPUESTO_MINIMO_DIARIO),
         moneda_catalogo=_moneda_por_defecto(cliente),
         etiquetas_fuente=ETIQUETAS_FUENTE,
@@ -4874,10 +4884,17 @@ def _pagina_gasto(cliente, desde=0, fuente=None):
     filas = fuente["historial"](cliente, limite=TARJETAS_POR_PAGINA + 1, desplazamiento=desde)
     historial = filas[:TARJETAS_POR_PAGINA]
     doble = fuente["modo"] == "doble"
-    cobrado = {"por_gasto": vista_cobros.cobrado_por_gasto(cliente, [h["id"] for h in historial])} if doble else {}
+    cobrado = {}
+    modo = fuente["modo"]
+    if doble:
+        try:
+            cobrado = {"por_gasto": vista_cobros.cobrado_por_gasto(cliente, [h["id"] for h in historial])}
+        except Exception as e:  # noqa: BLE001 — el admin conserva el historial de costos
+            print(f"[aviso] Gasto de {cliente}: no pude leer lo cobrado del historial: {type(e).__name__}")
+            modo = "costo"
     return {"gastos_historial": historial,
             "gastos_siguiente": desde + TARJETAS_POR_PAGINA if len(filas) > TARJETAS_POR_PAGINA else None,
-            "gasto_modo": fuente["modo"], "gasto_cobrado": cobrado, "nombres_tipo_gasto": NOMBRES_TIPO_GASTO}
+            "gasto_modo": modo, "gasto_cobrado": cobrado, "nombres_tipo_gasto": NOMBRES_TIPO_GASTO}
 
 
 @app.route("/cliente/<cliente>/gasto/lista")
@@ -4910,6 +4927,7 @@ def _contexto_gasto(cliente, tablero_ctx):
         print(f"[aviso] Gasto de {cliente}: no pude leer el historial: {type(e).__name__}")
         hist_ctx = {"gastos_historial": [], "gastos_siguiente": None, "gasto_cobrado": {}}
     historial = hist_ctx["gastos_historial"]
+    doble = doble and hist_ctx.get("gasto_modo") == "doble"
     try:
         gasto_total = fuente["resumen_total"](cliente)
     except Exception as e:  # noqa: BLE001 — informativo
@@ -4945,7 +4963,7 @@ def _contexto_gasto(cliente, tablero_ctx):
         "gastos_siguiente": hist_ctx["gastos_siguiente"],
         "gastos_por_tipo": por_tipo,
         "nombres_tipo_gasto": NOMBRES_TIPO_GASTO,
-        "gasto_modo": "doble" if doble else fuente["modo"],
+        "gasto_modo": "doble" if doble else ("costo" if fuente["modo"] == "doble" else fuente["modo"]),
         "gasto_cobrado": cobrado,
         "gasto_chip": (None if fuente["modo"] == "oculto" or (chip_total or {}).get("error")
                        else _chip_gasto(chip_total, pauta)),

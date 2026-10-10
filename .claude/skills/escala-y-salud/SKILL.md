@@ -54,3 +54,5 @@ histórico, y resuelve solo lo preseleccionado. `_pagina_swaps` corta antes de e
 precarga de vivos y memo del catálogo. Gasto pide 25 filas en SQL, entrega 24 y usa la extra para Ver más;
 `desplazamiento` es OFFSET, mientras `desde` sigue siendo la fecha ISO. Los tres fragmentos omiten el chip del
 sidebar incluso sin cabecera fetch. `tests/test_pagina_por_partes.py` vigila lecturas, HTML y tamaño con datos temporales.
+
+Enmiendas PND-062, entrega 1 (2026-10-10, pedido de Daniel tras revisar la entrega): n_activos_por_categoria cuenta referencias con fotos desde las fichas ya leídas: cada color cuenta uno; los productos archivados no cuentan. n_por_categoria conserva las filas comerciales de Catálogo. La prueba de contexto rechaza listar directo en ver_cliente y lecturas planas adicionales para selectores ocultos.

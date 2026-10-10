@@ -97,3 +97,5 @@ PND-062, entrega 1 (2026-10-10, pedido de Daniel): los avisos de fallo del catá
 pasan por gettext en los shells y viajan al JS con tojson; Reintentar reutiliza el catálogo. Los cinco fragmentos
 nuevos están inscritos en `PLANTILLAS_TRADUCIDAS`; catálogo actualizado, traducido con el glosario y compilado,
 sin fuzzy. La comprobación visual en es/en queda a cargo de Claude.
+
+Enmiendas PND-062, entrega 1 (2026-10-10, pedido de Daniel tras revisar la entrega): El aviso de producto obligatorio y el de sesión vencida pasan por gettext y tojson. El enlace Entrar reutiliza el catálogo. Catálogo actualizado, traducciones según glosario y compilación sin fuzzy; los ids internos usan required para no confundir la guarda de texto visible.

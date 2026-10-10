@@ -199,3 +199,5 @@ y valores de `productos_catalogo` (categoria:id) y `producto_id` (id/color) sigu
 existen como inputs antes de abrir, se mandan como `marcado` y se sustituyen al llegar la grilla sin duplicarlas.
 Los archivados solo vuelven si están marcados. Historial de swaps: 24, vivos primero y todas sus barras visibles,
 Ver más por fetch sin scripts. Las pruebas envían los inputs del fragmento a ambas rutas con proveedores dobles.
+
+Enmiendas PND-062, entrega 1 (2026-10-10, pedido de Daniel tras revisar la entrega): Cambiar producto comprueba la elección antes de enviar archivos aunque el selector siga cerrado: cancela submit, abre sel-clone y muestra el aviso por catálogo. No cambia producto_id ni la ruta de generación. Los contadores del selector y del compositor vuelven a contar activos/colores elegibles, como antes de paginar.

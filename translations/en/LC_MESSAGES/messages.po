@@ -6469,6 +6469,9 @@ msgstr "Choose a country"
 msgid "Elige un producto"
 msgstr "Choose a product"
 
+msgid "Elige un producto antes de enviar los archivos."
+msgstr "Choose a product before sending the files."
+
 msgid "Elige un producto con fotos."
 msgstr "Pick a product with photos."
 
@@ -17141,6 +17144,9 @@ msgstr "Your session closed; log in again."
 
 msgid "Tu sesión terminó: recarga la página e inicia sesión."
 msgstr "Your session ended: reload the page and log in."
+
+msgid "Tu sesión venció. Vuelve a entrar para continuar."
+msgstr "Your session has expired. Sign in again to continue."
 
 msgid "Tu sesión venció: vuelve a entrar para seguir."
 msgstr "Your session expired: sign in again to keep going."

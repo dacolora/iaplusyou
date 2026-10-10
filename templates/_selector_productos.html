@@ -46,7 +46,8 @@
 {% set _modo = sel_modo or "radio" %}
 {# En modo checkbox (FlowPlus) se muestran TODAS las categorías del catálogo por
    secciones; en modo radio (Cambiar producto) solo productos, como siempre. #}
-{% set _total = (n_por_categoria | default({})).values() | sum %}
+{% set _cuentas = n_activos_por_categoria | default(n_por_categoria | default({})) %}
+{% set _total = _cuentas.values() | sum %}
 {% if sel_dialogo %}
 {# En un <dialog> (Crear › «+» › Del catálogo): sin <summary>; el resumen es un párrafo. #}
 <div class="selector-productos selector-en-dialogo" id="sel-{{ sel_id }}" data-modo="{{ _modo }}">
@@ -54,7 +55,7 @@
 {% else %}
 <details class="comparacion-modelos selector-productos" id="sel-{{ sel_id }}" data-modo="{{ _modo }}">
   <summary class="btn-guardar btn-sm" id="sel-{{ sel_id }}-resumen">
-    {% if _modo == "radio" %}{{ _('Elegir producto (%(n)s) →', n=(n_por_categoria | default({})).get('producto', 0)) }}{% else %}{{ _('Del catálogo (opcional, %(n)s) →', n=_total) }}{% endif %}
+    {% if _modo == "radio" %}{{ _('Elegir producto (%(n)s) →', n=_cuentas.get('producto', 0)) }}{% else %}{{ _('Del catálogo (opcional, %(n)s) →', n=_total) }}{% endif %}
   </summary>
 {% endif %}
   <div class="comparacion-contenido">
@@ -63,6 +64,7 @@
       <button type="button" class="btn-guardar btn-sm" id="sel-{{ sel_id }}-add-btn">{{ _('+ Nuevo producto') }}</button>
     </div>
     <p class="vacio" id="sel-{{ sel_id }}-vacio" style="display:none;">{{ _('Ningún producto coincide con esa búsqueda.') }}</p>
+    {% if _modo == 'radio' %}<p class="vacio" id="sel-{{ sel_id }}-required" role="alert" hidden>{{ _('Elige un producto antes de enviar los archivos.') }}</p>{% endif %}
     <div data-selector-marcados hidden>
       {% if _modo == 'checkbox' %}{% for p in catalogo_marcados %}
       <label><input type="checkbox" name="{{ sel_campo }}" value="{{ p.categoria }}:{{ p.id }}" data-nombre="{{ p.nombre }}" checked>

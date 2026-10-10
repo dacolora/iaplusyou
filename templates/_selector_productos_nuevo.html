@@ -35,6 +35,16 @@
       total = opciones.length;
     }
     var modo = detalle.dataset.modo;
+    var sinProducto = document.getElementById(id + '-required');
+    if (modo === 'radio') {
+      detalle.closest('form').addEventListener('submit', function (ev) {
+        if (detalle.querySelector('input[name="producto_id"]:checked')) return;
+        ev.preventDefault();
+        sinProducto.hidden = false;
+        detalle.open = true;
+        cargar();
+      });
+    }
     var total = opciones.length;
     var textoInicial = resumen.textContent;
     // Crear abre el catálogo en un <dialog> (sel_dialogo): el resumen no es un
@@ -47,6 +57,7 @@
       var marcados = opciones.filter(function (l) { return l.querySelector("input").checked; });
       if (!marcados.length) { resumen.textContent = textoInicial; return; }
       if (modo === "radio") {
+        sinProducto.hidden = true;
         resumen.textContent = {{ _('Producto: %(nombre)s — cambiar →', nombre='__NOMBRE__')|tojson }}.replace('__NOMBRE__', marcados[0].querySelector("input").dataset.nombre);
         detalle.open = false;
       } else {
@@ -66,7 +77,12 @@
       detalle.querySelectorAll('input:checked').forEach(function (input) { url.searchParams.append('marcado', input.value); });
       grilla.textContent = {{ _('Cargando…')|tojson }};
       fetch(url.toString(), {headers: {'X-Requested-With': 'fetch'}})
-        .then(function (r) { if (!r.ok || r.redirected) throw new Error(); return r.text(); })
+        .then(function (r) {
+          if (r.status === 401 || r.status === 403 || r.redirected) {
+            var error = new Error(); error.sesionVencida = true; throw error;
+          }
+          if (!r.ok) throw new Error(); return r.text();
+        })
         .then(function (html) {
           // El estado actual manda: puede haberse quitado una precarga mientras llegaba el pedido.
           var marcados = Array.prototype.map.call(detalle.querySelectorAll('input:checked'), function (i) { return i.value; });
@@ -79,14 +95,22 @@
           filtrar();
           detalle.dispatchEvent(new Event('catalogo-cargado', {bubbles: true}));
         })
-        .catch(function () {
+        .catch(function (error) {
           grilla.innerHTML = '';
           var aviso = document.createElement('p'); aviso.className = 'vacio';
+          grilla.appendChild(aviso);
+          if (error.sesionVencida) {
+            aviso.textContent = {{ _('Tu sesión venció. Vuelve a entrar para continuar.')|tojson }};
+            var entrar = document.createElement('a'); entrar.className = 'btn-sm';
+            entrar.href = {{ url_for('login')|tojson }}; entrar.textContent = {{ _('Entrar')|tojson }};
+            grilla.appendChild(entrar);
+            return;
+          }
           aviso.textContent = {{ _('No pude cargar el catálogo. Intenta de nuevo.')|tojson }};
           var reintentar = document.createElement('button'); reintentar.type = 'button'; reintentar.className = 'btn-sm';
           reintentar.textContent = {{ _('Reintentar')|tojson }};
           reintentar.addEventListener('click', cargar);
-          grilla.appendChild(aviso); grilla.appendChild(reintentar);
+          grilla.appendChild(reintentar);
         })
         .finally(function () { cargando = false; });
     }

@@ -203,6 +203,7 @@ def test_gasto_24_siguientes_total_csv_y_modo(pagina, rol):
     total = html.select_one('.gasto-total').select('td')
     assert total[1].get_text() == '50'
     assert total[2].get_text() == gastos.formatear(50 if rol == "admin" else 75)
+    assert html.select_one('#gasto-desde-inicio strong').get_text() == gastos.formatear(50 if rol == 'admin' else 75)
     if rol == "admin":
         assert total[3].get_text() == gastos.formatear(75)
     assert gastos.resumen_total("acme")["total"] == 50
@@ -213,6 +214,13 @@ def test_gasto_24_siguientes_total_csv_y_modo(pagina, rol):
     filas = frag.select("tr")
     assert len(filas) == 24 and not frag.select("script")
     assert all(len(f.select("td")) == (5 if rol == "admin" else 4) for f in filas)
+    for fila in filas:
+        valores = fila.select('td')
+        assert valores[3].get_text() == gastos.formatear(1 if rol == 'admin' else 1.5)
+        if rol == 'admin':
+            assert valores[4].get_text() == gastos.formatear(1.5)
+        else:
+            assert gastos.formatear(1) not in [td.get_text() for td in valores]
     assert not {f.get_text() for f in html.select(".gasto-historial tbody tr")} & {f.get_text() for f in filas}
     assert "otro gasto" not in frag.get_text()
     ultima = sopa(c.get(frag.select_one('[data-lista-mas]')["data-url"], headers=FETCH))
@@ -262,11 +270,22 @@ def test_contexto_no_enriquece_catalogo_oculto_ni_swaps_fuera_de_pagina(pagina, 
     def no_armar(*args, **kwargs):
         pytest.fail('se armó el catálogo oculto para ver_cliente')
     monkeypatch.setattr(d, '_productos_con_uso', no_armar)
+    listar_original = d.catalogo_productos.listar
+    listar_lecturas = []
+    def listar_vigilado(*a, **kw):
+        import inspect
+        if inspect.currentframe().f_back.f_code.co_name == 'ver_cliente':
+            no_armar()
+        listar_lecturas.append(a)
+        return listar_original(*a, **kw)
+    monkeypatch.setattr(d.catalogo_productos, 'listar', listar_vigilado)
     original = d.catalogo_productos.encontrar
     lecturas = []
     monkeypatch.setattr(d.catalogo_productos, 'encontrar', lambda *a, **kw: lecturas.append(a) or original(*a, **kw))
     assert pagina['c'].get('/cliente/acme').status_code == 200
     assert len(lecturas) == 24
+    # Lecturas vigentes: encontrar para swaps visibles y _personajes del compositor.
+    assert listar_lecturas == [('acme', 'producto'), ('acme', 'personaje')]
 
 
 def test_fragmento_agrupa_colores_excluye_archivados_y_conserva_precarga(pagina):
@@ -301,3 +320,125 @@ def test_ningun_swap_vivo_queda_detras_de_ver_mas(pagina, monkeypatch):
     frag = sopa(pagina['c'].get(html.select_one('[data-lista-mas="swaps-historial"]')['data-url'], headers=FETCH))
     assert len(frag.select('.swap-card')) == 24
     assert not {n['id'] for n in lista.select('.swap-card')} & {n['id'] for n in frag.select('.swap-card')}
+
+
+def _arbol_json(nodo):
+    return {'tag': nodo.tag, 'attrs': nodo.attrs, 'texto': ''.join(nodo.textos),
+            'hijos': [_arbol_json(h) for h in nodo.hijos]}
+
+
+def _node_arreglos(datos):
+    import json
+    import subprocess
+    r = subprocess.run(['node', 'tests/js/pagina_arreglos.cjs'], input=json.dumps(datos), text=True, capture_output=True)
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def _shell(pagina, sel):
+    html = pagina['c'].get('/cliente/acme').get_data(as_text=True)
+    if sel in ('historial', 'gasto'):
+        inicio = html.index('    // Página por partes:')
+        script = html[inicio:html.index('    window.arrancarSondeos =', inicio)]
+    else:
+        script = next(s for s in re.findall(r'<script>(.*?)</script>', html, re.S) if f'var id = "sel-{sel}"' in s)
+    return {'pagina': _arbol_json(HTML(html).raiz), 'script': script}
+
+
+def test_swap_con_archivo_sin_abrir_no_envia(pagina):
+    sembrar(pagina, 1)
+    frag = pagina['c'].get('/cliente/acme/catalogo/selector?sel=clone', headers=FETCH)
+    _node_arreglos({'tipo': 'envio', **_shell(pagina, 'clone'), 'fragmento': _arbol_json(HTML(frag.get_data(as_text=True)).raiz)})
+
+
+def test_swaps_ver_mas_siempre_despues_de_ultima_tarjeta_en_dom(pagina):
+    sembrar(pagina, 74)
+    fragmentos = [_arbol_json(HTML(pagina['c'].get(f'/cliente/acme/swaps/lista?desde={n}', headers=FETCH).get_data(as_text=True)).raiz)
+                  for n in (24, 48, 72)]
+    _node_arreglos({'tipo': 'orden', **_shell(pagina, 'historial'), 'fragmentos': fragmentos})
+
+
+@pytest.mark.parametrize('sel', ['clone', 'plus', 'historial', 'gasto'])
+@pytest.mark.parametrize('respuesta', ['403', 'login'])
+def test_js_sesion_vencida_ofrece_entrar_sin_reintento(pagina, sel, respuesta):
+    sembrar(pagina, 50)
+    _node_arreglos({'tipo': 'sesion', 'sel': sel, 'respuesta': respuesta, **_shell(pagina, sel)})
+
+
+def test_gasto_fallo_cobrado_conserva_historial_sin_columna(pagina, monkeypatch):
+    from cobros import libro
+    libro.configurar('acme', cobrar=True, margen=1.5, usuario='admin')
+    sembrar(pagina)
+    def fallar(*a, **k):
+        raise RuntimeError('lectura de prueba')
+    monkeypatch.setattr(pagina['dashboard'].vista_cobros, 'cobrado_por_gasto', fallar)
+    html = sopa(pagina['c'].get('/cliente/acme'))
+    filas = html.select('.gasto-historial tbody tr')
+    assert len(filas) == 24
+    assert all(len(f.select('td')) == 4 for f in filas)
+    frag = sopa(pagina['c'].get('/cliente/acme/gasto/lista?desde=24', headers=FETCH))
+    assert len(frag.select('tr')) == 24
+    assert all(len(f.select('td')) == 4 for f in frag.select('tr'))
+
+
+def test_contadores_selector_igual_que_main_con_colores(pagina):
+    from tests.test_rutas_catalogo import _con_colores
+    import catalogo_productos as cp
+    import tiendas
+    _con_colores(pagina, colores=('Pink', 'Beige', 'Blue'))
+    _con_colores(pagina, pid='archivado', colores=('Gray', 'Black'))
+    # Se enlaza la fila comercial como en main antes de archivar.
+    pagina['c'].get('/cliente/acme')
+    tiendas.archivar_activo('acme', 'archivado')
+    # El conteo anterior sale de los activos, no de las filas comerciales.
+    cantidades_main = {cid: len(cp.sin_archivados(cp.listar('acme', cid), tiendas.activos_archivados('acme')))
+                       if cid == 'producto' else len(cp.listar('acme', cid)) for cid in cp.CATEGORIAS}
+    assert cantidades_main['producto'] == 3
+    html = sopa(pagina['c'].get('/cliente/acme'))
+    assert re.findall(r'\d+', html.select_one('#sel-clone-resumen').get_text()) == [str(cantidades_main['producto'])]
+    assert re.findall(r'\d+', html.select_one('#fp-abrir-catalogo small').get_text()) == [str(sum(cantidades_main.values()))]
+
+
+def _gasto_variado(pagina, rol):
+    import db
+    import gastos
+    from cobros import libro
+    libro.configurar('acme', cobrar=True, margen=1.5, usuario='admin')
+    with db.conectar() as con:
+        libro.acreditar(con, 'acme', 'ajuste', 1000000, 'ajuste', detalle='Prueba')
+    sembrar(pagina)
+    costos = {f'acme:gasto:{i:03}': (i + 1) / 10 for i in range(50)}
+    for referencia, costo in costos.items():
+        gastos.registrar('acme', 'imagen', costo, referencia)
+    if rol == 'cliente':
+        with pagina['c'].session_transaction() as s:
+            s.update(usuario='user_acme', rol='cliente', cliente='acme')
+    return costos
+
+
+@pytest.mark.parametrize('rol', ['admin', 'cliente'])
+def test_gasto_pagina_dos_valores_por_fila(pagina, rol):
+    import gastos
+    from cobros import libro
+    costos = _gasto_variado(pagina, rol)
+    frag = sopa(pagina['c'].get('/cliente/acme/gasto/lista?desde=24', headers=FETCH))
+    assert len(frag.select('tr')) == 24
+    for fila in frag.select('tr'):
+        celdas = fila.select('td')
+        costo = costos[celdas[2]['title']]
+        cobrado = libro.precio_milesimas(costo, 1.5) / 1000
+        assert celdas[3].get_text() == gastos.formatear(costo if rol == 'admin' else cobrado)
+        if rol == 'admin':
+            assert celdas[4].get_text() == gastos.formatear(cobrado)
+        else:
+            assert len(celdas) == 4
+            assert gastos.formatear(costo) not in [c.get_text() for c in celdas]
+
+
+@pytest.mark.parametrize('rol', ['admin', 'cliente'])
+def test_gasto_total_grande_incluye_todas_las_paginas(pagina, rol):
+    import gastos
+    from cobros import libro
+    costos = _gasto_variado(pagina, rol)
+    esperado = sum(costos.values()) if rol == 'admin' else sum(libro.precio_milesimas(c, 1.5) / 1000 for c in costos.values())
+    html = sopa(pagina['c'].get('/cliente/acme'))
+    assert html.select_one('#gasto-desde-inicio strong').get_text() == gastos.formatear(esperado)
