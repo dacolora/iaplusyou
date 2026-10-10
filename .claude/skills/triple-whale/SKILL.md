@@ -329,7 +329,11 @@ production. It must work for ANY ad, not only Creatv's: in happyflops only 4 pie
   tu tienda», 2026-10-08). The panel's CHANNEL filter is part of the scope too (A3): `foto.alcance_canal` is stored when
   asking (None or missing = «Todos»), because the verdict depends on the filter; without it an analysis looked stale
   under a filter and the batch charged it again. From another scope the card shows a neutral note and a secondary
-  «Analizar con estos datos»; moving from 7 to 30 days must not nudge a second payment.
+  «Analizar con estos datos»; moving from 7 to 30 days must not nudge a second payment. The verdict only counts when
+  the foto was taken with today's verdict method: every new analysis stores `foto["metodo"] = analisis.METODO_VEREDICTO`
+  (2, set in `mejorar.foto`), and for a foto without it (paid before R9) only the spend makes it stale (2026-10-10,
+  spend guardian: R9 moved the account's cost per sale and flipped verdicts of ads whose own numbers had not changed,
+  so the card offered «Analizar otra vez» and the batch charged them again; `tests/test_rendimiento_r9_plata.py`).
 - **Batch.** «Analizar los N que más gastaron» (`panel.N_LOTE` = 10) takes exactly the ads whose card shows the primary
   paid button (`a.ofrecer_analisis`: not `sin_datos`, no live task, no fresh analysis of this scope and no ready one of
   another scope), posts the `clave=<canal>:<ad_id>` inputs the form showed with their total price, and the route
@@ -373,8 +377,10 @@ lo atribuido por el Pixel sumaba 2,5 veces las ventas reales de la tienda (PND-1
 - **Solo canales pagados (R9).** `datos.totales_por_anuncio` y `datos.serie_anuncios` dejan fuera todo canal sin gasto en la
   copia del alcance (`_canales_pagados`: `SUM(gasto) > 0` por canal, de la tienda o de todas, sobre toda la copia y no solo el
   periodo): orgánico, Klaviyo, Direct y lo que Triple Whale agregue mañana. `totales_anuncio` (el de UN anuncio, para
-  Experimentos) no cambia: el decisor lee anuncios de Meta, que siempre tienen gasto (A4). No se tocan `VENTANA_DEFECTO`,
-  `MODELO_DEFECTO` ni el ajuste de ningún proyecto.
+  Experimentos) no cambia: el decisor lee anuncios de Meta, que siempre tienen gasto (A4); una prueba lo fija
+  (`tests/test_rendimiento_r9_plata.py`, G2 de la revisión final). `datos.canales` (el filtro «Canal») solo lista
+  canales con gasto en el periodo: uno con impresiones y sin gasto daba una galería vacía (revisión final, 2026-10-10).
+  No se tocan `VENTANA_DEFECTO`, `MODELO_DEFECTO` ni el ajuste de ningún proyecto.
 - **Lecturas nuevas.** `datos.cuentas_meta_de_tiendas(cliente)` → `{tienda_id: {"act_…"}}` (R5: una cuenta de Meta cuyos
   anuncios llegan en la copia de una tienda está «dentro» de esa tienda; normaliza con o sin `act_`);
   `datos.totales_por_grupo(cliente, tienda_id, desde, hasta, nivel)` (`"campana"|"conjunto"`) → gasto, pedidos e ingresos del

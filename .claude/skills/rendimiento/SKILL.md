@@ -60,11 +60,12 @@ los clientes». Las dos pestañas daban números distintos para el mismo anuncio
   (`triple_whale.datos.cuentas_meta_de_tiendas`) está dentro de esa tienda: «Todas» no suma su gasto aparte. Se decide
   con los datos, no con el país (una cuenta «World Wide» alimenta Noruega). «Por país» lo dice en una nota.
 - **R6. Moneda.** Una entrada en su moneda; «Todas» en USD día por día con la tasa de ESE día; sin tasa, «USD no
-  disponible», nunca una inventada; si todas comparten moneda, esa. Una cuenta sin moneda conocida no se suma como si
-  fuera de la de las demás.
-- **R7. «Desde el inicio»** es el periodo por defecto (regla del 2026-10-08: métricas en total). En «Todas» arranca el
-  día en que TODAS las fuentes ya tienen datos y lo dice: sumar 3 meses de una tienda con 13 de una cuenta daría un
-  total que no es de nadie. Una fuente atrasada no cuenta como ventas en cero (`resumen._fin_datos`).
+  disponible», nunca una inventada; si todas comparten moneda, esa (también en «Por país», ver «Revisión final»). Una
+  cuenta sin moneda conocida no se suma como si fuera de la de las demás.
+- **R7. «Desde el inicio»** es el periodo por defecto (regla del 2026-10-08: métricas en total). En «Todas» con fuentes
+  mezcladas arranca el día en que TODAS las fuentes ya tienen datos y lo dice: sumar 3 meses de una tienda con 13 de una
+  cuenta daría un total que no es de nadie (con solo tiendas, A7). Una fuente atrasada no cuenta como ventas en cero
+  (`resumen._fin_datos`).
 - **R8. Ventas arriba = retorno real.** Con Triple Whale, «Ventas» es lo que entró a la tienda y «Retorno», ventas /
   gasto; con Meta, el valor del Pixel rotulado «según Meta». En una mezcla, una línea dice de dónde sale cada parte.
 - **R9. Por anuncio, solo pagado.** Solo cuentan los canales con gasto en la copia del alcance: lo atribuido sumaba 2,5
@@ -98,6 +99,30 @@ los clientes». Las dos pestañas daban números distintos para el mismo anuncio
   ensanchada a «Todas» copiaba todas las cuentas y gastaba el límite de uso de Meta que necesitan los lanzamientos).
 - **A6.** E2 (PND-192) trae «Cómo mejorarlo»/«Evaluar con IA» para Meta con la misma tabla y tarea; la copia de
   desgloses `meta_desglose` y los avisos por correo de Meta quedaron aparte (PND-209).
+- **A7 (revisión final de E1, 2026-10-10; enmienda R7 en un borde).** Con SOLO tiendas de Triple Whale en «Todas»
+  (fuente "tw"), «Desde el inicio» es el de Triple Whale (`triple_whale.panel._primer_dia`: cada tienda desde su primer
+  día) para Resultados Y para «Por país», sin `inicio_comun` ni línea «Desde el …»; el inicio común de R7 es solo para
+  mezclas. Motivo: «Por país» arrancaba en la fecha común y no sumaba lo que decían los Resultados de arriba, y un
+  `inicio` distinto haría que la galería y las rutas pagadas de `triple_whale/rutas.py` calcularan alcances distintos.
+
+## Revisión final de E1 (2026-10-10): reglas que cambiaron
+
+- **R6 en «Por país».** La cifra principal va en la moneda común de TODAS las filas (`resumen.moneda_pais`; entonces no
+  se convierte nada ni se piden tasas) o, si no la hay, en USD; una fila sin USD dice «USD no disponible» en su celda y
+  sale el aviso de la página (`por_pais_sin_usd`). Motivo: siempre iba en USD y sin tasa mostraba «—» callado; un
+  proyecto en NOK veía dólares que no pidió.
+- **Una sola barra para las copias** (`panel.contexto()["copias_vivas"]`, las del alcance: la barra sigue al primer
+  trabajo vivo y dice «Trayendo N copias…»). Motivo: spec §5.1, y cada barra que termina recarga la página: con una por
+  tienda y por cuenta eran varias recargas seguidas.
+- **«Lo que necesita tu atención»** junta alertas de Triple Whale, de los anuncios de Meta y recomendaciones de Meta SIN
+  quitar textos repetidos y en orden estable alta → media → bien (`panel._atencion`). Motivo: «2 anuncios ganadores» de
+  cada fuente son cosas distintas y quitar una escondía la mitad; una cuenta desactivada no puede quedar debajo de «bien».
+- **El filtro «Canal»** solo ofrece canales con gasto en el periodo (`triple_whale.datos.canales`, alineado con R9): uno
+  sin gasto abría una galería vacía.
+- **Análisis pagados antes de R9** no se vuelven a ofrecer por un veredicto que movió R9 (`foto["metodo"]`; skill
+  `triple-whale`, «Old analysis»). Motivo: pagar dos veces lo mismo (guardián de gasto).
+- Pruebas de la revisión: `tests/test_rendimiento_revision_final.py` (con las mutaciones 22–28 del revisor) y
+  `tests/test_rendimiento_r9_plata.py`. Lo diferido: PND-210 a PND-221.
 
 ## Trampas
 
