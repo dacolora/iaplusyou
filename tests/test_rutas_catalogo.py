@@ -176,7 +176,8 @@ def test_selector_de_crear_agrupa_los_colores_por_producto(app):
     _con_colores(app)
     _activo_con_foto("acme", "Cojín")
     html = app["c"].get("/cliente/acme").data.decode()
-    dialogo = html.split('id="fp-catalogo"', 1)[1].split("</dialog>", 1)[0]
+    # Desde la página por partes (PND-062, 2026-10-10) la grilla del diálogo llega por fetch al abrirlo.
+    dialogo = app["c"].get("/cliente/acme/catalogo/selector?sel=plus", headers={"X-Requested-With": "fetch"}).data.decode()
     # La franja entre el primer "producto-grupo" y el siguiente (o el fin del
     # diálogo si no hay otro): más robusto que depender de la indentación exacta.
     resto = dialogo.split('class="producto-grupo"', 1)[1]

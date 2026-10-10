@@ -499,9 +499,10 @@ def test_tab_crear_con_catalogo_agrupa_los_colores():
         {"id": "original/beige", "producto_id": "original", "nombre_producto": "Original",
          "nombre": "Original — Beige", "variante": "beige", "categoria": "producto"},
     ]
-    html = _tab_crear(env, [], activos_por_categoria={"producto": catalogo},
-                      categorias=catalogo_productos.CATEGORIAS, productos=catalogo)
-    dialogo = html.split('id="fp-catalogo"', 1)[1].split("</dialog>", 1)[0]
+    # Desde la página por partes (PND-062, 2026-10-10) la grilla del diálogo es su propia plantilla (llega por fetch).
+    dialogo = env.get_template("_selector_productos_grilla.html").render(
+        cliente="acme", activos_por_categoria={"producto": catalogo}, categorias=catalogo_productos.CATEGORIAS,
+        sel_modo="checkbox", sel_campo="productos_catalogo", marcados=[])
     assert 'class="producto-grupo"' in dialogo
     assert 'value="producto:original/pink"' in dialogo and 'value="producto:original/beige"' in dialogo
 
