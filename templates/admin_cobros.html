@@ -45,6 +45,15 @@
   {{ _('Sin WOMPI_LLAVE_PUBLICA, WOMPI_LLAVE_PRIVADA, WOMPI_SECRETO_EVENTOS y WOMPI_SECRETO_INTEGRIDAD del mismo ambiente no se pueden vender planes con tarjeta y las recargas en línea usan Bold (si tiene llaves). Activar un plan a mano sigue funcionando.') }}
 </div>
 {% endif %}
+{% if trm_rechazada %}
+<div class="flash error" id="aviso-trm-rechazada">
+  {{ _('<strong>La tasa de cambio de hoy no se usó.</strong> La TRM de datos.gov.co (%(hoy)s COP por dólar) se movió más de 8 %% frente a la última aceptada (%(antes)s COP por dólar). Mientras no la aceptes, no se cobra nada en pesos (recargas con Wompi ni planes).', hoy=trm_rechazada.valor_texto, antes=trm_rechazada.anterior_texto) }}
+  <form method="post" action="{{ url_for('cobros.admin_trm_aceptar') }}">
+    <input type="hidden" name="valor" value="{{ trm_rechazada.valor }}">
+    <button type="submit" class="btn-sm">{{ _('Aceptar la tasa de hoy (%(hoy)s COP/USD)', hoy=trm_rechazada.valor_texto) }}</button>
+  </form>
+</div>
+{% endif %}
 {% if avisos_wompi.sandbox %}
 <div class="flash warn" id="aviso-wompi-sandbox">
   {{ _('Wompi está en modo de pruebas (sandbox): los cobros no son reales.') }}

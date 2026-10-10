@@ -11,7 +11,7 @@ recrea la tabla con batch porque SQLite no agrega un UNIQUE a una tabla viva,
 conservando los dos únicos y los dos índices de 0033 y su AUTOINCREMENT),
 `recarga.pasarela_ref` único (la transacción de Wompi), el índice único
 parcial que deja a lo más una suscripción no terminada por cliente y, en
-`reserva_saldo`, `margen`, `incluido` y `periodo_id` (el precio visto al encolar:
+`reserva_saldo`, `margen`, `incluido`, `periodo_id` y `costo_usd` (el precio visto al encolar:
 revisión final 2026-10-10).
 
 Datos: si el margen global guardado vale exactamente «1.5» (el viejo defecto),
@@ -142,6 +142,7 @@ def upgrade() -> None:
         lote.add_column(sa.Column("margen", sa.Float))
         lote.add_column(sa.Column("incluido", sa.Boolean, nullable=False, server_default=sa.text("0")))
         lote.add_column(sa.Column("periodo_id", sa.Integer))
+        lote.add_column(sa.Column("costo_usd", sa.Float))   # lo incluido reservado cuenta contra el tope
 
     # Datos: el margen a la carta pasa de 1,5 a 2,0 solo si sigue exactamente en el viejo defecto (idempotente).
     op.execute(sa.text(
@@ -159,6 +160,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     with op.batch_alter_table("reserva_saldo", recreate="always") as lote:
+        lote.drop_column("costo_usd")
         lote.drop_column("periodo_id")
         lote.drop_column("incluido")
         lote.drop_column("margen")

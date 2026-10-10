@@ -1899,6 +1899,10 @@ msgstr "<strong>BOLD_PRUEBAS=1 without BOLD_LLAVE_SECRETA.</strong> The webhook 
 msgid "<strong>Faltan llaves de Bold.</strong> Sin BOLD_LLAVE_IDENTIDAD y BOLD_LLAVE_SECRETA en el <code>.env</code> del servidor no hay recargas en línea: los proyectos solo pueden recargar con una recarga manual desde aquí."
 msgstr "<strong>Bold keys are missing.</strong> Without BOLD_LLAVE_IDENTIDAD and BOLD_LLAVE_SECRETA in the server’s <code>.env</code> there are no online top-ups: projects can only be topped up manually from here."
 
+#, python-format
+msgid "<strong>La tasa de cambio de hoy no se usó.</strong> La TRM de datos.gov.co (%(hoy)s COP por dólar) se movió más de 8 %% frente a la última aceptada (%(antes)s COP por dólar). Mientras no la aceptes, no se cobra nada en pesos (recargas con Wompi ni planes)."
+msgstr "<strong>Today's exchange rate was not used.</strong> The official rate (TRM) from datos.gov.co (%(hoy)s COP per dollar) moved more than 8 %% from the last accepted one (%(antes)s COP per dollar). Until you accept it, nothing is charged in pesos (neither Wompi top-ups nor plans)."
+
 msgid "<strong>Llaves de pruebas de Wompi en un servidor que no es local.</strong> Aquí no valen: no se cobran planes ni recargas con Wompi y sus eventos no se aceptan. Pon en el <code>.env</code> del servidor las llaves de producción de Wompi."
 msgstr "<strong>Wompi test keys on a server that is not local.</strong> They do not work here: no plans or top-ups are charged with Wompi and its events are not accepted. Put the Wompi production keys in the server <code>.env</code>."
 
@@ -2063,6 +2067,10 @@ msgstr "Unknown action."
 #, python-format
 msgid "Acción desconocida: %(accion)s."
 msgstr "Unknown action: %(accion)s."
+
+#, python-format
+msgid "Aceptar la tasa de hoy (%(hoy)s COP/USD)"
+msgstr "Accept today's rate (%(hoy)s COP/USD)"
 
 #, python-format
 msgid "Acepto los %(enlace)s."
@@ -7064,6 +7072,9 @@ msgstr "That Create session no longer exists."
 msgid "Esa sesión no se puede rearmar ahora."
 msgstr "That session can't be rebuilt right now."
 
+msgid "Esa tasa está fuera del rango posible y no se puede aceptar."
+msgstr "That rate is outside the possible range and can't be accepted."
+
 msgid "Esa temporada no existe en este proyecto."
 msgstr "That season doesn't exist in this project."
 
@@ -9765,8 +9776,8 @@ msgid "La Página %(pagina)s no está entre las que ve el Business de la agencia
 msgstr "The Page %(pagina)s isn't among the ones the agency's Business can see."
 
 #, python-format
-msgid "La TRM de datos.gov.co no sirve hoy (%(motivo)s). Mientras tanto no se cobra ninguna recarga ni plan en pesos. Revisa la TRM del día; si el salto es real, se destraba solo en 3 días o al borrar la clave «cobros:trm»."
-msgstr "Today's official exchange rate (TRM) from datos.gov.co can't be used (%(motivo)s). Until then no top-up or plan is charged in pesos. Check today's TRM; if the jump is real, it clears on its own in 3 days or when you delete the «cobros:trm» key."
+msgid "La TRM de datos.gov.co no sirve hoy (%(motivo)s). Mientras tanto no se cobra ninguna recarga ni plan en pesos. Si es un salto real del peso, acéptala en /admin/cobros («Aceptar la tasa de hoy»)."
+msgstr "Today's official exchange rate (TRM) from datos.gov.co can't be used (%(motivo)s). Until then no top-up or plan is charged in pesos. If it's a real move of the peso, accept it in /admin/cobros (“Accept today's rate”)."
 
 msgid "La URL de Android tiene que ser un enlace https de Google Play (play.google.com)."
 msgstr "The Android URL has to be an https Google Play link (play.google.com)."
@@ -10284,6 +10295,10 @@ msgstr "The voice adjusts itself to each country: you can move it or delete it, 
 
 msgid "La voz todavía no tiene una respuesta del proveedor; no se vuelve a cobrar."
 msgstr "The voice has no response from the provider yet; you will not be charged again."
+
+#, python-format
+msgid "La vuelta del pago de la recarga «%(ref)s» de %(cliente)s vio la transacción %(tx)s APROBADA en Wompi, pero su evento firmado no llegó en 30 minutos y no se acreditó. Revisa la URL de eventos en el panel de Wompi o acredita a mano."
+msgstr "The payment return page for top-up «%(ref)s» of %(cliente)s saw transaction %(tx)s APPROVED in Wompi, but its signed event did not arrive within 30 minutes and nothing was credited. Check the events URL in the Wompi dashboard or credit it manually."
 
 #, python-format
 msgid "La última copia de %(tienda)s falló: %(error)s"
@@ -11917,6 +11932,9 @@ msgstr "There's no stopped research to resume."
 
 msgid "No hay una tasa de cambio válida: los cobros en pesos están frenados"
 msgstr "No valid exchange rate: charges in pesos are on hold"
+
+msgid "No hay una tasa rechazada para aceptar."
+msgstr "There is no rejected rate to accept."
 
 msgid "No hay voz en este destino."
 msgstr "There's no voice in this market."
@@ -16335,6 +16353,10 @@ msgid "Tarjetas de cualquier país; en Colombia también PSE y Nequi. Bold cobra
 msgstr "Cards from any country; in Colombia also PSE and Nequi. Bold charges in Colombian pesos at the day's rate."
 
 #, python-format
+msgid "Tasa de cambio aceptada: %(valor)s COP por dólar. Los cobros en pesos siguen."
+msgstr "Exchange rate accepted: %(valor)s COP per dollar. Charges in pesos resume."
+
+#, python-format
 msgid "Te avisamos cuando baje de %(umbral)s."
 msgstr "We will let you know when it drops below %(umbral)s."
 
@@ -18300,6 +18322,10 @@ msgstr "Wompi approved a second payment for a top-up for %(cliente)s"
 
 msgid "Wompi confirmó el cobro: el pago quedó aprobado y el plan, al día."
 msgstr "Wompi confirmed the charge: the payment is approved and the plan is up to date."
+
+#, python-format
+msgid "Wompi dice aprobado pero no llegó su evento (%(cliente)s)"
+msgstr "Wompi says approved but its event did not arrive (%(cliente)s)"
 
 msgid "Wompi dice que esa referencia de pago ya se usó"
 msgstr "Wompi says that payment reference was already used"

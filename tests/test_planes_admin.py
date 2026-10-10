@@ -738,3 +738,48 @@ def test_apagar_cobrar_con_un_plan_que_renueva_apaga_la_renovacion_y_lo_dice(htt
     (s,) = _filas("suscripcion")
     assert s.renovar is False and s.proximo_cobro is None and s.estado == "activa"
     assert any("Su plan ya no se renueva solo" in m for m in _flashes(c))
+
+
+# --- N3 (re-revisión 2026-10-10): aceptar la TRM que la banda rechazó ---------------------------
+
+def _rechazada(valor=4400.0, anterior=4000.5):
+    import json
+    import time
+    import db
+    with db.conectar() as con:
+        con.execute(db.kv.insert().values(clave="cobros:trm_rechazada", actualizado_en=db.ahora(), valor=json.dumps(
+            {"valor": valor, "anterior": anterior, "leida_en": time.time(), "vigencia_desde": "2026-10-10",
+             "vigencia_hasta": "2026-10-10"})))
+
+
+def test_el_admin_ve_la_tasa_rechazada_y_la_acepta(http):
+    import json
+    import db
+    _rechazada()
+    c = http.como("admin")
+    html = c.get("/admin/cobros").get_data(as_text=True)
+    assert 'id="aviso-trm-rechazada"' in html and "Aceptar la tasa de hoy (4.400,00 COP/USD)" in html
+    assert "4.000,50" in html
+    c.post("/admin/cobros/trm/aceptar", data={"valor": "4400.0"}, headers=MISMO)
+    with db.conectar() as con:
+        guardada = json.loads(con.execute(sa.select(db.kv.c.valor).where(db.kv.c.clave == "cobros:trm")).scalar())
+        rech = con.execute(sa.select(db.kv.c.valor).where(db.kv.c.clave == "cobros:trm_rechazada")).scalar()
+    assert guardada["valor"] == 4400.0 and rech is None
+    assert any("Tasa de cambio aceptada" in m for m in _flashes(c))
+    assert 'id="aviso-trm-rechazada"' not in c.get("/admin/cobros").get_data(as_text=True)
+
+
+def test_aceptar_la_tasa_es_solo_del_admin_del_mismo_sitio_y_del_valor_mostrado(http):
+    import db
+    _rechazada()
+
+    def guardada():
+        with db.conectar() as con:
+            return con.execute(sa.select(db.kv.c.valor).where(db.kv.c.clave == "cobros:trm")).scalar()
+    assert http.como("user_acme").post("/admin/cobros/trm/aceptar", data={"valor": "4400.0"},
+                                       headers=MISMO).status_code in (302, 403, 404)
+    assert http.como("admin").post("/admin/cobros/trm/aceptar", data={"valor": "4400.0"},
+                                   headers={"Sec-Fetch-Site": "cross-site"}).status_code == 403
+    c = http.como("admin")
+    c.post("/admin/cobros/trm/aceptar", data={"valor": "5000"}, headers=MISMO)
+    assert guardada() is None and any("No hay una tasa rechazada" in m for m in _flashes(c))

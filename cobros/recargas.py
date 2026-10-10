@@ -54,6 +54,10 @@ HORAS_VIGENTE = 26          # el link vence a las 24 h; 2 h de gracia para el we
 TOPE_SIN_FIRMA_HORA = 50
 DIAS_SIN_FIRMA = 30          # la limpieza diaria borra los más viejos
 TOPE_VUELTA_S = 60           # verificar_pendientes no retiene el carril general más que esto
+# N2 (re-revisión 2026-10-10): lo que la vuelta vio aprobado y cuadraba, en kv (único escritor: este módulo). Si a
+# los 30 min la recarga sigue sin acreditar (el evento firmado no llegó), la periódica avisa al admin una vez.
+CLAVE_VISTO = "wompi:visto:{recarga}"
+MINUTOS_VISTO_SIN_EVENTO = 30
 _reloj = time.monotonic
 _SIN_FIRMA = {"desde": None, "n": 0, "avisado": False}          # Bold
 _SIN_FIRMA_WOMPI = {"desde": None, "n": 0, "avisado": False}    # Wompi: cupo aparte
@@ -865,7 +869,63 @@ def consultar(recarga_id, transaccion_id, tiempo=None):
     if not _cuadra(fila, tx):
         _avisar_no_cuadra(fila["id"], fila["cliente"], fila["referencia"], tx, "vuelta")
         return "no_cuadra"
+    if tx.get("status") == "APPROVED" and fila["estado"] != "aprobada":
+        _anotar_visto(fila["id"], tx["id"])
     return tx.get("status") or None
+
+
+def _anotar_visto(recarga_id, tx_id):
+    """Anota (una vez, la primera hora vista) que Wompi dijo APPROVED para esta recarga en la vuelta. No
+    acredita ni guarda `pasarela_ref`: solo deja que la periódica avise si el evento no llega. Nunca lanza."""
+    clave = CLAVE_VISTO.format(recarga=int(recarga_id))
+    valor = json.dumps({"tx": str(tx_id)[:64], "visto_en": db.ahora()})
+    try:
+        with db.conectar() as con:
+            if con.execute(sa.select(db.kv.c.clave).where(db.kv.c.clave == clave)).first() is None:
+                con.execute(db.kv.insert().values(clave=clave, valor=valor, actualizado_en=db.ahora()))
+    except sa.exc.IntegrityError:
+        pass   # otra pestaña la anotó a la vez
+    except Exception:  # noqa: BLE001
+        log.exception("no se pudo anotar lo visto en la vuelta de la recarga %s", recarga_id)
+
+
+def avisar_vistos_sin_evento():
+    """La periódica: una recarga que la vuelta vio APPROVED hace más de MINUTOS_VISTO_SIN_EVENTO y sigue sin
+    acreditar → aviso al admin, una vez («Wompi dice aprobado pero no llegó su evento»). Las ya acreditadas (o que
+    ya no existen) se limpian. Devuelve cuántos avisos salieron. Los correos van fuera de toda transacción."""
+    kv, r = db.kv, db.recarga
+    limite = (datetime.now() - timedelta(minutes=MINUTOS_VISTO_SIN_EVENTO)).isoformat(timespec="seconds")
+    avisar, borrar = [], []
+    with db.conectar() as con:
+        for clave, valor in con.execute(sa.select(kv.c.clave, kv.c.valor).where(kv.c.clave.like("wompi:visto:%"))):
+            try:
+                rid, visto = int(clave.rsplit(":", 1)[1]), json.loads(valor)
+            except (ValueError, TypeError):
+                borrar.append(clave)
+                continue
+            fila = _fila(con, rid)
+            if fila is None or fila["estado"] == "aprobada":
+                borrar.append(clave)
+            elif str(visto.get("visto_en") or "") <= limite:
+                avisar.append((fila, str(visto.get("tx") or "—")))
+        if borrar:
+            con.execute(kv.delete().where(kv.c.clave.in_(borrar)))
+    n = 0
+    for fila, tx_id in avisar:
+        if not avisos._marcar_una_vez(f"cobros:aviso_visto:{fila['id']}"):
+            continue
+        cliente, referencia = fila["cliente"], fila["referencia"]
+        avisos.admin(
+            "wompi_sin_evento",
+            lambda cliente=cliente: gettext("Wompi dice aprobado pero no llegó su evento (%(cliente)s)",
+                                            cliente=cliente),
+            lambda cliente=cliente, referencia=referencia, tx_id=tx_id: gettext(
+                "La vuelta del pago de la recarga «%(ref)s» de %(cliente)s vio la transacción %(tx)s APROBADA en "
+                "Wompi, pero su evento firmado no llegó en 30 minutos y no se acreditó. Revisa la URL de eventos en "
+                "el panel de Wompi o acredita a mano.", ref=referencia, cliente=cliente, tx=tx_id),
+            cliente=cliente)
+        n += 1
+    return n
 
 
 def verificar_pendientes():
@@ -918,6 +978,10 @@ def verificar_pendientes():
             with db.conectar() as con:
                 con.execute(r.update().where(r.c.id == fila.id, r.c.estado == "pendiente")
                             .values(estado="expirada", actualizada_en=db.ahora()))
+    try:
+        avisar_vistos_sin_evento()
+    except Exception:  # noqa: BLE001 — un aviso no frena la verificación
+        log.exception("no se pudieron revisar las recargas vistas aprobadas sin evento")
     return revisadas
 
 

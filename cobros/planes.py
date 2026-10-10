@@ -181,6 +181,18 @@ def _leer_incluye(cliente):
     return periodo_, incluido_usado(cliente, periodo_)
 
 
+def periodos_sin_cerrar(con, cliente, ahora=None):
+    """(abierto, terminados) en UNA lectura: el periodo vigente (como `periodo_abierto`) y los que ya terminaron
+    (`fin ≤ ahora`) pero siguen sin cerrar (su bolsa todavía no venció). Solo lee."""
+    ahora = ahora or db.ahora()
+    p = db.periodo_plan
+    filas = con.execute(sa.select(p).where(p.c.cliente == cliente, p.c.cerrado == sa.false(), p.c.inicio <= ahora)
+                        .order_by(p.c.inicio.desc(), p.c.id.desc())).all()
+    abierto = next((_desde_fila(f) for f in filas if f.fin > ahora), None)
+    terminados = [{**_desde_fila(f), "cliente": f.cliente} for f in filas if f.fin <= ahora]
+    return abierto, terminados
+
+
 def marcar_cerrado(con, periodo_id):
     """El periodo ya se venció (`libro.vencer_periodo` escribió su movimiento en
     esta misma transacción). Devuelve las filas tocadas."""
@@ -1312,7 +1324,7 @@ def renovar_todo(ahora=None):
                     continue
                 if (ahora < _mas(actual["fin"], ESPERA_CIERRE)
                         and _libro().reservas_vivas_del_periodo(con, actual["cliente"], actual["inicio"],
-                                                                actual["fin"])):
+                                                                actual["fin"], actual["id"])):
                     resumen["esperando"] += 1   # su lote todavía se cobra de esta bolsa
                     continue
                 resumen["cerrados"] += _cerrar_periodo(con, pid)

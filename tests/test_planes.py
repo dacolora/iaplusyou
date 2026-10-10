@@ -1070,3 +1070,21 @@ def test_anual_con_el_worker_apagado_mas_de_un_mes_abre_el_mes_en_curso(base_tem
     assert periodos[0].cerrado is True
     assert len(_filas(base_temporal, "movimiento_saldo", tipo="plan")) == 2   # ni febrero ni marzo de más
     assert planes.periodo_abierto(None, "acme", ahora="2027-04-15T10:00:00")["id"] == periodos[1].id
+
+
+def test_el_cierre_mira_el_periodo_de_la_reserva_y_la_fecha_solo_sin_el(base_temporal, planes, pro, falso, avisos):
+    _suscribir(planes, pro)
+    (per,) = _filas(base_temporal, "periodo_plan")
+    _tarea_viva(base_temporal, "de_otro")
+    _tarea_viva(base_temporal, "suya")
+    with base_temporal.conectar() as con:
+        con.execute(base_temporal.reserva_saldo.insert().values(       # durante, pero de otro periodo: no frena
+            cliente="acme", job_id="de_otro", milesimas=40_000, creada_en=T0, margen=2.0, periodo_id=per.id + 99))
+    assert planes.renovar_todo(ahora=_despues(per.fin, minutos=1))["esperando"] == 0
+    with base_temporal.conectar() as con:                              # otro periodo igual, la reserva suya
+        con.execute(base_temporal.periodo_plan.update().values(cerrado=False))
+        con.execute(base_temporal.movimiento_saldo.delete().where(base_temporal.movimiento_saldo.c.tipo == "vencimiento"))
+        con.execute(base_temporal.reserva_saldo.insert().values(       # con su periodo_id, aunque la fecha no sirva
+            cliente="acme", job_id="suya", milesimas=40_000, creada_en=_despues(per.fin, minutos=2), margen=1.25,
+            periodo_id=per.id))
+    assert planes.renovar_todo(ahora=_despues(per.fin, minutos=3))["esperando"] == 1

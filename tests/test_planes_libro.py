@@ -597,6 +597,7 @@ def test_exigir_con_plan_ilegible_cobra_como_sin_plan(base_temporal, libro, monk
     def rota(*a, **k):
         raise RuntimeError("base rota")
     monkeypatch.setattr(planes, "periodo_abierto", rota)
+    monkeypatch.setattr(planes, "periodos_sin_cerrar", rota)        # el freno lee el periodo por aquí (N4)
     _tarea_viva(base_temporal, "j1")
     assert libro.exigir("acme", 0.13, job_id="j1", tipo="guion") == 260   # 0,13 × 2,0: a la carta
     assert "no se pudo leer el plan" in caplog.text
@@ -718,3 +719,95 @@ def test_incluye_lee_una_vez_por_peticion(base_temporal, libro, planes, monkeypa
     with dashboard.app.test_request_context("/cliente/acme"):
         assert planes.incluye("acme", "guion", 0.13) and planes.incluye("acme", "ideas", 0.05)
     assert lecturas == ["acme"]
+
+
+# ------------------------- N1 (re-revisión 2026-10-10): el tope de lo incluido con trabajos en cola ---
+
+def test_cinco_guiones_en_cola_con_tope_de_020_solo_entra_lo_que_cabe(base_temporal, libro, sin_avisos):
+    import gastos
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    _abrir(base_temporal, libro, tope=0.20, credito=10_000)          # cabe UN guion de 0,13
+    reservas = []
+    for i in range(5):
+        _tarea_viva(base_temporal, f"g{i}")
+        reservas.append(libro.exigir("acme", 0.13, job_id=f"g{i}", tipo="guion"))
+    assert reservas == [0, 163, 163, 163, 163]                       # el resto, reservado a precio de miembro
+    for i in range(5):
+        with libro.en_trabajo(i + 1, f"g{i}"):
+            gastos.registrar("acme", "guion", 0.13, f"guion:{i}:t{i + 1}")
+    inc, cob = _movs(base_temporal, tipo="incluido"), _movs(base_temporal, tipo="cobro")
+    assert len(inc) == 1 and sum(m.extra["costo"] for m in inc) == pytest.approx(0.13)
+    assert [c.milesimas for c in cob] == [-163] * 4 and all(c.extra["margen"] == 1.25 for c in cob)
+
+
+def test_un_incluido_reservado_que_sale_mas_caro_que_el_tope_se_cobra_al_margen_reservado(base_temporal, libro,
+                                                                                          sin_avisos):
+    import gastos
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    pid = _abrir(base_temporal, libro, tope=0.20, credito=10_000)
+    _tarea_viva(base_temporal, "g")
+    assert libro.exigir("acme", 0.13, job_id="g", tipo="guion") == 0
+    with libro.en_trabajo(1, "g"):
+        gastos.registrar("acme", "guion", 3.00, "guion:x:t1")
+    assert not _movs(base_temporal, tipo="incluido")
+    (c,) = _movs(base_temporal, tipo="cobro")
+    assert c.milesimas == -3_750 and c.extra == {"margen": 1.25, "periodo_id": pid}
+
+
+def test_dos_incluidos_reservados_que_juntos_pasan_el_tope_real_cobran_el_segundo(base_temporal, libro, sin_avisos):
+    import gastos
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    _abrir(base_temporal, libro, tope=0.30, credito=10_000)
+    for j in ("a", "b"):
+        _tarea_viva(base_temporal, j)
+        assert libro.exigir("acme", 0.13, job_id=j, tipo="guion") == 0   # 0,13 + 0,13 caben en 0,30
+    for i, j in enumerate(("a", "b")):
+        with libro.en_trabajo(i + 1, j):
+            gastos.registrar("acme", "guion", 0.20, f"guion:{j}:t1")       # pero cuestan 0,20 cada uno
+    assert len(_movs(base_temporal, tipo="incluido")) == 1
+    assert [c.milesimas for c in _movs(base_temporal, tipo="cobro")] == [-250]
+
+
+def test_un_incluido_ya_anotado_no_cuenta_dos_veces_contra_el_tope(base_temporal, libro, sin_avisos):
+    """Mientras su tarea sigue viva, la reserva de un incluido que ya se anotó no se suma a lo usado."""
+    import gastos
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    _abrir(base_temporal, libro, tope=0.30, credito=0)
+    _tarea_viva(base_temporal, "a")
+    assert libro.exigir("acme", 0.13, job_id="a", tipo="guion") == 0
+    with libro.en_trabajo(1, "a"):
+        gastos.registrar("acme", "guion", 0.13, "guion:a:t1")
+    _tarea_viva(base_temporal, "b")
+    assert libro.exigir("acme", 0.13, job_id="b", tipo="guion") == 0    # 0,13 usado + 0,13 = 0,26 ≤ 0,30
+
+
+
+# --------------------- N4 (re-revisión 2026-10-10): la bolsa por vencer no se puede gastar ---
+
+def test_lo_que_queda_de_un_periodo_terminado_sin_cerrar_no_se_puede_gastar(base_temporal, libro, sin_avisos):
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    viejo = _abrir(base_temporal, libro, credito=10_000)              # bolsa vieja: 10 000
+    _acreditar(base_temporal, libro, 2_000)                          # 2 000 propios
+    _terminar_periodo(base_temporal, viejo)                          # terminó; espera a la periódica para vencer
+    _abrir(base_temporal, libro, inicio=_iso(datetime.now() - timedelta(seconds=1)), credito=5_000,
+           suscripcion_id=2)                                         # el nuevo: 5 000
+    assert libro.saldo("acme") == 17_000
+    _tarea_viva(base_temporal, "v1")
+    with pytest.raises(libro.SaldoInsuficiente) as e:
+        libro.exigir("acme", 6.0, job_id="v1")                       # 7 500 > 2 000 + 5 000 (los 10 000 vencen)
+    assert e.value.disponible == 7_000
+    assert libro.exigir("acme", 5.6, job_id="v1") == 7_000           # justo lo que no vence
+
+
+def test_el_lote_de_un_periodo_terminado_no_cuenta_dos_veces(base_temporal, libro, sin_avisos):
+    """Lo que el lote vivo del periodo viejo va a cobrar sale de esa bolsa: no se resta dos veces."""
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    viejo = _abrir(base_temporal, libro, credito=10_000)
+    _acreditar(base_temporal, libro, 2_000)
+    _tarea_viva(base_temporal, "lote")
+    assert libro.exigir("acme", 3.2, job_id="lote") == 4_000         # reservado en el periodo viejo
+    _terminar_periodo(base_temporal, viejo)
+    _tarea_viva(base_temporal, "v2")
+    with pytest.raises(libro.SaldoInsuficiente) as e:
+        libro.exigir("acme", 2.0, job_id="v2")                       # a la carta: 4 000
+    assert e.value.disponible == 2_000                               # 12 000 − 4 000 del lote − 6 000 que vencen

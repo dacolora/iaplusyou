@@ -674,6 +674,7 @@ reserva_saldo = Table("reserva_saldo", metadata,
     Column("margen", Float),
     Column("incluido", Boolean, nullable=False, default=False, server_default=sa.text("0")),
     Column("periodo_id", Integer),
+    Column("costo_usd", Float),   # el costo estimado al reservar: lo incluido reservado cuenta contra el tope
 )
 
 recarga = Table("recarga", metadata,

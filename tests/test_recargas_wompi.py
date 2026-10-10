@@ -865,3 +865,46 @@ def test_un_segundo_aprobado_con_otra_transaccion_avisa_al_admin(entorno):
     assert entorno["libro"].saldo("acme") == 50000 and len(_movimientos(db)) == 1   # no se acredita dos veces
     assert _recarga(db, rid)["pasarela_ref"] == "1292-1602113476-10985"
     assert _ev(entorno, _evento(_tx(ref)))[1] == "duplicada"        # la misma transacción: nada que avisar
+
+
+# --- N2 (re-revisión 2026-10-10): aprobado en la vuelta pero sin evento --------------------------
+
+def _visto(db, rid):
+    with db.conectar() as con:
+        crudo = con.execute(sa.select(db.kv.c.valor).where(db.kv.c.clave == f"wompi:visto:{rid}")).scalar()
+    return json.loads(crudo) if crudo else None
+
+
+def test_aprobado_en_la_vuelta_sin_evento_avisa_al_admin_a_los_30_min_una_vez(entorno):
+    db, recargas = entorno["db"], entorno["recargas"]
+    rid, ref = _pendiente(entorno)
+    entorno["txs"]["1292-1602113476-10985"] = _tx(ref)
+    assert recargas.consultar(rid, "1292-1602113476-10985") == "APPROVED"
+    visto = _visto(db, rid)
+    assert visto["tx"] == "1292-1602113476-10985"
+    fila = _recarga(db, rid)
+    assert (fila["estado"], fila["pasarela_ref"]) == ("pendiente", None) and entorno["libro"].saldo("acme") == 0
+    recargas.consultar(rid, "1292-1602113476-10985")
+    assert _visto(db, rid)["visto_en"] == visto["visto_en"]          # la primera vez manda
+    recargas.verificar_pendientes()
+    assert "wompi_sin_evento" not in _admin(entorno)                 # todavía no pasaron 30 min
+    hace = (datetime.now() - timedelta(minutes=31)).isoformat(timespec="seconds")
+    with db.conectar() as con:
+        con.execute(db.kv.update().where(db.kv.c.clave == f"wompi:visto:{rid}")
+                    .values(valor=json.dumps({"tx": "1292-1602113476-10985", "visto_en": hace})))
+    recargas.verificar_pendientes()
+    recargas.verificar_pendientes()
+    assert _admin(entorno).count("wompi_sin_evento") == 1
+    assert entorno["libro"].saldo("acme") == 0                       # nunca acredita
+    assert _ev(entorno, _evento(_tx(ref)))[1] == "acreditada"        # llega el evento: se limpia
+    recargas.verificar_pendientes()
+    assert _visto(db, rid) is None
+
+
+def test_lo_que_no_cuadra_o_no_esta_aprobado_no_se_anota(entorno):
+    rid, ref = _pendiente(entorno)
+    entorno["txs"]["1292-1602113476-10985"] = _tx(ref, status="PENDING")
+    entorno["recargas"].consultar(rid, "1292-1602113476-10985")
+    entorno["txs"]["1292-1602113476-20000"] = _tx("cv-otra-1", tx_id="1292-1602113476-20000")
+    entorno["recargas"].consultar(rid, "1292-1602113476-20000")
+    assert _visto(entorno["db"], rid) is None

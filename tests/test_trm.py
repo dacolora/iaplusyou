@@ -208,9 +208,72 @@ def test_dentro_del_8_por_ciento_se_usa(trm):
     assert trm.actual() == 3470.0 and trm.admin == []
 
 
-def test_con_la_guardada_de_mas_de_tres_dias_no_se_compara(trm):
+def test_con_la_guardada_de_mas_de_tres_dias_un_salto_sigue_frenando(trm, base_temporal):
+    """N3: pasados 3 días un salto de más de 8 % sigue sin aceptarse solo."""
     assert trm.actual() == 3218.75
-    trm.reloj["t"] = T0 + 3 * 86400 + 60
-    trm.reloj["hoy"] = HOY + dt.timedelta(days=3)
-    trm.respuesta["r"] = _Respuesta(200, _fila("3600.00", desde="2026-10-12", hasta="2026-10-12"))
-    assert trm.actual() == 3600.0
+    trm.reloj["t"] = T0 + 10 * 86400
+    trm.reloj["hoy"] = HOY + dt.timedelta(days=10)
+    trm.respuesta["r"] = _Respuesta(200, _fila("3600.00", desde="2026-10-19", hasta="2026-10-19"))
+    with pytest.raises(trm.SinTasa):
+        trm.actual()
+    r = trm.rechazada()
+    assert r["valor"] == 3600.0 and r["anterior"] == 3218.75
+    assert _guardado(base_temporal)["valor"] == 3218.75
+
+
+def test_la_rechazada_no_se_vuelve_a_pedir_en_una_hora(trm):
+    assert trm.actual() == 3218.75
+    trm.reloj["t"] = T0 + 7 * 3600
+    trm.respuesta["r"] = _Respuesta(200, _fila("3600.00"))
+    with pytest.raises(trm.SinTasa):
+        trm.actual()
+    n = len(trm.llamadas)
+    trm.reloj["t"] += 3599
+    with pytest.raises(trm.SinTasa):
+        trm.actual()
+    assert len(trm.llamadas) == n                                  # dentro de la hora: no pide
+    trm.reloj["t"] += 2
+    with pytest.raises(trm.SinTasa):
+        trm.actual()
+    assert len(trm.llamadas) == n + 1
+
+
+def test_el_dia_queda_avisado_solo_si_el_correo_salio(trm, monkeypatch):
+    from cobros import avisos
+    salidos = []
+    monkeypatch.setattr(avisos, "admin", lambda tipo, a, c, cliente="": salidos.append(tipo) or 0)   # no salió
+    trm.respuesta["r"] = _Respuesta(200, _fila("2400"))
+    for _ in range(2):
+        with pytest.raises(trm.SinTasa):
+            trm.actual()
+    assert salidos == ["trm_sin_tasa", "trm_sin_tasa"]             # se reintenta
+    monkeypatch.setattr(avisos, "admin", lambda tipo, a, c, cliente="": salidos.append(tipo) or 1)   # salió
+    for _ in range(2):
+        with pytest.raises(trm.SinTasa):
+            trm.actual()
+    assert len(salidos) == 3                                        # una vez y ya, hasta mañana
+
+
+def test_el_admin_acepta_la_tasa_rechazada(trm, base_temporal):
+    assert trm.actual() == 3218.75
+    trm.reloj["t"] = T0 + 7 * 3600
+    trm.respuesta["r"] = _Respuesta(200, _fila("3600.00"))
+    with pytest.raises(trm.SinTasa):
+        trm.actual()
+    with pytest.raises(ValueError):
+        trm.aceptar("3700", "admin")                                # solo la que se mostró
+    assert trm.aceptar("3600.0", "admin") == 3600.0
+    assert trm.rechazada() is None and trm.actual() == 3600.0
+    with pytest.raises(ValueError):
+        trm.aceptar("3600.0", "admin")                              # ya no hay nada que aceptar
+
+
+def test_si_la_de_hoy_vuelve_a_la_banda_se_borra_la_rechazada(trm):
+    assert trm.actual() == 3218.75
+    trm.reloj["t"] = T0 + 7 * 3600
+    trm.respuesta["r"] = _Respuesta(200, _fila("3600.00"))
+    with pytest.raises(trm.SinTasa):
+        trm.actual()
+    trm.reloj["t"] += 3601
+    trm.respuesta["r"] = _Respuesta(200, _fila("3250.00"))
+    assert trm.actual() == 3250.0 and trm.rechazada() is None

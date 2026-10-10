@@ -35,7 +35,7 @@ import gastos
 import idiomas
 import proyectos
 import usuarios
-from cobros import bold, libro, pasarela, planes, recargas, vista, wompi
+from cobros import bold, libro, pasarela, planes, recargas, trm, vista, wompi
 
 bp = Blueprint("cobros", __name__)
 log = logging.getLogger(__name__)
@@ -836,10 +836,34 @@ def admin_cobros():
         e["usd_texto"] = vista.usd_evento(e)
     return render_template("admin_cobros.html", filas=filas, margen_global=margen, planes=datos_planes["planes"],
                            eventos=eventos, webhook_callado=vista.webhook_callado(), avisos_bold=_avisos_bold(),
-                           avisos_wompi=_avisos_wompi(),
+                           avisos_wompi=_avisos_wompi(), trm_rechazada=_trm_rechazada(),
                            margen_global_texto=idiomas.numero(margen, 2), margen_global_campo=_campo(margen),
                            margen_min_texto=idiomas.numero(libro.MARGEN_MIN, 2),
                            margen_max_texto=idiomas.numero(libro.MARGEN_MAX, 2))
+
+
+def _trm_rechazada():
+    """La TRM que la banda rechazó (N3): su valor, el de la última aceptada y el campo exacto del formulario."""
+    r = trm.rechazada()
+    if r is None:
+        return None
+    return {"valor": r["valor"], "valor_texto": idiomas.numero(r["valor"], 2),
+            "anterior_texto": idiomas.numero(float(r["anterior"]), 2) if r.get("anterior") else "—"}
+
+
+@bp.post("/admin/cobros/trm/aceptar")
+@_solo_admin
+def admin_trm_aceptar():
+    """«Aceptar la tasa de hoy»: la TRM que se movió más de 8 % pasa a ser la aceptada y se vuelve a cobrar en
+    pesos. Solo el admin, del mismo sitio (la barrera CSRF de la app), y solo el valor exacto que se mostró."""
+    try:
+        valor = trm.aceptar(request.form.get("valor"), session.get("usuario"))
+    except ValueError as e:
+        flash(str(e), "error")
+        return _volver_admin()
+    flash(gettext("Tasa de cambio aceptada: %(valor)s COP por dólar. Los cobros en pesos siguen.",
+                  valor=idiomas.numero(valor, 2)), "ok")
+    return _volver_admin()
 
 
 @bp.post("/admin/cobros/margen")
