@@ -184,8 +184,10 @@ si superan 24, la primera página incluye todos para conservar sus barras. Fragm
 Enmiendas PND-062, entrega 1 (2026-10-10, pedido de Daniel tras revisar la entrega): El envío de Cambiar producto se bloquea en el shell si falta producto, abre el selector y conserva los archivos locales. Ver más inserta las tarjetas antes de sus acciones; la prueba usa un árbol del HTML renderizado con orden y parentesco reales. Un 401/403 o una redirección deja aviso y enlace a entrar, sin botón de reintento.
 
 PND-062, entrega 2 (2026-10-10, pedido de Daniel): los cuatro módulos grandes de Crear viven en
-`static/crear-compositor.js`, `crear-flowplus.js`, `crear-audios.js` y `crear-guiones.js`, con `defer`
-y `url_for('static', ...)` (versión y caché existentes). Cada plantilla deja un JSON `crear-<módulo>-datos`
+`static/crear-compositor.js`, `crear-flowplus.js`, `crear-audios.js` y `crear-guiones.js`, con
+`url_for('static', ...)` (versión y caché existentes). El compositor carga sin `defer` en su lugar,
+después del formulario y su JSON, para registrar las guardas del submit al parsear la sección
+(enmienda tras revisar, 2026-10-10); los otros tres conservan `defer`. Cada plantilla deja un JSON `crear-<módulo>-datos`
 con textos traducidos y datos. `_tab_flowplus.html` activa el modo inicial en DOMContentLoaded para que
 Guiones y el chat ya escuchen `crear:modo`; los eventos posteriores conservan su camino. `formatearUSD`
 sigue global antes del compositor. Node ejecuta los módulos completos sobre el HTML Flask; pantalla en es/en,

@@ -484,6 +484,77 @@ def _config_crear(html, archivo):
     return json.loads(m[1])
 
 
+def test_entrega2_compositor_sin_defer_en_su_lugar(pagina):
+    respuesta = pagina['c'].get('/cliente/acme')
+    html = respuesta.get_data(as_text=True)
+    nodo = next(n for n in sopa(respuesta).select('script')
+                if (n.get('src') or '').startswith('/static/crear-compositor.js?'))
+    assert not nodo.has_attr('defer'), 'El compositor debe registrar las guardas al terminar su sección'
+    assert not nodo.has_attr('async')
+    script = html.index('<script src="' + nodo['src'] + '"')
+    formulario = html.index('id="form-flowplus"')
+    assert formulario < html.index('</form>', formulario) < script
+    assert html.index('id="crear-compositor-datos"') < script
+    assert html.index('function formatearUSD(') < script
+    # Guiones, chat, Audios y el selector de modos aparecen después del compositor.
+    for dependencia in ('/static/crear-guiones.js?', '/static/crear-flowplus.js?',
+                        '/static/crear-audios.js?', "var KEY = 'crear-modo-"):
+        assert script < html.index(dependencia), dependencia
+
+
+@pytest.mark.parametrize('cliente', ['acme', 'otro'])
+@pytest.mark.parametrize('campo,endpoint', [('urlBandeja', 'fp_bandeja'),
+                                          ('urlDescribir', 'fp_describir'),
+                                          ('urlVaciar', 'fp_vaciar_referencias')])
+def test_entrega2_urls_json_del_proyecto(pagina, cliente, campo, endpoint):
+    from flask import url_for
+    respuesta = pagina['c'].get(f'/cliente/{cliente}')
+    sopa(respuesta)
+    datos = _config_crear(respuesta.get_data(as_text=True), 'crear-compositor')['datos']
+    with pagina['dashboard'].app.test_request_context():
+        esperado = url_for(endpoint, cliente=cliente)
+    assert datos[campo] == esperado
+
+
+def _sesion_cliente_con_margen(pagina):
+    from cobros import libro
+    libro.configurar('acme', usuario='admin', cobrar=True, margen=1.5)
+    with pagina['c'].session_transaction() as s:
+        s.update(usuario='user_acme', rol='cliente', cliente='acme')
+
+
+def test_entrega2_tarifa_musica_json_es_precio_para_cliente(pagina):
+    import gastos
+    _sesion_cliente_con_margen(pagina)
+    costo = gastos.costo_musica_estimada('generada')
+    assert costo > 0
+    respuesta = pagina['c'].get('/cliente/acme')
+    sopa(respuesta)
+    datos = _config_crear(respuesta.get_data(as_text=True), 'crear-compositor')['datos']
+    assert datos['tarifaMusica'] == pytest.approx(costo * 1.5)
+    assert datos['tarifaMusica'] != costo
+
+
+@pytest.mark.parametrize('campo,clave', [('preciosClon', 'precios_clon'),
+                                       ('preciosDisenar', 'precios_disenar')])
+def test_entrega2_tablas_voces_json_sin_cruzarse(pagina, monkeypatch, campo, clave):
+    _sesion_cliente_con_margen(pagina)
+    d = pagina['dashboard']
+    original = d._contexto_mis_voces
+    contextos = {}
+    def capturar(cliente):
+        contexto = original(cliente)
+        contextos[cliente] = contexto
+        return contexto
+    monkeypatch.setattr(d, '_contexto_mis_voces', capturar)
+    respuesta = pagina['c'].get('/cliente/acme')
+    sopa(respuesta)
+    contexto = contextos['acme']
+    assert contexto['precios_clon'] != contexto['precios_disenar']
+    datos = _config_crear(respuesta.get_data(as_text=True), 'crear-audios')['datos']
+    assert datos[campo] == contexto[clave]
+
+
 @pytest.mark.parametrize('archivo,firma', SCRIPTS_CREAR)
 def test_entrega2_cuerpo_fuera_del_html_y_estatico_versionado(pagina, archivo, firma):
     from pathlib import Path
@@ -564,12 +635,15 @@ def _ejecutar_crear(html, hash='#referencias', guardado=None):
     arbol = HTML(html).raiz
     def serializar(n):
         return {'tag': n.tag, 'attrs': n.attrs, 'textos': n.textos, 'hijos': [serializar(h) for h in n.hijos]}
-    scripts = [{'archivo': nombre, 'codigo': Path('static', nombre + '.js').read_text()}
+    nodos_scripts = Arbol(arbol).select('script')
+    scripts = [{'archivo': nombre, 'codigo': Path('static', nombre + '.js').read_text(),
+                'defer': next(n for n in nodos_scripts
+                              if (n.get('src') or '').startswith('/static/' + nombre + '.js?')).has_attr('defer')}
                for nombre in ('crear-compositor', 'crear-guiones', 'crear-flowplus', 'crear-audios')]
     modo = (hash[1:].split('?')[0] if hash != '#creativeflowplus' else guardado) or 'referencias'
     modos = next(s for s in re.findall(r'<script>(.*?)</script>', html, re.S) if "var KEY = 'crear-modo-" in s)
     formato = next(s for s in re.findall(r'<script>(.*?)</script>', html, re.S) if 'function formatearUSD(' in s)
-    scripts.insert(0, {'archivo': 'formatearUSD-inline', 'codigo': formato})
+    scripts.insert(0, {'archivo': 'formatearUSD-inline', 'codigo': formato, 'defer': False})
     r = subprocess.run(['node', 'tests/js/crear_estaticos.cjs'], text=True, capture_output=True,
                        input=json.dumps({'dom': serializar(arbol), 'scripts': scripts, 'modos': modos,
                                          'hash': hash, 'modo': modo, 'guardado': guardado}))

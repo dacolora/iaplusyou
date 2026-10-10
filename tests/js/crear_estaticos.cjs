@@ -83,9 +83,11 @@ const context={document,console,URL,Event:class {constructor(type,o={}){this.typ
 context.window=context;context.addEventListener=()=>{};context.scrollTo=()=>{};
 vm.createContext(context);
 document.addEventListener('crear:modo',e=>eventos.push(e.detail.modo));
+// Los scripts sin defer corren al parsear su sección; los diferidos, antes de DOMContentLoaded.
+for(const script of datos.scripts.filter(s=>!s.defer))vm.runInContext(script.codigo,context,{filename:script.archivo});
 vm.runInContext(datos.modos,context,{filename:'modos-inline.js'});
 assert.deepEqual(eventos,[], 'crear:modo se emitió antes de los módulos defer');
-for(const script of datos.scripts)vm.runInContext(script.codigo,context,{filename:script.archivo});
+for(const script of datos.scripts.filter(s=>s.defer))vm.runInContext(script.codigo,context,{filename:script.archivo});
 document.readyState='interactive';document.dispatchEvent({type:'DOMContentLoaded'});
 const $=id=>document.getElementById(id);
 assert.equal(eventos.length,1);
