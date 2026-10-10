@@ -169,9 +169,9 @@ input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
 .landing-tarjeta .generado-tipo { position: absolute; top: .6rem; left: .6rem; }
 .landing-tarjeta strong { font-family: var(--font-display); font-size: .95rem; }
 .landing-tarjeta small { font-size: .72rem; opacity: .85; }
-.landing-tarjeta.t1 { left: 8%; top: 40px; transform: rotate(-6deg); background: linear-gradient(160deg, var(--accent), #4d8dff); }
+.landing-tarjeta.t1 { left: 8%; top: 40px; transform: rotate(-6deg); background: linear-gradient(160deg, var(--accent), #a855f7); }
 .landing-tarjeta.t2 { left: 38%; top: 0; z-index: 2; background: linear-gradient(160deg, var(--accent-2), var(--accent)); }
-.landing-tarjeta.t3 { left: 66%; top: 60px; transform: rotate(7deg); background: linear-gradient(160deg, #4d8dff, var(--accent-2)); }
+.landing-tarjeta.t3 { left: 66%; top: 60px; transform: rotate(7deg); background: linear-gradient(160deg, #a855f7, var(--accent-2)); }
 
 
 
@@ -354,7 +354,7 @@ input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
 .sprint-eventos li small { color: var(--muted); margin-right: .4rem; }
 .sprint-refs-progreso { margin: .6rem 0 1rem; }
 .sprint-zona { border: 2px dashed var(--border); border-radius: var(--radius); padding: 1rem; margin-bottom: .8rem; }
-.sprint-zona.sobre { border-color: var(--accent); background: rgba(77, 141, 255, .06); }
+.sprint-zona.sobre { border-color: var(--accent); background: rgba(168, 85, 247, .06); }
 .sprint-zona-drop { display: block; padding: 1.4rem; text-align: center; cursor: pointer; }
 .sprint-refs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: .8rem; margin-top: 1rem; }
 .sprint-ref { padding: 0; overflow: hidden; }
@@ -364,7 +364,7 @@ input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
 .sprint-ref-cuerpo { padding: .7rem .9rem .9rem; display: grid; gap: .5rem; }
 .sprint-chips { display: flex; flex-wrap: wrap; gap: .3rem; }
 .sprint-chip { font-size: .75rem; border: 1px solid var(--border); border-radius: 999px; padding: .15rem .5rem; cursor: pointer; }
-.sprint-chip:has(input:checked) { border-color: var(--accent); background: rgba(77, 141, 255, .15); }
+.sprint-chip:has(input:checked) { border-color: var(--accent); background: rgba(168, 85, 247, .15); }
 .sprint-chip input { display: none; }
 .sprint-ref-analisis p { margin: 0 0 .3rem; font-size: .85rem; }
 .sprint-analisis-dl { font-size: .8rem; display: grid; grid-template-columns: auto 1fr; gap: .2rem .6rem; }
@@ -422,7 +422,7 @@ input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
 .badge-fuente-woo { color: #b48be0; background: rgba(127, 84, 179, .12); }  /* violeta de la marca WooCommerce, a propósito */
 .badge-fuente-meli { color: #e0b33a; background: rgba(255, 230, 0, .22); }
 .badge-fuente-csv { color: var(--muted); background: rgba(120, 120, 120, .12); }
-.badge-fuente-url { color: var(--accent-texto); background: rgba(47, 140, 255, .12); }
+.badge-fuente-url { color: var(--accent-texto); background: rgba(168, 85, 247, .12); }
 
 .tabla-tiendas td { vertical-align: top; }
 .tienda-acciones { display: flex; flex-direction: column; gap: .3rem; align-items: flex-start; }
@@ -432,7 +432,7 @@ input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
 .tienda-tipo-panel[hidden] { display: none; }
 .tag-atribucion { text-transform: none; }
 .tag-atribucion-pixel { color: var(--ok); background: rgba(47, 158, 110, .1); }
-.tag-atribucion-tienda { color: var(--accent-texto); background: rgba(47, 140, 255, .12); }
+.tag-atribucion-tienda { color: var(--accent-texto); background: rgba(168, 85, 247, .12); }
 .pixel-estado { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; font-size: .84rem; margin: .4rem 0; }
 .pixel-estado form.inline { margin: 0; flex-basis: 100%; }
 .pixel-ayuda { margin-top: .6rem; }
@@ -442,7 +442,7 @@ input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
 
 /* ---- Tablero (Bloque 6) ---- */
 /* Colores de las dos series del gráfico: viven en tokens.css (--tb-ingresos =
-   --serie-1, --tb-gasto = --serie-2; serie validada sobre #0b1a33 el 2026-10-02).
+   --serie-1, --tb-gasto = --serie-2; serie validada sobre #120c1f el 2026-10-02).
    El texto del gráfico nunca usa el color de la serie: va en --muted / --text. */
 
 .tb-cabecera { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap; }
@@ -718,7 +718,7 @@ kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 .3rem; fon
 .exp-filtros .chip.activo { background:var(--accent); color:#fff; border-color:var(--accent); }
 .exp-tarjetas { display:grid; grid-template-columns:repeat(auto-fill, minmax(min(100%, 150px), 1fr)); gap:.8rem; margin-top:.8rem; }
 .exp-tarjeta { position:relative; display:flex; flex-direction:column; gap:.4rem; border:2px solid transparent; border-radius:10px; padding:.4rem; background:var(--panel-2); cursor:pointer; }
-.exp-tarjeta:has(input:checked) { border-color:var(--accent); background:rgba(29, 106, 224, .16); }
+.exp-tarjeta:has(input:checked) { border-color:var(--accent); background:rgba(124, 58, 237, .16); }
 .exp-tarjeta input[type=checkbox] { position:absolute; top:.6rem; left:.6rem; width:1.2rem; height:1.2rem; z-index:1; }
 .exp-tarjeta-media { aspect-ratio:9/16; max-height:220px; overflow:hidden; border-radius:8px; background:#111; }
 .exp-tarjeta-media img, .exp-tarjeta-media video { width:100%; height:100%; object-fit:cover; display:block; }
@@ -756,10 +756,10 @@ kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 .3rem; fon
 .nicho-sub.estado-aprobado { border-color: var(--accent); }
 .nicho-sub.estado-descartado { opacity: .55; }
 .nicho-cita { margin: .3rem 0; padding-left: .8rem; border-left: 3px solid var(--border); font-style: italic; }
-.estado-nicho-armando { background: rgba(77, 141, 255, .15); }
+.estado-nicho-armando { background: rgba(168, 85, 247, .15); }
 .estado-nicho-generando { background: rgba(232, 179, 57, .15); }
 .estado-nicho-revisando, .estado-nicho-aprobado { background: rgba(62, 207, 142, .2); }
-.estado-nicho-propuesto { background: rgba(47, 140, 255, .15); }
+.estado-nicho-propuesto { background: rgba(168, 85, 247, .15); }
 .estado-nicho-descartado { background: rgba(255, 95, 122, .15); }
 
 /* Configuración › Meta: el cliente elige cómo conectar (2026-09-20) */
@@ -860,7 +860,7 @@ kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 .3rem; fon
 .modal-form-precio button { align-self: flex-start; margin-top: .3rem; }
 .modal-form-tabla { overflow-x: auto; margin-bottom: 1.6rem; border: 1px solid var(--border); border-radius: var(--radius-sm); }
 .modal-form > .vacio { padding-bottom: 1.6rem; }
-.tag-en-curso { color: var(--accent-texto); background: rgba(29, 106, 224, .1); }
+.tag-en-curso { color: var(--accent-texto); background: rgba(124, 58, 237, .1); }
 .barrido-fecha { white-space: nowrap; }
 .barrido-sub { display: block; margin-top: .2rem; font-size: .72rem; color: var(--muted); line-height: 1.4; }
 /* La barra del barrido en curso: su celda no tiene otro contenido, así que sin ancho mínimo se encogía a un punto. */
@@ -883,7 +883,7 @@ kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 .3rem; fon
 .opcion-tarjeta input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
 .opcion-tarjeta strong { font-size: .88rem; }
 .opcion-tarjeta small { font-size: .76rem; color: var(--muted); }
-.opcion-tarjeta:has(input:checked) { border-color: var(--accent); background: rgba(29, 106, 224, .05); box-shadow: 0 0 0 1px var(--accent); }
+.opcion-tarjeta:has(input:checked) { border-color: var(--accent); background: rgba(124, 58, 237, .05); box-shadow: 0 0 0 1px var(--accent); }
 .opcion-tarjeta:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* Traer referentes: solo el campo del modo elegido (los dos siguen en el DOM). */

@@ -33,6 +33,11 @@ tomó capturas a 1440 y 375 px y le sumó los arreglos que salieron de ahí (rel
 
 ## 3. Decisiones de Daniel (2026-10-02) — no se reabren
 
+> **Nota del 2026-10-10:** el color se reabrió. Camilo pidió que Creatv Adstra vuelva al **morado/violeta como color
+> principal**, con fondo de galaxia morada y el oscuro dominando. `tokens.css` tiene la paleta morada y
+> `tests/test_estilos_sistema.py::test_paleta_morada_sin_el_azul_viejo` reemplaza a `test_sin_morados`. Las demás
+> decisiones de esta tabla siguen vigentes.
+
 | Decisión | Respuesta |
 |---|---|
 | Color | **Azul en toda la plataforma.** El morado desaparece de la app; los gráficos se revalidan para daltonismo. |

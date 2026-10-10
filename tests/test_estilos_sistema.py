@@ -96,11 +96,10 @@ def test_orden_nombra_cada_archivo_una_vez_y_por_capas():
 import glob
 import re
 
-# Los morados e índigos de la paleta vieja (los dos últimos los encontró el barrido por tono de la revisión de la
-# entrega 1). El violeta de la insignia de WooCommerce (#b48be0 / 127,84,179) se queda a propósito: es el color de su
-# marca, como el verde de Shopify y el amarillo de Mercado Libre.
-MORADOS = re.compile(r"7c3aed|a855f7|a78bfa|8b5cf6|8b6cf0|6d28d9|c4b5fd|9333ea|124,\s*58,\s*237|168,\s*85,\s*247|"
-                     r"124,\s*92,\s*255|124,\s*108,\s*255|108,\s*92,\s*231", re.I)
+# Paleta morada de Creatv Adstra (pedido de Camilo, 2026-10-10): el violeta vuelve a ser el color principal y revierte
+# la paleta azul del 2026-10-02 (spec 2026-10-02-sistema-de-estilos §3, nota del 2026-10-10). Lo que se vigila ahora es
+# lo contrario: que no quede el azul de acento ni las superficies azul marino de esa paleta.
+AZULES_VIEJOS = re.compile(r"1d6ae0|2f8cff|5cb4ff|38c8ff|0b1a33|050d1f|10223f|1c3a66|47,\s*140,\s*255|29,\s*106,\s*224", re.I)
 
 
 def _archivos_estilo_y_plantillas():
@@ -109,13 +108,15 @@ def _archivos_estilo_y_plantillas():
     return css + plantillas
 
 
-def test_sin_morados():
+def test_paleta_morada_sin_el_azul_viejo():
+    valores = dict(estilos.tokens())
+    assert valores["--accent"] == "#7c3aed" and valores["--accent-2"] == "#a855f7"
     fallas = []
     for ruta in _archivos_estilo_y_plantillas():
         with open(ruta, encoding="utf-8") as f:
-            if MORADOS.search(f.read()):
+            if AZULES_VIEJOS.search(f.read()):
                 fallas.append(os.path.relpath(ruta, RAIZ))
-    assert not fallas, "el morado se fue de la app (spec §3): " + ", ".join(fallas)
+    assert not fallas, "quedó el azul de la paleta vieja (usa los tokens morados): " + ", ".join(fallas)
 
 _RE_COLOR_LITERAL = re.compile(r"#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(|\b(?:white|black)\b(?!-)")
 _RE_VALOR = re.compile(r":\s*([^;{}]+)")
