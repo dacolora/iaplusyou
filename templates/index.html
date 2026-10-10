@@ -9,14 +9,34 @@
     <img src="{{ url_for('static', filename='landing/banner.webp') }}" alt="" fetchpriority="high">
   </picture>
   <div class="portada-hero-texto">
-    <span class="landing-chip">✦ {{ _('Anuncios con IA que sí venden') }}</span>
-    <h1 id="hero-titulo" class="portada-lema">Run more <span class="landing-degradado">ADSTRA</span></h1>
-    <p class="portada-hero-sub">{{ _('De la referencia al anuncio publicado. Todo en un solo lugar.') }}</p>
+    <h1 id="hero-titulo" class="portada-promesa">
+      <span>{{ _('Anuncios que destacan.') }}</span>
+      <span>{{ _('Anuncios que venden.') }}</span>
+    </h1>
+    <p class="portada-hero-sub">
+      <span>{{ _('Del producto a la idea.') }}</span>
+      <span>{{ _('De la idea al creativo.') }}</span>
+      <span>{{ _('Del creativo al crecimiento.') }}</span>
+    </p>
     <div class="landing-cta">
-      <a class="btn-generar portada-pildora" href="#planes">{{ _('Empezar a crear anuncios') }}</a>
+      <a class="btn-generar portada-pildora portada-cta" href="#planes">Run more ADSTRA</a>
       <a class="btn-guardar portada-pildora" href="{{ url_for('login') }}">{{ _('Ya tengo cuenta') }}</a>
     </div>
   </div>
+</section>
+
+{# Segunda pantalla: la historia Purple Cow → Purple Ads → la máquina. #}
+<section class="portada-historia aparece" aria-labelledby="historia-titulo">
+  <h2 id="historia-titulo" class="portada-historia-titulo">
+    <span>{{ _('Hoy todos tienen IA.') }}</span>
+    <span class="landing-degradado">{{ _('¿Entonces por qué todo se ve igual?') }}</span>
+  </h2>
+  <ol class="portada-historia-pasos">
+    <li><strong>Purple Cow</strong><p>{{ _('En un campo de vacas iguales, solo una se recuerda: la morada.') }}</p></li>
+    <li><strong>Purple Ads</strong><p>{{ _('Anuncios que se notan entre el ruido y están hechos para vender.') }}</p></li>
+    <li><strong>{{ _('La máquina') }}</strong><p>{{ _('CREATV Adstra convierte tus productos en Purple Ads a escala.') }}</p></li>
+  </ol>
+  <p class="portada-historia-cierre">{{ _('No te mezcles con el resto.') }}</p>
 </section>
 
 {# Cifras: solo hechos de la plataforma, nada inventado. #}

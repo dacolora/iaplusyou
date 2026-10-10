@@ -93,19 +93,8 @@ h2.landing-titulo-chico { font-size: clamp(1.3rem, 2.6vw, 1.8rem); }
 .header-entrar { margin-left: auto; text-decoration: none; border-radius: var(--radius-pastilla); padding: .55rem 1.2rem; font-size: .92rem; }
 .header-entrar + .idioma-enlaces { margin-left: var(--esp-4); }
 
-/* Tarjeta del héroe: redondeada, dentro del ancho de la página. La foto ocupa la derecha y se funde hacia la
-   izquierda, donde va el título: así el texto nunca tapa a la vaca. */
-.portada-hero { position: relative; isolation: isolate; overflow: hidden; display: flex; align-items: center; min-height: min(78vh, 680px); margin: 0 0 var(--esp-7); border-radius: 28px; border: 1px solid var(--border); background: var(--panel-velo-2); box-shadow: var(--shadow); }
-.portada-hero-foto { position: absolute; top: 0; right: 0; bottom: 0; width: 64%; z-index: -1; }
-.portada-hero-foto img { width: 100%; height: 100%; object-fit: cover; object-position: 55% 35%;
-  -webkit-mask-image: linear-gradient(to right, transparent 0%, currentColor 32%); mask-image: linear-gradient(to right, transparent 0%, currentColor 32%); }
-.portada-hero-texto { position: relative; padding: clamp(var(--esp-6), 5vw, 4.5rem); max-width: 50%; }
-.portada-lema { font-family: var(--font-display); font-weight: 700; font-size: clamp(3.4rem, 8.4vw, 7.6rem); line-height: .92; letter-spacing: -0.045em; margin: 0 0 var(--esp-5); max-width: none; }
-.portada-lema .landing-degradado { display: block; }
-.portada-hero-sub { margin: 0 0 var(--esp-5); color: var(--text); opacity: .9; font-size: clamp(1.05rem, 1.6vw, 1.3rem); line-height: 1.45; max-width: 32ch; }
 .portada-pildora { border-radius: var(--radius-pastilla); padding: .85rem 1.5rem; }
 
-.landing-chip { display: inline-block; margin-bottom: var(--esp-4); padding: .35rem .9rem; border-radius: var(--radius-pastilla); border: 1px solid var(--resalte-borde); background: var(--panel-velo); color: var(--cian); font-size: var(--t-chico); font-weight: 600; letter-spacing: .02em; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
 
 /* Cifras: título con una palabra resaltada a la izquierda, cuatro números a la derecha. */
 .portada-cifras { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--esp-6); margin: 0 0 6rem; padding: 0 var(--esp-4); }
@@ -141,22 +130,9 @@ h2.portada-titulo::before { content: none; }
 .portada-paso.activo .portada-paso-texto { max-height: 8rem; opacity: 1; margin-top: var(--esp-3); }
 .portada-paso-media-movil { display: none; }
 
-@media (max-width: 1000px) {
-  .portada-hero-texto { max-width: 58%; }
-  .portada-hero-foto { width: 72%; }
-}
 @media (max-width: 760px) {
   .header-portada { display: none; }
   .header-entrar { padding: .45rem .9rem; font-size: .85rem; }
-  /* Celular: la foto arriba y el texto debajo, dentro de la misma tarjeta. */
-  .portada-hero { flex-direction: column; align-items: stretch; min-height: 0; border-radius: 22px; }
-  .portada-hero-foto { position: relative; width: 100%; height: 56vw; min-height: 220px; }
-  .portada-hero-foto img { -webkit-mask-image: linear-gradient(to bottom, currentColor 70%, transparent); mask-image: linear-gradient(to bottom, currentColor 70%, transparent); object-position: 52% 40%; }
-  .portada-hero-texto { max-width: none; padding: var(--esp-4) var(--esp-5) var(--esp-6); margin-top: calc(-1 * var(--esp-6)); text-align: center; }
-  .portada-hero-sub { margin-left: auto; margin-right: auto; }
-  .portada-hero .landing-cta { justify-content: center; }
-  .portada-lema { font-size: clamp(3rem, 15vw, 4.6rem); }
-  .portada-lema .landing-degradado { display: inline; }
   .portada-cifras { flex-direction: column; align-items: flex-start; }
   .portada-cifras-lista { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
   /* Pasos en el celular: uno debajo del otro, cada uno con su pieza y su texto abierto. */
@@ -167,4 +143,48 @@ h2.portada-titulo::before { content: none; }
   .portada-paso-media-movil { display: block; position: relative; isolation: isolate; aspect-ratio: 4 / 5; border-radius: 22px; overflow: hidden; margin-bottom: var(--esp-4); border: 1px solid var(--border); }
   .portada-paso-titulo { color: var(--text); opacity: 1; font-size: 1.9rem; }
   .portada-paso-texto { max-height: none; opacity: 1; margin-top: var(--esp-2); }
+}
+
+/* Banner a pantalla completa (2026-10-10): la vaca de borde a borde y de la cabecera al final de la pantalla; el
+   titular en Anton, en blanco, a la izquierda sobre un velo; «Run more ADSTRA» es el botón. En el celular la foto es
+   un recorte vertical centrado en la vaca y el texto va abajo. */
+body.portada main { padding-top: 0; }
+.portada-hero { position: relative; isolation: isolate; overflow: hidden; display: flex; align-items: center; width: 100vw; margin: 0 0 var(--esp-7) calc(50% - 50vw); min-height: calc(100svh - 84px); }
+.portada-hero-foto, .portada-hero-foto img { position: absolute; inset: 0; width: 100%; height: 100%; }
+.portada-hero-foto { z-index: -2; }
+.portada-hero-foto img { object-fit: cover; object-position: 15% 40%; }
+.portada-hero::after { content: ""; position: absolute; inset: 0; z-index: -1; background-image: var(--velo-hero); }
+.portada-hero-texto { width: 100%; padding: var(--esp-7) 5vw; }
+.portada-promesa { margin: 0 0 var(--esp-5); max-width: none; font-family: var(--font-titular); font-weight: 400; text-transform: uppercase; font-size: clamp(2.6rem, 4.6vw, 7rem); line-height: .95; letter-spacing: .005em; color: var(--text); text-shadow: 0 4px 30px var(--sombra-media); }
+.portada-promesa span { display: block; white-space: nowrap; }
+.portada-hero-sub { max-width: 46vw; }
+.portada-hero-sub { margin: 0 0 var(--esp-6); color: var(--text); font-size: clamp(1.05rem, 1.6vw, 1.35rem); line-height: 1.5; opacity: .92; }
+.portada-hero-sub span { display: block; }
+.portada-pildora { border-radius: var(--radius-pastilla); padding: .85rem 1.5rem; }
+.portada-cta { font-family: var(--font-titular); font-weight: 400; text-transform: uppercase; letter-spacing: .03em; font-size: 1.15rem; padding: .9rem 1.8rem; box-shadow: var(--shadow-glow); }
+
+/* Segunda pantalla: «Hoy todos tienen IA. ¿Entonces por qué todo se ve igual?» y la historia en tres pasos. */
+.portada-historia { text-align: center; max-width: 64rem; margin: var(--esp-7) auto 6rem; }
+.portada-historia-titulo { display: block; margin: 0 0 var(--esp-7); text-transform: none; color: var(--text); font-family: var(--font-titular); font-weight: 400; font-size: clamp(2.2rem, 5vw, 4.2rem); line-height: 1.02; letter-spacing: .005em; }
+.portada-historia-titulo::before { content: none; }
+.portada-historia-titulo span { display: block; }
+.portada-historia-pasos { list-style: none; margin: 0 0 var(--esp-6); padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--esp-5); counter-reset: historia; }
+.portada-historia-pasos li { position: relative; padding: var(--esp-6) var(--esp-5) var(--esp-5); border-radius: var(--radius-lg); border: 1px solid var(--border); background: var(--panel-velo); text-align: left; counter-increment: historia; }
+.portada-historia-pasos li:not(:last-child)::after { content: "→"; position: absolute; right: calc(-1 * var(--esp-5)); top: 50%; transform: translate(50%, -50%); color: var(--accent-texto); font-size: 1.4rem; }
+.portada-historia-pasos strong { display: block; margin-bottom: var(--esp-2); font-family: var(--font-titular); font-weight: 400; text-transform: uppercase; font-size: 1.9rem; letter-spacing: .01em; color: var(--accent-texto); }
+.portada-historia-pasos p { margin: 0; color: var(--muted); line-height: 1.5; }
+.portada-historia-cierre { margin: 0; font-family: var(--font-titular); text-transform: uppercase; font-size: clamp(1.6rem, 3.4vw, 2.6rem); letter-spacing: .01em; background-image: var(--degradado-lema); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+@media (max-width: 760px) {
+  /* Celular: la vaca arriba (llena el alto que el teléfono tenga) y el texto debajo, sin taparle la cara. */
+  .portada-hero { min-height: calc(100svh - 110px); flex-direction: column; align-items: stretch; justify-content: flex-end; }
+  .portada-hero-foto { inset: 0 0 auto 0; height: 62svh; }
+  .portada-hero-foto img { object-position: 50% 30%; }
+  .portada-hero::after { background-image: var(--velo-banner); }
+  .portada-hero-texto { width: 100%; padding: 46svh var(--esp-5) var(--esp-7); text-align: center; }
+  .portada-hero .landing-cta { justify-content: center; }
+  .portada-promesa { font-size: clamp(2rem, 10.4vw, 4rem); max-width: none; }
+  .portada-hero-sub { max-width: none; }
+  .portada-historia-pasos { grid-template-columns: 1fr; }
+  .portada-historia-pasos li:not(:last-child)::after { content: "↓"; right: 50%; top: auto; bottom: calc(-1 * var(--esp-5)); transform: translate(50%, 50%); }
 }

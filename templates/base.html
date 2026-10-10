@@ -7,7 +7,7 @@
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/adstra-icono.png') }}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <script>
     // Textos compartidos del JS de esta plantilla (spec 2026-09-26 §Task 4):
@@ -413,7 +413,7 @@
     })();
   </script>
 </head>
-<body class="{% if request.view_args and request.view_args.cliente %}con-sidebar{% endif %}">
+<body class="{% if request.view_args and request.view_args.cliente %}con-sidebar{% endif %}{% if request.endpoint == 'index' %} portada{% endif %}">
   <div class="fondo-galaxia" aria-hidden="true">
     <span class="galaxia-nebulosa n1"></span>
     <span class="galaxia-nebulosa n2"></span>

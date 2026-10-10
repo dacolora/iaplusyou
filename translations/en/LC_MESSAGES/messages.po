@@ -2198,14 +2198,20 @@ msgstr "Ad published (paused; review it in Meta Ads Manager before activating it
 msgid "Anuncios"
 msgstr "Ads"
 
-msgid "Anuncios con IA que sí venden"
-msgstr "AI ads that actually sell"
-
 msgid "Anuncios nuevos para probar"
 msgstr "New ads to test"
 
+msgid "Anuncios que destacan."
+msgstr "Ads that stand out."
+
 msgid "Anuncios que hablan de un tema o producto"
 msgstr "Ads about a topic or product"
+
+msgid "Anuncios que se notan entre el ruido y están hechos para vender."
+msgstr "Ads that get noticed in the noise and are built to sell."
+
+msgid "Anuncios que venden."
+msgstr "Ads that sell."
 
 msgid "Anuncios reales que ya están vendiendo, ordenados por etapa del embudo y nivel de consciencia."
 msgstr "Real ads that are already selling, sorted by funnel stage and awareness level."
@@ -2835,6 +2841,9 @@ msgstr "CPM %(cpm)s"
 #, python-format
 msgid "CPM %(valor)s %(moneda)s"
 msgstr "CPM %(valor)s %(moneda)s"
+
+msgid "CREATV Adstra convierte tus productos en Purple Ads a escala."
+msgstr "CREATV Adstra turns your products into Purple Ads at scale."
 
 msgid "CSV o Excel"
 msgstr "CSV or Excel"
@@ -4343,8 +4352,8 @@ msgstr "From each test to the next decision: your project's results, pieces and 
 msgid "De impacto"
 msgstr "Display"
 
-msgid "De la referencia al anuncio publicado. Todo en un solo lugar."
-msgstr "From reference to live ad. All in one place."
+msgid "De la idea al creativo."
+msgstr "From idea to creative."
 
 msgid "De los listos en Crear"
 msgstr "From the ready ones in Create"
@@ -4372,8 +4381,14 @@ msgstr "From the catalog"
 msgid "Del catálogo (opcional, %(n)s) →"
 msgstr "From the catalog (optional, %(n)s) →"
 
+msgid "Del creativo al crecimiento."
+msgstr "From creative to growth."
+
 msgid "Del guion"
 msgstr "From the script"
+
+msgid "Del producto a la idea."
+msgstr "From product to idea."
 
 #, python-format
 msgid "Del sprint: %(marcas)s. Escribe aquí para cambiarlas solo en esta campaña."
@@ -5915,6 +5930,9 @@ msgstr "At trendtrack.io choose the Pro plan or higher (it includes the API and 
 #, python-format
 msgid "En tu catálogo: %(nombre)s"
 msgstr "In your catalog: %(nombre)s"
+
+msgid "En un campo de vacas iguales, solo una se recuerda: la morada."
+msgstr "In a field of identical cows, only one gets remembered: the purple one."
 
 msgid "En uso"
 msgstr "In use"
@@ -8300,6 +8318,9 @@ msgstr "Horizontal 4:3"
 msgid "How does your product help them achieve that status/characteristics?"
 msgstr "How does your product help them achieve that status/characteristics?"
 
+msgid "Hoy todos tienen IA."
+msgstr "Everyone has AI now."
+
 msgid "ID de Creatv"
 msgstr "Creatv's ID"
 
@@ -9047,6 +9068,9 @@ msgstr "Currency goes as a 3-letter code (COP, MXN, USD…)."
 
 msgid "La moneda va en código de 3 letras (COP, MXN, USD…); no la guardé."
 msgstr "Currency goes as a 3-letter code (COP, MXN, USD…); I didn't save it."
+
+msgid "La máquina"
+msgstr "The machine"
 
 msgid "La paleta, las medidas y los componentes reales de Creatv, en un solo lugar."
 msgstr "Creatv’s palette, dimensions and real components, all in one place."
@@ -11298,6 +11322,9 @@ msgstr "I don't know how to format prices for %(pais)s."
 #, python-brace-format
 msgid "No sé formatear precios de {pais}."
 msgstr "I don't know how to format prices for {pais}."
+
+msgid "No te mezcles con el resto."
+msgstr "Don't blend in."
 
 msgid "No tienes acceso a ese proyecto."
 msgstr "You don't have access to that project."
@@ -19357,6 +19384,9 @@ msgstr "Delete this sprint PERMANENTLY? Its campaigns, ideas and references will
 
 msgid "¿Empezar de cero? Se vacían el texto, los ajustes y la bandeja de referencias."
 msgstr "Start from scratch? The text, the settings and the reference tray will be cleared."
+
+msgid "¿Entonces por qué todo se ve igual?"
+msgstr "So why does everything look the same?"
 
 #, python-format
 msgid "¿Evaluar %(n)s anuncio(s) con IA? Costo: %(precio)s"

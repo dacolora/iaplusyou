@@ -141,6 +141,11 @@ PND-130/133 (2026-10-05, lote 4): en celular las cifras de Final edition colocan
   `IntersectionObserver` con la franja central; en el celular cada paso lleva su pieza), tachados, vitrina, planes,
   cadena, cierre y la tecnología. En la portada la cabecera suma enlaces a las secciones y «Iniciar sesión» en
   pastilla (`request.endpoint == 'index'` en `base.html`). En texto la marca se escribe **CREATV Adstra**.
+- Banner (2026-10-10, elegido por Camilo entre cuatro portadas): foto a pantalla completa (`100vw` × `100svh` menos la
+  cabecera; en el celular un recorte vertical `banner-movil.webp` arriba y el texto debajo), titular «Ads that stand
+  out. / Ads that sell.» en **Anton** (`--font-titular`, cargada en `base.html`), en blanco, y «Run more ADSTRA» como
+  botón. Debajo, la historia «Everyone has AI now. So why does everything look the same?» → Purple Cow → Purple Ads →
+  la máquina. `body.portada` quita el padding superior de `<main>` solo en la portada.
 - **Paleta morada desde el 2026-10-10** (pedido de Camilo; revierte la azul del 2026-10-02): `tokens.css` tiene el
   violeta como acento y superficies oscuras moradas; `test_paleta_morada_sin_el_azul_viejo` vigila que no vuelva el
   azul viejo.
