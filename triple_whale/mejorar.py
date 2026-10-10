@@ -383,7 +383,7 @@ def _razones(lista, con_anillo):
 def _version(v, verificable):
     if not isinstance(v, dict):
         return None
-    titulo, prompt = analisis._texto(v.get("titulo"), 80), str(v.get("prompt") or "").strip()[:1500]
+    titulo, prompt = analisis._texto(v.get("titulo"), 80), analisis._cadena(v.get("prompt")).strip()[:1500]
     if not titulo or not prompt:
         return None
     angulo, errores = doctrina.validar_angulo(v.get("angulo") if isinstance(v.get("angulo"), dict) else {}, verificable)

@@ -400,8 +400,16 @@ def _json(texto):
     return data
 
 
+def _cadena(v):
+    """El texto de un campo de la respuesta: un texto o un número; cualquier otra cosa (un objeto, una lista, un
+    booleano, null) vale "" — nunca su `repr`, que llegaría a la pantalla o a un prompt de Crear como si fuera texto."""
+    if isinstance(v, bool) or not isinstance(v, (str, int, float)) or not v:
+        return ""
+    return str(v)
+
+
 def _texto(v, largo):
-    return " ".join(str(v or "").split())[:largo]
+    return " ".join(_cadena(v).split())[:largo]
 
 
 def _refs(valor, validas):
@@ -445,7 +453,7 @@ def parsear(texto, validas, datos_texto, origen="triple_whale"):
     for i in data.get("ideas") if isinstance(data.get("ideas"), list) else []:
         if not isinstance(i, dict):
             continue
-        titulo, prompt = _texto(i.get("titulo"), 80), str(i.get("prompt") or "").strip()[:1500]
+        titulo, prompt = _texto(i.get("titulo"), 80), _cadena(i.get("prompt")).strip()[:1500]
         if not titulo or not prompt:
             continue
         angulo, errores = doctrina.validar_angulo(i.get("angulo") if isinstance(i.get("angulo"), dict) else {},

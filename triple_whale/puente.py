@@ -41,7 +41,10 @@ def prefill_crear(cliente, idea, evaluacion_id=None, indice=None, analisis_id=No
     if not idea or not str(idea.get("prompt") or "").strip():
         raise PuenteError(gettext("Esa idea no tiene prompt."))
     pref = proyectos.preferencias_flowplus(cliente)
-    salida = {"texto": str(idea["prompt"]).strip(), "tipo": "video", "modelo": pref.get("modelo_video") or "",
+    # `cliente`: `dashboard._prefill_para` usa la precarga solo en el proyecto donde se pidió (sin él, abrir Crear
+    # en otro proyecto la tomaba como propia: revisión de seguridad de E2, 2026-10-10).
+    salida = {"cliente": cliente, "texto": str(idea["prompt"]).strip(), "tipo": "video",
+              "modelo": pref.get("modelo_video") or "",
               "duracion": pref.get("duracion_defecto") or 8, "aspect_ratio": "9:16",
               "con_sonido": proyectos.preferencias_sonido(cliente).get("con_sonido", True) is not False}
     if origen:

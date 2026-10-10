@@ -1067,3 +1067,20 @@ def test_los_post_de_la_evaluacion_frenan_otro_sitio_y_el_correo_sin_verificar(c
     usuarios.actualizar("user_acme", correo_verificado=True)
     _como_cliente(app).post(EVALUAR, data=_visto())
     assert len(_evaluaciones()) == 2 and _evaluaciones()[0]["pedido_por"] == "user_acme"
+
+
+def test_una_idea_llevada_a_crear_en_un_proyecto_no_se_usa_en_otro(conectado):
+    """El prefill lleva su proyecto: abierto Crear en otro, `_prefill_para` lo descarta (revisión de seguridad E2;
+    vale también para Triple Whale, que usa el mismo `prefill_crear`)."""
+    import flask
+    dashboard = conectado["dashboard"]
+    eid = _evaluacion_lista()
+    conectado["c"].post(f"/cliente/acme/meta-rendimiento/evaluacion/{eid}/idea/0/crear")
+    with conectado["c"].session_transaction() as s:
+        prefill = s["fp_prefill"]
+    assert prefill["cliente"] == "acme"
+    with dashboard.app.test_request_context():
+        flask.session["fp_prefill"] = dict(prefill)
+        assert dashboard._prefill_para("otro") is None and "fp_prefill" not in flask.session
+        flask.session["fp_prefill"] = dict(prefill)
+        assert dashboard._prefill_para("acme")["texto"] == "Close-up of feet"

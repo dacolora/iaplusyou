@@ -436,3 +436,13 @@ def test_llamar_con_correccion_un_parser_que_revienta_sale_con_los_tokens_pagado
         analisis.llamar_con_correccion([], "S", lambda crudo: (_ for _ in ()).throw(analisis.AnalisisInvalido("no")),
                                        llamar=falla_la_correccion)
     assert (e.value.tokens_entrada, e.value.tokens_salida) == (100, 40) and e.value.__cause__ is None
+
+
+def test_el_prefill_lleva_su_proyecto_y_un_campo_que_no_es_texto_no_llega_como_repr(base_temporal, monkeypatch):
+    import proyectos
+    monkeypatch.setattr(proyectos, "cargar", lambda cliente: {})
+    assert puente.prefill_crear("acme", {"prompt": "Top-down shot"})["cliente"] == "acme"
+    assert analisis._texto({"a": 1}, 50) == "" and analisis._texto(["x"], 50) == "" and analisis._texto(True, 50) == ""
+    assert analisis._texto(12, 50) == "12" and analisis._texto("  dos   palabras ", 50) == "dos palabras"
+    r = analisis.parsear(respuesta(ideas=[{"titulo": "Uno", "prompt": {"p": 1}}]), {"A1", "A2", "A3"}, "")
+    assert r["ideas"] == []
