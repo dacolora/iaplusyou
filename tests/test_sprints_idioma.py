@@ -42,7 +42,7 @@ def test_la_tarea_de_analisis_usa_el_idioma_del_proyecto(base_temporal, monkeypa
     sid, cid, rid = _referencia(datos)
     visto = {}
     monkeypatch.setattr(idiomas, "de_proyecto", lambda c: "en")
-    monkeypatch.setattr(analisis, "analizar", lambda ref, marca="", idioma="es": visto.update(idioma=idioma) or
+    monkeypatch.setattr(analisis, "analizar", lambda ref, marca="", idioma="es", uso=None: visto.update(idioma=idioma) or
                         {"resumen": "ok", "paleta": []})
     tareas.cargar_todas()
     tareas.REGISTRO["sprint_analizar_referencia"]({"payload": {"cliente": "acme", "referencia_id": rid}})

@@ -130,7 +130,13 @@ def _ids(con, cliente, cf_id):
 
 
 def actualizar(cliente, cf_id, **campos):
+    """Fusiona `campos` en la sesión. `BEGIN IMMEDIATE` antes de leer
+    (2026-10-09): sin él, el SELECT corría en autocommit y lo que otro
+    escritor confirmara entre la lectura y el UPDATE (el corazón de la
+    tarjeta, otra tarea del worker) se perdía al reescribir `extra` con la
+    foto vieja. Con `busy_timeout` el segundo escritor espera, no falla."""
     with db.conectar() as con:
+        con.exec_driver_sql("BEGIN IMMEDIATE")
         f = _ids(con, cliente, cf_id)
         if not f:
             return False
@@ -147,6 +153,25 @@ def actualizar(cliente, cf_id, **campos):
     return True
 
 
+def marcar_favorito(cliente, cf_id, favorito):
+    """El corazón de una pieza de Crear (pedido del 2026-10-08: separar las
+    versiones que se van a usar de las que no). Va en `extra["favorito"]` del
+    concepto; `BEGIN IMMEDIATE` antes de leer para no pisar lo que el worker
+    escriba en el mismo extra. Devuelve False si la sesión no es de ese proyecto."""
+    with db.conectar() as con:
+        con.exec_driver_sql("BEGIN IMMEDIATE")
+        f = _ids(con, cliente, cf_id)
+        if not f:
+            return False
+        extra = dict(f[2] or {})
+        if favorito:
+            extra["favorito"] = True
+        else:
+            extra.pop("favorito", None)
+        con.execute(db.concepto.update().where(db.concepto.c.id == f[0]).values(extra=extra))
+    return True
+
+
 def guardar_guion_base(cliente, cf_id, guion):
     """Guarda el guion y su fecha de cambio bajo el candado de escritura."""
     co = db.concepto
@@ -159,7 +184,7 @@ def guardar_guion_base(cliente, cf_id, guion):
             ahora = db.ahora()
             con.execute(co.update().where(condicion).values(
                 actualizado_en=ahora, guion_base=guion,
-                extra=sa.func.json_set(sa.func.coalesce(co.c.extra, "{}"), "$.guion_modificado_en", ahora)))
+                extra=sa.func.json_set(sa.func.coalesce(sa.func.nullif(co.c.extra, "null"), "{}"), "$.guion_modificado_en", ahora)))
     return True
 
 
@@ -330,7 +355,7 @@ def duplicar(cliente, cf_id, modelo=None, enfoque=None, prompt_relleno=None, var
         # Lo que pertenece al video generado, no a la idea, no viaja
         # (`capas` es columna de la pieza nueva: nace vacía).
         for k in ("credits", "sonido", "video_url_crudo", "video_local_crudo", "revision_doctrina",
-                  "revision_doctrina_error"):
+                  "revision_doctrina_error", "favorito"):
             extra.pop(k, None)
         extra.pop("director", None)
         extra.pop("variante", None)

@@ -552,7 +552,9 @@ def test_paises_dinero_del_motor_y_detalle_de_meta(sembrado):
     lista = r.paises(r.cargar("acme", r.Filtro(dias=7), AHORA))
     assert [x["pais"] for x in lista] == ["CO", "MX"]                      # mismo gasto: por código
     co = lista[0]
-    assert set(co) == {"pais", "impresiones", "clics_enlace", "gasto", "ctr", "roas", "roas_comparable", "ventas_cambiaron"}
+    assert set(co) == {"pais", "impresiones", "clics_enlace", "gasto", "ctr", "roas", "roas_comparable", "ventas_cambiaron",
+                       "visitantes", "visitantes_nuevos"}                 # NVP de Triple Whale (2026-10-09)
+    assert co["visitantes"] is None and co["visitantes_nuevos"] is None   # sin Triple Whale: None, no se muestra
     assert co["clics_enlace"] == 86 and co["ctr"] == pytest.approx(86 / 4000 * 100)      # metrica_dia
     assert co["roas"] == pytest.approx(120.0 / 40.0)                                      # el motor (snapshots)
     assert lista[1]["clics_enlace"] == 46 and lista[1]["ctr"] == pytest.approx(46 / 4000 * 100)

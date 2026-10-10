@@ -40,7 +40,7 @@ de la API: `docs/pagos/wompi-api.md` (informe del 2026-10-09 con URL y citas de 
   se calcula (§3).
 - **Incluido**: una generación «barata» que el plan regala (§4).
 
-## 2. Datos (migración 0035)
+## 2. Datos (migración 0038; era la 0035 hasta mezclar main el 2026-10-10, que ya tenía 0035–0037)
 
 ```
 plan
@@ -327,7 +327,7 @@ dispara la periódica (nunca una ruta GET).
 
 ## 14. Despliegue
 
-Migración 0035. Los dos servicios (cambian el worker y las rutas). Al desplegar: margen global a 2,0 si estaba en 1,5;
+Migración 0038 (era la 0035; renumerada al mezclar main el 2026-10-10). Los dos servicios (cambian el worker y las rutas). Al desplegar: margen global a 2,0 si estaba en 1,5;
 sembrar el plan «Pro» (US$ 1 000, anual 10 000, margen 1,25, tope 25) **archivado** para que Daniel lo revise y lo active en
 /admin/cobros. Las llaves de producción de Wompi las pone Daniel en el `.env` del VPS; la URL de eventos
 `https://app.creatvmachine.com/pagos/wompi/eventos` la registra en el panel de Wompi.

@@ -1,7 +1,7 @@
 """
 Worker de Creatv Machine: proceso aparte de gunicorn (servicio systemd
-creatv-worker) que ejecuta las tareas de la cola persistente (cola.py) en tres
-carriles (spec 2026-09-28-crear-sin-cola):
+creatv-worker) que ejecuta las tareas de la cola persistente (cola.py) en cuatro
+carriles (spec 2026-09-28-crear-sin-cola; el de lectura, spec 2026-10-08 meta rendimiento):
 
 - **crear**: las generaciones de Crear (`CARRIL_CREAR`) en hasta `HILOS_CREAR`
   hilos a la vez — casi todo su tiempo es esperar al proveedor, y una espera
@@ -11,6 +11,10 @@ carriles (spec 2026-09-28-crear-sin-cola):
 - **nicho**: las tareas de Nicho que esperan a Apify, Reddit/YouTube o
   Claude y los barridos de Referentes (`CARRIL_NICHO`), de a una: comparten
   la RAM de la cuenta de Apify. Sus esperas no ocupan general.
+- **lectura**: la copia de las cuentas de Meta (`CARRIL_LECTURA`, `meta_rend_sincronizar`)
+  en un solo hilo (`HILOS_LECTURA`): la primera copia de una cuenta tarda de 8 a 14 minutos
+  (medido con la API real) y no debe dejar al carril general —lanzar y refrescar
+  experimentos, Triple Whale, tiendas— esperando una hora. Gratis: leer de Meta no cobra.
 - **general**: todo lo demás, de a una y en orden, como siempre (renders con
   1 CPU, Meta, periódicas…).
 
@@ -59,7 +63,9 @@ log = logging.getLogger("creatv.worker")
 # dentro de un mismo tick: los pedidos de las tiendas se sincronizan (y se
 # atribuyen) ANTES de refrescar experimentos, así el snapshot por tienda ve
 # las ventas de este ciclo y no las de hace 2 h; lo mismo Triple Whale.
-PERIODICAS = [("tienda_sync_pedidos_todas", 7200), ("tw_sincronizar_todas", 7200), ("exp_refrescar_todos", 7200),
+PERIODICAS = [("tienda_sync_pedidos_todas", 7200), ("tw_sincronizar_todas", 7200),
+              # Meta rendimiento (spec 2026-10-08 §6): la copia de cada cuenta publicitaria, cada 3 h.
+              ("meta_rend_sincronizar_todas", 10800), ("exp_refrescar_todos", 7200),
               ("exp_decidir_todos", 3600),
               ("exp_avanzar_todos", 600), ("tienda_sync_productos_todas", 21600), ("sprint_qa_pendientes", 300),
               ("materiales_limpiar", 86400),
@@ -68,9 +74,14 @@ PERIODICAS = [("tienda_sync_pedidos_todas", 7200), ("tw_sincronizar_todas", 7200
               ("salidas_limpiar", 86400), ("cola_limpiar", 86400), ("db_respaldar", 86400),
               # Salud (spec 2026-10-01): los errores resueltos viejos no se acumulan.
               ("errores_limpiar", 86400),
+              # Los días de anuncio de Meta se guardan 95 días (spec 2026-10-08 §6).
+              ("meta_rend_limpiar", 86400),
               # Cadena de escenas de Flow Plus (spec 2026-09-30): avanza cada cadena viva
               # cuando su escena en curso termina (gratis; las escenas las cobra Crear).
               ("cadena_vigilar", 60),
+              # Ganchos de Triple Whale (spec 2026-10-09 §4.5): mueve cada variante viva (gratis; cada clip lo
+              # cobra Crear y el armado y el render son ffmpeg).
+              ("tw_ganchos_vigilar", 60),
               # Cobros (spec 2026-10-08 §9.3): respaldo del webhook de Bold, pregunta
               # por las recargas pendientes (gratis: no cobra).
               ("cobros_verificar_recargas", 600),
@@ -88,6 +99,13 @@ CARRIL_NICHO = ("nicho_recolectar", "nicho_inv_buscar", "nicho_inv_consultas",
 HILOS_CREAR = 4
 HILOS_LOTE = 2
 PRIORIDAD_SUELTA = 5    # flowplus_lanzar.PRIORIDAD_NORMAL: una pieza pedida desde Crear
+
+# Carril de lectura (ruling R16, 2026-10-08): la copia de rendimiento de Meta, UN hilo propio. Las copias de
+# varias cuentas siguen una detrás de otra (los límites de uso de Meta son por usuario y app, no por cuenta), pero
+# ya no ocupan el único hilo general. Las periódicas `meta_rend_sincronizar_todas` y `meta_rend_limpiar` son
+# instantáneas y se quedan en el general.
+CARRIL_LECTURA = ("meta_rend_sincronizar",)
+HILOS_LECTURA = 1
 
 # Parada limpia: SIGINT/SIGTERM (systemd manda SIGINT, TimeoutStopSec=600) solo
 # levantan esta bandera; el supervisor deja de repartir y espera a sus hilos.
@@ -278,7 +296,8 @@ def _terminar_y_encolar(tarea, siguiente):
     for intento in range(4):
         try:
             return cola.terminar_y_encolar(tarea["id"], siguiente.mensaje, {
-                "tipo": siguiente.tipo, "payload": siguiente.payload, "ejecutar_desde": siguiente.ejecutar_desde})
+                "tipo": siguiente.tipo, "payload": siguiente.payload, "ejecutar_desde": siguiente.ejecutar_desde,
+                "max_intentos": getattr(siguiente, "max_intentos", None)})
         except Exception as e:  # noqa: BLE001
             ultimo = e
             time.sleep(1 + intento)
@@ -345,7 +364,8 @@ def _ocupados():
     lotes = [v for v in crear if v["prioridad"] < PRIORIDAD_SUELTA]
     general = [v for v in vuelo if v["carril"] == "general"]
     nicho = [v for v in vuelo if v["carril"] == "nicho"]
-    return len(crear), len(lotes), len(general), len(nicho)
+    lectura = [v for v in vuelo if v["carril"] == "lectura"]
+    return len(crear), len(lotes), len(general), len(nicho), len(lectura)
 
 
 def repartir():
@@ -357,7 +377,7 @@ def repartir():
     encolar_periodicas()
     arrancadas = 0
     while not debe_parar():
-        crear, lotes, _, _ = _ocupados()
+        crear, lotes, _, _, _ = _ocupados()
         if crear >= HILOS_CREAR:
             break
         tarea = cola.reclamar(tipos=CARRIL_CREAR, prioridad_min=PRIORIDAD_SUELTA if lotes >= HILOS_LOTE else None)
@@ -370,8 +390,12 @@ def repartir():
         tarea = cola.reclamar(tipos=CARRIL_NICHO)
         if tarea is not None and _lanzar(tarea, "nicho"):
             arrancadas += 1
+    if not debe_parar() and _ocupados()[4] < HILOS_LECTURA:
+        tarea = cola.reclamar(tipos=CARRIL_LECTURA)
+        if tarea is not None and _lanzar(tarea, "lectura"):
+            arrancadas += 1
     if not debe_parar() and _ocupados()[2] == 0:
-        tarea = cola.reclamar(excluir_tipos=CARRIL_CREAR + CARRIL_NICHO)
+        tarea = cola.reclamar(excluir_tipos=tuple(CARRIL_CREAR) + tuple(CARRIL_NICHO) + tuple(CARRIL_LECTURA))
         if tarea is not None and _lanzar(tarea, "general"):
             arrancadas += 1
     return arrancadas

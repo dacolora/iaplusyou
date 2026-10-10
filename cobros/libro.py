@@ -7,6 +7,7 @@ import contextlib
 import contextvars
 import logging
 import math
+from datetime import datetime, timedelta
 
 import sqlalchemy as sa
 from flask_babel import gettext
@@ -16,7 +17,7 @@ from cobros import planes
 
 log = logging.getLogger(__name__)
 
-MARGEN_DEFECTO = 2.0   # a la carta (spec planes 2026-10-09 §12.7); era 1,5 hasta 0035
+MARGEN_DEFECTO = 2.0   # a la carta (spec planes 2026-10-09 §12.7); era 1,5 hasta 0038
 MARGEN_MIN, MARGEN_MAX = 1.0, 5.0
 UMBRAL_DEFECTO = 5000
 CLAVE_MARGEN = "cobros:margen_global"
@@ -362,7 +363,7 @@ def _reservar(con, cliente, job_id, milesimas, margen, incluido, periodo_id, cos
 
 def _reserva_del_trabajo(con, cliente, job_id):
     """La reserva (con su precio visto) del trabajo que corre en este hilo, o None (llamada sincrónica, una
-    reserva vieja de antes de 0035 sin margen, o un trabajo que se encoló sin pedir saldo)."""
+    reserva vieja de antes de 0038 sin margen, o un trabajo que se encoló sin pedir saldo)."""
     if not job_id:
         return None
     r = db.reserva_saldo
@@ -640,7 +641,7 @@ def _gastado(con, cliente, inicio, fin, periodo_id=None):
 
 
 def _de_la_reserva(r, periodo_id, inicio, fin):
-    """La reserva es de ese periodo: por su `periodo_id`; una sin él (de antes de 0035), por su fecha."""
+    """La reserva es de ese periodo: por su `periodo_id`; una sin él (de antes de 0038), por su fecha."""
     opciones = [sa.and_(r.c.periodo_id.is_(None), r.c.creada_en >= inicio, r.c.creada_en < fin)]
     if periodo_id is not None:
         opciones.append(r.c.periodo_id == int(periodo_id))
@@ -736,4 +737,5 @@ def vencer_periodo(con, periodo_id):
 def limpiar_reservas_muertas():
     r = db.reserva_saldo
     with db.conectar() as con:
-        return con.execute(r.delete().where(r.c.job_id.notin_(_vivas(con)))).rowcount
+        limite = (datetime.fromisoformat(db.ahora()) - timedelta(minutes=10)).isoformat(timespec="seconds")
+        return con.execute(r.delete().where(r.c.job_id.notin_(_vivas(con)), r.c.creada_en < limite)).rowcount

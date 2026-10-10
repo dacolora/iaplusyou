@@ -10,7 +10,7 @@
 <form method="post" action="{{ url_for('fp_subir_referencias', cliente=cliente) }}" enctype="multipart/form-data" id="fp-form-subir" hidden></form>
 <form method="post" action="{{ url_for('fp_agregar_link', cliente=cliente) }}" id="fp-form-link" hidden></form>
 
-{% include "_aviso_sin_saldo.html" %}
+{% with con_fal = true %}{% include "_aviso_sin_saldo.html" %}{% endwith %}
 <div class="crear-comp" id="crear-comp">
   <div class="crear-comp-arriba">
     <div id="fp-bandeja-wrap">
@@ -300,6 +300,8 @@
     zona.addEventListener('click', function (e) {
       var mas = e.target.closest('[data-siguiente]');
       if (mas) { cargarMas(mas); return; }
+      var fav = e.target.closest('.generado-fav');
+      if (fav) { e.preventDefault(); alternarFavorito(fav); return; }
       var card = e.target.closest('.generado');
       if (card && !e.target.closest('form, a, button')) abrir(card);
     });
@@ -322,6 +324,26 @@
       var v = card.querySelector('.generado-media video');
       if (v) { v.pause(); v.currentTime = 0; }
     });
+    // Corazón de la tarjeta (2026-10-08): cambia al instante y vuelve atrás si falla.
+    function pintarFavorito(boton, si) {
+      boton.classList.toggle('activo', si);
+      boton.setAttribute('aria-pressed', si ? 'true' : 'false');
+      boton.textContent = si ? '♥' : '♡';
+      boton.title = si ? boton.dataset.tituloSi : boton.dataset.tituloNo;
+      boton.form.elements.favorito.value = si ? '0' : '1';
+    }
+    function alternarFavorito(boton) {
+      if (boton.disabled) return;
+      var si = boton.getAttribute('aria-pressed') !== 'true';
+      var datos = new FormData(boton.form);
+      pintarFavorito(boton, si);
+      boton.disabled = true;
+      fetch(boton.form.action, { method: 'POST', body: datos, headers: { 'X-Requested-With': 'fetch' } })
+        .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+        .then(function (j) { pintarFavorito(boton, !!j.favorito); })
+        .catch(function () { pintarFavorito(boton, !si); })
+        .then(function () { boton.disabled = false; });
+    }
     function cargarMas(boton) {
       var grid = boton.closest('.generados-grid');
       boton.disabled = true;
@@ -1014,7 +1036,7 @@
     // antes de cobrar; esto solo evita el viaje.
     var avisoRefs = document.getElementById('fp-aviso-refs');
     var AVISO_REFS = {{ _('__MODELO__ usa hasta __N__ referencias: no usaría __SOBRAN__. Quita las que sobran o cambia de modelo.')|tojson }};
-    var AVISO_REFS_UNA = {{ _('__MODELO__ solo usa la primera referencia (__PRIMERA__): no usaría __SOBRAN__. Elige Wan 3.0 o Kling O3 Pro para usarlas todas, o deja solo una.')|tojson }};
+    var AVISO_REFS_UNA = {{ _('__MODELO__ solo usa la primera referencia (__PRIMERA__): no usaría __SOBRAN__. Elige Wan 3.0, Kling O3 Pro o Seedance 2.5 · varias referencias para usarlas todas, o deja solo una.')|tojson }};
     var refsSobrantes = [];
     var bloqueoDuracion = '';
     // Wan 3.0 con videos de referencia (incidente 2026-09-30, Forja): juntos

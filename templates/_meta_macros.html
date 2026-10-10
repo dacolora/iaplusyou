@@ -1,0 +1,38 @@
+{# Piezas comunes de la pestaña «Meta»: el panel (_meta_panel.html) y las filas de «Ver más»
+   (_meta_anuncios_filas.html, _meta_conjuntos_filas.html) se pintan por separado y comparten esto. Sin <script>.
+   Los diccionarios (clases por estado o veredicto) van DENTRO de cada macro: un {% set %} de módulo en una plantilla
+   importada se cachea (skill idioma). #}
+
+{# Un monto en la moneda dada; «—» si no hay dato (USD no disponible, sin compras…). #}
+{% macro monto(valor, moneda) %}{% if valor is none %}—{% else %}{{ valor | dinero(moneda or '') }}{% endif %}{% endmacro %}
+
+{% macro roas(valor) %}{% if valor %}{{ valor | roas }}×{% else %}—{% endif %}{% endmacro %}
+
+{# Bandera y nombre de una cuenta (`c` de panel.contexto: nombre, bandera, ad_account_id). #}
+{% macro cuenta(c) %}{% if c.bandera %}{{ c.bandera }} {% endif %}{{ c.nombre or c.ad_account_id }}{% endmacro %}
+
+{# effective_status de Meta en palabras (`estados` = panel.ESTADOS, marcado con N_). #}
+{% macro estado(valor, estados) -%}
+{%- set clases = {"ACTIVE": "tag-en-uso", "WITH_ISSUES": "tag-descartado", "DISAPPROVED": "tag-descartado",
+                  "PENDING_REVIEW": "tag-en-curso", "IN_PROCESS": "tag-en-curso"} -%}
+<span class="tag-estado {{ clases.get(valor, '') }}">{{ (estados[valor] | traducir) if valor in estados else valor }}</span>
+{%- endmacro %}
+
+{# learning_stage_info.status de un conjunto (`aprendizaje` = panel.APRENDIZAJE). #}
+{% macro aprendizaje(valor, etiquetas) -%}
+{%- set clases = {"FAIL": "tag-advertencia", "LEARNING": "tag-en-curso"} -%}
+{% if valor in etiquetas %}<span class="tag-estado {{ clases.get(valor, '') }}">{{ etiquetas[valor] | traducir }}</span>{% else %}—{% endif %}
+{%- endmacro %}
+
+{# Presupuesto de una campaña o un conjunto: diario, total o «—» (el de un conjunto con presupuesto de campaña). #}
+{% macro presupuesto(f) -%}
+{% if f.presupuesto_diario %}{{ _('%(monto)s/día', monto=f.presupuesto_diario | dinero(f.moneda or '')) }}{% elif f.presupuesto_total %}{{ _('%(monto)s en total', monto=f.presupuesto_total | dinero(f.moneda or '')) }}{% else %}—{% endif %}
+{%- endmacro %}
+
+{# Clase del veredicto de un anuncio (la misma de la pestaña Triple Whale). #}
+{% macro clase_veredicto(v) -%}
+{{ {"ganador": "tag-en-uso", "prometedor": "tag-en-curso", "en_prueba": "", "perdedor": "tag-descartado", "sin_datos": "tag-advertencia"}.get(v, '') }}
+{%- endmacro %}
+
+{# Cabecera de la columna NVP (spec 2026-10-09-nvp-visitantes-nuevos §4.2); la celda es `cx.nvp(nuevos, visitantes)`. #}
+{% macro th_nvp() %}<th title="{{ _('%% de visitantes nuevos: TOF, MOF o BOF según el Pixel de Triple Whale') }}">NVP</th>{% endmacro %}

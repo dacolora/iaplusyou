@@ -196,7 +196,7 @@ def test_ganador_a_referentes(app, monkeypatch):  # noqa: F811
     from referentes import imagenes
     _conectar()
     eid = _evaluacion_lista()
-    monkeypatch.setattr(imagenes, "guardar_en_r2", lambda aid, url, carpeta: f"https://r2/{aid}.jpg")
+    monkeypatch.setattr(imagenes, "guardar_en_r2", lambda aid, url, carpeta, cliente=None: f"https://r2/{aid}.jpg")
     r = app["c"].post(f"/cliente/acme/triple-whale/evaluacion/{eid}/anuncio/A1/referente", follow_redirects=True)
     assert "Guardado en Referentes" in r.data.decode()
     [ref] = ref_datos.listar("acme", {"fuente": "triple_whale"})["items"]

@@ -99,6 +99,15 @@ EN PRODUCCIÓN desde 2026-10-05 (main 878fcaf, sin migración, los dos servicios
     Decisión 051 enmendada: sin puntos de control de Apify y con los barridos de Referentes en el mismo carril. PND-049
     sigue abierto: la mejora es parcial (memoria en render-vps con zoom 2,45: 969 → 837 MiB; con zoom 4: 1 443 → 898 MiB),
     y lo que falta exige una decisión de diseño de Daniel.
+- Lote 7 EN PRODUCCIÓN (main d724266, 2026-10-09 22:28 UTC; decisiones en la sección «Lote 7» del documento de decisiones):
+  PND-190, 166, 159, 187, 177, 178 y 191 cerrados; 176 cerrado sin código. Dos rondas de arreglos tras guardian-gasto y
+  revisor (precios que dicen todo lo que se gasta, Apify anotado desde el arranque, errores en palabras). Lección: Claude
+  borró con `git checkout` cambios sin commit de Codex al deshacer una mutación; desde entonces se commitea un WIP apenas
+  Codex termina y las mutaciones van en una copia.
+- Lote 8 EN PRODUCCIÓN (main ed291b4, 2026-10-10 10:16 UTC; sección «Lote 8» de las decisiones): PND-160, 209, 210, 032,
+  155 (1-3) y 149 (2-6) cerrados; 152 lo hizo Claude (instalaciones-app mezclada en el main de CreaTvMetaAds, fe88fff);
+  023 cerrado sin código; PND-222 (candados de Triple Whale) abierto. Una ronda de arreglos: Codex había usado `_ENV_LOCK`
+  (lo sostiene una publicación entera) para el doble clic de Lanzar; quedó `_LANZAMIENTO_LOCK` con relectura del estado.
 - Lecciones del lote 6:
   - Codex resuelve «parada limpia» inventando mecanismos grandes (puntos de control). Pedir lo mínimo y decir qué NO
     construir.

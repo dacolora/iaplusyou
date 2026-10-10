@@ -26,9 +26,9 @@
 
 ---
 
-### Task 1: Datos (migración 0035) y margen global 2,0
+### Task 1: Datos (migración 0035, hoy 0038 tras mezclar main el 2026-10-10) y margen global 2,0
 
-**Files:** `db.py`, `migrations/versions/0035_planes_wompi.py`, `cobros/libro.py` (`MARGEN_DEFECTO = 2.0`), `tests/test_planes_db.py`.
+**Files:** `db.py`, `migrations/versions/0038_planes_wompi.py` (era `0035_planes_wompi.py`), `cobros/libro.py` (`MARGEN_DEFECTO = 2.0`), `tests/test_planes_db.py`.
 
 **Produces:** `db.plan`, `db.suscripcion`, `db.periodo_plan`, `db.pago_plan` con las columnas exactas del spec §2; `movimiento_saldo.periodo_id` + `UNIQUE(tipo, periodo_id)` (con `batch_alter_table` en SQLite; recuerda que `UNIQUE(tipo, gasto_id)` y `UNIQUE(tipo, recarga_id)` ya existen y deben quedar); `recarga.pasarela_ref` String(40) UNIQUE NULL; índice único parcial en `suscripcion(cliente)` donde `estado != 'terminada'` (`sqlite_where`). En la migración: si `kv['cobros:margen_global']` vale `1.5`, pasarlo a `2.0`; sembrar el plan «Pro» archivado (`activo=0`). `down_revision = '0034'` (verifica el id real en `migrations/versions/0034_tw_tarjetas.py`).
 

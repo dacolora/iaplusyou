@@ -210,6 +210,13 @@ Tablero dejó de ser pestaña: `resolver('tablero')` de `cliente.html` abre Expe
   `tests/test_lote5_experimentos.py` contrasta cifras, historia, decisiones y otro proyecto vivo;
   `tests/test_rutas_resultados.py` exige consultas constantes con 3 y 15 piezas. Ahí también están los 404 de piezas
   o experimentos de otro proyecto.
+- **NVP** (2026-10-09, pedido del cliente de HappyFlops: saber si una pieza llega a TOF, MOF o BOF; spec
+  `2026-10-09-nvp-visitantes-nuevos` §4.3): `resultados.visitantes(carga)` lee de `tw_anuncio_dia` (canal
+  `facebook-ads`) los visitantes del `meta_ad_id` de cada pieza en UNA consulta (`triple_whale.datos.visitantes_por`
+  con todos los anuncios de la moneda elegida, memorizada en la carga; el periodo es el de la pantalla, «desde el
+  inicio» sin fechas). Pinta el chip `cx.nvp` con SUMAS en el resumen (`r.nvp`), el ranking, «Por país», cada tarjeta
+  de experimento y el panel de la pieza. Sin tienda de Triple Whale (`triple_whale_tiendas.tiendas`) no consulta y no
+  aparece ni la columna. Solo se muestra: decisor, snapshots, lanzador y modos no lo leen (`tests/test_exp_nvp.py`).
 
 **`tablero.py` y OUTCOME_SALES** (el motor del dinero; desde E2 sin pestaña propia: lo pinta el centro; `tab_descargar_csv`
 sigue como botón de la cabecera). Cada cifra es un **delta de snapshots acumulados** (`metrica_snapshot` guarda los totales
@@ -302,6 +309,8 @@ Meta (ya sin token): se muestra con `meta_errores.explicar` y con el autoescape 
 alcance y la frecuencia **diarios no se suman** entre días: la frecuencia del periodo o de la pieza sale del último
 `metrica_snapshot` (acumulada de por vida) y se rotula «acumulada»; la regla de fatiga usa esa, no la diaria.
 
+Derivar y rescatar producen un anuncio NUEVO para lanzar, así que con Meta conectado SIN Página («solo métricas») se frenan ANTES de cobrar, reservar o encolar nada (R23, 2026-10-08): `acciones._exigir_pagina` (antes de `_exigir_saldo`) y `derivaciones._exigir_pagina` (en `planificar` y antes de encolar un clon o una final) lanzan el texto de `meta_conexion.error_solo_metricas`, y `acciones.pedir` deja la acción como propuesta con ese texto en el motivo (en auto no se intenta); escalar y pausar no se frenan.
+
 PND-003 (revisión 2026-10-02): el precio de rescatar/derivar pasa musica_estilo de la sesión a gastos.estimar para cada regeneración; no cambia decisiones ni autorizaciones de pauta.
 
 PND-039/044/113 (2026-10-03): regenerar conserva las voces originales por destino en el item; un destino nuevo hereda la última voz original conocida. El payload explícito mantiene esa elección al producir. La cuadrícula conserva desmarcadas por combinación. Antes de la primera activación (experimento, país o pieza), lanzador reserva fin_primera_activacion bajo el escritor de extra y envía end_time a todos los conjuntos; solo después activa. Reanudar no extiende el plazo ni cambia presupuestos. Una reserva tras un fallo conserva la misma fecha en el próximo intento; los experimentos ya activados mantienen su fecha previa. PND-043 sigue esperando la decisión de reserva de arranques entre experimentos.
@@ -335,3 +344,6 @@ Noruega y Suecia (2026-10-08, spec `docs/superpowers/specs/2026-10-08-noruega-y-
 PND-043 (2026-10-08, decisión delegada): _guardar asigna los arranques bajo actualizar_extra, después del candado de escritura. Lee reservas de todos los experimentos del proyecto para la misma sesión y excluye hermanas persistidas y finales; reserva también sus números de variante para que la carrera no comparta la misma final. No vuelve a elegir al avanzar una derivación existente. Regresión con dos ganadoras en hilos y encolado detenido: test_derivaciones.py::test_pnd043_dos_ganadoras_reservan_arranques_antes_de_encolar.
 
 R3 (2026-10-08, revisión lote 6B): test_derivaciones.py::test_r3_hermanas_de_la_misma_derivacion_reservan_arranques exige arranques distintos dentro de una misma derivación con n_reediciones=2 y varios libres; retirar reservados.add del bucle debe hacerlo fallar.
+
+
+PND-160 (2026-10-09, decisión del lote 8): el encolador comprueba la tarea viva y relee el experimento antes de escribir lanzando, bajo _LANZAMIENTO_LOCK; solo admite armando/error. Enmienda 2026-10-10: este candado propio no espera _ENV_LOCK, que una publicación sostiene durante minutos; una lectura vieja no puede relanzar un corriendo. El segundo POST de la tarjeta responde Ya se está lanzando por JSON o flash sin restaurar el estado anterior ni encolar otra tarea. activar_tras_lanzar conserva su guarda; tests/test_lote8_lanzamiento.py prueba dos POST con una lectura anterior, cola real y Meta falso.

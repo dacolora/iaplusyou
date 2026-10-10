@@ -1,8 +1,11 @@
 """planes mensuales y Wompi: plan, suscripcion, periodo_plan, pago_plan
 
-Revision ID: 0035
-Revises: 0034
+Revision ID: 0038
+Revises: 0037
 Create Date: 2026-10-09 00:00:00.000000
+
+Era la 0035 en la rama planes-wompi; se renumeró a 0038 al mezclar main el 2026-10-10,
+que ya tenía 0035_meta_rendimiento, 0036_tw_visitantes y 0037_tw_gancho.
 
 Spec 2026-10-09-planes-mensuales-wompi-design.md §2 y §14. Cuatro tablas nuevas
 (escritor único: cobros/planes.py), `movimiento_saldo.periodo_id` con
@@ -26,8 +29,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision: str = '0035'
-down_revision: Union[str, Sequence[str], None] = '0034'
+revision: str = '0038'
+down_revision: Union[str, Sequence[str], None] = '0037'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

@@ -16,7 +16,11 @@ colores literales restantes de `legado/` son la excepción transitoria: solo se 
 `TECHO_COLORES_LEGADO` en `tests/test_estilos_sistema.py` (199 al cerrar la entrega 1). Los estilos en línea
 sin colores tampoco crecen (`TECHO_ESTILOS_EN_LINEA`: 414). Un componente nuevo lleva archivo en `componentes/`,
 macro en `templates/_componentes.html` si tiene marcado, sección `data-componente="<nombre>"` en la Guía
-`/admin/estilos` y una línea aquí. Cada CSS nuevo empieza con un comentario de uso, emplea tokens y se enumera
+`/admin/estilos` y una línea aquí. Componentes: **`nvp`** (2026-10-09, pedido del cliente de HappyFlops: el %
+de visitantes nuevos dice si un anuncio es TOF, MOF o BOF): `{% import "_componentes.html" as cx %}` y
+`{{ cx.nvp(nuevos, visitantes) }}` con las SUMAS del periodo; la regla (70/40, mínimo 50 visitantes) vive solo en
+`triple_whale/visitantes.py` y llega a Jinja como los globales `resumen_nvp`/`explicacion_nvp`; CSS
+`componentes/nvp.css` (los colores de etapa distinguen, no califican). Cada CSS nuevo empieza con un comentario de uso, emplea tokens y se enumera
 una sola vez en `ORDEN`; sin `@import`. `base.css` respeta `prefers-reduced-motion` y pinta los enlaces sin clase
 con `:where(a) { color: var(--accent-texto) }` (sin ella Chrome los deja lila y, visitados, morados); un `<button>`
 con clase que no pinta su fondo queda con el gris del navegador: dale fondo o súmalo al secundario de la base
@@ -143,5 +147,30 @@ Correcciones del lote 5 (2026-10-08, pedido de Daniel): ESTRUCTURA.md y mapa_cod
 
 
 PND-076/095/124 (2026-10-08, decisiones delegadas): accesos bloqueados reutiliza hero/admin-bloque/tabla-apilada/tabla-admin y data-etiqueta, sin CSS ni colores propios. Audios pagina por 24 con un botón delegado, separado de las tarjetas por el contenedor común acciones (R8, 2026-10-08) y conserva descarga/borrado de las tarjetas agregadas. El fragmento de lista no lleva scripts; el JS permanece en la plantilla completa. Alertas oculta las acciones protegidas sin ocultar sus avisos de plata. Las pantallas a 375 px y escritorio las mira Claude, por el encargo sin navegadores.
+
+**Pestaña Meta (2026-10-08, rendimiento de varias cuentas; spec `2026-10-08-meta-rendimiento-design.md` §8):** `#tab-meta`
+(`data-tab="meta"`, después de Triple Whale; `cliente.html` la registra en `paneles`, así el `href="#meta"` de la
+tarjeta de Conexiones la abre) es solo el armazón `_tab_meta.html` con un contexto barato de `ver_cliente`
+(`meta_rend` = conectado, n_cuentas, modo: ni Graph ni el panel, una prueba lo vigila). El panel
+(`_meta_panel.html`), el selector «Elegir cuentas» (`_meta_cuentas.html`, la única ruta que llama a Meta) y las filas
+de «Ver más» (`_meta_anuncios_filas.html`, `_meta_conjuntos_filas.html`: solo `<tr>`, que el JS pone en el lugar de la
+fila del botón) llegan por fetch; todo el JS vive en el armazón. Reutiliza las clases de Triple Whale y del Tablero;
+lo propio está en `static/estilos/pantallas/meta.css` (separación del selector abierto, la miniatura y, desde
+la mezcla de main del 2026-10-08 que borró el gráfico del viejo Tablero, las reglas `.tb-grafico`/`.tb-barra`… del
+«Día a día», que arma `meta_rendimiento/grafico.py`). Los
+selectores del JS evitan palabras que `tests/i18n_util.py` lee como español (`data-meta-act`, `data-meta-seleccion`:
+«cuenta» y «guardar» están en sus marcas).
+
+PND-166/190 (2026-10-09, decisión delegada): acciones Sprints muestran precio_analisis_sprint, texto seguro de gastos.estimar; Reanudar usa gastos.texto_precio. Reintentar análisis reusa botón/formulario y clases comunes; panel sin scripts. La comprobación visual a 375 px, escritorio y es/en corresponde a Claude (encargo sin navegadores).
+
+
+Enmiendas lote 7 (2026-10-09): botones nuevos usan textos de estimación que fallan a precio no disponible. Fotos: cantidad faltante y total; sin acción si cero. Panel Armar: cada fallo tiene fila fuera de figure y de la grilla, texto largo envuelve, botón con precio y ✕ separada. Inspección a 375/1280 px por Claude; desbordes previos de campaña y Detenida quedan registrados, sin arreglo.
+
+Segunda ronda lote 7 (2026-10-09, encargo de Daniel): filas de análisis fallido identifican la referencia por título o id y usan campo-error de la Base visual común. El formulario de reintento dentro de panel-analisis-error conserva volver=tablero. Ambos formularios de fotos mandan n_visto; sin imagen no ofrecen un reintento pagado. La inspección a 375/1280 px sigue a cargo de Claude.
+
+
+PND-209/210/032 (2026-10-09, decisión del lote 8): pantallas/sprints.css limita el campo del link a 100%, permite envolver sprint-aviso (también Detenida de Nicho) y coloca los filtros de revisión en una grilla: campaña ocupa la fila completa en celular, Tipo/QA la siguiente. Reutiliza los campos de la Base visual común, sin colores nuevos. tests/test_lote8_ui.py; capturas a 375/1280 px en es/en a cargo de Claude.
+
+Enmienda PND-032/210 (2026-10-10, pedido de Daniel): sprint-filtros tiene margen superior para separar las acciones a 375 px. La guardia de Detenida comprueba su propio párrafo; la de filtros exige grilla de escritorio y reglas dentro de @media max-width. Capturas en es/en a 375/1280 px por Claude.
 
 **Configuración › Plan (planes 6/8, 2026-10-10, skill `cobros`):** como el saldo, el apartado `#config-ap-plan` solo trae un contenedor y `static/planes.js` pide el fragmento al abrirlo; el formulario de alta (`plan_alta.html`) es la única página con el widget de Wompi. Estilos en `pantallas/planes.css`; las barras son `<progress class="plan-barra">` (sin `style=` en línea, que tiene techo). Un `<a class="btn-generar">` no hereda el relleno de `<button>`: en esas pantallas lo pone `planes.css`; y `.vacio` trae `padding: 1rem 0`, así que las notas cortas del formulario usan `.plan-ayuda`. Visto en escritorio y a 375 px con el método «ver la UI sin contraseña».

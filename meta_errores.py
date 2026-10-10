@@ -55,6 +55,14 @@ def es_limite(texto):
     return _numero(str(texto or ""), "code") in _LIMITE
 
 
+def es_codigo_limite(codigo):
+    """True si el código numérico de Graph es un límite de uso (esperar y reintentar)."""
+    try:
+        return int(codigo) in _LIMITE
+    except (TypeError, ValueError):
+        return False
+
+
 def explicar(texto, modo="propia"):
     """Qué pasó y qué hacer, en el idioma activo. `modo` es la forma de la conexión
     con Meta del proyecto («propia» o «agencia»): cambia a quién le toca arreglarlo."""

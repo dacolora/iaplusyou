@@ -77,3 +77,15 @@ PND-036 (2026-10-03): organico.crear rechaza tipo imagen antes de insertar una p
 Su subcódigo 1885183/modo Desarrollo tiene mensaje propio por gettext, separado de permisos (#3), sin prometer
 reutilización que ese camino no implementa. `tests/test_tareas_meta.py` provoca el rechazo con dobles; no cambia
 la publicación ni los reintentos.
+
+**Conexión «solo métricas» (2026-10-08, Meta rendimiento E1):** en modo propia, `meta_elegir` acepta una cuenta publicitaria
+SIN Página (`page_id` vacío o ausente; la opción «Sin Página (solo métricas)» va al final de la lista, marcada solo si no
+hay Páginas). `meta.json` queda con `page_id`, `page_nombre`, `page_access_token`, `ig_user_id` e `ig_username` en `None`;
+`organico.py` y `uploaders/meta_uploader.py` ya tratan eso como «sin Página». Lanzar y publicar frenan en palabras ANTES de
+llamar a Meta con `meta_conexion.sin_pagina(cliente)` (exige token, para no confundirlo con «sin conexión»; el texto es
+`error_solo_metricas(cliente)`, que en modo agencia manda al admin de Creatv): `lanzador._validar_para_lanzar`,
+`lanzador.lanzar_piezas_nuevas`, las rutas `exp_lanzar` y `exp_probar` (antes de crear o encolar nada) y la tarea legado
+`meta_publicar`; derivar y rescatar, que producen anuncios nuevos, frenan antes de cobrar (skill `experimentos`). Leer métricas (`meta_refrescar`, la copia de `meta_rendimiento/`, skill `meta-rendimiento`) no
+necesita Página y no se frena. La tarjeta de Configuración › Conexiones muestra «Solo métricas» con un enlace a `#meta`.
+
+PND-191 (2026-10-09, decisión delegada): la prueba de reconciliar_subidas fija un mismo reloj propio para db.ahora y organico.datetime. Expectativas y publicación intactas. La sonda con once minutos de desfase reproduce el resultado, pero no confirma la causa natural del fallo de la suite anterior; test_pnd191_reconciliar_aisla_el_reloj cubre los bordes de segundo.

@@ -94,3 +94,22 @@ def test_una_barra_en_modo_evento_nunca_recarga_despues_de_avisar():
     llamadas = base.count("avisarFin(") - base.count("function avisarFin(")
     con_return = re.findall(r"if \(avisar\) \{ avisarFin\([^;]*\); return; \}", base)
     assert llamadas == 4 and len(con_return) == llamadas
+
+
+def test_los_ganchos_vuelven_a_pedir_el_detalle_y_nunca_reenvian_el_post():
+    """Spec 2026-10-09 §5 y regla 1: la barra de una variante pide el detalle otra vez (no repinta la tarjeta, que
+    cerraría el detalle); el POST de «Probar los N ganchos» es un solo fetch después de la confirmación, nunca se
+    repite, y mientras una variante espera al vigilante el detalle se vuelve a pedir con un tope."""
+    tab = _leer("_tab_triple_whale.html")
+    terminado = _manejador(tab, "cont.addEventListener('trabajo-terminado'", "closest('form[data-tw-ganchos]')")
+    assert "closest('.tw-analisis-detalle')" in terminado and "recargarDetalle(caja)" in terminado
+    assert terminado.index("recargarDetalle(caja)") < terminado.index("repintarTarjeta(")
+    ganchos = _manejador(tab, "closest('form[data-tw-ganchos]')", "function siActiva()")
+    assert ganchos.count("fetch(") == 1 and "method: 'POST'" in ganchos
+    assert "ev.defaultPrevented" in ganchos and ganchos.index("ev.defaultPrevented") < ganchos.index("fetch(")
+    assert "recargarDetalle(caja, T_TW.pedido)" in ganchos and ".submit(" not in tab
+    espera = _manejador(tab, "function programarEspera(", "function avisoDetalle(")
+    assert "MAX_ESPERAS" in espera and "setTimeout" in espera and "caja.isConnected" in espera
+    assert "data-tw-ganchos-esperan" in espera
+    detalle = _sin_comentarios(_leer("_tw_analisis.html"))
+    assert "<script" not in detalle and 'preload="none" data-precarga' in detalle

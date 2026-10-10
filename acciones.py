@@ -40,6 +40,7 @@ import experimentos
 import gastos
 import idiomas
 import lanzador
+import meta_conexion
 import modos
 import organico
 import propuestas
@@ -191,6 +192,7 @@ def ejecutar(cliente, experimento_id, accion, payload, propuesta_id=None, ep_id_
         if (pz.get("extra") or {}).get("derivado"):
             _evento("%(nombre)s ya derivada: no se vuelve a producir.", nombre=pz["nombre"])
             return gettext("%(nombre)s ya derivada: no se vuelve a producir.", nombre=pz["nombre"])
+        _exigir_pagina(cliente)
         _exigir_saldo(cliente, ex, accion, payload)
         with _del_proyecto(cliente):
             hijo = derivaciones.planificar(cliente, experimento_id, "derivar", payload)
@@ -218,6 +220,7 @@ def ejecutar(cliente, experimento_id, accion, payload, propuesta_id=None, ep_id_
                    nombre=pz["nombre"], escalon=marcado)
             return gettext("%(nombre)s ya rescatada (escalón %(escalon)s); pieza pausada.",
                            nombre=pz["nombre"], escalon=marcado)
+        _exigir_pagina(cliente)
         _exigir_saldo(cliente, ex, accion, payload)
         with _del_proyecto(cliente):
             derivaciones.planificar(cliente, experimento_id, "rescatar", payload)
@@ -490,6 +493,17 @@ def _precio_estimado(cliente, ex, accion, payload):
         return {"usd": None, "texto": sin_precio}
 
 
+def _exigir_pagina(cliente):
+    """Derivar y rescatar producen un anuncio NUEVO para lanzar: con la conexión de Meta «solo métricas» (token sin
+    Página) `lanzador.lanzar_piezas_nuevas` se negaría al final, con la producción ya pagada (ruling R23, revisión
+    final 2026-10-08). Se frena ANTES de `_exigir_saldo`, de `planificar` y de encolar nada: lanza ValueError con el
+    texto de `meta_conexion.error_solo_metricas`. `escalar` no pasa por aquí: solo cambia presupuestos de anuncios
+    que ya existen."""
+    aviso = meta_conexion.sin_pagina(cliente)
+    if aviso:
+        raise ValueError(aviso)
+
+
 def _exigir_saldo(cliente, ex, accion, payload):
     """Cobros (spec 2026-10-08 §5): derivar y rescatar producen (clon y
     finales). El saldo se pide ANTES de `planificar`, que crea el experimento
@@ -536,6 +550,15 @@ def pedir(cliente, experimento_id, accion, payload, motivo):
         motivo_prop = gettext(
             "profundidad máxima (%(n)s generaciones de derivación); %(motivo)s",
             n=experimentos.profundidad(ex), motivo=motivo).strip()
+    if accion in ("derivar", "rescatar"):
+        # Conexión «solo métricas» (R23): una pieza nueva no se podría lanzar. Ni en automático se intenta (nada se
+        # encola ni se reserva): queda como propuesta con el texto, para aprobarla tras conectar una Página; en
+        # manual/semi la persona ve el porqué desde antes de aprobar. Es texto que se guarda: idioma del proyecto.
+        with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+            sin_pagina = meta_conexion.sin_pagina(cliente)
+        if sin_pagina:
+            puerta = "propuesta"
+            motivo_prop = f"{sin_pagina} {motivo_prop}".strip()
     if payload.get("solo_proponer") and puerta != "propuesta":
         # Doctrina, bloque 4 (§4): el diagnóstico apunta a algo que no es el
         # creativo (landing, oferta, estación): una persona decide, en todo modo.

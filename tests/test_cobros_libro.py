@@ -233,6 +233,9 @@ def test_limpiar_reservas_muertas(libro, base_temporal):
     libro.exigir("acme", 1.0, job_id="viva")
     libro.exigir("acme", 1.0, job_id="muerta")
     _tarea(db, "viva", "en_curso")
+    # PND-178: la limpieza solo recoge reservas muertas de más de diez minutos.
+    with db.conectar() as con:
+        con.execute(db.reserva_saldo.update().values(creada_en="2020-01-01T00:00:00"))
     assert libro.limpiar_reservas_muertas() == 1
 
 

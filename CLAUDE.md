@@ -103,6 +103,7 @@ incidente. Si la tarea cruza dos áreas, carga las dos.
 | Editor: documento, render, materiales, `static/editor/`, subtítulos, voz en off | [`editor`](.claude/skills/editor/SKILL.md) |
 | Experimentos, lanzador, decisor, derivaciones, Tablero | [`experimentos`](.claude/skills/experimentos/SKILL.md) |
 | Meta (propia/agencia), publicador, uploaders, publicación orgánica | [`meta-y-publicacion`](.claude/skills/meta-y-publicacion/SKILL.md) |
+| la pestaña Meta, varias cuentas publicitarias por proyecto, `meta_rendimiento/`, la copia de métricas de Meta, las tasas USD | [`meta-rendimiento`](.claude/skills/meta-rendimiento/SKILL.md) |
 | Catálogo: productos y colores, conectores de tiendas, importador, ficha | [`catalogo`](.claude/skills/catalogo/SKILL.md) |
 | Triple Whale: sincronización, pestaña, evaluación con IA, atribución | [`triple-whale`](.claude/skills/triple-whale/SKILL.md) |
 | el saldo prepagado, el margen, el interruptor «Cobrar», las recargas, Wompi y Bold, los planes mensuales y sus alertas, `cobros/`, el precio que ve un cliente | [`cobros`](.claude/skills/cobros/SKILL.md) |

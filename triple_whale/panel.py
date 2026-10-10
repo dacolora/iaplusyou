@@ -505,6 +505,10 @@ def _resultados(cliente, config, tienda_id, canal, dias, desde, hasta, hoy, ev, 
     inicio_edad = datos.inicio_para_antiguedad(cliente, tienda_id) if inicio_copia else None
     conocido = (_iso(date.fromisoformat(str(inicio_edad)[:10]) + timedelta(days=resultados.DIAS_NUEVO))
                 if inicio_edad else None)
+    # NVP con fuente «anuncios»: lo que el Pixel atribuye a los anuncios del alcance, de la evaluación ya hecha
+    # (mismo periodo, canal y tienda; sin otra consulta).
+    visitas_anuncios = {k: sum(float(a["m"].get(k) or 0) for a in ev.get("anuncios") or [])
+                        for k in ("visitantes", "visitantes_nuevos")}
     return resultados.armar(
         dias, resultados.por_dia(ancho, d_hasta, filas), (d_desde - ancho).days, hoy, fuente, config["moneda"],
         datos.gasto_por_antiguedad(cliente, tienda_id, desde, hasta, canal) if inicio_copia else {},
@@ -512,7 +516,7 @@ def _resultados(cliente, config, tienda_id, canal, dias, desde, hasta, hoy, ev, 
         datos.cohortes(cliente, tienda_id, desde, hasta, canal, conocido_desde=conocido) if inicio_copia else None,
         inicio_copia, ev.get("meta_roas"), canal, "", ultima_copia,
         inicio_datos=str(primer_dato)[:10] if primer_dato else None, fin_datos=fin_datos,
-        inicio_edad=str(inicio_edad)[:10] if inicio_edad else None)
+        inicio_edad=str(inicio_edad)[:10] if inicio_edad else None, visitas_anuncios=visitas_anuncios)
 
 
 def contexto_dia(cliente, fecha, canal=None, tienda_id=None, hoy=None):

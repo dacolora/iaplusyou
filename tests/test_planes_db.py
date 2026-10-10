@@ -1,4 +1,4 @@
-"""Planes mensuales y Wompi (spec 2026-10-09 §2 y §14): tablas, únicos y la migración 0035."""
+"""Planes mensuales y Wompi (spec 2026-10-09 §2 y §14): tablas, únicos y la migración 0038 (era la 0035 en la rama; renumerada al mezclar main el 2026-10-10)."""
 import pytest
 import sqlalchemy as sa
 
@@ -118,8 +118,8 @@ def _ddl(con, nombre):
     return con.execute(sa.text("SELECT sql FROM sqlite_master WHERE name=:n"), {"n": nombre}).scalar()
 
 
-def test_migracion_0035_sube_y_baja(tmp_path, monkeypatch):
-    command, db = _migrar_a(tmp_path, monkeypatch, "0035", "mig35.db")
+def test_migracion_0038_sube_y_baja(tmp_path, monkeypatch):
+    command, db = _migrar_a(tmp_path, monkeypatch, "0038", "mig35.db")
     try:
         with db.conectar() as con:
             insp = sa.inspect(con)
@@ -143,7 +143,7 @@ def test_migracion_0035_sube_y_baja(tmp_path, monkeypatch):
         with pytest.raises(sa.exc.IntegrityError):
             with db.conectar() as con:
                 con.execute(sa.insert(db.suscripcion).values(**{**alta, "estado": "morosa"}))
-        command.downgrade(_cfg(), "0034")
+        command.downgrade(_cfg(), "0037")
         with db.conectar() as con:
             insp = sa.inspect(con)
             assert not {"plan", "suscripcion", "periodo_plan", "pago_plan"} & set(insp.get_table_names())
@@ -156,8 +156,8 @@ def test_migracion_0035_sube_y_baja(tmp_path, monkeypatch):
         db._reset_para_tests()
 
 
-def test_migracion_0035_siembra_pro_archivado(tmp_path, monkeypatch):
-    command, db = _migrar_a(tmp_path, monkeypatch, "0035", "mig35b.db")
+def test_migracion_0038_siembra_pro_archivado(tmp_path, monkeypatch):
+    command, db = _migrar_a(tmp_path, monkeypatch, "0038", "mig35b.db")
     try:
         with db.conectar() as con:
             filas = con.execute(sa.select(db.plan)).fetchall()
@@ -170,17 +170,17 @@ def test_migracion_0035_siembra_pro_archivado(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize("antes,despues", [("1.5", "2.0"), ("1.8", "1.8"), ("2.0", "2.0"), ("1.50", "1.50")])
-def test_migracion_0035_pasa_el_margen_1_5_a_2(tmp_path, monkeypatch, antes, despues):
-    command, db = _migrar_a(tmp_path, monkeypatch, "0034", "mig35c.db")
+def test_migracion_0038_pasa_el_margen_1_5_a_2(tmp_path, monkeypatch, antes, despues):
+    command, db = _migrar_a(tmp_path, monkeypatch, "0037", "mig35c.db")
     try:
         with db.conectar() as con:
             con.execute(sa.insert(db.kv).values(clave="cobros:margen_global", valor=antes, actualizado_en=AHORA))
-        command.upgrade(_cfg(), "0035")
+        command.upgrade(_cfg(), "0038")
         with db.conectar() as con:
             assert con.execute(sa.select(db.kv.c.valor).where(db.kv.c.clave == "cobros:margen_global")).scalar() == despues
         # idempotente: bajar y subir otra vez no cambia nada más
-        command.downgrade(_cfg(), "0034")
-        command.upgrade(_cfg(), "0035")
+        command.downgrade(_cfg(), "0037")
+        command.upgrade(_cfg(), "0038")
         with db.conectar() as con:
             assert con.execute(sa.select(db.kv.c.valor).where(db.kv.c.clave == "cobros:margen_global")).scalar() == despues
             assert con.execute(sa.select(sa.func.count()).select_from(db.plan)).scalar() == 1
@@ -188,8 +188,8 @@ def test_migracion_0035_pasa_el_margen_1_5_a_2(tmp_path, monkeypatch, antes, des
         db._reset_para_tests()
 
 
-def test_migracion_0035_sin_margen_guardado_no_crea_kv(tmp_path, monkeypatch):
-    command, db = _migrar_a(tmp_path, monkeypatch, "0035", "mig35d.db")
+def test_migracion_0038_sin_margen_guardado_no_crea_kv(tmp_path, monkeypatch):
+    command, db = _migrar_a(tmp_path, monkeypatch, "0038", "mig35d.db")
     try:
         with db.conectar() as con:
             assert con.execute(sa.select(db.kv.c.valor).where(db.kv.c.clave == "cobros:margen_global")).first() is None

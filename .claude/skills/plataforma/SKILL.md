@@ -54,13 +54,11 @@ the same endpoint for both paths — and renders a progress bar via the shared
 `iniciarPolling()` JS in `base.html`, reloading the page on completion. `job_id` is
 deterministic per (cliente, prompt_id/brief_id, acción) so a repeat click no-ops
 instead of double-launching. Tasks that spend credits are queued with
-`max_intentos=1` — they never auto-retry. Exception found 2026-10-08:
-old Nicho consultas/seleccionar callers still pass 2, tracked separately as
-PND-190; the lane change does not alter that paid retry policy. A queued task stuck running for more than
+`max_intentos=1` — they never auto-retry. A queued task stuck running for more than
 30 minutes is either re-queued (if it still has attempts left) or marked `error`
 (once `max_intentos` is exhausted) — never one this worker is running right now
 (`cola.recuperar_colgadas(excluir=worker.en_vuelo())`). Since 2026-09-28 (spec
-`2026-09-28-crear-sin-cola`, «en Crear nada queda en cola») the worker has three lanes (PND-051, decisión delegada 2026-10-07, implementada 2026-10-08):
+`2026-09-28-crear-sin-cola`, «en Crear nada queda en cola») the worker runs in lanes; since 2026-10-08 there are four: crear, nicho (PND-051, decisión delegada 2026-10-07, implementada 2026-10-08), `lectura` (below) and general:
 `CARRIL_CREAR` (`flowplus_video`, `flowplus_imagen`, `flowplus_recuperar`, `flowplus_director`, `hablado_voz`)
 runs up to `HILOS_CREAR = 4` at once — Sprints batches (`prioridad < 5`) take at most
 `HILOS_LOTE = 2`, so a single piece from Crear always finds a thread — and everything else
@@ -75,6 +73,24 @@ transaction (`cola.terminar_y_encolar`, retried; if it still fails the task goes
 start gives its task back (`cola.devolver`). **`dashboard.py` runs with `use_reloader=False`
 on purpose**: Flask's auto-reloader kills the whole process on file changes, which
 would silently abort any in-flight background generation.
+
+**Lane `lectura` (2026-10-08, ruling R16 of «Meta rendimiento»):** `CARRIL_LECTURA = ("meta_rend_sincronizar",)`
+runs in its own single thread (`HILOS_LECTURA = 1`), and the general lane excludes `CARRIL_CREAR`, `CARRIL_NICHO`
+and `CARRIL_LECTURA`. Why: the first copy of one Meta ad account measured on the real API takes 8 min (Norway) to
+14 min (Netherlands), about an hour for happyflops' 7 accounts; on the single general thread that would have
+blocked experiment launches and refreshes, Triple Whale and the stores for that long. Copies of different accounts
+still run one after another (Meta's rate limits are per user+app, shared across accounts). It is free (reading
+Meta never charges, `max_intentos=2`, and all three `meta_rend_*` types are in `TIPOS_EXENTOS_DE_COBRO`, so a project
+with «Cobrar» on still syncs). `meta_rend_sincronizar_todas` and `meta_rend_limpiar` stay in the general
+lane (instant). The area's own skill is `meta-rendimiento`. A new long, free, read-only sync can join this lane; anything that charges stays out of it.
+
+**Three worker types for the Triple Whale hooks (2026-10-09, skill `triple-whale`, «Ganchos y copy»):** `tw_ganchos_preparar`
+(`<c>__tw_ganchos_<aid>_t<tanda>`, `max_intentos=1`, prioridad 3: downloads the original and launches one Crear piece per
+hook), `tw_ganchos_vigilar` (periodic, 60 s, after `cadena_vigilar` in `worker.PERIODICAS`: moves each live variant) and
+`tw_gancho_armar` (`<c>__tw_gancho_<gid>_armar`, `max_intentos=2`, prioridad 1: ffmpeg and the editor on an already-paid
+clip). All three are in `TIPOS_EXENTOS_DE_COBRO` and none calls a paid provider: each clip is charged by
+`flowplus_video` when Crear closes it, with its own reservation, and the price was approved once in the route.
+`tw_gancho_armar` may retry because nothing in it charges; `tw_ganchos_preparar` stays at one attempt so a failure never launches a clip twice.
 
 **Higgsfield API wrapper** (`higgsfield_client.py`): all calls follow launch ->
 `poll_until_done(status_url)` -> extract-result, for both video (`kling-2.1-pro`,
@@ -145,3 +161,11 @@ S3 (2026-10-08, auditoría lote 6B): la periódica diaria cola_limpiar llama man
 PND-068 (2026-10-08, decisión 2026-09-18: nada nuevo a Higgsfield): retirados productores y rutas de Nueva idea y sus nueve plantillas. No eran tareas de cola, sino hilos de Flask. Un tipo desconocido queda en error en palabras sin llamar al proveedor (tests/test_lote6c_retirar_ideas.py); proveedores/CLI y datos históricos conservados.
 
 PND-051 (enmienda 2026-10-08): el carril Nicho tiene un solo hilo para sus seis tareas que esperan proveedor y referentes_barrer. Los barridos comparten la RAM y el límite de corridas de Apify con Nicho; repartirlos en paralelo daba 402 por capacidad. General excluye Crear + Nicho, y en_vuelo, esperar_hilos y recuperación son comunes a los tres carriles. En SIGINT/SIGTERM no se interrumpe el sondeo de Apify: el hilo termina la tarea y esperar_hilos lo espera. En un despliegue la cola debe estar vacía antes de reiniciar. No hay puntos de control ni continuaciones nuevas de Apify: se conserva el contrato anterior del proveedor y del gasto. Pruebas: tests/test_lote6c_nicho_carril.py, incluido un 402 sin cobro seguido de un segundo clic explícito con el mismo job_id que sí termina. No cambia max_intentos ni la política de cobro.
+
+PND-190/166/159 (2026-10-09, decisiones delegadas lote 7): consultas/selección de Nicho y análisis/personas de Sprints se encolan con un intento y costo estimado. Sprints pasa un acumulador de usage (caché incluida), registra con referencia por tarea también si falla el guardado/JSON y usa entregado=False al fallar. El POST de arranque Apify pasa reintentar=False; los GET conservan su política.
+
+
+Enmiendas lote 7 (2026-10-09, decisión delegada): SDK de Claude conserva sus reintentos. Apify registra estimado al recibir run_id, misma referencia de tarea para corregir al final (también cero si ya se anotó gasto; sin anotación previa, cero no crea fila). POST solo repite 429 con esperas; timeout/5xx leen hasta cinco corridas recientes, siguen una única posterior al inicio o avisan incertidumbre. Fuentes de Nicho propagan on_ids al registro antes del sondeo; hooks con corrida anotada dejan error, no pendiente.
+
+
+PND-149(6)/160 (2026-10-09, decisión del lote 8): reservar_aviso_sync vive en triple_whale_tiendas (único escritor) y toma el candado SQLite antes de leer extra/cola. Recuerda las copias terminadas que el worker aún no cerró y reserva una vez el aviso de la última, sin modificar estado/progreso de tareas; identidad id+creada_en para un nuevo ciclo. actualizar_extra comparte ese candado. El encolador de lanzamiento comprueba tarea viva y relee el estado antes de escribir; solo admite armando/error. Enmienda 2026-10-10: _LANZAMIENTO_LOCK es propio, junto a _ENV_LOCK, para no esperar una publicación larga ni relanzar desde una lectura vieja. La vuelta atrás usa el estado recién leído; no cambia gastos ni reintentos.

@@ -97,6 +97,7 @@ import tiendas
 import triple_whale
 import triple_whale_tiendas
 from triple_whale import paises as tw_paises
+from triple_whale import visitantes as tw_visitantes
 import tablero
 import resultados
 import admin
@@ -218,6 +219,9 @@ app.config["BABEL_TRANSLATION_DIRECTORIES"] = idiomas.DIR_TRADUCCIONES
 Babel(app, locale_selector=idiomas.de_peticion)
 idiomas.instalar_gettext_rapido(app)  # mismo resultado que el de Flask-Babel, sin su costo por `_()`
 app.jinja_env.filters["traducir"] = idiomas.traducir
+# NVP (spec 2026-10-09-nvp-visitantes-nuevos §4): la macro `nvp` de _componentes.html los usa en todas las pantallas.
+app.jinja_env.globals["resumen_nvp"] = tw_visitantes.resumen
+app.jinja_env.globals["explicacion_nvp"] = tw_visitantes.EXPLICACION
 
 # ---------- Monitoreo (spec 2026-10-01-escala-y-monitoreo §6) ----------
 # Registro en data/logs/web.log (lo lee /admin/salud/registros) y cada petición
@@ -353,6 +357,10 @@ from triple_whale import panel as triple_whale_panel  # noqa: E402  (la tienda s
 from triple_whale import puente as triple_whale_puente  # noqa: E402  (una pieza de Crear nacida de una idea)
 app.register_blueprint(triple_whale_rutas.bp)
 
+from meta_rendimiento import rutas as meta_rendimiento_rutas  # noqa: E402  (Blueprint de la pestaña Meta)
+from meta_rendimiento import cuentas as meta_rend_cuentas  # noqa: E402  (las cuentas que lee el proyecto)
+app.register_blueprint(meta_rendimiento_rutas.bp)
+
 from guiones import rutas as guiones_rutas  # noqa: E402  (Blueprint JSON del chat de Flow Plus en Crear)
 app.register_blueprint(guiones_rutas.bp)
 
@@ -374,6 +382,8 @@ app.register_blueprint(cobros_rutas.bp)
 # lock serializa esa sección crítica (cargar credenciales + usarlas) para que
 # eso no pase.
 _ENV_LOCK = threading.Lock()
+# El encolado no espera publicaciones largas ni usa sus credenciales (PND-160, 2026-10-10).
+_LANZAMIENTO_LOCK = threading.Lock()
 
 
 def _sesion():
@@ -565,6 +575,8 @@ def _idioma_en_plantillas():
     datos = {
         "idioma_ui": str(get_locale() or idiomas.DEFECTO),
         "idiomas_nombres": idiomas.NOMBRES,
+        "idiomas_publicacion_nombres": idiomas.NOMBRES_PUBLICACION,
+        "paises_publicacion": fe_tipos.PAISES,
         "idioma_selector_visible": bool(sesion) and (idiomas.ACTIVO_PARA_TODOS or sesion["rol"] == "admin"),
         "idioma_enlaces_publicos": idiomas.ACTIVO_PARA_TODOS and not sesion,
     }
@@ -1113,9 +1125,11 @@ cuando conectas tu cuenta de Meta (Facebook e Instagram) y cómo los protegemos.
 <li>Tu nombre y el identificador de tu usuario de Facebook (para saber quién autorizó la conexión).</li>
 <li>La lista de cuentas publicitarias, Páginas de Facebook y cuentas de Instagram que administras, para que
 elijas cuál conectar al proyecto.</li>
-<li>Un token de acceso de sistema para la cuenta publicitaria y la Página elegidas.</li>
+<li>Un token de acceso de sistema para las cuentas publicitarias y la Página elegidas.</li>
 <li>Datos de tus anuncios y sus resultados (impresiones, alcance, clics, gasto, conversiones) y, cuando
-publiques contenido orgánico, la confirmación de la publicación.</li>
+publiques contenido orgánico, la confirmación de la publicación. Copiamos esas métricas de las cuentas elegidas,
+con los nombres de tus campañas, conjuntos de anuncios y anuncios, a nuestro servidor para mostrártelas sin
+consultar a Meta cada vez.</li>
 </ul>
 <h3>Para qué los usamos</h3>
 <ul>
@@ -1132,8 +1146,9 @@ restringidos en nuestro servidor en la Unión Europea (Hetzner, Núremberg). Sol
 puede leerlos; nunca se muestran en pantalla ni se registran en logs.</p>
 <h3>Cuánto tiempo</h3>
 <p>Mientras el proyecto tenga Meta conectado. Al pulsar «Desconectar» en la plataforma se borran de inmediato
-el token y los identificadores. También puedes revocar el acceso desde Facebook: Configuración › Integraciones
-de negocio, o Configuración › Apps y sitios web.</p>
+el token, los identificadores y las métricas copiadas de las cuentas elegidas (gasto, compras, nombres de
+campañas, conjuntos de anuncios y anuncios). También puedes revocar el acceso desde Facebook: Configuración ›
+Integraciones de negocio, o Configuración › Apps y sitios web.</p>
 <h3>Eliminación de datos</h3>
 <p>Para que eliminemos todos los datos asociados a tu cuenta de Meta escríbenos a dacoloradog@gmail.com
 indicando el nombre del proyecto; lo hacemos en un plazo máximo de 7 días y te confirmamos por correo.</p>
@@ -1153,9 +1168,11 @@ process when you connect your Meta account (Facebook and Instagram) and how we p
 <li>Your name and your Facebook user identifier (to know who authorized the connection).</li>
 <li>The list of ad accounts, Facebook Pages and Instagram accounts you manage, so you can
 choose which one to connect to the project.</li>
-<li>A system access token for the chosen ad account and Page.</li>
+<li>A system access token for the chosen ad accounts and Page.</li>
 <li>Data about your ads and their results (impressions, reach, clicks, spend, conversions) and, when you
-publish organic content, confirmation of the publication.</li>
+publish organic content, confirmation of the publication. We copy those metrics from the chosen accounts, with
+the names of your campaigns, ad sets and ads, to our server so we can show them to you without asking Meta every
+time.</li>
 </ul>
 <h3>What we use it for</h3>
 <ul>
@@ -1172,7 +1189,8 @@ permissions on our server in the European Union (Hetzner, Nuremberg). Only the p
 can read them; they're never shown on screen or logged.</p>
 <h3>How long</h3>
 <p>As long as the project has Meta connected. Clicking “Disconnect” on the platform immediately deletes
-the token and the identifiers. You can also revoke access from Facebook: Settings › Business Integrations,
+the token, the identifiers and the metrics copied from the chosen accounts (spend, purchases, and the names of
+campaigns, ad sets and ads). You can also revoke access from Facebook: Settings › Business Integrations,
 or Settings › Apps and Websites.</p>
 <h3>Data deletion</h3>
 <p>For us to delete all the data associated with your Meta account, write to us at dacoloradog@gmail.com
@@ -1255,14 +1273,16 @@ def eliminar_datos():
     """URL de instrucciones de eliminación de datos que pide Meta."""
     cuerpo = {
         "es": """<p>Para eliminar los datos que Creatv Machine guarda de tu cuenta de Meta:</p>
-<ol><li>Entra a tu proyecto en app.creatvmachine.com › FlowMarketing › <strong>Desconectar</strong>: se borran el token
-y los identificadores de tu cuenta publicitaria, Página e Instagram al instante.</li>
+<ol><li>Entra a tu proyecto en app.creatvmachine.com › FlowMarketing › <strong>Desconectar</strong>: se borran el token,
+los identificadores de tus cuentas publicitarias, Página e Instagram y las métricas copiadas de las cuentas elegidas
+(gasto, compras, nombres de campañas, conjuntos de anuncios y anuncios) al instante.</li>
 <li>Si prefieres, escribe a dacoloradog@gmail.com con el nombre de tu proyecto y lo eliminamos en máximo 7 días,
 con confirmación por correo.</li></ol>
 <p>También puedes revocar el acceso desde Facebook: Configuración › Apps y sitios web › Creatv Machine › Eliminar.</p>""",
         "en": """<p>To delete the data Creatv Machine stores about your Meta account:</p>
-<ol><li>Go to your project at app.creatvmachine.com › FlowMarketing › <strong>Disconnect</strong>: the token
-and the identifiers of your ad account, Page and Instagram are deleted instantly.</li>
+<ol><li>Go to your project at app.creatvmachine.com › FlowMarketing › <strong>Disconnect</strong>: the token,
+the identifiers of your ad accounts, Page and Instagram, and the metrics copied from the chosen accounts
+(spend, purchases, and the names of campaigns, ad sets and ads) are deleted instantly.</li>
 <li>If you prefer, write to dacoloradog@gmail.com with your project's name and we'll delete it within 7 days,
 confirmed by email.</li></ol>
 <p>You can also revoke access from Facebook: Settings › Apps and Websites › Creatv Machine › Remove.</p>""",
@@ -2075,6 +2095,11 @@ def ver_cliente(cliente):
     # Las tarjetas de tiendas (spec 2026-10-08 §6.2): país y bandera en el idioma de quien mira.
     tw_tiendas = [dict(t, nombre=triple_whale_panel.nombre_tienda(t), bandera=tw_paises.bandera(t["pais"]))
                   for t in (triple_whale_conectado or {}).get("tiendas", [])]
+    # Pestaña Meta (spec 2026-10-08 meta rendimiento §8): solo lo que decide su estado vacío. Ni Graph ni el panel:
+    # el selector y el panel llegan por fetch al abrirla.
+    meta_rend = {"conectado": bool((meta_conexion.cargar(cliente) or {}).get("token")),
+                 "n_cuentas": len(meta_rend_cuentas.ids(cliente)), "modo": meta_conexion.modo(cliente),
+                 "es_admin": meta_rendimiento_rutas.es_admin()}
     # Catálogo (spec 2026-09-28): la galería y la ficha llegan por fragmento;
     # la página solo trae contadores por categoría y lo que Crear necesita.
     activos_producto = _productos_con_uso(cliente)
@@ -2131,6 +2156,9 @@ def ver_cliente(cliente):
         preferencias_flowplus=proyectos.preferencias_flowplus(cliente),
         preferencias_sonido=proyectos.preferencias_sonido(cliente),
         aviso_saldo=saldo.vigente("wavespeed"),
+        # Sin saldo en fal solo se pausan sus modelos (PND-213): aviso aparte, solo en Crear.
+        aviso_saldo_fal=saldo.vigente("fal"),
+        modelos_fal=saldo.nombres_modelos("fal"),
         # Pestaña Alertas: las alertas llegan en `alertas_ctx` (context
         # processor _alertas_sidebar); aquí solo los nombres, constantes N_.
         alertas_grupos=alertas.GRUPOS,
@@ -2162,6 +2190,7 @@ def ver_cliente(cliente):
         triple_whale_conectado=triple_whale_conectado,
         tw_modelos=triple_whale.MODELOS, tw_ventanas=triple_whale.VENTANAS, tw_monedas=triple_whale.MONEDAS,
         tw_tiendas=tw_tiendas, tw_paises=tw_paises.paises_opciones(idiomas.activo()),
+        meta_rend=meta_rend,
         trabajos_prod=_trabajos_productos(cliente, tiendas_cliente),
         precio_pedidos=gastos.estimar("pedidos_producto")["texto"],
         cifrado_ok=cifrado.disponible(),
@@ -3482,8 +3511,11 @@ def meta_elegir(cliente):
         )
 
     cuenta = next((a for a in cuentas if a["id"] == request.form.get("ad_account_id")), None)
-    pagina = next((p for p in paginas if p["id"] == request.form.get("page_id")), None)
-    if not cuenta or not pagina:
+    # La Página es opcional («solo métricas», 2026-10-08): vacía o ausente guarda la conexión sin Página; una que no
+    # está en la lista sigue siendo un formulario manipulado.
+    page_id = (request.form.get("page_id") or "").strip()
+    pagina = next((p for p in paginas if p["id"] == page_id), None) if page_id else None
+    if not cuenta or (page_id and not pagina):
         flash(gettext("Elige una cuenta publicitaria y una Página de la lista."), "error")
         return redirect(url_for("meta_elegir", cliente=cliente))
 
@@ -3496,7 +3528,11 @@ def meta_elegir(cliente):
         flash(gettext(MENSAJE_MODO_AGENCIA), "error")
         return _ir_a_flowmarketing(cliente)
     meta_conexion.borrar_pendiente(cliente)
-    bitacora.registrar(cliente, "meta", "conexion", "ok", f"{cuenta.get('name')} · {pagina.get('name')}")
+    bitacora.registrar(cliente, "meta", "conexion", "ok", f"{cuenta.get('name')} · {pagina.get('name') if pagina else '—'}")
+    if not pagina:
+        flash(gettext("Meta conectado: %(cuenta)s. %(aviso)s", cuenta=cuenta.get("name"),
+                      aviso=gettext("Conectado solo para métricas: sin Página no se pueden lanzar anuncios ni publicar.")), "ok")
+        return _ir_a_flowmarketing(cliente)
     aviso = "" if pagina.get("ig_user_id") else " " + gettext(
         "Esa Página no tiene Instagram vinculado: los Reels no se van a publicar hasta que lo vincules en Facebook.")
     flash(gettext("Meta conectado: %(cuenta)s · %(pagina)s.%(aviso)s",
@@ -3504,7 +3540,10 @@ def meta_elegir(cliente):
     return _ir_a_flowmarketing(cliente)
 
 
-def _guardar_conexion_propia(cliente, pendiente, cuenta, pagina):
+def _guardar_conexion_propia(cliente, pendiente, cuenta, pagina=None):
+    """`pagina=None` guarda la conexión «solo métricas»: se leen las cuentas publicitarias sin Página, así que
+    page_id, su token e Instagram quedan en None (lanzar y publicar frenan en palabras; ver lanzador y tareas.meta)."""
+    pagina = pagina or {}
     meta_conexion.guardar(cliente, {
         "token": pendiente["token"],
         "tipo_token": pendiente.get("tipo_token", ""),
@@ -3513,7 +3552,7 @@ def _guardar_conexion_propia(cliente, pendiente, cuenta, pagina):
         "ad_account_id": cuenta["id"],
         "ad_account_nombre": cuenta.get("name"),
         "moneda": cuenta.get("currency"),
-        "page_id": pagina["id"],
+        "page_id": pagina.get("id"),
         "page_nombre": pagina.get("name"),
         "page_access_token": pagina.get("access_token"),
         "ig_user_id": pagina.get("ig_user_id"),
@@ -3533,6 +3572,20 @@ def meta_cancelar(cliente):
     return _ir_a_flowmarketing(cliente)
 
 
+def _soltar_cuentas_meta(cliente):
+    """Quitar la conexión de Meta de un proyecto (Desconectar, volver a modo propia, desasignar, desconectar la
+    agencia) también borra las métricas copiadas de sus cuentas y las deja libres para otro proyecto: /privacidad y
+    /eliminar-datos lo prometen (ruling R21, 2026-10-08). Si borrar falla, la desconexión ya hecha se queda: se anota
+    el tipo del error (nunca su texto) y se avisa; la siguiente vez que alguien quite las cuentas se reintenta."""
+    try:
+        meta_rend_cuentas.elegir(cliente, [])
+    except Exception as e:  # noqa: BLE001 — la desconexión no se deshace por esto
+        log.warning("meta rendimiento: no se pudieron borrar las métricas copiadas de %s (%s)", cliente, type(e).__name__)
+        flash(gettext("Meta se desconectó en %(proyecto)s, pero no se pudieron borrar sus métricas copiadas (%(tipo)s). "
+                      "Avisa al administrador.", proyecto=proyectos.nombre_visible(cliente), tipo=type(e).__name__),
+              "warn")
+
+
 @app.route("/cliente/<cliente>/meta/desconectar", methods=["POST"])
 def meta_desconectar(cliente):
     bloqueo = _bloqueo_modo_agencia(cliente)
@@ -3547,6 +3600,7 @@ def meta_desconectar(cliente):
         flash(gettext(MENSAJE_MODO_AGENCIA), "error")
         return _ir_a_flowmarketing(cliente)
     meta_conexion.borrar_pendiente(cliente)
+    _soltar_cuentas_meta(cliente)
     bitacora.registrar(cliente, "meta", "conexion", "ok", "desconectado" + (" y revocado en Meta" if revocado else ""))
     if revocado:
         flash(gettext("Meta desconectado de este proyecto y acceso revocado en Meta."), "ok")
@@ -3708,7 +3762,7 @@ def meta_agencia_conectar(cliente):
     if page_id and not detalle.get("ig_username"):
         flash(gettext("Esa Página no tiene Instagram vinculado: los Reels no se van a publicar hasta que lo vincules en Facebook."), "warn")
     if not page_id:
-        flash(gettext("Sin Página solo se pueden pautar anuncios; la publicación orgánica queda apagada."), "warn")
+        flash(gettext("Sin Página solo se leen métricas: no se pueden lanzar anuncios y la publicación orgánica queda apagada."), "warn")
     return _ir_a_meta(cliente)
 
 
@@ -3778,6 +3832,7 @@ def meta_agencia_salir(cliente):
         flash(motivo, "error")
         return _ir_a_meta(cliente)
     meta_agencia.desasignar(cliente)
+    _soltar_cuentas_meta(cliente)
     restaurada = bool((meta_conexion.cargar(cliente) or {}).get("token"))
     proyectos.guardar_meta_forma(cliente, "propia")
     nombre = proyectos.nombre_visible(cliente)
@@ -3889,6 +3944,7 @@ def admin_meta_desconectar():
     asignados = list(meta_agencia.proyectos_asignados())
     resultado = meta_agencia.desconectar()
     for cid in asignados:
+        _soltar_cuentas_meta(cid)
         bitacora.registrar(cid, "meta", "agencia", "ok", "vuelve a modo propia: la agencia se desconectó")
     n = resultado.get("desasignados", 0)
     if not resultado.get("habia") and not n:
@@ -3964,8 +4020,8 @@ def admin_meta_asignar(cliente):
         flash(gettext("Esa Página no tiene Instagram vinculado: los Reels no se van a publicar hasta que lo vincule en "
                       "Facebook."), "warn")
     if not page_id:
-        flash(gettext("Sin Página asignada solo se pueden pautar anuncios; la publicación orgánica queda apagada para "
-                      "ese proyecto."), "warn")
+        flash(gettext("Sin Página asignada solo se leen métricas: no se pueden lanzar anuncios y la publicación orgánica "
+                      "queda apagada para ese proyecto."), "warn")
     return _volver_admin_meta()
 
 
@@ -3978,6 +4034,7 @@ def admin_meta_desasignar(cliente):
     if not meta_agencia.desasignar(cliente):
         flash(gettext("%(proyecto)s no estaba en modo agencia.", proyecto=proyectos.nombre_visible(cliente)), "warn")
         return _volver_admin_meta()
+    _soltar_cuentas_meta(cliente)
     bitacora.registrar(cliente, "meta", "agencia", "ok", f"vuelve a modo propia (por {session.get('usuario')})")
     flash(gettext("%(proyecto)s volvió a modo propia: si tenía su propia conexión se restauró; "
                   "si no, tendrá que registrar su app y conectar con Meta.", proyecto=proyectos.nombre_visible(cliente)),
@@ -5120,6 +5177,10 @@ def exp_probar(cliente):
     if meta_conexion.estado(cliente).get("estado") != "conectado":
         flash(gettext("Conecta Meta en Configuración › Conexiones antes de probar piezas."), "error")
         return _volver_exp(cliente)   # «Nuevo experimento» sin Meta ya no pinta la galería
+    sin_pagina = meta_conexion.sin_pagina(cliente)   # «solo métricas»: se avisa antes de crear nada
+    if sin_pagina:
+        flash(sin_pagina, "error")
+        return volver
     moneda = (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
     objetivo = request.form.get("objetivo") or ""
     # Sin repetidos y en el orden en que llegan: un POST armado a mano con paises=CO&paises=CO creaba dos
@@ -5250,17 +5311,25 @@ def _encolar_lanzamiento(cliente, eid, estado_previo, error_previo):
     como estaba. Al revés (encolar y después escribir «lanzando», el M2 de antes) un worker rápido podía activar y
     dejarlo «corriendo» antes de que la ruta escribiera, y esa escritura tardía lo pisaba con anuncios gastando (ronda 2
     de guardian-gasto, 2026-10-08). Lo que M2 cuidaba (quedar en «lanzando» sin tarea) lo cubre la vuelta atrás."""
-    experimentos.actualizar(cliente, eid, estado="lanzando", error=None)
-    try:
-        arranco = trabajos.encolar(tareas_exp.job_id_lanzar(cliente, eid), "exp_lanzar",
-                                   {"cliente": cliente, "experimento_id": eid, "activar": True}, cliente=cliente,
-                                   duracion_estimada=120, etapas=lanzador.ETAPAS_LANZAR_Y_ACTIVAR, max_intentos=1)
-    except Exception:
-        experimentos.actualizar(cliente, eid, estado=estado_previo, error=error_previo)
-        raise
-    if not arranco:
-        experimentos.actualizar(cliente, eid, estado=estado_previo, error=error_previo)
-    return arranco
+    with _LANZAMIENTO_LOCK:
+        job_id = tareas_exp.job_id_lanzar(cliente, eid)
+        if trabajos.en_curso(job_id):
+            return False
+        actual = experimentos.obtener(cliente, eid)
+        if not actual or actual["estado"] not in ("armando", "error"):
+            return False
+        estado_previo, error_previo = actual["estado"], actual["error"]
+        experimentos.actualizar(cliente, eid, estado="lanzando", error=None)
+        try:
+            arranco = trabajos.encolar(job_id, "exp_lanzar",
+                                       {"cliente": cliente, "experimento_id": eid, "activar": True}, cliente=cliente,
+                                       duracion_estimada=120, etapas=lanzador.ETAPAS_LANZAR_Y_ACTIVAR, max_intentos=1)
+        except Exception:
+            experimentos.actualizar(cliente, eid, estado=estado_previo, error=error_previo)
+            raise
+        if not arranco:
+            experimentos.actualizar(cliente, eid, estado=estado_previo, error=error_previo)
+        return arranco
 
 
 def _clave_formulario_experimento(token, datos, combinaciones):
@@ -5370,8 +5439,18 @@ def exp_lanzar(cliente, eid):
     if not ex:
         flash(gettext("Ese experimento no existe."), "error")
         return volver
+    if trabajos.en_curso(tareas_exp.job_id_lanzar(cliente, eid)):
+        mensaje = gettext("Ya se está lanzando ese experimento.")
+        if _quiere_json():
+            return jsonify(ok=True, mensaje=mensaje)
+        flash(mensaje, "warn")
+        return volver
     if ex["estado"] not in ("armando", "error"):
         flash(gettext("Ese experimento ya fue lanzado."), "error")
+        return volver
+    sin_pagina = meta_conexion.sin_pagina(cliente)   # «solo métricas»: mismo freno que lanzador._validar_para_lanzar
+    if sin_pagina:
+        flash(sin_pagina, "error")
         return volver
     if not ex["piezas"]:
         flash(gettext("El experimento no tiene piezas: agrega al menos una antes de lanzar."), "error")
@@ -5386,7 +5465,10 @@ def exp_lanzar(cliente, eid):
     if arranco:
         flash(gettext("Lanzando el experimento a Meta: si todo sale bien, queda activo y empieza a gastar…"), "ok")
     else:
-        flash(gettext("Ya se está lanzando ese experimento."), "warn")
+        mensaje = gettext("Ya se está lanzando ese experimento.")
+        if _quiere_json():
+            return jsonify(ok=True, mensaje=mensaje)
+        flash(mensaje, "warn")
     return volver
 
 
@@ -6800,6 +6882,21 @@ def _precio_form(valor):
         return None
 
 
+@app.route("/cliente/<cliente>/creative_flow/<cf_id>/favorito", methods=["POST"])
+def cf_favorito(cliente, cf_id):
+    """El corazón de una tarjeta de Crear (pedido del 2026-10-08): marca o
+    desmarca la pieza para separarla de las versiones que no se van a usar.
+    Form `favorito=1|0` → {ok, favorito}; sin fetch, vuelve a Crear."""
+    favorito = request.form.get("favorito") == "1"
+    if not creative_flow.marcar_favorito(cliente, cf_id, favorito):
+        if request.headers.get("X-Requested-With") == "fetch":
+            return jsonify({"ok": False, "error": gettext("Esa pieza ya no existe.")}), 404
+        abort(404)
+    if request.headers.get("X-Requested-With") == "fetch":
+        return jsonify({"ok": True, "favorito": favorito})
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+
+
 @app.route("/cliente/<cliente>/creative_flow/<cf_id>/angulo", methods=["POST"])
 def cf_angulo(cliente, cf_id):
     """Doctrina, bloque 2 (§3.3): guarda el ángulo editado a mano de una
@@ -7772,7 +7869,8 @@ def cf_crear_video(cliente):
         if int(info_modelo.get("max_referencias") or 0) == 1:
             primera = next((r["etiqueta"] for r in referencias if r["etiqueta"] not in sobran), "")
             flash(gettext("%(modelo)s solo usa la primera referencia (%(primera)s): no usaría %(sobran)s. "
-                          "Elige Wan 3.0 o Kling O3 Pro para usarlas todas, o deja solo una — no se cobró nada.",
+                          "Elige Wan 3.0, Kling O3 Pro o Seedance 2.5 · varias referencias para usarlas todas, o deja "
+                          "solo una — no se cobró nada.",
                           modelo=nombre_modelo, primera=primera, sobran=", ".join(sobran)), "error")
         else:
             flash(gettext("%(modelo)s usa hasta %(n)s referencias: no usaría %(sobran)s. "
@@ -7972,7 +8070,10 @@ def cf_recuperar(cliente, cf_id):
         max_intentos=1, prioridad=flowplus_lanzar.PRIORIDAD_NORMAL,
     )
     if encolado:
-        flash(gettext("Preguntando a WaveSpeed por el video… si ya terminó, aparece aquí sin pagar de nuevo."), "ok")
+        proveedor = saldo.nombre_proveedor(flowplus_modelos.proveedor_de((entry.get("prediccion") or {}).get("modelo")
+                                                                        or entry.get("modelo")))
+        flash(gettext("Preguntando a %(proveedor)s por el video… si ya terminó, aparece aquí sin pagar de nuevo.",
+                      proveedor=proveedor), "ok")
     else:
         flash(gettext("Ya se estaba recuperando — espera a que termine."), "warn")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))

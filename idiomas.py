@@ -43,6 +43,8 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DIR_TRADUCCIONES = os.path.join(BASE_DIR, "translations")
 IDIOMAS = ("en", "es")
 NOMBRES = {"en": "English", "es": "Español"}
+# Idiomas de las piezas; la interfaz sigue ofreciendo solo IDIOMAS (PND-155, 2026-10-09).
+NOMBRES_PUBLICACION = {**NOMBRES, "pt": "Português", "sv": "Svenska", "no": "Norsk (bokmål)"}
 DEFECTO = "en"
 ACTIVO_PARA_TODOS = True
 COOKIE = "idioma"

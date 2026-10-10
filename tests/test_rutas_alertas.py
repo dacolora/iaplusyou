@@ -388,8 +388,8 @@ def test_toda_alerta_solo_admin_de_las_fuentes_lleva_prefijo_de_admin(app, monke
     for s_ in llaves.SERVICIOS:
         for v in s_["variables"]:
             monkeypatch.delenv(v, raising=False)
-    monkeypatch.setattr(saldo, "vigente", lambda p: {"proveedor": p, "nombre": "WaveSpeed", "desde": "2026-10-01T10:00:00",
-                                                     "recarga": "https://wavespeed.ai/top-up"} if p == "wavespeed" else None)
+    monkeypatch.setattr(saldo, "vigente", lambda p: {"proveedor": p, **saldo.PROVEEDORES[p], "desde": "2026-10-01T10:00:00"}
+                        if p in saldo.PROVEEDORES else None)   # WaveSpeed y fal (PND-213)
 
     def rota(cliente, ahora):
         raise RuntimeError("x")
@@ -403,6 +403,7 @@ def test_toda_alerta_solo_admin_de_las_fuentes_lleva_prefijo_de_admin(app, monke
         assert any(c.startswith(prefijo) for c in de_admin), prefijo
         assert al.es_solo_admin(prefijo + ("x" if prefijo.endswith(":") else ""), [])
     assert not al.es_solo_admin("saldo:wavespeed", lista) and al.es_solo_admin("saldo:wavespeed_recarga", lista)
+    assert not al.es_solo_admin("saldo:fal", lista) and al.es_solo_admin("saldo:fal_recarga", lista)
 
 
 # ---------- la caché se vacía al escribir y cuando cambia el Tablero ----------

@@ -90,6 +90,11 @@ TARIFAS = {
     # Inicial; se ajusta con lo medido en la prueba real.
     "leer_referente": 0.01,
     "sugerir_ia": 0.04,
+    # PND-166, 2026-10-09: estimados iniciales con salidas al tope vigente y
+    # ~10k tokens de entrada equivalentes por llamada (doctrina/visión/catálogo).
+    # Análisis: hasta 2 × (4000 salida + entrada); personas: 6000 salida + entrada.
+    "analizar_referencia": 0.12,
+    "sugerir_personas": 0.08,
     "clasificacion": 0.012,
     # La de siempre + la salida del segundo idioma (~60 tokens más por anuncio,
     # redondeado hacia arriba): un referente global sale en español e inglés
@@ -119,7 +124,11 @@ TARIFAS = {
     # US$ 0,067–0,084; 1 de 4 necesitó la corrección (US$ 0,16 en total, la primera con la caché fría: US$ 0,095);
     # Whisper ≤ US$ 0,0014. Esperado ≈ 0,075 × 1,25 + Whisper; redondeado hacia arriba. Informe:
     # docs/superpowers/evals/2026-10-08-tw-como-mejorarlo.md (PND-179).
-    "analisis_anuncio_tw": 0.10,
+    # Desde el 2026-10-09 el análisis trae además tres ganchos y el copy nuevo para Meta (spec tw-ganchos-y-copy §3.3):
+    # medido 2026-10-09 con ganchos y copy: 0,086–0,111 con la caché caliente (tanda) y 0,131–0,170 con la caché fría
+    # (un clic suelto, media 0,142); se muestra 0,17, lo más caro medido de un clic suelto; en una tanda (caché
+    # caliente) se cobra lo real, menos.
+    "analisis_anuncio_tw": 0.17,
 }
 
 # Evaluación de anuncios de Triple Whale con IA (spec 2026-09-28 §6): una
@@ -430,6 +439,28 @@ def _estimar_analisis_anuncio_tw(segundos=None, **_):
             "una llamada a Claude con visión y la voz con Whisper")
 
 
+# Ganchos de Triple Whale (spec 2026-10-09-tw-ganchos-y-copy §4.1): cada variante es un clip de Kling O3 Pro, imagen
+# a video, de 3 s y sin sonido; armarlo y producirlo es ffmpeg (gratis).
+GANCHO_TW_MODELO = "kling_o3_pro"
+GANCHO_TW_SEGUNDOS = 3
+
+
+def estimar_ganchos_tw(n):
+    """El precio de «Probar los N ganchos»: n × el clip de Kling, la MISMA cuenta en la ruta y en la plantilla. La
+    misma forma que `estimar` (`usd` es el costo). Sin ganchos o sin tarifa, «precio no disponible» (usd None), nunca
+    US$ 0."""
+    try:
+        n = int(n or 0)
+    except (TypeError, ValueError):
+        n = 0
+    uno = estimar("video", modelo=GANCHO_TW_MODELO, duracion=GANCHO_TW_SEGUNDOS, con_sonido=False)["usd"]
+    if n <= 0:
+        return _estimado(None, "sin ganchos que generar")
+    if uno is None:
+        return _estimado(None, f"{SIN_PRECIO}: sin tarifa de Kling O3 Pro")
+    return _estimado(uno * n, f"{n} clip(s) de {GANCHO_TW_SEGUNDOS} s con Kling O3 Pro, imagen a video")
+
+
 _ESTIMADORES = {
     "video": _estimar_video,
     "regeneracion": _estimar_video,
@@ -442,6 +473,8 @@ _ESTIMADORES = {
     "caption_organico": lambda **_: (TARIFAS["caption_organico"], "una llamada a Claude"),
     "adaptar_referente": lambda **_: (TARIFAS["adaptar_referente"], "una llamada corta a Claude"),
     "leer_referente": lambda **_: (TARIFAS["leer_referente"], "una llamada corta a Claude con visión"),
+    "analizar_referencia": lambda **_: (TARIFAS["analizar_referencia"], ""),
+    "sugerir_personas": lambda **_: (TARIFAS["sugerir_personas"], ""),
     "sugerir_ia": lambda **_: (TARIFAS["sugerir_ia"], "una llamada a Claude"),
     "refinar_prompt": lambda **_: (TARIFAS["refinar_prompt"], "un mensaje a Claude"),
     "clasificacion": lambda n=1, bilingue=False, **_: (

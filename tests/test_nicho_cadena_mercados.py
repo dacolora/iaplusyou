@@ -36,7 +36,7 @@ class ApifyFalso:
     def __init__(self):
         self.entradas = []
 
-    def __call__(self, sesion, token, actor, corridas, etapa, avanzar=None, max_simultaneas=5):
+    def __call__(self, sesion, token, actor, corridas, etapa, avanzar=None, max_simultaneas=5, on_ids=None):
         items, registros = [], []
         for indice, c in enumerate(corridas):
             self.entradas.append((actor, c["entrada"]))

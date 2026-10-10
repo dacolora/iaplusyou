@@ -58,6 +58,9 @@ TIPOS_EXENTOS_DE_COBRO = {
     "exp_avanzar_todos": "periódica: avanza derivaciones; lo que produce pasa por su propio freno",
     "meta_publicar": "publica en Meta; no llama a un proveedor que cobra",
     "meta_refrescar": "lee métricas de Meta",
+    "meta_rend_sincronizar": "lee métricas de las cuentas de Meta y las tasas del BCE; no cobra",
+    "meta_rend_sincronizar_todas": "periódica: solo encola meta_rend_sincronizar",
+    "meta_rend_limpiar": "periódica de mantenimiento",
     "organico_publicar": "publica en redes; el texto con IA se cobra en la ruta «Escribir con IA»",
     "sprint_referencia_link": "descarga el link; el análisis con Claude es su propia tarea",
     "sprint_qa_pendientes": "periódica: solo encola sprint_qa_pieza",
@@ -72,6 +75,9 @@ TIPOS_EXENTOS_DE_COBRO = {
     "tienda_sync_pedidos_todas": "periódica: solo encola tienda_sync_pedidos",
     "tw_sincronizar": "lee datos de Triple Whale",
     "tw_sincronizar_todas": "periódica: solo encola tw_sincronizar",
+    "tw_ganchos_preparar": "baja el video y lanza piezas de Crear; cada pieza la cobra flowplus_video",
+    "tw_ganchos_vigilar": "periódica: mueve las variantes de los ganchos; cada clip lo cobra flowplus_video",
+    "tw_gancho_armar": "arma con ffmpeg y el editor un clip ya pagado y el original",
     "salidas_limpiar": "periódica de mantenimiento",
     "cola_limpiar": "periódica de mantenimiento",
     "db_respaldar": "periódica de mantenimiento",
@@ -104,8 +110,9 @@ class Continuar:
     tarjeta sigue viva). Ej.: un video cuya espera se agotó sigue con
     `flowplus_recuperar` (spec 2026-09-28-crear-sin-cola)."""
 
-    def __init__(self, tipo, payload, mensaje=None, ejecutar_desde=None):
+    def __init__(self, tipo, payload, mensaje=None, ejecutar_desde=None, max_intentos=None):
         self.tipo, self.payload, self.mensaje, self.ejecutar_desde = tipo, payload, mensaje, ejecutar_desde
+        self.max_intentos = max_intentos      # None: 1, como siempre (cola.terminar_y_encolar)
 
 
 def ref_sufijo(tarea):
@@ -123,4 +130,4 @@ def cargar_todas():
     """Importa los módulos con tareas reales. Se llama desde worker.main(), no
     al importar el paquete, para que los tests puedan registrar tareas falsas
     sin arrastrar proveedores externos."""
-    from tareas import audios, cadena, cobros, director, doctrina, edicion, experimentos, final_edition, flowplus, hablado, investigacion, mantenimiento, meta, musica, nicho, organico, planes, referentes, sprints, swap, tiendas, triple_whale, voces_propias  # noqa: F401
+    from tareas import audios, cadena, cobros, director, doctrina, edicion, experimentos, final_edition, flowplus, hablado, investigacion, mantenimiento, meta, meta_rendimiento, musica, nicho, organico, planes, referentes, sprints, swap, tiendas, triple_whale, voces_propias  # noqa: F401
