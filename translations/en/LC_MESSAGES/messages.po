@@ -491,6 +491,10 @@ msgid "%(n)s anuncio(s)"
 msgstr "%(n)s ad(s)"
 
 #, python-format
+msgid "%(n)s anuncio(s) de Meta"
+msgstr "%(n)s Meta ad(s)"
+
+#, python-format
 msgid "%(n)s anuncio(s) de Meta no llevan los parámetros de Triple Whale (%(pct)s%% del gasto): sus ventas pueden quedar sin atribuir."
 msgstr "%(n)s Meta ad(s) don't carry the Triple Whale parameters (%(pct)s%% of spend): their sales may go unattributed."
 
@@ -8007,6 +8011,10 @@ msgid "Evaluación lista: %(n)s idea(s) de anuncios nuevos."
 msgstr "Evaluation ready: %(n)s new ad idea(s)."
 
 #, python-format
+msgid "Evaluación lista: %(pasos)s paso(s) en el plan y %(ideas)s idea(s) de anuncios nuevos."
+msgstr "Evaluation ready: %(pasos)s step(s) in the plan and %(ideas)s new ad idea(s)."
+
+#, python-format
 msgid "Evaluando %(n)s anuncio(s) con IA…"
 msgstr "Evaluating %(n)s ad(s) with AI…"
 
@@ -10118,6 +10126,10 @@ msgstr "Currency goes as a 3-letter code (COP, MXN, USD…)."
 
 msgid "La moneda va en código de 3 letras (COP, MXN, USD…); no la guardé."
 msgstr "Currency goes as a 3-letter code (COP, MXN, USD…); I didn't save it."
+
+#, python-format
+msgid "La muestra cambió desde que abriste la pestaña: ahora son %(n)s anuncio(s) por %(precio)s. Revisa y vuelve a confirmar."
+msgstr "The sample changed since you opened the tab: it is now %(n)s ad(s) for %(precio)s. Review and confirm again."
 
 msgid "La paleta, las medidas y los componentes reales de Creatv, en un solo lugar."
 msgstr "Creatv’s palette, dimensions and real components, all in one place."
@@ -13389,6 +13401,9 @@ msgstr "Meta Pixel"
 
 msgid "Pixel sin datos"
 msgstr "Pixel with no data"
+
+msgid "Plan de cambios"
+msgstr "Action plan"
 
 msgid "Plataforma"
 msgstr "Platform"
