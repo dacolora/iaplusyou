@@ -803,3 +803,36 @@ def test_cada_fotograma_de_arranque_tiene_su_propia_clave_al_azar(entorno, monke
     assert len(claves) == 3 and len(set(claves)) == 3
     for clave, f in zip(claves, _filas(entorno)):
         assert re.fullmatch(rf"clientes/acme/triple_whale/ganchos/{f['id']}_[0-9a-f]{{16}}\.jpg", clave)
+
+
+# ------------------------------------------- revisión final (revisor, 2026-10-10): pruebas que faltaban ---
+
+def test_preparar_vuelve_a_acotar_el_fotograma_contra_el_video_medido(entorno, monkeypatch):
+    """Ruling 5: sin la duración al analizar, `fotograma_s` llega sin acotar; preparar lo acota contra el video que
+    midió (20 s): fuera de [0, 19] o sin segundo, la mitad."""
+    t = entorno["t"]
+    f1, f2, f3 = entorno["filas"]
+    with db.conectar() as con:
+        for gid, s in ((f1["id"], 30.0), (f2["id"], None), (f3["id"], 4.2)):
+            con.execute(db.tw_gancho.update().where(db.tw_gancho.c.id == gid).values(fotograma_s=s))
+    recibidos = []
+
+    def _fotograma(ruta, segundo, destino):
+        recibidos.append(segundo)
+        with open(destino, "wb") as f:
+            f.write(b"jpg")
+        return destino
+    monkeypatch.setattr(t, "_fotograma_en", _fotograma)
+    _preparar(entorno)
+    assert recibidos == [10.0, 10.0, 4.2]
+
+
+def test_vigilar_lleva_a_lista_una_final_degradada_con_su_video(entorno):
+    _preparar(entorno)
+    f1 = _filas(entorno)[0]
+    fin = creative_flow.crear_final("acme", f1["cf_id"], "es", "CO")
+    assert datos.mover(f1["id"], "generando", "produciendo", final_id=fin)
+    creative_flow.actualizar_final("acme", fin, estado="degradada", url_video="https://r2.test/final_degradada.mp4")
+    _vigilar(entorno)
+    g1 = datos.gancho("acme", f1["id"])
+    assert g1["estado"] == "lista" and g1["url_final"] == "https://r2.test/final_degradada.mp4"

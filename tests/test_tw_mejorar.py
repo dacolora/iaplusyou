@@ -831,3 +831,14 @@ def test_las_ofertas_nuevas_solo_miran_el_gancho_y_el_copy():
     assert r["cifras_sin_dato"] == []
     assert r["ganchos"][0]["cifras_sin_dato"] == ["garantía"]
     assert r["copy_nuevo"]["cifras_sin_dato"] == ["pengene tilbake"]
+
+
+def test_datos_verificables_no_trae_los_numeros_de_las_etiquetas():
+    """`solo_datos` quita «tendencia de 7 días» y «Gancho (se quedan 3 s)»: el 7 y el 3 son de la plantilla, no del
+    anuncio (revisión del 2026-10-09; prueba que pidió el revisor final, 2026-10-10)."""
+    fila = _fila_real()
+    fila["foto"]["tendencia"] = "cansando"
+    prompt, datos_ = mejorar.armar("Acme", fila), mejorar.datos_verificables("Acme", fila)
+    assert "tendencia de 7 días" in prompt and "(se quedan 3 s)" in prompt
+    assert "7 días" not in datos_ and "(se quedan 3 s)" not in datos_ and "se quedan" not in datos_
+    assert "tendencia: cansando" in datos_ and "- gancho: " in datos_
