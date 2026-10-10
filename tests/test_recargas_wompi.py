@@ -908,3 +908,23 @@ def test_lo_que_no_cuadra_o_no_esta_aprobado_no_se_anota(entorno):
     entorno["txs"]["1292-1602113476-20000"] = _tx("cv-otra-1", tx_id="1292-1602113476-20000")
     entorno["recargas"].consultar(rid, "1292-1602113476-20000")
     assert _visto(entorno["db"], rid) is None
+
+
+def test_el_aviso_del_aprobado_sin_evento_pide_confirmar_en_el_panel_de_wompi(entorno, monkeypatch):
+    """R3: el aviso nunca da el pago por confirmado: pide buscarlo en el panel de Wompi de Creatv antes de
+    acreditar a mano."""
+    db, recargas = entorno["db"], entorno["recargas"]
+    from cobros import avisos
+    textos = []
+    monkeypatch.setattr(avisos, "admin", lambda tipo, asunto, cuerpo, cliente="": textos.append((asunto(), cuerpo())))
+    rid, ref = _pendiente(entorno)
+    entorno["txs"]["1292-1602113476-10985"] = _tx(ref)
+    recargas.consultar(rid, "1292-1602113476-10985")
+    hace = (datetime.now() - timedelta(minutes=31)).isoformat(timespec="seconds")
+    with db.conectar() as con:
+        con.execute(db.kv.update().where(db.kv.c.clave == f"wompi:visto:{rid}")
+                    .values(valor=json.dumps({"tx": "1292-1602113476-10985", "visto_en": hace})))
+    recargas.avisar_vistos_sin_evento()
+    ((asunto, cuerpo),) = textos
+    assert "NO confirma el pago" in cuerpo and "panel de Wompi de Creatv" in cuerpo and "nuestro comercio" in cuerpo
+    assert "revísala en el panel de Wompi" in asunto and "dice aprobado" not in asunto

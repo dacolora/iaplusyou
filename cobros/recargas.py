@@ -917,12 +917,14 @@ def avisar_vistos_sin_evento():
         cliente, referencia = fila["cliente"], fila["referencia"]
         avisos.admin(
             "wompi_sin_evento",
-            lambda cliente=cliente: gettext("Wompi dice aprobado pero no llegó su evento (%(cliente)s)",
-                                            cliente=cliente),
+            lambda cliente=cliente: gettext("Una recarga de %(cliente)s figura aprobada en la vuelta y no llegó "
+                                            "su evento: revísala en el panel de Wompi", cliente=cliente),
             lambda cliente=cliente, referencia=referencia, tx_id=tx_id: gettext(
-                "La vuelta del pago de la recarga «%(ref)s» de %(cliente)s vio la transacción %(tx)s APROBADA en "
-                "Wompi, pero su evento firmado no llegó en 30 minutos y no se acreditó. Revisa la URL de eventos en "
-                "el panel de Wompi o acredita a mano.", ref=referencia, cliente=cliente, tx=tx_id),
+                "La página de vuelta de la recarga «%(ref)s» de %(cliente)s consultó la transacción %(tx)s (el id "
+                "lo trajo el navegador) y Wompi la dio por aprobada, pero su evento firmado no llegó en 30 minutos "
+                "y no se acreditó. Esto NO confirma el pago: antes de acreditar a mano, búscala en el panel de "
+                "Wompi de Creatv y confirma que es de nuestro comercio, con esa referencia y ese monto. Si está, "
+                "revisa también la URL de eventos.", ref=referencia, cliente=cliente, tx=tx_id),
             cliente=cliente)
         n += 1
     return n

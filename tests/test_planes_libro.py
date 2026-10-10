@@ -811,3 +811,46 @@ def test_el_lote_de_un_periodo_terminado_no_cuenta_dos_veces(base_temporal, libr
     with pytest.raises(libro.SaldoInsuficiente) as e:
         libro.exigir("acme", 2.0, job_id="v2")                       # a la carta: 4 000
     assert e.value.disponible == 2_000                               # 12 000 − 4 000 del lote − 6 000 que vencen
+
+
+# ----------------- R1 / R4 (re-revisión 2, 2026-10-10): el orden inverso y el chip ---
+
+def _terminar_tarea(db, job_id):
+    with db.conectar() as con:
+        con.execute(db.tarea.update().where(db.tarea.c.job_id == job_id).values(estado="hecha"))
+
+
+def test_orden_inverso_no_deja_el_saldo_negativo_y_respeta_lo_incluido(base_temporal, libro, sin_avisos):
+    """g0 reservado incluido, g1 pagado. g1 termina primero: no puede quedarse con el tope de g0 (cuenta su
+    reserva incluida); g2 ya no cabe ni tiene saldo; g0 termina incluido, como se vio."""
+    import gastos
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    _abrir(base_temporal, libro, tope=0.20, credito=0)
+    _acreditar(base_temporal, libro, 163)
+    _tarea_viva(base_temporal, "g0")
+    assert libro.exigir("acme", 0.13, job_id="g0", tipo="guion") == 0
+    _tarea_viva(base_temporal, "g1")
+    assert libro.exigir("acme", 0.13, job_id="g1", tipo="guion") == 163
+    with libro.en_trabajo(2, "g1"):
+        gastos.registrar("acme", "guion", 0.13, "guion:1:t2")
+    _terminar_tarea(base_temporal, "g1")
+    assert [(m.tipo, m.milesimas) for m in _movs(base_temporal) if m.job_id == "g1"] == [("cobro", -163)]
+    _tarea_viva(base_temporal, "g2")
+    with pytest.raises(libro.SaldoInsuficiente):
+        libro.exigir("acme", 0.13, job_id="g2", tipo="guion")
+    with libro.en_trabajo(1, "g0"):
+        gastos.registrar("acme", "guion", 0.13, "guion:0:t1")
+    assert [(m.tipo, m.milesimas) for m in _movs(base_temporal) if m.job_id == "g0"] == [("incluido", 0)]
+    assert libro.saldo("acme") == 0
+
+
+def test_el_chip_no_muestra_lo_que_va_a_vencer(base_temporal, libro, sin_avisos):
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    viejo = _abrir(base_temporal, libro, credito=10_000)
+    _acreditar(base_temporal, libro, 2_000)
+    _terminar_periodo(base_temporal, viejo)
+    _abrir(base_temporal, libro, inicio=_iso(datetime.now() - timedelta(seconds=1)), credito=5_000,
+           suscripcion_id=2)
+    assert libro.disponible("acme") == 7_000
+    e = libro.estado("acme")
+    assert (e["saldo"], e["disponible"]) == (17_000, 7_000)

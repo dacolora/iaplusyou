@@ -237,6 +237,11 @@ def actual():
     try:
         valor, desde, hasta = _pedir()
     except _Falla as e:
+        if previa:
+            # Hay una tasa de hoy rechazada por la banda sin resolver (R2): la aceptada vieja no vale como
+            # respaldo; no se cobra hasta que el admin la acepte o una lectura nueva pase la banda.
+            log.warning("TRM: datos.gov.co falló (%s) y hay una tasa rechazada sin aceptar; no se cobra", e)
+            raise SinTasa(gettext("No pudimos leer la tasa de cambio; intenta en unos minutos")) from None
         if reciente and _vigente(guardada["vigencia_hasta"]):
             log.warning("TRM: datos.gov.co falló (%s); uso la guardada", e)
             return guardada["valor"]

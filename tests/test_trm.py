@@ -277,3 +277,19 @@ def test_si_la_de_hoy_vuelve_a_la_banda_se_borra_la_rechazada(trm):
     trm.reloj["t"] += 3601
     trm.respuesta["r"] = _Respuesta(200, _fila("3250.00"))
     assert trm.actual() == 3250.0 and trm.rechazada() is None
+
+
+
+def test_con_una_rechazada_pendiente_y_datos_gov_caido_no_se_usa_la_vieja(trm):
+    """R2: pasada la hora de la rechazada, si datos.gov.co no responde, la aceptada vieja no vale: sin cobro
+    hasta que el admin acepte la de hoy o una lectura nueva pase la banda."""
+    assert trm.actual() == 3218.75
+    trm.reloj["t"] = T0 + 7 * 3600
+    trm.respuesta["r"] = _Respuesta(200, _fila("3600.00"))
+    with pytest.raises(trm.SinTasa):
+        trm.actual()
+    trm.reloj["t"] += 3601
+    trm.respuesta["r"] = requests_real.ConnectionError("caído")
+    with pytest.raises(trm.SinTasa):
+        trm.actual()
+    assert trm.rechazada()["valor"] == 3600.0

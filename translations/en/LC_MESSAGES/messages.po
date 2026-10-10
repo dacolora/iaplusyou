@@ -10157,6 +10157,10 @@ msgstr "The post was interrupted before it finished; check the platform before r
 msgid "La página de Notion está vacía."
 msgstr "The Notion page is empty."
 
+#, python-format
+msgid "La página de vuelta de la recarga «%(ref)s» de %(cliente)s consultó la transacción %(tx)s (el id lo trajo el navegador) y Wompi la dio por aprobada, pero su evento firmado no llegó en 30 minutos y no se acreditó. Esto NO confirma el pago: antes de acreditar a mano, búscala en el panel de Wompi de Creatv y confirma que es de nuestro comercio, con esa referencia y ese monto. Si está, revisa también la URL de eventos."
+msgstr "The return page of top-up «%(ref)s» for %(cliente)s looked up transaction %(tx)s (the id came from the browser) and Wompi reported it as approved, but its signed event did not arrive within 30 minutes and nothing was credited. This does NOT confirm the payment: before crediting by hand, find it in Creatv's Wompi dashboard and confirm it belongs to our merchant, with that reference and that amount. If it's there, also check the events URL."
+
 msgid "La página es demasiado larga (más de 3000 bloques)."
 msgstr "The page is too long (more than 3000 blocks)."
 
@@ -10295,10 +10299,6 @@ msgstr "The voice adjusts itself to each country: you can move it or delete it, 
 
 msgid "La voz todavía no tiene una respuesta del proveedor; no se vuelve a cobrar."
 msgstr "The voice has no response from the provider yet; you will not be charged again."
-
-#, python-format
-msgid "La vuelta del pago de la recarga «%(ref)s» de %(cliente)s vio la transacción %(tx)s APROBADA en Wompi, pero su evento firmado no llegó en 30 minutos y no se acreditó. Revisa la URL de eventos en el panel de Wompi o acredita a mano."
-msgstr "The payment return page for top-up «%(ref)s» of %(cliente)s saw transaction %(tx)s APPROVED in Wompi, but its signed event did not arrive within 30 minutes and nothing was credited. Check the events URL in the Wompi dashboard or credit it manually."
 
 #, python-format
 msgid "La última copia de %(tienda)s falló: %(error)s"
@@ -17631,6 +17631,10 @@ msgid "Una por línea; por ejemplo, los diálogos exactos del guion. Claude no l
 msgstr "One per line; for example, the exact dialogue lines from the script. Claude can't touch them."
 
 #, python-format
+msgid "Una recarga de %(cliente)s figura aprobada en la vuelta y no llegó su evento: revísala en el panel de Wompi"
+msgstr "A top-up for %(cliente)s shows as approved on the return page and its event did not arrive: check it in the Wompi dashboard"
+
+#, python-format
 msgid "Una recarga de %(monto)s con %(pasarela)s sigue pendiente. Si ya pagaste, se acredita sola en unos minutos; si no, genera un link nuevo en Configuración › Saldo y recargas."
 msgstr "A %(monto)s top-up with %(pasarela)s is still pending. If you already paid, it is credited on its own in a few minutes; if not, create a new link in Settings › Balance and top-ups."
 
@@ -18322,10 +18326,6 @@ msgstr "Wompi approved a second payment for a top-up for %(cliente)s"
 
 msgid "Wompi confirmó el cobro: el pago quedó aprobado y el plan, al día."
 msgstr "Wompi confirmed the charge: the payment is approved and the plan is up to date."
-
-#, python-format
-msgid "Wompi dice aprobado pero no llegó su evento (%(cliente)s)"
-msgstr "Wompi says approved but its event did not arrive (%(cliente)s)"
 
 msgid "Wompi dice que esa referencia de pago ya se usó"
 msgstr "Wompi says that payment reference was already used"

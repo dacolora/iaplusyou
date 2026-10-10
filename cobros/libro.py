@@ -274,21 +274,29 @@ def reservado(cliente):
 
 
 def disponible(cliente):
+    """Saldo − reservado − lo que vencerá de periodos terminados sin cerrar: lo mismo que deja gastar el freno
+    (R4, 2026-10-10)."""
     with db.conectar() as con:
-        return _saldo(con, cliente) - _reservado(con, cliente)
+        por_cerrar = []
+        _cuenta_y_periodo(con, cliente, por_cerrar)
+        return _saldo(con, cliente) - _reservado(con, cliente) - _por_vencer(con, cliente, por_cerrar)
 
 
 def estado(cliente, siempre=False):
     """La cuenta con su saldo, lo reservado y el disponible, en UNA conexión
     (el chip de la barra lateral y el panel del saldo). Solo lee. Si el
     proyecto no cobra, no suma el libro salvo con `siempre` (el admin mira el
-    panel de un proyecto apagado)."""
+    panel de un proyecto apagado). El disponible descuenta, como el freno, lo
+    que vencerá de periodos terminados sin cerrar (R4): el chip nunca muestra
+    más de lo que se puede gastar."""
     with db.conectar() as con:
-        c = _cuenta(con, cliente)
+        por_cerrar = []
+        c = _cuenta_y_periodo(con, cliente, por_cerrar)[0]
         if not (c["cobrar"] or siempre):
             return {**c, "saldo": 0, "reservado": 0, "disponible": 0}
         s, r = _saldo(con, cliente), _reservado(con, cliente)
-    return {**c, "saldo": s, "reservado": r, "disponible": s - r}
+        d = s - r - _por_vencer(con, cliente, por_cerrar)
+    return {**c, "saldo": s, "reservado": r, "disponible": d}
 
 
 # ------------------------------------------------------------ freno previo ---
@@ -514,7 +522,11 @@ def cobrar_gasto(con, gasto_id, cliente, usd, tipo, entregado=True, nuevo=True):
         incluido = periodo_res is not None and planes.cabe_incluido(
             planes.incluido_usado(cliente, periodo_res, con=con), usd, periodo_res)
     elif periodo is not None and periodo_id == periodo["id"] and tipo in planes.TIPOS_INCLUIDOS:
-        incluido = planes.cabe_incluido(planes.incluido_usado(cliente, periodo, con=con), usd, periodo)
+        # Lo incluido reservado por OTROS trabajos vivos también ocupa el tope (R1): si no, este gasto se quedaba
+        # con el lugar que otro ya vio como incluido, y ese otro se cobraba después sin saldo.
+        usado = (planes.incluido_usado(cliente, periodo, con=con)
+                 + _incluido_reservado(con, cliente, periodo["id"], excluir=(ctx.get("job_id"),)))
+        incluido = planes.cabe_incluido(usado, usd, periodo)
     if incluido:
         _insertar(con, tipo="incluido", milesimas=0,
                   extra={"precio": precio, "costo": _costo(usd), "margen": margen, **del_periodo}, **comunes)
