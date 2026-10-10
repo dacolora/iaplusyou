@@ -532,9 +532,9 @@ def chip(cliente, es_admin):
 # ------------------------------------------------------------ /admin/cobros ---
 
 DIAS_WEBHOOK = 7
-# Entra plata: recargas (Bold, Wompi, manuales) menos sus anulaciones, y el crédito de cada periodo de plan (planes
-# 7/8: lo pagó con Wompi o por transferencia). Los ajustes no cuentan.
-TIPOS_RECARGADO = ("recarga", "anulacion", "plan")
+# Entra plata: recargas (Bold, Wompi, manuales) menos sus anulaciones. Los ajustes no cuentan. El crédito de un periodo
+# de plan (`plan`) cuenta aparte y en CAJA (`_caja_plan`): un anual acredita 12 meses de bolsa por el precio anual.
+TIPOS_RECARGADO = ("recarga", "anulacion")
 # Lo que le cuesta a Creatv: lo que se intentó cobrar y lo que el plan regaló (`incluido`, planes 7/8).
 TIPOS_CON_COSTO = ("cobro", "no_cobrado", "incluido")
 RESULTADOS_EVENTO = {
@@ -554,6 +554,16 @@ def _abiertos(p, ahora):
     return sa.and_(p.c.cerrado == sa.false(), p.c.inicio <= ahora, p.c.fin > ahora)
 
 
+def _caja_plan(pp, credito):
+    """Lo que de verdad entró por UN periodo de plan, en milésimas (expresión SQL sobre el `pago_plan` que lo
+    cubre): su `usd` repartido entre los meses que paga (12 un anual, 1 un mensual); 0 si Wompi anuló el pago (la
+    plata volvió al cliente); sin pago, el crédito (`credito`). Planes 7/8, revisión 1: un anual acredita 12 bolsas
+    de US$ 1 000 por US$ 10 000, y contar el crédito como plata entrada inflaba recargado y ganancia."""
+    meses = sa.case((pp.c.ciclo == "anual", 12.0), else_=1.0)
+    return sa.case((pp.c.id.is_(None), credito), (pp.c.estado == "anulado", 0),
+                   else_=pp.c.usd * 1000.0 / meses)
+
+
 def resumen_admin(ahora_iso=None):
     """Una fila por proyecto para /admin/cobros (spec §10), en milésimas: los
     proyectos de `estado.listar_clientes()` (los del panel) más los que tengan
@@ -563,7 +573,8 @@ def resumen_admin(ahora_iso=None):
     Las cifras del mes van por la fecha del GASTO, como Configuración › Gasto
     del cliente (`resumen_mes_cobrado`):
     - `recargado_mes`: recargas (Bold, Wompi y manuales) menos sus anulaciones
-      del mes, más el crédito de los periodos de plan abiertos en el mes; los
+      del mes, más la CAJA de los periodos de plan acreditados en el mes
+      (`_caja_plan`: el precio pagado entre sus meses; 0 si se anuló); los
       ajustes no cuentan (no entra plata).
     - `cobrado_mes`: cobros menos reversos de los gastos del mes.
     - `costo_mes`: lo que costaron los gastos del mes que pasaron por el libro
@@ -572,15 +583,19 @@ def resumen_admin(ahora_iso=None):
       gasto de antes de prender «Cobrar» no tiene fila en el libro y no entra.
     - `vencido_mes`: el saldo del plan que venció sin usarse en el mes (el
       cliente lo pagó y no lo gastó: es de Creatv).
-    - `ganancia_mes = cobrado_mes + vencido_mes − costo_mes`: un cobro
-      revertido o una pieza no cobrada aporta 0 cobrado y su costo entero como
-      pérdida; lo incluido, solo su costo.
+    - `descuento_plan_mes`: crédito de plan del mes − su caja (lo que la bolsa
+      regala sobre lo pagado: 1/6 en el anual de 10 000 por 12 × 1 000; el
+      crédito entero si el pago se anuló).
+    - `ganancia_mes = cobrado_mes + vencido_mes − costo_mes − descuento_plan_mes`:
+      un cobro revertido o una pieza no cobrada aporta 0 cobrado y su costo
+      entero como pérdida; lo incluido, solo su costo; la bolsa de un pago
+      anulado que vence no es ganancia (su descuento la anula).
     - `margen`: el que se cobra hoy: con un periodo de plan abierto, el de
       miembro del periodo (`margen_plan`); si no, el propio o el global."""
     import estado as estado_mod  # noqa: PLC0415 — estado importa media app; solo lo usa el admin
     hasta = gastos._ahora(ahora_iso)
     desde = gastos._inicio_mes(hasta)
-    m, g, r, p = db.movimiento_saldo, db.gasto, db.reserva_saldo, db.periodo_plan
+    m, g, r, p, pp = db.movimiento_saldo, db.gasto, db.reserva_saldo, db.periodo_plan, db.pago_plan
     suma = sa.func.coalesce(sa.func.sum(m.c.milesimas), 0)
     del_mes = sa.and_(g.c.creado_en >= desde, g.c.creado_en <= hasta)
 
@@ -599,6 +614,12 @@ def resumen_admin(ahora_iso=None):
                 .where(m.c.tipo.in_(TIPOS_RECARGADO + ("vencimiento",)), m.c.creado_en >= desde,
                        m.c.creado_en <= hasta).group_by(m.c.cliente)):
             recargado[c], vencido[c] = entro, vence
+        plan_credito, plan_caja = {}, {}
+        for c, credito, caja in con.execute(
+                sa.select(m.c.cliente, suma, sa.func.coalesce(sa.func.sum(_caja_plan(pp, m.c.milesimas)), 0))
+                .select_from(m.join(p, p.c.id == m.c.periodo_id).outerjoin(pp, pp.c.id == p.c.pago_id))
+                .where(m.c.tipo == "plan", m.c.creado_en >= desde, m.c.creado_en <= hasta).group_by(m.c.cliente)):
+            plan_credito[c], plan_caja[c] = int(credito or 0), int(round(float(caja or 0)))
         cobrado = _por_cliente(con, sa.select(m.c.cliente, -suma).select_from(m.join(g, g.c.id == m.c.gasto_id))
                                .where(m.c.tipo.in_(TIPOS_COBRADOS), del_mes).group_by(m.c.cliente))
         costo = _por_cliente(con, sa.select(m.c.cliente, sa.func.coalesce(sa.func.sum(g.c.usd), 0))
@@ -614,6 +635,8 @@ def resumen_admin(ahora_iso=None):
         cobrado_mes = int(cobrado.get(c) or 0)
         costo_mes = int(round(float(costo.get(c) or 0) * 1000))
         vencido_mes = -int(vencido.get(c) or 0)
+        caja = plan_caja.get(c, 0)
+        descuento = plan_credito.get(c, 0) - caja
         propio = float(cta.margen) if cta is not None and cta.margen is not None else None
         plan_m = float(margen_plan[c]) if margen_plan.get(c) is not None else None
         filas.append({
@@ -623,9 +646,9 @@ def resumen_admin(ahora_iso=None):
             "margen_plan": plan_m,
             "umbral": int(cta.umbral_aviso) if cta else libro.UMBRAL_DEFECTO,
             "saldo": saldo, "disponible": saldo - int(reservas.get(c) or 0),
-            "recargado_mes": int(recargado.get(c) or 0), "cobrado_mes": cobrado_mes,
-            "costo_mes": costo_mes, "vencido_mes": vencido_mes,
-            "ganancia_mes": cobrado_mes + vencido_mes - costo_mes,
+            "recargado_mes": int(recargado.get(c) or 0) + caja, "cobrado_mes": cobrado_mes,
+            "costo_mes": costo_mes, "vencido_mes": vencido_mes, "descuento_plan_mes": descuento,
+            "ganancia_mes": cobrado_mes + vencido_mes - costo_mes - descuento,
         })
     return filas
 
@@ -641,7 +664,8 @@ def planes_admin(ahora_iso=None):
     {suscripcion…, periodo, bolsa_*, incluido_*, *_periodo, pendientes}}}. La
     ganancia del periodo es lo cobrado en el periodo (cobros − reversos, por la
     fecha del movimiento) − el costo de lo cobrado, lo no cobrado y lo
-    incluido."""
+    incluido − el descuento del plan (crédito − caja, `_caja_plan`: en un
+    anual, la bolsa del mes sobre la doceava parte de lo pagado)."""
     from cobros import planes  # noqa: PLC0415
     ahora = gastos._ahora(ahora_iso)
     s, p, m, g, pp = db.suscripcion, db.periodo_plan, db.movimiento_saldo, db.gasto, db.pago_plan
@@ -659,7 +683,9 @@ def planes_admin(ahora_iso=None):
         lista = [planes._plan_dict(f) for f in con.execute(sa.select(db.plan).order_by(db.plan.c.orden, db.plan.c.id))]
         vivas = [planes._sus_dict(f) for f in con.execute(sa.select(s).where(s.c.estado != "terminada")
                                                            .order_by(s.c.id))]
-        periodos = {int(f.suscripcion_id): f for f in con.execute(sa.select(p).where(_abiertos(p, ahora)))}
+        periodos = {int(f.suscripcion_id): f for f in con.execute(
+            sa.select(p, _caja_plan(pp, p.c.credito_milesimas).label("caja"))
+            .select_from(p.outerjoin(pp, pp.c.id == p.c.pago_id)).where(_abiertos(p, ahora)))}
         sumas = {int(f[0]): f for f in con.execute(
             sa.select(p.c.id,
                       suma(m.c.tipo == "cobro", m.c.milesimas),
@@ -675,12 +701,17 @@ def planes_admin(ahora_iso=None):
     for pl in lista:
         pl["suscripciones"] = 0
     por_cliente = {}
-    en_vuelo = (datetime.fromisoformat(db.ahora()) - planes.EN_VUELO).isoformat(timespec="seconds")
+    real = datetime.fromisoformat(db.ahora())
+    en_vuelo = (real - planes.EN_VUELO).isoformat(timespec="seconds")
+    reciente = (real - planes.ESPERA_NO_COBRADO).isoformat(timespec="seconds")
     for pago in pendientes:
         fila = por_cliente.setdefault(pago["cliente"], {"suscripcion": None, "periodo": None, "pendientes": []})
         fila["pendientes"].append({
             **{k: pago[k] for k in ("id", "referencia", "usd", "ciclo", "creado_en", "transaccion_id")},
             "en_vuelo": bool(pago["actualizado_en"]) and pago["actualizado_en"] > en_vuelo,
+            # «No se cobró» solo pasada la espera (planes.ESPERA_NO_COBRADO) y sin transacción que consultar.
+            "puede_no_cobrado": not pago["transaccion_id"] and not (bool(pago["actualizado_en"])
+                                                                      and pago["actualizado_en"] > reciente),
             "no_salio": pago["motivo"] == planes.MOTIVO_NO_SALIO})
     for sus in vivas:
         plan_ = por_plan.get(sus["plan_id"])
@@ -710,12 +741,14 @@ def planes_admin(ahora_iso=None):
         gastado = -(int(cobros_) + int(reversos_bolsa))
         cobrado = -(int(cobros_) + int(reversos))
         costo_m = int(round(float(costo or 0) * 1000))
+        descuento = credito - int(round(float(per.caja or 0)))
         fila.update({
             "periodo": {"id": int(per.id), "inicio": per.inicio, "fin": per.fin, "margen": float(per.margen),
                         "tope_incluido_usd": float(per.tope_incluido_usd)},
             "bolsa_credito": credito, "bolsa_restante": max(0, credito - gastado),
             "incluido_usado_usd": float(incluido or 0), "tope_incluido_usd": float(per.tope_incluido_usd),
-            "cobrado_periodo": cobrado, "costo_periodo": costo_m, "ganancia_periodo": cobrado - costo_m,
+            "cobrado_periodo": cobrado, "costo_periodo": costo_m, "descuento_periodo": descuento,
+            "ganancia_periodo": cobrado - costo_m - descuento,
         })
     return {"planes": lista, "por_cliente": por_cliente}
 

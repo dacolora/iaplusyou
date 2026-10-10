@@ -922,7 +922,7 @@ def admin_plan_editar(plan_id):
         flash(str(e), "error")
         return _volver_planes(f"plan-{plan_id}")
     flash(gettext("Plan guardado. Quien ya está suscrito sigue con el precio que aceptó; el margen y el tope "
-                  "valen desde su próximo periodo."), "ok")
+                  "valen desde su próximo periodo (en un plan anual, desde su próximo pago)."), "ok")
     return _volver_planes(f"plan-{plan_id}")
 
 
@@ -1028,6 +1028,9 @@ _RESUELTO = {
     "aprobado_sin_suscripcion": idiomas.N_("Wompi lo aprobó, pero la suscripción ya terminó: no se acreditó nada. "
                                    "Devuélvelo en Wompi o activa el plan a mano."),
     "ya_aplicada": idiomas.N_("Ese pago ya estaba resuelto: no cambió nada."),
+    "aprobado_tras_final": idiomas.N_("Wompi dice que ese cobro se aprobó, pero el pago ya estaba cerrado (rechazado, "
+                                      "con error o anulado): no se acreditó nada. Míralo en el panel de Wompi y "
+                                      "devuélvelo si se cobró de más."),
 }
 
 

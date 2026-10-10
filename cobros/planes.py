@@ -173,6 +173,9 @@ EN_VUELO = timedelta(minutes=2)
 # creó transacción). Ese se puede reenviar con su referencia mientras la suscripción siga viva; si se canceló, se
 # da por no cobrado. Un pendiente sin la marca es incierto (pudo cobrar): después de cancelar nunca se reenvía.
 MOTIVO_NO_SALIO = "no_salio"
+# Planes 7/8, revisión 1: el admin solo puede dar un pago pendiente por «no se cobró» pasada media hora desde el
+# último intento (un reintento o una respuesta lenta de Wompi pueden tardar más que el «en vuelo» de 2 min).
+ESPERA_NO_COBRADO = timedelta(minutes=30)
 AVISO_ANTES = timedelta(days=3)
 FRACCION_AVISO_BOLSA = 0.8
 CLAVE_ACEPTACION = "planes:aceptacion:{suscripcion}"
@@ -1135,7 +1138,8 @@ def resolver_pendiente(cliente, pago_id, cobrado, usuario, transaccion_id=None, 
       transacción con esa referencia), con nota: el pago pasa a `error` como un
       fallo definitivo de Wompi (`_fallo`: el primero termina la suscripción;
       una renovación queda morosa con su reintento). Se niega si el pago tiene
-      transacción (hay que consultarla) o si va en camino (`EN_VUELO`).
+      transacción (hay que consultarla) o si su último intento fue hace menos
+      de `ESPERA_NO_COBRADO` (30 min).
 
     Devuelve la palabra de `aplicar_transaccion` / `_aplicar_estado`. Lanza
     `ErrorPlan` en palabras."""
@@ -1180,6 +1184,9 @@ def resolver_pendiente(cliente, pago_id, cobrado, usuario, transaccion_id=None, 
         raise ErrorPlan(gettext("Escribe una nota: cómo supiste que no se cobró"))
     if pago["transaccion_id"]:
         raise ErrorPlan(gettext("Este pago tiene una transacción en Wompi: consúltala con «Sí se cobró»"))
+    if pago["actualizado_en"] and pago["actualizado_en"] > _iso(_dt(real) - ESPERA_NO_COBRADO):
+        raise ErrorPlan(gettext("«No se cobró» se puede marcar 30 minutos después del último intento de cobro; "
+                                "antes, Wompi todavía puede responder"))
     import idiomas  # noqa: PLC0415
     with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
         motivo = gettext("No se cobró (lo revisó un administrador)")   # lo ve el cliente en su historial

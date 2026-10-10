@@ -5954,8 +5954,8 @@ msgstr "The member markup must be between 1.00 and 5.00"
 msgid "El margen va de %(min)s a %(max)s."
 msgstr "The markup ranges from %(min)s to %(max)s."
 
-msgid "El margen y el tope valen desde el próximo periodo de cada suscripción: el periodo en curso guarda los suyos."
-msgstr "The markup and the cap apply from the next period of each subscription: the current period keeps its own."
+msgid "El margen y el tope valen desde el próximo periodo de cada suscripción mensual: el periodo en curso guarda los suyos. En una anual, desde su próximo pago: sus doce meses copian la foto del primero."
+msgstr "The markup and the cap apply from the next period of each monthly subscription: the current period keeps its own. On a yearly one, from its next payment: its twelve months copy the snapshot of the first."
 
 msgid "El material de cerca, un giro que muestra la forma completa y un cierre de lucimiento sobre el producto."
 msgstr "The material up close, a turn that shows the whole shape and a hero close on the product."
@@ -13411,8 +13411,8 @@ msgstr "Plan for %(proyecto)s canceled: it does not renew and lasts until %(fech
 msgid "Plan de %(proyecto)s terminado: el saldo del plan que quedaba venció y desde ahora genera a la carta."
 msgstr "Plan for %(proyecto)s ended: the remaining plan balance expired and from now on it generates pay-as-you-go."
 
-msgid "Plan guardado. Quien ya está suscrito sigue con el precio que aceptó; el margen y el tope valen desde su próximo periodo."
-msgstr "Plan saved. Anyone already subscribed keeps the price they accepted; the markup and the cap apply from their next period."
+msgid "Plan guardado. Quien ya está suscrito sigue con el precio que aceptó; el margen y el tope valen desde su próximo periodo (en un plan anual, desde su próximo pago)."
+msgstr "Plan saved. Anyone already subscribed keeps the price they accepted; the markup and the cap apply from their next period (on a yearly plan, from their next payment)."
 
 msgid "Planes"
 msgstr "Plans"
@@ -16466,6 +16466,9 @@ msgstr "Connected stores"
 msgid "Tiendas de %(pais)s"
 msgstr "Stores in %(pais)s"
 
+msgid "Tiene transacción en Wompi: se resuelve consultándola, no a mano."
+msgstr "It has a Wompi transaction: it is resolved by checking it, not by hand."
+
 msgid "Tienes cambios sin guardar en esta ficha. ¿Cerrarla igual?"
 msgstr "You have unsaved changes here. Close the details anyway?"
 
@@ -18239,6 +18242,9 @@ msgstr "Wompi confirmed the charge: the payment is approved and the plan is up t
 
 msgid "Wompi dice que esa referencia de pago ya se usó"
 msgstr "Wompi says that payment reference was already used"
+
+msgid "Wompi dice que ese cobro se aprobó, pero el pago ya estaba cerrado (rechazado, con error o anulado): no se acreditó nada. Míralo en el panel de Wompi y devuélvelo si se cobró de más."
+msgstr "Wompi says that charge was approved, but the payment was already closed (declined, with an error or voided): nothing was credited. Check it in the Wompi dashboard and refund it if it was overcharged."
 
 msgid "Wompi dice que ese cobro se rechazó: quedó como rechazado."
 msgstr "Wompi says that charge was declined: it is marked as declined."
@@ -21563,6 +21569,12 @@ msgstr "“How they move” is over 500 characters."
 
 msgid "«Editar y crear otra» todavía no sirve para un anuncio hablado: haz otra pieza en Crear › Anuncio hablado."
 msgstr "“Edit and create another one from this” doesn't work for a talking ad yet: make another piece in Create › Talking ad."
+
+msgid "«No se cobró» se habilita 30 minutos después del último intento de cobro."
+msgstr "“Not charged” becomes available 30 minutes after the last charge attempt."
+
+msgid "«No se cobró» se puede marcar 30 minutos después del último intento de cobro; antes, Wompi todavía puede responder"
+msgstr "“Not charged” can be marked 30 minutes after the last charge attempt; before that, Wompi may still answer"
 
 msgid "«Sí se cobró» consulta la transacción en Wompi y aplica lo que diga: nunca acredita sin que Wompi lo confirme. «No se cobró» solo si viste en el panel de Wompi que no hay ninguna transacción con esta referencia: cuenta como un cobro fallido (en el alta termina la suscripción; en una renovación queda morosa y se reintenta)."
 msgstr "“It was charged” checks the transaction in Wompi and applies what it says: it never credits without Wompi confirming. “Not charged” only if you saw in the Wompi dashboard that there is no transaction with this reference: it counts as a failed charge (on sign-up it ends the subscription; on a renewal it becomes past due and is retried)."

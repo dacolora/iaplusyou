@@ -600,3 +600,119 @@ def test_avisos_de_configuracion_de_wompi(http, monkeypatch):
     assert 'id="aviso-wompi-pruebas-servidor"' not in html and 'id="aviso-wompi-llaves"' not in html
     for v in valores.values():
         assert v not in html
+
+
+# --- revisión 1: el anual en caja, la espera de «no se cobró», la renovación ----------------
+
+def _hace(minutos):
+    from datetime import datetime, timedelta
+
+    import db
+    return (datetime.fromisoformat(db.ahora()) - timedelta(minutes=minutos)).isoformat(timespec="seconds")
+
+
+def test_un_anual_sin_usar_gana_la_doceava_parte_y_recarga_en_caja(entorno, pro):
+    from cobros import planes, vista
+    _cobrar()
+    planes.activar_manual("acme", pro, "anual", "admin")             # US$ 10 000 por 12 bolsas de US$ 1 000
+    a = {f["cliente"]: f for f in vista.resumen_admin()}["acme"]
+    assert a["recargado_mes"] == 833_333                              # 10 000 / 12, no los 1 000 de la bolsa
+    assert a["descuento_plan_mes"] == 166_667
+    assert vista.planes_admin()["por_cliente"]["acme"]["ganancia_periodo"] == -166_667
+    planes.terminar_ya("acme", "admin", nota="prueba")                # la bolsa entera vence sin usarse
+    a = {f["cliente"]: f for f in vista.resumen_admin()}["acme"]
+    assert a["vencido_mes"] == 1_000_000
+    assert a["ganancia_mes"] == pytest.approx(10_000_000 / 12, abs=1)
+
+
+def test_un_anual_usado_entero_a_costo_800_gana_33(entorno, pro):
+    import gastos
+    from cobros import libro, planes, vista
+    _cobrar()
+    planes.activar_manual("acme", pro, "anual", "admin")
+    gastos.registrar("acme", "video", 800.0, "video:cf1:t1")          # 1 000 a precio de miembro (1,25)
+    assert libro.bolsa_plan("acme")["restante"] == 0
+    a = {f["cliente"]: f for f in vista.resumen_admin()}["acme"]
+    assert a["ganancia_mes"] == 1_000_000 - 800_000 - 166_667         # ≈ +33
+    assert vista.planes_admin()["por_cliente"]["acme"]["ganancia_periodo"] == a["ganancia_mes"]
+
+
+def test_la_bolsa_de_un_pago_anulado_que_vence_no_es_ganancia(entorno, pro):
+    from cobros import planes, vista
+    _cobrar()
+    _suscribir("acme", pro)                                           # mensual con tarjeta, aprobado
+    (pago,) = _filas("pago_plan")
+    tx = dict(entorno.txs[pago.transaccion_id], status="VOIDED")
+    assert planes.aplicar_transaccion(tx) == "anulado"
+    a = {f["cliente"]: f for f in vista.resumen_admin()}["acme"]
+    assert a["recargado_mes"] == 0                                    # la plata volvió al cliente
+    planes.terminar_ya("acme", "admin", nota="contracargo")
+    a = {f["cliente"]: f for f in vista.resumen_admin()}["acme"]
+    assert a["vencido_mes"] == 1_000_000 and a["ganancia_mes"] == 0
+
+
+def test_no_se_cobro_espera_30_minutos(http, pro, entorno):
+    import db
+    pago = _pendiente_incierto(entorno, pro)
+    with db.conectar() as con:
+        con.execute(db.pago_plan.update().values(actualizado_en=_hace(10)))
+    c = http.como("admin")
+    html = c.get("/admin/cobros").get_data(as_text=True)
+    assert "se habilita 30 minutos después" in html and 'value="no_cobrado"' not in html
+    c.post(f"/admin/cobros/acme/plan/pago/{pago.id}/resolver", data={"resultado": "no_cobrado", "nota": "x"},
+           headers=MISMO)
+    assert _filas("pago_plan")[0].estado == "pendiente"
+    assert any("30 minutos" in m for m in _flashes(c))
+    with db.conectar() as con:
+        con.execute(db.pago_plan.update().values(actualizado_en=_hace(31)))
+    assert 'value="no_cobrado"' in c.get("/admin/cobros").get_data(as_text=True)
+
+
+def test_con_transaccion_no_se_ofrece_no_se_cobro(http, pro, entorno):
+    import db
+    _pendiente_incierto(entorno, pro)
+    with db.conectar() as con:
+        con.execute(db.pago_plan.update().values(transaccion_id="1292-82-1"))
+    html = http.como("admin").get("/admin/cobros").get_data(as_text=True)
+    assert 'value="no_cobrado"' not in html and "se resuelve consultándola" in html
+
+
+def test_no_se_cobro_en_una_renovacion_deja_morosa_y_reintenta_en_24_h(http, pro, entorno):
+    from datetime import datetime, timedelta
+
+    import db
+    from cobros import planes, wompi
+    _cobrar()
+    _suscribir("acme", pro)
+    sus = _filas("suscripcion")[0]
+    entorno.error = (wompi.ErrorWompi("se cortó", incierto=True), True)
+    assert planes.cobrar_periodo(sus.id, ahora=sus.proximo_cobro) == "incierto"
+    (renovacion,) = _filas("pago_plan", estado="pendiente")
+    _envejecer()
+    c = http.como("admin")
+    c.post(f"/admin/cobros/acme/plan/pago/{renovacion.id}/resolver",
+           data={"resultado": "no_cobrado", "nota": "no está en Wompi"}, headers=MISMO)
+    s = _filas("suscripcion")[0]
+    assert (s.estado, s.intentos_fallidos) == ("morosa", 1)
+    falta = datetime.fromisoformat(s.proximo_cobro) - datetime.fromisoformat(db.ahora())
+    assert timedelta(hours=23, minutes=58) <= falta <= timedelta(hours=24, minutes=1)
+    # Un APPROVED tardío de ese pago no acredita ni cambia la suscripción: el admin lo mira en Wompi.
+    tx = {"id": "1292-90-1", "reference": renovacion.referencia, "status": "APPROVED",
+          "amount_in_cents": renovacion.monto_cop_centavos, "currency": "COP"}
+    assert planes.aplicar_transaccion(tx) == "aprobado_tras_final"
+    assert len(_filas("movimiento_saldo", tipo="plan")) == 1 and _filas("pago_plan", id=renovacion.id)[0].estado == "error"
+    assert _filas("suscripcion")[0].estado == "morosa"
+
+
+def test_un_aprobado_tardio_tras_no_se_cobro_del_alta_no_revive(http, pro, entorno):
+    from cobros import planes
+    pago = _pendiente_incierto(entorno, pro)
+    c = http.como("admin")
+    c.post(f"/admin/cobros/acme/plan/pago/{pago.id}/resolver", data={"resultado": "no_cobrado", "nota": "no está"},
+           headers=MISMO)
+    assert _filas("suscripcion")[0].estado == "terminada"
+    tx = {"id": "1292-91-1", "reference": pago.referencia, "status": "APPROVED",
+          "amount_in_cents": pago.monto_cop_centavos, "currency": "COP"}
+    assert planes.aplicar_transaccion(tx) == "aprobado_tras_final"
+    assert _filas("movimiento_saldo", tipo="plan") == [] and len(_filas("suscripcion")) == 1
+    assert _filas("suscripcion")[0].estado == "terminada" and planes.suscripcion("acme") is None

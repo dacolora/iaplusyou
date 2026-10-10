@@ -191,7 +191,7 @@
                   <input type="text" inputmode="decimal" name="tope_incluido_usd" value="{{ pl.tope_campo }}" required></label>
                 <label>{{ _('Orden en la pantalla del cliente') }}
                   <input type="text" inputmode="numeric" name="orden" value="{{ pl.orden }}"></label>
-                <p class="cobros-admin-nota">{{ _('El margen y el tope valen desde el próximo periodo de cada suscripción: el periodo en curso guarda los suyos.') }}</p>
+                <p class="cobros-admin-nota">{{ _('El margen y el tope valen desde el próximo periodo de cada suscripción mensual: el periodo en curso guarda los suyos. En una anual, desde su próximo pago: sus doce meses copian la foto del primero.') }}</p>
                 <button type="submit" class="btn-generar">{{ _('Guardar plan') }}</button>
               </form>
             </details>
@@ -284,9 +284,15 @@
                 <label class="cobros-admin-casilla"><input type="radio" name="resultado" value="cobrado" required> {{ _('Sí se cobró') }}</label>
                 <label>{{ _('Id de la transacción en Wompi') }}
                   <input type="text" name="transaccion_id" value="{{ pago.transaccion_id or '' }}" maxlength="64" autocomplete="off"></label>
+                {% if pago.puede_no_cobrado %}
                 <label class="cobros-admin-casilla"><input type="radio" name="resultado" value="no_cobrado"> {{ _('No se cobró') }}</label>
                 <label>{{ _('Nota (obligatoria si no se cobró; solo la ven los admins)') }}
                   <input type="text" name="nota" maxlength="300"></label>
+                {% elif pago.transaccion_id %}
+                <p class="cobros-admin-nota">{{ _('Tiene transacción en Wompi: se resuelve consultándola, no a mano.') }}</p>
+                {% else %}
+                <p class="cobros-admin-nota">{{ _('«No se cobró» se habilita 30 minutos después del último intento de cobro.') }}</p>
+                {% endif %}
                 <button type="submit" class="btn-generar">{{ _('Resolver el pago') }}</button>
                 {% endif %}
               </form>
