@@ -318,13 +318,22 @@ def mismo_alcance(fila, alcance):
     return str(fila.get("desde"))[:10] == str(alcance.get("desde") or "")[:10]
 
 
+def _metodo(foto):
+    """El `metodo` del veredicto de una foto (`analisis.METODO_VEREDICTO`); 0 si no lo tiene o no es un número."""
+    valor = foto.get("metodo")
+    return valor if isinstance(valor, int) and not isinstance(valor, bool) else 0
+
+
 def es_viejo(a, fila, alcance=None):
     """Un análisis listo es viejo si, EN EL MISMO ALCANCE (spec §6.6), cambió el veredicto o el anuncio gastó al menos
-    un 50 % más. Uno de otra tienda u otro largo de periodo no es viejo: pasar de 7 a 30 días no lo vuelve a cobrar."""
+    un 50 % más. Uno de otra tienda u otro largo de periodo no es viejo: pasar de 7 a 30 días no lo vuelve a cobrar.
+    El veredicto solo cuenta si la foto se sacó con el cálculo de hoy (`metodo` >= `analisis.METODO_VEREDICTO`): R9
+    cambió el veredicto de anuncios cuyos números no se movieron y un análisis pagado antes se ofrecía pagar otra vez
+    (revisión final de E1, guardián de gasto, 2026-10-10)."""
     if not mismo_alcance(fila, alcance):
         return False
     foto = (fila or {}).get("foto") or {}
-    if foto.get("veredicto") != a["veredicto"]:
+    if foto.get("veredicto") != a["veredicto"] and _metodo(foto) >= analisis.METODO_VEREDICTO:
         return True
     antes = float((foto.get("m") or {}).get("gasto") or 0)
     return a["m"]["gasto"] >= FACTOR_VIEJO * antes if antes > 0 else a["m"]["gasto"] > 0

@@ -151,7 +151,9 @@ def test_las_consultas_no_crecen_con_las_tarjetas(app):  # noqa: F811
 
 def test_analisis_viejo_y_lote():
     a = {"veredicto": "perdedor", "m": {"gasto": 160.0}}
-    assert panel.es_viejo(a, {"foto": {"veredicto": "ganador", "m": {"gasto": 160.0}}})
+    assert panel.es_viejo(a, {"foto": {"metodo": 2, "veredicto": "ganador", "m": {"gasto": 160.0}}})
+    # Sin `metodo` (pagado antes de R9) el veredicto no cuenta: solo el gasto (revisión final de E1, G1).
+    assert not panel.es_viejo(a, {"foto": {"veredicto": "ganador", "m": {"gasto": 160.0}}})
     assert panel.es_viejo(a, {"foto": {"veredicto": "perdedor", "m": {"gasto": 100.0}}})
     assert not panel.es_viejo(a, {"foto": {"veredicto": "perdedor", "m": {"gasto": 120.0}}})
 
@@ -177,7 +179,8 @@ def _anuncio(alc, ad_id):
 
 
 def _foto(a, factor_gasto=1.0, veredicto=None):
-    return {"veredicto": veredicto or a["veredicto"], "m": {"gasto": a["m"]["gasto"] / factor_gasto}}
+    # `metodo` 2: la foto de un análisis pedido desde R9 (`analisis.METODO_VEREDICTO`, revisión final de E1, G1).
+    return {"metodo": 2, "veredicto": veredicto or a["veredicto"], "m": {"gasto": a["m"]["gasto"] / factor_gasto}}
 
 
 def _lista(alc, ad_id, foto, tienda_id="mismo", desde=None, hasta=None, frase="Gana por el arranque."):

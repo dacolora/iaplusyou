@@ -62,10 +62,11 @@ def foto(a, creativo, cuenta, ganadores, fuente=analisis.FUENTE_DEFECTO, ad_acco
     atribución con que se leyeron los números. `fuente` ("triple_whale" | "meta", `FUENTES`) dice de dónde salen los
     números (Rendimiento E2): un anuncio de Meta lleva además su cuenta (`ad_account_id`), y su creativo puede ir vacío:
     la tarea lo trae de Meta antes de mirarlo (`meta_rendimiento.creativo.traer`). Una foto guardada antes de E2 no
-    tiene `fuente` y se lee como Triple Whale."""
+    tiene `fuente` y se lee como Triple Whale. `metodo` = `analisis.METODO_VEREDICTO`: con qué cálculo salió el
+    veredicto (una foto sin él es de antes de R9 y su veredicto no cuenta para volverla vieja: `panel.es_viejo`)."""
     creatv = a.get("creatv") or None
     extra = {"ad_account_id": ad_account_id} if fuente == "meta" else {}
-    return {"fuente": fuente, **extra,
+    return {"fuente": fuente, "metodo": analisis.METODO_VEREDICTO, **extra,
             "nombre": a["nombre"], "campana": a.get("campana"), "canal": a["canal"], "ad_id": a["ad_id"],
             "veredicto": a["veredicto"], "motivo": a["motivo"], "problemas": list(a.get("problemas") or []),
             "fortalezas": list(a.get("fortalezas") or []), "tendencia": a.get("tendencia"),

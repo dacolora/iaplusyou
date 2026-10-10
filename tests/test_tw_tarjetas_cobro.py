@@ -197,8 +197,9 @@ def test_elegir_analisis():
     alc = {"tienda_id": 1, "canal": None, "desde": "2026-09-24", "hasta": "2026-09-30"}
 
     def fila(i, estado, desde="2026-09-24", hasta="2026-09-30", veredicto="perdedor"):
+        # `metodo` 2: pedido desde R9, su veredicto cuenta para volverlo viejo (revisión final de E1, G1).
         return {"id": i, "estado": estado, "tienda_id": 1, "desde": desde, "hasta": hasta,
-                "foto": {"veredicto": veredicto, "m": {"gasto": 100.0}}}
+                "foto": {"metodo": 2, "veredicto": veredicto, "m": {"gasto": 100.0}}}
     fresco7, error30 = fila(1, "lista"), fila(2, "error", desde="2026-09-01")
     lista30 = fila(3, "lista", desde="2026-09-01")
     e = panel.elegir_analisis(a, [error30, fresco7], alc)

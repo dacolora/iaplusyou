@@ -51,6 +51,11 @@ CAMPOS_M = ("gasto", "impresiones", "clics", "ctr", "cpm", "gancho", "retencion"
 # (las evaluaciones y los análisis guardados antes de E2 no la tienen).
 FUENTES = {"triple_whale": "Triple Whale", "meta": "Meta"}
 FUENTE_DEFECTO = "triple_whale"
+# Cómo se calculó el veredicto que guarda la foto de un análisis (`tw_analisis.foto["metodo"]`). 2 = con R9 (spec
+# 2026-10-09: por anuncio solo cuentan los canales con gasto). R9 movió el costo por venta de la cuenta y con él el
+# veredicto de anuncios cuyos números no cambiaron: en una foto sin esta marca (pagada antes de R9) un cambio de
+# veredicto no la vuelve vieja, solo el gasto (`panel.es_viejo`; revisión final de E1, guardián de gasto, 2026-10-10).
+METODO_VEREDICTO = 2
 
 
 def nombre_fuente(fuente):
