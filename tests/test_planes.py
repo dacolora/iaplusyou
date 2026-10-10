@@ -1056,3 +1056,17 @@ def test_un_pago_de_plan_de_otro_comercio_no_cuadra(base_temporal, planes, pro, 
     tx = {**falso.txs[pago.transaccion_id], "status": "APPROVED", "comercio": "pub_test_OTRO"}  # llave-de-prueba
     assert planes.aplicar_transaccion(tx) == "no_cuadra"
     assert _filas(base_temporal, "pago_plan")[0].estado == "pendiente" and _filas(base_temporal, "periodo_plan") == []
+
+
+def test_anual_con_el_worker_apagado_mas_de_un_mes_abre_el_mes_en_curso(base_temporal, planes, pro, falso, avisos):
+    """Los meses que pasaron enteros con el worker apagado no se acreditan: al volver, abre el del mes en curso
+    (planes._abrir_cubierto, «saltar los meses que ya pasaron enteros»)."""
+    inicio = "2027-01-31T10:00:00"
+    _suscribir(planes, pro, ahora=inicio, ciclo="anual")
+    planes.renovar_todo(ahora="2027-04-15T10:00:00")                  # feb y mar pasaron sin worker
+    periodos = _filas(base_temporal, "periodo_plan")
+    assert [(p.inicio, p.fin) for p in periodos] == [(inicio, "2027-02-28T10:00:00"),
+                                                     ("2027-03-31T10:00:00", "2027-04-30T10:00:00")]
+    assert periodos[0].cerrado is True
+    assert len(_filas(base_temporal, "movimiento_saldo", tipo="plan")) == 2   # ni febrero ni marzo de más
+    assert planes.periodo_abierto(None, "acme", ahora="2027-04-15T10:00:00")["id"] == periodos[1].id

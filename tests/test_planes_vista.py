@@ -627,3 +627,25 @@ def test_la_constancia_guarda_ip_y_navegador_y_nunca_recorta_el_alta(base, pagin
     assert lista[0]["ip"] == "203.0.113.7" and lista[0]["user_agent"].startswith("Navegador/1.0")
     assert len(lista[0]["user_agent"]) == 300 and lista[0]["acceptance_token"] == "eyJ.acepta.widget"
     assert lista[-1]["aceptada_en"] >= lista[0]["aceptada_en"]
+
+
+def test_el_pago_de_un_proyecto_no_se_consulta_desde_otro(base, pagina, pro, falso, avisos, monkeypatch):
+    """Aislamiento: «otro» no ve ni hace consultar el pago de plan de «acme» (vista.estado_pago_plan y
+    planes.verificar_pago comparan el proyecto)."""
+    import db
+    from cobros import planes
+    falso.defecto = "PENDING"
+    _cobra("acme")
+    _cobra("otro")
+    planes.suscribir("acme", pro, "mensual", "CARD", "tok_test_1_prueba", "pagos@acme.co", dict(ACEPTACION),
+                     "user_acme", 1000, ahora=db.ahora())
+    (pago,) = planes.estado_cliente("acme")["pagos"]
+    consultas = []
+    from cobros import wompi
+    monkeypatch.setattr(wompi, "transaccion",
+                        lambda tx_id, tiempo=None: consultas.append(tx_id) or falso.transaccion(tx_id))
+    r = pagina("otro", "cliente", "otro").get(f"/cliente/otro/plan/pago/{pago['id']}/estado")
+    assert r.status_code == 404
+    assert planes.verificar_pago("otro", pago["id"]) is None
+    assert consultas == []
+    assert pagina().get(f"/cliente/acme/plan/pago/{pago['id']}/estado").get_json()["estado"] == "pendiente"

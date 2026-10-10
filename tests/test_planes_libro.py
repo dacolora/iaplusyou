@@ -381,11 +381,14 @@ def test_avisa_al_admin_al_80_y_al_100_una_vez_por_periodo(base_temporal, libro,
     _abrir(base_temporal, libro, tope=1.0)
     gastos.registrar("acme", "guion", 0.50, "guion:1")
     assert sin_avisos == []
-    gastos.registrar("acme", "guion", 0.35, "guion:2")               # 85 %
-    gastos.registrar("acme", "guion", 0.10, "guion:3")               # 95 %: el de 80 ya salió
+    gastos.registrar("acme", "guion", 0.25, "guion:2")               # 75 %: todavía nada (antes del 80 %)
+    assert sin_avisos == []
+    gastos.registrar("acme", "guion", 0.10, "guion:3")               # 85 %: sale el de 80
     assert [t for t, _ in sin_avisos] == ["tope_incluido"]
-    gastos.registrar("acme", "guion", 0.05, "guion:4")               # 100 %
-    gastos.registrar("acme", "guion", 0.10, "guion:5")               # ya pasado: se cobra, sin otro aviso
+    gastos.registrar("acme", "guion", 0.10, "guion:4")               # 95 %: el de 80 ya salió
+    assert [t for t, _ in sin_avisos] == ["tope_incluido"]
+    gastos.registrar("acme", "guion", 0.05, "guion:5")               # 100 %
+    gastos.registrar("acme", "guion", 0.10, "guion:6")               # ya pasado: se cobra, sin otro aviso
     assert [t for t, _ in sin_avisos] == ["tope_incluido", "tope_incluido"]
 
 
