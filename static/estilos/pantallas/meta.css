@@ -61,3 +61,38 @@
 .meta-seg-cuenta { margin: .6rem 0 .3rem; color: var(--muted); font-size: .8rem; }
 .meta-seg-tabla tr.meta-seg-caro td { background: var(--warn-fondo); }
 .meta-seg-tabla .tag-estado { white-space: normal; }   /* «Caro en <cuentas>» se parte: si no, ensancha la tabla */
+
+/* «Evaluación con IA» (E2, _meta_evaluar.html y _meta_evaluacion.html): el botón con su precio y, al lado, qué alcance
+   evalúa. La evaluación reusa las clases de Triple Whale (.tw-patrones, .tw-ideas, .tw-angulo, .tw-analizados…) y suma
+   el plan: pasos con su número en un círculo (el número también lo dice la lista), la acción en palabras, los objetos
+   como pastillas que se parten antes de empujar la página y el enlace al Administrador al pie. Las anteriores, una por
+   línea, se abren debajo de su botón con una raya a la izquierda. */
+.meta-ia-pedir { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .8rem; margin: .4rem 0 .8rem; }
+.meta-eval { margin-top: .8rem; min-width: 0; overflow-wrap: anywhere; }
+.meta-eval h4 { margin: 1.1rem 0 .5rem; font-size: .9rem; }
+.meta-eval-cab { margin: 0 0 .4rem; color: var(--muted); }
+.meta-eval-resumen { margin: .3rem 0 .6rem; font-size: .95rem; line-height: 1.55; }
+.meta-eval-cifras { margin: .3rem 0 .6rem; }
+.meta-eval-causas { margin: 0; padding-left: 1.1rem; font-size: .86rem; line-height: 1.5; }
+.meta-eval-causas li + li { margin-top: .3rem; }
+.meta-eval-causas small { display: block; color: var(--muted); }
+.meta-eval-nota { margin: -.2rem 0 .6rem; font-size: .82rem; }
+.meta-eval-plan { list-style: none; margin: 0; padding: 0; display: grid; gap: .6rem; }
+.meta-eval-paso { display: flex; gap: .7rem; align-items: flex-start; min-width: 0; padding: .75rem .85rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); }
+.meta-eval-num { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 1.7rem; height: 1.7rem; border-radius: 50%; background: var(--accent); color: var(--sobre-accent); font-size: .85rem; font-weight: 700; }
+.meta-eval-paso-cuerpo { flex: 1; display: flex; flex-direction: column; align-items: flex-start; gap: .3rem; min-width: 0; }
+.meta-eval-paso-cuerpo > strong { font-size: .93rem; line-height: 1.35; }
+.meta-eval-paso-cuerpo p { margin: 0; font-size: .86rem; line-height: 1.45; }
+.meta-eval-paso-cuerpo p span { font-weight: 600; }
+.meta-eval-paso-cuerpo a { text-decoration: none; }
+.meta-eval-impacto { font-weight: 600; }
+.meta-eval-objetos { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: .3rem; max-width: 100%; }
+.meta-eval-objetos li { max-width: 100%; padding: .15rem .55rem; border-radius: var(--radius-pastilla); background: var(--panel-hover); font-size: .8rem; }
+.meta-eval-objetos small { margin-right: .2rem; color: var(--muted); }
+.meta-eval-anuncios, .meta-ia-anteriores { margin-top: 1.1rem; }
+.meta-eval-anuncios summary, .meta-ia-anteriores summary { cursor: pointer; }
+.meta-eval-anuncios .tw-analizados { margin-top: .6rem; }
+.meta-ia-lista { list-style: none; margin: .6rem 0 0; padding: 0; display: grid; gap: .5rem; }
+.meta-ia-lista > li { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; min-width: 0; }
+.meta-ia-lista .btn-xs { max-width: 100%; white-space: normal; text-align: left; }
+.meta-ia-anterior { flex-basis: 100%; min-width: 0; padding: .1rem 0 .4rem .8rem; border-left: 2px solid var(--border); }

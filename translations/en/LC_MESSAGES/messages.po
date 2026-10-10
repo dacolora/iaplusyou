@@ -247,6 +247,10 @@ msgid "%(fase)s (puesto %(n)s)"
 msgstr "%(fase)s (position %(n)s)"
 
 #, python-format
+msgid "%(fecha)s · %(alcance)s · del %(desde)s al %(hasta)s"
+msgstr "%(fecha)s · %(alcance)s · from %(desde)s to %(hasta)s"
+
+#, python-format
 msgid "%(fecha)s · estado <strong>%(estado)s</strong> · %(leidos)s leídos · %(nuevos)s nuevos · %(con_imagen)s con imagen"
 msgstr "%(fecha)s · status <strong>%(estado)s</strong> · %(leidos)s read · %(nuevos)s new · %(con_imagen)s with an image"
 
@@ -1323,6 +1327,12 @@ msgid "%(num)s error marcado como resuelto."
 msgid_plural "%(num)s errores marcados como resueltos."
 msgstr[0] "%(num)s error marked as resolved."
 msgstr[1] "%(num)s errors marked as resolved."
+
+#, python-format
+msgid "%(num)s evaluación anterior"
+msgid_plural "%(num)s evaluaciones anteriores"
+msgstr[0] "%(num)s previous evaluation"
+msgstr[1] "%(num)s previous evaluations"
 
 #, python-format
 msgid "%(num)s experimento mide"
@@ -2460,6 +2470,9 @@ msgstr "Analyzed with data from %(desde)s to %(hasta)s"
 msgid "Analizado en Triple Whale: «%(nombre)s»"
 msgstr "Analyzed in Triple Whale: “%(nombre)s”"
 
+msgid "Analizando"
+msgstr "Analyzing"
+
 #, python-format
 msgid "Analizando %(num)s anuncio con IA…"
 msgid_plural "Analizando %(num)s anuncios con IA…"
@@ -2577,6 +2590,10 @@ msgstr "Ad paused on Meta."
 
 msgid "Anuncio por anuncio"
 msgstr "Ad by ad"
+
+#, python-format
+msgid "Anuncio por anuncio (%(n)s)"
+msgstr "Ad by ad (%(n)s)"
 
 msgid "Anuncio publicado (pausado, revísalo en Meta Ads Manager antes de activarlo)."
 msgstr "Ad published (paused; review it in Meta Ads Manager before activating it)."
@@ -3852,6 +3869,9 @@ msgstr "Claude is responding; wait for its reply before sending another message.
 msgid "Claude está revisando el prompt…"
 msgstr "Claude is reviewing the prompt…"
 
+msgid "Claude lee tus cuentas, las recomendaciones de arriba y una muestra de anuncios ganadores y perdedores: explica qué pasa, arma un plan de cambios por prioridad y propone anuncios nuevos. No cambia nada en Meta y no genera nada: cada idea llega a Crear solo si la llevas."
+msgstr "Claude reads your accounts, the recommendations above and a sample of winning and losing ads: it explains what is happening, builds a prioritized action plan and proposes new ads. It changes nothing in Meta and generates nothing: each idea only reaches Create if you take it there."
+
 msgid "Claude lo decide"
 msgstr "Claude decides"
 
@@ -4177,6 +4197,9 @@ msgstr "Purchases (requires Pixel)"
 msgid "Comprobar Pixel"
 msgstr "Check Pixel"
 
+msgid "Compruébalas en el Administrador de anuncios antes de actuar."
+msgstr "Check them in Ads Manager before acting."
+
 msgid "Computador"
 msgstr "Desktop"
 
@@ -4474,6 +4497,9 @@ msgstr[1] "Consolidate similar ad sets within the same campaign: with %(compras)
 #, python-format
 msgid "Consolida conjuntos parecidos dentro de la misma campaña: con %(compras)s compras por semana, ningún conjunto llega a las %(meta)s que Meta necesita para salir del aprendizaje; concentra el presupuesto en 1 o 2 conjuntos."
 msgstr "Consolidate similar ad sets within the same campaign: with %(compras)s purchases a week, no ad set reaches the %(meta)s Meta needs to exit learning; concentrate the budget in 1 or 2 ad sets."
+
+msgid "Consolidar"
+msgstr "Consolidate"
 
 msgid "Consulta"
 msgstr "Query"
@@ -7179,6 +7205,9 @@ msgstr "That voice no longer exists."
 msgid "Esas piezas ya se estaban generando."
 msgstr "Those pieces were already being generated."
 
+msgid "Escalar"
+msgstr "Scale"
+
 #, python-format
 msgid "Escalón %(n)s/3"
 msgstr "Step %(n)s/3"
@@ -7657,6 +7686,10 @@ msgstr "This scene changes location: since it starts on the last frame of the pr
 msgid "Esta escena todavía no tiene su prompt en el chat."
 msgstr "This scene doesn't have its prompt in the chat yet."
 
+#, python-format
+msgid "Esta evaluación falló: %(error)s"
+msgstr "This evaluation failed: %(error)s"
+
 msgid "Esta idea todavía no tiene un ángulo con promesa."
 msgstr "This idea doesn't have an angle with a promise yet."
 
@@ -7995,6 +8028,13 @@ msgstr "Invalid stage: %(etapa)s"
 msgid "Etiqueta de precio"
 msgstr "Price tag"
 
+msgid "Evaluación con IA"
+msgstr "AI evaluation"
+
+#, python-format
+msgid "Evaluación de %(alcance)s del %(desde)s al %(hasta)s"
+msgstr "Evaluation of %(alcance)s from %(desde)s to %(hasta)s"
+
 #, python-format
 msgid "Evaluación de %(alcance)s del %(desde)s al %(hasta)s · %(precio)s"
 msgstr "Evaluation of %(alcance)s from %(desde)s to %(hasta)s · %(precio)s"
@@ -8037,6 +8077,10 @@ msgstr "Evaluate now"
 msgid "Evaluar con IA"
 msgstr "Evaluate with AI"
 
+#, python-format
+msgid "Evalúa lo que ves arriba: %(alcance)s, últimos %(n)s días."
+msgstr "Evaluates what you see above: %(alcance)s, last %(n)s days."
+
 msgid "Eventos en bitácora"
 msgstr "Log events"
 
@@ -8052,6 +8096,9 @@ msgstr "Exclamation"
 
 msgid "Excluir"
 msgstr "Exclude"
+
+msgid "Excluir un segmento"
+msgstr "Exclude a segment"
 
 #, python-format
 msgid "Excluye o baja el peso de %(segmento)s (%(dimension)s) en los conjuntos de esta cuenta."
@@ -10664,6 +10711,9 @@ msgstr "What’s on top stays where it is. Tap to make it follow its video."
 msgid "Lo esencial"
 msgstr "The essentials"
 
+msgid "Lo haces tú en el Administrador de anuncios, en este orden: Creatv no cambia nada en Meta."
+msgstr "You make these changes in Ads Manager, in this order: Creatv changes nothing in Meta."
+
 msgid "Lo que Claude necesita"
 msgstr "What Claude needs"
 
@@ -12377,6 +12427,9 @@ msgstr "The balance could not be loaded. Open this section again in a while."
 msgid "No se pudo cargar el sonido de {n} archivo(s) (puede ser la conexión o que el almacenamiento no dé permiso de lectura): la vista previa sigue sin ese sonido."
 msgstr "Couldn't load the sound of {n} file(s) (it may be the connection or the storage not allowing reads): the preview goes on without that sound."
 
+msgid "No se pudo cargar esa evaluación. Inténtalo de nuevo."
+msgstr "That evaluation could not be loaded. Try again."
+
 msgid "No se pudo cargar ese día."
 msgstr "That day could not be loaded."
 
@@ -12938,6 +12991,9 @@ msgstr "Other (write it in)…"
 
 msgid "Otro (usa la descripción del producto)"
 msgstr "Other (uses the product description)"
+
+msgid "Otro cambio"
+msgstr "Other change"
 
 msgid "Otro estado"
 msgstr "Other status"
@@ -13516,6 +13572,9 @@ msgstr "Why"
 msgid "Por qué funciona:"
 msgstr "Why it works:"
 
+msgid "Por qué rinden así"
+msgstr "Why they perform this way"
+
 msgid "Por qué:"
 msgstr "Why:"
 
@@ -13712,6 +13771,9 @@ msgstr "Test on Meta →"
 
 msgid "Probar en otro experimento"
 msgstr "Test in another experiment"
+
+msgid "Probar variantes"
+msgstr "Test variants"
 
 msgid "Problema"
 msgstr "Problem"
@@ -14474,6 +14536,9 @@ msgstr "Collect"
 
 msgid "Recomendaciones por prioridad"
 msgstr "Recommendations by priority"
+
+msgid "Recomendación"
+msgstr "Recommendation"
 
 msgid "Recomendada"
 msgstr "Recommended"
@@ -20341,6 +20406,10 @@ msgstr "pause"
 msgid "país inválido: %(pais)s (se esperan dos letras mayúsculas)."
 msgstr "invalid country: %(pais)s (two uppercase letters expected)."
 
+#, python-format
+msgid "pedida el %(fecha)s"
+msgstr "requested on %(fecha)s"
+
 msgid "pedidos"
 msgstr "orders"
 
@@ -21555,6 +21624,10 @@ msgstr "Start from scratch? The text, the settings and the reference tray will b
 #, python-format
 msgid "¿Evaluar %(n)s anuncio(s) con IA? Costo: %(precio)s"
 msgstr "Evaluate %(n)s ad(s) with AI? Cost: %(precio)s"
+
+#, python-format
+msgid "¿Evaluar %(n)s anuncio(s) con IA? Precio: %(precio)s"
+msgstr "Evaluate %(n)s ad(s) with AI? Price: %(precio)s"
 
 #, python-format
 msgid "¿Marcar a %(usuario)s como verificado sin que abra el enlace del correo?"
