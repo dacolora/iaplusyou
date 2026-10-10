@@ -511,6 +511,26 @@ def alcance(cliente, cuentas, ventana, nivel="cuenta"):
                           "frecuencia": None if r.frecuencia is None else float(r.frecuencia)} for r in filas}
 
 
+def alcance_varios(cliente, cuentas, ventanas, niveles=("cuenta", "campana")):
+    """{(nivel, ventana): {objeto_id: {"alcance", "frecuencia"}}} de varias ventanas y niveles en UNA consulta (el
+    panel necesita la ventana del período por cuenta y por campaña y la de 7 días por campaña: eran tres lecturas).
+    Cada combinación pedida está en la salida, vacía si no tiene filas."""
+    ventanas = sorted({int(v) for v in ventanas})
+    niveles = list(dict.fromkeys(niveles))
+    salida = {(n, v): {} for n in niveles for v in ventanas}
+    if not cuentas or not ventanas or not niveles:
+        return salida
+    t = db.meta_alcance
+    q = (sa.select(t.c.nivel, t.c.ventana, t.c.objeto_id, t.c.alcance, t.c.frecuencia)
+         .where(t.c.cliente == cliente, t.c.ad_account_id.in_(list(cuentas)), t.c.ventana.in_(ventanas),
+                t.c.nivel.in_(niveles)))
+    with db.conectar() as con:
+        for r in con.execute(q):
+            salida[(r.nivel, int(r.ventana))][r.objeto_id] = {
+                "alcance": int(r.alcance or 0), "frecuencia": None if r.frecuencia is None else float(r.frecuencia)}
+    return salida
+
+
 def activos(cliente, cuentas):
     """{ad_account_id: {"campana", "conjunto", "anuncio", "aprendizaje_limitado"}}: cuántos objetos están
     ACTIVE (entregando de verdad) y cuántos conjuntos activos tienen aprendizaje limitado (FAIL). Trae una

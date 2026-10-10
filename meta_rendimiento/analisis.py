@@ -69,6 +69,14 @@ def muestra(evaluados):
     return salida
 
 
+def tamano_muestra(evaluados):
+    """Cuántos anuncios tendría la muestra de esa lista de `panel._evaluar`: el mismo cálculo de `muestra` (la misma
+    función de Triple Whale) sin armar las entradas. El panel la usa para el botón «Evaluar N anuncio(s) con IA ·
+    precio» con la evaluación que ya hizo, sin llamar a `preparar` (que vuelve a leer la copia): con el mismo
+    alcance da el mismo N que cobrará la ruta (E2-R6)."""
+    return len(tw_analisis.muestra({"anuncios": list(evaluados or [])}))
+
+
 # ------------------------------------------------------------ preparar ---
 
 def _sumar(filas, act, desde, hasta):

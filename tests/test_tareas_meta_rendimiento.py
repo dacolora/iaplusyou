@@ -70,6 +70,16 @@ def test_syncs_en_curso_lista_los_job_ids_vivos_del_proyecto(hf):
     assert t.syncs_en_curso("otro") == []
 
 
+def test_trabajos_del_panel_trae_las_copias_y_la_evaluacion_en_una_lectura(hf):
+    assert t.trabajos_del_panel("hf") == set()
+    t.encolar_sync("hf", "act_1")
+    t.encolar_evaluacion("hf", 7)
+    cola.encolar("tw_sincronizar", {}, job_id="hf__otra_cosa", cliente="hf")
+    assert t.trabajos_del_panel("hf") == {"hf__meta_rend__act_1", "hf__meta_eval"}
+    assert t.trabajos_del_panel("otro") == set()
+    assert cola.job_ids_vivos("hf", t.TIPO_SYNC) == {"hf__meta_rend__act_1"}     # un tipo solo, como siempre
+
+
 def test_la_copia_de_meta_va_despues_de_lo_normal_en_la_cola(hf):
     t.encolar_sync("hf")
     cola.encolar("tw_sincronizar", {}, job_id="x__normal")        # prioridad 5 por defecto, llegó DESPUÉS

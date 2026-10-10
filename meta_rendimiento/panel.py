@@ -10,18 +10,22 @@ anuncios van siempre en la moneda de su cuenta (cada fila lleva `moneda`).
 
 Cada anuncio se compara con SU cuenta: `evaluacion.evaluar` corre una vez por cuenta, sobre UNA lectura de
 `datos.totales_por_anuncio` por ventana para todas las cuentas del alcance (nunca una consulta por cuenta ni por
-fila). Todo `contexto()` son de 14 a 16 consultas según el período (15 con el de 30 días, el de siempre), más
-una por moneda que haya que convertir en «Todas»; ninguna crece con las cuentas ni con las filas
-(`test_pocas_consultas_con_tres_cuentas`)."""
+fila). Con E2 (Diagnóstico, Segmentos y la sección «Evaluación con IA») todo `contexto()` son de 14 a 15 consultas
+según el período (14 con el de 30 días, el de siempre), más una por moneda que haya que convertir en «Todas»;
+ninguna crece con las cuentas ni con las filas (`test_pocas_consultas_con_tres_cuentas`)."""
 from datetime import date, datetime, timedelta
 
+from flask_babel import gettext
+
 import decisor
+import gastos
 import idiomas
 import meta_conexion
 import proyectos
+import triple_whale
 from idiomas import N_
+from meta_rendimiento import administrador, analisis, datos, grafico, recomendaciones, tasas
 from meta_rendimiento import cuentas as cuentas_mod
-from meta_rendimiento import datos, grafico, recomendaciones, tasas
 from meta_rendimiento.sync import VENTANAS_ALCANCE
 from tareas import meta_rendimiento as tareas_mr
 from triple_whale import evaluacion, paises
@@ -62,6 +66,14 @@ OBJETIVOS = {
 
 # Prioridad de una recomendación del «Diagnóstico» (recomendaciones.NIVELES) en palabras.
 NOMBRES_PRIORIDAD = {"alta": N_("Prioridad alta"), "media": N_("Prioridad media"), "baja": N_("Prioridad baja")}
+
+# «Evaluación con IA» (spec E2 §8 «Mostrarla»): la última lista llega con el panel y las anteriores, como mucho
+# estas, se piden por fetch (`GET …/evaluacion/<id>`).
+MAX_EVALUACIONES_ANTERIORES = 5
+# La acción de cada paso del plan (`analisis.ACCIONES`) en palabras.
+NOMBRES_ACCION = {"pausar": N_("Pausar"), "escalar": N_("Escalar"), "consolidar": N_("Consolidar"),
+                  "variantes": N_("Probar variantes"), "excluir_segmento": N_("Excluir un segmento"),
+                  "revisar": N_("Revisar"), "otro": N_("Otro cambio")}
 
 _CLAVES_VARIACION = ("gasto", "valor", "compras", "impresiones", "clics_salida", "roas", "cpa", "cpm", "ctr_salida")
 _MONTOS_KPI = ("gasto", "valor", "roas", "cpa", "cpm")
@@ -477,11 +489,92 @@ def segmentos(filas, en_alcance, moneda_comun, recs, ahora=None):
     return {"bloques": bloques, "viejos": viejos}
 
 
+# ------------------------------------------------ evaluación con IA ---
+
+def _enlace_administrador(url):
+    """El enlace de un paso del plan solo si es del Administrador de anuncios (lo arma `administrador`; un valor raro
+    guardado en la fila no llega a un href)."""
+    return url if isinstance(url, str) and url.startswith(administrador.BASE + "/") else None
+
+
+def _imagen_valida(url):
+    """Una miniatura de la muestra se pinta solo si es la copia en R2 (o un medio de Creatv) o una de Meta que pasa
+    `datos.miniatura_valida` (si la copia a R2 falló, queda la de Meta)."""
+    return isinstance(url, str) and (datos.miniatura_valida(url) or triple_whale.medio_permitido(url))
+
+
+def _alcance_evaluacion(ev):
+    """«Todas las cuentas» o el nombre de la cuenta evaluada (guardado en la fila: sin otra consulta)."""
+    extra = ev.get("extra") or {}
+    act = extra.get("cuenta")
+    if not act:
+        return gettext("Todas las cuentas")
+    nombre = next((c.get("nombre") for c in extra.get("resumen") or [] if c.get("ad_account_id") == act), None)
+    return nombre or act
+
+
+def evaluacion_vista(ev):
+    """Una fila de `meta_evaluacion` lista para `_meta_evaluacion.html`: su alcance en palabras, `nombres` ({ref:
+    nombre}: A… = el anuncio de la muestra, R… = el título de la recomendación), cada paso del plan con `objetos_vista`
+    ([{"ref", "nombre", "tipo": "anuncio"|"recomendacion"}]) y su `enlace` solo si es del Administrador, y
+    `anuncios_vista` («Anuncio por anuncio»: la muestra con lo que dijo Claude de cada uno y la miniatura solo si es
+    válida). Todo lo que escribió Claude o viene de Meta se pinta escapado (la plantilla nunca usa |safe)."""
+    resultado = dict(ev.get("resultado") or {})
+    muestra = [a for a in ev.get("muestra") or [] if isinstance(a, dict) and a.get("ref")]
+    nombres = {a["ref"]: a.get("nombre") or a["ref"] for a in muestra}
+    titulos = {r["ref"]: r.get("titulo") or r["ref"] for r in ev.get("recomendaciones") or []
+               if isinstance(r, dict) and r.get("ref")}
+    pasos = []
+    for p in resultado.get("plan") or []:
+        objetos = []
+        for ref in p.get("objetos") or []:
+            if ref in nombres:
+                objetos.append({"ref": ref, "nombre": nombres[ref], "tipo": "anuncio"})
+            elif ref in titulos:
+                objetos.append({"ref": ref, "nombre": titulos[ref], "tipo": "recomendacion"})
+        pasos.append(dict(p, objetos_vista=objetos, enlace=_enlace_administrador(p.get("enlace"))))
+    resultado["plan"] = pasos
+    por_anuncio = resultado.get("anuncios") or {}
+    anuncios = []
+    for a in muestra:
+        imagen = ((a.get("medio") or {}).get("imagen"))
+        anuncios.append({"ref": a["ref"], "nombre": nombres[a["ref"]], "veredicto": a.get("veredicto"),
+                         "visual": a.get("visual"), "imagen": imagen if _imagen_valida(imagen) else None,
+                         "analisis": por_anuncio.get(a["ref"]) or {}})
+    return dict(ev, resultado=resultado, nombres=nombres, alcance=_alcance_evaluacion(ev),
+                anuncios_vista=anuncios if any(x["analisis"] for x in anuncios) else [])
+
+
+def evaluacion_panel(cliente, evaluados, vivos):
+    """La sección «Evaluación con IA» del panel. `evaluados` es la lista completa de `_evaluar` que el panel ya hizo
+    (no la página de 24): de ahí sale N con `analisis.tamano_muestra`, el mismo N que cobrará la ruta con
+    `analisis.preparar` (E2-R6), y el precio `gastos.estimar("evaluacion_meta", n=N)` (su `texto` y `usd_precio` ya
+    llevan el margen). `vivos`: los job ids de `tareas_mr.trabajos_del_panel` (la barra, sin otra consulta). UNA
+    lectura de `meta_evaluacion`: la última lista se pinta entera, la última si falló después va como aviso y las
+    anteriores (hasta MAX_EVALUACIONES_ANTERIORES) solo con su fecha y alcance, para pedirlas por fetch."""
+    n = analisis.tamano_muestra(evaluados)
+    job = tareas_mr.job_id_evaluar(cliente)
+    corriendo = job in vivos
+    recientes = datos.evaluaciones(cliente, limite=MAX_EVALUACIONES_ANTERIORES + 3)
+    ultima_lista = next((e for e in recientes if e["estado"] == "lista"), None)
+    primera = recientes[0] if recientes else None
+    fallida = primera if primera is not None and primera["estado"] == "error" else None
+    en_curso = primera if corriendo and primera is not None and primera["estado"] in ("en_cola", "analizando") else None
+    anteriores = [{"id": e["id"], "estado": e["estado"], "desde": e["desde"], "hasta": e["hasta"],
+                   "creado_en": e["creado_en"], "alcance": _alcance_evaluacion(e)}
+                  for e in recientes if e is not ultima_lista and e is not fallida and e is not en_curso]
+    return {"n": n, "estimado": gastos.estimar("evaluacion_meta", n=n) if n else None,
+            "job": job if corriendo else None, "ultima_lista": evaluacion_vista(ultima_lista) if ultima_lista else None,
+            "fallida": fallida and {"id": fallida["id"], "error": fallida.get("error"),
+                                    "alcance": _alcance_evaluacion(fallida)},
+            "anteriores": anteriores[:MAX_EVALUACIONES_ANTERIORES]}
+
+
 # ---------------------------------------------------------- contexto ---
 
-def _jobs_sync(cliente, cuentas_alcance):
-    """[{"job_id", "cuenta"}] de las copias en cola o en curso de las cuentas del alcance (una consulta)."""
-    vivos = set(tareas_mr.syncs_en_curso(cliente))
+def _jobs_sync(cliente, cuentas_alcance, vivos):
+    """[{"job_id", "cuenta"}] de las copias en cola o en curso de las cuentas del alcance (`vivos`: los job ids de
+    `tareas_mr.trabajos_del_panel`, una consulta)."""
     salida = []
     for c in cuentas_alcance:
         job_id = tareas_mr.job_id_sync(cliente, c["ad_account_id"])
@@ -506,6 +599,7 @@ def _base(dias, desde, hasta):
         "max_recomendaciones": MAX_RECOMENDACIONES_VISIBLES, "niveles_recomendacion": recomendaciones.NIVELES,
         "nombres_prioridad": NOMBRES_PRIORIDAD,
         "segmentos": {"bloques": [], "viejos": []}, "ventana_segmentos": None,
+        "evaluacion": None, "nombres_accion": NOMBRES_ACCION,
         "estados": ESTADOS, "aprendizaje": APRENDIZAJE, "objetivos": OBJETIVOS,
         "etiquetas_veredicto": evaluacion.ETIQUETAS_VEREDICTO,
         "veredictos": evaluacion.VEREDICTOS, "problemas": evaluacion.PROBLEMAS, "fortalezas": evaluacion.FORTALEZAS,
@@ -540,7 +634,8 @@ def contexto(cliente, dias=PERIODO_DEFECTO, cuenta=None, hoy=None, pagina_anunci
     moneda_comun = next(iter(monedas)) if len(monedas) == 1 and "" not in monedas else None
     convertir = actual is None and len(en_alcance) > 1
     moneda = "USD" if convertir else (en_alcance[0].get("moneda") or None)
-    jobs_sync = _jobs_sync(cliente, en_alcance)
+    vivos = set(tareas_mr.trabajos_del_panel(cliente))
+    jobs_sync = _jobs_sync(cliente, en_alcance, vivos)
     copias = [c["ultima_copia"] for c in en_alcance if c.get("ultima_copia")]
     ctx.update(cuentas=lista, actual=actual, ids=ids, varias_cuentas=len(lista) > 1, moneda=moneda,
                moneda_comun=moneda_comun, jobs_sync=jobs_sync, sync_ocupado=len(jobs_sync) == len(en_alcance),
@@ -563,8 +658,10 @@ def contexto(cliente, dias=PERIODO_DEFECTO, cuenta=None, hoy=None, pagina_anunci
     else:
         serie = _serie(desde, hasta, actuales, moneda_comun) if moneda_comun else None
     ventana = _ventana_alcance(dias)
-    alcances = datos.alcance(cliente, ids, ventana, "cuenta")
-    alcances_campana = datos.alcance(cliente, ids, ventana, "campana")
+    # UNA lectura de alcance: la ventana del período por cuenta y por campaña, y la de 7 días por campaña (la
+    # frecuencia de la regla de fatiga). Eran tres: lo ahorrado paga la lectura de las evaluaciones con IA.
+    leidos = datos.alcance_varios(cliente, ids, (ventana, DIAS_SEMANA))
+    alcances, alcances_campana = leidos[("cuenta", ventana)], leidos[("campana", ventana)]
     con_alcance = [alcances[a]["alcance"] for a in ids if a in alcances]
     unica = alcances.get(ids[0]) if len(ids) == 1 else None
     ctx.update(
@@ -599,13 +696,14 @@ def contexto(cliente, dias=PERIODO_DEFECTO, cuenta=None, hoy=None, pagina_anunci
     ahora = _ahora()
     entrada = _entrada_reglas(
         cliente, en_alcance, hoy, reglas, filas_dia=filas, anuncios=(a30, recientes, previos),
-        frecuencia_7=alcances_campana if ventana == DIAS_SEMANA else None,
+        frecuencia_7=leidos[("campana", DIAS_SEMANA)],
         desgloses_30=[f for f in desgloses if f["ventana"] == DIAS_REGLAS], ahora=ahora,
         evaluados=anuncios if mismo_periodo else None)
     recs = recomendaciones.calcular(entrada)
     ctx.update(recomendaciones=recs, conteo_recomendaciones=_conteo_niveles(recs), ventana_segmentos=ventana_seg,
                segmentos=segmentos([f for f in desgloses if f["ventana"] == ventana_seg], en_alcance, moneda_comun,
-                                   recs, ahora))
+                                   recs, ahora),
+               evaluacion=evaluacion_panel(cliente, anuncios, vivos))
     return ctx
 
 

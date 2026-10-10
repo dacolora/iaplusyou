@@ -252,7 +252,7 @@ def test_jobs_sync_y_ultima_copia_del_alcance(base_temporal, conectado, monkeypa
     _cuentas((A, "SEK", "NO"), (B, "SEK", "SE"))
     cuentas.actualizar("hf", A, ultima_copia="2026-10-08T06:00:00")
     cuentas.actualizar("hf", B, ultima_copia="2026-10-08T03:00:00")
-    monkeypatch.setattr(panel.tareas_mr, "syncs_en_curso", lambda cliente: [panel.tareas_mr.job_id_sync("hf", B)])
+    monkeypatch.setattr(panel.tareas_mr, "trabajos_del_panel", lambda cliente: {panel.tareas_mr.job_id_sync("hf", B)})
     ctx = panel.contexto("hf", hoy=HOY)
     assert ctx["ultima_copia"] == "2026-10-08T03:00:00"
     assert [j["cuenta"]["ad_account_id"] for j in ctx["jobs_sync"]] == [B]
@@ -273,9 +273,11 @@ def test_pocas_consultas_con_tres_cuentas(base_temporal, conectado):
         # Una tasa publicada poco antes de cada día con datos (las tasas viejas ya no rellenan: ruling R24).
         for dia_tasa in ("2026-08-14", "2026-09-24", "2026-10-06"):
             _tasa(moneda, dia_tasa, 0.1)
-    # E1 eran 15 consultas. E2 (Diagnóstico y Segmentos) suma a lo sumo 4: los objetos activos, los desgloses (las
-    # dos ventanas en una), la frecuencia de 7 días por campaña (salvo con el período de 7, que ya la lee) y los
-    # anuncios de 30 días (salvo con el período de 30, que ya los lee). Ninguna crece con las cuentas ni las filas.
+    # E1 eran 15 consultas. E2 (Diagnóstico y Segmentos) suma a lo sumo 3: los objetos activos, los desgloses (las
+    # dos ventanas en una) y los anuncios de 30 días (salvo con el período de 30, que ya los lee). «Evaluación con IA»
+    # suma UNA (las últimas evaluaciones); su barra sale de la misma lectura de las copias vivas y su N de la
+    # evaluación ya hecha. Y el alcance (período por cuenta y por campaña, 7 días por campaña) es UNA lectura, no tres.
+    # Ninguna crece con las cuentas ni las filas.
     for dias in (30, 14, 7, 90):
         consultas = []
 
@@ -287,9 +289,11 @@ def test_pocas_consultas_con_tres_cuentas(base_temporal, conectado):
         finally:
             event.remove(db.engine(), "before_cursor_execute", contar)
         assert len(ctx["por_cuenta"]) == 3 and ctx["usd_ok"] is True
-        assert len(consultas) <= 19, (dias, len(consultas))
+        assert len(consultas) <= 18, (dias, len(consultas))
+        assert sum("FROM meta_evaluacion" in q for q in consultas) == 1
+        assert sum("FROM meta_alcance" in q for q in consultas) == 1 and ctx["evaluacion"]["n"] > 0
         if dias == 30:
-            assert len(ctx["anuncios"]) == 15 and len(consultas) <= 18
+            assert len(ctx["anuncios"]) == 15 and len(consultas) <= 17
 
 
 # ---------------------------------------------------------- Diagnóstico y Segmentos (E2) ---
@@ -436,3 +440,115 @@ def test_segmentos_muestran_los_diez_de_mas_gasto(base_temporal, conectado):
         ["NO", "SE", "FI", "DK", "DE", "NL", "PL", "FR", "ES", "IT", "PT", "BE"])])
     g, = panel.contexto("hf", hoy=HOY)["segmentos"]["bloques"][0]["grupos"]
     assert len(g["filas"]) == panel.MAX_SEGMENTOS == 10 and g["mas"] == 2 and g["filas"][0]["clave"] == "NO"
+
+
+# ---------------------------------------------------------- Evaluación con IA (E2, Task 6) ---
+
+def _sembrar_muestra():
+    """Cuenta A con un ganador y perdedores, cuenta B con un anuncio en prueba (en los últimos 7 y 30 días)."""
+    _cuentas((A, "SEK", "NO"), (B, "SEK", "SE"))
+    for f in ("2026-10-05", "2026-09-20"):
+        datos.reemplazar_cuenta_dias("hf", A, f, f, [_dia(f, 400, 1000, compras=5)])
+        datos.reemplazar_cuenta_dias("hf", B, f, f, [_dia(f, 200, 300, compras=2)])
+    datos.reemplazar_anuncio_dias("hf", A, "2026-09-20", "2026-10-05", [
+        _ad(f, ad, gasto, valor, compras=compras) for f in ("2026-09-20", "2026-10-05")
+        for ad, gasto, valor, compras in (("gana", 100, 1000, 20), ("p1", 60, 0, 0), ("p2", 55, 0, 0),
+                                          ("p3", 52, 0, 0), ("medio", 40, 60, 1))])
+    datos.reemplazar_anuncio_dias("hf", B, "2026-10-05", "2026-10-05",
+                                  [_ad("2026-10-05", "otra", 200, 300, compras=2, adset="s2", campaign="c2")])
+
+
+@pytest.mark.parametrize("dias,cuenta", [(30, None), (7, None), (90, None), (30, A), (14, B)])
+def test_el_boton_cuenta_los_mismos_anuncios_que_cobra_la_ruta(base_temporal, conectado, dias, cuenta):
+    """E2-R6: el N del botón sale de la evaluación que el panel ya hizo (sin `preparar`, que vuelve a leer la copia)
+    y es el mismo N que la ruta cobra con `analisis.preparar`; el precio es la tarifa de ese N."""
+    import gastos
+    from meta_rendimiento import analisis
+    _sembrar_muestra()
+    ev = panel.contexto("hf", dias=dias, cuenta=cuenta, hoy=HOY)["evaluacion"]
+    n = len(analisis.preparar("hf", dias, cuenta, hoy=HOY)["muestra"])
+    assert ev["n"] == n
+    if n:
+        assert ev["estimado"]["usd"] == gastos.estimar("evaluacion_meta", n=n)["usd"]
+    else:
+        assert ev["estimado"] is None
+    assert ev["job"] is None and ev["ultima_lista"] is None and ev["anteriores"] == []
+
+
+def test_el_boton_cuenta_toda_la_lista_no_la_pagina_de_24(base_temporal, conectado, monkeypatch):
+    from meta_rendimiento import analisis
+    _sembrar_muestra()
+    n = len(analisis.preparar("hf", 30, None, hoy=HOY)["muestra"])
+    monkeypatch.setattr(panel, "POR_PAGINA", 1)        # la página ya no trae la muestra entera
+    ctx = panel.contexto("hf", hoy=HOY)
+    assert len(ctx["anuncios"]) == 1 and n > 1 and ctx["evaluacion"]["n"] == n
+
+
+def _ev(estado, cliente="hf", **campos):
+    eid = datos.crear_evaluacion(cliente, [A], "2026-09-09", "2026-10-08", "SEK", [], [],
+                                 extra={"cuenta": None, "resumen": []})
+    if estado != "en_cola":
+        datos.actualizar_evaluacion(eid, estado=estado, **campos)
+    return eid
+
+
+def test_la_seccion_trae_la_ultima_lista_la_que_fallo_despues_y_las_anteriores(base_temporal, conectado):
+    _sembrar_muestra()
+    vieja = _ev("lista", resultado={"resumen": "vieja", "plan": []})
+    viejas = [_ev("error", error="otra falla") for _ in range(3)]
+    lista = _ev("lista", resultado={"resumen": "la buena", "plan": []})
+    fallo = _ev("error", error="Claude no devolvió un análisis que se pueda usar.")
+    _ev("lista", cliente="otro", resultado={"resumen": "ajena", "plan": []})
+    ev = panel.contexto("hf", hoy=HOY)["evaluacion"]
+    assert ev["ultima_lista"]["id"] == lista and ev["ultima_lista"]["resultado"]["resumen"] == "la buena"
+    assert ev["fallida"]["id"] == fallo and "Claude no devolvió" in ev["fallida"]["error"]
+    assert [e["id"] for e in ev["anteriores"]] == list(reversed(viejas)) + [vieja]
+    assert ev["ultima_lista"]["alcance"] == "Todas las cuentas"
+    # Como mucho cinco anteriores (se piden por fetch).
+    for _ in range(6):
+        _ev("lista", resultado={"resumen": "n", "plan": []})
+    ev = panel.contexto("hf", hoy=HOY)["evaluacion"]
+    assert len(ev["anteriores"]) == panel.MAX_EVALUACIONES_ANTERIORES and ev["fallida"] is None
+
+
+def test_una_evaluacion_en_curso_da_su_barra_y_no_sale_entre_las_anteriores(base_temporal, conectado):
+    from tareas import meta_rendimiento as tmr
+    _sembrar_muestra()
+    lista = _ev("lista", resultado={"resumen": "la buena", "plan": []})
+    viva = _ev("en_cola")
+    assert panel.contexto("hf", hoy=HOY)["evaluacion"]["job"] is None   # la fila sola, sin tarea viva: no hay barra
+    tmr.encolar_evaluacion("hf", viva)
+    ev = panel.contexto("hf", hoy=HOY)["evaluacion"]
+    assert ev["job"] == "hf__meta_eval" and ev["ultima_lista"]["id"] == lista
+    assert [e["id"] for e in ev["anteriores"]] == []
+
+
+def test_la_vista_de_una_evaluacion_nombra_los_objetos_y_solo_enlaza_al_administrador(monkeypatch):
+    monkeypatch.setenv("R2_PUBLIC_BASE_URL", "https://media.creatv.test")
+    ev = {"id": 3, "estado": "lista", "extra": {"cuenta": A, "resumen": [{"ad_account_id": A, "nombre": "Norway"}]},
+          "muestra": [{"ref": "A1", "nombre": "Video gana", "veredicto": "ganador",
+                       "medio": {"imagen": "https://media.creatv.test/clientes/hf/meta_rendimiento/eval3_A1.jpg"}},
+                      {"ref": "A2", "nombre": "Foto pierde", "veredicto": "perdedor",
+                       "medio": {"imagen": "https://otro.example/x.jpg"}},
+                      {"ref": "A3", "nombre": "Meta", "medio": {"imagen": "https://scontent.xx.fbcdn.net/a.jpg"}}],
+          "recomendaciones": [{"ref": "R1", "titulo": "Consolida los conjuntos"}],
+          "resultado": {"plan": [
+              {"prioridad": 1, "objetos": ["A1", "R1", "A9"], "que_hacer": "x",
+               "enlace": "https://adsmanager.facebook.com/adsmanager/manage/ads?act=1&selected_ad_ids=9"},
+              {"prioridad": 2, "objetos": [], "que_hacer": "y", "enlace": "javascript:alert(1)"},
+              {"prioridad": 3, "objetos": ["A2"], "que_hacer": "z",
+               "enlace": "https://adsmanager.facebook.com.evil.example/adsmanager/manage/ads"}],
+              "anuncios": {"A1": {"por_que": "gancho claro"}}}}
+    v = panel.evaluacion_vista(ev)
+    uno, dos, tres = v["resultado"]["plan"]
+    assert [(o["ref"], o["nombre"], o["tipo"]) for o in uno["objetos_vista"]] == [
+        ("A1", "Video gana", "anuncio"), ("R1", "Consolida los conjuntos", "recomendacion")]
+    assert uno["enlace"].startswith("https://adsmanager.facebook.com/adsmanager/manage/")
+    assert dos["enlace"] is None and tres["enlace"] is None
+    assert v["alcance"] == "Norway" and v["nombres"]["A2"] == "Foto pierde"
+    imagenes = {a["ref"]: a["imagen"] for a in v["anuncios_vista"]}
+    assert imagenes["A1"].startswith("https://media.creatv.test/") and imagenes["A2"] is None
+    assert imagenes["A3"] == "https://scontent.xx.fbcdn.net/a.jpg"
+    assert ev["resultado"]["plan"][1]["enlace"] == "javascript:alert(1)"      # la fila guardada no se toca
+    # Sin nada que decir por anuncio, no hay «Anuncio por anuncio».
+    assert panel.evaluacion_vista(dict(ev, resultado={"plan": []}))["anuncios_vista"] == []

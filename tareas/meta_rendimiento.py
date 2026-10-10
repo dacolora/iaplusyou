@@ -87,6 +87,12 @@ def syncs_en_curso(cliente):
     return sorted(cola.job_ids_vivos(cliente, TIPO_SYNC))
 
 
+def trabajos_del_panel(cliente):
+    """Los job ids vivos (en cola o corriendo) de las copias Y de la evaluación con IA del proyecto, en UNA consulta:
+    el panel pinta con ellos las barras de las copias y la de «Evaluar con IA» sin una consulta más."""
+    return cola.job_ids_vivos(cliente, (TIPO_SYNC, TIPO_EVALUAR))
+
+
 def _mensaje_error(e, token):
     """El motivo que se guarda en la cuenta y se muestra: sin token y de 500 caracteres como mucho. De un error de
     Meta (`ErrorGraph`) va su texto, que ya viene traducido; de cualquier otra excepción solo su tipo, porque su
