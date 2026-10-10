@@ -1,6 +1,6 @@
 # Meta rendimiento E2: decisiones del 2026-10-10
 
-Registro de las decisiones («rulings» E2-R1 a E2-R8) que se tomaron al construir y revisar el diagnóstico, los desgloses,
+Registro de las decisiones («rulings» E2-R1 a E2-R9) que se tomaron al construir y revisar el diagnóstico, los desgloses,
 «Evaluar con IA» y las alertas de la pestaña Meta. Salen del libro de trabajo de la construcción (`.superpowers/sdd/…`,
 carpeta ignorada por git, por eso se copian aquí). Spec: `docs/superpowers/specs/2026-10-10-meta-rendimiento-e2-design.md`
 (su §14 resume lo que cambió). Plan: `docs/superpowers/plans/2026-10-10-meta-rendimiento-e2.md`. Medición con datos reales:
@@ -46,6 +46,12 @@ y en el código.
   360 s — el pensamiento adaptativo gasta del mismo tope (la misma lección del guion del 2026-09-28) y con 16 000 las 3
   primeras llamadas reales llegaron al límite, dos correcciones salieron sin ideas y se cobraba sin nada para «Llevar a
   Crear» — si está mal: una evaluación más cara por pensar de más.
+- **E2-R9.** Las alertas de Meta rendimiento (`meta_rendimiento:<tipo>:<cuenta>`) las puede descartar un cliente, igual
+  que cualquier alerta que no sea de `PREFIJOS_SOLO_ADMIN` ni de `TIPOS_DESCARTE_ADMIN`; E2 no las agrega a esas listas y
+  se anota como PND-257 para que Daniel decida — los descartes son del proyecto (PND-124), así que el descarte de un cliente
+  también se las esconde al admin, aunque vuelven a salir solas cuando cambia la huella y el admin las ve en «Descartadas»;
+  proteger más alertas sin que Daniel lo pida es cambiar lo que ve el cliente — si está mal: una recomendación «alta»
+  que el admin no ve como pendiente porque un cliente la descartó.
 
 ## Desviaciones aceptadas en la construcción
 

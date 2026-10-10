@@ -15,7 +15,7 @@ la fila con `datos.crear_evaluacion`, en la copia. Después corre lo de la tarea
 `copiar_miniaturas` a R2 de verdad, `visuales`, `armar` y `analizar` contra el modelo real. Corrió con el `.env` de
 producción y sin imprimir ningún valor. El código bajo prueba no se tocó: un envoltorio sobre `Messages.create` solo
 anota `stop_reason`, uso y segundos de cada llamada. Al final se borraron de R2 las 30 claves posibles de las
-miniaturas (`analisis.borrar_miniaturas` sobre la copia: 30 borradas, 0 fallidas; `eval1_A1.jpg` da 404) y también
+miniaturas (`analisis.claves_de_evaluacion` y `analisis.borrar_claves` sobre la copia: 30 borradas, 0 fallidas; `eval1_A1.jpg` da 404) y también
 `/tmp/creatv-e2`.
 
 **Casos:** happyflops es proyecto de cliente; Daniel pidió E2 para él. La muestra tiene siempre 10 anuncios
