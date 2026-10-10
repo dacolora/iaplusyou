@@ -46,6 +46,16 @@ TIMEOUT_META = 20
 MAX_PRODUCTOS = 5
 CAMPOS_M = ("gasto", "impresiones", "clics", "ctr", "cpm", "gancho", "retencion", "pedidos", "ingresos", "roas",
             "cpa", "conversion", "ticket", "nc_pedidos")
+# De dónde salen los números que lee Claude (Rendimiento E2, 2026-10-10): los anuncios de una cuenta de Meta sin
+# tienda de Triple Whale usan este mismo análisis pagado. Nombres propios: no se traducen. Sin fuente, Triple Whale
+# (las evaluaciones y los análisis guardados antes de E2 no la tienen).
+FUENTES = {"triple_whale": "Triple Whale", "meta": "Meta"}
+FUENTE_DEFECTO = "triple_whale"
+
+
+def nombre_fuente(fuente):
+    """«Triple Whale» o «Meta» para el prompt; una fuente vacía o desconocida es Triple Whale."""
+    return FUENTES.get(fuente or FUENTE_DEFECTO, FUENTES[FUENTE_DEFECTO])
 
 
 class AnalisisInvalido(RuntimeError):
@@ -245,7 +255,7 @@ def copiar_miniaturas(cliente, evaluacion_id, anuncios, medios):
 
 # -------------------------------------------------------------- prompt ---
 
-PROMPT = """Eres estratega creativo de anuncios de performance para ecommerce. Estos son anuncios REALES de {marca}, con sus métricas de Triple Whale del {desde} al {hasta} (moneda {moneda}; atribución «{modelo}», ventana «{ventana}»).
+PROMPT = """Eres estratega creativo de anuncios de performance para ecommerce. Estos son anuncios REALES de {marca}, con sus métricas de {fuente} del {desde} al {hasta} (moneda {moneda}; atribución «{modelo}», ventana «{ventana}»).
 
 Medianas de la cuenta: CTR {ctr} %, gancho (vistas de 3 s / impresiones) {gancho}, retención (ThruPlays / vistas de 3 s) {retencion}, ROAS {roas}×. Meta de ROAS del proyecto: {meta}×.
 
@@ -314,7 +324,8 @@ def texto_productos(productos, moneda=""):
 
 def armar(marca, contexto, anuncios, medios, bloques=None, productos=None):
     """(texto de DATOS, bloques de visión). `contexto`: desde, hasta, moneda,
-    modelo, ventana, benchmarks, meta_roas. `bloques` es lo que devolvió
+    modelo, ventana, benchmarks, meta_roas y `fuente` de los números
+    ("triple_whale" si falta, `FUENTES`). `bloques` es lo que devolvió
     `visuales` (sin él, la miniatura de cada anuncio se baja aquí);
     `productos`, los de `datos.top_productos`."""
     b = contexto.get("benchmarks") or {}
@@ -326,8 +337,9 @@ def armar(marca, contexto, anuncios, medios, bloques=None, productos=None):
         medio["visual"] = (bloques.get(a["ad_id"]) or {}).get("clase")
         con_visual[a["ad_id"]] = medio
     texto = PROMPT.format(
-        marca=marca or "este proyecto", desde=contexto["desde"], hasta=contexto["hasta"],
-        moneda=contexto.get("moneda") or "", modelo=contexto.get("modelo") or "", ventana=contexto.get("ventana") or "",
+        marca=marca or "este proyecto", fuente=nombre_fuente(contexto.get("fuente")), desde=contexto["desde"],
+        hasta=contexto["hasta"], moneda=contexto.get("moneda") or "", modelo=contexto.get("modelo") or "",
+        ventana=contexto.get("ventana") or "",
         ctr=_num(b.get("ctr")), gancho=_pct(b.get("gancho")), retencion=_pct(b.get("retencion")),
         roas=_num(b.get("roas")), meta=_num(contexto.get("meta_roas")),
         bloques="\n\n".join(_bloque(a, con_visual.get(a["ad_id"])) for a in anuncios), n_ideas=N_IDEAS,
@@ -446,7 +458,8 @@ def _llamar(content, system_):
 
 def analizar(marca, contexto, anuncios, medios, idioma, bloques=None, productos=None):
     """(resultado, tokens_entrada, tokens_salida). Una corrección si la primera
-    respuesta no sirve; si tampoco, AnalisisInvalido con los tokens pagados."""
+    respuesta no sirve; si tampoco, AnalisisInvalido con los tokens pagados.
+    La fuente de los números llega en `contexto["fuente"]` (ver `armar`)."""
     texto, imagenes = armar(marca, contexto, anuncios, medios, bloques=bloques, productos=productos)
     content = [{"type": "text", "text": texto}] + imagenes
     system_ = system(idioma)

@@ -9,7 +9,9 @@
                            Claude; el gasto real se registra como tipo
                            `evaluacion`, también si la respuesta no sirvió)
   tw_analizar_anuncio   -> f"{cliente}__tw_anuncio__{canal}__{ad_id}"  (max_intentos=1: paga Whisper (fal) y
-                           Claude; «Cómo mejorarlo» de UN anuncio, spec 2026-10-08 tarjetas §6.2)
+                           Claude; «Cómo mejorarlo» de UN anuncio, spec 2026-10-08 tarjetas §6.2). También el de
+                           un anuncio de Meta sin tienda (Rendimiento E2): su foto lleva `fuente="meta"` y, si su
+                           creativo está vacío, la tarea lo trae de Meta (lectura, no cobra) antes de mirarlo
 
 Un error de Triple Whale (llave revocada, tienda, red) deja ESA tienda en
 `estado="error"` con el motivo sin token ni llave y sube para que la cola
@@ -31,6 +33,7 @@ import trabajos
 import triple_whale
 import triple_whale_tiendas
 from doctrina import aprendizajes as doctrina_aprendizajes
+from meta_rendimiento import creativo as meta_creativo
 from meta_rendimiento import tasas
 from nicho.avatares import costo_real
 from tareas import al_interrumpir, ref_sufijo, registrar
@@ -145,6 +148,16 @@ def tw_analizar_anuncio(tarea):
         foto = fila["foto"] or {}
         medios["copy"] = bool((foto.get("creativo") or {}).get("copy"))
         datos.actualizar_analisis(aid, estado="analizando", tarea_id=tarea.get("id"), error=None)
+        de_meta = foto.get("fuente") == "meta"
+        if de_meta and not foto.get("creativo"):
+            # Rendimiento E2: un anuncio de una cuenta de Meta sin tienda no tiene copia de su creativo. Se lee UNA vez
+            # con el token del proyecto (copia imagen y video a R2; nunca lanza) y queda en la foto: lo que Claude mira
+            # es lo que se guarda.
+            trabajos.reportar(job_id, etapa=idiomas.N_("Trayendo el anuncio de Meta"))
+            foto["creativo"] = meta_creativo.traer(cliente, fila["ad_id"], aid)
+            datos.actualizar_analisis(aid, foto=foto)
+            fila["foto"] = foto
+            medios["copy"] = bool(foto["creativo"].get("copy"))
         trabajos.reportar(job_id, etapa=idiomas.N_("Bajando el video"))
         vis, temporales = mejorar.visuales(foto)
         medios.update(visual=vis["clase"], fotogramas=vis["fotogramas"])
@@ -159,7 +172,8 @@ def tw_analizar_anuncio(tarea):
                 usd_voz = float(voz.get("costo_usd") or 0)
                 if usd_voz:
                     gastos.registrar_seguro(cliente, "transcripcion", usd_voz, f"{referencia}:voz", proveedor="fal",
-                                            detalle=gettext("la voz de un anuncio de Triple Whale"))
+                                            detalle=(gettext("la voz de un anuncio de Meta") if de_meta
+                                                     else gettext("la voz de un anuncio de Triple Whale")))
                 medios["transcripcion"] = (voz.get("texto") or "")[:mejorar.MAX_TRANSCRIPCION] or None
         trabajos.reportar(job_id, etapa=idiomas.N_("Analizando con Claude"))
         texto = mejorar.armar(proyectos.nombre_visible(cliente), fila, voz=voz,
@@ -173,7 +187,8 @@ def tw_analizar_anuncio(tarea):
         # El gasto de Claude se anota UNA vez, antes de la última escritura: si esa falla, el except no lo repite.
         usd_claude = costo_real(entrada, salida)
         gastos.registrar_seguro(cliente, "evaluacion", usd_claude, referencia, proveedor="anthropic",
-                                detalle=gettext("un anuncio de Triple Whale"))
+                                detalle=(gettext("un anuncio de Meta") if de_meta
+                                         else gettext("un anuncio de Triple Whale")))
         claude_anotado = True
         datos.actualizar_analisis(aid, estado="lista", resultado=resultado, medios=medios, error=None,
                                   usd=round(usd_voz + usd_claude, 4))

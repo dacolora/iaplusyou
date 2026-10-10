@@ -274,6 +274,19 @@ production. It must work for ANY ad, not only Creatv's: in happyflops only 4 pie
   frame labels AND the integer part of every frame and voice-phrase second: «el segundo 31» for a phrase at 31,1 s is
   not an invented figure; the real test flagged 31 and 37 that way, 2026-10-08). `NOMBRES_CANAL` lives in `triple_whale/__init__.py` so the worker never imports the
   blueprint (`resultados.NOMBRES_CANAL` and `rutas.NOMBRES_CANAL` are that same dict).
+- **Source in the foto (Rendimiento E2 task 1, 2026-10-10).** Why: Meta-source ads (accounts with no store) reuse this
+  same paid pipeline (`tw_analisis`, `tw_analizar_anuncio`, its price and no-double-charge guarantees) instead of a
+  copy. `mejorar.foto(..., fuente="triple_whale", ad_account_id=None)` now stores `"fuente"` (and `"ad_account_id"`
+  with Meta); a foto saved before has no key and reads as Triple Whale. When `foto["fuente"] == "meta"` and its
+  `creativo` is empty, the task reports «Trayendo el anuncio de Meta», calls `meta_rendimiento.creativo.traer` once
+  (image and video copied to R2, never raises; skill `meta-rendimiento`), saves the foto with it and recomputes
+  `medios["copy"]` before `mejorar.visuales`; the spend `detalle` says «un anuncio de Meta» / «la voz de un anuncio de
+  Meta». The only prompt change: «con sus números de {fuente}» (`mejorar.PROMPT`, from `foto["fuente"]`) and «con sus
+  métricas de {fuente}» (`analisis.PROMPT`, from `contexto["fuente"]`), names in `analisis.FUENTES` (=
+  `mejorar.FUENTES`, proper names, not translated; `analisis.nombre_fuente` defaults to Triple Whale). Ruling of the E2
+  plan: a source name alone does not need a new `eval-claude` measurement; the first real run is noted for Daniel.
+  What a Meta analysis still reads from Triple Whale (`_evaluacion_de_cuenta`, `top_productos` by `tienda_id`) is
+  unchanged in this step.
 - **Shared sections (2026-10-09).** What `_tw_panel.html` painted after «Por tienda» (copy bars, the shared-account
   note, alerts, «Tus anuncios», «Lo que hace ganar», reparto, productos, «Ver como tabla») lives as macros in
   `_tw_secciones.html`, which `_rend_panel.html` calls (`_tw_panel.html` itself was retired with its tab the same

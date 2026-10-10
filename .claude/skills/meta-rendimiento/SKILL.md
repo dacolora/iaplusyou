@@ -20,6 +20,25 @@ anchor `#meta`, which now opens Rendimiento). It never changes anything in Meta 
 
 **Thumbnails.** The 3-hourly runs only store the thumbnail of the ads they list with `creative{…}` (those that deliver or wait). Once a day, in the run with the FULL listing, a last step (`sync._miniaturas`) asks Meta for the thumbnail of every ad WITH SPEND in the last 30 days that has none or an older-than-20 h one — paused ones included — through `?ids=` in batches of 50 (`creative{id,thumbnail_url,video_id}`), about 20 extra calls per account per day. Nothing in that step fails the copy (a rejected batch is skipped, a usage limit stops further batches and the next full listing retries). Only a URL that passes `datos.miniatura_valida` is stored: https, host `fbcdn.net`, `facebook.com` or `fbsbx.com` (or a subdomain) and no `access_token` anywhere.
 
+**One ad's media for the paid analysis (`creativo.py`, Rendimiento E2 task 1, 2026-10-10).** Why: an ad of a Meta
+account with no Triple Whale store has no `tw_creativo` row, so «Cómo mejorarlo» (Triple Whale's paid pipeline, reused
+with `foto["fuente"] == "meta"`, skill `triple-whale`) had nothing to look at. `creativo.traer(cliente, ad_id,
+analisis_id)` is called by the task `tw_analizar_anuncio` ONCE, when the foto is from Meta and its `creativo` is empty,
+and returns the `triple_whale.datos.COLUMNAS_CREATIVO` keys. It reads with `meta_conexion.cargar(cliente)["token"]`
+(works without a Page; agency mode as in E1) through `graph.get`: `GET /{ad_id}?fields=creative{…}`, `GET
+/{video_id}?fields=source,length` and, only when the creative has no valid `image_url`, `GET
+/{creative_id}?fields=thumbnail_url&thumbnail_width=600&thumbnail_height=600` (the default thumbnail is 64 px, useless
+to Claude). Ids that are not ASCII digits are never used as an edge. Text: `body`/`title`, else `object_story_spec`
+(`link_data.message`/`name`, `video_data.message`/`title`), else the first of `asset_feed_spec` (`bodies`/`titles`),
+trimmed like `tw_creativo` (title 300, copy 3 000). Media are COPIED to R2 (`clientes/<c>/rendimiento/a<aid>_<ad>.jpg|.mp4`)
+because Meta's URLs expire and `triple_whale.medio_permitido` only lets R2 or Triple Whale reach ffmpeg, fal and Claude:
+both download through `conectores.url.descargar_archivo` (SSRF on every redirect, size and time caps); the image only if
+`datos.miniatura_valida` (8 MB, `image/*`, resized to JPEG of `analisis.LADO_IMAGEN`), the video only if
+`creativo.video_valido` (https, host ending in `.fbcdn.net`, no userinfo, odd port or `access_token`) and ffprobe says
+mp4/mov (`mejorar.es_mp4`); temp files go in a `finally`. It never raises: a Graph error (usage limit included) or a
+network error leaves that key None and logs only `type(e).__name__` and Meta's code, and it does NOT touch the shared
+pause (two or three reads per paid analysis). Tests: `tests/test_rendimiento_e2_creativo.py`.
+
 **The tab is Rendimiento's (2026-10-09, skill `rendimiento`).** The «Meta» tab (`_tab_meta.html`, `_meta_panel.html`,
 `_meta_anuncios_filas.html`, the routes `ver_panel`, `ver_anuncios`, `ver_conjuntos`, `sincronizar` and
 `panel.contexto`/`anuncios_pagina`/`conjuntos_pagina`) was retired: «Todas» in USD day by day now lives in

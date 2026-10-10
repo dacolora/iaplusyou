@@ -16605,6 +16605,9 @@ msgstr "Transition: {nombre}"
 msgid "Trayendo anuncios"
 msgstr "Getting ads"
 
+msgid "Trayendo el anuncio de Meta"
+msgstr "Getting the Meta ad"
+
 msgid "Trayendo las métricas de Meta…"
 msgstr "Pulling Meta metrics…"
 
@@ -19556,6 +19559,9 @@ msgstr "the store didn't bring photos"
 msgid "la voz"
 msgstr "the voice"
 
+msgid "la voz de un anuncio de Meta"
+msgstr "the voice of a Meta ad"
+
 msgid "la voz de un anuncio de Triple Whale"
 msgstr "the voice of a Triple Whale ad"
 
@@ -20735,6 +20741,9 @@ msgstr "your average %(pct)s"
 
 msgid "tu@empresa.com"
 msgstr "you@company.com"
+
+msgid "un anuncio de Meta"
+msgstr "a Meta ad"
 
 msgid "un anuncio de Triple Whale"
 msgstr "a Triple Whale ad"
