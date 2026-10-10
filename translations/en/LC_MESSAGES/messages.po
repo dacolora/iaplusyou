@@ -9532,6 +9532,9 @@ msgstr "Included in Atria's monthly plan (1 200 calls/month); it doesn't charge 
 msgid "Incluido en el plan: %(concepto)s"
 msgstr "Included in the plan: %(concepto)s"
 
+msgid "Incluido en tu plan"
+msgstr "Included in your plan"
+
 msgid "Incluido usado (costo)"
 msgstr "Included used (cost)"
 
@@ -18257,8 +18260,8 @@ msgstr "What does the prospect want to achieve in society?"
 msgid "Whisper · %(s)s s de audio"
 msgstr "Whisper · %(s)s s of audio"
 
-msgid "Wompi abre su propia ventana para los datos de la tarjeta: el número nunca pasa por Creatv. Visa o Mastercard con código de seguridad."
-msgstr "Wompi opens its own window for the card details: the number never goes through Creatv. Visa or Mastercard with a security code."
+msgid "Wompi abre su propia ventana para los datos de la tarjeta: el número nunca pasa por Creatv. Visa, Mastercard o American Express, con código de seguridad."
+msgstr "Wompi opens its own window for the card details: the number never goes through Creatv. Visa, Mastercard or American Express, with a security code."
 
 msgid "Wompi anuló este pago y lo descontamos de tu saldo."
 msgstr "Wompi voided this payment and we deducted it from your balance."

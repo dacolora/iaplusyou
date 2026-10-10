@@ -290,6 +290,7 @@ def test_el_formulario_carga_el_widget_con_la_llave_publica(base, pagina, pro, f
     assert "Autorizo el cobro automático de US$ 10.000 cada año" in anual
     assert 'value="10000"' in pagina().get(f"/cliente/acme/plan/alta?plan={pro}&ciclo=anual").get_data(as_text=True)
     assert "prv_" not in html and "1,25" not in texto
+    assert "Visa, Mastercard o American Express, con código de seguridad." in texto   # Wompi acepta Amex
 
 
 def test_alta_sin_una_casilla_no_habla_con_wompi(base, pagina, pro, falso, avisos):

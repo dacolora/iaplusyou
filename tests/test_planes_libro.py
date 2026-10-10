@@ -671,3 +671,47 @@ def test_una_reserva_incluida_no_hace_pasar_otra_cosa_del_mismo_trabajo(base_tem
     assert libro.exigir("acme", 0.13, job_id="j1", tipo="guion") == 0
     with pytest.raises(libro.SaldoInsuficiente):
         libro.exigir("acme", 0.13, job_id="j1")                      # la reserva de 0 no es «ya reservado»
+
+
+# ------------------------------------------- la etiqueta «Incluido en tu plan» (spec §4 y §8) ---
+
+def _estimar_en_peticion(tipo, cliente="acme", **params):
+    import dashboard
+    import gastos
+    from flask import g
+    with dashboard.app.test_request_context(f"/cliente/{cliente}"):
+        g.cliente_precio = cliente
+        return gastos.estimar(tipo, **params)
+
+
+def test_lo_incluido_dice_incluido_en_tu_plan_mientras_quede_tope(base_temporal, libro, sin_avisos):
+    import gastos
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    assert _estimar_en_peticion("guion")["texto"] == "US$ 0,26 aprox."             # sin plan: a la carta (×2)
+    _abrir(base_temporal, libro, tope=0.20)
+    e = _estimar_en_peticion("guion")
+    assert e["texto"] == "Incluido en tu plan" and e["incluido"] is True and e["usd"] == 0.13
+    assert _estimar_en_peticion("reescribir_idea")["texto"] == "Incluido en tu plan"
+    assert _estimar_en_peticion("video", modelo="nada", duracion=5).get("incluido") is None   # lo caro, nunca
+    gastos.registrar("acme", "guion", 0.10, "guion:1:t1")                           # quedan 0,10 de tope
+    assert _estimar_en_peticion("guion")["texto"] == "US$ 0,16 aprox."             # 0,13 ya no cabe: miembro
+    assert _estimar_en_peticion("regla_producto")["texto"] == "Incluido en tu plan"  # 0,01 sí cabe
+    assert _estimar_en_peticion("guion", cliente="otro")["texto"] == "US$ 0,13 aprox."   # otro proyecto: costo
+
+
+def test_la_etiqueta_no_aparece_en_un_proyecto_que_no_cobra(base_temporal, libro):
+    libro.configurar("acme", usuario="admin", cobrar=False)
+    _abrir(base_temporal, libro)
+    assert _estimar_en_peticion("guion")["texto"] == "US$ 0,13 aprox."
+
+
+def test_incluye_lee_una_vez_por_peticion(base_temporal, libro, planes, monkeypatch):
+    import dashboard
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    _abrir(base_temporal, libro)
+    lecturas = []
+    original = planes._leer_incluye
+    monkeypatch.setattr(planes, "_leer_incluye", lambda c: lecturas.append(c) or original(c))
+    with dashboard.app.test_request_context("/cliente/acme"):
+        assert planes.incluye("acme", "guion", 0.13) and planes.incluye("acme", "ideas", 0.05)
+    assert lecturas == ["acme"]

@@ -149,6 +149,38 @@ def cabe_incluido(usado, costo, periodo_):
     return float(usado) + float(costo or 0) <= float(periodo_["tope_incluido_usd"]) + EPSILON_USD
 
 
+def incluye(cliente, tipo, costo_usd=None):
+    """¿El botón de un gasto de `tipo` dice «Incluido en tu plan» en vez del
+    precio de miembro? (spec planes §4 y §8): el proyecto cobra, hay periodo
+    abierto con tope, el tipo es incluido y su costo cabe en lo que queda del
+    tope (sin costo, basta que quede algo). Una lectura por petición (en
+    `flask.g`, compartida con el chip). Si algo falla: False (se ve el precio,
+    nunca de menos)."""
+    if not cliente or tipo not in TIPOS_INCLUIDOS:
+        return False
+    try:
+        datos = _memo(("incluye", cliente), lambda: _leer_incluye(cliente))
+    except Exception:  # noqa: BLE001
+        log.warning("no se pudo leer lo incluido del plan de %s para la etiqueta", cliente, exc_info=True)
+        return False
+    if not datos:
+        return False
+    periodo_, usado = datos
+    if costo_usd is None:
+        return usado < float(periodo_["tope_incluido_usd"]) - EPSILON_USD
+    return cabe_incluido(usado, costo_usd, periodo_)
+
+
+def _leer_incluye(cliente):
+    from cobros import vista  # noqa: PLC0415 — vista importa libro, que importa este módulo
+    if not vista.cobra(cliente):
+        return None
+    periodo_ = periodo_abierto(cliente)
+    if periodo_ is None or periodo_["tope_incluido_usd"] <= 0:
+        return None
+    return periodo_, incluido_usado(cliente, periodo_)
+
+
 def marcar_cerrado(con, periodo_id):
     """El periodo ya se venció (`libro.vencer_periodo` escribió su movimiento en
     esta misma transacción). Devuelve las filas tocadas."""

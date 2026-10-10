@@ -5799,7 +5799,8 @@ def org_redactar(cliente):
         return jsonify({"error": gettext("Elige la pieza y al menos una plataforma.")}), 400
     # Cobros (spec 2026-10-08 §5.2): sin saldo, 402 (organico.redactar
     # caería en silencio al texto determinista, y la persona pidió IA).
-    libro_cobros.exigir(cliente, gastos.TARIFAS["caption_organico"])
+    # Con plan y tope libre es «incluido» y no pide saldo (spec planes §4): por eso el tipo.
+    libro_cobros.exigir(cliente, gastos.TARIFAS["caption_organico"], tipo="caption_organico")
     try:
         textos = organico.redactar(cliente, pieza_id, plataformas)
     except ValueError as e:
