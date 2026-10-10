@@ -97,6 +97,8 @@ images/videos, brand references, candidate images, final videos) is pushed to
 Cloudflare R2 and referenced by its public URL from then on — binaries are never
 committed to git (`.gitignore` excludes `clientes/*/personajes/*`, `clientes/*/marca/*`,
 `salidas/`, the `*.json` state files, all `.env`/token files).
+To delete: `delete_file(key)` builds one boto3 client per call; for a batch use `delete_files(keys)` (ONE client, each key on its
+own, returns `(borradas, tipos_de_error)`, never the error text; no keys = no client).
 
 **Ayudas de marca** (`generador_prompts.py`): calls Anthropic directly. `analizar_marca()` uses Claude's vision input on uploaded
 brand reference images to auto-write that guía de estilo.
