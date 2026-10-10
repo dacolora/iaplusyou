@@ -259,16 +259,36 @@ def test_el_periodo_y_los_params(base_temporal):
     hoy = date.today()
     assert alc["dias"] == 7 and alc["hasta"] == hoy.isoformat() and alc["desde"] == _hace(6)
     assert alc["params"] == params and alc["params"] is not params     # una copia: quien la pasó puede seguir usándola
-    # «Desde el inicio»: el primer día copiado de ESAS cuentas.
+    # «Desde el inicio»: el primer día de ANUNCIOS copiado de ESAS cuentas (B2; el de cuenta es _hace(9)).
     inicio = _alc([SE1, SE2], 0)
-    assert inicio["dias"] == 0 and inicio["desde"] == _hace(9) and inicio["hasta"] == hoy.isoformat()
+    assert inicio["dias"] == 0 and inicio["desde"] == _hace(6) and inicio["hasta"] == hoy.isoformat()
 
 
 @pytest.mark.parametrize("raro", [5, None, "30", True, 1.5, -7, 365])
 def test_un_periodo_raro_cae_en_desde_el_inicio(base_temporal, raro):
     _dos_suecas()
     alc = _alc([SE1], raro)
-    assert alc["dias"] == 0 and alc["desde"] == _hace(9)
+    assert alc["dias"] == 0 and alc["desde"] == _hace(6)
+
+
+def test_desde_el_inicio_arranca_en_el_primer_dia_de_anuncios_copiado(base_temporal):
+    """B2 (revisión final de Rendimiento E2, 2026-10-10; enmienda A2: los anuncios usan el «Desde el inicio» de SU
+    copia). La copia de cuentas guarda unos 400 días y la de anuncios 90: con el primer día de CUENTA, el alcance de los
+    anuncios decía «desde hace 390 días» y cada análisis guardaba un `desde` que no es el de los números que mira. Solo
+    las cuentas pedidas cuentan, y sin anuncios copiados no se toma el primer día de cuenta."""
+    cuentas.elegir("acme", [{"id": SE1, "name": "HappyFlops Sweden", "currency": "SEK", "pais": "SE"},
+                            {"id": SE2, "name": "HappyFlops Sverige", "currency": "SEK", "pais": "SE"}])
+    mdatos.reemplazar_cuenta_dias("acme", SE1, _hace(389), _hace(0), [_dia(_hace(n), 100, 200) for n in range(390)])
+    for n in range(5):
+        f = _hace(n)
+        mdatos.reemplazar_anuncio_dias("acme", SE1, f, f, [_ad(f, "a1", 100, 300, compras=2)])
+    mdatos.reemplazar_anuncio_dias("acme", SE2, _hace(40), _hace(40), [_ad(_hace(40), "b1", 50, 0)])   # otra cuenta
+    alc = _alc([SE1], 0)
+    assert alc["desde"] == _hace(4) and alc["hasta"] == date.today().isoformat()
+    assert _alc([SE1, SE2], 0)["desde"] == _hace(40)                       # el primero entre las cuentas pedidas
+    assert _alc([SE1], 30)["desde"] == _hace(29)                           # un periodo fijo no cambia
+    mdatos.reemplazar_anuncio_dias("acme", SE1, _hace(4), _hace(0), [])
+    assert _alc([SE1], 0)["desde"] == date.today().isoformat()            # sin anuncios: hoy, nunca hace 389 días
 
 
 def test_sin_params_el_alcance_igual_sale(base_temporal):

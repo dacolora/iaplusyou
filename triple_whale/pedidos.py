@@ -73,6 +73,9 @@ def pedir_analisis(cliente, alc, a, usuario):
                         mejorar.ganadores_del_canal(ev, a, creativos),
                         fuente=alc.get("fuente", analisis.FUENTE_DEFECTO), ad_account_id=a.get("ad_account_id"))
     foto["alcance_canal"] = alc.get("canal")     # el filtro de canal del panel también es del alcance (revisión final, A3)
+    # El periodo pedido (0 = «Desde el inicio»): la copia de anuncios de Meta guarda 90 días y su «Desde el inicio» corre
+    # cada día, así que `panel.mismo_alcance` lo usa para la fuente Meta (B2 de la revisión final de Rendimiento E2).
+    foto["alcance_dias"] = alc.get("dias")
     # La moneda del anuncio si la trae (Meta: la de su cuenta); si no, la del alcance. Un alcance de Meta con cuentas en
     # monedas distintas no tiene una común (None) y el análisis guardaría None aunque el anuncio sí la sepa.
     aid = datos.crear_analisis(cliente, alc["tienda_id"], a["canal"], a["ad_id"], alc["desde"], alc["hasta"],

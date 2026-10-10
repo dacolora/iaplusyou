@@ -314,7 +314,13 @@ def mismo_alcance(fila, alcance):
     así que una cuenta cubierta por una tienda (R5), vista sola (R3), muestra como tarjeta de Meta el MISMO anuncio que
     «Todas» muestra como de Triple Whale. Sin comparar la fuente, cada tarjeta tomaba el análisis de la otra como suyo y
     viejo, volvía a ofrecer pagarlo y lo metía al lote sin fin. La foto guarda `fuente` (una de antes de E2 no la tiene:
-    es de Triple Whale) y el alcance de Meta trae `fuente = "meta"` (el de Triple Whale no la trae)."""
+    es de Triple Whale) y el alcance de Meta trae `fuente = "meta"` (el de Triple Whale no la trae).
+
+    B2 (revisión final de Rendimiento E2, 2026-10-10): el «Desde el inicio» de los anuncios de Meta es una ventana que
+    corre (la copia de anuncios guarda 90 días), así que un análisis de ayer tiene otro `desde` y, si la copia y la poda
+    no corrieron juntas, otro largo: con alcance de Meta en «Desde el inicio», uno pedido también en «Desde el inicio»
+    (`foto.alcance_dias == 0`, lo guarda `pedidos.pedir_analisis`) es del mismo alcance. Triple Whale no cambia: su
+    «Desde el inicio» arranca siempre en el mismo primer día copiado."""
     if not alcance:
         return True
     fila = fila or {}
@@ -325,12 +331,20 @@ def mismo_alcance(fila, alcance):
         return False
     if canal_del_alcance(fila) != (alcance.get("canal") or None):
         return False
+    if alcance.get("fuente") == "meta" and _es_cero(alcance.get("dias")) and _es_cero(
+            (fila.get("foto") or {}).get("alcance_dias")):
+        return True
     largo = _dias_periodo(fila.get("desde"), fila.get("hasta"))
     if largo is None:
         return False
     if largo == _dias_periodo(alcance.get("desde"), alcance.get("hasta")):
         return True
     return str(fila.get("desde"))[:10] == str(alcance.get("desde") or "")[:10]
+
+
+def _es_cero(valor):
+    """¿Es el periodo 0 («Desde el inicio»)? Un entero de verdad: ni None ni False."""
+    return isinstance(valor, int) and not isinstance(valor, bool) and valor == 0
 
 
 def _metodo(foto):

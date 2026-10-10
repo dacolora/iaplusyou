@@ -693,6 +693,39 @@ def test_un_analisis_de_meta_no_es_el_de_la_tarjeta_de_triple_whale(mixto):
     _desde_la_otra_fuente(mixto, "tw", "", "meta")
 
 
+def test_un_analisis_de_meta_desde_el_inicio_sigue_siendo_del_mismo_alcance_cuando_corre_la_ventana(mixto):
+    """B2 (revisión final de Rendimiento E2, 2026-10-10): la copia de anuncios de Meta guarda 90 días, así que «Desde el
+    inicio» de una cuenta de Meta es una ventana que corre: un análisis de ayer tiene otro `desde` y, si la copia y la
+    poda no corrieron juntas, otro largo. Con «Desde el inicio» pedido (la foto guarda `alcance_dias = 0`) sigue siendo
+    del mismo alcance: ni viejo por eso ni de vuelta en el lote. Uno sin esa marca cae en «otro alcance» (nota neutra),
+    nunca en «viejo». Triple Whale no cambia: su «Desde el inicio» arranca siempre en el mismo día."""
+    from triple_whale import panel as tw_panel
+    _sembrar()
+    assert _analizar(mixto, "meta", "m2").get_json()["ok"]
+    [fila] = _filas()
+    assert fila["foto"]["alcance_dias"] == 0 and fila["foto"]["fuente"] == "meta"
+    with db.conectar() as con:
+        con.execute(db.tarea.update().values(estado="hecha"))
+    al = _alcances()
+    m2 = next(a for a in al["meta"]["ev"]["anuncios"] if a["ad_id"] == "m2")
+    # Ayer: la ventana arrancaba dos días antes y terminaba ayer (otro `desde`, otro largo).
+    ayer = dict(fila, estado="lista", desde=_hace(6), hasta=_hace(1),
+                foto=dict(fila["foto"], veredicto=m2["veredicto"], m={"gasto": m2["m"]["gasto"]}))
+    assert ayer["desde"] != al["meta"]["desde"]
+    e = tw_panel.elegir_analisis(m2, [ayer], al["meta"])
+    assert e["mismo"] is ayer and e["fresco"] and not e["viejo"] and not e["ofrecer"]
+    sin_marca = dict(ayer, foto={k: v for k, v in ayer["foto"].items() if k != "alcance_dias"})
+    e = tw_panel.elegir_analisis(m2, [sin_marca], al["meta"])
+    assert e["mismo"] is None and e["otro_alcance"] and not e["viejo"] and not e["ofrecer"]
+    # Con 30 días la marca no basta: un periodo fijo compara el largo, como siempre.
+    al30 = _alcances(dias=30)
+    m2_30 = next(a for a in al30["meta"]["ev"]["anuncios"] if a["ad_id"] == "m2")
+    assert not tw_panel.mismo_alcance(ayer, al30["meta"]) and not tw_panel.elegir_analisis(m2_30, [ayer], al30["meta"])["viejo"]
+    # Triple Whale: la marca no cambia nada (mismo `desde` o mismo largo, como siempre).
+    tw_fila = dict(ayer, tienda_id=al["tw"]["tienda_id"], foto=dict(ayer["foto"], fuente="triple_whale"))
+    assert not tw_panel.mismo_alcance(tw_fila, al["tw"])
+
+
 def test_mismo_alcance_compara_la_fuente():
     from triple_whale import panel as tw_panel
     base = {"tienda_id": None, "desde": "2026-09-11", "hasta": "2026-10-10"}

@@ -30,14 +30,20 @@ Lo que cambia respecto del de Triple Whale, cada cosa con su motivo:
    costo por venta del canal (`ev["cuenta"]["canales"]` queda vacío: `pedidos` y la tarjeta lo leen como «sin dato»).
 6. `meta_roas`: la meta de ROAS del proyecto; apagada, cada cuenta se mide con su mediana y el alcance de varias da
    UNA, la de todos sus anuncios.
+7. «Desde el inicio» (`dias` 0) arranca en el primer día copiado de ANUNCIOS de esas cuentas
+   (`meta_rendimiento.datos.primer_dia_anuncios`), no en el de cuentas: la copia de anuncios guarda 90 días y la de
+   cuentas 400 (B2 de la revisión final de E2, enmienda A2). Como esa ventana corre, un análisis pedido con «Desde el
+   inicio» sigue siendo del mismo alcance al día siguiente (`triple_whale.panel.mismo_alcance`, `foto.alcance_dias`).
 """
 from datetime import date
 
 import decisor
 import proyectos
 import triple_whale
+from meta_rendimiento import datos as meta_datos
 from meta_rendimiento import panel as meta_panel
 from triple_whale import evaluacion
+from triple_whale.panel import periodo
 
 FUENTE = "meta"
 MODELO_ATRIBUCION = "Pixel de Meta"     # nombres propios de lo que mide Meta: no pasan por el catálogo
@@ -72,7 +78,13 @@ def alcance(cliente, ids, dias, hoy, params, cuentas_por_id=None):
         return None
     hoy = hoy or date.today()
     dias = dias if not isinstance(dias, bool) and dias in meta_panel.PERIODOS_RENDIMIENTO else 0
-    desde, hasta, _, _ = meta_panel.rango_fechas(cliente, ids, dias, hoy)
+    if dias == 0:
+        # B2 (revisión final de E2, 2026-10-10; enmienda A2): «Desde el inicio» de los anuncios arranca en el primer día
+        # de la copia de ANUNCIOS (90 días), no en el de cuentas (400): ese periodo es el que tienen sus números, y el
+        # que guarda el análisis pagado.
+        desde, hasta, _, _ = periodo(0, hoy, meta_datos.primer_dia_anuncios(cliente, ids))
+    else:
+        desde, hasta, _, _ = meta_panel.rango_fechas(cliente, ids, dias, hoy)
     r = meta_panel.anuncios_evaluados(cliente, ids, desde, hasta, hoy, cuentas_por_id)
     anuncios = r["ev"]["anuncios"]
     for a in anuncios:

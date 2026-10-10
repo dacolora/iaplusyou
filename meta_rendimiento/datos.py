@@ -343,6 +343,20 @@ def rango(cliente, cuentas):
     return {"filas": int(r.filas or 0), "desde": r.desde, "hasta": r.hasta} if r.filas else vacio
 
 
+def primer_dia_anuncios(cliente, cuentas):
+    """La primera fecha (AAAA-MM-DD) copiada en `meta_anuncio_dia` entre esas cuentas, o None (sin cuentas no toca la
+    base). El «Desde el inicio» de los anuncios de Meta en Rendimiento (`pestana_rendimiento.alcance_meta`, B2 de la
+    revisión final de E2, 2026-10-10): la copia de anuncios guarda 90 días y la de cuentas 400, y un alcance de anuncios
+    que arrancara en el primer día de cuenta diría un periodo que sus números no tienen. Un MIN sobre el índice."""
+    if not cuentas:
+        return None
+    a = db.meta_anuncio_dia
+    with db.conectar() as con:
+        f = con.execute(sa.select(sa.func.min(a.c.fecha)).where(
+            a.c.cliente == cliente, a.c.ad_account_id.in_(list(cuentas)))).scalar()
+    return str(f)[:10] if f else None
+
+
 def primeras_fechas(cliente, cuentas):
     """{act: primera fecha copiada en meta_cuenta_dia} de esas cuentas (las que no tienen días no aparecen). La
     pestaña Rendimiento la usa para «Todas desde que hay datos de todas tus fuentes» (spec 2026-10-09 R7). Una
