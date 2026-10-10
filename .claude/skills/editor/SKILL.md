@@ -291,3 +291,16 @@ and `tareas/triple_whale.tw_gancho_armar` share it, so a task that builds a docu
 does, after its own `verificar_recortes` and `versionar` (the route keeps its `version_n` CAS and its 409). Materials
 with origen `triple_whale` (an ad's original video, downloaded once and deduped by hash) are in `ORIGENES_BIBLIOTECA`:
 they show in «Medios» and can be reused, but they are not in `ORIGENES_BORRABLES`.
+
+**«Separar audio» (pedido de 2026-10-10: «separar el audio del video que esté editando»):** `operaciones.separarAudio(doc,
+clipId, info)` turns the scene sound of a principal video clip into its OWN audio clip (`rol_audio: "sonido"`, same
+`inicio_ms`/`duracion_ms`/`recorte`, `velocidad` 1) on an audio track that is never `p_sonido` (`pistaLibre` with
+`mismoRolQue("sonido")`, base `p_audio`), so it can be moved, trimmed, cut or deleted without touching the picture. Its
+mirror `s_<id>` in `p_sonido` is set to volume 0 (it would sound twice); `espejar` keeps that 0 through cuts and
+duplicates (by id/root). Without `p_sonido` the video was already mute and nothing is created. The new clip copies the
+mirror's `audio` unless it was at 0 (then it is born at 1). Refused: a photo, speed ≠ 1, a material without sound, and a
+clip whose sound is already separated (a `sonido` clip outside `p_sonido` of the same material overlapping its recorte) —
+a second click never duplicates it. No render or validator change: the compiler mixes by `rol_audio`, not by track, and
+`materialQueFalta` checks the new clip like any other audio. UI: «Separar audio» button in the video form
+(`propiedades.js`, `modelo.separar` from `motivoRechazo`). Known limit: subtitles with source `sonido` still follow the
+VIDEO clip, not the moved audio (use source `material:<id>` if the separated audio is moved).

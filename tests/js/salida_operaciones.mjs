@@ -69,6 +69,15 @@ anotar("cambiar_estilo_parcial", () => {
 anotar("volumen_sonido", () => op.volumenSonido(op.normalizar(docBase(), INFO), "v0", 0.3, INFO));
 // Capa 4b (Task 7): lo que pide el panel de propiedades.
 anotar("volumen_sonido_espejo_del_borrador", () => op.volumenSonido(docBase(), "v1", 0.3, INFO));
+anotar("separar_audio", () => op.separarAudio(docBase(), "v1", INFO));
+anotar("separar_audio_y_moverlo", () => {
+  const r = op.separarAudio(docBase(), "v0", INFO);
+  return op.moverA(r.doc, r.seleccion, 3000, INFO);
+});
+anotar("separar_audio_y_recortarlo", () => {
+  const r = op.separarAudio(docBase(), "v0", INFO);
+  return op.recortar(r.doc, r.seleccion, "fin", -1500, INFO);
+});
 for (const preset of op.MEZCLAS) anotar(`cambiar_mezcla_${preset}`, () => op.cambiarMezcla(docBase(), preset, INFO));
 anotar("cambiar_desde_propiedades", () => {
   let d = op.agregarTexto(docBase(), 500, "titulo", {}, INFO).doc;

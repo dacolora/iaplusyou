@@ -184,7 +184,9 @@ export function estiloArrastre({ modo, lado, dx, ancho }) {
 }
 
 // Claves de textos.js (se traducen al usarlas, nunca al cargar el módulo).
-const NOMBRE_ROL = { voz: "fila.voz", musica: "fila.musica", sonido: "fila.sonido", efecto: "fila.efecto", subida: "fila.audio", grabacion: "fila.grabacion" };
+// `sonido` fuera de p_sonido es solo el audio separado de un video («Separar audio»):
+// su fila no se puede llamar igual que la del sonido de la escena.
+const NOMBRE_ROL = { voz: "fila.voz", musica: "fila.musica", sonido: "fila.audio_separado", efecto: "fila.efecto", subida: "fila.audio", grabacion: "fila.grabacion" };
 const NOMBRE_TIPO = { texto: "fila.textos", imagen: "fila.imagenes", superpuesto: "fila.superpuesto", video: "fila.video", audio: "fila.audio" };
 
 export function nombreFila(pista, doc) {
@@ -210,6 +212,7 @@ export function etiquetaClip(pista, clip, doc = null, destino = null) {
     const valor = destino ? valorDestino(doc?.variables?.textos?.[rol], idioma, pais) : null;
     return valor === null || valor === undefined ? t("clip.texto", { rol }) : String(valor);
   }
+  if (pista.id === ID_SONIDO) return t("fila.sonido");
   if (pista.tipo === "audio") return t(NOMBRE_ROL[clip.rol_audio] ?? "fila.audio");
   if (pista.tipo === "imagen") return t("clip.imagen");
   return "";
@@ -222,7 +225,7 @@ export function etiquetaClip(pista, clip, doc = null, destino = null) {
 const CABECERA_ROL = {
   voz: { icono: "voz", nombre: "fila.voz" },
   musica: { icono: "musica", nombre: "fila.musica" },
-  sonido: { icono: "sonido", nombre: "fila.sonido" },
+  sonido: { icono: "sonido", nombre: "fila.audio_separado" },
   efecto: { icono: "musica", nombre: "fila.efecto" },
   grabacion: { icono: "voz", nombre: "fila.grabacion" },
 };

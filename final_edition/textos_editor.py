@@ -73,6 +73,10 @@ TEXTOS = {
     "op.audio_solo_audio": N_("El audio solo se cambia en clips de audio."),
     "op.sonido_no_cabe": N_("Esta edición ya tiene demasiadas pistas: no cabe el sonido del video."),
     "op.sin_sonido_escena": N_("Ese clip no tiene sonido de la escena todavía."),
+    # operaciones.js: «Separar audio» (2026-10-10)
+    "op.separar_foto": N_("Una foto no tiene sonido que separar."),
+    "op.separar_velocidad": N_("A otra velocidad el video va sin su sonido: déjalo en 1× para separar el audio."),
+    "op.audio_ya_separado": N_("El audio de este clip ya está separado: lo encuentras en su propia pista."),
     "op.palabra_no_existe": N_("Esa palabra ya no está en los subtítulos."),
     "op.palabra_larga": N_("Una palabra corregida puede tener hasta 120 letras."),
     "op.palabra_solo_emoji": N_("Los emojis no salen en los subtítulos: escribe la palabra con letras."),
@@ -123,6 +127,7 @@ TEXTOS = {
     "fila.superpuesto": N_("Video encima"),
     "fila.video": N_("Video"),
     "fila.sonido_escena": N_("Sonido de la escena"),
+    "fila.audio_separado": N_("Audio separado"),
     "fila.pista": N_("Pista"),
     "fila.subtitulos": N_("Subtítulos"),          # linea_tiempo.js: la fila de solo lectura (capa 5a)
     # escala.js (clips), biblioteca.js, propiedades*.js
@@ -385,6 +390,8 @@ TEXTOS = {
     "prop.a_medida": N_("Esta edición trae volúmenes a medida: elegir una mezcla los reemplaza."),
     "prop.velocidad": N_("Velocidad"),
     "prop.volumen_sonido": N_("Volumen del sonido"),
+    "prop.separar_audio": N_("Separar audio"),
+    "prop.audio_separado": N_("El audio quedó en su propia pista: ya lo puedes mover, recortar o borrar sin tocar el video."),
     "prop.zoom_lento": N_("Zoom lento"),
     "prop.transicion_siguiente": N_("Transición al siguiente"),
     "prop.tipo": N_("Tipo"),

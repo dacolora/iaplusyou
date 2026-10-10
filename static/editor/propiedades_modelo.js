@@ -78,7 +78,7 @@ export const COLORES = [
   { nombre: "prop.color_rojo", color: "#E53935" },
 ];
 
-const NOMBRES_ROL = { musica: "fila.musica", efecto: "fila.efecto", voz: "fila.voz", grabacion: "fila.grabacion", sonido: "fila.sonido", subida: "fila.audio" };
+const NOMBRES_ROL = { musica: "fila.musica", efecto: "fila.efecto", voz: "fila.voz", grabacion: "fila.grabacion", sonido: "fila.audio_separado", subida: "fila.audio" };
 const CLAVE_DESTINO = /^[a-z]{2}(_[A-Z]{2})?$/;   // lo que acepta operaciones.editarTexto
 const COLOR_RE = /^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$/;
 
@@ -232,6 +232,13 @@ function sonidoDeVideo(doc, clip, info) {
            motivo: velocidad !== 1 ? t("prop.velocidad_sin_sonido") : t("prop.video_sin_sonido") };
 }
 
+// «Separar audio» de un clip de la principal: si se puede, y si no, el porqué
+// (el mismo de operaciones.separarAudio), para el título del botón.
+function separarDeVideo(doc, clip, info) {
+  const motivo = motivoRechazo(doc, "separarAudio", [clip.id], info);
+  return { disponible: motivo === null, motivo };
+}
+
 // La transición al siguiente clip de la principal (videos y fotos). D9:
 // una que nace ahora (o una «solape») junta los dos clips y acorta el
 // video: `ayuda` lo dice; una de «cola» (un borrador automático) no.
@@ -271,6 +278,7 @@ function modeloVideo(doc, h, info) {
     velocidad: Number(clip.velocidad ?? 1),
     velocidades: VELOCIDADES.map((v) => ({ valor: v, texto: textoVelocidad(v) })),
     sonido: sonidoDeVideo(doc, clip, info),
+    separar: separarDeVideo(doc, clip, info),
     ...comunPrincipal(h),
   };
 }

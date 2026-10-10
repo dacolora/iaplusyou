@@ -3,6 +3,7 @@
 // clase de lo elegido:
 //
 // - Video (la pista principal): velocidad, volumen del sonido de la escena,
+//   «Separar audio» (su sonido a una pista de audio propia),
 //   encuadre, zoom lento, transición al siguiente (y su duración) y borrar.
 // - Foto (capa 5b: una foto como clip de la principal): cuánto dura (en vez
 //   de velocidad y sonido, que una foto no tiene), encuadre, zoom lento,
@@ -384,6 +385,15 @@ export class Propiedades {
       aplicar: (v) => this._operar(`${id}:sonido`, "volumenSonido", id, v / 100),
     });
     this._nota(this.cuerpo, (x) => x.sonido.motivo);
+    // «Separar audio»: el sonido de este clip pasa a su propia pista de audio
+    const acciones = el("div", "ed-prop-acciones", this.cuerpo);
+    this._boton(acciones, {
+      texto: t("prop.separar_audio"),
+      leer: (x) => ({ deshabilitado: !x.separar.disponible, titulo: x.separar.motivo }),
+      aplicar: () => {
+        if (this._operar(null, "separarAudio", id)) this._decir(t("prop.audio_separado"));
+      },
+    });
     this._armarEncuadre(m);
     this._armarZoomLento();
     this._armarTransicion(m);

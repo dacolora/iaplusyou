@@ -653,3 +653,14 @@ test("claveForma de una imagen: distinta si su material se tiñe (el formulario 
   // lo demás sigue como estaba
   assert.equal(claveForma(modelo(r.doc, null)), "documento:");
 });
+
+test("«Separar audio» en el formulario del video: disponible, y después dice por qué no", () => {
+  const d = docBase();
+  assert.deepEqual(modelo(d, "v0", { info: INFO }).separar, { disponible: true, motivo: null });
+  const r = op.separarAudio(d, "v0", INFO);
+  const despues = modelo(r.doc, "v0", { info: INFO }).separar;
+  assert.equal(despues.disponible, false);
+  assert.match(despues.motivo, /ya está separado/);
+  // el audio separado se edita como cualquier audio (no como el espejo de la escena)
+  assert.equal(formaDe(r.doc, r.seleccion), "audio");
+});

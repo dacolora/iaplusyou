@@ -181,8 +181,9 @@ test("cabecera de cada fila: icono y nombre corto", () => {
   assert.deepEqual(cabeceraFila(musica, doc), { icono: "musica", nombre: "Música" });
   assert.deepEqual(cabeceraFila({ id: "p_fx", tipo: "audio", clips: [{ rol_audio: "efecto" }] }, doc), { icono: "musica", nombre: "Efecto" });
   assert.deepEqual(cabeceraFila({ id: "p_a", tipo: "audio", clips: [] }, doc), { icono: "musica", nombre: "Audio" });
-  // una pista de audio que dice «sonido» sin ser el espejo también es «Sonido»
-  assert.deepEqual(cabeceraFila({ id: "p_s2", tipo: "audio", clips: [{ rol_audio: "sonido" }] }, doc), { icono: "sonido", nombre: "Sonido" });
+  // una pista de audio que dice «sonido» sin ser el espejo es el audio separado de un video
+  // («Separar audio», 2026-10-10): no se puede llamar igual que la fila del sonido de la escena
+  assert.deepEqual(cabeceraFila({ id: "p_s2", tipo: "audio", clips: [{ rol_audio: "sonido" }] }, doc), { icono: "sonido", nombre: "Audio separado" });
   assert.deepEqual(cabeceraFila({ id: "p_pip", tipo: "superpuesto", clips: [] }, doc), { icono: "video", nombre: "Video encima" });
   const soloImagen = { pistas: [{ id: "p_fotos", tipo: "imagen", clips: [] }] };
   assert.deepEqual(cabeceraFila(soloImagen.pistas[0], soloImagen), { icono: "imagen", nombre: "Imagen" });

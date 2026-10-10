@@ -1306,6 +1306,45 @@ export function volumenSonido(doc, clipPrincipalId, volumen, info = {}) {
   return terminar(res, clipPrincipalId, info);
 }
 
+// «Separar audio» (pedido de 2026-10-10, como «Extraer audio» de CapCut): el
+// sonido de un clip de la principal pasa a ser un clip de audio propio
+// (rol `sonido`, en una pista de audio que no es p_sonido), con el mismo
+// tiempo y el mismo recorte, que ya se mueve, recorta, corta o borra sin
+// tocar la imagen. Su espejo en p_sonido queda en silencio (volumen 0) para
+// que no suene dos veces; si la edición no tiene p_sonido, el video ya iba
+// mudo y no hay nada que callar. El clip nuevo conserva el volumen y los
+// fundidos del espejo; si el espejo estaba en 0 (o no había), nace a 1: quien
+// separa el audio quiere oírlo. Un video a otra velocidad, una foto o un
+// material sin sonido no se separan, y tampoco un clip cuyo sonido ya está
+// separado (un clip `sonido` fuera de p_sonido del mismo material que pisa su
+// recorte): un segundo clic no lo duplica.
+export function separarAudio(doc, clipPrincipalId, info = {}) {
+  const res = structuredClone(doc);
+  const p = principalDe(res);
+  const clip = p.clips.find((c) => c.id === clipPrincipalId);
+  if (!clip) throw new OperacionInvalida(t("op.fuera_principal"));
+  if (clip.foto) throw new OperacionInvalida(t("op.separar_foto"));
+  if (vel(clip) !== 1) throw new OperacionInvalida(t("op.separar_velocidad"));
+  if (!tieneAudioDe(info, clip.material_id)) throw new OperacionInvalida(t("op.sin_sonido_escena"));
+  const desde = clip.recorte?.desde_ms ?? 0;
+  const hasta = desde + clip.duracion_ms;
+  const yaSeparado = res.pistas.some((x) => x.tipo === "audio" && x.id !== ID_SONIDO && x.clips.some((c) =>
+    c.rol_audio === "sonido" && c.material_id === clip.material_id
+    && (c.recorte?.desde_ms ?? 0) < hasta && desde < (c.recorte?.hasta_ms ?? 0)));
+  if (yaSeparado) throw new OperacionInvalida(t("op.audio_ya_separado"));
+  sincronizarSonido(res, info);
+  const mirror = res.pistas.find((x) => x.id === ID_SONIDO)?.clips.find((c) => c.id === `s_${clip.id}`.slice(0, 40));
+  const audio = mirror && Number(mirror.audio?.volumen ?? 1) > 0 ? { ...AUDIO, ...mirror.audio } : { ...AUDIO };
+  const pista = pistaLibre(res, "audio", BASE_PISTA.audio, clip.inicio_ms, clip.duracion_ms, [ID_SONIDO], mismoRolQue("sonido"));
+  const nuevo = {
+    id: idNuevo(res, "son"), inicio_ms: clip.inicio_ms, duracion_ms: clip.duracion_ms, material_id: clip.material_id,
+    rol_audio: "sonido", recorte: { desde_ms: desde, hasta_ms: hasta }, velocidad: 1, audio,
+  };
+  pista.clips.push(nuevo);
+  if (mirror) mirror.audio = { ...mirror.audio, volumen: 0 };
+  return terminar(res, nuevo.id, info);
+}
+
 // La mezcla de toda la edición: uno de los presets de final_edition/mezcla.PRESETS
 // (tests/test_editor_js.py compara la lista). Elegir uno quita los volúmenes a
 // medida (`volumenes`, que se suman ENCIMA del preset): si no, lo elegido no se

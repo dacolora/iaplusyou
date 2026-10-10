@@ -1315,3 +1315,46 @@ test("PND-128 precio sin marca es blanco sobre negro translúcido", () => {
   assert.equal(c.estilo.fondo.opacidad, 0.6);
   assert.equal(d.marca.color, null);
 });
+
+// ---- «Separar audio» (2026-10-10) ----
+
+test("separarAudio deja el sonido del clip en su propia pista y calla su espejo", () => {
+  const r = puro((d) => op.separarAudio(d, "v1", INFO));
+  const nuevo = clipDe(r.doc, r.seleccion);
+  assert.equal(nuevo.rol_audio, "sonido");
+  assert.deepEqual([nuevo.inicio_ms, nuevo.duracion_ms, nuevo.material_id, nuevo.recorte, nuevo.velocidad],
+    [4000, 4000, 1, { desde_ms: 4000, hasta_ms: 8000 }, 1]);
+  assert.equal(nuevo.audio.volumen, 1);
+  const pista = r.doc.pistas.find((p) => p.clips.includes(nuevo));
+  assert.notEqual(pista.id, "p_sonido");
+  assert.equal(pista.tipo, "audio");
+  assert.equal(clipDe(r.doc, "s_v1").audio.volumen, 0, "el espejo no suena dos veces");
+  assert.equal(clipDe(r.doc, "s_v0").audio.volumen, 1, "los demás clips siguen sonando");
+  // se mueve sin arrastrar la imagen
+  const movido = op.moverA(r.doc, r.seleccion, 1000, INFO).doc;
+  assert.equal(clipDe(movido, r.seleccion).inicio_ms, 1000);
+  assert.deepEqual(principal(movido), principal(r.doc));
+});
+
+test("separarAudio conserva el volumen del espejo y no lo duplica en un segundo clic", () => {
+  const bajo = op.volumenSonido(docBase(), "v0", 0.3, INFO).doc;
+  const r = op.separarAudio(bajo, "v0", INFO);
+  assert.equal(clipDe(r.doc, r.seleccion).audio.volumen, 0.3);
+  invalida(() => op.separarAudio(r.doc, "v0", INFO), /ya está separado/);
+  // el otro clip sí se separa, y su audio cae en la misma pista (no se pisan)
+  const r2 = op.separarAudio(r.doc, "v1", INFO);
+  const pistaDe = (d, id) => d.pistas.find((p) => p.clips.some((c) => c.id === id)).id;
+  assert.equal(pistaDe(r2.doc, r2.seleccion), pistaDe(r2.doc, r.seleccion));
+});
+
+test("separarAudio rechaza lo que no tiene sonido que separar", () => {
+  invalida(() => op.separarAudio(op.cambiarVelocidad(docBase(), "v1", 2, INFO).doc, "v1", INFO), /velocidad/);
+  invalida(() => op.separarAudio(docBase(), "t1", INFO), /./);
+  invalida(() => op.separarAudio(docBase(), "v0", { ...INFO, 1: { duracion_ms: 8000, tiene_audio: false } }), /sonido/);
+});
+
+test("separarAudio en una edición sin p_sonido no la crea: el audio separado nace a volumen 1", () => {
+  const r = puro((d) => op.separarAudio(d, "v0", INFO), sinSonido());
+  assert.ok(!tienePista(r.doc, "p_sonido"));
+  assert.equal(clipDe(r.doc, r.seleccion).audio.volumen, 1);
+});

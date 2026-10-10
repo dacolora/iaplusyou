@@ -2090,6 +2090,9 @@ msgstr "At once (peak)"
 msgid "A otra velocidad el video va sin su sonido."
 msgstr "At another speed the video plays without its sound."
 
+msgid "A otra velocidad el video va sin su sonido: déjalo en 1× para separar el audio."
+msgstr "At another speed the video plays without its sound: set it to 1× to detach the audio."
+
 msgid "A quién le habla"
 msgstr "Who it speaks to"
 
@@ -3109,6 +3112,9 @@ msgstr "Audio ready: it is in Your audios."
 
 msgid "Audio nativo del modelo, sin diálogo ni música."
 msgstr "The model's native audio, no dialogue or music."
+
+msgid "Audio separado"
+msgstr "Detached audio"
 
 #, python-brace-format
 msgid "Audio «{nombre}»"
@@ -5920,9 +5926,15 @@ msgstr "Putting the video together stopped before finishing."
 msgid "El arranque «%(lead)s» no es de los recomendados para una audiencia %(consciencia)s: mejor %(opciones)s."
 msgstr "The opener “%(lead)s” isn't one of the recommended ones for a %(consciencia)s audience: better %(opciones)s."
 
+msgid "El audio de este clip ya está separado: lo encuentras en su propia pista."
+msgstr "This clip's audio is already detached: you'll find it on its own track."
+
 #, python-brace-format
 msgid "El audio pesa más de {mb} MB."
 msgstr "The audio is larger than {mb} MB."
+
+msgid "El audio quedó en su propia pista: ya lo puedes mover, recortar o borrar sin tocar el video."
+msgstr "The audio is now on its own track: you can move, trim or delete it without touching the video."
 
 msgid "El audio solo se cambia en clips de audio."
 msgstr "Audio can only be changed on audio clips."
@@ -16107,6 +16119,9 @@ msgstr "Summer holidays (Semester)"
 msgid "Separados por una línea en blanco"
 msgstr "Separated by a blank line"
 
+msgid "Separar audio"
+msgstr "Detach audio"
+
 msgid "Servidor"
 msgstr "Server"
 
@@ -18291,6 +18306,9 @@ msgstr "A scene can have up to %(n)s images."
 
 msgid "Una foto no tiene sonido ni velocidad: cambia cuánto dura."
 msgstr "A photo has no sound or speed: change how long it lasts."
+
+msgid "Una foto no tiene sonido que separar."
+msgstr "A photo has no sound to detach."
 
 msgid "Una foto no tiene velocidad: cambia cuánto dura."
 msgstr "A photo has no speed: change how long it lasts."
