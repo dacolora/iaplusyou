@@ -2,6 +2,7 @@
 «Rendimiento», spec 2026-10-09 R1): la página solo pinta el contenedor, el panel llega por fetch
 (`/rendimiento/panel`, que acepta el `?tienda=` de la pestaña vieja), y los POST (copiar con «Actualizar ahora»,
 evaluar con IA, llevar una idea a Crear, guardar un anuncio en Referentes)."""
+import re
 from datetime import date, timedelta
 
 import pytest
@@ -132,11 +133,23 @@ def test_sincronizar_encola(app):  # noqa: F811
                                           "max_intentos": 2}]
 
 
+def lo_que_manda_el_boton(c, entrada="", dias="0"):
+    """Los campos `n` y `precio_visto` del botón «Evaluar con IA» de Triple Whale que pinta el panel de esa entrada
+    (G3, revisión final de Rendimiento E2: la ruta los compara con lo que calcula); {} si el panel no lo pinta."""
+    html = c.get(f"/cliente/acme/rendimiento/panel?entrada={entrada}&dias={dias}").data.decode()
+    if 'id="tw-ia"' not in html:
+        return {}
+    ia = html[html.index('id="tw-ia"'):]
+    ia = ia[:ia.index("</section>")]
+    return dict(re.findall(r'<input type="hidden" name="(n|precio_visto)" value="([^"]*)">', ia))
+
+
 def _evaluar(app, entrada="", dias="30", **headers):  # noqa: F811
     """«Evaluar con IA» de Triple Whale: desde Rendimiento E2 (tarea 5) es la ruta de la pestaña con `fuente=tw` y la
-    entrada del selector (la de `triple_whale/rutas.py` se jubiló)."""
+    entrada del selector (la de `triple_whale/rutas.py` se jubiló), con lo que manda su botón (G3)."""
     return app["c"].post("/cliente/acme/rendimiento/evaluar",
-                         data={"fuente": "tw", "entrada": entrada, "dias": dias, "canal": ""}, headers=headers)
+                         data=dict({"fuente": "tw", "entrada": entrada, "dias": dias, "canal": ""},
+                                   **lo_que_manda_el_boton(app["c"], entrada, dias)), headers=headers)
 
 
 def test_evaluar_crea_la_evaluacion_con_la_muestra_y_encola_una_sola_vez(app):  # noqa: F811

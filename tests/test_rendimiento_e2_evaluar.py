@@ -18,7 +18,7 @@ from meta_rendimiento import datos as mdatos
 from tests.test_rendimiento_e2_galeria import SE, TOKEN, _cobra, _hace, _sembrar
 from tests.test_rutas_configuracion import app  # noqa: F401  (fixture)
 from tests.test_rutas_meta_rendimiento import _ad, _dia, _tasa
-from tests.test_rutas_triple_whale import _tareas
+from tests.test_rutas_triple_whale import _tareas, lo_que_manda_el_boton
 from tests.test_triple_whale_analisis import respuesta
 from tests.test_triple_whale_evaluacion import REGLAS, anuncio
 from triple_whale import analisis, evaluacion
@@ -63,9 +63,11 @@ def _solo_meta():
                                                           dict(_ad(f, "mn", 1, 0), impresiones=20)])
 
 
-def _evaluar(app, fuente, entrada="", follow=True, cliente=None, **headers):  # noqa: F811
+def _evaluar(app, fuente, entrada="", follow=True, cliente=None, boton=None, **headers):  # noqa: F811
+    """Postea lo que manda el botón de esa entrada (`boton`: otros `n`/`precio_visto`, para probar la guarda G3)."""
     c = cliente or app["c"]
-    return c.post(URL, data={"fuente": fuente, "entrada": entrada, "dias": "0", "canal": ""},
+    boton = lo_que_manda_el_boton(c, entrada) if boton is None else boton
+    return c.post(URL, data=dict({"fuente": fuente, "entrada": entrada, "dias": "0", "canal": ""}, **boton),
                   headers=dict(POST, **headers), follow_redirects=follow)
 
 
@@ -142,6 +144,36 @@ def test_sin_saldo_no_crea_nada(mixto):
     html = _evaluar(mixto, "tw", entrada="NO").data.decode()
     assert "Saldo insuficiente" in html and "Recargar saldo" in html
     assert twdatos.evaluaciones("acme") == [] and _tareas("tw_evaluar") == []
+
+
+def test_evaluar_compara_el_numero_y_el_precio_que_mostro_el_boton(mixto, vivos):
+    """G3 (revisión final de Rendimiento E2, guardián de gasto, 2026-10-10): la guarda E2-R6 de la evaluación de Meta
+    también para la de Triple Whale. El botón manda cuántos anuncios mostró (`n`) y el precio que vio la persona
+    (`precio_visto`); si falta alguno o no coincide con lo que la ruta calcula al llegar, no se crea ni se encola nada y
+    el aviso dice el precio de ahora. Con lo que mandó el botón, sí."""
+    _sembrar()
+    boton = lo_que_manda_el_boton(mixto["c"], "NO")
+    assert boton["n"] == "2" and float(boton["precio_visto"]) == pytest.approx(_precio(2)["usd"])
+    aviso = f"Revisa el precio y vuelve a confirmar: ahora son 2 anuncio(s) por {_precio(2)['texto']}."
+    for cambio in ({"n": "3"}, {"precio_visto": "0.01"}, {"n": ""}, {"precio_visto": ""}, {"precio_visto": "abc"}):
+        html = _evaluar(mixto, "tw", entrada="NO", boton=dict(boton, **cambio)).data.decode()
+        assert aviso in html, cambio
+        assert twdatos.evaluaciones("acme") == [] and _tareas("tw_evaluar") == []
+    assert aviso in _evaluar(mixto, "tw", entrada="NO", boton={}).data.decode()        # un formulario viejo, sin campos
+    assert twdatos.evaluaciones("acme") == []
+    assert "Evaluando 2 anuncio(s) con IA" in _evaluar(mixto, "tw", entrada="NO", boton=boton).data.decode()
+    assert len(twdatos.evaluaciones("acme")) == 1 and len(_tareas("tw_evaluar")) == 1
+
+
+def test_con_margen_el_boton_manda_el_precio_nunca_el_costo_y_la_ruta_lo_acepta(mixto):
+    """Un proyecto que cobra: `precio_visto` es el precio con el margen (vuelve a costo una sola vez en la ruta)."""
+    _sembrar()
+    libro = _cobra(100_000)
+    boton = lo_que_manda_el_boton(mixto["c"], "NO")
+    margen = libro.margen_precio("acme")
+    assert margen != 1 and float(boton["precio_visto"]) == pytest.approx(_precio(2)["usd"] * margen, abs=1e-4)
+    assert "Evaluando 2 anuncio(s) con IA" in _evaluar(mixto, "tw", entrada="NO", boton=boton).data.decode()
+    assert len(twdatos.evaluaciones("acme")) == 1
 
 
 def test_sin_triple_whale_no_hay_seccion_de_triple_whale(mixto):

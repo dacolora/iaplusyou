@@ -137,18 +137,38 @@ def pedir_lote(cliente, alc, claves, usuario, veredicto=""):
     return n, fallos
 
 
-def pedir_evaluacion(cliente, alc_eval, usuario):
+def _entero(valor):
+    try:
+        return int(str(valor).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def pedir_evaluacion(cliente, alc_eval, usuario, *, n_visto, precio_visto):
     """«Evaluar con IA» (spec 2026-09-28 §8): la muestra de `alc_eval["ev"]`, su precio, la fila con su `extra` y la
     tarea (`max_intentos=1`, un job_id por proyecto). (ok, mensaje): `ok` es True si se encoló, False si ya hay una
-    en curso (aviso) y None si no hay anuncios con datos suficientes (nada que evaluar: la ruta lo avisa como error).
-    Quien llama ya comprobó que no hay otra en curso (`tareas_tw.evaluacion_en_curso`); el encolado lo vuelve a mirar."""
+    en curso o si el botón mostró otra cosa (aviso) y None si no hay anuncios con datos suficientes (nada que evaluar:
+    la ruta lo avisa como error). Quien llama ya comprobó que no hay otra en curso (`tareas_tw.evaluacion_en_curso`);
+    el encolado lo vuelve a mirar.
+
+    `n_visto` y `precio_visto`: lo que mandó el botón (cuántos anuncios mostró y el PRECIO que vio la persona, con el
+    margen), tal cual llegó del formulario. Obligatorios: G3 (revisión final de Rendimiento E2, guardián de gasto,
+    2026-10-10) adoptó aquí la guarda E2-R6 de la evaluación de Meta (`meta_rendimiento.rutas.evaluar`)."""
     ev = alc_eval["ev"]
     muestra = analisis.muestra(ev)
     if not muestra:
         return None, gettext("Todavía no hay anuncios con datos suficientes para evaluar con IA.")
+    precio = gastos.estimar("evaluacion_tw", n=len(muestra))
+    usd = precio["usd"]
+    # Primero el precio, después el cobro (G3): si falta el número o el precio que vio la persona, o la muestra o el
+    # precio (el margen) cambiaron desde que lo vio, no se crea ni se reserva nada y se dice el precio de ahora. El precio
+    # vuelve a costo UNA vez (`gastos.costo_de_precio`), con la tolerancia de siempre.
+    visto = gastos.costo_de_precio(precio_visto)
+    if _entero(n_visto) != len(muestra) or visto is None or usd is None or abs(visto - usd) > 0.005:
+        return False, gettext("Revisa el precio y vuelve a confirmar: ahora son %(n)s anuncio(s) por %(precio)s.",
+                              n=len(muestra), precio=precio["texto"])
     # Cobros (spec 2026-10-08 §5): sin saldo no se crea la evaluación; el
     # manejador común responde. La reserva la hace el encolado.
-    usd = gastos.estimar("evaluacion_tw", n=len(muestra))["usd"]
     libro.exigir(cliente, usd, tipo="evaluacion")      # `tipo`: lo incluido en un plan (main, planes 2026-10-10)
     eid = datos.crear_evaluacion(cliente, alc_eval["desde"], alc_eval["hasta"], alc_eval["moneda"], muestra,
                                  pedido_por=usuario)

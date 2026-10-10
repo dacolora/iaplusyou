@@ -94,7 +94,13 @@
     <input type="hidden" name="entrada" value="{{ params.entrada }}">
     <input type="hidden" name="dias" value="{{ params.dias }}">
     <input type="hidden" name="canal" value="{{ params.canal or '' }}">
-    <button type="submit" class="btn-generar btn-sm">{{ boton }}</button>
+    {#- G3 (revisión final de Rendimiento E2, 2026-10-10; la guarda E2-R6 de la evaluación de Meta): cuántos anuncios
+        mostró el botón y el PRECIO que vio la persona (`usd_precio`, con el margen; None si el margen no se pudo leer:
+        entonces el botón no se puede pedir). La ruta los compara con lo que calcula al llegar. -#}
+    {% set precio_visto = f.estimado.usd_precio if f.estimado else none %}
+    <input type="hidden" name="n" value="{{ n }}">
+    <input type="hidden" name="precio_visto" value="{{ '' if precio_visto is none else precio_visto }}">
+    <button type="submit" class="btn-generar btn-sm"{% if precio_visto is none %} disabled{% endif %}>{{ boton }}</button>
   </form>
   {% endfor %}
   {% if actual and ia.gasto_duplicado > 0 %}

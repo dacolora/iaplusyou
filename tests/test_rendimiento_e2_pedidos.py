@@ -12,12 +12,13 @@ import pytest
 import sqlalchemy as sa
 
 import db
+import gastos
 import proyectos
 from tests.test_i18n_mensajes import sueltos
 from tests.test_rutas_configuracion import app  # noqa: F401  (fixture)
 from tests.test_rutas_triple_whale import _conectar, _sembrar, _tareas
 from tests.test_tw_mejorar import respuesta
-from triple_whale import datos, mejorar, panel, pedidos
+from triple_whale import analisis, datos, mejorar, panel, pedidos
 
 
 @pytest.fixture(autouse=True)
@@ -57,9 +58,13 @@ def test_las_funciones_movidas_importan_con_su_firma():
                       "pedir_analisis": ["cliente", "alc", "a", "usuario"],
                       "claves_confirmadas": ["valores", "tope"],
                       "pedir_lote": ["cliente", "alc", "claves", "usuario", "veredicto"],
-                      "pedir_evaluacion": ["cliente", "alc_eval", "usuario"]}
+                      "pedir_evaluacion": ["cliente", "alc_eval", "usuario", "n_visto", "precio_visto"]}
     assert inspect.signature(pedidos.claves_confirmadas).parameters["tope"].default is None
     assert inspect.signature(pedidos.pedir_lote).parameters["veredicto"].default == ""
+    # G3: lo que mostró el botón es obligatorio y por nombre (nadie puede olvidarlo ni pasarlo en otro orden).
+    for nombre in ("n_visto", "precio_visto"):
+        p = inspect.signature(pedidos.pedir_evaluacion).parameters[nombre]
+        assert p.kind is inspect.Parameter.KEYWORD_ONLY and p.default is inspect.Parameter.empty
 
 
 def test_el_dominio_no_lee_la_sesion_ni_avisa_y_las_rutas_ya_no_tienen_la_copia():
@@ -213,18 +218,24 @@ def _alc_eval(cliente="acme"):
                       "benchmarks": ev["benchmarks"], "meta_roas": ev["meta_roas"]}}
 
 
+def _boton(alc_eval):
+    """Lo que manda el botón de esa muestra (G3): su número y su precio (sin margen: el proyecto no cobra)."""
+    n = len(analisis.muestra(alc_eval["ev"]))
+    return {"n_visto": str(n), "precio_visto": str(gastos.estimar("evaluacion_tw", n=n)["usd_precio"])}
+
+
 def test_pedir_evaluacion_guarda_su_extra_y_un_segundo_pedido_no_cobra(peticion):
     _conectar()
     _sembrar()
     alc_eval = _alc_eval()
-    ok, mensaje = pedidos.pedir_evaluacion("acme", alc_eval, "daniel")
+    ok, mensaje = pedidos.pedir_evaluacion("acme", alc_eval, "daniel", **_boton(alc_eval))
     assert ok is True and "Evaluando" in mensaje
     [fila] = datos.evaluaciones("acme")
     assert fila["estado"] == "en_cola" and fila["pedido_por"] == "daniel" and fila["moneda"] == "USD"
     assert fila["extra"] == alc_eval["extra"] and {a["ad_id"] for a in fila["anuncios"]} >= {"g1", "p1"}
     [t] = _tareas("tw_evaluar")
     assert t["max_intentos"] == 1 and t["payload"] == {"cliente": "acme", "evaluacion_id": fila["id"]}
-    ok, mensaje = pedidos.pedir_evaluacion("acme", _alc_eval(), "daniel")      # la primera sigue viva
+    ok, mensaje = pedidos.pedir_evaluacion("acme", _alc_eval(), "daniel", **_boton(alc_eval))   # la primera sigue viva
     assert ok is False and "en curso" in mensaje
     assert len(datos.evaluaciones("acme")) == 1 and len(_tareas("tw_evaluar")) == 1
 
@@ -232,11 +243,12 @@ def test_pedir_evaluacion_guarda_su_extra_y_un_segundo_pedido_no_cobra(peticion)
 def test_pedir_evaluacion_sin_muestra_no_crea_nada_y_sin_saldo_tampoco(peticion):
     from cobros import SaldoInsuficiente, libro
     _conectar()
-    ok, mensaje = pedidos.pedir_evaluacion("acme", _alc_eval(), "daniel")
+    ok, mensaje = pedidos.pedir_evaluacion("acme", _alc_eval(), "daniel", n_visto="0", precio_visto="")
     assert ok is None and "datos suficientes" in mensaje                         # None: nada que evaluar (aviso rojo)
     assert datos.evaluaciones("acme") == [] and _tareas("tw_evaluar") == []
     _sembrar()
     libro.configurar("acme", usuario="admin", cobrar=True)
+    alc_eval = _alc_eval()
     with pytest.raises(SaldoInsuficiente):
-        pedidos.pedir_evaluacion("acme", _alc_eval(), "daniel")
+        pedidos.pedir_evaluacion("acme", alc_eval, "daniel", **_boton(alc_eval))
     assert datos.evaluaciones("acme") == [] and _tareas("tw_evaluar") == []

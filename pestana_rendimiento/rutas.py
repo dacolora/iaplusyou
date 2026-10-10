@@ -295,8 +295,9 @@ def _alc_eval(alc):
 
 @bp.post("/evaluar")
 def evaluar(cliente):
-    """«Evaluar con IA» de la parte Triple Whale del alcance: su muestra, el precio que mostró su botón, Cobros, la
-    fila y la tarea (`triple_whale.pedidos.pedir_evaluacion`, `max_intentos=1`). Una evaluación en curso (un `job_id`
+    """«Evaluar con IA» de la parte Triple Whale del alcance: su muestra, el precio que mostró su botón (el formulario
+    manda `n` y `precio_visto` y si no coinciden no se cobra: G3), Cobros, la fila y la tarea
+    (`triple_whale.pedidos.pedir_evaluacion`, `max_intentos=1`). Una evaluación en curso (un `job_id`
     por proyecto) bloquea otra, y una vista que ya no tiene Triple Whale no cobra nada. `fuente` distinta de "tw" es
     404: la de Meta es `meta_rendimiento.rutas.evaluar` (INT-2)."""
     fuente = (request.form.get("fuente") or galeria.TW).strip()
@@ -310,7 +311,9 @@ def evaluar(cliente):
     if not alc:
         flash(_sin_alcance(al, fuente), "error")
         return _volver(cliente)
-    # Sin muestra el aviso es un error (ok None); con otra en curso (carrera con el encolado), una advertencia.
-    ok, mensaje = pedidos.pedir_evaluacion(cliente, _alc_eval(alc), session.get("usuario"))
+    # Sin muestra el aviso es un error (ok None); con otra en curso (carrera con el encolado) o si el botón mostró otro
+    # número o precio (G3, la guarda E2-R6), una advertencia: nada se crea ni se cobra.
+    ok, mensaje = pedidos.pedir_evaluacion(cliente, _alc_eval(alc), session.get("usuario"),
+                                           n_visto=request.form.get("n"), precio_visto=request.form.get("precio_visto"))
     flash(mensaje, "ok" if ok else ("error" if ok is None else "warn"))
     return _volver(cliente)
