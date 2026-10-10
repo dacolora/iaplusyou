@@ -31,9 +31,8 @@ log = logging.getLogger("creatv.saldo")
 
 PROVEEDORES = {
     "wavespeed": {"nombre": "WaveSpeed", "recarga": "https://wavespeed.ai/top-up"},
-    # Seedance 2.5 con varias referencias va por fal (2026-10-09). El aviso de la
-    # página de Crear sigue siendo el de WaveSpeed: sin saldo en fal solo falla
-    # ese modelo, y su tarjeta lo dice.
+    # Seedance 2.5 con varias referencias va por fal (2026-10-09). Sin saldo en fal
+    # solo falla lo que va por fal: Crear y Alertas lo dicen aparte (PND-213).
     "fal": {"nombre": "fal.ai", "recarga": "https://fal.ai/dashboard/billing"},
 }
 REAVISO_S = 6 * 3600       # un correo al administrador cada 6 h como mucho
@@ -92,6 +91,14 @@ def _avisar_admin(proveedor, detalle, cliente):
         return gettext("%(proveedor)s se quedó sin saldo", proveedor=info["nombre"])
 
     def _cuerpo():   # en el idioma de cada admin (notificaciones.avisar_admin)
+        if proveedor == "fal":
+            # Sin saldo en fal solo falla lo que va por fal (2026-10-09, PND-213): no todo Crear.
+            return gettext("Una generación del proyecto %(cliente)s falló porque la cuenta de %(proveedor)s de Creatv no "
+                           "tiene saldo. Mientras no se recargue en %(recarga)s fallan %(modelos)s en Crear y lo que usa "
+                           "fal en el resto de la app (voces, música y subtítulos automáticos); los demás modelos de "
+                           "Crear siguen funcionando y los intentos fallidos no se cobran. Respuesta del proveedor: "
+                           "%(detalle)s", cliente=cliente or "-", proveedor=info["nombre"], recarga=info["recarga"],
+                           modelos=nombres_modelos(proveedor), detalle=detalle or "-")
         return gettext("Una generación del proyecto %(cliente)s falló porque la cuenta de %(proveedor)s de Creatv no "
                        "tiene saldo. Mientras no se recargue en %(recarga)s, Crear y Cambiar producto no pueden "
                        "generar; los intentos fallidos no se cobran. Respuesta del proveedor: %(detalle)s",
@@ -128,6 +135,13 @@ def limpiar(proveedor):
                 con.execute(db.kv.delete().where(db.kv.c.clave == _clave(proveedor)))
     except Exception as error:  # noqa: BLE001
         log.error("no se pudo limpiar la falta de saldo de %s: %s", proveedor, type(error).__name__)
+
+
+def nombres_modelos(proveedor):
+    """«Seedance 2.5 · varias referencias»: los modelos de Crear de ese
+    proveedor, traducidos al idioma activo (aviso de Crear, Alertas, correo)."""
+    from providers import flowplus_modelos  # noqa: PLC0415 — perezoso: flowplus_modelos es pesado
+    return ", ".join(gettext(flowplus_modelos.VIDEO[m]["nombre"]) for m in flowplus_modelos.modelos_de_proveedor(proveedor))
 
 
 def nombre_proveedor(proveedor):

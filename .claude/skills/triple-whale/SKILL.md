@@ -331,5 +331,36 @@ production. It must work for ANY ad, not only Creatv's: in happyflops only 4 pie
 
 PND-187 (2026-10-09, decisión delegada): nuevas miniaturas de a_referente pasan cliente a guardar_en_r2 y usan clientes/<cliente>/referentes/tw_<ad_id>.jpg. Una fila con imagen ok no se vuelve a subir ni migra. anuncio_id ya es único por proyecto por 0030; test_lote7_tw_aislamiento guarda el mismo anuncio en dos proyectos con filas y claves distintas y comprueba biblioteca e imagen histórica.
 
+## NVP en la pestaña (2026-10-09)
+
+Pedido del cliente de HappyFlops (spec `2026-10-09-nvp-visitantes-nuevos` §4.1): el % de visitantes nuevos dice si un
+anuncio es TOF, MOF o BOF. Siempre con el chip `cx.nvp(nuevos, visitantes)` (skill `ui`) y las SUMAS del periodo.
+- «Resultados de tu tienda»: `resultados.tarjeta_nvp` arma el KPI «Visitantes nuevos (NVP)» (`r.nvp`), una celda más de
+  `.twr-tarjetas` que NO es pestaña (no se grafica, spec §5): las pestañas viven en `.twr-pestanas` (role="tablist",
+  `display: contents`), así `role="tab"` sigue contando 6 o 7. `por_dia` trae `vis`/`vnu` (no van al JSON del JS). El
+  cambio va en puntos («▲ 20 pts», tono siempre neutro) con la regla de las demás tarjetas (días completos contra los
+  anteriores), y solo si los dos lados tienen `visitantes.MIN_VISITANTES`. Con fuente «anuncios» (un canal o sin datos
+  de tienda) es lo que el Pixel atribuye a los anuncios de la evaluación (`panel._resultados` suma `ev["anuncios"]`, sin
+  consulta nueva) y no compara. Sin visitantes (copia de antes de 0036) el chip dice «—»; el KPI no se esconde.
+- «Ver como tabla» lleva la columna NVP y cada tarjeta de análisis una cifra más en `.tw-cifras`, las dos de `a.m`
+  (`evaluacion.metricas` ya suma visitantes).
+- `evaluacion.resumen_tienda` suma `visitantes`/`visitantes_nuevos`, así `panel.resumen_total_tienda` (el `tienda_tw`
+  del Tablero en Experimentos) los trae. Pruebas: `tests/test_tw_nvp_pantallas.py`.
+- La copia (spec §3): `tw_anuncio_dia`/`tw_tienda_dia` tienen `visitantes` y `visitantes_nuevos` (0036). El Pixel tiene
+  TRES versiones (`consultas_pixel` = con visitantes, sin visitantes, mínima; `sync.NOMBRES_CONSULTA_PIXEL`): si una
+  cuenta no conoce las columnas, baja a la de antes y solo falta el NVP. La tienda los trae aparte de
+  `web_analytics_table` (`consultas_visitantes_tienda`; si falla, `fallos.visitantes` y la tienda se guarda igual).
+  Cada tienda vuelve a traer 90 días una vez (`extra.backfill_visitantes`; cuándo queda, en el último punto). La regla vive solo en `triple_whale/visitantes.py`; `datos.visitantes_por(cliente, campo, ids, …)` es la
+  lectura compartida de Meta y Experimentos (una consulta; ~55 ms por nivel con las 61 218 filas de happyflops).
+- La IA (spec §4.5): «Cómo mejorarlo» recibe por anuncio (y por cada ganador del canal) `visitantes.texto_prompt(...)` y
+  la regla `visitantes.REGLA_PROMPT`; su tope (12 000) y su costo no cambiaron. «Evaluar con IA» guarda los visitantes en
+  la muestra (`analisis.CAMPOS_M`) pero su PROMPT todavía no los lleva: medido el 2026-10-09
+  (`docs/superpowers/evals/2026-10-09-nvp-en-la-ia.md`), su tope de 16 000 ya corta la primera respuesta con 10 anuncios,
+  y con el NVP una corrida falló en las dos llamadas. Con 32 000 acertaba la etapa de 10 de 10 (sin NVP, 4 de 10), pero
+  subir el tope cambia lo que cuesta: decide Daniel (PND-217). Desde la revisión, `analisis._llamar` va con
+  `max_retries=0`, como «Cómo mejorarlo» (un reintento del SDK podía cobrarse sin anotarse).
+- La copia de 90 días del NVP deja la marca `backfill_visitantes` solo si trajo visitantes en todo el rango, o tras
+  `sync.MAX_INTENTOS_VISITANTES` (3) copias sin lograrlo (`intentos_visitantes`); un error de red o de límite en
+  `web_analytics_table` deja la tienda sin su NVP (`fallos.visitantes`) pero no corta la copia (llave y tienda sí).
 
 PND-149(2–6) (2026-10-09, decisión del lote 8): serie_tienda solo resta duplicados de anuncios entre tiendas que tienen fila de tienda ese día; gasto_duplicado conserva su diagnóstico de todos los anuncios. Al refrescar un experimento, se limpian las marcas antiguas/nuevas de países cuya tienda ya está conectada, también si ninguna pieza queda sin tienda. uk al final del dominio da GB. agregar guarda los ajustes del formulario si no hay tiendas (aunque exista la fila); con tiendas conserva los ajustes anteriores. reservar_aviso_sync toma UPDATE sin efecto antes de leer extra/cola y marca ids+creada_en aún vivos en syncs_terminadas: la última reserva el aviso una sola vez aunque ambos hilos sigan vivos hasta volver al worker. actualizar_extra toma el mismo candado antes de leer. tests/test_lote8_tw.py cubre cifras, reconexión, dos finales simultáneos y el ciclo siguiente; sin red. Se dejan (1) países repetidos por tarjeta y (7) ajustes durante copia por decisión; (8) sigue para la primera copia real.

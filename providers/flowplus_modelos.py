@@ -239,6 +239,12 @@ def proveedor_de(modelo_id):
     return info.get("proveedor", "wavespeed")
 
 
+def modelos_de_proveedor(proveedor):
+    """Los modelos de video que genera ese proveedor (el aviso de sin saldo de
+    fal en Crear nombra los que quedan en pausa)."""
+    return [m for m in VIDEO if proveedor_de(m) == proveedor]
+
+
 def video_rotables():
     """Los modelos de video que una regeneración automática puede elegir
     (derivaciones._otro): todos menos los que piden `rotar: False`."""

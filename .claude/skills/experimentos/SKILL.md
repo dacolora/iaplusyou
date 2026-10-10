@@ -210,6 +210,13 @@ Tablero dejó de ser pestaña: `resolver('tablero')` de `cliente.html` abre Expe
   `tests/test_lote5_experimentos.py` contrasta cifras, historia, decisiones y otro proyecto vivo;
   `tests/test_rutas_resultados.py` exige consultas constantes con 3 y 15 piezas. Ahí también están los 404 de piezas
   o experimentos de otro proyecto.
+- **NVP** (2026-10-09, pedido del cliente de HappyFlops: saber si una pieza llega a TOF, MOF o BOF; spec
+  `2026-10-09-nvp-visitantes-nuevos` §4.3): `resultados.visitantes(carga)` lee de `tw_anuncio_dia` (canal
+  `facebook-ads`) los visitantes del `meta_ad_id` de cada pieza en UNA consulta (`triple_whale.datos.visitantes_por`
+  con todos los anuncios de la moneda elegida, memorizada en la carga; el periodo es el de la pantalla, «desde el
+  inicio» sin fechas). Pinta el chip `cx.nvp` con SUMAS en el resumen (`r.nvp`), el ranking, «Por país», cada tarjeta
+  de experimento y el panel de la pieza. Sin tienda de Triple Whale (`triple_whale_tiendas.tiendas`) no consulta y no
+  aparece ni la columna. Solo se muestra: decisor, snapshots, lanzador y modos no lo leen (`tests/test_exp_nvp.py`).
 
 **`tablero.py` y OUTCOME_SALES** (el motor del dinero; desde E2 sin pestaña propia: lo pinta el centro; `tab_descargar_csv`
 sigue como botón de la cabecera). Cada cifra es un **delta de snapshots acumulados** (`metrica_snapshot` guarda los totales

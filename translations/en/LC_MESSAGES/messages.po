@@ -99,6 +99,10 @@ msgid "%% de la tienda"
 msgstr "%% of the store"
 
 #, python-format
+msgid "%% de visitantes nuevos: TOF, MOF o BOF según el Pixel de Triple Whale"
+msgstr "%% of new visitors: TOF, MOF or BOF according to the Triple Whale Pixel"
+
+#, python-format
 msgid "%% del gasto"
 msgstr "%% of spend"
 
@@ -399,6 +403,14 @@ msgstr "%(modelo)s · %(n)s reference(s)"
 #, python-format
 msgid "%(modelo)s · %(n)s referencia(s) · falló al descargar; el modelo ya cobró"
 msgstr "%(modelo)s · %(n)s reference(s) · download failed; the model already charged"
+
+#, python-format
+msgid "%(modelos)s está en pausa"
+msgstr "%(modelos)s is paused"
+
+#, python-format
+msgid "%(modelos)s está en pausa."
+msgstr "%(modelos)s is paused."
 
 #, python-format
 msgid "%(monto)s apartados para lo que se está generando"
@@ -765,6 +777,12 @@ msgid "%(n)s propuesta(s) pendiente(s)"
 msgstr "%(n)s proposal(s) pending"
 
 #, python-format
+msgid "%(n)s pt"
+msgid_plural "%(n)s pts"
+msgstr[0] "%(n)s pt"
+msgstr[1] "%(n)s pts"
+
+#, python-format
 msgid "%(n)s recargas revisadas"
 msgstr "%(n)s top-ups checked"
 
@@ -827,6 +845,10 @@ msgstr "%(n)s verdict(s)"
 #, python-format
 msgid "%(n)s videos"
 msgstr "%(n)s videos"
+
+#, python-format
+msgid "%(n)s visitantes"
+msgstr "%(n)s visitors"
 
 #, python-format
 msgid "%(n)s zona(s) marcada(s). El modelo va a recibir la ubicación y la proporción exactas."
@@ -1961,6 +1983,9 @@ msgstr "Official API, free for your own use (100 calls per minute). If this is s
 msgid "Abajo"
 msgstr "Bottom"
 
+msgid "Abajo del embudo: la mayoría de las visitas son de gente que ya visitó la tienda."
+msgstr "Bottom of the funnel: most visits come from people who have already visited the store."
+
 msgid "Abajo, en <em>Conectar tienda › MercadoLibre</em>, pulsa <em>Conectar con MercadoLibre</em>."
 msgstr "Below, in <em>Connect store › MercadoLibre</em>, press <em>Connect with MercadoLibre</em>."
 
@@ -2822,6 +2847,9 @@ msgstr "Drag the image to choose which part shows; the corner zooms in."
 msgid "Arriba"
 msgstr "Top"
 
+msgid "Arriba del embudo: la mayoría de las visitas son de gente que no conocía la tienda."
+msgstr "Top of the funnel: most visits come from people who didn't know the store."
+
 msgid "Asignar"
 msgstr "Assign"
 
@@ -3395,6 +3423,9 @@ msgstr "Change product in a photo or video"
 
 msgid "Cambiarlo crea una versión nueva con los mismos clips, sin llamar a Claude (gratis). Esta versión y sus prompts quedan como están."
 msgstr "Changing it creates a new version with the same clips, without calling Claude (free). This version and its prompts stay as they are."
+
+msgid "Cambio del NVP en puntos porcentuales: días completos contra el mismo número de días anteriores"
+msgstr "Change in NVP in percentage points: full days against the same number of previous days"
 
 msgid "Cambios de producto"
 msgstr "Product swaps"
@@ -4192,6 +4223,10 @@ msgstr "Connect Notion first."
 
 msgid "Conecta Triple Whale para evaluar tu contenido"
 msgstr "Connect Triple Whale to evaluate your content"
+
+#, python-format
+msgid "Conecta Triple Whale para ver el %% de visitantes nuevos (NVP)."
+msgstr "Connect Triple Whale to see the %% of new visitors (NVP)."
 
 msgid "Conecta la agencia arriba para poder asignar cuentas y Páginas; mientras tanto solo se ve el modo de cada proyecto."
 msgstr "Connect the agency above to be able to assign accounts and Pages; meanwhile you only see each project's mode."
@@ -5138,6 +5173,14 @@ msgid "Desde Notion"
 msgstr "From Notion"
 
 #, python-format
+msgid "Desde el %(desde)s fallan %(modelos)s y lo que usa fal en el resto de la app (voces, música y subtítulos automáticos), sin cobrar. Los demás modelos de Crear siguen funcionando. Recarga la cuenta; este aviso se quita solo con la próxima generación de ese modelo que salga bien."
+msgstr "Since %(desde)s, %(modelos)s and whatever uses fal in the rest of the app (voices, music and automatic subtitles) fail, without charging. The other Create models keep working. Top up the account; this notice goes away on its own with the next generation of that model that succeeds."
+
+#, python-format
+msgid "Desde el %(desde)s fallan %(modelos)s y lo que usa fal en el resto de la app (voces, música y subtítulos automáticos), sin cobrar; los demás modelos de Crear siguen. Recarga la cuenta en %(recarga)s; esta alerta se quita sola con la próxima generación de ese modelo que salga bien."
+msgstr "Since %(desde)s, %(modelos)s and whatever uses fal in the rest of the app (voices, music and automatic subtitles) fail, without charging; the other Create models keep working. Top up the account at %(recarga)s; this alert goes away on its own with the next generation of that model that succeeds."
+
+#, python-format
 msgid "Desde el %(desde)s las generaciones de Crear y de Cambiar producto fallan (sin cobrar). Recarga la cuenta en %(recarga)s; esta alerta se quita sola con la próxima generación que salga bien."
 msgstr "Since %(desde)s, generations in Create and Change product fail (without charging). Top up the account at %(recarga)s; this alert goes away on its own with the next generation that works."
 
@@ -5468,6 +5511,10 @@ msgstr "E.g.: “I've worn them for three winters and they're still just as warm
 
 msgid "Ej: paleta cálida, tonos tierra, iluminación de atardecer, ambientes rústicos..."
 msgstr "E.g.: warm palette, earth tones, sunset lighting, rustic settings..."
+
+#, python-format
+msgid "El %% de visitantes nuevos y la etapa del embudo: TOF desde 70 %%, MOF desde 40 %%, BOF por debajo; con menos de 50 visitantes, sin etapa."
+msgstr "The %% of new visitors and the funnel stage: TOF from 70%%, MOF from 40%%, BOF below that; with fewer than 50 visitors, no stage."
 
 #, python-format
 msgid "El %(pct)s%% del gasto se fue en anuncios perdedores: pausarlos libera presupuesto para los ganadores."
@@ -9045,6 +9092,9 @@ msgstr "There are pending Bold top-ups and no Bold event has arrived in 7 days. 
 msgid "Hay textos sin traducir para algún destino."
 msgstr "Some texts aren't translated for a market."
 
+msgid "Hay un problema con el proveedor y ya le avisamos a Creatv. Mientras tanto elige otro modelo: los intentos fallidos no se cobran."
+msgstr "There is a problem with the provider and Creatv has already been notified. Meanwhile, choose another model: failed attempts are not charged."
+
 msgid "Hay un problema con el proveedor y ya le avisamos a Creatv. Vuelve a intentarlo en un rato: los intentos fallidos no se cobran."
 msgstr "There is a problem with the provider and Creatv has already been notified. Try again in a while: failed attempts are not charged."
 
@@ -11137,6 +11187,9 @@ msgstr "My voices"
 msgid "Mismo mensaje"
 msgstr "Same message"
 
+msgid "Mitad del embudo: mezcla de gente nueva y gente que ya visitó la tienda."
+msgstr "Middle of the funnel: a mix of new people and people who have already visited the store."
+
 msgid "Modelo"
 msgstr "Model"
 
@@ -11379,6 +11432,21 @@ msgstr "Background music"
 
 msgid "NUEVO"
 msgstr "NEW"
+
+msgid "NVP"
+msgstr "NVP"
+
+#, python-format
+msgid "NVP de las cuentas con Triple Whale: %(cuentas)s"
+msgstr "NVP from the accounts with Triple Whale: %(cuentas)s"
+
+#, python-format
+msgid "NVP: %(nuevos)s visitantes nuevos de %(total)s."
+msgstr "NVP: %(nuevos)s new visitors out of %(total)s."
+
+#, python-format
+msgid "NVP: %(nuevos)s visitantes nuevos de %(total)s. Son muy pocos para decir la etapa del embudo."
+msgstr "NVP: %(nuevos)s new visitors out of %(total)s. Too few to tell the funnel stage."
 
 #, python-format
 msgid "Nació de la idea «%(idea)s» de la evaluación con IA"
@@ -15082,6 +15150,9 @@ msgstr ""
 msgid "Según el Pixel, estos anuncios vendieron %(ventas)s que en los %(n)s días anteriores, con %(gasto)s de gasto: cada 1 %(moneda)s trajo %(mer)s %(moneda)s atribuidos (antes %(mer_antes)s)."
 msgstr "According to the Pixel, these ads sold %(ventas)s than in the previous %(n)s days, with %(gasto)s spend: every 1 %(moneda)s brought %(mer)s %(moneda)s attributed (before, %(mer_antes)s)."
 
+msgid "Según el Pixel: visitantes nuevos entre visitantes únicos que llegaron por estos anuncios. Los únicos se cuentan por día, así que en periodos largos es aproximado."
+msgstr "According to the Pixel: new visitors out of unique visitors who came through these ads. Unique visitors are counted per day, so over long periods it is approximate."
+
 msgid "Según los pedidos de la tienda en Triple Whale; es el producto que conviene empujar en los anuncios nuevos."
 msgstr "According to the store's orders in Triple Whale; it's the product worth pushing in new ads."
 
@@ -15407,6 +15478,9 @@ msgstr "No sales yet"
 
 msgid "Sin verificar ahora (Meta no respondió)."
 msgstr "Not verified right now (Meta didn't respond)."
+
+msgid "Sin visitas atribuidas por el Pixel de Triple Whale (sin rastreo o sin clics en este periodo)."
+msgstr "No visits attributed by the Triple Whale Pixel (no tracking or no clicks in this period)."
 
 msgid "Sin voz/música"
 msgstr "No voice/music"
@@ -17113,6 +17187,10 @@ msgid "Una foto o video real de tu cliente, tu producto puesto encima. Misma pos
 msgstr "A real photo or video of your customer, your product placed on it. Same pose, same background, same motion. Great for whole catalogs in one afternoon."
 
 #, python-format
+msgid "Una generación del proyecto %(cliente)s falló porque la cuenta de %(proveedor)s de Creatv no tiene saldo. Mientras no se recargue en %(recarga)s fallan %(modelos)s en Crear y lo que usa fal en el resto de la app (voces, música y subtítulos automáticos); los demás modelos de Crear siguen funcionando y los intentos fallidos no se cobran. Respuesta del proveedor: %(detalle)s"
+msgstr "A generation in project %(cliente)s failed because Creatv's %(proveedor)s account has no balance. Until it's topped up at %(recarga)s, %(modelos)s in Create and whatever uses fal in the rest of the app (voices, music and automatic subtitles) fail; the other Create models keep working and failed attempts aren't charged. Provider response: %(detalle)s"
+
+#, python-format
 msgid "Una generación del proyecto %(cliente)s falló porque la cuenta de %(proveedor)s de Creatv no tiene saldo. Mientras no se recargue en %(recarga)s, Crear y Cambiar producto no pueden generar; los intentos fallidos no se cobran. Respuesta del proveedor: %(detalle)s"
 msgstr "A generation in project %(cliente)s failed because Creatv's %(proveedor)s account has no credit. Until it is topped up at %(recarga)s, Create and Change product cannot generate; failed attempts are not charged. Provider response: %(detalle)s"
 
@@ -17628,6 +17706,18 @@ msgstr "Videos, images, scripts, final cuts and AI text paid for since the start
 
 msgid "Vincular"
 msgstr "Link"
+
+msgid "Visitantes nuevos (NVP)"
+msgstr "New visitors (NVP)"
+
+msgid "Visitantes nuevos / visitantes únicos que el Pixel de Triple Whale atribuye a tus anuncios de Meta. Los únicos se cuentan por día: en periodos largos es aproximado."
+msgstr "New visitors / unique visitors that the Triple Whale Pixel attributes to your Meta ads. Unique visitors are counted per day: over long periods it is approximate."
+
+msgid "Visitantes nuevos entre visitantes únicos de la tienda, según Triple Whale. Los únicos se cuentan por día, así que en periodos largos es aproximado."
+msgstr "New visitors out of the store's unique visitors, according to Triple Whale. Unique visitors are counted per day, so over long periods it is approximate."
+
+msgid "Visitantes nuevos entre visitantes únicos que el Pixel atribuye al anuncio: TOF, MOF o BOF"
+msgstr "New visitors out of unique visitors that the Pixel attributes to the ad: TOF, MOF or BOF"
 
 msgid "Visitas a la página"
 msgstr "Page visits"

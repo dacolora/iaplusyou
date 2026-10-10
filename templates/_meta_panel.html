@@ -3,8 +3,11 @@
    Solo lee la copia local; el único formulario es «Actualizar ahora» (leer de Meta no cobra). Sin <script>: el JS
    está en _tab_meta.html (`data-meta-param` cambia el filtro, `data-meta-act` elige una cuenta, `data-meta-mas`
    trae más filas). «Todas» (2+ cuentas) va en USD con la tasa de cada día; una cuenta, en su moneda; campañas,
-   conjuntos y anuncios, siempre en la moneda de su cuenta. #}
+   conjuntos y anuncios, siempre en la moneda de su cuenta. NVP (spec 2026-10-09-nvp-visitantes-nuevos §4.2): con
+   Triple Whale en el proyecto (`mr.nvp_activo`), KPI y columna en cada tabla con el chip `cx.nvp` y las SUMAS del
+   periodo; sin Triple Whale, ni columna ni KPI, solo la línea que invita a conectarlo. #}
 {% import "_meta_macros.html" as mx %}
+{% import "_componentes.html" as cx %}
 {% if not mr.conectado %}
 <p class="vacio">{{ _('Meta no está conectado en este proyecto.') }}</p>
 {% elif not mr.cuentas %}
@@ -95,7 +98,15 @@
     <div class="kpi-tile" title="{{ _('Gente única: en «Todas», la suma de las cuentas') }}"><span>{{ _('Alcance') }}</span><strong>{{ mr.alcance | tw_num }}</strong><small>{% if mr.frecuencia %}{{ _('frecuencia %(f)s', f=mr.frecuencia | tw_num(1)) }}{% elif mr.ventana_alcance %}{{ _('últimos %(n)s días', n=mr.ventana_alcance) }}{% endif %}</small></div>
     <div class="kpi-tile"><span>CPM</span>{% if k.cpm is not none %}<strong>{{ k.cpm | dinero(moneda) }}</strong>{% else %}<strong class="tb-sin-dato">—</strong>{% endif %}<small>{{ _('%(n)s impresiones', n=k.impresiones | tw_num) }}</small></div>
     <div class="kpi-tile" title="{{ _('Clics que salen hacia tu web / impresiones') }}"><span>{{ _('CTR de salida') }}</span><strong>{{ k.ctr_salida | tw_pct(2, false) }}</strong><small>{{ var.get('ctr_salida') | tw_var }}</small></div>
+    {% if mr.nvp_activo %}
+    <div class="kpi-tile meta-kpi-nvp" title="{{ _('Visitantes nuevos / visitantes únicos que el Pixel de Triple Whale atribuye a tus anuncios de Meta. Los únicos se cuentan por día: en periodos largos es aproximado.') }}"><span>{{ _('Visitantes nuevos (NVP)') }}</span><strong>{{ cx.nvp(mr.nvp.visitantes_nuevos, mr.nvp.visitantes) }}</strong><small>{{ _('%(n)s visitantes', n=mr.nvp.visitantes | tw_num) }}</small></div>
+    {% endif %}
   </div>
+  {% if mr.nvp_activo and mr.nvp_cuentas %}
+  <p class="vacio">{{ _('NVP de las cuentas con Triple Whale: %(cuentas)s', cuentas=mr.nvp_cuentas | join(', ')) }}</p>
+  {% elif not mr.nvp_activo %}
+  <p class="vacio"><a href="#triplewhale" data-ir-tab="triplewhale">{{ _('Conecta Triple Whale para ver el %% de visitantes nuevos (NVP).') }}</a></p>
+  {% endif %}
 </section>
 
 {# ---------- día a día ---------- #}
@@ -137,7 +148,7 @@
   <div class="tb-seccion-cab"><h3>{{ _('Por cuenta') }}</h3><small class="vacio">{{ _('Pulsa una cuenta para verla sola.') }}</small></div>
   <div class="tw-tabla-scroll">
     <table class="tw-tabla">
-      <thead><tr><th>{{ _('Cuenta') }}</th><th>{{ _('Gasto') }}</th><th>ROAS</th><th>{{ _('Compras') }}</th><th>{{ _('Alcance') }}</th><th>{{ _('Activos') }}</th><th>{{ _('Aprendizaje limitado') }}</th></tr></thead>
+      <thead><tr><th>{{ _('Cuenta') }}</th><th>{{ _('Gasto') }}</th><th>ROAS</th>{% if mr.nvp_activo %}{{ mx.th_nvp() }}{% endif %}<th>{{ _('Compras') }}</th><th>{{ _('Alcance') }}</th><th>{{ _('Activos') }}</th><th>{{ _('Aprendizaje limitado') }}</th></tr></thead>
       <tbody>
         {% for f in mr.por_cuenta %}
         {% set act = f.activos %}
@@ -148,6 +159,7 @@
           </td>
           <td>{{ mx.monto(f.gasto, moneda) }}{% if f.moneda_cuenta and f.moneda_cuenta != moneda %}<small class="tw-motivo">{{ f.gasto_cuenta | dinero(f.moneda_cuenta) }}</small>{% endif %}</td>
           <td>{{ mx.roas(f.roas) }}</td>
+          {% if mr.nvp_activo %}<td>{{ cx.nvp(f.visitantes_nuevos, f.visitantes) }}</td>{% endif %}
           <td>{{ f.compras | tw_num }}</td>
           <td>{{ f.alcance | tw_num }}</td>
           <td>{{ ngettext('%(num)s anuncio', '%(num)s anuncios', act.anuncio or 0) }}<small class="tw-motivo">{{ _('Campañas: %(c)s · conjuntos: %(s)s', c=act.campana or 0, s=act.conjunto or 0) }}</small></td>
@@ -167,7 +179,7 @@
   <div class="tb-seccion-cab"><h3>{{ _('Campañas') }}</h3><small class="vacio">{{ ngettext('%(num)s campaña con gasto en el periodo', '%(num)s campañas con gasto en el periodo', mr.campanas | length) }}</small></div>
   <div class="tw-tabla-scroll">
     <table class="tw-tabla">
-      <thead><tr><th>{{ _('Campaña') }}</th><th>{{ _('Estado') }}</th><th>{{ _('Objetivo') }}</th><th>{{ _('Presupuesto') }}</th><th>{{ _('Gasto') }}</th><th>ROAS</th><th>{{ _('Compras') }}</th><th>{{ _('Costo por compra') }}</th><th>{{ _('Alcance') }}</th></tr></thead>
+      <thead><tr><th>{{ _('Campaña') }}</th><th>{{ _('Estado') }}</th><th>{{ _('Objetivo') }}</th><th>{{ _('Presupuesto') }}</th><th>{{ _('Gasto') }}</th><th>ROAS</th>{% if mr.nvp_activo %}{{ mx.th_nvp() }}{% endif %}<th>{{ _('Compras') }}</th><th>{{ _('Costo por compra') }}</th><th>{{ _('Alcance') }}</th></tr></thead>
       <tbody>
         {% for c in campanas %}
         <tr>
@@ -177,6 +189,7 @@
           <td>{{ mx.presupuesto(c) }}</td>
           <td>{{ mx.monto(c.gasto, c.moneda) }}</td>
           <td>{{ mx.roas(c.m.roas) }}</td>
+          {% if mr.nvp_activo %}<td>{{ cx.nvp(c.visitantes_nuevos, c.visitantes) }}</td>{% endif %}
           <td>{{ c.compras | tw_num }}</td>
           <td>{{ mx.monto(c.m.cpa, c.moneda) }}</td>
           <td>{{ c.alcance | tw_num }}</td>
@@ -195,7 +208,7 @@
   <div class="tb-seccion-cab"><h3>{{ _('Conjuntos') }}</h3><small class="vacio">{{ _('Por gasto en el periodo') }}</small></div>
   <div class="tw-tabla-scroll">
     <table class="tw-tabla">
-      <thead><tr><th>{{ _('Conjunto') }}</th><th>{{ _('Estado') }}</th><th>{{ _('Aprendizaje') }}</th><th>{{ _('Presupuesto') }}</th><th>{{ _('Gasto') }}</th><th>ROAS</th><th>{{ _('Costo por compra') }}</th></tr></thead>
+      <thead><tr><th>{{ _('Conjunto') }}</th><th>{{ _('Estado') }}</th><th>{{ _('Aprendizaje') }}</th><th>{{ _('Presupuesto') }}</th><th>{{ _('Gasto') }}</th><th>ROAS</th>{% if mr.nvp_activo %}{{ mx.th_nvp() }}{% endif %}<th>{{ _('Costo por compra') }}</th></tr></thead>
       <tbody>
         {% include "_meta_conjuntos_filas.html" %}
       </tbody>
@@ -215,7 +228,7 @@
     <table class="tw-tabla tw-anuncios">
       <thead><tr>
         <th aria-label="{{ _('Miniatura') }}"></th><th>{{ _('Anuncio') }}</th><th>{{ _('Veredicto') }}</th><th>{{ _('Señales') }}</th>
-        <th>{{ _('Gasto') }}</th><th>ROAS</th><th>CTR</th><th>{{ _('Gancho') }}</th><th>{{ _('Retención') }}</th>
+        <th>{{ _('Gasto') }}</th><th>ROAS</th>{% if mr.nvp_activo %}{{ mx.th_nvp() }}{% endif %}<th>CTR</th><th>{{ _('Gancho') }}</th><th>{{ _('Retención') }}</th>
       </tr></thead>
       <tbody>
         {% include "_meta_anuncios_filas.html" %}

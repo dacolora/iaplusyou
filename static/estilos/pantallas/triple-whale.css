@@ -114,6 +114,12 @@
 .twr-tarjeta-k { overflow: hidden; color: var(--muted); font-size: .74rem; white-space: nowrap; text-overflow: ellipsis; }
 .twr-tarjeta-v { overflow: hidden; font-size: 1.05rem; font-weight: 600; letter-spacing: -.01em; white-space: nowrap; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
 .twr-tarjeta-d { font-size: .74rem; }
+/* NVP (spec 2026-10-09-nvp-visitantes-nuevos §4.1): las pestañas viven en `.twr-pestanas` (role="tablist") sin caja
+   propia, así el NVP, que no se grafica y no es pestaña, es otra celda de la misma rejilla. */
+.twr-pestanas { display: contents; }
+.twr-tarjeta-fija { cursor: default; }
+.twr-tarjeta-fija:hover { background: var(--panel-2); }
+.twr-tarjeta-fija .chip-nvp { font-size: var(--t-base); }   /* del tamaño de las otras cifras */
 .twr-spark { display: block; width: 100%; height: 26px; margin-top: .15rem; }
 .twr-spark-linea { fill: none; stroke: var(--accent-texto); stroke-width: 1.5; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
 .twr-bueno { color: var(--ok); }

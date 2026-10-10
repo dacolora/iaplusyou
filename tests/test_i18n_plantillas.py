@@ -65,6 +65,7 @@ PLANTILLAS_TRADUCIDAS = [
     # Pestaña Meta (rendimiento de varias cuentas, 2026-10-08): armazón, panel, selector y filas de «Ver más».
     "_tab_meta.html", "_meta_panel.html", "_meta_cuentas.html", "_meta_anuncios_filas.html",
     "_meta_conjuntos_filas.html", "_meta_macros.html",
+    "_componentes.html",   # componentes con marcado propio; el primero, el chip del NVP (spec 2026-10-09)
     "editor.html",   # Fase 6, Task 2: la página del editor
     "_tab_cambiar_calzado.html",   # Fase 6, Task 4: Crear › Cambiar producto
     "admin_meta.html", "admin_referentes.html", "meta_elegir.html",   # Fase 6, Task 5
