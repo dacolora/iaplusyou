@@ -2595,6 +2595,10 @@ msgstr "New ads to test"
 msgid "Anuncios nuevos probados"
 msgstr "New ads tested"
 
+#, python-format
+msgid "Anuncios perdedores siguen gastando en «%(cuenta)s»"
+msgstr "Losing ads are still spending in “%(cuenta)s”"
+
 msgid "Anuncios por veredicto"
 msgstr "Ads by verdict"
 
@@ -2603,6 +2607,10 @@ msgstr "Ads about a topic or product"
 
 msgid "Anuncios reales que ya funcionaron, clasificados por etapa del funnel, nivel de consciencia, formato y dolor. Elige uno y úsalo como referencia para tus piezas."
 msgstr "Real ads that already worked, classified by funnel stage, awareness level, format and pain point. Pick one and use it as a reference for your pieces."
+
+#, python-format
+msgid "Anuncios rechazados siguen gastando en «%(cuenta)s»"
+msgstr "Rejected ads are still spending in “%(cuenta)s”"
 
 msgid "Anuncios sueltos (anteriores)"
 msgstr "Standalone ads (previous)"
@@ -3676,6 +3684,13 @@ msgstr "Loading your prompts…"
 
 msgid "Cargando…"
 msgstr "Loading…"
+
+msgid "Caro"
+msgstr "Expensive"
+
+#, python-format
+msgid "Caro en %(cuentas)s"
+msgstr "Expensive in %(cuentas)s"
 
 msgid "Casi gratis: 10 GB al mes sin costo y sin cobro por descarga."
 msgstr "Almost free: 10 GB a month at no cost and no charge for downloads."
@@ -6705,6 +6720,9 @@ msgstr "In clips %(lista)s the declared lines don't match what's actually said."
 msgid "En los experimentos de instalaciones de la app todavía no se agregan piezas nuevas después de lanzar."
 msgstr "In app install experiments, new pieces can't be added after launching yet."
 
+msgid "En los últimos 30 días vendió menos de la mitad de lo que gastó: pausa o rehace la cuenta. Las cifras están en el Diagnóstico de la pestaña Meta."
+msgstr "In the last 30 days it sold less than half of what it spent: pause or rebuild the account. The numbers are in the Diagnosis of the Meta tab."
+
 msgid "En notion.so/profile/integrations crea una integración interna (solo lectura de contenido)."
 msgstr "At notion.so/profile/integrations create an internal integration (content read-only)."
 
@@ -8625,6 +8643,9 @@ msgstr "Won in %(pais)s: %(quien)s"
 msgid "Ganó en Triple Whale: «%(nombre)s»"
 msgstr "Won in Triple Whale: “%(nombre)s”"
 
+msgid "Gasta mucho con poco retorno: mira el Diagnóstico."
+msgstr "It spends a lot for little return: see the Diagnosis."
+
 #, python-format
 msgid "Gastado %(gastado)s de %(aprobado)s aprobados"
 msgstr "Spent %(gastado)s of %(aprobado)s approved"
@@ -9167,6 +9188,16 @@ msgid "Hay %(usos)s resultado(s) ya generado(s) con este producto: no se borran,
 msgstr "There are %(usos)s result(s) already generated with this product: they won't be deleted, but they'll stop showing its name and photo."
 
 #, python-format
+msgid "Hay desgloses de %(cuenta)s con datos de hace %(num)s día: no se muestran ni cuentan en el Diagnóstico hasta que la copia los traiga de nuevo."
+msgid_plural "Hay desgloses de %(cuenta)s con datos de hace %(num)s días: no se muestran ni cuentan en el Diagnóstico hasta que la copia los traiga de nuevo."
+msgstr[0] "Some breakdowns of %(cuenta)s have data from %(num)s day ago: they aren’t shown or used in the Diagnosis until the copy brings them again."
+msgstr[1] "Some breakdowns of %(cuenta)s have data from %(num)s days ago: they aren’t shown or used in the Diagnosis until the copy brings them again."
+
+#, python-format
+msgid "Hay desgloses de %(cuenta)s sin fecha legible: no se muestran ni cuentan en el Diagnóstico hasta que la copia los traiga de nuevo."
+msgstr "Some breakdowns of %(cuenta)s have no readable date: they aren’t shown or used in the Diagnosis until the copy brings them again."
+
+#, python-format
 msgid "Hay más de %(n)s capas en el mismo instante; quita algunas."
 msgstr "There are more than %(n)s layers at the same moment; remove some."
 
@@ -9676,6 +9707,9 @@ msgstr "Go to Subtitles"
 #, python-brace-format
 msgid "Ir a {tiempo}"
 msgstr "Go to {tiempo}"
+
+msgid "Ir a «Evaluar con IA»"
+msgstr "Go to “Evaluate with AI”"
 
 msgid "Ir al inicio"
 msgstr "Go to start"
@@ -10405,6 +10439,9 @@ msgstr "Online top-ups are not available yet; write to us to top up."
 msgid "Las reglas del decisor están en <a href=\"#experimentos\" onclick=\"document.querySelector('.sidebar-item[data-tab=experimentos]').click(); document.getElementById('reglas-motor').open = true; return false;\">Experimentos →</a>"
 msgstr "The decisor's rules are in <a href=\"#experimentos\" onclick=\"document.querySelector('.sidebar-item[data-tab=experimentos]').click(); document.getElementById('reglas-motor').open = true; return false;\">Experiments →</a>"
 
+msgid "Las reglas no encontraron nada que corregir en los últimos 30 días."
+msgstr "The rules found nothing to fix in the last 30 days."
+
 msgid "Las reglas no encontraron nada."
 msgstr "The rules found nothing."
 
@@ -11090,6 +11127,9 @@ msgstr "Meta is reviewing the account for risk and may slow delivery."
 msgid "Meta le atribuye %(valor)s en ventas por %(gasto)s de gasto: por debajo de %(minimo)s× se pierde dinero casi seguro."
 msgstr "Meta attributes %(valor)s in sales to it for %(gasto)s of spend: below %(minimo)s× you are almost surely losing money."
 
+msgid "Meta los rechazó y gastaron en los últimos 7 días. Revísalos en el Administrador de anuncios desde el Diagnóstico de la pestaña Meta."
+msgstr "Meta rejected them and they spent in the last 7 days. Review them in Ads Manager from the Diagnosis of the Meta tab."
+
 #, python-format
 msgid "Meta marca la cuenta con el estado %(codigo)s: no está activa."
 msgstr "Meta marks the account with status %(codigo)s: it isn’t active."
@@ -11168,6 +11208,9 @@ msgstr "Meta asked us to wait: the copy resumes at %(hora)s."
 #, python-format
 msgid "Meta pidió esperar: las copias siguen después de las %(hora)s."
 msgstr "Meta asked us to wait: copies resume after %(hora)s."
+
+msgid "Meta puede dejar de entregar sus anuncios. El motivo y qué hacer están en el Diagnóstico de la pestaña Meta."
+msgstr "Meta may stop delivering its ads. The reason and what to do are in the Diagnosis of the Meta tab."
 
 msgid "Meta quedó conectado en Creatv"
 msgstr "Meta is now connected in Creatv"
@@ -11444,6 +11487,10 @@ msgstr "Movements"
 
 msgid "Mucho clic"
 msgstr "Lots of clicks"
+
+#, python-format
+msgid "Muchos conjuntos de «%(cuenta)s» en aprendizaje limitado"
+msgstr "Many ad sets of “%(cuenta)s” are Learning limited"
 
 msgid "Mujer"
 msgstr "Female"
@@ -13458,6 +13505,9 @@ msgstr "Why"
 msgid "Por qué funciona:"
 msgstr "Why it works:"
 
+msgid "Por qué:"
+msgstr "Why:"
+
 msgid "Por región"
 msgstr "By region"
 
@@ -13627,6 +13677,15 @@ msgstr "First register your Meta app above."
 
 msgid "Prioridad (0–100)"
 msgstr "Priority (0–100)"
+
+msgid "Prioridad alta"
+msgstr "High priority"
+
+msgid "Prioridad baja"
+msgstr "Low priority"
+
+msgid "Prioridad media"
+msgstr "Medium priority"
 
 msgid "Privacidad"
 msgstr "Privacy"
@@ -14402,6 +14461,9 @@ msgstr "Collecting from %(fuente)s; the page reloads by itself when it finishes.
 msgid "Recolectar"
 msgstr "Collect"
 
+msgid "Recomendaciones por prioridad"
+msgstr "Recommendations by priority"
+
 msgid "Recomendada"
 msgstr "Recommended"
 
@@ -14653,6 +14715,9 @@ msgstr "Rules saved. Empty inherits from Settings."
 
 msgid "Reglas por defecto guardadas."
 msgstr "Default rules saved."
+
+msgid "Reglas sobre los últimos 7 y 30 días, sin costo. Nada se aplica solo: cada una lleva al Administrador de anuncios."
+msgstr "Rules over the last 7 and 30 days, at no cost. Nothing is applied on its own: each one takes you to Ads Manager."
 
 msgid "Regreso a clases"
 msgstr "Back to school"
@@ -15186,6 +15251,9 @@ msgstr "Interrupted by a server restart. Try again."
 msgid "Se interrumpió; vuelve a intentarlo."
 msgstr "It was interrupted; try again."
 
+msgid "Se llevan buena parte del gasto de la última semana. Pausarlos libera presupuesto para los que venden: la lista está en el Diagnóstico de la pestaña Meta."
+msgstr "They take a good share of last week’s spend. Pausing them frees budget for the ones that sell: the list is in the Diagnosis of the Meta tab."
+
 #, python-format
 msgid "Se llevó el %(pct)s %% del gasto de los últimos 30 días (%(gasto)s) con ROAS %(roas)s×, menos de la mitad del de la cuenta (%(roas_cuenta)s×)."
 msgstr "It took %(pct)s%% of the spend of the last 30 days (%(gasto)s) with a ROAS of %(roas)s×, less than half the account’s (%(roas_cuenta)s×)."
@@ -15292,6 +15360,9 @@ msgstr "Segment"
 #, python-format
 msgid "Segmento caro: %(segmento)s (%(dimension)s)"
 msgstr "Expensive segment: %(segmento)s (%(dimension)s)"
+
+msgid "Segmentos"
+msgstr "Segments"
 
 msgid "Segunda opción"
 msgstr "Second option"
@@ -15611,6 +15682,9 @@ msgstr "No balance: top up to keep generating."
 
 msgid "Sin saldo: recarga para seguir. No se cobró nada."
 msgstr "No balance: top up to continue. Nothing was charged."
+
+msgid "Sin salir del aprendizaje, Meta no estabiliza su entrega. El Diagnóstico de la pestaña Meta dice qué campañas consolidar primero."
+msgstr "Until they exit learning, Meta can’t stabilize their delivery. The Diagnosis of the Meta tab says which campaigns to consolidate first."
 
 msgid "Sin sonido: súbelo para oír el sonido de este video."
 msgstr "No sound: turn it up to hear this video's sound."
@@ -16455,6 +16529,10 @@ msgstr "Tap one to place it at the playhead; with the mouse you can also drag it
 msgid "Toca ▶ para oír una muestra corta y la tarjeta para elegir la voz."
 msgstr "Tap ▶ to hear a short sample and the card to pick the voice."
 
+#, python-format
+msgid "Toda la cuenta en los últimos %(n)s días, por segmento."
+msgstr "The whole account in the last %(n)s days, by segment."
+
 msgid "Toda la edición"
 msgstr "The whole edit"
 
@@ -16551,6 +16629,9 @@ msgstr "No ad accounts chosen yet: use “Choose accounts”."
 
 msgid "Todavía no hay datos de retención de Meta para este video."
 msgstr "There is no Meta retention data for this video yet."
+
+msgid "Todavía no hay desgloses: la copia los trae una vez al día."
+msgstr "No breakdowns yet: the copy brings them once a day."
 
 msgid "Todavía no hay estimado de Apify; espera un momento y vuelve a intentar."
 msgstr "There's no Apify estimate yet; wait a moment and try again."
@@ -17719,6 +17800,9 @@ msgstr "See in Ad Library →"
 msgid "Ver en Crear"
 msgstr "See in Create"
 
+msgid "Ver en el Administrador de anuncios"
+msgstr "See in Ads Manager"
+
 msgid "Ver ficha"
 msgstr "See details"
 
@@ -17764,6 +17848,10 @@ msgstr "View its piece →"
 
 msgid "Ver todas"
 msgstr "See all"
+
+#, python-format
+msgid "Ver todas (%(n)s)"
+msgstr "See all (%(n)s)"
 
 msgid "Ver todas las fuentes"
 msgstr "See all sources"
@@ -18092,6 +18180,12 @@ msgstr "And %(n)s more ad(s) with little spend that aren't shown."
 #, python-format
 msgid "Y %(n)s campaña(s) más con menos gasto."
 msgstr "And %(n)s more campaign(s) with less spend."
+
+#, python-format
+msgid "Y %(num)s segmento más con menos gasto."
+msgid_plural "Y %(num)s segmentos más con menos gasto."
+msgstr[0] "And %(num)s more segment with less spend."
+msgstr[1] "And %(num)s more segments with less spend."
 
 msgid "Ya abriste muchas recargas en la última hora. Espera un rato o escríbenos."
 msgstr "You opened too many top-ups in the last hour. Wait a while or write to us."
@@ -21214,6 +21308,14 @@ msgstr "“%(anuncio)s” takes %(pct)s%% of “%(conjunto)s”"
 #, python-format
 msgid "«%(campo)s» debe ser un número entero."
 msgstr "“%(campo)s” must be a whole number."
+
+#, python-format
+msgid "«%(cuenta)s» no está activa en Meta o llega a su tope de gasto"
+msgstr "“%(cuenta)s” isn’t active in Meta or is reaching its spending limit"
+
+#, python-format
+msgid "«%(cuenta)s» vende menos de lo que gasta"
+msgstr "“%(cuenta)s” sells less than it spends"
 
 #, python-format
 msgid "«%(lead)s»"
