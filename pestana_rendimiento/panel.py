@@ -162,6 +162,9 @@ def _meta(cliente, s, dias, hoy, params, pagina_conjuntos, pagina_anuncios):
     return {"ids_fuente": ids_fuente, "ids_estructura": ids_estructura,
             "estado": meta_panel.estado_copia(cliente, en_estructura), "estructura": estructura,
             "anuncios": anuncios,
+            "recomendaciones": meta_panel.recomendaciones(cliente, ids_estructura, estructura["desde"],
+                                                          estructura["hasta"], cuentas_por_id,
+                                                          anuncios["ev"]["anuncios"] if anuncios else ()),
             "moneda": _moneda_comun(en_estructura, estructura["campanas"] + estructura["conjuntos"])}
 
 
@@ -170,6 +173,7 @@ def _atencion(tw, meta):
     lista = list(tw["alertas"]) if tw else []
     if meta and meta["anuncios"]:
         lista += evaluacion.alertas(meta["anuncios"]["ev"], origen="meta")
+    lista += meta["recomendaciones"] if meta else []      # qué hacer en las cuentas de Meta (E2, tarea 6)
     salida, vistos = [], set()
     for a in lista:
         if a["texto"] not in vistos:

@@ -445,3 +445,46 @@ def activos(cliente, cuentas):
             if r.nivel == "conjunto":
                 salida[r.ad_account_id]["aprendizaje_limitado"] = int(r.fail or 0)
     return salida
+
+
+# Lo que lee `objetos_para_recomendar`: lo que entrega y lo que Meta rechazó o marcó con problemas.
+ESTADOS_RECOMENDAR = ("ACTIVE", "DISAPPROVED", "WITH_ISSUES")
+
+
+def objetos_para_recomendar(cliente, cuentas, desde, hasta):
+    """Los conjuntos y anuncios de esas cuentas que entregan (ACTIVE) o que Meta rechazó o marcó con problemas, con
+    lo que pide `recomendaciones.recomendar` (Rendimiento E2, tarea 6): `nivel`, `objeto_id`, `ad_account_id`,
+    `padre_id` (el conjunto de un anuncio), `campaign_id`, `nombre`, `estado`, `aprendizaje`, `presupuesto_diario`,
+    `gasto` en [desde, hasta] (el de un conjunto suma TODOS sus anuncios del rango, también los ya pausados) y
+    `frecuencia_7` (la de 7 días de la campaña de un anuncio; None en los conjuntos o sin alcance copiado).
+
+    UNA consulta (`UNION ALL` de anuncios y conjuntos): el gasto por anuncio del rango se agrega una vez (CTE `ga`,
+    con `max` del conjunto como `totales_por_anuncio`, para que un día sin conjunto no parta el anuncio) y de ahí sale
+    el de cada conjunto (`gc`); meta_objeto se lee por su índice (cliente, cuenta, nivel) y el alcance por el suyo.
+    Dos ramas y no un LEFT JOIN con el nivel en el ON: así SQLite solo recorre `gc` para los conjuntos y no para cada
+    anuncio (con 7 cuentas, ~4 000 objetos y 90 días: 0,16 s en vez de 0,28 s). Una lista vacía no toca la base."""
+    if not cuentas:
+        return []
+    a, o, al = db.meta_anuncio_dia, db.meta_objeto, db.meta_alcance
+    ga = (sa.select(a.c.ad_id, sa.func.max(a.c.adset_id).label("adset_id"), sa.func.sum(a.c.gasto).label("gasto"))
+          .where(*_donde(a, cliente, cuentas, desde, hasta), a.c.ad_id.is_not(None)).group_by(a.c.ad_id).cte("ga"))
+    gc = (sa.select(ga.c.adset_id, sa.func.sum(ga.c.gasto).label("gasto")).where(ga.c.adset_id.is_not(None))
+          .group_by(ga.c.adset_id).cte("gc"))
+    columnas = (o.c.nivel, o.c.objeto_id, o.c.ad_account_id, o.c.padre_id, o.c.campaign_id, o.c.nombre, o.c.estado,
+                o.c.aprendizaje, o.c.presupuesto_diario)
+    donde = (o.c.cliente == cliente, o.c.ad_account_id.in_(list(cuentas)), o.c.estado.in_(ESTADOS_RECOMENDAR))
+    anuncios = (sa.select(*columnas, ga.c.gasto.label("gasto"), al.c.frecuencia.label("frecuencia_7"))
+                .select_from(o.outerjoin(ga, ga.c.ad_id == o.c.objeto_id)
+                             .outerjoin(al, sa.and_(al.c.cliente == cliente, al.c.objeto_id == o.c.campaign_id,
+                                                    al.c.ventana == 7, al.c.nivel == "campana")))
+                .where(*donde, o.c.nivel == "anuncio"))
+    conjuntos = (sa.select(*columnas, gc.c.gasto.label("gasto"), sa.null().label("frecuencia_7"))
+                 .select_from(o.outerjoin(gc, gc.c.adset_id == o.c.objeto_id))
+                 .where(*donde, o.c.nivel == "conjunto"))
+    with db.conectar() as con:
+        filas = con.execute(sa.union_all(anuncios, conjuntos)).mappings().all()
+    salida = [dict(nivel=f["nivel"], objeto_id=f["objeto_id"], ad_account_id=f["ad_account_id"],
+                   padre_id=f["padre_id"], campaign_id=f["campaign_id"], nombre=f["nombre"], estado=f["estado"],
+                   aprendizaje=f["aprendizaje"], presupuesto_diario=f["presupuesto_diario"], gasto=_monto(f["gasto"]),
+                   frecuencia_7=None if f["frecuencia_7"] is None else float(f["frecuencia_7"])) for f in filas]
+    return sorted(salida, key=lambda f: (f["ad_account_id"], f["nivel"], f["objeto_id"]))

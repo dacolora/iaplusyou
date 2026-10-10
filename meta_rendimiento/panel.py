@@ -16,6 +16,7 @@ import proyectos
 from idiomas import N_
 from meta_rendimiento import cuentas as cuentas_mod
 from meta_rendimiento import datos
+from meta_rendimiento import recomendaciones as recomendaciones_mod
 from meta_rendimiento.sync import VENTANAS_ALCANCE
 from tareas import meta_rendimiento as tareas_mr
 from triple_whale import evaluacion, paises
@@ -212,6 +213,18 @@ def anuncios_evaluados(cliente, ids, desde, hasta, hoy, cuentas_por_id, pagina=0
     salida["ev"] = {"anuncios": todos, "conteo": salida["conteo"], "cuenta": evaluacion.resumen_cuenta(todos),
                     "hay_ventas": any(a["m"]["pedidos"] for a in todos)}
     return salida
+
+
+def recomendaciones(cliente, ids, desde, hasta, cuentas_por_id, anuncios=()):
+    """Qué hacer en esas cuentas (`recomendaciones.recomendar`, Rendimiento E2 tarea 6): [{"nivel", "texto"}] para
+    «Lo que necesita tu atención». UNA lectura (`datos.objetos_para_recomendar`, gasto de [desde, hasta]) más lo que el
+    contexto ya trae: las cuentas con su `extra` y los anuncios evaluados (`anuncios_evaluados(...)["ev"]["anuncios"]`).
+    Sin cuentas no consulta nada."""
+    if not ids:
+        return []
+    objetos = datos.objetos_para_recomendar(cliente, ids, desde, hasta)
+    cuentas = [cuentas_por_id[a] for a in ids if a in cuentas_por_id]
+    return recomendaciones_mod.recomendar(cuentas, objetos, anuncios)
 
 
 def estado_copia(cliente, cuentas):

@@ -127,6 +127,10 @@ msgid "%(anuncios)s (%(piezas)s en %(paises)s)"
 msgstr "%(anuncios)s (%(piezas)s in %(paises)s)"
 
 #, python-format
+msgid "%(anuncios)s y %(conjuntos)s están rechazados o con problemas: revisa en Meta qué piden para que vuelvan a entregar."
+msgstr "%(anuncios)s and %(conjuntos)s are rejected or have issues: check in Meta what they need to deliver again."
+
+#, python-format
 msgid "%(aprobadas)s de %(planeadas)s aprobadas · videos %(videos_aprobados)s/%(n_videos)s · imágenes %(imagenes_aprobadas)s/%(n_imagenes)s"
 msgstr "%(aprobadas)s of %(planeadas)s approved · videos %(videos_aprobados)s/%(n_videos)s · images %(imagenes_aprobadas)s/%(n_imagenes)s"
 
@@ -439,6 +443,24 @@ msgid "%(n)s actualizado(s)"
 msgstr "%(n)s updated"
 
 #, python-format
+msgid "%(n)s anuncio"
+msgid_plural "%(n)s anuncios"
+msgstr[0] "%(n)s ad"
+msgstr[1] "%(n)s ads"
+
+#, python-format
+msgid "%(n)s anuncio está rechazado o con problemas: revisa en Meta qué pide para que vuelva a entregar."
+msgid_plural "%(n)s anuncios están rechazados o con problemas: revisa en Meta qué piden para que vuelvan a entregar."
+msgstr[0] "%(n)s ad is rejected or has issues: check in Meta what it needs to deliver again."
+msgstr[1] "%(n)s ads are rejected or have issues: check in Meta what they need to deliver again."
+
+#, python-format
+msgid "%(n)s anuncio se está cansando y su campaña ya tiene una frecuencia de %(f)s en 7 días: haz variantes nuevas en Crear para no cansar más a la misma gente."
+msgid_plural "%(n)s anuncios se están cansando en campañas con una frecuencia de hasta %(f)s en 7 días: haz variantes nuevas en Crear para no cansar más a la misma gente."
+msgstr[0] "%(n)s ad is fatiguing and its campaign already has a 7-day frequency of %(f)s: make new variants in Create so the same people don't tire of it."
+msgstr[1] "%(n)s ads are fatiguing in campaigns with a 7-day frequency of up to %(f)s: make new variants in Create so the same people don't tire of them."
+
+#, python-format
 msgid "%(n)s anuncio(s)"
 msgstr "%(n)s ad(s)"
 
@@ -517,12 +539,30 @@ msgid "%(n)s con activo en el catálogo"
 msgstr "%(n)s with an asset in the catalog"
 
 #, python-format
+msgid "%(n)s conjunto"
+msgid_plural "%(n)s conjuntos"
+msgstr[0] "%(n)s ad set"
+msgstr[1] "%(n)s ad sets"
+
+#, python-format
+msgid "%(n)s conjunto está rechazado o con problemas: revisa en Meta qué pide para que vuelva a entregar."
+msgid_plural "%(n)s conjuntos están rechazados o con problemas: revisa en Meta qué piden para que vuelvan a entregar."
+msgstr[0] "%(n)s ad set is rejected or has issues: check in Meta what it needs to deliver again."
+msgstr[1] "%(n)s ad sets are rejected or have issues: check in Meta what they need to deliver again."
+
+#, python-format
 msgid "%(n)s consultas"
 msgstr "%(n)s queries"
 
 #, python-format
 msgid "%(n)s copia(s) de Meta en cola"
 msgstr "%(n)s Meta copy job(s) queued"
+
+#, python-format
+msgid "%(n)s de %(m)s conjuntos activos está en aprendizaje limitado (%(pct)s%% del gasto): júntalo con otro o sube su presupuesto para que salga de ahí. Meta necesita unas 50 conversiones por semana en cada conjunto."
+msgid_plural "%(n)s de %(m)s conjuntos activos están en aprendizaje limitado (%(pct)s%% del gasto): junta conjuntos o sube su presupuesto para que salgan de ahí. Meta necesita unas 50 conversiones por semana en cada conjunto."
+msgstr[0] "%(n)s of %(m)s active ad sets is Learning limited (%(pct)s%% of spend): merge it with another or raise its budget so it can get out. Meta needs about 50 conversions per week in each ad set."
+msgstr[1] "%(n)s of %(m)s active ad sets are Learning limited (%(pct)s%% of spend): merge ad sets or raise their budget so they can get out. Meta needs about 50 conversions per week in each ad set."
 
 #, python-format
 msgid "%(n)s de %(t)s avatar(es) completados."
@@ -945,6 +985,10 @@ msgstr "%(nombre)s — v%(version)s · %(n)s invariants · updated %(actualizado
 #, python-format
 msgid "%(nombre)s: Las imágenes no se publican en orgánico todavía."
 msgstr "%(nombre)s: Images are not published organically yet."
+
+#, python-format
+msgid "%(nombres)s y %(n)s más"
+msgstr "%(nombres)s and %(n)s more"
 
 #, python-format
 msgid "%(nucleos)s núcleo(s) y %(subs)s sub-avatar(es) propuestos — revísalos y aprueba los que sirvan%(aviso)s."
@@ -1907,6 +1951,10 @@ msgstr ""
 
 msgid "A la conexión con Meta le falta un permiso para esto: vuelve a conectar Meta en Experimentos aceptando todos los permisos que pide, y reintenta."
 msgstr "The Meta connection is missing a permission for this: reconnect Meta in Experiments, accepting every permission it asks for, and try again."
+
+#, python-format
+msgid "A la cuenta %(cuenta)s le quedan %(queda)s de su límite de gasto de %(limite)s: súbelo en Meta antes de que sus anuncios se detengan."
+msgstr "Account %(cuenta)s has %(queda)s left of its %(limite)s spending limit: raise it in Meta before its ads stop."
 
 msgid "A la vez (máximo)"
 msgstr "At once (peak)"
@@ -4710,6 +4758,10 @@ msgstr "Account and notices"
 msgid "Cuentas de Meta"
 msgstr "Meta accounts"
 
+#, python-format
+msgid "Cuentas en %(moneda)s: %(texto)s"
+msgstr "Accounts in %(moneda)s: %(texto)s"
+
 msgid "Cuentas publicitarias"
 msgstr "Ad accounts"
 
@@ -5498,6 +5550,10 @@ msgstr "Access was revoked or expired"
 
 msgid "El acceso no caduca."
 msgstr "Access doesn't expire."
+
+#, python-format
+msgid "El anuncio %(anuncio)s se lleva el %(pct)s%% del gasto de su conjunto %(conjunto)s, que tiene %(n)s anuncios activos: si se cansa, el conjunto cae con él. Prueba variantes nuevas para no depender de un solo creativo."
+msgstr "The ad %(anuncio)s takes %(pct)s%% of the spend of its ad set %(conjunto)s, which has %(n)s active ads: if it fatigues, the ad set falls with it. Try new variants so you don't depend on a single creative."
 
 msgid "El anuncio está pausado: no se muestra ni gasta. Actívalo para que empiece a circular."
 msgstr "The ad is paused: it isn't shown and doesn't spend. Activate it to get it running."
@@ -6432,6 +6488,10 @@ msgstr "Get started today"
 #, python-format
 msgid "En %(moneda)s, la moneda de la cuenta de Meta"
 msgstr "In %(moneda)s, the Meta account's currency"
+
+#, python-format
+msgid "En %(n)s conjuntos un solo anuncio se lleva el %(umbral)s%% o más del gasto, como %(anuncio)s (%(pct)s%% de %(conjunto)s): si se cansa, el conjunto cae con él. Prueba variantes nuevas para no depender de un solo creativo."
+msgstr "In %(n)s ad sets a single ad takes %(umbral)s%% or more of the spend, like %(anuncio)s (%(pct)s%% of %(conjunto)s): if it fatigues, the ad set falls with it. Try new variants so you don't depend on a single creative."
 
 msgid "En <em>Configuración › Básica</em>: nombre, correo de contacto, URL de términos, URL de política de privacidad, ícono 1024×1024 sin logos de Meta, categoría, propósito y «Eliminación de datos» (URL con instrucciones). Copia el <strong>identificador de la app</strong> y la <strong>clave secreta</strong>."
 msgstr "In <em>Settings › Basic</em>: name, contact email, terms URL, privacy policy URL, a 1024×1024 icon with no Meta logos, category, purpose and “Data deletion” (URL with instructions). Copy the <strong>app id</strong> and the <strong>app secret</strong>."
@@ -9670,6 +9730,14 @@ msgstr "The correction failed."
 
 msgid "La credencial de agencia es ilegible (¿cambió FLASK_SECRET_KEY?): un admin tiene que volver a conectarla."
 msgstr "The agency credential is unreadable (did FLASK_SECRET_KEY change?): an admin has to connect it again."
+
+#, python-format
+msgid "La cuenta %(cuenta)s tiene un problema en Meta (%(estado)s): revísala en el Administrador de anuncios."
+msgstr "Account %(cuenta)s has a problem in Meta (%(estado)s): check it in Meta Ads Manager."
+
+#, python-format
+msgid "La cuenta %(cuenta)s tiene un problema en Meta (%(estado)s, motivo: %(motivo)s): revísala en el Administrador de anuncios."
+msgstr "Account %(cuenta)s has a problem in Meta (%(estado)s, reason: %(motivo)s): check it in Meta Ads Manager."
 
 #, python-format
 msgid "La cuenta %(que)s: %(cuenta)s ventas por Pixel y no verán compras. Compruébalo en Configuración."
@@ -15649,6 +15717,16 @@ msgid "Sube al menos una referencia de marca (imagen o video) primero."
 msgstr "Upload at least one brand reference (image or video) first."
 
 #, python-format
+msgid "Sube el presupuesto de %(conjunto)s: tiene %(n)s anuncio ganador y su presupuesto diario (%(presupuesto)s) está por debajo de la mediana de los conjuntos activos de su cuenta (%(mediana)s). Súbelo de a 20%% para no reiniciar el aprendizaje."
+msgid_plural "Sube el presupuesto de %(conjunto)s: tiene %(n)s anuncios ganadores y su presupuesto diario (%(presupuesto)s) está por debajo de la mediana de los conjuntos activos de su cuenta (%(mediana)s). Súbelo de a 20%% para no reiniciar el aprendizaje."
+msgstr[0] "Raise the budget of %(conjunto)s: it has %(n)s winning ad and its daily budget (%(presupuesto)s) is below the median of its account's active ad sets (%(mediana)s). Raise it 20%% at a time so learning doesn't reset."
+msgstr[1] "Raise the budget of %(conjunto)s: it has %(n)s winning ads and its daily budget (%(presupuesto)s) is below the median of its account's active ad sets (%(mediana)s). Raise it 20%% at a time so learning doesn't reset."
+
+#, python-format
+msgid "Sube el presupuesto de %(n)s conjuntos con anuncios ganadores y presupuesto diario por debajo de la mediana de los conjuntos activos de su cuenta: %(nombres)s. Súbelos de a 20%% para no reiniciar el aprendizaje."
+msgstr "Raise the budget of %(n)s ad sets with winning ads and a daily budget below the median of their account's active ad sets: %(nombres)s. Raise them 20%% at a time so learning doesn't reset."
+
+#, python-format
 msgid "Sube máximo %(n)s archivos a la vez."
 msgstr "Upload at most %(n)s files at a time."
 
@@ -18424,6 +18502,9 @@ msgstr "closed"
 msgid "cf_id inválido: %(cf)s"
 msgstr "invalid cf_id: %(cf)s"
 
+msgid "cierre permanente"
+msgstr "permanent closure"
+
 msgid "cifras del mes por la fecha del gasto; ganancia = cobrado − costo de lo que se intentó cobrar"
 msgstr "month figures by spend date; profit = charged − cost of what we tried to charge"
 
@@ -18623,10 +18704,16 @@ msgstr "created in Sprints"
 msgid "cta"
 msgstr "CTA"
 
+msgid "cuenta comprometida (alguien entró sin permiso)"
+msgstr "compromised account (someone got in without permission)"
+
 msgid "cuenta publicitaria"
 msgid_plural "cuentas publicitarias"
 msgstr[0] "ad account"
 msgstr[1] "ad accounts"
+
+msgid "cuenta sin uso"
+msgstr "unused account"
 
 msgid "cálida"
 msgstr "warm"
@@ -19454,6 +19541,12 @@ msgstr "inconclusive"
 
 msgid "inconsciente"
 msgstr "unaware"
+
+msgid "incumplimiento de las políticas de publicidad"
+msgstr "violation of the advertising policies"
+
+msgid "incumplimiento de las políticas del administrador comercial"
+msgstr "violation of the Business Manager policies"
 
 msgid "info"
 msgstr "info"
@@ -20345,6 +20438,12 @@ msgstr "doctrine review"
 
 msgid "revisión de la doctrina · respuesta inválida"
 msgstr "doctrine review · invalid response"
+
+msgid "revisión de propiedad intelectual"
+msgstr "intellectual property review"
+
+msgid "riesgo en los pagos"
+msgstr "payment risk"
 
 msgid "roas"
 msgstr "roas"

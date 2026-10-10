@@ -8,7 +8,7 @@ description: "Meta rendimiento: lo que la pestaña Rendimiento lee de Meta (skil
 > Parte de la guía del repositorio. **Si cambias esta área, actualiza este archivo** en el mismo cambio (no CLAUDE.md). Si el código y este texto no coinciden, manda el código: corrige el texto.
 
 **Meta rendimiento** (package `meta_rendimiento/`, `tareas/meta_rendimiento.py`, migration 0035 — it was 0033 in the branch, renumbered to 0034 when main brought `0033_cobros` (2026-10-08) and to 0035 when main brought `0034_tw_tarjetas` (2026-10-09); spec `docs/superpowers/specs/2026-10-08-meta-rendimiento-design.md`, plan `docs/superpowers/plans/2026-10-08-meta-rendimiento-e1.md`, decisions and rulings R1–R30 with their reasons and the numbers measured against the real API in `docs/superpowers/decisiones/2026-10-08-meta-rendimiento-e1.md`): a project READS the metrics of several Meta ad accounts through its one Meta token and shows them in the Rendimiento tab (skill `rendimiento`; until 2026-10-09 in its own «Meta» tab, `_tab_meta.html`,
-anchor `#meta`, which now opens Rendimiento). It never changes anything in Meta and nothing here charges anyone; launching experiments stays with the single account of `meta.json` (`experimentos` and `meta-y-publicacion` skills). Why it exists: happyflops has 7 ad accounts (all SEK, ~9 600 ads with data in 90 days, ~660 active ad sets, ~60 % in limited learning) and Daniel could not see them together. **Who picks the accounts: only an admin** (R20, below). This is E1 (read + show). E2 «Diagnosticar y recomendar» and E3 «Aplicar cambios» (spec §9–§10) are not built: PND-192 and PND-193.
+anchor `#meta`, which now opens Rendimiento). It never changes anything in Meta and nothing here charges anyone; launching experiments stays with the single account of `meta.json` (`experimentos` and `meta-y-publicacion` skills). Why it exists: happyflops has 7 ad accounts (all SEK, ~9 600 ads with data in 90 days, ~660 active ad sets, ~60 % in limited learning) and Daniel could not see them together. **Who picks the accounts: only an admin** (R20, below). This is E1 (read + show). E2 «Diagnosticar y recomendar» (spec §9) is being built inside Rendimiento E2: the free rules are in «What to do in the accounts» below, the breakdowns (`meta_desglose`) are not; E3 «Aplicar cambios» (§10) is not built: PND-192 and PND-193.
 
 **Modules and single writers.** `cuentas.py` is the ONLY writer of `meta_cuenta` (the accounts a project reads: `elegir` leaves exactly the checked accounts, `cambiar_pais`, `actualizar`, `actualizar_extra` takes the row lock BEFORE reading with a no-op UPDATE — the `experimentos._bloquear` pattern — because web and worker both write `extra`; `adivinar_pais` guesses the country from the account name, an ISO code only as the LAST word so «HappyFlops AD Account» gives None). A removed account deletes its copies FIRST and its row after, so a failed removal is retried by the next `elegir` instead of leaving orphan copies. `datos.py` is the ONLY writer of `meta_cuenta_dia`, `meta_anuncio_dia`, `meta_objeto` and `meta_alcance` (every write is one transaction; `reemplazar_*` deletes the account's range and rewrites it) and holds the reads, each ONE aggregated query filtered by cliente + accounts + dates (an empty account list returns empty without touching the database). `tasas.py` is the ONLY writer of `tasa_cambio`. `pausa.py` is the ONLY writer of the `kv` row `meta_rend:pausa_hasta` (the shared pause, see «Meta's usage limit»). `graph.py` reads the Graph API with the token and the account as ARGUMENTS and never touches `meta_ads.auth`, the global state behind the launcher's lock: copying 7 accounts in a worker thread must not block a launch. `sync.py` copies ONE account, `panel.py` gives the parts Rendimiento paints (below, «By parts»), `rutas.py` is the blueprint `/cliente/<c>/meta-rendimiento` («Elegir cuentas», a country, `pedir_copia`). `grafico.py` (the old Tablero's day-by-day chart) went with the «Meta» tab on 2026-10-09: Rendimiento draws its chart with `static/tw_resultados.js`.
 
@@ -40,6 +40,25 @@ network error leaves that key None and logs only `type(e).__name__` and Meta's c
 pause (two or three reads per paid analysis). Because it never raises, the task checks `creativo.sin_contenido(...)`
 (none of copy, title, image, video) and stops before paying anyone (skill `triple-whale`). Tests:
 `tests/test_rendimiento_e2_creativo.py`.
+
+**What to do in the accounts (`recomendaciones.py`, Rendimiento E2 task 6, 2026-10-10; spec §9, PND-192 without the
+breakdowns).** Why: Daniel saw 7 accounts' numbers but not what to change (~60 % of happyflops' active ad sets in
+limited learning). PURE and free: `recomendar(cuentas, objetos, anuncios)` → `[{"nivel": alta|media|bien, "texto"}]`
+already translated for the viewer, appended to Rendimiento's «Lo que necesita tu atención» (`pestana_rendimiento.panel._meta`
+→ `meta["recomendaciones"]`, one line in `_atencion`). Six rules, thresholds as module constants: limited learning
+(media, ≥ 30 % of the ACTIVE ad sets' spend, below that silent; never summed across currencies: with several, one line
+per currency), rejected/with issues ads or ad sets (alta), account `account_status` ≠ 1 (alta, `disable_reason` in words
+only for the codes in `MOTIVOS_DESACTIVACION`, the status labels are `rutas.ESTADOS_CUENTA`) and `spend_cap` with < 10 %
+left (media; `amount_spent`/`spend_cap` arrive in minor units as text, `MONEDAS_SIN_DECIMALES` applies), a winner whose
+active ad set has its own daily budget below the median of its ACCOUNT's active ad sets with budget (bien; a CBO ad set
+has none and is skipped), one active ad with ≥ 60 % of its active ad set's spend when the set has ≥ 3 active ads
+(media), and a fatiguing non-loser ad whose campaign's 7-day frequency is ≥ 3 (media). Rules 4 and 6 need Meta-evaluated
+ads, so they say nothing about accounts whose sales Triple Whale covers. Its only read is
+`datos.objetos_para_recomendar` (ONE query whatever the number of accounts, no Meta call): active/rejected ad sets and
+ads with the period's spend (an ad set's = all its ads, paused ones included) and each ad's campaign 7-day frequency.
+It is a `UNION ALL` of two branches on purpose: one LEFT JOIN with the level in the ON made SQLite rescan the ad-set
+aggregate for every ad (0.28 s → 0.16 s with 7 accounts, ~4 000 objects, 90 days). `estado` can be ~20 h stale (trap 4).
+Tests: `tests/test_rendimiento_e2_recomendaciones.py` (one per rule with its threshold and edge, in Spanish).
 
 **The tab is Rendimiento's (2026-10-09, skill `rendimiento`).** The «Meta» tab (`_tab_meta.html`, `_meta_panel.html`,
 `_meta_anuncios_filas.html`, the routes `ver_panel`, `ver_anuncios`, `ver_conjuntos`, `sincronizar` and
