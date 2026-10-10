@@ -19,6 +19,7 @@ los anuncios de las dos fuentes (`pestana_rendimiento.galeria`, que usa
 `enriquecer`, `elegir_analisis`, `filtrar` y `precio_analisis`); `galeria`
 queda como lo elegible de una fuente que recalcula `pedidos.pedir_lote`.
 """
+import math
 import re
 from datetime import date, timedelta
 
@@ -411,9 +412,32 @@ def _elegir(cliente, a, analisis_por_clave, vivos, alcance):
     return job, elegir_analisis(a, analisis_por_clave.get((a["canal"], a["ad_id"])), alcance, vivo=job in vivos)
 
 
-def precio_analisis(creativo):
-    """El precio de «Cómo mejorarlo» de un anuncio: Claude + Whisper por la duración de SU video (30 s sin ella)."""
-    return gastos.estimar("analisis_anuncio_tw", segundos=(creativo or {}).get("duracion_s"))
+def duracion_vista(filas):
+    """La duración del video que ya trajo un análisis del anuncio: `foto.creativo.duracion_s` del más nuevo de `filas`
+    (las de `datos.analisis_de_anuncios`, la más nueva primero) que la guardó; None si ninguno."""
+    for f in filas or []:
+        valor = (((f or {}).get("foto") or {}).get("creativo") or {}).get("duracion_s")
+        try:
+            segundos = float(valor)
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(segundos) and segundos > 0:
+            return segundos
+    return None
+
+
+def precio_analisis(creativo, filas=None, fuente=None):
+    """El precio de «Cómo mejorarlo» de un anuncio: Claude + Whisper por la duración de SU video (30 s sin ella): la de
+    su creativo copiado de Triple Whale y, para un anuncio de fuente Meta (`fuente == "meta"`, la del alcance) que no lo
+    tiene, la que guardó el análisis más nuevo de ese anuncio que ya trajo su video de Meta (`duracion_vista(filas)`).
+    G2 (revisión final de Rendimiento E2, guardián de gasto, 2026-10-10): un anuncio de una cuenta sin tienda no tiene
+    fila en `tw_creativo` y su precio suponía 30 s aunque ya se supiera que dura 95. La tarjeta (`enriquecer`), el total
+    del lote (`galeria` y `pestana_rendimiento.galeria.armar`) y el cobro (`pedidos.pedir_analisis`) llaman a ESTA
+    función con las filas que ya leyeron (sin consultas por tarjeta), así los tres dicen lo mismo."""
+    segundos = (creativo or {}).get("duracion_s")
+    if segundos is None and fuente == "meta":
+        segundos = duracion_vista(filas)
+    return gastos.estimar("analisis_anuncio_tw", segundos=segundos)
 
 
 def enriquecer(cliente, tarjetas, ev, analisis_por_clave, alcance=None, vivos=None, creativos=None):
@@ -443,7 +467,7 @@ def enriquecer(cliente, tarjetas, ev, analisis_por_clave, alcance=None, vivos=No
         a["analisis_otro_alcance"] = e["otro_alcance"]
         a["ofrecer_analisis"] = e["ofrecer"]                # el botón principal pagado: la misma regla que el lote
         a["job_analisis"] = job if e["vivo"] else None
-        a["precio_analisis"] = precio_analisis(a["creativo"])
+        a["precio_analisis"] = precio_analisis(a["creativo"], analisis_por_clave.get(k), (alcance or {}).get("fuente"))
         a["cpa_canal"] = cpa_canal.get(a["canal"])
         a["piezas_mejora"] = hechas.get(fila["id"], []) if fila else []
     return tarjetas
@@ -472,7 +496,8 @@ def galeria(cliente, ev, veredicto="", pagina=1, alcance=None):
     # de cada video, así es la suma de los precios de sus tarjetas (revisión final, A5).
     creativos = datos.creativos(cliente, [(a["canal"], a["ad_id"]) for a in tarjetas + lote])
     enriquecer(cliente, tarjetas, ev, por_clave, alcance, vivos=vivos, creativos=creativos)
-    precios = [precio_analisis(creativos.get((a["canal"], a["ad_id"])))["usd"] for a in lote]
+    precios = [precio_analisis(creativos.get((a["canal"], a["ad_id"])), por_clave.get((a["canal"], a["ad_id"])),
+                               (alcance or {}).get("fuente"))["usd"] for a in lote]
     # Sin precio de alguno, el total es «precio no disponible», nunca «US$ 0» (regla 1).
     total = None if any(p is None for p in precios) else sum(precios)
     conteo = {f: len(filtrar(ev["anuncios"], f)) for f in FILTROS_GALERIA}

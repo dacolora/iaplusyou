@@ -52,8 +52,9 @@ def pedir_analisis(cliente, alc, a, usuario):
     creativos = datos.creativos(cliente, claves)
     # Cobros (spec 2026-10-08-cobros §5): sin saldo no se guarda nada ni se encola; SaldoInsuficiente sube al
     # manejador común (402 al fetch de la tarjeta, aviso con «Recargar saldo» al formulario). `usd` es el COSTO, el
-    # mismo del botón (`panel.precio_analisis`); la reserva la hace el encolado.
-    usd = panel.precio_analisis(creativos.get(clave))["usd"]
+    # mismo del botón (`panel.precio_analisis`, con las filas ya leídas: para un anuncio de Meta, la duración que guardó
+    # un análisis anterior, G2); la reserva la hace el encolado.
+    usd = panel.precio_analisis(creativos.get(clave), filas, alc.get("fuente"))["usd"]
     libro.exigir(cliente, usd, tipo="evaluacion")      # `tipo`: lo incluido en un plan (main, planes 2026-10-10)
     if any(f["estado"] in panel.EN_CURSO for f in filas):
         with idiomas.en_idioma(idiomas.de_proyecto(cliente)):        # lo que se guarda, en el idioma del proyecto

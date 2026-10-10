@@ -151,7 +151,9 @@ def armar(cliente, alc_tw, alc_meta, veredicto="", pagina=1):
             for a in suyas:
                 a["medio"] = medio_meta(a)
             _nvp_meta(cliente, suyas, alc, True if alc_tw else None)
-    precios = [tw_panel.precio_analisis(creativos.get((a["canal"], a["ad_id"])))["usd"] for a in lote]
+    # La misma función que la tarjeta y el cobro (G2): un anuncio de Meta usa la duración que guardó un análisis anterior.
+    precios = [tw_panel.precio_analisis(creativos.get((a["canal"], a["ad_id"])), por_clave.get((a["canal"], a["ad_id"])),
+                                        alcance_de[a["fuente"]].get("fuente"))["usd"] for a in lote]
     # Sin precio de alguno, el total es «precio no disponible», nunca «US$ 0» (regla 1 del repo).
     total = None if any(p is None for p in precios) else sum(precios)
     return {"tarjetas": tarjetas, "pagina": pagina, "hay_mas": pagina * tw_panel.POR_PAGINA < len(lista),

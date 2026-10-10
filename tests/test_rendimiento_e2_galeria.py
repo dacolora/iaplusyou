@@ -341,6 +341,36 @@ def test_sin_saldo_el_analisis_de_meta_da_402_y_no_guarda_nada(mixto):
     assert _jobs() == [] and _filas() == []
 
 
+def test_el_precio_de_un_anuncio_de_meta_usa_la_duracion_que_ya_se_vio(mixto):
+    """G2 (revisión final de Rendimiento E2, guardián de gasto, 2026-10-10): un anuncio de una cuenta de Meta sin tienda
+    no tiene fila en `tw_creativo`, así que su precio suponía 30 s de Whisper aunque un análisis anterior ya hubiera
+    traído su video de Meta y guardado `foto.creativo.duracion_s`. Con esa duración (95 s) la tarjeta, el total del lote
+    y lo que se reserva al cobrar dicen lo mismo; los demás anuncios de Meta siguen con 30 s."""
+    import gastos
+    _sembrar()
+    al = _alcances()
+    # Un análisis anterior de m2 trajo su creativo de Meta (95 s) y falló después: la tarjeta vuelve a ofrecerlo.
+    aid = twdatos.crear_analisis("acme", None, "facebook-ads", "m2", al["meta"]["desde"], al["meta"]["hasta"], "SEK",
+                                 {"fuente": "meta", "ad_account_id": SE, "metodo": 2,
+                                  "creativo": {"tipo": "video", "duracion_s": 95.0}})
+    twdatos.actualizar_analisis(aid, estado="error", error="Claude no respondió.")
+    noventa = gastos.estimar("analisis_anuncio_tw", segundos=95)["usd"]
+    treinta = gastos.estimar("analisis_anuncio_tw")["usd"]
+    assert noventa > treinta
+    g = _armar()
+    precios = {a["ad_id"]: a["precio_analisis"]["usd"] for a in g["tarjetas"]}
+    assert precios["m2"] == pytest.approx(noventa) and precios["m1"] == pytest.approx(treinta)
+    assert "meta:facebook-ads:m2" in g["lote"]["claves"]
+    assert g["lote"]["precio"]["usd"] == pytest.approx(sum(precios[k.rsplit(":", 1)[1]] for k in g["lote"]["claves"]),
+                                                       abs=1e-4)
+    libro = _cobra(100_000)
+    assert _analizar(mixto, "meta", "m2").get_json()["ok"]
+    with db.conectar() as con:
+        [reserva] = [dict(r._mapping) for r in con.execute(sa.select(db.reserva_saldo))]
+    assert reserva["costo_usd"] == pytest.approx(noventa)
+    assert reserva["milesimas"] == libro.precio_milesimas(noventa, libro.margen_precio("acme"))
+
+
 # ------------------------------------------------------------------------------- la tarjeta de Meta ---
 
 def _tarjeta_de(html, k):
