@@ -248,7 +248,7 @@ production. It must work for ANY ad, not only Creatv's: in happyflops only 4 pie
   `tw_anuncio:<aid>:t<tarea>`, once, also when it fails after paying (the tokens ride the exception). The Claude call has
   `timeout=300, max_retries=0` (A6: a retry by the SDK could be paid without being recorded; a failure ends in error
   and the person asks again with the price in view). **Cobros** (main's prepaid balance, wired in when main was merged on
-  2026-10-08; skill `cobros`): `tw_analizar_anuncio` is in `tareas.TIPOS_QUE_COBRAN`; `_pedir_analisis` reads the
+  2026-10-08; skill `cobros`): `tw_analizar_anuncio` is in `tareas.TIPOS_QUE_COBRAN`; `pedidos.pedir_analisis` reads the
   creative, takes the button's COST (`panel.precio_analisis(...)["usd"]`) and calls `libro.exigir(cliente, usd)` BEFORE
   closing stale rows or creating the `tw_analisis` row, then `encolar_analisis(..., costo_estimado=usd)` reserves it;
   `SaldoInsuficiente` goes up to `dashboard._saldo_insuficiente` (402 JSON to the card's fetch, which treats 402 as a
@@ -320,7 +320,7 @@ production. It must work for ANY ad, not only Creatv's: in happyflops only 4 pie
   offered «Intentar otra vez» and put the ad back in the batch. A row in `en_cola`/`analizando` whose job is NOT alive
   is shown as an error («Se interrumpió antes de terminar.») and never blocks; the route closes such orphans
   (`datos.cerrar_colgados`) before creating the new row (A4: a task that died before its `try` blocked the ad forever).
-- **The route never pays twice for the same data (A1).** `_pedir_analisis` refuses without charging when the ad has a
+- **The route never pays twice for the same data (A1).** `pedidos.pedir_analisis` refuses without charging when the ad has a
   live task or a READY analysis of this scope that is not stale («Ese anuncio ya tiene un análisis con estos datos.»;
   the JSON path returns the card): a stale tab, or the 7-day tab after visiting 30 days, still shows the button.
 - **Old analysis.** `panel.es_viejo` applies only inside the same scope (`panel.mismo_alcance`: same store AND either the
@@ -335,7 +335,14 @@ production. It must work for ANY ad, not only Creatv's: in happyflops only 4 pie
   another scope), posts the `clave=<canal>:<ad_id>` inputs the form showed with their total price, and the route
   charges only posted ∩ still-eligible, never «the next N»: a second submit of the same form charges nothing (rules 1
   and 4). The total is the sum of each card's price at the ad's real duration (A5); with any price unknown it says
-  «precio no disponible», never «US$ 0». `_claves_confirmadas` dedupes with a set and stops at N_LOTE valid keys (B6).
+  «precio no disponible», never «US$ 0». `pedidos.claves_confirmadas` dedupes with a set and stops at N_LOTE valid keys (B6).
+- **Where the paid request lives (Rendimiento E2 task 2, 2026-10-10).** `triple_whale/pedidos.py`
+  (`pedir_analisis`, `pedir_lote`, `pedir_evaluacion`, `claves_confirmadas`, `anuncio_del_alcance`), moved verbatim
+  from `rutas.py` with their A1/A3/A4/B6/Cobros comments, so the Rendimiento blueprint charges a Meta-source ad
+  through these same guarantees instead of a copy. `usuario` comes in explicitly (no `session`) and the routes keep
+  `flash` and redirects; `pedir_lote` takes the gallery's `veredicto` (what is eligible depends on the filter) and
+  re-raises `SaldoInsuficiente` with `.lote = (queued, failed)`; `pedir_evaluacion` returns `ok=None` when there is
+  nothing to evaluate (the route flashes it as an error, as before).
 - **From analysis to Crear and learnings.** `analisis_crear` sends `origen_tw = a<aid>`, stored as
   `concepto.extra.tw_idea = {"analisis_id", "titulo"}`; the cards list the pieces born from each analysis. The
   `aprendizaje` is saved only on click (`analisis_aprendizaje`, id `tw<aid>`, in the project's language: rule 3): saved
