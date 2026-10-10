@@ -11793,6 +11793,9 @@ msgstr "Couldn't talk to Meta (%(error)s)."
 msgid "No pude hablar con Triple Whale (%(tipo)s)."
 msgstr "I couldn't reach Triple Whale (%(tipo)s)."
 
+msgid "No pude leer el anuncio en Meta; no se cobró nada. Inténtalo más tarde."
+msgstr "I couldn't read the ad in Meta; nothing was charged. Try again later."
+
 msgid "No pude leer el archivo como texto (¿es un CSV?)."
 msgstr "I couldn't read the file as text (is it a CSV?)."
 

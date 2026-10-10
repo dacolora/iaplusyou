@@ -149,12 +149,17 @@ def tw_analizar_anuncio(tarea):
         medios["copy"] = bool((foto.get("creativo") or {}).get("copy"))
         datos.actualizar_analisis(aid, estado="analizando", tarea_id=tarea.get("id"), error=None)
         de_meta = foto.get("fuente") == "meta"
-        if de_meta and not foto.get("creativo"):
+        if de_meta and meta_creativo.sin_contenido(foto.get("creativo")):
             # Rendimiento E2: un anuncio de una cuenta de Meta sin tienda no tiene copia de su creativo. Se lee UNA vez
             # con el token del proyecto (copia imagen y video a R2; nunca lanza) y queda en la foto: lo que Claude mira
             # es lo que se guarda.
             trabajos.reportar(job_id, etapa=idiomas.N_("Trayendo el anuncio de Meta"))
-            foto["creativo"] = meta_creativo.traer(cliente, fila["ad_id"], aid)
+            traido = meta_creativo.traer(cliente, fila["ad_id"], aid)
+            if meta_creativo.sin_contenido(traido):
+                # Token caducado, red o límite de uso de Meta: sin texto, imagen ni video, Claude analizaría a ciegas.
+                # Se para ANTES de Whisper y de Claude: la fila queda en error y no se anota ningún gasto.
+                raise mejorar.AnuncioIlegible("Meta no devolvió el anuncio")
+            foto["creativo"] = traido
             datos.actualizar_analisis(aid, foto=foto)
             fila["foto"] = foto
             medios["copy"] = bool(foto["creativo"].get("copy"))

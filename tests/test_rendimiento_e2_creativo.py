@@ -348,3 +348,59 @@ def test_si_traer_falla_la_fila_queda_en_error_con_palabras(tarea_meta, monkeypa
         tarea_meta["t"].tw_analizar_anuncio({"id": 24, "payload": {"cliente": "acme", "analisis_id": tarea_meta["aid"]}})
     fila = datos.analisis_anuncio("acme", tarea_meta["aid"])
     assert fila["estado"] == "error" and fila["error"]
+    assert _filas_gasto() == [] and fila["usd"] == 0
+
+
+def _filas_gasto():
+    import db
+    import sqlalchemy as sa
+    with db.conectar() as con:
+        return [dict(r._mapping) for r in con.execute(sa.select(db.gasto))]
+
+
+NO_SE_COBRO = "No pude leer el anuncio en Meta; no se cobró nada. Inténtalo más tarde."
+
+
+def _sin_nada_que_mirar(tarea_meta, monkeypatch):
+    """Lo que devuelve `traer` con el token caducado (190), un corte de red o el límite de uso del 75 %: todo None."""
+    monkeypatch.setattr(creativo, "traer", lambda *a: dict.fromkeys(datos.COLUMNAS_CREATIVO, None))
+    llamados = []
+    monkeypatch.setattr(mejorar, "transcribir", lambda foto_: llamados.append("whisper") or pytest.fail("Whisper"))
+    monkeypatch.setattr(mejorar, "analizar", lambda *a, **k: llamados.append("claude") or pytest.fail("Claude"))
+    return llamados
+
+
+def test_meta_sin_nada_que_mirar_termina_en_error_sin_whisper_ni_claude_ni_gasto(tarea_meta, monkeypatch):
+    """Arreglo de la revisión de la tarea 1 (2026-10-10): `traer` nunca lanza, así que sin esta guarda un token caducado
+    pagaba ~US$ 0,10 por un «Cómo mejorarlo» que no vio el anuncio, y el lote lo multiplicaba."""
+    llamados = _sin_nada_que_mirar(tarea_meta, monkeypatch)
+    with pytest.raises(RuntimeError, match="no se cobró nada"):
+        tarea_meta["t"].tw_analizar_anuncio({"id": 25, "payload": {"cliente": "acme", "analisis_id": tarea_meta["aid"]}})
+    fila = datos.analisis_anuncio("acme", tarea_meta["aid"])
+    assert fila["estado"] == "error" and fila["error"] == NO_SE_COBRO
+    assert llamados == [] and tarea_meta["recibido"]["visuales"] == [] and tarea_meta["recibido"]["texto"] is None
+    assert _filas_gasto() == [] and fila["usd"] == 0
+    assert fila["foto"]["creativo"] == {}               # no se guarda un creativo vacío como si fuera el anuncio
+
+
+def test_el_error_sin_cobro_queda_en_el_idioma_del_proyecto(tarea_meta, monkeypatch):
+    """El worker corre cada tarea dentro de `idiomas.en_idioma(de_tarea)`: el texto guardado sale en ese idioma."""
+    import idiomas
+    _sin_nada_que_mirar(tarea_meta, monkeypatch)
+    with idiomas.en_idioma("en"), pytest.raises(RuntimeError):
+        tarea_meta["t"].tw_analizar_anuncio({"id": 26, "payload": {"cliente": "acme", "analisis_id": tarea_meta["aid"]}})
+    fila = datos.analisis_anuncio("acme", tarea_meta["aid"])
+    assert fila["error"] == "I couldn't read the ad in Meta; nothing was charged. Try again later."
+    assert _filas_gasto() == []
+
+
+def test_meta_con_solo_el_copy_sigue_y_cobra(tarea_meta, monkeypatch):
+    """Sin medios pero con texto, Claude tiene algo que mirar: el análisis sigue como siempre."""
+    solo_copy = dict.fromkeys(datos.COLUMNAS_CREATIVO, None)
+    solo_copy.update(copy="Chanclas que no duelen", tipo="imagen")
+    monkeypatch.setattr(creativo, "traer", lambda *a: dict(solo_copy))
+    tarea_meta["t"].tw_analizar_anuncio({"id": 27, "payload": {"cliente": "acme", "analisis_id": tarea_meta["aid"]}})
+    fila = datos.analisis_anuncio("acme", tarea_meta["aid"])
+    assert fila["estado"] == "lista" and fila["foto"]["creativo"] == solo_copy and fila["medios"]["copy"] is True
+    assert "Chanclas que no duelen" in tarea_meta["recibido"]["texto"]
+    assert [g["referencia"] for g in _filas_gasto()] == [f"tw_anuncio:{tarea_meta['aid']}:t27"]   # sin video, sin voz

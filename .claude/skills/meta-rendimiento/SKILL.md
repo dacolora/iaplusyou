@@ -37,7 +37,9 @@ both download through `conectores.url.descargar_archivo` (SSRF on every redirect
 `creativo.video_valido` (https, host ending in `.fbcdn.net`, no userinfo, odd port or `access_token`) and ffprobe says
 mp4/mov (`mejorar.es_mp4`); temp files go in a `finally`. It never raises: a Graph error (usage limit included) or a
 network error leaves that key None and logs only `type(e).__name__` and Meta's code, and it does NOT touch the shared
-pause (two or three reads per paid analysis). Tests: `tests/test_rendimiento_e2_creativo.py`.
+pause (two or three reads per paid analysis). Because it never raises, the task checks `creativo.sin_contenido(...)`
+(none of copy, title, image, video) and stops before paying anyone (skill `triple-whale`). Tests:
+`tests/test_rendimiento_e2_creativo.py`.
 
 **The tab is Rendimiento's (2026-10-09, skill `rendimiento`).** The «Meta» tab (`_tab_meta.html`, `_meta_panel.html`,
 `_meta_anuncios_filas.html`, the routes `ver_panel`, `ver_anuncios`, `ver_conjuntos`, `sincronizar` and

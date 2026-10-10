@@ -280,7 +280,11 @@ production. It must work for ANY ad, not only Creatv's: in happyflops only 4 pie
   with Meta); a foto saved before has no key and reads as Triple Whale. When `foto["fuente"] == "meta"` and its
   `creativo` is empty, the task reports «Trayendo el anuncio de Meta», calls `meta_rendimiento.creativo.traer` once
   (image and video copied to R2, never raises; skill `meta-rendimiento`), saves the foto with it and recomputes
-  `medios["copy"]` before `mejorar.visuales`; the spend `detalle` says «un anuncio de Meta» / «la voz de un anuncio de
+  `medios["copy"]` before `mejorar.visuales`. If it brought nothing to look at (`creativo.sin_contenido`: no copy,
+  title, image or video — an expired token, a network error, Meta's 75 % usage limit) the task raises
+  `mejorar.AnuncioIlegible` BEFORE Whisper and Claude: the row ends in `error` with «No pude leer el anuncio en Meta; no
+  se cobró nada. Inténtalo más tarde.» and no `gasto` row (fix of the task 1 review, 2026-10-10: otherwise each one paid
+  ~US$ 0,10 for an analysis blind to the ad, and the batch multiplied it). Copy alone, without media, goes on; the spend `detalle` says «un anuncio de Meta» / «la voz de un anuncio de
   Meta». The only prompt change: «con sus números de {fuente}» (`mejorar.PROMPT`, from `foto["fuente"]`) and «con sus
   métricas de {fuente}» (`analisis.PROMPT`, from `contexto["fuente"]`), names in `analisis.FUENTES` (=
   `mejorar.FUENTES`, proper names, not translated; `analisis.nombre_fuente` defaults to Triple Whale). Ruling of the E2

@@ -14,7 +14,8 @@ tarea (visuales, voz, prompt) no distingue la fuente.
   tiempo) y solo de hosts de Meta: la imagen si pasa `datos.miniatura_valida`, el video si su host termina en
   `.fbcdn.net` (`video_valido`). El video además tiene que ser mp4/mov según ffprobe (`mejorar.es_mp4`).
 - Nunca lanza: lo que falla queda en None y se anota en el log solo con el tipo del error (el texto de una excepción
-  de `requests` trae la URL con `access_token`). Un límite de uso de Meta tampoco toca la pausa compartida de la copia
+  de `requests` trae la URL con `access_token`). Si no llegó nada que mirar (`sin_contenido`), la tarea termina en
+  error sin cobrar en vez de pagarle a Claude un análisis a ciegas. Un límite de uso de Meta tampoco toca la pausa compartida de la copia
   (`pausa.pausar`): son dos o tres lecturas por análisis pagado.
 """
 import logging
@@ -42,6 +43,16 @@ MAX_COPY = 3000
 MAX_CTA = 60
 MAX_BYTES_IMAGEN = 8 * 1024 * 1024
 TIMEOUT_GRAPH = 20
+
+
+CAMPOS_CONTENIDO = ("copy", "titulo", "imagen_url", "video_url")
+
+
+def sin_contenido(creativo):
+    """True si el creativo no trae nada que Claude pueda mirar: ni texto ni imagen ni video (`tipo`, `cta` o la duración
+    solos no bastan). Con un creativo así la tarea pagada no llama a Whisper ni a Claude."""
+    c = creativo if isinstance(creativo, dict) else {}
+    return not any(c.get(k) for k in CAMPOS_CONTENIDO)
 
 
 def clave_r2(cliente, analisis_id, ad_id, extension):

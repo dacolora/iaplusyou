@@ -496,8 +496,16 @@ def analizar(texto, imagenes, idioma, verificable_extra=""):
             raise e3
 
 
+class AnuncioIlegible(RuntimeError):
+    """Meta no devolvió nada del anuncio (ni texto, ni imagen, ni video): token caducado, red, límite de uso. La tarea
+    para ANTES de Whisper y de Claude (Rendimiento E2, arreglo de la revisión de la tarea 1, 2026-10-10): un análisis
+    que no vio el anuncio no se paga."""
+
+
 def texto_error(error):
     """Lo que ve la persona cuando el análisis falla (sin tokens ni rutas)."""
+    if isinstance(error, AnuncioIlegible):
+        return gettext("No pude leer el anuncio en Meta; no se cobró nada. Inténtalo más tarde.")
     if isinstance(error, analisis.AnalisisInvalido):
         return gettext("Claude no devolvió un análisis que se pueda usar. Puedes intentarlo otra vez.")
     return gettext("No se pudo hacer el análisis: %(error)s", error=type(error).__name__)
