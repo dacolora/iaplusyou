@@ -1,0 +1,22 @@
+{# Piezas comunes de la pestaña «Rendimiento» (spec 2026-10-09 §5): el armazón (_tab_rendimiento.html) y el panel que
+   llega por fetch (_rend_panel.html) pintan el mismo estado vacío, y el panel y sus tarjetas dicen la fuente de una
+   cifra con la misma etiqueta. Solo macros, sin <script>: el JS (data-rend-ajustes abre «Ajustes», data-ir-tab va a
+   Configuración) vive en _tab_rendimiento.html. #}
+
+{#- Sin Triple Whale ni Meta: los dos caminos para conectar. Triple Whale se conecta en «Ajustes» de esta pestaña;
+    Meta, en Configuración › Conexiones. -#}
+{% macro sin_conexion() -%}
+<div class="estado-vacio">
+  <p class="estado-vacio-titulo">{{ _('Conecta Meta o Triple Whale para ver tu rendimiento') }}</p>
+  <p class="estado-vacio-texto">{{ _('Con Triple Whale vemos las ventas de tu tienda; con Meta, tus campañas, conjuntos y anuncios. Cada país muestra la cifra de una sola fuente.') }}</p>
+  <div class="acciones">
+    <a class="btn-generar btn-sm" href="#rend-ajustes" data-rend-ajustes>{{ _('Conectar Triple Whale') }}</a>
+    <a class="btn-sm" href="#settings" data-ir-tab="settings" data-ir-config="config-meta">{{ _('Conectar Meta en Configuración › Conexiones') }}</a>
+  </div>
+</div>
+{%- endmacro %}
+
+{#- La fuente de una cifra: "tw" = Triple Whale, cualquier otra = Meta. -#}
+{% macro fuente(origen) -%}
+{{ _('Triple Whale') if origen == 'tw' else _('Meta') }}
+{%- endmacro %}

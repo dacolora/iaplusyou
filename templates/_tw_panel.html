@@ -17,15 +17,15 @@
    luego reparto y lo que más se vende, y al final la tabla de siempre en «Ver
    como tabla», un <details> cerrado (id `tw-cada-anuncio`: «Ver todos los
    anuncios →» del detalle del día lo abre). «Resultados de tu tienda» va
-   arriba, en el lugar de «Tu tienda» y del viejo «Día a día». #}
+   arriba, en el lugar de «Tu tienda» y del viejo «Día a día».
+   Desde 2026-10-09 las secciones que comparte con la pestaña Rendimiento (copias, nota de cuenta compartida,
+   alertas, «Tus anuncios», «Lo que hace ganar», reparto, productos y la tabla) son macros de _tw_secciones.html. #}
+{% import "_tw_secciones.html" as tws %}
 {% if not tw.conectado %}
 <p class="vacio">{{ _('Triple Whale ya no está conectado en este proyecto.') }}</p>
 {% else %}
 {% set c = tw.config %}
 {% set moneda = tw.moneda %}
-{% set ev = tw.ev %}
-{% set cuenta = ev.cuenta %}
-{% set clases_veredicto = {"ganador": "tag-en-uso", "prometedor": "tag-en-curso", "en_prueba": "", "perdedor": "tag-descartado", "sin_datos": "tag-advertencia"} %}
 
 {% set actual = tw.tienda_actual %}
 <div class="tw-barra">
@@ -63,21 +63,7 @@
   </div>
 </div>
 
-{% for j in tw.jobs_sync %}
-<div class="tw-progreso">
-  <div class="barra-progreso" id="tw-sync-{{ cliente }}-{{ j.tienda.id }}" data-poll-job="{{ j.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
-  <div class="progreso-texto">{% if tw.varias_tiendas %}{{ _('Trayendo métricas de %(tienda)s…', tienda=j.tienda.nombre) }}{% else %}{{ _('Trayendo métricas de Triple Whale…') }}{% endif %}</div>
-</div>
-{% endfor %}
-{% for t in tw.en_alcance %}
-{% if t.estado == 'error' and t.error %}
-<p class="tag-error">{% if tw.varias_tiendas %}{{ _('La última copia de %(tienda)s falló: %(error)s', tienda=t.nombre, error=t.error) }}{% else %}{{ _('La última copia falló: %(error)s', error=t.error) }}{% endif %}</p>
-{% endif %}
-{% set resumen_sync = (t.extra or {}).get('ultimo_resumen') or {} %}
-{% if resumen_sync.get('fallos') %}
-<p class="tag-advertencia tw-aviso">{% if tw.varias_tiendas %}{{ _('Triple Whale no aceptó la consulta de %(partes)s en %(tienda)s. El resto de las métricas sí llegó.', partes=resumen_sync.fallos.keys() | join(', '), tienda=t.nombre) }}{% else %}{{ _('Triple Whale no aceptó la consulta de: %(partes)s. El resto de las métricas sí llegó.', partes=resumen_sync.fallos.keys() | join(', ')) }}{% endif %}</p>
-{% endif %}
-{% endfor %}
+{{ tws.copias(tw, cliente) }}
 
 {% if tw.rango.filas == 0 %}
 <div class="estado-vacio">
@@ -117,265 +103,14 @@
   </div>
 </section>
 {% endif %}
-{% if tw.gasto_duplicado > 0 %}
-<p class="tag-advertencia tw-aviso">{{ _('Estas tiendas comparten cuenta publicitaria: el gasto de cada tienda incluye anuncios de los otros países. «Todas» lo cuenta una sola vez.') }}{% if actual %} {{ _('Aquí el ROAS de cada anuncio solo cuenta las ventas de esta tienda.') }}{% endif %}</p>
-{% endif %}
+{{ tws.gasto_compartido(tw) }}
 
-{# ---------- alertas ---------- #}
-{% set nombres_nivel = {"alta": _("alta"), "media": _("media"), "bien": _("bien")} %}
-{% if tw.alertas %}
-<section class="tb-seccion">
-  <div class="tb-seccion-cab"><h3>{{ _('Lo que necesita tu atención') }}</h3></div>
-  <ul class="tb-alertas">
-    {% for a in tw.alertas %}
-    <li class="tb-alerta tb-alerta-{{ a.nivel }}">
-      <span class="tb-alerta-nivel">{{ nombres_nivel.get(a.nivel, a.nivel) }}</span>
-      <span class="tb-alerta-texto">{{ a.texto }}</span>
-    </li>
-    {% endfor %}
-  </ul>
-</section>
-{% endif %}
+{{ tws.alertas(tw.alertas) }}
 
-{# ---------- los anuncios ---------- #}
-{% set m = cuenta.m %}
-<section class="tb-seccion">
-  <div class="tb-seccion-cab"><h3>{{ _('Tus anuncios') }}</h3><small class="vacio">{{ ngettext('%(num)s anuncio con datos', '%(num)s anuncios con datos', cuenta.n) }}{% if tw.canal %} · {{ tw.canal | tw_canal }}{% endif %}</small></div>
-  <div class="tb-tiles">
-    <div class="kpi-tile"><span>{{ _('Gasto') }}</span><strong>{{ m.gasto | dinero(moneda) }}</strong><small>{{ _('%(n)s impresiones', n=m.impresiones | tw_num) }}</small></div>
-    <div class="kpi-tile" title="{{ _('Ingresos que el Triple Pixel atribuye a los anuncios con el modelo y la ventana elegidos') }}"><span>{{ _('Ingresos atribuidos') }}</span><strong>{{ m.ingresos | dinero(moneda) }}</strong><small>{{ _('%(n)s pedidos', n=m.pedidos | tw_num(1)) }}</small></div>
-    <div class="kpi-tile"><span>{{ _('ROAS (Pixel)') }}</span>{% if m.roas %}<strong>{{ m.roas | roas }}×</strong>{% else %}<strong class="tb-sin-dato">—</strong>{% endif %}<small>{{ _('meta %(meta)s×', meta=ev.meta_roas | roas) }}</small></div>
-    <div class="kpi-tile"><span>{{ _('Costo por venta') }}</span><strong>{% if m.cpa %}{{ m.cpa | dinero(moneda) }}{% else %}—{% endif %}</strong><small>{{ _('gasto / pedidos atribuidos') }}</small></div>
-    <div class="kpi-tile"><span>CTR</span><strong>{{ m.ctr | tw_pct(2, false) }}</strong><small>{{ _('CPM %(cpm)s', cpm=(m.cpm | dinero(moneda)) if m.cpm else '—') }}</small></div>
-    <div class="kpi-tile" title="{{ _('Gancho: vistas de 3 segundos / impresiones. Retención: ThruPlays / vistas de 3 segundos.') }}"><span>{{ _('Gancho · retención') }}</span><strong>{{ m.gancho | tw_pct(0) }}</strong><small>{{ _('retención %(r)s', r=m.retencion | tw_pct(0)) }}</small></div>
-  </div>
-  {% from "_tw_galeria.html" import galeria %}
-  {{ galeria(tw.galeria, cliente, tw.alcance_params, moneda, tw) }}
-</section>
+{{ tws.anuncios(tw, cliente) }}
 
-{# ---------- evaluación con IA ---------- #}
-<section class="tb-seccion" id="tw-ia">
-  <div class="tb-seccion-cab"><h3>{{ _('Lo que hace ganar en tu cuenta') }}</h3></div>
-  <p class="vacio">{{ _('Claude mira tus ganadores y tus perdedores (imagen, texto y números), explica qué patrón se repite y propone anuncios nuevos basados en lo que ya vende. No genera nada: cada idea llega a Crear para que decidas.') }}</p>
-  {% if tw.job_evaluar %}
-  <div class="tw-progreso">
-    <div class="barra-progreso" id="tw-evaluar-{{ cliente }}" data-poll-job="{{ tw.job_evaluar }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
-    <div class="progreso-texto">{{ _('Evaluando con IA…') }}</div>
-  </div>
-  {% elif tw.muestra_ia %}
-  {% set precio = tw.estimado_ia.texto if tw.estimado_ia else '' %}
-  <form method="post" action="{{ url_for('triple_whale.evaluar', cliente=cliente) }}" class="tw-evaluar"
-        data-confirmar="{{ _('¿Evaluar %(n)s anuncio(s) con IA? Costo: %(precio)s', n=tw.muestra_ia | length, precio=precio) }}">
-    <input type="hidden" name="dias" value="{{ tw.dias }}">
-    <input type="hidden" name="canal" value="{{ tw.canal or '' }}">
-    <input type="hidden" name="tienda" value="{{ actual.id if actual else '' }}">
-    <button type="submit" class="btn-generar btn-sm">{{ _('Evaluar %(n)s anuncio(s) con IA · %(precio)s', n=tw.muestra_ia | length, precio=precio) }}</button>
-  </form>
-  {% if actual and tw.gasto_duplicado > 0 %}
-  <p class="tag-advertencia tw-aviso">{{ _('Esta tienda comparte cuenta publicitaria: para evaluar anuncios conviene «Todas las tiendas».') }}</p>
-  {% endif %}
-  {% else %}
-  <p class="vacio">{{ _('Hacen falta al menos dos anuncios con datos en este periodo para evaluar con IA.') }}</p>
-  {% endif %}
+{{ tws.ia(tw, cliente) }}
 
-  {% set fallida = (tw.evaluaciones | selectattr('estado', 'equalto', 'error') | first) if tw.evaluaciones else none %}
-  {% if fallida and (not tw.ultima_lista or fallida.id > tw.ultima_lista.id) %}
-  <p class="tag-error">{% if fallida.alcance %}{{ _('La última evaluación (%(alcance)s) falló: %(error)s', alcance=fallida.alcance, error=fallida.error or '—') }}{% else %}{{ _('La última evaluación falló: %(error)s', error=fallida.error or '—') }}{% endif %}</p>
-  {% endif %}
-
-  {% set e = tw.ultima_lista %}
-  {% if e %}
-  {% set r = e.resultado %}
-  {% set por_ref = {} %}{% for a in e.anuncios %}{% set _x = por_ref.update({a.ref: a}) %}{% endfor %}
-  <div class="tw-eval">
-    <p class="tw-eval-cab"><small>{% if e.alcance %}{{ _('Evaluación de %(alcance)s del %(desde)s al %(hasta)s · %(precio)s', alcance=e.alcance, desde=e.desde, hasta=e.hasta, precio=(e.usd | cobrado('tw_eval:' ~ e.id)) | usd) }}{% else %}{{ _('Evaluación del %(desde)s al %(hasta)s · %(precio)s', desde=e.desde, hasta=e.hasta, precio=(e.usd | cobrado('tw_eval:' ~ e.id)) | usd) }}{% endif %}</small></p>
-    {% if r.resumen %}<p class="tw-eval-resumen">{{ r.resumen }}</p>{% endif %}
-    <div class="tw-patrones">
-      {% for titulo, lista in [(_('Lo que hace ganar'), r.patrones_ganadores), (_('Lo que hace perder'), r.patrones_perdedores)] %}
-      {% if lista %}
-      <div>
-        <h4>{{ titulo }}</h4>
-        <ul>
-          {% for p in lista %}
-          <li>{{ p.patron }}{% if p.anuncios %} <small class="vacio">({% for ref in p.anuncios %}{{ (por_ref.get(ref) or {}).get('nombre') or ref }}{% if not loop.last %}, {% endif %}{% endfor %})</small>{% endif %}</li>
-          {% endfor %}
-        </ul>
-      </div>
-      {% endif %}
-      {% endfor %}
-    </div>
-
-    {% if r.ideas %}
-    <h4>{{ _('Anuncios nuevos para probar') }}</h4>
-    <div class="tw-ideas">
-      {% for idea in r.ideas %}
-      <article class="tw-idea">
-        <strong>{{ idea.titulo }}</strong>
-        {% if idea.basada_en %}{% set nombres = [] %}{% for ref in idea.basada_en %}{% set _x = nombres.append((por_ref.get(ref) or {}).get('nombre') or ref) %}{% endfor %}<small class="vacio">{{ _('Basada en: %(anuncios)s', anuncios=nombres | join(', ')) }}</small>{% endif %}
-        {% if idea.producto %}<small class="tag-estado tag-en-uso">{{ _('Producto: %(p)s', p=idea.producto) }}</small>{% endif %}
-        {% if idea.por_que %}<p>{{ idea.por_que }}</p>{% endif %}
-        {% set ang = idea.angulo or {} %}
-        {% if ang.promesa or ang.gancho %}
-        <dl class="tw-angulo">
-          {% if ang.gancho %}<dt>{{ _('Gancho') }}</dt><dd>{{ ang.gancho }}</dd>{% endif %}
-          {% if ang.promesa %}<dt>{{ _('Promesa') }}</dt><dd>{{ ang.promesa }}</dd>{% endif %}
-          {% if ang.audiencia %}<dt>{{ _('Para quién') }}</dt><dd>{{ ang.audiencia }}</dd>{% endif %}
-        </dl>
-        {% endif %}
-        {% if idea.escena %}<p class="tw-escena">{{ idea.escena }}</p>{% endif %}
-        <details><summary>{{ _('Prompt para el video') }}</summary><p class="tw-prompt">{{ idea.prompt }}</p></details>
-        <form method="post" action="{{ url_for('triple_whale.idea_crear', cliente=cliente, eid=e.id, indice=loop.index0) }}">
-          <button type="submit" class="btn-sm">{{ _('Llevar a Crear →') }}</button>
-        </form>
-        {% set hechas = (e.piezas_por_idea or {}).get(loop.index0) or [] %}
-        {% if hechas %}
-        <p class="tw-idea-hechas"><small>{{ ngettext('Ya se hizo %(n)s pieza con esta idea:', 'Ya se hicieron %(n)s piezas con esta idea:', hechas | length, n=hechas | length) }}</small></p>
-        <ul class="tw-idea-piezas">
-          {% for p in hechas %}
-          <li><a href="#creativeflowplus">{{ p.titulo }}</a> · {{ tw.etiquetas_pieza.get(p.estado, p.estado) | traducir }}{% if p.anuncio %} · <span class="tag-estado {{ clases_veredicto.get(p.anuncio.veredicto, '') }}">{{ _('en Meta: %(v)s', v=tw.etiquetas_veredicto.get(p.anuncio.veredicto, p.anuncio.veredicto) | traducir) }}</span>{% endif %}</li>
-          {% endfor %}
-        </ul>
-        {% endif %}
-      </article>
-      {% endfor %}
-    </div>
-    {% endif %}
-
-    <h4>{{ _('Anuncio por anuncio') }}</h4>
-    <div class="tw-analizados">
-      {% for a in e.anuncios %}
-      {% set cl = (r.anuncios or {}).get(a.ref) or {} %}
-      <article class="tw-analizado">
-        {% if a.medio and a.medio.imagen %}<img src="{{ a.medio.imagen }}" alt="" loading="lazy" referrerpolicy="no-referrer">{% endif %}
-        <div>
-          <strong>{{ a.nombre }}</strong>
-          <span class="tag-estado {{ clases_veredicto.get(a.veredicto, '') }}">{{ tw.etiquetas_veredicto.get(a.veredicto, a.veredicto) | traducir }}</span>
-          {% if a.visual == 'fotogramas' %}<small class="vacio">{{ _('Claude vio los fotogramas del video') }}</small>{% elif not a.visual and not (a.medio and a.medio.imagen) %}<small class="vacio">{{ _('Sin imagen: Claude juzgó por texto y números') }}</small>{% endif %}
-          {% if cl.por_que %}<p>{{ cl.por_que }}</p>{% endif %}
-          {% if cl.gancho %}<p><small>{{ _('Gancho: %(g)s', g=cl.gancho) }}</small></p>{% endif %}
-          {% if cl.formato %}<p><small>{{ _('Formato: %(f)s', f=cl.formato) }}</small></p>{% endif %}
-          {% if a.medio and a.medio.imagen and a.veredicto in ('ganador', 'prometedor') %}
-          <form method="post" action="{{ url_for('triple_whale.a_referente', cliente=cliente, eid=e.id, ref=a.ref) }}">
-            <button type="submit" class="btn-xs">{{ _('Guardar en Referentes') }}</button>
-          </form>
-          {% endif %}
-        </div>
-      </article>
-      {% endfor %}
-    </div>
-  </div>
-  {% endif %}
-</section>
-
-{# ---------- reparto por veredicto y por canal ---------- #}
-<section class="tb-seccion">
-  <div class="tb-seccion-cab"><h3>{{ _('Dónde se va el gasto') }}</h3></div>
-  <div class="tw-reparto">
-    {% for v in tw.veredictos %}
-    <div class="tw-reparto-item">
-      <span class="tag-estado {{ clases_veredicto[v] }}">{{ tw.etiquetas_veredicto[v] | traducir }}</span>
-      <strong>{{ ev.conteo[v] }}</strong>
-      <small>{{ _('%(pct)s del gasto', pct=cuenta.pct_gasto[v] | tw_pct(0)) }}</small>
-    </div>
-    {% endfor %}
-  </div>
-  {% if cuenta.canales | length > 1 %}
-  <div class="tw-tabla-scroll">
-    <table class="tw-tabla">
-      <thead><tr><th>{{ _('Canal') }}</th><th>{{ _('Gasto') }}</th><th>{{ _('%% del gasto') }}</th><th>{{ _('Pedidos') }}</th><th>{{ _('Ingresos') }}</th><th>ROAS</th></tr></thead>
-      <tbody>
-        {% for k in cuenta.canales %}
-        <tr><td>{{ k.canal | tw_canal }}</td><td>{{ k.gasto | dinero(moneda) }}</td><td>{{ k.pct_gasto | tw_pct(0) }}</td><td>{{ k.pedidos | tw_num(1) }}</td><td>{{ k.ingresos | dinero(moneda) }}</td><td>{% if k.roas %}{{ k.roas | roas }}×{% else %}—{% endif %}</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  {% endif %}
-  {% if not ev.hay_ventas %}<p class="vacio">{{ _('Sin pedidos atribuidos en el periodo: los veredictos se apoyan solo en el tráfico (gancho, retención, clic), así que no hay ganadores ni perdedores todavía.') }}</p>{% endif %}
-</section>
-
-{# ---------- lo que más se vende ---------- #}
-{% if tw.productos %}
-<section class="tb-seccion">
-  <div class="tb-seccion-cab"><h3>{{ _('Lo que más se vende') }}</h3><small class="vacio">{{ _('Según los pedidos de la tienda en Triple Whale; es el producto que conviene empujar en los anuncios nuevos.') }}</small></div>
-  <div class="tw-tabla-scroll">
-    <table class="tw-tabla">
-      <thead><tr><th>{{ _('Producto') }}</th><th>{{ _('Ingresos') }}</th><th>{{ _('%% de la tienda') }}</th><th>{{ _('Pedidos') }}</th><th>{{ _('Unidades') }}</th>{% if tw.dias %}<th>{{ _('vs. periodo anterior') }}</th>{% endif %}</tr></thead>
-      <tbody>
-        {% for p in tw.productos %}
-        <tr>
-          <td class="tw-nombre">
-            <strong>{{ p.nombre or p.sku or p.producto_id }}</strong>
-            {% if p.sku and p.nombre %}<small>{{ p.sku }}</small>{% endif %}
-            {% if p.catalogo %}<small><a href="#catalogo" data-ir-tab="catalogo">{{ _('En tu catálogo: %(nombre)s', nombre=p.catalogo.nombre) }}</a></small>{% endif %}
-          </td>
-          <td>{{ p.ingresos | dinero(moneda) }}</td>
-          <td>{{ p.pct_ingresos | tw_pct(0) }}</td>
-          <td>{{ p.pedidos | tw_num }}</td>
-          <td>{{ p.unidades | tw_num }}</td>
-          {% if tw.dias %}<td>{{ p.variacion | tw_var or '—' }}</td>{% endif %}
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</section>
-{% endif %}
-
-{# ---------- todos los anuncios ---------- #}
-<details class="tw-tabla-detalle" id="tw-cada-anuncio"><summary>{{ _('Ver como tabla') }}</summary>
-<section class="tb-seccion">
-  <div class="tb-seccion-cab"><h3>{{ _('Cada anuncio') }}</h3></div>
-  <div class="tw-filtros" role="group" aria-label="{{ _('Filtrar por veredicto') }}">
-    <button type="button" class="chip activo" data-tw-filtro="">{{ _('Todos') }}</button>
-    {% for v in tw.veredictos %}{% if ev.conteo[v] %}<button type="button" class="chip" data-tw-filtro="{{ v }}">{{ tw.etiquetas_veredicto[v] | traducir }} ({{ ev.conteo[v] }})</button>{% endif %}{% endfor %}
-  </div>
-  <div class="tw-tabla-scroll">
-    <table class="tw-tabla tw-anuncios">
-      <thead><tr>
-        <th>{{ _('Anuncio') }}</th><th>{{ _('Veredicto') }}</th><th>{{ _('Gasto') }}</th><th>{{ _('Pedidos') }}</th>
-        <th>ROAS</th><th>{{ _('Costo por venta') }}</th><th>CTR</th><th>{{ _('Gancho') }}</th><th>{{ _('Retención') }}</th><th>{{ _('Señales') }}</th>
-      </tr></thead>
-      <tbody>
-        {% for a in tw.anuncios %}
-        {% set am = a.m %}
-        <tr data-veredicto="{{ a.veredicto }}">
-          <td class="tw-nombre">
-            <strong>{{ a.nombre }}</strong>
-            <small>{{ a.canal | tw_canal }}{% if a.campana %} · {{ a.campana }}{% endif %}</small>
-            {% if a.creatv %}<small><a href="#experimentos?exp={{ a.creatv.experimento_id }}">{{ _('Hecho en Creatv · %(exp)s', exp=a.creatv.experimento) }}</a></small>{% endif %}
-            {% if a.idea_origen %}<small class="tw-origen-idea">{{ _('Nació de la idea «%(idea)s» de la evaluación con IA', idea=a.idea_origen.titulo or a.idea_origen.idea + 1) }}</small>{% endif %}
-            {% if a.creatv and a.creatv.estado == 'activo' %}
-            <form method="post" class="tw-accion" action="{{ url_for('triple_whale.pieza_estado', cliente=cliente, ep_id=a.creatv.ep_id, accion='pausar') }}"
-                  data-confirmar="{{ _('¿Pausar «%(nombre)s» en Meta? Deja de gastar hasta que lo actives.', nombre=a.nombre) }}">
-              <button type="submit" class="btn-xs">{{ _('Pausar en Meta') }}</button>
-            </form>
-            {% elif a.creatv and a.creatv.estado == 'pausado' %}
-            <form method="post" class="tw-accion" action="{{ url_for('triple_whale.pieza_estado', cliente=cliente, ep_id=a.creatv.ep_id, accion='activar') }}"
-                  data-confirmar="{{ _('¿Activar «%(nombre)s» en Meta? Vuelve a gastar presupuesto.', nombre=a.nombre) }}">
-              <button type="submit" class="btn-xs">{{ _('Activar en Meta') }}</button>
-            </form>
-            {% endif %}
-          </td>
-          <td><span class="tag-estado {{ clases_veredicto[a.veredicto] }}" title="{{ a.motivo }}">{{ tw.etiquetas_veredicto[a.veredicto] | traducir }}</span><small class="tw-motivo">{{ a.motivo }}</small></td>
-          <td>{{ am.gasto | dinero(moneda) }}</td>
-          <td>{{ am.pedidos | tw_num(1) }}</td>
-          <td>{% if am.roas %}{{ am.roas | roas }}×{% else %}—{% endif %}</td>
-          <td>{% if am.cpa %}{{ am.cpa | dinero(moneda) }}{% else %}—{% endif %}</td>
-          <td>{{ am.ctr | tw_pct(2, false) }}</td>
-          <td>{{ am.gancho | tw_pct(0) }}</td>
-          <td>{{ am.retencion | tw_pct(0) }}</td>
-          <td class="tw-senales">
-            {% for p in a.problemas %}<span class="tag-estado tag-descartado" title="{{ tw.problemas[p][1] | traducir }}">{{ tw.problemas[p][0] | traducir }}</span>{% endfor %}
-            {% for f in a.fortalezas %}<span class="tag-estado tag-en-uso">{{ tw.fortalezas[f] | traducir }}</span>{% endfor %}
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  {% if tw.mas_anuncios %}<p class="vacio">{{ _('Y %(n)s anuncio(s) más con poco gasto que no se muestran.', n=tw.mas_anuncios) }}</p>{% endif %}
-</section>
-</details>
+{{ tws.resto(tw, cliente) }}
 {% endif %}
 {% endif %}

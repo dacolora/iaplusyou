@@ -156,3 +156,14 @@ la mezcla de main del 2026-10-08 que borró el gráfico del viejo Tablero, las r
 «Día a día», que arma `meta_rendimiento/grafico.py`). Los
 selectores del JS evitan palabras que `tests/i18n_util.py` lee como español (`data-meta-act`, `data-meta-seleccion`:
 «cuenta» y «guardar» están en sus marcas).
+
+**Pestaña Rendimiento (2026-10-09, spec `2026-10-09-pestana-rendimiento-design.md` §5; se cablea en `cliente.html` en la
+tarea 8 del plan):** `_tab_rendimiento.html` es el armazón (cabecera, «Ajustes» con la conexión de Triple Whale y
+«Elegir cuentas de Meta», `#rend-panel` por fetch) y trae TODO el JS de las dos pestañas viejas; el panel es
+`_rend_panel.html`. No duplica marcado: las secciones que comparte con las pestañas viejas son macros de
+`_tw_secciones.html` (copias, cuenta compartida, alertas, anuncios, ia, resto) y el include `_meta_secciones.html`
+(campañas y conjuntos); las tarjetas de anuncios de fuente Meta son `_rend_anuncios_meta.html` (sin IA, R14) y el
+estado vacío y la etiqueta de fuente, `_rend_macros.html`. `_triple_whale_conectar.html` es un `div#tw-conexion` y no
+una section: dentro de «Ajustes» cortaba la section de la pestaña (la prueba del armazón la busca hasta la siguiente).
+Estilos en `static/estilos/pantallas/rendimiento.css` (`rend-*`; la rejilla de tarjetas de Meta pasa a 2 columnas
+≤ 760 px y «Por país» es `tabla-apilada`). `static/tw_resultados.js` también arranca solo sobre `#rend-panel`.

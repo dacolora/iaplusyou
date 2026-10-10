@@ -2,8 +2,10 @@
    respuesta de «Ver más» (meta_rendimiento.rutas.ver_conjuntos). Solo <tr>. Contexto: `mr` (panel.contexto o
    panel.conjuntos_pagina) y `cliente`. Sin <script>.
    En la pestaña Rendimiento (spec 2026-10-09) `mr` trae `params` (la entrada y el periodo) y su «Ver más» va a
-   rendimiento.ver_conjuntos, que resuelve el mismo alcance que el panel. #}
+   rendimiento.ver_conjuntos, que resuelve el mismo alcance que el panel, y cada fila trae `origen` ("tw" | "meta"):
+   la etiqueta chica junto al ROAS dice de dónde salen sus ventas. #}
 {% import "_meta_macros.html" as mx %}
+{% import "_rend_macros.html" as rm %}
 {% for s in mr.conjuntos %}
 <tr>
   <td class="tw-nombre">
@@ -15,7 +17,7 @@
   <td>{{ mx.aprendizaje(s.aprendizaje, mr.aprendizaje) }}</td>
   <td>{{ mx.presupuesto(s) }}</td>
   <td>{{ mx.monto(s.gasto, s.moneda) }}</td>
-  <td>{{ mx.roas(s.m.roas) }}</td>
+  <td>{{ mx.roas(s.m.roas) }}{% if s.origen %}<small class="rend-fuente">{{ rm.fuente(s.origen) }}</small>{% endif %}</td>
   <td>{{ mx.monto(s.m.cpa, s.moneda) }}</td>
 </tr>
 {% endfor %}

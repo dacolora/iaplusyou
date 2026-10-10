@@ -420,3 +420,24 @@ def test_la_galeria_entera_respeta_el_alcance_y_un_filtro_raro_es_todos(app):  #
     assert "<script>" not in raro and 'data-veredicto=""' in raro
     sin_conexion = app["c"].get("/cliente/otro/triple-whale/galeria?entera=1")
     assert sin_conexion.status_code in (403, 404)
+
+
+# ---------------------------------------------------------------- Rendimiento R12: «Meta reporta» ---
+
+def test_meta_reporta_solo_en_anuncios_de_meta_con_dato(app):  # noqa: F811
+    """Spec 2026-10-09 R12: en un anuncio de `facebook-ads`, lo que Meta le informa a Triple Whale (`valor_canal` /
+    gasto) va en una línea chica; en otro canal, o sin ese dato, la línea no aparece."""
+    tid = _conectar()
+    canal, pixel = [], []
+    for dia in range(3):
+        for ad, canal_, valor in (("m1", "facebook-ads", 25), ("m2", "facebook-ads", 0), ("k1", "tiktok-ads", 25)):
+            canal.append({"canal": canal_, "ad_id": ad, "fecha": _hace(dia), "anuncio": f"Anuncio {ad}", "gasto": 10,
+                          "impresiones": 2000, "clics": 40, "vistas_3s": 600, "thruplays": 150, "valor_canal": valor})
+            pixel.append({"canal": canal_, "ad_id": ad, "fecha": _hace(dia), "pedidos": 1, "ingresos": 30})
+    datos.reemplazar_anuncios_canal("acme", tid, _hace(2), _hace(0), canal)
+    datos.reemplazar_anuncios_pixel("acme", tid, _hace(2), _hace(0), pixel)
+    con_dato = _tarjeta(app, "m1")
+    assert "Meta reporta" in con_dato and "2,5×" in con_dato
+    assert "cada uno cuenta las ventas con su propio Pixel" in con_dato
+    assert "Meta reporta" not in _tarjeta(app, "m2")                          # sin dato, sin línea
+    assert "Meta reporta" not in _tarjeta(app, "k1", canal="tiktok-ads")      # TikTok no es Meta

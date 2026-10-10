@@ -94,6 +94,7 @@ partida a revisar por Daniel. Lo usa quien traduzca `translations/en/LC_MESSAGES
 | Detalle de Meta (día a día, desgloses y rankings de `meta_detalle.py`) | Meta details |
 | Detalle de Meta al día hace N h | Meta details updated N h ago |
 | Indicadores (del centro de resultados) | Key metrics |
+| Rendimiento (la pestaña que junta Triple Whale y Meta, 2026-10-09) | Performance |
 
 ## Reglas de estilo
 

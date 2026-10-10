@@ -61,6 +61,8 @@
     <dl class="tw-cifras">
       <div><dt>{{ _('Costo por venta') }}</dt><dd>{% if am.cpa %}{{ am.cpa | dinero(moneda) }}{% else %}—{% endif %}{% if a.cpa_canal %} <small>{{ _('canal: %(c)s', c=a.cpa_canal | dinero(moneda)) }}</small>{% endif %}</dd></div>
       <div><dt>{{ _('Tendencia (7 días)') }}</dt><dd class="tw-tendencia-{{ a.tendencia or 'nada' }}">{% if a.tendencia %}{{ tw.tendencias[a.tendencia] | traducir }}{% else %}—{% endif %}</dd></div>
+      {#- R12 (spec 2026-10-09): lo que Meta le informa a Triple Whale de este anuncio (valor_canal / gasto); sin dato, nada. -#}
+      {% if a.canal == 'facebook-ads' and am.roas_canal %}<div><dt>{{ _('Meta reporta') }}</dt><dd>{{ am.roas_canal | roas }}× <small>{{ _('cada uno cuenta las ventas con su propio Pixel') }}</small></dd></div>{% endif %}
     </dl>
     {% if a.fortalezas or a.problemas %}
     <ul class="tw-razones">

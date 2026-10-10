@@ -266,6 +266,10 @@ production. It must work for ANY ad, not only Creatv's: in happyflops only 4 pie
   frame labels AND the integer part of every frame and voice-phrase second: «el segundo 31» for a phrase at 31,1 s is
   not an invented figure; the real test flagged 31 and 37 that way, 2026-10-08). `NOMBRES_CANAL` lives in `triple_whale/__init__.py` so the worker never imports the
   blueprint (`resultados.NOMBRES_CANAL` and `rutas.NOMBRES_CANAL` are that same dict).
+- **Shared sections (2026-10-09).** Everything of `_tw_panel.html` after «Por tienda» (copy bars, the shared-account
+  note, alerts, «Tus anuncios», «Lo que hace ganar», reparto, productos, «Ver como tabla») lives as macros in
+  `_tw_secciones.html`, which the Rendimiento tab (`_rend_panel.html`) calls too; a card of a `facebook-ads` ad shows
+  «Meta reporta N×» from `m.roas_canal` (`valor_canal` / gasto) when there is that figure (spec 2026-10-09 R12).
 - **Gallery.** Tab order: bar, «Resultados de tu tienda» (main's section, 2026-10-08), «Por tienda», alerts, «Tus
   anuncios» (tiles + gallery), «Lo que hace ganar en tu cuenta», «Dónde se va el gasto», «Lo que más se vende», «Ver como
   tabla». The gallery, card, analyze and batch routes resolve their scope with `panel.alcance` → `evaluar_periodo`, the

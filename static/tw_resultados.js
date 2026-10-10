@@ -5,8 +5,8 @@
    del día (fragmento del servidor: triple_whale.rutas.ver_dia). ES5, sin librerías, como exp_resultados.js: los
    datos entran solo con textContent/setAttribute; innerHTML solo con el fragmento del servidor (ya escapado por
    Jinja); los colores van por clases (estilos/pantallas/triple-whale.css). Lo puro vive en TwResultados._puro
-   (tests/js/tw_resultados.test.mjs). _tab_triple_whale.html llama TwResultados.iniciar(cont) cada vez que pinta
-   el panel, porque los <script> de un fragmento que llega por fetch no corren. */
+   (tests/js/tw_resultados.test.mjs). _tab_triple_whale.html y _tab_rendimiento.html llaman TwResultados.iniciar(cont)
+   cada vez que pintan el panel, porque los <script> de un fragmento que llega por fetch no corren. */
 (function () {
   'use strict';
   if (window.TwResultados) return;
@@ -523,8 +523,11 @@
              indiceEn: indiceEn, dinero: dinero, veces: veces, pct: pct, texto: texto }
   };
   // Si el panel llegó antes que este archivo (va con defer), se inicia aquí; `data-twr-listo` evita hacerlo dos veces.
+  // Lo mismo en la pestaña Rendimiento (_tab_rendimiento.html, spec 2026-10-09), que pinta su panel en #rend-panel.
   if (document.getElementById) {
-    var panel = document.getElementById('tw-panel');
-    if (panel) iniciar(panel);
+    ['tw-panel', 'rend-panel'].forEach(function (id) {
+      var panel = document.getElementById(id);
+      if (panel) iniciar(panel);
+    });
   }
 })();

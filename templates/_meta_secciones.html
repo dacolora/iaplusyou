@@ -1,0 +1,51 @@
+{# Campañas y conjuntos de Meta: las incluye el panel de la pestaña «Meta» (_meta_panel.html) y el de «Rendimiento»
+   (_rend_panel.html, con `mr` = r.meta.estructura). Se movieron tal cual desde _meta_panel.html para no duplicar el
+   marcado. Contexto: `mr` (campanas, conjuntos y lo que pide _meta_conjuntos_filas.html: estados, aprendizaje,
+   objetivos, actual, y en Rendimiento `params` para su «Ver más») y `cliente`. Cada fila va en la moneda de SUS
+   montos (`moneda`), nunca una de la tabla. En Rendimiento cada fila trae `origen` ("tw" | "meta"): de dónde salen sus
+   ventas y su ROAS, y una etiqueta chica lo dice (spec 2026-10-09 R3). Sin <script>. #}
+{% import "_meta_macros.html" as mx %}
+{% import "_rend_macros.html" as rm %}
+{# ---------- campañas ---------- #}
+{% if mr.campanas %}
+{% set campanas = mr.campanas[:50] %}
+<section class="tb-seccion">
+  <div class="tb-seccion-cab"><h3>{{ _('Campañas') }}</h3><small class="vacio">{{ ngettext('%(num)s campaña con gasto en el periodo', '%(num)s campañas con gasto en el periodo', mr.campanas | length) }}</small></div>
+  <div class="tw-tabla-scroll">
+    <table class="tw-tabla">
+      <thead><tr><th>{{ _('Campaña') }}</th><th>{{ _('Estado') }}</th><th>{{ _('Objetivo') }}</th><th>{{ _('Presupuesto') }}</th><th>{{ _('Gasto') }}</th><th>ROAS</th><th>{{ _('Compras') }}</th><th>{{ _('Costo por compra') }}</th><th>{{ _('Alcance') }}</th></tr></thead>
+      <tbody>
+        {% for c in campanas %}
+        <tr>
+          <td class="tw-nombre"><strong>{{ c.nombre or c.campaign_id }}</strong>{% if not mr.actual %}<small>{{ mx.cuenta(c.cuenta) }}</small>{% endif %}</td>
+          <td>{{ mx.estado(c.estado, mr.estados) }}</td>
+          <td>{% if c.objetivo in mr.objetivos %}{{ mr.objetivos[c.objetivo] | traducir }}{% else %}{{ c.objetivo or '—' }}{% endif %}</td>
+          <td>{{ mx.presupuesto(c) }}</td>
+          <td>{{ mx.monto(c.gasto, c.moneda) }}</td>
+          <td>{{ mx.roas(c.m.roas) }}{% if c.origen %}<small class="rend-fuente">{{ rm.fuente(c.origen) }}</small>{% endif %}</td>
+          <td>{{ c.compras | tw_num }}</td>
+          <td>{{ mx.monto(c.m.cpa, c.moneda) }}</td>
+          <td>{{ c.alcance | tw_num }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if mr.campanas | length > campanas | length %}<p class="vacio">{{ _('Y %(n)s campaña(s) más con menos gasto.', n=mr.campanas | length - campanas | length) }}</p>{% endif %}
+</section>
+{% endif %}
+
+{# ---------- conjuntos ---------- #}
+{% if mr.conjuntos %}
+<section class="tb-seccion">
+  <div class="tb-seccion-cab"><h3>{{ _('Conjuntos') }}</h3><small class="vacio">{{ _('Por gasto en el periodo') }}</small></div>
+  <div class="tw-tabla-scroll">
+    <table class="tw-tabla">
+      <thead><tr><th>{{ _('Conjunto') }}</th><th>{{ _('Estado') }}</th><th>{{ _('Aprendizaje') }}</th><th>{{ _('Presupuesto') }}</th><th>{{ _('Gasto') }}</th><th>ROAS</th><th>{{ _('Costo por compra') }}</th></tr></thead>
+      <tbody>
+        {% include "_meta_conjuntos_filas.html" %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}

@@ -65,8 +65,10 @@ PLANTILLAS_TRADUCIDAS = [
     # Pestaña Meta (rendimiento de varias cuentas, 2026-10-08): armazón, panel, selector y filas de «Ver más».
     "_tab_meta.html", "_meta_panel.html", "_meta_cuentas.html", "_meta_anuncios_filas.html",
     "_meta_conjuntos_filas.html", "_meta_macros.html",
-    # Pestaña Rendimiento (spec 2026-10-09): panel y tarjetas de anuncios de fuente Meta («Ver más»).
-    "_rend_panel.html", "_rend_anuncios_meta.html",
+    # Pestaña Rendimiento (spec 2026-10-09): armazón, panel, tarjetas de anuncios de fuente Meta («Ver más»), sus
+    # macros y las secciones que comparte con las pestañas Triple Whale y Meta.
+    "_tab_rendimiento.html", "_rend_panel.html", "_rend_anuncios_meta.html", "_rend_macros.html",
+    "_tw_secciones.html", "_meta_secciones.html",
     "editor.html",   # Fase 6, Task 2: la página del editor
     "_tab_cambiar_calzado.html",   # Fase 6, Task 4: Crear › Cambiar producto
     "admin_meta.html", "admin_referentes.html", "meta_elegir.html",   # Fase 6, Task 5

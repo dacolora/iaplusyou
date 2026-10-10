@@ -1,0 +1,45 @@
+/* ============================================================
+   Rendimiento: la pestaña única de Triple Whale + Meta (spec 2026-10-09 §5). Uso: _tab_rendimiento.html (el armazón
+   y «Ajustes», `.rend-ajustes`), _rend_panel.html (la línea de origen de las ventas bajo Resultados, `.rend-origen`;
+   el subtítulo de los anuncios de Meta, `.rend-subtitulo`), _meta_secciones.html y _meta_conjuntos_filas.html (la
+   fuente del ROAS de cada fila, `.rend-fuente`) y _rend_anuncios_meta.html (las tarjetas de los anuncios cuya fuente
+   es Meta, `.rend-tarjeta` en la rejilla `.rend-anuncios-meta`). El resto del panel reutiliza las clases de Triple
+   Whale (.tw-barra, .tw-tabla, .tw-anillo…), del Tablero (.tb-seccion, .kpi-tile…) y de Meta (.meta-cuentas). Las
+   tablas se desplazan dentro de .tw-tabla-scroll: nada empuja la página de lado en el celular. Solo tokens.
+   ============================================================ */
+
+/* «Ajustes»: un <details> con el borde y el fondo de una tarjeta; abierto, las dos conexiones una debajo de otra. */
+.rend-ajustes { margin: 0 0 1.2rem; padding: .7rem .9rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); }
+.rend-ajustes > summary { cursor: pointer; font-weight: 600; }
+.rend-ajustes[open] > summary { margin-bottom: .8rem; }
+.rend-ajustes-meta { margin-top: 1rem; padding-top: .9rem; border-top: 1px solid var(--border); }
+.rend-ajustes-meta .meta-cuentas:not([hidden]) { margin-top: .8rem; }
+
+/* De dónde sale cada venta (R8) y desde cuándo cuentan todas las fuentes (R7), bajo las tarjetas de Resultados. */
+.rend-origen { margin: .4rem 0 0; color: var(--muted); font-size: var(--t-chico); overflow-wrap: anywhere; }
+
+/* La fuente de una cifra en una fila (Triple Whale | Meta), chica bajo el número. */
+.rend-fuente { display: block; color: var(--muted); font-size: var(--t-sobretitulo); text-transform: uppercase; letter-spacing: .04em; }
+
+/* «De tus cuentas de Meta sin tienda en Triple Whale»: subtítulo dentro de «Tus anuncios». */
+.rend-subtitulo { margin: 0; font-size: var(--t-base); }
+
+/* Tarjetas de los anuncios de fuente Meta: la miniatura de Meta es chica (64 px), así que va al lado del nombre y no
+   como un medio grande; debajo, frase, resultado, anillos, cifras y razones con las clases de Triple Whale. */
+.rend-anuncios-meta { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: .9rem; }
+.rend-tarjeta { display: flex; flex-direction: column; gap: .6rem; min-width: 0; padding: .9rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); }
+.rend-tarjeta-cabeza { display: flex; align-items: flex-start; gap: .7rem; min-width: 0; }
+.rend-tarjeta-mini { flex: none; width: 64px; height: 64px; object-fit: cover; border-radius: var(--radius-sm); background: var(--fondo-video); }
+.rend-tarjeta-grupo { display: block; color: var(--muted); font-size: var(--t-chico); overflow-wrap: anywhere; }
+/* La tarjeta es más angosta que la de Triple Whale (260 px y no 34rem): la frase va a tamaño de texto y los cuatro
+   anillos, un poco más chicos, para que quepan en una fila sin pisarse las etiquetas. */
+.rend-tarjeta .tw-frase { margin: 0; font-size: var(--t-base); }
+.rend-tarjeta .tw-resultado { white-space: normal; }
+.rend-tarjeta .tw-anillo svg { width: 3rem; height: 3rem; }
+
+@media (max-width: 760px) {
+  .rend-anuncios-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rend-tarjeta { padding: .7rem; }
+  .rend-tarjeta-cabeza { flex-direction: column; }
+  .rend-tarjeta .tw-cifras { grid-template-columns: minmax(0, 1fr); }
+}

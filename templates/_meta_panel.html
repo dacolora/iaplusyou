@@ -3,7 +3,8 @@
    Solo lee la copia local; el único formulario es «Actualizar ahora» (leer de Meta no cobra). Sin <script>: el JS
    está en _tab_meta.html (`data-meta-param` cambia el filtro, `data-meta-act` elige una cuenta, `data-meta-mas`
    trae más filas). «Todas» (2+ cuentas) va en USD con la tasa de cada día; una cuenta, en su moneda; campañas,
-   conjuntos y anuncios, siempre en la moneda de su cuenta. #}
+   conjuntos y anuncios, siempre en la moneda de su cuenta. Campañas y conjuntos viven en _meta_secciones.html, que
+   comparte con la pestaña Rendimiento (2026-10-09). #}
 {% import "_meta_macros.html" as mx %}
 {% if not mr.conectado %}
 <p class="vacio">{{ _('Meta no está conectado en este proyecto.') }}</p>
@@ -160,49 +161,7 @@
 </section>
 {% endif %}
 
-{# ---------- campañas ---------- #}
-{% if mr.campanas %}
-{% set campanas = mr.campanas[:50] %}
-<section class="tb-seccion">
-  <div class="tb-seccion-cab"><h3>{{ _('Campañas') }}</h3><small class="vacio">{{ ngettext('%(num)s campaña con gasto en el periodo', '%(num)s campañas con gasto en el periodo', mr.campanas | length) }}</small></div>
-  <div class="tw-tabla-scroll">
-    <table class="tw-tabla">
-      <thead><tr><th>{{ _('Campaña') }}</th><th>{{ _('Estado') }}</th><th>{{ _('Objetivo') }}</th><th>{{ _('Presupuesto') }}</th><th>{{ _('Gasto') }}</th><th>ROAS</th><th>{{ _('Compras') }}</th><th>{{ _('Costo por compra') }}</th><th>{{ _('Alcance') }}</th></tr></thead>
-      <tbody>
-        {% for c in campanas %}
-        <tr>
-          <td class="tw-nombre"><strong>{{ c.nombre or c.campaign_id }}</strong>{% if not actual %}<small>{{ mx.cuenta(c.cuenta) }}</small>{% endif %}</td>
-          <td>{{ mx.estado(c.estado, mr.estados) }}</td>
-          <td>{% if c.objetivo in mr.objetivos %}{{ mr.objetivos[c.objetivo] | traducir }}{% else %}{{ c.objetivo or '—' }}{% endif %}</td>
-          <td>{{ mx.presupuesto(c) }}</td>
-          <td>{{ mx.monto(c.gasto, c.moneda) }}</td>
-          <td>{{ mx.roas(c.m.roas) }}</td>
-          <td>{{ c.compras | tw_num }}</td>
-          <td>{{ mx.monto(c.m.cpa, c.moneda) }}</td>
-          <td>{{ c.alcance | tw_num }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  {% if mr.campanas | length > campanas | length %}<p class="vacio">{{ _('Y %(n)s campaña(s) más con menos gasto.', n=mr.campanas | length - campanas | length) }}</p>{% endif %}
-</section>
-{% endif %}
-
-{# ---------- conjuntos ---------- #}
-{% if mr.conjuntos %}
-<section class="tb-seccion">
-  <div class="tb-seccion-cab"><h3>{{ _('Conjuntos') }}</h3><small class="vacio">{{ _('Por gasto en el periodo') }}</small></div>
-  <div class="tw-tabla-scroll">
-    <table class="tw-tabla">
-      <thead><tr><th>{{ _('Conjunto') }}</th><th>{{ _('Estado') }}</th><th>{{ _('Aprendizaje') }}</th><th>{{ _('Presupuesto') }}</th><th>{{ _('Gasto') }}</th><th>ROAS</th><th>{{ _('Costo por compra') }}</th></tr></thead>
-      <tbody>
-        {% include "_meta_conjuntos_filas.html" %}
-      </tbody>
-    </table>
-  </div>
-</section>
-{% endif %}
+{% include "_meta_secciones.html" %}
 
 {# ---------- anuncios ---------- #}
 <section class="tb-seccion">
