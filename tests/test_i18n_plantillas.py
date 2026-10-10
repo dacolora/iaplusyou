@@ -20,6 +20,8 @@ PLANTILLAS_TRADUCIDAS = [
     "_tab_settings.html", "_seccion_marca.html", "_comparacion_modelos.html",
     "_tab_flowplus.html", "_tab_creativeflowplus.html", "_flowplus_bandeja.html", "_aviso_sin_saldo.html",
     "_selector_productos.html", "_selector_productos_nuevo.html", "_mi_musica.html",
+    "_selector_productos_grilla.html", "_swaps_lista.html",
+    "_gasto_filas.html", "_gasto_lista.html", "_gasto_mas.html",
     "_crear_flowplus.html", "_crear_flowplus_guiones.html", "_gpg_panel.html", "_gpg_notion.html",
     "_gpg_guion.html", "_gpg_video.html", "_gpg_clips.html", "_gpg_imagenes.html", "_gpg_macros.html",
     "_tab_catalogo.html", "_catalogo_campos_comerciales.html", "_catalogo_importar.html",

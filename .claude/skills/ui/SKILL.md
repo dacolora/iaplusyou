@@ -174,3 +174,13 @@ PND-209/210/032 (2026-10-09, decisión del lote 8): pantallas/sprints.css limita
 Enmienda PND-032/210 (2026-10-10, pedido de Daniel): sprint-filtros tiene margen superior para separar las acciones a 375 px. La guardia de Detenida comprueba su propio párrafo; la de filtros exige grilla de escritorio y reglas dentro de @media max-width. Capturas en es/en a 375/1280 px por Claude.
 
 **Configuración › Plan (planes 6/8, 2026-10-10, skill `cobros`):** como el saldo, el apartado `#config-ap-plan` solo trae un contenedor y `static/planes.js` pide el fragmento al abrirlo; el formulario de alta (`plan_alta.html`) es la única página con el widget de Wompi. Estilos en `pantallas/planes.css`; las barras son `<progress class="plan-barra">` (sin `style=` en línea, que tiene techo). Un `<a class="btn-generar">` no hereda el relleno de `<button>`: en esas pantallas lo pone `planes.css`; y `.vacio` trae `padding: 1rem 0`, así que las notas cortas del formulario usan `.plan-ayuda`. Visto en escritorio y a 375 px con el método «ver la UI sin contraseña».
+
+PND-062, entrega 1 (2026-10-10, pedido de Daniel: pedir lo oculto al abrirlo): el selector compartido mantiene
+el armazón y las precargas dentro del formulario; `catalogo_selector` pinta `grilla_selector` al abrir el diálogo o
+el details. El JS de `_selector_productos_nuevo.html` pide una vez, conserva los inputs elegidos, filtra tras insertar
+y permite Reintentar con textos del catálogo. Swaps y Gasto pintan 24 por página; el delegado de `base.html` usa
+`data-lista-mas` y destinos por id (no `.swaps-lista`, que también usan anuncios sueltos). Swaps vivos van primero;
+si superan 24, la primera página incluye todos para conservar sus barras. Fragmentos sin script; barras con
+`data-poll-job`, medios diferidos y tablas atendidas por `static/tablas.js`. Inspección a 375 px a cargo de Claude.
+
+Enmiendas PND-062, entrega 1 (2026-10-10, pedido de Daniel tras revisar la entrega): El envío de Cambiar producto se bloquea en el shell si falta producto, abre el selector y conserva los archivos locales. Ver más inserta las tarjetas antes de sus acciones; la prueba usa un árbol del HTML renderizado con orden y parentesco reales. Un 401/403 o una redirección deja aviso y enlace a entrar, sin botón de reintento.

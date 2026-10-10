@@ -618,28 +618,18 @@
 </table>
 {% endif %}
 
-{# M6: el límite de 200 es fijo (sin paginación real); el scroll + la nota
-   de abajo alcanzan para el brief de hoy, pero si el volumen de cobros
-   crece, una Task futura debería paginar de verdad en vez de solo recortar. #}
+{# El historial pagina de a 24; total y CSV conservan todas las filas. #}
 <h3 style="margin-top:1.2rem;">{{ _('Historial') }}</h3>
 {% if gastos_historial %}
 <div class="gasto-historial">
   <table class="gasto-tabla">
     <thead><tr><th>{{ _('Fecha') }}</th><th>{{ _('Tipo') }}</th><th>{{ _('Detalle') }}</th><th class="num">{% if gasto_modo == 'doble' %}{{ _('Costo') }}{% else %}US${% endif %}</th>{% if gasto_modo == 'doble' %}<th class="num">{{ _('Cobrado') }}</th>{% endif %}</tr></thead>
-    <tbody>
-      {% for g in gastos_historial %}
-      <tr>
-        <td class="gasto-fecha">{{ g.creado_en[:16] | replace("T", " ") }}</td>
-        <td>{{ nombres_tipo_gasto.get(g.tipo, g.tipo)|traducir }}</td>
-        <td class="gasto-detalle" title="{{ g.referencia }}">{{ g.detalle or g.referencia }}{% if g.proveedor %} <small class="vacio" style="display:inline;padding:0;">· {{ g.proveedor }}</small>{% endif %}</td>
-        <td class="num">{{ g.usd | usd }}</td>
-        {% if gasto_modo == 'doble' %}<td class="num">{{ gasto_cobrado.por_gasto.get(g.id, 0) | usd }}</td>{% endif %}
-      </tr>
-      {% endfor %}
+    <tbody id="gasto-filas">
+      {% include "_gasto_filas.html" %}
     </tbody>
   </table>
 </div>
-<p class="vacio" style="padding-top:.3rem;font-size:.74rem;">{{ _('Se muestran los últimos %(n)s cobros', n=gastos_historial | length) }}{% if gastos_historial | length >= 200 %} {{ _('(el CSV trae todos los cobros desde el inicio)') }}{% endif %}.</p>
+{% include "_gasto_mas.html" %}
 {% else %}
 <p class="vacio">{{ _('Todavía no hay cobros registrados. Aparecerán aquí cuando generes algo en Crear.') }}</p>
 {% endif %}

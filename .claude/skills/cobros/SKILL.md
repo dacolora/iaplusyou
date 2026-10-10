@@ -248,3 +248,11 @@ Nada de Wompi corrió contra su API de verdad: todo se probó con un Wompi falso
 `docs/pendientes.md` PND-161 a PND-175: DIAN e IVA, la prueba real con Bold, recarga automática por umbral, otra pasarela, promociones, y los bordes y la higiene que dejó la revisión de cada tarea. Planes y Wompi, PND-244 a PND-253: la prueba real en el sandbox, las llaves de producción, la URL de eventos, activar el plan Pro y la DIAN (los cinco esperan a Daniel), las dudas de Wompi que mueven código, y los bordes de plata, la robustez y la higiene que dejaron las revisiones. De la revisión final (2026-10-10), PND-254 a PND-256: M3 y los bordes de la reserva tras el fin y de la TRM, confirmar en sandbox que una transacción de otro comercio da 404 (bloquea las llaves de producción) y los riesgos aceptados (Nequi a cualquier celular, `widget.js` sin SRI). Al mezclar main el 2026-10-10 se renumeraron de PND-239..251 a PND-244..256 (main ya usaba PND-239 a PND-243 para otros pendientes).
 
 PND-178 (2026-10-09, decisión delegada): limpiar_reservas_muertas solo elimina reservas sin tarea pendiente/en_curso cuya creada_en sea estrictamente anterior a ahora menos diez minutos. Cubre la ventana reservar→encolar; el disponible y el cobro real conservan sus reglas. test_lote7_estado prueba recién creada, diez, once minutos y tarea viva.
+
+PND-062, entrega 1 (2026-10-10, pedido de Daniel): historial de Configuración › Gasto paginado de
+24 con `_pagina_gasto`, siempre desde `gasto_para`. `historial_cobrado` y la fuente OCULTO admiten desplazamiento;
+no se usa el costo como respaldo para quien no puede verlo. El modo doble conserva Costo/Cobrado también en las
+páginas siguientes y `cobrado_por_gasto` consulta solo los ids de esa página. Totales y CSV siguen completos.
+`tests/test_pagina_por_partes.py` verifica precios, columnas, páginas sucesivas y aislamiento con SQLite temporal.
+
+Enmiendas PND-062, entrega 1 (2026-10-10, pedido de Daniel tras revisar la entrega): Si cobrado_por_gasto falla para el admin en modo doble, _pagina_gasto conserva las filas y pasa a modo costo sin la columna Cobrado. El contexto respeta ese modo. Las pruebas de la segunda página comparan cada costo/cobro con importes distintos y las del total grande exigen todas las páginas; las mutaciones corren en una copia.

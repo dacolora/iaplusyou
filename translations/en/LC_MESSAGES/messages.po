@@ -1759,9 +1759,6 @@ msgstr "(code %(codigo)s)"
 msgid "(de %(min)s a %(max)s)"
 msgstr "(from %(min)s to %(max)s)"
 
-msgid "(el CSV trae todos los cobros desde el inicio)"
-msgstr "(the CSV has every charge since the start)"
-
 msgid "(el servidor no tiene correo configurado; avisa al administrador)"
 msgstr "(the server has no email configured; let the administrator know)"
 
@@ -6765,6 +6762,9 @@ msgstr "Choose a country"
 
 msgid "Elige un producto"
 msgstr "Choose a product"
+
+msgid "Elige un producto antes de enviar los archivos."
+msgstr "Choose a product before sending the files."
 
 msgid "Elige un producto con fotos."
 msgstr "Pick a product with photos."
@@ -12508,6 +12508,12 @@ msgstr "Couldn't change the status: %(error)s"
 msgid "No pude cambiar el presupuesto: %(error)s"
 msgstr "Couldn't change the budget: %(error)s"
 
+msgid "No pude cargar el catálogo. Intenta de nuevo."
+msgstr "Could not load the catalog. Try again."
+
+msgid "No pude cargar más resultados. Intenta de nuevo."
+msgstr "Could not load more results. Try again."
+
 #, python-format
 msgid "No pude cerrar el experimento: %(error)s"
 msgstr "Couldn't close the experiment: %(error)s"
@@ -15963,10 +15969,6 @@ msgstr "Interrupted by a server restart. Try again."
 msgid "Se interrumpió; vuelve a intentarlo."
 msgstr "It was interrupted; try again."
 
-#, python-format
-msgid "Se muestran los últimos %(n)s cobros"
-msgstr "Showing the last %(n)s charges"
-
 msgid "Se ofrece"
 msgstr "Offered"
 
@@ -18063,6 +18065,9 @@ msgstr "Your session closed; log in again."
 
 msgid "Tu sesión terminó: recarga la página e inicia sesión."
 msgstr "Your session ended: reload the page and log in."
+
+msgid "Tu sesión venció. Vuelve a entrar para continuar."
+msgstr "Your session has expired. Log in again to continue."
 
 msgid "Tu sesión venció: vuelve a entrar para seguir."
 msgstr "Your session expired: sign in again to keep going."

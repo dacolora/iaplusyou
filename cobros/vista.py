@@ -268,7 +268,7 @@ def _sub_cobrado(cliente):
             .group_by(m.c.gasto_id).subquery())
 
 
-def historial_cobrado(cliente, limite=200, desde=None):
+def historial_cobrado(cliente, limite=200, desde=None, desplazamiento=0):
     """Como `gastos.historial`, una fila por gasto cobrado con `usd` = lo
     cobrado; lo que se devolvió entero no aparece (está en Saldo › Movimientos)."""
     g = db.gasto
@@ -277,7 +277,7 @@ def historial_cobrado(cliente, limite=200, desde=None):
          .where(g.c.cliente == cliente, sub.c.s != 0))
     if desde:
         q = q.where(g.c.creado_en >= desde[:19])
-    q = q.order_by(g.c.creado_en.desc(), g.c.id.desc()).limit(int(limite))
+    q = q.order_by(g.c.creado_en.desc(), g.c.id.desc()).limit(int(limite)).offset(int(desplazamiento))
     with db.conectar() as con:
         filas = []
         for r in con.execute(q):
@@ -378,7 +378,7 @@ def _oculto_mes(cliente, ahora_iso=None):
 # Lo que ve un cliente cuando no se pudo saber qué mostrarle: ninguna cifra («—»), nunca el costo.
 OCULTO = {"modo": "oculto", "resumen_mes": _oculto_mes, "resumen_todo": _oculto_mes,
           "resumen_total": lambda cliente, ahora_iso=None: {"total": None, "n": 0, "desde": None, "error": True},
-          "por_mes": lambda cliente, ahora_iso=None: {}, "historial": lambda cliente, limite=200, desde=None: [],
+          "por_mes": lambda cliente, ahora_iso=None: {}, "historial": lambda cliente, limite=200, desde=None, desplazamiento=0: [],
           "total_entre": lambda cliente, desde_iso, hasta_iso: {"usd": None, "n": 0}}
 
 
