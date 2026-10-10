@@ -2641,6 +2641,10 @@ msgid "Analizado con los datos del %(desde)s al %(hasta)s"
 msgstr "Analyzed with data from %(desde)s to %(hasta)s"
 
 #, python-format
+msgid "Analizado en Meta: «%(nombre)s»"
+msgstr "Analyzed in Meta: “%(nombre)s”"
+
+#, python-format
 msgid "Analizado en Triple Whale: «%(nombre)s»"
 msgstr "Analyzed in Triple Whale: “%(nombre)s”"
 
@@ -9201,6 +9205,10 @@ msgid "Ganó en %(pais)s: %(quien)s"
 msgstr "Won in %(pais)s: %(quien)s"
 
 #, python-format
+msgid "Ganó en Meta: «%(nombre)s»"
+msgstr "Won in Meta: “%(nombre)s”"
+
+#, python-format
 msgid "Ganó en Triple Whale: «%(nombre)s»"
 msgstr "Won in Triple Whale: “%(nombre)s”"
 
@@ -14235,6 +14243,10 @@ msgstr "Losing"
 #, python-format
 msgid "Perdió en %(pais)s: %(quien)s"
 msgstr "Lost in %(pais)s: %(quien)s"
+
+#, python-format
+msgid "Perdió en Meta: «%(nombre)s»"
+msgstr "Lost in Meta: “%(nombre)s”"
 
 #, python-format
 msgid "Perdió en Triple Whale: «%(nombre)s»"
@@ -22682,6 +22694,9 @@ msgstr "your average %(pct)s"
 
 msgid "tu@empresa.com"
 msgstr "you@company.com"
+
+msgid "tus cuentas de Meta"
+msgstr "your Meta accounts"
 
 msgid "términos y condiciones de Wompi"
 msgstr "Wompi terms and conditions"

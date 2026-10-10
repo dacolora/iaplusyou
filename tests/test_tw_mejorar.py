@@ -459,6 +459,24 @@ def test_aprendizaje_desde_un_analisis():
     assert aprendizajes.desde_analisis_tw({"foto": {}, "resultado": {}}) is None
 
 
+@pytest.mark.parametrize("veredicto, inicio", [("ganador", "Ganó en Meta: «Anuncio p1»"),
+                                                ("perdedor", "Perdió en Meta: «Anuncio p1»"),
+                                                ("prometedor", "Analizado en Meta: «Anuncio p1»")])
+def test_aprendizaje_desde_un_analisis_de_meta_dice_meta(veredicto, inicio):
+    """B1 (revisión final de Rendimiento E2, 2026-10-10): un análisis de un anuncio de fuente Meta (cuenta sin tienda)
+    no ganó «en Triple Whale»: el aprendizaje dice Meta y su `origen` es "meta". Lo que se guarda va en el idioma del
+    proyecto (lo envuelve quien llama)."""
+    from doctrina import aprendizajes
+    fila = {"id": 8, "foto": {"nombre": "Anuncio p1", "veredicto": veredicto, "fuente": "meta",
+                              "ad_account_id": "act_1"},
+            "resultado": {"aprendizaje": "Arrancar con el logo no detiene el scroll."}}
+    item = aprendizajes.desde_analisis_tw(fila)
+    assert item["texto"].startswith(inicio) and "Triple Whale" not in item["texto"]
+    assert item["origen"] == "meta" and item["analisis_id"] == 8 and item["id"] == "tw8"
+    tw = aprendizajes.desde_analisis_tw(dict(fila, foto=dict(fila["foto"], fuente="triple_whale")))
+    assert "en Triple Whale" in tw["texto"] and tw["origen"] == "triple_whale"
+
+
 def test_armar_deja_en_una_linea_los_nombres_y_la_evaluacion_de_cuenta():
     """Revisión final B3: un salto de línea en un nombre, una campaña, un ganador o un patrón de la evaluación de
     cuenta no abre una línea nueva del prompt, y sus `<<<FIN>>>` no cierran el bloque de datos."""

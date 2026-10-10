@@ -43,6 +43,7 @@ import triple_whale
 import triple_whale_tiendas
 from cobros import libro
 from doctrina import aprendizajes as doctrina_aprendizajes
+from meta_rendimiento import cuentas as meta_cuentas
 from tareas import triple_whale as tareas_tw
 from triple_whale import datos, mejorar, panel, pedidos, puente
 from triple_whale import ganchos as ganchos_tw
@@ -155,7 +156,13 @@ def _aprendizaje_guardado(cliente, aid):
 
 
 def _nombre_alcance(cliente, fila):
-    """«Todas las tiendas» o el nombre de la tienda en que se pagó ese análisis ("" si ya no existe)."""
+    """«Todas las tiendas» o el nombre de la tienda en que se pagó ese análisis ("" si ya no existe). Uno de fuente
+    Meta (B1, revisión final de Rendimiento E2, 2026-10-10: su `tienda_id` es None porque no es de ninguna tienda, no
+    porque sea de todas) dice su cuenta de Meta o, si ya no está en el proyecto, «tus cuentas de Meta»."""
+    foto = fila.get("foto") or {}
+    if foto.get("fuente") == "meta":
+        cuenta = meta_cuentas.cuenta(cliente, foto["ad_account_id"]) if foto.get("ad_account_id") else None
+        return (cuenta or {}).get("nombre") or gettext("tus cuentas de Meta")
     if fila.get("tienda_id") is None:
         return gettext("Todas las tiendas")
     tienda = triple_whale_tiendas.tienda(cliente, fila["tienda_id"])

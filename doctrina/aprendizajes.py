@@ -124,8 +124,8 @@ def desde_veredicto(pz, v, diagnostico=None, ahora=None):
 
 
 def desde_analisis_tw(fila, ahora=None):
-    """Un aprendizaje desde un análisis «Cómo mejorarlo» de Triple Whale (spec tarjetas §6.3), o None si Claude no
-    dejó uno. Lo guarda la persona con un clic; analizar nunca agrega aprendizajes solo. El `id` sale del análisis
+    """Un aprendizaje desde un análisis «Cómo mejorarlo» (spec tarjetas §6.3; de Triple Whale o, desde Rendimiento E2,
+    de un anuncio de fuente Meta: el texto y el `origen` dicen cuál), o None si Claude no dejó uno. Lo guarda la persona con un clic; analizar nunca agrega aprendizajes solo. El `id` sale del análisis
     (`tw<id>`): `proyectos.agregar_aprendizaje` descarta por `id` y bajo su candado, así dos clics (o dos pestañas) a
     la vez guardan una sola línea."""
     r = (fila or {}).get("resultado") or {}
@@ -137,19 +137,25 @@ def desde_analisis_tw(fila, ahora=None):
     # El nombre del anuncio es texto ajeno: `_limpio` le quita todo `<` y `>` (más que `mejorar._dato`, que quita
     # rachas de dos o más) y lo deja en una línea (revisión final, B1).
     nombre = _limpio(f.get("nombre"), 120)
+    # B1 (revisión final de Rendimiento E2, 2026-10-10): un anuncio de una cuenta de Meta sin tienda (`foto.fuente`
+    # "meta") no ganó «en Triple Whale»: sus números son del Pixel de Meta.
+    de_meta = f.get("fuente") == "meta"
     if ver == "ganador":
-        texto = gettext("Ganó en Triple Whale: «%(nombre)s»", nombre=nombre)
+        texto = (gettext("Ganó en Meta: «%(nombre)s»", nombre=nombre) if de_meta
+                 else gettext("Ganó en Triple Whale: «%(nombre)s»", nombre=nombre))
     elif ver == "perdedor":
-        texto = gettext("Perdió en Triple Whale: «%(nombre)s»", nombre=nombre)
+        texto = (gettext("Perdió en Meta: «%(nombre)s»", nombre=nombre) if de_meta
+                 else gettext("Perdió en Triple Whale: «%(nombre)s»", nombre=nombre))
     else:
-        texto = gettext("Analizado en Triple Whale: «%(nombre)s»", nombre=nombre)
+        texto = (gettext("Analizado en Meta: «%(nombre)s»", nombre=nombre) if de_meta
+                 else gettext("Analizado en Triple Whale: «%(nombre)s»", nombre=nombre))
     texto += gettext(". Diagnóstico: %(a)s", a=aprendizaje)
     analisis_id = (fila or {}).get("id")
     return {"id": f"tw{analisis_id}" if analisis_id is not None else uuid.uuid4().hex[:8], "en": ahora,
             "tipo": ver if ver in ("ganador", "perdedor") else "manual",
             "pais": None, "producto": None, "gancho": None, "lead": None, "consciencia": None,
-            "texto": _limpio(texto, MAX_TEXTO_MOTOR), "aprendizaje": aprendizaje, "origen": "triple_whale",
-            "analisis_id": analisis_id}
+            "texto": _limpio(texto, MAX_TEXTO_MOTOR), "aprendizaje": aprendizaje,
+            "origen": "meta" if de_meta else "triple_whale", "analisis_id": analisis_id}
 
 
 def manual(texto, ahora=None):

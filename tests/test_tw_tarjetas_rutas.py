@@ -420,6 +420,25 @@ def test_el_detalle_dice_cuando_se_analizo_y_con_que_alcance(app):  # noqa: F811
     assert "Todas las tiendas" in html and "acme.myshopify.com" not in html
 
 
+def test_el_detalle_de_un_analisis_de_meta_dice_su_cuenta_y_no_todas_las_tiendas(app):  # noqa: F811
+    """B1 (revisión final de Rendimiento E2, 2026-10-10): un análisis de fuente Meta no se pagó en «Todas las tiendas»
+    (su `tienda_id` es None porque no es de ninguna tienda): dice su cuenta de Meta o, si ya no está en el proyecto,
+    «tus cuentas de Meta»."""
+    from meta_rendimiento import cuentas as mcuentas
+    _conectar()
+    mcuentas.elegir("acme", [{"id": "act_se", "name": "HappyFlops Sweden", "currency": "SEK", "pais": "SE"}])
+    foto = {"fuente": "meta", "ad_account_id": "act_se", "nombre": "Video m1"}
+    de_meta = datos.crear_analisis("acme", None, "facebook-ads", "m1", "2026-09-01", "2026-09-30", "SEK", foto)
+    datos.actualizar_analisis(de_meta, estado="lista", resultado={"frase": "x"})
+    html = " ".join(app["c"].get(f"/cliente/acme/triple-whale/analisis/{de_meta}").data.decode().split())
+    assert "datos del 2026-09-01 al 2026-09-30 · HappyFlops Sweden ·" in html and "Todas las tiendas" not in html
+    otra = datos.crear_analisis("acme", None, "facebook-ads", "m2", "2026-09-01", "2026-09-30", "SEK",
+                                dict(foto, ad_account_id="act_9"))
+    datos.actualizar_analisis(otra, estado="lista", resultado={"frase": "x"})
+    html = " ".join(app["c"].get(f"/cliente/acme/triple-whale/analisis/{otra}").data.decode().split())
+    assert "· tus cuentas de Meta ·" in html and "Todas las tiendas" not in html
+
+
 def test_lo_que_escribio_claude_va_escapado(app):  # noqa: F811
     _conectar()
     _sembrar()
