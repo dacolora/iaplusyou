@@ -167,6 +167,12 @@ la miniatura, el saldo, la fuente en la foto, Referentes y «Meta reporta»).
   Creatv (R2); si no, la imagen que un análisis listo copió a R2; si no, la miniatura de Meta solo si
   `meta_rendimiento.datos.miniatura_valida` (al pintar: PND-220), a su tamaño (`.tw-medio-miniatura`: llega de 64 px y
   agrandada se vería borrosa).
+- **Un análisis es de SU fuente** (revisión de la tarea 4): `triple_whale.panel.mismo_alcance` compara la fuente de la
+  foto (`foto["fuente"]`, sin ella = Triple Whale) con la del alcance. Una cuenta cubierta por una tienda (R5), vista
+  sola (R3), es de fuente Meta y muestra los MISMOS anuncios (mismo `(canal, ad_id)`, las filas y los job_id no llevan
+  fuente) que «Todas» muestra como de Triple Whale: sin comparar la fuente, cada tarjeta tomaba el análisis de la otra
+  por viejo, volvía a ofrecer pagarlo y lo metía al lote sin fin. Ahora ese análisis es «de otro alcance»: nota neutra y
+  solo «Analizar con estos datos», nunca en el lote (`test_un_analisis_de_*_no_es_el_de_la_tarjeta_de_*`).
 - **Los tiles de Triple Whale** («Gasto», «Ingresos atribuidos»…) van encima de la galería solo con alcance solo Triple
   Whale: con Meta o mezcla describirían solo una parte de lo que muestra la galería.
 - Se jubilaron: `triple_whale.rutas.galeria`, `tarjeta`, `analizar_anuncio`, `analizar_lote` (y el alias

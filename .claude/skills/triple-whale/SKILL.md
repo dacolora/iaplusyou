@@ -334,8 +334,11 @@ production. It must work for ANY ad, not only Creatv's: in happyflops only 4 pie
 - **The route never pays twice for the same data (A1).** `pedidos.pedir_analisis` refuses without charging when the ad has a
   live task or a READY analysis of this scope that is not stale («Ese anuncio ya tiene un análisis con estos datos.»;
   the JSON path returns the card): a stale tab, or the 7-day tab after visiting 30 days, still shows the button.
-- **Old analysis.** `panel.es_viejo` applies only inside the same scope (`panel.mismo_alcance`: same store AND either the
-  same period length or the same `desde`): a changed verdict or ≥ 1.5× the spend. «Desde el inicio» grows one day every
+- **Old analysis.** `panel.es_viejo` applies only inside the same scope (`panel.mismo_alcance`: same source, same store
+  AND either the same period length or the same `desde`; the source since the Rendimiento E2 task 4 review: a covered Meta
+  account viewed alone (R3) shows as a Meta card the SAME `(canal, ad_id)` that «Todas» shows as Triple Whale, and each
+  card took the other source's analysis as its own stale one and offered to pay again forever; `foto["fuente"]`, missing
+  = "triple_whale", against `alcance.get("fuente")`): a changed verdict or ≥ 1.5× the spend. «Desde el inicio» grows one day every
   day but always starts on the first copied day, so yesterday's analysis is still this scope (merge with «Resultados de
   tu tienda», 2026-10-08). The panel's CHANNEL filter is part of the scope too (A3): `foto.alcance_canal` is stored when
   asking (None or missing = «Todos»), because the verdict depends on the filter; without it an analysis looked stale

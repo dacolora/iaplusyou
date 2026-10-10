@@ -306,10 +306,20 @@ def mismo_alcance(fila, alcance):
     compara el largo, no las fechas); «Desde el inicio» crece un día cada día pero arranca siempre en el primer día
     copiado, así que el análisis de ayer sigue siendo de este alcance (mezcla con «Resultados de tu tienda»,
     2026-10-08). Sin `alcance`, sí. Una fila sin fechas no es del mismo alcance: ante la duda no se ofrece pagar otra
-    vez (revisión de la tarea 7)."""
+    vez (revisión de la tarea 7).
+
+    La fuente de los números también es del alcance (Rendimiento E2 tarea 4, revisión): las filas y los job_id van por
+    (canal, ad_id) para las dos fuentes y un anuncio de Meta tiene el canal `facebook-ads` de la copia de Triple Whale,
+    así que una cuenta cubierta por una tienda (R5), vista sola (R3), muestra como tarjeta de Meta el MISMO anuncio que
+    «Todas» muestra como de Triple Whale. Sin comparar la fuente, cada tarjeta tomaba el análisis de la otra como suyo y
+    viejo, volvía a ofrecer pagarlo y lo metía al lote sin fin. La foto guarda `fuente` (una de antes de E2 no la tiene:
+    es de Triple Whale) y el alcance de Meta trae `fuente = "meta"` (el de Triple Whale no la trae)."""
     if not alcance:
         return True
     fila = fila or {}
+    if (((fila.get("foto") or {}).get("fuente") or analisis.FUENTE_DEFECTO)
+            != (alcance.get("fuente") or analisis.FUENTE_DEFECTO)):
+        return False
     if fila.get("tienda_id") != alcance.get("tienda_id"):
         return False
     if canal_del_alcance(fila) != (alcance.get("canal") or None):

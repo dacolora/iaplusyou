@@ -567,3 +567,102 @@ def test_el_panel_ya_no_tiene_el_bloque_de_tarjetas_de_meta_de_e1(mixto):
     assert "rend-tarjeta" not in html and "data-rend-mas" not in html
     assert "De tus cuentas de Meta sin tienda en Triple Whale" not in html
     assert mixto["c"].get("/cliente/acme/rendimiento/anuncios-meta").status_code == 404
+
+
+# ------------------------------------------- revisión de la tarea 4: un análisis es de SU fuente (A1) ---
+
+def _sembrar_cubierta():
+    """Dos tiendas (NO y DK, así «Todas» mira «todas las tiendas», `tienda_id` None) y la cuenta World Wide de Meta,
+    cuyos anuncios llegan en la copia de la tienda de Noruega: en «Todas» w1 y w2 son tarjetas de Triple Whale (R5) y,
+    vista sola, la cuenta es de fuente Meta (R3): los MISMOS anuncios, con el mismo canal `facebook-ads`, son tarjetas
+    de Meta. Las filas y los job_id de un análisis van por (canal, ad_id), sin fuente."""
+    t_no = triple_whale_tiendas.agregar("acme", "tw_llave_123", "acme-no.myshopify.com", "NO", moneda="USD")  # llave-de-prueba
+    t_dk = triple_whale_tiendas.agregar("acme", "tw_llave_456", "acme-dk.myshopify.com", "DK", moneda="USD")  # llave-de-prueba
+    for t in (t_no, t_dk):
+        triple_whale_tiendas.actualizar_tienda("acme", t, ultima_sincronizacion=db.ahora())
+    mcuentas.elegir("acme", [{"id": "act_ww", "name": "World Wide", "currency": "USD", "pais": None}])
+    canal, pixel = [], []
+    for n in range(40):
+        f = _hace(n)
+        mdatos.reemplazar_cuenta_dias("acme", "act_ww", f, f, [_dia(f, 700, 1400, compras=3)])
+        mdatos.reemplazar_anuncio_dias("acme", "act_ww", f, f, [_ad(f, "w1", 100, 50, compras=1),
+                                                                _ad(f, "w2", 100, 400, compras=4)])
+        for ad in ("w1", "w2"):
+            canal.append({"canal": "facebook-ads", "ad_id": ad, "fecha": f, "anuncio": ad, "gasto": 100,
+                          "impresiones": 5000, "clics": 100, "vistas_3s": 1500, "thruplays": 500, "cuenta_id": "act_ww"})
+            pixel.append({"canal": "facebook-ads", "ad_id": ad, "fecha": f, "pedidos": 3 if ad == "w1" else 1,
+                          "ingresos": 400 if ad == "w1" else 50})
+    twdatos.reemplazar_anuncios_canal("acme", t_no, _hace(39), _hace(0), canal)
+    twdatos.reemplazar_anuncios_pixel("acme", t_no, _hace(39), _hace(0), pixel)
+    twdatos.reemplazar_tienda("acme", t_no, _hace(39), _hace(0),
+                              [{"fecha": _hace(n), "gasto": 200, "ingresos": 450, "pedidos": 4} for n in range(40)])
+
+
+def _w1_listo(app, fuente, entrada):  # noqa: F811
+    """Pide «Cómo mejorarlo» de w1 desde la tarjeta de `fuente` (30 días) y lo deja listo, como cuando el worker
+    termina."""
+    r = app["c"].post(f"/cliente/acme/rendimiento/anuncio/{fuente}/facebook-ads/w1/analizar",
+                      data={"entrada": entrada, "dias": "30", "canal": ""}, headers=dict(POST, Accept="application/json"))
+    assert r.get_json()["ok"], r.get_json()
+    with db.conectar() as con:
+        con.execute(db.tarea.update().values(estado="hecha"))
+    [fila] = twdatos.ultimos_analisis("acme", [("facebook-ads", "w1")]).values()
+    twdatos.actualizar_analisis(fila["id"], estado="lista", resultado={"frase": f"Frase de {fuente}"})
+    return fila
+
+
+def _desde_la_otra_fuente(app, fuente_vista, entrada_vista, fuente_pagada):  # noqa: F811
+    al = rend_panel.alcances("acme", 30, entrada_vista, None)
+    alc = al[fuente_vista]
+    assert alc and alc.get("fuente", "triple_whale") != ("meta" if fuente_pagada == "meta" else "triple_whale")
+    g = galeria.armar("acme", al["tw"], al["meta"], "", 1)
+    w1 = next(a for a in g["tarjetas"] if a["ad_id"] == "w1")
+    assert w1["fuente"] == fuente_vista
+    # El análisis de la otra fuente no es «el mismo alcance»: ni viejo ni ofrecido como botón principal ni en el lote;
+    # se ve como de otro alcance (nota neutra y solo «Analizar con estos datos»).
+    filas = twdatos.analisis_de_anuncios("acme", [("facebook-ads", "w1")])[("facebook-ads", "w1")]
+    from triple_whale import panel as tw_panel
+    e = tw_panel.elegir_analisis(w1, filas, alc)
+    assert e["mismo"] is None and e["otro_alcance"] and not e["viejo"] and not e["ofrecer"]
+    assert w1["analisis_otro_alcance"] and not w1["analisis_viejo"] and not w1["ofrecer_analisis"]
+    clave = f"{fuente_vista}:facebook-ads:w1"
+    assert clave not in g["lote"]["claves"] and clave not in g["lote"]["elegibles"]
+    html = app["c"].get(f"/cliente/acme/rendimiento/tarjeta/{fuente_vista}/facebook-ads/w1"
+                        f"?entrada={entrada_vista}&dias=30&canal=").data.decode()
+    assert "Analizado con los datos del" in html and "Analizar con estos datos" in html
+    assert "Analizar otra vez" not in html and "desde entonces cambió" not in html and "Cómo mejorarlo" not in html
+    # El lote de esa vista (y uno forjado con w1) no lo cobra; un segundo envío no cobra nada.
+    antes = len(_filas())
+    formulario = list(g["lote"]["claves"]) + [clave]
+    _lote(app, formulario, entrada=entrada_vista, dias="30")
+    nuevas = [f for f in _filas()[antes:]]
+    assert all(f["ad_id"] != "w1" for f in nuevas)
+    total = len(_filas())
+    r = _lote(app, formulario, entrada=entrada_vista, dias="30")
+    assert len(_filas()) == total and "No quedó ningún anuncio por analizar" in r.data.decode()
+
+
+def test_un_analisis_de_triple_whale_no_es_el_de_la_tarjeta_de_meta(mixto):
+    _sembrar_cubierta()
+    fila = _w1_listo(mixto, "tw", "")
+    assert fila["foto"]["fuente"] == "triple_whale"
+    _desde_la_otra_fuente(mixto, "meta", "cuenta:act_ww", "tw")
+
+
+def test_un_analisis_de_meta_no_es_el_de_la_tarjeta_de_triple_whale(mixto):
+    _sembrar_cubierta()
+    fila = _w1_listo(mixto, "meta", "cuenta:act_ww")
+    assert fila["foto"]["fuente"] == "meta"
+    _desde_la_otra_fuente(mixto, "tw", "", "meta")
+
+
+def test_mismo_alcance_compara_la_fuente():
+    from triple_whale import panel as tw_panel
+    base = {"tienda_id": None, "desde": "2026-09-11", "hasta": "2026-10-10"}
+    tw, meta = dict(base), dict(base, fuente="meta")
+    assert tw_panel.mismo_alcance(dict(base, foto={}), tw)                      # una fila vieja es de Triple Whale
+    assert tw_panel.mismo_alcance(dict(base, foto={"fuente": "triple_whale"}), tw)
+    assert not tw_panel.mismo_alcance(dict(base, foto={"fuente": "meta"}), tw)
+    assert tw_panel.mismo_alcance(dict(base, foto={"fuente": "meta"}), meta)
+    assert not tw_panel.mismo_alcance(dict(base, foto={}), meta)
+    assert not tw_panel.mismo_alcance(dict(base, foto={"fuente": "triple_whale"}), meta)
