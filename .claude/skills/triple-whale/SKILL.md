@@ -452,16 +452,24 @@ fraction of a new video. Spec `docs/superpowers/specs/2026-10-09-tw-ganchos-y-co
   (PND-220), and the hook's `por_que` counts toward the check so a guessed figure there blocks a clean hook (PND-225).
   The scene chain still closes a recoverable clip as an error (PND-221; the hooks no longer do, fix C below). The
   originals count toward the 2 GB quota but «Medios» cannot delete origen `triple_whale` (PND-222). The `|precio` filter
-  keeps showing the cost when the margin read fails in ~25 other templates (PND-223). The 20 000 cap still needs one
-  eval-claude case (PND-224). preparar's own failure path does not show the Crear session's error (PND-226); small
-  robustness items in PND-227. «Cómo mejorarlo» and its batch do not compare the price seen (PND-228; Cobros is off
-  everywhere today).
+  keeps showing the cost when the margin read fails in ~25 other templates (PND-223). preparar's own failure path does
+  not show the Crear session's error (PND-226); small robustness items in PND-227. «Cómo mejorarlo» and its batch do
+  not compare the price seen (PND-228; Cobros is off everywhere today). `doctrina.verificar_cifras` does not check
+  single-digit figures («en 2 días»), shared with Sprints and Nicho (PND-229). When `SaldoInsuficiente` hits a clip, its
+  Crear session, already created, stays orphan in error (PND-230; no money). The 20 000 cap was measured in real
+  (end_turn, 13 013 output tokens, US$ 0,1696; PND-224 closed).
 - **Final review fixes (2026-10-09, guardian-gasto and auditor-seguridad, commits db605232..4e4a77a4, plus F and G
   from the controller's real measurement of A).** A: cap
   20 000 and a cut answer never pays a blind correction (above, «Cómo mejorarlo»). B: offers in words —
   `mejorar.TERMINOS_OFERTA` (a short reviewed heuristic list in es/en/no/sv/pt: gratis/free, envío/shipping/frakt,
-  descuento/rabatt, regalo/gift, halv pris/halva priset, 2x1/«2 for 1»…; whole word or phrase, a hyphen is not a border
-  so «pain-free» is not «free») and `ofertas_sin_dato(texto, verificable)` add the terms that are not in the data to the
+  descuento/rabatt, regalo/gift, halv pris/halva priset, prueba/garantía/trial/warranty/money back/pengene
+  tilbake/åpent kjøp/öppet köp…; whole word or phrase, a hyphen is not a border so «pain-free» is not «free»), plus two
+  patterns with a number added by the last review (revisor, 2026-10-10): «take N pay M» in any form (`_LLEVA_PAGA`:
+  «NxM» with one digit each side, since «12x10 cm» is a size; «N por/for/för M», «kjøp N betal for M», «köp N betala för
+  M», «lleva N paga M», «leve N pague M», «pague N lleve M», «buy N get M»), compared by the offer (take, pay) and not by
+  its form, so «3x2» and «3 por 2» are the same; and scarcity with a number (`_ESCASEZ`: «últimas/last/siste/sista N»).
+  Checked free against the 4 real eval answers: no hook newly blocked. `ofertas_sin_dato(texto, verificable)` adds the
+  terms and offers that are not in the data to the
   hook's `cifras_sin_dato` (only its `texto`, what goes in the video: the hook is not generated) and to the new copy's
   (title and text: «revisa antes de publicar»); `funciona`/`falla`/`cambios` stay digits-only. C: a recoverable clip
   keeps its row (above). D: `usd_precio` in the button and the 409 (above). E: errors copied from the Crear session or
