@@ -288,9 +288,19 @@ def plan_admin_una_vez(clave, tipo, cliente, referencia=""):
     return plan_admin(tipo, cliente, referencia=referencia)
 
 
-def plan_por_renovar(cliente, clave, fecha, usd, renueva=True):
-    """3 días antes del fin de lo pagado, una sola vez (§7.6): «se renueva el
-    …, por US$ X» o, sin tarjeta (activado a mano), «termina el …»."""
+def _fecha_hora(iso):
+    from datetime import datetime  # noqa: PLC0415
+    try:
+        return idiomas.fecha_hora_larga(datetime.fromisoformat(str(iso)[:19]))
+    except (TypeError, ValueError):
+        return str(iso or "")
+
+
+def plan_por_renovar(cliente, clave, fecha, usd, renueva=True, cobro=None, anual=False):
+    """3 días antes del fin de lo pagado, una sola vez (§7.6): «cobramos US$ X
+    el … a las …» (`cobro`: el momento real, una hora antes del fin; ruling
+    2026-10-10) o, sin tarjeta (activado a mano), «termina el …». Un anual no
+    dice que lo no usado «antes de esa fecha» se pierde: su saldo vence cada mes."""
     try:
         if not _marcar_una_vez(clave):
             return False
@@ -301,10 +311,17 @@ def plan_por_renovar(cliente, clave, fecha, usd, renueva=True):
 
     def armar():
         if renueva:
-            return (gettext("Tu plan %(plan)s se renueva pronto", plan=nombre),
-                    gettext("Tu plan se renueva el %(fecha)s por %(monto)s (en pesos a la TRM del día). El saldo del "
-                            "plan que no uses antes de esa fecha no se acumula.",
-                            fecha=_fecha(fecha), monto=_usd(usd)))
+            momento = _fecha_hora(cobro or fecha)
+            if anual:
+                cuerpo = gettext("Tu plan anual se renueva el %(momento)s: a esa hora cobramos %(monto)s (en pesos a "
+                                 "la TRM del día). Si cancelas antes, no se cobra. El saldo del plan se renueva cada "
+                                 "mes y lo que no uses en un mes no pasa al siguiente.",
+                                 momento=momento, monto=_usd(usd))
+            else:
+                cuerpo = gettext("Tu plan se renueva el %(momento)s: a esa hora cobramos %(monto)s (en pesos a la TRM "
+                                 "del día). Si cancelas antes, no se cobra. El saldo del plan que no uses antes de "
+                                 "esa fecha no se acumula.", momento=momento, monto=_usd(usd))
+            return gettext("Tu plan %(plan)s se renueva pronto", plan=nombre), cuerpo
         return (gettext("Tu plan %(plan)s termina pronto", plan=nombre),
                 gettext("Lo pagado de tu plan termina el %(fecha)s. Para seguir con el plan, escríbenos o registra una "
                         "tarjeta en Configuración › Plan.", fecha=_fecha(fecha)))

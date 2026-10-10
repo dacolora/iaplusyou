@@ -111,7 +111,13 @@ PROPS = ("transaction.id", "transaction.status", "transaction.amount_in_cents")
 TODAS = PROPS + ("transaction.reference", "transaction.currency")
 
 
-def _evento(tx, props=PROPS, ts=1760000000, secreto=EVE, tipo="transaction.updated"):
+def _ahora_ts():
+    import time
+    return int(time.time())
+
+
+def _evento(tx, props=PROPS, ts=None, secreto=EVE, tipo="transaction.updated"):
+    ts = _ahora_ts() if ts is None else ts
     cuerpo = {"event": tipo, "data": {"transaction": dict(tx)}, "environment": "test",
               "sent_at": "2026-10-09T16:45:05.000Z", "signature": {"properties": list(props), "timestamp": ts}}
     valores = "".join(str(cuerpo["data"]["transaction"][p.split(".")[1]]) for p in props)
@@ -185,25 +191,33 @@ def test_llaves_de_pruebas_en_un_servidor_publico_no_crean_checkouts(entorno, mo
 
 # --- vuelta y verificación -------------------------------------------------------------------
 
-def test_vuelta_aprobada_acredita_los_usd_una_sola_vez(entorno):
+def test_la_vuelta_solo_consulta_y_el_evento_firmado_acredita(entorno):
+    """Ruling 2026-10-10: el `?id=` del navegador nunca acredita ni guarda la transacción (podría ser de otra
+    cuenta de Wompi con nuestra referencia y monto); lo acredita el evento firmado."""
     db, recargas = entorno["db"], entorno["recargas"]
     rid, ref = _pendiente(entorno)
     entorno["txs"]["1292-1602113476-10985"] = _tx(ref)
-    assert recargas.verificar(rid, transaccion_id="1292-1602113476-10985") == "aprobada"
+    assert recargas.consultar(rid, "1292-1602113476-10985") == "APPROVED"
+    fila = _recarga(db, rid)
+    assert (fila["estado"], fila["pasarela_ref"]) == ("pendiente", None)
+    assert entorno["libro"].saldo("acme") == 0 and _movimientos(db) == []
+    assert recargas.verificar(rid) == "pendiente"                    # sin transacción guardada no hay qué aplicar
+    assert _ev(entorno, _evento(_tx(ref)))[1] == "acreditada"
     fila = _recarga(db, rid)
     assert fila["pasarela_ref"] == "1292-1602113476-10985" and fila["medio_pago"] == "CARD"
     assert fila["total_pago"] == CENTAVOS   # los pesos quedan de registro
     [mov] = _movimientos(db)
     assert (mov["tipo"], mov["milesimas"], mov["concepto"], mov["recarga_id"]) == ("recarga", 50000, "recarga_wompi", rid)
-    assert recargas.verificar(rid, transaccion_id="1292-1602113476-10985") == "aprobada"
+    assert recargas.verificar(rid) == "aprobada"
     assert entorno["libro"].saldo("acme") == 50000 and len(_movimientos(db)) == 1
     assert {"recarga_acreditada", "recarga_admin"} <= {a[0] for a in entorno["avisos"]}
 
 
-def test_vuelta_rechazada_no_acredita(entorno):
+def test_vuelta_rechazada_no_acredita_ni_marca(entorno):
     rid, ref = _pendiente(entorno)
     entorno["txs"]["1292-1602113476-10985"] = _tx(ref, status="DECLINED")
-    assert entorno["recargas"].verificar(rid, transaccion_id="1292-1602113476-10985") == "rechazada"
+    assert entorno["recargas"].consultar(rid, "1292-1602113476-10985") == "DECLINED"
+    assert _recarga(entorno["db"], rid)["estado"] == "pendiente"
     assert entorno["libro"].saldo("acme") == 0 and _movimientos(entorno["db"]) == []
 
 
@@ -218,24 +232,38 @@ def test_vuelta_que_no_cuadra_no_acredita_y_avisa_al_admin(entorno, cambio):
     else:
         tx["reference"] = "cv-999-1"   # una transacción de otra recarga pegada en el ?id=
     entorno["txs"]["1292-1602113476-10985"] = tx
-    assert entorno["recargas"].verificar(rid, transaccion_id="1292-1602113476-10985") == "pendiente"
+    assert entorno["recargas"].consultar(rid, "1292-1602113476-10985") == "no_cuadra"
     fila = _recarga(entorno["db"], rid)
-    assert fila["pasarela_ref"] is None and entorno["libro"].saldo("acme") == 0
+    assert fila["pasarela_ref"] is None and fila["estado"] == "pendiente" and entorno["libro"].saldo("acme") == 0
     assert _admin(entorno) == ["wompi_no_cuadra"]
-    entorno["recargas"].verificar(rid, transaccion_id="1292-1602113476-10985")
+    entorno["recargas"].consultar(rid, "1292-1602113476-10985")
     assert _admin(entorno) == ["wompi_no_cuadra"]   # el sondeo no manda un correo cada 3 s
 
 
-def test_vuelta_pendiente_guarda_la_transaccion_y_la_periodica_acredita(entorno):
+def test_el_pendiente_firmado_guarda_la_transaccion_y_la_periodica_acredita(entorno):
     recargas = entorno["recargas"]
     rid, ref = _pendiente(entorno)
     entorno["txs"]["1292-1602113476-10985"] = _tx(ref, status="PENDING")
-    assert recargas.verificar(rid, transaccion_id="1292-1602113476-10985") == "pendiente"
+    assert recargas.consultar(rid, "1292-1602113476-10985") == "PENDING"
+    assert _recarga(entorno["db"], rid)["pasarela_ref"] is None      # la vuelta no la guarda
+    assert _ev(entorno, _evento(_tx(ref, status="PENDING")))[1] == "pendiente"
     assert _recarga(entorno["db"], rid)["pasarela_ref"] == "1292-1602113476-10985"
     entorno["txs"]["1292-1602113476-10985"] = _tx(ref)
     assert recargas.verificar_pendientes() == 1
     assert _recarga(entorno["db"], rid)["estado"] == "aprobada" and entorno["libro"].saldo("acme") == 50000
     assert entorno["consultas"][-1] == ("1292-1602113476-10985", entorno["wompi"].TIEMPO)
+
+
+def test_una_transaccion_de_otro_comercio_nunca_acredita(entorno):
+    """Si Wompi dice de qué comercio es la transacción y no es el nuestro, no cuadra (ni en la vuelta, ni en el
+    evento releído, ni en la periódica)."""
+    rid, ref = _pendiente(entorno)
+    entorno["txs"]["1292-1602113476-10985"] = {**_tx(ref), "merchant": {"public_key": "pub_test_OTRO"}}  # llave-de-prueba
+    assert entorno["recargas"].consultar(rid, "1292-1602113476-10985") == "no_cuadra"
+    assert _ev(entorno, _evento(_tx(ref)))[1] == "no_cuadra"
+    assert entorno["libro"].saldo("acme") == 0 and _recarga(entorno["db"], rid)["estado"] == "pendiente"
+    entorno["txs"]["1292-1602113476-10985"] = {**_tx(ref), "merchant": {"public_key": PUB}}
+    assert _ev(entorno, _evento(_tx(ref), ts=_ahora_ts() + 1))[1] == "acreditada"   # el nuestro sí
 
 
 def test_la_periodica_vence_una_vieja_sin_transaccion_y_el_evento_tardio_la_acredita(entorno):
@@ -266,8 +294,11 @@ def test_la_periodica_para_con_wompi_caido(entorno):
 def test_verificar_toma_el_candado_antes_de_leer(entorno, escritor_en_medio):
     rid, ref = _pendiente(entorno)
     entorno["txs"]["1292-1602113476-10985"] = _tx(ref)
+    with entorno["db"].conectar() as con:                            # vino de un evento firmado (PENDING)
+        con.execute(entorno["db"].recarga.update().where(entorno["db"].recarga.c.id == rid)
+                    .values(pasarela_ref="1292-1602113476-10985"))
     otro = escritor_en_medio("recarga.pasarela_ref = ", "UPDATE recarga SET estado = 'anulada'")
-    assert entorno["recargas"].verificar(rid, transaccion_id="1292-1602113476-10985") == "aprobada"
+    assert entorno["recargas"].verificar(rid) == "aprobada"
     assert otro["resultado"].startswith("bloqueado")
 
 
@@ -309,15 +340,17 @@ def test_el_mismo_evento_dos_veces_no_acredita_dos_veces(entorno):
     assert entorno["libro"].saldo("acme") == 50000 and len(_eventos(entorno["db"])) == 1 and entorno["avisos"] == []
 
 
-def test_evento_y_vuelta_no_duplican(entorno):
+def test_evento_y_verificar_no_duplican(entorno):
     db, recargas = entorno["db"], entorno["recargas"]
     rid, ref = _pendiente(entorno)
     entorno["txs"]["1292-1602113476-10985"] = _tx(ref)
     assert _ev(entorno, _evento(_tx(ref)))[1] == "acreditada"
-    assert recargas.verificar(rid, transaccion_id="1292-1602113476-10985") == "aprobada"
+    assert recargas.verificar(rid) == "aprobada"
     rid2, ref2 = _pendiente(entorno)
+    entorno["txs"]["1292-1602113476-20000"] = _tx(ref2, tx_id="1292-1602113476-20000", status="PENDING")
+    assert _ev(entorno, _evento(_tx(ref2, tx_id="1292-1602113476-20000", status="PENDING")))[1] == "pendiente"
     entorno["txs"]["1292-1602113476-20000"] = _tx(ref2, tx_id="1292-1602113476-20000")
-    assert recargas.verificar(rid2, transaccion_id="1292-1602113476-20000") == "aprobada"
+    assert recargas.verificar(rid2) == "aprobada"                     # la periódica con el id del evento
     assert _ev(entorno, _evento(_tx(ref2, tx_id="1292-1602113476-20000")))[1] == "duplicada"
     assert entorno["libro"].saldo("acme") == 100000 and len(_movimientos(db)) == 2
 
@@ -545,17 +578,19 @@ def test_recargar_de_otro_sitio_403(entorno, cliente_http):
     assert r.status_code == 403 and _recargas(entorno["db"]) == []
 
 
-def test_la_vuelta_con_id_verifica_en_wompi_y_acredita(entorno, cliente_http):
+def test_la_vuelta_con_id_consulta_en_wompi_y_muestra_sin_acreditar(entorno, cliente_http):
     rid, ref = _pendiente(entorno)
     entorno["txs"]["1292-1602113476-10985"] = _tx(ref)
     c = cliente_http.como("user_acme")
     r = c.get(f"/cliente/acme/saldo/recarga/{rid}?id=1292-1602113476-10985&env=test")
     html = r.get_data(as_text=True)
-    assert r.status_code == 200 and "Listo" in html and "con Wompi" in html
-    assert entorno["libro"].saldo("acme") == 50000
+    assert r.status_code == 200 and "Wompi aprobó tu pago" in html and "con Wompi" in html
+    assert entorno["libro"].saldo("acme") == 0 and _recarga(entorno["db"], rid)["pasarela_ref"] is None
     assert entorno["consultas"] == [("1292-1602113476-10985", entorno["wompi"].TIEMPO_INTERACTIVO)]
-    c.get(f"/cliente/acme/saldo/recarga/{rid}?id=1292-1602113476-10985")
-    assert entorno["libro"].saldo("acme") == 50000 and len(_movimientos(entorno["db"])) == 1
+    assert f"/cliente/acme/saldo/recarga/{rid}/estado?id=1292-1602113476-10985" in html   # sigue sondeando
+    assert _ev(entorno, _evento(_tx(ref)))[1] == "acreditada"        # el evento firmado
+    html = c.get(f"/cliente/acme/saldo/recarga/{rid}?id=1292-1602113476-10985").get_data(as_text=True)
+    assert "Listo" in html and entorno["libro"].saldo("acme") == 50000 and len(_movimientos(entorno["db"])) == 1
 
 
 def test_la_vuelta_sin_id_o_con_un_id_raro_no_consulta(entorno, cliente_http):
@@ -574,7 +609,13 @@ def test_la_vuelta_pendiente_sondea_con_el_id(entorno, cliente_http):
     c = cliente_http.como("user_acme")
     html = c.get(f"/cliente/acme/saldo/recarga/{rid}?id=1292-1602113476-10985").get_data(as_text=True)
     assert f"/cliente/acme/saldo/recarga/{rid}/estado?id=1292-1602113476-10985" in html
+    assert "Verificando tu pago" in html
     entorno["txs"]["1292-1602113476-10985"] = _tx(ref)
+    rutas._ULTIMA_VERIFICACION.clear()
+    j = c.get(f"/cliente/acme/saldo/recarga/{rid}/estado?id=1292-1602113476-10985").get_json()
+    assert j["estado"] == "pendiente" and "Wompi aprobó tu pago" in j["texto"]
+    assert entorno["libro"].saldo("acme") == 0
+    assert _ev(entorno, _evento(_tx(ref)))[1] == "acreditada"
     rutas._ULTIMA_VERIFICACION.clear()
     j = c.get(f"/cliente/acme/saldo/recarga/{rid}/estado?id=1292-1602113476-10985").get_json()
     assert j["estado"] == "aprobada" and entorno["libro"].saldo("acme") == 50000

@@ -414,7 +414,7 @@ def _cuadra(fila, tx):
     return (fila is not None and bool(tx.get("id")) and len(str(tx.get("id"))) <= 40
             and tx.get("reference") == fila["referencia"]
             and tx.get("amount_in_cents") is not None and tx.get("amount_in_cents") == fila["total_pago"]
-            and tx.get("currency") == wompi.MONEDA)
+            and tx.get("currency") == wompi.MONEDA and not wompi.de_otro_comercio(tx))
 
 
 def _ref_de_otra(con, tx_id, rid):
@@ -721,8 +721,9 @@ def consultable(recarga, transaccion_id=None):
     HORAS_VIGENTE también: la persona pudo reintentar y pagar en el mismo link
     sin que llegara el SALE_APPROVED (ruling de la tarea 7, completado en la
     revisión final 2026-10-08). Wompi: lo mismo, con una transacción que
-    consultar (la guardada o el `?id=` de la vuelta, `transaccion_id`). Solo
-    lee el dict."""
+    consultar (la guardada, que vino de un evento firmado, o el `?id=` de la
+    vuelta, `transaccion_id`, que solo se consulta para MOSTRAR: `consultar`).
+    Solo lee el dict."""
     if not recarga:
         return False
     if recarga.get("medio") == "wompi":
@@ -735,11 +736,12 @@ def consultable(recarga, transaccion_id=None):
     return recarga.get("estado") in ("rechazada", "expirada") and str(recarga.get("creada_en") or "") >= _limite_vigente()
 
 
-def _verificar_wompi(fila, tiempo, transaccion_id):
-    """La vuelta del checkout, el botón «Verificar» y la periódica para una
-    recarga de Wompi: consulta la transacción (el `?id=` de la vuelta o la
-    guardada) y la aplica solo si cuadra. (estado, error)."""
-    tx_id = transaccion_id if wompi.id_valido(transaccion_id) else fila["pasarela_ref"]
+def _verificar_wompi(fila, tiempo):
+    """El botón «Verificar» y la periódica para una recarga de Wompi: consulta
+    la transacción GUARDADA (`pasarela_ref`, que solo escribe lo que llegó en un
+    evento firmado) y la aplica solo si cuadra. El `?id=` del navegador nunca
+    pasa por aquí (`consultar`). (estado, error)."""
+    tx_id = fila["pasarela_ref"]
     try:
         tx = wompi.transaccion(tx_id, tiempo=wompi.TIEMPO if tiempo is None else tiempo)
     except wompi.ErrorWompi as e:
@@ -757,17 +759,17 @@ def _verificar_wompi(fila, tiempo, transaccion_id):
         return (_fila(con, fila["id"]) or {}).get("estado"), None
 
 
-def _verificar(recarga_id, tiempo=None, transaccion_id=None):
+def _verificar(recarga_id, tiempo=None):
     """(estado, error): error = el ErrorBold/ErrorWompi si la pasarela no
     respondió, o None. `tiempo` None = la espera larga de cada pasarela."""
     with db.conectar() as con:
         fila = _fila(con, recarga_id)
     if fila is None:
         return None, None
-    if not consultable(fila, transaccion_id):
+    if not consultable(fila):
         return fila["estado"], None
     if fila["medio"] == "wompi":
-        return _verificar_wompi(fila, tiempo, transaccion_id)
+        return _verificar_wompi(fila, tiempo)
     tiempo = bold.TIEMPO if tiempo is None else tiempo
     try:
         est = bold.estado_link(fila["link_id"], tiempo=tiempo)
@@ -805,17 +807,42 @@ def _verificar(recarga_id, tiempo=None, transaccion_id=None):
         return (_fila(con, recarga_id) or {}).get("estado"), None
 
 
-def verificar(recarga_id, tiempo=None, transaccion_id=None):
+def verificar(recarga_id, tiempo=None):
     """Pregunta a la pasarela por una recarga `consultable` (pendiente, o
     rechazada/expirada de menos de HORAS_VIGENTE) y aplica lo que diga. Bold:
     PAID acredita (mismo cambio condicional que el webhook, así que correr los
     dos no acredita dos veces), EXPIRED la vence. Wompi: la transacción
-    (`transaccion_id`, el `?id=` de la vuelta, o la guardada) acredita con
-    APPROVED si su referencia, sus centavos y su moneda son los de la recarga.
+    guardada (vino de un evento firmado) acredita con APPROVED si su
+    referencia, sus centavos y su moneda son los de la recarga.
     Con la pasarela caída la deja como estaba. Devuelve el estado (None si la
     recarga no existe). `tiempo`: la espera de la consulta (None = la larga de
     cada pasarela); la página pasa el TIEMPO_INTERACTIVO de la suya."""
-    return _verificar(recarga_id, tiempo=tiempo, transaccion_id=transaccion_id)[0]
+    return _verificar(recarga_id, tiempo=tiempo)[0]
+
+
+def consultar(recarga_id, transaccion_id, tiempo=None):
+    """La vuelta del checkout de Wompi (`?id=`, lo escribe el navegador): pregunta
+    a Wompi por esa transacción solo para MOSTRAR cómo va. Nunca acredita, ni
+    guarda `pasarela_ref`, ni cambia el estado (ruling 2026-10-10: un id que llega
+    del navegador podría ser de otra cuenta de Wompi con nuestra referencia y
+    monto; acreditan el evento firmado, la periódica con el id de un evento, y el
+    admin). Devuelve el status de Wompi (APPROVED, DECLINED, PENDING…) si la
+    transacción es de esta recarga, `no_cuadra` (y avisa al admin una vez), o
+    None si no se pudo preguntar."""
+    with db.conectar() as con:
+        fila = _fila(con, recarga_id)
+    if fila is None or fila["medio"] != "wompi" or not wompi.id_valido(transaccion_id):
+        return None
+    try:
+        tx = wompi.transaccion(transaccion_id, tiempo=wompi.TIEMPO if tiempo is None else tiempo)
+    except wompi.ErrorWompi as e:
+        log.warning("no se pudo consultar la vuelta de la recarga %s en Wompi: %s", recarga_id,
+                    cola.sin_token(str(e)))
+        return None
+    if not _cuadra(fila, tx):
+        _avisar_no_cuadra(fila["id"], fila["cliente"], fila["referencia"], tx, "vuelta")
+        return "no_cuadra"
+    return tx.get("status") or None
 
 
 def verificar_pendientes():

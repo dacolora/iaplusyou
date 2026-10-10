@@ -6,8 +6,15 @@ Host fijo, sin seguir redirecciones, 10 s. Se guarda en `kv` (`cobros:trm`,
 único escritor este módulo) y se reusa 6 h. Si la lectura falla se usa la
 última guardada si se leyó hace ≤ 3 días; si no, `SinTasa` y no se cobra.
 Una fila cuya vigencia terminó hace más de 3 días tampoco sirve (el dataset
-dejó de actualizarse), ni una tasa fuera de un rango sensato (una tasa 0
-regalaría los planes)."""
+dejó de actualizarse), ni una tasa fuera de 2 500–7 000 COP/USD (una tasa 0
+regalaría los planes; una fila mala de 14 800 cobraría 3,7 veces).
+
+Banda (revisión final 2026-10-10, ruling): una tasa leída que se mueve más de
+±8 % frente a la guardada (si se leyó hace ≤ 3 días) no se usa y no se cobra
+(`SinTasa`): puede ser una fila mala dentro del rango o un salto real del peso,
+y eso lo mira una persona. Sin tasa válida se avisa al admin una vez por día.
+Pasados 3 días desde la última guardada ya no se compara (un salto real deja
+de frenar solo); para destrabarlo antes, el admin borra la clave `cobros:trm`."""
 import datetime as dt
 import json
 import logging
@@ -30,7 +37,9 @@ TIEMPO = 10
 CACHE_S = 6 * 3600
 RESPALDO_S = 3 * 86400
 DIAS_VIGENCIA = 3
-MINIMO, MAXIMO = 1000.0, 20000.0   # COP por USD: fuera de esto la fila está mal
+MINIMO, MAXIMO = 2500.0, 7000.0    # COP por USD: fuera de esto la fila está mal (ruling 2026-10-10)
+BANDA = 0.08                        # ±8 % frente a la última guardada (de ≤ 3 días): más que eso no se cobra
+CLAVE_AVISO = "cobros:aviso_trm:{dia}"
 
 
 class SinTasa(Exception):
@@ -123,21 +132,49 @@ def _pedir():
     return valor, str(desde or "")[:30], str(hasta or "")[:30]
 
 
+def _avisar_admin(motivo):
+    """Al admin, una vez por día: no hay una tasa válida y no se está cobrando nada en pesos. Fuera de toda
+    transacción; nunca lanza."""
+    try:
+        from cobros import avisos  # noqa: PLC0415
+        if not avisos._marcar_una_vez(CLAVE_AVISO.format(dia=_hoy().isoformat())):
+            return False
+        return avisos.admin(
+            "trm_sin_tasa",
+            lambda: gettext("No hay una tasa de cambio válida: los cobros en pesos están frenados"),
+            lambda: gettext("La TRM de datos.gov.co no sirve hoy (%(motivo)s). Mientras tanto no se cobra ninguna "
+                            "recarga ni plan en pesos. Revisa la TRM del día; si el salto es real, se destraba "
+                            "solo en 3 días o al borrar la clave «cobros:trm».", motivo=motivo))
+    except Exception:  # noqa: BLE001
+        log.exception("TRM: no se pudo avisar al admin")
+        return False
+
+
+def _sin_tasa(motivo):
+    _avisar_admin(motivo)
+    return SinTasa(gettext("No pudimos leer la tasa de cambio; intenta en unos minutos"))
+
+
 def actual():
     """La TRM (COP por USD) para cobrar ahora. Lanza `SinTasa`."""
     guardada = _leer_guardada()
     ahora = _ahora()
     if guardada and 0 <= ahora - guardada["leida_en"] < CACHE_S and _vigente(guardada["vigencia_hasta"]):
         return guardada["valor"]
+    reciente = bool(guardada and 0 <= ahora - guardada["leida_en"] <= RESPALDO_S)
     try:
         valor, desde, hasta = _pedir()
     except _Falla as e:
-        if (guardada and 0 <= ahora - guardada["leida_en"] <= RESPALDO_S
-                and _vigente(guardada["vigencia_hasta"])):
+        if reciente and _vigente(guardada["vigencia_hasta"]):
             log.warning("TRM: datos.gov.co falló (%s); uso la guardada", e)
             return guardada["valor"]
         log.warning("TRM: datos.gov.co falló (%s) y no hay una guardada de ≤ 3 días", e)
-        raise SinTasa(gettext("No pudimos leer la tasa de cambio; intenta en unos minutos")) from None
+        raise _sin_tasa(str(e)) from None
+    if reciente and abs(valor / guardada["valor"] - 1) > BANDA:
+        # Ni la nueva ni la vieja: una de las dos está mal por más de 8 % y eso lo decide una persona.
+        log.warning("TRM: la tasa leída (%s) se mueve más de ±8 %% frente a la guardada (%s); no se cobra",
+                    valor, guardada["valor"])
+        raise _sin_tasa(f"{valor} frente a {guardada['valor']}")
     try:
         _guardar(valor, desde, hasta)
     except Exception:  # noqa: BLE001 — no poder guardarla no quita una tasa buena recién leída

@@ -47,7 +47,9 @@ def test_un_proyecto_sin_plan_no_tiene_alertas_de_plan(cobra, base_temporal):
 
 
 def test_un_proyecto_que_no_cobra_no_las_tiene_aunque_tenga_plan(base_temporal, planes, pro, falso, avisos):
-    _suscribir(planes, pro)                                   # «Cobrar» nunca se prendió
+    from cobros import libro
+    _suscribir(planes, pro)
+    libro.configurar("acme", usuario="admin", cobrar=False)   # «Cobrar» apagado
     assert _plan_de(CLAVES, _alertas("acme", _despues(T0, dias=29))) == []
 
 

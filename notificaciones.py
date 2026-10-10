@@ -33,7 +33,9 @@ TIPOS = ("propuesta", "ganador", "rechazo_meta", "error_lanzamiento", "tope", "t
          "anulacion_wompi", "wompi_no_cuadra",
          # planes (spec 2026-10-09 §4 y §7.6): al proyecto y a los admins
          "tope_incluido", "plan_renovado", "plan_rechazado", "plan_terminado", "plan_por_renovar", "plan_bolsa",
-         "plan_admin")
+         "plan_admin",
+         # revisión final de planes (2026-10-10): la TRM no sirve y los cobros en pesos se frenan
+         "trm_sin_tasa")
 
 
 def _config():

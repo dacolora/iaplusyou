@@ -6018,8 +6018,8 @@ msgid "El país debe ser un código de 2 letras, como CO."
 msgstr "The country must be a 2-letter code, like CO."
 
 #, python-format
-msgid "El plan anual se renueva el %(fecha)s por %(monto)s."
-msgstr "The yearly plan renews on %(fecha)s for %(monto)s."
+msgid "El plan anual se renueva el %(momento)s: a esa hora cobramos %(monto)s."
+msgstr "Your yearly plan renews on %(momento)s: that's when we charge %(monto)s."
 
 #, python-format
 msgid "El plan de %(cliente)s terminó"
@@ -9758,6 +9758,10 @@ msgstr "Nordic Christmas: gifts, candles, gatherings at home and seasonal food; 
 msgid "La Página %(pagina)s no está entre las que ve el Business de la agencia."
 msgstr "The Page %(pagina)s isn't among the ones the agency's Business can see."
 
+#, python-format
+msgid "La TRM de datos.gov.co no sirve hoy (%(motivo)s). Mientras tanto no se cobra ninguna recarga ni plan en pesos. Revisa la TRM del día; si el salto es real, se destraba solo en 3 días o al borrar la clave «cobros:trm»."
+msgstr "Today's official exchange rate (TRM) from datos.gov.co can't be used (%(motivo)s). Until then no top-up or plan is charged in pesos. Check today's TRM; if the jump is real, it clears on its own in 3 days or when you delete the «cobros:trm» key."
+
 msgid "La URL de Android tiene que ser un enlace https de Google Play (play.google.com)."
 msgstr "The Android URL has to be an https Google Play link (play.google.com)."
 
@@ -11896,6 +11900,9 @@ msgstr "There's no account in this session."
 
 msgid "No hay una investigación detenida para reanudar."
 msgstr "There's no stopped research to resume."
+
+msgid "No hay una tasa de cambio válida: los cobros en pesos están frenados"
+msgstr "No valid exchange rate: charges in pesos are on hold"
 
 msgid "No hay voz en este destino."
 msgstr "There's no voice in this market."
@@ -15322,8 +15329,8 @@ msgid "Se quitaron %(n)s comentario(s) de %(fuente)s."
 msgstr "Removed %(n)s comment(s) from %(fuente)s."
 
 #, python-format
-msgid "Se renueva el %(fecha)s por %(monto)s."
-msgstr "Renews on %(fecha)s for %(monto)s."
+msgid "Se renueva el %(momento)s: a esa hora cobramos %(monto)s."
+msgstr "It renews on %(momento)s: that's when we charge %(monto)s."
 
 #, python-format
 msgid "Se retoma el lanzamiento donde quedó (no se duplican objetos en Meta) y, si termina bien, se activa: empieza a gastar ≈ %(diario)s al día entre todos los países. ¿Seguimos?"
@@ -15430,6 +15437,10 @@ msgstr "Shopify, step by step"
 #, python-format
 msgid "Si %(correo)s es correcto, te llega el enlace en unos minutos (revisa también el spam)."
 msgstr "If %(correo)s is correct, the link will arrive in a few minutes (check spam too)."
+
+#, python-format
+msgid "Si cancelas antes del %(momento)s, no se vuelve a cobrar. Tu plan sigue hasta el %(fecha)s y lo que quede del saldo del plan vence ese día. No se devuelve lo ya pagado."
+msgstr "If you cancel before %(momento)s, it will not be charged again. Your plan stays active until %(fecha)s and whatever is left of the plan balance expires that day. What you already paid is not refunded."
 
 msgid "Si cancelas, no se vuelve a cobrar y el plan termina. No se devuelve lo ya pagado."
 msgstr "If you cancel, it will not be charged again and the plan ends. What you already paid is not refunded."
@@ -15998,6 +16009,9 @@ msgstr "Their day to day (one situation per line)"
 #, python-format
 msgid "Su mejor día fue el %(dia)s: %(ventas)s en ventas atribuidas según el Pixel y %(pedidos)s."
 msgstr "Their best day was %(dia)s: %(ventas)s in sales attributed by the Pixel and %(pedidos)s."
+
+msgid "Su plan ya no se renueva solo: no cobraremos la tarjeta. Para volver a la renovación automática, el proyecto tiene que suscribirse de nuevo."
+msgstr "Its plan no longer renews automatically: we won't charge the card. To go back to automatic renewal, the project has to subscribe again."
 
 msgid "Su propia conexión:"
 msgstr "Its own connection:"
@@ -17252,12 +17266,20 @@ msgstr "Your %(plan)s plan renews soon"
 msgid "Tu plan %(plan)s termina pronto"
 msgstr "Your %(plan)s plan ends soon"
 
+#, python-format
+msgid "Tu plan anual se renueva el %(momento)s: a esa hora cobramos %(monto)s (en pesos a la TRM del día). Si cancelas antes, no se cobra. El saldo del plan se renueva cada mes y lo que no uses en un mes no pasa al siguiente."
+msgstr "Your yearly plan renews on %(momento)s: that's when we charge %(monto)s (in Colombian pesos at the day's official exchange rate). If you cancel before then, nothing is charged. The plan balance renews every month, and what you don't use in a month doesn't carry over to the next."
+
 msgid "Tu plan de TrendTrack no incluye la API (hace falta el plan Pro o superior)."
 msgstr "Your TrendTrack plan doesn't include the API (the Pro plan or higher is required)."
 
 #, python-format
 msgid "Tu plan se renueva el %(fecha)s por %(monto)s (en pesos a la TRM del día). El saldo del plan que no uses antes de esa fecha no se acumula."
 msgstr "Your plan renews on %(fecha)s for %(monto)s (in Colombian pesos at the day's official exchange rate). Plan balance you don't use before that date doesn't roll over."
+
+#, python-format
+msgid "Tu plan se renueva el %(momento)s: a esa hora cobramos %(monto)s (en pesos a la TRM del día). Si cancelas antes, no se cobra. El saldo del plan que no uses antes de esa fecha no se acumula."
+msgstr "Your plan renews on %(momento)s: that's when we charge %(monto)s (in Colombian pesos at the day's official exchange rate). If you cancel before then, nothing is charged. Plan balance you don't use before that date doesn't roll over."
 
 msgid "Tu plan se renueva pronto"
 msgstr "Your plan renews soon"
@@ -18255,6 +18277,9 @@ msgstr "Wompi voided a plan payment, so we stopped charging it automatically. Wr
 #, python-format
 msgid "Wompi anuló una recarga de %(cliente)s"
 msgstr "Wompi voided a top-up for %(cliente)s"
+
+msgid "Wompi aprobó tu pago. Lo sumamos a tu saldo apenas Wompi nos lo confirme; suele tardar unos segundos."
+msgstr "Wompi approved your payment. We'll add it to your balance as soon as Wompi confirms it; it usually takes a few seconds."
 
 msgid "Wompi confirmó el cobro: el pago quedó aprobado y el plan, al día."
 msgstr "Wompi confirmed the charge: the payment is approved and the plan is up to date."

@@ -220,7 +220,7 @@ def _texto(v, largo):
 
 
 def _transaccion(d):
-    return {
+    tx = {
         "id": _texto(d.get("id"), 64),
         "reference": _texto(d.get("reference"), 255),
         "status": (_texto(d.get("status"), 20) or "").upper(),
@@ -230,6 +230,19 @@ def _transaccion(d):
         "status_message": _texto(d.get("status_message"), 300),
         "payment_source_id": _entero(d.get("payment_source_id")),
     }
+    comercio = d.get("merchant") if isinstance(d.get("merchant"), dict) else {}
+    llave = _texto(comercio.get("public_key"), 120)
+    if llave:
+        tx["comercio"] = llave   # la llave pública del comercio dueño de la transacción, si Wompi la trae
+    return tx
+
+
+def de_otro_comercio(tx):
+    """¿La transacción trae el comercio y NO es el nuestro? (revisión final 2026-10-10: un id de transacción de
+    otra cuenta de Wompi nunca acredita). Sin el dato no se puede decir: False (la referencia, el monto y la
+    moneda se comparan igual)."""
+    llave = (tx or {}).get("comercio") if isinstance(tx, dict) else None
+    return bool(llave) and llave != _publica()
 
 
 # ------------------------------------------------------- validaciones ---

@@ -46,7 +46,10 @@ def trm(base_temporal, monkeypatch):
         return r
     monkeypatch.setattr(mod.requests, "get", get)
     monkeypatch.setattr(mod.requests, "post", lambda *a, **k: (_ for _ in ()).throw(AssertionError("sin post")))
-    mod.reloj, mod.llamadas, mod.respuesta = reloj, llamadas, respuesta
+    from cobros import avisos
+    admin = []
+    monkeypatch.setattr(avisos, "admin", lambda tipo, asunto, cuerpo, cliente="": admin.append((tipo, cuerpo())) or 1)
+    mod.reloj, mod.llamadas, mod.respuesta, mod.admin = reloj, llamadas, respuesta, admin
     return mod
 
 
@@ -166,3 +169,48 @@ def test_no_poder_guardar_no_pierde_la_tasa_leida(trm, monkeypatch):
         raise RuntimeError("database is locked")
     monkeypatch.setattr(trm, "_guardar", falla)
     assert trm.actual() == 3218.75
+
+
+
+# --- banda (revisión final 2026-10-10) ------------------------------------------------------
+
+@pytest.mark.parametrize("valor", ["2499.99", "7000.01", "14800"])
+def test_una_tasa_fuera_de_2500_7000_no_sirve_y_avisa_al_admin_una_vez_por_dia(trm, valor):
+    trm.respuesta["r"] = _Respuesta(200, _fila(valor))
+    with pytest.raises(trm.SinTasa):
+        trm.actual()
+    with pytest.raises(trm.SinTasa):
+        trm.actual()
+    assert [a[0] for a in trm.admin] == ["trm_sin_tasa"]          # una vez por día
+    trm.reloj["hoy"] = HOY + dt.timedelta(days=1)
+    with pytest.raises(trm.SinTasa):
+        trm.actual()
+    assert len(trm.admin) == 2
+
+
+def test_un_salto_de_mas_de_8_por_ciento_frena_y_no_usa_ninguna(trm, base_temporal):
+    assert trm.actual() == 3218.75
+    trm.reloj["t"] = T0 + 7 * 3600                                 # pasó la caché
+    trm.respuesta["r"] = _Respuesta(200, _fila("3500.00"))          # +8,7 %
+    with pytest.raises(trm.SinTasa):
+        trm.actual()
+    assert _guardado(base_temporal)["valor"] == 3218.75            # la mala no se guarda
+    assert [a[0] for a in trm.admin] == ["trm_sin_tasa"] and "3500" in trm.admin[0][1]
+    trm.respuesta["r"] = _Respuesta(200, _fila("2950.00"))          # −8,3 %
+    with pytest.raises(trm.SinTasa):
+        trm.actual()
+
+
+def test_dentro_del_8_por_ciento_se_usa(trm):
+    assert trm.actual() == 3218.75
+    trm.reloj["t"] = T0 + 7 * 3600
+    trm.respuesta["r"] = _Respuesta(200, _fila("3470.00"))          # +7,8 %
+    assert trm.actual() == 3470.0 and trm.admin == []
+
+
+def test_con_la_guardada_de_mas_de_tres_dias_no_se_compara(trm):
+    assert trm.actual() == 3218.75
+    trm.reloj["t"] = T0 + 3 * 86400 + 60
+    trm.reloj["hoy"] = HOY + dt.timedelta(days=3)
+    trm.respuesta["r"] = _Respuesta(200, _fila("3600.00", desde="2026-10-12", hasta="2026-10-12"))
+    assert trm.actual() == 3600.0

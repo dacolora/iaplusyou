@@ -728,3 +728,13 @@ def test_el_descuento_del_plan_se_ve_junto_a_la_ganancia_para_que_cuadre_en_anua
     assert html.count("descuento del plan US$ 166,67") == 2
     assert "ganancia del periodo = cobrado − costo − descuento del plan" in html
     assert "− descuento del plan (" in html
+
+
+def test_apagar_cobrar_con_un_plan_que_renueva_apaga_la_renovacion_y_lo_dice(http, pro):
+    _cobrar()
+    _suscribir("acme", pro)
+    c = http.como("admin")
+    c.post("/admin/cobros/acme/cuenta", data={"cobrar": "0"}, headers=MISMO)
+    (s,) = _filas("suscripcion")
+    assert s.renovar is False and s.proximo_cobro is None and s.estado == "activa"
+    assert any("Su plan ya no se renueva solo" in m for m in _flashes(c))

@@ -79,8 +79,8 @@
   <progress class="plan-barra" value="{{ v.bolsa.usado_pct }}" max="100">{{ v.bolsa.usado_pct }} %</progress>
   <p class="plan-medidor-detalle">{{ _('Usaste %(gastado)s de %(credito)s (%(pct)s %%).', gastado=v.bolsa.gastado, credito=v.bolsa.credito, pct=v.bolsa.usado_pct) }}
   {% if v.bolsa.vence_el %}{{ _('Lo que no uses vence el %(fecha)s y no se acumula.', fecha=v.bolsa.vence_el) }}{% endif %}</p>
-  {% if v.situacion == 'activa' and v.renueva_el and v.monto_renovacion %}
-  <p class="plan-medidor-detalle">{% if v.ciclo == 'anual' %}{{ _('El plan anual se renueva el %(fecha)s por %(monto)s.', fecha=v.renueva_el, monto=v.monto_renovacion) }}{% else %}{{ _('Se renueva el %(fecha)s por %(monto)s.', fecha=v.renueva_el, monto=v.monto_renovacion) }}{% endif %}</p>
+  {% if v.situacion == 'activa' and v.cobro_el and v.monto_renovacion %}
+  <p class="plan-medidor-detalle">{% if v.ciclo == 'anual' %}{{ _('El plan anual se renueva el %(momento)s: a esa hora cobramos %(monto)s.', momento=v.cobro_el, monto=v.monto_renovacion) }}{% else %}{{ _('Se renueva el %(momento)s: a esa hora cobramos %(monto)s.', momento=v.cobro_el, monto=v.monto_renovacion) }}{% endif %}</p>
   {% endif %}
 </section>
 
@@ -134,7 +134,7 @@
 {% if v.puede_cancelar %}
 <details class="plan-cancelar">
   <summary>{{ _('Cancelar plan') }}</summary>
-  <p>{% if v.situacion != 'morosa' and (v.termina_el or v.renueva_el) %}{{ _('Si cancelas, no se vuelve a cobrar. Tu plan sigue hasta el %(fecha)s y lo que quede del saldo del plan vence ese día. No se devuelve lo ya pagado.', fecha=(v.renueva_el or v.termina_el)) }}{% else %}{{ _('Si cancelas, no se vuelve a cobrar y el plan termina. No se devuelve lo ya pagado.') }}{% endif %}</p>
+  <p>{% if v.situacion == 'activa' and v.cobro_el and v.renueva_el %}{{ _('Si cancelas antes del %(momento)s, no se vuelve a cobrar. Tu plan sigue hasta el %(fecha)s y lo que quede del saldo del plan vence ese día. No se devuelve lo ya pagado.', momento=v.cobro_el, fecha=v.renueva_el) }}{% elif v.situacion != 'morosa' and (v.termina_el or v.renueva_el) %}{{ _('Si cancelas, no se vuelve a cobrar. Tu plan sigue hasta el %(fecha)s y lo que quede del saldo del plan vence ese día. No se devuelve lo ya pagado.', fecha=(v.renueva_el or v.termina_el)) }}{% else %}{{ _('Si cancelas, no se vuelve a cobrar y el plan termina. No se devuelve lo ya pagado.') }}{% endif %}</p>
   <form method="post" action="{{ url_for('cobros.plan_cancelar', cliente=cliente) }}">
     <input type="hidden" name="confirmo" value="1">
     <button type="submit" class="btn-sm plan-cancelar-si">{{ _('Sí, cancelar el plan') }}</button>

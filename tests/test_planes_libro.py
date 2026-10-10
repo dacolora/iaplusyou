@@ -305,7 +305,7 @@ def test_incluido_dentro_del_tope_no_descuenta(base_temporal, libro, planes, sin
     gid = gastos.registrar("acme", "guion", 0.10, "guion:1:t1")
     (i,) = _movs(base_temporal, tipo="incluido")
     assert i.milesimas == 0 and i.gasto_id == gid and i.concepto == "guion"
-    assert i.extra == {"precio": 125, "costo": 0.1, "margen": 1.25}
+    assert i.extra == {"precio": 125, "costo": 0.1, "margen": 1.25, "periodo_id": 1}
     assert not _movs(base_temporal, tipo="cobro")
     assert libro.saldo("acme") == 10_000
     assert planes.incluido_usado("acme", planes.periodo_abierto(None, "acme")) == pytest.approx(0.1)
@@ -346,7 +346,7 @@ def test_correccion_de_un_incluido_sigue_incluida(base_temporal, libro, sin_avis
     gastos.registrar("acme", "guion", 0.10, "guion:1:t1")
     gastos.registrar("acme", "guion", 0.30, "guion:1:t1")            # corrección del monto
     (i,) = _movs(base_temporal, tipo="incluido")
-    assert i.extra == {"precio": 375, "costo": 0.3, "margen": 1.25}
+    assert i.extra == {"precio": 375, "costo": 0.3, "margen": 1.25, "periodo_id": 1}
     assert not _movs(base_temporal, tipo="cobro")
     assert libro.saldo("acme") == 10_000
 
@@ -409,8 +409,10 @@ def test_exigir_tipo_incluido_dentro_del_tope_no_pide_saldo(base_temporal, libro
     pid = _periodo(base_temporal, tope=0.20)                         # sin bolsa acreditada: saldo 0
     _tarea_viva(base_temporal, "j1")
     assert libro.exigir("acme", 0.13, job_id="j1", tipo="guion") == 0
-    with base_temporal.conectar() as con:
-        assert con.execute(sa.select(base_temporal.reserva_saldo)).first() is None
+    with base_temporal.conectar() as con:                            # una reserva de 0 que recuerda «incluido»
+        r = con.execute(sa.select(base_temporal.reserva_saldo)).one()
+    assert (r.milesimas, r.incluido, r.margen, r.periodo_id) == (0, True, 1.25, pid)
+    assert libro.reservado("acme") == 0
     with pytest.raises(libro.SaldoInsuficiente):
         libro.exigir("acme", 0.13, job_id="j1")                      # sin tipo: como siempre
     with pytest.raises(libro.SaldoInsuficiente):
@@ -598,3 +600,74 @@ def test_exigir_con_plan_ilegible_cobra_como_sin_plan(base_temporal, libro, monk
     monkeypatch.undo()
     monkeypatch.setattr(planes, "incluido_usado", rota)
     assert libro.exigir("acme", 0.13, tipo="guion") == 163               # periodo leído (×1,25), tope ilegible: cobra
+
+
+# -------------------------------------- el precio visto al encolar (revisión final 2026-10-10) ---
+
+def _terminar_periodo(db, pid):
+    """El periodo llega a su fin (sin cerrarlo todavía): ya no está abierto."""
+    with db.conectar() as con:
+        con.execute(db.periodo_plan.update().where(db.periodo_plan.c.id == pid)
+                    .values(fin=_iso(datetime.now() - timedelta(seconds=1))))
+
+
+def test_un_video_reservado_antes_del_fin_se_cobra_al_margen_visto_y_de_su_bolsa(base_temporal, libro, sin_avisos):
+    """Aprobado a ×1,25 a las 09:50, llega después del fin: se cobra ×1,25 (no ×2) y cuenta en la bolsa que lo
+    pagó; al vencer, el saldo propio queda entero."""
+    import gastos
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    pid = _abrir(base_temporal, libro)                               # bolsa 10 000
+    _acreditar(base_temporal, libro, 5_000)                          # 5 000 propios
+    _tarea_viva(base_temporal, "lote")
+    assert libro.exigir("acme", 3.2, job_id="lote") == 4_000         # 3,2 × 1,25
+    _terminar_periodo(base_temporal, pid)
+    assert libro.cuenta("acme")["margen"] == 2.0                     # a la carta desde el fin
+    with libro.en_trabajo(1, "lote"):
+        gastos.registrar("acme", "video", 3.2, "video:1:t1")
+    (c,) = _movs(base_temporal, tipo="cobro")
+    assert c.milesimas == -4_000 and c.extra == {"margen": 1.25, "periodo_id": pid}
+    with base_temporal.conectar() as con:
+        assert libro.vencer_periodo(con, pid) == 6_000               # 10 000 − 4 000 del lote
+    assert libro.saldo("acme") == 5_000                              # lo propio no se tocó
+    gastos.registrar("acme", "video", 1.0, "video:2:t2")             # sin reserva (sincrónico): a la carta
+    assert _movs(base_temporal, tipo="cobro")[-1].milesimas == -2_000
+
+
+def test_un_incluido_reservado_que_termina_pasado_el_fin_sigue_incluido(base_temporal, libro, sin_avisos):
+    import gastos
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    pid = _abrir(base_temporal, libro)
+    _tarea_viva(base_temporal, "guion1")
+    assert libro.exigir("acme", 0.13, job_id="guion1", tipo="guion") == 0
+    _terminar_periodo(base_temporal, pid)
+    with libro.en_trabajo(1, "guion1"):
+        gastos.registrar("acme", "guion", 0.13, "guion:1:t1")
+    (i,) = _movs(base_temporal, tipo="incluido")
+    assert i.milesimas == 0 and i.extra["periodo_id"] == pid and i.extra["margen"] == 1.25
+    assert not _movs(base_temporal, tipo="cobro")
+
+
+def test_el_cobro_de_un_periodo_viejo_no_cuenta_en_la_bolsa_del_nuevo(base_temporal, libro, sin_avisos):
+    import gastos
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    viejo = _abrir(base_temporal, libro)
+    _tarea_viva(base_temporal, "lote")
+    libro.exigir("acme", 1.6, job_id="lote")                         # 2 000 a ×1,25
+    _terminar_periodo(base_temporal, viejo)
+    nuevo = _abrir(base_temporal, libro, inicio=_iso(datetime.now() - timedelta(seconds=1)), suscripcion_id=2)
+    with libro.en_trabajo(1, "lote"):
+        gastos.registrar("acme", "video", 1.6, "video:1:t1")
+    assert libro.bolsa_plan("acme")["periodo_id"] == nuevo
+    assert libro.bolsa_plan("acme")["gastado"] == 0                  # es del viejo
+    with base_temporal.conectar() as con:
+        from cobros import planes
+        assert libro._bolsa(con, "acme", planes.periodo(con, viejo))["gastado"] == 2_000
+
+
+def test_una_reserva_incluida_no_hace_pasar_otra_cosa_del_mismo_trabajo(base_temporal, libro):
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    _periodo(base_temporal, tope=0.20)                               # sin bolsa: saldo 0
+    _tarea_viva(base_temporal, "j1")
+    assert libro.exigir("acme", 0.13, job_id="j1", tipo="guion") == 0
+    with pytest.raises(libro.SaldoInsuficiente):
+        libro.exigir("acme", 0.13, job_id="j1")                      # la reserva de 0 no es «ya reservado»

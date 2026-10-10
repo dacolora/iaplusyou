@@ -128,8 +128,9 @@ def periodo(con, periodo_id):
 def _incluido_usado(con, cliente, periodo_):
     m = db.movimiento_saldo
     total = con.execute(sa.select(sa.func.coalesce(sa.func.sum(sa.func.json_extract(m.c.extra, "$.costo")), 0))
-                        .where(m.c.cliente == cliente, m.c.tipo == "incluido",
-                               m.c.creado_en >= periodo_["inicio"], m.c.creado_en < periodo_["fin"])).scalar()
+                        .where(m.c.tipo == "incluido",
+                               _libro().del_periodo(m, cliente, periodo_.get("id"), periodo_["inicio"],
+                                                    periodo_["fin"]))).scalar()
     return float(total or 0)
 
 
@@ -177,6 +178,10 @@ MOTIVO_NO_SALIO = "no_salio"
 # último intento (un reintento o una respuesta lenta de Wompi pueden tardar más que el «en vuelo» de 2 min).
 ESPERA_NO_COBRADO = timedelta(minutes=30)
 AVISO_ANTES = timedelta(days=3)
+# Revisión final 2026-10-10 (ruling): un periodo no se cierra (no vence su bolsa) mientras haya reservas vivas hechas
+# durante él, hasta este tope después de su fin: un lote aprobado antes del fin se cobra de esa bolsa, no de las
+# recargas propias. Pasado el tope se cierra igual.
+ESPERA_CIERRE = timedelta(hours=6)
 FRACCION_AVISO_BOLSA = 0.8
 CLAVE_ACEPTACION = "planes:aceptacion:{suscripcion}"
 CLAVE_AVISO_RENOVAR = "planes:aviso_renovar:{suscripcion}:{hasta}"
@@ -606,8 +611,10 @@ def aplicar_transaccion(transaccion, ahora=None):
         if pago is None:
             log.warning("pago de plan con referencia desconocida")
             return "desconocida"
+        from cobros import wompi  # noqa: PLC0415
         if (tx.get("amount_in_cents") != pago["monto_cop_centavos"] or tx.get("currency") != "COP"
-                or (pago["transaccion_id"] and tx_id and tx_id != pago["transaccion_id"])):
+                or (pago["transaccion_id"] and tx_id and tx_id != pago["transaccion_id"])
+                or wompi.de_otro_comercio(tx)):
             avisos_.append(("no_cuadra", pago["cliente"], {"referencia": referencia}))
             resultado = "no_cuadra"
         else:
@@ -678,9 +685,11 @@ def _aplicar_estado(con, pago, estado_wompi, tx_id, motivo, ahora):
 
 # ------------------------------------------------------ cobrar un periodo ---
 
-def _decidir(con, sus, ahora, tasa, forzar):
+def _decidir(con, sus, ahora, tasa, forzar, solo_si_cobra=False):
     """Con el candado: qué hacer con la renovación de `sus`. Devuelve
-    (accion, pago) con accion en cobrar | reintentar | consultar, o (estado, None)."""
+    (accion, pago) con accion en cobrar | reintentar | consultar, o (estado, None).
+    `solo_si_cobra` (la periódica): con «Cobrar» apagado no se envía ningún
+    cobro (ni uno nuevo, ni el reenvío de un pendiente); consultar sí."""
     if sus is None or sus["estado"] == "terminada":
         return "terminada", None
     if not sus["fuente_pago_id"]:
@@ -688,11 +697,17 @@ def _decidir(con, sus, ahora, tasa, forzar):
     clave = _clave_renovacion(sus)
     pagos = _pagos_de_renovacion(con, sus, clave)
     if any(p["estado"] == "aprobado" for p in pagos):
+        # Hoy no se alcanza por la periódica: aprobar un pago corre `cubierto_hasta` (`_aprobar`), y con él la
+        # clave de la renovación, en la misma transacción. Queda como guarda si algún día un pago aprobado no
+        # corriera lo pagado (un `_aprobar` que falla a medias deshace todo, así que tampoco por ahí).
         return "ya_pagado", None
     pendiente = next((p for p in pagos if p["estado"] == "pendiente"), None)
+    no_cobra = solo_si_cobra and not _libro()._cobra(con, sus["cliente"])
     if pendiente is not None:
         if pendiente["transaccion_id"]:
             return "consultar", pendiente      # consultar no cobra: vale también tras cancelar
+        if no_cobra:
+            return "no_cobra", None
         pp = db.pago_plan
         no_salio = pendiente["motivo"] == MOTIVO_NO_SALIO
         real = db.ahora()   # el reloj de verdad: el «en vuelo» es de la red, no de la vuelta de la periódica
@@ -726,6 +741,8 @@ def _decidir(con, sus, ahora, tasa, forzar):
         return "no_toca", None
     if sus["intentos_fallidos"] >= INTENTOS_MAXIMOS:
         return "no_toca", None
+    if no_cobra:
+        return "no_cobra", None   # «Cobrar» apagado: la periódica no cobra (ruling 2026-10-10)
     usd = _precio_aceptado(sus)
     if not usd:
         return "sin_precio", None
@@ -835,18 +852,19 @@ def _necesita_tasa(sid, ahora, forzar):
     return forzar or bool(sus["renovar"] and sus["proximo_cobro"] and sus["proximo_cobro"] <= ahora)
 
 
-def cobrar_periodo(suscripcion_id, ahora=None, forzar=False, acceptance_token=None):
+def cobrar_periodo(suscripcion_id, ahora=None, forzar=False, acceptance_token=None, solo_si_cobra=False):
     """Cobra la renovación que toca de una suscripción (spec §5.4), o resuelve
     el pago pendiente de esa renovación (consulta su transacción o reintenta
     con la MISMA referencia). Nunca dos pagos aprobados/pendientes para una
     renovación. `forzar`: sin esperar `proximo_cobro` (el alta, el cambio de
-    tarjeta en morosa). La TRM se lee antes del candado. Devuelve el estado."""
+    tarjeta en morosa). `solo_si_cobra` (la periódica): con «Cobrar» apagado no
+    cobra, releído con el candado. La TRM se lee antes del candado. Devuelve el estado."""
     ahora = ahora or db.ahora()
     tasa = _tasa_o_none() if _necesita_tasa(suscripcion_id, ahora, forzar) else None
     with db.conectar() as con:
         _libro()._candado(con)
         sus = _sus_por_id(con, suscripcion_id)
-        accion, pago = _decidir(con, sus, ahora, tasa, forzar)
+        accion, pago = _decidir(con, sus, ahora, tasa, forzar, solo_si_cobra=solo_si_cobra)
     if pago is None:
         return accion
     return _enviar(accion, pago, sus, ahora, acceptance_token=acceptance_token)
@@ -1018,6 +1036,22 @@ def terminar_ya(cliente, usuario, nota="", ahora=None):
         _actualizar_sus(con, sus["id"], ahora, estado="terminada", renovar=False, proximo_cobro=None)
     log.info("plan de %s terminado ya por %s: %s", cliente, usuario, str(nota or "")[:300])
     _mandar([("terminado", cliente, {"motivo": "admin", "nota": str(nota or "")[:300]})])
+    return True
+
+
+def apagar_renovacion(cliente, usuario, ahora=None):
+    """El admin apagó «Cobrar» del proyecto (ruling 2026-10-10): una suscripción
+    viva que se renovaba con tarjeta queda sin renovación automática
+    (`renovar = False`, sin `proximo_cobro`), sin tocar su estado ni lo pagado.
+    Devuelve True si había una renovación que apagar."""
+    ahora = ahora or db.ahora()
+    with db.conectar() as con:
+        _libro()._candado(con)
+        sus = _sus_viva(con, cliente)
+        if sus is None or not sus["renovar"]:
+            return False
+        _actualizar_sus(con, sus["id"], ahora, renovar=False, proximo_cobro=None)
+    log.info("renovación del plan de %s apagada con «Cobrar» por %s", cliente, usuario)
     return True
 
 
@@ -1213,11 +1247,14 @@ def renovar_todo(ahora=None):
     periodos vencidos (vencimiento de lo que sobró), (2) abre los periodos ya
     pagados (meses de un anual, o lo cobrado por adelantado), termina las que
     no se renuevan y ya no tienen nada, y cobra o resuelve las renovaciones que
-    tocan (con gracia), (3) avisos: 3 días antes y bolsa al 80 %. Una caída de
+    tocan (con gracia), (3) avisos: 3 días antes y bolsa al 80 %. Un periodo
+    con reservas vivas hechas durante él espera hasta `ESPERA_CIERRE` después
+    de su fin antes de cerrarse. Una caída de
     Wompi (o un 429) deja los demás cobros para la próxima vuelta. Devuelve un
     resumen con conteos."""
     ahora = ahora or db.ahora()
-    resumen = {"cerrados": 0, "abiertos": 0, "terminadas": 0, "cobros": Counter(), "avisos": 0, "fallos": 0}
+    resumen = {"cerrados": 0, "esperando": 0, "abiertos": 0, "terminadas": 0, "cobros": Counter(), "avisos": 0,
+               "fallos": 0}
     p, s = db.periodo_plan, db.suscripcion
     with db.conectar() as con:
         vencidos = [int(r[0]) for r in con.execute(sa.select(p.c.id).where(p.c.cerrado == sa.false(),
@@ -1228,6 +1265,11 @@ def renovar_todo(ahora=None):
                 _libro()._candado(con)
                 actual = periodo(con, pid)
                 if actual is None or actual["cerrado"]:
+                    continue
+                if (ahora < _mas(actual["fin"], ESPERA_CIERRE)
+                        and _libro().reservas_vivas_del_periodo(con, actual["cliente"], actual["inicio"],
+                                                                actual["fin"])):
+                    resumen["esperando"] += 1   # su lote todavía se cobra de esta bolsa
                     continue
                 resumen["cerrados"] += _cerrar_periodo(con, pid)
         except Exception:  # noqa: BLE001 — un periodo que falla no frena el cierre de los demás
@@ -1259,7 +1301,9 @@ def _renovar_una(sid, ahora, resumen, estado_vuelta):
         sus = _sus_por_id(con, sid)
         if sus is None or sus["estado"] == "terminada":
             return
-        if _abrir_cubierto(con, sus, ahora):
+        # Con «Cobrar» apagado no se abren meses de un anual (su bolsa vencería sin poder usarse) ni se cobra
+        # la renovación (ruling 2026-10-10); el cobro lo vuelve a mirar `_decidir` con el candado.
+        if _libro()._cobra(con, sus["cliente"]) and _abrir_cubierto(con, sus, ahora):
             resumen["abiertos"] += 1
         if _terminar_si_toca(con, sus, ahora):
             resumen["terminadas"] += 1
@@ -1267,7 +1311,7 @@ def _renovar_una(sid, ahora, resumen, estado_vuelta):
     _mandar(avisos_)
     if estado_vuelta["caida"] or not sus["fuente_pago_id"] or sus["estado"] not in ("activa", "morosa", "cancelada"):
         return
-    estado = cobrar_periodo(sid, ahora=ahora)
+    estado = cobrar_periodo(sid, ahora=ahora, solo_si_cobra=True)
     resumen["cobros"][estado] += 1
     estado_vuelta["caida"] = estado == "caida"
 
@@ -1282,10 +1326,12 @@ def _avisar_por_renovar(ahora):
             s.c.cubierto_hasta <= limite))]
     n = 0
     for sus in filas:
+        renueva = bool(sus["renovar"] and sus["fuente_pago_id"])
         if _avisos().plan_por_renovar(sus["cliente"], CLAVE_AVISO_RENOVAR.format(suscripcion=sus["id"],
                                                                                 hasta=sus["cubierto_hasta"]),
                                       fecha=sus["cubierto_hasta"], usd=_precio_aceptado(sus) or 0,
-                                      renueva=bool(sus["renovar"] and sus["fuente_pago_id"])):
+                                      renueva=renueva, cobro=sus["proximo_cobro"] if renueva else None,
+                                      anual=sus["ciclo"] == "anual"):
             n += 1
     return n
 
@@ -1394,6 +1440,7 @@ def estado_cliente(cliente, ahora=None):
         "suscripcion": {k: v for k, v in sus.items() if k != "fuente_pago_id"},
         "plan": plan_, "periodo": per, "bolsa": bolsa, "incluido_pct": incluido_pct, "ahorro_milesimas": ahorro,
         "renueva": renueva, "renueva_el": sus["cubierto_hasta"] if renueva else None,
+        "cobro_el": sus["proximo_cobro"] if renueva and sus["estado"] == "activa" else None,
         "termina_el": None if renueva else sus["cubierto_hasta"],
         "monto_renovacion_usd": _precio_aceptado(sus),
         "morosa": sus["estado"] == "morosa", "reintento_el": sus["proximo_cobro"] if sus["estado"] == "morosa" else None,

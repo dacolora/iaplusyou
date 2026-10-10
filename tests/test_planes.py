@@ -97,6 +97,11 @@ def _tipos(enviados):
 
 @pytest.fixture()
 def pro(planes):
+    # Los proyectos de estas pruebas cobran: con «Cobrar» apagado la periódica no renueva (revisión final
+    # 2026-10-10, test_con_cobrar_apagado_la_periodica_no_cobra_ni_abre_meses).
+    from cobros import libro
+    for cliente in ("acme", "otro"):
+        libro.configurar(cliente, usuario="admin", cobrar=True)
     return planes.crear_plan("Pro", 1000, 1.25, 25, precio_anual_usd=10000, usuario="admin")
 
 
@@ -571,6 +576,8 @@ def test_aviso_tres_dias_antes_una_sola_vez(base_temporal, planes, pro, falso, a
     planes.renovar_todo(ahora="2026-11-07T11:00:00")
     aviso = [e for e in avisos if e[0] == "plan_por_renovar"]
     assert len(aviso) == 1 and "renueva" in aviso[0][2] and "1.000" in aviso[0][3]
+    assert "9 de noviembre de 2026 a las 09:00" in aviso[0][3]      # el momento del cobro, no el fin (10:00)
+    assert "antes de esa fecha no se acumula" in aviso[0][3]
 
 
 def test_aviso_de_la_bolsa_al_80_una_vez_por_periodo(base_temporal, planes, pro, falso, avisos):
@@ -949,3 +956,103 @@ def test_un_periodo_a_mano_que_abre_despues_acredita_lo_pagado(base_temporal, pl
     assert len(periodos) == 4
     assert [p.credito_milesimas for p in periodos] == [1_000_000] * 4
     assert [p.usd for p in _filas(base_temporal, "pago_plan")] == [1000, 10000]
+
+
+# ------------------------------------------------ revisión final 2026-10-10 ---
+
+def _tarea_viva(db, job_id, cliente="acme"):
+    with db.conectar() as con:
+        con.execute(sa.insert(db.tarea).values(
+            cliente=cliente, job_id=job_id, tipo="flowplus_video", payload={}, estado="en_curso", intentos=0,
+            max_intentos=1, prioridad=5, ejecutar_desde=db.ahora(), creada_en=db.ahora(), duracion_estimada=60.0,
+            etapas=[]))
+
+
+def test_un_periodo_con_un_lote_vivo_no_cierra_hasta_seis_horas_despues(base_temporal, planes, pro, falso, avisos):
+    """Un lote reservado durante el periodo todavía se cobra de esa bolsa: el periodo espera para vencer (hasta
+    6 h después de su fin); después cierra igual."""
+    _suscribir(planes, pro)
+    (per,) = _filas(base_temporal, "periodo_plan")
+    _tarea_viva(base_temporal, "lote")
+    with base_temporal.conectar() as con:                    # reservado dentro del periodo
+        con.execute(base_temporal.reserva_saldo.insert().values(
+            cliente="acme", job_id="lote", milesimas=40_000, creada_en=_despues(T0, dias=29, horas=23),
+            margen=1.25, incluido=False, periodo_id=per.id))
+    fin = per.fin
+    r = planes.renovar_todo(ahora=_despues(fin, minutos=1))
+    assert r["cerrados"] == 0 and r["esperando"] == 1
+    assert _filas(base_temporal, "movimiento_saldo", tipo="vencimiento") == []
+    r = planes.renovar_todo(ahora=_despues(fin, horas=6))  # el tope: cierra igual
+    assert r["cerrados"] == 1
+    assert len(_filas(base_temporal, "movimiento_saldo", tipo="vencimiento")) == 1
+
+
+def test_un_periodo_cierra_si_el_lote_ya_termino_o_se_reservo_despues(base_temporal, planes, pro, falso, avisos):
+    _suscribir(planes, pro)
+    (per,) = _filas(base_temporal, "periodo_plan")
+    _tarea_viva(base_temporal, "despues")
+    with base_temporal.conectar() as con:                    # reservado después del fin: no es de esta bolsa
+        con.execute(base_temporal.reserva_saldo.insert().values(
+            cliente="acme", job_id="despues", milesimas=40_000, creada_en=_despues(per.fin, minutos=1), margen=2.0))
+        con.execute(base_temporal.reserva_saldo.insert().values(   # durante, pero su tarea ya no vive
+            cliente="acme", job_id="muerta", milesimas=40_000, creada_en=T0, margen=1.25, periodo_id=per.id))
+    assert planes.renovar_todo(ahora=_despues(per.fin, minutos=5))["cerrados"] == 1
+
+
+def test_con_cobrar_apagado_la_periodica_no_cobra_ni_abre_meses(base_temporal, planes, pro, falso, avisos):
+    from cobros import libro
+    _suscribir(planes, pro)                                   # mensual
+    _suscribir(planes, pro, ciclo="anual", cliente="otro")
+    libro.configurar("acme", usuario="admin", cobrar=False)
+    libro.configurar("otro", usuario="admin", cobrar=False)
+    fin = "2026-11-09T10:00:00"
+    r = planes.renovar_todo(ahora=_antes(fin, 30))
+    assert len(falso.posts) == 2                              # solo las dos altas
+    assert r["cobros"].get("no_cobra") == 1                   # la mensual (la anual todavía no toca)
+    planes.renovar_todo(ahora=_despues(fin, minutos=1))
+    assert len(_filas(base_temporal, "periodo_plan", cliente="otro")) == 1   # el mes 2 del anual no abre
+    libro.configurar("acme", usuario="admin", cobrar=True)    # se vuelve a prender: la periódica cobra
+    libro.configurar("otro", usuario="admin", cobrar=True)
+    planes.renovar_todo(ahora=_despues(fin, minutos=31))
+    assert len(falso.posts) == 3
+    assert len(_filas(base_temporal, "periodo_plan", cliente="otro")) == 2
+
+
+def test_apagar_renovacion_deja_lo_pagado_y_no_cobra_mas(base_temporal, planes, pro, falso, avisos):
+    _suscribir(planes, pro)
+    assert planes.apagar_renovacion("acme", "admin") is True
+    s = _sus(base_temporal)
+    assert (s.estado, s.renovar, s.proximo_cobro, s.cubierto_hasta) == ("activa", False, None, "2026-11-09T10:00:00")
+    assert planes.apagar_renovacion("acme", "admin") is False      # ya estaba apagada
+    assert planes.apagar_renovacion("otro", "admin") is False      # sin plan
+
+
+def test_un_cobro_que_cruza_la_medianoche_se_anuncia_el_dia_anterior(base_temporal, planes, pro, falso, avisos):
+    """Alta a las 00:30: lo pagado vence el 15 a las 00:30 y la renovación se cobra el 14 a las 23:30. La pantalla
+    y el aviso de 3 días dicen el 14 a las 23:30, no «el 15» (revisión final 2026-10-10)."""
+    from cobros import vista
+    _suscribir(planes, pro, ahora="2026-10-15T00:30:00")
+    e = planes.estado_cliente("acme", ahora="2026-10-20T10:00:00")
+    assert e["cobro_el"] == "2026-11-14T23:30:00" and e["renueva_el"] == "2026-11-15T00:30:00"
+    assert vista.fecha_hora_larga(e["cobro_el"]) == "14 de noviembre de 2026 a las 23:30"
+    planes.renovar_todo(ahora="2026-11-12T10:00:00")
+    (aviso,) = [e for e in avisos if e[0] == "plan_por_renovar"]
+    assert "14 de noviembre de 2026 a las 23:30" in aviso[3]
+
+
+def test_el_aviso_de_un_anual_no_dice_que_lo_no_usado_antes_de_la_fecha_se_pierde(base_temporal, planes, pro, falso,
+                                                                                  avisos):
+    _suscribir(planes, pro, ciclo="anual")
+    planes.renovar_todo(ahora="2027-10-06T11:00:00")
+    (aviso,) = [e for e in avisos if e[0] == "plan_por_renovar"]
+    assert "anual" in aviso[3] and "antes de esa fecha" not in aviso[3]
+    assert "lo que no uses en un mes no pasa al siguiente" in aviso[3]
+
+
+def test_un_pago_de_plan_de_otro_comercio_no_cuadra(base_temporal, planes, pro, falso, avisos):
+    falso.defecto = "PENDING"
+    _suscribir(planes, pro)
+    (pago,) = _filas(base_temporal, "pago_plan")
+    tx = {**falso.txs[pago.transaccion_id], "status": "APPROVED", "comercio": "pub_test_OTRO"}  # llave-de-prueba
+    assert planes.aplicar_transaccion(tx) == "no_cuadra"
+    assert _filas(base_temporal, "pago_plan")[0].estado == "pendiente" and _filas(base_temporal, "periodo_plan") == []

@@ -1,7 +1,8 @@
 {# Vuelta del checkout de Bold o de Wompi (cobros, spec 2026-10-08 §9.4; planes
    2026-10-09 §5.1). Nunca acredita por la URL: muestra el estado que dio el
    servidor de la pasarela (con Wompi, la transacción del `?id=` consultada en
-   Wompi; tx_id la sigue pasando al sondeo). static/cobros.js (lo carga
+   Wompi solo para mostrarla: la acredita el evento firmado, ruling 2026-10-10;
+   tx_id la sigue pasando al sondeo). static/cobros.js (lo carga
    base.html) sondea data-estado-url cada 3 s hasta 60 s y cambia el texto con
    lo que responde la ruta (ya traducido); los textos de «tarde» y los enlaces
    viven aquí ocultos. Sin JS queda «Verificar» y «Volver al saldo». #}

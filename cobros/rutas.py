@@ -79,40 +79,68 @@ def _id_vuelta():
     return valor if wompi.id_valido(valor) else None
 
 
+_VISTO = {}   # (recarga_id, id de la vuelta) -> lo último que dijo Wompi de esa transacción (solo para mostrar)
+
+
 def _verificar_si_toca(recarga, transaccion_id=None):
-    """Pregunta a la pasarela si toca y hay cupo; si no, devuelve la recarga tal cual."""
+    """Pregunta a la pasarela si toca y hay cupo. Devuelve (recarga, visto).
+
+    Con la transacción guardada (vino de un evento firmado de Wompi) o con Bold,
+    `recargas.verificar` aplica lo que diga. El `?id=` de la vuelta de Wompi
+    (lo escribe el navegador) solo se CONSULTA para mostrar cómo va
+    (`recargas.consultar`, ruling 2026-10-10): `visto` es el status de Wompi de
+    esa transacción si es de esta recarga, o None. Nunca acredita."""
     rid = recarga["id"]
+    del_navegador = (recarga.get("medio") == "wompi" and bool(transaccion_id)
+                     and transaccion_id != recarga.get("pasarela_ref"))
+    clave = (rid, transaccion_id)
+    visto = _VISTO.get(clave) if del_navegador else None
     if not recargas.consultable(recarga, transaccion_id):   # pendiente, o rechazada/vencida de menos de 26 h
-        return recarga
+        return recarga, visto
     with _CANDADO:
         if rid in _EN_CURSO:
-            return recarga
+            return recarga, visto
     if not _toca_verificar(rid):
-        return recarga
+        return recarga, visto
     if not _SEMAFORO.acquire(blocking=False):
-        return recarga
+        return recarga, visto
     try:
         with _CANDADO:
             if rid in _EN_CURSO:
-                return recarga
+                return recarga, visto
             _EN_CURSO.add(rid)
         try:
             tiempo = wompi.TIEMPO_INTERACTIVO if recarga.get("medio") == "wompi" else bold.TIEMPO_INTERACTIVO
-            recargas.verificar(rid, tiempo=tiempo, transaccion_id=transaccion_id)
+            if del_navegador:
+                visto = recargas.consultar(rid, transaccion_id, tiempo=tiempo) or visto
+                with _CANDADO:
+                    if len(_VISTO) > 1000:
+                        _VISTO.clear()
+                    _VISTO[clave] = visto
+            else:
+                recargas.verificar(rid, tiempo=tiempo)
         finally:
             with _CANDADO:
                 _EN_CURSO.discard(rid)
     finally:
         _SEMAFORO.release()
-    return recargas.obtener(recarga["cliente"], rid)
+    return recargas.obtener(recarga["cliente"], rid), visto
 
 
-def texto_estado(recarga, tx_id=None):
+def texto_estado(recarga, tx_id=None, visto=None):
     """La frase de la página de vuelta (spec §9.4), en el idioma de quien mira.
     Una de Wompi pendiente sin transacción que consultar (volvió sin `?id=`,
-    o cerró el checkout) no se queda en «Verificando…»: la acredita el evento."""
+    o cerró el checkout) no se queda en «Verificando…»: la acredita el evento.
+    `visto`: lo que Wompi dijo de la transacción de la vuelta (solo se muestra:
+    lo acredita el evento firmado, que llega en segundos)."""
     estado = recarga["estado"]
     es_wompi = recarga.get("medio") == "wompi"
+    if es_wompi and estado in ("pendiente", "rechazada", "expirada"):
+        if visto == "APPROVED":
+            return gettext("Wompi aprobó tu pago. Lo sumamos a tu saldo apenas Wompi nos lo confirme; suele tardar "
+                           "unos segundos.")
+        if visto in ("DECLINED", "ERROR") and estado == "pendiente":
+            return gettext("Wompi rechazó el pago. No se te cobró nada.")
     if es_wompi and estado == "pendiente" and not tx_id and not recarga.get("pasarela_ref"):
         return gettext("Si pagaste, lo acreditamos apenas Wompi lo confirme.")
     if estado == "aprobada":
@@ -222,15 +250,17 @@ def recarga_vuelta(cliente, rid):
     Bold agrega a la URL (bold-tx-status…); el estado lo da su servidor (el
     sondeo de /estado). Wompi vuelve con `?id=<transacción>`: se consulta esa
     transacción en Wompi (bajo el mismo cupo y la misma consulta en vuelo que
-    el sondeo) y solo se acredita si su referencia, sus centavos y su moneda
-    son los de la recarga y está APPROVED; el `id` sigue en el sondeo."""
+    el sondeo) solo para MOSTRAR cómo va: lo acredita el evento firmado de
+    Wompi (ruling 2026-10-10); el `id` sigue en el sondeo."""
     recarga = recargas.obtener(cliente, rid)
     if recarga is None:
         abort(404)
     tx_id = _id_vuelta() if recarga["medio"] == "wompi" else None
+    visto = None
     if tx_id:
-        recarga = _verificar_si_toca(recarga, tx_id)
-    return render_template("saldo_recarga.html", cliente=cliente, recarga=recarga, texto=texto_estado(recarga, tx_id),
+        recarga, visto = _verificar_si_toca(recarga, tx_id)
+    return render_template("saldo_recarga.html", cliente=cliente, recarga=recarga,
+                           texto=texto_estado(recarga, tx_id, visto),
                            consultable=recargas.consultable(recarga, tx_id), tx_id=tx_id)
 
 
@@ -240,8 +270,8 @@ def recarga_estado(cliente, rid):
     if recarga is None:
         abort(404)
     tx_id = _id_vuelta() if recarga["medio"] == "wompi" else None
-    recarga = _verificar_si_toca(recarga, tx_id)
-    return jsonify({"estado": recarga["estado"], "texto": texto_estado(recarga, tx_id),
+    recarga, visto = _verificar_si_toca(recarga, tx_id)
+    return jsonify({"estado": recarga["estado"], "texto": texto_estado(recarga, tx_id, visto),
                     "saldo_texto": gastos.formatear(libro.saldo(cliente) / 1000)})
 
 
@@ -251,8 +281,8 @@ def recarga_verificar(cliente, rid):
     if recarga is None:
         abort(404)
     tx_id = _id_vuelta() if recarga["medio"] == "wompi" else None
-    recarga = _verificar_si_toca(recarga, tx_id)
-    flash(texto_estado(recarga, tx_id), "ok" if recarga["estado"] in ("aprobada", "pendiente") else "error")
+    recarga, visto = _verificar_si_toca(recarga, tx_id)
+    flash(texto_estado(recarga, tx_id, visto), "ok" if recarga["estado"] in ("aprobada", "pendiente") else "error")
     return _volver(cliente)
 
 
@@ -844,6 +874,9 @@ def admin_cuenta(cliente):
                               "hasta que recargue."), "warn")
         else:
             flash(gettext("%(proyecto)s dejó de cobrar: genera sin tocar el saldo.", proyecto=nombre), "ok")
+            if planes.apagar_renovacion(cliente, session.get("usuario")):
+                flash(gettext("Su plan ya no se renueva solo: no cobraremos la tarjeta. Para volver a la "
+                              "renovación automática, el proyecto tiene que suscribirse de nuevo."), "warn")
     elif cambios:
         flash(gettext("Guardado: margen y umbral de %(proyecto)s.", proyecto=nombre), "ok")
     return _volver_admin(cliente)

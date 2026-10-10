@@ -9,8 +9,10 @@ Spec 2026-10-09-planes-mensuales-wompi-design.md §2 y §14. Cuatro tablas nueva
 UNIQUE(tipo, periodo_id) (un periodo se acredita y se vence una sola vez; se
 recrea la tabla con batch porque SQLite no agrega un UNIQUE a una tabla viva,
 conservando los dos únicos y los dos índices de 0033 y su AUTOINCREMENT),
-`recarga.pasarela_ref` único (la transacción de Wompi) y el índice único
-parcial que deja a lo más una suscripción no terminada por cliente.
+`recarga.pasarela_ref` único (la transacción de Wompi), el índice único
+parcial que deja a lo más una suscripción no terminada por cliente y, en
+`reserva_saldo`, `margen`, `incluido` y `periodo_id` (el precio visto al encolar:
+revisión final 2026-10-10).
 
 Datos: si el margen global guardado vale exactamente «1.5» (el viejo defecto),
 pasa a «2.0» (a la carta); cualquier otro valor se respeta. Siembra el plan
@@ -132,6 +134,15 @@ def upgrade() -> None:
         lote.add_column(sa.Column("pasarela_ref", sa.String(40)))
         lote.create_unique_constraint("uq_recarga_pasarela_ref", ["pasarela_ref"])
 
+    # reserva_saldo: el precio visto al encolar (revisión final 2026-10-10). Una generación se cobra con el margen
+    # y la condición de incluido de su reserva, y cuenta en la bolsa del periodo en que se reservó, aunque termine
+    # después del fin de ese periodo. Sin recrear: agregar columnas que admiten NULL (o con valor por defecto) no
+    # necesita copiar la tabla.
+    with op.batch_alter_table("reserva_saldo") as lote:
+        lote.add_column(sa.Column("margen", sa.Float))
+        lote.add_column(sa.Column("incluido", sa.Boolean, nullable=False, server_default=sa.text("0")))
+        lote.add_column(sa.Column("periodo_id", sa.Integer))
+
     # Datos: el margen a la carta pasa de 1,5 a 2,0 solo si sigue exactamente en el viejo defecto (idempotente).
     op.execute(sa.text(
         "UPDATE kv SET valor = '2.0', actualizado_en = :ahora "
@@ -147,6 +158,11 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    with op.batch_alter_table("reserva_saldo", recreate="always") as lote:
+        lote.drop_column("periodo_id")
+        lote.drop_column("incluido")
+        lote.drop_column("margen")
+
     with op.batch_alter_table("recarga", recreate="always",
                               table_kwargs={"sqlite_autoincrement": True}) as lote:
         lote.drop_constraint("uq_recarga_pasarela_ref", type_="unique")

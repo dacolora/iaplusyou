@@ -845,6 +845,17 @@ def fecha_larga(valor):
         return None
 
 
+def fecha_hora_larga(valor):
+    """El ISO del repo → «14 de noviembre de 2026 a las 23:30» (el momento del cobro de una renovación), en el
+    idioma de quien mira; None si no hay."""
+    if not valor:
+        return None
+    try:
+        return idiomas.fecha_hora_larga(datetime.fromisoformat(str(valor)[:19]))
+    except ValueError:
+        return None
+
+
 def motivo_ultimo_pago(cliente):
     """El motivo del último pago de plan con Wompi de `cliente` (lo que dijo
     Wompi de un rechazo), limpio, o None. Solo lee."""
@@ -964,6 +975,9 @@ def plan_para_cliente(cliente):
             e["periodo"]["margen"] if e["periodo"] else (plan_ or {}).get("margen"), carta)},
         "ciclo": sus["ciclo"],
         "renueva_el": fecha_larga(e.get("renueva_el")),
+        # El momento real del cobro (una hora antes del fin de lo pagado: ruling 2026-10-10); cancelar antes evita
+        # el cobro.
+        "cobro_el": fecha_hora_larga(e.get("cobro_el")),
         "termina_el": fecha_larga(e.get("termina_el")),
         "monto_renovacion": usd_entero(e["monto_renovacion_usd"]) if e.get("monto_renovacion_usd") else None,
         "tarjeta": sus.get("fuente_resumen") or _nombre_medio(sus.get("medio_fuente")),

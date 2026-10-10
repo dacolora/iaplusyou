@@ -168,9 +168,14 @@ def test_con_plan_el_medidor_lo_incluido_y_el_ahorro(base, pagina, pro, falso, a
     assert "20 % usado" in texto
     # ahorro: 125 × (2,0 / 1,25 − 1) = 75 del video + 6,25 × 2,0 / 1,25 = 10 del guion incluido
     assert "Este periodo ahorraste US$ 85,00 frente a la carta." in texto
-    assert re.search(r"Se renueva el \d{1,2} de \w+ de \d{4} por US\$ 1\.000\.", texto)
+    # El momento real del cobro (una hora antes del fin de lo pagado), con la hora (revisión final 2026-10-10).
+    from cobros import planes
+    hora = planes.suscripcion("acme")["proximo_cobro"][11:16]
+    assert re.search(r"Se renueva el \d{1,2} de \w+ de \d{4} a las " + hora + r": a esa hora cobramos US\$ 1\.000\.",
+                     texto)
     assert "Visa ···4242" in texto and "Cambiar tarjeta" in texto and "Aprobado" in texto
-    assert "Si cancelas, no se vuelve a cobrar. Tu plan sigue hasta el" in texto
+    assert re.search(r"Si cancelas antes del \d{1,2} de \w+ de \d{4} a las " + hora + r", no se vuelve a cobrar\. "
+                     r"Tu plan sigue hasta el", texto)
     assert "No se devuelve lo ya pagado." in texto
     _sin_costo(texto)
 

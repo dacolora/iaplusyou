@@ -668,6 +668,12 @@ reserva_saldo = Table("reserva_saldo", metadata,
     Column("job_id", String(160), primary_key=True),
     Column("milesimas", Integer, nullable=False),
     Column("creada_en", String(19), nullable=False),
+    # 0035 (revisión final de planes, 2026-10-10): el precio que se vio al encolar. La generación se cobra con este
+    # margen (y como incluida si lo fue al reservar) aunque termine después de que venza su periodo de plan, y
+    # su cobro cuenta en la bolsa de ESE periodo (`periodo_id`). NULL en las reservas de antes: margen del momento.
+    Column("margen", Float),
+    Column("incluido", Boolean, nullable=False, default=False, server_default=sa.text("0")),
+    Column("periodo_id", Integer),
 )
 
 recarga = Table("recarga", metadata,
