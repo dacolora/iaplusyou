@@ -825,3 +825,214 @@ def test_guardar_cuentas_sin_el_campo_de_pais_no_borra_el_pais_guardado(conectad
     assert cuentas.cuenta("acme", A)["pais"] == "NO"
     c.post("/cliente/acme/meta-rendimiento/cuentas", data={"cuenta": [A, B], f"pais_{A}": ""})     # enviado vacío: borra
     assert cuentas.cuenta("acme", A)["pais"] is None and cuentas.cuenta("acme", B)["pais"] == "SE"
+
+
+# ---------------------------------------------------------- «Evaluar con IA» (spec E2 §8) ---
+
+from tests.test_triple_whale_ideas_piezas import app as app_crear  # noqa: E402,F401  (fixture: Crear sin lanzar nada)
+
+EVALUAR = "/cliente/acme/meta-rendimiento/evaluar"
+
+
+def _evaluaciones(cliente="acme"):
+    return datos.evaluaciones(cliente, limite=50)
+
+
+def _encolados(monkeypatch):
+    """Lo que la ruta pasa a `trabajos.encolar` (sigue encolando de verdad)."""
+    from tareas import meta_rendimiento as tmr
+    llamadas = []
+    original = tmr.trabajos.encolar
+
+    def envuelto(*a, **k):
+        llamadas.append(k)
+        return original(*a, **k)
+    monkeypatch.setattr(tmr.trabajos, "encolar", envuelto)
+    return llamadas
+
+
+def test_evaluar_crea_la_fila_y_la_encola_con_su_precio(conectado, monkeypatch):
+    import gastos
+    _sembrar()
+    llamadas = _encolados(monkeypatch)
+    r = conectado["c"].post(EVALUAR, data={"dias": "30", "cuenta": ""})
+    assert r.status_code == 302 and r.headers["Location"].endswith("/cliente/acme#meta")
+    ev, = _evaluaciones()
+    n = len(ev["muestra"])
+    assert n >= 2 and ev["estado"] == "en_cola" and ev["cuentas"] == [A, B] and ev["moneda"] == "SEK"
+    assert ev["pedido_por"] == "admin" and ev["extra"]["dias"] == 30 and ev["extra"]["resumen"]
+    assert [r["ref"] for r in ev["recomendaciones"]][:1] == ["R1"]
+    # Primero el precio: la reserva usa el estimado de la tarifa con los anuncios de la muestra.
+    assert llamadas[-1]["costo_estimado"] == pytest.approx(gastos.estimar("evaluacion_meta", n=n)["usd"])
+    assert llamadas[-1]["max_intentos"] == 1
+    tarea, = _tareas("meta_rend_evaluar")
+    assert tarea["job_id"] == "acme__meta_eval" and tarea["payload"] == {"cliente": "acme", "evaluacion_id": ev["id"]}
+    assert any(f"Evaluando {n} anuncio(s) con IA" in m for m in _flashes(conectado["c"]))
+
+
+def test_evaluar_de_una_cuenta_guarda_ese_alcance(conectado):
+    _sembrar()
+    conectado["c"].post(EVALUAR, data={"dias": "7", "cuenta": A})
+    ev, = _evaluaciones()
+    assert ev["cuentas"] == [A] and ev["extra"]["cuenta"] == A and ev["extra"]["dias"] == 7
+
+
+def test_evaluar_sin_anuncios_suficientes_lo_dice_y_no_cobra_nada(conectado):
+    _dos_cuentas()
+    r = conectado["c"].post(EVALUAR, data={"dias": "30"})
+    assert r.status_code == 302 and _evaluaciones() == [] and _tareas("meta_rend_evaluar") == []
+    assert any("Todavía no hay anuncios con datos suficientes" in m for m in _flashes(conectado["c"]))
+
+
+def test_evaluar_sin_cuentas_o_sin_meta_no_crea_nada(conectado, app, monkeypatch):  # noqa: F811
+    conectado["c"].post(EVALUAR, data={"dias": "30"})
+    assert _evaluaciones() == [] and any("Elige primero" in m for m in _flashes(conectado["c"]))
+    monkeypatch.setattr(conectado["dashboard"].meta_conexion, "cargar", lambda c: {})
+    _sembrar()
+    conectado["c"].post(EVALUAR, data={"dias": "30"})
+    assert _evaluaciones() == [] and any("Meta no está conectado" in m for m in _flashes(conectado["c"]))
+
+
+def test_una_sola_evaluacion_viva_por_proyecto(conectado):
+    _sembrar()
+    conectado["c"].post(EVALUAR, data={"dias": "30"})
+    conectado["c"].post(EVALUAR, data={"dias": "30"})
+    assert len(_evaluaciones()) == 1 and len(_tareas("meta_rend_evaluar")) == 1
+    assert any("Ya hay una evaluación con IA en curso" in m for m in _flashes(conectado["c"]))
+
+
+def test_evaluar_si_la_muestra_cambio_no_cobra_y_dice_el_precio_nuevo(conectado):
+    _sembrar()
+    conectado["c"].post(EVALUAR, data={"dias": "30", "n": "99"})
+    assert _evaluaciones() == [] and _tareas("meta_rend_evaluar") == []
+    assert any("La muestra cambió" in m and "US$" in m for m in _flashes(conectado["c"]))
+    from meta_rendimiento import analisis
+    vista = len(analisis.preparar("acme", 30, None)["muestra"])
+    conectado["c"].post(EVALUAR, data={"dias": "30", "n": str(vista)})
+    assert len(_evaluaciones()) == 1
+
+
+def _cobra(milesimas=0):
+    from cobros import libro
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    if milesimas:
+        with db.conectar() as con:
+            libro.acreditar(con, "acme", "ajuste", milesimas, "ajuste", usuario="admin", detalle="prueba")
+
+
+def test_evaluar_sin_saldo_responde_402_y_no_crea_nada(conectado):
+    _sembrar()
+    _cobra()
+    r = conectado["c"].post(EVALUAR, data={"dias": "30"}, headers={"X-Requested-With": "fetch"})
+    assert r.status_code == 402 and r.get_json()["saldo_insuficiente"] is True
+    assert _evaluaciones() == [] and _tareas("meta_rend_evaluar") == []
+
+
+def test_evaluar_con_saldo_reserva_el_precio(conectado):
+    import gastos
+    from cobros import libro
+    _sembrar()
+    _cobra(milesimas=50_000)
+    conectado["c"].post(EVALUAR, data={"dias": "30"})
+    ev, = _evaluaciones()
+    usd = gastos.estimar("evaluacion_meta", n=len(ev["muestra"]))["usd"]
+    with db.conectar() as con:
+        reserva, = con.execute(sa.select(db.reserva_saldo)).mappings().all()
+    assert reserva["job_id"] == "acme__meta_eval"
+    assert reserva["milesimas"] == libro.precio_milesimas(usd, libro.margen_precio("acme"))
+
+
+def test_evaluar_si_encolar_falla_por_saldo_borra_la_fila(conectado, monkeypatch):
+    from cobros import SaldoInsuficiente
+    from tareas import meta_rendimiento as tmr
+    _sembrar()
+
+    def _sin_saldo(*a, **k):
+        raise SaldoInsuficiente("acme", 1000, 0)
+    monkeypatch.setattr(tmr, "encolar_evaluacion", _sin_saldo)
+    r = conectado["c"].post(EVALUAR, data={"dias": "30"}, headers={"X-Requested-With": "fetch"})
+    assert r.status_code == 402 and _evaluaciones() == []
+
+
+def _evaluacion_lista(cliente="acme", ideas=None):
+    eid = datos.crear_evaluacion(cliente, [A], _hace(29), _hace(0), "SEK",
+                                 [{"ref": "A1", "ad_id": "gana", "nombre": "Video <b>gana</b>"}], [])
+    datos.actualizar_evaluacion(eid, estado="lista", usd=0.2, resultado={
+        "resumen": "Norway vende con <script>un video</script>.", "diagnostico": [{"causa": "Perdedores", "evidencia": ""}],
+        "plan": [{"prioridad": 1, "accion": "pausar", "objetos": ["A1"], "que_hacer": "Pausa el perdedor",
+                  "por_que": "gasta", "impacto": None,
+                  "enlace": "https://adsmanager.facebook.com/adsmanager/manage/ads?act=1&selected_ad_ids=9"}],
+        "patrones_ganadores": [{"patron": "Demostración", "anuncios": ["A1"]}], "patrones_perdedores": [],
+        "anuncios": {}, "cifras_sin_dato": [],
+        "ideas": ideas if ideas is not None else [{"titulo": "Sandalia en la lluvia", "prompt": "Close-up of feet",
+                                                   "angulo": {"gancho": "¿Pies mojados?"}}]})
+    return eid
+
+
+def test_ver_una_evaluacion_y_la_de_otro_proyecto_es_404(conectado):
+    eid = _evaluacion_lista()
+    html = conectado["c"].get(f"/cliente/acme/meta-rendimiento/evaluacion/{eid}").get_data(as_text=True)
+    assert "Pausa el perdedor" in html and "Sandalia en la lluvia" in html and "Video &lt;b&gt;gana&lt;/b&gt;" in html
+    assert "<script>un video" not in html and 'rel="noopener noreferrer"' in html
+    assert f"/cliente/acme/meta-rendimiento/evaluacion/{eid}/idea/0/crear" in html
+    ajena = _evaluacion_lista(cliente="otro")
+    assert conectado["c"].get(f"/cliente/acme/meta-rendimiento/evaluacion/{ajena}").status_code == 404
+    assert conectado["c"].get("/cliente/acme/meta-rendimiento/evaluacion/99999").status_code == 404
+    assert conectado["c"].get(f"/cliente/acme/meta-rendimiento/evaluacion/{2 ** 64}").status_code == 404
+
+
+def test_una_evaluacion_en_curso_o_fallida_se_dice_en_palabras(conectado):
+    eid = datos.crear_evaluacion("acme", [A], _hace(29), _hace(0), "SEK", [], [])
+    assert "Evaluando con IA" in conectado["c"].get(f"/cliente/acme/meta-rendimiento/evaluacion/{eid}").get_data(as_text=True)
+    datos.actualizar_evaluacion(eid, estado="error", error="Claude no devolvió un análisis que se pueda usar.")
+    html = conectado["c"].get(f"/cliente/acme/meta-rendimiento/evaluacion/{eid}").get_data(as_text=True)
+    assert "falló" in html and "Claude no devolvió" in html
+
+
+def test_llevar_una_idea_a_crear_deja_el_prefill_con_el_origen_de_meta_sin_generar_nada(conectado):
+    eid = _evaluacion_lista()
+    r = conectado["c"].post(f"/cliente/acme/meta-rendimiento/evaluacion/{eid}/idea/0/crear")
+    assert r.status_code == 302 and r.headers["Location"].endswith("/cliente/acme#creativeflowplus")
+    with conectado["c"].session_transaction() as s:
+        assert s["fp_prefill"]["texto"] == "Close-up of feet" and s["fp_prefill"]["origen_tw"] == f"meta:{eid}:0"
+    with db.conectar() as con:
+        assert con.execute(sa.select(sa.func.count()).select_from(db.tarea)).scalar() == 0
+    assert conectado["c"].post(f"/cliente/acme/meta-rendimiento/evaluacion/{eid}/idea/1/crear").status_code == 404
+    ajena = _evaluacion_lista(cliente="otro")
+    assert conectado["c"].post(f"/cliente/acme/meta-rendimiento/evaluacion/{ajena}/idea/0/crear").status_code == 404
+    en_cola = datos.crear_evaluacion("acme", [A], _hace(29), _hace(0), "SEK", [], [])
+    assert conectado["c"].post(f"/cliente/acme/meta-rendimiento/evaluacion/{en_cola}/idea/0/crear").status_code == 404
+    sin_prompt = _evaluacion_lista(ideas=[{"titulo": "X", "prompt": ""}])
+    r = conectado["c"].post(f"/cliente/acme/meta-rendimiento/evaluacion/{sin_prompt}/idea/0/crear")
+    assert r.status_code == 302 and any("no tiene prompt" in m for m in _flashes(conectado["c"]))
+
+
+def test_crear_guarda_la_idea_de_meta_aparte_y_triple_whale_no_la_toma_por_suya(app_crear):
+    import creative_flow as cf
+    from triple_whale import datos as tw_datos
+    eid = _evaluacion_lista()
+    # Una evaluación de Triple Whale con el MISMO id: el origen de Meta nunca se confunde con ella.
+    tw_eid = tw_datos.crear_evaluacion("acme", "2026-09-01", "2026-09-28", "USD", [])
+    tw_datos.actualizar_evaluacion(tw_eid, estado="lista", resultado={"ideas": [{"titulo": "De TW", "prompt": "p"}]})
+    assert tw_eid == eid
+    data = {"accion_central": "el florero se quiebra", "duracion_objetivo": "8", "aspect_ratio": "9:16",
+            "tipo": "video", "modelo": "wan3", "musica_estilo": "", "bandeja_vista": "1", "origen_tw": f"meta:{eid}:0"}
+    assert app_crear["c"].post("/cliente/acme/creative_flow/crear", data=data).status_code == 302
+    [(_, entry)] = cf.cargar("acme").items()
+    assert entry["meta_idea"] == {"evaluacion_id": eid, "idea": 0, "titulo": "Sandalia en la lluvia"}
+    assert "tw_idea" not in entry
+
+
+def test_los_post_de_la_evaluacion_frenan_otro_sitio_y_el_correo_sin_verificar(conectado, app):  # noqa: F811
+    import usuarios
+    _sembrar()
+    eid = _evaluacion_lista()
+    for url in (EVALUAR, f"/cliente/acme/meta-rendimiento/evaluacion/{eid}/idea/0/crear"):
+        assert conectado["c"].post(url, data={"dias": "30"}, headers={"Sec-Fetch-Site": "cross-site"}).status_code == 403
+    usuarios.actualizar("user_acme", correo_verificado=False)
+    r = _como_cliente(app).post(EVALUAR, data={"dias": "30"})
+    assert r.headers["Location"].endswith("/cliente/acme#settings") and len(_evaluaciones()) == 1
+    # Cualquier persona del proyecto con su correo verificado la puede pedir (paga su saldo): no es solo del admin.
+    usuarios.actualizar("user_acme", correo_verificado=True)
+    _como_cliente(app).post(EVALUAR, data={"dias": "30"})
+    assert len(_evaluaciones()) == 2 and _evaluaciones()[0]["pedido_por"] == "user_acme"
