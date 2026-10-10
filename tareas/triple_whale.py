@@ -158,7 +158,7 @@ def tw_analizar_anuncio(tarea):
             if meta_creativo.sin_contenido(traido):
                 # Token caducado, red o límite de uso de Meta: sin texto, imagen ni video, Claude analizaría a ciegas.
                 # Se para ANTES de Whisper y de Claude: la fila queda en error y no se anota ningún gasto.
-                raise mejorar.AnuncioIlegible("Meta no devolvió el anuncio")
+                raise mejorar.AnuncioIlegible()   # el texto que ve la persona lo pone mejorar.texto_error
             foto["creativo"] = traido
             datos.actualizar_analisis(aid, foto=foto)
             fila["foto"] = foto
