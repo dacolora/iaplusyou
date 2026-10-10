@@ -192,3 +192,10 @@ PND-068 (corrección 2026-10-08): la página del proyecto no carga estado_videos
 **`creative_flow.actualizar` toma el candado antes de leer (2026-10-09, revisión del corazón):** leía `extra` en autocommit y lo reescribía entero, así que un corazón (u otra clave) confirmado entre esa lectura y su UPDATE se perdía cuando el worker escribía en la misma pieza (revisor de doctrina, Final edition, flowplus). Ahora hace `BEGIN IMMEDIATE` antes de `_ids`, igual que `marcar_favorito` y `duplicar` B; el otro escritor espera con `busy_timeout`. Prueba con `escritor_en_medio` en `tests/test_crear_favorito.py` (sin el candado, el escritor de en medio confirma y la prueba falla).
 
 **Probado en real el 2026-10-10** (`docs/superpowers/evals/2026-10-10-pruebas-reales.md`): Kling O3 Pro respeta «Image N» (no hace falta «@Image1»); `seedance25_ref` rechaza fotos realistas de personas como referencia aunque sean de IA (ByteDance; la app no cobra y lo dice, PND-242); «Que Wan mejore mi prompt» siguió la acción completa en la única muestra, al mismo precio; el director arma el prompt en el idioma del proyecto e inventó detalles (PND-239, PND-240).
+
+PND-062, entrega 1 (2026-10-10, pedido de Daniel): Del catálogo y Cambiar producto comparten
+`GET /cliente/<cliente>/catalogo/selector?sel=plus|clone`. La grilla llega dentro del formulario original; los nombres
+y valores de `productos_catalogo` (categoria:id) y `producto_id` (id/color) siguen iguales. Precargas seleccionadas
+existen como inputs antes de abrir, se mandan como `marcado` y se sustituyen al llegar la grilla sin duplicarlas.
+Los archivados solo vuelven si están marcados. Historial de swaps: 24, vivos primero y todas sus barras visibles,
+Ver más por fetch sin scripts. Las pruebas envían los inputs del fragmento a ambas rutas con proveedores dobles.

@@ -47,3 +47,10 @@ cola_salud()/avisos()`: base y WAL, disco, memoria, carga, pool, worker atrasado
 `/admin/salud/registros`. `/salud` (público, sin sesión): `{"ok": true}` 200 o 503, para un monitor externo.
 
 PND-090/136 (2026-10-07, lote 5 B): referentes.datos.por_ids evita una consulta por candidato en ambas vistas de Sprints; exp_pieza usa los memos existentes por petición (experimentos, catálogo y trabajos). La gestión de resultados completa solo el experimento elegido, conservando todos los datos del centro y las propuestas globales cuando no hay filtro. Las pruebas miden lecturas/valores, no prometen latencia real.
+
+PND-062, entrega 1 (2026-10-10, pedido de Daniel: bajar el HTML inicial): `ver_cliente` ya no arma
+`_productos_con_uso` ni `activos_por_categoria` para selectores ocultos. Mantiene contadores y el enlace comercial
+histórico, y resuelve solo lo preseleccionado. `_pagina_swaps` corta antes de enriquecer nombres; la ruta tiene
+precarga de vivos y memo del catálogo. Gasto pide 25 filas en SQL, entrega 24 y usa la extra para Ver más;
+`desplazamiento` es OFFSET, mientras `desde` sigue siendo la fecha ISO. Los tres fragmentos omiten el chip del
+sidebar incluso sin cabecera fetch. `tests/test_pagina_por_partes.py` vigila lecturas, HTML y tamaño con datos temporales.

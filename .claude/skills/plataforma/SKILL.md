@@ -169,3 +169,8 @@ Enmiendas lote 7 (2026-10-09, decisión delegada): SDK de Claude conserva sus re
 
 
 PND-149(6)/160 (2026-10-09, decisión del lote 8): reservar_aviso_sync vive en triple_whale_tiendas (único escritor) y toma el candado SQLite antes de leer extra/cola. Recuerda las copias terminadas que el worker aún no cerró y reserva una vez el aviso de la última, sin modificar estado/progreso de tareas; identidad id+creada_en para un nuevo ciclo. actualizar_extra comparte ese candado. El encolador de lanzamiento comprueba tarea viva y relee el estado antes de escribir; solo admite armando/error. Enmienda 2026-10-10: _LANZAMIENTO_LOCK es propio, junto a _ENV_LOCK, para no esperar una publicación larga ni relanzar desde una lectura vieja. La vuelta atrás usa el estado recién leído; no cambia gastos ni reintentos.
+
+PND-062, entrega 1 (2026-10-10, pedido de Daniel): `gastos.historial` acepta `desplazamiento=0`
+para cortar con OFFSET en SQL, ordenado por creado_en/id descendentes; `desde` conserva el filtro por fecha.
+La página pide 25 para pintar 24 y detectar la siguiente página; total y CSV conservan todas las filas.
+Solo cambia la lectura del historial; ningún registro de gasto, cola ni cobro cambia.

@@ -92,3 +92,8 @@ Segunda ronda lote 7 (2026-10-09): motivos del análisis se guardan con clave re
 
 
 PND-155 (2026-10-09, decisión del lote 8): idiomas.NOMBRES_PUBLICACION centraliza los nombres nativos del selector de idioma base de Final edition. NOMBRES e IDIOMAS de la interfaz siguen en es/en. Los nombres de países de Traer referentes vienen de tipos.PAISES con traducir, salvo Ecuador por gettext (enmienda 2026-10-10: conservar la lista anterior más NO/SE); el aviso duplicado al lanzar reutiliza el texto ya catalogado.
+
+PND-062, entrega 1 (2026-10-10, pedido de Daniel): los avisos de fallo del catálogo y de Ver más
+pasan por gettext en los shells y viajan al JS con tojson; Reintentar reutiliza el catálogo. Los cinco fragmentos
+nuevos están inscritos en `PLANTILLAS_TRADUCIDAS`; catálogo actualizado, traducido con el glosario y compilado,
+sin fuzzy. La comprobación visual en es/en queda a cargo de Claude.

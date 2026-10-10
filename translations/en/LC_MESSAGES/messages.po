@@ -1653,9 +1653,6 @@ msgstr "(code %(codigo)s)"
 msgid "(de %(min)s a %(max)s)"
 msgstr "(from %(min)s to %(max)s)"
 
-msgid "(el CSV trae todos los cobros desde el inicio)"
-msgstr "(the CSV has every charge since the start)"
-
 msgid "(el servidor no tiene correo configurado; avisa al administrador)"
 msgstr "(the server has no email configured; let the administrator know)"
 
@@ -11954,6 +11951,12 @@ msgstr "Couldn't change the status: %(error)s"
 msgid "No pude cambiar el presupuesto: %(error)s"
 msgstr "Couldn't change the budget: %(error)s"
 
+msgid "No pude cargar el catálogo. Intenta de nuevo."
+msgstr "Could not load the catalog. Try again."
+
+msgid "No pude cargar más resultados. Intenta de nuevo."
+msgstr "Could not load more results. Try again."
+
 #, python-format
 msgid "No pude cerrar el experimento: %(error)s"
 msgstr "Couldn't close the experiment: %(error)s"
@@ -15194,10 +15197,6 @@ msgstr "Interrupted by a server restart. Try again."
 
 msgid "Se interrumpió; vuelve a intentarlo."
 msgstr "It was interrupted; try again."
-
-#, python-format
-msgid "Se muestran los últimos %(n)s cobros"
-msgstr "Showing the last %(n)s charges"
 
 msgid "Se paga por imagen; el precio estimado se muestra antes de generar."
 msgstr "Paid per image; the estimated price is shown before generating."

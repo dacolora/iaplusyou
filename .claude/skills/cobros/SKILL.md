@@ -118,3 +118,9 @@ En un proyecto que cobra **toda persona que lo mira ve precios, no costos** (tam
 `docs/pendientes.md` PND-161 a PND-175: DIAN e IVA, la prueba real con Bold, suscripción y recarga automática, otra pasarela, promociones, y los bordes y la higiene que dejó la revisión de cada tarea.
 
 PND-178 (2026-10-09, decisión delegada): limpiar_reservas_muertas solo elimina reservas sin tarea pendiente/en_curso cuya creada_en sea estrictamente anterior a ahora menos diez minutos. Cubre la ventana reservar→encolar; el disponible y el cobro real conservan sus reglas. test_lote7_estado prueba recién creada, diez, once minutos y tarea viva.
+
+PND-062, entrega 1 (2026-10-10, pedido de Daniel): historial de Configuración › Gasto paginado de
+24 con `_pagina_gasto`, siempre desde `gasto_para`. `historial_cobrado` y la fuente OCULTO admiten desplazamiento;
+no se usa el costo como respaldo para quien no puede verlo. El modo doble conserva Costo/Cobrado también en las
+páginas siguientes y `cobrado_por_gasto` consulta solo los ids de esa página. Totales y CSV siguen completos.
+`tests/test_pagina_por_partes.py` verifica precios, columnas, páginas sucesivas y aislamiento con SQLite temporal.

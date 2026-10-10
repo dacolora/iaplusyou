@@ -745,13 +745,13 @@ def por_mes(cliente, ahora_iso=None):
         return {m: {"usd": round(float(suma or 0.0), 4), "n": int(n)} for m, suma, n in con.execute(q)}
 
 
-def historial(cliente, limite=200, desde=None):
+def historial(cliente, limite=200, desde=None, desplazamiento=0):
     """Filas del proyecto, la más nueva primero (`desde` = ISO inclusivo)."""
     g = db.gasto
     q = sa.select(g).where(g.c.cliente == cliente)
     if desde:
         q = q.where(g.c.creado_en >= desde[:19])
-    q = q.order_by(g.c.creado_en.desc(), g.c.id.desc()).limit(int(limite))
+    q = q.order_by(g.c.creado_en.desc(), g.c.id.desc()).limit(int(limite)).offset(int(desplazamiento))
     with db.conectar() as con:
         return [_fila(r) for r in con.execute(q)]
 
