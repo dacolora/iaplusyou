@@ -13,7 +13,9 @@ Dentro de una petición, lo que se repite (la cuenta, el estado del saldo, las
 filas cobradas de las tarjetas) se lee UNA vez y queda en `flask.g`."""
 import csv
 import io
+import logging
 import re
+from datetime import datetime
 
 import sqlalchemy as sa
 from flask_babel import gettext
@@ -23,6 +25,8 @@ import gastos
 import idiomas
 from cobros import libro
 from idiomas import N_
+
+log = logging.getLogger(__name__)
 
 POR_PAGINA = 50
 TIPOS_COBRADOS = ("cobro", "reverso")
@@ -35,6 +39,8 @@ CONCEPTOS = {
     "anulacion_bold": N_("Pago anulado por Bold"),
     "recarga_wompi": N_("Recarga con Wompi"),
     "anulacion_wompi": N_("Pago anulado por Wompi"),
+    "plan": N_("Saldo del plan del mes"),
+    "vencimiento": N_("Saldo del plan sin usar que venció"),
 }
 ESTADOS_RECARGA = {
     "pendiente": N_("Pendiente"), "aprobada": N_("Aprobada"), "rechazada": N_("Rechazada"),
@@ -43,6 +49,7 @@ ESTADOS_RECARGA = {
 PREFIJOS = {
     "no_cobrado": N_("No cobrado: %(concepto)s"),
     "reverso": N_("Devuelto: %(concepto)s"),
+    "incluido": N_("Incluido en el plan: %(concepto)s"),
 }
 # Una línea entera es UN msgid (como gastos.ENCABEZADO_CSV).
 ENCABEZADO_MOVIMIENTOS = N_("fecha;movimiento;concepto;detalle;usd;saldo")
@@ -468,13 +475,38 @@ def tono(e):
     return "aviso" if e["saldo"] < e["umbral"] else "normal"
 
 
+def bolsa(cliente):
+    """La bolsa del periodo de plan abierto ({credito, gastado, restante, fin…})
+    o None, una vez por petición. Solo lee."""
+    return _memo(("bolsa", cliente), lambda: libro.bolsa_plan(cliente))
+
+
+def bolsa_o_none(cliente):
+    """`bolsa` que nunca tumba una pantalla: si la lectura falla, None (se
+    muestra el saldo junto, sin partirlo) y una línea en el log."""
+    try:
+        return bolsa(cliente)
+    except Exception:  # noqa: BLE001
+        log.warning("no se pudo leer la bolsa del plan de %s", cliente, exc_info=True)
+        return None
+
+
 def chip(cliente, es_admin):
-    """El chip de la barra lateral de un proyecto que cobra, o None."""
+    """El chip de la barra lateral de un proyecto que cobra, o None. Con un
+    periodo de plan abierto (planes 6/8, spec §8): «Saldo: <propio> · Plan:
+    <restante> restantes · Recargar» (el saldo propio = saldo − lo que queda
+    de la bolsa; el tono sigue mirando el saldo entero)."""
     e = estado(cliente)
     if not e["cobrar"]:
         return None
     from flask import url_for  # noqa: PLC0415
-    texto = gettext("Saldo: %(saldo)s · Recargar", saldo=gastos.formatear(e["saldo"] / 1000))
+    b = bolsa_o_none(cliente)
+    if b is not None:
+        texto = gettext("Saldo: %(saldo)s · Plan: %(plan)s restantes · Recargar",
+                        saldo=gastos.formatear((e["saldo"] - b["restante"]) / 1000),
+                        plan=gastos.formatear(b["restante"] / 1000))
+    else:
+        texto = gettext("Saldo: %(saldo)s · Recargar", saldo=gastos.formatear(e["saldo"] / 1000))
     if es_admin:
         costo = gastos.resumen_mes(cliente)["total"]
         texto = f"{texto} · " + gettext("costo del mes: %(costo)s", costo=gastos.formatear(costo))
@@ -584,3 +616,159 @@ def webhook_callado(ahora_iso=None):
         reciente = con.execute(sa.select(pe.c.id).where(pe.c.firma_ok.is_(True), pe.c.recibido_en >= limite)
                                .limit(1)).first()
     return reciente is None
+
+
+# ------------------------------------------- Configuración › Plan (planes 6/8) ---
+
+ESTADOS_PAGO_PLAN = {
+    "pendiente": N_("Pendiente"), "aprobado": N_("Aprobado"), "rechazado": N_("Rechazado"),
+    "error": N_("No se cobró"), "anulado": N_("Anulado"),
+}
+MEDIOS_FUENTE = {"CARD": N_("Tarjeta"), "NEQUI": N_("Nequi")}
+
+
+def usd_entero(usd):
+    """Un precio de plan (dólares enteros): «US$ 1.000» / «US$ 1,000»."""
+    return f"US$ {idiomas.numero(int(usd), 0)}"
+
+
+def fecha_larga(valor):
+    """El ISO del repo → «15 de noviembre de 2026» en el idioma de quien mira; None si no hay fecha."""
+    if not valor:
+        return None
+    try:
+        return idiomas.fecha_larga(datetime.fromisoformat(str(valor)[:19]).date())
+    except ValueError:
+        return None
+
+
+def margen_carta(cliente):
+    """El margen a la carta del proyecto (el propio o el global), o None si no se pudo leer (entonces la
+    pantalla no dice cuánto menos cuesta ser miembro: nunca una cifra inventada)."""
+    try:
+        c = libro.cuenta(cliente)
+        return float(c["margen_propio"]) if c.get("margen_propio") is not None else libro.margen_global()
+    except Exception:  # noqa: BLE001
+        log.warning("no se pudo leer el margen a la carta de %s", cliente, exc_info=True)
+        return None
+
+
+def descuento_miembro(margen_plan, carta):
+    """Cuánto menos (en %, entero) cuesta una generación a precio de miembro que a la carta; None si no es
+    menos o no se sabe."""
+    try:
+        pct = int(round(100 * (1 - float(margen_plan) / float(carta))))
+    except (TypeError, ValueError, ZeroDivisionError):
+        return None
+    return pct if pct > 0 else None
+
+
+def meses_gratis(plan):
+    """Meses que regala el precio anual frente a doce mensuales (0 si no hay anual o no regala nada)."""
+    anual, mes = plan.get("precio_anual_usd"), plan.get("precio_usd")
+    if not anual or not mes:
+        return 0
+    return max(0, int(12 - anual / mes + 1e-9))
+
+
+def _situacion(e):
+    sus = e["suscripcion"]
+    if sus is None:
+        return "sin_plan"
+    if sus["estado"] == "morosa":
+        return "morosa"
+    if sus["estado"] == "cancelada":
+        return "anulada" if any(p["estado"] == "anulado" for p in e["pagos"]) else "cancelada"
+    if not sus["renovar"]:
+        return "manual"
+    return "activa"
+
+
+def _pago_visible(p):
+    """Un pago del historial, sin lo interno: el motivo de un pago a mano es la nota del admin (no se muestra);
+    el de Wompi es lo que dijo Wompi del rechazo."""
+    motivo = p.get("motivo") if p.get("medio") != "manual" else None
+    return {"id": p["id"], "fecha": fecha_larga(p["creado_en"]), "monto": usd_entero(p["usd"]),
+            "medio": gettext("Transferencia") if p.get("medio") == "manual" else "Wompi",
+            "estado": p["estado"], "estado_texto": _nombre_estado(p["estado"]),
+            "ciclo": p.get("ciclo"), "motivo": _limpio(motivo)}
+
+
+def _nombre_estado(estado):
+    mensaje = ESTADOS_PAGO_PLAN.get(estado)
+    return gettext(mensaje) if mensaje else str(estado or "")
+
+
+def _limpio(texto):
+    if not texto:
+        return None
+    import cola  # noqa: PLC0415
+    return cola.sin_token(str(texto))[:200]
+
+
+def _nombre_medio(medio):
+    mensaje = MEDIOS_FUENTE.get(medio)   # Babel 2.18: gettext(DICT[clave]) extraería la clave como msgid
+    return gettext(mensaje) if mensaje else None
+
+
+def oferta(planes_activos, carta):
+    """Las tarjetas de los planes que se ofrecen: precio mensual, anual con sus meses gratis y cuánto menos
+    cuesta generar. Ni el margen ni el tope de lo incluido salen de aquí."""
+    out = []
+    for p in planes_activos:
+        out.append({"id": p["id"], "nombre": p["nombre"], "precio": usd_entero(p["precio_usd"]),
+                    "precio_usd": int(p["precio_usd"]),
+                    "anual": usd_entero(p["precio_anual_usd"]) if p.get("precio_anual_usd") else None,
+                    "meses_gratis": meses_gratis(p), "descuento_pct": descuento_miembro(p["margen"], carta)})
+    return out
+
+
+def plan_para_cliente(cliente):
+    """Todo lo que pinta Configuración › Plan, ya listo para mostrar y SIN
+    nada de costo: ni el margen, ni el tope de lo incluido en dólares de
+    costo, ni el costo de lo usado (spec planes §8; el cliente ve precios, %
+    y fechas). Lanza si la lectura falla (la ruta responde «no se pudo
+    cargar», nunca una cifra a medias)."""
+    from cobros import planes, wompi  # noqa: PLC0415
+    e = planes.estado_cliente(cliente)
+    carta = margen_carta(cliente)
+    situacion = _situacion(e)
+    sus, plan_ = e["suscripcion"], e["plan"]
+    vista_ = {"situacion": situacion, "wompi_listo": wompi.configurado(), "planes": [], "plan": None,
+              "bolsa": None, "incluido_pct": None, "ahorro": None, "pagos": [], "pago_pendiente_id": None}
+    if sus is None:
+        vista_["planes"] = oferta(planes.listar(), carta)
+        return vista_
+    pendientes = [p for p in e["pagos"] if p["estado"] == "pendiente"]
+    vista_.update({
+        "plan": {"nombre": plan_["nombre"] if plan_ else "", "descuento_pct": descuento_miembro(
+            e["periodo"]["margen"] if e["periodo"] else (plan_ or {}).get("margen"), carta)},
+        "ciclo": sus["ciclo"],
+        "renueva_el": fecha_larga(e.get("renueva_el")),
+        "termina_el": fecha_larga(e.get("termina_el")),
+        "monto_renovacion": usd_entero(e["monto_renovacion_usd"]) if e.get("monto_renovacion_usd") else None,
+        "tarjeta": sus.get("fuente_resumen") or _nombre_medio(sus.get("medio_fuente")),
+        "puede_cambiar_tarjeta": sus["estado"] in ("activa", "morosa") and sus["renovar"],
+        "puede_cancelar": sus["estado"] in ("activa", "morosa"),
+        "reintento_el": fecha_larga(e.get("reintento_el")),
+        "intentos_restantes": e.get("intentos_restantes"),
+        "incluido_pct": e.get("incluido_pct"),
+        "ahorro": gastos.formatear(e["ahorro_milesimas"] / 1000) if e.get("ahorro_milesimas") else None,
+        "pagos": [_pago_visible(p) for p in e["pagos"]],
+        "pago_pendiente_id": pendientes[0]["id"] if pendientes else None,
+    })
+    b = e.get("bolsa")
+    if b is not None:
+        vista_["bolsa"] = {"credito": gastos.formatear(b["credito"] / 1000),
+                           "gastado": gastos.formatear(b["gastado"] / 1000),
+                           "restante": gastos.formatear(b["restante"] / 1000),
+                           "usado_pct": int(b["usado_pct"]), "vence_el": fecha_larga(b["fin"])}
+    return vista_
+
+
+def estado_pago_plan(cliente, pago_id):
+    """El estado guardado de un pago de plan de `cliente`, o None si no es suyo. Solo lee."""
+    pp = db.pago_plan
+    with db.conectar() as con:
+        f = con.execute(sa.select(pp.c.cliente, pp.c.estado).where(pp.c.id == int(pago_id))).first()
+    return f.estado if f is not None and f.cliente == cliente else None

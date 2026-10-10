@@ -123,6 +123,16 @@ def configurado():
     return _estado()[1] is None
 
 
+def llave_publica():
+    """La llave pública para el widget de tokenización (planes 6/8: va en el
+    HTML del formulario de alta, `data-public-key`; es pública por diseño), o
+    None si Wompi no está configurado. Nunca las otras tres."""
+    return _publica() if configurado() else None
+
+
+WIDGET = "https://checkout.wompi.co/widget.js"   # el widget de tokenización (wompi-api.md §5.b)
+
+
 def pruebas():
     """¿Las llaves son de pruebas (sandbox)? No dice si sirven: eso es `configurado`."""
     return _ambiente_de("WOMPI_LLAVE_PUBLICA") == "test"

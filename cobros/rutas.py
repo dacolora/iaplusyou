@@ -13,7 +13,10 @@
   regla que `dashboard.requiere_admin`) y sus POST pasan por la barrera CSRF.
   Escriben a través de `libro.configurar`, `libro.guardar_margen_global` y
   `recargas.manual`, nunca directo en las tablas."""
+import json
+import logging
 import os
+import re
 import threading
 import time
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
@@ -31,9 +34,10 @@ import gastos
 import idiomas
 import proyectos
 import usuarios
-from cobros import bold, libro, pasarela, recargas, vista, wompi
+from cobros import bold, libro, pasarela, planes, recargas, vista, wompi
 
 bp = Blueprint("cobros", __name__)
+log = logging.getLogger(__name__)
 
 TOPE_RECARGAS_HORA = 10
 ESPERA_VERIFICAR = 3        # segundos entre dos consultas a Bold por la misma recarga
@@ -147,7 +151,8 @@ def saldo_panel(cliente):
                            movs=vista.movimientos(cliente), pagina=1, recargas=lista,
                            consultables={r["id"] for r in lista if recargas.consultable(r)},
                            estados_recarga=vista.ESTADOS_RECARGA, pasarela=pasarela.para_recargas(),
-                           min_usd=recargas.MIN_USD, max_usd=recargas.MAX_USD, solo_filas=False)
+                           min_usd=recargas.MIN_USD, max_usd=recargas.MAX_USD, solo_filas=False,
+                           bolsa=vista.bolsa_o_none(cliente) if e["cobrar"] else None)
 
 
 @bp.get("/cliente/<cliente>/saldo/movimientos")
@@ -278,6 +283,351 @@ def wompi_eventos():
         return "", 413
     status, _resultado = recargas.procesar_evento_wompi(cuerpo, request.headers.get("X-Event-Checksum"))
     return "", status
+
+
+# --------------------------------------------- Configuración › Plan (planes 6/8) ---
+#
+# Spec planes §5.2, §7 y §8. Las mismas puertas que el saldo: la sesión, el
+# proyecto de la URL (`_guard_por_cliente`) y la barrera CSRF en los POST; además
+# solo un proyecto que cobra o el admin (`_puede_ver_saldo`, si no 404). Nada se
+# escribe aquí: `planes.suscribir`, `cambiar_fuente` y `cancelar`. La tarjeta la
+# captura el widget de Wompi (su script solo se carga en plan_alta.html): el
+# número nunca pasa por nuestra página ni por este servidor; llega un token.
+
+TOPE_ALTAS_HORA = 10        # altas y cambios de tarjeta por proyecto y hora (cada uno crea una fuente en Wompi)
+TOPE_NEQUI_HORA = 6         # pedidos a Nequi por proyecto y hora (cada uno manda una notificación al celular)
+MAX_CAMPOS_FORMULARIO = 40
+_TOKEN_TARJETA = re.compile(r"tok_(?:test|prod)_[A-Za-z0-9_-]{1,190}")
+_SESION_NEQUI = "plan_nequi"   # los tokens de Nequi que pidió ESTA sesión (solo esos se sondean y se aceptan)
+
+
+@bp.app_template_filter("fecha_larga")
+def _filtro_fecha_larga(valor):
+    """«15 de noviembre de 2026» de una fecha ISO guardada, en el idioma de quien mira; vacío si no se lee."""
+    return vista.fecha_larga(valor) or ""
+
+
+def _volver_plan(cliente):
+    return redirect(url_for("ver_cliente", cliente=cliente) + "#config-ap-plan")
+
+
+def _exigir_plan(cliente):
+    if not _puede_ver_saldo(cliente):
+        abort(404)
+
+
+@bp.get("/cliente/<cliente>/plan/panel")
+def plan_panel(cliente):
+    """El fragmento de Configuración › Plan que pide static/planes.js al abrir
+    el apartado: la página del proyecto no paga sus consultas. Si la lectura
+    falla, «no se pudo cargar» (nunca una cifra a medias, nunca un costo)."""
+    _exigir_plan(cliente)
+    try:
+        v = vista.plan_para_cliente(cliente)
+    except Exception:  # noqa: BLE001 — falla cerrado
+        log.exception("no se pudo armar el panel del plan de %s", cliente)
+        return render_template("_plan_panel.html", cliente=cliente, v=None, error=True), 500
+    return render_template("_plan_panel.html", cliente=cliente, v=v, error=False)
+
+
+def _precio_ciclo(fila, ciclo):
+    return fila.get("precio_anual_usd") if ciclo == "anual" else fila.get("precio_usd")
+
+
+def _correo_sugerido(sus=None):
+    if sus and sus.get("correo"):
+        return sus["correo"]
+    cuenta = usuarios.obtener(session.get("usuario")) or {}
+    return (cuenta.get("correo") or "").strip() if cuenta.get("correo_verificado") else ""
+
+
+def _formulario(cliente, modo, plan_, ciclo, precio_usd, sus=None):
+    """plan_alta.html: el alta (`modo="alta"`) o el cambio de tarjeta
+    (`"tarjeta"`). Los contratos de Wompi se piden al pintar (sus tokens duran
+    ≈1 h) con espera corta; sin Wompi, el aviso y ningún formulario."""
+    llave = wompi.llave_publica()
+    aceptaciones, problema = None, None
+    if llave is None:
+        problema = gettext("Los pagos con tarjeta no están disponibles ahora; escríbenos para activar tu plan")
+    else:
+        try:
+            aceptaciones = wompi.aceptaciones(tiempo=wompi.TIEMPO_INTERACTIVO)
+        except wompi.ErrorWompi:
+            problema = gettext("Wompi no responde en este momento. Intenta de nuevo en unos minutos.")
+    return render_template("plan_alta.html", cliente=cliente, modo=modo, plan=plan_, ciclo=ciclo,
+                           precio_usd=precio_usd, precio_texto=vista.usd_entero(precio_usd) if precio_usd else None,
+                           mensual_texto=vista.usd_entero(plan_["precio_usd"]) if plan_ else None,
+                           anual_texto=(vista.usd_entero(plan_["precio_anual_usd"])
+                                        if plan_ and plan_.get("precio_anual_usd") else None),
+                           meses_gratis=vista.meses_gratis(plan_) if plan_ else 0,
+                           llave_publica=llave, widget=wompi.WIDGET, aceptaciones=aceptaciones, problema=problema,
+                           correo=_correo_sugerido(sus), tarjeta=(sus or {}).get("fuente_resumen"))
+
+
+@bp.get("/cliente/<cliente>/plan/alta")
+def plan_alta(cliente):
+    """El formulario de alta de un plan (`?plan=<id>&ciclo=mensual|anual`):
+    el precio del ciclo, el correo de cobro, las tres casillas y el medio de
+    pago (el widget de Wompi para tarjeta, o Nequi)."""
+    _exigir_plan(cliente)
+    plan_ = planes.leer_plan(request.args.get("plan"))
+    if plan_ is None or not plan_["activo"]:
+        flash(gettext("Ese plan no está disponible"), "error")
+        return _volver_plan(cliente)
+    if planes.suscripcion(cliente) is not None:
+        flash(gettext("Este proyecto ya tiene un plan"), "error")
+        return _volver_plan(cliente)
+    ciclo = request.args.get("ciclo") if request.args.get("ciclo") in planes.CICLOS else "mensual"
+    if not _precio_ciclo(plan_, ciclo):
+        ciclo = "mensual"
+    return _formulario(cliente, "alta", plan_, ciclo, _precio_ciclo(plan_, ciclo))
+
+
+@bp.get("/cliente/<cliente>/plan/tarjeta")
+def plan_tarjeta(cliente):
+    """Cambiar la tarjeta (o pasar a Nequi) de un plan que se renueva solo:
+    la casilla del cobro dice el precio ACEPTADO (el de la suscripción)."""
+    _exigir_plan(cliente)
+    sus = planes.suscripcion(cliente)
+    if sus is None or sus["estado"] not in ("activa", "morosa") or not sus["renovar"]:
+        flash(gettext("Este plan no se renueva con tarjeta: no hay tarjeta que cambiar."), "error")
+        return _volver_plan(cliente)
+    plan_ = planes.leer_plan(sus["plan_id"])
+    return _formulario(cliente, "tarjeta", plan_, sus["ciclo"], _precio_ciclo(sus, sus["ciclo"]), sus=sus)
+
+
+def _aceptacion(form):
+    """Los dos tokens de Wompi (campos ocultos del formulario; Wompi los firma) y
+    las tres casillas, cada una `True` solo si vino marcada con «1»."""
+    return {"acceptance_token": (form.get("acceptance_token") or "").strip(),
+            "personal_token": (form.get("personal_token") or "").strip(),
+            **{c: form.get(c) == "1" for c in planes.CONSENTIMIENTOS}}
+
+
+def _token_en(valor):
+    """Un token de tarjeta de Wompi (`tok_test_…`/`tok_prod_…`) en `valor`: el
+    texto tal cual, o un JSON con ese `id`/`token` (también dentro de `data`)."""
+    texto = str(valor or "").strip()
+    if _TOKEN_TARJETA.fullmatch(texto):
+        return texto
+    if not texto.startswith("{") or len(texto) > 5000:
+        return None
+    try:
+        d = json.loads(texto)
+    except ValueError:
+        return None
+    for bloque in (d, d.get("data") if isinstance(d, dict) else None):
+        if isinstance(bloque, dict):
+            for clave in ("id", "token"):
+                v = bloque.get(clave)
+                if isinstance(v, str) and _TOKEN_TARJETA.fullmatch(v.strip()):
+                    return v.strip()
+    return None
+
+
+def _token_tarjeta(form):
+    """El token que dejó el widget de Wompi en el formulario. Primero el campo
+    `token`; si no, cualquier campo con forma de token de tarjeta (o un JSON con
+    él): la doc de Wompi no dice con qué nombre lo pone el widget en tokenize
+    (docs/pagos/wompi-api.md §13.1) y se confirma en sandbox. Wompi rechaza un
+    token que no sea de nuestro comercio o ya usado."""
+    campos = list(form.items(multi=True))[:MAX_CAMPOS_FORMULARIO]
+    for _clave, valor in sorted(campos, key=lambda kv: kv[0] != "token"):
+        token = _token_en(valor)
+        if token:
+            return token
+    return None
+
+
+def _medio(form):
+    """(tipo, token): tarjeta con el token del widget, o Nequi con un token que
+    pidió ESTA sesión (`plan_nequi`). Sin token válido, (tipo, None)."""
+    tipo = (form.get("tipo") or "CARD").strip().upper()
+    if tipo == "NEQUI":
+        token = (form.get("token") or "").strip()
+        return "NEQUI", token if token and token in (session.get(_SESION_NEQUI) or []) else None
+    if tipo != "CARD":
+        return tipo, None
+    return "CARD", _token_tarjeta(form)
+
+
+def _olvidar_nequi(token):
+    lista = [t for t in (session.get(_SESION_NEQUI) or []) if t != token]
+    session[_SESION_NEQUI] = lista
+
+
+def _entero_exacto(texto):
+    t = str(texto or "").strip()
+    return int(t) if t.isdigit() and len(t) <= 9 else None
+
+
+def _pedido_de_medio(cliente, volver):
+    """Lo común del alta y del cambio de tarjeta: casillas, medio, correo y el
+    tope por hora. Devuelve (aceptacion, tipo, token, correo) o una respuesta
+    de vuelta al formulario con el aviso en palabras (sin hablar con Wompi)."""
+    f = request.form
+    aceptacion = _aceptacion(f)
+    if not all(aceptacion[c] is True for c in planes.CONSENTIMIENTOS):
+        flash(gettext("Para suscribirte tienes que aceptar los términos de Wompi, el tratamiento de datos "
+                      "y el cobro automático"), "error")
+        return volver
+    tipo, token = _medio(f)
+    if token is None:
+        flash(gettext("No recibimos los datos de tu medio de pago. Vuelve a ingresar la tarjeta o a aprobar en "
+                      "Nequi."), "error")
+        return volver
+    correo = wompi.correo_valido(f.get("correo"))
+    if correo is None:
+        flash(gettext("Escribe un correo válido para los recibos de Wompi."), "error")
+        return volver
+    if not cuentas.limite_ok(f"plan_alta:{cliente}", TOPE_ALTAS_HORA, 3600):
+        flash(gettext("Ya intentaste muchas veces en la última hora. Espera un rato o escríbenos."), "error")
+        return volver
+    return aceptacion, tipo, token, correo
+
+
+def _tras_cobro(cliente, estado, motivo, volver):
+    """El aviso de lo que pasó con el cobro, en palabras (spec §5.2.4)."""
+    if estado == "aprobado":
+        flash(gettext("Listo: tu plan está activo y el saldo del plan ya está en tu cuenta."), "ok")
+        return _volver_plan(cliente)
+    if estado in ("rechazado", "error"):
+        if motivo:
+            flash(gettext("Wompi no aprobó el pago (%(motivo)s). No se activó el cobro; puedes intentar con otro "
+                          "medio de pago.", motivo=cola.sin_token(str(motivo))[:200]), "error")
+        else:
+            flash(gettext("Wompi no aprobó el pago. No se activó el cobro; puedes intentar con otro medio de pago."),
+                  "error")
+        return volver
+    flash(gettext("Wompi está confirmando el pago. Te avisamos apenas llegue; mientras tanto puedes seguir usando "
+                  "la app."), "warn")
+    return _volver_plan(cliente)
+
+
+@bp.post("/cliente/<cliente>/plan/alta")
+def plan_suscribir(cliente):
+    """El alta (spec §5.2): con las tres casillas marcadas, el token del medio
+    de pago y el precio que la persona vio (`precio_visto_usd`, dólares
+    enteros); `planes.suscribir` se niega sin hablar con Wompi si falta algo o
+    si el precio cambió, crea la fuente y cobra el primer periodo."""
+    _exigir_plan(cliente)
+    plan_id, ciclo = request.form.get("plan_id"), request.form.get("ciclo") or "mensual"
+    volver = redirect(url_for("cobros.plan_alta", cliente=cliente, plan=plan_id, ciclo=ciclo))
+    pedido = _pedido_de_medio(cliente, volver)
+    if not isinstance(pedido, tuple):
+        return pedido
+    aceptacion, tipo, token, correo = pedido
+    try:
+        r = planes.suscribir(cliente, plan_id, ciclo, tipo, token, correo, aceptacion, session.get("usuario"),
+                             _entero_exacto(request.form.get("precio_visto_usd")))
+    except planes.ErrorPlan as e:
+        flash(cola.sin_token(str(e)), "error")
+        return volver
+    if tipo == "NEQUI":
+        _olvidar_nequi(token)
+    return _tras_cobro(cliente, r["estado"], r.get("motivo"), volver)
+
+
+@bp.post("/cliente/<cliente>/plan/tarjeta")
+def plan_cambiar_tarjeta(cliente):
+    """§7.5: otro medio de pago reemplaza al guardado (nunca prende la
+    renovación); si el plan estaba moroso, cobra en el acto."""
+    _exigir_plan(cliente)
+    volver = redirect(url_for("cobros.plan_tarjeta", cliente=cliente))
+    pedido = _pedido_de_medio(cliente, volver)
+    if not isinstance(pedido, tuple):
+        return pedido
+    aceptacion, tipo, token, correo = pedido
+    try:
+        r = planes.cambiar_fuente(cliente, tipo, token, correo, aceptacion, session.get("usuario"))
+    except planes.ErrorPlan as e:
+        flash(cola.sin_token(str(e)), "error")
+        return volver
+    if tipo == "NEQUI":
+        _olvidar_nequi(token)
+    if r.get("cobro") is None:
+        flash(gettext("Listo: guardamos tu nuevo medio de pago para los próximos cobros del plan."), "ok")
+        return _volver_plan(cliente)
+    return _tras_cobro(cliente, r["cobro"], None, volver)
+
+
+@bp.post("/cliente/<cliente>/plan/cancelar")
+def plan_cancelar(cliente):
+    """§7.4: no se renueva más; lo pagado sigue hasta su fin y no se devuelve.
+    El formulario trae `confirmo=1` (la frase se lee antes del botón)."""
+    _exigir_plan(cliente)
+    if request.form.get("confirmo") != "1":
+        flash(gettext("Para cancelar, confirma con el botón «Sí, cancelar el plan»."), "error")
+        return _volver_plan(cliente)
+    try:
+        r = planes.cancelar(cliente, session.get("usuario"))
+    except planes.ErrorPlan as e:
+        flash(str(e), "error")
+        return _volver_plan(cliente)
+    fecha = vista.fecha_larga(r.get("termina_el"))
+    if r["estado"] == "terminada" or not fecha:
+        flash(gettext("Cancelaste el plan. No se vuelve a cobrar."), "ok")
+    else:
+        flash(gettext("Cancelaste el plan: sigue hasta el %(fecha)s y no se vuelve a cobrar.", fecha=fecha), "ok")
+    return _volver_plan(cliente)
+
+
+@bp.get("/cliente/<cliente>/plan/pago/<int:pago_id>/estado")
+def plan_pago_estado(cliente, pago_id):
+    """El sondeo del panel mientras Wompi confirma un cobro: el estado guardado
+    y, como mucho una vez cada 3 s por pago y con cupo, una consulta corta a
+    Wompi (`planes.verificar_pago`)."""
+    _exigir_plan(cliente)
+    estado = vista.estado_pago_plan(cliente, pago_id)
+    if estado is None:
+        abort(404)
+    if estado == "pendiente" and _toca_verificar(f"plan:{pago_id}") and _SEMAFORO.acquire(blocking=False):
+        try:
+            estado = planes.verificar_pago(cliente, pago_id) or estado
+        except Exception:  # noqa: BLE001 — el sondeo informa; la periódica y el evento resuelven
+            log.warning("no se pudo verificar el pago de plan %s", pago_id, exc_info=True)
+        finally:
+            _SEMAFORO.release()
+    return jsonify({"estado": estado})
+
+
+@bp.post("/cliente/<cliente>/plan/nequi")
+def plan_nequi(cliente):
+    """Pide a Wompi un token de Nequi para el celular escrito: la persona
+    acepta la suscripción en su app y la página sondea su estado."""
+    _exigir_plan(cliente)
+    celular = re.sub(r"[\s-]", "", str(request.form.get("celular")
+                                        or (request.get_json(silent=True) or {}).get("celular") or ""))
+    if not wompi._CELULAR.fullmatch(celular):
+        return jsonify({"ok": False, "error": gettext("El celular de Nequi debe tener 10 dígitos y empezar por 3")}), 400
+    if not cuentas.limite_ok(f"plan_nequi:{cliente}", TOPE_NEQUI_HORA, 3600):
+        return jsonify({"ok": False, "error": gettext("Ya pediste muchas veces a Nequi en la última hora. "
+                                                      "Espera un rato.")}), 429
+    try:
+        token = wompi.token_nequi(celular, tiempo=wompi.TIEMPO_INTERACTIVO)
+    except wompi.ErrorWompi as e:
+        return jsonify({"ok": False, "error": cola.sin_token(str(e))}), 502
+    session[_SESION_NEQUI] = ([t for t in (session.get(_SESION_NEQUI) or []) if t != token] + [token])[-5:]
+    return jsonify({"ok": True, "token": token,
+                    "estado_url": url_for("cobros.plan_nequi_estado", cliente=cliente, token=token)})
+
+
+@bp.get("/cliente/<cliente>/plan/nequi/<token>/estado")
+def plan_nequi_estado(cliente, token):
+    """PENDING, APPROVED o DECLINED de un token de Nequi que pidió esta sesión
+    (como mucho una consulta cada 3 s por token y con cupo; si no, PENDING)."""
+    _exigir_plan(cliente)
+    if token not in (session.get(_SESION_NEQUI) or []):
+        abort(404)
+    estado = "PENDING"
+    if _toca_verificar(f"nequi:{token}") and _SEMAFORO.acquire(blocking=False):
+        try:
+            estado = wompi.estado_token_nequi(token)
+        except wompi.ErrorWompi:
+            estado = "PENDING"
+        finally:
+            _SEMAFORO.release()
+    return jsonify({"estado": estado if estado in ("PENDING", "APPROVED", "DECLINED") else "PENDING"})
 
 
 # ------------------------------------------------------------ /admin/cobros ---

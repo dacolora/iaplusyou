@@ -49,6 +49,7 @@
   <button type="button" class="cat-tab" data-apartado="cuenta">{{ _('Cuenta y avisos') }}</button>
   <button type="button" class="cat-tab" data-apartado="gasto">{{ _('Gasto') }}</button>
   {% if (cobros_cuenta and cobros_cuenta.cobrar) or es_admin %}<button type="button" class="cat-tab" data-apartado="saldo">{{ _('Saldo y recargas') }}</button>{% endif %}
+  {% if (cobros_cuenta and cobros_cuenta.cobrar) or es_admin %}<button type="button" class="cat-tab" data-apartado="plan">{{ _('Plan') }}</button>{% endif %}
 </nav>
 
 {% if es_admin %}
@@ -751,6 +752,9 @@
 {% if (cobros_cuenta and cobros_cuenta.cobrar) or es_admin %}
 <section class="config-apartado" id="config-ap-saldo" data-apartado="saldo">
 {% include "_config_saldo.html" %}
+</section>
+<section class="config-apartado" id="config-ap-plan" data-apartado="plan">
+{% include "_config_plan.html" %}
 </section>
 {% endif %}
 

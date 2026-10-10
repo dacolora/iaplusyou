@@ -193,6 +193,13 @@ def fecha_corta(fecha, con_hora=False, idioma=None):
     return format_date(fecha, "d MMM", locale=loc)
 
 
+def fecha_larga(fecha, idioma=None):
+    """«15 de noviembre de 2026» / «November 15, 2026» (CLDR «long»): la fecha
+    de renovación de un plan (planes 6/8)."""
+    from babel.dates import format_date
+    return format_date(fecha, "long", locale=_loc(idioma))
+
+
 _PATRON_DIA_MES = {"es": "dd/MM", "en": "MM/dd"}
 
 
