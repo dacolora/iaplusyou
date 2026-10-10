@@ -195,6 +195,25 @@ def fecha_corta(fecha, con_hora=False, idioma=None):
     return format_date(fecha, "d MMM", locale=loc)
 
 
+def fecha_larga(fecha, idioma=None):
+    """«15 de noviembre de 2026» / «November 15, 2026» (CLDR «long»): la fecha
+    de renovación de un plan (planes 6/8)."""
+    from babel.dates import format_date
+    return format_date(fecha, "long", locale=_loc(idioma))
+
+
+_PATRON_FECHA_HORA = {"es": "d 'de' MMMM 'de' y 'a las' HH:mm", "en": "MMMM d, y 'at' h:mm a"}
+
+
+def fecha_hora_larga(momento, idioma=None):
+    """«14 de noviembre de 2026 a las 23:30» / «November 14, 2026 at 11:30 PM»: el momento real del cobro de una
+    renovación (revisión final de planes, 2026-10-10: se cobra una hora antes del fin de lo pagado). La hora es
+    la del servidor (America/Bogota), sin convertir."""
+    from babel.dates import format_datetime
+    loc = _loc(idioma)
+    return format_datetime(momento, _PATRON_FECHA_HORA[loc], locale=loc)
+
+
 _PATRON_DIA_MES = {"es": "dd/MM", "en": "MM/dd"}
 
 

@@ -3928,6 +3928,102 @@ body:has(#exp-nuevo) main { margin-left: 0; max-width: 1440px; width: 100%; }
 .cobros-admin-tabla td:last-child { white-space: normal; min-width: 15rem; }
 .cobros-admin-recarga summary { white-space: nowrap; }
 .cobros-admin-perdida { color: var(--error); font-weight: 600; }
+
+/* /admin/cobros, planes y suscripciones (planes 7/8): notas cortas bajo una cifra, casillas en línea, un pago
+   pendiente por resolver y el formulario de un plan nuevo. Los formularios de acciones van dentro de un <details>
+   de la última columna (cobros-admin-recarga), cada uno separado por una línea. */
+.cobros-admin-nota { color: var(--muted); font-size: .8rem; white-space: normal; }
+.cobros-admin-casilla { display: flex !important; align-items: center; gap: var(--esp-1); }
+.cobros-admin-recarga .agencia-form + .agencia-form { border-top: 1px solid var(--border); padding-top: var(--esp-2); }
+.cobros-admin-recarga .agencia-form p { margin: 0; }
+.cobros-admin-pendiente { border-left: 3px solid var(--error); padding-left: var(--esp-2); }
+.cobros-admin-nuevo { margin-top: var(--esp-3); }
+.cobros-admin-junto { white-space: nowrap; }
+/* La tabla de planes por proyecto envuelve el texto (ocho columnas con fechas largas): sin esto la columna de
+   acciones quedaba fuera de la caja en un escritorio de 1366 px (visto en la captura del 2026-10-10). */
+.cobros-admin-planes td { white-space: normal; }
+.cobros-admin-planes td:last-child { min-width: 17rem; }
+.cobros-admin-planes .agencia-form { grid-template-columns: minmax(0, 1fr); max-width: 100%; }
+.cobros-admin-planes .agencia-form select, .cobros-admin-planes .agencia-form input[type="text"] { width: 100%; min-width: 0; }
+/* ── estilos/pantallas/planes.css ── */
+/* Planes (planes 6/8, spec 2026-10-09 §8). Uso: Configuración › Plan (_config_plan.html y el fragmento
+   _plan_panel.html: ofertas .plan-oferta, medidores .plan-medidor con <progress class="plan-barra">, aviso de
+   morosa .plan-aviso, historial .plan-pagos, cancelar .plan-cancelar) y el formulario de alta o cambio de
+   tarjeta (plan_alta.html, #plan-alta: ciclos, casillas, pestañas Tarjeta / Nequi y el botón del widget de Wompi,
+   hijo directo de .plan-form, que queda .plan-bloqueado hasta marcar las tres casillas). El saldo del plan en Configuración › Saldo es .saldo-plan. */
+.plan-panel [hidden], #plan-alta [hidden] { display: none !important; }
+.plan-panel { min-width: 0; }
+.plan-panel h3 { margin: var(--esp-5) 0 var(--esp-2); }
+/* Un <a class="btn-generar"> no hereda el relleno ni la letra de <button> (base visual): los enlaces-botón de aquí sí. */
+.plan-panel a.btn-generar, #plan-alta a.btn-generar { font-family: var(--font-display); font-weight: 600; font-size: .87rem;
+  padding: .65rem 1.15rem; border-radius: var(--radius-sm); }
+
+/* Sin plan: las tarjetas de los planes */
+.plan-ofertas { display: grid; gap: var(--esp-4); grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); max-width: 900px; }
+.plan-oferta { display: flex; flex-direction: column; gap: var(--esp-2); padding: var(--esp-4); border: 1px solid var(--border);
+  border-radius: var(--radius); background: var(--panel); min-width: 0; }
+.plan-oferta h3 { margin: 0; font-family: var(--font-display); }
+.plan-precio { margin: 0; color: var(--muted); }
+.plan-precio strong { font-size: var(--t-cifra); color: var(--text); font-family: var(--font-display); }
+.plan-anual { margin: 0; color: var(--muted); font-size: var(--t-chico); }
+.plan-anual strong { color: var(--ok); }
+.plan-beneficios { margin: var(--esp-2) 0; padding-left: var(--esp-5); display: grid; gap: var(--esp-1); }
+.plan-suscribirme { align-self: flex-start; margin-top: auto; }
+
+/* Con plan: cabecera, notas, medidores y ahorro */
+.plan-cabecera { display: flex; flex-wrap: wrap; gap: var(--esp-2); align-items: center; margin-top: var(--esp-3); }
+.plan-cabecera h3 { margin: 0; }
+.plan-estado-activa { color: var(--ok); }
+.plan-estado-morosa { color: var(--error); }
+.plan-estado-cancelada, .plan-estado-anulada, .plan-estado-manual { color: var(--warn); }
+.plan-nota { max-width: 720px; overflow-wrap: anywhere; }
+.plan-aviso { display: grid; gap: var(--esp-2); justify-items: start; max-width: 720px; }
+.plan-aviso p { margin: 0; }
+.plan-esperando { max-width: 720px; }
+.plan-medidor { display: grid; gap: var(--esp-2); max-width: 720px; margin-top: var(--esp-4); padding: var(--esp-4);
+  border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); }
+.plan-medidor-linea { display: flex; flex-wrap: wrap; gap: var(--esp-2); justify-content: space-between; align-items: baseline; }
+.plan-medidor-linea strong { font-size: var(--t-titulo); font-family: var(--font-display); }
+.plan-medidor-detalle { margin: 0; color: var(--muted); font-size: var(--t-chico); overflow-wrap: anywhere; }
+.plan-barra { -webkit-appearance: none; appearance: none; width: 100%; height: 10px; border: 0; border-radius: var(--radius-pastilla);
+  background: var(--panel-2); overflow: hidden; }
+.plan-barra::-webkit-progress-bar { background: var(--panel-2); border-radius: var(--radius-pastilla); }
+.plan-barra::-webkit-progress-value { background: var(--accent-grad); border-radius: var(--radius-pastilla); }
+.plan-barra::-moz-progress-bar { background: var(--accent-grad); border-radius: var(--radius-pastilla); }
+.plan-barra-incluido::-webkit-progress-value { background: var(--ok); }
+.plan-barra-incluido::-moz-progress-bar { background: var(--ok); }
+.plan-ahorro { max-width: 720px; margin-top: var(--esp-4); }
+.plan-ahorro p { margin: 0 0 var(--esp-1); }
+.plan-tarjeta { display: grid; gap: var(--esp-2); justify-items: start; }
+.plan-tarjeta p { margin: 0; }
+.plan-pago-aprobado { color: var(--ok); }
+.plan-pago-rechazado, .plan-pago-error, .plan-pago-anulado { color: var(--error); }
+.plan-pago-pendiente { color: var(--warn); }
+.plan-cancelar { margin-top: var(--esp-5); max-width: 720px; }
+.plan-cancelar p { overflow-wrap: anywhere; }
+.plan-cancelar-si { border-color: var(--error); }
+
+/* Saldo partido (Configuración › Saldo) */
+.saldo-tile.saldo-plan { border-color: var(--accent); }
+
+/* Alta o cambio de tarjeta */
+.plan-alta { display: grid; gap: var(--esp-4); max-width: 640px; min-width: 0; }
+.plan-ciclos { flex-wrap: wrap; }
+.plan-ciclos .cat-tab { text-decoration: none; }
+.plan-ayuda { margin: 0; color: var(--muted); font-size: var(--t-chico); line-height: 1.45; overflow-wrap: anywhere; }
+.plan-form { display: grid; gap: var(--esp-3); min-width: 0; }
+.plan-form input[type=email] { max-width: 420px; width: 100%; }
+.plan-casillas { display: grid; gap: var(--esp-3); margin: 0; padding: var(--esp-4); border: 1px solid var(--border);
+  border-radius: var(--radius); background: var(--panel); min-width: 0; }
+.plan-casillas legend { padding: 0 var(--esp-1); font-weight: 600; }
+.plan-casillas label { display: flex; gap: var(--esp-2); align-items: flex-start; line-height: 1.45; }
+.plan-casillas input[type=checkbox] { flex: 0 0 auto; margin-top: 3px; }
+.plan-casillas span { min-width: 0; overflow-wrap: anywhere; }
+.plan-medio { display: grid; gap: var(--esp-2); min-width: 0; }
+.plan-medios-titulo { margin: var(--esp-3) 0 0; }
+.plan-form > button.plan-bloqueado, .plan-form > .waybox-button.plan-bloqueado { opacity: 0.45; pointer-events: none; filter: grayscale(1); }
+.plan-form > button { justify-self: start; }
+.plan-widget-aviso { color: var(--warn); }
 /* ── estilos/pantallas/triple-whale.css ── */
 /* ============================================================
    Triple Whale: la conexión con varias tiendas (spec 2026-10-08 §6.2). Uso:

@@ -499,10 +499,40 @@ _ESTIMADORES = {
 }
 
 
+# Estimador → el tipo de GASTO que anota (solo los de Claude y la transcripción, que un plan puede incluir:
+# cobros.planes.TIPOS_INCLUIDOS). Con plan y tope libre su texto dice «Incluido en tu plan» (spec planes §4 y §8).
+GASTO_DE_ESTIMADOR = {
+    "guion": "guion", "regla_producto": "regla_producto", "caption_organico": "caption_organico",
+    "adaptar_referente": "adaptar_referente", "leer_referente": "adaptar_referente", "sugerir_ia": "sugerir_ia",
+    "refinar_prompt": "refinar_prompt", "clasificacion": "clasificacion", "transcripcion": "transcripcion",
+    "guion_clips": "guion_clips", "reescribir_idea": "ideas", "proponer_ideas": "ideas",
+    "pedidos_producto": "pedidos", "revision_pieza": "revision", "diagnostico_pieza": "revision",
+    "evaluacion_tw": "evaluacion", "analisis_anuncio_tw": "evaluacion",
+}
+INCLUIDO = N_("Incluido en tu plan")
+
+
+def _incluido_aqui(tipo_estimador, usd):
+    """¿En esta petición el gasto entra en lo incluido del plan del proyecto? Nunca lanza."""
+    gasto = GASTO_DE_ESTIMADOR.get(tipo_estimador)
+    if gasto is None or usd is None:
+        return False
+    try:
+        from flask import g, has_request_context  # noqa: PLC0415
+        if not has_request_context():
+            return False
+        from cobros import planes  # noqa: PLC0415
+        return planes.incluye(g.get("cliente_precio"), gasto, usd)
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def estimar(tipo, **params):
     """{"usd": float|None, "texto": "US$ 0,10 aprox." | "precio no disponible",
     "detalle": str}. Nunca lanza: sin tarifa (tipo o modelo desconocido,
-    proveedor que revienta) devuelve usd=None."""
+    proveedor que revienta) devuelve usd=None. Con un plan que lo incluye (y
+    tope libre), `texto` dice «Incluido en tu plan» e `incluido` es True; `usd`
+    sigue siendo el costo."""
     fn = _ESTIMADORES.get(tipo)
     if fn is None:
         return _estimado(None, f"tipo desconocido: {tipo}")
@@ -511,7 +541,10 @@ def estimar(tipo, **params):
     except Exception as e:  # noqa: BLE001 — el precio es informativo, nunca bloquea
         log.warning("estimar(%s, %s) falló: %s", tipo, params, e)
         return _estimado(None, "sin tarifa para esos parámetros")
-    return _estimado(usd, detalle)
+    est = _estimado(usd, detalle)
+    if _incluido_aqui(tipo, est["usd"]):
+        est = {**est, "texto": gettext(INCLUIDO), "incluido": True}
+    return est
 
 
 # ----------------------------------------------------------- registrar ---
@@ -635,6 +668,15 @@ def _despues_del_cobro(cliente, resultado, gasto_id, usd, tipo, referencia):
             s = libro.saldo(cliente)
             if s < c["umbral"]:
                 avisos.saldo_bajo(cliente, s)
+        # Planes (spec 2026-10-09 §4): lo incluido no le avisa nada al cliente; al admin, al 80 % y al 100 % del
+        # tope. Un `cobro` de un tipo incluido con el periodo abierto es uno que ya no cupo en el tope.
+        if resultado in ("incluido", "cobro"):
+            from cobros import planes  # noqa: PLC0415
+            if tipo in planes.TIPOS_INCLUIDOS:
+                periodo = planes.periodo_abierto(None, cliente, ahora=db.ahora())
+                if periodo is not None:
+                    avisos.tope_incluido(cliente, periodo, planes.incluido_usado(cliente, periodo),
+                                         agotado=resultado == "cobro")
     except Exception:  # noqa: BLE001
         log.exception("aviso del cobro de %s falló", referencia)
 

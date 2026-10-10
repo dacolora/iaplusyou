@@ -1,0 +1,108 @@
+{# Alta de un plan o cambio de tarjeta (planes 6/8, spec 2026-10-09 §5.2 y
+   §7.5). Contexto: cliente, modo ("alta" | "tarjeta"), plan, ciclo,
+   precio_usd/precio_texto (el del ciclo; en "tarjeta", el precio ACEPTADO de
+   la suscripción), mensual_texto, anual_texto, meses_gratis, llave_publica,
+   widget, aceptaciones (wompi.aceptaciones: los dos tokens y sus enlaces),
+   problema (texto si Wompi no está), correo, tarjeta.
+   ES LA ÚNICA PÁGINA que carga el widget de Wompi (`widget`, modo
+   tokenize, con la llave pública): el número de la tarjeta se escribe en la
+   ventana de Wompi y aquí solo llega un token. Lo que el widget pone en el
+   formulario no está documentado (docs/pagos/wompi-api.md §13.1): el
+   servidor busca el token en `token` o en cualquier campo (cobros.rutas.
+   _token_tarjeta); se confirma en sandbox. static/planes.js bloquea el botón
+   del widget hasta marcar las tres casillas (el servidor las exige igual) y
+   lleva el camino de Nequi. #}
+{% extends "base.html" %}
+{% block title %}{% if modo == 'alta' %}{{ _('Suscribirme al plan') }}{% elif morosa %}{{ _('Actualizar tarjeta y pagar el plan') }}{% else %}{{ _('Cambiar medio de pago') }}{% endif %}{% endblock %}
+{% block content %}
+{% set volver = url_for('ver_cliente', cliente=cliente) ~ '#config-ap-plan' %}
+<div class="plan-alta" id="plan-alta"
+     data-texto-esperando="{{ _('Abre tu app de Nequi y acepta la suscripción. Esta página sigue sola cuando la apruebes.') }}"
+     data-texto-aprobado="{{ _('Nequi aprobó. Estamos activando el cobro…') }}"
+     data-texto-rechazado="{{ _('Nequi no aprobó la suscripción. Puedes intentar de nuevo o pagar con tarjeta.') }}"
+     data-texto-tarde="{{ _('Nequi todavía no responde. Revisa tu app y vuelve a intentar.') }}"
+     data-texto-error="{{ _('No pudimos hablar con Nequi. Intenta de nuevo en un rato.') }}">
+  <div class="panel-cabecera">
+    <div>
+      {% if modo == 'alta' %}
+      <h2>{{ _('Plan %(nombre)s', nombre=plan.nombre) }}</h2>
+      <p class="panel-cabecera-desc">{% if ciclo == 'anual' %}{{ _('%(precio)s al año, en pesos colombianos a la TRM del día.', precio=precio_texto) }}{% else %}{{ _('%(precio)s al mes, en pesos colombianos a la TRM del día.', precio=precio_texto) }}{% endif %}</p>
+      {% elif morosa %}
+      {# Morosa: guardar el medio nuevo cobra en el acto (planes.cambiar_fuente fuerza el cobro). #}
+      <h2>{{ _('Actualizar tarjeta y pagar el plan') }}</h2>
+      <p class="panel-cabecera-desc plan-cobro-ahora"><strong>{{ _('Al guardar, cobramos ahora %(monto)s (en pesos a la TRM del día) para recuperar tu plan.', monto=precio_texto) }}</strong></p>
+      {% else %}
+      <h2>{{ _('Cambiar medio de pago') }}</h2>
+      <p class="panel-cabecera-desc">{% if tarjeta %}{{ _('Ahora pagas con %(tarjeta)s. El nuevo medio se usa desde el próximo cobro del plan.', tarjeta=tarjeta) }}{% else %}{{ _('El nuevo medio se usa desde el próximo cobro del plan.') }}{% endif %}</p>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if problema %}
+  <p class="flash error">{{ problema }}</p>
+  {% else %}
+  {% if modo == 'alta' and anual_texto %}
+  <nav class="cat-tabs plan-ciclos" aria-label="{{ _('Cada cuánto pagas') }}">
+    <a class="cat-tab{% if ciclo == 'mensual' %} activo{% endif %}" href="{{ url_for('cobros.plan_alta', cliente=cliente, plan=plan.id, ciclo='mensual') }}">{{ _('Mensual · %(precio)s al mes', precio=mensual_texto) }}</a>
+    <a class="cat-tab{% if ciclo == 'anual' %} activo{% endif %}" href="{{ url_for('cobros.plan_alta', cliente=cliente, plan=plan.id, ciclo='anual') }}">{{ _('Anual · %(precio)s al año', precio=anual_texto) }}{% if meses_gratis %} ({{ ngettext('%(num)s mes gratis', '%(num)s meses gratis', meses_gratis) }}){% endif %}</a>
+  </nav>
+  {% endif %}
+
+  <form method="POST" class="plan-form" id="plan-form" data-plan-form
+        action="{{ url_for('cobros.plan_suscribir', cliente=cliente) if modo == 'alta' else url_for('cobros.plan_cambiar_tarjeta', cliente=cliente) }}">
+    {% if modo == 'alta' %}
+    <input type="hidden" name="plan_id" value="{{ plan.id }}">
+    <input type="hidden" name="ciclo" value="{{ ciclo }}">
+    <input type="hidden" name="precio_visto_usd" value="{{ precio_usd }}">
+    {% endif %}
+    <input type="hidden" name="acceptance_token" value="{{ aceptaciones.acceptance_token }}">
+    <input type="hidden" name="personal_token" value="{{ aceptaciones.personal_token }}">
+    <input type="hidden" name="tipo" value="CARD" data-plan-tipo>
+    <input type="hidden" name="token" value="" data-plan-token>
+
+    <label class="campo-label" for="plan-correo">{{ _('Correo para los recibos de Wompi') }}</label>
+    <input type="email" id="plan-correo" name="correo" value="{{ correo }}" maxlength="120" autocomplete="email" required>
+
+    <fieldset class="plan-casillas">
+      <legend>{{ _('Antes de pagar') }}</legend>
+      {# Una frase por casilla con el enlace como variable (un `{% set %}` de bloque es Markup y no se escapa): así
+         el inglés puede ordenar la frase a su modo. #}
+      {% set enlace_terminos %}<a href="{{ aceptaciones.acceptance_url }}" target="_blank" rel="noopener noreferrer">{{ _('términos y condiciones de Wompi') }}</a>{% endset %}
+      {% set enlace_datos %}<a href="{{ aceptaciones.personal_url }}" target="_blank" rel="noopener noreferrer">{{ _('tratamiento de mis datos personales') }}</a>{% endset %}
+      <label><input type="checkbox" name="acepta_terminos" value="1" required data-plan-casilla>
+        <span>{{ _('Acepto los %(enlace)s.', enlace=enlace_terminos) }}</span></label>
+      <label><input type="checkbox" name="acepta_datos" value="1" required data-plan-casilla>
+        <span>{{ _('Autorizo a Wompi el %(enlace)s.', enlace=enlace_datos) }}</span></label>
+      <label><input type="checkbox" name="autoriza_cobro" value="1" required data-plan-casilla>
+        <span>{% if ciclo == 'anual' %}{{ _('Autorizo el cobro automático de %(monto)s cada año (en pesos colombianos a la TRM del día) hasta que cancele. El saldo del plan se renueva cada mes y no se acumula.', monto=precio_texto) }}{% else %}{{ _('Autorizo el cobro automático de %(monto)s cada mes (en pesos colombianos a la TRM del día) hasta que cancele. El saldo del plan se renueva cada mes y no se acumula.', monto=precio_texto) }}{% endif %}</span></label>
+    </fieldset>
+
+    <h3 class="plan-medios-titulo">{{ _('Medio de pago') }}</h3>
+    <div class="cat-tabs plan-medio-botones" role="tablist" data-plan-medios hidden>
+      <button type="button" class="cat-tab activo" role="tab" aria-selected="true" data-plan-medio="CARD">{{ _('Tarjeta') }}</button>
+      <button type="button" class="cat-tab" role="tab" aria-selected="false" data-plan-medio="NEQUI">{{ _('Nequi') }}</button>
+    </div>
+    <div class="plan-medio" data-plan-panel-medio="CARD">
+      <p class="plan-ayuda">{{ _('Wompi abre su propia ventana para los datos de la tarjeta: el número nunca pasa por Creatv. Visa, Mastercard o American Express, con código de seguridad.') }}</p>
+      <p class="plan-ayuda plan-widget-aviso" data-plan-widget-aviso hidden>{{ _('Marca las tres casillas para ingresar la tarjeta.') }}</p>
+    </div>
+    {# El script del widget tiene que ser hijo DIRECTO de un <form method="POST"> (lo exige el widget: lo vimos en
+       su error de consola el 2026-10-10); pinta su botón a su lado. planes.js bloquea ese botón (los <button>
+       hijos directos del formulario) hasta marcar las tres casillas y lo oculta con Nequi. #}
+    <script src="{{ widget }}" data-render="button" data-widget-operation="tokenize" data-public-key="{{ llave_publica }}"></script>
+    <div class="plan-medio" data-plan-panel-medio="NEQUI" hidden>
+      <label class="campo-label" for="plan-celular">{{ _('Celular de Nequi') }}</label>
+      <div class="saldo-fila">
+        <input type="tel" id="plan-celular" inputmode="numeric" maxlength="13" autocomplete="tel-national" placeholder="3001234567" data-plan-celular>
+        <button type="button" class="btn-generar" data-plan-nequi="{{ url_for('cobros.plan_nequi', cliente=cliente) }}">{{ _('Enviar a mi Nequi') }}</button>
+      </div>
+      <p class="plan-ayuda" data-plan-nequi-estado aria-live="polite"></p>
+    </div>
+  </form>
+  {% endif %}
+  <div class="acciones">
+    <a class="btn-sm" href="{{ volver }}">{{ _('Volver al plan') }}</a>
+  </div>
+</div>
+<script src="{{ url_for('static', filename='planes.js') }}" defer></script>
+{% endblock %}

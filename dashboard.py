@@ -432,11 +432,13 @@ def _verificar_host():
 
 METODOS_QUE_ESCRIBEN = frozenset(("POST", "PUT", "PATCH", "DELETE"))
 
-# Los ÚNICOS POST que aceptan otro origen (cobros 7/11, spec 2026-10-08 §11):
-# el webhook de Bold lo manda el servidor de Bold, no un navegador nuestro. Su
-# protección es la firma HMAC del cuerpo (cobros.recargas.procesar_webhook), no
-# la cookie ni Sec-Fetch-Site. Por nombre de endpoint, nunca por prefijo de URL.
-ENDPOINTS_OTRO_ORIGEN = frozenset(("cobros.bold_webhook",))
+# Los ÚNICOS POST que aceptan otro origen (cobros 7/11, spec 2026-10-08 §11;
+# planes 4/8, spec 2026-10-09 §5.3): el webhook de Bold y los eventos de Wompi
+# los manda el servidor de la pasarela, no un navegador nuestro. Su protección
+# es la firma del cuerpo (cobros.recargas.procesar_webhook y
+# procesar_evento_wompi), no la cookie ni Sec-Fetch-Site. Por nombre de
+# endpoint, nunca por prefijo de URL.
+ENDPOINTS_OTRO_ORIGEN = frozenset(("cobros.bold_webhook", "cobros.wompi_eventos"))
 
 
 @app.before_request
@@ -447,8 +449,8 @@ def _solo_mismo_origen():
     un POST desde otro subdominio del mismo sitio ni el «login CSRF» (un
     formulario ajeno que inicia sesión con la cuenta del atacante). La app no
     recibe webhooks ni POST legítimos de otros sitios: los callbacks de OAuth
-    son GET. La única excepción, el webhook firmado de Bold, va en
-    ENDPOINTS_OTRO_ORIGEN."""
+    son GET. Las únicas excepciones, el webhook firmado de Bold y los eventos
+    firmados de Wompi, van en ENDPOINTS_OTRO_ORIGEN."""
     if request.method not in METODOS_QUE_ESCRIBEN or _mismo_origen():
         return None
     if request.endpoint in ENDPOINTS_OTRO_ORIGEN:
@@ -462,12 +464,13 @@ def _solo_mismo_origen():
 # Rutas de cuentas que deben funcionar aunque la sesión esté vencida o el
 # usuario ya no exista (verificar el correo o restablecer la contraseña se
 # abren desde un enlace, muchas veces sin sesión): el guard de sesión no las
-# cierra. El webhook de Bold no tiene sesión (lo llama el servidor de Bold):
-# una cookie vieja que llegara con él no puede convertirlo en un 302.
+# cierra. El webhook de Bold y los eventos de Wompi no tienen sesión (los
+# llama el servidor de la pasarela): una cookie vieja que llegara con ellos no
+# puede convertirlos en un 302.
 ENDPOINTS_SIN_GUARD_SESION = frozenset((
     "static", "login", "logout", "index", "crear_proyecto", "verificar_correo",
     "recuperar", "restablecer", "privacidad", "terminos", "eliminar_datos",
-    "cambiar_idioma", "salud_publica", "cobros.bold_webhook",
+    "cambiar_idioma", "salud_publica", "cobros.bold_webhook", "cobros.wompi_eventos",
 ))
 
 
@@ -5964,7 +5967,8 @@ def org_redactar(cliente):
         return jsonify({"error": gettext("Elige la pieza y al menos una plataforma.")}), 400
     # Cobros (spec 2026-10-08 §5.2): sin saldo, 402 (organico.redactar
     # caería en silencio al texto determinista, y la persona pidió IA).
-    libro_cobros.exigir(cliente, gastos.TARIFAS["caption_organico"])
+    # Con plan y tope libre es «incluido» y no pide saldo (spec planes §4): por eso el tipo.
+    libro_cobros.exigir(cliente, gastos.TARIFAS["caption_organico"], tipo="caption_organico")
     try:
         textos = organico.redactar(cliente, pieza_id, plataformas)
     except ValueError as e:

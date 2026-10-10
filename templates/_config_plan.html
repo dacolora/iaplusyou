@@ -1,0 +1,16 @@
+{# Configuración › Plan (planes 6/8, spec 2026-10-09 §8). Solo el contenedor:
+   static/planes.js pide el fragmento a cobros.plan_panel la primera vez que el
+   apartado se ve (abrir el proyecto no lee los planes ni el libro). Lo ve quien
+   entra a un proyecto que cobra, y el admin siempre. El widget de Wompi NO se
+   carga aquí: solo en plan_alta.html. #}
+<div class="panel-cabecera" id="config-plan">
+  <div>
+    <h2>{{ _('Plan') }}</h2>
+    <p class="panel-cabecera-desc">{{ _('Un plan mensual te da saldo cada mes, precio de miembro en todo lo que generas y la IA de textos incluida.') }}</p>
+  </div>
+</div>
+<div class="plan-panel" data-plan-panel="{{ url_for('cobros.plan_panel', cliente=cliente) }}" aria-live="polite">
+  <p class="vacio" data-plan-cargando>{{ _('Cargando el plan…') }}</p>
+  <p class="tag-error" data-plan-error hidden>{{ _('No se pudo cargar el plan. Vuelve a abrir este apartado en un rato.') }}</p>
+</div>
+<script src="{{ url_for('static', filename='planes.js') }}" defer></script>

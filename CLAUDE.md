@@ -106,7 +106,7 @@ incidente. Si la tarea cruza dos áreas, carga las dos.
 | la pestaña Meta, varias cuentas publicitarias por proyecto, `meta_rendimiento/`, la copia de métricas de Meta, las tasas USD | [`meta-rendimiento`](.claude/skills/meta-rendimiento/SKILL.md) |
 | Catálogo: productos y colores, conectores de tiendas, importador, ficha | [`catalogo`](.claude/skills/catalogo/SKILL.md) |
 | Triple Whale: sincronización, pestaña, evaluación con IA, atribución | [`triple-whale`](.claude/skills/triple-whale/SKILL.md) |
-| el saldo prepagado, el margen, el interruptor «Cobrar», las recargas, Bold, `cobros/`, el precio que ve un cliente | [`cobros`](.claude/skills/cobros/SKILL.md) |
+| el saldo prepagado, el margen, el interruptor «Cobrar», las recargas, Wompi y Bold, los planes mensuales y sus alertas, `cobros/`, el precio que ve un cliente | [`cobros`](.claude/skills/cobros/SKILL.md) |
 | Alertas: la pestaña, las fuentes, los descartes, la burbuja del sidebar, las tarjetas de Puesta a punto (`llaves.py`) | [`alertas`](.claude/skills/alertas/SKILL.md) |
 | una ruta nueva, una subida, una URL ajena, el login, las cuentas | [`seguridad`](.claude/skills/seguridad/SKILL.md) |
 | una pantalla, tarjeta o lista, `style.css`, `base.html`, el celular, la velocidad de la página | [`ui`](.claude/skills/ui/SKILL.md) |

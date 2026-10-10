@@ -373,7 +373,7 @@ def test_periodica_decidir_registrada():
                                  ("salidas_limpiar", 86400), ("cola_limpiar", 86400), ("db_respaldar", 86400),
                                  ("errores_limpiar", 86400), ("meta_rend_limpiar", 86400), ("cadena_vigilar", 60),
                                  ("tw_ganchos_vigilar", 60),
-                                 ("cobros_verificar_recargas", 600)]
+                                 ("cobros_verificar_recargas", 600), ("planes_renovar", 1800)]
 
 
 def test_semi_perdedora_se_pausa_ya_y_el_rescate_queda_propuesto(ent, monkeypatch):
