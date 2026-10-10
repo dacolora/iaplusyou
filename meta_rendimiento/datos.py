@@ -532,20 +532,39 @@ def activos(cliente, cuentas):
 
 
 def desgloses(cliente, cuentas, ventana):
-    """Los desgloses copiados de esas cuentas para una ventana (7|30 días), en UNA consulta: una fila por
-    (cuenta, dimensión, clave) con `ad_account_id`, `dimension`, `clave`, `METRICAS_DESGLOSE` y `calculado_en`.
-    Orden: cuenta, dimensión y gasto descendente."""
+    """Los desgloses copiados de esas cuentas para una ventana (7|30 días) o varias (una lista: el panel lee la de
+    las reglas y la de «Segmentos» juntas), en UNA consulta: una fila por (cuenta, ventana, dimensión, clave) con
+    `ad_account_id`, `ventana`, `dimension`, `clave`, `METRICAS_DESGLOSE` y `calculado_en`. Orden: cuenta, ventana,
+    dimensión y gasto descendente."""
     if not cuentas:
         return []
+    ventanas = [int(v) for v in ventana] if isinstance(ventana, (list, tuple, set, frozenset)) else [int(ventana)]
     t = db.meta_desglose
-    q = (sa.select(t.c.ad_account_id, t.c.dimension, t.c.clave, *[t.c[c] for c in METRICAS_DESGLOSE],
+    q = (sa.select(t.c.ad_account_id, t.c.ventana, t.c.dimension, t.c.clave, *[t.c[c] for c in METRICAS_DESGLOSE],
                    t.c.calculado_en)
-         .where(t.c.cliente == cliente, t.c.ad_account_id.in_(list(cuentas)), t.c.ventana == int(ventana))
-         .order_by(t.c.ad_account_id, t.c.dimension, t.c.gasto.desc(), t.c.clave))
+         .where(t.c.cliente == cliente, t.c.ad_account_id.in_(list(cuentas)), t.c.ventana.in_(ventanas))
+         .order_by(t.c.ad_account_id, t.c.ventana, t.c.dimension, t.c.gasto.desc(), t.c.clave))
     with db.conectar() as con:
         filas = con.execute(q).mappings().all()
-    return [dict(ad_account_id=f["ad_account_id"], dimension=f["dimension"], clave=f["clave"],
-                 calculado_en=f["calculado_en"], **_medidas(f, METRICAS_DESGLOSE)) for f in filas]
+    return [dict(ad_account_id=f["ad_account_id"], ventana=int(f["ventana"]), dimension=f["dimension"],
+                 clave=f["clave"], calculado_en=f["calculado_en"], **_medidas(f, METRICAS_DESGLOSE)) for f in filas]
+
+
+def objetos_activos(cliente, cuentas):
+    """Las campañas y los conjuntos ACTIVE de esas cuentas, en UNA consulta (las reglas de diagnóstico miran su
+    presupuesto diario y su aprendizaje): `objeto_id`, `ad_account_id`, `nivel`, `nombre`, `estado`,
+    `presupuesto_diario`, `aprendizaje`, `campaign_id` y `padre_id`. Los anuncios no vienen: la pestaña ya los trae
+    con sus métricas."""
+    if not cuentas:
+        return []
+    t = db.meta_objeto
+    q = (sa.select(t.c.objeto_id, t.c.ad_account_id, t.c.nivel, t.c.nombre, t.c.estado, t.c.presupuesto_diario,
+                   t.c.aprendizaje, t.c.campaign_id, t.c.padre_id)
+         .where(t.c.cliente == cliente, t.c.ad_account_id.in_(list(cuentas)), t.c.estado == "ACTIVE",
+                t.c.nivel.in_(("campana", "conjunto")))
+         .order_by(t.c.ad_account_id, t.c.nivel, t.c.objeto_id))
+    with db.conectar() as con:
+        return [dict(f) for f in con.execute(q).mappings().all()]
 
 
 def gasto_por_conjunto(cliente, cuentas, desde, hasta):

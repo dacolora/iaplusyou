@@ -103,6 +103,53 @@ def test_desgloses_es_una_sola_consulta(base_temporal):
     assert len(consultas) == 1
 
 
+def test_desgloses_de_varias_ventanas_en_una_consulta_y_cada_fila_dice_la_suya(base_temporal):
+    datos.reemplazar_desgloses("hf", A, 30, "pais", [_seg("NO", 100)])
+    datos.reemplazar_desgloses("hf", A, 7, "pais", [_seg("NO", 10)])
+    consultas = []
+
+    @sa.event.listens_for(db.engine(), "before_cursor_execute")
+    def _cuenta(conn, cursor, statement, params, context, executemany):
+        consultas.append(statement)
+
+    try:
+        filas = datos.desgloses("hf", [A], [7, 30])
+    finally:
+        sa.event.remove(db.engine(), "before_cursor_execute", _cuenta)
+    assert [(f["ventana"], f["gasto"]) for f in filas] == [(7, 10), (30, 100)] and len(consultas) == 1
+    assert [f["ventana"] for f in datos.desgloses("hf", [A], 30)] == [30]
+
+
+# ------------------------------------------------------------ objetos activos ---
+
+def test_objetos_activos_trae_campanas_y_conjuntos_activos_del_proyecto_en_una_consulta(base_temporal):
+    datos.guardar_objetos("hf", A, [
+        {"nivel": "campana", "objeto_id": "c1", "nombre": "Ventas", "estado": "ACTIVE", "presupuesto_diario": 500.0},
+        {"nivel": "campana", "objeto_id": "c2", "nombre": "Vieja", "estado": "PAUSED"},
+        {"nivel": "conjunto", "objeto_id": "s1", "nombre": "Mujeres", "estado": "ACTIVE", "aprendizaje": "FAIL",
+         "campaign_id": "c1", "padre_id": "c1"},
+        {"nivel": "anuncio", "objeto_id": "a1", "nombre": "Video", "estado": "ACTIVE", "padre_id": "s1"}])
+    datos.guardar_objetos("hf", B, [{"nivel": "campana", "objeto_id": "c9", "estado": "ACTIVE"}])
+    datos.guardar_objetos("otro", "act_7", [{"nivel": "campana", "objeto_id": "x1", "estado": "ACTIVE"}])
+    consultas = []
+
+    @sa.event.listens_for(db.engine(), "before_cursor_execute")
+    def _cuenta(conn, cursor, statement, params, context, executemany):
+        consultas.append(statement)
+
+    try:
+        filas = datos.objetos_activos("hf", [A])
+    finally:
+        sa.event.remove(db.engine(), "before_cursor_execute", _cuenta)
+    assert len(consultas) == 1
+    assert [(f["nivel"], f["objeto_id"]) for f in filas] == [("campana", "c1"), ("conjunto", "s1")]
+    s1 = filas[1]
+    assert s1["aprendizaje"] == "FAIL" and s1["campaign_id"] == "c1" and s1["ad_account_id"] == A
+    assert filas[0]["presupuesto_diario"] == 500.0 and filas[0]["nombre"] == "Ventas"
+    assert [f["objeto_id"] for f in datos.objetos_activos("hf", [A, B])] == ["c1", "s1", "c9"]
+    assert datos.objetos_activos("hf", []) == []
+
+
 def test_borrar_cuenta_borra_sus_desgloses_y_no_los_de_otras(base_temporal):
     datos.reemplazar_desgloses("hf", A, 30, "pais", [_seg("NO", 1)])
     datos.reemplazar_desgloses("hf", A, 7, "pais", [_seg("NO", 1)])

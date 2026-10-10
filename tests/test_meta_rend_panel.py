@@ -1,7 +1,7 @@
 """Lo que pinta la pestaña «Meta» (spec 2026-10-08 meta rendimiento §8): «Todas» en USD con la tasa de cada día,
 una cuenta en su moneda, la variación contra el período anterior, el veredicto de cada anuncio contra SU cuenta,
 la paginación y pocas consultas para todo."""
-from datetime import date
+from datetime import date, datetime, timedelta
 
 import pytest
 from sqlalchemy import event
@@ -273,14 +273,143 @@ def test_pocas_consultas_con_tres_cuentas(base_temporal, conectado):
         # Una tasa publicada poco antes de cada día con datos (las tasas viejas ya no rellenan: ruling R24).
         for dia_tasa in ("2026-08-14", "2026-09-24", "2026-10-06"):
             _tasa(moneda, dia_tasa, 0.1)
-    consultas = []
+    # E1 eran 15 consultas. E2 (Diagnóstico y Segmentos) suma a lo sumo 4: los objetos activos, los desgloses (las
+    # dos ventanas en una), la frecuencia de 7 días por campaña (salvo con el período de 7, que ya la lee) y los
+    # anuncios de 30 días (salvo con el período de 30, que ya los lee). Ninguna crece con las cuentas ni las filas.
+    for dias in (30, 14, 7, 90):
+        consultas = []
 
-    def contar(conn, cursor, statement, parameters, context, executemany):
-        consultas.append(statement)
-    event.listen(db.engine(), "before_cursor_execute", contar)
-    try:
-        ctx = panel.contexto("hf", hoy=HOY)
-    finally:
-        event.remove(db.engine(), "before_cursor_execute", contar)
-    assert len(ctx["anuncios"]) == 15 and ctx["usd_ok"] is True and len(ctx["por_cuenta"]) == 3
-    assert len(consultas) <= 15, consultas
+        def contar(conn, cursor, statement, parameters, context, executemany):
+            consultas.append(statement)
+        event.listen(db.engine(), "before_cursor_execute", contar)
+        try:
+            ctx = panel.contexto("hf", dias=dias, hoy=HOY)
+        finally:
+            event.remove(db.engine(), "before_cursor_execute", contar)
+        assert len(ctx["por_cuenta"]) == 3 and ctx["usd_ok"] is True
+        assert len(consultas) <= 19, (dias, len(consultas))
+        if dias == 30:
+            assert len(ctx["anuncios"]) == 15 and len(consultas) <= 18
+
+
+# ---------------------------------------------------------- Diagnóstico y Segmentos (E2) ---
+
+def _seg(clave, gasto, valor=0.0, compras=0):
+    return dict(clave=clave, gasto=gasto, impresiones=1000, clics=40, clics_salida=25, compras=compras, valor=valor)
+
+
+def _sembrar_diagnostico():
+    """Cuenta A (SEK) con ROAS 0,3 en 30 días (cuenta_roas_bajo, alta), un perdedor activo que gasta en la última
+    semana y un desglose por país donde SE es caro. Cuenta B (SEK) sana."""
+    _cuentas((A, "SEK", "NO"), (B, "SEK", "SE"))
+    dias = [f"2026-09-{d:02d}" for d in range(9, 31)] + [f"2026-10-{d:02d}" for d in range(1, 9)]
+    datos.reemplazar_cuenta_dias("hf", A, dias[0], dias[-1], [_dia(f, 1000, 300) for f in dias])
+    datos.reemplazar_cuenta_dias("hf", B, dias[0], dias[-1], [_dia(f, 100, 400) for f in dias])
+    datos.reemplazar_anuncio_dias("hf", A, "2026-10-05", "2026-10-05", [
+        _ad("2026-10-05", "gana", 100, 1000, compras=5), _ad("2026-10-05", "pierde", 3000, 0, compras=0)])
+    datos.guardar_objetos("hf", A, [{"nivel": "anuncio", "objeto_id": "pierde", "nombre": "Video pierde",
+                                     "estado": "ACTIVE"}])
+    datos.reemplazar_desgloses("hf", A, 30, "pais", [_seg("NO", 800, 2400, 8), _seg("SE", 200, 0, 0)])
+    datos.reemplazar_desgloses("hf", A, 7, "pais", [_seg("NO", 80, 240, 1)])
+    datos.reemplazar_desgloses("hf", B, 30, "pais", [_seg("NO", 50, 200, 2), _seg("SE", 10, 40, 1)])
+
+
+def _por_tipo(recs):
+    return {(r["tipo"], r["cuenta"]): r for r in recs}
+
+
+def test_el_diagnostico_trae_las_reglas_de_cada_cuenta(base_temporal, conectado):
+    _sembrar_diagnostico()
+    ctx = panel.contexto("hf", hoy=HOY)
+    recs = _por_tipo(ctx["recomendaciones"])
+    assert recs[("cuenta_roas_bajo", A)]["nivel"] == "alta"
+    perdedores = recs[("perdedores_gastando", A)]
+    assert perdedores["objetos"][0]["id"] == "pierde" and perdedores["nivel"] == "alta"
+    assert ("segmento_caro", A) in recs and not [r for r in ctx["recomendaciones"] if r["cuenta"] == B]
+    assert ctx["conteo_recomendaciones"]["alta"] == 2 and ctx["conteo_recomendaciones"]["media"] >= 1
+    # Una cuenta: solo las suyas.
+    una = panel.contexto("hf", cuenta=B, hoy=HOY)
+    assert una["recomendaciones"] == []
+
+
+def test_las_reglas_miran_siempre_7_y_30_dias_sea_cual_sea_el_periodo(base_temporal, conectado):
+    _sembrar_diagnostico()
+    ids = {d: [r["id"] for r in panel.contexto("hf", dias=d, hoy=HOY)["recomendaciones"]] for d in panel.PERIODOS}
+    assert ids[7] == ids[14] == ids[30] == ids[90] and ids[30]
+
+
+def test_recomendaciones_de_cuenta_son_las_del_panel_sin_flask(base_temporal, conectado):
+    _sembrar_diagnostico()
+    del_panel = [r for r in panel.contexto("hf", hoy=HOY)["recomendaciones"] if r["cuenta"] == A]
+    de_la_copia = panel.recomendaciones_de_cuenta("hf", A, hoy=HOY)
+    assert [r["id"] for r in de_la_copia] == [r["id"] for r in del_panel]
+    assert panel.recomendaciones_de_cuenta("hf", "act_999", hoy=HOY) == []
+    assert panel.recomendaciones_de_cuenta("otro", A, hoy=HOY) == []
+
+
+def _envejecer_desgloses(act, horas):
+    viejo = (datetime.now() - timedelta(hours=horas)).isoformat(timespec="seconds")
+    with db.conectar() as con:
+        con.execute(db.meta_desglose.update().where(db.meta_desglose.c.ad_account_id == act).values(
+            calculado_en=viejo))
+
+
+def test_un_desglose_de_mas_de_48_horas_no_cuenta_ni_se_muestra_como_actual(base_temporal, conectado):
+    _sembrar_diagnostico()
+    _envejecer_desgloses(A, 47)
+    ctx = panel.contexto("hf", hoy=HOY)
+    assert ("segmento_caro", A) in _por_tipo(ctx["recomendaciones"]) and ctx["segmentos"]["viejos"] == []
+    _envejecer_desgloses(A, 75)
+    ctx = panel.contexto("hf", hoy=HOY)
+    assert ("segmento_caro", A) not in _por_tipo(ctx["recomendaciones"])
+    assert [(v["cuenta"]["ad_account_id"], v["dias"]) for v in ctx["segmentos"]["viejos"]] == [(A, 3)]
+    # En «Segmentos» solo queda lo vigente (la cuenta B).
+    pais, = ctx["segmentos"]["bloques"]
+    assert {f["clave"]: f["gasto"] for f in pais["grupos"][0]["filas"]} == {"NO": 50, "SE": 10}
+    assert panel.recomendaciones_de_cuenta("hf", A, hoy=HOY) and \
+        ("segmento_caro", A) not in _por_tipo(panel.recomendaciones_de_cuenta("hf", A, hoy=HOY))
+
+
+def test_segmentos_suman_por_clave_si_comparten_moneda_y_marcan_los_caros(base_temporal, conectado):
+    _sembrar_diagnostico()
+    ctx = panel.contexto("hf", hoy=HOY)
+    assert ctx["ventana_segmentos"] == 30
+    pais, = ctx["segmentos"]["bloques"]
+    assert pais["dimension"] == "pais" and pais["nombre"] == "País"
+    grupo, = pais["grupos"]
+    assert grupo["cuenta"] is None and grupo["moneda"] == "SEK" and grupo["mas"] == 0
+    no, se = grupo["filas"]
+    assert (no["clave"], no["gasto"], no["valor"], no["compras"]) == ("NO", 850, 2600, 10)
+    assert no["roas"] == pytest.approx(2600 / 850) and no["cpa"] == pytest.approx(85)
+    assert se["nombre"] == "Suecia" and se["caro_en"] == ["HappyFlops act_1"] and no["caro_en"] == []
+    assert se["roas"] == pytest.approx(40 / 210) and se["cpa"] == pytest.approx(210)
+    # Con el período de 7 días, la ventana de 7: solo lo copiado para esa ventana.
+    siete = panel.contexto("hf", dias=7, hoy=HOY)
+    assert siete["ventana_segmentos"] == 7
+    assert [f["clave"] for f in siete["segmentos"]["bloques"][0]["grupos"][0]["filas"]] == ["NO"]
+
+
+def test_segmentos_con_monedas_distintas_van_por_cuenta(base_temporal, conectado):
+    _cuentas((A, "SEK", "NO"), (B, "EUR", "FI"))
+    for act in (A, B):
+        datos.reemplazar_cuenta_dias("hf", act, "2026-10-05", "2026-10-05", [_dia("2026-10-05", 100, 300)])
+    datos.reemplazar_desgloses("hf", A, 30, "dispositivo", [_seg("mobile_app", 90, 270, 3), _seg("desktop", 10)])
+    datos.reemplazar_desgloses("hf", B, 30, "dispositivo", [_seg("mobile_app", 5, 10, 1)])
+    ctx = panel.contexto("hf", hoy=HOY)
+    disp, = ctx["segmentos"]["bloques"]
+    assert [(g["cuenta"]["ad_account_id"], g["moneda"]) for g in disp["grupos"]] == [(A, "SEK"), (B, "EUR")]
+    assert [f["nombre"] for f in disp["grupos"][0]["filas"]] == ["Celular (app)", "Computador"]
+    assert disp["grupos"][0]["filas"][1]["cpa"] is None and disp["grupos"][0]["filas"][1]["roas"] == 0
+    # Una sola cuenta: su moneda y su nombre.
+    una = panel.contexto("hf", cuenta=B, hoy=HOY)
+    g, = una["segmentos"]["bloques"][0]["grupos"]
+    assert g["moneda"] == "EUR" and [f["gasto"] for f in g["filas"]] == [5]
+
+
+def test_segmentos_muestran_los_diez_de_mas_gasto(base_temporal, conectado):
+    _cuentas((A, "SEK", "NO"))
+    datos.reemplazar_cuenta_dias("hf", A, "2026-10-05", "2026-10-05", [_dia("2026-10-05", 100, 300)])
+    datos.reemplazar_desgloses("hf", A, 30, "pais", [_seg(c, 100 - i) for i, c in enumerate(
+        ["NO", "SE", "FI", "DK", "DE", "NL", "PL", "FR", "ES", "IT", "PT", "BE"])])
+    g, = panel.contexto("hf", hoy=HOY)["segmentos"]["bloques"][0]["grupos"]
+    assert len(g["filas"]) == panel.MAX_SEGMENTOS == 10 and g["mas"] == 2 and g["filas"][0]["clave"] == "NO"

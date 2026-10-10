@@ -11,7 +11,7 @@ anuncios van siempre en la moneda de su cuenta (cada fila lleva `moneda`).
 Cada anuncio se compara con SU cuenta: `evaluacion.evaluar` corre una vez por cuenta, sobre UNA lectura de
 `datos.totales_por_anuncio` por ventana para todas las cuentas del alcance (nunca una consulta por cuenta ni por
 fila). Todo `contexto()` son unas 12 consultas más una por moneda que haya que convertir."""
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 import decisor
 import idiomas
@@ -19,7 +19,7 @@ import meta_conexion
 import proyectos
 from idiomas import N_
 from meta_rendimiento import cuentas as cuentas_mod
-from meta_rendimiento import datos, grafico, tasas
+from meta_rendimiento import datos, grafico, recomendaciones, tasas
 from meta_rendimiento.sync import VENTANAS_ALCANCE
 from tareas import meta_rendimiento as tareas_mr
 from triple_whale import evaluacion, paises
@@ -29,6 +29,16 @@ PERIODOS = (7, 14, 30, 90)
 PERIODO_DEFECTO = 30
 POR_PAGINA = 24
 PAGINA_MAXIMA = 100_000
+# Las reglas del «Diagnóstico» miran SIEMPRE los últimos 7 y 30 días (spec E2 §6: sus umbrales hablan de esas
+# ventanas), sea cual sea el período del panel: así lo que dice la pestaña coincide con lo que la copia guarda para
+# Alertas, que no tiene período.
+DIAS_REGLAS = 30
+DIAS_SEMANA = 7
+# Un desglose se copia una vez cada 20 h; si la copia lleva más de 48 h fallando, el último es viejo: no alimenta la
+# regla `segmento_caro` ni se muestra en «Segmentos» como si fuera de hoy (revisión de la Task 2 de E2).
+HORAS_DESGLOSE_VIGENTE = 48
+MAX_SEGMENTOS = 10           # filas por tabla de «Segmentos» (un caro pesa ≥ 10 %: siempre cabe entre las 10 primeras)
+MAX_RECOMENDACIONES_VISIBLES = 6
 
 # effective_status de Meta en palabras (se traducen donde se muestran). None: Meta ya no lo devuelve en el listado.
 ESTADOS = {
@@ -209,8 +219,9 @@ def _con_cuenta(fila, cuentas_por_id):
     return fila
 
 
-def _campanas(cliente, ids, desde, hasta, ventana, cuentas_por_id):
-    alcances = datos.alcance(cliente, ids, ventana, "campana")
+def _campanas(cliente, ids, desde, hasta, alcances, cuentas_por_id):
+    """Las campañas del período con su alcance y frecuencia de la ventana más cercana (`alcances`, ya leídos: con el
+    período de 7 días son los mismos que usa la regla de fatiga)."""
     salida = []
     for f in datos.totales_por_campana(cliente, ids, desde, hasta):
         alc = alcances.get(f["campaign_id"]) or {}
@@ -231,16 +242,19 @@ def _agrupar(filas):
     return por_act
 
 
-def evaluar_anuncios(cliente, ids, desde, hasta, hoy, cuentas_por_id, reglas):
-    """(anuncios, conteo, meta_roas): cada anuncio del período con su veredicto y diagnóstico contra SU cuenta.
-    Tres lecturas para todas las cuentas (período, últimos 7 días y los 7 anteriores, para la fatiga) y una
-    evaluación por cuenta. Orden: veredicto y luego gasto. `meta_roas` es None si cada cuenta tiene la suya
-    (proyecto sin meta de ROAS: cada una usa su mediana)."""
-    ult7 = (_iso(hoy - timedelta(days=6)), _iso(hoy))
-    prev7 = (_iso(hoy - timedelta(days=13)), _iso(hoy - timedelta(days=7)))
+def _leer_anuncios(cliente, ids, desde, hasta, hoy):
+    """(periodo, ultimos_7, previos_7): las tres lecturas de `datos.totales_por_anuncio` que pide la evaluación (la
+    de los últimos 7 días es la del período si coinciden)."""
+    ult7 = (_iso(hoy - timedelta(days=DIAS_SEMANA - 1)), _iso(hoy))
+    prev7 = (_iso(hoy - timedelta(days=2 * DIAS_SEMANA - 1)), _iso(hoy - timedelta(days=DIAS_SEMANA)))
     periodo_ = datos.totales_por_anuncio(cliente, ids, desde, hasta)
     recientes = periodo_ if (desde, hasta) == ult7 else datos.totales_por_anuncio(cliente, ids, *ult7)
     previos = datos.totales_por_anuncio(cliente, ids, *prev7)
+    return periodo_, recientes, previos
+
+
+def _evaluar(ids, periodo_, recientes, previos, cuentas_por_id, reglas):
+    """(anuncios, conteo, meta_roas) de unas lecturas ya hechas: una evaluación por cuenta."""
     tot, rec, prev = _agrupar(periodo_), _agrupar(recientes), _agrupar(previos)
     anuncios, conteo, metas = [], {v: 0 for v in evaluacion.VEREDICTOS}, set()
     for act in ids:
@@ -269,6 +283,190 @@ def evaluar_anuncios(cliente, ids, desde, hasta, hoy, cuentas_por_id, reglas):
     return anuncios, conteo, meta_roas
 
 
+def evaluar_anuncios(cliente, ids, desde, hasta, hoy, cuentas_por_id, reglas):
+    """(anuncios, conteo, meta_roas): cada anuncio del período con su veredicto y diagnóstico contra SU cuenta.
+    Tres lecturas para todas las cuentas (período, últimos 7 días y los 7 anteriores, para la fatiga) y una
+    evaluación por cuenta. Orden: veredicto y luego gasto. `meta_roas` es None si cada cuenta tiene la suya
+    (proyecto sin meta de ROAS: cada una usa su mediana)."""
+    return _evaluar(ids, *_leer_anuncios(cliente, ids, desde, hasta, hoy), cuentas_por_id, reglas)
+
+
+# ------------------------------------------------------- diagnóstico ---
+
+def _ahora():
+    return datetime.now()
+
+
+def _horas_desde(iso, ahora):
+    """Horas desde un ISO de la base (`db.ahora`, hora local) hasta `ahora`; None si no se puede leer."""
+    try:
+        return (ahora - datetime.fromisoformat(str(iso)[:19])).total_seconds() / 3600
+    except (TypeError, ValueError):
+        return None
+
+
+def _vigente(fila, ahora):
+    horas = _horas_desde(fila.get("calculado_en"), ahora)
+    return horas is not None and horas <= HORAS_DESGLOSE_VIGENTE
+
+
+def _totales_por_cuenta(filas_dia, desde, hasta):
+    """{ad_account_id: {"gasto", "valor", "compras"}} de los días de cuenta en [desde, hasta] (ya leídos)."""
+    salida = {}
+    for f in filas_dia:
+        if desde <= f["fecha"] <= hasta:
+            t = salida.setdefault(f["ad_account_id"], {"gasto": 0.0, "valor": 0.0, "compras": 0.0})
+            for k in t:
+                t[k] += float(f.get(k) or 0)
+    return salida
+
+
+def _por_conjunto(filas_anuncio):
+    """{adset_id: {"gasto", "compras", "valor"}} sumando por conjunto las filas por anuncio de los últimos 7 días que
+    la evaluación ya leyó (= `datos.gasto_por_conjunto` de esa semana sin otra consulta; un anuncio cuenta en el
+    conjunto que tenía en la copia)."""
+    salida = {}
+    for f in filas_anuncio:
+        sid = f.get("adset_id")
+        if not sid:
+            continue
+        t = salida.setdefault(str(sid), {"gasto": 0.0, "compras": 0.0, "valor": 0.0})
+        for k in t:
+            t[k] += float(f.get(k) or 0)
+    return salida
+
+
+def _entrada_reglas(cliente, en_alcance, hoy, reglas, filas_dia=None, anuncios=None, frecuencia_7=None,
+                    desgloses_30=None, ahora=None):
+    """La `entrada` de `recomendaciones.calcular` (forma en su docstring) para esas cuentas, sobre los últimos 7 y 30
+    días hasta `hoy`. Lo que el panel ya leyó llega aquí y no se vuelve a pedir: `filas_dia` (días de cuenta que
+    cubran los últimos 30), `anuncios` ((30 días, últimos 7, los 7 anteriores) de `_leer_anuncios`), `frecuencia_7`
+    y `desgloses_30`. Sin ellos son 6 lecturas (la copia, que no tiene panel). Los desgloses viejos (más de
+    `HORAS_DESGLOSE_VIGENTE`) no entran."""
+    ids = [c["ad_account_id"] for c in en_alcance]
+    hasta = _iso(hoy)
+    desde_7, desde_30 = _iso(hoy - timedelta(days=DIAS_SEMANA - 1)), _iso(hoy - timedelta(days=DIAS_REGLAS - 1))
+    if filas_dia is None:
+        filas_dia = datos.cuenta_por_dia(cliente, ids, desde_30, hasta)
+    if anuncios is None:
+        anuncios = _leer_anuncios(cliente, ids, desde_30, hasta, hoy)
+    a30, a7, previos = anuncios
+    evaluados, _, _ = _evaluar(ids, a30, a7, previos, {c["ad_account_id"]: c for c in en_alcance}, reglas)
+    gasto_7 = {(f["ad_account_id"], str(f["ad_id"])): float(f.get("gasto") or 0) for f in a7}
+    for a in evaluados:
+        a["gasto_7"] = gasto_7.get((a["ad_account_id"], a["ad_id"]), 0.0)
+        a["gasto_30"] = a["m"]["gasto"]
+    if frecuencia_7 is None:
+        frecuencia_7 = datos.alcance(cliente, ids, DIAS_SEMANA, "campana")
+    if desgloses_30 is None:
+        desgloses_30 = datos.desgloses(cliente, ids, DIAS_REGLAS)
+    ahora = ahora or _ahora()
+    return {
+        "cuentas": en_alcance,
+        "totales_7": _totales_por_cuenta(filas_dia, desde_7, hasta),
+        "totales_30": _totales_por_cuenta(filas_dia, desde_30, hasta),
+        "objetos": datos.objetos_activos(cliente, ids),
+        "conjuntos_7": _por_conjunto(a7),
+        "anuncios": evaluados,
+        "frecuencia_7": frecuencia_7,
+        "desgloses_30": [f for f in desgloses_30 if _vigente(f, ahora)],
+    }
+
+
+def recomendaciones_de_cuenta(cliente, act, hoy=None):
+    """Las recomendaciones de UNA cuenta del proyecto (las mismas que el «Diagnóstico» de la pestaña), sin Flask ni
+    token: la copia las calcula al terminar para guardar las de nivel «alta» que lee Alertas (spec E2 §10). Una
+    cuenta que no es del proyecto, o sin datos, da []."""
+    c = cuentas_mod.cuenta(cliente, act)
+    if not c:
+        return []
+    reglas = decisor.reglas_efectivas(proyectos.reglas_defecto(cliente), {})
+    return recomendaciones.calcular(_entrada_reglas(cliente, [c], hoy or date.today(), reglas))
+
+
+def _conteo_niveles(recs):
+    salida = {n: 0 for n in recomendaciones.NIVELES}
+    for r in recs:
+        salida[r["nivel"]] += 1
+    return salida
+
+
+def _ventana_segmentos(dias):
+    """La ventana de desglose copiada (7 o 30 días) más cercana al período."""
+    return min(datos.VENTANAS_DESGLOSE, key=lambda v: (abs(v - dias), v))
+
+
+def _fila_segmento(dimension, clave, t, total, caro_en):
+    gasto, compras, valor = t["gasto"], t["compras"], t["valor"]
+    return {"clave": clave, "nombre": recomendaciones.nombre_segmento(dimension, clave), "gasto": gasto,
+            "compras": compras, "valor": valor, "roas": valor / gasto if gasto else None,
+            "cpa": gasto / compras if compras else None, "pct": gasto / total if total else None,
+            "caro_en": caro_en}
+
+
+def _tabla_segmentos(dimension, por_clave, caros):
+    """Las filas de una tabla (una dimensión de una cuenta o de varias sumadas): las de más gasto primero, hasta
+    `MAX_SEGMENTOS`, y cuántas quedaron fuera."""
+    total = sum(t["gasto"] for t in por_clave.values())
+    filas = [_fila_segmento(dimension, clave, t, total, sorted(caros.get((dimension, clave), ())))
+             for clave, t in sorted(por_clave.items(), key=lambda kv: (-kv[1]["gasto"], kv[0]))]
+    return filas[:MAX_SEGMENTOS], max(0, len(filas) - MAX_SEGMENTOS)
+
+
+def segmentos(filas, en_alcance, moneda_comun, recs, ahora=None):
+    """«Segmentos» del panel (spec E2 §9): por dimensión, una tabla con gasto, compras, ROAS y CPA por segmento.
+    Con varias cuentas que comparten moneda se suman por clave; con monedas distintas, una tabla por cuenta (nunca
+    se suman monedas). Las filas viejas (más de `HORAS_DESGLOSE_VIGENTE`) no se muestran: las cuentas que tienen
+    alguna salen en `viejos` con la edad en días de la más vieja (None si su fecha no se lee). Un segmento lleva `caro_en` = los nombres de las cuentas donde la regla
+    `segmento_caro` lo marcó. Devuelve {"bloques": [{"dimension", "nombre", "grupos": [{"cuenta", "moneda", "filas",
+    "mas"}]}], "viejos": [{"cuenta", "dias"}]}."""
+    ahora = ahora or _ahora()
+    por_id = {c["ad_account_id"]: c for c in en_alcance}
+    nombre = {act: c.get("nombre") or act for act, c in por_id.items()}
+    ids_caros = {r["id"] for r in recs if r["tipo"] == "segmento_caro"}
+    vigentes, edad = [], {}
+    for f in filas:
+        if f["ad_account_id"] not in por_id:
+            continue
+        if _vigente(f, ahora):
+            vigentes.append(f)
+        else:
+            horas = _horas_desde(f.get("calculado_en"), ahora)
+            dias = int(horas // 24) if horas is not None else None
+            previo = edad.get(f["ad_account_id"], -1)
+            edad[f["ad_account_id"]] = None if dias is None or previo is None else max(previo, dias)
+    caros = {}
+    for f in vigentes:
+        clave_rec = recomendaciones.huella_recomendacion("segmento_caro", f["ad_account_id"], "media",
+                                                         [f"{f['dimension']}:{f['clave']}"])
+        if clave_rec in ids_caros:
+            caros.setdefault((f["dimension"], f["clave"]), set()).add(nombre[f["ad_account_id"]])
+    sumar = len(en_alcance) == 1 or bool(moneda_comun)
+    bloques = []
+    for dimension in datos.DIMENSIONES:
+        propias = [f for f in vigentes if f["dimension"] == dimension]
+        if not propias:
+            continue
+        grupos = []
+        juegos = [(None, propias)] if sumar else [
+            (act, [f for f in propias if f["ad_account_id"] == act]) for act in por_id]
+        for act, lista in juegos:
+            if not lista:
+                continue
+            por_clave = {}
+            for f in lista:
+                t = por_clave.setdefault(f["clave"], {"gasto": 0.0, "compras": 0.0, "valor": 0.0})
+                for k in t:
+                    t[k] += float(f.get(k) or 0)
+            filas_tabla, mas = _tabla_segmentos(dimension, por_clave, caros)
+            cuenta = por_id[act] if act else (en_alcance[0] if len(en_alcance) == 1 else None)
+            moneda = (cuenta or {}).get("moneda") if cuenta else moneda_comun
+            grupos.append({"cuenta": cuenta, "moneda": moneda, "filas": filas_tabla, "mas": mas})
+        bloques.append({"dimension": dimension, "nombre": recomendaciones.DIMENSIONES[dimension], "grupos": grupos})
+    viejos = [{"cuenta": por_id[act], "dias": edad[act]} for act in por_id if act in edad]
+    return {"bloques": bloques, "viejos": viejos}
+
+
 # ---------------------------------------------------------- contexto ---
 
 def _jobs_sync(cliente, cuentas_alcance):
@@ -294,6 +492,9 @@ def _base(dias, desde, hasta):
         "conteo": {v: 0 for v in evaluacion.VEREDICTOS}, "meta_roas": None,
         "rango": {"filas": 0, "desde": None, "hasta": None}, "jobs_sync": [], "sync_ocupado": False,
         "ultima_copia": None, "por_pagina": POR_PAGINA,
+        "recomendaciones": [], "conteo_recomendaciones": {n: 0 for n in recomendaciones.NIVELES},
+        "max_recomendaciones": MAX_RECOMENDACIONES_VISIBLES, "niveles_recomendacion": recomendaciones.NIVELES,
+        "segmentos": {"bloques": [], "viejos": []}, "ventana_segmentos": None,
         "estados": ESTADOS, "aprendizaje": APRENDIZAJE, "objetivos": OBJETIVOS,
         "etiquetas_veredicto": evaluacion.ETIQUETAS_VEREDICTO,
         "veredictos": evaluacion.VEREDICTOS, "problemas": evaluacion.PROBLEMAS, "fortalezas": evaluacion.FORTALEZAS,
@@ -337,10 +538,12 @@ def contexto(cliente, dias=PERIODO_DEFECTO, cuenta=None, hoy=None, pagina_anunci
     if not ctx["rango"]["filas"]:
         return ctx
 
-    # KPIs, serie y «por cuenta»: una lectura de los días de cuenta de los dos períodos.
-    filas = datos.cuenta_por_dia(cliente, ids, desde_prev, hasta)
+    # KPIs, serie, «por cuenta» y los totales de 7 y 30 días de las reglas: UNA lectura de los días de cuenta que
+    # cubre los dos períodos y los últimos 30 días (con el período de 7 o 14 días, los dos no llegan a 30).
+    desde_reglas = _iso(hoy - timedelta(days=DIAS_REGLAS - 1))
+    filas = datos.cuenta_por_dia(cliente, ids, min(desde_prev, desde_reglas), hasta)
     actuales = [f for f in filas if f["fecha"] >= desde]
-    previas = [f for f in filas if f["fecha"] <= hasta_prev]
+    previas = [f for f in filas if desde_prev <= f["fecha"] <= hasta_prev]
     conv = _conversion(en_alcance, desde_prev, hasta) if convertir else None
     k, k_prev = kpis(actuales, conv), kpis(previas, conv)
     usd_ok = k["usd_ok"]
@@ -350,6 +553,7 @@ def contexto(cliente, dias=PERIODO_DEFECTO, cuenta=None, hoy=None, pagina_anunci
         serie = _serie(desde, hasta, actuales, moneda_comun) if moneda_comun else None
     ventana = _ventana_alcance(dias)
     alcances = datos.alcance(cliente, ids, ventana, "cuenta")
+    alcances_campana = datos.alcance(cliente, ids, ventana, "campana")
     con_alcance = [alcances[a]["alcance"] for a in ids if a in alcances]
     unica = alcances.get(ids[0]) if len(ids) == 1 else None
     ctx.update(
@@ -359,17 +563,35 @@ def contexto(cliente, dias=PERIODO_DEFECTO, cuenta=None, hoy=None, pagina_anunci
         alcance=sum(con_alcance) if con_alcance else None, frecuencia=(unica or {}).get("frecuencia"),
         ventana_alcance=ventana, serie=serie,
         por_cuenta=_filas_por_cuenta(en_alcance, actuales, conv, moneda, alcances, datos.activos(cliente, ids)),
-        campanas=_campanas(cliente, ids, desde, hasta, ventana, cuentas_por_id))
+        campanas=_campanas(cliente, ids, desde, hasta, alcances_campana, cuentas_por_id))
 
     pagina_c = max(0, _entero(pagina_conjuntos))
     conjuntos, hay_mas_conjuntos = _conjuntos(cliente, ids, desde, hasta, pagina_c, cuentas_por_id)
     reglas = decisor.reglas_efectivas(proyectos.reglas_defecto(cliente), {})
-    anuncios, conteo, meta_roas = evaluar_anuncios(cliente, ids, desde, hasta, hoy, cuentas_por_id, reglas)
+    lecturas = _leer_anuncios(cliente, ids, desde, hasta, hoy)
+    anuncios, conteo, meta_roas = _evaluar(ids, *lecturas, cuentas_por_id, reglas)
     pagina_a = max(0, _entero(pagina_anuncios))
     inicio = pagina_a * POR_PAGINA
     ctx.update(conjuntos=conjuntos, hay_mas_conjuntos=hay_mas_conjuntos, pagina_conjuntos=pagina_c,
                anuncios=anuncios[inicio:inicio + POR_PAGINA], hay_mas_anuncios=len(anuncios) > inicio + POR_PAGINA,
                n_anuncios=len(anuncios), pagina_anuncios=pagina_a, conteo=conteo, meta_roas=meta_roas)
+
+    # Diagnóstico y Segmentos (spec E2 §6 y §9): a lo sumo 4 lecturas más que E1 — los objetos activos, los
+    # anuncios de 30 días si el período es otro, la frecuencia de 7 días por campaña si la ventana de alcance es
+    # otra, y los desgloses de las reglas y de «Segmentos» juntos. Lo demás sale de lo ya leído.
+    _, recientes, previos = lecturas
+    a30 = lecturas[0] if dias == DIAS_REGLAS else datos.totales_por_anuncio(cliente, ids, desde_reglas, hasta)
+    ventana_seg = _ventana_segmentos(dias)
+    desgloses = datos.desgloses(cliente, ids, sorted({DIAS_REGLAS, ventana_seg}))
+    ahora = _ahora()
+    entrada = _entrada_reglas(
+        cliente, en_alcance, hoy, reglas, filas_dia=filas, anuncios=(a30, recientes, previos),
+        frecuencia_7=alcances_campana if ventana == DIAS_SEMANA else None,
+        desgloses_30=[f for f in desgloses if f["ventana"] == DIAS_REGLAS], ahora=ahora)
+    recs = recomendaciones.calcular(entrada)
+    ctx.update(recomendaciones=recs, conteo_recomendaciones=_conteo_niveles(recs), ventana_segmentos=ventana_seg,
+               segmentos=segmentos([f for f in desgloses if f["ventana"] == ventana_seg], en_alcance, moneda_comun,
+                                   recs, ahora))
     return ctx
 
 
