@@ -411,3 +411,23 @@ def test_un_origen_con_digitos_no_ascii_no_vale(hf):
     assert analisis.origen_desde_formulario("hf", f"meta:{eid}:0")
     arabe = str(eid).translate(str.maketrans("0123456789", "٠١٢٣٤٥٦٧٨٩"))
     assert analisis.origen_desde_formulario("hf", f"meta:{arabe}:0") is None
+
+
+
+# ------------------------------------------------------- revisión funcional (2026-10-10, ronda 1) ---
+
+def test_los_datos_llevan_la_meta_de_roas_las_ventanas_de_las_reglas_y_la_parte_fail_con_tope(hf, monkeypatch):
+    import proyectos
+    from meta_rendimiento import panel
+    _sembrar()
+    prep = analisis.preparar("hf", 30, None, hoy=HOY)
+    assert prep["extra"]["ventanas"] == {"corto": panel.DIAS_SEMANA, "largo": panel.DIAS_REGLAS}
+    texto, _ = analisis.armar("hf", _fila(prep), {}, {})
+    # La meta de los veredictos (como en Triple Whale): la del proyecto (por defecto, la del decisor: 2×).
+    assert prep["extra"]["meta_roas_proyecto"] is True and "Meta de ROAS del proyecto: 2,00×" in texto
+    # La parte del gasto en aprendizaje limitado sale de dos lecturas distintas: nunca más de 100 %.
+    assert prep["extra"]["resumen"][0]["pct_gasto_fail"] > 1 and "con el 100 % del gasto de 7 días" in texto
+    monkeypatch.setattr(proyectos, "reglas_defecto", lambda cliente: {"roas_min": 0})     # meta apagada
+    prep = analisis.preparar("hf", 30, None, hoy=HOY)
+    texto, _ = analisis.armar("hf", _fila(prep), {}, {})
+    assert prep["extra"]["meta_roas_proyecto"] is False and "El proyecto no tiene meta de ROAS" in texto
