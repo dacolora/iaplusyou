@@ -4246,6 +4246,7 @@ body:has(#exp-nuevo) main { margin-left: 0; max-width: 1440px; width: 100%; }
 .meta-seg-bloque h4 { margin: 0 0 .4rem; font-size: .9rem; }
 .meta-seg-cuenta { margin: .6rem 0 .3rem; color: var(--muted); font-size: .8rem; }
 .meta-seg-tabla tr.meta-seg-caro td { background: var(--warn-fondo); }
+.meta-seg-tabla .tag-estado { white-space: normal; }   /* «Caro en <cuentas>» se parte: si no, ensancha la tabla */
 /* ── estilos/pantallas/crear.css ── */
 /* Crear: el corazón de cada tarjeta (2026-10-08), para separar las versiones que se van a usar. */
 .generado-fav-form { position: absolute; right: .45rem; top: .4rem; margin: 0; z-index: 1; }

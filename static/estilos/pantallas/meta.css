@@ -60,3 +60,4 @@
 .meta-seg-bloque h4 { margin: 0 0 .4rem; font-size: .9rem; }
 .meta-seg-cuenta { margin: .6rem 0 .3rem; color: var(--muted); font-size: .8rem; }
 .meta-seg-tabla tr.meta-seg-caro td { background: var(--warn-fondo); }
+.meta-seg-tabla .tag-estado { white-space: normal; }   /* «Caro en <cuentas>» se parte: si no, ensancha la tabla */
