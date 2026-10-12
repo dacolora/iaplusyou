@@ -469,7 +469,17 @@ def estado(cliente, siempre=False):
     return _memo(("estado", cliente, siempre), lambda: libro.estado(cliente, siempre=siempre))
 
 
-def tono(e):
+def por_pagar(e, b=None):
+    """Lo que debe un proyecto pospago (milésimas, > 0) o 0: lo negativo de su saldo propio (saldo − lo que queda
+    de la bolsa del plan; la bolsa no paga la deuda, guardian-gasto 2026-10-12). Siempre 0 en prepago."""
+    if not e.get("pospago"):
+        return 0
+    return max(0, int(b["restante"] if b else 0) - int(e["saldo"]))
+
+
+def tono(e, b=None):
+    if e.get("pospago"):   # nada lo frena: lo que debe es un aviso, nunca «bloqueo»
+        return "aviso" if por_pagar(e, b) else "normal"
     if e["disponible"] <= 0 or e["saldo"] <= 0:
         return "bloqueo"
     return "aviso" if e["saldo"] < e["umbral"] else "normal"
@@ -511,13 +521,20 @@ def chip(cliente, es_admin):
     """El chip de la barra lateral de un proyecto que cobra, o None. Con un
     periodo de plan abierto (planes 6/8, spec §8): «Saldo: <propio> · Plan:
     <restante> restantes · Recargar» (el saldo propio = saldo − lo que queda
-    de la bolsa; el tono sigue mirando el saldo entero)."""
+    de la bolsa; el tono sigue mirando el saldo entero). En pospago con saldo
+    negativo: «Por pagar: <lo que debe>» (Daniel 2026-10-12)."""
     e = estado(cliente)
     if not e["cobrar"]:
         return None
     from flask import url_for  # noqa: PLC0415
     b = bolsa_o_none(cliente)
-    if b is not None:
+    debe = por_pagar(e, b)
+    if debe and b is not None:
+        texto = gettext("Por pagar: %(monto)s · Plan: %(plan)s restantes", monto=gastos.formatear(debe / 1000),
+                        plan=gastos.formatear(b["restante"] / 1000))
+    elif debe:
+        texto = gettext("Por pagar: %(monto)s", monto=gastos.formatear(debe / 1000))
+    elif b is not None:
         texto = gettext("Saldo: %(saldo)s · Plan: %(plan)s restantes · Recargar",
                         saldo=gastos.formatear(saldo_propio(e["saldo"], b) / 1000),
                         plan=gastos.formatear(b["restante"] / 1000))
@@ -526,7 +543,7 @@ def chip(cliente, es_admin):
     if es_admin:
         costo = gastos.resumen_mes(cliente)["total"]
         texto = f"{texto} · " + gettext("costo del mes: %(costo)s", costo=gastos.formatear(costo))
-    return {"texto": texto, "tono": tono(e), "url": url_for("ver_cliente", cliente=cliente) + "#config-ap-saldo"}
+    return {"texto": texto, "tono": tono(e, b), "url": url_for("ver_cliente", cliente=cliente) + "#config-ap-saldo"}
 
 
 # ------------------------------------------------------------ /admin/cobros ---
@@ -641,6 +658,7 @@ def resumen_admin(ahora_iso=None):
         plan_m = float(margen_plan[c]) if margen_plan.get(c) is not None else None
         filas.append({
             "cliente": c, "cobrar": bool(cta.cobrar) if cta else False,
+            "pospago": bool(cta.pospago) if cta else False,
             "margen_propio": propio,
             "margen": plan_m if plan_m is not None else (propio if propio is not None else glob),
             "margen_plan": plan_m,

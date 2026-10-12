@@ -678,9 +678,10 @@ def _despues_del_cobro(cliente, resultado, gasto_id, usd, tipo, referencia):
             avisos.pieza_no_cobrada(cliente, _no_cobrado_milesimas(gasto_id, resultado, usd, cliente), tipo)
         elif resultado in ("cobro", "recalculado_mayor"):
             c = libro.cuenta(cliente)
-            s = libro.saldo(cliente)
-            if s < c["umbral"]:
-                avisos.saldo_bajo(cliente, s)
+            if not c["pospago"]:   # pospago: un saldo bajo o negativo es lo que debe, no un aviso para recargar
+                s = libro.saldo(cliente)
+                if s < c["umbral"]:
+                    avisos.saldo_bajo(cliente, s)
         # Planes (spec 2026-10-09 §4): lo incluido no le avisa nada al cliente; al admin, al 80 % y al 100 % del
         # tope. Un `cobro` de un tipo incluido con el periodo abierto es uno que ya no cupo en el tope.
         if resultado in ("incluido", "cobro"):

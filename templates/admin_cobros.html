@@ -103,6 +103,12 @@
               <span class="tag-estado {{ 'tag-en-uso' if f.cobrar else 'tag-descartado' }}">{{ _('Cobra') if f.cobrar else _('No cobra') }}</span>
               <button type="submit" class="btn-sm" aria-pressed="{{ 'true' if f.cobrar else 'false' }}">{{ _('Apagar') if f.cobrar else _('Prender') }}</button>
             </form>
+            <form method="post" action="{{ url_for('cobros.admin_cuenta', cliente=f.cliente) }}" class="cobros-admin-celda">
+              <input type="hidden" name="pospago" value="{{ '0' if f.pospago else '1' }}">
+              <span class="tag-estado{{ ' tag-en-uso' if f.pospago else '' }}">{{ _('Pospago') if f.pospago else _('Prepago') }}</span>
+              <button type="submit" class="btn-sm" aria-pressed="{{ 'true' if f.pospago else 'false' }}"
+                      title="{{ _('Pospago: cobra igual, pero nada frena por saldo; lo que pase de cero queda por pagar.') }}">{{ _('Pasar a prepago') if f.pospago else _('Pasar a pospago') }}</button>
+            </form>
           </td>
           <td>
             <form id="cuenta-{{ f.cliente }}" method="post" action="{{ url_for('cobros.admin_cuenta', cliente=f.cliente) }}"></form>
@@ -118,7 +124,7 @@
               <button type="submit" form="cuenta-{{ f.cliente }}" class="btn-sm">{{ _('Guardar') }}</button>
             </div>
           </td>
-          <td class="num">{{ (f.saldo / 1000) | usd }}{% if f.cobrar and f.disponible <= 0 %}<br><span class="tag-estado tag-descartado">{{ _('sin saldo') }}</span>{% endif %}</td>
+          <td class="num">{{ (f.saldo / 1000) | usd }}{% if f.cobrar and f.pospago and f.saldo < 0 %}<br><span class="tag-estado tag-descartado">{{ _('por pagar') }}</span>{% elif f.cobrar and not f.pospago and f.disponible <= 0 %}<br><span class="tag-estado tag-descartado">{{ _('sin saldo') }}</span>{% endif %}</td>
           <td class="num">{{ (f.disponible / 1000) | usd }}</td>
           <td class="num">{{ (f.recargado_mes / 1000) | usd }}</td>
           <td class="num">{{ (f.cobrado_mes / 1000) | usd }}</td>

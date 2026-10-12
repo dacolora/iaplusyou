@@ -702,13 +702,14 @@ def _fuente_cobros(cliente, ahora):
     def monto(milesimas):
         return gastos.formatear(int(milesimas) / 1000)
 
-    if c["disponible"] <= 0:
+    # Pospago (Daniel 2026-10-12): nada frena por saldo; lo que debe lo dicen el chip y el panel, no una alerta.
+    if not c["pospago"] and c["disponible"] <= 0:
         out.append(_alerta("cobros:sin_saldo", huella("sin_saldo"), "bloquea", "puesta_a_punto",
                            gettext("Te quedaste sin saldo"),
                            gettext("Sin saldo no se puede generar nada nuevo. Recarga en Configuración › Saldo y recargas "
                                    "y sigues donde ibas."),
                            "settings", ancla="config-ap-saldo"))
-    elif 0 < c["saldo"] < c["umbral"]:
+    elif not c["pospago"] and 0 < c["saldo"] < c["umbral"]:
         out.append(_alerta("cobros:saldo_bajo", huella("saldo_bajo", round(c["saldo"] / 1000)), "atencion",
                            "puesta_a_punto",
                            gettext("Tu saldo se está acabando"),

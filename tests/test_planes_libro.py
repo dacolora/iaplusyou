@@ -161,9 +161,10 @@ def test_cobro_en_periodo_a_precio_de_miembro(base_temporal, libro, sin_avisos):
 
 
 def test_cuenta_sin_plan_no_cambia_de_forma(base_temporal, libro):
+    # «pospago» se sumó el 2026-10-12 (cobrar sin frenar, tests/test_cobros_pospago.py); el plan no agrega claves.
     libro.configurar("acme", usuario="admin", cobrar=True)
-    assert set(libro.cuenta("acme")) == {"cobrar", "margen", "margen_propio", "umbral"}
-    assert set(libro.cuenta("sin_fila")) == {"cobrar", "margen", "margen_propio", "umbral"}
+    assert set(libro.cuenta("acme")) == {"cobrar", "margen", "margen_propio", "umbral", "pospago"}
+    assert set(libro.cuenta("sin_fila")) == {"cobrar", "margen", "margen_propio", "umbral", "pospago"}
 
 
 # ------------------------------------------------------------ la bolsa ---

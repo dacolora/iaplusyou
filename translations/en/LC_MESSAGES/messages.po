@@ -1703,6 +1703,10 @@ msgid "%(proyecto)s ahora cobra lo que genera."
 msgstr "%(proyecto)s now pays for what it generates."
 
 #, python-format
+msgid "%(proyecto)s ahora es pospago: genera sin frenos y lo que pase de cero queda por pagar."
+msgstr "%(proyecto)s is now postpaid: it generates without limits and anything below zero is owed."
+
+#, python-format
 msgid "%(proyecto)s ahora lo gestiona Creatv en Meta: %(cuenta)s · %(pagina)s%(ig)s."
 msgstr "Creatv now manages %(proyecto)s on Meta: %(cuenta)s · %(pagina)s%(ig)s."
 
@@ -1725,6 +1729,10 @@ msgstr "%(proyecto)s does not charge usage yet: the balance stays saved for when
 #, python-format
 msgid "%(proyecto)s volvió a modo propia: si tenía su propia conexión se restauró; si no, tendrá que registrar su app y conectar con Meta."
 msgstr "%(proyecto)s went back to own-app mode: if it had its own connection, it was restored; if not, it will have to register its app and connect with Meta."
+
+#, python-format
+msgid "%(proyecto)s vuelve a prepago: sin saldo no podrá generar nada que cueste."
+msgstr "%(proyecto)s is back to prepaid: without balance it can't generate anything that costs."
 
 #, python-format
 msgid "%(r)s producto(s) del nicho; %(e)s elegido(s) para traer reseñas"
@@ -13884,6 +13892,9 @@ msgstr "Pay the outstanding balance in the account’s billing."
 msgid "Pagado por transferencia"
 msgstr "Paid by bank transfer"
 
+msgid "Pagar"
+msgstr "Pay"
+
 msgid "Pagar con Bold"
 msgstr "Pay with Bold"
 
@@ -14030,6 +14041,12 @@ msgstr "Passes thresholds but is not in the top third of its country (position %
 
 msgid "Pasada 1: Agrupa en núcleos de deseos comunes. Pasada 2: Desglosa cada núcleo en sub-avatares (bases de emoción/experiencia)."
 msgstr "Pass 1: Groups into cores of shared desires. Pass 2: Breaks each core down into sub-avatars (emotion/experience bases)."
+
+msgid "Pasar a pospago"
+msgstr "Switch to postpaid"
+
+msgid "Pasar a prepago"
+msgstr "Switch to prepaid"
 
 msgid "Pasarela"
 msgstr "Gateway"
@@ -14512,6 +14529,17 @@ msgstr "By gender"
 msgid "Por nombre"
 msgstr "By name"
 
+msgid "Por pagar"
+msgstr "Amount due"
+
+#, python-format
+msgid "Por pagar: %(monto)s"
+msgstr "Amount due: %(monto)s"
+
+#, python-format
+msgid "Por pagar: %(monto)s · Plan: %(plan)s restantes"
+msgstr "Amount due: %(monto)s · Plan: %(plan)s left"
+
 msgid "Por palabra clave"
 msgstr "By keyword"
 
@@ -14556,6 +14584,12 @@ msgstr "Position"
 
 msgid "Posición en el video"
 msgstr "Position in the video"
+
+msgid "Pospago"
+msgstr "Postpaid"
+
+msgid "Pospago: cobra igual, pero nada frena por saldo; lo que pase de cero queda por pagar."
+msgstr "Postpaid: usage is charged the same, but nothing stops for lack of balance; anything below zero is owed."
 
 msgid "Posts"
 msgstr "Posts"
@@ -14607,6 +14641,9 @@ msgstr "Turn on “Charge usage” to activate a plan."
 
 msgid "Prender"
 msgstr "Turn on"
+
+msgid "Prepago"
+msgstr "Prepaid"
 
 msgid "Prepara variantes antes de que se apague: «Evaluar con IA» propone ideas a partir de lo que ya funciona."
 msgid_plural "Prepara variantes antes de que se apaguen: «Evaluar con IA» propone ideas a partir de lo que ya funciona."
@@ -15094,6 +15131,12 @@ msgstr "It may have been deleted in another tab."
 #, python-format
 msgid "Puede haber anuncios activos en «%(experimento)s»"
 msgstr "There may be active ads in “%(experimento)s”"
+
+msgid "Puedes seguir generando aunque llegue a cero: lo que pase de cero queda por pagar."
+msgstr "You can keep generating even at zero: anything below zero is owed."
+
+msgid "Puedes seguir generando: lo que generes se suma a lo que debes y lo pagas cuando te pasemos la cuenta."
+msgstr "You can keep generating: what you generate is added to what you owe, and you pay it when we send you the bill."
 
 msgid "Puesta a punto"
 msgstr "Setup"
@@ -21942,6 +21985,9 @@ msgstr "little data"
 msgid "por %(monto)s (el precio que aceptó)"
 msgstr "for %(monto)s (the price they accepted)"
 
+msgid "por pagar"
+msgstr "due"
+
 msgid "por revisar"
 msgstr "to review"
 
@@ -22976,6 +23022,9 @@ msgstr "“%(titulo)s” couldn't be prepared: %(error)s"
 #, python-format
 msgid "«%(x)s» no es una familia de la biblioteca."
 msgstr "“%(x)s” isn't a family from the library."
+
+msgid "«Cobrar» está apagado: el pospago no cobra nada hasta que lo prendas."
+msgstr "“Charge usage” is off: postpaid charges nothing until you turn it on."
 
 msgid "«Crear credenciales» › «Clave de API»; en «Restricciones de API» limítala a YouTube Data API v3."
 msgstr "“Create credentials” › “API key”; in “API restrictions” limit it to YouTube Data API v3."
