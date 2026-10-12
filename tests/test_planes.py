@@ -25,6 +25,7 @@ class WompiFalso:
         self.wompi = wompi
         self.posts, self.usadas, self.txs, self.respuestas = [], set(), {}, {}
         self.defecto, self.error, self.espera, self.fuentes = "APPROVED", None, 0, []
+        self.busquedas, self.busquedas_vacias, self.error_busqueda = [], 0, None
 
     def crear_fuente(self, tipo, token, correo, acceptance_token, personal_token, tiempo=None):
         self.fuentes.append((tipo, token, correo, acceptance_token, personal_token))
@@ -55,6 +56,25 @@ class WompiFalso:
     def transaccion(self, transaccion_id, tiempo=None):
         return dict(self.txs[transaccion_id])
 
+    def transacciones_de_referencia(self, referencia, tiempo=None):
+        # PND-296: lo que Wompi tiene con esa referencia (las primeras `busquedas_vacias` no encuentran nada todavía).
+        self.busquedas.append(referencia)
+        if self.error_busqueda is not None:
+            raise self.error_busqueda
+        if self.busquedas_vacias:
+            self.busquedas_vacias -= 1
+            return []
+        return [dict(t) for t in self.txs.values() if t["reference"] == referencia]
+
+    def cobro_que_llego(self, referencia, centavos=CENTAVOS_MES, status="APPROVED", **extra):
+        """Wompi sí creó la transacción de un envío que se cortó (la respuesta se perdió)."""
+        tx = {"id": f"1292-{len(self.txs) + 1}-9", "reference": referencia, "amount_in_cents": centavos,
+              "currency": "COP", "status": status, "status_message": None, "payment_method_type": "CARD",
+              "payment_source_id": 3891, **extra}
+        self.txs[tx["id"]] = tx
+        self.usadas.add(referencia)
+        return tx["id"]
+
 
 @pytest.fixture()
 def planes(base_temporal):
@@ -70,6 +90,7 @@ def falso(base_temporal, monkeypatch):
     monkeypatch.setattr(wompi, "crear_fuente", f.crear_fuente)
     monkeypatch.setattr(wompi, "cobrar_fuente", f.cobrar_fuente)
     monkeypatch.setattr(wompi, "transaccion", f.transaccion)
+    monkeypatch.setattr(wompi, "transacciones_de_referencia", f.transacciones_de_referencia)
     monkeypatch.setattr(trm, "actual", lambda: TRM)
     return f
 
@@ -394,6 +415,90 @@ def test_cobro_incierto_se_reintenta_con_la_misma_referencia(base_temporal, plan
     assert planes.aplicar_transaccion(tx, ahora=_despues(ahora, minutos=12)) == "aprobado"
     assert _filas(base_temporal, "pago_plan")[1].transaccion_id == "1292-99-1"
     assert planes.cobrar_periodo(1, ahora=_despues(ahora, minutos=20)) == "no_toca"
+
+
+# --- PND-296 (2026-10-12): un cobro incierto se resuelve buscando su referencia en Wompi -------------------------
+
+def test_un_cobro_incierto_se_resuelve_buscando_su_referencia_sin_reenviar(base_temporal, planes, pro, falso, avisos):
+    _suscribir(planes, pro)
+    ahora = _antes("2026-11-09T10:00:00", 30)
+    falso.error = (falso.wompi.ErrorWompi("cortado", caida=True, incierto=True), False)
+    assert planes.cobrar_periodo(1, ahora=ahora) == "caida"
+    tx_id = falso.cobro_que_llego("pl-1-20261109-1")      # sí llegó: Wompi la tiene, la respuesta se perdió
+    _envejecer(base_temporal)
+    envios = len(falso.posts)
+    assert planes.cobrar_periodo(1, ahora=_despues(ahora, minutos=5)) == "aprobado"
+    assert len(falso.posts) == envios                     # no se reenvió: se encontró
+    pago = _filas(base_temporal, "pago_plan")[1]
+    assert pago.estado == "aprobado" and pago.transaccion_id == tx_id
+    assert falso.busquedas == ["pl-1-20261109-1"] and "admin:plan_admin" not in _tipos(avisos)
+    assert _sus(base_temporal).cubierto_hasta == "2026-12-09T10:00:00"
+
+
+def test_tras_un_422_de_referencia_usada_se_busca_y_se_aplica(base_temporal, planes, pro, falso, avisos):
+    _suscribir(planes, pro)
+    ahora = _antes("2026-11-09T10:00:00", 30)
+    falso.error = (falso.wompi.ErrorWompi("cortado", caida=True, incierto=True), False)
+    planes.cobrar_periodo(1, ahora=ahora)
+    falso.cobro_que_llego("pl-1-20261109-1", status="DECLINED")
+    falso.busquedas_vacias = 1                             # la primera búsqueda todavía no la ve
+    _envejecer(base_temporal)
+    assert planes.cobrar_periodo(1, ahora=_despues(ahora, minutos=5)) == "rechazado"
+    assert [p["referencia"] for p in falso.posts[1:]] == ["pl-1-20261109-1"] * 2   # el reenvío dio 422
+    assert falso.busquedas == ["pl-1-20261109-1"] * 2
+    assert _sus(base_temporal).estado == "morosa" and "admin:plan_admin" not in _tipos(avisos)
+
+
+def test_un_cobro_incierto_de_una_cancelada_se_resuelve_buscando(base_temporal, planes, pro, falso, avisos):
+    _suscribir(planes, pro)
+    fin = "2026-11-09T10:00:00"
+    falso.error = (falso.wompi.ErrorWompi("cortado", caida=True, incierto=True), False)
+    planes.renovar_todo(ahora=_antes(fin, 30))
+    planes.cancelar("acme", "user_acme", ahora=_antes(fin, 25))
+    falso.cobro_que_llego("pl-1-20261109-1")
+    _envejecer(base_temporal)
+    planes.renovar_todo(ahora=_antes(fin, 10))
+    assert len(falso.posts) == 2                           # ni un reenvío tras cancelar
+    assert _filas(base_temporal, "pago_plan")[1].estado == "aprobado"
+    s = _sus(base_temporal)
+    assert s.estado == "cancelada" and s.cubierto_hasta == "2026-12-09T10:00:00"
+    assert "admin:plan_admin" not in _tipos(avisos)
+
+
+def test_lo_que_encuentra_la_busqueda_se_relee_por_id_y_otro_comercio_no_cuenta(base_temporal, planes, pro, falso,
+                                                                                avisos, monkeypatch):
+    _suscribir(planes, pro)
+    ahora = _antes("2026-11-09T10:00:00", 30)
+    falso.error = (falso.wompi.ErrorWompi("cortado", caida=True, incierto=True), False)
+    planes.cobrar_periodo(1, ahora=ahora)
+    tx_id = falso.cobro_que_llego("pl-1-20261109-1")
+    leidas = []
+    original = falso.transaccion
+
+    from cobros import wompi
+
+    def por_id(transaccion_id, tiempo=None):
+        # Como el `transaccion` de verdad: normalizada, con el comercio que trae Wompi.
+        leidas.append(transaccion_id)
+        return wompi.normalizar({**original(transaccion_id), "merchant": {"public_key": "pub_prod_OTRO"}})  # llave-de-prueba
+    monkeypatch.setattr(wompi, "transaccion", por_id)
+    _envejecer(base_temporal)
+    planes.cobrar_periodo(1, ahora=_despues(ahora, minutos=5))
+    assert leidas[:1] == [tx_id]
+    assert _filas(base_temporal, "pago_plan")[1].estado == "pendiente"   # de otro comercio: no se aprueba nada
+    assert "admin:plan_admin" in _tipos(avisos)
+
+
+def test_si_la_busqueda_falla_se_sigue_como_antes(base_temporal, planes, pro, falso, avisos):
+    _suscribir(planes, pro)
+    ahora = _antes("2026-11-09T10:00:00", 30)
+    falso.error = (falso.wompi.ErrorWompi("cortado", caida=True, incierto=True), True)
+    planes.cobrar_periodo(1, ahora=ahora)
+    falso.error_busqueda = falso.wompi.ErrorWompi("No se pudo hablar con Wompi (Timeout)", caida=True)
+    _envejecer(base_temporal)
+    assert planes.cobrar_periodo(1, ahora=_despues(ahora, minutos=5)) == "incierto"   # reenvío → 422 → incierto
+    assert [p["referencia"] for p in falso.posts[1:]] == ["pl-1-20261109-1"] * 2
+    assert _filas(base_temporal, "pago_plan")[1].estado == "pendiente"
 
 
 def test_cobro_que_no_salio_se_reintenta_con_la_misma_referencia_y_cobra(base_temporal, planes, pro, falso, avisos):

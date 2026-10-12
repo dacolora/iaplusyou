@@ -171,9 +171,11 @@ def _referencia_usada(datos):
         return False
 
 
-def _pedir(verbo, ruta, *, llave=None, cabeceras=None, cuerpo=None, tiempo=TIEMPO, cobro=False):
-    """Pide a un host fijo de Wompi y devuelve `data` (un dict). `cobro=True`
-    marca `incierto` en todo error en el que Wompi pudo haber cobrado."""
+def _pedir(verbo, ruta, *, llave=None, cabeceras=None, cuerpo=None, tiempo=TIEMPO, cobro=False, params=None,
+           lista=False):
+    """Pide a un host fijo de Wompi y devuelve `data` (un dict; una lista con
+    `lista=True`). `cobro=True` marca `incierto` en todo error en el que Wompi
+    pudo haber cobrado."""
     url = base_url() + ruta
     h = {"Accept": "application/json", **(cabeceras or {})}
     if llave:
@@ -181,6 +183,8 @@ def _pedir(verbo, ruta, *, llave=None, cabeceras=None, cuerpo=None, tiempo=TIEMP
     k = {"headers": h, "timeout": tiempo, "allow_redirects": False}
     if cuerpo is not None:
         k["json"] = cuerpo
+    if params is not None:
+        k["params"] = params
     try:
         r = getattr(requests, verbo)(url, **k)
     except requests.ConnectTimeout:
@@ -207,7 +211,7 @@ def _pedir(verbo, ruta, *, llave=None, cabeceras=None, cuerpo=None, tiempo=TIEMP
     if j is None:
         raise ErrorWompi(gettext("Wompi respondió algo que no es JSON"), codigo=codigo, incierto=cobro)
     datos = j.get("data") if isinstance(j, dict) else None
-    if not isinstance(datos, dict):
+    if not isinstance(datos, list if lista else dict):
         raise ErrorWompi(gettext("Wompi no devolvió los datos esperados"), codigo=codigo, incierto=cobro)
     return datos
 
@@ -484,6 +488,28 @@ def transaccion(transaccion_id, tiempo=TIEMPO):
         raise ErrorWompi(gettext("Identificador de transacción inválido"))
     d = _pedir("get", f"/transactions/{transaccion_id}", llave=_privada(), tiempo=tiempo)
     return _transaccion(d)
+
+
+MAX_POR_REFERENCIA = 20   # una referencia nuestra tiene una transacción, o pocas si se reintentó el pago
+
+
+def transacciones_de_referencia(referencia, tiempo=TIEMPO):
+    """`GET /transactions?reference=<ref>` con la llave privada: las transacciones de NUESTRO comercio con esa
+    referencia exacta (PND-296, 2026-10-12: los eventos de la primera recarga real no se aceptaron y Wompi no los
+    reintentó; sin el id de la transacción, nada la encontraba). La búsqueda no trae `merchant`: quien la usa
+    relee cada una por id (`transaccion`) antes de aplicarla. A lo más MAX_POR_REFERENCIA; lo que no tenga forma
+    de transacción, o sea de otra referencia, se descarta."""
+    referencia = _validar_referencia(referencia)
+    datos = _pedir("get", "/transactions", llave=_privada(), params={"reference": referencia}, tiempo=tiempo,
+                   lista=True)
+    txs = []
+    for d in datos:
+        tx = _transaccion(d) if isinstance(d, dict) else {}
+        if tx.get("reference") == referencia and id_valido(tx.get("id")):
+            txs.append(tx)
+        if len(txs) >= MAX_POR_REFERENCIA:
+            break
+    return txs
 
 
 def _resumen(tipo, publico):

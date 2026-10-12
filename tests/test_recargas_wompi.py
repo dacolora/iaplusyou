@@ -38,7 +38,7 @@ def entorno(base_temporal, monkeypatch, tmp_path):
     for verbo in ("get", "post", "put", "request"):
         monkeypatch.setattr(wompi.requests, verbo, _sin_red)
 
-    estado = {"txs": {}, "consultas": [], "avisos": [], "trm": TRM, "links": []}
+    estado = {"txs": {}, "consultas": [], "avisos": [], "trm": TRM, "links": [], "por_ref": {}, "busquedas": []}
 
     def transaccion(tx_id, tiempo=wompi.TIEMPO):
         estado["consultas"].append((tx_id, tiempo))
@@ -58,7 +58,16 @@ def entorno(base_temporal, monkeypatch, tmp_path):
         estado["links"].append(k)
         return {"link_id": "LNK_PRUEBA1", "url": "https://checkout.bold.co/LNK_PRUEBA1"}
 
+    def por_referencia(ref, tiempo=wompi.TIEMPO):
+        # La búsqueda por referencia (PND-296): lo que Wompi diga de esa referencia, o una excepción.
+        estado["busquedas"].append(ref)
+        txs = estado["por_ref"].get(ref, [])
+        if isinstance(txs, Exception):
+            raise txs
+        return [wompi.normalizar(t) for t in txs]
+
     monkeypatch.setattr(wompi, "transaccion", transaccion)
+    monkeypatch.setattr(wompi, "transacciones_de_referencia", por_referencia)
     monkeypatch.setattr(trm, "actual", actual)
     monkeypatch.setattr(bold, "crear_link", crear_link)
     for nombre in ("recarga_acreditada", "recarga_admin", "limpiar_aviso_bajo"):
@@ -279,6 +288,153 @@ def test_la_periodica_vence_una_vieja_sin_transaccion_y_el_evento_tardio_la_acre
     entorno["txs"]["1292-1602113476-10985"] = _tx(ref)
     assert _ev(entorno, _evento(_tx(ref)))[1] == "acreditada"
     assert _recarga(db, rid)["estado"] == "aprobada" and entorno["libro"].saldo("acme") == 50000
+
+
+# --- rescate por referencia (PND-296, 2026-10-12) ---------------------------------------------------------------
+# La primera recarga real (cv-1-1791835226) quedó pagada y sin acreditar: sus eventos no se aceptaron y Wompi no los
+# reintentó. Sin `pasarela_ref`, la periódica no tenía qué consultar.
+
+def _envejecer(entorno, rid, minutos):
+    db = entorno["db"]
+    hace = (datetime.now() - timedelta(minutes=minutos)).isoformat(timespec="seconds")
+    with db.conectar() as con:
+        con.execute(db.recarga.update().where(db.recarga.c.id == rid).values(creada_en=hace))
+
+
+def test_la_periodica_rescata_una_recarga_pagada_cuyo_evento_no_llego(entorno):
+    db, recargas = entorno["db"], entorno["recargas"]
+    rid, ref = _pendiente(entorno)
+    _envejecer(entorno, rid, recargas.MINUTOS_RESCATE + 1)
+    entorno["por_ref"][ref] = [_tx(ref)]
+    entorno["txs"]["1292-1602113476-10985"] = _tx(ref)      # la relectura por id: la que trae el comercio
+    assert recargas.verificar_pendientes() == 1
+    fila = _recarga(db, rid)
+    assert fila["estado"] == "aprobada" and fila["pasarela_ref"] == "1292-1602113476-10985"
+    assert entorno["libro"].saldo("acme") == 50000 and len(_movimientos(db)) == 1
+    assert entorno["busquedas"] == [ref] and [c[0] for c in entorno["consultas"]] == ["1292-1602113476-10985"]
+    assert _admin(entorno).count("wompi_rescatada") == 1     # los eventos están fallando: al admin
+    assert ("recarga_acreditada", ("acme", 50000, "Wompi")) in entorno["avisos"]
+
+
+def test_el_rescate_y_un_evento_tardio_acreditan_una_sola_vez(entorno):
+    db, recargas = entorno["db"], entorno["recargas"]
+    rid, ref = _pendiente(entorno)
+    _envejecer(entorno, rid, recargas.MINUTOS_RESCATE + 1)
+    entorno["por_ref"][ref] = [_tx(ref)]
+    entorno["txs"]["1292-1602113476-10985"] = _tx(ref)
+    recargas.verificar_pendientes()
+    assert _ev(entorno, _evento(_tx(ref))) == (200, "duplicada")
+    recargas.verificar_pendientes()                           # ya aprobada: ni se busca ni se acredita otra vez
+    assert entorno["libro"].saldo("acme") == 50000 and len(_movimientos(db)) == 1
+    assert entorno["busquedas"] == [ref]
+
+
+def test_la_periodica_no_busca_una_recarga_recien_creada(entorno):
+    recargas = entorno["recargas"]
+    rid, ref = _pendiente(entorno)
+    _envejecer(entorno, rid, recargas.MINUTOS_RESCATE - 1)   # la persona puede estar pagando todavía
+    entorno["por_ref"][ref] = [_tx(ref)]
+    recargas.verificar_pendientes()
+    assert entorno["busquedas"] == [] and _recarga(entorno["db"], rid)["estado"] == "pendiente"
+
+
+def test_el_rescate_no_cree_la_busqueda_relee_por_id(entorno):
+    recargas = entorno["recargas"]
+    rid, ref = _pendiente(entorno)
+    _envejecer(entorno, rid, recargas.MINUTOS_RESCATE + 1)
+    entorno["por_ref"][ref] = [_tx(ref)]
+    otra = {**_tx(ref), "merchant": {"public_key": "pub_test_OTRO"}}  # llave-de-prueba
+    entorno["txs"]["1292-1602113476-10985"] = otra             # por id resulta de otro comercio
+    recargas.verificar_pendientes()
+    assert _recarga(entorno["db"], rid)["estado"] == "pendiente" and entorno["libro"].saldo("acme") == 0
+    assert "wompi_no_cuadra" in _admin(entorno)
+
+
+@pytest.mark.parametrize("cambio", [{"amount_in_cents": CENTAVOS - 100}, {"currency": "USD"},
+                                    {"reference": "cv-999-1"}])
+def test_el_rescate_con_otro_monto_moneda_o_referencia_no_acredita(entorno, cambio):
+    recargas = entorno["recargas"]
+    rid, ref = _pendiente(entorno)
+    _envejecer(entorno, rid, recargas.MINUTOS_RESCATE + 1)
+    entorno["por_ref"][ref] = [_tx(ref)]
+    entorno["txs"]["1292-1602113476-10985"] = {**_tx(ref), **cambio}
+    recargas.verificar_pendientes()
+    assert _recarga(entorno["db"], rid)["estado"] == "pendiente" and entorno["libro"].saldo("acme") == 0
+
+
+def test_el_rescate_prefiere_la_aprobada_si_hubo_un_intento_rechazado(entorno):
+    recargas = entorno["recargas"]
+    rid, ref = _pendiente(entorno)
+    _envejecer(entorno, rid, recargas.MINUTOS_RESCATE + 1)
+    rechazada = _tx(ref, status="DECLINED", tx_id="1292-1602113476-10001")
+    aprobada = _tx(ref, tx_id="1292-1602113476-10002")
+    entorno["por_ref"][ref] = [rechazada, aprobada]
+    entorno["txs"].update({"1292-1602113476-10001": rechazada, "1292-1602113476-10002": aprobada})
+    recargas.verificar_pendientes()
+    fila = _recarga(entorno["db"], rid)
+    assert fila["estado"] == "aprobada" and fila["pasarela_ref"] == "1292-1602113476-10002"
+    assert entorno["libro"].saldo("acme") == 50000
+
+
+def test_el_rescate_de_una_rechazada_la_marca_y_una_pendiente_guarda_su_transaccion(entorno):
+    recargas = entorno["recargas"]
+    r1, ref1 = _pendiente(entorno)
+    r2, ref2 = _pendiente(entorno)
+    for rid in (r1, r2):
+        _envejecer(entorno, rid, recargas.MINUTOS_RESCATE + 1)
+    entorno["por_ref"][ref1] = [_tx(ref1, status="DECLINED", tx_id="1292-1602113476-20001")]
+    entorno["por_ref"][ref2] = [_tx(ref2, status="PENDING", tx_id="1292-1602113476-20002")]
+    entorno["txs"]["1292-1602113476-20001"] = _tx(ref1, status="DECLINED", tx_id="1292-1602113476-20001")
+    entorno["txs"]["1292-1602113476-20002"] = _tx(ref2, status="PENDING", tx_id="1292-1602113476-20002")
+    recargas.verificar_pendientes()
+    assert _recarga(entorno["db"], r1)["estado"] == "rechazada"
+    f2 = _recarga(entorno["db"], r2)
+    assert f2["estado"] == "pendiente" and f2["pasarela_ref"] == "1292-1602113476-20002"
+    assert entorno["libro"].saldo("acme") == 0 and "wompi_rescatada" not in _admin(entorno)
+
+
+def test_el_rescate_sin_transacciones_no_toca_nada(entorno):
+    recargas = entorno["recargas"]
+    rid, ref = _pendiente(entorno)
+    _envejecer(entorno, rid, recargas.MINUTOS_RESCATE + 1)
+    recargas.verificar_pendientes()
+    assert entorno["busquedas"] == [ref] and entorno["consultas"] == []
+    assert _recarga(entorno["db"], rid)["estado"] == "pendiente" and _admin(entorno) == []
+
+
+def test_una_pendiente_vieja_se_busca_antes_de_vencerla(entorno):
+    recargas = entorno["recargas"]
+    rid, ref = _pendiente(entorno)
+    _envejecer(entorno, rid, recargas.HORAS_VIGENTE * 60 + 60)
+    entorno["por_ref"][ref] = [_tx(ref)]
+    entorno["txs"]["1292-1602113476-10985"] = _tx(ref)
+    recargas.verificar_pendientes()
+    assert _recarga(entorno["db"], rid)["estado"] == "aprobada" and entorno["libro"].saldo("acme") == 50000
+
+
+def test_el_rescate_para_con_wompi_caido_y_no_vence_nada(entorno):
+    recargas, wompi = entorno["recargas"], entorno["wompi"]
+    rids = []
+    for _ in range(3):
+        rid, ref = _pendiente(entorno)
+        _envejecer(entorno, rid, recargas.HORAS_VIGENTE * 60 + 60)
+        entorno["por_ref"][ref] = wompi.ErrorWompi("No se pudo hablar con Wompi (Timeout)", caida=True)
+        rids.append(rid)
+    recargas.verificar_pendientes()
+    assert len(entorno["busquedas"]) == 1                     # a la primera caída, la vuelta para
+    assert all(_recarga(entorno["db"], r)["estado"] == "pendiente" for r in rids)   # sin respuesta no se vence
+
+
+def test_el_rescate_toma_el_candado_antes_de_leer(entorno, escritor_en_medio):
+    recargas = entorno["recargas"]
+    rid, ref = _pendiente(entorno)
+    _envejecer(entorno, rid, recargas.MINUTOS_RESCATE + 1)
+    entorno["por_ref"][ref] = [_tx(ref)]
+    entorno["txs"]["1292-1602113476-10985"] = _tx(ref)
+    otro = escritor_en_medio("recarga.pasarela_ref = ", "UPDATE recarga SET estado = 'anulada'")
+    recargas.verificar_pendientes()
+    assert _recarga(entorno["db"], rid)["estado"] == "aprobada" and entorno["libro"].saldo("acme") == 50000
+    assert otro["resultado"].startswith("bloqueado")
 
 
 def test_la_periodica_para_con_wompi_caido(entorno):

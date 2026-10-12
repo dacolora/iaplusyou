@@ -10821,6 +10821,10 @@ msgid "La recarga va de US$ %(min)s a US$ %(max)s, en dólares enteros."
 msgstr "A top-up goes from US$ %(min)s to US$ %(max)s, in whole dollars."
 
 #, python-format
+msgid "La recarga «%(ref)s» de %(cliente)s estaba pagada en Wompi (transacción %(tx)s), pero su evento no llegó o no se aceptó. La encontramos buscando su referencia y la acreditamos. Revisa en el panel de Wompi la URL de eventos y que el secreto de eventos sea el del servidor."
+msgstr "The top-up «%(ref)s» of %(cliente)s was paid in Wompi (transaction %(tx)s), but its event did not arrive or was not accepted. We found it by searching its reference and credited it. In the Wompi dashboard, check the events URL and that the events secret is the one on the server."
+
+#, python-format
 msgid "La recarga «%(ref)s» de %(cliente)s ya estaba acreditada y Wompi aprobó otra transacción (%(tx)s) con la misma referencia. No se acreditó dos veces: revísalo en el panel de Wompi y devuélvelo o acredítalo a mano."
 msgstr "Top-up «%(ref)s» for %(cliente)s was already credited and Wompi approved another transaction (%(tx)s) with the same reference. It was not credited twice: check it in the Wompi dashboard and refund it or credit it manually."
 
@@ -18837,6 +18841,10 @@ msgstr "One per line; for example, the exact dialogue lines from the script. Cla
 #, python-format
 msgid "Una recarga de %(cliente)s figura aprobada en la vuelta y no llegó su evento: revísala en el panel de Wompi"
 msgstr "A top-up for %(cliente)s shows as approved on the return page and its event did not arrive: check it in the Wompi dashboard"
+
+#, python-format
+msgid "Una recarga de %(cliente)s se acreditó sin su evento de Wompi"
+msgstr "A top-up of %(cliente)s was credited without its Wompi event"
 
 #, python-format
 msgid "Una recarga de %(monto)s con %(pasarela)s sigue pendiente. Si ya pagaste, se acredita sola en unos minutos; si no, genera un link nuevo en Configuración › Saldo y recargas."

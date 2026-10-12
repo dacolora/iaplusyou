@@ -412,6 +412,52 @@ def test_transaccion_usa_la_llave_privada(wompi, monkeypatch):
     assert r["payment_source_id"] == 3891
 
 
+def _lista(*txs):
+    return _Respuesta(200, {"data": [dict(t) if isinstance(t, dict) else t for t in txs]})
+
+
+def _d(tx_id="1292-1602113476-10985", reference="cv-7-1", status="APPROVED"):
+    return {"id": tx_id, "reference": reference, "amount_in_cents": 19562100, "currency": "COP",
+            "payment_method_type": "CARD", "status": status}
+
+
+def test_transacciones_de_referencia_busca_con_la_llave_privada(wompi, monkeypatch):
+    # PND-296 (2026-10-12): una recarga cuyos eventos no se aceptaron se encuentra buscando su referencia.
+    visto = _capturar(monkeypatch, wompi, "get", _lista(_d(), _d("1292-1602113476-10986", status="DECLINED")))
+    r = wompi.transacciones_de_referencia("cv-7-1", tiempo=(3, 5))
+    assert visto["url"] == "https://sandbox.wompi.co/v1/transactions"
+    assert visto["params"] == {"reference": "cv-7-1"}
+    assert visto["headers"]["Authorization"] == f"Bearer {PRV_T}"
+    assert visto["allow_redirects"] is False and visto["timeout"] == (3, 5)
+    assert [(t["id"], t["status"]) for t in r] == [("1292-1602113476-10985", "APPROVED"),
+                                                   ("1292-1602113476-10986", "DECLINED")]
+
+
+def test_transacciones_de_referencia_descarta_las_de_otra_referencia_y_las_raras(wompi, monkeypatch):
+    _capturar(monkeypatch, wompi, "get", _lista(_d(reference="cv-7-10"), _d(reference="CV-7-1"), "no es un objeto",
+                                                {**_d(), "id": "../x"}, _d("1292-1602113476-10987")))
+    assert [t["id"] for t in wompi.transacciones_de_referencia("cv-7-1")] == ["1292-1602113476-10987"]
+
+
+def test_transacciones_de_referencia_trae_a_lo_mas_veinte(wompi, monkeypatch):
+    _capturar(monkeypatch, wompi, "get", _lista(*[_d(f"1292-1602113476-{i}") for i in range(30)]))
+    assert len(wompi.transacciones_de_referencia("cv-7-1")) == wompi.MAX_POR_REFERENCIA == 20
+
+
+@pytest.mark.parametrize("respuesta", [_Respuesta(200, {"data": {"id": "x"}}), _Respuesta(200, {"nada": 1}),
+                                       _Respuesta(200, texto="<html>"), _Respuesta(401, {"error": {}})])
+def test_transacciones_de_referencia_con_respuesta_rara_lanza(wompi, monkeypatch, respuesta):
+    _capturar(monkeypatch, wompi, "get", respuesta)
+    with pytest.raises(wompi.ErrorWompi):
+        wompi.transacciones_de_referencia("cv-7-1")
+
+
+@pytest.mark.parametrize("ref", ["", None, "cv-1\n", "x" * 256])
+def test_transacciones_de_referencia_rara_no_sale(wompi, ref):
+    with pytest.raises(wompi.ErrorWompi):
+        wompi.transacciones_de_referencia(ref)
+
+
 @pytest.mark.parametrize("tid", ["../merchants/info", "1-2-3?x=1", "", None, "a/b", "1" * 80])
 def test_transaccion_con_id_raro_no_sale(wompi, tid):
     with pytest.raises(wompi.ErrorWompi):

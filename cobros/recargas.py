@@ -58,6 +58,11 @@ TOPE_VUELTA_S = 60           # verificar_pendientes no retiene el carril general
 # los 30 min la recarga sigue sin acreditar (el evento firmado no llegó), la periódica avisa al admin una vez.
 CLAVE_VISTO = "wompi:visto:{recarga}"
 MINUTOS_VISTO_SIN_EVENTO = 30
+# PND-296 (2026-10-12): una recarga de Wompi `pendiente` sin transacción se busca por su referencia pasados estos
+# minutos (antes la persona puede estar pagando todavía y el evento llega solo). La primera recarga real quedó pagada
+# y sin acreditar: sus eventos no se aceptaron y Wompi no los reintentó a los 30 min como dice su doc.
+MINUTOS_RESCATE = 10
+_ORDEN_RESCATE = {"APPROVED": 0, "PENDING": 1, "DECLINED": 2, "ERROR": 2}   # VOIDED u otro: nada que aplicar
 _reloj = time.monotonic
 _SIN_FIRMA = {"desde": None, "n": 0, "avisado": False}          # Bold
 _SIN_FIRMA_WOMPI = {"desde": None, "n": 0, "avisado": False}    # Wompi: cupo aparte
@@ -799,13 +804,68 @@ def _verificar_wompi(fila, tiempo):
         return (_fila(con, fila["id"]) or {}).get("estado"), None
 
 
-def _verificar(recarga_id, tiempo=None):
+def _toca_rescate(fila):
+    """¿Una recarga de Wompi que hay que buscar por su referencia? `pendiente`, sin transacción conocida y creada hace
+    más de MINUTOS_RESCATE (también una vieja, antes de vencerla). Solo lee el dict."""
+    limite = (datetime.now() - timedelta(minutes=MINUTOS_RESCATE)).isoformat(timespec="seconds")
+    return (fila.get("medio") == "wompi" and fila.get("estado") == "pendiente" and not fila.get("pasarela_ref")
+            and str(fila.get("creada_en") or "") <= limite)
+
+
+def _rescatar_wompi(fila, tiempo):
+    """PND-296: la periódica busca en Wompi, por su referencia, una recarga pendiente cuyo evento no llegó. Nunca
+    cree la búsqueda: relee la elegida por id (la búsqueda no trae el comercio) y la aplica con `_aplicar_wompi` bajo
+    el candado, el mismo camino que «Verificar» (referencia, centavos, moneda y comercio tienen que cuadrar; acredita
+    una sola vez, y un evento tardío queda `duplicada`). Entre varias, la aprobada primero. (estado, error)."""
+    espera = wompi.TIEMPO if tiempo is None else tiempo
+    try:
+        candidatas = wompi.transacciones_de_referencia(fila["referencia"], tiempo=espera)
+        utiles = sorted((t for t in candidatas if t.get("status") in _ORDEN_RESCATE),
+                        key=lambda t: _ORDEN_RESCATE[t["status"]])
+        if not utiles:
+            return fila["estado"], None
+        tx = wompi.transaccion(utiles[0]["id"], tiempo=espera)
+    except wompi.ErrorWompi as e:
+        log.warning("no se pudo buscar la recarga %s en Wompi: %s", fila["id"], cola.sin_token(str(e)))
+        return fila["estado"], e
+    with db.conectar() as con:
+        libro._candado(con)   # antes de leer: el evento tardío, la vuelta y la periódica acreditan una sola vez
+        actual = _fila(con, fila["id"])
+        resultado = _aplicar_wompi(con, actual, tx)
+    if resultado == "no_cuadra":
+        _avisar_no_cuadra(fila["id"], fila["cliente"], fila["referencia"], tx, "busqueda")
+    else:
+        _avisar_wompi(resultado, actual, tx)
+    if resultado == "acreditada":
+        _avisar_rescatada(actual, tx)
+    with db.conectar() as con:
+        return (_fila(con, fila["id"]) or {}).get("estado"), None
+
+
+def _avisar_rescatada(fila, tx):
+    """Al admin: si una recarga se acreditó buscándola, los eventos de Wompi están fallando (la URL o el secreto)."""
+    cliente, referencia, tx_id = fila["cliente"], fila["referencia"], str(tx.get("id") or "—")[:64]
+    _en_segundo_plano(lambda: avisos.admin(
+        "wompi_rescatada",
+        lambda: gettext("Una recarga de %(cliente)s se acreditó sin su evento de Wompi", cliente=cliente),
+        lambda: gettext("La recarga «%(ref)s» de %(cliente)s estaba pagada en Wompi (transacción %(tx)s), pero su "
+                        "evento no llegó o no se aceptó. La encontramos buscando su referencia y la acreditamos. "
+                        "Revisa en el panel de Wompi la URL de eventos y que el secreto de eventos sea el del "
+                        "servidor.", ref=referencia, cliente=cliente, tx=tx_id),
+        cliente=cliente))
+
+
+def _verificar(recarga_id, tiempo=None, rescatar=False):
     """(estado, error): error = el ErrorBold/ErrorWompi si la pasarela no
-    respondió, o None. `tiempo` None = la espera larga de cada pasarela."""
+    respondió, o None. `tiempo` None = la espera larga de cada pasarela.
+    `rescatar` (solo la periódica): una de Wompi sin transacción se busca por
+    su referencia (`_toca_rescate`)."""
     with db.conectar() as con:
         fila = _fila(con, recarga_id)
     if fila is None:
         return None, None
+    if rescatar and _toca_rescate(fila):
+        return _rescatar_wompi(fila, tiempo)
     if not consultable(fila):
         return fila["estado"], None
     if fila["medio"] == "wompi":
@@ -945,8 +1005,9 @@ def avisar_vistos_sin_evento():
 
 def verificar_pendientes():
     """La tarea periódica: consulta cada recarga pendiente (de Bold, o de Wompi
-    con transacción conocida) y vence las de más de HORAS_VIGENTE que la
-    pasarela no dio por pagadas. Una vieja se consulta
+    con transacción conocida; una de Wompi sin transacción, de más de
+    MINUTOS_RESCATE, se busca por su referencia: PND-296) y vence las de más de
+    HORAS_VIGENTE que la pasarela no dio por pagadas. Una vieja se consulta
     una última vez antes de vencerla (el pago pudo entrar sin que llegara el
     webhook) y, si Bold no responde, se deja para la próxima vuelta.
 
@@ -981,7 +1042,7 @@ def verificar_pendientes():
             log.warning("verificar recargas: tope de %s s; quedan para la próxima vuelta", TOPE_VUELTA_S)
             break
         try:
-            estado, error = _verificar(fila.id)
+            estado, error = _verificar(fila.id, rescatar=True)
         except Exception:  # noqa: BLE001 — una recarga rara no frena las demás
             log.exception("no se pudo verificar la recarga %s", fila.id)
             continue

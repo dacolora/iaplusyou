@@ -809,8 +809,17 @@ def _enviar(accion, pago, sus, ahora, acceptance_token=None):
     Devuelve el estado (aprobado, pendiente, rechazado, error, incierto, caida…)."""
     from cobros import wompi  # noqa: PLC0415
     if accion == "esperar_evento":
+        hallado = _buscar_en_wompi(pago, ahora)
+        if hallado is not None:
+            return hallado
         _aviso_incierto(pago)
         return "incierto"
+    if accion == "reintentar":
+        # Antes de reenviar (con la MISMA referencia), ¿Wompi ya lo tiene? La respuesta pudo perderse con el cobro
+        # hecho (PND-296): así se resuelve sin esperar un evento ni al admin.
+        hallado = _buscar_en_wompi(pago, ahora)
+        if hallado is not None:
+            return hallado
     if accion == "consultar":
         try:
             tx = wompi.transaccion(pago["transaccion_id"])
@@ -823,8 +832,11 @@ def _enviar(accion, pago, sus, ahora, acceptance_token=None):
                                  acceptance_token=acceptance_token)
     except wompi.ErrorWompi as e:
         if e.referencia_usada:
-            # El primer envío llegó a Wompi (la referencia ya existe): ese pago se conocerá por su evento. Sin el id
-            # de la transacción no hay cómo consultarlo: queda pendiente (bloquea otro cobro) y el admin lo sabe.
+            # El primer envío llegó a Wompi (la referencia ya existe): se busca por la referencia (PND-296); si
+            # todavía no aparece, se conocerá por su evento: queda pendiente (bloquea otro cobro) y el admin lo sabe.
+            hallado = _buscar_en_wompi(pago, ahora)
+            if hallado is not None:
+                return hallado
             _aviso_incierto(pago)
             return "incierto"
         if accion == "cobrar" and not e.incierto and (e.caida or e.codigo in (401, 403, 429)):
@@ -848,6 +860,28 @@ def _enviar(accion, pago, sus, ahora, acceptance_token=None):
         return _fallo_definitivo(pago, gettext("La fuente de pago guardada no es válida"), ahora)
     if not tx.get("reference"):
         tx = {**tx, "reference": pago["referencia"]}
+    return aplicar_transaccion(tx, ahora=ahora)
+
+
+_ORDEN_BUSQUEDA = {"APPROVED": 0, "PENDING": 1, "DECLINED": 2, "ERROR": 2, "VOIDED": 3}
+
+
+def _buscar_en_wompi(pago, ahora):
+    """PND-296 (2026-10-12): ¿Wompi tiene una transacción con la referencia de este pago? La busca (con nuestra
+    llave privada), relee la elegida por id —la búsqueda no trae el comercio— y la aplica con
+    `aplicar_transaccion`, que compara centavos, moneda y comercio. Devuelve lo que diga, o None si no hay nada o
+    Wompi no respondió (quien llama sigue como antes: reenviar con la misma referencia nunca cobra dos veces)."""
+    from cobros import wompi  # noqa: PLC0415
+    try:
+        txs = [t for t in wompi.transacciones_de_referencia(pago["referencia"]) if t.get("status") in _ORDEN_BUSQUEDA]
+        if not txs:
+            return None
+        elegida = min(txs, key=lambda t: _ORDEN_BUSQUEDA[t["status"]])
+        tx = wompi.transaccion(elegida["id"])
+    except wompi.ErrorWompi as e:
+        log.warning("no se pudo buscar el pago %s en Wompi: %s", pago["id"], type(e).__name__)
+        return None
+    log.info("pago de plan %s encontrado en Wompi por su referencia (%s)", pago["id"], tx.get("status"))
     return aplicar_transaccion(tx, ahora=ahora)
 
 
