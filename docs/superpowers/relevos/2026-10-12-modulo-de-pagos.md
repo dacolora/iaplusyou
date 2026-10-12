@@ -10,22 +10,21 @@ Creatv ya cobra el uso con comisión, pero todo está **apagado**: ningún proye
 - Llaves de producción de Wompi en el `.env` del VPS (las puso Daniel con `read -s`, 2026-10-12) | verificado por ssh sin imprimirlas: las cuatro presentes, `wompi.configurado()` True, `pruebas()` False, `pasarela.para_recargas()` = "wompi", `wompi.aceptaciones()` responde; servicios reiniciados con cola vacía; `/login` 200, `/salud` ok, `POST /pagos/wompi/eventos` sin firma → 401.
 - Estado en producción al escribir esto: `cuenta_saldo` con cobrar=1 → 0 filas; plan `Pro` (1000, activo=0); kv `cobros:margen_global` vacío (el código usa 2,0); 0 recargas Wompi; 2 `pago_evento` de Wompi sin firma (son las pruebas de humo, no de Wompi). VPS en `7bb9208b` (otra conversación desplegó después; incluye lo nuestro), alembic 0039.
 
+## Actualización 2026-10-12 15:40 (hora de Bogotá): la prueba real ya se hizo
+- **URL de eventos registrada** por Daniel en el panel de producción (PND-246 cerrado). Los primeros eventos dieron 401: `evento_valido` buscaba `timestamp` en `signature` y Wompi lo manda arriba. Arreglado con prueba primero, revisado por `guardian-gasto` (sin riesgo de plata), suite 8 992 passed, **desplegado como parche** sobre lo que corría (VPS en `d3cf88da`, hijo de `7bb9208b`; reinicio de iaplusyou y creatv-worker 20:25:29 UTC con cola vacía; humo bien) y mezclado a main (`64d9a5d3`). No se desplegó main entero: traía la pestaña Rendimiento de otra conversación.
+- **Prueba real con plata, en `colorado_forja`**: recarga de US$ 10, alta del plan «Prueba» de US$ 1 con tarjeta y una renovación forzada de US$ 1 sin `acceptance_token`: las tres APPROVED, todo una sola vez. Detalle y cómo repetirla: skill `cobros`, «Prueba real en producción». PND-245 y PND-255 cerrados; PND-244 y PND-249 actualizados.
+- **Al cerrar**: suscripción cancelada (termina el 2026-12-12, sin cobrar más), plan «Prueba» archivado, «Cobrar» apagado en `colorado_forja` (saldo de prueba US$ 11 en su libro).
+- **Nuevo, PND-296 (plata)**: Wompi no reintentó a los 30 min; una recarga cuyos eventos fallan no la rescata nada solo. Se acreditó por ssh con `recargas._aplicar_wompi` y la transacción leída en Wompi. Conviene construirlo antes de prender «Cobrar» a clientes.
+
 ## Falta, en el orden en que conviene hacerlo
-1. **Confirmar con Daniel si registró la URL de eventos** en el panel de Wompi (producción): `https://app.creatvmachine.com/pagos/wompi/eventos` (PND-246). Sin eso las recargas y los pagos de plan no se acreditan solos (la vuelta del navegador ya NO acredita, por diseño).
-2. **Prueba real en producción con plata de verdad** (reemplaza la del sandbox, PND-244/249/255), en un proyecto de prueba:
-   - crear un proyecto de prueba (o usar uno de Daniel que no sea de un cliente), prender «Cobrar» en /admin/cobros;
-   - crear un plan «Prueba» de US$ 1 **activo** (aparece en Configuración › Plan de los proyectos que cobran; hoy no hay otros) y archivarlo al terminar;
-   - Daniel hace una recarga de US$ 10 y se suscribe al plan de US$ 1 con su tarjeta;
-   - verificar en la base: `recarga` aprobada con `pasarela_ref`, movimiento `recarga` +10000 una vez, `pago_evento` de Wompi con `firma_ok=1`; `suscripcion` activa, `pago_plan` aprobado, `periodo_plan` abierto, movimiento `plan` +1000 una vez;
-   - responder las dudas de PND-249: qué campo mete el widget de tokenización en el formulario (`cobros/rutas.py` `_token_en` acepta varios), si el envío sale de nuestra página (si sale del iframe de Wompi, `_solo_mismo_origen` da 403: la salida es un callback que publique el token desde nuestra página, NUNCA eximir la ruta), si `Permissions-Policy: payment=()` molesta (mirar la consola; si molesta, poner el header solo en `plan_alta`/`plan_tarjeta`), si Nequi recurrente pide aprobación cada mes;
-   - probar PND-255: `GET /v1/transactions/<id>` de un id ajeno debe dar 404;
-   - cancelar el plan de prueba y archivarlo; dejar o devolver a mano el saldo de prueba.
-3. **Activar el plan Pro** en /admin/cobros (PND-247) y **prender «Cobrar»** proyecto por proyecto, avisando antes al cliente (la carta queda ×2).
-4. **Facturación DIAN e IVA** (PND-161, PND-248): decisión de Daniel con su contador.
-5. Pendientes menores ya anotados: PND-161..175 (cobros) y PND-244..256 (planes).
+1. **PND-296**: que la periódica (o un botón del admin) rescate las recargas de Wompi pendientes sin transacción, buscándolas por referencia.
+2. **Activar el plan Pro** en /admin/cobros (PND-247) y **prender «Cobrar»** proyecto por proyecto, avisando antes al cliente (la carta queda ×2). Decide Daniel.
+3. **Facturación DIAN e IVA** (PND-161, PND-248): decisión de Daniel con su contador.
+4. Lo que sigue sin probar en real (PND-244, PND-249): rechazo en el alta, gracia, anual, anulación, Nequi.
+5. Pendientes menores ya anotados: PND-161..175 (cobros) y PND-250..254, 256 (planes).
 
 ## La siguiente acción concreta
-Preguntarle a Daniel si ya registró la URL de eventos en Wompi y si da el visto bueno a la prueba real (≈ US$ 11 + comisión). Con el sí: crear el plan «Prueba» de US$ 1 y prender «Cobrar» en un proyecto de prueba desde /admin/cobros (o con `cobros.planes.crear_plan(...)` y `cobros.libro.configurar(cliente, usuario="admin", cobrar=True)` por ssh, `TZ=America/Bogota`, desde `/home/deploy/iaplusyou`), y decirle cuándo pagar.
+Preguntarle a Daniel si construimos PND-296 ahora (spec corto: la periódica busca por referencia las recargas de Wompi pendientes de más de 15 min sin `pasarela_ref`, relee por id y aplica con `_aplicar_wompi`) o si primero activa el plan Pro y prende «Cobrar» a un cliente.
 
 ## Decisiones ya tomadas (no reabrir)
 | Decisión | Respuesta | Quién | Fecha |
@@ -60,7 +59,7 @@ Preguntarle a Daniel si ya registró la URL de eventos en Wompi y si da el visto
 - Otras conversaciones despliegan main seguido; avisar por SendMessage antes de desplegar.
 
 ## Plata
-- En proveedores durante el trabajo: nada (todas las pruebas con proveedores falsos). La prueba real costará ≈ US$ 11 a Daniel más la comisión de Wompi (2,65 % + $700 + IVA), y queda como saldo del proyecto de prueba.
+- En proveedores durante el trabajo: nada. La prueba real le costó a Daniel US$ 12 (COP 31 945 + 3 195 + 3 195, TRM 3 194,44) más la comisión de Wompi; esa plata entra a su propia cuenta de Wompi y quedó como saldo de prueba (US$ 11 en el libro de `colorado_forja`; la bolsa del segundo mes entra el 2026-11-12).
 
 ## Estado del árbol
-- Commits sin subir: este relevo y la nota en PND-245 (se suben con este commit) · Pruebas: no se corrieron para este commit (solo documentación) · VPS: `7bb9208b`, alembic 0039.
+- Todo en main (parche `d3cf88da`, merge `64d9a5d3` y el commit de documentación de esta actualización) · Pruebas: suite 8 992 passed en el parche · VPS: `d3cf88da`, alembic 0039 (la otra conversación desplegará main con la pestaña Rendimiento, que ya incluye el parche).
