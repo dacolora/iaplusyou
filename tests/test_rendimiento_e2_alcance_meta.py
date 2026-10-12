@@ -421,7 +421,7 @@ def test_pedir_analisis_de_una_cuenta_que_se_solto_en_medio_no_deja_fila_ni_enco
     monkeypatch.setattr(twdatos, "crear_analisis", _crear)
     from tareas import triple_whale as tareas_tw
     monkeypatch.setattr(tareas_tw, "encolar_analisis", lambda *a, **k: pytest.fail("no se encola ni se reserva"))
-    assert pedidos.pedir_analisis("acme", alc, a, "daniel") == (False, "Esa cuenta de Meta ya no está en este proyecto.")
+    assert pedidos.pedir_analisis("acme", alc, a, "daniel") == (False, "Esa cuenta de Meta ya no está en el proyecto.")
     assert len(creadas) == 1 and twdatos.analisis_anuncio("acme", creadas[0]) is None
     assert _tareas("tw_analizar_anuncio") == []
 

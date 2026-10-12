@@ -546,6 +546,11 @@ def test_si_soltaron_la_cuenta_mientras_claude_respondia_se_anota_una_vez_sin_en
     [claude] = [g for g in gastos_ if g["tipo"] == "evaluacion"]
     assert claude["entregado"] is False and claude["detalle"] == "sin resultado usable"
     assert claude["usd"] == pytest.approx(costo_real(1000, 500)) and claude["referencia"] == f"tw_anuncio:{aid}:t40"
+    # La voz ya se había anotado entregada: se vuelve a anotar igual pero sin entregar (G1 de la ronda de arreglos 1).
+    voz = [g for g in gastos_ if g["tipo"] == "transcripcion"]
+    assert [g.get("entregado", True) for g in voz] == [True, False]
+    assert {(g["referencia"], g["usd"], g["proveedor"], g["detalle"]) for g in voz} == {
+        (f"tw_anuncio:{aid}:t40:voz", 0.001, "fal", "la voz de un anuncio de Meta")}
     assert copias == [("acme", [(aid, AD)])]
     assert datos.analisis_anuncio("acme", aid) is None
 
@@ -629,3 +634,120 @@ def test_un_analisis_de_triple_whale_nunca_borra_copias_de_meta(tarea_meta, monk
                 "Ese análisis ya no existe."
     [claude] = [g for g in gastos_ if g["tipo"] == "evaluacion"]          # solo el que llegó a responder
     assert claude["entregado"] is False and claude["referencia"] == f"tw_anuncio:{ids[0]}:t51"
+
+
+# ----------------------- PND-295, ronda de arreglos 1 (2026-10-12): la voz ya pagada y las relecturas antes de pagar ---
+
+def _cobra_acme():
+    """Un proyecto con «Cobrar» prendido y saldo: el libro escribe un `cobro` por cada gasto entregado."""
+    import db
+    from cobros import libro
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    with db.conectar() as con:
+        libro.acreditar(con, "acme", "ajuste", 50_000, "ajuste", usuario="admin", detalle="prueba")
+
+
+def _libro_del_analisis(aid):
+    """{referencia: [tipos de movimiento]} y el neto en milésimas de lo que el libro anotó para ese análisis."""
+    import db
+    import sqlalchemy as sa
+    g, m = db.gasto, db.movimiento_saldo
+    with db.conectar() as con:
+        filas = con.execute(sa.select(g.c.referencia, m.c.tipo, m.c.milesimas).join(m, m.c.gasto_id == g.c.id)
+                            .where(g.c.referencia.like(f"tw_anuncio:{aid}:%"))).all()
+    tipos = {}
+    for r in filas:
+        tipos.setdefault(r.referencia, []).append(r.tipo)
+    return {k: sorted(v) for k, v in tipos.items()}, sum(r.milesimas for r in filas)
+
+
+def test_con_voz_y_la_fila_borrada_mientras_claude_respondia_al_cliente_no_se_le_cobra_nada(tarea_meta, monkeypatch):
+    """G1: la tarea TERMINA normal (no falla), así que el worker no revierte nada. Whisper ya se había anotado como
+    entregado (con su `cobro`): se vuelve a anotar con la misma referencia y `entregado=False`, y el libro escribe su
+    `reverso`. Claude queda `no_cobrado`. Neto para el cliente: cero."""
+    from cobros import libro
+    _cobra_acme()
+    saldo_antes = libro.saldo("acme")
+    aid = tarea_meta["aid"]
+    monkeypatch.setattr(creativo, "traer", lambda *a: dict(TRAIDO))
+    analizar = mejorar.analizar
+
+    def _analizar(*a, **k):
+        r = analizar(*a, **k)
+        datos.borrar_analisis("acme", aid)
+        return r
+    monkeypatch.setattr(mejorar, "analizar", _analizar)
+    _copias_borradas(monkeypatch)
+    assert _correr(tarea_meta) == "Ese análisis ya no existe."
+    tipos, neto = _libro_del_analisis(aid)
+    assert tipos == {f"tw_anuncio:{aid}:t40": ["no_cobrado"], f"tw_anuncio:{aid}:t40:voz": ["cobro", "reverso"]}
+    assert neto == 0 and libro.saldo("acme") == saldo_antes
+
+
+def test_con_la_fila_en_su_sitio_la_voz_y_claude_se_cobran(tarea_meta, monkeypatch):
+    """Control del anterior: entregado, el libro cobra los dos."""
+    _cobra_acme()
+    monkeypatch.setattr(creativo, "traer", lambda *a: dict(TRAIDO))
+    _correr(tarea_meta)
+    tipos, neto = _libro_del_analisis(tarea_meta["aid"])
+    assert tipos == {f"tw_anuncio:{tarea_meta['aid']}:t40": ["cobro"], f"tw_anuncio:{tarea_meta['aid']}:t40:voz": ["cobro"]}
+    assert neto < 0
+
+
+def test_si_la_fila_se_va_antes_de_whisper_no_se_paga_nada_y_se_borran_las_copias(tarea_meta, monkeypatch):
+    """G2: la fila se relee justo antes de Whisper (bajar el video y sacar fotogramas tarda segundos)."""
+    aid = tarea_meta["aid"]
+    monkeypatch.setattr(creativo, "traer", lambda *a: dict(TRAIDO))
+    visuales = mejorar.visuales
+
+    def _visuales(foto_):
+        r = visuales(foto_)
+        datos.borrar_analisis("acme", aid)
+        return r
+    monkeypatch.setattr(mejorar, "visuales", _visuales)
+    monkeypatch.setattr(mejorar, "transcribir", lambda foto_: pytest.fail("Whisper"))
+    monkeypatch.setattr(mejorar, "analizar", lambda *a, **k: pytest.fail("Claude"))
+    copias = _copias_borradas(monkeypatch)
+    assert _correr(tarea_meta) == "Ese análisis ya no existe."
+    assert copias == [("acme", [(aid, AD)])] and _filas_gasto() == []
+
+
+def test_si_la_fila_se_va_antes_de_claude_la_voz_queda_sin_entregar_y_claude_no_se_llama(tarea_meta, monkeypatch):
+    """G2: y otra vez justo antes de Claude. Whisper ya cobró: se vuelve a anotar sin entregar (reverso en el libro)."""
+    from cobros import libro
+    _cobra_acme()
+    saldo_antes = libro.saldo("acme")
+    aid = tarea_meta["aid"]
+    monkeypatch.setattr(creativo, "traer", lambda *a: dict(TRAIDO))
+
+    def _transcribir(foto_):
+        datos.borrar_analisis("acme", aid)
+        return {"texto": "Hei", "costo_usd": 0.001, "frases": [{"segundo": 0.4, "texto": "Hei"}]}
+    monkeypatch.setattr(mejorar, "transcribir", _transcribir)
+    monkeypatch.setattr(mejorar, "analizar", lambda *a, **k: pytest.fail("Claude"))
+    gastos_ = _gastos_anotados(tarea_meta["t"], monkeypatch)
+    copias = _copias_borradas(monkeypatch)
+    assert _correr(tarea_meta) == "Ese análisis ya no existe."
+    voz = [g for g in gastos_ if g["tipo"] == "transcripcion"]
+    assert [g.get("entregado", True) for g in voz] == [True, False]
+    assert {(g["referencia"], g["usd"], g["proveedor"], g["detalle"]) for g in voz} == {
+        (f"tw_anuncio:{aid}:t40:voz", 0.001, "fal", "la voz de un anuncio de Meta")}
+    assert not [g for g in gastos_ if g["tipo"] == "evaluacion"]
+    assert copias == [("acme", [(aid, AD)])]
+    tipos, neto = _libro_del_analisis(aid)
+    assert tipos == {f"tw_anuncio:{aid}:t40:voz": ["cobro", "reverso"]} and neto == 0
+    assert libro.saldo("acme") == saldo_antes
+
+
+def test_un_analisis_de_triple_whale_que_se_va_antes_de_claude_tampoco_borra_copias(tarea_meta, monkeypatch):
+    t = tarea_meta["t"]
+    monkeypatch.setattr(creativo, "borrar_copias", lambda *a: pytest.fail("Triple Whale no copia nada de Meta"))
+    foto = _foto()
+    foto["creativo"] = {"tipo": "video", "copy": "Chanclas", "video_url": "https://media.test/v.mp4"}
+    tw = datos.crear_analisis("acme", None, "facebook-ads", "p1", "2026-09-01", "2026-09-30", "USD", foto)
+    monkeypatch.setattr(mejorar, "visuales", lambda foto_: (datos.borrar_analisis("acme", tw),
+                                                             ({"bloques": [], "clase": None, "fotogramas": 0}, []))[1])
+    monkeypatch.setattr(mejorar, "transcribir", lambda foto_: pytest.fail("Whisper"))
+    monkeypatch.setattr(mejorar, "analizar", lambda *a, **k: pytest.fail("Claude"))
+    assert t.tw_analizar_anuncio({"id": 52, "payload": {"cliente": "acme", "analisis_id": tw}}) == \
+        "Ese análisis ya no existe."

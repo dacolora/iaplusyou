@@ -175,3 +175,39 @@ def test_una_clave_anotada_se_borra_en_la_limpieza_diaria(base_temporal, monkeyp
     monkeypatch.setattr(r2_uploader, "delete_files_detalle", lambda claves: (borradas.extend(claves), (len(claves), []))[1])
     tareas_mr.meta_rend_limpiar({"payload": {}})
     assert borradas == [f"{BASE}/a7_123.jpg", f"{BASE}/a7_123.mp4"] and r2_pendientes.pendientes() == []
+
+
+# ------------------------------------------------- ningún aviso registra claves (M2 de la ronda de arreglos 1) ---
+
+CLAVE = f"{BASE}/a1_123.jpg"      # con el id del proyecto y del anuncio: nunca va a un log
+
+
+@pytest.mark.parametrize("r2", ["devuelve", "lanza"])
+def test_el_aviso_de_reintentar_no_registra_las_claves(base_temporal, monkeypatch, caplog, r2):
+    r2_pendientes.anotar([CLAVE, f"{BASE}/a1_123.mp4"])
+
+    def _detalle(claves):
+        if r2 == "lanza":
+            raise RuntimeError(f"no se pudo borrar {claves[0]}")
+        return 1, [(CLAVE, "ClientError")]
+    monkeypatch.setattr(r2_uploader, "delete_files_detalle", _detalle)
+    with caplog.at_level(logging.DEBUG):
+        r2_pendientes.reintentar()
+    assert caplog.text and "clientes/" not in caplog.text
+
+
+@pytest.mark.parametrize("r2", ["devuelve", "lanza"])
+def test_los_avisos_de_borrar_copias_y_borrar_claves_no_registran_las_claves(base_temporal, monkeypatch, caplog, r2):
+    from meta_rendimiento import analisis, creativo
+
+    def _detalle(claves):
+        if r2 == "lanza":
+            raise RuntimeError(f"no se pudo borrar {claves[0]}")
+        return 0, [(c, "ClientError") for c in claves]
+    monkeypatch.setattr(r2_uploader, "delete_files_detalle", _detalle)
+    with caplog.at_level(logging.DEBUG):
+        creativo.borrar_copias("acme", [(1, "123")])
+        analisis.borrar_claves(["clientes/acme/meta_rendimiento/eval1_A1.jpg"])
+    assert "copia(s) de anuncios de Meta" in caplog.text and "miniatura(s) de evaluación" in caplog.text
+    assert "clientes/" not in caplog.text
+    assert CLAVE in r2_pendientes.pendientes()             # anotadas sí, en la base; en el log, nunca

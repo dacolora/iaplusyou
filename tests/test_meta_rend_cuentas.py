@@ -152,9 +152,10 @@ def test_elegir_barre_otra_vez_tras_borrar_la_cuenta(base_temporal, monkeypatch)
     cuentas.elegir("acme", [HF[0]])
     foto = {"fuente": "meta", "ad_account_id": act, "nombre": "Video"}
     vieja = tw_datos.crear_analisis("acme", None, "facebook-ads", "111", "2026-09-01", "2026-09-30", "SEK", foto)
-    barrer, nuevas = tw_datos.borrar_analisis_meta, []
+    barrer, nuevas, cuentas_vistas = tw_datos.borrar_analisis_meta, [], []
 
     def _barrer(cliente, ids):
+        cuentas_vistas.append(cuentas.ids("acme"))    # el segundo barrido tiene que ir DESPUÉS de borrar la cuenta
         borradas = barrer(cliente, ids)
         if not nuevas:           # el pedido llega justo después del primer barrido, antes de borrar la cuenta
             nuevas.append(tw_datos.crear_analisis("acme", None, "facebook-ads", "222", "2026-09-01", "2026-09-30",
@@ -168,6 +169,7 @@ def test_elegir_barre_otra_vez_tras_borrar_la_cuenta(base_temporal, monkeypatch)
     with db.conectar() as con:
         assert con.execute(sa.select(db.tw_analisis.c.id)).all() == []
     assert copias == [("acme", [(vieja, "111"), (nuevas[0], "222")])]
+    assert cuentas_vistas == [[act], []]
 
 
 def test_actualizar_extra_no_pierde_la_escritura_de_otro_hilo(base_temporal):
