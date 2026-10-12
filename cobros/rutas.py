@@ -186,12 +186,13 @@ def saldo_panel(cliente):
         abort(404)
     e = vista.estado(cliente, siempre=True)
     lista = recargas.de_proyecto(cliente)
-    return render_template("_saldo_panel.html", cliente=cliente, e=e, tono=vista.tono(e),
+    bolsa = vista.bolsa_o_none(cliente) if e["cobrar"] else None
+    return render_template("_saldo_panel.html", cliente=cliente, e=e, tono=vista.tono(e, bolsa),
                            movs=vista.movimientos(cliente), pagina=1, recargas=lista,
                            consultables={r["id"] for r in lista if recargas.consultable(r)},
                            estados_recarga=vista.ESTADOS_RECARGA, pasarela=pasarela.para_recargas(),
                            min_usd=recargas.MIN_USD, max_usd=recargas.MAX_USD, solo_filas=False,
-                           bolsa=vista.bolsa_o_none(cliente) if e["cobrar"] else None)
+                           bolsa=bolsa, por_pagar=vista.por_pagar(e, bolsa))
 
 
 MAX_PAGINA = 100_000   # «Ver más» de a 50 movimientos: muy por encima de cualquier libro real
@@ -917,13 +918,16 @@ def admin_margen():
 @_solo_admin
 def admin_cuenta(cliente):
     """Solo cambia lo que trae el formulario: `cobrar` (1|0, el interruptor),
-    `margen` (vacío = vuelve al global) y `umbral` (en dólares)."""
+    `pospago` (1|0: cobra sin frenar por saldo, Daniel 2026-10-12), `margen`
+    (vacío = vuelve al global) y `umbral` (en dólares)."""
     if not _existe(cliente):
         abort(404)
     cambios = {}
     try:
         if "cobrar" in request.form:
             cambios["cobrar"] = request.form.get("cobrar") == "1"
+        if "pospago" in request.form:
+            cambios["pospago"] = request.form.get("pospago") == "1"
         if "margen" in request.form:
             texto = (request.form.get("margen") or "").strip()
             cambios["margen"] = _margen(texto) if texto else None
@@ -938,7 +942,7 @@ def admin_cuenta(cliente):
     if "cobrar" in cambios:
         if cambios["cobrar"]:
             flash(gettext("%(proyecto)s ahora cobra lo que genera.", proyecto=nombre), "ok")
-            if libro.disponible(cliente) <= 0:
+            if not libro.cuenta(cliente)["pospago"] and libro.disponible(cliente) <= 0:
                 flash(gettext("Este proyecto no tiene saldo: desde ahora no podrá generar nada que cueste "
                               "hasta que recargue."), "warn")
         else:
@@ -946,6 +950,15 @@ def admin_cuenta(cliente):
             if planes.apagar_renovacion(cliente, session.get("usuario")):
                 flash(gettext("Su plan ya no se renueva solo: no cobraremos la tarjeta. Para volver a la "
                               "renovación automática, el proyecto tiene que suscribirse de nuevo."), "warn")
+    elif "pospago" in cambios:
+        if cambios["pospago"]:
+            flash(gettext("%(proyecto)s ahora es pospago: genera sin frenos y lo que pase de cero queda por pagar.",
+                          proyecto=nombre), "ok")
+            if not libro.cobra(cliente):
+                flash(gettext("«Cobrar» está apagado: el pospago no cobra nada hasta que lo prendas."), "warn")
+        else:
+            flash(gettext("%(proyecto)s vuelve a prepago: sin saldo no podrá generar nada que cueste.",
+                          proyecto=nombre), "ok")
     elif cambios:
         flash(gettext("Guardado: margen y umbral de %(proyecto)s.", proyecto=nombre), "ok")
     return _volver_admin(cliente)

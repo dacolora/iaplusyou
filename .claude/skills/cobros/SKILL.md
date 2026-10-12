@@ -22,6 +22,27 @@ nacía con «Cobrar» apagado (`cuenta_saldo.cobrar` default False) y un descono
 Los proyectos que ya existían no cambian (sin fila = no cobra). Un admin lo apaga en `/admin/cobros` si el proyecto es
 de la casa o de un cliente que paga por fuera.
 
+**Pospago: «Cobrar» sin frenar (Daniel, 2026-10-12, para happyflops: «siguen generando, pagan después»).**
+`cuenta_saldo.pospago` (migración `0040_cobros_pospago`, 0 por defecto; interruptor «Prepago / Pospago» en
+`/admin/cobros`, `admin_cuenta` con `pospago=1|0`, `libro.configurar(..., pospago=)`). Con «Cobrar» y pospago
+prendidos todo se cobra igual (costo × margen al libro, reserva con el margen visto, reversión si falla), pero **nada
+frena por saldo**: `exigir` reserva y no lanza `SaldoInsuficiente`, `puede_arrancar` deja arrancar, no hay aviso
+`saldo_bajo` (`gastos._despues_del_cobro`) ni alertas `cobros:sin_saldo`/`cobros:saldo_bajo`. El saldo negativo es lo
+que el proyecto debe: el chip dice «Por pagar: US$ X» (tono `aviso`, nunca `bloqueo`), el panel muestra la tile «Por
+pagar» y la sección de pago se llama «Pagar» (una recarga baja la deuda). La cuenta de lo usado antes de prenderlo
+se carga con un **ajuste** negativo (`recargas.manual`, nota visible al cliente; nunca con el costo ni el margen en la
+nota). Con «Cobrar» apagado el pospago no hace nada. `libro.cuenta()` trae la clave `pospago` (False sin fila).
+**Con plan mensual la bolsa no paga la deuda** (guardian-gasto 2026-10-12): `vencer_periodo` vence lo que sobró
+ENTERO en pospago (en prepago sigue con el tope de no bajar de 0), y lo que se muestra como deuda es
+`vista.por_pagar(e, bolsa)` = lo negativo de saldo − restante de la bolsa (chip «Por pagar: X · Plan: Y restantes»,
+tile del panel, `tono(e, bolsa)`). La deuda no tiene tope (lo automático ya autorizado —modo automático de
+Experimentos, QA de Sprints, regla de fidelidad del importador— sigue cobrando sin el freno del saldo); Daniel eligió
+**un aviso al admin cada US$ 200 de deuda nueva** (`avisos.TRAMO_DEUDA`): `avisos.deuda_pospago(cliente,
+libro.deuda(cliente))` tras cada cobro de un pospago (correo `deuda_pospago`; el tramo en `kv`
+`cobros:aviso_deuda:<cliente>`; la primera vez solo anota, al bajar no avisa) y la alerta solo-admin
+`cobros:deuda_pospago` con huella por tramo. El VPS no tiene SMTP (2026-10-12): hoy solo la alerta llega.
+**En producción** desde 2026-10-12 23:33 UTC (main 21823ed5, alembic 0040): happyflops con «Cobrar», margen 3 y pospago; lo usado antes (1 164 gastos, US$ 316,21 de costo, 2026-08-29 a 2026-10-11) quedó como el ajuste −US$ 948,63 (movimiento 3, nota en inglés sin costo ni margen) y el tramo 4 anotado en `kv`. El script de una sola vez exigía cola vacía y libro vacío del proyecto, prendía todo en un solo `configurar` y cargaba como ajuste exactamente los gastos sin movimiento × 3. Pruebas: `tests/test_cobros_pospago.py`, `tests/test_migracion_0040.py`.
+
 ## Módulos y quién escribe qué
 
 | Módulo | Qué hace | Escribe |
@@ -68,7 +89,7 @@ Spec `docs/superpowers/specs/2026-10-09-planes-mensuales-wompi-design.md` §3-§
 
 ## El freno y la reserva (antes de cobrar)
 
-- `libro.exigir(cliente, costo_usd, job_id=None)`: no cobra → 0. `precio` = lo del margen, o 1 si el costo es `None` («precio no disponible»: basta saldo positivo). Si `disponible < precio` lanza `SaldoInsuficiente(cliente, precio, disponible)`; si no y viene `job_id`, inserta la reserva (un segundo clic del mismo `job_id` vivo no duplica). Una reserva está **viva** mientras exista una `tarea` con ese `job_id` en `pendiente` o `en_curso`; no se libera a mano, y `limpiar_reservas_muertas` (mantenimiento diario) las borra.
+- `libro.exigir(cliente, costo_usd, job_id=None)` (en pospago reserva y nunca lanza; ver «Pospago»): no cobra → 0. `precio` = lo del margen, o 1 si el costo es `None` («precio no disponible»: basta saldo positivo). Si `disponible < precio` lanza `SaldoInsuficiente(cliente, precio, disponible)`; si no y viene `job_id`, inserta la reserva (un segundo clic del mismo `job_id` vivo no duplica). Una reserva está **viva** mientras exista una `tarea` con ese `job_id` en `pendiente` o `en_curso`; no se libera a mano, y `limpiar_reservas_muertas` (mantenimiento diario) las borra.
 - **Tareas del worker**: `trabajos.encolar(..., costo_estimado=)` (USD del proveedor, sin margen) exige y reserva antes de insertar la tarea si el tipo está en `tareas.TIPOS_QUE_COBRAN`. Todo tipo de `tareas/` está ahí o en `TIPOS_EXENTOS_DE_COBRO` con su motivo; `tests/test_cobros_worker.py` falla con un tipo nuevo sin clasificar, uno que sobra o uno que llama a `gastos.registrar_seguro` sin estar en la lista. **Una tarea nueva que paga a un proveedor entra a `TIPOS_QUE_COBRAN` y su ruta pasa `costo_estimado`.**
 - **Respaldo del worker** (`worker._sin_saldo` → `libro.puede_arrancar`): antes de correr un tipo que cobra, si el proyecto cobra, **no es continuación de una cadena** y su saldo es ≤ 0 (el saldo, no el disponible: la reserva propia no cuenta en su contra), la tarea queda en error definitivo con `worker.MENSAJE_SIN_SALDO`, sin llamar al proveedor, y corre su `AL_INTERRUMPIR`. Cubre lo que se encola sin pasar por una ruta (modo automático de Experimentos, lotes de Sprints).
 - **Rutas que llaman al proveedor dentro de la petición** (caption orgánico, locución, voz propia, final, Adaptar referente, chat de Flow Plus, regla de producto…) llaman `libro.exigir(cliente, costo)` sin `job_id` antes de gastar. **Toda ruta que guarda algo antes de encolar** (sesión de Crear, swap, fila de final…) pide saldo ANTES de guardar; si el encolado igual falla, deja la entidad en error con `e.frase_proyecto()` o la borra.

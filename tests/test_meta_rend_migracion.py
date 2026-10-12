@@ -44,12 +44,16 @@ def test_db_crear_todo_coincide(base_temporal):
 TABLAS_E2 = ("meta_desglose", "meta_evaluacion")
 
 
-def test_una_sola_cabeza_de_alembic_y_es_la_0039():
+def test_una_sola_cabeza_de_alembic_y_la_0039_esta_en_la_cadena():
+    # Era «y es la 0039»; la 0040 (pospago, 2026-10-12) la sigue: lo que importa es una sola cabeza.
     from alembic.config import Config
     from alembic.script import ScriptDirectory
     cfg = Config(os.path.join(RAIZ, "alembic.ini"))
     cfg.set_main_option("script_location", os.path.join(RAIZ, "migrations"))
-    assert ScriptDirectory.from_config(cfg).get_heads() == ["0039"]
+    guion = ScriptDirectory.from_config(cfg)
+    cabezas = guion.get_heads()
+    assert len(cabezas) == 1
+    assert "0039" in {r.revision for r in guion.walk_revisions("base", cabezas[0])}
 
 
 def test_0039_arriba_abajo_arriba(tmp_path):

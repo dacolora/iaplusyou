@@ -17,6 +17,9 @@ log = logging.getLogger(__name__)
 
 CLAVE_AVISO_BAJO = "cobros:aviso_bajo:{cliente}"
 CLAVE_TOPE_INCLUIDO = "cobros:tope_incluido:{periodo}:{nivel}"
+CLAVE_AVISO_DEUDA = "cobros:aviso_deuda:{cliente}"
+# Pospago (Daniel 2026-10-12): un aviso al admin cada US$ 200 de deuda nueva; la deuda no tiene tope.
+TRAMO_DEUDA = 200_000
 
 
 def _monto(milesimas):
@@ -105,6 +108,42 @@ def limpiar_aviso_bajo(cliente):
             con.execute(db.kv.delete().where(db.kv.c.clave == CLAVE_AVISO_BAJO.format(cliente=cliente)))
     except Exception:  # noqa: BLE001
         log.exception("no se pudo limpiar el aviso de saldo bajo de %s", cliente)
+
+
+def deuda_pospago(cliente, deuda_milesimas):
+    """Al admin, cuando la deuda de un proyecto pospago entra en un tramo nuevo de TRAMO_DEUDA (US$ 200, 400…).
+    La primera vez solo anota el tramo (la deuda con la que se prendió ya se sabe); si la deuda baja (pagó), el
+    tramo baja con ella sin avisar, y vuelve a avisar al subir. El tramo vive en `kv`; el candado se toma antes de
+    leer para que dos cobros a la vez no avisen dos veces. Devuelve True si avisó. Nunca lanza."""
+    tramo = max(0, int(deuda_milesimas)) // TRAMO_DEUDA
+    clave = CLAVE_AVISO_DEUDA.format(cliente=cliente)
+    try:
+        with db.conectar() as con:
+            con.execute(db.kv.update().where(db.kv.c.clave == clave).values(valor=db.kv.c.valor))
+            previo = con.execute(sa.select(db.kv.c.valor).where(db.kv.c.clave == clave)).scalar()
+            if previo is None:
+                con.execute(db.kv.insert().values(clave=clave, valor=str(tramo), actualizado_en=db.ahora()))
+                return False
+            if tramo == int(previo):
+                return False
+            con.execute(db.kv.update().where(db.kv.c.clave == clave)
+                        .values(valor=str(tramo), actualizado_en=db.ahora()))
+            if tramo < int(previo):
+                return False
+    except sa.exc.IntegrityError:
+        return False   # otro proceso acaba de anotar el tramo: él avisa
+    except Exception:  # noqa: BLE001
+        log.exception("no se pudo anotar el aviso de deuda de %s", cliente)
+        return False
+    admin("deuda_pospago",
+          lambda: gettext("La deuda de %(cliente)s pasó de %(tramo)s", cliente=cliente,
+                          tramo=_monto(tramo * TRAMO_DEUDA)),
+          lambda: gettext("%(cliente)s debe %(deuda)s. Es pospago: genera sin frenos y lo que pase de cero queda por "
+                          "pagar. Este aviso vuelve con cada %(tramo)s de deuda nueva; cóbrale o pásalo a prepago en "
+                          "/admin/cobros.", cliente=cliente, deuda=_monto(deuda_milesimas),
+                          tramo=_monto(TRAMO_DEUDA)),
+          cliente=cliente)
+    return True
 
 
 def _marcar_una_vez(clave):
