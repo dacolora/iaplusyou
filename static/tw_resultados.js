@@ -101,6 +101,15 @@
   }
   function vaciar(el) { while (el.firstChild) el.removeChild(el.firstChild); }
   function fechaDe(iso) { var p = String(iso).split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); }
+  // ¿Abre el detalle este día? No hoy (va a medias), ni uno sin copia, ni uno que cae antes del primer día del detalle
+  // (`sin_dia`: la ruta respondería 400). UNA sola regla para el clic, las flechas + Enter, la pista y el cursor.
+  function diaAbrible(d, esHoy) { return !!d && !esHoy && !d.sin_copia && !d.sin_dia; }
+  // El motivo de un 400 si es una frase corta de texto plano (la que escribe la ruta); si no, '' (HTML de una página de
+  // error, un cuerpo vacío o larguísimo): entonces se queda el aviso genérico.
+  function motivoCorto(cuerpo) {
+    var t = String(cuerpo === undefined || cuerpo === null ? '' : cuerpo).trim();
+    return t && t.length <= 200 && t.indexOf('<') < 0 ? t : '';
+  }
   function capital(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
 
   function iniciar(raiz) {
@@ -323,6 +332,9 @@
       if (clave !== 'gasto' && !st.tendencia && Object.keys(raros).length) muestra('twr-muestra-raro', T.raro);
     }
 
+    // ¿Se puede abrir el día `i`? Hace falta además que la plantilla haya dado dónde pedirlo (`url_dia`) y su recuadro.
+    function abrible(i) { return !!(datos.url_dia && detalle) && diaAbrible(dias[i], i === n - 1); }
+
     // ------------------------------------------------------------ recuadro ---
     function fila(padre, etiqueta, valorTexto, claseMuestra) {
       var f = html('div', 'twr-aviso-fila', padre);
@@ -346,7 +358,8 @@
         geo.punto.classList.remove('twr-visible');
       }
       vaciar(aviso);
-      html('div', 'twr-aviso-fecha', aviso, fechaLarga(d.f) + (d.sin_copia ? ' · ' + T.sin_copia : hoy ? ' · ' + T.hoy_medias : ''));
+      html('div', 'twr-aviso-fecha', aviso, fechaLarga(d.f) + (d.sin_copia ? ' · ' + T.sin_copia
+           : d.sin_dia && T.sin_dia ? ' · ' + T.sin_dia : hoy ? ' · ' + T.hoy_medias : ''));
       if (['ticket', 'cpp', 'clientes_nuevos'].indexOf(clave) >= 0) {
         fila(aviso, (metas[clave] || {}).etiqueta || '', formatear(clave, valor(clave, d)), 'twr-muestra-linea');
       }
@@ -371,7 +384,8 @@
         html('div', 'twr-aviso-sep', aviso);
         fila(aviso, texto(T.antes, { dia: fechaLarga(previo.f) }), formatear(clave, numero(geo.previos[i]) ? geo.previos[i] : valor(clave, previo)));
       }
-      if (!hoy && !d.sin_copia && datos.url_dia) html('div', 'twr-aviso-pista', aviso, T.pista);   // la pista invita a abrir el día
+      if (abrible(i)) html('div', 'twr-aviso-pista', aviso, T.pista);   // la pista invita a abrir el día
+      lienzo.classList.toggle('twr-sin-abrir', !abrible(i));            // y el cursor de mano, también
       aviso.hidden = false;
       var rLienzo = lienzo.getBoundingClientRect(), rCaja = caja.getBoundingClientRect();
       var escalaX = rLienzo.width / ANCHO;
@@ -396,7 +410,8 @@
       if (!fecha || !datos.url_dia || !detalle) return;   // sin `url_dia` (la plantilla no lo dio) no hay detalle del día
       var i = -1;
       for (var k = 0; k < n; k++) if (dias[k].f === fecha) i = k;
-      if (i === n - 1 || (i >= 0 && dias[i].sin_copia)) return;   // hoy va a medias y un día sin copia no tiene detalle
+      // Las flechas + Enter, el clic y los botones «Ver qué pasó →» pasan por aquí: la misma guarda para todos.
+      if (i >= 0 && !diaAbrible(dias[i], i === n - 1)) return;
       st.sel = i;
       dibujar();
       var mio = ++st.pedido;
@@ -406,18 +421,25 @@
       var url = datos.url_dia || '';
       url += (url.indexOf('?') >= 0 ? '&' : '?') + 'fecha=' + encodeURIComponent(fecha);
       fetch(url, { headers: { 'X-Requested-With': 'fetch' } })
-        .then(function (r) { return r.ok ? r.text() : Promise.reject(r.status); })
+        .then(function (r) {
+          if (r.ok) return r.text();
+          // Un 400 trae el motivo en palabras («Ese día no tiene datos completos.»): se le muestra a la persona.
+          // Cualquier otra cosa (red, 5xx, un 400 que no sea una frase corta) sigue siendo el aviso de siempre.
+          if (r.status !== 400) return Promise.reject(r.status);
+          return r.text().then(function (cuerpo) { return Promise.reject({ motivo: motivoCorto(cuerpo) }); },
+                               function () { return Promise.reject(r.status); });
+        })
         .then(function (fragmento) {
           if (mio !== st.pedido) return;
           detalle.classList.remove('twr-cargando');
           detalle.innerHTML = fragmento;
           if (conFoco) detalle.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         })
-        .catch(function () {
+        .catch(function (error) {
           if (mio !== st.pedido) return;
           detalle.classList.remove('twr-cargando');
           vaciar(detalle);
-          html('p', 'twr-nota', detalle, T.error_dia);
+          html('p', 'twr-nota', detalle, (error && error.motivo) || T.error_dia);   // como texto: nunca innerHTML
         });
     }
 
@@ -522,7 +544,8 @@
   window.TwResultados = {
     iniciar: iniciar,
     _puro: { pasoRedondo: pasoRedondo, escala: escala, promedio7: promedio7, valor: valor, posicionAviso: posicionAviso,
-             indiceEn: indiceEn, dinero: dinero, veces: veces, pct: pct, texto: texto }
+             indiceEn: indiceEn, dinero: dinero, veces: veces, pct: pct, texto: texto, motivoCorto: motivoCorto,
+             diaAbrible: diaAbrible }
   };
   // Si el panel de Rendimiento (#rend-panel, _tab_rendimiento.html) llegó antes que este archivo (va con defer), se
   // inicia aquí; `data-twr-listo` evita hacerlo dos veces. (#tw-panel, el de la pestaña Triple Whale, se jubiló el

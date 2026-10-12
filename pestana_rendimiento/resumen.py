@@ -241,7 +241,9 @@ def _resultados(cliente, alc, dias, hoy, desde, hasta, ancho, inicio_real, moned
         dias, serie, (d_desde - ancho).days, hoy, alc["fuente"], moneda, {}, {}, None, None, None, None, "",
         _ultima_copia(tiendas, alc["meta_fuente"], cuentas_por_id),
         inicio_datos=inicio_real, fin_datos=_fin_datos(filas, lee, origen_tw, con_datos, tiendas, cuentas_por_id),
-        con_detalle=True)
+        con_detalle=True,
+        # `dia` rechaza lo anterior a este mismo inicio común (`_primeros`): esos días no se ofrecen (PND-294).
+        inicio_detalle=inicio_real or resultados.NINGUN_DIA)
     return {"resultados": r, "usd_ok": True}
 
 

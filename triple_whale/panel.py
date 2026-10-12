@@ -558,7 +558,10 @@ def _resultados(cliente, config, tienda_id, canal, dias, desde, hasta, hoy, ev, 
         datos.cohortes(cliente, tienda_id, desde, hasta, canal, conocido_desde=conocido) if inicio_copia else None,
         inicio_copia, ev.get("meta_roas"), canal, "", ultima_copia,
         inicio_datos=str(primer_dato)[:10] if primer_dato else None, fin_datos=fin_datos,
-        inicio_edad=str(inicio_edad)[:10] if inicio_edad else None, visitas_anuncios=visitas_anuncios)
+        inicio_edad=str(inicio_edad)[:10] if inicio_edad else None, visitas_anuncios=visitas_anuncios,
+        # El detalle del día (`contexto_dia`) abre desde el primer día de `primer_dia_copia`, que mira anuncios Y tienda:
+        # no es `inicio_datos` (solo la tienda, o solo los anuncios). Los días de antes no se ofrecen (PND-294).
+        inicio_detalle=datos.primer_dia_copia(cliente, tienda_id) or resultados.NINGUN_DIA)
 
 
 def contexto_dia(cliente, fecha, canal=None, tienda_id=None, hoy=None):

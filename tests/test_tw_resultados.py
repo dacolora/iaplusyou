@@ -23,12 +23,12 @@ def _dias(valores, desde="2026-09-01"):
 
 def _armar(serie, dias_periodo=0, inicio=0, hoy=date(2026, 9, 30), nuevos=None, canales=None, cohortes=None,
            inicio_copia="2026-09-01", meta_roas=None, canal=None, fuente="tienda", ultima_copia=None,
-           inicio_datos=None, fin_datos=None, con_detalle=True):
+           inicio_datos=None, fin_datos=None, con_detalle=True, inicio_detalle=None):
     return r.armar(dias_periodo=dias_periodo, serie_larga=serie, inicio=inicio, hoy=hoy, fuente=fuente,
                    moneda="USD", nuevos=nuevos or {}, canales=canales or {}, cohortes=cohortes,
                    inicio_copia=inicio_copia, meta_roas=meta_roas, canal=canal, url_dia="/x/dia?tienda=",
                    ultima_copia=ultima_copia, inicio_datos=inicio_datos, fin_datos=fin_datos,
-                   con_detalle=con_detalle)
+                   con_detalle=con_detalle, inicio_detalle=inicio_detalle)
 
 
 def test_por_dia_rellena_con_ceros():
@@ -358,3 +358,62 @@ def test_fuente_meta_llama_compras_al_conteo_y_nunca_pedidos(es):
     # El mismo texto en la fuente mezclada sí habla de pedidos (no cambió).
     mixta = _armar(serie, dias_periodo=5, inicio=5, fuente="mixta")
     assert "2 pedidos" in " ".join(f["texto"] for f in mixta["lectura"]) and "1 pedido" in mixta["hoy_texto"]
+
+
+# ---- PND-294: los días que el detalle no abre (2026-10-12) ---------------------------------------------------------
+
+def _con_dia_mejor(i_mejor=2, largo=30):
+    """`largo` días con el mejor día de ventas en `i_mejor` (los demás venden 100)."""
+    return _dias([(900 if i == i_mejor else 100, 50, 2) for i in range(largo)])
+
+
+def test_los_dias_antes_del_primero_del_detalle_llevan_sin_dia(es):
+    serie = _dias([(100, 50, 2)] * 30)                                  # del 1 al 30 de septiembre; hoy = el 30
+    out = _armar(serie, fuente="mixta", inicio_detalle="2026-09-10")
+    dias = out["datos"]["dias"]
+    assert [d["f"] for d in dias if d.get("sin_dia")] == [f"2026-09-{n:02d}" for n in range(1, 10)]
+    assert all(d.get("sin_dia") is None for d in dias[9:])               # desde el primero del detalle, ninguno
+    assert not dias[-1].get("sin_dia")                                    # hoy tiene su propia regla (el JS)
+    # Totales, tarjetas y días dibujados no cambian: solo se marca.
+    sin_marcas = _armar(serie, fuente="mixta")
+    assert sin_marcas["tarjetas"] == out["tarjetas"] and len(sin_marcas["datos"]["dias"]) == len(dias)
+    assert [{k: v for k, v in d.items() if k != "sin_dia"} for d in dias] == sin_marcas["datos"]["dias"]
+
+
+def test_sin_inicio_detalle_o_sin_detalle_no_se_marca_nada(es):
+    serie = _dias([(100, 50, 2)] * 30)
+    for out in (_armar(serie, fuente="mixta"),                                              # la sección no marca
+                _armar(serie, fuente="mixta", inicio_detalle="2026-09-10", con_detalle=False)):   # nada que abrir
+        assert not any(d.get("sin_dia") for d in out["datos"]["dias"])
+
+
+def test_un_dia_sin_copia_conserva_lo_suyo_y_no_se_marca_sin_dia(es):
+    serie = _dias([(100, 50, 2)] * 30)
+    out = _armar(serie, fuente="mixta", inicio_detalle="2026-09-10", fin_datos="2026-09-25")
+    dias = {d["f"]: d for d in out["datos"]["dias"]}
+    assert dias["2026-09-26"]["sin_copia"] is True and "sin_dia" not in dias["2026-09-26"]
+    assert dias["2026-09-25"].get("sin_dia") is None and dias["2026-09-09"]["sin_dia"] is True
+
+
+def test_ninguna_copia_es_ningun_dia_salvo_hoy(es):
+    out = _armar(_dias([(100, 50, 2)] * 30), fuente="meta", inicio_detalle=r.NINGUN_DIA)
+    dias = out["datos"]["dias"]
+    assert all(d["sin_dia"] for d in dias[:-1]) and "sin_dia" not in dias[-1]
+
+
+def test_ver_que_paso_no_ofrece_un_dia_que_el_detalle_rechaza(es):
+    serie = _con_dia_mejor(i_mejor=2)                                     # el mejor día es el 3 de septiembre
+    abre = _armar(serie, fuente="mixta", inicio_detalle="2026-09-03")
+    cierra = _armar(serie, fuente="mixta", inicio_detalle="2026-09-04")
+    acciones = lambda out: [a for f in out["lectura"] for a in f["acciones"] if a["tipo"] == "dia"]   # noqa: E731
+    assert acciones(abre) == [{"tipo": "dia", "fecha": "2026-09-03"}] and acciones(cierra) == []
+    # La frase sigue diciendo lo mismo: solo se quita el botón que no iba a abrir nada.
+    assert [f["texto"] for f in abre["lectura"]] == [f["texto"] for f in cierra["lectura"]]
+
+
+def test_el_motivo_del_recuadro_depende_de_la_fuente(es):
+    serie = _dias([(100, 50, 2)] * 30)
+    textos = {fuente: _armar(serie, fuente=fuente)["datos"]["textos"]["sin_dia"]
+              for fuente in ("mixta", "meta", "tienda", "anuncios")}
+    assert textos["mixta"] == "todavía no estaban todas tus fuentes"
+    assert textos["meta"] == textos["tienda"] == textos["anuncios"] == "antes de la primera copia"

@@ -42,6 +42,9 @@ MIN_DIAS_AVISO = 7
 MIN_PCT_CANAL = 0.01
 MAX_MESES = 5
 SEMANAS_EXTRA = SEMANAS_RARO * 7          # días hacia atrás que pide la serie para juzgar los días raros
+# `inicio_detalle` de `armar` cuando la ruta del detalle no abre ningún día (no hay una sola copia): una fecha que
+# ningún día dibujado alcanza.
+NINGUN_DIA = "9999-12-31"
 
 # Nombres de los canales estandarizados de Triple Whale ("ads-standardized-channel-ids"): un solo registro, en el
 # paquete (lo usan también las tarjetas de análisis y `mejorar`, que corre en el worker).
@@ -467,6 +470,9 @@ def _textos(fuente):
         "cargando": gettext("Cargando…"), "error_dia": gettext("No se pudo cargar ese día."),
         "sin_copia": (gettext("sin copia de Meta") if fuente == "meta"
                       else gettext("sin copia") if fuente == "mixta" else gettext("sin copia de Triple Whale")),
+        # Un día dibujado que el detalle no abre porque cae antes del primer día que el detalle acepta (PND-294).
+        "sin_dia": (gettext("todavía no estaban todas tus fuentes") if fuente == "mixta"
+                    else gettext("antes de la primera copia")),
     }
 
 
@@ -531,7 +537,7 @@ def _hoy_texto(hoy_d, hoy, moneda, ultima_copia, fin_datos, fuente):
 
 def armar(dias_periodo, serie_larga, inicio, hoy, fuente, moneda, nuevos, canales, cohortes, inicio_copia,
           meta_roas, canal, url_dia, ultima_copia, inicio_datos=None, fin_datos=None, inicio_edad=None,
-          con_detalle=True, visitas_anuncios=None):
+          con_detalle=True, visitas_anuncios=None, inicio_detalle=None):
     """Todo lo de la sección. `serie_larga` = `por_dia` desde `inicio` días antes del periodo (el periodo anterior
     y las 4 semanas de los días raros) hasta hoy; el periodo es `serie_larga[inicio:]` y su último punto es hoy.
 
@@ -546,6 +552,12 @@ def armar(dias_periodo, serie_larga, inicio, hoy, fuente, moneda, nuevos, canale
     - `con_detalle`: falso cuando no hay detalle del día: ninguna frase ofrece abrir un día y `datos["url_dia"]` va
       vacío, así la plantilla no pinta el recuadro del detalle y el JS no pide nada. (Hasta E2 tarea 7, Meta y la
       mezcla; hoy todas las fuentes lo tienen.)
+    - `inicio_detalle`: el primer día que la ruta del detalle acepta (PND-294), el MISMO que usa ella: con Triple Whale
+      solo, `datos.primer_dia_copia`; con Meta o mezcla, el inicio común de las fuentes (`resumen._primeros`). Los
+      días dibujados antes de él (una fuente tiene datos y las demás todavía no) llevan `"sin_dia": True`: el detalle
+      los rechazaría con un 400, así que ni el clic, ni la tecla, ni la pista, ni «Ver qué pasó →» los ofrecen.
+      `NINGUN_DIA` = la ruta no abre ninguno (sin copia); None = la sección no marca nada. Hoy y los días «sin copia»
+      tienen su propia regla y no se marcan.
     - `visitas_anuncios`: {"visitantes", "visitantes_nuevos"} que el Pixel atribuye a los anuncios del alcance, para
       el NVP con fuente «anuncios» (`tarjeta_nvp`). Con fuente "meta" o "mixta" no hay tarjeta NVP (`nvp` None): los
       visitantes son de la copia de Triple Whale y en esos alcances describirían solo una parte (integración con main,
@@ -568,6 +580,7 @@ def armar(dias_periodo, serie_larga, inicio, hoy, fuente, moneda, nuevos, canale
     conocido = _iso(_fecha(base_edad) + timedelta(days=DIAS_NUEVO)) if base_edad else None
     nuevos = nuevos or {}
     nue_conocidos, dias_json = {}, []
+    hoy_f = periodo[-1]["f"]
     for d in periodo:
         if d["f"] in sin_copia:
             dias_json.append({"f": d["f"], "ing": None, "gas": None, "ped": None, "nc": None, "nue": None,
@@ -581,6 +594,8 @@ def armar(dias_periodo, serie_larga, inicio, hoy, fuente, moneda, nuevos, canale
                 "nc": round(d["nc"], 2), "nue": nue}
         if fuente == "tienda":
             fila["can"] = _canales_del_dia((canales or {}).get(d["f"]))
+        if con_detalle and inicio_detalle is not None and d["f"] != hoy_f and d["f"] < inicio_detalle:
+            fila["sin_dia"] = True
         dias_json.append(fila)
 
     con_dato = [d for d in periodo if d["f"] not in sin_copia]
@@ -617,9 +632,11 @@ def armar(dias_periodo, serie_larga, inicio, hoy, fuente, moneda, nuevos, canale
         tabla.append(fila)
 
     frases = lectura(completos, previos, comparar, nue_conocidos, canales if fuente == "tienda" else {}, moneda, fuente)
-    if not con_detalle:
-        for frase in frases:
-            frase["acciones"] = [a for a in frase["acciones"] if a["tipo"] != "dia"]
+    # «Ver qué pasó →» solo ofrece un día que el detalle sí abre: sin detalle, ninguno; con días `sin_dia`, esos no.
+    cerrados = {d["f"] for d in dias_json if d.get("sin_dia")}
+    for frase in frases:
+        frase["acciones"] = [a for a in frase["acciones"]
+                             if not (a["tipo"] == "dia" and (not con_detalle or a["fecha"] in cerrados))]
 
     return {
         "titulo": _titulo(fuente, canal), "fuente": fuente,

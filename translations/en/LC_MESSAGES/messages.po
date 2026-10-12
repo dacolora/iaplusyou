@@ -20071,6 +20071,9 @@ msgstr "analyze reference · the response was unusable"
 msgid "animada"
 msgstr "upbeat"
 
+msgid "antes de la primera copia"
+msgstr "before the first copy"
+
 msgid "anual"
 msgstr "yearly"
 
@@ -22653,6 +22656,9 @@ msgstr "type must be video or image"
 
 msgid "todas"
 msgstr "all"
+
+msgid "todavía no estaban todas tus fuentes"
+msgstr "not all your sources were there yet"
 
 msgid "todavía no se han traído resultados"
 msgstr "results haven't been pulled yet"

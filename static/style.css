@@ -4207,6 +4207,7 @@ body:has(#exp-nuevo) main { margin-left: 0; max-width: 1440px; width: 100%; }
 .twr-cruz.twr-visible { opacity: .6; }
 .twr-punto.twr-visible { opacity: 1; }
 .twr-blanco { fill: transparent; cursor: pointer; }
+.twr-sin-abrir .twr-blanco { cursor: default; }   /* hoy, un día sin copia o uno que el detalle no abre (PND-294) */
 .twr-hoy { margin: .35rem .35rem 0; color: var(--muted); font-size: .76rem; }
 
 /* el recuadro de cada día */

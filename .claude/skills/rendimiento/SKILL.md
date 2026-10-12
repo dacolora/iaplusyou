@@ -248,6 +248,10 @@ arranques desconocidos).
 - **Consultas fijas**: una lectura por fuente (serie, anuncios, arranques, inicio de la copia, primeros días), una de
   piezas de Creatv y una de tasas por moneda, crezcan o no los anuncios
   (`test_las_consultas_no_crecen_con_los_anuncios`).
+- **Días que el detalle no abre (PND-294, 2026-10-12).** Con un periodo fijo la gráfica dibuja días anteriores al
+  primero que la ruta acepta y el clic daba «No se pudo cargar ese día.»: `armar(inicio_detalle=…)` los marca `sin_dia`
+  con la regla de la ruta (`resumen._primeros`; con Triple Whale solo, `datos.primer_dia_copia`, no `inicio_datos`) y el
+  JS no los abre ni los invita (`tests/test_rendimiento_sin_dia.py`, `tests/js/tw_resultados_dia.test.mjs`).
 
 ## Integración con main (2026-10-10): lo de producción, dentro de Rendimiento
 
