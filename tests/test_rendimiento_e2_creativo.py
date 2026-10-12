@@ -15,6 +15,7 @@ import meta_conexion
 import proyectos
 from conectores import url as conector_url
 from meta_rendimiento import creativo, graph
+from nicho.avatares import costo_real
 from storage import r2_uploader
 from tests.test_tw_mejorar import _a, _creativo, _ev, respuesta
 from triple_whale import analisis, datos, mejorar
@@ -459,3 +460,172 @@ def test_meta_con_solo_el_copy_sigue_y_cobra(tarea_meta, monkeypatch):
     assert fila["estado"] == "lista" and fila["foto"]["creativo"] == solo_copy and fila["medios"]["copy"] is True
     assert "Chanclas que no duelen" in tarea_meta["recibido"]["texto"]
     assert [g["referencia"] for g in _filas_gasto()] == [f"tw_anuncio:{tarea_meta['aid']}:t27"]   # sin video, sin voz
+
+
+# ------------------------------------- PND-295 (1): la cuenta se suelta mientras corre «Cómo mejorarlo» (2026-10-12) ---
+
+TRAIDO = {"tipo": "video", "imagen_url": f"https://media.test/clientes/acme/rendimiento/a1_{AD}.jpg",
+          "video_url": f"https://media.test/clientes/acme/rendimiento/a1_{AD}.mp4", "titulo": "Envío gratis",
+          "copy": "Chanclas que no duelen", "cta": "SHOP_NOW", "duracion_s": 27.0}
+
+
+def _gastos_anotados(t, monkeypatch):
+    """Cada llamada a `gastos.registrar_seguro` de la tarea, con sus argumentos (y se anota de verdad)."""
+    llamadas = []
+    real = t.gastos.registrar_seguro
+
+    def _anotar(cliente, tipo, usd, referencia, **kw):
+        llamadas.append(dict(kw, tipo=tipo, usd=usd, referencia=referencia))
+        return real(cliente, tipo, usd, referencia, **kw)
+    monkeypatch.setattr(t.gastos, "registrar_seguro", _anotar)
+    return llamadas
+
+
+def _copias_borradas(monkeypatch):
+    llamadas = []
+    monkeypatch.setattr(creativo, "borrar_copias",
+                        lambda cliente, filas: llamadas.append((cliente, list(filas))) or (2 * len(filas), []))
+    return llamadas
+
+
+def _correr(tarea_meta, id_tarea=40):
+    return tarea_meta["t"].tw_analizar_anuncio({"id": id_tarea, "payload": {"cliente": "acme",
+                                                                             "analisis_id": tarea_meta["aid"]}})
+
+
+def test_si_soltaron_la_cuenta_mientras_se_traia_el_anuncio_no_se_paga_nada_y_se_borran_sus_copias(tarea_meta,
+                                                                                                    monkeypatch):
+    """Soltar la cuenta borró la fila mientras `traer` copiaba la imagen y el video a R2: nadie encontraría esas copias.
+    La tarea lo nota al guardar la foto, las borra y para ANTES de Whisper y de Claude: nada pagado, ningún gasto."""
+    aid = tarea_meta["aid"]
+
+    def _traer(cliente, ad_id, analisis_id):
+        datos.borrar_analisis(cliente, analisis_id)
+        return dict(TRAIDO)
+    monkeypatch.setattr(creativo, "traer", _traer)
+    monkeypatch.setattr(mejorar, "transcribir", lambda foto_: pytest.fail("Whisper"))
+    monkeypatch.setattr(mejorar, "analizar", lambda *a, **k: pytest.fail("Claude"))
+    gastos_ = _gastos_anotados(tarea_meta["t"], monkeypatch)
+    copias = _copias_borradas(monkeypatch)
+    assert _correr(tarea_meta) == "Ese análisis ya no existe."
+    assert copias == [("acme", [(aid, AD)])]
+    assert gastos_ == [] and _filas_gasto() == [] and tarea_meta["recibido"]["visuales"] == []
+
+
+def test_si_la_fila_ya_no_esta_al_empezar_no_trae_nada_de_meta(tarea_meta, monkeypatch):
+    """Como `meta_rend_evaluar`: si marcar «analizando» no encuentra la fila, la tarea para antes de leer Meta."""
+    original = datos.actualizar_analisis
+
+    def _soltada(analisis_id, **campos):
+        if campos.get("estado") == "analizando":
+            datos.borrar_analisis("acme", analisis_id)
+        return original(analisis_id, **campos)
+    monkeypatch.setattr(datos, "actualizar_analisis", _soltada)
+    monkeypatch.setattr(creativo, "traer", lambda *a: pytest.fail("la fila ya no estaba: no se lee Meta"))
+    copias = _copias_borradas(monkeypatch)
+    assert _correr(tarea_meta) == "Ese análisis ya no existe."
+    assert copias == [] and _filas_gasto() == []
+
+
+def test_si_soltaron_la_cuenta_mientras_claude_respondia_se_anota_una_vez_sin_entregar_y_se_borran_las_copias(
+        tarea_meta, monkeypatch):
+    """El orden de `meta_rend_evaluar`: primero se guarda la lista y después el gasto, con `entregado` = la fila seguía.
+    Claude ya cobró: se anota UNA vez, sin entregar (en un proyecto que cobra no se le cobra al cliente)."""
+    aid = tarea_meta["aid"]
+    monkeypatch.setattr(creativo, "traer", lambda *a: dict(TRAIDO))
+    analizar = mejorar.analizar                       # el falso del fixture: 1 000 y 500 tokens
+
+    def _analizar(*a, **k):
+        r = analizar(*a, **k)
+        datos.borrar_analisis("acme", aid)
+        return r
+    monkeypatch.setattr(mejorar, "analizar", _analizar)
+    gastos_ = _gastos_anotados(tarea_meta["t"], monkeypatch)
+    copias = _copias_borradas(monkeypatch)
+    assert _correr(tarea_meta) == "Ese análisis ya no existe."
+    [claude] = [g for g in gastos_ if g["tipo"] == "evaluacion"]
+    assert claude["entregado"] is False and claude["detalle"] == "sin resultado usable"
+    assert claude["usd"] == pytest.approx(costo_real(1000, 500)) and claude["referencia"] == f"tw_anuncio:{aid}:t40"
+    assert copias == [("acme", [(aid, AD)])]
+    assert datos.analisis_anuncio("acme", aid) is None
+
+
+def test_con_la_fila_en_su_sitio_claude_se_anota_entregado_con_su_detalle(tarea_meta, monkeypatch):
+    monkeypatch.setattr(creativo, "traer", lambda *a: dict(TRAIDO))
+    gastos_ = _gastos_anotados(tarea_meta["t"], monkeypatch)
+    copias = _copias_borradas(monkeypatch)
+    assert _correr(tarea_meta).startswith("Análisis listo")
+    [claude] = [g for g in gastos_ if g["tipo"] == "evaluacion"]
+    assert claude["entregado"] is True and claude["detalle"] == "un anuncio de Meta"
+    assert copias == [] and datos.analisis_anuncio("acme", tarea_meta["aid"])["estado"] == "lista"
+
+
+def test_si_guardar_la_lista_lanza_claude_se_anota_una_vez_sin_entregar(tarea_meta, monkeypatch):
+    """La escritura final lanza (base bloqueada): el `except` anota a Claude una sola vez, sin entregar. La fila sigue
+    (queda en error), así que sus copias también: se van con la cuenta."""
+    monkeypatch.setattr(creativo, "traer", lambda *a: dict(TRAIDO))
+    original = datos.actualizar_analisis
+
+    def _falla(analisis_id, **campos):
+        if campos.get("estado") == "lista":
+            raise RuntimeError("database is locked")
+        return original(analisis_id, **campos)
+    monkeypatch.setattr(datos, "actualizar_analisis", _falla)
+    gastos_ = _gastos_anotados(tarea_meta["t"], monkeypatch)
+    copias = _copias_borradas(monkeypatch)
+    with pytest.raises(RuntimeError):
+        _correr(tarea_meta)
+    [claude] = [g for g in gastos_ if g["tipo"] == "evaluacion"]
+    assert claude["entregado"] is False and claude["usd"] == pytest.approx(costo_real(1000, 500))
+    assert [g["tipo"] for g in _filas_gasto()].count("evaluacion") == 1
+    assert datos.analisis_anuncio("acme", tarea_meta["aid"])["estado"] == "error"
+    assert copias == []
+
+
+def test_si_la_fila_desaparece_y_claude_falla_se_anota_lo_pagado_y_se_borran_las_copias(tarea_meta, monkeypatch):
+    """El camino del `except`: dejar la fila en error no encuentra nada (la soltaron); sus copias tampoco se quedan."""
+    aid = tarea_meta["aid"]
+    monkeypatch.setattr(creativo, "traer", lambda *a: dict(TRAIDO))
+
+    def _falla(*a, **k):
+        datos.borrar_analisis("acme", aid)
+        e = analisis.AnalisisInvalido("nada")
+        e.tokens_entrada, e.tokens_salida = 1000, 500
+        raise e
+    monkeypatch.setattr(mejorar, "analizar", _falla)
+    gastos_ = _gastos_anotados(tarea_meta["t"], monkeypatch)
+    copias = _copias_borradas(monkeypatch)
+    with pytest.raises(RuntimeError):
+        _correr(tarea_meta)
+    [claude] = [g for g in gastos_ if g["tipo"] == "evaluacion"]
+    assert claude["entregado"] is False and claude["usd"] == pytest.approx(costo_real(1000, 500))
+    assert copias == [("acme", [(aid, AD)])]
+
+
+def test_un_analisis_de_triple_whale_nunca_borra_copias_de_meta(tarea_meta, monkeypatch):
+    """Una fila de Triple Whale no tiene copias en R2 de `traer`: aunque desaparezca, ni al guardar ni al fallar."""
+    t = tarea_meta["t"]
+    monkeypatch.setattr(creativo, "borrar_copias", lambda *a: pytest.fail("Triple Whale no copia nada de Meta"))
+    gastos_ = _gastos_anotados(t, monkeypatch)
+    analizar = mejorar.analizar
+    ids = []
+    for falla in (False, True):
+        foto = _foto()
+        foto["creativo"] = {"tipo": "imagen", "copy": "Chanclas"}
+        tw = datos.crear_analisis("acme", None, "facebook-ads", "p1", "2026-09-01", "2026-09-30", "USD", foto)
+        ids.append(tw)
+
+        def _analizar(*a, _tw=tw, _falla=falla, **k):
+            datos.borrar_analisis("acme", _tw)
+            if _falla:
+                raise RuntimeError("red")
+            return analizar(*a, **k)
+        monkeypatch.setattr(mejorar, "analizar", _analizar)
+        if falla:
+            with pytest.raises(RuntimeError):
+                t.tw_analizar_anuncio({"id": 50, "payload": {"cliente": "acme", "analisis_id": tw}})
+        else:
+            assert t.tw_analizar_anuncio({"id": 51, "payload": {"cliente": "acme", "analisis_id": tw}}) == \
+                "Ese análisis ya no existe."
+    [claude] = [g for g in gastos_ if g["tipo"] == "evaluacion"]          # solo el que llegó a responder
+    assert claude["entregado"] is False and claude["referencia"] == f"tw_anuncio:{ids[0]}:t51"

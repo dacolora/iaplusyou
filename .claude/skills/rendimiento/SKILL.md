@@ -306,7 +306,9 @@ coordinador en `.superpowers/sdd/2026-10-10-pestana-rendimiento-e2/final-fixes.m
 - **G4.** El prompt de «Cómo mejorarlo» de un anuncio de fuente Meta no recibe la evaluación de cuenta de Triple
   Whale (`evaluacion_cuenta=None`; los productos más vendidos sí).
 - **S1.** Soltar una cuenta de Meta (quitarla o desconectar) borra los análisis de fuente Meta de esa cuenta y,
-  después, su imagen y su video en R2 (skill `meta-rendimiento`, «Disconnecting»). **S3.** La imagen copiada de Meta
+  después, su imagen y su video en R2 (skill `meta-rendimiento`, «Disconnecting»). Desde el 2026-10-12 (PND-295) tampoco
+  quedan copias cuando la cuenta se suelta con un «Cómo mejorarlo» corriendo o pidiéndose, y lo que R2 no borró se
+  reintenta cada día (skill `meta-rendimiento`, «Releasing an account while…»). **S3.** La imagen copiada de Meta
   solo se abre como JPEG/PNG/WEBP/GIF.
 - **S2. Correo verificado solo en «Actualizar ahora»** (`rutas.CON_CORREO_VERIFICADO`): producción no tiene SMTP y
   la mitad de los usuarios cliente no pueden verificar; las rutas que cobran no lo exigían allá y siguen sin exigirlo

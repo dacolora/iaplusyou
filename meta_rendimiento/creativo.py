@@ -26,7 +26,7 @@ from urllib.parse import urlsplit
 import meta_conexion
 from conectores import url as conector_url
 from meta_rendimiento import datos, graph
-from storage import r2_uploader
+from storage import r2_pendientes, r2_uploader
 from triple_whale import analisis, mejorar
 from triple_whale import datos as tw_datos
 
@@ -76,17 +76,20 @@ def borrar_copias(cliente, filas):
     cliente de R2. S1 (revisión final de Rendimiento E2, 2026-10-10): soltar una cuenta de Meta borra lo que copió
     «Cómo mejorarlo»; se llama DESPUÉS de borrar las filas (`triple_whale.datos.borrar_analisis_meta`), como E2-R2, para
     que un R2 lento o caído nunca deje nombres ni cifras guardados. Nunca lanza: (borradas, fallos) con `fallos` = el
-    tipo de cada error (nunca su texto); sin R2 configurado, todas fallan."""
+    tipo de cada error (nunca su texto); sin R2 configurado, todas fallan. Las claves que fallaron ya no salen de
+    ninguna fila: se anotan en `r2_pendientes` y la limpieza diaria las reintenta (PND-295, 2026-10-12)."""
     claves = claves_de_analisis(cliente, filas)
     if not claves:
         return 0, []
     try:
-        borradas, fallos = r2_uploader.delete_files(claves)
+        borradas, detalle = r2_uploader.delete_files_detalle(claves)
+        fallos, pendientes = [tipo for _, tipo in detalle], [clave for clave, _ in detalle]
     except Exception as e:  # noqa: BLE001 — R2 sin configurar o caído: quien suelta la cuenta sigue y avisa
-        borradas, fallos = 0, [type(e).__name__] * len(claves)
+        borradas, fallos, pendientes = 0, [type(e).__name__] * len(claves), claves
     if fallos:
         log.warning("no se pudieron borrar %s copia(s) de anuncios de Meta en R2 (%s)", len(fallos),
                     ", ".join(sorted(set(fallos))))
+        r2_pendientes.anotar(pendientes)       # nunca lanza
     return borradas, fallos
 
 

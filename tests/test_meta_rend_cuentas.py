@@ -141,6 +141,35 @@ def test_si_borrar_copias_falla_la_cuenta_sigue_y_el_siguiente_elegir_reintenta(
     assert llamadas == [("acme", "act_883891256188845")] * 2
 
 
+def test_elegir_barre_otra_vez_tras_borrar_la_cuenta(base_temporal, monkeypatch):
+    """PND-295 (3), 2026-10-12: un «Cómo mejorarlo» pedido mientras se soltaba la cuenta puede crear su fila entre el
+    primer barrido y el borrado de la cuenta; ninguna suelta posterior la alcanzaría. `elegir` barre otra vez después
+    de borrar la cuenta, y sus copias en R2 se borran con las del primer barrido."""
+    import db
+    from meta_rendimiento import creativo
+    from triple_whale import datos as tw_datos
+    act = HF[0]["id"]
+    cuentas.elegir("acme", [HF[0]])
+    foto = {"fuente": "meta", "ad_account_id": act, "nombre": "Video"}
+    vieja = tw_datos.crear_analisis("acme", None, "facebook-ads", "111", "2026-09-01", "2026-09-30", "SEK", foto)
+    barrer, nuevas = tw_datos.borrar_analisis_meta, []
+
+    def _barrer(cliente, ids):
+        borradas = barrer(cliente, ids)
+        if not nuevas:           # el pedido llega justo después del primer barrido, antes de borrar la cuenta
+            nuevas.append(tw_datos.crear_analisis("acme", None, "facebook-ads", "222", "2026-09-01", "2026-09-30",
+                                                  "SEK", foto))
+        return borradas
+    monkeypatch.setattr(cuentas.tw_datos, "borrar_analisis_meta", _barrer)
+    copias = []
+    monkeypatch.setattr(creativo, "borrar_copias", lambda c, filas: copias.append((c, list(filas))) or (0, []))
+    r = cuentas.elegir("acme", [])
+    assert r["quitadas"] == [act] and r["fallos_r2"] == [] and cuentas.ids("acme") == []
+    with db.conectar() as con:
+        assert con.execute(sa.select(db.tw_analisis.c.id)).all() == []
+    assert copias == [("acme", [(vieja, "111"), (nuevas[0], "222")])]
+
+
 def test_actualizar_extra_no_pierde_la_escritura_de_otro_hilo(base_temporal):
     # R6: el lock de escritura se toma ANTES de leer `extra`. El hilo A se detiene tras su primera sentencia
     # sobre meta_cuenta; B intenta escribir mientras tanto. Sin el lock previo B escribe en medio y A la pisa.

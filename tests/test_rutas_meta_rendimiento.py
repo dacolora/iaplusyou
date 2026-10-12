@@ -1173,7 +1173,7 @@ def test_desconectar_meta_borra_de_r2_las_miniaturas_de_sus_evaluaciones(conecta
         momentos.append(datos.evaluaciones("acme", limite=50))
         borradas.extend(claves)
         return len(claves), []
-    monkeypatch.setattr(r2_uploader, "delete_files", borrar)
+    monkeypatch.setattr(r2_uploader, "delete_files_detalle", borrar)
     lista = _evaluacion_con_miniaturas("acme", "lista", [
         {"ref": "A1", "medio": COPIADA}, {"ref": "A2", "medio": {"imagen": None}},
         {"ref": "A3", "medio": {"imagen": "https://r2.example/p.jpg", "imagen_origen": "https://r2.example/p.jpg",
@@ -1197,7 +1197,7 @@ def test_si_r2_falla_las_evaluaciones_ya_estaban_borradas_y_se_avisa_una_vez(con
     def _falla(claves):
         vistas.append(datos.evaluaciones("acme", limite=50))
         raise RuntimeError(f"Faltan R2_ACCOUNT_ID {TOKEN}")
-    monkeypatch.setattr(r2_uploader, "delete_files", _falla)
+    monkeypatch.setattr(r2_uploader, "delete_files_detalle", _falla)
     _evaluacion_con_miniaturas("acme", "lista", [{"ref": "A1", "medio": COPIADA}])
     assert _desconectar(conectado, monkeypatch).status_code == 302
     assert datos.evaluaciones("acme") == [] and vistas == [[]]
@@ -1208,7 +1208,8 @@ def test_si_r2_falla_las_evaluaciones_ya_estaban_borradas_y_se_avisa_una_vez(con
 
 def test_si_a_r2_se_le_quedan_algunas_claves_se_avisa_con_el_tipo_y_las_filas_se_borraron(conectado, monkeypatch):
     from storage import r2_uploader
-    monkeypatch.setattr(r2_uploader, "delete_files", lambda claves: (len(claves) - 1, ["EndpointConnectionError"]))
+    monkeypatch.setattr(r2_uploader, "delete_files_detalle",
+                        lambda claves: (len(claves) - 1, [(claves[-1], "EndpointConnectionError")]))
     _evaluacion_con_miniaturas("acme", "lista", [{"ref": "A1", "medio": COPIADA}, {"ref": "A2", "medio": COPIADA}])
     _desconectar(conectado, monkeypatch)
     assert datos.evaluaciones("acme") == []
@@ -1231,7 +1232,7 @@ def test_si_borrar_las_filas_falla_las_miniaturas_se_borran_igual_y_se_reintenta
         conectado, monkeypatch):
     from storage import r2_uploader
     borradas = []
-    monkeypatch.setattr(r2_uploader, "delete_files", lambda claves: (borradas.extend(claves), (len(claves), []))[1])
+    monkeypatch.setattr(r2_uploader, "delete_files_detalle", lambda claves: (borradas.extend(claves), (len(claves), []))[1])
 
     def _falla(cliente):
         raise ValueError("base bloqueada")
@@ -1264,14 +1265,14 @@ def _analisis_que_quedan(cliente):
 
 
 def _r2_que_anota(monkeypatch, fallos=()):
-    """`delete_files` falso: anota cada llamada con las filas de `tw_analisis` que quedaban en ese momento."""
+    """`delete_files_detalle` falso: anota cada llamada con las filas de `tw_analisis` que quedaban en ese momento."""
     from storage import r2_uploader
     llamadas = []
 
     def borrar(claves):
         llamadas.append({"claves": list(claves), "filas": _analisis_que_quedan("acme")})
-        return len(claves) - len(fallos), list(fallos)
-    monkeypatch.setattr(r2_uploader, "delete_files", borrar)
+        return len(claves) - len(fallos), list(zip(claves, fallos))
+    monkeypatch.setattr(r2_uploader, "delete_files_detalle", borrar)
     return llamadas
 
 
