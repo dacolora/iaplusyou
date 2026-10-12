@@ -16,7 +16,7 @@ Creatv ya cobra el uso con comisión, pero todo está **apagado**: ningún proye
 - **Al cerrar**: suscripción cancelada (termina el 2026-12-12, sin cobrar más), plan «Prueba» archivado, «Cobrar» apagado en `colorado_forja` (saldo de prueba US$ 11 en su libro).
 - **Nuevo, PND-296 (plata)**: Wompi no reintentó a los 30 min; una recarga cuyos eventos fallan no la rescata nada solo. Se acreditó por ssh con `recargas._aplicar_wompi` y la transacción leída en Wompi. Conviene construirlo antes de prender «Cobrar» a clientes.
 
-## Actualización 2026-10-12 tarde: escenarios de error y seguridad (rama `pagos-rescate`, SIN desplegar al escribir esto)
+## Actualización 2026-10-12 tarde: escenarios de error y seguridad (rama `pagos-rescate`, EN PRODUCCIÓN 2026-10-12 23:45:22 UTC, main 42ecbbe3)
 Pedido de Daniel: «hagamos todo, los escenarios de error, también cómo nos cuidamos de vulnerabilidades».
 - **PND-296 hecho**: el rescate por referencia de recargas y de cobros de plan inciertos (detalle en la skill `cobros`,
   «Rescate por referencia…»). Revisado por guardian-gasto: 4 hallazgos, arreglados con su prueba.
@@ -32,18 +32,21 @@ Pedido de Daniel: «hagamos todo, los escenarios de error, también cómo nos cu
   Rendimiento; 2) «Multiplicar cobros x3» (pospago de happyflops, migración 0040) mezcla main y despliega; 3) esta rama
   mezcla main y despliega main (reiniciar los DOS servicios: toca cobros/recargas.py que la periódica usa).
 
+- **Desplegado** tras Rendimiento (c52d04fd) y el pospago de happyflops (21823ed5, alembic 0040): sin migración propia,
+  LOS DOS servicios con cola vacía; suite 9 487 passed; guardian-gasto en tres rondas y revisor con 18 mutaciones (todas
+  las que sobrevivían tienen ahora su prueba). Humo y /admin/cobros pintada como admin con los datos reales: bien.
+
 ## Falta, en el orden en que conviene hacerlo
-1. Terminar las revisiones finales (guardian-gasto y revisor) de `pagos-rescate`, mezclar a main en el turno acordado y
-   desplegar.
-2. Correr `deploy/prueba_wompi_sandbox.py` cuando estén las llaves de pruebas; con la consola limpia en `plan_alta`,
+1. Correr `deploy/prueba_wompi_sandbox.py` cuando estén las llaves de pruebas; con la consola limpia en `plan_alta`,
    pasar `CSP_TARJETA_SOLO_REPORTE` a False (PND-304 a, b).
-3. **Activar el plan Pro** (PND-247) y decidir «Cobrar» de los proyectos viejos (PND-301). Decide Daniel.
-4. **Facturación DIAN e IVA** (PND-161, PND-248): Daniel con su contador.
-5. SMTP del VPS (PND-048): mientras no esté, mirar «Avisos de plata» en /admin/cobros.
+2. **Activar el plan Pro** (PND-247). Decide Daniel. («Cobrar» de los proyectos viejos ya se decidió: PND-301 cerrado.)
+3. **Facturación DIAN e IVA** (PND-161, PND-248): Daniel con su contador.
+4. SMTP del VPS (PND-048): mientras no esté, mirar «Avisos de plata» en /admin/cobros.
 
 ## La siguiente acción concreta
-Leer lo que digan las revisiones finales de `pagos-rescate`, arreglar lo que encuentren y desplegar en el turno acordado
-(avisar a «Multiplicar cobros x3» y a «Meta y tripleWhale duplicados» antes y después).
+Cuando Daniel ponga las llaves de PRUEBAS de Wompi en `.env.wompi-sandbox` (comando con `read -rsp`; nunca las saca
+Claude del panel de Wompi), correr `venv/bin/python3 deploy/prueba_wompi_sandbox.py` y, con la consola limpia en
+`plan_alta` (sandbox local), pasar `CSP_TARJETA_SOLO_REPORTE` a False (PND-304 a, b).
 
 ## Decisiones ya tomadas (no reabrir)
 | Decisión | Respuesta | Quién | Fecha |
