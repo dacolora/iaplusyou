@@ -16,15 +16,34 @@ Creatv ya cobra el uso con comisión, pero todo está **apagado**: ningún proye
 - **Al cerrar**: suscripción cancelada (termina el 2026-12-12, sin cobrar más), plan «Prueba» archivado, «Cobrar» apagado en `colorado_forja` (saldo de prueba US$ 11 en su libro).
 - **Nuevo, PND-296 (plata)**: Wompi no reintentó a los 30 min; una recarga cuyos eventos fallan no la rescata nada solo. Se acreditó por ssh con `recargas._aplicar_wompi` y la transacción leída en Wompi. Conviene construirlo antes de prender «Cobrar» a clientes.
 
+## Actualización 2026-10-12 tarde: escenarios de error y seguridad (rama `pagos-rescate`, SIN desplegar al escribir esto)
+Pedido de Daniel: «hagamos todo, los escenarios de error, también cómo nos cuidamos de vulnerabilidades».
+- **PND-296 hecho**: el rescate por referencia de recargas y de cobros de plan inciertos (detalle en la skill `cobros`,
+  «Rescate por referencia…»). Revisado por guardian-gasto: 4 hallazgos, arreglados con su prueba.
+- **Auditoría de seguridad** del módulo (`auditor-seguridad`): ningún hallazgo crítico ni alto; los 5 medios de plata
+  y los menores se arreglaron. Lo que queda está en PND-302 y en `docs/pagos/seguridad-pagos.md` (la explicación en llano).
+- **Diez ataques de prueba contra producción**, todos rechazados como debían (eventos falsificados 401, 70 KB 413, JSON
+  anidado 400, POST de otro sitio 403, admin y saldo sin sesión al login, Bold sin firma 401, GET a eventos 405).
+- **Vencimiento del checkout verificado en producción** (vigente «Este pago vence en…», vencido «Ha terminado el plazo…»).
+- **Escenarios de error contra el sandbox**: `deploy/prueba_wompi_sandbox.py` (12 casos); falta correrlo: Daniel pone
+  las llaves de pruebas en `.env.wompi-sandbox` con el comando de `read -rsp` de esta conversación.
+- Suite completa en la rama: 9 383 passed (antes del merge de main con PND-298).
+- **Orden de despliegue acordado** con las otras conversaciones: 1) «Meta y tripleWhale duplicados» despliega main con
+  Rendimiento; 2) «Multiplicar cobros x3» (pospago de happyflops, migración 0040) mezcla main y despliega; 3) esta rama
+  mezcla main y despliega main (reiniciar los DOS servicios: toca cobros/recargas.py que la periódica usa).
+
 ## Falta, en el orden en que conviene hacerlo
-1. **PND-296**: que la periódica (o un botón del admin) rescate las recargas de Wompi pendientes sin transacción, buscándolas por referencia.
-2. **Activar el plan Pro** en /admin/cobros (PND-247) y **prender «Cobrar»** proyecto por proyecto, avisando antes al cliente (la carta queda ×2). Decide Daniel.
-3. **Facturación DIAN e IVA** (PND-161, PND-248): decisión de Daniel con su contador.
-4. Lo que sigue sin probar en real (PND-244, PND-249): rechazo en el alta, gracia, anual, anulación, Nequi.
-5. Pendientes menores ya anotados: PND-161..175 (cobros) y PND-250..254, 256 (planes).
+1. Terminar las revisiones finales (guardian-gasto y revisor) de `pagos-rescate`, mezclar a main en el turno acordado y
+   desplegar.
+2. Correr `deploy/prueba_wompi_sandbox.py` cuando estén las llaves de pruebas; con la consola limpia en `plan_alta`,
+   pasar `CSP_TARJETA_SOLO_REPORTE` a False (PND-302 a, b).
+3. **Activar el plan Pro** (PND-247) y decidir «Cobrar» de los proyectos viejos (PND-301). Decide Daniel.
+4. **Facturación DIAN e IVA** (PND-161, PND-248): Daniel con su contador.
+5. SMTP del VPS (PND-048): mientras no esté, mirar «Avisos de plata» en /admin/cobros.
 
 ## La siguiente acción concreta
-Preguntarle a Daniel si construimos PND-296 ahora (spec corto: la periódica busca por referencia las recargas de Wompi pendientes de más de 15 min sin `pasarela_ref`, relee por id y aplica con `_aplicar_wompi`) o si primero activa el plan Pro y prende «Cobrar» a un cliente.
+Leer lo que digan las revisiones finales de `pagos-rescate`, arreglar lo que encuentren y desplegar en el turno acordado
+(avisar a «Multiplicar cobros x3» y a «Meta y tripleWhale duplicados» antes y después).
 
 ## Decisiones ya tomadas (no reabrir)
 | Decisión | Respuesta | Quién | Fecha |
