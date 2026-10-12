@@ -281,21 +281,10 @@ _ETIQUETAS_ANILLO = {"gancho": "Gancho (se quedan 3 s)", "retencion": "Retenció
                      "clic": "Clic (CTR)", "compra": "Compra (pedidos por clic)"}
 
 
-_RE_DELIMITADOR = re.compile(r"[<>]{2,}")
-
-
-def _dato(texto):
-    """Texto ajeno (copy, título, nombres, voz) para ir en el prompt: sin ninguna racha de dos o más `<` o `>`, así no
-    puede cerrar el bloque de datos con un «<<<FIN>>>» propio y seguir hablándole a Claude como si fuera el prompt.
-    Una sola pasada sobre la racha entera: dos `replace` seguidos se podían burlar («<<>>><FIN>>» rearmaba «<<<FIN>>»);
-    quitar una racha completa no puede juntar dos símbolos, porque lo que la rodea nunca es `<` ni `>`."""
-    return _RE_DELIMITADOR.sub("", str(texto or ""))
-
-
-def _linea(texto):
-    """`_dato` en una sola línea: lo que va dentro de una línea del prompt (un nombre entre « », un patrón de la
-    evaluación de cuenta) no puede abrir una línea nueva que parezca otra parte del prompt (revisión final, B3)."""
-    return " ".join(_dato(texto).split())
+# Los filtros de texto ajeno viven en `analisis` (que «Evaluar con IA» también usa, PND-286); aquí siguen con su nombre.
+_RE_DELIMITADOR = analisis._RE_DELIMITADOR
+_dato = analisis._dato
+_linea = analisis._linea
 
 
 def _num(v, decimales=2):

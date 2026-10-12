@@ -305,7 +305,11 @@ production. It must work for ANY ad, not only Creatv's: in happyflops only 4 pie
   copy cannot close the DATOS block, and the output only fills an escaped card and a Crear prefill the person reviews.
   Names, campaign and conjunto arrive in one line (`evaluacion._una_linea`), and in the prompt the names, the winners'
   title/copy and the account evaluation's summary and patterns go through `mejorar._linea` (`_dato` + one line; B3: a
-  newline in a name opened what looked like a new part of the prompt and split the card's `data-confirmar`).
+  newline in a name opened what looked like a new part of the prompt and split the card's `data-confirmar`). `_dato`/`_linea`/`_RE_DELIMITADOR` live in `triple_whale/analisis.py` (`mejorar` imports
+  that module, so the other way round is a circular import) and `mejorar._dato` / `_linea` are the same functions.
+  «Evaluar con IA» (`analisis._bloque`, `texto_productos`) does the same since 2026-10-12 (PND-286): ad name, campaign,
+  product name and sku through `_linea`, the Meta title/copy in an indented `<<<TEXTO>>>` … `<<<FIN>>>` block per ad
+  (through `_dato`), and a line above `ANUNCIOS:` that says the names between « » and those blocks are data.
   `verificar_cifras` runs over the phrase, reasons with evidence, changes, `por_que` and the learning
   (`cifras_sin_dato`, non-blocking) against the DATA of the prompt (`mejorar.datos_verificables`: the same values
   without a word of the template; until 2026-10-09 it was the whole prompt, whose instruction numbers («3 cambios»,
