@@ -317,7 +317,11 @@ def evento_valido(cuerpo, checksum_header=None):
     firma, datos = cuerpo.get("signature"), cuerpo.get("data")
     if not isinstance(firma, dict) or not isinstance(datos, dict):
         return False
-    propiedades, marca, suma = firma.get("properties"), firma.get("timestamp"), firma.get("checksum")
+    # `timestamp` va al nivel de arriba del evento, junto a `sent_at` (doc oficial en español y los eventos
+    # reales: la primera recarga real, 2026-10-12, se rechazó cuatro veces por buscarlo solo en `signature`).
+    # Si no viene arriba, el de `signature` (la forma de la doc en inglés); los dos entran a la cadena firmada.
+    marca = cuerpo["timestamp"] if "timestamp" in cuerpo else firma.get("timestamp")
+    propiedades, suma = firma.get("properties"), firma.get("checksum")
     if not isinstance(propiedades, list) or not propiedades or not isinstance(suma, str) or not suma.strip():
         return False
     if _entero(marca) is None:

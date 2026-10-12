@@ -119,8 +119,9 @@ def _ahora_ts():
 
 def _evento(tx, props=PROPS, ts=None, secreto=EVE, tipo="transaction.updated"):
     ts = _ahora_ts() if ts is None else ts
-    cuerpo = {"event": tipo, "data": {"transaction": dict(tx)}, "environment": "test",
-              "sent_at": "2026-10-09T16:45:05.000Z", "signature": {"properties": list(props), "timestamp": ts}}
+    # La forma real: `timestamp` arriba, junto a `sent_at` (la primera recarga real, 2026-10-12).
+    cuerpo = {"event": tipo, "data": {"transaction": dict(tx)}, "environment": "test", "timestamp": ts,
+              "sent_at": "2026-10-09T16:45:05.000Z", "signature": {"properties": list(props)}}
     valores = "".join(str(cuerpo["data"]["transaction"][p.split(".")[1]]) for p in props)
     cuerpo["signature"]["checksum"] = hashlib.sha256(f"{valores}{ts}{secreto}".encode()).hexdigest()
     return json.dumps(cuerpo).encode()
@@ -455,6 +456,34 @@ def test_evento_sin_firma_401_sin_tocar_nada(entorno):
     evs = _eventos(entorno["db"])
     assert len(evs) == 3 and all(e["firma_ok"] is False and e["cuerpo"] is None and e["proveedor"] == "wompi"
                                  for e in evs)
+
+
+def test_evento_sin_firma_deja_en_el_registro_su_forma_sin_valores(entorno, caplog):
+    # Para diagnosticar sin otro despliegue (2026-10-12: la primera recarga real se rechazó cuatro veces y el
+    # cuerpo no se guarda): el registro dice qué campos traía el evento, nunca un valor.
+    import logging
+    _, ref = _pendiente(entorno)
+    cuerpo = json.loads(_evento(_tx(ref), secreto="test_events_OTRO"))  # llave-de-prueba
+    cuerpo["\nraro" * 20] = 1
+    cuerpo["event"] = "x\nACREDITADA cv-9-1"      # el tipo lo escribe quien manda: no puede partir la línea
+    with caplog.at_level(logging.WARNING, logger="cobros.recargas"):
+        assert _ev(entorno, json.dumps(cuerpo).encode()) == (401, "firma_invalida")
+    lineas = [r.getMessage() for r in caplog.records if "firma inválida" in r.getMessage()]
+    assert len(lineas) == 1
+    assert "timestamp" in lineas[0] and "properties" in lineas[0] and "checksum" in lineas[0]
+    assert cuerpo["signature"]["checksum"] not in lineas[0] and ref not in lineas[0]
+    assert "\n" not in lineas[0] and "raro" not in lineas[0]
+
+
+def test_eventos_sin_firma_no_llenan_el_registro_pasado_el_cupo(entorno, caplog):
+    import logging
+    recargas = entorno["recargas"]
+    cuerpo = _evento(_tx("cv-1-1"), secreto="test_events_OTRO")  # llave-de-prueba
+    with caplog.at_level(logging.WARNING, logger="cobros.recargas"):
+        for _ in range(recargas.TOPE_SIN_FIRMA_HORA + 5):
+            assert _ev(entorno, cuerpo) == (401, "firma_invalida")
+    assert sum(r.getMessage().startswith("evento de Wompi con firma inválida") for r in caplog.records) == \
+        recargas.TOPE_SIN_FIRMA_HORA
 
 
 def test_eventos_sin_firma_tienen_cupo_propio(entorno):
