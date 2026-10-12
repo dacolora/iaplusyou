@@ -39,8 +39,8 @@ debían) y la prueba real con plata de ese día.
 ## Riesgos aceptados o pendientes
 
 - **Correo del servidor (PND-048):** mientras el VPS no tenga SMTP, los avisos de plata solo se ven en /admin/cobros. Hay que mirarla.
-- **Cuenta de admin sin segundo factor:** con una sesión de admin robada se podría crear saldo con recargas manuales o ajustes (hasta US$ 100 000 por clic). Ver PND-302.
-- **La banda de la TRM se corre con cada lectura buena:** quien controlara datos.gov.co podría bajarla de a ~8 %. Hipótesis; se acepta (PND-302).
+- **Cuenta de admin sin segundo factor:** con una sesión de admin robada se podría crear saldo con recargas manuales o ajustes (hasta US$ 100 000 por clic). Ver PND-304.
+- **La banda de la TRM se corre con cada lectura buena:** quien controlara datos.gov.co podría bajarla de a ~8 %. Hipótesis; se acepta (PND-304).
 - **Nequi a cualquier celular** y **`widget.js` sin SRI** (PND-256): aceptados.
 - **El token de Nequi viaja en la ruta del sondeo** (queda en los registros de acceso): solo sirve con nuestra llave privada y es de un solo uso.
 - **La política de scripts de la página de la tarjeta empezó en «solo reporte»** (`CSP_TARJETA_SOLO_REPORTE`): se pasa a bloquear cuando se vea limpia con el widget de verdad.

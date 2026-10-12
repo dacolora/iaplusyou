@@ -22,6 +22,7 @@ import gastos
 import idiomas
 import triple_whale
 from cobros import SaldoInsuficiente, libro
+from meta_rendimiento import cuentas as meta_cuentas
 from tareas import triple_whale as tareas_tw
 from triple_whale import analisis, datos, mejorar, panel
 
@@ -80,6 +81,13 @@ def pedir_analisis(cliente, alc, a, usuario):
     # monedas distintas no tiene una común (None) y el análisis guardaría None aunque el anuncio sí la sepa.
     aid = datos.crear_analisis(cliente, alc["tienda_id"], a["canal"], a["ad_id"], alc["desde"], alc["hasta"],
                                a.get("moneda") or alc["config"]["moneda"], foto, pedido_por=usuario)
+    if alc.get("fuente") == "meta" and meta_cuentas.dueno(a.get("ad_account_id")) != cliente:
+        # PND-295 (2026-10-12): la cuenta se soltó mientras se pedía. Soltarla borra las filas de fuente Meta de esa
+        # cuenta y DESPUÉS la cuenta (y barre otra vez, `cuentas.elegir`); una fila creada después de eso no la
+        # alcanzaría ninguna suelta futura (solo borran las cuentas que sueltan). Se comprueba DESPUÉS de crearla y
+        # ANTES de encolar: si la cuenta ya no es del proyecto, la fila se borra aquí y no se reserva ni se cobra nada.
+        datos.borrar_analisis(cliente, aid)
+        return False, gettext("Esa cuenta de Meta ya no está en el proyecto.")
     try:
         encolada = tareas_tw.encolar_analisis(cliente, aid, a["canal"], a["ad_id"], costo_estimado=usd)
     except Exception:                             # SaldoInsuficiente incluida: se borra la fila y sigue su camino

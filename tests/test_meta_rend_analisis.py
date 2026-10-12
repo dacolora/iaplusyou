@@ -520,16 +520,18 @@ def test_las_claves_de_una_muestra_son_las_copiadas_o_todas_y_nunca_una_ref_rara
     assert analisis.claves_de_evaluacion("hf", 7, None) == []
 
 
-def test_borrar_claves_no_lanza_y_cuenta_las_borradas_y_los_tipos_de_error(monkeypatch):
-    from storage import r2_uploader
-    monkeypatch.setattr(r2_uploader, "delete_files", lambda claves: (len(claves) - 1, ["ClientError"]))
+def test_borrar_claves_no_lanza_y_cuenta_las_borradas_y_los_tipos_de_error(base_temporal, monkeypatch):
+    # `base_temporal`: desde PND-295 (2026-10-12) las claves que fallan se anotan en kv para reintentarlas.
+    from storage import r2_pendientes, r2_uploader
+    monkeypatch.setattr(r2_uploader, "delete_files_detalle", lambda claves: (len(claves) - 1, [("c", "ClientError")]))
     assert analisis.borrar_claves(["a", "b", "c"]) == (2, ["ClientError"])
 
     def falla(claves):
         raise RuntimeError("Faltan R2_ACCOUNT_ID")
-    monkeypatch.setattr(r2_uploader, "delete_files", falla)
+    monkeypatch.setattr(r2_uploader, "delete_files_detalle", falla)
     assert analisis.borrar_claves(["a", "b"]) == (0, ["RuntimeError", "RuntimeError"])      # sin R2: todas fallidas
     assert analisis.borrar_claves([]) == (0, [])
+    assert r2_pendientes.pendientes() == ["c", "a", "b"]
 
 
 def test_delete_files_usa_un_solo_cliente_sigue_tras_un_fallo_y_no_cuenta_el_texto(monkeypatch):

@@ -398,6 +398,34 @@ def test_pedir_analisis_con_monedas_mezcladas_no_guarda_una_moneda_ni_un_costo_i
     assert fila["foto"]["m"]["gasto"] == 400          # la cifra del anuncio es la suya, en la moneda de su cuenta
 
 
+@pytest.mark.parametrize("ahora_es_de", [None, "otro"])
+def test_pedir_analisis_de_una_cuenta_que_se_solto_en_medio_no_deja_fila_ni_encola(peticion, monkeypatch,  # noqa: F811
+                                                                                  ahora_es_de):
+    """PND-295 (3), 2026-10-12: la cuenta se suelta justo después de crear la fila (el barrido de `cuentas.elegir` ya
+    había pasado). Ninguna suelta posterior la alcanzaría (solo borran las cuentas que sueltan): el pedido la borra él
+    mismo antes de encolar, así no se reserva ni se cobra nada. Da igual si la cuenta quedó libre o en otro proyecto."""
+    _dos_suecas()
+    alc = _alc([SE1, SE2])
+    a = pedidos.anuncio_del_alcance(alc, "facebook-ads", "a2")
+    crear, creadas = twdatos.crear_analisis, []
+
+    def _crear(*args, **kw):
+        creadas.append(crear(*args, **kw))
+        with db.conectar() as con:
+            if ahora_es_de:
+                con.execute(db.meta_cuenta.update().where(db.meta_cuenta.c.ad_account_id == SE1)
+                            .values(cliente=ahora_es_de))
+            else:
+                con.execute(db.meta_cuenta.delete().where(db.meta_cuenta.c.ad_account_id == SE1))
+        return creadas[-1]
+    monkeypatch.setattr(twdatos, "crear_analisis", _crear)
+    from tareas import triple_whale as tareas_tw
+    monkeypatch.setattr(tareas_tw, "encolar_analisis", lambda *a, **k: pytest.fail("no se encola ni se reserva"))
+    assert pedidos.pedir_analisis("acme", alc, a, "daniel") == (False, "Esa cuenta de Meta ya no está en el proyecto.")
+    assert len(creadas) == 1 and twdatos.analisis_anuncio("acme", creadas[0]) is None
+    assert _tareas("tw_analizar_anuncio") == []
+
+
 def test_la_foto_del_anuncio_de_meta_se_arma_con_lo_que_trae_el_alcance(base_temporal):
     _dos_suecas()
     alc = _alc([SE1, SE2])
