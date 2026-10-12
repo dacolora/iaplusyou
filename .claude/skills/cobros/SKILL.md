@@ -15,6 +15,13 @@ Un proyecto con **«Cobrar» prendido** paga cada generación desde un **saldo p
 
 Esto se suma a la regla 1 del repo (precio antes del cobro, `max_intentos=1`, gasto real anotado): el costo sigue anotándose en `gasto` exactamente como antes; el cobro al cliente es una segunda escritura que cuelga de la primera.
 
+**Un proyecto nuevo nace cobrando (PND-298, Daniel 2026-10-12: «abierto, pero cobrando»).** El alta de la portada
+(`dashboard.crear_proyecto`, abierta a cualquiera) llama `libro.configurar(cid, usuario=, cobrar=True)` ANTES de crear el
+usuario y la carpeta: margen global, umbral por defecto. Si no se puede prender, no se crea nada (500 con aviso). Antes
+nacía con «Cobrar» apagado (`cuenta_saldo.cobrar` default False) y un desconocido generaba con las llaves de Creatv.
+Los proyectos que ya existían no cambian (sin fila = no cobra). Un admin lo apaga en `/admin/cobros` si el proyecto es
+de la casa o de un cliente que paga por fuera.
+
 ## Módulos y quién escribe qué
 
 | Módulo | Qué hace | Escribe |
