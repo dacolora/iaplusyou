@@ -42,9 +42,9 @@ Reglas, cada una con su motivo:
 8. «Lo que hace ganar en tu cuenta» (Evaluar con IA de Triple Whale, `_ia`) es de la parte Triple Whale del alcance
    (`rendimiento.evaluar`, que vuelve a armar la muestra con `alcances`); con mezcla una línea lo dice. La de las
    cuentas de Meta es la «Evaluación con IA» de Meta rendimiento E2 (la de main: `meta_rend_evaluar`, su tabla
-   `meta_evaluacion` y su precio `evaluacion_meta`), que el panel pinta con `_meta_evaluar.html` sobre las cuentas cuya
-   fuente es Meta (`meta["e2"]["evaluacion"]`, regla 10). Nunca un prompt con las dos fuentes: el Pixel de Triple Whale
-   y el de Meta atribuyen distinto. La rama Meta de E2 tarea 5 (evaluar Meta por `tw_evaluacion`) se jubiló en la
+   `meta_evaluacion` y su precio `evaluacion_meta`), que el panel pinta con `_meta_evaluar.html` sobre TODAS las
+   cuentas de Meta del alcance (`meta["e2"]["evaluacion"]`, regla 10; también las cubiertas desde PND-290). Nunca un
+   prompt con las dos fuentes: el Pixel de Triple Whale y el de Meta atribuyen distinto. La rama Meta de E2 tarea 5 (evaluar Meta por `tw_evaluacion`) se jubiló en la
    integración con main (INT-2).
 9. El detalle de un día de «Resultados» (`dia`, E2 tarea 7, spec A3) resuelve el alcance con la misma `_resolver`:
    con solo Triple Whale es `triple_whale.panel.contexto_dia` tal cual (la tienda de la entrada; el panel sigue
@@ -54,9 +54,12 @@ Reglas, cada una con su motivo:
    producción sigue alcanzable aquí, con los parciales de main tal cual (`_meta_diagnostico.html`,
    `_meta_segmentos.html`, `_meta_evaluar.html`, `_meta_evaluacion.html`) y su contexto armado por
    `meta_panel.diagnostico`: el Diagnóstico y los Segmentos de TODAS las cuentas de Meta del alcance (la estructura,
-   cubiertas incluidas: hablan de cómo está armada la cuenta en Meta) y la «Evaluación con IA» de las cuentas cuya
-   fuente es Meta, con el periodo que tomará la ruta (`meta_rendimiento.rutas.evaluar` con `entrada`,
-   `cuentas_evaluacion_meta`): el N y el precio del botón son los que cobra (E2-R6). El NVP de campañas y conjuntos
+   cubiertas incluidas: hablan de cómo está armada la cuenta en Meta) y la «Evaluación con IA» de esas mismas cuentas
+   (PND-290, Daniel 2026-10-12: «al unir ambos tableros tenemos que traer todo de ambos»; hasta entonces solo las de
+   fuente Meta, y una entrada de Triple Whale se quedaba sin la evaluación que la vieja pestaña sí daba), con el
+   periodo que tomará la ruta (`meta_rendimiento.rutas.evaluar` con `entrada`, `cuentas_evaluacion_meta`): el N y el
+   precio del botón son los que cobra (E2-R6). Esa evaluación lee solo la copia de Meta (el Pixel de Meta: nunca las
+   dos fuentes en un prompt) y, si entra una cuenta que cubre una tienda, lo dice. El NVP de campañas y conjuntos
    sale de la copia de Triple Whale (`meta_panel.nvp_estructura`) solo si el proyecto tiene Triple Whale.
 """
 from datetime import date
@@ -203,11 +206,17 @@ def _meta(cliente, s, dias, hoy, params, pagina_conjuntos):
     vivos = set(tareas_mr.trabajos_del_panel(cliente))
     estado = meta_panel.estado_copia(cliente, en_estructura, vivos)
     # Meta rendimiento E2 (regla 10) solo con días copiados: sin copia no hay reglas, desgloses ni muestra que mostrar.
-    e2 = (meta_panel.diagnostico(cliente, en_estructura, ids_fuente, dias, hoy, cuentas_por_id, vivos,
-                                 evaluados_periodo=alc_meta["ev"]["anuncios"] if alc_meta else None)
+    # La evaluación es de toda la estructura (PND-290); los anuncios ya evaluados de la galería solo sirven si la
+    # estructura es justo la de fuente Meta.
+    reusar = alc_meta is not None and set(ids_fuente) == set(ids_estructura)
+    e2 = (meta_panel.diagnostico(cliente, en_estructura, ids_estructura, dias, hoy, cuentas_por_id, vivos,
+                                 evaluados_periodo=alc_meta["ev"]["anuncios"] if reusar else None)
           if estado["rango"]["filas"] else None)
     if e2:
-        e2.update(entrada=params["entrada"], periodo_panel=dias)    # el formulario de la evaluación los manda
+        # El formulario de la evaluación manda `entrada` y `periodo_panel`; `con_pixel` = alguna de sus cuentas cubre
+        # una tienda de Triple Whale, así que sus cifras (las del Pixel de Meta) no son las de «Resultados».
+        e2.update(entrada=params["entrada"], periodo_panel=dias,
+                  con_pixel=bool(set(ids_estructura) & set(alc["cubiertas_tw"])))
     return {"ids_fuente": ids_fuente, "ids_estructura": ids_estructura, "estado": estado, "estructura": estructura,
             "alcance": alc_meta, "anuncios": anuncios, "e2": e2,
             "moneda": _moneda_comun(en_estructura, estructura["campanas"] + estructura["conjuntos"])}
@@ -387,11 +396,12 @@ def alcances(cliente, dias=0, entrada=None, canal=None, hoy=None):
 
 def cuentas_evaluacion_meta(cliente, entrada=None):
     """Las cuentas que evalúa la «Evaluación con IA» de Meta pedida desde esta pestaña (regla 10;
-    `meta_rendimiento.rutas.evaluar` con `entrada`): las de la entrada cuya fuente es Meta (`meta_fuente`), con la
-    misma resolución que el panel. None si `entrada` no es vacía y no es la clave de ninguna entrada (una pestaña
-    vieja, la de otro proyecto): no se ensancha a «Todas» y nada se cobra. Solo la conexión y las listas."""
+    `meta_rendimiento.rutas.evaluar` con `entrada`): TODAS las cuentas de Meta de la entrada (`meta_estructura`, también
+    las que cubre una tienda: PND-290), con la misma resolución que el panel. None si `entrada` no es vacía y no es la
+    clave de ninguna entrada (una pestaña vieja, la de otro proyecto): no se ensancha a «Todas» y nada se cobra. Solo la
+    conexión y las listas."""
     s = _resolver(cliente, entrada)
     valor = str(entrada or "").strip()
     if valor and (s["actual"] is None or s["actual"]["clave"] != valor):
         return None
-    return list(s["alcance"]["meta_fuente"])
+    return list(s["alcance"]["meta_estructura"])

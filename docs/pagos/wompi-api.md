@@ -186,15 +186,21 @@ Source: https://docs.wompi.co/en/docs/colombia/eventos/
       "customer_email": "john.doe@gmail.com", "currency": "COP", "payment_method_type": "NEQUI",
       "redirect_url": "https://mystore.com.co/payments/redirect", "status": "APPROVED",
       "shipping_address": null, "payment_link_id": null, "payment_source_id": null } },
-  "sent_at": "2018-07-20T16:45:05.000Z",
-  "signature": { "checksum": "3476DDA50F64CD7CBD160689640506FEBEA93239BC524FC0469B2C68A3CC8BD0",
-                 "properties": ["transaction.id", "transaction.status", "transaction.amount_in_cents"],
-                 "timestamp": 1530291411 }
+  "environment": "prod",
+  "signature": { "properties": ["transaction.id", "transaction.status", "transaction.amount_in_cents"],
+                 "checksum": "3476DDA50F64CD7CBD160689640506FEBEA93239BC524FC0469B2C68A3CC8BD0" },
+  "timestamp": 1530291411,
+  "sent_at": "2018-07-20T16:45:05.000Z"
 }
 ```
+- **`timestamp` is TOP-LEVEL, next to `sent_at`, not inside `signature`** (corrected 2026-10-12). The Spanish page
+  (https://docs.wompi.co/docs/colombia/eventos/) shows it there, and so did the first real production event: the
+  English page's sample, copied here before, put it inside `signature`, every test was built from that, and the first
+  real top-up (cv-1-1791835226) was rejected four times as «firma inválida». `wompi.evento_valido` reads the top-level
+  one and falls back to `signature.timestamp` only if the top-level one is missing.
 - Signature algorithm (verbatim steps):
   1. Concatenate the values of the fields named in `signature.properties`, in that order (each property is a dotted path into `data`, e.g. `transaction.id` -> `data.transaction.id`) -> `1234-1610641025-49201APPROVED4490000`
-  2. Append `timestamp` (integer from `signature.timestamp`) -> `...44900001530291411`
+  2. Append `timestamp` (integer, the TOP-LEVEL `timestamp` of the event) -> `...44900001530291411`
   3. Append the Events secret (dashboard > "Secrets of technical integration"; `test_events_...` / `prod_events_...`) -> `...1530291411prod_events_EJEMPLO_DE_LA_DOC`
   4. SHA256 hex (php `hash("sha256", $s)`; ruby `Digest::SHA256.hexdigest`) -> `3476DDA50F64CD7CBD160689640506FEBEA93239BC524FC0469B2C68A3CC8BD0`
   5. "Compare your calculated checksum against the value in either the `X-Event-Checksum` HTTP header or the `signature.checksum` field. If they match, the event is legitimate; otherwise, discard it."

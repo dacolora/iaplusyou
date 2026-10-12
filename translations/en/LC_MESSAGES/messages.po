@@ -11116,9 +11116,6 @@ msgstr "The rules found nothing."
 msgid "Las ventas cambiaron de fuente en este período"
 msgstr "Sales changed source during this period"
 
-msgid "Las ventas de estas cuentas las cuenta Triple Whale: su evaluación con IA es la de «Lo que hace ganar en tu cuenta»."
-msgstr "Triple Whale counts these accounts' sales: their AI evaluation is the one in “What wins in your account”."
-
 msgid "Las ventas entre todo el gasto en publicidad"
 msgstr "Sales divided by all ad spend"
 
@@ -12995,6 +12992,9 @@ msgstr "We could not charge your plan."
 #, python-format
 msgid "No pudimos consultar la transacción en Wompi: %(error)s"
 msgstr "We could not check the transaction in Wompi: %(error)s"
+
+msgid "No pudimos crear el proyecto. Inténtalo de nuevo en un momento."
+msgstr "We couldn't create the project. Please try again in a moment."
 
 msgid "No pudimos hablar con Nequi. Intenta de nuevo en un rato."
 msgstr "We could not reach Nequi. Try again in a while."
@@ -18884,6 +18884,9 @@ msgstr "Uses ONLY the first image as the starting frame; the framing and format 
 
 msgid "Usa el teclado para revisar el foco de los controles."
 msgstr "Use the keyboard to check focus on the controls."
+
+msgid "Usa las cifras del Pixel de Meta, que cuenta distinto que tu tienda: las ventas de Triple Whale las evalúa «Lo que hace ganar en tu cuenta»."
+msgstr "Uses the Meta Pixel numbers, which count differently from your store: the Triple Whale sales are evaluated in “What wins in your account”."
 
 #, python-format
 msgid "Usado %(num)d vez →"

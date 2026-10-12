@@ -147,8 +147,8 @@ def _segmentos(desgloses_30, en_alcance):
 
 def preparar(cliente, dias=None, cuenta=None, hoy=None, ids=None):
     """Todo lo que la evaluación guarda al pedirla, para el alcance que mira la persona (`dias` y `cuenta` como el
-    panel: una cuenta del proyecto o «Todas»; o, desde la pestaña «Rendimiento», `ids`: las cuentas de Meta de su
-    entrada cuya fuente es Meta, y entonces `cuenta` no cuenta), en el idioma del proyecto (lo que se guarda y se manda a Claude):
+    panel: una cuenta del proyecto o «Todas»; o, desde la pestaña «Rendimiento», `ids`: todas las cuentas de Meta de
+    su entrada, también las que cubre una tienda de Triple Whale (PND-290, 2026-10-12), y entonces `cuenta` no cuenta), en el idioma del proyecto (lo que se guarda y se manda a Claude):
     {"cuentas", "desde", "hasta", "moneda" (la común o None), "muestra", "recomendaciones" (las primeras
     MAX_RECOMENDACIONES, cada una con su `ref` R1…), "extra": {"dias", "cuenta", "parcial", "hoy", "resumen", "segmentos",
     "meta_roas", "meta_roas_proyecto", "ventanas": {"corto", "largo"}}}. None si el proyecto no tiene cuentas. Solo lee la copia local: nunca Meta ni Claude."""
