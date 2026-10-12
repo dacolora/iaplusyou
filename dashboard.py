@@ -1630,6 +1630,16 @@ def crear_proyecto():
         flash(gettext("Demasiados registros seguidos desde esta conexión. Espera un rato e inténtalo de nuevo."), "error")
         return render_template("index.html", form=form), 429
 
+    # PND-298 (Daniel, 2026-10-12: «abierto, pero cobrando»): el alta es abierta y un proyecto nuevo nacía con
+    # «Cobrar» apagado, así que un desconocido generaba con las llaves de Creatv. Nace cobrando (margen global) ANTES
+    # de existir: si no se puede prender, no se crea nada. Un admin lo apaga en /admin/cobros si es de la casa.
+    try:
+        libro_cobros.configurar(cid, usuario=usuario, cobrar=True)
+    except Exception:
+        log.exception("alta: no se pudo prender «Cobrar» para %s", cid)
+        flash(gettext("No pudimos crear el proyecto. Inténtalo de nuevo en un momento."), "error")
+        return render_template("index.html", form=form), 500
+
     try:
         usuarios.crear(usuario, password, "cliente", cliente=cid, correo=correo)
     except ValueError as e:

@@ -13021,6 +13021,9 @@ msgstr "We could not confirm in Wompi that it was not charged: %(error)s. Try ag
 msgid "No pudimos consultar la transacción en Wompi: %(error)s"
 msgstr "We could not check the transaction in Wompi: %(error)s"
 
+msgid "No pudimos crear el proyecto. Inténtalo de nuevo en un momento."
+msgstr "We couldn't create the project. Please try again in a moment."
+
 msgid "No pudimos hablar con Nequi. Intenta de nuevo en un rato."
 msgstr "We could not reach Nequi. Try again in a while."
 
