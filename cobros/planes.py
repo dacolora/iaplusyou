@@ -809,7 +809,7 @@ def _enviar(accion, pago, sus, ahora, acceptance_token=None):
     Devuelve el estado (aprobado, pendiente, rechazado, error, incierto, caida…)."""
     from cobros import wompi  # noqa: PLC0415
     if accion == "esperar_evento":
-        hallado = _buscar_en_wompi(pago, ahora)
+        hallado = _buscar_en_wompi(pago, sus, ahora)
         if hallado is not None:
             return hallado
         _aviso_incierto(pago)
@@ -817,7 +817,7 @@ def _enviar(accion, pago, sus, ahora, acceptance_token=None):
     if accion == "reintentar":
         # Antes de reenviar (con la MISMA referencia), ¿Wompi ya lo tiene? La respuesta pudo perderse con el cobro
         # hecho (PND-296): así se resuelve sin esperar un evento ni al admin.
-        hallado = _buscar_en_wompi(pago, ahora)
+        hallado = _buscar_en_wompi(pago, sus, ahora)
         if hallado is not None:
             return hallado
     if accion == "consultar":
@@ -834,7 +834,7 @@ def _enviar(accion, pago, sus, ahora, acceptance_token=None):
         if e.referencia_usada:
             # El primer envío llegó a Wompi (la referencia ya existe): se busca por la referencia (PND-296); si
             # todavía no aparece, se conocerá por su evento: queda pendiente (bloquea otro cobro) y el admin lo sabe.
-            hallado = _buscar_en_wompi(pago, ahora)
+            hallado = _buscar_en_wompi(pago, sus, ahora)
             if hallado is not None:
                 return hallado
             _aviso_incierto(pago)
@@ -863,23 +863,36 @@ def _enviar(accion, pago, sus, ahora, acceptance_token=None):
     return aplicar_transaccion(tx, ahora=ahora)
 
 
-_ORDEN_BUSQUEDA = {"APPROVED": 0, "PENDING": 1, "DECLINED": 2, "ERROR": 2, "VOIDED": 3}
+# Una anulada sola no se aplica: dejaba el pago pendiente para siempre sin aviso (revisión de plata, 2026-10-12).
+_ORDEN_BUSQUEDA = {"APPROVED": 0, "PENDING": 1, "DECLINED": 2, "ERROR": 2}
+ESPERA_BUSQUEDA = (5, 10)   # buscar y releer pueden correr dentro de una petición web (cambiar la tarjeta)
 
 
-def _buscar_en_wompi(pago, ahora):
+def _buscar_en_wompi(pago, sus, ahora):
     """PND-296 (2026-10-12): ¿Wompi tiene una transacción con la referencia de este pago? La busca (con nuestra
     llave privada), relee la elegida por id —la búsqueda no trae el comercio— y la aplica con
-    `aplicar_transaccion`, que compara centavos, moneda y comercio. Devuelve lo que diga, o None si no hay nada o
-    Wompi no respondió (quien llama sigue como antes: reenviar con la misma referencia nunca cobra dos veces)."""
+    `aplicar_transaccion`, solo si salió de la fuente de pago de ESTA suscripción, por sus centavos exactos, en
+    COP y de nuestro comercio (revisión de plata: las referencias de planes son fijas y, con ids reusados tras
+    restaurar un respaldo, podían encontrar el cobro de otra tarjeta). Devuelve lo que diga, o None si no hay nada
+    que valga o Wompi no respondió: quien llama sigue como antes (reenviar con la misma referencia nunca cobra dos
+    veces; lo incierto, al admin una vez)."""
     from cobros import wompi  # noqa: PLC0415
     try:
-        txs = [t for t in wompi.transacciones_de_referencia(pago["referencia"]) if t.get("status") in _ORDEN_BUSQUEDA]
+        txs = [t for t in wompi.transacciones_de_referencia(pago["referencia"], tiempo=ESPERA_BUSQUEDA)
+               if t.get("status") in _ORDEN_BUSQUEDA]
         if not txs:
             return None
         elegida = min(txs, key=lambda t: _ORDEN_BUSQUEDA[t["status"]])
-        tx = wompi.transaccion(elegida["id"])
+        tx = wompi.transaccion(elegida["id"], tiempo=ESPERA_BUSQUEDA)
     except wompi.ErrorWompi as e:
         log.warning("no se pudo buscar el pago %s en Wompi: %s", pago["id"], type(e).__name__)
+        return None
+    fuente = str((sus or {}).get("fuente_pago_id") or "")
+    if (not fuente or str(tx.get("payment_source_id") or "") != fuente
+            or tx.get("reference") != pago["referencia"] or tx.get("currency") != wompi.MONEDA
+            or tx.get("amount_in_cents") != int(pago["monto_cop_centavos"]) or wompi.de_otro_comercio(tx)):
+        log.warning("el pago %s tiene en Wompi una transacción que no es de su fuente, monto o comercio: no se aplica",
+                    pago["id"])
         return None
     log.info("pago de plan %s encontrado en Wompi por su referencia (%s)", pago["id"], tx.get("status"))
     return aplicar_transaccion(tx, ahora=ahora)

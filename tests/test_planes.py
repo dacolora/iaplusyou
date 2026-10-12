@@ -489,6 +489,71 @@ def test_lo_que_encuentra_la_busqueda_se_relee_por_id_y_otro_comercio_no_cuenta(
     assert "admin:plan_admin" in _tipos(avisos)
 
 
+def test_lo_que_encuentra_la_busqueda_tiene_que_ser_de_la_tarjeta_de_esta_suscripcion(base_temporal, planes, pro,
+                                                                                      falso, avisos):
+    # Revisión de plata (2026-10-12): las referencias de planes son fijas; con ids reusados (un respaldo restaurado)
+    # la búsqueda podía encontrar el cobro de OTRA tarjeta por el mismo monto y dar el plan por pagado.
+    _suscribir(planes, pro)
+    ahora = _antes("2026-11-09T10:00:00", 30)
+    falso.error = (falso.wompi.ErrorWompi("cortado", caida=True, incierto=True), False)
+    planes.cobrar_periodo(1, ahora=ahora)
+    falso.cobro_que_llego("pl-1-20261109-1", payment_source_id=99999)   # de otra fuente
+    _envejecer(base_temporal)
+    assert planes.cobrar_periodo(1, ahora=_despues(ahora, minutos=5)) == "incierto"   # como antes: al admin
+    assert _filas(base_temporal, "pago_plan")[1].estado == "pendiente"
+    assert _tipos(avisos).count("admin:plan_admin") == 1
+
+
+def test_si_wompi_solo_tiene_una_anulada_se_sigue_como_antes(base_temporal, planes, pro, falso, avisos):
+    # Antes la búsqueda devolvía `ya_aplicada` en cada vuelta y el pago quedaba pendiente para siempre, sin aviso.
+    _suscribir(planes, pro)
+    ahora = _antes("2026-11-09T10:00:00", 30)
+    falso.error = (falso.wompi.ErrorWompi("cortado", caida=True, incierto=True), False)
+    planes.cobrar_periodo(1, ahora=ahora)
+    falso.cobro_que_llego("pl-1-20261109-1", status="VOIDED")
+    _envejecer(base_temporal)
+    assert planes.cobrar_periodo(1, ahora=_despues(ahora, minutos=5)) == "incierto"
+    assert _tipos(avisos).count("admin:plan_admin") == 1
+
+
+def test_lo_encontrado_con_otro_monto_no_se_aplica_ni_repite_avisos(base_temporal, planes, pro, falso, avisos):
+    _suscribir(planes, pro)
+    ahora = _antes("2026-11-09T10:00:00", 30)
+    falso.error = (falso.wompi.ErrorWompi("cortado", caida=True, incierto=True), False)
+    planes.cobrar_periodo(1, ahora=ahora)
+    falso.cobro_que_llego("pl-1-20261109-1", centavos=CENTAVOS_MES - 100)
+    for minutos in (5, 40, 80):
+        _envejecer(base_temporal)
+        planes.cobrar_periodo(1, ahora=_despues(ahora, minutos=minutos))
+    assert _filas(base_temporal, "pago_plan")[1].estado == "pendiente"
+    assert _tipos(avisos).count("admin:plan_admin") == 1                 # una vez, no cada vuelta
+
+
+def test_la_busqueda_de_planes_espera_poco(base_temporal, planes, pro, falso, avisos, monkeypatch):
+    # cambiar_fuente corre dentro de una petición web: buscar y releer no pueden retener el hilo 15 s cada una.
+    tiempos = []
+    original_busca, original_lee = falso.transacciones_de_referencia, falso.transaccion
+
+    def busca(ref, tiempo=None):
+        tiempos.append(tiempo)
+        return original_busca(ref)
+
+    def lee(tx_id, tiempo=None):
+        tiempos.append(tiempo)
+        return original_lee(tx_id)
+    from cobros import wompi
+    monkeypatch.setattr(wompi, "transacciones_de_referencia", busca)
+    monkeypatch.setattr(wompi, "transaccion", lee)
+    _suscribir(planes, pro)
+    ahora = _antes("2026-11-09T10:00:00", 30)
+    falso.error = (falso.wompi.ErrorWompi("cortado", caida=True, incierto=True), False)
+    planes.cobrar_periodo(1, ahora=ahora)
+    falso.cobro_que_llego("pl-1-20261109-1")
+    _envejecer(base_temporal)
+    planes.cobrar_periodo(1, ahora=_despues(ahora, minutos=5))
+    assert tiempos and all(t == planes.ESPERA_BUSQUEDA for t in tiempos)
+
+
 def test_si_la_busqueda_falla_se_sigue_como_antes(base_temporal, planes, pro, falso, avisos):
     _suscribir(planes, pro)
     ahora = _antes("2026-11-09T10:00:00", 30)

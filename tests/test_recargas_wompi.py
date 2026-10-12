@@ -437,6 +437,120 @@ def test_el_rescate_toma_el_candado_antes_de_leer(entorno, escritor_en_medio):
     assert otro["resultado"].startswith("bloqueado")
 
 
+# --- revisión de plata del rescate (guardian, 2026-10-12): carga, rechazadas que se pagan, dos aprobadas, 401 ---
+
+def _ultima_busqueda(entorno, rid, minutos):
+    """Como si la última búsqueda de esa recarga hubiera sido hace `minutos`."""
+    db, recargas = entorno["db"], entorno["recargas"]
+    clave = recargas.CLAVE_BUSQUEDA.format(recarga=rid)
+    hace = (datetime.now() - timedelta(minutes=minutos)).isoformat(timespec="seconds")
+    with db.conectar() as con:
+        con.execute(db.kv.delete().where(db.kv.c.clave == clave))
+        con.execute(db.kv.insert().values(clave=clave, valor=hace, actualizado_en=hace))
+
+
+def test_las_busquedas_se_espacian_con_la_edad_de_la_recarga(entorno):
+    recargas = entorno["recargas"]
+    joven, ref_joven = _pendiente(entorno)
+    vieja, ref_vieja = _pendiente(entorno)
+    _envejecer(entorno, joven, 15)
+    _envejecer(entorno, vieja, 3 * 60)
+    recargas.verificar_pendientes()
+    assert sorted(entorno["busquedas"]) == sorted([ref_joven, ref_vieja])
+    recargas.verificar_pendientes()                                   # recién buscadas: nada
+    assert len(entorno["busquedas"]) == 2
+    _ultima_busqueda(entorno, joven, 11)                               # < 1 h de edad: cada 10 min
+    _ultima_busqueda(entorno, vieja, 30)                               # de 1 a 6 h: cada hora
+    recargas.verificar_pendientes()
+    assert entorno["busquedas"][2:] == [ref_joven]
+    _ultima_busqueda(entorno, vieja, 61)
+    recargas.verificar_pendientes()
+    assert entorno["busquedas"][3:] == [ref_vieja]
+
+
+def test_una_recien_pagada_no_espera_detras_de_las_abandonadas(entorno):
+    recargas = entorno["recargas"]
+    for _ in range(recargas.BUSQUEDAS_POR_VUELTA + 10):
+        rid, _ref = _pendiente(entorno)
+        _envejecer(entorno, rid, 5 * 60)                               # abandonadas hace 5 h
+    pagada, ref = _pendiente(entorno)
+    _envejecer(entorno, pagada, 15)
+    entorno["por_ref"][ref] = [_tx(ref)]
+    entorno["txs"]["1292-1602113476-10985"] = _tx(ref)
+    recargas.verificar_pendientes()
+    assert _recarga(entorno["db"], pagada)["estado"] == "aprobada"    # la más nueva va primero
+    assert len(entorno["busquedas"]) == recargas.BUSQUEDAS_POR_VUELTA   # el cupo de la vuelta
+
+
+def test_las_consultas_por_id_no_esperan_al_rescate(entorno):
+    db, recargas = entorno["db"], entorno["recargas"]
+    for _ in range(recargas.BUSQUEDAS_POR_VUELTA + 10):
+        rid, _ref = _pendiente(entorno)
+        _envejecer(entorno, rid, 5 * 60)
+    con_tx, ref = _pendiente(entorno)
+    with db.conectar() as con:                                         # vino de un evento firmado (PENDING)
+        con.execute(db.recarga.update().where(db.recarga.c.id == con_tx).values(pasarela_ref="1292-1602113476-30001"))
+    entorno["txs"]["1292-1602113476-30001"] = _tx(ref, tx_id="1292-1602113476-30001")
+    recargas.verificar_pendientes()
+    assert _recarga(db, con_tx)["estado"] == "aprobada"
+    assert entorno["consultas"][0][0] == "1292-1602113476-30001"         # antes que cualquier búsqueda
+
+
+def test_una_rechazada_que_se_pago_despues_se_encuentra(entorno):
+    db, recargas = entorno["db"], entorno["recargas"]
+    rid, ref = _pendiente(entorno)
+    _envejecer(entorno, rid, 40)
+    rechazo = _tx(ref, status="DECLINED", tx_id="1292-1602113476-40001")
+    with db.conectar() as con:
+        con.execute(db.recarga.update().where(db.recarga.c.id == rid)
+                    .values(estado="rechazada", pasarela_ref="1292-1602113476-40001"))
+    pago = _tx(ref, tx_id="1292-1602113476-40002")                      # reintentó en el mismo checkout y pagó
+    entorno["txs"].update({"1292-1602113476-40001": rechazo, "1292-1602113476-40002": pago})
+    entorno["por_ref"][ref] = [rechazo, pago]
+    recargas.verificar_pendientes()
+    fila = _recarga(db, rid)
+    assert fila["estado"] == "aprobada" and fila["pasarela_ref"] == "1292-1602113476-40002"
+    assert entorno["libro"].saldo("acme") == 50000
+
+
+def test_dos_aprobadas_acreditan_una_y_avisan_la_otra(entorno):
+    recargas = entorno["recargas"]
+    rid, ref = _pendiente(entorno)
+    _envejecer(entorno, rid, recargas.MINUTOS_RESCATE + 1)
+    a, b = _tx(ref, tx_id="1292-1602113476-50001"), _tx(ref, tx_id="1292-1602113476-50002")
+    entorno["por_ref"][ref] = [a, b]                                    # dos pestañas pagaron el mismo checkout
+    entorno["txs"].update({"1292-1602113476-50001": a, "1292-1602113476-50002": b})
+    recargas.verificar_pendientes()
+    assert entorno["libro"].saldo("acme") == 50000 and len(_movimientos(entorno["db"])) == 1
+    assert "wompi_no_cuadra" in _admin(entorno)                          # el segundo pago, al admin
+
+
+@pytest.mark.parametrize("codigo", [401, 403, 429])
+def test_el_rescate_para_con_llaves_rechazadas_o_cupo(entorno, codigo):
+    recargas, wompi = entorno["recargas"], entorno["wompi"]
+    for _ in range(3):
+        rid, ref = _pendiente(entorno)
+        _envejecer(entorno, rid, recargas.MINUTOS_RESCATE + 1)
+        entorno["por_ref"][ref] = wompi.ErrorWompi("Wompi no aceptó el pedido", codigo=codigo)
+    recargas.verificar_pendientes()
+    assert len(entorno["busquedas"]) == 1
+
+
+def test_las_marcas_de_busqueda_se_limpian_al_salir_de_pendiente(entorno):
+    db, recargas = entorno["db"], entorno["recargas"]
+    rid, ref = _pendiente(entorno)
+    _envejecer(entorno, rid, recargas.MINUTOS_RESCATE + 1)
+    recargas.verificar_pendientes()                                    # buscada, sin nada: queda su marca
+    clave = recargas.CLAVE_BUSQUEDA.format(recarga=rid)
+    with db.conectar() as con:
+        assert con.execute(sa.select(db.kv.c.clave).where(db.kv.c.clave == clave)).first() is not None
+    entorno["txs"]["1292-1602113476-10985"] = _tx(ref)
+    assert _ev(entorno, _evento(_tx(ref)))[1] == "acreditada"          # llegó el evento
+    recargas.verificar_pendientes()
+    with db.conectar() as con:
+        assert con.execute(sa.select(db.kv.c.clave).where(db.kv.c.clave == clave)).first() is None
+
+
 def test_la_periodica_para_con_wompi_caido(entorno):
     for i in range(3):
         rid, ref = _pendiente(entorno)
