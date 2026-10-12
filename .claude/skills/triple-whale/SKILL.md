@@ -129,8 +129,8 @@ the ads of Meta accounts without a store (`extra["fuente"] = "meta"`, «con sus 
 `meta_conexion.cargar`, `muestra` re-sorting the winners by revenue); at the integration with main (2026-10-10, INT-2)
 that branch was retired in favour of main's «Evaluación con IA» of Meta (`meta_rendimiento/analisis.py`,
 `meta_rend_evaluar`, skill `meta-rendimiento`), and `tw_evaluar`, `analisis.armar`/`PROMPT`, `muestra` and `medios_meta`
-are main's again (the prompt says «de Triple Whale»; `medios_meta` still needs a launch account, PND-286 keeps its
-undelimited text). `analisis.FUENTES`/`nombre_fuente` stay: «Cómo mejorarlo» uses them for a Meta ad (below). `triple_whale/puente.py`:
+are main's again (the prompt says «de Triple Whale»; `medios_meta` still needs a launch account; its text goes
+delimited since PND-286, 2026-10-12, see below). `analisis.FUENTES`/`nombre_fuente` stay: «Cómo mejorarlo» uses them for a Meta ad (below). `triple_whale/puente.py`:
 «Llevar a Crear» sets `session["fp_prefill"]` (nothing is generated) and «Guardar en Referentes» stores a
 winning own ad as a project referente (fuente `triple_whale`, `anuncio_id = tw:<ad_id>`, thumbnail in R2).
 Experiments with `atribucion="triple_whale"`: `lanzador.refrescar` keeps traffic, spend and ad status from
