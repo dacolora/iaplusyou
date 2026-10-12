@@ -1210,8 +1210,8 @@ def test_lo_que_no_cuadra_o_no_esta_aprobado_no_se_anota(entorno):
 
 
 def test_el_aviso_del_aprobado_sin_evento_pide_confirmar_en_el_panel_de_wompi(entorno, monkeypatch):
-    """R3: el aviso nunca da el pago por confirmado: pide buscarlo en el panel de Wompi de Creatv antes de
-    acreditar a mano."""
+    """R3: el aviso nunca da el pago por confirmado. Desde la auditoría del 2026-10-12 manda a «Buscar en Wompi»
+    (acredita una sola vez, solo lo de nuestro comercio) y prohíbe la recarga manual, que se sumaba otra vez."""
     db, recargas = entorno["db"], entorno["recargas"]
     from cobros import avisos
     textos = []
@@ -1225,5 +1225,6 @@ def test_el_aviso_del_aprobado_sin_evento_pide_confirmar_en_el_panel_de_wompi(en
                     .values(valor=json.dumps({"tx": "1292-1602113476-10985", "visto_en": hace})))
     recargas.avisar_vistos_sin_evento()
     ((asunto, cuerpo),) = textos
-    assert "NO confirma el pago" in cuerpo and "panel de Wompi de Creatv" in cuerpo and "nuestro comercio" in cuerpo
+    assert "NO confirma el pago" in cuerpo and "Buscar en Wompi" in cuerpo and "nuestro comercio" in cuerpo
+    assert "Nunca una recarga manual" in cuerpo
     assert "revísala en el panel de Wompi" in asunto and "dice aprobado" not in asunto

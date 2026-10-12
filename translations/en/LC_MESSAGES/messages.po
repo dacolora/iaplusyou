@@ -2073,6 +2073,9 @@ msgstr "<strong>BOLD_PRUEBAS=1 on a server that is not local.</strong> It does n
 msgid "<strong>BOLD_PRUEBAS=1 sin BOLD_LLAVE_SECRETA.</strong> El webhook acepta la firma de pruebas de Bold: cualquiera que lo sepa puede acreditar saldo. Úsalo solo en local; en el servidor pon la llave secreta y quita BOLD_PRUEBAS."
 msgstr "<strong>BOLD_PRUEBAS=1 without BOLD_LLAVE_SECRETA.</strong> The webhook accepts Bold’s test signature: anyone who knows it can add balance. Use it only locally; on the server set the secret key and remove BOLD_PRUEBAS."
 
+msgid "<strong>El servidor no manda correos.</strong> Los avisos de plata (un pago que no cuadra, una recarga rescatada, un cobro incierto…) no le llegan a nadie por correo: míralos en «Avisos de plata», aquí abajo."
+msgstr "<strong>The server does not send emails.</strong> Money notices (a payment that does not match, a rescued top-up, an uncertain charge…) reach no one by email: see them in «Money notices», below."
+
 msgid "<strong>Faltan llaves de Bold.</strong> Sin BOLD_LLAVE_IDENTIDAD y BOLD_LLAVE_SECRETA en el <code>.env</code> del servidor no hay recargas en línea: los proyectos solo pueden recargar con una recarga manual desde aquí."
 msgstr "<strong>Bold keys are missing.</strong> Without BOLD_LLAVE_IDENTIDAD and BOLD_LLAVE_SECRETA in the server’s <code>.env</code> there are no online top-ups: projects can only be topped up manually from here."
 
@@ -2956,6 +2959,9 @@ msgstr "Project learnings"
 msgid "Aprobada"
 msgstr "Approved"
 
+msgid "Aprobada sin evento de Wompi"
+msgstr "Approved without a Wompi event"
+
 #, python-format
 msgid "Aprobada «%(titulo)s»"
 msgstr "Approved “%(titulo)s”"
@@ -3282,6 +3288,9 @@ msgstr "Notice sent: %(g)s new winner(s), %(c)s fatiguing, %(p)s new loser(s)."
 msgid "Aviso: %(aviso)s"
 msgstr "Notice: %(aviso)s"
 
+msgid "Avisos de plata"
+msgstr "Money notices"
+
 msgid "Avisos por correo desactivados."
 msgstr "Email notifications turned off."
 
@@ -3466,6 +3475,9 @@ msgstr "Searching for references for this campaign…"
 
 msgid "Buscar"
 msgstr "Search"
+
+msgid "Buscar en Wompi"
+msgstr "Search in Wompi"
 
 msgid "Buscar en la biblioteca"
 msgstr "Search the library"
@@ -7524,6 +7536,9 @@ msgstr "That page is only for the administrator."
 msgid "Esa página no está compartida con tu integración de Notion (en la página: ··· › Conexiones › tu integración)."
 msgstr "That page isn't shared with your Notion integration (on the page: ··· › Connections › your integration)."
 
+msgid "Esa recarga no se puede buscar en Wompi: no es de Wompi o ya no está por acreditar."
+msgstr "That top-up cannot be searched in Wompi: it is not from Wompi or it is no longer waiting to be credited."
+
 msgid "Esa referencia no existe en esta versión."
 msgstr "That reference doesn't exist in this version."
 
@@ -10804,8 +10819,8 @@ msgid "La página de Notion está vacía."
 msgstr "The Notion page is empty."
 
 #, python-format
-msgid "La página de vuelta de la recarga «%(ref)s» de %(cliente)s consultó la transacción %(tx)s (el id lo trajo el navegador) y Wompi la dio por aprobada, pero su evento firmado no llegó en 30 minutos y no se acreditó. Esto NO confirma el pago: antes de acreditar a mano, búscala en el panel de Wompi de Creatv y confirma que es de nuestro comercio, con esa referencia y ese monto. Si está, revisa también la URL de eventos."
-msgstr "The return page of top-up «%(ref)s» for %(cliente)s looked up transaction %(tx)s (the id came from the browser) and Wompi reported it as approved, but its signed event did not arrive within 30 minutes and nothing was credited. This does NOT confirm the payment: before crediting by hand, find it in Creatv's Wompi dashboard and confirm it belongs to our merchant, with that reference and that amount. If it's there, also check the events URL."
+msgid "La página de vuelta de la recarga «%(ref)s» de %(cliente)s consultó la transacción %(tx)s (el id lo trajo el navegador) y Wompi la dio por aprobada, pero su evento firmado no llegó en 30 minutos y no se acreditó. Esto NO confirma el pago. En /admin/cobros, «Recargas de Wompi sin acreditar», usa «Buscar en Wompi»: la acredita una sola vez si Wompi la tiene aprobada para nuestro comercio. Nunca una recarga manual: se sumaría otra vez cuando llegue el evento. Revisa también la URL de eventos."
+msgstr "The return page of top-up «%(ref)s» of %(cliente)s checked transaction %(tx)s (the id came from the browser) and Wompi reported it approved, but its signed event did not arrive within 30 minutes and it was not credited. This does NOT confirm the payment. In /admin/cobros, «Wompi top-ups not credited», use «Search in Wompi»: it credits it once if Wompi has it approved for our merchant. Never a manual top-up: it would be added again when the event arrives. Also check the events URL."
 
 msgid "La página es demasiado larga (más de 3000 bloques)."
 msgstr "The page is too long (more than 3000 blocks)."
@@ -12672,6 +12687,9 @@ msgstr "There are no incomplete avatars to complete."
 msgid "No hay avatares nuevos: cuando un estudio genere avatares, aparecen aquí para que los apruebes."
 msgstr "There are no new avatars: once a study generates avatars, they'll show up here for you to approve."
 
+msgid "No hay avisos de plata."
+msgstr "There are no money notices."
+
 msgid "No hay cambios que aplicar."
 msgstr "There are no changes to apply."
 
@@ -12739,6 +12757,9 @@ msgstr "There are no pieces to activate."
 
 msgid "No hay productos en el catálogo: agrégalos en Catálogo › Productos."
 msgstr "There are no products in the catalog: add them in Catalog › Products."
+
+msgid "No hay recargas de Wompi por acreditar."
+msgstr "There are no Wompi top-ups waiting to be credited."
 
 msgid "No hay referentes para sugerir"
 msgstr "There are no references to suggest"
@@ -13905,12 +13926,18 @@ msgstr "Payment voided by Bold"
 msgid "Pago anulado por Wompi"
 msgstr "Payment voided by Wompi"
 
+msgid "Pago de plan para revisar"
+msgstr "Plan payment to review"
+
 msgid "Pago pendiente"
 msgstr "Payment due"
 
 #, python-format
 msgid "Pago pendiente %(referencia)s"
 msgstr "Pending payment %(referencia)s"
+
+msgid "Pago sin recarga"
+msgstr "Payment without a top-up"
 
 msgid "Pagos del plan"
 msgstr "Plan payments"
@@ -14008,6 +14035,9 @@ msgstr "To redo from that scene, the last frame of the previous one is needed."
 
 msgid "Para suscribirte tienes que aceptar los términos de Wompi, el tratamiento de datos y el cobro automático"
 msgstr "To subscribe you need to accept Wompi's terms, the data processing and the automatic charge"
+
+msgid "Para un pago que la persona ya hizo en Wompi usa «Buscar en Wompi» en «Recargas de Wompi sin acreditar»: una recarga manual se sumaría otra vez si después llega su evento."
+msgstr "For a payment the person already made in Wompi, use «Search in Wompi» in «Wompi top-ups not credited»: a manual top-up would be added again if its event arrives later."
 
 msgid "Para vender"
 msgstr "Promo labels"
@@ -14413,6 +14443,9 @@ msgstr "Action plan"
 
 msgid "Plan guardado. Quien ya está suscrito sigue con el precio que aceptó; el margen y el tope valen desde su próximo periodo (en un plan anual, desde su próximo pago)."
 msgstr "Plan saved. Anyone already subscribed keeps the price they accepted; the markup and the cap apply from their next period (on a yearly plan, from their next payment)."
+
+msgid "Plan terminado"
+msgstr "Plan ended"
 
 msgid "Planes"
 msgstr "Plans"
@@ -15327,6 +15360,9 @@ msgstr "Which model comes pre-selected when you open FlowPlus. It can be changed
 msgid "Qué muestra la gráfica"
 msgstr "What the chart shows"
 
+msgid "Qué pasó"
+msgstr "What happened"
+
 #, python-format
 msgid "Qué pasó el %(dia)s"
 msgstr "What happened on %(dia)s"
@@ -15469,9 +15505,15 @@ msgstr "Top-up (money came in)"
 msgid "Recarga Creatv · %(proyecto)s"
 msgstr "Creatv top-up · %(proyecto)s"
 
+msgid "Recarga acreditada"
+msgstr "Top-up credited"
+
 #, python-format
 msgid "Recarga acreditada en %(cliente)s"
 msgstr "Top-up credited to %(cliente)s"
+
+msgid "Recarga acreditada sin su evento"
+msgstr "Top-up credited without its event"
 
 msgid "Recarga con Bold"
 msgstr "Top-up with Bold"
@@ -15515,6 +15557,9 @@ msgstr "Top up balance"
 
 msgid "Recargas"
 msgstr "Top-ups"
+
+msgid "Recargas de Wompi sin acreditar"
+msgstr "Wompi top-ups not credited"
 
 msgid "Receta de tomas"
 msgstr "Shot recipe"
@@ -15884,6 +15929,9 @@ msgstr "Rendering segment %(i)s/%(n)s"
 
 msgid "Rendimiento"
 msgstr "Performance"
+
+msgid "Renovación apagada"
+msgstr "Renewal turned off"
 
 msgid "Repetido"
 msgstr "Duplicate"
@@ -16589,6 +16637,9 @@ msgstr "If it's Gmail: in myaccount.google.com › Security turn on “2-Step Ve
 msgid "Si ese correo está registrado, te llegará un enlace para restablecer la contraseña (vence en 1 hora; revisa también el spam)."
 msgstr "If that email is registered, a link to reset the password will arrive (expires in 1 hour; check spam too)."
 
+msgid "Si la persona pagó y no se acreditó, usa «Buscar en Wompi»: la acredita una sola vez si Wompi la tiene aprobada. Para un pago hecho en Wompi nunca uses una recarga manual: se sumaría otra vez cuando llegue su evento."
+msgstr "If the person paid and it was not credited, use «Search in Wompi»: it credits it once if Wompi has it approved. For a payment made in Wompi never use a manual top-up: it would be added again when its event arrives."
+
 msgid "Si lo eliges, Claude escribe con ese nivel en ideas, guiones y adaptaciones de este producto."
 msgstr "If you choose it, Claude writes at that level in this product's ideas, scripts and adaptations."
 
@@ -16871,6 +16922,9 @@ msgstr "No sub-avatars in this core."
 
 msgid "Sin tarjeta registrada (pago por transferencia)."
 msgstr "No card on file (paid by bank transfer)."
+
+msgid "Sin tasa de cambio"
+msgstr "No exchange rate"
 
 msgid "Sin texto: se redacta con IA al aprobar (o escríbelo aquí)"
 msgstr "No text: it's written with AI on approval (or write it here)"
@@ -18107,6 +18161,9 @@ msgstr "Cap reached in “%(experimento)s”"
 msgid "Tope alcanzado: gasto %(gasto)s de %(tope)s %(moneda)s. Se pausa el experimento."
 msgstr "Cap reached: spend %(gasto)s of %(tope)s %(moneda)s. The experiment is paused."
 
+msgid "Tope de lo incluido"
+msgstr "Included cap"
+
 msgid "Tope de lo incluido (costo/mes)"
 msgstr "Included cap (cost/month)"
 
@@ -18696,6 +18753,9 @@ msgstr "A clip asks for more than its file has, and the file is too short to sho
 msgid "Un clip pide más video del que tiene su archivo: se acorta solo con tu próximo cambio."
 msgstr "A clip asks for more video than its file has: it's shortened automatically with your next change."
 
+msgid "Un cobro no se pudo anotar"
+msgstr "A charge could not be recorded"
+
 msgid "Un crédito de TrendTrack por anuncio revisado (US$ 1 = 1 000 créditos); el plan Pro incluye 20 000 créditos al mes. El uso está en Referentes (admin)."
 msgstr "One TrendTrack credit per ad checked (US$ 1 = 1,000 credits); the Pro plan includes 20,000 credits a month. Usage is shown in Swipe file (admin)."
 
@@ -18725,6 +18785,9 @@ msgstr "A Wompi payment does not match any top-up"
 
 msgid "Un pago de Wompi no cuadra con su recarga"
 msgstr "A Wompi payment does not match its top-up"
+
+msgid "Un pago de Wompi no cuadra o llegó dos veces"
+msgstr "A Wompi payment does not match or arrived twice"
 
 #, python-format
 msgid "Un pago de plan de %(cliente)s pide revisión"
@@ -19593,6 +19656,12 @@ msgstr "Wompi is confirming a plan payment. This page updates on its own when it
 msgid "Wompi está en modo de pruebas (sandbox): los cobros no son reales."
 msgstr "Wompi is in test mode (sandbox): charges are not real."
 
+msgid "Wompi la tenía aprobada: la acreditamos."
+msgstr "Wompi had it approved: we credited it."
+
+msgid "Wompi la tiene rechazada: no se acreditó nada."
+msgstr "Wompi has it declined: nothing was credited."
+
 msgid "Wompi lo aprobó, pero la suscripción ya terminó: no se acreditó nada. Devuélvelo en Wompi o activa el plan a mano."
 msgstr "Wompi approved it, but the subscription had already ended: nothing was credited. Refund it in Wompi or activate the plan by hand."
 
@@ -19624,8 +19693,15 @@ msgstr "Wompi could not open the payment: %(motivo)s. Try again in a while."
 msgid "Wompi no responde en este momento. Intenta de nuevo en unos minutos."
 msgstr "Wompi is not responding right now. Try again in a few minutes."
 
+#, python-format
+msgid "Wompi no respondió: %(error)s. Inténtalo en unos minutos."
+msgstr "Wompi did not respond: %(error)s. Try again in a few minutes."
+
 msgid "Wompi no respondió; lo intentamos de nuevo en unos minutos."
 msgstr "Wompi did not respond; we will try again in a few minutes."
+
+msgid "Wompi no tiene ninguna transacción aprobada con esa referencia: no se acreditó nada."
+msgstr "Wompi has no approved transaction with that reference: nothing was credited."
 
 #, python-format
 msgid "Wompi rechazó el cobro de %(monto)s (%(motivo)s). Lo intentaremos otra vez el %(proximo)s. Si no se puede cobrar antes del %(limite)s, el plan termina. Puedes cambiar la tarjeta en Configuración › Plan. Mientras tanto, tus generaciones se cobran a la carta con tu saldo propio."
@@ -20585,6 +20661,9 @@ msgstr "of %(valor)s/day"
 msgid "de dónde salieron las ventas del periodo, según el mes en que arrancó cada anuncio (según el Pixel)"
 msgstr "where the period's sales came from, by the month each ad started (according to the Pixel)"
 
+msgid "de los últimos 7 días"
+msgstr "from the last 7 days"
+
 msgid "de más de 1 s (las últimas 50)"
 msgstr "over 1 s (the last 50)"
 
@@ -20932,6 +21011,9 @@ msgstr "Energetic"
 
 msgid "entrada inválida"
 msgstr "invalid input"
+
+msgid "enviado"
+msgstr "sent"
 
 msgid "equilibrada"
 msgstr "balanced"
@@ -21556,6 +21638,9 @@ msgstr "characters"
 
 msgid "los productos"
 msgstr "products"
+
+msgid "los últimos que se mandaron a los administradores"
+msgstr "the latest ones sent to the administrators"
 
 msgid "luces"
 msgstr "lights"
@@ -22765,6 +22850,9 @@ msgstr "variants"
 
 msgid "velas"
 msgstr "candles"
+
+msgid "vencida"
+msgstr "expired"
 
 #, python-format
 msgid "ventas por tienda: %(n)s pedido(s)"

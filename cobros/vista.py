@@ -15,11 +15,12 @@ import csv
 import io
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import sqlalchemy as sa
 from flask_babel import gettext
 
+import bitacora
 import db
 import gastos
 import idiomas
@@ -1006,3 +1007,47 @@ def estado_pago_plan(cliente, pago_id):
     with db.conectar() as con:
         f = con.execute(sa.select(pp.c.cliente, pp.c.estado).where(pp.c.id == int(pago_id))).first()
     return f.estado if f is not None and f.cliente == cliente else None
+
+
+# --- /admin/cobros tras la auditoría de seguridad (2026-10-12) -------------------------------------------------
+# El servidor no manda correos (PND-048): los avisos de plata al admin solo quedaban en la bitácora y nadie los veía.
+NOMBRES_AVISO_PLATA = {
+    "cobro_no_anotado": N_("Un cobro no se pudo anotar"),
+    "recarga_admin": N_("Recarga acreditada"),
+    "anulacion_bold": N_("Pago anulado por Bold"),
+    "pago_sin_recarga": N_("Pago sin recarga"),
+    "anulacion_wompi": N_("Pago anulado por Wompi"),
+    "wompi_no_cuadra": N_("Un pago de Wompi no cuadra o llegó dos veces"),
+    "wompi_sin_evento": N_("Aprobada sin evento de Wompi"),
+    "wompi_rescatada": N_("Recarga acreditada sin su evento"),
+    "tope_incluido": N_("Tope de lo incluido"),
+    "plan_admin": N_("Pago de plan para revisar"),
+    "plan_terminado": N_("Plan terminado"),
+    "renovacion_apagada": N_("Renovación apagada"),
+    "trm_sin_tasa": N_("Sin tasa de cambio"),
+}
+
+
+def avisos_plata(limite=30):
+    """Los últimos avisos de plata a los admins (de la cola de la bitácora), el más nuevo primero."""
+    salida = []
+    for f in bitacora.ultimas(limit=3000):
+        if f.get("id") != "admin" or f.get("etapa") not in NOMBRES_AVISO_PLATA:
+            continue
+        salida.append({"fecha": str(f.get("fecha") or "")[:19].replace("T", " "), "cliente": f.get("cliente") or "",
+                       "tipo": f["etapa"], "nombre": NOMBRES_AVISO_PLATA[f["etapa"]],
+                       "enviado": str(f.get("estado") or "").startswith("enviado"), "detalle": f.get("detalle") or ""})
+        if len(salida) >= limite:
+            break
+    return salida
+
+
+def recargas_wompi_sin_acreditar(dias=7, limite=30):
+    """Recargas de Wompi pendientes, rechazadas o vencidas de los últimos `dias`, para «Buscar en Wompi»."""
+    r = db.recarga
+    desde = (datetime.now() - timedelta(days=dias)).isoformat(timespec="seconds")
+    q = (sa.select(r.c.id, r.c.cliente, r.c.creada_en, r.c.estado, r.c.milesimas, r.c.referencia, r.c.pasarela_ref)
+         .where(r.c.medio == "wompi", r.c.estado.in_(("pendiente", "rechazada", "expirada")), r.c.creada_en >= desde)
+         .order_by(r.c.id.desc()).limit(int(limite)))
+    with db.conectar() as con:
+        return [dict(f._mapping) for f in con.execute(q)]

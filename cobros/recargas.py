@@ -841,6 +841,29 @@ def _rescatar_wompi(fila, tiempo):
         return (_fila(con, fila["id"]) or {}).get("estado"), None
 
 
+def buscar_en_wompi(recarga_id):
+    """El admin («Buscar en Wompi», /admin/cobros): lo mismo que el rescate para UNA recarga de Wompi pendiente,
+    rechazada o vencida, ya. Es la salida segura cuando una recarga pagada no se acreditó (auditoría de seguridad
+    2026-10-12): una recarga manual crearía otra fila y un evento tardío acreditaría la original también.
+    Devuelve (resultado, error): `acreditada`, `rechazada`, `sin_aprobada` (Wompi no tiene nada aprobado con esa
+    referencia), `error` (Wompi no respondió), `no_se_puede` (no es de Wompi o ya no está por acreditar); (None,
+    None) si no existe."""
+    with db.conectar() as con:
+        fila = _fila(con, int(recarga_id))
+    if fila is None:
+        return None, None
+    if fila["medio"] != "wompi" or fila["estado"] not in ("pendiente", "rechazada", "expirada"):
+        return "no_se_puede", None
+    antes = fila["estado"]
+    estado, error = _rescatar_wompi(fila, wompi.TIEMPO_INTERACTIVO)
+    _marcar_busqueda(fila["id"])
+    if error is not None:
+        return "error", error
+    if estado == "aprobada":
+        return "acreditada", None
+    return ("rechazada" if estado == "rechazada" and antes != "rechazada" else "sin_aprobada"), None
+
+
 def _aplicar_releida(fila, tx):
     """Aplica una transacción releída por id a su recarga, con el candado antes de leer, y avisa lo que toque."""
     with db.conectar() as con:
@@ -1003,9 +1026,10 @@ def avisar_vistos_sin_evento():
             lambda cliente=cliente, referencia=referencia, tx_id=tx_id: gettext(
                 "La página de vuelta de la recarga «%(ref)s» de %(cliente)s consultó la transacción %(tx)s (el id "
                 "lo trajo el navegador) y Wompi la dio por aprobada, pero su evento firmado no llegó en 30 minutos "
-                "y no se acreditó. Esto NO confirma el pago: antes de acreditar a mano, búscala en el panel de "
-                "Wompi de Creatv y confirma que es de nuestro comercio, con esa referencia y ese monto. Si está, "
-                "revisa también la URL de eventos.", ref=referencia, cliente=cliente, tx=tx_id),
+                "y no se acreditó. Esto NO confirma el pago. En /admin/cobros, «Recargas de Wompi sin acreditar», "
+                "usa «Buscar en Wompi»: la acredita una sola vez si Wompi la tiene aprobada para nuestro comercio. "
+                "Nunca una recarga manual: se sumaría otra vez cuando llegue el evento. Revisa también la URL de "
+                "eventos.", ref=referencia, cliente=cliente, tx=tx_id),
             cliente=cliente)
         n += 1
     return n

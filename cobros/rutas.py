@@ -838,7 +838,13 @@ def admin_cobros():
         e["proveedor_texto"] = vista.nombre_proveedor(e["proveedor"])
         e["monto_texto"] = vista.monto_evento(e)
         e["usd_texto"] = vista.usd_evento(e)
+    import cuentas  # noqa: PLC0415
+    recargas_wompi = vista.recargas_wompi_sin_acreditar()
+    for rw in recargas_wompi:
+        rw["nombre"] = proyectos.nombre_visible(rw["cliente"])
     return render_template("admin_cobros.html", filas=filas, margen_global=margen, planes=datos_planes["planes"],
+                           recargas_wompi=recargas_wompi, avisos_plata=vista.avisos_plata(),
+                           sin_correo=not cuentas.smtp_configurado(),
                            eventos=eventos, webhook_callado=vista.webhook_callado(), avisos_bold=_avisos_bold(),
                            avisos_wompi=_avisos_wompi(), trm_rechazada=_trm_rechazada(),
                            margen_global_texto=idiomas.numero(margen, 2), margen_global_campo=_campo(margen),
@@ -919,6 +925,31 @@ def admin_cuenta(cliente):
     elif cambios:
         flash(gettext("Guardado: margen y umbral de %(proyecto)s.", proyecto=nombre), "ok")
     return _volver_admin(cliente)
+
+
+@bp.post("/admin/cobros/recarga/<int(max=9223372036854775807):recarga_id>/buscar")
+@_solo_admin
+def admin_buscar_recarga(recarga_id):
+    """«Buscar en Wompi» (auditoría de seguridad 2026-10-12): la salida segura para una recarga de Wompi pagada que
+    no se acreditó. Busca su referencia en Wompi, relee por id y aplica con el mismo camino que «Verificar»: acredita
+    una sola vez, nunca crea otra recarga."""
+    resultado, error = recargas.buscar_en_wompi(recarga_id)
+    if resultado is None:
+        abort(404)
+    if resultado == "acreditada":
+        flash(gettext("Wompi la tenía aprobada: la acreditamos."), "ok")
+    elif resultado == "rechazada":
+        flash(gettext("Wompi la tiene rechazada: no se acreditó nada."), "warn")
+    elif resultado == "sin_aprobada":
+        flash(gettext("Wompi no tiene ninguna transacción aprobada con esa referencia: no se acreditó nada."), "warn")
+    elif resultado == "error":
+        import cola  # noqa: PLC0415
+        flash(gettext("Wompi no respondió: %(error)s. Inténtalo en unos minutos.",
+                      error=cola.sin_token(str(error))[:200]), "error")
+    else:
+        flash(gettext("Esa recarga no se puede buscar en Wompi: no es de Wompi o ya no está por acreditar."), "warn")
+    log.info("recarga %s buscada en Wompi por %s: %s", recarga_id, session.get("usuario"), resultado)
+    return redirect(url_for("cobros.admin_cobros") + "#cobros-recargas-wompi")
 
 
 @bp.post("/admin/cobros/<cliente>/recarga")

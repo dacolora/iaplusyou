@@ -64,6 +64,59 @@
   {{ _('Hay recargas de Bold pendientes y no llegó ningún evento de Bold en 7 días. Revisa la URL del webhook en el panel de Bold.') }}
 </div>
 {% endif %}
+{% if sin_correo %}
+<div class="flash warn" id="aviso-sin-correo">
+  {{ _('<strong>El servidor no manda correos.</strong> Los avisos de plata (un pago que no cuadra, una recarga rescatada, un cobro incierto…) no le llegan a nadie por correo: míralos en «Avisos de plata», aquí abajo.') }}
+</div>
+{% endif %}
+
+<section class="admin-bloque aparece" id="cobros-avisos">
+  <div class="admin-cabecera">
+    <h2>{{ _('Avisos de plata') }}</h2>
+    <span class="vacio">{{ _('los últimos que se mandaron a los administradores') }}</span>
+  </div>
+  {% if avisos_plata %}
+  <div class="admin-scroll">
+    <table class="tabla-admin">
+      <thead><tr><th>{{ _('Hora') }}</th><th>{{ _('Proyecto') }}</th><th>{{ _('Qué pasó') }}</th><th>{{ _('Detalle') }}</th><th>{{ _('Correo') }}</th></tr></thead>
+      <tbody>
+        {% for a in avisos_plata %}
+        <tr><td>{{ a.fecha }}</td><td><code>{{ a.cliente or '—' }}</code></td><td>{{ a.nombre | traducir }}</td><td>{{ a.detalle }}</td>
+          <td>{% if a.enviado %}{{ _('enviado') }}{% else %}{{ _('sin correo') }}{% endif %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="estado-vacio">{{ _('No hay avisos de plata.') }}</p>
+  {% endif %}
+</section>
+
+<section class="admin-bloque aparece" id="cobros-recargas-wompi">
+  <div class="admin-cabecera">
+    <h2>{{ _('Recargas de Wompi sin acreditar') }}</h2>
+    <span class="vacio">{{ _('de los últimos 7 días') }}</span>
+  </div>
+  <p class="vacio">{{ _('Si la persona pagó y no se acreditó, usa «Buscar en Wompi»: la acredita una sola vez si Wompi la tiene aprobada. Para un pago hecho en Wompi nunca uses una recarga manual: se sumaría otra vez cuando llegue su evento.') }}</p>
+  {% if recargas_wompi %}
+  <div class="admin-scroll">
+    <table class="tabla-admin">
+      <thead><tr><th>{{ _('Hora') }}</th><th>{{ _('Proyecto') }}</th><th>{{ _('Referencia') }}</th><th>{{ _('Monto') }}</th><th>{{ _('Estado') }}</th><th></th></tr></thead>
+      <tbody>
+        {% for rw in recargas_wompi %}
+        <tr><td>{{ rw.creada_en | replace('T', ' ') }}</td><td>{{ rw.nombre }}</td><td><code>{{ rw.referencia }}</code></td>
+          <td class="num">{{ (rw.milesimas / 1000) | usd }}</td>
+          <td>{% if rw.estado == 'pendiente' %}{{ _('pendiente') }}{% elif rw.estado == 'rechazada' %}{{ _('rechazada') }}{% else %}{{ _('vencida') }}{% endif %}</td>
+          <td><form method="post" action="{{ url_for('cobros.admin_buscar_recarga', recarga_id=rw.id) }}">
+            <button type="submit" class="btn-sm">{{ _('Buscar en Wompi') }}</button></form></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="estado-vacio">{{ _('No hay recargas de Wompi por acreditar.') }}</p>
+  {% endif %}
+</section>
 
 <section class="admin-bloque aparece" id="cobros-margen">
   <div class="admin-cabecera">
@@ -129,6 +182,7 @@
               <summary>{{ _('Recarga manual o ajuste') }}</summary>
               <form method="post" action="{{ url_for('cobros.admin_recarga', cliente=f.cliente) }}" class="agencia-form">
                 {% if not f.cobrar %}<p class="vacio">{{ _('Este proyecto todavía no cobra: el saldo queda guardado para cuando prendas «Cobrar».') }}</p>{% endif %}
+                <p class="vacio">{{ _('Para un pago que la persona ya hizo en Wompi usa «Buscar en Wompi» en «Recargas de Wompi sin acreditar»: una recarga manual se sumaría otra vez si después llega su evento.') }}</p>
                 <label>{{ _('Monto en US$ (negativo solo en un ajuste)') }}
                   <input type="text" inputmode="decimal" name="monto" required></label>
                 <label>{{ _('Tipo') }}
