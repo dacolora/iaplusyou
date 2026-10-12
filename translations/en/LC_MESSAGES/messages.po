@@ -6723,6 +6723,9 @@ msgstr "The username must be between 3 and 40 characters: only lowercase letters
 msgid "El valor gris es el que aplica hoy en este experimento. «Sin umbral» apaga esa comparación solo aquí."
 msgstr "The gray value is the one that applies today in this experiment. “No threshold” turns that comparison off only here."
 
+msgid "El vencimiento del pago no es válido"
+msgstr "The payment expiration is not valid"
+
 msgid "El video"
 msgstr "The video"
 

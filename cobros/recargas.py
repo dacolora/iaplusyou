@@ -26,7 +26,7 @@ import os
 import threading
 import time
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import ROUND_CEILING, Decimal, InvalidOperation
 from urllib.parse import quote
 
@@ -47,6 +47,7 @@ MAX_USD = 1000
 # desbordaba el INTEGER de SQLite y respondía 500 (revisión 2026-10-08).
 MAX_MANUAL_USD = 100_000
 MAX_CUERPO = 65536          # tope del cuerpo del webhook (spec §9.3)
+HORAS_CHECKOUT = 24          # el checkout de Wompi vence (auditoría 2026-10-12); la recarga, a las HORAS_VIGENTE
 HORAS_VIGENTE = 26          # el link vence a las 24 h; 2 h de gracia para el webhook o la consulta
 # Eventos con firma inválida: cuántos se anotan por hora (por proceso y en total).
 # Cada uno escribe y toma el candado de escritura de SQLite; sin tope, cualquiera
@@ -225,7 +226,8 @@ def _crear_wompi(cliente, usd, usuario, correo, base):
     try:
         # Un correo que Wompi no aceptaría se omite: el checkout lo pide (no frena la recarga).
         url = wompi.url_checkout(referencia, centavos, f"{base}/cliente/{quote(cliente, safe='')}/saldo/recarga/{rid}",
-                                 correo=wompi.correo_valido(correo))
+                                 correo=wompi.correo_valido(correo),
+                                 vence=datetime.now(timezone.utc) + timedelta(hours=HORAS_CHECKOUT))
     except Exception as e:
         motivo = cola.sin_token(str(e)) if isinstance(e, wompi.ErrorWompi) else type(e).__name__
         with db.conectar() as con:

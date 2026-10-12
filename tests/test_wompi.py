@@ -196,6 +196,22 @@ def test_url_de_checkout_lleva_los_parametros_documentados(wompi):
     assert "/cliente/acme" not in partes.query
 
 
+def test_url_de_checkout_con_vencimiento_lo_manda_y_lo_firma(wompi):
+    # Auditoría 2026-10-12: el checkout no vencía; un link abierto hoy se podía pagar días después a la TRM vieja.
+    from datetime import datetime, timezone
+    vence = datetime(2026, 10, 13, 20, 1, 18, 456789, tzinfo=timezone.utc)
+    q = dict(parse_qsl(urlsplit(wompi.url_checkout("cv-7-1", 100000, "http://localhost:5050/x", vence=vence)).query))
+    assert q["expiration-time"] == "2026-10-13T20:01:18.000Z"
+    cadena = f"cv-7-1100000COP2026-10-13T20:01:18.000Z{INT_T}"
+    assert q["signature:integrity"] == hashlib.sha256(cadena.encode()).hexdigest()
+
+
+def test_url_de_checkout_con_vencimiento_sin_zona_se_niega(wompi):
+    from datetime import datetime
+    with pytest.raises(wompi.ErrorWompi):
+        wompi.url_checkout("cv-7-1", 100000, "http://localhost:5050/x", vence=datetime(2026, 10, 13, 20, 1, 18))
+
+
 def test_url_de_checkout_sin_correo(wompi):
     url = wompi.url_checkout("cv-7-1", 100000, "http://localhost:5050/x")
     q = dict(parse_qsl(urlsplit(url).query))

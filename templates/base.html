@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Textos compartidos del JS de esta plantilla (spec 2026-09-26 §Task 4):
     // un solo lugar donde Jinja traduce, en vez de repetir _()|tojson en cada
     // punto donde se usan.
@@ -534,7 +534,7 @@
     {% block content %}{% endblock %}
   </main>
   {% if request.view_args and request.view_args.cliente %}
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Menú del celular (spec 2026-09-26): ☰ abre la barra lateral encima de la
     // página; se cierra con la ✕, tocando el fondo, con Escape o al elegir algo.
     (function () {
@@ -553,6 +553,18 @@
         if (ev.target.closest('.sidebar-item, .sidebar-gasto')) poner(false);
       });
     })();
+    // Un enlace con data-ir-config="<apartado>" abre Configuración en ese apartado si la pestaña está en la página;
+    // si no, sigue su href. Era un onclick en línea en el chip de Gasto: la página de la tarjeta no deja correr
+    // manejadores en línea (auditoría de seguridad de pagos, 2026-10-12).
+    document.addEventListener('click', function (ev) {
+      var a = ev.target.closest('a[data-ir-config]');
+      if (!a) return;
+      var b = document.querySelector('.sidebar-item[data-tab=settings]');
+      if (!b) return;
+      ev.preventDefault();
+      b.click();
+      if (window.irAConfig) window.irAConfig(a.dataset.irConfig);
+    });
   </script>
   {# Cobros (spec 2026-10-08 §5.4 y §7): un rechazo 402 «saldo insuficiente» de
      cualquier fetch muestra «Recargar saldo»; además, el panel de Configuración ›

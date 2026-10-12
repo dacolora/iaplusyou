@@ -416,6 +416,25 @@ def e_cobro_incierto_se_encuentra(db, avisos):
     return {"resultado": r2}
 
 
+def e_referencia_repetida(db, avisos):
+    """La base de «nunca doble cobro» (auditoría 2026-10-12, no verificable leyendo): Wompi rechaza con 422 un segundo
+    cobro a una fuente guardada con la MISMA referencia."""
+    from cobros import wompi
+    pid = _plan()
+    alta = _alta("sb_repetida", pid, APRUEBA)
+    esperar(_resolver("sb_repetida", alta) == "aprobado", "el alta no se aprobó")
+    s = _sus(db, "sb_repetida")
+    referencia = f"sb-repetida-{time.time_ns()}"
+    centavos = int(_filas(db, "pago_plan", cliente="sb_repetida")[0]["monto_cop_centavos"])
+    primera = wompi.cobrar_fuente(int(s["fuente_pago_id"]), centavos, CORREO, referencia, tipo="CARD")
+    try:
+        wompi.cobrar_fuente(int(s["fuente_pago_id"]), centavos, CORREO, referencia, tipo="CARD")
+    except wompi.ErrorWompi as e:
+        esperar(e.codigo == 422 and e.referencia_usada, f"el segundo dio {e.codigo}, referencia_usada={e.referencia_usada}")
+        return {"primera": primera.get("status"), "segunda": "422 referencia usada"}
+    raise Fallo("Wompi aceptó un segundo cobro con la misma referencia")
+
+
 def e_nequi(db, avisos):
     """Nequi: el celular que aprueba deja suscribirse; el que rechaza no. (El sandbox no dice si el débito de cada
     mes pide aprobar en la app: eso solo se ve con un Nequi real.)"""
@@ -453,8 +472,17 @@ ESCENARIOS = [
     ("Plan anual: un cobro, doce meses", e_anual),
     ("Anulación del pago de un plan", e_anulacion_de_plan),
     ("Cobro incierto que sí llegó → se encuentra sin reenviar (PND-296)", e_cobro_incierto_se_encuentra),
+    ("Referencia repetida → Wompi da 422 (nunca doble cobro)", e_referencia_repetida),
     ("Nequi: aprueba y rechaza", e_nequi),
 ]
+
+
+def url_checkout_con_vencimiento():
+    """Para mirarla en el navegador: el checkout del sandbox de una recarga, con el vencimiento que firma (auditoría
+    2026-10-12). Si Wompi no acepta el formato, el checkout lo dice al abrirlo."""
+    from cobros import libro, recargas
+    libro.configurar("sb_checkout", usuario="sandbox", cobrar=True)
+    return recargas.crear("sb_checkout", 10, "sandbox", correo=CORREO)["url"]
 
 
 def main():
@@ -487,6 +515,10 @@ def main():
             r = resultados[-1]
             print(f"{'OK   ' if r['ok'] else 'FALLA'} {nombre} ({time.time() - inicio:.0f} s): "
                   f"{json.dumps(r['detalle'], ensure_ascii=False, default=str)[:400]}", flush=True)
+        try:
+            print(f"\nCheckout con vencimiento para abrir en el navegador:\n{url_checkout_con_vencimiento()}")
+        except Exception as e:  # noqa: BLE001
+            print(f"\nNo se pudo armar el checkout con vencimiento: {type(e).__name__}: {str(e)[:200]}")
     finally:
         shutil.rmtree(carpeta, ignore_errors=True)
     salida = os.environ.get("SANDBOX_SALIDA")

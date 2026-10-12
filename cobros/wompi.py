@@ -19,6 +19,7 @@ import hmac
 import os
 import re
 import time
+from datetime import datetime, timezone
 from urllib.parse import urlencode, urlsplit
 
 import requests
@@ -366,10 +367,21 @@ def evento_valido(cuerpo, checksum_header=None):
 
 # ---------------------------------------------------------- checkout ---
 
-def url_checkout(referencia, centavos, redirect_url, correo=None):
+def _vencimiento(vence):
+    """`expiration-time` del checkout: ISO 8601 en UTC con milisegundos («2023-06-09T20:28:50.000Z», wompi-api.md
+    §4); el mismo texto entra a la firma de integridad. Un datetime sin zona no se adivina."""
+    if not isinstance(vence, datetime) or vence.tzinfo is None:
+        raise ErrorWompi(gettext("El vencimiento del pago no es válido"))
+    return vence.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+
+
+def url_checkout(referencia, centavos, redirect_url, correo=None, vence=None):
     """La URL del Web Checkout (GET a https://checkout.wompi.co/p/) con los
-    parámetros de la doc, codificados como los manda un formulario."""
-    firma = firma_integridad(referencia, centavos)
+    parámetros de la doc, codificados como los manda un formulario. `vence`
+    (datetime con zona): hasta cuándo se puede pagar (auditoría 2026-10-12: sin
+    él, un link abierto hoy se pagaba días después a la TRM vieja)."""
+    expiracion = None if vence is None else _vencimiento(vence)
+    firma = firma_integridad(referencia, centavos, expiracion=expiracion)
     try:
         partes = urlsplit(str(redirect_url or ""))
     except ValueError:
@@ -384,6 +396,8 @@ def url_checkout(referencia, centavos, redirect_url, correo=None):
         ("signature:integrity", firma),
         ("redirect-url", str(redirect_url)),
     ]
+    if expiracion:
+        params.append(("expiration-time", expiracion))
     if correo:
         params.append(("customer-data:email", _validar_correo(correo)))
     return CHECKOUT + "?" + urlencode(params)

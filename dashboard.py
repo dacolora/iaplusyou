@@ -713,8 +713,25 @@ CABECERAS_SEGURIDAD = {
 HSTS = "max-age=31536000"
 
 
+@app.before_request
+def _nonce_csp():
+    """Un valor al azar por petición para los <script> en línea de base.html: la página de la tarjeta solo deja
+    correr los que lo llevan (auditoría de seguridad de pagos, 2026-10-12)."""
+    g.csp_nonce = secrets.token_urlsafe(18)
+
+
+@app.context_processor
+def _contexto_nonce_csp():
+    return {"csp_nonce": getattr(g, "csp_nonce", "")}
+
+
 @app.after_request
 def _cabeceras_seguridad(resp):
+    # Una página con política propia (la de la tarjeta, cobros.rutas._con_politica_tarjeta) la SUMA a la de base:
+    # pisarla perdería frame-ancestors, object-src y base-uri.
+    propia = resp.headers.get("Content-Security-Policy")
+    if propia and CABECERAS_SEGURIDAD["Content-Security-Policy"] not in propia:
+        resp.headers["Content-Security-Policy"] = f"{CABECERAS_SEGURIDAD['Content-Security-Policy']}; {propia}"
     for nombre, valor in CABECERAS_SEGURIDAD.items():
         resp.headers.setdefault(nombre, valor)
     # Solo cuando el sitio público es https (en local, http seguiría andando).

@@ -24,7 +24,8 @@ from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from functools import wraps
 
 import sqlalchemy as sa
-from flask import Blueprint, Response, abort, flash, jsonify, redirect, render_template, request, session, url_for
+from flask import (Blueprint, Response, abort, flash, g, jsonify, make_response, redirect, render_template, request,
+                   session, url_for)
 from flask_babel import gettext
 from werkzeug.utils import secure_filename
 
@@ -84,6 +85,9 @@ def _id_vuelta():
 _VISTO = {}   # (recarga_id, id de la vuelta) -> lo último que dijo Wompi de esa transacción (solo para mostrar)
 
 
+VUELTA_WOMPI_POR_HORA = 300   # consultas por `?id=` de la vuelta, por proyecto y hora (una cada 3 s son 1 200/h)
+
+
 def _verificar_si_toca(recarga, transaccion_id=None):
     """Pregunta a la pasarela si toca y hay cupo. Devuelve (recarga, visto).
 
@@ -114,6 +118,10 @@ def _verificar_si_toca(recarga, transaccion_id=None):
         try:
             tiempo = wompi.TIEMPO_INTERACTIVO if recarga.get("medio") == "wompi" else bold.TIEMPO_INTERACTIVO
             if del_navegador:
+                # Cupo por proyecto (auditoría 2026-10-12): un `?id=` inventado gastaba una consulta a Wompi con
+                # nuestra llave, el mismo cupo de los eventos y las renovaciones. Solo cuenta lo que sí sale.
+                if not cuentas.limite_ok(f"vuelta_wompi:{recarga['cliente']}", VUELTA_WOMPI_POR_HORA, 3600):
+                    return recargas.obtener(recarga["cliente"], rid), visto
                 visto = recargas.consultar(rid, transaccion_id, tiempo=tiempo) or visto
                 with _CANDADO:
                     if len(_VISTO) > 1000:
@@ -400,6 +408,23 @@ def _correo_sugerido(sus=None):
     return (cuenta.get("correo") or "").strip() if cuenta.get("correo_verificado") else ""
 
 
+# La página donde el widget de Wompi pide la tarjeta (auditoría de seguridad 2026-10-12, PCI SAQ A): solo corren
+# nuestros scripts, los en línea con el nonce de la petición y los de checkout.wompi.co; marcos solo de Wompi;
+# formularios solo hacia aquí. Un XSS que llegara a esta página ya no podría pintar un formulario falso de tarjeta.
+CSP_TARJETA = ("script-src 'self' 'nonce-{nonce}' https://checkout.wompi.co; frame-src https://checkout.wompi.co; "
+               "form-action 'self'")
+# Primero «solo reporte» (la consola dice qué habría bloqueado, nada se rompe); a False cuando se vea limpia con el
+# widget de verdad (sandbox o producción). Ver la skill `cobros`.
+CSP_TARJETA_SOLO_REPORTE = True
+
+
+def _con_politica_tarjeta(html):
+    resp = make_response(html)
+    politica = CSP_TARJETA.format(nonce=getattr(g, "csp_nonce", "") or "sin-nonce")
+    resp.headers["Content-Security-Policy-Report-Only" if CSP_TARJETA_SOLO_REPORTE else "Content-Security-Policy"] = politica
+    return resp
+
+
 def _formulario(cliente, modo, plan_, ciclo, precio_usd, sus=None):
     """plan_alta.html: el alta (`modo="alta"`) o el cambio de tarjeta
     (`"tarjeta"`; con la suscripción morosa, guardar COBRA en el acto y la
@@ -416,7 +441,7 @@ def _formulario(cliente, modo, plan_, ciclo, precio_usd, sus=None):
         except wompi.ErrorWompi:
             problema = gettext("Wompi no responde en este momento. Intenta de nuevo en unos minutos.")
     plan_ = ({k: plan_.get(k) for k in ("id", "nombre", "precio_usd", "precio_anual_usd")} if plan_ else None)
-    return render_template("plan_alta.html", cliente=cliente, modo=modo, plan=plan_, ciclo=ciclo,
+    return _con_politica_tarjeta(render_template("plan_alta.html", cliente=cliente, modo=modo, plan=plan_, ciclo=ciclo,
                            morosa=bool(sus and sus.get("estado") == "morosa"),
                            precio_usd=precio_usd, precio_texto=vista.usd_entero(precio_usd) if precio_usd else None,
                            mensual_texto=vista.usd_entero(plan_["precio_usd"]) if plan_ else None,
@@ -424,7 +449,7 @@ def _formulario(cliente, modo, plan_, ciclo, precio_usd, sus=None):
                                         if plan_ and plan_.get("precio_anual_usd") else None),
                            meses_gratis=vista.meses_gratis(plan_) if plan_ else 0,
                            llave_publica=llave, widget=wompi.WIDGET, aceptaciones=aceptaciones, problema=problema,
-                           correo=_correo_sugerido(sus), tarjeta=(sus or {}).get("fuente_resumen"))
+                           correo=_correo_sugerido(sus), tarjeta=(sus or {}).get("fuente_resumen")))
 
 
 @bp.get("/cliente/<cliente>/plan/alta")
@@ -838,7 +863,6 @@ def admin_cobros():
         e["proveedor_texto"] = vista.nombre_proveedor(e["proveedor"])
         e["monto_texto"] = vista.monto_evento(e)
         e["usd_texto"] = vista.usd_evento(e)
-    import cuentas  # noqa: PLC0415
     recargas_wompi = vista.recargas_wompi_sin_acreditar()
     for rw in recargas_wompi:
         rw["nombre"] = proyectos.nombre_visible(rw["cliente"])

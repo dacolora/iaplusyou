@@ -153,7 +153,10 @@ def test_crear_con_wompi_firma_el_checkout_con_los_centavos_de_la_trm(entorno):
     q = dict(parse_qsl(urlsplit(r["url"]).query))
     assert q["public-key"] == PUB and q["currency"] == "COP" and q["amount-in-cents"] == str(CENTAVOS)
     assert q["reference"] == fila["referencia"]
-    esperado = hashlib.sha256(f"{fila['referencia']}{CENTAVOS}COP{INT}".encode()).hexdigest()
+    vence = datetime.fromisoformat(q["expiration-time"].replace(".000Z", "+00:00"))   # vence en 24 h
+    falta = (vence - datetime.now(vence.tzinfo)).total_seconds() / 3600
+    assert entorno["recargas"].HORAS_CHECKOUT - 0.1 < falta <= entorno["recargas"].HORAS_CHECKOUT
+    esperado = hashlib.sha256(f"{fila['referencia']}{CENTAVOS}COP{q['expiration-time']}{INT}".encode()).hexdigest()
     assert q["signature:integrity"] == esperado
     assert q["redirect-url"] == f"http://localhost:5050/cliente/acme/saldo/recarga/{r['id']}"
     assert q["customer-data:email"] == "acme@prueba.local"
@@ -891,6 +894,19 @@ def test_la_vuelta_con_id_consulta_en_wompi_y_muestra_sin_acreditar(entorno, cli
     assert _ev(entorno, _evento(_tx(ref)))[1] == "acreditada"        # el evento firmado
     html = c.get(f"/cliente/acme/saldo/recarga/{rid}?id=1292-1602113476-10985").get_data(as_text=True)
     assert "Listo" in html and entorno["libro"].saldo("acme") == 50000 and len(_movimientos(entorno["db"])) == 1
+
+
+def test_los_ids_que_trae_el_navegador_tienen_cupo_por_proyecto(entorno, cliente_http, monkeypatch):
+    # Auditoría 2026-10-12: cada `?id=` inventado gastaba una consulta a Wompi con nuestra llave privada, el mismo cupo
+    # que usan los eventos y las renovaciones.
+    from cobros import rutas
+    monkeypatch.setattr(rutas, "_toca_verificar", lambda rid: True)
+    monkeypatch.setattr(rutas, "VUELTA_WOMPI_POR_HORA", 3)
+    rid, _ref = _pendiente(entorno)
+    c = cliente_http.como("user_acme")
+    for i in range(6):
+        assert c.get(f"/cliente/acme/saldo/recarga/{rid}/estado?id=1292-1602113476-2000{i}").status_code == 200
+    assert len(entorno["consultas"]) == 3
 
 
 def test_la_vuelta_sin_id_o_con_un_id_raro_no_consulta(entorno, cliente_http):
