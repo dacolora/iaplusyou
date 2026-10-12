@@ -187,8 +187,10 @@ def _contexto_ganchos(cliente, fila):
     # Arreglo D (revisión del gasto, 2026-10-09): lo que mira el botón es el PRECIO (`usd_precio`), que es None también
     # cuando el margen no se pudo leer (`gastos._margen_fallido`): entonces el motivo es «precio no disponible», el
     # botón no se puede pedir y la ruta responde 409. `|precio` caía al costo (margen 1,0) y lo mostraba como precio.
+    # Un anuncio de fuente Meta solo para un admin hasta su prueba real (PND-289): la misma sesión en el detalle y en
+    # la ruta que cobra, así que un cliente nunca ve el botón ni lo pide por un POST armado.
     motivo = ganchos_tw.puede_probar(fila, generables, filas, precio["usd_precio"],
-                                     mejorar._url_voz(fila.get("foto") or {}))
+                                     mejorar._url_voz(fila.get("foto") or {}), admin=session.get("rol") == "admin")
     tandas = ganchos_tw.tandas(filas)
     vivos = cola.job_ids_vivos_todos() if any(f["estado"] in datos.VIVOS_GANCHO for f in filas) else set()
     for t in tandas:

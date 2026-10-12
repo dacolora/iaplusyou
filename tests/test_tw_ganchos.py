@@ -63,6 +63,17 @@ def test_puede_probar_dice_por_que_no():
     assert ganchos.puede_probar(_fila(), GEN, [], None, URL) == ganchos.MOTIVO_SIN_PRECIO
 
 
+def test_un_anuncio_de_meta_solo_lo_prueba_un_admin():
+    """PND-289 (Daniel, 2026-10-12: la prueba real se hace en colorado_forja): mientras falta, los ganchos de un anuncio
+    de fuente Meta se le ofrecen solo a un admin; el resto de las reglas sigue igual para él."""
+    meta = dict(_fila(), foto={"fuente": "meta", "creativo": {"duracion_s": 20.0}})
+    assert ganchos.puede_probar(meta, GEN, [], 0.336, URL) == ganchos.MOTIVO_META
+    assert ganchos.puede_probar(meta, GEN, [], 0.336, URL, admin=False) == ganchos.MOTIVO_META
+    assert ganchos.puede_probar(meta, GEN, [], 0.336, URL, admin=True) is None
+    assert ganchos.puede_probar(meta, GEN, [], 0.336, None, admin=True) == ganchos.MOTIVO_SIN_VIDEO
+    assert ganchos.puede_probar(_fila(), GEN, [], 0.336, URL, admin=False) is None     # Triple Whale, como siempre
+
+
 def test_tandas_agrupa_la_mas_nueva_primero_con_su_codigo():
     filas = [{"id": 4, "tanda": 1, "n": 2}, {"id": 9, "tanda": 2, "n": 1}, {"id": 3, "tanda": 1, "n": 1}]
     t = ganchos.tandas(filas)

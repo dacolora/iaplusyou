@@ -261,13 +261,18 @@ el informe de la integración, al lado (`integracion-report.md`). Dónde vive ca
   `meta_panel.diagnostico` sobre TODAS las cuentas de Meta del alcance (`meta_estructura`, cubiertas incluidas). Sus
   enlaces al Administrador de anuncios van tal cual. Las alertas «alta» de Meta (Alertas) llevan a `#rendimiento`.
 - **«Evaluación con IA» de Meta** (main E2, cobra): `_meta_evaluar.html` y `_meta_evaluacion.html` después de «Lo que
-  hace ganar en tu cuenta». Evalúa las cuentas de la entrada cuya fuente es Meta (`meta_fuente`; nunca las dos fuentes
-  en un prompt): el formulario manda `entrada`, y `meta_rendimiento.rutas.evaluar` las resuelve con
+  hace ganar en tu cuenta». Evalúa TODAS las cuentas de Meta de la entrada (`meta_estructura`, también las que cubre
+  una tienda por R5 y las de un proyecto con una tienda sin país por R4): PND-290, Daniel 2026-10-12, «al unir ambos
+  tableros tenemos que traer todo de ambos» (hasta entonces solo `meta_fuente`, y Noruega se quedaba sin la evaluación
+  que la vieja pestaña Meta sí daba). Lee solo la copia de Meta, así que nunca hay dos fuentes en un prompt; si entra
+  una cuenta cubierta (`mr.con_pixel`), una línea dice que usa las cifras del Pixel de Meta y que las ventas de Triple
+  Whale las evalúa «Lo que hace ganar en tu cuenta». El formulario manda `entrada`, y `meta_rendimiento.rutas.evaluar` las resuelve con
   `panel.cuentas_evaluacion_meta` (la misma `_resolver`; una entrada vieja no se ensancha a «Todas») y se las pasa a
   `analisis.preparar(ids=)`. «Desde el inicio» evalúa los últimos 30 días (el defecto de la vieja pestaña; el texto lo
   dice); con 7, 14, 30 o 90, ese periodo. El N y el precio del botón salen del mismo cálculo que la ruta (E2-R6;
-  `tests/test_rendimiento_meta_e2.py`). Una entrada cuyas cuentas de Meta cubre una tienda dice que su evaluación es la
-  de Triple Whale. Precio, `n`/`precio_visto`, `max_intentos=1` y el gasto son los de main, sin tocar.
+  `tests/test_rendimiento_meta_e2.py`). Los anuncios ya evaluados de la galería solo se reusan si la estructura es
+  justo la de fuente Meta (`_meta`, `reusar`). Precio, `n`/`precio_visto`, `max_intentos=1` y el gasto son los de main,
+  sin tocar.
 - **NVP**: en Resultados de Triple Whale (fuente «tienda» o «anuncios»; con Meta o mezcla no hay tarjeta NVP: sería de
   una parte del alcance), en «Ver como tabla» y en cada tarjeta de la galería (las de Meta, de la copia de Triple Whale
   por `ad_id`; sin Triple Whale, sin la línea), y para las cuentas de Meta una línea arriba de «Campañas y conjuntos»
@@ -294,7 +299,9 @@ coordinador en `.superpowers/sdd/2026-10-10-pestana-rendimiento-e2/final-fixes.m
 
 - **G1. Ganchos de un anuncio de Meta, apagados.** «Probar los 3 ganchos» de un análisis de fuente Meta cobraría unos
   US$ 1,01 de Kling por un camino sin prueba real: `triple_whale.ganchos.puede_probar` da `MOTIVO_META`, el detalle
-  no pinta el botón y `ganchos_probar` responde 409 sin crear ni reservar. Se activa tras una prueba real (PND-289).
+  no pinta el botón y `ganchos_probar` responde 409 sin crear ni reservar. Desde el 2026-10-12 eso vale solo para
+  quien no es admin (Daniel: la prueba real se hace en colorado_forja, la corre un admin viendo el precio); se abre a
+  todos tras esa prueba (PND-289).
 - **G2. El precio de «Cómo mejorarlo» de un anuncio de Meta** usa la duración que guardó un análisis anterior del
   mismo anuncio (`triple_whale.panel.precio_analisis(creativo, filas, fuente)` + `duracion_vista`): un anuncio de
   una cuenta sin tienda no tiene `tw_creativo` y suponía 30 s. La misma llamada alimenta la tarjeta, el total del lote
@@ -320,7 +327,7 @@ coordinador en `.superpowers/sdd/2026-10-10-pestana-rendimiento-e2/final-fixes.m
   neutra). Triple Whale no cambia.
 - **T1/T2.** Pruebas para las mutaciones 27 (cada tarjeta de Meta en la moneda de SU cuenta, orden en USD) y 25 (el
   envío de «Probar los ganchos» se frena antes del fetch).
-- Diferido: PND-290 a PND-295.
+- Diferido: PND-290 a PND-295. PND-290 cerrado el 2026-10-12 (evaluación de Meta para todas las cuentas, arriba).
 
 ## Trampas
 

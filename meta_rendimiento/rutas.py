@@ -16,7 +16,8 @@ Desde el 2026-10-09 la pestaña es «Rendimiento» (`pestana_rendimiento/`, spec
   lo agotaría (ruling R22, revisión final 2026-10-08). El admin no espera.
 - `evaluar` (spec E2 §8): «Evaluar con IA», que COBRA. Cualquier persona del proyecto la puede pedir (paga su saldo,
   como en Triple Whale). Arma la muestra y los DATOS con el alcance pedido (`dias` y, desde la pestaña «Rendimiento»,
-  `entrada`: las cuentas de Meta de esa entrada cuya fuente es Meta, `pestana_rendimiento.panel.cuentas_evaluacion_meta`;
+  `entrada`: todas las cuentas de Meta de esa entrada, también las que cubre una tienda de Triple Whale (PND-290),
+  `pestana_rendimiento.panel.cuentas_evaluacion_meta`;
   sin `entrada`, `cuenta` como el viejo panel de Meta), calcula
   el precio con `gastos.estimar("evaluacion_meta", n=)` y exige que el formulario traiga cuántos anuncios mostró el
   botón (`n`) y el precio que la persona vio (`precio_visto`): si falta alguno o ya no coinciden (la copia cambió la
@@ -333,8 +334,8 @@ def evaluar(cliente):
         return _volver(cliente)
     ids = None
     if "entrada" in request.form:
-        # Desde «Rendimiento» (integración con main, 2026-10-10, INT-2): las cuentas de Meta de esa entrada cuya
-        # fuente es Meta, con la misma resolución que pinta el panel. Una entrada que ya no existe (pestaña vieja, de
+        # Desde «Rendimiento» (integración con main, 2026-10-10, INT-2): todas las cuentas de Meta de esa entrada
+        # (también las que cubre una tienda, PND-290), con la misma resolución que pinta el panel. Una entrada que ya no existe (pestaña vieja, de
         # otro proyecto) no se ensancha a «Todas»: no se crea ni se cobra nada.
         from pestana_rendimiento import panel as rendimiento  # noqa: PLC0415 — tardío: ese paquete importa este
         ids = rendimiento.cuentas_evaluacion_meta(cliente, request.form.get("entrada"))

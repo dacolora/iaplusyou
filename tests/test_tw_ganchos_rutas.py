@@ -117,24 +117,44 @@ def test_sin_video_o_con_video_corto_dice_por_que_y_no_cobra(app, kw, motivo):  
     assert datos.ganchos_de_analisis("acme", aid) == [] and _preparaciones() == []
 
 
-def test_un_analisis_de_un_anuncio_de_meta_no_ofrece_los_ganchos_ni_cobra(app, monkeypatch):  # noqa: F811
+def test_un_analisis_de_un_anuncio_de_meta_no_ofrece_los_ganchos_ni_cobra_a_un_cliente(app, monkeypatch):  # noqa: F811
     """G1 (revisión final de Rendimiento E2, guardián de gasto, 2026-10-10): «Probar los 3 ganchos» de un anuncio de una
     cuenta de Meta sin tienda (su video copiado a R2) cobraría unos US$ 1,01 de Kling por un camino que nadie probó en
-    real (PND-289). Hasta esa prueba el detalle dice por qué, sin botón ni precio, y un POST directo es 409 sin crear
-    variantes, sin encolar y sin reservar, aunque el proyecto cobre y tenga saldo."""
+    real (PND-289). Hasta esa prueba, a un cliente el detalle le dice por qué, sin botón ni precio, y un POST directo es
+    409 sin crear variantes, sin encolar y sin reservar, aunque el proyecto cobre y tenga saldo (un admin sí: la prueba
+    real de Daniel en colorado_forja, la siguiente prueba)."""
+    from tests.test_rutas_meta_rendimiento import _como_cliente
     monkeypatch.setenv("R2_PUBLIC_BASE_URL", "https://media.test")
     aid = _analisis(fuente="meta", video_url="https://media.test/clientes/acme/rendimiento/a1_p1.mp4")
     assert mejorar._url_voz(datos.analisis_anuncio("acme", aid)["foto"])      # sin la regla, el botón saldría
-    html = _detalle(app, aid)
+    cliente = {"c": _como_cliente(app)}
+    html = _detalle(cliente, aid)
     assert "Para anuncios de Meta todavía no: falta una prueba real." in html
     assert "tw-ganchos-probar" not in html and 'name="precio_visto"' not in html and "Probar los 3" not in html
     assert "Ganchos nuevos (primeros 3 s)" in html                     # los ganchos se leen igual: solo no se generan
     _cobra(10_000)
-    r = _probar(app, aid)
+    r = _probar(cliente, aid)
     assert r.status_code == 409 and r.get_json()["mensaje"] == "Para anuncios de Meta todavía no: falta una prueba real."
     assert datos.ganchos_de_analisis("acme", aid) == [] and _preparaciones() == []
     with db.conectar() as con:
         assert con.execute(sa.select(sa.func.count()).select_from(db.reserva_saldo)).scalar() == 0
+
+
+
+def test_un_admin_si_puede_probar_los_ganchos_de_un_anuncio_de_meta(app, monkeypatch):  # noqa: F811
+    """PND-289 (Daniel, 2026-10-12): la prueba real se hace en colorado_forja, así que a un admin el detalle de un
+    anuncio de Meta le ofrece el botón con su precio, y el POST crea la tanda y encola su preparación como uno de
+    Triple Whale (precio visto, un intento)."""
+    monkeypatch.setenv("R2_PUBLIC_BASE_URL", "https://media.test")
+    aid = _analisis(fuente="meta", video_url="https://media.test/clientes/acme/rendimiento/a1_p1.mp4")
+    html = _detalle(app, aid)
+    assert "Para anuncios de Meta todavía no" not in html and 'name="precio_visto"' in html and "Probar los 3" in html
+    r = _probar(app, aid)
+    assert r.status_code == 200 and r.get_json()["ok"] is True
+    assert len(datos.ganchos_de_analisis("acme", aid)) == 3
+    prep, = _preparaciones()
+    assert prep["max_intentos"] == 1
+
 
 
 def test_el_detalle_muestra_cada_variante_segun_su_estado(app):  # noqa: F811

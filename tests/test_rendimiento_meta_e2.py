@@ -6,8 +6,10 @@ Rendimiento con las reglas de plata intactas:
 
 - el botón de la evaluación de Meta muestra el N y el precio que la ruta cobra (E2-R6), en «Todas», en una entrada y
   con cualquier periodo (0 = «Desde el inicio» evalúa los últimos 30 días y lo dice);
-- la evaluación es de las cuentas de la entrada cuya fuente es Meta: una cuenta cuyos anuncios trae una tienda de
-  Triple Whale (R5) la evalúa «Lo que hace ganar en tu cuenta», nunca las dos fuentes en un prompt;
+- la evaluación de Meta es de TODAS las cuentas de Meta de la entrada, también las que cubre una tienda de Triple Whale
+  (R5) y las de un proyecto con una sola tienda sin país (R4): PND-290, Daniel 2026-10-12, «al unir ambos tableros
+  tenemos que traer todo de ambos». Lee solo la copia de Meta (el Pixel de Meta, y lo dice cuando hay cuentas
+  cubiertas), así que nunca hay dos fuentes en un prompt;
 - una entrada que ya no existe no se ensancha a «Todas» y no cobra nada;
 - el Diagnóstico y los Segmentos son de toda la estructura de Meta del alcance (cubiertas incluidas).
 
@@ -34,6 +36,7 @@ from triple_whale import datos as twdatos
 TOKEN = "t-llave-de-prueba"   # llave-de-prueba
 NO, SE, NL = "act_no", "act_se", "act_nl"
 POST = {"Sec-Fetch-Site": "same-origin"}
+PIXEL = "Usa las cifras del Pixel de Meta"
 PANEL = "/cliente/acme/rendimiento/panel"
 EVALUAR = "/cliente/acme/meta-rendimiento/evaluar"
 
@@ -49,10 +52,12 @@ def mixto(app, monkeypatch):  # noqa: F811
     return app
 
 
-def _sembrar(dias=40):
+def _sembrar(dias=40, pais="NO"):
     """40 días: la tienda de Noruega (USD) con los anuncios de la cuenta de Noruega en su copia (R5: cubierta) y las
-    tres cuentas de Meta con un ganador y perdedores cada una."""
-    tid = triple_whale_tiendas.agregar("acme", "tw_llave_123", "acme-no.myshopify.com", "NO", moneda="USD")  # llave-de-prueba
+    tres cuentas de Meta con un ganador y perdedores cada una. Con `pais=None`, la misma tienda sin país (R4: la
+    fuente de todo el proyecto)."""
+    dominio = "acme-no.myshopify.com" if pais else "acme.myshopify.com"
+    tid = triple_whale_tiendas.agregar("acme", "tw_llave_123", dominio, pais, moneda="USD")  # llave-de-prueba
     triple_whale_tiendas.actualizar_tienda("acme", tid, ultima_sincronizacion=db.ahora())
     mcuentas.elegir("acme", [{"id": NO, "name": "HappyFlops Norway", "currency": "SEK", "pais": "NO"},
                              {"id": SE, "name": "HappyFlops Sweden", "currency": "SEK", "pais": "SE"},
@@ -114,20 +119,22 @@ def _tareas():
 
 @pytest.mark.parametrize("entrada,dias", [("", 0), ("", 30), ("", 7), ("", 90), ("SE", 0), ("SE", 14)])
 def test_el_boton_de_meta_cobra_lo_que_muestra(mixto, entrada, dias):
-    """E2-R6 en Rendimiento: el N y el precio del botón son los que la ruta vuelve a calcular con `preparar` sobre las
-    cuentas de la entrada cuya fuente es Meta, y lo que manda el botón crea la evaluación (una tarea, un intento) con
-    esas cuentas. «Desde el inicio» (0) evalúa los últimos 30 días."""
+    """E2-R6 en Rendimiento: el N y el precio del botón son los que la ruta vuelve a calcular con `preparar` sobre
+    todas las cuentas de Meta de la entrada (PND-290: también la de Noruega, que cubre la tienda), y lo que manda el
+    botón crea la evaluación (una tarea, un intento) con esas cuentas. «Desde el inicio» (0) evalúa los últimos 30
+    días. La línea del Pixel sale solo si entra una cuenta cubierta."""
     _sembrar()
     html = _panel(mixto, f"?entrada={entrada}&dias={dias}")
     campos, form = _ocultos(html)
     dias_eval = 30 if dias == 0 else dias
     ids = rend_panel.cuentas_evaluacion_meta("acme", entrada)
-    assert set(ids) == ({SE, NL} if entrada == "" else {SE})             # nunca la cubierta (Noruega)
+    assert set(ids) == ({NO, SE, NL} if entrada == "" else {SE})         # «Todas» trae también la cubierta
     n = len(analisis.preparar("acme", dias_eval, None, ids=ids)["muestra"])
     precio = gastos.estimar("evaluacion_meta", n=n)
     assert n >= 2 and campos == {"dias": str(dias_eval), "entrada": entrada, "n": str(n),
                                  "precio_visto": str(precio["usd_precio"])}
     assert f"Evaluar {n} anuncio(s) con IA · {precio['texto']}" in form
+    assert (PIXEL in _seccion(html, "meta-evaluacion")) is (entrada == "")
     if dias == 0:
         assert f"en los últimos {dias_eval} días." in form and "lo que ves arriba" not in form
     else:
@@ -136,7 +143,7 @@ def test_el_boton_de_meta_cobra_lo_que_muestra(mixto, entrada, dias):
     assert r.status_code == 302 and r.headers["Location"].endswith("#rendimiento")
     ev, = _evaluaciones()
     assert set(ev["cuentas"]) == set(ids) and len(ev["muestra"]) == n and ev["extra"]["dias"] == dias_eval
-    assert ev["extra"]["parcial"] is (entrada == "")                      # «Todas» = 2 de las 3 cuentas
+    assert ev["extra"]["parcial"] is False                                # «Todas» = las 3 cuentas
     tarea, = _tareas()
     assert tarea["max_intentos"] == 1 and tarea["job_id"] == "acme__meta_eval"
 
@@ -155,26 +162,51 @@ def test_con_otro_precio_o_otra_muestra_no_crea_ni_reserva_nada(mixto):
     assert any("Revisa el precio y vuelve a confirmar" in m for m in _flashes(mixto["c"]))
 
 
-def test_la_lista_nombra_las_cuentas_de_una_evaluacion_parcial(mixto):
-    """Desde «Todas» se evalúan 2 de las 3 cuentas: la evaluación no dice «Todas las cuentas» sino sus nombres."""
+def test_todas_evalua_todas_las_cuentas_de_meta(mixto):
+    """PND-290: desde «Todas» la evaluación de Meta lleva las tres cuentas, también la que cubre la tienda, y la lista
+    la rotula «Todas las cuentas» (antes eran 2 de 3 y se nombraban una por una)."""
     _sembrar()
     campos, _ = _ocultos(_panel(mixto))
     mixto["c"].post(EVALUAR, data=campos, headers=POST)
     ev, = _evaluaciones()
-    alcance = meta_panel.evaluacion_vista(ev)["alcance"]
-    assert "HappyFlops Sweden" in alcance and "HappyFlops Netherlands" in alcance
-    assert "Norway" not in alcance and "Todas las cuentas" not in alcance
+    assert set(ev["cuentas"]) == {NO, SE, NL}
+    assert meta_panel.evaluacion_vista(ev)["alcance"] == "Todas las cuentas"
 
 
-def test_la_entrada_cubierta_por_la_tienda_no_ofrece_la_evaluacion_de_meta(mixto):
-    """Noruega: su cuenta de Meta está dentro de la tienda (R5) y su fuente es Triple Whale: la sección lo dice y no
-    ofrece botón; un envío armado no crea nada."""
+def test_la_entrada_cubierta_por_la_tienda_tambien_se_evalua_con_meta(mixto):
+    """PND-290 (Daniel, 2026-10-12): Noruega, cuya cuenta de Meta está dentro de la tienda (R5), también ofrece la
+    evaluación de Meta, como la vieja pestaña. Dice que usa las cifras del Pixel de Meta (las de la tienda las evalúa
+    «Lo que hace ganar en tu cuenta») y lo que manda el botón la crea con esa cuenta, un intento."""
     _sembrar()
-    seccion = _seccion(_panel(mixto, "?entrada=NO"), "meta-evaluacion")
-    assert "Las ventas de estas cuentas las cuenta Triple Whale" in seccion and "<form" not in seccion
-    mixto["c"].post(EVALUAR, data={"entrada": "NO", "dias": "30", "n": "3", "precio_visto": "0.3"}, headers=POST)
-    assert _evaluaciones() == [] and _tareas() == []
-    assert any("Todavía no hay anuncios con datos suficientes" in m for m in _flashes(mixto["c"]))
+    html = _panel(mixto, "?entrada=NO")
+    seccion = _seccion(html, "meta-evaluacion")
+    assert "<form" in seccion and PIXEL in seccion
+    assert "Las ventas de estas cuentas las cuenta Triple Whale" not in seccion
+    campos, form = _ocultos(html)
+    n = len(analisis.preparar("acme", 30, None, ids=[NO])["muestra"])
+    assert n >= 2 and campos["entrada"] == "NO" and campos["n"] == str(n)
+    r = mixto["c"].post(EVALUAR, data=campos, headers=POST)
+    assert r.status_code == 302
+    ev, = _evaluaciones()
+    assert ev["cuentas"] == [NO] and len(ev["muestra"]) == n
+    assert meta_panel.evaluacion_vista(ev)["alcance"] == "HappyFlops Norway"
+    tarea, = _tareas()
+    assert tarea["max_intentos"] == 1
+
+
+def test_una_tienda_sin_pais_no_apaga_la_evaluacion_de_meta(mixto):
+    """PND-290 con R4: una sola tienda sin país es la fuente de todo el proyecto (el selector queda en «Todas» y todas
+    las cuentas de Meta van dentro de ella). La evaluación de Meta igual se ofrece, con las tres cuentas y la línea
+    del Pixel."""
+    _sembrar(pais=None)
+    html = _panel(mixto)
+    seccion = _seccion(html, "meta-evaluacion")
+    assert "<form" in seccion and PIXEL in seccion
+    assert set(rend_panel.cuentas_evaluacion_meta("acme", "")) == {NO, SE, NL}
+    campos, _ = _ocultos(html)
+    mixto["c"].post(EVALUAR, data=campos, headers=POST)
+    ev, = _evaluaciones()
+    assert set(ev["cuentas"]) == {NO, SE, NL}
 
 
 def test_una_entrada_que_ya_no_existe_no_evalua_nada(mixto):
