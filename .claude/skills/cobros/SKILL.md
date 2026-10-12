@@ -224,7 +224,10 @@ vulnerabilidades»). Explicación en llano y riesgos aceptados: `docs/pagos/segu
   vez). Buscar y releer con `ESPERA_BUSQUEDA` (5/10 s): puede correr en `cambiar_fuente`, dentro de una petición.
 - **Pago de plan anulado o contracargo**: vence en el acto lo que queda de los periodos de ESE pago (`_cerrar_periodo`);
   lo gastado y el saldo propio no se tocan. **Ruling 2026-10-12, reemplaza «el periodo no se corta solo» (2026-10-10)**:
-  la plata volvió a la persona.
+  la plata volvió a la persona. Si ese pago es el último aprobado de la suscripción, `cubierto_hasta` vuelve al inicio
+  del pago (su primer periodo, o lo que cubría si se pagó por adelantado): sin eso, «Activar a mano» tras la anulación
+  abría su periodo recién al fin del mes anulado (revisión de plata final). «No se cobró» vale si en Wompi todo lo de
+  esa referencia está anulado.
 - **«No se cobró»** (`resolver_pendiente`) busca la referencia en Wompi y se niega si hay cualquier transacción o si
   Wompi no responde: marcarlo con el cobro hecho llevaba a otra referencia y a un segundo cargo a la tarjeta.
 - **/admin/cobros**: «Avisos de plata» (`vista.avisos_plata`, de la cola de la bitácora con `bitacora.ultimas`; el
