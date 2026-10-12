@@ -8348,6 +8348,9 @@ msgstr "This project is charged: «Cost» is what Creatv paid the provider and �
 msgid "Este proyecto debe %(monto)s"
 msgstr "This project owes %(monto)s"
 
+msgid "Este proyecto debe plata y tiene un plan con el periodo sin cerrar: pasarlo a prepago ahora haría que la bolsa pague la deuda. Espera a que cierre el periodo o a que pague."
+msgstr "This project owes money and has a plan with an open period: switching it to prepaid now would make the plan balance pay the debt. Wait until the period closes or until they pay."
+
 msgid "Este proyecto está conectado a Meta solo para métricas (sin Página): conecta una Página en Configuración › Conexiones para lanzar anuncios."
 msgstr "This project is connected to Meta for metrics only (no Page): connect a Page in Settings › Connections to launch ads."
 

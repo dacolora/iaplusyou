@@ -344,3 +344,32 @@ def test_alerta_solo_para_el_admin_con_huella_por_tramo(libro):
     _pospago(libro, milesimas=-200_000)                              # 460 000: tramo 2, huella nueva
     c, = [x for x in alertas._fuente_cobros("acme", AHORA) if x["clave"] == "cobros:deuda_pospago"]
     assert c["huella"] != a["huella"]
+
+
+def test_no_se_pasa_a_prepago_con_deuda_y_un_plan_sin_cerrar(libro, base_temporal):
+    # guardian-gasto 2026-10-12 (2.ª ronda): en prepago, la bolsa que vence al cierre borraría la deuda.
+    _pospago(libro, milesimas=-948_630)
+    pid = _plan_abierto(base_temporal, libro, credito=1_000_000)
+    with pytest.raises(ValueError):
+        libro.configurar("acme", usuario="admin", pospago=False)
+    assert libro.cuenta("acme")["pospago"] is True
+    with base_temporal.conectar() as con:
+        libro.vencer_periodo(con, pid)
+        con.execute(base_temporal.periodo_plan.update().values(cerrado=True))
+    libro.configurar("acme", usuario="admin", pospago=False)         # ya cerrado: la deuda quedó, se puede
+    assert libro.cuenta("acme")["pospago"] is False and libro.saldo("acme") == -948_630
+
+
+def test_sin_plan_se_pasa_a_prepago_aunque_deba(libro):
+    _pospago(libro, milesimas=-948_630)
+    libro.configurar("acme", usuario="admin", pospago=False)
+    assert libro.cuenta("acme")["pospago"] is False
+
+
+def test_el_admin_ve_por_que_no_se_puede_pasar_a_prepago(http, libro, base_temporal):
+    _pospago(libro, milesimas=-5_000)
+    _plan_abierto(base_temporal, libro)
+    http.post("/admin/cobros/acme/cuenta", data={"pospago": "0"}, headers=MISMO)
+    with http.session_transaction() as s:
+        avisos = [m for c, m in s.get("_flashes", []) if c == "error"]
+    assert avisos and libro.cuenta("acme")["pospago"] is True

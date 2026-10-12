@@ -241,12 +241,31 @@ def configurar(cliente, *, usuario, cobrar=None, margen=SIN_CAMBIO, umbral=None,
     t = db.cuenta_saldo
     with db.conectar() as con:
         _candado(con)
+        if pospago is False:
+            _exigir_sin_deuda_con_plan(con, cliente)
         if con.execute(sa.select(t.c.cliente).where(t.c.cliente == cliente)).first():
             con.execute(t.update().where(t.c.cliente == cliente).values(**cambios))
         else:
             con.execute(t.insert().values(cliente=cliente, cobrar=cambios.pop("cobrar", False),
                                           umbral_aviso=cambios.pop("umbral_aviso", UMBRAL_DEFECTO), **cambios))
         return _cuenta(con, cliente)
+
+
+def _exigir_sin_deuda_con_plan(con, cliente):
+    """Un pospago que debe no pasa a prepago mientras tenga un periodo de plan sin cerrar: en prepago el
+    vencimiento de esa bolsa tiene el tope de no bajar de 0 y se comería la deuda (guardian-gasto 2026-10-12,
+    2.ª ronda). Cerrado el periodo (la bolsa ya venció entera), sí puede. Lanza ValueError con la frase."""
+    if not con.execute(sa.select(db.cuenta_saldo.c.pospago).where(db.cuenta_saldo.c.cliente == cliente)).scalar():
+        return
+    abierto, terminados = planes.periodos_sin_cerrar(con, cliente)
+    sin_cerrar = ([abierto] if abierto is not None else []) + terminados
+    if not sin_cerrar:
+        return
+    restante = sum(_bolsa(con, cliente, p)["restante"] for p in sin_cerrar)
+    if _saldo(con, cliente) - restante < 0:
+        raise ValueError(gettext("Este proyecto debe plata y tiene un plan con el periodo sin cerrar: pasarlo a "
+                                 "prepago ahora haría que la bolsa pague la deuda. Espera a que cierre el periodo "
+                                 "o a que pague."))
 
 
 # ------------------------------------------------------------------- saldo ---
