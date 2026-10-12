@@ -554,6 +554,66 @@ def test_las_marcas_de_busqueda_se_limpian_al_salir_de_pendiente(entorno):
         assert con.execute(sa.select(db.kv.c.clave).where(db.kv.c.clave == clave)).first() is None
 
 
+def test_una_vieja_cuya_ultima_busqueda_da_error_no_se_vence(entorno):
+    # Revisor: un 4xx o una respuesta rara en la última búsqueda no dice «no está»; vencerla la sacaría del rescate.
+    recargas, wompi = entorno["recargas"], entorno["wompi"]
+    rid, ref = _pendiente(entorno)
+    _envejecer(entorno, rid, recargas.HORAS_VIGENTE * 60 + 60)
+    entorno["por_ref"][ref] = wompi.ErrorWompi("Wompi no aceptó el pedido (HTTP 400)", codigo=400)
+    recargas.verificar_pendientes()
+    assert _recarga(entorno["db"], rid)["estado"] == "pendiente"
+
+
+def test_la_que_toca_vencer_va_primero_y_no_espera_su_turno(entorno):
+    recargas = entorno["recargas"]
+    for _ in range(recargas.BUSQUEDAS_POR_VUELTA + 5):
+        r, _ref = _pendiente(entorno)
+        _envejecer(entorno, r, 15)
+    vieja, ref = _pendiente(entorno)
+    _envejecer(entorno, vieja, recargas.HORAS_VIGENTE * 60 + 60)
+    _ultima_busqueda(entorno, vieja, 5)                                  # buscada hace poco: igual va
+    entorno["por_ref"][ref] = [_tx(ref)]
+    entorno["txs"]["1292-1602113476-10985"] = _tx(ref)
+    recargas.verificar_pendientes()
+    assert entorno["busquedas"][0] == ref and _recarga(entorno["db"], vieja)["estado"] == "aprobada"
+
+
+def test_despues_de_6_horas_se_busca_cada_4(entorno):
+    recargas = entorno["recargas"]
+    rid, ref = _pendiente(entorno)
+    _envejecer(entorno, rid, 7 * 60)
+    _ultima_busqueda(entorno, rid, 61)
+    recargas.verificar_pendientes()
+    assert entorno["busquedas"] == []
+    _ultima_busqueda(entorno, rid, 241)
+    recargas.verificar_pendientes()
+    assert entorno["busquedas"] == [ref]
+
+
+def test_una_rechazada_de_mas_de_26_horas_ya_no_se_busca(entorno):
+    db, recargas = entorno["db"], entorno["recargas"]
+    rid, _ref = _pendiente(entorno)
+    _envejecer(entorno, rid, recargas.HORAS_VIGENTE * 60 + 60)
+    with db.conectar() as con:
+        con.execute(db.recarga.update().where(db.recarga.c.id == rid).values(estado="rechazada"))
+    recargas.verificar_pendientes()
+    assert entorno["busquedas"] == []
+
+
+def test_el_rescate_respeta_su_tope_de_tiempo(entorno, monkeypatch):
+    recargas = entorno["recargas"]
+    for _ in range(5):
+        r, _ref = _pendiente(entorno)
+        _envejecer(entorno, r, recargas.MINUTOS_RESCATE + 1)
+    reloj = {"t": 0.0}
+
+    def avanza():
+        reloj["t"] += 10.0
+        return reloj["t"]
+    monkeypatch.setattr(recargas, "_reloj", avanza)
+    assert recargas.rescatar_sin_evento(tope_s=25) == 2 and len(entorno["busquedas"]) == 2
+
+
 def test_la_periodica_para_con_wompi_caido(entorno):
     for i in range(3):
         rid, ref = _pendiente(entorno)

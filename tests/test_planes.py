@@ -579,6 +579,22 @@ def test_una_transaccion_guardada_que_resulta_de_otra_referencia_no_se_aplica(ba
     assert [p.estado for p in _filas(base_temporal, "pago_plan")] == ["pendiente", "pendiente"]
 
 
+def test_lo_releido_por_la_busqueda_con_otra_referencia_no_se_aplica(base_temporal, planes, pro, falso, avisos,
+                                                                       monkeypatch):
+    _suscribir(planes, pro)
+    ahora = _antes("2026-11-09T10:00:00", 30)
+    falso.error = (falso.wompi.ErrorWompi("cortado", caida=True, incierto=True), False)
+    planes.cobrar_periodo(1, ahora=ahora)
+    tx_id = falso.cobro_que_llego("pl-1-20261109-1")
+    from cobros import wompi
+    original = falso.transaccion
+    monkeypatch.setattr(wompi, "transaccion", lambda i, tiempo=None: (
+        {**original(i), "reference": "pl-1-20261209-1"} if i == tx_id else original(i)))
+    _envejecer(base_temporal)
+    assert planes.cobrar_periodo(1, ahora=_despues(ahora, minutos=5)) == "incierto"
+    assert _filas(base_temporal, "pago_plan")[1].estado == "pendiente"
+
+
 def test_si_la_busqueda_falla_se_sigue_como_antes(base_temporal, planes, pro, falso, avisos):
     _suscribir(planes, pro)
     ahora = _antes("2026-11-09T10:00:00", 30)
@@ -1056,8 +1072,26 @@ def test_anular_un_pago_viejo_no_mueve_lo_que_pago_uno_mas_nuevo(base_temporal, 
     fin = "2026-11-09T10:00:00"
     planes.renovar_todo(ahora=_antes(fin, 30))                      # la renovación de noviembre, cobrada antes
     assert _sus(base_temporal).cubierto_hasta == "2026-12-09T10:00:00"
+    planes.renovar_todo(ahora=_antes(fin, 25))                      # abre el periodo de noviembre (a 1 h de empezar)
+    pago_b = _filas(base_temporal, "pago_plan")[1]
+    assert [p.cerrado for p in _filas(base_temporal, "periodo_plan") if p.pago_id == pago_b.id] == [False]
     planes.aplicar_transaccion({**falso.txs["1292-1-1"], "status": "VOIDED"}, ahora=_antes(fin, 20))
     assert _sus(base_temporal).cubierto_hasta == "2026-12-09T10:00:00"   # lo de noviembre sigue pagado
+    # Revisor: solo se vencen los periodos de ESE pago; el de noviembre (otro pago) sigue abierto.
+    assert [p.cerrado for p in _filas(base_temporal, "periodo_plan") if p.pago_id == pago_b.id] == [False]
+
+
+def test_anular_una_renovacion_cobrada_por_adelantado_y_sin_periodo_devuelve_su_mes(base_temporal, planes, pro,
+                                                                                    falso, avisos):
+    # Revisor (2026-10-12): el pago anulado no abrió ningún periodo todavía; lo pagado vuelve un ciclo atrás.
+    _suscribir(planes, pro)
+    assert planes.cobrar_periodo(1, ahora=_despues(T0, minutos=1), forzar=True) == "aprobado"
+    assert _sus(base_temporal).cubierto_hasta == "2026-12-09T10:00:00"
+    renovacion = _filas(base_temporal, "pago_plan")[1]
+    assert not [p for p in _filas(base_temporal, "periodo_plan") if p.pago_id == renovacion.id]
+    tx = {**falso.txs[renovacion.transaccion_id], "status": "VOIDED"}
+    assert planes.aplicar_transaccion(tx, ahora=_despues(T0, dias=2)) == "anulado"
+    assert _sus(base_temporal).cubierto_hasta == "2026-11-09T10:00:00"
 
 
 def test_un_mensual_anulado_no_se_renueva(base_temporal, planes, pro, falso, avisos):

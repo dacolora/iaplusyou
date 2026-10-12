@@ -713,7 +713,7 @@ def _aplicar_estado(con, pago, estado_wompi, tx_id, motivo, ahora):
         if n and sus is not None and sus["estado"] != "terminada":
             # Tras una anulación (o un contracargo) la tarjeta no se vuelve a cobrar sola: queda CANCELADA, sin
             # renovación automática, y cambiar de tarjeta no la revive (rulings del controlador, revisión de la
-            # Task 5). Lo pagado (`cubierto_hasta`) queda; al acabar, la suscripción termina.
+            # Task 5). Lo pagado por OTROS pagos queda; lo de este vuelve atrás (abajo); al acabar, termina.
             _actualizar_sus(con, sus["id"], ahora, estado="cancelada", renovar=False, proximo_cobro=None)
         if n:
             # La plata volvió a la persona: la bolsa que ese pago compró ya no está pagada. Vence lo que queda de
@@ -1369,8 +1369,18 @@ def resolver_pendiente(cliente, pago_id, cobrado, usuario, transaccion_id=None, 
         raise ErrorPlan(gettext("No pudimos confirmar en Wompi que no se cobró: %(error)s. Inténtalo en unos "
                                 "minutos.", error=cola.sin_token(str(e))[:200])) from None
     # Una anulada no se quedó con la plata: si todo lo que Wompi tiene con esa referencia está anulado, «no se cobró»
-    # vale (si no, el pago quedaba pendiente para siempre; revisión de plata final, 2026-10-12).
+    # vale (si no, el pago quedaba pendiente para siempre; revisión de plata final, 2026-10-12). La búsqueda no se
+    # cree (revisor): cada anulada se relee por id; si alguna no se puede releer, no se confirma nada.
     cobradas = [t for t in en_wompi if t.get("status") != "VOIDED"]
+    for anulada in (t for t in en_wompi if t.get("status") == "VOIDED"):
+        try:
+            releida = wompi.transaccion(anulada["id"], tiempo=ESPERA_BUSQUEDA)
+        except wompi.ErrorWompi as e:
+            import cola  # noqa: PLC0415
+            raise ErrorPlan(gettext("No pudimos confirmar en Wompi que no se cobró: %(error)s. Inténtalo en unos "
+                                    "minutos.", error=cola.sin_token(str(e))[:200])) from None
+        if releida.get("status") != "VOIDED":
+            cobradas.append(releida)
     if cobradas:
         raise ErrorPlan(gettext("Wompi sí tiene una transacción con esa referencia (%(ids)s): usa «Sí se cobró» "
                                 "con su id.", ids=", ".join(str(t["id"]) for t in cobradas[:3])))

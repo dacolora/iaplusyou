@@ -30,8 +30,8 @@ debían) y la prueba real con plata de ese día.
 
 - **La firma de los avisos de Wompi** leía el `timestamp` del lugar equivocado: todo aviso verdadero se rechazaba. Desplegado ese día (d3cf88da).
 - **Recargas o cobros de plan que Wompi sí hizo pero cuyo aviso se perdió (PND-296):** la periódica los busca por su referencia, los relee por id y los aplica una sola vez; en planes, solo si salió de la tarjeta de esa suscripción y por su monto exacto.
-- **Pago de plan anulado o contracargo:** la bolsa que compró ese pago vence en el acto (antes se podía seguir gastando el resto del mes).
-- **«No se cobró» del admin:** busca primero en Wompi y se niega si hay cualquier transacción con esa referencia (marcarlo con el cobro hecho llevaba a un segundo cargo a la tarjeta).
+- **Pago de plan anulado o contracargo:** la bolsa que compró ese pago vence en el acto (antes se podía seguir gastando el resto del mes) y, si era el último pago, lo pagado vuelve a su inicio, así una activación a mano abre la bolsa de inmediato.
+- **«No se cobró» del admin:** busca primero en Wompi y se niega si hay una transacción con esa referencia que no esté anulada, releída por id (marcarlo con el cobro hecho llevaba a un segundo cargo a la tarjeta); con solo anuladas vale, porque la plata volvió.
 - **«Buscar en Wompi» en /admin/cobros** para una recarga pagada sin acreditar, en vez de la recarga manual (que se sumaba otra vez si después llegaba el aviso).
 - **Los avisos de plata a la vista en /admin/cobros:** el servidor no manda correos (PND-048) y nadie se enteraba.
 - Menores: un 3xx en un cobro queda incierto; lo releído con otra referencia no se aplica; tope a `?pagina=`; Bold no sigue redirecciones; cupo por proyecto a las consultas del `?id=` de la vuelta; el checkout de una recarga vence a las 24 h; sin manejadores en línea en la página de la tarjeta.

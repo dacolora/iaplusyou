@@ -699,3 +699,17 @@ def test_evento_fuera_de_la_ventana_de_tiempo_no_vale(wompi, monkeypatch, desfas
     ts = 1530291411
     monkeypatch.setattr(wompi, "_ahora", lambda: ts - desfase)
     assert wompi.evento_valido(_evento(ts=ts)) is valido
+
+
+def test_el_script_del_sandbox_se_niega_con_llaves_que_no_son_de_pruebas(tmp_path):
+    # Revisor (2026-10-12): nada vigilaba que deploy/prueba_wompi_sandbox.py nunca corra contra producción.
+    import os
+    import subprocess
+    import sys
+    llaves = tmp_path / "llaves.env"
+    llaves.write_text("WOMPI_LLAVE_PUBLICA=pub_prod_x\nWOMPI_LLAVE_PRIVADA=prv_test_x\n"  # llave-de-prueba
+                      "WOMPI_SECRETO_EVENTOS=test_events_x\nWOMPI_SECRETO_INTEGRIDAD=test_integrity_x\n")  # llave-de-prueba
+    raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    r = subprocess.run([sys.executable, os.path.join(raiz, "deploy", "prueba_wompi_sandbox.py"), str(llaves)],
+                       capture_output=True, text=True, timeout=60)
+    assert r.returncode != 0 and "no es una llave de PRUEBAS" in r.stderr

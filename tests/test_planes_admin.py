@@ -450,6 +450,22 @@ def test_no_se_cobro_vale_si_en_wompi_todo_esta_anulado(http, pro, entorno):
     assert _filas("pago_plan")[0].estado == "error"
 
 
+def test_no_se_cobro_relee_por_id_las_que_la_busqueda_da_por_anuladas(http, pro, entorno, monkeypatch):
+    # Revisor (2026-10-12): la búsqueda no se cree. Si dice VOIDED pero por id está aprobada (índice desfasado, una
+    # anulación que no prosperó), «No se cobró» llevaría a otra referencia y a un segundo cargo a la tarjeta.
+    from cobros import wompi
+    pago = _pendiente_incierto(entorno, pro)
+    tx_id = entorno.cobro_que_llego(pago.referencia, status="VOIDED")
+    original = entorno.transaccion
+    monkeypatch.setattr(wompi, "transaccion",
+                        lambda i, tiempo=None: {**original(i), "status": "APPROVED"} if i == tx_id else original(i))
+    c = http.como("admin")
+    c.post(f"/admin/cobros/acme/plan/pago/{pago.id}/resolver", data={"resultado": "no_cobrado", "nota": "x"},
+           headers=MISMO)
+    assert _filas("pago_plan")[0].estado == "pendiente"
+    assert any("Wompi sí tiene una transacción" in m for m in _flashes(c))
+
+
 def test_no_se_cobro_se_niega_si_no_se_puede_confirmar_en_wompi(http, pro, entorno):
     from cobros import wompi
     pago = _pendiente_incierto(entorno, pro)

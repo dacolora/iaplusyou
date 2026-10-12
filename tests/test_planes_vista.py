@@ -319,6 +319,18 @@ def test_alta_con_el_token_simulado_activa_el_plan(base, pagina, pro, falso, avi
         assert any("tu plan está activo" in m for _cat, m in s.get("_flashes", []))
 
 
+def test_en_modo_bloquear_la_politica_de_la_tarjeta_conserva_la_de_base(base, pagina, pro, falso, monkeypatch):
+    # Revisor (2026-10-12): al pasar CSP_TARJETA_SOLO_REPORTE a False, la página no puede perder frame-ancestors
+    # (que otro sitio la enmarque y haga clickjacking sobre el pago).
+    from cobros import rutas
+    monkeypatch.setattr(rutas, "CSP_TARJETA_SOLO_REPORTE", False)
+    _cobra()
+    r = pagina().get(f"/cliente/acme/plan/alta?plan={pro}")
+    (politica,) = r.headers.getlist("Content-Security-Policy")
+    assert "frame-ancestors 'none'" in politica and "object-src 'none'" in politica
+    assert "script-src 'self' 'nonce-" in politica and "frame-src https://checkout.wompi.co" in politica
+
+
 def test_la_pagina_de_la_tarjeta_tiene_su_politica_de_scripts_con_nonce(base, pagina, pro, falso):
     # Auditoría de seguridad 2026-10-12 (PCI, SAQ A): en la página donde el widget pide la tarjeta solo corren
     # nuestros scripts, los del nonce y los de checkout.wompi.co; marcos solo de Wompi; formularios solo hacia aquí.

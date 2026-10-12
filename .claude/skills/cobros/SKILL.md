@@ -214,7 +214,8 @@ vulnerabilidades»). Explicación en llano y riesgos aceptados: `docs/pagos/segu
   `_aplicar_wompi` bajo el candado (el camino de «Verificar»). Orden: primero las que toca vencer (una última búsqueda),
   después de la más nueva a la más vieja; espaciadas por edad (`_espera_busqueda`: 10 min la primera hora, cada hora
   hasta las 6 h, cada 4 h después; marca en `kv` `wompi:busqueda:<id>`, que se limpia sola); a lo más
-  `BUSQUEDAS_POR_VUELTA` (30) y el tiempo que le quede a la vuelta; para con caída, 429, 401 o 403. Otra APPROVED de la
+  `BUSQUEDAS_POR_VUELTA` (30) y el tiempo que le quede a la vuelta, con un piso de 15 s para que el rescate avance
+  aunque las consultas por id se hayan llevado la vuelta; para con caída, 429, 401 o 403. Otra APPROVED de la
   misma referencia también se aplica, para que salga `otro_pago` al admin. Al acreditar así, aviso `wompi_rescatada`.
 - **Cobros de plan inciertos** (`planes._buscar_en_wompi`): antes de un «reintentar», tras un 422 de referencia usada
   y en una cancelada con el cobro en el aire, se busca la referencia; solo vale si la transacción salió de la fuente de
@@ -228,8 +229,9 @@ vulnerabilidades»). Explicación en llano y riesgos aceptados: `docs/pagos/segu
   del pago (su primer periodo, o lo que cubría si se pagó por adelantado): sin eso, «Activar a mano» tras la anulación
   abría su periodo recién al fin del mes anulado (revisión de plata final). «No se cobró» vale si en Wompi todo lo de
   esa referencia está anulado.
-- **«No se cobró»** (`resolver_pendiente`) busca la referencia en Wompi y se niega si hay cualquier transacción o si
-  Wompi no responde: marcarlo con el cobro hecho llevaba a otra referencia y a un segundo cargo a la tarjeta.
+- **«No se cobró»** (`resolver_pendiente`) busca la referencia en Wompi y se niega si hay una transacción que no esté
+  anulada o si Wompi no responde: marcarlo con el cobro hecho llevaba a otra referencia y a un segundo cargo a la
+  tarjeta. Con solo anuladas vale, pero cada una se relee por id antes (la búsqueda no se cree).
 - **/admin/cobros**: «Avisos de plata» (`vista.avisos_plata`, de la cola de la bitácora con `bitacora.ultimas`; el
   servidor no manda correos, PND-048, y si no hay SMTP lo advierte `#aviso-sin-correo`) y «Recargas de Wompi sin
   acreditar» (`vista.recargas_wompi_sin_acreditar`, 7 días) con «Buscar en Wompi» (`POST
