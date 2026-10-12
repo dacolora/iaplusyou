@@ -36,9 +36,17 @@ MOTIVO_SIN_PRECIO = gastos.SIN_PRECIO
 # G1 (revisión final de Rendimiento E2, guardián de gasto, 2026-10-10): un análisis de un anuncio de una cuenta de Meta
 # sin tienda (`foto.fuente == "meta"`, su video copiado a R2) cobraría unos US$ 1,01 de Kling por un camino que nadie
 # probó en real. Se rechaza aquí, la misma revisión que pinta el botón y que la ruta mira antes de cobrar (409), hasta
-# que una prueba real lo active (PND-289). Desde el 2026-10-12 solo a quien no es admin: Daniel pidió hacer esa prueba
-# en colorado_forja, el proyecto donde se prueba todo, y un admin es quien la corre viendo el precio.
+# que una prueba real lo active (PND-289). Desde el 2026-10-12 hay una excepción: Daniel pidió hacer esa prueba en
+# colorado_forja, «la cuenta con la que se prueba todo», así que ahí un admin la corre viendo el precio. Solo ahí: con
+# Cobros prendido, un admin que la pidiera en otro proyecto la pagaría con el saldo de ese cliente (guardian-gasto).
 MOTIVO_META = N_("Para anuncios de Meta todavía no: falta una prueba real.")
+PROYECTOS_PRUEBA_META = frozenset({"colorado_forja"})
+
+
+def prueba_meta_permitida(cliente, rol):
+    """¿Este proyecto y esta persona pueden pedir los ganchos de un anuncio de Meta antes de su prueba real?
+    Solo un admin en un proyecto de prueba (PND-289)."""
+    return rol == "admin" and cliente in PROYECTOS_PRUEBA_META
 ERROR_BAJAR = N_("No se pudo bajar el video original.")
 ERROR_NO_MP4 = N_("El video original no es un mp4: no se puede editar.")
 ERROR_FOTOGRAMA = N_("No se pudo sacar el fotograma de arranque.")
@@ -133,12 +141,12 @@ def ganchos_generables(resultado):
     return salida
 
 
-def puede_probar(fila, generables, filas_ganchos, precio_usd, url_video, admin=False):
+def puede_probar(fila, generables, filas_ganchos, precio_usd, url_video, meta_en_prueba=False):
     """None si el botón se ofrece; si no, el motivo (spec §4.1), en este orden: el análisis no está listo, es de antes
-    de los ganchos, no trae ninguno generable, es de un anuncio de fuente Meta y quien mira no es admin (G1: todavía
-    sin prueba real; PND-289, Daniel 2026-10-12: esa prueba se hace en colorado_forja, así que un admin sí lo pide),
-    no hay video que bajar (`url_video` = `mejorar._url_voz(foto)`), el video conocido dura menos de MIN_ORIGINAL_S,
-    hay una tanda viva, o no hay precio."""
+    de los ganchos, no trae ninguno generable, es de un anuncio de fuente Meta sin `meta_en_prueba` (G1: todavía sin
+    prueba real; `prueba_meta_permitida` = un admin en colorado_forja, PND-289), no hay video que bajar
+    (`url_video` = `mejorar._url_voz(foto)`), el video conocido dura menos de MIN_ORIGINAL_S, hay una tanda viva, o no
+    hay precio."""
     f = fila or {}
     r = f.get("resultado") or {}
     if f.get("estado") != "lista":
@@ -147,7 +155,7 @@ def puede_probar(fila, generables, filas_ganchos, precio_usd, url_video, admin=F
         return MOTIVO_VIEJO
     if not generables:
         return MOTIVO_SIN_GANCHOS
-    if (f.get("foto") or {}).get("fuente") == "meta" and not admin:
+    if (f.get("foto") or {}).get("fuente") == "meta" and not meta_en_prueba:
         return MOTIVO_META
     if not url_video:
         return MOTIVO_SIN_VIDEO

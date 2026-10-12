@@ -42,9 +42,9 @@ Reglas, cada una con su motivo:
 8. «Lo que hace ganar en tu cuenta» (Evaluar con IA de Triple Whale, `_ia`) es de la parte Triple Whale del alcance
    (`rendimiento.evaluar`, que vuelve a armar la muestra con `alcances`); con mezcla una línea lo dice. La de las
    cuentas de Meta es la «Evaluación con IA» de Meta rendimiento E2 (la de main: `meta_rend_evaluar`, su tabla
-   `meta_evaluacion` y su precio `evaluacion_meta`), que el panel pinta con `_meta_evaluar.html` sobre las cuentas cuya
-   fuente es Meta (`meta["e2"]["evaluacion"]`, regla 10). Nunca un prompt con las dos fuentes: el Pixel de Triple Whale
-   y el de Meta atribuyen distinto. La rama Meta de E2 tarea 5 (evaluar Meta por `tw_evaluacion`) se jubiló en la
+   `meta_evaluacion` y su precio `evaluacion_meta`), que el panel pinta con `_meta_evaluar.html` sobre TODAS las
+   cuentas de Meta del alcance (`meta["e2"]["evaluacion"]`, regla 10; también las cubiertas desde PND-290). Nunca un
+   prompt con las dos fuentes: el Pixel de Triple Whale y el de Meta atribuyen distinto. La rama Meta de E2 tarea 5 (evaluar Meta por `tw_evaluacion`) se jubiló en la
    integración con main (INT-2).
 9. El detalle de un día de «Resultados» (`dia`, E2 tarea 7, spec A3) resuelve el alcance con la misma `_resolver`:
    con solo Triple Whale es `triple_whale.panel.contexto_dia` tal cual (la tienda de la entrada; el panel sigue

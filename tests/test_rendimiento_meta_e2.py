@@ -29,7 +29,7 @@ from meta_rendimiento import datos as mdatos
 from meta_rendimiento import panel as meta_panel
 from pestana_rendimiento import panel as rend_panel
 from tests.test_rutas_configuracion import app  # noqa: F401  (fixture)
-from tests.test_rutas_meta_rendimiento import _ad, _dia, _hace, _tasa
+from tests.test_rutas_meta_rendimiento import _ad, _dia, _hace, _tasa  # noqa: F401
 from tests.test_rutas_productos import _flashes
 from triple_whale import datos as twdatos
 
@@ -208,6 +208,93 @@ def test_una_tienda_sin_pais_no_apaga_la_evaluacion_de_meta(mixto):
     ev, = _evaluaciones()
     assert set(ev["cuentas"]) == {NO, SE, NL}
 
+
+
+DIAS_VENTANAS = 85
+
+
+def _ads_por_ventana(n, prefijo):
+    """Anuncios que viven en ventanas distintas, para que el N de 7, 14, 30 y 90 días cambie (con los mismos anuncios
+    todos los días, un error de periodo pasaría inadvertido: revisión de guardian-gasto de PND-290, 2026-10-12)."""
+    out = [_ad(_hace(n), f"{prefijo}_gana", 100, 600, compras=3)]
+    if prefijo == "o" and n < 12:
+        out.append(_ad(_hace(n), f"{prefijo}_nuevo", 140, 0))
+    if 10 <= n < 28:
+        out.append(_ad(_hace(n), f"{prefijo}_medio", 160, 0))
+    if prefijo == "o" and n >= 32:
+        out += [_ad(_hace(n), f"{prefijo}_viejo", 200, 0), _ad(_hace(n), f"{prefijo}_viejo2", 210, 0)]
+    if prefijo == "n" and n < 5:
+        out.append(_ad(_hace(n), f"{prefijo}_recien", 90, 50, compras=1))
+    return out
+
+
+def _sembrar_ventanas(config):
+    """`config`: "tw_no" (la tienda de Noruega cubre su cuenta), "r4" (una tienda sin país cubre las tres) o
+    "tw_no_cubre_se" (la tienda de Noruega trae también los anuncios de Suecia)."""
+    pais, dominio = (None, "acme.myshopify.com") if config == "r4" else ("NO", "acme-no.myshopify.com")
+    tid = triple_whale_tiendas.agregar("acme", "tw_llave_123", dominio, pais, moneda="USD")  # llave-de-prueba
+    triple_whale_tiendas.actualizar_tienda("acme", tid, ultima_sincronizacion=db.ahora())
+    mcuentas.elegir("acme", [{"id": NO, "name": "HappyFlops Norway", "currency": "SEK", "pais": "NO"},
+                             {"id": SE, "name": "HappyFlops Sweden", "currency": "SEK", "pais": "SE"},
+                             {"id": NL, "name": "HappyFlops Netherlands", "currency": "SEK", "pais": "NL"}])
+    cubiertas = {"tw_no": [NO], "r4": [NO, SE, NL], "tw_no_cubre_se": [NO, SE]}[config]
+    canal, pixel, tienda = [], [], []
+    for n in range(DIAS_VENTANAS):
+        f = _hace(n)
+        _tasa(f, 0.1, "SEK")
+        for act, prefijo in ((NO, "o"), (SE, "s"), (NL, "n")):
+            mdatos.reemplazar_cuenta_dias("acme", act, f, f, [_dia(f, 800, 900, compras=3)])
+            ads = _ads_por_ventana(n, prefijo)
+            mdatos.reemplazar_anuncio_dias("acme", act, f, f, ads)
+            if act in cubiertas:
+                for a in ads:
+                    canal.append({"canal": "facebook-ads", "ad_id": a["ad_id"], "fecha": f, "anuncio": a["ad_id"],
+                                  "gasto": a["gasto"] / 10, "impresiones": 3000, "cuenta_id": act,
+                                  "campana_id": "c1", "conjunto_id": "s1"})
+                    pixel.append({"canal": "facebook-ads", "ad_id": a["ad_id"], "fecha": f, "pedidos": 1,
+                                  "ingresos": a["gasto"] / 10})
+        tienda.append({"fecha": f, "gasto": 100, "ingresos": 80, "pedidos": 2})
+    twdatos.reemplazar_anuncios_canal("acme", tid, _hace(DIAS_VENTANAS - 1), _hace(0), canal)
+    twdatos.reemplazar_anuncios_pixel("acme", tid, _hace(DIAS_VENTANAS - 1), _hace(0), pixel)
+    twdatos.reemplazar_tienda("acme", tid, _hace(DIAS_VENTANAS - 1), _hace(0), tienda)
+
+
+@pytest.mark.parametrize("config,entrada", [("tw_no", ""), ("tw_no", "NO"), ("tw_no", "SE"), ("r4", ""),
+                                            ("tw_no_cubre_se", ""), ("tw_no_cubre_se", "SE")])
+@pytest.mark.parametrize("dias", [0, 7, 14, 90])
+def test_el_boton_de_meta_cobra_lo_que_muestra_con_anuncios_por_ventana(mixto, config, entrada, dias):
+    """E2-R6 tras PND-290 con anuncios que cambian de periodo a periodo, en entradas con cuentas cubiertas (Noruega, R4
+    y una tienda que trae también Suecia): el N y el precio del botón son los que `preparar` recalcula para las cuentas
+    de la ruta y lo que manda el botón crea esa evaluación. Sin botón, la ruta tampoco tendría muestra."""
+    _sembrar_ventanas(config)
+    html = _panel(mixto, f"?entrada={entrada}&dias={dias}")
+    seccion = _seccion(html, "meta-evaluacion")
+    dias_eval = 30 if dias == 0 else dias
+    if "<form" not in seccion:
+        ids = rend_panel.cuentas_evaluacion_meta("acme", entrada)
+        assert not analisis.preparar("acme", dias_eval, None, ids=ids)["muestra"]
+        assert "Todavía no hay anuncios con datos suficientes" in seccion
+        return
+    campos, _ = _ocultos(html)
+    # Con R4 la única entrada es la de la tienda: «Todas» manda su clave (`tienda:<id>`).
+    ids = rend_panel.cuentas_evaluacion_meta("acme", campos.pop("entrada"))
+    n = len(analisis.preparar("acme", dias_eval, None, ids=ids)["muestra"])
+    precio = gastos.estimar("evaluacion_meta", n=n)
+    assert campos == {"dias": str(dias_eval), "n": str(n), "precio_visto": str(precio["usd_precio"])}
+    campos, _ = _ocultos(html)
+    r = mixto["c"].post(EVALUAR, data=campos, headers=POST)
+    assert r.status_code == 302
+    ev, = _evaluaciones()
+    assert set(ev["cuentas"]) == set(ids) and len(ev["muestra"]) == n
+    tarea, = _tareas()
+    assert tarea["max_intentos"] == 1
+
+
+def test_los_anuncios_por_ventana_si_cambian_el_n(mixto):
+    """La prueba de arriba solo vigila el periodo si el N cambia de una ventana a otra."""
+    _sembrar_ventanas("tw_no")
+    ns = {d: len(analisis.preparar("acme", d, None, ids=[NO])["muestra"]) for d in (7, 14, 30, 90)}
+    assert len(set(ns.values())) > 1, ns
 
 def test_una_entrada_que_ya_no_existe_no_evalua_nada(mixto):
     """Una pestaña vieja (un país que se quitó) no se ensancha a «Todas»: nada se crea ni se cobra."""

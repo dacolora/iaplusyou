@@ -141,10 +141,21 @@ def test_un_analisis_de_un_anuncio_de_meta_no_ofrece_los_ganchos_ni_cobra_a_un_c
 
 
 
-def test_un_admin_si_puede_probar_los_ganchos_de_un_anuncio_de_meta(app, monkeypatch):  # noqa: F811
-    """PND-289 (Daniel, 2026-10-12): la prueba real se hace en colorado_forja, así que a un admin el detalle de un
-    anuncio de Meta le ofrece el botón con su precio, y el POST crea la tanda y encola su preparación como uno de
-    Triple Whale (precio visto, un intento)."""
+def test_un_admin_fuera_del_proyecto_de_prueba_no_prueba_los_ganchos_de_meta(app, monkeypatch):  # noqa: F811
+    """PND-289 y guardian-gasto (2026-10-12): un admin en un proyecto que no es el de prueba tampoco los pide: con
+    Cobros prendido, la prueba la pagaría el saldo de ese cliente."""
+    monkeypatch.setenv("R2_PUBLIC_BASE_URL", "https://media.test")
+    aid = _analisis(fuente="meta", video_url="https://media.test/clientes/acme/rendimiento/a1_p1.mp4")
+    assert "Para anuncios de Meta todavía no: falta una prueba real." in _detalle(app, aid)
+    r = _probar(app, aid)
+    assert r.status_code == 409 and datos.ganchos_de_analisis("acme", aid) == [] and _preparaciones() == []
+
+
+def test_un_admin_en_el_proyecto_de_prueba_si_puede_probar_los_ganchos_de_meta(app, monkeypatch):  # noqa: F811
+    """PND-289 (Daniel, 2026-10-12): la prueba real se hace en colorado_forja (aquí «acme» hace de proyecto de prueba),
+    así que a un admin el detalle de un anuncio de Meta le ofrece el botón con su precio, y el POST crea la tanda y
+    encola su preparación como uno de Triple Whale (precio visto, un intento)."""
+    monkeypatch.setattr(ganchos_tw, "PROYECTOS_PRUEBA_META", frozenset({"acme"}))
     monkeypatch.setenv("R2_PUBLIC_BASE_URL", "https://media.test")
     aid = _analisis(fuente="meta", video_url="https://media.test/clientes/acme/rendimiento/a1_p1.mp4")
     html = _detalle(app, aid)

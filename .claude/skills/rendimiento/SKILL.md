@@ -299,9 +299,9 @@ coordinador en `.superpowers/sdd/2026-10-10-pestana-rendimiento-e2/final-fixes.m
 
 - **G1. Ganchos de un anuncio de Meta, apagados.** «Probar los 3 ganchos» de un análisis de fuente Meta cobraría unos
   US$ 1,01 de Kling por un camino sin prueba real: `triple_whale.ganchos.puede_probar` da `MOTIVO_META`, el detalle
-  no pinta el botón y `ganchos_probar` responde 409 sin crear ni reservar. Desde el 2026-10-12 eso vale solo para
-  quien no es admin (Daniel: la prueba real se hace en colorado_forja, la corre un admin viendo el precio); se abre a
-  todos tras esa prueba (PND-289).
+  no pinta el botón y `ganchos_probar` responde 409 sin crear ni reservar. Desde el 2026-10-12 la única excepción es
+  un admin en colorado_forja (`ganchos.prueba_meta_permitida`; Daniel: la prueba real se hace ahí, viendo el precio;
+  en otro proyecto con Cobros la pagaría el cliente); se abre a todos tras esa prueba (PND-289).
 - **G2. El precio de «Cómo mejorarlo» de un anuncio de Meta** usa la duración que guardó un análisis anterior del
   mismo anuncio (`triple_whale.panel.precio_analisis(creativo, filas, fuente)` + `duracion_vista`): un anuncio de
   una cuenta sin tienda no tiene `tw_creativo` y suponía 30 s. La misma llamada alimenta la tarjeta, el total del lote

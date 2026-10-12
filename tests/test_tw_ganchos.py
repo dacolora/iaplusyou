@@ -63,15 +63,19 @@ def test_puede_probar_dice_por_que_no():
     assert ganchos.puede_probar(_fila(), GEN, [], None, URL) == ganchos.MOTIVO_SIN_PRECIO
 
 
-def test_un_anuncio_de_meta_solo_lo_prueba_un_admin():
+def test_un_anuncio_de_meta_solo_lo_prueba_un_admin_en_colorado_forja():
     """PND-289 (Daniel, 2026-10-12: la prueba real se hace en colorado_forja): mientras falta, los ganchos de un anuncio
-    de fuente Meta se le ofrecen solo a un admin; el resto de las reglas sigue igual para él."""
+    de fuente Meta se le ofrecen solo a un admin en ese proyecto (en otro, con Cobros, los pagaría el saldo del
+    cliente); el resto de las reglas sigue igual."""
     meta = dict(_fila(), foto={"fuente": "meta", "creativo": {"duracion_s": 20.0}})
     assert ganchos.puede_probar(meta, GEN, [], 0.336, URL) == ganchos.MOTIVO_META
-    assert ganchos.puede_probar(meta, GEN, [], 0.336, URL, admin=False) == ganchos.MOTIVO_META
-    assert ganchos.puede_probar(meta, GEN, [], 0.336, URL, admin=True) is None
-    assert ganchos.puede_probar(meta, GEN, [], 0.336, None, admin=True) == ganchos.MOTIVO_SIN_VIDEO
-    assert ganchos.puede_probar(_fila(), GEN, [], 0.336, URL, admin=False) is None     # Triple Whale, como siempre
+    assert ganchos.puede_probar(meta, GEN, [], 0.336, URL, meta_en_prueba=True) is None
+    assert ganchos.puede_probar(meta, GEN, [], 0.336, None, meta_en_prueba=True) == ganchos.MOTIVO_SIN_VIDEO
+    assert ganchos.puede_probar(_fila(), GEN, [], 0.336, URL) is None                 # Triple Whale, como siempre
+    assert ganchos.prueba_meta_permitida("colorado_forja", "admin") is True
+    assert ganchos.prueba_meta_permitida("happyflops", "admin") is False
+    assert ganchos.prueba_meta_permitida("colorado_forja", "cliente") is False
+    assert ganchos.prueba_meta_permitida("colorado_forja", None) is False
 
 
 def test_tandas_agrupa_la_mas_nueva_primero_con_su_codigo():

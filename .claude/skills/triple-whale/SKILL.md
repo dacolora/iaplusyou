@@ -562,9 +562,11 @@ eval `docs/superpowers/evals/2026-10-09-tw-ganchos-y-copy.md`.
   since the final review of Rendimiento E2 (G1, 2026-10-10): it would charge ~US$ 1,01 of Kling through a path never
   tried in real, so `puede_probar` returns `MOTIVO_META` («Para anuncios de Meta todavía no: falta una prueba real.»)
   right after «sin ganchos», the detail shows that reason and the route answers 409 without rows or reservation. Since
-  2026-10-12 this applies only to non-admins (`puede_probar(..., admin=session rol == "admin")`, same check in the
-  detail and the paying route): Daniel wants the real test done in colorado_forja, so an admin can run it seeing the
-  price. Open it to everyone after that test (PND-289).
+  2026-10-12 there is one exception, `ganchos.prueba_meta_permitida(cliente, rol)` = an admin in a project of
+  `PROYECTOS_PRUEBA_META` (`colorado_forja`), passed as `puede_probar(..., meta_en_prueba=)` by the detail and the
+  paying route alike: Daniel wants the real test done in colorado_forja, «the account where everything is tested». Only
+  there: with Cobros on, an admin asking in another project would pay with that client's balance (guardian-gasto).
+  Open it to everyone after that test (PND-289).
 - **The code.** `ganchos.codigo(gid) = "CV<gid>"`; `codigo_en(nombre)` (regex `\bCV(\d+)\b`, case-insensitive) is written
   and tested for stage 3, which will read it from the ad name in the sync to compare v1 with v2 ring by ring.
 - **Real test (2026-10-09, one variant, ad 3 of the eval: HappyFluffs UGC 42,96 s).** preparar → Kling O3 Pro image to

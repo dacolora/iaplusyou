@@ -406,7 +406,7 @@ def _imagen_valida(url):
 
 def _alcance_evaluacion(ev):
     """«Todas las cuentas», el nombre de la cuenta evaluada o, si se evaluaron varias que no eran todas (`parcial`:
-    desde «Rendimiento», las cuentas de una entrada cuya fuente es Meta), sus nombres. Guardado en la fila: sin otra
+    desde «Rendimiento», las cuentas de Meta de una entrada), sus nombres. Guardado en la fila: sin otra
     consulta."""
     extra = ev.get("extra") or {}
     act = extra.get("cuenta")
