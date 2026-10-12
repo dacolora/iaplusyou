@@ -725,6 +725,20 @@ def _aplicar_estado(con, pago, estado_wompi, tx_id, motivo, ahora):
             for (pid,) in con.execute(sa.select(p.c.id).where(p.c.pago_id == pago["id"],
                                                               p.c.cerrado == sa.false())).all():
                 _cerrar_periodo(con, pid)
+            # Y si es el último pago de la suscripción, lo pagado vuelve al inicio de ese pago (revisión de plata
+            # final, 2026-10-12): si no, una activación a mano tras la anulación abría su periodo recién al fin del
+            # mes anulado (hasta 27 días pagados sin bolsa; en un anual, nunca) y no dejaba volver a suscribirse.
+            if sus is not None and sus["cubierto_hasta"]:
+                pp_ = db.pago_plan
+                mas_nuevo = con.execute(sa.select(pp_.c.id).where(
+                    pp_.c.suscripcion_id == pago["suscripcion_id"], pp_.c.estado == "aprobado",
+                    pp_.c.id > pago["id"])).first()
+                if mas_nuevo is None:
+                    inicios = [i for (i,) in con.execute(sa.select(p.c.inicio).where(p.c.pago_id == pago["id"])).all()]
+                    desde = min(inicios) if inicios else sumar_meses(sus["cubierto_hasta"],
+                                                                     -MESES_CICLO.get(pago["ciclo"], 1))
+                    if desde < sus["cubierto_hasta"]:
+                        _actualizar_sus(con, sus["id"], ahora, cubierto_hasta=desde)
         return ("anulado", ("anulado", pago["cliente"], {"referencia": pago["referencia"]})) if n else ("ya_aplicada", None)
     if estado_wompi == "PENDING":
         if pago["estado"] == "pendiente" and tx_id and not pago["transaccion_id"]:
@@ -1354,9 +1368,12 @@ def resolver_pendiente(cliente, pago_id, cobrado, usuario, transaccion_id=None, 
         import cola  # noqa: PLC0415
         raise ErrorPlan(gettext("No pudimos confirmar en Wompi que no se cobró: %(error)s. Inténtalo en unos "
                                 "minutos.", error=cola.sin_token(str(e))[:200])) from None
-    if en_wompi:
+    # Una anulada no se quedó con la plata: si todo lo que Wompi tiene con esa referencia está anulado, «no se cobró»
+    # vale (si no, el pago quedaba pendiente para siempre; revisión de plata final, 2026-10-12).
+    cobradas = [t for t in en_wompi if t.get("status") != "VOIDED"]
+    if cobradas:
         raise ErrorPlan(gettext("Wompi sí tiene una transacción con esa referencia (%(ids)s): usa «Sí se cobró» "
-                                "con su id.", ids=", ".join(str(t["id"]) for t in en_wompi[:3])))
+                                "con su id.", ids=", ".join(str(t["id"]) for t in cobradas[:3])))
     import idiomas  # noqa: PLC0415
     with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
         motivo = gettext("No se cobró (lo revisó un administrador)")   # lo ve el cliente en su historial

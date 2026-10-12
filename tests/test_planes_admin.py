@@ -439,6 +439,17 @@ def test_no_se_cobro_se_niega_si_wompi_tiene_una_transaccion_con_esa_referencia(
     assert any("Wompi sí tiene una transacción" in m for m in _flashes(c))
 
 
+def test_no_se_cobro_vale_si_en_wompi_todo_esta_anulado(http, pro, entorno):
+    # Revisión de plata final (2026-10-12): con solo una anulada en Wompi el pago quedaba pendiente para siempre
+    # («No se cobró» se negaba y «Sí se cobró» no aplica una anulación a un pendiente). La plata volvió: vale.
+    pago = _pendiente_incierto(entorno, pro)
+    entorno.cobro_que_llego(pago.referencia, status="VOIDED")
+    c = http.como("admin")
+    c.post(f"/admin/cobros/acme/plan/pago/{pago.id}/resolver", data={"resultado": "no_cobrado", "nota": "anulado"},
+           headers=MISMO)
+    assert _filas("pago_plan")[0].estado == "error"
+
+
 def test_no_se_cobro_se_niega_si_no_se_puede_confirmar_en_wompi(http, pro, entorno):
     from cobros import wompi
     pago = _pendiente_incierto(entorno, pro)

@@ -934,7 +934,7 @@ def test_un_anual_anulado_no_abre_mas_meses(base_temporal, planes, pro, falso, a
         planes.renovar_todo(ahora=_despues(frontera, minutos=1))
     assert len(_filas(base_temporal, "periodo_plan")) == 1 and _filas(base_temporal, "periodo_plan")[0].cerrado
     assert len(_filas(base_temporal, "movimiento_saldo", tipo="plan")) == 1
-    assert _sus(base_temporal).cubierto_hasta == "2028-01-31T10:00:00"   # queda como estaba; el admin decide
+    assert _sus(base_temporal).cubierto_hasta == inicio   # lo pagado vuelve al inicio del pago anulado
     assert any(e[0] == "admin:plan_admin" and "anuló" in e[3] for e in avisos)
     assert len(falso.posts) == 1
 
@@ -1027,13 +1027,46 @@ def test_un_pago_anulado_vence_lo_que_queda_de_su_bolsa_y_respeta_el_saldo_propi
     assert len(_filas(base_temporal, "movimiento_saldo", tipo="vencimiento")) == 1
 
 
+def test_activar_a_mano_tras_una_anulacion_abre_la_bolsa_en_el_acto(base_temporal, planes, pro, falso, avisos):
+    """Revisión de plata final (2026-10-12): la anulación vencía la bolsa pero dejaba «lo pagado» hasta el fin del mes
+    anulado; un pago por transferencia activado a mano solo abría ahí: hasta 27 días pagados sin bolsa (en un anual,
+    nunca). Ahora lo pagado vuelve al inicio del pago anulado."""
+    _suscribir(planes, pro)
+    tx = {**falso.txs["1292-1-1"], "status": "VOIDED"}
+    dia3 = _despues(T0, dias=3)
+    assert planes.aplicar_transaccion(tx, ahora=dia3) == "anulado"
+    assert _sus(base_temporal).cubierto_hasta == T0
+    planes.activar_manual("acme", pro, "mensual", "admin", "transferencia", ahora=dia3)
+    abiertos = [p for p in _filas(base_temporal, "periodo_plan") if not p.cerrado]
+    assert [p.inicio for p in abiertos] == [dia3] and abiertos[0].credito_milesimas == 1_000_000
+
+
+def test_tras_anular_el_ultimo_pago_se_puede_volver_a_suscribir_pronto(base_temporal, planes, pro, falso, avisos):
+    _suscribir(planes, pro)
+    tx = {**falso.txs["1292-1-1"], "status": "VOIDED"}
+    dia3 = _despues(T0, dias=3)
+    planes.aplicar_transaccion(tx, ahora=dia3)
+    planes.renovar_todo(ahora=_despues(dia3, minutos=1))
+    assert _sus(base_temporal).estado == "terminada"
+    assert _suscribir(planes, pro, ahora=_despues(dia3, minutos=2))["estado"] == "aprobado"
+
+
+def test_anular_un_pago_viejo_no_mueve_lo_que_pago_uno_mas_nuevo(base_temporal, planes, pro, falso, avisos):
+    _suscribir(planes, pro)
+    fin = "2026-11-09T10:00:00"
+    planes.renovar_todo(ahora=_antes(fin, 30))                      # la renovación de noviembre, cobrada antes
+    assert _sus(base_temporal).cubierto_hasta == "2026-12-09T10:00:00"
+    planes.aplicar_transaccion({**falso.txs["1292-1-1"], "status": "VOIDED"}, ahora=_antes(fin, 20))
+    assert _sus(base_temporal).cubierto_hasta == "2026-12-09T10:00:00"   # lo de noviembre sigue pagado
+
+
 def test_un_mensual_anulado_no_se_renueva(base_temporal, planes, pro, falso, avisos):
     """Ruling: tras una anulación (o contracargo) no se vuelve a cobrar la tarjeta sola."""
     _suscribir(planes, pro)
     tx = {**falso.txs["1292-1-1"], "status": "VOIDED"}
     assert planes.aplicar_transaccion(tx, ahora=_despues(T0, dias=3)) == "anulado"
     s = _sus(base_temporal)
-    assert (s.renovar, s.proximo_cobro, s.cubierto_hasta) == (False, None, "2026-11-09T10:00:00")
+    assert (s.renovar, s.proximo_cobro, s.cubierto_hasta) == (False, None, T0)   # lo pagado vuelve al inicio
     fin = "2026-11-09T10:00:00"
     planes.renovar_todo(ahora=_antes(fin, 30))
     planes.renovar_todo(ahora=_despues(fin, minutos=1))
