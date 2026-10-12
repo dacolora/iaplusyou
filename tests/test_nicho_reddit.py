@@ -69,12 +69,12 @@ def test_parsear_busqueda_y_comentarios():
     posts = reddit.parsear_busqueda(_fixture("reddit_search.json"))
     assert [p["id"] for p in posts] == ["abc123", "def456"] and posts[0]["subreddit"] == "Sneakers"
     lista = reddit.parsear_comentarios(_fixture("reddit_comments.json"), max_n=10)
-    assert [c["fuente_id"] for c in lista] == ["abc123", "c1", "c1r", "c4"]        # post + comentarios; sin bot, sin borrado, sin «more»
+    assert [c["fuente_id"] for c in lista] == ["t3_abc123", "t1_c1", "t1_c1r", "t1_c4"]        # post + comentarios; sin bot, sin borrado, sin «more»
     assert lista[0]["texto"].startswith("After a year") and lista[0]["url"] == "https://www.reddit.com/r/Sneakers/comments/abc123/foot_pains/"
     assert lista[1]["contexto"] == "Foot pains. What helped my feet pain" and lista[1]["puntuacion"] == 44 and lista[1]["fecha"] == 1725001000
     assert lista[1]["url"].endswith("/c1/") and lista[1]["extra"] == {"subreddit": "Sneakers", "post_id": "abc123"}
     assert "author" not in lista[1] and all("author" not in c for c in lista)
-    assert [c["fuente_id"] for c in reddit.parsear_comentarios(_fixture("reddit_comments.json"), max_n=2)] == ["abc123", "c1"]
+    assert [c["fuente_id"] for c in reddit.parsear_comentarios(_fixture("reddit_comments.json"), max_n=2)] == ["t3_abc123", "t1_c1"]
 
 
 def test_recolectar_busca_y_lee_con_token(entorno, monkeypatch):
@@ -88,7 +88,7 @@ def test_recolectar_busca_y_lee_con_token(entorno, monkeypatch):
     f = reddit.FuenteReddit()
     lista = list(f.recolectar({"palabras_clave": "foot pain", "subreddits": ["Sneakers"], "max_posts": 5, "max_comentarios_por_post": 10},
                               avanzar=lambda e, d=None: etapas.append(e)))
-    assert [c["fuente_id"] for c in lista] == ["abc123", "c1", "c1r", "c4"] and f.aviso == ""
+    assert [c["fuente_id"] for c in lista] == ["t3_abc123", "t1_c1", "t1_c1r", "t1_c4"] and f.aviso == ""
     assert lista[1]["fecha"] and lista[1]["texto"].startswith("Insoles") and lista[1]["url"].startswith("https://www.reddit.com/")
     metodo, url, kw = s.llamadas[0]
     assert metodo == "POST" and url == reddit.URL_TOKEN and kw["auth"] == ("cid", "csecret") and kw["data"] == {"grant_type": "client_credentials"}
@@ -109,7 +109,7 @@ def test_recolectar_links_y_busqueda_global(entorno, monkeypatch):
                  "/comments/zz9": _Resp(404)})
     monkeypatch.setattr(_http, "sesion", lambda: s)
     lista = list(reddit.FuenteReddit().recolectar({"palabras_clave": "foot pain", "links": ["https://redd.it/zz9", "https://redd.it/abc123"]}))
-    assert [c["fuente_id"] for c in lista] == ["abc123", "c1", "c1r", "c4"]      # abc123 una sola vez aunque venga por link y por búsqueda
+    assert [c["fuente_id"] for c in lista] == ["t3_abc123", "t1_c1", "t1_c1r", "t1_c4"]      # abc123 una sola vez aunque venga por link y por búsqueda
     assert sum(1 for _, u, _ in s.llamadas if "/comments/abc123" in u) == 1
     assert any(u == reddit.URL_API + "/search" for _, u, _ in s.llamadas)
 
@@ -138,7 +138,7 @@ def test_recolectar_429_persistente_entrega_parcial(entorno, monkeypatch):
     monkeypatch.setattr(_http, "sesion", lambda: s)
     f = reddit.FuenteReddit()
     lista = list(f.recolectar({"palabras_clave": "foot pain", "max_comentarios_por_post": 10}))
-    assert [c["fuente_id"] for c in lista] == ["abc123", "c1", "c1r", "c4"]
+    assert [c["fuente_id"] for c in lista] == ["t3_abc123", "t1_c1", "t1_c1r", "t1_c4"]
     assert "limitó" in f.aviso and "1 de 2" in f.aviso
 
 
@@ -163,7 +163,7 @@ def test_recolectar_429_en_busqueda_sigue_con_los_links(entorno, monkeypatch):
     monkeypatch.setattr(_http, "sesion", lambda: s)
     f = reddit.FuenteReddit()
     lista = list(f.recolectar({"palabras_clave": "foot pain", "links": ["https://redd.it/abc123"], "max_comentarios_por_post": 10}))
-    assert [c["fuente_id"] for c in lista] == ["abc123", "c1", "c1r", "c4"]
+    assert [c["fuente_id"] for c in lista] == ["t3_abc123", "t1_c1", "t1_c1r", "t1_c4"]
     assert "búsqueda" in f.aviso
 
 
@@ -185,7 +185,7 @@ def test_pnd055_reddit_sigue_tras_recurso_roto(entorno, monkeypatch, codigo):
                  '/comments/abc123':_Resp(codigo,{'reason':'private'}), '/comments/def456':_Resp(200,_fixture('reddit_comments.json'))})
     monkeypatch.setattr(_http,'sesion',lambda:s)
     comentarios = list(reddit.FuenteReddit().recolectar({'palabras_clave':'foot pain','subreddits':['Roto','Sneakers']}))
-    assert [c['fuente_id'] for c in comentarios] == ['abc123','c1','c1r','c4']
+    assert [c['fuente_id'] for c in comentarios] == ['t3_abc123','t1_c1','t1_c1r','t1_c4']
 
 
 @pytest.mark.parametrize('codigo', [401,403])
@@ -195,3 +195,10 @@ def test_pnd055_reddit_no_oculta_error_global(entorno, monkeypatch, codigo):
     monkeypatch.setattr(_http,'sesion',lambda:s)
     with pytest.raises(base.ErrorFuente):
         list(reddit.FuenteReddit().recolectar({'links':['https://redd.it/abc123']}))
+
+
+def test_pnd092_post_y_comentario_con_mismo_id_no_colisionan():
+    from nicho.fuentes import reddit
+    data = [{"data": {"children": [{"kind": "t3", "data": {"id": "igual", "title": "P", "selftext": "Texto post"}}]}},
+            {"data": {"children": [{"kind": "t1", "data": {"id": "igual", "body": "Texto comentario"}}]}}]
+    assert [c["fuente_id"] for c in reddit.parsear_comentarios(data, 10)] == ["t3_igual", "t1_igual"]

@@ -106,3 +106,7 @@
 @media (max-width: 760px) { .gpg-img { width: calc(50% - .25rem); } }
 .gpg-escena-cab .gpg-a-crear { margin-left: auto; }
 
+
+/* PND-095 (2026-10-07): acciones hermanas del radio; filtro oculta la tarjeta completa. */
+.au-voz-contenedor { position: relative; min-width: 0; }
+.au-voz-contenedor:has(.au-voz[hidden]) { display: none; }

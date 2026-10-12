@@ -6,6 +6,7 @@ import os
 
 import pytest
 
+from tests.js_de_pagina import con_script_estatico
 from tests.test_rutas_productos import _activo_con_foto, _flashes, _foto, _producto, app  # noqa: F401
 
 JPG = b"\xff\xd8\xff\xe0fake-jpg"
@@ -176,7 +177,9 @@ def test_selector_de_crear_agrupa_los_colores_por_producto(app):
     _con_colores(app)
     _activo_con_foto("acme", "Cojín")
     html = app["c"].get("/cliente/acme").data.decode()
-    dialogo = html.split('id="fp-catalogo"', 1)[1].split("</dialog>", 1)[0]
+    html = con_script_estatico(html, 'crear-compositor.js')
+    # Desde la página por partes (PND-062, 2026-10-10) la grilla del diálogo llega por fetch al abrirlo.
+    dialogo = app["c"].get("/cliente/acme/catalogo/selector?sel=plus", headers={"X-Requested-With": "fetch"}).data.decode()
     # La franja entre el primer "producto-grupo" y el siguiente (o el fin del
     # diálogo si no hay otro): más robusto que depender de la indentación exacta.
     resto = dialogo.split('class="producto-grupo"', 1)[1]
@@ -517,3 +520,31 @@ def test_buscador_orden_y_selects_de_accion_no_quedan_sin_guardar(app):
     # "Datos" y "+ Color" son ediciones de verdad: sin data-busqueda, siguen marcando sucio.
     assert '<input type="text" name="nombre" value="Original" required>' in ficha
     assert 'Nombre del color<input type="text" name="nombre" placeholder="ej. Rosa" required>' in ficha
+
+
+def test_pnd094_hash_invalido_no_pide_ficha_ni_interpola_selector(app):
+    import json, re, subprocess
+    html = app["c"].get("/cliente/acme").data.decode()
+    html = html[html.index("var raiz = document.getElementById('tab-catalogo')"):]
+    def funcion(nombre):
+        m = re.search(r"    function " + nombre + r"\([^\n]*\) \{.*?\n    \}", html, re.S)
+        assert m is not None
+        return m.group()
+    js = '\n'.join(funcion(n) for n in ["abrirFicha", "activar", "arrancar"])
+    programa = '''
+    const vm=require('vm'),assert=require('assert');let pedidos=0;
+    const raiz={querySelector:()=>{throw Error('selector interpolado')},querySelectorAll:()=>[]};
+    const c={raiz,paneles:[{dataset:{cat:'producto'}}],tabs:[],estado:{cat:'producto'},arrancado:false,
+      KEY:'cat',KEY_TAB:'tab',localStorage:{getItem:()=>null,setItem:()=>{}},cargado:{},
+      leerHash:()=>({cat:'"]malicioso',ficha:'producto:..'}),pintarControles:()=>{},escribirHash:()=>{},
+      fichaActual:null,fichaSucia:()=>false,mostrar:()=>{},cuerpo:{},panel:{dataset:{urlBase:'/cliente/acme'},scrollTop:0},peticionFicha:0,
+      cargarGrid:()=>pedidos++,fetch:()=>{pedidos++;return new Promise(()=>{})},encodeURIComponent,H:{}};
+    vm.createContext(c);vm.runInContext(CODIGO,c);
+    for(const clave of ['desconocida:a','producto:','producto:../x','producto:a//b','producto:a:b','producto:.'])c.abrirFicha(clave);
+    assert.equal(pedidos,0,'ficha inválida pedida');
+    c.activar('desconocida',true);assert.equal(pedidos,0);
+    c.arrancar();assert.equal(c.estado.cat,'producto');assert.equal(pedidos,1);
+    c.abrirFicha('producto:original/pink');assert.equal(pedidos,2);
+    '''.replace('CODIGO',json.dumps(js))
+    r = subprocess.run(["node", "-e", programa], capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout + r.stderr

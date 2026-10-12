@@ -176,4 +176,24 @@ def test_formato_y_color_de_marca():
     assert b.formato_de("9:16") == "9:16" and b.formato_de("4:3") == "16:9" and b.formato_de("3:4") == "4:5"
     assert b.formato_de(None) == "9:16" and b.formato_de("raro") == "9:16"
     assert b.color_marca("#7c3aed") == "#7c3aed" and b.color_marca("7C3AED") == "#7C3AED"
-    assert b.color_marca("#abc") == "#aabbcc" and b.color_marca("morado") == "#7c3aed" and b.color_marca(None) == "#7c3aed"
+    assert b.color_marca("#abc") == "#aabbcc" and b.color_marca("morado") is None and b.color_marca(None) is None
+
+
+def test_pnd128_neutro_sin_marca_y_color_explicito_intacto(monkeypatch):
+    import final_edition
+    monkeypatch.setattr(final_edition.proyectos, "cargar", lambda c: {})
+    assert final_edition._color_acento("acme") is None
+    for color in (None, '#7c3aed', '#000000', '#ff0000'):
+        doc = b.armar_documento(GUION, SEGMENTOS, CLON, None, None, {'color': color}, '9:16', OPCIONES)
+        t = {c['id']: c for c in _pistas(doc)['p_texto']['clips']}
+        f = t['t_precio']['estilo']['fondo']
+        assert f['color'] == (color or '#000000')
+        assert f['opacidad'] == (1 if color else 0.6)
+        assert t['t_precio']['estilo']['color'] == '#FFFFFF'
+        assert t['t_hook']['estilo'] == b.ESTILO_HOOK
+        assert t['t_cta']['estilo'] == b.ESTILO_CTA
+        assert doc['subtitulos']['estilo_id'] == 'karaoke'
+        assert doc['subtitulos']['resaltado'] is None
+    antiguo = b.armar_documento(GUION, SEGMENTOS, CLON, None, None, MARCA, '9:16', OPCIONES)
+    assert d.validar(antiguo) == antiguo
+    assert d.nuevo_video('9:16')['marca']['color'] is None

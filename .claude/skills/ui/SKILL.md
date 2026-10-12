@@ -16,7 +16,11 @@ colores literales restantes de `legado/` son la excepción transitoria: solo se 
 `TECHO_COLORES_LEGADO` en `tests/test_estilos_sistema.py` (199 al cerrar la entrega 1). Los estilos en línea
 sin colores tampoco crecen (`TECHO_ESTILOS_EN_LINEA`: 414). Un componente nuevo lleva archivo en `componentes/`,
 macro en `templates/_componentes.html` si tiene marcado, sección `data-componente="<nombre>"` en la Guía
-`/admin/estilos` y una línea aquí. Cada CSS nuevo empieza con un comentario de uso, emplea tokens y se enumera
+`/admin/estilos` y una línea aquí. Componentes: **`nvp`** (2026-10-09, pedido del cliente de HappyFlops: el %
+de visitantes nuevos dice si un anuncio es TOF, MOF o BOF): `{% import "_componentes.html" as cx %}` y
+`{{ cx.nvp(nuevos, visitantes) }}` con las SUMAS del periodo; la regla (70/40, mínimo 50 visitantes) vive solo en
+`triple_whale/visitantes.py` y llega a Jinja como los globales `resumen_nvp`/`explicacion_nvp`; CSS
+`componentes/nvp.css` (los colores de etapa distinguen, no califican). Cada CSS nuevo empieza con un comentario de uso, emplea tokens y se enumera
 una sola vez en `ORDEN`; sin `@import`. `base.css` respeta `prefers-reduced-motion` y pinta los enlaces sin clase
 con `:where(a) { color: var(--accent-texto) }` (sin ella Chrome los deja lila y, visitados, morados); un `<button>`
 con clase que no pinta su fondo queda con el gris del navegador: dale fondo o súmalo al secundario de la base
@@ -34,7 +38,7 @@ fields, labels, buttons (`.btn-generar` = primary with white text; `.btn-sm`/`.b
 those instead of new one-off styles. `cliente.html` switches tabs on `hashchange` and scrolls to
 top; `data-abrir-detalle="<details id>"` opens a `<details>`. Up to 760 px the sidebar leaves the
 screen and opens with «☰ Menú» (`body.menu-abierto`); nothing may scroll the page sideways
-(`tests/test_base_visual.py`, `tests/test_movil.py`). Phone review of every screen (2026-09-28, CSS block «Celular: revisión de pantallas» in `static/estilos/legado/07-celular-revision-de-pantallas-2026-09-28.css`): auto-fill grids use `minmax(min(100%, X), 1fr)` (never a bare fixed minimum — a test rejects it), card galleries (Crear, Final edition, Experimentos, Referentes) are 2 columns ≤ 760 px, button/filter rows (`.acciones`, summaries) wrap, long ids/JSON/URLs break instead of pushing the page, and data tables (`tabla-admin`, `tabla-tiendas`, `tabla-productos`, `gasto-tabla`, `sprint-entrega`, `gpg-tabla`, or opt-in `tabla-apilada`) become one card per row ≤ 640 px with each value labelled from its column header (`static/tablas.js` copies the `<th>` text to `data-etiqueta`, also for tables inserted later by fetch); `.solo-teclado` hides keyboard-only hints on touch screens. Crear's «Desde referencias» form is a **composer**
+(`tests/test_base_visual.py`, `tests/test_movil.py`). **Crear in the sidebar** (2026-10-08, feedback Daniel received: it had to stand out more than the other tabs): `_sidebar.html` puts Crear first, apart, as a filled blue button (`.sidebar-item.sidebar-crear`, still `data-tab="creativeflowplus"`, rules in `static/estilos/base.css`, text `--sobre-accent`); the tab list still starts with Experimentos, the default tab (without Meta the page opens in Crear, `cliente.html`; `tests/test_rutas_tablero.py`). Its hover/open state uses a short glow and a ring, never `--shadow-glow`: the 28 px glow spilled onto the next row and Experimentos looked selected. Phone review of every screen (2026-09-28, CSS block «Celular: revisión de pantallas» in `static/estilos/legado/07-celular-revision-de-pantallas-2026-09-28.css`): auto-fill grids use `minmax(min(100%, X), 1fr)` (never a bare fixed minimum — a test rejects it), card galleries (Crear, Final edition, Experimentos, Referentes) are 2 columns ≤ 760 px, button/filter rows (`.acciones`, summaries) wrap, long ids/JSON/URLs break instead of pushing the page, and data tables (`tabla-admin`, `tabla-tiendas`, `tabla-productos`, `gasto-tabla`, `sprint-entrega`, `gpg-tabla`, or opt-in `tabla-apilada`) become one card per row ≤ 640 px with each value labelled from its column header (`static/tablas.js` copies the `<th>` text to `data-etiqueta`, also for tables inserted later by fetch); `.solo-teclado` hides keyboard-only hints on touch screens. Crear's «Desde referencias» form is a **composer**
 (spec `2026-09-27-crear-compositor`, CSS block «Crear: compositor»): a card whose top half is the bandeja
 (OUTSIDE `#form-flowplus`, it carries its own `<form>`s) and whose bottom half is the form, with a bar of pills
 whose menus hold the real radios/selects — the selects stay the hidden source of truth and the menus draw chips
@@ -97,7 +101,14 @@ con `document.hidden` y baja de ritmo (`intervaloSondeo`: 1,5 s → 3 s al minut
 alcance (anotado en el spec §7): el JS embebido a estáticos, Experimentos por fragmentos (**hecho el
 2026-10-03**: ver «Experimentos: armazón + fragmento»; Catálogo ya carga su galería y su ficha por fragmento desde
 2026-09-30: ver «Catálogo ecommerce y conectores»), el chequeo de Meta en la carga, los N+1 de Sprints/Experimentos
-(el de `experimentos.cargar` sigue: PND-134), el flujo viejo «Nueva idea».
+(el de últimas métricas en `experimentos.cargar` se retiró en PND-134, 2026-10-07), el flujo viejo «Nueva idea».
+
+**Barra que avisa en vez de recargar** (2026-10-08, tarjetas de Triple Whale): `iniciarPolling` recarga la página al
+terminar, y con diez barras vivas en una lista serían diez recargas. Una barra con `data-poll-al-terminar="evento"`
+despacha `trabajo-terminado` (`bubbles`; `detail.estado` y `detail.mensaje`; también si se pierde el rastro o la
+conexión) y quien la pintó repinta solo lo suyo; la lista que llega por fetch llama a `arrancarSondeos(raiz)` con lo
+insertado, y la barra de una tarjeta repintada vuelve a sondear porque la clave `job|id` solo bloquea mientras la barra
+que la marcó siga en la página. Sin el atributo todo sigue igual (skill `triple-whale`).
 
 **Experimentos: armazón + fragmento** (E2, 2026-10-03; skill `experimentos`): `#tab-experimentos` solo pinta el armazón
 (`_tab_experimentos.html`). Los resultados llegan por `fetch` a `exp_resultados` (fragmento `_exp_resultados.html`, con el filtro
@@ -122,6 +133,88 @@ Precios del compositor y clon (2026-10-02, PND-011/016): el JS recibe tarifas y 
 PND-028/031/044 (2026-10-03, lote 2): «Versión A» requiere una hija B real; los enlaces de los diálogos de Referentes cierran el diálogo antes de cambiar de pestaña. Experimentos conserva la selección por pieza/país al reconstruir la cuadrícula y cuenta cero casillas sin sustituirlo por el total. Pruebas renderizadas con Node; la revisión visual a 375 px sigue a cargo del integrador.
 
 PND-130/133 (2026-10-05, lote 4): en celular las cifras de Final edition colocan el icono encima para que la etiqueta use todo el ancho, sin cortar palabras: overflow-wrap normal solo dentro de @media max-width 760px; escritorio y .fe-flujo small conservan anywhere (revisión de Codex, 2026-10-05). El detalle remoto rechaza respuestas redirigidas (sesión vencida) antes de leer su HTML; conserva el aviso de error y no arranca sondeos. La revisión visual a 375 px la hace Claude.
+
+**Enlace directo a Crear (2026-10-07, PND-120):** `#creativeflowplus?cf=<id>` abre el detalle remoto también si la
+sesión queda fuera de las 24 tarjetas iniciales. El script del modal atiende carga y `hashchange`, valida el id y usa
+la ruta `cf_detalle` existente, con su guardia de proyecto. `tests/test_tarjetas_ligeras.py` ejecuta el script renderizado
+en Node con 30 sesiones y prueba 200/404 entre proyectos. La comprobación visual queda para Claude: Codex no abrió navegador.
+
+PND-095/136/100 (2026-10-07, lote 5 B): acciones de voz fuera del role=radio con contenedor; foco del filtro se restaura tras reemplazar el fragmento; el fondo del panel cierra solo fuera de sus límites; popstate y cambios de filtro dentro de la misma pestaña conservan scroll; exp-minimo anuncia cambios. Se retira .regla-nombre code y se regenera style.css. El mapa es documentación interna generada por AST; su barra sigue por catálogo. Verificación de código con Flask/Node y dobles; inspección visual a cargo de Claude (encargo sin navegadores).
+
+Correcciones del lote 5 (2026-10-08, pedido de Daniel): ESTRUCTURA.md y mapa_codigo.html conservan el mapa en llano de ecef5555 hasta la decisión PND-100. mapa_codigo_generar exige --salida aparte, solo lee fuentes versionadas y escapa también llaves en textos dinámicos; el estilo se compara con la plantilla del disco. El aviso exp-minimo y Usar ese total son hermanos dentro del único resumen vivo exp-resumen; el call de la plantilla coloca ambos juntos y anuncia el propio aviso, sin aria-live añadido. Las pruebas antiguas de modo oscuro y resumen único no se modifican.
+
+**Precios con margen (cobros, 2026-10-08, spec `2026-10-08-cobros-saldo-prepagado` §6):** en un proyecto que cobra, toda cifra en dólares que la persona ve ANTES de gastar es precio (costo × margen), también para el admin en los botones. En plantillas: todo `data-usd*`/`data-recargo` y toda tarifa visible van por el filtro `|precio` (`{{ m.usd_por_segundo_efectivo|precio }}`, `{{ est.usd|precio|usd }}`); el `texto` de `gastos.estimar` ya llega con margen (`gastos.texto_precio`) y en Python se usa `gastos.precio(usd)`. Al navegador de un proyecto que cobra nunca le llega el costo (ni en un hidden, ni en `data-gpg-cuerpo`, ni en un JSON junto al texto): lo que vuelve para compararlo o cobrarlo (`total_visto`, `precio_visto`) es el precio que vio, y la ruta lo pasa a costo UNA vez con `gastos.costo_de_precio` antes de comparar (tolerancia de redondeo) o pedir saldo. El filtro lleva `pass_context` porque Jinja 3.1 resuelve al compilar todo filtro sobre una constante salvo los que piden el contexto (`pass_eval_context` NO basta): `{% if (1|precio) == 1 %}` quedó fijo con el margen de la primera petición (visto el 2026-10-08); para preguntar si hay margen, `margen_precio() == 1`. El margen se lee una vez por petición (`g.margen_precio`) y solo si algo pinta un precio. Lo ya gastado («costó», «gastado», Configuración › Gasto) no pasa por aquí: es lo cobrado del libro (`cobros.vista`, skill `cobros`). **Lo ya gastado (cobros 8/11, 2026-10-08):** toda cifra de algo ya pagado por una pieza va por el filtro `|cobrado(clave)` (`{{ item.usd|cobrado(item.tipo ~ ':' ~ item.id) }}`, `final:<id>`, `swap:<id>`, `tw_eval:<id>`; la clave es la referencia del gasto sin `:t<n>`): a quien no es admin en un proyecto que cobra le da lo cobrado del libro (None si nada) y a los demás el costo; sin clave (un desglose de costo, como las capas de una final) da None a ese cliente. `{% if ver_cobrado() %}` pregunta lo mismo. Los totales armados en Python pasan por `cobros.vista.gasto_para` / `suma_vista` / `cobrado_donde`, que leen las filas cobradas UNA vez por petición (nunca una consulta por tarjeta). Configuración › Saldo (`#config-ap-saldo`) solo trae un contenedor `data-saldo-panel`: `static/cobros.js` (lo carga `base.html` en toda página de un proyecto) pide el fragmento al abrir el apartado, sondea la vuelta del pago por `data-estado-url` y pinta el aviso `.aviso-sin-saldo` con «Recargar saldo» ante CUALQUIER fetch que reciba el 402 `saldo_insuficiente` (envuelve `window.fetch` una vez; las pantallas siguen pintando su `error`). `cliente.html` abre Configuración con cualquier ancla `#config-…`. Sus estilos: `pantallas/saldo.css`. **/admin/cobros (cobros 10/11, 2026-10-08):** `admin_cobros.html` reusa `hero`, `admin-bloque`, `admin-scroll` + `tabla-admin` (11 columnas: en escritorio la tabla se desplaza dentro de su caja; ≤ 640 px `tablas.js` la apila) y `flash warn`/`flash error` para los avisos de Bold; sus pocas reglas (`cobros-admin-*`) viven al final de `pantallas/saldo.css`. Un `<input>` dentro de una celda de `tabla-admin` necesita `min-width`: con `max-width: 100%` la columna auto lo encoge y corta el placeholder (visto en la captura del 2026-10-08). **Planes en /admin/cobros (planes 7/8, 2026-10-10):** dos tablas más (`#cobros-planes`, `#cobros-suscripciones`); la de planes por proyecto lleva `cobros-admin-planes`, que deja envolver el texto (con el `nowrap` de `cobros-admin-tabla` la columna de acciones quedaba fuera de la caja a 1366 px) y fuerza los formularios de su `<details>` a `minmax(0, 1fr)` (un `<select>` con opciones largas ensanchaba la celda). Visto en escritorio (1366) y a 375 px con el método «ver la UI sin contraseña».
+
+
+PND-076/095/124 (2026-10-08, decisiones delegadas): accesos bloqueados reutiliza hero/admin-bloque/tabla-apilada/tabla-admin y data-etiqueta, sin CSS ni colores propios. Audios pagina por 24 con un botón delegado, separado de las tarjetas por el contenedor común acciones (R8, 2026-10-08) y conserva descarga/borrado de las tarjetas agregadas. El fragmento de lista no lleva scripts; el JS permanece en la plantilla completa. Alertas oculta las acciones protegidas sin ocultar sus avisos de plata. Las pantallas a 375 px y escritorio las mira Claude, por el encargo sin navegadores.
+
+**Pestañas Triple Whale y Meta (jubiladas el 2026-10-09):** las reemplazó «Rendimiento» (abajo; spec
+`2026-10-09-pestana-rendimiento-design.md` R1). `_tab_triple_whale.html`, `_tab_meta.html`, `_tw_panel.html`,
+`_meta_panel.html`, `_meta_anuncios_filas.html` y el gráfico «Día a día» de Meta (`meta_rendimiento/grafico.py` y sus
+reglas `.tb-grafico`… de `pantallas/meta.css`) se borraron; `pantallas/meta.css` quedó con el selector `#meta-cuentas`
+y, desde la integración con main (2026-10-10), los estilos de Meta rendimiento E2 (`.meta-diag*`, `.meta-seg*`,
+`.meta-ia*`, `.meta-eval*`). Los selectores del JS siguen evitando palabras que `tests/i18n_util.py` lee como español
+(`data-meta-act`, `data-meta-seleccion`: «cuenta» y «guardar» están en sus marcas).
+
+**Pestaña Rendimiento (2026-10-09, spec `2026-10-09-pestana-rendimiento-design.md` §5; skill `rendimiento`):**
+`#tab-rendimiento` (`data-tab="rendimiento"`, después de Alertas, donde estaba Triple Whale; `cliente.html` la registra en
+`paneles` y traduce las claves viejas `triplewhale` y `meta` con `JUBILADAS`, así un hash, un `localStorage` o un
+`redirect(_anchor=…)` viejo la abren) recibe de `ver_cliente` un contexto barato (`rendimiento` = conectado, hay_tw,
+hay_meta, n_cuentas, es_admin: ni Graph ni el panel). `_tab_rendimiento.html` es el armazón (cabecera, «Ajustes» con la conexión de Triple Whale y
+«Elegir cuentas de Meta», `#rend-panel` por fetch) y trae TODO el JS de las dos pestañas viejas; el panel es
+`_rend_panel.html`. No duplica marcado: las secciones que comparte con las pestañas viejas son macros de
+`_tw_secciones.html` (copias —solo sus errores: la barra de las copias en curso es una sola para las dos fuentes,
+`r.copias_vivas`—, cuenta compartida, alertas, anuncios, ia, resto) y el include `_meta_secciones.html`
+(campañas y conjuntos); «Tus anuncios» es UNA galería con las tarjetas de las dos fuentes (`_tw_galeria.html`, E2
+tarea 4: las `.rend-tarjeta` de Meta de E1 y `_rend_anuncios_meta.html` se fueron; la miniatura de Meta, de 64 px, va a
+su tamaño con `.tw-medio-miniatura`) y el estado vacío y la etiqueta de fuente, `_rend_macros.html`. `_triple_whale_conectar.html` es un `div#tw-conexion` y no
+una section: dentro de «Ajustes» cortaba la section de la pestaña (la prueba del armazón la busca hasta la siguiente).
+Estilos en `static/estilos/pantallas/rendimiento.css` (`rend-*`; «Por país» es `tabla-apilada`). `static/tw_resultados.js` también arranca solo sobre `#rend-panel`.
+
+**Meta rendimiento E2 en Rendimiento (integración con main, 2026-10-10):** el panel incluye tal cual los parciales
+que main hizo para la vieja pestaña Meta: «Diagnóstico» (`_meta_diagnostico.html`, tarjetas con prioridad y enlace al
+Administrador de anuncios, después de «Lo que necesita tu atención»), «Evaluación con IA» (`_meta_evaluar.html` y
+`_meta_evaluacion.html`, después de «Lo que hace ganar en tu cuenta»: la única sección de Meta que cobra, botón con precio
+y `data-confirmar`, barra `data-poll-al-terminar="evento"` que al terminar vuelve a pedir solo el panel, anteriores por
+fetch con `data-meta-ev`) y «Segmentos» (`_meta_segmentos.html`, después de «Campañas» y «Conjuntos»). El NVP de las
+cuentas de Meta va en una línea arriba de las tablas y como columna en campañas y conjuntos (`cx.nvp`, solo con Triple
+Whale en el proyecto; sin él, un enlace a «Ajustes»); en la tarjeta de un anuncio de Meta, la línea NVP solo con Triple
+Whale (`sin_nvp`). El JS de todo eso, y el de los ganchos del detalle de un análisis (main), vive en
+`_tab_rendimiento.html`. Detalle en las skills `rendimiento` y `meta-rendimiento`.
+
+PND-166/190 (2026-10-09, decisión delegada): acciones Sprints muestran precio_analisis_sprint, texto seguro de gastos.estimar; Reanudar usa gastos.texto_precio. Reintentar análisis reusa botón/formulario y clases comunes; panel sin scripts. La comprobación visual a 375 px, escritorio y es/en corresponde a Claude (encargo sin navegadores).
+
+
+Enmiendas lote 7 (2026-10-09): botones nuevos usan textos de estimación que fallan a precio no disponible. Fotos: cantidad faltante y total; sin acción si cero. Panel Armar: cada fallo tiene fila fuera de figure y de la grilla, texto largo envuelve, botón con precio y ✕ separada. Inspección a 375/1280 px por Claude; desbordes previos de campaña y Detenida quedan registrados, sin arreglo.
+
+Segunda ronda lote 7 (2026-10-09, encargo de Daniel): filas de análisis fallido identifican la referencia por título o id y usan campo-error de la Base visual común. El formulario de reintento dentro de panel-analisis-error conserva volver=tablero. Ambos formularios de fotos mandan n_visto; sin imagen no ofrecen un reintento pagado. La inspección a 375/1280 px sigue a cargo de Claude.
+
+
+PND-209/210/032 (2026-10-09, decisión del lote 8): pantallas/sprints.css limita el campo del link a 100%, permite envolver sprint-aviso (también Detenida de Nicho) y coloca los filtros de revisión en una grilla: campaña ocupa la fila completa en celular, Tipo/QA la siguiente. Reutiliza los campos de la Base visual común, sin colores nuevos. tests/test_lote8_ui.py; capturas a 375/1280 px en es/en a cargo de Claude.
+
+Enmienda PND-032/210 (2026-10-10, pedido de Daniel): sprint-filtros tiene margen superior para separar las acciones a 375 px. La guardia de Detenida comprueba su propio párrafo; la de filtros exige grilla de escritorio y reglas dentro de @media max-width. Capturas en es/en a 375/1280 px por Claude.
+
+**Configuración › Plan (planes 6/8, 2026-10-10, skill `cobros`):** como el saldo, el apartado `#config-ap-plan` solo trae un contenedor y `static/planes.js` pide el fragmento al abrirlo; el formulario de alta (`plan_alta.html`) es la única página con el widget de Wompi. Estilos en `pantallas/planes.css`; las barras son `<progress class="plan-barra">` (sin `style=` en línea, que tiene techo). Un `<a class="btn-generar">` no hereda el relleno de `<button>`: en esas pantallas lo pone `planes.css`; y `.vacio` trae `padding: 1rem 0`, así que las notas cortas del formulario usan `.plan-ayuda`. Visto en escritorio y a 375 px con el método «ver la UI sin contraseña».
+
+PND-062, entrega 1 (2026-10-10, pedido de Daniel: pedir lo oculto al abrirlo): el selector compartido mantiene
+el armazón y las precargas dentro del formulario; `catalogo_selector` pinta `grilla_selector` al abrir el diálogo o
+el details. El JS de `_selector_productos_nuevo.html` pide una vez, conserva los inputs elegidos, filtra tras insertar
+y permite Reintentar con textos del catálogo. Swaps y Gasto pintan 24 por página; el delegado de `base.html` usa
+`data-lista-mas` y destinos por id (no `.swaps-lista`, que también usan anuncios sueltos). Swaps vivos van primero;
+si superan 24, la primera página incluye todos para conservar sus barras. Fragmentos sin script; barras con
+`data-poll-job`, medios diferidos y tablas atendidas por `static/tablas.js`. Inspección a 375 px a cargo de Claude.
+
+Enmiendas PND-062, entrega 1 (2026-10-10, pedido de Daniel tras revisar la entrega): El envío de Cambiar producto se bloquea en el shell si falta producto, abre el selector y conserva los archivos locales. Ver más inserta las tarjetas antes de sus acciones; la prueba usa un árbol del HTML renderizado con orden y parentesco reales. Un 401/403 o una redirección deja aviso y enlace a entrar, sin botón de reintento.
+
+PND-062, entrega 2 (2026-10-10, pedido de Daniel): los cuatro módulos grandes de Crear viven en
+`static/crear-compositor.js`, `crear-flowplus.js`, `crear-audios.js` y `crear-guiones.js`, con
+`url_for('static', ...)` (versión y caché existentes). El compositor carga sin `defer` en su lugar,
+después del formulario y su JSON, para registrar las guardas del submit al parsear la sección
+(enmienda tras revisar, 2026-10-10); los otros tres conservan `defer`. Cada plantilla deja un JSON `crear-<módulo>-datos`
+con textos traducidos y datos. `_tab_flowplus.html` activa el modo inicial en DOMContentLoaded para que
+Guiones y el chat ya escuchen `crear:modo`; los eventos posteriores conservan su camino. `formatearUSD`
+sigue global antes del compositor. Node ejecuta los módulos completos sobre el HTML Flask; pantalla en es/en,
+375 px y escritorio a cargo de Claude, sin afirmar inspección visual de Codex.
 
 ## Marca CREATV Adstra y fondo galáctico (2026-10-06, nombre de vuelta el 2026-10-10)
 

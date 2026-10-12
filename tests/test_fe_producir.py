@@ -433,7 +433,7 @@ def test_producir_ok(entorno):
     assert entorno["voz"] == {"voz": "Daniel", "cliente": "acme", "idioma": "en"}
     assert entorno["musica"]["estilo"] == "urbano"
     assert entorno["texto"]["palabras"][0]["texto"] == "Hola"
-    assert entorno["texto"]["marca"]["color_acento"] == "#7c3aed"
+    assert entorno["texto"]["marca"]["color_acento"] is None
     assert entorno["render"]["clon"].endswith("clon.mp4") and entorno["render"]["voz"] and entorno["render"]["musica"]
     assert entorno["render"]["duracion_s"] == pytest.approx(8.0, abs=0.1)
 
@@ -826,3 +826,17 @@ def test_legado_voz_propia_anota_minimax(entorno):
     v = _voz_propia()
     _, r = final_edition.producir("acme", entorno["cf_id"], "es", "CO", {"voz": f"vp:{v['id']}"})
     assert entorno["voz"]["voz"] == f"vp:{v['id']}" and r["capas"]["voz"]["proveedor"] == "fal/minimax"
+
+
+def test_pnd144_legado_anota_pista_pagada_fallida(entorno, monkeypatch):
+    import gastos
+    def falla(*a, **k):
+        raise musica.PistaPagadaError(RuntimeError('R2 fallo'), .02, 'https://fal/p.wav')
+    monkeypatch.setattr(musica, 'obtener_pista', falla)
+    fid, resumen = final_edition.producir_legado('acme', entorno['cf_id'], 'es', 'CO', {}, ref_sufijo=':t144')
+    assert resumen['capas']['musica']['costo_usd'] == .02
+    filas = [g for g in gastos.historial('acme') if g['referencia'] == f'final:{fid}:t144']
+    assert len(filas) == 1
+    assert filas[0]['extra']['capas']['musica'] == .02
+    assert filas[0]['usd'] == pytest.approx(sum(filas[0]['extra']['capas'].values()))
+    assert filas[0]['usd'] >= .02

@@ -1,0 +1,7 @@
+/* Crear: el corazón de cada tarjeta (2026-10-08), para separar las versiones que se van a usar. */
+.generado-fav-form { position: absolute; right: .45rem; top: .4rem; margin: 0; z-index: 1; }
+.generado-fav { width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 999px; background: var(--velo-media); color: var(--sobre-media); font-size: 1.15rem; line-height: 1; cursor: pointer; }
+.generado-fav:hover { background: var(--velo-media-fuerte); }
+.generado-fav.activo { color: var(--error); }
+.generado-fav:focus-visible { outline: 2px solid var(--sobre-media); outline-offset: 2px; }
+.generado-fav-form ~ .generado-tipo { max-width: calc(100% - 3.6rem); } /* que el corazón no tape la etiqueta del formato */

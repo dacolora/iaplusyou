@@ -1,0 +1,16 @@
+{#- Componentes con marcado propio (skill `ui`, «Sistema de estilos»): cada uno con su CSS en static/estilos/componentes/
+    y su sección en la Guía (/admin/estilos). Se importan con {% import "_componentes.html" as cx %}. -#}
+
+{#- NVP: % de visitantes nuevos y etapa del embudo (spec 2026-10-09-nvp-visitantes-nuevos §4; CSS componentes/nvp.css).
+    `nuevos` y `visitantes` son SUMAS del periodo (nunca un promedio de porcentajes); la regla vive en
+    triple_whale/visitantes.py y llega como el global `resumen_nvp`. -#}
+{% macro nvp(nuevos, visitantes) -%}
+{%- set r = resumen_nvp(nuevos, visitantes) -%}
+{%- if r.estado == 'sin_datos' -%}
+<span class="chip-nvp chip-nvp-vacio" title="{{ _('Sin visitas atribuidas por el Pixel de Triple Whale (sin rastreo o sin clics en este periodo).') }}">—</span>
+{%- elif r.estado == 'pocos' -%}
+<span class="chip-nvp chip-nvp-pocos" title="{{ _('NVP: %(nuevos)s visitantes nuevos de %(total)s. Son muy pocos para decir la etapa del embudo.', nuevos=r.nuevos, total=r.visitantes) }}">{{ '%.0f' | format(r.nvp) }}&nbsp;%</span>
+{%- else -%}
+<span class="chip-nvp chip-nvp-{{ r.etapa | lower }}" title="{{ _('NVP: %(nuevos)s visitantes nuevos de %(total)s.', nuevos=r.nuevos, total=r.visitantes) }} {{ explicacion_nvp[r.etapa] | traducir }}">{{ '%.0f' | format(r.nvp) }}&nbsp;% <span class="chip-nvp-etapa" translate="no">{{ r.etapa }}</span></span>
+{%- endif -%}
+{%- endmacro %}

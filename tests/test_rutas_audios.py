@@ -1,6 +1,8 @@
 """Rutas de Audios en Crear (spec 2026-09-28 §4): JSON con la lista ya pintada."""
 import re
 
+from tests.js_de_pagina import con_script_estatico
+
 import pytest
 
 import audios
@@ -283,7 +285,7 @@ def test_la_pagina_trae_mis_voces_el_panel_y_diez_idiomas(app):
     assert 'id="au-vp-descripcion"' in html and "US$ 1,52" in html and "US$ 3,01" in html
     assert "data-url-vp-clonar=" in html and "data-url-vp-lista=" in html
     sel = html.split('id="au-idioma"')[1].split("</select>")[0]
-    assert sel.count("<option") == 10 and "Norsk" in sel and "Čeština" in sel and "Suomi" in sel
+    assert sel.count("<option") == 11 and "Nederlands" in sel and "Norsk" in sel and "Čeština" in sel and "Suomi" in sel
     assert "Idioma del texto" in html
     # Pestañas del panel accesibles (revisión Task 6): cada una dice si está
     # elegida y qué formulario controla; los formularios son sus tabpanel.
@@ -294,6 +296,7 @@ def test_la_pagina_trae_mis_voces_el_panel_y_diez_idiomas(app):
     for forma in ("clonar", "disenar"):
         panel = re.search(rf'<div[^>]*data-vp-form="{forma}"[^>]*>', html).group(0)
         assert 'role="tabpanel"' in panel and f'id="au-vp-form-{forma}"' in panel
+    html = con_script_estatico(html, 'crear-audios.js')
     # No hay arnés de JS: como en test_base_visual/test_movil, se mira el
     # script de la página. Un clon que salió desmarca la casilla de permiso
     # (cada clon pide su propio permiso) y elegir otro archivo también la
@@ -331,6 +334,7 @@ def test_tabla_clon_coincide_con_estimador_y_se_calcula_una_vez(app, monkeypatch
         for nombre, idioma in [('Ana', 'es'), ('Dániel Pérez', 'en'), ('李雷', 'de')]:
             assert contexto['precios_clon'][idioma][len(nombre)] == original('voz_clonada', nombre=nombre, idioma=idioma)['usd']
         html = app['c'].get('/cliente/acme').get_data(as_text=True)
+        html = con_script_estatico(html, 'crear-audios.js')
         d._contexto_mis_voces('acme')
         assert cantidad == len(audios.IDIOMAS) * (voces_propias.MAX_NOMBRE + 1)
         assert len(calculos) == cantidad
@@ -344,6 +348,7 @@ def test_clonar_refresca_precio_al_vaciar_nombre(app):
     import json
     import subprocess
     html = app['c'].get('/cliente/acme').get_data(as_text=True)
+    html = con_script_estatico(html, 'crear-audios.js')
     funcion = re.search(r'function refrescarPrecioClon\(\) \{.*?\n  \}', html, re.S).group()
     accion = html.split('enviarVoz(raiz.dataset.urlVpClonar, fd).then(function (ok) {', 1)[1].split('    });', 1)[0]
     tabla = app['dashboard']._contexto_mis_voces('acme')['precios_clon']
@@ -369,6 +374,7 @@ def test_diseno_refresca_precio_por_nombre_e_idioma_en_node(app):
     import json
     import subprocess
     html = app['c'].get('/cliente/acme').get_data(as_text=True)
+    html = con_script_estatico(html, 'crear-audios.js')
     assert 'id="au-vp-disenar-precio"' in html
     tabla = app['dashboard']._contexto_mis_voces('acme')['precios_disenar']
     funcion = html[html.index('function refrescarPrecioDisenar('):html.index('function refrescarPrecioClon(')]
@@ -407,3 +413,84 @@ def test_tabla_diseno_por_nombre_e_idioma_contra_cobro(app, monkeypatch):
         assert precios[1] != precios[2]  # idioma
     finally:
         d._precios_disenar.cache_clear()
+
+
+def test_pnd095_botones_de_muestra_y_borrar_fuera_del_radio(app):
+    from flask import render_template_string
+    from html.parser import HTMLParser
+    with app["dashboard"].app.test_request_context():
+        html = render_template_string("{% from '_voces_galeria.html' import fichas_galeria, voz_propia_item %}{{ fichas_galeria(fichas) }}{{ voz_propia_item(v,'/borrar') }}",\
+            fichas=[{"nombre": "Rachel", "genero": "mujer", "genero_nombre": "Mujer"}],\
+            v={"valor": "vp:7", "nombre": "Mi voz", "forma_nombre": "Clonada", "estrenada": True})
+    class Lector(HTMLParser):
+        def __init__(self):
+            super().__init__(); self.pila = []; self.radios = 0; self.botones = 0
+        def handle_starttag(self, tag, attrs):
+            a = dict(attrs)
+            if tag == "button":
+                assert "radio" not in self.pila, "botón dentro de role=radio"
+                self.botones += 1
+            if a.get("role") == "radio":
+                assert a.get("tabindex") == "0" and "data-voz" in a
+                self.radios += 1
+            self.pila.append(a.get("role"))
+        def handle_endtag(self, tag):
+            self.pila.pop()
+    lector = Lector(); lector.feed(html)
+    assert lector.radios == 2 and lector.botones == 3
+
+
+def test_pnd095_lista_paginada_24_con_aislamiento_y_sin_scripts(app):
+    propios = [_audio(n=n)['id'] for n in range(1, 51)]
+    _audio(cliente='otro', n=1000)
+    c = app['c']
+    ids = []
+    desde = 0
+    for cantidad, siguiente in [(24, 24), (24, 48), (2, None)]:
+        d = c.get(f'/cliente/acme/audios/lista?desde={desde}', headers=FETCH).get_json()
+        assert len(d['audios']) == cantidad
+        assert d['siguiente'] == siguiente
+        assert '<script' not in d['html']
+        assert ('class="btn-sm au-mas"' in d['html']) == (siguiente is not None)
+        ids += [a['id'] for a in d['audios']]
+        desde = siguiente
+    assert ids == list(reversed(propios)) and len(set(ids)) == 50
+    html = c.get('/cliente/acme').get_data(as_text=True)
+    assert len(re.findall(r'id="au-item-\d+"', html)) == 24
+    for valor in ['-1', 'no', str(2**100)]:
+        assert c.get('/cliente/acme/audios/lista?desde=' + valor, headers=FETCH).status_code == 200
+
+
+def test_r8_ver_mas_usa_espaciado_comun(app):
+    from pathlib import Path
+    for n in range(25):
+        _audio(n=n)
+    html = app['c'].get('/cliente/acme/audios/lista', headers=FETCH).get_json()['html']
+    assert re.search(r'<div class="acciones">\s*<button[^>]*class="btn-sm au-mas"', html)
+    css = (Path(__file__).parents[1] / 'static/style.css').read_text()
+    regla = re.search(r'\.acciones\s*\{([^}]+)\}', css).group(1)
+    assert float(re.search(r'margin-top:\s*([\d.]+)rem', regla).group(1)) > 0
+
+
+def test_pnd095_ver_mas_agrega_tarjetas_en_node(app):
+    import subprocess
+    html = app['c'].get('/cliente/acme').get_data(as_text=True)
+    html = con_script_estatico(html, 'crear-audios.js')
+    ini = html.index("    var mas = ev.target.closest('.au-mas');")
+    fin = html.index("    var b = ev.target.closest('.au-borrar');", ini)
+    script = html[ini:fin]
+    codigo = '''
+    const assert = require('node:assert/strict');
+    let items=[1,2], reemplazo=null, error=false;
+    const mas={dataset:{url:'/lista?desde=24'},isConnected:true, disabled:false,
+      replaceWith(x){reemplazo=x},remove(){reemplazo='fin'}};
+    const ev={target:{closest:()=>mas}};
+    const fragmento={content:{querySelectorAll:()=>[3,4],querySelector:()=>({dataset:{url:'/lista?desde=48'}})}};
+    const document={createElement:()=>fragmento,querySelector:()=>({appendChild:x=>items.push(x)})};
+    const T={sinConexion:'error'}, mostrarError=()=>{error=true};
+    const fetch=url=>{assert.equal(url,'/lista?desde=24');return Promise.resolve({ok:true,json:()=>Promise.resolve({html:'fragmento'})})};
+    function click(){''' + script + '''}
+    click();
+    setTimeout(()=>{assert.deepEqual(items,[1,2,3,4]);assert.equal(reemplazo.dataset.url,'/lista?desde=48');assert.equal(error,false)},0);
+    '''
+    subprocess.run(['node', '-e', codigo], check=True, capture_output=True, text=True)

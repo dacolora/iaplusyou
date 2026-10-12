@@ -175,8 +175,11 @@ def test_crear_y_cambiar_producto_no_ofrecen_el_archivado(app):
     c = app["c"]
     c.post(URL.format("original"), data={"archivado": "1"})
     html = c.get("/cliente/acme").get_data(as_text=True)
-    assert 'value="producto:cozy/gray"' in html and 'value="producto:original/pink"' not in html      # Crear
-    assert 'name="producto_id" value="cozy/gray"' in html and 'value="original/pink"' not in html   # Cambiar producto
+    # Desde la página por partes (PND-062, 2026-10-10) la grilla llega por fetch al abrir el selector.
+    crear = c.get("/cliente/acme/catalogo/selector?sel=plus", headers={"X-Requested-With": "fetch"}).get_data(as_text=True)
+    cambiar = c.get("/cliente/acme/catalogo/selector?sel=clone", headers={"X-Requested-With": "fetch"}).get_data(as_text=True)
+    assert 'value="producto:cozy/gray"' in crear and 'value="producto:original/pink"' not in crear      # Crear
+    assert 'name="producto_id" value="cozy/gray"' in cambiar and 'value="original/pink"' not in cambiar   # Cambiar producto
     assert 'data-n-cat="producto">1</span>' in html                                                  # la pestaña cuenta 1
 
 

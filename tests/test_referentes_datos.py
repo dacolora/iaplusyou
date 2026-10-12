@@ -437,3 +437,24 @@ def test_guardar_mismo_anuncio_simultaneo_no_duplica(base_temporal, monkeypatch)
     with ThreadPoolExecutor(max_workers=2) as pool: resultados = list(pool.map(guardar, range(2)))
     assert resultados[0][0] == resultados[1][0]
     assert sorted(r[1] for r in resultados) == [False, True]
+
+
+def test_pnd090_por_ids_una_consulta_y_misma_visibilidad(base_temporal):
+    from referentes import datos
+    import sqlalchemy as sa
+    import db
+    global_id, _ = datos.guardar_referente(_anuncio(anuncio_id="batch-global"))
+    propio, _ = datos.guardar_referente(_anuncio(anuncio_id="batch-propio"), cliente="acme")
+    ajeno, _ = datos.guardar_referente(_anuncio(anuncio_id="batch-ajeno"), cliente="otro")
+    consultas = []
+    def contar(con, cursor, sentencia, parametros, contexto, muchos):
+        if sentencia.lstrip().upper().startswith("SELECT"):
+            consultas.append(sentencia)
+    sa.event.listen(db.engine(), "before_cursor_execute", contar)
+    try:
+        filas = datos.por_ids("acme", [propio, global_id, ajeno, propio, -1])
+    finally:
+        sa.event.remove(db.engine(), "before_cursor_execute", contar)
+    assert set(filas) == {propio, global_id}
+    assert len(consultas) == 1
+    assert filas[propio] == datos.referente("acme", propio)

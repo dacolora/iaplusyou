@@ -204,7 +204,7 @@ def test_chip_gasto_aparece_en_paginas_de_sprints(app):
     sid, cid = _sprint(datos, pid, tid)
     gastos.registrar("acme", "guion", 0.02, "guion:t1")
     html = app["c"].get(f"/cliente/acme/sprints/{sid}").data.decode()
-    assert "Este mes:" in html and "generación" in html
+    assert "Gasto total:" in html and "generación" in html and "Este mes:" not in html
 
 
 def test_crear_sprint_persona_inexistente_no_deja_sprint_a_medias(app):
@@ -267,11 +267,11 @@ def test_referencias_link_catalogo_y_reutilizar(app, monkeypatch):
     assert app["encolados"][-1]["tipo"] == "sprint_referencia_link" and app["encolados"][-1]["payload"]["campana_id"] == cid
     monkeypatch.setenv("R2_PUBLIC_BASE_URL", "https://r2")
     monkeypatch.setattr(catalogo_productos, "encontrar", lambda cl, pid_, categoria=None: {"id": "espejo_led", "nombre": "Espejo LED", "imagenes": ["1.jpg", "2.jpg"]})
-    c.post(f"/cliente/acme/sprints/{sid}/campanas/{cid}/referencias/catalogo")
+    c.post(f"/cliente/acme/sprints/{sid}/campanas/{cid}/referencias/catalogo", data={"n_visto": 2})
     refs = datos.referencias("acme", cid)
     assert [r["origen"] for r in refs] == ["catalogo", "catalogo"] and refs[0]["estado"] == "lista"
     assert refs[0]["url"] == "https://r2/clientes/acme/productos/espejo_led/1.jpg"
-    c.post(f"/cliente/acme/sprints/{sid}/campanas/{cid}/referencias/catalogo")     # idempotente
+    c.post(f"/cliente/acme/sprints/{sid}/campanas/{cid}/referencias/catalogo", data={"n_visto": 0})     # idempotente
     assert len(datos.referencias("acme", cid)) == 2
     tid2 = datos.crear_temporada("acme", "Navidad", "2026-11-15", "2026-12-31")
     cid2 = datos.agregar_campana("acme", sid, pid, "espejo_led", tid2, 1, 0)
@@ -885,6 +885,8 @@ def test_campana_ver_muestra_candidatos_ia(app, monkeypatch):
     monkeypatch.setattr(referentes_datos, "referente", lambda cliente_, rid: {
         "id": rid, "imagen_url": "https://cdn/5.jpg", "titular": "Candidato IA", "familia": "ugc",
     } if rid == 5 else None)
+    monkeypatch.setattr(referentes_datos, "por_ids", lambda cliente, ids: {rid: ref for rid in ids
+        if (ref := referentes_datos.referente(cliente, rid))})
     r = app["c"].get(f"/cliente/acme/sprints/{sid}/campanas/{cid}")
     assert r.status_code == 200
     assert b"Candidato IA" in r.data
@@ -907,6 +909,8 @@ def test_campana_ver_no_muestra_sugerencia_ia_ya_agregada(app, monkeypatch):
     monkeypatch.setattr(referentes_datos, "familias", lambda cliente_: [])
     datos.agregar_referencia_biblioteca("acme", cid, 5)
     datos.actualizar_campana("acme", cid, extra={"sugerencias_ia": [{"referente_id": 5, "razon": "buena razón"}]})
+    monkeypatch.setattr(referentes_datos, "por_ids", lambda cliente, ids: {rid: ref for rid in ids
+        if (ref := referentes_datos.referente(cliente, rid))})
     r = app["c"].get(f"/cliente/acme/sprints/{sid}/campanas/{cid}")
     assert r.status_code == 200
     assert "buena razón".encode() not in r.data
@@ -1057,3 +1061,255 @@ def test_la_revision_del_lote_muestra_la_doctrina(con_ideas, monkeypatch, tmp_pa
     html = c.get(f"/cliente/acme/sprints/{sid}/revision").data.decode()
     assert "Doctrina: 1 por mejorar" in html
     assert "Doctrina: sin revisar" in html
+
+
+def test_pnd090_consumir_sugerencia_conserva_las_otras_y_extra(app, monkeypatch):
+    from sprints import datos
+    import referentes.datos as rd
+    pid, tid = _base(datos)
+    sid, cid = _sprint(datos, pid, tid)
+    datos.actualizar_campana("acme", cid, extra={"otra": "conservar", "sugerencias_ia": [
+        {"referente_id": 7}, {"referente_id": 8}]})
+    monkeypatch.setattr(rd, "referente", lambda cliente, rid: {"id": rid, "estado_imagen": "ok",
+        "imagen_url": "https://cdn/ref.jpg", "titular": "T", "firma": "", "familia": None})
+    monkeypatch.setattr(rd, "familias", lambda cliente: [])
+    assert app["c"].post(f"/cliente/acme/sprints/campanas/{cid}/referencias_biblioteca",
+        data={"referente_ids": ["7"]}).status_code == 302
+    extra = datos.campana("acme", cid)["extra"]
+    assert extra == {"otra": "conservar", "sugerencias_ia": [{"referente_id": 8}]}
+
+
+@pytest.mark.parametrize("panel", [False, True])
+def test_pnd090_sugerencias_precargadas_sin_una_lectura_por_tarjeta(app, monkeypatch, panel):
+    from sprints import datos
+    import referentes.datos as rd
+    pid, tid = _base(datos)
+    sid, cid = _sprint(datos, pid, tid)
+    ids = list(range(100, 112))
+    datos.actualizar_campana("acme", cid, extra={"sugerencias_ia": [{"referente_id": rid} for rid in ids]})
+    llamadas = []
+    def cargar(cliente, solicitados):
+        llamadas.append((cliente, solicitados))
+        return {rid: {"id": rid, "imagen_url": "https://cdn/x.jpg", "titular": f"Candidato {rid}", "familia": "ugc"} for rid in solicitados}
+    monkeypatch.setattr(rd, "por_ids", cargar)
+    def individual(*args):
+        pytest.fail("una lectura por sugerencia")
+    monkeypatch.setattr(rd, "referente", individual)
+    ruta = f"/cliente/acme/sprints/{sid}/campanas/{cid}" + ("/panel" if panel else "")
+    r = app["c"].get(ruta)
+    assert r.status_code == 200
+    if not panel:
+        assert b"Candidato 111" in r.data
+    assert llamadas == [("acme", ids)]
+
+
+def test_pnd088_repetir_qa_no_borra_ni_encola_aprobadas(con_ideas, monkeypatch, tmp_path):
+    from sprints import datos
+    sid, cid, iv, ii, cfs = _con_piezas(con_ideas, monkeypatch, tmp_path)
+    c = con_ideas['c']
+    anterior = datos.idea('acme', iv)['qa']
+    n = len(con_ideas['encolados'])
+    r = c.post(f'/cliente/acme/sprints/ideas/{iv}/qa', headers={'Accept': 'application/json'})
+    assert r.status_code == 409
+    assert datos.idea('acme', iv)['qa'] == anterior
+    assert len(con_ideas['encolados']) == n
+    datos.actualizar_idea('acme', ii, revision='aprobada')
+    assert c.post(f'/cliente/acme/sprints/ideas/{ii}/qa', headers={'Accept': 'application/json'}).status_code == 409
+    assert len(con_ideas['encolados']) == n
+    datos.actualizar_idea('acme', ii, revision='pendiente', qa={'veredicto': 'falla'})
+    assert c.post(f'/cliente/acme/sprints/ideas/{ii}/qa', headers={'Accept': 'application/json'}).status_code == 200
+    assert len(con_ideas['encolados']) == n + 1
+
+
+@pytest.mark.parametrize('panel', [False, True])
+@pytest.mark.parametrize('accion', ['reanalizar', 'subir', 'catalogo'])
+@pytest.mark.parametrize('margen_roto', [False, True])
+def test_pnd166_precios_acciones_y_reintento(app, monkeypatch, panel, accion, margen_roto):
+    from sprints import datos
+    from cobros import libro
+    from tests.html_lote7 import HTML
+    import gastos, catalogo_productos
+    producto = {'id': 'espejo_led', 'nombre': 'Espejo', 'imagenes': ['a.jpg', 'b.jpg', 'c.jpg']}
+    monkeypatch.setattr(catalogo_productos, 'listar', lambda *a: [producto])
+    monkeypatch.setattr(catalogo_productos, 'encontrar', lambda *a: producto)
+    monkeypatch.setenv('R2_PUBLIC_BASE_URL', 'https://r2')
+    pid, tid = _base(datos)
+    sid, cid = _sprint(datos, pid, tid)
+    carpeta = catalogo_productos.CATEGORIAS['producto']['carpeta']
+    rid = datos.agregar_referencia('acme', cid, 'imagen', f'https://r2/clientes/acme/{carpeta}/espejo_led/a.jpg')
+    datos.actualizar_referencia('acme', rid, analisis_estado='error', analisis={'error': 'Error code: 529 - {"secreto": "detalle"}'})
+    libro.configurar('acme', cobrar=True, margen=2, usuario='admin')
+    if margen_roto:
+        monkeypatch.setattr(gastos, '_leer_margen', lambda *a: None)
+    base = f'/cliente/acme/sprints/{sid}/campanas/{cid}'
+    html = app['c'].get(base + ('/panel' if panel else '')).data.decode()
+    dom = HTML(html)
+    action = f'/cliente/acme/sprints/referencias/{rid}/reanalizar' if accion == 'reanalizar' else base + '/referencias' + ('/catalogo' if accion == 'catalogo' else '')
+    form = dom.form(action)
+    boton, = form.todos('button')
+    if margen_roto:
+        assert gastos.SIN_PRECIO in boton.texto()
+        assert 'US$' not in boton.texto()
+    else:
+        n = 2 if accion == 'catalogo' else 1
+        assert gastos.formatear(gastos.TARIFAS['analizar_referencia'] * n * 2) in boton.texto()
+        if accion == 'catalogo':
+            assert str(n) in boton.texto()
+    if panel and accion == 'reanalizar':
+        assert not form.dentro('figure')
+        assert not form.dentro('div') or form.padre.attrs.get('class') == 'panel-analisis-error'
+        assert 'Error code:' not in html and 'secreto' not in html
+        assert not dom.raiz.todos('script')
+        assert any(b.attrs.get('data-quitar-ref') for f in dom.raiz.todos('figure') for b in f.todos('button'))
+
+
+def test_pnd166_personas_sin_boton(app):
+    from tests.html_lote7 import HTML
+    import tareas.sprints as ts, gastos
+    html = app['c'].get('/cliente/acme').data.decode()
+    assert not any(f.attrs.get('action') == '/cliente/acme/sprints/personas/sugerir' for f in HTML(html).raiz.todos('form'))
+    assert ts.encolar_sugerir('acme')
+    assert gastos.estimar('sugerir_personas')['usd'] is not None
+
+
+@pytest.mark.parametrize('panel', [False, True])
+def test_pnd166_catalogo_sin_fotos_nuevas(app, monkeypatch, panel):
+    from sprints import datos
+    from tests.html_lote7 import HTML
+    import catalogo_productos
+    producto = {'id': 'espejo_led', 'nombre': 'Espejo', 'imagenes': ['a.jpg']}
+    monkeypatch.setattr(catalogo_productos, 'listar', lambda *a: [producto])
+    monkeypatch.setattr(catalogo_productos, 'encontrar', lambda *a: producto)
+    monkeypatch.setenv('R2_PUBLIC_BASE_URL', 'https://r2')
+    sid, cid = _sprint(datos, *_base(datos))
+    carpeta = catalogo_productos.CATEGORIAS['producto']['carpeta']
+    datos.agregar_referencia('acme', cid, 'imagen', f'https://r2/clientes/acme/{carpeta}/espejo_led/a.jpg')
+    base = f'/cliente/acme/sprints/{sid}/campanas/{cid}'
+    dom = HTML(app['c'].get(base + ('/panel' if panel else '')).data.decode())
+    form = dom.form(base + '/referencias/catalogo')
+    assert not form.todos('button') and form.todos('p')
+    app['c'].post(base + '/referencias/catalogo', data={'n_visto': 0})
+    assert app['encolados'] == []
+
+
+@pytest.mark.parametrize('tablero', [False, True])
+@pytest.mark.parametrize('viva', [False, True])
+def test_pnd166_reanalizar_vuelve_y_frena_doble_clic(app, monkeypatch, tablero, viva):
+    from sprints import datos, rutas
+    sid, cid = _sprint(datos, *_base(datos))
+    rid = datos.agregar_referencia('acme', cid, 'imagen', 'https://r2/i.jpg')
+    datos.actualizar_referencia('acme', rid, analisis_estado='error')
+    monkeypatch.setattr(rutas.trabajos, 'en_curso', lambda job: viva)
+    r = app['c'].post(f'/cliente/acme/sprints/referencias/{rid}/reanalizar', data={'volver': 'tablero'} if tablero else {})
+    assert r.headers['Location'] == (f'/cliente/acme/sprints/{sid}?panel={cid}' if tablero else f'/cliente/acme/sprints/{sid}/campanas/{cid}')
+    assert len(app['encolados']) == (0 if viva else 1)
+    assert datos.referencia('acme', rid)['analisis_estado'] == ('error' if viva else 'pendiente')
+
+
+def test_pnd166_panel_errores_en_lineas_propias(app):
+    from sprints import datos
+    from tests.html_lote7 import HTML
+    sid, cid = _sprint(datos, *_base(datos))
+    ids = [datos.agregar_referencia('acme', cid, 'imagen', f'https://r2/{i}.jpg') for i in range(2)]
+    for rid in ids:
+        datos.actualizar_referencia('acme', rid, analisis_estado='error', analisis={'error': 'Error code: 529 - {"detalle": "crudo"}'})
+    html = app['c'].get(f'/cliente/acme/sprints/{sid}/campanas/{cid}/panel').data.decode()
+    dom = HTML(html)
+    filas = [n for n in dom.raiz.todos('div') if n.attrs.get('class') == 'panel-analisis-error']
+    assert len(filas) == len(ids)
+    for fila, rid in zip(filas, ids):
+        assert not fila.dentro('figure')
+        assert fila.padre.attrs.get('class') == 'panel-seccion'
+        assert fila.todos('p')
+        form, = fila.todos('form')
+        assert form.attrs['action'].endswith(f'/{rid}/reanalizar')
+    assert 'Error code:' not in html and 'crudo' not in html
+
+
+@pytest.mark.parametrize('panel', [False, True])
+def test_r2_fotos_formulario_conserva_cantidad_vista(app, monkeypatch, panel):
+    from sprints import datos
+    from tests.html_lote7 import HTML
+    import catalogo_productos
+    producto = {'id': 'espejo_led', 'nombre': 'Espejo', 'imagenes': ['a.jpg', 'b.jpg']}
+    monkeypatch.setattr(catalogo_productos, 'listar', lambda *a: [producto])
+    sid, cid = _sprint(datos, *_base(datos))
+    base = f'/cliente/acme/sprints/{sid}/campanas/{cid}'
+    dom = HTML(app['c'].get(base + ('/panel' if panel else '')).data.decode())
+    entradas = dom.form(base + '/referencias/catalogo').todos('input')
+    visto, = [n for n in entradas if n.attrs.get('name') == 'n_visto']
+    assert visto.attrs.get('type') == 'hidden' and visto.attrs.get('value') == '2'
+
+
+@pytest.mark.parametrize('json', [False, True])
+@pytest.mark.parametrize('n_actual', [1, 3])
+def test_r2_fotos_cantidad_cambiada_no_encola(app, monkeypatch, json, n_actual):
+    from sprints import datos
+    import catalogo_productos
+    sid, cid = _sprint(datos, *_base(datos))
+    producto = {'id': 'espejo_led', 'nombre': 'Espejo', 'imagenes': [f'{i}.jpg' for i in range(n_actual)]}
+    monkeypatch.setattr(catalogo_productos, 'encontrar', lambda *a: producto)
+    url = f'/cliente/acme/sprints/{sid}/campanas/{cid}/referencias/catalogo'
+    kw = {'json': {'n_visto': 2}} if json else {'data': {'n_visto': 2, 'volver': 'tablero'}}
+    r = app['c'].post(url, **kw)
+    assert app['encolados'] == [] and datos.referencias('acme', cid) == []
+    if json:
+        assert r.status_code == 409 and r.json['ok'] is False and r.json['error']
+        assert r.json['n_actual'] == n_actual
+    else:
+        assert r.status_code == 302 and r.headers['Location'] == f'/cliente/acme/sprints/{sid}?panel={cid}'
+        with app['c'].session_transaction() as sesion:
+            assert sesion['_flashes'][-1][0] == 'warn' and sesion['_flashes'][-1][1]
+
+
+@pytest.mark.parametrize('crudo', ['Error code: 529 - {"detalle": "crudo"}', 'texto viejo sin procedencia'])
+def test_r2_campana_no_muestra_error_ajeno(app, crudo):
+    from sprints import datos
+    sid, cid = _sprint(datos, *_base(datos))
+    rid = datos.agregar_referencia('acme', cid, 'imagen', 'https://r2/a.jpg')
+    datos.actualizar_referencia('acme', rid, analisis_estado='error', analisis={'error': crudo})
+    html = app['c'].get(f'/cliente/acme/sprints/{sid}/campanas/{cid}').data.decode()
+    assert crudo not in html and 'Error code:' not in html and 'crudo' not in html
+
+
+def test_r2_panel_identifica_errores_y_regresa_al_tablero(app):
+    from sprints import datos
+    from tests.html_lote7 import HTML
+    sid, cid = _sprint(datos, *_base(datos))
+    ids = [datos.agregar_referencia('acme', cid, 'imagen', f'https://r2/{i}.jpg', titulo=titulo)
+           for i, titulo in enumerate(['Mi referencia', ''])]
+    for rid in ids:
+        datos.actualizar_referencia('acme', rid, analisis_estado='error')
+    dom = HTML(app['c'].get(f'/cliente/acme/sprints/{sid}/campanas/{cid}/panel').data.decode())
+    filas = [n for n in dom.raiz.todos('div') if n.attrs.get('class') == 'panel-analisis-error']
+    assert len(filas) == 2
+    for fila, rid, titulo in zip(filas, ids, ['Mi referencia', str(ids[1])]):
+        p, = fila.todos('p')
+        assert titulo in p.texto()
+        assert 'campo-error' in p.attrs.get('class', '').split()
+        form, = fila.todos('form')
+        assert form.attrs['action'].endswith(f'/{rid}/reanalizar')
+        volver, = [n for n in form.todos('input') if n.attrs.get('name') == 'volver']
+        assert volver.attrs.get('value') == 'tablero'
+
+
+@pytest.mark.parametrize('panel', [False, True])
+def test_r2_referencia_sin_imagen_no_ofrece_reintento_pagado(app, monkeypatch, panel):
+    from sprints import datos, analisis
+    from tareas import sprints as ts
+    from tests.html_lote7 import HTML
+    sid, cid = _sprint(datos, *_base(datos))
+    rid = datos.agregar_referencia('acme', cid, 'video', 'https://r2/video.mp4')
+    llamadas = []
+    monkeypatch.setattr(analisis, '_llamar_contando', lambda *a, **kw: llamadas.append(True))
+    tarea = {'id': 101, 'payload': {'cliente': 'acme', 'referencia_id': rid}}
+    with pytest.raises(analisis.AnalisisInvalido) as e:
+        ts.ejecutar_analizar(tarea)
+    ts.interrumpida_analizar(tarea, 'fin del intento')
+    ref = datos.referencia('acme', rid)
+    assert ref['analisis']['error'] == str(e.value) and llamadas == []
+    base = f'/cliente/acme/sprints/{sid}/campanas/{cid}'
+    html = app['c'].get(base + ('/panel' if panel else '')).data.decode()
+    dom = HTML(html)
+    assert str(e.value) in html
+    assert not any(n.attrs.get('action') == f'/cliente/acme/sprints/referencias/{rid}/reanalizar' for n in dom.raiz.todos('form'))

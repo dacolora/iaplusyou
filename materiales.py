@@ -236,3 +236,18 @@ def bytes_usados(cliente):
     with db.conectar() as con:
         return int(con.execute(sa.select(sa.func.coalesce(sa.func.sum(db.material.c.bytes), 0))
                                .where(db.material.c.cliente == cliente)).scalar() or 0)
+
+
+def actualizar_ficha(cliente, hash_, **campos):
+    """Actualiza la ficha final del mismo hash, sin duplicar material."""
+    m = db.material
+    with db.conectar() as con:
+        r = con.execute(m.update().where(m.c.cliente == cliente, m.c.hash == hash_)
+                        .values(actualizado_en=m.c.actualizado_en))
+        if not r.rowcount:
+            return None
+        extra = con.execute(sa.select(m.c.extra).where(m.c.cliente == cliente, m.c.hash == hash_)).scalar() or {}
+        nuevo_extra = {**extra, **campos.pop("extra", {})}
+        con.execute(m.update().where(m.c.cliente == cliente, m.c.hash == hash_)
+                    .values(**campos, extra=nuevo_extra, actualizado_en=db.ahora()))
+    return buscar_hash(cliente, hash_)

@@ -35,8 +35,7 @@ Desde la fase 6 (2026-09) toda la app pasa por el catálogo (excepciones a prop�
 (`doctrina/textos/*.md`), documentación interna en español; los mensajes de contrato de
 `final_edition/documento.validar` y los de `static/editor/operaciones.js` (`INTERNOS` en `tests/test_i18n_editor.py`);
 los prompts para los modelos de video e imagen y sus tokens `Image N`/`Video N`/`@Imagen N` (`prompt_swap.py`,
-`flowplus_prompt`); las 9 plantillas del flujo viejo «Nueva idea» se tradujeron el 2026-10-01 y `EXCLUIDAS` ya solo
-tiene el mapa. Una excepción a §B8: «Escribe aquí» y «Escribe el precio» (capa 4c), el texto inicial editable de un
+`flowplus_prompt`); las 9 plantillas del flujo viejo «Nueva idea» se retiraron el 2026-10-08 (PND-068, decisión 2026-09-18); `EXCLUIDAS` solo tiene el mapa. Una excepción a §B8: «Escribe aquí» y «Escribe el precio» (capa 4c), el texto inicial editable de un
 clip de texto nuevo del editor, salen en el idioma de quien mira; desde la capa 5c también las seis plantillas «Para vender» —
 OFERTA, NUEVO, -50 %, ENVÍO GRATIS, ¡ÚLTIMAS UNIDADES!, MÁS VENDIDO—: textos editables que nacen en su idioma y se quedan así). Final edition sigue la **decisión B** (Daniel, 2026-09-28; reemplaza el §B5
 del spec): cada final sale en el idioma de su país destino (`<idioma>_<PAIS>`); el guion base, que no es por destino,
@@ -76,3 +75,33 @@ constantes `N_` en un diccionario, escribe `mensaje = DICCIONARIO["clave"]` y de
 Pruebas de idioma (revisión del lote 1, 2026-10-02): app_i18n fija CREATV_LOGS en tmp_path/logs. El fallo de /admin/salud/registros al leer registros locales mostró que el fixture debe aislar también esa lectura.
 
 PND-042 (2026-10-03): guardar_de_proyecto delega en proyectos.actualizar_campos, bajo el mismo flock que los ajustes y aprendizajes, para no pisarlos al guardar el idioma. Lote 2: mensajes de voz ausente, fotos faltantes, barrido parcial y grupos del chat incluidos en el catálogo inglés.
+
+Correcciones del lote 5 (2026-10-08, pedido de Daniel): las instrucciones nuevas de Gemini usan apóstrofo recto en inglés; se comprueban con gettext del catálogo compilado. Restaurar el mapa fechado repone también su traducción de la barra. Sin fuzzy.
+
+Idioma de publicación vs idioma de la app (2026-10-08, spec de Noruega y Suecia §4; motivo: el público de happyflops es Noruega y Suecia, y la app solo habla es/en). Son dos cosas: el catálogo y `idiomas.py` cubren lo que ve quien mira (es/en); el idioma en que se escribe y se dice una pieza (guion, voz, copy, finales) puede ser también sv y no (`final_edition/guion` `IDIOMAS_FE`, `dashboard.IDIOMAS_FE`). Para ponerlo en un prompt a Claude se usa `idiomas_publicacion.nombre(codigo)` («noruego (bokmål)», o `en_ingles=True`), que no importa Flask. El código noruego `no` NUNCA va suelto en un prompt: «Idioma: no» se lee como la palabra «no». En `final_edition/guion.py` lo hace `_idioma_txt` («noruego (bokmål) ('no')»); `generador_prompts.caption_organico` suma « — noruego (bokmål)»; sprints y Nicho tienen sus propios diccionarios pero con el mismo nombre. Lo que se manda a los modelos de video e imagen sigue en inglés. El copy de «link en bio» de `organico._COPY` y `generador_prompts.LINK_EN_BIO` es contenido por idioma de publicación y no pasa por el catálogo. Los nombres de los idiomas del selector (Svenska, Norsk (bokmål)) van en su propia lengua, como los otros.
+
+
+Lote 6B (2026-10-08): pantalla de accesos bloqueados, bitácora de desbloqueo, rechazo de QA aprobado pasan por gettext y el catálogo inglés. admin_bloqueos_login.html se incorpora a la guardia de plantillas. Catálogo actualizado y compilado; sin fuzzy. R6 (2026-10-08): el vencimiento del login usa ngettext en minutos redondeados hacia arriba. Verificación visual en es/en corresponde a Claude.
+
+PND-166 (2026-10-09, decisión delegada): Reintentar análisis, Análisis por referencia y Sugerir personas pasan por gettext y catálogo inglés (Retry analysis, Analysis per reference, Suggest personas). Los importes usan el margen de la petición; mensajes de tareas siguen el idioma del proyecto.
+
+
+Enmiendas lote 7 (2026-10-09): mensajes de arranque incierto de Apify, detalles de gasto de análisis/personas, hasta, cantidad de fotos y error breve de Claude pasan por catálogo. Sugerir personas solo conserva su detalle de gasto y ruta, sin botón en pantalla.
+
+Segunda ronda lote 7 (2026-10-09): motivos del análisis se guardan con clave reconocida y mensaje en el idioma del proyecto; error_visible los traduce para quien mira. El catálogo incluye respuesta no útil, interrupción, fallos de guardado/preparación, Referencia N y aviso de cantidad de fotos cambiada.
+
+
+PND-155 (2026-10-09, decisión del lote 8): idiomas.NOMBRES_PUBLICACION centraliza los nombres nativos del selector de idioma base de Final edition. NOMBRES e IDIOMAS de la interfaz siguen en es/en. Los nombres de países de Traer referentes vienen de tipos.PAISES con traducir, salvo Ecuador por gettext (enmienda 2026-10-10: conservar la lista anterior más NO/SE); el aviso duplicado al lanzar reutiliza el texto ya catalogado.
+
+PND-062, entrega 1 (2026-10-10, pedido de Daniel): los avisos de fallo del catálogo y de Ver más
+pasan por gettext en los shells y viajan al JS con tojson; Reintentar reutiliza el catálogo. Los cinco fragmentos
+nuevos están inscritos en `PLANTILLAS_TRADUCIDAS`; catálogo actualizado, traducido con el glosario y compilado,
+sin fuzzy. La comprobación visual en es/en queda a cargo de Claude.
+
+Enmiendas PND-062, entrega 1 (2026-10-10, pedido de Daniel tras revisar la entrega): El aviso de producto obligatorio y el de sesión vencida pasan por gettext y tojson. El enlace Entrar reutiliza el catálogo. Catálogo actualizado, traducciones según glosario y compilación sin fuzzy; los ids internos usan required para no confundir la guarda de texto visible.
+
+PND-062, entrega 2 (2026-10-10, pedido de Daniel): los textos de los cuatro scripts extraídos siguen
+con `_()` y `tojson` en sus plantillas, dentro de JSON `crear-<módulo>-datos`. Los archivos static usan el
+objeto `T`, sin español visible suelto. `test_i18n_estaticos_crear.py` vigila los cuatro archivos y
+`test_pagina_por_partes.py` renderiza y ejecuta es/en sin fijar las traducciones. No se añadieron msgids;
+actualizar → comprobar con glosario (0 pendientes) → compilar, sin fuzzy y sin diferencias en el catálogo.

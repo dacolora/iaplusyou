@@ -194,7 +194,7 @@ def test_tarea_evaluar_guarda_resultado_medios_y_gasto(evaluacion_en_cola, monke
         recibido.update(bloques=bloques, productos=productos)
         return analisis.parsear(respuesta(), {a["ref"] for a in anuncios}, ""), 10000, 5000
     monkeypatch.setattr(analisis, "analizar", _analizar)
-    datos.reemplazar_productos("acme", "2026-09-01", "2026-09-01", [
+    datos.reemplazar_productos("acme", triple_whale_tiendas.tiendas("acme")[0]["id"], "2026-09-01", "2026-09-01", [
         {"fecha": "2026-09-01", "producto_id": "p1", "nombre": "Cojín", "unidades": 3, "ingresos": 90, "pedidos": 2}])
     texto = e["t"].tw_evaluar({"id": 7, "payload": {"cliente": "acme", "evaluacion_id": e["eid"]}})
     assert "1 idea" in texto
@@ -340,7 +340,7 @@ def test_a_referente_guarda_un_referente_propio_con_miniatura_en_r2(base_tempora
     from referentes import imagenes
     monkeypatch.setattr(proyectos, "cargar", lambda cliente: {"nombre": "Acme"})
     subidas = []
-    monkeypatch.setattr(imagenes, "guardar_en_r2", lambda aid, url, carpeta: subidas.append((aid, url)) or
+    monkeypatch.setattr(imagenes, "guardar_en_r2", lambda aid, url, carpeta, cliente=None: subidas.append((aid, url)) or
                         f"https://r2/referentes/{aid}.jpg")
     a = {"ref": "A1", "canal": "facebook-ads", "ad_id": "120000111", "nombre": "Caja", "campana": "C",
          "veredicto": "ganador", "motivo": "ROAS 4", "m": {"roas": 4.0, "pedidos": 5, "gasto": 100, "ctr": 2},
@@ -358,3 +358,91 @@ def test_a_referente_guarda_un_referente_propio_con_miniatura_en_r2(base_tempora
     assert puente.a_referente("acme", a, None) == (rid, False) and len(subidas) == 1
     with pytest.raises(puente.PuenteError):
         puente.a_referente("acme", dict(a, medio={}), None)
+
+
+# ------------------------------------------ lo que comparte con Meta rendimiento (E2, 2026-10-10) ---
+
+def test_llamar_con_correccion_una_respuesta_que_sirve_no_se_paga_dos_veces():
+    """E2-R5: la corrección solo se pide si la respuesta no sirve; nunca para mejorar una que sí sirve."""
+    llamadas = []
+
+    def llamar(content, system_):
+        llamadas.append(content)
+        return "primera", 100, 50
+    assert analisis.llamar_con_correccion([], "S", lambda crudo: {"texto": crudo}, llamar=llamar) == (
+        {"texto": "primera"}, 100, 50)
+    assert len(llamadas) == 1
+
+
+def test_si_la_correccion_se_queda_sin_respuesta_lo_dice_para_anotar_el_estimado():
+    import anthropic
+    import httpx
+
+    def parsear(crudo):
+        raise analisis.AnalisisInvalido("no es JSON")
+
+    def llamar(c, s, _n=[]):
+        _n.append(1)
+        if len(_n) > 1:
+            raise anthropic.APITimeoutError(request=httpx.Request("POST", "https://api.anthropic.com/v1/messages"))
+        return "basura", 100, 40
+    with pytest.raises(analisis.AnalisisInvalido) as e:
+        analisis.llamar_con_correccion([], "S", parsear, llamar=llamar)
+    assert (e.value.tokens_entrada, e.value.tokens_salida) == (100, 40) and analisis.sin_respuesta(e.value)
+    assert not analisis.sin_respuesta(analisis.AnalisisInvalido("x")) and not analisis.sin_respuesta(KeyError())
+
+
+def test_llamar_con_correccion_sin_llamar_usa_el_camino_de_siempre(monkeypatch):
+    monkeypatch.setattr(analisis, "_llamar", lambda content, system_: ("ok", 10, 5))
+    assert analisis.llamar_con_correccion([], "S", lambda crudo: crudo) == ("ok", 10, 5)
+
+
+def test_la_clave_de_la_miniatura_separa_la_carpeta_de_cada_pestana():
+    assert analisis.clave_miniatura("acme", 3, "A1") == "clientes/acme/triple_whale/eval3_A1.jpg"
+    assert analisis.clave_miniatura("acme", 3, "A1", "meta_rendimiento") == "clientes/acme/meta_rendimiento/eval3_A1.jpg"
+
+
+def test_parsear_con_otro_origen_lo_pone_en_el_angulo_de_cada_idea():
+    r = analisis.parsear(respuesta(), {"A1", "A2", "A3"}, "datos", origen="meta")
+    assert r["ideas"][0]["angulo"]["origen"] == "meta"
+
+
+def test_prefill_crear_con_un_origen_de_otra_pestana_y_triple_whale_no_lo_toma_por_suyo(base_temporal, monkeypatch):
+    import proyectos
+    monkeypatch.setattr(proyectos, "cargar", lambda cliente: {})
+    eid = datos.crear_evaluacion("acme", "2026-09-01", "2026-09-28", "USD", [])
+    datos.actualizar_evaluacion(eid, estado="lista", resultado={"ideas": [{"titulo": "T", "prompt": "p"}]})
+    p = puente.prefill_crear("acme", {"prompt": "Top-down shot"}, origen=f"meta:{eid}:0")
+    assert p["origen_tw"] == f"meta:{eid}:0"
+    # La forma de Triple Whale con el mismo id sí es suya; la de Meta nunca.
+    assert puente.origen_desde_formulario("acme", f"{eid}:0")["evaluacion_id"] == eid
+    assert puente.origen_desde_formulario("acme", f"meta:{eid}:0") is None
+
+
+def test_llamar_con_correccion_un_parser_que_revienta_sale_con_los_tokens_pagados():
+    """Claude ya cobró: cualquier excepción después de su respuesta lleva los tokens para que la tarea anote el gasto."""
+    def parsear(crudo):
+        raise KeyError("bug")
+    with pytest.raises(KeyError) as e:
+        analisis.llamar_con_correccion([], "S", parsear, llamar=lambda c, s: ("x", 100, 40))
+    assert (e.value.tokens_entrada, e.value.tokens_salida) == (100, 40)
+
+    def falla_la_correccion(c, s, _n=[]):
+        _n.append(1)
+        if len(_n) > 1:
+            raise RuntimeError("red")
+        return "basura", 100, 40
+    with pytest.raises(analisis.AnalisisInvalido) as e:
+        analisis.llamar_con_correccion([], "S", lambda crudo: (_ for _ in ()).throw(analisis.AnalisisInvalido("no")),
+                                       llamar=falla_la_correccion)
+    assert (e.value.tokens_entrada, e.value.tokens_salida) == (100, 40) and e.value.__cause__ is None
+
+
+def test_el_prefill_lleva_su_proyecto_y_un_campo_que_no_es_texto_no_llega_como_repr(base_temporal, monkeypatch):
+    import proyectos
+    monkeypatch.setattr(proyectos, "cargar", lambda cliente: {})
+    assert puente.prefill_crear("acme", {"prompt": "Top-down shot"})["cliente"] == "acme"
+    assert analisis._texto({"a": 1}, 50) == "" and analisis._texto(["x"], 50) == "" and analisis._texto(True, 50) == ""
+    assert analisis._texto(12, 50) == "12" and analisis._texto("  dos   palabras ", 50) == "dos palabras"
+    r = analisis.parsear(respuesta(ideas=[{"titulo": "Uno", "prompt": {"p": 1}}]), {"A1", "A2", "A3"}, "")
+    assert r["ideas"] == []

@@ -520,3 +520,19 @@ def test_rehacer_desde_una_escena(app, catalogo_vacio, subidas):
     est = cadena.estado(datos.video("acme", vid))
     assert est["desde"] == 2 and est["escenas"]["1"]["frame_url"] == "https://f1.jpg" and "2" not in est["escenas"]
     assert app["c"].post(f"{BASE}/videos/{vid}/cadena", json={"desde": 3, "total_visto": 0}).status_code == 400
+
+
+def test_pnd094_selector_agrupa_colores_sin_cambiar_valores_ni_seleccion(app):
+    from flask import render_template_string
+    import dashboard
+    from html.parser import HTMLParser
+    productos = [{"id": "original/pink", "nombre": "Original — Pink", "producto_id": "original", "nombre_producto": "Original"},
+                 {"id": "original/beige", "nombre": "Original — Beige", "producto_id": "original", "nombre_producto": "Original"},
+                 {"id": "otro", "nombre": "Otro"}]
+    cfg = {"referencias": [{"tipo": "producto", "activo_id": "original/beige"}], "casting": {}, "duracion_objetivo": 10}
+    with dashboard.app.test_request_context():
+        html = render_template_string("{% from '_gpg_macros.html' import form_config %}{{ form_config('id','/x',cfg,lectura,activos,formatos,'OK') }}",\
+            cfg=cfg, lectura={"lineas": [], "hooks": []}, activos={"producto": productos, "personaje": [], "entorno": []}, formatos={})
+    assert 'label="Productos · Original"' in html
+    assert html.count('value="original/pink"') == 7 and html.count('value="original/beige"') == 7
+    assert 'value="original/beige" selected' in html

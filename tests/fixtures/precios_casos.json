@@ -360,6 +360,66 @@
   "valor": -1234.5
  },
  {
+  "esperado": "89 900 kr",
+  "pais": "NO",
+  "valor": 89900
+ },
+ {
+  "esperado": "24,99 kr",
+  "pais": "NO",
+  "valor": 24.99
+ },
+ {
+  "esperado": "1 234 567,89 kr",
+  "pais": "NO",
+  "valor": 1234567.891
+ },
+ {
+  "esperado": "499,50 kr",
+  "pais": "NO",
+  "valor": 499.5
+ },
+ {
+  "esperado": "0 kr",
+  "pais": "NO",
+  "valor": 0
+ },
+ {
+  "esperado": "0,12 kr",
+  "pais": "NO",
+  "valor": 0.125
+ },
+ {
+  "esperado": "1,00 kr",
+  "pais": "NO",
+  "valor": 1.005
+ },
+ {
+  "esperado": "2,67 kr",
+  "pais": "NO",
+  "valor": 2.675
+ },
+ {
+  "esperado": "20,00 kr",
+  "pais": "NO",
+  "valor": 19.995
+ },
+ {
+  "esperado": "1 500 000 kr",
+  "pais": "NO",
+  "valor": 1500000
+ },
+ {
+  "esperado": "-5,50 kr",
+  "pais": "NO",
+  "valor": -5.5
+ },
+ {
+  "esperado": "-1 234,50 kr",
+  "pais": "NO",
+  "valor": -1234.5
+ },
+ {
   "esperado": "S/89,900.00",
   "pais": "PE",
   "valor": 89900
@@ -417,6 +477,66 @@
  {
   "esperado": "S/-1,234.50",
   "pais": "PE",
+  "valor": -1234.5
+ },
+ {
+  "esperado": "89 900 kr",
+  "pais": "SE",
+  "valor": 89900
+ },
+ {
+  "esperado": "24,99 kr",
+  "pais": "SE",
+  "valor": 24.99
+ },
+ {
+  "esperado": "1 234 567,89 kr",
+  "pais": "SE",
+  "valor": 1234567.891
+ },
+ {
+  "esperado": "499,50 kr",
+  "pais": "SE",
+  "valor": 499.5
+ },
+ {
+  "esperado": "0 kr",
+  "pais": "SE",
+  "valor": 0
+ },
+ {
+  "esperado": "0,12 kr",
+  "pais": "SE",
+  "valor": 0.125
+ },
+ {
+  "esperado": "1,00 kr",
+  "pais": "SE",
+  "valor": 1.005
+ },
+ {
+  "esperado": "2,67 kr",
+  "pais": "SE",
+  "valor": 2.675
+ },
+ {
+  "esperado": "20,00 kr",
+  "pais": "SE",
+  "valor": 19.995
+ },
+ {
+  "esperado": "1 500 000 kr",
+  "pais": "SE",
+  "valor": 1500000
+ },
+ {
+  "esperado": "-5,50 kr",
+  "pais": "SE",
+  "valor": -5.5
+ },
+ {
+  "esperado": "-1 234,50 kr",
+  "pais": "SE",
   "valor": -1234.5
  },
  {

@@ -40,12 +40,34 @@ MAX_BUENOS = 6
 MAX_MALOS = 4
 MIN_ANUNCIOS = 2
 N_IDEAS = 4
+# Medido el 2026-10-09 (docs/superpowers/evals/2026-10-09-nvp-en-la-ia.md): con 10 anuncios la primera respuesta ya
+# puede llegar cortada en 16 000 y la salva la corrección; subirlo (y poner el NVP en este prompt) cambia lo que cuesta
+# y espera la decisión de Daniel sobre el precio a la vista (PND-217).
 MAX_TOKENS = 16000
 LADO_IMAGEN = 768
 TIMEOUT_META = 20
 MAX_PRODUCTOS = 5
 CAMPOS_M = ("gasto", "impresiones", "clics", "ctr", "cpm", "gancho", "retencion", "pedidos", "ingresos", "roas",
-            "cpa", "conversion", "ticket", "nc_pedidos")
+            "cpa", "conversion", "ticket", "nc_pedidos",
+            # Visitantes del Pixel (NVP, spec 2026-10-09-nvp-visitantes-nuevos §4): «Cómo mejorarlo» (mejorar.CAMPOS_M)
+            # y las tarjetas los leen; el prompt de «Evaluar con IA» todavía no (PND-217).
+            "visitantes", "visitantes_nuevos", "nvp")
+# De dónde salen los números que lee Claude en «Cómo mejorarlo» (`mejorar`, Rendimiento E2, 2026-10-10): los anuncios
+# de una cuenta de Meta sin tienda de Triple Whale usan ese mismo análisis pagado. Nombres propios: no se traducen.
+# Sin fuente, Triple Whale (los análisis guardados antes de E2 no la tienen). «Evaluar con IA» de Meta NO pasa por
+# aquí: es la de `meta_rendimiento/analisis.py` (integración con main, INT-2).
+FUENTES = {"triple_whale": "Triple Whale", "meta": "Meta"}
+FUENTE_DEFECTO = "triple_whale"
+# Cómo se calculó el veredicto que guarda la foto de un análisis (`tw_analisis.foto["metodo"]`). 2 = con R9 (spec
+# 2026-10-09: por anuncio solo cuentan los canales con gasto). R9 movió el costo por venta de la cuenta y con él el
+# veredicto de anuncios cuyos números no cambiaron: en una foto sin esta marca (pagada antes de R9) un cambio de
+# veredicto no la vuelve vieja, solo el gasto (`panel.es_viejo`; revisión final de E1, guardián de gasto, 2026-10-10).
+METODO_VEREDICTO = 2
+
+
+def nombre_fuente(fuente):
+    """«Triple Whale» o «Meta» para el prompt; una fuente vacía o desconocida es Triple Whale."""
+    return FUENTES.get(fuente or FUENTE_DEFECTO, FUENTES[FUENTE_DEFECTO])
 
 
 class AnalisisInvalido(RuntimeError):
@@ -204,6 +226,22 @@ def visuales(cliente, anuncios, medios, creatv=None):
     return salida, temporales
 
 
+def con_piezas_creatv(anuncios, medios, creatv):
+    """Las piezas hechas en Creatv (`creatv`, de `datos.piezas_creatv`) tienen su video y su miniatura en R2: su
+    miniatura sirve tal cual (no se copia: `imagen_origen` ya está puesta) y `visuales` les saca los fotogramas.
+    Cambia `medios` en su lugar y lo devuelve."""
+    for a in anuncios:
+        pieza = (creatv or {}).get(a["ad_id"])
+        if not pieza:
+            continue
+        imagen = pieza.get("url_video") if pieza.get("tipo") == "imagen" else pieza.get("url_miniatura")
+        medio = medios.setdefault(a["ad_id"], {"imagen": None, "titulo": "", "texto": "", "tipo": pieza.get("tipo")})
+        if imagen:
+            medio.update(imagen=imagen, imagen_origen=imagen)
+        medio["origen"] = "creatv"
+    return medios
+
+
 def borrar_temporales(rutas):
     for ruta in rutas or []:
         try:
@@ -212,14 +250,18 @@ def borrar_temporales(rutas):
             pass
 
 
-def clave_miniatura(cliente, evaluacion_id, ref):
-    return f"clientes/{cliente}/triple_whale/eval{int(evaluacion_id)}_{ref}.jpg"
+def clave_miniatura(cliente, evaluacion_id, ref, carpeta="triple_whale"):
+    """La clave en R2 de la miniatura de `ref` en una evaluación. `carpeta` separa las evaluaciones de cada pestaña:
+    la de Meta rendimiento (`meta_rendimiento`) tiene sus propios ids, y con la misma carpeta la evaluación 3 de
+    Meta pisaría las miniaturas de la evaluación 3 de Triple Whale."""
+    return f"clientes/{cliente}/{carpeta}/eval{int(evaluacion_id)}_{ref}.jpg"
 
 
-def copiar_miniaturas(cliente, evaluacion_id, anuncios, medios):
+def copiar_miniaturas(cliente, evaluacion_id, anuncios, medios, carpeta="triple_whale"):
     """Las URL de miniatura de Meta caducan: la de cada anuncio se copia a R2
     y `medio["imagen"]` pasa a ser esa copia (`imagen_origen` guarda la de
-    Meta). Lo que no se pueda copiar queda como estaba. Nunca lanza."""
+    Meta). Lo que no se pueda copiar queda como estaba. Nunca lanza.
+    `carpeta`: ver `clave_miniatura`."""
     from PIL import Image
     from referentes import imagenes
     for a in anuncios:
@@ -228,13 +270,13 @@ def copiar_miniaturas(cliente, evaluacion_id, anuncios, medios):
             continue
         try:
             crudo = imagenes._bajar(medio["imagen"])
-            with tempfile.TemporaryDirectory(prefix="tw_mini_") as carpeta:
-                local = os.path.join(carpeta, f"{a['ref']}.jpg")
+            with tempfile.TemporaryDirectory(prefix="tw_mini_") as temporal:
+                local = os.path.join(temporal, f"{a['ref']}.jpg")
                 with Image.open(io.BytesIO(crudo)) as im:
                     im = im.convert("RGB")
                     im.thumbnail((LADO_IMAGEN, LADO_IMAGEN))
                     im.save(local, format="JPEG", quality=85)
-                url = r2_uploader.upload_image(local, clave_miniatura(cliente, evaluacion_id, a["ref"]))
+                url = r2_uploader.upload_image(local, clave_miniatura(cliente, evaluacion_id, a["ref"], carpeta))
         except Exception as e:  # noqa: BLE001 — se queda la URL de Meta mientras dure
             log.info("no pude copiar la miniatura de %s a R2: %s", a.get("ref"), type(e).__name__)
             continue
@@ -332,6 +374,12 @@ def armar(marca, contexto, anuncios, medios, bloques=None, productos=None):
         roas=_num(b.get("roas")), meta=_num(contexto.get("meta_roas")),
         bloques="\n\n".join(_bloque(a, con_visual.get(a["ad_id"])) for a in anuncios), n_ideas=N_IDEAS,
         productos=texto_productos(productos, contexto.get("moneda") or ""))
+    return texto, imagenes_para(anuncios, bloques)
+
+
+def imagenes_para(anuncios, bloques):
+    """Los bloques de visión que siguen a los DATOS: por cada anuncio con imagen o fotogramas (`bloques`, de
+    `visuales`), una línea que dice de cuál es y después sus bloques. La usan Triple Whale y Meta rendimiento."""
     imagenes = []
     for a in anuncios:
         v = bloques.get(a["ad_id"])
@@ -342,7 +390,7 @@ def armar(marca, contexto, anuncios, medios, bloques=None, productos=None):
         else:
             imagenes.append({"type": "text", "text": f"Imagen de {a['ref']} ({a['veredicto']}):"})
         imagenes.extend(v["bloques"])
-    return texto, imagenes
+    return imagenes
 
 
 def system(idioma):
@@ -374,8 +422,16 @@ def _json(texto):
     return data
 
 
+def _cadena(v):
+    """El texto de un campo de la respuesta: un texto o un número; cualquier otra cosa (un objeto, una lista, un
+    booleano, null) vale "" — nunca su `repr`, que llegaría a la pantalla o a un prompt de Crear como si fuera texto."""
+    if isinstance(v, bool) or not isinstance(v, (str, int, float)) or not v:
+        return ""
+    return str(v)
+
+
 def _texto(v, largo):
-    return " ".join(str(v or "").split())[:largo]
+    return " ".join(_cadena(v).split())[:largo]
 
 
 def _refs(valor, validas):
@@ -398,8 +454,9 @@ def _patrones(lista, validas):
     return salida[:5]
 
 
-def parsear(texto, validas, datos_texto):
-    """El resultado limpio. AnalisisInvalido si no trae ni patrones ni ideas."""
+def parsear(texto, validas, datos_texto, origen="triple_whale"):
+    """El resultado limpio. AnalisisInvalido si no trae ni patrones ni ideas. `origen` es el de cada ángulo de las
+    ideas («triple_whale», o «meta» cuando lo usa la evaluación de Meta rendimiento)."""
     data = _json(texto)
     anuncios = {}
     for a in data.get("anuncios") if isinstance(data.get("anuncios"), list) else []:
@@ -418,12 +475,12 @@ def parsear(texto, validas, datos_texto):
     for i in data.get("ideas") if isinstance(data.get("ideas"), list) else []:
         if not isinstance(i, dict):
             continue
-        titulo, prompt = _texto(i.get("titulo"), 80), str(i.get("prompt") or "").strip()[:1500]
+        titulo, prompt = _texto(i.get("titulo"), 80), _cadena(i.get("prompt")).strip()[:1500]
         if not titulo or not prompt:
             continue
         angulo, errores = doctrina.validar_angulo(i.get("angulo") if isinstance(i.get("angulo"), dict) else {},
                                                   datos_texto)
-        angulo["origen"] = "triple_whale"
+        angulo["origen"] = origen
         ideas.append({"titulo": titulo, "prompt": prompt, "por_que": _texto(i.get("por_que"), 300),
                       "escena": _texto(i.get("escena"), 600), "basada_en": _refs(i.get("basada_en"), validas),
                       "producto": _texto(i.get("producto"), 120) or None,
@@ -441,7 +498,75 @@ def parsear(texto, validas, datos_texto):
 
 def _llamar(content, system_):
     from sprints import analisis as sprints_analisis
-    return sprints_analisis._llamar_contando(content, max_tokens=MAX_TOKENS, system=system_)
+    # Sin reintentos del cliente, como «Cómo mejorarlo» (revisión final A6, 2026-10-08): un intento que el SDK repite
+    # solo podría cobrarse sin quedar anotado (se anotan los tokens de la respuesta que llega). Revisión del NVP, R2.
+    return sprints_analisis._llamar_contando(content, max_tokens=MAX_TOKENS, system=system_, max_retries=0)
+
+
+def anotar_tokens(error, entrada, salida):
+    """Deja en `error` los tokens ya pagados (`tokens_entrada`, `tokens_salida`), que la tarea lee para anotar el
+    gasto real aunque falle. Nunca lanza."""
+    try:
+        error.tokens_entrada, error.tokens_salida = int(entrada or 0), int(salida or 0)
+    except Exception:  # noqa: BLE001 — una excepción que no acepta atributos sigue su camino sin ellos
+        pass
+    return error
+
+
+def sin_respuesta(error):
+    """True si la llamada a Claude falló SIN respuesta (tope de tiempo o conexión cortada después de enviarla): no hay
+    `usage`, pero Anthropic pudo haberla cobrado. Quien anota el gasto usa entonces el estimado."""
+    try:
+        import anthropic
+        tipos = (anthropic.APITimeoutError, anthropic.APIConnectionError)
+    except Exception:  # noqa: BLE001 — sin el SDK no hay llamada que pudo cobrarse
+        tipos = ()
+    return bool(getattr(error, "sin_respuesta", False)) or (bool(tipos) and isinstance(error, tipos))
+
+
+def _correccion_de_siempre(error):
+    return f"Tu respuesta anterior no sirvió ({error}). Responde solo el JSON pedido."
+
+
+def llamar_con_correccion(content, system_, parsear_fn, llamar=None, correccion=None):
+    """(resultado, tokens_entrada, tokens_salida) de una llamada a Claude con UNA corrección como mucho, y solo si la
+    respuesta no sirve (no es JSON o le falta lo pedido: `parsear_fn` lanza AnalisisInvalido). La de Triple Whale y la
+    de Meta rendimiento comparten este camino (no se copia). Una respuesta que sirve nunca se paga dos veces: lo que
+    haya que marcar en ella (p. ej. cifras sin dato) se marca, no se corrige con otra llamada (E2-R5).
+
+    `llamar(content, system_) -> (texto, entrada, salida)`; por defecto `_llamar`. `correccion(error) -> texto` es lo
+    que se le pide a Claude en la corrección; por defecto «Responde solo el JSON pedido» (Meta pide el JSON completo:
+    con ese texto 2 de 3 correcciones medidas llegaron sin ideas, eval 2026-10-10). Si la corrección tampoco sirve, o
+    su llamada falla, AnalisisInvalido con los tokens ya pagados (`sin_respuesta=True` si la corrección se quedó sin
+    respuesta: pudo cobrarse). Cualquier otra excepción después de que Claude respondió (un parser que revienta) sale
+    también con los tokens pagados (`anotar_tokens`)."""
+    llamar = llamar or _llamar
+    crudo, entrada, salida = llamar(content, system_)
+    pagado = [entrada, salida]
+    try:
+        return _con_una_correccion(content, system_, parsear_fn, llamar, crudo, pagado,
+                                   correccion or _correccion_de_siempre)
+    except Exception as e:
+        anotar_tokens(e, *pagado)
+        raise
+
+
+def _con_una_correccion(content, system_, parsear_fn, llamar, crudo, pagado, correccion):
+    """El cuerpo de `llamar_con_correccion` tras la primera respuesta; `pagado` ([entrada, salida]) se actualiza en
+    su lugar con lo que cobra la corrección."""
+    try:
+        return parsear_fn(crudo), pagado[0], pagado[1]
+    except AnalisisInvalido as e:
+        error = e
+    pedido = content + [{"type": "text", "text": correccion(error)}]
+    try:
+        crudo, e2, s2 = llamar(pedido, system_)
+    except Exception as e_llamada:
+        if sin_respuesta(e_llamada):
+            error.sin_respuesta = True
+        raise error from None
+    pagado[0], pagado[1] = pagado[0] + e2, pagado[1] + s2
+    return parsear_fn(crudo), pagado[0], pagado[1]
 
 
 def analizar(marca, contexto, anuncios, medios, idioma, bloques=None, productos=None):
@@ -449,25 +574,8 @@ def analizar(marca, contexto, anuncios, medios, idioma, bloques=None, productos=
     respuesta no sirve; si tampoco, AnalisisInvalido con los tokens pagados."""
     texto, imagenes = armar(marca, contexto, anuncios, medios, bloques=bloques, productos=productos)
     content = [{"type": "text", "text": texto}] + imagenes
-    system_ = system(idioma)
     validas = {a["ref"] for a in anuncios}
-    crudo, entrada, salida = _llamar(content, system_)
-    try:
-        return parsear(crudo, validas, texto), entrada, salida
-    except AnalisisInvalido as e:
-        correccion = content + [{"type": "text", "text": f"Tu respuesta anterior no sirvió ({e}). "
-                                                         "Responde solo el JSON pedido."}]
-        try:
-            crudo, e2, s2 = _llamar(correccion, system_)
-        except Exception:
-            e.tokens_entrada, e.tokens_salida = entrada, salida
-            raise e
-        entrada, salida = entrada + e2, salida + s2
-        try:
-            return parsear(crudo, validas, texto), entrada, salida
-        except AnalisisInvalido as e3:
-            e3.tokens_entrada, e3.tokens_salida = entrada, salida
-            raise e3
+    return llamar_con_correccion(content, system(idioma), lambda crudo: parsear(crudo, validas, texto))
 
 
 def texto_error(error):

@@ -61,7 +61,7 @@ PRECIOS_USD_POR_MILLON = {
 # N_ solo marca para el catálogo: el valor sigue en español, que es lo que
 # nombre_idioma mete en el prompt de Claude; la pantalla lo traduce con |traducir.
 IDIOMAS = {"es": N_("español"), "en": N_("inglés"), "pt": N_("portugués"), "sv": N_("sueco"), "fr": N_("francés"),
-           "de": N_("alemán"), "it": N_("italiano")}
+           "de": N_("alemán"), "it": N_("italiano"), "no": N_("noruego (bokmål)")}
 
 
 class AnalisisInvalido(RuntimeError):

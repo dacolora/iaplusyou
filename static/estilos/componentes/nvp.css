@@ -1,0 +1,22 @@
+/* ============================================================
+   NVP: el porcentaje de visitantes nuevos y su etapa del embudo
+   (spec 2026-10-09-nvp-visitantes-nuevos §4). Uso: la macro `nvp(nuevos,
+   visitantes)` de templates/_componentes.html, en Triple Whale, Meta,
+   Experimentos y el Tablero. `.chip-nvp` es la pastilla con el % y la etapa
+   (`.chip-nvp-tof|mof|bof`); `.chip-nvp-pocos` (menos de 50 visitantes: el %
+   en gris y sin etapa) y `.chip-nvp-vacio` («—», sin datos). Los colores de la
+   etapa solo distinguen, no califican: ninguna etapa es buena o mala por sí sola.
+   ============================================================ */
+
+.chip-nvp { display: inline-flex; align-items: baseline; gap: .3rem; padding: .05rem .5rem; border: 1px solid var(--border); border-radius: var(--radius-pastilla); font-size: var(--t-chico); font-variant-numeric: tabular-nums; white-space: nowrap; cursor: help; }
+.chip-nvp-etapa { font-weight: 700; font-size: var(--t-sobretitulo); letter-spacing: .04em; }
+.chip-nvp-tof { border-color: var(--cian); }
+.chip-nvp-tof .chip-nvp-etapa { color: var(--cian); }
+.chip-nvp-mof { border-color: var(--accent-texto); }
+.chip-nvp-mof .chip-nvp-etapa { color: var(--accent-texto); }
+.chip-nvp-bof { border-color: var(--muted); }
+.chip-nvp-bof .chip-nvp-etapa { color: var(--muted); }
+.chip-nvp-pocos { color: var(--muted); border-style: dashed; }
+.chip-nvp-vacio { color: var(--muted); border-color: transparent; padding-inline: 0; }
+/* En una tarjeta de cifra (KPI) el chip va del tamaño de las otras cifras. */
+.kpi-tile .chip-nvp { font-size: var(--t-base); }

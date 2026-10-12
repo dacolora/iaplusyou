@@ -76,6 +76,8 @@ Rutas dentro del filtergraph (`subtitles=`, `fontsdir=`): van citadas con
 import os
 from dataclasses import dataclass, field
 
+import math
+
 from flask_babel import gettext
 
 import final_edition
@@ -224,6 +226,35 @@ def _expr_posicion(cl, keyframes, capa_w, capa_h, formato, desplaz, caja_defecto
     return _expr_piecewise(pts_x), _expr_piecewise(pts_y)
 
 
+def _eje_visible(origen, escalado, posicion, lienzo):
+    """Recorte en origen alineado con la cuadrícula del scale anterior.
+
+    La unidad de origen tiene desplazamiento entero PAR en destino y origen
+    PAR para el submuestreo yuv420p. Así ni la fase de interpolación ni el
+    encuadre se desplazan. Conserva cuatro píxeles de apoyo del interpolador
+    a cada lado y abre hacia fuera a la unidad; nunca corta una zona visible.
+    En proporciones coprimas la unidad puede abarcar el eje entero.
+    """
+    unidad = math.lcm(origen // math.gcd(origen, escalado), 2)
+    if (unidad * escalado // origen) % 2:
+        unidad *= 2
+    desde = max(0, ((max(0, -posicion) * origen // escalado - 4) // unidad) * unidad)
+    visible_hasta = min(escalado, lienzo - posicion)
+    # Techo entero, sin float en la frontera de un píxel.
+    hasta = min(origen, ((visible_hasta * origen + (4 + unidad) * escalado - 1)
+                        // (unidad * escalado)) * unidad)
+    tam = hasta - desde
+    salida = tam * escalado // origen
+    desplaz = desde * escalado // origen
+    return desde, tam, salida, posicion + desplaz
+
+
+def _ventana_visible(w, h, k, ancho, alto):
+    x, cw, sw, px = _eje_visible(w, k["sw"], k["px"], ancho)
+    y, ch, sh, py = _eje_visible(h, k["sh"], k["py"], alto)
+    return {"x": x, "y": y, "w": cw, "h": ch, "sw": sw, "sh": sh, "px": px, "py": py}
+
+
 def _encuadre(cabeza, cl, i, ancho, alto):
     """Las sentencias del encuadre del clip `i` de la principal (spec 5b
     §2.3). `cabeza` es el comienzo de su cadena (`[idx:v]` y, en un video,
@@ -237,15 +268,17 @@ def _encuadre(cabeza, cl, i, ancho, alto):
     if not w or not h:
         raise ValueError(gettext("Falta el tamaño del clip «%(clip)s» para su encuadre.", clip=cl["id"]))
     k = encuadre_mod.caja(int(w), int(h), ancho, alto, enc)
+    v = _ventana_visible(int(w), int(h), k, ancho, alto)
+    recorte = f"crop={v['w']}:{v['h']}:{v['x']}:{v['y']}:exact=1,scale={v['sw']}:{v['sh']}"
     if encuadre_mod.completo(enc)["modo"] == "llenar":
-        return [f"{cabeza}scale={k['sw']}:{k['sh']},crop={ancho}:{alto}:{-k['px']}:{-k['py']}"]
+        return [f"{cabeza}{recorte},crop={ancho}:{alto}:{-v['px']}:{-v['py']}"]
     fw, fh = encuadre_mod.fondo(ancho, alto)
     return [f"{cabeza}split=2[f{i}a][f{i}b]",
             f"[f{i}a]scale={fw}:{fh}:force_original_aspect_ratio=increase,crop={fw}:{fh},"
             f"boxblur=luma_radius={encuadre_mod.FONDO_RADIO}:luma_power={encuadre_mod.FONDO_PASADAS},"
             f"scale={ancho}:{alto},setsar=1[f{i}c]",
-            f"[f{i}b]scale={k['sw']}:{k['sh']},setsar=1[f{i}d]",
-            f"[f{i}c][f{i}d]overlay=x={k['px']}:y={k['py']}"]
+            f"[f{i}b]{recorte},setsar=1[f{i}d]",
+            f"[f{i}c][f{i}d]overlay=x={v['px']}:y={v['py']}"]
 
 
 def _cadena_principal(sentencias, resto):

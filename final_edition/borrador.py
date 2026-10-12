@@ -41,7 +41,7 @@ from final_edition import documento as documento_mod, tipos
 LOGO_MAX_PX = 240
 ZOOM_ALTERNO = ("in", "out")
 FORMATO_POR_ASPECTO = {"9:16": "9:16", "16:9": "16:9", "1:1": "1:1", "4:5": "4:5", "4:3": "16:9", "3:4": "4:5"}
-COLOR_DEFECTO = "#7c3aed"
+COLOR_DEFECTO = None
 _HEX_RE = re.compile(r"^#?([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$")
 _RECETA_OPCIONES = ("variante", "variante_tipo", "voz", "estilo_musica", "con_voz", "con_musica",
                     "con_sonido", "sonido", "mezcla", "volumenes")
@@ -63,7 +63,7 @@ _AUDIO = {"volumen": 1.0, "fundido_entrada_ms": 0, "fundido_salida_ms": 0, "duck
 
 def estilo_precio(color):
     return {"fuente": "Inter-Bold", "peso": 700, "tamano": 0.0292, "color": "#FFFFFF", "contorno": None, "sombra": None,
-            "fondo": {"color": color, "opacidad": 1.0, "radio": 1.0, "relleno_x": 0.0208, "relleno_y": 0.0115, "ancho": None},
+            "fondo": {"color": color or "#000000", "opacidad": 1.0 if color else 0.6, "radio": 1.0, "relleno_x": 0.0208, "relleno_y": 0.0115, "ancho": None},
             "alineacion": "centro", "interlineado": 1.1, "ancho_max": None}
 
 
@@ -78,7 +78,7 @@ def formato_de(aspect_ratio):
 
 
 def color_marca(valor):
-    """`proyecto.color_acento` normalizado a #RRGGBB; basura → el morado de siempre."""
+    """`proyecto.color_acento` normalizado a #RRGGBB; sin color válido → neutro."""
     m = _HEX_RE.match(str(valor or "").strip())
     if not m:
         return COLOR_DEFECTO

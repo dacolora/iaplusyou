@@ -7,6 +7,7 @@ determinista de `flowplus_prompt.armar` y un aviso: el fallo de Claude nunca
 es un fallo del trabajo ni bloquea a la persona. Con `auto_lanzar` (lotes de
 Sprints, cuyo costo ya se aprobó) encola además la generación.
 """
+import monitoreo
 import creative_flow
 import director
 import gastos
@@ -14,6 +15,7 @@ import flowplus_lanzar
 import flowplus_prompt
 import idiomas
 import trabajos
+from cobros import SaldoInsuficiente
 from idiomas import N_
 from providers import flowplus_modelos
 from tareas import al_interrumpir, registrar
@@ -32,6 +34,16 @@ def job_id(cliente, cf_id):
     return f"{cliente}__{cf_id}__director"
 
 
+def encolar(cliente, cf_id, auto_lanzar=False, prioridad=flowplus_lanzar.PRIORIDAD_NORMAL):
+    """Mismo contrato para Crear y Sprints; no vuelve a generar ni cambia el prompt."""
+    return trabajos.encolar(
+        job_id(cliente, cf_id), "flowplus_director",
+        {"cliente": cliente, "cf_id": cf_id, "auto_lanzar": bool(auto_lanzar), "prioridad": int(prioridad)},
+        cliente=cliente, duracion_estimada=DURACION_ESTIMADA, etapas=ETAPAS_DIRECTOR,
+        max_intentos=1, prioridad=prioridad,
+    )
+
+
 def _fallback(cliente, entry, motivo):
     sesion = creative_flow.datos_para_director(cliente, entry)
     refs = sesion["referencias"]
@@ -44,7 +56,7 @@ def _fallback(cliente, entry, motivo):
         con_sonido=sesion["con_sonido"], cierre_sonido=flowplus_modelos.cierre_sonido(modelo) if modelo else None,
         idioma=idiomas.de_proyecto(cliente),
     )
-    return prompt, {"estado": "fallback", "aviso": motivo, "planos": None, "planos_b": None, "prompt_b": None,
+    return prompt, {"estado": "fallback", "aviso": monitoreo.limpiar_texto(motivo, 300), "planos": None, "planos_b": None, "prompt_b": None,
                     "diferencia_b": None, "modelo_claude": None, "version": director.VERSION, "usd": 0.0}
 
 
@@ -78,9 +90,23 @@ def ejecutar(tarea):
     trabajos.reportar(jid, etapa=ETAPA_LISTO)
     creative_flow.actualizar(cliente, cf_id, estado="prompt_listo", prompt_relleno=prompt, director=datos, idioma_prompt=idioma)
     if p.get("auto_lanzar"):
-        entry = creative_flow.cargar(cliente)[cf_id]
-        flowplus_lanzar.lanzar(cliente, cf_id, entry, prioridad=int(p.get("prioridad") or flowplus_lanzar.PRIORIDAD_NORMAL))
+        mensaje = _lanzar_aprobado(cliente, cf_id, p) or mensaje
     return mensaje
+
+
+def _lanzar_aprobado(cliente, cf_id, p):
+    """Lanza la generación que la persona ya aprobó (`auto_lanzar`). Sin saldo
+    (cobros, spec 2026-10-08 §5.4) no se encola: la sesión queda en error con
+    la frase (su «Reintentar» relanza con el prompt ya armado) y la frase vuelve
+    como mensaje de la tarea. Devuelve None si encoló o ya estaba encolada."""
+    entry = creative_flow.cargar(cliente)[cf_id]
+    try:
+        flowplus_lanzar.lanzar(cliente, cf_id, entry, prioridad=int(p.get("prioridad") or flowplus_lanzar.PRIORIDAD_NORMAL))
+    except SaldoInsuficiente as e:
+        frase = e.frase_proyecto()
+        creative_flow.actualizar(cliente, cf_id, estado="error", error=frase)
+        return frase
+    return None
 
 
 @al_interrumpir("flowplus_director")
@@ -102,5 +128,4 @@ def interrumpida(tarea, mensaje):
         prompt, datos = _fallback(cliente, entry, mensaje)
         creative_flow.actualizar(cliente, cf_id, estado="prompt_listo", prompt_relleno=prompt, director=datos)
     if p.get("auto_lanzar"):
-        entry = creative_flow.cargar(cliente)[cf_id]
-        flowplus_lanzar.lanzar(cliente, cf_id, entry, prioridad=int(p.get("prioridad") or flowplus_lanzar.PRIORIDAD_NORMAL))
+        _lanzar_aprobado(cliente, cf_id, p)

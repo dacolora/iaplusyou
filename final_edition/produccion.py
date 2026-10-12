@@ -88,8 +88,11 @@ def _voces_bloques(cliente, guion, nombre_voz, carpeta):
         try:
             mat, c = insumos.voz_bloque(cliente, bl.get("texto_voz") or "", nombre_voz, idioma, ventana_ms, carpeta)
         except Exception as e:
+            costo += float(getattr(e, "costo_usd", 0.0) or 0.0)
             if i == 0:
-                raise voz_mod.ErrorPrimerBloque(str(e)) from e
+                error = voz_mod.ErrorPrimerBloque(str(e))
+                error.costo_usd = round(costo, 4)
+                raise error from e
             raise VozIncompleta(str(e), round(costo, 4)) from e
         voces[bl["rol"]] = {"material_id": mat["id"], "duracion_ms": int(mat["duracion_ms"] or 0),
                             "extra": mat.get("extra") or {}}
@@ -162,7 +165,9 @@ def asegurar_borrador(cliente, cf_id, entry, guion_base, guion, o, avisar):
                 costo += c
                 _capa(capas, "voz", proveedor_voz, {"voz": o.get("voz")}, c)
             except voz_mod.ErrorPrimerBloque as e:
-                _capa(capas, "voz", proveedor_voz, {"voz": o.get("voz")}, estado="error", error=_mensaje(e))
+                pagado = float(getattr(e, "costo_usd", 0.0) or 0.0)
+                costo += pagado
+                _capa(capas, "voz", proveedor_voz, {"voz": o.get("voz")}, pagado, estado="error", error=_mensaje(e))
                 raise VozFatal(gettext("No se pudo generar la voz (revisa la voz elegida, '%(voz)s'): %(error)s",
                                        voz=final_edition.etiqueta_voz(cliente, o.get("voz")), error=e),
                                round(costo, 4), capas) from e
@@ -183,7 +188,11 @@ def asegurar_borrador(cliente, cf_id, entry, guion_base, guion, o, avisar):
                 _capa(capas, "musica", "fal/stable-audio", {"estilo": o.get("estilo_musica"), "url": mat.get("url")}, c)
             except Exception as e:
                 degradada = True
-                _capa(capas, "musica", "fal/stable-audio", {"estilo": o.get("estilo_musica")}, estado="error", error=_mensaje(e))
+                pagado = float(getattr(e, "costo_usd", 0.0) or 0.0)
+                costo += pagado
+                _capa(capas, "musica", "fal/stable-audio",
+                      {"estilo": o.get("estilo_musica"), "url": getattr(e, "url", None)},
+                      pagado, estado="error", error=_mensaje(e))
         # 4. el documento
         logo = insumos.logo(cliente)
         marca = {"color": final_edition._color_acento(cliente),
@@ -283,7 +292,9 @@ def traducir(cliente, edicion, idioma, pais, precio, nombre_voz, con_voz):
                     costo += cv
                     _capa(capas, "voz", proveedor_voz, {"voz": nombre_voz}, cv)
                 except voz_mod.ErrorPrimerBloque as e:
-                    _capa(capas, "voz", proveedor_voz, {"voz": nombre_voz}, estado="error", error=_mensaje(e))
+                    pagado = float(getattr(e, "costo_usd", 0.0) or 0.0)
+                    costo += pagado
+                    _capa(capas, "voz", proveedor_voz, {"voz": nombre_voz}, pagado, estado="error", error=_mensaje(e))
                     raise VozFatal(gettext("No se pudo generar la voz (revisa la voz elegida, '%(voz)s'): %(error)s",
                                            voz=final_edition.etiqueta_voz(cliente, nombre_voz), error=e),
                                    round(costo, 4), capas) from e
@@ -403,11 +414,11 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_suf
         pagado = round(float(getattr(e, "costo_pagado", 0.0) or 0.0), 4)
         _capa(capas, "guion", "anthropic", {"variante_tipo": variante_tipo} if variante_tipo else {}, pagado,
               estado="error", error=_mensaje(e))
-        creative_flow.actualizar_final(cliente, final_id, estado="error", error=_mensaje(e), capas=_ordenar(capas),
-                                       costo_usd=round(costo + pagado, 4))
         if pagado:
             final_edition.registrar_gasto_final(cliente, final_id, idioma, pais, pagado, _ordenar(capas),
                                                 fallo=True, ref_sufijo=ref_sufijo)
+        creative_flow.actualizar_final(cliente, final_id, estado="error", error=_mensaje(e), capas=_ordenar(capas),
+                                       costo_usd=round(costo + pagado, 4))
         raise
 
     try:
@@ -474,10 +485,10 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_suf
             capas["guion"]["costo_usd"] = round(float(capas["guion"]["costo_usd"] or 0.0) + float(guion_previo["costo_usd"] or 0.0), 4)
             capas["guion"]["parametros"] = {**(guion_previo.get("parametros") or {}), **(capas["guion"].get("parametros") or {})}
         costo += float(getattr(e, "costo_pagado", 0.0) or 0.0)
-        creative_flow.actualizar_final(cliente, final_id, estado="error", error=_mensaje(e), capas=_ordenar(capas),
-                                       costo_usd=round(costo, 4), guion=guion)
         final_edition.registrar_gasto_final(cliente, final_id, idioma, pais, costo - costo_base, _ordenar(capas),
                                             fallo=True, ref_sufijo=ref_sufijo)
+        creative_flow.actualizar_final(cliente, final_id, estado="error", error=_mensaje(e), capas=_ordenar(capas),
+                                       costo_usd=round(costo, 4), guion=guion)
         raise
 
     capas = _ordenar(capas)

@@ -24,7 +24,7 @@ catálogo de traducciones por petición (junto al objeto `babel_locale`, así `f
 0026 (`pieza.padre_pieza_id`, `publicacion.pieza_id`, `metrica_snapshot(experimento_pieza_id, tomado_en)`,
 `gasto.creado_en`, las claves foráneas que borrar recorría enteras…), vigilados por `tests/test_indices_escala.py`; una
 consulta nueva sobre una tabla que crece debe usar índice. `experimentos.snapshots_de(ids, desde)` = `snapshots` de
-muchas piezas en 2 consultas (panel del admin y, desde el centro de resultados de E2, 2026-10-03, `tablero._piezas_con_snapshots`: antes una o dos consultas por pieza, hoy dos para todas). El fragmento de resultados (`exp_resultados`, `resultados.contexto`) no agrega consultas por pieza: lee `metrica_dia` y `metrica_desglose` con UNA consulta por tabla (ids por trozos de 500) y `promedio_embudo` con una; lo único que crece con las piezas es el N+1 `_ultima_metrica` de `experimentos.cargar` (PND-134), que se paga una vez por petición, y `tests/test_rutas_resultados.py::test_el_fragmento_no_hace_mas_consultas_por_pieza_que_experimentos_cargar` exige que el fragmento no crezca más que esa lectura. Al cerrar E2 `ver_cliente` todavía arma `_contexto_experimentos` sin pintarlo (PND-137). Pool explícito (`db.opciones_pool`: `CREATV_DB_POOL` 10 +
+muchas piezas en 2 consultas (panel del admin y, desde el centro de resultados de E2, 2026-10-03, `tablero._piezas_con_snapshots`: antes una o dos consultas por pieza, hoy dos para todas). El fragmento de resultados (`exp_resultados`, `resultados.contexto`) no agrega consultas por pieza: lee `metrica_dia` y `metrica_desglose` con UNA consulta por tabla (ids por trozos de 500) y `promedio_embudo` con una; `experimentos.cargar` lee las últimas métricas en una consulta conjunta (PND-134, 2026-10-07), con subconsulta de último id por pieza y sin índice nuevo. La prueba mide el número de consultas, no la latencia de producción. `tests/test_rutas_resultados.py::test_el_fragmento_no_hace_mas_consultas_por_pieza_que_experimentos_cargar` exige conteo constante con 3 y 15 piezas. `ver_cliente` entrega solo reglas y correo para el armazón, y cuenta vivos sin cargar piezas (PND-137, 2026-10-07); el fragmento y Nuevo conservan el contexto completo. Pool explícito (`db.opciones_pool`: `CREATV_DB_POOL` 10 +
 `CREATV_DB_POOL_EXTRA` 10, ≥ hilos de gunicorn) y `temp_store=MEMORY`. **gunicorn se configura en el repo**
 (`deploy/gunicorn.conf.py`, unidad de ejemplo `deploy/iaplusyou.service`): UN proceso a propósito —`trabajos.iniciar`,
 `_TRABAJOS` y los cachés viven en su memoria; para usar más procesos primero hay que mover esos trabajos a la cola—,
@@ -45,3 +45,20 @@ cola_salud()/avisos()`: base y WAL, disco, memoria, carga, pool, worker atrasado
 `registro_app.configurar("web"|"worker")` (dashboard al importarse fuera de pytest, worker en `main`): `data/logs/
 <proceso>.log` rotando (5 MB × 5), los `print` copiados línea por línea («[aviso]» = WARNING), leído en
 `/admin/salud/registros`. `/salud` (público, sin sesión): `{"ok": true}` 200 o 503, para un monitor externo.
+
+PND-090/136 (2026-10-07, lote 5 B): referentes.datos.por_ids evita una consulta por candidato en ambas vistas de Sprints; exp_pieza usa los memos existentes por petición (experimentos, catálogo y trabajos). La gestión de resultados completa solo el experimento elegido, conservando todos los datos del centro y las propuestas globales cuando no hay filtro. Las pruebas miden lecturas/valores, no prometen latencia real.
+
+PND-062, entrega 1 (2026-10-10, pedido de Daniel: bajar el HTML inicial): `ver_cliente` ya no arma
+`_productos_con_uso` ni `activos_por_categoria` para selectores ocultos. Mantiene contadores y el enlace comercial
+histórico, y resuelve solo lo preseleccionado. `_pagina_swaps` corta antes de enriquecer nombres; la ruta tiene
+precarga de vivos y memo del catálogo. Gasto pide 25 filas en SQL, entrega 24 y usa la extra para Ver más;
+`desplazamiento` es OFFSET, mientras `desde` sigue siendo la fecha ISO. Los tres fragmentos omiten el chip del
+sidebar incluso sin cabecera fetch. `tests/test_pagina_por_partes.py` vigila lecturas, HTML y tamaño con datos temporales.
+
+Enmiendas PND-062, entrega 1 (2026-10-10, pedido de Daniel tras revisar la entrega): n_activos_por_categoria cuenta referencias con fotos desde las fichas ya leídas: cada color cuenta uno; los productos archivados no cuentan. n_por_categoria conserva las filas comerciales de Catálogo. La prueba de contexto rechaza listar directo en ver_cliente y lecturas planas adicionales para selectores ocultos.
+
+PND-062, entrega 2 (2026-10-10, pedido de Daniel): los cuatro scripts grandes de Crear salen del HTML
+y se sirven con el `?v=<mtime>` y `immutable` por un año de `_version_estaticos`, sin cambiar consultas ni
+rutas. La medición antes/después reutiliza exactamente `test_pagina_sembrada_baja_de_600_kib` (120 productos,
+200 swaps y 200 gastos del proyecto, datos temporales). Cifras y conteos en el informe de la entrega 2;
+no son mediciones de producción ni incluyen compresión.

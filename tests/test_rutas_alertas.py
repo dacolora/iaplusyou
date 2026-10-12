@@ -366,6 +366,19 @@ def test_una_clave_de_admin_que_ya_no_esta_decide_por_su_prefijo(app, monkeypatc
     assert _flashes(c) == ([] if status == 403 else ["Esa alerta ya no está."])
 
 
+def _plan_sin_renovar(cliente):
+    """Un proyecto que cobra con una suscripción activa cuyo pagado ya terminó, sin periodo ni cobro en curso
+    (la alerta `cobros:plan_sin_renovar`, solo del admin)."""
+    import db
+    from cobros import libro, planes
+    libro.configurar(cliente, usuario="admin", cobrar=True)
+    pid = planes.crear_plan("Pro", 1000, 1.25, 25, usuario="admin")
+    with db.conectar() as con:
+        con.execute(db.suscripcion.insert().values(
+            cliente=cliente, plan_id=pid, ciclo="mensual", estado="activa", renovar=True, fuente_pago_id="1",
+            cubierto_hasta="2026-01-01T10:00:00", intentos_fallidos=0, usuario="u", precio_usd=1000))
+
+
 def test_toda_alerta_solo_admin_de_las_fuentes_lleva_prefijo_de_admin(app, monkeypatch):
     """`PREFIJOS_SOLO_ADMIN` decide cuando la alerta ya no está calculada: tiene que cubrir toda alerta `solo_admin`
     que producen las fuentes de verdad (llaves, worker, recarga del saldo, una fuente caída), y ninguna otra."""
@@ -375,12 +388,13 @@ def test_toda_alerta_solo_admin_de_las_fuentes_lleva_prefijo_de_admin(app, monke
     for s_ in llaves.SERVICIOS:
         for v in s_["variables"]:
             monkeypatch.delenv(v, raising=False)
-    monkeypatch.setattr(saldo, "vigente", lambda p: {"proveedor": p, "nombre": "WaveSpeed", "desde": "2026-10-01T10:00:00",
-                                                     "recarga": "https://wavespeed.ai/top-up"} if p == "wavespeed" else None)
+    monkeypatch.setattr(saldo, "vigente", lambda p: {"proveedor": p, **saldo.PROVEEDORES[p], "desde": "2026-10-01T10:00:00"}
+                        if p in saldo.PROVEEDORES else None)   # WaveSpeed y fal (PND-213)
 
     def rota(cliente, ahora):
         raise RuntimeError("x")
     monkeypatch.setattr(al, "FUENTES", al.FUENTES + [("rota", rota)])
+    _plan_sin_renovar("acme")
     lista = al.calcular("acme")
     de_admin = [a["clave"] for a in lista if a["solo_admin"]]
     assert all(c.startswith(al.PREFIJOS_SOLO_ADMIN) for c in de_admin), de_admin
@@ -389,6 +403,7 @@ def test_toda_alerta_solo_admin_de_las_fuentes_lleva_prefijo_de_admin(app, monke
         assert any(c.startswith(prefijo) for c in de_admin), prefijo
         assert al.es_solo_admin(prefijo + ("x" if prefijo.endswith(":") else ""), [])
     assert not al.es_solo_admin("saldo:wavespeed", lista) and al.es_solo_admin("saldo:wavespeed_recarga", lista)
+    assert not al.es_solo_admin("saldo:fal", lista) and al.es_solo_admin("saldo:fal_recarga", lista)
 
 
 # ---------- la caché se vacía al escribir y cuando cambia el Tablero ----------
@@ -508,7 +523,7 @@ def test_pestana_pinta_grupos_resumen_botones_y_descartar(app, monkeypatch):
     # Panel justo después de Experimentos (el primero; ahí se fundió el Tablero) y antes de Configuración (los tests de
     # Configuración recortan desde ahí).
     assert html.index('<section id="tab-experimentos"') < html.index('<section id="tab-alertas"') \
-        < html.index('<section id="tab-triplewhale"') < html.index('<section id="tab-settings"')
+        < html.index('<section id="tab-rendimiento"') < html.index('<section id="tab-settings"')
     assert "<h2>Alertas</h2>" in tab and 'class="panel-cabecera-desc"' in tab
     assert "1 bloquea · 3 piden atención · 1 informativa" in tab
     pos = []
@@ -579,9 +594,9 @@ def test_un_cliente_no_ve_las_alertas_solo_admin(app, monkeypatch):
 def test_burbuja_del_sidebar_roja_ambar_u_oculta(app, monkeypatch):
     _fijas(app, monkeypatch, [_alerta(app, "llave:r2", "bloquea", "puesta_a_punto"), _alerta(app, "proyecto:logo", "info")])
     sb = _sidebar(_html(app["c"]))
-    assert sb.index('data-tab="experimentos"') < sb.index('data-tab="alertas"') < sb.index('data-tab="triplewhale"')
+    assert sb.index('data-tab="experimentos"') < sb.index('data-tab="alertas"') < sb.index('data-tab="rendimiento"')
     assert 'data-tab="tablero"' not in sb
-    item = sb[sb.index('data-tab="alertas"'):sb.index('data-tab="triplewhale"')]
+    item = sb[sb.index('data-tab="alertas"'):sb.index('data-tab="rendimiento"')]
     assert re.search(r'<span class="sidebar-burbuja bloquea"[^>]*>2</span>', item)
     _fijas(app, monkeypatch, [_alerta(app, "proyecto:logo", "info")])
     sb = _sidebar(_html(app["c"]))
@@ -605,6 +620,8 @@ def test_burbuja_tambien_en_una_pagina_de_sprints(app, monkeypatch):
 
 def test_navegacion_con_ancla_vive_una_vez_en_cliente_html(app, monkeypatch):
     _fijas(app, monkeypatch, [])
+    # Con Meta: sin Meta ni historial la pestaña es solo «Conecta Meta», sin el armazón ni su JS (2026-10-08).
+    monkeypatch.setattr(app["dashboard"].meta_conexion, "estado", lambda c: {"estado": "conectado", "verificado": True, "detalle": {}})
     html = _html(app["c"])
     assert "alertas: document.getElementById('tab-alertas')" in html
     assert html.count("#tab-experimentos [data-ir-tab], #tab-alertas [data-ir-tab]") == 1
@@ -635,6 +652,8 @@ def _anclas_de_alertas():
 
 # Anclas que solo usan alertas `solo_admin` (worker parado): no existen en la página de un cliente.
 SOLO_ADMIN = {"config-puesta-a-punto"}
+# Los apartados Saldo y Plan solo existen para un cliente cuyo proyecto cobra (lo comprueba tests/test_cobros_alertas.py).
+SOLO_SI_COBRA = {"config-ap-saldo", "config-ap-plan"}
 
 
 def test_cada_ancla_de_alertas_existe_en_la_pagina(app, monkeypatch):
@@ -658,7 +677,7 @@ def test_cada_ancla_de_alertas_existe_en_la_pagina(app, monkeypatch):
             assert f'id="llave-{s["id"]}"' in admin, s["id"]
     assert 'id="cf-cf_ancla"' in admin
     cliente = _html(_cliente_rol_cliente(app))
-    for ancla in literales - SOLO_ADMIN:
+    for ancla in literales - SOLO_ADMIN - SOLO_SI_COBRA:
         assert f'id="{ancla}"' in cliente, ancla
     assert 'id="cf-cf_ancla"' in cliente
 
@@ -692,3 +711,82 @@ def test_en_frio_las_alertas_no_crecen_con_las_piezas(base_temporal, monkeypatch
         html = c.get("/cliente/acme").data.decode()
     assert 'id="tab-alertas"' in html
     assert muchas.total - pocas.total <= 6, (pocas.total, muchas.total)
+
+
+@pytest.mark.parametrize('clave', ['tablero:tope_alcanzado:1', 'tablero:propuestas_pendientes:1',
+                                  'tablero:experimento_error:1', 'crear:prompt_listo'])
+def test_pnd124_plata_visible_pero_solo_admin_descarta(app, monkeypatch, clave):
+    a = _alerta(app, clave)
+    _fijas(app, monkeypatch, [a])
+    cliente = _cliente_rol_cliente(app)
+    tab = _tab(_html(cliente))
+    assert a['titulo'] in tab
+    assert 'name="clave"' not in tab
+    for accion in ('descartar', 'restaurar'):
+        r = cliente.post('/cliente/acme/alertas/' + accion, data={'clave': clave, 'huella': a['huella']})
+        assert r.status_code == 403
+    assert _descartes() == []
+    assert app['c'].post('/cliente/acme/alertas/descartar', data={'clave': clave, 'huella': a['huella']}).status_code == 302
+    assert _descartes()
+    _fijas(app, monkeypatch, [])
+    assert cliente.post('/cliente/acme/alertas/descartar', data={'clave': clave, 'huella': a['huella']}).status_code == 403
+
+
+@pytest.mark.parametrize('clave', ['tablero:ganador_sin_publicar:1', 'tablero:anuncios_rechazados:1'])
+def test_s1_alertas_de_plata_adicionales_protegidas_en_servidor(app, monkeypatch, clave):
+    a = _alerta(app, clave)
+    _fijas(app, monkeypatch, [a])
+    cliente = _cliente_rol_cliente(app)
+    for accion in ('descartar', 'restaurar'):
+        assert cliente.post('/cliente/acme/alertas/' + accion,
+                            data={'clave': clave, 'huella': a['huella']}).status_code == 403
+    assert _descartes() == []
+
+
+def test_s4_cuentas_con_nombres_saneados_no_comparten_descartes(app, monkeypatch):
+    import re, usuarios
+    al = app['alertas']
+    monkeypatch.setattr(usuarios, 'por_cliente', lambda c: [
+        {'usuario': n, 'correo_verificado': False} for n in ['ana pérez', 'ana_p_rez', 'ana', 'ana é', 'ana ñ']])
+    todas = al._fuente_cuentas('acme', '2026-10-08T12:00:00')
+    claves = {a['entidad']: a['clave'] for a in todas}
+    assert len(set(claves.values())) == 5      # «ana é» y «ana ñ» limpian igual: el sufijo sale del nombre exacto
+    assert claves['ana_p_rez'] == 'cuenta:correo:ana_p_rez'
+    assert claves['ana'] == 'cuenta:correo:ana'
+    assert all(re.fullmatch(al.CLAVE_VALIDA, c) for c in claves.values())
+    una = next(a for a in todas if a['entidad'] == 'ana pérez')
+    al.descartar('acme', una['clave'], una['huella'])
+    visibles = al.visibles('acme', rol='admin', calculadas=todas)['visibles']
+    assert {a['entidad'] for a in visibles} == {'ana_p_rez', 'ana', 'ana é', 'ana ñ'}
+
+
+def test_pnd123_cuentas_filtradas_al_leer_y_post_ajeno_403(app, monkeypatch):
+    al, d = app['alertas'], app['dashboard']
+    monkeypatch.setattr(d.usuarios, 'por_cliente', lambda c: [
+        {'usuario': 'user_acme', 'correo': 'propio@example.test'},
+        {'usuario': 'alguien', 'correo': 'privado@example.test'}])
+    llamadas = []
+    _fijas(app, monkeypatch, al._fuente_cuentas('acme', '2026-10-08T00:00:00'), llamadas)
+    cliente = _cliente_rol_cliente(app)
+    tab = _tab(_html(cliente))
+    assert 'privado@example.test' not in tab
+    assert 'propio@example.test' in tab
+    assert 'privado@example.test' in _tab(_html(app['c']))
+    assert llamadas == ['acme']
+    for accion in ('descartar', 'restaurar'):
+        assert cliente.post('/cliente/acme/alertas/' + accion, data={
+            'clave': 'cuenta:correo:alguien', 'huella': H64}).status_code == 403
+    assert _descartes() == []
+    al.descartar('acme', 'cuenta:correo:alguien', al.huella('sin_verificar', 'privado@example.test'))
+    tab = _tab(_html(cliente))
+    assert 'alguien' not in tab
+    assert _descartes()  # la lectura del cliente no poda el descarte ajeno
+
+
+@pytest.mark.parametrize('clave', ['tablero:tope_alcanzado:1', 'tablero:propuestas_pendientes:1',
+                                  'tablero:experimento_error:1', 'crear:prompt_listo'])
+def test_pnd124_servidor_rechaza_plata_aunque_no_este_en_cache(app, monkeypatch, clave):
+    _fijas(app, monkeypatch, [])
+    c = _cliente_rol_cliente(app)
+    for accion in ('descartar', 'restaurar'):
+        assert c.post('/cliente/acme/alertas/' + accion, data={'clave': clave, 'huella': H64}).status_code == 403

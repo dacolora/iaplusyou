@@ -423,11 +423,12 @@ def ejecutar(tarea):
         bitacora.registrar(cliente, swap_id, "swap", "error", str(e))
         if costo is not None:
             _registrar_gasto(cliente, ref, proveedor, tipo, costo, mejora_ok,
-                             sufijo=" · " + gettext("falló después de generar; el proveedor ya cobró"))
+                             sufijo=" · " + gettext("falló después de generar; el proveedor ya cobró"),
+                             entregado=False)
         raise
 
 
-def _registrar_gasto(cliente, referencia, proveedor, tipo, costo, mejora_ok, sufijo=""):
+def _registrar_gasto(cliente, referencia, proveedor, tipo, costo, mejora_ok, sufijo="", entregado=True):
     """`swap:<swap_id><ref_sufijo>` con el `usd` del estimate del proveedor
     (ya incluye la mejora de calidad si de verdad corrió). Un proveedor sin
     tarifa (usd None) se registra en 0 con "sin tarifa" para que quede
@@ -440,4 +441,5 @@ def _registrar_gasto(cliente, referencia, proveedor, tipo, costo, mejora_ok, suf
         partes.append(gettext("sin tarifa"))
     detalle = " · ".join(partes)
     gastos.registrar_seguro(cliente, "swap", usd, referencia, detalle=detalle + sufijo, proveedor=proveedor,
+                            entregado=entregado,
                             extra={"credits": (costo or {}).get("credits"), "sin_tarifa": usd is None})

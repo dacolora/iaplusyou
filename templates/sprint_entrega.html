@@ -7,7 +7,7 @@
 <div class="pagina-cabecera sprint-cabecera">
   <div>
     <h1>{{ _('Entrega de %(nombre)s', nombre=sprint.nombre) }}</h1>
-    <p class="vacio">{{ chip_estado(sprint.estado) }} · {{ ngettext('%(num)s aprobada', '%(num)s aprobadas', resumen.aprobadas) }} · {{ ngettext('%(num)s rechazada', '%(num)s rechazadas', resumen.rechazadas) }} · {{ _('%(sin_revisar)s sin revisar · USD %(usd)s gastado (estimado USD %(usd_est)s)', sin_revisar=resumen.sin_revisar, usd='%.2f' % resumen.costo_usd, usd_est='%.2f' % resumen.costo_estimado_usd) }}{% if resumen.dias %} · {{ _('%(n)s días', n=resumen.dias) }}{% endif %}</p>
+    <p class="vacio">{{ chip_estado(sprint.estado) }} · {{ ngettext('%(num)s aprobada', '%(num)s aprobadas', resumen.aprobadas) }} · {{ ngettext('%(num)s rechazada', '%(num)s rechazadas', resumen.rechazadas) }} · {{ _('%(sin_revisar)s sin revisar · USD %(usd)s gastado (estimado USD %(usd_est)s)', sin_revisar=resumen.sin_revisar, usd='%.2f' % resumen.costo_usd, usd_est='%.2f' % (resumen.costo_estimado_usd | precio)) }}{% if resumen.dias %} · {{ _('%(n)s días', n=resumen.dias) }}{% endif %}</p>
   </div>
 </div>
 

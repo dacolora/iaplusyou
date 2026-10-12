@@ -462,9 +462,9 @@ def test_fotos_del_producto_vuelven_al_panel(app, monkeypatch):
     sid = _sprint(datos)
     cid = _campana(datos, sid)
     url = f"/cliente/acme/sprints/{sid}/campanas/{cid}/referencias/catalogo"
-    r = app["c"].post(url, data={"volver": "tablero"})
+    r = app["c"].post(url, data={"volver": "tablero", "n_visto": 1})
     assert r.status_code == 302 and r.headers["Location"].endswith(f"/sprints/{sid}?panel={cid}")
-    r = app["c"].post(url)
+    r = app["c"].post(url, data={"n_visto": 0})
     assert r.headers["Location"].endswith(f"/sprints/{sid}/campanas/{cid}")
 
 

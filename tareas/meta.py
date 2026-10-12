@@ -123,6 +123,9 @@ def publicar(tarea):
             # Credenciales del proyecto (meta.json), no del .env: cada
             # cliente conectó su propia cuenta desde FlowMarketing.
             creds = meta_conexion.credenciales_ads(cliente)
+            if not creds.get("page_id"):
+                # Conexión «solo métricas»: el creative exige Página; se frena antes de crear campaña o conjunto.
+                raise ValueError(meta_conexion.error_solo_metricas(cliente))
             meta_auth.configurar(creds["token"], creds["ad_account_id"], creds["page_id"])
             campaign_resp = meta_campaign.crear_campaign(entry["nombre"], objetivo)
             campaign_id = campaign_resp["id"]
@@ -178,7 +181,10 @@ def publicar(tarea):
                 msg = gettext("Tu cuenta publicitaria de Meta no tiene un método de pago. Agrégalo en "
                               "business.facebook.com › Facturación y pagos (tarjeta o PSE) y vuelve a intentar; "
                               "la pieza sigue en la lista.")
-            elif "1885183" in msg or "modo de desarrollo" in msg or "does not have the capability" in msg:
+            elif "1885183" in msg or "modo de desarrollo" in msg:
+                msg = gettext("Meta rechazó el anuncio porque la app está en modo Desarrollo (subcódigo 1885183). "
+                              "Pásala a modo Live y revisa lo creado en Ads Manager antes de volver a intentar.")
+            elif "does not have the capability" in msg:
                 msg = gettext("Meta rechazó la solicitud por permisos de la app (#3). Desconecta y vuelve a "
                               "conectar Meta para renovar los permisos; si sigue igual, avísanos. La pieza "
                               "sigue en la lista.")

@@ -40,11 +40,13 @@ import experimentos
 import gastos
 import idiomas
 import lanzador
+import meta_conexion
 import modos
 import organico
 import propuestas
 import proyectos
 import trabajos
+from cobros import SaldoInsuficiente, libro
 from tareas import organico as tareas_organico
 
 # Acciones que pueden aumentar el gasto: chequean el tope antes de ejecutarse.
@@ -190,6 +192,8 @@ def ejecutar(cliente, experimento_id, accion, payload, propuesta_id=None, ep_id_
         if (pz.get("extra") or {}).get("derivado"):
             _evento("%(nombre)s ya derivada: no se vuelve a producir.", nombre=pz["nombre"])
             return gettext("%(nombre)s ya derivada: no se vuelve a producir.", nombre=pz["nombre"])
+        _exigir_pagina(cliente)
+        _exigir_saldo(cliente, ex, accion, payload)
         with _del_proyecto(cliente):
             hijo = derivaciones.planificar(cliente, experimento_id, "derivar", payload)
         # planificar ya marcó `derivado`; repetirlo es inocuo (misma bandera).
@@ -216,6 +220,8 @@ def ejecutar(cliente, experimento_id, accion, payload, propuesta_id=None, ep_id_
                    nombre=pz["nombre"], escalon=marcado)
             return gettext("%(nombre)s ya rescatada (escalón %(escalon)s); pieza pausada.",
                            nombre=pz["nombre"], escalon=marcado)
+        _exigir_pagina(cliente)
+        _exigir_saldo(cliente, ex, accion, payload)
         with _del_proyecto(cliente):
             derivaciones.planificar(cliente, experimento_id, "rescatar", payload)
         # planificar ya dejó `rescatado_en_escalon` (I-5); acá se refuerza
@@ -482,9 +488,28 @@ def _precio_estimado(cliente, ex, accion, payload):
             if video["usd"] is None:
                 return {"usd": None, "texto": sin_precio}
             usd += video["usd"] + final
-        return {"usd": round(usd, 4), "texto": gettext("%(precio)s aprox.", precio=gastos.formatear(usd))}
+        return {"usd": round(usd, 4), "texto": gastos.texto_precio(usd)}
     except Exception:  # noqa: BLE001 — el precio es informativo, nunca bloquea la acción
         return {"usd": None, "texto": sin_precio}
+
+
+def _exigir_pagina(cliente):
+    """Derivar y rescatar producen un anuncio NUEVO para lanzar: con la conexión de Meta «solo métricas» (token sin
+    Página) `lanzador.lanzar_piezas_nuevas` se negaría al final, con la producción ya pagada (ruling R23, revisión
+    final 2026-10-08). Se frena ANTES de `_exigir_saldo`, de `planificar` y de encolar nada: lanza ValueError con el
+    texto de `meta_conexion.error_solo_metricas`. `escalar` no pasa por aquí: solo cambia presupuestos de anuncios
+    que ya existen."""
+    aviso = meta_conexion.sin_pagina(cliente)
+    if aviso:
+        raise ValueError(aviso)
+
+
+def _exigir_saldo(cliente, ex, accion, payload):
+    """Cobros (spec 2026-10-08 §5): derivar y rescatar producen (clon y
+    finales). El saldo se pide ANTES de `planificar`, que crea el experimento
+    hijo y marca la pieza (`derivado`, `rescatado_en_escalon`): sin saldo no
+    se gasta la única derivación ni el escalón; lanza SaldoInsuficiente."""
+    libro.exigir(cliente, _precio_estimado(cliente, ex, accion, payload)["usd"])
 
 
 def pedir(cliente, experimento_id, accion, payload, motivo):
@@ -496,6 +521,17 @@ def pedir(cliente, experimento_id, accion, payload, motivo):
     payload = dict(payload or {})
     payload.setdefault("motivo", motivo)
     ex = _experimento(cliente, experimento_id)
+    if accion in ("derivar", "rescatar") and ex.get("objetivo_meta") == "OUTCOME_APP_PROMOTION":
+        # Spec 2026-10-07: en instalaciones de la app cada pieza tiene una fila por
+        # plataforma; una pieza derivada nacería sin plataforma y el lanzador no
+        # sabría ubicarla. Ganadora: solo escala; perdedora: ya se pidió pausar.
+        mensaje = gettext("Derivar y rescatar no están disponibles en experimentos de instalaciones de la app.")
+        with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+            guardado = gettext("Derivar y rescatar no están disponibles en experimentos de instalaciones de la app.")
+        experimentos.registrar_evento(cliente, experimento_id, "accion", guardado,
+                                      datos={"accion": accion, "payload": payload, "modo": ex["modo"]},
+                                      ep_id=payload.get("ep_id"))
+        return "omitida", mensaje
     if accion in ("derivar", "rescatar") and "precio_estimado" not in payload:
         payload["precio_estimado"] = _precio_estimado(cliente, ex, accion, payload)
     puerta = modos.resolver(ex["modo"], accion)
@@ -514,6 +550,15 @@ def pedir(cliente, experimento_id, accion, payload, motivo):
         motivo_prop = gettext(
             "profundidad máxima (%(n)s generaciones de derivación); %(motivo)s",
             n=experimentos.profundidad(ex), motivo=motivo).strip()
+    if accion in ("derivar", "rescatar"):
+        # Conexión «solo métricas» (R23): una pieza nueva no se podría lanzar. Ni en automático se intenta (nada se
+        # encola ni se reserva): queda como propuesta con el texto, para aprobarla tras conectar una Página; en
+        # manual/semi la persona ve el porqué desde antes de aprobar. Es texto que se guarda: idioma del proyecto.
+        with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+            sin_pagina = meta_conexion.sin_pagina(cliente)
+        if sin_pagina:
+            puerta = "propuesta"
+            motivo_prop = f"{sin_pagina} {motivo_prop}".strip()
     if payload.get("solo_proponer") and puerta != "propuesta":
         # Doctrina, bloque 4 (§4): el diagnóstico apunta a algo que no es el
         # creativo (landing, oferta, estación): una persona decide, en todo modo.
@@ -527,14 +572,21 @@ def pedir(cliente, experimento_id, accion, payload, motivo):
     if puerta == "ejecutar":
         try:
             mensaje = ejecutar(cliente, experimento_id, accion, payload)
+        except SaldoInsuficiente as e:
+            # Modo automático sin saldo (cobros §5.4): no se consumió nada
+            # (`_exigir_saldo` va antes de planificar); queda como propuesta
+            # para que una persona la apruebe después de recargar.
+            mensaje = None
+            motivo_prop = f"{e.frase_proyecto()} {motivo}".strip()
         except Exception as error:
             experimentos.registrar_evento(cliente, experimento_id, "error",
                                           cola.sin_token(str(error)), datos=datos, ep_id=ep_id)
             raise
-        experimentos.registrar_evento(cliente, experimento_id, "accion",
-                                      gettext("%(mensaje)s Motivo: %(motivo)s.", mensaje=mensaje, motivo=motivo),
-                                      datos=datos, ep_id=ep_id)
-        return "ejecutada", mensaje
+        if mensaje is not None:
+            experimentos.registrar_evento(cliente, experimento_id, "accion",
+                                          gettext("%(mensaje)s Motivo: %(motivo)s.", mensaje=mensaje, motivo=motivo),
+                                          datos=datos, ep_id=ep_id)
+            return "ejecutada", mensaje
 
     if accion == "publicar_organico" and not _propuesta_organica_pendiente(cliente, experimento_id, payload):
         payload = _completar_propuesta_organica(cliente, ex, payload)

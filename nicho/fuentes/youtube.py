@@ -189,7 +189,7 @@ class FuenteYouTube(Fuente):
                 self.aviso = gettext("YouTube agotó la cuota diaria del proyecto de Google; vuelve a intentar mañana.")
                 return
             raise _error_llave(e)
-        if p["palabras_clave"]:
+        if p["palabras_clave"] and len({v["id"] for v in videos}) < MAX_VIDEOS:
             try:
                 videos += buscar_videos(yt, p)
             except HttpError as e:

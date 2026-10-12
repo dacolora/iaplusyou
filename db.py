@@ -401,19 +401,44 @@ tienda = Table("tienda", metadata,
     Column("error", Text),
 )
 
+# Desde la migración 0032 (spec 2026-10-08 §3.2) esta tabla son los AJUSTES del proyecto: una fila por
+# proyecto con moneda, modelo_atribucion, ventana_atribucion y extra (avisados, aviso_sin_ventas). Las
+# columnas llave, dominio_tienda, zona_horaria, ultima_sincronizacion, estado y error YA NO SE LEEN NI SE
+# ESCRIBEN (la conexión vive en tw_tienda); siguen aquí, intactas, para poder volver al despliegue anterior.
 triple_whale = Table("triple_whale", metadata,
     Column("id", Integer, primary_key=True),
     *_comunes(),
-    Column("llave", Text),                                   # cifrado (Fernet)
-    Column("dominio_tienda", String(200)),                   # ej: example.myshopify.com
+    Column("llave", Text),                                   # SIN USO desde 0032 (ahora tw_tienda.llave)
+    Column("dominio_tienda", String(200)),                   # SIN USO desde 0032
     Column("moneda", String(3)),                             # ISO 4217 (ej: USD, COP)
     Column("modelo_atribucion", String(50), default="Triple Attribution"),  # ej: Triple Attribution, Last Click 7d
     Column("ventana_atribucion", String(30), default="lifetime"),  # ej: lifetime, 7d
+    Column("zona_horaria", String(50)),                      # SIN USO desde 0032
+    Column("ultima_sincronizacion", String(19)),             # SIN USO desde 0032
+    Column("estado", String(20), default="conectada"),       # SIN USO desde 0032
+    Column("error", Text),                                   # SIN USO desde 0032
+    Column("extra", JSON, default=dict),                     # avisados, aviso_sin_ventas (los backfill_desde/... viejos quedan sin uso)
+)
+
+# Una fila por tienda de Triple Whale conectada (spec 2026-10-08 §3.1, migración 0032): un proyecto puede
+# tener varias, una por país. Único escritor: triple_whale_tiendas.py.
+tw_tienda = Table("tw_tienda", metadata,
+    Column("id", Integer, primary_key=True),
+    *_comunes(),
+    Column("pais", String(2)),                               # ISO 3166-1 alfa-2 en mayúsculas; None = sin elegir
+    Column("dominio", String(200), nullable=False),          # normalizado (triple_whale.normalizar_dominio)
+    Column("llave", Text),                                   # cifrado (Fernet)
     Column("zona_horaria", String(50)),                      # ej: America/Bogota (desde shop_timezone)
-    Column("ultima_sincronizacion", String(19)),             # ISO 8601
     Column("estado", String(20), default="conectada"),       # conectada / error
     Column("error", Text),
-    Column("extra", JSON, default=dict),                     # backfill_desde, ultimo_resumen, gasto_7d (0023)
+    Column("ultima_sincronizacion", String(19)),             # ISO 8601
+    Column("extra", JSON, default=dict),                     # backfill_desde, ultimo_resumen, gasto_7d
+    sa.UniqueConstraint("cliente", "dominio", name="uq_tw_tienda_dominio"),
+    # una tienda por país; varias sin país se permiten mientras se eligen
+    sa.Index("uq_tw_tienda_pais", "cliente", "pais", unique=True, sqlite_where=sa.text("pais IS NOT NULL")),
+    # AUTOINCREMENT: el id de una tienda quitada no se reusa, así una evaluación vieja (tw_evaluacion.extra.
+    # tienda_id) no toma el nombre de la tienda conectada después (auditoría de seguridad, 2026-10-08).
+    sqlite_autoincrement=True,
 )
 
 # --- Triple Whale: métricas copiadas y evaluación (spec 2026-09-28, migraciones 0023 y 0024) ---
@@ -425,6 +450,7 @@ triple_whale = Table("triple_whale", metadata,
 tw_anuncio_dia = Table("tw_anuncio_dia", metadata,
     Column("id", Integer, primary_key=True),
     Column("cliente", String(80), nullable=False),
+    Column("tienda_id", Integer, nullable=False),            # tw_tienda.id (0032); sin FK, como el resto
     Column("fecha", String(10), nullable=False),
     Column("canal", String(40), nullable=False),
     Column("ad_id", String(64), nullable=False),
@@ -445,23 +471,29 @@ tw_anuncio_dia = Table("tw_anuncio_dia", metadata,
     Column("nc_pedidos", Float, default=0.0), Column("nc_ingresos", Float, default=0.0),
     Column("sesiones", Integer, default=0), Column("carritos", Integer, default=0),
     Column("checkouts", Integer, default=0),
+    # Visitantes únicos y nuevos que el Pixel atribuye al anuncio ese día: el NVP (0036, spec 2026-10-09).
+    Column("visitantes", Integer, default=0), Column("visitantes_nuevos", Integer, default=0),
     Column("con_pixel", Boolean, default=False),            # el Pixel respondió para ese día (aunque sin pedidos)
     Column("actualizado_en", String(19), nullable=False),
-    sa.UniqueConstraint("cliente", "canal", "ad_id", "fecha", name="uq_tw_anuncio_dia"),
+    sa.UniqueConstraint("cliente", "tienda_id", "canal", "ad_id", "fecha", name="uq_tw_anuncio_dia"),
     sa.Index("ix_tw_anuncio_dia_cliente_fecha", "cliente", "fecha"),
+    sa.Index("ix_tw_anuncio_dia_cliente_tienda_fecha", "cliente", "tienda_id", "fecha"),
 )
 
 # La tienda por día (blended_stats_tvf): ingresos y pedidos reales, gasto total.
 tw_tienda_dia = Table("tw_tienda_dia", metadata,
     Column("id", Integer, primary_key=True),
     Column("cliente", String(80), nullable=False),
+    Column("tienda_id", Integer, nullable=False),            # tw_tienda.id (0032)
     Column("fecha", String(10), nullable=False),
     Column("gasto", Float, default=0.0), Column("ingresos", Float, default=0.0),
     Column("pedidos", Float, default=0.0), Column("nc_pedidos", Float, default=0.0),
     Column("nc_ingresos", Float, default=0.0), Column("reembolsos", Float, default=0.0),
     Column("cogs", Float, default=0.0), Column("utilidad_neta", Float, default=0.0),
+    # Visitantes únicos y nuevos de la tienda ese día (web_analytics_table): el NVP (0036).
+    Column("visitantes", Integer, default=0), Column("visitantes_nuevos", Integer, default=0),
     Column("actualizado_en", String(19), nullable=False),
-    sa.UniqueConstraint("cliente", "fecha", name="uq_tw_tienda_dia"),
+    sa.UniqueConstraint("cliente", "tienda_id", "fecha", name="uq_tw_tienda_dia"),
 )
 
 # Una evaluación con IA de los anuncios (pagada, max_intentos=1): la muestra
@@ -487,14 +519,86 @@ tw_evaluacion = Table("tw_evaluacion", metadata,
 tw_producto_dia = Table("tw_producto_dia", metadata,
     Column("id", Integer, primary_key=True),
     Column("cliente", String(80), nullable=False),
+    Column("tienda_id", Integer, nullable=False),            # tw_tienda.id (0032)
     Column("fecha", String(10), nullable=False),
     Column("producto_id", String(120), nullable=False),
     Column("nombre", Text), Column("sku", String(120)),
     Column("unidades", Float, default=0.0), Column("ingresos", Float, default=0.0),
     Column("pedidos", Float, default=0.0),
     Column("actualizado_en", String(19), nullable=False),
-    sa.UniqueConstraint("cliente", "producto_id", "fecha", name="uq_tw_producto_dia"),
+    sa.UniqueConstraint("cliente", "tienda_id", "producto_id", "fecha", name="uq_tw_producto_dia"),
     sa.Index("ix_tw_producto_dia_cliente_fecha", "cliente", "fecha"),
+    sa.Index("ix_tw_producto_dia_cliente_tienda_fecha", "cliente", "tienda_id", "fecha"),
+)
+
+# Tarjetas de análisis (spec 2026-10-08-triple-whale-tarjetas-analisis §3.1, migración 0034): el anuncio tal cual lo
+# da ads_table (miniatura, video, título, copy). Una fila por (proyecto, canal, anuncio), SIN tienda: el mismo anuncio
+# llega igual por todas las tiendas que comparten cuenta. Único escritor: triple_whale/datos.py (el borrado al quitar
+# la última tienda, en triple_whale_tiendas.py como las copias).
+tw_creativo = Table("tw_creativo", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("cliente", String(80), nullable=False),
+    Column("canal", String(40), nullable=False),
+    Column("ad_id", String(64), nullable=False),
+    Column("tipo", String(20)),                               # ad_type en minúsculas: video, image, carousel…
+    Column("imagen_url", String(2000)),                       # ad_image_url (files.triplewhale.com)
+    Column("video_url", String(2000)),
+    Column("titulo", String(300)),
+    Column("copy", Text),
+    Column("cta", String(60)),
+    Column("duracion_s", Float),
+    Column("actualizado_en", String(19), nullable=False),
+    sa.UniqueConstraint("cliente", "canal", "ad_id", name="uq_tw_creativo"),
+)
+
+# «Cómo mejorarlo» de un anuncio (spec §3.2): pagado, nunca se borra al quitar tiendas (como tw_evaluacion).
+tw_analisis = Table("tw_analisis", metadata,
+    Column("id", Integer, primary_key=True),
+    *_comunes(),
+    Column("tienda_id", Integer),                             # alcance pedido; None = «Todas»
+    Column("canal", String(40), nullable=False),
+    Column("ad_id", String(64), nullable=False),
+    Column("estado", String(12), nullable=False, default="en_cola"),   # en_cola|analizando|lista|error
+    Column("desde", String(10)), Column("hasta", String(10)),
+    Column("moneda", String(3)),
+    Column("foto", JSON, default=dict),                       # el anuncio cuando se pidió (spec §3.2)
+    Column("resultado", JSON, default=dict),
+    Column("medios", JSON, default=dict),                     # qué vio Claude
+    Column("usd", Float, default=0.0),
+    Column("error", Text),
+    Column("tarea_id", Integer),
+    Column("pedido_por", String(80)),
+    sa.Index("ix_tw_analisis_anuncio", "cliente", "canal", "ad_id", "id"),
+    sqlite_autoincrement=True,
+)
+
+# Ganchos nuevos de un análisis (spec 2026-10-09-tw-ganchos-y-copy §4.2, migración 0037; era la 0035 en la rama, la
+# 0036 al mezclar main, que ya tenía 0035_meta_rendimiento, y la 0037 desde que main trajo 0036_tw_visitantes,
+# 2026-10-10): una fila por variante de
+# «Probar los 3 ganchos». Su id es también el código `CV<id>` que va en el nombre del anuncio en Meta: AUTOINCREMENT
+# para que nunca se reuse. Único escritor: triple_whale/datos.py.
+tw_gancho = Table("tw_gancho", metadata,
+    Column("id", Integer, primary_key=True),
+    *_comunes(),
+    Column("analisis_id", Integer, nullable=False),
+    Column("tanda", Integer, nullable=False),
+    Column("n", Integer, nullable=False),
+    Column("estado", String(12), nullable=False, default="preparando"),  # preparando|generando|armando|produciendo|lista|error
+    Column("texto", String(200)),
+    Column("prompt", Text),
+    Column("fotograma_s", Float),
+    Column("frame_url", String(2000)),
+    Column("cf_id", String(80)),
+    Column("edicion_id", Integer),
+    Column("final_id", String(200)),
+    Column("url_final", String(2000)),
+    Column("job_id", String(255)),
+    Column("error", Text),
+    Column("pedido_por", String(80)),
+    sa.UniqueConstraint("analisis_id", "tanda", "n", name="uq_tw_gancho_tanda"),
+    sa.Index("ix_tw_gancho_analisis", "cliente", "analisis_id", "tanda"),
+    sa.Index("ix_tw_gancho_estado", "estado"),
+    sqlite_autoincrement=True,
 )
 
 pedido = Table("pedido", metadata,
@@ -554,6 +658,171 @@ gasto = Table("gasto", metadata,
     sa.UniqueConstraint("cliente", "referencia", name="uq_gasto_referencia"),
     sa.Index("ix_gasto_cliente_creado", "cliente", "creado_en"),
     sa.Index("ix_gasto_creado", "creado_en"),  # «Últimos cobros» del panel (0026)
+)
+
+# --- Cobros: saldo prepagado por proyecto (docs/superpowers/specs/2026-10-08-cobros-saldo-prepagado-design.md §2) ---
+# Montos en milésimas de dólar, enteros. Escritores únicos: cobros/libro.py
+# (cuenta_saldo, movimiento_saldo, reserva_saldo) y cobros/recargas.py (recarga, pago_evento).
+
+cuenta_saldo = Table("cuenta_saldo", metadata,
+    Column("cliente", String(80), primary_key=True),
+    Column("cobrar", Boolean, nullable=False, default=False),
+    Column("margen", Float),                                   # NULL = kv cobros:margen_global
+    Column("umbral_aviso", Integer, nullable=False, default=5000),
+    Column("actualizado_en", String(19)),
+    Column("actualizado_por", String(80)),
+)
+
+movimiento_saldo = Table("movimiento_saldo", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("cliente", String(80), nullable=False),
+    Column("creado_en", String(19), nullable=False),
+    Column("tipo", String(16), nullable=False),                # recarga|cobro|reverso|no_cobrado|ajuste|anulacion|plan|vencimiento|incluido
+    Column("milesimas", Integer, nullable=False),              # con signo
+    Column("gasto_id", Integer),
+    Column("recarga_id", Integer),
+    Column("periodo_id", Integer),                             # periodo_plan: plan|vencimiento (0038)
+    Column("job_id", String(160)),
+    Column("tarea_id", Integer),
+    Column("concepto", String(120), nullable=False),           # código; se traduce al pintar
+    Column("detalle", String(300)),
+    Column("usuario", String(80)),
+    Column("extra", JSON),
+    sa.UniqueConstraint("tipo", "gasto_id", name="uq_movimiento_gasto"),
+    sa.UniqueConstraint("tipo", "recarga_id", name="uq_movimiento_recarga"),
+    sa.UniqueConstraint("tipo", "periodo_id", name="uq_movimiento_periodo"),
+    sa.Index("ix_movimiento_cliente_creado", "cliente", "creado_en"),
+    sa.Index("ix_movimiento_job", "job_id"),
+    sqlite_autoincrement=True,
+)
+
+reserva_saldo = Table("reserva_saldo", metadata,
+    Column("cliente", String(80), primary_key=True),
+    Column("job_id", String(160), primary_key=True),
+    Column("milesimas", Integer, nullable=False),
+    Column("creada_en", String(19), nullable=False),
+    # 0038 (revisión final de planes, 2026-10-10): el precio que se vio al encolar. La generación se cobra con este
+    # margen (y como incluida si lo fue al reservar) aunque termine después de que venza su periodo de plan, y
+    # su cobro cuenta en la bolsa de ESE periodo (`periodo_id`). NULL en las reservas de antes: margen del momento.
+    Column("margen", Float),
+    Column("incluido", Boolean, nullable=False, default=False, server_default=sa.text("0")),
+    Column("periodo_id", Integer),
+    Column("costo_usd", Float),   # el costo estimado al reservar: lo incluido reservado cuenta contra el tope
+)
+
+recarga = Table("recarga", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("cliente", String(80), nullable=False, index=True),
+    Column("creada_en", String(19), nullable=False),
+    Column("actualizada_en", String(19)),
+    Column("medio", String(12), nullable=False),               # bold|wompi|manual
+    Column("estado", String(12), nullable=False),              # pendiente|aprobada|rechazada|expirada|anulada
+    Column("milesimas", Integer, nullable=False),
+    Column("referencia", String(60), nullable=False, unique=True),
+    Column("link_id", String(40)),
+    Column("pago_id", String(40), unique=True),
+    Column("pasarela_ref", String(40), unique=True),           # id de la transacción de Wompi (0038)
+    Column("moneda_pago", String(3)),
+    Column("total_pago", Integer),
+    Column("medio_pago", String(20)),
+    Column("usuario", String(80), nullable=False),
+    Column("nota", String(300)),
+    sqlite_autoincrement=True,
+)
+
+pago_evento = Table("pago_evento", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("proveedor", String(12), nullable=False),
+    Column("evento_id", String(64), nullable=False),
+    Column("tipo", String(24), nullable=False),
+    Column("referencia", String(60)),
+    Column("recibido_en", String(19), nullable=False),
+    Column("firma_ok", Boolean, nullable=False),
+    Column("resultado", String(40), nullable=False),
+    Column("cuerpo", JSON),
+    sa.UniqueConstraint("proveedor", "evento_id", name="uq_pago_evento"),
+    sa.Index("ix_pago_evento_recibido", "recibido_en"),
+)
+
+# --- Planes mensuales (docs/superpowers/specs/2026-10-09-planes-mensuales-wompi-design.md §2, migración 0038) ---
+# Escritor único: cobros/planes.py (plan, suscripcion, periodo_plan, pago_plan). Los movimientos que
+# acreditan o vencen un periodo los escribe cobros/libro.py.
+
+plan = Table("plan", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("nombre", String(60), nullable=False),
+    Column("precio_usd", Integer, nullable=False),             # mensual, dólares enteros
+    Column("precio_anual_usd", Integer),                       # NULL = sin opción anual
+    Column("margen", Float, nullable=False),                   # el de miembro, 1,00–5,00
+    Column("tope_incluido_usd", Float, nullable=False, default=25.0),   # costo de proveedor regalado por mes
+    Column("activo", Boolean, nullable=False, default=True),   # archivado = no se ofrece
+    Column("orden", Integer, nullable=False, default=0),
+    Column("creado_en", String(19)),
+    Column("actualizado_en", String(19)),
+    sqlite_autoincrement=True,
+)
+
+suscripcion = Table("suscripcion", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("cliente", String(80), nullable=False, index=True),
+    Column("plan_id", Integer, nullable=False),
+    Column("ciclo", String(8), nullable=False),                # mensual|anual
+    Column("estado", String(12), nullable=False),              # activa|cancelada|morosa|terminada
+    Column("renovar", Boolean, nullable=False, default=True),
+    Column("fuente_pago_id", String(40)),                      # payment_source de Wompi
+    Column("medio_fuente", String(12)),                        # CARD|NEQUI
+    Column("fuente_resumen", String(40)),                      # «Visa ···4242»; nunca el número
+    Column("correo", String(120)),
+    Column("cubierto_hasta", String(19)),
+    Column("proximo_cobro", String(19)),
+    Column("intentos_fallidos", Integer, nullable=False, default=0),
+    # Precio que la persona aceptó (planes 5/8, revisión): las renovaciones cobran esto, nunca el precio actual del plan.
+    Column("precio_usd", Integer),
+    Column("precio_anual_usd", Integer),
+    Column("usuario", String(80), nullable=False),
+    Column("creada_en", String(19)),
+    Column("actualizada_en", String(19)),
+    # A lo más una suscripción no terminada por cliente.
+    sa.Index("uq_suscripcion_viva", "cliente", unique=True, sqlite_where=sa.text("estado != 'terminada'")),
+    sqlite_autoincrement=True,
+)
+
+periodo_plan = Table("periodo_plan", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("cliente", String(80), nullable=False, index=True),
+    Column("suscripcion_id", Integer, nullable=False),
+    Column("inicio", String(19), nullable=False),
+    Column("fin", String(19), nullable=False),
+    Column("precio_usd", Integer, nullable=False),             # foto del plan para ese mes
+    Column("margen", Float, nullable=False),
+    Column("tope_incluido_usd", Float, nullable=False),
+    Column("credito_milesimas", Integer, nullable=False),
+    Column("pago_id", Integer),                                # pago_plan que lo cubre; NULL = activado a mano
+    Column("cerrado", Boolean, nullable=False, default=False),
+    sa.UniqueConstraint("suscripcion_id", "inicio", name="uq_periodo_suscripcion_inicio"),
+    sqlite_autoincrement=True,
+)
+
+pago_plan = Table("pago_plan", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("cliente", String(80), nullable=False, index=True),
+    Column("suscripcion_id", Integer, nullable=False),
+    Column("ciclo", String(8), nullable=False),
+    Column("usd", Integer, nullable=False),
+    Column("trm", Float),
+    Column("monto_cop_centavos", Integer),
+    Column("referencia", String(60), nullable=False, unique=True),   # pl-<suscripcion>-<AAAAMMDD>-<intento>
+    Column("transaccion_id", String(40), unique=True),
+    Column("estado", String(12), nullable=False),              # pendiente|aprobado|rechazado|error|anulado
+    Column("motivo", String(300)),
+    Column("creado_en", String(19)),
+    Column("actualizado_en", String(19)),
+    Column("medio", String(12), nullable=False),               # wompi|manual
+    Column("usuario", String(80)),
+    # La bolsa mensual que compró este pago (revisión 3 de la Task 5): cada periodo que abre, aunque abra meses
+    # después, acredita esto y no el precio del plan de ese día.
+    Column("precio_mes_usd", Integer),
+    sqlite_autoincrement=True,
 )
 
 # ---------------------------------------------------- referentes ---
@@ -994,6 +1263,154 @@ error_app = Table("error_app", metadata,
     Column("extra", JSON, default=dict),
     sa.Index("ix_error_app_estado_ultima", "estado", "ultima_vez"),
     sa.Index("ix_error_app_ultima", "ultima_vez"),
+)
+
+# --- Meta: rendimiento de varias cuentas por proyecto (spec 2026-10-08 meta rendimiento §4, migración 0035) ---
+# Las cuentas publicitarias que un proyecto LEE (aparte de la única con la que lanza, en meta.json).
+# Único escritor: meta_rendimiento/cuentas.py. Una cuenta solo puede estar en un proyecto.
+meta_cuenta = Table("meta_cuenta", metadata,
+    Column("id", Integer, primary_key=True),
+    *_comunes(),
+    Column("ad_account_id", String(40), nullable=False),     # «act_…»
+    Column("nombre", Text),
+    Column("moneda", String(3)),
+    Column("zona_horaria", String(60)),
+    Column("pais", String(2)),                               # ISO-2 o None (World Wide)
+    Column("estado", String(12), default="nueva"),           # nueva|copiando|ok|error
+    Column("error", Text),
+    Column("ultima_copia", String(19)),
+    Column("agregada_por", String(80)),
+    # Lo que escribe meta_rendimiento/sync.py: cuenta {account_status, disable_reason, amount_spent, spend_cap},
+    # backfill_cuenta / backfill_anuncios (cada mitad de la primera copia hecha), backfill_hecho (las dos; las copias
+    # viejas solo tienen esta), cuenta_desde / anuncios_desde (día más viejo ya copiado de la primera copia en curso),
+    # listado_completo_en (cuándo se hizo el último listado completo de anuncios, con pausados).
+    Column("extra", JSON, default=dict),
+    sa.Index("uq_meta_cuenta_act", "ad_account_id", unique=True),
+    sqlite_autoincrement=True,
+)
+
+# La cuenta por día (level=account): 13 meses. El alcance diario sí es de ese día (no se suma entre días).
+meta_cuenta_dia = Table("meta_cuenta_dia", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("cliente", String(80), nullable=False),
+    Column("ad_account_id", String(40), nullable=False),
+    Column("fecha", String(10), nullable=False),
+    Column("gasto", Float, default=0.0), Column("impresiones", Integer, default=0),
+    Column("alcance", Integer, default=0), Column("clics", Integer, default=0),
+    Column("clics_salida", Integer, default=0), Column("compras", Float, default=0.0),
+    Column("valor", Float, default=0.0), Column("vistas_3s", Integer, default=0),
+    Column("thruplays", Integer, default=0),
+    Column("actualizado_en", String(19), nullable=False),
+    sa.UniqueConstraint("cliente", "ad_account_id", "fecha", name="uq_meta_cuenta_dia"),
+)
+
+# El anuncio por día (level=ad): 90 días (tareas/meta_rendimiento borra lo anterior). Campaña y
+# conjunto van como id; los nombres viven en meta_objeto.
+meta_anuncio_dia = Table("meta_anuncio_dia", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("cliente", String(80), nullable=False),
+    Column("ad_account_id", String(40), nullable=False),
+    Column("fecha", String(10), nullable=False),
+    Column("campaign_id", String(40)), Column("adset_id", String(40)),
+    Column("ad_id", String(40), nullable=False),
+    Column("gasto", Float, default=0.0), Column("impresiones", Integer, default=0),
+    Column("clics", Integer, default=0), Column("clics_salida", Integer, default=0),
+    Column("compras", Float, default=0.0), Column("valor", Float, default=0.0),
+    Column("vistas_3s", Integer, default=0), Column("thruplays", Integer, default=0),
+    Column("p25", Integer, default=0), Column("p50", Integer, default=0),
+    Column("p75", Integer, default=0), Column("p100", Integer, default=0),
+    Column("actualizado_en", String(19), nullable=False),
+    sa.UniqueConstraint("cliente", "ad_account_id", "ad_id", "fecha", name="uq_meta_anuncio_dia"),
+    sa.Index("ix_meta_anuncio_dia_cuenta_fecha", "cliente", "ad_account_id", "fecha"),
+)
+
+# Campañas, conjuntos y anuncios: nombre, estado, presupuesto, aprendizaje, miniatura.
+meta_objeto = Table("meta_objeto", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("cliente", String(80), nullable=False),
+    Column("ad_account_id", String(40), nullable=False),
+    Column("nivel", String(10), nullable=False),             # campana|conjunto|anuncio
+    Column("objeto_id", String(40), nullable=False),
+    Column("padre_id", String(40)),                          # conjunto -> campaña, anuncio -> conjunto
+    Column("campaign_id", String(40)),
+    Column("nombre", Text),
+    Column("estado", String(30)),                            # effective_status; None = no vino (archivado/borrado)
+    Column("objetivo", String(40)), Column("optimizacion", String(40)),
+    Column("presupuesto_diario", Float), Column("presupuesto_total", Float),   # en la moneda de la cuenta
+    Column("estrategia_puja", String(40)),
+    Column("aprendizaje", String(20)),                       # learning_stage_info.status
+    Column("creative_id", String(40)), Column("miniatura_url", Text), Column("video_id", String(40)),
+    Column("creado_en_meta", String(25)),
+    Column("actualizado_en", String(19), nullable=False),
+    Column("extra", JSON, default=dict),
+    sa.UniqueConstraint("cliente", "objeto_id", name="uq_meta_objeto"),
+    sa.Index("ix_meta_objeto_cuenta_nivel", "cliente", "ad_account_id", "nivel"),
+)
+
+# Alcance y frecuencia de una ventana (gente única: no se suma por días).
+meta_alcance = Table("meta_alcance", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("cliente", String(80), nullable=False),
+    Column("ad_account_id", String(40), nullable=False),
+    Column("nivel", String(10), nullable=False),             # cuenta|campana
+    Column("objeto_id", String(40), nullable=False),         # act_… para la cuenta
+    Column("ventana", Integer, nullable=False),              # 7|14|30|90
+    Column("alcance", Integer, default=0),
+    Column("frecuencia", Float),
+    Column("calculado_en", String(19), nullable=False),
+    sa.UniqueConstraint("cliente", "objeto_id", "ventana", name="uq_meta_alcance"),
+)
+
+# Tasa de cambio diaria del BCE (frankfurter): cuántos USD vale una unidad de `moneda`.
+tasa_cambio = Table("tasa_cambio", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("fecha", String(10), nullable=False),
+    Column("moneda", String(3), nullable=False),
+    Column("usd_por_unidad", Float, nullable=False),
+    Column("fuente", String(20), default="bce"),
+    Column("creado_en", String(19), nullable=False),
+    sa.UniqueConstraint("fecha", "moneda", name="uq_tasa_cambio"),
+)
+
+# --- Meta rendimiento E2: diagnosticar y recomendar (spec 2026-10-10 meta rendimiento E2 §4, migración 0039) ---
+# Los desgloses de una cuenta (edad+género, ubicación, país, dispositivo) en ventanas de 7 y 30 días: una copia que
+# se reemplaza por (cuenta, ventana, dimensión). Único escritor: meta_rendimiento/datos.py.
+meta_desglose = Table("meta_desglose", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("cliente", String(80), nullable=False),
+    Column("ad_account_id", String(40), nullable=False),
+    Column("ventana", Integer, nullable=False),              # 7|30
+    Column("dimension", String(20), nullable=False),         # edad_genero|ubicacion|pais|dispositivo
+    Column("clave", String(120), nullable=False),            # «25-34|female», «facebook|feed», «NO», «mobile_app»
+    Column("gasto", Float, default=0.0), Column("impresiones", Integer, default=0),
+    Column("clics", Integer, default=0), Column("clics_salida", Integer, default=0),
+    Column("compras", Float, default=0.0), Column("valor", Float, default=0.0),
+    Column("calculado_en", String(19), nullable=False),
+    sa.UniqueConstraint("cliente", "ad_account_id", "ventana", "dimension", "clave", name="uq_meta_desglose"),
+)
+
+# «Evaluación con IA» del rendimiento de Meta: PAGADA, así que no se borra al quitar o cambiar cuentas (como
+# tw_analisis); solo desconectar Meta la borra (E2-R2: guarda nombres y métricas de Meta). AUTOINCREMENT para que un id
+# borrado no se reuse. Único escritor: meta_rendimiento/datos.py.
+meta_evaluacion = Table("meta_evaluacion", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("cliente", String(80), nullable=False),
+    Column("creado_en", String(19), nullable=False),
+    Column("actualizado_en", String(19), nullable=False),
+    Column("estado", String(12), nullable=False, default="en_cola"),   # en_cola|analizando|lista|error
+    Column("cuentas", JSON, default=list),                   # las «act_…» del alcance pedido
+    Column("desde", String(10)), Column("hasta", String(10)),
+    Column("moneda", String(3)),
+    Column("muestra", JSON, default=list),                   # los anuncios que se enviaron a Claude
+    Column("recomendaciones", JSON, default=list),           # las de las reglas gratis al pedirla
+    Column("resultado", JSON, default=dict),
+    Column("usd", Float, default=0.0),
+    Column("error", Text),
+    Column("tarea_id", Integer),
+    Column("pedido_por", String(80)),
+    Column("extra", JSON, default=dict),
+    sa.Index("ix_meta_evaluacion_cliente_creado", "cliente", "creado_en"),
+    sqlite_autoincrement=True,
 )
 
 

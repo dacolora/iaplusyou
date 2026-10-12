@@ -366,3 +366,37 @@ def _experimento_sin_angulo(db, ex):
     ex.agregar_pieza("acme", eid, pid, "CO")
     return eid
 
+
+
+def test_crear_con_piezas_app_una_fila_por_plataforma(base_temporal):
+    import experimentos as ex
+    clon = _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_app")
+    datos = dict(nombre="App", paises=PAISES, objetivo_meta="OUTCOME_APP_PROMOTION", dias=7, tope_total=100000.0,
+                 destino_url="https://apps.apple.com/co/app/forja/id123", moneda="COP",
+                 app={"ios_url": "https://apps.apple.com/co/app/forja/id123",
+                      "android_url": "https://play.google.com/store/apps/details?id=com.x", "app_id": "12345"})
+    eid = ex.crear_con_piezas("acme", datos, [(clon, "CO"), (clon, "MX")])
+    e = ex.obtener("acme", eid)
+    assert e["extra"]["app"]["app_id"] == "12345"
+    assert sorted((p["extra"] or {}).get("plataforma") for p in e["piezas"]) == ["android", "android", "ios", "ios"]
+    assert ex.plataformas_de(e["extra"]) == ["ios", "android"]
+    assert "4 anuncio(s)" in next(ev["mensaje"] for ev in e["eventos"] if ev["tipo"] == "creado")
+
+
+def test_crear_con_piezas_app_sin_urls_falla(base_temporal):
+    import experimentos as ex
+    clon = _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_app2")
+    datos = dict(nombre="App", paises=PAISES, objetivo_meta="OUTCOME_APP_PROMOTION", dias=7, tope_total=1.0,
+                 destino_url="https://t.co", moneda="COP", app={"app_id": "1"})
+    with pytest.raises(ValueError):
+        ex.crear_con_piezas("acme", datos, [(clon, "CO"), (clon, "MX")])
+    assert ex.cargar("acme") == []
+
+
+def test_crear_con_piezas_sin_app_no_cambia(base_temporal):
+    import experimentos as ex
+    clon = _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_sin")
+    datos = dict(nombre="N", paises=PAISES, objetivo_meta="OUTCOME_TRAFFIC", dias=7, tope_total=1.0,
+                 destino_url="https://t.co", moneda="COP")
+    e = ex.obtener("acme", ex.crear_con_piezas("acme", datos, [(clon, "CO"), (clon, "MX")]))
+    assert len(e["piezas"]) == 2 and not any((p["extra"] or {}).get("plataforma") for p in e["piezas"])

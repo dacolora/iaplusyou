@@ -27,6 +27,7 @@
   --accent-2: #a855f7;
   --accent-grad: linear-gradient(135deg, #6d28d9, #9333ea);
   --accent-texto: #c4a5ff;
+  --sobre-accent: #ffffff; /* letra e íconos sobre --accent o --accent-grad (5,7:1) */
 
   /* Luz (lavanda; el nombre --cian viene de la paleta azul): solo texto, trazos, íconos y sombras */
   --cian: #e0b3ff;
@@ -55,6 +56,9 @@
   --fondo-logo: #e9e9f0;
   --fondo-video: #121417;
   --fondo-lienzo: #000000;
+  --velo-media: rgba(17, 17, 24, 0.72); /* botones encima de un video o una imagen (corazón de Crear) */
+  --velo-media-fuerte: rgba(17, 17, 24, 0.88);
+  --sobre-media: #ffffff;
 
   /* Tipografía */
   --font-display: "Space Grotesk", "Helvetica Neue", Arial, sans-serif;

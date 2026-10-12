@@ -552,7 +552,9 @@ def test_paises_dinero_del_motor_y_detalle_de_meta(sembrado):
     lista = r.paises(r.cargar("acme", r.Filtro(dias=7), AHORA))
     assert [x["pais"] for x in lista] == ["CO", "MX"]                      # mismo gasto: por código
     co = lista[0]
-    assert set(co) == {"pais", "impresiones", "clics_enlace", "gasto", "ctr", "roas", "roas_comparable", "ventas_cambiaron"}
+    assert set(co) == {"pais", "impresiones", "clics_enlace", "gasto", "ctr", "roas", "roas_comparable", "ventas_cambiaron",
+                       "visitantes", "visitantes_nuevos"}                 # NVP de Triple Whale (2026-10-09)
+    assert co["visitantes"] is None and co["visitantes_nuevos"] is None   # sin Triple Whale: None, no se muestra
     assert co["clics_enlace"] == 86 and co["ctr"] == pytest.approx(86 / 4000 * 100)      # metrica_dia
     assert co["roas"] == pytest.approx(120.0 / 40.0)                                      # el motor (snapshots)
     assert lista[1]["clics_enlace"] == 46 and lista[1]["ctr"] == pytest.approx(46 / 4000 * 100)
@@ -939,7 +941,7 @@ def test_detalle_de_pieza_completo(sembrado):
     # lo del panel (R2): la gráfica de la pieza con su gasto, y sus acciones (la pieza de Crear, el país en Meta)
     assert len(d["series"]["gasto"]) == 7 and d["series"]["moneda"] == "COP" and "roas" in d["series"]
     assert d["pieza_id"] and d["estado_experimento"] == ex.obtener("acme", e1)["estado"]
-    assert d["pais_experimento"]["pais"] == d["pais"] and set(d["pais_experimento"]) == {"pais", "estado", "meta_adset_id", "presupuesto_dia"}
+    assert d["pais_experimento"]["pais"] == d["pais"] and set(d["pais_experimento"]) == {"pais", "estado", "meta_adset_id", "meta_adsets", "presupuesto_dia"}
     json.dumps({k2: d[k2] for k2 in ("curva", "series", "serie", "promedio", "historia", "eventos", "periodo",
                                      "pais_experimento")})
 

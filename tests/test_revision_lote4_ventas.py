@@ -20,7 +20,7 @@ def test_sonda_un_experimento_cop_apaga_el_roas_de_todos_los_meses(base_temporal
                 tomado_en="2026-09-12T08:00:00")
     despues = tablero.mes_a_mes("acme", ahora_iso=AHORA)
     total = tablero.resumen_total("acme", ahora_iso=AHORA)["por_moneda"]["USD"]
-    assert total["roas"] is None
+    assert total["roas"] == 3.0 and total["excluidos"] == 1
     for a, b in zip(antes, despues):
         if a["mes"] < "2026-09":
             assert b["por_moneda"]["USD"]["roas"] == a["por_moneda"]["USD"]["roas"] == 3.0

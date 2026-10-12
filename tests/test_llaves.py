@@ -40,7 +40,7 @@ def test_wavespeed_es_obligatoria_y_se_explica_sola(monkeypatch):
 
 def test_wavespeed_va_justo_despues_de_anthropic_y_el_resto_sigue_igual():
     ids = [t["id"] for t in llaves.estado()]
-    assert ids == ["anthropic", "wavespeed", "fal", "higgsfield", "r2", "smtp", "meli", "reddit", "youtube_api",
+    assert ids == ["anthropic", "wavespeed", "fal", "gemini", "higgsfield", "r2", "smtp", "meli", "reddit", "youtube_api",
                    "apify", "atria", "trendtrack"]
     assert [s["id"] for s in llaves.SERVICIOS] == ids
 
@@ -90,3 +90,15 @@ def test_dashboard_conserva_los_alias(base_temporal):
     import dashboard
     assert dashboard._estado_llaves is llaves.estado
     assert dashboard.SERVICIOS_LLAVES is llaves.SERVICIOS
+
+
+def test_pnd075_gemini_visible_sin_revelar_llave(monkeypatch):
+    monkeypatch.delenv('GEMINI_API_KEY', raising=False)
+    tarjeta = _por_id()['gemini']
+    assert tarjeta['estado'] == 'falta' and tarjeta['faltan'] == ['GEMINI_API_KEY']
+    # También la usa Cambiar producto con Nano Banana, no solo Nueva idea.
+    assert not tarjeta['opcional'] and 'Cambiar producto' in tarjeta['para_que']
+    secreto = 'valor-falso-gemini-llave-de-prueba'
+    monkeypatch.setenv('GEMINI_API_KEY', secreto)
+    assert _por_id()['gemini']['estado'] == 'configurada'
+    assert secreto not in repr(llaves.estado())

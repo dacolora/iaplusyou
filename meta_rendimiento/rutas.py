@@ -1,0 +1,407 @@
+"""Blueprint de Meta rendimiento (spec 2026-10-08 meta rendimiento §5 y §8), bajo `/cliente/<cliente>/meta-rendimiento`.
+Desde el 2026-10-09 la pestaña es «Rendimiento» (`pestana_rendimiento/`, spec 2026-10-09): su panel, sus «Ver más» y
+«Actualizar ahora» viven allá; aquí quedan «Elegir cuentas» (que la pestaña pide en «Ajustes»), el país de una cuenta y
+`pedir_copia`, y todo vuelve a `#rendimiento`. `dashboard._guard_por_cliente` protege todo porque la URL lleva
+`<cliente>`; cada POST además exige el mismo origen (Sec-Fetch-Site), la barrera CSRF del resto de la app.
+
+- `cuentas` (GET): el selector «Elegir cuentas». Es la ÚNICA ruta que llama a Meta al abrirse
+  (`meta_conexion.listar_activos`), y solo cuando la persona abre el selector.
+- `cuentas` (POST): deja en el proyecto las cuentas marcadas. Una cuenta nueva solo entra si el token la ve
+  (`listar_activos` otra vez: un id escrito a mano no sirve); una que ya estaba y sigue marcada se queda aunque el token
+  ya no la vea. Encola la copia de las agregadas (gratis: leer de Meta no cobra). Tope: 20 cuentas por proyecto.
+- `cuentas/<act>/pais`: cambia el país de una cuenta del proyecto (404 si es ajena, 400 si el código no es un país).
+- `pedir_copia` (no es ruta): «Actualizar ahora» de Rendimiento; sin `act`, la copia de todas; con `act`, la de esa.
+  Quien no es admin espera 30 minutos desde la última copia (de esa cuenta o, sin `act`, de cualquiera del proyecto):
+  el límite de Meta es por usuario y app, lo comparten todos los proyectos que usan el mismo token y un clic repetido
+  lo agotaría (ruling R22, revisión final 2026-10-08). El admin no espera.
+- `evaluar` (spec E2 §8): «Evaluar con IA», que COBRA. Cualquier persona del proyecto la puede pedir (paga su saldo,
+  como en Triple Whale). Arma la muestra y los DATOS con el alcance pedido (`dias` y, desde la pestaña «Rendimiento»,
+  `entrada`: las cuentas de Meta de esa entrada cuya fuente es Meta, `pestana_rendimiento.panel.cuentas_evaluacion_meta`;
+  sin `entrada`, `cuenta` como el viejo panel de Meta), calcula
+  el precio con `gastos.estimar("evaluacion_meta", n=)` y exige que el formulario traiga cuántos anuncios mostró el
+  botón (`n`) y el precio que la persona vio (`precio_visto`): si falta alguno o ya no coinciden (la copia cambió la
+  muestra, el margen cambió), no crea ni reserva nada y dice el precio de ahora (E2-R6); pide saldo ANTES de crear la
+  fila (`libro.exigir`) y la encola con
+  `costo_estimado` (reserva). `SaldoInsuficiente` la responde el manejador único de dashboard (402 a un fetch, aviso a
+  un formulario). Una viva por proyecto (`<cliente>__meta_eval`).
+- `evaluacion/<id>` (GET): el fragmento de una evaluación (404 si es de otro proyecto).
+- `evaluacion/<id>/idea/<i>/crear`: «Llevar a Crear» de una idea: deja el prefill con el origen «meta:<id>:<i>» y
+  no genera nada (generar sigue siendo el botón de Crear con su precio).
+
+AISLAMIENTO (ruling R20, revisión final 2026-10-08): elegir cuentas (GET y POST) y cambiar el país son SOLO del admin
+(403 al resto). El token de un proyecto puede ver cuentas de otros clientes, y quien las elige las lee: por eso lo
+decide una persona de Creatv. Una cuenta con la que LANZA otro proyecto (`meta.json`) cuenta como «En otro proyecto»
+igual que una que otro ya lee: no se lista habilitada ni se acepta. Todo POST de este Blueprint exige además correo
+verificado (como las rutas que conectan Meta); el admin está exento.
+
+En modo agencia el selector dice «Todavía no disponible» (spec §2.10). Ningún token llega a una respuesta: los
+errores de Meta pasan por `cola.sin_token` y además se tacha el valor exacto del token."""
+from datetime import datetime, timedelta
+from functools import wraps
+
+from flask import Blueprint, abort, flash, redirect, render_template, request, session, url_for
+from flask_babel import gettext, ngettext
+
+import cola
+import db
+import gastos
+import idiomas
+import meta_conexion
+import usuarios
+from cobros import libro
+from idiomas import N_
+from meta_rendimiento import analisis, cuentas, datos, panel, pausa
+from tareas import meta_rendimiento as tareas_mr
+from triple_whale import paises, puente
+
+bp = Blueprint("meta_rendimiento", __name__, url_prefix="/cliente/<cliente>/meta-rendimiento")
+
+# account_status de una cuenta publicitaria (Graph /me/adaccounts); otro código se muestra como «Otro estado».
+ESTADOS_CUENTA = {1: N_("Activa"), 2: N_("Desactivada"), 3: N_("Con pagos pendientes"), 7: N_("En revisión de Meta"),
+                  8: N_("Con pagos pendientes"), 9: N_("En período de gracia"), 100: N_("Por cerrarse"),
+                  101: N_("Cerrada")}
+OTRO_ESTADO = N_("Otro estado")
+ESPERA_ACTUALIZAR = timedelta(minutes=30)      # entre dos «Actualizar ahora» de quien no es admin (ruling R22)
+ID_MAX = 2 ** 63 - 1     # el mayor entero de SQLite: un id más grande es 404, no un OverflowError (como Triple Whale)
+
+
+@bp.before_request
+def _mismo_origen():
+    if request.method == "POST":
+        sitio = (request.headers.get("Sec-Fetch-Site") or "").strip().lower()
+        if sitio and sitio not in ("same-origin", "none"):
+            abort(403)
+
+
+def es_admin():
+    """Mismo criterio que el resto de la app (`session["rol"] == "admin"`; así lo leen las plantillas y la ruta de
+    descartar alertas). No se importa `dashboard` aquí: el Blueprint lo importa a él."""
+    return session.get("rol") == "admin"
+
+
+def solo_admin(fn):
+    """403 (nada se escribe y nada se lista) a quien no es admin. Nunca solo ocultar el botón (skill `seguridad`)."""
+    @wraps(fn)
+    def envuelta(*args, **kwargs):
+        if not es_admin():
+            abort(403)
+        return fn(*args, **kwargs)
+    return envuelta
+
+
+@bp.before_request
+def _correo_verificado():
+    """Sin correo verificado una persona con rol cliente no escribe nada aquí (como las rutas que conectan Meta o
+    una tienda: `dashboard._requiere_correo_verificado`, que este Blueprint no puede importar). El admin pasa."""
+    if request.method != "POST" or es_admin():
+        return None
+    entry = usuarios.obtener(session.get("usuario") or "")
+    if entry and entry.get("correo_verificado"):
+        return None
+    flash(gettext("Confirma tu correo primero (Configuración › Cuenta)."), "error")
+    return redirect(url_for("ver_cliente", cliente=request.view_args["cliente"], _anchor="settings"))
+
+
+def _volver(cliente):
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="rendimiento"))
+
+
+def _token(cliente):
+    return (meta_conexion.cargar(cliente) or {}).get("token")
+
+
+def _sin_token(e, token):
+    """El motivo de un error de Meta en palabras y sin token: de `MetaConexionError` su texto (ya traducido); de
+    cualquier otra excepción solo su tipo, porque su `str` puede traer la URL con el token."""
+    texto = str(e) if isinstance(e, meta_conexion.MetaConexionError) else type(e).__name__
+    if token:
+        texto = texto.replace(token, "***")
+    return cola.recortar(cola.sin_token(texto or type(e).__name__), 300)
+
+
+def _agencia(cliente):
+    return meta_conexion.modo(cliente) == meta_conexion.MODO_AGENCIA
+
+
+def _pais(valor):
+    """Código ISO-2 válido en mayúsculas, "" si no se eligió, o None si llegó algo que no es un país."""
+    v = (valor or "").strip().upper()
+    if not v:
+        return ""
+    return v if paises.es_pais(v) else None
+
+
+# -------------------------------------------------------------- elegir cuentas ---
+
+def _filas_selector(cliente, activos):
+    """Las casillas del selector: las cuentas que ve el token (con su país guardado o adivinado y si están en otro
+    proyecto) y, al final, las del proyecto que el token ya no ve."""
+    propias = {c["ad_account_id"]: c for c in cuentas.listar(cliente)}
+    dueno_de = {act: cli for cli, act in cuentas.todas()}
+    lanzamiento = meta_conexion.cuentas_de_lanzamiento()
+    filas, vistas = [], set()
+    for a in activos:
+        if not a.get("id"):
+            continue
+        act = cuentas.normalizar_id(a["id"])
+        if act in vistas:
+            continue
+        vistas.add(act)
+        propia = propias.get(act)
+        estado = ESTADOS_CUENTA.get(a.get("account_status"), OTRO_ESTADO)
+        # «En otro proyecto»: otro la lee o es la cuenta con la que LANZA otro proyecto (ruling R20).
+        en_otro = dueno_de.get(act) not in (None, cliente) or lanzamiento.get(act) not in (None, cliente)
+        filas.append({"id": act, "nombre": a.get("name") or act, "moneda": a.get("currency"), "estado": estado,
+                      "elegida": bool(propia) and not en_otro, "en_otro": en_otro,
+                      "pais": propia["pais"] if propia else cuentas.adivinar_pais(a.get("name")),
+                      "no_visible": False})
+    filas.sort(key=lambda f: (f["en_otro"], not f["elegida"], (f["nombre"] or "").lower(), f["id"]))
+    for act, c in propias.items():
+        if act not in vistas:
+            filas.append({"id": act, "nombre": c.get("nombre") or act, "moneda": c.get("moneda"), "estado": None,
+                          "elegida": True, "en_otro": False, "pais": c.get("pais"), "no_visible": True})
+    return filas
+
+
+@bp.get("/cuentas")
+@solo_admin
+def ver_cuentas(cliente):
+    token = _token(cliente)
+    ctx = {"conectado": bool(token), "agencia": False, "error": None, "filas": [], "paises": []}
+    if token and _agencia(cliente):
+        ctx["agencia"] = True
+    elif token:
+        try:
+            activos = meta_conexion.listar_activos(token).get("ad_accounts") or []
+        except Exception as e:  # noqa: BLE001 — Meta caída o token roto: se dice sin el token
+            ctx["error"] = _sin_token(e, token)
+        else:
+            ctx["filas"] = _filas_selector(cliente, activos)
+            ctx["paises"] = paises.paises_opciones(idiomas.activo())
+    return render_template("_meta_cuentas.html", cliente=cliente, sel=ctx)
+
+
+@bp.post("/cuentas")
+@solo_admin
+def guardar_cuentas(cliente):
+    token = _token(cliente)
+    if not token:
+        flash(gettext("Meta no está conectado en este proyecto."), "error")
+        return _volver(cliente)
+    if _agencia(cliente):
+        flash(gettext("Todavía no disponible en modo agencia."), "error")
+        return _volver(cliente)
+    try:
+        activos = meta_conexion.listar_activos(token).get("ad_accounts") or []
+    except Exception as e:  # noqa: BLE001
+        flash(gettext("Meta no devolvió tus cuentas: %(error)s", error=_sin_token(e, token)), "error")
+        return _volver(cliente)
+    visibles = {cuentas.normalizar_id(a["id"]): a for a in activos if a.get("id")}
+    propias = {c["ad_account_id"]: c for c in cuentas.listar(cliente)}
+    lanzamiento = meta_conexion.cuentas_de_lanzamiento()
+    existentes, nuevas, cambios_pais, ajenas = [], [], [], 0
+    for valor in dict.fromkeys(request.form.getlist("cuenta")):
+        act = cuentas.normalizar_id(valor)
+        # Un campo que no llegó deja el país guardado; solo uno enviado vacío lo borra (y uno inválido no cambia nada).
+        crudo = request.form.get(f"pais_{act}")
+        pais = None if crudo is None else _pais(crudo)
+        if lanzamiento.get(act) not in (None, cliente):
+            ajenas += 1      # la cuenta con la que lanza otro proyecto no se lee desde este (ruling R20)
+        elif act in propias:
+            # Ya estaba: se queda aunque el token ya no la vea (quitarla borraría sus copias sin que nadie lo pidiera).
+            c = propias[act]
+            existentes.append({"id": act, "name": c.get("nombre"), "currency": c.get("moneda"), "pais": c.get("pais")})
+            if pais is not None and (pais or None) != c.get("pais"):
+                cambios_pais.append((act, pais or None))
+        elif act in visibles:
+            a = visibles[act]
+            nuevas.append({"id": act, "name": a.get("name"), "currency": a.get("currency"), "pais": pais or None})
+        # Lo que el token no ve y no estaba en el proyecto se ignora: nunca se agrega una cuenta escrita a mano.
+    # Tope por proyecto: las que ya estaban van primero y las nuevas entran hasta llenar el cupo.
+    cupo = max(0, cuentas.MAX_POR_PROYECTO - len(existentes))
+    sobran = max(0, len(nuevas) - cupo)
+    elegidas = existentes + nuevas[:cupo]
+    antes = set(propias)
+    try:
+        r = cuentas.elegir(cliente, elegidas, usuario=session.get("usuario"))
+    except Exception as e:  # noqa: BLE001 — borrar las copias de una quitada falló: esa cuenta sigue en el proyecto
+        for act in sorted(set(cuentas.ids(cliente)) - antes):
+            tareas_mr.encolar_sync(cliente, act)
+        flash(gettext("No se pudo quitar una cuenta (%(tipo)s): sigue en el proyecto, inténtalo de nuevo.",
+                      tipo=type(e).__name__), "error")
+        return _volver(cliente)
+    for act, pais in cambios_pais:
+        cuentas.cambiar_pais(cliente, act, pais)
+    for act in r["agregadas"]:
+        tareas_mr.encolar_sync(cliente, act)
+    mensajes = []
+    if r["agregadas"]:
+        mensajes.append(ngettext("%(num)s cuenta agregada: trayendo sus métricas…",
+                                 "%(num)s cuentas agregadas: trayendo sus métricas…", len(r["agregadas"])))
+    if r["quitadas"]:
+        mensajes.append(ngettext("%(num)s cuenta quitada (se borraron sus métricas copiadas).",
+                                 "%(num)s cuentas quitadas (se borraron sus métricas copiadas).", len(r["quitadas"])))
+    ajenas += len(r["rechazadas"])
+    if ajenas:
+        mensajes.append(ngettext("%(num)s cuenta ya está en otro proyecto y no se agregó.",
+                                 "%(num)s cuentas ya están en otro proyecto y no se agregaron.", ajenas))
+    if sobran:
+        mensajes.append(ngettext("Un proyecto lee como máximo %(tope)s cuentas: %(num)s cuenta no se agregó.",
+                                 "Un proyecto lee como máximo %(tope)s cuentas: %(num)s cuentas no se agregaron.",
+                                 sobran, tope=cuentas.MAX_POR_PROYECTO))
+    if cambios_pais:
+        mensajes.append(gettext("País actualizado."))
+    if r.get("fallos_r2"):
+        # S1 (revisión final de Rendimiento E2, 2026-10-10): los análisis de esa cuenta ya se borraron, pero R2 no borró
+        # alguna imagen o video que copiaron. Solo el tipo del error, nunca su texto.
+        mensajes.append(gettext("No se pudieron borrar de R2 algunas imágenes o videos copiados de esa cuenta (%(tipo)s): "
+                                "avisa al administrador.", tipo=r["fallos_r2"][0]))
+    flash(" ".join(mensajes) if mensajes else gettext("Sin cambios en las cuentas."),
+          "warn" if ajenas or sobran or r.get("fallos_r2") else "ok")
+    return _volver(cliente)
+
+
+@bp.post("/cuentas/<act>/pais")
+@solo_admin
+def cambiar_pais(cliente, act):
+    if not cuentas.cuenta(cliente, act):
+        abort(404)
+    pais = _pais(request.form.get("pais"))
+    if pais is None:
+        abort(400)
+    cuentas.cambiar_pais(cliente, act, pais or None)
+    flash(gettext("País actualizado."), "ok")
+    return _volver(cliente)
+
+
+# ------------------------------------------------------------- actualizar ahora ---
+
+def _copiada_hace_poco(cliente, act):
+    """True si la copia de la cuenta `act` (o, sin `act`, de alguna cuenta del proyecto) terminó hace menos de
+    `ESPERA_ACTUALIZAR`. `ultima_copia` se guarda con `db.ahora()` (hora local, sin zona)."""
+    ahora = datetime.fromisoformat(db.ahora())
+    for c in cuentas.listar(cliente):
+        if act and c["ad_account_id"] != cuentas.normalizar_id(act):
+            continue
+        try:
+            copia = datetime.fromisoformat(str(c.get("ultima_copia"))[:19])
+        except ValueError:
+            continue         # sin copia (None) o una marca ilegible: no frena
+        if ahora - copia < ESPERA_ACTUALIZAR:
+            return True
+    return False
+
+
+def pedir_copia(cliente, act=None):
+    """(texto ya traducido, categoría de flash) de pedir la copia de Meta (gratis): la de la cuenta `act` o, sin
+    ella, la de todas las del proyecto. El llamador ya comprobó que la cuenta es del proyecto. Respeta la pausa
+    compartida y la espera de 30 minutos de quien no es admin (ruling R22). La usa «Actualizar ahora» de
+    Rendimiento (`rendimiento.actualizar`, spec 2026-10-09 A5), que reemplazó a la ruta `sincronizar` de la pestaña
+    vieja."""
+    if not _token(cliente):
+        return gettext("Meta no está conectado en este proyecto."), "error"
+    if not cuentas.ids(cliente):
+        return gettext("Elige primero qué cuentas publicitarias quieres ver."), "warn"
+    hasta = pausa.pausada_hasta()
+    if hasta:
+        # Meta pidió esperar (ruling R22): una copia encolada ahora no correría; se dice la hora en vez de «Trayendo…».
+        return gettext("Meta pidió esperar: la copia sigue a las %(hora)s.", hora=hasta[11:16]), "warn"
+    if not es_admin() and _copiada_hace_poco(cliente, act):
+        return gettext("Las métricas de Meta se acaban de actualizar: espera %(minutos)s minutos para volver a "
+                       "pedirlo.", minutos=int(ESPERA_ACTUALIZAR.total_seconds() // 60)), "warn"
+    if tareas_mr.encolar_sync(cliente, act):
+        return gettext("Trayendo las métricas de Meta…"), "ok"
+    return gettext("Ya se están trayendo las métricas de Meta."), "warn"
+
+
+# ------------------------------------------------------------- evaluar con IA ---
+
+def _entero(valor):
+    try:
+        return int(str(valor).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+@bp.post("/evaluar")
+def evaluar(cliente):
+    if not _token(cliente):
+        flash(gettext("Meta no está conectado en este proyecto."), "error")
+        return _volver(cliente)
+    if tareas_mr.evaluacion_en_curso(cliente):
+        flash(gettext("Ya hay una evaluación con IA en curso."), "warn")
+        return _volver(cliente)
+    ids = None
+    if "entrada" in request.form:
+        # Desde «Rendimiento» (integración con main, 2026-10-10, INT-2): las cuentas de Meta de esa entrada cuya
+        # fuente es Meta, con la misma resolución que pinta el panel. Una entrada que ya no existe (pestaña vieja, de
+        # otro proyecto) no se ensancha a «Todas»: no se crea ni se cobra nada.
+        from pestana_rendimiento import panel as rendimiento  # noqa: PLC0415 — tardío: ese paquete importa este
+        ids = rendimiento.cuentas_evaluacion_meta(cliente, request.form.get("entrada"))
+        if ids is None:
+            flash(gettext("Esa vista ya no existe: recarga la pestaña."), "warn")
+            return _volver(cliente)
+        if not ids:
+            flash(gettext("Todavía no hay anuncios con datos suficientes para evaluar con IA."), "error")
+            return _volver(cliente)
+    prep = analisis.preparar(cliente, request.form.get("dias"), request.form.get("cuenta"), ids=ids)
+    if prep is None:
+        flash(gettext("Elige primero qué cuentas publicitarias quieres ver."), "warn")
+        return _volver(cliente)
+    n = len(prep["muestra"])
+    if not n:
+        flash(gettext("Todavía no hay anuncios con datos suficientes para evaluar con IA."), "error")
+        return _volver(cliente)
+    precio = gastos.estimar("evaluacion_meta", n=n)
+    usd = precio["usd"]
+    # Primero el precio, después el cobro (E2-R6): el botón manda cuántos anuncios mostró (`n`) y el precio que la
+    # persona vio (`precio_visto`, con el margen si el proyecto cobra; vuelve a costo una sola vez con
+    # `gastos.costo_de_precio`). Si falta alguno, o la muestra o el precio (el margen) cambiaron desde que lo vio,
+    # no se crea ni se reserva nada y se dice el precio de ahora.
+    visto = gastos.costo_de_precio(request.form.get("precio_visto"))
+    if _entero(request.form.get("n")) != n or visto is None or usd is None or abs(visto - usd) > 0.005:
+        flash(gettext("Revisa el precio y vuelve a confirmar: ahora son %(n)s anuncio(s) por %(precio)s.",
+                      n=n, precio=precio["texto"]), "warn")
+        return _volver(cliente)
+    # Cobros: sin saldo no se crea la fila (el manejador único responde); la reserva la hace el encolado.
+    libro.exigir(cliente, usd)
+    eid = datos.crear_evaluacion(cliente, prep["cuentas"], prep["desde"], prep["hasta"], prep["moneda"],
+                                 prep["muestra"], prep["recomendaciones"], pedido_por=session.get("usuario"),
+                                 extra=prep["extra"])
+    try:
+        encolada = tareas_mr.encolar_evaluacion(cliente, eid, costo_estimado=usd)
+    except Exception:          # SaldoInsuficiente incluida: la fila se borra y la excepción sigue su camino
+        datos.borrar_evaluacion(cliente, eid)
+        raise
+    if not encolada:
+        datos.borrar_evaluacion(cliente, eid)
+        flash(gettext("Ya hay una evaluación con IA en curso."), "warn")
+        return _volver(cliente)
+    flash(gettext("Evaluando %(n)s anuncio(s) con IA…", n=n), "ok")
+    return _volver(cliente)
+
+
+@bp.get(f"/evaluacion/<int(max={ID_MAX}):eid>")
+def ver_evaluacion(cliente, eid):
+    fila = datos.evaluacion(cliente, eid)
+    if not fila:
+        abort(404)
+    return render_template("_meta_evaluacion.html", cliente=cliente, ev=panel.evaluacion_vista(fila),
+                           nombres_accion=panel.NOMBRES_ACCION, etiquetas_veredicto=panel.evaluacion.ETIQUETAS_VEREDICTO)
+
+
+@bp.post(f"/evaluacion/<int(max={ID_MAX}):eid>/idea/<int(max=1000):indice>/crear")
+def idea_crear(cliente, eid, indice):
+    fila = datos.evaluacion(cliente, eid)
+    if not fila or fila["estado"] != "lista":
+        abort(404)
+    ideas = (fila["resultado"] or {}).get("ideas") or []
+    if not 0 <= indice < len(ideas):
+        abort(404)
+    try:
+        session["fp_prefill"] = puente.prefill_crear(cliente, ideas[indice], origen=analisis.origen(eid, indice))
+    except puente.PuenteError as e:
+        flash(str(e), "error")
+        return _volver(cliente)
+    flash(gettext("Idea cargada en Crear: ajusta lo que quieras y genera."), "ok")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))

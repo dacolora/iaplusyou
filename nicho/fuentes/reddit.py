@@ -101,7 +101,7 @@ def parsear_busqueda(data):
 
 
 def _comentario(post, d):
-    return {"fuente_id": d["id"], "texto": d.get("body") or "", "url": URL_PUBLICA + (d.get("permalink") or ""),
+    return {"fuente_id": "t1_" + d["id"], "texto": d.get("body") or "", "url": URL_PUBLICA + (d.get("permalink") or ""),
             "contexto": post["titulo"], "puntuacion": d.get("score"), "fecha": d.get("created_utc"),
             "extra": {"subreddit": post["subreddit"], "post_id": post["id"]}}
 
@@ -129,7 +129,7 @@ def parsear_comentarios(data, max_n):
     post = _post((hijos_post[0].get("data") or {}) if hijos_post else {})
     salida = []
     if post["id"] and post["texto"].strip() not in _SIN_TEXTO:
-        salida.append({"fuente_id": post["id"], "texto": post["texto"], "url": URL_PUBLICA + post["permalink"],
+        salida.append({"fuente_id": "t3_" + post["id"], "texto": post["texto"], "url": URL_PUBLICA + post["permalink"],
                        "contexto": post["titulo"], "puntuacion": post["puntuacion"], "fecha": post["fecha"],
                        "extra": {"subreddit": post["subreddit"], "post_id": post["id"]}})
     _recorrer(((data[1].get("data") or {}).get("children") or []), post, salida, max_n)

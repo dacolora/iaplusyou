@@ -149,20 +149,35 @@ def terminar_y_encolar(tarea_id, mensaje, siguiente):
         return int(r.inserted_primary_key[0])
 
 
-def fallar(tarea_id, error):
+def fallar(tarea_id, error, definitivo=False):
+    """Marca el fallo de una tarea. Si le quedan intentos vuelve a `pendiente`
+    con espera exponencial; si no (o con `definitivo=True`, p. ej. el respaldo
+    de cobros que no la deja arrancar sin saldo), queda en `error`.
+    Devuelve "pendiente" (se reintenta), "error" (fallo definitivo) o None
+    (la tarea no existe)."""
     with db.conectar() as con:
         fila = con.execute(sa.select(db.tarea.c.intentos, db.tarea.c.max_intentos).where(db.tarea.c.id == tarea_id)).first()
         if not fila:
-            return
-        if fila.intentos < fila.max_intentos:
+            return None
+        if fila.intentos < fila.max_intentos and not definitivo:
             espera = timedelta(minutes=2 ** fila.intentos)
             con.execute(db.tarea.update().where(db.tarea.c.id == tarea_id).values(
                 estado="pendiente", error=recortar(sin_token(error)),
                 ejecutar_desde=(datetime.now() + espera).isoformat(timespec="seconds")))
-        else:
-            con.execute(db.tarea.update().where(db.tarea.c.id == tarea_id).values(
-                estado="error", error=recortar(sin_token(error)), terminada_en=db.ahora(),
-                mensaje=recortar(sin_token(error))))
+            return "pendiente"
+        con.execute(db.tarea.update().where(db.tarea.c.id == tarea_id).values(
+            estado="error", error=recortar(sin_token(error)), terminada_en=db.ahora(),
+            mensaje=recortar(sin_token(error))))
+        return "error"
+
+
+def viva(job_id):
+    """True si hay una tarea pendiente o en curso con ese job_id."""
+    if not job_id:
+        return False
+    with db.conectar() as con:
+        return con.execute(sa.select(db.tarea.c.id).where(
+            db.tarea.c.job_id == job_id, db.tarea.c.estado.in_(("pendiente", "en_curso"))).limit(1)).first() is not None
 
 
 def recuperar_colgadas(minutos=30, excluir=()):
@@ -234,12 +249,13 @@ def consultar_por_job(job_id):
 
 
 def job_ids_vivos(cliente, tipo):
-    """job_ids de las tareas pendientes o en_curso de ese cliente y tipo — una
-    sola consulta, para pintar una barra por fila (p. ej. «Crear activo» por
-    producto) sin una consulta por fila."""
+    """job_ids de las tareas pendientes o en_curso de ese cliente y tipo (o
+    tipos: una tupla o lista) — una sola consulta, para pintar una barra por
+    fila (p. ej. «Crear activo» por producto) sin una consulta por fila."""
+    tipos = [tipo] if isinstance(tipo, str) else list(tipo)
     with db.conectar() as con:
         filas = con.execute(sa.select(db.tarea.c.job_id).where(
-            db.tarea.c.cliente == cliente, db.tarea.c.tipo == tipo,
+            db.tarea.c.cliente == cliente, db.tarea.c.tipo.in_(tipos),
             db.tarea.c.estado.in_(("pendiente", "en_curso")), db.tarea.c.job_id.isnot(None))).all()
     return {f[0] for f in filas}
 
@@ -262,6 +278,20 @@ def limpiar_terminadas(dias=7, dias_periodicas=1):
         n += con.execute(db.tarea.delete().where(
             cerradas, fecha < (ahora - timedelta(days=dias)).isoformat(timespec="seconds"))).rowcount
     return int(n or 0)
+
+
+def hay_viva_de(tipos, solo_en_curso=False):
+    """True si alguna tarea de esos tipos (de cualquier proyecto) está pendiente o en curso, aunque la pendiente
+    espere un reintento: una escritura en Meta que reintenta en un minuto sigue siendo una escritura en camino.
+    Con `solo_en_curso=True` solo cuenta la que está corriendo ahora (una periódica pendiente detrás de tareas
+    largas todavía no escribe nada). Una consulta con límite 1."""
+    if not tipos:
+        return False
+    estados = ("en_curso",) if solo_en_curso else ("pendiente", "en_curso")
+    with db.conectar() as con:
+        return con.execute(sa.select(db.tarea.c.id).where(
+            db.tarea.c.tipo.in_(tuple(tipos)), db.tarea.c.estado.in_(estados)).limit(1)
+        ).first() is not None
 
 
 def job_ids_vivos_todos():

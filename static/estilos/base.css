@@ -7,3 +7,20 @@
 /* Enlaces: sin esta regla el navegador los pinta lila (#9e9eff) y morados al visitarlos (#d0adf0) en tema oscuro.
    :where() no suma especificidad, así que cualquier clase con su propio color le gana. */
 :where(a) { color: var(--accent-texto); }
+
+/* Barra lateral: Crear arriba de todo como botón azul lleno (2026-10-08, feedback que recibió Daniel: tenía que
+   notarse más que las demás pestañas). Es una pestaña más (.sidebar-item, data-tab="creativeflowplus"); estas reglas
+   le ganan a las de .sidebar-item de legado/02 por ir después y con la misma o más especificidad. Plegada queda
+   como un cuadro azul con el «+»; en el celular, igual dentro del menú ☰. */
+.sidebar-item.sidebar-crear {
+  background: var(--accent-grad); color: var(--sobre-accent); font-weight: 600;
+  box-shadow: var(--shadow-soft); margin-bottom: var(--esp-3);
+}
+/* Brillo corto a propósito: --shadow-glow (28 px) se derramaba sobre la fila de abajo y Experimentos parecía
+   seleccionado. Abierta, Crear lleva un anillo claro separado del botón. */
+.sidebar-item.sidebar-crear:hover { color: var(--sobre-accent); filter: brightness(1.08); box-shadow: var(--brillo-sm); }
+.sidebar-item.sidebar-crear.activo {
+  background: var(--accent-grad); color: var(--sobre-accent);
+  box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--accent-texto);
+}
+.sidebar-item.sidebar-crear:focus-visible { outline: 2px solid var(--accent-texto); outline-offset: 2px; }

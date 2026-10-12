@@ -14,6 +14,6 @@ def test_pnd138_moneda_ajena_con_solo_ingresos(base_temporal, sin_red):
     ex.snapshot(ep2, {"gasto": 10, "compras": 1, "ingresos": 90000, "fuente_ventas": "tienda"}, tomado_en="2026-09-12T08:00:00")
     g = tablero.resumen_mes("acme", ahora_iso=AHORA)["por_moneda"]["USD"]
     print("\nSEPTIEMBRE USD", {k: g[k] for k in ("gasto", "compras", "ingresos", "roas", "roas_comparable")})
-    assert g["roas"] is None, "los ingresos en COP no pueden sumarse a USD"
-    assert g["ingresos"] is None and not g["roas_comparable"]
+    assert g["roas"] == 3.0 and g["excluidos"] == 1, "el ROAS excluye COP"
+    assert g["ingresos"] == 300 and g["roas_comparable"]
     assert g["compras"] == 3 and g["gasto"] == 100

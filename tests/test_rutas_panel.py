@@ -48,3 +48,14 @@ def test_csv_del_panel_lleva_todos_los_proyectos_y_es_solo_admin(dashboard):
 
     anonimo = dashboard.app.test_client().get("/panel/gasto.csv")
     assert anonimo.status_code == 302 and anonimo.headers["Location"].endswith("/login")
+
+
+def test_panel_muestra_la_generacion_desde_el_inicio(dashboard):
+    """2026-10-08: el panel decía solo «generación este mes»; el gasto de los
+    meses anteriores no se veía en ninguna parte del panel."""
+    import gastos
+    gastos.registrar("acme", "video", 200.0, "video:viejo", creado_en="2026-08-15T10:00:00")
+    gastos.registrar("acme", "video", 1.3, "video:1")
+    html = _cliente_admin(dashboard).get("/panel").get_data(as_text=True)
+    assert "generación desde el inicio" in html and "Generación desde el inicio" in html
+    assert "US$ 201,30" in html                    # el total, no solo el mes

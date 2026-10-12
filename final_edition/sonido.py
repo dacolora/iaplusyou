@@ -15,7 +15,7 @@ PROMPT = (
 )
 
 
-def _llamar(texto, max_tokens=200, on_usage=None):
+def _llamar(texto, max_tokens=4000, on_usage=None):
     """Una llamada de texto a Claude; devuelve el texto de la respuesta."""
     import anthropic
     from generador_prompts import MODEL, _api_key

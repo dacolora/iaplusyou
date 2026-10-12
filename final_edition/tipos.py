@@ -3,6 +3,7 @@ soportados (idioma/moneda/símbolo por defecto), estilos de música, validación
 del guion localizado y rutas absolutas a las fuentes TTF usadas por la capa de
 texto en pantalla (Pillow).
 """
+import math
 import os
 
 from flask_babel import gettext
@@ -33,6 +34,8 @@ PAISES = {
     "AR": {"nombre": N_("Argentina"), "idioma": "es", "moneda": "ARS", "simbolo": "$", "bandera": "🇦🇷"},
     "CL": {"nombre": N_("Chile"), "idioma": "es", "moneda": "CLP", "simbolo": "$", "bandera": "🇨🇱"},
     "PE": {"nombre": N_("Perú"), "idioma": "es", "moneda": "PEN", "simbolo": "S/", "bandera": "🇵🇪"},
+    "NO": {"nombre": N_("Noruega"), "idioma": "no", "moneda": "NOK", "simbolo": "kr", "bandera": "🇳🇴"},
+    "SE": {"nombre": N_("Suecia"), "idioma": "sv", "moneda": "SEK", "simbolo": "kr", "bandera": "🇸🇪"},
 }
 
 # Prompts en inglés (Stable Audio funciona mejor con prompts en inglés): NUNCA
@@ -67,6 +70,8 @@ NOMBRES_ESTILO_MUSICA = {
 
 # Países cuya moneda no se muestra con decimales (COP, ARS, CLP).
 _PAISES_SIN_DECIMALES = ("CO", "AR", "CL")
+# Países con coronas: miles con espacio, coma decimal solo si el valor no es entero, «kr» detrás ("1 299 kr").
+_PAISES_CORONAS = ("NO", "SE")
 
 FUENTES = {
     "titulo": os.path.join(BASE_DIR, "static/fonts/SpaceGrotesk-Bold.ttf"),
@@ -87,6 +92,15 @@ def formatear_precio(valor, pais):
         entero = int(round(valor))
         numero = f"{entero:,}".replace(",", ".")
         return f"{simbolo} {numero}"
+
+    if pais in _PAISES_CORONAS:
+        if not math.isfinite(float(valor)):
+            return f"{valor} {simbolo}"
+        if float(valor) == int(valor):
+            numero = f"{int(valor):,}".replace(",", " ")
+        else:
+            numero = f"{valor:,.2f}".replace(",", " ").replace(".", ",")
+        return f"{numero} {simbolo}"
 
     # Miles "." y decimal "," (BR, ES) vs. miles "," y decimal "." (US, MX, PE).
     numero = f"{valor:,.2f}"

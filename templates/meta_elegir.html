@@ -22,17 +22,17 @@
   {% endif %}
 
   <label class="campo-label" style="margin-top:1rem;display:block;">{{ _('Página de Facebook') }}</label>
-  {% if paginas %}
+  {% if not paginas %}
+  <p class="vacio">{{ _('Tu usuario no administra ninguna Página de Facebook. Crea una o pide acceso, y vuelve a conectar.') }}</p>
+  {% endif %}
   <div class="checks-plataformas">
     {% for p in paginas %}
     <label><input type="radio" name="page_id" value="{{ p.id }}" {% if loop.first %}checked{% endif %}> {{ p.name }} <span class="vacio" style="display:inline;padding:0;font-size:.78rem;">· {% if p.ig_username %}Instagram @{{ p.ig_username }}{% else %}{{ _('sin Instagram vinculado') }}{% endif %}</span></label>
     {% endfor %}
+    <label><input type="radio" name="page_id" value="" {% if not paginas %}checked{% endif %}> {{ _('Sin Página (solo métricas)') }} <span class="vacio" style="display:inline;padding:0;font-size:.78rem;">· {{ _('se leen las métricas de la cuenta; sin Página no se pueden lanzar anuncios ni publicar') }}</span></label>
   </div>
-  {% else %}
-  <p class="vacio">{{ _('Tu usuario no administra ninguna Página de Facebook. Crea una o pide acceso, y vuelve a conectar.') }}</p>
-  {% endif %}
 
-  {% if cuentas and paginas %}
+  {% if cuentas %}
   <button class="btn-generar" type="submit" style="margin-top:1rem;">{{ _('Guardar conexión') }}</button>
   {% endif %}
 </form>

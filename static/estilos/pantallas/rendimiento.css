@@ -1,0 +1,27 @@
+/* ============================================================
+   Rendimiento: la pestaña única de Triple Whale + Meta (spec 2026-10-09 §5). Uso: _tab_rendimiento.html (el armazón
+   y «Ajustes», `.rend-ajustes`), _rend_panel.html (la línea de origen de las ventas bajo Resultados, `.rend-origen`)
+   y _meta_secciones.html y _meta_conjuntos_filas.html (la fuente del ROAS de cada fila, `.rend-fuente`). El resto del
+   panel reutiliza las clases de Triple Whale (.tw-barra, .tw-tabla, .tw-anillo…; desde E2 tarea 4 «Tus anuncios» es
+   UNA galería de .tw-tarjeta con los anuncios de las dos fuentes: las .rend-tarjeta de Meta de E1 se fueron; aquí
+   solo `.tw-medio-miniatura`, la miniatura chica de Meta), del
+   Tablero (.tb-seccion, .kpi-tile…) y de Meta (.meta-cuentas). Las tablas se desplazan dentro de .tw-tabla-scroll:
+   nada empuja la página de lado en el celular. Solo tokens.
+   ============================================================ */
+
+/* «Ajustes»: un <details> con el borde y el fondo de una tarjeta; abierto, las dos conexiones una debajo de otra. */
+.rend-ajustes { margin: 0 0 1.2rem; padding: .7rem .9rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); }
+.rend-ajustes > summary { cursor: pointer; font-weight: 600; }
+.rend-ajustes[open] > summary { margin-bottom: .8rem; }
+.rend-ajustes-meta { margin-top: 1rem; padding-top: .9rem; border-top: 1px solid var(--border); }
+.rend-ajustes-meta .meta-cuentas:not([hidden]) { margin-top: .8rem; }
+
+/* De dónde sale cada venta (R8) y desde cuándo cuentan todas las fuentes (R7), bajo las tarjetas de Resultados. */
+.rend-origen { margin: .4rem 0 0; color: var(--muted); font-size: var(--t-chico); overflow-wrap: anywhere; }
+
+/* La fuente de una cifra en una fila (Triple Whale | Meta), chica bajo el número. */
+.rend-fuente { display: block; color: var(--muted); font-size: var(--t-sobretitulo); text-transform: uppercase; letter-spacing: .04em; }
+
+/* La miniatura de Meta de un anuncio de fuente Meta sin análisis (la galería única de «Tus anuncios», E2 tarea 4) llega
+   de 64 px: dentro del recuadro 9:16 de la tarjeta se ve a su tamaño, centrada, y nunca agrandada (se vería borrosa). */
+.tw-tarjeta-medio img.tw-medio-miniatura { object-fit: scale-down; }

@@ -78,10 +78,10 @@ def test_total_y_por_mes_desde_el_inicio(base_temporal):
     gastos.registrar("acme", "video", 9.0, "video:futuro", creado_en="2026-09-20T10:00:00")
     gastos.registrar("otro", "video", 9.0, "video:a", creado_en="2026-09-10T10:00:00")
     ahora = "2026-09-18T12:00:00"
-    assert gastos.resumen_total("acme", ahora_iso=ahora) == {"total": 10.77, "n": 4}
+    assert gastos.resumen_total("acme", ahora_iso=ahora) == {"total": 10.77, "n": 4, "desde": "2026-07-30T10:00:00"}
     assert gastos.por_mes("acme", ahora_iso=ahora) == {
         "2026-07": {"usd": 9.0, "n": 1}, "2026-08": {"usd": 1.25, "n": 1}, "2026-09": {"usd": 0.52, "n": 2}}
-    assert gastos.resumen_total("nadie", ahora_iso=ahora) == {"total": 0.0, "n": 0}
+    assert gastos.resumen_total("nadie", ahora_iso=ahora) == {"total": 0.0, "n": 0, "desde": None}
     assert gastos.por_mes("nadie", ahora_iso=ahora) == {}
 
 
@@ -133,6 +133,22 @@ def test_csv_mes_con_bom_punto_y_coma_y_escape_de_formulas(base_temporal):
     assert len(lineas) == 3
 
 
+def test_csv_todo_trae_los_meses_anteriores_y_no_el_futuro(base_temporal):
+    """«Descargar CSV de todo» (2026-10-07): todos los cobros del proyecto desde
+    el primero, en orden, hasta `ahora`; el del mes sigue trayendo solo el mes."""
+    import gastos
+    gastos.registrar("acme", "video", 9, "video:viejo", creado_en="2026-08-03T10:00:00")
+    gastos.registrar("acme", "video", 0.5, "video:1", creado_en="2026-09-02T10:00:00")
+    gastos.registrar("acme", "video", 1, "video:futuro", creado_en="2026-09-30T10:00:00")
+    gastos.registrar("otro", "video", 7, "video:ajeno", creado_en="2026-08-10T10:00:00")
+    todo = gastos.csv_todo("acme", ahora_iso="2026-09-18T12:00:00").lstrip("\ufeff").splitlines()
+    assert todo[0] == "fecha;tipo;proveedor;referencia;detalle;usd"
+    assert [l.split(";")[3] for l in todo[1:]] == ["video:viejo", "video:1"]
+    assert todo[1].endswith(";9,0000")
+    mes = gastos.csv_mes("acme", ahora_iso="2026-09-18T12:00:00").lstrip("\ufeff").splitlines()
+    assert [l.split(";")[3] for l in mes[1:]] == ["video:1"]
+
+
 def test_estimar_video_e_imagen_delegan_en_flowplus_modelos(monkeypatch):
     import gastos
     from providers import flowplus_modelos
@@ -142,7 +158,7 @@ def test_estimar_video_e_imagen_delegan_en_flowplus_modelos(monkeypatch):
     monkeypatch.setattr(flowplus_modelos, "estimate_imagen",
                         lambda m, n_referencias=1: visto.update(imagen=(m, n_referencias)) or {"credits": None, "usd": 0.093})
     v = gastos.estimar("video", modelo="wan3", duracion=5, con_sonido=False)
-    assert v == {"usd": 0.35, "texto": "US$ 0,35 aprox.", "detalle": "wan3 · 5 s · sin sonido"}
+    assert v == {"usd": 0.35, "usd_precio": 0.35, "texto": "US$ 0,35 aprox.", "detalle": "wan3 · 5 s · sin sonido"}
     assert visto["video"] == ("wan3", 5.0, False)
     assert gastos.estimar("regeneracion", modelo="wan3", duracion=5)["usd"] == 0.35
     i = gastos.estimar("imagen", modelo="seedream_v5_pro", n_referencias=2)
@@ -166,7 +182,7 @@ def test_estimar_sin_tarifa_no_inventa(monkeypatch):
 
 def test_estimar_tarifas_fijas_y_final_por_pais():
     import gastos
-    assert gastos.estimar("guion") == {"usd": 0.13, "texto": "US$ 0,13 aprox.",
+    assert gastos.estimar("guion") == {"usd": 0.13, "usd_precio": 0.13, "texto": "US$ 0,13 aprox.",
                                        "detalle": "hasta dos llamadas a Claude y la transcripción de la referencia"}
     assert gastos.estimar("regla_producto")["usd"] == 0.01
     assert gastos.estimar("caption_organico")["usd"] == 0.01
@@ -218,7 +234,7 @@ def test_tipo_recoleccion_es_conocido(base_temporal):
 
 def test_estimar_adaptar_referente():
     import gastos
-    assert gastos.estimar("adaptar_referente") == {"usd": 0.01, "texto": "US$ 0,01 aprox.", "detalle": "una llamada corta a Claude"}
+    assert gastos.estimar("adaptar_referente") == {"usd": 0.01, "usd_precio": 0.01, "texto": "US$ 0,01 aprox.", "detalle": "una llamada corta a Claude"}
     assert "adaptar_referente" in gastos.TIPOS
 
 

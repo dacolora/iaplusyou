@@ -68,7 +68,11 @@ def test_elegir_forma_invalida_o_de_otro_sitio(cliente):
 def test_cambiar_forma_con_conexion_propia_viva_exige_nada_en_marcha(cliente, app, monkeypatch):
     _fake_conectada(app, monkeypatch)
     mc.guardar("acme", {"token": TOKEN_FALSO, "ad_account_id": "act_1", "page_id": "p1", "conectado_en": "2026-09-01T00:00:00"})
-    monkeypatch.setattr(cliente["d"].experimentos, "cargar", lambda c: [{"estado": "corriendo"}, {"estado": "cerrado"}])
+    ex = cliente["d"].experimentos
+    vivo = ex.crear("acme", "Vivo", [], "OUTCOME_TRAFFIC", 7, 10, "", "USD", atribucion="ninguna")
+    cerrado = ex.crear("acme", "Cerrado", [], "OUTCOME_TRAFFIC", 7, 10, "", "USD", atribucion="ninguna")
+    ex.actualizar("acme", vivo, estado="corriendo")
+    ex.actualizar("acme", cerrado, estado="cerrado")
     _post(cliente, "/cliente/acme/meta/forma", forma="agencia")
     assert proyectos.meta_forma("acme") is None
     assert any(m.startswith("Termina o cierra primero: 1 experimento vivo") for m in _flashes(cliente["c"]))
@@ -193,6 +197,15 @@ def test_salir_desasigna_restaura_y_avisa(cliente, app):
     assert any("no está en modo agencia" in m for m in _flashes(cliente["c"]))
 
 
+def test_salir_del_modo_agencia_borra_las_copias_y_libera_las_cuentas(cliente, app):
+    """Ruling R21: quitar la conexión de agencia también quita las cuentas que el proyecto leía (y sus copias)."""
+    from meta_rendimiento import cuentas
+    _asignar_en_disco("acme", propia_respaldo={"token": TOKEN_FALSO, "ad_account_id": "act_1", "page_id": "p1"})
+    cuentas.elegir("acme", [{"id": "act_5", "name": "HappyFlops Norway", "currency": "SEK"}])
+    _post(cliente, "/cliente/acme/meta/agencia/salir")
+    assert mc.modo("acme") == "propia" and cuentas.ids("acme") == []
+
+
 # ---- lo que ve el cliente (§1-§4) ----
 
 def _html(cliente, ruta="/cliente/acme"):
@@ -236,7 +249,7 @@ def test_resultados_muestran_solo_los_activos_del_portafolio(cliente, app, monke
     assert 'action="/cliente/acme/meta/agencia/conectar"' in html and 'name="portafolio_id" value="77700077700"' in html
     assert 'value="act_9"' in html and "Cuenta Socio · act_9 · MXN" in html and 'value="p2"' in html
     assert "Cuenta Uno" not in html and "Página Propia" not in html
-    assert "Sin Página (solo anuncios)" in html and 'name="page_id_manual"' not in html
+    assert "Sin Página (solo métricas)" in html and 'name="page_id_manual"' not in html
 
 
 def test_sin_resultados_ofrece_volver_a_buscar_y_avisar(cliente, app, monkeypatch):

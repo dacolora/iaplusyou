@@ -33,6 +33,7 @@
     <span class="cr-kpi-etiqueta">{{ i.etiqueta }}</span>
     <strong class="cr-cifra">{{ valor(i.valor, i.formato, moneda) }}</strong>
     <div class="cr-kpi-pie">
+      {% if i.excluidos %}<small>{{ ngettext('excluye %(num)s experimento en otra moneda', 'excluye %(num)s experimentos en otra moneda', i.excluidos) }}</small>{% endif %}
       {% if i.ventas_cambiaron %}<small class="cr-neutro">{{ _('Las ventas cambiaron de fuente en este período') }}</small>
       {% elif i.roas_no_comparable %}<small class="cr-neutro">{{ _('ROAS no comparable') }}</small>
       {% elif i.valor is none %}<small class="cr-neutro">{{ _('sin ventas medibles') if i.sin_ventas else _('sin datos') }}</small>

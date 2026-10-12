@@ -24,8 +24,11 @@ import hashlib
 import html
 import ipaddress
 import json
+import os
 import re
 import socket
+import threading
+import time
 
 import requests
 from urllib.parse import urljoin, urlparse
@@ -124,6 +127,118 @@ def abrir(url, cabeceras=None, timeout=TIMEOUT, max_redirecciones=MAX_REDIRECCIO
         url = urljoin(url, ubicacion)
         if not host_permitido(url):
             raise ErrorConector("Esa URL no está permitida (apunta a una red interna o local).")
+
+
+MAX_BYTES_VIDEO = 60 * 1024 * 1024   # el video de un anuncio (spec tarjetas §8.1); las páginas siguen con MAX_BYTES
+# Tope de tiempo de TODA la descarga (revisión final de las tarjetas, B5): `timeout` es por lectura, así que un
+# servidor que suelta un trozo cada pocos segundos podía tener ocupado al worker sin fin. Lo hace cumplir un vigía
+# que corta la conexión (`descargar_archivo`), no una revisión entre trozos: esa nunca llega a correr mientras un
+# `iter_content(65536)` espera sus 64 KB.
+TIEMPO_MAX_ARCHIVO = 120
+
+
+def _cortar_conexion(respuesta):
+    """Corta de golpe la conexión de `respuesta`, pensado para llamarse desde OTRO hilo (el vigía de
+    `descargar_archivo`) mientras el principal está bloqueado leyéndola. Cerrar el objeto de la respuesta no basta:
+    el `read` que ya espera dentro del socket no se entera hasta que llega un byte. `shutdown` del socket sí lo
+    despierta, así que va primero (el camino hasta el socket varía con la versión de urllib3: se prueban los dos que
+    existen), y después `close`. Una respuesta sin socket detrás (la de las pruebas) solo se cierra."""
+    sock = respuesta
+    for nombre in ("raw", "_connection", "sock"):
+        sock = getattr(sock, nombre, None)
+        if sock is None:
+            break
+    if sock is None:
+        crudo = getattr(getattr(respuesta, "raw", None), "_fp", None)         # http.client.HTTPResponse
+        sock = getattr(getattr(getattr(crudo, "fp", None), "raw", None), "_sock", None)
+    if sock is not None and hasattr(sock, "shutdown"):
+        try:
+            sock.shutdown(socket.SHUT_RDWR)
+        except (OSError, ValueError):
+            pass
+    cerrar = getattr(respuesta, "close", None)
+    if cerrar:
+        try:
+            cerrar()
+        except Exception:
+            pass
+
+
+def descargar_archivo(url, ruta, max_bytes=MAX_BYTES_VIDEO, tipos=("video/",), timeout=TIMEOUT,
+                      tiempo_max=TIEMPO_MAX_ARCHIVO):
+    """Baja `url` a `ruta` en streaming, con la guarda de SSRF de `abrir` en cada redirección. Exige un
+    Content-Type que empiece por alguno de `tipos` y corta al pasar `max_bytes` o cuando la descarga pasa de
+    `tiempo_max` segundos. Devuelve los bytes escritos; `ErrorConector` si algo falla (un corte de red o de disco
+    se convierte en uno, y si el vigía ya había saltado, cualquier error de la lectura).
+
+    El tope de tiempo no se puede revisar «entre trozos»: `iter_content(65536)` espera a juntar los 64 KB, y un
+    servidor que suelta un byte cada 0.25 s se queda ahí bloqueado minutos (se vio: 12 s con `tiempo_max=2`). Por
+    eso, apenas conectada, un vigía (`threading.Timer`) corta la conexión pasados `tiempo_max` segundos
+    (`_cortar_conexion`): la lectura bloqueada se despierta, termina sin más bytes o con un error de red, y como el
+    vigía ya había saltado se reporta «tardó demasiado» (nunca como una descarga buena). Conectar tiene su propio
+    `timeout` por intento; la revisión entre trozos sigue contando desde antes de conectar.
+
+    Escribe en `ruta + ".part"` y solo lo pasa a `ruta` (os.replace) cuando la descarga terminó bien: si falla, por
+    lo que sea (incluida una interrupción), se borra únicamente el `.part` y un archivo bueno que ya estuviera en
+    `ruta` queda intacto."""
+    parcial = ruta + ".part"
+    inicio = time.monotonic()
+    respuesta = abrir(url, timeout=timeout)
+    listo = False
+    vencio = threading.Event()
+    vigia = None
+    try:
+        def _vencer():
+            vencio.set()
+            _cortar_conexion(respuesta)
+        vigia = threading.Timer(tiempo_max, _vencer)
+        vigia.daemon = True
+        vigia.start()
+        if respuesta.status_code >= 400:
+            raise ErrorConector(f"El archivo respondió con error HTTP {respuesta.status_code}.")
+        tipo = (respuesta.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+        if tipos and not any(tipo.startswith(t) for t in tipos):
+            raise ErrorConector("El archivo no es del tipo esperado.")
+        total = 0
+        with open(parcial, "wb") as f:
+            for trozo in respuesta.iter_content(chunk_size=65536):
+                if not trozo:
+                    continue
+                total += len(trozo)
+                if total > max_bytes:
+                    raise ErrorConector("El archivo pesa demasiado.")
+                if time.monotonic() - inicio > tiempo_max:
+                    raise ErrorConector("La descarga del archivo tardó demasiado.")
+                f.write(trozo)
+        vigia.cancel()
+        if vencio.is_set():
+            # el vigía cortó la conexión y la lectura terminó «limpia» (EOF): el archivo está truncado
+            raise ErrorConector("La descarga del archivo tardó demasiado.")
+        os.replace(parcial, ruta)
+        listo = True
+        return total
+    except ErrorConector:
+        raise
+    except Exception as e:
+        # Con el vigía ya disparado, la lectura que él despertó puede fallar con cualquier cosa, no solo con un error
+        # de red: al cerrar el socket por debajo, urllib3/http.client a veces dejan escapar un `AttributeError`
+        # («'NoneType' object has no attribute 'close'» / «'readline'»). Todo eso es el corte por tiempo.
+        if vencio.is_set():
+            raise ErrorConector("La descarga del archivo tardó demasiado.") from None
+        if isinstance(e, (requests.RequestException, OSError)):
+            raise ErrorConector(f"Se cortó la descarga del archivo ({type(e).__name__}).") from None
+        raise
+    finally:
+        if vigia is not None:
+            vigia.cancel()
+        if not listo:
+            try:
+                os.remove(parcial)
+            except OSError:
+                pass
+        cerrar = getattr(respuesta, "close", None)
+        if cerrar:
+            cerrar()
 
 
 def _descargar(url):

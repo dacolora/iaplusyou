@@ -1,4 +1,5 @@
 import os
+import shutil
 import sys
 import tempfile
 
@@ -20,6 +21,52 @@ def base_temporal(monkeypatch):
     db.crear_todo()
     yield db
     db._reset_para_tests()
+    # El motor ya se soltó: la carpeta (con sus -wal/-shm) se borra. Sin esto
+    # cada test dejaba una carpeta en $TMPDIR (31 000 y 25 GB, 2026-10-10).
+    shutil.rmtree(carpeta, ignore_errors=True)
+
+
+@pytest.fixture()
+def margen_1_5(base_temporal):
+    """El margen global que suponen los tests de cobros que no hablan del margen. El defecto del código es 2,0
+    (a la carta, planes 2026-10-09); estos tests escriben su lógica con 1,5 y lo fijan aquí, explícito."""
+    from cobros import libro
+    libro.guardar_margen_global(1.5, "test")
+    yield
+
+
+@pytest.fixture()
+def escritor_en_medio(base_temporal):
+    """`escritor_en_medio(patron, sql)`: justo antes del primer statement que
+    contenga `patron`, OTRA conexión (otro hilo, el worker) ejecuta `sql` y
+    confirma. Si la transacción en curso ya tiene el candado de escritura, esa
+    conexión queda bloqueada (timeout corto) y no escribe nada: devuelve el
+    estado {"hecho", "resultado": "confirmó" | "bloqueado: …"}."""
+    import sqlite3
+
+    import sqlalchemy as sa
+
+    ruta = str(base_temporal.engine().url.database)
+
+    def armar(patron, sql):
+        estado = {"hecho": False, "resultado": None}
+
+        @sa.event.listens_for(base_temporal.engine(), "before_cursor_execute")
+        def _antes(conn, cursor, statement, params, context, executemany):
+            if estado["hecho"] or patron not in statement:
+                return
+            estado["hecho"] = True
+            otro = sqlite3.connect(ruta, timeout=0.3)
+            try:
+                otro.execute(sql)
+                otro.commit()
+                estado["resultado"] = "confirmó"
+            except sqlite3.OperationalError as e:
+                estado["resultado"] = f"bloqueado: {e}"
+            finally:
+                otro.close()
+        return estado
+    return armar
 
 
 # Usuarios que los tests de rutas meten en la sesión a mano (session_transaction).

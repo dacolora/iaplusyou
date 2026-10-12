@@ -29,6 +29,7 @@ import flowplus_lanzar
 import gastos
 import idiomas
 import trabajos
+from cobros import SaldoInsuficiente
 from final_edition import cortes, edicion_clon, insumos
 from guiones import cadena, datos, escenas, medios
 from guiones.refinador import ErrorRefinador
@@ -123,6 +124,12 @@ def lanzar_escena(cliente, video_id, k):
     return cf_id
 
 
+def fallar_cadena(cliente, video_id, k, error):
+    """Detiene la cadena en la escena `k` con `error` (lo usan el vigilante y la
+    ruta que aprueba la cadena cuando el encolado falla, p. ej. sin saldo)."""
+    _fallar(cliente, video_id, k, error)
+
+
 def _fallar(cliente, video_id, k, error):
     try:
         datos.modificar_cadena(cliente, video_id, lambda e, _v: cadena.fallo(e, k, error) if e else e)
@@ -172,6 +179,10 @@ def vigilar_una(cliente, video_id):
         if siguiente is not None:
             try:
                 lanzar_escena(cliente, video_id, siguiente)
+            except SaldoInsuficiente as e:
+                # Cobros (spec 2026-10-08 §5.4): la cadena se detiene en esta
+                # escena con la frase; nada se encoló ni se cobró.
+                _fallar(cliente, video_id, siguiente, e.frase_proyecto())
             except Exception as e:  # noqa: BLE001 — la cadena queda detenida con el motivo
                 log.exception("cadena: no se pudo lanzar la escena %s del video %s", siguiente, video_id)
                 _fallar(cliente, video_id, siguiente, str(e))

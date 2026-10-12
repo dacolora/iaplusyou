@@ -15,3 +15,17 @@
   {% endif %}
 </div>
 {% endif %}
+{# fal sin saldo (2026-10-09, PND-213): solo se pausan sus modelos (Seedance 2.5 con
+   varias referencias), los demás siguen. Solo en Crear: quien incluye pone `con_fal`. #}
+{% if con_fal and aviso_saldo_fal %}
+<div class="flash warn aviso-saldo" data-aviso-saldo-fal role="status">
+  {% if session.get('rol') == 'admin' %}
+  <strong>{{ _('%(proveedor)s se quedó sin saldo.', proveedor=aviso_saldo_fal.nombre) }}</strong>
+  {{ _('Desde el %(desde)s fallan %(modelos)s y lo que usa fal en el resto de la app (voces, música y subtítulos automáticos), sin cobrar. Los demás modelos de Crear siguen funcionando. Recarga la cuenta; este aviso se quita solo con la próxima generación de ese modelo que salga bien.', desde=(aviso_saldo_fal.desde or '')[:16].replace('T', ' '), modelos=modelos_fal) }}
+  <a href="{{ aviso_saldo_fal.recarga }}" target="_blank" rel="noopener">{{ _('Recargar %(proveedor)s', proveedor=aviso_saldo_fal.nombre) }}</a>
+  {% else %}
+  <strong>{{ _('%(modelos)s está en pausa.', modelos=modelos_fal) }}</strong>
+  {{ _('Hay un problema con el proveedor y ya le avisamos a Creatv. Mientras tanto elige otro modelo: los intentos fallidos no se cobran.') }}
+  {% endif %}
+</div>
+{% endif %}

@@ -12,8 +12,8 @@ import idiomas
 from tests.i18n_util import espanol_visible
 from tests.test_i18n_fugas import app_i18n, html_de  # noqa: F401  (fixture)
 
-PESTANAS = ("tab-alertas", "tab-triplewhale", "tab-nicho", "tab-referentes", "tab-creativeflowplus", "tab-final",
-            "tab-experimentos", "tab-sprints", "tab-catalogo", "tab-settings", "sidebar", "barra-superior")
+PESTANAS = ("tab-alertas", "tab-rendimiento", "tab-nicho", "tab-referentes", "tab-creativeflowplus",
+            "tab-final", "tab-experimentos", "tab-sprints", "tab-catalogo", "tab-settings", "sidebar", "barra-superior")
 
 
 @pytest.fixture()
@@ -45,7 +45,8 @@ def test_proyecto_entero_en_ingles_sin_idioma_guardado(produccion, usuario, rol,
     assert not fugas, fugas[:20]
 
 
-@pytest.mark.parametrize("url", ["/panel", "/admin/meta", "/admin/referentes", "/admin/salud", "/admin/salud/registros", "/admin/estilos"])
+@pytest.mark.parametrize("url", ["/panel", "/admin/meta", "/admin/referentes", "/admin/salud", "/admin/salud/registros", "/admin/estilos",
+                                 "/admin/cobros"])
 def test_paginas_de_admin_en_ingles_sin_idioma_guardado(produccion, url):
     fugas = espanol_visible(html_de(_sesion(produccion, "admin", "admin", None), url))
     assert not fugas, (url, fugas[:15])

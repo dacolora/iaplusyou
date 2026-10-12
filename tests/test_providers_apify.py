@@ -113,7 +113,7 @@ def test_arrancar_sin_dataset_avisa_on_ids_antes_de_lanzar():
     """El run_id que sí llegó se avisa por `on_ids` ANTES del error de "sin ids":
     la corrida pudo cobrar y quien llama necesita guardarlo aunque `arrancar` no
     vaya a devolverlo (termina lanzando)."""
-    sesion = _Sesion([_Resp({"data": {"id": "run_x", "status": "READY"}}, status=201)])
+    sesion = _Sesion([_Resp({"data": {"id": "run_x", "status": "READY"}}, status=201), _Resp({}, status=404)])
     vistos = []
     with pytest.raises(ErrorFuente):
         apify_api.arrancar(sesion, "tok", "apify~actor", {}, 10, 0.1, on_ids=lambda r, d: vistos.append((r, d)))

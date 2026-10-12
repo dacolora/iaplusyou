@@ -29,8 +29,11 @@ if SMTP is missing the flows still work and the admin panel shows the warning.
 
 **Seguridad (auditoría 2026-10-01)**: reglas que valen para todo lo nuevo. (1) CSRF: `dashboard._solo_mismo_origen`
 (before_request de la app, corre también para los Blueprints) rechaza todo POST/PUT/PATCH/DELETE que el navegador marque
-de otro sitio (`Sec-Fetch-Site` distinto de `same-origin`/`none`; JSON a un fetch, 403 al resto); la app no recibe
-webhooks: si algún día llega uno, necesita su excepción Y verificar su firma (HMAC, `compare_digest`). (2) Cabeceras:
+de otro sitio (`Sec-Fetch-Site` distinto de `same-origin`/`none`; JSON a un fetch, 403 al resto); desde el 2026-10-08
+(cobros 7/11; planes 4/8, 2026-10-09) la app recibe DOS webhooks, el de Bold (`POST /pagos/bold/webhook`) y los eventos de Wompi
+(`POST /pagos/wompi/eventos`, firma `cobros.wompi.evento_valido`, ver la skill `cobros`): exentos por nombre de endpoint en
+`dashboard.ENDPOINTS_OTRO_ORIGEN` y `ENDPOINTS_SIN_GUARD_SESION`, protegido por su firma HMAC (`cobros.bold.firma_valida`,
+`compare_digest`) sobre el cuerpo crudo con tope de 64 KB; un evento con firma inválida se anota sin cuerpo y con cupo por hora (`recargas._cupo_sin_firma`), para que nadie infle `pago_evento` ni compita por el candado de escritura; otro webhook nuevo necesita lo mismo: su excepción por nombre exacto de endpoint (nunca por prefijo) Y su firma. Detalle y trampas en la skill `cobros`. (2) Cabeceras:
 `_cabeceras_seguridad` pone `nosniff`, `X-Frame-Options: DENY`, una CSP que solo cierra `frame-ancestors`/`object-src`/
 `base-uri` (todavía hay ~80 `<script>` y ~90 manejadores en línea, y los medios vienen de R2) y HSTS cuando el sitio es
 https. (3) `/trabajo/<job_id>/estado` solo responde al admin o a quien puede entrar al proyecto dueño
@@ -50,3 +53,20 @@ con solicitud) no se lista (`meta_agencia.portafolio_de_otro`), una Página asig
 escrita a mano va por «Avisar a Creatv». (8) Tokens de YouTube/TikTok en disco con 0600 (`_json_store.escribir_privado`). (9) Alertas (2026-10-02): `POST /cliente/<c>/alertas/descartar|restaurar` validan clave y huella con `fullmatch` (400) y responden 403 a quien no es admin si la clave es de una alerta `solo_admin` (`alertas.es_solo_admin`, prefijos `llave:`, `worker:`, `revision:`, `saldo:wavespeed_recarga`): los descartes son del proyecto y un cliente se los escondería al admin; nunca solo ocultar el botón. Ninguna alerta lleva un valor de llave ni un texto de error sin `cola.sin_token`.
 Dependencias: `requirements.txt` trae pisos verificados con `pip-audit` (`venv/bin/pip install pip-audit && venv/bin/pip-audit`); en el VPS,
 `pip install -U -r requirements.txt` los aplica.
+
+PND-072/136 (2026-10-07, lote 5 B): el aviso del fallback del director pasa por monitoreo.limpiar_texto(motivo, 300), que también tapa Bearer y llaves sk-; el prompt permanece igual. _int_form limita identificadores al entero positivo de SQLite y _volver_org no consulta un ep_id fuera de rango, evitando OverflowError. La pregunta PND-076 fue delegada el 2026-10-08 (ver implementación abajo); los topes no cambian.
+
+
+PND-076/123/124 (2026-10-08, decisiones delegadas): /admin/cuentas/bloqueos y POST /admin/cuentas/desbloquear requieren requiere_admin y el POST pasa por _solo_mismo_origen. cuentas solo lista claves de límites de login válidas y vigentes (usuario o IP), sin leer fichas de contraseña ni tokens. Desbloquear toma el candado antes de leer, registra actor/objetivo en bitacora y borra únicamente ese límite; si falla la bitácora no borra. Los topes no cambian. Alertas de plata y correos ajenos rechazan descartar/restaurar con 403 en servidor. test_rutas_cuentas.py y test_rutas_alertas.py; inspección visual por Claude.
+
+R5/R6/S2 (2026-10-08, revisión lote 6B): los topes y la ventana del login se definen solo en cuentas.py y dashboard los lee allí. Usuario: login:u:<nombre en minúsculas, máximo 200 caracteres>; IP: login:ip:<IP>. El parser de desbloqueo acepta u: no vacío hasta 200, incluidos espacios/acentos de cuentas viejas; no acepta otros prefijos. Vencimiento de pantalla en minutos redondeados hacia arriba con ngettext. Permisos, bitácora y datos personales de admin se conservan. S3: cola_limpiar diaria poda limite:* con todas sus marcas mayores de siete días o valor ilegible, bajo candado antes de leer; no toca otras claves. La búsqueda del 2026-10-08 halló ventanas de 900/3600 segundos, ninguna superior a un día.
+
+Meta rendimiento (revisión final 2026-10-08): elegir qué cuentas publicitarias lee un proyecto es SOLO del admin (`meta_rendimiento/rutas.py::solo_admin`, 403 al resto). El token de un usuario de Meta ve las cuentas de OTROS clientes, y quien elige una cuenta lee todo su gasto; la cuenta con la que lanza otro proyecto cuenta como «En otro proyecto». Desconectar Meta, salir del modo agencia o desasignar borra las métricas copiadas (`dashboard._soltar_cuentas_meta`): `/privacidad` y `/eliminar-datos` lo prometen, así que un llamador nuevo de `meta_agencia.desasignar` o `meta_conexion.borrar` tiene que llamarla. Desde la revisión final de Rendimiento E2 (S1, 2026-10-10) soltar una cuenta (quitarla o desconectar) borra también los análisis «Cómo mejorarlo» de sus anuncios de fuente Meta (`tw_analisis` con `foto.fuente = "meta"`) y, después de las filas, su imagen y su video en R2; nunca un análisis de Triple Whale. Detalle en la skill `meta-rendimiento`.
+
+PND-062, entrega 1 (2026-10-10, pedido de Daniel): `catalogo_selector`, `swaps_lista` y `gasto_lista`
+son GET bajo `<cliente>`, pasan por `_guard_por_cliente` y rechazan con 403 a una sesión sin acceso. El catálogo
+acepta únicamente sel=plus|clone y fija modo/campo en servidor; toda lectura y precarga se resuelve dentro del
+proyecto de la URL. `desde` de Gasto se limita al rango SQLite. El JS rechaza respuestas redirigidas antes de
+insertar HTML. Pruebas con sesión de cliente: 200 propio y 403 ajeno para los tres fragmentos.
+
+Enmiendas PND-062, entrega 1 (2026-10-10, pedido de Daniel tras revisar la entrega): Los shells de catálogo e historiales distinguen 401/403 y redirección al login: muestran sesión vencida y un enlace a login, sin reintento perpetuo ni insertar el HTML redirigido. Se mantienen las guardias de proyecto de las rutas.

@@ -1,0 +1,209 @@
+{# Panel de la pestaña «Rendimiento» (fragmento por fetch, pestana_rendimiento.rutas.ver_panel; spec 2026-10-09 §5 con
+   las enmiendas A1–A3). Contexto: `r` (pestana_rendimiento.panel.contexto), `cliente` y `es_admin`. Solo lee la copia
+   local. Sin <script>: el JS vive en _tab_rendimiento.html (`data-rend-param` cambia un filtro, `data-rend-entrada`
+   elige una entrada desde «Por país», `data-meta-mas` trae más filas; la galería, sus `data-tw-*`).
+
+   Orden: barra (entrada, periodo, «Canal» solo con fuente Triple Whale, atribución, última copia, «Actualizar ahora»,
+   «Ajustes»), UNA barra para las copias en curso del alcance y sus errores, avisos, Resultados (los de Triple Whale
+   con su detalle del día cuando el alcance es solo Triple Whale; si no, los de `r.resumen`, que desde E2 tarea 7 abren
+   sus días en `rendimiento.ver_dia`: A3), la línea de
+   origen de las ventas (R8) y desde cuándo cuentan todas las fuentes (R7), «Por país» (solo «Todas» con dos
+   entradas o más, también cuando todas son tiendas: reemplaza a «Por tienda»), «Lo que necesita tu atención» (las
+   dos fuentes), «Tus anuncios» (UNA galería con los anuncios de las dos fuentes por gasto en USD y un solo lote,
+   `r.galeria`, E2 tarea 4: la enmienda A1 la dejó para E2; los tiles de Triple Whale encima solo con alcance solo
+   Triple Whale), «Lo que hace ganar en tu cuenta» (la parte Triple Whale, `r.ia`), «Campañas» y «Conjuntos» (con la fuente
+   del ROAS de cada fila) y, de Triple Whale, reparto, productos y «Ver como tabla».
+   Lo que cobra: la galería (_tw_galeria.html) postea a las rutas de la pestaña con el alcance de `r.params` y la
+   fuente de cada anuncio (pestana_rendimiento/rutas.py, que cobran con triple_whale/pedidos.py); «Evaluar con IA» de
+   Triple Whale, también a la pestaña (`rendimiento.evaluar`) con `r.params`; la «Evaluación con IA» de Meta, a
+   `meta_rendimiento.evaluar` con la entrada (precio visto y `n`, E2-R6).
+   Meta rendimiento E2 (integración con main, 2026-10-10, INT-1): lo que la vieja pestaña «Meta» mostraba en producción
+   va con los parciales de main tal cual, con `mr` = `r.meta.e2`: «Diagnóstico» (_meta_diagnostico.html) justo
+   después de «Lo que necesita tu atención», «Evaluación con IA» (_meta_evaluar.html) después de «Lo que hace ganar en
+   tu cuenta», y «Segmentos» (_meta_segmentos.html) después de «Campañas» y «Conjuntos» (que llevan su NVP). Una parte cuya copia todavía no tiene días no pinta sus
+   secciones: dice que se está trayendo o que falta pulsar «Actualizar ahora». #}
+{% import "_tw_secciones.html" as tws %}
+{% import "_meta_macros.html" as mx %}
+{% import "_rend_macros.html" as rm %}
+{% from "_tw_galeria.html" import galeria %}
+{% if not r.conectado %}
+{{ rm.sin_conexion() }}
+{% elif not r.entradas %}
+<div class="estado-vacio">
+  <p class="estado-vacio-titulo">{{ _('Todavía no hay cuentas publicitarias elegidas') }}</p>
+  {% if es_admin %}
+  <p class="estado-vacio-texto">{{ _('Elígelas en Ajustes, con «Elegir cuentas de Meta».') }}</p>
+  <div class="acciones"><a class="btn-sm" href="#rend-ajustes" data-rend-ajustes>{{ _('Abrir Ajustes') }}</a></div>
+  {% else %}
+  <p class="estado-vacio-texto">{{ _('Un administrador de Creatv tiene que elegir las cuentas.') }}</p>
+  {% endif %}
+</div>
+{% else %}
+{% set vacio_tw = r.tw and r.tw.rango.filas == 0 %}
+{% set vacio_meta = r.meta and r.meta.estado.rango.filas == 0 %}
+{% set con_tw = r.tw and not vacio_tw %}
+{% set con_meta = r.meta and not vacio_meta %}
+
+{# ---------- barra ---------- #}
+<div class="tw-barra">
+  <div class="tw-controles">
+    {% if r.entradas | length > 1 %}
+    <label class="campo-label">{{ _('País') }}
+      <select data-rend-param="entrada">
+        <option value=""{% if not r.actual %} selected{% endif %}>{{ _('Todas (%(n)s)', n=r.entradas | length) }}</option>
+        {% for e in r.entradas %}<option value="{{ e.clave }}"{% if r.actual and r.actual.clave == e.clave %} selected{% endif %}>{% if e.bandera %}{{ e.bandera }} {% endif %}{{ e.nombre }} — {{ rm.fuente(e.fuente) }}</option>{% endfor %}
+      </select>
+    </label>
+    {% endif %}
+    <label class="campo-label">{{ _('Periodo') }}
+      <select data-rend-param="dias">
+        {% for d in r.periodos %}<option value="{{ d }}"{% if d == r.dias %} selected{% endif %}>{{ _('Últimos %(n)s días', n=d) if d else _('Desde el inicio') }}</option>{% endfor %}
+      </select>
+    </label>
+    {% if r.canales | length > 1 %}
+    <label class="campo-label">{{ _('Canal') }}
+      <select data-rend-param="canal">
+        <option value="">{{ _('Todos') }}</option>
+        {% for k in r.canales %}<option value="{{ k }}"{% if k == r.canal %} selected{% endif %}>{{ k | tw_canal }}</option>{% endfor %}
+      </select>
+    </label>
+    {% endif %}
+  </div>
+  <div class="tw-sync">
+    {% if r.tw %}<small>{{ r.tw.config.modelo_atribucion }} · {{ r.tw.config.ventana_atribucion }}</small>{% endif %}
+    {% set copias = [] %}
+    {% if r.tw and r.tw.ultima_copia %}{% set _x = copias.append(r.tw.ultima_copia | string) %}{% endif %}
+    {% if r.meta and r.meta.estado.ultima_copia %}{% set _x = copias.append(r.meta.estado.ultima_copia | string) %}{% endif %}
+    <small>{% if copias %}{{ _('Última copia: %(fecha)s', fecha=copias | min | replace('T', ' ')) }}{% else %}{{ _('Todavía sin copia') }}{% endif %}</small>
+    {% set ocupado = (r.tw or r.meta) and (not r.tw or r.tw.sync_ocupado) and (not r.meta or r.meta.estado.sync_ocupado) %}
+    <form method="post" action="{{ url_for('rendimiento.actualizar', cliente=cliente) }}" class="inline">
+      <input type="hidden" name="entrada" value="{{ r.params.entrada }}">
+      <button type="submit" class="btn-sm"{% if ocupado %} disabled{% endif %}>{{ _('Actualizar ahora') }}</button>
+    </form>
+    <a class="btn-sm" href="#rend-ajustes" data-rend-ajustes>{{ _('Ajustes') }}</a>
+  </div>
+</div>
+
+{# ---------- copias en curso (UNA barra, la del primer trabajo vivo: cada barra que termina recarga) y sus errores ---------- #}
+{% if r.copias_vivas %}
+<div class="tw-progreso">
+  <div class="barra-progreso" id="rend-copias-{{ cliente }}" data-poll-job="{{ r.copias_vivas[0] }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
+  <div class="progreso-texto">{{ ngettext('Trayendo %(num)s copia…', 'Trayendo %(num)s copias…', r.copias_vivas | length) }}</div>
+</div>
+{% endif %}
+{% if r.tw %}{{ tws.copias(r.tw, cliente) }}{% endif %}
+{% if r.meta %}
+{% for c in r.meta.estado.errores %}
+<p class="tag-error tag-descartado tw-aviso">{{ _('La última copia de %(cuenta)s falló: %(error)s', cuenta=c.nombre or c.ad_account_id, error=c.error) }}</p>
+{% endfor %}
+{% endif %}
+
+{# ---------- avisos ---------- #}
+{% if r.solo_metricas %}
+<p class="tag-advertencia tw-aviso">{{ _('Conectado solo para métricas: sin Página no se pueden lanzar anuncios desde Creatv.') }}</p>
+{% endif %}
+{% if not r.resumen.usd_ok or r.resumen.por_pais_sin_usd %}
+<p class="tag-advertencia tw-aviso">{{ _('USD no disponible para algunos días: elige un país para ver sus cifras.') }}</p>
+{% endif %}
+
+{# ---------- una parte sin días copiados: en grande si es todo lo que hay, en una línea si la otra parte sí tiene ---------- #}
+{% if vacio_tw %}
+{% set titulo = _('Trayendo los últimos 90 días…') if r.tw.jobs_sync else _('Todavía no hay métricas copiadas de Triple Whale') %}
+{% set texto = _('La primera copia tarda unos minutos. Cuando termine, esta pestaña se recarga sola con la evaluación de cada anuncio.') if r.tw.jobs_sync else _('Pulsa «Actualizar ahora» para traer los últimos 90 días de Triple Whale.') %}
+{% if con_meta %}<p class="vacio">{{ titulo }} · {{ texto }}</p>
+{% else %}<div class="estado-vacio"><p class="estado-vacio-titulo">{{ titulo }}</p><p class="estado-vacio-texto">{{ texto }}</p></div>{% endif %}
+{% endif %}
+{% if vacio_meta %}
+{% set titulo = _('Trayendo los últimos 13 meses…') if r.meta.estado.jobs_sync else _('Todavía no hay métricas copiadas de Meta') %}
+{% set texto = _('La primera copia tarda unos minutos por cuenta. Cuando termine, esta pestaña se recarga sola.') if r.meta.estado.jobs_sync else _('Pulsa «Actualizar ahora» para traer los últimos 13 meses de Meta.') %}
+{% if con_tw %}<p class="vacio">{{ titulo }} · {{ texto }}</p>
+{% else %}<div class="estado-vacio"><p class="estado-vacio-titulo">{{ titulo }}</p><p class="estado-vacio-texto">{{ texto }}</p></div>{% endif %}
+{% endif %}
+
+{% if con_tw or con_meta %}
+{# ---------- 01 Resultados (R8) ---------- #}
+{% set resultados_tw = r.tw and r.tw.resultados %}
+{% if r.resumen.inicio_comun %}
+{% set desde_comun = _('Desde el %(fecha)s, cuando empiezan los datos de todas tus fuentes.', fecha=(r.resumen.inicio_comun | fecha_corta) ~ ' ' ~ r.resumen.inicio_comun[:4]) %}
+{% endif %}
+{% if resultados_tw %}
+{% with tw=r.tw %}{% include "_tw_resultados.html" %}{% endwith %}
+{% elif r.resumen.resultados %}
+{% with tw={"resultados": r.resumen.resultados} %}{% include "_tw_resultados.html" %}{% endwith %}
+{% set origenes = r.resumen.origen %}
+{% set tipos = origenes | map(attribute='origen') | unique | list %}
+{# En la mezcla el subtítulo de Resultados ya dice «desde que hay datos de todas tus fuentes»: no se repite. #}
+{% set desde_aqui = desde_comun and r.fuente != 'mixta' %}
+{% if tipos | length > 1 or desde_aqui %}
+<p class="rend-origen">
+  {%- if tipos | length > 1 %}
+  {%- set partes = [] %}
+  {%- for tipo in tipos %}
+  {%- set nombres = origenes | selectattr('origen', 'equalto', tipo) | map(attribute='nombre') | join(', ') %}
+  {%- if tipo == 'tienda' %}{% set _x = partes.append(_('tienda en %(pais)s', pais=nombres)) %}
+  {%- elif tipo == 'pixel_tw' %}{% set _x = partes.append(_('Pixel de Triple Whale en %(pais)s', pais=nombres)) %}
+  {%- else %}{% set _x = partes.append(_('Pixel de Meta en %(pais)s', pais=nombres)) %}{% endif %}
+  {%- endfor %}
+  {{ _('Ventas: %(lista)s.', lista=partes | join('; ')) }}
+  {%- endif %}
+  {%- if desde_aqui %} {{ desde_comun }}{% endif -%}
+</p>
+{% endif %}
+{% endif %}
+
+{# ---------- 02 Por país (R5; «Todas» con dos entradas o más) ---------- #}
+{% if r.resumen.por_pais %}
+<section class="tb-seccion" id="rend-por-pais">
+  <div class="tb-seccion-cab"><h3>{{ _('Por país') }}</h3><small class="vacio">{{ _('Pulsa un país para verlo solo.') }}{% if desde_comun and resultados_tw %} {{ desde_comun }}{% endif %}</small></div>
+  <div class="tw-tabla-scroll">
+    <table class="tw-tabla tabla-apilada">
+      <thead><tr><th>{{ _('País') }}</th><th>{{ _('Fuente') }}</th><th>{{ _('Gasto') }}</th><th>{{ _('Ventas') }}</th><th>{{ _('Retorno') }}</th></tr></thead>
+      <tbody>
+        {% for f in r.resumen.por_pais %}
+        {% set e = f.entrada %}
+        <tr>
+          <td class="tw-nombre">
+            <button type="button" class="btn-xs" data-rend-entrada="{{ e.clave }}">{% if e.bandera %}{{ e.bandera }} {% endif %}{{ e.nombre }}</button>
+            {% if f.fuera_de_todas %}<small class="tw-motivo">{{ _('Sus anuncios llegan dentro de la tienda de Triple Whale: «Todas» no los suma aparte.') }}</small>{% endif %}
+          </td>
+          <td>{{ rm.fuente(f.fuente) }}</td>
+          {# La cifra principal en la moneda común de todas las filas (USD si no la hay); debajo, la de la fila (R6). #}
+          <td>{% if f.sin_usd %}<span class="vacio">{{ _('USD no disponible') }}</span>{% else %}{{ mx.monto(f.gasto_vista, r.resumen.moneda_pais) }}{% endif %}{% if f.moneda and f.moneda != r.resumen.moneda_pais %}<small class="tw-motivo">{{ mx.monto(f.gasto, f.moneda) }}</small>{% endif %}</td>
+          <td>{% if f.sin_usd %}<span class="vacio">{{ _('USD no disponible') }}</span>{% else %}{{ mx.monto(f.ventas_vista, r.resumen.moneda_pais) }}{% endif %}{% if f.moneda and f.moneda != r.resumen.moneda_pais %}<small class="tw-motivo">{{ mx.monto(f.ventas, f.moneda) }}</small>{% endif %}</td>
+          <td>{{ mx.roas(f.retorno) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+{% if r.tw %}{{ tws.gasto_compartido(r.tw) }}{% endif %}
+
+{# ---------- 03 Lo que necesita tu atención (las dos fuentes) y el Diagnóstico de Meta (Meta rendimiento E2) ---------- #}
+{{ tws.alertas(r.atencion) }}
+{% set e2 = r.meta.e2 if con_meta else none %}
+{% if e2 %}{% with mr=e2, actual=e2.actual %}{% include "_meta_diagnostico.html" %}{% endwith %}{% endif %}
+
+{# ---------- 04 Tus anuncios: UNA galería con las dos fuentes, por gasto en USD (E2 tarea 4; A1, PND-196) ---------- #}
+{% set g = r.galeria %}
+{% if g %}
+<section class="tb-seccion">
+  <div class="tb-seccion-cab"><h3>{{ _('Tus anuncios') }}</h3><small class="vacio">{{ ngettext('%(num)s anuncio con datos', '%(num)s anuncios con datos', g.n_anuncios) }}{% if r.canal %} · {{ r.canal | tw_canal }}{% endif %}{% if g.hay_meta %} · {{ _('Los anuncios de Meta cubren los últimos 90 días.') }}{% endif %}</small></div>
+  {% if r.fuente == 'tw' and con_tw %}{{ tws.tiles_anuncios(r.tw) }}{% endif %}
+  {{ galeria(g, cliente, r.params, r.params_tw, r) }}
+</section>
+{% endif %}
+
+{# ---------- 05 Lo que hace ganar en tu cuenta (Triple Whale) y la Evaluación con IA de Meta (Meta rendimiento E2) ---------- #}
+{% if r.ia and con_tw %}{{ tws.ia(r.ia, cliente, r.params) }}{% endif %}
+{% if e2 %}{% with mr=e2 %}{% include "_meta_evaluar.html" %}{% endwith %}{% endif %}
+
+{# ---------- 06 Campañas y conjuntos (todas las cuentas del alcance, cubiertas incluidas: R5) y Segmentos ---------- #}
+{% if con_meta %}{% with mr=r.meta.estructura %}{% include "_meta_secciones.html" %}{% endwith %}{% endif %}
+{% if e2 %}{% with mr=e2, actual=e2.actual %}{% include "_meta_segmentos.html" %}{% endwith %}{% endif %}
+
+{# ---------- 07 Dónde se va el gasto, 08 Lo que más se vende, Ver como tabla (Triple Whale) ---------- #}
+{% if con_tw %}{{ tws.resto(r.tw, cliente) }}{% endif %}
+{% endif %}
+{% endif %}

@@ -18,12 +18,21 @@ def conectado(base_temporal, monkeypatch):
     return base_temporal
 
 
+def _tienda(cliente="acme"):
+    """El id de la (única) tienda conectada en la prueba."""
+    return triple_whale_tiendas.tiendas(cliente)[0]["id"]
+
+
 class TripleWhaleFalso:
     """Responde según la tabla que nombra la consulta. `fallar` = {tabla: n}
     hace que las primeras n consultas completas de esa tabla den
     ErrorConsulta (columna que la cuenta no tiene)."""
-    def __init__(self, ads=(), pixel=(), tienda=(), fallar=None, error=None, fallar_todo=(), productos=()):
+    def __init__(self, ads=(), pixel=(), tienda=(), fallar=None, error=None, fallar_todo=(), productos=(), creativos=(),
+                 web=(), sin_visitantes=False):
         self.ads, self.pixel, self.tienda, self.productos = list(ads), list(pixel), list(tienda), list(productos)
+        self.web = list(web)
+        self.sin_visitantes = sin_visitantes     # la cuenta no conoce new_visitors/unique_visitors en el Pixel
+        self.creativos = list(creativos)
         self.fallar = dict(fallar or {})
         self.fallar_todo = set(fallar_todo)
         self.error = error
@@ -31,19 +40,29 @@ class TripleWhaleFalso:
 
     def __call__(self, llave, shop, consulta, desde, hasta, moneda=None):
         tabla = ("pixel" if "pixel_joined_tvf" in consulta else "tienda" if "blended_stats_tvf" in consulta
-                 else "productos" if "orders_table" in consulta else "ads")
-        completa = ("outbound_clicks" in consulta or "sessions" in consulta or "net_profit" in consulta
-                    or "products_info.title" in consulta)
+                 else "web" if "web_analytics_table" in consulta
+                 else "productos" if "orders_table" in consulta else "creativos" if "ad_image_url" in consulta
+                 else "ads")
+        completa = ("outbound_clicks" in consulta or "sessions" in consulta or "new_customer_revenue" in consulta
+                    or "net_discount_amount_for_product" in consulta or "ad_title" in consulta)
         self.llamadas.append((tabla, "completa" if completa else "minima", desde, hasta, moneda, llave, shop))
         if self.error:
             raise self.error
+        if tabla == "pixel" and "new_visitors" in consulta and self.sin_visitantes:
+            raise triple_whale.ErrorConsulta("Unknown identifier new_visitors")
         if completa and self.fallar.get(tabla):
             self.fallar[tabla] -= 1
             raise triple_whale.ErrorConsulta("Unknown identifier")
         if tabla in self.fallar_todo:
             raise triple_whale.ErrorConsulta(f"{tabla}: no existe")
-        filas = {"ads": self.ads, "pixel": self.pixel, "tienda": self.tienda, "productos": self.productos}[tabla]
-        return [f for f in filas if desde <= str(f.get("event_date"))[:10] <= hasta]
+        if tabla == "creativos":      # una fila por anuncio, sin event_date: no se filtra por fecha
+            return list(self.creativos)
+        filas = {"ads": self.ads, "pixel": self.pixel, "tienda": self.tienda, "productos": self.productos,
+                 "web": self.web}[tabla]
+        filas = [f for f in filas if desde <= str(f.get("event_date"))[:10] <= hasta]
+        if tabla == "pixel" and "new_visitors" not in consulta:   # columnas que la consulta no pidió no llegan
+            filas = [{k: v for k, v in f.items() if k not in ("unique_visitors", "new_visitors")} for f in filas]
+        return filas
 
 
 def _ad(ad_id, fecha, **kw):
@@ -87,10 +106,12 @@ def test_rango_pendiente():
     # Nunca se copió: los 90 días.
     assert sync.rango_pendiente({"extra": {}}, HOY) == ("2026-07-01", "2026-09-28")
     # Al día: los últimos 7.
-    reciente = {"extra": {"backfill_desde": "2026-07-01"}, "ultima_sincronizacion": "2026-09-28T08:00:00"}
+    reciente = {"extra": {"backfill_desde": "2026-07-01", "backfill_visitantes": "2026-09-01"},
+                "ultima_sincronizacion": "2026-09-28T08:00:00"}
     assert sync.rango_pendiente(reciente, HOY) == ("2026-09-22", "2026-09-28")
     # El worker estuvo parado 12 días: desde dos días antes de la última copia.
-    parado = {"extra": {"backfill_desde": "2026-06-01"}, "ultima_sincronizacion": "2026-09-16T08:00:00"}
+    parado = {"extra": {"backfill_desde": "2026-06-01", "backfill_visitantes": "2026-09-01"},
+              "ultima_sincronizacion": "2026-09-16T08:00:00"}
     assert sync.rango_pendiente(parado, HOY) == ("2026-09-14", "2026-09-28")
 
 
@@ -111,16 +132,17 @@ def test_sincronizar_copia_anuncios_pixel_y_tienda(conectado, monkeypatch):
         tienda=[{"event_date": "2026-09-28", "spend": 25, "revenue": 300, "orders": 4}])
     monkeypatch.setattr(triple_whale, "sql_query", falso)
     progreso = []
-    r = sync.sincronizar("acme", "2026-09-22", "2026-09-28", on_progreso=lambda *a: progreso.append(a), hoy=HOY)
+    r = sync.sincronizar("acme", _tienda(), "2026-09-22", "2026-09-28", on_progreso=lambda *a: progreso.append(a), hoy=HOY)
     assert r["anuncios"] == 2 and r["dias_tienda"] == 1 and r["filas_pixel"] == 1 and r["fallos"] == {}
-    assert r["consultas"] == {"anuncios": "completa", "pixel": "completa", "tienda": "completa", "productos": "completa"}
+    assert r["consultas"] == {"anuncios": "completa", "pixel": "completa", "tienda": "completa", "productos": "completa",
+                              "creativos": "completa"}
     assert progreso == [(0, 1, "2026-09-22", "2026-09-28")]
     # La llave, la tienda y la moneda de la conexión van en cada consulta.
     assert {(l[4], l[5], l[6]) for l in falso.llamadas} == {("USD", "tw_secreto", "acme.myshopify.com")}
-    tot = datos.totales_anuncio("acme", "facebook-ads", "1", "2026-09-01")
+    tot = datos.totales_anuncio("acme", _tienda(), "facebook-ads", "1", "2026-09-01")
     assert tot["gasto"] == 15.0 and tot["pedidos"] == 2.0 and tot["ingresos"] == 80.0 and tot["con_pixel"]
-    assert datos.serie_tienda("acme", "2026-09-28", "2026-09-28")[0]["ingresos"] == 300.0
-    c = triple_whale_tiendas.obtener("acme")
+    assert datos.serie_tienda("acme", None, "2026-09-28", "2026-09-28")[0]["ingresos"] == 300.0
+    c = triple_whale_tiendas.tienda("acme", _tienda())
     assert c["estado"] == "conectada" and c["ultima_sincronizacion"] and c["extra"]["backfill_desde"] == "2026-09-22"
     assert c["extra"]["ultimo_resumen"]["anuncios"] == 2
 
@@ -131,12 +153,12 @@ def test_sincronizar_de_nuevo_reemplaza_lo_reatribuido(conectado, monkeypatch):
     ads = [_ad("1", "2026-09-28"), _ad("2", "2026-09-28")]
     monkeypatch.setattr(triple_whale, "sql_query", TripleWhaleFalso(ads=ads, pixel=[
         {"channel": "facebook-ads", "ad_id": "1", "event_date": "2026-09-28", "orders": 1, "revenue": 50}]))
-    sync.sincronizar("acme", "2026-09-28", "2026-09-28", hoy=HOY)
+    sync.sincronizar("acme", _tienda(), "2026-09-28", "2026-09-28", hoy=HOY)
     monkeypatch.setattr(triple_whale, "sql_query", TripleWhaleFalso(ads=ads, pixel=[
         {"channel": "facebook-ads", "ad_id": "2", "event_date": "2026-09-28", "orders": 1, "revenue": 50}]))
-    sync.sincronizar("acme", "2026-09-28", "2026-09-28", hoy=HOY)
-    uno = datos.totales_anuncio("acme", "facebook-ads", "1", "2026-09-28")
-    dos = datos.totales_anuncio("acme", "facebook-ads", "2", "2026-09-28")
+    sync.sincronizar("acme", _tienda(), "2026-09-28", "2026-09-28", hoy=HOY)
+    uno = datos.totales_anuncio("acme", _tienda(), "facebook-ads", "1", "2026-09-28")
+    dos = datos.totales_anuncio("acme", _tienda(), "facebook-ads", "2", "2026-09-28")
     # El Pixel respondió para ese día: el 1 queda en 0 pedidos (dato, no ausencia de dato).
     assert uno["pedidos"] == 0 and uno["con_pixel"] and dos["pedidos"] == 1 and dos["con_pixel"]
     assert datos.rango("acme")["filas"] == 2
@@ -145,7 +167,7 @@ def test_sincronizar_de_nuevo_reemplaza_lo_reatribuido(conectado, monkeypatch):
 def test_sincronizar_baja_a_la_consulta_minima_y_no_vuelve_a_probar_la_completa(conectado, monkeypatch):
     falso = TripleWhaleFalso(ads=[_ad("1", "2026-09-10")], fallar={"ads": 1})
     monkeypatch.setattr(triple_whale, "sql_query", falso)
-    r = sync.sincronizar("acme", "2026-09-01", "2026-09-14", hoy=HOY)
+    r = sync.sincronizar("acme", _tienda(), "2026-09-01", "2026-09-14", hoy=HOY)
     ads = [l for l in falso.llamadas if l[0] == "ads"]
     assert [l[1] for l in ads] == ["completa", "minima", "minima"]   # 2 tramos: el segundo va directo a la mínima
     assert r["consultas"]["anuncios"] == "minima" and r["anuncios"] == 1
@@ -154,12 +176,27 @@ def test_sincronizar_baja_a_la_consulta_minima_y_no_vuelve_a_probar_la_completa(
 def test_sin_pixel_ni_tienda_los_anuncios_igual_llegan(conectado, monkeypatch):
     falso = TripleWhaleFalso(ads=[_ad("1", "2026-09-28")], fallar_todo={"pixel", "tienda"})
     monkeypatch.setattr(triple_whale, "sql_query", falso)
-    r = sync.sincronizar("acme", "2026-09-15", "2026-09-28", hoy=HOY)
+    r = sync.sincronizar("acme", _tienda(), "2026-09-15", "2026-09-28", hoy=HOY)
     assert r["anuncios"] == 1 and set(r["fallos"]) == {"pixel", "tienda"}
     assert r["consultas"]["pixel"] == "sin_datos"
-    # Tras el primer fallo del Pixel no se insiste en cada tramo.
-    assert len([l for l in falso.llamadas if l[0] == "pixel"]) == 2
-    assert datos.totales_anuncio("acme", "facebook-ads", "1", "2026-09-01")["gasto"] == 10.0
+    # Tras el primer fallo del Pixel (sus tres versiones) no se insiste en cada tramo.
+    assert len([l for l in falso.llamadas if l[0] == "pixel"]) == 3
+    assert datos.totales_anuncio("acme", _tienda(), "facebook-ads", "1", "2026-09-01")["gasto"] == 10.0
+
+
+def test_los_fallos_que_quedan_en_el_resumen_no_llevan_la_llave(conectado, monkeypatch):
+    """Auditoría de seguridad (2026-10-08): el texto de un fallo de consulta queda en
+    `extra.ultimo_resumen.fallos` y se pinta en la pestaña; si Triple Whale repite la llave, se tacha."""
+    def responde(llave, shop, consulta, desde, hasta, moneda=None):
+        if "pixel_joined_tvf" in consulta or "blended_stats_tvf" in consulta or "orders_table" in consulta:
+            raise triple_whale.ErrorConsulta(f"consulta rechazada para {llave}")
+        return []
+    monkeypatch.setattr(triple_whale, "sql_query", responde)
+    r = sync.sincronizar("acme", _tienda(), "2026-09-22", "2026-09-28", hoy=HOY)
+    assert set(r["fallos"]) == {"pixel", "tienda", "productos"}
+    guardado = triple_whale_tiendas.tienda("acme", _tienda())["extra"]["ultimo_resumen"]["fallos"]
+    for texto in list(r["fallos"].values()) + list(guardado.values()):
+        assert "tw_secreto" not in texto and "***" in texto
 
 
 def test_normalizar_producto():
@@ -180,21 +217,21 @@ def test_sincronizar_copia_ventas_por_producto_y_suma_variantes(conectado, monke
         {"event_date": "2026-09-28", "product_id": "p2", "title": "Lámpara", "sku": "L-1", "quantity": 1, "revenue": 200, "orders": 1},
         {"event_date": "2026-09-27", "product_id": "p1", "title": "Cojín", "sku": "C-1", "quantity": 5, "revenue": 150, "orders": 4}])
     monkeypatch.setattr(triple_whale, "sql_query", falso)
-    r = sync.sincronizar("acme", "2026-09-27", "2026-09-28", hoy=HOY)
+    r = sync.sincronizar("acme", _tienda(), "2026-09-27", "2026-09-28", hoy=HOY)
     assert r["productos"] == 2 and r["consultas"]["productos"] == "completa"
-    top = datos.top_productos("acme", "2026-09-27", "2026-09-28")
+    top = datos.top_productos("acme", None, "2026-09-27", "2026-09-28")
     assert [(p["producto_id"], p["nombre"], p["ingresos"], p["unidades"], p["pedidos"]) for p in top] == [
         ("p1", "Cojín", 240.0, 8.0, 7.0), ("p2", "Lámpara", 200.0, 1.0, 1.0)]
     assert datos.hay_productos("acme")
     # Una segunda copia del mismo rango reemplaza, no duplica.
-    sync.sincronizar("acme", "2026-09-27", "2026-09-28", hoy=HOY)
-    assert datos.top_productos("acme", "2026-09-27", "2026-09-28")[0]["ingresos"] == 240.0
+    sync.sincronizar("acme", _tienda(), "2026-09-27", "2026-09-28", hoy=HOY)
+    assert datos.top_productos("acme", None, "2026-09-27", "2026-09-28")[0]["ingresos"] == 240.0
 
 
 def test_sin_products_info_la_copia_sigue_sin_productos(conectado, monkeypatch):
     falso = TripleWhaleFalso(ads=[_ad("1", "2026-09-28")], fallar_todo={"productos"})
     monkeypatch.setattr(triple_whale, "sql_query", falso)
-    r = sync.sincronizar("acme", "2026-09-22", "2026-09-28", hoy=HOY)
+    r = sync.sincronizar("acme", _tienda(), "2026-09-22", "2026-09-28", hoy=HOY)
     assert r["anuncios"] == 1 and "productos" in r["fallos"] and r["consultas"]["productos"] == "sin_datos"
     assert not datos.hay_productos("acme")
 
@@ -202,72 +239,195 @@ def test_sin_products_info_la_copia_sigue_sin_productos(conectado, monkeypatch):
 def test_sincronizar_con_llave_revocada_sube_el_error(conectado, monkeypatch):
     monkeypatch.setattr(triple_whale, "sql_query", TripleWhaleFalso(error=triple_whale.ErrorLlave("revocada")))
     with pytest.raises(triple_whale.ErrorLlave):
-        sync.sincronizar("acme", hoy=HOY)
-    assert triple_whale_tiendas.obtener("acme")["ultima_sincronizacion"] is None
+        sync.sincronizar("acme", _tienda(), hoy=HOY)
+    assert triple_whale_tiendas.tienda("acme", _tienda())["ultima_sincronizacion"] is None
 
 
 def test_sincronizar_si_hace_falta(conectado, monkeypatch):
     llamadas = []
-    monkeypatch.setattr(sync, "sincronizar", lambda cliente: llamadas.append(cliente) or {"ok": 1})
-    assert sync.sincronizar_si_hace_falta("acme") == {"ok": 1}   # nunca se copió
-    triple_whale_tiendas.actualizar("acme", ultima_sincronizacion=datetime.now().isoformat(timespec="seconds"))
-    triple_whale_tiendas.actualizar_extra("acme", {"backfill_desde": "2026-07-01"})
-    assert sync.sincronizar_si_hace_falta("acme") is None
-    assert sync.sincronizar_si_hace_falta("nadie") is None
-    assert llamadas == ["acme"]
+    monkeypatch.setattr(sync, "sincronizar", lambda cliente, tienda_id: llamadas.append((cliente, tienda_id)) or {"ok": 1})
+    tid = _tienda()
+    assert sync.sincronizar_si_hace_falta("acme", tid) == {"ok": 1}   # nunca se copió
+    triple_whale_tiendas.actualizar_tienda("acme", tid, ultima_sincronizacion=datetime.now().isoformat(timespec="seconds"))
+    triple_whale_tiendas.actualizar_extra_tienda("acme", tid, {"backfill_desde": "2026-07-01"})
+    assert sync.sincronizar_si_hace_falta("acme", tid) is None
+    assert sync.sincronizar_si_hace_falta("nadie", tid) is None
+    assert sync.sincronizar_si_hace_falta("acme", 9999) is None
+    assert llamadas == [("acme", tid)]
 
 
 # ------------------------------------------------------------- tareas ---
 
+def _payload(tid, cliente="acme"):
+    return {"cliente": cliente, "tienda_id": tid}
+
+
 def test_tarea_sincronizar_ok_y_error_sin_token(conectado, monkeypatch):
     from tareas import triple_whale as t
+    tid = _tienda()
     monkeypatch.setattr(t.trabajos, "reportar", lambda *a, **k: None)
     monkeypatch.setattr(t.avisos, "revisar_y_avisar", lambda cliente: None)
     monkeypatch.setattr(triple_whale, "sql_query", TripleWhaleFalso(ads=[_ad("1", "2026-09-28")]))
-    monkeypatch.setattr(sync, "rango_pendiente", lambda config, hoy: ("2026-09-28", "2026-09-28"))
-    texto = t.tw_sincronizar({"payload": {"cliente": "acme"}, "job_id": "acme__tw_sync"})
+    monkeypatch.setattr(sync, "rango_pendiente", lambda tienda, hoy: ("2026-09-28", "2026-09-28"))
+    texto = t.tw_sincronizar({"payload": _payload(tid), "job_id": t.job_id_sync("acme", tid)})
     assert "1 anuncio" in texto
 
     monkeypatch.setattr(triple_whale, "sql_query", TripleWhaleFalso(
         error=triple_whale.ErrorLlave("revocada x-api-key: tw_secreto")))
     with pytest.raises(triple_whale.ErrorTripleWhale) as e:
-        t.tw_sincronizar({"payload": {"cliente": "acme"}})
-    c = triple_whale_tiendas.obtener("acme")
+        t.tw_sincronizar({"payload": _payload(tid)})
+    c = triple_whale_tiendas.tienda("acme", tid)
     assert c["estado"] == "error" and "tw_secreto" not in c["error"] and "tw_secreto" not in str(e.value)
     assert "revocada" in c["error"]
 
 
 def test_tarea_sincronizar_avisa_lo_que_cambio_y_no_se_cae_si_el_aviso_falla(conectado, monkeypatch):
     from tareas import triple_whale as t
+    tid = _tienda()
     monkeypatch.setattr(t.trabajos, "reportar", lambda *a, **k: None)
     monkeypatch.setattr(triple_whale, "sql_query", TripleWhaleFalso(ads=[_ad("1", "2026-09-28")]))
-    monkeypatch.setattr(sync, "rango_pendiente", lambda config, hoy: ("2026-09-28", "2026-09-28"))
+    monkeypatch.setattr(sync, "rango_pendiente", lambda tienda, hoy: ("2026-09-28", "2026-09-28"))
     monkeypatch.setattr(t.avisos, "revisar_y_avisar", lambda cliente: {
         "ganadores": [1, 2], "cansados": [], "perdedores": [3], "avisado": True})
-    texto = t.tw_sincronizar({"payload": {"cliente": "acme"}})
+    texto = t.tw_sincronizar({"payload": _payload(tid)})
     assert "Aviso enviado: 2 ganador(es)" in texto and "1 perdedor(es)" in texto
 
     def _revienta(cliente):
         raise RuntimeError("smtp caído")
     monkeypatch.setattr(t.avisos, "revisar_y_avisar", _revienta)
-    assert "Listo" in t.tw_sincronizar({"payload": {"cliente": "acme"}})
+    assert "Listo" in t.tw_sincronizar({"payload": _payload(tid)})
 
 
-def test_tarea_sincronizar_sin_conexion_no_falla(base_temporal):
+def test_tarea_sincronizar_sin_conexion_no_falla(conectado):
     from tareas import triple_whale as t
-    assert "no está conectado" in t.tw_sincronizar({"payload": {"cliente": "nadie"}})
+    assert "ya no está conectada" in t.tw_sincronizar({"payload": _payload(9999)})
+    assert "ya no está conectada" in t.tw_sincronizar({"payload": _payload(_tienda(), "nadie")})
 
 
-def test_periodica_encola_una_por_proyecto_conectado(conectado):
+# ---------------------------------------------------- varias tiendas ---
+
+@pytest.fixture()
+def dos_tiendas(conectado, monkeypatch):
+    """acme tiene Colombia (la del fixture, llave tw_secreto) y Noruega (llave tw_noruega)."""
+    from tareas import triple_whale as t
+    triple_whale_tiendas.cambiar_pais("acme", _tienda(), "CO")
+    no = triple_whale_tiendas.agregar("acme", "tw_noruega", "no-acme.myshopify.com", "NO")
+    monkeypatch.setattr(t.trabajos, "reportar", lambda *a, **k: None)
+    monkeypatch.setattr(t.avisos, "revisar_y_avisar", lambda cliente: None)
+    monkeypatch.setattr(sync, "rango_pendiente", lambda tienda, hoy: ("2026-09-28", "2026-09-28"))
+    return _tienda(), no
+
+
+def test_cada_tienda_copia_con_su_llave_y_su_dominio(dos_tiendas, monkeypatch):
+    co, no = dos_tiendas
+    falso = TripleWhaleFalso(ads=[_ad("1", "2026-09-28")])
+    monkeypatch.setattr(triple_whale, "sql_query", falso)
+    sync.sincronizar("acme", co, hoy=HOY)
+    assert {(l[5], l[6]) for l in falso.llamadas} == {("tw_secreto", "acme.myshopify.com")}
+    falso.llamadas.clear()
+    sync.sincronizar("acme", no, hoy=HOY)
+    assert {(l[5], l[6]) for l in falso.llamadas} == {("tw_noruega", "no-acme.myshopify.com")}
+    # Cada copia quedó en su tienda y solo en la suya.
+    assert datos.totales_anuncio("acme", co, "facebook-ads", "1", "2026-09-28")["gasto"] == 10.0
+    assert datos.totales_anuncio("acme", no, "facebook-ads", "1", "2026-09-28")["gasto"] == 10.0
+    assert triple_whale_tiendas.tienda("acme", co)["extra"]["backfill_desde"]
+    assert triple_whale_tiendas.tienda("acme", no)["ultima_sincronizacion"]
+
+
+def test_error_en_una_tienda_no_toca_a_la_otra_ni_guarda_su_llave(dos_tiendas, monkeypatch):
+    from tareas import triple_whale as t
+    co, no = dos_tiendas
+
+    def responde(llave, shop, consulta, desde, hasta, moneda=None):
+        if shop == "no-acme.myshopify.com":
+            raise triple_whale.ErrorLlave("revocada tw_noruega x-api-key: tw_noruega")
+        return []
+    monkeypatch.setattr(triple_whale, "sql_query", responde)
+    t.tw_sincronizar({"payload": _payload(co)})
+    with pytest.raises(triple_whale.ErrorTripleWhale) as e:
+        t.tw_sincronizar({"payload": _payload(no)})
+    malo, bueno = triple_whale_tiendas.tienda("acme", no), triple_whale_tiendas.tienda("acme", co)
+    assert malo["estado"] == "error" and "tw_noruega" not in malo["error"] and "tw_noruega" not in str(e.value)
+    assert "revocada" in malo["error"]
+    assert bueno["estado"] == "conectada" and not bueno["error"]
+
+
+def test_tarea_dice_el_pais_de_la_tienda(dos_tiendas, monkeypatch):
+    from tareas import triple_whale as t
+    co, no = dos_tiendas
+    monkeypatch.setattr(triple_whale, "sql_query", TripleWhaleFalso(ads=[_ad("1", "2026-09-28")]))
+    assert "Noruega" in t.tw_sincronizar({"payload": _payload(no)})
+
+
+def _jobs_tw():
+    import sqlalchemy as sa
+    import db
+    with db.conectar() as con:
+        return sorted(r[0] for r in con.execute(sa.select(db.tarea.c.job_id).where(db.tarea.c.tipo == "tw_sincronizar")))
+
+
+def test_periodica_encola_una_por_tienda_conectada(dos_tiendas):
+    from tareas import triple_whale as t
+    triple_whale_tiendas.conectar("otro", "tw_y", "otro.myshopify.com")
+    co, no = dos_tiendas
+    assert "3" in t.tw_sincronizar_todas({"payload": {}})
+    assert "0" in t.tw_sincronizar_todas({"payload": {}})   # ya había una viva por tienda
+    otro = triple_whale_tiendas.tiendas("otro")[0]["id"]
+    assert _jobs_tw() == sorted([f"acme__tw_sync__{co}", f"acme__tw_sync__{no}", f"otro__tw_sync__{otro}"])
+
+
+def test_encolar_sync_encola_las_del_proyecto_o_una_sola(dos_tiendas):
+    from tareas import triple_whale as t
+    co, no = dos_tiendas
+    assert t.job_id_sync("acme", co) == f"acme__tw_sync__{co}"
+    assert t.encolar_sync("acme") == 2
+    assert t.encolar_sync("acme") == 0
+    assert t.syncs_en_curso("acme") == sorted([t.job_id_sync("acme", co), t.job_id_sync("acme", no)])
+    assert t.syncs_en_curso("otro") == []
+    assert t.encolar_sync("acme", co) == 0     # esa ya estaba viva
+    assert t.encolar_sync("acme", 9999) == 0   # no existe (o es de otro proyecto)
+
+
+def test_encolar_sync_de_una_tienda_lleva_su_payload_y_dos_intentos(dos_tiendas):
     import sqlalchemy as sa
     import db
     from tareas import triple_whale as t
-    triple_whale_tiendas.conectar("otro", "tw_y", "otro.myshopify.com")
-    assert "2" in t.tw_sincronizar_todas({"payload": {}})
-    assert "0" in t.tw_sincronizar_todas({"payload": {}})   # ya había una viva por proyecto
+    co, no = dos_tiendas
+    assert t.encolar_sync("acme", no) == 1
     with db.conectar() as con:
-        jobs = sorted(r[0] for r in con.execute(sa.select(db.tarea.c.job_id).where(db.tarea.c.tipo == "tw_sincronizar")))
-    assert jobs == ["acme__tw_sync", "otro__tw_sync"]
+        fila = con.execute(sa.select(db.tarea.c.payload, db.tarea.c.max_intentos).where(
+            db.tarea.c.job_id == t.job_id_sync("acme", no))).first()
+    assert fila.payload == {"cliente": "acme", "tienda_id": no} and fila.max_intentos == 2
+
+
+def test_los_avisos_corren_solo_cuando_termina_la_ultima_copia(dos_tiendas, monkeypatch):
+    from tareas import triple_whale as t
+    co, no = dos_tiendas
+    llamadas = []
+    monkeypatch.setattr(t.avisos, "revisar_y_avisar", lambda cliente: llamadas.append(cliente))
+    monkeypatch.setattr(triple_whale, "sql_query", TripleWhaleFalso(ads=[_ad("1", "2026-09-28")]))
+    t.encolar_sync("acme")
+    # La de Colombia termina mientras la de Noruega sigue en cola: no avisa.
+    t.tw_sincronizar({"payload": _payload(co), "job_id": t.job_id_sync("acme", co)})
+    assert llamadas == []
+    # Cuando la de Colombia ya no está viva, la de Noruega es la última y sí avisa, una vez.
+    import cola
+    cola.terminar(cola.consultar_por_job(t.job_id_sync("acme", co))["id"])
+    t.tw_sincronizar({"payload": _payload(no), "job_id": t.job_id_sync("acme", no)})
+    assert llamadas == ["acme"]
+
+
+def test_una_sola_tienda_avisa_siempre(conectado, monkeypatch):
+    from tareas import triple_whale as t
+    llamadas = []
+    monkeypatch.setattr(t.trabajos, "reportar", lambda *a, **k: None)
+    monkeypatch.setattr(t.avisos, "revisar_y_avisar", lambda cliente: llamadas.append(cliente))
+    monkeypatch.setattr(triple_whale, "sql_query", TripleWhaleFalso(ads=[_ad("1", "2026-09-28")]))
+    monkeypatch.setattr(sync, "rango_pendiente", lambda tienda, hoy: ("2026-09-28", "2026-09-28"))
+    tid = _tienda()
+    t.encolar_sync("acme", tid)   # la propia tarea está viva mientras corre: no cuenta como «otra»
+    t.tw_sincronizar({"payload": _payload(tid), "job_id": t.job_id_sync("acme", tid)})
+    assert llamadas == ["acme"]
 
 
 def test_tareas_registradas_y_periodica_antes_de_refrescar_experimentos():
@@ -277,3 +437,152 @@ def test_tareas_registradas_y_periodica_antes_de_refrescar_experimentos():
     assert {"tw_sincronizar", "tw_sincronizar_todas", "tw_evaluar"} <= set(tareas.REGISTRO)
     tipos = [tipo for tipo, _ in worker.PERIODICAS]
     assert tipos.index("tw_sincronizar_todas") < tipos.index("exp_refrescar_todos")
+
+
+# ------------------------------------------- visitantes nuevos (NVP) ---
+# Spec 2026-10-09-nvp-visitantes-nuevos §3.
+
+def _px(ad_id, fecha, **kw):
+    fila = {"channel": "facebook-ads", "ad_id": ad_id, "event_date": fecha, "orders": 1, "revenue": 50,
+            "sessions": 120, "unique_visitors": 100, "new_visitors": 75}
+    fila.update(kw)
+    return fila
+
+
+def test_normalizar_pixel_y_tienda_traen_visitantes():
+    p = sync.normalizar_pixel(_px("5", "2026-09-02", unique_visitors="80.4", new_visitors="20"))
+    assert p["visitantes"] == 80 and p["visitantes_nuevos"] == 20
+    # Sin las columnas (versión sin visitantes): cero, que se lee «sin datos».
+    p = sync.normalizar_pixel({"channel": "facebook-ads", "ad_id": 5, "event_date": "2026-09-02", "orders": 1})
+    assert p["visitantes"] == 0 and p["visitantes_nuevos"] == 0
+    assert sync.normalizar_visitantes_tienda({"event_date": "2026-09-02", "unique_visitors": 300,
+                                              "new_visitors": "120"}) == {
+        "fecha": "2026-09-02", "visitantes": 300, "visitantes_nuevos": 120}
+    assert sync.normalizar_visitantes_tienda({"event_date": None}) is None
+
+
+def test_la_consulta_del_pixel_pide_visitantes_y_tiene_tres_versiones():
+    con_visitantes, completa, minima = triple_whale.consultas_pixel("Last Click", "7_days")
+    assert "new_visitors" in con_visitantes and "unique_visitors" in con_visitantes
+    assert "sessions" in con_visitantes and "sessions" in completa
+    assert "new_visitors" not in completa and "new_visitors" not in minima
+    (web,) = triple_whale.consultas_visitantes_tienda()
+    assert "web_analytics_table" in web and "new_visitors" in web and "@startDate" in web
+
+
+def test_sincronizar_copia_visitantes_por_anuncio_y_de_la_tienda(conectado, monkeypatch):
+    falso = TripleWhaleFalso(
+        ads=[_ad("1", "2026-09-27"), _ad("1", "2026-09-28"), _ad("2", "2026-09-28")],
+        pixel=[_px("1", "2026-09-27"), _px("1", "2026-09-28", unique_visitors=60, new_visitors=15),
+               _px("2", "2026-09-28", unique_visitors=10, new_visitors=9)],
+        tienda=[{"event_date": "2026-09-27", "spend": 5, "revenue": 100, "orders": 1},
+                {"event_date": "2026-09-28", "spend": 25, "revenue": 300, "orders": 4}],
+        web=[{"event_date": "2026-09-27", "unique_visitors": 500, "new_visitors": 200},
+             {"event_date": "2026-09-28", "unique_visitors": 400, "new_visitors": 100}])
+    monkeypatch.setattr(triple_whale, "sql_query", falso)
+    r = sync.sincronizar("acme", _tienda(), "2026-09-22", "2026-09-28", hoy=HOY)
+    assert r["consultas"]["pixel"] == "completa" and r["fallos"] == {}
+    t1 = datos.totales_anuncio("acme", _tienda(), "facebook-ads", "1", "2026-09-01")
+    assert t1["visitantes"] == 160 and t1["visitantes_nuevos"] == 90
+    dias = {d["fecha"]: d for d in datos.serie_tienda("acme", None, "2026-09-27", "2026-09-28")}
+    assert dias["2026-09-27"]["visitantes"] == 500 and dias["2026-09-28"]["visitantes_nuevos"] == 100
+    assert dias["2026-09-28"]["ingresos"] == 300.0
+
+
+def test_si_triple_whale_no_conoce_los_visitantes_baja_a_la_completa_sin_perder_nada(conectado, monkeypatch):
+    falso = TripleWhaleFalso(ads=[_ad("1", "2026-09-28")], pixel=[_px("1", "2026-09-28")],
+                             tienda=[{"event_date": "2026-09-28", "revenue": 300, "orders": 4,
+                                      "new_customer_revenue": 10}],
+                             sin_visitantes=True, fallar_todo={"web"})
+    monkeypatch.setattr(triple_whale, "sql_query", falso)
+    r = sync.sincronizar("acme", _tienda(), "2026-09-28", "2026-09-28", hoy=HOY)
+    assert r["consultas"]["pixel"] == "sin_visitantes" and "pixel" not in r["fallos"]
+    t1 = datos.totales_anuncio("acme", _tienda(), "facebook-ads", "1", "2026-09-01")
+    assert t1["pedidos"] == 1.0 and t1["sesiones"] == 120 and t1["visitantes"] == 0
+    # La tienda se guarda igual; solo falta su NVP, y el resumen lo dice.
+    dia = datos.serie_tienda("acme", None, "2026-09-28", "2026-09-28")[0]
+    assert dia["ingresos"] == 300.0 and dia["visitantes"] == 0
+    assert "visitantes" in r["fallos"] and "tienda" not in r["fallos"]
+    # El segundo tramo no vuelve a probar la versión con visitantes.
+    r = sync.sincronizar("acme", _tienda(), "2026-09-14", "2026-09-28", hoy=HOY)
+    pixeles = [l for l in falso.llamadas if l[0] == "pixel"]
+    # 1.ª copia: rechazada + completa; 2.ª copia (3 tramos): el primero igual, los otros dos directo a la completa.
+    assert len(pixeles) == 2 + (2 + 1 + 1)
+
+
+def test_un_dia_con_visitantes_y_sin_fila_de_tienda_no_se_inventa(conectado, monkeypatch):
+    falso = TripleWhaleFalso(ads=[_ad("1", "2026-09-28")],
+                             tienda=[{"event_date": "2026-09-28", "revenue": 300, "orders": 4}],
+                             web=[{"event_date": "2026-09-27", "unique_visitors": 50, "new_visitors": 20},
+                                  {"event_date": "2026-09-28", "unique_visitors": 80, "new_visitors": 40}])
+    monkeypatch.setattr(triple_whale, "sql_query", falso)
+    sync.sincronizar("acme", _tienda(), "2026-09-27", "2026-09-28", hoy=HOY)
+    dias = datos.serie_tienda("acme", None, "2026-09-27", "2026-09-28")
+    assert [(d["fecha"], d["visitantes"]) for d in dias] == [("2026-09-28", 80)]
+
+
+def test_la_historia_de_visitantes_se_trae_una_sola_vez():
+    al_dia = {"extra": {"backfill_desde": "2026-07-01"}, "ultima_sincronizacion": "2026-09-28T08:00:00"}
+    # Copia de antes del NVP: los 90 días otra vez, para que el NVP tenga historia.
+    assert sync.rango_pendiente(al_dia, HOY) == ("2026-07-01", "2026-09-28")
+    con_marca = {"extra": dict(al_dia["extra"], backfill_visitantes="2026-09-28"),
+                 "ultima_sincronizacion": "2026-09-28T08:00:00"}
+    assert sync.rango_pendiente(con_marca, HOY) == ("2026-09-22", "2026-09-28")
+
+
+def test_la_marca_queda_tras_tres_copias_sin_visitantes_y_no_se_trae_90_dias_para_siempre(conectado, monkeypatch):
+    """Una cuenta que no conoce los visitantes: 3 copias de 90 días y se rinde (si no, 90 días cada 2 horas)."""
+    falso = TripleWhaleFalso(ads=[_ad("1", "2026-09-28")], sin_visitantes=True, fallar_todo={"web"})
+    monkeypatch.setattr(triple_whale, "sql_query", falso)
+    for n in (1, 2):
+        sync.sincronizar("acme", _tienda(), hoy=HOY)
+        extra = triple_whale_tiendas.tienda("acme", _tienda())["extra"]
+        assert "backfill_visitantes" not in extra and extra["intentos_visitantes"] == n
+        assert sync.rango_pendiente(triple_whale_tiendas.tienda("acme", _tienda()), HOY)[0] == "2026-07-01"
+    sync.sincronizar("acme", _tienda(), hoy=HOY)
+    extra = triple_whale_tiendas.tienda("acme", _tienda())["extra"]
+    assert extra["backfill_visitantes"] == HOY.isoformat()
+    assert sync.rango_pendiente(triple_whale_tiendas.tienda("acme", _tienda()), HOY)[0] != "2026-07-01"
+
+
+def test_con_visitantes_la_marca_queda_en_la_primera_copia(conectado, monkeypatch):
+    falso = TripleWhaleFalso(ads=[_ad("1", "2026-09-28")], pixel=[_px("1", "2026-09-28")],
+                             tienda=[{"event_date": "2026-09-28", "revenue": 300, "orders": 4}],
+                             web=[{"event_date": "2026-09-28", "unique_visitors": 80, "new_visitors": 40}])
+    monkeypatch.setattr(triple_whale, "sql_query", falso)
+    sync.sincronizar("acme", _tienda(), hoy=HOY)
+    assert triple_whale_tiendas.tienda("acme", _tienda())["extra"]["backfill_visitantes"] == HOY.isoformat()
+
+
+def test_un_error_pasajero_en_la_copia_de_90_dias_no_deja_el_nvp_en_cero_para_siempre(conectado, monkeypatch):
+    """Un 5xx que persiste llega como ErrorConsulta y baja la copia a la versión sin visitantes: esa copia no deja
+    la marca y la siguiente vuelve a traer los 90 días con visitantes."""
+    falso = TripleWhaleFalso(ads=[_ad("1", "2026-09-28")], pixel=[_px("1", "2026-09-28")], sin_visitantes=True)
+    monkeypatch.setattr(triple_whale, "sql_query", falso)
+    sync.sincronizar("acme", _tienda(), hoy=HOY)
+    assert "backfill_visitantes" not in triple_whale_tiendas.tienda("acme", _tienda())["extra"]
+    falso.sin_visitantes = False                     # Triple Whale se recuperó
+    r = sync.sincronizar("acme", _tienda(), hoy=HOY)
+    assert r["desde"] == "2026-07-01" and r["consultas"]["pixel"] == "completa"
+    assert datos.totales_anuncio("acme", _tienda(), "facebook-ads", "1", "2026-09-01")["visitantes"] == 100
+    assert triple_whale_tiendas.tienda("acme", _tienda())["extra"]["backfill_visitantes"] == HOY.isoformat()
+
+
+def test_un_error_de_red_en_los_visitantes_de_la_tienda_no_tumba_la_copia(conectado, monkeypatch):
+    def falso(llave, shop, consulta, desde, hasta, moneda=None):
+        if "web_analytics_table" in consulta:
+            raise triple_whale.ErrorTripleWhale("timeout")
+        return base(llave, shop, consulta, desde, hasta, moneda)
+    base = TripleWhaleFalso(ads=[_ad("1", "2026-09-28")], tienda=[{"event_date": "2026-09-28", "revenue": 300}])
+    monkeypatch.setattr(triple_whale, "sql_query", falso)
+    r = sync.sincronizar("acme", _tienda(), "2026-09-28", "2026-09-28", hoy=HOY)
+    assert "visitantes" in r["fallos"] and r["dias_tienda"] == 1
+    assert datos.serie_tienda("acme", None, "2026-09-28", "2026-09-28")[0]["ingresos"] == 300.0
+    # La llave revocada sí corta, como en cualquier otra consulta.
+    def revocada(llave, shop, consulta, desde, hasta, moneda=None):
+        if "web_analytics_table" in consulta:
+            raise triple_whale.ErrorLlave("401")
+        return base(llave, shop, consulta, desde, hasta, moneda)
+    monkeypatch.setattr(triple_whale, "sql_query", revocada)
+    with pytest.raises(triple_whale.ErrorLlave):
+        sync.sincronizar("acme", _tienda(), "2026-09-28", "2026-09-28", hoy=HOY)

@@ -3,6 +3,8 @@ el formulario cambia de forma, no de contrato — el servidor recibe los mismos
 campos — y Enter en un campo de una línea ya no genera (ni cobra) un video."""
 import re
 
+from tests.js_de_pagina import con_script_estatico
+
 from tests.test_rutas_crear_director import app  # noqa: F401  (fixture: admin en /cliente/acme)
 
 CAMPOS = ["bandeja_vista", "accion_central", "tipo", "modelo_video", "modelo_imagen", "modelo",
@@ -32,7 +34,7 @@ def test_el_formulario_manda_los_mismos_campos(app):
 def test_enter_en_un_campo_no_envia_el_formulario_de_crear(app):
     """Antes, Enter en «Sonido de la escena» hacía el envío implícito con el
     primer botón (#fp-generar, modo_prompt=directo): generaba y cobraba."""
-    html = _html(app)
+    html = con_script_estatico(_html(app), 'crear-compositor.js')
     js = html[html.index("form.addEventListener('keydown'"):]
     assert "e.key !== 'Enter'" in js[:300]
     assert "e.target.form === form" in js[:400] and "e.preventDefault()" in js[:400]
@@ -80,7 +82,7 @@ def test_cambiar_producto_sigue_con_su_desplegable(app):
 
 
 def test_el_script_maneja_menus_fichas_y_pastillas(app):
-    html = _html(app)
+    html = con_script_estatico(_html(app), 'crear-compositor.js')
     for pieza in ("function cerrarMenus()", "function pintarFichas()", "function pintarMusica()",
                   "function pintarPastillas()", "function pintarCatalogo()", "e.dataTransfer.files"):
         assert pieza in html, pieza

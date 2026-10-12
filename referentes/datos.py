@@ -265,6 +265,16 @@ def referente(cliente, referente_id):
         return _a_dict(f) if f else None
 
 
+def por_ids(cliente, ids):
+    """Las mismas filas visibles que referente(), en una consulta."""
+    if not ids:
+        return {}
+    t = db.referente
+    with db.conectar() as con:
+        filas = con.execute(sa.select(t).where(t.c.id.in_(ids), _visible(t, cliente)))
+        return {f.id: _a_dict(f) for f in filas}
+
+
 def _condiciones(cliente, filtros):
     f = filtros or {}
     t = db.referente

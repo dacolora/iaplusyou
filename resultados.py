@@ -36,17 +36,20 @@ from typing import Optional
 import sqlalchemy as sa
 from flask_babel import gettext
 
+import app_tiendas
 import db
 import decisor
 import doctrina
 import gastos
 import idiomas
 import proyectos
+import experimentos
 import tablero
 from idiomas import N_
 
-PERIODOS = (7, 14, 30, 90, 0)
-PERIODO_DEFECTO = 14
+PERIODOS = (0, 7, 14, 30, 90)
+# «Desde el inicio» por defecto (Daniel, 2026-10-08: las cifras por periodo confundían a sus clientes).
+PERIODO_DEFECTO = 0
 DIAS_MAX_INICIO = 180
 TIPOS = ("video", "imagen")
 PUNTOS_CURVA = 14
@@ -319,9 +322,9 @@ def _roas(v):
     """ROAS de `tablero.ventas_medidas` (lo vendido sobre TODO el gasto, redondeado como el Tablero): None si nada
     mide ventas o no hubo gasto (nunca un 0 falso de algo que no mide). Redondea ingresos y gasto antes de dividir,
     como `tablero._resumen_periodo`, para que el decimal que se muestra sea siempre el mismo."""
-    if not v.get("roas_comparable", True) or not (v["mide"] and v["gasto"] > 0):
+    if not v.get("roas_comparable", True) or not (v["mide"] and v.get("gasto_roas", v["gasto"]) > 0):
         return None
-    return round(round(v["ingresos"], 2) / round(v["gasto"], 2), 2) if round(v["gasto"], 2) > 0 else None
+    return round(round(v["ingresos"], 2) / round(v.get("gasto_roas", v["gasto"]), 2), 2) if round(v.get("gasto_roas", v["gasto"]), 2) > 0 else None
 
 
 def _con_ventas(gasto, v):
@@ -329,10 +332,12 @@ def _con_ventas(gasto, v):
     el gasto de todo, y compras, ingresos, ROAS y costo por compra sobre ese mismo gasto mientras algo de lo elegido
     mida ventas. Sin nada que mida, las ventas son None: la pantalla dice «—» y «sin ventas medibles», no 0."""
     mide = v["mide"]
-    return {"gasto": round(gasto, 2), "compras": v["compras"] if mide else None,
+    # La moneda ajena impide comparar ingresos, pero no contar pedidos ni calcular CPA.
+    mide_compras = mide or bool(v.get("excluidos"))
+    return {"gasto": round(gasto, 2), "compras": v["compras"] if mide_compras else None,
             "ingresos": round(v["ingresos"], 2) if mide and v.get("roas_comparable", True) else None,
-            "roas": _roas(v), "roas_comparable": v.get("roas_comparable", True),
-            "cpa": v["gasto"] / v["compras"] if mide and not v.get("ventas_cambiaron") and v["compras"] else None, "mide_ventas": mide,
+            "roas": _roas(v), "excluidos": v.get("excluidos", 0), "roas_comparable": v.get("roas_comparable", True),
+            "cpa": v["gasto"] / v["compras"] if mide_compras and not v.get("ventas_cambiaron") and v["compras"] else None, "mide_ventas": mide,
             "gasto_sin_ventas": v.get("gasto_sin_ventas", 0.0), "ventas_cambiaron": v.get("ventas_cambiaron", False)}
 
 
@@ -440,7 +445,7 @@ def indicadores(carga):
         anterior = None if previo is None else previo[clave]
         out.append({"clave": clave, "etiqueta": gettext(etiqueta), "formato": formato, "valor": actual[clave],
                     "anterior": anterior, "cambio": cambio(actual[clave], anterior, mejor, formato),
-                    "tendencia": curvas[clave],
+                    "tendencia": curvas[clave], "excluidos": actual.get("excluidos", 0) if clave in ("roas", "ingresos") else 0,
                     # «—» por «sin ventas medibles», no por «sin datos» (la plantilla elige la nota)
                     "sin_ventas": clave in _DE_VENTAS and not actual["mide_ventas"],
                     "roas_no_comparable": clave in _DE_VENTAS and (
@@ -469,6 +474,11 @@ def serie(carga):
     return out
 
 
+def _texto_marca(mensaje):
+    texto = mensaje or ""
+    return texto[:LARGO_MARCA - 1] + "…" if len(texto) > LARGO_MARCA else texto
+
+
 def marcas(carga):
     """Los días en que el motor actuó: eventos del periodo de los experimentos de la carga (veredictos,
     acciones, topes, escaladas, pausas…), los últimos MAX_MARCAS, en orden de fecha."""
@@ -483,10 +493,7 @@ def marcas(carga):
             .order_by(ev.c.creado_en.desc(), ev.c.id.desc()).limit(MAX_MARCAS)).all()
     out = []
     for creado_en, mensaje in reversed(filas):
-        texto = mensaje or ""
-        if len(texto) > LARGO_MARCA:
-            texto = texto[:LARGO_MARCA - 1] + "…"
-        out.append({"dia": creado_en[:10], "texto": texto})
+        out.append({"dia": creado_en[:10], "texto": _texto_marca(mensaje)})
     return out
 
 
@@ -681,15 +688,71 @@ def desgloses(carga):
             "metrica": "roas" if ingresos > 0 else "ctr"}
 
 
+# ---------- NVP: visitantes nuevos según Triple Whale ----------
+# Pedido del cliente de HappyFlops (2026-10-09; spec 2026-10-09-nvp-visitantes-nuevos §4.3): el % de visitantes
+# nuevos de cada pieza para saber si llega arriba, a la mitad o abajo del embudo. Solo se muestra: ni el decisor,
+# ni los snapshots, ni nada que gaste o decida lo lee.
+
+CANAL_NVP = "facebook-ads"          # los anuncios de un experimento son de Meta
+_SIN_VISITAS = {"visitantes": 0, "visitantes_nuevos": 0}
+
+
+def _suma_visitantes(lista):
+    """Suma de {visitantes, visitantes_nuevos} de varias piezas: el NVP de un grupo sale de las SUMAS, nunca de un
+    promedio de porcentajes (triple_whale/visitantes.py)."""
+    out = dict(_SIN_VISITAS)
+    for v in lista:
+        out["visitantes"] += (v or _SIN_VISITAS)["visitantes"]
+        out["visitantes_nuevos"] += (v or _SIN_VISITAS)["visitantes_nuevos"]
+    return out
+
+
+def visitantes(carga):
+    """{ep_id: {"visitantes", "visitantes_nuevos"}}: lo que el Pixel de Triple Whale atribuye al anuncio de Meta de
+    cada pieza (`meta_ad_id`), para todas las piezas de los experimentos de la moneda elegida (las del ranking y
+    las de las tarjetas de experimentos). Una pieza sin anuncio o sin visitas vale cero («—» en pantalla). None si
+    el proyecto no tiene Triple Whale: no se consulta nada y la pantalla no muestra el NVP. UNA consulta por carga
+    (`triple_whale.datos.visitantes_por` con todos los anuncios, nunca una por pieza), con el periodo de la
+    pantalla; «desde el inicio» lee toda la copia (los anuncios los crea Creatv: todas sus filas son de su vida)."""
+    if "visitantes" not in carga._memo:
+        carga._memo["visitantes"] = _leer_visitantes(carga)
+    return carga._memo["visitantes"]
+
+
+def _leer_visitantes(carga):
+    import triple_whale_tiendas  # noqa: PLC0415 — arrastra cifrado; solo hace falta aquí
+    from triple_whale import datos as tw_datos  # noqa: PLC0415
+    cliente = carga.todo.cliente
+    if not triple_whale_tiendas.tiendas(cliente):
+        return None
+    anuncio = {pz["id"]: str(pz["meta_ad_id"]) for ex, pz, _s in carga.todo.filas
+               if tablero._moneda(ex) == carga.moneda and pz.get("meta_ad_id")}
+    per = carga.per
+    desde, hasta = (None, None) if per["es_todo"] else (per["lista"][0].isoformat(), per["lista"][-1].isoformat())
+    por_anuncio = tw_datos.visitantes_por(cliente, "ad_id", anuncio.values(), desde=desde, hasta=hasta,
+                                          canal=CANAL_NVP)
+    return {ep: dict(por_anuncio.get(ad) or _SIN_VISITAS) for ep, ad in anuncio.items()}
+
+
+def _visitantes_de(vis, ep_ids):
+    """La suma de esas piezas, o {visitantes: None, visitantes_nuevos: None} sin Triple Whale (la plantilla no
+    pinta el NVP)."""
+    if vis is None:
+        return {"visitantes": None, "visitantes_nuevos": None}
+    return _suma_visitantes(vis.get(i) for i in ep_ids)
+
+
 # ---------- países ----------
 
 def paises(carga):
     """Una fila por país de las piezas de la carga: gasto y ROAS del motor del Tablero (deltas de los snapshots,
     con la misma ventana y la misma atribución que los indicadores; el ROAS con la regla del Tablero);
-    impresiones, clics y CTR de metrica_dia. Sin filas de detalle del país, lo de Meta queda en None
-    («cargando», no ceros). Ordenados por gasto."""
+    impresiones, clics y CTR de metrica_dia; los visitantes de Triple Whale de sus piezas (`visitantes`, None sin
+    Triple Whale). Sin filas de detalle del país, lo de Meta queda en None («cargando», no ceros). Ordenados por
+    gasto."""
     per = carga.per
     desde = tablero.INICIO if per["es_todo"] else per["desde"]
+    vis = visitantes(carga)
     por_pais, pais_de = {}, {}
     for ex, pz, serie in carga.datos.filas:
         pais = pz.get("pais")
@@ -708,7 +771,8 @@ def paises(carga):
         ventas = tablero.ventas_medidas(m["deltas"])
         out.append({"pais": pais, "impresiones": r["impresiones"], "clics_enlace": a["clics_enlace"] if a["n"] else None,
                     "gasto": round(sum(d["gasto"] for d in m["deltas"]), 2), "ctr": r["ctr"],
-                    "roas": _roas(ventas), "ventas_cambiaron": ventas["ventas_cambiaron"], "roas_comparable": ventas["roas_comparable"]})
+                    "roas": _roas(ventas), "ventas_cambiaron": ventas["ventas_cambiaron"], "roas_comparable": ventas["roas_comparable"],
+                    **_visitantes_de(vis, [i for i, p in pais_de.items() if p == pais])})
     out.sort(key=lambda x: (-x["gasto"], x["pais"]))
     return out
 
@@ -971,10 +1035,12 @@ def piezas(carga, reglas_cliente):
     entero (`serie`/`promedio`: ROAS en un experimento de ventas, CTR del enlace en los demás), el veredicto con
     su nombre humano y la `historia`. El dinero sale del motor del Tablero, lo demás de metrica_dia; sin ventas
     medibles (`mide_ventas` False) el ROAS y las compras son None. «Le faltan…» solo se dice de una pieza que el
-    motor evalúa (`_lo_juzga_el_motor`)."""
+    motor evalúa (`_lo_juzga_el_motor`). `visitantes`/`visitantes_nuevos`: el NVP de Triple Whale (None sin
+    Triple Whale; ver `visitantes`)."""
     per, ahora = carga.per, carga.datos.ahora
     desde = tablero.INICIO if per["es_todo"] else per["desde"]
     dias_pieza, veredictos, reglas_exp, out = _dias_del_proyecto(carga), _veredictos_por_pieza(carga), {}, []
+    vis = visitantes(carga)
     for ex, pz, serie_ in carga.datos.filas:
         ep_id, metrica, es_imagen = pz["id"], _metrica_principal(ex), bool(pz.get("es_imagen"))
         filas_dia = dias_pieza.get(ep_id, [])
@@ -991,12 +1057,15 @@ def piezas(carga, reglas_cliente):
         escalon = pz.get("escalon_rescate") or 0
         out.append({
             "ep_id": ep_id, "experimento_id": ex["id"], "nombre": pz["nombre"], "pais": pz["pais"], "es_imagen": es_imagen,
+            # Apps: «iOS» / «Android» (la misma pieza tiene una fila por tienda); None en los demás.
+            "plataforma": app_tiendas.OS_META.get((pz.get("extra") or {}).get("plataforma")),
             "url_miniatura": pz.get("url_miniatura"), "url_video": pz.get("url_video"),
             "metrica": metrica, "serie": serie_p, "promedio": promedio,
             "gasto": round(dinero["gasto"], 2), "ctr": detalle["ctr"], "gancho": detalle["gancho"], "cpc": detalle["cpc"],
             "roas": roas, "compras": ventas["compras"] if ventas["mide"] else None, "mide_ventas": ventas["mide"],
             "ventas_cambiaron": ventas["ventas_cambiaron"], "roas_comparable": ventas["roas_comparable"],
             "delta_roas": None if roas is None or roas_previo is None else roas - roas_previo,
+            **_visitantes_de(vis, [ep_id]),     # NVP de Triple Whale: solo se muestra (None sin Triple Whale)
             "veredicto": _veredicto(pz.get("veredicto"), escalon),
             "historia": historia(
                 tramos=_tramos(pz, ex, veredictos.get(ep_id, [])), serie=serie_p, promedio=promedio,
@@ -1025,10 +1094,12 @@ def experimentos_tarjetas(carga):
     `pct_tope`) es el de toda la vida del experimento; `valor` (ROAS en ventas, CTR del enlace en los demás) y
     `mejor` (la pieza que más rinde en esa métrica) son del periodo, del mismo motor y las mismas fuentes que el
     resto de la pantalla. El ROAS sigue la regla del Tablero (`_con_ventas`); sin nada que mida, `valor` es None y
-    `mide_ventas` False («sin ventas medibles»)."""
+    `mide_ventas` False («sin ventas medibles»). `visitantes`/`visitantes_nuevos`: el NVP de Triple Whale de sus
+    piezas en el periodo (la suma, None sin Triple Whale)."""
     per, dias_pieza = carga.per, _dias_del_proyecto(carga)
     desde = tablero.INICIO if per["es_todo"] else per["desde"]
     elegido = carga.filtro.experimento_id if carga.filtro else None
+    vis = visitantes(carga)
     out = []
     for ex in carga.todo.exps:
         if tablero._moneda(ex) != carga.moneda:
@@ -1053,6 +1124,7 @@ def experimentos_tarjetas(carga):
         tope, gasto = float(ex.get("tope_total") or 0), float((ex.get("resumen") or {}).get("gasto") or 0)
         out.append({"id": ex["id"], "nombre": ex["nombre"], "estado": ex["estado"], "gasto": gasto, "tope": tope,
                     "pct_tope": min(100.0, gasto / tope * 100) if tope > 0 else None,
+                    "datos_viejos": experimentos.datos_viejos(ex, carga.datos.ahora),
                     "dia": _dia_del_experimento(ex, carga.datos.ahora), "dias": ex.get("dias"),
                     "n_piezas": len(ex.get("piezas") or []), "paises": [p["pais"] for p in ex.get("paises") or []],
                     "ganadoras": sum(1 for pz in ex.get("piezas") or [] if pz.get("veredicto") == "ganador"),
@@ -1061,6 +1133,7 @@ def experimentos_tarjetas(carga):
                     "mide_ventas": ventas_ex["mide"],
                     "ventas_cambiaron": ventas_ex["ventas_cambiaron"], "roas_comparable": ventas_ex["roas_comparable"],
                     "mejor": max(candidatas, key=lambda c: (c[0], c[1]))[2] if candidatas else None,
+                    **_visitantes_de(vis, [pz["id"] for pz, _s in _filas_por_experimento(carga).get(ex["id"], [])]),
                     "seleccionado": ex["id"] == elegido})
     return out
 
@@ -1104,14 +1177,17 @@ def pieza(cliente, ep_id, filtro, ahora_iso=None):
     pais_ex = next((p for p in ex.get("paises") or [] if p.get("pais") == pz.get("pais")), {})
     acciones = {"pieza_id": pz.get("pieza_id"), "url_imagen": pz.get("url_imagen"), "tipo": pz.get("tipo"),
                 "estado_experimento": ex.get("estado"),
-                "pais_experimento": {k: pais_ex.get(k) for k in ("pais", "estado", "meta_adset_id", "presupuesto_dia")}}
+                "pais_experimento": {k: pais_ex.get(k) for k in ("pais", "estado", "meta_adset_id", "meta_adsets", "presupuesto_dia")}}
+    eventos = _eventos_pieza(cliente, ep_id)
+    marcas_panel = [{"dia": ev["creado_en"][:10], "texto": _texto_marca(ev.get("mensaje"))}
+                    for ev in reversed(eventos[:MAX_MARCAS]) if ev.get("creado_en")]
     return dict(piezas(carga, proyectos.reglas_defecto(cliente))[0], **acciones, moneda=carga.moneda,
                 periodo=_periodo_json(carga.per), indicadores=indicadores(carga),
                 series={k: s[k] for k in ("dias", "gasto", "roas", "ctr", "cpc", "cpm", "frecuencia", "gancho", "moneda")},
                 curva=_curva(carga.dias_act, bool(pz.get("es_imagen"))), desgloses=desgloses(carga),
                 rankings=dict(extra.get("rankings_meta") or {}),
                 diagnostico=extra.get("diagnostico") if isinstance(extra.get("diagnostico"), dict) else None,
-                eventos=_eventos_pieza(cliente, ep_id), experimento={"id": ex["id"], "nombre": ex["nombre"]})
+                eventos=eventos, marcas=marcas_panel, experimento={"id": ex["id"], "nombre": ex["nombre"]})
 
 
 # ---------- todo junto ----------
@@ -1130,19 +1206,26 @@ def _opciones(carga):
             "monedas": list(carga.monedas)}
 
 
-def contexto(cliente, filtro, ahora_iso=None):
+def contexto(cliente, filtro, ahora_iso=None, total_entre=None):
     """Todo lo que pinta el centro de resultados para un filtro. `datos_graficos` es apto para JSON (listas, sin
-    fechas): lo que dibuja el JS de la pantalla."""
+    fechas): lo que dibuja el JS de la pantalla. `total_entre`: de dónde sale «Generación con IA» (por defecto el
+    costo, `gastos.total_entre`; la ruta pasa el de `cobros.vista.gasto_para`: a un cliente de un proyecto que
+    cobra, lo cobrado)."""
+    total_entre = total_entre or gastos.total_entre
     carga = cargar(cliente, filtro, ahora_iso)
     per = carga.per
     lista, indic = piezas(carga, proyectos.reglas_defecto(cliente)), indicadores(carga)
     serie_dia, marcas_dia, desglose = serie(carga), marcas(carga), desgloses(carga)
+    vis = visitantes(carga)
     return {
         "filtro": filtro, "query": a_query(filtro), "opciones": _opciones(carga), "periodo": _periodo_json(per),
         "moneda": carga.moneda, "indicadores": indic, "serie": serie_dia, "marcas": marcas_dia,
+        "metrica": "roas" if carga.datos.exps and all(_metrica_principal(e) == "roas" for e in carga.datos.exps) else "ctr",
         "embudo": embudo(carga, promedio_embudo(cliente)), "piezas": lista, "evolucion": lista[:EVOLUCION_PIEZAS],
         "desgloses": desglose, "paises": paises(carga), "experimentos": experimentos_tarjetas(carga),
-        "generacion": gastos.total_entre(cliente, tablero.INICIO if per["es_todo"] else per["desde"], per["hasta"]),
+        "generacion": total_entre(cliente, tablero.INICIO if per["es_todo"] else per["desde"], per["hasta"]),
+        # NVP del filtro (suma de sus piezas); None sin Triple Whale: la pantalla no muestra el NVP en ningún lado.
+        "nvp": None if vis is None else _suma_visitantes(vis.get(pz["id"]) for _ex, pz, _s in carga.datos.filas),
         "detalle_meta": {ex["id"]: (ex.get("extra") or {}).get("detalle_meta") for ex in carga.datos.exps},
         "hay_detalle": bool(carga.dias_act),
         "datos_graficos": {

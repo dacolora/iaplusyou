@@ -1,13 +1,13 @@
 """
 Tareas del worker para Sprints: analizar una referencia con Claude, sugerir
-personas, traer una referencia desde un link (Parte 1, baratas — centavos, sin
-generación de video, por eso llevan reintentos), proponer ideas por campaña
+personas (un intento por tarea paga), traer una referencia desde un link
+(Parte 1, sin generación de video), proponer ideas por campaña
 con el prompt maestro (Parte 2, también solo texto) y el control de calidad
 automático de una pieza ya generada (también Parte 2, centavos de visión).
 
 Ids de trabajo (los mismos que usan las rutas para encolar y consultar):
-  sprint_analizar_referencia -> f"{cliente}__ref{referencia_id}__analizar"          (max_intentos=3)
-  sprint_sugerir_personas    -> f"{cliente}__sprints__sugerir_personas"             (max_intentos=2)
+  sprint_analizar_referencia -> f"{cliente}__ref{referencia_id}__analizar"          (max_intentos=1)
+  sprint_sugerir_personas    -> f"{cliente}__sprints__sugerir_personas"             (max_intentos=1)
   sprint_referencia_link     -> f"{cliente}__campana{campana_id}__link"             (max_intentos=2)
   sprint_proponer_ideas      -> f"{cliente}__campana{campana_id}__ideas"            (max_intentos=1, pagada)
   sprint_qa_pieza            -> f"{cliente}__cp{cp_id}__qa"                         (max_intentos=3)
@@ -25,6 +25,7 @@ campaña, con el gasto real registrado tanto si acierta como si la respuesta
 no parsea.
 """
 import os
+import logging
 from datetime import datetime
 
 import sqlalchemy as sa
@@ -42,6 +43,7 @@ import notificaciones
 import proyectos
 import referencias_link
 import trabajos
+from cobros import SaldoInsuficiente
 from idiomas import N_
 from nicho.avatares import costo_real, modelo_actual
 from referentes import sugerir as referentes_sugerir
@@ -62,21 +64,40 @@ def job_id_link(cliente, campana_id):
 
 
 def encolar_analisis(cliente, referencia_id):
-    return trabajos.encolar(job_id_analizar(cliente, referencia_id), "sprint_analizar_referencia",
-                            {"cliente": cliente, "referencia_id": referencia_id}, cliente=cliente,
-                            duracion_estimada=20, max_intentos=3)
+    """Encola el análisis (Claude) de una referencia recién guardada. Sin saldo
+    (cobros, spec 2026-10-08 §5.4) no se encola: la referencia queda guardada
+    con el análisis en error y la frase (se puede «Analizar de nuevo» tras
+    recargar). Nunca lanza por saldo: lo llaman bucles de subida y el worker
+    (después de bajar un link), que no deben cortarse a la mitad."""
+    try:
+        return trabajos.encolar(job_id_analizar(cliente, referencia_id), "sprint_analizar_referencia",
+                                {"cliente": cliente, "referencia_id": referencia_id}, cliente=cliente,
+                                duracion_estimada=20, max_intentos=1,
+                                costo_estimado=gastos.estimar("analizar_referencia")["usd"])
+    except SaldoInsuficiente as e:
+        datos.actualizar_referencia(cliente, referencia_id, analisis_estado="error",
+                                    analisis={"error": e.frase_proyecto()})
+        return False
 
 
 def encolar_sugerir(cliente, cuantas=3):
     return trabajos.encolar(job_id_sugerir(cliente), "sprint_sugerir_personas",
                             {"cliente": cliente, "cuantas": int(cuantas)}, cliente=cliente,
-                            duracion_estimada=25, max_intentos=2)
+                            duracion_estimada=25, max_intentos=1,
+                            costo_estimado=gastos.estimar("sugerir_personas")["usd"])
 
 
 def encolar_link(cliente, campana_id, url):
     return trabajos.encolar(job_id_link(cliente, campana_id), "sprint_referencia_link",
                             {"cliente": cliente, "campana_id": campana_id, "url": url}, cliente=cliente,
                             duracion_estimada=60, max_intentos=2)
+
+
+def _gasto_uso(cliente, uso, referencia, detalle, entregado=True):
+    if uso.get("entrada") or uso.get("salida"):
+        gastos.registrar_seguro(cliente, "ideas", costo_real(uso["entrada"], uso["salida"]), referencia,
+                                proveedor="anthropic", detalle=detalle, entregado=entregado,
+                                extra={"tokens_entrada": uso["entrada"], "tokens_salida": uso["salida"], "modelo": modelo_actual()})
 
 
 @registrar("sprint_analizar_referencia")
@@ -86,34 +107,64 @@ def ejecutar_analizar(tarea):
     ref = datos.referencia(cliente, rid)
     if not ref:
         return gettext("La referencia ya no existe.")
+    uso = {"entrada": 0, "salida": 0}
+    referencia = f"sprint:referencia:{rid}{ref_sufijo(tarea)}"
+    resultado_recibido = False
     try:
-        resultado = analisis.analizar(ref, marca=proyectos.nombre_visible(cliente), idioma=idiomas.de_proyecto(cliente))
+        resultado = analisis.analizar(ref, marca=proyectos.nombre_visible(cliente), idioma=idiomas.de_proyecto(cliente), uso=uso)
+        resultado_recibido = True
+        datos.actualizar_referencia(cliente, rid, analisis=resultado, analisis_estado="listo")
     except Exception as e:
-        datos.actualizar_referencia(cliente, rid, analisis_estado="error", analisis={"error": str(e)})
+        logging.getLogger(__name__).warning("Análisis de referencia %s: %s", rid, cola.sin_token(str(e)))
+        _gasto_uso(cliente, uso, referencia, gettext("analizar referencia · la respuesta no sirvió"), entregado=False)
+        if isinstance(e, analisis.ReferenciaSinImagen):
+            motivo = "sin_imagen"
+        elif isinstance(e, analisis.AnalisisInvalido):
+            motivo = "respuesta_invalida"
+        elif resultado_recibido:
+            motivo = "guardar"
+        else:
+            motivo = "sin_respuesta" if uso.get("fallo_llamada") else "incompleto"
+        try:
+            datos.actualizar_referencia(cliente, rid, analisis_estado="error", analisis=analisis.error_guardado(motivo))
+        except Exception:
+            pass  # conserva el fallo original; el hook del worker también deja el análisis en error
         raise
-    datos.actualizar_referencia(cliente, rid, analisis=resultado, analisis_estado="listo")
+    _gasto_uso(cliente, uso, referencia, gettext("analizar referencia"))
     return gettext("Referencia analizada.")
 
 
 @al_interrumpir("sprint_analizar_referencia")
 def interrumpida_analizar(tarea, mensaje):
     p = tarea["payload"]
+    ref = datos.referencia(p["cliente"], int(p["referencia_id"]))
+    guardado = ref.get("analisis") if ref else None
+    motivo = guardado.get("motivo") if isinstance(guardado, dict) else None
+    if ref and ref["analisis_estado"] == "error" and isinstance(motivo, str) and motivo in analisis.MOTIVOS_ERROR:
+        return  # conserva la causa que ejecutar_analizar ya dejó, también la falta de imagen
     datos.actualizar_referencia(p["cliente"], int(p["referencia_id"]), analisis_estado="error",
-                                analisis={"error": mensaje})
+                                analisis=analisis.error_guardado("interrumpido"))
 
 
 @registrar("sprint_sugerir_personas")
 def ejecutar_sugerir(tarea):
     p = tarea["payload"]
     cliente = p["cliente"]
-    propuestas = sugerencias.sugerir_personas(cliente, cuantas=int(p.get("cuantas") or 3))
-    for persona in propuestas:
-        datos.crear_persona(cliente, persona["nombre"], resumen=persona.get("resumen", ""),
-                            descripcion=persona.get("descripcion", ""), edad_rango=persona.get("edad_rango", ""),
-                            tono=persona.get("tono", ""), senales_visuales=persona.get("senales_visuales"),
-                            palabras_clave=persona.get("palabras_clave"), color=persona.get("color"),
-                            origen="sugerida_ia",
-                            extra={"conciencia": persona["conciencia"]} if persona.get("conciencia") else None)
+    uso = {"entrada": 0, "salida": 0}
+    referencia = f"sprint:personas{ref_sufijo(tarea)}"
+    try:
+        propuestas = sugerencias.sugerir_personas(cliente, cuantas=int(p.get("cuantas") or 3), uso=uso)
+        for persona in propuestas:
+            datos.crear_persona(cliente, persona["nombre"], resumen=persona.get("resumen", ""),
+                                descripcion=persona.get("descripcion", ""), edad_rango=persona.get("edad_rango", ""),
+                                tono=persona.get("tono", ""), senales_visuales=persona.get("senales_visuales"),
+                                palabras_clave=persona.get("palabras_clave"), color=persona.get("color"),
+                                origen="sugerida_ia",
+                                extra={"conciencia": persona["conciencia"]} if persona.get("conciencia") else None)
+    except Exception:
+        _gasto_uso(cliente, uso, referencia, gettext("sugerir personas · la respuesta no sirvió"), entregado=False)
+        raise
+    _gasto_uso(cliente, uso, referencia, gettext("sugerir personas"))
     return gettext("%(n)s personas sugeridas — revísalas y edítalas.", n=len(propuestas))
 
 
@@ -140,7 +191,22 @@ def encolar_ideas(cliente, campana_id, n_videos=None, n_imagenes=None, reemplaza
     return trabajos.encolar(job_id_ideas(cliente, campana_id), "sprint_proponer_ideas",
                             {"cliente": cliente, "campana_id": campana_id, "n_videos": n_videos, "n_imagenes": n_imagenes,
                              "reemplaza": reemplaza}, cliente=cliente, duracion_estimada=40,
-                            max_intentos=1)  # pagada: nunca se reintenta sola
+                            max_intentos=1,  # pagada: nunca se reintenta sola
+                            costo_estimado=_costo_ideas(cliente, campana_id, n_videos, n_imagenes, reemplaza))
+
+
+def _costo_ideas(cliente, campana_id, n_videos, n_imagenes, reemplaza):
+    """El mismo estimado del botón: base + por idea pedida (una si reemplaza;
+    sin cantidades, las que la campaña tiene como objetivo — tope conservador:
+    el botón muestra solo las que faltan; si no se sabe, una)."""
+    if reemplaza:
+        n = 1
+    elif n_videos is not None or n_imagenes is not None:
+        n = int(n_videos or 0) + int(n_imagenes or 0)
+    else:
+        c = datos.campana(cliente, campana_id) or {}
+        n = int(c.get("n_videos") or 0) + int(c.get("n_imagenes") or 0)
+    return gastos.estimar("proponer_ideas", n=max(1, n))["usd"]
 
 
 def job_id_reescribir(cliente, cp_id):
@@ -151,7 +217,8 @@ def encolar_reescribir(cliente, cp_id):
     """«Reescribir la idea con este ángulo» (doctrina, bloque 2): pagada, un
     clic con precio a la vista, nunca se reintenta sola."""
     return trabajos.encolar(job_id_reescribir(cliente, cp_id), "sprint_reescribir_idea",
-                            {"cliente": cliente, "cp_id": cp_id}, cliente=cliente, duracion_estimada=40, max_intentos=1)
+                            {"cliente": cliente, "cp_id": cp_id}, cliente=cliente, duracion_estimada=40, max_intentos=1,
+                            costo_estimado=gastos.estimar("reescribir_idea")["usd"])
 
 
 @registrar("sprint_reescribir_idea")
@@ -167,7 +234,7 @@ def ejecutar_reescribir_idea(tarea):
                    else gettext("reescribir idea · respuesta inválida"))
         if ent or sal:
             gastos.registrar_seguro(cliente, "ideas", costo_real(ent, sal), referencia, proveedor="anthropic",
-                                    detalle=detalle,
+                                    detalle=detalle, entregado=False,
                                     extra={"tokens_entrada": ent, "tokens_salida": sal, "modelo": modelo_actual()})
         raise
     gastos.registrar_seguro(cliente, "ideas", costo_real(ent, sal), referencia, proveedor="anthropic",
@@ -186,17 +253,17 @@ def ejecutar_proponer_ideas(tarea):
     uso = {"entrada": 0, "salida": 0}
     referencia = f"idea:proponer:{campana_id}{ref_sufijo(tarea)}"
 
-    def _registrar(detalle):
+    def _registrar(detalle, entregado=True):
         if uso["entrada"] or uso["salida"]:
             gastos.registrar_seguro(cliente, "ideas", costo_real(uso["entrada"], uso["salida"]), referencia,
-                                    proveedor="anthropic", detalle=detalle,
+                                    proveedor="anthropic", detalle=detalle, entregado=entregado,
                                     extra={"tokens_entrada": uso["entrada"], "tokens_salida": uso["salida"],
                                            "modelo": modelo_actual()})
     try:
         creadas = ideas.proponer(cliente, campana_id, n_videos=p.get("n_videos"), n_imagenes=p.get("n_imagenes"),
                                  reemplaza=p.get("reemplaza"), uso=uso)
     except Exception:
-        _registrar(gettext("proponer ideas · la respuesta no sirvió"))
+        _registrar(gettext("proponer ideas · la respuesta no sirvió"), entregado=False)
         raise
     _registrar(gettext("proponer %(n)s idea(s)", n=len(creadas)))
     c = datos.campana(cliente, campana_id)
@@ -212,7 +279,7 @@ def job_id_sugerir_biblioteca(cliente, campana_id):
 def encolar_sugerir_biblioteca(cliente, campana_id):
     return trabajos.encolar(job_id_sugerir_biblioteca(cliente, campana_id), "referentes_sugerir_ia",
                             {"cliente": cliente, "campana_id": int(campana_id)}, cliente=cliente,
-                            duracion_estimada=20, max_intentos=1)
+                            duracion_estimada=20, max_intentos=1, costo_estimado=gastos.estimar("sugerir_ia")["usd"])
 
 
 @registrar("referentes_sugerir_ia")
@@ -266,7 +333,7 @@ def ejecutar_sugerir_biblioteca(tarea):
         if ent or sal:
             usd = costo_real(ent, sal)
             gastos.registrar_seguro(cliente, "sugerir_ia", usd, f"referentes:sugerir_ia:{cid}{ref_sufijo(tarea)}",
-                                    detalle=gettext("respuesta inválida"), proveedor="anthropic",
+                                    detalle=gettext("respuesta inválida"), proveedor="anthropic", entregado=False,
                                     extra={"tokens_entrada": ent, "tokens_salida": sal, "modelo": modelo_actual()})
         raise
     usd = costo_real(ent, sal)
@@ -287,13 +354,14 @@ def encolar_qa(cliente, cp_id):
     """El mismo trabajo que encola la periódica; lo usa «Repetir QA» desde la
     bandeja. Solo QA (centavos de visión), nunca generación."""
     return trabajos.encolar(job_id_qa(cliente, cp_id), "sprint_qa_pieza", {"cliente": cliente, "cp_id": cp_id},
-                            cliente=cliente, duracion_estimada=30, max_intentos=3)
+                            cliente=cliente, duracion_estimada=30, max_intentos=3,
+                            costo_estimado=gastos.TARIFAS["revision_pieza"])
 
 
-def _gasto_qa(cliente, referencia, ent, sal, detalle):
+def _gasto_qa(cliente, referencia, ent, sal, detalle, entregado=True):
     if ent or sal:
         gastos.registrar_seguro(cliente, "revision", costo_real(ent, sal), referencia, proveedor="anthropic",
-                                detalle=detalle, extra={"tokens_entrada": ent, "tokens_salida": sal,
+                                detalle=detalle, entregado=entregado, extra={"tokens_entrada": ent, "tokens_salida": sal,
                                                         "modelo": modelo_actual()})
 
 
@@ -316,6 +384,8 @@ def ejecutar_qa_pieza(tarea):
     i = datos.idea(cliente, cp_id)
     if not i or not i.get("cf_id"):
         return gettext("La pieza ya no existe.")
+    if (i.get("qa") or {}).get("veredicto") == "pasa" or (i.get("revision") == "aprobada" and i.get("qa") is not None):
+        return gettext("Esa pieza ya pasó el QA o está aprobada.")
     cf_id = i["cf_id"]
     entry = creative_flow.cargar(cliente).get(cf_id)
     campana = datos.campana(cliente, i["campana_id"])
@@ -329,7 +399,7 @@ def ejecutar_qa_pieza(tarea):
         resultado = dict(qa.evaluar(cliente, i, entry, campana, umbral=umbral))
     except Exception as e:
         _gasto_qa(cliente, referencia, getattr(e, "tokens_entrada", 0) or 0, getattr(e, "tokens_salida", 0) or 0,
-                  gettext("control de calidad · respuesta inválida"))
+                  gettext("control de calidad · respuesta inválida"), entregado=False)
         datos.guardar_qa(cliente, cp_id, cf_id, {"veredicto": "error", "score": None, "checks": {}, "nota": str(e)[:300],
                                                  "cf_id": cf_id})
         raise
@@ -405,10 +475,21 @@ def ejecutar_qa_pendientes(tarea):
     """Periódica (5 min): encola el QA de las piezas listas sin evaluar y avisa
     cuando un lote termina (ninguna pieza pendiente ni generando)."""
     n = 0
+    sin_saldo = set()
     for cliente, cp_id in _piezas_listas_sin_qa():
-        if cola.encolar("sprint_qa_pieza", {"cliente": cliente, "cp_id": cp_id}, cliente=cliente,
-                        job_id=job_id_qa(cliente, cp_id), duracion_estimada=30, max_intentos=3):
-            n += 1
+        # Cobros (spec 2026-10-08 §5.1; revisión final 2026-10-08): el QA cobra
+        # y va por `trabajos.encolar` con su costo, así exige y reserva el
+        # precio de cada pieza. Sin saldo para la siguiente, el proyecto no
+        # recibe más QA en esta vuelta (se reintenta en 5 min, cuando recargue):
+        # encolarlo igual dejaba una tarea en error cada vuelta, o un saldo
+        # negativo por todo el lote.
+        if cliente in sin_saldo:
+            continue
+        try:
+            if encolar_qa(cliente, cp_id):
+                n += 1
+        except SaldoInsuficiente:
+            sin_saldo.add(cliente)
     terminados = 0
     for cliente, sid, nombre in _sprints_con_lote():
         sp = estado.recalcular(cliente, sid)

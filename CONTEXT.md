@@ -183,3 +183,88 @@ Un producto que la persona sacó de circulación con «Archivar» en su ficha, o
 nada, solo deja de salir en la galería (queda en «Archivados») y al elegir producto, salvo donde ya estaba elegido.
 Vuelve con «Desarchivar».
 _Avoid_: eliminado, oculto, inactivo
+
+### Cobros
+
+**Costo**:
+Lo que Creatv le paga al proveedor por una generación; es la fila de la tabla `gasto`, sin cambios. Solo lo ve el
+admin en un proyecto que cobra.
+_Avoid_: precio (es lo que paga el proyecto), gasto (es el nombre de la tabla y de la pantalla)
+
+**Precio**:
+Lo que paga un proyecto que cobra: el costo × el margen, redondeado hacia arriba a la milésima de dólar. Es lo único que
+ve la persona del proyecto, en los botones («≈ US$») y en lo ya gastado.
+_Avoid_: tarifa (es el costo por unidad de un proveedor, `gastos.TARIFAS`)
+
+**Margen**:
+El multiplicador del costo (2,0 por defecto desde 2026-10-09, de 1,00 a 5,00): global en `kv` y propio de un proyecto si el
+admin lo fija; con un plan, el del plan mientras dura el periodo (ver «Precio de miembro»). En inglés, «markup». El margen del primer registro de un gasto queda en el cobro; cambiarlo no recalcula lo
+ya cobrado.
+_Avoid_: comisión, recargo, porcentaje
+
+**Saldo**:
+La suma del libro de movimientos de un proyecto, en milésimas de dólar enteras. Puede quedar negativo (el costo real
+superó al estimado, una anulación de Bold) y entonces no se genera nada que cueste hasta recargar.
+_Avoid_: crédito, créditos (los créditos son los de Higgsfield, del flujo viejo)
+
+**Disponible**:
+El saldo menos las reservas vivas. Es lo que mira el freno antes de aceptar un trabajo; el respaldo del worker mira el
+saldo, no el disponible.
+
+**Reserva**:
+Lo que un trabajo encolado aparta del disponible mientras su tarea está pendiente o en curso (`reserva_saldo`, por
+`job_id`). No se libera a mano: al terminar la tarea, bien o mal, deja de contar.
+
+**Recarga**:
+Un ingreso de saldo: con Wompi o Bold (el cliente paga un checkout o un link y el evento firmado la acredita; Wompi gana si están las dos pasarelas) o manual (el admin). Va en
+dólares enteros, de 10 a 1 000. Lo acreditado son los USD que se eligieron; lo que Bold cobra en pesos queda solo como
+registro.
+_Avoid_: pago (es lo que reporta Bold), compra, depósito
+
+**Cobrar** (el interruptor):
+La casilla por proyecto que decide si el uso se descuenta del saldo. Arranca apagada; prenderla no cobra lo ya
+generado. Un proyecto con «Cobrar» apagado, o sin cuenta de saldo, se comporta como siempre. En inglés, «Charge usage».
+_Avoid_: facturar, activar saldo
+
+**Movimiento**:
+Una fila del libro de un proyecto (`movimiento_saldo`): `recarga`, `cobro`, `reverso`, `no_cobrado` (monto 0, avisa
+que no se cobró una pieza), `ajuste`, `anulacion`, `plan` (acredita la bolsa de un periodo), `incluido` (monto 0, lo que el
+plan regaló) o `vencimiento` (lo que sobró de la bolsa). No se borra ni se edita, salvo el recálculo de un cobro cuando el
+costo de su gasto se corrige.
+_Avoid_: transacción, asiento
+
+**Plan**:
+Una oferta mensual (o anual) que el admin crea en /admin/cobros: precio fijo en dólares enteros, margen de miembro y un tope de
+lo incluido. Se cobra en pesos con Wompi a la TRM del día. Hoy hay uno, «Pro» (US$ 1 000 al mes, anual US$ 10 000), sembrado
+archivado hasta que Daniel lo active. Un proyecto sin plan es **a la carta**. En inglés, «plan».
+_Avoid_: membresía, paquete, licencia
+
+**Suscripción**:
+El vínculo de un proyecto con un plan (`suscripcion`): ciclo, estado (`activa`, `morosa`, `cancelada`, `terminada`), tarjeta o
+Nequi registrada y el precio que la persona aceptó al suscribirse (las renovaciones cobran siempre ese). A lo más una viva por
+proyecto. En inglés, «subscription».
+_Avoid_: contrato, abono
+
+**Periodo**:
+Un mes de plan (`periodo_plan`, `inicio ≤ ahora < fin`): lo abre un pago aprobado (o una activación manual) y guarda la foto
+del plan de ese mes (margen, tope, crédito). Un plan anual paga una vez y abre doce periodos. Mientras la suscripción está
+morosa no hay periodo abierto.
+
+**Bolsa del plan**:
+El crédito del periodo (el precio del plan en milésimas): la parte del saldo que se gasta primero y que **vence** al cerrarse
+el periodo, sin acumularse ni devolverse. No es una cuenta aparte: el saldo propio es `saldo − lo que queda de la bolsa`. En
+la pantalla se llama «saldo del plan»; en inglés, «plan balance».
+_Avoid_: monedero, créditos, cuota
+
+**Incluido**:
+Lo que el plan regala dentro de su tope de costo de proveedor por periodo (ideas, guiones, análisis y revisiones con Claude y la
+transcripción): se anota como `incluido` y no baja el saldo. Pasado el tope se cobra a precio de miembro. En la pantalla del
+cliente se ve en porcentaje, nunca en dólares de costo. En inglés, «included».
+
+**Precio de miembro**:
+El precio con el margen del plan (1,25 el de Pro) frente al margen global a la carta (2,0): rige mientras hay periodo abierto, y
+la diferencia es el «ahorro del periodo» que ve el cliente. En inglés, «member price».
+_Avoid_: descuento (el «descuento del plan» del admin es otra cosa: lo que la bolsa acredita por encima de lo que se pagó ese mes)
+
+**A la carta**:
+Un proyecto sin periodo abierto: paga cada generación de su saldo propio con el margen global. En inglés, «pay-as-you-go».

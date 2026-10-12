@@ -75,7 +75,7 @@ def test_cada_pestana_abre_con_su_encabezado(app):
     assert 'id="btn-traer-referentes"' in cabecera and "panel-cabecera-acciones" in cabecera
 
 
-def test_estados_vacios_con_accion(app):
+def test_estados_vacios_con_accion(app, monkeypatch):
     html = _pagina(app)
     sp, ni, rf = (_pestana(html, t) for t in ("sprints", "nicho", "referentes"))
     # Sprints y Nicho: el botón del encabezado y el formulario de abajo bastan
@@ -84,7 +84,9 @@ def test_estados_vacios_con_accion(app):
     assert 'class="estado-vacio"' in ni and ni.count('data-abrir-detalle="nuevo-estudio"') == 1
     assert 'class="estado-vacio"' in rf and "Todavía no hay referentes" in rf
     # Experimentos (E2): la pestaña es un armazón y su estado vacío llega en el fragmento de resultados, con el botón
-    # para crear el primero; el «Ir a Crear» de la galería vacía vive ahora en «Nuevo experimento».
+    # para crear el primero; el «Ir a Crear» de la galería vacía vive ahora en «Nuevo experimento». Con Meta conectado:
+    # sin Meta la pestaña es solo «Conecta Meta» (2026-10-08, tests/test_experimentos_sin_meta.py).
+    monkeypatch.setattr(app["dashboard"].meta_conexion, "estado", lambda c: {"estado": "conectado", "verificado": True, "detalle": {}})
     ex = app["c"].get("/cliente/acme/experimentos/resultados", headers={"X-Requested-With": "fetch"}).data.decode()
     assert 'class="estado-vacio"' in ex and "Todavía no hay experimentos" in ex
     assert 'href="/cliente/acme/experimentos/nuevo"' in ex[ex.index('class="estado-vacio"'):]

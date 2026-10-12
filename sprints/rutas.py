@@ -16,6 +16,7 @@ from flask import Blueprint, abort, flash, jsonify, redirect, render_template, r
 from flask_babel import gettext
 
 import catalogo_productos
+from cobros import libro
 import creative_flow
 import db
 import doctrina
@@ -29,7 +30,7 @@ from idiomas import N_
 from providers import flowplus_modelos
 from referentes import datos as referentes_datos
 from referentes import sugerir as referentes_sugerir
-from sprints import (archivos, calendario, datos, entrega, estado, ideas, produccion, progreso,
+from sprints import (analisis, archivos, calendario, datos, entrega, estado, ideas, produccion, progreso,
                      revision as revision_mod, tablero)
 from tareas import sprints as tareas_sprints
 
@@ -114,6 +115,12 @@ def _productos(cliente):
     return list(productos_dict.values())
 
 
+@bp.context_processor
+def _precios_sprints():
+    return {"precio_analisis_sprint": gastos.estimar("analizar_referencia")["texto"],
+            "error_analisis_sprint": analisis.error_visible}
+
+
 def contexto(cliente):
     """Lo que necesita _tab_sprints.html. Se llama desde dashboard.ver_cliente."""
     lista = []
@@ -126,6 +133,7 @@ def contexto(cliente):
     inicio, fin = tablero.mes_siguiente(date.today())
     anio = int(inicio[:4])
     return {
+        **_precios_sprints(),
         "sprints_lista": lista,
         "pais_calendario": pais,
         "presets_temporadas": calendario.presets(pais, anio),
@@ -333,6 +341,25 @@ def _productos_planos(cliente):
     return catalogo_productos.listar(cliente, "producto")
 
 
+def _fotos_catalogo_pendientes(cliente, producto, refs):
+    existentes = {r["url"] for r in refs}
+    base = (os.environ.get("R2_PUBLIC_BASE_URL") or "").rstrip("/")
+    carpeta = catalogo_productos.CATEGORIAS["producto"]["carpeta"]
+    nuevas = []
+    for nombre in (producto or {}).get("imagenes") or []:
+        url = f"{base}/clientes/{cliente}/{carpeta}/{producto['id']}/{nombre}"
+        if url not in existentes:
+            nuevas.append((nombre, url))
+            existentes.add(url)
+    return nuevas
+
+
+def _precio_fotos(cliente, producto, refs):
+    n = len(_fotos_catalogo_pendientes(cliente, producto, refs))
+    costo = gastos.estimar("analizar_referencia")["usd"]
+    return {"n": n, "texto": gastos.texto_precio(costo * n if costo is not None else None)}
+
+
 def _campana_tablero(cliente, sp, c, productos_por_id):
     """Lo que la tarjeta y el panel muestran de una campaña."""
     c["progreso"] = progreso.progreso_campana(c)
@@ -340,6 +367,7 @@ def _campana_tablero(cliente, sp, c, productos_por_id):
     c["efectivos"] = datos.efectivos(sp, c)
     c["producto"] = productos_por_id.get(c["catalogo_id"])
     c["referencias_lista"] = datos.referencias(cliente, c["id"])
+    c["fotos_catalogo"] = _precio_fotos(cliente, c["producto"], c["referencias_lista"])
     c["consciencia_nombre"] = doctrina.CONSCIENCIAS_NOMBRE.get(c.get("consciencia") or "")
     return c
 
@@ -515,9 +543,11 @@ def campana_panel(cliente, sid, cid):
         if archivada:
             personas_.append(archivada)
     ya_ids = {(r.get("extra") or {}).get("referente_id") for r in c["referencias_lista"]} - {None}
+    sugerencias_ia = (c.get("extra") or {}).get("sugerencias_ia") or []
+    referentes_ia = referentes_datos.por_ids(cliente, [s.get("referente_id") for s in sugerencias_ia])
     candidatos_ia = []
-    for item in (c.get("extra") or {}).get("sugerencias_ia") or []:
-        ref = referentes_datos.referente(cliente, item.get("referente_id"))
+    for item in sugerencias_ia:
+        ref = referentes_ia.get(item.get("referente_id"))
         if ref and ref["id"] not in ya_ids:
             candidatos_ia.append({**ref, "razon": item.get("razon") or ""})
     familias = sorted(referentes_datos.familias(cliente), key=lambda f: (-int(f.get("n") or 0), f["nombre"]))
@@ -907,7 +937,7 @@ def campana_ver(cliente, sid, cid):
     c["progreso"] = progreso.progreso_campana(c)
     otras = [{"campana": oc, "referencias": datos.referencias(cliente, oc["id"])}
              for oc in sp["campanas"] if oc["id"] != cid]
-    producto = next((p for p in _productos(cliente) if p["id"] == c["catalogo_id"]), None)
+    producto = next((p for p in _productos_planos(cliente) if p["id"] == c["catalogo_id"]), None)
     job_link = tareas_sprints.job_id_link(cliente, cid)
     ya_ids = {(r.get("extra") or {}).get("referente_id") for r in refs} - {None}
     objetivo_restante = max(1, (c.get("referencias_objetivo") or 1) - len(refs))
@@ -921,14 +951,16 @@ def campana_ver(cliente, sid, cid):
     palabra_sugerida = (producto or {}).get("nombre") or ""
     pais_sugerido = proyectos.pais(cliente)
     sugerencias_ia_crudas = (c.get("extra") or {}).get("sugerencias_ia") or []
+    referentes_ia = referentes_datos.por_ids(cliente, [s.get("referente_id") for s in sugerencias_ia_crudas])
     candidatos_ia = []
     for item in sugerencias_ia_crudas:
-        ref = referentes_datos.referente(cliente, item.get("referente_id"))
+        ref = referentes_ia.get(item.get("referente_id"))
         if ref and ref["id"] not in ya_ids:
             candidatos_ia.append({**ref, "razon": item.get("razon") or ""})
     job_sugerir_ia = tareas_sprints.job_id_sugerir_biblioteca(cliente, cid)
     return render_template("campana_referencias.html", cliente=cliente, nombre_proyecto=proyectos.nombre_visible(cliente),
                            sprint=sp, campana=c, referencias=refs, producto=producto, otras_campanas=otras,
+                           fotos_catalogo=_precio_fotos(cliente, producto, refs),
                            intenciones_sprint=datos.INTENCIONES_NOMBRE, cobertura=progreso.cobertura(c, refs),
                            trabajo_link={"job_id": job_link} if trabajos.en_curso(job_link) else None,
                            candidatos_gratis=candidatos_gratis, candidatos_ia=candidatos_ia,
@@ -991,14 +1023,20 @@ def referencias_catalogo(cliente, sid, cid):
     if not producto:
         flash(gettext("El producto de la campaña ya no está en el catálogo."), "error")
         return _volver_campana(cliente, sid, cid)
-    existentes = {r["url"] for r in datos.referencias(cliente, cid)}
-    base = (os.environ.get("R2_PUBLIC_BASE_URL") or "").rstrip("/")
-    carpeta = catalogo_productos.CATEGORIAS["producto"]["carpeta"]
+    faltantes = _fotos_catalogo_pendientes(cliente, producto, datos.referencias(cliente, cid))
+    pedido = request.get_json(silent=True) if request.is_json else request.form
+    try:
+        n_visto = int(str((pedido or {}).get("n_visto", "")))
+    except (ValueError, TypeError):
+        n_visto = None
+    if n_visto != len(faltantes):
+        mensaje = gettext("La cantidad de fotos cambió; revisa el precio antes de traerlas.")
+        if _quiere_json() or request.is_json:
+            return jsonify({"ok": False, "error": mensaje, "n_actual": len(faltantes)}), 409
+        flash(mensaje, "warn")
+        return _volver_campana(cliente, sid, cid)
     nuevas = 0
-    for nombre in producto.get("imagenes") or []:
-        url = f"{base}/clientes/{cliente}/{carpeta}/{producto['id']}/{nombre}"
-        if url in existentes:
-            continue
+    for nombre, url in faltantes:
         descripcion = datos.texto_guardado(cliente, N_("Foto real del producto %(nombre)s, tal como es."),
                                            nombre=producto['nombre'])
         rid = datos.agregar_referencia(cliente, cid, "imagen", url, origen="catalogo", titulo=nombre,
@@ -1145,12 +1183,15 @@ def referencia_quitar(cliente, rid):
 @bp.post("/referencias/<int:rid>/reanalizar")
 def referencia_reanalizar(cliente, rid):
     r = _referencia_o_404(cliente, rid)
+    if trabajos.en_curso(tareas_sprints.job_id_analizar(cliente, rid)):
+        return jsonify({"ok": True}) if _quiere_json() else _volver_campana(cliente, r["sprint_id"], r["campana_id"])
+    libro.exigir(cliente, gastos.estimar("analizar_referencia")["usd"])
     datos.actualizar_referencia(cliente, rid, analisis_estado="pendiente")
     tareas_sprints.encolar_analisis(cliente, rid)
     if _quiere_json():
         return jsonify({"ok": True})
     flash(gettext("Analizando de nuevo."), "ok")
-    return _volver(cliente, r["sprint_id"], r["campana_id"])
+    return _volver_campana(cliente, r["sprint_id"], r["campana_id"])
 
 
 # -------------------------------------------------------------- ideas ---
@@ -1366,10 +1407,13 @@ def lote_estimar(cliente, sid):
     _sprint_o_404(cliente, sid)
     cid = request.args.get("campana_id", type=int)
     try:
-        return jsonify(produccion.estimar(cliente, sid, campana_id=cid, modelo_video=request.args.get("modelo_video"),
-                                          modelo_imagen=request.args.get("modelo_imagen")))
-    except datos.ErrorDatos as e:
-        return jsonify({"ok": False, "error": str(e)}), 400
+        e = produccion.estimar(cliente, sid, campana_id=cid, modelo_video=request.args.get("modelo_video"),
+                               modelo_imagen=request.args.get("modelo_imagen"))
+    except datos.ErrorDatos as ex:
+        return jsonify({"ok": False, "error": str(ex)}), 400
+    # El botón pinta `usd` y `texto`: lo que ve la persona (cobros, spec 2026-10-08 §6).
+    return jsonify({**e, "usd": gastos.precio(e["usd"]), "acumulado_usd": gastos.precio(e["acumulado_usd"]),
+                    "qa_usd": gastos.precio(e["qa_usd"])})
 
 
 @bp.post("/<int:sid>/lote")
@@ -1395,9 +1439,9 @@ def lote(cliente, sid):
         return _volver(cliente, sid)
     texto = gettext("Lote encolado: %(n)s pieza(s), USD %(usd)s estimado. "
                     "Te avisamos por correo al terminar si está configurado.",
-                    n=r['encoladas'], usd=f"{r['usd']:.2f}")
+                    n=r['encoladas'], usd=f"{gastos.precio(r['usd']):.2f}")
     if _quiere_json():
-        return jsonify({"ok": True, "encoladas": r["encoladas"], "omitidas": r["omitidas"], "usd": r["usd"],
+        return jsonify({"ok": True, "encoladas": r["encoladas"], "omitidas": r["omitidas"], "usd": gastos.precio(r["usd"]),
                         "mensaje": texto})
     flash(texto, "ok")
     return _volver(cliente, sid)
@@ -1507,7 +1551,15 @@ def pieza_qa(cliente, cp_id):
             return jsonify({"ok": False, "error": gettext("Esa pieza todavía no está lista para el QA.")}), 400
         flash(gettext("Esa pieza todavía no está lista para el QA."), "error")
         return destino
-    datos.actualizar_idea(cliente, cp_id, qa=None)
+    # Cobros (spec 2026-10-08 §5): sin saldo no se borra el QA anterior; el
+    # manejador común responde. Pide lo mismo que `encolar_qa` va a reservar
+    # (revisión final 2026-10-08), para no borrar el QA y quedarse sin encolar.
+    libro.exigir(cliente, gastos.TARIFAS["revision_pieza"], tipo="revision")
+    if not datos.limpiar_qa_no_aprobada(cliente, cp_id, i["cf_id"]):
+        if _quiere_json():
+            return jsonify({"ok": False, "error": gettext("Esa pieza ya pasó el QA o está aprobada.")}), 409
+        flash(gettext("Esa pieza ya pasó el QA o está aprobada."), "warn")
+        return destino
     ok = tareas_sprints.encolar_qa(cliente, cp_id)
     if _quiere_json():
         return jsonify({"ok": bool(ok), "error": None if ok else gettext("Ya hay un QA en curso para esa pieza.")}), \

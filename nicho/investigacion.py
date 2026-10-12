@@ -382,7 +382,7 @@ Productos (id · plataforma · título · marca · precio · estrellas · reseñ
 
 Responde SOLO con JSON, con TODOS los ids: {{"productos": [{{"id": 12, "relevante": true, "motivo": "..."}}, ...]}}"""
 
-_NOMBRE_IDIOMA = {"sv": "sueco", "es": "español", "en": "inglés", "pt": "portugués", "de": "alemán", "fr": "francés", "it": "italiano",
+_NOMBRE_IDIOMA = {"sv": "sueco", "no": "noruego (bokmål)", "es": "español", "en": "inglés", "pt": "portugués", "de": "alemán", "fr": "francés", "it": "italiano",
                   "nl": "neerlandés", "ja": "japonés"}
 
 

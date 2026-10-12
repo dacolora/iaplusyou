@@ -6,6 +6,7 @@ import pytest
 
 import creative_flow as cf
 import experimentos as ex
+from tests.js_de_pagina import con_script_estatico
 from tests.test_rutas_experimentos import _cliente_admin
 from tests.test_rutas_triple_whale import _conectar, _evaluacion_lista, _sembrar
 from triple_whale import datos, puente
@@ -44,6 +45,7 @@ def test_el_prefill_lleva_el_origen_y_el_formulario_lo_devuelve(app):
     with app["c"].session_transaction() as s:
         assert s["fp_prefill"]["origen_tw"] == f"{eid}:0"
     html = app["c"].get("/cliente/acme").data.decode()
+    html = con_script_estatico(html, 'crear-compositor.js')
     assert 'name="origen_tw"' in html and "prefill.origen_tw" in html
 
 
@@ -59,7 +61,7 @@ def test_crear_desde_la_idea_guarda_el_origen_y_la_pestana_enlaza_la_pieza(app):
     [p] = piezas[0]
     assert p["cf_id"] == cf_id and p["titulo"] == "el florero se quiebra" and p["tipo"] == "video"
     assert p["estado"] == entry["estado"]
-    html = app["c"].get("/cliente/acme/triple-whale/panel").data.decode()
+    html = app["c"].get("/cliente/acme/rendimiento/panel").data.decode()
     assert "Ya se hizo 1 pieza con esta idea" in html and "el florero se quiebra" in html
     assert "Nació de la idea" not in html          # todavía no corre en Meta
 
@@ -92,7 +94,7 @@ def test_el_anuncio_que_nacio_de_una_idea_lo_dice_y_la_idea_muestra_su_veredicto
     creatv = datos.piezas_creatv("acme", ["g1", "p1"])
     assert creatv["g1"]["tw_idea"] == {"evaluacion_id": eid, "idea": 0, "titulo": "Caja que se abre sola"}
     assert set(creatv) == {"g1"}
-    html = app["c"].get("/cliente/acme/triple-whale/panel").data.decode()
+    html = app["c"].get("/cliente/acme/rendimiento/panel").data.decode()
     assert "Nació de la idea «Caja que se abre sola»" in html
     assert "en Meta: Ganador" in html and "Ya se hizo 1 pieza con esta idea" in html
     assert html.count("Nació de la idea") == 1

@@ -128,6 +128,7 @@ def test_lanzar_encola_una_sola_vez_y_valida(app, base_temporal):
     assert len(app["encolados"]) == 1
     t = app["encolados"][0]
     assert t["tipo"] == "exp_lanzar" and t["max_intentos"] == 1 and t["job_id"] == f"acme__exp{eid}__lanzar"
+    assert t["payload"]["activar"] is True   # lanzar crea y activa (Daniel, 2026-10-08)
     assert ex.obtener("acme", eid)["estado"] == "lanzando"
     c.post(f"/cliente/acme/experimentos/{eid}/piezas", data={"pieza_id": clon, "pais": "CO"})   # ya no acepta piezas
     assert len(ex.piezas("acme", eid)) == 2
@@ -244,9 +245,8 @@ def test_reconciliar_lanzando_huerfano(app, base_temporal):
 
 
 def test_ver_cliente_pasa_contexto_experimentos(app, base_temporal, monkeypatch):
-    """C1 (review round 2): ver_cliente debe pasar el contexto de
-    experimentos a la plantilla — probado acá capturando render_template en
-    vez de depender del template de la Task 5 (ese es el xfail de arriba)."""
+    """PND-137: la página entrega solo reglas/correo; fragmento y Nuevo
+    conservan el contexto completo y sus trabajos, sin red."""
     import experimentos as ex
     from meta_ads import campaign as meta_campaign
     d = app["dashboard"]
@@ -267,11 +267,16 @@ def test_ver_cliente_pasa_contexto_experimentos(app, base_temporal, monkeypatch)
     monkeypatch.setattr(d, "render_template", _render)
     r = app["c"].get("/cliente/acme")
     assert r.status_code == 200
+    assert capturado["reglas_defecto_exp"] is d.decisor.REGLAS_DEFECTO
+    assert capturado["correo_notificaciones"] == ""
+    for pesado in ("experimentos", "experimentos_armando", "trabajos_exp", "elegibles_exp", "objetivos_exp"):
+        assert pesado not in capturado
+    capturado.clear()
+    assert app["c"].get("/cliente/acme/experimentos/resultados").status_code == 200
     assert {e["id"] for e in capturado["experimentos"]} == {eid_armando, eid_lanzando}
     assert [e["id"] for e in capturado["experimentos_armando"]] == [eid_armando]
-    # E2: las piezas elegibles (la galería) ya no viajan en la página del proyecto: las pide «Nuevo experimento»
-    # (el hotfix e8d433a las devolvió mientras corría la pestaña vieja).
-    assert "elegibles_exp" not in capturado
+    # El anuncio suelto en cola sí pide las elegibles en el fragmento.
+    assert capturado["elegibles_exp"] == ex.elegibles("acme")
     assert capturado["trabajos_exp"] == {eid_lanzando: {"job_id": job_id}}
     assert capturado["objetivos_exp"] is meta_campaign.OBJETIVOS_VALIDOS_FASE1
     assert capturado["moneda_exp"] == "COP"
@@ -292,9 +297,14 @@ def test_cerrar_rechaza_mientras_esta_lanzando(app, base_temporal, monkeypatch):
     ex.actualizar("acme", eid, estado="lanzando")
     llamado = []
     monkeypatch.setattr(d.lanzador, "cerrar", lambda c, e: llamado.append(True))
+    monkeypatch.setattr(d.trabajos, "en_curso", lambda job_id: True)   # la tarea de lanzar sigue viva
     r = app["c"].post(f"/cliente/acme/experimentos/{eid}/cerrar")
     assert r.status_code == 302 and llamado == []
     assert ex.obtener("acme", eid)["estado"] == "lanzando"
+    # Sin tarea viva (el worker murió) sí se cierra: cerrar pausa en Meta lo que haya (2026-10-08).
+    monkeypatch.setattr(d.trabajos, "en_curso", lambda job_id: False)
+    app["c"].post(f"/cliente/acme/experimentos/{eid}/cerrar")
+    assert llamado == [True]
 
 
 def test_cerrar_experimento_inexistente_no_falla(app, base_temporal):
@@ -479,7 +489,7 @@ def test_probar_crea_reparte_y_encola_en_un_post(app, base_temporal):
     assert e["estado"] == "lanzando" and e["nombre"].startswith("Prueba ") and "3 piezas" in e["nombre"] and "CO, MX" in e["nombre"]
     assert sorted((p["pieza_id"], p["pais"]) for p in e["piezas"]) == sorted([(f_co, "CO"), (clon, "CO"), (clon, "MX"), (img, "MX")])
     assert [t["tipo"] for t in app["encolados"]] == ["exp_lanzar"] and app["encolados"][0]["max_intentos"] == 1
-    assert app["encolados"][0]["payload"] == {"cliente": "acme", "experimento_id": e["id"]}
+    assert app["encolados"][0]["payload"] == {"cliente": "acme", "experimento_id": e["id"], "activar": True}
 
 
 def test_probar_no_deja_nada_si_algo_falla(app, base_temporal):

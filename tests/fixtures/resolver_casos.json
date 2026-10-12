@@ -13,7 +13,7 @@
     "guion": null,
     "idioma_base": "es",
     "marca": {
-     "color": "#7c3aed",
+     "color": null,
      "logo_material_id": null,
      "marca_de_agua": null
     },
@@ -295,7 +295,7 @@
     "guion": null,
     "idioma_base": "es",
     "marca": {
-     "color": "#7c3aed",
+     "color": null,
      "logo_material_id": null,
      "marca_de_agua": null
     },
@@ -577,7 +577,7 @@
     "guion": null,
     "idioma_base": "es",
     "marca": {
-     "color": "#7c3aed",
+     "color": null,
      "logo_material_id": null,
      "marca_de_agua": null
     },
@@ -827,7 +827,7 @@
     "guion": null,
     "idioma_base": "es",
     "marca": {
-     "color": "#7c3aed",
+     "color": null,
      "logo_material_id": null,
      "marca_de_agua": null
     },
@@ -1130,7 +1130,7 @@
     "guion": null,
     "idioma_base": "es",
     "marca": {
-     "color": "#7c3aed",
+     "color": null,
      "logo_material_id": null,
      "marca_de_agua": null
     },
@@ -1359,7 +1359,7 @@
   "guion": null,
   "idioma_base": "es",
   "marca": {
-   "color": "#7c3aed",
+   "color": null,
    "logo_material_id": null,
    "marca_de_agua": null
   },

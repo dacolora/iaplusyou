@@ -203,3 +203,12 @@ def test_investigacion_se_lee_y_actualiza(base_temporal):
     datos.actualizar_investigacion("acme", eid, lambda inv: {**inv, "estado": "buscando"})
     assert datos.investigacion("acme", eid)["estado"] == "buscando"
     assert datos.investigacion("otro", eid) == {}
+
+
+def test_pnd092_id_prefijado_no_duplica_comentario_historico(base_temporal):
+    from nicho import datos
+    eid = datos.crear_estudio("acme", "Estudio")
+    url = "https://reddit.com/r/a/comments/igual/titulo/igual/"
+    assert datos.agregar_comentarios("acme", eid, "reddit", [_c(1, fuente_id="igual", url=url)]) == {"nuevos": 1, "repetidos": 0}
+    assert datos.agregar_comentarios("acme", eid, "reddit", [_c(1, fuente_id="t1_igual", url=url)]) == {"nuevos": 0, "repetidos": 1}
+    assert datos.agregar_comentarios("acme", eid, "reddit", [_c(2, fuente_id="t3_igual", url="https://reddit.com/r/a/comments/igual/titulo/")]) == {"nuevos": 1, "repetidos": 0}

@@ -1,13 +1,20 @@
 """
 Worker de CREATV Adstra: proceso aparte de gunicorn (servicio systemd
-creatv-worker) que ejecuta las tareas de la cola persistente (cola.py) en dos
-carriles (spec 2026-09-28-crear-sin-cola):
+creatv-worker) que ejecuta las tareas de la cola persistente (cola.py) en cuatro
+carriles (spec 2026-09-28-crear-sin-cola; el de lectura, spec 2026-10-08 meta rendimiento):
 
 - **crear**: las generaciones de Crear (`CARRIL_CREAR`) en hasta `HILOS_CREAR`
   hilos a la vez — casi todo su tiempo es esperar al proveedor, y una espera
   colgada (Wan 3.0 llegó a 20 min) ya no deja a las demás en fila. Los lotes de
   Sprints (prioridad < 5) ocupan como mucho `HILOS_LOTE`, así una pieza suelta
   siempre encuentra hilo.
+- **nicho**: las tareas de Nicho que esperan a Apify, Reddit/YouTube o
+  Claude y los barridos de Referentes (`CARRIL_NICHO`), de a una: comparten
+  la RAM de la cuenta de Apify. Sus esperas no ocupan general.
+- **lectura**: la copia de las cuentas de Meta (`CARRIL_LECTURA`, `meta_rend_sincronizar`)
+  en un solo hilo (`HILOS_LECTURA`): la primera copia de una cuenta tarda de 8 a 14 minutos
+  (medido con la API real) y no debe dejar al carril general —lanzar y refrescar
+  experimentos, Triple Whale, tiendas— esperando una hora. Gratis: leer de Meta no cobra.
 - **general**: todo lo demás, de a una y en orden, como siempre (renders con
   1 CPU, Meta, periódicas…).
 
@@ -16,7 +23,9 @@ una tarea, esa tarea vuelve a `pendiente` a los 30 min (recuperar_colgadas) y
 se reintenta — nunca una que este mismo proceso está ejecutando. Al arrancar
 recupera de inmediato lo que quedó en_curso (solo hay un worker: es huérfano
 seguro), y ante SIGINT/SIGTERM deja de repartir, corta las esperas a WaveSpeed
-(pasan la posta a `flowplus_recuperar`) y espera a que terminen los hilos.
+(pasan la posta a `flowplus_recuperar`), y espera a que terminen todos los
+hilos. Nicho y Referentes terminan su tarea y su espera habitual a Apify;
+no se crean puntos de control ni continuaciones nuevas (enmienda 051, 2026-10-08).
 
 Uso: `python worker.py` (carga .env como dashboard.py).
 """
@@ -41,6 +50,7 @@ import idiomas
 import monitoreo
 import registro_app
 import tareas
+from cobros import libro
 from providers import wavespeed_common
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -53,7 +63,9 @@ log = logging.getLogger("creatv.worker")
 # dentro de un mismo tick: los pedidos de las tiendas se sincronizan (y se
 # atribuyen) ANTES de refrescar experimentos, así el snapshot por tienda ve
 # las ventas de este ciclo y no las de hace 2 h; lo mismo Triple Whale.
-PERIODICAS = [("tienda_sync_pedidos_todas", 7200), ("tw_sincronizar_todas", 7200), ("exp_refrescar_todos", 7200),
+PERIODICAS = [("tienda_sync_pedidos_todas", 7200), ("tw_sincronizar_todas", 7200),
+              # Meta rendimiento (spec 2026-10-08 §6): la copia de cada cuenta publicitaria, cada 3 h.
+              ("meta_rend_sincronizar_todas", 10800), ("exp_refrescar_todos", 7200),
               ("exp_decidir_todos", 3600),
               ("exp_avanzar_todos", 600), ("tienda_sync_productos_todas", 21600), ("sprint_qa_pendientes", 300),
               ("materiales_limpiar", 86400),
@@ -62,16 +74,38 @@ PERIODICAS = [("tienda_sync_pedidos_todas", 7200), ("tw_sincronizar_todas", 7200
               ("salidas_limpiar", 86400), ("cola_limpiar", 86400), ("db_respaldar", 86400),
               # Salud (spec 2026-10-01): los errores resueltos viejos no se acumulan.
               ("errores_limpiar", 86400),
+              # Los días de anuncio de Meta se guardan 95 días (spec 2026-10-08 §6).
+              ("meta_rend_limpiar", 86400),
               # Cadena de escenas de Flow Plus (spec 2026-09-30): avanza cada cadena viva
               # cuando su escena en curso termina (gratis; las escenas las cobra Crear).
-              ("cadena_vigilar", 60)]
+              ("cadena_vigilar", 60),
+              # Ganchos de Triple Whale (spec 2026-10-09 §4.5): mueve cada variante viva (gratis; cada clip lo
+              # cobra Crear y el armado y el render son ffmpeg).
+              ("tw_ganchos_vigilar", 60),
+              # Cobros (spec 2026-10-08 §9.3): respaldo del webhook de Bold, pregunta
+              # por las recargas pendientes (gratis: no cobra).
+              ("cobros_verificar_recargas", 600),
+              # Planes (spec 2026-10-09 §7): cierra periodos, abre los pagados y cobra las
+              # renovaciones en Wompi (ingreso, no gasto: no pasa por el saldo).
+              ("planes_renovar", 1800)]
 
 # Carril de Crear: generaciones que casi todo el tiempo esperan al proveedor
 # (también la voz del anuncio hablado, que no debe esperar detrás de un render).
 CARRIL_CREAR = ("flowplus_video", "flowplus_imagen", "flowplus_recuperar", "flowplus_director", "hablado_voz")
+# Un hilo para Nicho y barridos: comparten RAM/corridas de Apify y separados
+# podían recibir 402 por capacidad (enmienda 051, 2026-10-08).
+CARRIL_NICHO = ("nicho_recolectar", "nicho_inv_buscar", "nicho_inv_consultas",
+                "nicho_inv_seleccionar", "nicho_generar_avatares", "nicho_completar_avatares", "referentes_barrer")
 HILOS_CREAR = 4
 HILOS_LOTE = 2
 PRIORIDAD_SUELTA = 5    # flowplus_lanzar.PRIORIDAD_NORMAL: una pieza pedida desde Crear
+
+# Carril de lectura (ruling R16, 2026-10-08): la copia de rendimiento de Meta, UN hilo propio. Las copias de
+# varias cuentas siguen una detrás de otra (los límites de uso de Meta son por usuario y app, no por cuenta), pero
+# ya no ocupan el único hilo general. Las periódicas `meta_rend_sincronizar_todas` y `meta_rend_limpiar` son
+# instantáneas y se quedan en el general.
+CARRIL_LECTURA = ("meta_rend_sincronizar",)
+HILOS_LECTURA = 1
 
 # Parada limpia: SIGINT/SIGTERM (systemd manda SIGINT, TimeoutStopSec=600) solo
 # levantan esta bandera; el supervisor deja de repartir y espera a sus hilos.
@@ -129,6 +163,63 @@ def ejecutar(tarea):
 # Se guarda en la entidad de atrás (sesión, swap, anuncio): va en el idioma
 # del proyecto de cada tarea — gettext dentro de idiomas.en_idioma(de_tarea).
 MENSAJE_INTERRUMPIDA = idiomas.N_("Se interrumpió por un reinicio del servidor. Vuelve a intentar.")
+# Cobros (spec 2026-10-08 §5.1): el respaldo que no arranca una tarea que
+# cobra en un proyecto que cobra y no tiene saldo. Se guarda en la tarea y en
+# la entidad de atrás (vía AL_INTERRUMPIR), en el idioma del proyecto.
+MENSAJE_SIN_SALDO = idiomas.N_("Sin saldo: recarga para seguir. No se cobró nada.")
+# Detalle del reverso cuando la tarea entera termina en error (§3.5).
+MOTIVO_TAREA_FALLIDA = idiomas.N_("La tarea falló")
+
+
+def _cliente(tarea):
+    return tarea.get("cliente") or (tarea.get("payload") or {}).get("cliente")
+
+
+def _revertir(tarea, motivo):
+    """Spec 2026-10-08 §3.5: la tarea terminó en error definitivo → reverso de
+    los cobros de su cadena (mismo job_id, desde la primera tarea de la cadena:
+    el job_id se reusa entre corridas y lo ya entregado no se devuelve). En un
+    proyecto que no cobra no hay cobros: solo lee y no escribe nada. Nunca lanza.
+    `motivo` es un msgid: se guarda en el idioma del proyecto."""
+    if not tarea.get("job_id") or not _cliente(tarea):
+        return []
+    try:
+        desde = libro.inicio_de_cadena(tarea)
+        # Solo lectura primero: sin cobros (un proyecto que no cobra, o que
+        # nunca cobró en esta cadena) no se toma el candado de escritura. Un
+        # proyecto que apagó «Cobrar» después de cobrar sí tiene filas: se revierten.
+        if not libro.tiene_cobros(_cliente(tarea), tarea["job_id"], desde_tarea=desde):
+            return []
+        with idiomas.en_idioma(idiomas.de_tarea(tarea)):
+            texto = gettext(motivo)
+        return libro.revertir_trabajo(_cliente(tarea), tarea["job_id"], texto, desde_tarea=desde)
+    except Exception as e:  # noqa: BLE001 — el worker no muere por esto
+        log.error("tarea %s: no se pudieron revertir sus cobros: %s", tarea.get("id"), cola.sin_token(e))
+        return []
+
+
+def _sin_saldo(tarea):
+    """Respaldo (§5.1): True si la tarea no puede arrancar porque cobra, su
+    proyecto cobra, no es continuación de una cadena y el saldo es ≤ 0. En ese
+    caso ya la dejó en error definitivo (sin llamar al proveedor) y corrió el
+    gancho AL_INTERRUMPIR de su tipo para que la entidad de atrás no quede
+    «generando»."""
+    if libro.puede_arrancar({**tarea, "cliente": _cliente(tarea)}, tareas.TIPOS_QUE_COBRAN):
+        return False
+    with idiomas.en_idioma(idiomas.de_tarea(tarea)):
+        mensaje = gettext(MENSAJE_SIN_SALDO)
+    cola.fallar(tarea["id"], mensaje, definitivo=True)
+    # Un reintento (intentos > 1) pudo cobrar en su intento anterior: error definitivo = no se cobra la pieza.
+    _revertir(tarea, MOTIVO_TAREA_FALLIDA)
+    hook = tareas.AL_INTERRUMPIR.get(tarea["tipo"])
+    if hook is not None:
+        try:
+            with idiomas.en_idioma(idiomas.de_tarea(tarea)):
+                hook(tarea, mensaje)
+        except Exception as e:  # noqa: BLE001 — el gancho nunca tumba al worker
+            log.error("tarea %s sin saldo: el gancho de %s falló: %s", tarea["id"], tarea["tipo"], cola.sin_token(e))
+    log.info("tarea %s %s: proyecto sin saldo, no corre", tarea["id"], tarea["tipo"])
+    return True
 
 
 def en_vuelo():
@@ -146,6 +237,8 @@ def recuperar_interrumpidas(minutos):
     Devuelve cuántas tareas tocó recuperar_colgadas (mismo número de antes)."""
     tocadas, interrumpidas = cola.recuperar_colgadas(minutos, excluir=en_vuelo())
     for t in interrumpidas:
+        # Error definitivo: lo que cobró la cadena se devuelve (cobros §3.5), tenga o no gancho.
+        _revertir(t, MENSAJE_INTERRUMPIDA)
         hook = tareas.AL_INTERRUMPIR.get(t["tipo"])
         if hook is None:
             continue
@@ -164,7 +257,12 @@ def _correr(tarea):
     quedan). Nunca lanza: el worker no muere por una tarea."""
     log.info("tarea %s %s (intento %s) job=%s", tarea["id"], tarea["tipo"], tarea["intentos"], tarea["job_id"])
     try:
-        resultado = ejecutar(tarea)
+        if _sin_saldo(tarea):
+            return
+        # El cobro al cliente (gastos.registrar → cobros.libro.cobrar_gasto) anota
+        # tarea_id y job_id de este contexto; cada hilo tiene el suyo.
+        with libro.en_trabajo(tarea["id"], tarea["job_id"]):
+            resultado = ejecutar(tarea)
         if isinstance(resultado, tareas.Continuar):
             nueva = _terminar_y_encolar(tarea, resultado)
             log.info("tarea %s hecha; sigue en la tarea %s (%s)", tarea["id"], nueva, resultado.tipo)
@@ -179,7 +277,8 @@ def _correr(tarea):
         monitoreo.registrar_excepcion(e, "worker", ruta=tarea["tipo"], cliente=tarea.get("cliente"))
         log.error("tarea %s falló: %s\n%s", tarea["id"], cola.sin_token(e), cola.sin_token(traceback.format_exc()),
                   extra={"sin_monitoreo": True})
-        cola.fallar(tarea["id"], f"{type(e).__name__}: {e}")
+        if cola.fallar(tarea["id"], f"{type(e).__name__}: {e}") == "error":
+            _revertir(tarea, MOTIVO_TAREA_FALLIDA)
 
 
 class ContinuacionPerdida(RuntimeError):
@@ -197,14 +296,17 @@ def _terminar_y_encolar(tarea, siguiente):
     for intento in range(4):
         try:
             return cola.terminar_y_encolar(tarea["id"], siguiente.mensaje, {
-                "tipo": siguiente.tipo, "payload": siguiente.payload, "ejecutar_desde": siguiente.ejecutar_desde})
+                "tipo": siguiente.tipo, "payload": siguiente.payload, "ejecutar_desde": siguiente.ejecutar_desde,
+                "max_intentos": getattr(siguiente, "max_intentos", None)})
         except Exception as e:  # noqa: BLE001
             ultimo = e
             time.sleep(1 + intento)
     # Este hilo ya salió de ejecutar (y de su idioma): lo que se guarda va en el del proyecto.
     with idiomas.en_idioma(idiomas.de_tarea(tarea)):
-        cola.fallar(tarea["id"], gettext("No se pudo encolar la continuación (%(error)s)",
-                                         error=f"{type(ultimo).__name__}: {ultimo}"))
+        estado = cola.fallar(tarea["id"], gettext("No se pudo encolar la continuación (%(error)s)",
+                                                  error=f"{type(ultimo).__name__}: {ultimo}"))
+    if estado == "error":
+        _revertir(tarea, MOTIVO_TAREA_FALLIDA)
     hook = tareas.AL_INTERRUMPIR.get(tarea["tipo"])
     if hook is not None:
         try:
@@ -261,7 +363,9 @@ def _ocupados():
     crear = [v for v in vuelo if v["carril"] == "crear"]
     lotes = [v for v in crear if v["prioridad"] < PRIORIDAD_SUELTA]
     general = [v for v in vuelo if v["carril"] == "general"]
-    return len(crear), len(lotes), len(general)
+    nicho = [v for v in vuelo if v["carril"] == "nicho"]
+    lectura = [v for v in vuelo if v["carril"] == "lectura"]
+    return len(crear), len(lotes), len(general), len(nicho), len(lectura)
 
 
 def repartir():
@@ -273,7 +377,7 @@ def repartir():
     encolar_periodicas()
     arrancadas = 0
     while not debe_parar():
-        crear, lotes, _ = _ocupados()
+        crear, lotes, _, _, _ = _ocupados()
         if crear >= HILOS_CREAR:
             break
         tarea = cola.reclamar(tipos=CARRIL_CREAR, prioridad_min=PRIORIDAD_SUELTA if lotes >= HILOS_LOTE else None)
@@ -282,8 +386,16 @@ def repartir():
         if not _lanzar(tarea, "crear"):
             break
         arrancadas += 1
+    if not debe_parar() and _ocupados()[3] == 0:
+        tarea = cola.reclamar(tipos=CARRIL_NICHO)
+        if tarea is not None and _lanzar(tarea, "nicho"):
+            arrancadas += 1
+    if not debe_parar() and _ocupados()[4] < HILOS_LECTURA:
+        tarea = cola.reclamar(tipos=CARRIL_LECTURA)
+        if tarea is not None and _lanzar(tarea, "lectura"):
+            arrancadas += 1
     if not debe_parar() and _ocupados()[2] == 0:
-        tarea = cola.reclamar(excluir_tipos=CARRIL_CREAR)
+        tarea = cola.reclamar(excluir_tipos=tuple(CARRIL_CREAR) + tuple(CARRIL_NICHO) + tuple(CARRIL_LECTURA))
         if tarea is not None and _lanzar(tarea, "general"):
             arrancadas += 1
     return arrancadas

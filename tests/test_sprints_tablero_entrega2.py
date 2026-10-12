@@ -195,6 +195,8 @@ def test_reintentar_regenerar_y_qa_por_fetch(con_ideas, monkeypatch, tmp_path):
     r = c.post(f"/cliente/acme/sprints/ideas/{iv}/regenerar", headers=H)
     assert r.status_code == 400 and r.get_json()["error"] == "No se puede."
     monkeypatch.setattr(rutas.tareas_sprints, "encolar_qa", lambda cliente, cp: True)
+    # PND-088: repetir por fetch corresponde a una pieza que no pasó el QA.
+    datos.actualizar_idea("acme", iv, qa={"veredicto": "no_pasa"})
     assert c.post(f"/cliente/acme/sprints/ideas/{iv}/qa", headers=H).get_json()["ok"]
     r = c.post(f"/cliente/acme/sprints/ideas/{iv}/regenerar", data={"volver": "panel"})
     assert r.headers["Location"].endswith(f"/sprints/{sid}")    # error: vuelve al tablero como antes

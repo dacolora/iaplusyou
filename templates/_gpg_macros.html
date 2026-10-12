@@ -37,7 +37,13 @@
       <select name="ref_activo_{{ i }}" aria-label="{{ _('Activo del Catálogo para Image %(n)s', n=i) }}">
         <option value="">{{ _('Por crear (lo describo)') }}</option>
         {% for t, n in (('personaje', _('Personajes')), ('entorno', _('Entornos')), ('producto', _('Productos'))) %}
+        {% if t == 'producto' %}
+        {% for grupo in activos[t]|agrupar_por_producto %}
+        <optgroup label="{{ n }} · {{ grupo[0].nombre_producto or grupo[0].nombre }}">{% for a in grupo %}<option value="{{ a.id }}" {% if r.activo_id == a.id %}selected{% endif %}>{{ a.nombre }}</option>{% endfor %}</optgroup>
+        {% endfor %}
+        {% else %}
         <optgroup label="{{ n }}">{% for a in activos[t] %}<option value="{{ a.id }}" {% if r.activo_id == a.id %}selected{% endif %}>{{ a.nombre }}</option>{% endfor %}</optgroup>
+        {% endif %}
         {% endfor %}
       </select>
       <input type="text" name="ref_desc_{{ i }}" maxlength="600" value="{{ r.descripcion if r.tipo and not r.activo_id else '' }}"

@@ -1,0 +1,321 @@
+{# Secciones de Triple Whale que pinta la pestaña Rendimiento (spec 2026-10-09 §5): se movieron tal cual desde el
+   panel de la pestaña Triple Whale (_tw_panel.html, jubilado el 2026-10-09 con su pestaña). Solo macros, sin <script>
+   (el JS vive en _tab_rendimiento.html). Cada macro recibe `tw` (triple_whale.panel.contexto) y
+   `cliente`; arma dentro lo que antes eran variables de la plantilla (moneda, ev, cuenta, la tienda del alcance) y
+   sus diccionarios traducidos (un {% set %} de módulo en una plantilla importada se cachea en un idioma, skill idioma).
+   Rendimiento las llama en el orden del spec: copias, gasto_compartido, alertas (con las de las dos fuentes),
+   tiles_anuncios (encima de la galería única de «Tus anuncios», que pinta _rend_panel.html desde E2 tarea 4), ia
+   («Lo que hace ganar en tu cuenta» de Triple Whale: recibe `r.ia`, no `tw`) y, después de
+   Campañas y conjuntos, resto (reparto, productos, «Ver como tabla»). «Evaluar con IA», «Cómo mejorarlo» y el lote
+   postean a las rutas de la pestaña (pestana_rendimiento/rutas.py) con sus `params`. #}
+{% import "_componentes.html" as cx %}
+
+{#- Los errores de copia de las tiendas del alcance. La barra de las copias en curso la pinta _rend_panel.html: una sola
+    para las dos fuentes (`r.copias_vivas`, revisión final de E1). -#}
+{% macro copias(tw, cliente) -%}
+{% for t in tw.en_alcance %}
+{% if t.estado == 'error' and t.error %}
+<p class="tag-error">{% if tw.varias_tiendas %}{{ _('La última copia de %(tienda)s falló: %(error)s', tienda=t.nombre, error=t.error) }}{% else %}{{ _('La última copia falló: %(error)s', error=t.error) }}{% endif %}</p>
+{% endif %}
+{% set resumen_sync = (t.extra or {}).get('ultimo_resumen') or {} %}
+{% if resumen_sync.get('fallos') %}
+<p class="tag-advertencia tw-aviso">{% if tw.varias_tiendas %}{{ _('Triple Whale no aceptó la consulta de %(partes)s en %(tienda)s. El resto de las métricas sí llegó.', partes=resumen_sync.fallos.keys() | join(', '), tienda=t.nombre) }}{% else %}{{ _('Triple Whale no aceptó la consulta de: %(partes)s. El resto de las métricas sí llegó.', partes=resumen_sync.fallos.keys() | join(', ')) }}{% endif %}</p>
+{% endif %}
+{% endfor %}
+{%- endmacro %}
+
+{#- La nota de cuenta compartida (gasto_duplicado del alcance que se mira; viendo una tienda, con su segunda frase). -#}
+{% macro gasto_compartido(tw) -%}
+{% if tw.gasto_duplicado > 0 %}
+<p class="tag-advertencia tw-aviso">{{ _('Estas tiendas comparten cuenta publicitaria: el gasto de cada tienda incluye anuncios de los otros países. «Todas» lo cuenta una sola vez.') }}{% if tw.tienda_actual %} {{ _('Aquí el ROAS de cada anuncio solo cuenta las ventas de esta tienda.') }}{% endif %}</p>
+{% endif %}
+{%- endmacro %}
+
+{#- «Lo que necesita tu atención»: `lista` = las alertas de evaluacion.alertas ({nivel, texto}). -#}
+{% macro alertas(lista) -%}
+{% set nombres_nivel = {"alta": _("alta"), "media": _("media"), "bien": _("bien")} %}
+{% if lista %}
+<section class="tb-seccion">
+  <div class="tb-seccion-cab"><h3>{{ _('Lo que necesita tu atención') }}</h3></div>
+  <ul class="tb-alertas">
+    {% for a in lista %}
+    <li class="tb-alerta tb-alerta-{{ a.nivel }}">
+      <span class="tb-alerta-nivel">{{ nombres_nivel.get(a.nivel, a.nivel) }}</span>
+      <span class="tb-alerta-texto">{{ a.texto }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+{%- endmacro %}
+
+{#- Los tiles de los anuncios de Triple Whale (gasto, ingresos atribuidos, ROAS del Pixel, costo por venta, CTR, gancho).
+    Desde Rendimiento E2 (tarea 4) «Tus anuncios» es UNA galería con las dos fuentes y la pinta _rend_panel.html; estos
+    tiles van encima solo cuando el alcance es solo Triple Whale (con Meta o mezcla describirían solo una parte). -#}
+{% macro tiles_anuncios(tw) -%}
+{% set moneda = tw.moneda %}
+{% set ev = tw.ev %}
+{% set m = ev.cuenta.m %}
+<div class="tb-tiles">
+  <div class="kpi-tile"><span>{{ _('Gasto') }}</span><strong>{{ m.gasto | dinero(moneda) }}</strong><small>{{ _('%(n)s impresiones', n=m.impresiones | tw_num) }}</small></div>
+  <div class="kpi-tile" title="{{ _('Ingresos que el Triple Pixel atribuye a los anuncios con el modelo y la ventana elegidos') }}"><span>{{ _('Ingresos atribuidos') }}</span><strong>{{ m.ingresos | dinero(moneda) }}</strong><small>{{ _('%(n)s pedidos', n=m.pedidos | tw_num(1)) }}</small></div>
+  <div class="kpi-tile"><span>{{ _('ROAS (Pixel)') }}</span>{% if m.roas %}<strong>{{ m.roas | roas }}×</strong>{% else %}<strong class="tb-sin-dato">—</strong>{% endif %}<small>{{ _('meta %(meta)s×', meta=ev.meta_roas | roas) }}</small></div>
+  <div class="kpi-tile"><span>{{ _('Costo por venta') }}</span><strong>{% if m.cpa %}{{ m.cpa | dinero(moneda) }}{% else %}—{% endif %}</strong><small>{{ _('gasto / pedidos atribuidos') }}</small></div>
+  <div class="kpi-tile"><span>CTR</span><strong>{{ m.ctr | tw_pct(2, false) }}</strong><small>{{ _('CPM %(cpm)s', cpm=(m.cpm | dinero(moneda)) if m.cpm else '—') }}</small></div>
+  <div class="kpi-tile" title="{{ _('Gancho: vistas de 3 segundos / impresiones. Retención: ThruPlays / vistas de 3 segundos.') }}"><span>{{ _('Gancho · retención') }}</span><strong>{{ m.gancho | tw_pct(0) }}</strong><small>{{ _('retención %(r)s', r=m.retencion | tw_pct(0)) }}</small></div>
+</div>
+{%- endmacro %}
+
+{#- «Lo que hace ganar en tu cuenta» (Evaluar con IA de Triple Whale, cobra con el precio a la vista). `ia`: el de
+    pestana_rendimiento.panel._ia (el formulario de la parte Triple Whale del alcance, las evaluaciones y la barra).
+    `params`: los de la pestaña (entrada, dias, canal), los mismos con los que la ruta `rendimiento.evaluar` vuelve a
+    armar la muestra que se cobra. La evaluación de las cuentas de Meta es otra sección (`_meta_evaluar.html`, Meta
+    rendimiento E2): los números de Triple Whale y los del Pixel de Meta no van juntos en un prompt. -#}
+{% macro ia(ia, cliente, params) -%}
+{%- set clases_veredicto = {"ganador": "tag-en-uso", "prometedor": "tag-en-curso", "en_prueba": "", "perdedor": "tag-descartado", "sin_datos": "tag-advertencia"} -%}
+{% set actual = ia.tienda_actual %}
+<section class="tb-seccion" id="tw-ia">
+  <div class="tb-seccion-cab"><h3>{{ _('Lo que hace ganar en tu cuenta') }}</h3></div>
+  <p class="vacio">{{ _('Claude mira tus ganadores y tus perdedores (imagen, texto y números), explica qué patrón se repite y propone anuncios nuevos basados en lo que ya vende. No genera nada: cada idea llega a Crear para que decidas.') }}</p>
+  {% if ia.mixta %}<p class="vacio">{{ _('La evaluación con IA mira los anuncios de tus tiendas en Triple Whale.') }}</p>{% endif %}
+  {% if ia.job_evaluar %}
+  <div class="tw-progreso">
+    <div class="barra-progreso" id="tw-evaluar-{{ cliente }}" data-poll-job="{{ ia.job_evaluar }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
+    <div class="progreso-texto">{{ _('Evaluando con IA…') }}</div>
+  </div>
+  {% elif ia.formularios %}
+  {% for f in ia.formularios %}
+  {% set precio = f.estimado.texto if f.estimado else '' %}
+  {% set n = f.muestra | length %}
+  {% set confirmar = _('¿Evaluar %(n)s anuncio(s) con IA? Costo: %(precio)s', n=n, precio=precio) %}
+  {% set boton = _('Evaluar %(n)s anuncio(s) con IA · %(precio)s', n=n, precio=precio) %}
+  <form method="post" action="{{ url_for('rendimiento.evaluar', cliente=cliente) }}" class="tw-evaluar" data-confirmar="{{ confirmar }}">
+    <input type="hidden" name="fuente" value="{{ f.fuente }}">
+    <input type="hidden" name="entrada" value="{{ params.entrada }}">
+    <input type="hidden" name="dias" value="{{ params.dias }}">
+    <input type="hidden" name="canal" value="{{ params.canal or '' }}">
+    {#- G3 (revisión final de Rendimiento E2, 2026-10-10; la guarda E2-R6 de la evaluación de Meta): cuántos anuncios
+        mostró el botón y el PRECIO que vio la persona (`usd_precio`, con el margen; None si el margen no se pudo leer:
+        entonces el botón no se puede pedir). La ruta los compara con lo que calcula al llegar. -#}
+    {% set precio_visto = f.estimado.usd_precio if f.estimado else none %}
+    <input type="hidden" name="n" value="{{ n }}">
+    <input type="hidden" name="precio_visto" value="{{ '' if precio_visto is none else precio_visto }}">
+    <button type="submit" class="btn-generar btn-sm"{% if precio_visto is none %} disabled{% endif %}>{{ boton }}</button>
+  </form>
+  {% endfor %}
+  {% if actual and ia.gasto_duplicado > 0 %}
+  <p class="tag-advertencia tw-aviso">{{ _('Esta tienda comparte cuenta publicitaria: para evaluar anuncios conviene «Todas las tiendas».') }}</p>
+  {% endif %}
+  {% else %}
+  <p class="vacio">{{ _('Hacen falta al menos dos anuncios con datos en este periodo para evaluar con IA.') }}</p>
+  {% endif %}
+
+  {% set fallida = (ia.evaluaciones | selectattr('estado', 'equalto', 'error') | first) if ia.evaluaciones else none %}
+  {% if fallida and (not ia.ultima_lista or fallida.id > ia.ultima_lista.id) %}
+  <p class="tag-error">{% if fallida.alcance %}{{ _('La última evaluación (%(alcance)s) falló: %(error)s', alcance=fallida.alcance, error=fallida.error or '—') }}{% else %}{{ _('La última evaluación falló: %(error)s', error=fallida.error or '—') }}{% endif %}</p>
+  {% endif %}
+
+  {% set e = ia.ultima_lista %}
+  {% if e %}
+  {% set r = e.resultado %}
+  {% set por_ref = {} %}{% for a in e.anuncios %}{% set _x = por_ref.update({a.ref: a}) %}{% endfor %}
+  <div class="tw-eval">
+    <p class="tw-eval-cab"><small>{% if e.alcance %}{{ _('Evaluación de %(alcance)s del %(desde)s al %(hasta)s · %(precio)s', alcance=e.alcance, desde=e.desde, hasta=e.hasta, precio=(e.usd | cobrado('tw_eval:' ~ e.id)) | usd) }}{% else %}{{ _('Evaluación del %(desde)s al %(hasta)s · %(precio)s', desde=e.desde, hasta=e.hasta, precio=(e.usd | cobrado('tw_eval:' ~ e.id)) | usd) }}{% endif %}</small></p>
+    {% if r.resumen %}<p class="tw-eval-resumen">{{ r.resumen }}</p>{% endif %}
+    <div class="tw-patrones">
+      {% for titulo, lista in [(_('Lo que hace ganar'), r.patrones_ganadores), (_('Lo que hace perder'), r.patrones_perdedores)] %}
+      {% if lista %}
+      <div>
+        <h4>{{ titulo }}</h4>
+        <ul>
+          {% for p in lista %}
+          <li>{{ p.patron }}{% if p.anuncios %} <small class="vacio">({% for ref in p.anuncios %}{{ (por_ref.get(ref) or {}).get('nombre') or ref }}{% if not loop.last %}, {% endif %}{% endfor %})</small>{% endif %}</li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+      {% endfor %}
+    </div>
+
+    {% if r.ideas %}
+    <h4>{{ _('Anuncios nuevos para probar') }}</h4>
+    <div class="tw-ideas">
+      {% for idea in r.ideas %}
+      <article class="tw-idea">
+        <strong>{{ idea.titulo }}</strong>
+        {% if idea.basada_en %}{% set nombres = [] %}{% for ref in idea.basada_en %}{% set _x = nombres.append((por_ref.get(ref) or {}).get('nombre') or ref) %}{% endfor %}<small class="vacio">{{ _('Basada en: %(anuncios)s', anuncios=nombres | join(', ')) }}</small>{% endif %}
+        {% if idea.producto %}<small class="tag-estado tag-en-uso">{{ _('Producto: %(p)s', p=idea.producto) }}</small>{% endif %}
+        {% if idea.por_que %}<p>{{ idea.por_que }}</p>{% endif %}
+        {% set ang = idea.angulo or {} %}
+        {% if ang.promesa or ang.gancho %}
+        <dl class="tw-angulo">
+          {% if ang.gancho %}<dt>{{ _('Gancho') }}</dt><dd>{{ ang.gancho }}</dd>{% endif %}
+          {% if ang.promesa %}<dt>{{ _('Promesa') }}</dt><dd>{{ ang.promesa }}</dd>{% endif %}
+          {% if ang.audiencia %}<dt>{{ _('Para quién') }}</dt><dd>{{ ang.audiencia }}</dd>{% endif %}
+        </dl>
+        {% endif %}
+        {% if idea.escena %}<p class="tw-escena">{{ idea.escena }}</p>{% endif %}
+        <details><summary>{{ _('Prompt para el video') }}</summary><p class="tw-prompt">{{ idea.prompt }}</p></details>
+        <form method="post" action="{{ url_for('triple_whale.idea_crear', cliente=cliente, eid=e.id, indice=loop.index0) }}">
+          <button type="submit" class="btn-sm">{{ _('Llevar a Crear →') }}</button>
+        </form>
+        {% set hechas = (e.piezas_por_idea or {}).get(loop.index0) or [] %}
+        {% if hechas %}
+        <p class="tw-idea-hechas"><small>{{ ngettext('Ya se hizo %(n)s pieza con esta idea:', 'Ya se hicieron %(n)s piezas con esta idea:', hechas | length, n=hechas | length) }}</small></p>
+        <ul class="tw-idea-piezas">
+          {% for p in hechas %}
+          <li><a href="#creativeflowplus">{{ p.titulo }}</a> · {{ ia.etiquetas_pieza.get(p.estado, p.estado) | traducir }}{% if p.anuncio %} · <span class="tag-estado {{ clases_veredicto.get(p.anuncio.veredicto, '') }}">{{ _('en Meta: %(v)s', v=ia.etiquetas_veredicto.get(p.anuncio.veredicto, p.anuncio.veredicto) | traducir) }}</span>{% endif %}</li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+      </article>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <h4>{{ _('Anuncio por anuncio') }}</h4>
+    <div class="tw-analizados">
+      {% for a in e.anuncios %}
+      {% set cl = (r.anuncios or {}).get(a.ref) or {} %}
+      <article class="tw-analizado">
+        {% if a.medio and a.medio.imagen %}<img src="{{ a.medio.imagen }}" alt="" loading="lazy" referrerpolicy="no-referrer">{% endif %}
+        <div>
+          <strong>{{ a.nombre }}</strong>
+          <span class="tag-estado {{ clases_veredicto.get(a.veredicto, '') }}">{{ ia.etiquetas_veredicto.get(a.veredicto, a.veredicto) | traducir }}</span>
+          {% if a.visual == 'fotogramas' %}<small class="vacio">{{ _('Claude vio los fotogramas del video') }}</small>{% elif not a.visual and not (a.medio and a.medio.imagen) %}<small class="vacio">{{ _('Sin imagen: Claude juzgó por texto y números') }}</small>{% endif %}
+          {% if cl.por_que %}<p>{{ cl.por_que }}</p>{% endif %}
+          {% if cl.gancho %}<p><small>{{ _('Gancho: %(g)s', g=cl.gancho) }}</small></p>{% endif %}
+          {% if cl.formato %}<p><small>{{ _('Formato: %(f)s', f=cl.formato) }}</small></p>{% endif %}
+          {% if a.medio and a.medio.imagen and a.veredicto in ('ganador', 'prometedor') %}
+          <form method="post" action="{{ url_for('triple_whale.a_referente', cliente=cliente, eid=e.id, ref=a.ref) }}">
+            <button type="submit" class="btn-xs">{{ _('Guardar en Referentes') }}</button>
+          </form>
+          {% endif %}
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+</section>
+{%- endmacro %}
+
+{#- «Dónde se va el gasto», «Lo que más se vende» y «Ver como tabla» (con Pausar/Activar de las piezas de Creatv). -#}
+{% macro resto(tw, cliente) -%}
+{%- set clases_veredicto = {"ganador": "tag-en-uso", "prometedor": "tag-en-curso", "en_prueba": "", "perdedor": "tag-descartado", "sin_datos": "tag-advertencia"} -%}
+{% set moneda = tw.moneda %}
+{% set ev = tw.ev %}
+{% set cuenta = ev.cuenta %}
+{# ---------- reparto por veredicto y por canal ---------- #}
+<section class="tb-seccion">
+  <div class="tb-seccion-cab"><h3>{{ _('Dónde se va el gasto') }}</h3></div>
+  <div class="tw-reparto">
+    {% for v in tw.veredictos %}
+    <div class="tw-reparto-item">
+      <span class="tag-estado {{ clases_veredicto[v] }}">{{ tw.etiquetas_veredicto[v] | traducir }}</span>
+      <strong>{{ ev.conteo[v] }}</strong>
+      <small>{{ _('%(pct)s del gasto', pct=cuenta.pct_gasto[v] | tw_pct(0)) }}</small>
+    </div>
+    {% endfor %}
+  </div>
+  {% if cuenta.canales | length > 1 %}
+  <div class="tw-tabla-scroll">
+    <table class="tw-tabla">
+      <thead><tr><th>{{ _('Canal') }}</th><th>{{ _('Gasto') }}</th><th>{{ _('%% del gasto') }}</th><th>{{ _('Pedidos') }}</th><th>{{ _('Ingresos') }}</th><th>ROAS</th></tr></thead>
+      <tbody>
+        {% for k in cuenta.canales %}
+        <tr><td>{{ k.canal | tw_canal }}</td><td>{{ k.gasto | dinero(moneda) }}</td><td>{{ k.pct_gasto | tw_pct(0) }}</td><td>{{ k.pedidos | tw_num(1) }}</td><td>{{ k.ingresos | dinero(moneda) }}</td><td>{% if k.roas %}{{ k.roas | roas }}×{% else %}—{% endif %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+  {% if not ev.hay_ventas %}<p class="vacio">{{ _('Sin pedidos atribuidos en el periodo: los veredictos se apoyan solo en el tráfico (gancho, retención, clic), así que no hay ganadores ni perdedores todavía.') }}</p>{% endif %}
+</section>
+
+{# ---------- lo que más se vende ---------- #}
+{% if tw.productos %}
+<section class="tb-seccion">
+  <div class="tb-seccion-cab"><h3>{{ _('Lo que más se vende') }}</h3><small class="vacio">{{ _('Según los pedidos de la tienda en Triple Whale; es el producto que conviene empujar en los anuncios nuevos.') }}</small></div>
+  <div class="tw-tabla-scroll">
+    <table class="tw-tabla">
+      <thead><tr><th>{{ _('Producto') }}</th><th>{{ _('Ingresos') }}</th><th>{{ _('%% de la tienda') }}</th><th>{{ _('Pedidos') }}</th><th>{{ _('Unidades') }}</th>{% if tw.dias %}<th>{{ _('vs. periodo anterior') }}</th>{% endif %}</tr></thead>
+      <tbody>
+        {% for p in tw.productos %}
+        <tr>
+          <td class="tw-nombre">
+            <strong>{{ p.nombre or p.sku or p.producto_id }}</strong>
+            {% if p.sku and p.nombre %}<small>{{ p.sku }}</small>{% endif %}
+            {% if p.catalogo %}<small><a href="#catalogo" data-ir-tab="catalogo">{{ _('En tu catálogo: %(nombre)s', nombre=p.catalogo.nombre) }}</a></small>{% endif %}
+          </td>
+          <td>{{ p.ingresos | dinero(moneda) }}</td>
+          <td>{{ p.pct_ingresos | tw_pct(0) }}</td>
+          <td>{{ p.pedidos | tw_num }}</td>
+          <td>{{ p.unidades | tw_num }}</td>
+          {% if tw.dias %}<td>{{ p.variacion | tw_var or '—' }}</td>{% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+{# ---------- todos los anuncios ---------- #}
+<details class="tw-tabla-detalle" id="tw-cada-anuncio"><summary>{{ _('Ver como tabla') }}</summary>
+<section class="tb-seccion">
+  <div class="tb-seccion-cab"><h3>{{ _('Cada anuncio') }}</h3></div>
+  <div class="tw-filtros" role="group" aria-label="{{ _('Filtrar por veredicto') }}">
+    <button type="button" class="chip activo" data-tw-filtro="">{{ _('Todos') }}</button>
+    {% for v in tw.veredictos %}{% if ev.conteo[v] %}<button type="button" class="chip" data-tw-filtro="{{ v }}">{{ tw.etiquetas_veredicto[v] | traducir }} ({{ ev.conteo[v] }})</button>{% endif %}{% endfor %}
+  </div>
+  <div class="tw-tabla-scroll">
+    <table class="tw-tabla tw-anuncios">
+      <thead><tr>
+        <th>{{ _('Anuncio') }}</th><th>{{ _('Veredicto') }}</th><th>{{ _('Gasto') }}</th><th>{{ _('Pedidos') }}</th>
+        <th>ROAS</th><th>{{ _('Costo por venta') }}</th><th>CTR</th><th>{{ _('Gancho') }}</th><th>{{ _('Retención') }}</th>
+        <th title="{{ _('Visitantes nuevos entre visitantes únicos que el Pixel atribuye al anuncio: TOF, MOF o BOF') }}">NVP</th><th>{{ _('Señales') }}</th>
+      </tr></thead>
+      <tbody>
+        {% for a in tw.anuncios %}
+        {% set am = a.m %}
+        <tr data-veredicto="{{ a.veredicto }}">
+          <td class="tw-nombre">
+            <strong>{{ a.nombre }}</strong>
+            <small>{{ a.canal | tw_canal }}{% if a.campana %} · {{ a.campana }}{% endif %}</small>
+            {% if a.creatv %}<small><a href="#experimentos?exp={{ a.creatv.experimento_id }}">{{ _('Hecho en Creatv · %(exp)s', exp=a.creatv.experimento) }}</a></small>{% endif %}
+            {% if a.idea_origen %}<small class="tw-origen-idea">{{ _('Nació de la idea «%(idea)s» de la evaluación con IA', idea=a.idea_origen.titulo or a.idea_origen.idea + 1) }}</small>{% endif %}
+            {% if a.creatv and a.creatv.estado == 'activo' %}
+            <form method="post" class="tw-accion" action="{{ url_for('triple_whale.pieza_estado', cliente=cliente, ep_id=a.creatv.ep_id, accion='pausar') }}"
+                  data-confirmar="{{ _('¿Pausar «%(nombre)s» en Meta? Deja de gastar hasta que lo actives.', nombre=a.nombre) }}">
+              <button type="submit" class="btn-xs">{{ _('Pausar en Meta') }}</button>
+            </form>
+            {% elif a.creatv and a.creatv.estado == 'pausado' %}
+            <form method="post" class="tw-accion" action="{{ url_for('triple_whale.pieza_estado', cliente=cliente, ep_id=a.creatv.ep_id, accion='activar') }}"
+                  data-confirmar="{{ _('¿Activar «%(nombre)s» en Meta? Vuelve a gastar presupuesto.', nombre=a.nombre) }}">
+              <button type="submit" class="btn-xs">{{ _('Activar en Meta') }}</button>
+            </form>
+            {% endif %}
+          </td>
+          <td><span class="tag-estado {{ clases_veredicto[a.veredicto] }}" title="{{ a.motivo }}">{{ tw.etiquetas_veredicto[a.veredicto] | traducir }}</span><small class="tw-motivo">{{ a.motivo }}</small></td>
+          <td>{{ am.gasto | dinero(moneda) }}</td>
+          <td>{{ am.pedidos | tw_num(1) }}</td>
+          <td>{% if am.roas %}{{ am.roas | roas }}×{% else %}—{% endif %}</td>
+          <td>{% if am.cpa %}{{ am.cpa | dinero(moneda) }}{% else %}—{% endif %}</td>
+          <td>{{ am.ctr | tw_pct(2, false) }}</td>
+          <td>{{ am.gancho | tw_pct(0) }}</td>
+          <td>{{ am.retencion | tw_pct(0) }}</td>
+          <td>{{ cx.nvp(am.visitantes_nuevos, am.visitantes) }}</td>
+          <td class="tw-senales">
+            {% for p in a.problemas %}<span class="tag-estado tag-descartado" title="{{ tw.problemas[p][1] | traducir }}">{{ tw.problemas[p][0] | traducir }}</span>{% endfor %}
+            {% for f in a.fortalezas %}<span class="tag-estado tag-en-uso">{{ tw.fortalezas[f] | traducir }}</span>{% endfor %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if tw.mas_anuncios %}<p class="vacio">{{ _('Y %(n)s anuncio(s) más con poco gasto que no se muestran.', n=tw.mas_anuncios) }}</p>{% endif %}
+</section>
+</details>
+{%- endmacro %}

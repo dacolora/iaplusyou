@@ -315,7 +315,7 @@ def _texto_visible(html):
 
 
 def _formulario_de_reglas(html, prefijo):
-    ini = html.index('<p class="vacio reglas-intro">', html.index(f'id="{prefijo}-ventana_horas"') - 4000)
+    ini = html.index('<p class="vacio reglas-intro">', max(0, html.index(f'id="{prefijo}-ventana_horas"') - 4000))
     return html[ini:html.index("</fieldset>", html.index(f'id="{prefijo}-n_regeneraciones"')) + len("</fieldset>")]
 
 

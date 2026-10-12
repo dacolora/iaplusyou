@@ -321,7 +321,7 @@ def test_marca_null_toma_la_marca_por_defecto():
     # AttributeError → 500 en el autoguardado).
     doc = cargar("video_basico.json")
     doc["marca"] = None
-    assert d.validar(doc)["marca"] == {"color": "#7c3aed", "logo_material_id": None, "marca_de_agua": None}
+    assert d.validar(doc)["marca"] == {"color": None, "logo_material_id": None, "marca_de_agua": None}
 
 
 def test_logo_material_id_no_positivo_es_documento_invalido():

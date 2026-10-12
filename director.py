@@ -30,7 +30,10 @@ MAX_TOKENS = 4000
 VERSION = 1
 MAX_CARACTERES_PROMPT = 2500
 
-_TOKEN = re.compile(r"\b(Image|Video) (\d+)\b")
+# `Image N` / `Video N`, y la forma pegada `@Image1` de Seedance 2.5 con varias
+# referencias (vía fal): un token que no está en ACTIVOS se rechaza en las dos.
+_TOKEN = re.compile(r"@(?:Image|Video)\d+\b|\b(?:Image|Video) \d+\b")
+_TOKEN_SUELTO = re.compile(r"(?<!@)\bImage (\d+)\b")
 # Revisión final fase 3 (finding 1): con un proyecto en español la orden de
 # idioma ahora permite el español salvo estas excepciones (ver idiomas._ORDENES),
 # pero Claude puede seguir devolviendo el token traducido por su cuenta
@@ -76,11 +79,11 @@ REGLAS
 1. Intención primero: no cambies sujetos, cantidades, producto, lugar, orden de los hechos ni final. Los hechos vienen del texto; de las imágenes solo tomas rasgos visibles.
 2. Planos: exactamente {n_planos} para {duracion} s. Tiempos enteros en segundos, sin huecos: el primero empieza en 0, cada fin es el inicio del siguiente, el último termina en {duracion}.
 3. Cada plano: tamaño de plano ("primer plano", "plano medio", "plano general", "macro"...), UN solo movimiento de cámara elegido por su id de esta lista: {camaras}; la acción concreta (parte del cuerpo, grado, velocidad; movimientos lentos y continuos); y el sonido de ese tramo (fuente + acción + ambiente), sin voces ni música.
-4. Activos: nómbralos siempre por su token y su nombre, p. ej. "Ana (Image 1)". Usa SOLO los tokens de la tabla ACTIVOS; nunca inventes otros. El producto se describe con forma, color, material y logotipo tal cual. Nunca dos personajes desde una misma imagen; sin duplicados.
+4. Activos: nómbralos siempre por su token y su nombre, p. ej. {ejemplo_token}. Usa SOLO los tokens de la tabla ACTIVOS; nunca inventes otros. El producto se describe con forma, color, material y logotipo tal cual. Nunca dos personajes desde una misma imagen; sin duplicados.
 5. Emociones como gestos observables (una sonrisa que crece, hombros que se relajan), nunca adjetivos.
 6. No escribas duración total, formato (9:16), resolución (720p) ni fps: van por API.
 7. Nada de "alta calidad", "8k", "sin deformaciones" ni packs de calidad.
-8. Idioma de los textos: {idioma}. Los tokens (Image N, Video N) siempre en inglés.
+8. Idioma de los textos: {idioma}. Los tokens ({forma_tokens}) siempre en inglés.
 9. planos_b: misma intención y mismos activos; el primer plano usa OTRO movimiento de cámara y otro arranque; diferencia_b lo explica en una frase.
 10. Los planos de cada versión, juntos, no pasan de {max_chars} caracteres.
 11. El sistema antepone «Hard cut.» a cada plano a partir del segundo: no escribas transiciones, fundidos ni disolvencias entre planos.
@@ -110,13 +113,34 @@ _FAMILIAS = {
         "cámara por tramos de tiempo enteros; no vuelvas a describir el producto ni el fondo. Términos de cámara estándar "
         "(push in, pull out, pan, track, orbit). Cierre de sonido que pondrá el sistema: \"{cierre}\".\n\n"
     ),
+    # Seedance 2.5 referencia-a-video (vía fal, 2026-10-09): varias imágenes que
+    # fijan personajes, producto y lugar; ninguna es el primer fotograma.
+    "seedance_ref": (
+        "Eres director de fotografía y guionista de anuncios cortos. Conviertes una idea corta y unas referencias en un plan de "
+        "planos para Seedance 2.5 (referencia-a-video). Las referencias se llaman @Image1, @Image2…: cada una fija un personaje, "
+        "el producto o el lugar, y ninguna es el primer fotograma. Al presentar a alguien o algo, átalo a su referencia "
+        "(Ana@Image1) y nómbralo siempre igual; 2-3 rasgos fijos por sujeto. Describe la acción y la cámara por tramos de tiempo "
+        "enteros, con términos de cámara estándar (push in, pull out, pan, track, orbit). Cierre de sonido que pondrá el "
+        "sistema: \"{cierre}\".\n\n"
+    ),
 }
 
 
+# Cómo se ven los tokens en las reglas comunes: la forma de siempre, salvo
+# Seedance 2.5 con varias referencias (fal nombra @Image1, @Image2…). Medido el
+# 2026-10-09 (docs/superpowers/evals/2026-10-09-director-seedance-ref.md): con el
+# ejemplo «Ana (Image 1)» Claude escribía «Image 1» y 2 de 3 casos caían al prompt fijo.
+_TOKENS_REGLAS = {
+    "seedance_ref": ('"Ana@Image1"', "@Image1, @Image2…"),
+}
+_TOKENS_REGLAS_DEFECTO = ('"Ana (Image 1)"', "Image N, Video N")
+
+
 def _system(familia, cierre, n, duracion, idioma):
+    ejemplo_token, forma_tokens = _TOKENS_REGLAS.get(familia, _TOKENS_REGLAS_DEFECTO)
     return _FAMILIAS[familia].format(cierre=cierre) + _REGLAS_COMUNES.format(
         n_planos=n, duracion=duracion, camaras=", ".join(flowplus_prompt.CAMARAS), idioma=idiomas.nombre_para_claude(idioma),
-        max_chars=MAX_CARACTERES_PROMPT)
+        max_chars=MAX_CARACTERES_PROMPT, ejemplo_token=ejemplo_token, forma_tokens=forma_tokens)
 
 
 # Qué significa cada enfoque para Claude. «producto» NO es «solo y sin nadie»
@@ -223,8 +247,23 @@ def _componer(cliente, sesion, planos, cierre, idioma):
     )
 
 
+def _a_tokens_pegados(planos):
+    """«Image 2» → «@Image2» en lo que escribió Claude, cuando el modelo nombra
+    sus imágenes con la forma pegada (Seedance 2.5 vía fal): es la misma
+    referencia y no hay ambigüedad. Un número que no existe sigue sin pasar
+    la validación."""
+    for p in planos if isinstance(planos, list) else []:
+        if isinstance(p, dict):
+            for k in ("plano", "accion", "sonido"):
+                if isinstance(p.get(k), str):
+                    p[k] = _TOKEN_SUELTO.sub(r"@Image\1", p[k])
+
+
 def _validar_y_componer(cliente, sesion, datos, n, duracion, cierre, idioma):
     tokens = {r["token"] for r in (sesion.get("referencias") or []) if r.get("token")}
+    if any(t.startswith("@Image") for t in tokens):
+        _a_tokens_pegados(datos.get("planos"))
+        _a_tokens_pegados(datos.get("planos_b"))
     _validar_planos(datos.get("planos"), n, duracion, tokens, "planos")
     _validar_planos(datos.get("planos_b"), n, duracion, tokens, "planos_b")
     if datos["planos"][0]["camara"] == datos["planos_b"][0]["camara"]:

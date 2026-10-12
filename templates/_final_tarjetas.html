@@ -90,7 +90,7 @@
       </div>
       <div class="generado-pie">
         <strong>{{ _('Final %(id)s', id=(f.idioma ~ '_' ~ f.pais)) }}</strong>
-        <small>{{ _('Final de %(enfoque)s', enfoque=nombre_pieza(item)) }}{% if f.costo_usd %} · {{ _('costó %(usd)s', usd=(f.costo_usd | usd)) }}{% endif %}</small>
+        <small>{{ _('Final de %(enfoque)s', enfoque=nombre_pieza(item)) }}{% set _costo = f.costo_usd | cobrado('final:' ~ f.id) %}{% if _costo %} · {{ _('costó %(usd)s', usd=(_costo | usd)) }}{% endif %}</small>
       </div>
     </div>
 {% endmacro %}

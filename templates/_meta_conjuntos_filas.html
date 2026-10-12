@@ -1,0 +1,32 @@
+{# Filas de la tabla «Conjuntos» de la pestaña Rendimiento (spec 2026-10-09): incluidas en _meta_secciones.html (la
+   primera página) y solas como respuesta de «Ver más» (pestana_rendimiento.rutas.ver_conjuntos, que resuelve el mismo
+   alcance que el panel). Solo <tr>. Contexto: `mr` (la estructura de Meta de pestana_rendimiento.panel, con `params`
+   = la entrada y el periodo) y `cliente`. Sin <script>. Cada fila trae `origen` ("tw" | "meta"): la etiqueta chica
+   junto al ROAS dice de dónde salen sus ventas. La pestaña «Meta», que también las pintaba, se jubiló el 2026-10-09.
+   Con Triple Whale en el proyecto (`mr.nvp_activo`, spec 2026-10-09-nvp-visitantes-nuevos §4.2) lleva la columna NVP
+   después del ROAS (integración con main, 2026-10-10). #}
+{% import "_meta_macros.html" as mx %}
+{% import "_rend_macros.html" as rm %}
+{% import "_componentes.html" as cx %}
+{% for s in mr.conjuntos %}
+<tr>
+  <td class="tw-nombre">
+    <strong>{{ s.nombre or s.adset_id }}</strong>
+    <small>{{ s.campana or s.campaign_id or '—' }}</small>
+    {% if not mr.actual %}<small>{{ mx.cuenta(s.cuenta) }}</small>{% endif %}
+  </td>
+  <td>{{ mx.estado(s.estado, mr.estados) }}</td>
+  <td>{{ mx.aprendizaje(s.aprendizaje, mr.aprendizaje) }}</td>
+  <td>{{ mx.presupuesto(s) }}</td>
+  <td>{{ mx.monto(s.gasto, s.moneda) }}</td>
+  <td>{{ mx.roas(s.m.roas) }}{% if s.origen %}<small class="rend-fuente">{{ rm.fuente(s.origen) }}</small>{% endif %}</td>
+  {% if mr.nvp_activo %}<td>{{ cx.nvp(s.visitantes_nuevos, s.visitantes) }}</td>{% endif %}
+  <td>{{ mx.monto(s.m.cpa, s.moneda) }}</td>
+</tr>
+{% endfor %}
+{% if mr.hay_mas_conjuntos %}
+<tr class="meta-mas">
+  {% set url_mas = url_for('rendimiento.ver_conjuntos', cliente=cliente, entrada=mr.params.entrada, dias=mr.params.dias, pagina=mr.pagina_conjuntos + 1) %}
+  <td colspan="{{ 8 if mr.nvp_activo else 7 }}"><button type="button" class="btn-sm" data-meta-mas="{{ url_mas }}">{{ _('Ver más') }}</button></td>
+</tr>
+{% endif %}

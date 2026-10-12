@@ -12,6 +12,7 @@ from tests.i18n_util import espanol_en_plantilla
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PLANTILLAS_TRADUCIDAS = [
+    "admin_bloqueos_login.html",
     "base.html", "_sidebar.html", "login.html", "recuperar.html", "restablecer.html",
     "index.html", "legal.html", "panel.html",
     "_llave_tarjeta.html", "_meta_conectar.html", "_meta_elegir_forma.html",
@@ -19,6 +20,8 @@ PLANTILLAS_TRADUCIDAS = [
     "_tab_settings.html", "_seccion_marca.html", "_comparacion_modelos.html",
     "_tab_flowplus.html", "_tab_creativeflowplus.html", "_flowplus_bandeja.html", "_aviso_sin_saldo.html",
     "_selector_productos.html", "_selector_productos_nuevo.html", "_mi_musica.html",
+    "_selector_productos_grilla.html", "_swaps_lista.html",
+    "_gasto_filas.html", "_gasto_lista.html", "_gasto_mas.html",
     "_crear_flowplus.html", "_crear_flowplus_guiones.html", "_gpg_panel.html", "_gpg_notion.html",
     "_gpg_guion.html", "_gpg_video.html", "_gpg_clips.html", "_gpg_imagenes.html", "_gpg_macros.html",
     "_tab_catalogo.html", "_catalogo_campos_comerciales.html", "_catalogo_importar.html",
@@ -58,10 +61,29 @@ PLANTILLAS_TRADUCIDAS = [
     "cliente.html", "_etiquetas_estado.html",
     # Merge de main (2026-09-28, PR #1 Triple Whale): la pestaña y su panel ya
     # vienen con _() y su inglés en el catálogo; entran a la guardia al fusionar.
-    "_tab_triple_whale.html", "_tw_panel.html",
+    # (La pestaña y su panel se jubilaron el 2026-10-09 con la pestaña Rendimiento.)
+    "_tw_resultados.html", "_tw_dia.html",
+    "_tw_galeria.html", "_tw_galeria_fragmento.html",   # tarjetas de Triple Whale (spec 2026-10-08 tarjetas §5.1)
+    "_tw_analisis.html",                                 # «Cómo mejorarlo» de una tarjeta (spec 2026-10-08 tarjetas §6.5)
+    # Pestaña Meta (rendimiento de varias cuentas, 2026-10-08): el selector, las filas de «Ver más» y sus macros, que
+    # hoy pinta la pestaña Rendimiento (el armazón y el panel de Meta se jubilaron el 2026-10-09).
+    "_meta_cuentas.html", "_meta_conjuntos_filas.html", "_meta_macros.html",
+    # Pestaña Rendimiento (spec 2026-10-09): armazón, panel, sus macros y las secciones que heredó de las pestañas
+    # Triple Whale y Meta (las tarjetas de fuente Meta de E1 se fueron con la galería única de E2, tarea 4).
+    "_tab_rendimiento.html", "_rend_panel.html", "_rend_macros.html",
+    "_tw_secciones.html", "_meta_secciones.html",
+    # Meta rendimiento E2 (main, 2026-10-10; desde la integración los incluye la pestaña Rendimiento).
+    "_meta_diagnostico.html", "_meta_segmentos.html",   # Diagnóstico y Segmentos
+    "_meta_evaluacion.html",   # una «Evaluación con IA» (fragmento)
+    "_meta_evaluar.html",      # la sección «Evaluación con IA» del panel (botón, barra, anteriores)
+    "_componentes.html",   # componentes con marcado propio; el primero, el chip del NVP (spec 2026-10-09)
     "editor.html",   # Fase 6, Task 2: la página del editor
     "_tab_cambiar_calzado.html",   # Fase 6, Task 4: Crear › Cambiar producto
     "admin_meta.html", "admin_referentes.html", "meta_elegir.html",   # Fase 6, Task 5
+    "saldo_recarga.html",   # Cobros 7/11 y 8/11: la vuelta del checkout de Bold
+    "_config_saldo.html", "_saldo_panel.html",   # Cobros 8/11: Configuración › Saldo y recargas
+    "admin_cobros.html",   # Cobros 10/11: /admin/cobros
+    "_config_plan.html", "_plan_panel.html", "plan_alta.html",   # Planes 6/8: Configuración › Plan y el alta con Wompi
     "admin_salud.html", "admin_registros.html", "admin_estilos.html",   # Salud de la plataforma (spec 2026-10-01-escala-y-monitoreo)
     # Fase 6, Task 6: llegaron con fusiones de main ya traducidas y solo faltaba
     # sumarlas a la guardia — Crear › Audios (worktree-crear-audios, 82491a6) y el
@@ -77,10 +99,6 @@ PLANTILLAS_TRADUCIDAS = [
     # tarjetas y la ficha del producto reemplazan a _catalogo_lista.html y
     # _catalogo_sin_fotos.html (borradas); ya vienen con _() y su inglés en el catálogo.
     "_catalogo_grid.html", "_catalogo_tarjeta.html", "_catalogo_ficha.html",
-    # Flujo viejo «Nueva idea» (pedido de Daniel, 2026-10-01): sin pantalla viva,
-    # pero traducido igual; tests/test_i18n_nueva_idea.py lo pinta en los dos idiomas.
-    "_seccion_ideas.html", "_idea_card.html", "_idea_visual_card.html", "_prompt_row.html", "_imagen_row.html",
-    "_progreso_row.html", "_seccion_videos.html", "_video_card.html", "_seccion_bitacora.html",
     "_audios_mis_voces.html",   # Audios Europa (2026-09-30): Crear › Audios › Mis voces, ya con _()
     # Anuncio hablado en Crear (2026-10-01): el panel por fetch, su tarjeta de foto, la
     # galería de voces que comparte con Audios y la cáscara de la página (Task 7).

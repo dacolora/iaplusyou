@@ -67,9 +67,9 @@ def test_ventas_medidas_solo_de_lo_que_mide_ventas():
     trafico = [_snap("2026-09-01T08:00:00", gasto=100.0, compras=0, ingresos=0.0, fuente_ventas="ninguna")]
     a, b = (tablero._deltas_pieza(s, "2026-08-01T00:00:00", "2026-09-02T00:00:00") for s in (pixel, trafico))
     assert a["mide"] is True and b["mide"] is False
-    assert tablero.ventas_medidas([b]) == {"mide": False, "gasto": 100.0, "compras": 0, "ingresos": 0.0,
+    assert tablero.ventas_medidas([b]) == {"mide": False, "gasto": 100.0, "compras": 0, "ingresos": 0.0, "gasto_roas": 100.0, "excluidos": 0,
                                            "roas_comparable": True, "gasto_sin_ventas": 100.0, "ventas_cambiaron": False}
-    assert tablero.ventas_medidas([a, b]) == {"mide": True, "gasto": 200.0, "compras": 2, "ingresos": 300.0,
+    assert tablero.ventas_medidas([a, b]) == {"mide": True, "gasto": 200.0, "compras": 2, "ingresos": 300.0, "gasto_roas": 200.0, "excluidos": 0,
                                               "roas_comparable": True, "gasto_sin_ventas": 100.0, "ventas_cambiaron": False}
 
 
@@ -163,7 +163,7 @@ def test_resumen_mes_agrupa_por_moneda(base_temporal, sin_red):
     ex.snapshot(ep2, {"gasto": 12.5, "impresiones": 10}, tomado_en="2026-09-05T00:00:00")
     r = tablero.resumen_mes("acme", ahora_iso=AHORA)
     assert r["por_moneda"]["COP"]["gasto"] == 20000 and r["por_moneda"]["USD"]["gasto"] == 12.5
-    assert r["por_moneda"]["USD"]["roas"] == 0.0
+    assert r["por_moneda"]["USD"]["roas"] is None
     assert r["experimentos_corriendo"] == 1
 
 
@@ -204,7 +204,7 @@ def test_resumen_total_es_el_acumulado_hasta_ahora(base_temporal, sin_red):
     assert r["hasta"] == AHORA
     assert r["por_moneda"]["COP"]["gasto"] == 600 and r["por_moneda"]["COP"]["compras"] == 4
     assert r["por_moneda"]["COP"]["ingresos"] == 7000 and r["por_moneda"]["COP"]["roas"] == round(7000 / 600, 2)
-    assert r["por_moneda"]["USD"]["gasto"] == 12.5 and r["por_moneda"]["USD"]["roas"] == 0.0
+    assert r["por_moneda"]["USD"]["gasto"] == 12.5 and r["por_moneda"]["USD"]["roas"] is None
     assert r["experimentos_corriendo"] == 1 and r["piezas_activas"] == 2
     assert r["propuestas_pendientes"] == 0 and r["ganadoras_publicadas"] == 0
 
@@ -399,7 +399,7 @@ def test_cargar_datos_una_vez_y_contexto(base_temporal, sin_red, monkeypatch):
                 tomado_en="2026-09-15T23:00:00")
     sueltas = {"resumen": tablero.resumen_mes("acme", AHORA), "serie": tablero.serie_diaria("acme", 30, AHORA),
                "top": tablero.top_ganadoras("acme"), "alertas": tablero.alertas("acme", AHORA),
-               "csv": tablero.csv_mes("acme", AHORA)}
+               "csv": tablero.csv_total("acme", AHORA)}
     llamadas = {"cargar": 0, "snapshots": []}
     cargar, snapshots_de = ex.cargar, ex.snapshots_de
 

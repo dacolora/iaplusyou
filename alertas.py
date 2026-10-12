@@ -52,11 +52,17 @@ NOMBRES_GRUPO = {"puesta_a_punto": idiomas.N_("Puesta a punto pendiente"), "falt
                  "decision": idiomas.N_("Esperan tu decisión"), "fallos": idiomas.N_("Fallos y errores")}
 NOMBRES_NIVEL = {"bloquea": idiomas.N_("bloquea"), "atencion": idiomas.N_("atención"), "info": idiomas.N_("info")}
 NOMBRES_TAB = {"settings": idiomas.N_("Configuración"), "catalogo": idiomas.N_("Catálogo"), "creativeflowplus": idiomas.N_("Crear"),
-               "experimentos": idiomas.N_("Experimentos"), "sprints": idiomas.N_("Sprints"), "nicho": idiomas.N_("Nicho")}
+               "experimentos": idiomas.N_("Experimentos"), "sprints": idiomas.N_("Sprints"), "nicho": idiomas.N_("Nicho"),
+               "meta": idiomas.N_("Meta")}
 
 MINUTOS_WORKER = 30                                  # más de esto sin señal de vida y el worker está parado
 MINUTOS_PROMPT_LISTO = 60                            # un prompt listo más nuevo que esto no molesta: la persona sigue trabajando
 DIAS_FALLOS = 30                                     # un fallo más viejo que esto es historia, no una alerta
+DIAS_NO_COBRADO = 7                                  # una pieza que no se cobró avisa esta cantidad de días
+MINUTOS_RECARGA_PENDIENTE = 15                       # una recarga de Bold o Wompi pendiente más vieja que esto avisa
+DIAS_AVISO_RENOVACION = 3                            # el plan avisa que se renueva (o termina) con esta anticipación
+PORCENTAJE_BOLSA_PLAN = 80                           # la bolsa del plan avisa al usarse este porcentaje del periodo
+TOPE_COBROS = 20                                     # lo más que se lista de piezas no cobradas o recargas pendientes
 IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".webp")      # lo que cuenta como logo en clientes/<c>/logos/
 
 # Lo que las rutas aceptan al descartar/restaurar (una clave o huella que no
@@ -70,7 +76,18 @@ HUELLA_VALIDA = r"^[0-9a-f]{64}$"
 # frenan con `es_solo_admin` (fix de la revisión de la Task 5, 2026-10-02);
 # `tests/test_rutas_alertas.py` comprueba que toda alerta `solo_admin` que
 # producen las fuentes empiece por uno de estos prefijos.
-PREFIJOS_SOLO_ADMIN = ("llave:", "worker:", "revision:", "saldo:wavespeed_recarga")
+PREFIJOS_SOLO_ADMIN = ("llave:", "worker:", "revision:", "saldo:wavespeed_recarga", "saldo:fal_recarga",
+                       "cobros:plan_sin_renovar")
+
+# PND-124 (decisión 2026-10-07): visibles para todos, descartes solo admin.
+TIPOS_DESCARTE_ADMIN = {"tablero:tope_alcanzado", "tablero:propuestas_pendientes",
+                        "tablero:experimento_error", "crear:prompt_listo",
+                        "tablero:ganador_sin_publicar", "tablero:anuncios_rechazados"}
+
+
+def descarte_solo_admin(clave, calculadas=()):
+    return es_solo_admin(clave, calculadas) or ":".join(clave.split(":")[:2]) in TIPOS_DESCARTE_ADMIN
+
 
 # (nombre, función(cliente, ahora_iso) -> lista de alertas), en el orden en
 # que se muestran dentro de un mismo grupo y nivel. Las fuentes reales se
@@ -160,12 +177,7 @@ def _fuente_llaves(cliente, ahora):
 
 
 def _fuente_cuentas(cliente, ahora):
-    """Cuentas rol cliente del proyecto sin correo o con el correo sin
-    confirmar: sin él no se conecta Meta ni una tienda
-    (`_requiere_correo_verificado`). Son TODAS las cuentas del proyecto, no solo la de quien mira: cada cuenta del
-    proyecto ve las alertas, el correo y el nombre de las demás cuentas cliente y puede descartarlas (los descartes
-    son del proyecto). Hoy el alta web crea una cuenta por proyecto, así que solo afecta a las agregadas por la
-    línea de comandos; filtrar por quien mira es una decisión pendiente (PND-123)."""
+    """Todas las cuentas del proyecto; el usuario se filtra al leer (PND-123)."""
     import usuarios  # noqa: PLC0415
     out = []
     for u in usuarios.por_cliente(cliente):
@@ -174,19 +186,21 @@ def _fuente_cuentas(cliente, ahora):
         nombre = u["usuario"]
         # La clave tiene que pasar CLAVE_VALIDA aunque la cuenta sea vieja y traiga
         # espacios o acentos (usuarios.validar_usuario solo exige el formato al crear).
-        clave = f"cuenta:correo:{re.sub(r'[^A-Za-z0-9_.-]', '_', nombre)[:100]}"
+        limpio = re.sub(r'[^A-Za-z0-9_.-]', '_', nombre)[:100]
+        sufijo = '-' + hashlib.sha256(nombre.encode('utf-8')).hexdigest()[:8] if limpio != nombre else ''
+        clave = f"cuenta:correo:{limpio}{sufijo}"
         if not u.get("correo"):
             out.append(_alerta(clave, huella("sin_correo"), "bloquea", "puesta_a_punto",
                                gettext("La cuenta %(usuario)s no tiene correo", usuario=nombre),
                                gettext("Ponlo en Configuración › Cuenta para poder confirmarla y recuperar la contraseña. "
                                        "Sin correo confirmado no puedes conectar Meta ni una tienda."),
-                               "settings", ancla="config-cuenta"))
+                               "settings", ancla="config-cuenta", entidad=nombre))
         else:
             out.append(_alerta(clave, huella("sin_verificar", u["correo"]), "bloquea", "puesta_a_punto",
                                gettext("Confirma el correo de la cuenta %(usuario)s", usuario=nombre),
                                gettext("%(correo)s: abre el enlace que te mandamos o pide uno nuevo en Configuración › Cuenta. "
                                        "Sin correo confirmado no puedes conectar Meta ni una tienda.", correo=u["correo"]),
-                               "settings", ancla="config-cuenta"))
+                               "settings", ancla="config-cuenta", entidad=nombre))
     return out
 
 
@@ -230,11 +244,13 @@ def _fuente_saldo(cliente, ahora):
     """WaveSpeed sin saldo (`saldo.vigente`, el mismo aviso de Crear). DOS
     alertas con la misma huella (`desde`): la del cliente, neutra (la cuenta es
     de Creatv, no suya: sin enlace de recarga, sin respuesta del proveedor ni
-    el proyecto que falló) y la del admin, con desde cuándo y dónde recargar."""
+    el proyecto que falló) y la del admin, con desde cuándo y dónde recargar.
+    Después, las de fal (`_alertas_saldo_fal`), si las hay."""
     import saldo  # noqa: PLC0415
+    alertas_saldo = _alertas_saldo_fal(saldo)
     aviso = saldo.vigente("wavespeed")
     if not aviso:
-        return []
+        return alertas_saldo
     h = huella(aviso.get("desde"))
     desde = (aviso.get("desde") or "")[:16].replace("T", " ")
     return [
@@ -248,6 +264,33 @@ def _fuente_saldo(cliente, ahora):
                 gettext("Desde el %(desde)s las generaciones de Crear y de Cambiar producto fallan (sin cobrar). "
                         "Recarga la cuenta en %(recarga)s; esta alerta se quita sola con la próxima generación que "
                         "salga bien.", desde=desde, recarga=aviso["recarga"]),
+                "creativeflowplus", solo_admin=True),
+    ] + alertas_saldo
+
+
+def _alertas_saldo_fal(saldo):
+    """fal sin saldo (2026-10-09, PND-213): solo se pausan sus modelos de Crear
+    (Seedance 2.5 con varias referencias) y lo que usa fal en el resto de la app;
+    `atencion`, no `bloquea`: los demás modelos siguen. Igual que WaveSpeed, una
+    neutra para todos y otra con la recarga solo para el admin."""
+    aviso = saldo.vigente("fal")
+    if not aviso:
+        return []
+    h = huella(aviso.get("desde"))
+    desde = (aviso.get("desde") or "")[:16].replace("T", " ")
+    modelos = saldo.nombres_modelos("fal")
+    return [
+        _alerta("saldo:fal", h, "atencion", "puesta_a_punto",
+                gettext("%(modelos)s está en pausa", modelos=modelos),
+                gettext("Hay un problema con el proveedor y ya le avisamos a Creatv. Mientras tanto elige otro modelo: "
+                        "los intentos fallidos no se cobran."),
+                "creativeflowplus"),
+        _alerta("saldo:fal_recarga", h, "atencion", "puesta_a_punto",
+                gettext("%(proveedor)s se quedó sin saldo", proveedor=aviso["nombre"]),
+                gettext("Desde el %(desde)s fallan %(modelos)s y lo que usa fal en el resto de la app (voces, música y "
+                        "subtítulos automáticos), sin cobrar; los demás modelos de Crear siguen. Recarga la cuenta en "
+                        "%(recarga)s; esta alerta se quita sola con la próxima generación de ese modelo que salga bien.",
+                        desde=desde, modelos=modelos, recarga=aviso["recarga"]),
                 "creativeflowplus", solo_admin=True),
     ]
 
@@ -291,6 +334,73 @@ def _fuente_tablero(cliente, ahora):
                            _NIVEL_TABLERO.get(a["nivel"], "info"), _GRUPO_TABLERO.get(a["tipo"], "decision"),
                            texto, "", a["tab"], url=(f"#experimentos?exp={eid}" if eid is not None else None),
                            entidad=entidad))
+    return out
+
+
+# ---------- fuentes: Meta ----------
+
+def _fuente_meta(cliente, ahora):
+    """Meta conectada por la app propia del proyecto: recordar el método de pago de la cuenta publicitaria (sin él Meta
+    no activa ningún anuncio y no hay forma de verlo desde aquí). Antes era una nota fija en Experimentos. En modo
+    agencia la cuenta es de Creatv, no de quien mira. Informativa, huella vacía: un descarte sirve mientras siga igual."""
+    import meta_conexion  # noqa: PLC0415 — arrastra requests; este módulo solo lee estado
+    if (meta_conexion.estado(cliente) or {}).get("estado") != "conectado" or meta_conexion.modo(cliente) == "agencia":
+        return []
+    return [_alerta("meta:metodo_pago", huella(), "info", "puesta_a_punto",
+                    gettext("Revisa el método de pago de tu cuenta publicitaria de Meta"),
+                    gettext("La cuenta publicitaria necesita un método de pago en business.facebook.com › Facturación: "
+                            "sin él Meta no activa ningún anuncio."), "settings")]
+
+
+# Meta rendimiento (spec E2 §10): el título y el detalle de cada tipo de recomendación que puede ser «alta»
+# (`meta_rendimiento.recomendaciones`). La copia guarda solo tipo y huella; las cifras y los nombres de campañas
+# están en el «Diagnóstico» de Meta, que desde la integración con main (2026-10-10) pinta la pestaña Rendimiento, adonde
+# lleva la alerta (la pestaña «Meta» se jubiló el 2026-10-09; su clave `meta` abre Rendimiento, pero nada nuevo apunta a
+# ella: R1 del spec de la pestaña Rendimiento).
+TEXTOS_META_RENDIMIENTO = {
+    "cuenta_estado": (idiomas.N_("«%(cuenta)s» no está activa en Meta o llega a su tope de gasto"),
+                      idiomas.N_("Meta puede dejar de entregar sus anuncios. El motivo y qué hacer están en el "
+                                 "Diagnóstico de la pestaña Rendimiento.")),
+    "cuenta_roas_bajo": (idiomas.N_("«%(cuenta)s» vende menos de lo que gasta"),
+                         idiomas.N_("En los últimos 30 días vendió menos de la mitad de lo que gastó: pausa o rehace "
+                                    "la cuenta. Las cifras están en el Diagnóstico de la pestaña Rendimiento.")),
+    "aprendizaje_limitado": (idiomas.N_("Muchos conjuntos de «%(cuenta)s» en aprendizaje limitado"),
+                             idiomas.N_("Sin salir del aprendizaje, Meta no estabiliza su entrega. El Diagnóstico de "
+                                        "la pestaña Rendimiento dice qué campañas consolidar primero.")),
+    "perdedores_gastando": (idiomas.N_("Anuncios perdedores siguen gastando en «%(cuenta)s»"),
+                            idiomas.N_("Se llevan buena parte del gasto de la última semana. Pausarlos libera "
+                                       "presupuesto para los que venden: la lista está en el Diagnóstico de la "
+                                       "pestaña Rendimiento.")),
+    "anuncios_con_problemas": (idiomas.N_("Anuncios rechazados siguen gastando en «%(cuenta)s»"),
+                               idiomas.N_("Meta los rechazó y gastaron en los últimos 7 días. Revísalos en el "
+                                          "Administrador de anuncios desde el Diagnóstico de la pestaña Rendimiento.")),
+}
+_ACT_VALIDA = r"act_[0-9]{1,30}"
+
+
+def _fuente_meta_rendimiento(cliente, ahora):
+    """Las recomendaciones de nivel «alta» de cada cuenta de Meta que lee el proyecto, tal como las guardó su última
+    copia buena en `meta_cuenta.extra.alertas` ([{tipo, huella}]; `tareas.meta_rendimiento._guardar_alertas`): aquí
+    no se calcula ninguna regla, es UNA consulta a `meta_cuenta` del proyecto. Una alerta por elemento, de decisión y
+    `atencion`, a la pestaña Rendimiento (el «Diagnóstico» llega por fetch: no hay ancla en la página). La huella es la de la
+    recomendación (tipo + cuenta + nivel en las que juntan toda la cuenta): un descarte vale hasta que la situación
+    cambie. El título lleva el nombre de la cuenta (dato de Meta, pasado por `_limpio`) y se arma aquí, en el idioma
+    de quien mira. Un elemento roto (otro tipo, otra huella, algo que no es un dict) se ignora."""
+    from meta_rendimiento import cuentas  # noqa: PLC0415
+    out = []
+    for c in cuentas.listar(cliente):
+        act = c.get("ad_account_id") or ""
+        guardadas = (c.get("extra") or {}).get("alertas")
+        if not re.fullmatch(_ACT_VALIDA, act) or not isinstance(guardadas, list):
+            continue
+        nombre = _limpio(c.get("nombre") or act, 120)
+        for g in guardadas:
+            if not isinstance(g, dict) or g.get("tipo") not in TEXTOS_META_RENDIMIENTO \
+                    or not re.fullmatch(HUELLA_VALIDA, str(g.get("huella") or "")):
+                continue
+            titulo, detalle = TEXTOS_META_RENDIMIENTO[g["tipo"]]
+            out.append(_alerta(f"meta_rendimiento:{g['tipo']}:{act}", g["huella"], "atencion", "decision",
+                               gettext(titulo, cuenta=nombre), gettext(detalle), "rendimiento", entidad=act))
     return out
 
 
@@ -372,12 +482,17 @@ def _fuente_crear(cliente, ahora):
     estado = sa.func.coalesce(legado, sa.case((pz.c.estado == "pendiente", "prompt_listo"), else_=pz.c.estado))
     accion = sa.func.coalesce(sa.func.json_extract(pz.c.extra, "$.accion_central"),
                               sa.func.json_extract(co.c.extra, "$.accion_central"))
+    sp, c, cp = db.sprint, db.campana, db.campana_pieza
+    en_sprint_vivo = sa.exists(sa.select(cp.c.id)
+        .select_from(cp.join(c, c.c.id == cp.c.campana_id).join(sp, sp.c.id == c.c.sprint_id))
+        .where(cp.c.cf_id == co.c.legado_id, cp.c.cliente == cliente, c.c.cliente == cliente,
+               sp.c.cliente == cliente, sp.c.archivado.is_(False), sp.c.estado != "completado"))
     q = (sa.select(co.c.legado_id, estado.label("estado"), accion.label("accion"), pz.c.error)
          .select_from(co.join(pz, pz.c.concepto_id == co.c.id))
          .where(co.c.cliente == cliente, co.c.legado_id.isnot(None), pz.c.tipo != "final",
                 co.c.creado_en >= _hace(ahora, days=DIAS_FALLOS),
                 sa.or_(sa.and_(estado == "prompt_listo", co.c.creado_en < _hace(ahora, minutes=MINUTOS_PROMPT_LISTO)),
-                       estado == "error"))
+                       sa.and_(estado == "error", ~en_sprint_vivo)))
          .order_by(co.c.id.desc()))
     with db.conectar() as con:
         filas = con.execute(q).fetchall()
@@ -394,7 +509,8 @@ def _fuente_crear(cliente, ahora):
         out.append(_alerta(f"crear:error:{f.legado_id}", huella(error), "atencion", "fallos",
                            gettext("Falló «%(nombre)s» en Crear", nombre=nombre),
                            _con_error(error, gettext("Rearma el prompt o vuelve a generar.")),
-                           "creativeflowplus", ancla=f"cf-{f.legado_id}", entidad=f.legado_id))
+                           "creativeflowplus", ancla=f"cf-{f.legado_id}", entidad=f.legado_id,
+                           url="#creativeflowplus?cf=" + quote(f.legado_id, safe="")))
     if listos:
         listos = sorted(listos)
         out.insert(0, _alerta("crear:prompt_listo", huella(*listos), "atencion", "decision",
@@ -402,7 +518,8 @@ def _fuente_crear(cliente, ahora):
                                        "%(num)s prompts listos sin generar en Crear", len(listos)),
                               gettext("Revisa y genera (o descarta): el prompt ya está armado y generar cuesta lo que "
                                       "dice el botón."),
-                              "creativeflowplus", ancla=f"cf-{listos[0]}"))
+                              "creativeflowplus", ancla=f"cf-{listos[0]}",
+                              url="#creativeflowplus?cf=" + quote(listos[0], safe="")))
     return out
 
 
@@ -568,6 +685,147 @@ def _fuente_nicho(cliente, ahora):
 
 # ---------- cálculo ----------
 
+def _fuente_cobros(cliente, ahora):
+    """Saldo prepagado del proyecto (spec 2026-10-08-cobros §8), solo si el proyecto cobra: sin saldo, saldo bajo,
+    piezas que no se cobraron (un `reverso` o `no_cobrado` de los últimos DIAS_NO_COBRADO días), recargas de Bold o
+    Wompi que siguen pendientes y el plan mensual (`_alertas_plan`). Son del cliente (nada de aquí es solo_admin) y todas llevan a Configuración › Saldo y recargas.
+    Una consulta por tipo de dato (la cuenta con el saldo, los movimientos, las recargas), sin importar cuántos
+    haya; un proyecto que no cobra sale tras leer la cuenta y uno sin plan tras una consulta más. Las huellas son de cifras, nunca de texto traducido:
+    la de «saldo bajo» sigue al saldo en dólares, para que un descarte no esconda un saldo que siguió bajando."""
+    from cobros import libro, vista  # noqa: PLC0415
+    import gastos  # noqa: PLC0415
+    c = libro.estado(cliente)
+    if not c["cobrar"]:
+        return []
+    out = []
+
+    def monto(milesimas):
+        return gastos.formatear(int(milesimas) / 1000)
+
+    if c["disponible"] <= 0:
+        out.append(_alerta("cobros:sin_saldo", huella("sin_saldo"), "bloquea", "puesta_a_punto",
+                           gettext("Te quedaste sin saldo"),
+                           gettext("Sin saldo no se puede generar nada nuevo. Recarga en Configuración › Saldo y recargas "
+                                   "y sigues donde ibas."),
+                           "settings", ancla="config-ap-saldo"))
+    elif 0 < c["saldo"] < c["umbral"]:
+        out.append(_alerta("cobros:saldo_bajo", huella("saldo_bajo", round(c["saldo"] / 1000)), "atencion",
+                           "puesta_a_punto",
+                           gettext("Tu saldo se está acabando"),
+                           gettext("Te quedan %(saldo)s. Recarga en Configuración › Saldo y recargas antes de que se acabe.",
+                                   saldo=monto(c["saldo"])),
+                           "settings", ancla="config-ap-saldo"))
+
+    m = db.movimiento_saldo
+    q = (sa.select(m.c.id, m.c.tipo, m.c.milesimas, m.c.concepto, m.c.extra)
+         .where(m.c.cliente == cliente, m.c.tipo.in_(("reverso", "no_cobrado")),
+                m.c.creado_en >= _hace(ahora, days=DIAS_NO_COBRADO))
+         .order_by(m.c.id.desc()).limit(TOPE_COBROS))
+    r = db.recarga
+    qr = (sa.select(r.c.id, r.c.milesimas, r.c.medio)
+          .where(r.c.cliente == cliente, r.c.medio.in_(("bold", "wompi")), r.c.estado == "pendiente",
+                 r.c.creada_en <= _hace(ahora, minutes=MINUTOS_RECARGA_PENDIENTE))
+          .order_by(r.c.id.desc()).limit(TOPE_COBROS))
+    with db.conectar() as con:
+        movimientos = con.execute(q).fetchall()
+        recargas = con.execute(qr).fetchall()
+    for f in movimientos:
+        # El reverso devuelve lo cobrado (positivo); en un no_cobrado el libro guarda 0 y el precio en `extra`.
+        milesimas = int((f.extra or {}).get("precio") or 0) if f.tipo == "no_cobrado" else int(f.milesimas)
+        out.append(_alerta(f"cobros:no_cobrado:{f.id}", huella(f.tipo, milesimas), "info", "fallos",
+                           gettext("Una pieza falló y no se te cobró"),
+                           gettext("Algo de «%(concepto)s» no llegó. No descontamos %(monto)s de tu saldo.",
+                                   concepto=vista.nombre_concepto(f.concepto), monto=monto(milesimas)),
+                           "settings", ancla="config-ap-saldo", entidad=f.id))
+    for f in recargas:
+        out.append(_alerta(f"cobros:recarga_pendiente:{f.id}", huella(f.id), "info", "decision",
+                           gettext("Tienes una recarga sin terminar"),
+                           gettext("Una recarga de %(monto)s con %(pasarela)s sigue pendiente. Si ya pagaste, se acredita "
+                                   "sola en unos minutos; si no, genera un link nuevo en Configuración › Saldo y recargas.",
+                                   monto=monto(f.milesimas), pasarela="Wompi" if f.medio == "wompi" else "Bold"),
+                           "settings", ancla="config-ap-saldo", entidad=f.id))
+    out.extend(_alertas_plan(cliente, ahora, monto))
+    return out
+
+
+def _alertas_plan(cliente, ahora, monto):
+    """El plan mensual del proyecto (spec planes 2026-10-09 §7.6): `plan_morosa` (bloquea: no se pudo cobrar),
+    `plan_renueva` (info: se renueva en DIAS_AVISO_RENOVACION días, con el momento real del cobro y el monto
+    aceptado), `plan_cancelada` (info: el plan termina en tal fecha), `plan_bolsa_80` (atención: ya se usó el
+    PORCENTAJE_BOLSA_PLAN % de la bolsa del periodo) y, solo para el admin, `plan_sin_renovar` (lo pagado de una
+    suscripción activa ya terminó y no hay periodo abierto ni cobro en curso: la periódica no la renovó). Un
+    proyecto sin plan (o con la suscripción terminada) no tiene ninguna; con plan son 1 consulta (la suscripción)
+    más 2 (la bolsa del periodo abierto, o mirar si quedó sin renovar), sin importar cuánto haya pasado. Huellas
+    de números y fechas, nunca de texto traducido. Todas llevan a Configuración › Plan."""
+    from cobros import libro, planes, vista  # noqa: PLC0415
+    sus = planes.suscripcion(cliente)
+    if sus is None:
+        return []
+    out = []
+    estado, hasta = sus["estado"], sus["cubierto_hasta"]
+    if estado == "morosa":
+        quedan = max(0, planes.INTENTOS_MAXIMOS - int(sus["intentos_fallidos"]))
+        # Sirve para tarjeta o Nequi; la huella lleva la renovación (cubierto_hasta): un descarte de la morosa de
+        # este mes no esconde la del mes siguiente aunque el número de intentos coincida.
+        out.append(_alerta("cobros:plan_morosa", huella("plan_morosa", sus["intentos_fallidos"], hasta), "bloquea",
+                           "puesta_a_punto",
+                           gettext("No pudimos cobrar tu plan"),
+                           ngettext("No pudimos cobrar tu medio de pago. Mientras tanto usas tu saldo propio al precio a "
+                                    "la carta. Actualiza tu medio de pago en Configuración › Plan; si no, queda %(num)s "
+                                    "reintento antes de que el plan termine.",
+                                    "No pudimos cobrar tu medio de pago. Mientras tanto usas tu saldo propio al precio a "
+                                    "la carta. Actualiza tu medio de pago en Configuración › Plan; si no, quedan %(num)s "
+                                    "reintentos antes de que el plan termine.",
+                                    quedan),
+                           "settings", ancla="config-ap-plan"))
+        return out
+    if estado == "activa" and hasta and str(hasta) <= ahora and planes.sin_renovar(sus, ahora):
+        out.append(_alerta("cobros:plan_sin_renovar", huella("plan_sin_renovar", hasta), "atencion", "puesta_a_punto",
+                           gettext("El plan de este proyecto venció sin renovarse"),
+                           gettext("Lo pagado terminó el %(fecha)s y no hay un periodo abierto ni un cobro en curso: la "
+                                   "renovación periódica no lo renovó (¿el worker está parado, «Cobrar» apagado o no hay "
+                                   "tasa de cambio?). Revísalo en /admin/cobros.", fecha=vista.fecha_larga(hasta)),
+                           "settings", ancla="config-ap-plan", solo_admin=True))
+        return out
+    if hasta and str(hasta) > ahora:
+        pronto = str(hasta) <= (datetime.fromisoformat(str(ahora)[:19])
+                                + timedelta(days=DIAS_AVISO_RENOVACION)).isoformat(timespec="seconds")
+        fecha = vista.fecha_larga(hasta)
+        renueva = bool(sus["renovar"] and sus["fuente_pago_id"])
+        if estado == "activa" and renueva and pronto:
+            usd = planes._precio_aceptado(sus) or 0
+            # El momento real del cobro (una hora antes del fin de lo pagado: ruling 2026-10-10).
+            momento = vista.fecha_hora_larga(sus["proximo_cobro"] or hasta)
+            if sus["ciclo"] == "anual":
+                detalle = gettext("Tu plan anual se renueva el %(momento)s: a esa hora cobramos %(monto)s (en pesos a "
+                                  "la TRM del día). Si cancelas antes, no se cobra. El saldo del plan se renueva cada "
+                                  "mes y lo que no uses en un mes no pasa al siguiente.",
+                                  momento=momento, monto=monto(usd * 1000))
+            else:
+                detalle = gettext("Tu plan se renueva el %(momento)s: a esa hora cobramos %(monto)s (en pesos a la TRM "
+                                  "del día). Si cancelas antes, no se cobra. El saldo del plan que no uses antes de "
+                                  "esa fecha no se acumula.", momento=momento, monto=monto(usd * 1000))
+            out.append(_alerta("cobros:plan_renueva", huella("plan_renueva", hasta, usd), "info", "decision",
+                               gettext("Tu plan se renueva pronto"), detalle,
+                               "settings", ancla="config-ap-plan"))
+        elif estado == "cancelada" or (estado == "activa" and not renueva and pronto):
+            out.append(_alerta("cobros:plan_cancelada", huella("plan_cancelada", hasta), "info", "decision",
+                               gettext("Tu plan termina el %(fecha)s", fecha=fecha),
+                               gettext("No se renueva ni se cobra más. Hasta esa fecha sigues con el precio de miembro y "
+                                       "el saldo del plan; para seguir con el plan, vuelve a suscribirte en Configuración › Plan."),
+                               "settings", ancla="config-ap-plan"))
+    bolsa = libro.bolsa_plan(cliente, ahora) if estado in ("activa", "cancelada") else None
+    if bolsa and bolsa["credito"] > 0 and bolsa["gastado"] * 100 >= PORCENTAJE_BOLSA_PLAN * bolsa["credito"]:
+        usado = min(100, round(100 * bolsa["gastado"] / bolsa["credito"]))
+        out.append(_alerta("cobros:plan_bolsa_80", huella("plan_bolsa_80", bolsa["periodo_id"]), "atencion",
+                           "puesta_a_punto",
+                           gettext("Ya usaste el %(porcentaje)s %% del saldo de tu plan", porcentaje=usado),
+                           gettext("Te quedan %(monto)s del saldo del plan hasta el %(fecha)s; lo que no uses no se acumula.",
+                                   monto=monto(bolsa["restante"]), fecha=vista.fecha_larga(bolsa["fin"])),
+                           "settings", ancla="config-ap-plan"))
+    return out
+
+
 def calcular(cliente, ahora_iso=None):
     """Todas las alertas del proyecto, sin mirar descartes ni rol, ordenadas
     por grupo (GRUPOS) y nivel (NIVELES); dentro del mismo nivel, en el orden
@@ -642,7 +900,7 @@ def _borrar_descartes(cliente, huerfanos):
             con.execute(sa.delete(t).where(t.c.cliente == cliente, t.c.clave == clave, t.c.huella == huella_))
 
 
-def visibles(cliente, ahora_iso=None, rol="cliente", calculadas=None):
+def visibles(cliente, ahora_iso=None, rol="cliente", calculadas=None, usuario=None):
     """calcular() menos las alertas descartadas con la MISMA huella, y menos
     las `solo_admin` salvo que `rol == "admin"`. `calculadas` deja al llamador
     pasar un `calcular` ya hecho (la caché de 60 s del context processor); los
@@ -659,11 +917,14 @@ def visibles(cliente, ahora_iso=None, rol="cliente", calculadas=None):
     for a in todas:
         if a.get("solo_admin") and rol != "admin":
             continue
+        if a["clave"].startswith("cuenta:correo:") and rol != "admin" and a.get("entidad") != usuario:
+            continue
         d = filas.get(a["clave"])
         if d and d[0] == a["huella"]:
-            desc.append({**a, "descartada_en": d[1]})
+            desc.append({**a, "descartada_en": d[1],
+                         "puede_descartar": rol == "admin" or not descarte_solo_admin(a["clave"], todas)})
         else:
-            vis.append(a)
+            vis.append({**a, "puede_descartar": rol == "admin" or not descarte_solo_admin(a["clave"], todas)})
     claves = {a["clave"] for a in todas}
     huerfanos = {c: f[0] for c, f in filas.items() if c not in claves}
     if huerfanos and not any(a["clave"].startswith("revision:") for a in todas):
@@ -684,4 +945,7 @@ FUENTES.extend([
     ("organico", _fuente_organico),
     ("sprints", _fuente_sprints),
     ("nicho", _fuente_nicho),
+    ("cobros", _fuente_cobros),
+    ("meta", _fuente_meta),
+    ("meta_rendimiento", _fuente_meta_rendimiento),
 ])

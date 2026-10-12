@@ -16,7 +16,15 @@ legado/12-alertas-2026-10-02-spec-docs-superpowers.css
 base.css
 componentes/marca.css
 componentes/fondo-galaxia.css
+componentes/nvp.css
 pantallas/guia-estilos.css
 pantallas/experimentos.css
 pantallas/experimento-nuevo.css
+pantallas/saldo.css
+pantallas/planes.css
+pantallas/triple-whale.css
+pantallas/meta.css
+pantallas/rendimiento.css
+pantallas/crear.css
+pantallas/sprints.css
 pantallas/portada.css

@@ -1,0 +1,15 @@
+{# Configuración › Saldo y recargas (cobros, spec 2026-10-08 §7). Solo el
+   contenedor: static/cobros.js (lo carga base.html en toda página de un
+   proyecto) pide el panel a cobros.saldo_panel la primera vez que el apartado
+   se ve, así abrir el proyecto no lee el libro. Lo ve quien entra a un
+   proyecto que cobra, y el admin siempre. #}
+<div class="panel-cabecera" id="config-saldo">
+  <div>
+    <h2>{{ _('Saldo y recargas') }}</h2>
+    <p class="panel-cabecera-desc">{{ _('Lo que este proyecto tiene para generar. Cada pieza que llega descuenta su precio; la que falla no se cobra.') }}</p>
+  </div>
+</div>
+<div class="saldo-panel" data-saldo-panel="{{ url_for('cobros.saldo_panel', cliente=cliente) }}" aria-live="polite">
+  <p class="vacio" data-saldo-cargando>{{ _('Cargando el saldo…') }}</p>
+  <p class="tag-error" data-saldo-error hidden>{{ _('No se pudo cargar el saldo. Vuelve a abrir este apartado en un rato.') }}</p>
+</div>

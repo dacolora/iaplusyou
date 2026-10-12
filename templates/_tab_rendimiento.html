@@ -1,0 +1,501 @@
+{# Pestaña «Rendimiento» (spec 2026-10-09 §5, R15): reemplaza a las pestañas «Triple Whale» y «Meta». Al cargar la
+   página solo se pinta este armazón, con un contexto barato de ver_cliente: `rendimiento` = {conectado, hay_tw,
+   hay_meta, n_cuentas, es_admin} y lo que ya pide la conexión de Triple Whale (`triple_whale_conectado`, `tw_tiendas`,
+   `tw_paises`, `cifrado_ok`, `tw_monedas`, `tw_modelos`, `tw_ventanas`). El panel llega por fetch la primera vez que
+   se abre la pestaña (pestana_rendimiento.rutas.ver_panel → _rend_panel.html) y «Elegir cuentas de Meta» al abrirlo
+   (meta_rendimiento.rutas.ver_cuentas, la única ruta que llama a Meta; solo el admin, R20 de Meta rendimiento).
+   «Ajustes» junta las dos conexiones: el formulario de Triple Whale de siempre y el selector de cuentas de Meta; la
+   conexión con Meta sigue en Configuración › Conexiones. La conexión de Triple Whale no abre otra section: así
+   esta pestaña entera queda dentro de la suya.
+   Todo el JS vive aquí (los <script> de un fragmento que llega por fetch no corren). Junta el de las dos pestañas
+   viejas: el de Triple Whale (galería, «Cómo mejorarlo» por fetch con su confirmación y el 402, la tarjeta que se
+   repinta, `trabajo-terminado`, los chips de la tabla) se trajo tal cual, con las reglas que protegen lo que cobra
+   y sus comentarios; el de Meta («Elegir cuentas», confirmar antes de quitar una, «Ver más» de filas) también.
+   Desde E2 (tarea 4) la galería es UNA con los anuncios de las dos fuentes: este JS no cambió, porque cada URL (la
+   del bloque, la de la rejilla, la de cada tarjeta y la acción de cada formulario) sale de la plantilla y hoy apunta
+   a las rutas de la pestaña; el «Ver más» propio de las tarjetas de Meta de E1 (`data-rend-mas`) se fue con ellas. Los
+   textos del JS salen de la plantilla con |tojson. Los nombres de los selectores evitan palabras que la guardia de
+   idioma lee como español (`data-meta-act`, no `…-cuenta`).
+   Integración con main (2026-10-10): el JS que main agregó a las pestañas viejas vive aquí, tal cual. De Triple Whale,
+   los ganchos nuevos del detalle de un análisis (el detalle se vuelve a pedir cuando termina la barra de una variante
+   o, con una variante que espera al vigilante, cada ESPERA_DETALLE_MS y a lo sumo MAX_ESPERAS veces; «Probar los N
+   ganchos» por fetch, un POST por clic y nunca repetido). De Meta, «Evaluación con IA»: confirma el precio (el mismo
+   `form[data-confirmar]`), abre las evaluaciones anteriores por fetch (`data-meta-ev`) y, cuando su barra avisa que
+   terminó, vuelve a pedir el panel. #}
+{% import "_rend_macros.html" as rm %}
+<div class="panel-cabecera">
+  <div>
+    <h2>{{ _('Rendimiento') }}</h2>
+    <p class="panel-cabecera-desc">{{ _('Cómo van tus anuncios y tu tienda, país por país: cada cifra sale de una sola fuente, Triple Whale donde tienes tienda y Meta donde no.') }}</p>
+  </div>
+</div>
+
+{% if not rendimiento.conectado %}
+{{ rm.sin_conexion() }}
+{% endif %}
+
+{% set elegir_abierto = rendimiento.hay_meta and rendimiento.es_admin and not rendimiento.n_cuentas %}
+<details id="rend-ajustes" class="rend-ajustes"{% if not rendimiento.conectado or elegir_abierto %} open{% endif %}>
+  <summary>{{ _('Ajustes') }}</summary>
+  {% include "_triple_whale_conectar.html" %}
+  <div class="rend-ajustes-meta">
+    <h3 class="tw-conexion-titulo">{{ _('Cuentas de Meta') }}</h3>
+    {% if not rendimiento.hay_meta %}
+    <p class="vacio tw-nota"><a href="#settings" data-ir-tab="settings" data-ir-config="config-meta">{{ _('Conectar Meta en Configuración › Conexiones') }}</a></p>
+    {% elif rendimiento.es_admin %}
+    {% if elegir_abierto %}<p class="vacio tw-nota">{{ _('Marca abajo las cuentas de este proyecto y el país de cada una. Las copiamos en segundo plano: la primera vez tarda unos minutos por cuenta.') }}</p>{% endif %}
+    <button type="button" class="btn-sm" data-meta-elegir aria-expanded="{{ 'true' if elegir_abierto else 'false' }}" aria-controls="meta-cuentas">{{ _('Elegir cuentas de Meta') }}</button>
+    <div id="meta-cuentas" class="meta-cuentas" data-url="{{ url_for('meta_rendimiento.ver_cuentas', cliente=cliente) }}"{% if not elegir_abierto %} hidden{% endif %}>
+      <p class="vacio">{{ _('Cargando tus cuentas de Meta…') }}</p>
+    </div>
+    {% else %}
+    <p class="vacio tw-nota">{{ _('Un administrador de Creatv elige qué cuentas de Meta se leen.') }}</p>
+    {% endif %}
+  </div>
+</details>
+
+{% if rendimiento.conectado %}
+<div id="rend-panel" data-url="{{ url_for('rendimiento.ver_panel', cliente=cliente) }}">
+  <p class="vacio">{{ _('Cargando tu rendimiento…') }}</p>
+</div>
+{% endif %}
+<script src="{{ url_for('static', filename='tw_resultados.js') }}" defer></script>
+<script>
+  (function () {
+    var pestana = document.getElementById('tab-rendimiento');
+    if (!pestana) return;
+    var cont = document.getElementById('rend-panel');
+    var selector = document.getElementById('meta-cuentas');
+    var ajustes = document.getElementById('rend-ajustes');
+    var cargado = false, selectorCargado = false;
+    var filtros = {};
+    // Los textos que el JS escribe en la página salen de la plantilla (catálogo de idiomas), no de aquí.
+    var T_TW = {
+      tarjeta: {{ _('No se pudo actualizar este anuncio. Recarga la página para ver el resultado.')|tojson }},
+      detalle: {{ _('No se pudo cargar el análisis. Intenta de nuevo.')|tojson }},
+      pedido: {{ _('No se pudo confirmar el pedido. Revisa la tarjeta antes de intentar otra vez.')|tojson }}
+    };
+    var T = {
+      errorPanel: {{ _('No se pudo cargar tu rendimiento. Recarga la página.')|tojson }},
+      errorSelector: {{ _('No se pudieron cargar tus cuentas de Meta. Recarga la página.')|tojson }},
+      errorMas: {{ _('No se pudieron traer más filas. Inténtalo de nuevo.')|tojson }},
+      errorEvaluacion: {{ _('No se pudo cargar esa evaluación. Inténtalo de nuevo.')|tojson }},
+      confirmarQuitar: {{ _('Quitar una cuenta borra sus métricas copiadas en Creatv (no toca nada en Meta). ¿Seguir?')|tojson }}
+    };
+    var galeriaSeq = 0;   // cada pedido de la galería lleva su número: la respuesta que llega tarde no pisa la de ahora
+
+    // Las barras de progreso llevan data-poll-job (no un <script>): lo que se inserta por fetch las arranca aquí.
+    function sondear(raiz) {
+      if (typeof arrancarSondeos === 'function') arrancarSondeos(raiz);
+    }
+
+    function pedir(url) {
+      // Una sesión vencida redirige al login: eso no se pinta como si fuera el panel.
+      return fetch(url, { headers: { 'X-Requested-With': 'fetch' } })
+        .then(function (r) { return (r.ok && !r.redirected) ? r.text() : Promise.reject(r.status); });
+    }
+    function error(caja, texto) {
+      var p = document.createElement('p');
+      p.className = 'tag-error';
+      p.textContent = texto;
+      caja.replaceChildren(p);
+    }
+
+    function elementoDe(html, selector) {
+      var tmp = document.createElement('div');
+      tmp.innerHTML = html;
+      return tmp.querySelector(selector);
+    }
+
+    function galeria() { return cont.querySelector('#tw-galeria'); }
+    function bloque() { return cont.querySelector('.tw-galeria-bloque'); }
+
+    // Un filtro nuevo (`entera`) trae la galería ENTERA de ese filtro (chips, formulario del lote con sus claves y su
+    // precio, y la rejilla o el aviso de vacío) y reemplaza el bloque; «Ver más» solo agrega las tarjetas de la página
+    // siguiente a la rejilla que ya está. Si el pedido falla, la galería anterior sigue a la vista.
+    function pedirGaleria(params, entera, mas) {
+      var b = bloque(), g = galeria();
+      if (!b || !g) return;
+      var url = new URL((entera ? b : g).dataset.url, window.location.origin);
+      Object.keys(params).forEach(function (k) { url.searchParams.set(k, params[k]); });
+      var mio = ++galeriaSeq;
+      if (entera) b.setAttribute('aria-busy', 'true');
+      if (mas) mas.disabled = true;
+      function liberar() {
+        if (mas && mas.isConnected) mas.disabled = false;
+        if (entera && mio === galeriaSeq && b.isConnected) b.removeAttribute('aria-busy');
+      }
+      fetch(url.toString(), { headers: { 'X-Requested-With': 'fetch' } })
+        .then(function (r) { return r.ok ? r.text() : Promise.reject(r.status); })
+        .then(function (html) {
+          if (mio !== galeriaSeq) { liberar(); return; }
+          if (entera) {
+            var nuevo = elementoDe(html, '.tw-galeria-bloque');
+            if (!nuevo) { liberar(); return; }
+            b.replaceWith(nuevo);
+            sondear(nuevo);
+          } else {
+            if (mas) mas.remove();
+            g.insertAdjacentHTML('beforeend', html);
+            sondear(g);
+          }
+        })
+        .catch(liberar);
+    }
+
+    // Un aviso corto dentro de la tarjeta (textContent: puede venir del servidor o de un trabajo, nunca se interpreta).
+    function avisoEn(tarjeta, texto) {
+      var caja = tarjeta.querySelector('.tw-tarjeta-ia') || tarjeta;
+      var p = caja.querySelector('.tw-aviso-tarjeta');
+      if (!p) {
+        p = document.createElement('p');
+        p.className = 'tag-error tw-aviso-tarjeta';
+        p.setAttribute('role', 'status');
+        caja.insertBefore(p, caja.firstChild);
+      }
+      p.textContent = texto;
+    }
+
+    // Una tarjeta ya dijo su última palabra si muestra el análisis hecho o su error.
+    function tarjetaTerminada(tarjeta) {
+      return !!tarjeta.querySelector('.tw-ia-frase:not(.vacio), .tag-error');
+    }
+
+    // Repinta UNA tarjeta con lo que dice el servidor ahora: el resto de la galería, los filtros y lo que la persona
+    // tenía abierto no se tocan. `op.aviso` va en la tarjeta que quede (la nueva, o la vieja si no se pudo pedir);
+    // `op.falla`, solo si no se pudo pedir; `op.mensaje` (lo que dijo el trabajo al terminar), solo en una tarjeta
+    // nueva que no muestra ni un análisis hecho ni un error ni una barra viva, para que un fallo no pase en silencio.
+    function repintarTarjeta(tarjeta, op) {
+      if (!tarjeta) return;
+      var enFallo = op.aviso || op.falla;
+      function fallo() { if (enFallo) avisoEn(tarjeta, enFallo); }
+      if (!tarjeta.dataset.tarjetaUrl) { fallo(); return; }
+      fetch(tarjeta.dataset.tarjetaUrl, { headers: { 'X-Requested-With': 'fetch' } })
+        .then(function (r) { return r.ok ? r.text() : Promise.reject(r.status); })
+        .then(function (html) {
+          var nueva = elementoDe(html, 'article.tw-tarjeta');
+          if (!nueva) return Promise.reject(0);
+          tarjeta.replaceWith(nueva);
+          sondear(nueva);
+          if (op.aviso) avisoEn(nueva, op.aviso);
+          else if (op.mensaje && !tarjetaTerminada(nueva) && !nueva.querySelector('[data-poll-job]')) avisoEn(nueva, op.mensaje);
+        })
+        .catch(fallo);
+    }
+
+    // Ganchos nuevos (spec 2026-10-09 §5): el detalle de un análisis se vuelve a pedir cuando termina la barra de una
+    // de sus variantes y, mientras una variante viva espera al vigilante (sin trabajo vivo que sondear; el fragmento lo
+    // marca con data-tw-ganchos-esperan), cada ESPERA_DETALLE_MS, a lo sumo MAX_ESPERAS veces seguidas sin que una
+    // barra termine y solo con el detalle abierto. Nunca un bucle: el servidor no pinta una barra sin trabajo vivo.
+    var ESPERA_DETALLE_MS = 20000, MAX_ESPERAS = 30;
+    function programarEspera(caja) {
+      if (caja.dataset.esperando || !caja.querySelector('[data-tw-ganchos-esperan]')) return;
+      var n = parseInt(caja.dataset.esperas || '0', 10);
+      if (n >= MAX_ESPERAS) return;
+      caja.dataset.esperas = String(n + 1);
+      caja.dataset.esperando = '1';
+      setTimeout(function () {
+        delete caja.dataset.esperando;
+        if (caja.isConnected && !caja.hidden) recargarDetalle(caja);
+      }, ESPERA_DETALLE_MS);
+    }
+    // Un aviso corto arriba del detalle (textContent: nunca se interpreta).
+    function avisoDetalle(caja, texto) {
+      var p = document.createElement('p');
+      p.className = 'tag-error';
+      p.setAttribute('role', 'status');
+      p.textContent = texto;
+      caja.insertBefore(p, caja.firstChild);
+    }
+    function recargarDetalle(caja, aviso) {
+      var ver = caja && caja.parentElement ? caja.parentElement.querySelector('[data-tw-ver-analisis]') : null;
+      if (!ver) { if (aviso) window.alert(aviso); return; }
+      // Las tres variantes de una preparación comparten trabajo: sus barras terminan juntas y basta un pedido.
+      if (caja.dataset.recargando) return;
+      caja.dataset.recargando = '1';
+      fetch(ver.dataset.url, { headers: { 'X-Requested-With': 'fetch' } })
+        .then(function (r) { return r.ok ? r.text() : Promise.reject(r.status); })
+        .then(function (html) {
+          delete caja.dataset.recargando;
+          pintarDetalle(caja, html);
+          if (aviso) avisoDetalle(caja, aviso);
+        })
+        .catch(function () { delete caja.dataset.recargando; avisoDetalle(caja, aviso || T_TW.detalle); });
+    }
+    function pintarDetalle(caja, html) {
+      caja.innerHTML = html;
+      caja.dataset.cargado = '1';
+      sondear(caja);
+      programarEspera(caja);
+    }
+
+    function aplicarVeredicto(v) {
+      cont.querySelectorAll('[data-tw-filtro]').forEach(function (b) {
+        b.classList.toggle('activo', (b.dataset.twFiltro || '') === (v || ''));
+      });
+      cont.querySelectorAll('tr[data-veredicto]').forEach(function (fila) {
+        fila.hidden = !!v && fila.dataset.veredicto !== v;
+      });
+    }
+
+    function cargar() {
+      if (!cont) return;
+      cargado = true;
+      galeriaSeq++;   // lo que la galería anterior tenía pendiente ya no tiene dónde caer
+      var q = new URLSearchParams();
+      Object.keys(filtros).forEach(function (k) { if (filtros[k]) q.set(k, filtros[k]); });
+      pedir(cont.dataset.url + (q.toString() ? '?' + q.toString() : ''))
+        .then(function (html) {
+          cont.innerHTML = html;
+          // Las barras (data-poll-job) las arranca base.html (arrancarSondeos), sin repetir las que ya sondean.
+          sondear(cont);
+          // «Resultados»: la gráfica la dibuja static/tw_resultados.js (los <script> del fragmento no corren).
+          if (window.TwResultados && typeof window.TwResultados.iniciar === 'function') window.TwResultados.iniciar(cont);
+          aplicarVeredicto('');
+        })
+        .catch(function () { error(cont, T.errorPanel); });
+    }
+    function cargarSelector() {
+      if (!selector) return;
+      selectorCargado = true;
+      pedir(selector.dataset.url)
+        .then(function (html) { selector.innerHTML = html; })
+        .catch(function () { selectorCargado = false; error(selector, T.errorSelector); });
+    }
+
+    // Los filtros (entrada, periodo, canal) recargan el panel entero. «Canal» es de Triple Whale y de un alcance: al
+    // cambiar de entrada se suelta, y el panel nuevo lo ofrece si la entrada lo tiene.
+    function elegirEntrada(valor) {
+      filtros.entrada = valor;
+      delete filtros.canal;
+      cargar();
+    }
+    pestana.addEventListener('change', function (ev) {
+      var s = ev.target.closest('select[data-rend-param]');
+      if (!s || !cont) return;
+      if (s.dataset.rendParam === 'entrada') { elegirEntrada(s.value); return; }
+      filtros[s.dataset.rendParam] = s.value;
+      cargar();
+    });
+    pestana.addEventListener('click', function (ev) {
+      var entrada = ev.target.closest('[data-rend-entrada]');
+      if (entrada) {
+        elegirEntrada(entrada.dataset.rendEntrada);
+        pestana.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
+      var aj = ev.target.closest('[data-rend-ajustes]');
+      if (aj) {
+        if (ajustes) { ev.preventDefault(); ajustes.open = true; ajustes.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+        return;
+      }
+      var elegir = ev.target.closest('[data-meta-elegir]');
+      if (elegir && selector) {
+        selector.hidden = !selector.hidden;
+        elegir.setAttribute('aria-expanded', selector.hidden ? 'false' : 'true');
+        if (!selector.hidden && !selectorCargado) cargarSelector();
+        return;
+      }
+      var ir = ev.target.closest('[data-ir-tab]');
+      if (ir) {
+        var btn = document.querySelector('.sidebar-item[data-tab="' + ir.dataset.irTab + '"]');
+        if (btn) { ev.preventDefault(); btn.click(); if (ir.dataset.irConfig && window.irAConfig) window.irAConfig(ir.dataset.irConfig); }
+      }
+    });
+    // «Elegir cuentas de Meta»: quitar una cuenta borra sus métricas copiadas, así que se confirma antes.
+    pestana.addEventListener('submit', function (ev) {
+      var f = ev.target.closest('form[data-meta-seleccion]');
+      if (!f) return;
+      var quita = Array.prototype.some.call(f.querySelectorAll('input[data-elegida]'), function (c) { return !c.checked; });
+      if (quita && !window.confirm(T.confirmarQuitar)) ev.preventDefault();
+    });
+
+    if (cont) {
+      cont.addEventListener('click', function (ev) {
+        var gf = ev.target.closest('[data-tw-galeria-filtro]');
+        if (gf) {
+          pedirGaleria({ veredicto: gf.dataset.twGaleriaFiltro || '', entera: 1 }, true);
+          return;
+        }
+        var mas = ev.target.closest('[data-tw-mas]');
+        if (mas) {
+          var b1 = bloque(), g1 = galeria();
+          // Con un filtro nuevo en camino, agregar tarjetas del filtro viejo lo dejaría sin efecto.
+          if (!b1 || !g1 || b1.getAttribute('aria-busy') === 'true') return;
+          pedirGaleria({ veredicto: g1.dataset.veredicto || '', pagina: mas.dataset.pagina }, false, mas);
+          return;
+        }
+        var ver = ev.target.closest('[data-tw-ver-analisis]');
+        if (ver) {
+          var caja = ver.parentElement.querySelector('.tw-analisis-detalle');
+          if (!caja) return;
+          if (!caja.hidden) { caja.hidden = true; return; }
+          if (caja.dataset.cargado) {
+            caja.hidden = false;
+            // Cerrado, la espera de los ganchos no pide el detalle: al abrirlo (un clic de la persona) se pide ya y la
+            // cuenta de esperas vuelve a empezar.
+            if (caja.querySelector('[data-tw-ganchos-esperan]')) { caja.dataset.esperas = '0'; recargarDetalle(caja); }
+            return;
+          }
+          ver.disabled = true;
+          fetch(ver.dataset.url, { headers: { 'X-Requested-With': 'fetch' } })
+            .then(function (r) { return r.ok ? r.text() : Promise.reject(r.status); })
+            .then(function (html) { pintarDetalle(caja, html); caja.hidden = false; })
+            .catch(function () { caja.textContent = T_TW.detalle; caja.hidden = false; })   // sin cargado: otro clic reintenta
+            .then(function () { ver.disabled = false; });
+          return;
+        }
+        var chip = ev.target.closest('[data-tw-filtro]');
+        if (chip) { aplicarVeredicto(chip.dataset.twFiltro); return; }
+        var anterior = ev.target.closest('[data-meta-ev]');
+        if (anterior) {
+          // Una evaluación anterior de Meta: la primera vez se pide (HTML del servidor, ya escapado: nunca se arma aquí
+          // con el JSON de Claude); después solo se muestra u oculta.
+          var cajaEv = document.getElementById(anterior.getAttribute('aria-controls'));
+          if (!cajaEv) return;
+          var abrir = cajaEv.hidden;
+          cajaEv.hidden = !abrir;
+          anterior.setAttribute('aria-expanded', abrir ? 'true' : 'false');
+          if (abrir && !cajaEv.dataset.cargada) {
+            cajaEv.dataset.cargada = '1';
+            pedir(anterior.dataset.metaEv)
+              .then(function (html) { cajaEv.innerHTML = html; })
+              .catch(function () { delete cajaEv.dataset.cargada; error(cajaEv, T.errorEvaluacion); });
+          }
+          return;
+        }
+        var masFilas = ev.target.closest('[data-meta-mas]');
+        if (masFilas) {
+          // «Ver más» de conjuntos: la respuesta son solo filas <tr> (y la fila de su propio botón si quedan más); van
+          // en el lugar de la fila del botón, dentro del mismo <tbody>.
+          var fila = masFilas.closest('tr');
+          masFilas.disabled = true;
+          pedir(masFilas.dataset.metaMas)
+            .then(function (html) {
+              fila.insertAdjacentHTML('beforebegin', html);
+              fila.remove();
+            })
+            .catch(function () { masFilas.disabled = false; masFilas.title = T.errorMas; });
+        }
+      });
+      // «Cómo mejorarlo» (data-tw-async) se manda por fetch y la respuesta trae la tarjeta ya en curso; el lote y los
+      // demás formularios son POST normales (la página redirige con su aviso). Siempre se confirma el precio antes, y un
+      // pedido que cobra NUNCA se repite solo: si no se sabe cómo terminó (red caída, error, respuesta rara), se mira la
+      // tarjeta tal como está ahora (barra viva si el análisis corre, el botón de nuevo si no) y la persona decide.
+      cont.addEventListener('submit', function (ev) {
+        var f = ev.target.closest('form[data-confirmar]');
+        if (f && !window.confirm(f.dataset.confirmar)) { ev.preventDefault(); return; }
+        var asincrono = ev.target.closest('form[data-tw-async]');
+        if (!asincrono) return;
+        ev.preventDefault();
+        var tarjeta = asincrono.closest('article.tw-tarjeta');
+        // Todos los botones de análisis de la tarjeta: con dos formularios, un segundo clic no manda otro pedido.
+        var botones = (tarjeta || asincrono).querySelectorAll('form[data-tw-async] button[type="submit"]');
+        botones.forEach(function (b) { b.disabled = true; });
+        fetch(asincrono.action, { method: 'POST', body: new FormData(asincrono),
+                                  headers: { 'Accept': 'application/json', 'X-Requested-With': 'fetch' } })
+          // 402 = sin saldo: una respuesta conocida (no se guardó ni se encoló nada). static/cobros.js ya pinta el aviso
+          // con «Recargar saldo»; aquí solo vuelven los botones.
+          .then(function (r) { return (r.ok || r.status === 402) ? r.json() : Promise.reject(r.status); })
+          .then(function (d) {
+            var nueva = d && d.html ? elementoDe(d.html, 'article.tw-tarjeta') : null;
+            if (nueva && tarjeta) { tarjeta.replaceWith(nueva); sondear(nueva); }
+            else botones.forEach(function (b) { b.disabled = false; });
+            if (d && !d.ok && d.mensaje) window.alert(d.mensaje);
+          }, function () {
+            // Los botones siguen deshabilitados: solo la tarjeta repintada (o la persona, tras mirarla) los devuelve.
+            repintarTarjeta(tarjeta, { aviso: T_TW.pedido });
+          });
+      });
+      // La barra de una tarjeta avisa al terminar (data-poll-al-terminar="evento", base.html) en vez de recargar la página.
+      // Si es la de una variante de ganchos, se vuelve a pedir solo el detalle (repintar la tarjeta lo cerraría); si es
+      // la de «Evaluación con IA» de Meta, el panel entero con los mismos filtros.
+      cont.addEventListener('trabajo-terminado', function (ev) {
+        if (ev.target.closest('#meta-evaluacion')) { cargar(); return; }
+        var caja = ev.target.closest('.tw-analisis-detalle');
+        if (caja) { caja.dataset.esperas = '0'; recargarDetalle(caja); return; }
+        repintarTarjeta(ev.target.closest('article.tw-tarjeta'),
+                        { falla: T_TW.tarjeta, mensaje: (ev.detail && ev.detail.mensaje) || '' });
+      });
+      // «Probar los N ganchos»: el oyente de arriba ya pidió la confirmación del precio (si la persona cancela, el evento
+      // llega con defaultPrevented). Un solo POST por clic y nunca repetido: la respuesta, o su falta, solo hace que el
+      // detalle se vuelva a pedir y la persona vea el estado real antes de pagar otra vez (regla 1). 402 = sin saldo:
+      // static/cobros.js ya pinta «Recargar saldo».
+      cont.addEventListener('submit', function (ev) {
+        var f = ev.target.closest('form[data-tw-ganchos]');
+        if (!f || ev.defaultPrevented) return;
+        ev.preventDefault();
+        var caja = f.closest('.tw-analisis-detalle');
+        f.querySelectorAll('button[type="submit"]').forEach(function (b) { b.disabled = true; });
+        fetch(f.action, { method: 'POST', body: new FormData(f),
+                          headers: { 'Accept': 'application/json', 'X-Requested-With': 'fetch' } })
+          .then(function (r) { return (r.ok || r.status === 402 || r.status === 409) ? r.json() : Promise.reject(r.status); })
+          .then(function (d) {
+            if (d && !d.ok && d.mensaje) window.alert(d.mensaje);
+            recargarDetalle(caja);
+          }, function () { recargarDetalle(caja, T_TW.pedido); });
+      });
+    }
+
+    function siActiva() {
+      if (!pestana.classList.contains('activo')) return;
+      if (cont && !cargado) cargar();
+      if (selector && !selector.hidden && !selectorCargado) cargarSelector();
+    }
+    siActiva();
+    new MutationObserver(siActiva).observe(pestana, { attributes: true, attributeFilter: ['class'] });
+  })();
+</script>
+<script>
+  /* Conexión (_triple_whale_conectar.html, incluido arriba en «Ajustes»):
+     confirmar «Quitar» una tienda y, al salir del campo dominio, preseleccionar
+     el país que adivina el servidor. `pais.dataset.auto` recuerda el país que
+     puso este JS: si la persona corrige el dominio y el selector sigue con ese
+     valor, se vuelve a adivinar (norge → sverige pasa de Noruega a Suecia, y un
+     dominio sin pista vuelve a «Detectar por el dominio»); si la persona eligió
+     un país a mano (evento change del selector), no se toca (revisión del spec,
+     2026-10-08). */
+  (function () {
+    var con = document.getElementById('tw-conexion');
+    if (!con) return;
+    con.addEventListener('submit', function (ev) {
+      var f = ev.target.closest('form[data-confirmar]');
+      if (f && !window.confirm(f.dataset.confirmar)) ev.preventDefault();
+    });
+    var form = document.getElementById('form-triple-whale');
+    if (!form) return;
+    var dominio = form.querySelector('[name="dominio_tienda"]');
+    var pais = form.querySelector('select[name="pais"]');
+    if (!dominio || !pais || !form.dataset.adivinar) return;
+    var ultimo = '', pedido = 0;
+    function libre() {
+      // El selector es del JS mientras siga vacío o con el país que el JS puso.
+      return !pais.value || pais.value === pais.dataset.auto;
+    }
+    function adivinar() {
+      var valor = dominio.value.trim();
+      if (!valor || valor === ultimo || !libre()) return;
+      ultimo = valor;
+      var mio = ++pedido;
+      fetch(form.dataset.adivinar + '?dominio=' + encodeURIComponent(valor), { headers: { 'X-Requested-With': 'fetch' } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (!d || mio !== pedido || !libre()) return;
+          if (d.pais && pais.querySelector('option[value="' + d.pais + '"]')) {
+            pais.value = d.pais;
+            pais.dataset.auto = d.pais;
+          } else if (pais.dataset.auto) {
+            pais.value = '';
+            delete pais.dataset.auto;
+          }
+        })
+        .catch(function () { /* sin red: el servidor vuelve a adivinar al enviar */ });
+    }
+    pais.addEventListener('change', function () {
+      delete pais.dataset.auto;   // la persona eligió: el JS ya no lo toca
+      ultimo = '';                // si volvió a «Detectar por el dominio», el próximo blur adivina de nuevo
+    });
+    dominio.addEventListener('change', adivinar);
+    dominio.addEventListener('blur', adivinar);
+  })();
+</script>

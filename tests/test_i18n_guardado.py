@@ -18,23 +18,6 @@ def test_error_guardado_de_una_publicacion_va_en_el_idioma_del_proyecto(base_tem
     assert guardados == ["There was already a post of this piece in progress; retry once it finishes."]
 
 
-def test_puesto_en_cola_del_flujo_viejo_en_el_idioma_del_proyecto(monkeypatch):
-    """dashboard._avisar_fase_de (flujo viejo) compone «<fase> (puesto N)» en el
-    idioma del proyecto, como tareas/flowplus.py: una vez compuesto con el
-    número, estado_trabajo ya no puede traducirlo. En español, igual que antes."""
-    import dashboard
-    reportado = []
-    monkeypatch.setattr(dashboard.trabajos, "reportar", lambda job_id, detalle=None: reportado.append(detalle))
-    idioma = {"acme": "en"}
-    monkeypatch.setattr(idiomas, "de_proyecto", lambda c: idioma[c])
-    avisar = dashboard._avisar_fase_de("j", "acme")
-    avisar({"fase": "IN_QUEUE", "queue_position": 3})
-    avisar({"fase": "IN_PROGRESS"})
-    idioma["acme"] = "es"
-    avisar({"fase": "queued", "queue_position": 2})
-    avisar({"fase": "fase_nueva"})
-    avisar({"fase": "COMPLETED"})
-    assert reportado == ["queued (position 3)", "the model is working", "en cola (puesto 2)", "fase_nueva"]
 
 
 def _huerfanos_en_carpeta_temporal(dashboard, monkeypatch, tmp_path, clientes=()):

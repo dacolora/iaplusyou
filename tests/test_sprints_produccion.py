@@ -519,3 +519,20 @@ def test_director_sprint_no_reintenta_tarea_pagada(escenario, monkeypatch):
     monkeypatch.setattr(produccion.trabajos, 'encolar', lambda *a, **kw: cola.append(kw) or True)
     assert produccion.encolar_director('acme', cid)
     assert cola[0]['max_intentos'] == 1
+
+
+def test_pnd088_reserva_perdida_archiva_solo_la_sesion_nueva(escenario):
+    import creative_flow
+    from sprints import datos, produccion
+    sp = datos.sprint("acme", escenario["sid"])
+    idea = datos.idea("acme", escenario["iv"])
+    antes = set(creative_flow.cargar("acme"))
+    ajena = produccion.reserva_placeholder(idea["id"])
+    datos.actualizar_idea("acme", idea["id"], cf_id=ajena)
+    with pytest.raises(datos.ErrorDatos):
+        produccion.crear_sesion("acme", sp, sp["campanas"][0], idea,
+                                "wan3", "seedream_v5_pro", reserva="reservando_0_1")
+    nuevas = set(creative_flow.cargar("acme")) - antes
+    assert len(nuevas) == 1
+    assert all(creative_flow.concepto_archivado("acme", cf_id) for cf_id in nuevas)
+    assert datos.idea("acme", idea["id"])["cf_id"] == ajena

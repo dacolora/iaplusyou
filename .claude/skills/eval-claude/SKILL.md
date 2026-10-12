@@ -31,6 +31,7 @@ Antes de cerrar cualquier cambio en el prompt, la doctrina que recibe, `max_toke
 | Avatares | `nicho/avatares.py` (`_llamar`, `:516`) |
 | Lectura de Recrear / clasificar referentes | `referentes.lectura.leer` (`:125`) / `referentes.clasificar.clasificar` (`:206`) |
 | Revisor, QA, diagnóstico | `doctrina/revisor.py`, `sprints/qa.py`, `doctrina/diagnostico.py` |
+| «Evaluar con IA» de Meta (2026-10-10, medida dos veces: `docs/superpowers/evals/2026-10-10-meta-evaluacion.md`) | `meta_rendimiento.analisis.analizar`, tope `MAX_TOKENS` |
 
 ## Pasos
 

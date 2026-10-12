@@ -9,8 +9,9 @@
   {% include "_tab_alertas.html" %}
 </section>
 
-<section id="tab-triplewhale" class="tab-panel" role="tabpanel">
-  {% include "_tab_triple_whale.html" %}
+{# Rendimiento (spec 2026-10-09 R1): Triple Whale y Meta en una sola pestaña, en el lugar de las dos viejas. #}
+<section id="tab-rendimiento" class="tab-panel" role="tabpanel">
+  {% include "_tab_rendimiento.html" %}
 </section>
 
 <section id="tab-nicho" class="tab-panel" role="tabpanel">
@@ -52,9 +53,10 @@
     // Las claves siguen siendo las viejas ('calzado', 'idea', ...) a propósito:
     // son las que usan los redirect(_anchor=...) de dashboard.py y las que ya
     // están guardadas en el localStorage de la gente. Solo cambió la etiqueta.
+    // Las de una pestaña que se jubiló las traduce resolver() más abajo.
     var paneles = {
       alertas: document.getElementById('tab-alertas'),
-      triplewhale: document.getElementById('tab-triplewhale'),
+      rendimiento: document.getElementById('tab-rendimiento'),
       nicho: document.getElementById('tab-nicho'),
       referentes: document.getElementById('tab-referentes'),
       creativeflowplus: document.getElementById('tab-creativeflowplus'),
@@ -101,7 +103,14 @@
     // hash viejo (o el guardado) abre Catálogo.
     // 'ads' (Campañas) se fundió en Experimentos: el hash viejo (o el
     // guardado) abre Experimentos, donde quedan los anuncios sueltos.
+    // 'triplewhale' y 'meta' (2026-10-09) se juntaron en Rendimiento: el hash
+    // viejo, el guardado y los redirect(_anchor=...) viejos abren esa pestaña.
+    var JUBILADAS = { triplewhale: 'rendimiento', meta: 'rendimiento' };
     function resolver(t) {
+      if (t && Object.prototype.hasOwnProperty.call(JUBILADAS, t)) return JUBILADAS[t];
+      // «#config-ap-saldo» (el «Recargar» de un aviso sin saldo, la vuelta del
+      // pago): un apartado de Configuración abre esa pestaña; su script lo enfoca.
+      if (t && t.indexOf('config-') === 0) return 'settings';
       if (t === 'idea') return 'creativeflowplus';
       if (t === 'productos') return 'catalogo';
       if (t === 'ads' || t === 'tablero') return 'experimentos';
@@ -129,17 +138,23 @@
     }
     // Sin hash ni pestaña recordada, la página abre en Experimentos:
     // es lo que el dueño mira cada mañana. La recordada sigue mandando.
+    // Sin Meta ni historial (exp_sin_meta) Experimentos es solo «Conecta Meta», así que abre en Crear, también
+    // si la recordada es Experimentos (era la de entrada y quedó guardada); un #experimentos explícito la abre
+    // igual (Daniel, 2026-10-08).
     var inicial = resolver(desdeHash) || '';
-    if (!paneles[inicial]) inicial = resolver(desdeStorage) || '';
-    activar(paneles[inicial] ? inicial : 'experimentos');
+    if (!paneles[inicial]) {
+      inicial = resolver(desdeStorage) || '';
+      {% if exp_sin_meta %}if (inicial === 'experimentos') inicial = '';{% endif %}
+    }
+    activar(paneles[inicial] ? inicial : '{{ "creativeflowplus" if exp_sin_meta else "experimentos" }}');
 
     // Un enlace a «#settings» (alertas del Tablero, «Ir a Configuración →»,
     // una acción de Experimentos → «#experimentos?exp=…») cambia solo el hash: sin esto la
     // pestaña no cambiaba estando ya en la página. Un hash que no es
     // pestaña (#alta-sprint…) se ignora.
-    function desdeUbicacion() {
+    function desdeUbicacion(ev) {
       var t = resolver(location.hash.replace('#', '').split('?')[0]);
-      if (paneles[t]) activar(t, true);
+      if (paneles[t]) activar(t, !(ev && ev.type === 'popstate') && !paneles[t].classList.contains('activo'));
     }
     window.addEventListener('hashchange', desdeUbicacion);
     window.addEventListener('popstate', desdeUbicacion);

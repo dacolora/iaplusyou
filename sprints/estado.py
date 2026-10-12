@@ -6,7 +6,8 @@ ideas, lote, QA, revisión) para que la interfaz nunca mienta.
 """
 from sprints import datos
 
-_TERMINADAS = ("listo", "error", "degradada")
+LISTAS_PARA_REVISION = ("listo", "degradada")
+TERMINADAS = (*LISTAS_PARA_REVISION, "error")
 
 
 def estado_campana(n_referencias, planeadas, ideas=(), piezas=()):
@@ -17,7 +18,7 @@ def estado_campana(n_referencias, planeadas, ideas=(), piezas=()):
     ideas, piezas = list(ideas or []), list(piezas or [])
     if any(p.get("estado") in ("pendiente", "generando") for p in piezas):
         return "generando"
-    if piezas and all(p.get("estado") in _TERMINADAS for p in piezas):
+    if piezas and all(p.get("estado") in TERMINADAS for p in piezas):
         aprobadas = sum(1 for p in piezas if p.get("revision") == "aprobada")
         return "completada" if planeadas and aprobadas >= planeadas else "revision"
     aprobadas_ideas = sum(1 for i in ideas if i.get("estado_idea") == "aprobada")

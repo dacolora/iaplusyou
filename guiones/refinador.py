@@ -514,10 +514,10 @@ def _interpretar(texto, vigente):
     return respuesta, propuesta or None
 
 
-def _registrar(cliente, mensaje_id, ent, sal, detalle):
+def _registrar(cliente, mensaje_id, ent, sal, detalle, entregado=True):
     usd = costo_real(ent, sal)
     gastos.registrar_seguro(cliente, "refinar_prompt", usd, f"guiones:refinar:{mensaje_id}", detalle=detalle,
-                            proveedor="anthropic",
+                            proveedor="anthropic", entregado=entregado,
                             extra={"tokens_entrada": ent, "tokens_salida": sal, "modelo": modelo_actual()})
     return usd
 
@@ -573,7 +573,8 @@ def _responder(mensaje_id, llamar):
         except Exception as e:  # noqa: BLE001 — corre en un hilo: todo fallo termina en la fila, nunca afuera
             ent, sal = int(getattr(e, "tokens_entrada", 0) or 0), int(getattr(e, "tokens_salida", 0) or 0)
             log.warning("guiones: Claude falló en el mensaje %s (%s)", mensaje_id, type(e).__name__)
-            usd = _registrar(cliente, mensaje_id, ent, sal, f"{detalle} · sin respuesta útil") if (ent or sal) else 0.0
+            usd = (_registrar(cliente, mensaje_id, ent, sal, f"{detalle} · sin respuesta útil", entregado=False)
+                   if (ent or sal) else 0.0)
             contenido = str(e) if isinstance(e, RespuestaFallida) else gettext(
                 "No se pudo consultar a Claude (%(tipo)s). Vuelve a enviar tu mensaje.", tipo=type(e).__name__)
             _cerrar(mensaje_id, "error", contenido, usd=usd)
@@ -581,7 +582,7 @@ def _responder(mensaje_id, llamar):
         try:
             respuesta, propuesta = _interpretar(texto, prompt["texto_vigente"])
         except ValueError:
-            usd = _registrar(cliente, mensaje_id, ent, sal, f"{detalle} · respuesta inválida")
+            usd = _registrar(cliente, mensaje_id, ent, sal, f"{detalle} · respuesta inválida", entregado=False)
             _cerrar(mensaje_id, "error",
                    gettext("Claude no respondió en el formato esperado. Vuelve a enviar tu mensaje."), usd=usd)
             return

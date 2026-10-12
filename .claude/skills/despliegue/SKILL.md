@@ -78,6 +78,7 @@ Para encolar a mano usa `trabajos.encolar` con el mismo `job_id` que usaría la 
 - **`requirements.txt` y gunicorn** (2026-10-01): el pin `gunicorn>=22,<24` de «Escala y salud» bajaba el 26.2.0 que
   corre en el VPS; ese despliegue instaló sin esa línea. Revisa qué baja `pip` antes de aceptar un downgrade.
   Corregido el 2026-10-02 (`gunicorn>=22,<27`, PND-067); la regla sigue: mira qué baja `pip` antes de aceptarlo.
+- **`meta_rend_sincronizar` en `cola_vacia.py`** (2026-10-08): la copia de métricas de Meta aparece como tarea viva y reiniciar con ella a medias no pierde nada ni cobra (leer es gratis y la primera copia se reanuda desde su marcador), pero lo normal sigue siendo esperar: una cuenta tarda de 2 a 14 min y la primera copia de 7 cuentas ~1 h repartida en varios ciclos de 3 h.
 - **Un reinicio de systemd que no fue tuyo**: otra sesión puede haber reiniciado el worker segundos antes; mira
   `journalctl` antes de culparte de un `KeyboardInterrupt`.
 - **nginx**: `deploy/nginx-creatv.conf` es un EJEMPLO; la configuración real vive en el VPS (`/etc/nginx/…`, con los

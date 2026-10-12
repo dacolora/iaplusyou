@@ -176,6 +176,11 @@ def decidir(snapshots, reglas, contexto):
             return _resultado("pendiente", gettext(
                 "Pasó tráfico; esperando %(ventana)s h para medir ventas (%(horas)s h).",
                 ventana=r["ventana_ventas_horas"], horas=f"{horas:.0f}"), None, 2, numeros)
+        if int(c.get("compras_pais", numeros["compras"]) or 0) < 3:
+            v = _resultado("inconcluso", gettext("Menos de 3 compras entre las piezas del país: ventas inconclusas."),
+                           None, 2, numeros)
+            v["muestra_ventas_insuficiente"] = True
+            return v
         ok_roas = r["roas_min"] is not None and numeros["roas"] >= r["roas_min"]
         ok_cpa = r["cpa_max"] is not None and numeros["compras"] > 0 and numeros["cpa"] <= r["cpa_max"]
         if not (ok_roas or ok_cpa):

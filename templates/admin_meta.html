@@ -145,7 +145,7 @@
     </table>
   </div>
   {% else %}
-  <p class="vacio">{{ _('El Business no ve ninguna Página. Sin Página un proyecto solo puede pautar anuncios (nada de orgánico).') }}</p>
+  <p class="vacio">{{ _('El Business no ve ninguna Página. Sin Página el proyecto queda solo para métricas: no se pueden lanzar anuncios ni publicar.') }}</p>
   {% endif %}
 </section>
 {% endif %}
@@ -206,7 +206,7 @@
             {{ d.page_nombre or d.page_id or _('sin Página') }}{% if d.ig_username %} · @{{ d.ig_username }}{% endif %}
             {% if d.asignado_en %}<br><small>{{ _('desde %(fecha)s', fecha=d.asignado_en[:10]) }}</small>{% endif %}
           {% elif f.propia_conectada %}
-            {{ _('Su propia conexión:') }} {{ d.ad_account_nombre or d.ad_account_id }} · {{ d.page_nombre or d.page_id }}
+            {{ _('Su propia conexión:') }} {{ d.ad_account_nombre or d.ad_account_id }} · {{ d.page_nombre or d.page_id or _('sin Página') }}
           {% elif f.app_propia %}
             {{ _('App propia registrada, sin conectar') }}
           {% else %}
@@ -224,7 +224,7 @@
               {% endfor %}
             </select>
             <select name="page_id">
-              <option value="">{{ _('— sin Página (solo anuncios) —') }}</option>
+              <option value="">{{ _('— sin Página (solo métricas) —') }}</option>
               {% for p in activos.pages %}
               <option value="{{ p.id }}"{% if d.page_id == p.id or (sol and sol.page_id == p.id) %} selected{% endif %}>{{ p.name }}{% if p.ig_username %} (@{{ p.ig_username }}){% endif %} · {% if p.origen == "propia" %}{{ _('propia') }}{% else %}{{ _('cliente') }}{% endif %}</option>
               {% endfor %}

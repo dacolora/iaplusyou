@@ -38,7 +38,7 @@
   <li class="fe-cifra"><span class="fe-cifra-icono">{{ icono_fe("listo") }}</span><div><small>{{ _('Finalizados') }}</small><strong>{{ fe_cifras.finalizados }}</strong></div></li>
   <li class="fe-cifra"><span class="fe-cifra-icono">{{ icono_fe("paises") }}</span><div><small>{{ _('Países') }}</small><strong>{{ fe_cifras.paises }}</strong></div></li>
   {% if fe_cifras.costo_usd %}
-  <li class="fe-cifra"><span class="fe-cifra-icono">{{ icono_fe("costo") }}</span><div><small>{{ _('Costaron las finales listas') }}</small><strong>{{ fe_cifras.costo_usd | usd }}</strong></div></li>
+  <li class="fe-cifra"><span class="fe-cifra-icono">{{ icono_fe("costo") }}</span><div><small>{{ _('Lo que costaron las finales') }}</small><strong>{{ fe_cifras.costo_usd | usd }}</strong></div></li>
   {% endif %}
 </ul>
 

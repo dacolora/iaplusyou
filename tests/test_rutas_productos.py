@@ -642,8 +642,8 @@ def test_render_pixel_sin_conexion(app, monkeypatch):
     llamadas = []
     monkeypatch.setattr(d.meta_conexion, "estado_pixel", lambda c, solo_cache=False: llamadas.append(solo_cache))
     html = app["c"].get("/cliente/acme").data.decode()
-    # sin Meta no se va a Graph: la única consulta es la de atribucion_sugerida, solo caché
-    assert llamadas == [True] and "sin conexión" in html
+    # Sin Meta no se va a Graph ni se calcula la atribución del fragmento.
+    assert llamadas == [] and "sin conexión" in html
     assert "Comprobar Pixel" not in html and "sin comprobar" not in html
 
 
@@ -656,7 +656,7 @@ def test_render_pixel_meta_conectado_sin_cache_muestra_sin_comprobar(app, monkey
     llamadas = []
     monkeypatch.setattr(d.meta_conexion, "estado_pixel", lambda c, solo_cache=False: (llamadas.append(solo_cache), None)[1])
     html = app["c"].get("/cliente/acme").data.decode()
-    assert llamadas == [True, True]      # ver_cliente + atribucion_sugerida, ambas solo caché
+    assert llamadas == [True]           # ver_cliente: solo caché, sin el contexto del fragmento
     assert "sin comprobar" in html and "Comprobar Pixel" in html
     assert "/cliente/acme/config/pixel/refrescar" in html
     assert "Volver a comprobar" not in html and "sin conexión" not in html
@@ -683,9 +683,9 @@ def test_ver_cliente_contexto_productos(app, base_temporal, monkeypatch):
     a través de la galería y la ficha (siguen siendo _productos_tienda_contexto
     por debajo, dashboard.py:2861-2863 — el huérfano con activo_catalogo_id
     colgado se ve como tarjeta "fila", Cojín Azul cuenta sus 2 experimentos).
-    Lo que sigue en el contexto de ver_cliente (trabajos_prod, atribución
-    sugerida, cifrado, Pixel solo-caché) se comprueba por el contexto que
-    llega a la plantilla."""
+    Lo que sigue en el contexto de ver_cliente (trabajos_prod, cifrado,
+    Pixel solo-caché) se comprueba por el contexto que llega a la plantilla.
+    La atribución sugerida se comprueba en Nuevo experimento (PND-137)."""
     import creative_flow
     import experimentos as ex
     import tiendas
@@ -727,12 +727,18 @@ def test_ver_cliente_contexto_productos(app, base_temporal, monkeypatch):
     assert capturado["trabajos_prod"] == {"importar": {"job_id": "acme__importar_url"},
                                           "tiendas": {tiendas.listar("acme")[0]["id"]: {"job_id": job_sync}},
                                           "vincular": {}, "pedidos": {}}
-    assert capturado["atribucion_sugerida"] == "tienda" and capturado["cifrado_ok"] is True
+    assert "atribucion_sugerida" not in capturado and capturado["cifrado_ok"] is True
     assert capturado["meli_configurado"] is False and capturado["estado_pixel"]["estado"] == "sin_pixel"
     assert capturado["meta_conectado"] is True
-    assert llamadas_pixel == [True, True]   # ver_cliente y atribucion_sugerida: nunca a Graph
-    assert capturado["pedidos_por_exp"] == {}
+    assert llamadas_pixel == [True]        # ver_cliente: nunca a Graph
+    assert "pedidos_por_exp" not in capturado
     assert "nombre" in capturado["columnas_csv"] and capturado["tipos_tienda"] == ("shopify_publico", "shopify", "woo", "meli")
+    capturado.clear()
+    llamadas_pixel.clear()
+    assert c.get("/cliente/acme/experimentos/nuevo").status_code == 200
+    assert capturado["atribucion_sugerida"] == "tienda"
+    assert capturado["pedidos_por_exp"] == {}
+    assert llamadas_pixel and all(llamadas_pixel)  # Nuevo también lee solo el caché.
 
 
 def test_pedidos_por_experimento(app, base_temporal):

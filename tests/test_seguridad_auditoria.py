@@ -97,7 +97,7 @@ def test_dueno_de_un_trabajo_en_memoria_y_en_la_cola(base_temporal):
 
 def test_login_frena_tras_muchos_intentos_fallidos(app, monkeypatch):
     d = app["dashboard"]
-    monkeypatch.setattr(d, "LOGIN_MAX_POR_USUARIO", 3)
+    monkeypatch.setattr(d.cuentas, "LOGIN_MAX_POR_USUARIO", 3)
     app["usuarios"].crear("ana", "secreta123", "cliente", cliente="acme", correo="ana@ejemplo.com")
     c = d.app.test_client()
     assert c.post("/login", data={"usuario": "ana", "password": "secreta123"}).status_code == 302  # el bueno no cuenta
@@ -284,13 +284,6 @@ def test_tienda_woo_no_llama_a_la_red_interna_ni_sigue_redirecciones(monkeypatch
     assert "169.254.169.254" in str(ei.value) and s.llamadas[0]["allow_redirects"] is False
 
 
-def test_nueva_idea_visual_solo_acepta_un_personaje_del_proyecto(app, monkeypatch):
-    d = app["dashboard"]
-    monkeypatch.setattr(d, "_personajes", lambda cliente: [{"nombre": "p.png", "url": "https://r2.test/clientes/acme/personajes/p.png"}])
-    monkeypatch.setattr(d.generador_prompts, "generar_conceptos_imagen", lambda *a, **k: pytest.fail("no debió generar"))
-    c = _ana(app)
-    r = c.post("/cliente/acme/idea/nueva_visual", data={"idea": "x", "image_url": "http://169.254.169.254/latest/"})
-    assert r.status_code == 302
 
 
 # --- Excel con bomba de descompresión -------------------------------------------------------

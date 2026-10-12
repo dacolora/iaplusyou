@@ -23,7 +23,7 @@
           <input type="text" name="dominio" placeholder="mitienda.com" required {% if not cifrado_ok %}disabled{% endif %}>
           <p class="vacio" style="padding-top:.3rem;font-size:.76rem;">{{ _('Leo el catálogo público de tu tienda: productos, colores con su foto de estudio, precio y URL de compra. No necesita ninguna llave y se actualiza solo cada 6 h. Para pedidos y atribución conecta después con la Admin API en Configuración.') }}</p>
           <button type="submit" class="btn-generar btn-sm" {% if not cifrado_ok %}disabled{% endif %}>{{ _('Traer catálogo') }}</button>
-          {% if precios and precios.regla_producto and precios.regla_producto.usd is not none %}<small class="vacio precio-nota" style="display:inline;padding:0 0 0 .5rem;">{{ _('≈ %(usd)s la regla con IA por producto', usd=(precios.regla_producto.usd | usd)) }}</small>{% endif %}
+          {% if precios and precios.regla_producto and precios.regla_producto.usd is not none %}<small class="vacio precio-nota" style="display:inline;padding:0 0 0 .5rem;">{{ _('≈ %(usd)s la regla con IA por producto', usd=(precios.regla_producto.usd | precio | usd)) }}</small>{% endif %}
         </form>
         {% if not cifrado_ok %}<p class="tag-error">{{ _('Falta <code>FLASK_SECRET_KEY</code> en el <code>.env</code> del servidor: sin ella no se pueden guardar tiendas.') }}</p>{% endif %}
         {% endif %}
@@ -34,7 +34,7 @@
           <input type="file" name="archivo" accept=".csv,.xlsx" required>
           <p class="vacio" style="padding-top:.3rem;font-size:.76rem;">{{ _('Primera fila = nombres de columna. Reconozco: <code>%(columnas)s</code>. Máximo 5 MB.', columnas=(columnas_csv|traducir)) }}</p>
           <button type="submit" class="btn-generar btn-sm" {% if trabajo_imp %}disabled{% endif %}>{{ _('Importar archivo') }}</button>
-          {% if precios and precios.regla_producto and precios.regla_producto.usd is not none %}<small class="vacio precio-nota" style="display:inline;padding:0 0 0 .5rem;">{{ _('≈ %(usd)s la regla con IA por producto', usd=(precios.regla_producto.usd | usd)) }}</small>{% endif %}
+          {% if precios and precios.regla_producto and precios.regla_producto.usd is not none %}<small class="vacio precio-nota" style="display:inline;padding:0 0 0 .5rem;">{{ _('≈ %(usd)s la regla con IA por producto', usd=(precios.regla_producto.usd | precio | usd)) }}</small>{% endif %}
         </form>
       </details>
       <details class="swap-card prod-importar">
@@ -43,7 +43,7 @@
           <input type="url" name="url" placeholder="https://tutienda.com/productos/cojin-azul" required>
           <p class="vacio" style="padding-top:.3rem;font-size:.76rem;">{{ _('La página pública de UN producto: leo nombre, precio y fotos de sus datos estructurados.') }}</p>
           <button type="submit" class="btn-generar btn-sm" {% if trabajo_imp %}disabled{% endif %}>{{ _('Importar producto') }}</button>
-          {% if precios and precios.regla_producto and precios.regla_producto.usd is not none %}<small class="vacio precio-nota" style="display:inline;padding:0 0 0 .5rem;">{{ _('≈ %(usd)s la regla con IA', usd=(precios.regla_producto.usd | usd)) }}</small>{% endif %}
+          {% if precios and precios.regla_producto and precios.regla_producto.usd is not none %}<small class="vacio precio-nota" style="display:inline;padding:0 0 0 .5rem;">{{ _('≈ %(usd)s la regla con IA', usd=(precios.regla_producto.usd | precio | usd)) }}</small>{% endif %}
         </form>
       </details>
       <a class="btn-guardar btn-sm prod-link-config" href="#settings" onclick="document.querySelector('.sidebar-item[data-tab=settings]').click(); if (window.irAConfig) irAConfig('config-tienda'); return false;">{{ _('Otras tiendas (Configuración › Conexiones)') }}</a>

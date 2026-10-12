@@ -73,11 +73,3 @@ def test_caption_organico_pt_sin_orden_de_idioma(monkeypatch):
     assert idiomas.orden_idioma("es") not in s and idiomas.orden_idioma("en") not in s
     assert '"Link na bio"' in s
     assert "Idioma: pt" in cap["messages"][0]["content"]
-
-
-def test_generar_prompts_en_ingles(monkeypatch):
-    cap = _cliente_falso(monkeypatch, '["a", "b"]')
-    gp.generar_prompts("a dog runs", n=2, idioma="en")
-    s = _texto(cap["system"])
-    # (la orden de idioma dice «aunque estas instrucciones estén en español»: se mira la frase del prompt)
-    assert "variantes de prompt en inglés" in s and "variantes de prompt en español" not in s

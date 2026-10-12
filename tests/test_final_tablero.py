@@ -110,7 +110,7 @@ def test_cifras_del_tablero():
                                 _final("US", estado="generando", trabajo={"job_id": "j"}, idioma="en")])
     b = _video("cf_b", finales=[dict(_final("CO", costo=None), id="cf_b__es_CO")])
     c = _video("cf_c")
-    t = tablero.armar([a, b, c], {})
+    t = tablero.armar([a, b, c], {}, costo_finales=0.75)
     assert t["cifras"] == {"en_edicion": 1, "produciendo": 1, "finalizados": 3, "paises": 2, "costo_usd": 0.75,
                            "elegibles": 3}
     assert tablero.armar([c], {})["cifras"]["costo_usd"] is None
@@ -123,3 +123,26 @@ def test_lo_que_tiene_un_trabajo_vivo_va_primero():
     nuevo = _video("cf_nuevo", creado_en="2026-09-20T10:00:00", guion_base={"bloques": []})
     en, _, _ = _columna([nuevo, viejo], {"cf_nuevo": [_edicion("2026-10-01T08:00:00")]})
     assert en == ["cf_viejo", "cf_nuevo"]
+
+
+def test_pnd112_cambiar_guion_devuelve_a_edicion(base_temporal, monkeypatch):
+    import creative_flow as cf
+    import db
+    cid = cf.crear('acme', [], [], [], 'video', 8, '', 'A')
+    cf.actualizar('acme', cid, estado='video_listo')
+    monkeypatch.setattr(db, 'ahora', lambda: '2026-10-01T10:00:00')
+    cf.guardar_guion_base('acme', cid, {'bloques': [{'texto': 'antes'}]})
+    fid = cf.crear_final('acme', cid, 'es', 'CO')
+    cf.actualizar_final('acme', fid, estado='listo')
+    def resumen():
+        item = cf.cargar('acme')[cid]
+        item.update(guion_base=cf.guion_base('acme', cid), finales=cf.finales('acme', cid))
+        return tablero.resumen(item, [_edicion('2026-10-03T00:00:00', 'final_edition')])
+    assert not resumen()['en_edicion']
+    monkeypatch.setattr(db, 'ahora', lambda: '2026-10-02T10:00:00')
+    cf.guardar_guion_base('acme', cid, {'bloques': [{'texto': 'antes'}]})
+    assert not resumen()['en_edicion']
+    cf.guardar_guion_base('acme', cid, {'bloques': [{'texto': 'después'}]})
+    assert resumen()['en_edicion']
+    assert resumen()['siguiente'] == 'producir_otra_vez'
+    assert cf.finales('acme', cid)[0]['estado'] == 'listo'

@@ -499,3 +499,16 @@ def test_lanzar_animacion_de_la_variacion_marca_su_modo(base_temporal, monkeypat
     cf_vid = recrear.lanzar_animacion("acme", cf_img, "https://r2/var.png")
     video = creative_flow.cargar("acme")[cf_vid]
     assert video["recrear_modo"] == "libre_video" and video["accion_central"] == "Recrear: X · variación · video"
+
+
+def test_pnd090_tope_compartido_preserva_prompts_y_fotos(monkeypatch):
+    from referentes import recrear
+    p = _producto(referencias=["a", "b", "c"])
+    normal = recrear.armar_prompt(_referente(), _familia(), p, "", "", "1:1")
+    fiel = recrear.armar_prompt_fiel(None, p, "", "1:1")
+    assert "Image 2 y 3" in normal and "Image 2 y 3" in fiel
+    monkeypatch.setattr(recrear, "MAX_FOTOS_PRODUCTO", 1)
+    assert "Image 2 y 3" not in recrear.armar_prompt(_referente(), _familia(), p, "", "", "1:1")
+    assert "Image 2 y 3" not in recrear.armar_prompt_fiel(None, p, "", "1:1")
+    monkeypatch.setattr(recrear.r2_uploader, "upload_image", lambda ruta, clave: ruta)
+    assert recrear.referencias_para("acme", _referente(), p) == [_referente()["imagen_url"], "a"]

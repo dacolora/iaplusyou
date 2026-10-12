@@ -23,9 +23,12 @@ Ningún mensaje de error lleva la llave. Las consultas de este módulo son la
 mejor lectura del "Data Dictionary"; ninguna se probó todavía contra una
 tienda real (ver el spec 2026-09-28-triple-whale-rendimiento-design.md §9).
 """
+import os
+import posixpath
 import re
 import time
 from datetime import date, timedelta
+from urllib.parse import unquote, urlsplit
 
 import requests
 from flask_babel import gettext
@@ -50,14 +53,129 @@ _VENTANAS_VIEJAS = {"1": "1_day", "1d": "1_day", "7": "7_days", "7d": "7_days", 
                     "28": "28_days", "28d": "28_days", "30": "28_days", "30d": "28_days"}
 # Canal estandarizado de Meta en las tablas de Triple Whale.
 CANAL_META = "facebook-ads"
+# Nombres de los canales estandarizados de Triple Whale ("ads-standardized-channel-ids"). Viven aquí (no en el
+# blueprint) para que `mejorar`, que corre en el worker, no importe `rutas`.
+NOMBRES_CANAL = {"facebook-ads": "Meta", "google-ads": "Google Ads", "tiktok-ads": "TikTok", "bing": "Microsoft Ads",
+                 "pinterest-ads": "Pinterest", "snapchat-ads": "Snapchat", "twitter-ads": "X"}
 # «REQUIRED TRACKING PARAMETERS» de la KB de Meta en Triple Whale: van en los
 # Parámetros de URL del anuncio (url_tags del AdCreative), donde Meta resuelve
 # {{site_source_name}} y {{ad.id}}. Sin ellos Triple Whale igual ve el gasto,
 # pero "attribution accuracy may suffer significantly".
 URL_TAGS = "tw_source={{site_source_name}}&tw_adid={{ad.id}}"
-MONEDAS = ("USD", "EUR", "GBP", "AUD", "CAD", "MXN", "COP", "BRL", "CLP", "PEN", "ARS")
+
+# Tarjetas de análisis (spec 2026-10-08 §8.1): solo se incrusta en la página o se baja un medio de estos hosts, por
+# https. files.triplewhale.com aloja la miniatura y el mp4 de cada anuncio de Meta; el host de R2 (R2_PUBLIC_BASE_URL),
+# los de Creatv. Un video de TikTok llega como página (www.tiktok.com/embed/…) y queda como enlace.
+HOSTS_MEDIOS = ("files.triplewhale.com",)
+
+
+def _host_r2():
+    try:
+        return (urlsplit(os.environ.get("R2_PUBLIC_BASE_URL") or "").hostname or "").lower() or None
+    except ValueError:
+        return None
+
+
+def medio_permitido(url):
+    """¿Se puede incrustar o bajar este medio? https, sin usuario ni puerto raro, y host exacto de HOSTS_MEDIOS o
+    el de R2."""
+    try:
+        p = urlsplit(str(url or "").strip())
+        puerto = p.port
+    except ValueError:
+        return False
+    if p.scheme != "https" or not p.hostname or p.username or p.password or puerto not in (None, 443):
+        return False
+    host = p.hostname.lower()
+    return host in HOSTS_MEDIOS or (host == _host_r2())
+
+
+# Un video que no se puede incrustar (TikTok llega como página) se ofrece como enlace «Ver en …», pero solo a la
+# plataforma del propio anuncio (su `canal`): una URL rara que venga en los datos no se pinta, ni un enlace de otra
+# plataforma, ni un redirector («l.facebook.com/l.php?u=…», «youtube.com/redirect?q=…»), que mandaría a cualquier sitio.
+ENLACES_POR_CANAL = {
+    "tiktok-ads": ("tiktok.com",),
+    "facebook-ads": ("facebook.com", "fb.watch", "instagram.com"),
+    "snapchat-ads": ("snapchat.com",),
+    "google-ads": ("youtube.com",),
+    "pinterest-ads": ("pinterest.com",),
+}
+ENLACES_PLATAFORMAS = tuple(d for dominios in ENLACES_POR_CANAL.values() for d in dominios)
+_HOSTS_REDIRECTOR = ("l.", "lm.")
+# Redirectores de las plataformas: Facebook (/l.php, /flx/warn), TikTok (/link), Pinterest (/offsite) y los genéricos
+# (/redirect). Revisión final de las tarjetas, B8 (2026-10-08): /link, /offsite y /flx/warn se colaban.
+_RUTAS_REDIRECTOR = ("/l.php", "/redirect", "/link", "/offsite", "/flx/warn")
+
+
+def _ruta_decodificada(ruta):
+    """La ruta sin %-codificación (hasta tres vueltas: «/%252e/» también) y con «\\» como «/» (así lo hacen los
+    navegadores en https)."""
+    for _ in range(3):
+        decodificada = unquote(ruta)
+        if decodificada == ruta:
+            break
+        ruta = decodificada
+    return ruta.replace("\\", "/")
+
+
+def _ruta_como_la_lee_el_servidor(ruta):
+    """La ruta de una URL como la resolvería el servidor, para compararla con `_RUTAS_REDIRECTOR`: decodificada
+    (`_ruta_decodificada`), con los segmentos «.» y «..» resueltos y una sola barra al principio, en minúsculas.
+    «//l.php», «/%6C.php», «/./l.php», «/a/../l.php» y «/%2e/l.php» salen todas «/l.php». Revisión final de las
+    tarjetas, B8 (2026-10-08): los puntos y los `..` se colaban."""
+    ruta = "/" + _ruta_decodificada(ruta).lstrip("/")
+    return posixpath.normpath(ruta).lower()
+
+
+def _ruta_sin_segmentos_raros(ruta):
+    """¿La ruta, ya decodificada, no tiene ningún segmento vacío, «.» ni «..»? Se ignora la barra del principio y la
+    del final («/pin/1/»). Un enlace de anuncio de verdad nunca los lleva, y es justo lo que se usa para disfrazar un
+    redirector: `posixpath.normpath` junta «//» ANTES de resolver «..», pero un navegador no, así que
+    «/link//../v2» lo normaliza a «/v2» (pasa) y el navegador lo manda a «/link/v2», el redirector de TikTok.
+    Revisión de las tarjetas, 2026-10-08."""
+    segmentos = _ruta_decodificada(ruta).split("/")
+    if segmentos and segmentos[0] == "":
+        segmentos = segmentos[1:]
+    if segmentos and segmentos[-1] == "":
+        segmentos = segmentos[:-1]
+    return all(s not in ("", ".", "..") for s in segmentos)
+
+
+def enlace_permitido(url, canal=None):
+    """¿Se puede pintar este enlace «Ver en …»? https, sin usuario ni puerto raro, host exacto o subdominio de
+    la plataforma del `canal` del anuncio (canal desconocido: no; sin canal: cualquiera de las conocidas), sin
+    segmentos vacíos, «.» ni «..» en la ruta, y nunca un redirector de enlaces."""
+    try:
+        p = urlsplit(str(url or "").strip())
+        puerto = p.port
+    except ValueError:
+        return False
+    if p.scheme != "https" or not p.hostname or p.username or p.password or puerto not in (None, 443):
+        return False
+    host = p.hostname.lower()
+    if host.startswith(_HOSTS_REDIRECTOR) or not _ruta_sin_segmentos_raros(p.path):
+        return False
+    if _ruta_como_la_lee_el_servidor(p.path).startswith(_RUTAS_REDIRECTOR):
+        return False
+    if canal is None:
+        dominios = ENLACES_PLATAFORMAS
+    else:
+        dominios = ENLACES_POR_CANAL.get(str(canal).strip().lower(), ())
+    return any(host == d or host.endswith("." + d) for d in dominios)
+
+
+MONEDAS = ("USD", "EUR", "GBP", "AUD", "CAD", "MXN", "COP", "BRL", "CLP", "PEN", "ARS", "NOK", "SEK")
 
 _RE_DOMINIO = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$")
+
+
+def tachar_llave(texto, llave):
+    """`texto` con el valor exacto de `llave` tachado («***»). Ningún mensaje nuestro lleva la llave, pero
+    uno de Triple Whale podría repetirla sin «key=» delante (que `cola.sin_token` no reconoce): se tacha
+    antes de mostrarlo, guardarlo o dejarlo en un evento. Una llave de menos de 6 letras no se tacha (se
+    comería palabras sueltas). Auditoría de seguridad, 2026-10-08."""
+    texto = str(texto or "")
+    return texto.replace(llave, "***") if llave and len(llave) >= 6 else texto
 
 
 class ErrorTripleWhale(Exception):
@@ -264,6 +382,23 @@ WHERE event_date BETWEEN @startDate AND @endDate
 GROUP BY channel, ad_id, event_date
 """
 
+# La completa más los visitantes únicos y nuevos que el Pixel atribuye a cada anuncio: el NVP (spec
+# 2026-10-09-nvp-visitantes-nuevos §3; comprobado contra happyflops-norge el 2026-10-09). Va como versión
+# aparte, la primera: si una cuenta no los conoce, la copia baja a la completa de siempre y solo falta el NVP
+# (una columna de más tumbaba la copia entera a la mínima, PND-150).
+_PIXEL_CON_VISITANTES = """
+SELECT
+    channel, ad_id, event_date,
+    SUM(orders_quantity) AS orders, SUM(order_revenue) AS revenue,
+    SUM(new_customer_orders) AS nc_orders, SUM(new_customer_order_revenue) AS nc_revenue,
+    SUM(sessions) AS sessions, SUM(add_to_carts) AS add_to_carts, SUM(checkouts) AS checkouts,
+    SUM(unique_visitors) AS unique_visitors, SUM(new_visitors) AS new_visitors
+FROM pixel_joined_tvf()
+WHERE event_date BETWEEN @startDate AND @endDate
+    AND model = {modelo} AND attribution_window = {ventana}
+GROUP BY channel, ad_id, event_date
+"""
+
 _PIXEL_COMPLETA = """
 SELECT
     channel, ad_id, event_date,
@@ -291,11 +426,14 @@ SELECT
     event_date,
     SUM(spend) AS spend, SUM(order_revenue) AS revenue, SUM(orders_count) AS orders,
     SUM(new_customer_orders) AS nc_orders, SUM(new_customer_revenue) AS nc_revenue,
-    SUM(refund_money) AS refunds, SUM(cogs) AS cogs, SUM(net_profit) AS net_profit
+    SUM(refund_money) AS refunds, SUM(cogs) AS cogs
 FROM blended_stats_tvf()
 WHERE event_date BETWEEN @startDate AND @endDate
 GROUP BY event_date
 """
+# `blended_stats_tvf()` no tiene `net_profit` (comprobado contra happyflops-norge el 2026-10-08, PND-150): pedirla
+# hacía caer cada copia a la versión mínima y se perdían los clientes nuevos. La utilidad neta no se pinta en ningún
+# lado, así que no se pide ni se inventa con otras columnas; `utilidad_neta` queda en 0.
 
 _TIENDA_MINIMA = """
 SELECT event_date, SUM(spend) AS spend, SUM(order_revenue) AS revenue, SUM(orders_count) AS orders
@@ -304,40 +442,74 @@ WHERE event_date BETWEEN @startDate AND @endDate
 GROUP BY event_date
 """
 
-# Ventas por producto y día. `products_info` es una columna anidada de
-# orders_table ("products_info.* (product_id, sku, variant_id…)" en el Data
-# Dictionary): ARRAY JOIN la abre a una fila por producto de cada pedido,
-# como en ClickHouse. Los nombres de las medidas por producto (quantity,
-# price, title) no están en el diccionario que leímos: la versión mínima solo
-# cuenta pedidos por producto y reparte los ingresos del pedido en partes
-# iguales.
+# Visitantes únicos y nuevos de la tienda por día (`blended_stats_tvf` no los tiene). `web_analytics_table` los
+# cuenta por página de entrada, dispositivo, navegador, país y ciudad: la suma cuenta dos veces a quien entra por
+# dos de ellos, igual en el numerador y el denominador, así que el NVP es aproximado (spec §1).
+_VISITANTES_TIENDA = """
+SELECT
+    event_date, SUM(unique_visitors) AS unique_visitors, SUM(new_visitors) AS new_visitors
+FROM web_analytics_table
+WHERE event_date BETWEEN @startDate AND @endDate
+GROUP BY event_date
+"""
+
+# Ventas por producto y día. `products_info` es un arreglo de objetos dentro de cada fila de orders_table; ARRAY JOIN
+# lo abre a una fila por línea del pedido. Los nombres de sus campos se leyeron de la tienda real el 2026-10-08
+# (PND-150; la versión anterior pedía `title`, `sku`, `quantity` y `price`, que no existen): `product_id`,
+# `product_name`, `product_sku`, `variant_id`, `product_name_price` (precio unitario),
+# `product_name_quantity_sold` y `net_discount_amount_for_product` (descuento de la línea). La suma de
+# precio × cantidad cuadra con `gross_product_sales` de la tienda. La completa resta el descuento (ventas netas por
+# producto); la mínima, sin descuento, por si una tienda no lo trae.
 _PRODUCTOS_COMPLETA = """
 SELECT
     event_date,
-    products_info.product_id AS product_id,
-    any(products_info.title) AS title,
-    any(products_info.sku) AS sku,
-    SUM(products_info.quantity) AS quantity,
-    SUM(products_info.price * products_info.quantity) AS revenue,
+    p.product_id AS product_id,
+    any(p.product_name) AS title,
+    any(p.product_sku) AS sku,
+    SUM(p.product_name_quantity_sold) AS quantity,
+    SUM(p.product_name_price * p.product_name_quantity_sold - p.net_discount_amount_for_product) AS revenue,
     uniq(order_id) AS orders
 FROM orders_table
-ARRAY JOIN products_info
+ARRAY JOIN products_info AS p
 WHERE event_date BETWEEN @startDate AND @endDate
-GROUP BY event_date, products_info.product_id
+GROUP BY event_date, p.product_id
 """
 
 _PRODUCTOS_MINIMA = """
 SELECT
     event_date,
-    products_info.product_id AS product_id,
-    any(products_info.sku) AS sku,
-    count() AS quantity,
-    SUM(order_revenue / greatest(length(products_info), 1)) AS revenue,
+    p.product_id AS product_id,
+    any(p.product_name) AS title,
+    any(p.product_sku) AS sku,
+    SUM(p.product_name_quantity_sold) AS quantity,
+    SUM(p.product_name_price * p.product_name_quantity_sold) AS revenue,
     uniq(order_id) AS orders
 FROM orders_table
-ARRAY JOIN products_info
+ARRAY JOIN products_info AS p
 WHERE event_date BETWEEN @startDate AND @endDate
-GROUP BY event_date, products_info.product_id
+GROUP BY event_date, p.product_id
+"""
+
+# El anuncio tal cual (spec 2026-10-08-triple-whale-tarjetas-analisis §3.3): miniatura, video, título y copy, una
+# fila por anuncio (sin fecha). Probado con la tienda real el 2026-10-08: ad_type, ad_image_url (en
+# files.triplewhale.com, no caduca), video_url, ad_title, ad_copy y video_duration llegan; creative_cta_type vino
+# vacío. Columnas en https://triplewhale.readme.io/docs/ads-table.md.
+_CREATIVOS_COMPLETA = """
+SELECT
+    channel, ad_id,
+    max(ad_type) AS ad_type, max(ad_image_url) AS ad_image_url, max(video_url) AS video_url,
+    max(ad_title) AS ad_title, max(ad_copy) AS ad_copy, max(creative_cta_type) AS creative_cta_type,
+    max(video_duration) AS video_duration
+FROM ads_table
+WHERE event_date BETWEEN @startDate AND @endDate AND ad_id IS NOT NULL AND ad_id != ''
+GROUP BY channel, ad_id
+"""
+
+_CREATIVOS_MINIMA = """
+SELECT channel, ad_id, max(ad_type) AS ad_type, max(ad_image_url) AS ad_image_url, max(video_url) AS video_url
+FROM ads_table
+WHERE event_date BETWEEN @startDate AND @endDate AND ad_id IS NOT NULL AND ad_id != ''
+GROUP BY channel, ad_id
 """
 
 _PRUEBA = "SELECT SUM(spend) AS spend FROM ads_table WHERE event_date BETWEEN @startDate AND @endDate"
@@ -350,15 +522,23 @@ def consultas_anuncios():
 def consultas_pixel(modelo, ventana):
     lit = {"modelo": _literal(normalizar_modelo(modelo), MODELOS),
            "ventana": _literal(normalizar_ventana(ventana), VENTANAS)}
-    return [_PIXEL_COMPLETA.format(**lit), _PIXEL_MINIMA.format(**lit)]
+    return [_PIXEL_CON_VISITANTES.format(**lit), _PIXEL_COMPLETA.format(**lit), _PIXEL_MINIMA.format(**lit)]
 
 
 def consultas_tienda():
     return [_TIENDA_COMPLETA, _TIENDA_MINIMA]
 
 
+def consultas_visitantes_tienda():
+    return [_VISITANTES_TIENDA]
+
+
 def consultas_productos():
     return [_PRODUCTOS_COMPLETA, _PRODUCTOS_MINIMA]
+
+
+def consultas_creativos():
+    return [_CREATIVOS_COMPLETA, _CREATIVOS_MINIMA]
 
 
 # ------------------------------------------------------------ llamadas ---
