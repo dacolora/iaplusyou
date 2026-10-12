@@ -335,7 +335,7 @@ coordinador en `.superpowers/sdd/2026-10-10-pestana-rendimiento-e2/final-fixes.m
   neutra). Triple Whale no cambia.
 - **T1/T2.** Pruebas para las mutaciones 27 (cada tarjeta de Meta en la moneda de SU cuenta, orden en USD) y 25 (el
   envío de «Probar los ganchos» se frena antes del fetch).
-- Diferido: PND-290 a PND-295. PND-290 cerrado el 2026-10-12 (evaluación de Meta para todas las cuentas, arriba).
+- Diferido: PND-290 a PND-295. Cerrados el 2026-10-12: PND-290 (evaluación de Meta para todas las cuentas, arriba), PND-286 (texto ajeno delimitado en «Evaluar con IA») y PND-294 (días que no abren, `sin_dia`); PND-295 quedó solo con el aprendizaje que guarda el nombre del anuncio (decide Daniel).
 
 ## Trampas
 
