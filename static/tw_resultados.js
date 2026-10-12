@@ -406,12 +406,17 @@
     }
 
     // ------------------------------------------------------- detalle del día ---
-    function abrir(fecha, conFoco) {
-      if (!fecha || !datos.url_dia || !detalle) return;   // sin `url_dia` (la plantilla no lo dio) no hay detalle del día
+    function indiceDeDia(fecha) {
       var i = -1;
       for (var k = 0; k < n; k++) if (dias[k].f === fecha) i = k;
+      return i;
+    }
+    function abrir(fecha, conFoco) {
+      if (!fecha || !datos.url_dia || !detalle) return;   // sin `url_dia` (la plantilla no lo dio) no hay detalle del día
+      var i = indiceDeDia(fecha);
       // Las flechas + Enter, el clic y los botones «Ver qué pasó →» pasan por aquí: la misma guarda para todos.
       if (i >= 0 && !diaAbrible(dias[i], i === n - 1)) return;
+      detalle.hidden = false;                              // lo escondió el arranque si no había nada que abrir
       st.sel = i;
       dibujar();
       var mio = ++st.pedido;
@@ -538,7 +543,11 @@
     window.addEventListener('resize', alRedimensionar);
 
     dibujar();
-    abrir(datos.dia_inicial, false);
+    // Al nacer se abre el último día con datos que abre (`dia_inicial`). Si ninguno abre, el recuadro del detalle (que la
+    // plantilla pinta con «Cargando…») se esconde hasta que la persona abra un día: sin esto no terminaba nunca.
+    var inicial = indiceDeDia(datos.dia_inicial);
+    if (inicial >= 0 && abrible(inicial)) abrir(datos.dia_inicial, false);
+    else if (detalle) detalle.hidden = true;
   }
 
   window.TwResultados = {

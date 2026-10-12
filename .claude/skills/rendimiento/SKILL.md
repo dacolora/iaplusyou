@@ -251,7 +251,9 @@ arranques desconocidos).
 - **Días que el detalle no abre (PND-294, 2026-10-12).** Con un periodo fijo la gráfica dibuja días anteriores al
   primero que la ruta acepta y el clic daba «No se pudo cargar ese día.»: `armar(inicio_detalle=…)` los marca `sin_dia`
   con la regla de la ruta (`resumen._primeros`; con Triple Whale solo, `datos.primer_dia_copia`, no `inicio_datos`) y el
-  JS no los abre ni los invita (`tests/test_rendimiento_sin_dia.py`, `tests/js/tw_resultados_dia.test.mjs`).
+  JS no los abre ni los invita (`tests/test_rendimiento_sin_dia.py`, `tests/js/tw_resultados_dia.test.mjs`). El motivo
+  depende de cuántas fuentes tienen copia (`varias_fuentes`, no de `fuente == "mixta"`), y `dia_inicial` siempre es un
+  día que abre (o "": el JS esconde el recuadro en vez de dejarlo en «Cargando…»).
 
 ## Integración con main (2026-10-10): lo de producción, dentro de Rendimiento
 

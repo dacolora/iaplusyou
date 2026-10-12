@@ -79,7 +79,7 @@ const TEXTOS = { hoy: 'hoy', hoy_medias: 'hoy, a medias', pista: 'Clic para ver 
                  meta: '', promedio: '', grafica: 'Gráfica de %(m)s', cargando: 'Cargando…',
                  error_dia: 'No se pudo cargar ese día.', sin_copia: 'sin copia', sin_dia: 'todavía no estaban todas tus fuentes' };
 
-function montar() {
+function montar(cambios = {}) {
   const dias = FECHAS.map((f, i) => {
     if (i === 6) return { f, ing: null, gas: null, ped: null, nc: null, nue: null, sin_copia: true };
     const fila = { f, ing: 100 + i, gas: 50, ped: 2, nc: 0, nue: null };
@@ -89,7 +89,7 @@ function montar() {
   const datos = { lang: 'es', moneda: 'USD', fuente: 'mixta', comparar: false, meta_roas: null, conocido_desde: null,
                   dia_inicial: '2026-10-09', url_dia: '/x/dia?entrada=', dias, previos: [], raros: {}, mejor: {},
                   metricas: [{ clave: 'ventas', etiqueta: 'Ventas', bueno: 1, formato: 'dinero' }], canales: [],
-                  textos: TEXTOS };
+                  textos: TEXTOS, ...cambios };
   const el = (tag) => new El(tag);
   const seccion = el('section'), lienzo = el('svg'), aviso = el('div'), leyenda = el('ul'), caja = el('div'),
         detalle = el('div'), fuente = el('script'), raiz = el('div');
@@ -110,9 +110,9 @@ globalThis.fetch = (url) => {
 const resp = (estado, cuerpo) => ({ ok: estado >= 200 && estado < 300, status: estado, text: () => Promise.resolve(cuerpo) });
 const pasar = () => new Promise((r) => setTimeout(r, 0));
 
-async function iniciar(r = resp(200, '<p>detalle</p>')) {
+async function iniciar(r = resp(200, '<p>detalle</p>'), cambios = {}) {
   pedidas = []; respuesta = r;
-  const g = montar();
+  const g = montar(cambios);
   window.TwResultados.iniciar(g.raiz);
   await pasar();
   pedidas = [];                         // lo que pidió al nacer (el último día con datos) no es lo que se prueba
@@ -155,7 +155,9 @@ test('«Ver qué pasó →» de un día sin_dia no pide nada', async () => {
   const g = await iniciar();
   const boton = (fecha) => ({ target: { closest: (sel) => (sel === 'button[data-twr-dia]' ? { getAttribute: () => fecha } : null) },
                               preventDefault() {} });
-  g.seccion.disparar('click', boton('2026-10-02'));
+  g.seccion.disparar('click', boton('2026-10-02'));      // sin_dia
+  g.seccion.disparar('click', boton('2026-10-07'));      // sin_copia
+  g.seccion.disparar('click', boton('2026-10-10'));      // hoy
   await pasar();
   assert.deepEqual(pedidas, []);
   g.seccion.disparar('click', boton('2026-10-08'));
@@ -189,6 +191,31 @@ test('sin el texto sin_dia (una página vieja) el recuadro no escribe «undefine
   window.TwResultados.iniciar(g.raiz);
   g.lienzo.disparar('pointermove', { clientX: xDe(1) });
   assert.doesNotMatch(g.aviso.textContent, /undefined/);
+});
+
+// ------------------------------------------------------------------- el día con el que nace la gráfica ---
+
+test('si el día con el que nace no abre, el recuadro del detalle no se queda en «Cargando…»', async () => {
+  for (const dia_inicial of ['2026-10-02', '2026-10-07', '2026-10-10', '']) {   // sin_dia, sin_copia, hoy y ninguno
+    const g = await iniciar(undefined, { dia_inicial });
+    assert.deepEqual(pedidas, [], dia_inicial);                // nada que pedir
+    assert.equal(g.detalle.hidden, true, dia_inicial);         // y el «Cargando…» de la plantilla no se queda
+    // Cuando la persona abre un día que sí abre, el recuadro vuelve y se llena.
+    g.lienzo.disparar('click', { clientX: xDe(4) });
+    await pasar();
+    assert.equal(g.detalle.hidden, false, dia_inicial);
+    assert.equal(g.detalle.html, '<p>detalle</p>', dia_inicial);
+  }
+});
+
+test('si el día con el que nace abre, se pide y el recuadro se queda a la vista', async () => {
+  pedidas = []; respuesta = resp(200, '<p>inicial</p>');
+  const g = montar({ dia_inicial: '2026-10-09' });
+  window.TwResultados.iniciar(g.raiz);
+  await pasar();
+  assert.deepEqual(pedidas, ['/x/dia?entrada=&fecha=2026-10-09']);
+  assert.equal(g.detalle.hidden, false);
+  assert.equal(g.detalle.html, '<p>inicial</p>');
 });
 
 // ---------------------------------------------------------------------------------- el error del detalle ---

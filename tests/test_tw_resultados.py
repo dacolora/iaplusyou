@@ -23,12 +23,12 @@ def _dias(valores, desde="2026-09-01"):
 
 def _armar(serie, dias_periodo=0, inicio=0, hoy=date(2026, 9, 30), nuevos=None, canales=None, cohortes=None,
            inicio_copia="2026-09-01", meta_roas=None, canal=None, fuente="tienda", ultima_copia=None,
-           inicio_datos=None, fin_datos=None, con_detalle=True, inicio_detalle=None):
+           inicio_datos=None, fin_datos=None, con_detalle=True, inicio_detalle=None, varias_fuentes=False):
     return r.armar(dias_periodo=dias_periodo, serie_larga=serie, inicio=inicio, hoy=hoy, fuente=fuente,
                    moneda="USD", nuevos=nuevos or {}, canales=canales or {}, cohortes=cohortes,
                    inicio_copia=inicio_copia, meta_roas=meta_roas, canal=canal, url_dia="/x/dia?tienda=",
                    ultima_copia=ultima_copia, inicio_datos=inicio_datos, fin_datos=fin_datos,
-                   con_detalle=con_detalle, inicio_detalle=inicio_detalle)
+                   con_detalle=con_detalle, inicio_detalle=inicio_detalle, varias_fuentes=varias_fuentes)
 
 
 def test_por_dia_rellena_con_ceros():
@@ -411,9 +411,40 @@ def test_ver_que_paso_no_ofrece_un_dia_que_el_detalle_rechaza(es):
     assert [f["texto"] for f in abre["lectura"]] == [f["texto"] for f in cierra["lectura"]]
 
 
-def test_el_motivo_del_recuadro_depende_de_la_fuente(es):
+def test_el_motivo_del_recuadro_depende_de_cuantas_fuentes_tienen_copia(es):
     serie = _dias([(100, 50, 2)] * 30)
-    textos = {fuente: _armar(serie, fuente=fuente)["datos"]["textos"]["sin_dia"]
-              for fuente in ("mixta", "meta", "tienda", "anuncios")}
-    assert textos["mixta"] == "todavía no estaban todas tus fuentes"
-    assert textos["meta"] == textos["tienda"] == textos["anuncios"] == "antes de la primera copia"
+    # No depende de la etiqueta de la fuente: una mezcla con una sola copia, o varias cuentas de Meta (fuente «meta»)
+    # que empezaron en días distintos, dicen lo que es cierto en sus días anteriores al inicio común.
+    for fuente in ("mixta", "meta", "tienda", "anuncios"):
+        una = _armar(serie, fuente=fuente)["datos"]["textos"]["sin_dia"]
+        varias = _armar(serie, fuente=fuente, varias_fuentes=True)["datos"]["textos"]["sin_dia"]
+        assert una == "antes de la primera copia", fuente
+        assert varias == "todavía no estaban todas tus fuentes", fuente
+
+
+def test_el_motivo_del_recuadro_en_ingles(es):
+    # Los dos textos pasan por el catálogo: sin `gettext` o sin traducción este dice español.
+    serie = _dias([(100, 50, 2)] * 30)
+    with idiomas.en_idioma("en"):
+        una = _armar(serie, fuente="meta")["datos"]["textos"]["sin_dia"]
+        varias = _armar(serie, fuente="mixta", varias_fuentes=True)["datos"]["textos"]["sin_dia"]
+    assert (una, varias) == ("before the first copy", "not all your sources were there yet")
+
+
+def test_la_grafica_nace_en_un_dia_que_abre(es):
+    serie = _dias([(100, 50, 2)] * 30)                                  # 1 a 30 de septiembre; hoy = el 30
+    assert _armar(serie, inicio_detalle="2026-09-10")["datos"]["dia_inicial"] == "2026-09-29"   # el de siempre
+    assert _armar(serie)["datos"]["dia_inicial"] == "2026-09-29"
+    # Con datos solo en días que el detalle no abre, no se elige uno de ellos: ayer si abre...
+    solo_antes = _dias([(100, 50, 2)] * 5 + [(0, 0, 0)] * 25)
+    assert _armar(solo_antes, inicio_detalle="2026-09-10")["datos"]["dia_inicial"] == "2026-09-29"
+    # ...y si nada abre (la única copia es de hoy), queda vacío: el JS esconde el recuadro en vez de «Cargando…».
+    assert _armar(serie, inicio_detalle="2026-09-30")["datos"]["dia_inicial"] == ""
+    assert _armar(serie, inicio_detalle=r.NINGUN_DIA)["datos"]["dia_inicial"] == ""
+    # Ni el último día con datos si ese día cae antes del primero que abre (aquí el 20, y ayer tampoco abre).
+    datos_viejos = _dias([(100, 50, 2)] * 20 + [(0, 0, 0)] * 10)
+    assert _armar(datos_viejos, inicio_detalle="2026-09-30")["datos"]["dia_inicial"] == ""
+    # Ayer sin copia tampoco: abrirlo no haría nada.
+    assert _armar(serie, fin_datos="2026-09-27")["datos"]["dia_inicial"] == "2026-09-27"
+    sin_datos = _dias([(0, 0, 0)] * 30)
+    assert _armar(sin_datos, fin_datos="2026-09-27")["datos"]["dia_inicial"] == ""
