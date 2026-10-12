@@ -678,7 +678,9 @@ def _despues_del_cobro(cliente, resultado, gasto_id, usd, tipo, referencia):
             avisos.pieza_no_cobrada(cliente, _no_cobrado_milesimas(gasto_id, resultado, usd, cliente), tipo)
         elif resultado in ("cobro", "recalculado_mayor"):
             c = libro.cuenta(cliente)
-            if not c["pospago"]:   # pospago: un saldo bajo o negativo es lo que debe, no un aviso para recargar
+            if c["pospago"]:   # pospago: no hay «saldo bajo»; al admin, cada US$ 200 de deuda nueva
+                avisos.deuda_pospago(cliente, libro.deuda(cliente))
+            else:
                 s = libro.saldo(cliente)
                 if s < c["umbral"]:
                     avisos.saldo_bajo(cliente, s)

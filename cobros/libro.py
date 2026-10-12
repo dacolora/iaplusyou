@@ -692,6 +692,21 @@ def _bolsa(con, cliente, periodo):
             "restante": max(0, credito - gastado), "fin": periodo["fin"]}
 
 
+def deuda(cliente):
+    """Lo que debe un proyecto pospago, en milésimas (0 si no cobra, no es pospago o no debe): lo negativo de su
+    saldo propio = restante de la bolsa del plan − saldo (la bolsa no paga la deuda). Solo lee."""
+    if not cliente:
+        return 0
+    with db.conectar() as con:
+        cta = con.execute(sa.select(db.cuenta_saldo.c.cobrar, db.cuenta_saldo.c.pospago)
+                          .where(db.cuenta_saldo.c.cliente == cliente)).first()
+        if cta is None or not cta.cobrar or not cta.pospago:
+            return 0
+        periodo = planes.periodo_abierto(con, cliente)
+        restante = _bolsa(con, cliente, periodo)["restante"] if periodo is not None else 0
+        return max(0, int(restante) - _saldo(con, cliente))
+
+
 def bolsa_plan(cliente, ahora=None):
     """La bolsa del periodo abierto: {periodo_id, credito, gastado, restante,
     fin}, o None si no hay periodo. Solo lee. El saldo propio es

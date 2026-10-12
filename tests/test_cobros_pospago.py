@@ -278,3 +278,69 @@ def test_prender_cobrar_en_un_pospago_sin_saldo_no_dice_que_no_podra_generar(htt
         avisos = [m for _c, m in s.get("_flashes", [])]
     assert libro.cuenta("acme")["cobrar"] is True
     assert not [m for m in avisos if "no podrá generar" in m]
+
+
+# --- aviso al admin cada US$ 200 de deuda nueva (Daniel 2026-10-12) ---------------------------
+
+def test_la_deuda_es_lo_negativo_del_saldo_propio(libro, base_temporal):
+    assert libro.deuda("acme") == 0                                  # sin cuenta
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    with base_temporal.conectar() as con:
+        libro.acreditar(con, "acme", "ajuste", -5_000, "ajuste", usuario="admin", detalle="x")
+    assert libro.deuda("acme") == 0                                  # prepago: no es deuda de pospago
+    libro.configurar("acme", usuario="admin", pospago=True)
+    assert libro.deuda("acme") == 5_000
+    _plan_abierto(base_temporal, libro, credito=10_000)              # la bolsa no la paga
+    assert libro.deuda("acme") == 5_000
+
+
+@pytest.fixture()
+def avisos_admin(monkeypatch):
+    from cobros import avisos
+    enviados = []
+    monkeypatch.setattr(avisos, "admin", lambda tipo, asunto, cuerpo, cliente="": enviados.append(
+        (tipo, cliente, asunto() if callable(asunto) else asunto, cuerpo() if callable(cuerpo) else cuerpo)) or 1)
+    return enviados
+
+
+def test_avisa_al_admin_al_entrar_en_cada_tramo_de_200(libro, avisos_admin):
+    from cobros import avisos
+    assert avisos.deuda_pospago("acme", 948_630) is False            # la primera vez solo anota el tramo (4)
+    assert avisos.deuda_pospago("acme", 999_000) is False            # mismo tramo
+    assert avisos.deuda_pospago("acme", 1_000_000) is True           # entra al tramo 5: US$ 1 000
+    assert avisos.deuda_pospago("acme", 1_150_000) is False
+    assert avisos.deuda_pospago("acme", 1_450_000) is True           # salta al 7: un solo aviso
+    assert avisos.deuda_pospago("acme", 100_000) is False            # pagó: el tramo baja sin avisar
+    assert avisos.deuda_pospago("acme", 250_000) is True             # y vuelve a avisar al subir
+    tipos = [a[0] for a in avisos_admin]
+    assert tipos == ["deuda_pospago"] * 3 and {a[1] for a in avisos_admin} == {"acme"}
+    assert "1.000" in avisos_admin[0][2].replace(",", ".") or "1,000" in avisos_admin[0][2]
+
+
+def test_un_cobro_en_pospago_dispara_el_aviso_de_deuda(libro, avisos_admin):
+    import gastos
+    from cobros import avisos
+    _pospago(libro, milesimas=-199_000)
+    avisos.deuda_pospago("acme", libro.deuda("acme"))                # lo que hace el script al prenderlo
+    gastos.registrar("acme", "video", 1.0, "video:cf1:t1")           # 199 000 + 3 000 → tramo 1
+    assert [a[0] for a in avisos_admin] == ["deuda_pospago"]
+    libro.configurar("otro", usuario="admin", cobrar=True, margen=3.0)
+    with __import__("db").conectar() as con:
+        libro.acreditar(con, "otro", "ajuste", 900_000, "ajuste", usuario="admin", detalle="x")
+    gastos.registrar("otro", "video", 1.0, "video:cf2:t2")           # prepago: nunca
+    assert len(avisos_admin) == 1
+
+
+def test_alerta_solo_para_el_admin_con_huella_por_tramo(libro):
+    import alertas
+    _pospago(libro, milesimas=-150_000)
+    assert not [a for a in alertas._fuente_cobros("acme", AHORA) if a["clave"] == "cobros:deuda_pospago"]
+    _pospago(libro, milesimas=-100_000)                              # 250 000: tramo 1
+    a, = [a for a in alertas._fuente_cobros("acme", AHORA) if a["clave"] == "cobros:deuda_pospago"]
+    assert a["solo_admin"] is True and a["ancla"] == "config-ap-saldo" and re.search(r"250[.,]00", a["titulo"])
+    _pospago(libro, milesimas=-10_000)                               # 260 000: mismo tramo, misma huella
+    b, = [x for x in alertas._fuente_cobros("acme", AHORA) if x["clave"] == "cobros:deuda_pospago"]
+    assert b["huella"] == a["huella"]
+    _pospago(libro, milesimas=-200_000)                              # 460 000: tramo 2, huella nueva
+    c, = [x for x in alertas._fuente_cobros("acme", AHORA) if x["clave"] == "cobros:deuda_pospago"]
+    assert c["huella"] != a["huella"]

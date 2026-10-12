@@ -688,11 +688,11 @@ def _fuente_nicho(cliente, ahora):
 def _fuente_cobros(cliente, ahora):
     """Saldo prepagado del proyecto (spec 2026-10-08-cobros §8), solo si el proyecto cobra: sin saldo, saldo bajo,
     piezas que no se cobraron (un `reverso` o `no_cobrado` de los últimos DIAS_NO_COBRADO días), recargas de Bold o
-    Wompi que siguen pendientes y el plan mensual (`_alertas_plan`). Son del cliente (nada de aquí es solo_admin) y todas llevan a Configuración › Saldo y recargas.
+    Wompi que siguen pendientes y el plan mensual (`_alertas_plan`). Son del cliente salvo `cobros:deuda_pospago` (la deuda de un pospago cada US$ 200, solo el admin) y `plan_sin_renovar`; todas llevan a Configuración › Saldo y recargas o › Plan.
     Una consulta por tipo de dato (la cuenta con el saldo, los movimientos, las recargas), sin importar cuántos
     haya; un proyecto que no cobra sale tras leer la cuenta y uno sin plan tras una consulta más. Las huellas son de cifras, nunca de texto traducido:
     la de «saldo bajo» sigue al saldo en dólares, para que un descarte no esconda un saldo que siguió bajando."""
-    from cobros import libro, vista  # noqa: PLC0415
+    from cobros import avisos, libro, vista  # noqa: PLC0415
     import gastos  # noqa: PLC0415
     c = libro.estado(cliente)
     if not c["cobrar"]:
@@ -716,6 +716,18 @@ def _fuente_cobros(cliente, ahora):
                            gettext("Te quedan %(saldo)s. Recarga en Configuración › Saldo y recargas antes de que se acabe.",
                                    saldo=monto(c["saldo"])),
                            "settings", ancla="config-ap-saldo"))
+
+    if c["pospago"]:
+        # Solo el admin, cada US$ 200 de deuda (la huella es el tramo: descartarla la esconde hasta el siguiente).
+        debe = libro.deuda(cliente)
+        tramo = debe // avisos.TRAMO_DEUDA
+        if tramo:
+            out.append(_alerta("cobros:deuda_pospago", huella("deuda_pospago", tramo), "atencion", "decision",
+                               gettext("Este proyecto debe %(monto)s", monto=monto(debe)),
+                               gettext("Es pospago: genera sin frenos y lo que pase de cero queda por pagar. Vuelve "
+                                       "a avisar con cada %(tramo)s de deuda nueva; cóbrale o pásalo a prepago en "
+                                       "/admin/cobros.", tramo=monto(avisos.TRAMO_DEUDA)),
+                               "settings", ancla="config-ap-saldo", solo_admin=True))
 
     m = db.movimiento_saldo
     q = (sa.select(m.c.id, m.c.tipo, m.c.milesimas, m.c.concepto, m.c.extra)

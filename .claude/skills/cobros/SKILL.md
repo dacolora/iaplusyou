@@ -35,9 +35,12 @@ nota). Con «Cobrar» apagado el pospago no hace nada. `libro.cuenta()` trae la 
 **Con plan mensual la bolsa no paga la deuda** (guardian-gasto 2026-10-12): `vencer_periodo` vence lo que sobró
 ENTERO en pospago (en prepago sigue con el tope de no bajar de 0), y lo que se muestra como deuda es
 `vista.por_pagar(e, bolsa)` = lo negativo de saldo − restante de la bolsa (chip «Por pagar: X · Plan: Y restantes»,
-tile del panel, `tono(e, bolsa)`). Riesgo que decide Daniel: en pospago la deuda no tiene tope; lo automático ya
-autorizado (modo automático de Experimentos, QA de Sprints, regla de fidelidad del importador) sigue cobrando sin el
-freno del saldo. Pruebas: `tests/test_cobros_pospago.py`, `tests/test_migracion_0040.py`.
+tile del panel, `tono(e, bolsa)`). La deuda no tiene tope (lo automático ya autorizado —modo automático de
+Experimentos, QA de Sprints, regla de fidelidad del importador— sigue cobrando sin el freno del saldo); Daniel eligió
+**un aviso al admin cada US$ 200 de deuda nueva** (`avisos.TRAMO_DEUDA`): `avisos.deuda_pospago(cliente,
+libro.deuda(cliente))` tras cada cobro de un pospago (correo `deuda_pospago`; el tramo en `kv`
+`cobros:aviso_deuda:<cliente>`; la primera vez solo anota, al bajar no avisa) y la alerta solo-admin
+`cobros:deuda_pospago` con huella por tramo. El VPS no tiene SMTP (2026-10-12): hoy solo la alerta llega. Pruebas: `tests/test_cobros_pospago.py`, `tests/test_migracion_0040.py`.
 
 ## Módulos y quién escribe qué
 

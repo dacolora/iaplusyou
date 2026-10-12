@@ -173,6 +173,10 @@ msgid "%(cerrados)s periodos cerrados, %(abiertos)s abiertos, %(cobros)s cobros 
 msgstr "%(cerrados)s periods closed, %(abiertos)s opened, %(cobros)s charges checked"
 
 #, python-format
+msgid "%(cliente)s debe %(deuda)s. Es pospago: genera sin frenos y lo que pase de cero queda por pagar. Este aviso vuelve con cada %(tramo)s de deuda nueva; cóbrale o pásalo a prepago en /admin/cobros."
+msgstr "%(cliente)s owes %(deuda)s. It is postpaid: it generates without limits and anything below zero is owed. This notice comes back with every %(tramo)s of new debt; bill them or switch them to prepaid in /admin/cobros."
+
+#, python-format
 msgid "%(cliente)s recargó %(monto)s (%(medio)s)."
 msgstr "%(cliente)s topped up %(monto)s (%(medio)s)."
 
@@ -7345,6 +7349,10 @@ msgstr "This is what was deducted from your balance (each movement is listed in 
 msgid "Es mi voz o tengo permiso escrito de la persona para clonarla y usarla en anuncios."
 msgstr "This is my voice, or I have the person's written permission to clone it and use it in ads."
 
+#, python-format
+msgid "Es pospago: genera sin frenos y lo que pase de cero queda por pagar. Vuelve a avisar con cada %(tramo)s de deuda nueva; cóbrale o pásalo a prepago en /admin/cobros."
+msgstr "It is postpaid: it generates without limits and anything below zero is owed. It warns again with every %(tramo)s of new debt; bill them or switch them to prepaid in /admin/cobros."
+
 msgid "Es un comentario real de un comprador"
 msgstr "It's a real buyer's comment"
 
@@ -8335,6 +8343,10 @@ msgstr "This prompt is already approved. Reopen it to keep correcting it."
 
 msgid "Este proyecto cobra: «Costo» es lo que pagó Creatv al proveedor y «Cobrado», lo que se descontó del saldo del proyecto."
 msgstr "This project is charged: «Cost» is what Creatv paid the provider and «Charged» is what was deducted from the project balance."
+
+#, python-format
+msgid "Este proyecto debe %(monto)s"
+msgstr "This project owes %(monto)s"
 
 msgid "Este proyecto está conectado a Meta solo para métricas (sin Página): conecta una Página en Configuración › Conexiones para lanzar anuncios."
 msgstr "This project is connected to Meta for metrics only (no Page): connect a Page in Settings › Connections to launch ads."
@@ -10573,6 +10585,10 @@ msgstr "The account sells less than it spends: ROAS %(roas)s× in 30 days"
 
 msgid "La descarga terminó vacía."
 msgstr "The download came back empty."
+
+#, python-format
+msgid "La deuda de %(cliente)s pasó de %(tramo)s"
+msgstr "%(cliente)s's debt went over %(tramo)s"
 
 msgid "La dirección de vuelta del pago no es válida"
 msgstr "The payment return address is not valid"
