@@ -473,6 +473,23 @@ def test_limpiar_tambien_borra_los_dias_de_cuenta_de_mas_de_400_dias(hf):
     assert quedan == sorted(fechas[1:])
 
 
+def test_limpiar_reintenta_las_copias_pendientes_de_r2_y_sobrevive_si_el_reintento_falla(hf, monkeypatch):
+    """PND-295 (2), 2026-10-12: las claves de R2 que fallaron al soltar datos de Meta se reintentan en esta limpieza
+    diaria (sin otra periódica); si el reintento lanza, la limpieza de la copia termina igual."""
+    llamadas = []
+    monkeypatch.setattr(t.r2_pendientes, "reintentar", lambda: llamadas.append(1) or (3, 1))
+    texto = t.meta_rend_limpiar({"payload": {}})
+    assert llamadas == [1] and "fila(s) viejas de anuncios" in texto
+    assert "3 copia(s) pendientes borradas y 1 siguen pendientes" in texto
+    monkeypatch.setattr(t.r2_pendientes, "reintentar", lambda: (0, 0))
+    assert "R2" not in t.meta_rend_limpiar({"payload": {}})             # sin pendientes, el mensaje de siempre
+
+    def _cae():
+        raise RuntimeError("boom")
+    monkeypatch.setattr(t.r2_pendientes, "reintentar", _cae)
+    assert "fila(s) viejas de anuncios" in t.meta_rend_limpiar({"payload": {}})
+
+
 def test_registradas_y_periodicas_en_el_worker():
     import tareas
     import worker
@@ -538,7 +555,7 @@ def evaluacion(hf, monkeypatch):
     subidas, borradas = [], []
     monkeypatch.setattr(tw_analisis.r2_uploader, "upload_image",
                         lambda local, clave: subidas.append(clave) or f"https://r2/{clave}")
-    monkeypatch.setattr(tw_analisis.r2_uploader, "delete_files",
+    monkeypatch.setattr(tw_analisis.r2_uploader, "delete_files_detalle",
                         lambda claves: (borradas.extend(claves), (len(claves), []))[1])
     from referentes import imagenes
     monkeypatch.setattr(imagenes, "_bajar", lambda url: _jpeg())
@@ -713,7 +730,7 @@ def test_evaluar_si_r2_falla_al_soltar_las_miniaturas_la_tarea_termina_igual_y_a
     def _falla(claves):
         raise RuntimeError(f"Faltan R2_ACCOUNT_ID {TOKEN}")
     monkeypatch.setattr(analisis, "_llamar", _llamar)
-    monkeypatch.setattr(tw_analisis.r2_uploader, "delete_files", _falla)
+    monkeypatch.setattr(tw_analisis.r2_uploader, "delete_files_detalle", _falla)
     assert t.meta_rend_evaluar(_tarea_eval(eid)) == "Esa evaluación ya no existe."
     assert _gastos_eval()[0]["usd"] == pytest.approx(costo_real(10000, 5000))
 

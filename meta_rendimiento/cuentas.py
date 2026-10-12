@@ -122,6 +122,10 @@ def elegir(cliente, elegidas, usuario=None):
             copiadas += _borrar_copias(cliente, act) or []
             with db.conectar() as con:
                 con.execute(db.meta_cuenta.delete().where(_C.cliente == cliente, _C.ad_account_id == act))
+            # PND-295 (2026-10-12): un «Cómo mejorarlo» pedido mientras tanto pudo crear su fila entre el barrido de
+            # arriba y el borrado de la cuenta (el pedido comprueba la cuenta después de crearla, y en ese momento
+            # todavía estaba). Ninguna suelta futura la alcanzaría: se barre otra vez, y sus copias van al `finally`.
+            copiadas += tw_datos.borrar_analisis_meta(cliente, [act]) or []
     finally:
         # S1: las copias en R2 de los análisis ya borrados, al final y con un solo cliente de R2 (también si otra
         # cuenta falló después: sus filas ya no están y nadie más sabría esas claves). `borrar_copias` nunca lanza.

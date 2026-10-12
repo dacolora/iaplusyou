@@ -147,8 +147,8 @@ def _segmentos(desgloses_30, en_alcance):
 
 def preparar(cliente, dias=None, cuenta=None, hoy=None, ids=None):
     """Todo lo que la evaluación guarda al pedirla, para el alcance que mira la persona (`dias` y `cuenta` como el
-    panel: una cuenta del proyecto o «Todas»; o, desde la pestaña «Rendimiento», `ids`: las cuentas de Meta de su
-    entrada cuya fuente es Meta, y entonces `cuenta` no cuenta), en el idioma del proyecto (lo que se guarda y se manda a Claude):
+    panel: una cuenta del proyecto o «Todas»; o, desde la pestaña «Rendimiento», `ids`: todas las cuentas de Meta de
+    su entrada, también las que cubre una tienda de Triple Whale (PND-290, 2026-10-12), y entonces `cuenta` no cuenta), en el idioma del proyecto (lo que se guarda y se manda a Claude):
     {"cuentas", "desde", "hasta", "moneda" (la común o None), "muestra", "recomendaciones" (las primeras
     MAX_RECOMENDACIONES, cada una con su `ref` R1…), "extra": {"dias", "cuenta", "parcial", "hoy", "resumen", "segmentos",
     "meta_roas", "meta_roas_proyecto", "ventanas": {"corto", "largo"}}}. None si el proyecto no tiene cuentas. Solo lee la copia local: nunca Meta ni Claude."""
@@ -580,16 +580,19 @@ def borrar_claves(claves):
     """Borra de R2 esas claves con un solo cliente (desconectar Meta borra lo copiado de Meta: E2-R2 y la revisión de
     seguridad de E2; también la tarea que perdió su fila a mitad). Nunca lanza: cada borrado va aparte y se anota solo
     el tipo del error. Devuelve (borradas, fallos) con `fallos` = el tipo de cada error. Si R2 ni está configurado,
-    todas cuentan como fallidas."""
-    from storage import r2_uploader  # noqa: PLC0415
+    todas cuentan como fallidas. Las que fallaron se anotan en `r2_pendientes` para la limpieza diaria: sus filas ya
+    no están y nadie más sabría esas claves (PND-295, 2026-10-12)."""
+    from storage import r2_pendientes, r2_uploader  # noqa: PLC0415
     claves = list(claves or [])
     try:
-        borradas, fallos = r2_uploader.delete_files(claves)
+        borradas, detalle = r2_uploader.delete_files_detalle(claves)
+        fallos, pendientes = [tipo for _, tipo in detalle], [clave for clave, _ in detalle]
     except Exception as e:  # noqa: BLE001 — R2 sin configurar o caído: la desconexión sigue
-        borradas, fallos = 0, [type(e).__name__] * len(claves)
+        borradas, fallos, pendientes = 0, [type(e).__name__] * len(claves), claves
     if fallos:
         log.warning("no se pudieron borrar %s miniatura(s) de evaluación de Meta en R2 (%s)", len(fallos),
                     ", ".join(sorted(set(fallos))))
+        r2_pendientes.anotar(pendientes)       # nunca lanza
     return borradas, fallos
 
 

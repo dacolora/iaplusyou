@@ -248,6 +248,12 @@ arranques desconocidos).
 - **Consultas fijas**: una lectura por fuente (serie, anuncios, arranques, inicio de la copia, primeros días), una de
   piezas de Creatv y una de tasas por moneda, crezcan o no los anuncios
   (`test_las_consultas_no_crecen_con_los_anuncios`).
+- **Días que el detalle no abre (PND-294, 2026-10-12).** Con un periodo fijo la gráfica dibuja días anteriores al
+  primero que la ruta acepta y el clic daba «No se pudo cargar ese día.»: `armar(inicio_detalle=…)` los marca `sin_dia`
+  con la regla de la ruta (`resumen._primeros`; con Triple Whale solo, `datos.primer_dia_copia`, no `inicio_datos`) y el
+  JS no los abre ni los invita (`tests/test_rendimiento_sin_dia.py`, `tests/js/tw_resultados_dia.test.mjs`). El motivo
+  depende de cuántas fuentes tienen copia (`varias_fuentes`, no de `fuente == "mixta"`), y `dia_inicial` siempre es un
+  día que abre (o "": el JS esconde el recuadro en vez de dejarlo en «Cargando…»).
 
 ## Integración con main (2026-10-10): lo de producción, dentro de Rendimiento
 
@@ -313,7 +319,9 @@ coordinador en `.superpowers/sdd/2026-10-10-pestana-rendimiento-e2/final-fixes.m
 - **G4.** El prompt de «Cómo mejorarlo» de un anuncio de fuente Meta no recibe la evaluación de cuenta de Triple
   Whale (`evaluacion_cuenta=None`; los productos más vendidos sí).
 - **S1.** Soltar una cuenta de Meta (quitarla o desconectar) borra los análisis de fuente Meta de esa cuenta y,
-  después, su imagen y su video en R2 (skill `meta-rendimiento`, «Disconnecting»). **S3.** La imagen copiada de Meta
+  después, su imagen y su video en R2 (skill `meta-rendimiento`, «Disconnecting»). Desde el 2026-10-12 (PND-295) tampoco
+  quedan copias cuando la cuenta se suelta con un «Cómo mejorarlo» corriendo o pidiéndose, y lo que R2 no borró se
+  reintenta cada día (skill `meta-rendimiento`, «Releasing an account while…»). **S3.** La imagen copiada de Meta
   solo se abre como JPEG/PNG/WEBP/GIF.
 - **S2. Correo verificado solo en «Actualizar ahora»** (`rutas.CON_CORREO_VERIFICADO`): producción no tiene SMTP y
   la mitad de los usuarios cliente no pueden verificar; las rutas que cobran no lo exigían allá y siguen sin exigirlo
@@ -327,7 +335,7 @@ coordinador en `.superpowers/sdd/2026-10-10-pestana-rendimiento-e2/final-fixes.m
   neutra). Triple Whale no cambia.
 - **T1/T2.** Pruebas para las mutaciones 27 (cada tarjeta de Meta en la moneda de SU cuenta, orden en USD) y 25 (el
   envío de «Probar los ganchos» se frena antes del fetch).
-- Diferido: PND-290 a PND-295. PND-290 cerrado el 2026-10-12 (evaluación de Meta para todas las cuentas, arriba).
+- Diferido: PND-290 a PND-295. Cerrados el 2026-10-12: PND-290 (evaluación de Meta para todas las cuentas, arriba), PND-286 (texto ajeno delimitado en «Evaluar con IA») y PND-294 (días que no abren, `sin_dia`); PND-295 quedó solo con el aprendizaje que guarda el nombre del anuncio (decide Daniel).
 
 ## Trampas
 

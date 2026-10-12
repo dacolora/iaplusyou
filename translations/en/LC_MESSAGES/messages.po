@@ -729,6 +729,10 @@ msgid "%(n)s fila(s) viejas de anuncios y %(m)s día(s) viejos de cuentas de Met
 msgstr "%(n)s old ad row(s) and %(m)s old account day(s) from Meta deleted"
 
 #, python-format
+msgid "%(n)s fila(s) viejas de anuncios y %(m)s día(s) viejos de cuentas de Meta borrados; de R2, %(borradas)s copia(s) pendientes borradas y %(siguen)s siguen pendientes"
+msgstr "%(n)s old ad row(s) and %(m)s old account day(s) from Meta deleted; from R2, %(borradas)s pending copy(ies) deleted and %(siguen)s still pending"
+
+#, python-format
 msgid "%(n)s firmas no se pudieron traducir; reintenta la importación más tarde."
 msgstr "%(n)s “why it works” notes couldn't be translated; retry the import later."
 
@@ -20132,6 +20136,9 @@ msgstr "analyze reference · the response was unusable"
 msgid "animada"
 msgstr "upbeat"
 
+msgid "antes de la primera copia"
+msgstr "before the first copy"
+
 msgid "anual"
 msgstr "yearly"
 
@@ -22717,6 +22724,9 @@ msgstr "type must be video or image"
 
 msgid "todas"
 msgstr "all"
+
+msgid "todavía no estaban todas tus fuentes"
+msgstr "not all your sources were there yet"
 
 msgid "todavía no se han traído resultados"
 msgstr "results haven't been pulled yet"
