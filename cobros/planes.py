@@ -715,8 +715,16 @@ def _aplicar_estado(con, pago, estado_wompi, tx_id, motivo, ahora):
             # renovación automática, y cambiar de tarjeta no la revive (rulings del controlador, revisión de la
             # Task 5). Lo pagado (`cubierto_hasta`) queda; al acabar, la suscripción termina.
             _actualizar_sus(con, sus["id"], ahora, estado="cancelada", renovar=False, proximo_cobro=None)
-        # El periodo ya acreditado no se toca solo: el admin decide si lo corta («Terminar ya»). Los meses que
-        # faltan de un anual anulado ya no se abren (`_abrir_cubierto` exige el pago aprobado).
+        if n:
+            # La plata volvió a la persona: la bolsa que ese pago compró ya no está pagada. Vence lo que queda de
+            # los periodos de ESE pago, aquí mismo (auditoría de seguridad 2026-10-12; antes el periodo seguía y
+            # el proyecto gastaba la bolsa el resto del mes). Lo ya gastado y el saldo propio no se tocan
+            # (`vencer_periodo` vence a lo más el saldo). Los meses que faltan de un anual anulado ya no se abren
+            # (`_abrir_cubierto` exige el pago aprobado).
+            p = db.periodo_plan
+            for (pid,) in con.execute(sa.select(p.c.id).where(p.c.pago_id == pago["id"],
+                                                              p.c.cerrado == sa.false())).all():
+                _cerrar_periodo(con, pid)
         return ("anulado", ("anulado", pago["cliente"], {"referencia": pago["referencia"]})) if n else ("ya_aplicada", None)
     if estado_wompi == "PENDING":
         if pago["estado"] == "pendiente" and tx_id and not pago["transaccion_id"]:
@@ -825,6 +833,8 @@ def _enviar(accion, pago, sus, ahora, acceptance_token=None):
             tx = wompi.transaccion(pago["transaccion_id"])
         except wompi.ErrorWompi as e:
             return "caida" if (e.caida or e.codigo == 429) else "pendiente"
+        if not _es_de_este_pago(tx, pago):
+            return "pendiente"
         return aplicar_transaccion(tx, ahora=ahora)
     try:
         tx = wompi.cobrar_fuente(int(sus["fuente_pago_id"]), int(pago["monto_cop_centavos"]), sus["correo"],
@@ -896,6 +906,16 @@ def _buscar_en_wompi(pago, sus, ahora):
         return None
     log.info("pago de plan %s encontrado en Wompi por su referencia (%s)", pago["id"], tx.get("status"))
     return aplicar_transaccion(tx, ahora=ahora)
+
+
+def _es_de_este_pago(tx, pago):
+    """¿La transacción releída por el id guardado es de ESTE pago? `aplicar_transaccion` busca el pago por la
+    referencia de la transacción: sin esto, una respuesta rara le pegaba el resultado a otro pago (auditoría
+    2026-10-12; la base lo frenaba con un UNIQUE y un error, no con una regla)."""
+    if tx.get("reference") == pago["referencia"]:
+        return True
+    log.warning("la transacción guardada del pago %s volvió con otra referencia: no se aplica", pago["id"])
+    return False
 
 
 def _marcar_no_salio(pago):
@@ -973,7 +993,9 @@ def verificar_pago(cliente, pago_id):
     pago = _pago_dict(f)
     if pago["estado"] == "pendiente" and pago["transaccion_id"]:
         try:
-            aplicar_transaccion(wompi.transaccion(pago["transaccion_id"], tiempo=wompi.TIEMPO_INTERACTIVO))
+            tx = wompi.transaccion(pago["transaccion_id"], tiempo=wompi.TIEMPO_INTERACTIVO)
+            if _es_de_este_pago(tx, pago):
+                aplicar_transaccion(tx)
         except wompi.ErrorWompi:
             return "pendiente"
         with db.conectar() as con:
@@ -1324,6 +1346,17 @@ def resolver_pendiente(cliente, pago_id, cobrado, usuario, transaccion_id=None, 
     if pago["actualizado_en"] and pago["actualizado_en"] > _iso(_dt(real) - ESPERA_NO_COBRADO):
         raise ErrorPlan(gettext("«No se cobró» se puede marcar 30 minutos después del último intento de cobro; "
                                 "antes, Wompi todavía puede responder"))
+    # No depende del ojo del admin (auditoría de seguridad 2026-10-12): si el cobro sí salió y se marca «no se
+    # cobró», el siguiente intento usa otra referencia y la tarjeta se cobra dos veces. Se busca en Wompi.
+    try:
+        en_wompi = wompi.transacciones_de_referencia(pago["referencia"], tiempo=ESPERA_BUSQUEDA)
+    except wompi.ErrorWompi as e:
+        import cola  # noqa: PLC0415
+        raise ErrorPlan(gettext("No pudimos confirmar en Wompi que no se cobró: %(error)s. Inténtalo en unos "
+                                "minutos.", error=cola.sin_token(str(e))[:200])) from None
+    if en_wompi:
+        raise ErrorPlan(gettext("Wompi sí tiene una transacción con esa referencia (%(ids)s): usa «Sí se cobró» "
+                                "con su id.", ids=", ".join(str(t["id"]) for t in en_wompi[:3])))
     import idiomas  # noqa: PLC0415
     with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
         motivo = gettext("No se cobró (lo revisó un administrador)")   # lo ve el cliente en su historial

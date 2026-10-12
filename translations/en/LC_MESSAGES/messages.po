@@ -185,8 +185,8 @@ msgid "%(cliente)s usó %(usado)s de costo de lo incluido (tope %(tope)s). Desde
 msgstr "%(cliente)s used %(usado)s of included cost (cap %(tope)s). From now on those items are charged at the member price."
 
 #, python-format
-msgid "%(cliente)s: Wompi anuló un pago de plan ya aprobado (%(referencia)s). La renovación automática quedó detenida hasta que actúes: no se volverá a cobrar la tarjeta. El periodo en curso sigue abierto y, si era anual, los meses que faltan ya no se abren; si corresponde, usa «Terminar ya»."
-msgstr "%(cliente)s: Wompi voided an already approved plan payment (%(referencia)s). Automatic renewal is stopped until you act: the card won't be charged again. The current period stays open and, if it was yearly, the remaining months won't open; if needed, use “End now”."
+msgid "%(cliente)s: Wompi anuló un pago de plan ya aprobado (%(referencia)s). La renovación automática quedó detenida hasta que actúes: no se volverá a cobrar la tarjeta. Lo que quedaba de la bolsa de ese pago venció y, si era anual, los meses que faltan ya no se abren. Si fue un contracargo, revisa lo que el proyecto ya había gastado de esa bolsa."
+msgstr "%(cliente)s: Wompi voided an already approved plan payment (%(referencia)s). Automatic renewal is stopped until you act: the card will not be charged again. What was left of that payment's plan balance expired and, if it was yearly, the remaining months will not open. If it was a chargeback, check what the project had already spent from that balance."
 
 #, python-format
 msgid "%(cliente)s: Wompi aprobó un pago de plan (%(referencia)s) de una suscripción ya terminada. Devuélvelo o actívalo a mano."
@@ -12990,6 +12990,10 @@ msgid "No pudimos cobrar tu plan."
 msgstr "We could not charge your plan."
 
 #, python-format
+msgid "No pudimos confirmar en Wompi que no se cobró: %(error)s. Inténtalo en unos minutos."
+msgstr "We could not confirm in Wompi that it was not charged: %(error)s. Try again in a few minutes."
+
+#, python-format
 msgid "No pudimos consultar la transacción en Wompi: %(error)s"
 msgstr "We could not check the transaction in Wompi: %(error)s"
 
@@ -19636,6 +19640,10 @@ msgstr "Wompi returned something unexpected (HTTP %(codigo)s)"
 
 msgid "Wompi respondió algo que no es JSON"
 msgstr "Wompi returned something that is not JSON"
+
+#, python-format
+msgid "Wompi sí tiene una transacción con esa referencia (%(ids)s): usa «Sí se cobró» con su id."
+msgstr "Wompi does have a transaction with that reference (%(ids)s): use «It was charged» with its id."
 
 msgid "Wompi todavía no confirma el pago; te avisaremos cuando llegue. Puedes cerrar esta página."
 msgstr "Wompi has not confirmed the payment yet; we will let you know when it arrives. You can close this page."

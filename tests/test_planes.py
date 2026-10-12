@@ -133,6 +133,11 @@ def _suscribir(planes, pro, ahora=T0, ciclo="mensual", cliente="acme", precio_vi
                             "user_acme", precio_visto, ahora=ahora)
 
 
+def db_ahora():
+    import db
+    return db.ahora()
+
+
 def _envejecer(db):
     """El «en vuelo» de un pendiente se mide con el reloj de verdad: aquí lo hacemos viejo (como si el envío se
     hubiera cortado hace rato)."""
@@ -554,6 +559,26 @@ def test_la_busqueda_de_planes_espera_poco(base_temporal, planes, pro, falso, av
     assert tiempos and all(t == planes.ESPERA_BUSQUEDA for t in tiempos)
 
 
+def test_una_transaccion_guardada_que_resulta_de_otra_referencia_no_se_aplica(base_temporal, planes, pro, falso,
+                                                                               avisos):
+    # Auditoría 2026-10-12: «consultar» y `verificar_pago` aplicaban lo releído sin mirar que su referencia fuera la
+    # del pago; `aplicar_transaccion` busca el pago por la referencia de la transacción y pegaba el resultado a otro.
+    falso.defecto = "PENDING"
+    r = _suscribir(planes, pro)
+    _suscribir(planes, pro, cliente="otro")
+    mio, ajeno = _filas(base_temporal, "pago_plan")
+    with base_temporal.conectar() as con:                    # el de otro quedó incierto: sin id de transacción
+        con.execute(base_temporal.pago_plan.update().where(base_temporal.pago_plan.c.id == ajeno.id)
+                    .values(transaccion_id=None))
+    # Lo que Wompi devuelve para la transacción guardada de acme dice ser el pago de OTRO proyecto, aprobado.
+    falso.txs[mio.transaccion_id] = {**falso.txs[mio.transaccion_id], "reference": ajeno.referencia,
+                                     "status": "APPROVED"}
+    assert planes.verificar_pago("acme", r["pago_id"]) == "pendiente"
+    _envejecer(base_temporal)
+    planes.cobrar_periodo(1, ahora=_despues(T0, minutos=5), forzar=True)
+    assert [p.estado for p in _filas(base_temporal, "pago_plan")] == ["pendiente", "pendiente"]
+
+
 def test_si_la_busqueda_falla_se_sigue_como_antes(base_temporal, planes, pro, falso, avisos):
     _suscribir(planes, pro)
     ahora = _antes("2026-11-09T10:00:00", 30)
@@ -897,7 +922,8 @@ def test_activacion_manual_lleva_su_propio_precio(base_temporal, planes, pro, fa
 
 
 def test_un_anual_anulado_no_abre_mas_meses(base_temporal, planes, pro, falso, avisos):
-    """I2: tras anular el pago anual, el mes en curso sigue pero no se abre ni uno más."""
+    """I2: tras anular el pago anual no se abre ni un mes más (y, desde la auditoría del 2026-10-12, el mes en curso
+    se cierra: su bolsa vence con la anulación)."""
     inicio = "2027-01-31T10:00:00"
     _suscribir(planes, pro, ahora=inicio, ciclo="anual")
     tx = {**falso.txs["1292-1-1"], "status": "VOIDED"}
@@ -906,7 +932,7 @@ def test_un_anual_anulado_no_abre_mas_meses(base_temporal, planes, pro, falso, a
         frontera = planes.sumar_meses(inicio, mes)
         planes.renovar_todo(ahora=_antes(frontera, 20))
         planes.renovar_todo(ahora=_despues(frontera, minutos=1))
-    assert len(_filas(base_temporal, "periodo_plan")) == 1
+    assert len(_filas(base_temporal, "periodo_plan")) == 1 and _filas(base_temporal, "periodo_plan")[0].cerrado
     assert len(_filas(base_temporal, "movimiento_saldo", tipo="plan")) == 1
     assert _sus(base_temporal).cubierto_hasta == "2028-01-31T10:00:00"   # queda como estaba; el admin decide
     assert any(e[0] == "admin:plan_admin" and "anuló" in e[3] for e in avisos)
@@ -977,6 +1003,28 @@ def test_un_pendiente_nuevo_lleva_la_hora_real(base_temporal, planes, pro, falso
     _suscribir(planes, pro, ahora="2026-01-01T00:00:00")
     (pago,) = _filas(base_temporal, "pago_plan")
     assert pago.creado_en[:10] == db_.ahora()[:10]
+
+
+def test_un_pago_anulado_vence_lo_que_queda_de_su_bolsa_y_respeta_el_saldo_propio(base_temporal, planes, pro, falso,
+                                                                                   avisos):
+    """Auditoría de seguridad (2026-10-12): Wompi devolvió la plata del plan (anulación o contracargo) y el proyecto
+    seguía gastando la bolsa el resto del mes. Ahora vence lo que queda de los periodos de ese pago, en el acto; lo
+    ya gastado y el saldo propio (las recargas) no se tocan."""
+    import gastos
+    from cobros import libro
+    _suscribir(planes, pro, ahora=db_ahora())
+    with base_temporal.conectar() as con:
+        libro.acreditar(con, "acme", "recarga", 50_000, "recarga_manual", usuario="admin")   # US$ 50 propios
+    gastos.registrar_seguro("acme", "video", 100.0, "video:prueba-anulacion")               # 125 000 de la bolsa
+    assert libro.saldo("acme") == 1_000_000 + 50_000 - 125_000
+    tx = {**falso.txs["1292-1-1"], "status": "VOIDED"}
+    assert planes.aplicar_transaccion(tx) == "anulado"
+    (periodo,) = _filas(base_temporal, "periodo_plan")
+    assert periodo.cerrado
+    assert [m.milesimas for m in _filas(base_temporal, "movimiento_saldo", tipo="vencimiento")] == [-875_000]
+    assert libro.saldo("acme") == 50_000                                                   # queda lo propio
+    assert planes.aplicar_transaccion(tx) == "ya_aplicada"                                 # una sola vez
+    assert len(_filas(base_temporal, "movimiento_saldo", tipo="vencimiento")) == 1
 
 
 def test_un_mensual_anulado_no_se_renueva(base_temporal, planes, pro, falso, avisos):

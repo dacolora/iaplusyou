@@ -51,8 +51,8 @@ def test_configurado_depende_de_la_llave_de_identidad(bold, monkeypatch):
 def test_crear_link_manda_cabecera_y_cuerpo_de_bold(bold, monkeypatch):
     visto = {}
 
-    def post(url, json=None, headers=None, timeout=None):
-        visto.update(url=url, json=json, headers=headers, timeout=timeout)
+    def post(url, json=None, headers=None, timeout=None, **k):
+        visto.update(url=url, json=json, headers=headers, timeout=timeout, **k)
         return _link_ok()
     monkeypatch.setattr(bold.requests, "post", post)
     antes = time.time()
@@ -75,6 +75,26 @@ def test_crear_link_manda_cabecera_y_cuerpo_de_bold(bold, monkeypatch):
         "callback_url": "https://app.creatvmachine.com/cliente/acme/saldo/recarga/1",
         "payer_email": "acme@prueba.local",
     }
+
+
+def test_bold_no_sigue_redirecciones(bold, monkeypatch):
+    # Auditoría 2026-10-12: una redirección podía llevar la llave de identidad a otro host.
+    vistos = []
+    monkeypatch.setattr(bold.requests, "post", lambda *a, **k: vistos.append(k) or _link_ok())
+    monkeypatch.setattr(bold.requests, "get", lambda *a, **k: vistos.append(k) or _Respuesta(200, {"payload": {}}))
+    bold.crear_link(referencia="cv-1-1", usd=50, descripcion="x", callback_url="https://app.creatvmachine.com/x")
+    try:
+        bold.estado_link("LNK_ABC123")
+    except bold.ErrorBold:
+        pass
+    assert len(vistos) == 2 and all(k.get("allow_redirects") is False for k in vistos)
+
+
+@pytest.mark.parametrize("codigo", [301, 302])
+def test_bold_con_redireccion_es_error(bold, monkeypatch, codigo):
+    monkeypatch.setattr(bold.requests, "post", lambda *a, **k: _Respuesta(codigo, {}))
+    with pytest.raises(bold.ErrorBold):
+        bold.crear_link(referencia="cv-1-1", usd=50, descripcion="x", callback_url="https://app.creatvmachine.com/x")
 
 
 def test_crear_link_sin_correo_no_manda_payer_email(bold, monkeypatch):
@@ -130,7 +150,7 @@ def test_crear_link_sin_llaves_no_llama_a_la_red(bold, monkeypatch):
 def test_estado_link_plano_o_dentro_de_payload(bold, monkeypatch, datos):
     visto = {}
 
-    def get(url, headers=None, timeout=None):
+    def get(url, headers=None, timeout=None, **k):
         visto.update(url=url, headers=headers)
         return _Respuesta(200, datos)
     monkeypatch.setattr(bold.requests, "get", get)
@@ -257,7 +277,7 @@ def test_sin_red_es_bold_caido_y_un_id_raro_no(bold, monkeypatch):
 def test_estado_link_usa_el_tiempo_de_espera_pedido(bold, monkeypatch):
     vistos = []
     monkeypatch.setattr(bold.requests, "get",
-                        lambda url, headers=None, timeout=None: vistos.append(timeout) or _Respuesta(200, {"status": "ACTIVE"}))
+                        lambda url, headers=None, timeout=None, **k: vistos.append(timeout) or _Respuesta(200, {"status": "ACTIVE"}))
     bold.estado_link("LNK_ABC123")
     bold.estado_link("LNK_ABC123", tiempo=bold.TIEMPO_INTERACTIVO)
     assert vistos == [15, (3, 5)]

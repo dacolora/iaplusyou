@@ -197,7 +197,10 @@ def _pedir(verbo, ruta, *, llave=None, cabeceras=None, cuerpo=None, tiempo=TIEMP
                          caida=True, incierto=cobro) from None
     codigo = r.status_code
     if 300 <= codigo < 400:
-        raise ErrorWompi(gettext("Wompi respondió algo inesperado (HTTP %(codigo)s)", codigo=codigo), codigo=codigo)
+        # En un cobro, una redirección no dice si Wompi lo procesó: incierto, nunca otra referencia (auditoría
+        # 2026-10-12: se daba por fallido y el reintento con otra referencia podía cobrar dos veces).
+        raise ErrorWompi(gettext("Wompi respondió algo inesperado (HTTP %(codigo)s)", codigo=codigo), codigo=codigo,
+                         incierto=cobro)
     try:
         j = r.json()
     except ValueError:

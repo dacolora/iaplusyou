@@ -34,6 +34,7 @@ def falso(base, monkeypatch):
     monkeypatch.setattr(wompi, "crear_fuente", f.crear_fuente)
     monkeypatch.setattr(wompi, "cobrar_fuente", f.cobrar_fuente)
     monkeypatch.setattr(wompi, "transaccion", f.transaccion)
+    monkeypatch.setattr(wompi, "transacciones_de_referencia", f.transacciones_de_referencia)
     monkeypatch.setattr(wompi, "aceptaciones", lambda tiempo=None: {
         "acceptance_token": "eyJ.acepta.widget", "acceptance_url": "https://wompi.co/terminos.pdf",
         "personal_token": "eyJ.datos.widget", "personal_url": "https://wompi.com/datos.pdf"})

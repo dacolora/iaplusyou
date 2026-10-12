@@ -186,13 +186,17 @@ def saldo_panel(cliente):
                            bolsa=vista.bolsa_o_none(cliente) if e["cobrar"] else None)
 
 
+MAX_PAGINA = 100_000   # «Ver más» de a 50 movimientos: muy por encima de cualquier libro real
+
+
 @bp.get("/cliente/<cliente>/saldo/movimientos")
 def saldo_movimientos(cliente):
     """«Ver más»: las filas (`<tr>`) de la página pedida, y al final una fila
     oculta con la URL de la siguiente si hay más."""
     if not _puede_ver_saldo(cliente):
         abort(404)
-    pagina = max(1, request.args.get("pagina", 1, type=int) or 1)
+    # Con tope: `?pagina=` de 30 dígitos daba 500 (OverflowError en la consulta; auditoría 2026-10-12).
+    pagina = min(MAX_PAGINA, max(1, request.args.get("pagina", 1, type=int) or 1))
     return render_template("_saldo_panel.html", cliente=cliente, movs=vista.movimientos(cliente, pagina=pagina),
                            pagina=pagina, solo_filas=True)
 

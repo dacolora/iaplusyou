@@ -583,6 +583,23 @@ def test_cobrar_fuente_sin_conectar_no_es_incierto(wompi, monkeypatch):
     assert e.value.caida is True and e.value.incierto is False
 
 
+@pytest.mark.parametrize("codigo", [301, 302, 307])
+def test_cobrar_fuente_con_una_redireccion_queda_incierto(wompi, monkeypatch, codigo):
+    # Auditoría 2026-10-12: un 3xx no se marcaba incierto y el pago se daba por fallido; el siguiente intento iba con
+    # otra referencia: doble cobro si Wompi sí lo había procesado.
+    _capturar(monkeypatch, wompi, "post", _Respuesta(codigo, texto=""))
+    with pytest.raises(wompi.ErrorWompi) as e:
+        wompi.cobrar_fuente(3891, 100000, "a@b.co", "pl-1-20261109-1")
+    assert e.value.incierto is True and e.value.codigo == codigo
+
+
+def test_una_redireccion_fuera_de_un_cobro_no_es_incierta(wompi, monkeypatch):
+    _capturar(monkeypatch, wompi, "get", _Respuesta(302, texto=""))
+    with pytest.raises(wompi.ErrorWompi) as e:
+        wompi.transaccion("1292-1602113476-10985")
+    assert e.value.incierto is False
+
+
 def test_cobrar_fuente_con_5xx_queda_incierto(wompi, monkeypatch):
     _capturar(monkeypatch, wompi, "post", _Respuesta(502, texto="<html>"))
     with pytest.raises(wompi.ErrorWompi) as e:

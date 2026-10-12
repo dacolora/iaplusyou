@@ -35,6 +35,7 @@ def entorno(base_temporal, monkeypatch, tmp_path):
     monkeypatch.setattr(wompi, "crear_fuente", falso.crear_fuente)
     monkeypatch.setattr(wompi, "cobrar_fuente", falso.cobrar_fuente)
     monkeypatch.setattr(wompi, "transaccion", falso.transaccion)
+    monkeypatch.setattr(wompi, "transacciones_de_referencia", falso.transacciones_de_referencia)
     monkeypatch.setattr(trm, "actual", lambda: TRM)
     falso.enviados = enviados
     return falso
@@ -424,6 +425,30 @@ def test_no_se_cobro_se_niega_si_hay_transaccion(http, pro, entorno):
            headers=MISMO)
     assert _filas("pago_plan")[0].estado == "pendiente"
     assert any("tiene una transacción en Wompi" in m for m in _flashes(c))
+
+
+def test_no_se_cobro_se_niega_si_wompi_tiene_una_transaccion_con_esa_referencia(http, pro, entorno):
+    # Auditoría de seguridad (2026-10-12): si el cobro sí salió y el admin lo marca «no se cobró», el siguiente
+    # intento usa otra referencia y la tarjeta se cobra dos veces. El servidor lo busca antes en Wompi.
+    pago = _pendiente_incierto(entorno, pro)
+    entorno.cobro_que_llego(pago.referencia)
+    c = http.como("admin")
+    c.post(f"/admin/cobros/acme/plan/pago/{pago.id}/resolver", data={"resultado": "no_cobrado", "nota": "x"},
+           headers=MISMO)
+    assert _filas("pago_plan")[0].estado == "pendiente"
+    assert any("Wompi sí tiene una transacción" in m for m in _flashes(c))
+
+
+def test_no_se_cobro_se_niega_si_no_se_puede_confirmar_en_wompi(http, pro, entorno):
+    from cobros import wompi
+    pago = _pendiente_incierto(entorno, pro)
+    entorno.error_busqueda = wompi.ErrorWompi("No se pudo hablar con Wompi (Timeout)", caida=True)
+    c = http.como("admin")
+    c.post(f"/admin/cobros/acme/plan/pago/{pago.id}/resolver", data={"resultado": "no_cobrado", "nota": "x"},
+           headers=MISMO)
+    assert _filas("pago_plan")[0].estado == "pendiente"
+    assert any("No pudimos confirmar en Wompi" in m for m in _flashes(c))
+    assert entorno.busquedas == [pago.referencia]
 
 
 def test_el_pago_de_otro_proyecto_no_se_resuelve_desde_este(http, pro, entorno):
