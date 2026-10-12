@@ -40,7 +40,8 @@ Experimentos, QA de Sprints, regla de fidelidad del importador— sigue cobrando
 **un aviso al admin cada US$ 200 de deuda nueva** (`avisos.TRAMO_DEUDA`): `avisos.deuda_pospago(cliente,
 libro.deuda(cliente))` tras cada cobro de un pospago (correo `deuda_pospago`; el tramo en `kv`
 `cobros:aviso_deuda:<cliente>`; la primera vez solo anota, al bajar no avisa) y la alerta solo-admin
-`cobros:deuda_pospago` con huella por tramo. El VPS no tiene SMTP (2026-10-12): hoy solo la alerta llega. Pruebas: `tests/test_cobros_pospago.py`, `tests/test_migracion_0040.py`.
+`cobros:deuda_pospago` con huella por tramo. El VPS no tiene SMTP (2026-10-12): hoy solo la alerta llega.
+**En producción** desde 2026-10-12 23:33 UTC (main 21823ed5, alembic 0040): happyflops con «Cobrar», margen 3 y pospago; lo usado antes (1 164 gastos, US$ 316,21 de costo, 2026-08-29 a 2026-10-11) quedó como el ajuste −US$ 948,63 (movimiento 3, nota en inglés sin costo ni margen) y el tramo 4 anotado en `kv`. El script de una sola vez exigía cola vacía y libro vacío del proyecto, prendía todo en un solo `configurar` y cargaba como ajuste exactamente los gastos sin movimiento × 3. Pruebas: `tests/test_cobros_pospago.py`, `tests/test_migracion_0040.py`.
 
 ## Módulos y quién escribe qué
 
