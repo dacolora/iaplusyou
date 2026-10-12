@@ -214,9 +214,10 @@ def _evento(secreto=EVE_T, props=("transaction.id", "transaction.status", "trans
             ts=1530291411, tx=None):
     tx = tx or {"id": "01-1532941443-49201", "amount_in_cents": 4490000, "reference": "cv-1-1",
                 "currency": "COP", "status": "APPROVED", "payment_source_id": None}
+    # La forma real (doc oficial en español): `timestamp` arriba, junto a `sent_at`, no dentro de `signature`.
     cuerpo = {"event": "transaction.updated", "data": {"transaction": dict(tx)},
-              "sent_at": "2018-07-20T16:45:05.000Z",
-              "signature": {"properties": list(props), "timestamp": ts}}
+              "timestamp": ts, "sent_at": "2018-07-20T16:45:05.000Z",
+              "signature": {"properties": list(props)}}
     valores = ""
     for p in props:
         nodo = cuerpo["data"]
@@ -233,6 +234,39 @@ def test_evento_con_firma_valida(wompi):
     s = f"01-1532941443-49201APPROVED44900001530291411{EVE_T}"
     assert cuerpo["signature"]["checksum"] == hashlib.sha256(s.encode()).hexdigest().upper()
     assert wompi.evento_valido(cuerpo) is True
+
+
+def test_evento_con_la_forma_real_de_wompi_timestamp_arriba(wompi):
+    # La forma de la doc oficial en español (docs.wompi.co/docs/colombia/eventos/) y de los eventos reales:
+    # `timestamp` va al nivel de arriba, junto a `sent_at`, y `signature` solo trae `properties` y `checksum`.
+    # La primera recarga real (2026-10-12, cv-1-1791835226) llegó así y se rechazó cuatro veces como
+    # «firma inválida» porque lo buscábamos en `signature.timestamp`.
+    tx = {"id": "1234-1610641025-49201", "amount_in_cents": 4490000, "reference": "cv-1-1",
+          "currency": "COP", "status": "APPROVED"}
+    s = f"1234-1610641025-49201APPROVED44900001530291411{EVE_T}"
+    cuerpo = {"event": "transaction.updated", "data": {"transaction": tx}, "environment": "prod",
+              "signature": {"properties": ["transaction.id", "transaction.status", "transaction.amount_in_cents"],
+                            "checksum": hashlib.sha256(s.encode()).hexdigest().upper()},
+              "timestamp": 1530291411, "sent_at": "2018-07-20T16:45:05.000Z"}
+    assert wompi.evento_valido(cuerpo) is True
+    assert wompi.evento_valido(cuerpo, checksum_header=cuerpo["signature"]["checksum"]) is True
+
+
+def test_evento_con_timestamp_dentro_de_signature_tambien_vale(wompi):
+    # La forma de la doc en inglés (la que copiamos en wompi-api.md §8): sin `timestamp` arriba, el de `signature`.
+    cuerpo = _evento()
+    cuerpo["signature"]["timestamp"] = cuerpo.pop("timestamp")
+    assert wompi.evento_valido(cuerpo) is True
+
+
+def test_evento_con_los_dos_timestamp_manda_el_de_arriba(wompi):
+    firmado_arriba = _evento()
+    firmado_arriba["signature"]["timestamp"] = 1530291400   # otro valor dentro de `signature`: no se usa
+    assert wompi.evento_valido(firmado_arriba) is True
+    firmado_adentro = _evento(ts=1530291400)
+    firmado_adentro["signature"]["timestamp"] = firmado_adentro["timestamp"]
+    firmado_adentro["timestamp"] = 1530291411              # el de arriba no es el que se firmó
+    assert wompi.evento_valido(firmado_adentro) is False
 
 
 def test_evento_acepta_checksum_en_minusculas_y_cabecera(wompi):
@@ -264,7 +298,7 @@ def test_evento_alterado(wompi, cambio):
     elif cambio == "id":
         tx["id"] = "01-1532941443-49202"
     elif cambio == "timestamp":
-        cuerpo["signature"]["timestamp"] += 1
+        cuerpo["timestamp"] += 1
     elif cambio == "props":
         cuerpo["signature"]["properties"] = ["transaction.id", "transaction.status"]
     else:
@@ -290,8 +324,10 @@ def test_evento_con_propiedades_que_varian(wompi):
     lambda c: c["signature"].update(properties=["transaction.no_existe"]),
     lambda c: c["signature"].update(properties=["transaction"]),
     lambda c: c["signature"].update(properties=[1]),
-    lambda c: c["signature"].update(timestamp=None),
-    lambda c: c["signature"].update(timestamp=True),
+    lambda c: c.update(timestamp=None),
+    lambda c: c.update(timestamp=True),
+    lambda c: c.update(timestamp="1530291411"),
+    lambda c: c.pop("timestamp"),
     lambda c: c.update(data="x"),
     lambda c: c.pop("data"),
 ])

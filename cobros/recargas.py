@@ -230,6 +230,14 @@ def _dict(valor):
     return valor if isinstance(valor, dict) else {}
 
 
+def _claves(valor):
+    """Los nombres de campo de un objeto de un evento, para el registro: solo los que tienen forma de nombre
+    (un salto de línea o una clave inventada larga no entran) y a lo más 15."""
+    nombres = sorted(k for k in _dict(valor) if isinstance(k, str) and k.isascii() and k.isidentifier()
+                     and len(k) <= 30)
+    return ",".join(nombres[:15]) or "-"
+
+
 def _entero(valor):
     if isinstance(valor, bool) or not isinstance(valor, (int, float)):
         return None
@@ -642,6 +650,11 @@ def procesar_evento_wompi(cuerpo, checksum=None):
     ref = (tx.get("reference") or "")[:60] or None
     if not wompi.evento_valido(ev, checksum):
         if _cupo_sin_firma(PROVEEDOR_WOMPI):
+            # La forma, nunca un valor: el cuerpo de un evento sin firma no se guarda, y sin esto no se supo por
+            # qué se rechazó la primera recarga real (2026-10-12: `timestamp` venía arriba y lo buscábamos en
+            # `signature`). Dentro del cupo, para no llenar el registro; el tipo con %r, para no partir la línea.
+            log.warning("evento de Wompi con firma inválida (%r): arriba %s, signature %s, cabecera %s", tipo,
+                        _claves(ev), _claves(ev.get("signature")), "sí" if checksum else "no")
             _guardar_sin_firma(None, tipo, ref, proveedor=PROVEEDOR_WOMPI)
         return 401, "firma_invalida"
     evento_id = _evento_id_wompi(cuerpo)
