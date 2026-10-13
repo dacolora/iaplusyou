@@ -357,14 +357,26 @@ def _pct(v):
     return "—" if v is None else idiomas.numero(v * 100, 1) + " %"
 
 
+def _clave(clave, solo_datos):
+    """En el prompt, una clave interna (veredicto, tendencia, señal, anillo sin dato) va por su texto en el idioma de la
+    tarea (PND-306: «(trend: cansando)»); en lo verificable (`solo_datos`) sigue la CLAVE. Sus textos traerían palabras
+    que `ofertas_sin_dato` toma como una oferta de los datos («En prueba», «No spend in the last 7 days») y un gancho con
+    «Prueba 7 días» inventado se generaría y se cobraría (revisión del gasto, 2026-10-13). La clave, con su guion bajo,
+    nunca es una oferta."""
+    return clave if solo_datos else evaluacion.texto_clave(clave)
+
+
 def _bloque_anuncio(f, solo_datos=False):
-    """Con `solo_datos`, sin los números de las etiquetas («tendencia de 7 días»): ver `datos_verificables`."""
+    """Con `solo_datos`, sin los números de las etiquetas («tendencia de 7 días») y con las claves internas tal cual
+    (`_clave`): ver `datos_verificables`."""
     m = f.get("m") or {}
     c = f.get("creativo") or {}
     lineas = [f"«{_linea(f.get('nombre'))}» · campaña «{_linea(f.get('campana')) or '—'}» · formato {c.get('tipo') or '—'}"
               + (f" · {_num(c.get('duracion_s'), 0)} s" if c.get("duracion_s") else ""),
-              f"veredicto: {f.get('veredicto')} ({f.get('motivo')}) · "
-              f"{'tendencia' if solo_datos else 'tendencia de 7 días'}: {f.get('tendencia') or '—'}",
+              # Veredicto, tendencia y señales: en el prompt por su texto, en lo verificable por su clave (`_clave`).
+              f"veredicto: {_clave(f.get('veredicto'), solo_datos)} ({f.get('motivo')}) · "
+              f"{'tendencia' if solo_datos else 'tendencia de 7 días'}: "
+              f"{_clave(f['tendencia'], solo_datos) if f.get('tendencia') else '—'}",
               f"gasto {_num(m.get('gasto'))} · impresiones {_num(m.get('impresiones'), 0)} · CTR {_num(m.get('ctr'))} % · "
               f"CPM {_num(m.get('cpm'))} · gancho {_pct(m.get('gancho'))} · retención {_pct(m.get('retencion'))}",
               f"pedidos {_num(m.get('pedidos'), 1)} · ingresos {_num(m.get('ingresos'))} · ROAS {_num(m.get('roas'))}× · "
@@ -372,7 +384,7 @@ def _bloque_anuncio(f, solo_datos=False):
               visitantes.texto_prompt(m.get("visitantes_nuevos"), m.get("visitantes"))]
     senales = list(f.get("fortalezas") or []) + list(f.get("problemas") or [])
     if senales:
-        lineas.append("señales del diagnóstico automático: " + ", ".join(senales))
+        lineas.append("señales del diagnóstico automático: " + ", ".join(_clave(s, solo_datos) for s in senales))
     return "\n".join(lineas)
 
 
@@ -385,7 +397,7 @@ def _bloque_anillos(f, solo_datos=False):
         if r.get("pct") is not None:
             lineas.append(f"- {etiqueta}: percentil {r['pct']}")
         else:
-            lineas.append(f"- {etiqueta}: sin dato ({r.get('vacio') or '—'})")
+            lineas.append(f"- {etiqueta}: sin dato ({_clave(r['vacio'], solo_datos) if r.get('vacio') else '—'})")
     return "\n".join(lineas)
 
 
@@ -486,22 +498,22 @@ def system(idioma, tipo="video"):
 
 
 def cierre_idioma(idioma, tipo="video"):
-    """La última línea del mensaje (PND-218): con la orden de idioma solo en el system, las instrucciones en español
-    arrastraban la respuesta (los dos análisis de happyflops, un proyecto en inglés, llegaron en español). En inglés la
-    orden va ESCRITA en inglés y nombra cada campo: en la medición del 2026-10-13 la misma orden en español al final
-    («escribe en inglés…») no movió nada (2 de 3 en español antes y después). En español, la orden de siempre."""
-    if idiomas.normalizar(idioma) == "en":
-        extra = ", like the quoted text that will be written inside the image" if tipo == "imagen" else ""
-        return ("LANGUAGE: write every text field of your JSON in English — \"frase\", \"funciona\" and \"falla\" (with "
-                "their \"evidencia\"), \"cambios\", the \"titulo\", \"por_que\", \"escena\" and \"angulo\" of "
-                "\"version\", and \"aprendizaje\" — even though the instructions above are in Spanish. The only "
-                "exceptions: every \"prompt\" is in English too, and the \"texto\" of each gancho and the \"titulo\" and "
-                f"\"texto\" of \"copy_nuevo\" go in the language of the TEXTO DEL ANUNCIO{extra}.")
-    excepciones = ("Siguen valiendo las excepciones: los \"prompt\" van en inglés, y el \"texto\" de cada gancho y el "
-                   "\"titulo\" y el \"texto\" de \"copy_nuevo\" en el idioma del TEXTO DEL ANUNCIO")
-    if tipo == "imagen":
-        excepciones += ", como el texto entre comillas que se verá escrito en la imagen"
-    return f"{idiomas.orden_idioma(idioma)} {excepciones}."
+    """La última línea del mensaje (PND-218), con `analisis.cierre_idioma`: en inglés va ESCRITA en inglés y nombra cada
+    campo (en la medición del 2026-10-13 la orden al final escrita en español no movió nada: 1 de 3 en inglés; en inglés,
+    4 de 4), y pide conservar los valores fijos que valida `parsear` y `doctrina.validar_angulo`. En español, la orden de
+    siempre con sus excepciones."""
+    extra_en = ", like the quoted text that will be written inside the image" if tipo == "imagen" else ""
+    extra_es = ", como el texto entre comillas que se verá escrito en la imagen" if tipo == "imagen" else ""
+    return analisis.cierre_idioma(
+        idioma,
+        "\"frase\", \"funciona\" and \"falla\" (with their \"evidencia\"), \"cambios\", the \"titulo\", \"por_que\", "
+        "\"escena\" and \"angulo\" of \"version\", and \"aprendizaje\"",
+        f"\"anillo\", \"mueve\", {analisis.FIJOS_ANGULO}",
+        excepciones_en=("The only other exceptions: every \"prompt\" is in English too, and the \"texto\" of each gancho "
+                        "and the \"titulo\" and \"texto\" of \"copy_nuevo\" go in the language of the TEXTO DEL ANUNCIO"
+                        f"{extra_en}."),
+        excepciones_es=("Siguen valiendo las excepciones: los \"prompt\" van en inglés, y el \"texto\" de cada gancho y "
+                        f"el \"titulo\" y el \"texto\" de \"copy_nuevo\" en el idioma del TEXTO DEL ANUNCIO{extra_es}."))
 
 
 # -------------------------------------------------------------- parsear ---

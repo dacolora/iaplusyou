@@ -608,7 +608,8 @@ def test_evaluar_guarda_el_resultado_las_miniaturas_en_r2_y_el_gasto_real(evalua
     a1, a2 = fila["muestra"]
     assert a1["medio"]["imagen"] == f"https://r2/{clave}" and a1["visual"] == "imagen"
     assert a2["medio"]["imagen"] is None and "visual" not in a2
-    assert [b["type"] for b in visto["content"]] == ["text", "text", "image"]
+    assert [b["type"] for b in visto["content"]] == ["text", "text", "image", "text"]
+    assert visto["content"][-1]["text"].startswith(("LANGUAGE:", "IDIOMA:"))   # el cierre de idioma (PND-218)
     assert "<anuncios>" in visto["content"][0]["text"]
     assert evaluacion["borradas"] == []                  # con la fila en su lugar, las miniaturas se quedan
     assert _gastos_eval() == [{"tipo": "evaluacion", "usd": pytest.approx(usd), "referencia": f"meta_eval:{eid}:t7",
