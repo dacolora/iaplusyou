@@ -3367,6 +3367,9 @@ msgstr "Avatar saved; the persona the app uses was updated."
 msgid "Avatares"
 msgstr "Avatars"
 
+msgid "Avatares (IA)"
+msgstr "Avatars (AI)"
+
 msgid "Avatares del proyecto"
 msgstr "Project avatars"
 
@@ -4162,6 +4165,9 @@ msgstr "It cites figures that aren't in the data (%(cifras)s): check before publ
 
 msgid "Citas textuales"
 msgstr "Verbatim quotes"
+
+msgid "Clasificación de referentes (IA)"
+msgstr "Reference classification (AI)"
 
 #, python-format
 msgid "Clasificación inválida: %(clasificacion)s"
@@ -10446,6 +10452,9 @@ msgstr "Interrupted — rebuild the prompt"
 msgid "Investigación cancelada: el paso que está corriendo termina y no se lanza el siguiente."
 msgstr "Research cancelled: the step that's running finishes and the next one isn't launched."
 
+msgid "Investigación de nicho (IA)"
+msgstr "Niche research (AI)"
+
 #, python-format
 msgid "Investigación en marcha con un tope de %(tope)s; la página muestra cada paso."
 msgstr "Research underway with a cap of %(tope)s; the page shows each step."
@@ -15845,6 +15854,9 @@ msgstr "Reject"
 msgid "Recibido"
 msgstr "Received"
 
+msgid "Recolección de comentarios"
+msgstr "Comment collection"
+
 #, python-format
 msgid "Recolectando de %(fuente)s; la página se recarga sola al terminar."
 msgstr "Collecting from %(fuente)s; the page reloads by itself when it finishes."
@@ -15872,6 +15884,9 @@ msgstr "Recreate with my product"
 
 msgid "Recrear mi video de referencia"
 msgstr "Recreate my reference video"
+
+msgid "Recrear referentes (IA)"
+msgstr "Reference recreation (AI)"
 
 #, python-format
 msgid "Recrear «%(titular)s» con mi producto"
@@ -17682,6 +17697,9 @@ msgstr "Plays in"
 
 msgid "Sugerencia"
 msgstr "Suggestion"
+
+msgid "Sugerencias de referentes (IA)"
+msgstr "Reference suggestions (AI)"
 
 #, python-format
 msgid "Sugeridas para %(etapa)s:"
@@ -19557,6 +19575,9 @@ msgstr "See all"
 
 msgid "Ver todas las fuentes"
 msgstr "See all sources"
+
+msgid "Ver todo"
+msgstr "Show all"
 
 msgid "Ver todos los anuncios →"
 msgstr "See all ads →"

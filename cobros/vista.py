@@ -187,21 +187,46 @@ def csv_movimientos(cliente):
 
 # ------------------------------------------------- gasto cobrado (resúmenes) ---
 
-def _neto():
-    """Lo cobrado en milésimas positivas y cuántos cobros quedan en pie (un
-    reverso descuenta el suyo)."""
-    m = db.movimiento_saldo
-    return (-sa.func.coalesce(sa.func.sum(m.c.milesimas), 0),
-            sa.func.coalesce(sa.func.sum(sa.case((m.c.tipo == "cobro", 1), else_=-1)), 0))
+def _usos_previos(cliente):
+    """[(desde_gasto, hasta_gasto, margen)] de los ajustes que pagan lo usado antes de cobrar
+    (`libro.detallar_uso_previo`), una lectura por petición."""
+    def leer():
+        m = db.movimiento_saldo
+        q = sa.select(m.c.extra).where(m.c.cliente == cliente, m.c.tipo == "ajuste")
+        with db.conectar() as con:
+            usos = [(e or {}).get("uso_previo") for e in con.execute(q).scalars()]
+        return [(int(u["desde_gasto"]), int(u["hasta_gasto"]), float(u["margen"])) for u in usos if u]
+    return _memo(("usos_previos", cliente), leer)
 
 
-def _unir():
+def _sub_cobrado(cliente):
+    """Lo cobrado por gasto del proyecto, una fila por gasto: `gasto_id`, `s` (milésimas con el signo del libro:
+    el cobro resta, el reverso suma), `n` (cobros menos reversos), `job_id` y `concepto`. Además de los cobros y
+    reversos del libro, los gastos que paga un ajuste detallado (lo usado antes de cobrar, pedido de Daniel
+    2026-10-13) a su margen: así el cliente ve en su gasto todo lo que paga, no solo lo de después."""
     m, g = db.movimiento_saldo, db.gasto
-    return m, g, m.join(g, g.c.id == m.c.gasto_id)
+    partes = [sa.select(m.c.gasto_id.label("gasto_id"), sa.func.sum(m.c.milesimas).label("s"),
+                        sa.func.sum(sa.case((m.c.tipo == "cobro", 1), else_=-1)).label("n"),
+                        sa.func.max(m.c.job_id).label("job_id"), sa.func.max(m.c.concepto).label("concepto"))
+              .where(m.c.cliente == cliente, m.c.tipo.in_(TIPOS_COBRADOS), m.c.gasto_id.isnot(None))
+              .group_by(m.c.gasto_id)]
+    con_movimiento = sa.select(m.c.gasto_id).where(m.c.cliente == cliente, m.c.gasto_id.isnot(None))
+    for desde, hasta, margen in _usos_previos(cliente):
+        partes.append(sa.select(g.c.id, -g.c.usd * margen * 1000, sa.literal(1), sa.null(), g.c.tipo)
+                      .where(g.c.cliente == cliente, g.c.id > desde, g.c.id <= hasta,
+                             g.c.id.notin_(con_movimiento)))
+    return (sa.union_all(*partes) if len(partes) > 1 else partes[0]).subquery()
+
+
+def _unir(cliente):
+    """(gasto, lo cobrado por gasto, su join, lo cobrado en milésimas positivas, cuántos cobros quedan en pie)."""
+    g, sub = db.gasto, _sub_cobrado(cliente)
+    return (g, sub, g.join(sub, sub.c.gasto_id == g.c.id), -sa.func.coalesce(sa.func.sum(sub.c.s), 0),
+            sa.func.coalesce(sa.func.sum(sub.c.n), 0))
 
 
 def _usd(milesimas):
-    return round(int(milesimas or 0) / 1000, 4)
+    return round(float(milesimas or 0) / 1000, 4)
 
 
 def resumen_mes_cobrado(cliente, ahora_iso=None, desde=None):
@@ -209,11 +234,10 @@ def resumen_mes_cobrado(cliente, ahora_iso=None, desde=None):
     la del gasto: un reverso descuenta en el mes de su cobro)."""
     hasta = gastos._ahora(ahora_iso)
     desde = desde or gastos._inicio_mes(hasta)
-    m, g, j = _unir()
-    neto, n = _neto()
-    q = (sa.select(m.c.concepto, neto, n).select_from(j)
-         .where(m.c.cliente == cliente, m.c.tipo.in_(TIPOS_COBRADOS), g.c.creado_en >= desde, g.c.creado_en <= hasta)
-         .group_by(m.c.concepto))
+    g, sub, j, neto, n = _unir(cliente)
+    q = (sa.select(sub.c.concepto, neto, n).select_from(j)
+         .where(g.c.cliente == cliente, g.c.creado_en >= desde, g.c.creado_en <= hasta)
+         .group_by(sub.c.concepto))
     por_tipo = {}
     with db.conectar() as con:
         for concepto, suma, cuantos in con.execute(q):
@@ -229,10 +253,9 @@ def resumen_todo_cobrado(cliente, ahora_iso=None):
 
 
 def resumen_total_cobrado(cliente, ahora_iso=None):
-    m, g, j = _unir()
-    neto, n = _neto()
+    g, _sub, j, neto, n = _unir(cliente)
     q = (sa.select(neto, n, sa.func.min(g.c.creado_en)).select_from(j)
-         .where(m.c.cliente == cliente, m.c.tipo.in_(TIPOS_COBRADOS), g.c.creado_en <= gastos._ahora(ahora_iso)))
+         .where(g.c.cliente == cliente, g.c.creado_en <= gastos._ahora(ahora_iso)))
     with db.conectar() as con:
         suma, cuantos, desde = con.execute(q).first()
     cuantos = int(cuantos or 0)
@@ -240,11 +263,10 @@ def resumen_total_cobrado(cliente, ahora_iso=None):
 
 
 def por_mes_cobrado(cliente, ahora_iso=None):
-    m, g, j = _unir()
-    neto, n = _neto()
+    g, _sub, j, neto, n = _unir(cliente)
     mes = sa.func.substr(g.c.creado_en, 1, 7)
     q = (sa.select(mes, neto, n).select_from(j)
-         .where(m.c.cliente == cliente, m.c.tipo.in_(TIPOS_COBRADOS), g.c.creado_en <= gastos._ahora(ahora_iso))
+         .where(g.c.cliente == cliente, g.c.creado_en <= gastos._ahora(ahora_iso))
          .group_by(mes))
     with db.conectar() as con:
         return {mm: {"usd": _usd(suma), "n": int(cuantos)} for mm, suma, cuantos in con.execute(q) if suma or cuantos}
@@ -252,26 +274,18 @@ def por_mes_cobrado(cliente, ahora_iso=None):
 
 def total_entre_cobrado(cliente, desde_iso, hasta_iso):
     """Como `gastos.total_entre` (centro de resultados de Experimentos)."""
-    m, g, j = _unir()
-    neto, n = _neto()
+    g, _sub, j, neto, n = _unir(cliente)
     q = (sa.select(neto, n).select_from(j)
-         .where(m.c.cliente == cliente, m.c.tipo.in_(TIPOS_COBRADOS),
-                g.c.creado_en >= desde_iso[:19], g.c.creado_en < hasta_iso[:19]))
+         .where(g.c.cliente == cliente, g.c.creado_en >= desde_iso[:19], g.c.creado_en < hasta_iso[:19]))
     with db.conectar() as con:
         suma, cuantos = con.execute(q).one()
     return {"usd": _usd(suma), "n": int(cuantos or 0)}
 
 
-def _sub_cobrado(cliente):
-    m = db.movimiento_saldo
-    return (sa.select(m.c.gasto_id, sa.func.sum(m.c.milesimas).label("s"))
-            .where(m.c.cliente == cliente, m.c.tipo.in_(TIPOS_COBRADOS), m.c.gasto_id.isnot(None))
-            .group_by(m.c.gasto_id).subquery())
-
-
 def historial_cobrado(cliente, limite=200, desde=None, desplazamiento=0):
     """Como `gastos.historial`, una fila por gasto cobrado con `usd` = lo
-    cobrado; lo que se devolvió entero no aparece (está en Saldo › Movimientos)."""
+    cobrado (también lo que paga un ajuste detallado, `_sub_cobrado`); lo que se
+    devolvió entero no aparece (está en Saldo › Movimientos)."""
     g = db.gasto
     sub = _sub_cobrado(cliente)
     q = (sa.select(g, sub.c.s).select_from(g.join(sub, sub.c.gasto_id == g.c.id))
@@ -294,13 +308,11 @@ def cobrado_por_gasto(cliente, gasto_ids):
     ids = [int(i) for i in gasto_ids or []]
     if not ids:
         return {}
-    m = db.movimiento_saldo
+    sub = _sub_cobrado(cliente)
     out = {}
     with db.conectar() as con:
         for i in range(0, len(ids), 500):
-            q = (sa.select(m.c.gasto_id, sa.func.sum(m.c.milesimas))
-                 .where(m.c.cliente == cliente, m.c.tipo.in_(TIPOS_COBRADOS), m.c.gasto_id.in_(ids[i:i + 500]))
-                 .group_by(m.c.gasto_id))
+            q = sa.select(sub.c.gasto_id, sub.c.s).where(sub.c.gasto_id.in_(ids[i:i + 500]))
             out.update({gid: _usd(-s) for gid, s in con.execute(q)})
     return out
 
@@ -325,7 +337,7 @@ def _csv(cliente, desde, hasta, modo):
     with db.conectar() as con:
         for r in con.execute(q):
             f = gastos._fila(r)
-            cobrado = f"{-int(r.s or 0) / 1000:.4f}".replace(".", ",")
+            cobrado = f"{_usd(-(r.s or 0)):.4f}".replace(".", ",")
             fila = [_celda(f["creado_en"]), _celda(f["tipo"]), _celda(f.get("proveedor")), _celda(f["referencia"]),
                     _celda(f.get("detalle"))]
             if modo == "doble":
@@ -403,11 +415,10 @@ def _filas_cobradas(cliente):
     los gastos cobrados del proyecto, una vez por petición (las tarjetas de
     Crear, Final edition, Sprints… leen de aquí, nunca una consulta por tarjeta)."""
     def leer():
-        m, g, j = _unir()
-        q = (sa.select(g.c.referencia, g.c.creado_en, sa.func.max(m.c.job_id), sa.func.sum(m.c.milesimas))
-             .select_from(j).where(m.c.cliente == cliente, m.c.tipo.in_(TIPOS_COBRADOS)).group_by(m.c.gasto_id))
+        g, sub, j, _neto, _n = _unir(cliente)
+        q = sa.select(g.c.referencia, g.c.creado_en, sub.c.job_id, sub.c.s).select_from(j).where(g.c.cliente == cliente)
         with db.conectar() as con:
-            return [(ref, creado, job, -int(s or 0)) for ref, creado, job, s in con.execute(q)]
+            return [(ref, creado, job, -round(s or 0)) for ref, creado, job, s in con.execute(q)]
     return _memo(("filas", cliente), leer)
 
 

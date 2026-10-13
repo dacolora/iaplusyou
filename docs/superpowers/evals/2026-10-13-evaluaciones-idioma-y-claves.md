@@ -45,7 +45,7 @@ de cliente con el visto bueno de Daniel; costo aprobado por Daniel (≈ US$ 1,40
 
 **Valores fijos:** las `etapa` (TOF/MOF/BOF) y las `accion` del plan de Meta (`pausar`, `escalar`, `variantes`,
 `revisar`, `consolidar`) llegaron todas válidas en los dos lados; ningún ángulo de las evaluaciones con un valor
-inválido. En «Cómo mejorarlo» el `lead` del ángulo sigue saliendo inválido a veces, como antes del cambio (PND-307).
+inválido. En «Cómo mejorarlo» el `lead` del ángulo sigue saliendo inválido a veces, como antes del cambio (PND-308).
 
 ## Lo que mostró
 

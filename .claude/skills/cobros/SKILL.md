@@ -43,6 +43,20 @@ libro.deuda(cliente))` tras cada cobro de un pospago (correo `deuda_pospago`; el
 `cobros:deuda_pospago` con huella por tramo. El VPS no tiene SMTP (2026-10-12): hoy solo la alerta llega.
 **En producción** desde 2026-10-12 23:33 UTC (main 21823ed5, alembic 0040): happyflops con «Cobrar», margen 3 y pospago; lo usado antes (1 164 gastos, US$ 316,21 de costo, 2026-08-29 a 2026-10-11) quedó como el ajuste −US$ 948,63 (movimiento 3, nota en inglés sin costo ni margen) y el tramo 4 anotado en `kv`. El script de una sola vez exigía cola vacía y libro vacío del proyecto, prendía todo en un solo `configurar` y cargaba como ajuste exactamente los gastos sin movimiento × 3. Pruebas: `tests/test_cobros_pospago.py`, `tests/test_migracion_0040.py`.
 
+**Lo usado antes, uno por uno en Configuración › Gasto** (Daniel, 2026-10-13: «en Spend, History solo saca lo
+último; la idea es que también vea todos los 900»). Lo cobrado que ve el cliente sale de los movimientos atados a un
+gasto, así que el ajuste de lo usado antes no aparecía en su gasto: happyflops veía 17 cobros (US$ 18,10) y no los
+1 164 del ajuste. `libro.detallar_uso_previo(cliente, movimiento_id, margen)` anota en el `extra.uso_previo` del
+ajuste qué gastos paga (`desde_gasto` < id ≤ `hasta_gasto`, sin ningún movimiento; `hasta_gasto` = el último gasto
+con fecha ≤ la del ajuste, `desde_gasto` = el `hasta_gasto` del ajuste detallado anterior) y a qué margen; exige que
+costo × margen dé el ajuste al centavo (si no, `ValueError` y no escribe) y no mueve plata. `vista._sub_cobrado`
+(una fila por gasto: `gasto_id`, `s`, `n`, `job_id`, `concepto`) suma esos gastos a costo × margen junto a los
+cobros y reversos del libro, y de ahí leen TODAS las cifras cobradas: historial, «Por tipo», total, por mes,
+`total_entre`, CSV, la columna «Cobrado» del admin y las tarjetas (`_filas_cobradas`). `_usd` redondea (0,70 × 3 es
+2,0999… en coma flotante). Se corre una vez por ajuste con `deploy/detallar_uso_previo.py <proyecto> <movimiento>
+<margen>` (repetirlo con el mismo margen no cambia nada). Un ajuste que no se detalla sigue como antes: una línea en
+Saldo › Movimientos. Pruebas: `tests/test_cobros_uso_previo.py`.
+
 ## Módulos y quién escribe qué
 
 | Módulo | Qué hace | Escribe |

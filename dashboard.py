@@ -4954,10 +4954,16 @@ def _fuente_gasto(cliente):
     return fuente
 
 
-def _pagina_gasto(cliente, desde=0, fuente=None):
+# El historial de gasto entero en un pedido (Daniel 2026-10-13: «la idea es que salga todo»): la página trae
+# las primeras TARJETAS_POR_PAGINA filas y el resto llega solo, por fetch, al bajar a History. Este tope solo
+# corta una respuesta enorme; si se pasa, el fragmento trae otro «Ver todo».
+GASTO_TODO_MAX = 5000
+
+
+def _pagina_gasto(cliente, desde=0, fuente=None, por_pagina=TARJETAS_POR_PAGINA):
     fuente = fuente if fuente is not None else _fuente_gasto(cliente)
-    filas = fuente["historial"](cliente, limite=TARJETAS_POR_PAGINA + 1, desplazamiento=desde)
-    historial = filas[:TARJETAS_POR_PAGINA]
+    filas = fuente["historial"](cliente, limite=por_pagina + 1, desplazamiento=desde)
+    historial = filas[:por_pagina]
     doble = fuente["modo"] == "doble"
     cobrado = {}
     modo = fuente["modo"]
@@ -4968,14 +4974,16 @@ def _pagina_gasto(cliente, desde=0, fuente=None):
             print(f"[aviso] Gasto de {cliente}: no pude leer lo cobrado del historial: {type(e).__name__}")
             modo = "costo"
     return {"gastos_historial": historial,
-            "gastos_siguiente": desde + TARJETAS_POR_PAGINA if len(filas) > TARJETAS_POR_PAGINA else None,
+            "gastos_siguiente": desde + por_pagina if len(filas) > por_pagina else None,
             "gasto_modo": modo, "gasto_cobrado": cobrado, "nombres_tipo_gasto": NOMBRES_TIPO_GASTO}
 
 
 @app.route("/cliente/<cliente>/gasto/lista")
 def gasto_lista(cliente):
+    por_pagina = GASTO_TODO_MAX if request.args.get("todo") else TARJETAS_POR_PAGINA
     return render_template("_gasto_lista.html", cliente=cliente,
-                           **_pagina_gasto(cliente, min(_pagina_desde(request.args.get("desde")), 2**63 - 1)))
+                           **_pagina_gasto(cliente, min(_pagina_desde(request.args.get("desde")), 2**63 - 1),
+                                           por_pagina=por_pagina))
 
 
 def _contexto_gasto(cliente, tablero_ctx):
