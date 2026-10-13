@@ -104,7 +104,7 @@ def test_tablero_con_datos(app, base_temporal, monkeypatch):
     # los totales (llegan en el fragmento de resultados).
     assert 'id="tab-tablero"' not in pagina and 'data-tab="tablero"' not in pagina
     exp = pagina[pagina.index('<section id="tab-experimentos"'):pagina.index('<section id="tab-alertas"')]
-    assert "<h2>Experimentos</h2>" in exp and "Tablero · septiembre 2026" not in pagina
+    assert "<h2>Probar anuncios</h2>" in exp and "Tablero · septiembre 2026" not in pagina
     html = _resultados(app["c"])
     hist = html[html.index("Totales desde el inicio"):]
     # Tiles: el total desde el inicio (el último acumulado): gasto 350, compras 3, ingresos 12.000, ROAS 34,3.
@@ -141,7 +141,7 @@ def test_tablero_vacio(app, base_temporal, monkeypatch):
     app["dashboard"].invalidar_alertas()
     _reloj(monkeypatch)
     pagina = app["c"].get("/cliente/acme").get_data(as_text=True)
-    assert "<h2>Experimentos</h2>" in pagina and 'id="tab-tablero"' not in pagina
+    assert "<h2>Probar anuncios</h2>" in pagina and 'id="tab-tablero"' not in pagina
     html = _resultados(app["c"])
     # «Crea tu primer experimento» lo reemplaza el estado vacío del centro, con su botón.
     assert "Todavía no hay experimentos" in html and "+ Nuevo experimento" in html

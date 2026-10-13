@@ -266,7 +266,7 @@
   <form method="post" action="{{ url_for('cfg_pixel_refrescar', cliente=cliente) }}" class="inline" style="margin-top:.4rem;"><button class="btn-guardar btn-xs">{{ _('Comprobar Pixel') }}</button></form>
 </div>
 {% else %}
-<p class="vacio"><span class="tag-estado">{{ _('sin conexión') }}</span> {{ _('Conecta Meta en <a href="#experimentos" onclick="document.querySelector(\'.sidebar-item[data-tab=experimentos]\').click(); return false;">Experimentos</a> para comprobar el Pixel.') }}</p>
+<p class="vacio"><span class="tag-estado">{{ _('sin conexión') }}</span> {{ _('Conecta Meta en <a href="#settings" data-ir-config="config-meta">Conexiones</a> para comprobar el Pixel.') }}</p>
 {% endif %}
 <details class="pixel-ayuda">
   <summary>{{ _('Cómo instalar el Pixel según tu plataforma') }}</summary>
@@ -299,7 +299,7 @@
       <summary>{{ _('Cómo activarlo') }}</summary>
       <ol>
         {% if c.plataforma == "facebook" %}
-        <li>{{ _('Conecta Meta en <a href="#experimentos" onclick="document.querySelector(\'.sidebar-item[data-tab=experimentos]\').click(); return false;">Experimentos</a> con una cuenta que administre la <strong>Página</strong> donde se publica.') }}</li>
+        <li>{{ _('Conecta Meta en <a href="#settings" data-ir-config="config-meta">Conexiones</a> con una cuenta que administre la <strong>Página</strong> donde se publica.') }}</li>
         <li>{{ _('Al conectar, elige esa Página: se guarda su token de página (<code>page_id</code>) para publicar videos en el muro.') }}</li>
         {% elif c.plataforma == "instagram" %}
         <li>{{ _('Primero Facebook (arriba): Instagram publica a través de la Página.') }}</li>
@@ -322,9 +322,9 @@
   {% endfor %}
 </ul>
 
-{# Las reglas por defecto del decisor se movieron a Experimentos › «Reglas del motor» (sin Meta ni historial esa
+{# Las reglas por defecto del decisor se movieron a Probar anuncios (data-tab experimentos) › «Reglas del motor» (sin Meta ni historial esa
    pestaña no las pinta: el enlace tampoco, 2026-10-08). #}
-{% if not exp_sin_meta %}<p class="vacio" id="config-reglas-enlace" style="padding-top:1rem;">{{ _('Las reglas del decisor están en <a href="#experimentos" onclick="document.querySelector(\'.sidebar-item[data-tab=experimentos]\').click(); document.getElementById(\'reglas-motor\').open = true; return false;">Experimentos →</a>') }}</p>{% endif %}
+{% if not exp_sin_meta %}<p class="vacio" id="config-reglas-enlace" style="padding-top:1rem;">{{ _('Las reglas del decisor están en <a href="#experimentos" onclick="document.querySelector(\'.sidebar-item[data-tab=experimentos]\').click(); document.getElementById(\'reglas-motor\').open = true; return false;">Probar anuncios →</a>') }}</p>{% endif %}
 </section>
 
 <section class="config-apartado" id="config-ap-marca" data-apartado="marca">

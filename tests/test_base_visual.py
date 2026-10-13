@@ -56,7 +56,7 @@ def test_clases_de_encabezado_y_estado_vacio():
 
 # El Tablero se fundió en Experimentos (E2, 2026-10-02): ya no es pestaña.
 PESTANAS = [("alertas", "Alertas"), ("nicho", "Nicho"), ("referentes", "Referentes"),
-            ("creativeflowplus", "Crear"), ("final", "Final edition"), ("experimentos", "Experimentos"), ("sprints", "Sprints"),
+            ("creativeflowplus", "Crear"), ("final", "Final edition"), ("experimentos", "Probar anuncios"), ("sprints", "Sprints"),
             ("catalogo", "Catálogo"), ("settings", "Configuración")]
 
 

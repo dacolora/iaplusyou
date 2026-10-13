@@ -3426,7 +3426,7 @@ def enviar_swap_a_publicidad(cliente, swap_id):
     producto = catalogo_productos.encontrar(cliente, entry.get("producto_id"))
     nombre = producto["nombre"] if producto else entry.get("producto_id", "Swap")
     ads_mod.crear(cliente, "swap", swap_id, entry["resultado_url"], entry.get("tipo", "foto"), nombre)
-    flash(gettext("Quedó en Experimentos › Anuncios sueltos — crea un experimento con esa pieza."), "ok")
+    flash(gettext("Quedó en Probar anuncios › Anuncios sueltos — crea un experimento con esa pieza."), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
 
@@ -3440,7 +3440,7 @@ def enviar_video_a_publicidad(cliente, brief_id):
 
     nombre = entry.get("title") or brief_id
     ads_mod.crear(cliente, "idea_visual", brief_id, entry["video_url"], "video", nombre)
-    flash(gettext("Quedó en Experimentos › Anuncios sueltos — crea un experimento con esa pieza."), "ok")
+    flash(gettext("Quedó en Probar anuncios › Anuncios sueltos — crea un experimento con esa pieza."), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
 
 
@@ -3460,7 +3460,7 @@ def _ir_a_flowmarketing(cliente):
 
 
 MENSAJE_MODO_AGENCIA = idiomas.N_("Este proyecto lo gestiona Creatv en Meta. Para volver a tu propia app usa «Cambiar de forma» "
-                        "en Experimentos › Meta (con nada en marcha).")
+                        "en Configuración › Conexiones (con nada en marcha).")
 
 
 def _bloqueo_modo_agencia(cliente):
@@ -4127,7 +4127,7 @@ def admin_meta_asignar(cliente):
         sin_pagina = gettext("sin Página")
         asunto = gettext("Meta quedó conectado en Creatv")
         cuerpo = gettext("Tu proyecto %(nombre)s ya está conectado a Meta: cuenta %(cuenta)s · Página %(pagina)s. "
-                         "Ya puedes probar piezas en Experimentos y publicar contenido.",
+                         "Ya puedes probar tus piezas como anuncios en «Probar anuncios» y publicar contenido.",
                          nombre=nombre, cuenta=cuenta, pagina=pagina_real or sin_pagina)
     notificaciones.avisar(cliente, "meta_conectado", asunto, cuerpo)
     ig = f" · Instagram @{detalle['ig_username']}" if detalle.get("ig_username") else ""

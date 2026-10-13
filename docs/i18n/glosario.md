@@ -13,6 +13,7 @@ partida a revisar por Daniel. Lo usa quien traduzca `translations/en/LC_MESSAGES
 | Tablero | Dashboard |
 | Catálogo | Catalog |
 | Experimentos | Experiments |
+| Probar anuncios (el nombre de la pestaña de Experimentos desde 2026-10-13; «experimento» sigue siendo la prueba) | Test ads |
 | Sprints | Sprints |
 | Nicho | Niche |
 | Avatar / sub-avatar | Avatar / sub-avatar |

@@ -5,6 +5,13 @@ description: "Experimentos en Meta y su centro de resultados: armar y lanzar pru
 
 # Experimentos, decisor y centro de resultados
 
+**Nombre en pantalla (2026-10-13):** la pestaña se llama «Probar anuncios» (ES) / «Test ads» (EN), con un ícono de
+matraz; su encabezado dice que aquí se lanzan las piezas como anuncios y se decide, y enlaza a «Rendimiento» para ver
+cómo va toda la cuenta (y Rendimiento enlaza de vuelta). Daniel: con la pestaña Rendimiento, «Experimentos · Centro de
+resultados» y su ícono de barras se leían como otra pantalla de resultados. El `data-tab`, las rutas y la palabra
+«experimento» (la prueba) no cambian. Los textos que mandaban a «conectar Meta en Experimentos» ahora dicen
+Configuración › Conexiones, donde vive la conexión desde 2026-10-07.
+
 > Parte de la guía del repositorio; hasta el 2026-10-01 vivía dentro de CLAUDE.md. **Si cambias esta área, actualiza este archivo** en el mismo cambio (no CLAUDE.md). Si el código y este texto no coinciden, manda el código: corrige el texto.
 
 **Experimentos** (`experimentos.py` + `lanzador.py`): the ecommerce test loop's unit

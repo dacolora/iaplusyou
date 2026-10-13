@@ -29,9 +29,11 @@
       <svg viewBox="0 0 24 24"><path d="M12 4v16M4 12h16" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" fill="none"/></svg>
       <span class="sidebar-texto">{{ _('Crear') }}</span>
     </button>
-    <button type="button" class="sidebar-item" data-tab="experimentos" role="tab" title="{{ _('Experimentos') }}">
-      <svg viewBox="0 0 24 24"><path d="M4 20h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/><rect x="5" y="11" width="3.5" height="6" rx="1" stroke="currentColor" stroke-width="2" fill="none"/><rect x="10.25" y="5" width="3.5" height="12" rx="1" stroke="currentColor" stroke-width="2" fill="none"/><rect x="15.5" y="8" width="3.5" height="9" rx="1" stroke="currentColor" stroke-width="2" fill="none"/></svg>
-      <span class="sidebar-texto">{{ _('Experimentos') }}</span>
+    {# «Probar anuncios» (2026-10-13, Daniel: con la pestaña Rendimiento, «Experimentos» y su ícono de barras se leían
+       como otra pantalla de resultados). El data-tab sigue siendo «experimentos». #}
+    <button type="button" class="sidebar-item" data-tab="experimentos" role="tab" title="{{ _('Probar anuncios') }}">
+      <svg viewBox="0 0 24 24"><path d="M9 3h6M10 3v6.5L4.8 18.2A2 2 0 0 0 6.5 21h11a2 2 0 0 0 1.7-2.8L14 9.5V3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M7.2 15h9.6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <span class="sidebar-texto">{{ _('Probar anuncios') }}</span>
     </button>
     <button type="button" class="sidebar-item" data-tab="alertas" role="tab" title="{{ _('Alertas') }}">
       <svg viewBox="0 0 24 24"><path d="M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"/><path d="M10 20a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>

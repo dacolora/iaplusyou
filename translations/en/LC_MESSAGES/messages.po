@@ -2162,8 +2162,8 @@ msgstr ""
 "Proposals waiting for approval, winners and\n"
 "  Meta rejections all land in this email. Empty = no email notifications."
 
-msgid "A la conexión con Meta le falta un permiso para esto: vuelve a conectar Meta en Experimentos aceptando todos los permisos que pide, y reintenta."
-msgstr "The Meta connection is missing a permission for this: reconnect Meta in Experiments, accepting every permission it asks for, and try again."
+msgid "A la conexión con Meta le falta un permiso para esto: vuelve a conectar Meta en Configuración › Conexiones aceptando todos los permisos que pide, y reintenta."
+msgstr "The Meta connection is missing a permission for this: reconnect Meta in Settings › Connections, accepting every permission it asks for, and try again."
 
 msgid "A la vez (máximo)"
 msgstr "At once (peak)"
@@ -4016,9 +4016,6 @@ msgstr "Center horizontally"
 msgid "Centro"
 msgstr "Center"
 
-msgid "Centro de resultados"
-msgstr "Results center"
-
 msgid "Cerrada"
 msgstr "Closed"
 
@@ -4562,11 +4559,11 @@ msgstr "Connect Meta above to test"
 msgid "Conecta Meta con una Página"
 msgstr "Connect Meta with a Page"
 
-msgid "Conecta Meta en <a href=\"#experimentos\" onclick=\"document.querySelector('.sidebar-item[data-tab=experimentos]').click(); return false;\">Experimentos</a> con una cuenta que administre la <strong>Página</strong> donde se publica."
-msgstr "Connect Meta in <a href=\"#experimentos\" onclick=\"document.querySelector('.sidebar-item[data-tab=experimentos]').click(); return false;\">Experiments</a> with an account that administers the <strong>Page</strong> where it publishes."
+msgid "Conecta Meta en <a href=\"#settings\" data-ir-config=\"config-meta\">Conexiones</a> con una cuenta que administre la <strong>Página</strong> donde se publica."
+msgstr "Connect Meta in <a href=\"#settings\" data-ir-config=\"config-meta\">Connections</a> with an account that administers the <strong>Page</strong> where it publishes."
 
-msgid "Conecta Meta en <a href=\"#experimentos\" onclick=\"document.querySelector('.sidebar-item[data-tab=experimentos]').click(); return false;\">Experimentos</a> para comprobar el Pixel."
-msgstr "Connect Meta in <a href=\"#experimentos\" onclick=\"document.querySelector('.sidebar-item[data-tab=experimentos]').click(); return false;\">Experiments</a> to check the Pixel."
+msgid "Conecta Meta en <a href=\"#settings\" data-ir-config=\"config-meta\">Conexiones</a> para comprobar el Pixel."
+msgstr "Connect Meta in <a href=\"#settings\" data-ir-config=\"config-meta\">Connections</a> to check the Pixel."
 
 msgid "Conecta Meta en Configuración › Conexiones antes de crear un experimento."
 msgstr "Connect Meta in Settings › Connections before creating an experiment."
@@ -5321,6 +5318,9 @@ msgstr "How it's paid:"
 msgid "Cómo se ve cada prop"
 msgstr "What each prop looks like"
 
+msgid "Cómo van todos tus anuncios y tu tienda: Rendimiento →"
+msgstr "How all your ads and your store are doing: Performance →"
+
 msgid "Cómo van tus anuncios y tu tienda, país por país: cada cifra sale de una sola fuente, Triple Whale donde tienes tienda y Meta donde no."
 msgstr "How your ads and your store are doing, country by country: each figure comes from a single source, Triple Whale where you have a store and Meta where you don't."
 
@@ -5345,9 +5345,6 @@ msgstr "Stale data: the decision engine takes no action until metrics are update
 #, python-format
 msgid "De %(persona)s:"
 msgstr "From %(persona)s:"
-
-msgid "De cada prueba a la siguiente decisión: resultados, piezas y aprendizajes de tu proyecto."
-msgstr "From each test to the next decision: your project's results, pieces and learnings."
 
 msgid "De impacto"
 msgstr "Display"
@@ -8392,8 +8389,8 @@ msgstr "This project is managed by Creatv (agency mode): it can't be disconnecte
 msgid "Este proyecto está gestionado por Creatv (modo agencia): no se puede guardar una conexión propia encima. Un admin tiene que desasignarlo primero."
 msgstr "This project is managed by Creatv (agency mode): you can't save your own connection over it. An admin has to unassign it first."
 
-msgid "Este proyecto lo gestiona Creatv en Meta. Para volver a tu propia app usa «Cambiar de forma» en Experimentos › Meta (con nada en marcha)."
-msgstr "Creatv manages this project on Meta. To go back to your own app use “Change form” in Experiments › Meta (with nothing running)."
+msgid "Este proyecto lo gestiona Creatv en Meta. Para volver a tu propia app usa «Cambiar de forma» en Configuración › Conexiones (con nada en marcha)."
+msgstr "Creatv manages this project on Meta. To go back to your own app use “Change form” in Settings › Connections (with nothing running)."
 
 msgid "Este proyecto no está en modo agencia."
 msgstr "This project isn't in agency mode."
@@ -10536,8 +10533,8 @@ msgstr "The connection with Meta was lost"
 msgid "La conexión con Meta se cortó: ves lo que ya probaste, pero para lanzar algo nuevo hay que reconectarla."
 msgstr "The connection with Meta was lost: you can see what you already tested, but to launch something new you need to reconnect it."
 
-msgid "La conexión con Meta venció o se retiró: vuelve a conectar Meta en Experimentos y reintenta."
-msgstr "The Meta connection expired or was revoked: reconnect Meta in Experiments and try again."
+msgid "La conexión con Meta venció o se retiró: vuelve a conectar Meta en Configuración › Conexiones y reintenta."
+msgstr "The Meta connection expired or was revoked: reconnect Meta in Settings › Connections and try again."
 
 #, python-format
 msgid "La conexión con Triple Whale falló: %(error)s"
@@ -11054,6 +11051,9 @@ msgstr "The last batch of English descriptions failed: %(error)s"
 msgid "Lado brillante"
 msgstr "Bright side"
 
+msgid "Lanza tus piezas como anuncios en Meta: aquí se mide cuál funciona y el motor te dice cuál escalar y cuál pausar."
+msgstr "Launch your pieces as ads on Meta: here we measure which one works and the engine tells you which to scale and which to pause."
+
 msgid "Lanzamiento de la colección"
 msgstr "Collection launch"
 
@@ -11156,8 +11156,8 @@ msgstr "Online top-ups are off: this server has Bold’s test mode on. Let the a
 msgid "Las recargas en línea todavía no están disponibles; escríbenos para recargar."
 msgstr "Online top-ups are not available yet; write to us to top up."
 
-msgid "Las reglas del decisor están en <a href=\"#experimentos\" onclick=\"document.querySelector('.sidebar-item[data-tab=experimentos]').click(); document.getElementById('reglas-motor').open = true; return false;\">Experimentos →</a>"
-msgstr "The decisor's rules are in <a href=\"#experimentos\" onclick=\"document.querySelector('.sidebar-item[data-tab=experimentos]').click(); document.getElementById('reglas-motor').open = true; return false;\">Experiments →</a>"
+msgid "Las reglas del decisor están en <a href=\"#experimentos\" onclick=\"document.querySelector('.sidebar-item[data-tab=experimentos]').click(); document.getElementById('reglas-motor').open = true; return false;\">Probar anuncios →</a>"
+msgstr "The decisor's rules are in <a href=\"#experimentos\" onclick=\"document.querySelector('.sidebar-item[data-tab=experimentos]').click(); document.getElementById('reglas-motor').open = true; return false;\">Test ads →</a>"
 
 msgid "Las reglas no encontraron nada que corregir en los últimos 30 días."
 msgstr "The rules found nothing to fix in the last 30 days."
@@ -14052,6 +14052,9 @@ msgstr "To record, open the editor from its secure address (https)."
 msgid "Para instalaciones de la app usa «Nuevo experimento»."
 msgstr "For app installs use “New experiment”."
 
+msgid "Para lanzar y probar piezas nuevas: Probar anuncios →"
+msgstr "To launch and test new pieces: Test ads →"
+
 msgid "Para producir una variante hay que indicar `variante` (número) y `variante_tipo` (hook | estructura) a la vez."
 msgstr "To produce a variant you must give `variante` (number) and `variante_tipo` (hook | estructura) together."
 
@@ -14853,6 +14856,9 @@ msgid_plural "Probar los %(num)s ganchos · %(precio)s"
 msgstr[0] "Try %(num)s hook · %(precio)s"
 msgstr[1] "Try the %(num)s hooks · %(precio)s"
 
+msgid "Probar anuncios"
+msgstr "Test ads"
+
 msgid "Probar conexión"
 msgstr "Test connection"
 
@@ -15331,8 +15337,8 @@ msgstr "Disk is running low (%(libre)s free). Delete old salidas/ files or grow 
 msgid "Quedó como no cobrado."
 msgstr "Marked as not charged."
 
-msgid "Quedó en Experimentos › Anuncios sueltos — crea un experimento con esa pieza."
-msgstr "It's now in Experiments › Standalone ads — create an experiment with that piece."
+msgid "Quedó en Probar anuncios › Anuncios sueltos — crea un experimento con esa pieza."
+msgstr "It's now in Test ads › Standalone ads — create an experiment with that piece."
 
 msgid "Quitamos la biblioteca de copycoders de este proyecto. Puedes volver a traerla cuando quieras."
 msgstr "We removed the copycoders library from this project. You can bring it back whenever you want."
@@ -18643,8 +18649,8 @@ msgid "Tu plan terminó. Tu saldo propio sigue disponible y tus generaciones se 
 msgstr "Your plan ended. Your own balance is still available and your generations are charged pay-as-you-go. You can subscribe again in Settings › Plan."
 
 #, python-format
-msgid "Tu proyecto %(nombre)s ya está conectado a Meta: cuenta %(cuenta)s · Página %(pagina)s. Ya puedes probar piezas en Experimentos y publicar contenido."
-msgstr "Your project %(nombre)s is now connected to Meta: account %(cuenta)s · Page %(pagina)s. You can now test pieces in Experiments and publish content."
+msgid "Tu proyecto %(nombre)s ya está conectado a Meta: cuenta %(cuenta)s · Página %(pagina)s. Ya puedes probar tus piezas como anuncios en «Probar anuncios» y publicar contenido."
+msgstr "Your project %(nombre)s is now connected to Meta: account %(cuenta)s · Page %(pagina)s. You can now test your pieces as ads in “Test ads” and publish content."
 
 msgid "Tu proyecto usa su propia app de Meta: CreatvMachine opera solo con tus credenciales y tus datos no pasan por ninguna app ajena."
 msgstr "Your project uses its own Meta app: CreatvMachine operates only with your credentials and your data doesn't pass through any third-party app."

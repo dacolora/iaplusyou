@@ -360,7 +360,7 @@ def test_experimentos_admin_en_ingles(admin_en, app_i18n, base_temporal, monkeyp
     _meta_conectada(app_i18n, monkeypatch)
     eid, ep = _experimento_con_pieza(base_temporal)
     html = html_de(admin_en, "/cliente/acme")
-    assert "Results center" in html and "Loading results…" in html and "How the engine decides" in html
+    assert "<h2>Test ads</h2>" in html and "Loading results…" in html and "How the engine decides" in html
     fugas = espanol_visible(html, ("tab-experimentos",))
     assert not fugas, fugas[:15]
     for url in _urls_del_centro(eid, ep):
