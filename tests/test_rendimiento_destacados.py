@@ -1,6 +1,8 @@
 """Las métricas que faltaban en Rendimiento (spec 2026-10-13-rendimiento-metricas-que-faltaban): productos con gasto y
 ROAS, los mejores para iterar, los que mejor convierten y las mejores imágenes y videos, todo desde la copia de Triple
 Whale."""
+import pytest
+
 from triple_whale import destacados as D
 from triple_whale import evaluacion
 
@@ -159,3 +161,96 @@ def test_cada_fila_trae_producto_y_tipo():
                         gasto=100)], roas_cuenta=1.0, tipos=tipos)["iterar"][0]
     assert fila["producto"]["nombre"] == "HappyComfy" and fila["etiqueta"] == D.TIPOS["video"]
     assert fila["grupo"] == "video" and fila["m"]["ingresos"] == 900
+
+
+# ------------------------------------------------------------------------ lecturas y panel (tarea 2) ---
+
+@pytest.fixture(autouse=True)
+def _llave_de_cifrado(monkeypatch):
+    # `triple_whale_tiendas.agregar` cifra la llave de la tienda con la clave de la app.
+    monkeypatch.setenv("FLASK_SECRET_KEY", "test_secret_key_12345678")
+
+
+def _hace(n):
+    from datetime import date, timedelta
+    return (date.today() - timedelta(days=n)).isoformat()
+
+
+def _tienda(cliente="acme", pais="NO"):
+    import triple_whale_tiendas
+    return triple_whale_tiendas.agregar(cliente, "tw_llave_123", f"{cliente}-{pais.lower()}.myshopify.com", pais,  # llave-de-prueba
+                                        moneda="USD")
+
+
+def _sembrar_anuncios(tid, n=6, cliente="acme"):
+    """`n` anuncios de Meta ayer: la mitad videos de HappyCozy, la mitad imágenes de HappyComfy; ventas crecientes."""
+    from triple_whale import datos as twdatos
+    f = _hace(1)
+    canal, pixel, creativos = [], [], []
+    for i in range(n):
+        video = i % 2 == 0
+        destino = "https://x.no/products/" + ("happyflops-cozy-1" if video else "happycomfy")
+        canal.append({"canal": "facebook-ads", "ad_id": f"a{i}", "fecha": f, "gasto": 100, "impresiones": 10000,
+                      "clics": 150, "vistas_3s": 3000 if video else 0, "anuncio": f"Anuncio {i}",
+                      "destino_url": destino})
+        pixel.append({"canal": "facebook-ads", "ad_id": f"a{i}", "fecha": f, "pedidos": 10 + i,
+                      "ingresos": 200 + 50 * i, "nc_ingresos": 100 + 10 * i, "sesiones": 400})
+        creativos.append({"canal": "facebook-ads", "ad_id": f"a{i}", "tipo": "video" if video else "image",
+                          "imagen_url": f"https://files.triplewhale.com/a{i}.jpg"})
+    twdatos.reemplazar_anuncios_canal(cliente, tid, f, f, canal)
+    twdatos.reemplazar_anuncios_pixel(cliente, tid, f, f, pixel)
+    twdatos.reemplazar_creativos(cliente, tid, creativos)
+
+
+def _catalogo(cliente="acme"):
+    import tiendas
+    tiendas.upsert_producto(cliente, "shopify", "32", {"nombre": "HappyCozy",
+                                                      "url_compra": "https://www.happyflops.com/products/happyflops-cozy"})
+    tiendas.upsert_producto(cliente, "shopify", "39", {"nombre": "HappyComfy",
+                                                      "url_compra": "https://www.happyflops.com/products/happycomfy"})
+
+
+def test_tipos_creativo_lee_solo_los_del_proyecto_y_con_tipo(base_temporal):
+    from triple_whale import datos as twdatos
+    tid, otra = _tienda(), _tienda("otro", "SE")
+    twdatos.reemplazar_creativos("acme", tid, [{"canal": "facebook-ads", "ad_id": "1", "tipo": "video"},
+                                               {"canal": "facebook-ads", "ad_id": "2", "titulo": "sin tipo"}])
+    twdatos.reemplazar_creativos("otro", otra, [{"canal": "facebook-ads", "ad_id": "9", "tipo": "image"}])
+    assert twdatos.tipos_creativo("acme") == {("facebook-ads", "1"): "video"}
+
+
+def _contexto_tw(tid):
+    import idiomas
+    from triple_whale import panel as tw_panel
+    with idiomas.en_idioma("es"):
+        return tw_panel.contexto("acme", 0, tienda_id=tid)
+
+
+def test_armar_junta_las_listas_con_el_catalogo_el_tipo_y_el_medio(base_temporal):
+    tid = _tienda()
+    _sembrar_anuncios(tid)
+    _catalogo()
+    d = D.armar("acme", _contexto_tw(tid))
+    assert d["moneda"] == "USD"
+    assert [p["nombre"] for p in d["productos"]] == ["HappyComfy", "HappyCozy"]   # 1 050 contra 900
+    assert {f["grupo"] for f in d["videos"]} == {"video"} and len(d["videos"]) == 3 and len(d["imagenes"]) == 3
+    assert d["videos"][0]["ad_id"] == "a4" and d["videos"][0]["producto"]["nombre"] == "HappyCozy"
+    assert d["imagenes"][0]["medio"]["imagen"] == "https://files.triplewhale.com/a5.jpg"
+    assert d["iterar"] and all(f["m"]["pedidos"] >= D.PEDIDOS_MIN_ITERAR for f in d["iterar"])
+    assert [f["ad_id"] for f in d["conversion"]][:2] == ["a5", "a4"]
+
+
+def test_armar_sin_anuncios_no_lee_nada_y_queda_vacio(base_temporal):
+    tid = _tienda()
+    d = D.armar("acme", _contexto_tw(tid))
+    assert d["iterar"] == d["conversion"] == d["imagenes"] == d["videos"] == d["productos"] == []
+
+
+def test_el_panel_de_rendimiento_trae_destacados_con_triple_whale(base_temporal):
+    import idiomas
+    from pestana_rendimiento import panel as rpanel
+    tid = _tienda()
+    _sembrar_anuncios(tid)
+    with idiomas.en_idioma("es"):
+        r = rpanel.contexto("acme", 0, entrada="NO")
+    assert r["fuente"] == "tw" and r["destacados"] and r["destacados"]["videos"]

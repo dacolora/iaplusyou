@@ -146,3 +146,25 @@ def resumir(anuncios, roas_cuenta, indice, tipos):
             "videos": por_grupo["video"], "productos": _productos(filas), "roas_cuenta": roas_cuenta,
             "minimos": {"pedidos_iterar": PEDIDOS_MIN_ITERAR, "sesiones": SESIONES_MIN_CONVERSION,
                         "pedidos_conversion": PEDIDOS_MIN_CONVERSION}}
+
+
+def armar(cliente, tw):
+    """Lo que pinta la pantalla (`r.destacados`) desde el contexto de Triple Whale del panel (`tw`, de
+    `triple_whale.panel.contexto`): `resumir` + `moneda` y, en cada tarjeta de «imagenes»/«videos», su `medio` (el de
+    la galería: solo hosts permitidos o lo de una pieza de Creatv en R2). Lecturas fijas: tipos, Catálogo y los
+    creativos de las ≤ 12 tarjetas; sin anuncios, ninguna."""
+    import tiendas
+    from triple_whale import datos
+    from triple_whale import panel as tw_panel
+    ev = tw["ev"]
+    anuncios = ev["anuncios"]
+    tipos = datos.tipos_creativo(cliente) if anuncios else {}
+    catalogo = tiendas.productos(cliente) if anuncios else []
+    r = resumir(anuncios, ev["cuenta"]["m"].get("roas"), catalogo_indice(catalogo), tipos)
+    tarjetas = r["imagenes"] + r["videos"]
+    creativos = datos.creativos(cliente, [(f["canal"], f["ad_id"]) for f in tarjetas])
+    for f in tarjetas:
+        f["medio"] = tw_panel.medio_tarjeta({"canal": f["canal"], "video_url": f["video_url"], "creatv": f["creatv"],
+                                             "creativo": creativos.get((f["canal"], f["ad_id"]))})
+    r["moneda"] = tw["moneda"]
+    return r
