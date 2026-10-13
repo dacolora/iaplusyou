@@ -1,8 +1,10 @@
 {# Migas y comportamiento de la barra lateral fuera de cliente.html (igual que
    _sprint_nav.html): los botones de pestaña no tienen paneles en esta página,
-   así que llevan de vuelta al proyecto con el hash de la pestaña. #}
+   así que llevan de vuelta al proyecto con el hash de la pestaña. Desde 2026-10-13 Nicho vive en Sprints: la miga es
+   «← Sprints › Nicho» (#sprints y #nicho). #}
 <p class="sprint-migas">
-  <a href="{{ url_for('ver_cliente', cliente=cliente, _anchor='nicho') }}">← {{ _('Nicho') }}</a>
+  <a href="{{ url_for('ver_cliente', cliente=cliente, _anchor='sprints') }}">← {{ _('Sprints') }}</a> ›
+  <a href="{{ url_for('ver_cliente', cliente=cliente, _anchor='nicho') }}">{{ _('Nicho') }}</a>
   {% if estudio %} · {{ estudio.nombre }}{% endif %}
 </p>
 <script>

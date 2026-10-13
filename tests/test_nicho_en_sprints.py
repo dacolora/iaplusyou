@@ -160,3 +160,14 @@ def test_volver_a_sprints_desde_la_barra_lateral_no_pierde_nicho_en_la_direccion
 def test_crear_un_estudio_con_error_vuelve_a_nicho(app):  # noqa: F811
     r = app["c"].post("/cliente/acme/nicho/estudios", data={"nombre": ""})
     assert r.status_code == 302 and r.headers["Location"].endswith("/cliente/acme#nicho")
+
+
+def test_la_miga_de_las_paginas_de_nicho_lleva_a_sprints_y_a_nicho(app):  # noqa: F811
+    from nicho import datos
+    from tests.test_rutas_nicho import _estudio
+    eid = _estudio(datos)
+    for url in (f"/cliente/acme/nicho/{eid}", "/cliente/acme/nicho/avatares"):
+        html = app["c"].get(url).data.decode()
+        miga = html[html.index('<p class="sprint-migas">'):html.index("</p>", html.index('<p class="sprint-migas">'))]
+        assert 'href="/cliente/acme#sprints"' in miga and 'href="/cliente/acme#nicho"' in miga, url
+        assert miga.index("#sprints") < miga.index("#nicho") and "›" in miga, url
