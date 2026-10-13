@@ -16892,6 +16892,9 @@ msgstr "It will be published again on %(plataforma)s. Check first that it hasn't
 msgid "Se vuelven a generar la escena %(n)s y las siguientes por ≈ US$ %(precio)s. Las anteriores se quedan como están. ¿Rehacer?"
 msgstr "Scene %(n)s and the ones after it will be generated again for ≈ US$ %(precio)s. The earlier ones stay as they are. Redo?"
 
+msgid "Secciones de Sprints"
+msgstr "Sprints sections"
+
 msgid "Secundario"
 msgstr "Secondary"
 

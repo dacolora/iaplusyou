@@ -77,6 +77,17 @@ save (`guardarAngulosPendientes`: «Reescribir», «Aprobar», any form submit �
 so its `confirm()` asks once); a reload of the SAME campaign's panel keeps what was being typed, which
 `<details>` were open and the cursor (`tomarEscrito`/`devolverEscrito`). The Blueprint refuses POSTs the
 browser marks as cross-site (`Sec-Fetch-Site`), like Flow Plus and the editor.
+Since 2026-10-13 the Sprints tab has two sub-tabs, «Sprints · Nicho» (spec
+`docs/superpowers/specs/2026-10-13-nicho-dentro-de-sprints-design.md`, Daniel's request): `_tab_sprints.html` holds a
+`nav.cat-tabs.sprints-subs` bar and two `.sprints-sub[data-sub]` containers (`sprints-sub-sprints`,
+`sprints-sub-nicho` with `_tab_nicho.html` included as-is). Their addresses are `#sprints` / `#nicho` (an explicit
+hash wins over the remembered `sprints-sub-<cliente>`; the sub-tab JS lives at the end of `_tab_sprints.html`, picks
+at once (so `#nicho` never flashes the Sprints list) and re-picks on DOMContentLoaded only when there was no explicit
+hash and the document was still loading, because `cliente.html`'s `resolver('nicho')` turns an old
+`tab-activa-<cliente>=nicho` into `sprints-sub-<cliente>=nicho` after this script has run; it puts `#nicho` back after
+a sidebar click via `cr:tab`). The Nicho sub-tab shows the count of new avatars to review (`cat-n`).
+Tests: `tests/test_nicho_en_sprints.py` runs both scripts in Node, alone and together in the browser's load order
+(sub-tab script, then `cliente.html`'s, then DOMContentLoaded).
 
 Director de Crear en lotes (2026-10-02, PND-014): también se encola con max_intentos=1 y registra el usage real bajo _creatv; sigue siendo una ayuda gratis para la persona.
 

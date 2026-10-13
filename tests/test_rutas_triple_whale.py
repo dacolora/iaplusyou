@@ -66,7 +66,7 @@ def test_sin_conectar_la_pestana_invita_a_conectar(app):  # noqa: F811
     html = app["c"].get("/cliente/acme").data.decode()
     assert 'data-tab="rendimiento"' in html and 'id="tab-rendimiento"' in html
     ini = html.index('id="tab-rendimiento"')
-    pestana = html[ini:html.index('id="tab-nicho"')]
+    pestana = html[ini:html.index('id="tab-referentes"')]
     # Desde 2026-09-28 el formulario de conexión vive en la pestaña (hoy, en su «Ajustes»), no en Configuración.
     assert "Conecta Meta o Triple Whale para ver tu rendimiento" in pestana and 'id="tw-conexion"' in pestana
     assert "/cliente/acme/cfg_triple_whale/conectar" in pestana and "config-triple-whale" not in pestana

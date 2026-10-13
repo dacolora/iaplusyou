@@ -11,6 +11,8 @@
    `triplewhale`: Triple Whale y Meta juntos en una sola pestaña (spec
    2026-10-09 R1; «Meta» salió del menú); su panel llega por fetch al abrirla.
    Las claves viejas `triplewhale` y `meta` las resuelve cliente.html.
+   `nicho` (2026-10-13) ya no es pestaña: vive en Sprints › Nicho (spec
+   2026-10-13-nicho-dentro-de-sprints); cliente.html resuelve la clave.
    `productos` ya no es pestaña: vive dentro de Catálogo; `ads` (Campañas)
    tampoco: sus anuncios sueltos viven dentro de Experimentos (cliente.html
    resuelve los hashes viejos). #}
@@ -47,10 +49,6 @@
     <button type="button" class="sidebar-item" data-tab="rendimiento" role="tab" title="{{ _('Rendimiento') }}">
       <svg viewBox="0 0 24 24"><path d="M3 17l5-6 4 3 5-7 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M3 21h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="17" cy="7" r="1.6" fill="currentColor"/></svg>
       <span class="sidebar-texto">{{ _('Rendimiento') }}</span>
-    </button>
-    <button type="button" class="sidebar-item" data-tab="nicho" role="tab" title="{{ _('Nicho') }}">
-      <svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6" stroke="currentColor" stroke-width="2" fill="none"/><path d="M15 15l5.5 5.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M8 10.5h5M10.5 8v5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-      <span class="sidebar-texto">{{ _('Nicho') }}</span>
     </button>
     <button type="button" class="sidebar-item" data-tab="referentes" role="tab" title="{{ _('Referentes') }}">
       <svg viewBox="0 0 24 24"><rect x="3" y="4" width="8" height="7" rx="1.5" stroke="currentColor" stroke-width="2" fill="none"/><rect x="13" y="4" width="8" height="7" rx="1.5" stroke="currentColor" stroke-width="2" fill="none"/><rect x="3" y="13" width="8" height="7" rx="1.5" stroke="currentColor" stroke-width="2" fill="none"/><rect x="13" y="13" width="8" height="7" rx="1.5" stroke="currentColor" stroke-width="2" fill="none"/></svg>

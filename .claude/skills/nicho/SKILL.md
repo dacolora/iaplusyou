@@ -130,9 +130,13 @@ sub-avatar sin citas queda `sin_evidencia`, no se borra. `estimar_costo` (tokens
 `avatares`). Regenerar borra `propuesto`/`descartado` y conserva los `aprobado`.
 Aprobar un sub-avatar crea (o actualiza) una `persona` con origen `investigada`
 (`persona_desde_avatar`); descartar la archiva. Exportación `.md` y `.xlsx` con la
-plantilla de la hoja "Personas" (`nicho/exportar.py`). UI: pestaña **Nicho**
-(`_tab_nicho.html`) y página propia del estudio (`nicho_estudio.html`), Blueprint
-`nicho/rutas.py` bajo `/cliente/<cliente>/nicho/...`.
+plantilla de la hoja "Personas" (`nicho/exportar.py`). UI: desde 2026-10-13 Nicho ya no es pestaña propia: es la sub-pestaña **Sprints › Nicho**
+(`_tab_nicho.html`, incluida tal cual por `_tab_sprints.html`; spec
+`docs/superpowers/specs/2026-10-13-nicho-dentro-de-sprints-design.md`, pedido de Daniel: la investigación es la
+entrada del plan de contenido). `#nicho` sigue siendo su dirección (`_volver`, la miga, los enlaces guardados:
+`cliente.html` la resuelve a la pestaña `sprints` y guarda `sprints-sub-<cliente>`); ningún elemento lleva
+`id="nicho"`. Página propia del estudio (`nicho_estudio.html`), Blueprint `nicho/rutas.py` bajo
+`/cliente/<cliente>/nicho/...`, sin cambios.
 
 PND-055 (2026-10-05): una búsqueda por subreddit o comentarios de un post con 400/410/422, o 403 con reason private/banned/quarantined, salta ese recurso. Reddit conserva el error global de 401/403 genérico. YouTube salta videoNotFound/commentThreadNotFound como commentsDisabled, conserva páginas leídas y propaga errores de llave/permisos; cuota sigue deteniendo con aviso.
 
