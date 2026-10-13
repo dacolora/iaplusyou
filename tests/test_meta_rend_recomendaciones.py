@@ -115,7 +115,10 @@ def test_forma_de_cada_recomendacion():
     e = entrada(anuncios=[anuncio("501", veredicto="perdedor", gasto_7=100.0)])
     r = una(rec.calcular(e), "perdedores_gastando")
     assert set(r) == {"id", "nivel", "tipo", "cuenta", "cuenta_nombre", "titulo", "que_hacer", "por_que", "impacto",
-                      "objetos", "enlace"}
+                      "objetos", "enlace", "fila"}
+    assert r["fila"] == {"etiqueta": None, "cifra": "1 anuncio", "nota": "100 SEK en 7 días", "barra": None,
+                         "gasto": "10 %"}
+    assert r["impacto"]["corto"] == "14,29 SEK" and r["impacto"]["texto"] == "14,29 SEK por día en juego"
     assert r["cuenta"] == ACT and r["cuenta_nombre"] == "HF Sverige"
     assert r["objetos"] == [{"nivel": "anuncio", "id": "501", "nombre": "Anuncio 501"}]
     assert r["enlace"] == administrador.enlace(ACT, "anuncio", ["501"])
@@ -670,3 +673,124 @@ def test_nombre_segmento_en_el_idioma_de_quien_mira():
         assert rec.nombre_segmento("pais", "NO") == "Norway"
         assert rec.nombre_segmento("edad_genero", "25-34|female") == "25–34 · Women"
         assert rec.nombre_segmento("ubicacion", "instagram|instagram_stories") == "Instagram · Stories"
+
+
+# ------------------------------------------------------------ el Diagnóstico agrupado (2026-10-13) ---
+# Pedido de Daniel: cinco tarjetas «Learning limited» repetían el mismo consejo, una por cuenta, con las cifras
+# enterradas en la prosa. Cada recomendación trae sus cifras sueltas (`fila`) y `agrupar` arma un bloque por tipo.
+
+def test_fila_de_aprendizaje_con_la_barra_de_conjuntos_y_la_parte_del_gasto():
+    r = una(rec.calcular(_aprendizaje(300.0, n_fail=1, n_ok=3, compras_7=20.0)), "aprendizaje_limitado")
+    assert r["fila"] == {"etiqueta": None, "cifra": "1 de 4", "nota": "ninguno junta 50 compras por semana",
+                         "barra": 0.25, "gasto": "30 %"}
+    r = una(rec.calcular(_aprendizaje(300.0, n_fail=3, n_ok=1, compras_7=120.0)), "aprendizaje_limitado")
+    assert r["fila"]["cifra"] == "3 de 4" and r["fila"]["barra"] == 0.75
+    assert r["fila"]["nota"] == "da para ~2 fuera del aprendizaje"
+
+
+def test_cada_regla_trae_su_fila_y_no_repite_el_titulo():
+    """Las nueve reglas arman su fila (la de respaldo, solo el título, es para una recomendación sin cifras)."""
+    e = _segmentos()
+    e["cuentas"] = [cuenta(status=9, spend_cap="1000000", amount_spent="950000")]
+    e["totales_7"] = {ACT: {"gasto": 1000.0, "valor": 2000.0, "compras": 20.0}}
+    e["totales_30"] = {ACT: {"gasto": 4000.0, "valor": 1000.0, "compras": 10.0}}
+    e["objetos"] = [campana("800"), conjunto("900", "800", "SUCCESS", 100.0), conjunto("901", "800", "FAIL"),
+                    conjunto("902", "800", "FAIL")]
+    e["conjuntos_7"] = {"900": {"gasto": 100.0, "compras": 10.0, "valor": 260.0},
+                        "901": {"gasto": 300.0, "compras": 0.0, "valor": 0.0}}
+    e["anuncios"] = [anuncio("1", adset_id="900", veredicto="ganador", problemas=("fatiga",), gasto_7=90.0),
+                     anuncio("2", adset_id="900", gasto_7=10.0),
+                     anuncio("3", adset_id="901", veredicto="perdedor", gasto_7=250.0),
+                     anuncio("4", adset_id="901", estado="DISAPPROVED", gasto_7=5.0, gasto_30=60.0)]
+    e["frecuencia_7"] = {"800": {"alcance": 5000, "frecuencia": 3.4}}
+    recs = rec.calcular(e)
+    assert {r["tipo"] for r in recs} == set(rec.TIPOS)
+    for r in recs:
+        f = r["fila"]
+        assert set(f) == {"etiqueta", "cifra", "nota", "barra", "gasto"} and f["cifra"], r["tipo"]
+        assert f["cifra"] != r["titulo"], r["tipo"]
+        assert f["barra"] is None or 0 <= f["barra"] <= 1
+    assert una(recs, "escalar")["fila"]["etiqueta"] == "Conjunto 900"
+    assert una(recs, "segmento_caro")["fila"]["etiqueta"] == "Noruega (País)"
+    estado = una(recs, "cuenta_estado")["fila"]
+    assert estado["cifra"] == "No está activa" and estado["nota"] == "95 % de su tope de gasto"
+    assert estado["barra"] == 0.95
+
+
+def _dos_cuentas_en_aprendizaje(moneda2="SEK"):
+    """Dos cuentas con aprendizaje limitado (alta en la 1, media en la 2) y la 2 vendiendo menos de lo que gasta."""
+    e = _aprendizaje(300.0)
+    e["cuentas"] = [cuenta(), cuenta(ACT2, "HF Norge", moneda2)]
+    e["totales_7"][ACT2] = {"gasto": 1000.0, "valor": 2000.0, "compras": 20.0}
+    e["totales_30"][ACT2] = {"gasto": 4000.0, "valor": 1000.0, "compras": 10.0}
+    e["objetos"] += [campana("700", act=ACT2), conjunto("70", "700", "FAIL", act=ACT2)]
+    e["objetos"] += [conjunto(f"7{i}", "700", act=ACT2) for i in range(1, 6)]
+    e["conjuntos_7"]["70"] = {"gasto": 200.0, "compras": 0.0, "valor": 0.0}
+    return e
+
+
+def test_agrupar_un_bloque_por_tipo_con_el_consejo_una_vez():
+    recs = rec.calcular(_dos_cuentas_en_aprendizaje())
+    grupos = rec.agrupar(recs)
+    # Los dos son de prioridad alta: va primero el que pone más en juego por día (4 000/30 contra 500/7).
+    assert [g["tipo"] for g in grupos] == ["cuenta_roas_bajo", "aprendizaje_limitado"]
+    roas, ap = grupos
+    assert [r["cuenta"] for r in ap["recs"]] == [ACT, ACT2]
+    assert ap["titulo"] == "Aprendizaje limitado en 2 cuentas"
+    assert ap["nivel"] == "alta" and ap["mixto"] is True and [r["nivel"] for r in ap["recs"]] == ["alta", "media"]
+    assert ap["consejo"].startswith("Consolida conjuntos parecidos") and "50 compras por semana" in ap["consejo"]
+    # Lo que está en juego por día, sumado: 300/7 + 200/7.
+    assert ap["impacto"]["monto"] == pytest.approx(500 / 7) and ap["impacto"]["texto"] == "71,43 SEK por día en juego"
+    assert ap["cab_etiqueta"] == "Cuenta" and ap["cab_gasto"] == "Del gasto de 7 días"
+    assert ap["con_gasto"] is True and ap["con_impacto"] is True
+    assert roas["titulo"] == "1 cuenta vende menos de lo que gasta" and roas["mixto"] is False
+    assert "ROAS 0,50×" in roas["consejo"] and roas["con_gasto"] is False and roas["cab_gasto"] is None
+
+
+def test_agrupar_no_suma_monedas_distintas():
+    ap = una(rec.agrupar(rec.calcular(_dos_cuentas_en_aprendizaje(moneda2="NOK"))), "aprendizaje_limitado")
+    assert ap["impacto"] is None and ap["con_impacto"] is True
+    assert {r["impacto"]["moneda"] for r in ap["recs"]} == {"SEK", "NOK"}
+
+
+def test_agrupar_ordena_por_nivel_y_luego_por_lo_que_esta_en_juego():
+    def r(tipo, nivel, monto=None, cuenta_=ACT):
+        imp = {"monto": monto, "moneda": "SEK", "texto": "", "corto": ""} if monto else None
+        return {"id": tipo + nivel + cuenta_, "nivel": nivel, "tipo": tipo, "cuenta": cuenta_, "impacto": imp,
+                "fila": {"gasto": None}}
+    recs = [r("fatiga", "media"), r("segmento_caro", "media", 5.0), r("perdedores_gastando", "media", 50.0),
+            r("concentracion", "baja"), r("aprendizaje_limitado", "alta", 1.0), r("cuenta_estado", "alta")]
+    assert [g["tipo"] for g in rec.agrupar(recs)] == ["aprendizaje_limitado", "cuenta_estado", "perdedores_gastando",
+                                                      "segmento_caro", "fatiga", "concentracion"]
+
+
+def test_agrupar_cuenta_cuentas_o_filas_segun_el_tipo():
+    def r(tipo, cuenta_):
+        return {"id": tipo + cuenta_, "nivel": "media", "tipo": tipo, "cuenta": cuenta_, "impacto": None,
+                "fila": {"gasto": None}}
+    grupos = {g["tipo"]: g for g in rec.agrupar([r("segmento_caro", ACT), r("segmento_caro", ACT),
+                                                 r("escalar", ACT), r("fatiga", ACT), r("fatiga", ACT2)])}
+    assert grupos["segmento_caro"]["titulo"] == "2 segmentos caros"
+    assert grupos["escalar"]["titulo"] == "1 presupuesto listo para subir"
+    assert grupos["fatiga"]["titulo"] == "Anuncios que funcionan y se cansan en 2 cuentas"
+
+
+def test_agrupar_es_pura_y_cada_tipo_tiene_sus_textos():
+    import copy
+    recs = rec.calcular(_dos_cuentas_en_aprendizaje())
+    antes = copy.deepcopy(recs)
+    rec.agrupar(recs)
+    assert recs == antes and rec.agrupar([]) == [] and rec.agrupar(None) == []
+    assert set(rec.CONSEJOS) == set(rec.CABECERA_CIFRA) == set(rec.TIPOS)
+    titulos = {rec._titulo_grupo(t, 2) for t in rec.TIPOS}
+    assert len(titulos) == len(rec.TIPOS)
+
+
+def test_agrupado_en_ingles_con_el_catalogo():
+    import idiomas
+    with idiomas.en_idioma("en"):
+        roas, ap = rec.agrupar(rec.calcular(_dos_cuentas_en_aprendizaje()))
+    assert ap["titulo"] == "Learning limited in 2 accounts" and ap["cab_gasto"] == "Of 7-day spend"
+    assert ap["recs"][0]["fila"]["gasto"] == "30%" and ap["recs"][0]["fila"]["cifra"] == "1 of 4"
+    assert ap["impacto"]["texto"] == "71.43 SEK per day at stake"
+    assert roas["consejo"].startswith("Pause or rebuild these accounts")
