@@ -148,8 +148,9 @@ def test_enviar_inputs_remotos_conserva_ambos_contratos(pagina, monkeypatch):
     frag = sopa(c.get("/cliente/acme/catalogo/selector?sel=clone", headers=FETCH))
     entrada = frag.select_one("input")
     enviados = []
-    monkeypatch.setattr(d, "_lanzar_swap", lambda cliente, archivo, producto, pid, *a: enviados.append((cliente, pid, producto["nombre"])) or True)
-    r = c.post("/cliente/acme/swap/generar", data={entrada["name"]: entrada["value"], "foto": (io.BytesIO(JPG_VALIDO), "foto.jpg")})
+    monkeypatch.setattr(d, "_lanzar_swap", lambda cliente, archivo, producto, pid, *a, **k: enviados.append((cliente, pid, producto["nombre"])) or True)
+    r = c.post("/cliente/acme/swap/generar", data={entrada["name"]: entrada["value"], "foto": (io.BytesIO(JPG_VALIDO), "foto.jpg"),
+                                                   "precio_visto": "999"})
     assert r.status_code == 302 and enviados == [("acme", "propio", "Propio")]
 
 

@@ -7032,6 +7032,9 @@ msgstr "Choose this store's country so that country's experiments use its sales.
 msgid "Elige el país de la tienda."
 msgstr "Choose the store's country."
 
+msgid "Elige el producto para ver el precio."
+msgstr "Choose the product to see the price."
+
 msgid "Elige la cuenta que va a enviar (Gmail, Outlook o el correo del dominio)."
 msgstr "Choose the account that will send it (Gmail, Outlook or the domain's email)."
 
@@ -7044,6 +7047,9 @@ msgstr "Choose the piece and at least one platform."
 
 msgid "Elige las fotos desde tu computador: se crea el producto en el catálogo con ellas."
 msgstr "Choose the photos from your computer: the product gets created in the catalog with them."
+
+msgid "Elige los archivos para ver el precio."
+msgstr "Choose the files to see the price."
 
 msgid "Elige los destinos. Es gratis: se produce con lo que hay en esta edición, sin pagar nada nuevo. Tarda <span id=\"producir-tiempo\"></span>."
 msgstr "Choose the markets. It's free: it's produced with what's in this edit, without paying for anything new. It takes <span id=\"producir-tiempo\"></span>."
@@ -8473,6 +8479,10 @@ msgstr "This charge is on its way to Wompi. Wait a few minutes before resolving 
 
 msgid "Este color no tiene fotos todavía: súbele una para que el modelo lo reproduzca."
 msgstr "This color has no photos yet: upload one so the model can reproduce it."
+
+#, python-format
+msgid "Este envío cuesta %(precio)s. Revisa el precio y vuelve a generar."
+msgstr "This upload costs %(precio)s. Check the price and generate again."
 
 #, python-format
 msgid "Este experimento optimiza por compras y el Pixel no está activo%(detalle)s. Comprueba el Pixel en Configuración o crea el experimento con objetivo de tráfico."
@@ -11386,6 +11396,9 @@ msgstr "Reading the catalog and creating the products…"
 msgid "Leyendo la cuenta"
 msgstr "Reading the account"
 
+msgid "Leyendo la duración del video…"
+msgstr "Reading the video length…"
+
 msgid "Leyendo la página"
 msgstr "Reading the page"
 
@@ -12316,6 +12329,9 @@ msgstr "My music"
 msgid "Mi música · gratis"
 msgstr "My music · free"
 
+msgid "Midiendo el video…"
+msgstr "Measuring the video…"
+
 msgid "Midsommar"
 msgstr "Midsummer (Midsommar)"
 
@@ -13059,6 +13075,9 @@ msgstr "I couldn't delete it (%(tipo)s); try again."
 msgid "No pude calcular el panel esta vez. El detalle quedó en el log del servidor; vuelve a cargar en un momento."
 msgstr "I couldn't calculate the panel this time. The detail was logged on the server; reload in a moment."
 
+msgid "No pude calcular el precio de este envío; no se generó nada."
+msgstr "I couldn't calculate the price of this upload; nothing was generated."
+
 #, python-format
 msgid "No pude cambiar el estado: %(error)s"
 msgstr "Couldn't change the status: %(error)s"
@@ -13160,6 +13179,12 @@ msgstr "I couldn't read that audio file."
 
 msgid "No pude leer ese video."
 msgstr "I couldn't read that video."
+
+msgid "No pude leer la duración de ese video."
+msgstr "I couldn't read that video's length."
+
+msgid "No pude leer la duración de un video; el precio se calcula al subirlo."
+msgstr "I couldn't read a video's length; the price is calculated when you upload it."
 
 #, python-format
 msgid "No pude leer la foto %(archivo)s."
@@ -17628,6 +17653,9 @@ msgstr ""
 msgid "Sube un mp3, wav, m4a, aac u ogg."
 msgstr "Upload an mp3, wav, m4a, aac or ogg."
 
+msgid "Sube un video mp4, mov o webm."
+msgstr "Upload an mp4, mov or webm video."
+
 msgid "Sube un video, una imagen o un audio."
 msgstr "Upload a video, an image or an audio file."
 
@@ -21453,6 +21481,14 @@ msgstr "seasonality"
 msgid "estado"
 msgstr "status"
 
+#, python-brace-format
+msgid "este modelo entrega {segundos} s de video"
+msgstr "this model returns {segundos} s of video"
+
+#, python-brace-format
+msgid "este modelo procesa hasta {max} s de cada video: lo demás se corta"
+msgstr "this model processes up to {max} s of each video: the rest is cut"
+
 msgid "estimado: sin respuesta de Claude"
 msgstr "estimated: no response from Claude"
 
@@ -22022,6 +22058,10 @@ msgstr "characters"
 
 msgid "los productos"
 msgstr "products"
+
+#, python-brace-format
+msgid "los videos se cobran por lo que duran: {segundos} s en total"
+msgstr "videos are charged by their length: {segundos} s in total"
 
 msgid "los últimos que se mandaron a los administradores"
 msgstr "the latest ones sent to the administrators"

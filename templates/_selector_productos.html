@@ -11,7 +11,7 @@
           <div class="producto-grupo-tiles">
             {% for p in entradas %}
             <label class="producto-opcion" data-nombre="{{ (p.nombre_producto ~ ' ' ~ p.nombre) | lower }}">
-              <input type="{{ _modo }}" name="{{ sel_campo }}" value="{% if _modo == 'checkbox' %}{{ cid }}:{% endif %}{{ p.id }}" data-nombre="{{ p.nombre }}" {% if _modo == "radio" %}required{% endif %} {% if ((cid ~ ":" ~ p.id) if _modo == "checkbox" else p.id) in marcados %}checked{% endif %}>
+              <input type="{{ _modo }}" name="{{ sel_campo }}" value="{% if _modo == 'checkbox' %}{{ cid }}:{% endif %}{{ p.id }}" data-nombre="{{ p.nombre }}" data-n-referencias="{{ (p.referencias or []) | length }}" {% if _modo == "radio" %}required{% endif %} {% if ((cid ~ ":" ~ p.id) if _modo == "checkbox" else p.id) in marcados %}checked{% endif %}>
               <img src="{{ url_for('imagen_producto', cliente=cliente, producto_id=p.id, categoria=cid, w=320) }}" alt="{{ p.nombre }}" loading="lazy">
               <span>{{ p.nombre | replace(p.nombre_producto ~ ' — ', '') }}</span>
             </label>
@@ -21,7 +21,7 @@
         {% else %}
         {% set p = entradas[0] %}
         <label class="producto-opcion" data-nombre="{{ p.nombre | lower }}">
-          <input type="{{ _modo }}" name="{{ sel_campo }}" value="{% if _modo == 'checkbox' %}{{ cid }}:{% endif %}{{ p.id }}" data-nombre="{{ p.nombre }}" {% if _modo == "radio" %}required{% endif %} {% if ((cid ~ ":" ~ p.id) if _modo == "checkbox" else p.id) in marcados %}checked{% endif %}>
+          <input type="{{ _modo }}" name="{{ sel_campo }}" value="{% if _modo == 'checkbox' %}{{ cid }}:{% endif %}{{ p.id }}" data-nombre="{{ p.nombre }}" data-n-referencias="{{ (p.referencias or []) | length }}" {% if _modo == "radio" %}required{% endif %} {% if ((cid ~ ":" ~ p.id) if _modo == "checkbox" else p.id) in marcados %}checked{% endif %}>
           <img src="{{ url_for('imagen_producto', cliente=cliente, producto_id=p.id, categoria=cid, w=320) }}" alt="{{ p.nombre }}" loading="lazy">
           <span>{{ p.nombre }}</span>
         </label>

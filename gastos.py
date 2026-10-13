@@ -327,10 +327,11 @@ def _estimar_imagen(modelo=None, n_referencias=1, **_):
     return r.get("usd"), f"{modelo} · {max(1, int(n_referencias or 1))} referencia(s)"
 
 
-def _estimar_swap(proveedor=None, formato="foto", mejorar_calidad=False, duracion=5, n_referencias=1, **_):
+def _estimar_swap(proveedor=None, formato="foto", mejorar_calidad=False, duracion=5, n_referencias=1, fps=None, **_):
     """Misma tabla que usa `tareas/swap.py` al cobrar: cada proveedor tiene
     su `estimate_*`; el que no esté aquí no tiene tarifa (None). `formato`
-    es "foto" | "video" (el `tipo` del swap)."""
+    es "foto" | "video" (el `tipo` del swap). En video, `duracion` y `fps` son
+    los del video que se sube (`providers.swap_video_precio`, PND-312)."""
     from providers import (comparador_modelos, kling_o1_client, nano_banana_client, wavespeed_client,
                            wavespeed_imagen, wavespeed_video_edit)
     if not proveedor:
@@ -338,16 +339,16 @@ def _estimar_swap(proveedor=None, formato="foto", mejorar_calidad=False, duracio
     duracion = float(duracion or 5)
     if formato == "video":
         if proveedor == "kling_o1":
-            usd = kling_o1_client.estimate_video(duracion)["usd"]
+            usd = kling_o1_client.estimate_video(duracion, fps)["usd"]
         elif proveedor == "wan27_edit":
-            usd = wavespeed_client.estimate_video(duracion)["usd"]
+            usd = wavespeed_client.estimate_video(duracion, fps)["usd"]
         elif proveedor in wavespeed_video_edit.MODELOS:
-            usd = wavespeed_video_edit.estimate_video(proveedor, duracion)["usd"]
+            usd = wavespeed_video_edit.estimate_video(proveedor, duracion, fps)["usd"]
         elif proveedor in comparador_modelos.MODELOS_VIDEO:
-            usd = comparador_modelos.estimate_video(proveedor, duracion)["usd"]
+            usd = comparador_modelos.estimate_video(proveedor, duracion, fps)["usd"]
         else:
             return None, f"{proveedor}: sin tarifa"
-        return usd, f"{proveedor} · video {int(duracion)} s"
+        return usd, f"{proveedor} · video {duracion:g} s"
     if proveedor == "nano_banana":
         usd = nano_banana_client.estimate_image()["usd"]
     elif proveedor == "nano_banana_pro_ultra":

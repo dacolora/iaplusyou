@@ -31,7 +31,7 @@ import trabajos
 from idiomas import N_
 from providers import aspect_ratio as aspect_ratio_mod
 from providers import nano_banana_client, kling_o1_client, comparador_modelos, wavespeed_client
-from providers import wavespeed_common, wavespeed_video_edit, wavespeed_imagen
+from providers import swap_video_precio, wavespeed_common, wavespeed_video_edit, wavespeed_imagen
 from storage import r2_uploader
 from tareas import al_interrumpir, ref_sufijo, registrar
 
@@ -228,6 +228,12 @@ def ejecutar(tarea):
 
         if tipo == "video":
             local_path = os.path.join(resultados_dir, f"{swap_id}.mp4")
+            # Lo que cobra el proveedor depende de cuánto dura el video subido (PND-312): la medida que guardó
+            # dashboard._lanzar_swap, o se mide aquí (un swap encolado antes del cambio). Sin medida, 5 s como antes.
+            duracion_in, fps_in = entry.get("duracion_s"), entry.get("fps")
+            if not duracion_in:
+                duracion_in, fps_in = swap_video_precio.medir(foto_local)
+            duracion_in = duracion_in or 5
             trabajos.reportar(job_id, etapa=ETAPA_SUBIR_ORIGINAL)
             video_url = r2_uploader.upload_video(foto_local, f"clientes/{cliente}/swaps_subidas/{nombre_subida}")
             # Se suben hasta 9 (el máximo que acepta Wan 2.7 Video Edit) — cada
@@ -253,27 +259,27 @@ def ejecutar(tarea):
                 resultado_url = kling_o1_client.editar_video(
                     video_url, prompt, referencias_urls=referencias_urls, on_progreso=avisar_fase,
                 )
-                costo = kling_o1_client.estimate_video()
+                costo = kling_o1_client.estimate_video(duracion_in, fps_in)
             elif proveedor == "wan27_edit":
                 prompt = prompt_swap.prompt_video(tipo_producto, mapa=mapa_producto)
                 resultado_url = wavespeed_client.editar_video(
                     video_url, prompt, referencias_urls=referencias_urls, on_progreso=avisar_fase,
                 )
-                costo = wavespeed_client.estimate_video()
+                costo = wavespeed_client.estimate_video(duracion_in, fps_in)
             elif proveedor in wavespeed_video_edit.MODELOS:
                 prompt = prompt_swap.prompt_video(tipo_producto, mapa=mapa_producto)
                 resultado_url = wavespeed_video_edit.editar_video(
                     proveedor, video_url, prompt, referencias_urls=referencias_urls,
                     on_progreso=avisar_fase,
                 )
-                costo = wavespeed_video_edit.estimate_video(proveedor)
+                costo = wavespeed_video_edit.estimate_video(proveedor, duracion_in, fps_in)
             else:
                 referencia = referencias_urls[0] if referencias_urls else None
                 resultado_url = comparador_modelos.editar_video(
                     proveedor, video_url, producto["descripcion"], referencia_imagen_url=referencia,
                     on_progreso=avisar_fase, tipo=tipo_producto, mapa=mapa_producto,
                 )
-                costo = comparador_modelos.estimate_video(proveedor)
+                costo = comparador_modelos.estimate_video(proveedor, duracion_in, fps_in)
 
             trabajos.reportar(job_id, etapa=ETAPA_DESCARGAR)
             resp = requests.get(resultado_url, timeout=180)
