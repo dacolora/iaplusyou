@@ -224,3 +224,36 @@ def test_la_pantalla_de_gasto_del_cliente_y_el_csv_traen_lo_viejo(libro, pagina)
     assert csv_todo.count("\n") == 5 and "2,4000" in csv_todo and "0,8000" not in csv_todo
     admin = _seccion(pagina("admin", "admin", None).get("/cliente/acme").get_data(as_text=True), "config-ap-gasto")
     assert "US$ 5,25" in admin and "US$ 0,80" in admin                    # «Cobrado total» y el costo
+
+
+# --- History entero, sin clics (Daniel 2026-10-13: «la idea es que salga todo») ---------------
+
+def _boton_mas(html):
+    m = re.search(r'<button[^>]*data-lista-mas="gasto-filas"[^>]*>', html)
+    return m and m.group(0)
+
+
+def test_history_llega_liviano_y_el_resto_se_pide_solo_de_una_vez(libro, pagina, monkeypatch):
+    """La página trae 24 filas (pintar 1 181 le sumaba ~400 KB a cada carga del proyecto); el botón «Ver todo»
+    lleva data-auto (base.html lo pulsa al entrar en pantalla) y UN pedido trae todas las filas que faltan."""
+    import dashboard
+    import gastos
+    for i in range(60):
+        gastos.registrar("acme", "imagen", 0.01 * (i + 1), f"imagen:cf{i}:t{i}")
+    html = pagina().get("/cliente/acme").get_data(as_text=True)
+    sec = _seccion(html, "config-ap-gasto")
+    tbody = re.search(r'<tbody id="gasto-filas">(.*?)</tbody>', sec, re.S).group(1)
+    assert tbody.count("<tr") == 24
+    boton = _boton_mas(sec)
+    url = re.search(r'data-url="([^"]+)"', boton).group(1).replace("&amp;", "&")
+    assert " data-auto" in boton and "todo=1" in url and "desde=24" in url
+    assert "'[data-lista-mas][data-auto]'" in html                       # el script que lo pulsa solo
+    resto = pagina().get(url).get_data(as_text=True)
+    assert resto.count("<tr") == 36 and _boton_mas(resto) is None
+    # Sin `todo`, la página siguiente sigue de a 24.
+    assert pagina().get("/cliente/acme/gasto/lista?desde=24").get_data(as_text=True).count("<tr") == 24
+    monkeypatch.setattr(dashboard, "GASTO_TODO_MAX", 10)                 # el tope corta y deja otro «Ver todo»
+    corto = pagina().get(url).get_data(as_text=True)
+    assert corto.count("<tr") == 10
+    otro = _boton_mas(corto)
+    assert " data-auto" in otro and "desde=34" in otro and "todo=1" in otro

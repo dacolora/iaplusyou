@@ -19386,6 +19386,9 @@ msgstr "See all (%(n)s)"
 msgid "Ver todas las fuentes"
 msgstr "See all sources"
 
+msgid "Ver todo"
+msgstr "Show all"
+
 msgid "Ver todos los anuncios →"
 msgstr "See all ads →"
 

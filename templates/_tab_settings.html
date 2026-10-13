@@ -618,7 +618,7 @@
 </table>
 {% endif %}
 
-{# El historial pagina de a 24; total y CSV conservan todas las filas. #}
+{# El historial llega con 24 filas y el resto se pide solo al bajar hasta él (_gasto_mas.html, data-auto). #}
 <h3 style="margin-top:1.2rem;">{{ _('Historial') }}</h3>
 {% if gastos_historial %}
 <div class="gasto-historial">

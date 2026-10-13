@@ -212,7 +212,8 @@ def test_gasto_24_siguientes_total_csv_y_modo(pagina, rol):
     assert "otro gasto" not in csv
     frag = sopa(c.get(html.select_one('[data-lista-mas="gasto-filas"]')["data-url"], headers=FETCH))
     filas = frag.select("tr")
-    assert len(filas) == 24 and not frag.select("script")
+    # «Ver todo» (Daniel 2026-10-13: «la idea es que salga todo») trae de una vez las 26 que faltan.
+    assert len(filas) == 26 and not frag.select("script") and not frag.select("[data-lista-mas]")
     assert all(len(f.select("td")) == (5 if rol == "admin" else 4) for f in filas)
     for fila in filas:
         valores = fila.select('td')
@@ -223,8 +224,6 @@ def test_gasto_24_siguientes_total_csv_y_modo(pagina, rol):
             assert gastos.formatear(1) not in [td.get_text() for td in valores]
     assert not {f.get_text() for f in html.select(".gasto-historial tbody tr")} & {f.get_text() for f in filas}
     assert "otro gasto" not in frag.get_text()
-    ultima = sopa(c.get(frag.select_one('[data-lista-mas]')["data-url"], headers=FETCH))
-    assert len(ultima.select("tr")) == 2 and not ultima.select('[data-lista-mas]')
 
 
 def test_pagina_sembrada_baja_de_600_kib(pagina):
