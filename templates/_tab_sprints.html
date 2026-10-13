@@ -85,10 +85,13 @@
 <script>
   // Sub-pestañas «Sprints · Nicho» (spec 2026-10-13): una a la vez. Al entrar manda
   // el hash (#nicho / #sprints), si no la última que la persona dejó abierta en este
-  // proyecto y si no Sprints. Se elige en DOMContentLoaded porque el script de
-  // cliente.html, que corre después de este, es el que guarda «nicho» cuando resuelve
-  // un #nicho o un localStorage de antes del cambio. Cambiar de sub-pestaña mueve la
-  // dirección sin recargar; tras un clic en «Sprints» de la barra lateral (que deja
+  // proyecto y si no Sprints. Se elige en el acto, para que con #nicho (o con Nicho
+  // guardado) no se vea un instante la lista de Sprints mientras carga la página. El
+  // script de cliente.html corre después de este y es quien convierte un localStorage
+  // de antes del cambio (tab-activa = nicho, sin hash) en «sprints-sub = nicho»; por eso,
+  // SIN hash explícito y con el documento todavía leyéndose, se vuelve a elegir en
+  // DOMContentLoaded. Con hash no hace falta: ya manda él. Cambiar de sub-pestaña mueve
+  // la dirección sin recargar; tras un clic en «Sprints» de la barra lateral (que deja
   // #sprints y dispara cr:tab) la dirección vuelve a #nicho si Nicho está a la vista.
   (function () {
     var raiz = document.getElementById('tab-sprints');
@@ -115,13 +118,14 @@
     botones.forEach(function (b) {
       b.addEventListener('click', function () { history.replaceState(null, '', '#' + mostrar(b.dataset.sub)); });
     });
-    function alEntrar() {
+    function elegir() {
       var guardada = null;
       try { guardada = localStorage.getItem(CLAVE); } catch (e) {}
       mostrar(delHash() || guardada);
     }
-    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', alEntrar);
-    else alEntrar();
+    var habiaHash = !!delHash();
+    elegir();
+    if (!habiaHash && document.readyState === 'loading') document.addEventListener('DOMContentLoaded', elegir);
     window.addEventListener('hashchange', function () { var h = delHash(); if (h) mostrar(h); });
     window.addEventListener('cr:tab', function () {
       if (raiz.classList.contains('activo') && actual === 'nicho' && delHash() !== 'nicho') {

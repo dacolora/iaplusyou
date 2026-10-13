@@ -56,8 +56,11 @@ la clave `nicho` la resuelve `cliente.html`).
 - El JS de la sub-pestaña vive en `_tab_sprints.html` (como el de los apartados de Configuración):
   - `mostrar(sub)`: muestra un contenedor, marca su botón `activo` (y `aria-selected`), guarda `sprints-sub-<cliente>`.
   - Clic en una sub-pestaña: `mostrar` + `history.replaceState(null, '', '#' + sub)`.
-  - Elegir al entrar (§1): se corre en `DOMContentLoaded` (o ya, si el documento terminó de cargar), porque el script
-    de `cliente.html` —que corre después de este— es el que guarda la sub-pestaña cuando resuelve `#nicho`.
+  - Elegir al entrar (§1): se elige en el acto, cuando corre el script (así con `#nicho`, o con Nicho guardado, no se
+    ve un instante la lista de Sprints). Y se vuelve a elegir en `DOMContentLoaded` solo si no había hash explícito
+    (`#nicho`/`#sprints`) y el documento todavía se estaba leyendo: el script de `cliente.html` —que corre después de
+    este— es quien convierte el localStorage de antes del cambio (`tab-activa-<cliente>` = `nicho`, sin hash) en
+    `sprints-sub-<cliente>` = `nicho`. Ver el ruling 8.
   - `hashchange`: `#nicho` → Nicho; `#sprints` → Sprints.
   - Evento `cr:tab` (lo dispara `cliente.html` tras un clic en la barra lateral, que deja `#sprints` en la dirección):
     si la pestaña activa es Sprints y la sub-pestaña visible es Nicho, `replaceState('#nicho')`, para que la dirección
@@ -133,3 +136,7 @@ worker no se toca (`feedback-cadena-de-despliegue`). Humo: `/cliente/<c>` respon
    siguen llamando así.
 6. **Sin carga por fetch** (opción B descartada en el chat): la sub-pestaña es chica y ya se pintaba con la página.
 7. **No se renombra la pestaña**: sigue siendo «Sprints».
+8. **La sub-pestaña se elige en el acto y se reconsidera en `DOMContentLoaded` solo sin hash explícito** (revisión final
+   2026-10-13). Antes se elegía únicamente en `DOMContentLoaded`, que espera a los scripts `defer` de la página, y con
+   `#nicho` se veía un momento la lista de Sprints antes de Nicho. Quita el parpadeo y cambia lo que decía el §3.3. El
+   caso que sí necesita la segunda elección es el localStorage de antes del cambio, sin hash.
