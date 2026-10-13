@@ -1,8 +1,12 @@
 """Las métricas que faltaban en Rendimiento (spec 2026-10-13-rendimiento-metricas-que-faltaban): productos con gasto y
 ROAS, los mejores para iterar, los que mejor convierten y las mejores imágenes y videos, todo desde la copia de Triple
 Whale."""
+import re
+
 import pytest
 
+from tests.test_rutas_configuracion import app  # noqa: F401  (fixture)
+from tests.test_rutas_rendimiento import meta_on  # noqa: F401  (fixture)
 from triple_whale import destacados as D
 from triple_whale import evaluacion
 
@@ -196,7 +200,8 @@ def _sembrar_anuncios(tid, n=6, cliente="acme"):
         pixel.append({"canal": "facebook-ads", "ad_id": f"a{i}", "fecha": f, "pedidos": 10 + i,
                       "ingresos": 200 + 50 * i, "nc_ingresos": 100 + 10 * i, "sesiones": 400})
         creativos.append({"canal": "facebook-ads", "ad_id": f"a{i}", "tipo": "video" if video else "image",
-                          "imagen_url": f"https://files.triplewhale.com/a{i}.jpg"})
+                          "imagen_url": f"https://files.triplewhale.com/a{i}.jpg",
+                          "video_url": f"https://files.triplewhale.com/a{i}.mp4" if video else None})
     twdatos.reemplazar_anuncios_canal(cliente, tid, f, f, canal)
     twdatos.reemplazar_anuncios_pixel(cliente, tid, f, f, pixel)
     twdatos.reemplazar_creativos(cliente, tid, creativos)
@@ -254,3 +259,92 @@ def test_el_panel_de_rendimiento_trae_destacados_con_triple_whale(base_temporal)
     with idiomas.en_idioma("es"):
         r = rpanel.contexto("acme", 0, entrada="NO")
     assert r["fuente"] == "tw" and r["destacados"] and r["destacados"]["videos"]
+
+
+# --------------------------------------------------------------------------------- pantalla (tarea 3) ---
+
+def _panel(app, q="?entrada=NO"):  # noqa: F811
+    r = app["c"].get("/cliente/acme/rendimiento/panel" + q)
+    assert r.status_code == 200
+    return r.data.decode()
+
+
+def _productos_tienda(tid):
+    from triple_whale import datos as twdatos
+    f = _hace(1)
+    twdatos.reemplazar_productos("acme", tid, f, f, [{"fecha": f, "producto_id": "10772020298065", "nombre": "HappyCozy",
+                                                      "unidades": 3, "ingresos": 900, "pedidos": 3}])
+
+
+def test_la_pantalla_pinta_las_metricas_que_faltaban_en_su_lugar(app):  # noqa: F811
+    tid = _tienda()
+    _sembrar_anuncios(tid)
+    _productos_tienda(tid)
+    _catalogo()
+    html = _panel(app)
+    for texto in ("ROAS de clientes nuevos", "Tasa de conversión", "Los mejores para iterar", "Los que mejor convierten",
+                  "Mejores imágenes", "Mejores videos", "Productos en tus anuncios"):
+        assert texto in html, texto
+    assert html.index("Tus anuncios") < html.index("Los mejores para iterar") < html.index("Los que mejor convierten")
+    assert html.index("Lo que más se vende") < html.index("Productos en tus anuncios") < html.index("Ver como tabla")
+    productos = html[html.index('id="rend-productos-anuncios"'):html.index("Ver como tabla")]
+    assert "HappyComfy" in productos and "HappyCozy" in productos
+
+
+def test_los_videos_de_las_tarjetas_no_se_precargan(app):  # noqa: F811
+    tid = _tienda()
+    _sembrar_anuncios(tid)
+    html = _panel(app)
+    videos = html[html.index('id="rend-videos"'):]
+    videos = videos[:videos.index("</section>")]
+    etiquetas = re.findall(r"<video[^>]*>", videos)
+    assert len(etiquetas) == 3 and all('preload="none"' in v and "data-precarga" in v for v in etiquetas)
+    imagenes = html[html.index('id="rend-imagenes"'):]
+    assert 'loading="lazy"' in imagenes[:imagenes.index("</section>")]
+
+
+def test_las_listas_vacias_dicen_por_que(app):  # noqa: F811
+    from triple_whale import datos as twdatos
+    tid = _tienda()
+    f = _hace(1)
+    twdatos.reemplazar_anuncios_canal("acme", tid, f, f, [{"canal": "facebook-ads", "ad_id": "x", "fecha": f,
+                                                           "gasto": 50, "impresiones": 5000, "anuncio": "Uno"}])
+    twdatos.reemplazar_anuncios_pixel("acme", tid, f, f, [{"canal": "facebook-ads", "ad_id": "x", "fecha": f,
+                                                           "pedidos": 2, "ingresos": 120, "sesiones": 40}])
+    html = _panel(app)
+    assert "Ningún anuncio llega todavía al ROAS de tus anuncios con 10 compras o más" in html
+    assert "Ningún anuncio tiene todavía 100 sesiones y 3 compras" in html
+
+
+def test_con_meta_mezclada_no_aparecen_y_en_el_pais_de_triple_whale_si(meta_on):  # noqa: F811
+    from tests.test_rutas_rendimiento import _con_anuncios
+    _con_anuncios()
+    todas = _panel(meta_on, "")
+    assert "Los mejores para iterar" not in todas and "Productos en tus anuncios" not in todas
+    assert "ROAS de clientes nuevos" not in todas
+    assert "Los mejores para iterar" in _panel(meta_on, "?entrada=NO")
+
+
+def _contar(fn):
+    from tests.test_escala import _Consultas
+    with _Consultas() as c:
+        fn()
+    return c.n
+
+
+def test_las_consultas_del_panel_no_crecen_con_los_anuncios(app):  # noqa: F811
+    tid = _tienda()
+    _catalogo()
+    _sembrar_anuncios(tid, n=6)
+    d = app["dashboard"]
+
+    def frio():
+        d._TABLERO_CACHE.clear()
+        d.invalidar_alertas("acme")
+        _panel(app)
+
+    frio()
+    seis = _contar(frio)
+    _sembrar_anuncios(tid, n=30)
+    treinta = _contar(frio)
+    assert seis == treinta, (seis, treinta)

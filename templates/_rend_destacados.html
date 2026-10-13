@@ -1,0 +1,138 @@
+{# Las métricas que faltaban (spec 2026-10-13-rendimiento-metricas-que-faltaban): «Los mejores para iterar», «Los que
+   mejor convierten», «Mejores imágenes» y «Mejores videos» (`listas`, debajo de «Tus anuncios» en _rend_panel.html) y
+   «Productos en tus anuncios» (`productos`, dentro de `resto` de _tw_secciones.html, después de «Lo que más se vende»).
+   Reciben `d` = `r.destacados` (`triple_whale.destacados.armar`), que solo existe con fuente "tw". Solo macros, sin
+   <script>; las etiquetas de tipo son N_ y se traducen al pintar (skill idioma). #}
+
+{#- El producto de una fila: el del Catálogo, el handle de su página o «Otros». -#}
+{% macro _producto(p) -%}
+{%- if p.nombre -%}{{ p.nombre }}{%- else -%}<span class="vacio">{{ _('Otros') }}</span>{%- endif -%}
+{%- endmacro %}
+
+{% macro _roas(valor) -%}
+{%- if valor -%}{{ valor | roas }}×{%- else -%}—{%- endif -%}
+{%- endmacro %}
+
+{#- Tarjetas de «Mejores imágenes» / «Mejores videos»: el medio de la galería (mismos hosts permitidos), sin análisis
+    ni botones que cobran. -#}
+{% macro _tarjetas(filas, titulo, id, moneda) -%}
+{% if filas %}
+<section class="tb-seccion" id="{{ id }}">
+  <div class="tb-seccion-cab"><h3>{{ titulo }}</h3><small class="vacio">{{ _('Ordenados por las ventas que el Triple Pixel les atribuye en el periodo.') }}</small></div>
+  <div class="rend-destacadas">
+    {% for f in filas %}
+    <article class="rend-destacada">
+      <div class="tw-tarjeta-medio">
+        {% if f.medio.video %}
+        <video src="{{ f.medio.video }}" {% if f.medio.poster %}poster="{{ f.medio.poster }}"{% endif %} controls playsinline preload="none" data-precarga></video>
+        {% elif f.medio.imagen %}
+        <img src="{{ f.medio.imagen }}" alt="{{ f.nombre }}" loading="lazy" referrerpolicy="no-referrer">
+        {% else %}
+        <div class="tw-tarjeta-sin-medio">{{ f.canal | tw_canal }}</div>
+        {% endif %}
+        {% if f.medio.enlace %}<a class="tw-tarjeta-enlace" href="{{ f.medio.enlace }}" target="_blank" rel="noopener noreferrer">{{ _('Ver en %(canal)s', canal=f.canal | tw_canal) }}</a>{% endif %}
+      </div>
+      <div class="rend-destacada-cuerpo">
+        <small class="tw-sobretitulo">#{{ loop.index }} · {{ _producto(f.producto) }} · {{ f.etiqueta | traducir }}</small>
+        <strong class="tw-tarjeta-nombre">{{ f.nombre }}</strong>
+        <dl class="tw-cifras">
+          <div><dt>ROAS</dt><dd>{{ _roas(f.m.roas) }}</dd></div>
+          <div><dt>{{ _('Ventas') }}</dt><dd>{{ f.m.ingresos | dinero(moneda) }}</dd></div>
+          <div><dt>{{ _('Compras') }}</dt><dd>{{ f.m.pedidos | tw_num }}</dd></div>
+          <div><dt>CTR</dt><dd>{{ f.m.ctr | tw_pct(2, false) }}</dd></div>
+        </dl>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+{%- endmacro %}
+
+{#- Las dos listas y las dos rejillas de tarjetas, debajo de «Tus anuncios». -#}
+{% macro listas(d) -%}
+{% set moneda = d.moneda %}
+<section class="tb-seccion" id="rend-iterar">
+  <div class="tb-seccion-cab"><h3>{{ _('Los mejores para iterar') }}</h3>{% if d.roas_cuenta %}<small class="vacio">{{ _('ROAS igual o mayor al de tus anuncios (%(roas)s×) y al menos %(n)s compras: las bases más seguras para hacer variaciones.', roas=d.roas_cuenta | roas, n=d.minimos.pedidos_iterar) }}</small>{% endif %}</div>
+  {% if d.iterar %}
+  <div class="tw-tabla-scroll">
+    <table class="tw-tabla">
+      <thead><tr><th>{{ _('Anuncio') }}</th><th>{{ _('Producto') }}</th><th>{{ _('Tipo') }}</th><th>{{ _('Ventas') }}</th><th>ROAS</th><th>{{ _('Compras') }}</th><th>CTR</th></tr></thead>
+      <tbody>
+        {% for f in d.iterar %}
+        <tr>
+          <td class="tw-nombre"><strong>{{ f.nombre }}</strong><small>{{ f.canal | tw_canal }}</small></td>
+          <td>{{ _producto(f.producto) }}</td>
+          <td>{{ f.etiqueta | traducir }}</td>
+          <td>{{ f.m.ingresos | dinero(moneda) }}</td>
+          <td>{{ _roas(f.m.roas) }}</td>
+          <td>{{ f.m.pedidos | tw_num }}</td>
+          <td>{{ f.m.ctr | tw_pct(2, false) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% elif d.roas_cuenta %}
+  <p class="vacio">{{ _('Ningún anuncio llega todavía al ROAS de tus anuncios con %(n)s compras o más en este periodo. Prueba con un periodo más largo.', n=d.minimos.pedidos_iterar) }}</p>
+  {% else %}
+  <p class="vacio">{{ _('Sin ventas atribuidas en el periodo: todavía no hay un ROAS con qué comparar.') }}</p>
+  {% endif %}
+</section>
+
+<section class="tb-seccion" id="rend-conversion">
+  <div class="tb-seccion-cab"><h3>{{ _('Los que mejor convierten') }}</h3><small class="vacio">{{ _('Compras / sesiones que trajo cada anuncio, con al menos %(s)s sesiones y %(p)s compras.', s=d.minimos.sesiones, p=d.minimos.pedidos_conversion) }}</small></div>
+  {% if d.conversion %}
+  <div class="tw-tabla-scroll">
+    <table class="tw-tabla">
+      <thead><tr><th>{{ _('Anuncio') }}</th><th>{{ _('Producto') }}</th><th>{{ _('Tipo') }}</th><th>{{ _('Sesiones') }}</th><th>{{ _('Compras') }}</th><th>{{ _('Conversión') }}</th></tr></thead>
+      <tbody>
+        {% for f in d.conversion %}
+        <tr>
+          <td class="tw-nombre"><strong>{{ f.nombre }}</strong><small>{{ f.canal | tw_canal }}</small></td>
+          <td>{{ _producto(f.producto) }}</td>
+          <td>{{ f.etiqueta | traducir }}</td>
+          <td>{{ f.m.sesiones | tw_num }}</td>
+          <td>{{ f.m.pedidos | tw_num }}</td>
+          <td>{{ f.m.cv_sesion | tw_pct(2) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="vacio">{{ _('Ningún anuncio tiene todavía %(s)s sesiones y %(p)s compras en este periodo.', s=d.minimos.sesiones, p=d.minimos.pedidos_conversion) }}</p>
+  {% endif %}
+</section>
+
+{{ _tarjetas(d.imagenes, _('Mejores imágenes'), 'rend-imagenes', moneda) }}
+{{ _tarjetas(d.videos, _('Mejores videos'), 'rend-videos', moneda) }}
+{%- endmacro %}
+
+{#- «Productos en tus anuncios»: cada anuncio cuenta para el producto de su página; «Otros» al final. Sin `d` (Meta o
+    mezcla) no pinta nada. -#}
+{% macro productos(d) -%}
+{% if d and d.productos %}
+{% set moneda = d.moneda %}
+<section class="tb-seccion" id="rend-productos-anuncios">
+  <div class="tb-seccion-cab"><h3>{{ _('Productos en tus anuncios') }}</h3><small class="vacio">{{ _('Cada anuncio cuenta para el producto de la página a la que lleva; las ventas son las que el Triple Pixel atribuye a esos anuncios.') }}</small></div>
+  <div class="tw-tabla-scroll">
+    <table class="tw-tabla">
+      <thead><tr><th>{{ _('Producto') }}</th><th>{{ _('Ventas') }}</th><th>{{ _('Gasto') }}</th><th>ROAS</th><th>{{ _('Compras') }}</th><th>{{ _('Anuncios') }}</th></tr></thead>
+      <tbody>
+        {% for p in d.productos %}
+        <tr>
+          <td class="tw-nombre">{% if p.es_otros %}<strong>{{ _('Otros') }}</strong><small>{{ _('Anuncios sin página de producto y los productos que no caben arriba.') }}</small>{% else %}<strong>{{ p.nombre }}</strong>{% endif %}</td>
+          <td>{{ p.ingresos | dinero(moneda) }}</td>
+          <td>{{ p.gasto | dinero(moneda) }}</td>
+          <td>{{ _roas(p.roas) }}</td>
+          <td>{{ p.pedidos | tw_num }}</td>
+          <td>{{ p.anuncios | tw_num }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+{%- endmacro %}

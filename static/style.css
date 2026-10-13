@@ -4434,6 +4434,13 @@ body:has(#exp-nuevo) main { margin-left: 0; max-width: 1440px; width: 100%; }
 /* La miniatura de Meta de un anuncio de fuente Meta sin análisis (la galería única de «Tus anuncios», E2 tarea 4) llega
    de 64 px: dentro del recuadro 9:16 de la tarjeta se ve a su tamaño, centrada, y nunca agrandada (se vería borrosa). */
 .tw-tarjeta-medio img.tw-medio-miniatura { object-fit: scale-down; }
+
+/* «Mejores imágenes» / «Mejores videos» (spec 2026-10-13, _rend_destacados.html): tarjetas livianas con el medio de la
+   galería (.tw-tarjeta-medio, 9:16) arriba y sus cifras (.tw-cifras) abajo, en una rejilla que en el celular queda de a
+   una sin empujar la página. */
+.rend-destacadas { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 13rem), 1fr)); gap: .9rem; }
+.rend-destacada { display: flex; flex-direction: column; gap: .6rem; min-width: 0; padding: .8rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); }
+.rend-destacada-cuerpo { display: flex; flex-direction: column; gap: .3rem; min-width: 0; }
 /* ── estilos/pantallas/crear.css ── */
 /* Crear: el corazón de cada tarjeta (2026-10-08), para separar las versiones que se van a usar. */
 .generado-fav-form { position: absolute; right: .45rem; top: .4rem; margin: 0; z-index: 1; }

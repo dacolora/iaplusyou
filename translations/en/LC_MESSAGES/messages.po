@@ -843,6 +843,10 @@ msgid "%(n)s pedidos"
 msgstr "%(n)s orders"
 
 #, python-format
+msgid "%(n)s pedidos de clientes nuevos"
+msgstr "%(n)s new-customer orders"
+
+#, python-format
 msgid "%(n)s personas"
 msgstr "%(n)s people"
 
@@ -943,6 +947,10 @@ msgstr "%(n)s “Change product” result(s)"
 #, python-format
 msgid "%(n)s s"
 msgstr "%(n)s s"
+
+#, python-format
+msgid "%(n)s sesiones"
+msgstr "%(n)s sessions"
 
 #, python-format
 msgid "%(n)s sin clasificar"
@@ -2846,6 +2854,9 @@ msgstr "Real ads that already worked, classified by funnel stage, awareness leve
 msgid "Anuncios rechazados siguen gastando en «%(cuenta)s»"
 msgstr "Rejected ads are still spending in “%(cuenta)s”"
 
+msgid "Anuncios sin página de producto y los productos que no caben arriba."
+msgstr "Ads without a product page and the products that do not fit above."
+
 msgid "Anuncios sueltos (anteriores)"
 msgstr "Standalone ads (previous)"
 
@@ -3598,6 +3609,9 @@ msgstr "Tab header"
 msgid "Cada anuncio"
 msgstr "Every ad"
 
+msgid "Cada anuncio cuenta para el producto de la página a la que lleva; las ventas son las que el Triple Pixel atribuye a esos anuncios."
+msgstr "Each ad counts toward the product of the page it links to; sales are what the Triple Pixel attributes to those ads."
+
 msgid "Cada anuncio que llega se clasifica con Claude; ese es el costo que ves abajo."
 msgstr "Each ad that comes in is classified with Claude; that's the cost you see below."
 
@@ -3973,6 +3987,9 @@ msgstr "Expensive"
 #, python-format
 msgid "Caro en %(cuentas)s"
 msgstr "Expensive in %(cuentas)s"
+
+msgid "Carrusel"
+msgstr "Carousel"
 
 msgid "Casi gratis: 10 GB al mes sin costo y sin cobro por descarga."
 msgstr "Almost free: 10 GB a month at no cost and no charge for downloads."
@@ -4468,6 +4485,13 @@ msgstr "Purchases"
 
 msgid "Compras (requiere Pixel)"
 msgstr "Purchases (requires Pixel)"
+
+#, python-format
+msgid "Compras / sesiones que trajo cada anuncio, con al menos %(s)s sesiones y %(p)s compras."
+msgstr "Purchases / sessions each ad brought, with at least %(s)s sessions and %(p)s purchases."
+
+msgid "Compras atribuidas a los anuncios divididas por las sesiones que trajeron"
+msgstr "Purchases attributed to the ads divided by the sessions they brought"
 
 msgid "Compras según Meta"
 msgstr "Purchases per Meta"
@@ -5719,6 +5743,9 @@ msgstr "Diagnosis: %(causas)s — next: %(que)s"
 
 msgid "Dile a Claude qué está mal, por ejemplo: &quot;el clip 3 dura 16 segundos&quot;"
 msgstr "Tell Claude what’s wrong, for example: &quot;clip 3 is 16 seconds long&quot;"
+
+msgid "Dinámico"
+msgstr "Dynamic"
 
 msgid "Dirección"
 msgstr "Path"
@@ -11591,6 +11618,9 @@ msgstr "Emojis don't show in subtitles: type the word with letters."
 msgid "Los errores de la app (páginas, worker y trabajos en segundo plano) agrupados, qué tan rápido responde cada página, el worker y el servidor. Un error nuevo te llega por correo si hay SMTP."
 msgstr "The app's errors (pages, worker and background jobs) grouped, how fast each page responds, the worker and the server. A new error is emailed to you if SMTP is set up."
 
+msgid "Los mejores para iterar"
+msgstr "Best ads to iterate on"
+
 msgid "Los modelos rinden mejor hasta 15 s; para algo más largo, genera dos piezas y únelas después en la edición final."
 msgstr "Models perform best up to 15 s; for something longer, generate two pieces and join them later in the final edition."
 
@@ -11608,6 +11638,9 @@ msgstr "This version's image prompts are already done or in progress."
 
 msgid "Los prompts de imágenes quedaron escritos pero no se pudieron pasar todos al chat. Vuelve a escribirlos en una versión nueva."
 msgstr "The image prompts were written but not all of them could be sent to chat. Write them again in a new version."
+
+msgid "Los que mejor convierten"
+msgstr "Best converting ads"
 
 #, python-brace-format
 msgid "Los subtítulos quedan bajo la interfaz de {plataforma}: súbelos en «Subtítulos»."
@@ -11850,6 +11883,12 @@ msgstr "Improving the image quality"
 #, python-format
 msgid "Mejorar la calidad al final (+%(precio)s, solo aplica a fotos)"
 msgstr "Improve quality at the end (+%(precio)s, photos only)"
+
+msgid "Mejores imágenes"
+msgstr "Top image ads"
+
+msgid "Mejores videos"
+msgstr "Top video ads"
 
 msgid "Memoria disponible"
 msgstr "Available memory"
@@ -12544,6 +12583,14 @@ msgstr "None"
 
 msgid "Ningún anuncio en este filtro."
 msgstr "No ads in this filter."
+
+#, python-format
+msgid "Ningún anuncio llega todavía al ROAS de tus anuncios con %(n)s compras o más en este periodo. Prueba con un periodo más largo."
+msgstr "No ad reaches your ads' ROAS with %(n)s or more purchases in this period yet. Try a longer period."
+
+#, python-format
+msgid "Ningún anuncio tiene todavía %(s)s sesiones y %(p)s compras en este periodo."
+msgstr "No ad has %(s)s sessions and %(p)s purchases in this period yet."
 
 msgid "Ningún error en esta lista."
 msgstr "No errors in this list."
@@ -13881,6 +13928,9 @@ msgstr "Sort"
 msgid "Orden en la pantalla del cliente"
 msgstr "Order on the customer's screen"
 
+msgid "Ordenados por las ventas que el Triple Pixel les atribuye en el periodo."
+msgstr "Sorted by the sales the Triple Pixel attributes to them in the period."
+
 msgid "Origen"
 msgstr "Source"
 
@@ -14978,6 +15028,9 @@ msgstr "Products"
 msgid "Productos elegidos por tienda"
 msgstr "Products picked per store"
 
+msgid "Productos en tus anuncios"
+msgstr "Products in your ads"
+
 #, python-format
 msgid "Productos encontrados (%(n)s)"
 msgstr "Products found (%(n)s)"
@@ -15510,8 +15563,15 @@ msgstr "ROAS %(roas)s× · %(n)s sales"
 msgid "ROAS (Pixel)"
 msgstr "ROAS (Pixel)"
 
+msgid "ROAS de clientes nuevos"
+msgstr "New-customer ROAS"
+
 msgid "ROAS diario"
 msgstr "Daily ROAS"
+
+#, python-format
+msgid "ROAS igual o mayor al de tus anuncios (%(roas)s×) y al menos %(n)s compras: las bases más seguras para hacer variaciones."
+msgstr "ROAS at or above your ads' (%(roas)s×) and at least %(n)s purchases: the safest bases for new variations."
 
 msgid "ROAS mínimo"
 msgstr "Minimum ROAS"
@@ -16670,6 +16730,9 @@ msgstr "Separated by a blank line"
 msgid "Servidor"
 msgstr "Server"
 
+msgid "Sesiones"
+msgstr "Sessions"
+
 msgid "Sesión cerrada."
 msgstr "Session closed."
 
@@ -17012,6 +17075,9 @@ msgstr "No transition: it switches at once."
 
 msgid "Sin título"
 msgstr "Untitled"
+
+msgid "Sin ventas atribuidas en el periodo: todavía no hay un ROAS con qué comparar."
+msgstr "No attributed sales in the period: there is no ROAS to compare with yet."
 
 msgid "Sin ventas todavía"
 msgstr "No sales yet"
@@ -17629,6 +17695,9 @@ msgstr "Cards from any country; in Colombia also PSE and Nequi. Bold charges in 
 #, python-format
 msgid "Tasa de cambio aceptada: %(valor)s COP por dólar. Los cobros en pesos siguen."
 msgstr "Exchange rate accepted: %(valor)s COP per dollar. Charges in pesos resume."
+
+msgid "Tasa de conversión"
+msgstr "Conversion rate"
 
 #, python-format
 msgid "Te avisamos cuando baje de %(umbral)s."
@@ -19215,6 +19284,9 @@ msgstr "Window:"
 
 msgid "Ventas"
 msgstr "Sales"
+
+msgid "Ventas a clientes nuevos que el Triple Pixel atribuye a los anuncios, divididas por el gasto"
+msgstr "Sales to new customers that the Triple Pixel attributes to the ads, divided by spend"
 
 msgid "Ventas atribuidas"
 msgstr "Attributed sales"
