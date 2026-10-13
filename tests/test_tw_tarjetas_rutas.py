@@ -703,3 +703,163 @@ def test_las_ventas_enteras_van_sin_decimal():
     from triple_whale import rutas
     assert rutas._tw_ventas(196.0) == "196" and rutas._tw_ventas(196.04) == "196"
     assert rutas._tw_ventas(2.5) == "2,5" and rutas._tw_ventas(0.25) == "0,2" and rutas._tw_ventas(None) == "—"
+
+
+# ------------------------------- «Llevar a Crear» de un anuncio de imagen (pedido de Daniel, 2026-10-13) ---
+
+def _png(ancho, alto):
+    import io
+    from PIL import Image
+    buf = io.BytesIO()
+    Image.new("RGB", (ancho, alto), (220, 80, 120)).save(buf, format="PNG")
+    return buf.getvalue()
+
+
+@pytest.fixture
+def bandeja(tmp_path, monkeypatch):
+    """La bandeja de Crear en una carpeta temporal, la imagen del anuncio sin red y R2 falso."""
+    import referencias_flowplus
+    from referentes import imagenes
+    from storage import r2_uploader
+    monkeypatch.setattr(referencias_flowplus, "BASE_DIR", str(tmp_path))
+    bajadas, subidas = [], []
+    monkeypatch.setattr(imagenes, "_bajar", lambda url: bajadas.append(url) or _png(800, 1000))
+    monkeypatch.setattr(r2_uploader, "upload_image", lambda local, clave: subidas.append(clave) or f"https://r2.test/{clave}")
+    return {"bajadas": bajadas, "subidas": subidas, "listar": lambda: referencias_flowplus.listar("acme"),
+            "agregar": referencias_flowplus.agregar}
+
+
+def _lista_imagen(app, ad_id="p1"):  # noqa: F811
+    """Un análisis listo de un anuncio de imagen fija: su foto trae la imagen y su versión es de imagen."""
+    aid = _lista(app, ad_id)
+    fila = datos.analisis_anuncio("acme", aid)
+    foto = dict(fila["foto"], creativo={"tipo": "image", "imagen_url": "https://files.triplewhale.com/t/p1.jpg",
+                                        "video_url": None, "titulo": "40% RABATT", "copy": "Myk EVA-pute."})
+    version = dict(fila["resultado"]["version"],
+                   prompt='Keep the slide and the layout. Replace the headline with "Sikkert grep på våte gulv".')
+    datos.actualizar_analisis(aid, foto=foto, resultado=mejorar.parsear(respuesta(version=version), "datos",
+                                                                         tipo="imagen"))
+    return aid
+
+
+def test_llevar_a_crear_un_anuncio_de_imagen_abre_crear_en_imagen_con_el_anuncio_en_la_bandeja(app, bandeja):  # noqa: F811
+    from providers import flowplus_modelos
+    _conectar()
+    _sembrar()
+    aid = _lista_imagen(app)
+    bandeja["agregar"]("acme", "imagen", "https://r2.test/vieja.jpg")          # una referencia «del pasado»
+    html = app["c"].get(f"/cliente/acme/triple-whale/analisis/{aid}").data.decode()
+    assert "Prompt para la imagen" in html and "Prompt para el video" not in html and "modo imagen" in html
+    r = app["c"].post(f"/cliente/acme/triple-whale/analisis/{aid}/crear")
+    assert r.status_code == 302 and r.headers["Location"].endswith("#creativeflowplus")
+    with app["c"].session_transaction() as s:
+        p = s["fp_prefill"]
+    assert p["tipo"] == "imagen" and p["modelo"] == flowplus_modelos.IMAGEN_POR_DEFECTO and p["cliente"] == "acme"
+    assert p["aspect_ratio"] == "4:5"                                  # el de la imagen original (800 × 1000)
+    assert p["texto"].startswith("Keep the slide") and p["origen_tw"] == f"a{aid}" and "duracion" not in p
+    assert bandeja["bajadas"] == ["https://files.triplewhale.com/t/p1.jpg"]
+    assert bandeja["subidas"] == [f"clientes/acme/referencias_flowplus/analisis_{aid}.jpg"]
+    [ref] = bandeja["listar"]()                                        # la bandeja queda SOLO con el anuncio
+    assert ref["tipo"] == "imagen" and ref["url"] == f"https://r2.test/clientes/acme/referencias_flowplus/analisis_{aid}.jpg"
+    assert ref["origen"] == "triple_whale" and ref["etiqueta"] == "@Imagen 1"
+
+
+def test_llevar_a_crear_una_imagen_que_no_se_puede_copiar_no_toca_la_bandeja(app, bandeja, monkeypatch):  # noqa: F811
+    from referentes import imagenes
+    _conectar()
+    _sembrar()
+    aid = _lista_imagen(app)
+    bandeja["agregar"]("acme", "imagen", "https://r2.test/de-otra-persona.jpg")
+    monkeypatch.setattr(imagenes, "_bajar", lambda url: b"esto no es una imagen")
+    r = app["c"].post(f"/cliente/acme/triple-whale/analisis/{aid}/crear")
+    assert r.status_code == 302 and not r.headers["Location"].endswith("#creativeflowplus")
+    with app["c"].session_transaction() as s:
+        assert "fp_prefill" not in s
+        assert any("No se pudo copiar la imagen del anuncio" in m for _, m in s.get("_flashes", []))
+    assert [x["url"] for x in bandeja["listar"]()] == ["https://r2.test/de-otra-persona.jpg"]
+    # sin una imagen de un host permitido, tampoco: ni se baja nada
+    fila = datos.analisis_anuncio("acme", aid)
+    datos.actualizar_analisis(aid, foto=dict(fila["foto"], creativo={"tipo": "image", "imagen_url": "https://malo.example/x.jpg"}))
+    app["c"].post(f"/cliente/acme/triple-whale/analisis/{aid}/crear")
+    with app["c"].session_transaction() as s:
+        assert "fp_prefill" not in s
+    assert len(bandeja["listar"]()) == 1
+
+
+def test_llevar_a_crear_un_analisis_de_antes_sigue_siendo_de_video(app, bandeja):  # noqa: F811
+    """Un análisis de antes del 2026-10-13 no trae `version.tipo`: sigue abriendo Crear en video y sin tocar la bandeja,
+    aunque el anuncio sea de imagen (su prompt es de video)."""
+    _conectar()
+    _sembrar()
+    aid = _lista_imagen(app)
+    fila = datos.analisis_anuncio("acme", aid)
+    resultado = dict(fila["resultado"], version={k: v for k, v in fila["resultado"]["version"].items() if k != "tipo"})
+    datos.actualizar_analisis(aid, resultado=resultado)
+    app["c"].post(f"/cliente/acme/triple-whale/analisis/{aid}/crear")
+    with app["c"].session_transaction() as s:
+        assert s["fp_prefill"]["tipo"] == "video"
+    assert bandeja["bajadas"] == [] and bandeja["listar"]() == []
+
+
+def test_llevar_a_crear_un_anuncio_de_meta_usa_su_copia_sin_otra_ni_su_nombre(app, bandeja, monkeypatch):  # noqa: F811
+    """Auditoría de seguridad (2026-10-13): la imagen de un anuncio de fuente Meta ya es una copia en R2 que se borra al
+    soltar la cuenta. «Llevar a Crear» la usa tal cual: no hace otra copia ni guarda el nombre del anuncio de Meta."""
+    monkeypatch.setenv("R2_PUBLIC_BASE_URL", "https://pub.r2.test")
+    _conectar()
+    _sembrar()
+    aid = _lista_imagen(app)
+    fila = datos.analisis_anuncio("acme", aid)
+    copia = f"https://pub.r2.test/clientes/acme/rendimiento/a{aid}_p1.jpg"
+    datos.actualizar_analisis(aid, foto=dict(fila["foto"], fuente="meta", creativo=dict(fila["foto"]["creativo"],
+                                                                                         imagen_url=copia)))
+    app["c"].post(f"/cliente/acme/triple-whale/analisis/{aid}/crear")
+    with app["c"].session_transaction() as s:
+        assert s["fp_prefill"]["tipo"] == "imagen" and s["fp_prefill"]["aspect_ratio"] == "4:5"
+    assert bandeja["bajadas"] == [copia] and bandeja["subidas"] == []         # medida, no copiada
+    [ref] = bandeja["listar"]()
+    assert ref["url"] == copia and ref["origen"] == "meta" and not ref.get("titulo")
+
+
+def test_llevar_a_crear_no_acepta_una_imagen_de_r2_de_otro_proyecto(app, bandeja, monkeypatch):  # noqa: F811
+    monkeypatch.setenv("R2_PUBLIC_BASE_URL", "https://pub.r2.test")
+    _conectar()
+    _sembrar()
+    aid = _lista_imagen(app)
+    fila = datos.analisis_anuncio("acme", aid)
+    ajena = "https://pub.r2.test/clientes/otro/flowplus/x.png"
+    datos.actualizar_analisis(aid, foto=dict(fila["foto"], creativo={"tipo": "image", "imagen_url": ajena}))
+    app["c"].post(f"/cliente/acme/triple-whale/analisis/{aid}/crear")
+    with app["c"].session_transaction() as s:
+        assert "fp_prefill" not in s
+    assert bandeja["bajadas"] == [] and bandeja["listar"]() == []
+
+
+def test_llevar_a_crear_con_r2_caido_avisa_en_palabras_sin_tocar_la_bandeja(app, bandeja, monkeypatch):  # noqa: F811
+    from storage import r2_uploader
+    _conectar()
+    _sembrar()
+    aid = _lista_imagen(app)
+
+    def _caido(local, clave):
+        raise ConnectionError("r2 caído")
+    monkeypatch.setattr(r2_uploader, "upload_image", _caido)
+    r = app["c"].post(f"/cliente/acme/triple-whale/analisis/{aid}/crear")
+    assert r.status_code == 302
+    with app["c"].session_transaction() as s:
+        assert "fp_prefill" not in s
+        assert any("No se pudo copiar la imagen del anuncio: ConnectionError" in m for _, m in s.get("_flashes", []))
+    assert bandeja["listar"]() == []
+
+
+def test_llevar_a_crear_avisa_en_crear_de_una_oferta_que_no_esta_en_los_datos(app, bandeja):  # noqa: F811
+    """Revisiones del 2026-10-13: lo que se escriba en la imagen se publica; el aviso llega a Crear, no solo al detalle."""
+    _conectar()
+    _sembrar()
+    aid = _lista_imagen(app)
+    fila = datos.analisis_anuncio("acme", aid)
+    version = dict(fila["resultado"]["version"], prompt="Keep the layout and add a badge: Free shipping today")
+    datos.actualizar_analisis(aid, resultado=mejorar.parsear(respuesta(version=version), "datos", tipo="imagen"))
+    app["c"].post(f"/cliente/acme/triple-whale/analisis/{aid}/crear")
+    with app["c"].session_transaction() as s:
+        avisos = [m for tipo, m in s.get("_flashes", []) if tipo == "warn"]
+    assert len(avisos) == 1 and "free" in avisos[0] and "revísalo antes de generar" in avisos[0]

@@ -6581,6 +6581,10 @@ msgstr "The prompt doesn't meet the rules; fix it before saving."
 msgid "El prompt no puede quedar vacío."
 msgstr "The prompt can't be empty."
 
+#, python-format
+msgid "El prompt pide escribir en la imagen cifras u ofertas que no están en los datos (%(cifras)s): revísalo antes de generar."
+msgstr "The prompt asks to write figures or offers in the image that aren't in the data (%(cifras)s): check it before generating."
+
 msgid "El prompt rompe reglas que no se negocian; corrígelo antes de aprobarlo."
 msgstr "The prompt breaks non-negotiable rules; fix it before approving."
 
@@ -6695,6 +6699,10 @@ msgstr "The text “%(rol)s” has no value in %(idioma)s."
 #, python-brace-format
 msgid "El texto '{rol}' no tiene valor en {idioma}."
 msgstr "The text “{rol}” has no value in {idioma}."
+
+#, python-format
+msgid "El texto de la imagen cita cifras u ofertas que no están en los datos (%(cifras)s): revisa antes de generar."
+msgstr "The text in the image cites figures or offers that aren't in the data (%(cifras)s): check before generating."
 
 msgid "El texto de la publicación no puede estar vacío."
 msgstr "The post's text can't be empty."
@@ -7827,6 +7835,9 @@ msgstr "That ad isn't in an error state."
 
 msgid "Ese anuncio no tiene miniatura: solo se guardan anuncios que Meta dejó ver."
 msgstr "That ad has no thumbnail: only ads Meta let us see can be saved."
+
+msgid "Ese anuncio no tiene su imagen guardada: súbela tú a la bandeja de Crear."
+msgstr "That ad doesn't have its image saved: upload it to the Create tray yourself."
 
 msgid "Ese anuncio todavía no está publicado en Meta."
 msgstr "That ad isn't published on Meta yet."
@@ -13380,6 +13391,10 @@ msgid "No se pudo copiar la cuenta de Meta (%(tipo)s)."
 msgstr "The Meta account couldn't be copied (%(tipo)s)."
 
 #, python-format
+msgid "No se pudo copiar la imagen del anuncio: %(error)s"
+msgstr "Couldn't copy the ad's image: %(error)s"
+
+#, python-format
 msgid "No se pudo copiar la miniatura: %(error)s"
 msgstr "The thumbnail couldn't be copied: %(error)s"
 
@@ -15046,6 +15061,9 @@ msgstr "Original prompt"
 msgid "Prompt para el video"
 msgstr "Video prompt"
 
+msgid "Prompt para la imagen"
+msgstr "Image prompt"
+
 msgid "Prompt por planos"
 msgstr "Prompt by shots"
 
@@ -16371,6 +16389,9 @@ msgstr "System health"
 
 msgid "San Valentín"
 msgstr "Valentine's Day"
+
+msgid "Se abre Crear en modo imagen, con la imagen del anuncio en la bandeja."
+msgstr "Create opens in image mode, with the ad's image in the tray."
 
 msgid "Se acerca y pasa al siguiente."
 msgstr "It zooms in and moves to the next one."
@@ -19414,6 +19435,9 @@ msgstr "Chosen version"
 
 msgid "Versión mejorada"
 msgstr "Improved version"
+
+msgid "Versión mejorada cargada en Crear con la imagen del anuncio en la bandeja: ajusta lo que quieras y genera la imagen."
+msgstr "Improved version loaded in Create with the ad's image in the tray: tweak what you want and generate the image."
 
 msgid "Versión mejorada cargada en Crear: ajusta lo que quieras y genera."
 msgstr "Improved version loaded in Create: tweak what you want and generate."

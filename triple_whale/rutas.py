@@ -234,15 +234,32 @@ def analisis_detalle(cliente, aid):
 
 @bp.post(f"/analisis/<int(max={AID_MAX}):aid>/crear")
 def analisis_crear(cliente, aid):
-    version = (_analisis_listo(cliente, aid)["resultado"] or {}).get("version")
+    """Nada se genera: la precarga de Crear. La versión de un anuncio de imagen (2026-10-13) abre Crear en modo imagen
+    con la imagen del anuncio como la única referencia de la bandeja; una versión de antes (sin `tipo`), de video."""
+    fila = _analisis_listo(cliente, aid)
+    version = (fila["resultado"] or {}).get("version")
     if not version:
         abort(404)
     try:
-        session["fp_prefill"] = puente.prefill_crear(cliente, version, analisis_id=aid)
+        if version.get("tipo") == "imagen":
+            puente.prefill_crear(cliente, version, analisis_id=aid, tipo="imagen")      # valida antes de tocar la bandeja
+            formato = puente.imagen_a_bandeja(cliente, fila)
+            prefill = puente.prefill_crear(cliente, version, analisis_id=aid, tipo="imagen", aspect_ratio=formato)
+            mensaje = gettext("Versión mejorada cargada en Crear con la imagen del anuncio en la bandeja: ajusta lo "
+                              "que quieras y genera la imagen.")
+        else:
+            prefill = puente.prefill_crear(cliente, version, analisis_id=aid)
+            mensaje = gettext("Versión mejorada cargada en Crear: ajusta lo que quieras y genera.")
     except puente.PuenteError as e:
         flash(str(e), "error")
         return _volver(cliente)
-    flash(gettext("Versión mejorada cargada en Crear: ajusta lo que quieras y genera."), "ok")
+    session["fp_prefill"] = prefill
+    flash(mensaje, "ok")
+    if version.get("tipo") == "imagen" and version.get("cifras_sin_dato"):
+        # Lo que se escriba en la imagen se publica: el aviso llega a Crear, donde se aprieta «Generar» (revisiones de
+        # seguridad y de gasto, 2026-10-13), no solo al detalle del análisis.
+        flash(gettext("El prompt pide escribir en la imagen cifras u ofertas que no están en los datos (%(cifras)s): "
+                      "revísalo antes de generar.", cifras=", ".join(version["cifras_sin_dato"])), "warn")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
 
