@@ -209,3 +209,8 @@ misma tarifa con margen llegan intactos. Las precargas de Crear con este product
 siguen aplicándose antes del primer evento de modo; modelos, precios, DOM y POST no cambian.
 El script conserva su lugar después del formulario y su JSON: las guardas del submit se registran
 al parsear esa sección, antes de los módulos posteriores y del selector de modos.
+
+**Llegar a Crear desde un análisis de Rendimiento (2026-10-13):** la versión mejorada de un anuncio de imagen fija abre
+Crear en modo imagen con la imagen del anuncio como la ÚNICA referencia de la bandeja (se reemplaza, como «Editar y
+crear otra» y la escena de Flow Plus) y un prompt para editarla; nada se genera hasta «Generar» con su precio. El
+detalle vive en la skill `triple-whale` («Cómo mejorarlo» de un anuncio de imagen fija).

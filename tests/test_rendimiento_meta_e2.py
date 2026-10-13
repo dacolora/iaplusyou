@@ -321,9 +321,9 @@ def test_el_diagnostico_es_de_toda_la_estructura_de_meta(mixto):
     menos de lo que gasta), en «Todas» y en su entrada; Suecia sola no la nombra."""
     _sembrar()
     todas = _seccion(_panel(mixto), "meta-diagnostico")
-    assert "La cuenta vende menos de lo que gasta" in todas and "HappyFlops Norway" in todas
+    assert "1 cuenta vende menos de lo que gasta" in todas and "HappyFlops Norway" in todas
     noruega = _seccion(_panel(mixto, "?entrada=NO"), "meta-diagnostico")
-    assert "La cuenta vende menos de lo que gasta" in noruega
+    assert "1 cuenta vende menos de lo que gasta" in noruega
     suecia = _seccion(_panel(mixto, "?entrada=SE"), "meta-diagnostico")
     assert "HappyFlops Norway" not in suecia
 

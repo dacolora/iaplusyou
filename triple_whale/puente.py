@@ -14,14 +14,24 @@ gasta: solo deja las cosas donde el resto de Creatv ya sabe usarlas.
   (fuente `triple_whale`, solo visible para él) con su miniatura copiada a
   R2, la clasificación que dio Claude y sus métricas en `extra.triple_whale`.
   Desde ahí funcionan «Recrear con mi producto» y «Usar en sprint».
+- `imagen_a_bandeja` (2026-10-13, pedido de Daniel): la versión mejorada de
+  un anuncio de imagen fija (`version["tipo"] == "imagen"`) se lleva a Crear
+  en modo imagen, con la imagen del anuncio copiada a R2 como la ÚNICA
+  referencia de la bandeja (como «Editar y crear otra»): el prompt es para
+  editar esa imagen. Tampoco genera nada.
 """
+import math
+import os
 import re
 import tempfile
+from urllib.parse import urlsplit
 
 from flask_babel import gettext
 
 import proyectos
-from triple_whale import datos
+import referencias_flowplus
+from providers import flowplus_modelos
+from triple_whale import datos, mejorar
 from referentes import datos as referentes_datos
 from referentes import imagenes as referentes_imagenes
 
@@ -30,23 +40,35 @@ class PuenteError(ValueError):
     """Algo que la persona tiene que saber (el mensaje se muestra tal cual)."""
 
 
-def prefill_crear(cliente, idea, evaluacion_id=None, indice=None, analisis_id=None, origen=None):
+def prefill_crear(cliente, idea, evaluacion_id=None, indice=None, analisis_id=None, origen=None, tipo="video",
+                  aspect_ratio=None):
     """Lo que `_tab_creativeflowplus.html` lee de `fp_prefill`. `origen_tw` es «<evaluación>:<índice>» para una idea
     de la evaluación de cuenta y «a<análisis>» para la versión mejorada de un anuncio (spec tarjetas §7.1).
 
     `origen` es un origen de otra pestaña, ya armado y con su propio prefijo (Meta rendimiento: «meta:<id>:<i>»,
     `meta_rendimiento.analisis.origen`). Va en la misma clave porque es el campo oculto que Crear devuelve tal cual;
     `origen_desde_formulario` solo reconoce las formas de Triple Whale (solo dígitos o «a<dígitos>»), así que un
-    origen con prefijo nunca se toma por una evaluación de Triple Whale."""
+    origen con prefijo nunca se toma por una evaluación de Triple Whale.
+
+    `tipo="imagen"` (la versión de un anuncio de imagen, 2026-10-13) abre Crear en modo imagen con el modelo de imagen
+    del proyecto y `aspect_ratio` (el de la imagen original, `formato_mas_cercano`) llevado a uno que ese modelo
+    admite; la bandeja la llena `imagen_a_bandeja`."""
     if not idea or not str(idea.get("prompt") or "").strip():
         raise PuenteError(gettext("Esa idea no tiene prompt."))
     pref = proyectos.preferencias_flowplus(cliente)
     # `cliente`: `dashboard._prefill_para` usa la precarga solo en el proyecto donde se pidió (sin él, abrir Crear
     # en otro proyecto la tomaba como propia: revisión de seguridad de E2, 2026-10-10).
-    salida = {"cliente": cliente, "texto": str(idea["prompt"]).strip(), "tipo": "video",
-              "modelo": pref.get("modelo_video") or "",
-              "duracion": pref.get("duracion_defecto") or 8, "aspect_ratio": "9:16",
-              "con_sonido": proyectos.preferencias_sonido(cliente).get("con_sonido", True) is not False}
+    if tipo == "imagen":
+        modelo = pref.get("modelo_imagen")
+        if modelo not in flowplus_modelos.IMAGEN:        # una preferencia vieja con un modelo que ya no está
+            modelo = flowplus_modelos.IMAGEN_POR_DEFECTO
+        salida = {"cliente": cliente, "texto": str(idea["prompt"]).strip(), "tipo": "imagen", "modelo": modelo,
+                  "aspect_ratio": flowplus_modelos.ajustar_formato(modelo, aspect_ratio or "", tipo="imagen")}
+    else:
+        salida = {"cliente": cliente, "texto": str(idea["prompt"]).strip(), "tipo": "video",
+                  "modelo": pref.get("modelo_video") or "",
+                  "duracion": pref.get("duracion_defecto") or 8, "aspect_ratio": "9:16",
+                  "con_sonido": proyectos.preferencias_sonido(cliente).get("con_sonido", True) is not False}
     if origen:
         salida["origen_tw"] = str(origen)
     elif evaluacion_id is not None and indice is not None:
@@ -54,6 +76,67 @@ def prefill_crear(cliente, idea, evaluacion_id=None, indice=None, analisis_id=No
     elif analisis_id is not None:
         salida["origen_tw"] = f"a{int(analisis_id)}"
     return salida
+
+
+def formato_mas_cercano(ancho, alto, formatos):
+    """El formato de `formatos` («4:5», «9:16»…) cuya proporción es la más cercana a ancho × alto (en escala
+    logarítmica: 4:5 contra 1:1 pesa lo mismo que 5:4 contra 1:1). None sin medidas o sin formatos."""
+    if not ancho or not alto or not formatos:
+        return None
+    proporcion = ancho / alto
+
+    def distancia(formato):
+        a, b = (int(x) for x in formato.split(":"))
+        return abs(math.log((a / b) / proporcion))
+    return min(formatos, key=distancia)
+
+
+def _de_otro_proyecto(cliente, url):
+    """¿Es una URL de NUESTRO R2 fuera de `clientes/<cliente>/`? El host de R2 es el mismo para todos los proyectos:
+    una imagen de R2 solo entra a la bandeja si es de este (auditoría de seguridad, 2026-10-13)."""
+    base = urlsplit(os.environ.get("R2_PUBLIC_BASE_URL") or "")
+    p = urlsplit(url)
+    if not base.hostname or (p.hostname or "").lower() != base.hostname.lower():
+        return False
+    return not p.path.startswith(base.path.rstrip("/") + f"/clientes/{cliente}/")
+
+
+def imagen_a_bandeja(cliente, fila):
+    """La imagen del anuncio de un análisis (`tw_analisis`, su `foto`) → la ÚNICA referencia de la bandeja de Crear (se
+    reemplaza, como «Editar y crear otra»: sin referencias «del pasado»). Devuelve el formato de imagen de Crear más
+    cercano al de la imagen original, o None. Se baja con la guarda de SSRF y se valida por su contenido; la bandeja
+    solo se toca cuando todo salió bien. PuenteError si el anuncio no tiene una imagen de un host permitido (o es de R2
+    de otro proyecto), o si no se pudo leer o copiar: entonces nada cambia.
+
+    Triple Whale o una pieza de Creatv: se copia a R2 (`referencias_flowplus/analisis_<id>.jpg`) con el nombre del
+    anuncio como título. Un anuncio de fuente Meta ya es una copia en R2 que se BORRA al soltar la cuenta
+    (`meta_rendimiento.creativo.borrar_copias`, la promesa de /eliminar-datos): se usa esa misma, sin otra copia ni su
+    nombre en la bandeja, así soltar la cuenta no deja nada de Meta guardado (auditoría de seguridad, 2026-10-13)."""
+    foto = fila.get("foto") or {}
+    url = mejorar.imagen_del_anuncio(foto)
+    if not url or _de_otro_proyecto(cliente, url):
+        raise PuenteError(gettext("Ese anuncio no tiene su imagen guardada: súbela tú a la bandeja de Crear."))
+    de_meta = foto.get("fuente") == "meta"
+    try:
+        if de_meta:
+            (ancho, alto), url_final, titulo = referentes_imagenes.medir(url), url, None
+        else:
+            clave = f"clientes/{cliente}/referencias_flowplus/analisis_{int(fila['id'])}.jpg"
+            with tempfile.TemporaryDirectory(prefix="tw_crear_") as carpeta:
+                url_final, (ancho, alto) = referentes_imagenes.copiar_a_r2(url, clave, carpeta)
+            titulo = str(foto.get("nombre") or "").strip()[:80] or None
+    except referentes_imagenes.ImagenInvalida as e:
+        raise PuenteError(gettext("No se pudo copiar la imagen del anuncio: %(error)s", error=str(e))) from None
+    except Exception as e:  # noqa: BLE001 — R2 caído o sin configurar: un aviso en palabras, no un 500
+        raise PuenteError(gettext("No se pudo copiar la imagen del anuncio: %(error)s",
+                                  error=type(e).__name__)) from None
+    referencias_flowplus.vaciar(cliente)
+    # El origen es la fuente de los números (nombre propio, igual en todos los idiomas).
+    referencias_flowplus.agregar(cliente, "imagen", url_final, origen="meta" if de_meta else "triple_whale",
+                                 titulo=titulo)
+    modelo = proyectos.preferencias_flowplus(cliente).get("modelo_imagen")
+    info = flowplus_modelos.IMAGEN.get(modelo) or flowplus_modelos.IMAGEN[flowplus_modelos.IMAGEN_POR_DEFECTO]
+    return formato_mas_cercano(ancho, alto, info.get("formatos") or ())
 
 
 _ORIGEN = re.compile(r"^(\d{1,12}):(\d{1,4})$")
