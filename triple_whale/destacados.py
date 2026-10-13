@@ -9,6 +9,7 @@ import re
 from urllib.parse import unquote, urlsplit
 
 from idiomas import N_
+from triple_whale.datos import CANAL_META
 
 PEDIDOS_MIN_ITERAR = 10            # «real purchase volume»: un ROAS de 1 o 2 compras no es una base segura
 SESIONES_MIN_CONVERSION = 100
@@ -82,12 +83,21 @@ def producto_de(anuncio, indice):
 
 
 def tipo_de(anuncio, tipos):
-    """{"tipo", "etiqueta", "grupo"} (spec §4.4). `tipos`: {(canal, ad_id): ad_type de tw_creativo}. Grupo «video» si
-    Triple Whale dice video, o si no dice imagen ni carrusel y el anuncio tiene vistas de 3 s; si no, «imagen»."""
+    """{"tipo", "etiqueta", "grupo"} (spec §4.4 y §9). `tipos`: {(canal, ad_id): ad_type de tw_creativo}. Grupo:
+    «video» si Triple Whale dice video; «imagen» si dice imagen o carrusel; si no dice ninguno, «video» con vistas de
+    3 s, «imagen» en Meta (Meta informa las vistas de sus videos) y None en otro canal: un anuncio de búsqueda de Google
+    o uno de Snapchat sin vistas en la copia no es una imagen, no se sabe (datos reales de Noruega, 2026-10-13). Sin
+    grupo, la etiqueta es None y el anuncio no entra en «Mejores imágenes» ni en «Mejores videos»."""
     tipo = (tipos.get((anuncio["canal"], anuncio["ad_id"])) or "").lower() or None
-    es_video = bool(anuncio["m"].get("es_video"))
-    grupo = "video" if tipo == "video" or (tipo not in ("image", "carousel") and es_video) else "imagen"
-    etiqueta = TIPOS.get(tipo) or (TIPOS["video"] if grupo == "video" else TIPOS["image"])
+    if tipo == "video":
+        grupo = "video"
+    elif tipo in ("image", "carousel"):
+        grupo = "imagen"
+    elif anuncio["m"].get("es_video"):
+        grupo = "video"
+    else:
+        grupo = "imagen" if anuncio["canal"] == CANAL_META else None
+    etiqueta = TIPOS.get(tipo) or {"video": TIPOS["video"], "imagen": TIPOS["image"]}.get(grupo)
     return {"tipo": tipo, "etiqueta": etiqueta, "grupo": grupo}
 
 
@@ -133,13 +143,16 @@ def resumir(anuncios, roas_cuenta, indice, tipos):
     """Las cinco piezas de la pantalla, sin tocar la base: «iterar», «conversion», «imagenes», «videos» (filas de
     `_fila`) y «productos» (con «Otros» al final; la suma de su gasto es la de todos los anuncios)."""
     filas = [_fila(a, indice, tipos) for a in anuncios or []]
-    iterar = sorted((f for f in filas if roas_cuenta and f["m"]["pedidos"] >= PEDIDOS_MIN_ITERAR
+    # Las listas y las tarjetas son de anuncios con gasto: Google Ads trae filas como «(not set)» o «sag_organic» con
+    # ventas atribuidas y gasto 0, que no son anuncios (§9). «Productos» sí las cuenta: su gasto suma el del tile.
+    pagados = [f for f in filas if f["m"]["gasto"] > 0]
+    iterar = sorted((f for f in pagados if roas_cuenta and f["m"]["pedidos"] >= PEDIDOS_MIN_ITERAR
                      and (f["m"]["roas"] or 0) >= roas_cuenta), key=_por_ventas)[:MAX_ITERAR]
-    conversion = sorted((f for f in filas if f["m"]["sesiones"] >= SESIONES_MIN_CONVERSION
+    conversion = sorted((f for f in pagados if f["m"]["sesiones"] >= SESIONES_MIN_CONVERSION
                          and f["m"]["pedidos"] >= PEDIDOS_MIN_CONVERSION and f["m"]["cv_sesion"] is not None),
                         key=lambda f: (-f["m"]["cv_sesion"], -f["m"]["pedidos"], f["canal"], f["ad_id"]))
     por_grupo = {"imagen": [], "video": []}
-    for f in sorted((f for f in filas if f["m"]["pedidos"] > 0), key=_por_ventas):
+    for f in sorted((f for f in pagados if f["m"]["pedidos"] > 0 and f["grupo"]), key=_por_ventas):
         if len(por_grupo[f["grupo"]]) < MAX_POR_TIPO:
             por_grupo[f["grupo"]].append(f)
     return {"iterar": iterar, "conversion": conversion[:MAX_CONVERSION], "imagenes": por_grupo["imagen"],

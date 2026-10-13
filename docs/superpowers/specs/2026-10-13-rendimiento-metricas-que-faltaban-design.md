@@ -112,3 +112,17 @@ Lo llama `pestana_rendimiento.panel.contexto` solo con `fuente == "tw"` y lo pon
 
 No cobra ni llama a proveedores: solo lee la copia. Nada nuevo entra a un prompt. Los medios son los ya permitidos
 por `medio_tarjeta`. Lecturas filtradas por `cliente` (aislamiento entre proyectos).
+
+## 9. Cambios tras la prueba con datos reales (Noruega, copia de producción, 2026-10-13)
+
+Con la copia real (Noruega, 30 días: 141 623 USD de gasto, 6 206 pedidos) aparecieron dos cosas que el diseño no veía:
+
+- **Filas sin gasto.** Google Ads trae filas como «(not set)» y «sag_organic» con ventas atribuidas y gasto 0 (no son
+  anuncios). Entraban en «Mejores imágenes» y en «Los que mejor convierten». Ahora las cuatro listas solo miran
+  anuncios con `gasto > 0`; «Productos en tus anuncios» las sigue contando (su gasto suma el del tile «Gasto», como
+  pide §4.1).
+- **Tipo inventado fuera de Meta.** «Sin tipo y sin vistas de 3 s = Imagen» (§4.4) marcaba como imagen un anuncio de
+  búsqueda de Google y uno de Snapchat que por el nombre es un video (Snapchat no informa esas vistas en la copia).
+  Ahora, sin tipo de Triple Whale y sin vistas: Imagen solo en Meta (`facebook-ads`, que sí informa las vistas de sus
+  videos); en otro canal el tipo no se sabe (etiqueta «—») y el anuncio no entra en las tarjetas de imágenes ni de
+  videos.

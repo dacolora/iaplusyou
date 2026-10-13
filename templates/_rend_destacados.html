@@ -9,6 +9,11 @@
 {%- if p.nombre -%}{{ p.nombre }}{%- else -%}<span class="vacio">{{ _('Otros') }}</span>{%- endif -%}
 {%- endmacro %}
 
+{#- El tipo del anuncio, o «—» si Triple Whale no lo dice y no se puede saber (fuera de Meta, spec §9). -#}
+{% macro _tipo(f) -%}
+{%- if f.etiqueta -%}{{ f.etiqueta | traducir }}{%- else -%}—{%- endif -%}
+{%- endmacro %}
+
 {% macro _roas(valor) -%}
 {%- if valor -%}{{ valor | roas }}×{%- else -%}—{%- endif -%}
 {%- endmacro %}
@@ -63,7 +68,7 @@
         <tr>
           <td class="tw-nombre"><strong>{{ f.nombre }}</strong><small>{{ f.canal | tw_canal }}</small></td>
           <td>{{ _producto(f.producto) }}</td>
-          <td>{{ f.etiqueta | traducir }}</td>
+          <td>{{ _tipo(f) }}</td>
           <td>{{ f.m.ingresos | dinero(moneda) }}</td>
           <td>{{ _roas(f.m.roas) }}</td>
           <td>{{ f.m.pedidos | tw_num }}</td>
@@ -91,7 +96,7 @@
         <tr>
           <td class="tw-nombre"><strong>{{ f.nombre }}</strong><small>{{ f.canal | tw_canal }}</small></td>
           <td>{{ _producto(f.producto) }}</td>
-          <td>{{ f.etiqueta | traducir }}</td>
+          <td>{{ _tipo(f) }}</td>
           <td>{{ f.m.sesiones | tw_num }}</td>
           <td>{{ f.m.pedidos | tw_num }}</td>
           <td>{{ f.m.cv_sesion | tw_pct(2) }}</td>

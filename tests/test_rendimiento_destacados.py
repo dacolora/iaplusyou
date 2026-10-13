@@ -21,7 +21,9 @@ INDICE = D.catalogo_indice(CATALOGO)
 
 
 def _a(ad_id, nombre=None, destino=None, canal="facebook-ads", **campos):
-    """Un anuncio con la forma de `evaluacion.evaluar(...)["anuncios"]`."""
+    """Un anuncio con la forma de `evaluacion.evaluar(...)["anuncios"]`. Con gasto 1 si no se dice: las listas solo
+    miran anuncios con gasto (§9)."""
+    campos.setdefault("gasto", 1)
     return {"canal": canal, "ad_id": ad_id, "nombre": nombre or ad_id, "destino_url": destino, "video_url": None,
             "creatv": None, "veredicto": "sin_datos", "m": evaluacion.metricas(campos)}
 
@@ -348,3 +350,45 @@ def test_las_consultas_del_panel_no_crecen_con_los_anuncios(app):  # noqa: F811
     _sembrar_anuncios(tid, n=30)
     treinta = _contar(frio)
     assert seis == treinta, (seis, treinta)
+
+
+# ------------------------------------------------- lo que enseñaron los datos reales de Noruega (2026-10-13) ---
+
+def test_una_fila_sin_gasto_no_entra_en_las_listas_ni_en_las_tarjetas_pero_si_en_productos():
+    """Google Ads trae «(not set)» y «sag_organic» con ventas atribuidas y gasto 0: no son anuncios."""
+    tipos = {("facebook-ads", "img"): "image"}
+    anuncios = [_a("img", gasto=100, ingresos=300, pedidos=12, sesiones=200),
+                _a("(not set)", canal="google-ads", gasto=0, ingresos=9000, pedidos=400, sesiones=4000)]
+    r = _resumen(anuncios, roas_cuenta=1.0, tipos=tipos)
+    for lista in ("iterar", "conversion", "imagenes", "videos"):
+        assert "(not set)" not in [f["ad_id"] for f in r[lista]], lista
+    assert sum(p["ingresos"] for p in r["productos"]) == 9300
+
+
+def test_sin_tipo_fuera_de_meta_y_sin_vistas_el_tipo_no_se_sabe_y_no_entra_en_las_tarjetas():
+    """Un anuncio de búsqueda de Google o uno de Snapchat sin vistas de 3 s en la copia no es «Imagen»: no se sabe."""
+    google = D.tipo_de(_a("g", canal="google-ads"), {})
+    assert google == {"tipo": None, "etiqueta": None, "grupo": None}
+    assert D.tipo_de(_a("s", canal="snapchat-ads", vistas_3s=40), {})["grupo"] == "video"
+    assert D.tipo_de(_a("m"), {})["grupo"] == "imagen"                          # Meta informa las vistas de sus videos
+    r = _resumen([_a("g", canal="google-ads", gasto=10, ingresos=500, pedidos=20)], roas_cuenta=1.0)
+    assert r["imagenes"] == r["videos"] == [] and r["iterar"][0]["etiqueta"] is None
+
+
+def test_en_pantalla_un_anuncio_de_google_sin_tipo_dice_guion_y_no_sale_entre_las_imagenes(app):  # noqa: F811
+    from triple_whale import datos as twdatos
+    tid = _tienda()
+    _sembrar_anuncios(tid)
+    f = _hace(2)                     # otro día: `reemplazar_*` reescribe el día entero de la tienda
+    twdatos.reemplazar_anuncios_canal("acme", tid, f, f, [{"canal": "google-ads", "ad_id": "busqueda", "fecha": f,
+                                                           "gasto": 50, "impresiones": 900, "clics": 300,
+                                                           "anuncio": "Busqueda de marca"}])
+    twdatos.reemplazar_anuncios_pixel("acme", tid, f, f, [{"canal": "google-ads", "ad_id": "busqueda", "fecha": f,
+                                                           "pedidos": 40, "ingresos": 4000, "sesiones": 500}])
+    html = _panel(app)
+    iterar = html[html.index('id="rend-iterar"'):]
+    fila = iterar[iterar.index("Busqueda de marca"):]
+    fila = fila[:fila.index("</tr>")]
+    assert "None" not in fila and "<td>—</td>" in fila
+    imagenes = html[html.index('id="rend-imagenes"'):]
+    assert "Busqueda de marca" not in imagenes[:imagenes.index("</section>")]

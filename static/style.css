@@ -4441,6 +4441,13 @@ body:has(#exp-nuevo) main { margin-left: 0; max-width: 1440px; width: 100%; }
 .rend-destacadas { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 13rem), 1fr)); gap: .9rem; }
 .rend-destacada { display: flex; flex-direction: column; gap: .6rem; min-width: 0; padding: .8rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--panel); }
 .rend-destacada-cuerpo { display: flex; flex-direction: column; gap: .3rem; min-width: 0; }
+/* En el celular, de a dos como las demás galerías de tarjetas (skill ui): de a una, 12 tarjetas 9:16 eran muy largas. */
+@media (max-width: 760px) {
+  .rend-destacadas { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; }
+  .rend-destacada { padding: .6rem; }
+  /* «13,633.78 USD» se partía dentro del número (el celular rompe palabras largas): solo en el espacio. */
+  .rend-destacada .tw-cifras dd { overflow-wrap: normal; word-break: normal; font-size: var(--t-chico); }
+}
 /* ── estilos/pantallas/crear.css ── */
 /* Crear: el corazón de cada tarjeta (2026-10-08), para separar las versiones que se van a usar. */
 .generado-fav-form { position: absolute; right: .45rem; top: .4rem; margin: 0; z-index: 1; }
