@@ -85,7 +85,8 @@ los clientes». Las dos pestañas daban números distintos para el mismo anuncio
   `MODELO_DEFECTO` ni el ajuste de un proyecto: mueven lo que decide el decisor de Experimentos (plata).
 - **R12. «Meta reporta».** En la tarjeta de un anuncio `facebook-ads` de Triple Whale, «Meta reporta N×» sale de
   `valor_canal / gasto`; sin dato no aparece.
-- **R13. Lo pagado no se reescribe.** Referentes, «Llevar a Crear» y Pausar/Activar siguen en
+- **R13. Lo pagado no se reescribe.** (Desde el 2026-10-13, «Llevar a Crear» de un anuncio de imagen fija abre Crear
+  en modo imagen con la imagen del anuncio en la bandeja: skill `triple-whale`.) Referentes, «Llevar a Crear» y Pausar/Activar siguen en
   `triple_whale/rutas.py` con su alcance y sus garantías; esta pestaña solo les pasa la tienda de la entrada (o
   `None`). «Cómo mejorarlo» y «Analizar los N» pasaron en E2 tarea 4 a las rutas de la pestaña (la galería es una con
   las dos fuentes), y «Evaluar con IA» de Triple Whale en E2 tarea 5, pero cobran con el mismo

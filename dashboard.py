@@ -3426,7 +3426,7 @@ def enviar_swap_a_publicidad(cliente, swap_id):
     producto = catalogo_productos.encontrar(cliente, entry.get("producto_id"))
     nombre = producto["nombre"] if producto else entry.get("producto_id", "Swap")
     ads_mod.crear(cliente, "swap", swap_id, entry["resultado_url"], entry.get("tipo", "foto"), nombre)
-    flash(gettext("Quedó en Experimentos › Anuncios sueltos — crea un experimento con esa pieza."), "ok")
+    flash(gettext("Quedó en Probar anuncios › Anuncios sueltos — crea un experimento con esa pieza."), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
 
@@ -3440,7 +3440,7 @@ def enviar_video_a_publicidad(cliente, brief_id):
 
     nombre = entry.get("title") or brief_id
     ads_mod.crear(cliente, "idea_visual", brief_id, entry["video_url"], "video", nombre)
-    flash(gettext("Quedó en Experimentos › Anuncios sueltos — crea un experimento con esa pieza."), "ok")
+    flash(gettext("Quedó en Probar anuncios › Anuncios sueltos — crea un experimento con esa pieza."), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
 
 
@@ -3460,7 +3460,7 @@ def _ir_a_flowmarketing(cliente):
 
 
 MENSAJE_MODO_AGENCIA = idiomas.N_("Este proyecto lo gestiona Creatv en Meta. Para volver a tu propia app usa «Cambiar de forma» "
-                        "en Experimentos › Meta (con nada en marcha).")
+                        "en Configuración › Conexiones (con nada en marcha).")
 
 
 def _bloqueo_modo_agencia(cliente):
@@ -4127,7 +4127,7 @@ def admin_meta_asignar(cliente):
         sin_pagina = gettext("sin Página")
         asunto = gettext("Meta quedó conectado en Creatv")
         cuerpo = gettext("Tu proyecto %(nombre)s ya está conectado a Meta: cuenta %(cuenta)s · Página %(pagina)s. "
-                         "Ya puedes probar piezas en Experimentos y publicar contenido.",
+                         "Ya puedes probar tus piezas como anuncios en «Probar anuncios» y publicar contenido.",
                          nombre=nombre, cuenta=cuenta, pagina=pagina_real or sin_pagina)
     notificaciones.avisar(cliente, "meta_conectado", asunto, cuerpo)
     ig = f" · Instagram @{detalle['ig_username']}" if detalle.get("ig_username") else ""
@@ -4954,10 +4954,16 @@ def _fuente_gasto(cliente):
     return fuente
 
 
-def _pagina_gasto(cliente, desde=0, fuente=None):
+# El historial de gasto entero en un pedido (Daniel 2026-10-13: «la idea es que salga todo»): la página trae
+# las primeras TARJETAS_POR_PAGINA filas y el resto llega solo, por fetch, al bajar a History. Este tope solo
+# corta una respuesta enorme; si se pasa, el fragmento trae otro «Ver todo».
+GASTO_TODO_MAX = 5000
+
+
+def _pagina_gasto(cliente, desde=0, fuente=None, por_pagina=TARJETAS_POR_PAGINA):
     fuente = fuente if fuente is not None else _fuente_gasto(cliente)
-    filas = fuente["historial"](cliente, limite=TARJETAS_POR_PAGINA + 1, desplazamiento=desde)
-    historial = filas[:TARJETAS_POR_PAGINA]
+    filas = fuente["historial"](cliente, limite=por_pagina + 1, desplazamiento=desde)
+    historial = filas[:por_pagina]
     doble = fuente["modo"] == "doble"
     cobrado = {}
     modo = fuente["modo"]
@@ -4968,14 +4974,16 @@ def _pagina_gasto(cliente, desde=0, fuente=None):
             print(f"[aviso] Gasto de {cliente}: no pude leer lo cobrado del historial: {type(e).__name__}")
             modo = "costo"
     return {"gastos_historial": historial,
-            "gastos_siguiente": desde + TARJETAS_POR_PAGINA if len(filas) > TARJETAS_POR_PAGINA else None,
+            "gastos_siguiente": desde + por_pagina if len(filas) > por_pagina else None,
             "gasto_modo": modo, "gasto_cobrado": cobrado, "nombres_tipo_gasto": NOMBRES_TIPO_GASTO}
 
 
 @app.route("/cliente/<cliente>/gasto/lista")
 def gasto_lista(cliente):
+    por_pagina = GASTO_TODO_MAX if request.args.get("todo") else TARJETAS_POR_PAGINA
     return render_template("_gasto_lista.html", cliente=cliente,
-                           **_pagina_gasto(cliente, min(_pagina_desde(request.args.get("desde")), 2**63 - 1)))
+                           **_pagina_gasto(cliente, min(_pagina_desde(request.args.get("desde")), 2**63 - 1),
+                                           por_pagina=por_pagina))
 
 
 def _contexto_gasto(cliente, tablero_ctx):

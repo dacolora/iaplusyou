@@ -260,7 +260,9 @@ def tw_analizar_anuncio(tarea):
                                                       # los números de las instrucciones (revisión del 2026-10-09).
                                                       verificable=mejorar.datos_verificables(marca, fila, **entradas),
                                                       # El clip arranca en un fotograma que Claude miró (arreglo G).
-                                                      segundos_vistos=mejorar.segundos_vistos(vis["bloques"]))
+                                                      segundos_vistos=mejorar.segundos_vistos(vis["bloques"]),
+                                                      # Un anuncio de imagen se mejora como imagen (2026-10-13).
+                                                      tipo=mejorar.tipo_version(foto))
         if vis["clase"] != "fotogramas":
             # Spec 2026-10-09 §2: sin fotogramas del video (un anuncio de imagen, o nada) hay copy pero no ganchos,
             # aunque Claude los mande: el clip arranca en un fotograma que Claude tiene que haber visto.

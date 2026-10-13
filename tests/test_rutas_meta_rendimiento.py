@@ -450,8 +450,10 @@ RPANEL = "/cliente/acme/rendimiento/panel"
 def _rec(i, nivel="media", tipo="perdedores_gastando", titulo=None, enlace="https://adsmanager.facebook.com/adsmanager/manage/ads?act=1&selected_ad_ids=9"):
     return {"id": f"{i:064x}", "nivel": nivel, "tipo": tipo, "cuenta": A, "cuenta_nombre": "HappyFlops Norway",
             "titulo": titulo or f"Recomendación {i}", "que_hacer": f"Haz la cosa {i}", "por_que": f"Porque {i}",
-            "impacto": {"monto": 10.0, "moneda": "SEK", "texto": "10 SEK por día en juego"} if i % 2 else None,
-            "objetos": [], "enlace": enlace}
+            "impacto": {"monto": 10.0, "moneda": "SEK", "texto": "10 SEK por día en juego", "corto": "10 SEK"}
+            if i % 2 else None,
+            "objetos": [], "enlace": enlace,
+            "fila": {"etiqueta": None, "cifra": f"{i} anuncios", "nota": None, "barra": None, "gasto": "5 %"}}
 
 
 def test_el_diagnostico_va_tras_los_kpis_con_enlaces_al_administrador(conectado):
@@ -464,39 +466,48 @@ def test_el_diagnostico_va_tras_los_kpis_con_enlaces_al_administrador(conectado)
     # En Rendimiento va tras «Resultados» y antes de «Tus anuncios» (en la vieja pestaña, tras los KPIs).
     assert html.index('id="tw-resultados"') < html.index('id="meta-diagnostico"') < html.index("Tus anuncios</h3>")
     # Alta: la cuenta vende menos de lo que gasta y su único conjunto activo está en aprendizaje limitado.
-    assert "La cuenta vende menos de lo que gasta" in html and "Prioridad alta · 2" in html
-    tarjeta = html[html.rindex("<article", 0, html.index("La cuenta vende menos de lo que gasta")):]
-    tarjeta = tarjeta[:tarjeta.index("</article>")]
-    assert 'class="meta-diag meta-diag-alta"' in tarjeta and "133 SEK por día en juego" in tarjeta
+    assert "1 cuenta vende menos de lo que gasta" in html and "Prioridad alta · 2" in html
+    bloque = html[html.rindex("<article", 0, html.index("1 cuenta vende menos de lo que gasta")):]
+    bloque = bloque[:bloque.index("</article>")]
+    assert 'class="meta-diag meta-diag-alta"' in bloque and "133 SEK por día en juego" in bloque
+    # La fila: la cuenta, su ROAS y lo que está en juego, y al abrirla el texto completo de siempre.
+    assert "HappyFlops Norway" in bloque and "ROAS 0,25×" in bloque and "133 SEK" in bloque
+    assert "Pausa o rehace esta cuenta" in bloque and "Por qué:" in bloque
     # Los ids de prueba no son numéricos: el enlace es el de las campañas de la cuenta, sin selección.
-    assert 'href="https://adsmanager.facebook.com/adsmanager/manage/campaigns?act=1"' in tarjeta
-    assert 'target="_blank" rel="noopener noreferrer"' in tarjeta and "HappyFlops Norway" in tarjeta
+    assert 'href="https://adsmanager.facebook.com/adsmanager/manage/campaigns?act=1"' in bloque
+    assert 'target="_blank" rel="noopener noreferrer"' in bloque
     assert "<script" not in _sin_scripts(html)
 
 
-def test_mas_de_seis_recomendaciones_el_resto_va_plegado_y_lo_de_meta_se_escapa(conectado, monkeypatch):
+def test_un_bloque_por_problema_con_el_consejo_una_vez_y_lo_de_meta_se_escapa(conectado, monkeypatch):
+    """Pedido de Daniel 2026-10-13: cinco tarjetas «Learning limited» repetían el mismo consejo. Ahora un bloque por
+    tipo con una fila por cuenta; más de `max_filas` filas → el resto en un <details>."""
     _sembrar()
-    recs = [_rec(i, nivel="alta" if i < 2 else "media") for i in range(8)]
-    recs[0]["titulo"] = '<img src=x onerror=alert(1)> Campaña "rara"'
-    recs.append(_rec(9, nivel="baja", tipo="fatiga"))
+    recs = [_rec(i, nivel="alta" if i < 2 else "media") for i in range(10)]
+    recs[0]["titulo"] = recs[0]["fila"]["cifra"] = '<img src=x onerror=alert(1)> Campaña "rara"'
+    recs.append(_rec(11, nivel="baja", tipo="fatiga"))
     monkeypatch.setattr(panel.recomendaciones, "calcular", lambda entrada: recs)
     html = conectado["c"].get(RPANEL).get_data(as_text=True)
     diag = html[html.index('id="meta-diagnostico"'):html.index("</section>", html.index('id="meta-diagnostico"'))]
-    visibles, plegadas = diag.split('<details class="meta-diag-mas">')
-    assert visibles.count("<article") == 6 and plegadas.count("<article") == 3
-    assert "Ver todas (9)" in plegadas
-    assert "Prioridad alta · 2" in diag and "Prioridad media · 6" in diag and "Prioridad baja · 1" in diag
+    assert diag.count("<article") == 2 and diag.count("Páusalos: libera su presupuesto") == 1
+    perdedores = diag[:diag.index("Anuncios que funcionan y se cansan")]
+    visibles, plegadas = perdedores.split('<details class="meta-diag-mas">')
+    assert visibles.count('class="meta-diag-fila"') == 8 and plegadas.count('class="meta-diag-fila"') == 2
+    assert "Ver 2 más" in plegadas
+    # Las filas de media dentro de un bloque alta dicen su prioridad; las de alta no la repiten.
+    assert visibles.count("tag-advertencia\">Prioridad media") == 6
+    assert "Prioridad alta · 2" in diag and "Prioridad media · 8" in diag and "Prioridad baja · 1" in diag
     assert "<img src=x" not in diag and "&lt;img src=x onerror=alert(1)&gt;" in diag
-    assert diag.count('rel="noopener noreferrer"') == 9 and diag.count('target="_blank"') == 9
-    assert 'href="#meta-evaluacion"' in plegadas and diag.count('href="#meta-evaluacion"') == 1
-    assert "10 SEK por día en juego" in diag
+    assert diag.count('rel="noopener noreferrer"') == 11 and diag.count('target="_blank"') == 11
+    assert diag.count('href="#meta-evaluacion"') == 1
+    assert "50 SEK por día en juego" in diag and diag.count("10 SEK") >= 5
 
 
 def test_sin_recomendaciones_lo_dice(conectado, monkeypatch):
     _sembrar()
     monkeypatch.setattr(panel.recomendaciones, "calcular", lambda entrada: [])
     html = conectado["c"].get(RPANEL).get_data(as_text=True)
-    assert "Las reglas no encontraron nada que corregir" in html and "meta-diag-mas" not in html
+    assert "Las reglas no encontraron nada que corregir" in html and "meta-diag-fila" not in html
 
 
 def test_segmentos_al_final_con_los_caros_marcados_y_los_viejos_avisados(conectado):

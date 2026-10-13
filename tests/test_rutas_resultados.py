@@ -549,7 +549,8 @@ def test_armazon_y_js_del_centro_de_resultados(app):
     tab = html[html.index('<section id="tab-experimentos"'):html.index('<section id="tab-alertas"')]
     assert re.search(r'src="/static/exp_resultados\.js\?v=\w+" defer', tab)
     assert 'id="cr-textos"' in tab and 'id="cr-resultados"' in tab and '<dialog id="cr-panel"' in tab
-    assert "panel-cabecera cr-cabecera" in tab and "Centro de resultados" in tab
+    assert "panel-cabecera cr-cabecera" in tab and "<h2>Probar anuncios</h2>" in tab   # 2026-10-13: antes «Centro de resultados» · «Experimentos»
+    assert 'data-ir-tab="rendimiento"' in tab                 # lleva a la pestaña que muestra resultados
     js = open("static/exp_resultados.js", encoding="utf-8").read()
     assert "getElementById(id)" in js and "textosDe('cr-textos')" in js and "dataset.crTextos" not in js
     assert "r.redirected" in js                         # sesión vencida: el login no entra a la pestaña

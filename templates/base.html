@@ -371,6 +371,31 @@
     window.arrancarSondeos = arrancarSondeos;
     document.addEventListener('DOMContentLoaded', function () { arrancarSondeos(document); });
 
+    // «Ver todo» del historial de gasto (Daniel 2026-10-13: «la idea es que salga todo»): el botón con
+    // data-auto se pulsa solo cuando entra en pantalla, así la página llega liviana y una pestaña oculta
+    // no pide nada. Sin IntersectionObserver queda el botón para pulsarlo a mano.
+    document.addEventListener('DOMContentLoaded', function () {
+      if (!('IntersectionObserver' in window)) return;
+      var io = new IntersectionObserver(function (entradas) {
+        entradas.forEach(function (e) {
+          if (!e.isIntersecting) return;
+          io.unobserve(e.target);
+          e.target.click();
+        });
+      }, { rootMargin: '200px 0px' });
+      function observar(raiz) {
+        if (raiz.matches && raiz.matches('[data-lista-mas][data-auto]')) io.observe(raiz);
+        if (raiz.querySelectorAll) raiz.querySelectorAll('[data-lista-mas][data-auto]').forEach(function (b) { io.observe(b); });
+      }
+      observar(document);
+      // El fragmento trae otro «Ver todo» solo si pasó el tope de filas (GASTO_TODO_MAX).
+      new MutationObserver(function (cambios) {
+        cambios.forEach(function (c) {
+          c.addedNodes.forEach(function (n) { if (n.nodeType === 1) observar(n); });
+        });
+      }).observe(document.body, { childList: true, subtree: true });
+    });
+
     // Modal de detalle por fetch (Crear y Final edition): abre al instante con
     // «Cargando…», pide el HTML y solo lo pinta si sigue siendo el último
     // pedido (dos clics rápidos no se pisan). Nada se cachea: el detalle trae

@@ -53,7 +53,9 @@ DIAS_SEMANA = 7
 # regla `segmento_caro` ni se muestra en «Segmentos» como si fuera de hoy (revisión de la Task 2 de E2).
 HORAS_DESGLOSE_VIGENTE = 48
 MAX_SEGMENTOS = 10           # filas por tabla de «Segmentos» (un caro pesa ≥ 10 %: siempre cabe entre las 10 primeras)
-MAX_RECOMENDACIONES_VISIBLES = 6
+# Filas visibles por bloque del Diagnóstico agrupado (`recomendaciones.agrupar`); el resto, en un <details>. Las de una
+# cuenta son una por cuenta (happyflops tiene 7); `escalar` y `segmento_caro` pueden ser muchas.
+MAX_FILAS_GRUPO = 8
 
 # effective_status de Meta en palabras (se traducen donde se muestran). None: Meta ya no lo devuelve en el listado.
 ESTADOS = {
@@ -622,8 +624,9 @@ def _moneda_comun(cuentas):
 
 
 def diagnostico(cliente, en_estructura, ids_evaluacion, dias, hoy, cuentas_por_id, vivos, evaluados_periodo=None):
-    """Lo de Meta rendimiento E2 que pinta la pestaña Rendimiento: {"recomendaciones", "conteo_recomendaciones",
-    "max_recomendaciones", "niveles_recomendacion", "nombres_prioridad", "segmentos", "ventana_segmentos",
+    """Lo de Meta rendimiento E2 que pinta la pestaña Rendimiento: {"recomendaciones", "grupos" (las mismas en bloques
+    por tipo, `recomendaciones.agrupar`), "conteo_recomendaciones", "max_filas", "niveles_recomendacion",
+    "nombres_prioridad", "segmentos", "ventana_segmentos",
     "evaluacion" (`evaluacion_panel` más `cuenta` y `alcance`; `cuentas_por_id` tienen que ser
     TODAS las del proyecto, `lista`), "dias" (el periodo de la
     evaluación), "actual" (la cuenta cuando la estructura tiene una sola), "nombres_accion", "estados_evaluacion" y
@@ -679,8 +682,9 @@ def diagnostico(cliente, en_estructura, ids_evaluacion, dias, hoy, cuentas_por_i
     ev.update(cuenta=cuentas_por_id[fuente[0]] if len(fuente) == 1 else None,
               alcance=(gettext("Todas las cuentas") if len(fuente) > 1 and set(fuente) >= set(cuentas_por_id) else
                        ", ".join(cuentas_por_id[a].get("nombre") or a for a in fuente) if len(fuente) > 1 else None))
-    return {"recomendaciones": recs, "conteo_recomendaciones": _conteo_niveles(recs),
-            "max_recomendaciones": MAX_RECOMENDACIONES_VISIBLES, "niveles_recomendacion": recomendaciones.NIVELES,
+    return {"recomendaciones": recs, "grupos": recomendaciones.agrupar(recs),
+            "conteo_recomendaciones": _conteo_niveles(recs),
+            "max_filas": MAX_FILAS_GRUPO, "niveles_recomendacion": recomendaciones.NIVELES,
             "nombres_prioridad": NOMBRES_PRIORIDAD, "ventana_segmentos": ventana_seg,
             "segmentos": segmentos([f for f in desgloses if f["ventana"] == ventana_seg], en_estructura,
                                    _moneda_comun(en_estructura), recs, ahora),

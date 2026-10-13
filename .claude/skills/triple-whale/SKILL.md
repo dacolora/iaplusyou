@@ -658,6 +658,31 @@ anuncio es TOF, MOF o BOF. Siempre con el chip `cx.nvp(nuevos, visitantes)` (ski
 
 PND-149(2–6) (2026-10-09, decisión del lote 8): serie_tienda solo resta duplicados de anuncios entre tiendas que tienen fila de tienda ese día; gasto_duplicado conserva su diagnóstico de todos los anuncios. Al refrescar un experimento, se limpian las marcas antiguas/nuevas de países cuya tienda ya está conectada, también si ninguna pieza queda sin tienda. uk al final del dominio da GB. agregar guarda los ajustes del formulario si no hay tiendas (aunque exista la fila); con tiendas conserva los ajustes anteriores. reservar_aviso_sync toma UPDATE sin efecto antes de leer extra/cola y marca ids+creada_en aún vivos en syncs_terminadas: la última reserva el aviso una sola vez aunque ambos hilos sigan vivos hasta volver al worker. actualizar_extra toma el mismo candado antes de leer. tests/test_lote8_tw.py cubre cifras, reconexión, dos finales simultáneos y el ciclo siguiente; sin red. Se dejan (1) países repetidos por tarjeta y (7) ajustes durante copia por decisión; (8) sigue para la primera copia real.
 
+**«Cómo mejorarlo» de un anuncio de imagen fija, y su idioma (2026-10-13).** Pedido de Daniel: el análisis de un
+estático salía en español en un proyecto en inglés y proponía «pasar el formato a video»; «Llevar a Crear» abría un
+video sin la imagen. Ahora `mejorar.es_estatico(foto)` lo decide el creativo guardado (una pieza de Creatv por su tipo;
+si no, sin `video_url`, sin `duracion_s` ni un tipo con «video», y con imagen; en happyflops el tipo `dynamic` es video
+o imagen según lo que traiga), nunca lo que Claude miró (un video cuya descarga falló llega como miniatura y sigue siendo video).
+Con imagen, `PROMPT` pide (`_VERSION["imagen"]`, `{escena_version}`/`{prompt_version}`/`{regla_version}`) un prompt en
+inglés para EDITAR esa misma imagen: conservar producto, foto, composición, colores y formato, cambiar lo mínimo que
+falla, y el texto que se verá en la imagen entre comillas, en el idioma del anuncio y con solo las ofertas de los
+datos; `_version` guarda `tipo` ("video"/"imagen") y, en imagen, `cifras_sin_dato` de TODO su prompt
+(`cifras_en_imagen`, sin los formatos «9:16» pero sí «3x2»: solo las comillas dejaban pasar comillas simples, ningunas
+o un `12"`; no bloquea, avisa en el detalle y en Crear al llegar). El prompt de video es palabra por palabra el de antes.
+`mejorar.analizar` cierra el mensaje, después de las imágenes, con `cierre_idioma(idioma, tipo)`: con la orden solo en
+el system, las instrucciones en español arrastraban la respuesta (PND-218; «Evaluar con IA» sigue pendiente). En inglés
+la orden va ESCRITA en inglés y nombra cada campo: la misma orden en español al final no movió nada (1 de 3 en inglés
+antes y con ella; 4 de 4 escrita en inglés, `docs/superpowers/evals/2026-10-13-mejorar-estaticos-idioma.md`). «Llevar a Crear» (`rutas.analisis_crear`) de una versión de imagen
+llama a `puente.imagen_a_bandeja`: copia la imagen del anuncio (`mejorar.imagen_del_anuncio`, solo de un host
+permitido y, si es de R2, solo de `clientes/<cliente>/`) a R2 con `referentes.imagenes.copiar_a_r2` (guarda de SSRF
+y validación por contenido), y solo si salió bien REEMPLAZA la bandeja con ella (origen `triple_whale`, título el
+nombre del anuncio). Un anuncio de fuente Meta usa su copia de R2 tal cual (`referentes.imagenes.medir`), sin otra
+copia ni su nombre: esa copia se borra al soltar la cuenta (promesa de /eliminar-datos); el prefill
+(`prefill_crear(tipo="imagen")`) va con el modelo de imagen del proyecto y el formato más cercano al de la imagen
+(`formato_mas_cercano`). Si no se puede copiar (o R2 está caído), aviso en palabras y nada cambia. Un análisis de antes (sin `version.tipo`) sigue
+siendo de video. Pruebas: `tests/test_tw_mejorar.py` (estático, prompt, cierre, parseo),
+`tests/test_tw_tarjetas_rutas.py` («Llevar a Crear» de una imagen) y `tests/test_tw_tarjetas_tarea.py`.
+
 **Rendimiento: las métricas que faltaban (2026-10-13).** `triple_whale/destacados.py` arma, desde los anuncios ya
 evaluados del panel, productos con gasto y ROAS (por la página de destino contra el Catálogo), los mejores para
 iterar, los que mejor convierten (`metricas()["cv_sesion"]` = pedidos / sesiones; `resumen_cuenta` ahora suma

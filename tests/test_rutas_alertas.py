@@ -538,7 +538,7 @@ def test_pestana_pinta_grupos_resumen_botones_y_descartar(app, monkeypatch):
     assert "Falta la llave de WaveSpeed" in tab and "Detalle de prueba." in tab
     # «Ir a …»: pestaña + ancla, o la URL tal cual.
     assert 'href="#settings" data-ir-tab="settings" data-ancla="llave-wavespeed">Ir a Configuración →' in tab
-    assert 'href="#experimentos?exp=7">Ir a Experimentos →' in tab
+    assert 'href="#experimentos?exp=7">Ir a Probar anuncios →' in tab
     assert 'href="#creativeflowplus" data-ir-tab="creativeflowplus" data-ancla="cf-cf_1">Ir a Crear →' in tab
     # Un form de descartar por alerta con su clave y su huella.
     assert tab.count('action="/cliente/acme/alertas/descartar"') == 5

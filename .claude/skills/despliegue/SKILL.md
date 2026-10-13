@@ -67,6 +67,10 @@ Si otra conversación avisa que va a desplegar, coordinen por SendMessage antes 
 
 `TZ=America/Bogota` siempre (las horas de la cola son locales), desde `/home/deploy/iaplusyou` y con `venv/bin/python3`.
 Para encolar a mano usa `trabajos.encolar` con el mismo `job_id` que usaría la ruta.
+Un script que corre una tarea directamente (sin el worker) y llama a un proveedor tiene que cargar las llaves como
+`worker.py`: `from dotenv import load_dotenv; load_dotenv(".env")` ANTES de importar nada de la app, sin imprimirlas.
+Sin eso, `generador_prompts._api_key` lanza `RuntimeError` y la tarea deja su fila en `error` (2026-10-13: rehacer un
+análisis de happyflops lo dejó en error un minuto, sin gastar nada, hasta correrlo otra vez con el `.env`).
 
 ## Trampas
 

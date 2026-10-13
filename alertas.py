@@ -52,7 +52,7 @@ NOMBRES_GRUPO = {"puesta_a_punto": idiomas.N_("Puesta a punto pendiente"), "falt
                  "decision": idiomas.N_("Esperan tu decisión"), "fallos": idiomas.N_("Fallos y errores")}
 NOMBRES_NIVEL = {"bloquea": idiomas.N_("bloquea"), "atencion": idiomas.N_("atención"), "info": idiomas.N_("info")}
 NOMBRES_TAB = {"settings": idiomas.N_("Configuración"), "catalogo": idiomas.N_("Catálogo"), "creativeflowplus": idiomas.N_("Crear"),
-               "experimentos": idiomas.N_("Experimentos"), "sprints": idiomas.N_("Sprints"), "nicho": idiomas.N_("Nicho"),
+               "experimentos": idiomas.N_("Probar anuncios"), "sprints": idiomas.N_("Sprints"), "nicho": idiomas.N_("Nicho"),
                "meta": idiomas.N_("Meta")}
 
 MINUTOS_WORKER = 30                                  # más de esto sin señal de vida y el worker está parado

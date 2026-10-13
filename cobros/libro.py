@@ -636,6 +636,48 @@ def acreditar(con, cliente, tipo, milesimas, concepto, *, recarga_id=None, usuar
                      concepto=concepto, usuario=usuario, detalle=str(detalle or "")[:300], extra={})
 
 
+def detallar_uso_previo(cliente, movimiento_id, margen):
+    """Anota en un ajuste negativo que paga lo usado antes de cobrar: los gastos del proyecto sin movimiento
+    hasta la fecha del ajuste (y después del último ajuste ya detallado), a `margen`. Con eso
+    Configuración › Gasto los muestra uno por uno como cobrados (`vista._sub_cobrado`); el saldo no cambia.
+    Pedido de Daniel 2026-10-13 («que vea todos los 900 que ha gastado»): el pospago de happyflops cargó lo
+    usado antes como UN ajuste y su gasto solo enseñaba lo de después.
+
+    Exige que costo × margen dé el ajuste al centavo; si no, ValueError y no escribe nada. Con el mismo
+    margen ya anotado devuelve lo anotado; con otro, ValueError. Devuelve
+    {"desde_gasto", "hasta_gasto", "margen", "n", "costo"}."""
+    margen = float(margen)
+    m, g = db.movimiento_saldo, db.gasto
+    with db.conectar() as con:
+        _candado(con)
+        mov = con.execute(sa.select(m).where(m.c.id == int(movimiento_id))).first()
+        if mov is None or mov.cliente != cliente or mov.tipo != "ajuste" or mov.milesimas >= 0:
+            raise ValueError(f"el movimiento {movimiento_id} no es un ajuste negativo de {cliente}")
+        extra = dict(mov.extra or {})
+        if extra.get("uso_previo"):
+            if float(extra["uso_previo"]["margen"]) != margen:
+                raise ValueError(f"el ajuste {movimiento_id} ya está detallado a otro margen")
+            return extra["uso_previo"]
+        anteriores = con.execute(sa.select(m.c.extra).where(m.c.cliente == cliente, m.c.tipo == "ajuste",
+                                                            m.c.id < mov.id)).scalars()
+        desde = max([int(e["uso_previo"]["hasta_gasto"]) for e in anteriores if (e or {}).get("uso_previo")],
+                    default=0)
+        hasta = con.execute(sa.select(sa.func.max(g.c.id))
+                            .where(g.c.cliente == cliente, g.c.creado_en <= mov.creado_en)).scalar() or 0
+        con_movimiento = sa.select(m.c.gasto_id).where(m.c.cliente == cliente, m.c.gasto_id.isnot(None))
+        n, costo = con.execute(sa.select(sa.func.count(), sa.func.coalesce(sa.func.sum(g.c.usd), 0.0))
+                               .where(g.c.cliente == cliente, g.c.id > desde, g.c.id <= hasta,
+                                      g.c.id.notin_(con_movimiento))).one()
+        if not n or abs(float(costo) * margen * 1000 + mov.milesimas) > 10:
+            raise ValueError(f"el ajuste {movimiento_id} ({-mov.milesimas / 1000:.2f}) no cuadra con {n} gastos "
+                             f"de costo {float(costo):.4f} × {margen:g}")
+        uso = {"desde_gasto": desde, "hasta_gasto": int(hasta), "margen": margen, "n": int(n),
+               "costo": round(float(costo), 6)}
+        extra["uso_previo"] = uso
+        con.execute(m.update().where(m.c.id == mov.id).values(extra=extra))
+    return uso
+
+
 # ------------------------------------------------------------- planes ---
 # Spec planes 2026-10-09 §3: el saldo sigue siendo UNA suma; la bolsa del plan se
 # calcula primero-el-plan sobre los cobros y reversos del periodo.

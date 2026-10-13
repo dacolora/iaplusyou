@@ -167,7 +167,13 @@ NOMBRES_TIPO = {
     "ideas": N_("Ideas de sprint (IA)"), "pedidos": N_("Pedidos al cliente (IA)"),
     "revision": N_("Revisión de la doctrina (IA)"),
     "evaluacion": N_("Evaluación de anuncios (IA)"),
-    "transcripcion": N_("Subtítulos (transcripción)"), "otro": N_("Otros"),
+    "transcripcion": N_("Subtítulos (transcripción)"),
+    # Sin nombre hasta 2026-10-13: el cliente de un proyecto que cobra no veía estos gastos en su historial;
+    # desde que ve lo usado antes de cobrar (libro.detallar_uso_previo) aparecían con su código.
+    "clasificacion": N_("Clasificación de referentes (IA)"), "adaptar_referente": N_("Recrear referentes (IA)"),
+    "sugerir_ia": N_("Sugerencias de referentes (IA)"), "recoleccion": N_("Recolección de comentarios"),
+    "investigacion": N_("Investigación de nicho (IA)"), "avatares": N_("Avatares (IA)"),
+    "otro": N_("Otros"),
 }
 
 SIN_PRECIO = N_("precio no disponible")

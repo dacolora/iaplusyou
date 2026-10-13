@@ -97,7 +97,15 @@ Reglas: **ninguna barra de progreso lleva `<script>`** — todas `data-poll-job=
 MutationObserver de `data-precarga`) arranca el sondeo de lo que aparezca; los clics de tarjetas
 van delegados sobre la cuadrícula (las agregadas por «Ver más» funcionan igual); el sondeo se pausa
 con `document.hidden` y baja de ritmo (`intervaloSondeo`: 1,5 s → 3 s al minuto → 5 s a los 5 min).
-`tests/test_tarjetas_ligeras.py` y `test_perf_pagina_proyecto.py` vigilan todo esto. Fuera de
+`tests/test_tarjetas_ligeras.py` y `test_perf_pagina_proyecto.py` vigilan todo esto.
+**Historial de gasto entero sin clics** (Daniel 2026-10-13: «la idea es que salga todo»; happyflops tiene 1 181
+filas, ~340 bytes cada una, que pintadas en la página le sumaban ~400 KB a cada carga del proyecto): Configuración ›
+Gasto llega con 24 filas y su botón «Ver todo» (`_gasto_mas.html`) lleva `data-auto`; un `IntersectionObserver` de
+`base.html` lo pulsa al entrar en pantalla (una pestaña oculta nunca entra: en Crear no se pide nada) y
+`gasto_lista?todo=1` trae el resto en UN pedido, dentro de la caja con scroll `.gasto-historial`. `GASTO_TODO_MAX`
+(5000) solo corta una respuesta enorme y deja otro «Ver todo». Sin `todo`, `gasto_lista` sigue de a 24. Ojo al
+probarlo: con el panel del navegador oculto `innerHeight` es 0 y el observador nunca dispara (emula un tamaño con
+`resize_window`). Prueba: `tests/test_cobros_uso_previo.py::test_history_llega_liviano_y_el_resto_se_pide_solo_de_una_vez`. Fuera de
 alcance (anotado en el spec §7): el JS embebido a estáticos, Experimentos por fragmentos (**hecho el
 2026-10-03**: ver «Experimentos: armazón + fragmento»; Catálogo ya carga su galería y su ficha por fragmento desde
 2026-09-30: ver «Catálogo ecommerce y conectores»), el chequeo de Meta en la carga, los N+1 de Sprints/Experimentos

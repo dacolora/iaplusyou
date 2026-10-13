@@ -36,7 +36,7 @@ def _gastos():
 def test_tarea_guarda_el_resultado_y_registra_whisper_y_claude(en_cola, monkeypatch):
     recibido = {}
 
-    def _analizar(texto, imagenes, idioma, verificable_extra="", duracion_s=None, verificable=None, segundos_vistos=None):
+    def _analizar(texto, imagenes, idioma, verificable_extra="", duracion_s=None, verificable=None, segundos_vistos=None, tipo="video"):
         recibido.update(texto=texto, imagenes=imagenes, extra=verificable_extra)
         return mejorar.parsear(respuesta(), texto), 10000, 5000
     monkeypatch.setattr(mejorar, "analizar", _analizar)
@@ -96,7 +96,7 @@ def test_whisper_caido_sigue_sin_voz(en_cola, monkeypatch):
     def _cae(foto_):
         raise RuntimeError("fal caído")
     monkeypatch.setattr(mejorar, "transcribir", _cae)
-    monkeypatch.setattr(mejorar, "analizar", lambda texto, imagenes, idioma, verificable_extra="", duracion_s=None, verificable=None, segundos_vistos=None: (
+    monkeypatch.setattr(mejorar, "analizar", lambda texto, imagenes, idioma, verificable_extra="", duracion_s=None, verificable=None, segundos_vistos=None, tipo="video": (
         mejorar.parsear(respuesta(), texto), 100, 50))
     en_cola["t"].tw_analizar_anuncio({"id": 3, "payload": {"cliente": "acme", "analisis_id": en_cola["aid"]}})
     fila = datos.analisis_anuncio("acme", en_cola["aid"])
@@ -189,7 +189,7 @@ def test_encolar_rechaza_ids_invalidos_sin_encolar(en_cola):
 
 
 def _analizar_bien(monkeypatch):
-    monkeypatch.setattr(mejorar, "analizar", lambda texto, imagenes, idioma, verificable_extra="", duracion_s=None, verificable=None, segundos_vistos=None: (
+    monkeypatch.setattr(mejorar, "analizar", lambda texto, imagenes, idioma, verificable_extra="", duracion_s=None, verificable=None, segundos_vistos=None, tipo="video": (
         mejorar.parsear(respuesta(), texto), 10000, 5000))
 
 
@@ -279,7 +279,7 @@ def test_la_tarea_pasa_la_duracion_y_sin_fotogramas_no_deja_ganchos(en_cola, mon
     from tests.test_tw_mejorar import COPY_NUEVO, GANCHOS
     recibido = {}
 
-    def _analizar(texto, imagenes, idioma, verificable_extra="", duracion_s=None, verificable=None, segundos_vistos=None):
+    def _analizar(texto, imagenes, idioma, verificable_extra="", duracion_s=None, verificable=None, segundos_vistos=None, tipo="video"):
         recibido["duracion_s"] = duracion_s
         return mejorar.parsear(respuesta(ganchos=GANCHOS, copy_nuevo=COPY_NUEVO), texto, duracion_s=duracion_s), 100, 50
     monkeypatch.setattr(mejorar, "analizar", _analizar)
@@ -344,3 +344,23 @@ def test_la_tarea_le_pasa_a_analizar_los_segundos_de_los_fotogramas_que_claude_v
     en_cola["t"].tw_analizar_anuncio({"id": 24, "payload": {"cliente": "acme", "analisis_id": en_cola["aid"]}})
     assert recibido["segundos_vistos"] == [0.3, 11.84, 15.7]
     assert datos.analisis_anuncio("acme", en_cola["aid"])["resultado"]["ganchos"][0]["fotograma_s"] == 11.84
+
+
+def test_un_anuncio_de_imagen_se_analiza_como_imagen_y_su_version_lo_dice(en_cola, monkeypatch):
+    """Pedido de Daniel (2026-10-13): la tarea le dice a `analizar` que el anuncio es una imagen fija (lo decide la foto,
+    no lo que Claude miró), y la versión guardada queda `tipo = "imagen"` con el prompt que pide editarla."""
+    from tests.test_tw_mejorar import _foto_imagen
+    llamadas = []
+
+    def _llamar(content, system_):
+        llamadas.append(content)
+        return respuesta(), 100, 50, "end_turn"
+    monkeypatch.setattr(mejorar, "_llamar", _llamar)
+    monkeypatch.setattr(mejorar, "visuales", lambda foto_: ({"bloques": [], "clase": "imagen", "fotogramas": 0}, []))
+    aid = datos.crear_analisis("acme", None, "facebook-ads", "p9", "2026-09-01", "2026-09-30", "USD", _foto_imagen())
+    en_cola["t"].tw_analizar_anuncio({"id": 31, "payload": {"cliente": "acme", "analisis_id": aid}})
+    assert "EDITAR la imagen del anuncio" in llamadas[0][0]["text"] and "comillas" in llamadas[0][-1]["text"]
+    assert datos.analisis_anuncio("acme", aid)["resultado"]["version"]["tipo"] == "imagen"
+    en_cola["t"].tw_analizar_anuncio({"id": 32, "payload": {"cliente": "acme", "analisis_id": en_cola["aid"]}})
+    assert "EDITAR" not in llamadas[1][0]["text"]                       # el de video, como siempre
+    assert datos.analisis_anuncio("acme", en_cola["aid"])["resultado"]["version"]["tipo"] == "video"
