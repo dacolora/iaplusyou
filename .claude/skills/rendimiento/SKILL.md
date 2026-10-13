@@ -338,6 +338,33 @@ coordinador en `.superpowers/sdd/2026-10-10-pestana-rendimiento-e2/final-fixes.m
   envío de «Probar los ganchos» se frena antes del fetch).
 - Diferido: PND-290 a PND-295. Cerrados el 2026-10-12: PND-290 (evaluación de Meta para todas las cuentas, arriba), PND-286 (texto ajeno delimitado en «Evaluar con IA») y PND-294 (días que no abren, `sin_dia`); PND-295 quedó solo con el aprendizaje que guarda el nombre del anuncio (decide Daniel).
 
+## Las métricas que faltaban (2026-10-13)
+
+Por qué: Daniel mandó un informe por país hecho con Triple Whale («Happy Flops October Performance») y pidió esas
+métricas en la pestaña, «desde Triple Whale». Spec `docs/superpowers/specs/2026-10-13-rendimiento-metricas-que-faltaban-design.md`
+(§9: lo que cambió con los datos reales), plan al lado en `plans/`, pruebas `tests/test_rendimiento_destacados.py`.
+
+- **Qué**: dos tiles más en `tiles_anuncios` («ROAS de clientes nuevos» = `m.nc_roas`; «Tasa de conversión» =
+  `m.cv_sesion` = pedidos / sesiones del Pixel, distinta de `m.conversion`, que es por clic y alimenta el anillo
+  «Compra»), y `templates/_rend_destacados.html`: «Los mejores para iterar», «Los que mejor convierten», «Mejores
+  imágenes» y «Mejores videos» (`listas`, debajo de «Tus anuncios») y «Productos en tus anuncios» (`productos`, dentro
+  de `resto`, después de «Lo que más se vende», que no cambia: aquella es la tienda, esta los anuncios).
+- **Cálculo**: `triple_whale/destacados.py`, puro salvo `armar(cliente, tw)`; parte de `tw["ev"]["anuncios"]` (país,
+  periodo y canal de la pestaña). Lo pone `panel.contexto()["destacados"]` SOLO con fuente "tw" (como los tiles): con
+  Meta o mezcla no hay sesiones, ventas a clientes nuevos ni página de destino.
+- **Producto de un anuncio**: su página `/products/<handle>` contra el `url_compra` del Catálogo, primero tal cual y
+  después sin el `-<dígitos>` que Shopify agrega en otra tienda (sin guiones en los dos casos; así `-pack` y `-pack-2`
+  del Catálogo no se juntan); si no, un nombre del Catálogo dentro del nombre del anuncio (el más largo, y gana a una
+  página que no está en el Catálogo); si no, el handle; si no, «Otros». Productos: top 10 + «Otros»; la suma de su
+  gasto es la del tile «Gasto». ROAS «0,0×» con gasto y sin ventas; «—» solo sin gasto.
+- **Mínimos**: iterar = ROAS ≥ el de los anuncios del alcance y ≥ 10 compras; conversión = ≥ 100 sesiones y ≥ 3
+  compras; topes 8 / 8 / 6 por tipo. Las listas y las tarjetas solo miran anuncios con gasto (Google Ads trae filas
+  «(not set)»/«sag_organic» con ventas y gasto 0).
+- **Tipo**: `tw_creativo.tipo` (`datos.tipos_creativo`, UNA consulta); sin tipo: video con vistas de 3 s, imagen en Meta,
+  y en otro canal «—» y fuera de las tarjetas (un anuncio de búsqueda de Google no es una imagen).
+- **Lecturas fijas**: tipos, Catálogo y los creativos de las ≤ 12 tarjetas
+  (`test_las_consultas_del_panel_no_crecen_con_los_anuncios`). No cobra ni llama a nadie.
+
 ## Trampas
 
 - Lo que se jubiló el 2026-10-10 con la galería única (no lo revivas): ver «E2 tarea 4»; con la evaluación de la

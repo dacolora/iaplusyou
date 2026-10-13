@@ -682,3 +682,25 @@ copia ni su nombre: esa copia se borra al soltar la cuenta (promesa de /eliminar
 (`formato_mas_cercano`). Si no se puede copiar (o R2 está caído), aviso en palabras y nada cambia. Un análisis de antes (sin `version.tipo`) sigue
 siendo de video. Pruebas: `tests/test_tw_mejorar.py` (estático, prompt, cierre, parseo),
 `tests/test_tw_tarjetas_rutas.py` («Llevar a Crear» de una imagen) y `tests/test_tw_tarjetas_tarea.py`.
+
+**Idioma y claves internas en los tres prompts que escriben un análisis (2026-10-13, PND-218 y PND-306).** «Cómo
+mejorarlo», «Evaluar con IA» (`analisis.analizar`) y la «Evaluación con IA» de Meta (`meta_rendimiento.analisis`) cierran
+el mensaje, después de las imágenes, con `analisis.cierre_idioma(idioma, campos, fijos, excepciones_en=,
+excepciones_es=)`: en inglés la orden va escrita en inglés, nombra los campos que se escriben en el idioma del proyecto
+y pide conservar tal cual los valores de lista cerrada (`etapa`, `consciencia`, `accion`, `anillo`, `mueve`, y
+`consciencia`/`lead`/`fuente` del ángulo: `FIJOS_ANGULO`), porque traducidos no validan; en español, la orden de
+siempre. Y los datos del prompt nunca llevan una clave interna: veredicto, tendencia, señales y anillos sin dato pasan
+por `evaluacion.texto_clave`, que da su texto (`ETIQUETAS_VEREDICTO`, `TENDENCIAS`, `FORTALEZAS`, `PROBLEMAS`,
+`VACIOS_ANILLO`) en el idioma activo, que en el worker es el del proyecto (`worker.ejecutar`); una clave desconocida sale
+tal cual. **Lo verificable NO**: `mejorar.datos_verificables` sigue con la clave (`mejorar._clave`), porque los textos
+traen palabras que `ofertas_sin_dato` toma por una oferta de los datos («En prueba», «No spend in the last 7 days») y
+un gancho con «Prueba 7 días» inventado se generaría y se cobraría (revisión del gasto, 2026-10-13). Un script que arme estos prompts fuera del worker los arma dentro de `idiomas.en_idioma(idioma)`, nunca con una
+app de Flask propia sin catálogo (la medición lo pagó: mandó «Se está cansando» en un prompt en inglés). Medido:
+`docs/superpowers/evals/2026-10-13-evaluaciones-idioma-y-claves.md` (con lo que cuesta cada llamada, lo que paga el
+cliente y lo que ganamos).
+
+**Rendimiento: las métricas que faltaban (2026-10-13).** `triple_whale/destacados.py` arma, desde los anuncios ya
+evaluados del panel, productos con gasto y ROAS (por la página de destino contra el Catálogo), los mejores para
+iterar, los que mejor convierten (`metricas()["cv_sesion"]` = pedidos / sesiones; `resumen_cuenta` ahora suma
+`sesiones`) y las mejores imágenes y videos (`datos.tipos_creativo(cliente)`: `{(canal, ad_id): tipo}` en una
+consulta). Detalle y reglas en la skill `rendimiento`, «Las métricas que faltaban».

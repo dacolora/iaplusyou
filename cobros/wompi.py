@@ -164,10 +164,16 @@ def base_url():
 
 # ------------------------------------------------------------- HTTP ---
 
+# Wompi lo dice en español («La referencia ya ha sido usada», visto en el sandbox el 2026-10-13) o en inglés
+# («The reference has already been used», la doc): solo buscar «already» lo tomaba por un rechazo cualquiera.
+_SENALES_REFERENCIA_USADA = ("already", "ya ha sido usada", "ya fue usada", "ya se usó")
+
+
 def _referencia_usada(datos):
     try:
         mensajes = (datos.get("error") or {}).get("messages") or {}
-        return any("already" in str(m).lower() for m in (mensajes.get("reference") or []))
+        return any(senal in str(m).lower() for m in (mensajes.get("reference") or [])
+                   for senal in _SENALES_REFERENCIA_USADA)
     except AttributeError:
         return False
 

@@ -90,8 +90,20 @@ NIVEL_ALTO = 67
 NIVEL_MEDIO = 34
 TENDENCIAS = {"cansando": N_("Se está cansando"), "mejorando": N_("Mejorando"),
               "sin_gasto": N_("Sin gasto estos 7 días"), "estable": N_("Estable")}
+# Las claves internas que viajan en los prompts de Claude (veredicto, tendencia, señales, anillo sin dato) con su texto
+# (PND-306, 2026-10-13): en un proyecto en inglés, «Cómo mejorarlo» citaba «(trend: cansando)». Sin choques entre ellas.
+_TEXTO_CLAVE = {**ETIQUETAS_VEREDICTO, **TENDENCIAS, **FORTALEZAS, **{k: v[0] for k, v in PROBLEMAS.items()},
+                **VACIOS_ANILLO}
 SUBIDA_ROAS_MEJORA = 0.20
 SUBIDA_CTR_MEJORA = 0.25
+
+
+def texto_clave(clave):
+    """El texto de una clave interna (veredicto, tendencia, señal o anillo sin dato) en el idioma activo, para un
+    prompt de Claude: el worker corre cada tarea en el idioma de su proyecto (`worker.ejecutar`). Una clave que no está
+    en la lista sale tal cual (un dato nuevo no rompe el prompt)."""
+    mensaje = _TEXTO_CLAVE.get(clave)
+    return gettext(mensaje) if mensaje else clave
 
 
 # ----------------------------------------------------------- números ---
@@ -131,6 +143,9 @@ def metricas(t):
     m["ticket"] = _div(m["ingresos"], m["pedidos"])
     base_clics = m["clics_salida"] or m["clics"]
     m["conversion"] = _div(m["pedidos"], base_clics)
+    # Compras / sesiones del Pixel: la «tasa de conversión» de la tienda (spec 2026-10-13 §4.3). `conversion` (por clic)
+    # es otra cifra, la del anillo «Compra», y no cambia.
+    m["cv_sesion"] = _div(m["pedidos"], m["sesiones"])
     m["roas_canal"] = _div(m["valor_canal"], m["gasto"])
     m["es_video"] = bool(m["vistas_3s"] or m["thruplays"])
     # NVP y etapa del embudo (spec 2026-10-09-nvp-visitantes-nuevos §2): una lectura, no entra al veredicto.
@@ -407,7 +422,8 @@ def evaluar(totales, recientes=None, previos=None, reglas=None):
 def resumen_cuenta(anuncios):
     """Totales de los anuncios del periodo, reparto del gasto por veredicto y por canal."""
     total = {k: sum(a["m"][k] for a in anuncios) for k in ("gasto", "impresiones", "clics", "pedidos", "ingresos",
-                                                           "nc_pedidos", "nc_ingresos", "vistas_3s", "thruplays")}
+                                                           "nc_pedidos", "nc_ingresos", "vistas_3s", "thruplays",
+                                                           "sesiones")}
     m = metricas(total)
     gasto = total["gasto"]
     por_veredicto = {v: sum(a["m"]["gasto"] for a in anuncios if a["veredicto"] == v) for v in VEREDICTOS}

@@ -9,6 +9,7 @@
    Campañas y conjuntos, resto (reparto, productos, «Ver como tabla»). «Evaluar con IA», «Cómo mejorarlo» y el lote
    postean a las rutas de la pestaña (pestana_rendimiento/rutas.py) con sus `params`. #}
 {% import "_componentes.html" as cx %}
+{% import "_rend_destacados.html" as dst %}
 
 {#- Los errores de copia de las tiendas del alcance. La barra de las copias en curso la pinta _rend_panel.html: una sola
     para las dos fuentes (`r.copias_vivas`, revisión final de E1). -#}
@@ -63,6 +64,9 @@
   <div class="kpi-tile"><span>{{ _('Costo por venta') }}</span><strong>{% if m.cpa %}{{ m.cpa | dinero(moneda) }}{% else %}—{% endif %}</strong><small>{{ _('gasto / pedidos atribuidos') }}</small></div>
   <div class="kpi-tile"><span>CTR</span><strong>{{ m.ctr | tw_pct(2, false) }}</strong><small>{{ _('CPM %(cpm)s', cpm=(m.cpm | dinero(moneda)) if m.cpm else '—') }}</small></div>
   <div class="kpi-tile" title="{{ _('Gancho: vistas de 3 segundos / impresiones. Retención: ThruPlays / vistas de 3 segundos.') }}"><span>{{ _('Gancho · retención') }}</span><strong>{{ m.gancho | tw_pct(0) }}</strong><small>{{ _('retención %(r)s', r=m.retencion | tw_pct(0)) }}</small></div>
+  {#- Las métricas que faltaban (spec 2026-10-13): ventas a clientes nuevos / gasto y compras / sesiones del Pixel. -#}
+  <div class="kpi-tile" title="{{ _('Ventas a clientes nuevos que el Triple Pixel atribuye a los anuncios, divididas por el gasto') }}"><span>{{ _('ROAS de clientes nuevos') }}</span>{% if m.nc_roas %}<strong>{{ m.nc_roas | roas }}×</strong>{% else %}<strong class="tb-sin-dato">—</strong>{% endif %}<small>{{ _('%(n)s pedidos de clientes nuevos', n=m.nc_pedidos | tw_num(1)) }}</small></div>
+  <div class="kpi-tile" title="{{ _('Compras atribuidas a los anuncios divididas por las sesiones que trajeron') }}"><span>{{ _('Tasa de conversión') }}</span>{% if m.cv_sesion is not none %}<strong>{{ m.cv_sesion | tw_pct(2) }}</strong>{% else %}<strong class="tb-sin-dato">—</strong>{% endif %}<small>{{ _('%(n)s sesiones', n=m.sesiones | tw_num) }}</small></div>
 </div>
 {%- endmacro %}
 
@@ -201,7 +205,7 @@
 {%- endmacro %}
 
 {#- «Dónde se va el gasto», «Lo que más se vende» y «Ver como tabla» (con Pausar/Activar de las piezas de Creatv). -#}
-{% macro resto(tw, cliente) -%}
+{% macro resto(tw, cliente, destacados=None) -%}
 {%- set clases_veredicto = {"ganador": "tag-en-uso", "prometedor": "tag-en-curso", "en_prueba": "", "perdedor": "tag-descartado", "sin_datos": "tag-advertencia"} -%}
 {% set moneda = tw.moneda %}
 {% set ev = tw.ev %}
@@ -260,6 +264,9 @@
   </div>
 </section>
 {% endif %}
+
+{# ---------- productos en tus anuncios (spec 2026-10-13): solo con fuente "tw" ---------- #}
+{{ dst.productos(destacados) }}
 
 {# ---------- todos los anuncios ---------- #}
 <details class="tw-tabla-detalle" id="tw-cada-anuncio"><summary>{{ _('Ver como tabla') }}</summary>

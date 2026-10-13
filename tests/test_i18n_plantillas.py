@@ -70,7 +70,7 @@ PLANTILLAS_TRADUCIDAS = [
     "_meta_cuentas.html", "_meta_conjuntos_filas.html", "_meta_macros.html",
     # Pestaña Rendimiento (spec 2026-10-09): armazón, panel, sus macros y las secciones que heredó de las pestañas
     # Triple Whale y Meta (las tarjetas de fuente Meta de E1 se fueron con la galería única de E2, tarea 4).
-    "_tab_rendimiento.html", "_rend_panel.html", "_rend_macros.html",
+    "_tab_rendimiento.html", "_rend_panel.html", "_rend_macros.html", "_rend_destacados.html",
     "_tw_secciones.html", "_meta_secciones.html",
     # Meta rendimiento E2 (main, 2026-10-10; desde la integración los incluye la pestaña Rendimiento).
     "_meta_diagnostico.html", "_meta_segmentos.html",   # Diagnóstico y Segmentos

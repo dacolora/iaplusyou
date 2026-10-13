@@ -102,8 +102,9 @@
     // viejo, el guardado y los redirect(_anchor=...) viejos abren esa pestaña.
     // 'nicho' (2026-10-13) es la sub-pestaña Nicho de Sprints: el hash (la vuelta
     // de nicho.rutas, la miga, los enlaces guardados) y el guardado abren Sprints
-    // y dejan elegida esa sub-pestaña; _tab_sprints.html la muestra al terminar de
-    // cargar la página, después de este script.
+    // y dejan elegida esa sub-pestaña. El script de _tab_sprints.html corre antes que
+    // este y ya eligió con el hash; sin hash, vuelve a elegir en DOMContentLoaded y
+    // lee lo que este guardó (así un localStorage de antes del cambio abre Nicho).
     var JUBILADAS = { triplewhale: 'rendimiento', meta: 'rendimiento' };
     function resolver(t) {
       if (t && Object.prototype.hasOwnProperty.call(JUBILADAS, t)) return JUBILADAS[t];

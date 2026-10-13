@@ -113,6 +113,10 @@ Pruebas nuevas (`tests/test_nicho_en_sprints.py`):
 4. El número de avatares nuevos aparece en la sub-pestaña cuando hay propuestos y no aparece cuando no hay.
 5. Crear un estudio con error vuelve a `#nicho` (la vuelta de siempre) y la miga de un estudio lleva a `#sprints` y
    `#nicho`.
+6. (Revisión final, ruling 8) Los dos scripts reales juntos en Node, en el orden del navegador (sub-pestaña con
+   `readyState = 'loading'`, después `cliente.html`, después `DOMContentLoaded`): con `#nicho` Nicho ya se ve al
+   terminar `cliente.html`; un `localStorage` viejo con `tab-activa = nicho` termina en Nicho; `#sprints` gana a la
+   guardada. Caza quitar el segundo intento en `DOMContentLoaded` y elegir solo en él.
 
 Antes de dar por bueno: captura real en escritorio y en celular (375 px) de Sprints › Sprints y Sprints › Nicho, sin
 desplazamiento lateral (regla 4 de CLAUDE.md: las tarjetas «en escalera» de 2026-09-28 pasaron todas las pruebas).

@@ -247,7 +247,7 @@ def test_tarea_evaluar_manda_los_fotogramas_de_una_pieza_de_creatv_y_borra_el_te
     fila = datos.evaluacion("acme", e["eid"])
     pieza = fila["anuncios"][1]
     assert pieza["visual"] == "fotogramas" and pieza["medio"]["origen"] == "creatv"
-    assert "Fotogramas de A2 (ganador), en orden:" in [b.get("text") for b in recibido["imagenes"]]
+    assert "Fotogramas de A2 (Ganador), en orden:" in [b.get("text") for b in recibido["imagenes"]]
     assert "(abajo van los fotogramas de su video)" in recibido["texto"]
 
 
@@ -533,3 +533,37 @@ def test_el_prefill_lleva_su_proyecto_y_un_campo_que_no_es_texto_no_llega_como_r
     assert analisis._texto(12, 50) == "12" and analisis._texto("  dos   palabras ", 50) == "dos palabras"
     r = analisis.parsear(respuesta(ideas=[{"titulo": "Uno", "prompt": {"p": 1}}]), {"A1", "A2", "A3"}, "")
     assert r["ideas"] == []
+
+
+# ------------------------------- PND-218 y PND-306 (2026-10-13): idioma y claves internas en el prompt ---
+
+def test_texto_clave_da_el_texto_de_cada_clave_en_el_idioma_activo():
+    import idiomas
+    from triple_whale import evaluacion
+    assert evaluacion.texto_clave("cansando") == "Se está cansando" and evaluacion.texto_clave("perdedor") == "Perdedor"
+    assert evaluacion.texto_clave("gancho_debil") == "Gancho débil" and evaluacion.texto_clave("retiene") == "Retiene"
+    assert evaluacion.texto_clave("sin_video") == "sin datos de video"
+    assert evaluacion.texto_clave("clave_nueva") == "clave_nueva" and evaluacion.texto_clave(None) is None
+    with idiomas.en_idioma("en"):
+        assert [evaluacion.texto_clave(k) for k in ("cansando", "perdedor", "gancho_debil", "sin_video")] == [
+            "Fatiguing", "Loser", "Weak hook", "no video data"]
+
+
+def test_analizar_cierra_con_la_orden_de_idioma_y_conserva_los_valores_fijos(monkeypatch):
+    import idiomas
+    m = analisis.muestra(_ev())
+    llamadas = []
+
+    def _llamar(content, system_):
+        llamadas.append(content)
+        return respuesta(), 100, 50
+    monkeypatch.setattr(analisis, "_llamar", _llamar)
+    monkeypatch.setattr(analisis, "system", lambda idioma: "SYSTEM")
+    analisis.analizar("Acme", {"desde": "a", "hasta": "b"}, m, {}, "en")
+    cierre = llamadas[0][-1]["text"]
+    assert cierre.startswith("LANGUAGE: write every text field of your JSON in English") and '"resumen"' in cierre
+    assert '"etapa"' in cierre and '"lead"' in cierre and "exactly as the instructions list them" in cierre
+    analisis.analizar("Acme", {"desde": "a", "hasta": "b"}, m, {}, "es")
+    assert llamadas[1][-1]["text"] == idiomas.orden_idioma("es")
+    # el bloque del anuncio dice el veredicto y las señales por su texto, no por su clave
+    assert "veredicto: Ganador" in llamadas[0][0]["text"] and "veredicto: ganador" not in llamadas[0][0]["text"]
