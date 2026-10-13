@@ -130,8 +130,8 @@ def _fila(html, marca):
 
 
 def _pestana(html):
-    """La pestaña Rendimiento de la página del proyecto (hasta la siguiente, Nicho)."""
-    return html[html.index('id="tab-rendimiento"'):html.index('id="tab-nicho"')]
+    """La pestaña Rendimiento de la página del proyecto (hasta la siguiente, Referentes)."""
+    return html[html.index('id="tab-rendimiento"'):html.index('id="tab-referentes"')]
 
 
 def _sin_scripts(html):
@@ -161,8 +161,8 @@ def test_sin_conectar_la_pestana_invita_a_conectar_y_no_calcula_el_panel(app, mo
     assert "/rendimiento/panel" not in pestana and "/meta-rendimiento/cuentas" not in pestana
     # El enlace «#meta» de la tarjeta de Conexiones (y uno guardado) abre Rendimiento (cliente.html lo traduce).
     assert "meta: 'rendimiento'" in html
-    # La pestaña va donde estaban Triple Whale y Meta en la barra lateral: después de Alertas, antes de Nicho.
-    assert html.index('data-tab="alertas"') < html.index('data-tab="rendimiento"') < html.index('data-tab="nicho"')
+    # La pestaña va donde estaban Triple Whale y Meta en la barra lateral: después de Alertas, antes de Referentes.
+    assert html.index('data-tab="alertas"') < html.index('data-tab="rendimiento"') < html.index('data-tab="referentes"')
 
 
 def test_conectado_sin_cuentas_pide_el_selector(conectado, monkeypatch):

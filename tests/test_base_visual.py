@@ -16,6 +16,13 @@ def _pestana(html, tab):
     return html[ini:sig if sig > 0 else len(html)]
 
 
+def _sprints_y_nicho(html):
+    """Desde 2026-10-13 Nicho es la sub-pestaña de Sprints (spec nicho-dentro-de-sprints): (lista de sprints, Nicho)."""
+    sp = _pestana(html, "sprints")
+    i = sp.index('id="sprints-sub-nicho"')
+    return sp[:i], sp[i:]
+
+
 def test_pagina_de_proyecto_sin_titulo_grande(app):
     html = _pagina(app)
     assert 'id="titulo-seccion"' not in html and 'class="pagina-cabecera"' not in html
@@ -55,7 +62,7 @@ def test_clases_de_encabezado_y_estado_vacio():
 
 
 # El Tablero se fundió en Experimentos (E2, 2026-10-02): ya no es pestaña.
-PESTANAS = [("alertas", "Alertas"), ("nicho", "Nicho"), ("referentes", "Referentes"),
+PESTANAS = [("alertas", "Alertas"), ("referentes", "Referentes"),
             ("creativeflowplus", "Crear"), ("final", "Final edition"), ("experimentos", "Probar anuncios"), ("sprints", "Sprints"),
             ("catalogo", "Catálogo"), ("settings", "Configuración")]
 
@@ -69,7 +76,10 @@ def test_cada_pestana_abre_con_su_encabezado(app):
         assert f"<h2>{titulo}" in p, tab
         assert 'class="panel-cabecera-desc"' in p, tab
     assert 'data-abrir-detalle="alta-sprint"' in _pestana(html, "sprints")
-    assert 'data-abrir-detalle="nuevo-estudio"' in _pestana(html, "nicho")
+    ni = _sprints_y_nicho(html)[1]                  # Nicho ya no es pestaña: es la sub-pestaña de Sprints
+    assert 'class="panel-cabecera' in ni and ni.index('class="panel-cabecera') < ni.index("<h2")
+    assert "<h2>Nicho" in ni and 'class="panel-cabecera-desc"' in ni
+    assert 'data-abrir-detalle="nuevo-estudio"' in ni
     rf = _pestana(html, "referentes")
     cabecera = rf[rf.index('class="panel-cabecera'):rf.index("<dialog")]
     assert 'id="btn-traer-referentes"' in cabecera and "panel-cabecera-acciones" in cabecera
@@ -77,7 +87,8 @@ def test_cada_pestana_abre_con_su_encabezado(app):
 
 def test_estados_vacios_con_accion(app, monkeypatch):
     html = _pagina(app)
-    sp, ni, rf = (_pestana(html, t) for t in ("sprints", "nicho", "referentes"))
+    sp, ni = _sprints_y_nicho(html)
+    rf = _pestana(html, "referentes")
     # Sprints y Nicho: el botón del encabezado y el formulario de abajo bastan
     # (tres «+ Nuevo …» en la misma pantalla sobraban).
     assert 'class="estado-vacio"' in sp and sp.count('data-abrir-detalle="alta-sprint"') == 1

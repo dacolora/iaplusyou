@@ -14,10 +14,6 @@
   {% include "_tab_rendimiento.html" %}
 </section>
 
-<section id="tab-nicho" class="tab-panel" role="tabpanel">
-  {% include "_tab_nicho.html" %}
-</section>
-
 <section id="tab-referentes" class="tab-panel" role="tabpanel">
   {% include "_tab_referentes.html" %}
 </section>
@@ -57,7 +53,6 @@
     var paneles = {
       alertas: document.getElementById('tab-alertas'),
       rendimiento: document.getElementById('tab-rendimiento'),
-      nicho: document.getElementById('tab-nicho'),
       referentes: document.getElementById('tab-referentes'),
       creativeflowplus: document.getElementById('tab-creativeflowplus'),
       final: document.getElementById('tab-final'),
@@ -105,12 +100,20 @@
     // guardado) abre Experimentos, donde quedan los anuncios sueltos.
     // 'triplewhale' y 'meta' (2026-10-09) se juntaron en Rendimiento: el hash
     // viejo, el guardado y los redirect(_anchor=...) viejos abren esa pestaña.
+    // 'nicho' (2026-10-13) es la sub-pestaña Nicho de Sprints: el hash (la vuelta
+    // de nicho.rutas, la miga, los enlaces guardados) y el guardado abren Sprints
+    // y dejan elegida esa sub-pestaña; _tab_sprints.html la muestra al terminar de
+    // cargar la página, después de este script.
     var JUBILADAS = { triplewhale: 'rendimiento', meta: 'rendimiento' };
     function resolver(t) {
       if (t && Object.prototype.hasOwnProperty.call(JUBILADAS, t)) return JUBILADAS[t];
       // «#config-ap-saldo» (el «Recargar» de un aviso sin saldo, la vuelta del
       // pago): un apartado de Configuración abre esa pestaña; su script lo enfoca.
       if (t && t.indexOf('config-') === 0) return 'settings';
+      if (t === 'nicho') {
+        try { localStorage.setItem('sprints-sub-{{ cliente }}', 'nicho'); } catch (e) {}
+        return 'sprints';
+      }
       if (t === 'idea') return 'creativeflowplus';
       if (t === 'productos') return 'catalogo';
       if (t === 'ads' || t === 'tablero') return 'experimentos';
