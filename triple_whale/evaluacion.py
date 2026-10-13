@@ -143,6 +143,9 @@ def metricas(t):
     m["ticket"] = _div(m["ingresos"], m["pedidos"])
     base_clics = m["clics_salida"] or m["clics"]
     m["conversion"] = _div(m["pedidos"], base_clics)
+    # Compras / sesiones del Pixel: la «tasa de conversión» de la tienda (spec 2026-10-13 §4.3). `conversion` (por clic)
+    # es otra cifra, la del anillo «Compra», y no cambia.
+    m["cv_sesion"] = _div(m["pedidos"], m["sesiones"])
     m["roas_canal"] = _div(m["valor_canal"], m["gasto"])
     m["es_video"] = bool(m["vistas_3s"] or m["thruplays"])
     # NVP y etapa del embudo (spec 2026-10-09-nvp-visitantes-nuevos §2): una lectura, no entra al veredicto.
@@ -419,7 +422,8 @@ def evaluar(totales, recientes=None, previos=None, reglas=None):
 def resumen_cuenta(anuncios):
     """Totales de los anuncios del periodo, reparto del gasto por veredicto y por canal."""
     total = {k: sum(a["m"][k] for a in anuncios) for k in ("gasto", "impresiones", "clics", "pedidos", "ingresos",
-                                                           "nc_pedidos", "nc_ingresos", "vistas_3s", "thruplays")}
+                                                           "nc_pedidos", "nc_ingresos", "vistas_3s", "thruplays",
+                                                           "sesiones")}
     m = metricas(total)
     gasto = total["gasto"]
     por_veredicto = {v: sum(a["m"]["gasto"] for a in anuncios if a["veredicto"] == v) for v in VEREDICTOS}

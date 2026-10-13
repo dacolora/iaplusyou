@@ -1,0 +1,449 @@
+"""Las métricas que faltaban en Rendimiento (spec 2026-10-13-rendimiento-metricas-que-faltaban): productos con gasto y
+ROAS, los mejores para iterar, los que mejor convierten y las mejores imágenes y videos, todo desde la copia de Triple
+Whale."""
+import re
+
+import pytest
+
+from tests.test_rutas_configuracion import app  # noqa: F401  (fixture)
+from tests.test_rutas_rendimiento import meta_on  # noqa: F401  (fixture)
+from triple_whale import destacados as D
+from triple_whale import evaluacion
+
+CATALOGO = [
+    {"id": 32, "nombre": "HappyCozy", "url_compra": "https://www.happyflops.com/products/happyflops-cozy"},
+    {"id": 37, "nombre": "HappyCushers", "url_compra": "https://www.happyflops.com/products/happycushers"},
+    {"id": 27, "nombre": "HappyFlops Original", "url_compra": "https://www.happyflops.com/products/happyflops"},
+    {"id": 39, "nombre": "HappyComfy", "url_compra": "https://www.happyflops.com/products/happycomfy"},
+    {"id": 50, "nombre": "HappyFlops", "url_compra": None},
+]
+INDICE = D.catalogo_indice(CATALOGO)
+
+
+def _a(ad_id, nombre=None, destino=None, canal="facebook-ads", **campos):
+    """Un anuncio con la forma de `evaluacion.evaluar(...)["anuncios"]`. Con gasto 1 si no se dice: las listas solo
+    miran anuncios con gasto (§9)."""
+    campos.setdefault("gasto", 1)
+    return {"canal": canal, "ad_id": ad_id, "nombre": nombre or ad_id, "destino_url": destino, "video_url": None,
+            "creatv": None, "veredicto": "sin_datos", "m": evaluacion.metricas(campos)}
+
+
+# ------------------------------------------------------------------------------------------- producto ---
+
+def test_el_handle_sale_de_la_pagina_de_producto_sin_el_sufijo_de_otra_tienda():
+    assert D.handle("https://happyflops.no/products/happyflops-cozy-1?variant=123") == "happyflops-cozy"
+    assert D.handle("https://happyflops.no/products/Happy-Cushers/") == "happy-cushers"
+    assert D.handle("https://happyflops.co/products/happyflops-original-drop-002") == "happyflops-original-drop"
+    assert D.handle("https://happyflops.no/collections/sale") is None
+    assert D.handle("") is None and D.handle(None) is None
+
+
+def test_el_producto_sale_de_la_pagina_aunque_otra_tienda_le_ponga_numero_o_guiones():
+    assert D.producto_de(_a("1", destino="https://x.no/products/happyflops-cozy-1"), INDICE)["nombre"] == "HappyCozy"
+    assert D.producto_de(_a("2", destino="https://x.no/products/happy-cushers"), INDICE)["nombre"] == "HappyCushers"
+    p = D.producto_de(_a("3", destino="https://x.se/products/happyflops-1"), INDICE)
+    assert p == {"clave": "p27", "nombre": "HappyFlops Original", "producto_id": 27}
+
+
+def test_sin_pagina_el_nombre_del_anuncio_lo_ubica_y_gana_el_nombre_mas_largo():
+    assert D.producto_de(_a("1", nombre="SC | HAPPYCOMFY - STATICS - CAROUSEL"), INDICE)["nombre"] == "HappyComfy"
+    largo = D.producto_de(_a("2", nombre="HAPPYFLOPS ORIGINAL - W32 - sale"), INDICE)
+    assert largo["nombre"] == "HappyFlops Original"
+    assert D.producto_de(_a("3", nombre="HAPPYFLOPS - W32 - sale"), INDICE)["producto_id"] == 50
+
+
+def test_una_pagina_fuera_del_catalogo_se_muestra_tal_cual_y_sin_nada_va_a_otros():
+    fuera = D.producto_de(_a("1", nombre="NO - hook", destino="https://x.no/products/smertelindrende-tofler-2"), INDICE)
+    assert fuera == {"clave": "h:smertelindrendetofler", "nombre": "smertelindrende-tofler", "producto_id": None}
+    otros = D.producto_de(_a("2", nombre="x", destino="https://x.no/"), INDICE)
+    assert otros == {"clave": D.OTROS, "nombre": None, "producto_id": None}
+
+
+def test_sin_catalogo_no_falla():
+    vacio = D.catalogo_indice([])
+    assert D.producto_de(_a("1", destino="https://x.no/products/happycomfy-1"), vacio)["nombre"] == "happycomfy"
+    assert D.producto_de(_a("2"), D.catalogo_indice(None))["clave"] == D.OTROS
+
+
+def _resumen(anuncios, roas_cuenta=None, tipos=None):
+    return D.resumir(anuncios, roas_cuenta, INDICE, tipos or {})
+
+
+def test_los_productos_suman_todo_el_gasto_y_otros_va_al_final():
+    anuncios = [_a("1", destino="https://x/products/happyflops-cozy-1", gasto=100, ingresos=300, pedidos=5),
+                _a("2", destino="https://x/products/happyflops-cozy", gasto=50, ingresos=40, pedidos=1),
+                _a("3", destino="https://x/products/happycomfy", gasto=80, ingresos=200, pedidos=4),
+                _a("4", nombre="sin nada", gasto=30, ingresos=500, pedidos=9)]
+    productos = _resumen(anuncios)["productos"]
+    assert [p["nombre"] for p in productos] == ["HappyCozy", "HappyComfy", None]
+    cozy = productos[0]
+    assert (cozy["gasto"], cozy["ingresos"], cozy["pedidos"], cozy["anuncios"]) == (150, 340, 6, 2)
+    assert round(cozy["roas"], 4) == round(340 / 150, 4)
+    assert productos[-1]["es_otros"] and not cozy["es_otros"]
+    assert sum(p["gasto"] for p in productos) == sum(a["m"]["gasto"] for a in anuncios)
+
+
+def test_mas_de_diez_productos_el_resto_entra_en_otros():
+    anuncios = [_a(str(i), destino=f"https://x/products/producto-{chr(97 + i)}", gasto=10, ingresos=100 - i, pedidos=1)
+                for i in range(12)] + [_a("sin", gasto=7, ingresos=1, pedidos=1)]
+    productos = _resumen(anuncios)["productos"]
+    assert len(productos) == D.MAX_PRODUCTOS + 1 and productos[-1]["es_otros"]
+    assert productos[-1]["gasto"] == 27 and productos[-1]["anuncios"] == 3
+    assert sum(p["gasto"] for p in productos) == sum(a["m"]["gasto"] for a in anuncios)
+
+
+# ------------------------------------------------------------------------------------------- iterar ---
+
+def test_para_iterar_pide_el_roas_de_la_cuenta_y_diez_compras():
+    anuncios = [_a("justo", gasto=100, ingresos=200, pedidos=10),         # ROAS 2 = el de la cuenta, 10 compras
+                _a("casi", gasto=100, ingresos=300, pedidos=9.99),         # buen ROAS, le falta volumen
+                _a("flojo", gasto=100, ingresos=190, pedidos=50),          # volumen, ROAS bajo
+                _a("mejor", gasto=100, ingresos=400, pedidos=12)]
+    iterar = _resumen(anuncios, roas_cuenta=2.0)["iterar"]
+    assert [f["ad_id"] for f in iterar] == ["mejor", "justo"]
+
+
+def test_para_iterar_sin_roas_de_cuenta_queda_vacia_y_tiene_tope():
+    anuncios = [_a(str(i), gasto=10, ingresos=100 + i, pedidos=20) for i in range(12)]
+    assert _resumen(anuncios, roas_cuenta=None)["iterar"] == []
+    iterar = _resumen(anuncios, roas_cuenta=1.0)["iterar"]
+    assert len(iterar) == D.MAX_ITERAR and iterar[0]["ad_id"] == "11"
+
+
+# ---------------------------------------------------------------------------------------- conversión ---
+
+def test_mejor_conversion_pide_cien_sesiones_y_tres_compras_y_ordena_por_conversion():
+    anuncios = [_a("borde", sesiones=100, pedidos=3),                    # 3 %
+                _a("pocas", sesiones=99, pedidos=30),                    # le faltan sesiones
+                _a("dos", sesiones=500, pedidos=2.9),                    # le faltan compras
+                _a("alta", sesiones=200, pedidos=18),                    # 9 %
+                _a("cero", sesiones=0, pedidos=5)]
+    conversion = _resumen(anuncios)["conversion"]
+    assert [f["ad_id"] for f in conversion] == ["alta", "borde"]
+    assert round(conversion[0]["m"]["cv_sesion"], 4) == 0.09
+
+
+def test_mejor_conversion_tiene_tope():
+    anuncios = [_a(str(i), sesiones=1000, pedidos=10 + i) for i in range(12)]
+    conversion = _resumen(anuncios)["conversion"]
+    assert len(conversion) == D.MAX_CONVERSION and conversion[0]["ad_id"] == "11"
+
+
+def test_la_conversion_por_sesion_es_none_sin_sesiones():
+    assert evaluacion.metricas({"pedidos": 3, "sesiones": 150})["cv_sesion"] == 0.02
+    assert evaluacion.metricas({"pedidos": 3, "sesiones": 0})["cv_sesion"] is None
+    cuenta = evaluacion.resumen_cuenta([_a("1", sesiones=100, pedidos=2), _a("2", sesiones=300, pedidos=6)])
+    assert cuenta["m"]["sesiones"] == 400 and cuenta["m"]["cv_sesion"] == 0.02
+
+
+# -------------------------------------------------------------------------------------- tipo y top ---
+
+def test_el_tipo_sale_de_triple_whale_y_sin_el_de_las_vistas_de_3_segundos():
+    tipos = {("facebook-ads", "img"): "image", ("facebook-ads", "car"): "carousel", ("facebook-ads", "vid"): "video",
+             ("facebook-ads", "din_v"): "dynamic", ("facebook-ads", "din_i"): "dynamic"}
+    casos = {"img": {}, "car": {"vistas_3s": 50}, "vid": {}, "din_v": {"vistas_3s": 50}, "din_i": {},
+             "sin_v": {"vistas_3s": 50}, "sin_i": {}}
+    t = {ad: D.tipo_de(_a(ad, **campos), tipos) for ad, campos in casos.items()}
+    assert {ad: x["grupo"] for ad, x in t.items()} == {"img": "imagen", "car": "imagen", "vid": "video",
+                                                        "din_v": "video", "din_i": "imagen", "sin_v": "video",
+                                                        "sin_i": "imagen"}
+    assert t["car"]["etiqueta"] == D.TIPOS["carousel"] and t["din_v"]["etiqueta"] == D.TIPOS["dynamic"]
+    assert t["sin_v"]["etiqueta"] == D.TIPOS["video"] and t["sin_i"]["etiqueta"] == D.TIPOS["image"]
+
+
+def test_las_mejores_imagenes_y_videos_solo_con_ventas_seis_de_cada_uno_por_ventas():
+    tipos = {("facebook-ads", f"v{i}"): "video" for i in range(8)}
+    anuncios = ([_a(f"v{i}", ingresos=100 + i, pedidos=1) for i in range(8)]
+                + [_a(f"i{i}", ingresos=50 + i, pedidos=1) for i in range(3)]
+                + [_a("i_sin_ventas", ingresos=0, pedidos=0, gasto=500)])
+    r = _resumen(anuncios, tipos=tipos)
+    assert [f["ad_id"] for f in r["videos"]] == ["v7", "v6", "v5", "v4", "v3", "v2"]
+    assert [f["ad_id"] for f in r["imagenes"]] == ["i2", "i1", "i0"]
+
+
+def test_cada_fila_trae_producto_y_tipo():
+    tipos = {("facebook-ads", "1"): "video"}
+    fila = _resumen([_a("1", destino="https://x/products/happycomfy", sesiones=300, pedidos=30, ingresos=900,
+                        gasto=100)], roas_cuenta=1.0, tipos=tipos)["iterar"][0]
+    assert fila["producto"]["nombre"] == "HappyComfy" and fila["etiqueta"] == D.TIPOS["video"]
+    assert fila["grupo"] == "video" and fila["m"]["ingresos"] == 900
+
+
+# ------------------------------------------------------------------------ lecturas y panel (tarea 2) ---
+
+@pytest.fixture(autouse=True)
+def _llave_de_cifrado(monkeypatch):
+    # `triple_whale_tiendas.agregar` cifra la llave de la tienda con la clave de la app.
+    monkeypatch.setenv("FLASK_SECRET_KEY", "test_secret_key_12345678")
+
+
+def _hace(n):
+    from datetime import date, timedelta
+    return (date.today() - timedelta(days=n)).isoformat()
+
+
+def _tienda(cliente="acme", pais="NO"):
+    import triple_whale_tiendas
+    return triple_whale_tiendas.agregar(cliente, "tw_llave_123", f"{cliente}-{pais.lower()}.myshopify.com", pais,  # llave-de-prueba
+                                        moneda="USD")
+
+
+def _sembrar_anuncios(tid, n=6, cliente="acme"):
+    """`n` anuncios de Meta ayer: la mitad videos de HappyCozy, la mitad imágenes de HappyComfy; ventas crecientes."""
+    from triple_whale import datos as twdatos
+    f = _hace(1)
+    canal, pixel, creativos = [], [], []
+    for i in range(n):
+        video = i % 2 == 0
+        destino = "https://x.no/products/" + ("happyflops-cozy-1" if video else "happycomfy")
+        canal.append({"canal": "facebook-ads", "ad_id": f"a{i}", "fecha": f, "gasto": 100, "impresiones": 10000,
+                      "clics": 150, "vistas_3s": 3000 if video else 0, "anuncio": f"Anuncio {i}",
+                      "destino_url": destino})
+        pixel.append({"canal": "facebook-ads", "ad_id": f"a{i}", "fecha": f, "pedidos": 10 + i,
+                      "ingresos": 200 + 50 * i, "nc_ingresos": 100 + 10 * i, "sesiones": 400})
+        creativos.append({"canal": "facebook-ads", "ad_id": f"a{i}", "tipo": "video" if video else "image",
+                          "imagen_url": f"https://files.triplewhale.com/a{i}.jpg",
+                          "video_url": f"https://files.triplewhale.com/a{i}.mp4" if video else None})
+    twdatos.reemplazar_anuncios_canal(cliente, tid, f, f, canal)
+    twdatos.reemplazar_anuncios_pixel(cliente, tid, f, f, pixel)
+    twdatos.reemplazar_creativos(cliente, tid, creativos)
+
+
+def _catalogo(cliente="acme"):
+    import tiendas
+    tiendas.upsert_producto(cliente, "shopify", "32", {"nombre": "HappyCozy",
+                                                      "url_compra": "https://www.happyflops.com/products/happyflops-cozy"})
+    tiendas.upsert_producto(cliente, "shopify", "39", {"nombre": "HappyComfy",
+                                                      "url_compra": "https://www.happyflops.com/products/happycomfy"})
+
+
+def test_tipos_creativo_lee_solo_los_del_proyecto_y_con_tipo(base_temporal):
+    from triple_whale import datos as twdatos
+    tid, otra = _tienda(), _tienda("otro", "SE")
+    twdatos.reemplazar_creativos("acme", tid, [{"canal": "facebook-ads", "ad_id": "1", "tipo": "video"},
+                                               {"canal": "facebook-ads", "ad_id": "2", "titulo": "sin tipo"}])
+    twdatos.reemplazar_creativos("otro", otra, [{"canal": "facebook-ads", "ad_id": "9", "tipo": "image"}])
+    assert twdatos.tipos_creativo("acme") == {("facebook-ads", "1"): "video"}
+
+
+def _contexto_tw(tid):
+    import idiomas
+    from triple_whale import panel as tw_panel
+    with idiomas.en_idioma("es"):
+        return tw_panel.contexto("acme", 0, tienda_id=tid)
+
+
+def test_armar_junta_las_listas_con_el_catalogo_el_tipo_y_el_medio(base_temporal):
+    tid = _tienda()
+    _sembrar_anuncios(tid)
+    _catalogo()
+    d = D.armar("acme", _contexto_tw(tid))
+    assert d["moneda"] == "USD"
+    assert [p["nombre"] for p in d["productos"]] == ["HappyComfy", "HappyCozy"]   # 1 050 contra 900
+    assert {f["grupo"] for f in d["videos"]} == {"video"} and len(d["videos"]) == 3 and len(d["imagenes"]) == 3
+    assert d["videos"][0]["ad_id"] == "a4" and d["videos"][0]["producto"]["nombre"] == "HappyCozy"
+    assert d["imagenes"][0]["medio"]["imagen"] == "https://files.triplewhale.com/a5.jpg"
+    assert d["iterar"] and all(f["m"]["pedidos"] >= D.PEDIDOS_MIN_ITERAR for f in d["iterar"])
+    assert [f["ad_id"] for f in d["conversion"]][:2] == ["a5", "a4"]
+
+
+def test_armar_sin_anuncios_no_lee_nada_y_queda_vacio(base_temporal):
+    tid = _tienda()
+    d = D.armar("acme", _contexto_tw(tid))
+    assert d["iterar"] == d["conversion"] == d["imagenes"] == d["videos"] == d["productos"] == []
+
+
+def test_el_panel_de_rendimiento_trae_destacados_con_triple_whale(base_temporal):
+    import idiomas
+    from pestana_rendimiento import panel as rpanel
+    tid = _tienda()
+    _sembrar_anuncios(tid)
+    with idiomas.en_idioma("es"):
+        r = rpanel.contexto("acme", 0, entrada="NO")
+    assert r["fuente"] == "tw" and r["destacados"] and r["destacados"]["videos"]
+
+
+# --------------------------------------------------------------------------------- pantalla (tarea 3) ---
+
+def _panel(app, q="?entrada=NO"):  # noqa: F811
+    r = app["c"].get("/cliente/acme/rendimiento/panel" + q)
+    assert r.status_code == 200
+    return r.data.decode()
+
+
+def _productos_tienda(tid):
+    from triple_whale import datos as twdatos
+    f = _hace(1)
+    twdatos.reemplazar_productos("acme", tid, f, f, [{"fecha": f, "producto_id": "10772020298065", "nombre": "HappyCozy",
+                                                      "unidades": 3, "ingresos": 900, "pedidos": 3}])
+
+
+def test_la_pantalla_pinta_las_metricas_que_faltaban_en_su_lugar(app):  # noqa: F811
+    tid = _tienda()
+    _sembrar_anuncios(tid)
+    _productos_tienda(tid)
+    _catalogo()
+    html = _panel(app)
+    for texto in ("ROAS de clientes nuevos", "Tasa de conversión", "Los mejores para iterar", "Los que mejor convierten",
+                  "Mejores imágenes", "Mejores videos", "Productos en tus anuncios"):
+        assert texto in html, texto
+    assert html.index("Tus anuncios") < html.index("Los mejores para iterar") < html.index("Los que mejor convierten")
+    assert html.index("Lo que más se vende") < html.index("Productos en tus anuncios") < html.index("Ver como tabla")
+    productos = html[html.index('id="rend-productos-anuncios"'):html.index("Ver como tabla")]
+    assert "HappyComfy" in productos and "HappyCozy" in productos
+
+
+def test_los_videos_de_las_tarjetas_no_se_precargan(app):  # noqa: F811
+    tid = _tienda()
+    _sembrar_anuncios(tid)
+    html = _panel(app)
+    videos = html[html.index('id="rend-videos"'):]
+    videos = videos[:videos.index("</section>")]
+    etiquetas = re.findall(r"<video[^>]*>", videos)
+    assert len(etiquetas) == 3 and all('preload="none"' in v and "data-precarga" in v for v in etiquetas)
+    imagenes = html[html.index('id="rend-imagenes"'):]
+    assert 'loading="lazy"' in imagenes[:imagenes.index("</section>")]
+
+
+def test_las_listas_vacias_dicen_por_que(app):  # noqa: F811
+    from triple_whale import datos as twdatos
+    tid = _tienda()
+    f = _hace(1)
+    twdatos.reemplazar_anuncios_canal("acme", tid, f, f, [{"canal": "facebook-ads", "ad_id": "x", "fecha": f,
+                                                           "gasto": 50, "impresiones": 5000, "anuncio": "Uno"}])
+    twdatos.reemplazar_anuncios_pixel("acme", tid, f, f, [{"canal": "facebook-ads", "ad_id": "x", "fecha": f,
+                                                           "pedidos": 2, "ingresos": 120, "sesiones": 40}])
+    html = _panel(app)
+    assert "Ningún anuncio llega todavía al ROAS de tus anuncios con 10 compras o más" in html
+    assert "Ningún anuncio tiene todavía 100 sesiones y 3 compras" in html
+
+
+def test_con_meta_mezclada_no_aparecen_y_en_el_pais_de_triple_whale_si(meta_on):  # noqa: F811
+    from tests.test_rutas_rendimiento import _con_anuncios
+    _con_anuncios()
+    todas = _panel(meta_on, "")
+    assert "Los mejores para iterar" not in todas and "Productos en tus anuncios" not in todas
+    assert "ROAS de clientes nuevos" not in todas
+    assert "Los mejores para iterar" in _panel(meta_on, "?entrada=NO")
+
+
+def _contar(fn):
+    from tests.test_escala import _Consultas
+    with _Consultas() as c:
+        fn()
+    return c.n
+
+
+def test_las_consultas_del_panel_no_crecen_con_los_anuncios(app):  # noqa: F811
+    tid = _tienda()
+    _catalogo()
+    _sembrar_anuncios(tid, n=6)
+    d = app["dashboard"]
+
+    def frio():
+        d._TABLERO_CACHE.clear()
+        d.invalidar_alertas("acme")
+        _panel(app)
+
+    frio()
+    seis = _contar(frio)
+    _sembrar_anuncios(tid, n=30)
+    treinta = _contar(frio)
+    assert seis == treinta, (seis, treinta)
+
+
+# ------------------------------------------------- lo que enseñaron los datos reales de Noruega (2026-10-13) ---
+
+def test_una_fila_sin_gasto_no_entra_en_las_listas_ni_en_las_tarjetas_pero_si_en_productos():
+    """Google Ads trae «(not set)» y «sag_organic» con ventas atribuidas y gasto 0: no son anuncios."""
+    tipos = {("facebook-ads", "img"): "image"}
+    anuncios = [_a("img", gasto=100, ingresos=300, pedidos=12, sesiones=200),
+                _a("(not set)", canal="google-ads", gasto=0, ingresos=9000, pedidos=400, sesiones=4000)]
+    r = _resumen(anuncios, roas_cuenta=1.0, tipos=tipos)
+    for lista in ("iterar", "conversion", "imagenes", "videos"):
+        assert "(not set)" not in [f["ad_id"] for f in r[lista]], lista
+    assert sum(p["ingresos"] for p in r["productos"]) == 9300
+
+
+def test_sin_tipo_fuera_de_meta_y_sin_vistas_el_tipo_no_se_sabe_y_no_entra_en_las_tarjetas():
+    """Un anuncio de búsqueda de Google o uno de Snapchat sin vistas de 3 s en la copia no es «Imagen»: no se sabe."""
+    google = D.tipo_de(_a("g", canal="google-ads"), {})
+    assert google == {"tipo": None, "etiqueta": None, "grupo": None}
+    assert D.tipo_de(_a("s", canal="snapchat-ads", vistas_3s=40), {})["grupo"] == "video"
+    assert D.tipo_de(_a("m"), {})["grupo"] == "imagen"                          # Meta informa las vistas de sus videos
+    r = _resumen([_a("g", canal="google-ads", gasto=10, ingresos=500, pedidos=20)], roas_cuenta=1.0)
+    assert r["imagenes"] == r["videos"] == [] and r["iterar"][0]["etiqueta"] is None
+
+
+def test_en_pantalla_un_anuncio_de_google_sin_tipo_dice_guion_y_no_sale_entre_las_imagenes(app):  # noqa: F811
+    from triple_whale import datos as twdatos
+    tid = _tienda()
+    _sembrar_anuncios(tid)
+    f = _hace(2)                     # otro día: `reemplazar_*` reescribe el día entero de la tienda
+    twdatos.reemplazar_anuncios_canal("acme", tid, f, f, [{"canal": "google-ads", "ad_id": "busqueda", "fecha": f,
+                                                           "gasto": 50, "impresiones": 900, "clics": 300,
+                                                           "anuncio": "Busqueda de marca"}])
+    twdatos.reemplazar_anuncios_pixel("acme", tid, f, f, [{"canal": "google-ads", "ad_id": "busqueda", "fecha": f,
+                                                           "pedidos": 40, "ingresos": 4000, "sesiones": 500}])
+    html = _panel(app)
+    iterar = html[html.index('id="rend-iterar"'):]
+    fila = iterar[iterar.index("Busqueda de marca"):]
+    fila = fila[:fila.index("</tr>")]
+    assert "None" not in fila and "<td>—</td>" in fila
+    imagenes = html[html.index('id="rend-imagenes"'):]
+    assert "Busqueda de marca" not in imagenes[:imagenes.index("</section>")]
+
+
+# ------------------------------------------------------------- revisión final (revisor, 2026-10-13) ---
+
+def _tile(html, titulo):
+    """El número grande del tile que lleva ese título."""
+    i = html.index(f"<span>{titulo}</span>")
+    return re.search(r"<strong[^>]*>([^<]*)</strong>", html[i:]).group(1).strip()
+
+
+def test_los_tiles_nuevos_muestran_su_propio_numero(app):  # noqa: F811
+    """ROAS 5,0 · ROAS de clientes nuevos 2,0 · conversión por clic 20 % · por sesión 2,50 %: cada tile el suyo."""
+    from triple_whale import datos as twdatos
+    tid = _tienda()
+    f = _hace(1)
+    twdatos.reemplazar_anuncios_canal("acme", tid, f, f, [{"canal": "facebook-ads", "ad_id": "t", "fecha": f,
+                                                           "gasto": 100, "impresiones": 1000, "clics": 50,
+                                                           "anuncio": "Tile"}])
+    twdatos.reemplazar_anuncios_pixel("acme", tid, f, f, [{"canal": "facebook-ads", "ad_id": "t", "fecha": f,
+                                                           "pedidos": 10, "ingresos": 500, "nc_ingresos": 200,
+                                                           "nc_pedidos": 4, "sesiones": 400}])
+    html = _panel(app)
+    assert _tile(html, "ROAS de clientes nuevos") == "2,0×"
+    assert _tile(html, "Tasa de conversión") == "2,50 %"
+
+
+def test_el_nombre_del_catalogo_gana_a_una_pagina_fuera_del_catalogo():
+    p = D.producto_de(_a("1", nombre="SC | HAPPYCOMFY - W32", destino="https://x.no/products/oferta-otono"), INDICE)
+    assert p["nombre"] == "HappyComfy"
+
+
+def test_dos_paginas_del_catalogo_que_solo_cambian_por_el_numero_final_no_se_juntan():
+    indice = D.catalogo_indice([
+        {"id": 1, "nombre": "Pack", "url_compra": "https://x.com/products/happyflops-pack"},
+        {"id": 2, "nombre": "Pack Dos", "url_compra": "https://x.com/products/happyflops-pack-2"},
+    ])
+    assert D.producto_de(_a("a", destino="https://x.no/products/happyflops-pack-2"), indice)["producto_id"] == 2
+    assert D.producto_de(_a("b", destino="https://x.no/products/happyflops-pack"), indice)["producto_id"] == 1
+    # El número de otra tienda (Shopify agrega -1, -2…) sigue llevando al producto sin número.
+    assert D.producto_de(_a("c", destino="https://x.no/products/happyflops-pack-1"), indice)["producto_id"] == 1
+
+
+def test_un_producto_con_gasto_y_sin_ventas_muestra_cero_no_guion(app):  # noqa: F811
+    from triple_whale import datos as twdatos
+    tid = _tienda()
+    _catalogo()
+    f = _hace(1)
+    twdatos.reemplazar_anuncios_canal("acme", tid, f, f, [{"canal": "facebook-ads", "ad_id": "pierde", "fecha": f,
+                                                           "gasto": 300, "impresiones": 9000, "anuncio": "Pierde",
+                                                           "destino_url": "https://x.no/products/happycomfy"}])
+    html = _panel(app)
+    productos = html[html.index('id="rend-productos-anuncios"'):]
+    fila = productos[productos.index("HappyComfy"):]
+    fila = fila[:fila.index("</tr>")]
+    assert "<td>0,0×</td>" in fila

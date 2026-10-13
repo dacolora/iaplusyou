@@ -74,6 +74,7 @@ from pestana_rendimiento import alcance_meta, entradas, galeria, resumen
 from tareas import meta_rendimiento as tareas_mr
 from triple_whale import evaluacion, paises
 from triple_whale import datos as twdatos
+from triple_whale import destacados as tw_destacados
 from triple_whale import panel as tw_panel
 
 PERIODOS = (0, 7, 14, 30, 90)        # 0 = desde el inicio (regla de Daniel del 2026-10-08: métricas en total)
@@ -306,6 +307,9 @@ def contexto(cliente, dias=0, entrada=None, canal=None, hoy=None, pagina_conjunt
         "periodos": PERIODOS, "canal": canal_ok, "canales": tw["canales"] if tw and fuente == "tw" else [],
         "params": params, "tw": tw, "meta": meta,
         "galeria": galeria.armar(cliente, alc_tw, alc_meta) if (alc_tw or alc_meta) else None,
+        # Las métricas que faltaban (spec 2026-10-13): solo con fuente "tw", como los tiles de Triple Whale; con Meta o
+        # mezcla describirían solo una parte del alcance.
+        "destacados": tw_destacados.armar(cliente, tw) if tw and fuente == "tw" else None,
         "params_tw": alc_tw["params"] if alc_tw else {},
         "resumen": resumen.contexto(cliente, s["entradas"], actual, alc, dias, hoy,
                                     tw_cfg["moneda"] if tw_cfg else "USD"),

@@ -757,6 +757,18 @@ def _por_claves(tabla, cliente, pares):
     return sa.and_(tabla.c.cliente == cliente, sa.tuple_(tabla.c.canal, tabla.c.ad_id).in_(pares))
 
 
+def tipos_creativo(cliente):
+    """{(canal, ad_id): tipo} de los anuncios del proyecto que Triple Whale tipificó (ad_type: video, image, carousel,
+    dynamic…), en UNA consulta: el tipo de cada anuncio del alcance para «Mejores imágenes» y «Mejores videos» sin
+    una consulta por anuncio (spec 2026-10-13-rendimiento-metricas-que-faltaban §5). Solo columnas cortas: unas pocas
+    miles de filas por proyecto."""
+    t = db.tw_creativo
+    with db.conectar() as con:
+        filas = con.execute(sa.select(t.c.canal, t.c.ad_id, t.c.tipo)
+                            .where(t.c.cliente == cliente, t.c.tipo.isnot(None), t.c.tipo != ""))
+        return {(f.canal, f.ad_id): f.tipo for f in filas}
+
+
 def creativos(cliente, claves):
     """{(canal, ad_id): {COLUMNAS_CREATIVO}} de esos anuncios: una consulta por tramo de claves (una por página)."""
     if not claves:

@@ -698,3 +698,9 @@ un gancho con «Prueba 7 días» inventado se generaría y se cobraría (revisi�
 app de Flask propia sin catálogo (la medición lo pagó: mandó «Se está cansando» en un prompt en inglés). Medido:
 `docs/superpowers/evals/2026-10-13-evaluaciones-idioma-y-claves.md` (con lo que cuesta cada llamada, lo que paga el
 cliente y lo que ganamos).
+
+**Rendimiento: las métricas que faltaban (2026-10-13).** `triple_whale/destacados.py` arma, desde los anuncios ya
+evaluados del panel, productos con gasto y ROAS (por la página de destino contra el Catálogo), los mejores para
+iterar, los que mejor convierten (`metricas()["cv_sesion"]` = pedidos / sesiones; `resumen_cuenta` ahora suma
+`sesiones`) y las mejores imágenes y videos (`datos.tipos_creativo(cliente)`: `{(canal, ad_id): tipo}` en una
+consulta). Detalle y reglas en la skill `rendimiento`, «Las métricas que faltaban».
