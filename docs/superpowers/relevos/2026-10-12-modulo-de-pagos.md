@@ -43,10 +43,18 @@ Pedido de Daniel: «hagamos todo, los escenarios de error, también cómo nos cu
 3. **Facturación DIAN e IVA** (PND-161, PND-248): Daniel con su contador.
 4. SMTP del VPS (PND-048): mientras no esté, mirar «Avisos de plata» en /admin/cobros.
 
+## Actualización 2026-10-13: el sandbox
+- Daniel pegó las llaves de PRUEBAS; quedaron en `~/Documents/GitHub/iaplusyou/.env.wompi-sandbox` (0600, git lo ignora).
+- `deploy/prueba_wompi_sandbox.py`: **12 de 12** contra el sandbox. Encontró el 422 en español (arreglado en 083ab8e6, en
+  main SIN desplegar: sale con el próximo despliegue de main, que hoy trae trabajo de otras conversaciones).
+- CSP de la página de la tarjeta: con el widget real carga y abre su ventana sin violaciones; el envío tras tokenizar no se
+  pudo ver (el navegador integrado no hace clic dentro de la ventana de Wompi). Sigue en «solo reporte» (PND-304 a).
+- Hueco anotado: una recarga aprobada que Wompi anula y cuyo aviso se pierde no la detecta nadie (PND-304 b).
+
 ## La siguiente acción concreta
-Cuando Daniel ponga las llaves de PRUEBAS de Wompi en `.env.wompi-sandbox` (comando con `read -rsp`; nunca las saca
-Claude del panel de Wompi), correr `venv/bin/python3 deploy/prueba_wompi_sandbox.py` y, con la consola limpia en
-`plan_alta` (sandbox local), pasar `CSP_TARJETA_SOLO_REPORTE` a False (PND-304 a, b).
+Nada urgente. Cuando alguien despliegue main, confirmar que va 083ab8e6 (el 422 en español). Para cerrar PND-304 (a):
+que una persona haga un alta de prueba en el sandbox local con la consola abierta (o agregar un `report-uri`) y, si sale
+limpia, pasar `CSP_TARJETA_SOLO_REPORTE` a False.
 
 ## Decisiones ya tomadas (no reabrir)
 | Decisión | Respuesta | Quién | Fecha |

@@ -284,7 +284,13 @@ vulnerabilidades»). Explicación en llano y riesgos aceptados: `docs/pagos/segu
   referencia (`planes._es_de_este_pago`); `?pagina=` con tope (`MAX_PAGINA`); Bold con `allow_redirects=False` y un 3xx
   como error; cupo por proyecto a las consultas del `?id=` de la vuelta (`VUELTA_WOMPI_POR_HORA`, `limite_ok`).
 - Escenarios de error contra el sandbox: `deploy/prueba_wompi_sandbox.py` (llaves de pruebas en `.env.wompi-sandbox`,
-  base temporal, se niega con llaves que no sean de pruebas).
+  base temporal, se niega con llaves que no sean de pruebas). **12 de 12 el 2026-10-13.** Lo que enseñó el sandbox:
+  el 422 de una referencia repetida viene en ESPAÑOL («La referencia ya ha sido usada»; `wompi._referencia_usada`
+  reconoce español e inglés); las referencias de planes llevan el id de la suscripción y Wompi las recuerda entre
+  corridas (el script numera desde un punto al azar; con ids repetidos el sistema se niega, bien, a aplicar el cobro
+  viejo de otra tarjeta); los números de Nequi de prueba deciden el cobro, no la inscripción; una recarga APROBADA que
+  Wompi anula solo se entera por el aviso firmado (PND-304 b). Correrlo de nuevo: `venv/bin/python3
+  deploy/prueba_wompi_sandbox.py` (sin argumentos: la guarda del repo frena un comando que nombre el archivo de llaves).
 
 ## Bold: llaves, link, webhook, verificación
 
