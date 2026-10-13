@@ -352,9 +352,11 @@ métricas en la pestaña, «desde Triple Whale». Spec `docs/superpowers/specs/2
 - **Cálculo**: `triple_whale/destacados.py`, puro salvo `armar(cliente, tw)`; parte de `tw["ev"]["anuncios"]` (país,
   periodo y canal de la pestaña). Lo pone `panel.contexto()["destacados"]` SOLO con fuente "tw" (como los tiles): con
   Meta o mezcla no hay sesiones, ventas a clientes nuevos ni página de destino.
-- **Producto de un anuncio**: su página `/products/<handle>` (sin el `-<dígitos>` de otra tienda, sin guiones) contra el
-  `url_compra` del Catálogo; si no, un nombre del Catálogo dentro del nombre del anuncio (el más largo); si no, el
-  handle tal cual; si no, «Otros». Productos: top 10 + «Otros»; la suma de su gasto es la del tile «Gasto».
+- **Producto de un anuncio**: su página `/products/<handle>` contra el `url_compra` del Catálogo, primero tal cual y
+  después sin el `-<dígitos>` que Shopify agrega en otra tienda (sin guiones en los dos casos; así `-pack` y `-pack-2`
+  del Catálogo no se juntan); si no, un nombre del Catálogo dentro del nombre del anuncio (el más largo, y gana a una
+  página que no está en el Catálogo); si no, el handle; si no, «Otros». Productos: top 10 + «Otros»; la suma de su
+  gasto es la del tile «Gasto». ROAS «0,0×» con gasto y sin ventas; «—» solo sin gasto.
 - **Mínimos**: iterar = ROAS ≥ el de los anuncios del alcance y ≥ 10 compras; conversión = ≥ 100 sesiones y ≥ 3
   compras; topes 8 / 8 / 6 por tipo. Las listas y las tarjetas solo miran anuncios con gasto (Google Ads trae filas
   «(not set)»/«sag_organic» con ventas y gasto 0).

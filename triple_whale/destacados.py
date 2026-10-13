@@ -37,10 +37,8 @@ def _div(a, b):
     return a / b if b else None
 
 
-def handle(url):
-    """El handle de `/products/<handle>` en minúsculas y sin el `-<dígitos>` final que Shopify agrega cuando el mismo
-    producto existe en otra tienda (`happyflops-cozy-1` → `happyflops-cozy`); None sin página de producto. Al
-    Catálogo se le aplica lo mismo, así que un handle que de verdad termina en número sigue emparejando."""
+def _handle_crudo(url):
+    """El handle de `/products/<handle>` en minúsculas, tal cual; None sin página de producto."""
     try:
         ruta = urlsplit(url or "").path
     except ValueError:
@@ -48,13 +46,27 @@ def handle(url):
     m = _HANDLE.search(ruta or "")
     if not m:
         return None
-    return _SUFIJO_TIENDA.sub("", unquote(m.group(1)).strip().lower()) or None
+    return unquote(m.group(1)).strip().lower() or None
+
+
+def handle(url):
+    """El handle sin el `-<dígitos>` final que Shopify agrega cuando el mismo producto existe en otra tienda
+    (`happyflops-cozy-1` → `happyflops-cozy`); None sin página de producto. Es el respaldo: `producto_de` prueba
+    primero el handle tal cual, así dos productos del Catálogo que solo cambian por el número final (`-pack` y
+    `-pack-2`) no se juntan (revisión final, 2026-10-13)."""
+    crudo = _handle_crudo(url)
+    return (_SUFIJO_TIENDA.sub("", crudo) or None) if crudo else None
 
 
 def catalogo_indice(productos):
     """El Catálogo listo para ubicar anuncios: {"handles": {handle normalizado: producto}, "nombres": [(nombre
-    normalizado, producto)] del más largo al más corto}."""
+    normalizado, producto)] del más largo al más corto}. En "handles" van primero los handles tal cual y después, sin
+    pisarlos, los mismos sin el `-<dígitos>` final: `-pack` sigue siendo de su producto aunque exista `-pack-2`."""
     handles, nombres = {}, []
+    for p in productos or []:
+        crudo = _handle_crudo(p.get("url_compra"))
+        if crudo:
+            handles.setdefault(_norm(crudo), p)
     for p in productos or []:
         h = handle(p.get("url_compra"))
         if h:
@@ -70,8 +82,9 @@ def producto_de(anuncio, indice):
     """{"clave", "nombre", "producto_id"} del anuncio, en este orden (spec §4.1): su página de producto en el
     Catálogo; el nombre de un producto del Catálogo dentro del nombre del anuncio (gana el más largo); el handle tal
     cual; «Otros» (`clave == OTROS`, nombre None)."""
+    crudo = _handle_crudo(anuncio.get("destino_url"))
     h = handle(anuncio.get("destino_url"))
-    p = indice["handles"].get(_norm(h)) if h else None
+    p = (indice["handles"].get(_norm(crudo)) or indice["handles"].get(_norm(h))) if h else None
     if p is None:
         nombre = _norm(anuncio.get("nombre"))
         p = next((prod for n, prod in indice["nombres"] if n in nombre), None) if nombre else None

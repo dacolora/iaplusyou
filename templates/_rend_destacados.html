@@ -14,8 +14,10 @@
 {%- if f.etiqueta -%}{{ f.etiqueta | traducir }}{%- else -%}—{%- endif -%}
 {%- endmacro %}
 
+{#- «—» solo sin gasto (ROAS None); con gasto y sin ventas es «0,0×»: un producto que gasta sin vender no puede
+    parecer un dato que falta (revisión final, 2026-10-13). -#}
 {% macro _roas(valor) -%}
-{%- if valor -%}{{ valor | roas }}×{%- else -%}—{%- endif -%}
+{%- if valor is not none -%}{{ valor | roas }}×{%- else -%}—{%- endif -%}
 {%- endmacro %}
 
 {#- Tarjetas de «Mejores imágenes» / «Mejores videos»: el medio de la galería (mismos hosts permitidos), sin análisis

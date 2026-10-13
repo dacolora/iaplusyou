@@ -126,3 +126,13 @@ Con la copia real (Noruega, 30 días: 141 623 USD de gasto, 6 206 pedidos) apare
   Ahora, sin tipo de Triple Whale y sin vistas: Imagen solo en Meta (`facebook-ads`, que sí informa las vistas de sus
   videos); en otro canal el tipo no se sabe (etiqueta «—») y el anuncio no entra en las tarjetas de imágenes ni de
   videos.
+
+Revisión final (revisor con contexto limpio, 2026-10-13), lo que cambió:
+- **Handles del Catálogo que solo cambian por el número final** (`-pack` y `-pack-2`) ya no se juntan: se busca primero
+  el handle tal cual y después sin el `-<dígitos>`.
+- **ROAS 0** se muestra «0,0×» (un producto que gasta sin vender); «—» queda para «sin gasto».
+- **Tipo**: `dynamic` u otro tipo fuera de Meta sin vistas de 3 s queda sin grupo («Dinámico» en la tabla, fuera de las
+  tarjetas): en happyflops `dynamic` es video o imagen según lo que traiga. Un tipo que no conocemos en Meta (por
+  ejemplo `collection`) sin vistas va como imagen, como el resto de Meta sin vistas.
+- Pruebas nuevas para los dos tiles (valor exacto) y para el nombre del Catálogo que gana a una página fuera de él.
+

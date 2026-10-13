@@ -392,3 +392,58 @@ def test_en_pantalla_un_anuncio_de_google_sin_tipo_dice_guion_y_no_sale_entre_la
     assert "None" not in fila and "<td>—</td>" in fila
     imagenes = html[html.index('id="rend-imagenes"'):]
     assert "Busqueda de marca" not in imagenes[:imagenes.index("</section>")]
+
+
+# ------------------------------------------------------------- revisión final (revisor, 2026-10-13) ---
+
+def _tile(html, titulo):
+    """El número grande del tile que lleva ese título."""
+    i = html.index(f"<span>{titulo}</span>")
+    return re.search(r"<strong[^>]*>([^<]*)</strong>", html[i:]).group(1).strip()
+
+
+def test_los_tiles_nuevos_muestran_su_propio_numero(app):  # noqa: F811
+    """ROAS 5,0 · ROAS de clientes nuevos 2,0 · conversión por clic 20 % · por sesión 2,50 %: cada tile el suyo."""
+    from triple_whale import datos as twdatos
+    tid = _tienda()
+    f = _hace(1)
+    twdatos.reemplazar_anuncios_canal("acme", tid, f, f, [{"canal": "facebook-ads", "ad_id": "t", "fecha": f,
+                                                           "gasto": 100, "impresiones": 1000, "clics": 50,
+                                                           "anuncio": "Tile"}])
+    twdatos.reemplazar_anuncios_pixel("acme", tid, f, f, [{"canal": "facebook-ads", "ad_id": "t", "fecha": f,
+                                                           "pedidos": 10, "ingresos": 500, "nc_ingresos": 200,
+                                                           "nc_pedidos": 4, "sesiones": 400}])
+    html = _panel(app)
+    assert _tile(html, "ROAS de clientes nuevos") == "2,0×"
+    assert _tile(html, "Tasa de conversión") == "2,50 %"
+
+
+def test_el_nombre_del_catalogo_gana_a_una_pagina_fuera_del_catalogo():
+    p = D.producto_de(_a("1", nombre="SC | HAPPYCOMFY - W32", destino="https://x.no/products/oferta-otono"), INDICE)
+    assert p["nombre"] == "HappyComfy"
+
+
+def test_dos_paginas_del_catalogo_que_solo_cambian_por_el_numero_final_no_se_juntan():
+    indice = D.catalogo_indice([
+        {"id": 1, "nombre": "Pack", "url_compra": "https://x.com/products/happyflops-pack"},
+        {"id": 2, "nombre": "Pack Dos", "url_compra": "https://x.com/products/happyflops-pack-2"},
+    ])
+    assert D.producto_de(_a("a", destino="https://x.no/products/happyflops-pack-2"), indice)["producto_id"] == 2
+    assert D.producto_de(_a("b", destino="https://x.no/products/happyflops-pack"), indice)["producto_id"] == 1
+    # El número de otra tienda (Shopify agrega -1, -2…) sigue llevando al producto sin número.
+    assert D.producto_de(_a("c", destino="https://x.no/products/happyflops-pack-1"), indice)["producto_id"] == 1
+
+
+def test_un_producto_con_gasto_y_sin_ventas_muestra_cero_no_guion(app):  # noqa: F811
+    from triple_whale import datos as twdatos
+    tid = _tienda()
+    _catalogo()
+    f = _hace(1)
+    twdatos.reemplazar_anuncios_canal("acme", tid, f, f, [{"canal": "facebook-ads", "ad_id": "pierde", "fecha": f,
+                                                           "gasto": 300, "impresiones": 9000, "anuncio": "Pierde",
+                                                           "destino_url": "https://x.no/products/happycomfy"}])
+    html = _panel(app)
+    productos = html[html.index('id="rend-productos-anuncios"'):]
+    fila = productos[productos.index("HappyComfy"):]
+    fila = fila[:fila.index("</tr>")]
+    assert "<td>0,0×</td>" in fila
