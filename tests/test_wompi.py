@@ -582,6 +582,25 @@ def test_cobrar_fuente_con_referencia_usada(wompi, monkeypatch):
     assert e.value.incierto is False
 
 
+@pytest.mark.parametrize("mensaje", ["La referencia ya ha sido usada", "The reference has already been used."])
+def test_cobrar_fuente_reconoce_la_referencia_usada_en_espanol_y_en_ingles(wompi, monkeypatch, mensaje):
+    # Visto en el sandbox de Wompi (2026-10-13): el 422 de una referencia repetida viene en ESPAÑOL; solo buscábamos
+    # «already» y el reintento lo tomaba por un rechazo cualquiera (un primer envío así se daba por fallido).
+    _capturar(monkeypatch, wompi, "post", _Respuesta(422, {"error": {
+        "type": "INPUT_VALIDATION_ERROR", "messages": {"reference": [mensaje]}}}))
+    with pytest.raises(wompi.ErrorWompi) as e:
+        wompi.cobrar_fuente(3891, 100000, "a@b.co", "pl-1-20261109-1")
+    assert e.value.codigo == 422 and e.value.referencia_usada is True
+
+
+def test_otro_422_de_la_referencia_no_es_referencia_usada(wompi, monkeypatch):
+    _capturar(monkeypatch, wompi, "post", _Respuesta(422, {"error": {
+        "type": "INPUT_VALIDATION_ERROR", "messages": {"reference": ["La referencia es muy larga"]}}}))
+    with pytest.raises(wompi.ErrorWompi) as e:
+        wompi.cobrar_fuente(3891, 100000, "a@b.co", "pl-1-20261109-1")
+    assert e.value.referencia_usada is False
+
+
 def test_cobrar_fuente_que_se_corta_queda_incierto(wompi, monkeypatch):
     """Un tiempo agotado leyendo la respuesta: Wompi pudo cobrar. Quien llama
     no reintenta con otra referencia (sería un segundo cobro)."""

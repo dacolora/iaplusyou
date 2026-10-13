@@ -61,6 +61,14 @@ def _preparar(carpeta):
     import notificaciones
     import proyectos
     db.crear_todo()
+    # Las referencias de los cobros de plan llevan el id de la suscripción (`pl-<id>-<fecha>-<n>`) y el sandbox las
+    # recuerda entre corridas: con una base nueva se repetían y Wompi respondía «La referencia ya ha sido usada» (y el
+    # sistema, bien, se negaba a aplicar el cobro viejo de otra tarjeta). Cada corrida numera desde un punto al azar.
+    import random
+    with db.conectar() as con:
+        con.execute(db.suscripcion.insert().values(
+            id=random.randint(100_000, 9_000_000), cliente="sb_base", plan_id=0, ciclo="mensual", estado="terminada",
+            renovar=False, intentos_fallidos=0, usuario="sandbox", creada_en=db.ahora(), actualizada_en=db.ahora()))
     avisos = []
     notificaciones.avisar = lambda cliente, tipo, asunto, cuerpo: avisos.append((cliente, tipo)) and False
     notificaciones.avisar_admin = lambda tipo, asunto, cuerpo, cliente="": avisos.append(("admin", tipo)) and 0
@@ -217,14 +225,34 @@ def e_recarga_rechazada(db, avisos):
     return {"recarga": r["id"], "status_wompi": tx["status"]}
 
 
+def evento_firmado(tx):
+    """El aviso `transaction.updated` como lo manda Wompi (forma real: `timestamp` arriba; firma de id, status y
+    monto con el secreto de eventos de PRUEBAS). El servidor local no recibe los de verdad."""
+    import hashlib
+    from cobros import wompi
+    ts = int(time.time())
+    props = ["transaction.id", "transaction.status", "transaction.amount_in_cents"]
+    datos = {"id": tx["id"], "status": tx["status"], "amount_in_cents": tx["amount_in_cents"],
+             "reference": tx["reference"], "currency": tx["currency"]}
+    suma = hashlib.sha256(f"{datos['id']}{datos['status']}{datos['amount_in_cents']}{ts}{wompi._secreto_eventos()}"
+                          .encode()).hexdigest()
+    cuerpo = {"event": "transaction.updated", "data": {"transaction": datos}, "environment": "test",
+              "signature": {"properties": props, "checksum": suma}, "timestamp": ts,
+              "sent_at": datetime.utcnow().isoformat(timespec="milliseconds") + "Z"}
+    return json.dumps(cuerpo).encode(), suma
+
+
 def e_recarga_anulada(db, avisos, previo):
-    """Wompi anula la recarga aprobada: `verificar` la ve VOIDED, la anula y descuenta el saldo."""
+    """Wompi anula la recarga aprobada y avisa: el aviso firmado (que se relee en Wompi) la anula y descuenta el saldo.
+    Ojo: sin ese aviso nada la detecta («Verificar» y el rescate no miran recargas aprobadas; PND-304)."""
     from cobros import libro, recargas
     tx_id, rid = previo["transaccion"], previo["recarga"]
     anular(tx_id)
     tx = esperar_final(tx_id)
     esperar(tx["status"] == "VOIDED", f"Wompi no la anuló: {tx['status']}")
-    recargas.verificar(rid)
+    cuerpo, suma = evento_firmado(tx)
+    estado_http, resultado = recargas.procesar_evento_wompi(cuerpo, suma)
+    esperar((estado_http, resultado) == (200, "anulada"), f"el aviso firmado dio {estado_http} {resultado}")
     fila = _filas(db, "recarga", id=rid)[0]
     esperar(fila["estado"] == "anulada", f"estado {fila['estado']}")
     esperar(_movs(db, "sb_recarga") == [("recarga", 10000), ("anulacion", -10000)], f"movs {_movs(db, 'sb_recarga')}")
@@ -440,25 +468,40 @@ def e_nequi(db, avisos):
     mes pide aprobar en la app: eso solo se ve con un Nequi real.)"""
     from cobros import libro, planes, wompi
     pid = _plan()
-    libro.configurar("sb_nequi", usuario="sandbox", cobrar=True)
-    malo = wompi.token_nequi(NEQUI_RECHAZA)
-    token = wompi.token_nequi(NEQUI_APRUEBA)
-    fin, estado, estado_malo = time.time() + 90, "PENDING", "PENDING"
-    while time.time() < fin and "PENDING" in (estado, estado_malo):
-        time.sleep(3)
-        estado = wompi.estado_token_nequi(token, tiempo=(5, 15)) if estado == "PENDING" else estado
-        estado_malo = wompi.estado_token_nequi(malo, tiempo=(5, 15)) if estado_malo == "PENDING" else estado_malo
-    esperar(estado == "APPROVED", f"token de Nequi que aprueba: {estado}")
-    esperar(estado_malo != "APPROVED", f"token de Nequi que rechaza: {estado_malo}")
-    alta = planes.suscribir("sb_nequi", pid, "mensual", "NEQUI", token, CORREO, aceptacion(), "sandbox", 1)
-    r = _resolver("sb_nequi", alta, segundos=120)
-    esperar(r == "aprobado", f"alta con Nequi: {r}")
-    s = _sus(db, "sb_nequi")
-    r2 = planes.cobrar_periodo(s["id"], forzar=True)
-    if r2 == "pendiente":
-        pago = _filas(db, "pago_plan", cliente="sb_nequi")[-1]
-        r2 = _resolver("sb_nequi", {"estado": "pendiente", "pago_id": pago["id"]}, segundos=120)
-    return {"token_malo": estado_malo, "alta": r, "renovacion": r2}
+
+    def token_aprobado(celular):
+        token, estado, fin = wompi.token_nequi(celular), "PENDING", time.time() + 90
+        while estado == "PENDING" and time.time() < fin:
+            time.sleep(3)
+            estado = wompi.estado_token_nequi(token, tiempo=(5, 15))
+        return token, estado
+
+    # En el sandbox los números de prueba deciden el COBRO, no la inscripción (visto el 2026-10-13: el que rechaza
+    # también deja inscribir): el rechazo se mide en el alta.
+    salida = {}
+    for cliente, celular, quiere in (("sb_nequi", NEQUI_APRUEBA, "aprobado"), ("sb_nequi_malo", NEQUI_RECHAZA, None)):
+        libro.configurar(cliente, usuario="sandbox", cobrar=True)
+        token, estado = token_aprobado(celular)
+        salida[f"token_{celular}"] = estado
+        if estado != "APPROVED":
+            esperar(quiere is None, f"el token de {celular} quedó {estado}")
+            continue
+        alta = planes.suscribir(cliente, pid, "mensual", "NEQUI", token, CORREO, aceptacion(), "sandbox", 1)
+        r = _resolver(cliente, alta, segundos=120)
+        salida[f"alta_{celular}"] = r
+        if quiere:
+            esperar(r == quiere, f"alta con Nequi {celular}: {r}")
+            s = _sus(db, cliente)
+            r2 = planes.cobrar_periodo(s["id"], forzar=True)
+            if r2 == "pendiente":
+                pago = _filas(db, "pago_plan", cliente=cliente)[-1]
+                r2 = _resolver(cliente, {"estado": "pendiente", "pago_id": pago["id"]}, segundos=120)
+            esperar(r2 == "aprobado", f"renovación con Nequi: {r2}")
+            salida["renovacion"] = r2
+        else:
+            esperar(r in ("rechazado", "error") and _sus(db, cliente)["estado"] == "terminada",
+                    f"alta con el Nequi que rechaza: {r}")
+    return salida
 
 
 ESCENARIOS = [
