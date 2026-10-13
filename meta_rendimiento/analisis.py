@@ -33,6 +33,7 @@ import proyectos
 from doctrina import aprendizajes as doctrina_aprendizajes
 from meta_rendimiento import administrador, cuentas as cuentas_mod, datos, recomendaciones
 from triple_whale import analisis as tw_analisis
+from triple_whale import evaluacion
 
 log = logging.getLogger("creatv.meta_rendimiento.analisis")
 
@@ -298,7 +299,7 @@ def _bloque_anuncio(a, clase):
     m, moneda = a.get("m") or {}, _ajeno(a.get("moneda"), 8)
     lineas = [f"[{a['ref']}] «{_ajeno(a.get('nombre'))}» · cuenta «{_ajeno(a.get('cuenta_nombre'))}» · campaña "
               f"«{_ajeno(a.get('campana')) or '—'}» · conjunto «{_ajeno(a.get('conjunto')) or '—'}» · estado "
-              f"{_ajeno(a.get('estado'), 30) or '—'} · veredicto {a['veredicto']} ({_ajeno(a.get('motivo'), 300)})",
+              f"{_ajeno(a.get('estado'), 30) or '—'} · veredicto {evaluacion.texto_clave(a['veredicto'])} ({_ajeno(a.get('motivo'), 300)})",
               f"  gasto {_monto(m.get('gasto'), moneda)} · impresiones {_num(m.get('impresiones'))} · CTR "
               f"{_num(m.get('ctr'), 2)} % · CPM {_monto(m.get('cpm'), moneda)} · gancho {_pct(m.get('gancho'), 1)} · "
               f"retención {_pct(m.get('retencion'), 1)}",
@@ -306,7 +307,7 @@ def _bloque_anuncio(a, clase):
               f"{_num(m.get('roas'), 2)} · CPA {_monto(m.get('cpa'), moneda)} · conversión {_pct(m.get('conversion'), 1)}"]
     senales = list(a.get("fortalezas") or []) + list(a.get("problemas") or [])
     if senales:
-        lineas.append(f"  señales: {', '.join(_ajeno(s, 40) for s in senales)}")
+        lineas.append(f"  señales: {', '.join(_ajeno(evaluacion.texto_clave(s), 40) for s in senales)}")
     if clase == "fotogramas":
         lineas.append("  (abajo van los fotogramas de su video)")
     elif clase == "imagen":
@@ -530,8 +531,13 @@ def analizar(datos_texto, imagenes, idioma, elegidos, recs):
     """(resultado, tokens_entrada, tokens_salida). Una corrección como mucho y solo si la respuesta no sirve
     (`triple_whale.analisis.llamar_con_correccion`, que pide el JSON completo: `correccion`); si tampoco sirve, AnalisisInvalido con los tokens pagados. Las
     cifras que no están en los DATOS NO piden otra llamada pagada (E2-R5): quedan en `cifras_sin_dato` y la pantalla
-    las marca."""
-    content = [{"type": "text", "text": datos_texto}] + list(imagenes or [])
+    las marca. El mensaje cierra con la orden de idioma (`tw_analisis.cierre_idioma`, PND-218)."""
+    cierre = tw_analisis.cierre_idioma(
+        idioma, "\"resumen\", the \"causa\" and \"evidencia\" of each diagnosis, the \"que_hacer\", \"por_que\" and "
+                "\"impacto\" of each step of \"plan\", " + tw_analisis.CAMPOS_EVALUACION.replace("\"resumen\", ", "", 1),
+        f"\"accion\" of each step, \"etapa\" and \"consciencia\" of each ad, and {tw_analisis.FIJOS_ANGULO}",
+        excepciones_en="The \"prompt\" of each idea is in English too.")
+    content = [{"type": "text", "text": datos_texto}] + list(imagenes or []) + [{"type": "text", "text": cierre}]
     refs = {a["ref"] for a in elegidos or []}
     refs_rec = {r["ref"] for r in recs or [] if r.get("ref")}
     resultado, entrada, salida = tw_analisis.llamar_con_correccion(

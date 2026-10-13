@@ -33,6 +33,7 @@ from flask_babel import gettext
 import doctrina
 import idiomas
 from referentes import datos as referentes_datos
+from triple_whale import evaluacion
 from storage import r2_uploader
 
 log = logging.getLogger("creatv.triple_whale.analisis")
@@ -344,13 +345,13 @@ def _pct(v):
 def _bloque(a, medio):
     m = a["m"]
     lineas = [f"[{a['ref']}] «{_linea(a['nombre'])}» · {a['canal']} · campaña «{_linea(a.get('campana')) or '—'}» · "
-              f"veredicto: {a['veredicto']} ({a['motivo']})",
+              f"veredicto: {evaluacion.texto_clave(a['veredicto'])} ({a['motivo']})",
               f"  gasto {_num(m['gasto'])} · impresiones {_num(m['impresiones'], 0)} · CTR {_num(m['ctr'])} % · "
               f"CPM {_num(m['cpm'])} · gancho {_pct(m['gancho'])} · retención {_pct(m['retencion'])}",
               f"  pedidos {_num(m['pedidos'], 1)} · ingresos {_num(m['ingresos'])} · ROAS {_num(m['roas'])}× · "
               f"CPA {_num(m['cpa'])} · conversión {_pct(m['conversion'])}"]
     if a["problemas"] or a["fortalezas"]:
-        lineas.append(f"  señales: {', '.join(a['fortalezas'] + a['problemas'])}")
+        lineas.append(f"  señales: {', '.join(evaluacion.texto_clave(s) for s in a['fortalezas'] + a['problemas'])}")
     if medio and (medio.get("titulo") or medio.get("texto")):
         # El título y el copy se traen de Meta: van en su bloque, sin rachas de `<`/`>` que lo cierren (PND-286).
         copia = _dato("\n".join(x for x in (f"Título: {medio['titulo']}" if medio.get("titulo") else "",
@@ -411,11 +412,30 @@ def imagenes_para(anuncios, bloques):
         if not v or not v.get("bloques"):
             continue
         if v.get("clase") == "fotogramas":
-            imagenes.append({"type": "text", "text": f"Fotogramas de {a['ref']} ({a['veredicto']}), en orden:"})
+            imagenes.append({"type": "text", "text": f"Fotogramas de {a['ref']} ({evaluacion.texto_clave(a['veredicto'])}), en orden:"})
         else:
-            imagenes.append({"type": "text", "text": f"Imagen de {a['ref']} ({a['veredicto']}):"})
+            imagenes.append({"type": "text", "text": f"Imagen de {a['ref']} ({evaluacion.texto_clave(a['veredicto'])}):"})
         imagenes.extend(v["bloques"])
     return imagenes
+
+
+FIJOS_ANGULO = "\"consciencia\", \"lead\" and the \"fuente\" of each proof inside \"angulo\""
+CAMPOS_EVALUACION = ("\"resumen\", every \"patron\", the \"por_que\", \"gancho\" and \"formato\" of each ad, and the "
+                     "\"titulo\", \"por_que\", \"angulo\" and \"escena\" of each idea")
+
+
+def cierre_idioma(idioma, campos, fijos, excepciones_en="", excepciones_es=""):
+    """La última línea del mensaje de una llamada que devuelve JSON (PND-218, 2026-10-13). Con la orden de idioma solo en
+    el system, las instrucciones en español arrastraban la respuesta: en «Cómo mejorarlo» la misma orden al final pero
+    escrita en español no movió nada (1 de 3 en inglés) y escrita en inglés, nombrando cada campo, dio 4 de 4
+    (`docs/superpowers/evals/2026-10-13-mejorar-estaticos-idioma.md`). `campos` son los que se escriben en el idioma
+    del proyecto y `fijos` los valores de una lista cerrada que la validación espera tal cual (traducidos, no validan).
+    En otro idioma, la orden de siempre (`idiomas.orden_idioma`) y `excepciones_es`."""
+    if idiomas.normalizar(idioma) == "en":
+        extra = f" {excepciones_en}" if excepciones_en else ""
+        return (f"LANGUAGE: write every text field of your JSON in English — {campos} — even though the instructions "
+                f"above are in Spanish. Keep the fixed values of {fijos} exactly as the instructions list them.{extra}")
+    return idiomas.orden_idioma(idioma) + (f" {excepciones_es}" if excepciones_es else "")
 
 
 def system(idioma):
@@ -598,7 +618,9 @@ def analizar(marca, contexto, anuncios, medios, idioma, bloques=None, productos=
     """(resultado, tokens_entrada, tokens_salida). Una corrección si la primera
     respuesta no sirve; si tampoco, AnalisisInvalido con los tokens pagados."""
     texto, imagenes = armar(marca, contexto, anuncios, medios, bloques=bloques, productos=productos)
-    content = [{"type": "text", "text": texto}] + imagenes
+    cierre = cierre_idioma(idioma, CAMPOS_EVALUACION, f"\"etapa\" and \"consciencia\" of each ad, and {FIJOS_ANGULO}",
+                           excepciones_en="The \"prompt\" of each idea is in English too.")
+    content = [{"type": "text", "text": texto}] + imagenes + [{"type": "text", "text": cierre}]
     validas = {a["ref"] for a in anuncios}
     return llamar_con_correccion(content, system(idioma), lambda crudo: parsear(crudo, validas, texto))
 

@@ -558,3 +558,23 @@ def test_delete_files_usa_un_solo_cliente_sigue_tras_un_fallo_y_no_cuenta_el_tex
     monkeypatch.delenv("R2_BUCKET_NAME")
     with pytest.raises(RuntimeError):
         r2_uploader.delete_files(["a.jpg"])
+
+
+def test_analizar_cierra_con_la_orden_de_idioma_y_conserva_las_acciones(monkeypatch):
+    """PND-218 (2026-10-13): la orden de idioma, escrita en inglés, va al final; las acciones del plan se conservan tal
+    cual porque `parsear` solo acepta las de ACCIONES."""
+    import idiomas
+    llamadas = []
+
+    def _llamar(content, system_):
+        llamadas.append(content)
+        return respuesta(), 100, 50
+    monkeypatch.setattr(analisis, "_llamar", _llamar)
+    analisis.analizar("DATOS 1", [{"type": "image"}], "en", _muestra(), _recs())
+    contenido = llamadas[0]
+    assert contenido[0]["text"] == "DATOS 1" and contenido[1] == {"type": "image"}
+    cierre = contenido[-1]["text"]
+    assert cierre.startswith("LANGUAGE: write every text field of your JSON in English") and '"que_hacer"' in cierre
+    assert '"accion" of each step' in cierre and '"resumen", the "causa"' in cierre and cierre.count('"resumen"') == 1
+    analisis.analizar("DATOS 1", [], "es", _muestra(), _recs())
+    assert llamadas[1][-1]["text"] == idiomas.orden_idioma("es")

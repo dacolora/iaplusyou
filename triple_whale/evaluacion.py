@@ -90,8 +90,20 @@ NIVEL_ALTO = 67
 NIVEL_MEDIO = 34
 TENDENCIAS = {"cansando": N_("Se está cansando"), "mejorando": N_("Mejorando"),
               "sin_gasto": N_("Sin gasto estos 7 días"), "estable": N_("Estable")}
+# Las claves internas que viajan en los prompts de Claude (veredicto, tendencia, señales, anillo sin dato) con su texto
+# (PND-306, 2026-10-13): en un proyecto en inglés, «Cómo mejorarlo» citaba «(trend: cansando)». Sin choques entre ellas.
+_TEXTO_CLAVE = {**ETIQUETAS_VEREDICTO, **TENDENCIAS, **FORTALEZAS, **{k: v[0] for k, v in PROBLEMAS.items()},
+                **VACIOS_ANILLO}
 SUBIDA_ROAS_MEJORA = 0.20
 SUBIDA_CTR_MEJORA = 0.25
+
+
+def texto_clave(clave):
+    """El texto de una clave interna (veredicto, tendencia, señal o anillo sin dato) en el idioma activo, para un
+    prompt de Claude: el worker corre cada tarea en el idioma de su proyecto (`worker.ejecutar`). Una clave que no está
+    en la lista sale tal cual (un dato nuevo no rompe el prompt)."""
+    mensaje = _TEXTO_CLAVE.get(clave)
+    return gettext(mensaje) if mensaje else clave
 
 
 # ----------------------------------------------------------- números ---
