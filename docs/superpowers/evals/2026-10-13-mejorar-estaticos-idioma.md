@@ -70,3 +70,12 @@ español («IDIOMA: escribe en inglés…» + excepciones); **v2** = la misma or
 **Total gastado:** US$ 0,98 (6 llamadas de la primera vuelta, US$ 0,60; 4 de la segunda, US$ 0,38), Anthropic, cuenta
 de Creatv. **Conclusión:** se cierra. Ningún caso que salía bien sale mal, los estáticos piden la edición de su imagen y,
 con la orden en inglés, la respuesta sale en inglés.
+
+## En producción
+
+Desplegado el 2026-10-13 a las 16:30:58 UTC (main 3605c25d, los dos servicios, sin migración, alembic 0040). Por
+decisión de Daniel, los análisis 1 y 2 de happyflops se rehicieron gratis con la misma tarea (`tw_analizar_anuncio`,
+script a mano en el VPS): los dos salieron en inglés y con versión de imagen, y lo que cobró Claude (US$ 0,1041 +
+0,0714) quedó en `_creatv` con referencias `rehacer:happyflops:tw_anuncio:<id>:t0`, sin nada para el cliente. Un primer
+intento falló antes de llamar a Claude (el script no cargaba el `.env` como `worker.py`: sin la llave, `_api_key` lanza
+`RuntimeError`) y no gastó nada. De ahí salió PND-306 («trend: cansando»).
