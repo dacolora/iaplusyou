@@ -237,9 +237,12 @@ def test_la_vigilancia_pausa_si_gasta_mas_del_doble_de_su_diario(entorno, base_t
     """Lo que pasó el 2026-10-08: 42 498 COP en dos horas con un diario de 8 000. Se frena en 10 minutos."""
     ex, lz, meta = entorno["ex"], entorno["lanzador"], entorno["meta"]
     eid, cid = _corriendo(entorno, base_temporal, tope=280000.0)
+    adset = ex.obtener("acme", eid)["paises"][0]["meta_adset_id"]
     meta.gastos[cid] = (9000.0, 9000.0)
+    meta.gastos_conjuntos[adset] = 9000.0
     assert "doble" in lz.vigilar_gasto("acme", eid)
     assert ex.obtener("acme", eid)["estado"] == "pausado"
+    assert (cid, {"status": "PAUSED"}) in meta.posts   # la entrega se corta con la llamada directa
 
 
 def test_la_periodica_vigila_cada_10_minutos_y_uno_que_falla_no_frena_a_los_demas(entorno, base_temporal, monkeypatch):
@@ -382,22 +385,59 @@ def test_un_pausado_en_creatv_que_sigue_activo_en_meta_se_vuelve_a_pausar(entorn
     assert ("estado", {"oid": cid, "status": "PAUSED"}) in meta.llamadas
 
 
-def test_el_ritmo_se_mide_contra_el_diario_de_todos_los_paises(entorno, base_temporal):
-    """Un país pausado hoy ya gastó parte de lo de hoy: no se pausa todo por eso (falso positivo de la revisión)."""
+def test_el_ritmo_se_mide_conjunto_por_conjunto(entorno, base_temporal):
+    """Revisión de gasto: contra la suma de los países, un país pausado hoy daba falsos positivos y un solo país activo
+    con el diario inflado tardaba horas en frenar. Cada conjunto se mide contra SU diario."""
     ex, lz, meta = entorno["ex"], entorno["lanzador"], entorno["meta"]
-    eid = ex.crear("acme", "Dos", [{"pais": "CO", "idioma": "es", "presupuesto_dia": 4000.0},
-                                   {"pais": "MX", "idioma": "es", "presupuesto_dia": 4000.0}],
-                   "OUTCOME_TRAFFIC", 7, 280000.0, URL, "COP")
-    ex.agregar_pieza("acme", eid, _pieza(base_temporal), "CO")
-    ex.agregar_pieza("acme", eid, _pieza(base_temporal, legado="cf_2__es_MX", pais="MX"), "MX")
+    paises = [{"pais": p, "idioma": "es", "presupuesto_dia": 4000.0} for p in ("CO", "MX", "PE", "CL", "AR")]
+    eid = ex.crear("acme", "Cinco", paises, "OUTCOME_TRAFFIC", 7, 280000.0, URL, "COP")
+    for p in ("CO", "MX", "PE", "CL", "AR"):
+        ex.agregar_pieza("acme", eid, _pieza(base_temporal, legado=f"cf_{p}__es_{p}", pais=p), p)
     lz.lanzar("acme", eid)
     lz.cambiar_estado("acme", eid, "ACTIVE")
     lz.cambiar_estado("acme", eid, "PAUSED", pais="MX")
-    cid = ex.obtener("acme", eid)["meta_campaign_id"]
-    meta.gastos[cid] = (9000.0, 9000.0)
+    e = ex.obtener("acme", eid)
+    conjunto = {p["pais"]: p["meta_adset_id"] for p in e["paises"]}
+    meta.gastos[e["meta_campaign_id"]] = (13000.0, 13000.0)
+    meta.gastos_conjuntos.update({conjunto["MX"]: 7000.0, conjunto["CO"]: 6000.0})   # MX gastó antes de pausarlo
     assert lz.vigilar_gasto("acme", eid) is None
-    meta.gastos[cid] = (17000.0, 17000.0)
-    assert "doble" in lz.vigilar_gasto("acme", eid)
+    meta.gastos_conjuntos[conjunto["CO"]] = 9000.0     # un solo país pasa el doble de SU diario: se frena ya
+    assert "CO" in lz.vigilar_gasto("acme", eid)
+    assert ex.obtener("acme", eid)["estado"] == "pausado"
+
+
+def test_la_vigilancia_corta_la_entrega_sin_esperar_el_candado_de_un_lanzamiento(entorno, base_temporal):
+    """Revisión de gasto: un lanzamiento tiene el candado de Meta mientras sube videos (hasta 180 s por pieza). La
+    vigilancia lee y pausa la campaña con la llave del proyecto directo, sin ese candado."""
+    import threading
+    from tareas.meta import _LOCK
+    ex, lz, meta = entorno["ex"], entorno["lanzador"], entorno["meta"]
+    eid, cid = _corriendo(entorno, base_temporal)
+    meta.gastos[cid] = (28000.0, 0.0)
+    with _LOCK:   # «un lanzamiento» tiene el candado
+        hilo = threading.Thread(target=lz.vigilar_gasto, args=("acme", eid), daemon=True)
+        hilo.start()
+        for _ in range(100):
+            if (cid, {"status": "PAUSED"}) in meta.posts:
+                break
+            threading.Event().wait(0.02)
+        assert (cid, {"status": "PAUSED"}) in meta.posts
+    hilo.join(timeout=5)
+    assert not hilo.is_alive() and ex.obtener("acme", eid)["estado"] == "pausado"
+
+
+def test_la_vigilancia_no_repausa_lo_que_alguien_esta_activando(entorno, base_temporal):
+    """Revisión de gasto: activar desde el panel enciende Meta y después pasa a «corriendo»; en ese rato el
+    experimento dice «pausado» con la campaña activa, y la vigilancia no lo debe volver a pausar."""
+    ex, lz, meta = entorno["ex"], entorno["lanzador"], entorno["meta"]
+    eid, cid = _corriendo(entorno, base_temporal)
+    lz.cambiar_estado("acme", eid, "PAUSED")
+    meta.estados_meta[cid] = "ACTIVE"
+    lz._marcar_activando("acme", eid, True)
+    meta.llamadas.clear()
+    assert lz.vigilar_gasto("acme", eid) is None and not meta.llamadas
+    lz._marcar_activando("acme", eid, False)
+    assert "activo en Meta" in lz.vigilar_gasto("acme", eid)
 
 
 def test_un_error_de_lectura_deja_un_solo_aviso(entorno, base_temporal, monkeypatch):

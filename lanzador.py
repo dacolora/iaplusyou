@@ -11,6 +11,8 @@ import logging
 import math
 import time
 
+import requests
+
 from flask_babel import gettext, ngettext
 
 import app_tiendas
@@ -651,22 +653,30 @@ def cambiar_estado(cliente, experimento_id, status, pais=None, desde_lanzamiento
             else:
                 experimentos.actualizar_pieza(cliente, pz["id"], estado=local)
 
-    _con_credenciales(cliente, _correr)
-    if pais is None:
-        if status == "ACTIVE":
+    # PND-319: la marca «activando» cubre desde antes de tocar Meta hasta que el estado ya dice «corriendo»; mientras
+    # tanto la vigilancia no confunde un experimento a medio activar con uno pausado que sigue activo en Meta.
+    if status == "ACTIVE":
+        _marcar_activando(cliente, experimento_id, True)
+    try:
+        _con_credenciales(cliente, _correr)
+        if pais is None:
+            if status == "ACTIVE":
+                _a_corriendo(cliente, experimento_id)
+            else:
+                experimentos.actualizar(cliente, experimento_id, estado="pausado")
+        elif status == "ACTIVE" and ex["estado"] != "corriendo":
             _a_corriendo(cliente, experimento_id)
-        else:
-            experimentos.actualizar(cliente, experimento_id, estado="pausado")
-    elif status == "ACTIVE" and ex["estado"] != "corriendo":
-        _a_corriendo(cliente, experimento_id)
-    elif status == "PAUSED":
-        # M5: si ese país era el último activo, "corriendo" ya no refleja la
-        # realidad (todos los conjuntos quedaron PAUSED en Meta) — el rótulo
-        # importa porque exp_refrescar_todos sigue puliendo lo que está
-        # "corriendo".
-        otros_activos = any(p["estado"] == "activo" for p in ex["paises"] if p["pais"] != pais)
-        if not otros_activos:
-            experimentos.actualizar(cliente, experimento_id, estado="pausado")
+        elif status == "PAUSED":
+            # M5: si ese país era el último activo, "corriendo" ya no refleja la
+            # realidad (todos los conjuntos quedaron PAUSED en Meta) — el rótulo
+            # importa porque exp_refrescar_todos sigue puliendo lo que está
+            # "corriendo".
+            otros_activos = any(p["estado"] == "activo" for p in ex["paises"] if p["pais"] != pais)
+            if not otros_activos:
+                experimentos.actualizar(cliente, experimento_id, estado="pausado")
+    finally:
+        if status == "ACTIVE":
+            _marcar_activando(cliente, experimento_id, False)
     objetivo = pais or gettext("todo el experimento")
     mensaje = (gettext("Activado %(objetivo)s", objetivo=objetivo) if status == "ACTIVE" else
                gettext("Pausado %(objetivo)s", objetivo=objetivo))
@@ -700,43 +710,114 @@ def _confirmar_antes_de_activar(creds, ex, pais=None):
                 _confirmar_presupuesto(adset_id, esperado, pausar=ids)
 
 
-# PND-319: la vigilancia del gasto pausa cuando hoy se gasta más que este múltiplo del diario de los países activos.
-# Meta puede pasarse hasta un 75 % un día; el doble ya no es un día bueno, es un monto mal puesto.
+# PND-319: la vigilancia pausa cuando un conjunto gasta hoy más que este múltiplo de SU diario. Meta puede pasarse
+# hasta un 75 % un día; el doble ya no es un día bueno, es un monto mal puesto. Se mide conjunto por conjunto: contra
+# la suma de los países, un solo país activo con un diario inflado tardaba horas en frenar (revisión de gasto).
 RITMO_MAXIMO = 2.0
+# Mientras alguien activa (panel o worker), la vigilancia no vuelve a pausar un experimento que todavía dice «pausado».
+_VENTANA_ACTIVANDO_S = 900
 
 
 def _gasto_campana(campaign_id, periodo):
-    """Gasto de la campaña según Meta (`insights`, `spend`, en la moneda de la cuenta, no en su unidad)."""
+    """Gasto de la campaña según Meta (`insights`, `spend`, en la moneda de la cuenta, no en su unidad). Bajo el
+    candado de credenciales: lo usa la comprobación antes de activar."""
     r = meta_auth.llamar("GET", f"{campaign_id}/insights", params={"fields": "spend", "date_preset": periodo}) or {}
-    filas = r.get("data") or []
+    return _spend(r)
+
+
+def _spend(respuesta):
+    filas = (respuesta or {}).get("data") or []
     try:
         return float(filas[0].get("spend") or 0) if filas else 0.0
     except (TypeError, ValueError):
         return 0.0
 
 
+def _meta_directo(cliente, metodo, edge, params=None, payload=None):
+    """Llamada a Meta con la llave del proyecto, SIN la configuración global de `meta_ads.auth` ni su candado: la
+    vigilancia no espera a un lanzamiento que sube videos (revisión de gasto de PND-319). Nunca deja la llave en un
+    error. Las pruebas la reemplazan por el Meta falso."""
+    token = meta_conexion.credenciales_ads(cliente)["token"]
+    url = f"{meta_auth.BASE_URL}/{edge}"
+    try:
+        if metodo == "GET":
+            r = requests.get(url, params={**(params or {}), "access_token": token}, timeout=30)
+        else:
+            r = requests.post(url, data={**(payload or {}), "access_token": token}, timeout=30)
+    except requests.exceptions.RequestException as e:
+        raise RuntimeError(f"Meta no respondió ({type(e).__name__})") from None
+    try:
+        datos = r.json()
+    except ValueError:
+        datos = {}
+    if r.status_code >= 400 or (isinstance(datos, dict) and datos.get("error")):
+        detalle = cola.sin_token(str((datos or {}).get("error") or ""))[:200] if isinstance(datos, dict) else ""
+        raise RuntimeError(f"Meta respondió {r.status_code}: {detalle}")
+    return datos if isinstance(datos, dict) else {}
+
+
+def _activando(ex):
+    """True si alguien empezó a activar este experimento hace menos de `_VENTANA_ACTIVANDO_S`."""
+    marca = (ex.get("extra") or {}).get("activando_en")
+    if not marca:
+        return False
+    try:
+        from datetime import datetime
+        return (datetime.now() - datetime.fromisoformat(str(marca))).total_seconds() < _VENTANA_ACTIVANDO_S
+    except ValueError:
+        return False
+
+
+def _marcar_activando(cliente, experimento_id, marcar):
+    def cambiar(extra):
+        extra = dict(extra or {})
+        if marcar:
+            extra["activando_en"] = db.ahora()
+        else:
+            extra.pop("activando_en", None)
+        return extra
+    experimentos.actualizar_extra(cliente, experimento_id, cambiar)
+
+
+def _pausar_campana_ya(cliente, ex):
+    """Corta la entrega en el acto: la campaña en PAUSED por la llamada directa (sin esperar el candado). Después,
+    `cambiar_estado`/`_pausar_todo_en_meta` dejan en pausa conjuntos, anuncios y el estado local."""
+    _meta_directo(cliente, "POST", ex["meta_campaign_id"], payload={"status": "PAUSED"})
+
+
 def _repausar_si_sigue_activo(cliente, ex):
     """Un experimento pausado (o en error) en Creatv cuya campaña sigue ACTIVA en Meta —una pausa que falló a medias—
-    se vuelve a pausar entero (PND-319, revisión de gasto). Solo lee el estado de la campaña: un GET."""
-    leido = {}
-
-    def _leer(_creds):
-        leido["estado"] = (meta_auth.llamar("GET", ex["meta_campaign_id"], params={"fields": "effective_status"})
-                           or {}).get("effective_status")
-
-    _con_credenciales(cliente, _leer)
-    if leido.get("estado") != "ACTIVE":
+    se vuelve a pausar entero (PND-319, revisión de gasto). Solo lee el estado de la campaña: un GET. No toca uno que
+    alguien está activando en este momento (`_activando`)."""
+    estado = _meta_directo(cliente, "GET", ex["meta_campaign_id"], params={"fields": "effective_status"}).get(
+        "effective_status")
+    if estado != "ACTIVE":
         return None
-    _pausar_todo_en_meta(cliente, ex)
+    actual = experimentos.obtener(cliente, ex["id"])
+    if not actual or actual["estado"] not in ("pausado", "error") or _activando(actual):
+        return None
+    _pausar_campana_ya(cliente, actual)
+    _pausar_todo_en_meta(cliente, actual)
     motivo = gettext("Estaba en pausa en Creatv pero activo en Meta: se volvió a pausar.")
     experimentos.registrar_evento(cliente, ex["id"], "presupuesto", motivo, {"estado_meta": "ACTIVE"})
     return motivo
 
 
+def _diario_por_conjunto(ex):
+    """{adset_id: (diario en la moneda, país)}: el diario del país repartido entre sus conjuntos (apps: uno por tienda)."""
+    out = {}
+    for p in ex["paises"]:
+        ids = _adsets_de_pais(p)
+        for adset_id in ids:
+            out[adset_id] = (float(p.get("presupuesto_dia") or 0) / len(ids), p["pais"])
+    return out
+
+
 def vigilar_gasto(cliente, experimento_id):
-    """PND-319: lee en Meta lo que de verdad gastó la campaña (en total y hoy) y la pausa entera si llegó al tope o si
-    hoy va por más de `RITMO_MAXIMO` veces el diario de sus países activos. No espera a las métricas de cada 2 h ni al
-    decisor de cada hora: lo corre la periódica `exp_vigilar_gasto` cada 10 min. Devuelve el motivo si pausó."""
+    """PND-319: lee en Meta lo que de verdad gastó la campaña en total y lo que gastó hoy cada conjunto, y la pausa
+    entera si llegó al tope o si un conjunto va hoy por más de `RITMO_MAXIMO` veces su diario. Usa la llave del
+    proyecto directo (`_meta_directo`): no espera el candado de un lanzamiento, y corre en su propio carril del worker
+    cada 10 min (`exp_vigilar_gasto`). Devuelve el motivo si pausó."""
     ex = experimentos.obtener(cliente, experimento_id)
     if not ex or not ex["meta_campaign_id"]:
         return None
@@ -744,33 +825,40 @@ def vigilar_gasto(cliente, experimento_id):
         return _repausar_si_sigue_activo(cliente, ex)
     if ex["estado"] not in ("corriendo", "decidido"):
         return None
-    lectura = {}
-
-    def _leer(_creds):
-        lectura["total"] = _gasto_campana(ex["meta_campaign_id"], "maximum")
-        lectura["hoy"] = _gasto_campana(ex["meta_campaign_id"], "today")
-
-    _con_credenciales(cliente, _leer)
-    total, hoy = lectura["total"], lectura["hoy"]
+    cid = ex["meta_campaign_id"]
+    total = _spend(_meta_directo(cliente, "GET", f"{cid}/insights",
+                                 params={"fields": "spend", "date_preset": "maximum"}))
+    hoy = {}
+    for fila in (_meta_directo(cliente, "GET", f"{cid}/insights",
+                               params={"fields": "adset_id,spend", "date_preset": "today", "level": "adset"})
+                 .get("data") or []):
+        try:
+            hoy[str(fila.get("adset_id"))] = float(fila.get("spend") or 0)
+        except (TypeError, ValueError):
+            continue
     if total > float(ex["gasto_acumulado"] or 0):
         experimentos.actualizar(cliente, experimento_id, gasto_acumulado=round(total, 2))
     from tablero import dinero as _dinero
     moneda = ex["moneda"] or "USD"
     tope = float(ex["tope_total"] or 0)
-    # El diario de todos los países con conjunto: lo de hoy incluye lo que gastó un país antes de pausarlo.
-    diario = diario_activable(ex)
-    motivo = None
+    motivo, datos = None, {"gasto_total": total, "tope": tope}
     if tope > 0 and total >= tope:
         motivo = gettext("Llegó a su tope en Meta (%(gasto)s de %(tope)s): se pausó.",
                          gasto=_dinero(total, moneda), tope=_dinero(tope, moneda))
-    elif diario > 0 and hoy > RITMO_MAXIMO * diario:
-        motivo = gettext("Hoy gastó %(hoy)s con un diario de %(diario)s: es más del doble, así que se pausó para "
-                         "revisarlo.", hoy=_dinero(hoy, moneda), diario=_dinero(diario, moneda))
+    else:
+        for adset_id, (diario, pais) in _diario_por_conjunto(ex).items():
+            gastado = hoy.get(str(adset_id), 0.0)
+            if diario > 0 and gastado > RITMO_MAXIMO * diario:
+                motivo = gettext("Hoy %(pais)s gastó %(hoy)s con un diario de %(diario)s: es más del doble, así que se "
+                                 "pausó para revisarlo.", pais=pais, hoy=_dinero(gastado, moneda),
+                                 diario=_dinero(diario, moneda))
+                datos.update(conjunto=adset_id, gasto_hoy=gastado, diario=diario)
+                break
     if not motivo:
         return None
+    _pausar_campana_ya(cliente, ex)   # la entrega se corta ya; lo de abajo puede esperar el candado
     cambiar_estado(cliente, experimento_id, "PAUSED")
-    experimentos.registrar_evento(cliente, experimento_id, "presupuesto", motivo,
-                                  {"gasto_total": total, "gasto_hoy": hoy, "tope": tope, "diario": diario})
+    experimentos.registrar_evento(cliente, experimento_id, "presupuesto", motivo, datos)
     return motivo
 
 
@@ -1137,16 +1225,20 @@ def activar_pieza(cliente, ep_id):
                 meta_adset.actualizar_estado(adset_id, "ACTIVE")
         meta_ad.actualizar_estado(pz["meta_ad_id"], "ACTIVE")
 
-    _con_credenciales(cliente, _correr)
-    experimentos.actualizar_pieza(cliente, ep_id, estado="activo")
-    experimentos.marcar_pieza(cliente, ep_id, activado_en=db.ahora())
-    if pais:
-        experimentos.actualizar_pais(cliente, ex["id"], pz["pais"], estado="activo")
-    if campaña_pausada or ex["estado"] == "decidido":
-        # Un experimento 'decidido' que vuelve a tener un anuncio activo
-        # (pieza de rescate aprobada después) vuelve a 'corriendo' para que
-        # exp_decidir_todos la evalúe; si no, la escalera se queda sin juez.
-        _a_corriendo(cliente, ex["id"])
+    _marcar_activando(cliente, ex["id"], True)   # PND-319: hasta que el estado ya dice «corriendo» (ver cambiar_estado)
+    try:
+        _con_credenciales(cliente, _correr)
+        experimentos.actualizar_pieza(cliente, ep_id, estado="activo")
+        experimentos.marcar_pieza(cliente, ep_id, activado_en=db.ahora())
+        if pais:
+            experimentos.actualizar_pais(cliente, ex["id"], pz["pais"], estado="activo")
+        if campaña_pausada or ex["estado"] == "decidido":
+            # Un experimento 'decidido' que vuelve a tener un anuncio activo
+            # (pieza de rescate aprobada después) vuelve a 'corriendo' para que
+            # exp_decidir_todos la evalúe; si no, la escalera se queda sin juez.
+            _a_corriendo(cliente, ex["id"])
+    finally:
+        _marcar_activando(cliente, ex["id"], False)
     experimentos.registrar_evento(cliente, ex["id"], "estado",
                                   gettext("Activado: %(nombre)s (%(pais)s)", nombre=pz["nombre"], pais=pz["pais"]), ep_id=ep_id)
 

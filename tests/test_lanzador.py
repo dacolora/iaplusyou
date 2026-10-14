@@ -23,6 +23,7 @@ class MetaFalsa:
         self.topes = {}
         self.gastos = {}
         self.estados_meta = {}   # id de campaña -> effective_status que contesta Meta
+        self.gastos_conjuntos = {}   # id de conjunto -> gasto de hoy (insights level=adset)
         self.posts = []          # (edge, payload) de cada POST directo por meta_auth (p. ej. end_time)
 
     def _adset(self, nombre, cid, obj, targeting, centavos, dias, dry_run=False, promoted_object=None):
@@ -41,6 +42,10 @@ class MetaFalsa:
         self.topes[r["id"]] = spend_cap_centavos
         return r
 
+    def _directo(self, cliente, metodo, edge, params=None, payload=None):
+        """Lo que `lanzador._meta_directo` le pide a Meta con la llave del proyecto, sin el candado."""
+        return self._llamar(metodo, edge, payload, params)
+
     def _llamar(self, metodo, edge, payload=None, params=None, dry_run=False):
         params = params or {}
         if metodo != "GET":
@@ -48,6 +53,8 @@ class MetaFalsa:
             return {"success": True}
         if edge.startswith("act_"):
             return dict(self.cuenta)
+        if edge.endswith("/insights") and params.get("level") == "adset":
+            return {"data": [{"adset_id": k, "spend": str(v)} for k, v in self.gastos_conjuntos.items()]}
         if edge.endswith("/insights"):
             total, hoy = self.gastos.get(edge.split("/")[0], (0.0, 0.0))
             return {"data": [{"spend": str(total if params.get("date_preset") == "maximum" else hoy)}]}
@@ -99,6 +106,7 @@ def entorno(base_temporal, monkeypatch):
     monkeypatch.setattr(lanzador, "meta_ad", ad)
     monkeypatch.setattr(lanzador, "meta_insights", insights)
     monkeypatch.setattr(lanzador, "meta_auth", auth)
+    monkeypatch.setattr(lanzador, "_meta_directo", meta._directo)
     monkeypatch.setattr(lanzador.meta_conexion, "credenciales_ads", lambda c: {"token": "t", "ad_account_id": "1", "page_id": "2", "ig_user_id": None})
     monkeypatch.setattr(lanzador.meta_conexion, "cargar", lambda c: {"moneda": "COP"})
     monkeypatch.setattr(lanzador, "_miniatura_para_ad", lambda cliente, ad_id, url: "https://r2/mini.jpg")
@@ -131,6 +139,7 @@ def _entorno_app(base_temporal, monkeypatch, app):
     monkeypatch.setattr(lanzador, "meta_ad", ad)
     monkeypatch.setattr(lanzador, "meta_insights", insights)
     monkeypatch.setattr(lanzador, "meta_auth", auth)
+    monkeypatch.setattr(lanzador, "_meta_directo", meta._directo)
     monkeypatch.setattr(lanzador.meta_conexion, "credenciales_ads", lambda c: {"token": "t", "ad_account_id": "1", "page_id": "2", "ig_user_id": None})
     monkeypatch.setattr(lanzador.meta_conexion, "cargar", lambda c: {"moneda": "COP"})
     monkeypatch.setattr(lanzador.meta_conexion, "cargar_app_anunciada", lambda c: "12345")

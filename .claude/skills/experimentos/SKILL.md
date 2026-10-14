@@ -111,9 +111,13 @@ alcanza el tope (`_dias_que_alcanza`, al menos 1 día) y queda un evento que lo 
 (`_preparar_fin_primera_activacion`) usa los MISMOS días (antes devolvía los del experimento y deshacía el freno), y
 activar se niega si el gasto en Meta ya llegó al tope; (4) la periódica `exp_vigilar_gasto` (10 min, en su PROPIO
 carril del worker, `CARRIL_VIGILANCIA`: en el general esperaba horas detrás de renders) lee el gasto real de cada
-campaña `corriendo`/`decidido` y la pausa entera si llegó al tope o si hoy va por más de `RITMO_MAXIMO` (2) veces el
-diario de todos sus países con conjunto (`diario_activable`); un experimento `pausado` o en `error` cuya campaña siga
-ACTIVA en Meta se vuelve a pausar; un error de lectura deja un solo aviso, no uno cada 10 min. Si una lectura de
+campaña `corriendo`/`decidido` y la pausa entera si llegó al tope o si UN conjunto va hoy por más de `RITMO_MAXIMO`
+(2) veces SU diario (insights `level=adset`; contra la suma de países, un solo país inflado tardaba horas); lee y corta
+la entrega con la llave del proyecto directo (`_meta_directo`, sin el candado `_LOCK` que un lanzamiento tiene
+mientras sube videos) y después pausa todo con `cambiar_estado`; un experimento `pausado` o en `error` cuya campaña
+siga ACTIVA en Meta se vuelve a pausar, salvo que alguien lo esté activando (`extra.activando_en`, que
+`cambiar_estado` y `activar_pieza` ponen desde antes de tocar Meta hasta que el estado dice «corriendo»); un error de
+lectura deja un solo aviso, no uno cada 10 min. Si una lectura de
 vuelta no coincide y la pausa falla, el país NO se marca «pausado» (el aviso dice «páusalo en Meta ya») para que la
 vigilancia lo siga contando. «Activar» de un anuncio suelto (`dashboard.cambiar_estado_ad`) pasa por los mismos
 frenos y se niega si la ficha no tiene su `presupuesto_diario`.

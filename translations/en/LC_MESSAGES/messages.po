@@ -10131,8 +10131,8 @@ msgid "How does your product help them achieve that status/characteristics?"
 msgstr "How does your product help them achieve that status/characteristics?"
 
 #, python-format
-msgid "Hoy gastó %(hoy)s con un diario de %(diario)s: es más del doble, así que se pausó para revisarlo."
-msgstr "Today it spent %(hoy)s on a daily budget of %(diario)s: more than double, so it was paused for review."
+msgid "Hoy %(pais)s gastó %(hoy)s con un diario de %(diario)s: es más del doble, así que se pausó para revisarlo."
+msgstr "Today %(pais)s spent %(hoy)s on a daily budget of %(diario)s: more than double, so it was paused for review."
 
 #, python-format
 msgid "Hoy va en %(ventas)s y %(pedidos)s, con %(gasto)s de gasto."
