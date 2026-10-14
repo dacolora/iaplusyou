@@ -747,14 +747,14 @@ def _meta_directo(cliente, metodo, edge, params=None, payload=None):
         else:
             r = requests.post(url, data={**(payload or {}), "access_token": token}, timeout=30)
     except requests.exceptions.RequestException as e:
-        raise RuntimeError(f"Meta no respondió ({type(e).__name__})") from None
+        raise RuntimeError(gettext("Meta no respondió (%(tipo)s)", tipo=type(e).__name__)) from None
     try:
         datos = r.json()
     except ValueError:
         datos = {}
     if r.status_code >= 400 or (isinstance(datos, dict) and datos.get("error")):
         detalle = cola.sin_token(str((datos or {}).get("error") or ""))[:200] if isinstance(datos, dict) else ""
-        raise RuntimeError(f"Meta respondió {r.status_code}: {detalle}")
+        raise RuntimeError(gettext("Meta respondió %(codigo)s: %(detalle)s", codigo=r.status_code, detalle=detalle))
     return datos if isinstance(datos, dict) else {}
 
 
