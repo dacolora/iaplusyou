@@ -4829,37 +4829,12 @@ h2.portada-titulo { display: block; margin: 0 0 var(--esp-4); text-transform: no
 h2.portada-titulo::before { content: none; }
 .portada-centro-sub { margin: 0 auto; color: var(--muted); font-size: 1.1rem; line-height: 1.55; max-width: 46rem; }
 
-/* Pasos: puntos | pieza (fija al bajar) | lista grande. El paso activo se ve fuerte y abre su texto. */
-.portada-pasos-seccion { margin: 0 0 6rem; }
-.portada-pasos { display: grid; grid-template-columns: 24px minmax(0, 1fr) minmax(0, 1.15fr); gap: var(--esp-6); align-items: start; }
-.portada-puntos { position: sticky; top: 45vh; list-style: none; margin: 0; padding: 0; display: grid; gap: var(--esp-3); justify-items: center; }
-.portada-puntos li { width: 6px; height: 6px; border-radius: 50%; background: var(--muted-2); transition: height .3s, background .3s; }
-.portada-puntos li.activo { height: 24px; border-radius: var(--radius-pastilla); background: var(--accent-2); }
-.portada-pasos-media { position: sticky; top: 14vh; aspect-ratio: 4 / 5; max-height: 72vh; border-radius: 26px; overflow: hidden; border: 1px solid var(--border); box-shadow: var(--shadow); }
-.portada-paso-media { position: absolute; inset: 0; isolation: isolate; opacity: 0; transition: opacity .45s; }
-.portada-paso-media.activo { opacity: 1; }
-.portada-pasos-lista { list-style: none; margin: 0; padding: 12vh 0; display: grid; gap: var(--esp-2); }
-.portada-paso { min-height: 22vh; display: flex; flex-direction: column; justify-content: center; }
-.portada-paso-titulo { all: unset; cursor: pointer; font-family: var(--font-display); font-weight: 700; font-size: clamp(1.8rem, 3.6vw, 3rem); line-height: 1.05; letter-spacing: -0.035em; color: var(--muted-2); opacity: .55; transition: color .3s, opacity .3s; }
-.portada-paso-titulo:focus-visible { outline: 2px solid var(--accent-texto); outline-offset: 4px; border-radius: 6px; }
-.portada-paso.activo .portada-paso-titulo, .portada-paso-titulo:hover { color: var(--text); opacity: 1; }
-.portada-paso-texto { margin: 0; max-height: 0; overflow: hidden; opacity: 0; color: var(--muted); font-size: 1.05rem; line-height: 1.55; max-width: 38ch; transition: max-height .4s, opacity .4s, margin .4s; }
-.portada-paso.activo .portada-paso-texto { max-height: 8rem; opacity: 1; margin-top: var(--esp-3); }
-.portada-paso-media-movil { display: none; }
 
 @media (max-width: 760px) {
   .header-portada { display: none; }
   .header-entrar { padding: .45rem .9rem; font-size: .85rem; }
   .portada-cifras { flex-direction: column; align-items: flex-start; }
   .portada-cifras-lista { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
-  /* Pasos en el celular: uno debajo del otro, cada uno con su pieza y su texto abierto. */
-  .portada-pasos { display: block; }
-  .portada-puntos, .portada-pasos-media { display: none; }
-  .portada-pasos-lista { padding: 0; gap: var(--esp-6); }
-  .portada-paso { min-height: 0; }
-  .portada-paso-media-movil { display: block; position: relative; isolation: isolate; aspect-ratio: 4 / 5; border-radius: 22px; overflow: hidden; margin-bottom: var(--esp-4); border: 1px solid var(--border); }
-  .portada-paso-titulo { color: var(--text); opacity: 1; font-size: 1.9rem; }
-  .portada-paso-texto { max-height: none; opacity: 1; margin-top: var(--esp-2); }
 }
 
 /* Banner a pantalla completa (2026-10-10): la vaca de borde a borde y de la cabecera al final de la pantalla; el
@@ -4946,4 +4921,39 @@ body.portada main { padding-top: 0; }
   .portada-zen-cuerpo { grid-template-columns: 1fr; }
   .portada-zen-vaca { order: -1; width: 190px; justify-self: center; }
   .planes-tres { grid-template-columns: 1fr; }
+}
+
+/* El flujo en tarjetas (2026-10-14): seis tarjetas en fila con su número, su ícono en un círculo que brilla y una
+   flecha hacia la siguiente; en pantallas medianas, de a tres; en el celular, una debajo de otra. */
+.portada-flujo { margin: 0 0 7rem; }
+.flujo-fila { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--esp-5); }
+.flujo-tarjeta { position: relative; display: flex; flex-direction: column; align-items: center; text-align: center; gap: var(--esp-3); padding: var(--esp-6) var(--esp-4) var(--esp-5); border-radius: var(--radius-lg); border: 1px solid var(--border); background: var(--panel-velo); transition: transform .25s, border-color .25s, box-shadow .25s; }
+.flujo-tarjeta:hover { transform: translateY(-4px); border-color: var(--resalte-borde-fuerte); box-shadow: var(--shadow-glow); }
+.flujo-tarjeta:not(:last-child)::after { content: "→"; position: absolute; right: calc(-1 * var(--esp-5)); top: 4.2rem; width: var(--esp-5); text-align: center; color: var(--accent-texto); font-size: 1.2rem; }
+.flujo-paso-num { position: absolute; top: var(--esp-3); left: var(--esp-4); font-family: var(--font-titular); font-weight: 700; font-size: .8rem; color: var(--muted-2); }
+.flujo-icono { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%; color: var(--cian); background-image: radial-gradient(circle, var(--resalte-fondo), transparent 75%); border: 1px solid var(--resalte-borde); box-shadow: var(--brillo-md); }
+.flujo-icono svg { width: 28px; height: 28px; }
+.flujo-tarjeta h3 { margin: 0; font-family: var(--font-titular); font-weight: 700; font-size: 1.05rem; letter-spacing: -0.01em; }
+.flujo-tarjeta p { margin: 0; color: var(--muted); font-size: .88rem; line-height: 1.5; }
+
+/* Maximiza tus resultados: el texto a la izquierda y el tablero de ingresos (ilustrativo) a la derecha. */
+.portada-maximiza { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); align-items: center; gap: clamp(var(--esp-6), 5vw, 5rem); margin: 0 0 7rem; }
+.portada-maximiza .portada-titulo, .portada-maximiza .portada-centro-sub { text-align: left; margin-left: 0; }
+.portada-maximiza-lista { list-style: none; margin: var(--esp-5) 0 0; padding: 0; display: grid; gap: var(--esp-3); }
+.portada-maximiza-lista li { display: flex; align-items: center; gap: var(--esp-3); font-weight: 500; }
+.portada-maximiza-lista li::before { content: "✦"; color: var(--cian); }
+.portada-maximiza-imagen { margin: 0; }
+.portada-maximiza-imagen img { display: block; width: 100%; height: auto; border-radius: var(--radius-lg); }
+.portada-maximiza-imagen figcaption { margin-top: var(--esp-2); text-align: right; color: var(--muted-2); font-size: .72rem; }
+
+@media (max-width: 1100px) {
+  .flujo-fila { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .flujo-tarjeta:nth-child(3n)::after { content: none; }
+}
+@media (max-width: 760px) {
+  .flujo-fila { grid-template-columns: 1fr; gap: var(--esp-6); }
+  .flujo-tarjeta:not(:last-child)::after { content: "↓"; right: auto; left: 50%; top: auto; bottom: calc(-1 * var(--esp-6)); transform: translateX(-50%); }
+  .portada-maximiza { grid-template-columns: 1fr; }
+  .portada-maximiza .portada-titulo, .portada-maximiza .portada-centro-sub { text-align: center; margin-left: auto; }
+  .portada-maximiza-lista { justify-items: center; }
 }

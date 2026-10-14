@@ -282,3 +282,8 @@ sigue global antes del compositor. Node ejecuta los módulos completos sobre el 
   la historia «They stand out / sell / multiply» se quitó y su lugar lo ocupa la sección zen (texto arriba, la vaca
   pequeña entre las cuatro herramientas). «Why Run when you can Fly?» es el título del login. En el cierre, «ADS» de
   GALADSY brilla en blanco (`.lema-brillo`) y el único botón, «Start», lleva al login.
+- El flujo (2026-10-14, referencia de Camilo): la lista grande de seis pasos con la pieza fija se reemplazó por seis
+  tarjetas en fila (`.flujo-fila`: Data → Connect → Create → Duplicate → Launch → On autopilot, ícono SVG en línea en un
+  círculo que brilla, flecha a la siguiente; de a tres hasta 1100 px y una debajo de otra en el celular). Después,
+  «Maximize your results.» con el tablero de ingresos (`static/landing/tablero-ingresos.webp`, marcado «Illustrative
+  image.»: sus cifras no son de ningún cliente).

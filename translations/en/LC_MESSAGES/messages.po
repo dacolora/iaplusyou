@@ -2973,9 +2973,6 @@ msgstr "Ads about a topic or product"
 msgid "Anuncios que se cansan"
 msgstr "Ads wearing out"
 
-msgid "Anuncios reales que ya están vendiendo, ordenados por etapa del embudo y nivel de consciencia."
-msgstr "Real ads that are already selling, sorted by funnel stage and awareness level."
-
 msgid "Anuncios reales que ya funcionaron, clasificados por etapa del funnel, nivel de consciencia, formato y dolor. Elige uno y úsalo como referencia para tus piezas."
 msgstr "Real ads that already worked, classified by funnel stage, awareness level, format and pain point. Pick one and use it as a reference for your pieces."
 
@@ -3801,6 +3798,9 @@ msgstr "Each country has its own daily budget. The total is also sent to Meta as
 #, python-format
 msgid "Cada perdedora se diagnostica sola (%(precio)s) y deja su línea aquí."
 msgstr "Every loser is diagnosed on its own (%(precio)s) and leaves its line here."
+
+msgid "Cada pico, con el anuncio que lo trajo"
+msgstr "Every peak, with the ad that drove it"
 
 msgid "Cada tarjeta muestra el QA: ✓ pasa, ✗ falla; toca la fila del QA para leer por qué."
 msgstr "Each card shows the QA: ✓ passes, ✗ fails; tap the QA row to read why."
@@ -4727,6 +4727,9 @@ msgstr "With reference videos (Wan 3.0), their seconds plus the result's can't a
 msgid "Concepto"
 msgstr "Item"
 
+msgid "Conecta"
+msgstr "Connect"
+
 msgid "Conecta Meta arriba para probar"
 msgstr "Connect Meta above to test"
 
@@ -5214,6 +5217,9 @@ msgstr "Attributed cost per order"
 msgid "Costo por venta"
 msgstr "Cost per sale"
 
+msgid "Crea"
+msgstr "Create"
+
 msgid "Crea el primero con «+ Nuevo sprint»: pones el mes y agregas sus campañas en el tablero."
 msgstr "Create the first one with “+ New sprint”: set the month and add its campaigns on the board."
 
@@ -5234,9 +5240,6 @@ msgstr "Create your project in a minute. No card: you only pay for what you gene
 
 msgid "Crea una API key en tu workspace de TrendTrack (guía: docs.trendtrack.io › Getting Started)."
 msgstr "Create an API key in your TrendTrack workspace (guide: docs.trendtrack.io › Getting Started)."
-
-msgid "Crea variaciones"
-msgstr "Create variations"
 
 msgid "Creando activos"
 msgstr "Creating assets"
@@ -5520,6 +5523,9 @@ msgstr "Copy it as YOUTUBE_API_KEY in the server's .env and restart both service
 msgid "Da permiso al micrófono en tu navegador para grabar."
 msgstr "Allow microphone access in your browser to record."
 
+msgid "Data"
+msgstr "Data"
+
 msgid "Dato del producto"
 msgstr "Product fact"
 
@@ -5538,6 +5544,9 @@ msgstr "From %(persona)s:"
 
 msgid "De impacto"
 msgstr "Display"
+
+msgid "De los datos al anuncio. Y otra vez, en automático."
+msgstr "From data to ad. And again, on autopilot."
 
 msgid "De los listos en Crear"
 msgstr "From the ready ones in Create"
@@ -5922,6 +5931,9 @@ msgstr "Dynamic"
 msgid "Dirección"
 msgstr "Path"
 
+msgid "Directo a Meta Ads en un clic; tú decides cuándo empiezan a gastar."
+msgstr "Straight to Meta Ads in one click; you decide when they start spending."
+
 msgid "Directo a Meta Ads, con los resultados de vuelta en un solo lugar."
 msgstr "Straight to Meta Ads, with the results back in one place."
 
@@ -5984,6 +5996,9 @@ msgstr "Store domain (the Triple Whale shop-id)"
 #, python-brace-format
 msgid "Dos voces suenan al mismo tiempo en {tiempo}: muévelas o borra una."
 msgstr "Two voices play at the same time at {tiempo}: move them or delete one."
+
+msgid "Duplica"
+msgstr "Duplicate"
 
 msgid "Duplicar"
 msgstr "Duplicate"
@@ -6139,9 +6154,6 @@ msgstr "Editor"
 
 msgid "Edítalo"
 msgstr "Edit it"
-
-msgid "Edítalos"
-msgstr "Edit them"
 
 msgid "Efecto"
 msgstr "Effect"
@@ -6659,6 +6671,9 @@ msgstr "The engine waits until it has evidence, then compares each piece against
 
 msgid "El motor espera a tener evidencia y después compara cada pieza con estas reglas. Vacío = la regla del proyecto (en gris)."
 msgstr "The engine waits until it has evidence, then compares each piece against these rules. Empty = the project rule (in gray)."
+
+msgid "El motor mide, decide y vuelve a crear: más pruebas, más ganadores."
+msgstr "The engine measures, decides and creates again: more tests, more winners."
 
 msgid "El motor no tiene a quién avisarle de propuestas, ganadores y rechazos: escríbelo en Configuración › Correo de avisos."
 msgstr "The engine has nobody to notify about proposals, winners and rejections: enter one in Settings › Notification email."
@@ -7337,6 +7352,9 @@ msgstr ""
 "In WordPress: <em>WooCommerce › Settings › Advanced › REST API › Add key</em>, with\n"
 "        <em>read</em> permissions. The store has to be over <code>https://</code>."
 
+msgid "En automático"
+msgstr "On autopilot"
+
 msgid "En cola"
 msgstr "Queued"
 
@@ -7468,12 +7486,6 @@ msgstr "On top of the video"
 
 msgid "Encuadre"
 msgstr "Framing"
-
-msgid "Encuentra referencias ganadoras"
-msgstr "Find winning references"
-
-msgid "Encuentra referencias ganadoras, sube tus productos una vez, genera cientos de estáticos y videos, edítalos, crea variaciones y lánzalos directo a Meta."
-msgstr "Find winning references. Upload your products once. Generate hundreds of high-converting statics and videos, edit them, create variations, and launch directly to Meta."
 
 msgid "Energético"
 msgstr "Energetic"
@@ -8808,6 +8820,9 @@ msgstr "Static"
 msgid "Estático generado con CREATV Galadsy"
 msgstr "Static made with CREATV Galadsy"
 
+msgid "Estáticos y videos desde tus referencias y tus productos, en minutos."
+msgstr "Statics and videos from your references and products, in minutes."
+
 msgid "Estáticos y videos en piloto automático"
 msgstr "Statics and videos on autopilot"
 
@@ -9389,9 +9404,6 @@ msgstr "Photos of the color"
 msgid "Fotos del producto (varias, con fondo limpio)"
 msgstr "Product photos (several, clean background)"
 
-msgid "Fotos, personajes, espacios y logo. La IA respeta tu marca en cada pieza."
-msgstr "Photos, characters, spaces and logo. The AI stays true to your brand in every piece."
-
 msgid "Francia"
 msgstr "France"
 
@@ -9532,9 +9544,6 @@ msgstr "Hook: 3-second views / impressions. Hold: ThruPlays / 3-second views."
 msgid "Ganchos nuevos (primeros 3 s)"
 msgstr "New hooks (first 3 s)"
 
-msgid "Ganchos nuevos, otras estructuras y regeneraciones a partir de lo que ya funciona."
-msgstr "New hooks, new structures and regenerations built from what already works."
-
 #, python-format
 msgid "Ganó en %(pais)s: %(quien)s"
 msgstr "Won in %(pais)s: %(quien)s"
@@ -9624,9 +9633,6 @@ msgstr "Gemini Omni Flash Edit"
 
 msgid "Genera cada video (Wan 3.0, Kling O3 Pro, Seedance 2.5) e imagen (Seedream) de Crear y de los lotes de Sprints."
 msgstr "Generates every video (Wan 3.0, Kling O3 Pro, Seedance 2.5) and image (Seedream) in Create and in the Sprints batches."
-
-msgid "Genera cientos de estáticos y videos que convierten"
-msgstr "Generate hundreds of high-converting statics and videos"
 
 msgid "Genera imágenes y reemplaza el producto en Crear › Cambiar producto cuando eliges Nano Banana."
 msgstr "Generates images and replaces the product in Create › Change product when you choose Nano Banana."
@@ -10410,6 +10416,9 @@ msgstr "Image deleted: %(nombre)s"
 msgid "Imagen generada"
 msgstr "Generated image"
 
+msgid "Imagen ilustrativa."
+msgstr "Illustrative image."
+
 msgid "Importaciones anteriores"
 msgstr "Previous imports"
 
@@ -10527,6 +10536,9 @@ msgstr "Attributed revenue"
 
 msgid "Ingresos que el Triple Pixel atribuye a los anuncios con el modelo y la ventana elegidos"
 msgstr "Revenue the Triple Pixel attributes to the ads with the chosen model and window"
+
+msgid "Ingresos y gasto, día a día"
+msgstr "Revenue and spend, day by day"
 
 msgid "Inicia sesión con la cuenta de la tienda y autoriza la app: no se pega ningún token."
 msgstr "Log in with the store's account and authorize the app: no token gets pasted."
@@ -11362,6 +11374,9 @@ msgstr "The last batch of English descriptions failed: %(error)s"
 msgid "Lado brillante"
 msgstr "Bright side"
 
+msgid "Lanza"
+msgstr "Launch"
+
 msgid "Lanza tus piezas como anuncios en Meta: aquí se mide cuál funciona y el motor te dice cuál escalar y cuál pausar."
 msgstr "Launch your pieces as ads on Meta: here we measure which one works and the engine tells you which to scale and which to pause."
 
@@ -11394,9 +11409,6 @@ msgstr "Flags, skin tones and combined emojis come out simplified."
 
 msgid "Las campañas del asistente no se pudieron leer."
 msgstr "The wizard's campaigns couldn't be read."
-
-msgid "Las campañas se crean en pausa: tú decides cuándo gastan y los resultados vuelven aquí."
-msgstr "Campaigns are created paused: you decide when they spend, and the results come back here."
 
 msgid "Las cantidades de videos e imágenes deben ser números enteros."
 msgstr "Video and image counts must be whole numbers."
@@ -11493,6 +11505,9 @@ msgstr "Sales divided by all ad spend"
 
 msgid "Las zonas son para videos verticales (9:16)."
 msgstr "Zones are for vertical videos (9:16)."
+
+msgid "Leemos qué anuncios venden, qué ángulos funcionan y qué es eficiente: ROAS, CPA y tendencias."
+msgstr "We read which ads sell, which angles work and what's efficient: ROAS, CPA and trends."
 
 msgid "Leer anuncios ajenos"
 msgstr "Reading other brands' ads"
@@ -11921,8 +11936,8 @@ msgstr "Emojis don't show in subtitles: type the word with letters."
 msgid "Los errores de la app (páginas, worker y trabajos en segundo plano) agrupados, qué tan rápido responde cada página, el worker y el servidor. Un error nuevo te llega por correo si hay SMTP."
 msgstr "The app's errors (pages, worker and background jobs) grouped, how fast each page responds, the worker and the server. A new error is emailed to you if SMTP is set up."
 
-msgid "Los mejores modelos de video e imagen del mercado, desde un solo formulario."
-msgstr "The best video and image models on the market, from a single form."
+msgid "Los ganadores, listos para duplicar"
+msgstr "Your winners, ready to duplicate"
 
 msgid "Los mejores para iterar"
 msgstr "Best ads to iterate on"
@@ -11985,9 +12000,6 @@ msgstr "Luma Ray 3.2 Video Edit"
 
 msgid "Luma Ray3 Modify"
 msgstr "Luma Ray3 Modify"
-
-msgid "Lánzalos directo a Meta"
-msgstr "Launch directly to Meta"
 
 msgid "Línea 1 del guion"
 msgstr "Script line 1"
@@ -12151,6 +12163,9 @@ msgstr "File %(id)s ready."
 
 msgid "Material inexistente."
 msgstr "File doesn't exist."
+
+msgid "Maximiza tus resultados."
+msgstr "Maximize your results."
 
 #, python-format
 msgid "Me detuve en la propuesta #%(id)s (%(accion)s): %(error)s"
@@ -17176,6 +17191,9 @@ msgstr "Shopify"
 msgid "Shopify (sin llaves)"
 msgstr "Shopify (no keys)"
 
+msgid "Shopify, Meta Ads, Triple Whale y tu catálogo en un solo lugar, con datos reales."
+msgstr "Shopify, Meta Ads, Triple Whale and your catalog in one place, with real data."
+
 msgid "Shopify, paso a paso"
 msgstr "Shopify, step by step"
 
@@ -17846,9 +17864,6 @@ msgstr "Upload only music you own or have licensed."
 msgid "Sube solo música tuya o con licencia: Meta silencia o rechaza anuncios con canciones protegidas."
 msgstr "Only upload music that's yours or licensed: Meta mutes or rejects ads with protected songs."
 
-msgid "Sube tus productos una sola vez"
-msgstr "Upload your products once"
-
 msgid "Sube un mp3, wav, m4a, aac u ogg."
 msgstr "Upload an mp3, wav, m4a, aac or ogg."
 
@@ -18095,6 +18110,9 @@ msgstr "Table"
 
 msgid "Tablero"
 msgstr "Dashboard"
+
+msgid "Tablero de ingresos con los anuncios que trajo cada pico"
+msgstr "Revenue dashboard with the ads behind every peak"
 
 msgid "Tableta Android"
 msgstr "Android tablet"
@@ -18727,6 +18745,9 @@ msgstr "Invalid payment token"
 
 msgid "Token del usuario del sistema"
 msgstr "System-user token"
+
+msgid "Toma a los ganadores y multiplícalos: nuevos ganchos, ángulos y países."
+msgstr "Take the winners and multiply them: new hooks, angles and countries."
 
 msgid "Tono de voz"
 msgstr "Tone of voice"
@@ -19395,6 +19416,9 @@ msgstr[1] "A project reads at most %(tope)s accounts: %(num)s accounts were not 
 msgid "Un proyecto que cobra paga cada pieza con su saldo prepagado: costo del proveedor × margen. Un proyecto que no cobra sigue igual que siempre."
 msgstr "A project that charges usage pays for each piece from its prepaid balance: provider cost × markup. A project that does not charge works the same as always."
 
+msgid "Un solo flujo conectado a tus plataformas: lo que vende alimenta lo próximo que se crea."
+msgstr "One flow connected to your platforms: what sells feeds what gets created next."
+
 msgid "Un solo lugar por video: si nombras varios cuartos, el modelo los recorre."
 msgstr "One single place per video: if you name several rooms, the model walks through them."
 
@@ -19482,9 +19506,6 @@ msgstr "A piece has no store platform: create the experiment again."
 
 msgid "Una pieza sin país no tiene tienda de Triple Whale: ventas no comparables."
 msgstr "A piece without a country has no Triple Whale store: sales are not comparable."
-
-msgid "Una plataforma. Un flujo. Hecha para vender."
-msgstr "One platform. One workflow. Built to sell."
 
 msgid "Una por línea"
 msgstr "One per line"
@@ -19705,6 +19726,9 @@ msgstr "Go to “API keys” › “Create key”, give it a name (for example �
 
 msgid "Ve a «Keys» › «Add key», elige alcance «API» y copia la llave."
 msgstr "Go to “Keys” › “Add key”, choose scope “API” and copy the key."
+
+msgid "Ve en un solo tablero qué anuncio vende y cuánto: el gasto, los ingresos y los ganadores, con los datos de tu tienda y tu pauta."
+msgstr "See in one dashboard which ad sells and how much: spend, revenue and winners, with your store and ad data."
 
 msgid "Veces"
 msgstr "Times"
@@ -20156,9 +20180,6 @@ msgstr "Voice, in English (optional: leave it empty and it's drawn from the char
 
 msgid "Voz, sonido del video y música, cada uno en su punto."
 msgstr "Voice, video sound and music, each at its right level."
-
-msgid "Voz, subtítulos, música y el precio de cada país, en un editor dentro del navegador."
-msgstr "Voice-over, subtitles, music and each country's price, in an editor right in your browser."
 
 msgid "Voz, subtítulos, música y el precio de cada país, listos en el navegador."
 msgstr "Voice-over, subtitles, music and each country's price, ready in your browser."

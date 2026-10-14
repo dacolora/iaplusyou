@@ -68,43 +68,49 @@
   <p class="landing-modelos">Wan 3.0 · Kling O3 Pro · Seedance 2.5 · Seedream V5 Pro · Nano Banana</p>
 </section>
 
-{# Los seis pasos: a la izquierda la pieza del paso activo (fija mientras se baja), a la derecha la lista grande. El paso
-   activo cambia al bajar o al tocarlo. En el celular cada paso lleva su pieza encima. #}
-{% set pasos = [
-  (_('Encuentra referencias ganadoras'), _('Anuncios reales que ya están vendiendo, ordenados por etapa del embudo y nivel de consciencia.'), 'imagen', 13),
-  (_('Sube tus productos una sola vez'), _('Fotos, personajes, espacios y logo. La IA respeta tu marca en cada pieza.'), 'imagen', 14),
-  (_('Genera cientos de estáticos y videos que convierten'), _('Los mejores modelos de video e imagen del mercado, desde un solo formulario.'), 'video', 1),
-  (_('Edítalos'), _('Voz, subtítulos, música y el precio de cada país, en un editor dentro del navegador.'), 'video', 5),
-  (_('Crea variaciones'), _('Ganchos nuevos, otras estructuras y regeneraciones a partir de lo que ya funciona.'), 'video', 7),
-  (_('Lánzalos directo a Meta'), _('Las campañas se crean en pausa: tú decides cuándo gastan y los resultados vuelven aquí.'), 'imagen', 11),
+{# El flujo, como tarjetas en fila (2026-10-14, referencia de Camilo): de los datos a los anuncios en automático. #}
+{% set flujo = [
+  ('data', _('Data'), _('Leemos qué anuncios venden, qué ángulos funcionan y qué es eficiente: ROAS, CPA y tendencias.')),
+  ('conecta', _('Conecta'), _('Shopify, Meta Ads, Triple Whale y tu catálogo en un solo lugar, con datos reales.')),
+  ('crea', _('Crea'), _('Estáticos y videos desde tus referencias y tus productos, en minutos.')),
+  ('duplica', _('Duplica'), _('Toma a los ganadores y multiplícalos: nuevos ganchos, ángulos y países.')),
+  ('lanza', _('Lanza'), _('Directo a Meta Ads en un clic; tú decides cuándo empiezan a gastar.')),
+  ('auto', _('En automático'), _('El motor mide, decide y vuelve a crear: más pruebas, más ganadores.')),
 ] %}
-{% macro media_paso(tipo, n) -%}
-{% if tipo == 'video' %}<video class="landing-media" src="{{ url_for('static', filename='landing/video-%d.mp4' % n) }}" poster="{{ url_for('static', filename='landing/video-%d.jpg' % n) }}" muted loop playsinline preload="none"></video>{% else %}<img class="landing-media" src="{{ url_for('static', filename='landing/imagen-%d.webp' % n) }}" alt="" loading="lazy">{% endif %}
-{%- endmacro %}
-<section class="portada-pasos-seccion aparece" aria-labelledby="pasos-titulo">
+<section class="portada-flujo aparece" aria-labelledby="pasos-titulo">
   <div class="portada-centro">
-    <h2 id="pasos-titulo" class="portada-titulo">{{ _('Una plataforma. Un flujo. Hecha para vender.') }}</h2>
-    <p class="portada-centro-sub">{{ _('Encuentra referencias ganadoras, sube tus productos una vez, genera cientos de estáticos y videos, edítalos, crea variaciones y lánzalos directo a Meta.') }}</p>
+    <span class="landing-etiqueta">{{ _('Cómo funciona') }}</span>
+    <h2 id="pasos-titulo" class="portada-titulo">{{ _('De los datos al anuncio. Y otra vez, en automático.') }}</h2>
+    <p class="portada-centro-sub">{{ _('Un solo flujo conectado a tus plataformas: lo que vende alimenta lo próximo que se crea.') }}</p>
   </div>
-  <div class="portada-pasos">
-    <ol class="portada-puntos" aria-hidden="true">
-      {% for p in pasos %}<li{% if loop.first %} class="activo"{% endif %}></li>{% endfor %}
-    </ol>
-    <div class="portada-pasos-media" aria-hidden="true">
-      {% for titulo, texto, tipo, n in pasos %}
-      <div class="portada-paso-media{% if loop.first %} activo{% endif %}">{{ media_paso(tipo, n) }}</div>
-      {% endfor %}
-    </div>
-    <ol class="portada-pasos-lista">
-      {% for titulo, texto, tipo, n in pasos %}
-      <li class="portada-paso{% if loop.first %} activo{% endif %}" data-paso="{{ loop.index0 }}">
-        <div class="portada-paso-media-movil">{{ media_paso(tipo, n) }}</div>
-        <button type="button" class="portada-paso-titulo" aria-expanded="{{ 'true' if loop.first else 'false' }}">{{ titulo }}</button>
-        <p class="portada-paso-texto">{{ texto }}</p>
-      </li>
-      {% endfor %}
-    </ol>
+  <ol class="flujo-fila">
+    {% for icono, titulo, texto in flujo %}
+    <li class="flujo-tarjeta">
+      <span class="flujo-paso-num">{{ loop.index }}</span>
+      <span class="flujo-icono" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">{% if icono == 'data' %}<path d="M4 20h16" /><rect x="6" y="11" width="3" height="6" rx="1"/><rect x="10.5" y="7" width="3" height="10" rx="1"/><rect x="15" y="4" width="3" height="13" rx="1"/>{% endif %}{% if icono == 'conecta' %}<path d="M9 7V3M15 7V3"/><path d="M7 7h10v4a5 5 0 0 1-10 0z"/><path d="M12 16v5"/>{% endif %}{% if icono == 'crea' %}<path d="M12 3l1.8 4.6L18.5 9l-4.7 1.4L12 15l-1.8-4.6L5.5 9l4.7-1.4z"/><path d="M18 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/>{% endif %}{% if icono == 'duplica' %}<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>{% endif %}{% if icono == 'lanza' %}<path d="M5 15c-1 1-1.5 3.5-1.5 5.5 2 0 4.5-.5 5.5-1.5"/><path d="M9 15l-3-3 2-4c3-5 8-6 12-5-1 4-1 9-5 12l-4 2z"/><circle cx="15" cy="9" r="1.5"/>{% endif %}{% if icono == 'auto' %}<path d="M20 12a8 8 0 0 1-14 5.3"/><path d="M4 12a8 8 0 0 1 14-5.3"/><path d="M18 3v4h-4M6 21v-4h4"/>{% endif %}</svg></span>
+      <h3>{{ titulo }}</h3>
+      <p>{{ texto }}</p>
+    </li>
+    {% endfor %}
+  </ol>
+</section>
+
+{# Maximiza tus resultados: el tablero de ingresos (imagen ilustrativa). #}
+<section class="portada-maximiza aparece" aria-labelledby="maximiza-titulo">
+  <div class="portada-maximiza-texto">
+    <span class="landing-etiqueta">{{ _('Resultados') }}</span>
+    <h2 id="maximiza-titulo" class="portada-titulo">{{ _('Maximiza tus resultados.') }}</h2>
+    <p class="portada-centro-sub">{{ _('Ve en un solo tablero qué anuncio vende y cuánto: el gasto, los ingresos y los ganadores, con los datos de tu tienda y tu pauta.') }}</p>
+    <ul class="portada-maximiza-lista">
+      <li>{{ _('Ingresos y gasto, día a día') }}</li>
+      <li>{{ _('Cada pico, con el anuncio que lo trajo') }}</li>
+      <li>{{ _('Los ganadores, listos para duplicar') }}</li>
+    </ul>
   </div>
+  <figure class="portada-maximiza-imagen">
+    <img src="{{ url_for('static', filename='landing/tablero-ingresos.webp') }}" alt="{{ _('Tablero de ingresos con los anuncios que trajo cada pico') }}" loading="lazy" width="1062" height="956">
+    <figcaption>{{ _('Imagen ilustrativa.') }}</figcaption>
+  </figure>
 </section>
 
 {# Lo que ya no hace falta, tachado. #}
@@ -239,7 +245,7 @@
         else { visibles.delete(e.target); e.target.pause(); }
       });
     }, { rootMargin: '100px' }) : null;
-    document.querySelectorAll('.portada-paso-media-movil video, .landing-vitrina video').forEach(function (v) {
+    document.querySelectorAll('.landing-vitrina video').forEach(function (v) {
       if (obs) obs.observe(v);
     });
     // Con la pestaña en segundo plano el navegador los pausa; al volver, retoman.
@@ -272,31 +278,6 @@
       });
     });
 
-    // Pasos: el activo cambia al bajar (el que cruza el centro de la pantalla) o al tocar su título.
-    var pasos = Array.prototype.slice.call(document.querySelectorAll('.portada-paso'));
-    var medias = Array.prototype.slice.call(document.querySelectorAll('.portada-paso-media'));
-    var puntos = Array.prototype.slice.call(document.querySelectorAll('.portada-puntos li'));
-    function activar(i) {
-      pasos.forEach(function (p, k) {
-        p.classList.toggle('activo', k === i);
-        p.querySelector('.portada-paso-titulo').setAttribute('aria-expanded', k === i ? 'true' : 'false');
-      });
-      puntos.forEach(function (p, k) { p.classList.toggle('activo', k === i); });
-      medias.forEach(function (m, k) {
-        m.classList.toggle('activo', k === i);
-        var v = m.querySelector('video');
-        if (v) { if (k === i) correr(v); else v.pause(); }
-      });
-    }
-    pasos.forEach(function (p, k) {
-      p.querySelector('.portada-paso-titulo').addEventListener('click', function () { activar(k); });
-    });
-    if ('IntersectionObserver' in window && window.matchMedia('(min-width: 761px)').matches) {
-      var obsPasos = new IntersectionObserver(function (entradas) {
-        entradas.forEach(function (e) { if (e.isIntersecting) activar(pasos.indexOf(e.target)); });
-      }, { rootMargin: '-45% 0px -45% 0px' });
-      pasos.forEach(function (p) { obsPasos.observe(p); });
-    }
   })();
 </script>
 {% endblock %}
