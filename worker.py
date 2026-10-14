@@ -1,5 +1,5 @@
 """
-Worker de CREATV Adstra: proceso aparte de gunicorn (servicio systemd
+Worker de CREATV Galadsy: proceso aparte de gunicorn (servicio systemd
 creatv-worker) que ejecuta las tareas de la cola persistente (cola.py) en cuatro
 carriles (spec 2026-09-28-crear-sin-cola; el de lectura, spec 2026-10-08 meta rendimiento):
 

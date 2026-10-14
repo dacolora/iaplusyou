@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}CREATV Adstra{% endblock %}
+{% block title %}CREATV Galadsy{% endblock %}
 {% block content %}
 {# Distribución inspirada en klarna.com (pedido de Camilo, 2026-10-10): tarjeta grande con el título a la izquierda y la
    foto a la derecha, fila de cifras, título centrado y los pasos como lista grande con la imagen al lado. #}
@@ -9,17 +9,13 @@
     <img src="{{ url_for('static', filename='landing/banner.webp') }}" alt="" fetchpriority="high">
   </picture>
   <div class="portada-hero-texto">
-    <h1 id="hero-titulo" class="portada-promesa">
-      <span>{{ _('Anuncios que destacan.') }}</span>
-      <span>{{ _('Anuncios que venden.') }}</span>
+    <h1 id="hero-titulo" class="portada-promesa" data-letras>
+      <span>{{ _('Bienvenido a la') }}</span>
+      <span class="landing-degradado">{{ _('Vía Láctea de los anuncios.') }}</span>
     </h1>
-    <p class="portada-hero-sub">
-      <span>{{ _('Del producto a la idea.') }}</span>
-      <span>{{ _('De la idea al creativo.') }}</span>
-      <span>{{ _('Del creativo al crecimiento.') }}</span>
-    </p>
+    <p class="portada-hero-sub">{{ _('Una galaxia gobernada por vacas moradas, donde cada anuncio destaca y vende.') }}</p>
     <div class="landing-cta">
-      <a class="btn-generar portada-pildora portada-cta" href="#planes">Run more ADSTRA</a>
+      <a class="btn-generar portada-pildora portada-cta" href="#planes">{{ _('Descubre Galadsy') }}</a>
       <a class="btn-guardar portada-pildora" href="{{ url_for('login') }}">{{ _('Ya tengo cuenta') }}</a>
     </div>
   </div>
@@ -34,7 +30,7 @@
   <ol class="portada-historia-pasos">
     <li><strong>Purple Cow</strong><p>{{ _('En un campo de vacas iguales, solo una se recuerda: la morada.') }}</p></li>
     <li><strong>Purple Ads</strong><p>{{ _('Anuncios que se notan entre el ruido y están hechos para vender.') }}</p></li>
-    <li><strong>{{ _('La máquina') }}</strong><p>{{ _('CREATV Adstra convierte tus productos en Purple Ads a escala.') }}</p></li>
+    <li><strong>{{ _('La máquina') }}</strong><p>{{ _('CREATV Galadsy convierte tus productos en Purple Ads a escala.') }}</p></li>
   </ol>
   <p class="portada-historia-cierre">{{ _('No te mezcles con el resto.') }}</p>
 </section>
@@ -97,7 +93,7 @@
     <li><s>{{ _('Editar sin fin') }}</s></li>
     <li><s>{{ _('10 herramientas de IA distintas') }}</s></li>
   </ul>
-  <p class="landing-solo">{{ _('Solo Adstra.') }}</p>
+  <p class="landing-solo">{{ _('Solo Galadsy.') }}</p>
 </section>
 
 {# Vitrina: lo que sale de la plataforma, corriendo de derecha a izquierda.
@@ -111,8 +107,8 @@
                  ('imagen', 7, 480, 853), ('imagen', 14, 640, 800)] %}
 <section class="landing-vitrina aparece" aria-labelledby="vitrina-titulo">
   <div class="landing-seccion-cabecera">
-    <h2 id="vitrina-titulo" class="landing-titulo">{{ _('Hecho con CREATV Adstra') }}</h2>
-    <p class="landing-seccion-sub">{{ _('ADSTRA convierte tus productos y tus ideas ganadoras en anuncios de e‑commerce listos para salir.') }}</p>
+    <h2 id="vitrina-titulo" class="landing-titulo">{{ _('Hecho con CREATV Galadsy') }}</h2>
+    <p class="landing-seccion-sub">{{ _('GALADSY convierte tus productos y tus ideas ganadoras en anuncios de e‑commerce listos para salir.') }}</p>
   </div>
   <div class="landing-vitrina-carril">
     <ul class="landing-vitrina-pista">
@@ -123,7 +119,7 @@
         <video class="landing-media" src="{{ url_for('static', filename='landing/video-%d.mp4' % n) }}" poster="{{ url_for('static', filename='landing/video-%d.jpg' % n) }}" muted loop playsinline preload="none"></video>
         <span class="generado-tipo">{{ _('Video') }}</span>
         {% else %}
-        <img class="landing-media" src="{{ url_for('static', filename='landing/imagen-%d.webp' % n) }}" alt="{% if not copia %}{{ _('Estático generado con CREATV Adstra') }}{% endif %}" loading="lazy">
+        <img class="landing-media" src="{{ url_for('static', filename='landing/imagen-%d.webp' % n) }}" alt="{% if not copia %}{{ _('Estático generado con CREATV Galadsy') }}{% endif %}" loading="lazy">
         <span class="generado-tipo">{{ _('Estático') }}</span>
         {% endif %}
       </li>
@@ -159,19 +155,19 @@
       <span class="plan-cifra plan-cifra-texto">Business Custom</span>
       <span class="plan-unidad">{{ _('Plan a tu medida') }}</span>
       <p>{{ _('Volumen, marcas y países a tu medida, con acompañamiento directo de nuestro equipo.') }}</p>
-      <a class="btn-guardar plan-boton" href="mailto:dacoloradog@gmail.com?subject=Creatv%20Adstra%20Business%20Custom">{{ _('Hablar con nosotros') }}</a>
+      <a class="btn-guardar plan-boton" href="mailto:dacoloradog@gmail.com?subject=Creatv%20Galadsy%20Business%20Custom">{{ _('Hablar con nosotros') }}</a>
     </article>
   </div>
 </section>
 
-<section class="landing-cadena aparece" aria-label="{{ _('El ciclo de CREATV Adstra') }}">
+<section class="landing-cadena aparece" aria-label="{{ _('El ciclo de CREATV Galadsy') }}">
   {% for palabra in [_('Referencia'), _('Crear'), _('Editar'), _('Lanzar'), _('Escalar')] %}
   <span class="cadena-eslabon" style="--i: {{ loop.index0 }}">{{ palabra }}</span>{% if not loop.last %}<span class="cadena-flecha" aria-hidden="true">→</span>{% endif %}
   {% endfor %}
 </section>
 
 <section class="landing-final aparece">
-  <h2 class="landing-lema">Run more <span class="landing-degradado">ADSTRA</span></h2>
+  <h2 class="landing-lema">Run more <span class="landing-degradado">GALADSY</span></h2>
   <p class="landing-bajada">{{ _('Solo más anuncios. Más pruebas. Más ganadores.') }}</p>
   <div class="landing-cta">
     <a class="btn-generar" href="#planes">{{ _('Empezar a crear anuncios') }}</a>
@@ -214,7 +210,7 @@
 </section>
 
 <footer class="landing-pie vacio">
-  © 2026 CREATV Adstra · <a href="{{ url_for('privacidad') }}">{{ _('Privacidad') }}</a> · <a href="{{ url_for('terminos') }}">{{ _('Términos') }}</a> · <a href="{{ url_for('eliminar_datos') }}">{{ _('Eliminación de datos') }}</a>
+  © 2026 CREATV Galadsy · <a href="{{ url_for('privacidad') }}">{{ _('Privacidad') }}</a> · <a href="{{ url_for('terminos') }}">{{ _('Términos') }}</a> · <a href="{{ url_for('eliminar_datos') }}">{{ _('Eliminación de datos') }}</a>
 </footer>
 <script>
   (function () {
@@ -238,6 +234,30 @@
       if (document.visibilityState === 'visible') visibles.forEach(correr);
     });
 
+
+
+    // Titular: cada letra en su propio span para que se mueva al pasar el mouse (transición en CSS, sin animación).
+    // El h1 conserva su texto para lectores de pantalla con aria-label; las letras van aria-hidden.
+    document.querySelectorAll('[data-letras]').forEach(function (h) {
+      h.setAttribute('aria-label', h.textContent.replace(/\s+/g, ' ').trim());
+      h.querySelectorAll(':scope > span').forEach(function (linea) {
+        var palabras = linea.textContent.trim().split(/\s+/);
+        linea.textContent = '';
+        linea.setAttribute('aria-hidden', 'true');
+        palabras.forEach(function (palabra, i) {
+          var p = document.createElement('span');
+          p.className = 'palabra';
+          Array.prototype.forEach.call(palabra, function (c) {
+            var l = document.createElement('span');
+            l.className = 'letra';
+            l.textContent = c;
+            p.appendChild(l);
+          });
+          linea.appendChild(p);
+          if (i < palabras.length - 1) linea.appendChild(document.createTextNode(' '));
+        });
+      });
+    });
 
     // Pasos: el activo cambia al bajar (el que cruza el centro de la pantalla) o al tocar su título.
     var pasos = Array.prototype.slice.call(document.querySelectorAll('.portada-paso'));

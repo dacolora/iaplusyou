@@ -268,11 +268,11 @@ def documentos(inv, fecha):
         "La publicación del artifact del mapa corresponde a Claude."])
     html = ['''{# Documentación interna en español; barra traducida por catálogo. Generado por mapa_codigo_generar.py. #}
 <!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Mapa de CREATV Adstra</title><link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<title>Mapa de CREATV Galadsy</title><link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 {% raw %}''' + ESTILO_MAPA + '''{% endraw %}</head><body>
 <div id="mapa-barra"><a href="{{ url_for('panel') }}">{{ _('Volver al panel') }}</a> · <span>{{ _('Mapa del código') }}</span> · <span>{{ _('Solo lo ve el administrador') }}</span>
 {% if idioma_ui != 'es' %}<span>{{ _('Este mapa es documentación interna y está en español.') }}</span>{% endif %}</div>
-{% raw %}''', '<main class="panel-contenido"><h1>Mapa de CREATV Adstra</h1>',
+{% raw %}''', '<main class="panel-contenido"><h1>Mapa de CREATV Galadsy</h1>',
         '<p>Regenerado desde el código del worktree el ' + _texto_html(fecha) + '.</p>', '<p>' + _texto_html(resumen) + '</p>', '<p>' + _texto_html(alcance) + '</p>',
         '''<svg id="svg-mapa" role="img" aria-label="Entradas del código" viewBox="0 0 700 100" width="100%" height="100">
 <rect x="5" y="5" width="330" height="90" fill="none" stroke="currentColor"/><text x="25" y="40" fill="currentColor">Web: dashboard.py</text><text x="25" y="65" fill="currentColor">Cola e hilos: trabajos.py</text>

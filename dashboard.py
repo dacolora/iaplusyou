@@ -1122,11 +1122,11 @@ def index():
 # str(get_locale()). El español es idéntico al que había antes de esta tarea.
 _PRIVACIDAD_HTML = {
     "es": """
-<p>CREATV Adstra (creatvmachine.com) es una plataforma para que empresas creen contenido con inteligencia
+<p>CREATV Galadsy (creatvmachine.com) es una plataforma para que empresas creen contenido con inteligencia
 artificial y lo publiquen o anuncien en sus propias redes sociales. Esta política explica qué datos tratamos
 cuando conectas tu cuenta de Meta (Facebook e Instagram) y cómo los protegemos.</p>
 <h3>Responsable</h3>
-<p>Daniel Alejandro Colorado Gaviria — CREATV Adstra, Envigado, Colombia. Contacto: dacoloradog@gmail.com.</p>
+<p>Daniel Alejandro Colorado Gaviria — CREATV Galadsy, Envigado, Colombia. Contacto: dacoloradog@gmail.com.</p>
 <h3>Qué datos recibimos de Meta</h3>
 <ul>
 <li>Tu nombre y el identificador de tu usuario de Facebook (para saber quién autorizó la conexión).</li>
@@ -1165,11 +1165,11 @@ Cumplimos la Ley 1581 de 2012 de protección de datos personales de Colombia y l
 de Meta.</p>
 """,
     "en": """
-<p>CREATV Adstra (creatvmachine.com) is a platform for businesses to create content with artificial
+<p>CREATV Galadsy (creatvmachine.com) is a platform for businesses to create content with artificial
 intelligence and publish or advertise it on their own social media accounts. This policy explains what data we
 process when you connect your Meta account (Facebook and Instagram) and how we protect it.</p>
 <h3>Data controller</h3>
-<p>Daniel Alejandro Colorado Gaviria — CREATV Adstra, Envigado, Colombia. Contact: dacoloradog@gmail.com.</p>
+<p>Daniel Alejandro Colorado Gaviria — CREATV Galadsy, Envigado, Colombia. Contact: dacoloradog@gmail.com.</p>
 <h3>What data we receive from Meta</h3>
 <ul>
 <li>Your name and your Facebook user identifier (to know who authorized the connection).</li>
@@ -1211,9 +1211,9 @@ policies.</p>
 
 _TERMINOS_HTML = {
     "es": """
-<p>Al usar CREATV Adstra aceptas estas condiciones.</p>
+<p>Al usar CREATV Galadsy aceptas estas condiciones.</p>
 <h3>El servicio</h3>
-<p>CREATV Adstra genera imágenes y videos con inteligencia artificial a partir de las referencias que subes,
+<p>CREATV Galadsy genera imágenes y videos con inteligencia artificial a partir de las referencias que subes,
 y te permite publicarlos o anunciarlos en tus propias cuentas de redes sociales. Tú decides qué se genera,
 qué se publica y qué se anuncia: cada acción con costo o efecto público requiere tu confirmación.</p>
 <h3>Tu contenido</h3>
@@ -1231,12 +1231,12 @@ directamente a Meta desde tu cuenta publicitaria.</p>
 siempre el resultado esperado. No respondemos por rechazos de anuncios por parte de Meta ni por cambios en
 las plataformas de terceros.</p>
 <h3>Contacto</h3>
-<p>Daniel Alejandro Colorado Gaviria — CREATV Adstra, Envigado, Colombia. dacoloradog@gmail.com.</p>
+<p>Daniel Alejandro Colorado Gaviria — CREATV Galadsy, Envigado, Colombia. dacoloradog@gmail.com.</p>
 """,
     "en": """
-<p>By using CREATV Adstra you accept these terms.</p>
+<p>By using CREATV Galadsy you accept these terms.</p>
 <h3>The service</h3>
-<p>CREATV Adstra generates images and videos with artificial intelligence from the references you upload,
+<p>CREATV Galadsy generates images and videos with artificial intelligence from the references you upload,
 and lets you publish or advertise them on your own social media accounts. You decide what gets generated,
 what gets published and what gets advertised: every action with a cost or a public effect requires your
 confirmation.</p>
@@ -1255,7 +1255,7 @@ directly to Meta from your ad account.</p>
 produce the expected result. We're not responsible for ads rejected by Meta or for changes to
 third-party platforms.</p>
 <h3>Contact</h3>
-<p>Daniel Alejandro Colorado Gaviria — CREATV Adstra, Envigado, Colombia. dacoloradog@gmail.com.</p>
+<p>Daniel Alejandro Colorado Gaviria — CREATV Galadsy, Envigado, Colombia. dacoloradog@gmail.com.</p>
 """,
 }
 
@@ -1279,20 +1279,20 @@ def terminos():
 def eliminar_datos():
     """URL de instrucciones de eliminación de datos que pide Meta."""
     cuerpo = {
-        "es": """<p>Para eliminar los datos que CREATV Adstra guarda de tu cuenta de Meta:</p>
+        "es": """<p>Para eliminar los datos que CREATV Galadsy guarda de tu cuenta de Meta:</p>
 <ol><li>Entra a tu proyecto en app.creatvmachine.com › FlowMarketing › <strong>Desconectar</strong>: se borran el token,
 los identificadores de tus cuentas publicitarias, Página e Instagram y las métricas copiadas de las cuentas elegidas
 (gasto, compras, nombres de campañas, conjuntos de anuncios y anuncios) al instante.</li>
 <li>Si prefieres, escribe a dacoloradog@gmail.com con el nombre de tu proyecto y lo eliminamos en máximo 7 días,
 con confirmación por correo.</li></ol>
-<p>También puedes revocar el acceso desde Facebook: Configuración › Apps y sitios web › CREATV Adstra › Eliminar.</p>""",
-        "en": """<p>To delete the data CREATV Adstra stores about your Meta account:</p>
+<p>También puedes revocar el acceso desde Facebook: Configuración › Apps y sitios web › CREATV Galadsy › Eliminar.</p>""",
+        "en": """<p>To delete the data CREATV Galadsy stores about your Meta account:</p>
 <ol><li>Go to your project at app.creatvmachine.com › FlowMarketing › <strong>Disconnect</strong>: the token,
 the identifiers of your ad accounts, Page and Instagram, and the metrics copied from the chosen accounts
 (spend, purchases, and the names of campaigns, ad sets and ads) are deleted instantly.</li>
 <li>If you prefer, write to dacoloradog@gmail.com with your project's name and we'll delete it within 7 days,
 confirmed by email.</li></ol>
-<p>You can also revoke access from Facebook: Settings › Apps and Websites › CREATV Adstra › Remove.</p>""",
+<p>You can also revoke access from Facebook: Settings › Apps and Websites › CREATV Galadsy › Remove.</p>""",
     }[str(get_locale())]
     return render_template("legal.html", titulo=gettext("Eliminación de datos"),
                            actualizado=gettext("12 de septiembre de 2026"), cuerpo=cuerpo)

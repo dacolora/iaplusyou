@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}{{ _('Pipeline') }}{% endblock %}{% if self.title()|trim != 'CREATV Adstra' %} · CREATV Adstra{% endif %}</title>
-  <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/adstra-icono.png') }}">
+  <title>{% block title %}{{ _('Pipeline') }}{% endblock %}{% if self.title()|trim != 'CREATV Galadsy' %} · CREATV Galadsy{% endif %}</title>
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/galadsy-icono.png') }}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;800&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <script>
     // Textos compartidos del JS de esta plantilla (spec 2026-09-26 §Task 4):
@@ -505,7 +505,7 @@
       <span aria-hidden="true">☰</span> {{ _('Menú') }}
     </button>
     {% endif %}
-    <a class="marca-header" href="{{ url_for('index') }}" aria-label="CREATV Adstra">
+    <a class="marca-header" href="{{ url_for('index') }}" aria-label="CREATV Galadsy">
       <span class="marca-mark" aria-hidden="true"></span>
       <span class="marca-texto" aria-hidden="true"></span>
     </a>

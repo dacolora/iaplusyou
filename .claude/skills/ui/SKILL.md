@@ -242,3 +242,15 @@ sigue global antes del compositor. Node ejecuta los módulos completos sobre el 
 - **Paleta morada desde el 2026-10-10** (pedido de Camilo; revierte la azul del 2026-10-02): `tokens.css` tiene el
   violeta como acento y superficies oscuras moradas; `test_paleta_morada_sin_el_azul_viejo` vigila que no vuelva el
   azul viejo.
+
+## Marca GALADSY y la Vía Láctea (2026-10-14, pedido de Camilo)
+
+- La marca vuelve a ser **CREATV Galadsy** (en texto; «GALADSY» en mayúsculas en los lemas). Historial: Creatv Machine →
+  Adstra (2026-09-29) → Galadsy (2026-10-06) → Adstra (2026-10-10) → Galadsy (2026-10-14). Logo: `static/img/galadsy-*`
+  (máscaras con alfa en `componentes/marca.css`). Las notas de arriba que dicen «Adstra» describen ese momento.
+- Discurso: la **Vía Láctea de los anuncios**, una galaxia gobernada por vacas moradas (Purple Cow → Purple Ads). Portada:
+  «Welcome to the / Milky Way of ads.» en **Unbounded** (`--font-titular`), botón «Discover the Galadsy». El titular lleva
+  `data-letras`: el script de `index.html` envuelve cada letra (`.palabra` > `.letra`, `aria-hidden`, el h1 conserva
+  `aria-label`) y CSS las mueve al pasar el mouse con una transición (no es una animación nueva).
+- Login: la vaca surfeando la Vía Láctea de fondo a pantalla completa (`static/landing/vaca-surf*.webp`), la caja a la
+  derecha y «Surfing the Milky Way of ads.» abajo a la izquierda; en el celular la vaca arriba y la caja abajo.

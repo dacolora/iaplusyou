@@ -2167,9 +2167,6 @@ msgstr "At another speed the video plays without its sound."
 msgid "A quién le habla"
 msgstr "Who it speaks to"
 
-msgid "ADSTRA convierte tus productos y tus ideas ganadoras en anuncios de e‑commerce listos para salir."
-msgstr "ADSTRA turns your products and winning ideas into ready to run e‑commerce ads."
-
 msgid "API oficial, gratis para uso propio (100 llamadas por minuto). Si esto se vende como producto, Reddit pide permiso comercial."
 msgstr "Official API, free for your own use (100 calls per minute). If this is sold as a product, Reddit requires commercial permission."
 
@@ -2835,17 +2832,11 @@ msgstr "New ads tested"
 msgid "Anuncios perdedores siguen gastando en «%(cuenta)s»"
 msgstr "Losing ads are still spending in “%(cuenta)s”"
 
-msgid "Anuncios que destacan."
-msgstr "Ads that stand out."
-
 msgid "Anuncios que hablan de un tema o producto"
 msgstr "Ads about a topic or product"
 
 msgid "Anuncios que se notan entre el ruido y están hechos para vender."
 msgstr "Ads that get noticed in the noise and are built to sell."
-
-msgid "Anuncios que venden."
-msgstr "Ads that sell."
 
 msgid "Anuncios reales que ya están vendiendo, ordenados por etapa del embudo y nivel de consciencia."
 msgstr "Real ads that are already selling, sorted by funnel stage and awareness level."
@@ -3368,6 +3359,9 @@ msgstr[1] "Copycoders library: active in this project (%(num)s ads)."
 msgid "Biblioteca de referentes."
 msgstr "Reference library."
 
+msgid "Bienvenido a la"
+msgstr "Welcome to the"
+
 msgid "Bitácora"
 msgstr "Activity log"
 
@@ -3564,8 +3558,8 @@ msgstr "CPM %(cpm)s"
 msgid "CPM %(valor)s %(moneda)s"
 msgstr "CPM %(valor)s %(moneda)s"
 
-msgid "CREATV Adstra convierte tus productos en Purple Ads a escala."
-msgstr "CREATV Adstra turns your products into Purple Ads at scale."
+msgid "CREATV Galadsy convierte tus productos en Purple Ads a escala."
+msgstr "CREATV Galadsy turns your products into Purple Ads at scale."
 
 msgid "CSV o Excel"
 msgstr "CSV or Excel"
@@ -5348,9 +5342,6 @@ msgstr "From each test to the next decision: your project's results, pieces and 
 msgid "De impacto"
 msgstr "Display"
 
-msgid "De la idea al creativo."
-msgstr "From idea to creative."
-
 msgid "De los listos en Crear"
 msgstr "From the ready ones in Create"
 
@@ -5393,18 +5384,12 @@ msgstr "From the catalog"
 msgid "Del catálogo (opcional, %(n)s) →"
 msgstr "From the catalog (optional, %(n)s) →"
 
-msgid "Del creativo al crecimiento."
-msgstr "From creative to growth."
-
 #, python-format
 msgid "Del gasto de los últimos 7 días de su conjunto: %(ejemplos)s. Cada conjunto pesa %(minimo)s %% o más del gasto de la cuenta."
 msgstr "Of their ad set’s spend in the last 7 days: %(ejemplos)s. Each ad set weighs %(minimo)s%% or more of the account’s spend."
 
 msgid "Del guion"
 msgstr "From the script"
-
-msgid "Del producto a la idea."
-msgstr "From product to idea."
 
 #, python-format
 msgid "Del sprint: %(marcas)s. Escribe aquí para cambiarlas solo en esta campaña."
@@ -5580,6 +5565,9 @@ msgstr "Description “creatv”, user an admin, permissions <em>Read</em>. Pres
 
 msgid "Descrito ✓"
 msgstr "Described ✓"
+
+msgid "Descubre Galadsy"
+msgstr "Discover the Galadsy"
 
 msgid "Descuentos y meses sin intereses; urgencia."
 msgstr "Discounts and interest-free installments; urgency."
@@ -6131,8 +6119,8 @@ msgstr "The catalog still comes from the no-keys connection; the Admin API adds 
 msgid "El celular de Nequi debe tener 10 dígitos y empezar por 3"
 msgstr "The Nequi mobile number must have 10 digits and start with 3"
 
-msgid "El ciclo de CREATV Adstra"
-msgstr "The CREATV Adstra cycle"
+msgid "El ciclo de CREATV Galadsy"
+msgstr "The CREATV Galadsy cycle"
 
 #, python-format
 msgid "El clic sale caro con un CTR normal: CPC %(cpc)s (máximo %(max)s); es la subasta, no el creativo."
@@ -8548,8 +8536,8 @@ msgstr "Standard"
 msgid "Estático"
 msgstr "Static"
 
-msgid "Estático generado con CREATV Adstra"
-msgstr "Static made with CREATV Adstra"
+msgid "Estático generado con CREATV Galadsy"
+msgstr "Static made with CREATV Galadsy"
 
 msgid "Estética"
 msgstr "Aesthetics"
@@ -9193,6 +9181,9 @@ msgstr "Fade out"
 #, python-format
 msgid "Funnel inválido: %(funnel)s. Opciones: %(opciones)s"
 msgstr "Invalid funnel: %(funnel)s. Options: %(opciones)s"
+
+msgid "GALADSY convierte tus productos y tus ideas ganadoras en anuncios de e‑commerce listos para salir."
+msgstr "GALADSY turns your products and winning ideas into ready to run e‑commerce ads."
 
 msgid "Gafas"
 msgstr "Glasses"
@@ -9878,8 +9869,8 @@ msgstr "A batch is in progress: wait for it to finish."
 msgid "Hechas"
 msgstr "Done"
 
-msgid "Hecho con CREATV Adstra"
-msgstr "Made with CREATV Adstra"
+msgid "Hecho con CREATV Galadsy"
+msgstr "Made with CREATV Galadsy"
 
 #, python-format
 msgid "Hecho en Creatv · %(exp)s"
@@ -17054,8 +17045,8 @@ msgstr "Request sent on %(fecha)s: Creatv is reviewing it and will email you."
 msgid "Solicitudes de clientes"
 msgstr "Client requests"
 
-msgid "Solo Adstra."
-msgstr "Just Adstra."
+msgid "Solo Galadsy."
+msgstr "Just Galadsy."
 
 msgid "Solo Wan 3.0, mitad de precio: para probar el prompt antes de la versión final."
 msgstr "Wan 3.0 only, half price: to test the prompt before the final version."
@@ -17491,6 +17482,9 @@ msgstr "We added %(monto)s to your balance (%(medio)s)."
 
 msgid "Superior al promedio"
 msgstr "Above average"
+
+msgid "Surfeando la Vía Láctea de los anuncios."
+msgstr "Surfing the Milky Way of ads."
 
 msgid "Sus anuncios llegan dentro de la tienda de Triple Whale: «Todas» no los suma aparte."
 msgstr "Its ads already come in through the Triple Whale store: “All” doesn't add them separately."
@@ -18614,8 +18608,8 @@ msgstr "Your plan ended. Your own balance is still available and your generation
 msgid "Tu proyecto %(nombre)s ya está conectado a Meta: cuenta %(cuenta)s · Página %(pagina)s. Ya puedes probar piezas en Experimentos y publicar contenido."
 msgstr "Your project %(nombre)s is now connected to Meta: account %(cuenta)s · Page %(pagina)s. You can now test pieces in Experiments and publish content."
 
-msgid "Tu proyecto usa su propia app de Meta: CREATV Adstra opera solo con tus credenciales y tus datos no pasan por ninguna app ajena."
-msgstr "Your project uses its own Meta app: CREATV Adstra operates only with your credentials and your data doesn't pass through any third-party app."
+msgid "Tu proyecto usa su propia app de Meta: CREATV Galadsy opera solo con tus credenciales y tus datos no pasan por ninguna app ajena."
+msgstr "Your project uses its own Meta app: CREATV Galadsy operates only with your credentials and your data doesn't pass through any third-party app."
 
 msgid "Tu recarga se acreditó"
 msgstr "Your top-up was credited"
@@ -18875,6 +18869,9 @@ msgstr "A photo has no sound or speed: change how long it lasts."
 
 msgid "Una foto no tiene velocidad: cambia cuánto dura."
 msgstr "A photo has no speed: change how long it lasts."
+
+msgid "Una galaxia gobernada por vacas moradas, donde cada anuncio destaca y vende."
+msgstr "A galaxy run by purple cows — where every ad stands out and sells."
 
 #, python-format
 msgid "Una generación del proyecto %(cliente)s falló porque la cuenta de %(proveedor)s de Creatv no tiene saldo. Mientras no se recargue en %(recarga)s fallan %(modelos)s en Crear y lo que usa fal en el resto de la app (voces, música y subtítulos automáticos); los demás modelos de Crear siguen funcionando y los intentos fallidos no se cobran. Respuesta del proveedor: %(detalle)s"
@@ -19604,6 +19601,9 @@ msgstr "Generate again from the study."
 
 msgid "Vuelves a conectar cada 60 días."
 msgstr "You reconnect every 60 days."
+
+msgid "Vía Láctea de los anuncios."
+msgstr "Milky Way of ads."
 
 #, python-format
 msgid "WAL: %(peso)s"

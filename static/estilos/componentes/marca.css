@@ -1,4 +1,4 @@
-/* Marca CREATV Adstra (2026-10-06): el símbolo y el nombre son máscaras (PNG con alfa en static/img/adstra-*)
+/* Marca CREATV Galadsy (2026-10-06): el símbolo y el nombre son máscaras (PNG con alfa en static/img/galadsy-*)
    pintadas con el color del texto, así siguen el tema sin un segundo juego de archivos. */
 .marca-mark,
 .marca-texto,
@@ -16,21 +16,21 @@
 .marca-mark {
   width: 34px;
   height: 36px;
-  -webkit-mask-image: url("img/adstra-simbolo.png");
-  mask-image: url("img/adstra-simbolo.png");
+  -webkit-mask-image: url("img/galadsy-simbolo.png");
+  mask-image: url("img/galadsy-simbolo.png");
 }
 .marca-texto {
-  width: 112px;
+  width: 108px;
   height: 37px;
-  -webkit-mask-image: url("img/adstra-nombre.png");
-  mask-image: url("img/adstra-nombre.png");
+  -webkit-mask-image: url("img/galadsy-nombre.png");
+  mask-image: url("img/galadsy-nombre.png");
 }
 /* Logo completo (símbolo + nombre) de las páginas principales: portada, login, recuperar, restablecer, legales. */
 .marca-logo {
   width: 280px;
-  height: 110px;
+  height: 76px;
   max-width: 100%;
   margin-bottom: var(--esp-4);
-  -webkit-mask-image: url("img/adstra-logo.png");
-  mask-image: url("img/adstra-logo.png");
+  -webkit-mask-image: url("img/galadsy-logo.png");
+  mask-image: url("img/galadsy-logo.png");
 }

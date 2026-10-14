@@ -1,6 +1,6 @@
 /* ============================================================
    Tokens — sistema de estilos (spec docs/superpowers/specs/2026-10-02-sistema-de-estilos-design.md §4).
-   El ÚNICO archivo con valores escritos a mano. Paleta MORADA de CREATV Adstra (pedido de Camilo, 2026-10-10: el
+   El ÚNICO archivo con valores escritos a mano. Paleta MORADA de CREATV Galadsy (pedido de Camilo, 2026-10-10: el
    violeta es el color principal y el oscuro prevalece; reemplaza la paleta azul del 2026-10-02).
    Contrastes sobre --panel #120c1f: --text 17:1 · --muted 8,4:1 · --muted-2 6,6:1 · --accent-texto 9,3:1 ·
    --cian 11:1 · --ok 9,6:1 · --warn 10:1 · --error 6,5:1 · --serie-1 5,3:1 · --serie-2 4,9:1 · blanco sobre
@@ -63,8 +63,8 @@
   /* Tipografía */
   --font-display: "Space Grotesk", "Helvetica Neue", Arial, sans-serif;
   --font-body: "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif;
-  /* Titular de la portada (2026-10-10, elegido por Camilo): condensada y pesada, como el de klarna.com */
-  --font-titular: "Anton", Impact, "Arial Narrow", sans-serif;
+  /* Titular de la portada (2026-10-14, elegido por Camilo): ancha, redondeada y espacial */
+  --font-titular: "Unbounded", "Space Grotesk", Arial, sans-serif;
   --t-sobretitulo: 0.72rem;
   --t-chico: 0.82rem;
   --t-base: 1rem;
@@ -99,7 +99,7 @@
     radial-gradient(700px 380px at -10% 110%, rgba(124, 58, 237, 0.10), transparent 60%),
     radial-gradient(rgba(196, 165, 255, 0.07) 1px, transparent 1.5px) 0 0 / 22px 22px;
 
-  /* Fondo galáctico (2026-10-10, CREATV Adstra): galaxia morada con algo de azul profundo, estrellas y retícula. Solo
+  /* Fondo galáctico (2026-10-10, CREATV Galadsy): galaxia morada con algo de azul profundo, estrellas y retícula. Solo
      fondo detrás de todo, con alfa baja: compuestos sobre --bg quedan oscuros, el oscuro prevalece. */
   --galaxia-1: rgba(124, 58, 237, 0.50);
   --galaxia-1-suave: rgba(124, 58, 237, 0.30);
