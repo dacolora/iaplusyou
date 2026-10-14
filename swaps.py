@@ -23,7 +23,8 @@ def guardar(cliente, data):
     _json_store.guardar(_path(cliente), data)
 
 
-def crear(cliente, foto_original_local, producto_id, aspect_ratio, proveedor="nano_banana", tipo="foto"):
+def crear(cliente, foto_original_local, producto_id, aspect_ratio, proveedor="nano_banana", tipo="foto", **medidas):
+    """`medidas`: en un video, `duracion_s` y `fps` del original (lo que cobra el proveedor, PND-312)."""
     data = cargar(cliente)
     swap_id = "swap_" + datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     data[swap_id] = {
@@ -40,6 +41,7 @@ def crear(cliente, foto_original_local, producto_id, aspect_ratio, proveedor="na
         "evaluacion": None,
         "error": None,
         "creado_en": datetime.now().isoformat(),
+        **{k: v for k, v in medidas.items() if k in ("duracion_s", "fps") and v is not None},
     }
     guardar(cliente, data)
     return swap_id

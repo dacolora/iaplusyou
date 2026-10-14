@@ -70,3 +70,14 @@ proyecto de la URL. `desde` de Gasto se limita al rango SQLite. El JS rechaza re
 insertar HTML. Pruebas con sesión de cliente: 200 propio y 403 ajeno para los tres fragmentos.
 
 Enmiendas PND-062, entrega 1 (2026-10-10, pedido de Daniel tras revisar la entrega): Los shells de catálogo e historiales distinguen 401/403 y redirección al login: muestran sesión vencida y un enlace a login, sin reintento perpetuo ni insertar el HTML redirigido. Se mantienen las guardias de proyecto de las rutas.
+
+**ffprobe sobre un video subido** (auditoría de seguridad 2026-10-13, `POST /cliente/<c>/swap/medir` y `generar_swap`,
+PND-312): un precio NUNCA sale solo de la cabecera del archivo (mvhd/mdhd se falsifican con 20 líneas: un video de
+12 s que dice 2 s pagaba la sexta parte). `providers/swap_video_precio.medir` toma la mayor entre la cabecera y el fin
+del último paquete, y cuenta los paquetes para los cuadros (sin decodificar). ffprobe va con `-protocol_whitelist file`
+(una lista HLS/concat disfrazada no hace pedidos de red; ffmpeg ya limita una entrada local, esto es defensa extra).
+Topes: dos mediciones a la vez (`_MEDIR_VIDEO_TURNOS`; un 8192×8192 le pide 176 MB y el VPS tiene 2 GB; sin turno,
+503), 200 MB por video (413) y 120 mediciones por persona y hora (`cuentas.limite_ok`, 429). La ruta está en el
+conjunto que responde 403 (no redirección) a un fetch sin acceso, y la pantalla dice sesión vencida, tamaño o turno.
+Pruebas: `tests/test_swap_video_precio.py` (cabecera falsa, lista blanca, topes, 403). Pendiente: el precio de Wan 3.0
+en Crear (`dashboard._duracion_video`) todavía confía en la cabecera (PND-319).

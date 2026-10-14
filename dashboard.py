@@ -535,7 +535,7 @@ def _guard_por_cliente():
         return None
     sesion = _sesion()
     if not usuarios.puede_acceder(sesion, cliente):
-        if request.endpoint in {"catalogo_selector", "swaps_lista", "gasto_lista"}:
+        if request.endpoint in {"catalogo_selector", "swaps_lista", "gasto_lista", "medir_video_swap"}:
             abort(403)
         if not sesion:
             flash(gettext("Inicia sesión para entrar a este proyecto."), "error")
@@ -2231,6 +2231,7 @@ def ver_cliente(cliente):
         plantillas_anuncio=plantillas_anuncio.PLANTILLAS,
         modelos_flowplus_imagen=flowplus_modelos.IMAGEN,
         preferencias_swap=proyectos.preferencias(cliente),
+        precios_swap=_precios_swap(proyectos.preferencias(cliente)),
         proveedores_swap_imagen=PROVEEDORES_SWAP_IMAGEN,
         proveedores_swap_video=PROVEEDORES_SWAP_VIDEO,
         nombres_proveedor_swap=NOMBRES_PROVEEDOR_SWAP,
@@ -3286,6 +3287,23 @@ def generar_swap(cliente):
     if any(_ext_de(a.filename) in IMAGE_EXTS and not _imagen_valida(a.stream) for a in archivos):
         flash(gettext("No pude leer esa imagen."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
+    # Un swap de video cuesta según cuánto dura el video (PND-312): se mide antes de reservar y cobrar.
+    if any(_ext_de(a.filename) in VIDEO_EXTS and _tamano_subida(a) > MAX_BYTES_VIDEO_SWAP for a in archivos):
+        flash(gettext("El video pesa más de 200 MB."), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
+    try:
+        medidas = [_medir_video_subido(a) if _ext_de(a.filename) in VIDEO_EXTS else None for a in archivos]
+    except _MedidorOcupado:
+        flash(gettext("Estoy midiendo otros videos; intenta en unos segundos."), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
+    if any(_ext_de(a.filename) in VIDEO_EXTS and not m for a, m in zip(archivos, medidas)):
+        flash(gettext("No pude leer la duración de ese video."), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
+    from providers import swap_video_precio  # noqa: PLC0415
+    tope = next((t for m in medidas if m for t in [swap_video_precio.demasiado_largo(proveedor_video, m[0])] if t), None)
+    if tope:
+        flash(gettext("Este modelo acepta videos de hasta %(n)s s.", n=tope), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
     producto = catalogo_productos.encontrar(cliente, producto_id)
     if not producto:
@@ -3294,10 +3312,22 @@ def generar_swap(cliente):
 
     # Cobros (spec 2026-10-08 §5): todos los swaps de este envío se piden
     # juntos antes de guardar el primero; cada uno reserva lo suyo al encolar.
-    libro_cobros.exigir(cliente, _costo_swaps(archivos, proveedor_foto, proveedor_video, mejorar_calidad))
+    # Primero el precio (regla 1, PND-312): la pantalla manda el que mostró (`precio_visto`, con el margen, calculado
+    # con la medida de /swap/medir, la misma de aquí) y aquí se recalcula. Sin precio visto, o si el de verdad pasa de
+    # medio centavo más (como nicho/rutas y guiones/rutas_pipeline), no se guarda ni se cobra nada.
+    costo = _costo_swaps(archivos, proveedor_foto, proveedor_video, mejorar_calidad, medidas,
+                         _n_referencias_swap(producto))
+    visto = gastos.costo_de_precio(request.form.get("precio_visto"))
+    if costo is None or visto is None or costo > visto + 0.005:
+        flash(gettext("Este envío cuesta %(precio)s. Revisa el precio y vuelve a generar.",
+                      precio=gastos.texto_precio(costo)) if costo is not None else
+              gettext("No pude calcular el precio de este envío; no se generó nada."), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
+    libro_cobros.exigir(cliente, costo)
     lanzados = 0
-    for archivo in archivos:
-        if _lanzar_swap(cliente, archivo, producto, producto_id, proveedor_foto, proveedor_video, mejorar_calidad):
+    for archivo, medida in zip(archivos, medidas):
+        if _lanzar_swap(cliente, archivo, producto, producto_id, proveedor_foto, proveedor_video, mejorar_calidad,
+                        medida=medida):
             lanzados += 1
 
     if lanzados == 1:
@@ -3309,24 +3339,126 @@ def generar_swap(cliente):
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
 
-def _costo_un_swap(es_video, proveedor_foto, proveedor_video, mejorar_calidad):
+# ffprobe sobre un video subido: dos a la vez como mucho (un video de 8192×8192 le pide 176 MB; el VPS tiene 2 GB),
+# 200 MB por archivo (el tope de los videos del editor) y 120 mediciones por persona y hora (auditoría de seguridad
+# 2026-10-13).
+_MEDIR_VIDEO_TURNOS = threading.BoundedSemaphore(2)
+MAX_BYTES_VIDEO_SWAP = 200 * 1024 * 1024
+ESPERA_TURNO_MEDIR_S = 5   # la pantalla: si no hay turno, «intenta en unos segundos»
+
+
+class _MedidorOcupado(Exception):
+    """No hubo turno para medir el video a tiempo."""
+
+
+@app.route("/cliente/<cliente>/swap/medir", methods=["POST"])
+def medir_video_swap(cliente):
+    """La duración y los cuadros por segundo de un video, para el precio de «Cambiar producto» (PND-312): la misma
+    medida con la que `generar_swap` reserva y cobra. No guarda nada."""
+    archivo = request.files.get("video")
+    if not archivo or _ext_de(archivo.filename) not in VIDEO_EXTS:
+        return jsonify({"ok": False, "error": gettext("Sube un video mp4, mov o webm.")}), 400
+    if _tamano_subida(archivo) > MAX_BYTES_VIDEO_SWAP:
+        return jsonify({"ok": False, "error": gettext("El video pesa más de 200 MB.")}), 413
+    if not cuentas.limite_ok(f"swap_medir:{session.get('usuario')}", maximo=120, ventana_s=3600):
+        return jsonify({"ok": False, "error": gettext("Mediste muchos videos seguidos; espera un rato.")}), 429
+    try:
+        medida = _medir_video_subido(archivo, espera_s=ESPERA_TURNO_MEDIR_S)
+    except _MedidorOcupado:
+        return jsonify({"ok": False, "error": gettext("Estoy midiendo otros videos; intenta en unos segundos.")}), 503
+    if not medida:
+        return jsonify({"ok": False, "error": gettext("No pude leer la duración de ese video.")}), 400
+    return jsonify({"ok": True, "duracion_s": medida[0], "fps": medida[1]})
+
+
+def _medir_video_subido(archivo, espera_s=60):
+    """(duración s, fps) del video que se está subiendo, o None si ffprobe no lo lee. Lo copia a un temporal y
+    deja el stream al principio para guardarlo después. `_MedidorOcupado` si no hubo turno en `espera_s`."""
+    import tempfile  # noqa: PLC0415
+    from providers import swap_video_precio  # noqa: PLC0415
+    if not _MEDIR_VIDEO_TURNOS.acquire(timeout=espera_s):
+        raise _MedidorOcupado()
+    try:
+        return _medir_en_temporal(archivo, tempfile, swap_video_precio)
+    finally:
+        _MEDIR_VIDEO_TURNOS.release()
+
+
+def _medir_en_temporal(archivo, tempfile, swap_video_precio):
+    with tempfile.NamedTemporaryFile(suffix=_ext_de(archivo.filename) or ".mp4") as tmp:
+        archivo.stream.seek(0)
+        while True:
+            bloque = archivo.stream.read(1 << 20)
+            if not bloque:
+                break
+            tmp.write(bloque)
+        tmp.flush()
+        archivo.stream.seek(0)
+        duracion, fps = swap_video_precio.medir(tmp.name)
+    return (duracion, fps) if duracion else None
+
+
+def _precios_swap(prefs):
+    """Lo que ve la persona en «Cambiar producto» antes de generar (PND-312), ya con el margen: por cada modelo de
+    video su regla (`swap_video_precio.TARIFAS`, con `usd_s` y `fijo` en precio) y por cada modelo de foto su
+    precio. None si el margen no se pudo leer: la pantalla dice «precio no disponible», nunca el costo."""
+    from providers import swap_video_precio  # noqa: PLC0415
+    video = {}
+    for pid in PROVEEDORES_SWAP_VIDEO:
+        t = swap_video_precio.TARIFAS.get(pid)
+        if t is None:
+            video[pid] = None
+        elif "fijo" in t:
+            video[pid] = {"fijo": gastos.precio(t["fijo"])}
+        else:
+            video[pid] = {**t, "usd_s": gastos.precio(t["usd_s"])}
+    from providers import wavespeed_imagen  # noqa: PLC0415
+    mejorar = bool(prefs.get("mejorar_calidad"))
+    foto = {}
+    for pid in PROVEEDORES_SWAP_IMAGEN:
+        if pid == "seedream_v5_pro":
+            # Cada referencia del producto suma (hasta 9): la pantalla las cuenta con data-n-referencias.
+            base = wavespeed_imagen.estimate_seedream(n_imagenes=1)["usd"] + (
+                wavespeed_imagen.COSTO_USD_UPSCALE if mejorar else 0.0)
+            foto[pid] = {"usd": gastos.precio(base), "por_referencia":
+                         gastos.precio(wavespeed_imagen.COSTO_USD_SEEDREAM_IMAGEN_EXTRA), "max_referencias": 9}
+        else:
+            foto[pid] = {"usd": gastos.precio(gastos.estimar("swap", proveedor=pid, formato="foto",
+                                                             mejorar_calidad=mejorar)["usd"])}
+    if gastos._margen_fallido():
+        return None
+    return {"video": video, "foto": foto, "fps": swap_video_precio.FPS_SUPUESTO,
+            "necesita_fps": list(swap_video_precio.NECESITA_FPS)}
+
+
+def _costo_un_swap(es_video, proveedor_foto, proveedor_video, mejorar_calidad, medida=None, n_referencias=1):
     if es_video:
-        return gastos.estimar("swap", proveedor=proveedor_video, formato="video")["usd"]
-    return gastos.estimar("swap", proveedor=proveedor_foto, formato="foto", mejorar_calidad=mejorar_calidad)["usd"]
+        duracion, fps = medida or (None, None)
+        return gastos.estimar("swap", proveedor=proveedor_video, formato="video", duracion=duracion, fps=fps)["usd"]
+    return gastos.estimar("swap", proveedor=proveedor_foto, formato="foto", mejorar_calidad=mejorar_calidad,
+                          n_referencias=n_referencias)["usd"]
 
 
-def _costo_swaps(archivos, proveedor_foto, proveedor_video, mejorar_calidad):
-    """USD (sin margen) de los swaps de un envío; None si alguno no tiene tarifa."""
+def _n_referencias_swap(producto):
+    """Las referencias del producto que ve el modelo de foto (Seedream cobra cada una, hasta 9: tareas/swap.py)."""
+    return min(len((producto or {}).get("referencias") or []), 9)
+
+
+def _costo_swaps(archivos, proveedor_foto, proveedor_video, mejorar_calidad, medidas=None, n_referencias=1):
+    """USD (sin margen) de los swaps de un envío; None si alguno no tiene tarifa. `medidas`: la (duración, fps) de
+    cada video, en el orden de `archivos`."""
     total = 0.0
-    for a in archivos:
-        usd = _costo_un_swap(_ext_de(a.filename) in VIDEO_EXTS, proveedor_foto, proveedor_video, mejorar_calidad)
+    for a, medida in zip(archivos, medidas or [None] * len(archivos)):
+        usd = _costo_un_swap(_ext_de(a.filename) in VIDEO_EXTS, proveedor_foto, proveedor_video, mejorar_calidad,
+                             medida, n_referencias)
         if usd is None:
             return None
         total += float(usd)
     return round(total, 4)
 
 
-def _lanzar_swap(cliente, archivo, producto, producto_id, proveedor_foto, proveedor_video, mejorar_calidad):
+def _lanzar_swap(cliente, archivo, producto, producto_id, proveedor_foto, proveedor_video, mejorar_calidad,
+                 medida=None):
     """Un solo archivo -> un solo swap, en su propio job de fondo. Extraído de
     generar_swap para poder subir varios archivos a la vez, cada uno con su
     propia barra de progreso independiente."""
@@ -3348,7 +3480,9 @@ def _lanzar_swap(cliente, archivo, producto, producto_id, proveedor_foto, provee
     # que subió, para que el resultado mantenga esas mismas proporciones.
     aspect_ratio_detectado = aspect_ratio_mod.detectar_gemini(foto_local) if not es_video else None
     mejorar_calidad = mejorar_calidad and not es_video
-    swap_id = swaps_mod.crear(cliente, foto_local, producto_id, aspect_ratio_detectado, proveedor, tipo=tipo)
+    medidas = dict(zip(("duracion_s", "fps"), medida)) if (es_video and medida) else {}
+    swap_id = swaps_mod.crear(cliente, foto_local, producto_id, aspect_ratio_detectado, proveedor, tipo=tipo,
+                              **medidas)
     job_id = f"{cliente}__{swap_id}__swap"
 
     if proveedor in ("nano_banana", "nano_banana_fal", "qwen_edit"):
@@ -3373,7 +3507,8 @@ def _lanzar_swap(cliente, archivo, producto, producto_id, proveedor_foto, provee
             "cliente": cliente, "swap_id": swap_id, "producto_id": producto_id,
             "proveedor": proveedor, "tipo": tipo, "mejorar_calidad": bool(mejorar_calidad),
         }, cliente=cliente, duracion_estimada=duracion_estimada, etapas=etapas, max_intentos=1,
-            costo_estimado=_costo_un_swap(es_video, proveedor_foto, proveedor_video, mejorar_calidad))
+            costo_estimado=_costo_un_swap(es_video, proveedor_foto, proveedor_video, mejorar_calidad, medida,
+                                          _n_referencias_swap(producto)))
     except SaldoInsuficiente as e:
         # Un swap guardado sin trabajo detrás quedaría «generando» para siempre.
         swaps_mod.actualizar(cliente, swap_id, estado="error", error=e.frase_proyecto())

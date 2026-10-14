@@ -15,6 +15,7 @@ legado/11-final-edition-tablero-2026-10-02-daniel.css
 legado/12-alertas-2026-10-02-spec-docs-superpowers.css
 base.css
 componentes/nvp.css
+componentes/cargando.css
 pantallas/guia-estilos.css
 pantallas/experimentos.css
 pantallas/experimento-nuevo.css
