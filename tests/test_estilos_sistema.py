@@ -125,7 +125,7 @@ ANIMACIONES_PERMITIDAS = {"pulso", "aparece-card", "exp-pulso", "fe-pulso", "fla
                           # Fondo galáctico de toda la plataforma y la vitrina de la portada (CREATV Galadsy, 2026-10-06)
                           "galaxia-nebulosa-a", "galaxia-nebulosa-b", "galaxia-nebulosa-c", "galaxia-gira",
                           "galaxia-estrellas-1", "galaxia-estrellas-2", "galaxia-titila", "galaxia-reticula",
-                          "portada-vitrina", "portada-cadena"}
+                          "portada-vitrina", "portada-cadena", "galaxia-fugaz", "vaca-flota", "vaca-parpadea"}
 TECHO_COLORES_LEGADO = 199     # medido el 2026-10-02 al cerrar la paleta azul; solo baja
 TECHO_ESTILOS_EN_LINEA = 414   # medido el 2026-10-02 con la Guía; solo baja
 

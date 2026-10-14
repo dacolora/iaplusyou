@@ -8,31 +8,31 @@
     <source media="(max-width: 760px)" srcset="{{ url_for('static', filename='landing/banner-movil.webp') }}">
     <img src="{{ url_for('static', filename='landing/banner.webp') }}" alt="" fetchpriority="high">
   </picture>
-  <div class="portada-hero-texto">
+  <div class="portada-hero-arriba">
     <h1 id="hero-titulo" class="portada-promesa" data-letras>
       <span>{{ _('Bienvenido a la') }}</span>
       <span class="landing-degradado">{{ _('Vía Láctea de los anuncios.') }}</span>
     </h1>
-    <p class="portada-hero-sub">{{ _('Una galaxia gobernada por vacas moradas, donde cada anuncio destaca y vende.') }}</p>
-    <div class="landing-cta">
-      <a class="btn-generar portada-pildora portada-cta" href="#planes">{{ _('Descubre Galadsy') }}</a>
-      <a class="btn-guardar portada-pildora" href="{{ url_for('login') }}">{{ _('Ya tengo cuenta') }}</a>
-    </div>
+    <p class="portada-hero-sub">{{ _('Un universo infinito de anuncios que destacan y venden.') }}</p>
+  </div>
+  <div class="portada-hero-abajo landing-cta">
+    <a class="btn-generar portada-pildora portada-cta" href="#planes">{{ _('Descubre Galadsy') }}</a>
+    <a class="btn-guardar portada-pildora" href="{{ url_for('login') }}">{{ _('Ya tengo cuenta') }}</a>
   </div>
 </section>
 
-{# Segunda pantalla: la historia Purple Cow → Purple Ads → la máquina. #}
+{# Segunda pantalla: el problema (todo se ve igual) y la respuesta (Purple Ads: destacar, vender, replicar). #}
 <section class="portada-historia aparece" aria-labelledby="historia-titulo">
   <h2 id="historia-titulo" class="portada-historia-titulo">
     <span>{{ _('Hoy todos tienen IA.') }}</span>
-    <span class="landing-degradado">{{ _('¿Entonces por qué todo se ve igual?') }}</span>
+    <span class="landing-degradado">{{ _('¿Entonces por qué todos los anuncios se ven igual?') }}</span>
   </h2>
   <ol class="portada-historia-pasos">
-    <li><strong>Purple Cow</strong><p>{{ _('En un campo de vacas iguales, solo una se recuerda: la morada.') }}</p></li>
-    <li><strong>Purple Ads</strong><p>{{ _('Anuncios que se notan entre el ruido y están hechos para vender.') }}</p></li>
-    <li><strong>{{ _('La máquina') }}</strong><p>{{ _('CREATV Galadsy convierte tus productos en Purple Ads a escala.') }}</p></li>
+    <li><strong>{{ _('Destacan') }}</strong><p>{{ _('Anuncios con identidad propia, hechos para frenar el scroll en cualquier feed.') }}</p></li>
+    <li><strong>{{ _('Venden') }}</strong><p>{{ _('Cada creativo nace de una razón para comprar, no solo de una imagen bonita.') }}</p></li>
+    <li><strong>{{ _('Se multiplican') }}</strong><p>{{ _('Encuentra lo que funciona y conviértelo en un universo de variaciones, en automático.') }}</p></li>
   </ol>
-  <p class="portada-historia-cierre">{{ _('No te mezcles con el resto.') }}</p>
+  <p class="portada-historia-cierre">{{ _('Purple Ads: distintos por diseño, hechos para rendir.') }}</p>
 </section>
 
 {# Cifras: solo hechos de la plataforma, nada inventado. #}
@@ -46,15 +46,46 @@
   </dl>
 </section>
 
+{# Anuncios automáticos: la vaca zen medita (y parpadea) mientras la plataforma trabaja. #}
+<section class="portada-zen aparece" aria-labelledby="zen-titulo">
+  <div class="portada-zen-vaca" aria-hidden="true">
+    <img class="zen-abierta" src="{{ url_for('static', filename='landing/vaca-zen-abierta.webp') }}" alt="" loading="lazy" width="720" height="783">
+    <img class="zen-cerrada" src="{{ url_for('static', filename='landing/vaca-zen-cerrada.webp') }}" alt="" loading="lazy" width="720" height="783">
+  </div>
+  <div class="portada-zen-texto">
+    <span class="landing-etiqueta">{{ _('Anuncios automáticos') }}</span>
+    <h2 id="zen-titulo" class="portada-titulo portada-titulo-izq">{{ _('Anuncios en automático. Tu equipo, en modo zen.') }}</h2>
+    <p class="portada-centro-sub portada-sub-izq">{{ _('Mientras Galadsy crea, prueba y replica lo que vende, tu equipo respira.') }}</p>
+    <ul class="portada-zen-lista">
+      <li><strong>{{ _('Estáticos y videos en piloto automático') }}</strong><span>{{ _('Cientos de variaciones desde una referencia, en el formato que pide cada red.') }}</span></li>
+      <li><strong>{{ _('Replica a los ganadores') }}</strong><span>{{ _('Detecta el anuncio que vende y multiplícalo: nuevos ganchos, ángulos y países.') }}</span></li>
+      <li><strong>{{ _('Lanza y mide sin salir') }}</strong><span>{{ _('Directo a Meta Ads, con los resultados de vuelta en un solo lugar.') }}</span></li>
+      <li><strong>{{ _('Edita sin editor') }}</strong><span>{{ _('Voz, subtítulos, música y el precio de cada país, listos en el navegador.') }}</span></li>
+    </ul>
+  </div>
+</section>
+
+{# Conexiones reales: las plataformas con las que Galadsy habla directo. #}
+<section class="portada-conexiones aparece" aria-labelledby="conexiones-titulo">
+  <h2 id="conexiones-titulo" class="portada-titulo">{{ _('Conexiones reales. Cero intermediarios.') }}</h2>
+  <p class="portada-centro-sub">{{ _('Tu tienda, tu pauta y tus datos, conectados de verdad: Galadsy lee lo que vende y publica donde vendes.') }}</p>
+  <ul class="portada-conexiones-lista">
+    {% for nombre in ['Shopify', 'Meta Ads', 'Triple Whale', 'Atria', 'WooCommerce', 'Mercado Libre', 'Instagram', 'TikTok', 'YouTube'] %}
+    <li>{{ nombre }}</li>
+    {% endfor %}
+  </ul>
+  <p class="landing-modelos">Wan 3.0 · Kling O3 Pro · Seedance 2.5 · Seedream V5 Pro · Nano Banana</p>
+</section>
+
 {# Los seis pasos: a la izquierda la pieza del paso activo (fija mientras se baja), a la derecha la lista grande. El paso
    activo cambia al bajar o al tocarlo. En el celular cada paso lleva su pieza encima. #}
 {% set pasos = [
-  (_('Encuentra referencias ganadoras'), _('Anuncios reales que ya están vendiendo, ordenados por etapa del embudo y nivel de consciencia.'), 'imagen', 2),
-  (_('Sube tus productos una sola vez'), _('Fotos, personajes, espacios y logo. La IA respeta tu marca en cada pieza.'), 'imagen', 1),
+  (_('Encuentra referencias ganadoras'), _('Anuncios reales que ya están vendiendo, ordenados por etapa del embudo y nivel de consciencia.'), 'imagen', 13),
+  (_('Sube tus productos una sola vez'), _('Fotos, personajes, espacios y logo. La IA respeta tu marca en cada pieza.'), 'imagen', 14),
   (_('Genera cientos de estáticos y videos que convierten'), _('Los mejores modelos de video e imagen del mercado, desde un solo formulario.'), 'video', 1),
   (_('Edítalos'), _('Voz, subtítulos, música y el precio de cada país, en un editor dentro del navegador.'), 'video', 5),
-  (_('Crea variaciones'), _('Ganchos nuevos, otras estructuras y regeneraciones a partir de lo que ya funciona.'), 'video', 3),
-  (_('Lánzalos directo a Meta'), _('Las campañas se crean en pausa: tú decides cuándo gastan y los resultados vuelven aquí.'), 'imagen', 3),
+  (_('Crea variaciones'), _('Ganchos nuevos, otras estructuras y regeneraciones a partir de lo que ya funciona.'), 'video', 7),
+  (_('Lánzalos directo a Meta'), _('Las campañas se crean en pausa: tú decides cuándo gastan y los resultados vuelven aquí.'), 'imagen', 11),
 ] %}
 {% macro media_paso(tipo, n) -%}
 {% if tipo == 'video' %}<video class="landing-media" src="{{ url_for('static', filename='landing/video-%d.mp4' % n) }}" poster="{{ url_for('static', filename='landing/video-%d.jpg' % n) }}" muted loop playsinline preload="none"></video>{% else %}<img class="landing-media" src="{{ url_for('static', filename='landing/imagen-%d.webp' % n) }}" alt="" loading="lazy">{% endif %}
@@ -99,12 +130,11 @@
 {# Vitrina: lo que sale de la plataforma, corriendo de derecha a izquierda.
    La lista va dos veces (la segunda aria-hidden) para que el bucle no salte;
    los videos solo se reproducen mientras se ven (script al final). #}
-{% set piezas = [('video', 1, 480, 854), ('imagen', 1, 480, 720), ('video', 2, 480, 854), ('imagen', 8, 640, 640),
-                 ('video', 6, 480, 854), ('imagen', 2, 480, 720), ('video', 3, 480, 854), ('imagen', 9, 640, 640),
-                 ('video', 7, 480, 854), ('imagen', 3, 480, 720), ('video', 4, 480, 854), ('imagen', 10, 640, 640),
-                 ('video', 8, 480, 854), ('imagen', 4, 480, 853), ('video', 5, 480, 854), ('imagen', 11, 640, 640),
-                 ('imagen', 5, 480, 853), ('imagen', 12, 640, 640), ('imagen', 6, 480, 853), ('imagen', 13, 640, 853),
-                 ('imagen', 7, 480, 853), ('imagen', 14, 640, 800)] %}
+{% set piezas = [('video', 1, 480, 854), ('imagen', 8, 640, 640), ('video', 6, 480, 854), ('imagen', 12, 640, 640),
+                 ('video', 2, 480, 854), ('imagen', 13, 640, 853), ('video', 7, 480, 854), ('imagen', 4, 480, 853),
+                 ('video', 3, 480, 854), ('imagen', 11, 640, 640), ('video', 8, 480, 854), ('imagen', 9, 640, 640),
+                 ('video', 4, 480, 854), ('imagen', 5, 480, 853), ('imagen', 3, 480, 720), ('video', 5, 480, 854),
+                 ('imagen', 14, 640, 800), ('imagen', 7, 480, 853), ('imagen', 10, 640, 640), ('imagen', 6, 480, 853)] %}
 <section class="landing-vitrina aparece" aria-labelledby="vitrina-titulo">
   <div class="landing-seccion-cabecera">
     <h2 id="vitrina-titulo" class="landing-titulo">{{ _('Hecho con CREATV Galadsy') }}</h2>
@@ -132,30 +162,30 @@
 {# Planes por volumen: todavía sin precio publicado; cada uno lleva a crear el
    proyecto, y Business a medida a escribirnos. #}
 <section class="landing-planes aparece" id="planes" aria-labelledby="planes-titulo">
-  <div class="landing-seccion-cabecera">
+  <div class="portada-centro">
     <span class="landing-etiqueta">{{ _('Planes') }}</span>
-    <h2 id="planes-titulo" class="landing-titulo">{{ _('100, 250, 500 o incluso más de 1.000 creativos al mes — sin agrandar tu equipo creativo.') }}</h2>
+    <h2 id="planes-titulo" class="portada-titulo">{{ _('100 o 500 estáticos por semana. O un plan a tu medida.') }}</h2>
+    <p class="portada-centro-sub">{{ _('Anuncios listos para pauta cada semana, sin agrandar tu equipo creativo.') }}</p>
   </div>
-  <div class="planes-grilla">
-    {% for cifra, texto, destacado in [
-      ('100', _('Para encontrar tus primeros ganadores.'), False),
-      ('250', _('Para probar ángulos nuevos cada semana.'), True),
-      ('500', _('Para escalar varias líneas de producto a la vez.'), False),
-      (_('1.000+'), _('Para marcas que viven de probar y escalar.'), False),
-    ] %}
-    <article class="plan{% if destacado %} plan-destacado{% endif %}">
-      {% if destacado %}<span class="plan-cinta">{{ _('Recomendado') }}</span>{% endif %}
-      <span class="plan-cifra">{{ cifra }}</span>
-      <span class="plan-unidad">{{ _('creativos al mes') }}</span>
-      <p>{{ texto }}</p>
-      <a class="{{ 'btn-generar' if destacado else 'btn-guardar' }} plan-boton" href="#empezar">{{ _('Empezar este plan') }}</a>
+  <div class="planes-grilla planes-tres">
+    <article class="plan">
+      <span class="plan-cifra">100</span>
+      <span class="plan-unidad">{{ _('estáticos por semana') }}</span>
+      <p>{{ _('Para probar ángulos nuevos cada semana y encontrar a tus ganadores.') }}</p>
+      <a class="btn-guardar plan-boton" href="#empezar">{{ _('Empezar este plan') }}</a>
     </article>
-    {% endfor %}
+    <article class="plan plan-destacado">
+      <span class="plan-cinta">{{ _('Recomendado') }}</span>
+      <span class="plan-cifra">500</span>
+      <span class="plan-unidad">{{ _('estáticos por semana') }}</span>
+      <p>{{ _('Para escalar: varias líneas de producto, países y variaciones a la vez.') }}</p>
+      <a class="btn-generar plan-boton" href="#empezar">{{ _('Empezar este plan') }}</a>
+    </article>
     <article class="plan plan-custom">
-      <span class="plan-cifra plan-cifra-texto">Business Custom</span>
-      <span class="plan-unidad">{{ _('Plan a tu medida') }}</span>
+      <span class="plan-cifra plan-cifra-texto">{{ _('A tu medida') }}</span>
+      <span class="plan-unidad">{{ _('Estáticos, videos y marcas') }}</span>
       <p>{{ _('Volumen, marcas y países a tu medida, con acompañamiento directo de nuestro equipo.') }}</p>
-      <a class="btn-guardar plan-boton" href="mailto:dacoloradog@gmail.com?subject=Creatv%20Galadsy%20Business%20Custom">{{ _('Hablar con nosotros') }}</a>
+      <a class="btn-guardar plan-boton" href="mailto:dacoloradog@gmail.com?subject=CREATV%20Galadsy%20plan">{{ _('Hablar con nosotros') }}</a>
     </article>
   </div>
 </section>
@@ -201,13 +231,6 @@
   </form>
 </section>
 
-{# Al final: con quién generamos. Los nombres de los modelos van en letra
-   pequeña, sin protagonismo. #}
-<section class="landing-tecnologia aparece" aria-labelledby="tecnologia-titulo">
-  <h2 id="tecnologia-titulo" class="landing-titulo landing-titulo-chico">{{ _('Conexión directa con las mejores tecnologías de imagen y video.') }}</h2>
-  <p class="landing-seccion-sub">{{ _('Sin intermediarios externos: tus piezas salen de los modelos líderes y tus anuncios van directo a tu cuenta de Meta.') }}</p>
-  <p class="landing-modelos">Wan 3.0 · Kling O3 Pro · Seedance 2.5 · Seedream V5 Pro · Nano Banana · Meta Ads</p>
-</section>
 
 <footer class="landing-pie vacio">
   © 2026 CREATV Galadsy · <a href="{{ url_for('privacidad') }}">{{ _('Privacidad') }}</a> · <a href="{{ url_for('terminos') }}">{{ _('Términos') }}</a> · <a href="{{ url_for('eliminar_datos') }}">{{ _('Eliminación de datos') }}</a>

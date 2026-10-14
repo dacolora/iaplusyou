@@ -254,3 +254,12 @@ sigue global antes del compositor. Node ejecuta los módulos completos sobre el 
   `aria-label`) y CSS las mueve al pasar el mouse con una transición (no es una animación nueva).
 - Login: la vaca surfeando la Vía Láctea de fondo a pantalla completa (`static/landing/vaca-surf*.webp`), la caja a la
   derecha y «Surfing the Milky Way of ads.» abajo a la izquierda; en el celular la vaca arriba y la caja abajo.
+- Portada 2026-10-14 (segunda ronda): titular centrado arriba («Welcome to the Milky Way of ads.» + «An infinite universe of
+  ads that stand out and sell.»), botones abajo, vaca libre en el medio (`--velo-hero-centro`). La historia habla de
+  destacar, vender y multiplicar (sin vacas). Tras las cifras, **la vaca zen** (`static/landing/vaca-zen-abierta|cerrada.webp`:
+  la de ojos cerrados es la abierta con un parche en cada ojo, así encajan) flota (`vaca-flota`) y parpadea (`vaca-parpadea`)
+  junto a «Ads on autopilot. Your team, in zen mode.»; luego «Real connections. Zero middlemen.» (Shopify, Meta Ads, Triple
+  Whale, Atria, WooCommerce, Mercado Libre, Instagram, TikTok, YouTube, y los modelos en letra pequeña). Planes: 100 o 500
+  estáticos por semana y uno a medida. La vitrina y los pasos usan sobre todo videos y piezas de Happy Fresh / Happy Flops.
+- Dentro de la plataforma: estrellas fugaces en el fondo (`.galaxia-fugaz`, `base.html`) y la vaca zen pequeña al pie del menú
+  lateral («Your ads work. You breathe.»), que se esconde con el menú plegado.

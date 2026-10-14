@@ -78,3 +78,27 @@
 @keyframes galaxia-estrellas-2 { to { transform: translateY(600px); } }
 @keyframes galaxia-titila { from { opacity: .45; } to { opacity: 1; } }
 @keyframes galaxia-reticula { to { background-position: 0 64px, 0 0; } }
+
+/* Estrellas fugaces (2026-10-14): tres trazos que cruzan en diagonal, cada uno con su ritmo; casi todo el ciclo están
+   apagados, así pasan de vez en cuando y no distraen. */
+.galaxia-fugaz { top: 0; left: 0; width: 140px; height: 1.5px; border-radius: 999px; opacity: 0;
+  background-image: linear-gradient(90deg, transparent, var(--estrella)); transform-origin: right center;
+  animation: galaxia-fugaz 9s linear infinite; }
+.galaxia-fugaz.f1 { top: 12%; left: 62%; animation-delay: 1.5s; }
+.galaxia-fugaz.f2 { top: 34%; left: 85%; animation-duration: 13s; animation-delay: 6s; }
+.galaxia-fugaz.f3 { top: 6%; left: 30%; animation-duration: 17s; animation-delay: 10s; width: 100px; }
+@keyframes galaxia-fugaz {
+  0% { opacity: 0; transform: rotate(-32deg) translateX(0); }
+  2% { opacity: 1; }
+  9% { opacity: 0; transform: rotate(-32deg) translateX(-420px); }
+  100% { opacity: 0; transform: rotate(-32deg) translateX(-420px); }
+}
+
+/* La vaca zen al pie del menú lateral (2026-10-14): pequeña, flota y parpadea. Con el menú plegado no se ve
+   (.sidebar-texto). */
+.sidebar-zen { display: flex; align-items: center; gap: var(--esp-3); margin: 0 var(--esp-2) var(--esp-3); padding: var(--esp-3); border-radius: var(--radius); border: 1px solid var(--border-soft); background-image: radial-gradient(circle at 20% 50%, var(--galaxia-velo-1), transparent 70%); }
+.sidebar-zen-vaca { position: relative; flex: 0 0 auto; width: 46px; aspect-ratio: 720 / 783; animation: vaca-flota 6s ease-in-out infinite; }
+.sidebar-zen-vaca img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.sidebar-zen-vaca .zen-cerrada { animation: vaca-parpadea 5.5s infinite; }
+.sidebar-zen-frase { font-size: var(--t-chico); line-height: 1.35; color: var(--muted); }
+.sidebar-plegada .sidebar-zen { display: none; }
