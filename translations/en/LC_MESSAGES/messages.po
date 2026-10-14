@@ -8393,6 +8393,9 @@ msgstr "This voice lasts %(n)s s; a talking ad can be up to 30 s. Split it into 
 msgid "Esta voz se borró; no se vuelve a crear."
 msgstr "This voice was deleted; it will not be recreated."
 
+msgid "Estaba en pausa en Creatv pero activo en Meta: se volvió a pausar."
+msgstr "It was paused in Creatv but active in Meta: it was paused again."
+
 msgid "Estable"
 msgstr "Stable"
 
@@ -8463,6 +8466,9 @@ msgstr "This Apify actor now requires full account access and Creatv won't grant
 
 msgid "Este anuncio no funciona"
 msgstr "This ad doesn't work"
+
+msgid "Este anuncio no tiene su presupuesto diario guardado en Creatv: no se activa sin comprobarlo. Revísalo en Meta."
+msgstr "This ad doesn't have its daily budget saved in Creatv: it isn't activated without checking it. Review it in Meta."
 
 msgid "Este anuncio sí funciona"
 msgstr "This ad works"
@@ -12145,6 +12151,10 @@ msgstr "Meta is throttling calls for a while (usage limit): try again in a few m
 
 msgid "Meta está revisando la cuenta por riesgo y puede frenar la entrega."
 msgstr "Meta is reviewing the account for risk and may slow delivery."
+
+#, python-format
+msgid "Meta guardó en el conjunto un presupuesto diario distinto al enviado (%(leido)s en vez de %(esperado)s, en la unidad de Meta) y NO se pudo pausar: páusalo en Meta ya."
+msgstr "Meta saved a different daily budget on the ad set than the one sent (%(leido)s instead of %(esperado)s, in Meta's unit) and it could NOT be paused: pause it in Meta now."
 
 #, python-format
 msgid "Meta guardó en el conjunto un presupuesto diario distinto al enviado (%(leido)s en vez de %(esperado)s, en la unidad de Meta): quedó en pausa."
@@ -20194,6 +20204,10 @@ msgstr "A user '%(usuario)s' already exists — choose another."
 #, python-format
 msgid "Ya existe un usuario '%(usuario)s'."
 msgstr "User '%(usuario)s' already exists."
+
+#, python-format
+msgid "Ya gastó %(gasto)s de un tope de %(tope)s en Meta: sube el tope antes de activarlo."
+msgstr "It already spent %(gasto)s of a %(tope)s cap in Meta: raise the cap before activating it."
 
 msgid "Ya había algo generándose para esta sesión."
 msgstr "Something was already generating for this session."

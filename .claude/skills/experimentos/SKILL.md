@@ -107,9 +107,16 @@ Meta da para la cuenta (con la lista vieja daba ×120); (2) cada diario y cada `
 (`cambiar_estado`, `activar_pieza`) también lo lee, así un conjunto viejo con ×100 nunca se enciende; (3) el tope va a
 la campaña desde el `min_campaign_group_spend_cap` de la cuenta (Forja: 200 000 COP; `minimo_tope_campana` queda como
 respaldo y para el texto de «Nuevo experimento»); por debajo, los conjuntos se crean con la fecha de fin a la que
-alcanza el tope (`_tope_y_dias_meta`, al menos 1 día) y queda un evento que lo dice; (4) la periódica
-`exp_vigilar_gasto` (10 min) lee el gasto real de cada campaña `corriendo`/`decidido` y la pausa entera si llegó al tope
-o si hoy va por más de `RITMO_MAXIMO` (2) veces el diario de sus países activos.
+alcanza el tope (`_dias_que_alcanza`, al menos 1 día) y queda un evento que lo dice; la primera activación
+(`_preparar_fin_primera_activacion`) usa los MISMOS días (antes devolvía los del experimento y deshacía el freno), y
+activar se niega si el gasto en Meta ya llegó al tope; (4) la periódica `exp_vigilar_gasto` (10 min, en su PROPIO
+carril del worker, `CARRIL_VIGILANCIA`: en el general esperaba horas detrás de renders) lee el gasto real de cada
+campaña `corriendo`/`decidido` y la pausa entera si llegó al tope o si hoy va por más de `RITMO_MAXIMO` (2) veces el
+diario de todos sus países con conjunto (`diario_activable`); un experimento `pausado` o en `error` cuya campaña siga
+ACTIVA en Meta se vuelve a pausar; un error de lectura deja un solo aviso, no uno cada 10 min. Si una lectura de
+vuelta no coincide y la pausa falla, el país NO se marca «pausado» (el aviso dice «páusalo en Meta ya») para que la
+vigilancia lo siga contando. «Activar» de un anuncio suelto (`dashboard.cambiar_estado_ad`) pasa por los mismos
+frenos y se niega si la ficha no tiene su `presupuesto_diario`.
 
 **Decisor, escalera y modos** (`decisor.py`, `modos.py`, `propuestas.py`, `acciones.py`,
 `derivaciones.py`, `notificaciones.py`): the part of the loop that closes on its own.

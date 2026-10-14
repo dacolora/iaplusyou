@@ -22,6 +22,8 @@ class MetaFalsa:
         self.presupuestos = {}
         self.topes = {}
         self.gastos = {}
+        self.estados_meta = {}   # id de campaña -> effective_status que contesta Meta
+        self.posts = []          # (edge, payload) de cada POST directo por meta_auth (p. ej. end_time)
 
     def _adset(self, nombre, cid, obj, targeting, centavos, dias, dry_run=False, promoted_object=None):
         r = self._id("adset", nombre=nombre, objetivo=obj, targeting=targeting, centavos=centavos, dias=dias,
@@ -42,6 +44,7 @@ class MetaFalsa:
     def _llamar(self, metodo, edge, payload=None, params=None, dry_run=False):
         params = params or {}
         if metodo != "GET":
+            self.posts.append((edge, dict(payload or {})))
             return {"success": True}
         if edge.startswith("act_"):
             return dict(self.cuenta)
@@ -50,6 +53,8 @@ class MetaFalsa:
             return {"data": [{"spend": str(total if params.get("date_preset") == "maximum" else hoy)}]}
         if params.get("fields") == "daily_budget":
             return {"daily_budget": str(self.presupuestos.get(edge, ""))}
+        if params.get("fields") == "effective_status":
+            return {"effective_status": self.estados_meta.get(edge)}
         if params.get("fields") == "spend_cap":
             tope = self.topes.get(edge)
             return {"spend_cap": str(tope) if tope else "0"}

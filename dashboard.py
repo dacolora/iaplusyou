@@ -4449,7 +4449,10 @@ def cambiar_estado_ad(cliente, ad_id):
             # de la ficha (los dos anuncios sueltos de Forja quedaron con 2 000 000 COP al día por 20 000).
             moneda = entry.get("moneda") or (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
             lanzador.comprobar_moneda(lanzador._cuenta_meta(creds), moneda)
-            if ids.get("adset_id") and entry.get("presupuesto_diario"):
+            if ids.get("adset_id"):
+                if not entry.get("presupuesto_diario"):
+                    raise ValueError(gettext("Este anuncio no tiene su presupuesto diario guardado en Creatv: no se "
+                                             "activa sin comprobarlo. Revísalo en Meta."))
                 lanzador._confirmar_presupuesto(ids["adset_id"], lanzador.centavos(entry["presupuesto_diario"], moneda))
         for oid in (campaign_id, ids.get("adset_id"), ids.get("ad_id")):
             if oid:

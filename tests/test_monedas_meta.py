@@ -299,3 +299,122 @@ def test_un_anuncio_suelto_con_el_diario_correcto_se_activa(base_temporal, monke
     respuesta, estados = _ruta_suelto(base_temporal, monkeypatch, 20000)
     assert respuesta.status_code == 302
     assert estados == [("camp", "ACTIVE"), ("set", "ACTIVE"), ("ad", "ACTIVE")]
+
+
+def test_un_anuncio_suelto_sin_diario_guardado_no_se_activa(base_temporal, monkeypatch):
+    import dashboard
+    from tests.test_rutas_experimentos import _cliente_admin
+    c = _cliente_admin(dashboard)
+    meta = MetaFalsa()
+    monkeypatch.setattr(dashboard.ads_mod, "cargar", lambda _: {"a": {"meta_ids": {"campaign_id": "camp", "adset_id": "set",
+                                                                                     "ad_id": "ad"}, "moneda": "COP"}})
+    monkeypatch.setattr(dashboard.ads_mod, "actualizar", lambda *a, **k: None)
+    monkeypatch.setattr(dashboard.meta_conexion, "credenciales_ads",
+                        lambda _: {"token": "llave-de-prueba", "ad_account_id": "1", "page_id": "p"})
+    monkeypatch.setattr(dashboard.meta_auth, "configurar", lambda *a: None)
+    monkeypatch.setattr(dashboard.meta_auth, "limpiar", lambda: None)
+    monkeypatch.setattr(dashboard.meta_auth, "llamar", meta._llamar)
+    estados = []
+    monkeypatch.setattr(dashboard.meta_campaign, "actualizar_estado", lambda oid, status, dry_run=False: estados.append((oid, status)))
+    assert c.post("/cliente/acme/ads/a/estado", data={"estado": "ACTIVE"}).status_code == 302
+    assert not estados
+
+
+# ---------- lo que encontró la revisión de gasto ----------
+
+def test_activar_no_devuelve_los_dias_que_el_tope_no_paga(entorno, base_temporal, monkeypatch):
+    """Antes, la primera activación mandaba end_time = ahora + 7 días y deshacía el día que paga el tope."""
+    import time
+    ex, lz, meta = entorno["ex"], entorno["lanzador"], entorno["meta"]
+    eid = _experimento(base_temporal, ex, tope=4000.0)
+    lz.lanzar("acme", eid)
+    ahora = 1800000000
+    monkeypatch.setattr(time, "time", lambda: ahora)
+    lz.cambiar_estado("acme", eid, "ACTIVE")
+    fines = [p["end_time"] for _, p in meta.posts if "end_time" in p]
+    assert fines and all(f == ahora + 1 * 86400 for f in fines)
+
+
+def test_no_se_reactiva_lo_que_ya_llego_a_su_tope(entorno, base_temporal):
+    ex, lz, meta = entorno["ex"], entorno["lanzador"], entorno["meta"]
+    eid, cid = _corriendo(entorno, base_temporal)
+    meta.gastos[cid] = (28000.0, 4000.0)
+    lz.vigilar_gasto("acme", eid)
+    meta.llamadas.clear()
+    with pytest.raises(ValueError, match="tope"):
+        lz.cambiar_estado("acme", eid, "ACTIVE")
+    with pytest.raises(ValueError, match="tope"):
+        lz.activar_pieza("acme", ex.obtener("acme", eid)["piezas"][0]["id"])
+    assert not [kw for t, kw in meta.llamadas if t == "estado" and kw["status"] == "ACTIVE"]
+
+
+def test_si_la_pausa_falla_el_pais_no_queda_marcado_pausado(entorno):
+    ex, lz, meta, eid = entorno["ex"], entorno["lanzador"], entorno["meta"], entorno["eid"]
+    lz.lanzar("acme", eid)
+    lz.cambiar_estado("acme", eid, "ACTIVE")
+    original = meta._presupuesto
+
+    def guarda_otro(oid, c, dry_run=False):
+        r = original(oid, c)
+        meta.presupuestos[oid] = int(c) * 100
+        return r
+
+    def pausa_que_falla(oid, status, dry_run=False):
+        raise RuntimeError("Meta no contestó")
+    meta._presupuesto = guarda_otro
+    campaign, adset, creative, ad, insights, auth = meta.modulos()
+    adset.actualizar_estado = pausa_que_falla
+    entorno["monkeypatch"].setattr(lz, "meta_adset", adset)
+    with pytest.raises(lz.PresupuestoNoCoincide, match="NO se pudo pausar"):
+        lz.cambiar_presupuesto_pais("acme", eid, "CO", 25000)
+    assert ex.obtener("acme", eid)["paises"][0]["estado"] == "activo"
+
+
+def test_un_pausado_en_creatv_que_sigue_activo_en_meta_se_vuelve_a_pausar(entorno, base_temporal):
+    ex, lz, meta = entorno["ex"], entorno["lanzador"], entorno["meta"]
+    eid, cid = _corriendo(entorno, base_temporal)
+    lz.cambiar_estado("acme", eid, "PAUSED")
+    meta.llamadas.clear()
+    assert lz.vigilar_gasto("acme", eid) is None            # Meta dice que no está activo: nada que hacer
+    assert not meta.llamadas
+    meta.estados_meta[cid] = "ACTIVE"
+    assert "activo en Meta" in lz.vigilar_gasto("acme", eid)
+    assert ("estado", {"oid": cid, "status": "PAUSED"}) in meta.llamadas
+
+
+def test_el_ritmo_se_mide_contra_el_diario_de_todos_los_paises(entorno, base_temporal):
+    """Un país pausado hoy ya gastó parte de lo de hoy: no se pausa todo por eso (falso positivo de la revisión)."""
+    ex, lz, meta = entorno["ex"], entorno["lanzador"], entorno["meta"]
+    eid = ex.crear("acme", "Dos", [{"pais": "CO", "idioma": "es", "presupuesto_dia": 4000.0},
+                                   {"pais": "MX", "idioma": "es", "presupuesto_dia": 4000.0}],
+                   "OUTCOME_TRAFFIC", 7, 280000.0, URL, "COP")
+    ex.agregar_pieza("acme", eid, _pieza(base_temporal), "CO")
+    ex.agregar_pieza("acme", eid, _pieza(base_temporal, legado="cf_2__es_MX", pais="MX"), "MX")
+    lz.lanzar("acme", eid)
+    lz.cambiar_estado("acme", eid, "ACTIVE")
+    lz.cambiar_estado("acme", eid, "PAUSED", pais="MX")
+    cid = ex.obtener("acme", eid)["meta_campaign_id"]
+    meta.gastos[cid] = (9000.0, 9000.0)
+    assert lz.vigilar_gasto("acme", eid) is None
+    meta.gastos[cid] = (17000.0, 17000.0)
+    assert "doble" in lz.vigilar_gasto("acme", eid)
+
+
+def test_un_error_de_lectura_deja_un_solo_aviso(entorno, base_temporal, monkeypatch):
+    from tareas import experimentos as tex
+    ex, lz = entorno["ex"], entorno["lanzador"]
+    eid, cid = _corriendo(entorno, base_temporal)
+
+    def falla(cliente, experimento_id):
+        raise RuntimeError("token caído")
+    monkeypatch.setattr(lz, "vigilar_gasto", falla)
+    tex.exp_vigilar_gasto({})
+    tex.exp_vigilar_gasto({})
+    assert len([e for e in ex.eventos("acme", eid) if "No se pudo vigilar" in e["mensaje"]]) == 1
+
+
+def test_la_vigilancia_tiene_su_propio_carril():
+    import worker
+    assert worker.CARRIL_VIGILANCIA == ("exp_vigilar_gasto",)
+    for carril in (worker.CARRIL_CREAR, worker.CARRIL_NICHO, worker.CARRIL_LECTURA):
+        assert "exp_vigilar_gasto" not in carril

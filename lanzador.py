@@ -110,6 +110,18 @@ def comprobar_moneda(cuenta, moneda):
                 "no se manda ningún presupuesto.", moneda=real, minimo=minimo_meta))
 
 
+def _dias_que_alcanza(ex):
+    """Días de pauta que paga el tope al diario de todos los países: nunca más que los del experimento, al menos 1
+    (PND-319). Con el reparto de «Nuevo experimento» (diario × días ≤ total) da los mismos días; con un tope menor que
+    un día de pauta o un experimento viejo armado a mano, menos."""
+    dias = int(ex.get("dias") or 7)
+    tope = float(ex.get("tope_total") or 0)
+    diario = sum(float(p.get("presupuesto_dia") or 0) for p in ex.get("paises") or [])
+    if tope <= 0 or diario <= 0:
+        return dias
+    return max(1, min(dias, int(tope // diario)))
+
+
 def _tope_y_dias_meta(ex, cuenta, moneda):
     """(spend_cap en la unidad de Meta o None, días con que se crean los conjuntos). El tope va a la campaña cuando
     Meta lo acepta: desde el `min_campaign_group_spend_cap` de la cuenta (si no se pudo leer, desde
@@ -124,10 +136,7 @@ def _tope_y_dias_meta(ex, cuenta, moneda):
     minimo = _entero(cuenta.get("min_campaign_group_spend_cap"))
     if (tope_meta >= minimo) if minimo else (tope >= minimo_tope_campana(moneda)):
         return tope_meta, dias
-    diario = sum(float(p.get("presupuesto_dia") or 0) for p in ex["paises"])
-    if diario <= 0:
-        return None, dias
-    return None, max(1, min(dias, int(tope // diario)))
+    return None, _dias_que_alcanza(ex)
 
 
 def _confirmar_presupuesto(adset_id, esperado, pausar=None):
@@ -136,14 +145,24 @@ def _confirmar_presupuesto(adset_id, esperado, pausar=None):
     leido = _entero((meta_auth.llamar("GET", adset_id, params={"fields": "daily_budget"}) or {}).get("daily_budget"))
     if leido == int(esperado):
         return
+    pausados = True
     for oid in (pausar or [adset_id]):
         try:
             meta_adset.actualizar_estado(oid, "PAUSED")
         except Exception:  # noqa: BLE001 — el aviso de abajo sale igual; la pausa es de mejor esfuerzo
+            pausados = False
             log.warning("No se pudo pausar el conjunto %s tras un presupuesto que no coincide", oid)
-    raise PresupuestoNoCoincide(gettext(
-        "Meta guardó en el conjunto un presupuesto diario distinto al enviado (%(leido)s en vez de %(esperado)s, en la "
-        "unidad de Meta): quedó en pausa.", leido=leido if leido is not None else "?", esperado=int(esperado)))
+    if pausados:
+        error = PresupuestoNoCoincide(gettext(
+            "Meta guardó en el conjunto un presupuesto diario distinto al enviado (%(leido)s en vez de %(esperado)s, en "
+            "la unidad de Meta): quedó en pausa.", leido=leido if leido is not None else "?", esperado=int(esperado)))
+    else:
+        error = PresupuestoNoCoincide(gettext(
+            "Meta guardó en el conjunto un presupuesto diario distinto al enviado (%(leido)s en vez de %(esperado)s, en "
+            "la unidad de Meta) y NO se pudo pausar: páusalo en Meta ya.",
+            leido=leido if leido is not None else "?", esperado=int(esperado)))
+    error.pausado = pausados
+    raise error
 
 
 def _confirmar_tope(campaign_id, esperado):
@@ -566,7 +585,9 @@ def _preparar_fin_primera_activacion(cliente, ex):
     def reservar(extra):
         previo = extra.get("fin_primera_activacion")
         if not previo or int(previo) < ahora + _MARGEN_FIN_RESERVADO:
-            extra["fin_primera_activacion"] = ahora + int(ex.get("dias") or 7) * 86400
+            # PND-319: los días que paga el tope, no los del experimento (antes, activar devolvía a Meta los 7 días y
+            # deshacía la fecha de fin acortada al lanzar).
+            extra["fin_primera_activacion"] = ahora + _dias_que_alcanza(actual) * 86400
         return extra
     extra = experimentos.actualizar_extra(cliente, ex["id"], reservar)
     for p in actual["paises"]:
@@ -662,6 +683,13 @@ def _confirmar_antes_de_activar(creds, ex, pais=None):
     (el país entero) y sale el aviso."""
     moneda = ex["moneda"] or "USD"
     comprobar_moneda(_cuenta_meta(creds), moneda)
+    tope = float(ex.get("tope_total") or 0)
+    if tope > 0 and ex.get("meta_campaign_id"):
+        gastado = _gasto_campana(ex["meta_campaign_id"], "maximum")
+        if gastado >= tope:
+            from tablero import dinero as _dinero
+            raise ValueError(gettext("Ya gastó %(gasto)s de un tope de %(tope)s en Meta: sube el tope antes de activarlo.",
+                                     gasto=_dinero(gastado, moneda), tope=_dinero(tope, moneda)))
     for p in ex["paises"]:
         if pais is not None and p["pais"] != pais:
             continue
@@ -687,12 +715,34 @@ def _gasto_campana(campaign_id, periodo):
         return 0.0
 
 
+def _repausar_si_sigue_activo(cliente, ex):
+    """Un experimento pausado (o en error) en Creatv cuya campaña sigue ACTIVA en Meta —una pausa que falló a medias—
+    se vuelve a pausar entero (PND-319, revisión de gasto). Solo lee el estado de la campaña: un GET."""
+    leido = {}
+
+    def _leer(_creds):
+        leido["estado"] = (meta_auth.llamar("GET", ex["meta_campaign_id"], params={"fields": "effective_status"})
+                           or {}).get("effective_status")
+
+    _con_credenciales(cliente, _leer)
+    if leido.get("estado") != "ACTIVE":
+        return None
+    _pausar_todo_en_meta(cliente, ex)
+    motivo = gettext("Estaba en pausa en Creatv pero activo en Meta: se volvió a pausar.")
+    experimentos.registrar_evento(cliente, ex["id"], "presupuesto", motivo, {"estado_meta": "ACTIVE"})
+    return motivo
+
+
 def vigilar_gasto(cliente, experimento_id):
     """PND-319: lee en Meta lo que de verdad gastó la campaña (en total y hoy) y la pausa entera si llegó al tope o si
     hoy va por más de `RITMO_MAXIMO` veces el diario de sus países activos. No espera a las métricas de cada 2 h ni al
     decisor de cada hora: lo corre la periódica `exp_vigilar_gasto` cada 10 min. Devuelve el motivo si pausó."""
     ex = experimentos.obtener(cliente, experimento_id)
-    if not ex or ex["estado"] not in ("corriendo", "decidido") or not ex["meta_campaign_id"]:
+    if not ex or not ex["meta_campaign_id"]:
+        return None
+    if ex["estado"] in ("pausado", "error"):
+        return _repausar_si_sigue_activo(cliente, ex)
+    if ex["estado"] not in ("corriendo", "decidido"):
         return None
     lectura = {}
 
@@ -707,7 +757,8 @@ def vigilar_gasto(cliente, experimento_id):
     from tablero import dinero as _dinero
     moneda = ex["moneda"] or "USD"
     tope = float(ex["tope_total"] or 0)
-    diario = sum(float(p.get("presupuesto_dia") or 0) for p in ex["paises"] if p.get("estado") == "activo")
+    # El diario de todos los países con conjunto: lo de hoy incluye lo que gastó un país antes de pausarlo.
+    diario = diario_activable(ex)
     motivo = None
     if tope > 0 and total >= tope:
         motivo = gettext("Llegó a su tope en Meta (%(gasto)s de %(tope)s): se pausó.",
@@ -947,7 +998,8 @@ def cambiar_presupuesto_pais(cliente, experimento_id, pais, presupuesto_dia):
             for adset_id in ids:
                 _confirmar_presupuesto(adset_id, centavos_conjunto, pausar=ids)
         except PresupuestoNoCoincide as exc:
-            experimentos.actualizar_pais(cliente, experimento_id, pais, estado="pausado")
+            if getattr(exc, "pausado", False):   # solo si Meta de verdad lo pausó: si no, la vigilancia lo sigue mirando
+                experimentos.actualizar_pais(cliente, experimento_id, pais, estado="pausado")
             experimentos.registrar_evento(cliente, experimento_id, "presupuesto", f"{pais}: {exc}",
                                           {"intentado": float(presupuesto_dia), "unidades": centavos_conjunto})
             raise
