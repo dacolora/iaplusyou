@@ -536,3 +536,37 @@ def test_pnd094_selector_agrupa_colores_sin_cambiar_valores_ni_seleccion(app):
     assert 'label="Productos · Original"' in html
     assert html.count('value="original/pink"') == 7 and html.count('value="original/beige"') == 7
     assert 'value="original/beige" selected' in html
+
+
+def test_armar_frena_gratis_si_una_linea_no_cabe_en_un_clip(app, catalogo_vacio, monkeypatch):
+    """Incidente 2026-10-14: una línea que sola dura más de 15 s hace imposible
+    cualquier plan; se avisa y se frena antes de cobrar, en vez de pagar a Claude
+    por un armado que V2/V3 siempre rechazan."""
+    from cobros import libro
+    larga = " ".join(["palabra"] * 38)  # 15,8 s a 2,4 palabras/s
+    gid = _leido(app, dict(GUION_CRUDO, lineas=LINEAS[:2] + [larga]))
+    assert app["c"].post(f"{BASE}/guiones/{gid}/confirmar", json={}).status_code == 200
+    vid = app["c"].post(f"{BASE}/guiones/{gid}/videos", json=dict(FORM_VIDEO, duracion_objetivo="")).get_json()["video_id"]
+    cobros = []
+    monkeypatch.setattr(libro, "exigir", lambda *a, **k: cobros.append(a))
+    html = app["c"].get(f"{BASE}/panel?guion={gid}&video={vid}").get_data(as_text=True)
+    assert "línea 3 (15,8 s)" in html and "2,6 palabras/s" in html
+    assert f'data-gpg-accion="/videos/{vid}/armar" disabled' in html
+    r = app["c"].post(f"{BASE}/videos/{vid}/armar", json={})
+    assert r.status_code == 409 and "línea 3" in r.get_json()["error"]
+    assert cobros == [] and not any(j == f"guion_armar_{vid}" for j, _ in app["iniciados"])
+    # Con el ritmo que alcanza, ya se puede armar.
+    assert app["c"].post(f"{BASE}/videos/{vid}/config", json=dict(FORM_VIDEO, duracion_objetivo="",
+                                                                  palabras_por_segundo="2.6")).status_code == 200
+    assert app["c"].post(f"{BASE}/videos/{vid}/armar", json={}).status_code == 202
+
+
+def test_armar_frena_si_un_hook_alternativo_no_cabe(app, catalogo_vacio):
+    largo = " ".join(["gancho"] * 70)  # 29,2 s: ni a 4 palabras/s cabe
+    gid = _leido(app, dict(GUION_CRUDO, hooks=[largo]))
+    assert app["c"].post(f"{BASE}/guiones/{gid}/confirmar", json={}).status_code == 200
+    vid = app["c"].post(f"{BASE}/guiones/{gid}/videos", json=dict(FORM_VIDEO, duracion_objetivo="")).get_json()["video_id"]
+    r = app["c"].post(f"{BASE}/videos/{vid}/armar", json={})
+    assert r.status_code == 409
+    error = r.get_json()["error"]
+    assert "hook_2 (29,2 s)" in error and "Parte cada una en dos" in error and "Sube el ritmo" not in error

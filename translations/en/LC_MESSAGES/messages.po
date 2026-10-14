@@ -2234,6 +2234,10 @@ msgstr "<strong>Variables in the server's <code>.env</code>:</strong>"
 msgid "<strong>WooCommerce:</strong> instala el plugin <em>Facebook for WooCommerce</em> y conéctalo con tu Business Manager; el Pixel y los eventos de compra quedan puestos."
 msgstr "<strong>WooCommerce:</strong> install the <em>Facebook for WooCommerce</em> plugin and connect it to your Business Manager; the Pixel and the purchase events get set up."
 
+#, python-format
+msgid "A %(wps)s palabras/s estas líneas duran solas más de 15 s, el máximo de un clip, y una línea no se parte entre clips: %(lista)s."
+msgstr "At %(wps)s words/s these lines alone last more than 15 s, the maximum for a clip, and a line is never split across clips: %(lista)s."
+
 msgid "A anuncios nuevos"
 msgstr "To new ads"
 
@@ -14419,6 +14423,9 @@ msgstr "Stop"
 msgid "Parar «{nombre}»"
 msgstr "Stop “{nombre}”"
 
+msgid "Parte cada una en dos: duplica el guion para editar la lectura."
+msgstr "Split each one in two: duplicate the script to edit the reading."
+
 msgid "Parte mínima que ve el video completo (0–1)"
 msgstr "Minimum share that watches the full video (0–1)"
 
@@ -17721,6 +17728,10 @@ msgstr "Upload at least one brand reference (image or video) first."
 #, python-format
 msgid "Sube el presupuesto de «%(nombre)s»"
 msgstr "Raise the budget of “%(nombre)s”"
+
+#, python-format
+msgid "Sube el ritmo a %(min)s palabras/s o más, o parte cada una en dos (duplica el guion para editar la lectura)."
+msgstr "Raise the pace to %(min)s words/s or more, or split each one in two (duplicate the script to edit the reading)."
 
 #, python-format
 msgid "Sube máximo %(n)s archivos a la vez."
@@ -21421,6 +21432,10 @@ msgstr "the hook isn't stopping people: %(g)s %%"
 msgid "el gancho no retiene"
 msgstr "the hook doesn't hold attention"
 
+#, python-format
+msgid "el hook %(hid)s (%(s)s s)"
+msgstr "hook %(hid)s (%(s)s s)"
+
 msgid "el mecanismo"
 msgstr "the mechanism"
 
@@ -22179,6 +22194,10 @@ msgstr "bright, golden night light"
 
 msgid "línea"
 msgstr "line"
+
+#, python-format
+msgid "línea %(n)s (%(s)s s)"
+msgstr "line %(n)s (%(s)s s)"
 
 msgid "líneas"
 msgstr "lines"

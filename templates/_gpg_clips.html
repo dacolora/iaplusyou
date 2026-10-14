@@ -5,8 +5,9 @@
 {% endif %}
 
 {% if video.estado in ('configurando', 'invalido', 'error') %}
+  {% if no_caben %}<p class="flash warn">{{ no_caben }}</p>{% endif %}
   <div class="gp-botones">
-    <button type="button" class="btn-generar btn-sm" data-gpg-accion="/videos/{{ video.id }}/armar">
+    <button type="button" class="btn-generar btn-sm" data-gpg-accion="/videos/{{ video.id }}/armar"{% if no_caben %} disabled{% endif %}>
       {{ _('Volver a armar') if video.estado != 'configurando' else _('Armar clips') }} · {{ costos.armar }}</button>
   </div>
   {% if video.estado == 'configurando' %}<p class="gp-ayuda">{{ _('Claude agrupa las líneas en clips de 5 a 15 s; el código pega el diálogo exacto, calcula los tiempos y valida todo antes de mostrarte nada.') }}</p>{% endif %}

@@ -93,6 +93,7 @@ def _contexto(cliente, guion_id=None, video_id=None):
         ctx["bloque_global"] = {"texto": propio or plantillas.BLOQUE_GLOBAL_FABRICA, "propio": bool(propio)}
     if v is not None:
         ctx["costos"]["armar"] = _costo("armar", _palabras(v))
+        ctx["no_caben"] = clips.lineas_que_no_caben(v)
         ctx["prompts"] = {f"{(p['extra'] or {}).get('variante')}:{(p['extra'] or {}).get('clip_index')}":
                           {"id": p["id"], "estado": p["estado"]}
                           for p in datos.prompts_de_video(v["id"]) if p["tipo"] == "clip"}
@@ -369,7 +370,11 @@ def video_armar(cliente, vid):
     if _cuerpo() is None:
         return _sin_cuerpo()
     try:
-        _exigir(cliente, "armar", _palabras(_video_o_404(cliente, vid)))
+        v = _video_o_404(cliente, vid)
+        no_caben = clips.lineas_que_no_caben(v)
+        if no_caben:
+            raise Conflicto(no_caben)
+        _exigir(cliente, "armar", _palabras(v))
         datos.empezar(cliente, vid, "armando", ("configurando", "invalido", "error"))
     except ErrorRefinador as e:
         return _error(e)

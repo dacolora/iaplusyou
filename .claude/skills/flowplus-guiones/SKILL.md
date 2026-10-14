@@ -98,3 +98,10 @@ PND-062, entrega 2 (2026-10-10, pedido de Daniel): chat y panel cargan `static/c
 cliente y todos los textos ya traducidos. El orden de archivos sigue Guiones → chat; la activación inicial
 de modos espera DOMContentLoaded, evitando perder `crear:modo` con hash o modo recordado Flow Plus.
 Rutas construidas, selección local, fetch y sondeos conservan el código original.
+
+Línea que no cabe en un clip (2026-10-14, pedido de Daniel): una línea no se parte entre clips, así que si una sola
+(o un hook alternativo) dura más de 15 s al ritmo de la versión, ningún plan pasa V2/V3: Claude la repetía en dos
+clips y cada «Volver a armar» se cobraba igual (guion «Podcast» de HappyCozy, líneas de 38 palabras a 2,4
+palabras/s = 15,8 s). `clips.lineas_que_no_caben` (con `duracion.lineas_largas` y `duracion.ritmo_minimo`, puros) lo
+detecta gratis: el panel muestra el aviso con el ritmo que alcanza y apaga el botón, y `POST /videos/<id>/armar`
+responde 409 antes de `_exigir`. Salida: subir el ritmo o duplicar el guion y partir la línea.
