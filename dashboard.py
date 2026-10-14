@@ -535,7 +535,7 @@ def _guard_por_cliente():
         return None
     sesion = _sesion()
     if not usuarios.puede_acceder(sesion, cliente):
-        if request.endpoint in {"catalogo_selector", "swaps_lista", "gasto_lista"}:
+        if request.endpoint in {"catalogo_selector", "swaps_lista", "gasto_lista", "medir_video_swap"}:
             abort(403)
         if not sesion:
             flash(gettext("Inicia sesión para entrar a este proyecto."), "error")
@@ -3288,9 +3288,21 @@ def generar_swap(cliente):
         flash(gettext("No pude leer esa imagen."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
     # Un swap de video cuesta según cuánto dura el video (PND-312): se mide antes de reservar y cobrar.
-    medidas = [_medir_video_subido(a) if _ext_de(a.filename) in VIDEO_EXTS else None for a in archivos]
+    if any(_ext_de(a.filename) in VIDEO_EXTS and _tamano_subida(a) > MAX_BYTES_VIDEO_SWAP for a in archivos):
+        flash(gettext("El video pesa más de 200 MB."), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
+    try:
+        medidas = [_medir_video_subido(a) if _ext_de(a.filename) in VIDEO_EXTS else None for a in archivos]
+    except _MedidorOcupado:
+        flash(gettext("Estoy midiendo otros videos; intenta en unos segundos."), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
     if any(_ext_de(a.filename) in VIDEO_EXTS and not m for a, m in zip(archivos, medidas)):
         flash(gettext("No pude leer la duración de ese video."), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
+    from providers import swap_video_precio  # noqa: PLC0415
+    tope = next((t for m in medidas if m for t in [swap_video_precio.demasiado_largo(proveedor_video, m[0])] if t), None)
+    if tope:
+        flash(gettext("Este modelo acepta videos de hasta %(n)s s.", n=tope), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
     producto = catalogo_productos.encontrar(cliente, producto_id)
@@ -3300,12 +3312,13 @@ def generar_swap(cliente):
 
     # Cobros (spec 2026-10-08 §5): todos los swaps de este envío se piden
     # juntos antes de guardar el primero; cada uno reserva lo suyo al encolar.
-    # Primero el precio (regla 1, PND-312): la pantalla manda el que mostró (`precio_visto`, con el margen) y aquí
-    # se recalcula con la duración medida. Sin precio visto, o si el de verdad es mayor, no se guarda ni se cobra nada.
+    # Primero el precio (regla 1, PND-312): la pantalla manda el que mostró (`precio_visto`, con el margen, calculado
+    # con la medida de /swap/medir, la misma de aquí) y aquí se recalcula. Sin precio visto, o si el de verdad pasa de
+    # medio centavo más (como nicho/rutas y guiones/rutas_pipeline), no se guarda ni se cobra nada.
     costo = _costo_swaps(archivos, proveedor_foto, proveedor_video, mejorar_calidad, medidas,
                          _n_referencias_swap(producto))
     visto = gastos.costo_de_precio(request.form.get("precio_visto"))
-    if costo is None or visto is None or costo > visto * 1.02 + 0.005:
+    if costo is None or visto is None or costo > visto + 0.005:
         flash(gettext("Este envío cuesta %(precio)s. Revisa el precio y vuelve a generar.",
                       precio=gastos.texto_precio(costo)) if costo is not None else
               gettext("No pude calcular el precio de este envío; no se generó nada."), "error")
@@ -3326,24 +3339,52 @@ def generar_swap(cliente):
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
 
+# ffprobe sobre un video subido: dos a la vez como mucho (un video de 8192×8192 le pide 176 MB; el VPS tiene 2 GB),
+# 200 MB por archivo (el tope de los videos del editor) y 120 mediciones por persona y hora (auditoría de seguridad
+# 2026-10-13).
+_MEDIR_VIDEO_TURNOS = threading.BoundedSemaphore(2)
+MAX_BYTES_VIDEO_SWAP = 200 * 1024 * 1024
+ESPERA_TURNO_MEDIR_S = 5   # la pantalla: si no hay turno, «intenta en unos segundos»
+
+
+class _MedidorOcupado(Exception):
+    """No hubo turno para medir el video a tiempo."""
+
+
 @app.route("/cliente/<cliente>/swap/medir", methods=["POST"])
 def medir_video_swap(cliente):
-    """La duración y los cuadros por segundo de un video, para el precio de «Cambiar producto» cuando el navegador
-    no los puede leer (un .mov de iPhone en Chrome) o el modelo cobra por cuadros (Wan Animate). No guarda nada."""
+    """La duración y los cuadros por segundo de un video, para el precio de «Cambiar producto» (PND-312): la misma
+    medida con la que `generar_swap` reserva y cobra. No guarda nada."""
     archivo = request.files.get("video")
     if not archivo or _ext_de(archivo.filename) not in VIDEO_EXTS:
         return jsonify({"ok": False, "error": gettext("Sube un video mp4, mov o webm.")}), 400
-    medida = _medir_video_subido(archivo)
+    if _tamano_subida(archivo) > MAX_BYTES_VIDEO_SWAP:
+        return jsonify({"ok": False, "error": gettext("El video pesa más de 200 MB.")}), 413
+    if not cuentas.limite_ok(f"swap_medir:{session.get('usuario')}", maximo=120, ventana_s=3600):
+        return jsonify({"ok": False, "error": gettext("Mediste muchos videos seguidos; espera un rato.")}), 429
+    try:
+        medida = _medir_video_subido(archivo, espera_s=ESPERA_TURNO_MEDIR_S)
+    except _MedidorOcupado:
+        return jsonify({"ok": False, "error": gettext("Estoy midiendo otros videos; intenta en unos segundos.")}), 503
     if not medida:
         return jsonify({"ok": False, "error": gettext("No pude leer la duración de ese video.")}), 400
     return jsonify({"ok": True, "duracion_s": medida[0], "fps": medida[1]})
 
 
-def _medir_video_subido(archivo):
+def _medir_video_subido(archivo, espera_s=60):
     """(duración s, fps) del video que se está subiendo, o None si ffprobe no lo lee. Lo copia a un temporal y
-    deja el stream al principio para guardarlo después."""
+    deja el stream al principio para guardarlo después. `_MedidorOcupado` si no hubo turno en `espera_s`."""
     import tempfile  # noqa: PLC0415
     from providers import swap_video_precio  # noqa: PLC0415
+    if not _MEDIR_VIDEO_TURNOS.acquire(timeout=espera_s):
+        raise _MedidorOcupado()
+    try:
+        return _medir_en_temporal(archivo, tempfile, swap_video_precio)
+    finally:
+        _MEDIR_VIDEO_TURNOS.release()
+
+
+def _medir_en_temporal(archivo, tempfile, swap_video_precio):
     with tempfile.NamedTemporaryFile(suffix=_ext_de(archivo.filename) or ".mp4") as tmp:
         archivo.stream.seek(0)
         while True:

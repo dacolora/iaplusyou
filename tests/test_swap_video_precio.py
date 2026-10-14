@@ -342,3 +342,160 @@ def test_generar_se_activa_solo_con_un_precio_a_la_vista():
     """
     r = subprocess.run(["node", "-e", programa], capture_output=True, text=True, timeout=60)
     assert r.returncode == 0, r.stderr
+
+
+# --- segunda revisión de guardian-gasto: medio centavo, Kling O1 y el aviso de recorte ------------
+
+@pytest.mark.slow
+@pytest.mark.parametrize("visto, pasa", [("1.76", True), ("1.7551", True), ("1.75", False)])
+def test_no_se_cobra_mas_de_medio_centavo_sobre_lo_visto(app, monkeypatch, tmp_path, visto, pasa):  # noqa: F811
+    d = app["dashboard"]
+    monkeypatch.setattr(d.swaps_mod, "BASE_DIR", str(app["tmp"]))
+    monkeypatch.setattr(d.catalogo_productos, "encontrar", lambda cliente, pid: {"id": pid})
+    encolados = []
+    monkeypatch.setattr(d.trabajos, "encolar", lambda *a, **k: encolados.append(a) or True)
+    monkeypatch.setattr(d.libro_cobros, "exigir", lambda cliente, usd, **k: None)
+    _ana(app).post("/cliente/acme/swap/generar", data={
+        "foto": (io.BytesIO(_video(tmp_path, 3, 25).read_bytes()), "clip.mp4"), "producto_id": "p1",
+        "proveedor_video": "seedance25_edit", "precio_visto": visto}, content_type="multipart/form-data")
+    assert bool(encolados) is pasa
+
+
+@pytest.mark.slow
+def test_kling_o1_no_deja_subir_un_video_de_mas_de_10_s(app, monkeypatch, tmp_path):  # noqa: F811
+    d = app["dashboard"]
+    monkeypatch.setattr(d.swaps_mod, "BASE_DIR", str(app["tmp"]))
+    monkeypatch.setattr(d.catalogo_productos, "encontrar", lambda cliente, pid: {"id": pid})
+    encolados = []
+    monkeypatch.setattr(d.trabajos, "encolar", lambda *a, **k: encolados.append(a) or True)
+    c = _ana(app)
+    c.post("/cliente/acme/swap/generar", data={"foto": (io.BytesIO(_video(tmp_path, 11, 10).read_bytes()), "c.mp4"),
+                                               "producto_id": "p1", "proveedor_video": "kling_o1",
+                                               "precio_visto": "999"}, content_type="multipart/form-data")
+    assert encolados == [] and any("hasta 10 s" in m for m in _flashes(c))
+
+
+def _dom_video(proveedor, duracion, tarifa):
+    """El JS de la pantalla con un video que el servidor (fetch doble) mide en `duracion` s."""
+    return r"""
+    const fs=require('fs'),assert=require('assert');const g=globalThis;g.window=g;
+    function nodo(extra){return Object.assign({dataset:{},textContent:'',value:'',disabled:true,
+      addEventListener(t,f){this['on'+t]=f}},extra||{});}
+    const input=nodo({files:[]}), visto=nodo(), boton=nodo(), salida=nodo();
+    const radioVideo={value:'%(proveedor)s',dataset:{}};
+    const form=nodo({querySelector(s){
+      if(s.indexOf('type="file"')>=0)return input;
+      if(s.indexOf('proveedor_video')>=0)return radioVideo;
+      return null;}});
+    const datos={textContent:JSON.stringify({usdEjemplo:'US$ 0,50',urlMedir:'/m',
+      precios:{video:{'%(proveedor)s':%(tarifa)s},foto:{},fps:30,necesita_fps:[]},
+      textos:{aprox:'≈',elegir:'Elige',sinPrecio:'—',midiendo:'…',sinDuracion:'?',detalleVideos:'{segundos}',
+              elegirProducto:'P',recorte:'corta en {max}',salidaFija:'{segundos}',muyLargo:'acepta {max}'}})};
+    g.FormData=function(){this.append=function(){}};
+    g.fetch=()=>Promise.resolve({ok:true,json:()=>Promise.resolve({ok:true,duracion_s:%(duracion)s,fps:30})});
+    g.document={getElementById:id=>({'swap-form':form,'swap-precio':salida,'swap-precio-datos':datos,
+      'swap-precio-visto':visto,'swap-generar':boton}[id]||null)};
+    eval(fs.readFileSync('static/swap-precio.js','utf8'));
+    input.files=[{name:'clip.mov'}]; input.onchange();
+    setTimeout(()=>{ console.log(JSON.stringify({texto:salida.textContent,visto:visto.value,bloqueado:boton.disabled})); },20);
+    """ % {"proveedor": proveedor, "duracion": duracion, "tarifa": json.dumps(tarifa)}
+
+
+@pytest.mark.parametrize("proveedor, duracion, visto, bloqueado, trozo", [
+    ("wan27_edit", 14.7, "2.0000", False, "corta en 10"),      # avisa el recorte; el precio ya va recortado
+    ("kling_o1", 14.7, "", True, "acepta 10"),                # Kling O1 lo rechaza: no se deja generar
+    ("seedance25_edit", 9.73, "4.2812", False, "9,7"),
+])
+def test_la_pantalla_usa_la_medida_del_servidor_y_avisa(proveedor, duracion, visto, bloqueado, trozo):
+    if not shutil.which("node"):
+        pytest.skip("sin node")
+    from providers import swap_video_precio
+    r = subprocess.run(["node", "-e", _dom_video(proveedor, duracion, swap_video_precio.TARIFAS[proveedor])],
+                       capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stderr
+    salida = json.loads(r.stdout.strip().splitlines()[-1])
+    assert salida["visto"] == visto and salida["bloqueado"] is bloqueado and trozo in salida["texto"], salida
+
+
+
+# --- auditoría de seguridad (2026-10-13): la cabecera no manda, ffprobe solo lee el disco y la ruta tiene topes ---
+
+def _mentir_duracion(ruta, segundos):
+    """Cambia la duración que declaran mvhd, tkhd y mdhd (versión 0) sin tocar los cuadros."""
+    datos = bytearray(ruta.read_bytes())
+    i = datos.find(b"mvhd")
+    escala_peli = int.from_bytes(datos[i + 16:i + 20], "big")
+    datos[i + 20:i + 24] = (escala_peli * segundos).to_bytes(4, "big")
+    i = datos.find(b"tkhd")
+    datos[i + 24:i + 28] = (escala_peli * segundos).to_bytes(4, "big")
+    i = datos.find(b"mdhd")
+    escala = int.from_bytes(datos[i + 16:i + 20], "big")
+    datos[i + 20:i + 24] = (escala * segundos).to_bytes(4, "big")
+    ruta.write_bytes(bytes(datos))
+
+
+@pytest.mark.slow
+def test_una_cabecera_que_miente_no_baja_el_precio(tmp_path):
+    from providers import swap_video_precio
+    video = _video(tmp_path, 12, 30)
+    _mentir_duracion(video, 2)
+    cabecera = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0",
+                               str(video)], capture_output=True, text=True).stdout.strip()
+    assert float(cabecera) == pytest.approx(2.0, abs=0.1)           # el archivo dice 2 s…
+    duracion, fps = swap_video_precio.medir(str(video))
+    assert duracion == pytest.approx(12.0, abs=0.1)                  # …y se cobra por los 12 s que trae
+    assert duracion * fps == pytest.approx(360, abs=2)               # los cuadros, contados
+
+
+def test_ffprobe_solo_lee_archivos_del_disco(monkeypatch):
+    from providers import swap_video_precio
+    llamadas = []
+
+    class _R:
+        stdout = ""
+    monkeypatch.setattr(swap_video_precio.subprocess, "run", lambda args, **k: llamadas.append(args) or _R())
+    swap_video_precio.medir("/tmp/x.mp4")
+    assert llamadas and all(a[a.index("-protocol_whitelist") + 1] == "file" for a in llamadas)
+
+
+def _post_medir(c, contenido=b"x"):
+    return c.post("/cliente/acme/swap/medir", data={"video": (io.BytesIO(contenido), "c.mp4")},
+                  content_type="multipart/form-data")
+
+
+def test_medir_tiene_tope_de_tamano_de_tasa_y_de_turnos(app, monkeypatch):  # noqa: F811
+    d = app["dashboard"]
+    c = _ana(app)
+    monkeypatch.setattr(d, "MAX_BYTES_VIDEO_SWAP", 3)
+    assert _post_medir(c, b"cuatro").status_code == 413
+    monkeypatch.setattr(d, "MAX_BYTES_VIDEO_SWAP", 200 * 1024 * 1024)
+    monkeypatch.setattr(d.cuentas, "limite_ok", lambda *a, **k: False)
+    assert _post_medir(c).status_code == 429
+    monkeypatch.setattr(d.cuentas, "limite_ok", lambda *a, **k: True)
+    turnos = d.threading.BoundedSemaphore(1)
+    turnos.acquire()                                   # el único turno está ocupado
+    monkeypatch.setattr(d, "_MEDIR_VIDEO_TURNOS", turnos)
+    monkeypatch.setattr(d, "ESPERA_TURNO_MEDIR_S", 0)
+    assert _post_medir(c).status_code == 503
+
+
+def test_medir_de_otro_proyecto_da_403_y_no_mide(app, monkeypatch):  # noqa: F811
+    d = app["dashboard"]
+    monkeypatch.setattr(d, "_medir_video_subido", lambda *a, **k: pytest.fail("midió un video ajeno"))
+    r = _ana(app).post("/cliente/otro/swap/medir", data={"video": (io.BytesIO(b"x"), "c.mp4")},
+                       content_type="multipart/form-data")
+    assert r.status_code == 403
+
+
+@pytest.mark.parametrize("estado, clave", [(403, "sesion"), (413, "grande"), (503, "ocupado")])
+def test_la_pantalla_dice_por_que_no_hay_precio(estado, clave):
+    if not shutil.which("node"):
+        pytest.skip("sin node")
+    from providers import swap_video_precio
+    programa = _dom_video("seedance25_edit", 5, swap_video_precio.TARIFAS["seedance25_edit"]).replace(
+        "g.fetch=()=>Promise.resolve({ok:true,", "g.fetch=()=>Promise.resolve({ok:false,status:%d,redirected:false," % estado)
+    programa = programa.replace("muyLargo:'acepta {max}'", "muyLargo:'acepta {max}',sesion:'S',grande:'G',ocupado:'O'")
+    r = subprocess.run(["node", "-e", programa], capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stderr
+    salida = json.loads(r.stdout.strip().splitlines()[-1])
+    assert salida["texto"] == {"sesion": "S", "grande": "G", "ocupado": "O"}[clave] and salida["bloqueado"] is True

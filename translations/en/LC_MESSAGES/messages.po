@@ -6934,6 +6934,9 @@ msgstr "The final video doesn't show this clip: here you can only delete it."
 msgid "El video original no es un mp4: no se puede editar."
 msgstr "The original video isn't an mp4: it can't be edited."
 
+msgid "El video pesa más de 200 MB."
+msgstr "The video is larger than 200 MB."
+
 #, python-brace-format
 msgid "El video pesa más de {mb} MB."
 msgstr "The video is larger than {mb} MB."
@@ -8500,6 +8503,10 @@ msgstr "This language doesn't have subtitles yet."
 msgid "Este mapa es documentación interna y está en español."
 msgstr "This map is internal documentation and is written in Spanish."
 
+#, python-format
+msgid "Este modelo acepta videos de hasta %(n)s s."
+msgstr "This model accepts videos up to %(n)s s."
+
 msgid "Este navegador no graba audio: prueba con Chrome, Edge, Firefox o Safari al día."
 msgstr "This browser can't record audio: try an up-to-date Chrome, Edge, Firefox or Safari."
 
@@ -8677,6 +8684,9 @@ msgstr "These subtitles come from the automatic draft and don't follow the cuts.
 
 msgid "Estos textos están en español: son las instrucciones internas que recibe Claude. Claude escribe tus anuncios en el idioma de tu proyecto."
 msgstr "These texts are in Spanish: they're the internal instructions Claude receives. Claude writes your ads in your project's language."
+
+msgid "Estoy midiendo otros videos; intenta en unos segundos."
+msgstr "I'm measuring other videos; try again in a few seconds."
 
 msgid "Estrella"
 msgstr "Star"
@@ -12035,6 +12045,9 @@ msgstr "Payment method not supported"
 msgid "Medios"
 msgstr "Media"
 
+msgid "Mediste muchos videos seguidos; espera un rato."
+msgstr "You measured many videos in a row; wait a while."
+
 msgid "Mejorando"
 msgstr "Improving"
 
@@ -13183,8 +13196,8 @@ msgstr "I couldn't read that video."
 msgid "No pude leer la duración de ese video."
 msgstr "I couldn't read that video's length."
 
-msgid "No pude leer la duración de un video; el precio se calcula al subirlo."
-msgstr "I couldn't read a video's length; the price is calculated when you upload it."
+msgid "No pude leer la duración de un video; prueba con otro archivo."
+msgstr "I couldn't read a video's length; try another file."
 
 #, python-format
 msgid "No pude leer la foto %(archivo)s."
@@ -21483,6 +21496,10 @@ msgstr "seasonality"
 
 msgid "estado"
 msgstr "status"
+
+#, python-brace-format
+msgid "este modelo acepta videos de hasta {max} s: recórtalo o elige otro modelo"
+msgstr "this model accepts videos up to {max} s: trim it or choose another model"
 
 #, python-brace-format
 msgid "este modelo entrega {segundos} s de video"

@@ -1,9 +1,8 @@
 /* Crear › Cambiar producto: el precio antes de generar (PND-312, pedido de Daniel 2026-10-13). Un swap de video
    cuesta según cuánto dura el video; la regla de cada modelo llega del servidor ya con el margen
-   (#swap-precio-datos, dashboard._precios_swap; misma tabla que providers/swap_video_precio.py). La duración la
-   lee el navegador y, si no puede (un .mov de iPhone en Chrome) o el modelo cobra por cuadros (Wan Animate), la
-   mide el servidor sin guardar el archivo. «Generar» solo se activa con un precio a la vista, y ese precio viaja
-   en `precio_visto`: el servidor vuelve a medir y no cobra más que eso. */
+   (#swap-precio-datos, dashboard._precios_swap; misma tabla que providers/swap_video_precio.py). La duración y los
+   cuadros por segundo los mide el servidor (/swap/medir) sin guardar el archivo. «Generar» solo se activa con un
+   precio a la vista, y ese precio viaja en `precio_visto`: el servidor vuelve a medir y no cobra más que eso. */
 (function () {
   // --- precio puro (tests/test_swap_video_precio.py lo compara con el de Python) ---
   function segundosFacturados(t, d, fps, fpsSupuesto) {
@@ -38,7 +37,7 @@
   var visto = document.getElementById('swap-precio-visto');
   var boton = document.getElementById('swap-generar');
   var VIDEO = /\.(mp4|mov|webm)$/i;
-  var medidas = new Map();   // File -> {d, fps} (o null si nadie la pudo leer)
+  var medidas = new Map();   // File -> {d, fps} (o null si el servidor no la pudo leer)
   var turno = 0;
 
   function fmtUsd(v) { return 'US$ ' + (Math.round(v * 100) / 100).toFixed(2).replace('.', sep); }
@@ -50,34 +49,31 @@
     boton.disabled = precio == null || boton.dataset.sinProductos === '1';
   }
 
-  function enNavegador(archivo) {
-    return new Promise(function (listo) {
-      var v = document.createElement('video');
-      var url = URL.createObjectURL(archivo);
-      var hecho = false;
-      var fin = function (d) { if (hecho) return; hecho = true; URL.revokeObjectURL(url); listo(d); };
-      v.preload = 'metadata';
-      v.onloadedmetadata = function () { fin(isFinite(v.duration) && v.duration > 0 ? v.duration : null); };
-      v.onerror = function () { fin(null); };
-      setTimeout(function () { fin(null); }, 8000);   // sin respuesta: lo mide el servidor
-      v.src = url;
-    });
-  }
-  function enServidor(archivo) {
+  // La duración y los cuadros los mide el servidor con ffprobe, la misma medida con la que reserva y cobra: así el
+  // precio visto y el cobrado coinciden al medio centavo (la del navegador difiere unas centésimas; revisión de
+  // guardian-gasto, 2026-10-13). No guarda el archivo.
+  // Un error de sesión, de tamaño o de turno se dice con su nombre (y los de turno o sesión no se guardan: al
+  // volver a elegir se mide otra vez).
+  function medir(archivo) {
+    if (medidas.has(archivo)) return Promise.resolve(medidas.get(archivo));
     var datos = new FormData();
     datos.append('video', archivo);
     return fetch(config.urlMedir, {method: 'POST', body: datos, headers: {'X-Requested-With': 'fetch'}})
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (j) { return j && j.ok ? {d: j.duracion_s, fps: j.fps} : null; })
-      .catch(function () { return null; });
-  }
-  function medir(archivo, conFps) {
-    var ya = medidas.get(archivo);
-    if (ya !== undefined && (!conFps || (ya && ya.fps))) return Promise.resolve(ya);
-    var paso = conFps ? enServidor(archivo) : enNavegador(archivo).then(function (d) {
-      return d != null ? {d: d, fps: null} : enServidor(archivo);
-    });
-    return paso.then(function (m) { medidas.set(archivo, m); return m; });
+      .then(function (r) {
+        if (r.redirected || r.status === 401 || r.status === 403) return {error: 'sesion'};
+        if (r.status === 413) return {error: 'grande'};
+        if (r.status === 429 || r.status === 503) return {error: 'ocupado'};
+        return r.ok ? r.json() : null;
+      })
+      .then(function (j) {
+        if (j && j.error && j.ok === undefined) return j;
+        return j && j.ok ? {d: j.duracion_s, fps: j.fps} : null;
+      })
+      .catch(function () { return {error: 'ocupado'}; })
+      .then(function (m) {
+        if (!(m && (m.error === 'ocupado' || m.error === 'sesion'))) medidas.set(archivo, m);
+        return m;
+      });
   }
 
   function refrescar() {
@@ -89,11 +85,10 @@
     var tVideo = rVideo ? P.video[rVideo.value] : null, tFoto = rFoto ? P.foto[rFoto.value] : null;
     var producto = elegido('producto_id');
     var nRefs = producto && producto.dataset.nReferencias !== undefined ? parseInt(producto.dataset.nReferencias, 10) : null;
-    var conFps = !!(rVideo && (P.necesita_fps || []).indexOf(rVideo.value) >= 0);
     var hayVideo = archivos.some(function (a) { return VIDEO.test(a.name); });
     if (hayVideo) mostrar(T.midiendo, null);
     Promise.all(archivos.map(function (a) {
-      return VIDEO.test(a.name) ? medir(a, conFps) : Promise.resolve(undefined);
+      return VIDEO.test(a.name) ? medir(a) : Promise.resolve(undefined);
     })).then(function (ms) {
       if (mio !== turno) return;   // eligió otra cosa mientras medía: gana lo último
       var total = 0, segundos = 0, notas = [];
@@ -101,6 +96,10 @@
         var usd;
         if (VIDEO.test(archivos[i].name)) {
           if (!ms[i]) return mostrar(T.sinDuracion, null);
+          if (ms[i].error) return mostrar(T[ms[i].error] || T.sinDuracion, null);
+          if (tVideo && tVideo.max_entrada_s && ms[i].d > tVideo.max_entrada_s + 0.05) {
+            return mostrar(T.muyLargo.replace('{max}', tVideo.max_entrada_s), null);
+          }
           segundos += ms[i].d;
           usd = precioVideo(tVideo, ms[i].d, ms[i].fps, P.fps);
           if (tVideo && tVideo.recorte_s && ms[i].d > tVideo.recorte_s + 0.05) {

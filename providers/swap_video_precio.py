@@ -26,19 +26,25 @@ FPS_SUPUESTO = 30.0  # el navegador no sabe los cuadros por segundo; el servidor
 
 # usd_s: por segundo facturado · factor: 2 si cobra entrada + salida · min_s/max_s: segundos que se facturan ·
 # redondear: sube al segundo entero · por_cuadros: cuenta «segundos de video» de 16 cuadros · fijo: precio fijo.
-# recorte_s: lo que el modelo procesa como máximo (lo demás se corta; la pantalla avisa) · salida_s: lo que dura la
-# salida si el modelo no sigue al video.
+# recorte_s: lo que el modelo procesa como máximo (lo demás se corta; la pantalla avisa) · max_entrada_s: lo que acepta
+# (un video más largo lo rechaza: no se deja generar) · salida_s: lo que dura la salida si no sigue al video.
 TARIFAS = {
     "seedance25_edit": {"usd_s": 0.22, "factor": 2, "min_s": 4, "max_s": 30, "redondear": False, "recorte_s": 30},
     "wan27_edit": {"usd_s": 0.10, "factor": 2, "min_s": 2, "max_s": 10, "redondear": True, "recorte_s": 10},
     "kling_o3_pro_edit": {"usd_s": 0.168, "factor": 1, "min_s": 3, "max_s": 10, "redondear": False, "recorte_s": 10},
-    "kling_o1": {"usd_s": 0.126, "factor": 1, "min_s": 3, "max_s": 10, "redondear": False, "recorte_s": 10},
+    "kling_o1": {"usd_s": 0.126, "factor": 1, "min_s": 3, "max_s": 10, "redondear": False, "max_entrada_s": 10},
     "luma_modify": {"usd_s": 0.35, "factor": 1, "min_s": 0, "max_s": None, "redondear": False},
     "wan_animate_replace": {"usd_s": 0.04, "factor": 1, "min_s": 0, "max_s": None, "redondear": False,
                             "por_cuadros": 16},
     "luma_ray32_edit": {"fijo": 0.72, "salida_s": 5},
 }
 NECESITA_FPS = tuple(k for k, t in TARIFAS.items() if t.get("por_cuadros"))
+
+
+def demasiado_largo(proveedor, duracion_s):
+    """El máximo que acepta el modelo si `duracion_s` lo pasa (Kling O1: 10 s), si no None."""
+    tope = (TARIFAS.get(proveedor) or {}).get("max_entrada_s")
+    return tope if (tope and duracion_s and duracion_s > tope + 0.05) else None
 
 
 def segundos_facturados(proveedor, duracion_s, fps=None):
@@ -68,29 +74,60 @@ def costo(proveedor, duracion_s, fps=None):
     return None if seg is None else round(seg * t["usd_s"], 4)
 
 
-def medir(ruta):
-    """(duración en segundos, cuadros por segundo) de un video en disco, con ffprobe; (None, None) si no se puede
-    leer. Nunca lanza: quien llama decide qué hacer sin duración."""
+def _ffprobe(argumentos, ruta):
+    salida = subprocess.run(["ffprobe", "-v", "error", "-protocol_whitelist", "file", *argumentos, ruta],
+                            capture_output=True, text=True, timeout=60)
+    return salida.stdout or ""
+
+
+def _numero(valor):
     try:
-        salida = subprocess.run(
-            ["ffprobe", "-v", "error", "-print_format", "json", "-show_format", "-show_streams", ruta],
-            capture_output=True, text=True, timeout=60)
-        info = json.loads(salida.stdout or "{}")
-    except Exception:  # noqa: BLE001 — sin ffprobe o archivo roto: sin medida
-        return None, None
-    video = next((s for s in info.get("streams") or [] if s.get("codec_type") == "video"), None)
-    if video is None:
-        return None, None
-    try:
-        duracion = float((info.get("format") or {}).get("duration") or video.get("duration"))
+        v = float(valor)
     except (TypeError, ValueError):
-        return None, None
-    fps = None
-    num, _, den = str(video.get("avg_frame_rate") or video.get("r_frame_rate") or "").partition("/")
+        return None
+    return v if v > 0 and math.isfinite(v) else None
+
+
+def medir(ruta):
+    """(duración en segundos, cuadros por segundo) de un video en disco; (None, None) si no se puede leer. Nunca
+    lanza: quien llama decide qué hacer sin duración.
+
+    La duración es la mayor entre la de la cabecera y la de los PAQUETES del video (fin del último), y los cuadros
+    por segundo son los paquetes contados ÷ esa duración: una cabecera falsa (mvhd/mdhd de un video de 12 s que dice
+    2 s) no baja el precio (auditoría de seguridad 2026-10-13). Se leen los paquetes sin decodificar. Solo archivos
+    del disco (`-protocol_whitelist file`): una lista HLS o concat disfrazada de video no hace pedidos de red."""
     try:
-        fps = float(num) / float(den or 1) if float(den or 1) else None
-    except ValueError:
-        fps = None
-    if not duracion or duracion <= 0:
+        info = json.loads(_ffprobe(["-print_format", "json", "-show_format", "-show_streams"], ruta) or "{}")
+        video = next((st for st in info.get("streams") or [] if st.get("codec_type") == "video"), None)
+        if video is None:
+            return None, None
+        paquetes = _ffprobe(["-select_streams", "v:0", "-show_entries", "packet=pts_time,duration_time",
+                             "-of", "csv=p=0"], ruta)
+    except Exception:  # noqa: BLE001 — sin ffprobe, archivo roto o tiempo agotado: sin medida
         return None, None
+    n, inicio, fin = 0, None, None
+    for linea in paquetes.splitlines():
+        partes = linea.split(",")
+        try:
+            pts = float(partes[0])
+        except ValueError:          # «N/A»: un paquete sin tiempo no cuenta
+            continue
+        if not math.isfinite(pts):
+            continue
+        n += 1
+        dur = _numero(partes[1]) if len(partes) > 1 else None
+        inicio = pts if inicio is None else min(inicio, pts)
+        fin = max(fin or 0.0, pts + (dur or 0.0))
+    por_paquetes = (fin - inicio) if (n and fin is not None) else None
+    candidatas = [_numero((info.get("format") or {}).get("duration")), _numero(video.get("duration")), por_paquetes]
+    duracion = max((c for c in candidatas if c), default=None)
+    if not duracion:
+        return None, None
+    fps = n / duracion if n else None
+    if fps is None:
+        num, _, den = str(video.get("avg_frame_rate") or video.get("r_frame_rate") or "").partition("/")
+        try:
+            fps = float(num) / float(den or 1) if float(den or 1) else None
+        except ValueError:
+            fps = None
     return round(duracion, 3), (round(fps, 3) if fps else None)
