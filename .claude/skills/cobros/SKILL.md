@@ -57,6 +57,8 @@ cobros y reversos del libro, y de ahí leen TODAS las cifras cobradas: historial
 <margen>` (repetirlo con el mismo margen no cambia nada). Un ajuste que no se detalla sigue como antes: una línea en
 Saldo › Movimientos. Pruebas: `tests/test_cobros_uso_previo.py`.
 
+**Lo que faltó cobrar a happyflops** (revisión del 2026-10-13, con el sí de Daniel: «si a los dos numerales»): 52 filas de `gasto` anotadas como gasto normal (cada una estrenó su cobro a ×3; la deuda subió US$ 102,39, de 966,73 a 1 069,12), con `extra.faltante_2026_10_13` y la fecha original: 12 diferencias de swaps de video anotados a 5 s (`swap:<id>:t0:duracion_real`, medidas con el original o el resultado), 5 videos y 8 swaps entregados y borrados antes de que existiera la tabla (`video:<cf>:t0`, `swap:<id>:t0`; 4 videos sin archivo ni modelo, estimados a la baja por su sesión) y 27 revisiones de marca con Claude nunca anotadas (`revision_marca:<swap>:t0`, estimadas en 1 800/350 tokens). Lo pagado que no se entregó (≈ 9 videos de Wan con la espera agotada) y las pruebas de Creatv NO se cobraron. El `:t0` es la convención de `tareas.ref_sufijo` para lo que se anota fuera del worker: así la tarjeta de la pieza suma la diferencia.
+
 ## Módulos y quién escribe qué
 
 | Módulo | Qué hace | Escribe |
