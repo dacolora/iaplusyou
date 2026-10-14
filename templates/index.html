@@ -10,10 +10,10 @@
   </picture>
   <div class="portada-hero-arriba">
     <h1 id="hero-titulo" class="portada-promesa" data-letras>
-      <span>{{ _('¿Por qué correr') }}</span>
-      <span class="landing-degradado">{{ _('si puedes volar?') }}</span>
+      <span>{{ _('Bienvenido a la') }}</span>
+      <span class="landing-degradado">{{ _('Vía Láctea de los anuncios.') }}</span>
     </h1>
-    <p class="portada-hero-sub">{{ _('Bienvenido a la Vía Láctea de los anuncios. Destaca y vende.') }}</p>
+    <p class="portada-hero-sub">{{ _('Un universo infinito de anuncios que destacan y venden.') }}</p>
   </div>
   <div class="portada-hero-abajo landing-cta">
     <a class="btn-generar portada-pildora portada-cta" href="#planes">{{ _('Descubre Galadsy') }}</a>
@@ -21,18 +21,28 @@
   </div>
 </section>
 
-{# Segunda pantalla: el problema (todo se ve igual) y la respuesta (Purple Ads: destacar, vender, replicar). #}
-<section class="portada-historia aparece" aria-labelledby="historia-titulo">
-  <h2 id="historia-titulo" class="portada-historia-titulo">
-    <span>{{ _('Hoy todos tienen IA.') }}</span>
-    <span class="landing-degradado">{{ _('¿Entonces por qué todos los anuncios se ven igual?') }}</span>
-  </h2>
-  <ol class="portada-historia-pasos">
-    <li><strong>{{ _('Destacan') }}</strong><p>{{ _('Anuncios con identidad propia, hechos para frenar el scroll en cualquier feed.') }}</p></li>
-    <li><strong>{{ _('Venden') }}</strong><p>{{ _('Cada creativo nace de una razón para comprar, no solo de una imagen bonita.') }}</p></li>
-    <li><strong>{{ _('Se multiplican') }}</strong><p>{{ _('Encuentra lo que funciona y conviértelo en un universo de variaciones, en automático.') }}</p></li>
-  </ol>
-  <p class="portada-historia-cierre">{{ _('Purple Ads: distintos por diseño, hechos para rendir.') }}</p>
+{# Segunda pantalla: anuncios automáticos. El texto arriba y la vaca zen (flota y parpadea) en medio de las
+   herramientas que le hacen la vida más fácil al equipo. #}
+<section class="portada-zen aparece" aria-labelledby="zen-titulo">
+  <div class="portada-centro">
+    <span class="landing-etiqueta">{{ _('Anuncios automáticos') }}</span>
+    <h2 id="zen-titulo" class="portada-titulo">{{ _('Anuncios en automático. Tu equipo, en modo zen.') }}</h2>
+    <p class="portada-centro-sub">{{ _('Mientras Galadsy crea, prueba y replica lo que vende, tu equipo respira.') }}</p>
+  </div>
+  <div class="portada-zen-cuerpo">
+    <ul class="portada-zen-lista">
+      <li><strong>{{ _('Estáticos y videos en piloto automático') }}</strong><span>{{ _('Cientos de variaciones desde una referencia, en el formato que pide cada red.') }}</span></li>
+      <li><strong>{{ _('Replica a los ganadores') }}</strong><span>{{ _('Detecta el anuncio que vende y multiplícalo: nuevos ganchos, ángulos y países.') }}</span></li>
+    </ul>
+    <div class="portada-zen-vaca" aria-hidden="true">
+      <img class="zen-abierta" src="{{ url_for('static', filename='landing/vaca-zen-abierta.webp') }}" alt="" loading="lazy" width="720" height="783">
+      <img class="zen-cerrada" src="{{ url_for('static', filename='landing/vaca-zen-cerrada.webp') }}" alt="" loading="lazy" width="720" height="783">
+    </div>
+    <ul class="portada-zen-lista">
+      <li><strong>{{ _('Lanza y mide sin salir') }}</strong><span>{{ _('Directo a Meta Ads, con los resultados de vuelta en un solo lugar.') }}</span></li>
+      <li><strong>{{ _('Edita sin editor') }}</strong><span>{{ _('Voz, subtítulos, música y el precio de cada país, listos en el navegador.') }}</span></li>
+    </ul>
+  </div>
 </section>
 
 {# Cifras: solo hechos de la plataforma, nada inventado. #}
@@ -44,25 +54,6 @@
     <div><dt>4</dt><dd>{{ _('redes para publicar') }}</dd></div>
     <div><dt>{{ _('1.000+') }}</dt><dd>{{ _('creativos al mes, si los necesitas') }}</dd></div>
   </dl>
-</section>
-
-{# Anuncios automáticos: la vaca zen medita (y parpadea) mientras la plataforma trabaja. #}
-<section class="portada-zen aparece" aria-labelledby="zen-titulo">
-  <div class="portada-zen-vaca" aria-hidden="true">
-    <img class="zen-abierta" src="{{ url_for('static', filename='landing/vaca-zen-abierta.webp') }}" alt="" loading="lazy" width="720" height="783">
-    <img class="zen-cerrada" src="{{ url_for('static', filename='landing/vaca-zen-cerrada.webp') }}" alt="" loading="lazy" width="720" height="783">
-  </div>
-  <div class="portada-zen-texto">
-    <span class="landing-etiqueta">{{ _('Anuncios automáticos') }}</span>
-    <h2 id="zen-titulo" class="portada-titulo portada-titulo-izq">{{ _('Anuncios en automático. Tu equipo, en modo zen.') }}</h2>
-    <p class="portada-centro-sub portada-sub-izq">{{ _('Mientras Galadsy crea, prueba y replica lo que vende, tu equipo respira.') }}</p>
-    <ul class="portada-zen-lista">
-      <li><strong>{{ _('Estáticos y videos en piloto automático') }}</strong><span>{{ _('Cientos de variaciones desde una referencia, en el formato que pide cada red.') }}</span></li>
-      <li><strong>{{ _('Replica a los ganadores') }}</strong><span>{{ _('Detecta el anuncio que vende y multiplícalo: nuevos ganchos, ángulos y países.') }}</span></li>
-      <li><strong>{{ _('Lanza y mide sin salir') }}</strong><span>{{ _('Directo a Meta Ads, con los resultados de vuelta en un solo lugar.') }}</span></li>
-      <li><strong>{{ _('Edita sin editor') }}</strong><span>{{ _('Voz, subtítulos, música y el precio de cada país, listos en el navegador.') }}</span></li>
-    </ul>
-  </div>
 </section>
 
 {# Conexiones reales: las plataformas con las que Galadsy habla directo. #}
@@ -197,11 +188,10 @@
 </section>
 
 <section class="landing-final aparece">
-  <h2 class="landing-lema">Run more <span class="landing-degradado">GALADSY</span></h2>
+  <h2 class="landing-lema">Run more <span class="landing-degradado">GAL</span><span class="lema-brillo">ADS</span><span class="landing-degradado">Y</span></h2>
   <p class="landing-bajada">{{ _('Solo más anuncios. Más pruebas. Más ganadores.') }}</p>
   <div class="landing-cta">
-    <a class="btn-generar" href="#planes">{{ _('Empezar a crear anuncios') }}</a>
-    <a class="btn-guardar" href="{{ url_for('login') }}">{{ _('Ya tengo cuenta') }}</a>
+    <a class="btn-generar portada-pildora portada-cta" href="{{ url_for('login') }}">Start</a>
   </div>
 </section>
 

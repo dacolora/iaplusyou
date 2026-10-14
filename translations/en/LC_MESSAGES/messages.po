@@ -2927,9 +2927,6 @@ msgstr "Ads"
 msgid "Anuncios automáticos"
 msgstr "Automatic ads"
 
-msgid "Anuncios con identidad propia, hechos para frenar el scroll en cualquier feed."
-msgstr "Ads with an identity of their own, built to stop the scroll in any feed."
-
 msgid "Anuncios con más de 14 días"
 msgstr "Ads older than 14 days"
 
@@ -3515,8 +3512,8 @@ msgstr[1] "Copycoders library: active in this project (%(num)s ads)."
 msgid "Biblioteca de referentes."
 msgstr "Reference library."
 
-msgid "Bienvenido a la Vía Láctea de los anuncios. Destaca y vende."
-msgstr "Welcome to the Milky Way of ads. Stand out and sell."
+msgid "Bienvenido a la"
+msgstr "Welcome to the"
 
 msgid "Bitácora"
 msgstr "Activity log"
@@ -3767,9 +3764,6 @@ msgstr "Each campaign is a persona with a product and the ads it will follow. St
 
 msgid "Cada casilla es un anuncio (pieza × país). Las finales solo van a su país."
 msgstr "Each checkbox is an ad (piece × country). Final cuts only go to their own country."
-
-msgid "Cada creativo nace de una razón para comprar, no solo de una imagen bonita."
-msgstr "Every creative starts from a reason to buy, not just a pretty picture."
 
 msgid "Cada cuenta dice qué la frena: ábrela para ver qué hacer."
 msgstr "Each account says what is holding it back: open it to see what to do."
@@ -5840,9 +5834,6 @@ msgstr "Slide"
 msgid "Desplegable"
 msgstr "Disclosure"
 
-msgid "Destacan"
-msgstr "They stand out"
-
 msgid "Destellos"
 msgstr "Sparkles"
 
@@ -7285,9 +7276,6 @@ msgstr "Emojis"
 msgid "Emojis: Twemoji (CC-BY 4.0)."
 msgstr "Emojis: Twemoji (CC-BY 4.0)."
 
-msgid "Empezar a crear anuncios"
-msgstr "Start creating ads"
-
 msgid "Empezar de cero"
 msgstr "Start from scratch"
 
@@ -7480,9 +7468,6 @@ msgstr "On top of the video"
 
 msgid "Encuadre"
 msgstr "Framing"
-
-msgid "Encuentra lo que funciona y conviértelo en un universo de variaciones, en automático."
-msgstr "Find what works and turn it into a universe of variations, automatically."
 
 msgid "Encuentra referencias ganadoras"
 msgstr "Find winning references"
@@ -10255,9 +10240,6 @@ msgstr "How does your product help them achieve that status/characteristics?"
 #, python-format
 msgid "Hoy %(pais)s gastó %(hoy)s con un diario de %(diario)s: es más del doble, así que se pausó para revisarlo."
 msgstr "Today %(pais)s spent %(hoy)s on a daily budget of %(diario)s: more than double, so it was paused for review."
-
-msgid "Hoy todos tienen IA."
-msgstr "Everyone has AI now."
 
 #, python-format
 msgid "Hoy va en %(ventas)s y %(pedidos)s, con %(gasto)s de gasto."
@@ -15698,9 +15680,6 @@ msgstr "Press “Update now” to pull the last 90 days from Triple Whale."
 msgid "Pulsa «Proponer las que faltan»: Claude las escribe con la persona, el producto, el enfoque y los referentes elegidos."
 msgstr "Click “Propose the missing ones”: Claude writes them using the persona, product, focus and the references you chose."
 
-msgid "Purple Ads: distintos por diseño, hechos para rendir."
-msgstr "Purple Ads: different by design, built to perform."
-
 msgid "Página"
 msgstr "Page"
 
@@ -17020,9 +16999,6 @@ msgstr "They take a good share of last week’s spend. Pausing them frees budget
 #, python-format
 msgid "Se llevó el %(pct)s %% del gasto de los últimos 30 días (%(gasto)s) con ROAS %(roas)s×, menos de la mitad del de la cuenta (%(roas_cuenta)s×)."
 msgstr "It took %(pct)s%% of the spend of the last 30 days (%(gasto)s) with a ROAS of %(roas)s×, less than half the account’s (%(roas_cuenta)s×)."
-
-msgid "Se multiplican"
-msgstr "They multiply"
 
 msgid "Se ofrece"
 msgstr "Offered"
@@ -19425,6 +19401,9 @@ msgstr "One single place per video: if you name several rooms, the model walks t
 msgid "Un sprint es el plan de contenido de un mes para todos tus países: pones el mes y en su tablero armas una campaña por persona y producto con los anuncios que va a seguir. Se trabaja en inglés; cada país e idioma se adapta después en la edición final. Nada se genera sin tu aprobación y sin ver el costo antes."
 msgstr "A sprint is the content plan for one month across all your countries: you set the month and build a campaign per persona and product with the ads it will follow, in its board. It's worked out in English; each country and language is adapted afterward in final edition. Nothing is generated without your approval and without seeing the cost first."
 
+msgid "Un universo infinito de anuncios que destacan y venden."
+msgstr "An infinite universe of ads that stand out and sell."
+
 msgid "Un usuario con rol 'cliente' necesita un proyecto asignado."
 msgstr "A user with the 'cliente' role needs an assigned project."
 
@@ -19738,9 +19717,6 @@ msgstr "Expires in"
 
 msgid "Vencida"
 msgstr "Expired"
-
-msgid "Venden"
-msgstr "They sell"
 
 #, python-format
 msgid "Venden mejor que su cuenta: sube %(pct)s %% el presupuesto diario (más de %(pct)s %% reinicia el aprendizaje)."
@@ -20204,6 +20180,9 @@ msgstr "Generate again from the study."
 
 msgid "Vuelves a conectar cada 60 días."
 msgstr "You reconnect every 60 days."
+
+msgid "Vía Láctea de los anuncios."
+msgstr "Milky Way of ads."
 
 #, python-format
 msgid "WAL: %(peso)s"
@@ -23947,9 +23926,6 @@ msgstr "Delete this sprint PERMANENTLY? Its campaigns, ideas and references will
 
 msgid "¿Empezar de cero? Se vacían el texto, los ajustes y la bandeja de referencias."
 msgstr "Start from scratch? The text, the settings and the reference tray will be cleared."
-
-msgid "¿Entonces por qué todos los anuncios se ven igual?"
-msgstr "So why does every ad look the same?"
 
 #, python-format
 msgid "¿Evaluar %(n)s anuncio(s) con IA? Costo: %(precio)s"

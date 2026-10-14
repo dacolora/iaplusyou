@@ -278,3 +278,7 @@ sigue global antes del compositor. Node ejecuta los módulos completos sobre el 
   estáticos por semana y uno a medida. La vitrina y los pasos usan sobre todo videos y piezas de Happy Fresh / Happy Flops.
 - Dentro de la plataforma: estrellas fugaces en el fondo (`.galaxia-fugaz`, `base.html`) y la vaca zen pequeña al pie del menú
   lateral («Your ads work. You breathe.»), que se esconde con el menú plegado.
+- Ajuste final (2026-10-14): la portada abre con «Welcome to the Milky Way of ads.» a la izquierda (la vaca a la derecha);
+  la historia «They stand out / sell / multiply» se quitó y su lugar lo ocupa la sección zen (texto arriba, la vaca
+  pequeña entre las cuatro herramientas). «Why Run when you can Fly?» es el título del login. En el cierre, «ADS» de
+  GALADSY brilla en blanco (`.lema-brillo`) y el único botón, «Start», lleva al login.

@@ -4872,8 +4872,8 @@ body.portada main { padding-top: 0; }
 .portada-hero-foto img { object-fit: cover; object-position: 15% 45%; }
 .portada-hero::after { content: ""; position: absolute; inset: 0; z-index: -1; background-image: var(--velo-hero); }
 .portada-hero-abajo { margin: 0; }
-.portada-promesa { margin: 0 0 var(--esp-4); max-width: 48vw; font-family: var(--font-titular); font-weight: 800; font-size: clamp(2.4rem, 5vw, 6rem); line-height: 1.02; letter-spacing: -0.03em; color: var(--text); text-shadow: 0 4px 30px var(--sombra-media); }
-.portada-promesa > span { display: block; }
+.portada-promesa { margin: 0 0 var(--esp-4); font-family: var(--font-titular); font-weight: 800; font-size: clamp(2.2rem, 3.7vw, 5.4rem); line-height: 1.04; letter-spacing: -0.03em; color: var(--text); text-shadow: 0 4px 30px var(--sombra-media); }
+.portada-promesa > span { display: block; white-space: nowrap; }
 /* Letras que se mueven al pasar el mouse (index.html las envuelve; transición, no animación). */
 .portada-promesa .palabra { display: inline-block; white-space: nowrap; }
 .portada-promesa .letra { display: inline-block; transition: transform .3s cubic-bezier(.34, 1.56, .64, 1), color .3s; }
@@ -4882,28 +4882,16 @@ body.portada main { padding-top: 0; }
 .portada-pildora { border-radius: var(--radius-pastilla); padding: .85rem 1.5rem; }
 .portada-cta { font-family: var(--font-titular); font-weight: 700; letter-spacing: .01em; font-size: 1rem; padding: .95rem 1.8rem; box-shadow: var(--shadow-glow); }
 
-/* Segunda pantalla: «Hoy todos tienen IA. ¿Entonces por qué todo se ve igual?» y la historia en tres pasos. */
-.portada-historia { text-align: center; max-width: 64rem; margin: var(--esp-7) auto 6rem; }
-.portada-historia-titulo { display: block; margin: 0 0 var(--esp-7); text-transform: none; color: var(--text); font-family: var(--font-titular); font-weight: 700; font-size: clamp(1.7rem, 3.4vw, 3.1rem); line-height: 1.1; letter-spacing: -0.02em; }
-.portada-historia-titulo::before { content: none; }
-.portada-historia-titulo span { display: block; }
-.portada-historia-pasos { list-style: none; margin: 0 0 var(--esp-6); padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--esp-5); counter-reset: historia; }
-.portada-historia-pasos li { position: relative; padding: var(--esp-6) var(--esp-5) var(--esp-5); border-radius: var(--radius-lg); border: 1px solid var(--border); background: var(--panel-velo); text-align: left; counter-increment: historia; }
-.portada-historia-pasos li:not(:last-child)::after { content: "→"; position: absolute; right: calc(-1 * var(--esp-5)); top: 50%; transform: translate(50%, -50%); color: var(--accent-texto); font-size: 1.4rem; }
-.portada-historia-pasos strong { display: block; margin-bottom: var(--esp-2); font-family: var(--font-titular); font-weight: 700; font-size: 1.3rem; letter-spacing: -0.01em; color: var(--accent-texto); }
-.portada-historia-pasos p { margin: 0; color: var(--muted); line-height: 1.5; }
-.portada-historia-cierre { margin: 0; font-family: var(--font-titular); font-weight: 800; font-size: clamp(1.4rem, 2.8vw, 2.2rem); letter-spacing: -0.02em; background-image: var(--degradado-lema); -webkit-background-clip: text; background-clip: text; color: transparent; }
 
 @media (max-width: 760px) {
   .portada-hero { min-height: calc(100svh - 110px); align-items: center; justify-content: space-between; text-align: center; padding: var(--esp-6) var(--esp-5); }
   .portada-hero::after { background-image: var(--velo-hero-centro); }
   .portada-hero-foto img { object-position: 50% 58%; }
   .portada-promesa { max-width: none; }
+  .portada-promesa > span { white-space: normal; }
   .portada-hero-sub { margin: 0 auto; }
   .portada-hero-abajo { justify-content: center; }
   .portada-promesa { font-size: clamp(1.9rem, 8.6vw, 3.2rem); }
-  .portada-historia-pasos { grid-template-columns: 1fr; }
-  .portada-historia-pasos li:not(:last-child)::after { content: "↓"; right: 50%; top: auto; bottom: calc(-1 * var(--esp-5)); transform: translate(50%, 50%); }
 }
 
 /* Login (2026-10-14): la vaca surfeando de fondo a pantalla completa; la caja a la derecha (la vaca está a la
@@ -4922,20 +4910,27 @@ body.portada main { padding-top: 0; }
   .login-lema { position: static; display: none; }
 }
 
-/* Anuncios automáticos: la vaca zen flota y parpadea (dos fotos superpuestas; la de ojos cerrados aparece un instante). */
-.portada-zen { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); align-items: center; gap: clamp(var(--esp-6), 5vw, 5rem); margin: 0 0 7rem; }
-.portada-zen-vaca { position: relative; aspect-ratio: 720 / 783; max-width: 440px; width: 100%; justify-self: center; animation: vaca-flota 6s ease-in-out infinite; }
-.portada-zen-vaca::before { content: ""; position: absolute; inset: 12% 8% 0; z-index: -1; border-radius: 50%; background-image: radial-gradient(circle, var(--galaxia-2), transparent 68%); filter: blur(10px); }
+/* Anuncios automáticos (segunda pantalla): el texto arriba y, debajo, la vaca zen pequeña entre las cuatro
+   herramientas (dos a cada lado); flota y parpadea. En el celular, la vaca arriba de la lista. */
+.portada-zen { margin: 0 0 7rem; }
+.portada-zen-cuerpo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(180px, 260px) minmax(0, 1fr); align-items: center; gap: clamp(var(--esp-5), 3vw, var(--esp-7)); }
+.portada-zen-vaca { position: relative; aspect-ratio: 720 / 783; width: 100%; animation: vaca-flota 6s ease-in-out infinite; }
+.portada-zen-vaca::before { content: ""; position: absolute; inset: 18% 6% 0; z-index: -1; border-radius: 50%; background-image: radial-gradient(circle, var(--galaxia-2), transparent 68%); filter: blur(12px); }
 .portada-zen-vaca img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
 .portada-zen-vaca .zen-cerrada { animation: vaca-parpadea 5.5s infinite; }
-.portada-titulo-izq, .portada-sub-izq { text-align: left; margin-left: 0; }
-h2.portada-titulo-izq { font-size: clamp(2rem, 3.8vw, 3.2rem); }
-.portada-zen-lista { list-style: none; margin: var(--esp-6) 0 0; padding: 0; display: grid; gap: var(--esp-4); }
+.portada-zen-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--esp-4); }
 .portada-zen-lista li { display: grid; gap: var(--esp-1); padding: var(--esp-4) var(--esp-5); border-radius: var(--radius); border: 1px solid var(--border); background: var(--panel-velo); }
 .portada-zen-lista strong { font-family: var(--font-titular); font-weight: 700; font-size: 1rem; letter-spacing: -0.01em; color: var(--accent-texto); }
 .portada-zen-lista span { color: var(--muted); line-height: 1.5; font-size: .95rem; }
-@keyframes vaca-flota { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
+@keyframes vaca-flota { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
 @keyframes vaca-parpadea { 0%, 86%, 100% { opacity: 0; } 88%, 95% { opacity: 1; } }
+
+/* Cierre: «ADS» de GALADSY en blanco y brillante, como «Run more». */
+.lema-brillo { color: var(--text); text-shadow: 0 0 18px var(--brillo), 0 0 42px var(--brillo); }
+
+/* Login: «Why Run when you can Fly?» como título de la caja. */
+.login-titulo { margin: 0 0 var(--esp-2); font-family: var(--font-titular); font-weight: 800; font-size: clamp(1.6rem, 2.6vw, 2.1rem); line-height: 1.08; letter-spacing: -0.025em; }
+.login-entrar { margin: 0 0 var(--esp-1); font-weight: 600; color: var(--text); }
 
 /* Conexiones reales: nombres en pastillas que brillan al pasar. */
 .portada-conexiones { text-align: center; max-width: 64rem; margin: 0 auto 7rem; }
@@ -4948,9 +4943,7 @@ h2.portada-titulo-izq { font-size: clamp(2rem, 3.8vw, 3.2rem); }
 .planes-tres .plan-custom { grid-column: auto; }
 
 @media (max-width: 760px) {
-  .portada-zen { grid-template-columns: 1fr; text-align: center; }
-  .portada-zen-vaca { max-width: 280px; }
-  .portada-titulo-izq, .portada-sub-izq { text-align: center; margin-left: auto; }
-  .portada-zen-lista li { text-align: left; }
+  .portada-zen-cuerpo { grid-template-columns: 1fr; }
+  .portada-zen-vaca { order: -1; width: 190px; justify-self: center; }
   .planes-tres { grid-template-columns: 1fr; }
 }
