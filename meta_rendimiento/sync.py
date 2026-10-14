@@ -20,7 +20,7 @@ from zoneinfo import ZoneInfo
 import db
 import idiomas
 from meta_rendimiento import cuentas, datos, desgloses, graph, tasas
-from tareas.meta import MONEDAS_SIN_DECIMALES
+from monedas_meta import SIN_DECIMALES as MONEDAS_SIN_DECIMALES
 
 log = logging.getLogger("creatv.meta_rendimiento.sync")
 

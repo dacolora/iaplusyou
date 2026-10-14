@@ -761,6 +761,10 @@ msgid "%(n)s experimentos en cola."
 msgstr "%(n)s experiments queued."
 
 #, python-format
+msgid "%(n)s experimentos vigilados, %(p)s pausados."
+msgstr "%(n)s experiments watched, %(p)s paused."
+
+#, python-format
 msgid "%(n)s fila(s) viejas de anuncios y %(m)s día(s) viejos de cuentas de Meta borrados"
 msgstr "%(n)s old ad row(s) and %(m)s old account day(s) from Meta deleted"
 
@@ -10117,6 +10121,10 @@ msgid "How does your product help them achieve that status/characteristics?"
 msgstr "How does your product help them achieve that status/characteristics?"
 
 #, python-format
+msgid "Hoy gastó %(hoy)s con un diario de %(diario)s: es más del doble, así que se pausó para revisarlo."
+msgstr "Today it spent %(hoy)s on a daily budget of %(diario)s: more than double, so it was paused for review."
+
+#, python-format
 msgid "Hoy va en %(ventas)s y %(pedidos)s, con %(gasto)s de gasto."
 msgstr "Today so far: %(ventas)s and %(pedidos)s, with %(gasto)s of spend."
 
@@ -10742,6 +10750,10 @@ msgstr "The account %(usuario)s has no email"
 msgid "La cuenta de Instagram no está vinculada a la Página"
 msgstr "The Instagram account isn't linked to the Page"
 
+#, python-format
+msgid "La cuenta de Meta factura en %(real)s y el experimento está en %(moneda)s: no se manda ningún presupuesto."
+msgstr "The Meta ad account bills in %(real)s and the experiment is in %(moneda)s: no budget is sent."
+
 msgid "La cuenta está cerrada."
 msgstr "The account is closed."
 
@@ -11140,6 +11152,10 @@ msgstr "Wompi transaction %(tx)s (reference “%(ref_tx)s”) arrived for top-up
 msgid "La transición quedó de {duracion}: no hay más video al final del primer clip."
 msgstr "The transition ended up at {duracion}: there's no more video at the end of the first clip."
 
+#, python-format
+msgid "La unidad de %(moneda)s no cuadra con la cuenta de Meta (su mínimo diario es %(minimo)s en su unidad): no se manda ningún presupuesto."
+msgstr "The %(moneda)s unit doesn't match the Meta ad account (its daily minimum is %(minimo)s in its unit): no budget is sent."
+
 msgid "La velocidad solo se cambia en clips de video."
 msgstr "Speed can only be changed on video clips."
 
@@ -11524,6 +11540,10 @@ msgstr "You reached 5 minutes: the recording stopped."
 
 msgid "Llegaste al uso justo de este mes: lo que sigue se cobra a precio de miembro."
 msgstr "You reached this month's fair use: what comes next is charged at member price."
+
+#, python-format
+msgid "Llegó a su tope en Meta (%(gasto)s de %(tope)s): se pausó."
+msgstr "It reached its cap in Meta (%(gasto)s of %(tope)s): paused."
 
 #, python-format
 msgid "Llegó un evento %(tipo)s de Bold con la referencia «%(ref)s», que no es de ninguna recarga de Creatv. Revísalo en el panel de Bold."
@@ -12123,6 +12143,14 @@ msgid "Meta está revisando la cuenta por riesgo y puede frenar la entrega."
 msgstr "Meta is reviewing the account for risk and may slow delivery."
 
 #, python-format
+msgid "Meta guardó en el conjunto un presupuesto diario distinto al enviado (%(leido)s en vez de %(esperado)s, en la unidad de Meta): quedó en pausa."
+msgstr "Meta saved a different daily budget on the ad set than the one sent (%(leido)s instead of %(esperado)s, in Meta's unit): it was paused."
+
+#, python-format
+msgid "Meta guardó en la campaña un tope distinto al enviado (%(leido)s en vez de %(esperado)s, en la unidad de Meta): quedó en pausa."
+msgstr "Meta saved a different spend cap on the campaign than the one sent (%(leido)s instead of %(esperado)s, in Meta's unit): it was paused."
+
+#, python-format
 msgid "Meta le atribuye %(valor)s en ventas por %(gasto)s de gasto: por debajo de %(minimo)s× se pierde dinero casi seguro."
 msgstr "Meta attributes %(valor)s in sales to it for %(gasto)s of spend: below %(minimo)s× you are almost surely losing money."
 
@@ -12132,6 +12160,10 @@ msgstr "Meta rejected them and they spent in the last 7 days. Review them in Ads
 #, python-format
 msgid "Meta marca la cuenta con el estado %(codigo)s: no está activa."
 msgstr "Meta marks the account with status %(codigo)s: it isn’t active."
+
+#, python-format
+msgid "Meta no acepta un tope tan bajo como %(tope)s: para no pasarlo, los conjuntos se apagan solos en %(dias)s días."
+msgstr "Meta doesn't accept a cap as low as %(tope)s: to stay under it, the ad sets turn themselves off in %(dias)s days."
 
 #, python-format
 msgid "Meta no aceptó el cambio: %(error)s"
@@ -13704,6 +13736,9 @@ msgstr "Couldn't read the script. Try again."
 msgid "No se pudo leer el proyecto; no se guardó."
 msgstr "The project couldn't be read; nothing was saved."
 
+msgid "No se pudo leer en Meta la moneda de la cuenta publicitaria; no se manda ningún presupuesto sin comprobarla."
+msgstr "Couldn't read the ad account's currency in Meta; no budget is sent without checking it."
+
 msgid "No se pudo leer la llave guardada: vuelve a conectar Triple Whale."
 msgstr "The saved key couldn't be read: connect Triple Whale again."
 
@@ -13832,6 +13867,10 @@ msgstr[1] "Couldn't transcribe %(num)s files."
 
 msgid "No se pudo usar el micrófono."
 msgstr "Couldn't use the microphone."
+
+#, python-format
+msgid "No se pudo vigilar el gasto en Meta: %(error)s"
+msgstr "Couldn't watch the spend in Meta: %(error)s"
 
 #, python-format
 msgid "No se pudo volver a pausar en Meta: %(motivo)s"

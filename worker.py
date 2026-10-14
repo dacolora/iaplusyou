@@ -67,6 +67,8 @@ PERIODICAS = [("tienda_sync_pedidos_todas", 7200), ("tw_sincronizar_todas", 7200
               # Meta rendimiento (spec 2026-10-08 §6): la copia de cada cuenta publicitaria, cada 3 h.
               ("meta_rend_sincronizar_todas", 10800), ("exp_refrescar_todos", 7200),
               ("exp_decidir_todos", 3600),
+              # PND-319: el gasto real de cada experimento en Meta, contra su tope y su ritmo diario (gratis).
+              ("exp_vigilar_gasto", 600),
               ("exp_avanzar_todos", 600), ("tienda_sync_productos_todas", 21600), ("sprint_qa_pendientes", 300),
               ("materiales_limpiar", 86400),
               # Auditoría 2026-09-28: salidas/ crecía 2 GB cada dos semanas, tarea

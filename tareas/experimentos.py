@@ -159,6 +159,23 @@ def exp_refrescar_todos(tarea):
     return gettext("%(n)s experimentos en cola.", n=len(filas))
 
 
+@registrar("exp_vigilar_gasto")
+def exp_vigilar_gasto(tarea):
+    """Periódica (10 min, PND-319): lee en Meta el gasto de cada experimento que puede gastar (`corriendo` y
+    `decidido`) y lo pausa si llegó a su tope o si hoy gasta más del doble de su diario (`lanzador.vigilar_gasto`).
+    Un experimento que no se pudo leer no frena a los demás: queda el aviso en su historia."""
+    filas = _experimentos_en(("corriendo", "decidido"))
+    pausados = 0
+    for eid, cliente in filas:
+        try:
+            if lanzador.vigilar_gasto(cliente, eid):
+                pausados += 1
+        except Exception as e:  # noqa: BLE001 — uno que falla no detiene la vigilancia de los demás
+            experimentos.registrar_evento(cliente, eid, "error", gettext(
+                "No se pudo vigilar el gasto en Meta: %(error)s", error=cola.sin_token(str(e))[:300]))
+    return gettext("%(n)s experimentos vigilados, %(p)s pausados.", n=len(filas), p=pausados)
+
+
 @registrar("exp_decidir_todos")
 def exp_decidir_todos(tarea):
     """Periódica (1 h): encola exp_decidir para cada experimento `corriendo`."""

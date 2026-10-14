@@ -94,6 +94,23 @@ organic publish path (`organico`/`publicador` are video-only; for an image piece
 IS the image URL, so every gate also checks `es_imagen`). `experimentos.ESTADOS_VIVOS`
 (the gallery's «en prueba» label) includes `decidido`: winners keep delivering there.
 
+**Plata hacia Meta (PND-319, 2026-10-13).** Meta recibe presupuestos y topes en la unidad de su tabla oficial
+(`monedas_meta.py`, el ÚNICO lugar: offset 1 = CLP, COP, CRC, HUF, IDR, ISK, JPY, KRW, PYG, TWD, VND; las demás en
+centavos; una moneda fuera de la tabla lanza `MonedaNoSoportada`). Hasta ese día una lista escrita de memoria sin el
+COP mandó los diarios en pesos colombianos 100 veces más altos (4 000 → 400 000 COP al día; colorado_forja gastó
+192 167 COP, 24 y 2,5 veces los topes de los experimentos 3 y 5) y las pruebas no lo vieron porque comparaban
+`centavos()` consigo mismo: `tests/test_monedas_meta.py` compara con la tabla de Meta. Cuatro frenos, ninguno se quita:
+(1) `lanzador.comprobar_moneda` antes de mandar CUALQUIER monto (lanzar, cambiar el diario, activar): la cuenta
+factura en la moneda del experimento y `PRESUPUESTO_MINIMO_DIARIO` convertido cuadra ×10 con el `min_daily_budget` que
+Meta da para la cuenta (con la lista vieja daba ×120); (2) cada diario y cada `spend_cap` se lee de vuelta
+(`_confirmar_presupuesto`/`_confirmar_tope`): si Meta guardó otro, se pausa y lanza `PresupuestoNoCoincide`; activar
+(`cambiar_estado`, `activar_pieza`) también lo lee, así un conjunto viejo con ×100 nunca se enciende; (3) el tope va a
+la campaña desde el `min_campaign_group_spend_cap` de la cuenta (Forja: 200 000 COP; `minimo_tope_campana` queda como
+respaldo y para el texto de «Nuevo experimento»); por debajo, los conjuntos se crean con la fecha de fin a la que
+alcanza el tope (`_tope_y_dias_meta`, al menos 1 día) y queda un evento que lo dice; (4) la periódica
+`exp_vigilar_gasto` (10 min) lee el gasto real de cada campaña `corriendo`/`decidido` y la pausa entera si llegó al tope
+o si hoy va por más de `RITMO_MAXIMO` (2) veces el diario de sus países activos.
+
 **Decisor, escalera y modos** (`decisor.py`, `modos.py`, `propuestas.py`, `acciones.py`,
 `derivaciones.py`, `notificaciones.py`): the part of the loop that closes on its own.
 `decisor.decidir(snapshots, reglas, contexto)` is a pure function — traffic gate first

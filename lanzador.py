@@ -21,6 +21,7 @@ import experimentos
 import idiomas
 import meta_conexion
 import meta_errores
+import monedas_meta
 import notificaciones
 import triple_whale
 import triple_whale_tiendas
@@ -28,7 +29,7 @@ from triple_whale import datos as tw_datos, paises as tw_paises, sync as tw_sync
 from meta_ads import ad as meta_ad, adset as meta_adset, auth as meta_auth, campaign as meta_campaign
 from meta_ads import creative as meta_creative, insights as meta_insights
 from meta_ads.targeting import Targeting
-from tareas.meta import MONEDAS_SIN_DECIMALES, _LOCK, _miniatura_para_ad
+from tareas.meta import _LOCK, _miniatura_para_ad
 
 log = logging.getLogger("creatv.lanzador")
 
@@ -48,7 +49,115 @@ _SNAP_DESDE_INSIGHTS = {"impresiones": "impresiones", "alcance": "alcance", "fre
 
 
 def centavos(monto, moneda):
-    return int(round(float(monto) * (1 if moneda in MONEDAS_SIN_DECIMALES else 100)))
+    """El monto como lo recibe Meta: en su unidad según la tabla oficial (`monedas_meta`): centavos para USD o SEK, la
+    moneda entera para COP, CLP o JPY. Se llama así por historia: en COP NO son centavos (PND-319: hasta el
+    2026-10-13 se multiplicaba por 100 y 4 000 COP al día salían como 400 000). Una moneda fuera de la tabla de Meta
+    lanza `monedas_meta.MonedaNoSoportada`."""
+    return monedas_meta.a_unidad_meta(monto, moneda)
+
+
+# PND-319: cuántas veces puede diferir nuestro mínimo diario (≈ US$ 1 en la moneda, `PRESUPUESTO_MINIMO_DIARIO`) del
+# que Meta dice para la cuenta antes de sospechar de la unidad. Un error de unidad da ×100; una diferencia de precio
+# entre países, a lo sumo ×3.
+_HOLGURA_UNIDAD = 10
+
+
+class PresupuestoNoCoincide(ValueError):
+    """Meta guardó un monto distinto al enviado, o la moneda o su unidad no cuadran con la cuenta (PND-319)."""
+
+
+def _entero(valor):
+    try:
+        return int(float(valor))
+    except (TypeError, ValueError):
+        return None
+
+
+def _act(ad_account_id):
+    a = str(ad_account_id or "")
+    return a if a.startswith("act_") else f"act_{a}"
+
+
+def _cuenta_meta(creds):
+    """La moneda y los mínimos de la cuenta publicitaria, leídos de Meta: `currency`, `min_daily_budget` y
+    `min_campaign_group_spend_cap` (los dos últimos en la unidad de Meta)."""
+    return meta_auth.llamar("GET", _act(creds["ad_account_id"]),
+                            params={"fields": "currency,min_daily_budget,min_campaign_group_spend_cap"}) or {}
+
+
+def comprobar_moneda(cuenta, moneda):
+    """Antes de mandarle a Meta un presupuesto o un tope (PND-319): la cuenta factura en la moneda del experimento y
+    la unidad de `monedas_meta` cuadra con el mínimo diario que Meta dice para ESA cuenta, que es un dato de Meta y
+    no nuestro. Con la lista vieja, 4 000 COP salían como 400 000 contra un mínimo de 3 322: ×120, y aquí se frena.
+    Lanza `PresupuestoNoCoincide`; no se manda ningún monto sin pasar por aquí."""
+    from presupuesto_experimentos import PRESUPUESTO_MINIMO_DIARIO
+    real = (cuenta.get("currency") or "").strip().upper()
+    if not real:
+        raise PresupuestoNoCoincide(gettext(
+            "No se pudo leer en Meta la moneda de la cuenta publicitaria; no se manda ningún presupuesto sin comprobarla."))
+    if real != (moneda or "").strip().upper():
+        raise PresupuestoNoCoincide(gettext(
+            "La cuenta de Meta factura en %(real)s y el experimento está en %(moneda)s: no se manda ningún presupuesto.",
+            real=real, moneda=moneda or "?"))
+    monedas_meta.factor(real)   # una moneda fuera de la tabla de Meta se niega aquí
+    nuestro = PRESUPUESTO_MINIMO_DIARIO.get(real)
+    minimo_meta = _entero(cuenta.get("min_daily_budget"))
+    if nuestro and minimo_meta and minimo_meta > 0:
+        razon = centavos(nuestro, real) / minimo_meta
+        if not (1 / _HOLGURA_UNIDAD <= razon <= _HOLGURA_UNIDAD):
+            raise PresupuestoNoCoincide(gettext(
+                "La unidad de %(moneda)s no cuadra con la cuenta de Meta (su mínimo diario es %(minimo)s en su unidad): "
+                "no se manda ningún presupuesto.", moneda=real, minimo=minimo_meta))
+
+
+def _tope_y_dias_meta(ex, cuenta, moneda):
+    """(spend_cap en la unidad de Meta o None, días con que se crean los conjuntos). El tope va a la campaña cuando
+    Meta lo acepta: desde el `min_campaign_group_spend_cap` de la cuenta (si no se pudo leer, desde
+    `minimo_tope_campana`). Si no lo acepta, ningún freno de Meta respetaría el tope; entonces los conjuntos se crean
+    con la fecha de fin a la que alcanza el tope con el diario de todos los países (al menos un día), y Meta los
+    apaga solo (PND-319: los experimentos 3 y 5 de colorado_forja gastaron 24 y 2,5 veces su tope)."""
+    dias = int(ex["dias"] or 7)
+    tope = float(ex["tope_total"] or 0)
+    if tope <= 0:
+        return None, dias
+    tope_meta = centavos(tope, moneda)
+    minimo = _entero(cuenta.get("min_campaign_group_spend_cap"))
+    if (tope_meta >= minimo) if minimo else (tope >= minimo_tope_campana(moneda)):
+        return tope_meta, dias
+    diario = sum(float(p.get("presupuesto_dia") or 0) for p in ex["paises"])
+    if diario <= 0:
+        return None, dias
+    return None, max(1, min(dias, int(tope // diario)))
+
+
+def _confirmar_presupuesto(adset_id, esperado, pausar=None):
+    """Le pregunta a Meta qué presupuesto diario quedó en el conjunto. Si no es el que se mandó, pausa los conjuntos
+    `pausar` (por defecto ese) y lanza `PresupuestoNoCoincide`: nunca queda corriendo un monto que nadie vio."""
+    leido = _entero((meta_auth.llamar("GET", adset_id, params={"fields": "daily_budget"}) or {}).get("daily_budget"))
+    if leido == int(esperado):
+        return
+    for oid in (pausar or [adset_id]):
+        try:
+            meta_adset.actualizar_estado(oid, "PAUSED")
+        except Exception:  # noqa: BLE001 — el aviso de abajo sale igual; la pausa es de mejor esfuerzo
+            log.warning("No se pudo pausar el conjunto %s tras un presupuesto que no coincide", oid)
+    raise PresupuestoNoCoincide(gettext(
+        "Meta guardó en el conjunto un presupuesto diario distinto al enviado (%(leido)s en vez de %(esperado)s, en la "
+        "unidad de Meta): quedó en pausa.", leido=leido if leido is not None else "?", esperado=int(esperado)))
+
+
+def _confirmar_tope(campaign_id, esperado):
+    """Lo mismo con el tope de la campaña: si Meta no guardó el `spend_cap` enviado, la campaña queda en pausa."""
+    leido = _entero((meta_auth.llamar("GET", campaign_id, params={"fields": "spend_cap"}) or {}).get("spend_cap"))
+    if leido == int(esperado):
+        return
+    try:
+        meta_campaign.actualizar_estado(campaign_id, "PAUSED")
+    except Exception:  # noqa: BLE001
+        log.warning("No se pudo pausar la campaña %s tras un tope que no coincide", campaign_id)
+    raise PresupuestoNoCoincide(gettext(
+        "Meta guardó en la campaña un tope distinto al enviado (%(leido)s en vez de %(esperado)s, en la unidad de "
+        "Meta): quedó en pausa.", leido=leido if leido is not None else "?", esperado=int(esperado)))
 
 
 def minimo_tope_campana(moneda):
@@ -256,22 +365,27 @@ def _adsets_de_pais(p):
     return [p["meta_adset_id"]] if p.get("meta_adset_id") else []
 
 
-def _conjunto_de(cliente, ex, p, plat, n_plataformas, campaign_id, promoted_object, moneda):
+def _conjunto_de(cliente, ex, p, plat, n_plataformas, campaign_id, promoted_object, moneda, dias_meta=None):
     """Id del conjunto del país `p` (y de la plataforma `plat`, en apps): el
     guardado si ya existe — así un reintento no lo duplica — o uno nuevo,
     en pausa, guardado apenas Meta lo devuelve. En apps el presupuesto diario
     del país se reparte en partes iguales entre sus plataformas (no se
-    duplica) y el conjunto queda en `paises[i]["meta_adsets"][plat]`."""
+    duplica) y el conjunto queda en `paises[i]["meta_adsets"][plat]`. PND-319: `dias_meta` (la fecha de fin, que
+    puede ser menor que la del experimento cuando Meta no acepta el tope) y, nuevo o reusado, el diario se lee de
+    vuelta en Meta antes de seguir (`_confirmar_presupuesto`)."""
     experimento_id = ex["id"]
+    dias_meta = int(dias_meta or ex["dias"] or 7)
     if not plat:
+        unidades = centavos(p["presupuesto_dia"], moneda)
         adset_id = p.get("meta_adset_id")
         if adset_id:
+            _confirmar_presupuesto(adset_id, unidades)
             return adset_id
         targeting = Targeting().edad(int(ex["edad_min"] or 18), int(ex["edad_max"] or 65)).paises([p["pais"]]).to_dict()
         adset_id = meta_adset.crear_adset(f"{ex['nombre']} — {p['pais']}", campaign_id, ex["objetivo_meta"], targeting,
-                                          centavos(p["presupuesto_dia"], moneda), int(ex["dias"] or 7),
-                                          promoted_object=promoted_object)["id"]
+                                          unidades, dias_meta, promoted_object=promoted_object)["id"]
         experimentos.actualizar_pais(cliente, experimento_id, p["pais"], meta_adset_id=adset_id, estado="pausado")
+        _confirmar_presupuesto(adset_id, unidades)
         con_pixel = (gettext(" (optimiza compras con el Pixel %(pixel_id)s)", pixel_id=promoted_object["pixel_id"])
                      if promoted_object else "")
         experimentos.registrar_evento(cliente, experimento_id, "lanzamiento",
@@ -280,24 +394,26 @@ def _conjunto_de(cliente, ex, p, plat, n_plataformas, campaign_id, promoted_obje
                                        "pixel_id": promoted_object["pixel_id"] if promoted_object else None})
         return adset_id
     ids = dict(p.get("meta_adsets") or {})
+    # Se reparten los centavos del país (una sola conversión) y el resto se
+    # queda sin gastar: redondear cada parte por separado podía sumar más
+    # que el presupuesto del país (CLP 1003 → 502 + 502).
+    centavos_conjunto = centavos(p["presupuesto_dia"], moneda) // max(1, int(n_plataformas))
     if ids.get(plat):
+        _confirmar_presupuesto(ids[plat], centavos_conjunto)
         return ids[plat]
     sistema = app_tiendas.OS_META[plat]
     app = (ex.get("extra") or {}).get("app") or {}
     targeting = (Targeting().edad(int(ex["edad_min"] or 18), int(ex["edad_max"] or 65)).paises([p["pais"]])
                  .sistema(sistema).to_dict())
-    # Se reparten los centavos del país (una sola conversión) y el resto se
-    # queda sin gastar: redondear cada parte por separado podía sumar más
-    # que el presupuesto del país (CLP 1003 → 502 + 502).
-    centavos_conjunto = centavos(p["presupuesto_dia"], moneda) // max(1, int(n_plataformas))
     presupuesto = app_tiendas.parte_presupuesto(p["presupuesto_dia"], n_plataformas)
     adset_id = meta_adset.crear_adset(f"{ex['nombre']} — {p['pais']} · {sistema}", campaign_id, ex["objetivo_meta"],
-                                      targeting, centavos_conjunto, int(ex["dias"] or 7),
+                                      targeting, centavos_conjunto, dias_meta,
                                       promoted_object={**promoted_object, "object_store_url": app[f"{plat}_url"]})["id"]
     ids[plat] = adset_id
     # Copia viva en `p` para la siguiente plataforma del mismo país en esta corrida.
     p["meta_adsets"] = ids
     experimentos.actualizar_pais(cliente, experimento_id, p["pais"], meta_adsets=dict(ids), estado="pausado")
+    _confirmar_presupuesto(adset_id, centavos_conjunto)
     experimentos.registrar_evento(cliente, experimento_id, "lanzamiento",
                                   gettext("Conjunto %(pais)s · %(sistema)s creado", pais=p["pais"], sistema=sistema),
                                   {"adset_id": adset_id, "presupuesto_dia": presupuesto, "plataforma": plat})
@@ -332,20 +448,31 @@ def lanzar(cliente, experimento_id, on_etapa=None, soltar=True):
 
     def _correr(creds):
         etapa(ETAPAS_LANZAR[0][0])
+        # PND-319: la moneda y su unidad se comprueban contra la cuenta ANTES de mandar ningún monto.
+        cuenta = _cuenta_meta(creds)
+        comprobar_moneda(cuenta, moneda)
+        cap, dias_meta = _tope_y_dias_meta(ex, cuenta, moneda)
         campaign_id = ex["meta_campaign_id"]
         if not campaign_id:
-            cap = centavos(ex["tope_total"], moneda) if float(ex["tope_total"] or 0) >= minimo_tope_campana(moneda) else None
             campaign_id = meta_campaign.crear_campaign(ex["nombre"], ex["objetivo_meta"], spend_cap_centavos=cap)["id"]
             experimentos.actualizar(cliente, experimento_id, meta_campaign_id=campaign_id)
             experimentos.registrar_evento(cliente, experimento_id, "lanzamiento", gettext("Campaña creada en Meta (en pausa)"),
                                           {"campaign_id": campaign_id, "spend_cap": cap})
+            if dias_meta < int(ex["dias"] or 7):
+                from tablero import dinero as _dinero
+                experimentos.registrar_evento(cliente, experimento_id, "lanzamiento", gettext(
+                    "Meta no acepta un tope tan bajo como %(tope)s: para no pasarlo, los conjuntos se apagan solos en "
+                    "%(dias)s días.", tope=_dinero(float(ex["tope_total"] or 0), moneda), dias=dias_meta),
+                    {"dias_meta": dias_meta})
+        if cap:
+            _confirmar_tope(campaign_id, cap)
         etapa(ETAPAS_LANZAR[1][0])
         adsets = {}
         plataformas = experimentos.plataformas_de(ex.get("extra")) or [None]
         for p in ex["paises"]:
             for plat in plataformas:
                 adsets[_clave_adset(p["pais"], plat)] = _conjunto_de(cliente, ex, p, plat, len(plataformas),
-                                                                      campaign_id, promoted_object, moneda)
+                                                                      campaign_id, promoted_object, moneda, dias_meta)
         etapa(ETAPAS_LANZAR[2][0])
         _crear_anuncios(cliente, ex, creds, adsets)
 
@@ -466,6 +593,7 @@ def cambiar_estado(cliente, experimento_id, status, pais=None, desde_lanzamiento
         if status == "ACTIVE":
             if pais is not None and not any(p["pais"] == pais and _adsets_de_pais(p) for p in ex["paises"]):   # apps: meta_adsets
                 raise ValueError(gettext("Ese país no tiene conjunto en Meta."))
+            _confirmar_antes_de_activar(_creds, ex, pais)
             _preparar_fin_primera_activacion(cliente, ex)
         if pais is None:
             meta_campaign.actualizar_estado(ex["meta_campaign_id"], status)
@@ -526,6 +654,73 @@ def cambiar_estado(cliente, experimento_id, status, pais=None, desde_lanzamiento
         mensaje += gettext(". Siguen en pausa (retiradas por el decisor): %(detalle)s", detalle=detalle)
     experimentos.registrar_evento(cliente, experimento_id, "estado", mensaje,
                                   {"saltadas": [p["id"] for p in saltadas]} if saltadas else None)
+
+
+def _confirmar_antes_de_activar(creds, ex, pais=None):
+    """PND-319: antes de ENCENDER, la cuenta pasa `comprobar_moneda` y cada conjunto que se va a activar tiene en Meta
+    el diario que se ve en pantalla. Uno lanzado antes del arreglo, con 100 veces más, no se enciende: queda en pausa
+    (el país entero) y sale el aviso."""
+    moneda = ex["moneda"] or "USD"
+    comprobar_moneda(_cuenta_meta(creds), moneda)
+    for p in ex["paises"]:
+        if pais is not None and p["pais"] != pais:
+            continue
+        ids = _adsets_de_pais(p)
+        if ids:
+            esperado = centavos(p["presupuesto_dia"], moneda) // len(ids)
+            for adset_id in ids:
+                _confirmar_presupuesto(adset_id, esperado, pausar=ids)
+
+
+# PND-319: la vigilancia del gasto pausa cuando hoy se gasta más que este múltiplo del diario de los países activos.
+# Meta puede pasarse hasta un 75 % un día; el doble ya no es un día bueno, es un monto mal puesto.
+RITMO_MAXIMO = 2.0
+
+
+def _gasto_campana(campaign_id, periodo):
+    """Gasto de la campaña según Meta (`insights`, `spend`, en la moneda de la cuenta, no en su unidad)."""
+    r = meta_auth.llamar("GET", f"{campaign_id}/insights", params={"fields": "spend", "date_preset": periodo}) or {}
+    filas = r.get("data") or []
+    try:
+        return float(filas[0].get("spend") or 0) if filas else 0.0
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def vigilar_gasto(cliente, experimento_id):
+    """PND-319: lee en Meta lo que de verdad gastó la campaña (en total y hoy) y la pausa entera si llegó al tope o si
+    hoy va por más de `RITMO_MAXIMO` veces el diario de sus países activos. No espera a las métricas de cada 2 h ni al
+    decisor de cada hora: lo corre la periódica `exp_vigilar_gasto` cada 10 min. Devuelve el motivo si pausó."""
+    ex = experimentos.obtener(cliente, experimento_id)
+    if not ex or ex["estado"] not in ("corriendo", "decidido") or not ex["meta_campaign_id"]:
+        return None
+    lectura = {}
+
+    def _leer(_creds):
+        lectura["total"] = _gasto_campana(ex["meta_campaign_id"], "maximum")
+        lectura["hoy"] = _gasto_campana(ex["meta_campaign_id"], "today")
+
+    _con_credenciales(cliente, _leer)
+    total, hoy = lectura["total"], lectura["hoy"]
+    if total > float(ex["gasto_acumulado"] or 0):
+        experimentos.actualizar(cliente, experimento_id, gasto_acumulado=round(total, 2))
+    from tablero import dinero as _dinero
+    moneda = ex["moneda"] or "USD"
+    tope = float(ex["tope_total"] or 0)
+    diario = sum(float(p.get("presupuesto_dia") or 0) for p in ex["paises"] if p.get("estado") == "activo")
+    motivo = None
+    if tope > 0 and total >= tope:
+        motivo = gettext("Llegó a su tope en Meta (%(gasto)s de %(tope)s): se pausó.",
+                         gasto=_dinero(total, moneda), tope=_dinero(tope, moneda))
+    elif diario > 0 and hoy > RITMO_MAXIMO * diario:
+        motivo = gettext("Hoy gastó %(hoy)s con un diario de %(diario)s: es más del doble, así que se pausó para "
+                         "revisarlo.", hoy=_dinero(hoy, moneda), diario=_dinero(diario, moneda))
+    if not motivo:
+        return None
+    cambiar_estado(cliente, experimento_id, "PAUSED")
+    experimentos.registrar_evento(cliente, experimento_id, "presupuesto", motivo,
+                                  {"gasto_total": total, "gasto_hoy": hoy, "tope": tope, "diario": diario})
+    return motivo
 
 
 def diario_activable(ex):
@@ -714,7 +909,8 @@ def cambiar_presupuesto_pais(cliente, experimento_id, pais, presupuesto_dia):
     # si no, el panel diría un presupuesto y Meta gastaría otro.
     centavos_antes = centavos(p.get("presupuesto_dia") or 0, moneda) // len(ids)
 
-    def _correr(_c):
+    def _correr(creds):
+        comprobar_moneda(_cuenta_meta(creds), moneda)   # PND-319: ningún monto sin comprobar la unidad
         cambiados = []
         try:
             for adset_id in ids:
@@ -747,6 +943,14 @@ def cambiar_presupuesto_pais(cliente, experimento_id, pais, presupuesto_dia):
                                           {"error": error[:300], "cambiados": cambiados, "sin_volver": sin_volver,
                                            "anterior": p.get("presupuesto_dia"), "intentado": float(presupuesto_dia)})
             raise ValueError(mensaje) from exc
+        try:
+            for adset_id in ids:
+                _confirmar_presupuesto(adset_id, centavos_conjunto, pausar=ids)
+        except PresupuestoNoCoincide as exc:
+            experimentos.actualizar_pais(cliente, experimento_id, pais, estado="pausado")
+            experimentos.registrar_evento(cliente, experimento_id, "presupuesto", f"{pais}: {exc}",
+                                          {"intentado": float(presupuesto_dia), "unidades": centavos_conjunto})
+            raise
 
     _con_credenciales(cliente, _correr)
     experimentos.actualizar_pais(cliente, experimento_id, pais, presupuesto_dia=float(presupuesto_dia))
@@ -872,6 +1076,7 @@ def activar_pieza(cliente, ep_id):
         adsets_a_activar = [pais["meta_adset_id"]] if pais and pais.get("meta_adset_id") else []
 
     def _correr(_creds):
+        _confirmar_antes_de_activar(_creds, ex, pz["pais"])
         _preparar_fin_primera_activacion(cliente, ex)
         if campaña_pausada:
             meta_campaign.actualizar_estado(ex["meta_campaign_id"], "ACTIVE")

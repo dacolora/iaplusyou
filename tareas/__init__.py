@@ -55,6 +55,7 @@ TIPOS_EXENTOS_DE_COBRO = {
     "exp_lanzar": "publica en Meta en pausa; la pauta la paga el cliente en su cuenta, no el saldo",
     "exp_refrescar": "lee métricas de Meta",
     "exp_refrescar_todos": "periódica: solo encola exp_refrescar",
+    "exp_vigilar_gasto": "periódica: lee en Meta el gasto y pausa; no le paga a ningún proveedor",
     "exp_detalle": "lee el detalle de Meta",
     "exp_avanzar_todos": "periódica: avanza derivaciones; lo que produce pasa por su propio freno",
     "meta_publicar": "publica en Meta; no llama a un proveedor que cobra",

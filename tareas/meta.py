@@ -25,6 +25,7 @@ import ads
 import bitacora
 import db
 import meta_conexion
+import monedas_meta
 import triple_whale_tiendas
 from meta_ads import ad as meta_ad, adset as meta_adset, auth as meta_auth, campaign as meta_campaign
 from meta_ads import creative as meta_creative, insights as meta_insights
@@ -34,8 +35,9 @@ from tareas import al_interrumpir, registrar
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# Divisas que Meta maneja sin decimales (el monto se manda tal cual, no ×100).
-MONEDAS_SIN_DECIMALES = {"JPY", "CLP", "HUF", "ISK", "KRW", "TWD", "VND", "PYG", "UGX", "XAF", "XOF"}
+# Divisas que Meta recibe sin decimales (offset 1): la tabla oficial vive en `monedas_meta` (PND-319: la lista
+# escrita aquí de memoria no tenía el COP y los presupuestos en pesos colombianos salían 100 veces más altos).
+MONEDAS_SIN_DECIMALES = monedas_meta.SIN_DECIMALES
 
 _LOCK = threading.Lock()
 
@@ -116,9 +118,9 @@ def publicar(tarea):
     # proceso (meta_ads/auth._CREDENCIALES); el lock cubre configurar ->
     # llamadas a Meta -> limpiar() para que dos proyectos nunca se mezclen.
     with _LOCK:
-        # Meta recibe el presupuesto en la unidad menor de la divisa (centavos
-        # para USD y COP; sin decimales para JPY/CLP/etc.).
-        centavos = int(round(presupuesto_diario * (1 if moneda in MONEDAS_SIN_DECIMALES else 100)))
+        # Meta recibe el presupuesto en la unidad de la divisa según su tabla (centavos para USD o EUR; la moneda
+        # entera para COP, CLP o JPY): `monedas_meta`, que se niega con una moneda fuera de la tabla.
+        centavos = monedas_meta.a_unidad_meta(presupuesto_diario, moneda)
         try:
             # Credenciales del proyecto (meta.json), no del .env: cada
             # cliente conectó su propia cuenta desde FlowMarketing.
