@@ -26,7 +26,7 @@ import os
 import threading
 import time
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import ROUND_CEILING, Decimal, InvalidOperation
 from urllib.parse import quote
 
@@ -47,6 +47,7 @@ MAX_USD = 1000
 # desbordaba el INTEGER de SQLite y respondía 500 (revisión 2026-10-08).
 MAX_MANUAL_USD = 100_000
 MAX_CUERPO = 65536          # tope del cuerpo del webhook (spec §9.3)
+HORAS_CHECKOUT = 24          # el checkout de Wompi vence (auditoría 2026-10-12); la recarga, a las HORAS_VIGENTE
 HORAS_VIGENTE = 26          # el link vence a las 24 h; 2 h de gracia para el webhook o la consulta
 # Eventos con firma inválida: cuántos se anotan por hora (por proceso y en total).
 # Cada uno escribe y toma el candado de escritura de SQLite; sin tope, cualquiera
@@ -58,6 +59,17 @@ TOPE_VUELTA_S = 60           # verificar_pendientes no retiene el carril general
 # los 30 min la recarga sigue sin acreditar (el evento firmado no llegó), la periódica avisa al admin una vez.
 CLAVE_VISTO = "wompi:visto:{recarga}"
 MINUTOS_VISTO_SIN_EVENTO = 30
+# PND-296 (2026-10-12): una recarga de Wompi `pendiente` sin transacción se busca por su referencia pasados estos
+# minutos (antes la persona puede estar pagando todavía y el evento llega solo). La primera recarga real quedó pagada
+# y sin acreditar: sus eventos no se aceptaron y Wompi no los reintentó a los 30 min como dice su doc.
+MINUTOS_RESCATE = 10
+_ORDEN_RESCATE = {"APPROVED": 0, "PENDING": 1, "DECLINED": 2, "ERROR": 2}   # VOIDED u otro: nada que aplicar
+# Revisión de plata del rescate (2026-10-12): cada recarga abandonada costaba una búsqueda por vuelta durante 26 h y
+# tapaba a una recién pagada. El rescate va después de las consultas por id, con su cupo, de la más nueva a la más
+# vieja, y cada recarga se vuelve a buscar más espaciado con la edad (`_espera_busqueda`).
+BUSQUEDAS_POR_VUELTA = 30
+CLAVE_BUSQUEDA = "wompi:busqueda:{recarga}"   # kv: cuándo se buscó por última vez (único escritor: este módulo)
+MAX_OTRAS_APROBADAS = 3                        # otras aprobadas de la misma referencia que se leen para avisar
 _reloj = time.monotonic
 _SIN_FIRMA = {"desde": None, "n": 0, "avisado": False}          # Bold
 _SIN_FIRMA_WOMPI = {"desde": None, "n": 0, "avisado": False}    # Wompi: cupo aparte
@@ -214,7 +226,8 @@ def _crear_wompi(cliente, usd, usuario, correo, base):
     try:
         # Un correo que Wompi no aceptaría se omite: el checkout lo pide (no frena la recarga).
         url = wompi.url_checkout(referencia, centavos, f"{base}/cliente/{quote(cliente, safe='')}/saldo/recarga/{rid}",
-                                 correo=wompi.correo_valido(correo))
+                                 correo=wompi.correo_valido(correo),
+                                 vence=datetime.now(timezone.utc) + timedelta(hours=HORAS_CHECKOUT))
     except Exception as e:
         motivo = cola.sin_token(str(e)) if isinstance(e, wompi.ErrorWompi) else type(e).__name__
         with db.conectar() as con:
@@ -228,6 +241,14 @@ def _crear_wompi(cliente, usd, usuario, correo, base):
 
 def _dict(valor):
     return valor if isinstance(valor, dict) else {}
+
+
+def _claves(valor):
+    """Los nombres de campo de un objeto de un evento, para el registro: solo los que tienen forma de nombre
+    (un salto de línea o una clave inventada larga no entran) y a lo más 15."""
+    nombres = sorted(k for k in _dict(valor) if isinstance(k, str) and k.isascii() and k.isidentifier()
+                     and len(k) <= 30)
+    return ",".join(nombres[:15]) or "-"
 
 
 def _entero(valor):
@@ -642,6 +663,11 @@ def procesar_evento_wompi(cuerpo, checksum=None):
     ref = (tx.get("reference") or "")[:60] or None
     if not wompi.evento_valido(ev, checksum):
         if _cupo_sin_firma(PROVEEDOR_WOMPI):
+            # La forma, nunca un valor: el cuerpo de un evento sin firma no se guarda, y sin esto no se supo por
+            # qué se rechazó la primera recarga real (2026-10-12: `timestamp` venía arriba y lo buscábamos en
+            # `signature`). Dentro del cupo, para no llenar el registro; el tipo con %r, para no partir la línea.
+            log.warning("evento de Wompi con firma inválida (%r): arriba %s, signature %s, cabecera %s", tipo,
+                        _claves(ev), _claves(ev.get("signature")), "sí" if checksum else "no")
             _guardar_sin_firma(None, tipo, ref, proveedor=PROVEEDOR_WOMPI)
         return 401, "firma_invalida"
     evento_id = _evento_id_wompi(cuerpo)
@@ -786,6 +812,86 @@ def _verificar_wompi(fila, tiempo):
         return (_fila(con, fila["id"]) or {}).get("estado"), None
 
 
+def _rescatar_wompi(fila, tiempo):
+    """PND-296: la periódica busca en Wompi, por su referencia, una recarga pendiente cuyo evento no llegó. Nunca
+    cree la búsqueda: relee la elegida por id (la búsqueda no trae el comercio) y la aplica con `_aplicar_wompi` bajo
+    el candado, el mismo camino que «Verificar» (referencia, centavos, moneda y comercio tienen que cuadrar; acredita
+    una sola vez, y un evento tardío queda `duplicada`). Entre varias, la aprobada primero. (estado, error)."""
+    espera = wompi.TIEMPO if tiempo is None else tiempo
+    try:
+        candidatas = wompi.transacciones_de_referencia(fila["referencia"], tiempo=espera)
+        utiles = sorted((t for t in candidatas if t.get("status") in _ORDEN_RESCATE),
+                        key=lambda t: _ORDEN_RESCATE[t["status"]])
+        if not utiles:
+            return fila["estado"], None
+        tx = wompi.transaccion(utiles[0]["id"], tiempo=espera)
+    except wompi.ErrorWompi as e:
+        log.warning("no se pudo buscar la recarga %s en Wompi: %s", fila["id"], cola.sin_token(str(e)))
+        return fila["estado"], e
+    resultado, actual = _aplicar_releida(fila, tx)
+    if resultado == "acreditada":
+        _avisar_rescatada(actual, tx)
+    # Otra aprobada de la misma referencia (dos pestañas pagando): se aplica también, para que `_aplicar_wompi`
+    # diga `otro_pago` y el admin se entere; con los eventos fallando, nadie más lo diría (revisión de plata).
+    otras = [t for t in utiles[1:] if t.get("status") == "APPROVED" and t.get("id") != tx.get("id")]
+    for otra in otras[:MAX_OTRAS_APROBADAS]:
+        try:
+            _aplicar_releida(fila, wompi.transaccion(otra["id"], tiempo=espera))
+        except wompi.ErrorWompi as e:
+            log.warning("no se pudo releer otra aprobada de la recarga %s: %s", fila["id"], cola.sin_token(str(e)))
+    with db.conectar() as con:
+        return (_fila(con, fila["id"]) or {}).get("estado"), None
+
+
+def buscar_en_wompi(recarga_id):
+    """El admin («Buscar en Wompi», /admin/cobros): lo mismo que el rescate para UNA recarga de Wompi pendiente,
+    rechazada o vencida, ya. Es la salida segura cuando una recarga pagada no se acreditó (auditoría de seguridad
+    2026-10-12): una recarga manual crearía otra fila y un evento tardío acreditaría la original también.
+    Devuelve (resultado, error): `acreditada`, `rechazada`, `sin_aprobada` (Wompi no tiene nada aprobado con esa
+    referencia), `error` (Wompi no respondió), `no_se_puede` (no es de Wompi o ya no está por acreditar); (None,
+    None) si no existe."""
+    with db.conectar() as con:
+        fila = _fila(con, int(recarga_id))
+    if fila is None:
+        return None, None
+    if fila["medio"] != "wompi" or fila["estado"] not in ("pendiente", "rechazada", "expirada"):
+        return "no_se_puede", None
+    antes = fila["estado"]
+    estado, error = _rescatar_wompi(fila, wompi.TIEMPO_INTERACTIVO)
+    _marcar_busqueda(fila["id"])
+    if error is not None:
+        return "error", error
+    if estado == "aprobada":
+        return "acreditada", None
+    return ("rechazada" if estado == "rechazada" and antes != "rechazada" else "sin_aprobada"), None
+
+
+def _aplicar_releida(fila, tx):
+    """Aplica una transacción releída por id a su recarga, con el candado antes de leer, y avisa lo que toque."""
+    with db.conectar() as con:
+        libro._candado(con)   # antes de leer: el evento tardío, la vuelta y la periódica acreditan una sola vez
+        actual = _fila(con, fila["id"])
+        resultado = _aplicar_wompi(con, actual, tx)
+    if resultado == "no_cuadra":
+        _avisar_no_cuadra(fila["id"], fila["cliente"], fila["referencia"], tx, "busqueda")
+    else:
+        _avisar_wompi(resultado, actual, tx)
+    return resultado, actual
+
+
+def _avisar_rescatada(fila, tx):
+    """Al admin: si una recarga se acreditó buscándola, los eventos de Wompi están fallando (la URL o el secreto)."""
+    cliente, referencia, tx_id = fila["cliente"], fila["referencia"], str(tx.get("id") or "—")[:64]
+    _en_segundo_plano(lambda: avisos.admin(
+        "wompi_rescatada",
+        lambda: gettext("Una recarga de %(cliente)s se acreditó sin su evento de Wompi", cliente=cliente),
+        lambda: gettext("La recarga «%(ref)s» de %(cliente)s estaba pagada en Wompi (transacción %(tx)s), pero su "
+                        "evento no llegó o no se aceptó. La encontramos buscando su referencia y la acreditamos. "
+                        "Revisa en el panel de Wompi la URL de eventos y que el secreto de eventos sea el del "
+                        "servidor.", ref=referencia, cliente=cliente, tx=tx_id),
+        cliente=cliente))
+
+
 def _verificar(recarga_id, tiempo=None):
     """(estado, error): error = el ErrorBold/ErrorWompi si la pasarela no
     respondió, o None. `tiempo` None = la espera larga de cada pasarela."""
@@ -922,9 +1028,10 @@ def avisar_vistos_sin_evento():
             lambda cliente=cliente, referencia=referencia, tx_id=tx_id: gettext(
                 "La página de vuelta de la recarga «%(ref)s» de %(cliente)s consultó la transacción %(tx)s (el id "
                 "lo trajo el navegador) y Wompi la dio por aprobada, pero su evento firmado no llegó en 30 minutos "
-                "y no se acreditó. Esto NO confirma el pago: antes de acreditar a mano, búscala en el panel de "
-                "Wompi de Creatv y confirma que es de nuestro comercio, con esa referencia y ese monto. Si está, "
-                "revisa también la URL de eventos.", ref=referencia, cliente=cliente, tx=tx_id),
+                "y no se acreditó. Esto NO confirma el pago. En /admin/cobros, «Recargas de Wompi sin acreditar», "
+                "usa «Buscar en Wompi»: la acredita una sola vez si Wompi la tiene aprobada para nuestro comercio. "
+                "Nunca una recarga manual: se sumaría otra vez cuando llegue el evento. Revisa también la URL de "
+                "eventos.", ref=referencia, cliente=cliente, tx=tx_id),
             cliente=cliente)
         n += 1
     return n
@@ -933,7 +1040,9 @@ def avisar_vistos_sin_evento():
 def verificar_pendientes():
     """La tarea periódica: consulta cada recarga pendiente (de Bold, o de Wompi
     con transacción conocida) y vence las de más de HORAS_VIGENTE que la
-    pasarela no dio por pagadas. Una vieja se consulta
+    pasarela no dio por pagadas; después, la pasada del rescate
+    (`rescatar_sin_evento`, PND-296) busca por su referencia las de Wompi sin
+    transacción. Una vieja se consulta
     una última vez antes de vencerla (el pago pudo entrar sin que llegara el
     webhook) y, si Bold no responde, se deja para la próxima vuelta.
 
@@ -956,10 +1065,9 @@ def verificar_pendientes():
                 r.c.estado == "pendiente",
                 sa.and_(r.c.estado.in_(("rechazada", "expirada")), r.c.link_id.is_not(None),
                         r.c.creada_en >= limite))),
-            sa.and_(r.c.medio == "wompi", sa.or_(
+            sa.and_(r.c.medio == "wompi", r.c.pasarela_ref.is_not(None), sa.or_(
                 r.c.estado == "pendiente",
-                sa.and_(r.c.estado.in_(("rechazada", "expirada")), r.c.pasarela_ref.is_not(None),
-                        r.c.creada_en >= limite)))))
+                sa.and_(r.c.estado.in_(("rechazada", "expirada")), r.c.creada_en >= limite)))))
             .order_by(r.c.id)).all()
     revisadas = 0
     inicio = _reloj()
@@ -981,10 +1089,95 @@ def verificar_pendientes():
                 con.execute(r.update().where(r.c.id == fila.id, r.c.estado == "pendiente")
                             .values(estado="expirada", actualizada_en=db.ahora()))
     try:
+        revisadas += rescatar_sin_evento(tope_s=max(15, TOPE_VUELTA_S - (_reloj() - inicio)))
+    except Exception:  # noqa: BLE001 — el rescate no frena lo demás
+        log.exception("no se pudo correr el rescate de recargas de Wompi sin evento")
+    try:
         avisar_vistos_sin_evento()
     except Exception:  # noqa: BLE001 — un aviso no frena la verificación
         log.exception("no se pudieron revisar las recargas vistas aprobadas sin evento")
     return revisadas
+
+
+def _espera_busqueda(edad_min):
+    """Minutos entre dos búsquedas de una misma recarga según su edad: la primera hora cada 10 min, hasta las 6 h cada
+    hora y después cada 4 h (unas 15 búsquedas en sus 26 h, más la última antes de vencerla)."""
+    if edad_min < 60:
+        return MINUTOS_RESCATE
+    if edad_min < 6 * 60:
+        return 60
+    return 240
+
+
+def _marcar_busqueda(recarga_id):
+    clave, ahora = CLAVE_BUSQUEDA.format(recarga=int(recarga_id)), db.ahora()
+    try:
+        with db.conectar() as con:
+            if not con.execute(db.kv.update().where(db.kv.c.clave == clave)
+                               .values(valor=ahora, actualizado_en=ahora)).rowcount:
+                con.execute(db.kv.insert().values(clave=clave, valor=ahora, actualizado_en=ahora))
+    except sa.exc.IntegrityError:
+        pass
+    except Exception:  # noqa: BLE001 — sin la marca solo se busca antes de tiempo
+        log.exception("no se pudo anotar la búsqueda de la recarga %s", recarga_id)
+
+
+def rescatar_sin_evento(tope_s=TOPE_VUELTA_S):
+    """PND-296, la pasada del rescate (después de las consultas por id): busca en Wompi por su referencia las
+    recargas de Wompi `pendiente` sin transacción de más de MINUTOS_RESCATE y las `rechazada` de menos de
+    HORAS_VIGENTE (la persona pudo reintentar en el mismo checkout y pagar sin que llegara el evento). Primero las
+    que toca vencer (una última búsqueda: sin nada y sin error, se vencen), después de la más nueva a la más vieja,
+    cada una espaciada por `_espera_busqueda`; a lo más BUSQUEDAS_POR_VUELTA y `tope_s` segundos; para a la
+    primera caída, 429 o llave rechazada (401/403). Devuelve cuántas buscó."""
+    r, kv = db.recarga, db.kv
+    ahora = datetime.now()
+    limite = _limite_vigente()
+    minimo = (ahora - timedelta(minutes=MINUTOS_RESCATE)).isoformat(timespec="seconds")
+    with db.conectar() as con:
+        filas = con.execute(sa.select(r.c.id, r.c.creada_en, r.c.estado).where(r.c.medio == "wompi", sa.or_(
+            sa.and_(r.c.estado == "pendiente", r.c.pasarela_ref.is_(None), r.c.creada_en <= minimo),
+            sa.and_(r.c.estado == "rechazada", r.c.creada_en >= limite)))).all()
+        marcas = dict(con.execute(sa.select(kv.c.clave, kv.c.valor).where(kv.c.clave.like("wompi:busqueda:%"))).all())
+        vivas = {CLAVE_BUSQUEDA.format(recarga=f.id) for f in filas}
+        sobran = [c for c in marcas if c not in vivas]
+        if sobran:
+            con.execute(kv.delete().where(kv.c.clave.in_(sobran)))
+    a_vencer = {f.id for f in filas if f.estado == "pendiente" and str(f.creada_en) < limite}
+    orden = ([f for f in filas if f.id in a_vencer]
+             + sorted((f for f in filas if f.id not in a_vencer), key=lambda f: str(f.creada_en), reverse=True))
+    hechas, inicio = 0, _reloj()
+    for f in orden:
+        if hechas >= BUSQUEDAS_POR_VUELTA or _reloj() - inicio > tope_s:
+            log.info("rescate de recargas: cupo de la vuelta; quedan para la próxima")
+            break
+        vencer = f.id in a_vencer
+        ultima = marcas.get(CLAVE_BUSQUEDA.format(recarga=f.id))
+        if not vencer and ultima:
+            try:
+                edad = (ahora - datetime.fromisoformat(str(f.creada_en))).total_seconds() / 60
+            except ValueError:
+                edad = 0
+            if str(ultima) > (ahora - timedelta(minutes=_espera_busqueda(edad))).isoformat(timespec="seconds"):
+                continue
+        with db.conectar() as con:
+            fila = _fila(con, f.id)
+        if fila is None:
+            continue
+        try:
+            estado, error = _rescatar_wompi(fila, None)
+        except Exception:  # noqa: BLE001 — una recarga rara no frena las demás
+            log.exception("no se pudo rescatar la recarga %s", f.id)
+            continue
+        hechas += 1
+        _marcar_busqueda(f.id)
+        if error is not None and (error.caida or getattr(error, "codigo", None) in (401, 403, 429)):
+            log.warning("rescate de recargas: Wompi no responde o rechaza la llave; la pasada para aquí")
+            break
+        if vencer and estado == "pendiente" and error is None:
+            with db.conectar() as con:
+                con.execute(r.update().where(r.c.id == f.id, r.c.estado == "pendiente", r.c.pasarela_ref.is_(None))
+                            .values(estado="expirada", actualizada_en=db.ahora()))
+    return hechas
 
 
 # ---------------------------------------------------------- manual y ajuste ---

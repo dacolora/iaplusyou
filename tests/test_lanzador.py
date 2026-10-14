@@ -6,11 +6,66 @@ from tests.test_experimentos_db import PAISES, _pieza
 
 
 class MetaFalsa:
-    """Sustituye los módulos meta_ads.* usados por lanzador con contadores."""
-    def __init__(self, fallar_en=None):
+    """Sustituye los módulos meta_ads.* usados por lanzador con contadores. PND-322: también contesta lo que lanzador
+    lee de vuelta en Meta: la cuenta (`cuenta`: moneda y mínimos, en la unidad de Meta), el diario guardado de cada
+    conjunto, el tope de cada campaña y el gasto de cada campaña (`gastos[campaign_id] = (total, hoy)`)."""
+    def __init__(self, fallar_en=None, moneda="COP"):
         self.llamadas = []
         self.fallar_en = fallar_en
         self.n = 0
+        # Mínimo diario de Meta para la cuenta: el real de colorado_forja en COP (3 322); en otra moneda, ≈ el nuestro.
+        from presupuesto_experimentos import PRESUPUESTO_MINIMO_DIARIO
+        import monedas_meta
+        minimo = 3322 if moneda == "COP" else int(monedas_meta.a_unidad_meta(PRESUPUESTO_MINIMO_DIARIO.get(moneda, 1), moneda) * 0.8)
+        self.cuenta = {"currency": moneda, "min_daily_budget": minimo,
+                       "min_campaign_group_spend_cap": "200000" if moneda == "COP" else str(minimo * 50)}
+        self.presupuestos = {}
+        self.topes = {}
+        self.gastos = {}
+        self.estados_meta = {}   # id de campaña -> effective_status que contesta Meta
+        self.gastos_conjuntos = {}   # id de conjunto -> gasto de hoy (insights level=adset)
+        self.posts = []          # (edge, payload) de cada POST directo por meta_auth (p. ej. end_time)
+
+    def _adset(self, nombre, cid, obj, targeting, centavos, dias, dry_run=False, promoted_object=None):
+        r = self._id("adset", nombre=nombre, objetivo=obj, targeting=targeting, centavos=centavos, dias=dias,
+                     promoted_object=promoted_object)
+        self.presupuestos[r["id"]] = int(centavos)
+        return r
+
+    def _presupuesto(self, oid, c, dry_run=False):
+        r = self._id("presupuesto", oid=oid, centavos=c)
+        self.presupuestos[oid] = int(c)
+        return r
+
+    def _campaign(self, nombre, objetivo, dry_run=False, spend_cap_centavos=None):
+        r = self._id("campaign", nombre=nombre, spend_cap=spend_cap_centavos)
+        self.topes[r["id"]] = spend_cap_centavos
+        return r
+
+    def _directo(self, cliente, metodo, edge, params=None, payload=None):
+        """Lo que `lanzador._meta_directo` le pide a Meta con la llave del proyecto, sin el candado."""
+        return self._llamar(metodo, edge, payload, params)
+
+    def _llamar(self, metodo, edge, payload=None, params=None, dry_run=False):
+        params = params or {}
+        if metodo != "GET":
+            self.posts.append((edge, dict(payload or {})))
+            return {"success": True}
+        if edge.startswith("act_"):
+            return dict(self.cuenta)
+        if edge.endswith("/insights") and params.get("level") == "adset":
+            return {"data": [{"adset_id": k, "spend": str(v)} for k, v in self.gastos_conjuntos.items()]}
+        if edge.endswith("/insights"):
+            total, hoy = self.gastos.get(edge.split("/")[0], (0.0, 0.0))
+            return {"data": [{"spend": str(total if params.get("date_preset") == "maximum" else hoy)}]}
+        if params.get("fields") == "daily_budget":
+            return {"daily_budget": str(self.presupuestos.get(edge, ""))}
+        if params.get("fields") == "effective_status":
+            return {"effective_status": self.estados_meta.get(edge)}
+        if params.get("fields") == "spend_cap":
+            tope = self.topes.get(edge)
+            return {"spend_cap": str(tope) if tope else "0"}
+        return {"success": True}
 
     def _id(self, tipo, **kw):
         self.llamadas.append((tipo, kw))
@@ -20,13 +75,9 @@ class MetaFalsa:
         return {"id": f"{tipo}_{self.n}"}
 
     def modulos(self):
-        campaign = types.SimpleNamespace(crear_campaign=lambda nombre, objetivo, dry_run=False, spend_cap_centavos=None:
-                                         self._id("campaign", nombre=nombre, spend_cap=spend_cap_centavos),
+        campaign = types.SimpleNamespace(crear_campaign=self._campaign,
                                          actualizar_estado=lambda oid, status, dry_run=False: self._id("estado", oid=oid, status=status))
-        adset = types.SimpleNamespace(crear_adset=lambda nombre, cid, obj, targeting, centavos, dias, dry_run=False, promoted_object=None:
-                                      self._id("adset", nombre=nombre, objetivo=obj, targeting=targeting, centavos=centavos, dias=dias,
-                                               promoted_object=promoted_object),
-                                      actualizar_presupuesto=lambda oid, c, dry_run=False: self._id("presupuesto", oid=oid, centavos=c),
+        adset = types.SimpleNamespace(crear_adset=self._adset, actualizar_presupuesto=self._presupuesto,
                                       actualizar_estado=lambda oid, status, dry_run=False: self._id("estado", oid=oid, status=status))
         creative = types.SimpleNamespace(subir_video=lambda url, titulo="", dry_run=False, esperar_seg=180: "vid_1",
                                          crear_creative_video=lambda nombre, vid, mini, msg, link, cta_type="LEARN_MORE", instagram_user_id=None, dry_run=False, url_tags=None:
@@ -39,8 +90,7 @@ class MetaFalsa:
                                          {"impresiones": 100, "reach": 90, "alcance": 90, "clics_enlace": 4, "ctr": 4.0, "cpc": 0.5,
                                           "gasto_usd": 2.0, "thruplay": 10, "thruplay_rate": 0.1, "compras": 0, "ingresos": 0.0,
                                           "roas": 0.0, "estado_meta": "ACTIVE", "estado_meta_texto": "Activo", "motivo_rechazo": None})
-        auth = types.SimpleNamespace(configurar=lambda *a, **k: None, limpiar=lambda: None,
-                                     llamar=lambda *a, **kw: {"success": True})
+        auth = types.SimpleNamespace(configurar=lambda *a, **k: None, limpiar=lambda: None, llamar=self._llamar)
         return campaign, adset, creative, ad, insights, auth
 
 
@@ -56,6 +106,7 @@ def entorno(base_temporal, monkeypatch):
     monkeypatch.setattr(lanzador, "meta_ad", ad)
     monkeypatch.setattr(lanzador, "meta_insights", insights)
     monkeypatch.setattr(lanzador, "meta_auth", auth)
+    monkeypatch.setattr(lanzador, "_meta_directo", meta._directo)
     monkeypatch.setattr(lanzador.meta_conexion, "credenciales_ads", lambda c: {"token": "t", "ad_account_id": "1", "page_id": "2", "ig_user_id": None})
     monkeypatch.setattr(lanzador.meta_conexion, "cargar", lambda c: {"moneda": "COP"})
     monkeypatch.setattr(lanzador, "_miniatura_para_ad", lambda cliente, ad_id, url: "https://r2/mini.jpg")
@@ -88,6 +139,7 @@ def _entorno_app(base_temporal, monkeypatch, app):
     monkeypatch.setattr(lanzador, "meta_ad", ad)
     monkeypatch.setattr(lanzador, "meta_insights", insights)
     monkeypatch.setattr(lanzador, "meta_auth", auth)
+    monkeypatch.setattr(lanzador, "_meta_directo", meta._directo)
     monkeypatch.setattr(lanzador.meta_conexion, "credenciales_ads", lambda c: {"token": "t", "ad_account_id": "1", "page_id": "2", "ig_user_id": None})
     monkeypatch.setattr(lanzador.meta_conexion, "cargar", lambda c: {"moneda": "COP"})
     monkeypatch.setattr(lanzador.meta_conexion, "cargar_app_anunciada", lambda c: "12345")
@@ -168,6 +220,13 @@ def test_app_el_anuncio_lleva_la_url_de_tienda_sin_utm(entorno_app):
     assert {(pz.get("extra") or {}).get("meta_video_id") for pz in ex["piezas"]} == {"vid_1"}
 
 
+def _cuenta_en(meta, moneda):
+    """PND-322: la cuenta falsa factura en la moneda del experimento, con un mínimo diario de Meta realista (≈ US$ 1
+    en su unidad: COP 3 322 visto en colorado_forja; CLP ≈ 900; USD 100 centavos)."""
+    meta.cuenta = {"currency": moneda, "min_daily_budget": {"COP": 3322, "CLP": 900, "USD": 100}[moneda],
+                   "min_campaign_group_spend_cap": {"COP": "200000", "CLP": "50000", "USD": "5000"}[moneda]}
+
+
 @pytest.mark.parametrize("moneda,presupuesto", [("CLP", 1003.0), ("USD", 10.05), ("COP", 20001.0)])
 def test_app_reparto_nunca_sobrepasa_el_presupuesto_del_pais(entorno_app, moneda, presupuesto):
     e = entorno_app
@@ -175,6 +234,7 @@ def test_app_reparto_nunca_sobrepasa_el_presupuesto_del_pais(entorno_app, moneda
     import db
     with db.conectar() as con:  # la moneda no se cambia por la API: se fija acá, como al crear
         con.execute(db.experimento.update().where(db.experimento.c.id == e["eid"]).values(moneda=moneda, paises=paises))
+    _cuenta_en(e["meta"], moneda)
     e["lanzador"].lanzar("acme", e["eid"])
     adsets = [kw for tipo, kw in e["meta"].llamadas if tipo == "adset"]
     total = e["lanzador"].centavos(presupuesto, moneda)
@@ -359,6 +419,7 @@ def test_app_cambiar_presupuesto_nunca_sobrepasa_el_del_pais(entorno_app, moneda
     import db
     with db.conectar() as con:  # la moneda no se cambia por la API: se fija acá, como al crear
         con.execute(db.experimento.update().where(db.experimento.c.id == e["eid"]).values(moneda=moneda))
+    _cuenta_en(e["meta"], moneda)
     e["meta"].llamadas.clear()
     lz.cambiar_presupuesto_pais("acme", e["eid"], "CO", presupuesto)
     partes = [kw["centavos"] for t, kw in e["meta"].llamadas if t == "presupuesto"]
@@ -506,7 +567,9 @@ def test_app_activar_pieza_android_reactiva_solo_su_conjunto(entorno_app):
 
 def test_centavos_y_url(base_temporal):
     import lanzador
-    assert lanzador.centavos(20000, "COP") == 2000000 and lanzador.centavos(1000, "CLP") == 1000
+    # PND-322: Meta recibe el COP sin decimales (tabla oficial): 20 000 COP son 20 000, no 2 000 000.
+    assert lanzador.centavos(20000, "COP") == 20000 and lanzador.centavos(1000, "CLP") == 1000
+    assert lanzador.centavos(14.28, "USD") == 1428 and lanzador.centavos(150, "SEK") == 15000
     assert lanzador.url_destino("https://t.co/p", 7) == "https://t.co/p?utm_source=creatv&utm_medium=meta&utm_content=7"
     assert lanzador.url_destino("https://t.co/p?x=1", 7).startswith("https://t.co/p?x=1&utm_source=creatv")
 
@@ -517,10 +580,10 @@ def test_lanzar_crea_campana_conjuntos_y_anuncios(entorno):
     lz.lanzar("acme", eid, on_etapa=etapas.append)
     tipos = [t for t, _ in meta.llamadas]
     assert tipos.count("campaign") == 1 and tipos.count("adset") == 2 and tipos.count("ad") == 3
-    assert meta.llamadas[0][1]["spend_cap"] == 50000000
+    assert meta.llamadas[0][1]["spend_cap"] == 500000   # 500 000 COP, en pesos enteros (PND-322)
     adsets = [kw for t, kw in meta.llamadas if t == "adset"]
-    assert adsets[0]["targeting"]["geo_locations"]["countries"] == ["CO"] and adsets[0]["centavos"] == 2000000
-    assert adsets[1]["targeting"]["geo_locations"]["countries"] == ["MX"] and adsets[1]["centavos"] == 15000
+    assert adsets[0]["targeting"]["geo_locations"]["countries"] == ["CO"] and adsets[0]["centavos"] == 20000
+    assert adsets[1]["targeting"]["geo_locations"]["countries"] == ["MX"] and adsets[1]["centavos"] == 150
     creativos = [kw for t, kw in meta.llamadas if t == "creative"]
     e = ex.obtener("acme", eid)
     # Bloque 5: el link de cada anuncio lleva el id de la experimento_pieza (uno por país), no el de la pieza
@@ -595,7 +658,7 @@ def test_cambiar_estado_y_presupuesto(entorno):
     assert e["estado"] == "corriendo" and [p["estado"] for p in e["paises"]] == ["activo", "pausado"]
     assert [p["estado"] for p in e["piezas"]] == ["activo", "activo", "pausado"]
     lz.cambiar_presupuesto_pais("acme", eid, "MX", 300)
-    assert meta.llamadas[-1] == ("presupuesto", {"oid": "adset_3", "centavos": 30000})
+    assert meta.llamadas[-1] == ("presupuesto", {"oid": "adset_3", "centavos": 300})
     e = ex.obtener("acme", eid)
     assert e["paises"][1]["presupuesto_dia"] == 300.0 and e["piezas"][2]["presupuesto_dia_actual"] == 300.0
     lz.cerrar("acme", eid)
@@ -1548,7 +1611,9 @@ def test_pnd113_fin_desde_primera_activacion_sin_extender_al_reanudar(entorno, m
     lz.lanzar('acme', eid)
     ahora = 1800000000
     monkeypatch.setattr(time, 'time', lambda: ahora)
-    def llamar(metodo, oid, payload):
+    def llamar(metodo, oid, payload=None, params=None, dry_run=False):
+        if metodo == 'GET':   # PND-322: lecturas de vuelta
+            return meta._llamar(metodo, oid, payload, params)
         return meta._id('fin', metodo=metodo, oid=oid, payload=payload)
     monkeypatch.setattr(lz.meta_auth, 'llamar', llamar, raising=False)
     def activar():
@@ -1584,7 +1649,9 @@ def test_pnd113_apps_fin_en_cada_conjunto_de_tienda_sin_extender_al_reanudar(ent
     ahora = 1800000000
     monkeypatch.setattr(time, 'time', lambda: ahora)
 
-    def llamar(metodo, oid, payload):
+    def llamar(metodo, oid, payload=None, params=None, dry_run=False):
+        if metodo == 'GET':   # PND-322: lecturas de vuelta
+            return meta._llamar(metodo, oid, payload, params)
         return meta._id('fin', metodo=metodo, oid=oid, payload=payload)
     monkeypatch.setattr(lz.meta_auth, 'llamar', llamar, raising=False)
 
@@ -1612,7 +1679,9 @@ def test_pnd113_fallo_fecha_no_activa_y_reintento_conserva_fin(entorno, monkeypa
     lz.lanzar('acme', eid)
     meta.llamadas.clear()
     vistos = []
-    def fallar(metodo, oid, payload):
+    def fallar(metodo, oid, payload=None, params=None, dry_run=False):
+        if metodo == 'GET':   # PND-322: lecturas de vuelta
+            return meta._llamar(metodo, oid, payload, params)
         vistos.append(payload)
         raise RuntimeError('fecha rechazada')
     monkeypatch.setattr(lz.meta_auth, 'llamar', fallar, raising=False)
@@ -1635,7 +1704,9 @@ def test_pnd113_experimento_que_ya_corre_sin_activado_en_no_mueve_el_fin(entorno
     lz.lanzar('acme', eid)
     ex.actualizar('acme', eid, estado=estado)
     assert 'activado_en' not in (ex.obtener('acme', eid).get('extra') or {})
-    def llamar(metodo, oid, payload):
+    def llamar(metodo, oid, payload=None, params=None, dry_run=False):
+        if metodo == 'GET':   # PND-322: lecturas de vuelta
+            return meta._llamar(metodo, oid, payload, params)
         return meta._id('fin', metodo=metodo, oid=oid, payload=payload)
     monkeypatch.setattr(lz.meta_auth, 'llamar', llamar, raising=False)
     meta.llamadas.clear()
@@ -1656,7 +1727,9 @@ def test_pnd113_reintento_tras_pasar_la_reserva_reenvia_un_fin_futuro(entorno, m
     lz.lanzar('acme', eid)
     ahora = 1800000000
     monkeypatch.setattr(time, 'time', lambda: ahora)
-    def fallar(metodo, oid, payload):
+    def fallar(metodo, oid, payload=None, params=None, dry_run=False):
+        if metodo == 'GET':   # PND-322: lecturas de vuelta
+            return meta._llamar(metodo, oid, payload, params)
         raise RuntimeError('fecha rechazada')
     monkeypatch.setattr(lz.meta_auth, 'llamar', fallar, raising=False)
     with pytest.raises(RuntimeError, match='fecha rechazada'):
@@ -1664,7 +1737,9 @@ def test_pnd113_reintento_tras_pasar_la_reserva_reenvia_un_fin_futuro(entorno, m
     assert ex.obtener('acme', eid)['extra']['fin_primera_activacion'] == ahora + 7 * 86400
 
     ahora += 8 * 86400  # el reintento llega después del plazo reservado
-    def llamar(metodo, oid, payload):
+    def llamar(metodo, oid, payload=None, params=None, dry_run=False):
+        if metodo == 'GET':   # PND-322: lecturas de vuelta
+            return meta._llamar(metodo, oid, payload, params)
         return meta._id('fin', metodo=metodo, oid=oid, payload=payload)
     monkeypatch.setattr(lz.meta_auth, 'llamar', llamar, raising=False)
     meta.llamadas.clear()
@@ -1681,7 +1756,9 @@ def test_pnd113_reserva_a_menos_de_una_hora_tambien_se_recalcula(entorno, monkey
     ahora = 1800000000
     monkeypatch.setattr(time, 'time', lambda: ahora)
     ex.actualizar_extra('acme', eid, lambda e: {**e, 'fin_primera_activacion': ahora + 1800})
-    def llamar(metodo, oid, payload):
+    def llamar(metodo, oid, payload=None, params=None, dry_run=False):
+        if metodo == 'GET':   # PND-322: lecturas de vuelta
+            return meta._llamar(metodo, oid, payload, params)
         return meta._id('fin', metodo=metodo, oid=oid, payload=payload)
     monkeypatch.setattr(lz.meta_auth, 'llamar', llamar, raising=False)
     meta.llamadas.clear()

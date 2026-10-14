@@ -167,7 +167,13 @@ NOMBRES_TIPO = {
     "ideas": N_("Ideas de sprint (IA)"), "pedidos": N_("Pedidos al cliente (IA)"),
     "revision": N_("Revisión de la doctrina (IA)"),
     "evaluacion": N_("Evaluación de anuncios (IA)"),
-    "transcripcion": N_("Subtítulos (transcripción)"), "otro": N_("Otros"),
+    "transcripcion": N_("Subtítulos (transcripción)"),
+    # Sin nombre hasta 2026-10-13: el cliente de un proyecto que cobra no veía estos gastos en su historial;
+    # desde que ve lo usado antes de cobrar (libro.detallar_uso_previo) aparecían con su código.
+    "clasificacion": N_("Clasificación de referentes (IA)"), "adaptar_referente": N_("Recrear referentes (IA)"),
+    "sugerir_ia": N_("Sugerencias de referentes (IA)"), "recoleccion": N_("Recolección de comentarios"),
+    "investigacion": N_("Investigación de nicho (IA)"), "avatares": N_("Avatares (IA)"),
+    "otro": N_("Otros"),
 }
 
 SIN_PRECIO = N_("precio no disponible")
@@ -321,10 +327,11 @@ def _estimar_imagen(modelo=None, n_referencias=1, **_):
     return r.get("usd"), f"{modelo} · {max(1, int(n_referencias or 1))} referencia(s)"
 
 
-def _estimar_swap(proveedor=None, formato="foto", mejorar_calidad=False, duracion=5, n_referencias=1, **_):
+def _estimar_swap(proveedor=None, formato="foto", mejorar_calidad=False, duracion=5, n_referencias=1, fps=None, **_):
     """Misma tabla que usa `tareas/swap.py` al cobrar: cada proveedor tiene
     su `estimate_*`; el que no esté aquí no tiene tarifa (None). `formato`
-    es "foto" | "video" (el `tipo` del swap)."""
+    es "foto" | "video" (el `tipo` del swap). En video, `duracion` y `fps` son
+    los del video que se sube (`providers.swap_video_precio`, PND-312)."""
     from providers import (comparador_modelos, kling_o1_client, nano_banana_client, wavespeed_client,
                            wavespeed_imagen, wavespeed_video_edit)
     if not proveedor:
@@ -332,16 +339,16 @@ def _estimar_swap(proveedor=None, formato="foto", mejorar_calidad=False, duracio
     duracion = float(duracion or 5)
     if formato == "video":
         if proveedor == "kling_o1":
-            usd = kling_o1_client.estimate_video(duracion)["usd"]
+            usd = kling_o1_client.estimate_video(duracion, fps)["usd"]
         elif proveedor == "wan27_edit":
-            usd = wavespeed_client.estimate_video(duracion)["usd"]
+            usd = wavespeed_client.estimate_video(duracion, fps)["usd"]
         elif proveedor in wavespeed_video_edit.MODELOS:
-            usd = wavespeed_video_edit.estimate_video(proveedor, duracion)["usd"]
+            usd = wavespeed_video_edit.estimate_video(proveedor, duracion, fps)["usd"]
         elif proveedor in comparador_modelos.MODELOS_VIDEO:
-            usd = comparador_modelos.estimate_video(proveedor, duracion)["usd"]
+            usd = comparador_modelos.estimate_video(proveedor, duracion, fps)["usd"]
         else:
             return None, f"{proveedor}: sin tarifa"
-        return usd, f"{proveedor} · video {int(duracion)} s"
+        return usd, f"{proveedor} · video {duracion:g} s"
     if proveedor == "nano_banana":
         usd = nano_banana_client.estimate_image()["usd"]
     elif proveedor == "nano_banana_pro_ultra":
@@ -678,9 +685,12 @@ def _despues_del_cobro(cliente, resultado, gasto_id, usd, tipo, referencia):
             avisos.pieza_no_cobrada(cliente, _no_cobrado_milesimas(gasto_id, resultado, usd, cliente), tipo)
         elif resultado in ("cobro", "recalculado_mayor"):
             c = libro.cuenta(cliente)
-            s = libro.saldo(cliente)
-            if s < c["umbral"]:
-                avisos.saldo_bajo(cliente, s)
+            if c["pospago"]:   # pospago: no hay «saldo bajo»; al admin, cada US$ 200 de deuda nueva
+                avisos.deuda_pospago(cliente, libro.deuda(cliente))
+            else:
+                s = libro.saldo(cliente)
+                if s < c["umbral"]:
+                    avisos.saldo_bajo(cliente, s)
         # Planes (spec 2026-10-09 §4): lo incluido no le avisa nada al cliente; al admin, al 80 % y al 100 % del
         # tope. Un `cobro` de un tipo incluido con el periodo abierto es uno que ya no cupo en el tope.
         if resultado in ("incluido", "cobro"):

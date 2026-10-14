@@ -6,12 +6,13 @@ Acepta hasta 4 imágenes de referencia citables como @Image1, @Image2... en el p
 
 Requiere FAL_KEY en el .env (el mismo que usa fal_client.py).
 """
-from providers import fal_client
+from providers import fal_client, swap_video_precio
 
 MODEL_PATH = "fal-ai/kling-video/o1/standard/video-to-video/edit"
 
-# $/segundo verificado en la página oficial de precios de fal.ai (29 ago 2026).
-COSTO_USD_POR_SEGUNDO = 0.168
+# $/segundo de salida en la página de fal.ai: 0,168 el 29 ago 2026, 0,126 el 2026-10-13 (la tabla que manda es
+# swap_video_precio.TARIFAS).
+COSTO_USD_POR_SEGUNDO = 0.126
 
 # Restricción documentada por fal.ai (confirmada empíricamente vía el error
 # real que devuelve la API: "Video dimensions are too small. Minimum width is
@@ -38,6 +39,7 @@ def editar_video(video_url, prompt, referencias_urls=None, keep_audio=False, on_
     return url
 
 
-def estimate_video(duration_seconds=5):
-    """Sin endpoint de estimación — costo conocido de antemano por segundo."""
-    return {"credits": None, "usd": round(COSTO_USD_POR_SEGUNDO * duration_seconds, 3)}
+def estimate_video(duration_seconds=5, fps=None):
+    """Sin endpoint de estimación: por segundo de salida, que dura lo que el video que se sube
+    (`swap_video_precio`, PND-312)."""
+    return {"credits": None, "usd": swap_video_precio.costo("kling_o1", duration_seconds, fps)}

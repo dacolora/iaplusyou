@@ -51,19 +51,39 @@ def _bajar(url):
 
 
 def guardar_en_r2(anuncio_id, url_origen, carpeta, cliente=None):
+    return copiar_a_r2(url_origen, clave_r2(anuncio_id, cliente=cliente), carpeta)[0]
+
+
+def medir(url_origen):
+    """(ancho, alto) de una imagen, bajada con la guarda de SSRF y validada por su contenido; no sube nada.
+    ImagenInvalida si no se puede."""
     crudo = _bajar(url_origen)
     try:
         with Image.open(io.BytesIO(crudo)) as im:
             im.load()
+            return im.size
+    except (UnidentifiedImageError, Image.DecompressionBombError, OSError, ValueError) as e:
+        raise ImagenInvalida(f"No es una imagen válida: {e.__class__.__name__}") from e
+
+
+def copiar_a_r2(url_origen, clave, carpeta):
+    """(URL pública en R2, (ancho, alto) de la imagen original). La baja con la guarda de SSRF (`_bajar`), la valida
+    por su contenido con Pillow y la sube como JPEG de hasta LADO_MAX px bajo `clave`. ImagenInvalida si no se puede.
+    También la usa «Llevar a Crear» de un anuncio de imagen (`triple_whale.puente.imagen_a_bandeja`, 2026-10-13)."""
+    crudo = _bajar(url_origen)
+    try:
+        with Image.open(io.BytesIO(crudo)) as im:
+            im.load()
+            tamano = im.size
             im = im.convert("RGB")
             im.thumbnail((LADO_MAX, LADO_MAX))
             os.makedirs(carpeta, exist_ok=True)
-            local = os.path.join(carpeta, f"{anuncio_id}.jpg")
+            local = os.path.join(carpeta, os.path.basename(clave))
             im.save(local, format="JPEG", quality=88)
-    except (UnidentifiedImageError, OSError, ValueError) as e:
+    except (UnidentifiedImageError, Image.DecompressionBombError, OSError, ValueError) as e:
         raise ImagenInvalida(f"No es una imagen válida: {e.__class__.__name__}") from e
     try:
-        return r2_uploader.upload_image(local, clave_r2(anuncio_id, cliente=cliente))
+        return r2_uploader.upload_image(local, clave), tamano
     finally:
         try:
             os.remove(local)

@@ -109,6 +109,12 @@
     <p>{{ _('El %% de visitantes nuevos y la etapa del embudo: TOF desde 70 %%, MOF desde 40 %%, BOF por debajo; con menos de 50 visitantes, sin etapa.') }}</p>
     <div class="guia-fila">{{ cx.nvp(820, 1000) }} {{ cx.nvp(520, 1000) }} {{ cx.nvp(250, 1000) }} {{ cx.nvp(30, 40) }} {{ cx.nvp(0, 0) }}</div>
   </section>
+  <section class="guia-seccion" data-componente="cargando">
+    <h3>{{ _('Cargando') }}</h3>
+    <p>{{ _('Mientras algo llega por fetch: el aviso con su círculo (con la forma de lo que viene, si es un panel grande) y el botón ocupado.') }}</p>
+    {{ cx.cargando(_('Cargando tu rendimiento…'), _('Juntamos las cifras de tus tiendas y de tus anuncios, país por país. Puede tardar unos segundos.'), esqueleto=true) }}
+    <div class="guia-fila"><button type="button" class="btn-sm btn-cargando" disabled aria-busy="true">{{ _('Cargando…') }}</button></div>
+  </section>
 </section>
 <section class="guia-seccion">
   <h2>{{ _('Celular') }}</h2>

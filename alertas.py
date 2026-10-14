@@ -52,7 +52,7 @@ NOMBRES_GRUPO = {"puesta_a_punto": idiomas.N_("Puesta a punto pendiente"), "falt
                  "decision": idiomas.N_("Esperan tu decisión"), "fallos": idiomas.N_("Fallos y errores")}
 NOMBRES_NIVEL = {"bloquea": idiomas.N_("bloquea"), "atencion": idiomas.N_("atención"), "info": idiomas.N_("info")}
 NOMBRES_TAB = {"settings": idiomas.N_("Configuración"), "catalogo": idiomas.N_("Catálogo"), "creativeflowplus": idiomas.N_("Crear"),
-               "experimentos": idiomas.N_("Experimentos"), "sprints": idiomas.N_("Sprints"), "nicho": idiomas.N_("Nicho"),
+               "experimentos": idiomas.N_("Probar anuncios"), "sprints": idiomas.N_("Sprints"), "nicho": idiomas.N_("Nicho"),
                "meta": idiomas.N_("Meta")}
 
 MINUTOS_WORKER = 30                                  # más de esto sin señal de vida y el worker está parado
@@ -688,11 +688,11 @@ def _fuente_nicho(cliente, ahora):
 def _fuente_cobros(cliente, ahora):
     """Saldo prepagado del proyecto (spec 2026-10-08-cobros §8), solo si el proyecto cobra: sin saldo, saldo bajo,
     piezas que no se cobraron (un `reverso` o `no_cobrado` de los últimos DIAS_NO_COBRADO días), recargas de Bold o
-    Wompi que siguen pendientes y el plan mensual (`_alertas_plan`). Son del cliente (nada de aquí es solo_admin) y todas llevan a Configuración › Saldo y recargas.
+    Wompi que siguen pendientes y el plan mensual (`_alertas_plan`). Son del cliente salvo `cobros:deuda_pospago` (la deuda de un pospago cada US$ 200, solo el admin) y `plan_sin_renovar`; todas llevan a Configuración › Saldo y recargas o › Plan.
     Una consulta por tipo de dato (la cuenta con el saldo, los movimientos, las recargas), sin importar cuántos
     haya; un proyecto que no cobra sale tras leer la cuenta y uno sin plan tras una consulta más. Las huellas son de cifras, nunca de texto traducido:
     la de «saldo bajo» sigue al saldo en dólares, para que un descarte no esconda un saldo que siguió bajando."""
-    from cobros import libro, vista  # noqa: PLC0415
+    from cobros import avisos, libro, vista  # noqa: PLC0415
     import gastos  # noqa: PLC0415
     c = libro.estado(cliente)
     if not c["cobrar"]:
@@ -702,19 +702,32 @@ def _fuente_cobros(cliente, ahora):
     def monto(milesimas):
         return gastos.formatear(int(milesimas) / 1000)
 
-    if c["disponible"] <= 0:
+    # Pospago (Daniel 2026-10-12): nada frena por saldo; lo que debe lo dicen el chip y el panel, no una alerta.
+    if not c["pospago"] and c["disponible"] <= 0:
         out.append(_alerta("cobros:sin_saldo", huella("sin_saldo"), "bloquea", "puesta_a_punto",
                            gettext("Te quedaste sin saldo"),
                            gettext("Sin saldo no se puede generar nada nuevo. Recarga en Configuración › Saldo y recargas "
                                    "y sigues donde ibas."),
                            "settings", ancla="config-ap-saldo"))
-    elif 0 < c["saldo"] < c["umbral"]:
+    elif not c["pospago"] and 0 < c["saldo"] < c["umbral"]:
         out.append(_alerta("cobros:saldo_bajo", huella("saldo_bajo", round(c["saldo"] / 1000)), "atencion",
                            "puesta_a_punto",
                            gettext("Tu saldo se está acabando"),
                            gettext("Te quedan %(saldo)s. Recarga en Configuración › Saldo y recargas antes de que se acabe.",
                                    saldo=monto(c["saldo"])),
                            "settings", ancla="config-ap-saldo"))
+
+    if c["pospago"]:
+        # Solo el admin, cada US$ 200 de deuda (la huella es el tramo: descartarla la esconde hasta el siguiente).
+        debe = libro.deuda(cliente)
+        tramo = debe // avisos.TRAMO_DEUDA
+        if tramo:
+            out.append(_alerta("cobros:deuda_pospago", huella("deuda_pospago", tramo), "atencion", "decision",
+                               gettext("Este proyecto debe %(monto)s", monto=monto(debe)),
+                               gettext("Es pospago: genera sin frenos y lo que pase de cero queda por pagar. Vuelve "
+                                       "a avisar con cada %(tramo)s de deuda nueva; cóbrale o pásalo a prepago en "
+                                       "/admin/cobros.", tramo=monto(avisos.TRAMO_DEUDA)),
+                               "settings", ancla="config-ap-saldo", solo_admin=True))
 
     m = db.movimiento_saldo
     q = (sa.select(m.c.id, m.c.tipo, m.c.milesimas, m.c.concepto, m.c.extra)

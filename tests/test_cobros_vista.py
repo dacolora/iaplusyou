@@ -227,6 +227,14 @@ def test_ver_mas_trae_la_pagina_siguiente(libro, pagina):
     assert "fila 9<" in mas and "fila 59" not in mas and "<tr" in mas
 
 
+@pytest.mark.parametrize("valor", ["999999999999999999999999999999", "-5", "0", "x"])
+def test_ver_mas_con_una_pagina_rara_no_revienta(libro, pagina, valor):
+    # Auditoría 2026-10-12: `?pagina=` con 30 dígitos daba 500 (OverflowError en la consulta).
+    _cobra(libro)
+    r = pagina().get(f"/cliente/acme/saldo/movimientos?pagina={valor}")
+    assert r.status_code == 200
+
+
 def test_el_admin_ve_el_apartado_aunque_el_proyecto_no_cobre(libro, pagina):
     html = pagina("admin", "admin", None).get("/cliente/acme").get_data(as_text=True)
     assert 'id="config-ap-saldo"' in html

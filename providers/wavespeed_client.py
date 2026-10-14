@@ -24,7 +24,7 @@ Requiere WAVESPEED_API_KEY en el .env (wavespeed.ai > API Keys).
 """
 import requests
 
-from providers import wavespeed_common
+from providers import swap_video_precio, wavespeed_common
 
 MODEL_PATH = "alibaba/wan-2.7/video-edit"
 
@@ -60,8 +60,7 @@ def editar_video(video_url, prompt, referencias_urls=None, resolution="720p", on
     return outputs[0]
 
 
-def estimate_video(duration_seconds=5, resolution="720p"):
-    costo_seg = COSTO_USD_POR_SEGUNDO.get(resolution, COSTO_USD_POR_SEGUNDO["720p"])
-    # Factura entrada + salida — esto es solo el costo de la salida; el real
-    # termina siendo más alto según cuánto dure el video que subiste.
-    return {"credits": None, "usd": round(costo_seg * max(duration_seconds, 2), 3)}
+def estimate_video(duration_seconds=5, fps=None):
+    """Factura entrada + salida (720p, la que pide la app), por la duración del video que se sube redondeada al
+    segundo y entre 2 y 10 s (`swap_video_precio`, PND-312; antes solo contaba la salida)."""
+    return {"credits": None, "usd": swap_video_precio.costo("wan27_edit", duration_seconds, fps)}

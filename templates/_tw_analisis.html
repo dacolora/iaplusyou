@@ -120,10 +120,20 @@
     </dl>
     {% endif %}
     {% if v.escena %}<p class="tw-escena">{{ v.escena }}</p>{% endif %}
+    {#- Un anuncio de imagen fija se mejora como imagen (2026-10-13): su prompt edita esa imagen, que va a la bandeja. -#}
+    {% if v.tipo == 'imagen' %}
+    {% if v.cifras_sin_dato %}<p class="tag-advertencia tw-aviso">{{ _('El texto de la imagen cita cifras u ofertas que no están en los datos (%(cifras)s): revisa antes de generar.', cifras=v.cifras_sin_dato | join(', ')) }}</p>{% endif %}
+    <details><summary>{{ _('Prompt para la imagen') }}</summary><p class="tw-prompt">{{ v.prompt }}</p></details>
+    <form method="post" action="{{ url_for('triple_whale.analisis_crear', cliente=cliente, aid=fila.id) }}">
+      <button type="submit" class="btn-generar btn-sm">{{ _('Llevar a Crear →') }}</button>
+      <small class="vacio">{{ _('Se abre Crear en modo imagen, con la imagen del anuncio en la bandeja.') }}</small>
+    </form>
+    {% else %}
     <details><summary>{{ _('Prompt para el video') }}</summary><p class="tw-prompt">{{ v.prompt }}</p></details>
     <form method="post" action="{{ url_for('triple_whale.analisis_crear', cliente=cliente, aid=fila.id) }}">
       <button type="submit" class="btn-generar btn-sm">{{ _('Llevar a Crear →') }}</button>
     </form>
+    {% endif %}
   </div>
   {% endif %}
   {% if r.aprendizaje %}

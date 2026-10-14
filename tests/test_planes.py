@@ -25,6 +25,7 @@ class WompiFalso:
         self.wompi = wompi
         self.posts, self.usadas, self.txs, self.respuestas = [], set(), {}, {}
         self.defecto, self.error, self.espera, self.fuentes = "APPROVED", None, 0, []
+        self.busquedas, self.busquedas_vacias, self.error_busqueda = [], 0, None
 
     def crear_fuente(self, tipo, token, correo, acceptance_token, personal_token, tiempo=None):
         self.fuentes.append((tipo, token, correo, acceptance_token, personal_token))
@@ -55,6 +56,25 @@ class WompiFalso:
     def transaccion(self, transaccion_id, tiempo=None):
         return dict(self.txs[transaccion_id])
 
+    def transacciones_de_referencia(self, referencia, tiempo=None):
+        # PND-296: lo que Wompi tiene con esa referencia (las primeras `busquedas_vacias` no encuentran nada todavía).
+        self.busquedas.append(referencia)
+        if self.error_busqueda is not None:
+            raise self.error_busqueda
+        if self.busquedas_vacias:
+            self.busquedas_vacias -= 1
+            return []
+        return [dict(t) for t in self.txs.values() if t["reference"] == referencia]
+
+    def cobro_que_llego(self, referencia, centavos=CENTAVOS_MES, status="APPROVED", **extra):
+        """Wompi sí creó la transacción de un envío que se cortó (la respuesta se perdió)."""
+        tx = {"id": f"1292-{len(self.txs) + 1}-9", "reference": referencia, "amount_in_cents": centavos,
+              "currency": "COP", "status": status, "status_message": None, "payment_method_type": "CARD",
+              "payment_source_id": 3891, **extra}
+        self.txs[tx["id"]] = tx
+        self.usadas.add(referencia)
+        return tx["id"]
+
 
 @pytest.fixture()
 def planes(base_temporal):
@@ -70,6 +90,7 @@ def falso(base_temporal, monkeypatch):
     monkeypatch.setattr(wompi, "crear_fuente", f.crear_fuente)
     monkeypatch.setattr(wompi, "cobrar_fuente", f.cobrar_fuente)
     monkeypatch.setattr(wompi, "transaccion", f.transaccion)
+    monkeypatch.setattr(wompi, "transacciones_de_referencia", f.transacciones_de_referencia)
     monkeypatch.setattr(trm, "actual", lambda: TRM)
     return f
 
@@ -110,6 +131,11 @@ def _suscribir(planes, pro, ahora=T0, ciclo="mensual", cliente="acme", precio_vi
         precio_visto = 10000 if ciclo == "anual" else 1000
     return planes.suscribir(cliente, pro, ciclo, "CARD", "tok_prueba_4242", "pagos@acme.co", dict(ACEPTACION),
                             "user_acme", precio_visto, ahora=ahora)
+
+
+def db_ahora():
+    import db
+    return db.ahora()
 
 
 def _envejecer(db):
@@ -394,6 +420,191 @@ def test_cobro_incierto_se_reintenta_con_la_misma_referencia(base_temporal, plan
     assert planes.aplicar_transaccion(tx, ahora=_despues(ahora, minutos=12)) == "aprobado"
     assert _filas(base_temporal, "pago_plan")[1].transaccion_id == "1292-99-1"
     assert planes.cobrar_periodo(1, ahora=_despues(ahora, minutos=20)) == "no_toca"
+
+
+# --- PND-296 (2026-10-12): un cobro incierto se resuelve buscando su referencia en Wompi -------------------------
+
+def test_un_cobro_incierto_se_resuelve_buscando_su_referencia_sin_reenviar(base_temporal, planes, pro, falso, avisos):
+    _suscribir(planes, pro)
+    ahora = _antes("2026-11-09T10:00:00", 30)
+    falso.error = (falso.wompi.ErrorWompi("cortado", caida=True, incierto=True), False)
+    assert planes.cobrar_periodo(1, ahora=ahora) == "caida"
+    tx_id = falso.cobro_que_llego("pl-1-20261109-1")      # sí llegó: Wompi la tiene, la respuesta se perdió
+    _envejecer(base_temporal)
+    envios = len(falso.posts)
+    assert planes.cobrar_periodo(1, ahora=_despues(ahora, minutos=5)) == "aprobado"
+    assert len(falso.posts) == envios                     # no se reenvió: se encontró
+    pago = _filas(base_temporal, "pago_plan")[1]
+    assert pago.estado == "aprobado" and pago.transaccion_id == tx_id
+    assert falso.busquedas == ["pl-1-20261109-1"] and "admin:plan_admin" not in _tipos(avisos)
+    assert _sus(base_temporal).cubierto_hasta == "2026-12-09T10:00:00"
+
+
+def test_tras_un_422_de_referencia_usada_se_busca_y_se_aplica(base_temporal, planes, pro, falso, avisos):
+    _suscribir(planes, pro)
+    ahora = _antes("2026-11-09T10:00:00", 30)
+    falso.error = (falso.wompi.ErrorWompi("cortado", caida=True, incierto=True), False)
+    planes.cobrar_periodo(1, ahora=ahora)
+    falso.cobro_que_llego("pl-1-20261109-1", status="DECLINED")
+    falso.busquedas_vacias = 1                             # la primera búsqueda todavía no la ve
+    _envejecer(base_temporal)
+    assert planes.cobrar_periodo(1, ahora=_despues(ahora, minutos=5)) == "rechazado"
+    assert [p["referencia"] for p in falso.posts[1:]] == ["pl-1-20261109-1"] * 2   # el reenvío dio 422
+    assert falso.busquedas == ["pl-1-20261109-1"] * 2
+    assert _sus(base_temporal).estado == "morosa" and "admin:plan_admin" not in _tipos(avisos)
+
+
+def test_un_cobro_incierto_de_una_cancelada_se_resuelve_buscando(base_temporal, planes, pro, falso, avisos):
+    _suscribir(planes, pro)
+    fin = "2026-11-09T10:00:00"
+    falso.error = (falso.wompi.ErrorWompi("cortado", caida=True, incierto=True), False)
+    planes.renovar_todo(ahora=_antes(fin, 30))
+    planes.cancelar("acme", "user_acme", ahora=_antes(fin, 25))
+    falso.cobro_que_llego("pl-1-20261109-1")
+    _envejecer(base_temporal)
+    planes.renovar_todo(ahora=_antes(fin, 10))
+    assert len(falso.posts) == 2                           # ni un reenvío tras cancelar
+    assert _filas(base_temporal, "pago_plan")[1].estado == "aprobado"
+    s = _sus(base_temporal)
+    assert s.estado == "cancelada" and s.cubierto_hasta == "2026-12-09T10:00:00"
+    assert "admin:plan_admin" not in _tipos(avisos)
+
+
+def test_lo_que_encuentra_la_busqueda_se_relee_por_id_y_otro_comercio_no_cuenta(base_temporal, planes, pro, falso,
+                                                                                avisos, monkeypatch):
+    _suscribir(planes, pro)
+    ahora = _antes("2026-11-09T10:00:00", 30)
+    falso.error = (falso.wompi.ErrorWompi("cortado", caida=True, incierto=True), False)
+    planes.cobrar_periodo(1, ahora=ahora)
+    tx_id = falso.cobro_que_llego("pl-1-20261109-1")
+    leidas = []
+    original = falso.transaccion
+
+    from cobros import wompi
+
+    def por_id(transaccion_id, tiempo=None):
+        # Como el `transaccion` de verdad: normalizada, con el comercio que trae Wompi.
+        leidas.append(transaccion_id)
+        return wompi.normalizar({**original(transaccion_id), "merchant": {"public_key": "pub_prod_OTRO"}})  # llave-de-prueba
+    monkeypatch.setattr(wompi, "transaccion", por_id)
+    _envejecer(base_temporal)
+    planes.cobrar_periodo(1, ahora=_despues(ahora, minutos=5))
+    assert leidas[:1] == [tx_id]
+    assert _filas(base_temporal, "pago_plan")[1].estado == "pendiente"   # de otro comercio: no se aprueba nada
+    assert "admin:plan_admin" in _tipos(avisos)
+
+
+def test_lo_que_encuentra_la_busqueda_tiene_que_ser_de_la_tarjeta_de_esta_suscripcion(base_temporal, planes, pro,
+                                                                                      falso, avisos):
+    # Revisión de plata (2026-10-12): las referencias de planes son fijas; con ids reusados (un respaldo restaurado)
+    # la búsqueda podía encontrar el cobro de OTRA tarjeta por el mismo monto y dar el plan por pagado.
+    _suscribir(planes, pro)
+    ahora = _antes("2026-11-09T10:00:00", 30)
+    falso.error = (falso.wompi.ErrorWompi("cortado", caida=True, incierto=True), False)
+    planes.cobrar_periodo(1, ahora=ahora)
+    falso.cobro_que_llego("pl-1-20261109-1", payment_source_id=99999)   # de otra fuente
+    _envejecer(base_temporal)
+    assert planes.cobrar_periodo(1, ahora=_despues(ahora, minutos=5)) == "incierto"   # como antes: al admin
+    assert _filas(base_temporal, "pago_plan")[1].estado == "pendiente"
+    assert _tipos(avisos).count("admin:plan_admin") == 1
+
+
+def test_si_wompi_solo_tiene_una_anulada_se_sigue_como_antes(base_temporal, planes, pro, falso, avisos):
+    # Antes la búsqueda devolvía `ya_aplicada` en cada vuelta y el pago quedaba pendiente para siempre, sin aviso.
+    _suscribir(planes, pro)
+    ahora = _antes("2026-11-09T10:00:00", 30)
+    falso.error = (falso.wompi.ErrorWompi("cortado", caida=True, incierto=True), False)
+    planes.cobrar_periodo(1, ahora=ahora)
+    falso.cobro_que_llego("pl-1-20261109-1", status="VOIDED")
+    _envejecer(base_temporal)
+    assert planes.cobrar_periodo(1, ahora=_despues(ahora, minutos=5)) == "incierto"
+    assert _tipos(avisos).count("admin:plan_admin") == 1
+
+
+def test_lo_encontrado_con_otro_monto_no_se_aplica_ni_repite_avisos(base_temporal, planes, pro, falso, avisos):
+    _suscribir(planes, pro)
+    ahora = _antes("2026-11-09T10:00:00", 30)
+    falso.error = (falso.wompi.ErrorWompi("cortado", caida=True, incierto=True), False)
+    planes.cobrar_periodo(1, ahora=ahora)
+    falso.cobro_que_llego("pl-1-20261109-1", centavos=CENTAVOS_MES - 100)
+    for minutos in (5, 40, 80):
+        _envejecer(base_temporal)
+        planes.cobrar_periodo(1, ahora=_despues(ahora, minutos=minutos))
+    assert _filas(base_temporal, "pago_plan")[1].estado == "pendiente"
+    assert _tipos(avisos).count("admin:plan_admin") == 1                 # una vez, no cada vuelta
+
+
+def test_la_busqueda_de_planes_espera_poco(base_temporal, planes, pro, falso, avisos, monkeypatch):
+    # cambiar_fuente corre dentro de una petición web: buscar y releer no pueden retener el hilo 15 s cada una.
+    tiempos = []
+    original_busca, original_lee = falso.transacciones_de_referencia, falso.transaccion
+
+    def busca(ref, tiempo=None):
+        tiempos.append(tiempo)
+        return original_busca(ref)
+
+    def lee(tx_id, tiempo=None):
+        tiempos.append(tiempo)
+        return original_lee(tx_id)
+    from cobros import wompi
+    monkeypatch.setattr(wompi, "transacciones_de_referencia", busca)
+    monkeypatch.setattr(wompi, "transaccion", lee)
+    _suscribir(planes, pro)
+    ahora = _antes("2026-11-09T10:00:00", 30)
+    falso.error = (falso.wompi.ErrorWompi("cortado", caida=True, incierto=True), False)
+    planes.cobrar_periodo(1, ahora=ahora)
+    falso.cobro_que_llego("pl-1-20261109-1")
+    _envejecer(base_temporal)
+    planes.cobrar_periodo(1, ahora=_despues(ahora, minutos=5))
+    assert tiempos and all(t == planes.ESPERA_BUSQUEDA for t in tiempos)
+
+
+def test_una_transaccion_guardada_que_resulta_de_otra_referencia_no_se_aplica(base_temporal, planes, pro, falso,
+                                                                               avisos):
+    # Auditoría 2026-10-12: «consultar» y `verificar_pago` aplicaban lo releído sin mirar que su referencia fuera la
+    # del pago; `aplicar_transaccion` busca el pago por la referencia de la transacción y pegaba el resultado a otro.
+    falso.defecto = "PENDING"
+    r = _suscribir(planes, pro)
+    _suscribir(planes, pro, cliente="otro")
+    mio, ajeno = _filas(base_temporal, "pago_plan")
+    with base_temporal.conectar() as con:                    # el de otro quedó incierto: sin id de transacción
+        con.execute(base_temporal.pago_plan.update().where(base_temporal.pago_plan.c.id == ajeno.id)
+                    .values(transaccion_id=None))
+    # Lo que Wompi devuelve para la transacción guardada de acme dice ser el pago de OTRO proyecto, aprobado.
+    falso.txs[mio.transaccion_id] = {**falso.txs[mio.transaccion_id], "reference": ajeno.referencia,
+                                     "status": "APPROVED"}
+    assert planes.verificar_pago("acme", r["pago_id"]) == "pendiente"
+    _envejecer(base_temporal)
+    planes.cobrar_periodo(1, ahora=_despues(T0, minutos=5), forzar=True)
+    assert [p.estado for p in _filas(base_temporal, "pago_plan")] == ["pendiente", "pendiente"]
+
+
+def test_lo_releido_por_la_busqueda_con_otra_referencia_no_se_aplica(base_temporal, planes, pro, falso, avisos,
+                                                                       monkeypatch):
+    _suscribir(planes, pro)
+    ahora = _antes("2026-11-09T10:00:00", 30)
+    falso.error = (falso.wompi.ErrorWompi("cortado", caida=True, incierto=True), False)
+    planes.cobrar_periodo(1, ahora=ahora)
+    tx_id = falso.cobro_que_llego("pl-1-20261109-1")
+    from cobros import wompi
+    original = falso.transaccion
+    monkeypatch.setattr(wompi, "transaccion", lambda i, tiempo=None: (
+        {**original(i), "reference": "pl-1-20261209-1"} if i == tx_id else original(i)))
+    _envejecer(base_temporal)
+    assert planes.cobrar_periodo(1, ahora=_despues(ahora, minutos=5)) == "incierto"
+    assert _filas(base_temporal, "pago_plan")[1].estado == "pendiente"
+
+
+def test_si_la_busqueda_falla_se_sigue_como_antes(base_temporal, planes, pro, falso, avisos):
+    _suscribir(planes, pro)
+    ahora = _antes("2026-11-09T10:00:00", 30)
+    falso.error = (falso.wompi.ErrorWompi("cortado", caida=True, incierto=True), True)
+    planes.cobrar_periodo(1, ahora=ahora)
+    falso.error_busqueda = falso.wompi.ErrorWompi("No se pudo hablar con Wompi (Timeout)", caida=True)
+    _envejecer(base_temporal)
+    assert planes.cobrar_periodo(1, ahora=_despues(ahora, minutos=5)) == "incierto"   # reenvío → 422 → incierto
+    assert [p["referencia"] for p in falso.posts[1:]] == ["pl-1-20261109-1"] * 2
+    assert _filas(base_temporal, "pago_plan")[1].estado == "pendiente"
 
 
 def test_cobro_que_no_salio_se_reintenta_con_la_misma_referencia_y_cobra(base_temporal, planes, pro, falso, avisos):
@@ -727,7 +938,8 @@ def test_activacion_manual_lleva_su_propio_precio(base_temporal, planes, pro, fa
 
 
 def test_un_anual_anulado_no_abre_mas_meses(base_temporal, planes, pro, falso, avisos):
-    """I2: tras anular el pago anual, el mes en curso sigue pero no se abre ni uno más."""
+    """I2: tras anular el pago anual no se abre ni un mes más (y, desde la auditoría del 2026-10-12, el mes en curso
+    se cierra: su bolsa vence con la anulación)."""
     inicio = "2027-01-31T10:00:00"
     _suscribir(planes, pro, ahora=inicio, ciclo="anual")
     tx = {**falso.txs["1292-1-1"], "status": "VOIDED"}
@@ -736,9 +948,9 @@ def test_un_anual_anulado_no_abre_mas_meses(base_temporal, planes, pro, falso, a
         frontera = planes.sumar_meses(inicio, mes)
         planes.renovar_todo(ahora=_antes(frontera, 20))
         planes.renovar_todo(ahora=_despues(frontera, minutos=1))
-    assert len(_filas(base_temporal, "periodo_plan")) == 1
+    assert len(_filas(base_temporal, "periodo_plan")) == 1 and _filas(base_temporal, "periodo_plan")[0].cerrado
     assert len(_filas(base_temporal, "movimiento_saldo", tipo="plan")) == 1
-    assert _sus(base_temporal).cubierto_hasta == "2028-01-31T10:00:00"   # queda como estaba; el admin decide
+    assert _sus(base_temporal).cubierto_hasta == inicio   # lo pagado vuelve al inicio del pago anulado
     assert any(e[0] == "admin:plan_admin" and "anuló" in e[3] for e in avisos)
     assert len(falso.posts) == 1
 
@@ -809,13 +1021,86 @@ def test_un_pendiente_nuevo_lleva_la_hora_real(base_temporal, planes, pro, falso
     assert pago.creado_en[:10] == db_.ahora()[:10]
 
 
+def test_un_pago_anulado_vence_lo_que_queda_de_su_bolsa_y_respeta_el_saldo_propio(base_temporal, planes, pro, falso,
+                                                                                   avisos):
+    """Auditoría de seguridad (2026-10-12): Wompi devolvió la plata del plan (anulación o contracargo) y el proyecto
+    seguía gastando la bolsa el resto del mes. Ahora vence lo que queda de los periodos de ese pago, en el acto; lo
+    ya gastado y el saldo propio (las recargas) no se tocan."""
+    import gastos
+    from cobros import libro
+    _suscribir(planes, pro, ahora=db_ahora())
+    with base_temporal.conectar() as con:
+        libro.acreditar(con, "acme", "recarga", 50_000, "recarga_manual", usuario="admin")   # US$ 50 propios
+    gastos.registrar_seguro("acme", "video", 100.0, "video:prueba-anulacion")               # 125 000 de la bolsa
+    assert libro.saldo("acme") == 1_000_000 + 50_000 - 125_000
+    tx = {**falso.txs["1292-1-1"], "status": "VOIDED"}
+    assert planes.aplicar_transaccion(tx) == "anulado"
+    (periodo,) = _filas(base_temporal, "periodo_plan")
+    assert periodo.cerrado
+    assert [m.milesimas for m in _filas(base_temporal, "movimiento_saldo", tipo="vencimiento")] == [-875_000]
+    assert libro.saldo("acme") == 50_000                                                   # queda lo propio
+    assert planes.aplicar_transaccion(tx) == "ya_aplicada"                                 # una sola vez
+    assert len(_filas(base_temporal, "movimiento_saldo", tipo="vencimiento")) == 1
+
+
+def test_activar_a_mano_tras_una_anulacion_abre_la_bolsa_en_el_acto(base_temporal, planes, pro, falso, avisos):
+    """Revisión de plata final (2026-10-12): la anulación vencía la bolsa pero dejaba «lo pagado» hasta el fin del mes
+    anulado; un pago por transferencia activado a mano solo abría ahí: hasta 27 días pagados sin bolsa (en un anual,
+    nunca). Ahora lo pagado vuelve al inicio del pago anulado."""
+    _suscribir(planes, pro)
+    tx = {**falso.txs["1292-1-1"], "status": "VOIDED"}
+    dia3 = _despues(T0, dias=3)
+    assert planes.aplicar_transaccion(tx, ahora=dia3) == "anulado"
+    assert _sus(base_temporal).cubierto_hasta == T0
+    planes.activar_manual("acme", pro, "mensual", "admin", "transferencia", ahora=dia3)
+    abiertos = [p for p in _filas(base_temporal, "periodo_plan") if not p.cerrado]
+    assert [p.inicio for p in abiertos] == [dia3] and abiertos[0].credito_milesimas == 1_000_000
+
+
+def test_tras_anular_el_ultimo_pago_se_puede_volver_a_suscribir_pronto(base_temporal, planes, pro, falso, avisos):
+    _suscribir(planes, pro)
+    tx = {**falso.txs["1292-1-1"], "status": "VOIDED"}
+    dia3 = _despues(T0, dias=3)
+    planes.aplicar_transaccion(tx, ahora=dia3)
+    planes.renovar_todo(ahora=_despues(dia3, minutos=1))
+    assert _sus(base_temporal).estado == "terminada"
+    assert _suscribir(planes, pro, ahora=_despues(dia3, minutos=2))["estado"] == "aprobado"
+
+
+def test_anular_un_pago_viejo_no_mueve_lo_que_pago_uno_mas_nuevo(base_temporal, planes, pro, falso, avisos):
+    _suscribir(planes, pro)
+    fin = "2026-11-09T10:00:00"
+    planes.renovar_todo(ahora=_antes(fin, 30))                      # la renovación de noviembre, cobrada antes
+    assert _sus(base_temporal).cubierto_hasta == "2026-12-09T10:00:00"
+    planes.renovar_todo(ahora=_antes(fin, 25))                      # abre el periodo de noviembre (a 1 h de empezar)
+    pago_b = _filas(base_temporal, "pago_plan")[1]
+    assert [p.cerrado for p in _filas(base_temporal, "periodo_plan") if p.pago_id == pago_b.id] == [False]
+    planes.aplicar_transaccion({**falso.txs["1292-1-1"], "status": "VOIDED"}, ahora=_antes(fin, 20))
+    assert _sus(base_temporal).cubierto_hasta == "2026-12-09T10:00:00"   # lo de noviembre sigue pagado
+    # Revisor: solo se vencen los periodos de ESE pago; el de noviembre (otro pago) sigue abierto.
+    assert [p.cerrado for p in _filas(base_temporal, "periodo_plan") if p.pago_id == pago_b.id] == [False]
+
+
+def test_anular_una_renovacion_cobrada_por_adelantado_y_sin_periodo_devuelve_su_mes(base_temporal, planes, pro,
+                                                                                    falso, avisos):
+    # Revisor (2026-10-12): el pago anulado no abrió ningún periodo todavía; lo pagado vuelve un ciclo atrás.
+    _suscribir(planes, pro)
+    assert planes.cobrar_periodo(1, ahora=_despues(T0, minutos=1), forzar=True) == "aprobado"
+    assert _sus(base_temporal).cubierto_hasta == "2026-12-09T10:00:00"
+    renovacion = _filas(base_temporal, "pago_plan")[1]
+    assert not [p for p in _filas(base_temporal, "periodo_plan") if p.pago_id == renovacion.id]
+    tx = {**falso.txs[renovacion.transaccion_id], "status": "VOIDED"}
+    assert planes.aplicar_transaccion(tx, ahora=_despues(T0, dias=2)) == "anulado"
+    assert _sus(base_temporal).cubierto_hasta == "2026-11-09T10:00:00"
+
+
 def test_un_mensual_anulado_no_se_renueva(base_temporal, planes, pro, falso, avisos):
     """Ruling: tras una anulación (o contracargo) no se vuelve a cobrar la tarjeta sola."""
     _suscribir(planes, pro)
     tx = {**falso.txs["1292-1-1"], "status": "VOIDED"}
     assert planes.aplicar_transaccion(tx, ahora=_despues(T0, dias=3)) == "anulado"
     s = _sus(base_temporal)
-    assert (s.renovar, s.proximo_cobro, s.cubierto_hasta) == (False, None, "2026-11-09T10:00:00")
+    assert (s.renovar, s.proximo_cobro, s.cubierto_hasta) == (False, None, T0)   # lo pagado vuelve al inicio
     fin = "2026-11-09T10:00:00"
     planes.renovar_todo(ahora=_antes(fin, 30))
     planes.renovar_todo(ahora=_despues(fin, minutos=1))

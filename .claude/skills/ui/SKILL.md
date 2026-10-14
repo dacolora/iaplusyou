@@ -20,7 +20,14 @@ macro en `templates/_componentes.html` si tiene marcado, sección `data-componen
 de visitantes nuevos dice si un anuncio es TOF, MOF o BOF): `{% import "_componentes.html" as cx %}` y
 `{{ cx.nvp(nuevos, visitantes) }}` con las SUMAS del periodo; la regla (70/40, mínimo 50 visitantes) vive solo en
 `triple_whale/visitantes.py` y llega a Jinja como los globales `resumen_nvp`/`explicacion_nvp`; CSS
-`componentes/nvp.css` (los colores de etapa distinguen, no califican). Cada CSS nuevo empieza con un comentario de uso, emplea tokens y se enumera
+`componentes/nvp.css` (los colores de etapa distinguen, no califican). **`cargando`** (2026-10-13, pedido de
+Daniel: «Cargando tu rendimiento…» en gris no se notaba y «Ver más» solo se apagaba, sin decir que traía algo):
+`{{ cx.cargando(texto, detalle, esqueleto=true) }}` es el aviso con un círculo que gira (role="status") y, con
+`esqueleto`, la forma del panel debajo; `.cargando-encima` flota arriba de un contenido que se está reemplazando
+(`[aria-busy="true"]` atenúa lo de debajo, sin transición: con el panel del navegador oculto no avanza) y
+`.btn-cargando` es el botón ocupado (círculo + «Cargando…», legible aunque esté apagado). En Rendimiento lo arman
+`ocupar`/`desocupar` y `ocupado(boton, si, texto)` de `_tab_rendimiento.html`; un «Ver más» nuevo que trae algo por
+fetch usa `ocupado`, nunca `disabled` a secas (`tests/test_rendimiento_cargando.py`). Cada CSS nuevo empieza con un comentario de uso, emplea tokens y se enumera
 una sola vez en `ORDEN`; sin `@import`. `base.css` respeta `prefers-reduced-motion` y pinta los enlaces sin clase
 con `:where(a) { color: var(--accent-texto) }` (sin ella Chrome los deja lila y, visitados, morados); un `<button>`
 con clase que no pinta su fondo queda con el gris del navegador: dale fondo o súmalo al secundario de la base
@@ -97,7 +104,15 @@ Reglas: **ninguna barra de progreso lleva `<script>`** — todas `data-poll-job=
 MutationObserver de `data-precarga`) arranca el sondeo de lo que aparezca; los clics de tarjetas
 van delegados sobre la cuadrícula (las agregadas por «Ver más» funcionan igual); el sondeo se pausa
 con `document.hidden` y baja de ritmo (`intervaloSondeo`: 1,5 s → 3 s al minuto → 5 s a los 5 min).
-`tests/test_tarjetas_ligeras.py` y `test_perf_pagina_proyecto.py` vigilan todo esto. Fuera de
+`tests/test_tarjetas_ligeras.py` y `test_perf_pagina_proyecto.py` vigilan todo esto.
+**Historial de gasto entero sin clics** (Daniel 2026-10-13: «la idea es que salga todo»; happyflops tiene 1 181
+filas, ~340 bytes cada una, que pintadas en la página le sumaban ~400 KB a cada carga del proyecto): Configuración ›
+Gasto llega con 24 filas y su botón «Ver todo» (`_gasto_mas.html`) lleva `data-auto`; un `IntersectionObserver` de
+`base.html` lo pulsa al entrar en pantalla (una pestaña oculta nunca entra: en Crear no se pide nada) y
+`gasto_lista?todo=1` trae el resto en UN pedido, dentro de la caja con scroll `.gasto-historial`. `GASTO_TODO_MAX`
+(5000) solo corta una respuesta enorme y deja otro «Ver todo». Sin `todo`, `gasto_lista` sigue de a 24. Ojo al
+probarlo: con el panel del navegador oculto `innerHeight` es 0 y el observador nunca dispara (emula un tamaño con
+`resize_window`). Prueba: `tests/test_cobros_uso_previo.py::test_history_llega_liviano_y_el_resto_se_pide_solo_de_una_vez`. Fuera de
 alcance (anotado en el spec §7): el JS embebido a estáticos, Experimentos por fragmentos (**hecho el
 2026-10-03**: ver «Experimentos: armazón + fragmento»; Catálogo ya carga su galería y su ficha por fragmento desde
 2026-09-30: ver «Catálogo ecommerce y conectores»), el chequeo de Meta en la carga, los N+1 de Sprints/Experimentos

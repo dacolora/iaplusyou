@@ -4,7 +4,7 @@
                                   Una por CUENTA; el payload lleva `cliente` y `ad_account_id`.
   meta_rend_sincronizar_todas  -> periódica (worker.PERIODICAS, 3 h): encola la de cada cuenta de cada proyecto
   meta_rend_limpiar            -> periódica diaria: borra los días de anuncio de más de 95 días y los de cuenta de
-                                  más de 400
+                                  más de 400, y reintenta los borrados de R2 pendientes (`storage.r2_pendientes`)
   meta_rend_evaluar            -> f"{cliente}__meta_eval"  (max_intentos=1: paga a Claude; «Evaluar con IA», spec E2
                                   §8). Una viva por proyecto, en el carril general (no en el de lectura). El gasto
                                   real se anota como tipo `evaluacion` también si la respuesta no sirvió.
@@ -36,6 +36,7 @@ import meta_conexion
 import trabajos
 from meta_rendimiento import analisis, cuentas, datos, graph, pausa, sync
 from nicho.avatares import costo_real
+from storage import r2_pendientes
 from tareas import Continuar, al_interrumpir, ref_sufijo, registrar
 from triple_whale import analisis as tw_analisis
 from triple_whale import datos as tw_datos
@@ -214,6 +215,17 @@ def meta_rend_limpiar(tarea):
     hoy = date.today()
     n = datos.purgar_anuncios((hoy - timedelta(days=DIAS_ANUNCIO_GUARDADOS)).isoformat())
     m = datos.purgar_cuenta_dias((hoy - timedelta(days=DIAS_CUENTA_GUARDADOS)).isoformat())
+    # PND-295 (2026-10-12): las copias en R2 que no se pudieron borrar al soltar una cuenta o desconectar Meta (sus filas
+    # ya no están: nadie más sabría esas claves) se reintentan aquí, una vez al día. Nunca tumba la limpieza.
+    try:
+        borradas_r2, siguen_r2 = r2_pendientes.reintentar()
+    except Exception as e:  # noqa: BLE001 — `reintentar` no lanza; por si acaso, la limpieza de la copia ya se hizo
+        log.warning("Meta rendimiento: no se reintentaron los borrados pendientes de R2 (%s)", type(e).__name__)
+        borradas_r2 = siguen_r2 = 0
+    if borradas_r2 or siguen_r2:
+        return gettext("%(n)s fila(s) viejas de anuncios y %(m)s día(s) viejos de cuentas de Meta borrados; de R2, "
+                       "%(borradas)s copia(s) pendientes borradas y %(siguen)s siguen pendientes",
+                       n=n, m=m, borradas=borradas_r2, siguen=siguen_r2)
     return gettext("%(n)s fila(s) viejas de anuncios y %(m)s día(s) viejos de cuentas de Meta borrados", n=n, m=m)
 
 

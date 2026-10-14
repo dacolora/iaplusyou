@@ -87,7 +87,7 @@
         {% endif %}
       </form>
       {% elif entry.estado == "pausado" %}
-      <form method="post" action="{{ url_for('cambiar_estado_ad', cliente=cliente, ad_id=ad_id) }}" class="inline" onsubmit='return confirm({{ _("Activar empieza a gastar presupuesto real en Meta. ¿Seguimos?")|tojson }});'>
+      <form method="post" action="{{ url_for('cambiar_estado_ad', cliente=cliente, ad_id=ad_id) }}" class="inline" onsubmit='return confirm({% if entry.presupuesto_diario and entry.moneda %}{{ _("Activar empieza a gastar presupuesto real en Meta: ≈ %(diario)s al día. ¿Seguimos?", diario=(entry.presupuesto_diario|dinero(entry.moneda)))|tojson }}{% else %}{{ _("Activar empieza a gastar presupuesto real en Meta. ¿Seguimos?")|tojson }}{% endif %});'>
         <input type="hidden" name="estado" value="ACTIVE">
         {% if capacidades_meta.estado == "conectado" %}
         <button type="submit" class="btn-aprobar btn-sm">{{ _('Activar') }}</button>

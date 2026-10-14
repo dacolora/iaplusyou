@@ -2,10 +2,12 @@
    (2026-10-10) la incluye la pestaña «Rendimiento» (_rend_panel.html, después de «Lo que hace ganar en tu cuenta»; las
    tarjetas de fatiga del «Diagnóstico» enlazan aquí: id="meta-evaluacion"); la vieja pestaña «Meta» se jubiló el
    2026-10-09. Contexto: `mr` (pestana_rendimiento.panel: `r.meta.e2`, de meta_rendimiento.panel.diagnostico;
-   `mr.evaluacion` = panel.evaluacion_panel más `cuenta`/`alcance`/`sin_cuentas_fuente`, `mr.dias` = el periodo de la
-   evaluación, `mr.periodo_panel` = el de la pestaña y `mr.entrada` = la entrada que se mira) y `cliente`. Evalúa las
-   cuentas de Meta de la entrada cuya fuente es Meta (las de una tienda de Triple Whale las evalúa «Lo que hace ganar
-   en tu cuenta»): el formulario manda `entrada` y la ruta las resuelve igual que el panel.
+   `mr.evaluacion` = panel.evaluacion_panel más `cuenta`/`alcance`, `mr.dias` = el periodo de la evaluación,
+   `mr.periodo_panel` = el de la pestaña, `mr.entrada` = la entrada que se mira y `mr.con_pixel` = alguna cuenta cubre
+   una tienda de Triple Whale) y `cliente`. Evalúa TODAS las cuentas de Meta de la entrada, también las que cubre una
+   tienda (PND-290, Daniel 2026-10-12: al unir los dos tableros se trae todo de ambos), con las cifras del Pixel de
+   Meta; si entra una cubierta, una línea lo dice (las ventas de la tienda las evalúa «Lo que hace ganar en tu
+   cuenta»). El formulario manda `entrada` y la ruta las resuelve igual que el panel.
    COBRA (regla 1 del repo): el botón dice cuántos anuncios y el precio (`estimado.texto`, con el margen si el proyecto
    cobra), se confirma antes (data-confirmar; el JS vive en _tab_rendimiento.html) y manda `n` y `precio_visto` =
    `estimado.usd_precio` (el precio que vio, nunca el costo: la ruta lo vuelve costo una vez y, si la muestra o el
@@ -25,8 +27,6 @@
     <div class="barra-progreso" id="meta-eval-barra-{{ cliente }}" data-poll-job="{{ ia.job }}" data-poll-al-terminar="evento"><div class="barra-progreso-fill" style="width:0%"></div></div>
     <div class="progreso-texto">{{ _('Evaluando con IA…') }}</div>
   </div>
-  {% elif ia.sin_cuentas_fuente %}
-  <p class="vacio">{{ _('Las ventas de estas cuentas las cuenta Triple Whale: su evaluación con IA es la de «Lo que hace ganar en tu cuenta».') }}</p>
   {% elif ia.n %}
   {% set est = ia.estimado %}
   {% set alcance = mx.cuenta(ia.cuenta) if ia.cuenta else (ia.alcance or _('Todas las cuentas')) %}
@@ -38,6 +38,7 @@
     <input type="hidden" name="precio_visto" value="{{ est.usd_precio if est.usd_precio is not none else '' }}">
     <button type="submit" class="btn-generar btn-sm"{% if est.usd_precio is none %} disabled{% endif %}>{{ _('Evaluar %(n)s anuncio(s) con IA · %(precio)s', n=ia.n, precio=est.texto) }}</button>
     <small class="vacio">{% if mr.periodo_panel == mr.dias %}{{ _('Evalúa lo que ves arriba: %(alcance)s, últimos %(n)s días.', alcance=alcance | trim, n=mr.dias) }}{% else %}{{ _('Evalúa %(alcance)s en los últimos %(n)s días.', alcance=alcance | trim, n=mr.dias) }}{% endif %}</small>
+    {% if mr.con_pixel %}<small class="vacio">{{ _('Usa las cifras del Pixel de Meta, que cuenta distinto que tu tienda: las ventas de Triple Whale las evalúa «Lo que hace ganar en tu cuenta».') }}</small>{% endif %}
   </form>
   {% else %}
   <p class="vacio">{{ _('Todavía no hay anuncios con datos suficientes para evaluar con IA.') }}</p>

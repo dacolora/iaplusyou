@@ -21,12 +21,19 @@
    o, con una variante que espera al vigilante, cada ESPERA_DETALLE_MS y a lo sumo MAX_ESPERAS veces; «Probar los N
    ganchos» por fetch, un POST por clic y nunca repetido). De Meta, «Evaluación con IA»: confirma el precio (el mismo
    `form[data-confirmar]`), abre las evaluaciones anteriores por fetch (`data-meta-ev`) y, cuando su barra avisa que
-   terminó, vuelve a pedir el panel. #}
+   terminó, vuelve a pedir el panel.
+   Cargando (pedido de Daniel 2026-10-13: «Cargando tu rendimiento…» en gris no se notaba y «Ver más» solo se apagaba):
+   el armazón trae el aviso grande con la forma del panel (cx.cargando, componentes/cargando.css); al cambiar un
+   filtro, el panel de antes queda atenuado con el aviso pegado arriba hasta que llega el nuevo (`ocupar`, y
+   `panelSeq`: la respuesta de un filtro viejo no pisa la del nuevo); cada botón que trae algo por fetch («Ver más» de
+   la galería y de conjuntos, «Ver el análisis») gira y dice «Cargando…» (`ocupado`). #}
 {% import "_rend_macros.html" as rm %}
+{% import "_componentes.html" as cx %}
 <div class="panel-cabecera">
   <div>
     <h2>{{ _('Rendimiento') }}</h2>
-    <p class="panel-cabecera-desc">{{ _('Cómo van tus anuncios y tu tienda, país por país: cada cifra sale de una sola fuente, Triple Whale donde tienes tienda y Meta donde no.') }}</p>
+    <p class="panel-cabecera-desc">{{ _('Cómo van tus anuncios y tu tienda, país por país: cada cifra sale de una sola fuente, Triple Whale donde tienes tienda y Meta donde no.') }}
+      <a href="#experimentos" data-ir-tab="experimentos">{{ _('Para lanzar y probar piezas nuevas: Probar anuncios →') }}</a></p>
   </div>
 </div>
 
@@ -46,7 +53,7 @@
     {% if elegir_abierto %}<p class="vacio tw-nota">{{ _('Marca abajo las cuentas de este proyecto y el país de cada una. Las copiamos en segundo plano: la primera vez tarda unos minutos por cuenta.') }}</p>{% endif %}
     <button type="button" class="btn-sm" data-meta-elegir aria-expanded="{{ 'true' if elegir_abierto else 'false' }}" aria-controls="meta-cuentas">{{ _('Elegir cuentas de Meta') }}</button>
     <div id="meta-cuentas" class="meta-cuentas" data-url="{{ url_for('meta_rendimiento.ver_cuentas', cliente=cliente) }}"{% if not elegir_abierto %} hidden{% endif %}>
-      <p class="vacio">{{ _('Cargando tus cuentas de Meta…') }}</p>
+      {{ cx.cargando(_('Cargando tus cuentas de Meta…')) }}
     </div>
     {% else %}
     <p class="vacio tw-nota">{{ _('Un administrador de Creatv elige qué cuentas de Meta se leen.') }}</p>
@@ -55,8 +62,8 @@
 </details>
 
 {% if rendimiento.conectado %}
-<div id="rend-panel" data-url="{{ url_for('rendimiento.ver_panel', cliente=cliente) }}">
-  <p class="vacio">{{ _('Cargando tu rendimiento…') }}</p>
+<div id="rend-panel" data-url="{{ url_for('rendimiento.ver_panel', cliente=cliente) }}" aria-busy="true">
+  {{ cx.cargando(_('Cargando tu rendimiento…'), _('Juntamos las cifras de tus tiendas y de tus anuncios, país por país. Puede tardar unos segundos.'), esqueleto=true) }}
 </div>
 {% endif %}
 <script src="{{ url_for('static', filename='tw_resultados.js') }}" defer></script>
@@ -80,9 +87,13 @@
       errorSelector: {{ _('No se pudieron cargar tus cuentas de Meta. Recarga la página.')|tojson }},
       errorMas: {{ _('No se pudieron traer más filas. Inténtalo de nuevo.')|tojson }},
       errorEvaluacion: {{ _('No se pudo cargar esa evaluación. Inténtalo de nuevo.')|tojson }},
+      cargando: {{ _('Cargando…')|tojson }},
+      cargandoMas: {{ _('Cargando más…')|tojson }},
+      actualizando: {{ _('Actualizando tu rendimiento…')|tojson }},
       confirmarQuitar: {{ _('Quitar una cuenta borra sus métricas copiadas en Creatv (no toca nada en Meta). ¿Seguir?')|tojson }}
     };
     var galeriaSeq = 0;   // cada pedido de la galería lleva su número: la respuesta que llega tarde no pisa la de ahora
+    var panelSeq = 0;     // lo mismo con el panel entero: el filtro de antes no pisa al de ahora
 
     // Las barras de progreso llevan data-poll-job (no un <script>): lo que se inserta por fetch las arranca aquí.
     function sondear(raiz) {
@@ -99,6 +110,53 @@
       p.className = 'tag-error';
       p.textContent = texto;
       caja.replaceChildren(p);
+    }
+
+    // El aviso de que algo llega (componentes/cargando.css): el círculo que gira y el texto, como role="status".
+    function avisoCargando(texto, clase) {
+      var caja = document.createElement('div');
+      caja.className = 'cargando' + (clase ? ' ' + clase : '');
+      caja.setAttribute('role', 'status');
+      var giro = document.createElement('span');
+      giro.className = 'cargando-giro';
+      giro.setAttribute('aria-hidden', 'true');
+      var t = document.createElement('span');
+      t.className = 'cargando-texto';
+      var fuerte = document.createElement('strong');
+      fuerte.textContent = texto;
+      t.appendChild(fuerte);
+      caja.append(giro, t);
+      return caja;
+    }
+    // Un contenido que se va a reemplazar entero (el panel, el bloque de la galería): queda a la vista, atenuado y sin
+    // clics, con el aviso pegado arriba. Lo que llega lo reemplaza; si falla, `desocupar` lo deja como estaba.
+    function ocupar(caja, texto) {
+      caja.setAttribute('aria-busy', 'true');
+      if (!caja.querySelector(':scope > .cargando-encima, :scope > .cargando-panel')) {
+        caja.insertBefore(avisoCargando(texto, 'cargando-encima'), caja.firstChild);
+      }
+    }
+    function desocupar(caja) {
+      caja.removeAttribute('aria-busy');
+      var aviso = caja.querySelector(':scope > .cargando-encima');
+      if (aviso) aviso.remove();
+    }
+    // Un botón que trae algo por fetch: apagado, con su círculo y «Cargando…» en vez de su texto (apagarlo solo no
+    // decía que estaba trayendo algo). `false` le devuelve su texto y lo prende.
+    function ocupado(boton, si, texto) {
+      if (!boton) return;
+      if (si) {
+        if (!boton.dataset.textoAntes) boton.dataset.textoAntes = boton.textContent;
+        boton.textContent = texto || T.cargando;
+        boton.classList.add('btn-cargando');
+        boton.setAttribute('aria-busy', 'true');
+        boton.disabled = true;
+        return;
+      }
+      if (boton.dataset.textoAntes) { boton.textContent = boton.dataset.textoAntes; delete boton.dataset.textoAntes; }
+      boton.classList.remove('btn-cargando');
+      boton.removeAttribute('aria-busy');
+      boton.disabled = false;
     }
 
     function elementoDe(html, selector) {
@@ -119,11 +177,11 @@
       var url = new URL((entera ? b : g).dataset.url, window.location.origin);
       Object.keys(params).forEach(function (k) { url.searchParams.set(k, params[k]); });
       var mio = ++galeriaSeq;
-      if (entera) b.setAttribute('aria-busy', 'true');
-      if (mas) mas.disabled = true;
+      if (entera) ocupar(b, T.cargando);
+      if (mas) ocupado(mas, true, T.cargandoMas);
       function liberar() {
-        if (mas && mas.isConnected) mas.disabled = false;
-        if (entera && mio === galeriaSeq && b.isConnected) b.removeAttribute('aria-busy');
+        if (mas && mas.isConnected) ocupado(mas, false);
+        if (entera && mio === galeriaSeq && b.isConnected) desocupar(b);
       }
       fetch(url.toString(), { headers: { 'X-Requested-With': 'fetch' } })
         .then(function (r) { return r.ok ? r.text() : Promise.reject(r.status); })
@@ -242,10 +300,15 @@
       if (!cont) return;
       cargado = true;
       galeriaSeq++;   // lo que la galería anterior tenía pendiente ya no tiene dónde caer
+      var mio = ++panelSeq;
+      // La primera vez el armazón ya trae el aviso grande; al cambiar un filtro el panel de antes queda atenuado.
+      ocupar(cont, T.actualizando);
       var q = new URLSearchParams();
       Object.keys(filtros).forEach(function (k) { if (filtros[k]) q.set(k, filtros[k]); });
       pedir(cont.dataset.url + (q.toString() ? '?' + q.toString() : ''))
         .then(function (html) {
+          if (mio !== panelSeq) return;
+          cont.removeAttribute('aria-busy');
           cont.innerHTML = html;
           // Las barras (data-poll-job) las arranca base.html (arrancarSondeos), sin repetir las que ya sondean.
           sondear(cont);
@@ -253,7 +316,11 @@
           if (window.TwResultados && typeof window.TwResultados.iniciar === 'function') window.TwResultados.iniciar(cont);
           aplicarVeredicto('');
         })
-        .catch(function () { error(cont, T.errorPanel); });
+        .catch(function () {
+          if (mio !== panelSeq) return;
+          cont.removeAttribute('aria-busy');
+          error(cont, T.errorPanel);
+        });
     }
     function cargarSelector() {
       if (!selector) return;
@@ -337,12 +404,12 @@
             if (caja.querySelector('[data-tw-ganchos-esperan]')) { caja.dataset.esperas = '0'; recargarDetalle(caja); }
             return;
           }
-          ver.disabled = true;
+          ocupado(ver, true);
           fetch(ver.dataset.url, { headers: { 'X-Requested-With': 'fetch' } })
             .then(function (r) { return r.ok ? r.text() : Promise.reject(r.status); })
             .then(function (html) { pintarDetalle(caja, html); caja.hidden = false; })
             .catch(function () { caja.textContent = T_TW.detalle; caja.hidden = false; })   // sin cargado: otro clic reintenta
-            .then(function () { ver.disabled = false; });
+            .then(function () { ocupado(ver, false); });
           return;
         }
         var chip = ev.target.closest('[data-tw-filtro]');
@@ -358,6 +425,7 @@
           anterior.setAttribute('aria-expanded', abrir ? 'true' : 'false');
           if (abrir && !cajaEv.dataset.cargada) {
             cajaEv.dataset.cargada = '1';
+            cajaEv.replaceChildren(avisoCargando(T.cargando));
             pedir(anterior.dataset.metaEv)
               .then(function (html) { cajaEv.innerHTML = html; })
               .catch(function () { delete cajaEv.dataset.cargada; error(cajaEv, T.errorEvaluacion); });
@@ -369,13 +437,13 @@
           // «Ver más» de conjuntos: la respuesta son solo filas <tr> (y la fila de su propio botón si quedan más); van
           // en el lugar de la fila del botón, dentro del mismo <tbody>.
           var fila = masFilas.closest('tr');
-          masFilas.disabled = true;
+          ocupado(masFilas, true, T.cargandoMas);
           pedir(masFilas.dataset.metaMas)
             .then(function (html) {
               fila.insertAdjacentHTML('beforebegin', html);
               fila.remove();
             })
-            .catch(function () { masFilas.disabled = false; masFilas.title = T.errorMas; });
+            .catch(function () { ocupado(masFilas, false); masFilas.title = T.errorMas; });
         }
       });
       // «Cómo mejorarlo» (data-tw-async) se manda por fetch y la respuesta trae la tarjeta ya en curso; el lote y los

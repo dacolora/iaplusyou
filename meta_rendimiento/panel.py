@@ -53,7 +53,9 @@ DIAS_SEMANA = 7
 # regla `segmento_caro` ni se muestra en «Segmentos» como si fuera de hoy (revisión de la Task 2 de E2).
 HORAS_DESGLOSE_VIGENTE = 48
 MAX_SEGMENTOS = 10           # filas por tabla de «Segmentos» (un caro pesa ≥ 10 %: siempre cabe entre las 10 primeras)
-MAX_RECOMENDACIONES_VISIBLES = 6
+# Filas visibles por bloque del Diagnóstico agrupado (`recomendaciones.agrupar`); el resto, en un <details>. Las de una
+# cuenta son una por cuenta (happyflops tiene 7); `escalar` y `segmento_caro` pueden ser muchas.
+MAX_FILAS_GRUPO = 8
 
 # effective_status de Meta en palabras (se traducen donde se muestran). None: Meta ya no lo devuelve en el listado.
 ESTADOS = {
@@ -406,7 +408,7 @@ def _imagen_valida(url):
 
 def _alcance_evaluacion(ev):
     """«Todas las cuentas», el nombre de la cuenta evaluada o, si se evaluaron varias que no eran todas (`parcial`:
-    desde «Rendimiento», las cuentas de una entrada cuya fuente es Meta), sus nombres. Guardado en la fila: sin otra
+    desde «Rendimiento», las cuentas de Meta de una entrada), sus nombres. Guardado en la fila: sin otra
     consulta."""
     extra = ev.get("extra") or {}
     act = extra.get("cuenta")
@@ -621,10 +623,11 @@ def _moneda_comun(cuentas):
     return next(iter(monedas)) if len(monedas) == 1 and "" not in monedas else None
 
 
-def diagnostico(cliente, en_estructura, ids_fuente, dias, hoy, cuentas_por_id, vivos, evaluados_periodo=None):
-    """Lo de Meta rendimiento E2 que pinta la pestaña Rendimiento: {"recomendaciones", "conteo_recomendaciones",
-    "max_recomendaciones", "niveles_recomendacion", "nombres_prioridad", "segmentos", "ventana_segmentos",
-    "evaluacion" (`evaluacion_panel` más `cuenta`, `alcance` y `sin_cuentas_fuente`; `cuentas_por_id` tienen que ser
+def diagnostico(cliente, en_estructura, ids_evaluacion, dias, hoy, cuentas_por_id, vivos, evaluados_periodo=None):
+    """Lo de Meta rendimiento E2 que pinta la pestaña Rendimiento: {"recomendaciones", "grupos" (las mismas en bloques
+    por tipo, `recomendaciones.agrupar`), "conteo_recomendaciones", "max_filas", "niveles_recomendacion",
+    "nombres_prioridad", "segmentos", "ventana_segmentos",
+    "evaluacion" (`evaluacion_panel` más `cuenta` y `alcance`; `cuentas_por_id` tienen que ser
     TODAS las del proyecto, `lista`), "dias" (el periodo de la
     evaluación), "actual" (la cuenta cuando la estructura tiene una sola), "nombres_accion", "estados_evaluacion" y
     "etiquetas_veredicto"}: la forma `mr` que esperan `_meta_diagnostico.html`, `_meta_segmentos.html` y
@@ -634,11 +637,12 @@ def diagnostico(cliente, en_estructura, ids_fuente, dias, hoy, cuentas_por_id, v
       cubre una tienda de Triple Whale: hablan de cómo está armada la cuenta en Meta, como la vieja pestaña) y miran
       siempre los últimos 7 y 30 días hasta `hoy`, sea cual sea el periodo (spec E2 §6: así coinciden con lo que la
       copia guarda para Alertas).
-    - La evaluación es de `ids_fuente` (las cuentas cuya fuente es Meta, INT-2: nunca un prompt que mezcle el Pixel de
-      Triple Whale con el de Meta) y de `_dias_periodo(dias)`, el mismo periodo que tomará `analisis.preparar`
+    - La evaluación es de `ids_evaluacion` (desde Rendimiento, todas las cuentas de Meta del alcance, también las que
+      cubre una tienda: PND-290, como la vieja pestaña; lee solo la copia de Meta, así que nunca mezcla el Pixel de
+      Triple Whale con el de Meta en un prompt) y de `_dias_periodo(dias)`, el mismo periodo que tomará `analisis.preparar`
       (0 = «Desde el inicio» → los últimos 30 días, el defecto de la vieja pestaña Meta): el N y el precio que pinta
       el botón son los que cobrará la ruta (E2-R6). Con 30 días reusa las lecturas del Diagnóstico; con otro periodo,
-      `evaluados_periodo` (los anuncios de `ids_fuente` ya evaluados en ESE periodo, el alcance de la galería) o, sin
+      `evaluados_periodo` (los anuncios de `ids_evaluacion` ya evaluados en ESE periodo) o, sin
       ellos, tres lecturas más. La lista de evaluaciones es del proyecto (como en la vieja pestaña).
 
     Lecturas fijas (ninguna crece con las cuentas ni con las filas): días de cuenta, las tres de anuncios, la frecuencia
@@ -659,7 +663,7 @@ def diagnostico(cliente, en_estructura, ids_fuente, dias, hoy, cuentas_por_id, v
                               desgloses_30=[f for f in desgloses if f["ventana"] == DIAS_REGLAS], ahora=ahora,
                               evaluados=evaluados_30)
     recs = recomendaciones.calcular(entrada)
-    fuente = [a for a in ids_fuente if a in cuentas_por_id]
+    fuente = [a for a in ids_evaluacion if a in cuentas_por_id]
     if not fuente:
         evaluados = []
     elif dias_eval == DIAS_REGLAS:
@@ -677,10 +681,10 @@ def diagnostico(cliente, en_estructura, ids_fuente, dias, hoy, cuentas_por_id, v
     # `cuentas_por_id` son TODAS las cuentas del proyecto (`lista`): si la evaluación las toma todas, «Todas las cuentas».
     ev.update(cuenta=cuentas_por_id[fuente[0]] if len(fuente) == 1 else None,
               alcance=(gettext("Todas las cuentas") if len(fuente) > 1 and set(fuente) >= set(cuentas_por_id) else
-                       ", ".join(cuentas_por_id[a].get("nombre") or a for a in fuente) if len(fuente) > 1 else None),
-              sin_cuentas_fuente=not fuente)
-    return {"recomendaciones": recs, "conteo_recomendaciones": _conteo_niveles(recs),
-            "max_recomendaciones": MAX_RECOMENDACIONES_VISIBLES, "niveles_recomendacion": recomendaciones.NIVELES,
+                       ", ".join(cuentas_por_id[a].get("nombre") or a for a in fuente) if len(fuente) > 1 else None))
+    return {"recomendaciones": recs, "grupos": recomendaciones.agrupar(recs),
+            "conteo_recomendaciones": _conteo_niveles(recs),
+            "max_filas": MAX_FILAS_GRUPO, "niveles_recomendacion": recomendaciones.NIVELES,
             "nombres_prioridad": NOMBRES_PRIORIDAD, "ventana_segmentos": ventana_seg,
             "segmentos": segmentos([f for f in desgloses if f["ventana"] == ventana_seg], en_estructura,
                                    _moneda_comun(en_estructura), recs, ahora),

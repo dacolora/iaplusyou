@@ -125,11 +125,12 @@ def delete_file(key):
     _client().delete_object(Bucket=bucket, Key=key)
 
 
-def delete_files(keys):
+def delete_files_detalle(keys):
     """Borra varias claves con UN solo cliente (`delete_file` arma uno por llamada: con decenas de miniaturas, decenas
     de sesiones de boto3). Cada clave va aparte: una que falla no frena las demás. Devuelve (borradas, fallos) con
-    `fallos` = el tipo de error de cada clave que no se pudo borrar (nunca su texto). Sin claves no abre cliente; si
-    R2 no está configurado lanza como `delete_file`."""
+    `fallos` = [(clave, tipo de error)] de cada clave que no se pudo borrar (nunca el texto del error). Sin claves no
+    abre cliente; si R2 no está configurado lanza como `delete_file`. Dice CUÁLES fallaron para que quien suelta datos
+    de Meta las anote y se reintenten (`storage.r2_pendientes`, PND-295, 2026-10-12)."""
     keys = list(keys or [])
     if not keys:
         return 0, []
@@ -143,5 +144,12 @@ def delete_files(keys):
             cliente.delete_object(Bucket=bucket, Key=key)
             borradas += 1
         except Exception as e:  # noqa: BLE001 — R2 caído o una clave que no se deja: las demás se intentan igual
-            fallos.append(type(e).__name__)
+            fallos.append((key, type(e).__name__))
     return borradas, fallos
+
+
+def delete_files(keys):
+    """`delete_files_detalle` con el contrato de siempre: (borradas, [tipo de error de cada clave que falló]). Sin
+    claves no abre cliente; si R2 no está configurado lanza como `delete_file`."""
+    borradas, fallos = delete_files_detalle(keys)
+    return borradas, [tipo for _, tipo in fallos]

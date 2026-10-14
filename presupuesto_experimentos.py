@@ -14,17 +14,19 @@ test_presupuesto_experimentos.py` corre ambos con los mismos casos y exige resul
 """
 from decimal import Decimal, InvalidOperation, ROUND_DOWN, ROUND_UP
 
+import monedas_meta
+
 # Mínimo diario que Meta acepta por divisa (aprox., para avisar antes de fallar). Se compara contra la moneda de
 # FACTURACIÓN de la cuenta, no la del país del conjunto. NOK y SEK con margen (2026-10-08): 10 coronas quedaban
 # bajo US$1; 15 ≈ US$1,4.
 PRESUPUESTO_MINIMO_DIARIO = {"USD": 1, "COP": 4000, "MXN": 20, "EUR": 1, "BRL": 5, "PEN": 4, "CLP": 1000, "ARS": 1000,
                               "NOK": 15, "SEK": 15}
-# Monedas sin decimales para Meta: la misma lista que `tareas.meta.MONEDAS_SIN_DECIMALES` (lo que `lanzador.centavos` manda
-# sin multiplicar por 100); una prueba compara las dos.
-SIN_DECIMALES = {"JPY", "CLP", "HUF", "ISK", "KRW", "TWD", "VND", "PYG", "UGX", "XAF", "XOF"}
+# Monedas sin decimales para Meta (offset 1): la tabla oficial de `monedas_meta` (lo que `lanzador.centavos` manda sin
+# multiplicar por 100). Hasta PND-322 esta lista se escribía a mano aquí y le faltaba el COP.
+SIN_DECIMALES = set(monedas_meta.SIN_DECIMALES)
 # Monedas en las que el presupuesto se reparte en PESOS ENTEROS: las sin decimales y las de valor tan chico que un
-# centavo no dice nada (COP y ARS, cuyo mínimo diario ya es de miles). Un peso entero siempre es válido para Meta
-# (`centavos` lo multiplica por 100), así «21.428 COP al día» no sale como «21.428,57». Las demás llevan centavos.
+# centavo no dice nada (ARS, cuyo mínimo diario ya es de miles; el COP ya va sin decimales en Meta). Un peso entero
+# siempre es válido para Meta, así «21.428 COP al día» no sale como «21.428,57». Las demás llevan centavos.
 EN_ENTEROS = SIN_DECIMALES | {"COP", "ARS"}
 # Los atajos «Prueba rápida · Estándar · Fuerte» (spec §5.2): (veces el mínimo diario por anuncio, días). Son una
 # SUGERENCIA, no el precio de un proveedor: el precio es la cifra que la persona elige.

@@ -7,7 +7,7 @@
    "wompi", "bold" o None), min_usd, max_usd, bolsa (planes 6/8:
    vista.bolsa_o_none, la bolsa del periodo de plan abierto o None; con ella el
    saldo se muestra partido en «Saldo propio» = max(0, saldo − restante) y «Saldo del
-   plan» = restante). #}
+   plan» = restante), por_pagar (vista.por_pagar: lo que debe un pospago, 0 si no). #}
 {% macro filas_movimientos(filas) %}
 {% for f in filas %}
 <tr>
@@ -23,15 +23,24 @@
 {% if movs.hay_mas %}<tr data-saldo-siguiente="{{ url_for('cobros.saldo_movimientos', cliente=cliente, pagina=pagina + 1) }}" hidden></tr>{% endif %}
 {% else %}
 <div class="tb-tiles saldo-tiles">
+  {% if por_pagar %}
+  <div class="kpi-tile saldo-tile saldo-{{ tono }}">
+    <span>{{ _('Por pagar') }}</span>
+    <strong>{{ (por_pagar / 1000) | usd }}</strong>
+    <small>{{ _('Puedes seguir generando: lo que generes se suma a lo que debes y lo pagas cuando te pasemos la cuenta.') }}</small>
+  </div>
+  {% else %}
   <div class="kpi-tile saldo-tile saldo-{{ tono }}">
     <span>{% if bolsa %}{{ _('Saldo propio') }}{% else %}{{ _('Saldo') }}{% endif %}</span>
     <strong>{{ ((([e.saldo - bolsa.restante, 0] | max) if bolsa else e.saldo) / 1000) | usd }}</strong>
     <small>
-      {% if tono == 'bloqueo' %}{{ _('Sin saldo: recarga para seguir generando.') }}
+      {% if e.pospago %}{{ _('Puedes seguir generando aunque llegue a cero: lo que pase de cero queda por pagar.') }}
+      {% elif tono == 'bloqueo' %}{{ _('Sin saldo: recarga para seguir generando.') }}
       {% elif tono == 'aviso' %}{{ _('Saldo bajo: te queda menos de %(umbral)s.', umbral=((e.umbral / 1000) | usd)) }}
       {% else %}{{ _('Te avisamos cuando baje de %(umbral)s.', umbral=((e.umbral / 1000) | usd)) }}{% endif %}
     </small>
   </div>
+  {% endif %}
   {% if bolsa %}
   <div class="kpi-tile saldo-tile saldo-plan">
     <span>{{ _('Saldo del plan') }}</span>
@@ -39,7 +48,7 @@
     <small>{{ _('Se usa primero. Lo que no uses vence el %(fecha)s y no se acumula.', fecha=(bolsa.fin | fecha_larga)) }}</small>
   </div>
   {% endif %}
-  {% if e.reservado %}
+  {% if e.reservado and not e.pospago %}
   <div class="kpi-tile saldo-tile">
     <span>{{ _('Disponible') }}</span>
     <strong>{{ (e.disponible / 1000) | usd }}</strong>
@@ -51,7 +60,7 @@
 <p class="flash warn">{{ _('Este proyecto no usa saldo prepagado: nada de lo que genera se descuenta. Se prende desde el panel de administración.') }}</p>
 {% endif %}
 
-<h3>{{ _('Recargar') }}</h3>
+<h3>{% if por_pagar %}{{ _('Pagar') }}{% else %}{{ _('Recargar') }}{% endif %}</h3>
 {% if pasarela %}
 <form method="post" action="{{ url_for('cobros.recargar', cliente=cliente) }}" class="saldo-recarga">
   <div class="saldo-montos" role="group" aria-label="{{ _('Montos sugeridos') }}">

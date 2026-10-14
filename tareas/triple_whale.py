@@ -152,6 +152,21 @@ def _evaluacion_de_cuenta(cliente, tienda_id):
     return None
 
 
+def _soltar_copias(cliente, aid, ad_id):
+    """La fila de un análisis de fuente Meta ya no existe (soltar su cuenta la borró mientras la tarea trabajaba): la
+    imagen y el video que `traer` copió a R2 son datos de Meta sin ninguna fila que los encuentre, así que se borran
+    aquí (como `tareas.meta_rendimiento._soltar_miniaturas`; PND-295, 2026-10-12). Se piden las dos claves (borrar una
+    que no se subió no es un error) y las que R2 no deja borrar quedan anotadas para la limpieza diaria. Nunca lanza."""
+    try:
+        meta_creativo.borrar_copias(cliente, [(aid, ad_id)])
+    except Exception as e:  # noqa: BLE001 — `borrar_copias` no lanza; por si acaso, las copias sueltas no tumban la tarea
+        log.warning("no se pudieron soltar las copias del análisis %s (%s)", aid, type(e).__name__)
+
+
+def _detalle_voz(de_meta):
+    return gettext("la voz de un anuncio de Meta") if de_meta else gettext("la voz de un anuncio de Triple Whale")
+
+
 @registrar(TIPO_ANALIZAR)
 def tw_analizar_anuncio(tarea):
     p = tarea["payload"]
@@ -159,18 +174,34 @@ def tw_analizar_anuncio(tarea):
     referencia = f"tw_anuncio:{aid}{ref_sufijo(tarea)}"
     medios = {"visual": None, "fotogramas": 0, "transcripcion": None, "copy": False}
     usd_voz, usd_claude, entrada, salida, temporales = 0.0, 0.0, 0, 0, []
-    claude_anotado = False
+    claude_anotado = de_meta = False
+    fila = None
+    ya_no_existe = gettext("Ese análisis ya no existe.")
+
+    def _se_fue():
+        """La fila ya no está (soltar la cuenta la borró a mitad) y la tarea termina NORMAL, así que el worker no revierte
+        nada (solo revierte lo que falla): las copias de Meta en R2 se borran y la voz que Whisper ya cobró se vuelve a
+        anotar con la misma referencia y el mismo monto, sin entregar (el libro escribe su `reverso`; PND-295, ronda de
+        arreglos 1, 2026-10-12). Nadie va a ver ese análisis: al cliente no se le cobra nada de él."""
+        if de_meta:
+            _soltar_copias(cliente, aid, fila["ad_id"])
+        if usd_voz:
+            gastos.registrar_seguro(cliente, "transcripcion", usd_voz, f"{referencia}:voz", proveedor="fal",
+                                    detalle=_detalle_voz(de_meta), entregado=False)
+        return ya_no_existe
+
     # Todo va dentro del try, también leer la fila (revisión final, A4): cualquier fallo (al leerla, al marcar
     # «analizando», al poner el precio o al guardar la lista) deja la fila en `error` con palabras, nunca colgada en
     # en_cola/analizando.
     try:
         fila = datos.analisis_anuncio(cliente, aid)
         if fila is None:
-            return gettext("Ese análisis ya no existe.")
+            return ya_no_existe
         job_id = tarea.get("job_id") or job_id_analisis(cliente, fila["canal"], fila["ad_id"])
         foto = fila["foto"] or {}
         medios["copy"] = bool((foto.get("creativo") or {}).get("copy"))
-        datos.actualizar_analisis(aid, estado="analizando", tarea_id=tarea.get("id"), error=None)
+        if not datos.actualizar_analisis(aid, estado="analizando", tarea_id=tarea.get("id"), error=None):
+            return ya_no_existe          # se borró entre la lectura y aquí (soltar la cuenta): nada leído ni pagado
         de_meta = foto.get("fuente") == "meta"
         if de_meta and meta_creativo.sin_contenido(foto.get("creativo")):
             # Rendimiento E2: un anuncio de una cuenta de Meta sin tienda no tiene copia de su creativo. Se lee UNA vez
@@ -183,7 +214,10 @@ def tw_analizar_anuncio(tarea):
                 # Se para ANTES de Whisper y de Claude: la fila queda en error y no se anota ningún gasto.
                 raise mejorar.AnuncioIlegible()   # el texto que ve la persona lo pone mejorar.texto_error
             foto["creativo"] = traido
-            datos.actualizar_analisis(aid, foto=foto)
+            if not datos.actualizar_analisis(aid, foto=foto):
+                # PND-295 (2026-10-12): soltar la cuenta borró la fila mientras `traer` copiaba a R2. Esas copias ya no
+                # las encontraría nadie: se borran aquí, y se para ANTES de Whisper y de Claude (nada pagado).
+                return _se_fue()
             fila["foto"] = foto
             medios["copy"] = bool(foto["creativo"].get("copy"))
         trabajos.reportar(job_id, etapa=idiomas.N_("Bajando el video"))
@@ -191,6 +225,9 @@ def tw_analizar_anuncio(tarea):
         medios.update(visual=vis["clase"], fotogramas=vis["fotogramas"])
         voz = None
         if mejorar.tiene_voz(foto):
+            # Bajar el video y sacar fotogramas tarda segundos: si en ese rato soltaron la cuenta, Whisper no se paga.
+            if datos.analisis_anuncio(cliente, aid) is None:
+                return _se_fue()
             trabajos.reportar(job_id, etapa=idiomas.N_("Escuchando la voz"))
             try:
                 voz = mejorar.transcribir(foto)
@@ -200,8 +237,7 @@ def tw_analizar_anuncio(tarea):
                 usd_voz = float(voz.get("costo_usd") or 0)
                 if usd_voz:
                     gastos.registrar_seguro(cliente, "transcripcion", usd_voz, f"{referencia}:voz", proveedor="fal",
-                                            detalle=(gettext("la voz de un anuncio de Meta") if de_meta
-                                                     else gettext("la voz de un anuncio de Triple Whale")))
+                                            detalle=_detalle_voz(de_meta))
                 medios["transcripcion"] = (voz.get("texto") or "")[:mejorar.MAX_TRANSCRIPCION] or None
         trabajos.reportar(job_id, etapa=idiomas.N_("Analizando con Claude"))
         # G4 (revisión final de Rendimiento E2, 2026-10-10): la evaluación de cuenta es del Pixel de Triple Whale; en el
@@ -212,6 +248,10 @@ def tw_analizar_anuncio(tarea):
                                                       limite=analisis.MAX_PRODUCTOS))
         marca = proyectos.nombre_visible(cliente)
         texto = mejorar.armar(marca, fila, **entradas)
+        # Una relectura más justo antes de pagar a Claude (PND-295, ronda de arreglos 1): si la fila ya no está, Claude
+        # no se llama y la voz ya pagada queda sin entregar.
+        if datos.analisis_anuncio(cliente, aid) is None:
+            return _se_fue()
         # Los segundos de los fotogramas y de la voz son datos citables, también su parte entera («el segundo 31»).
         resultado, entrada, salida = mejorar.analizar(texto, vis["bloques"], idiomas.de_proyecto(cliente),
                                                       verificable_extra=mejorar.segundos_verificables(vis["bloques"], voz),
@@ -220,19 +260,32 @@ def tw_analizar_anuncio(tarea):
                                                       # los números de las instrucciones (revisión del 2026-10-09).
                                                       verificable=mejorar.datos_verificables(marca, fila, **entradas),
                                                       # El clip arranca en un fotograma que Claude miró (arreglo G).
-                                                      segundos_vistos=mejorar.segundos_vistos(vis["bloques"]))
+                                                      segundos_vistos=mejorar.segundos_vistos(vis["bloques"]),
+                                                      # Un anuncio de imagen se mejora como imagen (2026-10-13).
+                                                      tipo=mejorar.tipo_version(foto))
         if vis["clase"] != "fotogramas":
             # Spec 2026-10-09 §2: sin fotogramas del video (un anuncio de imagen, o nada) hay copy pero no ganchos,
             # aunque Claude los mande: el clip arranca en un fotograma que Claude tiene que haber visto.
             resultado["ganchos"] = []
-        # El gasto de Claude se anota UNA vez, antes de la última escritura: si esa falla, el except no lo repite.
         usd_claude = costo_real(entrada, salida)
-        gastos.registrar_seguro(cliente, "evaluacion", usd_claude, referencia, proveedor="anthropic",
-                                detalle=(gettext("un anuncio de Meta") if de_meta
-                                         else gettext("un anuncio de Triple Whale")))
+        # PND-295 (2026-10-12), el orden de `meta_rend_evaluar`: primero la fila y después el gasto de Claude, UNA vez
+        # (`registrar_seguro` nunca lanza). Si la fila ya no estaba (soltar la cuenta la borró mientras Claude
+        # respondía), lo pagado se anota igual pero sin entregar: nadie va a ver ese resultado, así que en un proyecto
+        # que cobra no se le cobra. Si la escritura LANZA, `claude_anotado` sigue en False y el `except` lo anota una
+        # vez, también sin entregar.
+        guardada = datos.actualizar_analisis(aid, estado="lista", resultado=resultado, medios=medios, error=None,
+                                             usd=round(usd_voz + usd_claude, 4))
+        if not guardada:
+            detalle = gettext("sin resultado usable")
+        elif de_meta:
+            detalle = gettext("un anuncio de Meta")
+        else:
+            detalle = gettext("un anuncio de Triple Whale")
+        gastos.registrar_seguro(cliente, "evaluacion", usd_claude, referencia, proveedor="anthropic", entregado=guardada,
+                                detalle=detalle)
         claude_anotado = True
-        datos.actualizar_analisis(aid, estado="lista", resultado=resultado, medios=medios, error=None,
-                                  usd=round(usd_voz + usd_claude, 4))
+        if not guardada:
+            return _se_fue()            # sus copias en R2 tampoco se quedan, y la voz pagada queda sin entregar
     except Exception as e:
         if not claude_anotado:
             # Los tokens vienen de la excepción (AnalisisInvalido) o, si Claude sí contestó y falló el precio, de aquí.
@@ -248,8 +301,9 @@ def tw_analizar_anuncio(tarea):
                                         detalle=gettext("sin resultado usable"), entregado=False)
         mensaje = mejorar.texto_error(e)
         try:
-            datos.actualizar_analisis(aid, estado="error", error=mensaje, medios=medios,
-                                      usd=round(usd_voz + usd_claude, 4))
+            if not datos.actualizar_analisis(aid, estado="error", error=mensaje, medios=medios,
+                                             usd=round(usd_voz + usd_claude, 4)) and de_meta:
+                _soltar_copias(cliente, aid, fila["ad_id"])   # la fila ya no estaba: sus copias en R2 tampoco se quedan
         except Exception as e_fila:  # noqa: BLE001 — la tarea igual termina en error con su mensaje; la fila colgada
             # sin tarea viva ya no bloquea el anuncio (panel.elegir_analisis) y la ruta la cierra al pedir otro.
             log.warning("el análisis %s no se pudo dejar en error: %s", aid, type(e_fila).__name__)

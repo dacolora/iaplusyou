@@ -125,7 +125,8 @@ def _cuenta_y_periodo(con, cliente, por_cerrar=None):
     fila = con.execute(sa.select(db.cuenta_saldo).where(db.cuenta_saldo.c.cliente == cliente)).first()
     glob = _margen_global(con)
     if fila is None:
-        return {"cobrar": False, "margen": glob, "margen_propio": None, "umbral": UMBRAL_DEFECTO}, None
+        return {"cobrar": False, "margen": glob, "margen_propio": None, "umbral": UMBRAL_DEFECTO,
+                "pospago": False}, None
     if fila.cobrar and por_cerrar is not None:
         # El freno (N4): en la MISMA lectura, el abierto y los terminados que siguen sin cerrar.
         periodo, terminados = planes.periodos_sin_cerrar(con, cliente)
@@ -137,7 +138,7 @@ def _cuenta_y_periodo(con, cliente, por_cerrar=None):
     else:
         margen = float(fila.margen) if fila.margen is not None else glob
     return {"cobrar": bool(fila.cobrar), "margen": margen, "margen_propio": fila.margen,
-            "umbral": int(fila.umbral_aviso)}, periodo
+            "umbral": int(fila.umbral_aviso), "pospago": bool(fila.pospago)}, periodo
 
 
 def _cuenta(con, cliente):
@@ -202,9 +203,10 @@ def _cuenta_y_periodo_tolerante(con, cliente, por_cerrar=None):
     fila = con.execute(sa.select(db.cuenta_saldo).where(db.cuenta_saldo.c.cliente == cliente)).first()
     glob = _margen_global(con)
     if fila is None:
-        return {"cobrar": False, "margen": glob, "margen_propio": None, "umbral": UMBRAL_DEFECTO}, None
+        return {"cobrar": False, "margen": glob, "margen_propio": None, "umbral": UMBRAL_DEFECTO,
+                "pospago": False}, None
     return {"cobrar": bool(fila.cobrar), "margen": float(fila.margen) if fila.margen is not None else glob,
-            "margen_propio": fila.margen, "umbral": int(fila.umbral_aviso)}, None
+            "margen_propio": fila.margen, "umbral": int(fila.umbral_aviso), "pospago": bool(fila.pospago)}, None
 
 
 def cuenta(cliente):
@@ -221,10 +223,14 @@ def margen_precio(cliente):
     return c["margen"] if c and c["cobrar"] else 1.0
 
 
-def configurar(cliente, *, usuario, cobrar=None, margen=SIN_CAMBIO, umbral=None):
+def configurar(cliente, *, usuario, cobrar=None, margen=SIN_CAMBIO, umbral=None, pospago=None):
+    """`pospago` (Daniel 2026-10-12): con «Cobrar» prendido, cobra a su margen como siempre pero nada frena por
+    saldo (`exigir`, `puede_arrancar`); el saldo negativo es lo que el proyecto debe."""
     cambios = {"actualizado_en": db.ahora(), "actualizado_por": usuario}
     if cobrar is not None:
         cambios["cobrar"] = bool(cobrar)
+    if pospago is not None:
+        cambios["pospago"] = bool(pospago)
     if margen is not SIN_CAMBIO:
         cambios["margen"] = None if margen is None else _validar_margen(margen)
     if umbral is not None:
@@ -235,12 +241,31 @@ def configurar(cliente, *, usuario, cobrar=None, margen=SIN_CAMBIO, umbral=None)
     t = db.cuenta_saldo
     with db.conectar() as con:
         _candado(con)
+        if pospago is False:
+            _exigir_sin_deuda_con_plan(con, cliente)
         if con.execute(sa.select(t.c.cliente).where(t.c.cliente == cliente)).first():
             con.execute(t.update().where(t.c.cliente == cliente).values(**cambios))
         else:
             con.execute(t.insert().values(cliente=cliente, cobrar=cambios.pop("cobrar", False),
                                           umbral_aviso=cambios.pop("umbral_aviso", UMBRAL_DEFECTO), **cambios))
         return _cuenta(con, cliente)
+
+
+def _exigir_sin_deuda_con_plan(con, cliente):
+    """Un pospago que debe no pasa a prepago mientras tenga un periodo de plan sin cerrar: en prepago el
+    vencimiento de esa bolsa tiene el tope de no bajar de 0 y se comería la deuda (guardian-gasto 2026-10-12,
+    2.ª ronda). Cerrado el periodo (la bolsa ya venció entera), sí puede. Lanza ValueError con la frase."""
+    if not con.execute(sa.select(db.cuenta_saldo.c.pospago).where(db.cuenta_saldo.c.cliente == cliente)).scalar():
+        return
+    abierto, terminados = planes.periodos_sin_cerrar(con, cliente)
+    sin_cerrar = ([abierto] if abierto is not None else []) + terminados
+    if not sin_cerrar:
+        return
+    restante = sum(_bolsa(con, cliente, p)["restante"] for p in sin_cerrar)
+    if _saldo(con, cliente) - restante < 0:
+        raise ValueError(gettext("Este proyecto debe plata y tiene un plan con el periodo sin cerrar: pasarlo a "
+                                 "prepago ahora haría que la bolsa pague la deuda. Espera a que cierre el periodo "
+                                 "o a que pague."))
 
 
 # ------------------------------------------------------------------- saldo ---
@@ -342,9 +367,11 @@ def exigir(cliente, costo_usd, job_id=None, excluir_job=None, tipo=None):
         precio = max(precio, 1)
         if previa is not None and not previa.incluido:
             return int(previa.milesimas)   # segundo clic del mismo trabajo: ya reservado
-        libre = _saldo(con, cliente) - _reservado(con, cliente, excluir_job) - _por_vencer(con, cliente, por_cerrar, excluir_job)
-        if libre < precio:
-            raise SaldoInsuficiente(cliente, precio, libre)
+        if not c["pospago"]:   # pospago: se reserva el precio visto (su margen) pero nada frena por saldo
+            libre = (_saldo(con, cliente) - _reservado(con, cliente, excluir_job)
+                     - _por_vencer(con, cliente, por_cerrar, excluir_job))
+            if libre < precio:
+                raise SaldoInsuficiente(cliente, precio, libre)
         if job_id:
             _reservar(con, cliente, job_id, precio, c["margen"], False, periodo_id, costo_usd)
         return precio
@@ -431,14 +458,16 @@ def inicio_de_cadena(tarea):
 
 def puede_arrancar(tarea, tipos_que_cobran):
     """Respaldo del worker (§5.1): False solo si el tipo cobra, el proyecto
-    cobra, no es continuación de una cadena, el saldo es ≤ 0 y no es algo
+    cobra sin pospago, no es continuación de una cadena, el saldo es ≤ 0 y no es algo
     incluido en un plan abierto al que aún le queda tope (planes §4: `encolar`
     ya lo aceptó sin pedir saldo; el periodo solo se lee en ese último caso)."""
     if tarea.get("tipo") not in tipos_que_cobran or not tarea.get("cliente"):
         return True
     cliente = tarea["cliente"]
     with db.conectar() as con:
-        if not _cobra(con, cliente):
+        cta = con.execute(sa.select(db.cuenta_saldo.c.cobrar, db.cuenta_saldo.c.pospago)
+                          .where(db.cuenta_saldo.c.cliente == cliente)).first()
+        if cta is None or not cta.cobrar or cta.pospago:   # pospago: el saldo negativo es deuda, no freno
             return True
         if tarea.get("job_id") and _es_continuacion(con, tarea):
             return True
@@ -607,6 +636,48 @@ def acreditar(con, cliente, tipo, milesimas, concepto, *, recarga_id=None, usuar
                      concepto=concepto, usuario=usuario, detalle=str(detalle or "")[:300], extra={})
 
 
+def detallar_uso_previo(cliente, movimiento_id, margen):
+    """Anota en un ajuste negativo que paga lo usado antes de cobrar: los gastos del proyecto sin movimiento
+    hasta la fecha del ajuste (y después del último ajuste ya detallado), a `margen`. Con eso
+    Configuración › Gasto los muestra uno por uno como cobrados (`vista._sub_cobrado`); el saldo no cambia.
+    Pedido de Daniel 2026-10-13 («que vea todos los 900 que ha gastado»): el pospago de happyflops cargó lo
+    usado antes como UN ajuste y su gasto solo enseñaba lo de después.
+
+    Exige que costo × margen dé el ajuste al centavo; si no, ValueError y no escribe nada. Con el mismo
+    margen ya anotado devuelve lo anotado; con otro, ValueError. Devuelve
+    {"desde_gasto", "hasta_gasto", "margen", "n", "costo"}."""
+    margen = float(margen)
+    m, g = db.movimiento_saldo, db.gasto
+    with db.conectar() as con:
+        _candado(con)
+        mov = con.execute(sa.select(m).where(m.c.id == int(movimiento_id))).first()
+        if mov is None or mov.cliente != cliente or mov.tipo != "ajuste" or mov.milesimas >= 0:
+            raise ValueError(f"el movimiento {movimiento_id} no es un ajuste negativo de {cliente}")
+        extra = dict(mov.extra or {})
+        if extra.get("uso_previo"):
+            if float(extra["uso_previo"]["margen"]) != margen:
+                raise ValueError(f"el ajuste {movimiento_id} ya está detallado a otro margen")
+            return extra["uso_previo"]
+        anteriores = con.execute(sa.select(m.c.extra).where(m.c.cliente == cliente, m.c.tipo == "ajuste",
+                                                            m.c.id < mov.id)).scalars()
+        desde = max([int(e["uso_previo"]["hasta_gasto"]) for e in anteriores if (e or {}).get("uso_previo")],
+                    default=0)
+        hasta = con.execute(sa.select(sa.func.max(g.c.id))
+                            .where(g.c.cliente == cliente, g.c.creado_en <= mov.creado_en)).scalar() or 0
+        con_movimiento = sa.select(m.c.gasto_id).where(m.c.cliente == cliente, m.c.gasto_id.isnot(None))
+        n, costo = con.execute(sa.select(sa.func.count(), sa.func.coalesce(sa.func.sum(g.c.usd), 0.0))
+                               .where(g.c.cliente == cliente, g.c.id > desde, g.c.id <= hasta,
+                                      g.c.id.notin_(con_movimiento))).one()
+        if not n or abs(float(costo) * margen * 1000 + mov.milesimas) > 10:
+            raise ValueError(f"el ajuste {movimiento_id} ({-mov.milesimas / 1000:.2f}) no cuadra con {n} gastos "
+                             f"de costo {float(costo):.4f} × {margen:g}")
+        uso = {"desde_gasto": desde, "hasta_gasto": int(hasta), "margen": margen, "n": int(n),
+               "costo": round(float(costo), 6)}
+        extra["uso_previo"] = uso
+        con.execute(m.update().where(m.c.id == mov.id).values(extra=extra))
+    return uso
+
+
 # ------------------------------------------------------------- planes ---
 # Spec planes 2026-10-09 §3: el saldo sigue siendo UNA suma; la bolsa del plan se
 # calcula primero-el-plan sobre los cobros y reversos del periodo.
@@ -682,6 +753,21 @@ def _bolsa(con, cliente, periodo):
             "restante": max(0, credito - gastado), "fin": periodo["fin"]}
 
 
+def deuda(cliente):
+    """Lo que debe un proyecto pospago, en milésimas (0 si no cobra, no es pospago o no debe): lo negativo de su
+    saldo propio = restante de la bolsa del plan − saldo (la bolsa no paga la deuda). Solo lee."""
+    if not cliente:
+        return 0
+    with db.conectar() as con:
+        cta = con.execute(sa.select(db.cuenta_saldo.c.cobrar, db.cuenta_saldo.c.pospago)
+                          .where(db.cuenta_saldo.c.cliente == cliente)).first()
+        if cta is None or not cta.cobrar or not cta.pospago:
+            return 0
+        periodo = planes.periodo_abierto(con, cliente)
+        restante = _bolsa(con, cliente, periodo)["restante"] if periodo is not None else 0
+        return max(0, int(restante) - _saldo(con, cliente))
+
+
 def bolsa_plan(cliente, ahora=None):
     """La bolsa del periodo abierto: {periodo_id, credito, gastado, restante,
     fin}, o None si no hay periodo. Solo lee. El saldo propio es
@@ -714,7 +800,8 @@ def acreditar_plan(con, periodo_id):
 def vencer_periodo(con, periodo_id):
     """Movimiento `vencimiento` por lo que sobró de la bolsa (spec planes §3),
     limitado a no dejar el saldo por debajo de 0 por el vencimiento (una
-    anulación o un ajuste negativo pudo bajarlo). Devuelve las milésimas
+    anulación o un ajuste negativo pudo bajarlo), salvo en pospago: ahí vence
+    lo que sobró entero y la deuda queda. Devuelve las milésimas
     vencidas (positivas; 0 si se gastó todo, y se escribe igual: así queda
     hecho). Idempotente: un segundo llamado devuelve lo ya vencido sin escribir.
     Marcar el periodo `cerrado` lo hace `planes.marcar_cerrado` en este mismo `con`."""
@@ -728,7 +815,11 @@ def vencer_periodo(con, periodo_id):
     if previo is not None:
         return -int(previo.milesimas)
     restante = _bolsa(con, p["cliente"], p)["restante"]
-    monto = min(restante, max(0, _saldo(con, p["cliente"])))
+    pospago = con.execute(sa.select(db.cuenta_saldo.c.pospago)
+                          .where(db.cuenta_saldo.c.cliente == p["cliente"])).scalar()
+    # Pospago: lo que no se usó de la bolsa vence ENTERO. Con el tope de 0, la bolsa pagaría la deuda
+    # (guardian-gasto 2026-10-12: una bolsa de US$ 1 000 sin usar borraba US$ 948 de deuda).
+    monto = restante if pospago else min(restante, max(0, _saldo(con, p["cliente"])))
     _insertar(con, cliente=p["cliente"], tipo="vencimiento", milesimas=-monto, periodo_id=p["id"],
               concepto="vencimiento", extra={"restante": restante})
     return monto

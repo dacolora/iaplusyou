@@ -85,7 +85,8 @@ los clientes». Las dos pestañas daban números distintos para el mismo anuncio
   `MODELO_DEFECTO` ni el ajuste de un proyecto: mueven lo que decide el decisor de Experimentos (plata).
 - **R12. «Meta reporta».** En la tarjeta de un anuncio `facebook-ads` de Triple Whale, «Meta reporta N×» sale de
   `valor_canal / gasto`; sin dato no aparece.
-- **R13. Lo pagado no se reescribe.** Referentes, «Llevar a Crear» y Pausar/Activar siguen en
+- **R13. Lo pagado no se reescribe.** (Desde el 2026-10-13, «Llevar a Crear» de un anuncio de imagen fija abre Crear
+  en modo imagen con la imagen del anuncio en la bandeja: skill `triple-whale`.) Referentes, «Llevar a Crear» y Pausar/Activar siguen en
   `triple_whale/rutas.py` con su alcance y sus garantías; esta pestaña solo les pasa la tienda de la entrada (o
   `None`). «Cómo mejorarlo» y «Analizar los N» pasaron en E2 tarea 4 a las rutas de la pestaña (la galería es una con
   las dos fuentes), y «Evaluar con IA» de Triple Whale en E2 tarea 5, pero cobran con el mismo
@@ -248,6 +249,12 @@ arranques desconocidos).
 - **Consultas fijas**: una lectura por fuente (serie, anuncios, arranques, inicio de la copia, primeros días), una de
   piezas de Creatv y una de tasas por moneda, crezcan o no los anuncios
   (`test_las_consultas_no_crecen_con_los_anuncios`).
+- **Días que el detalle no abre (PND-294, 2026-10-12).** Con un periodo fijo la gráfica dibuja días anteriores al
+  primero que la ruta acepta y el clic daba «No se pudo cargar ese día.»: `armar(inicio_detalle=…)` los marca `sin_dia`
+  con la regla de la ruta (`resumen._primeros`; con Triple Whale solo, `datos.primer_dia_copia`, no `inicio_datos`) y el
+  JS no los abre ni los invita (`tests/test_rendimiento_sin_dia.py`, `tests/js/tw_resultados_dia.test.mjs`). El motivo
+  depende de cuántas fuentes tienen copia (`varias_fuentes`, no de `fuente == "mixta"`), y `dia_inicial` siempre es un
+  día que abre (o "": el JS esconde el recuadro en vez de dejarlo en «Cargando…»).
 
 ## Integración con main (2026-10-10): lo de producción, dentro de Rendimiento
 
@@ -261,13 +268,18 @@ el informe de la integración, al lado (`integracion-report.md`). Dónde vive ca
   `meta_panel.diagnostico` sobre TODAS las cuentas de Meta del alcance (`meta_estructura`, cubiertas incluidas). Sus
   enlaces al Administrador de anuncios van tal cual. Las alertas «alta» de Meta (Alertas) llevan a `#rendimiento`.
 - **«Evaluación con IA» de Meta** (main E2, cobra): `_meta_evaluar.html` y `_meta_evaluacion.html` después de «Lo que
-  hace ganar en tu cuenta». Evalúa las cuentas de la entrada cuya fuente es Meta (`meta_fuente`; nunca las dos fuentes
-  en un prompt): el formulario manda `entrada`, y `meta_rendimiento.rutas.evaluar` las resuelve con
+  hace ganar en tu cuenta». Evalúa TODAS las cuentas de Meta de la entrada (`meta_estructura`, también las que cubre
+  una tienda por R5 y las de un proyecto con una tienda sin país por R4): PND-290, Daniel 2026-10-12, «al unir ambos
+  tableros tenemos que traer todo de ambos» (hasta entonces solo `meta_fuente`, y Noruega se quedaba sin la evaluación
+  que la vieja pestaña Meta sí daba). Lee solo la copia de Meta, así que nunca hay dos fuentes en un prompt; si entra
+  una cuenta cubierta (`mr.con_pixel`), una línea dice que usa las cifras del Pixel de Meta y que las ventas de Triple
+  Whale las evalúa «Lo que hace ganar en tu cuenta». El formulario manda `entrada`, y `meta_rendimiento.rutas.evaluar` las resuelve con
   `panel.cuentas_evaluacion_meta` (la misma `_resolver`; una entrada vieja no se ensancha a «Todas») y se las pasa a
   `analisis.preparar(ids=)`. «Desde el inicio» evalúa los últimos 30 días (el defecto de la vieja pestaña; el texto lo
   dice); con 7, 14, 30 o 90, ese periodo. El N y el precio del botón salen del mismo cálculo que la ruta (E2-R6;
-  `tests/test_rendimiento_meta_e2.py`). Una entrada cuyas cuentas de Meta cubre una tienda dice que su evaluación es la
-  de Triple Whale. Precio, `n`/`precio_visto`, `max_intentos=1` y el gasto son los de main, sin tocar.
+  `tests/test_rendimiento_meta_e2.py`). Los anuncios ya evaluados de la galería solo se reusan si la estructura es
+  justo la de fuente Meta (`_meta`, `reusar`). Precio, `n`/`precio_visto`, `max_intentos=1` y el gasto son los de main,
+  sin tocar.
 - **NVP**: en Resultados de Triple Whale (fuente «tienda» o «anuncios»; con Meta o mezcla no hay tarjeta NVP: sería de
   una parte del alcance), en «Ver como tabla» y en cada tarjeta de la galería (las de Meta, de la copia de Triple Whale
   por `ad_id`; sin Triple Whale, sin la línea), y para las cuentas de Meta una línea arriba de «Campañas y conjuntos»
@@ -294,7 +306,9 @@ coordinador en `.superpowers/sdd/2026-10-10-pestana-rendimiento-e2/final-fixes.m
 
 - **G1. Ganchos de un anuncio de Meta, apagados.** «Probar los 3 ganchos» de un análisis de fuente Meta cobraría unos
   US$ 1,01 de Kling por un camino sin prueba real: `triple_whale.ganchos.puede_probar` da `MOTIVO_META`, el detalle
-  no pinta el botón y `ganchos_probar` responde 409 sin crear ni reservar. Se activa tras una prueba real (PND-289).
+  no pinta el botón y `ganchos_probar` responde 409 sin crear ni reservar. Desde el 2026-10-12 la única excepción es
+  un admin en colorado_forja (`ganchos.prueba_meta_permitida`; Daniel: la prueba real se hace ahí, viendo el precio;
+  en otro proyecto con Cobros la pagaría el cliente); se abre a todos tras esa prueba (PND-289).
 - **G2. El precio de «Cómo mejorarlo» de un anuncio de Meta** usa la duración que guardó un análisis anterior del
   mismo anuncio (`triple_whale.panel.precio_analisis(creativo, filas, fuente)` + `duracion_vista`): un anuncio de
   una cuenta sin tienda no tiene `tw_creativo` y suponía 30 s. La misma llamada alimenta la tarjeta, el total del lote
@@ -306,7 +320,9 @@ coordinador en `.superpowers/sdd/2026-10-10-pestana-rendimiento-e2/final-fixes.m
 - **G4.** El prompt de «Cómo mejorarlo» de un anuncio de fuente Meta no recibe la evaluación de cuenta de Triple
   Whale (`evaluacion_cuenta=None`; los productos más vendidos sí).
 - **S1.** Soltar una cuenta de Meta (quitarla o desconectar) borra los análisis de fuente Meta de esa cuenta y,
-  después, su imagen y su video en R2 (skill `meta-rendimiento`, «Disconnecting»). **S3.** La imagen copiada de Meta
+  después, su imagen y su video en R2 (skill `meta-rendimiento`, «Disconnecting»). Desde el 2026-10-12 (PND-295) tampoco
+  quedan copias cuando la cuenta se suelta con un «Cómo mejorarlo» corriendo o pidiéndose, y lo que R2 no borró se
+  reintenta cada día (skill `meta-rendimiento`, «Releasing an account while…»). **S3.** La imagen copiada de Meta
   solo se abre como JPEG/PNG/WEBP/GIF.
 - **S2. Correo verificado solo en «Actualizar ahora»** (`rutas.CON_CORREO_VERIFICADO`): producción no tiene SMTP y
   la mitad de los usuarios cliente no pueden verificar; las rutas que cobran no lo exigían allá y siguen sin exigirlo
@@ -320,7 +336,34 @@ coordinador en `.superpowers/sdd/2026-10-10-pestana-rendimiento-e2/final-fixes.m
   neutra). Triple Whale no cambia.
 - **T1/T2.** Pruebas para las mutaciones 27 (cada tarjeta de Meta en la moneda de SU cuenta, orden en USD) y 25 (el
   envío de «Probar los ganchos» se frena antes del fetch).
-- Diferido: PND-290 a PND-295.
+- Diferido: PND-290 a PND-295. Cerrados el 2026-10-12: PND-290 (evaluación de Meta para todas las cuentas, arriba), PND-286 (texto ajeno delimitado en «Evaluar con IA») y PND-294 (días que no abren, `sin_dia`); PND-295 quedó solo con el aprendizaje que guarda el nombre del anuncio (decide Daniel).
+
+## Las métricas que faltaban (2026-10-13)
+
+Por qué: Daniel mandó un informe por país hecho con Triple Whale («Happy Flops October Performance») y pidió esas
+métricas en la pestaña, «desde Triple Whale». Spec `docs/superpowers/specs/2026-10-13-rendimiento-metricas-que-faltaban-design.md`
+(§9: lo que cambió con los datos reales), plan al lado en `plans/`, pruebas `tests/test_rendimiento_destacados.py`.
+
+- **Qué**: dos tiles más en `tiles_anuncios` («ROAS de clientes nuevos» = `m.nc_roas`; «Tasa de conversión» =
+  `m.cv_sesion` = pedidos / sesiones del Pixel, distinta de `m.conversion`, que es por clic y alimenta el anillo
+  «Compra»), y `templates/_rend_destacados.html`: «Los mejores para iterar», «Los que mejor convierten», «Mejores
+  imágenes» y «Mejores videos» (`listas`, debajo de «Tus anuncios») y «Productos en tus anuncios» (`productos`, dentro
+  de `resto`, después de «Lo que más se vende», que no cambia: aquella es la tienda, esta los anuncios).
+- **Cálculo**: `triple_whale/destacados.py`, puro salvo `armar(cliente, tw)`; parte de `tw["ev"]["anuncios"]` (país,
+  periodo y canal de la pestaña). Lo pone `panel.contexto()["destacados"]` SOLO con fuente "tw" (como los tiles): con
+  Meta o mezcla no hay sesiones, ventas a clientes nuevos ni página de destino.
+- **Producto de un anuncio**: su página `/products/<handle>` contra el `url_compra` del Catálogo, primero tal cual y
+  después sin el `-<dígitos>` que Shopify agrega en otra tienda (sin guiones en los dos casos; así `-pack` y `-pack-2`
+  del Catálogo no se juntan); si no, un nombre del Catálogo dentro del nombre del anuncio (el más largo, y gana a una
+  página que no está en el Catálogo); si no, el handle; si no, «Otros». Productos: top 10 + «Otros»; la suma de su
+  gasto es la del tile «Gasto». ROAS «0,0×» con gasto y sin ventas; «—» solo sin gasto.
+- **Mínimos**: iterar = ROAS ≥ el de los anuncios del alcance y ≥ 10 compras; conversión = ≥ 100 sesiones y ≥ 3
+  compras; topes 8 / 8 / 6 por tipo. Las listas y las tarjetas solo miran anuncios con gasto (Google Ads trae filas
+  «(not set)»/«sag_organic» con ventas y gasto 0).
+- **Tipo**: `tw_creativo.tipo` (`datos.tipos_creativo`, UNA consulta); sin tipo: video con vistas de 3 s, imagen en Meta,
+  y en otro canal «—» y fuera de las tarjetas (un anuncio de búsqueda de Google no es una imagen).
+- **Lecturas fijas**: tipos, Catálogo y los creativos de las ≤ 12 tarjetas
+  (`test_las_consultas_del_panel_no_crecen_con_los_anuncios`). No cobra ni llama a nadie.
 
 ## Trampas
 

@@ -15,12 +15,56 @@ Un proyecto con **«Cobrar» prendido** paga cada generación desde un **saldo p
 
 Esto se suma a la regla 1 del repo (precio antes del cobro, `max_intentos=1`, gasto real anotado): el costo sigue anotándose en `gasto` exactamente como antes; el cobro al cliente es una segunda escritura que cuelga de la primera.
 
+**Un proyecto nuevo nace cobrando (PND-298, Daniel 2026-10-12: «abierto, pero cobrando»).** El alta de la portada
+(`dashboard.crear_proyecto`, abierta a cualquiera) llama `libro.configurar(cid, usuario=, cobrar=True)` ANTES de crear el
+usuario y la carpeta: margen global, umbral por defecto. Si no se puede prender, no se crea nada (500 con aviso). Antes
+nacía con «Cobrar» apagado (`cuenta_saldo.cobrar` default False) y un desconocido generaba con las llaves de Creatv.
+Los proyectos que ya existían no cambian (sin fila = no cobra). Un admin lo apaga en `/admin/cobros` si el proyecto es
+de la casa o de un cliente que paga por fuera.
+
+**Pospago: «Cobrar» sin frenar (Daniel, 2026-10-12, para happyflops: «siguen generando, pagan después»).**
+`cuenta_saldo.pospago` (migración `0040_cobros_pospago`, 0 por defecto; interruptor «Prepago / Pospago» en
+`/admin/cobros`, `admin_cuenta` con `pospago=1|0`, `libro.configurar(..., pospago=)`). Con «Cobrar» y pospago
+prendidos todo se cobra igual (costo × margen al libro, reserva con el margen visto, reversión si falla), pero **nada
+frena por saldo**: `exigir` reserva y no lanza `SaldoInsuficiente`, `puede_arrancar` deja arrancar, no hay aviso
+`saldo_bajo` (`gastos._despues_del_cobro`) ni alertas `cobros:sin_saldo`/`cobros:saldo_bajo`. El saldo negativo es lo
+que el proyecto debe: el chip dice «Por pagar: US$ X» (tono `aviso`, nunca `bloqueo`), el panel muestra la tile «Por
+pagar» y la sección de pago se llama «Pagar» (una recarga baja la deuda). La cuenta de lo usado antes de prenderlo
+se carga con un **ajuste** negativo (`recargas.manual`, nota visible al cliente; nunca con el costo ni el margen en la
+nota). Con «Cobrar» apagado el pospago no hace nada. `libro.cuenta()` trae la clave `pospago` (False sin fila).
+**Con plan mensual la bolsa no paga la deuda** (guardian-gasto 2026-10-12): `vencer_periodo` vence lo que sobró
+ENTERO en pospago (en prepago sigue con el tope de no bajar de 0), y lo que se muestra como deuda es
+`vista.por_pagar(e, bolsa)` = lo negativo de saldo − restante de la bolsa (chip «Por pagar: X · Plan: Y restantes»,
+tile del panel, `tono(e, bolsa)`). La deuda no tiene tope (lo automático ya autorizado —modo automático de
+Experimentos, QA de Sprints, regla de fidelidad del importador— sigue cobrando sin el freno del saldo); Daniel eligió
+**un aviso al admin cada US$ 200 de deuda nueva** (`avisos.TRAMO_DEUDA`): `avisos.deuda_pospago(cliente,
+libro.deuda(cliente))` tras cada cobro de un pospago (correo `deuda_pospago`; el tramo en `kv`
+`cobros:aviso_deuda:<cliente>`; la primera vez solo anota, al bajar no avisa) y la alerta solo-admin
+`cobros:deuda_pospago` con huella por tramo. El VPS no tiene SMTP (2026-10-12): hoy solo la alerta llega.
+**En producción** desde 2026-10-12 23:33 UTC (main 21823ed5, alembic 0040): happyflops con «Cobrar», margen 3 y pospago; lo usado antes (1 164 gastos, US$ 316,21 de costo, 2026-08-29 a 2026-10-11) quedó como el ajuste −US$ 948,63 (movimiento 3, nota en inglés sin costo ni margen) y el tramo 4 anotado en `kv`. El script de una sola vez exigía cola vacía y libro vacío del proyecto, prendía todo en un solo `configurar` y cargaba como ajuste exactamente los gastos sin movimiento × 3. Pruebas: `tests/test_cobros_pospago.py`, `tests/test_migracion_0040.py`.
+
+**Lo usado antes, uno por uno en Configuración › Gasto** (Daniel, 2026-10-13: «en Spend, History solo saca lo
+último; la idea es que también vea todos los 900»). Lo cobrado que ve el cliente sale de los movimientos atados a un
+gasto, así que el ajuste de lo usado antes no aparecía en su gasto: happyflops veía 17 cobros (US$ 18,10) y no los
+1 164 del ajuste. `libro.detallar_uso_previo(cliente, movimiento_id, margen)` anota en el `extra.uso_previo` del
+ajuste qué gastos paga (`desde_gasto` < id ≤ `hasta_gasto`, sin ningún movimiento; `hasta_gasto` = el último gasto
+con fecha ≤ la del ajuste, `desde_gasto` = el `hasta_gasto` del ajuste detallado anterior) y a qué margen; exige que
+costo × margen dé el ajuste al centavo (si no, `ValueError` y no escribe) y no mueve plata. `vista._sub_cobrado`
+(una fila por gasto: `gasto_id`, `s`, `n`, `job_id`, `concepto`) suma esos gastos a costo × margen junto a los
+cobros y reversos del libro, y de ahí leen TODAS las cifras cobradas: historial, «Por tipo», total, por mes,
+`total_entre`, CSV, la columna «Cobrado» del admin y las tarjetas (`_filas_cobradas`). `_usd` redondea (0,70 × 3 es
+2,0999… en coma flotante). Se corre una vez por ajuste con `deploy/detallar_uso_previo.py <proyecto> <movimiento>
+<margen>` (repetirlo con el mismo margen no cambia nada). Un ajuste que no se detalla sigue como antes: una línea en
+Saldo › Movimientos. Pruebas: `tests/test_cobros_uso_previo.py`.
+
+**Lo que faltó cobrar a happyflops** (revisión del 2026-10-13, con el sí de Daniel: «si a los dos numerales»): 52 filas de `gasto` anotadas como gasto normal (cada una estrenó su cobro a ×3; la deuda subió US$ 102,39, de 966,73 a 1 069,12), con `extra.faltante_2026_10_13` y la fecha original: 12 diferencias de swaps de video anotados a 5 s (`swap:<id>:t0:duracion_real`, medidas con el original o el resultado), 5 videos y 8 swaps entregados y borrados antes de que existiera la tabla (`video:<cf>:t0`, `swap:<id>:t0`; 4 videos sin archivo ni modelo, estimados a la baja por su sesión) y 27 revisiones de marca con Claude nunca anotadas (`revision_marca:<swap>:t0`, estimadas en 1 800/350 tokens). Lo pagado que no se entregó (≈ 9 videos de Wan con la espera agotada) y las pruebas de Creatv NO se cobraron. El `:t0` es la convención de `tareas.ref_sufijo` para lo que se anota fuera del worker: así la tarjeta de la pieza suma la diferencia.
+
 ## Módulos y quién escribe qué
 
 | Módulo | Qué hace | Escribe |
 |---|---|---|
 | `cobros/libro.py` | cuenta, margen, saldo, reservas, `exigir`, `cobrar_gasto`, `revertir_trabajo`, `acreditar`, `puede_arrancar`, `SaldoInsuficiente` | **ÚNICO escritor** de `cuenta_saldo`, `movimiento_saldo`, `reserva_saldo` y de `kv` `cobros:margen_global` |
-| `cobros/recargas.py` | recargas con Wompi o Bold, eventos/webhook, verificación, recarga manual | **ÚNICO escritor** de `recarga` y `pago_evento` (acredita llamando a `libro.acreditar` en su misma transacción) |
+| `cobros/recargas.py` | recargas con Wompi o Bold, eventos/webhook, verificación, rescate por referencia (`rescatar_sin_evento`, `buscar_en_wompi`), recarga manual | **ÚNICO escritor** de `recarga` y `pago_evento` (acredita llamando a `libro.acreditar` en su misma transacción) y de `kv` `wompi:visto:<id>` y `wompi:busqueda:<id>` |
 | `cobros/bold.py` | crear el link, leer su estado, verificar la firma | nada (el único módulo que habla con Bold) |
 | `cobros/wompi.py` | checkout de recarga, aceptaciones, fuentes (tarjeta/Nequi), cobro de un periodo, transacción, firma de integridad y de eventos | solo `kv` `wompi:aceptaciones` (caché de los contratos, `aceptaciones_recientes`; el único módulo que habla con Wompi) |
 | `cobros/trm.py` | la TRM oficial (datos.gov.co) para cobrar en COP | `kv` `cobros:trm` (único escritor, upsert de un statement) |
@@ -61,7 +105,7 @@ Spec `docs/superpowers/specs/2026-10-09-planes-mensuales-wompi-design.md` §3-§
 
 ## El freno y la reserva (antes de cobrar)
 
-- `libro.exigir(cliente, costo_usd, job_id=None)`: no cobra → 0. `precio` = lo del margen, o 1 si el costo es `None` («precio no disponible»: basta saldo positivo). Si `disponible < precio` lanza `SaldoInsuficiente(cliente, precio, disponible)`; si no y viene `job_id`, inserta la reserva (un segundo clic del mismo `job_id` vivo no duplica). Una reserva está **viva** mientras exista una `tarea` con ese `job_id` en `pendiente` o `en_curso`; no se libera a mano, y `limpiar_reservas_muertas` (mantenimiento diario) las borra.
+- `libro.exigir(cliente, costo_usd, job_id=None)` (en pospago reserva y nunca lanza; ver «Pospago»): no cobra → 0. `precio` = lo del margen, o 1 si el costo es `None` («precio no disponible»: basta saldo positivo). Si `disponible < precio` lanza `SaldoInsuficiente(cliente, precio, disponible)`; si no y viene `job_id`, inserta la reserva (un segundo clic del mismo `job_id` vivo no duplica). Una reserva está **viva** mientras exista una `tarea` con ese `job_id` en `pendiente` o `en_curso`; no se libera a mano, y `limpiar_reservas_muertas` (mantenimiento diario) las borra.
 - **Tareas del worker**: `trabajos.encolar(..., costo_estimado=)` (USD del proveedor, sin margen) exige y reserva antes de insertar la tarea si el tipo está en `tareas.TIPOS_QUE_COBRAN`. Todo tipo de `tareas/` está ahí o en `TIPOS_EXENTOS_DE_COBRO` con su motivo; `tests/test_cobros_worker.py` falla con un tipo nuevo sin clasificar, uno que sobra o uno que llama a `gastos.registrar_seguro` sin estar en la lista. **Una tarea nueva que paga a un proveedor entra a `TIPOS_QUE_COBRAN` y su ruta pasa `costo_estimado`.**
 - **Respaldo del worker** (`worker._sin_saldo` → `libro.puede_arrancar`): antes de correr un tipo que cobra, si el proyecto cobra, **no es continuación de una cadena** y su saldo es ≤ 0 (el saldo, no el disponible: la reserva propia no cuenta en su contra), la tarea queda en error definitivo con `worker.MENSAJE_SIN_SALDO`, sin llamar al proveedor, y corre su `AL_INTERRUMPIR`. Cubre lo que se encola sin pasar por una ruta (modo automático de Experimentos, lotes de Sprints).
 - **Rutas que llaman al proveedor dentro de la petición** (caption orgánico, locución, voz propia, final, Adaptar referente, chat de Flow Plus, regla de producto…) llaman `libro.exigir(cliente, costo)` sin `job_id` antes de gastar. **Toda ruta que guarda algo antes de encolar** (sesión de Crear, swap, fila de final…) pide saldo ANTES de guardar; si el encolado igual falla, deja la entidad en error con `e.frase_proyecto()` o la borra.
@@ -83,10 +127,11 @@ En un proyecto que cobra **toda persona que lo mira ve precios, no costos** (tam
 - **El costo no llega al navegador de un proyecto que cobra**: lo que vuelve (`total_visto`, `precio_visto`) es un precio, y el servidor lo convierte una vez con `gastos.costo_de_precio` antes de compararlo o pasarlo al libro.
 - **Falla cerrado**: si una lectura del libro falla, un cliente (no admin) ve «—», nunca el costo (`vista.puede_ver_costo`, `OCULTO`, `_filtro_cobrado`, `_ver_cobrado`). Si falla la lectura del margen de la petición, `gastos.texto_precio` y el `texto`/`usd_precio` de `gastos.estimar` dicen «precio no disponible» (`gastos._margen_fallido`, `g.margen_precio_fallo`); `margen_vigente()` sigue devolviendo 1,0 para no romper a quien multiplica (revisión final 2026-10-08).
 - Prueba de humo: `tests/test_cobros_precios.py::test_un_proyecto_que_cobra_muestra_precios_y_no_costos` renderiza las pestañas con margen 1,5 y falla si aparece un costo.
+- **Swap de video por su duración** (PND-312, Daniel 2026-10-13): antes todo swap de video se reservaba, cobraba y anotaba como 5 s de salida; Seedance 2.5 Edit y Wan 2.7 Edit cobran entrada + salida y todos por la duración real (happyflops: 12 swaps anotados en US$ 12,80 que costaron ≈ US$ 38). `providers/swap_video_precio.py` es la ÚNICA tabla (reglas de la página de cada modelo, 2026-10-13); los `estimate_video` de los proveedores de swap delegan en ella. `generar_swap` mide cada video subido con ffprobe ANTES de `exigir` (`_medir_video_subido`; sin duración legible no sube nada), reserva con esa duración y la guarda en el swap (`duracion_s`, `fps`); `tareas/swap.py` anota con ella (un swap viejo sin medida se mide en la tarea). «Cambiar producto» muestra «≈ US$ X» al elegir los archivos: `dashboard._precios_swap` manda la regla con `usd_s`/`fijo` ya con el margen en `#swap-precio-datos` (None si el margen falló: «precio no disponible»; Seedream con `por_referencia`, que la pantalla multiplica por el `data-n-referencias` del producto elegido) y `static/swap-precio.js` pide la duración y los cuadros de cada video a `POST /cliente/<c>/swap/medir` (ffprobe sobre un temporal, no guarda nada: la MISMA medida con la que el servidor reserva y cobra; la del navegador difiere unas centésimas y con Seedance eso ya pasa de medio centavo). «Generar» nace bloqueado y solo se activa con un precio a la vista, que viaja en `precio_visto`: `generar_swap` recalcula y, sin precio visto o si el real pasa de visto + 0,005 (como `nicho/rutas.py` y `guiones/rutas_pipeline.py`), no guarda ni reserva nada y avisa el precio (dos rondas de guardian-gasto, 2026-10-13). Un video más largo que lo que procesa el modelo (`recorte_s`) o un modelo de salida fija (`salida_s`) se avisa en la pantalla y el precio ya va recortado; Kling O1 rechaza más de 10 s (`max_entrada_s`): la pantalla no deja generar y la ruta lo frena. Desplegar con los dos servicios a la vez y la cola vacía (un swap encolado por el Flask viejo se mediría y cobraría distinto). Pruebas: `tests/test_swap_video_precio.py` (incluye la paridad JS↔Python y el botón con un DOM mínimo en node).
 
 ## Wompi y la TRM (planes 3/8, 2026-10-09)
 
-API y su lista de dudas: `docs/pagos/wompi-api.md` (§13). Llaves `WOMPI_LLAVE_PUBLICA/PRIVADA`, `WOMPI_SECRETO_EVENTOS/INTEGRIDAD`; el prefijo (`pub_test_`/`prv_test_` → `https://sandbox.wompi.co/v1`, `_prod_` → `https://production.wompi.co/v1`) decide el ambiente, las dos llaves tienen que coincidir y un secreto con prefijo reconocible también; las de pruebas con `PLATAFORMA_URL` no local dejan `configurado()` en False, toda llamada lanza `ErrorWompi` y `evento_valido` da False (`pruebas_fuera_de_local()` para avisar al admin). Hosts fijos, `allow_redirects=False`, errores `from None` sin llave ni URL. `ErrorWompi` trae `caida`, `codigo`, `referencia_usada` (422 de referencia repetida) e **`incierto`**: solo en `cobrar_fuente`, cuando Wompi pudo haber cobrado (tiempo agotado leyendo, conexión cortada, 5xx, 2xx ilegible); quien cobra deja el pago pendiente y reconcilia, **nunca reintenta con otra referencia**. `cobrar_fuente` manda siempre `recurrent=True` y la firma; `payment_method.installments=1` solo con `tipo="CARD"` (la doc pide omitirlo para Nequi) y sin `acceptance_token` (§13.2, a confirmar en sandbox). `aceptaciones()` usa `GET /merchants/info` con `x-merchant-public-key` (el `/merchants/<llave>` se apaga el 2026-10-31). `evento_valido` resuelve `signature.properties` como rutas dentro de `data`; un valor nulo, objeto o booleano → False (la doc no dice cómo se firma). La referencia de un evento NO está firmada salvo que esté en `properties`: comparar monto y referencia contra lo guardado.
+API y su lista de dudas: `docs/pagos/wompi-api.md` (§13). Llaves `WOMPI_LLAVE_PUBLICA/PRIVADA`, `WOMPI_SECRETO_EVENTOS/INTEGRIDAD`; el prefijo (`pub_test_`/`prv_test_` → `https://sandbox.wompi.co/v1`, `_prod_` → `https://production.wompi.co/v1`) decide el ambiente, las dos llaves tienen que coincidir y un secreto con prefijo reconocible también; las de pruebas con `PLATAFORMA_URL` no local dejan `configurado()` en False, toda llamada lanza `ErrorWompi` y `evento_valido` da False (`pruebas_fuera_de_local()` para avisar al admin). Hosts fijos, `allow_redirects=False`, errores `from None` sin llave ni URL. `ErrorWompi` trae `caida`, `codigo`, `referencia_usada` (422 de referencia repetida) e **`incierto`**: solo en `cobrar_fuente`, cuando Wompi pudo haber cobrado (tiempo agotado leyendo, conexión cortada, 5xx, 2xx ilegible); quien cobra deja el pago pendiente y reconcilia, **nunca reintenta con otra referencia**. `cobrar_fuente` manda siempre `recurrent=True` y la firma; `payment_method.installments=1` solo con `tipo="CARD"` (la doc pide omitirlo para Nequi) y sin `acceptance_token` (§13.2, a confirmar en sandbox). `aceptaciones()` usa `GET /merchants/info` con `x-merchant-public-key` (el `/merchants/<llave>` se apaga el 2026-10-31). `evento_valido` resuelve `signature.properties` como rutas dentro de `data`; un valor nulo, objeto o booleano → False (la doc no dice cómo se firma). **El `timestamp` firmado va ARRIBA del evento, junto a `sent_at`, no dentro de `signature`** (doc oficial en español y el primer evento real, 2026-10-12); el de `signature` (la forma de la página en inglés) solo vale si no viene arriba. Con firma inválida, `recargas` deja en el registro los nombres de los campos del evento (arriba y en `signature`, nunca un valor; dentro del cupo sin firma), porque el cuerpo no se guarda. La referencia de un evento NO está firmada salvo que esté en `properties`: comparar monto y referencia contra lo guardado.
 TRM: `trm.actual()` lee `32sa-8pi3` (`$limit=1&$order=vigenciadesde DESC&$where=vigenciadesde <= hoy`, campo `valor`; una fila de un día futuro no sirve; si no se puede guardar en `kv`, la leída vale igual), 10 s, caché 6 h; si falla, la guardada leída hace ≤ 3 días; si no, `trm.SinTasa`. Una fila cuya `vigenciahasta` terminó hace más de 3 días o fuera de **2 500–7 000** COP/USD no sirve (una tasa 0 regalaría el plan; una fila de 14 800 cobraría 3,7 veces). **Banda** (revisión final 2026-10-10): una leída que se mueve más de ±8 % (`BANDA`) frente a la última aceptada (sea de cuando sea) → `SinTasa` (ni la nueva ni la vieja); nunca se acepta sola: queda en `kv` `cobros:trm_rechazada` y el admin la acepta en /admin/cobros. Todo `SinTasa` avisa al admin una vez por día (`trm_sin_tasa`, `kv` `cobros:aviso_trm:<día>`, marcado solo si el correo salió). (Re-revisión N3; ver «Revisión final».) Nunca se tiene una transacción abierta mientras se espera a la red.
 
 ## Recargas con Wompi (planes 4/8, 2026-10-09)
@@ -156,11 +201,12 @@ Una morosa no tiene periodo abierto, así que no mezcla renovación ni bolsa. Lo
 
 - **El plan respeta los escritores únicos y el candado.** `libro.vencer_periodo` escribe el movimiento `vencimiento` y devuelve el monto, pero **`planes.marcar_cerrado` marca `cerrado` en la misma transacción** (`planes` es el único escritor de `periodo_plan`). Si alguien vence sin marcar, `UNIQUE(tipo, periodo_id)` impide un segundo vencimiento. Todo cobro de una renovación decide bajo el candado tomado ANTES de leer (pysqlite no abre transacción antes de un SELECT): sin eso, dos hilos cobraban el mismo mes.
 - **Un cobro de Wompi que «pudo haber salido» no se reenvía con otra referencia.** `ErrorWompi.incierto` deja el `pago_plan` pendiente; se resuelve con la MISMA referencia (un 422 `referencia_usada` significa que ya llegó) o a mano en /admin/cobros («Resolver un pago pendiente»). Motivo: un segundo cobro con referencia nueva cobra dos veces la tarjeta de un cliente (revisión 1 de la Task 5).
+- **`timestamp` va arriba del evento** (2026-10-12): la primera recarga real (cv-1-1791835226, US$ 10) se rechazó cuatro veces como «firma inválida» porque `evento_valido` lo buscaba solo en `signature.timestamp`, la forma que copiamos de la página en inglés y con la que se armaron TODAS las pruebas. Las pruebas pasaban porque probaban nuestra copia de la doc, no a Wompi. Los ayudantes `_evento` de `tests/test_wompi.py` y `tests/test_recargas_wompi.py` arman ahora la forma real. Una forma nueva de Wompi se confirma con un evento real (o la doc en español), nunca solo con la copia de `docs/pagos/wompi-api.md`.
 - **Los eventos no se creen: se comparan y se releen.** Wompi firma por defecto solo `id`, `status` y monto; la referencia y la moneda pueden venir sin firmar. Antes de acreditar una aprobación o anulación se relee la transacción (una consulta) y se compara referencia, moneda y monto con lo guardado; si Wompi cae, 500 y Wompi reintenta. Un evento con la referencia cambiada acreditaba la recarga de otro proyecto.
 - **El precio que renueva es el que la persona aceptó.** `suscripcion.precio_usd` y `precio_anual_usd` se guardan al suscribirse; editar el plan solo vale para suscripciones nuevas (es lo que dice «Autorizo el cobro de US$ X»). Para subir el precio a un cliente existente hay que pedirle que se vuelva a suscribir.
 - **La bolsa de un periodo es la que compró su pago** (`pago_plan.precio_mes_usd`), no el precio del plan de ese día: un anual abre doce periodos con la misma foto. El `gastado` de la bolsa cuenta un reverso solo si su cobro también cayó en el periodo (si no, devolver un cobro del mes anterior inflaba la bolsa y el vencimiento se llevaba plata propia).
 - **Se cobra una hora antes de que termine lo pagado** (`ADELANTO_COBRO`): con la periódica cada 30 min, cobrar justo al vencer dejaba al cliente hasta media hora a precio a la carta o bloqueado. El crédito del mes nuevo aparece hasta una hora antes.
-- **Activar a mano SIEMPRE apaga la renovación con tarjeta** (`renovar=False`) y no toca el precio aceptado: un pago por transferencia no autoriza otro monto en la tarjeta. Una anulación (VOID) de un pago de plan aprobado deja la suscripción `cancelada` (no solo `renovar=False`): así cambiar de tarjeta no reactiva la renovación; el admin reactiva con una suscripción nueva.
+- **Activar a mano SIEMPRE apaga la renovación con tarjeta** (`renovar=False`) y no toca el precio aceptado: un pago por transferencia no autoriza otro monto en la tarjeta. Una anulación (VOID) de un pago de plan aprobado deja la suscripción `cancelada` (no solo `renovar=False`): así cambiar de tarjeta no reactiva la renovación; el admin reactiva con una suscripción nueva. Desde 2026-10-12 además vence la bolsa de los periodos de ese pago.
 - **«No se cobró» y «Activar a mano»** (admin): «No se cobró» cuenta como cobro fallido y espera 30 min del último intento (`ESPERA_NO_COBRADO`), porque un pendiente en vuelo todavía puede aprobarse; «Activar a mano» exige «Cobrar» prendido; la nota del admin va solo al log (el motivo del pago lo ve el cliente).
 - **La constancia de aceptación vive en `kv` `planes:aceptacion:<suscripcion>`** (tokens y hora; la columna no existe). No hay limpieza de esa clave: es la prueba si Wompi o el cliente discuten el cobro.
 - **Las llaves de pruebas solo funcionan con host local**; con `PLATAFORMA_URL` real `configurado()` da False. Un valor falso de llave en una prueba lleva `llave-de-prueba` en la línea (la guarda del commit).
@@ -182,19 +228,72 @@ Una morosa no tiene periodo abierto, así que no mezcla renovación ni bolsa. Lo
 - **Re-revisión 2 (2026-10-10)**: (R1) también el gasto de un trabajo con reserva pagada (o sin reserva) cuenta lo incluido reservado por OTROS trabajos vivos antes de anotarse incluido (si no, en orden inverso se quedaba con el lugar de otro y ese otro se cobraba sin saldo). (R2) con una TRM rechazada sin resolver, si datos.gov.co cae, la aceptada vieja NO sirve de respaldo: `SinTasa` hasta que el admin acepte o una lectura nueva pase la banda. (R3) el aviso `wompi_sin_evento` nunca da el pago por confirmado: pide buscar la transacción en el panel de Wompi de Creatv (nuestro comercio, referencia y monto) antes de acreditar a mano. (R4) `libro.disponible` y `libro.estado` (el chip, el panel y la alerta `sin_saldo`) descuentan lo que vencerá de periodos terminados sin cerrar, como `exigir`.
 - **Aceptado y a pendientes**: M3 (corregir al alza el cobro de un periodo ya cerrado sale del saldo propio), Nequi a cualquier celular, `widget.js` sin SRI, y confirmar en sandbox que `GET /transactions/<id>` de otro comercio da 404 (ver `docs/pendientes.md`).
 
-## Prueba real pendiente (sandbox de Wompi; bloqueante para activar el plan Pro, PND-239/PND-244)
+## Prueba real en producción (2026-10-12, PND-244)
 
-Nada de Wompi corrió contra su API de verdad: todo se probó con un Wompi falso. Antes de activar el plan (con las llaves de pruebas en el `.env` local, `PLATAFORMA_URL` local, `venv/bin/python3 dashboard.py` y el worker):
+Se hizo en producción con plata de Daniel en vez del sandbox (las llaves de pruebas solo sirven con `PLATAFORMA_URL` local), en `colorado_forja` con «Cobrar» prendido solo durante la prueba y un plan «Prueba» de US$ 1 (id 2, margen 1,25, tope incluido 0,50), con la TRM 3 194,44:
 
-1. **Recarga con checkout**: tarjeta `4242 4242 4242 4242` aprobada, `4111 1111 1111 1111` rechazada; la vuelta con `?id=` acredita una sola vez; el evento firmado llega (URL del panel de pruebas) y no duplica.
-2. **Widget de tarjeta** en `plan_alta`: qué campo mete en el formulario (`_token_tarjeta` lo busca como `token` o cualquier `tok_…`); si el POST lo manda el iframe (3DS) y `_solo_mismo_origen` da 403 (arreglo: callback que publique el token desde nuestra página, nunca eximir la ruta); la consola sin violaciones de `Permissions-Policy: payment=()` (si las hay, política solo en `plan_alta` y `plan_tarjeta`).
-3. **Alta de plan** con tarjeta: primer cobro APPROVED abre el periodo y acredita la bolsa; DECLINED termina la suscripción sin periodo; PENDING lo resuelve el evento o «Verificar».
-4. **Cargo a una fuente**: ¿exige `acceptance_token`? (hoy se manda sin él, `docs/pagos/wompi-api.md` §13.2); ¿el token de aceptación es de un solo uso? (la caché de `aceptaciones_recientes` supone que no).
-5. **Nequi**: con `3991111111` / `3992222222`, ¿el débito recurrente pide aprobar cada mes? Si lo pide, la suscripción solo acepta tarjeta (spec ruling 10); anotarlo aquí. Token de Nequi aprobado → fuente de pago.
-6. **Renovación y gracia**: llevar `cubierto_hasta` a una hora de vencer y correr `planes.renovar_todo()`; un rechazo deja `morosa` y reintenta a las 24 h y a las 48 h; «Actualizar tarjeta» cobra en el acto; el tercer rechazo termina.
-7. **Cancelar** (sigue hasta el fin, sin cobro), **anual** (un pago, doce periodos) y **anulación** de un pago desde el panel de Wompi (queda `cancelada` y avisa al admin).
-8. **Ambiente**: al pasar de llaves de pruebas a producción, borrar la clave `kv` `wompi:aceptaciones` (la caché no lleva el ambiente); registrar en el panel de producción `https://app.creatvmachine.com/pagos/wompi/eventos` (PND-241).
-9. Anotar aquí lo que cambie y cerrar PND-239/PND-244.
+1. **Recarga de US$ 10** por checkout (cv-1-1791835226, 3 194 500 centavos): Wompi la aprobó, pero sus 4 eventos (20:01:24–26 UTC, en 2 s) dieron 401 por el `timestamp` (ver «Trampas de planes y Wompi»; arreglado en d3cf88da) y **Wompi no reintentó a los 30 min** como dice su doc. Se acreditó por ssh con la transacción leída en Wompi y `recargas._aplicar_wompi` bajo el candado, el camino de «Verificar» (PND-296: falta que eso lo haga la periódica o el admin). Nunca `recargas.manual` para una recarga de Wompi que ya se pagó: crea otra fila y un evento tardío acreditaría la primera también.
+2. **Alta con tarjeta** (pl-1-20261012-1): el widget tokenizó, el `POST plan/alta` salió de nuestra página (302, no 403), el primer cobro con `acceptance_token` salió APPROVED; periodo con la foto del plan y movimiento `plan` +1000 una vez; el evento llegó con `firma_ok=1` y quedó `ya_aplicada`.
+3. **Renovación forzada** (`planes.cobrar_periodo(1, forzar=True)`, pl-1-20261112-1): el cargo a la fuente SIN `acceptance_token` salió PENDING y el evento firmado lo aprobó a los 8 s; `cubierto_hasta` pasó al mes siguiente sin abrir periodo antes de tiempo. **El cobro mensual automático funciona.** Para repetirlo en una suscripción de prueba: con `forzar=True` cobra UNA renovación (la clave es la fecha de `cubierto_hasta`) por el precio aceptado.
+4. **Cierre**: `planes.cancelar` (lo pagado sigue hasta su fin), `planes.archivar_plan(2)`, «Cobrar» apagado con `libro.configurar(..., cobrar=False)` + `planes.apagar_renovacion` (lo que hace /admin/cobros). El saldo de prueba (US$ 11) queda en el libro de `colorado_forja`.
+5. **PND-255**: 404 a ids ajenos y `merchant.public_key` = nuestra llave en una transacción nuestra. La búsqueda `GET /transactions?reference=` no trae `merchant`: relee por id antes de aplicar.
+
+**Sigue sin probar en real**: un rechazo en el alta, la gracia (morosa, reintentos, «Actualizar tarjeta»), un anual, una anulación desde el panel de Wompi, Nequi (si el débito recurrente pide aprobar cada mes) y el nombre exacto del campo que mete el widget (PND-244, PND-249). Antes de activar el plan Pro con un cliente (PND-247) no hace falta más: lo que mueve plata cada mes ya corrió.
+
+## Rescate por referencia (PND-296) y auditoría de seguridad (2026-10-12)
+
+Pedido de Daniel tras la prueba real («hagamos todo, los escenarios de error, también cómo nos cuidamos de
+vulnerabilidades»). Explicación en llano y riesgos aceptados: `docs/pagos/seguridad-pagos.md`. Cada punto con su prueba.
+- **Rescate de recargas** (`recargas.rescatar_sin_evento`, la pasada que corre DESPUÉS de las consultas por id en
+  `verificar_pendientes`): Wompi no reintentó los eventos de la primera recarga real, y sin `pasarela_ref` nada la
+  encontraba. Busca por referencia (`wompi.transacciones_de_referencia`, `GET /transactions?reference=`, llave privada;
+  esa búsqueda NO trae `merchant`) las de Wompi `pendiente` sin transacción de más de `MINUTOS_RESCATE` (10) y las
+  `rechazada` de menos de 26 h (la persona pudo reintentar en el mismo checkout), relee la elegida por id y aplica con
+  `_aplicar_wompi` bajo el candado (el camino de «Verificar»). Orden: primero las que toca vencer (una última búsqueda),
+  después de la más nueva a la más vieja; espaciadas por edad (`_espera_busqueda`: 10 min la primera hora, cada hora
+  hasta las 6 h, cada 4 h después; marca en `kv` `wompi:busqueda:<id>`, que se limpia sola); a lo más
+  `BUSQUEDAS_POR_VUELTA` (30) y el tiempo que le quede a la vuelta, con un piso de 15 s para que el rescate avance
+  aunque las consultas por id se hayan llevado la vuelta; para con caída, 429, 401 o 403. Otra APPROVED de la
+  misma referencia también se aplica, para que salga `otro_pago` al admin. Al acreditar así, aviso `wompi_rescatada`.
+- **Cobros de plan inciertos** (`planes._buscar_en_wompi`): antes de un «reintentar», tras un 422 de referencia usada
+  y en una cancelada con el cobro en el aire, se busca la referencia; solo vale si la transacción salió de la fuente de
+  pago de ESA suscripción (`payment_source_id`), por sus centavos exactos, en COP y de nuestro comercio (con ids
+  reusados tras restaurar un respaldo, la búsqueda podía encontrar el cobro de otra tarjeta). Una anulada sola no
+  cuenta. Si no vale o Wompi no responde, se sigue como antes (reenviar con la misma referencia; incierto al admin una
+  vez). Buscar y releer con `ESPERA_BUSQUEDA` (5/10 s): puede correr en `cambiar_fuente`, dentro de una petición.
+- **Pago de plan anulado o contracargo**: vence en el acto lo que queda de los periodos de ESE pago (`_cerrar_periodo`);
+  lo gastado y el saldo propio no se tocan. **Ruling 2026-10-12, reemplaza «el periodo no se corta solo» (2026-10-10)**:
+  la plata volvió a la persona. Si ese pago es el último aprobado de la suscripción, `cubierto_hasta` vuelve al inicio
+  del pago (su primer periodo, o lo que cubría si se pagó por adelantado): sin eso, «Activar a mano» tras la anulación
+  abría su periodo recién al fin del mes anulado (revisión de plata final). «No se cobró» vale si en Wompi todo lo de
+  esa referencia está anulado.
+- **«No se cobró»** (`resolver_pendiente`) busca la referencia en Wompi y se niega si hay una transacción que no esté
+  anulada o si Wompi no responde: marcarlo con el cobro hecho llevaba a otra referencia y a un segundo cargo a la
+  tarjeta. Con solo anuladas vale, pero cada una se relee por id antes (la búsqueda no se cree).
+- **/admin/cobros**: «Avisos de plata» (`vista.avisos_plata`, de la cola de la bitácora con `bitacora.ultimas`; el
+  servidor no manda correos, PND-048, y si no hay SMTP lo advierte `#aviso-sin-correo`) y «Recargas de Wompi sin
+  acreditar» (`vista.recargas_wompi_sin_acreditar`, 7 días) con «Buscar en Wompi» (`POST
+  /admin/cobros/recarga/<id>/buscar` → `recargas.buscar_en_wompi`). **Para un pago hecho en Wompi, nunca
+  `recargas.manual`**: crea otra fila y un evento tardío o el rescate acreditan también la original.
+- **Página de la tarjeta** (`plan_alta.html`, por `rutas._formulario`): `CSP_TARJETA` (scripts propios, los en línea con
+  el nonce de la petición —`dashboard._nonce_csp`, `csp_nonce` en `base.html`— y `checkout.wompi.co`; marcos solo de
+  Wompi; `form-action 'self'`). Arranca en **«solo reporte»** (`CSP_TARJETA_SOLO_REPORTE = True`): pasarlo a False cuando
+  la consola se vea limpia con el widget de verdad. `dashboard._cabeceras_seguridad` SUMA una CSP propia a la de base.
+  Sin manejadores en línea en esa página (el chip de Gasto usa `data-ir-config`, atendido en `base.html`).
+- **Checkout que vence** (`HORAS_CHECKOUT` = 24, `wompi.url_checkout(..., vence=)`, `expiration-time` en UTC con
+  milisegundos y firmado): visto en producción el 2026-10-12 (uno vigente muestra «Este pago vence en…»; uno vencido,
+  «Ha terminado el plazo para realizar este pago»). Antes un link abierto hoy se pagaba días después a la TRM vieja.
+- Menores: un 3xx en un cobro es `incierto`; `consultar` y `verificar_pago` no aplican una transacción releída con otra
+  referencia (`planes._es_de_este_pago`); `?pagina=` con tope (`MAX_PAGINA`); Bold con `allow_redirects=False` y un 3xx
+  como error; cupo por proyecto a las consultas del `?id=` de la vuelta (`VUELTA_WOMPI_POR_HORA`, `limite_ok`).
+- Escenarios de error contra el sandbox: `deploy/prueba_wompi_sandbox.py` (llaves de pruebas en `.env.wompi-sandbox`,
+  base temporal, se niega con llaves que no sean de pruebas). **12 de 12 el 2026-10-13.** Lo que enseñó el sandbox:
+  el 422 de una referencia repetida viene en ESPAÑOL («La referencia ya ha sido usada»; `wompi._referencia_usada`
+  reconoce español e inglés); las referencias de planes llevan el id de la suscripción y Wompi las recuerda entre
+  corridas (el script numera desde un punto al azar; con ids repetidos el sistema se niega, bien, a aplicar el cobro
+  viejo de otra tarjeta); los números de Nequi de prueba deciden el cobro, no la inscripción; una recarga APROBADA que
+  Wompi anula solo se entera por el aviso firmado (PND-304 b). Correrlo de nuevo: `venv/bin/python3
+  deploy/prueba_wompi_sandbox.py` (sin argumentos: la guarda del repo frena un comando que nombre el archivo de llaves).
 
 ## Bold: llaves, link, webhook, verificación
 

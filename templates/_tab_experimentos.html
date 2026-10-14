@@ -2,8 +2,9 @@
    llegan por fetch (`static/exp_resultados.js` → exp_resultados / exp_pieza); el filtro vive en el hash
    (#experimentos?dias=&exp=&pais=&pieza=&tipo=&moneda=). Los textos del JS van en `#cr-textos` (JSON). #}
 <div class="panel-cabecera cr-cabecera">
-  <div><p class="cr-sobretitulo">{{ _('Centro de resultados') }}</p><h2>{{ _('Experimentos') }}</h2>
-    <p class="panel-cabecera-desc">{{ _('De cada prueba a la siguiente decisión: resultados, piezas y aprendizajes de tu proyecto.') }}</p></div>
+  <div><h2>{{ _('Probar anuncios') }}</h2>
+    <p class="panel-cabecera-desc">{{ _('Lanza tus piezas como anuncios en Meta: aquí se mide cuál funciona y el motor te dice cuál escalar y cuál pausar.') }}
+      <a href="#rendimiento" data-ir-tab="rendimiento">{{ _('Cómo van todos tus anuncios y tu tienda: Rendimiento →') }}</a></p></div>
   {% if not exp_sin_meta %}
   <div class="panel-cabecera-acciones">
     {% if meta_conectado %}<a class="btn-generar" href="{{ url_for('exp_nuevo', cliente=cliente) }}">{{ _('+ Nuevo experimento') }}</a>{% endif %}

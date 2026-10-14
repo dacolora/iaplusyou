@@ -19,6 +19,7 @@ import hmac
 import os
 import re
 import time
+from datetime import datetime, timezone
 from urllib.parse import urlencode, urlsplit
 
 import requests
@@ -163,17 +164,25 @@ def base_url():
 
 # ------------------------------------------------------------- HTTP ---
 
+# Wompi lo dice en español («La referencia ya ha sido usada», visto en el sandbox el 2026-10-13) o en inglés
+# («The reference has already been used», la doc): solo buscar «already» lo tomaba por un rechazo cualquiera.
+_SENALES_REFERENCIA_USADA = ("already", "ya ha sido usada", "ya fue usada", "ya se usó")
+
+
 def _referencia_usada(datos):
     try:
         mensajes = (datos.get("error") or {}).get("messages") or {}
-        return any("already" in str(m).lower() for m in (mensajes.get("reference") or []))
+        return any(senal in str(m).lower() for m in (mensajes.get("reference") or [])
+                   for senal in _SENALES_REFERENCIA_USADA)
     except AttributeError:
         return False
 
 
-def _pedir(verbo, ruta, *, llave=None, cabeceras=None, cuerpo=None, tiempo=TIEMPO, cobro=False):
-    """Pide a un host fijo de Wompi y devuelve `data` (un dict). `cobro=True`
-    marca `incierto` en todo error en el que Wompi pudo haber cobrado."""
+def _pedir(verbo, ruta, *, llave=None, cabeceras=None, cuerpo=None, tiempo=TIEMPO, cobro=False, params=None,
+           lista=False):
+    """Pide a un host fijo de Wompi y devuelve `data` (un dict; una lista con
+    `lista=True`). `cobro=True` marca `incierto` en todo error en el que Wompi
+    pudo haber cobrado."""
     url = base_url() + ruta
     h = {"Accept": "application/json", **(cabeceras or {})}
     if llave:
@@ -181,6 +190,8 @@ def _pedir(verbo, ruta, *, llave=None, cabeceras=None, cuerpo=None, tiempo=TIEMP
     k = {"headers": h, "timeout": tiempo, "allow_redirects": False}
     if cuerpo is not None:
         k["json"] = cuerpo
+    if params is not None:
+        k["params"] = params
     try:
         r = getattr(requests, verbo)(url, **k)
     except requests.ConnectTimeout:
@@ -193,7 +204,10 @@ def _pedir(verbo, ruta, *, llave=None, cabeceras=None, cuerpo=None, tiempo=TIEMP
                          caida=True, incierto=cobro) from None
     codigo = r.status_code
     if 300 <= codigo < 400:
-        raise ErrorWompi(gettext("Wompi respondió algo inesperado (HTTP %(codigo)s)", codigo=codigo), codigo=codigo)
+        # En un cobro, una redirección no dice si Wompi lo procesó: incierto, nunca otra referencia (auditoría
+        # 2026-10-12: se daba por fallido y el reintento con otra referencia podía cobrar dos veces).
+        raise ErrorWompi(gettext("Wompi respondió algo inesperado (HTTP %(codigo)s)", codigo=codigo), codigo=codigo,
+                         incierto=cobro)
     try:
         j = r.json()
     except ValueError:
@@ -207,7 +221,7 @@ def _pedir(verbo, ruta, *, llave=None, cabeceras=None, cuerpo=None, tiempo=TIEMP
     if j is None:
         raise ErrorWompi(gettext("Wompi respondió algo que no es JSON"), codigo=codigo, incierto=cobro)
     datos = j.get("data") if isinstance(j, dict) else None
-    if not isinstance(datos, dict):
+    if not isinstance(datos, list if lista else dict):
         raise ErrorWompi(gettext("Wompi no devolvió los datos esperados"), codigo=codigo, incierto=cobro)
     return datos
 
@@ -317,7 +331,11 @@ def evento_valido(cuerpo, checksum_header=None):
     firma, datos = cuerpo.get("signature"), cuerpo.get("data")
     if not isinstance(firma, dict) or not isinstance(datos, dict):
         return False
-    propiedades, marca, suma = firma.get("properties"), firma.get("timestamp"), firma.get("checksum")
+    # `timestamp` va al nivel de arriba del evento, junto a `sent_at` (doc oficial en español y los eventos
+    # reales: la primera recarga real, 2026-10-12, se rechazó cuatro veces por buscarlo solo en `signature`).
+    # Si no viene arriba, el de `signature` (la forma de la doc en inglés); los dos entran a la cadena firmada.
+    marca = cuerpo["timestamp"] if "timestamp" in cuerpo else firma.get("timestamp")
+    propiedades, suma = firma.get("properties"), firma.get("checksum")
     if not isinstance(propiedades, list) or not propiedades or not isinstance(suma, str) or not suma.strip():
         return False
     if _entero(marca) is None:
@@ -355,10 +373,21 @@ def evento_valido(cuerpo, checksum_header=None):
 
 # ---------------------------------------------------------- checkout ---
 
-def url_checkout(referencia, centavos, redirect_url, correo=None):
+def _vencimiento(vence):
+    """`expiration-time` del checkout: ISO 8601 en UTC con milisegundos («2023-06-09T20:28:50.000Z», wompi-api.md
+    §4); el mismo texto entra a la firma de integridad. Un datetime sin zona no se adivina."""
+    if not isinstance(vence, datetime) or vence.tzinfo is None:
+        raise ErrorWompi(gettext("El vencimiento del pago no es válido"))
+    return vence.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+
+
+def url_checkout(referencia, centavos, redirect_url, correo=None, vence=None):
     """La URL del Web Checkout (GET a https://checkout.wompi.co/p/) con los
-    parámetros de la doc, codificados como los manda un formulario."""
-    firma = firma_integridad(referencia, centavos)
+    parámetros de la doc, codificados como los manda un formulario. `vence`
+    (datetime con zona): hasta cuándo se puede pagar (auditoría 2026-10-12: sin
+    él, un link abierto hoy se pagaba días después a la TRM vieja)."""
+    expiracion = None if vence is None else _vencimiento(vence)
+    firma = firma_integridad(referencia, centavos, expiracion=expiracion)
     try:
         partes = urlsplit(str(redirect_url or ""))
     except ValueError:
@@ -373,6 +402,8 @@ def url_checkout(referencia, centavos, redirect_url, correo=None):
         ("signature:integrity", firma),
         ("redirect-url", str(redirect_url)),
     ]
+    if expiracion:
+        params.append(("expiration-time", expiracion))
     if correo:
         params.append(("customer-data:email", _validar_correo(correo)))
     return CHECKOUT + "?" + urlencode(params)
@@ -480,6 +511,28 @@ def transaccion(transaccion_id, tiempo=TIEMPO):
         raise ErrorWompi(gettext("Identificador de transacción inválido"))
     d = _pedir("get", f"/transactions/{transaccion_id}", llave=_privada(), tiempo=tiempo)
     return _transaccion(d)
+
+
+MAX_POR_REFERENCIA = 20   # una referencia nuestra tiene una transacción, o pocas si se reintentó el pago
+
+
+def transacciones_de_referencia(referencia, tiempo=TIEMPO):
+    """`GET /transactions?reference=<ref>` con la llave privada: las transacciones de NUESTRO comercio con esa
+    referencia exacta (PND-296, 2026-10-12: los eventos de la primera recarga real no se aceptaron y Wompi no los
+    reintentó; sin el id de la transacción, nada la encontraba). La búsqueda no trae `merchant`: quien la usa
+    relee cada una por id (`transaccion`) antes de aplicarla. A lo más MAX_POR_REFERENCIA; lo que no tenga forma
+    de transacción, o sea de otra referencia, se descarta."""
+    referencia = _validar_referencia(referencia)
+    datos = _pedir("get", "/transactions", llave=_privada(), params={"reference": referencia}, tiempo=tiempo,
+                   lista=True)
+    txs = []
+    for d in datos:
+        tx = _transaccion(d) if isinstance(d, dict) else {}
+        if tx.get("reference") == referencia and id_valido(tx.get("id")):
+            txs.append(tx)
+        if len(txs) >= MAX_POR_REFERENCIA:
+            break
+    return txs
 
 
 def _resumen(tipo, publico):

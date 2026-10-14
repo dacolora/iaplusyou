@@ -367,7 +367,7 @@ def test_periodica_decidir_registrada():
     # lugar: su copia se pide antes de refrescar experimentos.
     assert worker.PERIODICAS == [("tienda_sync_pedidos_todas", 7200), ("tw_sincronizar_todas", 7200),
                                  ("meta_rend_sincronizar_todas", 10800), ("exp_refrescar_todos", 7200),
-                                 ("exp_decidir_todos", 3600), ("exp_avanzar_todos", 600),
+                                 ("exp_decidir_todos", 3600), ("exp_vigilar_gasto", 600), ("exp_avanzar_todos", 600),
                                  ("tienda_sync_productos_todas", 21600), ("sprint_qa_pendientes", 300),
                                  ("materiales_limpiar", 86400),
                                  ("salidas_limpiar", 86400), ("cola_limpiar", 86400), ("db_respaldar", 86400),

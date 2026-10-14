@@ -49,4 +49,5 @@ def test_cliente_no_ve_puesta_a_punto(app):
 
 def test_este_mes_de_la_barra_lateral_abre_gasto(app):
     html = app["c"].get("/cliente/acme").data.decode()
-    assert "irAConfig('config-gasto')" in html
+    # Sin onclick en línea desde 2026-10-12: el chip lleva data-ir-config y base.html lo atiende.
+    assert 'data-ir-config="config-gasto"' in html and "a[data-ir-config]" in html

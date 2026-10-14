@@ -29,8 +29,13 @@ Entrada (`calcular(entrada)`), un dict que arma `panel` (Task 4) sin una consult
 Una clave que falta vale vacío. Una cuenta sin gasto en 30 días no genera ninguna regla (spec §6).
 
 Salida: [{"id", "nivel": alta|media|baja, "tipo", "cuenta" (act_…), "cuenta_nombre", "titulo", "que_hacer",
-"por_que", "impacto": {"monto", "moneda", "texto"}|None, "objetos": [{"nivel", "id", "nombre"}], "enlace"}],
-ordenadas por nivel y luego por impacto (los que no tienen van después en su nivel). Los montos van en la moneda de
+"por_que", "impacto": {"monto", "moneda", "texto", "corto"}|None, "objetos": [{"nivel", "id", "nombre"}], "enlace",
+"fila": {"etiqueta", "cifra", "nota", "barra", "gasto"}}], ordenadas por nivel y luego por impacto (los que no tienen
+van después en su nivel). `fila` son las cifras sueltas de la fila del Diagnóstico agrupado (`agrupar`, pedido de
+Daniel 2026-10-13: cinco tarjetas repetían el mismo consejo con las cifras enterradas en la prosa): `etiqueta` es lo
+que nombra la fila cuando no es la cuenta (la campaña o el conjunto de `escalar`, el segmento de `segmento_caro`),
+`cifra` y `nota` lo que se ve de un vistazo, `barra` una fracción 0–1 o None y `gasto` la parte del gasto de la cuenta
+en texto o None. Los montos van en la moneda de
 la cuenta: en «Todas» el orden por impacto es nominal entre monedas (como PND-196). `impacto.monto` es siempre «por
 día» (lo que está en juego cada día), para que se puedan comparar. `objetos` trae como mucho `MAX_OBJETOS` (los de
 más gasto) y `enlace` es el Administrador de anuncios con ellos seleccionados (`administrador.enlace`) o, para lo que
@@ -104,6 +109,43 @@ TIPOS_ALTA = ("cuenta_estado", "cuenta_roas_bajo", "aprendizaje_limitado", "perd
 # effective_status de un anuncio que entrega (o puede entregar): WITH_ISSUES sigue gastando en muchos casos.
 ESTADOS_ENTREGA = ("ACTIVE", "WITH_ISSUES")
 ESTADOS_PROBLEMA = ("WITH_ISSUES", "DISAPPROVED")
+
+# El Diagnóstico agrupado (`agrupar`): un bloque por tipo con el consejo UNA vez y una fila por recomendación. Cada
+# consejo recibe las mismas cifras (`_cifras_consejo`); el título va en `_titulo_grupo` porque lleva plural.
+CONSEJOS = {
+    "cuenta_estado": N_("Cada cuenta dice qué la frena: ábrela para ver qué hacer."),
+    "cuenta_roas_bajo": N_("Pausa o rehace estas cuentas: por debajo de ROAS %(minimo)s× se pierde dinero casi seguro."),
+    "aprendizaje_limitado": N_("Consolida conjuntos parecidos dentro de la misma campaña: Meta pide unas %(meta)s "
+                               "compras por semana por conjunto para sacarlo del aprendizaje. Abre una cuenta para ver "
+                               "por qué campañas empezar."),
+    "perdedores_gastando": N_("Páusalos: libera su presupuesto para los anuncios que venden."),
+    "anuncios_con_problemas": N_("Revísalos en el Administrador de anuncios: Meta les marca un problema que frena o "
+                                 "detiene su entrega."),
+    "escalar": N_("Venden mejor que su cuenta: sube %(pct)s %% el presupuesto diario (más de %(pct)s %% reinicia el "
+                  "aprendizaje)."),
+    "fatiga": N_("Prepara variantes antes de que se apaguen: «Evaluar con IA» propone ideas a partir de lo que ya "
+                 "funciona."),
+    "segmento_caro": N_("Excluye o baja el peso de estos segmentos en los conjuntos de su cuenta: gastan mucho y venden "
+                        "menos de la mitad que el resto."),
+    "concentracion": N_("Prepara variantes del anuncio que carga cada conjunto antes de que se canse."),
+}
+# Encabezados de las columnas de cada bloque: lo que nombra la fila, la cifra y la parte del gasto (con su ventana).
+CABECERA_ETIQUETA = {"escalar": N_("Campaña o conjunto"), "segmento_caro": N_("Segmento")}
+CABECERA_CUENTA = N_("Cuenta")
+CABECERA_CIFRA = {
+    "cuenta_estado": N_("Qué pasa"),
+    "cuenta_roas_bajo": N_("ROAS de 30 días"),
+    "aprendizaje_limitado": N_("Conjuntos activos en aprendizaje limitado"),
+    "perdedores_gastando": N_("Perdedores activos"),
+    "anuncios_con_problemas": N_("Anuncios con problemas"),
+    "escalar": N_("ROAS de 7 días"),
+    "fatiga": N_("Anuncios que se cansan"),
+    "segmento_caro": N_("ROAS de 30 días"),
+    "concentracion": N_("Conjuntos que dependen de uno"),
+}
+GASTO_7, GASTO_30 = N_("Del gasto de 7 días"), N_("Del gasto de 30 días")
+CABECERA_GASTO = {"aprendizaje_limitado": GASTO_7, "perdedores_gastando": GASTO_7,
+                  "anuncios_con_problemas": GASTO_30, "segmento_caro": GASTO_30}
 
 # account_status de Meta -> (el motivo, qué hacer). Otro código: OTRO_ESTADO.
 ESTADOS_CUENTA = {
@@ -225,8 +267,18 @@ def huella_recomendacion(tipo, act, nivel, claves=()):
 def _impacto(monto_dia, moneda):
     if not monto_dia or monto_dia <= 0:
         return None
-    return {"monto": monto_dia, "moneda": moneda,
-            "texto": gettext("%(monto)s por día en juego", monto=_dinero(monto_dia, moneda))}
+    corto = _dinero(monto_dia, moneda)
+    return {"monto": monto_dia, "moneda": moneda, "corto": corto,
+            "texto": gettext("%(monto)s por día en juego", monto=corto)}
+
+
+def _fila(cifra, nota=None, barra=None, gasto=None, etiqueta=None):
+    """Las cifras sueltas de una recomendación para su fila en el Diagnóstico agrupado (ver la salida en el docstring
+    del módulo). `barra` y `gasto` son fracciones (None = no aplica): la barra se acota a 0–1 y el gasto sale en texto
+    («10 %»)."""
+    return {"etiqueta": etiqueta, "cifra": cifra, "nota": nota,
+            "barra": None if barra is None else round(min(max(_f(barra), 0.0), 1.0), 3),
+            "gasto": None if gasto is None else gettext("%(pct)s %%", pct=_pct(gasto))}
 
 
 def _objeto(nivel, objeto_id, nombre):
@@ -264,9 +316,11 @@ class _Cuenta:
     def g7(self, adset_id):
         return self.conj7.get(str(adset_id)) or self.conj7.get(adset_id) or {}
 
-    def rec(self, tipo, nivel, titulo, que_hacer, por_que, objetos=(), impacto=None, claves=None, enlace=None):
+    def rec(self, tipo, nivel, titulo, que_hacer, por_que, objetos=(), impacto=None, claves=None, enlace=None,
+            fila=None):
         """Una recomendación. `objetos` ya ordenados (los de más peso primero): se guardan los primeros
-        MAX_OBJETOS, pero la huella usa TODOS (o `claves`, si se dan; los `AGREGADOS` no usan ninguno)."""
+        MAX_OBJETOS, pero la huella usa TODOS (o `claves`, si se dan; los `AGREGADOS` no usan ninguno). `fila` es
+        `_fila(...)`; sin ella la fila muestra el título."""
         objetos = list(objetos)
         ids = [o["id"] for o in objetos] if claves is None else claves
         visibles = objetos[:MAX_OBJETOS]
@@ -275,7 +329,7 @@ class _Cuenta:
                       if visibles else None) or administrador.enlace_cuenta(self.act)
         return {"id": huella_recomendacion(tipo, self.act, nivel, ids), "nivel": nivel, "tipo": tipo, "cuenta": self.act,
                 "cuenta_nombre": self.nombre, "titulo": titulo, "que_hacer": que_hacer, "por_que": por_que,
-                "impacto": impacto, "objetos": visibles, "enlace": enlace}
+                "impacto": impacto, "objetos": visibles, "enlace": enlace, "fila": fila or _fila(titulo)}
 
     def dinero(self, valor):
         return _dinero(valor, self.moneda)
@@ -338,8 +392,15 @@ def _aprendizaje_limitado(cx):
         total, n=_num(len(fail)), total=_num(total), pct_conjuntos=_pct(frac_conjuntos), gasto=cx.dinero(gasto_fail),
         gasto_cuenta=cx.dinero(cx.gasto_7), pct_gasto=_pct(frac_gasto))
     objetos = [_objeto("campana", cid, nombre(cid)) for cid, _ in top]
+    if cabe < 1:
+        nota = gettext("ninguno junta %(meta)s compras por semana", meta=_num(COMPRAS_SEMANA_POR_CONJUNTO))
+    else:
+        nota = ngettext("da para ~%(cabe)s fuera del aprendizaje", "da para ~%(cabe)s fuera del aprendizaje", cabe,
+                        cabe=_num(cabe))
+    fila = _fila(gettext("%(n)s de %(total)s", n=_num(len(fail)), total=_num(total)), nota, barra=frac_conjuntos,
+                 gasto=frac_gasto)
     return [cx.rec("aprendizaje_limitado", nivel, titulo, que_hacer, por_que, objetos,
-                   cx.impacto(gasto_fail / DIAS_SEMANA))]
+                   cx.impacto(gasto_fail / DIAS_SEMANA), fila=fila)]
 
 
 def _perdedores_gastando(cx):
@@ -363,8 +424,10 @@ def _perdedores_gastando(cx):
         "gastó lo de dos ventas o más con un ROAS de menos de la mitad de la meta.",
         n, gasto=cx.dinero(gasto), pct=_pct(fraccion or 0))
     objetos = [_objeto("anuncio", a["ad_id"], a.get("nombre")) for a in perdedores]
+    fila = _fila(ngettext("%(n)s anuncio", "%(n)s anuncios", n, n=_num(n)),
+                 gettext("%(gasto)s en 7 días", gasto=cx.dinero(gasto)), gasto=fraccion or 0)
     return [cx.rec("perdedores_gastando", nivel, titulo, que_hacer, por_que, objetos,
-                   cx.impacto(gasto / DIAS_SEMANA))]
+                   cx.impacto(gasto / DIAS_SEMANA), fila=fila)]
 
 
 def _escalar(cx):
@@ -413,7 +476,12 @@ def _escalar(cx):
             "%(compras)s compras en los últimos 7 días con ROAS %(roas)s×, %(veces)s veces el de la cuenta "
             "(%(roas_cuenta)s×), y fuera del aprendizaje limitado.",
             compras=_num(compras), roas=_roas(roas), veces=_roas(roas / roas_cuenta), roas_cuenta=_roas(roas_cuenta))
-        salida.append(cx.rec("escalar", "media", titulo, que_hacer, por_que, [_objeto(nivel_obj, oid, nombre)]))
+        fila = _fila(gettext("%(roas)s× (la cuenta, %(roas_cuenta)s×)", roas=_roas(roas),
+                             roas_cuenta=_roas(roas_cuenta)),
+                     gettext("de %(antes)s a %(despues)s por día", antes=cx.dinero(antes), despues=cx.dinero(despues)),
+                     etiqueta=nombre)
+        salida.append(cx.rec("escalar", "media", titulo, que_hacer, por_que, [_objeto(nivel_obj, oid, nombre)],
+                             fila=fila))
     return salida
 
 
@@ -446,7 +514,9 @@ def _fatiga(cx):
         "cansancio).",
         n, frecuencia=_num(frecuencia, 1), minimo=_num(FATIGA_FRECUENCIA_MIN))
     objetos = [_objeto("anuncio", a["ad_id"], a.get("nombre")) for a in cansados]
-    return [cx.rec("fatiga", "media", titulo, que_hacer, por_que, objetos)]
+    fila = _fila(ngettext("%(n)s anuncio", "%(n)s anuncios", n, n=_num(n)),
+                 gettext("frecuencia de 7 días: %(frecuencia)s", frecuencia=_num(frecuencia, 1)))
+    return [cx.rec("fatiga", "media", titulo, que_hacer, por_que, objetos, fila=fila)]
 
 
 def _gasto_30(a):
@@ -475,8 +545,13 @@ def _anuncios_con_problemas(cx):
             "%(n)s están rechazados y gastaron %(gasto)s en los últimos 7 días.", k,
             n=_num(k), gasto=cx.dinero(sum(_f(a.get("gasto_7")) for a in rechazados_7)))
     objetos = [_objeto("anuncio", a["ad_id"], a.get("nombre")) for a in malos]
+    nota = (ngettext("%(n)s rechazado sigue gastando", "%(n)s rechazados siguen gastando", len(rechazados_7),
+                     n=_num(len(rechazados_7))) if rechazados_7 else
+            gettext("%(gasto)s en 30 días", gasto=cx.dinero(gasto)))
+    fila = _fila(ngettext("%(n)s anuncio", "%(n)s anuncios", n, n=_num(n)), nota,
+                 gasto=min(_div(gasto, cx.gasto_30) or 0.0, 1.0))
     return [cx.rec("anuncios_con_problemas", "alta" if rechazados_7 else "media", titulo, que_hacer, por_que,
-                   objetos, cx.impacto(gasto / DIAS_MES))]
+                   objetos, cx.impacto(gasto / DIAS_MES), fila=fila)]
 
 
 def _cuenta_roas_bajo(cx):
@@ -495,19 +570,23 @@ def _cuenta_roas_bajo(cx):
         gasto_campana[cid] += _f(cx.g7(sid).get("gasto"))
     campanas = sorted(cx.campanas.items(), key=lambda kv: (-gasto_campana[kv[0]], kv[0]))
     objetos = [_objeto("campana", cid, c.get("nombre")) for cid, c in campanas]
+    fila = _fila(gettext("ROAS %(roas)s×", roas=_roas(roas)),
+                 gettext("vendió %(valor)s de %(gasto)s gastados", valor=cx.dinero(cx.valor_30),
+                         gasto=cx.dinero(cx.gasto_30)))
     return [cx.rec("cuenta_roas_bajo", "alta", titulo, que_hacer, por_que, objetos,
-                   cx.impacto(cx.gasto_30 / DIAS_MES))]
+                   cx.impacto(cx.gasto_30 / DIAS_MES), fila=fila)]
 
 
 def _cuenta_estado(cx):
     estado = _entero(cx.info.get("account_status"))
-    motivos, acciones = [], []
-    titulo = None
+    motivos, acciones, cifras = [], [], []
+    titulo, barra = None, None
     if estado is not None and estado != CUENTA_ACTIVA:
         motivo, accion = ESTADOS_CUENTA.get(estado, OTRO_ESTADO)
         motivos.append(gettext(motivo, codigo=estado))
         acciones.append(gettext(accion))
         titulo = gettext("La cuenta no está activa en Meta")
+        cifras.append(gettext("No está activa"))
     tope = _monto_menor(cx.info.get("spend_cap"), cx.moneda)
     gastado = _monto_menor(cx.info.get("amount_spent"), cx.moneda)
     if tope > 0 and gastado >= TOPE_FRACCION * tope:
@@ -516,9 +595,12 @@ def _cuenta_estado(cx):
                                pct=_pct(gastado / tope)))
         acciones.append(gettext("Sube o quita el tope de gasto en la configuración de pagos de la cuenta."))
         titulo = titulo or gettext("La cuenta está por llegar a su tope de gasto")
+        cifras.append(gettext("%(pct)s %% de su tope de gasto", pct=_pct(gastado / tope)))
+        barra = gastado / tope
     if not motivos:
         return []
-    return [cx.rec("cuenta_estado", "alta", titulo, " ".join(acciones), " ".join(motivos))]
+    fila = _fila(cifras[0], cifras[1] if len(cifras) > 1 else None, barra=barra)
+    return [cx.rec("cuenta_estado", "alta", titulo, " ".join(acciones), " ".join(motivos), fila=fila)]
 
 
 def _legible(valor):
@@ -596,9 +678,13 @@ def _segmento_caro(cx):
                 "mitad del de la cuenta (%(roas_cuenta)s×).",
                 pct=_pct(gasto / gasto_total), gasto=cx.dinero(gasto), roas=_roas(roas),
                 roas_cuenta=_roas(roas_cuenta))
+            fila = _fila(gettext("%(roas)s× (la cuenta, %(roas_cuenta)s×)", roas=_roas(roas),
+                                 roas_cuenta=_roas(roas_cuenta)),
+                         gettext("%(gasto)s en 30 días", gasto=cx.dinero(gasto)), gasto=gasto / gasto_total,
+                         etiqueta=gettext("%(segmento)s (%(dimension)s)", segmento=segmento, dimension=nombre_dim))
             salida.append(cx.rec("segmento_caro", "media", titulo, que_hacer, por_que,
                                  impacto=cx.impacto(gasto / DIAS_MES), claves=[f"{dimension}:{clave}"],
-                                 enlace=administrador.enlace_cuenta(cx.act)))
+                                 enlace=administrador.enlace_cuenta(cx.act), fila=fila))
     return salida
 
 
@@ -635,7 +721,11 @@ def _concentracion(cx):
     por_que = gettext("Del gasto de los últimos 7 días de su conjunto: %(ejemplos)s. Cada conjunto pesa %(minimo)s %% o "
                       "más del gasto de la cuenta.", ejemplos=ejemplos, minimo=_pct(CONCENTRACION_CONJUNTO_MIN))
     objetos = [_objeto("anuncio", a["ad_id"], a.get("nombre")) for a, _, _ in dependientes]
-    return [cx.rec("concentracion", "baja", titulo, que_hacer, por_que, objetos)]
+    a, fr, _ = dependientes[0]
+    fila = _fila(ngettext("%(n)s conjunto", "%(n)s conjuntos", n, n=_num(n)),
+                 gettext("«%(anuncio)s» lleva el %(pct)s %% de su conjunto",
+                         anuncio=_una_linea(a.get("nombre")) or str(a.get("ad_id")), pct=_pct(fr)))
+    return [cx.rec("concentracion", "baja", titulo, que_hacer, por_que, objetos, fila=fila)]
 
 
 _REGLAS = (_cuenta_estado, _cuenta_roas_bajo, _aprendizaje_limitado, _perdedores_gastando, _anuncios_con_problemas,
@@ -679,3 +769,81 @@ def calcular(entrada):
             salida.extend(regla(cx))
     salida.sort(key=_orden)
     return salida
+
+
+# ---------------------------------------------------------------- el Diagnóstico agrupado ---
+
+def _titulo_grupo(tipo, n):
+    """El título de un bloque en plural: `n` son sus cuentas (o sus filas en `escalar` y `segmento_caro`, que tienen
+    varias por cuenta)."""
+    if tipo == "cuenta_estado":
+        return ngettext("%(n)s cuenta inactiva o cerca de su tope de gasto",
+                        "%(n)s cuentas inactivas o cerca de su tope de gasto", n, n=_num(n))
+    if tipo == "cuenta_roas_bajo":
+        return ngettext("%(n)s cuenta vende menos de lo que gasta", "%(n)s cuentas venden menos de lo que gastan", n,
+                        n=_num(n))
+    if tipo == "aprendizaje_limitado":
+        return ngettext("Aprendizaje limitado en %(n)s cuenta", "Aprendizaje limitado en %(n)s cuentas", n, n=_num(n))
+    if tipo == "perdedores_gastando":
+        return ngettext("Perdedores que siguen gastando en %(n)s cuenta",
+                        "Perdedores que siguen gastando en %(n)s cuentas", n, n=_num(n))
+    if tipo == "anuncios_con_problemas":
+        return ngettext("Anuncios que Meta frena en %(n)s cuenta", "Anuncios que Meta frena en %(n)s cuentas", n,
+                        n=_num(n))
+    if tipo == "escalar":
+        return ngettext("%(n)s presupuesto listo para subir", "%(n)s presupuestos listos para subir", n, n=_num(n))
+    if tipo == "fatiga":
+        return ngettext("Anuncios que funcionan y se cansan en %(n)s cuenta",
+                        "Anuncios que funcionan y se cansan en %(n)s cuentas", n, n=_num(n))
+    if tipo == "segmento_caro":
+        return ngettext("%(n)s segmento caro", "%(n)s segmentos caros", n, n=_num(n))
+    return ngettext("Conjuntos que dependen de un solo anuncio en %(n)s cuenta",
+                    "Conjuntos que dependen de un solo anuncio en %(n)s cuentas", n, n=_num(n))
+
+
+def _impacto_total(recs):
+    """Lo que está en juego por día en todo el bloque, solo si sus montos están en UNA moneda (en «Todas» con monedas
+    distintas no se suman: cada fila dice lo suyo)."""
+    con = [r["impacto"] for r in recs if r.get("impacto")]
+    monedas = {i["moneda"] for i in con}
+    if not con or len(monedas) != 1:
+        return None
+    return _impacto(sum(i["monto"] for i in con), monedas.pop())
+
+
+def agrupar(recs):
+    """Las recomendaciones de `calcular` en bloques, uno por tipo (pedido de Daniel 2026-10-13: el mismo consejo se
+    repetía en una tarjeta por cuenta y las cifras quedaban enterradas en la prosa). Cada bloque: {"tipo", "nivel" (el
+    más alto de sus filas), "mixto" (sus filas no tienen todas el mismo nivel), "titulo", "consejo", "recs" (en el
+    orden de `calcular`), "impacto" (`_impacto_total`), "cab_etiqueta", "cab_cifra", "cab_gasto" (None si el tipo no
+    mide parte del gasto), "con_gasto", "con_impacto"}. Orden: nivel, lo que está en juego (nominal entre monedas,
+    como `_orden`) y el orden de `TIPOS`. PURA: no cambia ni copia las recomendaciones."""
+    por_tipo = {}
+    for r in recs or ():
+        por_tipo.setdefault(r["tipo"], []).append(r)
+    grupos = []
+    for tipo, filas in por_tipo.items():
+        niveles = {r["nivel"] for r in filas}
+        nivel = min(niveles, key=NIVELES.index)
+        n = len(filas) if tipo in ("escalar", "segmento_caro") else len({r["cuenta"] for r in filas})
+        consejo = CONSEJOS.get(tipo)
+        etiqueta = CABECERA_ETIQUETA.get(tipo, CABECERA_CUENTA)
+        cifra = CABECERA_CIFRA.get(tipo)
+        gasto = CABECERA_GASTO.get(tipo)
+        montos = [r["impacto"]["monto"] for r in filas if r.get("impacto")]
+        grupos.append({
+            "tipo": tipo, "nivel": nivel, "mixto": len(niveles) > 1, "titulo": _titulo_grupo(tipo, n),
+            "consejo": gettext(consejo, minimo=_roas(CUENTA_ROAS_MIN), meta=_num(COMPRAS_SEMANA_POR_CONJUNTO),
+                               pct=_pct(ESCALAR_SUBIDA)) if consejo else None,
+            "recs": filas, "impacto": _impacto_total(filas),
+            "cab_etiqueta": gettext(etiqueta), "cab_cifra": gettext(cifra) if cifra else "",
+            "cab_gasto": gettext(gasto) if gasto else None,
+            "con_gasto": any((r.get("fila") or {}).get("gasto") for r in filas),
+            "con_impacto": bool(montos),
+            "_orden": (NIVELES.index(nivel), (0, -sum(montos)) if montos else (1, 0),
+                       TIPOS.index(tipo) if tipo in TIPOS else len(TIPOS)),
+        })
+    grupos.sort(key=lambda g: g["_orden"])
+    for g in grupos:
+        del g["_orden"]
+    return grupos

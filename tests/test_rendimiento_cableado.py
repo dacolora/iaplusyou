@@ -102,21 +102,22 @@ def _activas_en_node(html, casos):
 
 def test_un_hash_o_un_localstorage_viejo_abre_rendimiento_de_verdad(app):  # noqa: F811
     """R1: `#triplewhale`, `#meta` y las mismas claves guardadas en el localStorage de la gente abren Rendimiento
-    (como `idea` abre Crear). Se corre el script de verdad, no se busca el texto."""
+    (como `idea` abre Crear). Se corre el script de verdad, no se busca el texto. `#nicho` abre Sprints, donde vive
+    Nicho desde 2026-10-13."""
     html = app["c"].get("/cliente/acme").data.decode()
     casos = [["#triplewhale", None], ["#meta", None], ["", "triplewhale"], ["", "meta"], ["#rendimiento", None],
              ["#nicho", None]]
-    assert _activas_en_node(html, casos) == [["tab-rendimiento"]] * 5 + [["tab-nicho"]]
+    assert _activas_en_node(html, casos) == [["tab-rendimiento"]] * 5 + [["tab-sprints"]]
 
 
 def test_rendimiento_ocupa_el_lugar_de_triple_whale_en_el_menu(app):  # noqa: F811
     html = app["c"].get("/cliente/acme").data.decode()
     menu = html[html.index('<nav class="sidebar-nav"'):html.index("</nav>")]
-    assert menu.index('data-tab="alertas"') < menu.index('data-tab="rendimiento"') < menu.index('data-tab="nicho"')
+    assert menu.index('data-tab="alertas"') < menu.index('data-tab="rendimiento"') < menu.index('data-tab="referentes"')
     assert menu.count('data-tab="rendimiento"') == 1 and 'title="Rendimiento"' in menu
-    # Y la pestaña va entre Alertas y Nicho también en la página.
+    # Y la pestaña va entre Alertas y Referentes también en la página.
     assert (html.index('<section id="tab-alertas"') < html.index('<section id="tab-rendimiento"')
-            < html.index('<section id="tab-nicho"'))
+            < html.index('<section id="tab-referentes"'))
 
 
 def test_la_pestana_trae_ajustes_y_pide_el_panel_nuevo(app):  # noqa: F811

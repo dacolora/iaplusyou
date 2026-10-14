@@ -428,13 +428,17 @@ def gasto_duplicado(cliente, desde, hasta, tienda_id=None):
         d = _duplicado_por_dia(cliente, desde, hasta)
         q = sa.select(sa.func.coalesce(sa.func.sum(d.c.duplicado), 0))
     else:
-        t, o = db.tw_anuncio_dia, db.tw_anuncio_dia.alias("otra")
-        en_otra = (sa.select(o.c.id).where(o.c.cliente == cliente, o.c.tienda_id != tienda_id,
-                                           o.c.canal == t.c.canal, o.c.ad_id == t.c.ad_id,
-                                           o.c.fecha == t.c.fecha, o.c.gasto > 0)
-                   .exists())
-        q = sa.select(sa.func.coalesce(sa.func.sum(t.c.gasto), 0)).where(
-            t.c.cliente == cliente, t.c.tienda_id == tienda_id, t.c.fecha >= desde, t.c.fecha <= hasta, en_otra)
+        # UNA pasada agrupada por (canal, anuncio, día) sobre todas las tiendas del rango: el gasto de ESTA tienda y si
+        # otra tienda trae gasto en la misma clave. Hasta el incidente del 2026-10-13 era un EXISTS correlacionado
+        # (una búsqueda en otra tienda por cada fila, sin índice que encajara): 51 s de los 60 del panel de Países Bajos
+        # a 30 días con las 5 tiendas de happyflops; así, 0,14 s y el mismo número.
+        t = db.tw_anuncio_dia
+        por_clave = (sa.select(
+            sa.func.sum(sa.case((t.c.tienda_id == tienda_id, t.c.gasto), else_=0)).label("suyo"),
+            sa.func.max(sa.case((sa.and_(t.c.tienda_id != tienda_id, t.c.gasto > 0), 1), else_=0)).label("en_otra"))
+            .where(t.c.cliente == cliente, t.c.fecha >= desde, t.c.fecha <= hasta)
+            .group_by(t.c.canal, t.c.ad_id, t.c.fecha).subquery())
+        q = sa.select(sa.func.coalesce(sa.func.sum(por_clave.c.suyo), 0)).where(por_clave.c.en_otra == 1)
     with db.conectar() as con:
         return float(con.execute(q).scalar() or 0)
 
@@ -755,6 +759,18 @@ def _por_claves(tabla, cliente, pares):
     la tarea 7 era una cadena de OR por clave, que con ~2 500 anuncios pasaba el tope de profundidad de expresiones
     de SQLite («Expression tree is too large»)."""
     return sa.and_(tabla.c.cliente == cliente, sa.tuple_(tabla.c.canal, tabla.c.ad_id).in_(pares))
+
+
+def tipos_creativo(cliente):
+    """{(canal, ad_id): tipo} de los anuncios del proyecto que Triple Whale tipificó (ad_type: video, image, carousel,
+    dynamic…), en UNA consulta: el tipo de cada anuncio del alcance para «Mejores imágenes» y «Mejores videos» sin
+    una consulta por anuncio (spec 2026-10-13-rendimiento-metricas-que-faltaban §5). Solo columnas cortas: unas pocas
+    miles de filas por proyecto."""
+    t = db.tw_creativo
+    with db.conectar() as con:
+        filas = con.execute(sa.select(t.c.canal, t.c.ad_id, t.c.tipo)
+                            .where(t.c.cliente == cliente, t.c.tipo.isnot(None), t.c.tipo != ""))
+        return {(f.canal, f.ad_id): f.tipo for f in filas}
 
 
 def creativos(cliente, claves):

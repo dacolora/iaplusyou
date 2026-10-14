@@ -129,8 +129,8 @@ the ads of Meta accounts without a store (`extra["fuente"] = "meta"`, «con sus 
 `meta_conexion.cargar`, `muestra` re-sorting the winners by revenue); at the integration with main (2026-10-10, INT-2)
 that branch was retired in favour of main's «Evaluación con IA» of Meta (`meta_rendimiento/analisis.py`,
 `meta_rend_evaluar`, skill `meta-rendimiento`), and `tw_evaluar`, `analisis.armar`/`PROMPT`, `muestra` and `medios_meta`
-are main's again (the prompt says «de Triple Whale»; `medios_meta` still needs a launch account, PND-286 keeps its
-undelimited text). `analisis.FUENTES`/`nombre_fuente` stay: «Cómo mejorarlo» uses them for a Meta ad (below). `triple_whale/puente.py`:
+are main's again (the prompt says «de Triple Whale»; `medios_meta` still needs a launch account; its text goes
+delimited since PND-286, 2026-10-12, see below). `analisis.FUENTES`/`nombre_fuente` stay: «Cómo mejorarlo» uses them for a Meta ad (below). `triple_whale/puente.py`:
 «Llevar a Crear» sets `session["fp_prefill"]` (nothing is generated) and «Guardar en Referentes» stores a
 winning own ad as a project referente (fuente `triple_whale`, `anuncio_id = tw:<ad_id>`, thumbnail in R2).
 Experiments with `atribucion="triple_whale"`: `lanzador.refrescar` keeps traffic, spend and ad status from
@@ -305,7 +305,11 @@ production. It must work for ANY ad, not only Creatv's: in happyflops only 4 pie
   copy cannot close the DATOS block, and the output only fills an escaped card and a Crear prefill the person reviews.
   Names, campaign and conjunto arrive in one line (`evaluacion._una_linea`), and in the prompt the names, the winners'
   title/copy and the account evaluation's summary and patterns go through `mejorar._linea` (`_dato` + one line; B3: a
-  newline in a name opened what looked like a new part of the prompt and split the card's `data-confirmar`).
+  newline in a name opened what looked like a new part of the prompt and split the card's `data-confirmar`). `_dato`/`_linea`/`_RE_DELIMITADOR` live in `triple_whale/analisis.py` (`mejorar` imports
+  that module, so the other way round is a circular import) and `mejorar._dato` / `_linea` are the same functions.
+  «Evaluar con IA» (`analisis._bloque`, `texto_productos`) does the same since 2026-10-12 (PND-286): ad name, campaign,
+  product name and sku through `_linea`, the Meta title/copy in an indented `<<<TEXTO>>>` … `<<<FIN>>>` block per ad
+  (through `_dato`), and a line above `ANUNCIOS:` that says the names between « » and those blocks are data.
   `verificar_cifras` runs over the phrase, reasons with evidence, changes, `por_que` and the learning
   (`cifras_sin_dato`, non-blocking) against the DATA of the prompt (`mejorar.datos_verificables`: the same values
   without a word of the template; until 2026-10-09 it was the whole prompt, whose instruction numbers («3 cambios»,
@@ -561,8 +565,12 @@ eval `docs/superpowers/evals/2026-10-09-tw-ganchos-y-copy.md`.
   without a store (Rendimiento E2, `foto.fuente = "meta"`, its video copied to R2) does NOT offer «Probar los 3 ganchos»
   since the final review of Rendimiento E2 (G1, 2026-10-10): it would charge ~US$ 1,01 of Kling through a path never
   tried in real, so `puede_probar` returns `MOTIVO_META` («Para anuncios de Meta todavía no: falta una prueba real.»)
-  right after «sin ganchos», the detail shows that reason and the route answers 409 without rows or reservation. Turn it
-  on after a real test (PND-289).
+  right after «sin ganchos», the detail shows that reason and the route answers 409 without rows or reservation. Since
+  2026-10-12 there is one exception, `ganchos.prueba_meta_permitida(cliente, rol)` = an admin in a project of
+  `PROYECTOS_PRUEBA_META` (`colorado_forja`), passed as `puede_probar(..., meta_en_prueba=)` by the detail and the
+  paying route alike: Daniel wants the real test done in colorado_forja, «the account where everything is tested». Only
+  there: with Cobros on, an admin asking in another project would pay with that client's balance (guardian-gasto).
+  Open it to everyone after that test (PND-289).
 - **The code.** `ganchos.codigo(gid) = "CV<gid>"`; `codigo_en(nombre)` (regex `\bCV(\d+)\b`, case-insensitive) is written
   and tested for stage 3, which will read it from the ad name in the sync to compare v1 with v2 ring by ring.
 - **Real test (2026-10-09, one variant, ad 3 of the eval: HappyFluffs UGC 42,96 s).** preparar → Kling O3 Pro image to
@@ -649,3 +657,50 @@ anuncio es TOF, MOF o BOF. Siempre con el chip `cx.nvp(nuevos, visitantes)` (ski
   `web_analytics_table` deja la tienda sin su NVP (`fallos.visitantes`) pero no corta la copia (llave y tienda sí).
 
 PND-149(2–6) (2026-10-09, decisión del lote 8): serie_tienda solo resta duplicados de anuncios entre tiendas que tienen fila de tienda ese día; gasto_duplicado conserva su diagnóstico de todos los anuncios. Al refrescar un experimento, se limpian las marcas antiguas/nuevas de países cuya tienda ya está conectada, también si ninguna pieza queda sin tienda. uk al final del dominio da GB. agregar guarda los ajustes del formulario si no hay tiendas (aunque exista la fila); con tiendas conserva los ajustes anteriores. reservar_aviso_sync toma UPDATE sin efecto antes de leer extra/cola y marca ids+creada_en aún vivos en syncs_terminadas: la última reserva el aviso una sola vez aunque ambos hilos sigan vivos hasta volver al worker. actualizar_extra toma el mismo candado antes de leer. tests/test_lote8_tw.py cubre cifras, reconexión, dos finales simultáneos y el ciclo siguiente; sin red. Se dejan (1) países repetidos por tarjeta y (7) ajustes durante copia por decisión; (8) sigue para la primera copia real.
+
+**«Cómo mejorarlo» de un anuncio de imagen fija, y su idioma (2026-10-13).** Pedido de Daniel: el análisis de un
+estático salía en español en un proyecto en inglés y proponía «pasar el formato a video»; «Llevar a Crear» abría un
+video sin la imagen. Ahora `mejorar.es_estatico(foto)` lo decide el creativo guardado (una pieza de Creatv por su tipo;
+si no, sin `video_url`, sin `duracion_s` ni un tipo con «video», y con imagen; en happyflops el tipo `dynamic` es video
+o imagen según lo que traiga), nunca lo que Claude miró (un video cuya descarga falló llega como miniatura y sigue siendo video).
+Con imagen, `PROMPT` pide (`_VERSION["imagen"]`, `{escena_version}`/`{prompt_version}`/`{regla_version}`) un prompt en
+inglés para EDITAR esa misma imagen: conservar producto, foto, composición, colores y formato, cambiar lo mínimo que
+falla, y el texto que se verá en la imagen entre comillas, en el idioma del anuncio y con solo las ofertas de los
+datos; `_version` guarda `tipo` ("video"/"imagen") y, en imagen, `cifras_sin_dato` de TODO su prompt
+(`cifras_en_imagen`, sin los formatos «9:16» pero sí «3x2»: solo las comillas dejaban pasar comillas simples, ningunas
+o un `12"`; no bloquea, avisa en el detalle y en Crear al llegar). El prompt de video es palabra por palabra el de antes.
+`mejorar.analizar` cierra el mensaje, después de las imágenes, con `cierre_idioma(idioma, tipo)`: con la orden solo en
+el system, las instrucciones en español arrastraban la respuesta (PND-218; «Evaluar con IA» sigue pendiente). En inglés
+la orden va ESCRITA en inglés y nombra cada campo: la misma orden en español al final no movió nada (1 de 3 en inglés
+antes y con ella; 4 de 4 escrita en inglés, `docs/superpowers/evals/2026-10-13-mejorar-estaticos-idioma.md`). «Llevar a Crear» (`rutas.analisis_crear`) de una versión de imagen
+llama a `puente.imagen_a_bandeja`: copia la imagen del anuncio (`mejorar.imagen_del_anuncio`, solo de un host
+permitido y, si es de R2, solo de `clientes/<cliente>/`) a R2 con `referentes.imagenes.copiar_a_r2` (guarda de SSRF
+y validación por contenido), y solo si salió bien REEMPLAZA la bandeja con ella (origen `triple_whale`, título el
+nombre del anuncio). Un anuncio de fuente Meta usa su copia de R2 tal cual (`referentes.imagenes.medir`), sin otra
+copia ni su nombre: esa copia se borra al soltar la cuenta (promesa de /eliminar-datos); el prefill
+(`prefill_crear(tipo="imagen")`) va con el modelo de imagen del proyecto y el formato más cercano al de la imagen
+(`formato_mas_cercano`). Si no se puede copiar (o R2 está caído), aviso en palabras y nada cambia. Un análisis de antes (sin `version.tipo`) sigue
+siendo de video. Pruebas: `tests/test_tw_mejorar.py` (estático, prompt, cierre, parseo),
+`tests/test_tw_tarjetas_rutas.py` («Llevar a Crear» de una imagen) y `tests/test_tw_tarjetas_tarea.py`.
+
+**Idioma y claves internas en los tres prompts que escriben un análisis (2026-10-13, PND-218 y PND-306).** «Cómo
+mejorarlo», «Evaluar con IA» (`analisis.analizar`) y la «Evaluación con IA» de Meta (`meta_rendimiento.analisis`) cierran
+el mensaje, después de las imágenes, con `analisis.cierre_idioma(idioma, campos, fijos, excepciones_en=,
+excepciones_es=)`: en inglés la orden va escrita en inglés, nombra los campos que se escriben en el idioma del proyecto
+y pide conservar tal cual los valores de lista cerrada (`etapa`, `consciencia`, `accion`, `anillo`, `mueve`, y
+`consciencia`/`lead`/`fuente` del ángulo: `FIJOS_ANGULO`), porque traducidos no validan; en español, la orden de
+siempre. Y los datos del prompt nunca llevan una clave interna: veredicto, tendencia, señales y anillos sin dato pasan
+por `evaluacion.texto_clave`, que da su texto (`ETIQUETAS_VEREDICTO`, `TENDENCIAS`, `FORTALEZAS`, `PROBLEMAS`,
+`VACIOS_ANILLO`) en el idioma activo, que en el worker es el del proyecto (`worker.ejecutar`); una clave desconocida sale
+tal cual. **Lo verificable NO**: `mejorar.datos_verificables` sigue con la clave (`mejorar._clave`), porque los textos
+traen palabras que `ofertas_sin_dato` toma por una oferta de los datos («En prueba», «No spend in the last 7 days») y
+un gancho con «Prueba 7 días» inventado se generaría y se cobraría (revisión del gasto, 2026-10-13). Un script que arme estos prompts fuera del worker los arma dentro de `idiomas.en_idioma(idioma)`, nunca con una
+app de Flask propia sin catálogo (la medición lo pagó: mandó «Se está cansando» en un prompt en inglés). Medido:
+`docs/superpowers/evals/2026-10-13-evaluaciones-idioma-y-claves.md` (con lo que cuesta cada llamada, lo que paga el
+cliente y lo que ganamos).
+
+**Rendimiento: las métricas que faltaban (2026-10-13).** `triple_whale/destacados.py` arma, desde los anuncios ya
+evaluados del panel, productos con gasto y ROAS (por la página de destino contra el Catálogo), los mejores para
+iterar, los que mejor convierten (`metricas()["cv_sesion"]` = pedidos / sesiones; `resumen_cuenta` ahora suma
+`sesiones`) y las mejores imágenes y videos (`datos.tipos_creativo(cliente)`: `{(canal, ad_id): tipo}` en una
+consulta). Detalle y reglas en la skill `rendimiento`, «Las métricas que faltaban».

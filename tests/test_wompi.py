@@ -196,6 +196,22 @@ def test_url_de_checkout_lleva_los_parametros_documentados(wompi):
     assert "/cliente/acme" not in partes.query
 
 
+def test_url_de_checkout_con_vencimiento_lo_manda_y_lo_firma(wompi):
+    # Auditoría 2026-10-12: el checkout no vencía; un link abierto hoy se podía pagar días después a la TRM vieja.
+    from datetime import datetime, timezone
+    vence = datetime(2026, 10, 13, 20, 1, 18, 456789, tzinfo=timezone.utc)
+    q = dict(parse_qsl(urlsplit(wompi.url_checkout("cv-7-1", 100000, "http://localhost:5050/x", vence=vence)).query))
+    assert q["expiration-time"] == "2026-10-13T20:01:18.000Z"
+    cadena = f"cv-7-1100000COP2026-10-13T20:01:18.000Z{INT_T}"
+    assert q["signature:integrity"] == hashlib.sha256(cadena.encode()).hexdigest()
+
+
+def test_url_de_checkout_con_vencimiento_sin_zona_se_niega(wompi):
+    from datetime import datetime
+    with pytest.raises(wompi.ErrorWompi):
+        wompi.url_checkout("cv-7-1", 100000, "http://localhost:5050/x", vence=datetime(2026, 10, 13, 20, 1, 18))
+
+
 def test_url_de_checkout_sin_correo(wompi):
     url = wompi.url_checkout("cv-7-1", 100000, "http://localhost:5050/x")
     q = dict(parse_qsl(urlsplit(url).query))
@@ -214,9 +230,10 @@ def _evento(secreto=EVE_T, props=("transaction.id", "transaction.status", "trans
             ts=1530291411, tx=None):
     tx = tx or {"id": "01-1532941443-49201", "amount_in_cents": 4490000, "reference": "cv-1-1",
                 "currency": "COP", "status": "APPROVED", "payment_source_id": None}
+    # La forma real (doc oficial en español): `timestamp` arriba, junto a `sent_at`, no dentro de `signature`.
     cuerpo = {"event": "transaction.updated", "data": {"transaction": dict(tx)},
-              "sent_at": "2018-07-20T16:45:05.000Z",
-              "signature": {"properties": list(props), "timestamp": ts}}
+              "timestamp": ts, "sent_at": "2018-07-20T16:45:05.000Z",
+              "signature": {"properties": list(props)}}
     valores = ""
     for p in props:
         nodo = cuerpo["data"]
@@ -233,6 +250,39 @@ def test_evento_con_firma_valida(wompi):
     s = f"01-1532941443-49201APPROVED44900001530291411{EVE_T}"
     assert cuerpo["signature"]["checksum"] == hashlib.sha256(s.encode()).hexdigest().upper()
     assert wompi.evento_valido(cuerpo) is True
+
+
+def test_evento_con_la_forma_real_de_wompi_timestamp_arriba(wompi):
+    # La forma de la doc oficial en español (docs.wompi.co/docs/colombia/eventos/) y de los eventos reales:
+    # `timestamp` va al nivel de arriba, junto a `sent_at`, y `signature` solo trae `properties` y `checksum`.
+    # La primera recarga real (2026-10-12, cv-1-1791835226) llegó así y se rechazó cuatro veces como
+    # «firma inválida» porque lo buscábamos en `signature.timestamp`.
+    tx = {"id": "1234-1610641025-49201", "amount_in_cents": 4490000, "reference": "cv-1-1",
+          "currency": "COP", "status": "APPROVED"}
+    s = f"1234-1610641025-49201APPROVED44900001530291411{EVE_T}"
+    cuerpo = {"event": "transaction.updated", "data": {"transaction": tx}, "environment": "prod",
+              "signature": {"properties": ["transaction.id", "transaction.status", "transaction.amount_in_cents"],
+                            "checksum": hashlib.sha256(s.encode()).hexdigest().upper()},
+              "timestamp": 1530291411, "sent_at": "2018-07-20T16:45:05.000Z"}
+    assert wompi.evento_valido(cuerpo) is True
+    assert wompi.evento_valido(cuerpo, checksum_header=cuerpo["signature"]["checksum"]) is True
+
+
+def test_evento_con_timestamp_dentro_de_signature_tambien_vale(wompi):
+    # La forma de la doc en inglés (la que copiamos en wompi-api.md §8): sin `timestamp` arriba, el de `signature`.
+    cuerpo = _evento()
+    cuerpo["signature"]["timestamp"] = cuerpo.pop("timestamp")
+    assert wompi.evento_valido(cuerpo) is True
+
+
+def test_evento_con_los_dos_timestamp_manda_el_de_arriba(wompi):
+    firmado_arriba = _evento()
+    firmado_arriba["signature"]["timestamp"] = 1530291400   # otro valor dentro de `signature`: no se usa
+    assert wompi.evento_valido(firmado_arriba) is True
+    firmado_adentro = _evento(ts=1530291400)
+    firmado_adentro["signature"]["timestamp"] = firmado_adentro["timestamp"]
+    firmado_adentro["timestamp"] = 1530291411              # el de arriba no es el que se firmó
+    assert wompi.evento_valido(firmado_adentro) is False
 
 
 def test_evento_acepta_checksum_en_minusculas_y_cabecera(wompi):
@@ -264,7 +314,7 @@ def test_evento_alterado(wompi, cambio):
     elif cambio == "id":
         tx["id"] = "01-1532941443-49202"
     elif cambio == "timestamp":
-        cuerpo["signature"]["timestamp"] += 1
+        cuerpo["timestamp"] += 1
     elif cambio == "props":
         cuerpo["signature"]["properties"] = ["transaction.id", "transaction.status"]
     else:
@@ -290,8 +340,10 @@ def test_evento_con_propiedades_que_varian(wompi):
     lambda c: c["signature"].update(properties=["transaction.no_existe"]),
     lambda c: c["signature"].update(properties=["transaction"]),
     lambda c: c["signature"].update(properties=[1]),
-    lambda c: c["signature"].update(timestamp=None),
-    lambda c: c["signature"].update(timestamp=True),
+    lambda c: c.update(timestamp=None),
+    lambda c: c.update(timestamp=True),
+    lambda c: c.update(timestamp="1530291411"),
+    lambda c: c.pop("timestamp"),
     lambda c: c.update(data="x"),
     lambda c: c.pop("data"),
 ])
@@ -374,6 +426,52 @@ def test_transaccion_usa_la_llave_privada(wompi, monkeypatch):
     assert r["amount_in_cents"] == 322000000
     assert r["currency"] == "COP"
     assert r["payment_source_id"] == 3891
+
+
+def _lista(*txs):
+    return _Respuesta(200, {"data": [dict(t) if isinstance(t, dict) else t for t in txs]})
+
+
+def _d(tx_id="1292-1602113476-10985", reference="cv-7-1", status="APPROVED"):
+    return {"id": tx_id, "reference": reference, "amount_in_cents": 19562100, "currency": "COP",
+            "payment_method_type": "CARD", "status": status}
+
+
+def test_transacciones_de_referencia_busca_con_la_llave_privada(wompi, monkeypatch):
+    # PND-296 (2026-10-12): una recarga cuyos eventos no se aceptaron se encuentra buscando su referencia.
+    visto = _capturar(monkeypatch, wompi, "get", _lista(_d(), _d("1292-1602113476-10986", status="DECLINED")))
+    r = wompi.transacciones_de_referencia("cv-7-1", tiempo=(3, 5))
+    assert visto["url"] == "https://sandbox.wompi.co/v1/transactions"
+    assert visto["params"] == {"reference": "cv-7-1"}
+    assert visto["headers"]["Authorization"] == f"Bearer {PRV_T}"
+    assert visto["allow_redirects"] is False and visto["timeout"] == (3, 5)
+    assert [(t["id"], t["status"]) for t in r] == [("1292-1602113476-10985", "APPROVED"),
+                                                   ("1292-1602113476-10986", "DECLINED")]
+
+
+def test_transacciones_de_referencia_descarta_las_de_otra_referencia_y_las_raras(wompi, monkeypatch):
+    _capturar(monkeypatch, wompi, "get", _lista(_d(reference="cv-7-10"), _d(reference="CV-7-1"), "no es un objeto",
+                                                {**_d(), "id": "../x"}, _d("1292-1602113476-10987")))
+    assert [t["id"] for t in wompi.transacciones_de_referencia("cv-7-1")] == ["1292-1602113476-10987"]
+
+
+def test_transacciones_de_referencia_trae_a_lo_mas_veinte(wompi, monkeypatch):
+    _capturar(monkeypatch, wompi, "get", _lista(*[_d(f"1292-1602113476-{i}") for i in range(30)]))
+    assert len(wompi.transacciones_de_referencia("cv-7-1")) == wompi.MAX_POR_REFERENCIA == 20
+
+
+@pytest.mark.parametrize("respuesta", [_Respuesta(200, {"data": {"id": "x"}}), _Respuesta(200, {"nada": 1}),
+                                       _Respuesta(200, texto="<html>"), _Respuesta(401, {"error": {}})])
+def test_transacciones_de_referencia_con_respuesta_rara_lanza(wompi, monkeypatch, respuesta):
+    _capturar(monkeypatch, wompi, "get", respuesta)
+    with pytest.raises(wompi.ErrorWompi):
+        wompi.transacciones_de_referencia("cv-7-1")
+
+
+@pytest.mark.parametrize("ref", ["", None, "cv-1\n", "x" * 256])
+def test_transacciones_de_referencia_rara_no_sale(wompi, ref):
+    with pytest.raises(wompi.ErrorWompi):
+        wompi.transacciones_de_referencia(ref)
 
 
 @pytest.mark.parametrize("tid", ["../merchants/info", "1-2-3?x=1", "", None, "a/b", "1" * 80])
@@ -484,6 +582,25 @@ def test_cobrar_fuente_con_referencia_usada(wompi, monkeypatch):
     assert e.value.incierto is False
 
 
+@pytest.mark.parametrize("mensaje", ["La referencia ya ha sido usada", "The reference has already been used."])
+def test_cobrar_fuente_reconoce_la_referencia_usada_en_espanol_y_en_ingles(wompi, monkeypatch, mensaje):
+    # Visto en el sandbox de Wompi (2026-10-13): el 422 de una referencia repetida viene en ESPAÑOL; solo buscábamos
+    # «already» y el reintento lo tomaba por un rechazo cualquiera (un primer envío así se daba por fallido).
+    _capturar(monkeypatch, wompi, "post", _Respuesta(422, {"error": {
+        "type": "INPUT_VALIDATION_ERROR", "messages": {"reference": [mensaje]}}}))
+    with pytest.raises(wompi.ErrorWompi) as e:
+        wompi.cobrar_fuente(3891, 100000, "a@b.co", "pl-1-20261109-1")
+    assert e.value.codigo == 422 and e.value.referencia_usada is True
+
+
+def test_otro_422_de_la_referencia_no_es_referencia_usada(wompi, monkeypatch):
+    _capturar(monkeypatch, wompi, "post", _Respuesta(422, {"error": {
+        "type": "INPUT_VALIDATION_ERROR", "messages": {"reference": ["La referencia es muy larga"]}}}))
+    with pytest.raises(wompi.ErrorWompi) as e:
+        wompi.cobrar_fuente(3891, 100000, "a@b.co", "pl-1-20261109-1")
+    assert e.value.referencia_usada is False
+
+
 def test_cobrar_fuente_que_se_corta_queda_incierto(wompi, monkeypatch):
     """Un tiempo agotado leyendo la respuesta: Wompi pudo cobrar. Quien llama
     no reintenta con otra referencia (sería un segundo cobro)."""
@@ -499,6 +616,23 @@ def test_cobrar_fuente_sin_conectar_no_es_incierto(wompi, monkeypatch):
     with pytest.raises(wompi.ErrorWompi) as e:
         wompi.cobrar_fuente(3891, 100000, "a@b.co", "pl-1-20261109-1")
     assert e.value.caida is True and e.value.incierto is False
+
+
+@pytest.mark.parametrize("codigo", [301, 302, 307])
+def test_cobrar_fuente_con_una_redireccion_queda_incierto(wompi, monkeypatch, codigo):
+    # Auditoría 2026-10-12: un 3xx no se marcaba incierto y el pago se daba por fallido; el siguiente intento iba con
+    # otra referencia: doble cobro si Wompi sí lo había procesado.
+    _capturar(monkeypatch, wompi, "post", _Respuesta(codigo, texto=""))
+    with pytest.raises(wompi.ErrorWompi) as e:
+        wompi.cobrar_fuente(3891, 100000, "a@b.co", "pl-1-20261109-1")
+    assert e.value.incierto is True and e.value.codigo == codigo
+
+
+def test_una_redireccion_fuera_de_un_cobro_no_es_incierta(wompi, monkeypatch):
+    _capturar(monkeypatch, wompi, "get", _Respuesta(302, texto=""))
+    with pytest.raises(wompi.ErrorWompi) as e:
+        wompi.transaccion("1292-1602113476-10985")
+    assert e.value.incierto is False
 
 
 def test_cobrar_fuente_con_5xx_queda_incierto(wompi, monkeypatch):
@@ -584,3 +718,17 @@ def test_evento_fuera_de_la_ventana_de_tiempo_no_vale(wompi, monkeypatch, desfas
     ts = 1530291411
     monkeypatch.setattr(wompi, "_ahora", lambda: ts - desfase)
     assert wompi.evento_valido(_evento(ts=ts)) is valido
+
+
+def test_el_script_del_sandbox_se_niega_con_llaves_que_no_son_de_pruebas(tmp_path):
+    # Revisor (2026-10-12): nada vigilaba que deploy/prueba_wompi_sandbox.py nunca corra contra producción.
+    import os
+    import subprocess
+    import sys
+    llaves = tmp_path / "llaves.env"
+    llaves.write_text("WOMPI_LLAVE_PUBLICA=pub_prod_x\nWOMPI_LLAVE_PRIVADA=prv_test_x\n"  # llave-de-prueba
+                      "WOMPI_SECRETO_EVENTOS=test_events_x\nWOMPI_SECRETO_INTEGRIDAD=test_integrity_x\n")  # llave-de-prueba
+    raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    r = subprocess.run([sys.executable, os.path.join(raiz, "deploy", "prueba_wompi_sandbox.py"), str(llaves)],
+                       capture_output=True, text=True, timeout=60)
+    assert r.returncode != 0 and "no es una llave de PRUEBAS" in r.stderr

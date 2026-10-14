@@ -11,6 +11,8 @@
    `triplewhale`: Triple Whale y Meta juntos en una sola pestaña (spec
    2026-10-09 R1; «Meta» salió del menú); su panel llega por fetch al abrirla.
    Las claves viejas `triplewhale` y `meta` las resuelve cliente.html.
+   `nicho` (2026-10-13) ya no es pestaña: vive en Sprints › Nicho (spec
+   2026-10-13-nicho-dentro-de-sprints); cliente.html resuelve la clave.
    `productos` ya no es pestaña: vive dentro de Catálogo; `ads` (Campañas)
    tampoco: sus anuncios sueltos viven dentro de Experimentos (cliente.html
    resuelve los hashes viejos). #}
@@ -29,9 +31,11 @@
       <svg viewBox="0 0 24 24"><path d="M12 4v16M4 12h16" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" fill="none"/></svg>
       <span class="sidebar-texto">{{ _('Crear') }}</span>
     </button>
-    <button type="button" class="sidebar-item" data-tab="experimentos" role="tab" title="{{ _('Experimentos') }}">
-      <svg viewBox="0 0 24 24"><path d="M4 20h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/><rect x="5" y="11" width="3.5" height="6" rx="1" stroke="currentColor" stroke-width="2" fill="none"/><rect x="10.25" y="5" width="3.5" height="12" rx="1" stroke="currentColor" stroke-width="2" fill="none"/><rect x="15.5" y="8" width="3.5" height="9" rx="1" stroke="currentColor" stroke-width="2" fill="none"/></svg>
-      <span class="sidebar-texto">{{ _('Experimentos') }}</span>
+    {# «Probar anuncios» (2026-10-13, Daniel: con la pestaña Rendimiento, «Experimentos» y su ícono de barras se leían
+       como otra pantalla de resultados). El data-tab sigue siendo «experimentos». #}
+    <button type="button" class="sidebar-item" data-tab="experimentos" role="tab" title="{{ _('Probar anuncios') }}">
+      <svg viewBox="0 0 24 24"><path d="M9 3h6M10 3v6.5L4.8 18.2A2 2 0 0 0 6.5 21h11a2 2 0 0 0 1.7-2.8L14 9.5V3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M7.2 15h9.6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <span class="sidebar-texto">{{ _('Probar anuncios') }}</span>
     </button>
     <button type="button" class="sidebar-item" data-tab="alertas" role="tab" title="{{ _('Alertas') }}">
       <svg viewBox="0 0 24 24"><path d="M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"/><path d="M10 20a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
@@ -45,10 +49,6 @@
     <button type="button" class="sidebar-item" data-tab="rendimiento" role="tab" title="{{ _('Rendimiento') }}">
       <svg viewBox="0 0 24 24"><path d="M3 17l5-6 4 3 5-7 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M3 21h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="17" cy="7" r="1.6" fill="currentColor"/></svg>
       <span class="sidebar-texto">{{ _('Rendimiento') }}</span>
-    </button>
-    <button type="button" class="sidebar-item" data-tab="nicho" role="tab" title="{{ _('Nicho') }}">
-      <svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6" stroke="currentColor" stroke-width="2" fill="none"/><path d="M15 15l5.5 5.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M8 10.5h5M10.5 8v5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-      <span class="sidebar-texto">{{ _('Nicho') }}</span>
     </button>
     <button type="button" class="sidebar-item" data-tab="referentes" role="tab" title="{{ _('Referentes') }}">
       <svg viewBox="0 0 24 24"><rect x="3" y="4" width="8" height="7" rx="1.5" stroke="currentColor" stroke-width="2" fill="none"/><rect x="13" y="4" width="8" height="7" rx="1.5" stroke="currentColor" stroke-width="2" fill="none"/><rect x="3" y="13" width="8" height="7" rx="1.5" stroke="currentColor" stroke-width="2" fill="none"/><rect x="13" y="13" width="8" height="7" rx="1.5" stroke="currentColor" stroke-width="2" fill="none"/></svg>
@@ -113,7 +113,7 @@
          la cuenta de Meta, solo si hay). Lleva a Configuración › Gasto. #}
       <a class="sidebar-gasto" href="{{ url_for('ver_cliente', cliente=request.view_args.cliente, _anchor='settings') }}"
          title="{{ _('Ver el detalle en Configuración › Gasto') }}"
-         onclick="var b = document.querySelector('.sidebar-item[data-tab=settings]'); if (b) { b.click(); if (window.irAConfig) irAConfig('config-gasto'); return false; }">{{ _('Gasto total: %(gasto)s', gasto=gasto_chip) }}</a>
+         data-ir-config="config-gasto">{{ _('Gasto total: %(gasto)s', gasto=gasto_chip) }}</a>
       {% endif %}
     </div>
   </div>

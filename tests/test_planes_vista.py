@@ -34,6 +34,7 @@ def falso(base, monkeypatch):
     monkeypatch.setattr(wompi, "crear_fuente", f.crear_fuente)
     monkeypatch.setattr(wompi, "cobrar_fuente", f.cobrar_fuente)
     monkeypatch.setattr(wompi, "transaccion", f.transaccion)
+    monkeypatch.setattr(wompi, "transacciones_de_referencia", f.transacciones_de_referencia)
     monkeypatch.setattr(wompi, "aceptaciones", lambda tiempo=None: {
         "acceptance_token": "eyJ.acepta.widget", "acceptance_url": "https://wompi.co/terminos.pdf",
         "personal_token": "eyJ.datos.widget", "personal_url": "https://wompi.com/datos.pdf"})
@@ -316,6 +317,58 @@ def test_alta_con_el_token_simulado_activa_el_plan(base, pagina, pro, falso, avi
     assert sus["estado"] == "activa" and sus["precio_usd"] == 1000 and sus["usuario"] == "user_acme"
     with c.session_transaction() as s:
         assert any("tu plan está activo" in m for _cat, m in s.get("_flashes", []))
+
+
+def test_en_modo_bloquear_la_politica_de_la_tarjeta_conserva_la_de_base(base, pagina, pro, falso, monkeypatch):
+    # Revisor (2026-10-12): al pasar CSP_TARJETA_SOLO_REPORTE a False, la página no puede perder frame-ancestors
+    # (que otro sitio la enmarque y haga clickjacking sobre el pago).
+    from cobros import rutas
+    monkeypatch.setattr(rutas, "CSP_TARJETA_SOLO_REPORTE", False)
+    _cobra()
+    r = pagina().get(f"/cliente/acme/plan/alta?plan={pro}")
+    (politica,) = r.headers.getlist("Content-Security-Policy")
+    assert "frame-ancestors 'none'" in politica and "object-src 'none'" in politica
+    assert "script-src 'self' 'nonce-" in politica and "frame-src https://checkout.wompi.co" in politica
+
+
+def test_la_pagina_de_la_tarjeta_tiene_su_politica_de_scripts_con_nonce(base, pagina, pro, falso):
+    # Auditoría de seguridad 2026-10-12 (PCI, SAQ A): en la página donde el widget pide la tarjeta solo corren
+    # nuestros scripts, los del nonce y los de checkout.wompi.co; marcos solo de Wompi; formularios solo hacia aquí.
+    import re
+    from cobros import rutas
+    _cobra()
+    r = pagina().get(f"/cliente/acme/plan/alta?plan={pro}")
+    nombre = ("Content-Security-Policy-Report-Only" if rutas.CSP_TARJETA_SOLO_REPORTE
+              else "Content-Security-Policy-Tarjeta")
+    politica = r.headers.get("Content-Security-Policy-Report-Only") or ""
+    if not rutas.CSP_TARJETA_SOLO_REPORTE:
+        politica = r.headers.get("Content-Security-Policy") or ""
+    assert politica, nombre
+    nonce = re.search(r"'nonce-([A-Za-z0-9_-]{16,})'", politica).group(1)
+    assert "script-src 'self'" in politica and "https://checkout.wompi.co" in politica
+    assert "frame-src https://checkout.wompi.co" in politica and "form-action 'self'" in politica
+    from html.parser import HTMLParser
+
+    class Etiquetas(HTMLParser):
+        # Como el navegador: lo que va DENTRO de un <script> es texto, no etiquetas.
+        def __init__(self):
+            super().__init__()
+            self.scripts, self.manejadores = [], []
+
+        def handle_starttag(self, tag, attrs):
+            d = dict(attrs)
+            if tag == "script":
+                self.scripts.append(d)
+            self.manejadores += [k for k in d if k.startswith("on")]
+    e = Etiquetas()
+    e.feed(r.get_data(as_text=True))
+    en_linea = [d for d in e.scripts if "src" not in d]
+    assert en_linea and all(d.get("nonce") == nonce for d in en_linea)   # todo script en línea lleva el nonce
+    assert e.manejadores == []                                          # y no hay manejadores en línea
+    otra = pagina().get(f"/cliente/acme/plan/alta?plan={pro}").headers.get("Content-Security-Policy-Report-Only") \
+        or pagina().get(f"/cliente/acme/plan/alta?plan={pro}").headers.get("Content-Security-Policy") or ""
+    assert nonce not in otra                                                       # un nonce por petición
+    assert not pagina().get("/cliente/acme").headers.get("Content-Security-Policy-Report-Only")
 
 
 @pytest.mark.parametrize("campo,valor", [

@@ -8,13 +8,18 @@ def test_estado_ad_espera_el_candado_compartido(base_temporal, monkeypatch):
     from tests.test_rutas_experimentos import _cliente_admin
     c = _cliente_admin(dashboard)
     entro = Event()
-    monkeypatch.setattr(dashboard.ads_mod, "cargar", lambda _: {"a": {"meta_ids": {"campaign_id": "camp", "adset_id": "set", "ad_id": "ad"}}})
+    monkeypatch.setattr(dashboard.ads_mod, "cargar", lambda _: {"a": {"meta_ids": {"campaign_id": "camp", "adset_id": "set", "ad_id": "ad"},
+                                                                      "presupuesto_diario": 20000.0, "moneda": "COP"}})
     monkeypatch.setattr(dashboard.ads_mod, "actualizar", lambda *a, **k: None)
     monkeypatch.setattr(dashboard.meta_conexion, "credenciales_ads", lambda _: {"token": "llave-de-prueba", "ad_account_id": "cuenta", "page_id": "pagina"})
     monkeypatch.setattr(dashboard.meta_auth, "configurar", lambda *a: entro.set())
     monkeypatch.setattr(dashboard.meta_auth, "limpiar", lambda: None)
     llamadas = []
     monkeypatch.setattr(dashboard.meta_campaign, "actualizar_estado", lambda *a: llamadas.append(a))
+    # Esta prueba es del candado: la comprobación de la moneda de PND-322 tiene sus propias pruebas.
+    monkeypatch.setattr(dashboard.lanzador, "_cuenta_meta", lambda creds: {})
+    monkeypatch.setattr(dashboard.lanzador, "comprobar_moneda", lambda cuenta, moneda: None)
+    monkeypatch.setattr(dashboard.lanzador, "_confirmar_presupuesto", lambda *a, **k: None)
     resultado = []
     with _LOCK:
         hilo = Thread(target=lambda: resultado.append(c.post("/cliente/acme/ads/a/estado", data={"estado": "ACTIVE"})))

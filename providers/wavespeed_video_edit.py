@@ -19,7 +19,7 @@ intercambiables sin revisar MODELOS abajo:
 """
 import requests
 
-from providers import wavespeed_common
+from providers import swap_video_precio, wavespeed_common
 
 MODELOS = {
     "seedance25_edit": {
@@ -79,6 +79,7 @@ def editar_video(modelo_id, video_url, prompt, referencias_urls=None, on_progres
     return outputs[0]
 
 
-def estimate_video(modelo_id, duration_seconds=5):
-    costo_seg = MODELOS[modelo_id]["costo_usd_por_segundo"]
-    return {"credits": None, "usd": round(costo_seg * duration_seconds, 3)}
+def estimate_video(modelo_id, duration_seconds=5, fps=None):
+    """Por la duración del video que se sube (`swap_video_precio`, PND-312): Seedance cobra entrada + salida,
+    Kling O3 la salida entre 3 y 10 s, Luma 3.2 un precio fijo."""
+    return {"credits": None, "usd": swap_video_precio.costo(modelo_id, duration_seconds, fps)}

@@ -5,6 +5,13 @@ description: "Experimentos en Meta y su centro de resultados: armar y lanzar pru
 
 # Experimentos, decisor y centro de resultados
 
+**Nombre en pantalla (2026-10-13):** la pestaña se llama «Probar anuncios» (ES) / «Test ads» (EN), con un ícono de
+matraz; su encabezado dice que aquí se lanzan las piezas como anuncios y se decide, y enlaza a «Rendimiento» para ver
+cómo va toda la cuenta (y Rendimiento enlaza de vuelta). Daniel: con la pestaña Rendimiento, «Experimentos · Centro de
+resultados» y su ícono de barras se leían como otra pantalla de resultados. El `data-tab`, las rutas y la palabra
+«experimento» (la prueba) no cambian. Los textos que mandaban a «conectar Meta en Experimentos» ahora dicen
+Configuración › Conexiones, donde vive la conexión desde 2026-10-07.
+
 > Parte de la guía del repositorio; hasta el 2026-10-01 vivía dentro de CLAUDE.md. **Si cambias esta área, actualiza este archivo** en el mismo cambio (no CLAUDE.md). Si el código y este texto no coinciden, manda el código: corrige el texto.
 
 **Experimentos** (`experimentos.py` + `lanzador.py`): the ecommerce test loop's unit
@@ -86,6 +93,34 @@ loser is only paused — `derivaciones` refuses image sessions), and they never 
 organic publish path (`organico`/`publicador` are video-only; for an image piece `url_video`
 IS the image URL, so every gate also checks `es_imagen`). `experimentos.ESTADOS_VIVOS`
 (the gallery's «en prueba» label) includes `decidido`: winners keep delivering there.
+
+**Plata hacia Meta (PND-322, 2026-10-13).** Meta recibe presupuestos y topes en la unidad de su tabla oficial
+(`monedas_meta.py`, el ÚNICO lugar: offset 1 = CLP, COP, CRC, HUF, IDR, ISK, JPY, KRW, PYG, TWD, VND; las demás en
+centavos; una moneda fuera de la tabla lanza `MonedaNoSoportada`). Hasta ese día una lista escrita de memoria sin el
+COP mandó los diarios en pesos colombianos 100 veces más altos (4 000 → 400 000 COP al día; colorado_forja gastó
+192 167 COP, 24 y 2,5 veces los topes de los experimentos 3 y 5) y las pruebas no lo vieron porque comparaban
+`centavos()` consigo mismo: `tests/test_monedas_meta.py` compara con la tabla de Meta. Cuatro frenos, ninguno se quita:
+(1) `lanzador.comprobar_moneda` antes de mandar CUALQUIER monto (lanzar, cambiar el diario, activar): la cuenta
+factura en la moneda del experimento y `PRESUPUESTO_MINIMO_DIARIO` convertido cuadra ×10 con el `min_daily_budget` que
+Meta da para la cuenta (con la lista vieja daba ×120); (2) cada diario y cada `spend_cap` se lee de vuelta
+(`_confirmar_presupuesto`/`_confirmar_tope`): si Meta guardó otro, se pausa y lanza `PresupuestoNoCoincide`; activar
+(`cambiar_estado`, `activar_pieza`) también lo lee, así un conjunto viejo con ×100 nunca se enciende; (3) el tope va a
+la campaña desde el `min_campaign_group_spend_cap` de la cuenta (Forja: 200 000 COP; `minimo_tope_campana` queda como
+respaldo y para el texto de «Nuevo experimento»); por debajo, los conjuntos se crean con la fecha de fin a la que
+alcanza el tope (`_dias_que_alcanza`, al menos 1 día) y queda un evento que lo dice; la primera activación
+(`_preparar_fin_primera_activacion`) usa los MISMOS días (antes devolvía los del experimento y deshacía el freno), y
+activar se niega si el gasto en Meta ya llegó al tope; (4) la periódica `exp_vigilar_gasto` (10 min, en su PROPIO
+carril del worker, `CARRIL_VIGILANCIA`: en el general esperaba horas detrás de renders) lee el gasto real de cada
+campaña `corriendo`/`decidido` y la pausa entera si llegó al tope o si UN conjunto va hoy por más de `RITMO_MAXIMO`
+(2) veces SU diario (insights `level=adset`; contra la suma de países, un solo país inflado tardaba horas); lee y corta
+la entrega con la llave del proyecto directo (`_meta_directo`, sin el candado `_LOCK` que un lanzamiento tiene
+mientras sube videos) y después pausa todo con `cambiar_estado`; un experimento `pausado` o en `error` cuya campaña
+siga ACTIVA en Meta se vuelve a pausar, salvo que alguien lo esté activando (`extra.activando_en`, que
+`cambiar_estado` y `activar_pieza` ponen desde antes de tocar Meta hasta que el estado dice «corriendo»); un error de
+lectura deja un solo aviso, no uno cada 10 min. Si una lectura de
+vuelta no coincide y la pausa falla, el país NO se marca «pausado» (el aviso dice «páusalo en Meta ya») para que la
+vigilancia lo siga contando. «Activar» de un anuncio suelto (`dashboard.cambiar_estado_ad`) pasa por los mismos
+frenos y se niega si la ficha no tiene su `presupuesto_diario`.
 
 **Decisor, escalera y modos** (`decisor.py`, `modos.py`, `propuestas.py`, `acciones.py`,
 `derivaciones.py`, `notificaciones.py`): the part of the loop that closes on its own.

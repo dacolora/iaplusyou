@@ -159,7 +159,7 @@ def test_publicar_crea_campana_y_deja_pausado(base_temporal, monkeypatch):
     e = ads.cargar("acme")[aid]
     assert e["estado"] == "pausado"
     assert e["meta_ids"] == {"campaign_id": "c1", "adset_id": "s1", "ad_id": "a1", "creative_id": "cr1"}
-    assert llamadas["adset"][3] == 2000000 and llamadas["adset"][4] == 3   # 20000 COP -> centavos
+    assert llamadas["adset"][3] == 20000 and llamadas["adset"][4] == 3   # 20000 COP: Meta lo recibe sin decimales (PND-322)
     assert llamadas["adset"][2]["age_min"] == 18 and llamadas["adset"][2]["age_max"] == 45
     assert llamadas["limpiar"] is True
     assert llamadas["url_tags"] == "tw_source={{site_source_name}}&tw_adid={{ad.id}}"

@@ -58,7 +58,7 @@ instead of double-launching. Tasks that spend credits are queued with
 30 minutes is either re-queued (if it still has attempts left) or marked `error`
 (once `max_intentos` is exhausted) — never one this worker is running right now
 (`cola.recuperar_colgadas(excluir=worker.en_vuelo())`). Since 2026-09-28 (spec
-`2026-09-28-crear-sin-cola`, «en Crear nada queda en cola») the worker runs in lanes; since 2026-10-08 there are four: crear, nicho (PND-051, decisión delegada 2026-10-07, implementada 2026-10-08), `lectura` (below) and general:
+`2026-09-28-crear-sin-cola`, «en Crear nada queda en cola») the worker runs in lanes; since 2026-10-13 there are five: crear, nicho (PND-051, decisión delegada 2026-10-07, implementada 2026-10-08), `lectura` (below), `vigilancia` (PND-322: `CARRIL_VIGILANCIA = ("exp_vigilar_gasto",)`, one thread, so the Meta spend brake runs every 10 min and not behind a render; see the `experimentos` skill) and general:
 `CARRIL_CREAR` (`flowplus_video`, `flowplus_imagen`, `flowplus_recuperar`, `flowplus_director`, `hablado_voz`)
 runs up to `HILOS_CREAR = 4` at once — Sprints batches (`prioridad < 5`) take at most
 `HILOS_LOTE = 2`, so a single piece from Crear always finds a thread — and everything else
@@ -106,7 +106,10 @@ Cloudflare R2 and referenced by its public URL from then on — binaries are nev
 committed to git (`.gitignore` excludes `clientes/*/personajes/*`, `clientes/*/marca/*`,
 `salidas/`, the `*.json` state files, all `.env`/token files).
 To delete: `delete_file(key)` builds one boto3 client per call; for a batch use `delete_files(keys)` (ONE client, each key on its
-own, returns `(borradas, tipos_de_error)`, never the error text; no keys = no client).
+own, returns `(borradas, tipos_de_error)`, never the error text; no keys = no client), or `delete_files_detalle(keys)`, the
+same with `[(key, tipo)]` so the caller knows WHICH keys failed. Since 2026-10-12 (PND-295) the deletes that follow rows
+that are already gone (releasing Meta data) record the failed keys with `storage/r2_pendientes.anotar` (kv
+`r2:borrar_pendientes`, its only writer) and `meta_rend_limpiar` retries them daily (skill `meta-rendimiento`).
 
 **Ayudas de marca** (`generador_prompts.py`): calls Anthropic directly. `analizar_marca()` uses Claude's vision input on uploaded
 brand reference images to auto-write that guía de estilo.
@@ -162,7 +165,7 @@ S3 (2026-10-08, auditoría lote 6B): la periódica diaria cola_limpiar llama man
 
 PND-068 (2026-10-08, decisión 2026-09-18: nada nuevo a Higgsfield): retirados productores y rutas de Nueva idea y sus nueve plantillas. No eran tareas de cola, sino hilos de Flask. Un tipo desconocido queda en error en palabras sin llamar al proveedor (tests/test_lote6c_retirar_ideas.py); proveedores/CLI y datos históricos conservados.
 
-PND-051 (enmienda 2026-10-08): el carril Nicho tiene un solo hilo para sus seis tareas que esperan proveedor y referentes_barrer. Los barridos comparten la RAM y el límite de corridas de Apify con Nicho; repartirlos en paralelo daba 402 por capacidad. General excluye Crear + Nicho (+ lectura, el carril de Meta rendimiento), y en_vuelo, esperar_hilos y recuperación son comunes a los cuatro carriles. En SIGINT/SIGTERM no se interrumpe el sondeo de Apify: el hilo termina la tarea y esperar_hilos lo espera. En un despliegue la cola debe estar vacía antes de reiniciar. No hay puntos de control ni continuaciones nuevas de Apify: se conserva el contrato anterior del proveedor y del gasto. Pruebas: tests/test_lote6c_nicho_carril.py, incluido un 402 sin cobro seguido de un segundo clic explícito con el mismo job_id que sí termina. No cambia max_intentos ni la política de cobro.
+PND-051 (enmienda 2026-10-08): el carril Nicho tiene un solo hilo para sus seis tareas que esperan proveedor y referentes_barrer. Los barridos comparten la RAM y el límite de corridas de Apify con Nicho; repartirlos en paralelo daba 402 por capacidad. General excluye Crear + Nicho (+ lectura, el carril de Meta rendimiento, + vigilancia, el freno del gasto de PND-322), y en_vuelo, esperar_hilos y recuperación son comunes a los cinco carriles. En SIGINT/SIGTERM no se interrumpe el sondeo de Apify: el hilo termina la tarea y esperar_hilos lo espera. En un despliegue la cola debe estar vacía antes de reiniciar. No hay puntos de control ni continuaciones nuevas de Apify: se conserva el contrato anterior del proveedor y del gasto. Pruebas: tests/test_lote6c_nicho_carril.py, incluido un 402 sin cobro seguido de un segundo clic explícito con el mismo job_id que sí termina. No cambia max_intentos ni la política de cobro.
 
 PND-190/166/159 (2026-10-09, decisiones delegadas lote 7): consultas/selección de Nicho y análisis/personas de Sprints se encolan con un intento y costo estimado. Sprints pasa un acumulador de usage (caché incluida), registra con referencia por tarea también si falla el guardado/JSON y usa entregado=False al fallar. El POST de arranque Apify pasa reintentar=False; los GET conservan su política.
 

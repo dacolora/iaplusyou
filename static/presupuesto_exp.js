@@ -10,7 +10,7 @@
 (function (raiz) {
   'use strict';
   // Monedas en que el presupuesto va en pesos enteros: las mismas de presupuesto_experimentos.EN_ENTEROS (una prueba lo exige).
-  var EN_ENTEROS = ['ARS', 'CLP', 'COP', 'HUF', 'ISK', 'JPY', 'KRW', 'PYG', 'TWD', 'UGX', 'VND', 'XAF', 'XOF'];
+  var EN_ENTEROS = ['ARS', 'CLP', 'COP', 'CRC', 'HUF', 'IDR', 'ISK', 'JPY', 'KRW', 'PYG', 'TWD', 'VND'];
   // Mismos atajos que presupuesto_experimentos.ATAJOS: [veces el mínimo diario por anuncio, días].
   var ATAJOS = [[4, 4], [8, 7], [15, 10]];
 

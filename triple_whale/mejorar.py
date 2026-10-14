@@ -7,6 +7,12 @@ o pierde con evidencia, tres cambios y una versión mejorada con su ángulo y un
 2026-10-09 (spec 2026-10-09-tw-ganchos-y-copy §3) trae también tres `ganchos` (los 3 primeros segundos, solo si Claude
 vio fotogramas del video) y un `copy_nuevo` para Meta; ninguno de los dos vuelve más exigente el parseo.
 
+Desde el 2026-10-13 (pedido de Daniel: «si el ad es un static, no debería pedir un video») la versión de un anuncio de
+imagen fija (`es_estatico`) es una instrucción en inglés para EDITAR esa misma imagen con el modelo de imagen de Crear
+(`version["tipo"] = "imagen"`), y «Llevar a Crear» la abre en modo imagen con el anuncio en la bandeja
+(`puente.prefill_crear(tipo="imagen")`). Y el mensaje cierra con la orden de idioma (`cierre_idioma`, PND-218): con
+ella solo en el system, las instrucciones en español arrastraban la respuesta aunque el proyecto fuera en inglés.
+
 Es PAGADO: lo encola la ruta con el precio a la vista (`gastos.estimar("analisis_anuncio_tw")`) y lo corre la tarea
 `tw_analizar_anuncio` (max_intentos=1), que registra Whisper y Claude. Nunca genera ni publica nada.
 
@@ -82,6 +88,41 @@ def foto(a, creativo, cuenta, ganadores, fuente=analisis.FUENTE_DEFECTO, ad_acco
             "cuenta": dict(cuenta or {}), "ganadores": list(ganadores or []),
             "creatv": ({"tipo": creatv.get("tipo"), "url_video": creatv.get("url_video"),
                         "url_miniatura": creatv.get("url_miniatura")} if creatv else None)}
+
+
+# -------------------------------------------- la versión: video o imagen ---
+# Pedido de Daniel (2026-10-13): un anuncio de imagen fija no se rehace como video; se arregla lo que falla en ESA
+# imagen. Lo decide el creativo guardado en la foto, nunca lo que Claude miró: un video cuya descarga falló también
+# llega a Claude como su miniatura, y sigue siendo un video.
+TIPOS_VERSION = ("video", "imagen")
+
+
+def es_estatico(foto_):
+    """¿El anuncio es una imagen fija? Una pieza de Creatv lo dice su tipo; un creativo de Triple Whale o de Meta, que
+    no tenga nada de video (ni `video_url`, ni una duración, ni un tipo con «video») y sí una imagen. En happyflops el
+    tipo `dynamic` (y el vacío) es video o imagen según lo que traiga: un `dynamic` con duración y sin `video_url`
+    es un video cuyo archivo no llegó (revisión del gasto, 2026-10-13)."""
+    creatv = foto_.get("creatv") or {}
+    if creatv:
+        return creatv.get("tipo") == "imagen"
+    c = foto_.get("creativo") or {}
+    if c.get("video_url") or c.get("duracion_s") or "video" in str(c.get("tipo") or "").lower():
+        return False
+    return bool(c.get("imagen_url"))
+
+
+def tipo_version(foto_):
+    return "imagen" if es_estatico(foto_) else "video"
+
+
+def imagen_del_anuncio(foto_):
+    """La URL de la imagen del anuncio que «Llevar a Crear» pone en la bandeja: la de la pieza de Creatv (una imagen de
+    Crear se guarda en `url_video`) o la del creativo, solo de un host permitido (https, files.triplewhale.com o R2).
+    None si no hay."""
+    creatv = foto_.get("creatv") or {}
+    if creatv:
+        return _permitida(creatv.get("url_video")) or _permitida(creatv.get("url_miniatura"))
+    return _permitida((foto_.get("creativo") or {}).get("imagen_url"))
 
 
 # ------------------------------------------------------------ visuales ---
@@ -248,8 +289,8 @@ Responde SOLO con un objeto JSON, sin texto antes ni después, con esta forma:
  "cambios": [{{"que": "qué cambiar", "como": "cómo, concreto", "mueve": "gancho|retencion|clic|compra"}}],
  "version": {{"titulo": "máximo 8 palabras", "por_que": "qué arregla y qué conserva",
              "angulo": {{"audiencia": "...", "consciencia": "...", "sofisticacion": 3, "deseo": "...", "promesa": "...", "mecanismo": "una frase (o null; obligatorio si sofisticacion es 3 o más)", "pruebas": [{{"texto": "...", "fuente": "demostracion"}}], "lead": "...", "gancho": "...", "faltantes": []}},
-             "escena": "qué se ve, plano a plano, máximo 60 palabras",
-             "prompt": "prompt en inglés para el modelo de video, 60 a 120 palabras"}},
+             "escena": "{escena_version}",
+             "prompt": "{prompt_version}"}},
  "aprendizaje": "una frase de máximo 200 caracteres para este proyecto: en esta cuenta, X funciona o no porque Y",
  "ganchos": [{{"texto": "texto en pantalla, máximo 8 palabras, en el idioma del TEXTO DEL ANUNCIO",
               "escena": "qué se ve en esos 3 s, máximo 40 palabras",
@@ -268,7 +309,7 @@ Reglas:
 - Si el anuncio trae su NVP, úsalo para saber a quién le llega y que los cambios cuadren con esa etapa: un anuncio BOF no se arregla con un gancho para desconocidos, y uno pensado para gente nueva con NVP bajo está llegando sobre todo a quien ya visitó la tienda (dilo en "falla").
 - Si un anillo no tiene dato, no lo uses como evidencia.
 - Ninguna cifra que no esté en los datos de arriba.
-- La "version" es para {marca}: el mismo producto, la promesa de los ganadores y un gancho nuevo. El "prompt" describe la escena para un modelo de video: nada de logos ni marcas ajenas.
+- La "version" es para {marca}: el mismo producto, la promesa de los ganadores y un gancho nuevo. {regla_version}
 - Si no hay fotogramas ni imagen, juzga por el texto, la voz y los números, y dilo en "frase".
 - "ganchos": exactamente 3, y van SIEMPRE que haya fotogramas del video (las imágenes con «Segundo N:»), también si el anuncio es ganador (para escalarlo antes de que se canse); solo si no los ves (solo una imagen, o nada), "ganchos": []. Los 3 son distintos entre sí (otra pregunta, otro dolor, otra demostración, otra prueba) y llevan la misma promesa del anuncio.
 - El clip de cada gancho reemplaza los 3 primeros segundos y la voz original sigue sonando debajo (es la del bloque VOZ): su "texto" tiene que funcionar con esa voz.
@@ -277,25 +318,35 @@ Reglas:
 - "copy_nuevo": usa solo las ofertas, descuentos, precios y plazos que aparecen en el TEXTO DEL ANUNCIO o en los datos de arriba; nunca inventes uno.
 - Idiomas: el "texto" de cada gancho y el "titulo" y el "texto" de "copy_nuevo" van en el idioma del TEXTO DEL ANUNCIO (si no hay texto, en el de la voz); "escena" y "por_que" van en el idioma pedido; el "prompt" de cada gancho, en inglés."""
 
+# Lo que cambia en PROMPT según el anuncio (`tipo_version`). El de video es, palabra por palabra, el de antes del
+# 2026-10-13: un anuncio de video recibe el mismo prompt que ya estaba medido.
+_VERSION = {
+    "video": {
+        "escena": "qué se ve, plano a plano, máximo 60 palabras",
+        "prompt": "prompt en inglés para el modelo de video, 60 a 120 palabras",
+        "regla": "El \"prompt\" describe la escena para un modelo de video: nada de logos ni marcas ajenas.",
+    },
+    "imagen": {
+        "escena": "qué se conserva de la imagen y qué cambia, máximo 60 palabras",
+        "prompt": "prompt en inglés para EDITAR la imagen del anuncio con un modelo de imagen, 40 a 100 palabras",
+        "regla": ("El anuncio es una imagen fija, y la \"version\" también: no la conviertas en video. Su \"prompt\" "
+                  "es la instrucción para EDITAR esa misma imagen, que el modelo de imagen recibe adjunta: di qué se "
+                  "conserva igual (el producto, la foto, la composición, los colores y el formato) y cambia solo lo "
+                  "que falla —el titular, el gancho, la oferta o el orden de los textos—, el cambio más pequeño que lo "
+                  "arregle. Todo texto que deba verse en la imagen va entre comillas, en el idioma del TEXTO DEL "
+                  "ANUNCIO y con solo las ofertas, descuentos, precios y plazos que aparecen en el TEXTO DEL ANUNCIO "
+                  "o en los datos de arriba; el resto del prompt va en inglés. No agregues logos ni marcas ajenas."),
+    },
+}
+
 _ETIQUETAS_ANILLO = {"gancho": "Gancho (se quedan 3 s)", "retencion": "Retención (lo ven completo)",
                      "clic": "Clic (CTR)", "compra": "Compra (pedidos por clic)"}
 
 
-_RE_DELIMITADOR = re.compile(r"[<>]{2,}")
-
-
-def _dato(texto):
-    """Texto ajeno (copy, título, nombres, voz) para ir en el prompt: sin ninguna racha de dos o más `<` o `>`, así no
-    puede cerrar el bloque de datos con un «<<<FIN>>>» propio y seguir hablándole a Claude como si fuera el prompt.
-    Una sola pasada sobre la racha entera: dos `replace` seguidos se podían burlar («<<>>><FIN>>» rearmaba «<<<FIN>>»);
-    quitar una racha completa no puede juntar dos símbolos, porque lo que la rodea nunca es `<` ni `>`."""
-    return _RE_DELIMITADOR.sub("", str(texto or ""))
-
-
-def _linea(texto):
-    """`_dato` en una sola línea: lo que va dentro de una línea del prompt (un nombre entre « », un patrón de la
-    evaluación de cuenta) no puede abrir una línea nueva que parezca otra parte del prompt (revisión final, B3)."""
-    return " ".join(_dato(texto).split())
+# Los filtros de texto ajeno viven en `analisis` (que «Evaluar con IA» también usa, PND-286); aquí siguen con su nombre.
+_RE_DELIMITADOR = analisis._RE_DELIMITADOR
+_dato = analisis._dato
+_linea = analisis._linea
 
 
 def _num(v, decimales=2):
@@ -306,14 +357,26 @@ def _pct(v):
     return "—" if v is None else idiomas.numero(v * 100, 1) + " %"
 
 
+def _clave(clave, solo_datos):
+    """En el prompt, una clave interna (veredicto, tendencia, señal, anillo sin dato) va por su texto en el idioma de la
+    tarea (PND-306: «(trend: cansando)»); en lo verificable (`solo_datos`) sigue la CLAVE. Sus textos traerían palabras
+    que `ofertas_sin_dato` toma como una oferta de los datos («En prueba», «No spend in the last 7 days») y un gancho con
+    «Prueba 7 días» inventado se generaría y se cobraría (revisión del gasto, 2026-10-13). La clave, con su guion bajo,
+    nunca es una oferta."""
+    return clave if solo_datos else evaluacion.texto_clave(clave)
+
+
 def _bloque_anuncio(f, solo_datos=False):
-    """Con `solo_datos`, sin los números de las etiquetas («tendencia de 7 días»): ver `datos_verificables`."""
+    """Con `solo_datos`, sin los números de las etiquetas («tendencia de 7 días») y con las claves internas tal cual
+    (`_clave`): ver `datos_verificables`."""
     m = f.get("m") or {}
     c = f.get("creativo") or {}
     lineas = [f"«{_linea(f.get('nombre'))}» · campaña «{_linea(f.get('campana')) or '—'}» · formato {c.get('tipo') or '—'}"
               + (f" · {_num(c.get('duracion_s'), 0)} s" if c.get("duracion_s") else ""),
-              f"veredicto: {f.get('veredicto')} ({f.get('motivo')}) · "
-              f"{'tendencia' if solo_datos else 'tendencia de 7 días'}: {f.get('tendencia') or '—'}",
+              # Veredicto, tendencia y señales: en el prompt por su texto, en lo verificable por su clave (`_clave`).
+              f"veredicto: {_clave(f.get('veredicto'), solo_datos)} ({f.get('motivo')}) · "
+              f"{'tendencia' if solo_datos else 'tendencia de 7 días'}: "
+              f"{_clave(f['tendencia'], solo_datos) if f.get('tendencia') else '—'}",
               f"gasto {_num(m.get('gasto'))} · impresiones {_num(m.get('impresiones'), 0)} · CTR {_num(m.get('ctr'))} % · "
               f"CPM {_num(m.get('cpm'))} · gancho {_pct(m.get('gancho'))} · retención {_pct(m.get('retencion'))}",
               f"pedidos {_num(m.get('pedidos'), 1)} · ingresos {_num(m.get('ingresos'))} · ROAS {_num(m.get('roas'))}× · "
@@ -321,7 +384,7 @@ def _bloque_anuncio(f, solo_datos=False):
               visitantes.texto_prompt(m.get("visitantes_nuevos"), m.get("visitantes"))]
     senales = list(f.get("fortalezas") or []) + list(f.get("problemas") or [])
     if senales:
-        lineas.append("señales del diagnóstico automático: " + ", ".join(senales))
+        lineas.append("señales del diagnóstico automático: " + ", ".join(_clave(s, solo_datos) for s in senales))
     return "\n".join(lineas)
 
 
@@ -334,7 +397,7 @@ def _bloque_anillos(f, solo_datos=False):
         if r.get("pct") is not None:
             lineas.append(f"- {etiqueta}: percentil {r['pct']}")
         else:
-            lineas.append(f"- {etiqueta}: sin dato ({r.get('vacio') or '—'})")
+            lineas.append(f"- {etiqueta}: sin dato ({_clave(r['vacio'], solo_datos) if r.get('vacio') else '—'})")
     return "\n".join(lineas)
 
 
@@ -384,6 +447,8 @@ def _valores(marca, fila, voz=None, evaluacion_cuenta=None, aprendizajes="", pro
     texto_anuncio = _dato("\n".join(x for x in (f"Título: {c['titulo']}" if c.get("titulo") else "",
                                                c.get("copy") or "") if x)) or "(sin texto)"
     canal = triple_whale.NOMBRES_CANAL.get(fila.get("canal") or f.get("canal"), fila.get("canal") or f.get("canal"))
+    # Lo que pide la versión (video o imagen) es instrucción, no dato: vacío en lo verificable, como la regla del NVP.
+    version = {} if solo_datos else _VERSION[tipo_version(f)]
     return dict(
         marca=marca or "este proyecto", fuente=analisis.nombre_fuente(f.get("fuente")), desde=fila.get("desde"),
         hasta=fila.get("hasta"), moneda=fila.get("moneda") or "",
@@ -393,6 +458,8 @@ def _valores(marca, fila, voz=None, evaluacion_cuenta=None, aprendizajes="", pro
         meta=_num(cuenta.get("meta_roas")), cpa_canal=_num(cuenta.get("cpa_canal")),
         # La regla del NVP es una instrucción con sus cortes de etapa: no es un dato del anuncio (al mezclar main).
         regla_nvp="" if solo_datos else visitantes.REGLA_PROMPT,
+        escena_version=version.get("escena", ""), prompt_version=version.get("prompt", ""),
+        regla_version=version.get("regla", ""),
         texto_anuncio=texto_anuncio, voz=_bloque_voz(voz), ganadores=_bloque_ganadores(f.get("ganadores")),
         evaluacion_cuenta=_bloque_evaluacion(evaluacion_cuenta), aprendizajes=aprendizajes or "",
         productos=analisis.texto_productos(productos, fila.get("moneda") or ""))
@@ -414,14 +481,39 @@ def datos_verificables(marca, fila, voz=None, evaluacion_cuenta=None, aprendizaj
                                                 solo_datos=True).values())
 
 
-def system(idioma):
+def system(idioma, tipo="video"):
+    """`tipo` es el de la versión (`tipo_version`): con "imagen" se suma que el texto que se verá escrito en la imagen
+    va en el idioma del anuncio. Con "video" el system es el de antes del 2026-10-13."""
     extra = ("Todo el texto de la respuesta va en el idioma pedido, con tres excepciones: el campo \"prompt\" de "
              "\"version\" y el de cada gancho van siempre en inglés, porque son para el modelo de video; y el \"texto\" "
              "de cada gancho y el \"titulo\" y el \"texto\" de \"copy_nuevo\" van en el idioma del TEXTO DEL ANUNCIO "
              "(si no hay texto, en el de la voz), porque se publican dentro del anuncio. Estas tres excepciones mandan "
              "sobre la instrucción de IDIOMA que rodea este texto, también sobre la que se repite al final: ahí donde "
              "esa instrucción diga que todo va en el idioma pedido, estas excepciones siguen valiendo.")
+    if tipo == "imagen":
+        extra += (" En este anuncio de imagen, el \"prompt\" de \"version\" es para el modelo de imagen y va en inglés, "
+                  "salvo el texto entre comillas que se verá escrito en la imagen: ese va en el idioma del TEXTO DEL "
+                  "ANUNCIO, porque también se publica.")
     return doctrina.bloque_system("revisar", "diagnosticar", "angulo", "gancho", "video", extra=extra, idioma=idioma)
+
+
+def cierre_idioma(idioma, tipo="video"):
+    """La última línea del mensaje (PND-218), con `analisis.cierre_idioma`: en inglés va ESCRITA en inglés y nombra cada
+    campo (en la medición del 2026-10-13 la orden al final escrita en español no movió nada: 1 de 3 en inglés; en inglés,
+    4 de 4), y pide conservar los valores fijos que valida `parsear` y `doctrina.validar_angulo`. En español, la orden de
+    siempre con sus excepciones."""
+    extra_en = ", like the quoted text that will be written inside the image" if tipo == "imagen" else ""
+    extra_es = ", como el texto entre comillas que se verá escrito en la imagen" if tipo == "imagen" else ""
+    return analisis.cierre_idioma(
+        idioma,
+        "\"frase\", \"funciona\" and \"falla\" (with their \"evidencia\"), \"cambios\", the \"titulo\", \"por_que\", "
+        "\"escena\" and \"angulo\" of \"version\", and \"aprendizaje\"",
+        f"\"anillo\", \"mueve\", {analisis.FIJOS_ANGULO}",
+        excepciones_en=("The only other exceptions: every \"prompt\" is in English too, and the \"texto\" of each gancho "
+                        "and the \"titulo\" and \"texto\" of \"copy_nuevo\" go in the language of the TEXTO DEL ANUNCIO"
+                        f"{extra_en}."),
+        excepciones_es=("Siguen valiendo las excepciones: los \"prompt\" van en inglés, y el \"texto\" de cada gancho y "
+                        f"el \"titulo\" y el \"texto\" de \"copy_nuevo\" en el idioma del TEXTO DEL ANUNCIO{extra_es}."))
 
 
 # -------------------------------------------------------------- parsear ---
@@ -441,7 +533,29 @@ def _razones(lista, con_anillo):
     return salida[:3]
 
 
-def _version(v, verificable):
+# Un formato («9:16», «4:5») no es una cifra del anuncio: se quita antes de revisar el prompt de una versión de imagen.
+# Solo con «:»: «3x2» es una oferta y tiene que llegar a `ofertas_sin_dato`.
+_FORMATO = re.compile(r"(?<!\d)(?<!\d[.,])\d{1,2}\s*:\s*\d{1,2}(?!\d|[.,]\d)")
+
+
+def cifras_en_imagen(prompt, verificable):
+    """Cifras y ofertas en palabras del prompt de una versión de imagen que no están en los datos. Se revisa el prompt
+    ENTERO, no solo lo que va entre comillas: con comillas simples, sin comillas o con un `12"` que descuadra el par, una
+    oferta inventada se escapaba (revisiones de seguridad y de gasto, 2026-10-13). Un falso positivo solo deja un aviso."""
+    texto = _FORMATO.sub(" ", prompt or "")
+    vistas, salida = set(), []
+    for x in doctrina.verificar_cifras(texto, verificable) + ofertas_sin_dato(texto, verificable):
+        if x not in vistas:
+            vistas.add(x)
+            salida.append(x)
+    return salida
+
+
+def _version(v, verificable, tipo="video"):
+    """La versión mejorada con su `tipo` ("video" o "imagen": el del anuncio, `tipo_version`; no lo decide Claude). Una
+    versión de imagen lleva `cifras_sin_dato` de su prompt (`cifras_en_imagen`: lo que se escribirá en la imagen sale de
+    ahí): como el copy, no bloquea, porque la persona lo edita en Crear antes de pagar; el detalle y «Llevar a Crear»
+    dicen «revisa antes de generar»."""
     if not isinstance(v, dict):
         return None
     titulo, prompt = analisis._texto(v.get("titulo"), 80), analisis._cadena(v.get("prompt")).strip()[:1500]
@@ -449,9 +563,12 @@ def _version(v, verificable):
         return None
     angulo, errores = doctrina.validar_angulo(v.get("angulo") if isinstance(v.get("angulo"), dict) else {}, verificable)
     angulo["origen"] = "triple_whale"
-    return {"titulo": titulo, "por_que": analisis._texto(v.get("por_que"), 300),
-            "escena": analisis._texto(v.get("escena"), 600), "prompt": prompt,
-            "angulo": doctrina.anotar_errores(angulo, errores)}
+    salida = {"titulo": titulo, "por_que": analisis._texto(v.get("por_que"), 300),
+              "escena": analisis._texto(v.get("escena"), 600), "prompt": prompt,
+              "angulo": doctrina.anotar_errores(angulo, errores), "tipo": tipo if tipo in TIPOS_VERSION else "video"}
+    if salida["tipo"] == "imagen":
+        salida["cifras_sin_dato"] = cifras_en_imagen(prompt, verificable)
+    return salida
 
 
 # ------------------------------------------------- ganchos y copy (spec 2026-10-09 §3.2) ---
@@ -675,12 +792,13 @@ def _copy_nuevo(d, verificable):
                                 + ofertas_sin_dato(f"{titulo} · {texto}", verificable))}
 
 
-def parsear(texto, verificable, duracion_s=None, segundos_vistos=None):
+def parsear(texto, verificable, duracion_s=None, segundos_vistos=None, tipo="video"):
     """El resultado limpio (forma en el docstring del módulo y spec §6.3). AnalisisInvalido sin frase, sin razones,
     con menos de 3 cambios o sin versión con título y prompt. `ganchos` y `copy_nuevo` (spec 2026-10-09 §3.2) nunca lo
     vuelven más exigente; los análisis de antes no los traen y se leen con `.get`. `duracion_s` (la del video del
     anuncio, o None) acota el `fotograma_s` de cada gancho y `segundos_vistos` (los de sus fotogramas, o None) lo lleva
-    al fotograma visto más cercano."""
+    al fotograma visto más cercano. `tipo` es el de la versión (`tipo_version`); un análisis de antes del 2026-10-13
+    no lo trae y se lee como video."""
     data = analisis._json(texto)
     frase = analisis._texto(data.get("frase"), 300)
     funciona = _razones(data.get("funciona"), con_anillo=False)
@@ -693,7 +811,7 @@ def parsear(texto, verificable, duracion_s=None, segundos_vistos=None):
         if que:
             cambios.append({"que": que, "como": analisis._texto(c.get("como"), 400),
                             "mueve": c.get("mueve") if c.get("mueve") in evaluacion.ANILLOS else None})
-    version = _version(data.get("version"), verificable)
+    version = _version(data.get("version"), verificable, tipo)
     if not frase or not (funciona or falla) or len(cambios) < 3 or not version:
         raise analisis.AnalisisInvalido("Faltan la frase, las razones, los tres cambios o la versión mejorada.")
     cambios = cambios[:3]
@@ -783,7 +901,8 @@ def segundos_vistos(bloques):
     return salida
 
 
-def analizar(texto, imagenes, idioma, verificable_extra="", duracion_s=None, verificable=None, segundos_vistos=None):
+def analizar(texto, imagenes, idioma, verificable_extra="", duracion_s=None, verificable=None, segundos_vistos=None,
+             tipo="video"):
     """(resultado, tokens_entrada, tokens_salida). Una corrección si la primera respuesta no sirve; si tampoco,
     AnalisisInvalido con los tokens pagados. Una respuesta cortada por el tope (`stop_reason` = max_tokens) no se
     corrige: la corrección, con el mismo tope, saldría cortada otra vez y se pagaría dos veces (revisión del gasto del
@@ -792,15 +911,17 @@ def analizar(texto, imagenes, idioma, verificable_extra="", duracion_s=None, ver
     acota el `fotograma_s` de cada gancho (spec 2026-10-09 §3.2). `verificable` (`datos_verificables`: los datos sin
     la plantilla) es contra lo que se contrastan las cifras; sin él, el `texto` entero, con los números de sus
     instrucciones. `segundos_vistos` (los de los fotogramas que Claude recibió) lleva cada `fotograma_s` al visto más
-    cercano (arreglo G)."""
-    content = [{"type": "text", "text": texto}] + list(imagenes or [])
-    system_ = system(idioma)
+    cercano (arreglo G). `tipo` es el de la versión (`tipo_version` de la foto): cambia el system y el cierre de idioma
+    y queda en `version["tipo"]`. El mensaje cierra con `cierre_idioma`, después de las imágenes (PND-218)."""
+    content = ([{"type": "text", "text": texto}] + list(imagenes or [])
+               + [{"type": "text", "text": cierre_idioma(idioma, tipo)}])
+    system_ = system(idioma, tipo)
     verificable = (texto if verificable is None else verificable) + ("\n" + verificable_extra if verificable_extra else "")
     crudo, entrada, salida, parada = _llamar(content, system_)
     if parada == "max_tokens":
         raise _cortado(entrada, salida)
     try:
-        return parsear(crudo, verificable, duracion_s, segundos_vistos), entrada, salida
+        return parsear(crudo, verificable, duracion_s, segundos_vistos, tipo), entrada, salida
     except analisis.AnalisisInvalido as e:
         correccion = content + [{"type": "text", "text": f"Tu respuesta anterior no sirvió ({e}). "
                                                          "Responde solo el JSON pedido."}]
@@ -813,7 +934,7 @@ def analizar(texto, imagenes, idioma, verificable_extra="", duracion_s=None, ver
         if parada == "max_tokens":
             raise _cortado(entrada, salida) from None
         try:
-            return parsear(crudo, verificable, duracion_s, segundos_vistos), entrada, salida
+            return parsear(crudo, verificable, duracion_s, segundos_vistos, tipo), entrada, salida
         except analisis.AnalisisInvalido as e3:
             e3.tokens_entrada, e3.tokens_salida = entrada, salida
             raise e3

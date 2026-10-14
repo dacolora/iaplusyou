@@ -1,7 +1,8 @@
 """
 Worker de CREATV Galadsy: proceso aparte de gunicorn (servicio systemd
-creatv-worker) que ejecuta las tareas de la cola persistente (cola.py) en cuatro
-carriles (spec 2026-09-28-crear-sin-cola; el de lectura, spec 2026-10-08 meta rendimiento):
+creatv-worker) que ejecuta las tareas de la cola persistente (cola.py) en cinco
+carriles (spec 2026-09-28-crear-sin-cola; el de lectura, spec 2026-10-08 meta rendimiento; el de vigilancia,
+PND-322):
 
 - **crear**: las generaciones de Crear (`CARRIL_CREAR`) en hasta `HILOS_CREAR`
   hilos a la vez — casi todo su tiempo es esperar al proveedor, y una espera
@@ -15,6 +16,8 @@ carriles (spec 2026-09-28-crear-sin-cola; el de lectura, spec 2026-10-08 meta re
   en un solo hilo (`HILOS_LECTURA`): la primera copia de una cuenta tarda de 8 a 14 minutos
   (medido con la API real) y no debe dejar al carril general —lanzar y refrescar
   experimentos, Triple Whale, tiendas— esperando una hora. Gratis: leer de Meta no cobra.
+- **vigilancia**: `exp_vigilar_gasto` (`CARRIL_VIGILANCIA`), un hilo propio: el freno del gasto en Meta corre
+  cada 10 minutos de verdad, no cuando el carril general termine un render (PND-322, revisión de gasto).
 - **general**: todo lo demás, de a una y en orden, como siempre (renders con
   1 CPU, Meta, periódicas…).
 
@@ -67,6 +70,8 @@ PERIODICAS = [("tienda_sync_pedidos_todas", 7200), ("tw_sincronizar_todas", 7200
               # Meta rendimiento (spec 2026-10-08 §6): la copia de cada cuenta publicitaria, cada 3 h.
               ("meta_rend_sincronizar_todas", 10800), ("exp_refrescar_todos", 7200),
               ("exp_decidir_todos", 3600),
+              # PND-322: el gasto real de cada experimento en Meta, contra su tope y su ritmo diario (gratis).
+              ("exp_vigilar_gasto", 600),
               ("exp_avanzar_todos", 600), ("tienda_sync_productos_todas", 21600), ("sprint_qa_pendientes", 300),
               ("materiales_limpiar", 86400),
               # Auditoría 2026-09-28: salidas/ crecía 2 GB cada dos semanas, tarea
@@ -106,6 +111,9 @@ PRIORIDAD_SUELTA = 5    # flowplus_lanzar.PRIORIDAD_NORMAL: una pieza pedida des
 # instantáneas y se quedan en el general.
 CARRIL_LECTURA = ("meta_rend_sincronizar",)
 HILOS_LECTURA = 1
+# PND-322: la vigilancia del gasto en Meta tiene su propio hilo; en el general esperaba detrás de renders y
+# lanzamientos (a veces horas) y es el freno que corta un gasto que se dispara.
+CARRIL_VIGILANCIA = ("exp_vigilar_gasto",)
 
 # Parada limpia: SIGINT/SIGTERM (systemd manda SIGINT, TimeoutStopSec=600) solo
 # levantan esta bandera; el supervisor deja de repartir y espera a sus hilos.
@@ -365,7 +373,8 @@ def _ocupados():
     general = [v for v in vuelo if v["carril"] == "general"]
     nicho = [v for v in vuelo if v["carril"] == "nicho"]
     lectura = [v for v in vuelo if v["carril"] == "lectura"]
-    return len(crear), len(lotes), len(general), len(nicho), len(lectura)
+    vigilancia = [v for v in vuelo if v["carril"] == "vigilancia"]
+    return len(crear), len(lotes), len(general), len(nicho), len(lectura), len(vigilancia)
 
 
 def repartir():
@@ -377,7 +386,7 @@ def repartir():
     encolar_periodicas()
     arrancadas = 0
     while not debe_parar():
-        crear, lotes, _, _, _ = _ocupados()
+        crear, lotes, _, _, _, _ = _ocupados()
         if crear >= HILOS_CREAR:
             break
         tarea = cola.reclamar(tipos=CARRIL_CREAR, prioridad_min=PRIORIDAD_SUELTA if lotes >= HILOS_LOTE else None)
@@ -394,8 +403,13 @@ def repartir():
         tarea = cola.reclamar(tipos=CARRIL_LECTURA)
         if tarea is not None and _lanzar(tarea, "lectura"):
             arrancadas += 1
+    if not debe_parar() and _ocupados()[5] == 0:
+        tarea = cola.reclamar(tipos=CARRIL_VIGILANCIA)
+        if tarea is not None and _lanzar(tarea, "vigilancia"):
+            arrancadas += 1
     if not debe_parar() and _ocupados()[2] == 0:
-        tarea = cola.reclamar(excluir_tipos=tuple(CARRIL_CREAR) + tuple(CARRIL_NICHO) + tuple(CARRIL_LECTURA))
+        tarea = cola.reclamar(excluir_tipos=tuple(CARRIL_CREAR) + tuple(CARRIL_NICHO) + tuple(CARRIL_LECTURA)
+                              + tuple(CARRIL_VIGILANCIA))
         if tarea is not None and _lanzar(tarea, "general"):
             arrancadas += 1
     return arrancadas

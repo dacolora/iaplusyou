@@ -131,6 +131,37 @@ def test_registro_con_correo_crea_usuario_envia_verificacion_y_abre_sesion(app):
     assert any("Te mandamos un correo a dueno@acme.com" in m for m in _flashes(c))
 
 
+def test_registro_nace_cobrando_con_el_margen_global(app):
+    """PND-298 (Daniel, 2026-10-12: «abierto, pero cobrando»): la portada deja registrarse a cualquiera y un proyecto
+    nuevo nacía con «Cobrar» apagado, así que un desconocido generaba con las llaves de Creatv y lo pagaba Daniel. Ahora
+    nace cobrando (margen global, umbral por defecto): para generar tiene que recargar saldo o tomar un plan."""
+    from cobros import libro
+    c = app["dashboard"].app.test_client()
+    assert libro.cobra("acme_store") is False
+    r = c.post("/proyectos/nuevo", data=REGISTRO)
+    assert r.status_code == 302
+    cuenta = libro.cuenta("acme_store")
+    assert cuenta["cobrar"] is True and cuenta["margen_propio"] is None and cuenta["margen"] == libro.margen_global()
+    assert cuenta["umbral"] == libro.UMBRAL_DEFECTO
+    with pytest.raises(libro.SaldoInsuficiente):
+        libro.exigir("acme_store", 0.5)                                  # sin saldo, nada que cueste arranca
+
+
+def test_registro_que_no_puede_prender_cobrar_no_crea_nada(app, monkeypatch):
+    """Si prender «Cobrar» falla, el alta se corta antes de crear el usuario y la carpeta: nunca queda un proyecto que
+    genera sin cobrar."""
+    from cobros import libro
+
+    def falla(*a, **k):
+        raise RuntimeError("base caída")
+    monkeypatch.setattr(libro, "configurar", falla)
+    c = app["dashboard"].app.test_client()
+    r = c.post("/proyectos/nuevo", data=REGISTRO)
+    assert r.status_code == 500
+    assert not app["usuarios"].existe("acme") and "acme_store" not in app["dashboard"].estado_mod.listar_clientes()
+    assert app["correos"] == []
+
+
 def test_registro_rechaza_correo_ya_usado(app):
     app["usuarios"].crear("otro", "secreta123", "cliente", cliente="otro", correo="dueno@acme.com")
     c = app["dashboard"].app.test_client()

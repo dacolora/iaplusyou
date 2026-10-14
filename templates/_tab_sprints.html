@@ -4,7 +4,18 @@
    se crea el sprint con lo mínimo; las campañas se arman en su tablero
    (sprint_detalle.html). Desde 2026-09-27 el sprint es para todos los países:
    no pide país ni idioma (se trabaja en inglés y la edición final adapta cada
-   país), y «Momento del mes» ofrece el calendario del proyecto. #}
+   país), y «Momento del mes» ofrece el calendario del proyecto.
+   Desde 2026-10-13 (spec 2026-10-13-nicho-dentro-de-sprints) la pestaña tiene
+   dos sub-pestañas: «Sprints» (lo de siempre) y «Nicho» (la pestaña Nicho de
+   antes, _tab_nicho.html tal cual, con su contexto de nicho.rutas.contexto).
+   Sus direcciones son #sprints y #nicho; ningún elemento lleva esos ids, o el
+   navegador saltaría a él. El JS de las sub-pestañas vive aquí, al final. #}
+<nav class="cat-tabs sprints-subs" role="tablist" aria-label="{{ _('Secciones de Sprints') }}">
+  <button type="button" class="cat-tab activo" role="tab" aria-selected="true" data-sub="sprints">{{ _('Sprints') }}</button>
+  <button type="button" class="cat-tab" role="tab" aria-selected="false" data-sub="nicho">{{ _('Nicho') }}{% if avatares_resumen and avatares_resumen.nuevos %} <span class="cat-n">{{ avatares_resumen.nuevos }}</span>{% endif %}</button>
+</nav>
+
+<div class="sprints-sub" id="sprints-sub-sprints" data-sub="sprints">
 <div class="panel-cabecera">
   <div>
     <h2>Sprints</h2>
@@ -54,6 +65,11 @@
   </div>
   {% endfor %}
 </div>
+</div>
+
+<div class="sprints-sub" id="sprints-sub-nicho" data-sub="nicho" hidden>
+  {% include "_tab_nicho.html" %}
+</div>
 
 <script>
   (function () {
@@ -64,5 +80,57 @@
     function mostrar() { propio.hidden = sel.value !== 'propio'; }
     sel.addEventListener('change', mostrar);
     mostrar();
+  })();
+</script>
+<script>
+  // Sub-pestañas «Sprints · Nicho» (spec 2026-10-13): una a la vez. Al entrar manda
+  // el hash (#nicho / #sprints), si no la última que la persona dejó abierta en este
+  // proyecto y si no Sprints. Se elige en el acto, para que con #nicho (o con Nicho
+  // guardado) no se vea un instante la lista de Sprints mientras carga la página. El
+  // script de cliente.html corre después de este y es quien convierte un localStorage
+  // de antes del cambio (tab-activa = nicho, sin hash) en «sprints-sub = nicho»; por eso,
+  // SIN hash explícito y con el documento todavía leyéndose, se vuelve a elegir en
+  // DOMContentLoaded. Con hash no hace falta: ya manda él. Cambiar de sub-pestaña mueve
+  // la dirección sin recargar; tras un clic en «Sprints» de la barra lateral (que deja
+  // #sprints y dispara cr:tab) la dirección vuelve a #nicho si Nicho está a la vista.
+  (function () {
+    var raiz = document.getElementById('tab-sprints');
+    if (!raiz) return;
+    var botones = raiz.querySelectorAll('.sprints-subs [data-sub]');
+    var subs = raiz.querySelectorAll('.sprints-sub[data-sub]');
+    var CLAVE = 'sprints-sub-{{ cliente }}';
+    var actual = 'sprints';
+    function mostrar(sub) {
+      actual = sub === 'nicho' ? 'nicho' : 'sprints';
+      subs.forEach(function (s) { s.hidden = s.dataset.sub !== actual; });
+      botones.forEach(function (b) {
+        var esta = b.dataset.sub === actual;
+        b.classList.toggle('activo', esta);
+        b.setAttribute('aria-selected', esta ? 'true' : 'false');
+      });
+      try { localStorage.setItem(CLAVE, actual); } catch (e) {}
+      return actual;
+    }
+    function delHash() {
+      var h = location.hash.replace('#', '').split('?')[0];
+      return (h === 'nicho' || h === 'sprints') ? h : null;
+    }
+    botones.forEach(function (b) {
+      b.addEventListener('click', function () { history.replaceState(null, '', '#' + mostrar(b.dataset.sub)); });
+    });
+    function elegir() {
+      var guardada = null;
+      try { guardada = localStorage.getItem(CLAVE); } catch (e) {}
+      mostrar(delHash() || guardada);
+    }
+    var habiaHash = !!delHash();
+    elegir();
+    if (!habiaHash && document.readyState === 'loading') document.addEventListener('DOMContentLoaded', elegir);
+    window.addEventListener('hashchange', function () { var h = delHash(); if (h) mostrar(h); });
+    window.addEventListener('cr:tab', function () {
+      if (raiz.classList.contains('activo') && actual === 'nicho' && delHash() !== 'nicho') {
+        history.replaceState(null, '', '#nicho');
+      }
+    });
   })();
 </script>

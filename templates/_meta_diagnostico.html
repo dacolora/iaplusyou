@@ -1,55 +1,89 @@
 {# «Diagnóstico» de Meta rendimiento E2 (spec E2 §6 y §9). Desde la integración con main (2026-10-10) lo incluye la
    pestaña «Rendimiento» (_rend_panel.html) justo después de «Lo que necesita tu atención»; la vieja pestaña «Meta» se
-   jubiló el 2026-10-09. Contexto: `mr` (`r.meta.e2`, de meta_rendimiento.panel.diagnostico: recomendaciones,
-   conteo_recomendaciones, max_recomendaciones, niveles_recomendacion, nombres_prioridad) y `actual` (la cuenta si
-   la estructura del alcance tiene una sola; None = varias: cada tarjeta dice su cuenta). Son reglas puras y gratis sobre la copia,
-   siempre de los últimos 7 y 30 días: nada se aplica solo, cada tarjeta lleva al Administrador de anuncios con los
-   objetos ya filtrados (pestaña nueva, rel="noopener noreferrer"). Títulos y textos traen nombres de Meta (texto
-   ajeno): solo el autoescape, nunca |safe. Más de `max_recomendaciones` → el resto en un <details>. Sin <script>. #}
+   jubiló el 2026-10-09. Contexto: `mr` (`r.meta.e2`, de meta_rendimiento.panel.diagnostico: grupos,
+   conteo_recomendaciones, max_filas, niveles_recomendacion, nombres_prioridad) y `actual` (la cuenta si la estructura
+   del alcance tiene una sola; None = varias). Son reglas puras y gratis sobre la copia, siempre de los últimos 7 y 30
+   días: nada se aplica solo, cada fila lleva al Administrador de anuncios con los objetos ya filtrados (pestaña nueva,
+   rel="noopener noreferrer").
+   Agrupado por problema (pedido de Daniel 2026-10-13: cinco tarjetas repetían el mismo consejo y las cifras quedaban
+   enterradas en la prosa): un bloque por tipo (`recomendaciones.agrupar`) con su consejo UNA vez y una fila por
+   cuenta, campaña o segmento con sus cifras sueltas (`r.fila`); al abrir la fila sale el texto completo de siempre.
+   Más de `max_filas` filas → el resto en un <details>. Títulos y textos traen nombres de Meta (texto ajeno): solo el
+   autoescape, nunca |safe. Sin <script>. #}
 {% macro clase_prioridad(nivel) -%}
 {{ {"alta": "tag-descartado", "media": "tag-advertencia", "baja": "tag-en-curso"}.get(nivel, '') }}
 {%- endmacro %}
 
-{% macro tarjeta(r, nombres, con_cuenta) %}
-<article class="meta-diag meta-diag-{{ r.nivel }}">
+{% macro fila(r, g, nombres, con_cuenta) %}
+{% set f = r.fila or {"cifra": r.titulo} %}
+<div class="meta-diag-fila">
+  <details>
+    <summary class="meta-diag-celdas">
+      <span class="meta-diag-etiqueta">
+        <span>{{ f.etiqueta or r.cuenta_nombre }}</span>
+        {% if f.etiqueta and con_cuenta %}<small>{{ r.cuenta_nombre }}</small>{% endif %}
+        {% if g.mixto and r.nivel != g.nivel %}<small class="tag-estado {{ clase_prioridad(r.nivel) }}">{{ nombres[r.nivel] | traducir }}</small>{% endif %}
+      </span>
+      <span class="meta-diag-cifra">
+        {% if f.barra is number %}<meter class="meta-diag-barra" min="0" max="1" value="{{ f.barra }}"></meter>{% endif %}
+        <span>{{ f.cifra }}{% if f.nota %} <small>· {{ f.nota }}</small>{% endif %}</span>
+      </span>
+      {% if g.con_gasto %}<span class="meta-diag-num">{{ f.gasto or '—' }}{% if f.gasto %}<small class="meta-diag-sufijo"> {{ g.cab_gasto | lower }}</small>{% endif %}</span>{% endif %}
+      {% if g.con_impacto %}<strong class="meta-diag-num">{% if r.impacto %}{{ r.impacto.corto }}<small class="meta-diag-sufijo"> {{ _('por día') }}</small>{% else %}—{% endif %}</strong>{% endif %}
+    </summary>
+    <div class="meta-diag-detalle">
+      <p class="meta-diag-que">{{ r.que_hacer }}</p>
+      <p class="meta-diag-porque"><span>{{ _('Por qué:') }}</span> {{ r.por_que }}</p>
+    </div>
+  </details>
+  {% if r.enlace %}<a class="btn-sm meta-diag-ir" href="{{ r.enlace }}" target="_blank" rel="noopener noreferrer" title="{{ _('Ver en el Administrador de anuncios') }}">{{ _('Ver en Meta') }} ↗</a>{% endif %}
+</div>
+{% endmacro %}
+
+{% macro bloque(g, nombres, tope, con_cuenta) %}
+<article class="meta-diag meta-diag-{{ g.nivel }}">
   <div class="meta-diag-cabeza">
-    <span class="tag-estado {{ clase_prioridad(r.nivel) }}">{{ nombres[r.nivel] | traducir }}</span>
-    {% if con_cuenta %}<small class="meta-diag-cuenta">{{ r.cuenta_nombre }}</small>{% endif %}
+    <div class="meta-diag-nombre">
+      <span class="tag-estado {{ clase_prioridad(g.nivel) }}">{{ nombres[g.nivel] | traducir }}</span>
+      <h4 class="meta-diag-titulo">{{ g.titulo }}</h4>
+    </div>
+    {% if g.impacto %}<strong class="meta-diag-total">{{ g.impacto.texto }}</strong>{% endif %}
   </div>
-  <strong class="meta-diag-titulo">{{ r.titulo }}</strong>
-  <p class="meta-diag-que">{{ r.que_hacer }}</p>
-  <p class="meta-diag-porque"><span>{{ _('Por qué:') }}</span> {{ r.por_que }}</p>
-  {% if r.impacto %}<p class="meta-diag-impacto">{{ r.impacto.texto }}</p>{% endif %}
-  <div class="meta-diag-acciones">
-    {% if r.enlace %}<a class="btn-sm" href="{{ r.enlace }}" target="_blank" rel="noopener noreferrer">{{ _('Ver en el Administrador de anuncios') }} ↗</a>{% endif %}
-    {% if r.tipo == 'fatiga' %}<a class="btn-sm" href="#meta-evaluacion">{{ _('Ir a «Evaluar con IA»') }}</a>{% endif %}
+  {% if g.consejo %}<p class="meta-diag-consejo">{{ g.consejo }}</p>{% endif %}
+  <div class="meta-diag-filas{% if g.con_gasto %} con-gasto{% endif %}{% if g.con_impacto %} con-impacto{% endif %}">
+    <div class="meta-diag-fila meta-diag-encabezado">
+      <div class="meta-diag-celdas">
+        <span>{{ g.cab_etiqueta }}</span><span>{{ g.cab_cifra }}</span>
+        {% if g.con_gasto %}<span class="meta-diag-num">{{ g.cab_gasto }}</span>{% endif %}
+        {% if g.con_impacto %}<span class="meta-diag-num">{{ _('En juego por día') }}</span>{% endif %}
+      </div>
+    </div>
+    {% for r in g.recs[:tope] %}{{ fila(r, g, nombres, con_cuenta) }}{% endfor %}
+    {% if g.recs | length > tope %}
+    <details class="meta-diag-mas">
+      <summary>{{ _('Ver %(n)s más', n=g.recs | length - tope) }}</summary>
+      {% for r in g.recs[tope:] %}{{ fila(r, g, nombres, con_cuenta) }}{% endfor %}
+    </details>
+    {% endif %}
   </div>
+  {% if g.tipo == 'fatiga' %}<div class="meta-diag-acciones"><a class="btn-sm" href="#meta-evaluacion">{{ _('Ir a «Evaluar con IA»') }}</a></div>{% endif %}
 </article>
 {% endmacro %}
 
-{% set recs = mr.recomendaciones %}
-{% set tope = mr.max_recomendaciones %}
+{% set grupos = mr.grupos %}
 {% set con_cuenta = not actual %}
 <section class="tb-seccion" id="meta-diagnostico">
   <div class="tb-seccion-cab">
     <h3>{{ _('Diagnóstico') }}</h3>
     <small class="vacio">{{ _('Reglas sobre los últimos 7 y 30 días, sin costo. Nada se aplica solo: cada una lleva al Administrador de anuncios.') }}</small>
   </div>
-  {% if recs %}
-  <div class="tw-filtros" aria-label="{{ _('Recomendaciones por prioridad') }}">
-    {% for n in mr.niveles_recomendacion %}{% if mr.conteo_recomendaciones[n] %}<span class="tag-estado {{ clase_prioridad(n) }}">{{ mr.nombres_prioridad[n] | traducir }} · {{ mr.conteo_recomendaciones[n] }}</span>{% endif %}{% endfor %}
-  </div>
+  {% if grupos %}
+  <p class="meta-diag-resumen">
+    {% for n in mr.niveles_recomendacion %}{% if mr.conteo_recomendaciones[n] %}<span class="meta-diag-conteo meta-diag-conteo-{{ n }}">{{ mr.nombres_prioridad[n] | traducir }} · {{ mr.conteo_recomendaciones[n] }}</span>{% endif %}{% endfor %}
+  </p>
   <div class="meta-diag-lista">
-    {% for r in recs[:tope] %}{{ tarjeta(r, mr.nombres_prioridad, con_cuenta) }}{% endfor %}
+    {% for g in grupos %}{{ bloque(g, mr.nombres_prioridad, mr.max_filas, con_cuenta) }}{% endfor %}
   </div>
-  {% if recs | length > tope %}
-  <details class="meta-diag-mas">
-    <summary>{{ _('Ver todas (%(n)s)', n=recs | length) }}</summary>
-    <div class="meta-diag-lista">
-      {% for r in recs[tope:] %}{{ tarjeta(r, mr.nombres_prioridad, con_cuenta) }}{% endfor %}
-    </div>
-  </details>
-  {% endif %}
   {% else %}
   <p class="vacio">{{ _('Las reglas no encontraron nada que corregir en los últimos 30 días.') }}</p>
   {% endif %}

@@ -17,6 +17,7 @@ base.css
 componentes/marca.css
 componentes/fondo-galaxia.css
 componentes/nvp.css
+componentes/cargando.css
 pantallas/guia-estilos.css
 pantallas/experimentos.css
 pantallas/experimento-nuevo.css

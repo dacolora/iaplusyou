@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;800&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Textos compartidos del JS de esta plantilla (spec 2026-09-26 §Task 4):
     // un solo lugar donde Jinja traduce, en vez de repetir _()|tojson en cada
     // punto donde se usan.
@@ -372,6 +372,31 @@
     window.arrancarSondeos = arrancarSondeos;
     document.addEventListener('DOMContentLoaded', function () { arrancarSondeos(document); });
 
+    // «Ver todo» del historial de gasto (Daniel 2026-10-13: «la idea es que salga todo»): el botón con
+    // data-auto se pulsa solo cuando entra en pantalla, así la página llega liviana y una pestaña oculta
+    // no pide nada. Sin IntersectionObserver queda el botón para pulsarlo a mano.
+    document.addEventListener('DOMContentLoaded', function () {
+      if (!('IntersectionObserver' in window)) return;
+      var io = new IntersectionObserver(function (entradas) {
+        entradas.forEach(function (e) {
+          if (!e.isIntersecting) return;
+          io.unobserve(e.target);
+          e.target.click();
+        });
+      }, { rootMargin: '200px 0px' });
+      function observar(raiz) {
+        if (raiz.matches && raiz.matches('[data-lista-mas][data-auto]')) io.observe(raiz);
+        if (raiz.querySelectorAll) raiz.querySelectorAll('[data-lista-mas][data-auto]').forEach(function (b) { io.observe(b); });
+      }
+      observar(document);
+      // El fragmento trae otro «Ver todo» solo si pasó el tope de filas (GASTO_TODO_MAX).
+      new MutationObserver(function (cambios) {
+        cambios.forEach(function (c) {
+          c.addedNodes.forEach(function (n) { if (n.nodeType === 1) observar(n); });
+        });
+      }).observe(document.body, { childList: true, subtree: true });
+    });
+
     // Modal de detalle por fetch (Crear y Final edition): abre al instante con
     // «Cargando…», pide el HTML y solo lo pinta si sigue siendo el último
     // pedido (dos clics rápidos no se pisan). Nada se cachea: el detalle trae
@@ -557,7 +582,7 @@
     {% block content %}{% endblock %}
   </main>
   {% if request.view_args and request.view_args.cliente %}
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Menú del celular (spec 2026-09-26): ☰ abre la barra lateral encima de la
     // página; se cierra con la ✕, tocando el fondo, con Escape o al elegir algo.
     (function () {
@@ -576,6 +601,18 @@
         if (ev.target.closest('.sidebar-item, .sidebar-gasto')) poner(false);
       });
     })();
+    // Un enlace con data-ir-config="<apartado>" abre Configuración en ese apartado si la pestaña está en la página;
+    // si no, sigue su href. Era un onclick en línea en el chip de Gasto: la página de la tarjeta no deja correr
+    // manejadores en línea (auditoría de seguridad de pagos, 2026-10-12).
+    document.addEventListener('click', function (ev) {
+      var a = ev.target.closest('a[data-ir-config]');
+      if (!a) return;
+      var b = document.querySelector('.sidebar-item[data-tab=settings]');
+      if (!b) return;
+      ev.preventDefault();
+      b.click();
+      if (window.irAConfig) window.irAConfig(a.dataset.irConfig);
+    });
   </script>
   {# Cobros (spec 2026-10-08 §5.4 y §7): un rechazo 402 «saldo insuficiente» de
      cualquier fetch muestra «Recargar saldo»; además, el panel de Configuración ›

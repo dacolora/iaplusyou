@@ -97,10 +97,11 @@ def crear_link(*, referencia, usd, descripcion, callback_url, correo=None, horas
     if correo:
         cuerpo["payer_email"] = correo
     try:
-        r = requests.post(f"{BASE}/online/link/v1", json=cuerpo, headers=_cabeceras(), timeout=tiempo)
+        r = requests.post(f"{BASE}/online/link/v1", json=cuerpo, headers=_cabeceras(), timeout=tiempo,
+                          allow_redirects=False)   # una redirección llevaría la llave a otro host
     except requests.RequestException as e:
         raise _sin_red(e) from None
-    if r.status_code >= 400:
+    if r.status_code >= 300:
         raise ErrorBold(gettext("Bold no aceptó el pedido (HTTP %(codigo)s)", codigo=r.status_code),
                         caida=r.status_code >= 500)
     d = _datos(r)
@@ -114,10 +115,11 @@ def estado_link(link_id, tiempo=TIEMPO):
     if not _LINK.fullmatch(str(link_id or "")):
         raise ErrorBold(gettext("Identificador de link inválido"))
     try:
-        r = requests.get(f"{BASE}/online/link/v1/{link_id}", headers=_cabeceras(), timeout=tiempo)
+        r = requests.get(f"{BASE}/online/link/v1/{link_id}", headers=_cabeceras(), timeout=tiempo,
+                         allow_redirects=False)
     except requests.RequestException as e:
         raise _sin_red(e) from None
-    if r.status_code >= 400:
+    if r.status_code >= 300:
         raise ErrorBold(gettext("Bold no respondió el estado (HTTP %(codigo)s)", codigo=r.status_code),
                         caida=r.status_code >= 500)
     d = _datos(r)

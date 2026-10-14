@@ -1,3 +1,4 @@
 {% if gastos_siguiente is not none %}
-<div class="acciones"><button type="button" class="btn-sm" data-lista-mas="gasto-filas" data-url="{{ url_for('gasto_lista', cliente=cliente, desde=gastos_siguiente) }}">{{ _('Ver más') }}</button></div>
+{# Se pide solo al entrar en pantalla (data-auto, base.html): History muestra todo sin clics. #}
+<div class="acciones"><button type="button" class="btn-sm" data-lista-mas="gasto-filas" data-auto data-url="{{ url_for('gasto_lista', cliente=cliente, desde=gastos_siguiente, todo=1) }}">{{ _('Ver todo') }}</button></div>
 {% endif %}

@@ -671,6 +671,8 @@ cuenta_saldo = Table("cuenta_saldo", metadata,
     Column("umbral_aviso", Integer, nullable=False, default=5000),
     Column("actualizado_en", String(19)),
     Column("actualizado_por", String(80)),
+    # Pospago (0040, Daniel 2026-10-12): cobra igual pero nada frena por saldo; un saldo negativo es lo que debe.
+    Column("pospago", Boolean, nullable=False, default=False, server_default=sa.text("0")),
 )
 
 movimiento_saldo = Table("movimiento_saldo", metadata,
