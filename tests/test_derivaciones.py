@@ -412,6 +412,8 @@ def test_lanzador_activar_pieza_conserva_derivaciones_escritas_entre_medio(ent, 
         dv.planificar("acme", eid, "rescatar", {"ep_id": ep})   # el worker escribe mientras "Meta" responde
         fn({})
     monkeypatch.setattr(lanzador, "_con_credenciales", _meta)
+    # Esta prueba es de las derivaciones: lo que se lee en Meta antes de activar (PND-319) tiene sus propias pruebas.
+    monkeypatch.setattr(lanzador, "_confirmar_antes_de_activar", lambda *a, **k: None)
     monkeypatch.setattr(lanzador.meta_campaign, "actualizar_estado", lambda *a, **k: None)
     monkeypatch.setattr(lanzador.meta_adset, "actualizar_estado", lambda *a, **k: None)
     monkeypatch.setattr(lanzador.meta_ad, "actualizar_estado", lambda *a, **k: None)

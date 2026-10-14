@@ -2415,6 +2415,10 @@ msgstr "Activate by hand"
 msgid "Activar empieza a gastar presupuesto real en Meta. ¿Seguimos?"
 msgstr "Activating starts spending real budget on Meta. Continue?"
 
+#, python-format
+msgid "Activar empieza a gastar presupuesto real en Meta: ≈ %(diario)s al día. ¿Seguimos?"
+msgstr "Activating starts spending real budget in Meta: ≈ %(diario)s a day. Continue?"
+
 msgid "Activar en Meta"
 msgstr "Activate on Meta"
 

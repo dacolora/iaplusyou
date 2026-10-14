@@ -261,3 +261,41 @@ def test_la_periodica_vigila_cada_10_minutos_y_uno_que_falla_no_frena_a_los_dema
     assert "1 pausados" in texto
     assert ex.obtener("acme", otro)["estado"] == "pausado"
     assert any("No se pudo vigilar" in e["mensaje"] for e in ex.eventos("acme", eid))
+
+
+# ---------- los anuncios sueltos viejos ----------
+
+def _ruta_suelto(base_temporal, monkeypatch, diario_en_meta):
+    import dashboard
+    from tests.test_rutas_experimentos import _cliente_admin
+    c = _cliente_admin(dashboard)
+    meta = MetaFalsa()
+    meta.presupuestos["set"] = diario_en_meta
+    entrada = {"a": {"meta_ids": {"campaign_id": "camp", "adset_id": "set", "ad_id": "ad"}, "estado": "pausado",
+                     "presupuesto_diario": 20000.0, "moneda": "COP"}}
+    monkeypatch.setattr(dashboard.ads_mod, "cargar", lambda _: entrada)
+    monkeypatch.setattr(dashboard.ads_mod, "actualizar", lambda *a, **k: None)
+    monkeypatch.setattr(dashboard.meta_conexion, "credenciales_ads",
+                        lambda _: {"token": "llave-de-prueba", "ad_account_id": "1", "page_id": "p"})
+    monkeypatch.setattr(dashboard.meta_auth, "configurar", lambda *a: None)
+    monkeypatch.setattr(dashboard.meta_auth, "limpiar", lambda: None)
+    monkeypatch.setattr(dashboard.meta_auth, "llamar", meta._llamar)
+    import lanzador
+    monkeypatch.setattr(lanzador.meta_adset, "actualizar_estado", lambda oid, status, dry_run=False: estados.append((oid, status)))
+    estados = []
+    monkeypatch.setattr(dashboard.meta_campaign, "actualizar_estado", lambda oid, status, dry_run=False: estados.append((oid, status)))
+    respuesta = c.post("/cliente/acme/ads/a/estado", data={"estado": "ACTIVE"})
+    return respuesta, estados
+
+
+def test_un_anuncio_suelto_con_el_diario_inflado_no_se_activa(base_temporal, monkeypatch):
+    """Los dos anuncios sueltos de Forja: 20 000 COP en la ficha, 2 000 000 en Meta."""
+    respuesta, estados = _ruta_suelto(base_temporal, monkeypatch, 2000000)
+    assert respuesta.status_code == 302
+    assert not [e for e in estados if e[1] == "ACTIVE"] and ("set", "PAUSED") in estados
+
+
+def test_un_anuncio_suelto_con_el_diario_correcto_se_activa(base_temporal, monkeypatch):
+    respuesta, estados = _ruta_suelto(base_temporal, monkeypatch, 20000)
+    assert respuesta.status_code == 302
+    assert estados == [("camp", "ACTIVE"), ("set", "ACTIVE"), ("ad", "ACTIVE")]

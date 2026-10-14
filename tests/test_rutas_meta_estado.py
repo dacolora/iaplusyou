@@ -15,6 +15,9 @@ def test_estado_ad_espera_el_candado_compartido(base_temporal, monkeypatch):
     monkeypatch.setattr(dashboard.meta_auth, "limpiar", lambda: None)
     llamadas = []
     monkeypatch.setattr(dashboard.meta_campaign, "actualizar_estado", lambda *a: llamadas.append(a))
+    # Esta prueba es del candado: la comprobación de la moneda de PND-319 tiene sus propias pruebas.
+    monkeypatch.setattr(dashboard.lanzador, "_cuenta_meta", lambda creds: {})
+    monkeypatch.setattr(dashboard.lanzador, "comprobar_moneda", lambda cuenta, moneda: None)
     resultado = []
     with _LOCK:
         hilo = Thread(target=lambda: resultado.append(c.post("/cliente/acme/ads/a/estado", data={"estado": "ACTIVE"})))

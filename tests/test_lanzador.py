@@ -13,8 +13,12 @@ class MetaFalsa:
         self.llamadas = []
         self.fallar_en = fallar_en
         self.n = 0
-        self.cuenta = {"currency": moneda, "min_daily_budget": 3322 if moneda == "COP" else 100,
-                       "min_campaign_group_spend_cap": "200000" if moneda == "COP" else "10000"}
+        # Mínimo diario de Meta para la cuenta: el real de colorado_forja en COP (3 322); en otra moneda, ≈ el nuestro.
+        from presupuesto_experimentos import PRESUPUESTO_MINIMO_DIARIO
+        import monedas_meta
+        minimo = 3322 if moneda == "COP" else int(monedas_meta.a_unidad_meta(PRESUPUESTO_MINIMO_DIARIO.get(moneda, 1), moneda) * 0.8)
+        self.cuenta = {"currency": moneda, "min_daily_budget": minimo,
+                       "min_campaign_group_spend_cap": "200000" if moneda == "COP" else str(minimo * 50)}
         self.presupuestos = {}
         self.topes = {}
         self.gastos = {}
