@@ -561,6 +561,44 @@ def test_host_distinto_a_plataforma_url_es_404_salvo_localhost(app, monkeypatch)
     assert c.get("/login", headers={"Host": "evil.example"}).status_code == 200   # sin la variable no se filtra
 
 
+# --- Cambio de dominio (2026-10-14, app.creatvmachine.com → galadsy.com) ----------------
+
+def test_alias_redirige_los_get_a_plataforma_url_y_atiende_los_webhooks(app, monkeypatch):
+    from cobros import recargas
+    d = app["dashboard"]
+    monkeypatch.setenv("PLATAFORMA_URL", "https://nuevo.test")
+    monkeypatch.setenv("PLATAFORMA_ALIAS", " https://app.viejo.test/ , WWW.nuevo.test,")
+    monkeypatch.setitem(d.app.config, "TESTING", False)
+    c = d.app.test_client()
+    # Un GET por el dominio viejo o por www va a la misma ruta, con su consulta, en el nuevo.
+    r = c.get("/meta/callback?code=abc&state=x%2By", headers={"Host": "app.viejo.test"})
+    assert r.status_code == 302
+    assert r.headers["Location"] == "https://nuevo.test/meta/callback?code=abc&state=x%2By"
+    r = c.head("/privacidad", headers={"Host": "www.nuevo.test:443"})
+    assert (r.status_code, r.headers["Location"]) == (302, "https://nuevo.test/privacidad")
+    # Un POST no se redirige (nadie lo reenvía): el webhook de una pasarela que todavía tiene
+    # la dirección vieja llega a su ruta. 413 es la respuesta de la ruta, antes de tocar la base.
+    r = c.post("/pagos/bold/webhook", data=b"x" * (recargas.MAX_CUERPO + 1), headers={"Host": "app.viejo.test"})
+    assert r.status_code == 413
+    # Lo que no es alias sigue siendo 404, y el dominio nuevo se atiende directo.
+    assert c.get("/login", headers={"Host": "evil.example"}).status_code == 404
+    assert c.post("/pagos/bold/webhook", data=b"{}", headers={"Host": "evil.example"}).status_code == 404
+    assert c.get("/login", headers={"Host": "viejo.test"}).status_code == 404
+    assert c.get("/login", headers={"Host": "nuevo.test"}).status_code == 200
+
+
+def test_eliminar_datos_nombra_el_dominio_de_plataforma_url(app, monkeypatch):
+    d = app["dashboard"]
+    c = d.app.test_client()
+    monkeypatch.setenv("PLATAFORMA_URL", "https://nuevo.test")
+    html = c.get("/eliminar-datos").get_data(as_text=True)
+    assert "en nuevo.test ›" in html and "creatvmachine" not in html
+    # Sin la variable sale del Host, escapado: el cuerpo se pinta como HTML.
+    monkeypatch.delenv("PLATAFORMA_URL")
+    html = c.get("/eliminar-datos", headers={"Host": "localhost:5050"}).get_data(as_text=True)
+    assert "en localhost:5050 ›" in html
+
+
 # --- I1: toda sesión tiene que ser de un usuario que exista -------------------------------
 
 def test_sesion_de_usuario_inexistente_sin_sv_tambien_se_cierra(app):
