@@ -14,3 +14,24 @@
 <span class="chip-nvp chip-nvp-{{ r.etapa | lower }}" title="{{ _('NVP: %(nuevos)s visitantes nuevos de %(total)s.', nuevos=r.nuevos, total=r.visitantes) }} {{ explicacion_nvp[r.etapa] | traducir }}">{{ '%.0f' | format(r.nvp) }}&nbsp;% <span class="chip-nvp-etapa" translate="no">{{ r.etapa }}</span></span>
 {%- endif -%}
 {%- endmacro %}
+
+{#- Cargando: el aviso de que algo llega por fetch (pedido de Daniel 2026-10-13; CSS componentes/cargando.css). Un
+    círculo que gira, el `texto` y, si viene, un `detalle` chico debajo; con `esqueleto`, la forma de un panel debajo
+    (cuatro cifras, una gráfica y dos filas) para que se note que viene algo grande. role="status": el lector de
+    pantalla lo anuncia. El JS que arma el mismo aviso (_tab_rendimiento.html) usa estas clases. -#}
+{% macro cargando(texto, detalle='', esqueleto=false) -%}
+<div class="cargando-panel">
+  <div class="cargando cargando-grande" role="status" aria-live="polite">
+    <span class="cargando-giro" aria-hidden="true"></span>
+    <span class="cargando-texto"><strong>{{ texto }}</strong>{% if detalle %}<small>{{ detalle }}</small>{% endif %}</span>
+  </div>
+  {%- if esqueleto %}
+  <div class="cargando-esqueleto" aria-hidden="true">
+    <div class="cargando-fila"><span class="cargando-bloque"></span><span class="cargando-bloque"></span><span class="cargando-bloque"></span><span class="cargando-bloque"></span></div>
+    <span class="cargando-bloque cargando-bloque-alto"></span>
+    <span class="cargando-bloque cargando-bloque-linea"></span>
+    <span class="cargando-bloque cargando-bloque-linea"></span>
+  </div>
+  {%- endif %}
+</div>
+{%- endmacro %}

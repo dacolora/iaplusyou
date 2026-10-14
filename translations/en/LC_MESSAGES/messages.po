@@ -2452,6 +2452,9 @@ msgstr "Updating metrics…"
 msgid "Actualizando resultados…"
 msgstr "Updating results…"
 
+msgid "Actualizando tu rendimiento…"
+msgstr "Updating your performance…"
+
 msgid "Actualizar ahora"
 msgstr "Update now"
 
@@ -4042,6 +4045,9 @@ msgstr "Loads its prompt and images into Create › From references. Nothing is 
 msgid "Carga tu catálogo"
 msgstr "Upload your catalog"
 
+msgid "Cargando"
+msgstr "Loading"
+
 msgid "Cargando el detalle de Meta…"
 msgstr "Loading Meta details…"
 
@@ -4062,6 +4068,9 @@ msgstr "Loading the campaign…"
 
 msgid "Cargando la pieza…"
 msgstr "Loading the piece…"
+
+msgid "Cargando más…"
+msgstr "Loading more…"
 
 msgid "Cargando referentes…"
 msgstr "Loading references…"
@@ -10572,6 +10581,9 @@ msgstr "Jul (Nordic Christmas)"
 msgid "Junta los dos clips: el video queda tan corto como dure la transición."
 msgstr "Joins the two clips: the video gets shorter by the length of the transition."
 
+msgid "Juntamos las cifras de tus tiendas y de tus anuncios, país por país. Puede tardar unos segundos."
+msgstr "We're gathering the numbers from your stores and your ads, country by country. This can take a few seconds."
+
 msgid "Karaoke"
 msgstr "Karaoke"
 
@@ -12318,6 +12330,9 @@ msgstr "My music · free"
 
 msgid "Midsommar"
 msgstr "Midsummer (Midsommar)"
+
+msgid "Mientras algo llega por fetch: el aviso con su círculo (con la forma de lo que viene, si es un panel grande) y el botón ocupado."
+msgstr "While something arrives by fetch: the notice with its spinner (with the shape of what's coming, for a large panel) and the busy button."
 
 #, python-format
 msgid "Mientras no llegues al 100 %%, esto no descuenta de tu saldo."
