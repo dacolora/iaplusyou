@@ -8,7 +8,7 @@ gasto pausa por tope o por ritmo.
 import pytest
 
 from tests.test_experimentos_db import _pieza
-from tests.test_lanzador import MetaFalsa, entorno  # noqa: F401 — `entorno` es un fixture
+from tests.test_lanzador import MetaFalsa, entorno, entorno_app  # noqa: F401 — fixtures
 
 import monedas_meta
 
@@ -182,7 +182,7 @@ def test_sin_tope_en_meta_los_conjuntos_se_apagan_al_alcanzarlo(entorno, base_te
     campana = [kw for t, kw in meta.llamadas if t == "campaign"][0]
     conjunto = [kw for t, kw in meta.llamadas if t == "adset"][0]
     assert campana["spend_cap"] is None and conjunto["dias"] == 1 and conjunto["centavos"] == 4000
-    assert any("se apagan solos en 1 días" in e["mensaje"] for e in ex.eventos("acme", eid))
+    assert any("se apagan solos en 1 día." in e["mensaje"] for e in ex.eventos("acme", eid))
 
 
 def test_con_tope_aceptado_va_a_la_campana_y_los_dias_no_cambian(entorno, base_temporal):
@@ -458,3 +458,144 @@ def test_la_vigilancia_tiene_su_propio_carril():
     assert worker.CARRIL_VIGILANCIA == ("exp_vigilar_gasto",)
     for carril in (worker.CARRIL_CREAR, worker.CARRIL_NICHO, worker.CARRIL_LECTURA):
         assert "exp_vigilar_gasto" not in carril
+
+
+# ---------- lo que encontró la revisión con mutaciones ----------
+
+USD = {"currency": "USD", "min_daily_budget": 100, "min_campaign_group_spend_cap": "10000"}
+
+
+def test_cambiar_el_diario_no_manda_nada_si_la_cuenta_cambio_de_moneda(entorno):
+    """M03: la lectura de vuelta no ve un error de unidad (Meta guarda lo que se le manda): lo frena comprobar_moneda."""
+    ex, lz, meta, eid = entorno["ex"], entorno["lanzador"], entorno["meta"], entorno["eid"]
+    lz.lanzar("acme", eid)
+    meta.cuenta = dict(USD)
+    meta.llamadas.clear()
+    with pytest.raises(lz.PresupuestoNoCoincide):
+        lz.cambiar_presupuesto_pais("acme", eid, "CO", 25000)
+    assert not [t for t, _ in meta.llamadas if t == "presupuesto"]
+
+
+def test_activar_no_enciende_nada_si_la_cuenta_cambio_de_moneda(entorno):
+    """M04."""
+    ex, lz, meta, eid = entorno["ex"], entorno["lanzador"], entorno["meta"], entorno["eid"]
+    lz.lanzar("acme", eid)
+    meta.cuenta = dict(USD)
+    meta.llamadas.clear()
+    with pytest.raises(lz.PresupuestoNoCoincide):
+        lz.cambiar_estado("acme", eid, "ACTIVE")
+    with pytest.raises(lz.PresupuestoNoCoincide):
+        lz.activar_pieza("acme", ex.obtener("acme", eid)["piezas"][0]["id"])
+    assert not [kw for t, kw in meta.llamadas if t == "estado" and kw["status"] == "ACTIVE"]
+
+
+def test_un_anuncio_suelto_no_se_activa_si_la_cuenta_cambio_de_moneda(base_temporal, monkeypatch):
+    """M05."""
+    import dashboard
+    from tests.test_rutas_experimentos import _cliente_admin
+    c = _cliente_admin(dashboard)
+    meta = MetaFalsa()
+    meta.cuenta = dict(USD)
+    meta.presupuestos["set"] = 20000
+    monkeypatch.setattr(dashboard.ads_mod, "cargar", lambda _: {"a": {"meta_ids": {"campaign_id": "camp", "adset_id": "set",
+                                                                                     "ad_id": "ad"}, "presupuesto_diario": 20000.0,
+                                                                        "moneda": "COP"}})
+    monkeypatch.setattr(dashboard.ads_mod, "actualizar", lambda *a, **k: None)
+    monkeypatch.setattr(dashboard.meta_conexion, "credenciales_ads",
+                        lambda _: {"token": "llave-de-prueba", "ad_account_id": "1", "page_id": "p"})
+    monkeypatch.setattr(dashboard.meta_auth, "configurar", lambda *a: None)
+    monkeypatch.setattr(dashboard.meta_auth, "limpiar", lambda: None)
+    monkeypatch.setattr(dashboard.meta_auth, "llamar", meta._llamar)
+    estados = []
+    monkeypatch.setattr(dashboard.meta_campaign, "actualizar_estado", lambda oid, status, dry_run=False: estados.append((oid, status)))
+    assert c.post("/cliente/acme/ads/a/estado", data={"estado": "ACTIVE"}).status_code == 302
+    assert not [e for e in estados if e[1] == "ACTIVE"]
+
+
+def _lanzamiento_a_medias(e):
+    """Lanza con Meta fallando al crear el primer anuncio: quedan la campaña y los conjuntos, para reintentar."""
+    e["meta"].fallar_en = "ad"
+    with pytest.raises(RuntimeError):
+        e["lanzador"].lanzar("acme", e["eid"])
+    e["meta"].fallar_en = None
+    return e["ex"].obtener("acme", e["eid"])
+
+
+def test_reintentar_lee_de_vuelta_el_conjunto_que_reusa(entorno):
+    """M08: un conjunto que quedó de un lanzamiento anterior, con otro diario en Meta, no se reusa sin leerlo."""
+    ex, lz, meta, eid = entorno["ex"], entorno["lanzador"], entorno["meta"], entorno["eid"]
+    e = _lanzamiento_a_medias(entorno)
+    meta.presupuestos[e["paises"][0]["meta_adset_id"]] *= 100
+    with pytest.raises(lz.PresupuestoNoCoincide):
+        lz.lanzar("acme", eid)
+
+
+def test_apps_leen_de_vuelta_cada_conjunto_nuevo(entorno_app):
+    """M09: en Instalaciones de la app, cada conjunto de tienda se lee de vuelta al crearlo."""
+    e = entorno_app
+    meta, lz = e["meta"], e["lanzador"]
+    original = meta._adset
+
+    def guarda_otro(*a, **kw):
+        r = original(*a, **kw)
+        meta.presupuestos[r["id"]] *= 100
+        return r
+    meta._adset = guarda_otro
+    campaign, adset, creative, ad, insights, auth = meta.modulos()
+    e["monkeypatch"].setattr(lz, "meta_adset", adset)
+    with pytest.raises(lz.PresupuestoNoCoincide):
+        lz.lanzar("acme", e["eid"])
+
+
+def test_apps_leen_de_vuelta_el_conjunto_que_reusan(entorno_app):
+    """M10."""
+    e = entorno_app
+    meta, lz = e["meta"], e["lanzador"]
+    ex = _lanzamiento_a_medias(e)
+    ids = ex["paises"][0]["meta_adsets"]
+    meta.presupuestos[ids["ios"]] *= 100
+    with pytest.raises(lz.PresupuestoNoCoincide):
+        lz.lanzar("acme", e["eid"])
+
+
+def test_activar_apps_lee_todos_los_conjuntos_no_solo_el_primero(entorno_app):
+    """M32: con dos tiendas, el segundo conjunto con ×100 tampoco se enciende."""
+    e = entorno_app
+    meta, lz = e["meta"], e["lanzador"]
+    lz.lanzar("acme", e["eid"])
+    ids = e["ex"].obtener("acme", e["eid"])["paises"][0]["meta_adsets"]
+    meta.presupuestos[ids["android"]] *= 100
+    meta.llamadas.clear()
+    with pytest.raises(lz.PresupuestoNoCoincide):
+        lz.cambiar_estado("acme", e["eid"], "ACTIVE")
+    assert not [kw for t, kw in meta.llamadas if t == "estado" and kw["status"] == "ACTIVE"]
+
+
+def test_una_lectura_sin_diario_no_se_da_por_buena(entorno):
+    """M34: si Meta no contesta el `daily_budget`, no se sigue como si coincidiera."""
+    ex, lz, meta, eid = entorno["ex"], entorno["lanzador"], entorno["meta"], entorno["eid"]
+    lz.lanzar("acme", eid)
+    meta.presupuestos[ex.obtener("acme", eid)["paises"][0]["meta_adset_id"]] = ""
+    with pytest.raises(lz.PresupuestoNoCoincide):
+        lz.cambiar_estado("acme", eid, "ACTIVE")
+
+
+@pytest.mark.parametrize("tope,dias,esperado", [(1000.0, 7, 1), (4000.0, 7, 1), (12000.0, 7, 3), (28000.0, 7, 7),
+                                                 (10_000_000.0, 7, 7), (0.0, 5, 5)])
+def test_los_dias_que_paga_el_tope_nunca_son_cero_ni_mas_que_los_del_experimento(tope, dias, esperado):
+    """M28 y M29: un tope menor que un día de pauta da 1 día (no 0, que sería un fin igual a ahora); uno enorme no
+    alarga el experimento."""
+    import lanzador
+    ex = {"dias": dias, "tope_total": tope, "paises": [{"pais": "CO", "presupuesto_dia": 4000.0}]}
+    assert lanzador._dias_que_alcanza(ex) == esperado
+
+
+def test_la_vigilancia_tambien_cuida_los_experimentos_decididos(entorno, base_temporal):
+    """M25 y M26: en `decidido` los ganadores siguen entregando."""
+    from tareas import experimentos as tex
+    ex, lz, meta = entorno["ex"], entorno["lanzador"], entorno["meta"]
+    eid, cid = _corriendo(entorno, base_temporal)
+    ex.actualizar("acme", eid, estado="decidido")
+    meta.gastos[cid] = (28000.0, 0.0)
+    assert "1 pausados" in tex.exp_vigilar_gasto({})
+    assert ex.obtener("acme", eid)["estado"] == "pausado"

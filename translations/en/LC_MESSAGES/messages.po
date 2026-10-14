@@ -12176,8 +12176,10 @@ msgid "Meta marca la cuenta con el estado %(codigo)s: no está activa."
 msgstr "Meta marks the account with status %(codigo)s: it isn’t active."
 
 #, python-format
-msgid "Meta no acepta un tope tan bajo como %(tope)s: para no pasarlo, los conjuntos se apagan solos en %(dias)s días."
-msgstr "Meta doesn't accept a cap as low as %(tope)s: to stay under it, the ad sets turn themselves off in %(dias)s days."
+msgid "Meta no acepta un tope tan bajo como %(tope)s: para no pasarlo, los conjuntos se apagan solos en %(num)s día."
+msgid_plural "Meta no acepta un tope tan bajo como %(tope)s: para no pasarlo, los conjuntos se apagan solos en %(num)s días."
+msgstr[0] "Meta doesn't accept a cap as low as %(tope)s: to stay under it, the ad sets turn themselves off in %(num)s day."
+msgstr[1] "Meta doesn't accept a cap as low as %(tope)s: to stay under it, the ad sets turn themselves off in %(num)s days."
 
 #, python-format
 msgid "Meta no aceptó el cambio: %(error)s"

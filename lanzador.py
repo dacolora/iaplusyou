@@ -481,9 +481,11 @@ def lanzar(cliente, experimento_id, on_etapa=None, soltar=True):
                                           {"campaign_id": campaign_id, "spend_cap": cap})
             if dias_meta < int(ex["dias"] or 7):
                 from tablero import dinero as _dinero
-                experimentos.registrar_evento(cliente, experimento_id, "lanzamiento", gettext(
+                experimentos.registrar_evento(cliente, experimento_id, "lanzamiento", ngettext(
                     "Meta no acepta un tope tan bajo como %(tope)s: para no pasarlo, los conjuntos se apagan solos en "
-                    "%(dias)s días.", tope=_dinero(float(ex["tope_total"] or 0), moneda), dias=dias_meta),
+                    "%(num)s día.",
+                    "Meta no acepta un tope tan bajo como %(tope)s: para no pasarlo, los conjuntos se apagan solos en "
+                    "%(num)s días.", dias_meta, tope=_dinero(float(ex["tope_total"] or 0), moneda)),
                     {"dias_meta": dias_meta})
         if cap:
             _confirmar_tope(campaign_id, cap)
