@@ -6943,6 +6943,9 @@ msgstr "The final video doesn't show this clip: here you can only delete it."
 msgid "El video original no es un mp4: no se puede editar."
 msgstr "The original video isn't an mp4: it can't be edited."
 
+msgid "El video pesa más de 200 MB."
+msgstr "The video is larger than 200 MB."
+
 #, python-brace-format
 msgid "El video pesa más de {mb} MB."
 msgstr "The video is larger than {mb} MB."
@@ -7041,6 +7044,9 @@ msgstr "Choose this store's country so that country's experiments use its sales.
 msgid "Elige el país de la tienda."
 msgstr "Choose the store's country."
 
+msgid "Elige el producto para ver el precio."
+msgstr "Choose the product to see the price."
+
 msgid "Elige la cuenta que va a enviar (Gmail, Outlook o el correo del dominio)."
 msgstr "Choose the account that will send it (Gmail, Outlook or the domain's email)."
 
@@ -7053,6 +7059,9 @@ msgstr "Choose the piece and at least one platform."
 
 msgid "Elige las fotos desde tu computador: se crea el producto en el catálogo con ellas."
 msgstr "Choose the photos from your computer: the product gets created in the catalog with them."
+
+msgid "Elige los archivos para ver el precio."
+msgstr "Choose the files to see the price."
 
 msgid "Elige los destinos. Es gratis: se produce con lo que hay en esta edición, sin pagar nada nuevo. Tarda <span id=\"producir-tiempo\"></span>."
 msgstr "Choose the markets. It's free: it's produced with what's in this edit, without paying for anything new. It takes <span id=\"producir-tiempo\"></span>."
@@ -8484,6 +8493,10 @@ msgid "Este color no tiene fotos todavía: súbele una para que el modelo lo rep
 msgstr "This color has no photos yet: upload one so the model can reproduce it."
 
 #, python-format
+msgid "Este envío cuesta %(precio)s. Revisa el precio y vuelve a generar."
+msgstr "This upload costs %(precio)s. Check the price and generate again."
+
+#, python-format
 msgid "Este experimento optimiza por compras y el Pixel no está activo%(detalle)s. Comprueba el Pixel en Configuración o crea el experimento con objetivo de tráfico."
 msgstr "This experiment optimizes for purchases and the Pixel is not active%(detalle)s. Check the Pixel in Settings or create the experiment with a traffic objective."
 
@@ -8498,6 +8511,10 @@ msgstr "This language doesn't have subtitles yet."
 
 msgid "Este mapa es documentación interna y está en español."
 msgstr "This map is internal documentation and is written in Spanish."
+
+#, python-format
+msgid "Este modelo acepta videos de hasta %(n)s s."
+msgstr "This model accepts videos up to %(n)s s."
 
 msgid "Este navegador no graba audio: prueba con Chrome, Edge, Firefox o Safari al día."
 msgstr "This browser can't record audio: try an up-to-date Chrome, Edge, Firefox or Safari."
@@ -8676,6 +8693,9 @@ msgstr "These subtitles come from the automatic draft and don't follow the cuts.
 
 msgid "Estos textos están en español: son las instrucciones internas que recibe Claude. Claude escribe tus anuncios en el idioma de tu proyecto."
 msgstr "These texts are in Spanish: they're the internal instructions Claude receives. Claude writes your ads in your project's language."
+
+msgid "Estoy midiendo otros videos; intenta en unos segundos."
+msgstr "I'm measuring other videos; try again in a few seconds."
 
 msgid "Estrella"
 msgstr "Star"
@@ -11398,6 +11418,9 @@ msgstr "Reading the catalog and creating the products…"
 msgid "Leyendo la cuenta"
 msgstr "Reading the account"
 
+msgid "Leyendo la duración del video…"
+msgstr "Reading the video length…"
+
 msgid "Leyendo la página"
 msgstr "Reading the page"
 
@@ -12034,6 +12057,9 @@ msgstr "Payment method not supported"
 msgid "Medios"
 msgstr "Media"
 
+msgid "Mediste muchos videos seguidos; espera un rato."
+msgstr "You measured many videos in a row; wait a while."
+
 msgid "Mejorando"
 msgstr "Improving"
 
@@ -12327,6 +12353,9 @@ msgstr "My music"
 
 msgid "Mi música · gratis"
 msgstr "My music · free"
+
+msgid "Midiendo el video…"
+msgstr "Measuring the video…"
 
 msgid "Midsommar"
 msgstr "Midsummer (Midsommar)"
@@ -13074,6 +13103,9 @@ msgstr "I couldn't delete it (%(tipo)s); try again."
 msgid "No pude calcular el panel esta vez. El detalle quedó en el log del servidor; vuelve a cargar en un momento."
 msgstr "I couldn't calculate the panel this time. The detail was logged on the server; reload in a moment."
 
+msgid "No pude calcular el precio de este envío; no se generó nada."
+msgstr "I couldn't calculate the price of this upload; nothing was generated."
+
 #, python-format
 msgid "No pude cambiar el estado: %(error)s"
 msgstr "Couldn't change the status: %(error)s"
@@ -13175,6 +13207,12 @@ msgstr "I couldn't read that audio file."
 
 msgid "No pude leer ese video."
 msgstr "I couldn't read that video."
+
+msgid "No pude leer la duración de ese video."
+msgstr "I couldn't read that video's length."
+
+msgid "No pude leer la duración de un video; prueba con otro archivo."
+msgstr "I couldn't read a video's length; try another file."
 
 #, python-format
 msgid "No pude leer la foto %(archivo)s."
@@ -17646,6 +17684,9 @@ msgstr ""
 msgid "Sube un mp3, wav, m4a, aac u ogg."
 msgstr "Upload an mp3, wav, m4a, aac or ogg."
 
+msgid "Sube un video mp4, mov o webm."
+msgstr "Upload an mp4, mov or webm video."
+
 msgid "Sube un video, una imagen o un audio."
 msgstr "Upload a video, an image or an audio file."
 
@@ -21471,6 +21512,18 @@ msgstr "seasonality"
 msgid "estado"
 msgstr "status"
 
+#, python-brace-format
+msgid "este modelo acepta videos de hasta {max} s: recórtalo o elige otro modelo"
+msgstr "this model accepts videos up to {max} s: trim it or choose another model"
+
+#, python-brace-format
+msgid "este modelo entrega {segundos} s de video"
+msgstr "this model returns {segundos} s of video"
+
+#, python-brace-format
+msgid "este modelo procesa hasta {max} s de cada video: lo demás se corta"
+msgstr "this model processes up to {max} s of each video: the rest is cut"
+
 msgid "estimado: sin respuesta de Claude"
 msgstr "estimated: no response from Claude"
 
@@ -22040,6 +22093,10 @@ msgstr "characters"
 
 msgid "los productos"
 msgstr "products"
+
+#, python-brace-format
+msgid "los videos se cobran por lo que duran: {segundos} s en total"
+msgstr "videos are charged by their length: {segundos} s in total"
 
 msgid "los últimos que se mandaron a los administradores"
 msgstr "the latest ones sent to the administrators"

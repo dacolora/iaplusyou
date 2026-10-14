@@ -188,13 +188,13 @@ def test_cambiar_producto_rechaza_html_y_sirve_el_original_como_imagen(app, monk
     monkeypatch.setattr(d.trabajos, "encolar", lambda *a, **k: encolados.append(a) or True)
     c = _ana(app)
     html = _png() + b"<script>alert(document.cookie)</script>"
-    c.post("/cliente/acme/swap/generar", data={"foto": (io.BytesIO(html), "x.html"), "producto_id": "p1"},
+    c.post("/cliente/acme/swap/generar", data={"foto": (io.BytesIO(html), "x.html"), "producto_id": "p1", "precio_visto": "999"},
            content_type="multipart/form-data")
     assert encolados == []
-    c.post("/cliente/acme/swap/generar", data={"foto": (io.BytesIO(b"no soy foto"), "x.png"), "producto_id": "p1"},
+    c.post("/cliente/acme/swap/generar", data={"foto": (io.BytesIO(b"no soy foto"), "x.png"), "producto_id": "p1", "precio_visto": "999"},
            content_type="multipart/form-data")
     assert encolados == []
-    c.post("/cliente/acme/swap/generar", data={"foto": (io.BytesIO(_png()), "x.png"), "producto_id": "p1"},
+    c.post("/cliente/acme/swap/generar", data={"foto": (io.BytesIO(_png()), "x.png"), "producto_id": "p1", "precio_visto": "999"},
            content_type="multipart/form-data")
     assert len(encolados) == 1
     swap_id = encolados[0][2]["swap_id"]
@@ -210,7 +210,7 @@ def test_cambiar_producto_tiene_tope_de_archivos(app, monkeypatch):
     monkeypatch.setattr(d.trabajos, "encolar", lambda *a, **k: encolados.append(a) or True)
     c = _ana(app)
     fotos = [(io.BytesIO(_png()), f"f{i}.png") for i in range(d.MAX_SWAPS_POR_ENVIO + 1)]
-    c.post("/cliente/acme/swap/generar", data={"foto": fotos, "producto_id": "p1"}, content_type="multipart/form-data")
+    c.post("/cliente/acme/swap/generar", data={"foto": fotos, "producto_id": "p1", "precio_visto": "999"}, content_type="multipart/form-data")
     assert encolados == []
 
 

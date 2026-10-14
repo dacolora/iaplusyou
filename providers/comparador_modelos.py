@@ -34,7 +34,7 @@ que el código está mal:
     por esto otro" en un video real.
 """
 import prompt_swap
-from providers import aspect_ratio, fal_client
+from providers import aspect_ratio, fal_client, swap_video_precio
 
 MODELOS_IMAGEN = {
     "nano_banana_fal": {
@@ -127,6 +127,8 @@ def estimate_image(modelo_id):
     return {"credits": None, "usd": MODELOS_IMAGEN[modelo_id]["costo_usd"]}
 
 
-def estimate_video(modelo_id, duration_seconds=5):
-    costo_seg = MODELOS_VIDEO[modelo_id]["costo_usd_por_segundo"]
-    return {"credits": None, "usd": round(costo_seg * duration_seconds, 3) if costo_seg else None}
+def estimate_video(modelo_id, duration_seconds=5, fps=None):
+    """Por la duración (y, en Wan Animate, los cuadros) del video que se sube (`swap_video_precio`, PND-312)."""
+    if not MODELOS_VIDEO[modelo_id]["costo_usd_por_segundo"]:
+        return {"credits": None, "usd": None}
+    return {"credits": None, "usd": swap_video_precio.costo(modelo_id, duration_seconds, fps)}

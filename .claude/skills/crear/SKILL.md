@@ -193,6 +193,8 @@ PND-068 (corrección 2026-10-08): la página del proyecto no carga estado_videos
 
 **Probado en real el 2026-10-10** (`docs/superpowers/evals/2026-10-10-pruebas-reales.md`): Kling O3 Pro respeta «Image N» (no hace falta «@Image1»); `seedance25_ref` rechaza fotos realistas de personas como referencia aunque sean de IA (ByteDance; la app no cobra y lo dice, PND-242); «Que Wan mejore mi prompt» siguió la acción completa en la única muestra, al mismo precio; el director arma el prompt en el idioma del proyecto e inventó detalles (PND-239, PND-240).
 
+Cambiar producto cobra un video por lo que dura (PND-312, 2026-10-13): la tabla es `providers/swap_video_precio.py` y el detalle está en la skill `cobros` («Swap de video por su duración»); el precio se ve antes de generar (`#swap-precio`, `static/swap-precio.js`).
+
 PND-062, entrega 1 (2026-10-10, pedido de Daniel): Del catálogo y Cambiar producto comparten
 `GET /cliente/<cliente>/catalogo/selector?sel=plus|clone`. La grilla llega dentro del formulario original; los nombres
 y valores de `productos_catalogo` (categoria:id) y `producto_id` (id/color) siguen iguales. Precargas seleccionadas

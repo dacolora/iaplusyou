@@ -249,3 +249,32 @@ def test_copias_de_una_tienda_ajena_no_se_escriben(dos):
     _, _, otro = dos
     datos.reemplazar_anuncios_canal("acme", otro, DIA, DIA, [_canal("A")])
     assert datos.totales_por_anuncio("acme", None, DIA, DIA) == []
+
+
+def test_gasto_duplicado_de_una_tienda_no_pregunta_fila_por_fila(dos):
+    """Incidente 2026-10-13: con las 5 tiendas de happyflops, la versión con un EXISTS correlacionado (por cada fila de
+    la tienda, buscar la misma fila en otra tienda, sin índice que encaje) tardaba 51 s de los 60 del panel de Países
+    Bajos a 30 días, y 399 s «Desde el inicio». Una sola pasada agrupada da lo mismo en 0,14 s. El plan de SQLite no
+    puede volver a tener una subconsulta por fila."""
+    import sqlalchemy as sa
+    from sqlalchemy import event
+
+    import db
+    se, no, _ = dos
+    datos.reemplazar_anuncios_canal("acme", se, DIA, DIA, [_canal("A", gasto=30)])
+    datos.reemplazar_anuncios_canal("acme", no, DIA, DIA, [_canal("A", gasto=25)])
+    consultas = []
+
+    def guardar(_con, _cursor, sql, parametros, _ctx, _many):
+        if "tw_anuncio_dia" in sql:
+            consultas.append((sql, parametros))
+    event.listen(sa.engine.Engine, "before_cursor_execute", guardar)
+    try:
+        assert datos.gasto_duplicado("acme", DIA, DIA, tienda_id=se) == 30
+    finally:
+        event.remove(sa.engine.Engine, "before_cursor_execute", guardar)
+    assert len(consultas) == 1
+    sql, parametros = consultas[0]
+    with db.conectar() as con:
+        plan = " ".join(str(f[-1]) for f in con.exec_driver_sql("EXPLAIN QUERY PLAN " + sql, parametros))
+    assert "CORRELATED" not in plan.upper(), plan
