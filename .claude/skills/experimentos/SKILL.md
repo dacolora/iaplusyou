@@ -94,7 +94,7 @@ organic publish path (`organico`/`publicador` are video-only; for an image piece
 IS the image URL, so every gate also checks `es_imagen`). `experimentos.ESTADOS_VIVOS`
 (the gallery's «en prueba» label) includes `decidido`: winners keep delivering there.
 
-**Plata hacia Meta (PND-319, 2026-10-13).** Meta recibe presupuestos y topes en la unidad de su tabla oficial
+**Plata hacia Meta (PND-322, 2026-10-13).** Meta recibe presupuestos y topes en la unidad de su tabla oficial
 (`monedas_meta.py`, el ÚNICO lugar: offset 1 = CLP, COP, CRC, HUF, IDR, ISK, JPY, KRW, PYG, TWD, VND; las demás en
 centavos; una moneda fuera de la tabla lanza `MonedaNoSoportada`). Hasta ese día una lista escrita de memoria sin el
 COP mandó los diarios en pesos colombianos 100 veces más altos (4 000 → 400 000 COP al día; colorado_forja gastó

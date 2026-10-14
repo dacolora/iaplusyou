@@ -2,7 +2,7 @@
 Worker de Creatv Machine: proceso aparte de gunicorn (servicio systemd
 creatv-worker) que ejecuta las tareas de la cola persistente (cola.py) en cinco
 carriles (spec 2026-09-28-crear-sin-cola; el de lectura, spec 2026-10-08 meta rendimiento; el de vigilancia,
-PND-319):
+PND-322):
 
 - **crear**: las generaciones de Crear (`CARRIL_CREAR`) en hasta `HILOS_CREAR`
   hilos a la vez — casi todo su tiempo es esperar al proveedor, y una espera
@@ -17,7 +17,7 @@ PND-319):
   (medido con la API real) y no debe dejar al carril general —lanzar y refrescar
   experimentos, Triple Whale, tiendas— esperando una hora. Gratis: leer de Meta no cobra.
 - **vigilancia**: `exp_vigilar_gasto` (`CARRIL_VIGILANCIA`), un hilo propio: el freno del gasto en Meta corre
-  cada 10 minutos de verdad, no cuando el carril general termine un render (PND-319, revisión de gasto).
+  cada 10 minutos de verdad, no cuando el carril general termine un render (PND-322, revisión de gasto).
 - **general**: todo lo demás, de a una y en orden, como siempre (renders con
   1 CPU, Meta, periódicas…).
 
@@ -70,7 +70,7 @@ PERIODICAS = [("tienda_sync_pedidos_todas", 7200), ("tw_sincronizar_todas", 7200
               # Meta rendimiento (spec 2026-10-08 §6): la copia de cada cuenta publicitaria, cada 3 h.
               ("meta_rend_sincronizar_todas", 10800), ("exp_refrescar_todos", 7200),
               ("exp_decidir_todos", 3600),
-              # PND-319: el gasto real de cada experimento en Meta, contra su tope y su ritmo diario (gratis).
+              # PND-322: el gasto real de cada experimento en Meta, contra su tope y su ritmo diario (gratis).
               ("exp_vigilar_gasto", 600),
               ("exp_avanzar_todos", 600), ("tienda_sync_productos_todas", 21600), ("sprint_qa_pendientes", 300),
               ("materiales_limpiar", 86400),
@@ -111,7 +111,7 @@ PRIORIDAD_SUELTA = 5    # flowplus_lanzar.PRIORIDAD_NORMAL: una pieza pedida des
 # instantáneas y se quedan en el general.
 CARRIL_LECTURA = ("meta_rend_sincronizar",)
 HILOS_LECTURA = 1
-# PND-319: la vigilancia del gasto en Meta tiene su propio hilo; en el general esperaba detrás de renders y
+# PND-322: la vigilancia del gasto en Meta tiene su propio hilo; en el general esperaba detrás de renders y
 # lanzamientos (a veces horas) y es el freno que corta un gasto que se dispara.
 CARRIL_VIGILANCIA = ("exp_vigilar_gasto",)
 

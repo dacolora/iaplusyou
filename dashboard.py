@@ -4580,7 +4580,7 @@ def cambiar_estado_ad(cliente, ad_id):
         # Los tres niveles se operan con el mismo lock que el worker de Meta.
         ids = entry.get("meta_ids") or {}
         if nuevo_estado == "ACTIVE":
-            # PND-319: antes de encender, la moneda y su unidad cuadran con la cuenta y el diario guardado en Meta es el
+            # PND-322: antes de encender, la moneda y su unidad cuadran con la cuenta y el diario guardado en Meta es el
             # de la ficha (los dos anuncios sueltos de Forja quedaron con 2 000 000 COP al día por 20 000).
             moneda = entry.get("moneda") or (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
             lanzador.comprobar_moneda(lanzador._cuenta_meta(creds), moneda)

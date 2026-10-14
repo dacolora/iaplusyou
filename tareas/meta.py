@@ -35,7 +35,7 @@ from tareas import al_interrumpir, registrar
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# Divisas que Meta recibe sin decimales (offset 1): la tabla oficial vive en `monedas_meta` (PND-319: la lista
+# Divisas que Meta recibe sin decimales (offset 1): la tabla oficial vive en `monedas_meta` (PND-322: la lista
 # escrita aquí de memoria no tenía el COP y los presupuestos en pesos colombianos salían 100 veces más altos).
 MONEDAS_SIN_DECIMALES = monedas_meta.SIN_DECIMALES
 

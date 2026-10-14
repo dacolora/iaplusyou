@@ -57,7 +57,7 @@ def test_exp_probar_pide_el_minimo_en_coronas_si_la_cuenta_factura_en_nok(app, b
 def test_el_conjunto_de_meta_apunta_a_noruega_y_a_suecia(base_temporal, monkeypatch):
     import experimentos as ex
     import lanzador
-    meta = MetaFalsa(moneda="NOK")   # PND-319: la cuenta factura en la moneda del experimento
+    meta = MetaFalsa(moneda="NOK")   # PND-322: la cuenta factura en la moneda del experimento
     campaign, adset, creative, ad, insights, auth = meta.modulos()
     for nombre, modulo in (("meta_campaign", campaign), ("meta_adset", adset), ("meta_creative", creative),
                            ("meta_ad", ad), ("meta_insights", insights), ("meta_auth", auth)):

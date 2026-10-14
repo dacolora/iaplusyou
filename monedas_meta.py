@@ -4,7 +4,7 @@ Meta recibe presupuestos y topes en la unidad mínima de la moneda de la CUENTA 
 con offset 100 (USD, EUR, MXN, SEK…) y la moneda entera en las de offset 1 (COP, CLP, JPY…). Fuente: la tabla oficial
 https://developers.facebook.com/docs/marketing-api/currencies, consultada el 2026-10-13.
 
-Por qué existe (PND-319, 2026-10-13): hasta ese día Creatv tenía una lista escrita de memoria, sin el peso colombiano,
+Por qué existe (PND-322, 2026-10-13): hasta ese día Creatv tenía una lista escrita de memoria, sin el peso colombiano,
 y mandó los presupuestos en COP 100 veces más altos (4 000 COP al día salían como 400 000). `lanzador`, `tareas.meta`,
 `presupuesto_experimentos` y `meta_rendimiento.sync` importan de aquí; `tests/test_monedas_meta.py` compara la tabla
 con la de Meta y `static/presupuesto_exp.js` repite las monedas en enteros (una prueba exige que coincidan).
@@ -30,7 +30,7 @@ class MonedaNoSoportada(ValueError):
 
 def factor(moneda):
     """Cuántas unidades de Meta tiene una unidad de la moneda: 1 (offset 1) o 100 (offset 100). Una moneda fuera de
-    la tabla lanza `MonedaNoSoportada`: adivinar la unidad es justo el error que costó PND-319."""
+    la tabla lanza `MonedaNoSoportada`: adivinar la unidad es justo el error que costó PND-322."""
     m = (moneda or "").strip().upper()
     if m in SIN_DECIMALES:
         return 1

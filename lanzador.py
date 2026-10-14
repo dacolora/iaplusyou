@@ -52,20 +52,20 @@ _SNAP_DESDE_INSIGHTS = {"impresiones": "impresiones", "alcance": "alcance", "fre
 
 def centavos(monto, moneda):
     """El monto como lo recibe Meta: en su unidad según la tabla oficial (`monedas_meta`): centavos para USD o SEK, la
-    moneda entera para COP, CLP o JPY. Se llama así por historia: en COP NO son centavos (PND-319: hasta el
+    moneda entera para COP, CLP o JPY. Se llama así por historia: en COP NO son centavos (PND-322: hasta el
     2026-10-13 se multiplicaba por 100 y 4 000 COP al día salían como 400 000). Una moneda fuera de la tabla de Meta
     lanza `monedas_meta.MonedaNoSoportada`."""
     return monedas_meta.a_unidad_meta(monto, moneda)
 
 
-# PND-319: cuántas veces puede diferir nuestro mínimo diario (≈ US$ 1 en la moneda, `PRESUPUESTO_MINIMO_DIARIO`) del
+# PND-322: cuántas veces puede diferir nuestro mínimo diario (≈ US$ 1 en la moneda, `PRESUPUESTO_MINIMO_DIARIO`) del
 # que Meta dice para la cuenta antes de sospechar de la unidad. Un error de unidad da ×100; una diferencia de precio
 # entre países, a lo sumo ×3.
 _HOLGURA_UNIDAD = 10
 
 
 class PresupuestoNoCoincide(ValueError):
-    """Meta guardó un monto distinto al enviado, o la moneda o su unidad no cuadran con la cuenta (PND-319)."""
+    """Meta guardó un monto distinto al enviado, o la moneda o su unidad no cuadran con la cuenta (PND-322)."""
 
 
 def _entero(valor):
@@ -88,7 +88,7 @@ def _cuenta_meta(creds):
 
 
 def comprobar_moneda(cuenta, moneda):
-    """Antes de mandarle a Meta un presupuesto o un tope (PND-319): la cuenta factura en la moneda del experimento y
+    """Antes de mandarle a Meta un presupuesto o un tope (PND-322): la cuenta factura en la moneda del experimento y
     la unidad de `monedas_meta` cuadra con el mínimo diario que Meta dice para ESA cuenta, que es un dato de Meta y
     no nuestro. Con la lista vieja, 4 000 COP salían como 400 000 contra un mínimo de 3 322: ×120, y aquí se frena.
     Lanza `PresupuestoNoCoincide`; no se manda ningún monto sin pasar por aquí."""
@@ -114,7 +114,7 @@ def comprobar_moneda(cuenta, moneda):
 
 def _dias_que_alcanza(ex):
     """Días de pauta que paga el tope al diario de todos los países: nunca más que los del experimento, al menos 1
-    (PND-319). Con el reparto de «Nuevo experimento» (diario × días ≤ total) da los mismos días; con un tope menor que
+    (PND-322). Con el reparto de «Nuevo experimento» (diario × días ≤ total) da los mismos días; con un tope menor que
     un día de pauta o un experimento viejo armado a mano, menos."""
     dias = int(ex.get("dias") or 7)
     tope = float(ex.get("tope_total") or 0)
@@ -129,7 +129,7 @@ def _tope_y_dias_meta(ex, cuenta, moneda):
     Meta lo acepta: desde el `min_campaign_group_spend_cap` de la cuenta (si no se pudo leer, desde
     `minimo_tope_campana`). Si no lo acepta, ningún freno de Meta respetaría el tope; entonces los conjuntos se crean
     con la fecha de fin a la que alcanza el tope con el diario de todos los países (al menos un día), y Meta los
-    apaga solo (PND-319: los experimentos 3 y 5 de colorado_forja gastaron 24 y 2,5 veces su tope)."""
+    apaga solo (PND-322: los experimentos 3 y 5 de colorado_forja gastaron 24 y 2,5 veces su tope)."""
     dias = int(ex["dias"] or 7)
     tope = float(ex["tope_total"] or 0)
     if tope <= 0:
@@ -391,7 +391,7 @@ def _conjunto_de(cliente, ex, p, plat, n_plataformas, campaign_id, promoted_obje
     guardado si ya existe — así un reintento no lo duplica — o uno nuevo,
     en pausa, guardado apenas Meta lo devuelve. En apps el presupuesto diario
     del país se reparte en partes iguales entre sus plataformas (no se
-    duplica) y el conjunto queda en `paises[i]["meta_adsets"][plat]`. PND-319: `dias_meta` (la fecha de fin, que
+    duplica) y el conjunto queda en `paises[i]["meta_adsets"][plat]`. PND-322: `dias_meta` (la fecha de fin, que
     puede ser menor que la del experimento cuando Meta no acepta el tope) y, nuevo o reusado, el diario se lee de
     vuelta en Meta antes de seguir (`_confirmar_presupuesto`)."""
     experimento_id = ex["id"]
@@ -469,7 +469,7 @@ def lanzar(cliente, experimento_id, on_etapa=None, soltar=True):
 
     def _correr(creds):
         etapa(ETAPAS_LANZAR[0][0])
-        # PND-319: la moneda y su unidad se comprueban contra la cuenta ANTES de mandar ningún monto.
+        # PND-322: la moneda y su unidad se comprueban contra la cuenta ANTES de mandar ningún monto.
         cuenta = _cuenta_meta(creds)
         comprobar_moneda(cuenta, moneda)
         cap, dias_meta = _tope_y_dias_meta(ex, cuenta, moneda)
@@ -589,7 +589,7 @@ def _preparar_fin_primera_activacion(cliente, ex):
     def reservar(extra):
         previo = extra.get("fin_primera_activacion")
         if not previo or int(previo) < ahora + _MARGEN_FIN_RESERVADO:
-            # PND-319: los días que paga el tope, no los del experimento (antes, activar devolvía a Meta los 7 días y
+            # PND-322: los días que paga el tope, no los del experimento (antes, activar devolvía a Meta los 7 días y
             # deshacía la fecha de fin acortada al lanzar).
             extra["fin_primera_activacion"] = ahora + _dias_que_alcanza(actual) * 86400
         return extra
@@ -655,7 +655,7 @@ def cambiar_estado(cliente, experimento_id, status, pais=None, desde_lanzamiento
             else:
                 experimentos.actualizar_pieza(cliente, pz["id"], estado=local)
 
-    # PND-319: la marca «activando» cubre desde antes de tocar Meta hasta que el estado ya dice «corriendo»; mientras
+    # PND-322: la marca «activando» cubre desde antes de tocar Meta hasta que el estado ya dice «corriendo»; mientras
     # tanto la vigilancia no confunde un experimento a medio activar con uno pausado que sigue activo en Meta.
     if status == "ACTIVE":
         _marcar_activando(cliente, experimento_id, True)
@@ -690,7 +690,7 @@ def cambiar_estado(cliente, experimento_id, status, pais=None, desde_lanzamiento
 
 
 def _confirmar_antes_de_activar(creds, ex, pais=None):
-    """PND-319: antes de ENCENDER, la cuenta pasa `comprobar_moneda` y cada conjunto que se va a activar tiene en Meta
+    """PND-322: antes de ENCENDER, la cuenta pasa `comprobar_moneda` y cada conjunto que se va a activar tiene en Meta
     el diario que se ve en pantalla. Uno lanzado antes del arreglo, con 100 veces más, no se enciende: queda en pausa
     (el país entero) y sale el aviso."""
     moneda = ex["moneda"] or "USD"
@@ -712,7 +712,7 @@ def _confirmar_antes_de_activar(creds, ex, pais=None):
                 _confirmar_presupuesto(adset_id, esperado, pausar=ids)
 
 
-# PND-319: la vigilancia pausa cuando un conjunto gasta hoy más que este múltiplo de SU diario. Meta puede pasarse
+# PND-322: la vigilancia pausa cuando un conjunto gasta hoy más que este múltiplo de SU diario. Meta puede pasarse
 # hasta un 75 % un día; el doble ya no es un día bueno, es un monto mal puesto. Se mide conjunto por conjunto: contra
 # la suma de los países, un solo país activo con un diario inflado tardaba horas en frenar (revisión de gasto).
 RITMO_MAXIMO = 2.0
@@ -737,7 +737,7 @@ def _spend(respuesta):
 
 def _meta_directo(cliente, metodo, edge, params=None, payload=None):
     """Llamada a Meta con la llave del proyecto, SIN la configuración global de `meta_ads.auth` ni su candado: la
-    vigilancia no espera a un lanzamiento que sube videos (revisión de gasto de PND-319). Nunca deja la llave en un
+    vigilancia no espera a un lanzamiento que sube videos (revisión de gasto de PND-322). Nunca deja la llave en un
     error. Las pruebas la reemplazan por el Meta falso."""
     token = meta_conexion.credenciales_ads(cliente)["token"]
     url = f"{meta_auth.BASE_URL}/{edge}"
@@ -789,7 +789,7 @@ def _pausar_campana_ya(cliente, ex):
 
 def _repausar_si_sigue_activo(cliente, ex):
     """Un experimento pausado (o en error) en Creatv cuya campaña sigue ACTIVA en Meta —una pausa que falló a medias—
-    se vuelve a pausar entero (PND-319, revisión de gasto). Solo lee el estado de la campaña: un GET. No toca uno que
+    se vuelve a pausar entero (PND-322, revisión de gasto). Solo lee el estado de la campaña: un GET. No toca uno que
     alguien está activando en este momento (`_activando`)."""
     estado = _meta_directo(cliente, "GET", ex["meta_campaign_id"], params={"fields": "effective_status"}).get(
         "effective_status")
@@ -816,7 +816,7 @@ def _diario_por_conjunto(ex):
 
 
 def vigilar_gasto(cliente, experimento_id):
-    """PND-319: lee en Meta lo que de verdad gastó la campaña en total y lo que gastó hoy cada conjunto, y la pausa
+    """PND-322: lee en Meta lo que de verdad gastó la campaña en total y lo que gastó hoy cada conjunto, y la pausa
     entera si llegó al tope o si un conjunto va hoy por más de `RITMO_MAXIMO` veces su diario. Usa la llave del
     proyecto directo (`_meta_directo`): no espera el candado de un lanzamiento, y corre en su propio carril del worker
     cada 10 min (`exp_vigilar_gasto`). Devuelve el motivo si pausó."""
@@ -1051,7 +1051,7 @@ def cambiar_presupuesto_pais(cliente, experimento_id, pais, presupuesto_dia):
     centavos_antes = centavos(p.get("presupuesto_dia") or 0, moneda) // len(ids)
 
     def _correr(creds):
-        comprobar_moneda(_cuenta_meta(creds), moneda)   # PND-319: ningún monto sin comprobar la unidad
+        comprobar_moneda(_cuenta_meta(creds), moneda)   # PND-322: ningún monto sin comprobar la unidad
         cambiados = []
         try:
             for adset_id in ids:
@@ -1227,7 +1227,7 @@ def activar_pieza(cliente, ep_id):
                 meta_adset.actualizar_estado(adset_id, "ACTIVE")
         meta_ad.actualizar_estado(pz["meta_ad_id"], "ACTIVE")
 
-    _marcar_activando(cliente, ex["id"], True)   # PND-319: hasta que el estado ya dice «corriendo» (ver cambiar_estado)
+    _marcar_activando(cliente, ex["id"], True)   # PND-322: hasta que el estado ya dice «corriendo» (ver cambiar_estado)
     try:
         _con_credenciales(cliente, _correr)
         experimentos.actualizar_pieza(cliente, ep_id, estado="activo")

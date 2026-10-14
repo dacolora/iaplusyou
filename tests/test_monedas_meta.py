@@ -1,4 +1,4 @@
-"""PND-319 (2026-10-13): los presupuestos en COP salían hacia Meta 100 veces más altos.
+"""PND-322 (2026-10-13): los presupuestos en COP salían hacia Meta 100 veces más altos.
 
 Estas pruebas comparan con la tabla OFICIAL de Meta (no con nuestra propia cuenta, que es lo que dejó pasar el error) y
 fijan los cuatro frenos: la moneda y su unidad se comprueban contra la cuenta antes de mandar un monto, cada

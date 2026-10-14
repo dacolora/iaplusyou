@@ -22,7 +22,7 @@ import monedas_meta
 PRESUPUESTO_MINIMO_DIARIO = {"USD": 1, "COP": 4000, "MXN": 20, "EUR": 1, "BRL": 5, "PEN": 4, "CLP": 1000, "ARS": 1000,
                               "NOK": 15, "SEK": 15}
 # Monedas sin decimales para Meta (offset 1): la tabla oficial de `monedas_meta` (lo que `lanzador.centavos` manda sin
-# multiplicar por 100). Hasta PND-319 esta lista se escribía a mano aquí y le faltaba el COP.
+# multiplicar por 100). Hasta PND-322 esta lista se escribía a mano aquí y le faltaba el COP.
 SIN_DECIMALES = set(monedas_meta.SIN_DECIMALES)
 # Monedas en las que el presupuesto se reparte en PESOS ENTEROS: las sin decimales y las de valor tan chico que un
 # centavo no dice nada (ARS, cuyo mínimo diario ya es de miles; el COP ya va sin decimales en Meta). Un peso entero

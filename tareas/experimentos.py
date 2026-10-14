@@ -161,7 +161,7 @@ def exp_refrescar_todos(tarea):
 
 @registrar("exp_vigilar_gasto")
 def exp_vigilar_gasto(tarea):
-    """Periódica (10 min, PND-319, en su propio carril del worker): lee en Meta el gasto de cada experimento que puede
+    """Periódica (10 min, PND-322, en su propio carril del worker): lee en Meta el gasto de cada experimento que puede
     gastar (`corriendo` y `decidido`) y lo pausa si llegó a su tope o si hoy gasta más del doble de su diario; uno
     `pausado` o en `error` cuya campaña siga ACTIVA en Meta se vuelve a pausar (`lanzador.vigilar_gasto`). Un
     experimento que no se pudo leer no frena a los demás: queda UN aviso en su historia (no uno cada 10 min)."""

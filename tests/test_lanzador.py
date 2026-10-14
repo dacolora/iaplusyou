@@ -6,7 +6,7 @@ from tests.test_experimentos_db import PAISES, _pieza
 
 
 class MetaFalsa:
-    """Sustituye los módulos meta_ads.* usados por lanzador con contadores. PND-319: también contesta lo que lanzador
+    """Sustituye los módulos meta_ads.* usados por lanzador con contadores. PND-322: también contesta lo que lanzador
     lee de vuelta en Meta: la cuenta (`cuenta`: moneda y mínimos, en la unidad de Meta), el diario guardado de cada
     conjunto, el tope de cada campaña y el gasto de cada campaña (`gastos[campaign_id] = (total, hoy)`)."""
     def __init__(self, fallar_en=None, moneda="COP"):
@@ -221,7 +221,7 @@ def test_app_el_anuncio_lleva_la_url_de_tienda_sin_utm(entorno_app):
 
 
 def _cuenta_en(meta, moneda):
-    """PND-319: la cuenta falsa factura en la moneda del experimento, con un mínimo diario de Meta realista (≈ US$ 1
+    """PND-322: la cuenta falsa factura en la moneda del experimento, con un mínimo diario de Meta realista (≈ US$ 1
     en su unidad: COP 3 322 visto en colorado_forja; CLP ≈ 900; USD 100 centavos)."""
     meta.cuenta = {"currency": moneda, "min_daily_budget": {"COP": 3322, "CLP": 900, "USD": 100}[moneda],
                    "min_campaign_group_spend_cap": {"COP": "200000", "CLP": "50000", "USD": "5000"}[moneda]}
@@ -567,7 +567,7 @@ def test_app_activar_pieza_android_reactiva_solo_su_conjunto(entorno_app):
 
 def test_centavos_y_url(base_temporal):
     import lanzador
-    # PND-319: Meta recibe el COP sin decimales (tabla oficial): 20 000 COP son 20 000, no 2 000 000.
+    # PND-322: Meta recibe el COP sin decimales (tabla oficial): 20 000 COP son 20 000, no 2 000 000.
     assert lanzador.centavos(20000, "COP") == 20000 and lanzador.centavos(1000, "CLP") == 1000
     assert lanzador.centavos(14.28, "USD") == 1428 and lanzador.centavos(150, "SEK") == 15000
     assert lanzador.url_destino("https://t.co/p", 7) == "https://t.co/p?utm_source=creatv&utm_medium=meta&utm_content=7"
@@ -580,7 +580,7 @@ def test_lanzar_crea_campana_conjuntos_y_anuncios(entorno):
     lz.lanzar("acme", eid, on_etapa=etapas.append)
     tipos = [t for t, _ in meta.llamadas]
     assert tipos.count("campaign") == 1 and tipos.count("adset") == 2 and tipos.count("ad") == 3
-    assert meta.llamadas[0][1]["spend_cap"] == 500000   # 500 000 COP, en pesos enteros (PND-319)
+    assert meta.llamadas[0][1]["spend_cap"] == 500000   # 500 000 COP, en pesos enteros (PND-322)
     adsets = [kw for t, kw in meta.llamadas if t == "adset"]
     assert adsets[0]["targeting"]["geo_locations"]["countries"] == ["CO"] and adsets[0]["centavos"] == 20000
     assert adsets[1]["targeting"]["geo_locations"]["countries"] == ["MX"] and adsets[1]["centavos"] == 150
@@ -1612,7 +1612,7 @@ def test_pnd113_fin_desde_primera_activacion_sin_extender_al_reanudar(entorno, m
     ahora = 1800000000
     monkeypatch.setattr(time, 'time', lambda: ahora)
     def llamar(metodo, oid, payload=None, params=None, dry_run=False):
-        if metodo == 'GET':   # PND-319: lecturas de vuelta
+        if metodo == 'GET':   # PND-322: lecturas de vuelta
             return meta._llamar(metodo, oid, payload, params)
         return meta._id('fin', metodo=metodo, oid=oid, payload=payload)
     monkeypatch.setattr(lz.meta_auth, 'llamar', llamar, raising=False)
@@ -1650,7 +1650,7 @@ def test_pnd113_apps_fin_en_cada_conjunto_de_tienda_sin_extender_al_reanudar(ent
     monkeypatch.setattr(time, 'time', lambda: ahora)
 
     def llamar(metodo, oid, payload=None, params=None, dry_run=False):
-        if metodo == 'GET':   # PND-319: lecturas de vuelta
+        if metodo == 'GET':   # PND-322: lecturas de vuelta
             return meta._llamar(metodo, oid, payload, params)
         return meta._id('fin', metodo=metodo, oid=oid, payload=payload)
     monkeypatch.setattr(lz.meta_auth, 'llamar', llamar, raising=False)
@@ -1680,7 +1680,7 @@ def test_pnd113_fallo_fecha_no_activa_y_reintento_conserva_fin(entorno, monkeypa
     meta.llamadas.clear()
     vistos = []
     def fallar(metodo, oid, payload=None, params=None, dry_run=False):
-        if metodo == 'GET':   # PND-319: lecturas de vuelta
+        if metodo == 'GET':   # PND-322: lecturas de vuelta
             return meta._llamar(metodo, oid, payload, params)
         vistos.append(payload)
         raise RuntimeError('fecha rechazada')
@@ -1705,7 +1705,7 @@ def test_pnd113_experimento_que_ya_corre_sin_activado_en_no_mueve_el_fin(entorno
     ex.actualizar('acme', eid, estado=estado)
     assert 'activado_en' not in (ex.obtener('acme', eid).get('extra') or {})
     def llamar(metodo, oid, payload=None, params=None, dry_run=False):
-        if metodo == 'GET':   # PND-319: lecturas de vuelta
+        if metodo == 'GET':   # PND-322: lecturas de vuelta
             return meta._llamar(metodo, oid, payload, params)
         return meta._id('fin', metodo=metodo, oid=oid, payload=payload)
     monkeypatch.setattr(lz.meta_auth, 'llamar', llamar, raising=False)
@@ -1728,7 +1728,7 @@ def test_pnd113_reintento_tras_pasar_la_reserva_reenvia_un_fin_futuro(entorno, m
     ahora = 1800000000
     monkeypatch.setattr(time, 'time', lambda: ahora)
     def fallar(metodo, oid, payload=None, params=None, dry_run=False):
-        if metodo == 'GET':   # PND-319: lecturas de vuelta
+        if metodo == 'GET':   # PND-322: lecturas de vuelta
             return meta._llamar(metodo, oid, payload, params)
         raise RuntimeError('fecha rechazada')
     monkeypatch.setattr(lz.meta_auth, 'llamar', fallar, raising=False)
@@ -1738,7 +1738,7 @@ def test_pnd113_reintento_tras_pasar_la_reserva_reenvia_un_fin_futuro(entorno, m
 
     ahora += 8 * 86400  # el reintento llega después del plazo reservado
     def llamar(metodo, oid, payload=None, params=None, dry_run=False):
-        if metodo == 'GET':   # PND-319: lecturas de vuelta
+        if metodo == 'GET':   # PND-322: lecturas de vuelta
             return meta._llamar(metodo, oid, payload, params)
         return meta._id('fin', metodo=metodo, oid=oid, payload=payload)
     monkeypatch.setattr(lz.meta_auth, 'llamar', llamar, raising=False)
@@ -1757,7 +1757,7 @@ def test_pnd113_reserva_a_menos_de_una_hora_tambien_se_recalcula(entorno, monkey
     monkeypatch.setattr(time, 'time', lambda: ahora)
     ex.actualizar_extra('acme', eid, lambda e: {**e, 'fin_primera_activacion': ahora + 1800})
     def llamar(metodo, oid, payload=None, params=None, dry_run=False):
-        if metodo == 'GET':   # PND-319: lecturas de vuelta
+        if metodo == 'GET':   # PND-322: lecturas de vuelta
             return meta._llamar(metodo, oid, payload, params)
         return meta._id('fin', metodo=metodo, oid=oid, payload=payload)
     monkeypatch.setattr(lz.meta_auth, 'llamar', llamar, raising=False)
