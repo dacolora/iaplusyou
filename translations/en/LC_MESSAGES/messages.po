@@ -3371,8 +3371,8 @@ msgstr[1] "Copycoders library: active in this project (%(num)s ads)."
 msgid "Biblioteca de referentes."
 msgstr "Reference library."
 
-msgid "Bienvenido a la"
-msgstr "Welcome to the"
+msgid "Bienvenido a la Vía Láctea de los anuncios. Destaca y vende."
+msgstr "Welcome to the Milky Way of ads. Stand out and sell."
 
 msgid "Bitácora"
 msgstr "Activity log"
@@ -18884,9 +18884,6 @@ msgstr "One single place per video: if you name several rooms, the model walks t
 msgid "Un sprint es el plan de contenido de un mes para todos tus países: pones el mes y en su tablero armas una campaña por persona y producto con los anuncios que va a seguir. Se trabaja en inglés; cada país e idioma se adapta después en la edición final. Nada se genera sin tu aprobación y sin ver el costo antes."
 msgstr "A sprint is the content plan for one month across all your countries: you set the month and build a campaign per persona and product with the ads it will follow, in its board. It's worked out in English; each country and language is adapted afterward in final edition. Nothing is generated without your approval and without seeing the cost first."
 
-msgid "Un universo infinito de anuncios que destacan y venden."
-msgstr "An infinite universe of ads that stand out and sell."
-
 msgid "Un usuario con rol 'cliente' necesita un proyecto asignado."
 msgstr "A user with the 'cliente' role needs an assigned project."
 
@@ -19643,9 +19640,6 @@ msgstr "Generate again from the study."
 
 msgid "Vuelves a conectar cada 60 días."
 msgstr "You reconnect every 60 days."
-
-msgid "Vía Láctea de los anuncios."
-msgstr "Milky Way of ads."
 
 #, python-format
 msgid "WAL: %(peso)s"
@@ -22509,6 +22503,9 @@ msgstr "per Triple Whale"
 msgid "seleccionando"
 msgstr "selecting"
 
+msgid "si puedes volar?"
+msgstr "you can Fly?"
+
 msgid "si una tarea espera más de 10 min para empezar, el worker no está corriendo"
 msgstr "if a task waits more than 10 min to start, the worker is not running"
 
@@ -23337,6 +23334,9 @@ msgstr "Forgot your password?"
 #, python-format
 msgid "¿Pausar «%(nombre)s» en Meta? Deja de gastar hasta que lo actives."
 msgstr "Pause “%(nombre)s” on Meta? It stops spending until you activate it."
+
+msgid "¿Por qué correr"
+msgstr "Why Run when"
 
 msgid "¿Por qué no sirve?"
 msgstr "Why doesn't it work?"
