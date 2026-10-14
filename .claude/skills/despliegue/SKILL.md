@@ -88,3 +88,9 @@ análisis de happyflops lo dejó en error un minuto, sin gastar nada, hasta corr
 - **nginx**: `deploy/nginx-creatv.conf` es un EJEMPLO; la configuración real vive en el VPS (`/etc/nginx/…`, con los
   certificados de certbot). Compárala antes de copiar nada y prueba con `sudo nginx -t` antes de recargar. Los estáticos
   con `?v=` se cachean un año: cambiar el `?v=` es lo que obliga al navegador a pedir el archivo nuevo.
+
+## Dominio galadsy.com (2026-10-14)
+
+`galadsy.com` convive con `app.creatvmachine.com`: `PLATAFORMA_HOSTS_EXTRA` (separados por comas) amplía los Host que
+`dashboard._verificar_host` acepta sin tocar `PLATAFORMA_URL`, de donde siguen saliendo los enlaces por correo. Los pasos
+del servidor y del DNS, en orden para que nadie vea un 404, están en `docs/despliegue-dominio-galadsy.md`.

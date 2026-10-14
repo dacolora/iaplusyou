@@ -420,17 +420,27 @@ def _host_plataforma():
     return (urlsplit(fijo).hostname or "").lower() or None
 
 
+def _hosts_extra():
+    """Dominios que también se atienden además del de PLATAFORMA_URL
+    (PLATAFORMA_HOSTS_EXTRA, separados por comas; p. ej. «galadsy.com,www.galadsy.com»
+    mientras el dominio nuevo convive con el viejo, 2026-10-14). Solo amplían qué
+    Host se acepta: los enlaces por correo siguen saliendo de PLATAFORMA_URL."""
+    crudo = os.environ.get("PLATAFORMA_HOSTS_EXTRA") or ""
+    return frozenset(h.strip().lower() for h in crudo.split(",") if h.strip())
+
+
 @app.before_request
 def _verificar_host():
-    """Con PLATAFORMA_URL definida, solo se atiende ese host (y localhost para
-    probar en la propia máquina): una petición con otra cabecera Host —la que
-    un atacante usaría para que un enlace por correo apunte a su dominio— es
-    un 404. Va primero que los demás guards. Se salta con app.testing."""
+    """Con PLATAFORMA_URL definida, solo se atiende ese host, los de
+    PLATAFORMA_HOSTS_EXTRA y localhost (para probar en la propia máquina): una
+    petición con otra cabecera Host —la que un atacante usaría para que un
+    enlace por correo apunte a su dominio— es un 404. Va primero que los demás
+    guards. Se salta con app.testing (las pruebas la llaman directo)."""
     esperado = _host_plataforma()
     if esperado is None or app.testing:
         return None
     host = (urlsplit(f"//{request.host}").hostname or "").lower()
-    if host == esperado or host in HOSTS_LOCALES:
+    if host == esperado or host in HOSTS_LOCALES or host in _hosts_extra():
         return None
     abort(404)
 
@@ -1139,7 +1149,7 @@ def index():
 # str(get_locale()). El español es idéntico al que había antes de esta tarea.
 _PRIVACIDAD_HTML = {
     "es": """
-<p>CREATV Galadsy (creatvmachine.com) es una plataforma para que empresas creen contenido con inteligencia
+<p>CREATV Galadsy (galadsy.com) es una plataforma para que empresas creen contenido con inteligencia
 artificial y lo publiquen o anuncien en sus propias redes sociales. Esta política explica qué datos tratamos
 cuando conectas tu cuenta de Meta (Facebook e Instagram) y cómo los protegemos.</p>
 <h3>Responsable</h3>
@@ -1182,7 +1192,7 @@ Cumplimos la Ley 1581 de 2012 de protección de datos personales de Colombia y l
 de Meta.</p>
 """,
     "en": """
-<p>CREATV Galadsy (creatvmachine.com) is a platform for businesses to create content with artificial
+<p>CREATV Galadsy (galadsy.com) is a platform for businesses to create content with artificial
 intelligence and publish or advertise it on their own social media accounts. This policy explains what data we
 process when you connect your Meta account (Facebook and Instagram) and how we protect it.</p>
 <h3>Data controller</h3>
