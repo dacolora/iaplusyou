@@ -2893,6 +2893,9 @@ msgstr "Yearly · %(precio)s a year"
 msgid "Anulada"
 msgstr "Voided"
 
+msgid "Anulada antes de acreditar"
+msgstr "Voided before crediting"
+
 msgid "Anulado"
 msgstr "Voided"
 
@@ -3118,6 +3121,9 @@ msgstr[1] "Learning limited in %(n)s accounts"
 
 msgid "Aprendizajes del proyecto"
 msgstr "Project learnings"
+
+msgid "Aprobación de un pago anulado"
+msgstr "Approval of a voided payment"
 
 msgid "Aprobada"
 msgstr "Approved"
@@ -11219,6 +11225,10 @@ msgstr "A top-up goes from US$ %(min)s to US$ %(max)s, in whole dollars."
 #, python-format
 msgid "La recarga «%(ref)s» de %(cliente)s estaba pagada en Wompi (transacción %(tx)s), pero su evento no llegó o no se aceptó. La encontramos buscando su referencia y la acreditamos. Revisa en el panel de Wompi la URL de eventos y que el secreto de eventos sea el del servidor."
 msgstr "The top-up «%(ref)s» of %(cliente)s was paid in Wompi (transaction %(tx)s), but its event did not arrive or was not accepted. We found it by searching its reference and credited it. In the Wompi dashboard, check the events URL and that the events secret is the one on the server."
+
+#, python-format
+msgid "La recarga «%(ref)s» de %(cliente)s quedó anulada (Wompi anuló su pago) y Wompi aprobó otra transacción (%(tx)s) con la misma referencia. No la acreditamos sola: revísala en el panel de Wompi y devuélvela o acredítala a mano."
+msgstr "Top-up «%(ref)s» for %(cliente)s was voided (Wompi voided its payment) and Wompi approved another transaction (%(tx)s) with the same reference. We did not credit it automatically: check it in the Wompi dashboard and refund it or credit it manually."
 
 #, python-format
 msgid "La recarga «%(ref)s» de %(cliente)s ya estaba acreditada y Wompi aprobó otra transacción (%(tx)s) con la misma referencia. No se acreditó dos veces: revísalo en el panel de Wompi y devuélvelo o acredítalo a mano."
@@ -20285,8 +20295,19 @@ msgstr "Whisper · %(s)s s of audio"
 msgid "Wompi abre su propia ventana para los datos de la tarjeta: el número nunca pasa por Creatv. Visa, Mastercard o American Express, con código de seguridad."
 msgstr "Wompi opens its own window for the card details: the number never goes through Creatv. Visa, Mastercard or American Express, with a security code."
 
+#, python-format
+msgid "Wompi anuló el pago de la recarga %(ref)s de %(cliente)s (%(monto)s) antes de que lo acreditáramos: su saldo no cambió y una aprobación que llegue después no lo suma."
+msgstr "Wompi voided the payment for top-up %(ref)s for %(cliente)s (%(monto)s) before we credited it: its balance did not change, and an approval that arrives later will not add it."
+
+msgid "Wompi anuló este pago antes de que lo sumáramos: tu saldo no cambió."
+msgstr "Wompi voided this payment before we added it: your balance did not change."
+
 msgid "Wompi anuló este pago y lo descontamos de tu saldo."
 msgstr "Wompi voided this payment and we deducted it from your balance."
+
+#, python-format
+msgid "Wompi anuló la recarga %(ref)s de %(cliente)s (transacción %(tx)s) y su evento no llegó: la encontramos revisando las recargas aprobadas y descontamos %(monto)s de su saldo. Revisa en el panel de Wompi la URL de eventos."
+msgstr "Wompi voided top-up %(ref)s for %(cliente)s (transaction %(tx)s) and its event never arrived: we found it while reviewing approved top-ups and deducted %(monto)s from its balance. Check the events URL in the Wompi dashboard."
 
 #, python-format
 msgid "Wompi anuló la recarga %(ref)s de %(cliente)s: descontamos %(monto)s de su saldo."

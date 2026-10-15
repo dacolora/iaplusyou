@@ -165,6 +165,8 @@ def texto_estado(recarga, tx_id=None, visto=None):
         return gettext("El link de pago venció sin pagarse.")
     if estado == "anulada":
         if es_wompi:
+            if not recargas.fue_acreditada(recarga["id"]):   # PND-328: Wompi la anuló antes de que se sumara
+                return gettext("Wompi anuló este pago antes de que lo sumáramos: tu saldo no cambió.")
             return gettext("Wompi anuló este pago y lo descontamos de tu saldo.")
         return gettext("Bold anuló este pago y lo descontamos de tu saldo.")
     return gettext("Verificando tu pago…")

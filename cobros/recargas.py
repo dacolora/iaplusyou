@@ -70,6 +70,11 @@ _ORDEN_RESCATE = {"APPROVED": 0, "PENDING": 1, "DECLINED": 2, "ERROR": 2}   # VO
 BUSQUEDAS_POR_VUELTA = 30
 CLAVE_BUSQUEDA = "wompi:busqueda:{recarga}"   # kv: cuándo se buscó por última vez (único escritor: este módulo)
 MAX_OTRAS_APROBADAS = 3                        # otras aprobadas de la misma referencia que se leen para avisar
+# PND-304 (b) (2026-10-15): una recarga APROBADA que Wompi anula después solo se sabía por su evento firmado. La
+# periódica relee por id las aprobadas de estos días (`revisar_aprobadas`), con su cupo y espaciadas por edad.
+DIAS_REVISAR_APROBADAS = 30
+REVISIONES_POR_VUELTA = 20
+CLAVE_REVISION = "wompi:revision:{recarga}"   # kv: cuándo se revisó por última vez (único escritor: este módulo)
 _reloj = time.monotonic
 _SIN_FIRMA = {"desde": None, "n": 0, "avisado": False}          # Bold
 _SIN_FIRMA_WOMPI = {"desde": None, "n": 0, "avisado": False}    # Wompi: cupo aparte
@@ -458,10 +463,17 @@ def _por_referencia_wompi(con, ref):
 def _aplicar_wompi(con, fila, tx):
     """Aplica una transacción de Wompi a su recarga, con el candado ya tomado
     (antes de leer `fila`). Devuelve el resultado: `acreditada`, `duplicada`,
-    `rechazada`, `anulada`, `pendiente`, `ignorada` o `no_cuadra` (no se toca
-    nada). APPROVED acredita los USD de la recarga (no los pesos) desde
-    `pendiente`, `rechazada` o `expirada`, una sola vez. Una transacción ya
-    guardada en OTRA recarga es `no_cuadra` (quien llama avisa al admin)."""
+    `rechazada`, `anulada`, `anulada_sin_acreditar`, `ya_anulada`, `otro_pago`,
+    `pendiente`, `ignorada` o `no_cuadra` (no se toca nada). APPROVED acredita
+    los USD de la recarga (no los pesos) desde `pendiente`, `rechazada` o
+    `expirada`, una sola vez. Una transacción ya guardada en OTRA recarga es
+    `no_cuadra` (quien llama avisa al admin).
+
+    PND-328 (2026-10-15): los eventos de Wompi pueden llegar en desorden. Un
+    VOIDED de una recarga que todavía no se acreditó la deja `anulada` con esa
+    transacción y sin movimiento (no entró plata); el APPROVED de esa misma
+    transacción que llegue después (con todo firmado no se relee) mira esa
+    anulación y no acredita (`ya_anulada`)."""
     if fila is None:
         return "sin_recarga"
     if not _cuadra(fila, tx):
@@ -472,8 +484,10 @@ def _aplicar_wompi(con, fila, tx):
         return "no_cuadra"
     if status == "APPROVED":
         if fila["estado"] not in ACREDITABLES:
-            if fila["estado"] == "aprobada" and fila.get("pasarela_ref") and fila["pasarela_ref"] != tx_id:
-                return "otro_pago"   # otra transacción aprobada para una recarga ya acreditada: al admin
+            if fila["estado"] == "anulada" and fila.get("pasarela_ref") == tx_id:
+                return "ya_anulada"   # Wompi ya anuló esta transacción: su aprobación tardía no acredita
+            if fila["estado"] in ("aprobada", "anulada") and fila.get("pasarela_ref") and fila["pasarela_ref"] != tx_id:
+                return "otro_pago"   # otra transacción aprobada para una recarga ya cerrada: al admin
             return "duplicada"
         n = con.execute(r.update().where(r.c.id == rid, r.c.estado.in_(ACREDITABLES)).values(
             estado="aprobada", pasarela_ref=tx_id, moneda_pago=wompi.MONEDA,
@@ -487,6 +501,11 @@ def _aplicar_wompi(con, fila, tx):
                         .values(estado="rechazada", pasarela_ref=tx_id, actualizada_en=db.ahora())).rowcount
         return "rechazada" if n == 1 else "ignorada"
     if status == "VOIDED":
+        if fila["estado"] in ACREDITABLES:
+            # PND-328: anulada antes de acreditarse (su APPROVED no llegó o llega después). Nada que descontar.
+            n = con.execute(r.update().where(r.c.id == rid, r.c.estado.in_(ACREDITABLES)).values(
+                estado="anulada", pasarela_ref=tx_id, actualizada_en=db.ahora())).rowcount
+            return "anulada_sin_acreditar" if n == 1 else "ignorada"
         n = con.execute(r.update().where(r.c.id == rid, r.c.estado == "aprobada", r.c.pasarela_ref == tx_id)
                         .values(estado="anulada", actualizada_en=db.ahora())).rowcount
         if n != 1:
@@ -543,25 +562,42 @@ def _avisar_wompi(resultado, fila, tx):
             lambda: gettext("Wompi anuló la recarga %(ref)s de %(cliente)s: descontamos %(monto)s de su saldo.",
                             ref=referencia, cliente=cliente, monto=_monto(milesimas)),
             cliente=cliente))
+    elif resultado == "anulada_sin_acreditar":
+        cliente, milesimas, referencia = fila["cliente"], fila["milesimas"], fila["referencia"]
+        _en_segundo_plano(lambda: avisos.admin(
+            "anulacion_wompi",
+            lambda: gettext("Wompi anuló una recarga de %(cliente)s", cliente=cliente),
+            lambda: gettext("Wompi anuló el pago de la recarga %(ref)s de %(cliente)s (%(monto)s) antes de que lo "
+                            "acreditáramos: su saldo no cambió y una aprobación que llegue después no lo suma.",
+                            ref=referencia, cliente=cliente, monto=_monto(milesimas)),
+            cliente=cliente))
 
 
 def _avisar_otro_pago(fila, tx):
     """Al admin, una vez por (recarga, transacción) en este proceso: Wompi aprobó OTRA transacción para una
-    recarga ya acreditada (dos pestañas pagando el mismo checkout). No se acredita dos veces; la plata entró y
-    hay que devolverla o acreditarla a mano (revisión final 2026-10-10, como los pagos de plan)."""
+    recarga ya acreditada (dos pestañas pagando el mismo checkout) o ya anulada. No se acredita sola; la plata
+    entró y hay que devolverla o acreditarla a mano (revisión final 2026-10-10, como los pagos de plan)."""
     clave = (fila["id"], str(tx.get("id") or ""), "otro_pago")
     if clave in _AVISADOS_NO_CUADRA:
         return
     _AVISADOS_NO_CUADRA.add(clave)
     cliente, referencia, tx_id = fila["cliente"], fila["referencia"], str(tx.get("id") or "—")[:64]
-    log.warning("la recarga %s ya aprobada recibió otra transacción aprobada (%s)", fila["id"], tx_id)
+    log.warning("la recarga %s ya %s recibió otra transacción aprobada (%s)", fila["id"], fila["estado"], tx_id)
+    if fila["estado"] == "anulada":
+        def cuerpo():
+            return gettext("La recarga «%(ref)s» de %(cliente)s quedó anulada (Wompi anuló su pago) y Wompi aprobó "
+                           "otra transacción (%(tx)s) con la misma referencia. No la acreditamos sola: revísala en el "
+                           "panel de Wompi y devuélvela o acredítala a mano.", ref=referencia, cliente=cliente,
+                           tx=tx_id)
+    else:
+        def cuerpo():
+            return gettext("La recarga «%(ref)s» de %(cliente)s ya estaba acreditada y Wompi aprobó otra transacción "
+                           "(%(tx)s) con la misma referencia. No se acreditó dos veces: revísalo en el panel de Wompi "
+                           "y devuélvelo o acredítalo a mano.", ref=referencia, cliente=cliente, tx=tx_id)
     _en_segundo_plano(lambda: avisos.admin(
         "wompi_no_cuadra",
         lambda: gettext("Wompi aprobó un segundo pago para una recarga de %(cliente)s", cliente=cliente),
-        lambda: gettext("La recarga «%(ref)s» de %(cliente)s ya estaba acreditada y Wompi aprobó otra transacción "
-                        "(%(tx)s) con la misma referencia. No se acreditó dos veces: revísalo en el panel de Wompi "
-                        "y devuélvelo o acredítalo a mano.", ref=referencia, cliente=cliente, tx=tx_id),
-        cliente=cliente))
+        cuerpo, cliente=cliente))
 
 
 def _evento_id_wompi(cuerpo):
@@ -1042,7 +1078,8 @@ def verificar_pendientes():
     con transacción conocida) y vence las de más de HORAS_VIGENTE que la
     pasarela no dio por pagadas; después, la pasada del rescate
     (`rescatar_sin_evento`, PND-296) busca por su referencia las de Wompi sin
-    transacción. Una vieja se consulta
+    transacción, y la de las aprobadas (`revisar_aprobadas`, PND-304 b) relee
+    las de los últimos 30 días por si Wompi las anuló. Una vieja se consulta
     una última vez antes de vencerla (el pago pudo entrar sin que llegara el
     webhook) y, si Bold no responde, se deja para la próxima vuelta.
 
@@ -1093,6 +1130,10 @@ def verificar_pendientes():
     except Exception:  # noqa: BLE001 — el rescate no frena lo demás
         log.exception("no se pudo correr el rescate de recargas de Wompi sin evento")
     try:
+        revisadas += revisar_aprobadas(tope_s=max(10, TOPE_VUELTA_S - (_reloj() - inicio)))
+    except Exception:  # noqa: BLE001 — la revisión de las aprobadas no frena lo demás
+        log.exception("no se pudo revisar las recargas de Wompi aprobadas")
+    try:
         avisar_vistos_sin_evento()
     except Exception:  # noqa: BLE001 — un aviso no frena la verificación
         log.exception("no se pudieron revisar las recargas vistas aprobadas sin evento")
@@ -1109,8 +1150,9 @@ def _espera_busqueda(edad_min):
     return 240
 
 
-def _marcar_busqueda(recarga_id):
-    clave, ahora = CLAVE_BUSQUEDA.format(recarga=int(recarga_id)), db.ahora()
+def _marcar_busqueda(recarga_id, formato=CLAVE_BUSQUEDA):
+    """Anota en kv cuándo se buscó (rescate) o se revisó (aprobadas) por última vez una recarga. Nunca lanza."""
+    clave, ahora = formato.format(recarga=int(recarga_id)), db.ahora()
     try:
         with db.conectar() as con:
             if not con.execute(db.kv.update().where(db.kv.c.clave == clave)
@@ -1180,6 +1222,103 @@ def rescatar_sin_evento(tope_s=TOPE_VUELTA_S):
     return hechas
 
 
+def _espera_revision(edad_h):
+    """Horas entre dos revisiones de una recarga aprobada según su edad: cada 2 h los dos primeros días (cuando una
+    tarjeta se suele anular) y después una vez al día hasta DIAS_REVISAR_APROBADAS (unas 52 consultas por recarga)."""
+    return 2 if edad_h < 48 else 24
+
+
+def _revisar_aprobada(fila, tiempo=None):
+    """Relee por id (`pasarela_ref`, que escribió un evento firmado o una relectura) la transacción de una recarga
+    aprobada. Solo si Wompi dice VOIDED se aplica, con `_aplicar_wompi` bajo el candado tomado antes de leer: el
+    reverso del saldo (`anulacion_wompi`) sale una sola vez (el UPDATE condicional y UNIQUE(tipo, recarga_id) del
+    libro) aunque el evento tardío o otra vuelta lleguen a la vez. Devuelve el ErrorWompi si Wompi no respondió,
+    o None."""
+    try:
+        tx = wompi.transaccion(fila["pasarela_ref"], tiempo=wompi.TIEMPO if tiempo is None else tiempo)
+    except wompi.ErrorWompi as e:
+        log.warning("no se pudo revisar la recarga aprobada %s en Wompi: %s", fila["id"], cola.sin_token(str(e)))
+        return e
+    if tx.get("status") != "VOIDED":
+        return None   # sigue aprobada (o algo que no mueve plata): no se escribe nada
+    with db.conectar() as con:
+        libro._candado(con)   # antes de leer: el evento de la anulación y esta vuelta descuentan una sola vez
+        actual = _fila(con, fila["id"])
+        resultado = _aplicar_wompi(con, actual, tx)
+    if resultado == "no_cuadra":
+        _avisar_no_cuadra(fila["id"], fila["cliente"], fila["referencia"], tx, "revision")
+    elif resultado == "anulada":
+        _avisar_anulada_sin_evento(actual, tx)
+    return None
+
+
+def _avisar_anulada_sin_evento(fila, tx):
+    """Al admin: Wompi anuló una recarga ya acreditada y su evento no llegó; la periódica la encontró y descontó."""
+    cliente, milesimas, referencia = fila["cliente"], fila["milesimas"], fila["referencia"]
+    tx_id = str(tx.get("id") or "—")[:64]
+    _en_segundo_plano(lambda: avisos.admin(
+        "anulacion_wompi",
+        lambda: gettext("Wompi anuló una recarga de %(cliente)s", cliente=cliente),
+        lambda: gettext("Wompi anuló la recarga %(ref)s de %(cliente)s (transacción %(tx)s) y su evento no llegó: la "
+                        "encontramos revisando las recargas aprobadas y descontamos %(monto)s de su saldo. Revisa en "
+                        "el panel de Wompi la URL de eventos.", ref=referencia, cliente=cliente, tx=tx_id,
+                        monto=_monto(milesimas)),
+        cliente=cliente))
+
+
+def revisar_aprobadas(tope_s=TOPE_VUELTA_S):
+    """PND-304 (b) (2026-10-15): una recarga APROBADA que Wompi anula después solo se sabía por su evento firmado; si
+    se perdía, el saldo quedaba acreditado y nadie lo notaba. Esta pasada de la periódica relee por id las recargas de
+    Wompi aprobadas de los últimos DIAS_REVISAR_APROBADAS días, espaciadas por edad (`_espera_revision`, contando desde
+    la última revisión o, si no hubo, desde la aprobación), la que lleva más tiempo sin mirarse primero; a lo más
+    REVISIONES_POR_VUELTA y `tope_s` segundos; para a la primera caída, 429 o llave rechazada (401/403). Si Wompi la
+    anuló, hace el reverso (una sola vez) y avisa al admin. Devuelve cuántas revisó."""
+    r, kv = db.recarga, db.kv
+    ahora = datetime.now()
+    desde = (ahora - timedelta(days=DIAS_REVISAR_APROBADAS)).isoformat(timespec="seconds")
+    with db.conectar() as con:
+        filas = con.execute(sa.select(r.c.id, r.c.creada_en, r.c.actualizada_en).where(
+            r.c.medio == "wompi", r.c.estado == "aprobada", r.c.pasarela_ref.is_not(None),
+            r.c.creada_en >= desde)).all()
+        marcas = dict(con.execute(sa.select(kv.c.clave, kv.c.valor).where(kv.c.clave.like("wompi:revision:%"))).all())
+    vivas = {CLAVE_REVISION.format(recarga=f.id) for f in filas}
+    sobran = [c for c in marcas if c not in vivas]
+    if sobran:
+        with db.conectar() as con:   # transacción propia: solo borra marcas de recargas que ya no se revisan
+            con.execute(kv.delete().where(kv.c.clave.in_(sobran)))
+
+    def _ultima(f):
+        # La última vez que se supo que seguía aprobada: la revisión anterior o, si no hubo, cuando se aprobó (así
+        # una recién acreditada en esta misma vuelta no se vuelve a preguntar enseguida).
+        return max(str(marcas.get(CLAVE_REVISION.format(recarga=f.id)) or ""), str(f.actualizada_en or ""))
+    hechas, inicio = 0, _reloj()
+    for f in sorted(filas, key=_ultima):   # la que lleva más tiempo sin mirarse, primero
+        if hechas >= REVISIONES_POR_VUELTA or _reloj() - inicio > tope_s:
+            log.info("revisión de recargas aprobadas: cupo de la vuelta; quedan para la próxima")
+            break
+        try:
+            edad_h = (ahora - datetime.fromisoformat(str(f.creada_en))).total_seconds() / 3600
+        except ValueError:
+            edad_h = 0
+        if _ultima(f) > (ahora - timedelta(hours=_espera_revision(edad_h))).isoformat(timespec="seconds"):
+            continue
+        with db.conectar() as con:
+            fila = _fila(con, f.id)
+        if fila is None or fila["estado"] != "aprobada":
+            continue
+        try:
+            error = _revisar_aprobada(fila)
+        except Exception:  # noqa: BLE001 — una recarga rara no frena las demás
+            log.exception("no se pudo revisar la recarga aprobada %s", f.id)
+            continue
+        hechas += 1
+        _marcar_busqueda(f.id, CLAVE_REVISION)
+        if error is not None and (error.caida or getattr(error, "codigo", None) in (401, 403, 429)):
+            log.warning("revisión de recargas aprobadas: Wompi no responde o rechaza la llave; la pasada para aquí")
+            break
+    return hechas
+
+
 # ---------------------------------------------------------- manual y ajuste ---
 
 def _milesimas_manual(usd):
@@ -1237,6 +1376,15 @@ def obtener(cliente, recarga_id):
     with db.conectar() as con:
         fila = con.execute(sa.select(r).where(r.c.id == recarga_id, r.c.cliente == cliente)).first()
     return dict(fila._mapping) if fila else None
+
+
+def fue_acreditada(recarga_id):
+    """¿El libro tiene el movimiento `recarga` de esta recarga? Una de Wompi `anulada` sin él la anuló Wompi antes de
+    acreditarse (PND-328): no se descontó nada. Solo lee."""
+    m = db.movimiento_saldo
+    with db.conectar() as con:
+        return con.execute(sa.select(m.c.id).where(m.c.recarga_id == int(recarga_id), m.c.tipo == "recarga")
+                           ).first() is not None
 
 
 def de_proyecto(cliente, limite=20):
