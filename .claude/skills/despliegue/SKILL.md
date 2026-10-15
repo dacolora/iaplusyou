@@ -70,17 +70,20 @@ subdominio. El dominio viejo se queda: sigue apuntando al mismo VPS (los `ssh` d
 cualquiera de los dos nombres) y la app lo manda al nuevo (`PLATAFORMA_ALIAS`, skill `seguridad`). Mientras el
 cambio no esté hecho, la producción sigue en `app.creatvmachine.com`. En orden, cada paso con su comprobación:
 
-1. **Desplegar el código** que trae `PLATAFORMA_ALIAS` (la rama `claude/dominio-galadsy`), con los pasos de arriba.
+1. **Desplegar el código** que trae `PLATAFORMA_ALIAS` (PR #13, rama `claude/dominio-galadsy`), con los pasos de arriba.
 2. **DNS en GoDaddy**: el registro `A @` (hoy «Parked») pasa a `116.203.20.147` con TTL de 600 s. El `CNAME www →
    galadsy.com.` ya está. No se tocan NS, SOA, `_domainconnect` ni `_dmarc`. Listo cuando el registro A de
    `galadsy.com` y `www.galadsy.com` responde esa IP.
 3. **nginx y certificado** (como root): agregar `galadsy.com www.galadsy.com` al `server_name` de los bloques 443 y
    80 de la configuración real (ver `deploy/nginx-creatv.conf`), `nginx -t && systemctl reload nginx`, y después
-   `certbot --nginx --expand -d app.creatvmachine.com -d galadsy.com -d www.galadsy.com`. Con
-   `PLATAFORMA_ALIAS=galadsy.com,www.galadsy.com` en el `.env` (y `PLATAFORMA_URL` todavía la vieja) y un reinicio
-   de `iaplusyou`, `https://galadsy.com/login` ya responde 302 hacia la app de siempre.
-4. **El cambio**, en el `.env` del VPS: `PLATAFORMA_URL=https://galadsy.com` y
-   `PLATAFORMA_ALIAS=www.galadsy.com,app.creatvmachine.com`. Reinicio de los dos servicios con la cola vacía.
+   `certbot --nginx --cert-name <el de sudo certbot certificates> --expand -d app.creatvmachine.com -d galadsy.com
+   -d www.galadsy.com`: UN certificado con los tres nombres. Sin `--expand` sobre el certificado de siempre, certbot
+   pone uno solo de galadsy en el bloque compartido y `app.creatvmachine.com` queda con un certificado ajeno. Con
+   `PLATAFORMA_HOSTS_EXTRA=galadsy.com,www.galadsy.com` en el `.env` (y `PLATAFORMA_URL` todavía la vieja) y un
+   reinicio de `iaplusyou`, `https://galadsy.com/login` ya da 200 y se puede probar antes del cambio.
+4. **El cambio**, en el `.env` del VPS: `PLATAFORMA_URL=https://galadsy.com`,
+   `PLATAFORMA_ALIAS=www.galadsy.com,app.creatvmachine.com` y sin `PLATAFORMA_HOSTS_EXTRA` (un host en las dos listas
+   se atiende sin redirigir). Reinicio de los dos servicios con la cola vacía.
    `META_REDIRECT_URI` se queda en la dirección vieja: cada proyecto tiene su propia app de Meta con esa URL
    registrada, y la vuelta de Meta llega al dominio viejo, que la redirige con su `code` y su `state` al nuevo,
    donde está la sesión. Se cambia cuando todas las apps de Meta tengan registrada `https://galadsy.com/meta/callback`.
@@ -127,3 +130,11 @@ análisis de happyflops lo dejó en error un minuto, sin gastar nada, hasta corr
 - **nginx**: `deploy/nginx-creatv.conf` es un EJEMPLO; la configuración real vive en el VPS (`/etc/nginx/…`, con los
   certificados de certbot). Compárala antes de copiar nada y prueba con `sudo nginx -t` antes de recargar. Los estáticos
   con `?v=` se cachean un año: cambiar el `?v=` es lo que obliga al navegador a pedir el archivo nuevo.
+
+## Dominio galadsy.com (2026-10-14)
+
+Dos variables, dos usos. `PLATAFORMA_HOSTS_EXTRA` (pedido de Camilo, 2026-10-14) atiende otro dominio ahí mismo sin
+tocar `PLATAFORMA_URL`: sirve para que `galadsy.com` conviva con el viejo (`docs/despliegue-dominio-galadsy.md`), pero
+conectar Meta o Mercado Libre desde `galadsy.com` falla, porque la vuelta llega al dominio viejo y la sesión (cookie
+por dominio) está en el nuevo. `PLATAFORMA_ALIAS` (PND-326) es para mudarse: el dominio viejo manda sus GET al nuevo,
+con `code` y `state`, y esa vuelta sí funciona. Pasos en «Cambio de dominio a galadsy.com», arriba.

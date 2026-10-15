@@ -599,6 +599,25 @@ def test_eliminar_datos_nombra_el_dominio_de_plataforma_url(app, monkeypatch):
     assert "en localhost:5050 ›" in html
 
 
+def test_hosts_extra_se_atienden_y_los_correos_siguen_en_plataforma_url(app, monkeypatch):
+    """galadsy.com convive con el dominio viejo (2026-10-14): PLATAFORMA_HOSTS_EXTRA amplía los Host aceptados,
+    pero los enlaces por correo siguen saliendo de PLATAFORMA_URL aunque la petición llegue por el dominio extra."""
+    _ana(app)
+    d = app["dashboard"]
+    monkeypatch.setenv("PLATAFORMA_URL", "https://app.creatv.test")
+    monkeypatch.setenv("PLATAFORMA_HOSTS_EXTRA", " galadsy.test , WWW.galadsy.test ,")
+    monkeypatch.setitem(d.app.config, "TESTING", False)
+    c = d.app.test_client()
+    assert c.get("/login", headers={"Host": "galadsy.test"}).status_code == 200
+    assert c.get("/login", headers={"Host": "www.galadsy.test:443"}).status_code == 200
+    assert c.get("/login", headers={"Host": "otro.galadsy.test"}).status_code == 404
+    assert c.get("/login", headers={"Host": "evil.example"}).status_code == 404
+    r = c.post("/recuperar", data={"correo": "ana@ejemplo.com"}, headers={"Host": "galadsy.test"})
+    assert r.status_code == 302
+    cuerpo = app["correos"][0]["cuerpo"]
+    assert "https://app.creatv.test/restablecer/" in cuerpo and "galadsy.test" not in cuerpo
+
+
 # --- I1: toda sesión tiene que ser de un usuario que exista -------------------------------
 
 def test_sesion_de_usuario_inexistente_sin_sv_tambien_se_cierra(app):

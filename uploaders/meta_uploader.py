@@ -23,7 +23,7 @@ GRAPH_VIDEO_URL = f"https://graph-video.facebook.com/{GRAPH_VERSION}"
 def _credenciales(cliente):
     datos = meta_conexion.cargar(cliente)
     if not datos or not datos.get("page_access_token") or not datos.get("page_id"):
-        raise RuntimeError("Este proyecto no tiene Meta conectado — conéctalo en FlowMarketing.")
+        raise RuntimeError("Este proyecto no tiene Meta conectado — conéctalo en Experimentos.")
     return {
         "page_access_token": datos["page_access_token"],
         "page_id": datos["page_id"],
