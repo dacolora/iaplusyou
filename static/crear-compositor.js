@@ -143,7 +143,9 @@
       campoModelo.value = m ? m.value : '';
       ajustarSegunModelo(m, esImagen);
       pintarReceta(m, esImagen);
-      var usdMusica = D.tarifaMusica;
+      // Una tarifa que no es número es «precio no disponible» (el margen no se pudo leer, PND-231): NaN, y el
+      // botón lo dice en vez de mostrar un costo o nada.
+      var usdMusica = Number(D.tarifaMusica);
       var usd = 0;
       var conSonido = document.getElementById('fp-check-sonido');
       if (m) {
@@ -163,7 +165,7 @@
       // «Crear super prompt» solo existe para video (la imagen nunca pasa por
       // el director): lo oculta [data-solo-video].
       botonGenerar.textContent = esImagen ? T.m02 : T.m03;
-      precio.textContent = usd ? '≈ ' + formatearUSD(usd) : '';
+      precio.textContent = isNaN(usd) ? T.m40 : (usd ? '≈ ' + formatearUSD(usd) : '');
       if (pieLogos) pieLogos.hidden = sinAdjuntos();
       pintarFichas(); pintarMusica(); pintarPastillas();
       avisarRefs(m, esImagen);

@@ -5024,7 +5024,10 @@ app.jinja_env.globals["ver_cobrado"] = _ver_cobrado
 
 @app.template_filter("usd_fino")
 def _filtro_usd_fino(valor):
-    """«US$ 0,042»: tarifas por segundo, donde dos decimales mentirían."""
+    """«US$ 0,042»: tarifas por segundo, donde dos decimales mentirían. Un
+    `gastos.SinPrecio` (el `|precio` sin margen, PND-231) pasa tal cual."""
+    if isinstance(valor, gastos.SinPrecio):
+        return valor
     try:
         return f"US$ {idiomas.numero(float(valor), 3)}"
     except (TypeError, ValueError):
@@ -5043,13 +5046,43 @@ def _filtro_precio(_contexto, usd):
     constante: Jinja 3.1 pliega todo filtro sobre una constante salvo los que
     piden el contexto (`pass_eval_context` no basta), y `{{ 0.04|precio }}`
     quedaría con el margen de la primera petición que compiló la plantilla,
-    para todos los proyectos."""
+    para todos los proyectos.
+
+    Si el margen de la petición no se pudo leer, «precio no disponible»
+    (`gastos.SinPrecio`, PND-231): nunca el costo con cara de precio, igual
+    que `gastos.texto_precio`. Es texto, así que para darle formato de número
+    se usa `|precio_fmt('US$ %.2f')`, nunca `'%.2f' % (x|precio)`."""
     if usd is None or usd == "":
         return usd
+    if gastos._margen_fallido():
+        return gastos.SinPrecio.ahora()
     try:
         return round(float(usd) * gastos.margen_vigente(), 6)
     except (TypeError, ValueError):
         return usd
+
+
+@app.template_test("sin_precio")
+def _prueba_sin_precio(valor):
+    """`{% if x is sin_precio %}`: el `|precio` (o `|precio_fmt`) sin margen
+    legible (PND-231), para no pegarle «/s con sonido» a «precio no disponible»."""
+    return isinstance(valor, gastos.SinPrecio)
+
+
+@app.template_filter("precio_fmt")
+@jinja2.pass_context
+def _filtro_precio_fmt(contexto, usd, formato):
+    """`|precio` con formato de número: `{{ m.usd|precio_fmt('$%.3f/s') }}`.
+    Sin margen legible, «precio no disponible» entero (el formato, con su
+    «US$» o su «/s», no se pinta): `'%.3f' % (x|precio)` reventaría la página
+    con ese texto (PND-231)."""
+    valor = _filtro_precio(contexto, usd)
+    if valor is None or valor == "" or isinstance(valor, gastos.SinPrecio):
+        return valor
+    try:
+        return formato % float(valor)
+    except (TypeError, ValueError):
+        return valor
 
 
 def _pauta_mes(tablero_ctx, parte="resumen"):

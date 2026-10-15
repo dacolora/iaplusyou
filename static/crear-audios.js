@@ -7,7 +7,8 @@
 
   // El separador decimal del idioma de quien mira (el filtro usd ya lo sabe).
   var sep = D.usdEjemplo.indexOf(',') >= 0 ? ',' : '.';
-  var usdCaracter = parseFloat(raiz.dataset.usdCaracter) || 0;
+  // Sin número (el margen no se pudo leer, PND-231) el precio dice «precio no disponible», nunca US$ 0,00.
+  var usdCaracter = parseFloat(raiz.dataset.usdCaracter);
   var texto = document.getElementById('au-texto'), contador = document.getElementById('au-contador');
   var precio = document.getElementById('au-precio'), crear = document.getElementById('au-crear');
   var crearPrecio = document.getElementById('au-crear-precio');
@@ -37,7 +38,7 @@
     var n = texto.value.replace(/\s+/g, ' ').trim().length;
     contador.textContent = n;
     var usd = n * usdCaracter;
-    var etiqueta = T.aprox + ' ' + (n && usd < 0.01 ? 'US$ <0' + sep + '01' : fmtUsd(usd));
+    var etiqueta = isNaN(usdCaracter) ? T.sinPrecio : T.aprox + ' ' + (n && usd < 0.01 ? 'US$ <0' + sep + '01' : fmtUsd(usd));
     precio.textContent = etiqueta;
     crearPrecio.textContent = etiqueta;
     crear.disabled = !n || raiz.dataset.ocupado === '1';

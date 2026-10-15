@@ -179,12 +179,26 @@ NOMBRES_TIPO = {
 SIN_PRECIO = N_("precio no disponible")
 
 
+class SinPrecio(str):
+    """«precio no disponible» en el idioma de quien mira: lo que devuelve el filtro de plantilla `|precio` cuando el
+    margen de la petición no se pudo leer (PND-231, como `texto_precio`). Es texto: los filtros `|usd`, `|usd_fino` y
+    `|precio_fmt` lo dejan pasar tal cual, y como `total_visto` no vuelve a ser un precio (`costo_de_precio` → None:
+    el servidor no cobra con eso)."""
+
+    @classmethod
+    def ahora(cls):
+        return cls(gettext(SIN_PRECIO))
+
+
 # ------------------------------------------------------------ formato ---
 
 def formatear(usd):
     """`None` -> "—"; menos de un centavo -> "US$ <0,01"; si no, dos
     decimales con coma decimal y punto de miles ("US$ 1.234,56") — o el
-    separador del idioma activo (`idiomas.numero`)."""
+    separador del idioma activo (`idiomas.numero`). Un `SinPrecio` (el
+    `|precio` sin margen) pasa tal cual: «precio no disponible»."""
+    if isinstance(usd, SinPrecio):
+        return usd
     if usd is None:
         return "—"
     try:
