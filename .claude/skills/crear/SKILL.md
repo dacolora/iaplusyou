@@ -147,8 +147,10 @@ degradable (the paid video is never lost) — it only reports, never regenerates
 3 imágenes y en el nuestro solo una»):** WaveSpeed solo tiene la imagen-a-video de Seedance 2.5 (`image` de arranque +
 `last_image`; su reference-to-video no existe, 404 verificado ese día), así que `seedance25_ref` es la ÚNICA entrada de
 `VIDEO` que no va por WaveSpeed: `proveedor: "fal"` (`flowplus_modelos.proveedor_de`), ruta
-`bytedance/seedance-2.5/reference-to-video` (`image_urls`, `duration` como TEXTO "4".."30", `aspect_ratio` 9:16/16:9/1:1
-—4:3 y 3:4 fuera hasta medir su cobro, fal cobra por píxeles—, 720p, `generate_audio`) y sin imágenes `bytedance/seedance-2.5/text-to-video`. Hasta 10 imágenes (fal admite 30, pero
+`bytedance/seedance-2.5/reference-to-video` (`image_urls`, `duration` como TEXTO "4".."30", `aspect_ratio`
+9:16/16:9/1:1/4:3/3:4, 720p, `generate_audio`) y sin imágenes `bytedance/seedance-2.5/text-to-video` (mismos formatos y
+precio). 4:3 y 3:4 se abrieron el 2026-10-13 (PND-211, decisión del lote 1) al mismo precio por segundo: fal cobra por
+píxeles de salida y a 720p esos formatos no pasan de los de 16:9; la factura la revisa la auditoría de PND-013. Hasta 10 imágenes (fal admite 30, pero
 `cf_crear_video` corta `referencias_urls[:10]`; subir el tope exige subir esos cortes). Las menciones se vuelven
 `@Image1`, `@Image2`… (`token_imagen` del registro, `flowplus_prompt.asignar_tokens`) y el director tiene su familia
 `seedance_ref` (`director._TOKEN` acepta las dos formas). Precio 0,473 USD/s a 720p (API de precios de fal: 0,0214 USD por
@@ -162,8 +164,9 @@ rotación automática de regeneraciones (`rotar: False`, `flowplus_modelos.video
 un modelo que dejaría referencias sin usar (`derivaciones.modelo_regeneracion` filtra con `referencias_de_mas`). Un video
 que fal ya terminó y cobró pero cuyo resultado no se pudo traer (429, 5xx, red) sale como error de red y conserva el id;
 `ErrorProveedor` es solo para un 4xx con motivo (revisión del guardián de gasto, 2026-10-09). Sin saldo en fal (PND-213, 2026-10-09): `_aviso_sin_saldo.html` pinta un aviso aparte con `con_fal` (solo lo pone Crear)
-y `aviso_saldo_fal`/`modelos_fal`; Alertas suma `saldo:fal`/`saldo:fal_recarga`. Pendientes: prueba real
-(PND-211), videos de referencia como video (PND-212), el audio de fal no marca el saldo (PND-215).
+y `aviso_saldo_fal`/`modelos_fal`; Alertas suma `saldo:fal`/`saldo:fal_recarga`. Pendientes: la factura de
+fal de la prueba real y de un 4:3 o un solo texto (PND-211, dentro de la auditoría de PND-013), videos de referencia como
+video (PND-212), el audio de fal no marca el saldo (PND-215).
 
 **Pedido rechazado al lanzar (2026-10-02, PND-107):** toda respuesta no-ok de WaveSpeed que no es de saldo es `wavespeed_common.PedidoRechazado` (RuntimeError, mismo `str(e)` técnico de siempre para la bitácora y `tarea.error`, más `status` y `mensaje` del proveedor); `tareas/flowplus._mensaje_error` la cuenta en palabras: «<proveedor> no aceptó el pedido y no se cobró nada: <motivo>…» (WaveSpeed o fal.ai, `saldo.nombre_proveedor`) (o, sin mensaje legible, con el código de respuesta). Antes la tarjeta mostraba el JSON crudo. Cada tipo tiene su frase: 401/403 «rechazó la llave de Creatv», 429 «demasiados pedidos», 5xx «falla de su lado» SIN prometer que no se cobró (WaveSpeed pudo crear la predicción sin devolver su id), y un 4xx con o sin el motivo del proveedor. Un `PedidoRechazado`, como `SinSaldo`, no persigue la `prediccion` que haya en la sesión: es de un intento anterior, no de este video.
 

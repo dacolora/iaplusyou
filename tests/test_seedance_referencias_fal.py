@@ -6,6 +6,7 @@ fal con las mismas garantías que WaveSpeed: precio a la vista, id guardado
 para recuperar sin pagar de nuevo, rechazos y falta de saldo en palabras, y el
 gasto anotado a nombre de fal."""
 import json
+import re
 from datetime import datetime
 
 import pytest
@@ -404,10 +405,39 @@ def test_una_regeneracion_nunca_va_a_un_modelo_que_deja_referencias_sin_usar():
     assert derivaciones.modelo_regeneracion({"modelo": "seedance25_ref", "referencias": once}, 0) == "wan3"
 
 
-def test_4_3_y_3_4_quedan_fuera_hasta_medir_su_cobro():
+def test_4_3_y_3_4_se_abren_al_mismo_precio_por_segundo():
+    """PND-211 (decisión 2026-10-13, lote 1): se abren 4:3 y 3:4, con imágenes y en solo texto, a los mismos
+    0,473 USD/s. fal cobra por píxeles de salida y un 4:3 de 720p no pasa de esa cifra; la factura la mira PND-013."""
     from providers import flowplus_modelos as fm
-    assert fm.VIDEO["seedance25_ref"]["formatos"] == ("9:16", "16:9", "1:1")
-    assert fm.ajustar_formato("seedance25_ref", "4:3") == "9:16"
+    assert set(fm.VIDEO["seedance25_ref"]["formatos"]) == {"9:16", "16:9", "1:1", "4:3", "3:4"}
+    for formato in ("4:3", "3:4"):
+        assert fm.ajustar_formato("seedance25_ref", formato) == formato
+        assert fm.ajustar_formato("seedance25_ref", formato, solo_texto=True) == formato
+    assert fm.estimate_video("seedance25_ref", 8)["usd"] == pytest.approx(3.784)
+
+
+def test_4_3_con_imagenes_y_3_4_de_solo_texto_llegan_a_fal(monkeypatch):
+    from providers import flowplus_modelos as fm
+    pedidos = []
+    monkeypatch.setattr(fm.fal_video, "lanzar", lambda ruta, payload, nombre, on_progreso=None:
+                        pedidos.append((ruta, payload["aspect_ratio"])) or "https://fal/v.mp4")
+    fm.generar_video("seedance25_ref", "p", IMGS, 8, aspect_ratio="4:3")
+    fm.generar_video("seedance25_ref", "p", [], 8, aspect_ratio="3:4")
+    assert pedidos == [("bytedance/seedance-2.5/reference-to-video", "4:3"),
+                       ("bytedance/seedance-2.5/text-to-video", "3:4")]
+
+
+def test_crear_guarda_el_4_3_de_seedance_con_varias_referencias(app):  # noqa: F811
+    e = _crear(app, modelo="seedance25_ref", aspect_ratio="4:3")
+    assert e["modelo"] == "seedance25_ref" and e["aspect_ratio"] == "4:3"
+
+
+def test_el_selector_de_crear_ofrece_4_3_y_3_4_en_seedance_con_varias_referencias(app):  # noqa: F811
+    html = app["c"].get("/cliente/acme").get_data(as_text=True)
+    radio = re.search(r'<input type="radio" name="modelo_video" value="seedance25_ref"[^>]*>', html).group(0)
+    for atributo in ("data-formatos", "data-formatos-texto"):
+        formatos = re.search(atributo + r'="([^"]*)"', radio).group(1).split(",")
+        assert {"4:3", "3:4"} <= set(formatos), atributo
 
 
 def test_una_foto_de_persona_real_rechazada_se_explica(base_temporal, monkeypatch, tmp_path):

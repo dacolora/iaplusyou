@@ -44,8 +44,9 @@ Higgsfield Seedance acepta más de 3 imágenes»): WaveSpeed solo tiene su
 image-to-video (`image` de arranque + `last_image`), así que `seedance25_ref`
 va por fal (`proveedor: "fal"`, providers/fal_video.py):
 bytedance/seedance-2.5/reference-to-video (`image_urls`, que el prompt nombra
-@Image1, @Image2…; `duration` es TEXTO "4".."30"; formato elegible) y, sin
-ninguna imagen, bytedance/seedance-2.5/text-to-video. Precio verificado el
+@Image1, @Image2…; `duration` es TEXTO "4".."30"; formato elegible: 9:16, 16:9,
+1:1 y, desde el 2026-10-13 (PND-211), 4:3 y 3:4) y, sin ninguna imagen,
+bytedance/seedance-2.5/text-to-video (mismos formatos y precio). Precio verificado el
 2026-10-09 en la API de precios de fal (0,0214 USD por 1 000 tokens en las dos
 rutas) y en sus páginas: ~0,4730 USD/s a 720p, con o sin sonido. Videos de referencia como
 video quedan fuera por ahora (fal los factura aparte): entran por su
@@ -131,17 +132,20 @@ VIDEO = {
         "duraciones": (5, 8, 10, 12, 15, 20, 25, 30),
         "min_duracion": 4,
         "max_duracion": 30,
-        # fal cobra por píxeles de salida: 0,473 USD/s es su cifra de 720p (16:9 y
-        # 9:16; 1:1 tiene menos píxeles). 4:3 y 3:4 quedan fuera hasta medir su
-        # cobro real (PND-211): podrían pasar de esa cifra.
-        "formatos": ("9:16", "16:9", "1:1"),
+        # fal cobra por píxeles de salida (alto × ancho × segundos × 24 / 1024
+        # tokens, 0,0214 USD por 1 000): 0,473 USD/s es la cifra que publica para
+        # 720p. 4:3 y 3:4 se abren al mismo precio por segundo (PND-211, decisión
+        # 2026-10-13, lote 1): a 720p tienen casi los mismos píxeles que 16:9, así
+        # que no pasan de esa cifra; su factura la revisa la auditoría de PND-013.
+        # Sin imágenes va a text-to-video con los mismos formatos y precio.
+        "formatos": ("9:16", "16:9", "1:1", "4:3", "3:4"),
         "max_videos": 0,
         # Cómo nombra fal cada imagen en el prompt (esquema de reference-to-video).
         "token_imagen": "@Image{n}",
         "rotar": False,
         "audio_nativo": {"parametro": "generate_audio", "recargo_usd_s": 0.0},
         # Prueba real 2026-10-09: ByteDance rechaza (422, sin cobro) las fotos de personas reales.
-        "nota": N_("Hasta 10 imágenes de referencia (personajes, producto, lugar) que nombras en el texto con @Imagen 1, @Imagen 2…; de un video usa solo un fotograma. No acepta fotos de personas reales: los personajes tienen que ser creados con IA. Hasta 30 s, en el formato que elijas. Va por fal y es el más caro. Sonido de la escena incluido."),
+        "nota": N_("Hasta 10 imágenes de referencia (personajes, producto, lugar) que nombras en el texto con @Imagen 1, @Imagen 2…, o ninguna: solo con tu texto. De un video usa solo un fotograma. No acepta fotos de personas reales: los personajes tienen que ser creados con IA. Hasta 30 s, en el formato que elijas (también 4:3 y 3:4). Va por fal y es el más caro. Sonido de la escena incluido."),
     },
 }
 

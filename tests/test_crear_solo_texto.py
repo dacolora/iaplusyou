@@ -157,6 +157,14 @@ def test_seedance_sin_referencias_guarda_el_formato_elegido(app):
     assert e["aspect_ratio"] == "16:9"
 
 
+def test_seedance_con_varias_referencias_sin_referencias_va_en_3_4(app):
+    """PND-211 (lote 1): Seedance 2.5 con varias referencias también sirve sin ninguna, en el formato elegido."""
+    (cf_id, e), = _crear(app, modelo="seedance25_ref", aspect_ratio="3:4").items()
+    assert app["lanzadas"] == [cf_id]
+    assert e["modelo"] == "seedance25_ref" and e["enfoque"] == "libre" and e["aspect_ratio"] == "3:4"
+    assert e["prompt_relleno"] == "una mujer camina por la playa\nSONIDO: olas."
+
+
 def test_super_prompt_sin_referencias_encola_el_director(app):
     (_, e), = _crear(app, modo_prompt="director").items()
     assert e["estado"] == "prompt_pendiente" and e["enfoque"] == "libre"
