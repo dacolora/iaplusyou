@@ -452,6 +452,15 @@ def preparar_guion(cliente, cf_id, opciones=None, ref_sufijo=""):
                  if costo_whisper else gettext("guion base %(idioma)s", idioma=idioma_base)),
         extra={"usd_guion": round(float(costo_guion or 0.0), 4), "usd_whisper": round(costo_whisper, 4)})
     creative_flow.guardar_guion_base(cliente, cf_id, guion_base)
+    # PND-314: ya guardado, el guion base queda para reusarse; si esta tarea falla después y se le devuelve el
+    # cobro, la próxima producción que lo reuse lo cobra (`guion_base:<cf_id>`).
+    if costo > 0:
+        gastos.registrar_seguro(
+            cliente, "guion", round(costo, 4), f"guion:{cf_id}{ref_sufijo}", proveedor="anthropic",
+            detalle=(gettext("guion base %(idioma)s + transcripción de la referencia", idioma=idioma_base)
+                     if costo_whisper else gettext("guion base %(idioma)s", idioma=idioma_base)),
+            extra={"usd_guion": round(float(costo_guion or 0.0), 4), "usd_whisper": round(costo_whisper, 4),
+                   "cache": {f"guion_base:{cf_id}": round(costo, 4)}})
     # F: el ángulo se guarda AL FINAL — si esto falla, el guion (ya pagado) y
     # su gasto ya quedaron a salvo; una tarea nueva no vuelve a pagar por él.
     # Solo uno con promesa y gancho: si Claude lo omitió en las dos vueltas,
@@ -828,7 +837,8 @@ def producir_legado(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, 
     return final_id, creative_flow.final_por_legado(cliente, final_id)
 
 
-def _registrar_gasto_final(cliente, final_id, idioma, pais, usd, capas, fallo=False, ref_sufijo=""):
+def _registrar_gasto_final(cliente, final_id, idioma, pais, usd, capas, fallo=False, ref_sufijo="", cache=None,
+                           traslados=None):
     """`final:<final_id><ref_sufijo>`: el total que cobraron las capas (por
     capa en `extra`). Si la pieza falló solo se registra cuando algo se
     cobró — con el detalle de qué capa falló y cuáles ya estaban pagadas
@@ -836,7 +846,12 @@ def _registrar_gasto_final(cliente, final_id, idioma, pais, usd, capas, fallo=Fa
     de la tarea que pagó: sin él, reproducir el mismo destino (un cobro real
     nuevo, tarea nueva) pisaría el gasto del intento anterior. El detalle sale
     en el idioma activo (en el worker, el del proyecto) con las etiquetas de
-    `tipos.ETIQUETAS_CAPA`; las claves de `extra` no cambian."""
+    `tipos.ETIQUETAS_CAPA`; las claves de `extra` no cambian.
+
+    PND-314 (decisión 2026-10-13, lote 1: lo que queda en caché tras una final fallida se cobra cuando se reusa):
+    `cache` ({clave: usd}, solo con `fallo`) dice qué parte de lo pagado quedó guardada para reusarse
+    (`borrador:<edición>`, `destino:<edición>:<idioma>_<país>`); `traslados` (de `gastos.pendientes_por_clave`)
+    es lo que una final entregada reusó sin que nadie lo cobrara: pasa a su fila (`gastos.registrar_trasladando`)."""
     por_capa = {n: round(float(c.get("costo_usd") or 0.0), 4) for n, c in (capas or {}).items()}
     cobradas = [n for n, v in por_capa.items() if v > 0]
     usd = round(max(0.0, float(usd or 0.0)), 4)
@@ -862,9 +877,22 @@ def _registrar_gasto_final(cliente, final_id, idioma, pais, usd, capas, fallo=Fa
         detalle = gettext("%(destino)s · %(capas)s", destino=destino, capas=", ".join(etiqueta(n) for n in cobradas))
     else:
         detalle = gettext("%(destino)s · sin cobros (todo cacheado u omitido)", destino=destino)
-    gastos.registrar_seguro(cliente, "final", usd, f"final:{final_id}{ref_sufijo}", detalle=detalle,
-                            proveedor="fal/anthropic", extra={"capas": por_capa, "fallo": bool(fallo)},
-                            entregado=not fallo)
+    extra = {"capas": por_capa, "fallo": bool(fallo)}
+    if fallo and cache:
+        extra["cache"] = {k: round(float(v), 4) for k, v in cache.items() if v and float(v) > 0}
+    referencia = f"final:{final_id}{ref_sufijo}"
+    if traslados and not fallo:
+        detalle = gettext("%(detalle)s · incluye lo que dejó un intento fallido", detalle=detalle)
+        gastos.registrar_trasladando_seguro(cliente, "final", usd, referencia, traslados, detalle=detalle,
+                                            proveedor="fal/anthropic", extra=extra)
+        return
+    gastos.registrar_seguro(cliente, "final", usd, referencia, detalle=detalle,
+                            proveedor="fal/anthropic", extra=extra, entregado=not fallo)
+
+
+def claves_reusables(cf_id):
+    """Los prefijos de las filas de gasto donde puede quedar algo pagado y sin cobrar de esta sesión (PND-314)."""
+    return (f"final:{cf_id}__", f"guion:{cf_id}")
 
 
 registrar_gasto_final = _registrar_gasto_final   # lo usa final_edition.produccion (vía del editor)

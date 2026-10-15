@@ -20,6 +20,7 @@ from flask_babel import gettext
 import cola
 import creative_flow
 import ediciones
+import gastos
 import final_edition
 import idiomas
 from final_edition import ETAPAS_FINAL, borrador, cortes, guion as guion_mod, insumos, mezcla, musica as musica_mod, tipos
@@ -352,6 +353,8 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_suf
 
     final_id = creative_flow.crear_final(cliente, cf_id, idioma, pais, variante=o.get("variante"))
     costo, costo_base, costo_variante = 0.0, 0.0, 0.0
+    # PND-314: lo pagado en esta corrida que queda guardado para reusarse ({clave: usd}) y lo que se reusa.
+    cache, reusadas = {}, set()
     capas, guion, angulo_variante = {}, None, None
     formato = borrador.formato_de(entry.get("aspect_ratio"))
 
@@ -363,6 +366,8 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_suf
         if not guion_base:
             guion_base, costo_base = final_edition.preparar_guion(cliente, cf_id, o, ref_sufijo=ref_sufijo)
             costo += costo_base
+        else:
+            reusadas.add(f"guion_base:{cf_id}")
         # Voz y estilo concretos ANTES de la receta (la receta los incluye).
         lista_voces = fal_audio.VOCES.get(guion_base.get("idioma") or "es") or fal_audio.VOCES["es"]
         if not o.get("voz"):
@@ -422,9 +427,13 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_suf
         raise
 
     try:
-        edicion, capas_b, c_b, _ = asegurar_borrador(cliente, cf_id, entry, guion_base, guion_trabajo, o, avisar)
+        edicion, capas_b, c_b, creada = asegurar_borrador(cliente, cf_id, entry, guion_base, guion_trabajo, o, avisar)
         capas.update(capas_b)
         costo += c_b
+        if creada:
+            cache[f"borrador:{edicion['id']}"] = round(float(c_b or 0.0) + float(costo_variante or 0.0), 4)
+        else:
+            reusadas.add(f"borrador:{edicion['id']}")
         # Precio por destino (I1): el número escrito para ESE país; el atajo
         # `precio` / `precio_base` solo aplica al país base del guion.
         precios = o.get("precios") or {}
@@ -435,7 +444,11 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_suf
             precio = o.get("precio") if o.get("precio") is not None else guion_base.get("precio_base")
         else:
             precio = None
-        if not borrador.tiene_destino(edicion["documento"], idioma, pais):
+        clave_destino = f"destino:{edicion['id']}:{idioma}_{pais}"
+        destino_reusado = borrador.tiene_destino(edicion["documento"], idioma, pais)
+        if destino_reusado:
+            reusadas.add(clave_destino)
+        if not destino_reusado:
             # Un borrador REUTILIZADO no pasa por los avisos de Cortes/Voz/
             # Música de `asegurar_borrador` (vuelve de una, sin reportar
             # nada): sin este aviso la barra queda clavada en "Escribiendo
@@ -445,6 +458,8 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_suf
             avisar(ETAPAS_FINAL[3][0])
         edicion, capas_t, c_t = traducir(cliente, edicion, idioma, pais, precio, o["voz"], bool(o.get("con_voz", True)))
         costo += c_t
+        if not destino_reusado and c_t:
+            cache[clave_destino] = round(float(c_t), 4)
         params_guion = {"idioma": idioma, "pais": pais, "precio": precio}
         if variante_tipo:
             params_guion["variante_tipo"] = variante_tipo
@@ -486,7 +501,7 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_suf
             capas["guion"]["parametros"] = {**(guion_previo.get("parametros") or {}), **(capas["guion"].get("parametros") or {})}
         costo += float(getattr(e, "costo_pagado", 0.0) or 0.0)
         final_edition.registrar_gasto_final(cliente, final_id, idioma, pais, costo - costo_base, _ordenar(capas),
-                                            fallo=True, ref_sufijo=ref_sufijo)
+                                            fallo=True, ref_sufijo=ref_sufijo, cache=cache)
         creative_flow.actualizar_final(cliente, final_id, estado="error", error=_mensaje(e), capas=_ordenar(capas),
                                        costo_usd=round(costo, 4), guion=guion)
         raise
@@ -496,7 +511,10 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_suf
     # El gasto es real aunque la fila final ya no exista (p. ej. la persona la
     # descartó mientras se producía: "Descartar" también se muestra en
     # `generando`) — se registra ANTES de las dos comprobaciones de abajo.
-    final_edition.registrar_gasto_final(cliente, final_id, idioma, pais, costo - costo_base, capas, ref_sufijo=ref_sufijo)
+    # PND-314: lo que esta final reusó de un intento fallido (y nadie cobró) se cobra aquí, que sí se entrega.
+    traslados = gastos.pendientes_por_clave(cliente, final_edition.claves_reusables(cf_id), reusadas) if reusadas else []
+    final_edition.registrar_gasto_final(cliente, final_id, idioma, pais, costo - costo_base, capas, ref_sufijo=ref_sufijo,
+                                        traslados=traslados)
     # La fila la creó `crear_final` al principio: si ya no está, algo la
     # borró en el camino — un error del worker, nada más que escribirle.
     if not creative_flow.actualizar_final(

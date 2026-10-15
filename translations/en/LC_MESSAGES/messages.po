@@ -291,6 +291,10 @@ msgid "%(detalle)s · falló al guardar; fal ya cobró"
 msgstr "%(detalle)s · saving failed; fal already charged"
 
 #, python-format
+msgid "%(detalle)s · incluye lo que dejó un intento fallido"
+msgstr "%(detalle)s · includes what a failed attempt left behind"
+
+#, python-format
 msgid "%(dia)s (antes)"
 msgstr "%(dia)s (before)"
 
@@ -23743,6 +23747,10 @@ msgstr "unknown voice or language"
 
 msgid "voz protagonista"
 msgstr "voice first"
+
+#, python-format
+msgid "voz reusada de un intento que falló · %(n)s caracteres"
+msgstr "voice reused from an attempt that failed · %(n)s characters"
 
 msgid "voz.sintetizar: el guion no tiene bloques."
 msgstr "voz.sintetizar: the script has no blocks."
