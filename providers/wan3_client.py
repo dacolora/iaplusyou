@@ -73,15 +73,9 @@ def generar_video(prompt, reference_images, duration=12, resolution="720p",
     }
     if reference_videos:
         payload["reference_videos"] = reference_videos
-    resp = requests.post(
-        f"{wavespeed_common.BASE_URL}/{MODEL_PATH}", json=payload,
-        headers=wavespeed_common.headers(), timeout=60,
-    )
-    if not resp.ok:
-        raise wavespeed_common.error_de_respuesta(resp, MODEL_PATH)
-    prediction_id = (resp.json().get("data") or {}).get("id")
-    if not prediction_id:
-        raise RuntimeError(f"WaveSpeed no devolvió un id de predicción: {resp.text[:500]}")
+    # PND-214: una lectura agotada o una conexión cortada al lanzar es
+    # `LanzamientoIncierto` (pudo cobrarse; se recupera por el historial).
+    prediction_id = wavespeed_common.lanzar_prediccion(MODEL_PATH, payload)
     wavespeed_common.avisar_lanzada(on_progreso, prediction_id)
 
     resultado = wavespeed_common.poll_hasta_listo(

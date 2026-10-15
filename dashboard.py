@@ -110,7 +110,7 @@ from cobros import vista as vista_cobros
 from conectores import ErrorConector
 from conectores import csv_excel as conector_csv
 from conectores import meli as conector_meli
-from tareas.flowplus import ETAPAS_CREATIVE_FLOW
+from tareas.flowplus import ETAPAS_CREATIVE_FLOW, lanzamiento_pendiente
 from tareas import final_edition as tareas_fe
 from tareas import director as tareas_director
 from tareas import experimentos as tareas_exp
@@ -3086,6 +3086,8 @@ def _armar_item_cf(cliente, cf_id, entry, data, ctx, ligero=False):
     if "hijas_b" not in ctx:
         ctx["hijas_b"] = _hijas_b(data)
     item["tiene_hija_b"] = cf_id in ctx["hijas_b"]
+    # PND-214: el pedido salió sin respuesta y pudo cobrarse: «Recuperar», nunca «Reintentar».
+    item["lanzamiento_pendiente"] = lanzamiento_pendiente(entry)
     # Estimado real vía wan3_client.estimate_video() en vez de un número
     # calculado a mano en la plantilla (duracion * 0.10) — usa la misma
     # tabla de precios (COSTO_USD_POR_SEGUNDO) que generar_video() real,
@@ -7661,13 +7663,27 @@ def _guardar_referencia_archivo(cliente, archivo, i):
 
 
 def _duracion_video(ruta):
-    """Segundos de un video de referencia (ffprobe), a centésimas; None si no
-    se pudo medir. Nunca lanza: una medida que falla no frena la subida
-    (2026-09-30: Crear la usa para el límite de Wan 3.0 y su precio)."""
-    try:
-        return round(fe_cortes.duracion(ruta), 2) if ruta else None
-    except Exception:  # noqa: BLE001
+    """Segundos de un video de referencia, a centésimas; None si no se pudo
+    medir. Nunca lanza: una medida que falla no frena la subida (2026-09-30:
+    Crear la usa para el límite de Wan 3.0 y su precio).
+
+    PND-319 (decisión 2026-10-13, lote 1): se mide como el swap de PND-312
+    (`swap_video_precio.medir`: la mayor entre la cabecera y los paquetes del
+    video, solo archivos del disco), nunca con la cabecera sola, que se
+    falsifica (12 s que dicen 2 s pagaban la sexta parte). Comparte los dos
+    turnos de ffprobe de «Cambiar producto»: sin turno en un minuto, None."""
+    from providers import swap_video_precio  # noqa: PLC0415
+    if not ruta:
         return None
+    if not _MEDIR_VIDEO_TURNOS.acquire(timeout=60):
+        return None
+    try:
+        duracion, _fps = swap_video_precio.medir(ruta)
+    except Exception:  # noqa: BLE001 — medir ya no lanza; defensa extra
+        duracion = None
+    finally:
+        _MEDIR_VIDEO_TURNOS.release()
+    return round(duracion, 2) if duracion else None
 
 
 def _quiere_json():
@@ -8271,16 +8287,23 @@ def cf_crear_video(cliente):
             return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
         bandeja = [r for r in bandeja if r["id"] in set(usadas)]
     referencias = []
+    remedidos = {}     # etiqueta -> (id en la bandeja, segundos medidos ahora) si no es lo que se vio
     for r in bandeja:
         ref = {"tipo": r["tipo"], "url": r["url"], "frame_url": r.get("frame_url") or r["url"],
                "etiqueta": r["etiqueta"], "origen": r.get("origen")}
         if r["tipo"] == "video":
-            # Lo que dura el video (2026-09-30): lo medido al subirlo; las
-            # referencias anteriores se miden acá si el archivo sigue en disco
-            # (sin tocar la red en la petición: si no, lo mide el worker).
-            dur = r.get("duracion_s")
-            if dur is None and r.get("ruta_local") and os.path.exists(r["ruta_local"]):
+            # Lo que dura el video (2026-09-30), que Wan 3.0 factura: si el
+            # archivo sigue en disco se vuelve a medir por sus paquetes (PND-319:
+            # una referencia subida antes guardó la duración de la cabecera, que
+            # se falsifica); si no, lo medido al subirlo. Sin tocar la red en la
+            # petición: sin ninguna de las dos, Wan no genera (abajo).
+            dur = None
+            if r.get("ruta_local") and os.path.exists(r["ruta_local"]):
                 dur = _duracion_video(r["ruta_local"])
+            if dur is None:
+                dur = r.get("duracion_s")
+            elif r.get("duracion_s") is None or abs(float(r["duracion_s"]) - dur) > 0.05:
+                remedidos[r["etiqueta"]] = (r.get("id"), dur)
             ref["duracion_s"] = dur
         referencias.append(ref)
     n_img = sum(1 for r in referencias if r["tipo"] == "imagen")
@@ -8361,6 +8384,29 @@ def cf_crear_video(cliente):
             flash(gettext("%(modelo)s usa hasta %(n)s referencias: no usaría %(sobran)s. "
                           "Quita las que sobran o cambia de modelo — no se cobró nada.",
                           modelo=nombre_modelo, n=info_modelo.get("max_referencias"), sobran=", ".join(sobran)), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+    # PND-319: Wan 3.0 factura los segundos de cada video de referencia; uno que
+    # no se pudo medir dejaría el precio visto (y lo anotado) por debajo de lo
+    # que cobra WaveSpeed. Se avisa y no se genera: nada se cobra.
+    sin_medida = flowplus_modelos.videos_sin_duracion(modelo, referencias) if tipo == "video" else []
+    # La pantalla mostró el precio con la duración guardada en la bandeja: si al volver
+    # a medir cambió, no se cobra un precio que no se vio (revisión del guardián de gasto).
+    cambiados = [r["etiqueta"] for r in flowplus_modelos.videos_facturados(modelo, referencias)
+                 if r["etiqueta"] in remedidos] if tipo == "video" else []
+    if cambiados:
+        for etiqueta in cambiados:
+            rid, segundos = remedidos[etiqueta]
+            if rid:
+                referencias_flowplus.fijar_duracion(cliente, rid, segundos)
+        flash(gettext("Volví a medir %(videos)s y la duración no era la que usó el precio de la pantalla. Revisa el "
+                      "precio nuevo y vuelve a generar — no se cobró nada.",
+                      videos=", ".join(f"{e} ({format_decimal(remedidos[e][1], format='#,##0.#')} s)" for e in cambiados)),
+              "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+    if sin_medida:
+        flash(gettext("No pude medir cuánto dura %(videos)s, y %(modelo)s cobra cada segundo de un video de "
+                      "referencia. Vuelve a intentarlo en un momento o súbelo otra vez — no se cobró nada.",
+                      videos=", ".join(sin_medida), modelo=gettext(flowplus_modelos.VIDEO[modelo]["nombre"])), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
     # Incidente 2026-09-30 (Forja): un video de referencia de 14,9 s y 20 s
     # pedidos → WaveSpeed 1405 «exceeds 30s limit». Wan 3.0 no admite más de
@@ -8546,6 +8592,11 @@ def cf_rearmar(cliente, cf_id):
     if not puede_rearmar:
         flash(gettext("Esa sesión no se puede rearmar ahora."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+    if lanzamiento_pendiente(entry):
+        # PND-214: rearmar la sacaría de «error», donde se ofrece «Recuperar el video».
+        flash(gettext("El pedido anterior de esta pieza pudo crearse y cobrarse aunque WaveSpeed no respondió: usa "
+                      "«Recuperar el video (sin pagar de nuevo)» en vez de generarla otra vez."), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
     # PND-299: rearmar es otra llamada al director y la paga el proyecto: sin saldo no se toca la sesión.
     libro_cobros.exigir(cliente, tareas_director.costo_estimado())
     creative_flow.actualizar(cliente, cf_id, estado="prompt_pendiente", error=None)
@@ -8569,7 +8620,10 @@ def cf_recuperar(cliente, cf_id):
     terminó, cierra la pieza. No genera ni paga de nuevo (max_intentos=1)."""
     entry = creative_flow.cargar(cliente).get(cf_id)
     pred = (entry or {}).get("prediccion") or {}
-    if not entry or entry.get("estado") != "error" or not pred.get("id") or (entry.get("tipo") or "video") == "imagen":
+    # PND-214: también un lanzamiento incierto (el pedido salió sin respuesta):
+    # la tarea lo busca en el historial de WaveSpeed.
+    recuperable = pred.get("id") or lanzamiento_pendiente(entry)
+    if not entry or entry.get("estado") != "error" or not recuperable or (entry.get("tipo") or "video") == "imagen":
         flash(gettext("Esa pieza no tiene nada que recuperar."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
     # Mismo orden que flowplus_lanzar.lanzar: el estado va ANTES de encolar.
@@ -8626,6 +8680,11 @@ def cf_generar_video(cliente, cf_id):
     # video que ya se generó o se está generando.
     if entry.get("estado") not in ("prompt_listo", "error"):
         flash(gettext("Este video ya se generó o se está generando — no se puede volver a disparar."), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+    if lanzamiento_pendiente(entry):
+        # PND-214: el pedido anterior salió sin respuesta y pudo cobrarse.
+        flash(gettext("El pedido anterior de esta pieza pudo crearse y cobrarse aunque WaveSpeed no respondió: usa "
+                      "«Recuperar el video (sin pagar de nuevo)» en vez de generarla otra vez."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
     if not (entry.get("referencias_urls") or []) and entry.get("enfoque") != "libre":
         flash(gettext("Esta sesión no tiene imágenes de referencia — descártala y crea una nueva."), "error")

@@ -59,6 +59,17 @@ def agregar(cliente, tipo, url, frame_url=None, origen="archivo", ruta_local=Non
     return rid
 
 
+def fijar_duracion(cliente, rid, duracion_s):
+    """La duración medida de nuevo de un video de la bandeja (PND-319: al crear
+    se vuelve a medir el archivo; si cambió, la bandeja guarda la medida nueva y
+    el precio a la vista es el que se cobrará)."""
+    items = listar(cliente)
+    for r in items:
+        if r["id"] == rid:
+            r["duracion_s"] = duracion_s
+    _guardar(cliente, items)
+
+
 def quitar(cliente, rid):
     items = [r for r in listar(cliente) if r["id"] != rid]
     _guardar(cliente, items)

@@ -44,8 +44,9 @@ Higgsfield Seedance acepta más de 3 imágenes»): WaveSpeed solo tiene su
 image-to-video (`image` de arranque + `last_image`), así que `seedance25_ref`
 va por fal (`proveedor: "fal"`, providers/fal_video.py):
 bytedance/seedance-2.5/reference-to-video (`image_urls`, que el prompt nombra
-@Image1, @Image2…; `duration` es TEXTO "4".."30"; formato elegible) y, sin
-ninguna imagen, bytedance/seedance-2.5/text-to-video. Precio verificado el
+@Image1, @Image2…; `duration` es TEXTO "4".."30"; formato elegible: 9:16, 16:9,
+1:1 y, desde el 2026-10-13 (PND-211), 4:3 y 3:4) y, sin ninguna imagen,
+bytedance/seedance-2.5/text-to-video (mismos formatos y precio). Precio verificado el
 2026-10-09 en la API de precios de fal (0,0214 USD por 1 000 tokens en las dos
 rutas) y en sus páginas: ~0,4730 USD/s a 720p, con o sin sonido. Videos de referencia como
 video quedan fuera por ahora (fal los factura aparte): entran por su
@@ -131,17 +132,20 @@ VIDEO = {
         "duraciones": (5, 8, 10, 12, 15, 20, 25, 30),
         "min_duracion": 4,
         "max_duracion": 30,
-        # fal cobra por píxeles de salida: 0,473 USD/s es su cifra de 720p (16:9 y
-        # 9:16; 1:1 tiene menos píxeles). 4:3 y 3:4 quedan fuera hasta medir su
-        # cobro real (PND-211): podrían pasar de esa cifra.
-        "formatos": ("9:16", "16:9", "1:1"),
+        # fal cobra por píxeles de salida (alto × ancho × segundos × 24 / 1024
+        # tokens, 0,0214 USD por 1 000): 0,473 USD/s es la cifra que publica para
+        # 720p. 4:3 y 3:4 se abren al mismo precio por segundo (PND-211, decisión
+        # 2026-10-13, lote 1): a 720p tienen casi los mismos píxeles que 16:9, así
+        # que no pasan de esa cifra; su factura la revisa la auditoría de PND-013.
+        # Sin imágenes va a text-to-video con los mismos formatos y precio.
+        "formatos": ("9:16", "16:9", "1:1", "4:3", "3:4"),
         "max_videos": 0,
         # Cómo nombra fal cada imagen en el prompt (esquema de reference-to-video).
         "token_imagen": "@Image{n}",
         "rotar": False,
         "audio_nativo": {"parametro": "generate_audio", "recargo_usd_s": 0.0},
         # Prueba real 2026-10-09: ByteDance rechaza (422, sin cobro) las fotos de personas reales.
-        "nota": N_("Hasta 10 imágenes de referencia (personajes, producto, lugar) que nombras en el texto con @Imagen 1, @Imagen 2…; de un video usa solo un fotograma. No acepta fotos de personas reales: los personajes tienen que ser creados con IA. Hasta 30 s, en el formato que elijas. Va por fal y es el más caro. Sonido de la escena incluido."),
+        "nota": N_("Hasta 10 imágenes de referencia (personajes, producto, lugar) que nombras en el texto con @Imagen 1, @Imagen 2…, o ninguna: solo con tu texto. De un video usa solo un fotograma. No acepta fotos de personas reales: los personajes tienen que ser creados con IA. Hasta 30 s, en el formato que elijas (también 4:3 y 3:4). Va por fal y es el más caro. Sonido de la escena incluido."),
     },
 }
 
@@ -346,6 +350,24 @@ def segundos_videos(modelo_id, referencias):
     return [float(r["duracion_s"]) for r in videos if r.get("duracion_s") is not None]
 
 
+def videos_facturados(modelo_id, referencias):
+    """Los videos de referencia que el modelo recibe COMO VIDEO y factura por
+    sus segundos (Wan 3.0, hasta `max_videos`); los demás usan su fotograma."""
+    info = VIDEO.get(modelo_id) or {}
+    max_videos = int(info.get("max_videos") or 0)
+    if not max_videos:
+        return []
+    return [r for r in (referencias or []) if r.get("tipo") == "video"][:max_videos]
+
+
+def videos_sin_duracion(modelo_id, referencias):
+    """Etiquetas de los videos que el modelo factura (`videos_facturados`) sin
+    `duracion_s` medida. PND-319: sin la medida el precio visto y lo anotado
+    quedarían por debajo de lo que cobra el proveedor; Crear avisa y no genera."""
+    return [r.get("etiqueta") or "@Video" for r in videos_facturados(modelo_id, referencias)
+            if r.get("duracion_s") is None]
+
+
 def problema_duracion(modelo_id, referencias, duracion):
     """None si la duración pedida cabe con los videos de referencia; si no,
     qué regla rompe (incidente 2026-09-30 en Forja: 14,9 s de video + 20 s
@@ -417,15 +439,9 @@ def estimate_hablado(modelo_id, segundos, resolucion=RESOLUCION_HABLADO):
 
 
 def _lanzar(path, payload, nombre, timeout_seconds=1200, on_progreso=None):
-    resp = requests.post(
-        f"{wavespeed_common.BASE_URL}/{path}", json=payload,
-        headers=wavespeed_common.headers(), timeout=60,
-    )
-    if not resp.ok:
-        raise wavespeed_common.error_de_respuesta(resp, path)
-    prediction_id = (resp.json().get("data") or {}).get("id")
-    if not prediction_id:
-        raise RuntimeError(f"WaveSpeed no devolvió un id de predicción: {resp.text[:500]}")
+    # PND-214: si el pedido salió y la respuesta no llegó, `LanzamientoIncierto`
+    # (pudo cobrarse; se busca en el historial, nunca se vuelve a mandar).
+    prediction_id = wavespeed_common.lanzar_prediccion(path, payload)
     wavespeed_common.avisar_lanzada(on_progreso, prediction_id)
     resultado = wavespeed_common.poll_hasta_listo(
         prediction_id, nombre, timeout_seconds=timeout_seconds, on_progreso=on_progreso,

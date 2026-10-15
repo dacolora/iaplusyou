@@ -90,3 +90,5 @@ en Crear (`dashboard._duracion_video`) todavía confía en la cabecera (PND-319)
 desde ese correo y «marcar verificado» del admin) pasa por `cuentas.confirmar_correo(usuario, correo=None)`, que además
 le da al proyecto de la cuenta su saldo de bienvenida una sola vez (`cobros.libro.dar_bienvenida`, skill `cobros`). Un
 camino nuevo que deje una cuenta verificada usa esa función, no `usuarios.actualizar(..., correo_verificado=True)`.
+
+Pruebas: `tests/test_swap_video_precio.py` (cabecera falsa, lista blanca, topes, 403). El precio de los videos de referencia de Wan 3.0 en Crear (`dashboard._duracion_video`, PND-319, 2026-10-13) usa la misma medida: ya no confía en la cabecera (skill `crear`).

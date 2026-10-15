@@ -172,8 +172,10 @@ def test_video_wan3_quita_fotograma_del_video_de_referencia(base_temporal, monke
     import tareas.flowplus as fp
     monkeypatch.setattr(fp, "BASE_DIR", str(tmp_path))
     cid = cf.crear("acme", [], [], [], "camina", 5, "", "A", referencias_urls=["https://x/1.png", "https://x/frame.jpg"])
+    # Con su duración medida: sin ella Wan no se lanza (PND-319, revisión del guardián de gasto).
     cf.actualizar("acme", cid, estado="video_generando", tipo="video", modelo="wan3",
-                  referencias=[{"tipo": "video", "url": "https://x/v.mp4", "frame_url": "https://x/frame.jpg"}])
+                  referencias=[{"tipo": "video", "url": "https://x/v.mp4", "frame_url": "https://x/frame.jpg",
+                                "duracion_s": 5.0}])
 
     visto = {}
 
@@ -181,7 +183,7 @@ def test_video_wan3_quita_fotograma_del_video_de_referencia(base_temporal, monke
         visto.update(refs=referencias, videos=videos, ar=aspect_ratio)
         return "https://prov/v.mp4"
     monkeypatch.setattr(fp.flowplus_modelos, "generar_video", _gen)
-    monkeypatch.setattr(fp.flowplus_modelos, "estimate_video", lambda m, d, con_sonido=True, calidad="final": {})
+    monkeypatch.setattr(fp.flowplus_modelos, "estimate_video", lambda m, d, con_sonido=True, calidad="final", **k: {})
     monkeypatch.setattr(fp.requests, "get", lambda *a, **k: _Resp())
     monkeypatch.setattr(fp.r2_uploader, "upload_video", lambda local, key: "https://r2/" + key)
     monkeypatch.setattr(fp.bitacora, "registrar", lambda *a, **k: None)
@@ -905,7 +907,8 @@ def test_preparar_mide_el_video_si_la_sesion_no_trae_su_duracion(base_temporal, 
     video = {"tipo": "video", "url": "https://x/v2.mp4", "frame_url": "https://x/v2.jpg", "etiqueta": "@Video 1"}
     cid = _sesion_wan_con_video(cf, monkeypatch, tmp_path, 25, video)
     medidos = []
-    monkeypatch.setattr(fp.cortes, "duracion", lambda ruta: medidos.append(ruta) or 12.0)
+    # PND-319: se mide por los paquetes del video bajado (`_medir_url`), no por la cabecera de la URL.
+    monkeypatch.setattr(fp, "_medir_url", lambda url: medidos.append(url) or 12.0)
     assert fp._preparar("acme", cid)[3] == 18
     assert medidos == ["https://x/v2.mp4"]
 

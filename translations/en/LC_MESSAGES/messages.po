@@ -517,6 +517,10 @@ msgid "%(modelo)s · %(n)s referencia(s) · se agotó la espera; el modelo la co
 msgstr "%(modelo)s · %(n)s reference(s) · the wait ran out; the model charges for it anyway"
 
 #, python-format
+msgid "%(modelo)s · %(n)s s · posible cobro: WaveSpeed no respondió al lanzar y no se pudo confirmar"
+msgstr "%(modelo)s · %(n)s s · possible charge: WaveSpeed didn't respond at launch and it couldn't be confirmed"
+
+#, python-format
 msgid "%(modelos)s está en pausa"
 msgstr "%(modelos)s is paused"
 
@@ -1807,6 +1811,26 @@ msgstr "%(proveedor)s did not accept the request (response %(status)s) and nothi
 #, python-format
 msgid "%(proveedor)s no aceptó el pedido y no se cobró nada: %(motivo)s. Ajusta la duración, el formato o las referencias y vuelve a generar."
 msgstr "%(proveedor)s did not accept the request and nothing was charged: %(motivo)s. Adjust the duration, the format or the references and generate again."
+
+#, python-format
+msgid "%(proveedor)s no recibió el pedido de %(modelo)s: no se creó ni se cobró nada. Ya puedes volver a generarlo."
+msgstr "%(proveedor)s didn't receive the %(modelo)s request: nothing was created or charged. You can generate it again now."
+
+#, python-format
+msgid "%(proveedor)s no respondió al lanzar %(modelo)s y el pedido pudo crearse y cobrarse, pero a esa misma hora hay otros pedidos de ese modelo y no podemos saber cuál es el tuyo sin arriesgarnos a traer el de otra pieza. Ya avisamos al administrador. Para no pagar dos veces esta pieza no se vuelve a generar; si la necesitas ya, usa «Editar y crear otra a partir de esta»."
+msgstr "%(proveedor)s didn't respond when %(modelo)s was launched and the request may have been created and charged, but there are other requests for that model at that same time and we can't tell which one is yours without risking bringing in another piece's. We've already notified the administrator. To avoid paying twice this piece won't be generated again; if you need it now, use “Edit and create another one from this”."
+
+#, python-format
+msgid "%(proveedor)s no respondió al lanzar %(modelo)s: el pedido pudo crearse y cobrarse, y todavía no pudimos confirmarlo. No lo vuelvas a generar: toca «Recuperar el video» en unos minutos y, si se creó, lo traemos sin pagar de nuevo."
+msgstr "%(proveedor)s didn't respond when %(modelo)s was launched: the request may have been created and charged, and we couldn't confirm it yet. Don't generate it again: tap “Recover the video” in a few minutes and, if it was created, we'll bring it in without paying again."
+
+#, python-format
+msgid "%(proveedor)s no respondió al lanzar el pedido: pudo crearse y cobrarse. Espera unos minutos antes de volver a generar, para no pagar dos veces."
+msgstr "%(proveedor)s didn't respond when the request was launched: it may have been created and charged. Wait a few minutes before generating again, so you don't pay twice."
+
+#, python-format
+msgid "%(proveedor)s no tiene ese pedido: no se cobró."
+msgstr "%(proveedor)s doesn't have that request: nothing was charged."
 
 #, python-format
 msgid "%(proveedor)s rechazó la llave de Creatv (respuesta %(status)s): no se generó ni se cobró nada. Avísale al administrador."
@@ -5433,6 +5457,10 @@ msgstr "Create and use"
 msgid "Crear › Audios"
 msgstr "Create › Audios"
 
+#, python-format
+msgid "Crear: un video de %(cliente)s pudo cobrarse y no sabemos cuál es"
+msgstr "Create: a video from %(cliente)s may have been charged and we can't tell which one it is"
+
 msgid "Creas una app en developers.facebook.com y la pasas a modo Live."
 msgstr "You create an app at developers.facebook.com and switch it to Live mode."
 
@@ -6795,6 +6823,9 @@ msgstr "The country %(pais)s was left without pieces: remove the country or sele
 
 msgid "El país debe ser un código de 2 letras, como CO."
 msgstr "The country must be a 2-letter code, like CO."
+
+msgid "El pedido anterior de esta pieza pudo crearse y cobrarse aunque WaveSpeed no respondió: usa «Recuperar el video (sin pagar de nuevo)» en vez de generarla otra vez."
+msgstr "This piece's previous request may have been created and charged even though WaveSpeed didn't respond: use “Recover the video (without paying again)” instead of generating it again."
 
 #, python-format
 msgid "El plan anual se renueva el %(momento)s: a esa hora cobramos %(monto)s."
@@ -10229,8 +10260,8 @@ msgstr "Halloween"
 msgid "Hasta"
 msgstr "To"
 
-msgid "Hasta 10 imágenes de referencia (personajes, producto, lugar) que nombras en el texto con @Imagen 1, @Imagen 2…; de un video usa solo un fotograma. No acepta fotos de personas reales: los personajes tienen que ser creados con IA. Hasta 30 s, en el formato que elijas. Va por fal y es el más caro. Sonido de la escena incluido."
-msgstr "Up to 10 reference images (characters, product, place) that you name in the text with @Imagen 1, @Imagen 2…; from a video it only uses one frame. It doesn't accept photos of real people: characters have to be created with AI. Up to 30 s, in the format you choose. Runs on fal and is the most expensive. Scene sound included."
+msgid "Hasta 10 imágenes de referencia (personajes, producto, lugar) que nombras en el texto con @Imagen 1, @Imagen 2…, o ninguna: solo con tu texto. De un video usa solo un fotograma. No acepta fotos de personas reales: los personajes tienen que ser creados con IA. Hasta 30 s, en el formato que elijas (también 4:3 y 3:4). Va por fal y es el más caro. Sonido de la escena incluido."
+msgstr "Up to 10 reference images (characters, product, place) that you name in the text with @Imagen 1, @Imagen 2…, or none: just your text. From a video it only uses one frame. It doesn't accept photos of real people: characters have to be created with AI. Up to 30 s, in the format you choose (4:3 and 3:4 too). Runs on fal and is the most expensive. Scene sound included."
 
 msgid "Hasta 10 imágenes y 5 videos de referencia (1-15 s), 720p, hasta 30 s (con videos de referencia, sus segundos más los del resultado no pasan de 30). El único que usa videos tal cual. Sonido de la escena incluido."
 msgstr "Up to 10 images and 5 reference videos (1-15 s), 720p, up to 30 s (with reference videos, their seconds plus the result's don't exceed 30). The only one that uses videos as-is. Scene sound included."
@@ -13575,6 +13606,10 @@ msgstr "Couldn't read your assets:"
 msgid "No pude leer tus activos: %(error)s"
 msgstr "Couldn't read your assets: %(error)s"
 
+#, python-format
+msgid "No pude medir cuánto dura %(videos)s, y %(modelo)s cobra cada segundo de un video de referencia. Vuelve a intentarlo en un momento o súbelo otra vez — no se cobró nada."
+msgstr "I couldn't measure how long %(videos)s lasts, and %(modelo)s charges for every second of a reference video. Try again in a moment or upload it again — nothing was charged."
+
 msgid "No pude medir la duración de ese audio."
 msgstr "I couldn't measure the length of that audio."
 
@@ -13940,6 +13975,10 @@ msgid "No se pudo comprobar"
 msgstr "Couldn't check"
 
 #, python-format
+msgid "No se pudo conectar con %(proveedor)s: el pedido no salió y no se cobró nada. Vuelve a intentarlo en unos minutos."
+msgstr "Couldn't connect to %(proveedor)s: the request wasn't sent and nothing was charged. Try again in a few minutes."
+
+#, python-format
 msgid "No se pudo conectar con Atria: %(tipo)s."
 msgstr "Couldn't connect to Atria: %(tipo)s."
 
@@ -14124,6 +14163,10 @@ msgstr "Couldn't queue the preparation."
 msgid "No se pudo poner la preparación en la cola: vuelve a intentarlo."
 msgstr "Couldn't queue the preparation: try again."
 
+#, python-format
+msgid "No se pudo preguntar a %(proveedor)s por el pedido; queda «Recuperar el video»."
+msgstr "Couldn't ask %(proveedor)s about the request; “Recover the video” is still available."
+
 #, python-brace-format
 msgid "No se pudo preparar ese video (error {status})."
 msgstr "Couldn't prepare that video (error {status})."
@@ -14231,6 +14274,10 @@ msgstr "Couldn't watch the spend in Meta: %(error)s"
 #, python-format
 msgid "No se pudo volver a pausar en Meta: %(motivo)s"
 msgstr "Couldn't pause it again on Meta: %(motivo)s"
+
+#, python-format
+msgid "No se puede saber cuál pedido de %(proveedor)s es el de esta pieza; avisamos al administrador."
+msgstr "We can't tell which %(proveedor)s request belongs to this piece; we notified the administrator."
 
 msgid "No se renueva más; sigue hasta el fin de lo pagado, sin devolución."
 msgstr "It no longer renews; it lasts until the end of what is paid, with no refund."
@@ -20355,6 +20402,10 @@ msgstr "Back to balance"
 msgid "Volver al tablero"
 msgstr "Back to the board"
 
+#, python-format
+msgid "Volví a medir %(videos)s y la duración no era la que usó el precio de la pantalla. Revisa el precio nuevo y vuelve a generar — no se cobró nada."
+msgstr "I measured %(videos)s again and its length wasn't the one the price on screen used. Check the new price and generate again — nothing was charged."
+
 msgid "Voz"
 msgstr "Voice"
 
@@ -20448,6 +20499,13 @@ msgstr "Wan-2.2 Animate Replace"
 
 msgid "WaveSpeed (videos e imágenes de Crear)"
 msgstr "WaveSpeed (videos and images in Create)"
+
+msgid "WaveSpeed no respondió al lanzar el video: el pedido pudo crearse y cobrarse. Lo estamos buscando para traerlo sin pagar de nuevo."
+msgstr "WaveSpeed didn't respond when the video was launched: the request may have been created and charged. We're looking for it to bring it in without paying again."
+
+#, python-format
+msgid "WaveSpeed no respondió al lanzar la pieza %(cf)s (%(modelo)s) de %(cliente)s entre %(desde)s y %(hasta)s (UTC), y en su historial no se puede saber cuál predicción es la suya. Candidatas: %(ids)s. Revísalo en el panel de WaveSpeed; la pieza no se vuelve a generar sola."
+msgstr "WaveSpeed didn't respond when piece %(cf)s (%(modelo)s) from %(cliente)s was launched between %(desde)s and %(hasta)s (UTC), and its history can't tell which prediction is that piece's. Candidates: %(ids)s. Check it in the WaveSpeed dashboard; the piece won't be generated again on its own."
 
 msgid "Web (páginas)"
 msgstr "Web (pages)"
@@ -22712,6 +22770,9 @@ msgstr "natural, afternoon light"
 
 msgid "ninguna"
 msgstr "none"
+
+msgid "ninguna clara"
+msgstr "none clear"
 
 #, python-format
 msgid "ninguno junta %(meta)s compras por semana"
