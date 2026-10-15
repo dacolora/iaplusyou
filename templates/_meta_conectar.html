@@ -93,6 +93,11 @@
   {% endif %}
   {% if cm.detalle.conectado_en %}· {{ _('desde') }} {{ cm.detalle.conectado_en[:10] }}{% endif %}
   {% if not cm.verificado %}· <em>{{ _('sin verificar ahora (Meta no respondió)') }}</em>{% endif %}
+  {# PND-058: lo que vence es el acceso a los datos; se renueva volviendo a conectar (no «Desconectar», que borra las
+     métricas copiadas). La alerta `meta_acceso:datos` trae aquí 14 días antes. #}
+  {% if cm.detalle.acceso_datos_vence_en %}
+  <br><small id="meta-acceso-datos">{{ _('Acceso a los datos de Meta hasta el %(fecha)s; se renueva volviendo a conectar, sin borrar nada.', fecha=cm.detalle.acceso_datos_vence_en[:10]) }}{% if meta_app %} <a href="{{ url_for('meta_conectar', cliente=cliente) }}">{{ _('Renovar el acceso') }}</a>{% endif %}</small>
+  {% endif %}
   {% if not cm.detalle.page_id %}
   <br><small>{{ _('Conectado solo para métricas: sin Página no se pueden lanzar anuncios ni publicar.') }} <a href="#rendimiento">{{ _('Ver métricas en la pestaña Rendimiento') }}</a></small><br>
   {% endif %}

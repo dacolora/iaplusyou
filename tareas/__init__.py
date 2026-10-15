@@ -60,6 +60,7 @@ TIPOS_EXENTOS_DE_COBRO = {
     "exp_avanzar_todos": "periódica: avanza derivaciones; lo que produce pasa por su propio freno",
     "meta_publicar": "publica en Meta; no llama a un proveedor que cobra",
     "meta_refrescar": "lee métricas de Meta",
+    "meta_revisar_acceso": "periódica: lee en Meta cuándo vence el acceso a los datos; no cobra",
     "meta_rend_sincronizar": "lee métricas de las cuentas de Meta y las tasas del BCE; no cobra",
     "meta_rend_sincronizar_todas": "periódica: solo encola meta_rend_sincronizar",
     "meta_rend_limpiar": "periódica de mantenimiento",

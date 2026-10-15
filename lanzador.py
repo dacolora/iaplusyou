@@ -10,6 +10,7 @@ Las credenciales se cargan y limpian bajo el lock de tareas.meta (mismo motivo q
 import logging
 import math
 import time
+from datetime import date, timedelta
 
 import requests
 
@@ -87,12 +88,32 @@ def _cuenta_meta(creds):
                             params={"fields": "currency,min_daily_budget,min_campaign_group_spend_cap"}) or {}
 
 
+def _minimo_diario_esperado(moneda):
+    """≈ US$ 1 al día en `moneda`, lo que esperamos que sea el mínimo diario de Meta para una cuenta en esa moneda:
+    el de `PRESUPUESTO_MINIMO_DIARIO` o, para las monedas que no están ahí (GBP, DKK, JPY…), US$ 1 convertido con la
+    tasa del BCE de hoy (`meta_rendimiento.tasas`; si no está guardada se pide en el momento). None sin tasa: `tasas`
+    no inventa una ni usa una de hace más de 4 días (PND-325, 2026-10-15)."""
+    from presupuesto_experimentos import PRESUPUESTO_MINIMO_DIARIO
+    if moneda in PRESUPUESTO_MINIMO_DIARIO:
+        return PRESUPUESTO_MINIMO_DIARIO[moneda]
+    from meta_rendimiento import tasas
+    hoy = date.today()
+    usd = tasas.usd(moneda, hoy.isoformat())
+    if not usd:
+        tasas.asegurar([moneda], (hoy - timedelta(days=7)).isoformat(), hoy.isoformat())
+        usd = tasas.usd(moneda, hoy.isoformat())
+    if not usd or usd <= 0:
+        return None
+    return 1 / usd
+
+
 def comprobar_moneda(cuenta, moneda):
     """Antes de mandarle a Meta un presupuesto o un tope (PND-322): la cuenta factura en la moneda del experimento y
     la unidad de `monedas_meta` cuadra con el mínimo diario que Meta dice para ESA cuenta, que es un dato de Meta y
     no nuestro. Con la lista vieja, 4 000 COP salían como 400 000 contra un mínimo de 3 322: ×120, y aquí se frena.
+    PND-325 (2026-10-15): la comprobación de la unidad ya no se salta en silencio. Sin `min_daily_budget` de Meta, o
+    sin un mínimo esperado (una moneda fuera de `PRESUPUESTO_MINIMO_DIARIO` sin tasa del BCE), no se manda nada.
     Lanza `PresupuestoNoCoincide`; no se manda ningún monto sin pasar por aquí."""
-    from presupuesto_experimentos import PRESUPUESTO_MINIMO_DIARIO
     real = (cuenta.get("currency") or "").strip().upper()
     if not real:
         raise PresupuestoNoCoincide(gettext(
@@ -102,14 +123,21 @@ def comprobar_moneda(cuenta, moneda):
             "La cuenta de Meta factura en %(real)s y el experimento está en %(moneda)s: no se manda ningún presupuesto.",
             real=real, moneda=moneda or "?"))
     monedas_meta.factor(real)   # una moneda fuera de la tabla de Meta se niega aquí
-    nuestro = PRESUPUESTO_MINIMO_DIARIO.get(real)
     minimo_meta = _entero(cuenta.get("min_daily_budget"))
-    if nuestro and minimo_meta and minimo_meta > 0:
-        razon = centavos(nuestro, real) / minimo_meta
-        if not (1 / _HOLGURA_UNIDAD <= razon <= _HOLGURA_UNIDAD):
-            raise PresupuestoNoCoincide(gettext(
-                "La unidad de %(moneda)s no cuadra con la cuenta de Meta (su mínimo diario es %(minimo)s en su unidad): "
-                "no se manda ningún presupuesto.", moneda=real, minimo=minimo_meta))
+    if not minimo_meta or minimo_meta <= 0:
+        raise PresupuestoNoCoincide(gettext(
+            "Meta no dijo el mínimo diario de la cuenta publicitaria: sin él no se puede comprobar en qué unidad va "
+            "%(moneda)s y no se manda ningún presupuesto. Vuelve a intentar en unos minutos.", moneda=real))
+    nuestro = _minimo_diario_esperado(real)
+    if not nuestro:
+        raise PresupuestoNoCoincide(gettext(
+            "No hay una tasa de cambio del BCE de hoy para %(moneda)s: sin ella no se puede comprobar en qué unidad va "
+            "y no se manda ningún presupuesto.", moneda=real))
+    razon = centavos(nuestro, real) / minimo_meta
+    if not (1 / _HOLGURA_UNIDAD <= razon <= _HOLGURA_UNIDAD):
+        raise PresupuestoNoCoincide(gettext(
+            "La unidad de %(moneda)s no cuadra con la cuenta de Meta (su mínimo diario es %(minimo)s en su unidad): "
+            "no se manda ningún presupuesto.", moneda=real, minimo=minimo_meta))
 
 
 def _dias_que_alcanza(ex):

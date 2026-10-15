@@ -81,6 +81,8 @@ PERIODICAS = [("tienda_sync_pedidos_todas", 7200), ("tw_sincronizar_todas", 7200
               ("errores_limpiar", 86400),
               # Los días de anuncio de Meta se guardan 95 días (spec 2026-10-08 §6).
               ("meta_rend_limpiar", 86400),
+              # PND-058: cuándo vence el acceso a los datos de Meta de cada proyecto, para avisar en Alertas.
+              ("meta_revisar_acceso", 86400),
               # Cadena de escenas de Flow Plus (spec 2026-09-30): avanza cada cadena viva
               # cuando su escena en curso termina (gratis; las escenas las cobra Crear).
               ("cadena_vigilar", 60),
