@@ -278,9 +278,13 @@ def _bloqueante_de_meta(monkeypatch):
     return arrancadas, soltar, activas
 
 
-def test_el_carril_de_lectura_es_la_copia_de_meta_y_nada_mas():
+def test_el_carril_de_lectura_es_la_copia_de_meta_y_el_precalculo_de_rendimiento():
+    """Largas, gratis y de solo lectura (skill plataforma): la copia de Meta y, desde el 2026-10-15, las sumas
+    precalculadas de Rendimiento (`tw_precalcular`). Nada que cobre."""
+    import tareas
     import worker
-    assert worker.CARRIL_LECTURA == ("meta_rend_sincronizar",) and worker.HILOS_LECTURA == 1
+    assert worker.CARRIL_LECTURA == ("meta_rend_sincronizar", "tw_precalcular") and worker.HILOS_LECTURA == 1
+    assert not set(worker.CARRIL_LECTURA) & set(tareas.TIPOS_QUE_COBRAN)
     assert not set(worker.CARRIL_LECTURA) & set(worker.CARRIL_CREAR)
 
 
