@@ -40,8 +40,22 @@ def _exigir(cliente, paso, palabras=0):
     """Cobros (spec 2026-10-08 §5.2): los pasos con Claude corren en un hilo de
     esta misma petición (`trabajos.iniciar`), no en el worker: el saldo se pide
     aquí, antes de cambiar el estado y de lanzar el hilo. Sin saldo,
-    SaldoInsuficiente y el manejador común responde 402."""
-    libro.exigir(cliente, gastos.estimar("guion_clips", paso=paso, palabras=palabras)["usd"], tipo="guion_clips")
+    SaldoInsuficiente y el manejador común responde 402. Desde PND-300 además
+    reserva con un id propio (lo devuelve): «Armar» abre un hilo por video y,
+    sin reserva, diez clics seguidos veían el mismo saldo libre. La reserva la
+    suelta el hilo al terminar (`trabajos.iniciar_con_pedido`) o `_fallo` si la
+    ruta no llega a lanzarlo."""
+    return libro.reservar_pedido(cliente, gastos.estimar("guion_clips", paso=paso, palabras=palabras)["usd"],
+                                 tipo="guion_clips")
+
+
+def _fallo(cliente, pedido, e):
+    """La ruta no llegó a lanzar el hilo: suelta la reserva del pedido (PND-300) y responde el error de siempre (un
+    ErrorRefinador) o lo deja subir."""
+    libro.soltar_pedido(cliente, pedido)
+    if isinstance(e, ErrorRefinador):
+        return _error(e)
+    raise e
 
 
 def _palabras(v):
@@ -181,8 +195,9 @@ def panel(cliente):
     return render_template("_gpg_panel.html", **ctx)
 
 
-def _lanzar_lectura(cliente, lote_id):
-    trabajos.iniciar(f"guion_leer_{lote_id}", lambda: lectura.leer_lote(lote_id), duracion_estimada=60, cliente=cliente)
+def _lanzar_lectura(cliente, lote_id, pedido=None):
+    trabajos.iniciar_con_pedido(f"guion_leer_{lote_id}", lambda: lectura.leer_lote(lote_id), cliente, pedido,
+                                duracion_estimada=60)
 
 
 @bp.post("/lotes")
@@ -190,7 +205,7 @@ def lote_crear(cliente):
     cuerpo = _cuerpo()
     if cuerpo is None:
         return _sin_cuerpo()
-    _exigir(cliente, "leer", 750)
+    pedido = _exigir(cliente, "leer", 750)
     try:
         if str(cuerpo.get("notion_url") or "").strip():
             if not notion.conectado(cliente):
@@ -201,9 +216,9 @@ def lote_crear(cliente):
             lote_id = datos.crear_lote(cliente, "", fuente="notion", notion_page_id=page_id)
         else:
             lote_id = datos.crear_lote(cliente, cuerpo.get("texto"))
-    except ErrorRefinador as e:
-        return _error(e)
-    _lanzar_lectura(cliente, lote_id)
+    except BaseException as e:  # noqa: BLE001 — `_fallo` suelta la reserva y vuelve a lanzar lo que no es nuestro
+        return _fallo(cliente, pedido, e)
+    _lanzar_lectura(cliente, lote_id, pedido)
     return jsonify({"lote_id": lote_id}), 202
 
 
@@ -250,12 +265,12 @@ def notion_borrar(cliente):
 def lote_reintentar(cliente, lid):
     if _cuerpo() is None:
         return _sin_cuerpo()
-    _exigir(cliente, "leer", 750)
+    pedido = _exigir(cliente, "leer", 750)
     try:
         datos.reintentar_lote(cliente, lid)
-    except ErrorRefinador as e:
-        return _error(e)
-    _lanzar_lectura(cliente, lid)
+    except BaseException as e:  # noqa: BLE001 — ver `_fallo`
+        return _fallo(cliente, pedido, e)
+    _lanzar_lectura(cliente, lid, pedido)
     return jsonify({"lote_id": lid}), 202
 
 
@@ -351,15 +366,17 @@ def video_calcular(cliente, vid):
 def video_recorte_proponer(cliente, vid):
     if _cuerpo() is None:
         return _sin_cuerpo()
+    pedido = None
     try:
         v = _video_o_404(cliente, vid)
         if not v["config"].get("duracion_objetivo"):
             raise Conflicto(gettext("Pon una duración objetivo para poder recortar."))
-        _exigir(cliente, "recorte")
+        pedido = _exigir(cliente, "recorte")
         datos.empezar(cliente, vid, "recortando", ("configurando",))
-    except ErrorRefinador as e:
-        return _error(e)
-    trabajos.iniciar(f"guion_recorte_{vid}", lambda: recorte.proponer(vid), duracion_estimada=40, cliente=cliente)
+    except BaseException as e:  # noqa: BLE001 — ver `_fallo`
+        return _fallo(cliente, pedido, e)
+    trabajos.iniciar_con_pedido(f"guion_recorte_{vid}", lambda: recorte.proponer(vid), cliente, pedido,
+                                duracion_estimada=40)
     return jsonify({"video_id": vid}), 202
 
 
@@ -380,16 +397,17 @@ def video_recorte(cliente, vid):
 def video_armar(cliente, vid):
     if _cuerpo() is None:
         return _sin_cuerpo()
+    pedido = None
     try:
         v = _video_o_404(cliente, vid)
         no_caben = clips.lineas_que_no_caben(v)
         if no_caben:
             raise Conflicto(no_caben)
-        _exigir(cliente, "armar", _palabras(v))
+        pedido = _exigir(cliente, "armar", _palabras(v))
         datos.empezar(cliente, vid, "armando", ("configurando", "invalido", "error"))
-    except ErrorRefinador as e:
-        return _error(e)
-    trabajos.iniciar(f"guion_armar_{vid}", lambda: clips.armar(vid), duracion_estimada=300, cliente=cliente)
+    except BaseException as e:  # noqa: BLE001 — ver `_fallo`
+        return _fallo(cliente, pedido, e)
+    trabajos.iniciar_con_pedido(f"guion_armar_{vid}", lambda: clips.armar(vid), cliente, pedido, duracion_estimada=300)
     return jsonify({"video_id": vid}), 202
 
 
@@ -436,13 +454,15 @@ def video_documento(cliente, vid):
 def video_imagenes(cliente, vid):
     if _cuerpo() is None:
         return _sin_cuerpo()
+    pedido = None
     try:
         _video_o_404(cliente, vid)
-        _exigir(cliente, "imagenes")
+        pedido = _exigir(cliente, "imagenes")
         datos.empezar_imagenes(cliente, vid)
-    except ErrorRefinador as e:
-        return _error(e)
-    trabajos.iniciar(f"guion_imagenes_{vid}", lambda: imagenes.escribir(vid), duracion_estimada=60, cliente=cliente)
+    except BaseException as e:  # noqa: BLE001 — ver `_fallo`
+        return _fallo(cliente, pedido, e)
+    trabajos.iniciar_con_pedido(f"guion_imagenes_{vid}", lambda: imagenes.escribir(vid), cliente, pedido,
+                                duracion_estimada=60)
     return jsonify({"video_id": vid}), 202
 
 

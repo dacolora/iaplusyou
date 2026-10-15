@@ -103,14 +103,18 @@ def prompt_mensaje(cliente, pid):
     if cuerpo is None:
         return _sin_cuerpo()
     # Cobros (spec 2026-10-08 §5.2): Claude responde en un hilo de esta
-    # petición; sin saldo no se guarda el mensaje ni se lanza el hilo.
-    libro.exigir(cliente, gastos.estimar("refinar_prompt")["usd"], tipo="refinar_prompt")
+    # petición; sin saldo no se guarda el mensaje ni se lanza el hilo. Reserva
+    # con un id propio hasta que el hilo termine (PND-300).
+    pedido = libro.reservar_pedido(cliente, gastos.estimar("refinar_prompt")["usd"], tipo="refinar_prompt")
     try:
         mensaje_id = refinador.pedir_cambio(cliente, pid, cuerpo.get("mensaje"), usuario=session.get("usuario"))
-    except refinador.ErrorRefinador as e:
-        return _error(e)
+    except BaseException as e:  # noqa: BLE001 — se suelta la reserva; lo que no es del refinador sigue subiendo
+        libro.soltar_pedido(cliente, pedido)
+        if isinstance(e, refinador.ErrorRefinador):
+            return _error(e)
+        raise
     job_id = f"guion_refinar_{mensaje_id}"
-    trabajos.iniciar(job_id, lambda: refinador.responder(mensaje_id), duracion_estimada=40, cliente=cliente)
+    trabajos.iniciar_con_pedido(job_id, lambda: refinador.responder(mensaje_id), cliente, pedido, duracion_estimada=40)
     return jsonify({"mensaje_id": mensaje_id, "job_id": job_id}), 202
 
 

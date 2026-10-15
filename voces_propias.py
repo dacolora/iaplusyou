@@ -419,17 +419,19 @@ def muestra(cliente, valor, idioma):
 
     def _producir():
         # Cobros (spec 2026-10-08 §5.2): la muestra se sintetiza en la petición
-        # (au_muestra) y la paga el proyecto; solo cuando no está en caché.
-        libro.exigir(cliente, gastos.estimar("locucion", caracteres=len(frase))["usd"])
-        t = sintetizar(cliente, vp, frase, idioma, timeout=45)
-        usd = float(t["costo_usd"])
-        # La pide quien mira (ruta au_muestra), pero el detalle se GUARDA: va en
-        # el idioma del proyecto (spec 2026-09-26 §B8).
-        with idiomas.en_idioma(idiomas.de_tarea({"cliente": cliente})):
-            detalle = gettext("muestra de voz propia · %(nombre)s · %(idioma)s", nombre=vp["nombre"], idioma=idioma)
-        gastos.registrar_seguro(cliente, "locucion", usd,
-                                f"muestra_propia:{vp['id']}:{idioma}:{int(time.time() * 1000)}",
-                                detalle=detalle, proveedor=PROVEEDOR)
+        # (au_muestra) y la paga el proyecto; solo cuando no está en caché. Con
+        # reserva propia mientras fal responde (PND-300).
+        with libro.pedido(cliente, gastos.estimar("locucion", caracteres=len(frase))["usd"]):
+            t = sintetizar(cliente, vp, frase, idioma, timeout=45)
+            usd = float(t["costo_usd"])
+            # La pide quien mira (ruta au_muestra), pero el detalle se GUARDA: va en
+            # el idioma del proyecto (spec 2026-09-26 §B8).
+            with idiomas.en_idioma(idiomas.de_tarea({"cliente": cliente})):
+                detalle = gettext("muestra de voz propia · %(nombre)s · %(idioma)s", nombre=vp["nombre"],
+                                  idioma=idioma)
+            gastos.registrar_seguro(cliente, "locucion", usd,
+                                    f"muestra_propia:{vp['id']}:{idioma}:{int(time.time() * 1000)}",
+                                    detalle=detalle, proveedor=PROVEEDOR)
         url, bytes_, dur = _subir_mp3(cliente, t["url"], f"clientes/{cliente}/materiales/muestra_propia_{h[:16]}.mp3")
         return {"tipo": "audio", "origen": audios.ORIGEN_VOZ, "url": url, "bytes": bytes_, "duracion_ms": dur,
                 "costo_usd": usd, "extra": {"texto": frase, "voz": vp["valor"], "idioma": idioma, "muestra": True,

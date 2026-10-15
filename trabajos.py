@@ -199,6 +199,26 @@ def iniciar(job_id, fn, duracion_estimada=60, etapas=None, cliente=None):
     return True
 
 
+def iniciar_con_pedido(job_id, fn, cliente, pedido_id, duracion_estimada=60, etapas=None):
+    """`iniciar` para un trabajo que paga al proveedor desde su hilo con la reserva de un pedido (PND-300,
+    `cobros.libro.reservar_pedido`): `fn` corre dentro de `libro.en_pedido` (su gasto se cobra al precio reservado
+    y la reserva se suelta al terminar, también si falla). Si el hilo no arranca (ya corría ese job_id), la reserva
+    se suelta ya. Devuelve lo mismo que `iniciar`."""
+    from cobros import libro  # noqa: PLC0415 — cobros.libro importa gastos, que importa media app
+
+    def correr():
+        with libro.en_pedido(cliente, pedido_id):
+            return fn()
+    try:
+        lanzado = iniciar(job_id, correr, duracion_estimada=duracion_estimada, etapas=etapas, cliente=cliente)
+    except BaseException:
+        libro.soltar_pedido(cliente, pedido_id)
+        raise
+    if not lanzado:
+        libro.soltar_pedido(cliente, pedido_id)
+    return lanzado
+
+
 def reportar(job_id, etapa=None, progreso=None, detalle=None):
     """Canal para que un trabajo EN CURSO cuente en qué va. Se llama desde dentro
     de la propia fn() (todas son closures que ya tienen job_id en scope, así que

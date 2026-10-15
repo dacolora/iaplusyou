@@ -6232,13 +6232,15 @@ def org_redactar(cliente):
     # Cobros (spec 2026-10-08 §5.2): sin saldo, 402 (organico.redactar
     # caería en silencio al texto determinista, y la persona pidió IA).
     # Con plan y tope libre es «incluido» y no pide saldo (spec planes §4): por eso el tipo.
-    libro_cobros.exigir(cliente, gastos.TARIFAS["caption_organico"], tipo="caption_organico")
-    try:
-        textos = organico.redactar(cliente, pieza_id, plataformas)
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
-    except Exception as e:  # noqa: BLE001 — el error vuelve al form, nunca un token
-        return jsonify({"error": gettext("No pude redactar el texto: %(error)s", error=cola.sin_token(str(e)))}), 500
+    # Reserva propia mientras Claude responde (PND-300); dentro, el `exigir` de redactar no cuenta esta reserva.
+    with libro_cobros.pedido(cliente, gastos.TARIFAS["caption_organico"], tipo="caption_organico"):
+        try:
+            textos = organico.redactar(cliente, pieza_id, plataformas)
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+        except Exception as e:  # noqa: BLE001 — el error vuelve al form, nunca un token
+            return jsonify({"error": gettext("No pude redactar el texto: %(error)s",
+                                             error=cola.sin_token(str(e)))}), 500
     return jsonify({p: {"titulo": t.get("titulo") or "", "caption": t.get("caption") or "",
                         "fallback": bool((t.get("extra") or {}).get("fallback"))} for p, t in textos.items()})
 

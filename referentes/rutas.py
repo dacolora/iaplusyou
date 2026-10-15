@@ -347,16 +347,17 @@ def recrear_leer(cliente, rid):
         return jsonify({"error": gettext("Ese referente no existe.")}), 404
     if lectura.de(r):
         return jsonify({"ok": True, "cobrado": False})
-    libro.exigir(cliente, gastos.estimar("leer_referente")["usd"], tipo="adaptar_referente")     # cobros §5.2: antes de llamar a Claude
-    try:
-        lec, ent, sal = lectura.leer(r)
-    except lectura.LecturaInvalida as e:
-        if e.tokens_entrada or e.tokens_salida:
-            _registrar_lectura(cliente, rid, r, e.tokens_entrada, e.tokens_salida, fallo=True)
-        return jsonify({"error": str(e)}), 502
-    except Exception as e:
-        return jsonify({"error": gettext("No se pudo leer la referencia (%(tipo)s).", tipo=type(e).__name__)}), 502
-    _registrar_lectura(cliente, rid, r, ent, sal)
+    # Cobros §5.2: el saldo antes de llamar a Claude, con reserva propia hasta que se anota (PND-300).
+    with libro.pedido(cliente, gastos.estimar("leer_referente")["usd"], tipo="adaptar_referente"):
+        try:
+            lec, ent, sal = lectura.leer(r)
+        except lectura.LecturaInvalida as e:
+            if e.tokens_entrada or e.tokens_salida:
+                _registrar_lectura(cliente, rid, r, e.tokens_entrada, e.tokens_salida, fallo=True)
+            return jsonify({"error": str(e)}), 502
+        except Exception as e:
+            return jsonify({"error": gettext("No se pudo leer la referencia (%(tipo)s).", tipo=type(e).__name__)}), 502
+        _registrar_lectura(cliente, rid, r, ent, sal)
     lec["ancho"], lec["alto"] = lectura.medir(r["imagen_url"])
     datos.guardar_lectura(rid, lec)
     return jsonify({"ok": True, "cobrado": True})
@@ -384,7 +385,13 @@ def recrear_adaptar(cliente, rid):
     lec = lectura.de(r)
     crudos = cuerpo.get("textos")
     campos = {f"texto_{i}": str(v or "") for i, v in enumerate(crudos)} if isinstance(crudos, list) else {}
-    libro.exigir(cliente, gastos.estimar("adaptar_referente")["usd"], tipo="adaptar_referente")     # cobros §5.2: antes de llamar a Claude
+    # Cobros §5.2: el saldo antes de llamar a Claude, con reserva propia hasta que se anota (PND-300).
+    with libro.pedido(cliente, gastos.estimar("adaptar_referente")["usd"], tipo="adaptar_referente"):
+        return _adaptar(cliente, rid, r, cuerpo, producto, idioma, familia, lec, campos)
+
+
+def _adaptar(cliente, rid, r, cuerpo, producto, idioma, familia, lec, campos):
+    """La llamada a Claude de «Adaptar con IA» y su gasto (dentro de la reserva del pedido)."""
     try:
         resultado, ent, sal = recrear.adaptar(datos.localizado(r, idioma), familia, producto,
                                               str(cuerpo.get("titular") or ""), marca_mod.guia_efectiva(cliente),

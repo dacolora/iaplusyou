@@ -7,6 +7,7 @@ import contextlib
 import contextvars
 import logging
 import math
+import secrets
 from datetime import datetime, timedelta
 
 import sqlalchemy as sa
@@ -25,6 +26,11 @@ TIPOS_ACREDITAR = ("recarga", "ajuste", "anulacion")
 ESTADOS_VIVOS = ("pendiente", "en_curso")
 SIN_CAMBIO = object()
 CLAVE_CANDADO = "cobros:candado"
+# PND-300: la reserva de un pedido que llama al proveedor dentro de la petición (o en un hilo de
+# `trabajos.iniciar`) no tiene tarea en la cola: vive desde que se hizo hasta que se suelta, y como mucho
+# VIDA_PEDIDO_MIN minutos (lo mismo que espera `limpiar_reservas_muertas`), por si el proceso muere a mitad.
+PREFIJO_PEDIDO = "pedido:"
+VIDA_PEDIDO_MIN = 10
 
 # (tarea_id, job_id) del trabajo del worker que corre en este hilo. Cada hilo
 # empieza con el valor por defecto: dos hilos del carril de Crear no se cruzan.
@@ -168,7 +174,7 @@ def _incluido_reservado(con, cliente, periodo_id, excluir=()):
         return 0.0
     r, m = db.reserva_saldo, db.movimiento_saldo
     filtro = [r.c.cliente == cliente, r.c.incluido == sa.true(), r.c.periodo_id == int(periodo_id),
-              r.c.job_id.in_(_vivas(con)),
+              viva(con, r),
               ~sa.exists().where(m.c.cliente == cliente, m.c.job_id == r.c.job_id, m.c.tipo == "incluido",
                                  m.c.creado_en >= r.c.creada_en)]
     excluir = [j for j in excluir if j]
@@ -281,9 +287,21 @@ def _vivas(con):
     return sa.select(db.tarea.c.job_id).where(db.tarea.c.estado.in_(ESTADOS_VIVOS), db.tarea.c.job_id.isnot(None))
 
 
+def _limite_pedido():
+    return (datetime.fromisoformat(db.ahora()) - timedelta(minutes=VIDA_PEDIDO_MIN)).isoformat(timespec="seconds")
+
+
+def viva(con, r=None):
+    """Condición SQL: la reserva `r` está viva. La de un trabajo del worker, mientras su tarea esté pendiente o en
+    curso; la de un pedido (PND-300), desde que se hizo y por VIDA_PEDIDO_MIN minutos (se suelta antes al terminar)."""
+    r = db.reserva_saldo if r is None else r
+    return sa.or_(r.c.job_id.in_(_vivas(con)),
+                  sa.and_(r.c.job_id.like(PREFIJO_PEDIDO + "%"), r.c.creada_en >= _limite_pedido()))
+
+
 def _reservado(con, cliente, excluir_job=None):
     r = db.reserva_saldo
-    filtro = [r.c.cliente == cliente, r.c.job_id.in_(_vivas(con))]
+    filtro = [r.c.cliente == cliente, viva(con, r)]
     if excluir_job:
         filtro.append(r.c.job_id != excluir_job)
     return int(con.execute(sa.select(sa.func.coalesce(sa.func.sum(r.c.milesimas), 0)).where(*filtro)).scalar())
@@ -343,6 +361,12 @@ def exigir(cliente, costo_usd, job_id=None, excluir_job=None, tipo=None):
     (revisión final 2026-10-08)."""
     if not cliente:
         return 0
+    if excluir_job is None:
+        # Dentro de un pedido (PND-300) su propia reserva no cuenta: quien vuelve a pedir saldo para lo mismo
+        # (organico.redactar dentro de «Escribir con IA») no se frena con ella.
+        ctx = _CONTEXTO.get() or {}
+        if str(ctx.get("job_id") or "").startswith(PREFIJO_PEDIDO):
+            excluir_job = ctx["job_id"]
     r = db.reserva_saldo
     with db.conectar() as con:
         if not _cobra(con, cliente):
@@ -355,7 +379,7 @@ def exigir(cliente, costo_usd, job_id=None, excluir_job=None, tipo=None):
         previa = None
         if job_id:
             previa = con.execute(sa.select(r.c.milesimas, r.c.incluido).where(
-                r.c.cliente == cliente, r.c.job_id == job_id, r.c.job_id.in_(_vivas(con)))).first()
+                r.c.cliente == cliente, r.c.job_id == job_id, viva(con, r))).first()
         periodo_id = periodo["id"] if periodo is not None else None
         if _incluido_cabe(con, cliente, periodo, tipo, costo_usd, excluir=(job_id, excluir_job)):
             if job_id and previa is None:
@@ -375,6 +399,56 @@ def exigir(cliente, costo_usd, job_id=None, excluir_job=None, tipo=None):
         if job_id:
             _reservar(con, cliente, job_id, precio, c["margen"], False, periodo_id, costo_usd)
         return precio
+
+
+# -------------------------------------------------- pedidos en la petición ---
+# PND-300 (decisión 2026-10-13, lote 1): lo que llama al proveedor dentro de la petición (o en un hilo de
+# `trabajos.iniciar`) reserva con un id propio por pedido. Antes `exigir` sin `job_id` no reservaba y todos los pedidos
+# veían el mismo saldo libre hasta que el primero anotaba su gasto.
+
+def reservar_pedido(cliente, costo_usd, tipo=None):
+    """`exigir` con un id nuevo de pedido: lanza SaldoInsuficiente o reserva el precio. Devuelve el id (también si el
+    proyecto no cobra y no se reservó nada: soltarlo no hace nada). Quien lo pide lo suelta con `soltar_pedido`, o
+    corre el trabajo dentro de `en_pedido`, que lo suelta al terminar."""
+    pedido_id = f"{PREFIJO_PEDIDO}{cliente}:{secrets.token_hex(8)}"
+    exigir(cliente, costo_usd, job_id=pedido_id, tipo=tipo)
+    return pedido_id
+
+
+def soltar_pedido(cliente, pedido_id):
+    """Borra la reserva del pedido: terminó (lo que cobró ya está en el libro) o falló sin llegar al proveedor. Solo
+    reservas de pedidos, nunca la de un trabajo del worker. Nunca lanza (corre en un `finally`); si falla, la reserva
+    vence sola a los VIDA_PEDIDO_MIN minutos."""
+    if not cliente or not str(pedido_id or "").startswith(PREFIJO_PEDIDO):
+        return
+    r = db.reserva_saldo
+    try:
+        with db.conectar() as con:
+            con.execute(r.delete().where(r.c.cliente == cliente, r.c.job_id == pedido_id))
+    except Exception:  # noqa: BLE001
+        log.warning("no se pudo soltar la reserva %s de %s; vence sola", pedido_id, cliente, exc_info=True)
+
+
+@contextlib.contextmanager
+def en_pedido(cliente, pedido_id):
+    """Corre lo de adentro como el trabajo `pedido_id`: el gasto que anote se cobra con el precio reservado (su margen
+    y, con plan, si fue incluido; como un trabajo del worker) y al salir, pase lo que pase, la reserva se suelta.
+    Va en el hilo que llama al proveedor (la ContextVar no cruza a un hilo nuevo)."""
+    token = _CONTEXTO.set({"tarea_id": None, "job_id": pedido_id})
+    try:
+        yield pedido_id
+    finally:
+        _CONTEXTO.reset(token)
+        soltar_pedido(cliente, pedido_id)
+
+
+@contextlib.contextmanager
+def pedido(cliente, costo_usd, tipo=None):
+    """`reservar_pedido` + `en_pedido` para lo que llama al proveedor en la misma petición:
+    `with libro.pedido(cliente, costo, tipo=...): …llamar y anotar el gasto…`."""
+    pedido_id = reservar_pedido(cliente, costo_usd, tipo=tipo)
+    with en_pedido(cliente, pedido_id):
+        yield pedido_id
 
 
 def _reservar(con, cliente, job_id, milesimas, margen, incluido, periodo_id, costo_usd=None):
@@ -725,7 +799,7 @@ def reservas_vivas_del_periodo(con, cliente, inicio, fin, periodo_id=None):
     r = db.reserva_saldo
     return con.execute(sa.select(r.c.job_id).where(
         r.c.cliente == cliente, r.c.milesimas > 0, r.c.incluido == sa.false(),
-        _de_la_reserva(r, periodo_id, inicio, fin), r.c.job_id.in_(_vivas(con))).limit(1)).first() is not None
+        _de_la_reserva(r, periodo_id, inicio, fin), viva(con, r)).limit(1)).first() is not None
 
 
 def _por_vencer(con, cliente, por_cerrar, excluir_job=None):
@@ -738,7 +812,7 @@ def _por_vencer(con, cliente, por_cerrar, excluir_job=None):
     total = 0
     for p in por_cerrar:
         filtro = [r.c.cliente == cliente, r.c.incluido == sa.false(), r.c.periodo_id == p["id"],
-                  r.c.job_id.in_(_vivas(con))]
+                  viva(con, r)]
         if excluir_job:
             filtro.append(r.c.job_id != excluir_job)
         suyas = int(con.execute(sa.select(sa.func.coalesce(sa.func.sum(r.c.milesimas), 0)).where(*filtro)).scalar())
