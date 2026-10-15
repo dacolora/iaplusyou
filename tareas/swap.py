@@ -209,7 +209,7 @@ def _extraer_frame(video_path, frame_path, segundo=1.0):
     )
 
 
-def _evaluar_swap_contra_matriz(cliente, swap_id, image_url):
+def _evaluar_swap_contra_matriz(cliente, swap_id, image_url, ref_sufijo=""):
     """Corre la evaluación de marca sobre una imagen (foto final, o un fotograma
     extraído de un video final) y guarda el resultado. No falla el swap si esto
     falla — es un plus, no el resultado principal."""
@@ -225,7 +225,18 @@ def _evaluar_swap_contra_matriz(cliente, swap_id, image_url):
         if not invariantes:
             swaps_mod.actualizar(cliente, swap_id, evaluacion_estado="sin_matriz")
             return
-        evaluacion = generador_prompts.evaluar_contra_matriz(image_url, invariantes)
+        entregada = False
+        # PND-315: lo que cobró Claude por revisar la marca se anota (antes no se anotaba nada: 27 en happyflops).
+        with generador_prompts.contar_uso() as usos:
+            try:
+                evaluacion = generador_prompts.evaluar_contra_matriz(image_url, invariantes)
+                entregada = True
+            finally:
+                if usos:
+                    gastos.registrar_seguro(cliente, "revision", generador_prompts.usd_de(usos),
+                                            f"revision_marca:{swap_id}{ref_sufijo}", proveedor="anthropic",
+                                            detalle=gettext("revisión de marca del swap %(swap)s", swap=swap_id),
+                                            entregado=entregada)
         swaps_mod.actualizar(cliente, swap_id, evaluacion=evaluacion, evaluacion_estado="ok")
         bitacora.registrar(cliente, swap_id, "evaluacion", "ok", "")
     except Exception as e:
@@ -389,13 +400,21 @@ def ejecutar(tarea):
             trabajos.reportar(job_id, etapa=ETAPA_PREPARAR_FOTO)
             if proveedor == "nano_banana":
                 trabajos.reportar(job_id, etapa=ETAPA_MODELO)
-                img_bytes = nano_banana_client.swap_producto(
-                    foto_local, producto["referencias"], negative_prompt=negative_prompt,
-                    tipo=tipo_producto, mapa=mapa_producto,
-                )
+                # PND-315: Gemini reintenta; se anota lo que cobró cada intento (no uno solo), y si falla
+                # después de cobrar, el `except` de abajo lo anota igual.
+                cobrado_gemini = []
+                try:
+                    img_bytes = nano_banana_client.swap_producto(
+                        foto_local, producto["referencias"], negative_prompt=negative_prompt,
+                        tipo=tipo_producto, mapa=mapa_producto, on_cobro=cobrado_gemini.append,
+                    )
+                finally:
+                    if cobrado_gemini:
+                        costo = {"credits": None, "usd": round(sum(cobrado_gemini), 4)}
+                if not cobrado_gemini:
+                    costo = nano_banana_client.estimate_image()
                 with open(local_path, "wb") as f:
                     f.write(img_bytes)
-                costo = nano_banana_client.estimate_image()
             else:  # nano_banana_fal, qwen_edit, nano_banana_pro_ultra
                 foto_url = r2_uploader.upload_image(foto_local, f"clientes/{cliente}/swaps_subidas/{nombre_subida}")
                 # Nano Banana Pro Ultra acepta hasta 14 imágenes (13 de
@@ -518,11 +537,11 @@ def ejecutar(tarea):
                 try:
                     _extraer_frame(local_path, frame_path)
                     frame_url = r2_uploader.upload_image(frame_path, f"clientes/{cliente}/swaps/{swap_id}.frame.jpg")
-                    _evaluar_swap_contra_matriz(cliente, swap_id, frame_url)
+                    _evaluar_swap_contra_matriz(cliente, swap_id, frame_url, ref_sufijo(tarea))
                 except Exception as e:
                     bitacora.registrar(cliente, swap_id, "evaluacion", "error", str(e))
             else:
-                _evaluar_swap_contra_matriz(cliente, swap_id, url)
+                _evaluar_swap_contra_matriz(cliente, swap_id, url, ref_sufijo(tarea))
 
         return gettext("Swap listo.")
     except Exception as e:
@@ -662,9 +681,9 @@ def recuperar(tarea):
             try:
                 _extraer_frame(local_path, frame_path)
                 frame_url = r2_uploader.upload_image(frame_path, f"clientes/{cliente}/swaps/{swap_id}.frame.jpg")
-                _evaluar_swap_contra_matriz(cliente, swap_id, frame_url)
+                _evaluar_swap_contra_matriz(cliente, swap_id, frame_url, ref_sufijo(tarea))
             except Exception as e:
                 bitacora.registrar(cliente, swap_id, "evaluacion", "error", str(e))
         else:
-            _evaluar_swap_contra_matriz(cliente, swap_id, url)
+            _evaluar_swap_contra_matriz(cliente, swap_id, url, ref_sufijo(tarea))
     return gettext("Swap recuperado sin pagar de nuevo.")

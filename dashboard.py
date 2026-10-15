@@ -1055,7 +1055,13 @@ def analizar_marca(cliente):
     job_id = _job_id_marca(cliente)
 
     def trabajo():
-        guia = generador_prompts.analizar_marca(urls, idioma=idiomas.de_proyecto(cliente))
+        # PND-315: lo que cobró Claude se anota (antes nada), con la misma puerta que las otras ayudas.
+        with generador_prompts.contar_uso() as usos:
+            try:
+                guia = generador_prompts.analizar_marca(urls, idioma=idiomas.de_proyecto(cliente))
+            finally:
+                for uso in usos:
+                    _registrar_usage_claude_interno(cliente, "analizar_marca", uso)
         data = marca_mod.cargar(cliente)
         data["guia_estilo"] = guia
         marca_mod.guardar(cliente, data)

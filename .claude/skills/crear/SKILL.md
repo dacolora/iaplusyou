@@ -233,3 +233,11 @@ por ese id (`TIEMPO_RECUPERAR` 120 s), y si llegó, lo baja, lo sube, evalúa la
 O1, comparador) que se agota se anota si fal lo va a cobrar (`EsperaAgotadaFal.cobrado`, PND-313) pero no se
 recupera. La mejora de calidad pagada que no llega (falla al bajar o se agota su espera) se anota aparte en
 `swap:<id>:t<tarea>:mejora`, sin cobrarla (PND-315). Pruebas: `tests/test_swap_recuperar.py`, `tests/test_tareas_swap.py`.
+
+**Lo que de verdad cobró cada llamada de Cambiar producto (PND-315).** La revisión de marca de cada swap
+(`generador_prompts.evaluar_contra_matriz`) anota lo que cobró Claude en `revision_marca:<swap>:t<tarea>` (tipo
+`revision`; sin cobrarla si la respuesta no se pudo leer) con `generador_prompts.contar_uso()`, que junta el `usage`
+de las llamadas del módulo sin cambiar sus firmas (`usd_de(usos)`). Gemini (`nano_banana_client._llamar`,
+`on_cobro`) avisa lo que cobra cada intento: la imagen, un `ReadTimeout` (Google pudo generarla y cobrarla) y una
+respuesta sin imagen (su `usageMetadata`); el swap suma todo, también cuando falla después. Pendiente propuesto:
+el precio que ve la persona antes de generar no incluye la revisión de marca (≈ US$ 0,01).

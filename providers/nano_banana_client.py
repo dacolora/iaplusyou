@@ -19,6 +19,15 @@ BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 MODEL = "gemini-2.5-flash-image"
 
 COSTO_USD_POR_IMAGEN = 0.039
+# Lista pública de gemini-2.5-flash-image: entrada US$ 0,30 por millón de tokens; salida US$ 30 por millón (una
+# imagen son 1 290 tokens: los 0,039 de arriba). Solo para una respuesta SIN imagen, que igual se cobra (PND-315).
+COSTO_USD_ENTRADA_POR_MILLON = 0.30
+COSTO_USD_SALIDA_POR_MILLON = 30.0
+
+
+def costo_tokens(entrada, salida):
+    return round((int(entrada or 0) * COSTO_USD_ENTRADA_POR_MILLON + int(salida or 0) * COSTO_USD_SALIDA_POR_MILLON)
+                 / 1e6, 6)
 
 # Las fotos de producto del catálogo pesan 1-2MB cada una — mandar varias en una
 # sola llamada (base64, todas juntas) es lo que causaba los timeouts de escritura.
@@ -46,14 +55,28 @@ def _mime_type(url):
     return "image/jpeg"
 
 
-def _llamar(parts, timeout=150, intentos=3, aspect_ratio=None):
+def _cobrar(on_cobro, usd):
+    """Avisa lo que Google cobró (PND-315). Nunca tumba la llamada."""
+    if on_cobro and usd:
+        try:
+            on_cobro(usd)
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def _llamar(parts, timeout=150, intentos=3, aspect_ratio=None, on_cobro=None):
     """Manda las parts (texto + imágenes) a Gemini y devuelve los bytes de la
     primera imagen generada en la respuesta. Reintenta en timeouts/errores de
     conexión y en 400/500 — confirmado empíricamente que a veces la misma
     llamada con el mismo payload responde 400 una vez y 200 al reintentar sin
     cambiar nada; si el 400 es real (payload inválido) el reintento no lo
     arregla, pero al menos ahora el mensaje de error trae el detalle real de
-    Google en vez de solo "400 Bad Request"."""
+    Google en vez de solo "400 Bad Request".
+
+    `on_cobro(usd)` (PND-315, decisión 2026-10-13: Gemini reintenta hasta 3 veces y se anotaba una): se llama
+    por cada respuesta que Google cobra o pudo cobrar: la imagen que vuelve, un intento que se cortó leyendo la
+    respuesta (`ReadTimeout`: Google pudo generarla y cobrarla) y una respuesta 200 sin imagen (su `usageMetadata`).
+    Un error de conexión o un 4xx/5xx no se cobran."""
     url = f"{BASE_URL}/{MODEL}:generateContent?key={_api_key()}"
     payload = {
         "contents": [{"parts": parts}],
@@ -72,6 +95,8 @@ def _llamar(parts, timeout=150, intentos=3, aspect_ratio=None):
             break
         except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
             ultimo_error = e
+            if isinstance(e, requests.exceptions.ReadTimeout):
+                _cobrar(on_cobro, COSTO_USD_POR_IMAGEN)   # el pedido llegó: Google pudo generarla y cobrarla
             if intento == intentos:
                 # Nunca incluir la excepción cruda ({e}) acá — su texto trae la
                 # URL completa, con la API key como query param, y este mensaje
@@ -92,14 +117,16 @@ def _llamar(parts, timeout=150, intentos=3, aspect_ratio=None):
     data = resp.json()
 
     candidatos = data.get("candidates") or []
-    if not candidatos:
-        raise RuntimeError(f"Nano Banana no devolvió candidatos: {data}")
-
-    for part in candidatos[0].get("content", {}).get("parts", []):
+    for part in (candidatos[0].get("content", {}).get("parts", []) if candidatos else []):
         inline = part.get("inlineData") or part.get("inline_data")
         if inline and inline.get("data"):
+            _cobrar(on_cobro, COSTO_USD_POR_IMAGEN)
             return base64.b64decode(inline["data"])
-
+    # Sin imagen (bloqueada, solo texto): Google igual cobra lo que leyó y escribió.
+    uso = data.get("usageMetadata") or {}
+    _cobrar(on_cobro, costo_tokens(uso.get("promptTokenCount"), uso.get("candidatesTokenCount")))
+    if not candidatos:
+        raise RuntimeError(f"Nano Banana no devolvió candidatos: {data}")
     raise RuntimeError(f"Nano Banana no devolvió ninguna imagen en la respuesta: {data}")
 
 
@@ -155,7 +182,8 @@ def generate_image(image_reference_url, prompt, negative_prompt=None, extra_para
 # editar cinco textos casi iguales.
 
 
-def swap_producto(foto_original_path, referencias_producto_paths, negative_prompt=None, tipo=None, mapa=None):
+def swap_producto(foto_original_path, referencias_producto_paths, negative_prompt=None, tipo=None, mapa=None,
+                  on_cobro=None):
     """Reemplaza SOLO el calzado de foto_original_path por el producto mostrado en
     referencias_producto_paths (hasta 6), manteniendo todo lo demás idéntico —
     incluido el encuadre: se detecta el aspect ratio real de la foto original y
@@ -176,7 +204,7 @@ def swap_producto(foto_original_path, referencias_producto_paths, negative_promp
     for ref in referencias:
         parts.append(_parte_imagen_local(ref))
     ratio = aspect_ratio.detectar_gemini(foto_original_path)
-    return _llamar(parts, aspect_ratio=ratio)
+    return _llamar(parts, aspect_ratio=ratio, on_cobro=on_cobro)
 
 
 def estimate_image():

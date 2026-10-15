@@ -23194,6 +23194,10 @@ msgstr "doctrine review"
 msgid "revisión de la doctrina · respuesta inválida"
 msgstr "doctrine review · invalid response"
 
+#, python-format
+msgid "revisión de marca del swap %(swap)s"
+msgstr "brand review of swap %(swap)s"
+
 msgid "roas"
 msgstr "roas"
 

@@ -252,7 +252,8 @@ def _gasto_recoleccion(cliente, eid, tarea, fuente, params, nota=""):
     tarifa = _tarifa(fuente, params) if (n > 0 or corridas) else None
     if not tarifa:
         return 0.0
-    usd = plataformas.costo(n, len(corridas), tarifa)
+    # PND-315: conciliado con lo que Apify dice que cobró cada corrida (`usageTotalUsd`), no solo el estimado.
+    usd, conciliacion = plataformas.costo_conciliado(n, getattr(fuente, "corridas", None) or [], tarifa)
     referencia = f"recoleccion:{eid}{ref_sufijo(tarea)}"
     if usd <= 0:
         from tareas.investigacion import corrida_anotada
@@ -264,6 +265,7 @@ def _gasto_recoleccion(cliente, eid, tarea, fuente, params, nota=""):
                             proveedor="apify",
                             extra={"actor": tarifa["actor"], "resultados": n, "usd_por_resultado": tarifa["usd_por_resultado"],
                                    "usd_por_corrida": tarifa.get("usd_por_corrida", 0),
+                                   **conciliacion,
                                    **({"estimado": True, "conciliacion_pendiente": True} if any(c.get("estimado") for c in (getattr(fuente, "corridas", None) or [])) else {}), **_corrida(fuente),
                                    **({"corridas": corridas} if corridas else {})})
     return usd
