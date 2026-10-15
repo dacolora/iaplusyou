@@ -54,8 +54,10 @@ def _p1():
 
 
 def _pedir(app):  # noqa: F811
+    from tests.test_rutas_triple_whale import precio_visto
     return app["c"].post("/cliente/acme/rendimiento/anuncio/tw/facebook-ads/p1/analizar",
-                         data={"entrada": "", "dias": "0", "canal": ""})
+                         data={"entrada": "", "dias": "0", "canal": "",
+                               "precio_visto": precio_visto(app["c"], "p1", dias="0")})
 
 
 def _n_analisis():

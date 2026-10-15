@@ -163,7 +163,9 @@ la miniatura, el saldo, la fuente en la foto, Referentes y «Meta reporta»).
   es `"<fuente>:<canal>:<ad_id>"`. Al cobrar, `galeria.claves_confirmadas` recorta a N ENTRE LAS DOS fuentes ANTES de
   separar (si no, cada fuente cobraría hasta N: B6) y `galeria.pedir_lote` llama a `pedidos.pedir_lote` por fuente
   (confirmadas ∩ aún elegibles), en el orden de su primera clave; la primera fuente sin saldo para todo y el aviso dice
-  cuántos salieron. Un segundo envío no cobra.
+  cuántos salieron. Un segundo envío no cobra. Desde PND-236 (2026-10-15) el formulario manda el total que mostró
+  (`precio_visto`) y, si la suma de ahora de las claves confirmadas que siguen en su alcance no es esa, no se pide
+  ninguno (`galeria.PrecioCambiado`); la tarjeta también manda el suyo (skill `triple-whale`).
 - **El alcance de cada ruta** sale de `panel.alcances` (la misma `_resolver` que el panel; `canal` solo con alcance solo
   Triple Whale). Una `entrada` no vacía que ya no es la clave de ninguna entrada (pestaña vieja) no se ensancha a
   «Todas»: no hay alcance y nada se cobra (como «Actualizar ahora», A5). En el panel, el alcance de Triple Whale sale

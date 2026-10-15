@@ -585,8 +585,8 @@ eval `docs/superpowers/evals/2026-10-09-tw-ganchos-y-copy.md`.
   The scene chain still closes a recoverable clip as an error (PND-229; the hooks no longer do, fix C below). The
   originals count toward the 2 GB quota but «Medios» cannot delete origen `triple_whale` (PND-230). The `|precio` filter
   keeps showing the cost when the margin read fails in ~25 other templates (PND-231). preparar's own failure path does
-  not show the Crear session's error (PND-234); small robustness items in PND-235. «Cómo mejorarlo» and its batch do
-  not compare the price seen (PND-236; Cobros is off everywhere today). `doctrina.verificar_cifras` does not check
+  not show the Crear session's error (PND-234); small robustness items in PND-235. «Cómo mejorarlo» and its batch
+  compare the price seen since 2026-10-15 (PND-236, below). `doctrina.verificar_cifras` does not check
   single-digit figures («en 2 días»), shared with Sprints and Nicho (PND-237). When `SaldoInsuficiente` hits a clip, its
   Crear session, already created, stays orphan in error (PND-238; no money). The 20 000 cap was measured in real
   (end_turn, 13 013 output tokens, US$ 0,1696; PND-232 closed).
@@ -713,3 +713,22 @@ Claude ANTES de dejar la fila «lista»), no lo pisa: el worker ya revirtió el 
 (el respaldo sin saldo: no corrió) no anota nada. Y como la de Meta (E2-R7), una llamada sin respuesta (tope de tiempo,
 conexión cortada) anota el estimado con «estimado: sin respuesta de Claude». Pruebas: `tests/test_triple_whale_analisis.py`
 (`test_interrumpida_*`, `test_tarea_evaluar_si_claude_no_responde_*`) y `tests/test_tareas_meta_rendimiento.py`.
+
+**«Cómo mejorarlo» y el lote comparan el precio visto (PND-236, 2026-10-15).** Motivo: la ruta recalculaba el costo al
+recibir el clic y se lo pedía al libro, así que una pestaña abierta antes de un cambio de tarifa (0,10 → 0,17 entre el
+2026-10-09 y el 10) cobraba la nueva sin mostrarla, y desde el 2026-10-12 happyflops cobra (pospago, margen 3). Ahora
+cada formulario de la tarjeta (`_tw_galeria.html`: el principal y «Analizar con estos datos») manda `precio_visto` =
+`a.precio_analisis.usd_precio` (el PRECIO, con el margen; sin él, el botón apagado) y el del lote, el total
+`g.lote.precio.usd_precio`. La ruta (`pestana_rendimiento.rutas`) lo pasa a costo UNA vez con `gastos.costo_de_precio`.
+`pedidos.pedir_analisis(..., *, costo_visto)` (obligatorio, por nombre) lo compara con `pedidos.coincide` (±0,005)
+DESPUÉS de lo que no cobra (sin datos, en curso, fresco) y ANTES de `libro.exigir`: si no coincide, (False, «El precio
+cambió (ahora: X). Revisa y vuelve a confirmar.») sin fila ni reserva, y por fetch la tarjeta vuelve con el precio
+nuevo. El lote: `galeria.pedir_lote(..., *, costo_visto)` suma el costo de AHORA de las claves confirmadas que siguen en
+su alcance (`galeria.costos_confirmados` → `pedidos.costos_de`, la misma cuenta que la tarjeta, dos lecturas por
+fuente; las que no están no cuentan ni se cobran); si alguna no tiene precio o el total no es el visto, lanza
+`galeria.PrecioCambiado` y la ruta avisa «El precio cambió desde que lo viste…» sin pedir nada. Después cada fuente
+cobra con `pedidos.pedir_lote(..., *, costos_vistos)`, cada clave con el costo de esa suma: se cobra lo visto o menos
+(una que otra pestaña ya analizó se salta), nunca más. Prender «Cobrar» también cambia el precio (el margen): un botón
+pintado antes no cobra. Pruebas: `tests/test_tw_tarjetas_rutas.py` (`test_si_el_precio_cambio_*`,
+`test_la_tarjeta_manda_el_precio_que_muestra`) y `tests/test_rendimiento_e2_pedidos.py`; las demás piden la tarjeta y
+mandan su precio (`tests/test_rutas_triple_whale.py::precio_visto`, `con_total` para un lote armado a mano).

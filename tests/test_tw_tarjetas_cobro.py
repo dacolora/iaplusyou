@@ -10,7 +10,7 @@ import sqlalchemy as sa
 import db
 import proyectos
 from tests.test_rutas_configuracion import app  # noqa: F401  (fixture)
-from tests.test_rutas_triple_whale import _conectar, _hace, _tareas, _tienda
+from tests.test_rutas_triple_whale import _conectar, _hace, _tareas, _tienda, precio_visto
 from triple_whale import datos, panel
 
 
@@ -43,7 +43,8 @@ def _sembrar_con_snapchat(dias=10):
 
 def _analizar(app, ad_id, canal="facebook-ads", filtro="", dias="30", json=False):  # noqa: F811
     return app["c"].post(f"/cliente/acme/rendimiento/anuncio/tw/{canal}/{ad_id}/analizar",
-                         data={"entrada": "", "dias": dias, "canal": filtro},
+                         data={"entrada": "", "dias": dias, "canal": filtro,
+                               "precio_visto": precio_visto(app["c"], ad_id, canal=canal, dias=dias, filtro=filtro)},
                          headers={"Accept": "application/json"} if json else {})
 
 

@@ -11,7 +11,7 @@ import sqlalchemy as sa
 import db
 import proyectos
 from tests.test_rutas_configuracion import app  # noqa: F401  (fixture)
-from tests.test_rutas_triple_whale import _conectar, _hace, _sembrar, _tareas
+from tests.test_rutas_triple_whale import _conectar, _hace, _sembrar, _tareas, con_total, precio_del_lote, precio_visto
 from tests.test_tw_mejorar import respuesta
 from triple_whale import datos, mejorar
 
@@ -27,7 +27,8 @@ def _analizar(app, ad_id="p1", json=False, **headers):  # noqa: F811
     if json:
         h["Accept"] = "application/json"
     return app["c"].post(f"/cliente/acme/rendimiento/anuncio/tw/facebook-ads/{ad_id}/analizar",
-                         data={"entrada": "", "dias": "30", "canal": ""}, headers=h)
+                         data={"entrada": "", "dias": "30", "canal": "", "precio_visto": precio_visto(app["c"], ad_id)},
+                         headers=h)
 
 
 def test_analizar_crea_la_fila_con_la_foto_y_encola_una_vez(app):  # noqa: F811
@@ -90,11 +91,12 @@ def _form_del_lote(app, **extra):  # noqa: F811
     """Lo que manda el formulario del lote tal como la pestaña lo pinta: el alcance y una `clave` por anuncio mostrado."""
     html = app["c"].get("/cliente/acme/rendimiento/panel").data.decode()
     claves = re.findall(r'<input type="hidden" name="clave" value="([^"]+)">', html)
-    return dict({"entrada": "", "dias": "30", "canal": "", "veredicto": "", "clave": claves}, **extra), claves, html
+    return dict({"entrada": "", "dias": "30", "canal": "", "veredicto": "", "clave": claves,
+                 "precio_visto": precio_del_lote(html)}, **extra), claves, html
 
 
 def _lote(app, data):  # noqa: F811
-    return app["c"].post("/cliente/acme/rendimiento/analizar-lote", data=data, follow_redirects=True)
+    return app["c"].post("/cliente/acme/rendimiento/analizar-lote", data=con_total(app, data), follow_redirects=True)
 
 
 def _jobs():
@@ -274,9 +276,9 @@ def test_con_saldo_el_analisis_reserva_el_precio_del_boton(app):  # noqa: F811
 def test_el_lote_sin_saldo_para_todos_encola_los_que_alcanzan_y_lo_dice(app):  # noqa: F811
     _conectar()
     _sembrar()
+    libro = _cobra()                         # antes de mirar el botón: con «Cobrar» el precio que muestra lleva el margen
     data, claves, _ = _form_del_lote(app)
     assert len(claves) == 5
-    libro = _cobra()
     dos = [c.split(":")[2] for c in claves[:2]]
     with db.conectar() as con:
         libro.acreditar(con, "acme", "ajuste", sum(_precio(libro, a) for a in dos), "ajuste", usuario="admin",
@@ -551,14 +553,18 @@ def test_el_lote_no_repite_lo_analizado_en_otro_periodo_pero_la_tarjeta_si_lo_of
     _el_worker_termino()                                                  # sin tarea viva: solo el alcance los frena
     data, claves, _ = _form_del_lote(app)
     assert not {f"tw:facebook-ads:{ad}" for ad in ("g1", "g2", "p1", "p2")} & set(claves)    # el botón no los ofrece
-    forzado = dict(data, clave=claves + [f"tw:facebook-ads:{ad}" for ad in ("g1", "g2", "p1", "p2")])
+    # Con el total de todas (como si quien arma el formulario a mano también sumara sus precios): solo frena lo elegible.
+    total = float(data["precio_visto"]) + sum(float(precio_visto(app["c"], ad)) for ad in ("g1", "g2", "p1", "p2"))
+    forzado = dict(data, clave=claves + [f"tw:facebook-ads:{ad}" for ad in ("g1", "g2", "p1", "p2")],
+                   precio_visto=repr(total))
     r = _lote(app, forzado)                                               # ni aunque alguien los mande a mano
     assert de_los_cuatro() == antes                                       # ya tenían análisis: el lote no los repite
     assert "Analizando 1 anuncio con IA" in r.data.decode()               # solo t1 (TikTok), que no tenía ninguno
     antes_todas = len(_tareas("tw_analizar_anuncio"))
     # Y la tarjeta ofrece, a propósito, uno nuevo con los datos de ahora; ese sí cobra otro análisis.
     r = app["c"].post("/cliente/acme/rendimiento/anuncio/tw/facebook-ads/p1/analizar",
-                      data={"entrada": "", "dias": "30", "canal": ""}, headers={"Accept": "application/json"})
+                      data={"entrada": "", "dias": "30", "canal": "", "precio_visto": precio_visto(app["c"], "p1")},
+                      headers={"Accept": "application/json"})
     assert r.get_json()["ok"] and len(_tareas("tw_analizar_anuncio")) == antes_todas + 1
 
 
@@ -863,3 +869,71 @@ def test_llevar_a_crear_avisa_en_crear_de_una_oferta_que_no_esta_en_los_datos(ap
     with app["c"].session_transaction() as s:
         avisos = [m for tipo, m in s.get("_flashes", []) if tipo == "warn"]
     assert len(avisos) == 1 and "free" in avisos[0] and "revísalo antes de generar" in avisos[0]
+
+
+# ------------------------------------------ PND-236: el precio que vio la persona (2026-10-15) ---
+
+def _precio_de(html):
+    m = re.search(r'name="precio_visto" value="([^"]*)"', html)
+    return m.group(1) if m else None
+
+
+def _tarjeta_html(app, ad_id="p1"):  # noqa: F811
+    return app["c"].get(f"/cliente/acme/rendimiento/tarjeta/tw/facebook-ads/{ad_id}?entrada=&dias=30&canal=").data.decode()
+
+
+def _pedir_con(app, precio, ad_id="p1", json=True):  # noqa: F811
+    h = {"Accept": "application/json"} if json else {}
+    return app["c"].post(f"/cliente/acme/rendimiento/anuncio/tw/facebook-ads/{ad_id}/analizar",
+                         data={"entrada": "", "dias": "30", "canal": "", "precio_visto": precio}, headers=h)
+
+
+def test_la_tarjeta_manda_el_precio_que_muestra(app):  # noqa: F811
+    import gastos
+    from triple_whale import panel
+    _conectar()
+    _sembrar()
+    precio = panel.precio_analisis(datos.creativos("acme", [("facebook-ads", "p1")]).get(("facebook-ads", "p1")))
+    html = _tarjeta_html(app)
+    assert float(_precio_de(html)) == pytest.approx(precio["usd"]) and precio["texto"] in html
+    assert gastos.TARIFAS["analisis_anuncio_tw"] > 0
+
+
+def test_si_el_precio_cambio_como_mejorarlo_no_cobra_y_muestra_el_nuevo(app, monkeypatch):  # noqa: F811
+    """PND-236 (decisión del lote 1, 2026-10-13): una pestaña abierta antes de un cambio de tarifa (0,10 → 0,17 entre
+    el 2026-10-09 y el 10) cobraba la nueva sin mostrarla. Ahora la ruta compara el precio visto y, si cambió, no crea
+    fila, no reserva ni encola: devuelve la tarjeta con el precio de ahora y lo dice."""
+    import gastos
+    _conectar()
+    _sembrar()
+    visto = _precio_de(_tarjeta_html(app))
+    monkeypatch.setitem(gastos.TARIFAS, "analisis_anuncio_tw", gastos.TARIFAS["analisis_anuncio_tw"] + 0.05)
+    nuevo = _precio_de(_tarjeta_html(app))
+    assert float(nuevo) == pytest.approx(float(visto) + 0.05)
+    for precio in (visto, "", "abc", None):
+        d = _pedir_con(app, precio).get_json()
+        assert d["ok"] is False and "El precio cambió" in d["mensaje"], precio
+        assert _precio_de(d["html"]) == nuevo                       # la tarjeta vuelve con el precio de ahora
+    assert _tareas("tw_analizar_anuncio") == [] and _filas_analisis() == 0
+    r = _pedir_con(app, visto, json=False)                           # el formulario sin JS: aviso y nada cobrado
+    assert r.status_code == 302 and _tareas("tw_analizar_anuncio") == [] and _filas_analisis() == 0
+    d = _pedir_con(app, nuevo).get_json()                           # con el precio de ahora, sí
+    assert d["ok"] is True and len(_tareas("tw_analizar_anuncio")) == 1 and _filas_analisis() == 1
+
+
+def test_si_el_precio_cambio_el_lote_no_cobra_ninguno(app, monkeypatch):  # noqa: F811
+    import gastos
+    _conectar()
+    _sembrar()
+    data, claves, html = _form_del_lote(app)
+    visto = _precio_de(html[html.index("tw-analizar-lote"):])
+    assert claves and visto
+    monkeypatch.setitem(gastos.TARIFAS, "analisis_anuncio_tw", gastos.TARIFAS["analisis_anuncio_tw"] + 0.05)
+    for precio in (visto, ""):
+        texto = _lote(app, dict(data, precio_visto=precio)).data.decode()
+        assert "El precio cambió" in texto and _tareas("tw_analizar_anuncio") == [] and _filas_analisis() == 0
+    data, claves, html = _form_del_lote(app)                         # la pestaña recargada trae el precio nuevo
+    nuevo = _precio_de(html[html.index("tw-analizar-lote"):])
+    assert float(nuevo) == pytest.approx(float(visto) + 0.05 * len(claves))
+    _lote(app, dict(data, precio_visto=nuevo))
+    assert len(_tareas("tw_analizar_anuncio")) == len(claves)

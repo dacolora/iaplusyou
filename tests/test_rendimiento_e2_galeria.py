@@ -17,7 +17,7 @@ from pestana_rendimiento import galeria
 from pestana_rendimiento import panel as rend_panel
 from tests.test_rutas_configuracion import app  # noqa: F401  (fixture)
 from tests.test_rutas_meta_rendimiento import _ad, _dia, _tasa
-from tests.test_rutas_triple_whale import _tareas
+from tests.test_rutas_triple_whale import _tareas, con_total, precio_visto
 from triple_whale import datos as twdatos
 
 TOKEN = "t-llave-de-prueba"   # llave-de-prueba
@@ -113,8 +113,10 @@ def _claves_del_lote(html):
 
 
 def _lote(app, claves, **extra):  # noqa: F811
+    """El formulario del lote con esas claves y el total que mostraría su botón (`con_total`, PND-236)."""
     data = dict({"entrada": "", "dias": "0", "canal": "", "veredicto": "", "clave": claves}, **extra)
-    return app["c"].post("/cliente/acme/rendimiento/analizar-lote", data=data, headers=POST, follow_redirects=True)
+    return app["c"].post("/cliente/acme/rendimiento/analizar-lote", data=con_total(app, data), headers=POST,
+                         follow_redirects=True)
 
 
 def _analizar(app, fuente, ad, json=True, entrada="", **headers):  # noqa: F811
@@ -122,7 +124,9 @@ def _analizar(app, fuente, ad, json=True, entrada="", **headers):  # noqa: F811
     if json:
         h["Accept"] = "application/json"
     return app["c"].post(f"/cliente/acme/rendimiento/anuncio/{fuente}/facebook-ads/{ad}/analizar",
-                         data={"entrada": entrada, "dias": "0", "canal": ""}, headers=h)
+                         data={"entrada": entrada, "dias": "0", "canal": "",
+                               "precio_visto": precio_visto(app["c"], ad, fuente=fuente, entrada=entrada, dias="0")},
+                         headers=h)
 
 
 # ------------------------------------------------------------------------------------- el orden (PND-196) ---
@@ -584,12 +588,15 @@ def test_sin_correo_verificado_un_cliente_pide_igual_como_en_produccion(mixto):
     c = _como_cliente(mixto)
     url = "/cliente/acme/rendimiento/anuncio/meta/facebook-ads/m2/analizar"
     datos_form = {"entrada": "", "dias": "0", "canal": ""}
-    r = c.post(url, data=datos_form, headers={"Sec-Fetch-Site": "cross-site", "Accept": "application/json"})
+    visto = dict(datos_form, precio_visto=precio_visto(c, "m2", fuente="meta", dias="0"))
+    r = c.post(url, data=visto, headers={"Sec-Fetch-Site": "cross-site", "Accept": "application/json"})
     assert r.status_code == 403 and _jobs() == []                                    # otro sitio, nunca
-    r = c.post(url, data=datos_form, headers=dict(POST, Accept="application/json"))
+    r = c.post(url, data=visto, headers=dict(POST, Accept="application/json"))
     assert r.status_code == 200 and r.get_json()["ok"] is True
     r = c.post("/cliente/acme/rendimiento/analizar-lote", data=dict(datos_form, veredicto="",
-                                                                     clave=["meta:facebook-ads:m1"]), headers=POST)
+                                                                     clave=["meta:facebook-ads:m1"],
+                                                                     precio_visto=precio_visto(c, "m1", fuente="meta",
+                                                                                               dias="0")), headers=POST)
     assert r.status_code == 302 and r.headers["Location"].endswith("#rendimiento")
     assert _jobs() == ["acme__tw_anuncio__facebook-ads__m1", "acme__tw_anuncio__facebook-ads__m2"]
     assert {f["pedido_por"] for f in _filas()} == {"user_acme"}
@@ -667,7 +674,9 @@ def _w1_listo(app, fuente, entrada):  # noqa: F811
     """Pide «Cómo mejorarlo» de w1 desde la tarjeta de `fuente` (30 días) y lo deja listo, como cuando el worker
     termina."""
     r = app["c"].post(f"/cliente/acme/rendimiento/anuncio/{fuente}/facebook-ads/w1/analizar",
-                      data={"entrada": entrada, "dias": "30", "canal": ""}, headers=dict(POST, Accept="application/json"))
+                      data={"entrada": entrada, "dias": "30", "canal": "",
+                            "precio_visto": precio_visto(app["c"], "w1", fuente=fuente, entrada=entrada)},
+                      headers=dict(POST, Accept="application/json"))
     assert r.get_json()["ok"], r.get_json()
     with db.conectar() as con:
         con.execute(db.tarea.update().values(estado="hecha"))
