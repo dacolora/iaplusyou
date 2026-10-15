@@ -82,7 +82,7 @@ blocked experiment launches and refreshes, Triple Whale and the stores for that 
 still run one after another (Meta's rate limits are per user+app, shared across accounts). It is free (reading
 Meta never charges, `max_intentos=2`, and all three `meta_rend_*` types are in `TIPOS_EXENTOS_DE_COBRO`, so a project
 with «Cobrar» on still syncs). `meta_rend_sincronizar_todas` and `meta_rend_limpiar` stay in the general
-lane (instant). The area's own skill is `meta-rendimiento`. A new long, free, read-only sync can join this lane; anything that charges stays out of it.
+lane (instant). The area's own skill is `meta-rendimiento`. A new long, free, read-only sync can join this lane; anything that charges stays out of it. Since 2026-10-15 `tw_precalcular` (the precomputed sums of the Rendimiento tab, skill `rendimiento`) runs there too.
 
 **Three worker types for the Triple Whale hooks (2026-10-09, skill `triple-whale`, «Ganchos y copy»):** `tw_ganchos_preparar`
 (`<c>__tw_ganchos_<aid>_t<tanda>`, `max_intentos=1`, prioridad 3: downloads the original and launches one Crear piece per

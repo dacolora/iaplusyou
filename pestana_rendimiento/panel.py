@@ -275,6 +275,12 @@ def _ia(tw, meta):
 
 # --------------------------------------------------------------- contexto ---
 
+def claves_con_triple_whale(cliente):
+    """Las claves de las entradas del selector que leen Triple Whale (fuente "tw"), para que el worker precalcule sus
+    sumas (`tareas.triple_whale.tw_precalcular`); «Todas» («») va aparte."""
+    return [e["clave"] for e in _resolver(cliente)["entradas"] if e["fuente"] == entradas.TW]
+
+
 def contexto(cliente, dias=0, entrada=None, canal=None, hoy=None, pagina_conjuntos=0, tienda=None, cuenta=None):
     """Todo lo que pinta `_rend_panel.html` para la entrada pedida (`entrada`: la clave de una entrada; vacía, ajena
     o rara = «Todas»; `tienda`/`cuenta`, los parámetros de las pestañas viejas). Claves: `conectado`, `hay_tw`,

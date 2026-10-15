@@ -15245,6 +15245,9 @@ msgstr "Preparing for the editor…"
 msgid "Preparando sus subtítulos"
 msgstr "Preparing its subtitles"
 
+msgid "Preparando tu rendimiento"
+msgstr "Preparing your performance"
+
 #, python-brace-format
 msgid "Preparando {n} archivo(s) para que la vista previa sea más liviana. Es gratis; mientras tanto se usan los originales."
 msgstr "Preparing {n} file(s) so the preview is lighter. It's free; meanwhile the originals are used."
@@ -16528,6 +16531,10 @@ msgstr "Rendering segment %(i)s/%(n)s"
 msgid "Rendimiento"
 msgstr "Performance"
 
+#, python-format
+msgid "Rendimiento listo: %(n)s vistas preparadas."
+msgstr "Performance ready: %(n)s views prepared."
+
 msgid "Renovación apagada"
 msgstr "Renewal turned off"
 
@@ -17321,6 +17328,9 @@ msgstr "Without an assigned Page only metrics are read: ads can't be launched an
 
 msgid "Sin Página solo se leen métricas: no se pueden lanzar anuncios y la publicación orgánica queda apagada."
 msgstr "Without a Page only metrics are read: ads can't be launched and organic posting stays off."
+
+msgid "Sin Triple Whale conectado: no hay nada que preparar."
+msgstr "Triple Whale is not connected: there is nothing to prepare."
 
 msgid "Sin URL"
 msgstr "No URL"
@@ -19478,6 +19488,9 @@ msgstr "One video fades into the other."
 
 msgid "Una campaña necesita al menos un video o una imagen."
 msgstr "A campaign needs at least one video or image."
+
+msgid "Una copia de Triple Whale terminó mientras se preparaba: se prepara en la próxima vuelta."
+msgstr "A Triple Whale copy finished while preparing: it will be prepared on the next round."
 
 msgid "Una de las piezas no está disponible (o no está lista)."
 msgstr "One of the pieces is not available (or not ready)."

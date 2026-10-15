@@ -19,6 +19,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects.sqlite import insert as insert_sqlite
 
 import db
+from triple_whale import memo
 
 # Columnas de ads_table y de pixel_joined_tvf en tw_anuncio_dia.
 COLUMNAS_DIMENSION = ("cuenta_id", "campana_id", "campana", "conjunto_id", "conjunto", "anuncio", "estado_anuncio",
@@ -176,6 +177,7 @@ def _canales_pagados(cliente, tienda_id):
     return sa.select(t.c.canal).where(*cond).group_by(t.c.canal).having(sa.func.sum(t.c.gasto) > 0)
 
 
+@memo.precalculable
 def totales_por_anuncio(cliente, tienda_id, desde, hasta, canal=None):
     """Una fila por (canal, anuncio) con las medidas sumadas en [desde, hasta]
     y las dimensiones más recientes que no estén vacías. Solo anuncios con
@@ -261,6 +263,7 @@ def visitantes_por(cliente, campo, ids, desde=None, hasta=None, canal="facebook-
                 for r in con.execute(q) if r.visitantes}
 
 
+@memo.precalculable
 def serie_anuncios(cliente, tienda_id, desde, hasta, canal=None):
     """Por día: gasto de anuncios e ingresos atribuidos por el Pixel (de un canal, si se pide), solo de canales
     con gasto en la copia del alcance (R9)."""
@@ -314,6 +317,7 @@ def _con_primer_dia(d, p):
     return d.join(p, sa.and_(p.c.canal == d.c.canal, p.c.ad_id == d.c.ad_id))
 
 
+@memo.precalculable
 def gasto_por_antiguedad(cliente, tienda_id, desde, hasta, canal=None):
     """{fecha: gasto de los anuncios nuevos ese día}, de los días con algún anuncio con gasto."""
     d, p = _medidas_dia(cliente, tienda_id, desde, hasta, canal), _primeros_dias(cliente, tienda_id)
@@ -324,6 +328,7 @@ def gasto_por_antiguedad(cliente, tienda_id, desde, hasta, canal=None):
         return {f: float(g or 0) for f, g in con.execute(q)}
 
 
+@memo.precalculable
 def gasto_por_canal(cliente, tienda_id, desde, hasta):
     """{fecha: {canal: {"gasto", "ingresos"}}} de los canales con gasto ese día (los ingresos son del Pixel).
     Direct, Klaviyo, orgánico y demás fuentes sin gasto no entran: no son anuncios."""
@@ -363,6 +368,7 @@ def arrancaron_el(cliente, tienda_id, fecha, canal=None):
         return int(con.execute(q).scalar() or 0)
 
 
+@memo.precalculable
 def cohortes(cliente, tienda_id, desde, hasta, canal=None, conocido_desde=None):
     """Creativos por mes de arranque en [desde, hasta] (spec §2.5): por mes, anuncios con gasto en el periodo,
     gasto e ingresos del Pixel; gasto e ingresos de nuevos y de establecidos solo en días con antigüedad
@@ -416,6 +422,7 @@ def _duplicado_por_dia(cliente, desde, hasta, solo_con_fila_tienda=False):
             .group_by(por_anuncio.c.fecha).subquery())
 
 
+@memo.precalculable
 def gasto_duplicado(cliente, desde, hasta, tienda_id=None):
     """Gasto de anuncios que llega repetido por varias tiendas en [desde, hasta]
     (mayor que 0 = hay tiendas que comparten cuenta publicitaria). Sin tienda
@@ -475,6 +482,7 @@ def primer_dia_tienda(cliente, tienda_id=None):
         return con.execute(sa.select(sa.func.min(t.c.fecha)).where(*cond)).scalar()
 
 
+@memo.precalculable
 def serie_tienda(cliente, tienda_id, desde, hasta):
     """La tienda por día. Con todas, suma las tiendas y le quita al `gasto` el
     gasto duplicado de ese día (se lo devuelve a `utilidad_neta`, que lo había
@@ -521,6 +529,7 @@ def por_tienda(cliente, desde, hasta, desde_prev, hasta_prev):
              "previo": {c: f[f"p_{c}"] for c in COLUMNAS_POR_TIENDA}} for f in filas]
 
 
+@memo.precalculable
 def top_productos(cliente, tienda_id, desde, hasta, limite=10):
     """Los productos que más vendieron en [desde, hasta] (por ingresos), con
     el nombre y el sku más recientes que no estén vacíos. Con una tienda, por
@@ -587,6 +596,7 @@ def rango_ligero(cliente, tienda_id=None):
     return {"desde": desde, "hasta": hasta, "filas": int(filas or 0)}
 
 
+@memo.precalculable
 def canales(cliente, tienda_id, desde, hasta):
     """Canales con gasto en el rango, del que más gastó al que menos. Uno con impresiones y sin gasto (o solo con lo
     que atribuye el Pixel) no se ofrece en el filtro «Canal»: R9 deja fuera los canales sin gasto y su galería saldría

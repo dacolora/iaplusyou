@@ -77,6 +77,7 @@ TIPOS_EXENTOS_DE_COBRO = {
     "tienda_sync_pedidos_todas": "periódica: solo encola tienda_sync_pedidos",
     "tw_sincronizar": "lee datos de Triple Whale",
     "tw_sincronizar_todas": "periódica: solo encola tw_sincronizar",
+    "tw_precalcular": "lee la copia de Triple Whale y guarda sumas para la pestaña; no llama a nadie",
     "tw_ganchos_preparar": "baja el video y lanza piezas de Crear; cada pieza la cobra flowplus_video",
     "tw_ganchos_vigilar": "periódica: mueve las variantes de los ganchos; cada clip lo cobra flowplus_video",
     "tw_gancho_armar": "arma con ffmpeg y el editor un clip ya pagado y el original",

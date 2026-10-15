@@ -704,3 +704,9 @@ evaluados del panel, productos con gasto y ROAS (por la página de destino contr
 iterar, los que mejor convierten (`metricas()["cv_sesion"]` = pedidos / sesiones; `resumen_cuenta` ahora suma
 `sesiones`) y las mejores imágenes y videos (`datos.tipos_creativo(cliente)`: `{(canal, ad_id): tipo}` en una
 consulta). Detalle y reglas en la skill `rendimiento`, «Las métricas que faltaban».
+
+**Sumas precalculadas e historia (2026-10-15).** `triple_whale/memo.py` es el único escritor de `tw_memo` (0041): las
+sumas pesadas de `datos.py` llevan `@memo.precalculable` y la tarea `tw_precalcular` las graba después de la última
+copia; `tw_sincronizar` acepta `desde` (historia) y `encolar_historia` la pide por tienda. Detalle en la skill
+`rendimiento`, «Sumas precalculadas y un año de historia».
+

@@ -379,6 +379,28 @@ con IA» de Meta (pagada) mira el periodo elegido a lo sumo 90 días (`meta_rend
 cobra usan esa misma función. Alcance y segmentos de Meta toman la ventana copiada más cercana (15 → 14; 6 meses y
 1 año → 90). Pruebas: `tests/test_rendimiento_periodos.py`.
 
+## Sumas precalculadas y un año de historia (2026-10-15)
+
+Por qué: con las 5 tiendas de happyflops «Todas, desde el inicio» tardaba 24 s en el VPS (7 u 8 sumas de 1–2,5 s sobre la
+copia entera) y Daniel pidió un año de historia (4 veces más filas). Spec
+`docs/superpowers/specs/2026-10-15-rendimiento-sumas-precalculadas-design.md`, pruebas `tests/test_tw_memo.py` y
+`tests/test_tw_precalculo.py`.
+
+- Las nueve sumas pesadas de `triple_whale/datos.py` (`totales_por_anuncio`, `serie_tienda`, `serie_anuncios`,
+  `cohortes`, `gasto_por_antiguedad`, `gasto_por_canal`, `gasto_duplicado`, `canales`, `top_productos`) llevan
+  `@memo.precalculable`: con los mismos argumentos y la misma versión de los datos (`memo.version`: cada tienda con su
+  última copia, país y dominio, y moneda, modelo y ventana), devuelven lo grabado en `tw_memo` (migración 0041); si
+  no, consultan como siempre. Se guardan sumas, no la pantalla (veredictos y textos van en el idioma de quien mira).
+- Graba SOLO el worker: `tw_precalcular` (carril de lectura, exenta de Cobros, un intento) corre
+  `pestana_rendimiento.panel.contexto` para «Todas» y cada entrada de fuente "tw" (`claves_con_triple_whale`) con
+  todos los periodos y sin canal, dentro de `memo.grabando`. La pide la última copia del proyecto que termina (donde
+  `reservar_aviso_sync` reserva los avisos). Si una copia termina en medio, no guarda nada. Quitar tiendas borra lo
+  grabado (`_borrar_copias` → `memo.borrar_en`).
+- Con canal elegido, el detalle de un día y todo lo de Meta: en vivo. Una suma nueva que se agregue a la pestaña
+  necesita su `@memo.precalculable` si es pesada y su resultado sobrevive igual a JSON (la prueba de ida y vuelta).
+- Historia: `tw_sincronizar` acepta `desde` en el pedido (hasta hoy; uno raro, futuro o de hace más de dos años se
+  ignora); `tareas.triple_whale.encolar_historia(cliente, dias=365)` lo pide para cada tienda.
+
 ## Trampas
 
 - Lo que se jubiló el 2026-10-10 con la galería única (no lo revivas): ver «E2 tarea 4»; con la evaluación de la
