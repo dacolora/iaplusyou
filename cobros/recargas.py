@@ -568,8 +568,9 @@ def _avisar_wompi(resultado, fila, tx):
             "anulacion_wompi",
             lambda: gettext("Wompi anuló una recarga de %(cliente)s", cliente=cliente),
             lambda: gettext("Wompi anuló el pago de la recarga %(ref)s de %(cliente)s (%(monto)s) antes de que lo "
-                            "acreditáramos: su saldo no cambió y una aprobación que llegue después no lo suma.",
-                            ref=referencia, cliente=cliente, monto=_monto(milesimas)),
+                            "acreditáramos: su saldo no cambió. Revisa en el panel de Wompi si hay otra transacción "
+                            "aprobada con esa referencia (otra pestaña); la periódica la busca durante 26 horas y te "
+                            "avisa si la encuentra.", ref=referencia, cliente=cliente, monto=_monto(milesimas)),
             cliente=cliente))
 
 
@@ -1046,7 +1047,9 @@ def avisar_vistos_sin_evento():
                 borrar.append(clave)
                 continue
             fila = _fila(con, rid)
-            if fila is None or fila["estado"] == "aprobada":
+            # Una anulada (Wompi anuló lo que la vuelta vio aprobado) tampoco: «Buscar en Wompi» no la toma, y si otra
+            # pestaña pagó, el rescate la encuentra y avisa como segundo pago (guardian 2026-10-15).
+            if fila is None or fila["estado"] in ("aprobada", "anulada"):
                 borrar.append(clave)
             elif str(visto.get("visto_en") or "") <= limite:
                 avisar.append((fila, str(visto.get("tx") or "—")))
@@ -1166,8 +1169,10 @@ def _marcar_busqueda(recarga_id, formato=CLAVE_BUSQUEDA):
 
 def rescatar_sin_evento(tope_s=TOPE_VUELTA_S):
     """PND-296, la pasada del rescate (después de las consultas por id): busca en Wompi por su referencia las
-    recargas de Wompi `pendiente` sin transacción de más de MINUTOS_RESCATE y las `rechazada` de menos de
-    HORAS_VIGENTE (la persona pudo reintentar en el mismo checkout y pagar sin que llegara el evento). Primero las
+    recargas de Wompi `pendiente` sin transacción de más de MINUTOS_RESCATE, las `rechazada` de menos de
+    HORAS_VIGENTE (la persona pudo reintentar en el mismo checkout y pagar sin que llegara el evento) y las `anulada`
+    de menos de HORAS_VIGENTE que nunca se acreditaron (PND-328: Wompi anuló la transacción de una pestaña y otra
+    pestaña pudo pagar; esa sale como `otro_pago` al admin, guardian 2026-10-15). Primero las
     que toca vencer (una última búsqueda: sin nada y sin error, se vencen), después de la más nueva a la más vieja,
     cada una espaciada por `_espera_busqueda`; a lo más BUSQUEDAS_POR_VUELTA y `tope_s` segundos; para a la
     primera caída, 429 o llave rechazada (401/403). Devuelve cuántas buscó."""
@@ -1175,10 +1180,13 @@ def rescatar_sin_evento(tope_s=TOPE_VUELTA_S):
     ahora = datetime.now()
     limite = _limite_vigente()
     minimo = (ahora - timedelta(minutes=MINUTOS_RESCATE)).isoformat(timespec="seconds")
+    m = db.movimiento_saldo
+    nunca_acreditada = ~sa.exists().where(m.c.recarga_id == r.c.id, m.c.tipo == "recarga")
     with db.conectar() as con:
         filas = con.execute(sa.select(r.c.id, r.c.creada_en, r.c.estado).where(r.c.medio == "wompi", sa.or_(
             sa.and_(r.c.estado == "pendiente", r.c.pasarela_ref.is_(None), r.c.creada_en <= minimo),
-            sa.and_(r.c.estado == "rechazada", r.c.creada_en >= limite)))).all()
+            sa.and_(r.c.estado == "rechazada", r.c.creada_en >= limite),
+            sa.and_(r.c.estado == "anulada", r.c.creada_en >= limite, nunca_acreditada)))).all()
         marcas = dict(con.execute(sa.select(kv.c.clave, kv.c.valor).where(kv.c.clave.like("wompi:busqueda:%"))).all())
         vivas = {CLAVE_BUSQUEDA.format(recarga=f.id) for f in filas}
         sobran = [c for c in marcas if c not in vivas]

@@ -256,3 +256,85 @@ def test_una_recien_aprobada_no_se_vuelve_a_preguntar_en_la_misma_vuelta(entorno
     recargas.verificar_pendientes()
     assert _recarga(entorno["db"], rid)["estado"] == "aprobada"
     assert [c[0] for c in entorno["consultas"]] == [TX]
+
+
+# --- revisión de plata (guardian-gasto, 2026-10-15): dos pestañas, una anulada y otra pagada ----------------------
+
+Y = "1292-1602113476-77777"
+
+
+def test_dos_pestanas_la_anulada_no_esconde_la_otra_pagada_cuyo_evento_se_perdio(entorno):  # noqa: F811
+    # Pestaña 1: X se aprueba y Wompi la anula (llega su VOIDED). Pestaña 2: Y se aprueba y su evento se pierde.
+    # Antes del cambio el rescate encontraba Y en la pendiente; la anulada tiene que seguir buscándose (26 h) y Y
+    # llega al admin como segundo pago (no se acredita sola: lo decide el admin, como cualquier segundo pago).
+    db, recargas = entorno["db"], entorno["recargas"]
+    rid, ref = _pendiente(entorno)
+    assert _ev(entorno, _evento(_tx(ref, status="VOIDED"), props=TODAS))[1] == "anulada_sin_acreditar"
+    entorno["avisos"].clear()
+    _envejecer_min(entorno, rid, recargas.MINUTOS_RESCATE + 1)
+    entorno["por_ref"][ref] = [_tx(ref, status="VOIDED"), _tx(ref, tx_id=Y)]
+    entorno["txs"][Y] = _tx(ref, tx_id=Y)
+    recargas.verificar_pendientes()
+    assert entorno["busquedas"] == [ref]
+    assert _admin(entorno) == ["wompi_no_cuadra"]                     # «Wompi aprobó un segundo pago…»
+    assert entorno["libro"].saldo("acme") == 0 and _recarga(db, rid)["estado"] == "anulada"
+
+
+def test_la_pendiente_de_nequi_que_se_aprueba_despues_de_la_anulacion_llega_al_admin(entorno):  # noqa: F811
+    # Escenario A del guardian: Y (Nequi) PENDING guardada; X (tarjeta) aprobada y anulada pisa la recarga; Y se
+    # aprueba y su evento se pierde.
+    recargas = entorno["recargas"]
+    rid, ref = _pendiente(entorno)
+    assert _ev(entorno, _evento(_tx(ref, status="PENDING", tx_id=Y), props=TODAS))[1] == "pendiente"
+    assert _ev(entorno, _evento(_tx(ref, status="VOIDED"), props=TODAS))[1] == "anulada_sin_acreditar"
+    entorno["avisos"].clear()
+    _envejecer_min(entorno, rid, recargas.MINUTOS_RESCATE + 1)
+    entorno["por_ref"][ref] = [_tx(ref, status="VOIDED"), _tx(ref, tx_id=Y)]
+    entorno["txs"][Y] = _tx(ref, tx_id=Y)
+    recargas.verificar_pendientes()
+    assert _admin(entorno) == ["wompi_no_cuadra"] and entorno["libro"].saldo("acme") == 0
+
+
+def test_el_rescate_no_busca_las_anuladas_que_si_se_acreditaron_ni_las_viejas(entorno):  # noqa: F811
+    recargas = entorno["recargas"]
+    rid, ref = _aprobada(entorno)                              # acreditada y después anulada: ya se descontó
+    entorno["txs"][TX] = _tx(ref, status="VOIDED")
+    assert _ev(entorno, _evento(_tx(ref, status="VOIDED"), props=TODAS))[1] == "anulada"
+    rid2, ref2 = _pendiente(entorno)                           # anulada sin acreditar, pero de hace más de 26 h
+    _ev(entorno, _evento(_tx(ref2, status="VOIDED", tx_id="1292-1602113476-88888"), props=TODAS))
+    _envejecer_min(entorno, rid2, (recargas.HORAS_VIGENTE + 1) * 60)
+    recargas.verificar_pendientes()
+    assert entorno["busquedas"] == []
+
+
+def test_el_aviso_de_la_anulada_sin_acreditar_pide_mirar_si_hay_otro_pago(entorno, monkeypatch):  # noqa: F811
+    from cobros import avisos
+    textos = []
+    monkeypatch.setattr(avisos, "admin", lambda tipo, asunto, cuerpo, cliente="": textos.append(cuerpo()))
+    _rid, ref = _pendiente(entorno)
+    _ev(entorno, _evento(_tx(ref, status="VOIDED"), props=TODAS))
+    (cuerpo,) = textos
+    assert "otra transacción aprobada" in cuerpo and "no lo suma" not in cuerpo
+
+
+def test_lo_visto_aprobado_en_la_vuelta_y_despues_anulado_no_avisa_sin_evento(entorno):  # noqa: F811
+    import json
+    db, recargas = entorno["db"], entorno["recargas"]
+    rid, ref = _pendiente(entorno)
+    entorno["txs"][TX] = _tx(ref)
+    assert recargas.consultar(rid, TX) == "APPROVED"           # la vuelta lo vio aprobado
+    _ev(entorno, _evento(_tx(ref, status="VOIDED"), props=TODAS))
+    hace = (datetime.now() - timedelta(minutes=31)).isoformat(timespec="seconds")
+    with db.conectar() as con:
+        con.execute(db.kv.update().where(db.kv.c.clave == f"wompi:visto:{rid}")
+                    .values(valor=json.dumps({"tx": TX, "visto_en": hace})))
+    entorno["avisos"].clear()
+    recargas.avisar_vistos_sin_evento()
+    assert "wompi_sin_evento" not in _admin(entorno) and _kv(entorno, "wompi:visto:") == {}
+
+
+def _envejecer_min(entorno, rid, minutos):  # noqa: F811
+    db = entorno["db"]
+    hace = (datetime.now() - timedelta(minutes=minutos)).isoformat(timespec="seconds")
+    with db.conectar() as con:
+        con.execute(db.recarga.update().where(db.recarga.c.id == rid).values(creada_en=hace))

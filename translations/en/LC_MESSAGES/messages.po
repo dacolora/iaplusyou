@@ -20341,8 +20341,8 @@ msgid "Wompi abre su propia ventana para los datos de la tarjeta: el número nun
 msgstr "Wompi opens its own window for the card details: the number never goes through Creatv. Visa, Mastercard or American Express, with a security code."
 
 #, python-format
-msgid "Wompi anuló el pago de la recarga %(ref)s de %(cliente)s (%(monto)s) antes de que lo acreditáramos: su saldo no cambió y una aprobación que llegue después no lo suma."
-msgstr "Wompi voided the payment for top-up %(ref)s for %(cliente)s (%(monto)s) before we credited it: its balance did not change, and an approval that arrives later will not add it."
+msgid "Wompi anuló el pago de la recarga %(ref)s de %(cliente)s (%(monto)s) antes de que lo acreditáramos: su saldo no cambió. Revisa en el panel de Wompi si hay otra transacción aprobada con esa referencia (otra pestaña); la periódica la busca durante 26 horas y te avisa si la encuentra."
+msgstr "Wompi voided the payment for top-up %(ref)s for %(cliente)s (%(monto)s) before we credited it: its balance did not change. Check in the Wompi dashboard whether there is another approved transaction with that reference (another tab); the periodic check looks for it for 26 hours and lets you know if it finds one."
 
 msgid "Wompi anuló este pago antes de que lo sumáramos: tu saldo no cambió."
 msgstr "Wompi voided this payment before we added it: your balance did not change."
