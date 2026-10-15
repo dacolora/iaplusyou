@@ -9,8 +9,9 @@ description: "Crear (FlowPlus): generar video o imagen con WaveSpeed (Wan 3.0, K
 
 `comparar_seedance_turbo.py` (2026-10-01) is a research CLI for the VPS, like `comparar_modelos.py`: it
 regenerates existing Seedance 2.5 pieces through WaveSpeed's Turbo routes with the worker's same inputs
-(`tareas.flowplus._preparar`) for a side-by-side page, asks «si» before spending and registers the gasto
-(`docs/investigacion/2026-10-01-seedance-turbo.md`). Crear keeps the standard route until that comparison
+(`tareas.flowplus._preparar`) for a side-by-side page, asks «si» before spending and registers the gasto under
+`_creatv` with the project in `extra.cliente` (PND-316, 2026-10-13: it went to the `--cliente`, and happyflops in
+pospago ×3 would have paid our research) (`docs/investigacion/2026-10-01-seedance-turbo.md`). Crear keeps the standard route until that comparison
 says otherwise.
 
 **Crear (FlowPlus)**. Two paths from the same form (`cf_crear_video`, field

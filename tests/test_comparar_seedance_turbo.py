@@ -136,9 +136,13 @@ def test_genera_anota_el_gasto_sube_el_video_y_la_pagina(entorno, monkeypatch):
     monkeypatch.setattr(flowplus_modelos, "_lanzar", _lanzar)
     assert cst.main(["--cliente", "acme", "--cf", a, "--cf", b, "--generar"], preguntar=lambda t: "Sí") == 0
     assert llamadas == [(cst.PATH_TURBO, 8), (cst.PATH_TEXTO_TURBO, 5)]
-    g = sorted(_gastos(), key=lambda x: x["usd"], reverse=True)
+    # PND-316: la investigación la paga Creatv (`_creatv`, con el proyecto en `extra`), nunca el proyecto del
+    # `--cliente`: con happyflops en pospago ×3 se le cobraría una prueba nuestra.
+    assert _gastos("acme") == []
+    g = sorted(_gastos("_creatv"), key=lambda x: x["usd"], reverse=True)
     assert [(x["tipo"], x["usd"]) for x in g] == [("video", 1.6), ("video", 1.0)]
     assert g[0]["referencia"].startswith(f"turbo:{a}:") and g[1]["referencia"].startswith(f"turbo:{b}:")
+    assert all(x["extra"]["cliente"] == "acme" for x in g)
     videos = [k for k in entorno["subidos"] if k.endswith(".mp4")]
     assert sorted(videos) == sorted(k for k in videos if k.startswith("clientes/acme/comparaciones/seedance_turbo/"))
     html = next(v for k, v in entorno["subidos"].items() if k.endswith("index.html"))
@@ -156,7 +160,8 @@ def test_una_espera_agotada_anota_el_gasto_y_un_rechazo_no(entorno, monkeypatch)
                                              prediction_id="pred-9")
     monkeypatch.setattr(flowplus_modelos, "_lanzar", _lanzar)
     assert cst.main(["--cliente", "acme", "--cf", a, "--cf", b, "--generar"], preguntar=lambda t: "si") == 1
-    g = _gastos()
-    assert len(g) == 1 and g[0]["usd"] == 1.6 and "pred-123" in g[0]["detalle"]
+    assert _gastos("acme") == []
+    g = _gastos("_creatv")
+    assert len(g) == 1 and g[0]["usd"] == 1.6 and "pred-123" in g[0]["detalle"] and g[0]["extra"]["cliente"] == "acme"
     html = next(v for k, v in entorno["subidos"].items() if k.endswith("index.html"))
     assert "pred-123" in html and "contenido sensible" in html

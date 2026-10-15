@@ -19,7 +19,10 @@ Uso (en el VPS: ahí están las llaves y wavespeed.ai responde):
 Gasto: cada video Turbo se anota en `gasto` (tipo `video`, referencia
 `turbo:<cf_id>:<marca>`) apenas WaveSpeed lo entrega, o con el detalle «espera
 agotada» si se dejó de esperar (WaveSpeed sigue y cobra igual). Un rechazo del
-proveedor no se anota: no entregó nada.
+proveedor no se anota: no entregó nada. Se anota a Creatv (`_creatv`, con el
+proyecto de las piezas en `extra.cliente`), nunca al `--cliente`: es una
+investigación nuestra y un proyecto que cobra (happyflops, pospago ×3) la
+pagaría (PND-316, 2026-10-13).
 """
 import argparse
 import html
@@ -38,6 +41,8 @@ from providers import flowplus_modelos, wavespeed_common
 from storage import r2_uploader
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Quien paga la investigación (PND-316): Creatv, no el proyecto de las piezas.
+CLIENTE_GASTO = "_creatv"
 
 MODELO = "seedance25"
 # Rutas y precio del acceso Turbo (fuentes en el doc de investigación): mismos
@@ -130,16 +135,17 @@ def generar(cliente, e, marca, avisar=print):
     except wavespeed_common.EsperaAgotada as err:
         resultado["prediction_id"] = err.prediction_id or resultado["prediction_id"]
         resultado["error"] = f"se dejó de esperar; WaveSpeed sigue (predicción {resultado['prediction_id']})"
-        gastos.registrar_seguro(cliente, "video", e["usd_turbo"], ref, proveedor="wavespeed",
+        gastos.registrar_seguro(CLIENTE_GASTO, "video", e["usd_turbo"], ref, proveedor="wavespeed",
                                 detalle=f"{NOMBRE_TURBO} (comparación): espera agotada, "
-                                        f"predicción {resultado['prediction_id']}")
+                                        f"predicción {resultado['prediction_id']}", extra={"cliente": cliente})
         return resultado
     except Exception as err:  # noqa: BLE001 — una pieza que falla no frena a las demás
         resultado["error"] = str(err)[:300]
         return resultado
     resultado["segundos"] = round(time.time() - inicio)
-    gastos.registrar_seguro(cliente, "video", e["usd_turbo"], ref, proveedor="wavespeed",
-                            detalle=f"{NOMBRE_TURBO} (comparación con {e['cf_id']}), {e['duracion']} s")
+    gastos.registrar_seguro(CLIENTE_GASTO, "video", e["usd_turbo"], ref, proveedor="wavespeed",
+                            detalle=f"{NOMBRE_TURBO} (comparación con {e['cf_id']}), {e['duracion']} s",
+                            extra={"cliente": cliente})
     try:
         carpeta = os.path.join(BASE_DIR, "salidas", cliente, "comparacion_turbo", marca)
         os.makedirs(carpeta, exist_ok=True)
