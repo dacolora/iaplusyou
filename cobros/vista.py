@@ -574,6 +574,10 @@ RESULTADOS_EVENTO = {
     "no_cuadra": N_("No cuadra"), "pendiente": N_("Pendiente"), "otro_pago": N_("Segundo pago"),
     # PND-328 (2026-10-15): la anulación llegó antes que la aprobación, y la aprobación tardía de ese pago anulado.
     "anulada_sin_acreditar": N_("Anulada antes de acreditar"), "ya_anulada": N_("Aprobación de un pago anulado"),
+    # Revisión de plata 2026-10-15: la anulación de la acreditada con otro pago aprobado, el pago bueno de una recarga
+    # anulada sin acreditar y una anulación que nadie miró si tenía otro pago.
+    "reemplazada": N_("Anulada; queda pagada con otra transacción"), "acreditada_otra": N_("Acreditada con otra transacción"),
+    "anulacion_sin_revisar": N_("Anulación sin revisar"),
 }
 PROVEEDORES_EVENTO = {"bold": "Bold", "wompi": "Wompi"}
 

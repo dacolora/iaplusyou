@@ -85,15 +85,22 @@ def test_la_anulacion_de_una_rechazada_o_vencida_tambien_la_marca(entorno):  # n
     assert entorno["libro"].saldo("acme") == 0
 
 
-def test_otra_aprobada_de_una_recarga_anulada_sin_acreditar_va_al_admin(entorno):  # noqa: F811
-    # Dos pestañas: una pagó y Wompi la anuló; la otra se aprobó después. No se acredita sola (la recarga ya está
-    # cerrada): el admin la ve como segundo pago y decide.
+def test_otra_aprobada_de_una_recarga_anulada_sin_acreditar_la_acredita_y_avisa(entorno):  # noqa: F811
+    # Dos pestañas: una pagó y Wompi la anuló; la otra se aprobó después. La recarga nunca se acreditó: ese pago
+    # bueno la acredita solo (una vez: UNIQUE(tipo, recarga_id)) y el admin se entera (revisión de plata 2026-10-15).
+    db = entorno["db"]
     rid, ref = _pendiente(entorno)
     _ev(entorno, _evento(_tx(ref, status="VOIDED"), props=TODAS))
     entorno["avisos"].clear()
     otra = _tx(ref, tx_id="1292-1602113476-30000")
-    assert _ev(entorno, _evento(otra, props=TODAS))[1] == "otro_pago"
-    assert entorno["libro"].saldo("acme") == 0 and _admin(entorno) == ["wompi_no_cuadra"]
+    assert _ev(entorno, _evento(otra, props=TODAS))[1] == "acreditada_otra"
+    fila = _recarga(db, rid)
+    assert (fila["estado"], fila["pasarela_ref"]) == ("aprobada", "1292-1602113476-30000")
+    assert entorno["libro"].saldo("acme") == 50000 and [m["concepto"] for m in _movimientos(db)] == ["recarga_wompi"]
+    assert "anulacion_wompi" in _admin(entorno) and ("recarga_acreditada", ("acme", 50000, "Wompi")) in entorno["avisos"]
+    assert _ev(entorno, _evento(otra, props=TODAS, ts=_ahora_ts() + 1))[1] == "duplicada"
+    assert _ev(entorno, _evento(_tx(ref), props=TODAS, ts=_ahora_ts() + 2))[1] == "ya_anulada"   # la anulada, tarde
+    assert entorno["libro"].saldo("acme") == 50000
 
 
 def test_la_anulacion_de_otra_transaccion_no_cierra_una_recarga_aprobada(entorno):  # noqa: F811
@@ -276,8 +283,8 @@ def test_dos_pestanas_la_anulada_no_esconde_la_otra_pagada_cuyo_evento_se_perdio
     entorno["txs"][Y] = _tx(ref, tx_id=Y)
     recargas.verificar_pendientes()
     assert entorno["busquedas"] == [ref]
-    assert _admin(entorno) == ["wompi_no_cuadra"]                     # «Wompi aprobó un segundo pago…»
-    assert entorno["libro"].saldo("acme") == 0 and _recarga(db, rid)["estado"] == "anulada"
+    assert "anulacion_wompi" in _admin(entorno)                      # se acreditó con Y y el admin lo sabe
+    assert entorno["libro"].saldo("acme") == 50000 and _recarga(db, rid)["pasarela_ref"] == Y
 
 
 def test_la_pendiente_de_nequi_que_se_aprueba_despues_de_la_anulacion_llega_al_admin(entorno):  # noqa: F811
@@ -292,7 +299,7 @@ def test_la_pendiente_de_nequi_que_se_aprueba_despues_de_la_anulacion_llega_al_a
     entorno["por_ref"][ref] = [_tx(ref, status="VOIDED"), _tx(ref, tx_id=Y)]
     entorno["txs"][Y] = _tx(ref, tx_id=Y)
     recargas.verificar_pendientes()
-    assert _admin(entorno) == ["wompi_no_cuadra"] and entorno["libro"].saldo("acme") == 0
+    assert "anulacion_wompi" in _admin(entorno) and entorno["libro"].saldo("acme") == 50000
 
 
 def test_el_rescate_no_busca_las_anuladas_que_si_se_acreditaron_ni_las_viejas(entorno):  # noqa: F811
@@ -303,6 +310,7 @@ def test_el_rescate_no_busca_las_anuladas_que_si_se_acreditaron_ni_las_viejas(en
     rid2, ref2 = _pendiente(entorno)                           # anulada sin acreditar, pero de hace más de 26 h
     _ev(entorno, _evento(_tx(ref2, status="VOIDED", tx_id="1292-1602113476-88888"), props=TODAS))
     _envejecer_min(entorno, rid2, (recargas.HORAS_VIGENTE + 1) * 60)
+    entorno["busquedas"].clear()      # la anulación de la acreditada ya buscó si había otro pago (punto 1)
     recargas.verificar_pendientes()
     assert entorno["busquedas"] == []
 
@@ -338,3 +346,104 @@ def _envejecer_min(entorno, rid, minutos):  # noqa: F811
     hace = (datetime.now() - timedelta(minutes=minutos)).isoformat(timespec="seconds")
     with db.conectar() as con:
         con.execute(db.recarga.update().where(db.recarga.c.id == rid).values(creada_en=hace))
+
+
+
+# --- segunda revisión de plata (2026-10-15): la anulación de la acreditada con otro pago aprobado ------------------
+
+T2 = "1292-1602113476-22222"
+T3 = "1292-1602113476-33333"
+
+
+def _textos_admin(entorno, monkeypatch):  # noqa: F811
+    from cobros import avisos
+    textos = []
+    monkeypatch.setattr(avisos, "admin", lambda tipo, asunto, cuerpo, cliente="": (
+        textos.append((tipo, cuerpo() if callable(cuerpo) else cuerpo)), entorno["avisos"].append(("admin", tipo))))
+    return textos
+
+
+def _con_segundo_pago(entorno):  # noqa: F811
+    """Acreditada con TX (T1); otra pestaña pagó T2 y llegó como segundo pago; después el admin anula T1 en Wompi."""
+    rid, ref = _aprobada(entorno)
+    assert _ev(entorno, _evento(_tx(ref, tx_id=T2), props=TODAS))[1] == "otro_pago"
+    entorno["txs"][TX] = _tx(ref, status="VOIDED")
+    entorno["txs"][T2] = _tx(ref, tx_id=T2)
+    entorno["por_ref"][ref] = [_tx(ref, status="VOIDED"), _tx(ref, tx_id=T2)]
+    entorno["avisos"].clear()
+    return rid, ref
+
+
+def test_anular_la_acreditada_con_otro_pago_aprobado_no_descuenta_y_la_pasa_al_otro(entorno, monkeypatch):  # noqa: F811
+    db = entorno["db"]
+    rid, ref = _con_segundo_pago(entorno)
+    textos = _textos_admin(entorno, monkeypatch)
+    assert _ev(entorno, _evento(_tx(ref, status="VOIDED"), props=TODAS))[1] == "reemplazada"
+    fila = _recarga(db, rid)
+    assert (fila["estado"], fila["pasarela_ref"]) == ("aprobada", T2)
+    assert entorno["libro"].saldo("acme") == 50000 and [m["concepto"] for m in _movimientos(db)] == ["recarga_wompi"]
+    ((tipo, cuerpo),) = textos
+    assert tipo == "anulacion_wompi" and T2 in cuerpo and TX in cuerpo
+    # La aprobación tardía de T1 (ya anulada) no la da por «segundo pago» otra vez.
+    assert _ev(entorno, _evento(_tx(ref), props=TODAS, ts=_ahora_ts() + 1))[1] == "ya_anulada"
+    # Y si después también se anula T2, ahí sí se descuenta (no queda otro pago).
+    entorno["txs"][T2] = _tx(ref, tx_id=T2, status="VOIDED")
+    entorno["por_ref"][ref] = [_tx(ref, status="VOIDED"), _tx(ref, tx_id=T2, status="VOIDED")]
+    assert _ev(entorno, _evento(_tx(ref, tx_id=T2, status="VOIDED"), props=TODAS))[1] == "anulada"
+    assert entorno["libro"].saldo("acme") == 0
+
+
+def test_la_periodica_tampoco_descuenta_si_hay_otro_pago_aprobado(entorno):  # noqa: F811
+    db, recargas = entorno["db"], entorno["recargas"]
+    rid, ref = _con_segundo_pago(entorno)
+    recargas.revisar_aprobadas()
+    fila = _recarga(db, rid)
+    assert (fila["estado"], fila["pasarela_ref"]) == ("aprobada", T2) and entorno["libro"].saldo("acme") == 50000
+
+
+def test_si_no_se_puede_saber_si_hay_otro_pago_se_frena_el_reverso_y_se_avisa(entorno, monkeypatch):  # noqa: F811
+    db, recargas = entorno["db"], entorno["recargas"]
+    rid, ref = _con_segundo_pago(entorno)
+    textos = _textos_admin(entorno, monkeypatch)
+    entorno["por_ref"][ref] = entorno["wompi"].ErrorWompi("No se pudo hablar con Wompi (Timeout)", caida=True)
+    assert _ev(entorno, _evento(_tx(ref, status="VOIDED"), props=TODAS)) == (500, "error")   # Wompi reintenta
+    recargas.revisar_aprobadas()
+    assert _recarga(db, rid)["estado"] == "aprobada" and entorno["libro"].saldo("acme") == 50000
+    assert [t for t, _c in textos] == ["anulacion_wompi"]            # un solo aviso del freno
+    assert "no descontamos" in textos[0][1].lower()
+    entorno["por_ref"][ref] = [_tx(ref, status="VOIDED")]             # Wompi responde: no hay otro pago
+    entorno["txs"][T2] = _tx(ref, tx_id=T2, status="VOIDED")
+    assert _ev(entorno, _evento(_tx(ref, status="VOIDED"), props=TODAS, ts=_ahora_ts() + 1))[1] == "anulada"
+    assert entorno["libro"].saldo("acme") == 0
+
+
+def test_el_aviso_de_anulacion_nombra_las_otras_aprobadas_que_no_cuadran(entorno, monkeypatch):  # noqa: F811
+    textos = _textos_admin(entorno, monkeypatch)
+    rid, ref = _aprobada(entorno)
+    entorno["txs"][TX] = _tx(ref, status="VOIDED")
+    entorno["por_ref"][ref] = [_tx(ref, status="VOIDED"), _tx(ref, tx_id=T3, centavos=999)]
+    entorno["txs"][T3] = _tx(ref, tx_id=T3, centavos=999)          # aprobada, pero no es de este monto
+    assert _ev(entorno, _evento(_tx(ref, status="VOIDED"), props=TODAS))[1] == "anulada"
+    assert entorno["libro"].saldo("acme") == 0
+    (cuerpo,) = [c for t, c in textos if t == "anulacion_wompi"]
+    assert T3 in cuerpo
+
+
+# --- el aviso «acredítala a mano» una sola vez, también tras un reinicio --------------------------------------------
+
+def test_el_aviso_de_segundo_pago_no_se_repite_tras_un_reinicio(entorno, monkeypatch):  # noqa: F811
+    recargas = entorno["recargas"]
+    _rid, ref = _aprobada(entorno)
+    assert _ev(entorno, _evento(_tx(ref, tx_id=T2), props=TODAS))[1] == "otro_pago"
+    monkeypatch.setattr(recargas, "_AVISADOS_NO_CUADRA", set())    # el proceso se reinició
+    assert _ev(entorno, _evento(_tx(ref, tx_id=T2), props=TODAS, ts=_ahora_ts() + 1))[1] == "otro_pago"
+    assert _admin(entorno).count("wompi_no_cuadra") == 1
+
+
+def test_una_aprobacion_que_wompi_ya_anulo_no_manda_no_cuadra_y_anulacion_a_la_vez(entorno):  # noqa: F811
+    # El evento dice APPROVED (sin todo firmado) y al releer Wompi ya la tiene anulada: es el estado que cambió, no
+    # un evento que miente. Un solo aviso: la anulación.
+    rid, ref = _aprobada(entorno)
+    entorno["txs"][TX] = _tx(ref, status="VOIDED")
+    assert _ev(entorno, _evento(_tx(ref), ts=_ahora_ts() + 1))[1] == "anulada"
+    assert _admin(entorno) == ["anulacion_wompi"]

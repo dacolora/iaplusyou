@@ -2481,6 +2481,9 @@ msgstr "Zoom in on the frame"
 msgid "Acreditada"
 msgstr "Credited"
 
+msgid "Acreditada con otra transacción"
+msgstr "Credited with another transaction"
+
 msgid "Activa"
 msgstr "Active"
 
@@ -2983,11 +2986,17 @@ msgstr "Unknown age"
 msgid "Anual · %(precio)s al año"
 msgstr "Yearly · %(precio)s a year"
 
+msgid "Anulación sin revisar"
+msgstr "Void not reviewed"
+
 msgid "Anulada"
 msgstr "Voided"
 
 msgid "Anulada antes de acreditar"
 msgstr "Voided before crediting"
+
+msgid "Anulada; queda pagada con otra transacción"
+msgstr "Voided; now paid with another transaction"
 
 msgid "Anulado"
 msgstr "Voided"
@@ -11411,6 +11420,10 @@ msgstr "The top-up «%(ref)s» of %(cliente)s was paid in Wompi (transaction %(t
 #, python-format
 msgid "La recarga «%(ref)s» de %(cliente)s quedó anulada (Wompi anuló su pago) y Wompi aprobó otra transacción (%(tx)s) con la misma referencia. No la acreditamos sola: revísala en el panel de Wompi y devuélvela o acredítala a mano."
 msgstr "Top-up «%(ref)s» for %(cliente)s was voided (Wompi voided its payment) and Wompi approved another transaction (%(tx)s) with the same reference. We did not credit it automatically: check it in the Wompi dashboard and refund it or credit it manually."
+
+#, python-format
+msgid "La recarga «%(ref)s» de %(cliente)s tenía anulada la transacción %(anulada)s sin haberse acreditado, y Wompi aprobó otra (%(tx)s) con la misma referencia: la acreditamos con esa (%(monto)s), una sola vez."
+msgstr "Top-up «%(ref)s» for %(cliente)s had transaction %(anulada)s voided before it was credited, and Wompi approved another one (%(tx)s) with the same reference: we credited it with that one (%(monto)s), only once."
 
 #, python-format
 msgid "La recarga «%(ref)s» de %(cliente)s ya estaba acreditada y Wompi aprobó otra transacción (%(tx)s) con la misma referencia. No se acreditó dos veces: revísalo en el panel de Wompi y devuélvelo o acredítalo a mano."
@@ -20604,6 +20617,14 @@ msgid "Wompi anuló la recarga %(ref)s de %(cliente)s: descontamos %(monto)s de 
 msgstr "Wompi voided top-up %(ref)s for %(cliente)s: we deducted %(monto)s from its balance."
 
 #, python-format
+msgid "Wompi anuló la transacción %(anulada)s de la recarga «%(ref)s» de %(cliente)s, pero la recarga tiene otra transacción aprobada (%(nueva)s): no descontamos nada y la recarga queda pagada con %(nueva)s. Si lo que había que devolver era el segundo pago, el que había que anular en Wompi era %(nueva)s."
+msgstr "Wompi voided transaction %(anulada)s of top-up «%(ref)s» for %(cliente)s, but the top-up has another approved transaction (%(nueva)s): we did not deduct anything and the top-up is now paid with %(nueva)s. If what had to be refunded was the second payment, the one to void in Wompi was %(nueva)s."
+
+#, python-format
+msgid "Wompi anuló la transacción %(tx)s de la recarga «%(ref)s» de %(cliente)s, pero no pudimos confirmar en Wompi si la recarga tiene otro pago aprobado: no descontamos nada todavía. Se vuelve a intentar sola (el aviso de Wompi y la revisión periódica)."
+msgstr "Wompi voided transaction %(tx)s of top-up «%(ref)s» for %(cliente)s, but we could not confirm in Wompi whether the top-up has another approved payment: we have not deducted anything yet. It retries on its own (Wompi's event and the periodic check)."
+
+#, python-format
 msgid "Wompi anuló un pago del plan, así que dejamos de cobrarlo solo. El plan sigue hasta el %(fecha)s; para seguir después, escríbenos o suscríbete de nuevo cuando termine."
 msgstr "Wompi voided a plan payment, so we stopped charging it automatically. The plan stays active until %(fecha)s; to continue afterwards, write to us or subscribe again when it ends."
 
@@ -20706,6 +20727,10 @@ msgstr "Wompi returned something that is not JSON"
 #, python-format
 msgid "Wompi sí tiene una transacción con esa referencia (%(ids)s): usa «Sí se cobró» con su id."
 msgstr "Wompi does have a transaction with that reference (%(ids)s): use «It was charged» with its id."
+
+#, python-format
+msgid "Wompi tiene además otras transacciones aprobadas con esa referencia: %(ids)s; revísalas en el panel de Wompi."
+msgstr "Wompi also has other approved transactions with that reference: %(ids)s; check them in the Wompi dashboard."
 
 msgid "Wompi todavía no confirma el pago; te avisaremos cuando llegue. Puedes cerrar esta página."
 msgstr "Wompi has not confirmed the payment yet; we will let you know when it arrives. You can close this page."
