@@ -1,0 +1,242 @@
+/* Portada CREATV Galadsy (templates/index.html, 2026-10-10). Distribución de klarna.com, no sus colores: tarjeta grande
+   con el título a la izquierda y la vaca a la derecha, fila de cifras, título centrado, los pasos como lista grande con
+   la pieza al lado (fija al bajar), lo que ya no necesitas, vitrina, planes, cadena, cierre y la tecnología al final.
+   .landing-cta y .landing-empezar siguen en legado/02. */
+
+/* Las piezas de la vitrina y de los pasos llevan un video o una foto de fondo. */
+.landing-media { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: -2; display: block; }
+
+/* Lema y bajada (banner y cierre) */
+.landing-lema { font-size: clamp(3rem, 8vw, 6.5rem); line-height: 1; letter-spacing: -0.035em; margin: 0 0 var(--esp-4); max-width: none; }
+.landing-degradado { background-image: var(--degradado-lema); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.landing-bajada { font-family: var(--font-display); font-weight: 600; font-size: clamp(1.25rem, 2.4vw, 1.85rem); line-height: 1.2; letter-spacing: -0.015em; margin: 0 0 var(--esp-5); max-width: 24ch; }
+
+/* Encabezados de sección: la misma letra del título principal. */
+.landing-seccion-cabecera { margin-bottom: var(--esp-5); max-width: 60ch; }
+.landing-etiqueta { display: inline-block; font-family: var(--font-display); font-size: var(--t-sobretitulo); font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--accent-texto); margin-bottom: var(--esp-3); }
+h2.landing-titulo { font-family: var(--font-display); font-size: clamp(1.8rem, 3.6vw, 2.8rem); font-weight: 700; letter-spacing: -0.03em; line-height: 1.08; color: var(--text); text-transform: none; margin: 0 0 var(--esp-3); display: block; }
+h2.landing-titulo::before { content: none; }
+.landing-seccion-sub { margin: 0; color: var(--muted); font-size: 1.05rem; line-height: 1.5; }
+
+
+/* Vitrina: una cinta que corre de derecha a izquierda. La lista va dos veces: correr la mitad (más medio espacio)
+   cierra el bucle sin salto. */
+.landing-vitrina { margin: 0 0 3.5rem; }
+.landing-vitrina-carril {
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to right, transparent, currentColor 6%, currentColor 94%, transparent);
+  mask-image: linear-gradient(to right, transparent, currentColor 6%, currentColor 94%, transparent);
+}
+.landing-vitrina-pista { display: flex; gap: var(--esp-4); width: max-content; margin: 0; padding: var(--esp-2) 0; list-style: none; animation: portada-vitrina 60s linear infinite; }
+.landing-vitrina-carril:hover .landing-vitrina-pista { animation-play-state: paused; }
+@keyframes portada-vitrina { from { transform: translateX(0); } to { transform: translateX(calc(-50% - var(--esp-2))); } }
+.landing-vitrina-pieza { position: relative; flex: 0 0 auto; height: 356px; aspect-ratio: 9/16; border-radius: var(--radius-lg); overflow: hidden; isolation: isolate; background: var(--panel); border: 1px solid var(--border); box-shadow: var(--shadow-soft); }
+.landing-vitrina-pieza .generado-tipo { position: absolute; top: .6rem; left: .6rem; }
+
+/* Planes */
+.landing-planes { margin: 0 0 4.5rem; scroll-margin-top: 90px; }
+.planes-grilla { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--esp-4); }
+.plan { position: relative; display: flex; flex-direction: column; gap: var(--esp-1); padding: var(--esp-5) 1.2rem 1.2rem; border-radius: var(--radius-lg); border: 1px solid var(--border); background: var(--panel-velo); transition: transform .2s, border-color .2s; }
+.plan:hover { transform: translateY(-4px); border-color: var(--resalte-borde); }
+.plan p { margin: var(--esp-2) 0 1.2rem; color: var(--muted); font-size: .88rem; line-height: 1.5; flex: 1; }
+.plan-cifra { font-family: var(--font-display); font-weight: 700; font-size: 2.6rem; letter-spacing: -0.04em; line-height: 1; }
+.plan-cifra-texto { font-size: 1.55rem; letter-spacing: -0.02em; }
+.plan-unidad { font-size: .78rem; letter-spacing: .08em; text-transform: uppercase; color: var(--accent-texto); }
+.plan-boton { text-decoration: none; display: flex; justify-content: center; padding: .7rem 1rem; font-size: .9rem; }
+.plan-destacado { border-color: var(--resalte-borde-fuerte); background-image: linear-gradient(180deg, var(--resalte-fondo), transparent 60%); box-shadow: var(--shadow-glow); }
+.plan-cinta { position: absolute; top: -.7rem; left: 1.2rem; padding: .2rem .6rem; border-radius: var(--radius-pastilla); background: var(--accent-grad); color: var(--text); font-size: .7rem; font-weight: 600; }
+.plan-custom { background-image: linear-gradient(160deg, var(--galaxia-velo-2), transparent 55%); }
+
+/* Cadena Referencia → Crear → Editar → Lanzar → Escalar: un brillo la recorre, eslabón por eslabón. */
+.landing-cadena { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: var(--esp-3) var(--esp-4); margin: 0 0 4.5rem; font-family: var(--font-display); font-weight: 700; font-size: clamp(1.1rem, 2.6vw, 1.8rem); letter-spacing: -0.02em; }
+.cadena-eslabon { padding: .45rem 1rem; border-radius: var(--radius-pastilla); border: 1px solid var(--border); background: var(--panel-velo); animation: portada-cadena 5s ease-in-out infinite; animation-delay: calc(var(--i) * .6s); }
+.cadena-flecha { color: var(--accent-texto); }
+@keyframes portada-cadena {
+  0%, 30%, 100% { border-color: var(--border); box-shadow: none; }
+  12% { border-color: var(--resalte-borde-fuerte); box-shadow: var(--brillo-md); }
+}
+
+/* Cierre y tecnología */
+.landing-final { text-align: center; margin: 0 0 4rem; padding: 3.5rem 1.5rem; border-radius: var(--radius-lg); border: 1px solid var(--resalte-borde); background: var(--panel-velo-2); background-image: radial-gradient(ellipse at 50% 0%, var(--galaxia-2-suave), transparent 65%); }
+.landing-final .landing-bajada { margin-left: auto; margin-right: auto; max-width: none; }
+.landing-final .landing-cta { justify-content: center; }
+h2.landing-lema { display: block; color: var(--text); text-transform: none; font-size: clamp(2.4rem, 6vw, 4.4rem); font-weight: 700; }
+h2.landing-lema::before { content: none; }
+.landing-tecnologia { text-align: center; max-width: 62ch; margin: 3.5rem auto 0; }
+h2.landing-titulo-chico { font-size: clamp(1.3rem, 2.6vw, 1.8rem); }
+.landing-tecnologia .landing-seccion-sub { font-size: .95rem; }
+.landing-modelos { margin: var(--esp-4) 0 0; font-weight: 300; font-size: .72rem; letter-spacing: .08em; color: var(--muted-2); }
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-vitrina-carril { overflow-x: auto; }
+}
+@media (max-width: 1000px) {
+  .planes-grilla { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .plan-custom { grid-column: 1 / -1; }
+}
+@media (max-width: 560px) {
+  .planes-grilla { grid-template-columns: 1fr; }
+  .landing-vitrina-pieza { height: 268px; }
+}
+
+
+/* Lo que ya no necesitas: tachado, con «Solo Galadsy.» al final. */
+.landing-sin-nada { text-align: center; margin: 0 auto 5rem; max-width: 60rem; }
+.landing-tachados { list-style: none; margin: var(--esp-5) 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: var(--esp-3) var(--esp-6); font-family: var(--font-display); font-weight: 700; font-size: clamp(1.4rem, 3.4vw, 2.4rem); letter-spacing: -0.02em; color: var(--muted-2); }
+.landing-tachados s { text-decoration-color: var(--accent-2); text-decoration-thickness: .12em; }
+.landing-solo { margin: 0; font-family: var(--font-display); font-weight: 700; font-size: clamp(1.8rem, 4.4vw, 3.2rem); letter-spacing: -0.03em; background-image: var(--degradado-lema); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+/* Cabecera de la portada: enlaces a las secciones y «Iniciar sesión» en pastilla. */
+.header-portada { display: flex; gap: var(--esp-5); margin-left: var(--esp-5); }
+.header-portada a { color: var(--text); text-decoration: none; font-weight: 500; font-size: .95rem; opacity: .85; }
+.header-portada a:hover { opacity: 1; color: var(--accent-texto); }
+.header-entrar { margin-left: auto; text-decoration: none; border-radius: var(--radius-pastilla); padding: .55rem 1.2rem; font-size: .92rem; }
+.header-entrar + .idioma-enlaces { margin-left: var(--esp-4); }
+
+.portada-pildora { border-radius: var(--radius-pastilla); padding: .85rem 1.5rem; }
+
+
+/* Cifras: título con una palabra resaltada a la izquierda, cuatro números a la derecha. */
+.portada-cifras { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--esp-6); margin: 0 0 6rem; padding: 0 var(--esp-4); }
+.portada-cifras-titulo { margin: 0; display: block; text-transform: none; color: var(--text); font-family: var(--font-display); font-weight: 700; font-size: clamp(1.6rem, 3vw, 2.4rem); letter-spacing: -0.03em; line-height: 1.1; max-width: 18ch; }
+.portada-cifras-titulo::before { content: none; }
+.portada-cifras-titulo mark { background: var(--accent); color: var(--text); padding: 0 .2em; border-radius: 6px; }
+.portada-cifras-lista { display: flex; flex-wrap: wrap; gap: var(--esp-6) clamp(var(--esp-5), 4vw, 4rem); margin: 0; }
+.portada-cifras-lista div { text-align: center; }
+.portada-cifras-lista dt { font-family: var(--font-display); font-weight: 700; font-size: clamp(2.4rem, 4.4vw, 3.6rem); letter-spacing: -0.04em; line-height: 1; }
+.portada-cifras-lista dd { margin: var(--esp-2) 0 0; color: var(--muted); font-size: .88rem; max-width: 16ch; }
+
+/* Título centrado de sección */
+.portada-centro { text-align: center; max-width: 52rem; margin: 0 auto var(--esp-7); }
+h2.portada-titulo { display: block; margin: 0 0 var(--esp-4); text-transform: none; color: var(--text); font-family: var(--font-display); font-weight: 700; font-size: clamp(2.2rem, 5vw, 4rem); line-height: 1.02; letter-spacing: -0.04em; }
+h2.portada-titulo::before { content: none; }
+.portada-centro-sub { margin: 0 auto; color: var(--muted); font-size: 1.1rem; line-height: 1.55; max-width: 46rem; }
+
+
+@media (max-width: 760px) {
+  .header-portada { display: none; }
+  .header-entrar { padding: .45rem .9rem; font-size: .85rem; }
+  .portada-cifras { flex-direction: column; align-items: flex-start; }
+  .portada-cifras-lista { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
+}
+
+/* Banner a pantalla completa (2026-10-10): la vaca de borde a borde y de la cabecera al final de la pantalla; el
+   titular en Unbounded, en blanco, a la izquierda sobre un velo; «Run more GALADSY» es el botón. En el celular la foto es
+   un recorte vertical centrado en la vaca y el texto va abajo. */
+body.portada main { padding-top: 0; }
+.portada-hero { position: relative; isolation: isolate; overflow: hidden; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: var(--esp-6); text-align: left; width: 100vw; margin: 0 0 var(--esp-7) calc(50% - 50vw); min-height: calc(100svh - 84px); padding: var(--esp-7) 6vw; }
+.portada-hero-foto, .portada-hero-foto img { position: absolute; inset: 0; width: 100%; height: 100%; }
+.portada-hero-foto { z-index: -2; }
+.portada-hero-foto img { object-fit: cover; object-position: 15% 45%; }
+.portada-hero::after { content: ""; position: absolute; inset: 0; z-index: -1; background-image: var(--velo-hero); }
+.portada-hero-abajo { margin: 0; }
+.portada-promesa { margin: 0 0 var(--esp-4); font-family: var(--font-titular); font-weight: 800; font-size: clamp(2.2rem, 3.7vw, 5.4rem); line-height: 1.04; letter-spacing: -0.03em; color: var(--text); text-shadow: 0 4px 30px var(--sombra-media); }
+.portada-promesa > span { display: block; white-space: nowrap; }
+/* Letras que se mueven al pasar el mouse (index.html las envuelve; transición, no animación). */
+.portada-promesa .palabra { display: inline-block; white-space: nowrap; }
+.portada-promesa .letra { display: inline-block; transition: transform .3s cubic-bezier(.34, 1.56, .64, 1), color .3s; }
+.portada-promesa .letra:hover { transform: translateY(-.14em) rotate(-8deg) scale(1.08); color: var(--cian); }
+.portada-hero-sub { margin: 0; max-width: 34ch; color: var(--text); font-size: clamp(1rem, 1.4vw, 1.3rem); line-height: 1.5; opacity: .9; }
+.portada-pildora { border-radius: var(--radius-pastilla); padding: .85rem 1.5rem; }
+.portada-cta { font-family: var(--font-titular); font-weight: 700; letter-spacing: .01em; font-size: 1rem; padding: .95rem 1.8rem; box-shadow: var(--shadow-glow); }
+
+
+@media (max-width: 760px) {
+  .portada-hero { min-height: calc(100svh - 110px); align-items: center; justify-content: space-between; text-align: center; padding: var(--esp-6) var(--esp-5); }
+  .portada-hero::after { background-image: var(--velo-hero-centro); }
+  .portada-hero-foto img { object-position: 50% 58%; }
+  .portada-promesa { max-width: none; }
+  .portada-promesa > span { white-space: normal; }
+  .portada-hero-sub { margin: 0 auto; }
+  .portada-hero-abajo { justify-content: center; }
+  .portada-promesa { font-size: clamp(1.9rem, 8.6vw, 3.2rem); }
+}
+
+/* Login (2026-10-14): la vaca surfeando de fondo a pantalla completa; la caja a la derecha (la vaca está a la
+   izquierda) y una frase abajo a la izquierda. En el celular, la caja abajo y la vaca arriba. */
+.login-foto, .login-foto img { position: fixed; inset: 0; width: 100%; height: 100%; }
+.login-foto { z-index: -1; }
+.login-foto img { object-fit: cover; object-position: 30% 50%; }
+.login-foto::after { content: ""; position: absolute; inset: 0; background-image: linear-gradient(90deg, transparent 40%, var(--sombra-media)); }
+.login-escena { display: flex; align-items: center; justify-content: flex-end; gap: var(--esp-6); min-height: calc(100svh - 160px); }
+.login-escena .login-caja { margin: 0; background: var(--panel-velo); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+.login-lema { position: fixed; left: 5vw; bottom: 6vh; margin: 0; max-width: 18ch; font-family: var(--font-titular); font-weight: 700; font-size: clamp(1.2rem, 2.2vw, 1.9rem); line-height: 1.15; letter-spacing: -0.02em; color: var(--text); text-shadow: 0 4px 24px var(--sombra-media); }
+@media (max-width: 760px) {
+  .login-foto img { object-position: 50% 30%; }
+  .login-foto::after { background-image: linear-gradient(to bottom, transparent 30%, var(--sombra-media) 70%); }
+  .login-escena { align-items: flex-end; justify-content: center; min-height: calc(100svh - 150px); padding-top: 50svh; }
+  .login-lema { position: static; display: none; }
+}
+
+/* Anuncios automáticos (segunda pantalla): el texto arriba y, debajo, la vaca zen pequeña entre las cuatro
+   herramientas (dos a cada lado); flota y parpadea. En el celular, la vaca arriba de la lista. */
+.portada-zen { margin: 0 0 7rem; }
+.portada-zen-cuerpo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(180px, 260px) minmax(0, 1fr); align-items: center; gap: clamp(var(--esp-5), 3vw, var(--esp-7)); }
+.portada-zen-vaca { position: relative; aspect-ratio: 720 / 783; width: 100%; animation: vaca-flota 6s ease-in-out infinite; }
+.portada-zen-vaca::before { content: ""; position: absolute; inset: 18% 6% 0; z-index: -1; border-radius: 50%; background-image: radial-gradient(circle, var(--galaxia-2), transparent 68%); filter: blur(12px); }
+.portada-zen-vaca img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.portada-zen-vaca .zen-cerrada { animation: vaca-parpadea 5.5s infinite; }
+.portada-zen-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--esp-4); }
+.portada-zen-lista li { display: grid; gap: var(--esp-1); padding: var(--esp-4) var(--esp-5); border-radius: var(--radius); border: 1px solid var(--border); background: var(--panel-velo); }
+.portada-zen-lista strong { font-family: var(--font-titular); font-weight: 700; font-size: 1rem; letter-spacing: -0.01em; color: var(--accent-texto); }
+.portada-zen-lista span { color: var(--muted); line-height: 1.5; font-size: .95rem; }
+@keyframes vaca-flota { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+@keyframes vaca-parpadea { 0%, 86%, 100% { opacity: 0; } 88%, 95% { opacity: 1; } }
+
+/* Cierre: «ADS» de GALADSY en blanco y brillante, como «Run more». */
+.lema-brillo { color: var(--text); text-shadow: 0 0 18px var(--brillo), 0 0 42px var(--brillo); }
+
+/* Login: «Why Run when you can Fly?» como título de la caja. */
+.login-titulo { margin: 0 0 var(--esp-2); font-family: var(--font-titular); font-weight: 800; font-size: clamp(1.6rem, 2.6vw, 2.1rem); line-height: 1.08; letter-spacing: -0.025em; }
+.login-entrar { margin: 0 0 var(--esp-1); font-weight: 600; color: var(--text); }
+
+/* Conexiones reales: nombres en pastillas que brillan al pasar. */
+.portada-conexiones { text-align: center; max-width: 64rem; margin: 0 auto 7rem; }
+.portada-conexiones-lista { list-style: none; margin: var(--esp-6) 0 var(--esp-5); padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: var(--esp-3); }
+.portada-conexiones-lista li { padding: .7rem 1.3rem; border-radius: var(--radius-pastilla); border: 1px solid var(--border); background: var(--panel-velo); font-family: var(--font-titular); font-weight: 600; font-size: .95rem; letter-spacing: -0.01em; transition: border-color .25s, box-shadow .25s, transform .25s; }
+.portada-conexiones-lista li:hover { border-color: var(--resalte-borde-fuerte); box-shadow: var(--shadow-glow); transform: translateY(-2px); }
+
+/* Planes: tres columnas (100, 500 y a medida). */
+.planes-tres { grid-template-columns: repeat(3, minmax(0, 1fr)); max-width: 62rem; margin: 0 auto; }
+.planes-tres .plan-custom { grid-column: auto; }
+
+@media (max-width: 760px) {
+  .portada-zen-cuerpo { grid-template-columns: 1fr; }
+  .portada-zen-vaca { order: -1; width: 190px; justify-self: center; }
+  .planes-tres { grid-template-columns: 1fr; }
+}
+
+/* El flujo en tarjetas (2026-10-14): seis tarjetas en fila con su número, su ícono en un círculo que brilla y una
+   flecha hacia la siguiente; en pantallas medianas, de a tres; en el celular, una debajo de otra. */
+.portada-flujo { margin: 0 0 7rem; }
+.flujo-fila { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--esp-5); }
+.flujo-tarjeta { position: relative; display: flex; flex-direction: column; align-items: center; text-align: center; gap: var(--esp-3); padding: var(--esp-6) var(--esp-4) var(--esp-5); border-radius: var(--radius-lg); border: 1px solid var(--border); background: var(--panel-velo); transition: transform .25s, border-color .25s, box-shadow .25s; }
+.flujo-tarjeta:hover { transform: translateY(-4px); border-color: var(--resalte-borde-fuerte); box-shadow: var(--shadow-glow); }
+.flujo-tarjeta:not(:last-child)::after { content: "→"; position: absolute; right: calc(-1 * var(--esp-5)); top: 4.2rem; width: var(--esp-5); text-align: center; color: var(--accent-texto); font-size: 1.2rem; }
+.flujo-paso-num { position: absolute; top: var(--esp-3); left: var(--esp-4); font-family: var(--font-titular); font-weight: 700; font-size: .8rem; color: var(--muted-2); }
+.flujo-icono { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%; color: var(--cian); background-image: radial-gradient(circle, var(--resalte-fondo), transparent 75%); border: 1px solid var(--resalte-borde); box-shadow: var(--brillo-md); }
+.flujo-icono svg { width: 28px; height: 28px; }
+.flujo-tarjeta h3 { margin: 0; font-family: var(--font-titular); font-weight: 700; font-size: 1.05rem; letter-spacing: -0.01em; }
+.flujo-tarjeta p { margin: 0; color: var(--muted); font-size: .88rem; line-height: 1.5; }
+
+/* Maximiza tus resultados: el texto a la izquierda y el tablero de ingresos (ilustrativo) a la derecha. */
+.portada-maximiza { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); align-items: center; gap: clamp(var(--esp-6), 5vw, 5rem); margin: 0 0 7rem; }
+.portada-maximiza .portada-titulo, .portada-maximiza .portada-centro-sub { text-align: left; margin-left: 0; }
+.portada-maximiza-lista { list-style: none; margin: var(--esp-5) 0 0; padding: 0; display: grid; gap: var(--esp-3); }
+.portada-maximiza-lista li { display: flex; align-items: center; gap: var(--esp-3); font-weight: 500; }
+.portada-maximiza-lista li::before { content: "✦"; color: var(--cian); }
+.portada-maximiza-imagen { margin: 0; }
+.portada-maximiza-imagen img { display: block; width: 100%; height: auto; border-radius: var(--radius-lg); }
+.portada-maximiza-imagen figcaption { margin-top: var(--esp-2); text-align: right; color: var(--muted-2); font-size: .72rem; }
+
+@media (max-width: 1100px) {
+  .flujo-fila { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .flujo-tarjeta:nth-child(3n)::after { content: none; }
+}
+@media (max-width: 760px) {
+  .flujo-fila { grid-template-columns: 1fr; gap: var(--esp-6); }
+  .flujo-tarjeta:not(:last-child)::after { content: "↓"; right: auto; left: 50%; top: auto; bottom: calc(-1 * var(--esp-6)); transform: translateX(-50%); }
+  .portada-maximiza { grid-template-columns: 1fr; }
+  .portada-maximiza .portada-titulo, .portada-maximiza .portada-centro-sub { text-align: center; margin-left: auto; }
+  .portada-maximiza-lista { justify-items: center; }
+}

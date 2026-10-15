@@ -16,8 +16,8 @@ MAPA = os.path.join(RAIZ, "templates", "mapa_codigo.html")
 PLANTILLAS = sorted(glob.glob(os.path.join(RAIZ, "templates", "*.html")))
 ARCHIVOS = [CSS] + sorted(glob.glob(os.path.join(RAIZ, "static", "estilos", "**", "*.css"), recursive=True)) + PLANTILLAS
 
-PANEL = (0x0B, 0x1A, 0x33)      # --panel oscuro: la superficie contra la que se mide
-PANEL_2 = (0x10, 0x22, 0x3F)    # --panel-2
+PANEL = (0x12, 0x0C, 0x1F)      # --panel oscuro: la superficie contra la que se mide
+PANEL_2 = (0x19, 0x11, 0x2B)    # --panel-2
 LUMINANCIA_MAX_FONDO = 0.4      # por encima, un fondo o un borde "se ve claro" sobre la app
 CONTRASTE_MIN_TEXTO = 3.0       # piso para cualquier texto con color a mano
 NOMBRADOS = {"white": (255, 255, 255), "black": (0, 0, 0)}
