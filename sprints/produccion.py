@@ -130,7 +130,8 @@ def estimar(cliente, sprint_id, campana_id=None, modelo_video=None, modelo_image
         usd += qa_usd
     segundos = videos * SEGUNDOS_VIDEO + imagenes * SEGUNDOS_IMAGEN
     acumulado = float((sp.get("extra") or {}).get("costo_estimado_usd") or 0.0)
-    nombre_v, nombre_i = flowplus_modelos.VIDEO[mv]["nombre"], flowplus_modelos.IMAGEN[mi]["nombre"]
+    # Los nombres son N_ del registro: van por el catálogo (PND-243, «Seedance 2.5 · varias referencias»).
+    nombre_v, nombre_i = flowplus_modelos.nombre_visible(mv), flowplus_modelos.nombre_visible(mi)
     texto = gettext(
         "%(videos)s video(s) (%(modelo_v)s) y %(imagenes)s imagen(es) (%(modelo_i)s): USD %(usd)s estimado · "
         "acumulado del sprint USD %(acumulado)s · tiempo estimado %(tiempo)s",

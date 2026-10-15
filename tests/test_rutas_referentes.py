@@ -770,7 +770,7 @@ def test_barridos_muestra_precio_de_clasificar_pendientes(app, monkeypatch):
     datos.actualizar_barrido(bid, pendientes=3)
     monkeypatch.setattr(tareas_referentes, "trabajo_barrer", lambda b: None)
     html = app["c"].get("/cliente/acme/referentes/barridos", headers={"X-Requested-With": "fetch"}).data.decode()
-    precio = gastos.estimar("clasificacion", n=3)["texto"]
+    precio = gastos.estimar("clasificacion", n=3, bilingue=True)["texto"]     # acme en español (PND-243)
     assert precio in html
 
 
@@ -1582,3 +1582,46 @@ def test_r4_contexto_dolor_y_producto_sin_cobrar_ni_bloquear(app, monkeypatch, d
     if producto:
         assert 'US$' in boton.group(2)
     assert '<script' not in html
+
+
+@pytest.mark.parametrize("idioma,bilingue", [("es", True), ("en", False)])
+def test_pnd243_traer_usa_la_tarifa_bilingue_segun_el_idioma_del_proyecto(app, monkeypatch, idioma, bilingue):
+    """PND-243: el precio de «Traer referentes» (el que se ve y el que se reserva) sale de `bilingue` según el
+    idioma del proyecto: en español la clasificación medida (0,0133–0,0138 por anuncio) pasa de la tarifa de 0,012."""
+    import gastos
+    import idiomas
+    from referentes.fuentes import atria
+    from tareas import referentes as tareas_referentes
+    idiomas.guardar_de_proyecto("acme", idioma)
+    monkeypatch.setenv("ATRIA_API_KEY", "atria-sk_test")
+    monkeypatch.setattr(atria, "estimar", lambda consulta, tope: {"usd_fuente": 0.0, "llamadas": 4,
+                                                                  "detalle": "4 llamadas del plan de Atria"})
+    esperado = gastos.estimar("clasificacion", n=200, bilingue=bilingue)
+    r = app["c"].get("/cliente/acme/referentes/traer?fuente=atria&modo=palabra&palabra=protein&idioma=en&tope=200",
+                     headers={"X-Requested-With": "fetch"})
+    assert esperado["texto"] in r.get_data(as_text=True)
+    llamadas = []
+    monkeypatch.setattr(tareas_referentes, "encolar_barrer", lambda *a, **kw: llamadas.append(a) or 42)
+    app["c"].post("/cliente/acme/referentes/traer", data={"fuente": "atria", "modo": "palabra", "palabra": "protein",
+                                                         "idioma": "en", "tope": "200"})
+    assert llamadas[0][4] == pytest.approx(esperado["usd"])            # usd_estimado: lo que se reserva
+
+
+def test_pnd243_clasificar_pendientes_usa_la_misma_tarifa(app, monkeypatch):
+    """El botón «Clasificar pendientes» y su reserva, con la misma tarifa que «Traer referentes»."""
+    import gastos
+    from referentes import datos
+    from tareas import referentes as tareas_referentes
+    bid = datos.crear_barrido("acme", "atria", {"modo": "palabra", "palabra": "x", "idioma": "en"}, 50)
+    datos.actualizar_barrido(bid, pendientes=3)
+    monkeypatch.setattr(tareas_referentes, "trabajo_barrer", lambda b: None)
+    html = app["c"].get("/cliente/acme/referentes/barridos", headers={"X-Requested-With": "fetch"}).data.decode()
+    assert gastos.estimar("clasificacion", n=3, bilingue=True)["texto"] in html
+    pedidos = []
+    monkeypatch.setattr(tareas_referentes.trabajos, "encolar", lambda *a, **kw: pedidos.append(kw) or True)
+    assert tareas_referentes.encolar_clasificar_pendientes("acme", bid)
+    assert pedidos[0]["costo_estimado"] == pytest.approx(gastos.estimar("clasificacion", n=3, bilingue=True)["usd"])
+    assert tareas_referentes._costo_fase({"fase": "clasificando", "cliente": "acme"}, bid,
+                                         tareas_referentes.TIPO_CLASIFICAR) \
+        == pytest.approx(gastos.estimar("clasificacion", n=max(1, len(datos.pendientes_clasificacion(
+            barrido_id=bid, limite=tareas_referentes.TRAMO, incluir_error=True))), bilingue=True)["usd"])

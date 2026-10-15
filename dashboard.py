@@ -8307,6 +8307,7 @@ def cf_crear_video(cliente):
         lanzado = _lanzar_video_cf(cliente, cf_id, entry)
         _consumir_bandeja(cliente, usadas)
         nombre_modelo = flowplus_modelos.IMAGEN[modelo]["nombre"]
+        nombre_modelo = gettext(nombre_modelo)     # N_ del registro (PND-243)
         if lanzado:
             detalle_flash = " · " + aspect_ratio if aspect_ratio else ""
             flash(gettext("Generando la imagen con %(modelo)s%(detalle)s…", modelo=nombre_modelo, detalle=detalle_flash), "ok")
@@ -8324,6 +8325,7 @@ def cf_crear_video(cliente):
         lanzado = _lanzar_video_cf(cliente, cf_id, entry)
         _consumir_bandeja(cliente, usadas)
         nombre_modelo = flowplus_modelos.VIDEO[modelo]["nombre"]
+        nombre_modelo = gettext(nombre_modelo)     # N_ del registro (PND-243)
         if lanzado:
             detalle = f" · {aspect_ratio}" if aspect_ratio else ""
             flash(gettext("Generando el video con %(modelo)s%(detalle)s · %(duracion)s s…",
@@ -8342,7 +8344,7 @@ def cf_crear_video(cliente):
         flash(gettext("Armando el prompt con IA… en unos segundos aparece aquí para que lo revises y generes."), "ok")
         if aviso_duracion is not None:
             flash(gettext("%(modelo)s llega a %(aviso)s s: se armará para %(aviso)s s.",
-                          modelo=flowplus_modelos.VIDEO[modelo]["nombre"], aviso=aviso_duracion), "warn")
+                          modelo=flowplus_modelos.nombre_visible(modelo), aviso=aviso_duracion), "warn")
     else:
         flash(gettext("Ya se estaba armando ese prompt — espera a que termine."), "warn")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
@@ -8474,7 +8476,8 @@ def cf_generar_video(cliente, cf_id):
     if not (entry.get("referencias_urls") or []) and entry.get("enfoque") != "libre":
         flash(gettext("Esta sesión no tiene imágenes de referencia — descártala y crea una nueva."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
-    nombre_modelo = flowplus_modelos.nombre_modelo(entry.get("modelo")) or gettext("el modelo")
+    nombre_modelo = flowplus_modelos.nombre_modelo(entry.get("modelo"))
+    nombre_modelo = gettext(nombre_modelo) if nombre_modelo else gettext("el modelo")     # N_ del registro (PND-243)
     es_imagen = (entry.get("tipo") or "video") == "imagen"
     que = gettext("la imagen") if es_imagen else gettext("el video")
     prompt_b = (entry.get("director") or {}).get("prompt_b")

@@ -10,12 +10,12 @@
     <div class="fe-opciones">
       <label>{{ _('Modelo de video') }}
         <select name="modelo_video" id="lote-modelo-video">
-          {% for k, m in modelos_video.items() %}<option value="{{ k }}" {% if k == modelo_video_defecto %}selected{% endif %}>{% set _p = m.usd_por_segundo_efectivo|precio_fmt('%.3f') %}{{ m.nombre }} {% if _p is sin_precio %}({{ _p }}){% else %}{{ _('(USD %(precio)s/s con sonido)', precio=_p) }}{% endif %}</option>{% endfor %}
+          {% for k, m in modelos_video.items() %}<option value="{{ k }}" {% if k == modelo_video_defecto %}selected{% endif %}>{% set _p = m.usd_por_segundo_efectivo|precio_fmt('%.3f') %}{{ m.nombre|traducir }} {% if _p is sin_precio %}({{ _p }}){% else %}{{ _('(USD %(precio)s/s con sonido)', precio=_p) }}{% endif %}</option>{% endfor %}
         </select>
       </label>
       <label>{{ _('Modelo de imagen') }}
         <select name="modelo_imagen" id="lote-modelo-imagen">
-          {% for k, m in modelos_imagen.items() %}<option value="{{ k }}" {% if k == modelo_imagen_defecto %}selected{% endif %}>{{ m.nombre }}</option>{% endfor %}
+          {% for k, m in modelos_imagen.items() %}<option value="{{ k }}" {% if k == modelo_imagen_defecto %}selected{% endif %}>{{ m.nombre|traducir }}</option>{% endfor %}
         </select>
       </label>
     </div>

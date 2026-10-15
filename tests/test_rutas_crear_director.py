@@ -470,3 +470,14 @@ def test_prompt_b_sin_hija_no_etiqueta_tarjeta_como_version_a(app):
     cf.duplicar("acme", cid, prompt_relleno="B", variante="B")
     html = app["c"].get("/cliente/acme/crear/tarjetas").get_data(as_text=True)
     assert "Versión A" in html and "Versión B" in html
+
+
+@pytest.mark.parametrize("modo", ["", "director"])
+def test_pnd243_el_aviso_nombra_el_modelo_en_el_idioma_de_quien_mira(app, monkeypatch, modo):
+    """PND-243: el aviso de Crear («Generando el video con …», «… llega a N s») nombra el modelo traducido."""
+    import idiomas
+    monkeypatch.setattr(idiomas, "de_usuario", lambda *a: "en")
+    _crear(app, modo_prompt=modo, modelo="seedance25_ref", duracion_objetivo="40")
+    with app["c"].session_transaction() as s:
+        avisos = " ".join(m for _, m in s.get("_flashes", []))
+    assert "Seedance 2.5 · multiple references" in avisos and "varias referencias" not in avisos

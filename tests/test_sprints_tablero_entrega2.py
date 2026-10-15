@@ -476,3 +476,17 @@ def test_js_del_panel_espera_el_angulo_y_conserva_lo_escrito():
     assert "var escrito = mismo ? tomarEscrito() : null;" in panel and "devolverEscrito(escrito);" in panel
     assert "d.open = guardado.abiertos[k];" in panel
     assert "if (!sigue(cid)) return;" in panel
+
+
+def test_pnd243_el_nombre_del_modelo_sale_traducido_en_el_lote(con_ideas, monkeypatch):
+    """PND-243: «Seedance 2.5 · varias referencias» pasa por el catálogo en el selector de modelo del lote (panel
+    Ideas y el modal del tablero) y en el texto del estimado."""
+    import idiomas
+    from sprints import produccion
+    monkeypatch.setattr(idiomas, "de_usuario", lambda *a: "en")
+    c, sid, cid = con_ideas["c"], con_ideas["sid"], con_ideas["cid"]
+    for html in (_panel(c, sid, cid, "ideas"), c.get(f"/cliente/acme/sprints/{sid}").data.decode()):
+        assert "Seedance 2.5 · multiple references" in html and "varias referencias" not in html
+    with idiomas.en_idioma("en"):
+        texto = produccion.estimar("acme", sid, modelo_video="seedance25_ref")["texto"]
+    assert "Seedance 2.5 · multiple references" in texto
