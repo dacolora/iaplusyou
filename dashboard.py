@@ -7511,13 +7511,27 @@ def _guardar_referencia_archivo(cliente, archivo, i):
 
 
 def _duracion_video(ruta):
-    """Segundos de un video de referencia (ffprobe), a centésimas; None si no
-    se pudo medir. Nunca lanza: una medida que falla no frena la subida
-    (2026-09-30: Crear la usa para el límite de Wan 3.0 y su precio)."""
-    try:
-        return round(fe_cortes.duracion(ruta), 2) if ruta else None
-    except Exception:  # noqa: BLE001
+    """Segundos de un video de referencia, a centésimas; None si no se pudo
+    medir. Nunca lanza: una medida que falla no frena la subida (2026-09-30:
+    Crear la usa para el límite de Wan 3.0 y su precio).
+
+    PND-319 (decisión 2026-10-13, lote 1): se mide como el swap de PND-312
+    (`swap_video_precio.medir`: la mayor entre la cabecera y los paquetes del
+    video, solo archivos del disco), nunca con la cabecera sola, que se
+    falsifica (12 s que dicen 2 s pagaban la sexta parte). Comparte los dos
+    turnos de ffprobe de «Cambiar producto»: sin turno en un minuto, None."""
+    from providers import swap_video_precio  # noqa: PLC0415
+    if not ruta:
         return None
+    if not _MEDIR_VIDEO_TURNOS.acquire(timeout=60):
+        return None
+    try:
+        duracion, _fps = swap_video_precio.medir(ruta)
+    except Exception:  # noqa: BLE001 — medir ya no lanza; defensa extra
+        duracion = None
+    finally:
+        _MEDIR_VIDEO_TURNOS.release()
+    return round(duracion, 2) if duracion else None
 
 
 def _quiere_json():
@@ -8107,12 +8121,16 @@ def cf_crear_video(cliente):
         ref = {"tipo": r["tipo"], "url": r["url"], "frame_url": r.get("frame_url") or r["url"],
                "etiqueta": r["etiqueta"], "origen": r.get("origen")}
         if r["tipo"] == "video":
-            # Lo que dura el video (2026-09-30): lo medido al subirlo; las
-            # referencias anteriores se miden acá si el archivo sigue en disco
-            # (sin tocar la red en la petición: si no, lo mide el worker).
-            dur = r.get("duracion_s")
-            if dur is None and r.get("ruta_local") and os.path.exists(r["ruta_local"]):
+            # Lo que dura el video (2026-09-30), que Wan 3.0 factura: si el
+            # archivo sigue en disco se vuelve a medir por sus paquetes (PND-319:
+            # una referencia subida antes guardó la duración de la cabecera, que
+            # se falsifica); si no, lo medido al subirlo. Sin tocar la red en la
+            # petición: sin ninguna de las dos, Wan no genera (abajo).
+            dur = None
+            if r.get("ruta_local") and os.path.exists(r["ruta_local"]):
                 dur = _duracion_video(r["ruta_local"])
+            if dur is None:
+                dur = r.get("duracion_s")
             ref["duracion_s"] = dur
         referencias.append(ref)
     n_img = sum(1 for r in referencias if r["tipo"] == "imagen")
@@ -8193,6 +8211,15 @@ def cf_crear_video(cliente):
             flash(gettext("%(modelo)s usa hasta %(n)s referencias: no usaría %(sobran)s. "
                           "Quita las que sobran o cambia de modelo — no se cobró nada.",
                           modelo=nombre_modelo, n=info_modelo.get("max_referencias"), sobran=", ".join(sobran)), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+    # PND-319: Wan 3.0 factura los segundos de cada video de referencia; uno que
+    # no se pudo medir dejaría el precio visto (y lo anotado) por debajo de lo
+    # que cobra WaveSpeed. Se avisa y no se genera: nada se cobra.
+    sin_medida = flowplus_modelos.videos_sin_duracion(modelo, referencias) if tipo == "video" else []
+    if sin_medida:
+        flash(gettext("No pude medir cuánto dura %(videos)s, y %(modelo)s cobra cada segundo de un video de "
+                      "referencia. Vuelve a intentarlo en un momento o súbelo otra vez — no se cobró nada.",
+                      videos=", ".join(sin_medida), modelo=gettext(flowplus_modelos.VIDEO[modelo]["nombre"])), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
     # Incidente 2026-09-30 (Forja): un video de referencia de 14,9 s y 20 s
     # pedidos → WaveSpeed 1405 «exceeds 30s limit». Wan 3.0 no admite más de

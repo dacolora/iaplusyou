@@ -79,5 +79,4 @@ del último paquete, y cuenta los paquetes para los cuadros (sin decodificar). f
 Topes: dos mediciones a la vez (`_MEDIR_VIDEO_TURNOS`; un 8192×8192 le pide 176 MB y el VPS tiene 2 GB; sin turno,
 503), 200 MB por video (413) y 120 mediciones por persona y hora (`cuentas.limite_ok`, 429). La ruta está en el
 conjunto que responde 403 (no redirección) a un fetch sin acceso, y la pantalla dice sesión vencida, tamaño o turno.
-Pruebas: `tests/test_swap_video_precio.py` (cabecera falsa, lista blanca, topes, 403). Pendiente: el precio de Wan 3.0
-en Crear (`dashboard._duracion_video`) todavía confía en la cabecera (PND-319).
+Pruebas: `tests/test_swap_video_precio.py` (cabecera falsa, lista blanca, topes, 403). El precio de los videos de referencia de Wan 3.0 en Crear (`dashboard._duracion_video`, PND-319, 2026-10-13) usa la misma medida: ya no confía en la cabecera (skill `crear`).

@@ -342,6 +342,19 @@ def segundos_videos(modelo_id, referencias):
     return [float(r["duracion_s"]) for r in videos if r.get("duracion_s") is not None]
 
 
+def videos_sin_duracion(modelo_id, referencias):
+    """Etiquetas de los videos de referencia que el modelo recibe COMO VIDEO
+    (y factura por sus segundos: Wan 3.0, hasta `max_videos`) sin `duracion_s`
+    medida. PND-319: sin la medida el precio visto y lo anotado quedarían por
+    debajo de lo que cobra el proveedor; Crear avisa y no genera."""
+    info = VIDEO.get(modelo_id) or {}
+    max_videos = int(info.get("max_videos") or 0)
+    if not max_videos:
+        return []
+    videos = [r for r in (referencias or []) if r.get("tipo") == "video"][:max_videos]
+    return [r.get("etiqueta") or "@Video" for r in videos if r.get("duracion_s") is None]
+
+
 def problema_duracion(modelo_id, referencias, duracion):
     """None si la duración pedida cabe con los videos de referencia; si no,
     qué regla rompe (incidente 2026-09-30 en Forja: 14,9 s de video + 20 s

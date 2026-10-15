@@ -80,7 +80,9 @@ def test_subir_un_video_guarda_su_duracion(app, monkeypatch):
     monkeypatch.setattr(dashboard.r2_uploader, "upload_video", lambda local, key: "https://r2/" + key)
     monkeypatch.setattr(dashboard.r2_uploader, "upload_image", lambda local, key: "https://r2/" + key)
     monkeypatch.setattr(dashboard, "_extraer_frame", lambda origen, destino: open(destino, "wb").write(b"jpg"))
-    monkeypatch.setattr(dashboard.fe_cortes, "duracion", lambda ruta: 12.53)
+    # PND-319: la duración sale de los paquetes del archivo (swap_video_precio.medir), no de la cabecera.
+    from providers import swap_video_precio
+    monkeypatch.setattr(swap_video_precio, "medir", lambda ruta: (12.53, 30.0))
     r = app["c"].post("/cliente/acme/flowplus/referencias/subir",
                       data={"referencias": (io.BytesIO(b"mp4"), "clip.mp4")}, content_type="multipart/form-data")
     assert r.status_code == 302
@@ -95,9 +97,8 @@ def test_una_duracion_que_no_se_puede_medir_no_rompe_la_subida(app, monkeypatch)
     monkeypatch.setattr(dashboard.r2_uploader, "upload_image", lambda local, key: "https://r2/" + key)
     monkeypatch.setattr(dashboard, "_extraer_frame", lambda origen, destino: open(destino, "wb").write(b"jpg"))
 
-    def _falla(ruta):
-        raise RuntimeError("ffprobe no pudo")
-    monkeypatch.setattr(dashboard.fe_cortes, "duracion", _falla)
+    from providers import swap_video_precio
+    monkeypatch.setattr(swap_video_precio, "medir", lambda ruta: (None, None))     # ffprobe no pudo
     app["c"].post("/cliente/acme/flowplus/referencias/subir",
                   data={"referencias": (io.BytesIO(b"mp4"), "clip.mp4")}, content_type="multipart/form-data")
     (item,) = referencias_flowplus.listar("acme")

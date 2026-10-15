@@ -905,7 +905,8 @@ def test_preparar_mide_el_video_si_la_sesion_no_trae_su_duracion(base_temporal, 
     video = {"tipo": "video", "url": "https://x/v2.mp4", "frame_url": "https://x/v2.jpg", "etiqueta": "@Video 1"}
     cid = _sesion_wan_con_video(cf, monkeypatch, tmp_path, 25, video)
     medidos = []
-    monkeypatch.setattr(fp.cortes, "duracion", lambda ruta: medidos.append(ruta) or 12.0)
+    # PND-319: se mide por los paquetes del video bajado (`_medir_url`), no por la cabecera de la URL.
+    monkeypatch.setattr(fp, "_medir_url", lambda url: medidos.append(url) or 12.0)
     assert fp._preparar("acme", cid)[3] == 18
     assert medidos == ["https://x/v2.mp4"]
 

@@ -343,17 +343,51 @@ def _preparar(cliente, cf_id):
     return entry, referencias, videos_ref, duracion, prompt_texto, platforms, aspect_ratio, modelo, calidad
 
 
+# PND-319: lo más que se baja para medir un video de referencia (el mismo tope
+# que los videos de «Cambiar producto»; uno de referencia dura hasta 15 s).
+MAX_BYTES_VIDEO_REFERENCIA = 200 * 1024 * 1024
+
+
+def _medir_url(url):
+    """Segundos (a centésimas) del video de `url`, medidos como al subirlo:
+    se baja a un temporal y `swap_video_precio.medir` lee sus paquetes (PND-319:
+    ffprobe sobre la URL leía solo la cabecera, que se falsifica). None si no se
+    pudo bajar o medir, o si pesa más de MAX_BYTES_VIDEO_REFERENCIA."""
+    import tempfile  # noqa: PLC0415
+    from providers import swap_video_precio  # noqa: PLC0415
+    resp = None
+    try:
+        resp = requests.get(url, stream=True, timeout=60)
+        resp.raise_for_status()
+        with tempfile.NamedTemporaryFile(suffix=".mp4") as tmp:
+            total = 0
+            for bloque in resp.iter_content(1 << 20):
+                total += len(bloque)
+                if total > MAX_BYTES_VIDEO_REFERENCIA:
+                    return None
+                tmp.write(bloque)
+            tmp.flush()
+            duracion, _fps = swap_video_precio.medir(tmp.name)
+    except Exception:  # noqa: BLE001 — sin duración, no cuenta (Crear ya no deja generar así)
+        return None
+    finally:
+        if resp is not None:
+            try:
+                resp.close()
+            except Exception:  # noqa: BLE001
+                pass
+    return round(duracion, 2) if duracion else None
+
+
 def _con_duraciones(referencias):
-    """Copia de las referencias con `duracion_s` en cada video (medida con
-    ffprobe sobre su URL pública cuando la sesión no la traía; si no se puede
-    medir queda None y ese video no cuenta para el límite ni para el precio)."""
+    """Copia de las referencias con `duracion_s` en cada video (medida por sus
+    paquetes, `_medir_url`, cuando la sesión no la traía: sesiones de antes del
+    2026-09-30; si no se puede medir queda None y ese video no cuenta para el
+    límite ni para el precio)."""
     salida = []
     for r in referencias:
         if r.get("tipo") == "video" and r.get("duracion_s") is None and r.get("url"):
-            try:
-                r = dict(r, duracion_s=round(cortes.duracion(r["url"]), 2))
-            except Exception:  # noqa: BLE001 — sin duración, el proveedor decide
-                r = dict(r, duracion_s=None)
+            r = dict(r, duracion_s=_medir_url(r["url"]))
         salida.append(r)
     return salida
 

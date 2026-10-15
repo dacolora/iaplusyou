@@ -95,9 +95,19 @@ los videos juntos hasta 15 s y entrada + salida hasta 30 s (`max_videos_s`, `max
 La bandeja guarda `duracion_s` de cada video (ffprobe al subirlo o bajar el link, `dashboard._duracion_video`;
 `fp_reusar` la conserva), `cf_crear_video` avisa y no genera con `flowplus_modelos.problema_duracion`, el compositor
 lo avisa en vivo (`data-duracion` en la bandeja, `data-max-total`/`data-max-videos-s` en los radios), el worker recorta
-la salida como última barrera (`duracion_con_videos`, midiendo por URL lo que la sesión no traía) y el precio incluye
+la salida como última barrera (`duracion_con_videos`, midiendo lo que la sesión no traía) y el precio incluye
 los segundos de entrada que WaveSpeed factura en Wan (`segundos_facturables_referencia`: cada video 1–15 s, el total
 hasta 15 s, hacia arriba; `estimate_video(..., videos_ref_s=)` en el botón, al reintentar y en el gasto real).
+**La duración del video de referencia no sale de la cabecera (PND-319, decisión 2026-10-13, lote 1):** un mp4 con
+mvhd/mdhd falsos (12 s que dicen 2 s) bajaba el precio visto y el anotado de Wan 3.0, y WaveSpeed cobraba el video
+entero. `_duracion_video` mide con `providers.swap_video_precio.medir` (la mayor entre cabecera y paquetes, solo
+archivos del disco; los mismos dos turnos de ffprobe que «Cambiar producto»), `cf_crear_video` vuelve a medir el
+archivo de la bandeja si sigue en disco (una referencia subida antes guardó la medida de la cabecera) y, si un video que
+Wan recibe como video queda sin medida (`flowplus_modelos.videos_sin_duracion`), avisa y no genera; el worker
+(`tareas/flowplus._medir_url`) baja a un temporal lo que una sesión vieja no traía y lo mide igual (tope
+`MAX_BYTES_VIDEO_REFERENCIA`). Kling y Seedance usan el fotograma y no miran la duración. Queda fuera una referencia
+reusada con «Editar y crear otra» de una pieza de antes del arreglo: conserva la medida que guardó. Pruebas:
+`tests/test_crear_duracion_referencia.py`.
 Desde el carril de Crear (2026-09-28) eso pasa solo: la primera espera dura `ESPERA_PRIMERA` (10 min,
 `wavespeed_common.cortable(plazo_s=)`), y si WaveSpeed sigue la sesión queda en `video_generando` y la tarea
 devuelve `Continuar("flowplus_recuperar")`, que pregunta `TIEMPO_RECUPERAR` (45 s) cada `PAUSA_RECUPERAR` (60 s)

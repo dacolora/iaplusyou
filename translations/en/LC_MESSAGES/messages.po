@@ -13442,6 +13442,10 @@ msgstr "Couldn't read your assets:"
 msgid "No pude leer tus activos: %(error)s"
 msgstr "Couldn't read your assets: %(error)s"
 
+#, python-format
+msgid "No pude medir cuánto dura %(videos)s, y %(modelo)s cobra cada segundo de un video de referencia. Vuelve a intentarlo en un momento o súbelo otra vez — no se cobró nada."
+msgstr "I couldn't measure how long %(videos)s lasts, and %(modelo)s charges for every second of a reference video. Try again in a moment or upload it again — nothing was charged."
+
 msgid "No pude medir la duración de ese audio."
 msgstr "I couldn't measure the length of that audio."
 
