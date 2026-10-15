@@ -1,6 +1,7 @@
 """Tareas del worker de tiendas (`tareas/tiendas.py`): sync de productos y
 pedidos con un conector falso, importación de catálogo y las periódicas."""
 import os
+from datetime import datetime, timedelta
 
 import pytest
 
@@ -235,9 +236,12 @@ def test_sync_pedidos_guarda_y_resuelve_atribucion(entorno):
     pieza = _pieza(entorno["db"])
     eid = ex.crear("acme", "Cojín", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP", atribucion="tienda")
     ep_id = ex.agregar_pieza("acme", eid, pieza, "CO")
-    Falso.pedidos = [normalizar_pedido({"fuente_id": "o1", "fecha": "2026-09-15T10:00:00Z", "total": 50,
+    # Fechas de ayer, no fijas: `tiendas.pedidos_sin_resolver` solo mira los últimos DIAS_RESOLVER_PEDIDOS días, y
+    # con el 2026-09-15 escrito a mano la prueba empezó a fallar sola el 2026-10-15.
+    ayer = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+    Falso.pedidos = [normalizar_pedido({"fuente_id": "o1", "fecha": f"{ayer}T10:00:00Z", "total": 50,
                                         "moneda": "USD", "utm_content": str(ep_id)}),
-                     normalizar_pedido({"fuente_id": "o2", "fecha": "2026-09-15T11:00:00Z", "total": 5,
+                     normalizar_pedido({"fuente_id": "o2", "fecha": f"{ayer}T11:00:00Z", "total": 5,
                                         "moneda": "USD", "utm_content": "ep_1"})]
     msg = tareas.REGISTRO["tienda_sync_pedidos"]({"payload": {"cliente": "acme", "tienda_id": tid}})
     assert "2 pedido(s)" in msg and "2 nuevo(s)" in msg and "1 atribuido(s)" in msg

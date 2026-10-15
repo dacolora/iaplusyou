@@ -728,11 +728,11 @@ def test_rutas_organico_rechazan_cliente_cruzado(app, base_temporal):
 
 
 def test_boton_escribir_texto_con_ia_muestra_precio(app, base_temporal):
-    """Task 3: precio a la vista antes de gastar — «Escribir texto con IA ≈ US$ 0,01»."""
+    """Task 3: precio a la vista antes de gastar — «Escribir texto con IA ≈ US$ 0,06»."""
     eid = _experimento()
     _pid, ep = _pieza_en(base_temporal, eid)
     html = _html_exp(app, eid)
-    assert "Escribir texto con IA ≈ US$ 0,01</button>" in html
+    assert "Escribir texto con IA ≈ US$ 0,06</button>" in html
     # El panel de la pieza (`exp_pieza`, E2) trae el mismo bloque y el mismo precio a la vista.
     panel = app["c"].get(f"/cliente/acme/experimentos/pieza/{ep}", headers={"X-Requested-With": "fetch"}).get_data(as_text=True)
-    assert "Escribir texto con IA ≈ US$ 0,01</button>" in panel
+    assert "Escribir texto con IA ≈ US$ 0,06</button>" in panel
