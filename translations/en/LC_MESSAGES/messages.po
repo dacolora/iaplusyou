@@ -2246,6 +2246,10 @@ msgstr "<strong>Variables in the server's <code>.env</code>:</strong>"
 msgid "<strong>WooCommerce:</strong> instala el plugin <em>Facebook for WooCommerce</em> y conéctalo con tu Business Manager; el Pixel y los eventos de compra quedan puestos."
 msgstr "<strong>WooCommerce:</strong> install the <em>Facebook for WooCommerce</em> plugin and connect it to your Business Manager; the Pixel and the purchase events get set up."
 
+#, python-format
+msgid "A %(wps)s palabras/s estas líneas duran solas más de 15 s, el máximo de un clip, y una línea no se parte entre clips: %(lista)s."
+msgstr "At %(wps)s words/s these lines alone last more than 15 s, the maximum for a clip, and a line is never split across clips: %(lista)s."
+
 msgid "A anuncios nuevos"
 msgstr "To new ads"
 
@@ -4648,6 +4652,14 @@ msgstr "Check Pixel"
 
 msgid "Computador"
 msgstr "Desktop"
+
+#, python-format
+msgid "Con %(modelo)s, antes de generar falta resolver esto:"
+msgstr "With %(modelo)s, this needs fixing before generating:"
+
+#, python-format
+msgid "Con %(modelo)s."
+msgstr "With %(modelo)s."
 
 #, python-format
 msgid "Con %(n)s comentarios pegados a mano ya salen avatares: el formulario está justo abajo."
@@ -8239,6 +8251,9 @@ msgstr "That script doesn't exist."
 msgid "Ese hook no existe en el guion."
 msgstr "That hook doesn't exist in the script."
 
+msgid "Ese idioma del diálogo no está disponible."
+msgstr "That dialogue language isn't available."
+
 msgid "Ese idioma no está disponible."
 msgstr "That language isn't available."
 
@@ -8253,6 +8268,9 @@ msgstr "That media is in an edit; remove it from there first."
 
 msgid "Ese mensaje no trae una versión para usar."
 msgstr "That message doesn't carry a version to use."
+
+msgid "Ese modelo no está disponible para la cadena."
+msgstr "That model isn't available for the chain."
 
 msgid "Ese momento del calendario no existe."
 msgstr "That calendar moment doesn't exist."
@@ -9762,10 +9780,10 @@ msgid "Generar %(n)s pieza(s) — USD %(usd)s"
 msgstr "Generate %(n)s piece(s) — USD %(usd)s"
 
 #, python-format
-msgid "Generar %(num)s escena"
-msgid_plural "Generar las %(num)s escenas"
-msgstr[0] "Generate %(num)s scene"
-msgstr[1] "Generate the %(num)s scenes"
+msgid "Generar %(num)s escena con %(modelo)s"
+msgid_plural "Generar las %(num)s escenas con %(modelo)s"
+msgstr[0] "Generate %(num)s scene with %(modelo)s"
+msgstr[1] "Generate the %(num)s scenes with %(modelo)s"
 
 msgid "Generar 2 imágenes"
 msgstr "Generate 2 images"
@@ -9775,6 +9793,10 @@ msgstr "Generate 2 videos"
 
 msgid "Generar avatares"
 msgstr "Generate avatars"
+
+#, python-format
+msgid "Generar con %(modelo)s"
+msgstr "Generate with %(modelo)s"
 
 msgid "Generar el video igual"
 msgstr "Generate the same-as-reference video"
@@ -10335,6 +10357,12 @@ msgstr "Base language"
 
 msgid "Idioma de lo que se dice"
 msgstr "Language being spoken"
+
+msgid "Idioma del diálogo"
+msgstr "Dialogue language"
+
+msgid "Idioma del diálogo (en el que hablan los personajes)"
+msgstr "Dialogue language (the one the characters speak)"
 
 msgid "Idioma del proyecto"
 msgstr "Project language"
@@ -11705,6 +11733,10 @@ msgstr "Fill"
 
 msgid "Llenar la pantalla"
 msgstr "Fill the screen"
+
+#, python-format
+msgid "Lleva %(n)s imágenes; con Wan 3.0 esta escena admite %(max)s: apaga alguna."
+msgstr "It has %(n)s images; with Wan 3.0 this scene allows %(max)s: turn some off."
 
 #, python-format
 msgid "Lleva %(n)s imágenes; la primera escena admite %(max)s: apaga alguna."
@@ -14536,6 +14568,9 @@ msgstr "Stop"
 msgid "Parar «{nombre}»"
 msgstr "Stop “{nombre}”"
 
+msgid "Parte cada una en dos: duplica el guion para editar la lectura."
+msgstr "Split each one in two: duplicate the script to edit the reading."
+
 msgid "Parte mínima que ve el video completo (0–1)"
 msgstr "Minimum share that watches the full video (0–1)"
 
@@ -16958,10 +16993,10 @@ msgid "Se están cansando"
 msgstr "Fatiguing"
 
 #, python-format
-msgid "Se genera %(num)s escena con Kling O3 Pro por ≈ US$ %(precio)s. Nada más se cobra hasta que la apruebes de nuevo. ¿Generar?"
-msgid_plural "Se generan %(num)s escenas con Kling O3 Pro, una tras otra, por ≈ US$ %(precio)s en total. Si una falla, la cadena se detiene y no cobra lo que sigue. ¿Generar?"
-msgstr[0] "%(num)s scene will be generated with Kling O3 Pro for ≈ US$ %(precio)s. Nothing else is charged until you approve again. Generate?"
-msgstr[1] "%(num)s scenes will be generated with Kling O3 Pro, one after another, for ≈ US$ %(precio)s in total. If one fails, the chain stops and nothing after it is charged. Generate?"
+msgid "Se genera %(num)s escena con %(modelo)s por ≈ US$ %(precio)s. Nada más se cobra hasta que la apruebes de nuevo. ¿Generar?"
+msgid_plural "Se generan %(num)s escenas con %(modelo)s, una tras otra, por ≈ US$ %(precio)s en total. Si una falla, la cadena se detiene y no cobra lo que sigue. ¿Generar?"
+msgstr[0] "%(num)s scene is generated with %(modelo)s for ≈ US$ %(precio)s. Nothing else is charged until you approve again. Generate?"
+msgstr[1] "%(num)s scenes are generated with %(modelo)s, one after another, for ≈ US$ %(precio)s in total. If one fails, the chain stops and doesn't charge for the rest. Generate?"
 
 #, python-format
 msgid "Se generó, pero no se pudo subir al almacenamiento (%(error)s)."
@@ -17097,8 +17132,8 @@ msgid "Se vuelve a publicar en %(plataforma)s. Revisa antes que no haya salido y
 msgstr "It will be published again on %(plataforma)s. Check first that it hasn't already gone out there. Retry?"
 
 #, python-format
-msgid "Se vuelven a generar la escena %(n)s y las siguientes por ≈ US$ %(precio)s. Las anteriores se quedan como están. ¿Rehacer?"
-msgstr "Scene %(n)s and the ones after it will be generated again for ≈ US$ %(precio)s. The earlier ones stay as they are. Redo?"
+msgid "Se vuelven a generar la escena %(n)s y las siguientes con %(modelo)s por ≈ US$ %(precio)s. Las anteriores se quedan como están. ¿Rehacer?"
+msgstr "Scene %(n)s and the following ones are generated again with %(modelo)s for ≈ US$ %(precio)s. The earlier ones stay as they are. Redo?"
 
 msgid "Secciones"
 msgstr "Sections"
@@ -17850,6 +17885,10 @@ msgstr "Upload at least one brand reference (image or video) first."
 #, python-format
 msgid "Sube el presupuesto de «%(nombre)s»"
 msgstr "Raise the budget of “%(nombre)s”"
+
+#, python-format
+msgid "Sube el ritmo a %(min)s palabras/s o más, o parte cada una en dos (duplica el guion para editar la lectura)."
+msgstr "Raise the pace to %(min)s words/s or more, or split each one in two (duplicate the script to edit the reading)."
 
 #, python-format
 msgid "Sube máximo %(n)s archivos a la vez."
@@ -19537,8 +19576,8 @@ msgstr "One single idea"
 msgid "Una transición va entre dos videos: agrega otro video primero."
 msgstr "A transition goes between two videos: add another video first."
 
-msgid "Una tras otra con Kling O3 Pro: la primera con sus imágenes y cada siguiente arranca en el último cuadro de la anterior, con los mismos personajes. Corre sola (unos 5 minutos por escena); puedes cerrar la página. Si una escena falla, la cadena se detiene y no cobra lo que sigue."
-msgstr "One after another with Kling O3 Pro: the first with its images and each next one starting on the last frame of the previous one, with the same characters. It runs on its own (about 5 minutes per scene); you can close the page. If a scene fails, the chain stops and nothing after it is charged."
+msgid "Una tras otra: la primera con sus imágenes y cada siguiente arranca en el último cuadro de la anterior, con los mismos personajes. Corre sola (unos 5 minutos por escena); puedes cerrar la página. Si una escena falla, la cadena se detiene y no cobra lo que sigue."
+msgstr "One after another: the first with its images and each next one starts on the last frame of the previous one, with the same characters. It runs on its own (about 5 minutes per scene); you can close the page. If a scene fails, the chain stops and doesn't charge for the rest."
 
 msgid "Unboxing"
 msgstr "Unboxing"
@@ -20217,6 +20256,9 @@ msgstr "Wan 3.0"
 
 msgid "Wan 3.0 (referencia, no edición)"
 msgstr "Wan 3.0 (reference, no editing)"
+
+msgid "Wan 3.0 es la más barata: cada escena recibe el último cuadro de la anterior y sus imágenes como referencias. Kling O3 Pro arranca exactamente en ese cuadro y fija las caras con «elementos», pero cuesta más."
+msgstr "Wan 3.0 is the cheapest: each scene gets the previous one's last frame and its images as references. Kling O3 Pro starts exactly on that frame and locks faces with “elements”, but costs more."
 
 msgid "Wan-2.2 Animate Replace"
 msgstr "Wan-2.2 Animate Replace"
@@ -21568,6 +21610,10 @@ msgstr "the hook isn't stopping people: %(g)s %%"
 msgid "el gancho no retiene"
 msgstr "the hook doesn't hold attention"
 
+#, python-format
+msgid "el hook %(hid)s (%(s)s s)"
+msgstr "hook %(hid)s (%(s)s s)"
+
 msgid "el mecanismo"
 msgstr "the mechanism"
 
@@ -22329,6 +22375,10 @@ msgstr "bright, golden night light"
 
 msgid "línea"
 msgstr "line"
+
+#, python-format
+msgid "línea %(n)s (%(s)s s)"
+msgstr "line %(n)s (%(s)s s)"
 
 msgid "líneas"
 msgstr "lines"

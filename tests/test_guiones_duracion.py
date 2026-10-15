@@ -69,3 +69,14 @@ def test_aire_disponible():
     # 145 s de objetivo → se cuentan 15 clips de 10 s con 1 s de redondeo cada uno (de más, a propósito)
     assert duracion.aire_disponible(lineas, 2.4, 145) == round(145 - hablado - 15, 1)
     assert duracion.aire_disponible(lineas, 2.4, 100) == 0.0  # no entra: nada de aire
+
+
+def test_lineas_largas_y_ritmo_minimo():
+    # Incidente 2026-10-14: 38 palabras a 2,4 palabras/s = 15,8 s, no cabe en un clip de 15 s.
+    larga, justa = " ".join(["w"] * 38), " ".join(["w"] * 36)  # 36 / 2,4 = 15,0 s: cabe
+    lineas = [(1, "uno dos"), (6, larga), (7, justa)]
+    assert duracion.lineas_largas(lineas, 2.4) == [(6, 15.8)]
+    assert duracion.lineas_largas(lineas, 2.6) == []
+    assert duracion.ritmo_minimo(lineas) == 2.6  # 38 / 15 = 2,533…
+    assert duracion.ritmo_minimo([(1, " ".join(["w"] * 30))]) == 2.0
+    assert duracion.ritmo_minimo([]) == 0

@@ -26,6 +26,7 @@ from sqlalchemy.dialects.sqlite import insert as insert_sqlite
 import creative_flow
 import db
 import flowplus_lanzar
+import flowplus_prompt
 import gastos
 import idiomas
 import trabajos
@@ -89,17 +90,42 @@ def lanzar_escena(cliente, video_id, k):
     último cuadro de la anterior como imagen de arranque y sus elementos."""
     v = datos.video(cliente, video_id)
     est = cadena.estado(v)
+    modelo = cadena.modelo_de(est)
     clip = next(c for c in v["clips"] if c["indice"] == k)
     imagenes = escenas.imagenes_para_crear(v, k)
-    prompt = cadena.prompt_escena(_prompt_vigente(video_id, k), v, k, imagenes)
     primera = k == cadena.indices(v)[0]
-    if primera:
+    if modelo == cadena.WAN:
+        # Wan 3.0: todas por referencias; desde la segunda, el último cuadro de
+        # la anterior va primero (`@Imagen 1`) y las de la escena después.
+        prompt = cadena.prompt_escena_wan(_prompt_vigente(video_id, k), v, k, imagenes)
+        urls = [medios.url_publica(cliente, x["imagen"]) for x in imagenes]
+        referencias = [{"tipo": "imagen", "url": u, "frame_url": u,
+                        "titulo": f"Image {x['numero']}" + (f" · {x['nombre']}" if x["nombre"] else "")}
+                       for x, u in zip(imagenes, urls)]
+        if not primera:
+            frame = cadena.frame_anterior(est, k)
+            if not frame:
+                raise ValueError(gettext("Falta el último cuadro de la escena anterior."))
+            urls = [frame] + urls
+            referencias = [{"tipo": "imagen", "url": frame, "frame_url": frame, "titulo": f"{k - 1} → {k}"}] + referencias
+        for i, r in enumerate(referencias, start=1):
+            r["etiqueta"] = f"@Imagen {i}"
+        flowplus_prompt.asignar_tokens(referencias, modelo)
+        prompt = flowplus_prompt.sustituir_tokens(prompt, referencias)
+        campos = {"referencias": referencias}
+    elif primera:
+        prompt = cadena.prompt_escena(_prompt_vigente(video_id, k), v, k, imagenes)
         urls = [medios.url_publica(cliente, x["imagen"]) for x in imagenes]
         referencias = [{"tipo": "imagen", "url": u, "frame_url": u, "etiqueta": f"@Imagen {i}",
                         "titulo": f"Image {x['numero']}" + (f" · {x['nombre']}" if x["nombre"] else "")}
                        for i, (x, u) in enumerate(zip(imagenes, urls), start=1)]
+        # Las menciones `@Imagen n` pasan al token de Kling («Image n»): hasta el
+        # 2026-10-15 la primera escena le llegaba a Kling con «@Imagen n» literal.
+        flowplus_prompt.asignar_tokens(referencias, modelo)
+        prompt = flowplus_prompt.sustituir_tokens(prompt, referencias)
         campos = {"referencias": referencias}
     else:
+        prompt = cadena.prompt_escena(_prompt_vigente(video_id, k), v, k, imagenes)
         frame = cadena.frame_anterior(est, k)
         if not frame:
             raise ValueError(gettext("Falta el último cuadro de la escena anterior."))
@@ -109,12 +135,12 @@ def lanzar_escena(cliente, video_id, k):
         campos = {"imagen_inicial": frame, "elementos": elementos,
                   "referencias": [{"tipo": "imagen", "url": frame, "frame_url": frame, "etiqueta": "@Imagen 1",
                                    "titulo": f"{k - 1} → {k}"}]}
-    duracion = flowplus_modelos.ajustar_duracion(cadena.MODELO, clip["duracion"])
+    duracion = flowplus_modelos.ajustar_duracion(modelo, clip["duracion"])
     total = len(v["clips"])
     accion = f"{(v['guion'].get('titulo') or '')[:60]} · {k}/{total} · {clip.get('titulo') or ''}".strip(" ·")
     cf_id = creative_flow.crear(cliente, [], [], [], accion, duracion, "", "A", referencias_urls=urls, platforms=[])
     creative_flow.actualizar(cliente, cf_id, prompt_relleno=prompt, prompt_fuente=prompt, tipo="video",
-                             modelo=cadena.MODELO, aspect_ratio=v["config"].get("formato") or "9:16", con_sonido=True,
+                             modelo=modelo, aspect_ratio=v["config"].get("formato") or "9:16", con_sonido=True,
                              sonido_texto="", musica_estilo="", calidad="final",
                              cadena={"guion_video_id": video_id, "indice": k}, **campos)
     datos.modificar_cadena(cliente, video_id, lambda e, _v: cadena.lanzada(e, k, cf_id))
@@ -206,7 +232,7 @@ def ejecutar_elementos(tarea):
     nuevos = {}
     with _idioma(cliente):
         try:
-            for e in cadena.elementos_necesarios(v, est["desde"]):
+            for e in cadena.elementos_necesarios(v, est["desde"], cadena.modelo_de(est)):
                 if e["id"] in est["elementos"]:
                     continue
                 sha = _sha(f"{cliente}:{e['id']}")

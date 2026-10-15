@@ -98,3 +98,29 @@ PND-062, entrega 2 (2026-10-10, pedido de Daniel): chat y panel cargan `static/c
 cliente y todos los textos ya traducidos. El orden de archivos sigue Guiones → chat; la activación inicial
 de modos espera DOMContentLoaded, evitando perder `crear:modo` con hash o modo recordado Flow Plus.
 Rutas construidas, selección local, fetch y sondeos conservan el código original.
+
+Línea que no cabe en un clip (2026-10-14, pedido de Daniel): una línea no se parte entre clips, así que si una sola
+(o un hook alternativo) dura más de 15 s al ritmo de la versión, ningún plan pasa V2/V3: Claude la repetía en dos
+clips y cada «Volver a armar» se cobraba igual (guion «Podcast» de HappyCozy, líneas de 38 palabras a 2,4
+palabras/s = 15,8 s). `clips.lineas_que_no_caben` (con `duracion.lineas_largas` y `duracion.ritmo_minimo`, puros) lo
+detecta gratis: el panel muestra el aviso con el ritmo que alcanza y apaga el botón, y `POST /videos/<id>/armar`
+responde 409 antes de `_exigir`. Salida: subir el ritmo o duplicar el guion y partir la línea.
+
+Idioma y ritmo del diálogo (2026-10-15, pedido de Daniel tras el video del guion «Podcast» en neerlandés): el audio salió
+en un idioma incomprensible mezclado con inglés y las tomas lentas. (1) `config.idioma_dialogo` (los once de Audios,
+`config.IDIOMAS_DIALOGO`; por defecto el del proyecto) y `plantillas.bloque_video` agrega en VOICE & AUDIO «All dialogue
+is spoken in <idioma>, word for word…» (una versión vieja sin el campo sigue igual). Se elige en la configuración o, gratis
+y con el mismo plan, en «Crear versión con este bloque» (`clips.version_con_bloque(..., idioma_dialogo)`). (2)
+`ENCABEZADO_DIALOGO` decía «natural unhurried pace»: ahora pide ritmo conversacional ágil a las palabras/s de la versión,
+las mismas con que se calculó cada clip.
+
+Cadena con Wan 3.0 (2026-10-15, pedido de Daniel: Kling con sonido cuesta US$ 0,14/s y Wan US$ 0,10/s): el panel ofrece
+una opción por modelo (`cadena.MODELOS`, Wan primero), cada una con lo que le falta y su precio; el POST manda `modelo`
+y la cadena lo guarda (`cadena.modelo_de`; una vieja sin modelo es Kling). «Rehacer desde» sigue con el de la cadena
+aunque el cuerpo pida otro. Wan no tiene imagen a video ni elementos en WaveSpeed: cada escena va por
+reference-to-video; desde la segunda, el último cuadro de la anterior es `@Imagen 1` (`cadena.prompt_escena_wan`,
+`ARRANQUE_WAN`) y las de la escena corren un número (máximo 10 en total: `revisar` pide 9 en las siguientes); sin
+elementos ni aviso de cambio de lugar. `tareas.cadena.lanzar_escena` cambia las menciones de Crear por el token del
+modelo (`flowplus_prompt.asignar_tokens`/`sustituir_tokens`); hasta este cambio la primera escena de Kling le llegaba al
+modelo con «@Imagen n» literal. Pendiente: probar con una cadena real corta que Wan arranca de verdad en el cuadro y
+mantiene las caras (detener después de dos escenas si no).

@@ -67,6 +67,21 @@ def aire_disponible(lineas, wps, objetivo):
     return round(max(0.0, objetivo - hablado - REDONDEO_MAXIMO * clips), 1)
 
 
+def lineas_largas(lineas, wps):
+    """[(n, segundos)] de las líneas que solas ya duran más que MAX_CLIP. Una
+    línea no se parte entre clips, así que con una de estas ningún plan pasa
+    V3: Claude termina repitiéndola en dos clips (incidente 2026-10-14, guion
+    «Podcast» de HappyCozy: líneas de 38 palabras a 2,4 palabras/s = 15,8 s)."""
+    return [(n, round(seg_hablados(t, wps), 1)) for n, t in lineas if seg_hablados(t, wps) > MAX_CLIP]
+
+
+def ritmo_minimo(lineas):
+    """Palabras por segundo (redondeadas hacia arriba a la décima) con las que
+    la línea más larga cabe en un clip de MAX_CLIP."""
+    mayor = max((palabras(t) for _, t in lineas), default=0)
+    return math.ceil(round(mayor / MAX_CLIP * 10, 6)) / 10
+
+
 def bloques_quitados(textos, quitadas):
     """Textos de las corridas contiguas quitadas, en el orden del guion."""
     fuera = sorted({int(n) for n in quitadas if int(n) in textos})

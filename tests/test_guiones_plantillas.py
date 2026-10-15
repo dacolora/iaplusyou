@@ -18,7 +18,7 @@ def _fijos(c):
 ESPERADO_CLIP2 = """CLIP 2 of 2 — 13 seconds — 9:16 — The thin sole
 Start image = last frame of Clip 1.
 START STATE: Hands empty.
-DIALOGUE (exact words, natural unhurried pace, lip-sync exactly):
+DIALOGUE (exact words, brisk natural conversational pace of about 2.4 words per second, no slow delivery, no long pauses between lines, lip-sync exactly):
 "Flip-flops are the first ones. The sole is paper thin. So what do I recommend instead? A cushioned slipper you can wear all day."
 TIMED SCRIPT
 0.0–2.4s  [SAY: "Flip-flops are the first ones."]  He lifts ONE flip-flop.
@@ -98,3 +98,22 @@ def test_bloque_global_del_proyecto(tmp_path, monkeypatch):
     assert plantillas.bloque_global("acme") == "CLOSING RULES\nThe final clip ends with a HARD CUT."
     proyectos.guardar_bloque_global_flowplus("acme", "")
     assert plantillas.bloque_global("acme") == plantillas.BLOQUE_GLOBAL_FABRICA
+
+
+def test_el_ritmo_del_dialogo_sigue_a_la_config():
+    # 2026-10-15: «natural unhurried pace» hacía hablar lento y rellenar el clip con pausas.
+    txt = plantillas.bloque_clip(_calc(CLIP1, 1, 2), dict(CONFIG, palabras_por_segundo=3.2))
+    assert "about 3.2 words per second" in txt and "unhurried" not in txt
+
+
+def test_idioma_del_dialogo_en_el_bloque_del_video():
+    # 2026-10-15: sin decir el idioma, un guion en neerlandés salió mezclado con inglés.
+    bv = plantillas.bloque_video(dict(CONFIG, idioma_dialogo="nl"), BLOQUE)
+    assert "All dialogue is spoken in Dutch, word for word as written; never translate it" in bv
+    assert "never mix in English" in bv
+    assert "spoken in English, word for word" in plantillas.bloque_video(dict(CONFIG, idioma_dialogo="en"), BLOQUE)
+    assert "spoken in" not in plantillas.bloque_video(CONFIG, BLOQUE)  # versiones viejas: igual que antes
+    assert "spoken in" not in plantillas.bloque_video(dict(CONFIG, modo="voiceover", idioma_dialogo="nl"), BLOQUE)
+    for idioma in ("nl", "en", "de"):
+        bv = plantillas.bloque_video(dict(CONFIG, idioma_dialogo=idioma), BLOQUE)
+        assert refinador.validar(bv, [], "imagen") == []

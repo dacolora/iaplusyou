@@ -14,7 +14,7 @@
     {% else %}<p class="vacio">{{ _('Todavía no hay videos. Crea el primero: eliges duración, modo, hook y referencias.') }}</p>{% endfor %}
   </div>
   <div id="gpg-nuevo-video" {% if guion.videos %}hidden{% endif %} data-gpg-caja>
-    {{ form_config("gpg-form-nuevo", "/guiones/" ~ guion.id ~ "/videos", config_defecto, guion.lectura, activos, formatos, _("Crear video")) }}
+    {{ form_config("gpg-form-nuevo", "/guiones/" ~ guion.id ~ "/videos", config_defecto, guion.lectura, activos, formatos, _("Crear video"), idiomas_dialogo) }}
   </div>
 
   {% if video %}
@@ -36,7 +36,7 @@
     {% if video.estado == 'configurando' %}
       <details id="gpg-det-config-{{ video.id }}">
         <summary>{{ _('Cambiar la configuración') }}</summary>
-        {{ form_config("gpg-form-config", "/videos/" ~ video.id ~ "/config", video.config, guion.lectura, activos, formatos, _("Guardar configuración")) }}
+        {{ form_config("gpg-form-config", "/videos/" ~ video.id ~ "/config", video.config, guion.lectura, activos, formatos, _("Guardar configuración"), idiomas_dialogo) }}
       </details>
 
       {% if video.config.duracion_objetivo %}

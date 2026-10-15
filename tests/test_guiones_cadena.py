@@ -139,3 +139,45 @@ def test_prompt_escena_siguiente_arranca_en_el_fotograma_y_nombra_elementos():
     assert "Characters and objects: HappyFlops Original, the AI podiatrist,." in p
     # Image 2 es un elemento: su nombre; Image 3 (la clínica) no es elemento: su nombre en palabras
     assert "the AI podiatrist, lifts HappyFlops Original near modern bright podiatry clinic." in p
+
+
+# --- Wan 3.0 (2026-10-15, pedido de Daniel: más barata que Kling) ---------------------------
+
+def test_wan_revisar_cuenta_el_cuadro_anterior_y_no_tiene_tope_de_elementos():
+    v = _completo()
+    est = escenas.estado(v)
+    for n in range(2):
+        est = escenas.agregar_extra(est, _video(est), dict(FOTO, material_id=50 + n, url=f"https://r2/x{n}.jpg"),
+                                    escena=2)
+    assert cadena.revisar(_video(est), PROMPTS, modelo=cadena.WAN) == []      # 4 elementos: a Wan no le importa
+    n = 2
+    while len(escenas.imagenes_para_crear(_video(est), 2)) < 10:   # el tope de una escena
+        est = escenas.agregar_extra(est, _video(est), dict(FOTO, material_id=50 + n, url=f"https://r2/x{n}.jpg"),
+                                    escena=2)
+        n += 1
+    n2 = len(escenas.imagenes_para_crear(_video(est), 2))
+    motivos = cadena.revisar(_video(est), PROMPTS, modelo=cadena.WAN)
+    assert n2 == 10 and [m["indice"] for m in motivos] == [2] and "9" in motivos[0]["motivo"]  # 10 + el cuadro
+
+
+def test_wan_precio_sin_elementos_ni_avisos_de_lugar():
+    v = _completo()
+    escenas_usd = sum(flowplus_modelos.estimate_video("wan3", c["duracion"], True)["usd"] for c in CLIPS)
+    assert cadena.precio(v, modelo=cadena.WAN) == round(escenas_usd, 2) < cadena.precio(v)
+    assert cadena.elementos_necesarios(v, 1, cadena.WAN) == [] and cadena.avisos(v, cadena.WAN) == []
+    assert cadena.aprobar(v, 1, 1.0, "admin", "t", modelo=cadena.WAN)["modelo"] == cadena.WAN
+    assert cadena.modelo_de(None) == cadena.MODELO == cadena.modelo_de({"modelo": "otro"})
+
+
+def test_wan_prompt_escena_siguiente_pone_el_cuadro_como_imagen_1():
+    v = _completo()
+    imgs = escenas.imagenes_para_crear(v, 2)
+    assert cadena.prompt_escena_wan(TEXTO, v, 1, escenas.imagenes_para_crear(v, 1)) == \
+        escenas.prompt_para_crear(TEXTO, v, escenas.imagenes_para_crear(v, 1))
+    base = escenas.prompt_para_crear(TEXTO, v, imgs)
+    p = cadena.prompt_escena_wan(TEXTO, v, 2, imgs)
+    assert p.startswith("The video starts exactly on @Imagen 1.\n\nREFERENCE MAP\n" + cadena.ARRANQUE_WAN)
+    # cada mención de la escena corre un número: la @Imagen 1 de Crear es ahora la 2
+    assert base.count("@Imagen 1") >= 1 and p.count("@Imagen 1") == 2
+    assert p.count(f"@Imagen {len(imgs) + 1}") == base.count(f"@Imagen {len(imgs)}")
+    assert "Start image" not in p

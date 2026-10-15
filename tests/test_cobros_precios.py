@@ -364,15 +364,21 @@ def test_cadena_de_escenas_ve_el_precio_y_cobra_el_costo(libro, pipeline, monkey
     _con_imagenes(pipeline, vid, subidas)
     _cobra(libro, milesimas=50_000)
     c = _como_user_acme(pipeline["c"])
-    costo = cadena.precio(datos.video("acme", vid))
+    costo = cadena.precio(datos.video("acme", vid))                               # Kling
+    costo_wan = cadena.precio(datos.video("acme", vid), modelo=cadena.WAN)
     html = c.get(f"{BASE}/panel?guion={gid}&video={vid}").get_data(as_text=True)
     vistos = [float(x) for x in _re.findall(r'&#34;total_visto&#34;: ([0-9.]+)|"total_visto": ([0-9.]+)', html) for x in x if x]
-    assert vistos == [round(costo * MARGEN, 6)]                                  # al navegador, solo el precio
-    assert f"{costo * MARGEN:.2f}" in html
+    # al navegador, solo el precio: una opción por modelo, Wan 3.0 primero (2026-10-15)
+    assert vistos == [round(costo_wan * MARGEN, 6), round(costo * MARGEN, 6)]
+    assert f"{costo * MARGEN:.2f}" in html and f"{costo_wan * MARGEN:.2f}" in html
+    r = c.post(f"{BASE}/videos/{vid}/cadena", json={"total_visto": vistos[0], "modelo": "veo"})
+    assert r.status_code == 400
     pedidos = _exigidos(monkeypatch, rutas_pipeline)
     r = c.post(f"{BASE}/videos/{vid}/cadena", json={"total_visto": costo})        # el costo NO es lo que vio
     assert r.status_code == 409 and r.get_json()["precio"] == round(costo * MARGEN, 4) and pedidos == []
-    r = c.post(f"{BASE}/videos/{vid}/cadena", json={"total_visto": vistos[0]})
+    r = c.post(f"{BASE}/videos/{vid}/cadena", json={"total_visto": vistos[0]})   # sin modelo: Kling
+    assert r.status_code == 409 and pedidos == []
+    r = c.post(f"{BASE}/videos/{vid}/cadena", json={"total_visto": vistos[1]})
     assert r.status_code == 202, r.get_json()
     assert pedidos and all(p == pytest.approx(costo) for p in pedidos)          # la ruta y el encolar: costo
     assert cadena.estado(datos.video("acme", vid))["aprobado_usd"] == costo
