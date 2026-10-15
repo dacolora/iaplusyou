@@ -255,6 +255,10 @@ msgstr ""
 "Piece %(pieza_id)s of project %(cliente)s."
 
 #, python-format
+msgid "%(cuando)s Vuelve a conectar Meta antes de esa fecha en Configuración › Conexiones › «Renovar el acceso», con la misma cuenta; no se borra nada. Si vence, Creatv deja de leer sus métricas y no puede lanzar ni activar anuncios."
+msgstr "%(cuando)s Reconnect Meta before that date in Settings › Connections › “Renew access”, with the same account; nothing is deleted. If it expires, Creatv stops reading its metrics and can't launch or activate ads."
+
+#, python-format
 msgid "%(cuenta)s sin publicar orgánicamente y ningún canal conectado: configura un canal orgánico en Configuración."
 msgstr "%(cuenta)s not posted organically yet and no channel connected: set up an organic channel in Settings."
 
@@ -1527,6 +1531,12 @@ msgstr[0] "%(num)s month free"
 msgstr[1] "%(num)s months free"
 
 #, python-format
+msgid "%(num)s no se pudo revisar."
+msgid_plural "%(num)s no se pudieron revisar."
+msgstr[0] "%(num)s couldn't be checked."
+msgstr[1] "%(num)s couldn't be checked."
+
+#, python-format
 msgid "%(num)s parte del detalle de Meta no llegó"
 msgid_plural "%(num)s partes del detalle de Meta no llegaron"
 msgstr[0] "%(num)s part of the Meta details didn't load"
@@ -2345,6 +2355,16 @@ msgstr "Open campaign %(n)s"
 
 msgid "Aburrimiento"
 msgstr "Boredom"
+
+#, python-format
+msgid "Acceso a los datos de Meta hasta el %(fecha)s; se renueva volviendo a conectar, sin borrar nada."
+msgstr "Access to Meta data until %(fecha)s; renew it by reconnecting, nothing is deleted."
+
+#, python-format
+msgid "Acceso a los datos de Meta revisado en %(num)s proyecto."
+msgid_plural "Acceso a los datos de Meta revisado en %(num)s proyectos."
+msgstr[0] "Meta data access checked in %(num)s project."
+msgstr[1] "Meta data access checked in %(num)s projects."
 
 msgid "Acceso desbloqueado."
 msgstr "Login unlocked."
@@ -6263,6 +6283,10 @@ msgstr "The Pixel hasn't fired in more than 7 days."
 msgid "El WAL de la base pesa %(peso)s: algo mantiene una lectura abierta y no deja hacer checkpoint."
 msgstr "The database WAL is %(peso)s: something is holding a read open and blocking the checkpoint."
 
+#, python-format
+msgid "El acceso de Creatv a los datos de Meta vence el %(fecha)s"
+msgstr "Creatv's access to your Meta data expires on %(fecha)s"
+
 msgid "El acceso fue revocado o expiró"
 msgstr "Access was revoked or expired"
 
@@ -9063,6 +9087,12 @@ msgstr "%(llaves)s is missing from the server's .env (Settings › Setup)."
 #, python-format
 msgid "Falta %(llaves)s en el .env del servidor."
 msgstr "%(llaves)s is missing from the server's .env."
+
+#, python-format
+msgid "Falta %(num)s día."
+msgid_plural "Faltan %(num)s días."
+msgstr[0] "%(num)s day left."
+msgstr[1] "%(num)s days left."
 
 msgid "Falta 1 archivo de esta edición (se borró o no es de este proyecto): esa parte no se verá."
 msgstr "1 file of this edit is missing (it was deleted or isn't from this project): that part won't show."
@@ -16539,6 +16569,9 @@ msgstr "Performance"
 msgid "Renovación apagada"
 msgstr "Renewal turned off"
 
+msgid "Renovar el acceso"
+msgstr "Renew access"
+
 msgid "Repetido"
 msgstr "Duplicate"
 
@@ -19786,8 +19819,18 @@ msgstr "Speed"
 msgid "Vence en"
 msgstr "Expires in"
 
+msgid "Vence hoy."
+msgstr "Expires today."
+
 msgid "Vencida"
 msgstr "Expired"
+
+#, python-format
+msgid "Venció el %(fecha)s: hasta que vuelvas a conectar Meta, Creatv no lee sus métricas y no puede lanzar ni activar anuncios. Vuelve a conectar en Configuración › Conexiones, con la misma cuenta; no se borra nada."
+msgstr "It expired on %(fecha)s: until you reconnect Meta, Creatv can't read its metrics or launch or activate ads. Reconnect in Settings › Connections, with the same account; nothing is deleted."
+
+msgid "Venció el acceso de Creatv a los datos de Meta"
+msgstr "Creatv's access to your Meta data has expired"
 
 #, python-format
 msgid "Venden mejor que su cuenta: sube %(pct)s %% el presupuesto diario (más de %(pct)s %% reinicia el aprendizaje)."

@@ -9,7 +9,11 @@ permiso cubre anuncios (meta_ads/) y publicación orgánica
 
 Reglas que este módulo hace cumplir por sí mismo:
   - El token nunca entra a un mensaje de excepción, log ni dry_run.
-  - El app_secret del proyecto solo se lee en cambiar_code_por_token().
+  - El app_secret del proyecto solo se lee en cambiar_code_por_token() y en
+    _vencimientos() (el token de la app para debug_token; PND-058).
+  - meta.json se lee y se escribe bajo un candado por proyecto (`_candado`):
+    la revisión diaria del vencimiento lee, pregunta a Meta y escribe, y no
+    puede pisar una reconexión ni revivir una desconexión hechas en medio.
   - meta.json y meta_app.json se escriben atómicos (tmp + os.replace), 0600.
 
 Cada proyecto es un mundo aparte: trae SU app de Meta (id, secret y
@@ -33,10 +37,12 @@ Dos modos por proyecto (meta.json["modo"], "propia" cuando falta):
 
 Ver docs/superpowers/specs/2026-09-11-conexion-meta-design.md.
 """
+import fcntl
 import json
 import os
 import secrets
 import time
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 
@@ -225,6 +231,20 @@ def _path_pendiente(cliente):
     return os.path.join(_dir(cliente), "meta.pendiente.json")
 
 
+@contextmanager
+def _candado(cliente):
+    """flock exclusivo sobre `meta.json.lock` del proyecto: serializa hilos y procesos (gunicorn y el worker) que
+    escriben o borran meta.json. Nunca anidado en el mismo proceso (un segundo flock sobre otro descriptor espera)."""
+    ruta = _path(cliente) + ".lock"
+    os.makedirs(os.path.dirname(ruta), exist_ok=True)
+    with open(ruta, "a+") as candado:
+        fcntl.flock(candado.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(candado.fileno(), fcntl.LOCK_UN)
+
+
 def _escribir_atomico(ruta, datos):
     os.makedirs(os.path.dirname(ruta), exist_ok=True)
     tmp = ruta + ".tmp"
@@ -305,11 +325,12 @@ def guardar(cliente, datos, permitir_agencia=False):
     cualquier otro escritor (p. ej. una ruta que complete un
     meta.pendiente.json viejo) pisaría la asignación del admin — I2 del
     review de Task 1."""
-    if not permitir_agencia and modo(cliente) == MODO_AGENCIA:
-        raise ModoAgenciaError(gettext(
-            "Este proyecto está gestionado por Creatv (modo agencia): no se puede guardar una "
-            "conexión propia encima. Un admin tiene que desasignarlo primero."))
-    _escribir_atomico(_path(cliente), datos)
+    with _candado(cliente):
+        if not permitir_agencia and modo(cliente) == MODO_AGENCIA:
+            raise ModoAgenciaError(gettext(
+                "Este proyecto está gestionado por Creatv (modo agencia): no se puede guardar una "
+                "conexión propia encima. Un admin tiene que desasignarlo primero."))
+        _escribir_atomico(_path(cliente), datos)
     _cache_estado.pop(cliente, None)
     _cache_pixel.pop(cliente, None)
 
@@ -317,7 +338,8 @@ def guardar(cliente, datos, permitir_agencia=False):
 def _borrar_crudo(cliente):
     _cache_estado.pop(cliente, None)
     _cache_pixel.pop(cliente, None)
-    return _borrar(_path(cliente))
+    with _candado(cliente):
+        return _borrar(_path(cliente))
 
 
 def borrar(cliente):
@@ -420,13 +442,8 @@ def cuentas_de_lanzamiento():
     meta.json, en modo propia o agencia). Meta rendimiento la usa para que ningún proyecto elija leer la cuenta de
     lanzamiento de otro (ruling R20, revisión final 2026-10-08). Lee el meta.json crudo de cada proyecto: sin token de
     agencia y sin `propia_respaldo` (una cuenta que ya no se usa no cuenta)."""
-    try:
-        clientes = sorted(d for d in os.listdir(os.path.join(BASE_DIR, "clientes"))
-                          if not d.startswith(".") and os.path.isdir(_dir(d)))
-    except OSError:
-        return {}
     salida = {}
-    for cliente in clientes:
+    for cliente in clientes():
         act = str((_cargar_crudo(cliente) or {}).get("ad_account_id") or "").strip()
         if act:
             salida.setdefault(act if act.startswith("act_") else f"act_{act}", cliente)
@@ -478,10 +495,87 @@ def cambiar_code_por_token(cliente, code):
         motivo = err.get("message") or gettext("sin token")
         raise MetaConexionError(gettext("Meta no aceptó la autorización: %(motivo)s", motivo=motivo),
                                 codigo=err.get("code"))
-    expira_en = None
+    vence = {"expira_en": None, "acceso_datos_vence_en": None, "acceso_revisado_en": None}
     if datos.get("expires_in"):
-        expira_en = (datetime.now() + timedelta(seconds=int(datos["expires_in"]))).isoformat(timespec="seconds")
-    return {"token": datos["access_token"], "tipo_token": datos.get("token_type", ""), "expira_en": expira_en}
+        # Respaldo si debug_token falla: Meta manda 60 días aunque el token no caduque (PND-058: colorado_forja
+        # quedó con 2026-11-18 y su token no vence).
+        vence["expira_en"] = (datetime.now() + timedelta(seconds=int(datos["expires_in"]))).isoformat(timespec="seconds")
+    try:
+        vence = _vencimientos(app, datos["access_token"])
+    except MetaConexionError:
+        pass   # la conexión sigue: la revisión diaria (tarea meta_revisar_acceso) vuelve a leer la fecha
+    return {"token": datos["access_token"], "tipo_token": datos.get("token_type", ""), **vence}
+
+
+# ---------- vencimiento del token y del acceso a los datos (PND-058) ----------
+
+def _fecha_de_meta(valor):
+    """Un instante Unix de Meta como ISO local de 19 caracteres (el formato de db.ahora); 0 o vacío es «nunca»."""
+    try:
+        segundos = int(valor or 0)
+    except (TypeError, ValueError):
+        return None
+    if segundos <= 0:
+        return None
+    return datetime.fromtimestamp(segundos).isoformat(timespec="seconds")
+
+
+def _vencimientos(app, token):
+    """Cuándo vence el token (`expira_en`, None = no caduca) y cuándo vence el acceso a los datos
+    (`acceso_datos_vence_en`), según `debug_token` de Meta. El cambio de code por token solo trae `expires_in`, que
+    para un token sin caducidad igual dice 60 días, y no trae `data_access_expires_at`: de ahí la caducidad falsa de
+    colorado_forja (PND-058). Se pregunta con el token de la app del proyecto (`app_id|app_secret`), que sirve para
+    cualquier token de esa app. MetaConexionError (sin token adentro) si Meta no contesta."""
+    datos = _graph_get("debug_token", f"{app['app_id']}|{app['app_secret']}", {"input_token": token}).get("data") or {}
+    return {"expira_en": _fecha_de_meta(datos.get("expires_at")),
+            "acceso_datos_vence_en": _fecha_de_meta(datos.get("data_access_expires_at")),
+            "acceso_revisado_en": datetime.now().isoformat(timespec="seconds")}
+
+
+def acceso_datos_vence_en(cliente):
+    """ISO de cuándo vence el acceso de Creatv a los datos de Meta del proyecto, o None (sin conexión propia con
+    token, o sin fecha leída todavía). En modo agencia el token es de Creatv, no del proyecto: None. Solo lee
+    meta.json; lo usa la fuente `meta_acceso` de Alertas, que nunca llama a Meta."""
+    datos = _cargar_crudo(cliente) or {}
+    if datos.get("modo") == MODO_AGENCIA or not datos.get("token"):
+        return None
+    return datos.get("acceso_datos_vence_en") or None
+
+
+def revisar_vencimientos(cliente):
+    """Vuelve a leer en Meta los vencimientos de la conexión propia del proyecto y los guarda en meta.json (con
+    `acceso_revisado_en`). La corre la periódica diaria `meta_revisar_acceso`: así una conexión hecha antes de
+    PND-058 (colorado_forja) tiene su fecha y Alertas puede avisar. Devuelve los vencimientos, o None si no hay nada
+    que revisar (sin conexión, sin token, sin app propia o modo agencia). Lanza MetaConexionError si Meta no
+    contesta, sin tocar meta.json.
+
+    Lee, pregunta a Meta (fuera del candado: puede tardar) y escribe bajo el candado SOLO si meta.json sigue siendo
+    la misma conexión (mismo token, modo propia): una reconexión en medio no se pisa con el token viejo y una
+    desconexión en medio no se revive."""
+    datos = _cargar_crudo(cliente)
+    if not datos or datos.get("modo") == MODO_AGENCIA or not datos.get("token"):
+        return None
+    app = cargar_app(cliente)
+    if not app:
+        return None
+    token = datos["token"]
+    vence = _vencimientos(app, token)
+    with _candado(cliente):
+        actual = _cargar_crudo(cliente)
+        if not actual or actual.get("modo") == MODO_AGENCIA or actual.get("token") != token:
+            return vence
+        _escribir_atomico(_path(cliente), {**actual, **vence})
+    _cache_estado.pop(cliente, None)
+    return vence
+
+
+def clientes():
+    """Las carpetas de proyecto bajo clientes/ (ordenadas; sin las ocultas)."""
+    try:
+        return sorted(d for d in os.listdir(os.path.join(BASE_DIR, "clientes"))
+                      if not d.startswith(".") and os.path.isdir(_dir(d)))
+    except OSError:
+        return []
 
 
 def obtener_perfil(token):
@@ -532,6 +626,7 @@ def _detalle(datos):
         "moneda": datos.get("moneda"),
         "modo": MODO_AGENCIA if datos.get("modo") == MODO_AGENCIA else "propia",
         "asignado_en": datos.get("asignado_en"),
+        "acceso_datos_vence_en": datos.get("acceso_datos_vence_en"),
     }
 
 

@@ -3779,6 +3779,9 @@ def _guardar_conexion_propia(cliente, pendiente, cuenta, pagina=None):
         "token": pendiente["token"],
         "tipo_token": pendiente.get("tipo_token", ""),
         "expira_en": pendiente.get("expira_en"),
+        # PND-058: lo que de verdad vence es el acceso a los datos (debug_token); Alertas avisa 14 días antes.
+        "acceso_datos_vence_en": pendiente.get("acceso_datos_vence_en"),
+        "acceso_revisado_en": pendiente.get("acceso_revisado_en"),
         "business_id": pendiente.get("business_id"),
         "ad_account_id": cuenta["id"],
         "ad_account_nombre": cuenta.get("name"),

@@ -16,12 +16,13 @@ pasa por los mismos frenos de plata que el lanzador (PND-324, 2026-10-15):
 `lanzador.comprobar_moneda` antes de crear nada y la lectura de vuelta del
 diario (`lanzador._confirmar_presupuesto`) después de crear el conjunto.
 """
+import logging
 import os
 import subprocess
 import threading
 
 import requests
-from flask_babel import gettext
+from flask_babel import gettext, ngettext
 
 import ads
 import bitacora
@@ -42,6 +43,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MONEDAS_SIN_DECIMALES = monedas_meta.SIN_DECIMALES
 
 _LOCK = threading.Lock()
+log = logging.getLogger("creatv.tareas.meta")
 
 
 def _extraer_frame(video_path, frame_path, segundo=1.0):
@@ -238,3 +240,24 @@ def refrescar(tarea):
             return gettext("Resultados actualizados.")
         finally:
             meta_auth.limpiar()
+
+
+@registrar("meta_revisar_acceso")
+def revisar_acceso(tarea):
+    """Periódica diaria (PND-058): lee en Meta (`debug_token`) cuándo vence el acceso a los datos de cada proyecto con
+    su app propia conectada y lo guarda en su meta.json, para que Alertas avise 14 días antes. Rellena también las
+    conexiones hechas antes de que se leyera al conectar (colorado_forja: 2026-12-18). Gratis: no cobra ni escribe en
+    Meta. Un proyecto que falla no frena a los demás; el registro lleva solo el tipo del error (nunca su texto)."""
+    revisados = fallidos = 0
+    for cliente in meta_conexion.clientes():
+        try:
+            if meta_conexion.revisar_vencimientos(cliente) is not None:
+                revisados += 1
+        except Exception as e:  # noqa: BLE001 — uno que falla no frena a los demás
+            fallidos += 1
+            log.warning("meta_revisar_acceso %s: %s", cliente, type(e).__name__)
+    texto = ngettext("Acceso a los datos de Meta revisado en %(num)s proyecto.",
+                     "Acceso a los datos de Meta revisado en %(num)s proyectos.", revisados)
+    if fallidos:
+        texto += " " + ngettext("%(num)s no se pudo revisar.", "%(num)s no se pudieron revisar.", fallidos)
+    return texto

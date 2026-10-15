@@ -90,3 +90,21 @@ llamar a Meta con `meta_conexion.sin_pagina(cliente)` (exige token, para no conf
 necesita Página y no se frena. La tarjeta de Configuración › Conexiones muestra «Solo métricas» con un enlace a `#rendimiento` (la pestaña que junta Triple Whale y Meta desde el 2026-10-09; antes `#meta`).
 
 PND-191 (2026-10-09, decisión delegada): la prueba de reconciliar_subidas fija un mismo reloj propio para db.ahora y organico.datetime. Expectativas y publicación intactas. La sonda con once minutos de desfase reproduce el resultado, pero no confirma la causa natural del fallo de la suite anterior; test_pnd191_reconciliar_aisla_el_reloj cubre los bordes de segundo.
+
+**Vencimiento del acceso a los datos (2026-10-15, PND-058).** El cambio de code por token solo trae `expires_in`
+(60 días aunque el token no caduque) y no trae `data_access_expires_at`: colorado_forja quedó con `expira_en`
+2026-11-18 cuando su token no caduca, y lo que vence es el acceso a los datos (2026-12-18). `meta_conexion` pregunta
+a `debug_token` con el token de la app del proyecto (`app_id|app_secret`, el segundo lugar donde se lee el secret,
+`_vencimientos`) y guarda en `meta.json` `expira_en` (None = no caduca), `acceso_datos_vence_en` y
+`acceso_revisado_en` (ISO local, como `db.ahora`). Al conectar, `cambiar_code_por_token` lo lee y
+`dashboard._guardar_conexion_propia` lo copia del pendiente; si `debug_token` falla, la conexión sigue con el cálculo
+viejo y sin fecha. La periódica diaria `meta_revisar_acceso` (`tareas/meta.revisar_acceso`, en `worker.PERIODICAS`,
+exenta de cobro) llama `revisar_vencimientos` en cada proyecto con app propia y token (nunca en modo agencia): lee
+`meta.json`, pregunta a Meta fuera del candado y escribe bajo `meta_conexion._candado` (flock sobre
+`meta.json.lock`, ignorado por git) SOLO si sigue siendo la misma conexión; `guardar` y `_borrar_crudo` toman el
+mismo candado, así una reconexión en medio no se pisa con el token viejo y una desconexión no revive. Un proyecto que
+falla no frena a los demás y el registro lleva solo el tipo del error. Alertas avisa 14 días antes (fuente
+`meta_acceso`, skill `alertas`) y la tarjeta conectada de Configuración › Conexiones dice «Acceso a los datos de Meta
+hasta el …» con «Renovar el acceso» (la ruta `meta_conectar`: reconectar reemplaza el token sin pasar por
+`_soltar_cuentas_meta`). Pruebas: `tests/test_meta_acceso_datos.py`. No cubre el modo agencia: el token del usuario
+del sistema de Creatv vive en `kv` y no se revisa aquí.
