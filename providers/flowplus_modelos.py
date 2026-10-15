@@ -236,6 +236,25 @@ VIDEO_POR_DEFECTO = "wan3"
 IMAGEN_POR_DEFECTO = "seedream_v5_pro"
 
 
+def rutas_wavespeed():
+    """Todas las rutas de WaveSpeed que usa la app (Crear, cadena, hablado,
+    elementos, swaps, imágenes y los CLI de comparación). PND-214: en el
+    historial de la cuenta, una predicción de una de ellas que no es la del
+    pedido incierto se reconoce como de otro uso; un `model` fuera de esta
+    lista no se sabe de quién es y vuelve dudosa la búsqueda."""
+    from providers import wavespeed_client, wavespeed_video_edit  # noqa: PLC0415 — perezoso
+    rutas = set()
+    for registro in (VIDEO, IMAGEN, HABLADO):
+        for info in registro.values():
+            rutas.update(info[k] for k in ("path", "path_texto", "path_i2v") if info.get(k))
+    rutas.update({ELEMENTOS_PATH, wavespeed_client.MODEL_PATH, wavespeed_imagen.MODELO_EDICION,
+                  wavespeed_imagen.MODELO_SEEDREAM, wavespeed_imagen.MODELO_UPSCALE})
+    rutas.update(m["path"] for m in wavespeed_video_edit.MODELOS.values() if m.get("path"))
+    # comparar_seedance_turbo.py (CLI de investigación, 2026-10-01)
+    rutas.update({"bytedance/seedance-2.5/image-to-video-turbo", "bytedance/seedance-2.5/text-to-video-turbo"})
+    return rutas
+
+
 def proveedor_de(modelo_id):
     """Quién genera (y cobra) con ese modelo: "wavespeed", salvo los que
     declaran otro (`seedance25_ref` → "fal")."""

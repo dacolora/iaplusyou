@@ -105,12 +105,14 @@ entero. `_duracion_video` mide con `providers.swap_video_precio.medir` (la mayor
 archivos del disco; los mismos dos turnos de ffprobe que «Cambiar producto»), `cf_crear_video` vuelve a medir el
 archivo de la bandeja si sigue en disco (una referencia subida antes guardó la medida de la cabecera) y, si un video que
 Wan recibe como video queda sin medida (`flowplus_modelos.videos_sin_duracion`), avisa y no genera; el worker
-(`tareas/flowplus._medir_url`) baja a un temporal lo que una sesión vieja no traía y lo mide igual (tope
-`MAX_BYTES_VIDEO_REFERENCIA`) y, si tampoco puede, no lanza (revisión del guardián de gasto). Si la medida nueva no es
+(`tareas/flowplus.medir_video_url`) baja a un temporal lo que una sesión vieja no traía y lo mide igual (tope
+`MAX_BYTES_VIDEO_REFERENCIA`, solo de nuestro R2: `R2_PUBLIC_BASE_URL`) y, si tampoco puede, no lanza (revisión del
+guardián de gasto). Una referencia reusada con «Editar y crear otra» no tiene archivo en disco: `fp_reusar` la mide
+bajándola de R2 y `cf_crear_video` la vuelve a medir así (`_duracion_video_url`) cuando el modelo la factura; si no se
+puede, no genera y lo dice (R7). Si la medida nueva no es
 la que guardaba la bandeja (la que usó el precio de la pantalla), `cf_crear_video` no genera: la guarda
 (`referencias_flowplus.fijar_duracion`) y avisa, así el precio a la vista es el que se cobra. Kling y Seedance usan el
-fotograma y no miran la duración. Queda fuera una referencia
-reusada con «Editar y crear otra» de una pieza de antes del arreglo: conserva la medida que guardó. Pruebas:
+fotograma y no miran la duración. Pruebas:
 `tests/test_crear_duracion_referencia.py`.
 Desde el carril de Crear (2026-09-28) eso pasa solo: la primera espera dura `ESPERA_PRIMERA` (10 min,
 `wavespeed_common.cortable(plazo_s=)`), y si WaveSpeed sigue la sesión queda en `video_generando` y la tarea
@@ -186,36 +188,40 @@ video (PND-212), el audio de fal no marca el saldo (PND-215).
 
 **Gasto y duplicación (2026-10-02, PND-004/014/109):** `duplicar(..., variante="B")` toma `BEGIN IMMEDIATE` antes de buscar y crear; dos clics obtienen la misma hija. El director cuenta `usage` con caché y conserva el costo en `DirectorError`; su gasto se anota antes de guardar la sesión (desde PND-299, al proyecto: ver abajo). Sus tareas van con `max_intentos=1`. La predicción conserva `referencia_gasto`: recuperar una descarga pagada mantiene la referencia del intento original, y una música nueva se registra aparte con la tarea de recuperación.
 
-**Lanzamiento incierto (PND-214, decisión 2026-10-13, lote 1):** una lectura agotada o una conexión cortada al LANZAR
-salía cruda («HTTPSConnectionPool… Read timed out») y «Reintentar» pagaba otra vez, aunque WaveSpeed pudo crear y cobrar
-la predicción sin devolver su id. `wavespeed_common.lanzar_prediccion` (lo usan `flowplus_modelos._lanzar` y
-`wan3_client.generar_video`) distingue: no se pudo ni conectar (`requests.ConnectTimeout`, `NewConnectionError`) →
-`SinConexion` («el pedido no salió y no se cobró nada»); salió y no hubo respuesta, un 2xx sin id o un 502/504/52x de
-la pasarela (`PASARELA_SIN_RESPUESTA`) → `LanzamientoIncierto` con la ventana (`desde`/`hasta`, UTC). Un 500, 503 o 4xx
-sigue siendo `PedidoRechazado` (PND-107). `tareas/flowplus._lanzamiento_incierto` guarda `lanzamiento_incierto` {path,
-modelo, desde, hasta, causa, estado, en, referencia_gasto} en la sesión (y suelta una `prediccion` vieja: no es este
-video) y sigue `flowplus_recuperar` cuando cerró la ventana tardía (`TARDANZA_MAX_S`, 300 s tras el corte: WaveSpeed
-lento puede crear la predicción después) más `ESPERA_LISTADO_S` (60 s). La recuperación (`_buscar_lanzamiento`) pide
-el historial de la cuenta (`wavespeed_common.buscar_lanzada` → `POST /predictions` con `created_after/before`; trae id,
-model, status y created_at, sin el prompt) y decide: **una sola** predicción de esa ruta en la ventana, sin video
-fallido y de nadie más → la toma con `creative_flow.reclamar_prediccion` (`BEGIN IMMEDIATE` antes de mirar que ninguna
-otra sesión de ningún proyecto la nombre: `prediccion` en curso, `prediccion_entregada` que `_terminar_video` guarda al
-cerrar, o el `kv` `crear:prediccion:<id>` que `creative_flow.eliminar` deja al descartar) y sigue el camino de siempre
-(`_terminar_video`, «recuperado», gasto con la `referencia_gasto` del intento, como PND-109); **ninguna** (y el
-historial filtró bien y se entiende) → «no se creó ni se cobró», `estado: no_creado` y vuelve «Reintentar»; **dudosa**
-(dos o más, un `model` que no es la ruta completa, un id raro, un historial que no filtró, u otra sesión incierta del
-mismo modelo cuya ventana se cruza: `creative_flow.lanzamientos_inciertos`) → en palabras que pudo cobrarse y no se sabe
-cuál es, el estimado en Gasto con `entregado=False` (nada al cliente) y aviso al admin UNA vez (`lanzamiento_dudoso`);
-nunca se trae nada; historial caído → en palabras + «Recuperar el video». Mientras `estado` es `buscando` o `dudoso`
-(`lanzamiento_pendiente`), el detalle ofrece «Recuperar el video» y no «Reintentar» ni «Rearmar», `cf_generar_video` y
-`cf_rearmar` lo dicen y no cobran, `flowplus_lanzar.lanzar` devuelve False (Sprints «Reintentar», cadena, director) y
-`cf_recuperar` lo acepta sin `prediccion`. `duplicar` no copia `prediccion`, `prediccion_entregada` ni
-`lanzamiento_incierto`. Una imagen (sin «Recuperar») solo lo dice en palabras; fal sigue contándolo como su 5xx. No
-verificado en vivo: el formato real del campo `model` del historial (si no es la ruta, todo sale «dudosa» y avisa: nunca
-cobra dos veces ni trae lo ajeno); una predicción hecha con la misma llave fuera de esta base (web de WaveSpeed, pruebas
-locales, los CLI de comparación) a esa hora no se distingue de la nuestra. Pruebas: `tests/test_lanzamiento_incierto.py`.
+**Lanzamiento incierto (PND-214, decisión 2026-10-13, lote 1; dos revisiones del guardián de gasto).** Regla: ante
+cualquier duda NADIE recibe un video por suposición; el posible cobro queda anotado (`entregado=False`) y se avisa al
+admin. Una lectura agotada, una conexión cortada, un 2xx sin id o CUALQUIER 5xx al LANZAR (de WaveSpeed o de su
+pasarela: el pedido pudo crearse antes de fallar) es `wavespeed_common.LanzamientoIncierto` (lo arma
+`lanzar_prediccion`, que usan `flowplus_modelos._lanzar` y `wan3_client.generar_video`); no poder ni conectar
+(`ConnectTimeout`, `NewConnectionError`) es `SinConexion` («no salió, no se cobró»); un 4xx sigue siendo
+`PedidoRechazado`. Video: `tareas/flowplus._lanzamiento_incierto` guarda `lanzamiento_incierto` {path, modelo, desde,
+hasta, causa, estado, en, referencia_gasto, prompt_sha (huella del prompt enviado, `huella_prompt`)} y sigue
+`flowplus_recuperar` cuando cerró la ventana tardía (`TARDANZA_MAX_S` 300 s tras el corte) más `ESPERA_LISTADO_S`.
+`_buscar_lanzamiento` primero mira si OTRO lanzamiento incierto (cualquier proyecto, cualquier modelo, también uno
+descartado: `kv` `crear:lanzamiento:<cliente>:<cf_id>`) cruza su ventana ENTERA de búsqueda (`_ventana_busqueda`): si sí,
+dudosa sin preguntar. Si no, lee el historial (`buscar_lanzada` → `POST /predictions`, paginando hasta una página vacía;
+una página que repite es `HistorialNoDisponible`). **Lo que trae el historial (leído en vivo el 2026-10-15):** `data.items`
+del más nuevo al más viejo, filtrado por `created_after/before`; cada ítem con id (32 hex), model (la ruta completa, p. ej.
+`alibaba/wan-3.0/reference-to-video`), status, created_at con nanosegundos y «Z», outputs, urls, timings, error y code;
+**sin la entrada (prompt)**. Por eso hoy una predicción de la ruta en la ventana NUNCA se entrega: «encontrada» exige
+que el ítem traiga `input.prompt` con la misma huella (si WaveSpeed algún día lo agrega). Resultados: «ninguna» (ni una
+de la ruta ni un `model` fuera de `flowplus_modelos.rutas_wavespeed()`, con un historial que filtró y se entiende) → «no
+se creó ni se cobró», `estado: no_creado`, vuelve «Reintentar» y una línea de posible cobro anterior vuelve a 0;
+«dudosa» (cualquier candidata sin entrada que la confirme, dos o más, un `model` desconocido, un id raro, un historial
+que no filtró, un cruce) o historial caído → en palabras, posible cobro en Gasto con la `referencia_gasto` del intento y
+`avisar_admin("lanzamiento_dudoso")` UNA vez (`avisado`). Si alguna vez entrega, la toma con
+`creative_flow.reclamar_prediccion` (`BEGIN IMMEDIATE`; ninguna otra sesión la nombra: `prediccion`,
+`prediccion_entregada` o `kv` `crear:prediccion:<id>` de una descartada). Mientras `estado` es `buscando` o `dudoso`
+(`lanzamiento_pendiente`): «Recuperar el video» sí, «Reintentar» y «Rearmar» no (`cf_generar_video`, `cf_rearmar`,
+`flowplus_lanzar.lanzar` devuelven sin cobrar), y mientras está `buscando` tampoco «Descartar»; descartar en otro estado
+anota el posible cobro (`anotar_posible_cobro_al_descartar`) y `creative_flow.eliminar` guarda en `kv` la predicción y
+el lanzamiento. `duplicar` no copia `prediccion`, `prediccion_entregada` ni `lanzamiento_incierto`. Imagen (no se
+recupera): posible cobro anotado, `lanzamiento_incierto.estado = "imagen"` y «Reintentar» pide confirmar con el precio
+(`confirmo_posible_cobro`); tras confirmar queda `imagen_reintentada`. fal sigue contándolo como su 5xx. Riesgo que
+queda: una predicción hecha con la misma llave fuera de esta base (web de WaveSpeed, pruebas locales) con una ruta de la
+app no se distingue; como nunca se entrega sin la entrada, solo puede volver dudosa una búsqueda. Pruebas:
+`tests/test_lanzamiento_incierto.py`.
 
-**Gasto y duplicación (2026-10-02, PND-004/014/109):** `duplicar(..., variante="B")` toma `BEGIN IMMEDIATE` antes de buscar y crear; dos clics obtienen la misma hija. El director cuenta `usage` con caché y conserva el costo en `DirectorError`; la ayuda gratis se anota bajo `_creatv` con el proyecto en `extra`, antes de guardar la sesión. Sus tareas van con `max_intentos=1`. La predicción conserva `referencia_gasto`: recuperar una descarga pagada mantiene la referencia del intento original, y una música nueva se registra aparte con la tarea de recuperación.
 
 Director (revisión 2026-10-02, PND-014): Anthropic usa max_retries=0; un 529 cae al prompt básico sin reintentar y sin cobrar dos veces. PND-109: una generación normal persiste la referencia de su propia tarea; solo una recuperación reutiliza referencia_gasto. Guardar esa referencia está dentro del try de descarga y el gasto se registra antes de persistir un error.
 

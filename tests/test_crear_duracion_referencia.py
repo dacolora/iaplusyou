@@ -160,6 +160,7 @@ def test_el_worker_mide_por_paquetes_lo_que_la_sesion_no_traia(base_temporal, mo
     cabecera. Ahora baja el video a un temporal y lo mide como al subirlo."""
     import tareas.flowplus as fp
     from providers import swap_video_precio
+    monkeypatch.setenv("R2_PUBLIC_BASE_URL", "https://r2")
     vistos = []
     monkeypatch.setattr(fp.requests, "get", lambda url, **k: vistos.append(url) or _Descarga([b"abc", b"def"]))
     monkeypatch.setattr(swap_video_precio, "medir",
@@ -175,7 +176,70 @@ def test_el_worker_mide_por_paquetes_lo_que_la_sesion_no_traia(base_temporal, mo
 def test_el_worker_no_baja_un_video_enorme(base_temporal, monkeypatch):
     import tareas.flowplus as fp
     from providers import swap_video_precio
+    monkeypatch.setenv("R2_PUBLIC_BASE_URL", "https://r2")
     monkeypatch.setattr(fp, "MAX_BYTES_VIDEO_REFERENCIA", 4)
     monkeypatch.setattr(fp.requests, "get", lambda url, **k: _Descarga([b"abc", b"def"]))
     monkeypatch.setattr(swap_video_precio, "medir", lambda ruta: pytest.fail("no se mide a medias"))
     assert fp._con_duraciones([{"tipo": "video", "url": "https://r2/v.mp4"}])[0]["duracion_s"] is None
+
+
+def test_solo_se_baja_de_nuestro_r2(base_temporal, monkeypatch):
+    """Una referencia siempre vive en el R2 de Creatv: otra dirección nunca se pide (ni sin la variable)."""
+    import tareas.flowplus as fp
+    monkeypatch.setattr(fp.requests, "get", lambda url, **k: pytest.fail(f"no se pide {url}"))
+    monkeypatch.delenv("R2_PUBLIC_BASE_URL", raising=False)
+    assert fp.medir_video_url("https://r2/v.mp4") is None
+    monkeypatch.setenv("R2_PUBLIC_BASE_URL", "https://r2")
+    assert fp.medir_video_url("https://r2.otro.com/v.mp4") is None
+    assert fp.medir_video_url("http://169.254.169.254/latest") is None
+
+
+# --- R7: una referencia reusada sin archivo en disco ----------------------------------------
+
+def test_una_referencia_sin_archivo_se_mide_bajandola(app, monkeypatch, tmp_path):  # noqa: F811
+    """R7 (revisión del guardián de gasto): reusada con «Editar y crear otra», no tiene archivo en disco. Wan la cobra
+    por sus segundos: se baja de R2 y se mide; si la medida no es la que se vio, no se cobra."""
+    import referencias_flowplus
+    d = app["dashboard"]
+    _bandeja_con_video(monkeypatch, tmp_path, duracion_guardada=2.0, con_archivo=False)
+    monkeypatch.setattr(d, "_duracion_video", lambda ruta: pytest.fail("no hay archivo en disco"))
+    bajadas = []
+    monkeypatch.setattr(d, "_duracion_video_url", lambda url: bajadas.append(url) or 12.0)
+    fijadas = []
+    monkeypatch.setattr(referencias_flowplus, "fijar_duracion", lambda c, rid, s: fijadas.append(s))
+    assert _crear(app) == {} and bajadas == ["https://r2/ref.mp4"] and fijadas == [12.0]
+
+
+def test_una_referencia_sin_archivo_que_no_se_puede_medir_no_genera(app, monkeypatch, tmp_path):  # noqa: F811
+    d = app["dashboard"]
+    _bandeja_con_video(monkeypatch, tmp_path, duracion_guardada=12.0, con_archivo=False)
+    monkeypatch.setattr(d, "_duracion_video_url", lambda url: None)
+    monkeypatch.setattr(d.libro_cobros, "exigir", lambda *a, **k: pytest.fail("no se pide saldo"))
+    assert _crear(app) == {} and app["lanzadas"] == []
+    with app["c"].session_transaction() as s:
+        avisos = [m for _, m in s.get("_flashes", [])]
+    assert any("No pude medir cuánto dura @Video 1" in m and "no se cobró nada" in m for m in avisos)
+
+
+def test_con_kling_no_se_baja_nada(app, monkeypatch, tmp_path):  # noqa: F811
+    d = app["dashboard"]
+    _bandeja_con_video(monkeypatch, tmp_path, duracion_guardada=None, con_archivo=False)
+    monkeypatch.setattr(d, "_duracion_video_url", lambda url: pytest.fail("Kling usa el fotograma"))
+    (cf_id, _), = _crear(app, modelo="kling_o3_pro").items()
+    assert app["lanzadas"] == [cf_id]
+
+
+def test_editar_y_crear_otra_mide_el_video_reusado(app, monkeypatch):  # noqa: F811
+    import creative_flow as cf
+    import referencias_flowplus
+    d = app["dashboard"]
+    cid = cf.crear("acme", [], [], [], "camina", 8, "", "A", referencias_urls=["https://r2/ref.jpg"])
+    cf.actualizar("acme", cid, estado="video_listo", tipo="video", modelo="wan3", referencias=[
+        {"tipo": "video", "url": "https://r2/ref.mp4", "frame_url": "https://r2/ref.jpg", "etiqueta": "@Video 1",
+         "duracion_s": 2.0}])
+    monkeypatch.setattr(referencias_flowplus, "vaciar", lambda c: None)
+    agregados = []
+    monkeypatch.setattr(referencias_flowplus, "agregar", lambda *a, **k: agregados.append(k) or "ref_1")
+    monkeypatch.setattr(d, "_duracion_video_url", lambda url: 12.0)
+    assert app["c"].post(f"/cliente/acme/flowplus/reusar/{cid}").status_code == 302
+    assert [a["duracion_s"] for a in agregados] == [12.0]

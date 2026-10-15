@@ -4,6 +4,7 @@ genérico contra /predictions/{id}/result, que usan por igual
 providers/wavespeed_client.py (Wan 2.7 Video Edit) y providers/wan3_client.py
 (Wan 3.0).
 """
+import hashlib
 import os
 import re
 import threading
@@ -113,10 +114,6 @@ def _ahora_utc():
     return datetime.now(timezone.utc)
 
 
-# Respuestas de la pasarela (no de WaveSpeed): el pedido pudo llegar y crearse
-# aunque la respuesta no (revisión del guardián de gasto, PND-214).
-PASARELA_SIN_RESPUESTA = (502, 504, 520, 521, 522, 523, 524)
-
 # Errores de `requests` que pasan ANTES de mandar el pedido: nada salió.
 _ANTES_DE_MANDAR = (requests.ConnectTimeout, requests.exceptions.InvalidURL, requests.exceptions.MissingSchema,
                     requests.exceptions.InvalidSchema, requests.exceptions.InvalidHeader)
@@ -140,9 +137,9 @@ def lanzar_prediccion(path, payload, timeout=60):
     `flowplus_modelos._lanzar` y `wan3_client.generar_video`. Una respuesta
     no-ok es `SinSaldo` o `PedidoRechazado` (`error_de_respuesta`); si no se
     pudo ni conectar, `SinConexion`; si el pedido salió y la respuesta no llegó,
-    llegó sin id o la dio la pasarela (502, 504, 52x), `LanzamientoIncierto`
-    con la ventana del lanzamiento (PND-214): pudo cobrarse, nunca se vuelve a
-    mandar."""
+    llegó sin id o fue un 5xx (de WaveSpeed o de su pasarela: el pedido pudo
+    crearse antes de fallar), `LanzamientoIncierto` con la ventana del
+    lanzamiento (PND-214): pudo cobrarse, nunca se vuelve a mandar."""
     desde = _ahora_utc()
     try:
         resp = requests.post(f"{BASE_URL}/{path}", json=payload, headers=headers(), timeout=timeout)
@@ -151,7 +148,7 @@ def lanzar_prediccion(path, payload, timeout=60):
             raise SinConexion(path, type(e).__name__) from e
         raise LanzamientoIncierto(path, type(e).__name__, desde, _ahora_utc()) from e
     if not resp.ok:
-        if resp.status_code in PASARELA_SIN_RESPUESTA:
+        if resp.status_code >= 500:
             raise LanzamientoIncierto(path, f"HTTP {resp.status_code}", desde, _ahora_utc())
         raise error_de_respuesta(resp, path)
     try:
@@ -165,9 +162,14 @@ def lanzar_prediccion(path, payload, timeout=60):
 
 
 # Búsqueda de un lanzamiento incierto en el historial (PND-214). El historial
-# (POST /predictions, documentado en wavespeed.ai/docs/predictions-api el
-# 2026-10-15) trae id, model, status y created_at (RFC 3339, UTC), sin el
-# prompt: la predicción se reconoce por la ruta del modelo y la hora.
+# (POST /predictions, wavespeed.ai/docs/predictions-api) se leyó en vivo una vez
+# el 2026-10-15: {"code", "message", "data": {"page", "items"}}, ordenado del más
+# nuevo al más viejo y filtrado por created_after/created_before; cada ítem trae
+# code, created_at (RFC 3339 con nanosegundos y «Z»), error, id (32 hex), model
+# (la ruta completa, p. ej. «alibaba/wan-3.0/reference-to-video»), outputs,
+# status, timings y urls, y NO trae la entrada (prompt). Sin la entrada, una
+# coincidencia de modelo y hora nunca basta para entregar un video: solo
+# «encontrada» si algún día trae `input.prompt` y coincide con el de la pieza.
 HOLGURA_VENTANA_S = 20          # relojes de WaveSpeed y del VPS
 # Una predicción puede crearse un rato DESPUÉS de que la lectura se agotó (WaveSpeed
 # lento justo entonces): la ventana sigue abierta este tiempo tras `hasta`, y la
@@ -176,7 +178,7 @@ TARDANZA_MAX_S = 300
 # Forma de un id de predicción (hex o uuid): otro texto no se toma ni se descarta.
 ID_PREDICCION = re.compile(r"^[A-Za-z0-9-]{6,80}$")
 POR_PAGINA = 100                # el máximo que admite
-MAX_PAGINAS = 3
+MAX_PAGINAS = 10                # se pagina hasta una página vacía; más de esto, no se concluye
 # Estados terminales sin video: nada que recuperar (un intento fallido normalmente no se cobra).
 ESTADOS_SIN_VIDEO = ("failed", "cancelled", "timeout", "deleted")
 
@@ -186,9 +188,10 @@ class HistorialNoDisponible(RuntimeError):
     predicciones en la ventana de las que se pueden mirar): sin él no se
     concluye nada sobre un lanzamiento incierto. Texto técnico (bitácora)."""
 
-    def __init__(self, status=None, demasiadas=None):
-        self.status, self.demasiadas = status, demasiadas
+    def __init__(self, status=None, demasiadas=None, repetida=False):
+        self.status, self.demasiadas, self.repetida = status, demasiadas, repetida
         motivo = (f"más de {demasiadas} predicciones en la ventana" if demasiadas
+                  else "una página repitió lo ya visto (la paginación no avanza)" if repetida
                   else f"respondió {status}")
         super().__init__(f"WaveSpeed (historial de predicciones): {motivo}")
 
@@ -221,12 +224,14 @@ def predicciones_en_ventana(desde, hasta, holgura_s=HOLGURA_VENTANA_S):
     """(predicciones, fiable): las de la cuenta creadas entre `desde − holgura`
     y `hasta + TARDANZA_MAX_S + holgura` (historial de WaveSpeed), y si el
     historial se puede creer entero: False si devolvió alguna fuera de la
-    ventana (no aplicó el filtro) o con una fecha que no se entiende. Lanza
-    `HistorialNoDisponible` si no se pudo leer entero o no tiene la forma
-    documentada: quien busca no concluye nada sin el historial completo."""
+    ventana (no aplicó el filtro) o con una fecha que no se entiende. Se pagina
+    hasta una página vacía (una página corta no prueba que no haya más). Lanza
+    `HistorialNoDisponible` si no se pudo leer entero, una página repite lo ya
+    visto o no tiene la forma documentada: quien busca no concluye nada sin el
+    historial completo."""
     inicio = desde - timedelta(seconds=holgura_s)
     fin = hasta + timedelta(seconds=TARDANZA_MAX_S + holgura_s)
-    items = []
+    items, vistos = [], set()
     for pagina in range(1, MAX_PAGINAS + 1):
         resp = requests.post(f"{BASE_URL}/predictions", headers=headers(), timeout=30, json={
             "page": pagina, "page_size": POR_PAGINA, "created_after": _iso_utc(inicio), "created_before": _iso_utc(fin)})
@@ -238,9 +243,14 @@ def predicciones_en_ventana(desde, hasta, holgura_s=HOLGURA_VENTANA_S):
             lote = None
         if not isinstance(lote, list):
             raise HistorialNoDisponible(status=resp.status_code)
-        items.extend(i for i in lote if isinstance(i, dict))
-        if len(lote) < POR_PAGINA:
+        lote = [i for i in lote if isinstance(i, dict)]
+        if not lote:
             break
+        nuevos = [i for i in lote if str(i.get("id")) not in vistos]
+        if not nuevos:
+            raise HistorialNoDisponible(repetida=True)
+        vistos.update(str(i.get("id")) for i in nuevos)
+        items.extend(nuevos)
     else:
         raise HistorialNoDisponible(demasiadas=MAX_PAGINAS * POR_PAGINA)
     fechas = [_leer_fecha(i.get("created_at")) for i in items]
@@ -248,42 +258,60 @@ def predicciones_en_ventana(desde, hasta, holgura_s=HOLGURA_VENTANA_S):
     return [i for i, f in zip(items, fechas) if f is None or inicio <= f <= fin], fiable
 
 
+def _ruta_normal(modelo):
+    return str(modelo or "").strip().strip("/").lower()
+
+
 def _es_de_la_ruta(modelo, path):
     """El `model` del historial es esta ruta (o la lleva entera con un prefijo).
     Un nombre más corto que la ruta («reference-to-video» sirve a Wan y a Kling)
     no cuenta como de esta ruta."""
-    m, p = str(modelo or "").strip().strip("/").lower(), path.strip("/").lower()
+    m, p = _ruta_normal(modelo), _ruta_normal(path)
     return bool(m) and (m == p or m.endswith("/" + p))
 
 
-def buscar_lanzada(path, desde, hasta, en_uso=lambda pid: False):
+def huella_prompt(prompt):
+    """Lo que se guarda del prompt enviado para reconocerlo en una entrada del
+    proveedor sin copiar el texto de la persona."""
+    return hashlib.sha256(str(prompt or "").encode("utf-8")).hexdigest() if prompt else None
+
+
+def _entrada_coincide(item, prompt_sha):
+    entrada = item.get("input")
+    return bool(prompt_sha) and isinstance(entrada, dict) and huella_prompt(entrada.get("prompt")) == prompt_sha
+
+
+def buscar_lanzada(path, desde, hasta, en_uso=lambda pid: False, conocidas=(), prompt_sha=None):
     """¿Qué fue del pedido lanzado en `path` entre `desde` y `hasta` (UTC)?
-    `en_uso(id)` dice si una predicción ya es de otra pieza. Devuelve
-    {"resultado", "prediccion", "ids"}:
+    `en_uso(id)` dice si una predicción ya es de otra pieza; `conocidas`, las
+    rutas de WaveSpeed que usa la app (una predicción de otra de ellas no es la
+    nuestra); `prompt_sha`, la huella del prompt enviado (`huella_prompt`).
+    Devuelve {"resultado", "prediccion", "ids"}:
       - "encontrada": una sola predicción de esa ruta en la ventana, viva o
-        terminada con video, de nadie más (`prediccion` = el ítem del historial);
+        terminada con video, de nadie más Y cuya entrada trae el mismo prompt
+        (hoy el historial no trae la entrada: no pasa);
       - "ninguna": ninguna que pueda ser la nuestra: no se creó (o falló, y un
         intento fallido normalmente no se cobra);
-      - "dudosa": más de una, o algo que no se entiende (un `model` que no es
-        una ruta completa, un id raro, un historial que no filtró): no se puede
-        saber sin arriesgarse a traer la de otra pieza.
+      - "dudosa": cualquier otra cosa: una de esa ruta sin entrada que la
+        confirme, más de una, un `model` que no es una ruta conocida, un id
+        raro, un historial que no filtró. Nadie recibe un video por suposición.
     Lanza `HistorialNoDisponible` (RuntimeError) si el historial no responde."""
     items, fiable = predicciones_en_ventana(desde, hasta)
+    otras = {_ruta_normal(c) for c in conocidas} - {_ruta_normal(path)}
     candidatas, raras = [], []
     for item in items:
         pid = str(item.get("id") or "")
-        modelo = str(item.get("model") or "")
         if not ID_PREDICCION.match(pid):
             raras.append(item)
         elif en_uso(pid):
             continue
-        elif _es_de_la_ruta(modelo, path):
+        elif _es_de_la_ruta(item.get("model"), path):
             if str(item.get("status") or "").lower() not in ESTADOS_SIN_VIDEO:
                 candidatas.append(item)
-        elif path.strip("/").lower().endswith(modelo.strip().strip("/").lower()) or "/" not in modelo:
-            raras.append(item)
+        elif _ruta_normal(item.get("model")) not in otras:
+            raras.append(item)          # un modelo que la app no usa: no se sabe de quién es
     ids = [str(i.get("id")) for i in candidatas + raras]
-    if fiable and len(candidatas) == 1 and not raras:
+    if fiable and len(candidatas) == 1 and not raras and _entrada_coincide(candidatas[0], prompt_sha):
         return {"resultado": "encontrada", "prediccion": candidatas[0], "ids": ids}
     if fiable and not candidatas and not raras:
         return {"resultado": "ninguna", "prediccion": None, "ids": []}
