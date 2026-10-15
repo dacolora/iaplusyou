@@ -120,20 +120,26 @@ def _vista_cadena(v, prompts):
     ks = cadena.indices(v)
     conocidos = list(((est or {}).get("elementos") or {}).keys())
     corriendo = bool(est and est["estado"] == "corriendo")
-    vista = {"estado": est, "corriendo": corriendo, "revision": [], "avisos": cadena.avisos(v), "precio": None,
-             "filas": [], "total": len(ks)}
+    modelo_est = cadena.modelo_de(est)
+    vista = {"estado": est, "corriendo": corriendo, "opciones": [], "filas": [], "total": len(ks),
+             "modelo": modelo_est, "modelo_nombre": flowplus_modelos.nombre_modelo(modelo_est)}
     if not corriendo:
-        vista["revision"] = cadena.revisar(v, prompts)
-        if not vista["revision"]:
-            vista["precio"] = cadena.precio(v, ks[0], conocidos) if ks else None
+        # Una opción por modelo (Wan 3.0 primero, 2026-10-15): cada una con lo
+        # que le falta o su precio; lo que frena a Kling no frena a Wan.
+        for m in cadena.MODELOS:
+            revision = cadena.revisar(v, prompts, modelo=m)
+            vista["opciones"].append({
+                "modelo": m, "nombre": flowplus_modelos.nombre_modelo(m), "revision": revision,
+                "avisos": cadena.avisos(v, m),
+                "precio": cadena.precio(v, ks[0], conocidos, m) if ks and not revision else None})
     for c in v["clips"]:
         k = c["indice"]
         e = ((est or {}).get("escenas") or {}).get(str(k)) or {}
         fila = {"indice": k, "titulo": c.get("titulo") or "", "estado": e.get("estado") or ("espera" if est else None),
                 "error": e.get("error"), "rehacer_precio": None}
         if est and not corriendo and k != ks[0] and cadena.puede_rehacer(est, k, ks[0]) \
-                and not cadena.revisar(v, prompts, desde=k):
-            fila["rehacer_precio"] = cadena.precio(v, k, conocidos)
+                and not cadena.revisar(v, prompts, desde=k, modelo=modelo_est):
+            fila["rehacer_precio"] = cadena.precio(v, k, conocidos, modelo_est)
         vista["filas"].append(fila)
     return vista
 
@@ -616,15 +622,19 @@ def cadena_aprobar(cliente, vid):
         desde = _entero(cuerpo.get("desde")) if cuerpo.get("desde") is not None else ks[0]
         if desde not in ks:
             raise DatoInvalido(gettext("Esa escena no existe en esta versión."))
-        problemas = cadena.revisar(v, _prompts_clip(vid), desde=desde)
+        est = cadena.estado(v)
+        # Empezar de cero elige el modelo; «Rehacer desde» sigue con el de la cadena.
+        modelo = (cuerpo.get("modelo") or cadena.MODELO) if desde == ks[0] else cadena.modelo_de(est)
+        if modelo not in cadena.MODELOS:
+            raise DatoInvalido(gettext("Ese modelo no está disponible para la cadena."))
+        problemas = cadena.revisar(v, _prompts_clip(vid), desde=desde, modelo=modelo)
         if problemas:
             return jsonify({"error": gettext("Antes de generar falta resolver esto:"),
                             "problemas": [(gettext("Escena %(n)s: ", n=p["indice"]) if p["indice"] else "") + p["motivo"]
                                           for p in problemas]}), 409
-        est = cadena.estado(v)
         if desde != ks[0] and not cadena.puede_rehacer(est, desde, ks[0]):
             raise Conflicto(gettext("Para rehacer desde esa escena hace falta el último cuadro de la anterior."))
-        precio = cadena.precio(v, desde, list(((est or {}).get("elementos") or {}).keys()))
+        precio = cadena.precio(v, desde, list(((est or {}).get("elementos") or {}).keys()), modelo)
         # `total_visto` es lo que la persona vio (precio, con margen si el
         # proyecto cobra; cobros, spec 2026-10-08 §6): vuelve a costo una sola vez.
         visto = gastos.costo_de_precio(cuerpo.get("total_visto"))
@@ -639,7 +649,7 @@ def cadena_aprobar(cliente, vid):
         def aprobar(e, video):
             if e and e.get("estado") == "corriendo":
                 raise Conflicto(gettext("La cadena ya está corriendo."))
-            return cadena.aprobar(video, desde, precio, usuario, db.ahora(), previo=e or {})
+            return cadena.aprobar(video, desde, precio, usuario, db.ahora(), previo=e or {}, modelo=modelo)
         datos.modificar_cadena(cliente, vid, aprobar)
     except ErrorRefinador as e:
         return _error(e)

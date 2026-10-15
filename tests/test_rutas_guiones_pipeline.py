@@ -522,6 +522,30 @@ def test_rehacer_desde_una_escena(app, catalogo_vacio, subidas):
     assert app["c"].post(f"{BASE}/videos/{vid}/cadena", json={"desde": 3, "total_visto": 0}).status_code == 400
 
 
+def test_cadena_con_wan_y_rehacer_sigue_con_el_mismo_modelo(app, catalogo_vacio, subidas):
+    """2026-10-15: Wan 3.0 se ofrece primero y más barata; la cadena guarda su
+    modelo y «Rehacer desde» no lo cambia aunque el cuerpo pida otro."""
+    from guiones import cadena, datos
+    gid, vid = _video_armado(app)
+    _con_imagenes(app, vid, subidas)
+    v = datos.video("acme", vid)
+    wan, kling = cadena.precio(v, modelo=cadena.WAN), cadena.precio(v)
+    html = app["c"].get(f"{BASE}/panel?guion={gid}&video={vid}").get_data(as_text=True)
+    assert html.index("con Wan 3.0 · ≈ US$ %.2f" % wan) < html.index("con Kling O3 Pro · ≈ US$ %.2f" % kling)
+    assert app["c"].post(f"{BASE}/videos/{vid}/cadena", json={"total_visto": wan, "modelo": "veo"}).status_code == 400
+    r = app["c"].post(f"{BASE}/videos/{vid}/cadena", json={"total_visto": wan, "modelo": cadena.WAN})
+    assert r.status_code == 202, r.get_json()
+    assert cadena.estado(datos.video("acme", vid))["modelo"] == cadena.WAN
+    html = app["c"].get(f"{BASE}/panel?guion={gid}&video={vid}").get_data(as_text=True)
+    assert "Con Wan 3.0." in html and "Preparando los personajes en Kling" not in html
+    datos.modificar_cadena("acme", vid, lambda e, _v: cadena.fallo(cadena.lista(cadena.lanzada(
+        cadena.preparada(e, {}), 1, "cf_1"), 1, "https://f1.jpg"), 2, "x"))
+    precio = cadena.precio(datos.video("acme", vid), desde=2, modelo=cadena.WAN)
+    r = app["c"].post(f"{BASE}/videos/{vid}/cadena", json={"desde": 2, "total_visto": precio, "modelo": cadena.MODELO})
+    assert r.status_code == 202, r.get_json()
+    assert cadena.estado(datos.video("acme", vid))["modelo"] == cadena.WAN
+
+
 def test_pnd094_selector_agrupa_colores_sin_cambiar_valores_ni_seleccion(app):
     from flask import render_template_string
     import dashboard

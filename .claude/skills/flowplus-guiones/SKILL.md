@@ -113,3 +113,14 @@ is spoken in <idioma>, word for word…» (una versión vieja sin el campo sigue
 y con el mismo plan, en «Crear versión con este bloque» (`clips.version_con_bloque(..., idioma_dialogo)`). (2)
 `ENCABEZADO_DIALOGO` decía «natural unhurried pace»: ahora pide ritmo conversacional ágil a las palabras/s de la versión,
 las mismas con que se calculó cada clip.
+
+Cadena con Wan 3.0 (2026-10-15, pedido de Daniel: Kling con sonido cuesta US$ 0,14/s y Wan US$ 0,10/s): el panel ofrece
+una opción por modelo (`cadena.MODELOS`, Wan primero), cada una con lo que le falta y su precio; el POST manda `modelo`
+y la cadena lo guarda (`cadena.modelo_de`; una vieja sin modelo es Kling). «Rehacer desde» sigue con el de la cadena
+aunque el cuerpo pida otro. Wan no tiene imagen a video ni elementos en WaveSpeed: cada escena va por
+reference-to-video; desde la segunda, el último cuadro de la anterior es `@Imagen 1` (`cadena.prompt_escena_wan`,
+`ARRANQUE_WAN`) y las de la escena corren un número (máximo 10 en total: `revisar` pide 9 en las siguientes); sin
+elementos ni aviso de cambio de lugar. `tareas.cadena.lanzar_escena` cambia las menciones de Crear por el token del
+modelo (`flowplus_prompt.asignar_tokens`/`sustituir_tokens`); hasta este cambio la primera escena de Kling le llegaba al
+modelo con «@Imagen n» literal. Pendiente: probar con una cadena real corta que Wan arranca de verdad en el cuadro y
+mantiene las caras (detener después de dos escenas si no).
