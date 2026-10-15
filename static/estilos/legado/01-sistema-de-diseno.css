@@ -21,17 +21,6 @@ body {
   overflow-x: hidden;
 }
 
-.fondo-ambiente {
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background:
-    radial-gradient(600px 400px at 8% -5%, rgba(77, 141, 255, 0.14), transparent 60%),
-    radial-gradient(700px 500px at 95% 10%, rgba(47, 140, 255, 0.12), transparent 60%),
-    radial-gradient(900px 600px at 50% 110%, rgba(77, 141, 255, 0.07), transparent 60%);
-}
-
 /* ---------- header ---------- */
 
 /* Solo la barra superior de la página (base.html: <body><header>). Las
@@ -45,7 +34,9 @@ body > header {
   z-index: 10;
   padding: 1rem 2rem;
   border-bottom: 1px solid var(--border-soft);
-  background: var(--bg);
+  background: var(--velo-cabecera);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
   display: flex;
   align-items: center;
   gap: 1rem 1.5rem;
@@ -61,21 +52,6 @@ body > header {
   text-decoration: none;
   color: var(--text);
 }
-.marca-mark {
-  width: 26px;
-  height: 26px;
-  border-radius: 8px;
-  background: var(--accent-grad);
-  box-shadow: 0 0 16px rgba(77, 141, 255, 0.4);
-  flex: 0 0 auto;
-}
-.marca-texto {
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 1.15rem;
-  letter-spacing: -0.02em;
-}
-.marca-punto { color: var(--accent-texto); }
 
 .header-nav {
   display: flex;
@@ -270,7 +246,7 @@ h2::before {
   animation-delay: calc(var(--i, 0) * 60ms);
 }
 @keyframes aparece-card { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
-.card-cliente:hover { transform: translateY(-6px); box-shadow: var(--shadow); border-color: rgba(77, 141, 255, .4); }
+.card-cliente:hover { transform: translateY(-6px); box-shadow: var(--shadow); border-color: rgba(168, 85, 247, .4); }
 
 .card-cliente-portada { position: relative; aspect-ratio: 16 / 11; overflow: hidden; background: var(--panel-2); }
 .card-cliente-portada img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .5s ease; }
@@ -360,7 +336,7 @@ textarea, select, input[type="number"], input[type="text"], input[type="password
    pintaba como un recuadro alrededor del circulito. Ellos usan outline. */
 textarea:focus, select:focus, input:not([type="radio"]):not([type="checkbox"]):focus {
   outline: none; border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(29, 106, 224, .15);
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, .15);
 }
 input[type="radio"]:focus-visible, input[type="checkbox"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 textarea { resize: vertical; }
@@ -893,9 +869,9 @@ td.estado-error { color: var(--error); }
 /* Generación probada por la bitácora pero reconstruida: se marca distinto para
    que nunca se confunda con una registrada en vivo (su costo no se conoce). */
 .badge.reconstruido {
-  background: rgba(71, 151, 201, .14);
+  background: rgba(167, 139, 250, .14);
   color: var(--accent-2);
-  border: 1px solid rgba(71, 151, 201, .3);
+  border: 1px solid rgba(167, 139, 250, .3);
 }
 
 /* ---------- maniquí para marcar dónde va el producto ---------- */
@@ -948,7 +924,7 @@ td.estado-error { color: var(--error); }
   cursor: pointer;
 }
 .maniqui-preset:hover { color: var(--text); border-color: var(--accent); }
-.maniqui-preset.activo { color: var(--text); border-color: var(--accent); background: rgba(47, 140, 255, .15); }
+.maniqui-preset.activo { color: var(--text); border-color: var(--accent); background: rgba(168, 85, 247, .15); }
 
 .maniqui-resumen {
   margin-top: .7rem;

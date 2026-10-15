@@ -230,3 +230,60 @@ con textos traducidos y datos. `_tab_flowplus.html` activa el modo inicial en DO
 Guiones y el chat ya escuchen `crear:modo`; los eventos posteriores conservan su camino. `formatearUSD`
 sigue global antes del compositor. Node ejecuta los módulos completos sobre el HTML Flask; pantalla en es/en,
 375 px y escritorio a cargo de Claude, sin afirmar inspección visual de Codex.
+
+## Marca CREATV Adstra y fondo galáctico (2026-10-06, nombre de vuelta el 2026-10-10)
+
+- La marca es **CREATV Adstra** (pedido de Camilo; fue Creatv Galadsy del 2026-10-06 al 2026-10-10 y volvió a Adstra). El logo son tres máscaras
+  PNG con alfa (`static/img/adstra-simbolo|nombre|logo.png`) que `componentes/marca.css` pinta con `currentColor`
+  (`.marca-mark`, `.marca-texto`, `.marca-logo`); el favicon es `adstra-icono.png`. `cuentas.NOMBRE_PLATAFORMA` es el
+  nombre de los correos.
+- `componentes/fondo-galaxia.css` + el bloque `.fondo-galaxia` de `base.html` (reemplazó a `.fondo-ambiente`): nebulosas,
+  núcleo, estrellas y retícula, solo degradados con tokens `--galaxia-*`, `--estrella*`, `--reticula`. Va **en morado** desde el
+  2026-10-10 (antes en azul). Sus animaciones
+  (`galaxia-*`) y las de la portada (`portada-vitrina`, `portada-cadena`) están en `ANIMACIONES_PERMITIDAS`.
+- La barra superior es `--velo-cabecera` con `backdrop-filter`, para que el fondo se vea detrás.
+- La portada (`templates/index.html`, `pantallas/portada.css`, 2026-10-10) sigue la **distribución de klarna.com** (no
+  sus colores), pedido de Camilo: tarjeta grande redondeada con «Run more ADSTRA» a la izquierda y la vaca a la derecha
+  (`static/landing/banner*.webp`; en el celular, la foto arriba y el texto debajo), fila de cifras (solo hechos de la
+  plataforma), título centrado, los seis pasos como lista grande con la pieza fija al lado (el activo cambia al bajar,
+  `IntersectionObserver` con la franja central; en el celular cada paso lleva su pieza), tachados, vitrina, planes,
+  cadena, cierre y la tecnología. En la portada la cabecera suma enlaces a las secciones y «Iniciar sesión» en
+  pastilla (`request.endpoint == 'index'` en `base.html`). En texto la marca se escribe **CREATV Adstra**.
+- Banner (2026-10-10, elegido por Camilo entre cuatro portadas): foto a pantalla completa (`100vw` × `100svh` menos la
+  cabecera; en el celular un recorte vertical `banner-movil.webp` arriba y el texto debajo), titular «Ads that stand
+  out. / Ads that sell.» en **Anton** (`--font-titular`, cargada en `base.html`), en blanco, y «Run more ADSTRA» como
+  botón. Debajo, la historia «Everyone has AI now. So why does everything look the same?» → Purple Cow → Purple Ads →
+  la máquina. `body.portada` quita el padding superior de `<main>` solo en la portada.
+- **Paleta morada desde el 2026-10-10** (pedido de Camilo; revierte la azul del 2026-10-02): `tokens.css` tiene el
+  violeta como acento y superficies oscuras moradas; `test_paleta_morada_sin_el_azul_viejo` vigila que no vuelva el
+  azul viejo.
+
+## Marca GALADSY y la Vía Láctea (2026-10-14, pedido de Camilo)
+
+- La marca vuelve a ser **CREATV Galadsy** (en texto; «GALADSY» en mayúsculas en los lemas). Historial: Creatv Machine →
+  Adstra (2026-09-29) → Galadsy (2026-10-06) → Adstra (2026-10-10) → Galadsy (2026-10-14). Logo: `static/img/galadsy-*`
+  (máscaras con alfa en `componentes/marca.css`). Las notas de arriba que dicen «Adstra» describen ese momento.
+- Discurso: la **Vía Láctea de los anuncios**, una galaxia gobernada por vacas moradas (Purple Cow → Purple Ads). Portada:
+  «Welcome to the / Milky Way of ads.» en **Unbounded** (`--font-titular`), botón «Discover the Galadsy». El titular lleva
+  `data-letras`: el script de `index.html` envuelve cada letra (`.palabra` > `.letra`, `aria-hidden`, el h1 conserva
+  `aria-label`) y CSS las mueve al pasar el mouse con una transición (no es una animación nueva).
+- Login: la vaca surfeando la Vía Láctea de fondo a pantalla completa (`static/landing/vaca-surf*.webp`), la caja a la
+  derecha y «Surfing the Milky Way of ads.» abajo a la izquierda; en el celular la vaca arriba y la caja abajo.
+- Portada 2026-10-14 (segunda ronda): titular centrado arriba («Welcome to the Milky Way of ads.» + «An infinite universe of
+  ads that stand out and sell.»), botones abajo, vaca libre en el medio (`--velo-hero-centro`). La historia habla de
+  destacar, vender y multiplicar (sin vacas). Tras las cifras, **la vaca zen** (`static/landing/vaca-zen-abierta|cerrada.webp`:
+  la de ojos cerrados es la abierta con un parche en cada ojo, así encajan) flota (`vaca-flota`) y parpadea (`vaca-parpadea`)
+  junto a «Ads on autopilot. Your team, in zen mode.»; luego «Real connections. Zero middlemen.» (Shopify, Meta Ads, Triple
+  Whale, Atria, WooCommerce, Mercado Libre, Instagram, TikTok, YouTube, y los modelos en letra pequeña). Planes: 100 o 500
+  estáticos por semana y uno a medida. La vitrina y los pasos usan sobre todo videos y piezas de Happy Fresh / Happy Flops.
+- Dentro de la plataforma: estrellas fugaces en el fondo (`.galaxia-fugaz`, `base.html`) y la vaca zen pequeña al pie del menú
+  lateral («Your ads work. You breathe.»), que se esconde con el menú plegado.
+- Ajuste final (2026-10-14): la portada abre con «Welcome to the Milky Way of ads.» a la izquierda (la vaca a la derecha);
+  la historia «They stand out / sell / multiply» se quitó y su lugar lo ocupa la sección zen (texto arriba, la vaca
+  pequeña entre las cuatro herramientas). «Why Run when you can Fly?» es el título del login. En el cierre, «ADS» de
+  GALADSY brilla en blanco (`.lema-brillo`) y el único botón, «Start», lleva al login.
+- El flujo (2026-10-14, referencia de Camilo): la lista grande de seis pasos con la pieza fija se reemplazó por seis
+  tarjetas en fila (`.flujo-fila`: Data → Connect → Create → Duplicate → Launch → On autopilot, ícono SVG en línea en un
+  círculo que brilla, flecha a la siguiente; de a tres hasta 1100 px y una debajo de otra en el celular). Después,
+  «Maximize your results.» con el tablero de ingresos (`static/landing/tablero-ingresos.webp`, marcado «Illustrative
+  image.»: sus cifras no son de ningún cliente).

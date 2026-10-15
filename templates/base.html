@@ -3,10 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}{{ _('Pipeline') }}{% endblock %} · Creatv Flow</title>
+  <title>{% block title %}{{ _('Pipeline') }}{% endblock %}{% if self.title()|trim != 'CREATV Galadsy' %} · CREATV Galadsy{% endif %}</title>
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/galadsy-icono.png') }}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;800&family=Space+Grotesk:wght@500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <script nonce="{{ csp_nonce }}">
     // Textos compartidos del JS de esta plantilla (spec 2026-09-26 §Task 4):
@@ -509,8 +510,19 @@
     })();
   </script>
 </head>
-<body class="{% if request.view_args and request.view_args.cliente %}con-sidebar{% endif %}">
-  <div class="fondo-ambiente" aria-hidden="true"></div>
+<body class="{% if request.view_args and request.view_args.cliente %}con-sidebar{% endif %}{% if request.endpoint == 'index' %} portada{% endif %}">
+  <div class="fondo-galaxia" aria-hidden="true">
+    <span class="galaxia-nebulosa n1"></span>
+    <span class="galaxia-nebulosa n2"></span>
+    <span class="galaxia-nebulosa n3"></span>
+    <span class="galaxia-nucleo"></span>
+    <span class="galaxia-estrellas e1"></span>
+    <span class="galaxia-estrellas e2"></span>
+    <span class="galaxia-reticula"></span>
+    <span class="galaxia-fugaz f1"></span>
+    <span class="galaxia-fugaz f2"></span>
+    <span class="galaxia-fugaz f3"></span>
+  </div>
   {% if request.view_args and request.view_args.cliente %}
   {% include "_sidebar.html" %}
   <div class="sidebar-fondo" id="sidebar-fondo"></div>
@@ -521,10 +533,18 @@
       <span aria-hidden="true">☰</span> {{ _('Menú') }}
     </button>
     {% endif %}
-    <a class="marca-header" href="{{ url_for('index') }}">
-      <span class="marca-mark"></span>
-      <span class="marca-texto">Creatv<span class="marca-punto">Flow</span></span>
+    <a class="marca-header" href="{{ url_for('index') }}" aria-label="CREATV Galadsy">
+      <span class="marca-mark" aria-hidden="true"></span>
+      <span class="marca-texto" aria-hidden="true"></span>
     </a>
+    {% if request.endpoint == 'index' %}
+    {# Portada: enlaces a sus secciones y «Iniciar sesión» en pastilla (distribución de klarna.com, 2026-10-10). #}
+    <nav class="header-portada" aria-label="{{ _('Secciones') }}">
+      <a href="#pasos-titulo">{{ _('Cómo funciona') }}</a>
+      <a href="#vitrina-titulo">{{ _('Ejemplos') }}</a>
+      <a href="#planes">{{ _('Planes') }}</a>
+    </nav>
+    {% endif %}
     {% if request.view_args and request.view_args.cliente %}
     <nav class="header-nav">
       {% if session.get('rol') == 'admin' %}
@@ -540,6 +560,9 @@
       <span class="header-usuario">{{ session['usuario'] }}</span>
       <button type="submit">{{ _('Cerrar sesión') }}</button>
     </form>
+    {% endif %}
+    {% if request.endpoint == 'index' and not session.get('usuario') %}
+    <a class="btn-generar header-entrar" href="{{ url_for('login') }}">{{ _('Iniciar sesión') }}</a>
     {% endif %}
     {% if idioma_enlaces_publicos %}
     <nav class="idioma-enlaces" aria-label="Language / Idioma">
