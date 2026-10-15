@@ -365,6 +365,17 @@ métricas en la pestaña, «desde Triple Whale». Spec `docs/superpowers/specs/2
 - **Lecturas fijas**: tipos, Catálogo y los creativos de las ≤ 12 tarjetas
   (`test_las_consultas_del_panel_no_crecen_con_los_anuncios`). No cobra ni llama a nadie.
 
+## Periodos (2026-10-15)
+
+Daniel pidió «15 días, un mes, 3 meses, 6 meses, un año» y dejar 7 días: `triple_whale.panel.PERIODOS = (0, 7, 15, 30, 90,
+180, 365)` es el ÚNICO juego (lo importan `pestana_rendimiento.panel`, `resumen` y `meta_rendimiento.panel`, donde
+`PERIODOS` son los mismos sin el 0). Los nombres salen de la macro `periodo` de `_rend_macros.html` («Último mes»,
+«Últimos 3 meses»…). Un valor que no es del selector (los viejos 14 días, 60…) abre «Desde el inicio». La «Evaluación
+con IA» de Meta (pagada) mira el periodo elegido a lo sumo 90 días (`meta_rendimiento.panel._dias_periodo`,
+`DIAS_ANUNCIOS_MAX`: sus anuncios se guardan 90 días), y «Desde el inicio» o un valor raro, 30; el botón y la ruta que
+cobra usan esa misma función. Alcance y segmentos de Meta toman la ventana copiada más cercana (15 → 14; 6 meses y
+1 año → 90). Pruebas: `tests/test_rendimiento_periodos.py`.
+
 ## Trampas
 
 - Lo que se jubiló el 2026-10-10 con la galería única (no lo revivas): ver «E2 tarea 4»; con la evaluación de la

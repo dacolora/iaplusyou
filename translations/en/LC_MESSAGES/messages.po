@@ -24149,6 +24149,9 @@ msgstr "Last seen"
 msgid "Últimas sincronizaciones"
 msgstr "Latest syncs"
 
+msgid "Último año"
+msgstr "Last year"
+
 #, python-format
 msgid "Último cambio: %(fecha)s"
 msgstr "Last changed: %(fecha)s"
@@ -24156,6 +24159,9 @@ msgstr "Last changed: %(fecha)s"
 #, python-format
 msgid "Último error: %(error)s"
 msgstr "Last error: %(error)s"
+
+msgid "Último mes"
+msgstr "Last month"
 
 msgid "Último respaldo"
 msgstr "Last backup"
@@ -24167,6 +24173,12 @@ msgstr "Last %(n)s days"
 #, python-format
 msgid "Últimos %(n)s días vs %(n)s anteriores"
 msgstr "Last %(n)s days vs previous %(n)s"
+
+msgid "Últimos 3 meses"
+msgstr "Last 3 months"
+
+msgid "Últimos 6 meses"
+msgstr "Last 6 months"
 
 msgid "Últimos cobros"
 msgstr "Latest charges"

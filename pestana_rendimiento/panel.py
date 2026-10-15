@@ -77,7 +77,7 @@ from triple_whale import datos as twdatos
 from triple_whale import destacados as tw_destacados
 from triple_whale import panel as tw_panel
 
-PERIODOS = (0, 7, 14, 30, 90)        # 0 = desde el inicio (regla de Daniel del 2026-10-08: métricas en total)
+PERIODOS = tw_panel.PERIODOS        # 0 = desde el inicio (regla de Daniel del 2026-10-08: métricas en total)
 
 
 def periodo_valido(dias):

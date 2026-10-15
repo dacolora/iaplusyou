@@ -300,7 +300,7 @@ def test_el_diagnostico_hace_pocas_consultas_fijas(base_temporal, conectado):
         _ev("error", error="falló")
     por_id = _por_id()
     en = list(por_id.values())
-    for dias, con_periodo, tope in ((0, False, 8), (30, False, 8), (14, True, 8), (14, False, 11), (7, False, 10),
+    for dias, con_periodo, tope in ((0, False, 8), (30, False, 8), (15, True, 8), (15, False, 11), (7, False, 10),
                                     (90, False, 11)):
         consultas = []
 
@@ -381,7 +381,7 @@ def _objetos_de(recs, tipo):
 
 def test_las_reglas_miran_siempre_7_y_30_dias_sea_cual_sea_el_periodo(base_temporal, conectado):
     """Lo que el período cambia es la tabla de anuncios, no el Diagnóstico: sus recomendaciones COMPLETAS (texto,
-    cifras, objetos) son las mismas con 7, 14, 30 y 90 días. Los datos sembrados dan resultados distintos según la
+    cifras, objetos) son las mismas con 7, 15, 30 y 90 días. Los datos sembrados dan resultados distintos según la
     ventana (un rechazado de hace 20 días, uno con problemas de hace 49, un perdedor de 30 días que en 7 gana): una
     regla que mirara el período en vez de 7 y 30 daría otra lista."""
     _sembrar_ventanas_distintas()
@@ -391,7 +391,7 @@ def test_las_reglas_miran_siempre_7_y_30_dias_sea_cual_sea_el_periodo(base_tempo
     # gastó esta semana cuentan; el de hace 49 días no entra en ninguna.
     assert _objetos_de(base, "anuncios_con_problemas") == ["rechazado"]
     assert _objetos_de(base, "perdedores_gastando") == ["mixto", "pierde"]
-    for dias in (7, 14, 90):
+    for dias in (7, 15, 90):
         assert por_periodo[dias] == base, dias
 
 
@@ -533,7 +533,7 @@ def _sembrar_muestra():
                                   [_ad("2026-10-05", "otra", 200, 300, compras=2, adset="s2", campaign="c2")])
 
 
-@pytest.mark.parametrize("dias,cuenta", [(30, None), (7, None), (90, None), (30, A), (14, B)])
+@pytest.mark.parametrize("dias,cuenta", [(30, None), (7, None), (90, None), (30, A), (15, B)])
 def test_el_boton_cuenta_los_mismos_anuncios_que_cobra_la_ruta(base_temporal, conectado, dias, cuenta):
     """E2-R6: el N del botón sale de la evaluación que el panel ya hizo (sin `preparar`, que vuelve a leer la copia)
     y es el mismo N que la ruta cobra con `analisis.preparar`; el precio es la tarifa de ese N."""

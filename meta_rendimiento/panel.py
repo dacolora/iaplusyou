@@ -38,9 +38,9 @@ from meta_rendimiento.sync import VENTANAS_ALCANCE
 from tareas import meta_rendimiento as tareas_mr
 from triple_whale import datos as tw_datos
 from triple_whale import evaluacion, paises
-from triple_whale.panel import periodo
+from triple_whale.panel import PERIODOS as _PERIODOS_PESTANA, periodo
 
-PERIODOS = (7, 14, 30, 90)
+PERIODOS = tuple(d for d in _PERIODOS_PESTANA if d)   # 7 días a 1 año (la pestaña Rendimiento, 2026-10-15)
 PERIODO_DEFECTO = 30
 POR_PAGINA = 24
 PAGINA_MAXIMA = 100_000
@@ -103,9 +103,17 @@ def _entero(valor, defecto=0):
         return defecto
 
 
+# Los anuncios de Meta se guardan 90 días (`meta_anuncio_dia`): un periodo más largo de la pestaña (6 meses, 1 año) se
+# evalúa con lo que hay.
+DIAS_ANUNCIOS_MAX = 90
+
+
 def _dias_periodo(dias):
+    """Los días que mira la «Evaluación con IA» (pagada): los del periodo elegido de la pestaña, a lo sumo
+    DIAS_ANUNCIOS_MAX; «Desde el inicio» o cualquier otro valor, PERIODO_DEFECTO (30). El botón y
+    la ruta que cobra llaman a esta misma función: el precio visto es el cobrado (E2-R6)."""
     dias = _entero(dias, PERIODO_DEFECTO)
-    return dias if dias in PERIODOS else PERIODO_DEFECTO
+    return min(dias, DIAS_ANUNCIOS_MAX) if dias in PERIODOS else PERIODO_DEFECTO
 
 
 def _ventana_alcance(dias):
@@ -545,7 +553,7 @@ def _pagina_valida(valor):
 # que Triple Whale no cubre en «Todas»…) y con el periodo 0 = «Desde el inicio»; su panel y sus «Ver más» llaman a
 # estas mismas funciones, así que hay un solo cálculo.
 
-PERIODOS_RENDIMIENTO = (0, 7, 14, 30, 90)   # 0 = desde el inicio (regla de Daniel del 2026-10-08)
+PERIODOS_RENDIMIENTO = _PERIODOS_PESTANA   # los de la pestaña Rendimiento; 0 = desde el inicio (regla del 2026-10-08)
 
 
 def lista(cliente):

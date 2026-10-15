@@ -38,7 +38,10 @@ from triple_whale import analisis, datos, evaluacion, paises, resultados
 
 # 0 = desde el inicio (todo lo copiado), el defecto desde 2026-10-08: Daniel pidió
 # las métricas en su totalidad porque los periodos cortos confundían a sus clientes.
-PERIODOS = (0, 7, 14, 30, 90)
+# Los periodos del selector de Rendimiento (Daniel, 2026-10-15: 15 días, un mes, 3 meses, 6 meses y un año, más 7 días y
+# «Desde el inicio»). UNO para Triple Whale, Meta y la pestaña: `pestana_rendimiento.panel` y `meta_rendimiento.panel`
+# lo importan de aquí.
+PERIODOS = (0, 7, 15, 30, 90, 180, 365)
 PERIODO_DEFECTO = 0
 MAX_FILAS = 200
 MAX_PRODUCTOS_PANEL = 8
