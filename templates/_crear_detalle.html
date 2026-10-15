@@ -50,7 +50,7 @@
               <button type="submit" class="btn-guardar btn-sm" style="margin-top:.4rem;">{{ _('Guardar cambios') }}</button>
             </form>
             <form method="post" action="{{ url_for('cf_rearmar', cliente=cliente, cf_id=item.id) }}" style="display:inline;" onsubmit='return confirm({{ _('Rearmar con IA sobrescribe las versiones A y B (se pierden tus ediciones). ¿Seguir?')|tojson }});'>
-              <button type="submit" class="btn-sm">{{ _('Rearmar con IA') }}</button>
+              <button type="submit" class="btn-sm">{{ _('Rearmar con IA') }} · {{ precio_de('director').texto }}</button>
             </form>
           </section>
           {% elif item.prompt_relleno and item.prompt_relleno != item.accion_central %}
@@ -106,7 +106,7 @@
             {% endif %}
             {% if (item.estado == "error" or (item.estado == "prompt_pendiente" and not item.trabajo_director)) and item.tipo != "imagen" and item.modo_crear != "hablado" %}
             <form method="post" action="{{ url_for('cf_rearmar', cliente=cliente, cf_id=item.id) }}" style="display:inline;">
-              <button type="submit" class="btn-sm">{{ _('Rearmar el prompt') }}</button>
+              <button type="submit" class="btn-sm">{{ _('Rearmar el prompt') }} · {{ precio_de('director').texto }}</button>
             </form>
             {% endif %}
             <form method="post" action="{{ url_for('cf_descartar', cliente=cliente, cf_id=item.id) }}" onsubmit='return confirm({{ _('¿Descartar esta pieza?')|tojson }});' style="display:inline;">

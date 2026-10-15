@@ -873,6 +873,8 @@ def admin_cobros():
                            eventos=eventos, webhook_callado=vista.webhook_callado(), avisos_bold=_avisos_bold(),
                            avisos_wompi=_avisos_wompi(), trm_rechazada=_trm_rechazada(),
                            margen_global_texto=idiomas.numero(margen, 2), margen_global_campo=_campo(margen),
+                           bienvenida_campo=_campo(libro.bienvenida_usd()),
+                           bienvenida_max_texto=gastos.formatear(libro.BIENVENIDA_MAX),
                            margen_min_texto=idiomas.numero(libro.MARGEN_MIN, 2),
                            margen_max_texto=idiomas.numero(libro.MARGEN_MAX, 2))
 
@@ -911,6 +913,26 @@ def admin_margen():
         flash(str(e), "error")
         return _volver_admin()
     flash(gettext("Margen global guardado: %(margen)s.", margen=idiomas.numero(valor, 2)), "ok")
+    return _volver_admin()
+
+
+@bp.post("/admin/cobros/bienvenida")
+@_solo_admin
+def admin_bienvenida():
+    """El saldo de bienvenida de los proyectos nuevos (PND-299), junto al margen global: dólares con hasta 2
+    decimales, de 0 (apagado) al tope del libro."""
+    valor = _decimal(request.form.get("bienvenida"))
+    try:
+        if valor is None or abs(valor) > Decimal(str(libro.BIENVENIDA_MAX * 2)) \
+                or valor != valor.quantize(Decimal("0.01")):
+            raise ValueError(gettext("El saldo de bienvenida va de %(min)s a %(max)s, con hasta 2 decimales.",
+                                     min=gastos.formatear(0), max=gastos.formatear(libro.BIENVENIDA_MAX)))
+        guardado = libro.guardar_bienvenida(float(valor), session.get("usuario"))
+    except ValueError as e:
+        flash(str(e), "error")
+        return _volver_admin()
+    flash(gettext("Saldo de bienvenida guardado: %(monto)s para cada proyecto nuevo, al confirmar su correo.",
+                  monto=gastos.formatear(guardado)), "ok")
     return _volver_admin()
 
 

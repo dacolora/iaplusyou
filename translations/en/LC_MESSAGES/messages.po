@@ -1513,6 +1513,12 @@ msgstr[0] "%(num)s idea to approve in the sprint “%(nombre)s”"
 msgstr[1] "%(num)s ideas to approve in the sprint “%(nombre)s”"
 
 #, python-format
+msgid "%(num)s imagen"
+msgid_plural "%(num)s imágenes"
+msgstr[0] "%(num)s image"
+msgstr[1] "%(num)s images"
+
+#, python-format
 msgid "%(num)s informativa"
 msgid_plural "%(num)s informativas"
 msgstr[0] "%(num)s informational"
@@ -4368,6 +4374,9 @@ msgstr "Claude didn't return a usable analysis. You can try again."
 msgid "Claude no devolvió un objeto JSON."
 msgstr "Claude didn't return a JSON object."
 
+msgid "Claude no devolvió una guía completa; no se cobró ni se cambió la guía. Intenta de nuevo."
+msgstr "Claude did not return a complete guide; nothing was charged and the guide was not changed. Try again."
+
 msgid "Claude no devolvió una respuesta válida."
 msgstr "Claude didn't return a valid answer."
 
@@ -4439,10 +4448,6 @@ msgstr "Claude saw the image"
 
 msgid "Claude vio los fotogramas del video"
 msgstr "Claude saw the video's frames"
-
-#, python-format
-msgid "Claude · %(origen)s"
-msgstr "Claude · %(origen)s"
 
 msgid "Clave secreta de la app"
 msgstr "App secret"
@@ -5358,8 +5363,8 @@ msgstr "Create product"
 msgid "Crear solo hará videos de producto. Sube un personaje en Catálogo › Personajes si quieres gente en los videos."
 msgstr "Create will only make product videos. Upload a character in Catalog › Characters if you want people in the videos."
 
-msgid "Crear super prompt con IA (gratis)"
-msgstr "Create super prompt with AI (free)"
+msgid "Crear super prompt con IA"
+msgstr "Create super prompt with AI"
 
 msgid "Crear versión con este bloque"
 msgstr "Create version with this block"
@@ -6092,6 +6097,10 @@ msgstr "Full days against the same number of days before"
 
 msgid "Días de su presupuesto diario que debe haber gastado"
 msgstr "Days of its daily budget it must have spent"
+
+#, python-format
+msgid "Dólares (hasta %(max)s)"
+msgstr "Dollars (up to %(max)s)"
 
 msgid "Dónde"
 msgstr "Where"
@@ -6900,6 +6909,10 @@ msgstr "The project %(nombre)s (%(cliente)s) went back to using its own Meta app
 msgid "El proyecto %(nombre)s (%(cliente)s) volvió a usar su propia app de Meta (su conexión anterior se restauró)."
 msgstr "The project %(nombre)s (%(cliente)s) went back to using its own Meta app (its previous connection was restored)."
 
+#, python-format
+msgid "El proyecto %(proyecto)s recibió %(monto)s de saldo de bienvenida."
+msgstr "Project %(proyecto)s received %(monto)s of welcome balance."
+
 msgid "El proyecto llegó a su límite de espacio (2 GB): borra algo antes de subir más."
 msgstr "The project reached its storage limit (2 GB): delete something before uploading more."
 
@@ -6930,6 +6943,14 @@ msgstr "The split exceeds the total: lower a country's budget or raise the total
 
 msgid "El ritmo va entre 1,5 y 4 palabras por segundo."
 msgstr "The pace is between 1.5 and 4 words per second."
+
+#, python-format
+msgid "El saldo de bienvenida va de %(min)s a %(max)s, con hasta 2 decimales."
+msgstr "The welcome balance goes from %(min)s to %(max)s, with up to 2 decimals."
+
+#, python-format
+msgid "El saldo de bienvenida va de %(min)s a %(max)s."
+msgstr "The welcome balance goes from %(min)s to %(max)s."
 
 msgid "El saldo del plan se renueva cada mes y no se acumula."
 msgstr "The plan balance renews every month and does not roll over."
@@ -10069,6 +10090,9 @@ msgstr "Save rules"
 msgid "Guardar reglas del motor"
 msgstr "Save engine rules"
 
+msgid "Guardar saldo de bienvenida"
+msgstr "Save welcome balance"
+
 msgid "Guardar sonido al crear"
 msgstr "Save sound when creating"
 
@@ -10119,6 +10143,9 @@ msgstr "Style guide generated."
 
 msgid "Guía de estilos"
 msgstr "Style guide"
+
+msgid "Guía de marca con IA"
+msgstr "Brand guide with AI"
 
 msgid "Hablar con nosotros"
 msgstr "Talk to us"
@@ -10789,8 +10816,9 @@ msgstr "Kling O3 Pro"
 msgid "Kling Omni O3 Pro Video Edit"
 msgstr "Kling Omni O3 Pro Video Edit"
 
-msgid "La IA arma el prompt por planos desde tu idea y las referencias. Revisas, editas y puedes regenerar antes de generar. No cuesta nada."
-msgstr "The AI builds the prompt by shots from your idea and the references. You review, edit, and can regenerate before generating. It costs nothing."
+#, python-format
+msgid "La IA arma el prompt por planos desde tu idea y las referencias. Revisas, editas y puedes regenerar antes de generar. Armarlo cuesta %(precio)s; el video se cobra aparte, al generar."
+msgstr "The AI builds the prompt by shots from your idea and the references. You review, edit, and can regenerate before generating. Building it costs %(precio)s; the video is charged separately, when you generate."
 
 #, python-format
 msgid "La IA no pudo armar los planos (%(aviso)s); este es el prompt básico. Puedes editarlo o rearmar."
@@ -15036,6 +15064,10 @@ msgstr "Plans"
 msgid "Planes de los proyectos"
 msgstr "Projects' plans"
 
+#, python-format
+msgid "Planos para %(modelo)s"
+msgstr "Shots for %(modelo)s"
+
 msgid "Plataforma"
 msgstr "Platform"
 
@@ -15594,6 +15626,9 @@ msgstr "Current prompt"
 
 msgid "Prompts"
 msgstr "Prompts"
+
+msgid "Prompts armados con IA"
+msgstr "Prompts built with AI"
 
 #, python-format
 msgid "Proponer las que faltan (%(videos)s, %(imagenes)s)"
@@ -16392,6 +16427,9 @@ msgstr "References loaded; the text and the settings start blank."
 msgid "Referencias de la campaña %(n)s"
 msgstr "References for campaign %(n)s"
 
+msgid "Referencias descritas con IA"
+msgstr "References described with AI"
+
 msgid ""
 "Referencias visuales (imágenes o videos) que definen el look de este proyecto — paleta,\n"
 "  tono, iluminación, ambientación. La guía de estilo se aplica automáticamente cada vez\n"
@@ -16877,6 +16915,13 @@ msgstr "Balance"
 #, python-format
 msgid "Saldo bajo: te queda menos de %(umbral)s."
 msgstr "Low balance: you have less than %(umbral)s left."
+
+msgid "Saldo de bienvenida"
+msgstr "Welcome balance"
+
+#, python-format
+msgid "Saldo de bienvenida guardado: %(monto)s para cada proyecto nuevo, al confirmar su correo."
+msgstr "Welcome balance saved: %(monto)s for each new project, when it confirms its email."
 
 msgid "Saldo del plan"
 msgstr "Plan balance"
@@ -17822,6 +17867,9 @@ msgstr "Scene sound"
 msgid "Sonido de la escena (audio nativo del modelo; Kling: %(precio)s más por segundo)"
 msgstr "Scene sound (the model's native audio; Kling: %(precio)s more per second)"
 
+msgid "Sonidos sugeridos con IA"
+msgstr "Sounds suggested with AI"
+
 #, python-format
 msgid "Sprint %(nombre)s · Campaña %(n)s"
 msgstr "Sprint %(nombre)s · Campaign %(n)s"
@@ -18270,6 +18318,10 @@ msgstr "You have %(saldo)s left. Top up in Settings › Balance and top-ups befo
 
 msgid "Te quedaste sin saldo"
 msgstr "You are out of balance"
+
+#, python-format
+msgid "Te regalamos %(monto)s de saldo para que empieces a crear."
+msgstr "We gave you %(monto)s of balance to start creating."
 
 msgid "Televisor conectado"
 msgstr "Connected TV"
@@ -22396,6 +22448,9 @@ msgstr "what is sold each month; the member markup replaces the pay-as-you-go ma
 msgid "lo que ve el proceso web en esta máquina"
 msgstr "what the web process sees on this machine"
 
+msgid "lo recibe cada proyecto que cobra en prepago, una sola vez, cuando una cuenta suya confirma el correo (o la marcas verificada en el panel). 0 lo apaga."
+msgstr "every prepaid project that charges gets it once, when one of its accounts confirms its email (or you mark it verified in the panel). 0 turns it off."
+
 msgid "lo usa la próxima versión"
 msgstr "the next version uses it"
 
@@ -23762,6 +23817,10 @@ msgstr "and"
 msgid "y %(n)s más"
 msgstr "and %(n)s more"
 
+#, python-format
+msgid "y el prompt armado con IA de cada video (USD %(director)s)"
+msgstr "and the AI-built prompt of each video (USD %(director)s)"
+
 msgid "y sus variantes Turbo, vía WaveSpeed AI"
 msgstr "and its Turbo variants, via WaveSpeed AI"
 
@@ -23915,6 +23974,10 @@ msgstr "“Not charged” becomes available 30 minutes after the last charge att
 
 msgid "«No se cobró» se puede marcar 30 minutos después del último intento de cobro; antes, Wompi todavía puede responder"
 msgstr "“Not charged” can be marked 30 minutes after the last charge attempt; before that, Wompi may still answer"
+
+#, python-format
+msgid "«Sugerir»: %(precio)s."
+msgstr "«Suggest»: %(precio)s."
 
 msgid "«Sí se cobró» consulta la transacción en Wompi y aplica lo que diga: nunca acredita sin que Wompi lo confirme. «No se cobró» solo si viste en el panel de Wompi que no hay ninguna transacción con esta referencia: cuenta como un cobro fallido (en el alta termina la suscripción; en una renovación queda morosa y se reintenta)."
 msgstr "“It was charged” checks the transaction in Wompi and applies what it says: it never credits without Wompi confirming. “Not charged” only if you saw in the Wompi dashboard that there is no transaction with this reference: it counts as a failed charge (on sign-up it ends the subscription; on a renewal it becomes past due and is retried)."

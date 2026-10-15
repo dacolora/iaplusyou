@@ -128,6 +128,15 @@
       <input type="text" inputmode="decimal" name="margen" value="{{ margen_global_campo }}" required></label>
     <button type="submit" class="btn-generar">{{ _('Guardar margen') }}</button>
   </form>
+  <div class="admin-cabecera" id="cobros-bienvenida">
+    <h2>{{ _('Saldo de bienvenida') }}</h2>
+    <span class="vacio">{{ _('lo recibe cada proyecto que cobra en prepago, una sola vez, cuando una cuenta suya confirma el correo (o la marcas verificada en el panel). 0 lo apaga.') }}</span>
+  </div>
+  <form method="post" action="{{ url_for('cobros.admin_bienvenida') }}" class="cobros-admin-linea">
+    <label>{{ _('Dólares (hasta %(max)s)', max=bienvenida_max_texto) }}
+      <input type="text" inputmode="decimal" name="bienvenida" value="{{ bienvenida_campo }}" required></label>
+    <button type="submit" class="btn-generar">{{ _('Guardar saldo de bienvenida') }}</button>
+  </form>
 </section>
 
 <section class="admin-bloque aparece" id="cobros-proyectos">

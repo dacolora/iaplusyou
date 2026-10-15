@@ -512,3 +512,30 @@ def test_la_nota_de_una_recarga_manual_dice_que_la_ve_el_cliente(http):
     """E2: la nota (detalle) sale en los movimientos y el CSV del cliente."""
     html = http.como("admin").get("/admin/cobros").get_data(as_text=True)
     assert "la ve el cliente" in html
+
+
+# --- PND-299: el saldo de bienvenida, junto al margen global ---------------------------------------
+
+def test_bienvenida_se_ve_y_se_edita_junto_al_margen(http):
+    from cobros import libro
+    c = http.como("admin")
+    html = c.get("/admin/cobros").get_data(as_text=True)
+    assert 'id="cobros-bienvenida"' in html and 'name="bienvenida" value="2,00"' in html
+    r = c.post("/admin/cobros/bienvenida", data={"bienvenida": "3,5"}, headers=MISMO)
+    assert r.status_code == 302 and libro.bienvenida_usd() == 3.5
+    assert any("3,50" in m for m in _flashes(c))
+
+
+@pytest.mark.parametrize("valor", ["-1", "20.01", "", "abc", "1e30", "0.001"])
+def test_bienvenida_invalida_avisa_y_no_cambia(http, valor):
+    from cobros import libro
+    c = http.como("admin")
+    r = c.post("/admin/cobros/bienvenida", data={"bienvenida": valor}, headers=MISMO)
+    assert r.status_code == 302 and libro.bienvenida_usd() == 2.0 and _flashes(c)
+
+
+def test_bienvenida_solo_la_cambia_el_admin(http):
+    from cobros import libro
+    c = http.como("user_acme")
+    r = c.post("/admin/cobros/bienvenida", data={"bienvenida": "9"}, headers=MISMO)
+    assert r.status_code == 302 and "/login" in r.headers["Location"] and libro.bienvenida_usd() == 2.0

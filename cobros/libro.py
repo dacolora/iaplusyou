@@ -7,6 +7,7 @@ import contextlib
 import contextvars
 import logging
 import math
+import secrets
 from datetime import datetime, timedelta
 
 import sqlalchemy as sa
@@ -25,6 +26,19 @@ TIPOS_ACREDITAR = ("recarga", "ajuste", "anulacion")
 ESTADOS_VIVOS = ("pendiente", "en_curso")
 SIN_CAMBIO = object()
 CLAVE_CANDADO = "cobros:candado"
+# PND-300: la reserva de un pedido que llama al proveedor dentro de la petición (o en un hilo de
+# `trabajos.iniciar`) no tiene tarea en la cola: vive desde que se hizo hasta que se suelta, y como mucho
+# VIDA_PEDIDO_MIN minutos, por si el proceso muere a mitad. 30 y no 10: «Armar» de Flow Plus corre en su hilo hasta
+# varios minutos y su reserva no puede vencer mientras sigue (guardian-gasto, 2026-10-15).
+PREFIJO_PEDIDO = "pedido:"
+VIDA_PEDIDO_MIN = 30
+# PND-299 (Daniel 2026-10-13: «podríamos darle hasta 2 o 3 dólares gratis para la generación»): el saldo de
+# bienvenida de un proyecto nuevo, una sola vez, al quedar verificado el correo de una cuenta suya. Editable en
+# /admin/cobros (kv, como el margen global); 0 lo apaga. El tope evita un error de tipeo (200 en vez de 2,00).
+CLAVE_BIENVENIDA = "cobros:bienvenida_usd"
+BIENVENIDA_DEFECTO = 2.0
+BIENVENIDA_MAX = 20.0
+CONCEPTO_BIENVENIDA = "bienvenida"
 
 # (tarea_id, job_id) del trabajo del worker que corre en este hilo. Cada hilo
 # empieza con el valor por defecto: dos hilos del carril de Crear no se cruzan.
@@ -116,6 +130,100 @@ def guardar_margen_global(valor, usuario):
     log.info("margen global → %s (por %s)", valor, usuario)
 
 
+# ------------------------------------------------------- saldo de bienvenida ---
+
+def _bienvenida_usd(con):
+    valor = con.execute(sa.select(db.kv.c.valor).where(db.kv.c.clave == CLAVE_BIENVENIDA)).scalar()
+    try:
+        v = float(valor) if valor is not None else BIENVENIDA_DEFECTO
+    except (TypeError, ValueError):
+        return BIENVENIDA_DEFECTO
+    return v if math.isfinite(v) and 0 <= v <= BIENVENIDA_MAX else BIENVENIDA_DEFECTO
+
+
+def bienvenida_usd():
+    """El saldo de bienvenida vigente, en dólares (US$ 2 si nadie lo cambió)."""
+    with db.conectar() as con:
+        return _bienvenida_usd(con)
+
+
+def guardar_bienvenida(valor, usuario):
+    """Lo cambia el admin en /admin/cobros: de 0 (apagado) a BIENVENIDA_MAX, con 2 decimales. Vale para lo que se
+    regale desde ahora; lo ya regalado no cambia."""
+    try:
+        valor = round(float(valor), 2)
+    except (TypeError, ValueError):
+        valor = float("nan")
+    if not math.isfinite(valor) or not 0 <= valor <= BIENVENIDA_MAX:
+        import gastos  # noqa: PLC0415 — gastos importa este módulo dentro de registrar
+        raise ValueError(gettext("El saldo de bienvenida va de %(min)s a %(max)s.", min=gastos.formatear(0),
+                                 max=gastos.formatear(BIENVENIDA_MAX)))
+    with db.conectar() as con:
+        _candado(con)
+        fila = {"valor": str(valor), "actualizado_en": db.ahora()}
+        if con.execute(sa.select(db.kv.c.clave).where(db.kv.c.clave == CLAVE_BIENVENIDA)).first():
+            con.execute(db.kv.update().where(db.kv.c.clave == CLAVE_BIENVENIDA).values(**fila))
+        else:
+            con.execute(db.kv.insert().values(clave=CLAVE_BIENVENIDA, **fila))
+    log.info("saldo de bienvenida → %s (por %s)", valor, usuario)
+    return valor
+
+
+def correo_canonico(correo):
+    """El correo como lo entrega el buzón: minúsculas, sin el `+etiqueta` y, en Gmail, sin puntos
+    (`Ana.Gomez+2@gmail.com` → `anagomez@gmail.com`). Para no regalar dos veces al mismo buzón."""
+    local, _, dominio = str(correo or "").strip().lower().partition("@")
+    if not local or not dominio:
+        return ""
+    local = local.split("+", 1)[0]
+    if dominio in ("gmail.com", "googlemail.com"):
+        local, dominio = local.replace(".", ""), "gmail.com"
+    return f"{local}@{dominio}"
+
+
+def _clave_bienvenida_correo(correo):
+    import hashlib  # noqa: PLC0415
+    return CLAVE_BIENVENIDA + ":correo:" + hashlib.sha256(correo_canonico(correo).encode("utf-8")).hexdigest()[:32]
+
+
+def dar_bienvenida(cliente, usuario=None, correo=None):
+    """Acredita el saldo de bienvenida a `cliente` (PND-299) y devuelve las milésimas (0 si no tocaba). Una sola vez por
+    proyecto: con el candado tomado antes de leer, si ya hay un movimiento `bienvenida` no escribe nada (también si
+    otra cuenta del mismo proyecto confirma su correo, o la misma confirma otro). Solo a un proyecto con «Cobrar»
+    prendido y en prepago: uno que no cobra no lo usaría, y en pospago pagaría deuda. Solo a un proyecto NUEVO: uno
+    que ya tuvo saldo (una recarga, un ajuste a favor —el regalo dado a mano— o un plan) no lo recibe. Y una sola vez
+    por buzón (`correo`, `correo_canonico`, guardado como hash en kv): con un Gmail y `+1`, `+2`… no se sacan
+    US$ 2 por proyecto (guardian-gasto, 2026-10-15). Es un `ajuste` positivo con concepto `bienvenida` («Saldo de
+    bienvenida» en sus movimientos): no es una recarga (no entró plata) y no cuenta en lo recargado del admin."""
+    if not cliente:
+        return 0
+    m = db.movimiento_saldo
+    with db.conectar() as con:
+        if not _cobra(con, cliente):
+            return 0   # sin «Cobrar» ni siquiera toma el candado
+        _candado(con)
+        fila = con.execute(sa.select(db.cuenta_saldo.c.cobrar, db.cuenta_saldo.c.pospago)
+                           .where(db.cuenta_saldo.c.cliente == cliente)).first()
+        if fila is None or not fila.cobrar or fila.pospago:
+            return 0
+        if con.execute(sa.select(m.c.id).where(m.c.cliente == cliente, sa.or_(
+                m.c.concepto == CONCEPTO_BIENVENIDA,
+                sa.and_(m.c.tipo.in_(("recarga", "ajuste", "plan")), m.c.milesimas > 0))).limit(1)).first():
+            return 0   # ya lo recibió, o ya tuvo saldo: no es nuevo
+        clave_correo = _clave_bienvenida_correo(correo) if correo_canonico(correo) else None
+        if clave_correo and con.execute(sa.select(db.kv.c.clave).where(db.kv.c.clave == clave_correo)).first():
+            return 0   # ese buzón ya le dio el regalo a otro proyecto
+        milesimas = int(round(_bienvenida_usd(con) * 1000))
+        if milesimas <= 0:
+            return 0
+        _insertar(con, cliente=cliente, tipo="ajuste", milesimas=milesimas, concepto=CONCEPTO_BIENVENIDA,
+                  usuario=usuario, detalle="", extra={"bienvenida": True})
+        if clave_correo:
+            con.execute(db.kv.insert().values(clave=clave_correo, valor=cliente, actualizado_en=db.ahora()))
+    log.info("saldo de bienvenida a %s: %s milésimas (cuenta %s)", cliente, milesimas, usuario)
+    return milesimas
+
+
 def _cuenta_y_periodo(con, cliente, por_cerrar=None):
     """La cuenta y el periodo de plan abierto ahora (o None). Margen efectivo
     (spec planes §4): el del periodo abierto (la foto del plan de ese mes); si no
@@ -168,7 +276,7 @@ def _incluido_reservado(con, cliente, periodo_id, excluir=()):
         return 0.0
     r, m = db.reserva_saldo, db.movimiento_saldo
     filtro = [r.c.cliente == cliente, r.c.incluido == sa.true(), r.c.periodo_id == int(periodo_id),
-              r.c.job_id.in_(_vivas(con)),
+              viva(con, r),
               ~sa.exists().where(m.c.cliente == cliente, m.c.job_id == r.c.job_id, m.c.tipo == "incluido",
                                  m.c.creado_en >= r.c.creada_en)]
     excluir = [j for j in excluir if j]
@@ -281,9 +389,21 @@ def _vivas(con):
     return sa.select(db.tarea.c.job_id).where(db.tarea.c.estado.in_(ESTADOS_VIVOS), db.tarea.c.job_id.isnot(None))
 
 
+def _limite_pedido():
+    return (datetime.fromisoformat(db.ahora()) - timedelta(minutes=VIDA_PEDIDO_MIN)).isoformat(timespec="seconds")
+
+
+def viva(con, r=None):
+    """Condición SQL: la reserva `r` está viva. La de un trabajo del worker, mientras su tarea esté pendiente o en
+    curso; la de un pedido (PND-300), desde que se hizo y por VIDA_PEDIDO_MIN minutos (se suelta antes al terminar)."""
+    r = db.reserva_saldo if r is None else r
+    return sa.or_(r.c.job_id.in_(_vivas(con)),
+                  sa.and_(r.c.job_id.like(PREFIJO_PEDIDO + "%"), r.c.creada_en >= _limite_pedido()))
+
+
 def _reservado(con, cliente, excluir_job=None):
     r = db.reserva_saldo
-    filtro = [r.c.cliente == cliente, r.c.job_id.in_(_vivas(con))]
+    filtro = [r.c.cliente == cliente, viva(con, r)]
     if excluir_job:
         filtro.append(r.c.job_id != excluir_job)
     return int(con.execute(sa.select(sa.func.coalesce(sa.func.sum(r.c.milesimas), 0)).where(*filtro)).scalar())
@@ -343,6 +463,12 @@ def exigir(cliente, costo_usd, job_id=None, excluir_job=None, tipo=None):
     (revisión final 2026-10-08)."""
     if not cliente:
         return 0
+    if excluir_job is None:
+        # Dentro de un pedido (PND-300) su propia reserva no cuenta: quien vuelve a pedir saldo para lo mismo
+        # (organico.redactar dentro de «Escribir con IA») no se frena con ella.
+        ctx = _CONTEXTO.get() or {}
+        if str(ctx.get("job_id") or "").startswith(PREFIJO_PEDIDO):
+            excluir_job = ctx["job_id"]
     r = db.reserva_saldo
     with db.conectar() as con:
         if not _cobra(con, cliente):
@@ -355,7 +481,7 @@ def exigir(cliente, costo_usd, job_id=None, excluir_job=None, tipo=None):
         previa = None
         if job_id:
             previa = con.execute(sa.select(r.c.milesimas, r.c.incluido).where(
-                r.c.cliente == cliente, r.c.job_id == job_id, r.c.job_id.in_(_vivas(con)))).first()
+                r.c.cliente == cliente, r.c.job_id == job_id, viva(con, r))).first()
         periodo_id = periodo["id"] if periodo is not None else None
         if _incluido_cabe(con, cliente, periodo, tipo, costo_usd, excluir=(job_id, excluir_job)):
             if job_id and previa is None:
@@ -375,6 +501,56 @@ def exigir(cliente, costo_usd, job_id=None, excluir_job=None, tipo=None):
         if job_id:
             _reservar(con, cliente, job_id, precio, c["margen"], False, periodo_id, costo_usd)
         return precio
+
+
+# -------------------------------------------------- pedidos en la petición ---
+# PND-300 (decisión 2026-10-13, lote 1): lo que llama al proveedor dentro de la petición (o en un hilo de
+# `trabajos.iniciar`) reserva con un id propio por pedido. Antes `exigir` sin `job_id` no reservaba y todos los pedidos
+# veían el mismo saldo libre hasta que el primero anotaba su gasto.
+
+def reservar_pedido(cliente, costo_usd, tipo=None):
+    """`exigir` con un id nuevo de pedido: lanza SaldoInsuficiente o reserva el precio. Devuelve el id (también si el
+    proyecto no cobra y no se reservó nada: soltarlo no hace nada). Quien lo pide lo suelta con `soltar_pedido`, o
+    corre el trabajo dentro de `en_pedido`, que lo suelta al terminar."""
+    pedido_id = f"{PREFIJO_PEDIDO}{cliente}:{secrets.token_hex(8)}"
+    exigir(cliente, costo_usd, job_id=pedido_id, tipo=tipo)
+    return pedido_id
+
+
+def soltar_pedido(cliente, pedido_id):
+    """Borra la reserva del pedido: terminó (lo que cobró ya está en el libro) o falló sin llegar al proveedor. Solo
+    reservas de pedidos, nunca la de un trabajo del worker. Nunca lanza (corre en un `finally`); si falla, la reserva
+    vence sola a los VIDA_PEDIDO_MIN minutos."""
+    if not cliente or not str(pedido_id or "").startswith(PREFIJO_PEDIDO):
+        return
+    r = db.reserva_saldo
+    try:
+        with db.conectar() as con:
+            con.execute(r.delete().where(r.c.cliente == cliente, r.c.job_id == pedido_id))
+    except Exception:  # noqa: BLE001
+        log.warning("no se pudo soltar la reserva %s de %s; vence sola", pedido_id, cliente, exc_info=True)
+
+
+@contextlib.contextmanager
+def en_pedido(cliente, pedido_id):
+    """Corre lo de adentro como el trabajo `pedido_id`: el gasto que anote se cobra con el precio reservado (su margen
+    y, con plan, si fue incluido; como un trabajo del worker) y al salir, pase lo que pase, la reserva se suelta.
+    Va en el hilo que llama al proveedor (la ContextVar no cruza a un hilo nuevo)."""
+    token = _CONTEXTO.set({"tarea_id": None, "job_id": pedido_id})
+    try:
+        yield pedido_id
+    finally:
+        _CONTEXTO.reset(token)
+        soltar_pedido(cliente, pedido_id)
+
+
+@contextlib.contextmanager
+def pedido(cliente, costo_usd, tipo=None):
+    """`reservar_pedido` + `en_pedido` para lo que llama al proveedor en la misma petición:
+    `with libro.pedido(cliente, costo, tipo=...): …llamar y anotar el gasto…`."""
+    pedido_id = reservar_pedido(cliente, costo_usd, tipo=tipo)
+    with en_pedido(cliente, pedido_id):
+        yield pedido_id
 
 
 def _reservar(con, cliente, job_id, milesimas, margen, incluido, periodo_id, costo_usd=None):
@@ -725,7 +901,7 @@ def reservas_vivas_del_periodo(con, cliente, inicio, fin, periodo_id=None):
     r = db.reserva_saldo
     return con.execute(sa.select(r.c.job_id).where(
         r.c.cliente == cliente, r.c.milesimas > 0, r.c.incluido == sa.false(),
-        _de_la_reserva(r, periodo_id, inicio, fin), r.c.job_id.in_(_vivas(con))).limit(1)).first() is not None
+        _de_la_reserva(r, periodo_id, inicio, fin), viva(con, r)).limit(1)).first() is not None
 
 
 def _por_vencer(con, cliente, por_cerrar, excluir_job=None):
@@ -738,7 +914,7 @@ def _por_vencer(con, cliente, por_cerrar, excluir_job=None):
     total = 0
     for p in por_cerrar:
         filtro = [r.c.cliente == cliente, r.c.incluido == sa.false(), r.c.periodo_id == p["id"],
-                  r.c.job_id.in_(_vivas(con))]
+                  viva(con, r)]
         if excluir_job:
             filtro.append(r.c.job_id != excluir_job)
         suyas = int(con.execute(sa.select(sa.func.coalesce(sa.func.sum(r.c.milesimas), 0)).where(*filtro)).scalar())
@@ -829,4 +1005,4 @@ def limpiar_reservas_muertas():
     r = db.reserva_saldo
     with db.conectar() as con:
         limite = (datetime.fromisoformat(db.ahora()) - timedelta(minutes=10)).isoformat(timespec="seconds")
-        return con.execute(r.delete().where(r.c.job_id.notin_(_vivas(con)), r.c.creada_en < limite)).rowcount
+        return con.execute(r.delete().where(~viva(con, r), r.c.creada_en < limite)).rowcount

@@ -85,3 +85,8 @@ Topes: dos mediciones a la vez (`_MEDIR_VIDEO_TURNOS`; un 8192×8192 le pide 176
 conjunto que responde 403 (no redirección) a un fetch sin acceso, y la pantalla dice sesión vencida, tamaño o turno.
 Pruebas: `tests/test_swap_video_precio.py` (cabecera falsa, lista blanca, topes, 403). Pendiente: el precio de Wan 3.0
 en Crear (`dashboard._duracion_video`) todavía confía en la cabecera (PND-319).
+
+**Correo verificado y saldo de bienvenida (PND-299, 2026-10-15):** toda verificación (el enlace, restablecer la clave
+desde ese correo y «marcar verificado» del admin) pasa por `cuentas.confirmar_correo(usuario, correo=None)`, que además
+le da al proyecto de la cuenta su saldo de bienvenida una sola vez (`cobros.libro.dar_bienvenida`, skill `cobros`). Un
+camino nuevo que deje una cuenta verificada usa esa función, no `usuarios.actualizar(..., correo_verificado=True)`.

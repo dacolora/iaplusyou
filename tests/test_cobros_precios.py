@@ -414,3 +414,67 @@ def test_si_el_margen_no_se_puede_leer_el_precio_no_cae_al_costo(libro, monkeypa
     assert e["usd"] == gastos.TARIFAS["guion"]
     assert e["usd_precio"] is None and e["texto"] == "precio no disponible"
     assert texto == "precio no disponible"
+
+
+# --- PND-231: el filtro |precio con el margen sin leer ---------------------------------------
+
+def _margen_roto(libro, monkeypatch):
+    monkeypatch.setattr(libro, "margen_precio", lambda c: (_ for _ in ()).throw(RuntimeError("base caída")))
+
+
+def test_pnd231_el_filtro_precio_dice_precio_no_disponible_si_el_margen_fallo(libro, monkeypatch):
+    """Como `texto_precio` (M1): con el margen sin leer, el filtro no devuelve el costo con cara de precio sino
+    «precio no disponible», también detrás de |usd, |usd_fino y |precio_fmt. Con el margen bien, lo de siempre."""
+    import dashboard
+    from flask import g, render_template_string
+    _cobra(libro)
+    _margen_roto(libro, monkeypatch)
+    with dashboard.app.test_request_context("/cliente/acme"):
+        g.cliente_precio = "acme"
+        assert render_template_string("{{ 0.13|precio }}") == "precio no disponible"
+        assert render_template_string("{{ 0.13|precio|usd }}") == "precio no disponible"
+        assert render_template_string("{{ 0.042|precio|usd_fino }}") == "precio no disponible"
+        assert render_template_string("{{ 0.13|precio_fmt('US$ %.2f') }}") == "precio no disponible"
+        assert render_template_string("{{ none|precio }}|{{ ''|precio }}") == "None|"      # sin costo, como antes
+        # Lo que el navegador devuelve (`total_visto`) no vale como precio: el servidor no cobra con eso.
+        import gastos
+        assert gastos.costo_de_precio(render_template_string("{{ 0.13|precio }}")) is None
+    with dashboard.app.test_request_context("/cliente/acme"):
+        g.margen_precio = MARGEN
+        assert render_template_string("{{ 0.13|precio_fmt('US$ %.2f') }}") == "US$ 0.20"
+        assert render_template_string("{{ 0.042|precio_fmt('$%.3f/s') }}") == "$0.063/s"
+        assert render_template_string("{{ none|precio_fmt('%.2f') }}") == "None"
+
+
+@pytest.mark.parametrize("usuario,rol,proyecto", [("user_acme", "cliente", "acme"), ("admin", "admin", None)])
+def test_pnd231_con_el_margen_sin_leer_la_pagina_no_muestra_costos(libro, pagina, monkeypatch, usuario, rol, proyecto):
+    """La página del proyecto entera se pinta (nada de 500 por un «%.3f» sobre el texto) y ningún botón ni tarifa
+    muestra el costo como si fuera el precio."""
+    from providers import flowplus_modelos
+    _cobra(libro, milesimas=50_000)
+    _margen_roto(libro, monkeypatch)
+    r = pagina(usuario, rol, proyecto).get("/cliente/acme")
+    assert r.status_code == 200
+    html = r.get_data(as_text=True)
+    wan = flowplus_modelos.VIDEO["wan3"]
+    costo_seg = wan["usd_por_segundo_efectivo"]
+    assert _atributo(html, "data-usd-seg", "wan3") == "precio no disponible"
+    assert f'data-usd-seg="{costo_seg}"' not in html and f"${costo_seg:.3f}/s" not in html
+    seedream = next(iter(flowplus_modelos.IMAGEN))
+    assert _atributo(html, "data-usd", seedream) == "precio no disponible"
+    assert f"${flowplus_modelos.IMAGEN[seedream]['usd']:.3f}" not in html
+    assert "precio no disponible" in html
+
+
+def test_pnd231_ninguna_plantilla_da_formato_de_numero_al_filtro_precio():
+    """Con el margen sin leer, |precio devuelve un texto: un «'%.2f' % (x|precio)» o un «"%.3f"|format(x|precio)»
+    revienta la página (500). Para dar formato se usa |precio_fmt('…%.2f…')."""
+    import pathlib
+    malos = []
+    # '%.2f' % (x | precio)  ·  "%.3f"|format(x|precio)
+    patron = re.compile(r"""%[-+ #0]*\d*\.?\d*f['"]\s*(?:%|\|\s*format\()\s*\(?[^)]*\|\s*precio\b(?!_)""")
+    for ruta in sorted(pathlib.Path("templates").rglob("*.html")):
+        for n, linea in enumerate(ruta.read_text(encoding="utf-8").splitlines(), 1):
+            if patron.search(linea):
+                malos.append(f"{ruta}:{n}")
+    assert malos == []

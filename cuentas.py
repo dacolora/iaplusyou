@@ -214,6 +214,26 @@ def limite_ok(clave, maximo=LIMITE_MAXIMO, ventana_s=LIMITE_VENTANA_S):
 
 # --- correos --------------------------------------------------------------
 
+def confirmar_correo(usuario, correo=None):
+    """Deja verificado el correo de `usuario` (el enlace del correo, restablecer la clave desde ese correo o el admin
+    a mano en el panel: los tres caminos pasan por aquí) y, si la cuenta es de un proyecto, le da su saldo de
+    bienvenida (PND-299: una sola vez por proyecto y solo si cobra en prepago; `cobros.libro.dar_bienvenida`).
+    `correo`: el del token, si cambió. Devuelve (registro del usuario, milésimas regaladas, 0 si no tocaba).
+    ValueError como `usuarios.actualizar`. Si regalar falla, la verificación queda igual (y queda en el log)."""
+    campos = {"correo_verificado": True}
+    if correo is not None:
+        campos["correo"] = correo
+    entry = usuarios.actualizar(usuario, **campos)
+    regalo = 0
+    if entry.get("rol") == "cliente" and entry.get("cliente"):
+        try:
+            from cobros import libro  # noqa: PLC0415 — cobros importa media app; solo hace falta aquí
+            regalo = libro.dar_bienvenida(entry["cliente"], usuario=usuario, correo=entry.get("correo"))
+        except Exception:  # noqa: BLE001 — confirmar el correo nunca falla por el regalo
+            log.exception("no se pudo dar el saldo de bienvenida a %s (cuenta %s)", entry.get("cliente"), usuario)
+    return entry, regalo
+
+
 def _horas_texto(segundos):
     horas = segundos // 3600
     return ngettext("%(num)d hora", "%(num)d horas", horas)

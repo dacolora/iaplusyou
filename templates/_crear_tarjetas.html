@@ -60,7 +60,7 @@
               {# «Rearmar» tiene su propio <form> vacío afuera (atributo form=): un
                  <form> anidado lo descarta el navegador y este botón terminaba
                  enviando «Guardar cambios» (arreglo 2026-09-28). #}
-              <button type="submit" class="btn-sm" form="rearmar-{{ item.id }}">{{ _('🔄 Rearmar con IA') }}</button>
+              <button type="submit" class="btn-sm" form="rearmar-{{ item.id }}">{{ _('🔄 Rearmar con IA') }} · {{ precio_de('director').texto }}</button>
             </div>
           </form>
           <form method="post" id="rearmar-{{ item.id }}" action="{{ url_for('cf_rearmar', cliente=cliente, cf_id=item.id) }}" onsubmit='return confirm({{ _('Rearmar con IA sobrescribe el prompt. ¿Seguir?')|tojson }});'></form>

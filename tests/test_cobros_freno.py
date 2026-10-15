@@ -455,8 +455,10 @@ def test_estimado_del_lote_incluye_el_qa_solo_si_el_proyecto_cobra(libro, escena
     _cobra(libro)
     con = produccion.estimar("acme", escenario["sid"])
     assert con["qa_usd"] == pytest.approx(2 * gastos.TARIFAS["revision_pieza"])
-    assert con["usd"] == pytest.approx(sin["usd"] + con["qa_usd"])
-    assert "control de calidad" in con["texto"]
+    # PND-299: el video del lote pasa por el director, que también cobra (solo si el proyecto cobra, como el QA).
+    assert sin["director_usd"] == 0.0 and con["director_usd"] == pytest.approx(gastos.TARIFAS["director"])
+    assert con["usd"] == pytest.approx(sin["usd"] + con["qa_usd"] + con["director_usd"])
+    assert "control de calidad" in con["texto"] and "prompt armado con IA" in con["texto"]
 
 
 # --- revisión final: cada paso de la investigación y del barrido reserva su precio -----------
@@ -554,7 +556,8 @@ def test_barrido_con_saldo_reserva_el_precio_de_la_clasificacion(libro, monkeypa
     assert t["payload"]["fase"] == "clasificando"
     (r,) = _reservas()
     assert r["job_id"] == t["job_id"]
-    assert r["milesimas"] == libro.precio_milesimas(gastos.estimar("clasificacion", n=1)["usd"], 1.5)
+    # acme está en español: la tarifa bilingüe (PND-243, `referentes.clasificar.tarifa_bilingue`).
+    assert r["milesimas"] == libro.precio_milesimas(gastos.estimar("clasificacion", n=1, bilingue=True)["usd"], 1.5)
 
 
 # --- revisión final, seguimiento: el paso siguiente no cuenta la reserva de la tarea que lo pide --
@@ -629,3 +632,18 @@ def test_el_paso_siguiente_de_la_investigacion_no_cuenta_la_reserva_del_que_corr
     i = datos.investigacion("acme", eid)
     assert i["estado"] != "detenida", i.get("detenida_por")
     assert [t["tipo"] for t in _tareas() if t["job_id"] != tarea["job_id"]] == ["nicho_inv_buscar"]
+
+
+
+def test_pnd299_regenerar_suma_el_director_y_reintentar_no(base_temporal):
+    """«Regenerar» duplica la sesión y el video vuelve a pasar por el director (que cobra desde PND-299); «Reintentar»
+    relanza la misma sesión. Cada botón dice lo suyo (guardian-gasto 2026-10-15)."""
+    import gastos
+    from sprints import rutas
+    c = {"orden": 0, "persona_nombre": "", "temporada_nombre": "", "catalogo_id": "espejo_led", "referencias_total": 0,
+         "piezas": [{"id": 1, "tipo": "video", "modelo": "wan3", "duracion_s": 8, "cf_id": None},
+                    {"id": 2, "tipo": "imagen", "modelo": "seedream_v5_pro", "cf_id": None}]}
+    v, i = rutas._piezas_de("acme", c, "wan3", "seedream_v5_pro", sesiones={})
+    assert v["costo_reintentar"] > 0
+    assert v["costo_regenerar"] == pytest.approx(v["costo_reintentar"] + gastos.TARIFAS["director"])
+    assert i["costo_regenerar"] == i["costo_reintentar"] > 0

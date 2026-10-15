@@ -16,6 +16,7 @@ import flowplus_prompt
 import idiomas
 import trabajos
 from cobros import SaldoInsuficiente
+from flask_babel import gettext
 from idiomas import N_
 from providers import flowplus_modelos
 from tareas import al_interrumpir, registrar
@@ -34,13 +35,19 @@ def job_id(cliente, cf_id):
     return f"{cliente}__{cf_id}__director"
 
 
+def costo_estimado():
+    """Lo que cuesta armar un prompt con el director (costo de proveedor; el botón lo muestra con el margen)."""
+    return gastos.estimar("director")["usd"]
+
+
 def encolar(cliente, cf_id, auto_lanzar=False, prioridad=flowplus_lanzar.PRIORIDAD_NORMAL):
-    """Mismo contrato para Crear y Sprints; no vuelve a generar ni cambia el prompt."""
+    """Mismo contrato para Crear y Sprints; no vuelve a generar ni cambia el prompt. Desde PND-299 el director lo paga
+    el proyecto: si cobra, `trabajos.encolar` exige y reserva su precio (SaldoInsuficiente sin encolar nada)."""
     return trabajos.encolar(
         job_id(cliente, cf_id), "flowplus_director",
         {"cliente": cliente, "cf_id": cf_id, "auto_lanzar": bool(auto_lanzar), "prioridad": int(prioridad)},
         cliente=cliente, duracion_estimada=DURACION_ESTIMADA, etapas=ETAPAS_DIRECTOR,
-        max_intentos=1, prioridad=prioridad,
+        max_intentos=1, prioridad=prioridad, costo_estimado=costo_estimado(),
     )
 
 
@@ -83,25 +90,34 @@ def ejecutar(tarea):
         prompt, datos = _fallback(cliente, entry, str(e)[:300])
         mensaje = N_("La IA no pudo armar los planos; quedó el prompt básico para que lo edites o rearmes.")
     if datos["usd"]:
-        # La ayuda sigue gratis para la persona: el proveedor lo paga Creatv.
-        gastos.registrar_seguro("_creatv", "otro", datos["usd"],
-                               f"director:{cf_id}:t{tarea.get('id', 0)}",
-                               proveedor="anthropic", extra={"cliente": cliente, "modelo": director.MODEL})
+        # PND-299 (decisión 2026-10-13): lo paga el proyecto, al precio reservado al encolar (antes `_creatv`). Si la
+        # IA no entregó los planos (quedó el prompt básico), Claude cobró pero la persona no recibió la ayuda: se anota
+        # sin cobrarle (`entregado=False`, un `no_cobrado`).
+        modelo_video = entry.get("modelo")
+        with idiomas.en_idioma(idioma):     # el detalle se GUARDA: idioma del proyecto
+            detalle = gettext("Planos para %(modelo)s", modelo=flowplus_modelos.nombre_visible(modelo_video)
+                              or modelo_video or "-")
+        gastos.registrar_seguro(cliente, "director", datos["usd"],
+                               f"director:{cf_id}:t{tarea.get('id', 0)}", detalle=detalle,
+                               proveedor="anthropic", extra={"modelo": director.MODEL},
+                               entregado=datos["estado"] == "ok")
     trabajos.reportar(jid, etapa=ETAPA_LISTO)
     creative_flow.actualizar(cliente, cf_id, estado="prompt_listo", prompt_relleno=prompt, director=datos, idioma_prompt=idioma)
     if p.get("auto_lanzar"):
-        mensaje = _lanzar_aprobado(cliente, cf_id, p) or mensaje
+        mensaje = _lanzar_aprobado(cliente, cf_id, p, excluir_job=jid) or mensaje
     return mensaje
 
 
-def _lanzar_aprobado(cliente, cf_id, p):
+def _lanzar_aprobado(cliente, cf_id, p, excluir_job=None):
     """Lanza la generación que la persona ya aprobó (`auto_lanzar`). Sin saldo
     (cobros, spec 2026-10-08 §5.4) no se encola: la sesión queda en error con
     la frase (su «Reintentar» relanza con el prompt ya armado) y la frase vuelve
     como mensaje de la tarea. Devuelve None si encoló o ya estaba encolada."""
     entry = creative_flow.cargar(cliente)[cf_id]
     try:
-        flowplus_lanzar.lanzar(cliente, cf_id, entry, prioridad=int(p.get("prioridad") or flowplus_lanzar.PRIORIDAD_NORMAL))
+        # La reserva de este director sigue viva hasta que la tarea cierre, pero ya se cobró: no cuenta (PND-299).
+        flowplus_lanzar.lanzar(cliente, cf_id, entry, prioridad=int(p.get("prioridad") or flowplus_lanzar.PRIORIDAD_NORMAL),
+                               excluir_job=excluir_job)
     except SaldoInsuficiente as e:
         frase = e.frase_proyecto()
         creative_flow.actualizar(cliente, cf_id, estado="error", error=frase)

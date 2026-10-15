@@ -86,7 +86,7 @@
 <script>iniciarPolling({{ marca.trabajo.job_id | tojson }}, {{ ("trabajo-" ~ marca.trabajo.job_id) | tojson }});</script>
 {% elif marca.referencias %}
 <form method="post" action="{{ url_for('analizar_marca', cliente=cliente) }}" class="form-analizar-marca">
-  <button class="btn-generar btn-sm" type="submit">{{ _('Analizar referencias y generar guía de estilo') }}</button>
+  <button class="btn-generar btn-sm" type="submit">{{ _('Analizar referencias y generar guía de estilo') }} · {{ precio_de('analizar_marca').texto }}</button>
 </form>
 {% endif %}
 

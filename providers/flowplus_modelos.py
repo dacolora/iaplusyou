@@ -282,9 +282,17 @@ def es_sesion_hablada(entry):
 
 
 def nombre_modelo(modelo_id):
-    """Nombre visible del modelo (VIDEO, IMAGEN o HABLADO); None si no existe."""
+    """Nombre visible del modelo (VIDEO, IMAGEN o HABLADO); None si no existe. Es el msgid (`N_`): para pintarlo,
+    `nombre_visible` o `|traducir`."""
     info = VIDEO.get(modelo_id) or IMAGEN.get(modelo_id) or HABLADO.get(modelo_id)
     return info["nombre"] if info else None
+
+
+def nombre_visible(modelo_id):
+    """`nombre_modelo` en el idioma activo (PND-243: «Seedance 2.5 · varias referencias» salía sin traducir en
+    avisos y en el lote de Sprints); None si no existe."""
+    import idiomas  # noqa: PLC0415 — el registro solo importa N_; traducir lo pide quien pinta
+    return idiomas.traducir(nombre_modelo(modelo_id)) or None
 
 
 def segundos_facturables(segundos):

@@ -156,6 +156,17 @@ def salida_para(referente):
     return (idiomas.de_proyecto(cliente),) if cliente else ("es", "en")
 
 
+def tarifa_bilingue(cliente):
+    """¿El precio de clasificar lo que trae `cliente` va con la tarifa bilingüe (`clasificacion_bilingue`)? PND-243
+    (decisión 2026-10-13, lote 1): según el idioma del proyecto. Un proyecto en español escribe la clasificación en
+    su idioma (`salida_para`) y lo medido en 938 clasificaciones (US$ 0,0133–0,0138 por anuncio) pasa de la tarifa de
+    0,012: va con la de 0,014, la que no se queda corta. En inglés, la de siempre. Un barrido global (sin proyecto)
+    sale en los dos idiomas: bilingüe. Solo el precio y la reserva: el gasto anotado es lo que cobró Claude."""
+    if not cliente:
+        return True
+    return idiomas.de_proyecto(cliente) != "en"
+
+
 def _traducciones(otros):
     """El pedazo del JSON pedido con la segunda versión (vacío con un idioma)."""
     if not otros:

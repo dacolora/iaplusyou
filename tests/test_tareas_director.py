@@ -32,7 +32,7 @@ def test_ok_guarda_prompt_a_y_director_en_la_sesion(base_temporal, monkeypatch):
     cid = _sesion(cf)
     monkeypatch.setattr(td.director, "compilar", lambda cliente, sesion, idioma="es": _resultado())
     lanzados = []
-    monkeypatch.setattr(td.flowplus_lanzar, "lanzar", lambda c, cf_id, entry, prioridad=5: lanzados.append((cf_id, prioridad)) or True)
+    monkeypatch.setattr(td.flowplus_lanzar, "lanzar", lambda c, cf_id, entry, prioridad=5, excluir_job=None: lanzados.append((cf_id, prioridad)) or True)
     msg = td.ejecutar({"payload": {"cliente": "acme", "cf_id": cid, "auto_lanzar": False}, "job_id": td.job_id("acme", cid)})
     e = cf.cargar("acme")[cid]
     assert e["estado"] == "prompt_listo" and e["prompt_relleno"] == "PROMPT A"
@@ -75,9 +75,10 @@ def test_auto_lanzar_encola_la_generacion_con_la_prioridad_del_payload(base_temp
     cid = _sesion(cf)
     monkeypatch.setattr(td.director, "compilar", lambda cliente, sesion, idioma="es": _resultado())
     lanzados = []
-    monkeypatch.setattr(td.flowplus_lanzar, "lanzar", lambda c, cf_id, entry, prioridad=5: lanzados.append((cf_id, prioridad, entry["prompt_relleno"])) or True)
+    monkeypatch.setattr(td.flowplus_lanzar, "lanzar", lambda c, cf_id, entry, prioridad=5, excluir_job=None: lanzados.append((cf_id, prioridad, entry["prompt_relleno"], excluir_job)) or True)
     td.ejecutar({"payload": {"cliente": "acme", "cf_id": cid, "auto_lanzar": True, "prioridad": 3}, "job_id": "j"})
-    assert lanzados == [(cid, 3, "PROMPT A")]
+    # El video no cuenta la reserva del director que lo lanza: ya está cobrada (PND-299, guardian-gasto).
+    assert lanzados == [(cid, 3, "PROMPT A", "j")]
 
 
 def test_pnd034_interrumpida_continua_solo_generacion_aprobada(base_temporal, monkeypatch):
@@ -87,7 +88,7 @@ def test_pnd034_interrumpida_continua_solo_generacion_aprobada(base_temporal, mo
     assert tareas.AL_INTERRUMPIR["flowplus_director"] is td.interrumpida
     cid = _sesion(cf)
     lanzados = []
-    monkeypatch.setattr(td.flowplus_lanzar, "lanzar", lambda c, cf_id, entry, prioridad=5: lanzados.append((cf_id, prioridad)) or True)
+    monkeypatch.setattr(td.flowplus_lanzar, "lanzar", lambda c, cf_id, entry, prioridad=5, excluir_job=None: lanzados.append((cf_id, prioridad)) or True)
     td.interrumpida({"payload": {"cliente": "acme", "cf_id": cid, "auto_lanzar": True}},
                      "Se interrumpió por un reinicio del servidor.")
     e = cf.cargar("acme")[cid]
@@ -126,7 +127,7 @@ def test_idioma_viene_del_idioma_del_proyecto(base_temporal, monkeypatch, tmp_pa
     assert cf.cargar("acme")[cid]["idioma_prompt"] == "en"
 
 
-def test_director_registra_gasto_interno_aunque_falle_guardar(base_temporal, monkeypatch):
+def test_director_registra_su_gasto_al_proyecto_aunque_falle_guardar(base_temporal, monkeypatch):
     import pytest
     import gastos
     import creative_flow as cf
@@ -136,9 +137,9 @@ def test_director_registra_gasto_interno_aunque_falle_guardar(base_temporal, mon
     monkeypatch.setattr(cf, "actualizar", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("disco")))
     with pytest.raises(RuntimeError, match="disco"):
         td.ejecutar({"id": 88, "payload": {"cliente": "acme", "cf_id": cid}})
-    g, = gastos.historial("_creatv")
-    assert g["usd"] == 0.01 and g["referencia"].endswith(":t88")
-    assert g["extra"]["cliente"] == "acme"
+    g, = gastos.historial("acme")                  # PND-299: lo paga el proyecto (antes `_creatv`)
+    assert g["usd"] == 0.01 and g["referencia"].endswith(":t88") and g["tipo"] == "director"
+    assert gastos.historial("_creatv") == []
 
 
 def test_director_fallback_registra_costo_pagado(base_temporal, monkeypatch):
@@ -150,7 +151,30 @@ def test_director_fallback_registra_costo_pagado(base_temporal, monkeypatch):
         raise td.director.DirectorError("inválido", costo_usd=0.035)
     monkeypatch.setattr(td.director, "compilar", fallar)
     td.ejecutar({"id": 89, "payload": {"cliente": "acme", "cf_id": cid}})
-    assert gastos.historial("_creatv")[0]["usd"] == 0.035
+    assert gastos.historial("acme")[0]["usd"] == 0.035
+
+
+def test_pnd299_el_director_cobra_al_proyecto_y_no_cobra_si_quedo_el_prompt_basico(base_temporal, monkeypatch):
+    """Con «Cobrar»: los planos entregados se cobran del saldo; si la IA falló y quedó el prompt básico, Claude
+    cobró pero la persona no recibió la ayuda: `no_cobrado`, sin descontarle nada."""
+    import db
+    import creative_flow as cf
+    import sqlalchemy as sa
+    import tareas.director as td
+    from cobros import libro
+    libro.configurar("acme", usuario="admin", cobrar=True, margen=1.5)
+    ok, falla = _sesion(cf), _sesion(cf)
+    monkeypatch.setattr(td.director, "compilar", lambda *a, **k: _resultado())
+    td.ejecutar({"id": 90, "payload": {"cliente": "acme", "cf_id": ok}})
+
+    def fallar(*a, **k):
+        raise td.director.DirectorError("inválido", costo_usd=0.02)
+    monkeypatch.setattr(td.director, "compilar", fallar)
+    td.ejecutar({"id": 91, "payload": {"cliente": "acme", "cf_id": falla}})
+    m = db.movimiento_saldo
+    with db.conectar() as con:
+        movs = [(x.tipo, x.milesimas) for x in con.execute(sa.select(m).where(m.c.cliente == "acme").order_by(m.c.id))]
+    assert movs == [("cobro", -15), ("no_cobrado", 0)]                  # 0,01 × 1,5; el fallback no se cobra
 
 
 def test_pnd034_interrumpida_no_relanza_y_respeta_clic(base_temporal, monkeypatch):

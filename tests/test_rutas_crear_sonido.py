@@ -95,13 +95,14 @@ def test_sugerir_sonido_ruta(app, monkeypatch):
     monkeypatch.setattr(sonido, "sugerir_descripcion", sugerir)
     r = app["c"].post("/cliente/acme/creative_flow/sugerir_sonido", json={"escena": "una niña salta", "enfoque": "persona"})
     assert r.status_code == 200 and r.get_json() == {"sonido": "persona: pasos y risas"}
-    assert len(gastos.historial("_creatv")) == 1
-    assert gastos.historial("_creatv")[0]["tipo"] == "otro"
+    # PND-299: lo paga el proyecto (antes `_creatv`, tipo «otro»).
+    assert gastos.historial("_creatv") == []
+    assert [g["tipo"] for g in gastos.historial("acme")] == ["sugerir_sonido"]
     assert app["c"].post("/cliente/acme/creative_flow/sugerir_sonido", json={"escena": ""}).status_code == 400
     assert app["c"].post("/cliente/acme/creative_flow/sugerir_sonido", json=[1]).status_code == 400
 
 
-def test_describir_referencias_registra_usage_en_proyecto_interno(app, monkeypatch):
+def test_describir_referencias_registra_usage_en_el_proyecto(app, monkeypatch):
     import gastos
     from types import SimpleNamespace
     d = app["dashboard"]
@@ -112,8 +113,9 @@ def test_describir_referencias_registra_usage_en_proyecto_interno(app, monkeypat
     monkeypatch.setattr(d.referencias_link, "describir", describir)
     r = app["c"].post("/cliente/acme/flowplus/describir")
     assert r.status_code == 200 and r.get_json() == {"ok": True, "texto": "Una escena breve."}
-    gasto, = gastos.historial("_creatv")
-    assert gasto["tipo"] == "otro" and gasto["proveedor"] == "anthropic"
+    gasto, = gastos.historial("acme")                               # PND-299: el proyecto, no `_creatv`
+    assert gasto["tipo"] == "describir_referencias" and gasto["proveedor"] == "anthropic"
+    assert gastos.historial("_creatv") == []
 
 
 def test_sugerir_sonido_ruta_hardening(app, monkeypatch):
@@ -163,9 +165,9 @@ def test_pnd014_sdk_registra_antes_de_leer_respuesta(app, monkeypatch, origen, r
         {'etiqueta':'@Imagen 1', 'tipo':'imagen','url':'https://r2/ref.jpg'}])
     r = app['c'].post(ruta, json={'escena':'Una persona camina'})
     assert r.status_code == (502 if falla_al_leer else 200)
-    fila, = gastos.historial('_creatv')
+    fila, = gastos.historial('acme')                                # PND-299: el proyecto paga la ayuda
     assert fila['usd'] == pytest.approx(costo_real(200,40))
     assert fila['proveedor'] == 'anthropic'
-    assert fila['extra']['cliente'] == 'acme'
+    assert fila['extra']['tokens_entrada'] == 200 and gastos.historial('_creatv') == []
     assert cliente_kw[0]['max_retries'] == 0
     assert peticiones[0]['max_tokens'] == 4000

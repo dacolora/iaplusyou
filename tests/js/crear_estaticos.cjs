@@ -101,7 +101,10 @@ if(prefill?.texto)assert.equal($('fp-texto').value,prefill.texto);
 if(prefill?.modelo)assert.equal($('fp-modelo').value,prefill.modelo);
 if(prefill?.duracion)assert.equal($('fp-duracion').value,String(prefill.duracion));
 for(const v of prefill?.productos_catalogo || [])assert($('form-flowplus').querySelector('input[name=productos_catalogo][value="'+v+'"]')?.checked);
-assert($('fp-precio').textContent.includes('US$'), 'el botón perdió el precio');
+// PND-231: con el margen sin leer las tarifas no son número y el botón dice «precio no disponible», nunca US$ 0.
+const audiosT=JSON.parse($('crear-audios-datos').textContent).textos;
+const precioVisto=datos.sinPrecio?config.textos.m40:'US$', precioAudios=datos.sinPrecio?audiosT.sinPrecio:'US$';
+assert($('fp-precio').textContent.includes(precioVisto), 'el botón perdió el precio: '+$('fp-precio').textContent);
 // Cambiar modelo y tipo dispara los listeners extraídos y actualiza campo, pastilla y precio.
 const modelo=$('form-flowplus').querySelector('input[name=modelo_video][value="kling_o3_pro"]');
 assert(modelo, 'falta el modelo que ejercita el selector');
@@ -109,9 +112,10 @@ modelo.checked=true;modelo.dispatchEvent(new context.Event('change',{bubbles:tru
 assert.equal($('fp-modelo').value,'kling_o3_pro');assert($('fp-pill-modelo').textContent.includes(modelo.dataset.nombre));
 const tipo=$('form-flowplus').querySelector('input[name=tipo][value="imagen"]');
 tipo.checked=true;tipo.dispatchEvent(new context.Event('change',{bubbles:true}));
-assert.equal($('fp-generar').textContent,config.textos.m02);assert($('fp-precio').textContent.includes('US$'));
+assert.equal($('fp-generar').textContent,config.textos.m02);assert($('fp-precio').textContent.includes(precioVisto));
 // Audios cuenta texto y conserva el precio, aun estando oculto.
 $('au-texto').value='abcd';$('au-texto').dispatchEvent(new context.Event('input'));
 assert.equal(String($('au-contador').textContent),'4');assert.equal($('au-crear').disabled,false);
-assert($('au-crear-precio').textContent.includes('US$'));
+assert($('au-crear-precio').textContent.includes(precioAudios), $('au-crear-precio').textContent);
+if(datos.sinPrecio)assert(!$('fp-precio').textContent.includes('US$') && !$('au-crear-precio').textContent.includes('US$'));
 console.log('DOM, eventos, precarga y precios comprobados');

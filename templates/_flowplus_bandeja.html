@@ -17,7 +17,7 @@
   </figure>
   {% endfor %}
   <div class="crear-refs-acciones">
-    <button type="button" class="crear-enlace" id="fp-describir">{{ _('Describir con IA') }}</button>
+    <button type="button" class="crear-enlace" id="fp-describir">{{ _('Describir con IA') }} · {{ precio_describir(referencias_bandeja).texto }}</button>
     <form method="post" action="{{ url_for('fp_vaciar_referencias', cliente=cliente) }}" data-fp="vaciar" data-confirm="{{ _('¿Quitar todas las referencias?') }}"><button type="submit" class="crear-enlace crear-enlace-gris">{{ _('Quitar todas') }}</button></form>
     <span class="crear-nota" id="fp-describir-estado"></span>
   </div>
