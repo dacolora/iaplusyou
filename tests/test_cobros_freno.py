@@ -554,7 +554,8 @@ def test_barrido_con_saldo_reserva_el_precio_de_la_clasificacion(libro, monkeypa
     assert t["payload"]["fase"] == "clasificando"
     (r,) = _reservas()
     assert r["job_id"] == t["job_id"]
-    assert r["milesimas"] == libro.precio_milesimas(gastos.estimar("clasificacion", n=1)["usd"], 1.5)
+    # acme está en español: la tarifa bilingüe (PND-243, `referentes.clasificar.tarifa_bilingue`).
+    assert r["milesimas"] == libro.precio_milesimas(gastos.estimar("clasificacion", n=1, bilingue=True)["usd"], 1.5)
 
 
 # --- revisión final, seguimiento: el paso siguiente no cuenta la reserva de la tarea que lo pide --
