@@ -574,14 +574,33 @@ def rango(cliente, tienda_id=None):
     return {"desde": desde, "hasta": hasta, "filas": int(filas or 0), "anuncios": int(anuncios or 0)}
 
 
+def rango_ligero(cliente, tienda_id=None):
+    """{"desde", "hasta", "filas"} de lo copiado para el panel, que solo usa la primera fecha y si hay filas: MIN, MAX y
+    COUNT de las filas crudas sobre el índice (cliente[, tienda], fecha). `filas` cuenta filas por tienda (un anuncio
+    que llega por dos tiendas cuenta dos); para el número deduplicado y los anuncios distintos está `rango`, que agrupa
+    cada (canal, anuncio, día) y en «Todas» con las 5 tiendas de happyflops tardaba 2,2 s por llamada (2026-10-15)."""
+    t = db.tw_anuncio_dia
+    cond = [t.c.cliente == cliente] + ([t.c.tienda_id == tienda_id] if tienda_id is not None else [])
+    q = sa.select(sa.func.min(t.c.fecha), sa.func.max(t.c.fecha), sa.func.count()).where(*cond)
+    with db.conectar() as con:
+        desde, hasta, filas = con.execute(q).one()
+    return {"desde": desde, "hasta": hasta, "filas": int(filas or 0)}
+
+
 def canales(cliente, tienda_id, desde, hasta):
     """Canales con gasto en el rango, del que más gastó al que menos. Uno con impresiones y sin gasto (o solo con lo
     que atribuye el Pixel) no se ofrece en el filtro «Canal»: R9 deja fuera los canales sin gasto y su galería saldría
     vacía (revisión final de E1, 2026-10-10)."""
-    d = _anuncio_dia(cliente, tienda_id, desde, hasta)
-    q = (sa.select(d.c.canal).group_by(d.c.canal)
-         .having(sa.func.sum(d.c.gasto) > 0)
-         .order_by(sa.func.sum(d.c.gasto).desc()))
+    # Sobre las filas crudas, sin la subconsulta que agrupa cada (canal, anuncio, día) de todas las tiendas (2,3 s en
+    # «Todas» con las 5 tiendas de happyflops, 2026-10-15): un canal tiene gasto si alguna fila lo tiene. El orden suma
+    # el gasto por tienda (un anuncio compartido cuenta en cada una): solo ordena las opciones del filtro.
+    t = db.tw_anuncio_dia
+    cond = [t.c.cliente == cliente, t.c.fecha >= desde, t.c.fecha <= hasta]
+    if tienda_id is not None:
+        cond.append(t.c.tienda_id == tienda_id)
+    q = (sa.select(t.c.canal).where(*cond).group_by(t.c.canal)
+         .having(sa.func.sum(t.c.gasto) > 0)
+         .order_by(sa.func.sum(t.c.gasto).desc(), t.c.canal))
     with db.conectar() as con:
         return [r[0] for r in con.execute(q)]
 
