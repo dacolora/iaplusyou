@@ -599,3 +599,116 @@ def test_la_vigilancia_tambien_cuida_los_experimentos_decididos(entorno, base_te
     meta.gastos[cid] = (28000.0, 0.0)
     assert "1 pausados" in tex.exp_vigilar_gasto({})
     assert ex.obtener("acme", eid)["estado"] == "pausado"
+
+
+# ---------- PND-325 (2026-10-15): sin mínimo de Meta o sin mínimo esperado, ningún monto ----------
+
+def _tasa(base_temporal, moneda, usd_por_unidad, fecha=None):
+    """Guarda la tasa del BCE de `moneda` (USD por unidad) en `fecha` (hoy por defecto)."""
+    from datetime import date
+    with base_temporal.conectar() as con:
+        con.execute(base_temporal.tasa_cambio.insert().values(
+            fecha=fecha or date.today().isoformat(), moneda=moneda, usd_por_unidad=usd_por_unidad, fuente="bce",
+            creado_en=base_temporal.ahora()))
+
+
+@pytest.mark.parametrize("minimo", [None, "", 0, "0", -5, "abc"])
+def test_sin_minimo_diario_de_meta_no_se_manda_ningun_monto(minimo):
+    """Antes, sin `min_daily_budget` la comprobación de la unidad se saltaba callada y quedaba solo la tabla."""
+    import lanzador
+    cuenta = {"currency": "COP"}
+    if minimo is not None:
+        cuenta["min_daily_budget"] = minimo
+    with pytest.raises(lanzador.PresupuestoNoCoincide, match="mínimo diario"):
+        lanzador.comprobar_moneda(cuenta, "COP")
+
+
+def test_las_monedas_de_hoy_no_consultan_tasas(monkeypatch):
+    """COP (la cuenta real de Forja: 3 322) y SEK (1 010) tienen su mínimo propio: no dependen del BCE."""
+    import lanzador
+    from meta_rendimiento import tasas
+
+    def _no(*a, **k):
+        raise AssertionError("no debía consultar tasas")
+    monkeypatch.setattr(tasas, "usd", _no)
+    monkeypatch.setattr(tasas, "asegurar", _no)
+    lanzador.comprobar_moneda({"currency": "COP", "min_daily_budget": 3322}, "COP")
+    lanzador.comprobar_moneda({"currency": "SEK", "min_daily_budget": 1010}, "SEK")
+
+
+@pytest.mark.parametrize("moneda,usd_por_unidad,minimo_meta", [
+    ("GBP", 1.25, 100),      # US$ 1 = 0,80 GBP = 80 peniques contra 100
+    ("JPY", 0.0067, 150),    # offset 1: US$ 1 ≈ 149 yenes contra 150
+    ("DKK", 0.145, 700),     # US$ 1 ≈ 6,90 DKK = 690 øre contra 700
+])
+def test_una_moneda_sin_minimo_propio_cuadra_con_un_dolar_del_bce(base_temporal, monkeypatch, moneda, usd_por_unidad,
+                                                                   minimo_meta):
+    import lanzador
+    from meta_rendimiento import tasas
+    from presupuesto_experimentos import PRESUPUESTO_MINIMO_DIARIO
+    assert moneda not in PRESUPUESTO_MINIMO_DIARIO
+    monkeypatch.setattr(tasas, "asegurar", lambda *a, **k: None)
+    _tasa(base_temporal, moneda, usd_por_unidad)
+    lanzador.comprobar_moneda({"currency": moneda, "min_daily_budget": minimo_meta}, moneda)
+
+
+@pytest.mark.parametrize("minimo_meta", [8000, 1])    # ×100 y ÷100 de lo que dice el BCE (80 peniques)
+def test_una_moneda_sin_minimo_propio_frena_si_la_unidad_no_cuadra(base_temporal, monkeypatch, minimo_meta):
+    import lanzador
+    from meta_rendimiento import tasas
+    monkeypatch.setattr(tasas, "asegurar", lambda *a, **k: None)
+    _tasa(base_temporal, "GBP", 1.25)
+    with pytest.raises(lanzador.PresupuestoNoCoincide, match="no cuadra"):
+        lanzador.comprobar_moneda({"currency": "GBP", "min_daily_budget": minimo_meta}, "GBP")
+
+
+def test_la_holgura_con_el_bce_es_la_misma_x10(base_temporal, monkeypatch):
+    """80 peniques contra 799 pasa (×9,99); contra 801, no (×10,01). Lo mismo hacia abajo."""
+    import lanzador
+    from meta_rendimiento import tasas
+    monkeypatch.setattr(tasas, "asegurar", lambda *a, **k: None)
+    _tasa(base_temporal, "GBP", 1.25)
+    lanzador.comprobar_moneda({"currency": "GBP", "min_daily_budget": 799}, "GBP")
+    lanzador.comprobar_moneda({"currency": "GBP", "min_daily_budget": 8}, "GBP")
+    for minimo in (801, 7):
+        with pytest.raises(lanzador.PresupuestoNoCoincide):
+            lanzador.comprobar_moneda({"currency": "GBP", "min_daily_budget": minimo}, "GBP")
+
+
+def test_sin_tasa_del_bce_no_se_manda_ningun_monto(base_temporal, monkeypatch):
+    """TWD está en la tabla de Meta pero el BCE no la publica: se intenta traer y, sin tasa, se niega."""
+    import lanzador
+    from meta_rendimiento import tasas
+    pedidas = []
+    monkeypatch.setattr(tasas, "asegurar", lambda monedas, desde, hasta, hoy=None: pedidas.append(list(monedas)))
+    with pytest.raises(lanzador.PresupuestoNoCoincide, match="tasa"):
+        lanzador.comprobar_moneda({"currency": "TWD", "min_daily_budget": 30}, "TWD")
+    assert pedidas == [["TWD"]]
+
+
+def test_una_tasa_vieja_no_cuenta(base_temporal, monkeypatch):
+    """Una tasa de hace un mes no es la de hoy (`tasas` rellena a lo sumo 4 días): se niega."""
+    from datetime import date, timedelta
+    import lanzador
+    from meta_rendimiento import tasas
+    monkeypatch.setattr(tasas, "asegurar", lambda *a, **k: None)
+    _tasa(base_temporal, "GBP", 1.25, fecha=(date.today() - timedelta(days=30)).isoformat())
+    with pytest.raises(lanzador.PresupuestoNoCoincide, match="tasa"):
+        lanzador.comprobar_moneda({"currency": "GBP", "min_daily_budget": 100}, "GBP")
+
+
+def test_la_tasa_que_trae_el_bce_al_momento_sirve(base_temporal, monkeypatch):
+    """Sin tasa guardada se pide al BCE (`tasas.asegurar`) y se vuelve a leer."""
+    import lanzador
+    from meta_rendimiento import tasas
+    monkeypatch.setattr(tasas, "asegurar", lambda monedas, desde, hasta, hoy=None: _tasa(base_temporal, "GBP", 1.25))
+    lanzador.comprobar_moneda({"currency": "GBP", "min_daily_budget": 100}, "GBP")
+
+
+def test_lanzar_no_crea_nada_si_meta_no_dice_el_minimo_diario(entorno):
+    ex, lz, meta, eid = entorno["ex"], entorno["lanzador"], entorno["meta"], entorno["eid"]
+    del meta.cuenta["min_daily_budget"]
+    with pytest.raises(lz.PresupuestoNoCoincide):
+        lz.lanzar("acme", eid)
+    assert not [t for t, _ in meta.llamadas if t in ("campaign", "adset", "ad")]
+    assert ex.obtener("acme", eid)["estado"] == "error"

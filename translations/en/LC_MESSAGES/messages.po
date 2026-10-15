@@ -12381,6 +12381,10 @@ msgstr "Meta didn't create the metrics report."
 msgid "Meta no devolvió tus cuentas: %(error)s"
 msgstr "Meta didn't return your accounts: %(error)s"
 
+#, python-format
+msgid "Meta no dijo el mínimo diario de la cuenta publicitaria: sin él no se puede comprobar en qué unidad va %(moneda)s y no se manda ningún presupuesto. Vuelve a intentar en unos minutos."
+msgstr "Meta didn't report the ad account's daily minimum: without it there's no way to check which unit %(moneda)s uses, so no budget is sent. Try again in a few minutes."
+
 msgid "Meta no dio un motivo"
 msgstr "Meta gave no reason"
 
@@ -13260,6 +13264,10 @@ msgstr "There's no account in this session."
 
 msgid "No hay una investigación detenida para reanudar."
 msgstr "There's no stopped research to resume."
+
+#, python-format
+msgid "No hay una tasa de cambio del BCE de hoy para %(moneda)s: sin ella no se puede comprobar en qué unidad va y no se manda ningún presupuesto."
+msgstr "There's no ECB exchange rate for %(moneda)s today: without it there's no way to check which unit it uses, so no budget is sent."
 
 msgid "No hay una tasa de cambio válida: los cobros en pesos están frenados"
 msgstr "No valid exchange rate: charges in pesos are on hold"
