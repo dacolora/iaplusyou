@@ -285,8 +285,9 @@ def meta_rend_evaluar(tarea):
     ya_no_existe = gettext("Esa evaluación ya no existe.")
     try:
         fila = datos.evaluacion(cliente, eid)
-        if fila is None or not datos.actualizar_evaluacion(eid, estado="analizando", tarea_id=tarea.get("id"),
-                                                           error=None):
+        # Sigue «en_cola» mientras copia miniaturas: «analizando» es «la llamada a Claude empezó» (abajo), lo que mira
+        # el gancho de interrupción para anotar el estimado (PND-268; revisión del gasto, 2026-10-15).
+        if fila is None or not datos.actualizar_evaluacion(eid, tarea_id=tarea.get("id"), error=None):
             return ya_no_existe
         elegidos = list(fila["muestra"] or [])
         trabajos.reportar(job_id, etapa=idiomas.N_("Buscando miniaturas"),
@@ -299,6 +300,10 @@ def meta_rend_evaluar(tarea):
         bloques, temporales = tw_analisis.visuales(cliente, elegidos, medios, creatv)
         trabajos.reportar(job_id, etapa=idiomas.N_("Analizando con Claude"))
         texto, imagenes = analisis.armar(cliente, fila, medios, bloques)
+        if not datos.actualizar_evaluacion(eid, estado="analizando"):
+            # Desconectar Meta la borró mientras se copiaban las miniaturas: no se paga una llamada que nadie va a ver.
+            _soltar_miniaturas(cliente, eid, elegidos)
+            return ya_no_existe
         llamada_hecha = True
         resultado, entrada, salida = analisis.analizar(texto, imagenes, idiomas.de_proyecto(cliente), elegidos,
                                                        fila["recomendaciones"] or [])
@@ -356,9 +361,9 @@ def meta_rend_evaluar(tarea):
 @al_interrumpir(TIPO_EVALUAR)
 def _evaluar_interrumpida(tarea, mensaje):
     """Un reinicio (o el respaldo sin saldo del worker) mató la evaluación: la fila no se queda «analizando». Si lo
-    estaba, la tarea ya había empezado y pudo cortar una llamada a Claude que Anthropic cobró: se anota el estimado de
-    la tarifa sin entregar, con la referencia de la tarea (PND-268, `tareas.triple_whale.anotar_estimado_cortado`);
-    «en_cola» = no llegó a correr, no se anota nada."""
+    estaba, la llamada a Claude había empezado (`meta_rend_evaluar` la pone así justo antes) y pudo cortarse después
+    de que Anthropic la cobró: se anota el estimado de la tarifa sin entregar, con la referencia de la tarea (PND-268,
+    `tareas.triple_whale.anotar_estimado_cortado`); «en_cola» = no llegó a llamar, no se anota nada."""
     from tareas.triple_whale import anotar_estimado_cortado    # noqa: PLC0415 — el worker carga los dos módulos
     p = tarea.get("payload") or {}
     if not (p.get("cliente") and p.get("evaluacion_id")):

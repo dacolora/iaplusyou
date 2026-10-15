@@ -413,7 +413,9 @@ def tw_evaluar(tarea):
     fila = datos.evaluacion(cliente, eid)
     if fila is None:
         return gettext("Esa evaluación ya no existe.")
-    datos.actualizar_evaluacion(eid, estado="analizando", tarea_id=tarea.get("id"), error=None)
+    # La fila sigue «en_cola» mientras baja miniaturas y saca fotogramas: «analizando» es «la llamada a Claude empezó»
+    # (revisión del gasto, 2026-10-15), lo que mira el gancho de interrupción para anotar el estimado (PND-268).
+    datos.actualizar_evaluacion(eid, tarea_id=tarea.get("id"), error=None)
     anuncios = list(fila["anuncios"] or [])
     extra = dict(fila["extra"] or {})
     trabajos.reportar(job_id, etapa=idiomas.N_("Buscando miniaturas"), detalle=gettext("%(n)s anuncio(s)", n=len(anuncios)))
@@ -432,6 +434,7 @@ def tw_evaluar(tarea):
                 "modelo": extra.get("modelo"), "ventana": extra.get("ventana"),
                 "benchmarks": extra.get("benchmarks") or {}, "meta_roas": extra.get("meta_roas")}
     referencia = f"tw_eval:{eid}{ref_sufijo(tarea)}"
+    datos.actualizar_evaluacion(eid, estado="analizando")
     try:
         resultado, entrada, salida = analisis.analizar(proyectos.nombre_visible(cliente), contexto, anuncios,
                                                        medios, idiomas.de_proyecto(cliente), bloques=bloques,
@@ -446,7 +449,7 @@ def tw_evaluar(tarea):
         # corrección). Un rechazo de la API (`APIStatusError`) no cobra: `sin_respuesta` es False.
         estimado = analisis.sin_respuesta(e)
         if estimado:
-            usd += float(gastos.estimar("evaluacion_tw", n=len(anuncios))["usd"] or 0.0)
+            usd += float(analisis.estimado(cliente, anuncios, creatv)["usd"] or 0.0)
         if usd:     # pagado y sin entregar: en un proyecto que cobra no se le cobra (skill `cobros`)
             gastos.registrar_seguro(cliente, "evaluacion", usd, referencia, proveedor="anthropic",
                                     detalle=gettext("estimado: sin respuesta de Claude") if estimado
@@ -490,8 +493,9 @@ def anotar_estimado_cortado(cliente, referencia, usd, detalle):
 
 @al_interrumpir(TIPO_EVALUAR)
 def _evaluar_interrumpida(tarea, mensaje):
-    """La fila no se queda «analizando». Si lo estaba, la tarea ya había empezado su trabajo y pudo estar esperando a
-    Claude: se anota el estimado (PND-268); «en_cola» = no llegó a correr (respaldo sin saldo), no se anota nada."""
+    """La fila no se queda «analizando». Si lo estaba, la llamada a Claude había empezado (`tw_evaluar` la pone así
+    justo antes): se anota el estimado (PND-268); «en_cola» = no llegó a llamar (respaldo sin saldo, o un reinicio
+    mientras bajaba miniaturas), no se anota nada."""
     p = tarea.get("payload") or {}
     if p.get("cliente") and p.get("evaluacion_id"):
         cliente, eid = p["cliente"], int(p["evaluacion_id"])
@@ -499,7 +503,7 @@ def _evaluar_interrumpida(tarea, mensaje):
         if fila and fila["estado"] in ("en_cola", "analizando"):
             if fila["estado"] == "analizando":
                 anotar_estimado_cortado(cliente, f"tw_eval:{eid}{ref_sufijo(tarea)}",
-                                        gastos.estimar("evaluacion_tw", n=len(fila["anuncios"] or []))["usd"],
+                                        analisis.estimado(cliente, fila["anuncios"] or [])["usd"],
                                         gettext("estimado: se interrumpió durante el análisis"))
             datos.actualizar_evaluacion(eid, estado="error", error=cola.recortar(cola.sin_token(str(mensaje)), 500))
 

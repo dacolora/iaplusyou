@@ -655,7 +655,11 @@ anuncio es TOF, MOF o BOF. Siempre con el chip `cx.nvp(nuevos, visitantes)` (ski
   con `MAX_TOKENS` = 32 000 y `TIMEOUT_CLAUDE_S` = 900 (sin tope de tiempo explícito el SDK exige streaming), siempre
   `max_retries=0` como «Cómo mejorarlo» (un reintento del SDK podía cobrarse sin anotarse). El precio a la vista
   (`gastos.EVALUACION_TW_BASE_USD` 0,67 + `_POR_ANUNCIO_USD` 0,005, US$ 0,72 con 10) es el del peor caso: las dos
-  llamadas agotando 32 000 de salida más su entrada; lo medido sale muy por debajo y se cobra lo real × margen.
+  llamadas agotando 32 000 de salida más su entrada; lo medido sale muy por debajo y se cobra lo real × margen. Cada
+  anuncio que manda los fotogramas de su video (una pieza de Creatv: hasta 8 de 640 px en cada llamada) suma
+  `EVALUACION_TW_POR_VIDEO_USD` 0,032 (revisión del gasto, 2026-10-15: con 10 así el peor caso llegaba a ≈ 1,00).
+  `analisis.estimado(cliente, muestra, creatv=None)` (`n_con_fotogramas`) es la ÚNICA cuenta: el botón
+  (`panel.contexto`), la ruta que cobra (`pedidos.pedir_evaluacion`) y los estimados de la tarea.
   Medición del cambio: `docs/superpowers/evals/2026-10-15-tw-evaluar-32000-nvp.md`.
 - La copia de 90 días del NVP deja la marca `backfill_visitantes` solo si trajo visitantes en todo el rango, o tras
   `sync.MAX_INTENTOS_VISITANTES` (3) copias sin lograrlo (`intentos_visitantes`); un error de red o de límite en
@@ -710,8 +714,10 @@ iterar, los que mejor convierten (`metricas()["cv_sesion"]` = pedidos / sesiones
 `sesiones`) y las mejores imágenes y videos (`datos.tipos_creativo(cliente)`: `{(canal, ad_id): tipo}` en una
 consulta). Detalle y reglas en la skill `rendimiento`, «Las métricas que faltaban».
 
-**«Evaluar con IA» cortada a mitad (PND-268, 2026-10-15).** `tw_evaluar` pone la fila en «analizando» al empezar. Si un
-reinicio del worker la mata ahí, `_evaluar_interrumpida` anota el estimado de `evaluacion_tw` con `entregado=False`, la
+**«Evaluar con IA» cortada a mitad (PND-268, 2026-10-15).** `tw_evaluar` deja la fila «en_cola» mientras baja
+miniaturas y saca fotogramas, y la pone en «analizando» justo antes de llamar a Claude (revisión del gasto: así
+«analizando» quiere decir «la llamada empezó»). Si un reinicio del worker la mata ahí, `_evaluar_interrumpida` anota el
+estimado (`analisis.estimado`) con `entregado=False`, la
 referencia de la tarea (`tw_eval:<id>:t<tarea>`) y el detalle «estimado: se interrumpió durante el análisis»
 (`anotar_estimado_cortado`, que también usa la de Meta). Si ya había un gasto con esa referencia (la tarea anota a
 Claude ANTES de dejar la fila «lista»), no lo pisa: el worker ya revirtió el cobro de la cadena. Con la fila «en_cola»

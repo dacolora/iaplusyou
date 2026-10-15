@@ -171,6 +171,29 @@ def test_la_barra_de_evaluar_espera_lo_medido_con_32000(base_temporal):
     assert fila.duracion_estimada == t.DURACION_EVALUAR == 180 and fila.max_intentos == 1
 
 
+def test_una_pieza_de_creatv_con_video_suma_sus_fotogramas_al_peor_caso():
+    """Revisión del gasto (2026-10-15): una pieza hecha en Creatv no manda una miniatura sino hasta 8 fotogramas de
+    640 px (≈ 8 000 tokens) en CADA llamada; con 10 así, el peor caso pasaba de US$ 0,72 a ≈ 1,00 y se habría cobrado más
+    de lo visto. Cada anuncio que manda fotogramas suma `EVALUACION_TW_POR_VIDEO_USD` al precio."""
+    from doctrina import revisor
+    from nicho.avatares import PRECIOS_USD_POR_MILLON
+    from generador_prompts import MODEL
+    por_fotograma = 640 * 1138 / 750                       # un fotograma vertical de 640 px, en tokens de imagen
+    fotogramas = 2 * revisor.MAX_FOTOGRAMAS * por_fotograma * PRECIOS_USD_POR_MILLON[MODEL]["entrada"] / 1e6
+    assert gastos.EVALUACION_TW_POR_VIDEO_USD >= fotogramas
+    base = gastos.estimar("evaluacion_tw", n=10)["usd"]
+    assert gastos.estimar("evaluacion_tw", n=10, n_video=4)["usd"] == pytest.approx(
+        base + 4 * gastos.EVALUACION_TW_POR_VIDEO_USD)
+    m = analisis.muestra(_ev())
+    creatv = {m[0]["ad_id"]: {"tipo": "video", "url_video": "https://r2/v.mp4", "url_miniatura": "https://r2/m.jpg"},
+              m[1]["ad_id"]: {"tipo": "imagen", "url_video": "https://r2/i.jpg"},          # una imagen: una sola
+              m[2]["ad_id"]: {"tipo": "video", "url_video": None, "url_miniatura": "https://r2/m.jpg"}}  # sin video
+    assert analisis.n_con_fotogramas(m, creatv) == 1
+    assert analisis.n_con_fotogramas([dict(m[0], canal="tiktok-ads")], creatv) == 0     # solo los de Meta son piezas
+    assert analisis.estimado("acme", m, creatv)["usd"] == pytest.approx(
+        gastos.estimar("evaluacion_tw", n=len(m), n_video=1)["usd"])
+
+
 def test_system_lleva_la_doctrina_y_el_idioma():
     bloques = analisis.system("en")
     texto = json.dumps(bloques, ensure_ascii=False)
@@ -504,6 +527,28 @@ def test_interrumpida_analizando_anota_el_estimado_sin_cobrarlo(evaluacion_en_co
     assert _gastos_con_detalle() == [{"usd": pytest.approx(estimado), "referencia": f"tw_eval:{e['eid']}:t7",
                                       "detalle": "estimado: se interrumpió durante el análisis"}]
     assert _movimientos() == ["no_cobrado"] and datos.evaluacion("acme", e["eid"])["estado"] == "error"
+
+
+def test_la_fila_queda_analizando_solo_cuando_empieza_la_llamada(evaluacion_en_cola, monkeypatch):
+    """Revisión del gasto (2026-10-15): «analizando» quiere decir que la llamada a Claude empezó. Mientras baja las
+    miniaturas y saca los fotogramas la fila sigue «en_cola»: un reinicio ahí no anota el estimado de una llamada que
+    nunca se hizo (PND-268)."""
+    e = evaluacion_en_cola
+    vistos = []
+    real = analisis.medios_meta
+
+    def _medios(cliente, anuncios):
+        vistos.append(("miniaturas", datos.evaluacion("acme", e["eid"])["estado"]))
+        return real(cliente, anuncios)
+
+    def _analizar(marca, contexto, anuncios, medios, idioma, bloques=None, productos=None):
+        vistos.append(("claude", datos.evaluacion("acme", e["eid"])["estado"]))
+        return analisis.parsear(respuesta(), {a["ref"] for a in anuncios}, ""), 10, 20
+    monkeypatch.setattr(analisis, "medios_meta", _medios)
+    monkeypatch.setattr(analisis, "analizar", _analizar)
+    e["t"].tw_evaluar(_tarea(e["eid"]))
+    assert vistos == [("miniaturas", "en_cola"), ("claude", "analizando")]
+    assert datos.evaluacion("acme", e["eid"])["tarea_id"] == 7
 
 
 def test_interrumpida_en_cola_no_anota_nada(evaluacion_en_cola):

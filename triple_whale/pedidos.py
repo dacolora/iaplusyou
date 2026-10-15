@@ -206,7 +206,7 @@ def pedir_evaluacion(cliente, alc_eval, usuario, *, n_visto, precio_visto):
     muestra = analisis.muestra(ev)
     if not muestra:
         return None, gettext("Todavía no hay anuncios con datos suficientes para evaluar con IA.")
-    precio = gastos.estimar("evaluacion_tw", n=len(muestra))
+    precio = analisis.estimado(cliente, muestra)        # la misma cuenta que el botón (con los fotogramas de Creatv)
     usd = precio["usd"]
     # Primero el precio, después el cobro (G3): si falta el número o el precio que vio la persona, o la muestra o el
     # precio (el margen) cambiaron desde que lo vio, no se crea ni se reserva nada y se dice el precio de ahora. El precio

@@ -153,6 +153,11 @@ TARIFAS = {
 # Hasta el 2026-10-15 eran 0,08 + 0,012 por anuncio (0,20 con 10), por debajo de lo medido con corrección (0,30).
 EVALUACION_TW_BASE_USD = 0.67
 EVALUACION_TW_POR_ANUNCIO_USD = 0.005
+# Un anuncio hecho en Creatv con video no manda una miniatura sino hasta 8 fotogramas de 640 px (`doctrina.revisor`,
+# ≈ 970 tokens cada uno, ≈ 8 000 por anuncio) en CADA una de las dos llamadas: ≈ US$ 0,032 más por anuncio así
+# (revisión del gasto, 2026-10-15: con 10 piezas de Creatv el peor caso llegaba a ≈ 1,00 y se habría cobrado más de lo
+# visto). `triple_whale.analisis.estimado` los cuenta (`n_video`) con la misma regla en el botón, la ruta y la tarea.
+EVALUACION_TW_POR_VIDEO_USD = 0.032
 
 # «Proponer ideas» de Sprints (entrega 2 del tablero): una llamada a Claude con
 # la doctrina en el system (caché) y hasta ~1 200 tokens de salida por idea
@@ -511,8 +516,10 @@ _ESTIMADORES = {
     "reescribir_idea": lambda **_: (TARIFAS["reescribir_idea"], "una llamada a Claude"),
     "pedidos_producto": lambda **_: (TARIFAS["pedidos_producto"], "una llamada a Claude"),
     "revision_pieza": lambda **_: (TARIFAS["revision_pieza"], "una llamada a Claude con visión"),
-    "evaluacion_tw": lambda n=1, **_: (EVALUACION_TW_BASE_USD + EVALUACION_TW_POR_ANUNCIO_USD * max(1, int(n or 0)),
-                                       f"{max(1, int(n or 0))} anuncio(s) con Claude"),
+    "evaluacion_tw": lambda n=1, n_video=0, **_: (
+        EVALUACION_TW_BASE_USD + EVALUACION_TW_POR_ANUNCIO_USD * max(1, int(n or 0))
+        + EVALUACION_TW_POR_VIDEO_USD * max(0, int(n_video or 0)),
+        f"{max(1, int(n or 0))} anuncio(s) con Claude"),
     "evaluacion_meta": lambda n=1, **_: (
         TARIFAS["evaluacion_meta"] + TARIFAS["evaluacion_meta_por_anuncio"] * max(1, int(n or 0)),
         f"{max(1, int(n or 0))} anuncio(s) de Meta con Claude"),

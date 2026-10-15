@@ -934,3 +934,39 @@ def test_interrumpida_de_otro_proyecto_no_anota_nada(evaluacion):
     datos.actualizar_evaluacion(eid, estado="analizando")
     t._evaluar_interrumpida(_tarea_eval(eid, cliente="otro"), "reinicio")
     assert _gastos_eval() == [] and datos.evaluacion("hf", eid)["estado"] == "analizando"
+
+
+def test_la_fila_queda_analizando_solo_cuando_empieza_la_llamada(evaluacion, monkeypatch):
+    """Revisión del gasto (2026-10-15): mientras copia miniaturas y saca fotogramas la fila sigue «en_cola»; pasa a
+    «analizando» justo antes de llamar a Claude, así un reinicio antes no anota el estimado (PND-268)."""
+    eid = evaluacion["eid"]
+    vistos = []
+    real = analisis.medios
+
+    def _medios(cliente, elegidos):
+        vistos.append(("miniaturas", datos.evaluacion("hf", eid)["estado"]))
+        return real(cliente, elegidos)
+
+    def _llamar(content, system_):
+        vistos.append(("claude", datos.evaluacion("hf", eid)["estado"]))
+        return RESPUESTA_OK, 10000, 5000
+    monkeypatch.setattr(analisis, "medios", _medios)
+    monkeypatch.setattr(analisis, "_llamar", _llamar)
+    t.meta_rend_evaluar(_tarea_eval(eid))
+    assert vistos == [("miniaturas", "en_cola"), ("claude", "analizando")]
+    assert datos.evaluacion("hf", eid)["tarea_id"] == 7
+
+
+def test_si_la_fila_se_borro_antes_de_la_llamada_no_llama_a_claude(evaluacion, monkeypatch):
+    """Si desconectar Meta borró la evaluación mientras se copiaban las miniaturas, la tarea no paga una llamada que
+    nadie va a ver: suelta las miniaturas que copió y termina sin gasto."""
+    eid = evaluacion["eid"]
+    real = analisis.armar
+
+    def _armar(*a, **k):
+        datos.borrar_evaluacion("hf", eid)
+        return real(*a, **k)
+    monkeypatch.setattr(analisis, "armar", _armar)
+    monkeypatch.setattr(analisis, "_llamar", lambda c, s: pytest.fail("no debía llamar a Claude"))
+    assert t.meta_rend_evaluar(_tarea_eval(eid)) == "Esa evaluación ya no existe."
+    assert _gastos_eval() == [] and evaluacion["subidas"] and set(evaluacion["subidas"]) <= set(evaluacion["borradas"])

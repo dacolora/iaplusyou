@@ -31,9 +31,11 @@ import requests
 from flask_babel import gettext
 
 import doctrina
+import gastos
 import idiomas
+import triple_whale
 from referentes import datos as referentes_datos
-from triple_whale import evaluacion, visitantes
+from triple_whale import datos, evaluacion, visitantes
 from storage import r2_uploader
 
 log = logging.getLogger("creatv.triple_whale.analisis")
@@ -115,6 +117,28 @@ def muestra(ev):
             "m": {k: _redondear(a["m"].get(k)) for k in CAMPOS_M},
         })
     return salida
+
+
+def n_con_fotogramas(anuncios, creatv):
+    """Cuántos anuncios de la muestra mandan los fotogramas de su video: una pieza de Creatv lanzada en Meta, de video
+    y con su video (`visuales` / `_fotogramas_pieza`). Cada uno pesa hasta `doctrina.revisor.MAX_FOTOGRAMAS` imágenes en
+    cada llamada; los demás, una miniatura. `creatv` es lo de `datos.piezas_creatv`."""
+    n = 0
+    for a in anuncios or []:
+        pieza = (creatv or {}).get(a.get("ad_id")) if a.get("canal") == triple_whale.CANAL_META else None
+        if pieza and pieza.get("tipo") != "imagen" and pieza.get("url_video"):
+            n += 1
+    return n
+
+
+def estimado(cliente, anuncios, creatv=None):
+    """El precio de «Evaluar con IA» de esta muestra (`gastos.estimar("evaluacion_tw", n=, n_video=)`): la MISMA cuenta
+    en el botón (`panel.contexto`), la ruta que cobra (`pedidos.pedir_evaluacion`) y el estimado que anota la tarea
+    cuando Claude no responde o un reinicio la corta. `creatv`, si quien llama ya lo leyó; si no, una consulta."""
+    if creatv is None:
+        ids = [a["ad_id"] for a in anuncios or [] if a.get("canal") == triple_whale.CANAL_META]
+        creatv = datos.piezas_creatv(cliente, ids) if ids else {}
+    return gastos.estimar("evaluacion_tw", n=len(anuncios or []), n_video=n_con_fotogramas(anuncios, creatv))
 
 
 # -------------------------------------------------------------- medios ---
