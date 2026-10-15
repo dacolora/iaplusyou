@@ -76,13 +76,19 @@ desalineado con el esquema de la base tras una migración.
 Configuración › Cuenta) necesitan dos variables más en el `.env` del servidor (el
 servicio `iaplusyou` de gunicorn lo carga con `EnvironmentFile=.env`, así que no hay que
 tocar la unidad de systemd):
-- `PLATAFORMA_URL=https://app.creatvmachine.com`: la dirección pública fija del sitio. Es
+- `PLATAFORMA_URL=https://galadsy.com` (antes `https://app.creatvmachine.com`; el cambio de
+  dominio es PND-326): la dirección pública fija del sitio. Es
   la base de los enlaces que viajan en los correos (confirmar cuenta, restablecer
   contraseña) — nunca se toma de la cabecera `Host` de la petición, que la manda quien
   pide — y el único host que el servidor atiende (cualquier otro `Host` responde 404;
   `localhost`/`127.0.0.1` pasan siempre). Con `https` la cookie de sesión sale `Secure`.
   Sin ella los enlaces usan el host de `META_REDIRECT_URI`, o `http://127.0.0.1:5050`
   en local, y el log lo avisa una vez.
+- `PLATAFORMA_ALIAS=www.galadsy.com,app.creatvmachine.com`: otros dominios nuestros que
+  llevan a la app. Un GET por uno de ellos se manda (302) a la misma ruta en
+  `PLATAFORMA_URL`; un POST se atiende ahí mismo, porque los webhooks de Wompi y Bold
+  siguen llegando a la dirección vieja hasta que alguien la cambia en su panel. Cualquier
+  otro `Host` sigue respondiendo 404.
 - `DETRAS_DE_PROXY=1`: solo en el VPS, donde nginx está delante de gunicorn y es lo único
   que le llega. Con esto la IP y el esquema reales se leen de `X-Forwarded-For` /
   `X-Forwarded-Proto` (el último valor, el que añade nginx con
@@ -132,7 +138,7 @@ cambias, hay que volver a conectar cada tienda). Para conectar:
 - **WooCommerce**: WooCommerce › Ajustes › Avanzado › REST API › Añadir clave (permisos de
   lectura) → pegar Consumer key y Consumer secret junto con la URL https de la tienda.
 - **MercadoLibre**: requiere una app en developers.mercadolibre.com con redirect URI
-  `https://app.creatvmachine.com/meli/callback`; poner `MELI_APP_ID` y `MELI_SECRET` en
+  `https://galadsy.com/meli/callback`; poner `MELI_APP_ID` y `MELI_SECRET` en
   `.env` y usar el botón "Conectar con MercadoLibre". MELI no manda UTM ni Pixel: sus
   experimentos se deciden por tráfico.
 - **CSV/Excel**: columnas `nombre, precio, moneda, url_compra, fotos (varias con |),
@@ -471,7 +477,7 @@ Spec `docs/superpowers/specs/2026-10-01-escala-y-monitoreo-design.md`. Al desple
    `log.error`, queda agrupado en **/admin/salud**; uno nuevo llega por correo a los admins
    con correo verificado si hay SMTP (como mucho 10 por hora; `CREATV_AVISOS_ERRORES=0` los
    apaga). Los resueltos y silenciados se borran a los 90 días (tarea diaria `errores_limpiar`).
-6. **Monitor externo**: `https://app.creatvmachine.com/salud` responde `{"ok": true}` (200)
+6. **Monitor externo**: `https://galadsy.com/salud` responde `{"ok": true}` (200)
    si la app y la base contestan, 503 si no. Apúntale un monitor gratuito (UptimeRobot, Better
    Stack) cada 1–5 min para enterarte de una caída aunque nadie esté mirando.
 7. **Medir antes de cambiar**: `rendimiento/README.md` (datos de carga, prueba de 100 usuarios

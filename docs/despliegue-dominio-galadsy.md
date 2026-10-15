@@ -25,8 +25,10 @@ Por eso `PLATAFORMA_URL` se queda en `https://app.creatvmachine.com` y `galadsy.
    - nginx: sumar los dominios nuevos al `server_name` del bloque de `app.creatvmachine.com` (la configuración real
      vive en `/etc/nginx/…`; `deploy/nginx-creatv.conf` es solo el ejemplo):
      `server_name app.creatvmachine.com galadsy.com www.galadsy.com;`
-   - certificado: `sudo certbot --nginx -d galadsy.com -d www.galadsy.com` (después del paso 3: certbot necesita que
-     el DNS ya apunte al servidor).
+   - certificado, UNO con los tres nombres (después del paso 3: certbot necesita que el DNS ya apunte al servidor):
+     `sudo certbot --nginx --cert-name <el de «sudo certbot certificates»> --expand -d app.creatvmachine.com
+     -d galadsy.com -d www.galadsy.com`. Con solo `-d galadsy.com -d www.galadsy.com`, certbot instala un
+     certificado de galadsy en el bloque compartido y `app.creatvmachine.com` queda con uno que no es suyo.
    - `.env` del servidor: `PLATAFORMA_HOSTS_EXTRA=galadsy.com,www.galadsy.com` (sin tocar `PLATAFORMA_URL`).
    - `sudo nginx -t && sudo systemctl reload nginx`, y reiniciar `iaplusyou` (el worker no lee esta variable).
 3. **DNS en GoDaddy** (`galadsy.com` › DNS):
@@ -38,6 +40,10 @@ Por eso `PLATAFORMA_URL` se queda en `https://app.creatvmachine.com` y `galadsy.
    `https://app.creatvmachine.com` sigue igual.
 
 ## Más adelante (opcional)
+
+Mudarse del todo (PND-326) va con `PLATAFORMA_ALIAS` y los pasos de la skill `despliegue` («Cambio de dominio a
+galadsy.com»): ahí el dominio viejo redirige al nuevo y la vuelta de Meta sigue funcionando sin que cada cliente toque su
+app. Lo de abajo es la versión a mano.
 
 Si `galadsy.com` pasa a ser el dominio principal: cambiar `PLATAFORMA_URL`, avisar a cada cliente con app propia de
 Meta que agregue `https://galadsy.com/meta/callback` a sus «Valid OAuth Redirect URIs» (y el `META_REDIRECT_URI` del
