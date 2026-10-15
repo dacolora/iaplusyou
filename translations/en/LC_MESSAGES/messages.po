@@ -4405,6 +4405,9 @@ msgstr "Claude for research"
 msgid "Claude rechazó la solicitud."
 msgstr "Claude declined the request."
 
+msgid "Claude se negó a escribir este guion (respondió sin guion). No se pidió una segunda vuelta, así que solo se pagó la primera. Prueba con otra referencia o cambia la descripción del producto."
+msgstr "Claude declined to write this script (it answered without one). We didn't ask for a second pass, so only the first one was paid for. Try another reference or change the product description."
+
 msgid "Claude todavía está respondiendo tu mensaje anterior."
 msgstr "Claude is still answering your previous message."
 
