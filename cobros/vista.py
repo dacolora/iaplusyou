@@ -1057,6 +1057,7 @@ NOMBRES_AVISO_PLATA = {
     "renovacion_apagada": N_("Renovación apagada"),
     "trm_sin_tasa": N_("Sin tasa de cambio"),
     "deuda_pospago": N_("Deuda de pospago"),
+    "csp_tarjeta": N_("Política de la página de la tarjeta"),
 }
 
 

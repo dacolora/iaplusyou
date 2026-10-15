@@ -913,7 +913,8 @@ MISMO = {"Sec-Fetch-Site": "same-origin"}
 
 def test_las_excepciones_csrf_son_exactamente_los_dos_webhooks():
     import dashboard
-    assert dashboard.ENDPOINTS_OTRO_ORIGEN == {"cobros.bold_webhook", "cobros.wompi_eventos"}
+    # Más los reportes de la política de la página de la tarjeta (PND-304 a, tests/test_csp_tarjeta.py).
+    assert dashboard.ENDPOINTS_OTRO_ORIGEN == {"cobros.bold_webhook", "cobros.wompi_eventos", "cobros.csp_tarjeta"}
     assert "cobros.wompi_eventos" in dashboard.ENDPOINTS_SIN_GUARD_SESION
 
 

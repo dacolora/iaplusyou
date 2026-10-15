@@ -69,10 +69,11 @@ Saldo › Movimientos. Pruebas: `tests/test_cobros_uso_previo.py`.
 | `cobros/wompi.py` | checkout de recarga, aceptaciones, fuentes (tarjeta/Nequi), cobro de un periodo, transacción, firma de integridad y de eventos | solo `kv` `wompi:aceptaciones` (caché de los contratos, `aceptaciones_recientes`; el único módulo que habla con Wompi) |
 | `cobros/trm.py` | la TRM oficial (datos.gov.co) para cobrar en COP | `kv` `cobros:trm` (único escritor, upsert de un statement) |
 | `cobros/pasarela.py` | `para_recargas()` → `"wompi"`, `"bold"` o `None` | nada |
+| `cobros/csp.py` | los reportes de la política de scripts de la página de la tarjeta (`POST /pagos/csp/tarjeta`, PND-304 a): leer, recortar a lo justo, topes, aviso `csp_tarjeta`, `resumen()` para /admin/cobros | **ÚNICO escritor** de `kv` `cobros:csp:<huella>` |
 | `cobros/_entorno.py` | `host_local`, `plataforma_local` (las llaves o marcas de pruebas solo en local; `bold.host_local` lo reexporta) | nada |
 | `cobros/vista.py` | lo que ve la persona: movimientos, chip, resúmenes de lo cobrado, `gasto_para`, `resumen_admin`, `planes_admin`, eventos | nada (solo lee) |
 | `cobros/avisos.py` | correos y bitácora (pieza no cobrada, recarga acreditada, saldo bajo, avisos al admin) | `kv` `cobros:aviso_bajo:<cliente>` |
-| `cobros/rutas.py` | Blueprint: `/cliente/<c>/saldo/…`, `/pagos/bold/webhook`, `/pagos/wompi/eventos`, `/admin/cobros…` | nada directo: llama a los de arriba |
+| `cobros/rutas.py` | Blueprint: `/cliente/<c>/saldo/…`, `/pagos/bold/webhook`, `/pagos/wompi/eventos`, `/pagos/csp/tarjeta`, `/admin/cobros…` | nada directo: llama a los de arriba |
 | `tareas/cobros.py` | `cobros_verificar_recargas`, periódica cada 10 min (`worker.py`) | vía `recargas.verificar_pendientes` |
 | `cobros/planes.py` | planes, suscripciones, cobro de cada renovación, `aplicar_transaccion`, `renovar_todo`, cancelar/terminar/cambiar tarjeta/a mano, `estado_cliente` | **ÚNICO escritor** de `plan`, `suscripcion`, `periodo_plan`, `pago_plan` y de `kv` `planes:aceptacion:<suscripción>` (el libro escribe sus movimientos en la misma transacción) |
 | `tareas/planes.py` | `planes_renovar`, periódica cada 30 min (`worker.py`), exenta de cobro (ingreso, no gasto) | vía `planes.renovar_todo` |
@@ -290,9 +291,31 @@ vulnerabilidades»). Explicación en llano y riesgos aceptados: `docs/pagos/segu
   `recargas.manual`**: crea otra fila y un evento tardío o el rescate acreditan también la original.
 - **Página de la tarjeta** (`plan_alta.html`, por `rutas._formulario`): `CSP_TARJETA` (scripts propios, los en línea con
   el nonce de la petición —`dashboard._nonce_csp`, `csp_nonce` en `base.html`— y `checkout.wompi.co`; marcos solo de
-  Wompi; `form-action 'self'`). Arranca en **«solo reporte»** (`CSP_TARJETA_SOLO_REPORTE = True`): pasarlo a False cuando
-  la consola se vea limpia con el widget de verdad. `dashboard._cabeceras_seguridad` SUMA una CSP propia a la de base.
-  Sin manejadores en línea en esa página (el chip de Gasto usa `data-ir-config`, atendido en `base.html`).
+  Wompi; `form-action 'self'`). Arranca en **«solo reporte»** (`CSP_TARJETA_SOLO_REPORTE = True`).
+  `dashboard._cabeceras_seguridad` SUMA una CSP propia a la de base. Sin manejadores en línea en esa página (el chip de
+  Gasto usa `data-ir-config`, atendido en `base.html`).
+- **Lo que esa política bloquearía, anotado en el servidor** (PND-304 a, 2026-10-15; decisión 2026-10-13: «un
+  `report-uri` que anote las violaciones, sin depender de que alguien mire la consola»). La política lleva
+  `; report-uri /pagos/csp/tarjeta` (en los dos modos) y `cobros.csp.procesar` anota cada violación: directiva (lista
+  blanca: `script-src`, `-elem`, `-attr`, `worker-src`, `frame-src`, `child-src`, `form-action`), lo bloqueado reducido
+  a su origen o su palabra (`inline`, `eval`, `data`, `chrome-extension`…), qué página (`alta` o `tarjeta`, por la ruta
+  del documento; un reporte de otra página no se anota), `report`/`enforce`/`desconocida`, veces, primera y última. Nunca
+  la URL completa, la consulta, el `script-sample`, el archivo fuente ni el proyecto. Exenta de la barrera CSRF y de la
+  sesión por nombre (`cobros.csp_tarjeta` en `ENDPOINTS_OTRO_ORIGEN` y `ENDPOINTS_SIN_GUARD_SESION`): es la ÚNICA
+  excepción sin firma (un reporte no se puede firmar) y la protegen sus topes: 16 KB (413), 10 reportes por envío,
+  `TOPE_IP_HORA` (10) por IP y `TOPE_HORA` (60) entre todos (memoria + `cuentas.limite_ok("csp_tarjeta")`), a lo más
+  `MAX_DISTINTAS` (20) violaciones guardadas, y las que no se repiten en `DIAS` (30) se olvidan. Una violación nueva
+  avisa al admin una vez (`csp_tarjeta`, en «Avisos de plata»). /admin/cobros la muestra en `#cobros-csp-tarjeta` con el
+  modo actual. **Sin `report-to`** a propósito: en Chromium reemplaza a `report-uri` y manda por la Reporting API en
+  tandas; con el navegador integrado no llegó ningún reporte en 90 s, y con solo `report-uri` llegaron al instante las
+  tres violaciones de prueba (inline, un script de otro CDN, un marco ajeno), con `Sec-Fetch-Site: same-origin` y la
+  cookie (2026-10-15). El parser igual lee el formato de la Reporting API.
+- **Cuándo pasarla a «bloquear»** (`CSP_TARJETA_SOLO_REPORTE = False` en `cobros/rutas.py`, un despliegue): cuando,
+  después de al menos un alta y un cambio de tarjeta REALES con el widget desde que existe el registro (no en local:
+  el widget de pruebas y el de producción pueden cargar cosas distintas), `#cobros-csp-tarjeta` esté vacía o solo tenga
+  cosas que no son ni de Creatv ni de Wompi (extensiones del navegador: `chrome-extension`, `moz-extension`). Si aparece
+  un origen de Wompi (`*.wompi.co`) o nuestro (`inline`, `eval`, un `/static/`), primero se agrega a `CSP_TARJETA` y se
+  vuelve a mirar. Ya en «bloquear», la misma lista dice `bloqueado`: un renglón nuevo de Wompi ahí es un pago roto.
 - **Checkout que vence** (`HORAS_CHECKOUT` = 24, `wompi.url_checkout(..., vence=)`, `expiration-time` en UTC con
   milisegundos y firmado): visto en producción el 2026-10-12 (uno vigente muestra «Este pago vence en…»; uno vencido,
   «Ha terminado el plazo para realizar este pago»). Antes un link abierto hoy se pagaba días después a la TRM vieja.
@@ -339,7 +362,7 @@ El modelo de una tarea de Claude que cobra con precio a la vista (`meta_rend_eva
 
 ## Qué prueba qué
 
-`tests/test_cobros_db.py` (tablas y únicos), `_libro.py` (precio, reservas, cobro, corrección, reverso, candado), `_gastos.py` (`registrar` cobra, savepoint, `entregado`), `_worker.py` (reversión por cadena, respaldo, ContextVar entre hilos, clasificación de tipos), `_freno.py` (`encolar` y rutas sin saldo, 402, encoladores del worker), `_precios.py` (margen en botones, el filtro no se congela, el costo no llega al navegador), `_vista.py` (lo cobrado, chip, panel, falla cerrado), `_bold.py`, `_recargas.py` (firma, idempotencia, webhook exento solo él, cupo sin firma, vuelta que no acredita, consulta de rechazadas, BOLD_PRUEBAS solo en local), `_alertas.py`, `_admin.py`, `tests/test_planes*.py` (bolsa, Wompi falso, alta, renovación y gracia, pantallas, admin, alertas: `test_planes_alertas.py`), `tests/test_recargas_wompi.py`, `_sincronicas.py` (las rutas y funciones que llaman al proveedor en la petición y cuyo `exigir` es el único freno: Leer referente, pasos del pipeline de Flow Plus, muestra de voz propia, caption orgánico y «Escribir con IA», regla de fidelidad del importador). `tests/js/cobros.test.mjs` (el 402 y `urlSegura`). `tests/test_cobros_*` entero son la red; una regla nueva lleva su prueba aquí.
+`tests/test_cobros_db.py` (tablas y únicos), `_libro.py` (precio, reservas, cobro, corrección, reverso, candado), `_gastos.py` (`registrar` cobra, savepoint, `entregado`), `_worker.py` (reversión por cadena, respaldo, ContextVar entre hilos, clasificación de tipos), `_freno.py` (`encolar` y rutas sin saldo, 402, encoladores del worker), `_precios.py` (margen en botones, el filtro no se congela, el costo no llega al navegador), `_vista.py` (lo cobrado, chip, panel, falla cerrado), `_bold.py`, `_recargas.py` (firma, idempotencia, webhook exento solo él, cupo sin firma, vuelta que no acredita, consulta de rechazadas, BOLD_PRUEBAS solo en local), `_alertas.py`, `_admin.py`, `tests/test_planes*.py` (bolsa, Wompi falso, alta, renovación y gracia, pantallas, admin, alertas: `test_planes_alertas.py`), `tests/test_recargas_wompi.py`, `_sincronicas.py` (las rutas y funciones que llaman al proveedor en la petición y cuyo `exigir` es el único freno: Leer referente, pasos del pipeline de Flow Plus, muestra de voz propia, caption orgánico y «Escribir con IA», regla de fidelidad del importador). `tests/js/cobros.test.mjs` (el 402 y `urlSegura`). `tests/test_csp_tarjeta.py` (los reportes de la página de la tarjeta). `tests/test_cobros_*` entero son la red; una regla nueva lleva su prueba aquí.
 
 ## Trampas (2026-10-08, cada una nos costó una ronda de revisión)
 

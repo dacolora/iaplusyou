@@ -118,6 +118,34 @@
   {% endif %}
 </section>
 
+<section class="admin-bloque aparece" id="cobros-csp-tarjeta">
+  <div class="admin-cabecera">
+    <h2>{{ _('Política de scripts de la página de la tarjeta') }}</h2>
+    <span class="vacio">{% if csp_solo_reporte %}{{ _('en «solo reporte»: no bloquea nada') }}{% else %}{{ _('en «bloquear»') }}{% endif %}</span>
+  </div>
+  <p class="vacio">{{ _('El navegador anota aquí lo que la política de la página donde se guarda la tarjeta bloquearía (los últimos 30 días). Se pasa a «bloquear» cuando, después de al menos un alta y un cambio de tarjeta reales, esta lista está vacía o solo tiene extensiones del navegador; si aparece algo de Creatv o de Wompi, primero hay que permitirlo en la política.') }}</p>
+  {% if csp_tarjeta is none %}
+  <p class="estado-vacio">{{ _('No se pudo leer lo anotado.') }}</p>
+  {% elif csp_tarjeta %}
+  <div class="admin-scroll">
+    <table class="tabla-admin">
+      <thead><tr><th>{{ _('Última vez') }}</th><th>{{ _('Página') }}</th><th>{{ _('Directiva') }}</th><th>{{ _('Lo bloqueado') }}</th><th>{{ _('Modo') }}</th><th class="num">{{ _('Veces') }}</th></tr></thead>
+      <tbody>
+        {% for v in csp_tarjeta %}
+        <tr><td>{{ v.ultima | replace('T', ' ') }}</td>
+          <td>{% if v.pagina == 'tarjeta' %}{{ _('Cambio de tarjeta') }}{% else %}{{ _('Alta del plan') }}{% endif %}</td>
+          <td><code>{{ v.directiva }}</code></td><td><code>{{ v.bloqueado }}</code></td>
+          <td>{% if v.disposicion == 'enforce' %}{{ _('bloqueado') }}{% elif v.disposicion == 'report' %}{{ _('solo reporte') }}{% else %}{{ _('no se sabe') }}{% endif %}</td>
+          <td class="num">{{ v.veces }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="estado-vacio">{{ _('No hay violaciones anotadas.') }}</p>
+  {% endif %}
+</section>
+
 <section class="admin-bloque aparece" id="cobros-margen">
   <div class="admin-cabecera">
     <h2>{{ _('Margen global') }}</h2>

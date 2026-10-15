@@ -532,8 +532,10 @@ def test_ninguna_otra_ruta_acepta_un_post_de_otro_sitio(entorno, cliente_http):
     import dashboard
     # B3 (revisión final 2026-10-08): la lista de excepciones a la barrera CSRF
     # es exactamente los webhooks firmados (Bold y, desde planes 4/8, los
-    # eventos de Wompi); uno nuevo se agrega aquí a conciencia.
-    assert dashboard.ENDPOINTS_OTRO_ORIGEN == {"cobros.bold_webhook", "cobros.wompi_eventos"}
+    # eventos de Wompi) y, desde PND-304 a (2026-10-15), los reportes de la
+    # política de la página de la tarjeta (sin firma posible: solo anotan, con
+    # topes); uno nuevo se agrega aquí a conciencia.
+    assert dashboard.ENDPOINTS_OTRO_ORIGEN == {"cobros.bold_webhook", "cobros.wompi_eventos", "cobros.csp_tarjeta"}
     c = cliente_http.como("user_acme")
     r = c.post("/cliente/acme/saldo/recargar", data={"usd": "50"}, headers={"Sec-Fetch-Site": "cross-site"})
     assert r.status_code == 403

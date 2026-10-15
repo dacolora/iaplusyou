@@ -37,7 +37,9 @@ TIPOS = ("propuesta", "ganador", "rechazo_meta", "error_lanzamiento", "tope", "t
          # revisión final de planes (2026-10-10): la TRM no sirve y los cobros en pesos se frenan
          "trm_sin_tasa", "wompi_sin_evento", "wompi_rescatada",
          # pospago (Daniel 2026-10-12): a los admins, cada US$ 200 de deuda nueva
-         "deuda_pospago")
+         "deuda_pospago",
+         # PND-304 a (2026-10-15): la política de scripts de la página de la tarjeta reportó una violación nueva
+         "csp_tarjeta")
 
 
 def _config():
