@@ -447,3 +447,45 @@ def test_un_producto_con_gasto_y_sin_ventas_muestra_cero_no_guion(app):  # noqa:
     fila = productos[productos.index("HappyComfy"):]
     fila = fila[:fila.index("</tr>")]
     assert "<td>0,0×</td>" in fila
+
+
+# -------------------------------------------------- listas solo de Meta por defecto (Daniel, 2026-10-15) ---
+
+def test_con_solo_meta_las_listas_dejan_fuera_a_google_y_comparan_con_el_roas_de_meta():
+    """La búsqueda de marca de Google (ROAS 90×) inflaba el ROAS de «todos los anuncios»: comparadas con él, casi
+    ninguna pieza de Meta llegaba a «Los mejores para iterar». Solo Meta, la vara es el ROAS de Meta."""
+    anuncios = [_a("g", canal="google-ads", gasto=10, ingresos=900, pedidos=40, sesiones=500),
+                _a("m1", gasto=100, ingresos=200, pedidos=12, sesiones=300),       # ROAS 2,0
+                _a("m2", gasto=100, ingresos=300, pedidos=15, sesiones=300)]       # ROAS 3,0 → Meta = 500/200 = 2,5
+    todos = _resumen(anuncios, roas_cuenta=1400 / 210)
+    assert [f["ad_id"] for f in todos["iterar"]] == ["g"]
+    meta = D.resumir(anuncios, 1400 / 210, INDICE, {}, solo_canal="facebook-ads")
+    assert meta["solo_canal"] == "facebook-ads" and meta["roas_cuenta"] == 2.5
+    assert [f["ad_id"] for f in meta["iterar"]] == ["m2"]
+    assert "g" not in [f["ad_id"] for f in meta["conversion"] + meta["imagenes"] + meta["videos"]]
+    assert sum(p["gasto"] for p in meta["productos"]) == 210              # Productos sigue con todos los canales
+
+
+def test_armar_usa_solo_meta_si_no_se_eligio_canal_y_hay_otros(base_temporal):
+    tid = _tienda()
+    _sembrar_anuncios(tid)
+    tw = _contexto_tw(tid)
+    assert D.armar("acme", dict(tw, canal=None))["solo_canal"] is None          # solo hay Meta: nada que aclarar
+    tw["ev"]["anuncios"].append(_a("g", canal="google-ads", gasto=10, ingresos=900, pedidos=40))
+    assert D.armar("acme", dict(tw, canal=None))["solo_canal"] == "facebook-ads"
+    assert D.armar("acme", dict(tw, canal="google-ads"))["solo_canal"] is None  # eligió un canal: ese manda
+
+
+def test_la_pantalla_dice_que_las_listas_son_solo_de_meta(app):  # noqa: F811
+    from triple_whale import datos as twdatos
+    tid = _tienda()
+    _sembrar_anuncios(tid)
+    f = _hace(2)
+    twdatos.reemplazar_anuncios_canal("acme", tid, f, f, [{"canal": "google-ads", "ad_id": "busqueda", "fecha": f,
+                                                           "gasto": 50, "impresiones": 900, "anuncio": "Marca"}])
+    twdatos.reemplazar_anuncios_pixel("acme", tid, f, f, [{"canal": "google-ads", "ad_id": "busqueda", "fecha": f,
+                                                           "pedidos": 40, "ingresos": 9000, "sesiones": 500}])
+    html = _panel(app)
+    iterar = html[html.index('id="rend-iterar"'):]
+    iterar = iterar[:iterar.index("</section>")]
+    assert "Solo anuncios de Meta" in iterar and "Marca" not in iterar

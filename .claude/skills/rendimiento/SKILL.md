@@ -362,6 +362,9 @@ métricas en la pestaña, «desde Triple Whale». Spec `docs/superpowers/specs/2
   «(not set)»/«sag_organic» con ventas y gasto 0).
 - **Tipo**: `tw_creativo.tipo` (`datos.tipos_creativo`, UNA consulta); sin tipo: video con vistas de 3 s, imagen en Meta,
   y en otro canal «—» y fuera de las tarjetas (un anuncio de búsqueda de Google no es una imagen).
+- **Solo Meta por defecto (2026-10-15)**: sin canal elegido y con Meta junto a otros canales, las cuatro listas son
+  solo de Meta (`resumir(solo_canal=)`) y la vara de «iterar» es el ROAS de Meta; una línea lo dice. Motivo: la
+  búsqueda de marca de Google (ROAS ~90×) llenaba las listas e inflaba la vara. «Productos» sigue con todos.
 - **Lecturas fijas**: tipos, Catálogo y los creativos de las ≤ 12 tarjetas
   (`test_las_consultas_del_panel_no_crecen_con_los_anuncios`). No cobra ni llama a nadie.
 

@@ -61,6 +61,7 @@
 {% set moneda = d.moneda %}
 <section class="tb-seccion" id="rend-iterar">
   <div class="tb-seccion-cab"><h3>{{ _('Los mejores para iterar') }}</h3>{% if d.roas_cuenta %}<small class="vacio">{{ _('ROAS igual o mayor al de tus anuncios (%(roas)s×) y al menos %(n)s compras: las bases más seguras para hacer variaciones.', roas=d.roas_cuenta | roas, n=d.minimos.pedidos_iterar) }}</small>{% endif %}</div>
+  {% if d.solo_canal %}<p class="vacio rend-solo-canal">{{ _('Solo anuncios de Meta, aquí y en las tres listas de abajo: elige otro canal en «Canal» para ver los demás.') }}</p>{% endif %}
   {% if d.iterar %}
   <div class="tw-tabla-scroll">
     <table class="tw-tabla">

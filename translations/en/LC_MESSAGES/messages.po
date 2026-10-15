@@ -17642,6 +17642,9 @@ msgstr "I only accept .csv or .xlsx files."
 msgid "Solo activos"
 msgstr "Active only"
 
+msgid "Solo anuncios de Meta, aquí y en las tres listas de abajo: elige otro canal en «Canal» para ver los demás."
+msgstr "Meta ads only, here and in the three lists below: pick another channel in «Channel» to see the rest."
+
 msgid "Solo anuncios que siguen activos"
 msgstr "Only ads that are still active"
 
