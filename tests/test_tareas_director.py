@@ -32,7 +32,7 @@ def test_ok_guarda_prompt_a_y_director_en_la_sesion(base_temporal, monkeypatch):
     cid = _sesion(cf)
     monkeypatch.setattr(td.director, "compilar", lambda cliente, sesion, idioma="es": _resultado())
     lanzados = []
-    monkeypatch.setattr(td.flowplus_lanzar, "lanzar", lambda c, cf_id, entry, prioridad=5: lanzados.append((cf_id, prioridad)) or True)
+    monkeypatch.setattr(td.flowplus_lanzar, "lanzar", lambda c, cf_id, entry, prioridad=5, excluir_job=None: lanzados.append((cf_id, prioridad)) or True)
     msg = td.ejecutar({"payload": {"cliente": "acme", "cf_id": cid, "auto_lanzar": False}, "job_id": td.job_id("acme", cid)})
     e = cf.cargar("acme")[cid]
     assert e["estado"] == "prompt_listo" and e["prompt_relleno"] == "PROMPT A"
@@ -75,9 +75,10 @@ def test_auto_lanzar_encola_la_generacion_con_la_prioridad_del_payload(base_temp
     cid = _sesion(cf)
     monkeypatch.setattr(td.director, "compilar", lambda cliente, sesion, idioma="es": _resultado())
     lanzados = []
-    monkeypatch.setattr(td.flowplus_lanzar, "lanzar", lambda c, cf_id, entry, prioridad=5: lanzados.append((cf_id, prioridad, entry["prompt_relleno"])) or True)
+    monkeypatch.setattr(td.flowplus_lanzar, "lanzar", lambda c, cf_id, entry, prioridad=5, excluir_job=None: lanzados.append((cf_id, prioridad, entry["prompt_relleno"], excluir_job)) or True)
     td.ejecutar({"payload": {"cliente": "acme", "cf_id": cid, "auto_lanzar": True, "prioridad": 3}, "job_id": "j"})
-    assert lanzados == [(cid, 3, "PROMPT A")]
+    # El video no cuenta la reserva del director que lo lanza: ya está cobrada (PND-299, guardian-gasto).
+    assert lanzados == [(cid, 3, "PROMPT A", "j")]
 
 
 def test_pnd034_interrumpida_continua_solo_generacion_aprobada(base_temporal, monkeypatch):
@@ -87,7 +88,7 @@ def test_pnd034_interrumpida_continua_solo_generacion_aprobada(base_temporal, mo
     assert tareas.AL_INTERRUMPIR["flowplus_director"] is td.interrumpida
     cid = _sesion(cf)
     lanzados = []
-    monkeypatch.setattr(td.flowplus_lanzar, "lanzar", lambda c, cf_id, entry, prioridad=5: lanzados.append((cf_id, prioridad)) or True)
+    monkeypatch.setattr(td.flowplus_lanzar, "lanzar", lambda c, cf_id, entry, prioridad=5, excluir_job=None: lanzados.append((cf_id, prioridad)) or True)
     td.interrumpida({"payload": {"cliente": "acme", "cf_id": cid, "auto_lanzar": True}},
                      "Se interrumpió por un reinicio del servidor.")
     e = cf.cargar("acme")[cid]

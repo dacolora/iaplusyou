@@ -32,6 +32,7 @@ from referentes import datos as referentes_datos
 from referentes import sugerir as referentes_sugerir
 from sprints import (analisis, archivos, calendario, datos, entrega, estado, ideas, produccion, progreso,
                      revision as revision_mod, tablero)
+from tareas import director as tareas_director
 from tareas import sprints as tareas_sprints
 
 bp = Blueprint("sprints", __name__, url_prefix="/cliente/<cliente>/sprints")
@@ -498,11 +499,15 @@ def _piezas_de(cliente, c, modelo_video, modelo_imagen, sesiones=None):
     salida = []
     for p in c["piezas"]:
         entry = sesiones.get(p.get("cf_id")) or {}
+        costo = _costo_regenerar(cliente, c, p, modelo_video, modelo_imagen, entry.get("musica_estilo") or "")
+        # «Reintentar» relanza la sesión; «Regenerar» la duplica y un video vuelve a pasar por el director, que desde
+        # PND-299 lo paga el proyecto (`produccion.regenerar` lo pide): su precio lo suma.
+        director_usd = (tareas_director.costo_estimado() or 0.0) if p["tipo"] == "video" else 0.0
         salida.append({**p, "campana_n": int(c["orden"]) + 1, "persona_nombre": c["persona_nombre"],
                        "temporada_nombre": c["temporada_nombre"], "catalogo_id": c["catalogo_id"],
                        "funnel": c.get("funnel") or "tof",
-                       "costo_regenerar": _costo_regenerar(cliente, c, p, modelo_video, modelo_imagen,
-                                                            entry.get("musica_estilo") or ""),
+                       "costo_reintentar": costo,
+                       "costo_regenerar": None if costo is None else round(costo + director_usd, 4),
                        "doctrina": doctrina_revisor.resumen_galeria(entry.get("revision_doctrina"),
                                                                     entry.get("video_url"))})
     return salida
@@ -1413,7 +1418,7 @@ def lote_estimar(cliente, sid):
         return jsonify({"ok": False, "error": str(ex)}), 400
     # El botón pinta `usd` y `texto`: lo que ve la persona (cobros, spec 2026-10-08 §6).
     return jsonify({**e, "usd": gastos.precio(e["usd"]), "acumulado_usd": gastos.precio(e["acumulado_usd"]),
-                    "qa_usd": gastos.precio(e["qa_usd"])})
+                    "qa_usd": gastos.precio(e["qa_usd"]), "director_usd": gastos.precio(e["director_usd"])})
 
 
 @bp.post("/<int:sid>/lote")

@@ -104,18 +104,20 @@ def ejecutar(tarea):
     trabajos.reportar(jid, etapa=ETAPA_LISTO)
     creative_flow.actualizar(cliente, cf_id, estado="prompt_listo", prompt_relleno=prompt, director=datos, idioma_prompt=idioma)
     if p.get("auto_lanzar"):
-        mensaje = _lanzar_aprobado(cliente, cf_id, p) or mensaje
+        mensaje = _lanzar_aprobado(cliente, cf_id, p, excluir_job=jid) or mensaje
     return mensaje
 
 
-def _lanzar_aprobado(cliente, cf_id, p):
+def _lanzar_aprobado(cliente, cf_id, p, excluir_job=None):
     """Lanza la generación que la persona ya aprobó (`auto_lanzar`). Sin saldo
     (cobros, spec 2026-10-08 §5.4) no se encola: la sesión queda en error con
     la frase (su «Reintentar» relanza con el prompt ya armado) y la frase vuelve
     como mensaje de la tarea. Devuelve None si encoló o ya estaba encolada."""
     entry = creative_flow.cargar(cliente)[cf_id]
     try:
-        flowplus_lanzar.lanzar(cliente, cf_id, entry, prioridad=int(p.get("prioridad") or flowplus_lanzar.PRIORIDAD_NORMAL))
+        # La reserva de este director sigue viva hasta que la tarea cierre, pero ya se cobró: no cuenta (PND-299).
+        flowplus_lanzar.lanzar(cliente, cf_id, entry, prioridad=int(p.get("prioridad") or flowplus_lanzar.PRIORIDAD_NORMAL),
+                               excluir_job=excluir_job)
     except SaldoInsuficiente as e:
         frase = e.frase_proyecto()
         creative_flow.actualizar(cliente, cf_id, estado="error", error=frase)

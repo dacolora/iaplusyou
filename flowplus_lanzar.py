@@ -44,7 +44,7 @@ def costo_estimado(entry):
         return None
 
 
-def lanzar(cliente, cf_id, entry, prioridad=PRIORIDAD_NORMAL):
+def lanzar(cliente, cf_id, entry, prioridad=PRIORIDAD_NORMAL, excluir_job=None):
     """Devuelve True si encoló, False si ya había una tarea viva para esa sesión.
     Escribe estado="video_generando" ANTES de encolar: si el worker fallara
     instantáneo, podría escribir "error" y el principal pisarlo. max_intentos=1:
@@ -55,7 +55,8 @@ def lanzar(cliente, cf_id, entry, prioridad=PRIORIDAD_NORMAL):
     «prompt listo» si venía de ahí y si no queda en error con la frase (en el
     idioma del proyecto), así no se queda «generando» para siempre; después se
     relanza SaldoInsuficiente para que la ruta lo muestre o el encolador del
-    worker lo anote."""
+    worker lo anote. `excluir_job`: la tarea del worker que la lanza (el director con `auto_lanzar`): su reserva
+    sigue viva pero ya se cobró, y contarla frenaría con un «sin saldo» falso (ver `libro.exigir`)."""
     tipo = entry.get("tipo") or "video"
     previo = entry.get("estado")
     creative_flow.actualizar(cliente, cf_id, estado="video_generando")
@@ -64,7 +65,7 @@ def lanzar(cliente, cf_id, entry, prioridad=PRIORIDAD_NORMAL):
             job_id(cliente, cf_id), "flowplus_imagen" if tipo == "imagen" else "flowplus_video",
             {"cliente": cliente, "cf_id": cf_id}, cliente=cliente,
             duracion_estimada=60 if tipo == "imagen" else 180, etapas=ETAPAS_CREATIVE_FLOW,
-            max_intentos=1, prioridad=prioridad, costo_estimado=costo_estimado(entry),
+            max_intentos=1, prioridad=prioridad, costo_estimado=costo_estimado(entry), excluir_job=excluir_job,
         )
     except SaldoInsuficiente as e:
         if previo == "prompt_listo":

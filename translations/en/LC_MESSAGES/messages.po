@@ -4354,6 +4354,9 @@ msgstr "Claude didn't return a usable analysis. You can try again."
 msgid "Claude no devolvió un objeto JSON."
 msgstr "Claude didn't return a JSON object."
 
+msgid "Claude no devolvió una guía completa; no se cobró ni se cambió la guía. Intenta de nuevo."
+msgstr "Claude did not return a complete guide; nothing was charged and the guide was not changed. Try again."
+
 msgid "Claude no devolvió una respuesta válida."
 msgstr "Claude didn't return a valid answer."
 

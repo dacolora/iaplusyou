@@ -229,5 +229,9 @@ tipo (`director`, `describir_referencias`, `sugerir_sonido`, `analizar_marca`). 
 frase (la bandeja no se consume). El director que cae al prompt básico se anota con `entregado=False` (no se cobra).
 Describir y sugerir corren con `libro.pedido` en la petición; «Analizar marca» con `trabajos.iniciar_con_pedido`
 (`generador_prompts.analizar_marca(on_usage=)` avisa el uso apenas Claude responde: antes no se anotaba). Los lotes de
-Sprints suman el director de cada video al precio del lote si el proyecto cobra (`director_usd`, como el QA). Un plan
-no las incluye (no están en `planes.TIPOS_INCLUIDOS`). Pruebas: `tests/test_cobros_ayudas_ia.py`.
+Sprints suman el director de cada video al precio del lote si el proyecto cobra (`director_usd`, como el QA), y
+«Regenerar» de un video lo suma siempre (`costo_regenerar`; «Reintentar» no pasa por el director: `costo_reintentar`).
+El video que lanza el director con `auto_lanzar` no cuenta la reserva del director (`flowplus_lanzar.lanzar(...,
+excluir_job=)`): ya está cobrada. «Analizar marca» vacía o cortada (`max_tokens` 400) lanza `RespuestaInvalida`: se
+anota con `entregado=False` y no pisa la guía. Un plan no las incluye (no están en `planes.TIPOS_INCLUIDOS`). Pruebas:
+`tests/test_cobros_ayudas_ia.py`.

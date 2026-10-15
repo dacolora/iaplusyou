@@ -228,7 +228,7 @@ def confirmar_correo(usuario, correo=None):
     if entry.get("rol") == "cliente" and entry.get("cliente"):
         try:
             from cobros import libro  # noqa: PLC0415 — cobros importa media app; solo hace falta aquí
-            regalo = libro.dar_bienvenida(entry["cliente"], usuario=usuario)
+            regalo = libro.dar_bienvenida(entry["cliente"], usuario=usuario, correo=entry.get("correo"))
         except Exception:  # noqa: BLE001 — confirmar el correo nunca falla por el regalo
             log.exception("no se pudo dar el saldo de bienvenida a %s (cuenta %s)", entry.get("cliente"), usuario)
     return entry, regalo

@@ -632,3 +632,18 @@ def test_el_paso_siguiente_de_la_investigacion_no_cuenta_la_reserva_del_que_corr
     i = datos.investigacion("acme", eid)
     assert i["estado"] != "detenida", i.get("detenida_por")
     assert [t["tipo"] for t in _tareas() if t["job_id"] != tarea["job_id"]] == ["nicho_inv_buscar"]
+
+
+
+def test_pnd299_regenerar_suma_el_director_y_reintentar_no(base_temporal):
+    """«Regenerar» duplica la sesión y el video vuelve a pasar por el director (que cobra desde PND-299); «Reintentar»
+    relanza la misma sesión. Cada botón dice lo suyo (guardian-gasto 2026-10-15)."""
+    import gastos
+    from sprints import rutas
+    c = {"orden": 0, "persona_nombre": "", "temporada_nombre": "", "catalogo_id": "espejo_led", "referencias_total": 0,
+         "piezas": [{"id": 1, "tipo": "video", "modelo": "wan3", "duracion_s": 8, "cf_id": None},
+                    {"id": 2, "tipo": "imagen", "modelo": "seedream_v5_pro", "cf_id": None}]}
+    v, i = rutas._piezas_de("acme", c, "wan3", "seedream_v5_pro", sesiones={})
+    assert v["costo_reintentar"] > 0
+    assert v["costo_regenerar"] == pytest.approx(v["costo_reintentar"] + gastos.TARIFAS["director"])
+    assert i["costo_regenerar"] == i["costo_reintentar"] > 0

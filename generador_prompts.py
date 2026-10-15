@@ -117,7 +117,12 @@ def analizar_marca(image_urls, idioma="es", on_usage=None):
     )
     if on_usage:
         on_usage(getattr(resp, "usage", None))
-    return "".join(block.text for block in resp.content if block.type == "text").strip()
+    guia = "".join(block.text for block in resp.content if block.type == "text").strip()
+    if not guia or getattr(resp, "stop_reason", None) == "max_tokens":
+        # Cobrada pero vacía o cortada: quien llama no la guarda (pisaría la guía buena) ni la cobra al proyecto.
+        raise RespuestaInvalida(idiomas.N_("Claude no devolvió una guía completa; no se cobró ni se cambió la guía. "
+                                           "Intenta de nuevo."))
+    return guia
 
 
 REGLA_FIDELIDAD_PROMPT = """Eres director de arte de una marca. Te doy el nombre, la descripción y \

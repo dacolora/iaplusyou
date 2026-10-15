@@ -203,8 +203,28 @@ def test_analizar_marca_anota_lo_que_cobro_claude_aunque_la_respuesta_no_sirva(m
     monkeypatch.setattr(generador_prompts.anthropic, "Anthropic", _Cliente)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-prueba")  # llave-de-prueba
     usos = []
-    assert generador_prompts.analizar_marca(["https://r2/m1.jpg"], on_usage=usos.append) == ""
+    with pytest.raises(generador_prompts.RespuestaInvalida):        # vacía: ni se guarda ni se cobra
+        generador_prompts.analizar_marca(["https://r2/m1.jpg"], on_usage=usos.append)
     assert usos == [USO]
+
+
+def test_analizar_marca_vacia_o_cortada_no_cobra_ni_pisa_la_guia(marca_app, libro, monkeypatch):
+    """guardian-gasto 2026-10-15: con `max_tokens` 400, una respuesta cortada se cobraba y pisaba la guía buena."""
+    import generador_prompts
+    marca_app["guardado"]["guia_estilo"] = "La guía buena"
+
+    def analizar(urls, idioma="es", on_usage=None):
+        on_usage(USO)
+        raise generador_prompts.RespuestaInvalida("cortada")
+    monkeypatch.setattr(generador_prompts, "analizar_marca", analizar)
+    _cobra(libro, milesimas=5_000)
+    marca_app["c"].post("/cliente/acme/marca/analizar", headers=MISMO)
+    with pytest.raises(generador_prompts.RespuestaInvalida):
+        marca_app["iniciados"][0]()
+    assert marca_app["guardado"]["guia_estilo"] == "La guía buena" and _reservas() == []
+    g, = _gastos()
+    assert g["tipo"] == "analizar_marca"
+    assert [m["tipo"] for m in _movimientos()] == ["ajuste", "no_cobrado"]
 
 
 def test_la_seccion_de_marca_muestra_el_precio(app_crear, libro, monkeypatch):
@@ -353,3 +373,27 @@ def test_si_regalar_falla_la_verificacion_igual_queda(libro, usuarios_tmp, monke
     monkeypatch.setattr(libro, "dar_bienvenida", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("base caída")))
     entry, regalo = cuentas.confirmar_correo("ana")
     assert entry["correo_verificado"] is True and regalo == 0
+
+
+def test_bienvenida_no_a_un_proyecto_que_ya_tuvo_saldo(libro):
+    """«Cada proyecto nuevo»: uno que ya recargó (o al que el admin ya le dio el regalo a mano con un ajuste) no lo
+    recibe al verificar una cuenta."""
+    _cobra(libro, milesimas=10_000)                                        # un ajuste a favor
+    assert libro.dar_bienvenida("acme") == 0
+    import db
+    _cobra(libro, cliente="otro")
+    with db.conectar() as con:
+        libro.acreditar(con, "otro", "recarga", 10_000, "recarga_manual", usuario="admin")
+    assert libro.dar_bienvenida("otro") == 0
+
+
+def test_bienvenida_una_vez_por_buzon_aunque_cambie_el_alias(libro):
+    """guardian-gasto 2026-10-15: con un Gmail y `+1`, `+2`… cada proyecto nuevo sacaba US$ 2."""
+    assert libro.correo_canonico("Ana.Gomez+2@GMail.com") == "anagomez@gmail.com"
+    assert libro.correo_canonico("ana+x@empresa.co") == "ana@empresa.co"
+    _cobra(libro, cliente="p1")
+    _cobra(libro, cliente="p2")
+    _cobra(libro, cliente="p3")
+    assert libro.dar_bienvenida("p1", correo="ana.gomez+1@gmail.com") == 2_000
+    assert libro.dar_bienvenida("p2", correo="anagomez+2@googlemail.com") == 0
+    assert libro.dar_bienvenida("p3", correo="otra@gmail.com") == 2_000

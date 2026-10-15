@@ -1059,8 +1059,16 @@ def analizar_marca(cliente):
     pedido = libro_cobros.reservar_pedido(cliente, gastos.estimar("analizar_marca")["usd"])
 
     def trabajo():
-        guia = generador_prompts.analizar_marca(
-            urls, idioma=idioma, on_usage=lambda uso: _registrar_usage_ayuda(cliente, "analizar_marca", uso, detalle))
+        usos = []
+        try:
+            guia = generador_prompts.analizar_marca(urls, idioma=idioma, on_usage=usos.append)
+        except generador_prompts.RespuestaInvalida:
+            # Claude cobró pero la guía vino vacía o cortada: se anota sin cobrarle al proyecto y la guía no se toca.
+            for uso in usos:
+                _registrar_usage_ayuda(cliente, "analizar_marca", uso, detalle, entregado=False)
+            raise
+        for uso in usos:
+            _registrar_usage_ayuda(cliente, "analizar_marca", uso, detalle)
         data = marca_mod.cargar(cliente)
         data["guia_estilo"] = guia
         marca_mod.guardar(cliente, data)
@@ -8053,11 +8061,12 @@ def _prefill_para(cliente):
     return pre
 
 
-def _registrar_usage_ayuda(cliente, tipo, uso, detalle=""):
+def _registrar_usage_ayuda(cliente, tipo, uso, detalle="", entregado=True):
     """Lo que cobró Claude por una ayuda con IA (describir referencias, sugerir sonido, analizar marca) va al gasto
     del PROYECTO con su tipo (PND-299, decisión 2026-10-13: antes lo pagaba Creatv en `_creatv`). Con «Cobrar», sale
     de su saldo al precio de la reserva del pedido (`libro.pedido`/`en_pedido`). Claude respondió: se anota como
-    entregado (spec cobros §3.5). Nunca lanza: anotar no convierte una sugerencia que sirvió en un error."""
+    entregado (spec cobros §3.5), salvo que quien llama sepa que no sirvió (`entregado=False`: no se le cobra). Nunca
+    lanza: anotar no convierte una sugerencia que sirvió en un error."""
     if not uso:
         return
     try:
@@ -8066,7 +8075,7 @@ def _registrar_usage_ayuda(cliente, tipo, uso, detalle=""):
         salida = int(getattr(uso, "output_tokens", 0) or 0)
         gastos.registrar_seguro(cliente, tipo, costo_real(entrada, salida), f"{tipo}:{secrets.token_hex(6)}",
                                 detalle=detalle, proveedor="anthropic",
-                                extra={"tokens_entrada": entrada, "tokens_salida": salida})
+                                extra={"tokens_entrada": entrada, "tokens_salida": salida}, entregado=entregado)
     except Exception:
         # El registro nunca debe convertir una sugerencia utilizable en error.
         logging.getLogger(__name__).warning("No pude registrar el gasto de Claude (%s)", tipo)

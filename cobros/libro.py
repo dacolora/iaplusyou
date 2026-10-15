@@ -28,9 +28,10 @@ SIN_CAMBIO = object()
 CLAVE_CANDADO = "cobros:candado"
 # PND-300: la reserva de un pedido que llama al proveedor dentro de la petición (o en un hilo de
 # `trabajos.iniciar`) no tiene tarea en la cola: vive desde que se hizo hasta que se suelta, y como mucho
-# VIDA_PEDIDO_MIN minutos (lo mismo que espera `limpiar_reservas_muertas`), por si el proceso muere a mitad.
+# VIDA_PEDIDO_MIN minutos, por si el proceso muere a mitad. 30 y no 10: «Armar» de Flow Plus corre en su hilo hasta
+# varios minutos y su reserva no puede vencer mientras sigue (guardian-gasto, 2026-10-15).
 PREFIJO_PEDIDO = "pedido:"
-VIDA_PEDIDO_MIN = 10
+VIDA_PEDIDO_MIN = 30
 # PND-299 (Daniel 2026-10-13: «podríamos darle hasta 2 o 3 dólares gratis para la generación»): el saldo de
 # bienvenida de un proyecto nuevo, una sola vez, al quedar verificado el correo de una cuenta suya. Editable en
 # /admin/cobros (kv, como el margen global); 0 lo apaga. El tope evita un error de tipeo (200 en vez de 2,00).
@@ -168,13 +169,32 @@ def guardar_bienvenida(valor, usuario):
     return valor
 
 
-def dar_bienvenida(cliente, usuario=None):
+def correo_canonico(correo):
+    """El correo como lo entrega el buzón: minúsculas, sin el `+etiqueta` y, en Gmail, sin puntos
+    (`Ana.Gomez+2@gmail.com` → `anagomez@gmail.com`). Para no regalar dos veces al mismo buzón."""
+    local, _, dominio = str(correo or "").strip().lower().partition("@")
+    if not local or not dominio:
+        return ""
+    local = local.split("+", 1)[0]
+    if dominio in ("gmail.com", "googlemail.com"):
+        local, dominio = local.replace(".", ""), "gmail.com"
+    return f"{local}@{dominio}"
+
+
+def _clave_bienvenida_correo(correo):
+    import hashlib  # noqa: PLC0415
+    return CLAVE_BIENVENIDA + ":correo:" + hashlib.sha256(correo_canonico(correo).encode("utf-8")).hexdigest()[:32]
+
+
+def dar_bienvenida(cliente, usuario=None, correo=None):
     """Acredita el saldo de bienvenida a `cliente` (PND-299) y devuelve las milésimas (0 si no tocaba). Una sola vez por
     proyecto: con el candado tomado antes de leer, si ya hay un movimiento `bienvenida` no escribe nada (también si
     otra cuenta del mismo proyecto confirma su correo, o la misma confirma otro). Solo a un proyecto con «Cobrar»
-    prendido y en prepago: uno que no cobra no lo usaría, y en pospago pagaría deuda. Es un `ajuste` positivo con
-    concepto `bienvenida` («Saldo de bienvenida» en sus movimientos): no es una recarga (no entró plata) y no cuenta
-    en lo recargado del admin."""
+    prendido y en prepago: uno que no cobra no lo usaría, y en pospago pagaría deuda. Solo a un proyecto NUEVO: uno
+    que ya tuvo saldo (una recarga, un ajuste a favor —el regalo dado a mano— o un plan) no lo recibe. Y una sola vez
+    por buzón (`correo`, `correo_canonico`, guardado como hash en kv): con un Gmail y `+1`, `+2`… no se sacan
+    US$ 2 por proyecto (guardian-gasto, 2026-10-15). Es un `ajuste` positivo con concepto `bienvenida` («Saldo de
+    bienvenida» en sus movimientos): no es una recarga (no entró plata) y no cuenta en lo recargado del admin."""
     if not cliente:
         return 0
     m = db.movimiento_saldo
@@ -186,14 +206,20 @@ def dar_bienvenida(cliente, usuario=None):
                            .where(db.cuenta_saldo.c.cliente == cliente)).first()
         if fila is None or not fila.cobrar or fila.pospago:
             return 0
-        if con.execute(sa.select(m.c.id).where(m.c.cliente == cliente,
-                                               m.c.concepto == CONCEPTO_BIENVENIDA).limit(1)).first():
-            return 0
+        if con.execute(sa.select(m.c.id).where(m.c.cliente == cliente, sa.or_(
+                m.c.concepto == CONCEPTO_BIENVENIDA,
+                sa.and_(m.c.tipo.in_(("recarga", "ajuste", "plan")), m.c.milesimas > 0))).limit(1)).first():
+            return 0   # ya lo recibió, o ya tuvo saldo: no es nuevo
+        clave_correo = _clave_bienvenida_correo(correo) if correo_canonico(correo) else None
+        if clave_correo and con.execute(sa.select(db.kv.c.clave).where(db.kv.c.clave == clave_correo)).first():
+            return 0   # ese buzón ya le dio el regalo a otro proyecto
         milesimas = int(round(_bienvenida_usd(con) * 1000))
         if milesimas <= 0:
             return 0
         _insertar(con, cliente=cliente, tipo="ajuste", milesimas=milesimas, concepto=CONCEPTO_BIENVENIDA,
                   usuario=usuario, detalle="", extra={"bienvenida": True})
+        if clave_correo:
+            con.execute(db.kv.insert().values(clave=clave_correo, valor=cliente, actualizado_en=db.ahora()))
     log.info("saldo de bienvenida a %s: %s milésimas (cuenta %s)", cliente, milesimas, usuario)
     return milesimas
 
@@ -979,4 +1005,4 @@ def limpiar_reservas_muertas():
     r = db.reserva_saldo
     with db.conectar() as con:
         limite = (datetime.fromisoformat(db.ahora()) - timedelta(minutes=10)).isoformat(timespec="seconds")
-        return con.execute(r.delete().where(r.c.job_id.notin_(_vivas(con)), r.c.creada_en < limite)).rowcount
+        return con.execute(r.delete().where(~viva(con, r), r.c.creada_en < limite)).rowcount
