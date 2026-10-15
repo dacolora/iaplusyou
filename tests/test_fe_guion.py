@@ -190,7 +190,8 @@ def test_generar_guion_base_corrige_una_vez(monkeypatch):
 
 def test_generar_guion_base_json_invalido_va_a_correccion(monkeypatch):
     from final_edition import guion
-    reg = _instalar_fake(monkeypatch, ["esto no es json", json.dumps(_guion_valido())])
+    # Con llaves pero roto: es un intento de JSON, no una negativa (PND-241), y va a la corrección.
+    reg = _instalar_fake(monkeypatch, ['{"bloques": [esto no es json]}', json.dumps(_guion_valido())])
     g, costo = guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "es", "", "")
     assert len(reg.kwargs) == 2 and "JSON inválido" in reg.kwargs[1]["messages"][-1]["content"]
     assert len(g["bloques"]) == 5
@@ -669,7 +670,7 @@ def test_guion_invalido_en_el_idioma_de_quien_lo_ve(monkeypatch):
     inventado = _guion_valido()
     inventado["bloques"][0]["texto_pantalla"] = "3x más duración"
     with idiomas.en_idioma("en"):
-        _instalar_fake(monkeypatch, ["esto no es json", "tampoco"])
+        _instalar_fake(monkeypatch, ["{esto no es json}", "tampoco"])
         with pytest.raises(guion.GuionInvalido) as e:
             guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "es", "", "")
         assert str(e.value) == "Invalid script: Invalid JSON"
@@ -679,7 +680,7 @@ def test_guion_invalido_en_el_idioma_de_quien_lo_ve(monkeypatch):
         assert str(e.value).startswith("Invalid script: The figure “3x” in the hook block")
         assert "inválido" not in str(e.value) and "cifra" not in str(e.value)
     with idiomas.en_idioma("es"):
-        _instalar_fake(monkeypatch, ["esto no es json", "tampoco"])
+        _instalar_fake(monkeypatch, ["{esto no es json}", "tampoco"])
         with pytest.raises(guion.GuionInvalido) as e:
             guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "es", "", "")
         assert str(e.value) == "Guion inválido: JSON inválido"
@@ -728,3 +729,55 @@ def test_correccion_fallida_conserva_primera_valida_y_costo(monkeypatch, fallo):
     assert resultado == primera
     assert costo == pytest.approx(.022)
     assert len(llamadas) == 2
+
+
+# ------------------------------------------------- PND-241: la negativa de Claude ---
+
+NEGATIVA = "Lo siento, no puedo ayudar a escribir un guion publicitario para este producto."
+
+
+def test_si_claude_se_niega_no_se_paga_la_correccion_y_se_dice_en_palabras(monkeypatch):
+    """PND-241 (decisión 2026-10-13, lote 1): visto con cf_20261007_221411_960598 de colorado_forja el
+    2026-10-10, la app pagaba la vuelta de corrección de una respuesta sin JSON y mostraba «JSON inválido».
+    Una respuesta que no trae ningún JSON es una negativa: no se pide corrección y el error lo dice en palabras."""
+    from final_edition import guion
+    reg = _instalar_fake(monkeypatch, [(NEGATIVA, _Uso(2000, 300)), json.dumps(dict(_guion_valido(), angulo=ANG))])
+    with pytest.raises(guion.GuionNegado) as exc:
+        guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "es", "", "")
+    assert len(reg.kwargs) == 1                       # la corrección no se pidió (ni se pagó)
+    assert exc.value.costo_usd == pytest.approx((2000 * 2 + 300 * 10) / 1e6)
+    assert isinstance(exc.value, guion.GuionInvalido)  # quien la atrapa anota lo pagado como siempre
+    assert "JSON" not in str(exc.value)
+    assert "se negó" in str(exc.value) and "segunda vuelta" in str(exc.value)
+
+
+def test_la_negativa_con_stop_reason_refusal_tampoco_paga_correccion(monkeypatch):
+    from final_edition import guion
+    original = _Resp.__init__
+
+    def init(self, *a, **k):
+        original(self, *a, **k)
+        self.stop_reason = "refusal"
+    monkeypatch.setattr(_Resp, "__init__", init)
+    reg = _instalar_fake(monkeypatch, ["", json.dumps(_guion_valido())])
+    with pytest.raises(guion.GuionNegado) as exc:
+        guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "es", "", "")
+    assert len(reg.kwargs) == 1 and exc.value.costo_usd == pytest.approx(0.01)
+
+
+def test_la_negativa_al_localizar_tampoco_paga_correccion(monkeypatch):
+    from final_edition import guion
+    reg = _instalar_fake(monkeypatch, [NEGATIVA, json.dumps(_guion_valido(idioma="en", pais="US"))])
+    with pytest.raises(guion.GuionNegado):
+        guion.localizar_guion(_guion_valido(), "en", "US", 89.90)
+    assert len(reg.kwargs) == 1
+
+
+def test_la_negativa_en_ingles_para_un_proyecto_en_ingles(monkeypatch):
+    import idiomas
+    from final_edition import guion
+    with idiomas.en_idioma("en"):
+        _instalar_fake(monkeypatch, [NEGATIVA])
+        with pytest.raises(guion.GuionNegado) as e:
+            guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "es", "", "")
+    assert "Claude" in str(e.value) and "negó" not in str(e.value)

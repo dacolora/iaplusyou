@@ -538,13 +538,15 @@ def redactar(cliente, pieza_id, plataformas):
     if not plataformas:
         raise ValueError(gettext("Elige al menos una plataforma."))
     contexto = contexto_pieza(cliente, pieza_id)
+    usos = []
     try:
         # Cobros (spec 2026-10-08 §5.2): sin saldo no se llama a Claude y queda
         # el texto determinista. La ruta «Escribir con IA» pide el saldo antes
         # (y responde 402); esto cubre la publicación de una ganadora, que no
         # se frena por un texto.
         libro.exigir(cliente, gastos.TARIFAS["caption_organico"], tipo="caption_organico")
-        textos = generador_prompts.caption_organico(contexto, plataformas)
+        with generador_prompts.contar_uso() as usos:
+            textos = generador_prompts.caption_organico(contexto, plataformas)
         if not isinstance(textos, dict):
             textos = {}
         cobrar = True
@@ -566,15 +568,17 @@ def redactar(cliente, pieza_id, plataformas):
         textos = {}
         cobrar = False
     if cobrar:
-        # Se cobró la llamada (tarifa fija). La referencia lleva la hora
-        # porque cada "Escribir con IA" es una llamada nueva.
+        # Se cobró la llamada: lo que de verdad cobró Anthropic por su `usage` (PND-315: era 0,01 fijo, y con el
+        # pensamiento una llamada pasa de eso); la tarifa, solo si no hubo `usage` medido. La referencia lleva la
+        # hora porque cada "Escribir con IA" es una llamada nueva.
         # El `detalle` se guarda: en el idioma del proyecto aunque lo pida una
         # ruta (Escribir con IA) mirada en otro idioma.
         with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
             detalle = gettext("texto para %(plataformas)s de la pieza %(pieza)s",
                               plataformas=", ".join(plataformas), pieza=pieza_id)
         gastos.registrar_seguro(
-            cliente, "caption_organico", gastos.TARIFAS["caption_organico"],
+            cliente, "caption_organico",
+            generador_prompts.usd_de(usos) if usos else gastos.TARIFAS["caption_organico"],
             f"caption_organico:{pieza_id}:{datetime.now().strftime('%Y%m%d%H%M%S')}",
             proveedor="anthropic", detalle=detalle)
     out = {}

@@ -29,7 +29,7 @@ def test_registro_contiene_swap_generar(base_temporal):
         "producto_vincular", "referentes_barrer", "referentes_clasificar", "referentes_familias_en",
         "referentes_importar_copycoders", "referentes_sugerir_ia", "salidas_limpiar", "sprint_analizar_referencia",
         "sprint_empaquetar", "sprint_proponer_ideas", "sprint_qa_pendientes", "sprint_qa_pieza",
-        "sprint_reescribir_idea", "sprint_referencia_link", "sprint_sugerir_personas", "swap_generar",
+        "sprint_reescribir_idea", "sprint_referencia_link", "sprint_sugerir_personas", "swap_generar", "swap_recuperar",
         "tienda_sync_pedidos", "tienda_sync_pedidos_todas", "tienda_sync_productos", "tienda_sync_productos_todas",
         "tw_analizar_anuncio", "tw_evaluar", "tw_gancho_armar", "tw_ganchos_preparar", "tw_ganchos_vigilar",
         "tw_sincronizar", "tw_sincronizar_todas", "voz_propia_crear",
@@ -317,3 +317,38 @@ def test_swap_sin_saldo_se_explica_y_avisa(base_temporal, monkeypatch, tmp_path)
     (error,) = [k["error"] for k in actualizaciones if k.get("estado") == "error"]
     assert "saldo" in error and "Insufficient" not in error
     assert marcas == [("wavespeed", "acme")]
+
+
+class _RespCaida:
+    content = b""
+
+    def raise_for_status(self):
+        raise RuntimeError("descarga caída")
+
+
+@pytest.mark.parametrize("fallo", ["descarga", "espera"])
+def test_la_mejora_pagada_que_no_llega_se_anota_aparte_sin_cobrarla(base_temporal, monkeypatch, tmp_path, fallo):
+    """PND-315 (decisión 2026-10-13, lote 1): el upscaler que falla al bajar ya cobró sus 0,04 y se perdían.
+    Se anotan en su propia fila, sin cobrárselos al cliente (la mejora no le llegó); el swap sale igual."""
+    import gastos
+    import tareas.swap as sw
+    from providers import wavespeed_common as wc
+    payload = _swap_foto_listo(sw, monkeypatch, tmp_path, swap_id="swap_m3")
+    payload["mejorar_calidad"] = True
+    monkeypatch.setattr(sw.swaps_mod, "actualizar", lambda c, sid, **k: None)
+    monkeypatch.setattr(sw.aspect_ratio_mod, "dimensiones", lambda path: (1024, 1024))
+    monkeypatch.setattr(sw.wavespeed_imagen, "factor_seguro", lambda ancho, alto: 2)
+    if fallo == "descarga":
+        monkeypatch.setattr(sw.wavespeed_imagen, "mejorar_calidad",
+                            lambda url, factor=2, on_progreso=None: "https://prov/mejorada.png")
+        monkeypatch.setattr(sw.requests, "get", lambda *a, **k: _RespCaida())
+    else:
+        def _agotada(url, factor=2, on_progreso=None):
+            raise wc.EsperaAgotada("Bria Increase Resolution", "pred-u", 900)
+        monkeypatch.setattr(sw.wavespeed_imagen, "mejorar_calidad", _agotada)
+    sw.ejecutar({"id": 1, "job_id": "acme__swap_m3__swap", "payload": payload})
+    filas = {f["referencia"]: f for f in gastos.historial("acme")}
+    assert filas["swap:swap_m3:t1"]["usd"] == pytest.approx(0.039)
+    assert "con mejora" not in filas["swap:swap_m3:t1"]["detalle"]
+    mejora = filas["swap:swap_m3:t1:mejora"]
+    assert mejora["usd"] == pytest.approx(sw.wavespeed_imagen.COSTO_USD_UPSCALE)

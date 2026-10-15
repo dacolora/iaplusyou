@@ -479,3 +479,59 @@ def test_pnd095_grabacion_larga_rechazada_antes_de_convertir(base_temporal, monk
     assert exc.value.args[0] == voces_propias.MENSAJES["larga"]
     assert conversiones == []
     assert list((tmp_path / "grabacion").iterdir()) == []
+
+
+def test_la_muestra_que_no_se_pudo_subir_no_se_cobra(base_temporal, r2, fal, monkeypatch):
+    """Auditoría de PND-013: fal cobró la muestra pero no se pudo subir (no llegó y el próximo clic la vuelve a
+    pagar): el costo queda anotado y al cliente se le devuelve el cobro."""
+    from cobros import libro
+    libro.configurar("acme", usuario="admin", cobrar=True, pospago=True)
+    v = _voz(idioma="es")
+    monkeypatch.setattr(voces_propias, "_subir_mp3", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("R2 caído")))
+    with pytest.raises(RuntimeError):
+        voces_propias.muestra("acme", f"vp:{v['id']}", "en")
+    (g,) = [x for x in _gastos("acme") if x["referencia"].startswith("muestra_propia:")]
+    with db.conectar() as con:
+        movs = [r.tipo for r in con.execute(sa.select(db.movimiento_saldo.c.tipo)
+                                            .where(db.movimiento_saldo.c.gasto_id == g["id"]))]
+    assert g["usd"] > 0 and sorted(movs) == ["cobro", "reverso"]
+
+
+def _ficha_pagada_y_devuelta(libro):
+    ficha = {"tipo": "audio", "origen": voces_propias.ORIGEN, "url": "https://fal/p.mp3",
+             "hash": materiales.hash_clave(voces_propias.ORIGEN, "minimax", "mmx_r"), "bytes": 0, "duracion_ms": None,
+             "costo_usd": 3.0, "extra": {"nombre": "Ana", "forma": "disenada", "proveedor": "minimax",
+                                          "voice_id": "mmx_r", "idioma_muestra": "es", "estrenada": False}}
+    with libro.en_trabajo(1, "acme__voz_propia"):
+        gastos.registrar("acme", "voz_propia", 3.0, "voz_propia:disenar:t1", proveedor="fal/minimax",
+                         extra={"voice_id": "mmx_r", "ficha": ficha, "ficha_guardada": False})
+    libro.revertir_trabajo("acme", "acme__voz_propia", "falló", desde_tarea=1)
+
+
+def _neto():
+    with db.conectar() as con:
+        return con.execute(sa.select(sa.func.coalesce(sa.func.sum(db.movimiento_saldo.c.milesimas), 0))).scalar()
+
+
+def test_la_voz_que_se_recupera_al_abrir_mis_voces_no_se_cobra_en_el_get(base_temporal, r2):
+    """Decisión de quien orquesta (2026-10-15): la voz pagada por una tarea que falló se recupera gratis al abrir Mis
+    voces, como antes, pero ese GET nunca cobra."""
+    from cobros import libro
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    _ficha_pagada_y_devuelta(libro)
+    assert [v["voice_id"] for v in voces_propias.listar("acme")] == ["mmx_r"]
+    assert _neto() == 0 and "voz_propia:disenar:t1:recuperada" not in {x["referencia"] for x in _gastos("acme")}
+
+
+def test_la_voz_que_recupera_su_propia_tarea_se_cobra_al_entregarla(base_temporal, r2):
+    """Dentro de la tarea que la persona lanzó con el precio a la vista, la voz recuperada sí se cobra, una vez."""
+    from cobros import libro
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    _ficha_pagada_y_devuelta(libro)
+    voz, _ = voces_propias.crear("acme", {"forma": "disenar", "nombre": "Ana", "descripcion": "Mujer", "idioma": "es"},
+                                 ref_sufijo=":t1")
+    assert voz["voice_id"] == "mmx_r"
+    filas = {x["referencia"]: x for x in _gastos("acme")}
+    assert filas["voz_propia:disenar:t1"]["usd"] == 0
+    assert filas["voz_propia:disenar:t1:recuperada"]["usd"] == 3.0
+    assert _neto() == -libro.precio_milesimas(3.0, libro.cuenta("acme")["margen"])

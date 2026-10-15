@@ -53,6 +53,21 @@ class GuionInvalido(Exception):
         super().__init__(gettext("Guion inválido: %(errores)s", errores="; ".join(self.errores)))
 
 
+class GuionNegado(GuionInvalido):
+    """Claude se negó a escribir el guion: la respuesta no trae ningún JSON (o
+    `stop_reason="refusal"`). PND-241 (decisión 2026-10-13, lote 1): no se paga
+    la vuelta de corrección —una negativa no se corrige pidiendo el JSON otra
+    vez— y la persona lo lee en palabras, no como «JSON inválido». Es un
+    `GuionInvalido`, así que quien la atrapa anota `costo_usd` como siempre."""
+    def __init__(self, costo_usd=0.0):
+        super().__init__([], costo_usd=costo_usd)
+        mensaje = gettext("Claude se negó a escribir este guion (respondió sin guion). No se pidió una segunda "
+                          "vuelta, así que solo se pagó la primera. Prueba con otra referencia o cambia la "
+                          "descripción del producto.")
+        self.errores = [mensaje]
+        self.args = (mensaje,)
+
+
 def _api_key():
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
@@ -329,6 +344,8 @@ def _llamar(client, system, mensajes):
         messages=mensajes,
     )
     usd = _usd(getattr(resp, "usage", None))
+    if getattr(resp, "stop_reason", None) == "refusal":
+        raise GuionNegado(costo_usd=usd)
     if getattr(resp, "stop_reason", None) == "max_tokens":
         raise GuionInvalido([gettext("La respuesta de Claude salió incompleta. Intenta con un guion más corto.")],
                             costo_usd=usd)
@@ -439,6 +456,9 @@ def _generar_con_correccion(system, mensaje_usuario, duracion_s, ajustar, datos_
         costo += usd
         guion = _parsear(texto)
         extra = []
+        if guion is None and intento == 0 and "{" not in (texto or ""):
+            # Sin ningún JSON es una negativa, no un JSON roto: no se paga la corrección (PND-241).
+            raise GuionNegado(costo_usd=costo)
         if guion is None:
             errores = [gettext("JSON inválido")]
         else:

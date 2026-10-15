@@ -75,7 +75,7 @@ def entorno(base_temporal, tmp_path, monkeypatch):
     monkeypatch.setattr(fal_audio, "tts", lambda texto, voz="Rachel", idioma="es", on_progreso=None:
                         {"url": f"tts:{len(texto)}", "costo_usd": 0.05})
     monkeypatch.setattr(insumos, "_descargar", lambda url, destino: _audio(destino, 1.2))
-    monkeypatch.setattr(fal_audio, "transcribir_palabras", lambda url, idioma, on_progreso=None:
+    monkeypatch.setattr(fal_audio, "transcribir_palabras", lambda url, idioma, on_progreso=None, duracion_ms=None:
                         {"texto": "hola", "palabras": [{"inicio": 0.1, "fin": 0.5, "texto": "hola"}], "costo_usd": 0.01})
 
     def pista(estilo, segundos, carpeta_cache=None, on_progreso=None):

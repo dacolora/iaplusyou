@@ -887,7 +887,7 @@ def test_redactar_registra_el_gasto_solo_cuando_claude_respondio(proyecto, monke
     filas = gastos.historial("acme")
     assert len(filas) == 1
     g = filas[0]
-    assert g["tipo"] == "caption_organico" and g["usd"] == gastos.TARIFAS["caption_organico"] == 0.01
+    assert g["tipo"] == "caption_organico" and g["usd"] == gastos.TARIFAS["caption_organico"] == 0.06
     assert re.fullmatch(rf"caption_organico:{pid}:\d{{14}}", g["referencia"])
     assert g["proveedor"] == "anthropic" and "instagram, facebook" in g["detalle"]
 

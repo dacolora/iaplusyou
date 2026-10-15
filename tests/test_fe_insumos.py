@@ -24,7 +24,7 @@ def entorno(base_temporal, tmp_path, monkeypatch):
     llamadas = {"tts": [], "whisper": [], "ffmpeg": []}
     monkeypatch.setattr(fal_audio, "tts", lambda texto, voz="Rachel", idioma="es", on_progreso=None:
                         llamadas["tts"].append((texto, voz, idioma)) or {"url": "https://fal/x.mp3", "costo_usd": 0.05})
-    monkeypatch.setattr(fal_audio, "transcribir_palabras", lambda url, idioma, on_progreso=None:
+    monkeypatch.setattr(fal_audio, "transcribir_palabras", lambda url, idioma, on_progreso=None, duracion_ms=None:
                         llamadas["whisper"].append(url) or {"texto": "hola mundo", "costo_usd": 0.01, "palabras": [
                             {"inicio": 0.1, "fin": 0.4, "texto": "hola"}, {"inicio": 0.5, "fin": 0.9, "texto": "mundo"}]})
     duraciones = {"dur": 1.0}
@@ -69,7 +69,7 @@ def test_voz_larga_se_acelera_o_recorta_en_un_material_derivado(entorno):
 def test_voz_bloque_transcripcion_vacia_cuenta_como_hecha(entorno, monkeypatch):
     from providers import fal_audio
     ins, ll = entorno["insumos"], entorno["llamadas"]
-    monkeypatch.setattr(fal_audio, "transcribir_palabras", lambda url, idioma, on_progreso=None:
+    monkeypatch.setattr(fal_audio, "transcribir_palabras", lambda url, idioma, on_progreso=None, duracion_ms=None:
                         ll["whisper"].append(url) or {"texto": "", "palabras": [], "costo_usd": 0.01})
     mat, _ = ins.voz_bloque("acme", "Silencio total", "Rachel", "es", 1500, entorno["carpeta"])
     assert mat["extra"]["palabras"] == []

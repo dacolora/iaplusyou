@@ -364,3 +364,23 @@ def test_un_anuncio_de_imagen_se_analiza_como_imagen_y_su_version_lo_dice(en_col
     en_cola["t"].tw_analizar_anuncio({"id": 32, "payload": {"cliente": "acme", "analisis_id": en_cola["aid"]}})
     assert "EDITAR" not in llamadas[1][0]["text"]                       # el de video, como siempre
     assert datos.analisis_anuncio("acme", en_cola["aid"])["resultado"]["version"]["tipo"] == "video"
+
+
+def test_whisper_que_cobro_y_no_llego_o_costo_cero_igual_se_anota(en_cola, monkeypatch):
+    """PND-186 (1), dentro de la auditoría de PND-013: si Whisper falla después de que fal cobró, o cuesta 0, se
+    anotaba nada. Lo cobrado se anota sin cobrárselo al cliente; un costo 0 queda como constancia."""
+    from providers import fal_client
+
+    def _agotada(foto_):
+        e = fal_client.EsperaAgotadaFal("fal-ai/whisper", "req-1", "IN_PROGRESS", True)
+        e.costo_usd = 0.0012
+        raise e
+    monkeypatch.setattr(mejorar, "transcribir", _agotada)
+    monkeypatch.setattr(mejorar, "analizar", lambda texto, imagenes, idioma, verificable_extra="", duracion_s=None, verificable=None, segundos_vistos=None, tipo="video": (
+        mejorar.parsear(respuesta(), texto), 100, 50))
+    en_cola["t"].tw_analizar_anuncio({"id": 4, "payload": {"cliente": "acme", "analisis_id": en_cola["aid"]}})
+    voz = [g for g in _gastos() if g["tipo"] == "transcripcion"]
+    assert [(g["referencia"], g["usd"]) for g in voz] == [(f"tw_anuncio:{en_cola['aid']}:t4:voz", 0.0012)]
+    monkeypatch.setattr(mejorar, "transcribir", lambda foto_: {"texto": "", "costo_usd": 0, "frases": []})
+    en_cola["t"].tw_analizar_anuncio({"id": 5, "payload": {"cliente": "acme", "analisis_id": en_cola["aid"]}})
+    assert f"tw_anuncio:{en_cola['aid']}:t5:voz" in [g["referencia"] for g in _gastos()]

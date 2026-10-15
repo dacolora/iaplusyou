@@ -85,7 +85,11 @@ TIPOS = ("video", "imagen", "swap", "guion", "final", "regla_producto", "caption
 TARIFAS = {
     "guion": 0.13,
     "regla_producto": 0.01,
-    "caption_organico": 0.01,
+    # Texto orgánico («Escribir con IA», la publicación de una ganadora): la doctrina en el system y hasta 4 000
+    # tokens de salida con el pensamiento. Peor caso con ese tope: 4 000 × US$ 10/M + ≈ 6 000 de entrada (la
+    # doctrina escrita en caché, 1,25×) × US$ 2/M ≈ 0,055. Era 0,01 fijo y se anotaba eso (PND-315: ahora se anota
+    # lo real; revisión de guardian-gasto, 2026-10-15: el botón tiene que mostrar un precio que no se quede corto).
+    "caption_organico": 0.06,
     "adaptar_referente": 0.01,
     # «Recrear» fiel (spec 2026-09-30): una llamada de visión que describe la
     # composición y lee los textos de la referencia, una vez por referente.
@@ -155,6 +159,11 @@ TARIFAS = {
     "sugerir_sonido": 0.002,
     # Analizar marca (`generador_prompts.analizar_marca`): hasta 5 imágenes (~1 600 tokens c/u) y 400 de salida.
     "analizar_marca": 0.025,
+    # La revisión de marca de cada swap (`generador_prompts.evaluar_contra_matriz`): una llamada con visión y hasta
+    # 1 500 tokens de salida. Peor caso con ese tope: 1 500 × US$ 10/M + ≈ 3 000 de entrada (imagen y reglas) ×
+    # US$ 2/M ≈ 0,021; se anota lo real (PND-315) y este es el precio que se ve antes (revisión de guardian-gasto,
+    # 2026-10-15: se cobraba sin estar en el precio del swap).
+    "revision_marca": 0.02,
 }
 
 # Evaluación de anuncios de Triple Whale con IA (spec 2026-09-28 §6): una llamada con visión (una miniatura por
@@ -369,11 +378,20 @@ def _estimar_imagen(modelo=None, n_referencias=1, **_):
     return r.get("usd"), f"{modelo} · {max(1, int(n_referencias or 1))} referencia(s)"
 
 
-def _estimar_swap(proveedor=None, formato="foto", mejorar_calidad=False, duracion=5, n_referencias=1, fps=None, **_):
+def _estimar_swap(proveedor=None, formato="foto", mejorar_calidad=False, duracion=5, n_referencias=1, fps=None,
+                  con_revision=False, **_):
     """Misma tabla que usa `tareas/swap.py` al cobrar: cada proveedor tiene
     su `estimate_*`; el que no esté aquí no tiene tarifa (None). `formato`
     es "foto" | "video" (el `tipo` del swap). En video, `duracion` y `fps` son
-    los del video que se sube (`providers.swap_video_precio`, PND-312)."""
+    los del video que se sube (`providers.swap_video_precio`, PND-312). `con_revision`: el proyecto tiene reglas
+    de marca y cada swap pasa por la revisión de marca con Claude, que se cobra (`TARIFAS["revision_marca"]`)."""
+    usd, detalle = _estimar_swap_proveedor(proveedor, formato, mejorar_calidad, duracion, n_referencias, fps)
+    if usd is not None and con_revision:
+        usd, detalle = float(usd) + TARIFAS["revision_marca"], f"{detalle} · revisión de marca"
+    return usd, detalle
+
+
+def _estimar_swap_proveedor(proveedor, formato, mejorar_calidad, duracion, n_referencias, fps):
     from providers import (comparador_modelos, kling_o1_client, nano_banana_client, wavespeed_client,
                            wavespeed_imagen, wavespeed_video_edit)
     if not proveedor:
@@ -633,6 +651,16 @@ def registrar(cliente, tipo, usd, referencia, detalle="", proveedor=None, extra=
     ya existía recalcula su cobro si lo tenía y nunca lo crea (§3.2).
     `entregado=False`: el proveedor cobró pero la pieza no llegó; el costo se
     anota igual y al cliente no se le cobra (spec §3.4)."""
+    fila = _normalizar(cliente, tipo, usd, referencia, detalle, proveedor)
+    with db.conectar() as con:
+        gasto_id, resultado_cobro, usd_final = _escribir(con, cliente, *fila, extra=extra, creado_en=creado_en,
+                                                         conservar_mayor=conservar_mayor, entregado=entregado)
+    _despues_del_cobro(cliente, resultado_cobro, gasto_id, usd_final, fila[0], fila[2])
+    return gasto_id
+
+
+def _normalizar(cliente, tipo, usd, referencia, detalle, proveedor):
+    """(tipo, monto, referencia, detalle, proveedor) como se guardan."""
     if not cliente or not referencia:
         raise ValueError("registrar necesita cliente y referencia.")
     tipo = tipo if tipo in TIPOS else "otro"
@@ -645,6 +673,13 @@ def registrar(cliente, tipo, usd, referencia, detalle="", proveedor=None, extra=
     detalle = (detalle or "")[:300]
     proveedor = (proveedor or None) and str(proveedor)[:30]
     referencia = str(referencia)[:160]
+    return tipo, monto, referencia, detalle, proveedor
+
+
+def _escribir(con, cliente, tipo, monto, referencia, detalle, proveedor, *, extra=None, creado_en=None,
+              conservar_mayor=False, entregado=True):
+    """El upsert del gasto y su cobro, dentro de la transacción `con`.
+    Devuelve (gasto_id, resultado_cobro, usd_final)."""
     valores = {"tipo": tipo, "usd": monto, "detalle": detalle}
     # Al actualizar, proveedor/extra solo se pisan si vienen (una segunda
     # llamada que solo corrige el monto no borra lo que ya se sabía).
@@ -655,11 +690,11 @@ def registrar(cliente, tipo, usd, referencia, detalle="", proveedor=None, extra=
         cambios["extra"] = extra
     g = db.gasto
 
-    def _actualizar(con, gasto_id):
+    def _actualizar(gasto_id):
         con.execute(sa.update(g).where(g.c.id == gasto_id,
             g.c.usd <= monto if conservar_mayor else sa.true()).values(**cambios))
 
-    def _cobrar(con, gasto_id, nuevo):
+    def _cobrar(gasto_id, nuevo):
         """El cobro en su propio savepoint, con el candado de escritura YA tomado
         por el INSERT/UPDATE del gasto: en WAL, una transacción diferida que lee y
         después escribe recibe «database is locked» al instante si otro escritor
@@ -683,33 +718,150 @@ def registrar(cliente, tipo, usd, referencia, detalle="", proveedor=None, extra=
             resultado = "error"
         return resultado, usd_final
 
+    fila = con.execute(sa.select(g.c.id).where(g.c.cliente == cliente, g.c.referencia == referencia)).first()
+    if fila:
+        gasto_id = int(fila.id)
+        _actualizar(gasto_id)   # el UPDATE abre la transacción y toma el candado
+        resultado_cobro, usd_final = _cobrar(gasto_id, nuevo=False)
+        return gasto_id, resultado_cobro, usd_final
+    try:
+        with con.begin_nested():
+            r = con.execute(sa.insert(g).values(cliente=cliente, referencia=referencia,
+                                                creado_en=(creado_en or db.ahora())[:19],
+                                                proveedor=proveedor, extra=extra or {}, **valores))
+            gasto_id = int(r.inserted_primary_key[0])
+            # DENTRO del savepoint del gasto: pysqlite no emite BEGIN antes de un
+            # SAVEPOINT, así que este es el más externo; el INSERT ya tomó el candado
+            # y su RELEASE confirma gasto y cobro juntos.
+            resultado_cobro, usd_final = _cobrar(gasto_id, nuevo=True)
+    except sa.exc.IntegrityError:
+        # Carrera: otro proceso insertó la misma referencia entre el select y el insert.
+        fila = con.execute(sa.select(g.c.id).where(g.c.cliente == cliente,
+                                                   g.c.referencia == referencia)).first()
+        gasto_id = int(fila.id)
+        _actualizar(gasto_id)
+        resultado_cobro, usd_final = _cobrar(gasto_id, nuevo=False)
+    return gasto_id, resultado_cobro, usd_final
+
+
+# ------------------------------------------- cobrar lo que se entrega después ---
+
+def _pendiente_de_cobro(con, gasto_id):
+    """¿Se pagó y al cliente no se le cobró? Un `no_cobrado` (el proveedor cobró y la pieza no llegó), o un
+    `cobro` con su `reverso` (la tarea falló después). Sin movimientos (un proyecto que no cobra) o con un
+    `cobro` vivo o `incluido`: no. Solo lee."""
+    m = db.movimiento_saldo
+    tipos = {r.tipo for r in con.execute(sa.select(m.c.tipo).where(m.c.gasto_id == gasto_id))}
+    return "no_cobrado" in tipos or {"cobro", "reverso"} <= tipos
+
+
+def pendientes_por_clave(cliente, prefijos, claves):
+    """Las partes que quedaron en caché tras un trabajo que falló después de pagar y que nadie le cobró al
+    cliente: filas del proyecto cuya referencia empieza con alguno de `prefijos`, con `extra.cache[clave]`
+    para una de `claves` y pendientes de cobro (`_pendiente_de_cobro`). Devuelve
+    [{"referencia", "clave", "usd"}], lo que `registrar_trasladando` recibe. Solo lee."""
+    claves = set(claves or ())
+    if not claves or not prefijos:
+        return []
+    g = db.gasto
+    filtro = sa.or_(*[g.c.referencia.startswith(p, autoescape=True) for p in prefijos])
+    salida = []
     with db.conectar() as con:
-        fila = con.execute(sa.select(g.c.id).where(g.c.cliente == cliente, g.c.referencia == referencia)).first()
-        resultado_cobro = None
-        if fila:
-            gasto_id = int(fila.id)
-            _actualizar(con, gasto_id)   # el UPDATE abre la transacción y toma el candado
-            resultado_cobro, usd_final = _cobrar(con, gasto_id, nuevo=False)
-        else:
-            try:
-                with con.begin_nested():
-                    r = con.execute(sa.insert(g).values(cliente=cliente, referencia=referencia,
-                                                        creado_en=(creado_en or db.ahora())[:19],
-                                                        proveedor=proveedor, extra=extra or {}, **valores))
-                    gasto_id = int(r.inserted_primary_key[0])
-                    # DENTRO del savepoint del gasto: pysqlite no emite BEGIN antes de un
-                    # SAVEPOINT, así que este es el más externo; el INSERT ya tomó el candado
-                    # y su RELEASE confirma gasto y cobro juntos.
-                    resultado_cobro, usd_final = _cobrar(con, gasto_id, nuevo=True)
-            except sa.exc.IntegrityError:
-                # Carrera: otro proceso insertó la misma referencia entre el select y el insert.
-                fila = con.execute(sa.select(g.c.id).where(g.c.cliente == cliente,
-                                                           g.c.referencia == referencia)).first()
-                gasto_id = int(fila.id)
-                _actualizar(con, gasto_id)
-                resultado_cobro, usd_final = _cobrar(con, gasto_id, nuevo=False)
-    _despues_del_cobro(cliente, resultado_cobro, gasto_id, usd_final, tipo, referencia)
-    return gasto_id
+        filas = con.execute(sa.select(g.c.id, g.c.referencia, g.c.extra)
+                            .where(g.c.cliente == cliente, filtro).order_by(g.c.id)).all()
+        for f in filas:
+            cache = (f.extra or {}).get("cache") or {}
+            propias = [k for k in cache if k in claves]
+            if propias and _pendiente_de_cobro(con, f.id):
+                salida += [{"referencia": f.referencia, "clave": k, "usd": float(cache[k] or 0)} for k in propias]
+    return salida
+
+
+def registrar_trasladando(cliente, tipo, usd, referencia, traslados, detalle="", proveedor=None, extra=None,
+                          entregado=True):
+    """`registrar` de una entrega que además se lleva lo que el proveedor cobró antes y nunca se le cobró al
+    cliente (PND-314 y PND-318, decisión 2026-10-13, lote 1: «se cobra cuando se reusa»): la pieza recuperada
+    sin pagar de nuevo, o lo que quedó en caché tras una final que falló. Cada traslado es
+    {"referencia": <fila de origen>, "clave": <clave de su extra.cache> | None}; con clave se mueve ese monto (la
+    clave sale de `extra.cache`), sin clave toda la fila. El origen BAJA en lo movido y anota a dónde fue en
+    `extra.trasladado`: el proveedor cobró una sola vez y la tabla sigue sumando lo mismo que su factura. Un
+    origen ya cobrado, de otro proyecto o de un proyecto que no cobra no se toca. Todo en una transacción, con
+    el candado tomado antes de leer. Sin nada que mover y con `usd` 0 no escribe nada.
+    Devuelve (gasto_id | None, usd_movido)."""
+    tipo_n, monto, referencia_n, detalle_n, proveedor_n = _normalizar(cliente, tipo, usd, referencia, detalle,
+                                                                      proveedor)
+    g = db.gasto
+    ahora = db.ahora()
+    with db.conectar() as con:
+        con.execute(db.kv.update().where(db.kv.c.clave == "gastos:candado").values(valor=db.kv.c.valor))
+        movido, hechos = 0.0, []
+        # Una fila de origen puede traer varias claves (el borrador y el destino de la misma final fallida): se
+        # lee UNA vez y se le descuentan todas, para que cada clave salga y se cobre una sola vez.
+        origenes = {}
+        for t in traslados or ():
+            ref_origen = str(t.get("referencia") or "")
+            if ref_origen not in origenes:
+                fila = con.execute(sa.select(g).where(g.c.cliente == cliente, g.c.referencia == ref_origen)).first()
+                if fila is None or fila.referencia == referencia_n or not _pendiente_de_cobro(con, fila.id):
+                    origenes[ref_origen] = None
+                    continue
+                origenes[ref_origen] = {"fila": fila, "usd": float(fila.usd or 0.0), "extra": dict(fila.extra or {})}
+            o = origenes[ref_origen]
+            if o is None:
+                continue
+            clave = t.get("clave")
+            if clave:
+                cache = dict(o["extra"].get("cache") or {})
+                if clave not in cache:
+                    continue
+                parte = min(float(cache.pop(clave) or 0.0), o["usd"])
+                o["extra"]["cache"] = cache
+            else:
+                parte = o["usd"]
+            parte = round(max(0.0, parte), 4)
+            if parte <= 0:
+                continue
+            o["usd"] = round(o["usd"] - parte, 4)
+            o["extra"]["trasladado"] = list(o["extra"].get("trasladado") or []) + [
+                {"a": referencia_n, "clave": clave, "usd": parte, "en": ahora}]
+            o["movido"] = True
+            hechos.append({"de": ref_origen, "clave": clave or f"traslado:{ref_origen}", "usd": parte})
+            movido += parte
+        correcciones = [o for o in origenes.values() if o and o.get("movido")]
+        movido = round(movido, 4)
+        if not movido and not monto:
+            return None, 0.0
+        for o in correcciones:
+            # Una corrección (nuevo=False): un `no_cobrado` sigue igual; un cobro con su reverso baja en par.
+            f = o["fila"]
+            _escribir(con, cliente, f.tipo, o["usd"], f.referencia, f.detalle or "", f.proveedor, extra=o["extra"],
+                      entregado=False)
+        extra_destino = dict(extra or {})
+        if hechos:
+            extra_destino["traslados"] = list(extra_destino.get("traslados") or []) + hechos
+            extra_destino["usd_trasladado"] = movido
+            # Si la entrega falla después y se le devuelve el cobro, lo movido queda pendiente aquí con sus mismas
+            # claves: la próxima que lo reuse lo encuentra (revisión de guardian-gasto, 2026-10-15).
+            cache = dict(extra_destino.get("cache") or {})
+            for h in hechos:
+                cache[h["clave"]] = round(float(cache.get(h["clave"]) or 0.0) + h["usd"], 4)
+            extra_destino["cache"] = cache
+        gasto_id, resultado, usd_final = _escribir(con, cliente, tipo_n, round(monto + movido, 4), referencia_n,
+                                                   detalle_n, proveedor_n, extra=extra_destino, entregado=entregado)
+    _despues_del_cobro(cliente, resultado, gasto_id, usd_final, tipo_n, referencia_n)
+    return gasto_id, movido
+
+
+def registrar_trasladando_seguro(cliente, tipo, usd, referencia, traslados, **kw):
+    """`registrar_trasladando` que nunca lanza: si falla, anota la entrega sola con `registrar_seguro` (lo
+    pagado en esta corrida no se pierde; lo de antes sigue pendiente en su fila). Devuelve lo mismo."""
+    try:
+        return registrar_trasladando(cliente, tipo, usd, referencia, traslados, **kw)
+    except Exception:  # noqa: BLE001 — ver docstring
+        log.exception("No se pudo trasladar lo pendiente de cobro a %s de %s", referencia, cliente)
+        if not usd:
+            return None, 0.0
+        return registrar_seguro(cliente, tipo, usd, referencia, **kw), 0.0
 
 
 def _neto_del_gasto(con, gasto_id):

@@ -186,3 +186,18 @@ miles de carpetas en $TMPDIR (31 000 y 25 GB en el Mac de Daniel; 781 296 y 589 
 disco). Un fixture nuevo que cree carpetas temporales las borra igual (`tests/test_conftest_limpieza.py` vigila este).
 Lo arreglaron a la vez main y la rama de Rendimiento; al integrarlas (2026-10-10) quedó el de main (INT-2) y la prueba
 propia de la rama (`test_conftest_base_temporal.py`) se fue: vigilaba lo mismo.
+
+**Cobrar lo que se entrega después (PND-314/318, decisión 2026-10-13, lote 1: «se cobra cuando se reusa»).** Lo que el
+proveedor cobró y al cliente no se le cobró (su gasto tiene un `no_cobrado`, o un `cobro` con su `reverso`) queda
+pendiente; cuando por fin se entrega (un swap recuperado) o se reusa desde la caché (lo que dejó una final fallida),
+`gastos.registrar_trasladando(cliente, tipo, usd, referencia, traslados)` lo cobra: en UNA transacción (candado antes
+de leer) baja cada fila de origen en lo movido (con `clave`, solo `extra.cache[clave]`; sin clave, toda la fila) y
+anota a dónde fue (`extra.trasladado`), y registra la entrega con su costo + lo movido (`extra.traslados`). La suma de
+la tabla no cambia: el proveedor cobró una vez y se anota una vez. Un origen ya cobrado, de otro proyecto o de un
+proyecto sin «Cobrar» no se toca. Varias claves de una misma fila (el borrador y el destino de una final fallida) se
+descuentan sobre UNA lectura de la fila: cada clave se cobra una vez (revisión de guardian-gasto, 2026-10-15: el
+segundo traslado leía la fila vieja y el borrador se cobraba dos veces). La entrega guarda en su `extra.cache` las
+mismas claves que se llevó: si su tarea falla después y se le devuelve el cobro, lo movido queda pendiente ahí y la
+próxima que lo reuse lo encuentra. `pendientes_por_clave(cliente, prefijos, claves)` lista lo pendiente por clave;
+`registrar_trasladando_seguro` nunca lanza (si falla, anota la entrega sola). `registrar` se partió en `_normalizar` +
+`_escribir(con, …)` para poder escribir varias filas en una transacción. Pruebas: `tests/test_gastos_traslado.py`.

@@ -270,7 +270,8 @@ def sugerir_ia(candidatos_, persona_texto, producto_texto, temporada_texto, obje
     respuesta = cliente_ia.messages.create(model=MODEL, max_tokens=tope,
                                            system=doctrina.bloque_system("clasificar", idioma=idioma),
                                            messages=[{"role": "user", "content": texto}])
-    ent = getattr(respuesta.usage, "input_tokens", 0) or 0
+    from guiones.claude import tokens_entrada_equivalentes  # noqa: PLC0415 — la caché de la doctrina también se cobra
+    ent = tokens_entrada_equivalentes(respuesta.usage)
     sal = getattr(respuesta.usage, "output_tokens", 0) or 0
     motivo = {"refusal": gettext("Claude rechazó la solicitud."),
               "max_tokens": gettext("La respuesta de Claude se cortó por largo (max_tokens).")}.get(getattr(respuesta, "stop_reason", None))

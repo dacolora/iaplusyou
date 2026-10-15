@@ -200,6 +200,21 @@ def costo(n_resultados, n_corridas, actor):
     return math.ceil(round(bruto * 100, 6)) / 100
 
 
+def costo_conciliado(n_resultados, corridas, actor):
+    """PND-315 (decisión 2026-10-13, lote 1): el cobro de un lote conciliado con lo que Apify reporta de cada
+    corrida (`usd_real`, de `usageTotalUsd`). Con todas las corridas lanzadas conciliadas, lo mayor entre esa
+    suma y resultados × precio (la misma regla del barrido de referentes: `usageTotalUsd` puede no traer lo
+    que cobra un actor por resultado); si falta alguna, el estimado de siempre con `conciliacion_pendiente`.
+    Devuelve (usd, extra)."""
+    estimado = costo(n_resultados, len([c for c in corridas or () if c.get("run_id")]), actor)
+    lanzadas = [c for c in corridas or () if c.get("run_id")]
+    reales = [c.get("usd_real") for c in lanzadas]
+    if not lanzadas or any(r is None for r in reales):
+        return estimado, ({"conciliacion_pendiente": True} if lanzadas else {})
+    usd_apify = round(sum(float(r) for r in reales), 4)
+    return max(estimado, usd_apify), {"usd_apify": usd_apify, "usd_formula": estimado}
+
+
 def _texto(v, largo):
     return ("" if v is None else str(v)).strip()[:largo]
 

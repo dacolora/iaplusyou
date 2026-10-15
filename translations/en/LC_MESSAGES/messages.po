@@ -283,8 +283,20 @@ msgid "%(detalle)s (respuesta inutilizable: %(error)s)"
 msgstr "%(detalle)s (unusable response: %(error)s)"
 
 #, python-format
+msgid "%(detalle)s · fal cobró y no devolvió la voz"
+msgstr "%(detalle)s · fal charged and didn't return the voice"
+
+#, python-format
+msgid "%(detalle)s · fal la cobró y no llegó"
+msgstr "%(detalle)s · fal charged for it and it didn't arrive"
+
+#, python-format
 msgid "%(detalle)s · falló al guardar; fal ya cobró"
 msgstr "%(detalle)s · saving failed; fal already charged"
+
+#, python-format
+msgid "%(detalle)s · incluye lo que dejó un intento fallido"
+msgstr "%(detalle)s · includes what a failed attempt left behind"
 
 #, python-format
 msgid "%(dia)s (antes)"
@@ -461,12 +473,32 @@ msgid "%(modelo)s no pudo generar: %(detalle)s. Un intento fallido normalmente n
 msgstr "%(modelo)s could not generate: %(detalle)s. A failed attempt is normally not charged."
 
 #, python-format
+msgid "%(modelo)s no terminó el swap; no cobró"
+msgstr "%(modelo)s didn't finish the swap; it didn't charge"
+
+#, python-format
 msgid "%(modelo)s rechazó el contenido por sensible (el texto o las imágenes): cambia la escena y vuelve a generar. No se cobró. Detalle: %(detalle)s"
 msgstr "%(modelo)s rejected the content as sensitive (the text or the images): change the scene and generate again. Nothing was charged. Detail: %(detalle)s"
 
 #, python-format
+msgid "%(modelo)s sigue trabajando en este swap y lo cobra igual. Toca «Recuperar el resultado» en unos minutos: %(modelo)s no lo cobra otra vez y a ti se te cobra solo cuando llegue."
+msgstr "%(modelo)s is still working on this swap and charges for it anyway. Tap “Recover the result” in a few minutes: %(modelo)s won't charge for it again, and you're only charged when it arrives."
+
+#, python-format
+msgid "%(modelo)s siguió trabajando en este swap después de que dejamos de esperar. No se puede recuperar desde aquí y no se te cobró."
+msgstr "%(modelo)s kept working on this swap after we stopped waiting. It can't be recovered from here and you weren't charged."
+
+#, python-format
 msgid "%(modelo)s solo usa la primera referencia (%(primera)s): no usaría %(sobran)s. Elige Wan 3.0, Kling O3 Pro o Seedance 2.5 · varias referencias para usarlas todas, o deja solo una — no se cobró nada."
 msgstr "%(modelo)s only uses the first reference (%(primera)s): it would not use %(sobran)s. Choose Wan 3.0, Kling O3 Pro or Seedance 2.5 · multiple references to use them all, or keep just one — nothing was charged."
+
+#, python-format
+msgid "%(modelo)s terminó sin devolver ningún resultado."
+msgstr "%(modelo)s finished without returning any result."
+
+#, python-format
+msgid "%(modelo)s todavía no termina este swap. Vuelve a tocar «Recuperar el resultado» en unos minutos; no se paga de nuevo."
+msgstr "%(modelo)s hasn't finished this swap yet. Tap “Recover the result” again in a few minutes; you don't pay again."
 
 #, python-format
 msgid "%(modelo)s usa hasta %(n)s referencias: no usaría %(sobran)s. Quita las que sobran o cambia de modelo — no se cobró nada."
@@ -479,6 +511,10 @@ msgstr "%(modelo)s · %(n)s reference(s)"
 #, python-format
 msgid "%(modelo)s · %(n)s referencia(s) · falló al descargar; el modelo ya cobró"
 msgstr "%(modelo)s · %(n)s reference(s) · download failed; the model already charged"
+
+#, python-format
+msgid "%(modelo)s · %(n)s referencia(s) · se agotó la espera; el modelo la cobra igual"
+msgstr "%(modelo)s · %(n)s reference(s) · the wait ran out; the model charges for it anyway"
 
 #, python-format
 msgid "%(modelos)s está en pausa"
@@ -627,6 +663,10 @@ msgstr "%(n)s notice(s): %(muestra)s"
 #, python-format
 msgid "%(n)s campaña(s)"
 msgstr "%(n)s campaign(s)"
+
+#, python-format
+msgid "%(n)s caracteres · fal la cobró y no llegó"
+msgstr "%(n)s characters · fal charged for it and it didn't arrive"
 
 #, python-format
 msgid "%(n)s cobros rechazados"
@@ -3659,6 +3699,9 @@ msgstr "Searches videos by keyword and brings their comments into a Niche study.
 msgid "Buscando"
 msgstr "Searching"
 
+msgid "Buscando el resultado en WaveSpeed"
+msgstr "Looking for the result on WaveSpeed"
+
 msgid "Buscando en Apify"
 msgstr "Searching on Apify"
 
@@ -4433,6 +4476,9 @@ msgstr "Claude for research"
 
 msgid "Claude rechazó la solicitud."
 msgstr "Claude declined the request."
+
+msgid "Claude se negó a escribir este guion (respondió sin guion). No se pidió una segunda vuelta, así que solo se pagó la primera. Prueba con otra referencia o cambia la descripción del producto."
+msgstr "Claude declined to write this script (it answered without one). We didn't ask for a second pass, so only the first one was paid for. Try another reference or change the product description."
 
 msgid "Claude todavía está respondiendo tu mensaje anterior."
 msgstr "Claude is still answering your previous message."
@@ -6941,6 +6987,10 @@ msgstr "The split exceeds the total: %(diario)s %(moneda)s a day for %(dias)s da
 msgid "El reparto supera el total: baja el presupuesto de algún país o sube el total."
 msgstr "The split exceeds the total: lower a country's budget or raise the total."
 
+#, python-format
+msgid "El resultado ya está listo en %(modelo)s pero no se pudo bajar: %(error)s. Vuelve a tocar «Recuperar el resultado»."
+msgstr "The result is ready on %(modelo)s but couldn't be downloaded: %(error)s. Tap “Recover the result” again."
+
 msgid "El ritmo va entre 1,5 y 4 palabras por segundo."
 msgstr "The pace is between 1.5 and 4 words per second."
 
@@ -8412,6 +8462,9 @@ msgstr "That sprint doesn't exist."
 msgid "Ese sticker no existe."
 msgstr "That sticker doesn't exist."
 
+msgid "Ese swap no tiene nada que recuperar."
+msgstr "That swap has nothing to recover."
+
 msgid "Ese swap todavía no tiene un resultado listo."
 msgstr "That swap doesn't have a finished result yet."
 
@@ -8779,6 +8832,9 @@ msgstr "This project already has a plan"
 
 msgid "Este sprint todavía no tiene campañas"
 msgstr "This sprint doesn't have campaigns yet"
+
+msgid "Este swap no tiene nada que recuperar."
+msgstr "This swap has nothing to recover."
 
 #, python-brace-format
 msgid "Este texto cambia según el país: lo que escribas aquí vale para {destino}."
@@ -12650,6 +12706,10 @@ msgid "MiniMax · diseñar voz · %(nombre)s"
 msgstr "MiniMax · design voice · %(nombre)s"
 
 #, python-format
+msgid "MiniMax · estreno que no llegó · %(nombre)s"
+msgstr "MiniMax · try-out that didn't arrive · %(nombre)s"
+
+#, python-format
 msgid "MiniMax · estreno · %(nombre)s"
 msgstr "MiniMax · try-out · %(nombre)s"
 
@@ -15269,6 +15329,9 @@ msgstr "Sound preferences saved."
 msgid "Preguntando a %(proveedor)s por el video… si ya terminó, aparece aquí sin pagar de nuevo."
 msgstr "Asking %(proveedor)s for the video… if it already finished, it shows up here without paying again."
 
+msgid "Preguntando a WaveSpeed por el resultado… si ya terminó, aparece aquí y se cobra al llegar."
+msgstr "Asking WaveSpeed for the result… if it's done, it shows up here and is charged when it arrives."
+
 msgid "Prenda de vestir (saco, camiseta, chaqueta)"
 msgstr "Clothing (sweater, t-shirt, jacket)"
 
@@ -16309,6 +16372,13 @@ msgstr "Restore"
 
 msgid "Recuperar contraseña"
 msgstr "Recover password"
+
+msgid "Recuperar el resultado"
+msgstr "Recover the result"
+
+#, python-format
+msgid "Recuperar el resultado (se cobra ≈ %(precio)s)"
+msgstr "Recover the result (charged ≈ %(precio)s)"
 
 msgid "Recuperar el video (sin pagar de nuevo)"
 msgstr "Recover the video (without paying again)"
@@ -18191,6 +18261,9 @@ msgstr "Active subscriptions"
 
 msgid "Swap listo."
 msgstr "Swap ready."
+
+msgid "Swap recuperado: WaveSpeed no lo cobró otra vez."
+msgstr "Swap recovered: WaveSpeed didn't charge for it again."
 
 msgid "Swipe file de copycoders"
 msgstr "Copycoders swipe file"
@@ -20392,6 +20465,10 @@ msgstr "What does the prospect want to achieve in society?"
 msgid "Whisper · %(s)s s de audio"
 msgstr "Whisper · %(s)s s of audio"
 
+#, python-format
+msgid "Whisper · %(s)s s de audio · no llegó"
+msgstr "Whisper · %(s)s s of audio · didn't arrive"
+
 msgid "Wompi abre su propia ventana para los datos de la tarjeta: el número nunca pasa por Creatv. Visa, Mastercard o American Express, con código de seguridad."
 msgstr "Wompi opens its own window for the card details: the number never goes through Creatv. Visa, Mastercard or American Express, with a security code."
 
@@ -21748,6 +21825,9 @@ msgstr "the product has no downloadable photos."
 msgid "el producto solo se le puede describir en texto, no mostrárselo"
 msgstr "the product can only be described to it in text, not shown to it"
 
+msgid "el proveedor lo cerró sin entregarlo; pudo cobrarlo"
+msgstr "the provider closed it without delivering it; it may have charged for it"
+
 msgid "el que usa todo proyecto sin margen propio ni plan (a la carta); no cambia lo ya cobrado. Cada plan tiene su margen de miembro, abajo."
 msgstr "the one every project without its own markup or a plan uses (pay-as-you-go); it does not change what was already charged. Each plan has its member markup, below."
 
@@ -22525,6 +22605,10 @@ msgstr "best CPC %(cpc)s"
 msgid "mejor: %(nombre)s"
 msgstr "best: %(nombre)s"
 
+#, python-format
+msgid "mejora de calidad pagada que no llegó (%(error)s)"
+msgstr "quality upscale paid for but not delivered (%(error)s)"
+
 msgid "mensaje_id inválido."
 msgstr "Invalid mensaje_id."
 
@@ -22615,6 +22699,10 @@ msgstr "nothing charged"
 
 msgid "nada por aprobar"
 msgstr "nothing to approve"
+
+#, python-format
+msgid "nano_banana · %(n)s intento(s) que Google pudo cobrar sin entregar"
+msgstr "nano_banana · %(n)s attempt(s) Google may have charged for without delivering"
 
 msgid "natural, australiana"
 msgstr "natural, Australian"
@@ -23086,6 +23174,9 @@ msgstr "recovered: it had been running for more than %(min)s min"
 msgid "recuperado"
 msgstr "recovered"
 
+msgid "recuperado sin pagar de nuevo"
+msgstr "recovered without paying again"
+
 msgid "redes"
 msgstr "social"
 
@@ -23234,6 +23325,10 @@ msgstr "doctrine review"
 msgid "revisión de la doctrina · respuesta inválida"
 msgstr "doctrine review · invalid response"
 
+#, python-format
+msgid "revisión de marca del swap %(swap)s"
+msgstr "brand review of swap %(swap)s"
+
 msgid "roas"
 msgstr "roas"
 
@@ -23257,11 +23352,17 @@ msgstr "your official logo is attached"
 msgid "se adjuntan tus %(n)s logos oficiales"
 msgstr "your %(n)s official logos are attached"
 
+msgid "se agotó la espera; el proveedor lo cobra igual"
+msgstr "the wait ran out; the provider charges for it anyway"
+
 msgid "se cobra al generar."
 msgstr "charged when you generate."
 
 msgid "se cobra en tu cuenta de Meta"
 msgstr "charged on your Meta account"
+
+msgid "se cortó al reiniciar; el proveedor lo cobra igual"
+msgstr "cut off by a restart; the provider charges for it anyway"
 
 msgid "se detuvo antes de terminar"
 msgstr "it stopped before finishing"
@@ -23784,6 +23885,10 @@ msgstr "unknown voice or language"
 
 msgid "voz protagonista"
 msgstr "voice first"
+
+#, python-format
+msgid "voz reusada de un intento que falló · %(n)s caracteres"
+msgstr "voice reused from an attempt that failed · %(n)s characters"
 
 msgid "voz.sintetizar: el guion no tiene bloques."
 msgstr "voz.sintetizar: the script has no blocks."

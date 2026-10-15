@@ -20,6 +20,9 @@ AL_INTERRUMPIR = {}
 TIPOS_QUE_COBRAN = frozenset({
     # Crear y Flow Plus (WaveSpeed; el director con Claude desde PND-299: antes lo pagaba Creatv)
     "flowplus_video", "flowplus_imagen", "cadena_elementos", "swap_generar", "flowplus_director",
+    # «Recuperar el resultado» de un swap: WaveSpeed no cobra de nuevo, pero lo que cobró se le cobra al cliente al
+    # entregarlo, con el precio en el botón y el freno de saldo (decisión de quien orquesta, 2026-10-15)
+    "swap_recuperar",
     # Voz y música (fal: MiniMax, ElevenLabs, Whisper)
     "audio_generar", "hablado_voz", "voz_propia_crear", "musica_generar", "editor_voz", "material_transcribir",
     # Final edition (Claude escribe el guion; voz y música por fal)

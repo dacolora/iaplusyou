@@ -208,7 +208,8 @@ def voz_bloque(cliente, texto_voz, voz, idioma, ventana_ms, carpeta):
             mat, _ = materiales.obtener_o_crear(cliente, h2, _ajustar)
 
         if "palabras" not in (mat.get("extra") or {}):
-            t = fal_audio.transcribir_palabras(mat["url"], idioma)
+            # Con la duración del audio, Whisper se anota por lo que cobra fal (PND-186 (1)).
+            t = fal_audio.transcribir_palabras(mat["url"], idioma, duracion_ms=int(mat.get("duracion_ms") or 0) or None)
             costo += float(t.get("costo_usd") or 0.0)
             palabras = []
             for p in t.get("palabras") or []:

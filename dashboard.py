@@ -126,7 +126,8 @@ from final_edition import ETAPAS_FINAL, cortes as fe_cortes, mezcla as fe_mezcla
 from final_edition import tablero as fe_tablero
 from providers import fal_audio
 from providers import wavespeed_imagen as wavespeed_imagen_prov
-from tareas.swap import ETAPAS_SWAP_VIDEO, ETAPAS_SWAP_FOTO, ETAPAS_SWAP_FOTO_MEJORADA
+from tareas.swap import ETAPAS_SWAP_VIDEO, ETAPAS_SWAP_FOTO, ETAPAS_SWAP_FOTO_MEJORADA, ETAPAS_SWAP_RECUPERAR
+from tareas.swap import MODELOS_WAVESPEED as SWAP_RECUPERABLES
 from publicador import publicar_brief
 
 from storage import r2_uploader
@@ -2299,7 +2300,7 @@ def ver_cliente(cliente):
         plantillas_anuncio=plantillas_anuncio.PLANTILLAS,
         modelos_flowplus_imagen=flowplus_modelos.IMAGEN,
         preferencias_swap=proyectos.preferencias(cliente),
-        precios_swap=_precios_swap(proyectos.preferencias(cliente)),
+        precios_swap=_precios_swap(proyectos.preferencias(cliente), _revision_marca_swap(cliente)),
         proveedores_swap_imagen=PROVEEDORES_SWAP_IMAGEN,
         proveedores_swap_video=PROVEEDORES_SWAP_VIDEO,
         nombres_proveedor_swap=NOMBRES_PROVEEDOR_SWAP,
@@ -3384,7 +3385,7 @@ def generar_swap(cliente):
     # con la medida de /swap/medir, la misma de aquí) y aquí se recalcula. Sin precio visto, o si el de verdad pasa de
     # medio centavo más (como nicho/rutas y guiones/rutas_pipeline), no se guarda ni se cobra nada.
     costo = _costo_swaps(archivos, proveedor_foto, proveedor_video, mejorar_calidad, medidas,
-                         _n_referencias_swap(producto))
+                         _n_referencias_swap(producto), _revision_marca_swap(cliente))
     visto = gastos.costo_de_precio(request.form.get("precio_visto"))
     if costo is None or visto is None or costo > visto + 0.005:
         flash(gettext("Este envío cuesta %(precio)s. Revisa el precio y vuelve a generar.",
@@ -3466,7 +3467,16 @@ def _medir_en_temporal(archivo, tempfile, swap_video_precio):
     return (duracion, fps) if duracion else None
 
 
-def _precios_swap(prefs):
+def _revision_marca_swap(cliente):
+    """¿Cada swap de este proyecto pasa por la revisión de marca con Claude (tiene reglas de marca)? Entonces se
+    cobra y va en el precio que se ve antes (`gastos.TARIFAS["revision_marca"]`)."""
+    try:
+        return bool((marca_mod.cargar_root(cliente) or {}).get("invariants"))
+    except Exception:  # noqa: BLE001 — un root.json roto: la tarea tampoco puede revisarla
+        return False
+
+
+def _precios_swap(prefs, con_revision=False):
     """Lo que ve la persona en «Cambiar producto» antes de generar (PND-312), ya con el margen: por cada modelo de
     video su regla (`swap_video_precio.TARIFAS`, con `usd_s` y `fijo` en precio) y por cada modelo de foto su
     precio. None si el margen no se pudo leer: la pantalla dice «precio no disponible», nunca el costo."""
@@ -3496,15 +3506,19 @@ def _precios_swap(prefs):
     if gastos._margen_fallido():
         return None
     return {"video": video, "foto": foto, "fps": swap_video_precio.FPS_SUPUESTO,
-            "necesita_fps": list(swap_video_precio.NECESITA_FPS)}
+            "necesita_fps": list(swap_video_precio.NECESITA_FPS),
+            # Lo que suma la revisión de marca a cada archivo (0 si el proyecto no tiene reglas de marca).
+            "revision": gastos.precio(gastos.TARIFAS["revision_marca"]) if con_revision else 0}
 
 
-def _costo_un_swap(es_video, proveedor_foto, proveedor_video, mejorar_calidad, medida=None, n_referencias=1):
+def _costo_un_swap(es_video, proveedor_foto, proveedor_video, mejorar_calidad, medida=None, n_referencias=1,
+                   con_revision=False):
     if es_video:
         duracion, fps = medida or (None, None)
-        return gastos.estimar("swap", proveedor=proveedor_video, formato="video", duracion=duracion, fps=fps)["usd"]
+        return gastos.estimar("swap", proveedor=proveedor_video, formato="video", duracion=duracion, fps=fps,
+                              con_revision=con_revision)["usd"]
     return gastos.estimar("swap", proveedor=proveedor_foto, formato="foto", mejorar_calidad=mejorar_calidad,
-                          n_referencias=n_referencias)["usd"]
+                          n_referencias=n_referencias, con_revision=con_revision)["usd"]
 
 
 def _n_referencias_swap(producto):
@@ -3512,13 +3526,14 @@ def _n_referencias_swap(producto):
     return min(len((producto or {}).get("referencias") or []), 9)
 
 
-def _costo_swaps(archivos, proveedor_foto, proveedor_video, mejorar_calidad, medidas=None, n_referencias=1):
+def _costo_swaps(archivos, proveedor_foto, proveedor_video, mejorar_calidad, medidas=None, n_referencias=1,
+                 con_revision=False):
     """USD (sin margen) de los swaps de un envío; None si alguno no tiene tarifa. `medidas`: la (duración, fps) de
     cada video, en el orden de `archivos`."""
     total = 0.0
     for a, medida in zip(archivos, medidas or [None] * len(archivos)):
         usd = _costo_un_swap(_ext_de(a.filename) in VIDEO_EXTS, proveedor_foto, proveedor_video, mejorar_calidad,
-                             medida, n_referencias)
+                             medida, n_referencias, con_revision)
         if usd is None:
             return None
         total += float(usd)
@@ -3576,7 +3591,7 @@ def _lanzar_swap(cliente, archivo, producto, producto_id, proveedor_foto, provee
             "proveedor": proveedor, "tipo": tipo, "mejorar_calidad": bool(mejorar_calidad),
         }, cliente=cliente, duracion_estimada=duracion_estimada, etapas=etapas, max_intentos=1,
             costo_estimado=_costo_un_swap(es_video, proveedor_foto, proveedor_video, mejorar_calidad, medida,
-                                          _n_referencias_swap(producto)))
+                                          _n_referencias_swap(producto), _revision_marca_swap(cliente)))
     except SaldoInsuficiente as e:
         # Un swap guardado sin trabajo detrás quedaría «generando» para siempre.
         swaps_mod.actualizar(cliente, swap_id, estado="error", error=e.frase_proyecto())
@@ -3600,6 +3615,40 @@ def imagen_swap_original(cliente, swap_id):
     if tipo is None:
         return send_file(ruta, mimetype="application/octet-stream", as_attachment=True)
     return send_file(ruta, mimetype=tipo)
+
+
+@app.route("/cliente/<cliente>/swap/<swap_id>/recuperar", methods=["POST"])
+def recuperar_swap(cliente, swap_id):
+    """«Recuperar el resultado» (PND-318, como `cf_recuperar` de Crear): el swap quedó en error porque el worker
+    dejó de esperar a WaveSpeed, pero guardó el id de la predicción; el worker vuelve a preguntar por ese id y,
+    si terminó, lo entrega. WaveSpeed no cobra de nuevo, pero lo que ya cobró se le cobra al cliente al
+    entregarlo: el botón dice el precio y esto pasa por el freno de saldo como cualquier cobro (`swap_recuperar`
+    está en TIPOS_QUE_COBRAN; decisión de quien orquesta, 2026-10-15). `max_intentos=1`."""
+    entry = swaps_mod.cargar(cliente).get(swap_id)
+    pred = (entry or {}).get("prediccion") or {}
+    if (not entry or entry.get("estado") != "error" or not pred.get("id")
+            or (pred.get("proveedor") or entry.get("proveedor")) not in SWAP_RECUPERABLES):
+        flash(gettext("Ese swap no tiene nada que recuperar."), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
+    # El freno (y la reserva) ANTES de tocar el swap: sin saldo, la tarjeta queda como estaba, con su botón.
+    costo = pred.get("usd")
+    libro_cobros.exigir(cliente, costo)
+    # El estado va ANTES de encolar (como cf_recuperar): la tarjeta muestra la barra del mismo job_id.
+    swaps_mod.actualizar(cliente, swap_id, estado="generando", error=None)
+    try:
+        encolado = trabajos.encolar(f"{cliente}__{swap_id}__swap", "swap_recuperar",
+                                    {"cliente": cliente, "swap_id": swap_id}, cliente=cliente, duracion_estimada=150,
+                                    etapas=ETAPAS_SWAP_RECUPERAR, max_intentos=1, costo_estimado=costo)
+    except SaldoInsuficiente:
+        # Otro clic gastó el saldo en medio: el swap vuelve a error con su predicción (se puede recuperar luego).
+        swaps_mod.actualizar(cliente, swap_id, estado="error", error=entry.get("error"))
+        raise
+    if encolado:
+        flash(gettext("Preguntando a WaveSpeed por el resultado… si ya terminó, aparece aquí y se cobra al llegar."),
+              "ok")
+    else:
+        flash(gettext("Ya se estaba recuperando — espera a que termine."), "warn")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
 
 @app.route("/cliente/<cliente>/swap/<swap_id>/eliminar", methods=["POST"])
