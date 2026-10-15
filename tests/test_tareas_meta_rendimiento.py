@@ -893,3 +893,44 @@ def test_evaluar_sin_ideas_tambien_tras_la_correccion_queda_en_error_y_anota_lo_
     assert _gastos_eval() == [{"tipo": "evaluacion", "usd": pytest.approx(usd), "referencia": f"meta_eval:{eid}:t7",
                                "proveedor": "anthropic"}]
     assert _detalles() == ["sin resultado usable"] and _movimientos_hf() == ["no_cobrado"]
+
+
+# ------------------------------------------- PND-268: cortada a mitad de la llamada a Claude (2026-10-15) ---
+
+def test_interrumpida_analizando_anota_el_estimado_sin_cobrarlo(evaluacion):
+    """Un reinicio del worker (o el respaldo sin saldo) mata la tarea con la fila «analizando»: Anthropic pudo cobrar
+    una llamada que se cortó con el proceso. Se anota el estimado de la tarifa con la referencia de la tarea, sin
+    entregar (al cliente no se le cobra), y la fila queda en error (regla 1; decisión del lote 1, 2026-10-13)."""
+    eid = evaluacion["eid"]
+    _cobra_hf()
+    datos.actualizar_evaluacion(eid, estado="analizando")
+    t._evaluar_interrumpida(_tarea_eval(eid), "Se interrumpió por un reinicio del servidor.")
+    estimado = gastos.estimar("evaluacion_meta", n=2)["usd"]
+    assert _gastos_eval() == [{"tipo": "evaluacion", "usd": pytest.approx(estimado), "referencia": f"meta_eval:{eid}:t7",
+                               "proveedor": "anthropic"}]
+    assert _detalles() == ["estimado: se interrumpió durante el análisis"] and _movimientos_hf() == ["no_cobrado"]
+    assert datos.evaluacion("hf", eid)["estado"] == "error"
+
+
+def test_interrumpida_en_cola_no_anota_nada(evaluacion):
+    """«En cola» = la tarea no llegó a correr (el respaldo sin saldo, un reinicio antes de empezar): no hubo llamada."""
+    eid = evaluacion["eid"]
+    t._evaluar_interrumpida(_tarea_eval(eid), "Sin saldo")
+    assert _gastos_eval() == [] and datos.evaluacion("hf", eid)["estado"] == "error"
+
+
+def test_interrumpida_con_el_gasto_ya_anotado_no_lo_pisa(evaluacion):
+    """Si la tarea alcanzó a anotar lo que Claude cobró (con sus tokens), el estimado no lo reemplaza ni suma otra fila."""
+    eid = evaluacion["eid"]
+    datos.actualizar_evaluacion(eid, estado="analizando")
+    gastos.registrar("hf", "evaluacion", 0.1234, f"meta_eval:{eid}:t7", proveedor="anthropic", entregado=False)
+    t._evaluar_interrumpida(_tarea_eval(eid), "reinicio")
+    assert _gastos_eval() == [{"tipo": "evaluacion", "usd": pytest.approx(0.1234), "referencia": f"meta_eval:{eid}:t7",
+                               "proveedor": "anthropic"}]
+
+
+def test_interrumpida_de_otro_proyecto_no_anota_nada(evaluacion):
+    eid = evaluacion["eid"]
+    datos.actualizar_evaluacion(eid, estado="analizando")
+    t._evaluar_interrumpida(_tarea_eval(eid, cliente="otro"), "reinicio")
+    assert _gastos_eval() == [] and datos.evaluacion("hf", eid)["estado"] == "analizando"

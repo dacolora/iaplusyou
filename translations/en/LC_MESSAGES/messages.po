@@ -21784,6 +21784,9 @@ msgstr "this model returns {segundos} s of video"
 msgid "este modelo procesa hasta {max} s de cada video: lo demás se corta"
 msgstr "this model processes up to {max} s of each video: the rest is cut"
 
+msgid "estimado: se interrumpió durante el análisis"
+msgstr "estimated: interrupted during the analysis"
+
 msgid "estimado: sin respuesta de Claude"
 msgstr "estimated: no response from Claude"
 

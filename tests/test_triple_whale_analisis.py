@@ -404,6 +404,94 @@ def test_evaluacion_interrumpida_queda_en_error(evaluacion_en_cola):
     assert fila["estado"] == "error" and "abc" not in fila["error"]
 
 
+def _gastos_con_detalle():
+    import sqlalchemy as sa
+    import db
+    with db.conectar() as con:
+        return [dict(r._mapping) for r in con.execute(sa.select(db.gasto.c.usd, db.gasto.c.referencia, db.gasto.c.detalle))]
+
+
+def _movimientos(cliente="acme"):
+    import sqlalchemy as sa
+    import db
+    with db.conectar() as con:
+        return [r.tipo for r in con.execute(sa.select(db.movimiento_saldo.c.tipo).where(
+            db.movimiento_saldo.c.cliente == cliente, db.movimiento_saldo.c.tipo != "ajuste"))]
+
+
+def _cobra(cliente="acme"):
+    import db
+    from cobros import libro
+    libro.configurar(cliente, usuario="admin", cobrar=True)
+    with db.conectar() as con:
+        libro.acreditar(con, cliente, "ajuste", 50_000, "ajuste", usuario="admin", detalle="prueba")
+
+
+def _tarea(eid, cliente="acme", tid=7):
+    return {"id": tid, "payload": {"cliente": cliente, "evaluacion_id": eid}}
+
+
+def test_interrumpida_analizando_anota_el_estimado_sin_cobrarlo(evaluacion_en_cola):
+    """PND-268 (decisión del lote 1, 2026-10-13): un reinicio del worker con la fila «analizando» pudo cortar una llamada
+    que Anthropic cobró. Se anota el estimado de la tarifa con la referencia de la tarea, sin entregar (al cliente no se
+    le cobra), y la fila queda en error."""
+    e = evaluacion_en_cola
+    _cobra()
+    datos.actualizar_evaluacion(e["eid"], estado="analizando")
+    e["t"]._evaluar_interrumpida(_tarea(e["eid"]), "Se interrumpió por un reinicio del servidor.")
+    estimado = gastos.estimar("evaluacion_tw", n=len(e["muestra"]))["usd"]
+    assert _gastos_con_detalle() == [{"usd": pytest.approx(estimado), "referencia": f"tw_eval:{e['eid']}:t7",
+                                      "detalle": "estimado: se interrumpió durante el análisis"}]
+    assert _movimientos() == ["no_cobrado"] and datos.evaluacion("acme", e["eid"])["estado"] == "error"
+
+
+def test_interrumpida_en_cola_no_anota_nada(evaluacion_en_cola):
+    e = evaluacion_en_cola
+    e["t"]._evaluar_interrumpida(_tarea(e["eid"]), "Sin saldo")
+    assert _gastos() == [] and datos.evaluacion("acme", e["eid"])["estado"] == "error"
+
+
+def test_interrumpida_con_el_gasto_ya_anotado_no_lo_pisa(evaluacion_en_cola):
+    """La tarea anota lo que cobró Claude ANTES de dejar la fila «lista»: si murió entre las dos, el gasto real queda (y
+    el worker ya revirtió su cobro); el estimado no lo reemplaza ni suma otra fila."""
+    e = evaluacion_en_cola
+    datos.actualizar_evaluacion(e["eid"], estado="analizando")
+    gastos.registrar("acme", "evaluacion", 0.1234, f"tw_eval:{e['eid']}:t7", proveedor="anthropic")
+    e["t"]._evaluar_interrumpida(_tarea(e["eid"]), "reinicio")
+    assert _gastos() == [{"tipo": "evaluacion", "usd": pytest.approx(0.1234), "referencia": f"tw_eval:{e['eid']}:t7"}]
+
+
+def test_interrumpida_de_otro_proyecto_no_anota_nada(evaluacion_en_cola):
+    e = evaluacion_en_cola
+    datos.actualizar_evaluacion(e["eid"], estado="analizando")
+    e["t"]._evaluar_interrumpida(_tarea(e["eid"], cliente="otro"), "reinicio")
+    assert _gastos() == [] and datos.evaluacion("acme", e["eid"])["estado"] == "analizando"
+
+
+def _timeout():
+    import anthropic
+    import httpx
+    return anthropic.APITimeoutError(request=httpx.Request("POST", "https://api.anthropic.com/v1/messages"))
+
+
+def test_tarea_evaluar_si_claude_no_responde_anota_el_estimado_sin_cobrarlo(evaluacion_en_cola, monkeypatch):
+    """E2-R7 también en Triple Whale (PND-217 sube el tope de tiempo a 900 s): un tope de tiempo o una conexión cortada
+    no traen `usage`, pero Anthropic pudo cobrar. Se anota el estimado, sin entregar."""
+    e = evaluacion_en_cola
+    _cobra()
+
+    def _falla(*a, **k):
+        raise _timeout()
+    monkeypatch.setattr(analisis, "_llamar", _falla)
+    with pytest.raises(RuntimeError) as err:
+        e["t"].tw_evaluar(_tarea(e["eid"], tid=8))
+    estimado = gastos.estimar("evaluacion_tw", n=len(e["muestra"]))["usd"]
+    assert _gastos_con_detalle() == [{"usd": pytest.approx(estimado), "referencia": f"tw_eval:{e['eid']}:t8",
+                                      "detalle": "estimado: sin respuesta de Claude"}]
+    assert _movimientos() == ["no_cobrado"] and "anthropic.com" not in str(err.value)
+    assert datos.evaluacion("acme", e["eid"])["estado"] == "error"
+
+
 def test_estimado_de_la_evaluacion():
     est = gastos.estimar("evaluacion_tw", n=10)
     assert est["usd"] == pytest.approx(gastos.EVALUACION_TW_BASE_USD + 10 * gastos.EVALUACION_TW_POR_ANUNCIO_USD)

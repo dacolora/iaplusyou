@@ -435,9 +435,17 @@ def tw_evaluar(tarea):
         entrada = int(getattr(e, "tokens_entrada", 0) or 0)
         salida = int(getattr(e, "tokens_salida", 0) or 0)
         usd = costo_real(entrada, salida) if (entrada or salida) else 0.0
-        if usd:
+        # E2-R7, como la evaluación de Meta (PND-217 subió el tope de tiempo a 900 s): una llamada que se quedó sin
+        # respuesta (tope de tiempo, conexión cortada) no trae `usage`, pero Anthropic pudo cobrarla. Se anota el
+        # estimado de la tarifa sobre lo exacto que ya se sepa (la primera llamada, si la que no respondió fue la
+        # corrección). Un rechazo de la API (`APIStatusError`) no cobra: `sin_respuesta` es False.
+        estimado = analisis.sin_respuesta(e)
+        if estimado:
+            usd += float(gastos.estimar("evaluacion_tw", n=len(anuncios))["usd"] or 0.0)
+        if usd:     # pagado y sin entregar: en un proyecto que cobra no se le cobra (skill `cobros`)
             gastos.registrar_seguro(cliente, "evaluacion", usd, referencia, proveedor="anthropic",
-                                    detalle=gettext("sin resultado usable"), entregado=False)
+                                    detalle=gettext("estimado: sin respuesta de Claude") if estimado
+                                    else gettext("sin resultado usable"), entregado=False)
         mensaje = analisis.texto_error(e)
         datos.actualizar_evaluacion(eid, estado="error", error=mensaje, usd=usd)
         raise RuntimeError(mensaje) from None
@@ -458,14 +466,37 @@ def tw_evaluar(tarea):
     return gettext("Evaluación lista: %(n)s idea(s) de anuncios nuevos.", n=len(resultado["ideas"]))
 
 
+def anotar_estimado_cortado(cliente, referencia, usd, detalle):
+    """PND-268 (decisión del lote 1, 2026-10-13; regla 1): una evaluación que un reinicio del worker (o el respaldo sin
+    saldo) mató con la fila «analizando» pudo cortar una llamada a Claude que Anthropic cobró, y nadie la anotaría. Se
+    anota el estimado de la tarifa (`usd`, costo) con la referencia que habría usado la tarea, sin entregar: en un
+    proyecto que cobra no se le cobra al cliente. Si la tarea alcanzó a anotar lo que Claude cobró con sus tokens (esa
+    referencia ya existe), no se pisa ni se suma: el worker ya revirtió el cobro de su cadena (`worker._revertir`).
+    La comparte la evaluación de Meta (`tareas.meta_rendimiento`). Nunca lanza."""
+    try:
+        if not usd or gastos.por_referencia(cliente, referencia):
+            return False
+        return gastos.registrar_seguro(cliente, "evaluacion", usd, referencia, proveedor="anthropic", detalle=detalle,
+                                       entregado=False) is not None
+    except Exception as e:  # noqa: BLE001 — el gancho nunca tumba al worker; la fila igual queda en error
+        log.warning("no se pudo anotar el estimado de %s de %s (%s)", referencia, cliente, type(e).__name__)
+        return False
+
+
 @al_interrumpir(TIPO_EVALUAR)
 def _evaluar_interrumpida(tarea, mensaje):
+    """La fila no se queda «analizando». Si lo estaba, la tarea ya había empezado su trabajo y pudo estar esperando a
+    Claude: se anota el estimado (PND-268); «en_cola» = no llegó a correr (respaldo sin saldo), no se anota nada."""
     p = tarea.get("payload") or {}
     if p.get("cliente") and p.get("evaluacion_id"):
-        fila = datos.evaluacion(p["cliente"], int(p["evaluacion_id"]))
+        cliente, eid = p["cliente"], int(p["evaluacion_id"])
+        fila = datos.evaluacion(cliente, eid)
         if fila and fila["estado"] in ("en_cola", "analizando"):
-            datos.actualizar_evaluacion(int(p["evaluacion_id"]), estado="error",
-                                        error=cola.recortar(cola.sin_token(str(mensaje)), 500))
+            if fila["estado"] == "analizando":
+                anotar_estimado_cortado(cliente, f"tw_eval:{eid}{ref_sufijo(tarea)}",
+                                        gastos.estimar("evaluacion_tw", n=len(fila["anuncios"] or []))["usd"],
+                                        gettext("estimado: se interrumpió durante el análisis"))
+            datos.actualizar_evaluacion(eid, estado="error", error=cola.recortar(cola.sin_token(str(mensaje)), 500))
 
 
 # ------------------------------------------------ ganchos nuevos (spec 2026-10-09 §4.4–§4.6) ---

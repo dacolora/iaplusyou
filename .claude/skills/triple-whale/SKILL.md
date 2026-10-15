@@ -704,3 +704,12 @@ evaluados del panel, productos con gasto y ROAS (por la página de destino contr
 iterar, los que mejor convierten (`metricas()["cv_sesion"]` = pedidos / sesiones; `resumen_cuenta` ahora suma
 `sesiones`) y las mejores imágenes y videos (`datos.tipos_creativo(cliente)`: `{(canal, ad_id): tipo}` en una
 consulta). Detalle y reglas en la skill `rendimiento`, «Las métricas que faltaban».
+
+**«Evaluar con IA» cortada a mitad (PND-268, 2026-10-15).** `tw_evaluar` pone la fila en «analizando» al empezar. Si un
+reinicio del worker la mata ahí, `_evaluar_interrumpida` anota el estimado de `evaluacion_tw` con `entregado=False`, la
+referencia de la tarea (`tw_eval:<id>:t<tarea>`) y el detalle «estimado: se interrumpió durante el análisis»
+(`anotar_estimado_cortado`, que también usa la de Meta). Si ya había un gasto con esa referencia (la tarea anota a
+Claude ANTES de dejar la fila «lista»), no lo pisa: el worker ya revirtió el cobro de la cadena. Con la fila «en_cola»
+(el respaldo sin saldo: no corrió) no anota nada. Y como la de Meta (E2-R7), una llamada sin respuesta (tope de tiempo,
+conexión cortada) anota el estimado con «estimado: sin respuesta de Claude». Pruebas: `tests/test_triple_whale_analisis.py`
+(`test_interrumpida_*`, `test_tarea_evaluar_si_claude_no_responde_*`) y `tests/test_tareas_meta_rendimiento.py`.

@@ -355,10 +355,19 @@ def meta_rend_evaluar(tarea):
 
 @al_interrumpir(TIPO_EVALUAR)
 def _evaluar_interrumpida(tarea, mensaje):
-    """Un reinicio (o el respaldo sin saldo del worker) mató la evaluación: la fila no se queda «analizando»."""
+    """Un reinicio (o el respaldo sin saldo del worker) mató la evaluación: la fila no se queda «analizando». Si lo
+    estaba, la tarea ya había empezado y pudo cortar una llamada a Claude que Anthropic cobró: se anota el estimado de
+    la tarifa sin entregar, con la referencia de la tarea (PND-268, `tareas.triple_whale.anotar_estimado_cortado`);
+    «en_cola» = no llegó a correr, no se anota nada."""
+    from tareas.triple_whale import anotar_estimado_cortado    # noqa: PLC0415 — el worker carga los dos módulos
     p = tarea.get("payload") or {}
     if not (p.get("cliente") and p.get("evaluacion_id")):
         return
-    fila = datos.evaluacion(p["cliente"], int(p["evaluacion_id"]))
+    cliente, eid = p["cliente"], int(p["evaluacion_id"])
+    fila = datos.evaluacion(cliente, eid)
     if fila and fila["estado"] in ("en_cola", "analizando"):
+        if fila["estado"] == "analizando":
+            anotar_estimado_cortado(cliente, f"meta_eval:{eid}{ref_sufijo(tarea)}",
+                                    gastos.estimar("evaluacion_meta", n=len(fila["muestra"] or []))["usd"],
+                                    gettext("estimado: se interrumpió durante el análisis"))
         datos.actualizar_evaluacion(fila["id"], estado="error", error=cola.recortar(cola.sin_token(str(mensaje)), 500))
