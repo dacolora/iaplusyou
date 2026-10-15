@@ -481,8 +481,11 @@ METODOS_QUE_ESCRIBEN = frozenset(("POST", "PUT", "PATCH", "DELETE"))
 # los manda el servidor de la pasarela, no un navegador nuestro. Su protección
 # es la firma del cuerpo (cobros.recargas.procesar_webhook y
 # procesar_evento_wompi), no la cookie ni Sec-Fetch-Site. Por nombre de
-# endpoint, nunca por prefijo de URL.
-ENDPOINTS_OTRO_ORIGEN = frozenset(("cobros.bold_webhook", "cobros.wompi_eventos"))
+# endpoint, nunca por prefijo de URL. El tercero (PND-304 a, 2026-10-15) son los
+# reportes de la política de scripts de la página de la tarjeta: los manda el
+# navegador, sin cookie, y no se pueden firmar; no mueven nada (solo anotan lo
+# justo, con topes de tamaño y cantidad: cobros.csp).
+ENDPOINTS_OTRO_ORIGEN = frozenset(("cobros.bold_webhook", "cobros.wompi_eventos", "cobros.csp_tarjeta"))
 
 
 @app.before_request
@@ -493,8 +496,9 @@ def _solo_mismo_origen():
     un POST desde otro subdominio del mismo sitio ni el «login CSRF» (un
     formulario ajeno que inicia sesión con la cuenta del atacante). La app no
     recibe webhooks ni POST legítimos de otros sitios: los callbacks de OAuth
-    son GET. Las únicas excepciones, el webhook firmado de Bold y los eventos
-    firmados de Wompi, van en ENDPOINTS_OTRO_ORIGEN."""
+    son GET. Las únicas excepciones, el webhook firmado de Bold, los eventos
+    firmados de Wompi y los reportes de la política de la página de la tarjeta
+    (que solo anotan, con topes), van en ENDPOINTS_OTRO_ORIGEN."""
     if request.method not in METODOS_QUE_ESCRIBEN or _mismo_origen():
         return None
     if request.endpoint in ENDPOINTS_OTRO_ORIGEN:
@@ -514,7 +518,7 @@ def _solo_mismo_origen():
 ENDPOINTS_SIN_GUARD_SESION = frozenset((
     "static", "login", "logout", "index", "crear_proyecto", "verificar_correo",
     "recuperar", "restablecer", "privacidad", "terminos", "eliminar_datos",
-    "cambiar_idioma", "salud_publica", "cobros.bold_webhook", "cobros.wompi_eventos",
+    "cambiar_idioma", "salud_publica", "cobros.bold_webhook", "cobros.wompi_eventos", "cobros.csp_tarjeta",
 ))
 
 

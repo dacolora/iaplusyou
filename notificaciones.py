@@ -39,7 +39,9 @@ TIPOS = ("propuesta", "ganador", "rechazo_meta", "error_lanzamiento", "tope", "t
          # pospago (Daniel 2026-10-12): a los admins, cada US$ 200 de deuda nueva
          "deuda_pospago",
          # Crear (PND-214, 2026-10-15): un video que pudo cobrarse y no se reconoce en el historial de WaveSpeed
-         "lanzamiento_dudoso")
+         "lanzamiento_dudoso",
+         # PND-304 a (2026-10-15): la política de scripts de la página de la tarjeta reportó una violación nueva
+         "csp_tarjeta")
 
 
 def _config():

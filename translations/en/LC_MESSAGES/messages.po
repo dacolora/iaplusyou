@@ -2844,6 +2844,9 @@ msgstr "Valentine's Day (Alla hjärtans dag)"
 msgid "Alta"
 msgstr "High"
 
+msgid "Alta del plan"
+msgstr "Plan sign-up"
+
 msgid "Altura"
 msgstr "Height"
 
@@ -2982,6 +2985,9 @@ msgstr "Yearly · %(precio)s a year"
 
 msgid "Anulada"
 msgstr "Voided"
+
+msgid "Anulada antes de acreditar"
+msgstr "Voided before crediting"
 
 msgid "Anulado"
 msgstr "Voided"
@@ -3208,6 +3214,9 @@ msgstr[1] "Learning limited in %(n)s accounts"
 
 msgid "Aprendizajes del proyecto"
 msgstr "Project learnings"
+
+msgid "Aprobación de un pago anulado"
+msgstr "Approval of a voided payment"
 
 msgid "Aprobada"
 msgstr "Approved"
@@ -3982,6 +3991,9 @@ msgstr "Change card"
 
 msgid "Cambiarlo crea una versión nueva con los mismos clips, sin llamar a Claude (gratis). Esta versión y sus prompts quedan como están."
 msgstr "Changing it creates a new version with the same clips, without calling Claude (free). This version and its prompts stay as they are."
+
+msgid "Cambio de tarjeta"
+msgstr "Card change"
 
 msgid "Cambio del NVP en puntos porcentuales: días completos contra el mismo número de días anteriores"
 msgstr "Change in NVP in percentage points: full days against the same number of previous days"
@@ -5921,6 +5933,10 @@ msgid "Desde el %(desde)s las generaciones de Crear y de Cambiar producto fallan
 msgstr "Since %(desde)s, generations in Create and Change product fail (without charging). Top up the account; this notice goes away on its own with the next generation that works."
 
 #, python-format
+msgid "Desde el %(fecha)s se descartaron reportes por los topes: esta lista puede estar incompleta. No pases la política a «bloquear» sin revisar la página real con la consola abierta."
+msgstr "Since %(fecha)s some reports were dropped by the limits: this list may be incomplete. Do not switch the policy to «block» without checking the real page with the console open."
+
+#, python-format
 msgid "Desde el %(fecha)s, cuando empiezan los datos de todas tus fuentes."
 msgstr "Since %(fecha)s, when data from all your sources begins."
 
@@ -6041,6 +6057,9 @@ msgstr "Dynamic"
 
 msgid "Dirección"
 msgstr "Path"
+
+msgid "Directiva"
+msgstr "Directive"
 
 msgid "Directo a Meta Ads en un clic; tú decides cuándo empiezan a gastar."
 msgstr "Straight to Meta Ads in one click; you decide when they start spending."
@@ -6801,6 +6820,9 @@ msgstr "The engine has nobody to notify about proposals, winners and rejections:
 msgid "El máximo diario permitido es %(maximo)s por los días restantes."
 msgstr "The maximum daily budget is %(maximo)s for the remaining days."
 
+msgid "El navegador anota aquí lo que la política de la página donde se guarda la tarjeta bloquearía (los últimos 30 días). Se pasa a «bloquear» cuando, después de al menos un alta y un cambio de tarjeta reales, esta lista está vacía o solo tiene extensiones del navegador; si aparece algo de Creatv o de Wompi, primero hay que permitirlo en la política."
+msgstr "The browser records here what the policy of the page where the card is saved would block (last 30 days). Switch it to «block» when, after at least one real sign-up and one real card change, this list is empty or only has browser extensions; if something from Creatv or Wompi shows up, allow it in the policy first."
+
 msgid "El nuevo medio se usa desde el próximo cobro del plan."
 msgstr "The new payment method is used from the next plan charge."
 
@@ -7550,6 +7572,14 @@ msgstr "Waiting"
 
 msgid "En juego por día"
 msgstr "At stake per day"
+
+#, python-format
+msgid "En la página de la tarjeta (%(pagina)s) el navegador BLOQUEÓ «%(bloqueado)s» por la directiva %(directiva)s. Si es de Creatv o de Wompi, el pago puede estar roto: revísalo en /admin/cobros."
+msgstr "On the card page (%(pagina)s) the browser BLOCKED «%(bloqueado)s» under the %(directiva)s directive. If it belongs to Creatv or Wompi, payment may be broken: check it in /admin/cobros."
+
+#, python-format
+msgid "En la página de la tarjeta (%(pagina)s) el navegador reportó «%(bloqueado)s» por la directiva %(directiva)s. La política está en «solo reporte» y no se bloqueó nada; antes de pasarla a «bloquear», revísalo en /admin/cobros."
+msgstr "On the card page (%(pagina)s) the browser reported «%(bloqueado)s» under the %(directiva)s directive. The policy is in «report only» mode and nothing was blocked; check it in /admin/cobros before switching it to «block»."
 
 msgid "En la página del guion: ··· › Conexiones › elige tu integración."
 msgstr "On the script's page: ··· › Connections › choose your integration."
@@ -8924,6 +8954,9 @@ msgstr ""
 "3. Charge approx. %(precio)s from Claude\n"
 "\n"
 "Shall we go ahead?"
+
+msgid "Estos reportes no van firmados: cualquiera puede mandar uno. Antes de permitir un origen en la política, reprodúcelo en la consola de la página real y compáralo letra por letra con https://checkout.wompi.co."
+msgstr "These reports are not signed: anyone can send one. Before allowing an origin in the policy, reproduce it in the console of the real page and compare it letter by letter with https://checkout.wompi.co."
 
 msgid "Estos subtítulos vienen del borrador automático y no siguen los cortes. Genéralos de nuevo para poder corregirlos."
 msgstr "These subtitles come from the automatic draft and don't follow the cuts. Generate them again to be able to correct them."
@@ -11351,6 +11384,9 @@ msgstr "The post was interrupted before it finished; check the platform before r
 msgid "La página de Notion está vacía."
 msgstr "The Notion page is empty."
 
+msgid "La página de la tarjeta reportó algo que su política bloquea"
+msgstr "The card page reported something its policy blocks"
+
 #, python-format
 msgid "La página de vuelta de la recarga «%(ref)s» de %(cliente)s consultó la transacción %(tx)s (el id lo trajo el navegador) y Wompi la dio por aprobada, pero su evento firmado no llegó en 30 minutos y no se acreditó. Esto NO confirma el pago. En /admin/cobros, «Recargas de Wompi sin acreditar», usa «Buscar en Wompi»: la acredita una sola vez si Wompi la tiene aprobada para nuestro comercio. Nunca una recarga manual: se sumaría otra vez cuando llegue el evento. Revisa también la URL de eventos."
 msgstr "The return page of top-up «%(ref)s» of %(cliente)s checked transaction %(tx)s (the id came from the browser) and Wompi reported it approved, but its signed event did not arrive within 30 minutes and it was not credited. This does NOT confirm the payment. In /admin/cobros, «Wompi top-ups not credited», use «Search in Wompi»: it credits it once if Wompi has it approved for our merchant. Never a manual top-up: it would be added again when the event arrives. Also check the events URL."
@@ -11371,6 +11407,10 @@ msgstr "A top-up goes from US$ %(min)s to US$ %(max)s, in whole dollars."
 #, python-format
 msgid "La recarga «%(ref)s» de %(cliente)s estaba pagada en Wompi (transacción %(tx)s), pero su evento no llegó o no se aceptó. La encontramos buscando su referencia y la acreditamos. Revisa en el panel de Wompi la URL de eventos y que el secreto de eventos sea el del servidor."
 msgstr "The top-up «%(ref)s» of %(cliente)s was paid in Wompi (transaction %(tx)s), but its event did not arrive or was not accepted. We found it by searching its reference and credited it. In the Wompi dashboard, check the events URL and that the events secret is the one on the server."
+
+#, python-format
+msgid "La recarga «%(ref)s» de %(cliente)s quedó anulada (Wompi anuló su pago) y Wompi aprobó otra transacción (%(tx)s) con la misma referencia. No la acreditamos sola: revísala en el panel de Wompi y devuélvela o acredítala a mano."
+msgstr "Top-up «%(ref)s» for %(cliente)s was voided (Wompi voided its payment) and Wompi approved another transaction (%(tx)s) with the same reference. We did not credit it automatically: check it in the Wompi dashboard and refund it or credit it manually."
 
 #, python-format
 msgid "La recarga «%(ref)s» de %(cliente)s ya estaba acreditada y Wompi aprobó otra transacción (%(tx)s) con la misma referencia. No se acreditó dos veces: revísalo en el panel de Wompi y devuélvelo o acredítalo a mano."
@@ -11908,6 +11948,9 @@ msgstr "Take to Create →"
 
 msgid "Llevar a final edition"
 msgstr "Take to Final edition"
+
+msgid "Lo bloqueado"
+msgstr "Blocked"
 
 msgid "Lo de encima se mueve con su video. Toca para soltarlo."
 msgstr "What’s on top moves with its video. Tap to unlink it."
@@ -13431,6 +13474,9 @@ msgstr "No valid exchange rate: charges in pesos are on hold"
 msgid "No hay una tasa rechazada para aceptar."
 msgstr "There is no rejected rate to accept."
 
+msgid "No hay violaciones anotadas."
+msgstr "No violations recorded."
+
 msgid "No hay voz en este destino."
 msgstr "There's no voice in this market."
 
@@ -14143,6 +14189,9 @@ msgstr "Couldn't read the reference (%(tipo)s)."
 
 msgid "No se pudo leer la referencia."
 msgstr "Couldn't read the reference."
+
+msgid "No se pudo leer lo anotado."
+msgstr "Could not read what was recorded."
 
 msgid "No se pudo medir la duración del video."
 msgstr "Couldn't measure the video's length."
@@ -15192,8 +15241,14 @@ msgstr "Few clicks"
 msgid "Pocos pasan de los primeros segundos: ThruPlay %(t)s %% (mínimo %(min)s %%)."
 msgstr "Few get past the first seconds: ThruPlay %(t)s %% (minimum %(min)s %%)."
 
+msgid "Política de la página de la tarjeta"
+msgstr "Card page policy"
+
 msgid "Política de privacidad"
 msgstr "Privacy policy"
+
+msgid "Política de scripts de la página de la tarjeta"
+msgstr "Script policy of the card page"
 
 msgid "Pon REDDIT_USER_AGENT con la forma «creatv-machine/1.0 (by u/tu_usuario)» y reinicia los dos servicios."
 msgstr "Set REDDIT_USER_AGENT to the form “creatv-machine/1.0 (by u/your_username)” and restart both services."
@@ -20530,8 +20585,19 @@ msgstr "Whisper · %(s)s s of audio · didn't arrive"
 msgid "Wompi abre su propia ventana para los datos de la tarjeta: el número nunca pasa por Creatv. Visa, Mastercard o American Express, con código de seguridad."
 msgstr "Wompi opens its own window for the card details: the number never goes through Creatv. Visa, Mastercard or American Express, with a security code."
 
+#, python-format
+msgid "Wompi anuló el pago de la recarga %(ref)s de %(cliente)s (%(monto)s) antes de que lo acreditáramos: su saldo no cambió. Revisa en el panel de Wompi si hay otra transacción aprobada con esa referencia (otra pestaña); la periódica la busca durante 26 horas y te avisa si la encuentra."
+msgstr "Wompi voided the payment for top-up %(ref)s for %(cliente)s (%(monto)s) before we credited it: its balance did not change. Check in the Wompi dashboard whether there is another approved transaction with that reference (another tab); the periodic check looks for it for 26 hours and lets you know if it finds one."
+
+msgid "Wompi anuló este pago antes de que lo sumáramos: tu saldo no cambió."
+msgstr "Wompi voided this payment before we added it: your balance did not change."
+
 msgid "Wompi anuló este pago y lo descontamos de tu saldo."
 msgstr "Wompi voided this payment and we deducted it from your balance."
+
+#, python-format
+msgid "Wompi anuló la recarga %(ref)s de %(cliente)s (transacción %(tx)s) y su evento no llegó: la encontramos revisando las recargas aprobadas y descontamos %(monto)s de su saldo. Revisa en el panel de Wompi la URL de eventos."
+msgstr "Wompi voided top-up %(ref)s for %(cliente)s (transaction %(tx)s) and its event never arrived: we found it while reviewing approved top-ups and deducted %(monto)s from its balance. Check the events URL in the Wompi dashboard."
 
 #, python-format
 msgid "Wompi anuló la recarga %(ref)s de %(cliente)s: descontamos %(monto)s de su saldo."
@@ -21218,6 +21284,9 @@ msgstr "good"
 
 msgid "bloquea"
 msgstr "blocks"
+
+msgid "bloqueado"
+msgstr "blocked"
 
 msgid "borrador"
 msgstr "draft"
@@ -21949,6 +22018,12 @@ msgstr "testing: %(nombre)s"
 
 msgid "en sus primeros 14 días"
 msgstr "in their first 14 days"
+
+msgid "en «bloquear»"
+msgstr "in «block» mode"
+
+msgid "en «solo reporte»: no bloquea nada"
+msgstr "in «report only» mode: it blocks nothing"
 
 msgid "encaje del producto"
 msgstr "product fit"
@@ -22840,6 +22915,9 @@ msgstr "its outcome couldn't be confirmed"
 msgid "no se puede usar aún"
 msgstr "can't be used yet"
 
+msgid "no se sabe"
+msgstr "unknown"
+
 #, python-format
 msgid "no se te cobraron %(monto)s"
 msgstr "you were not charged %(monto)s"
@@ -23679,6 +23757,9 @@ msgstr "there are only %(n)s comments; %(min)s are needed for the avatars"
 
 msgid "solo los que llegaron con firma válida"
 msgstr "only those that arrived with a valid signature"
+
+msgid "solo reporte"
+msgstr "report only"
 
 msgid "solo ventas medibles"
 msgstr "measurable sales only"

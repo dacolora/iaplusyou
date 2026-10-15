@@ -572,6 +572,8 @@ RESULTADOS_EVENTO = {
     "rechazada": N_("Rechazada"), "anulada": N_("Anulada"), "ignorada": N_("Ignorado"),
     "recibido": N_("Recibido"), "error": N_("Error"),
     "no_cuadra": N_("No cuadra"), "pendiente": N_("Pendiente"), "otro_pago": N_("Segundo pago"),
+    # PND-328 (2026-10-15): la anulación llegó antes que la aprobación, y la aprobación tardía de ese pago anulado.
+    "anulada_sin_acreditar": N_("Anulada antes de acreditar"), "ya_anulada": N_("Aprobación de un pago anulado"),
 }
 PROVEEDORES_EVENTO = {"bold": "Bold", "wompi": "Wompi"}
 
@@ -1056,6 +1058,7 @@ NOMBRES_AVISO_PLATA = {
     "renovacion_apagada": N_("Renovación apagada"),
     "trm_sin_tasa": N_("Sin tasa de cambio"),
     "deuda_pospago": N_("Deuda de pospago"),
+    "csp_tarjeta": N_("Política de la página de la tarjeta"),
 }
 
 

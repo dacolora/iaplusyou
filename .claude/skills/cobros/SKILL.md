@@ -80,15 +80,16 @@ Saldo › Movimientos. Pruebas: `tests/test_cobros_uso_previo.py`.
 | Módulo | Qué hace | Escribe |
 |---|---|---|
 | `cobros/libro.py` | cuenta, margen, saldo, reservas, `exigir`, `cobrar_gasto`, `revertir_trabajo`, `acreditar`, `puede_arrancar`, `SaldoInsuficiente` | **ÚNICO escritor** de `cuenta_saldo`, `movimiento_saldo`, `reserva_saldo` y de `kv` `cobros:margen_global` |
-| `cobros/recargas.py` | recargas con Wompi o Bold, eventos/webhook, verificación, rescate por referencia (`rescatar_sin_evento`, `buscar_en_wompi`), recarga manual | **ÚNICO escritor** de `recarga` y `pago_evento` (acredita llamando a `libro.acreditar` en su misma transacción) y de `kv` `wompi:visto:<id>` y `wompi:busqueda:<id>` |
+| `cobros/recargas.py` | recargas con Wompi o Bold, eventos/webhook, verificación, rescate por referencia (`rescatar_sin_evento`, `buscar_en_wompi`), recarga manual | **ÚNICO escritor** de `recarga` y `pago_evento` (acredita llamando a `libro.acreditar` en su misma transacción) y de `kv` `wompi:visto:<id>`, `wompi:busqueda:<id>` y `wompi:revision:<id>` |
 | `cobros/bold.py` | crear el link, leer su estado, verificar la firma | nada (el único módulo que habla con Bold) |
 | `cobros/wompi.py` | checkout de recarga, aceptaciones, fuentes (tarjeta/Nequi), cobro de un periodo, transacción, firma de integridad y de eventos | solo `kv` `wompi:aceptaciones` (caché de los contratos, `aceptaciones_recientes`; el único módulo que habla con Wompi) |
 | `cobros/trm.py` | la TRM oficial (datos.gov.co) para cobrar en COP | `kv` `cobros:trm` (único escritor, upsert de un statement) |
 | `cobros/pasarela.py` | `para_recargas()` → `"wompi"`, `"bold"` o `None` | nada |
+| `cobros/csp.py` | los reportes de la política de scripts de la página de la tarjeta (`POST /pagos/csp/tarjeta`, PND-304 a): leer, recortar a lo justo, topes, aviso `csp_tarjeta`, `resumen()` para /admin/cobros | **ÚNICO escritor** de `kv` `cobros:csp:<huella>` |
 | `cobros/_entorno.py` | `host_local`, `plataforma_local` (las llaves o marcas de pruebas solo en local; `bold.host_local` lo reexporta) | nada |
 | `cobros/vista.py` | lo que ve la persona: movimientos, chip, resúmenes de lo cobrado, `gasto_para`, `resumen_admin`, `planes_admin`, eventos | nada (solo lee) |
 | `cobros/avisos.py` | correos y bitácora (pieza no cobrada, recarga acreditada, saldo bajo, avisos al admin) | `kv` `cobros:aviso_bajo:<cliente>` |
-| `cobros/rutas.py` | Blueprint: `/cliente/<c>/saldo/…`, `/pagos/bold/webhook`, `/pagos/wompi/eventos`, `/admin/cobros…` | nada directo: llama a los de arriba |
+| `cobros/rutas.py` | Blueprint: `/cliente/<c>/saldo/…`, `/pagos/bold/webhook`, `/pagos/wompi/eventos`, `/pagos/csp/tarjeta`, `/admin/cobros…` | nada directo: llama a los de arriba |
 | `tareas/cobros.py` | `cobros_verificar_recargas`, periódica cada 10 min (`worker.py`) | vía `recargas.verificar_pendientes` |
 | `cobros/planes.py` | planes, suscripciones, cobro de cada renovación, `aplicar_transaccion`, `renovar_todo`, cancelar/terminar/cambiar tarjeta/a mano, `estado_cliente` | **ÚNICO escritor** de `plan`, `suscripcion`, `periodo_plan`, `pago_plan` y de `kv` `planes:aceptacion:<suscripción>` (el libro escribe sus movimientos en la misma transacción) |
 | `tareas/planes.py` | `planes_renovar`, periódica cada 30 min (`worker.py`), exenta de cobro (ingreso, no gasto) | vía `planes.renovar_todo` |
@@ -153,12 +154,12 @@ TRM: `trm.actual()` lee `32sa-8pi3` (`$limit=1&$order=vigenciadesde DESC&$where=
 ## Recargas con Wompi (planes 4/8, 2026-10-09)
 
 Spec planes §5.1 y §5.3. `recargas.crear` usa `pasarela.para_recargas()`: con Wompi, la TRM se lee ANTES de escribir (`trm.SinTasa` → `ValueError` «No pudimos leer la tasa de cambio…», sin fila), `centavos_cop(usd, trm)` = `ceil(usd × trm) × 100` en Decimal, y la recarga nace `medio="wompi"`, `total_pago` = esos centavos de COP, `moneda_pago="COP"`, `nota="trm=<valor>"`; redirige a `wompi.url_checkout` (vuelta `PLATAFORMA_URL/cliente/<c>/saldo/recarga/<id>`, correo solo si está verificado). Sin llaves de Wompi sigue Bold igual que antes.
-- **Qué acredita** (`recargas._aplicar_wompi`, con el candado tomado antes de leer): solo si `reference`, `amount_in_cents` y `currency` de la transacción son los de la recarga (`_cuadra`); `APPROVED` desde `ACREDITABLES` → `aprobada`, `pasarela_ref` = id de la transacción (UNIQUE) y `+milesimas` de la recarga (los USD elegidos, concepto `recarga_wompi`); `DECLINED`/`ERROR` → `rechazada` (sigue acreditable); `VOIDED` de la aprobada con ese id → `anulada` + `anulacion_wompi`; `PENDING` guarda el id para la periódica. Lo que no cuadra no toca nada y avisa al admin (`wompi_no_cuadra`, una vez por recarga y transacción en el proceso: el sondeo no manda un correo cada 3 s).
+- **Qué acredita** (`recargas._aplicar_wompi`, con el candado tomado antes de leer): solo si `reference`, `amount_in_cents` y `currency` de la transacción son los de la recarga (`_cuadra`); `APPROVED` desde `ACREDITABLES` → `aprobada`, `pasarela_ref` = id de la transacción (UNIQUE) y `+milesimas` de la recarga (los USD elegidos, concepto `recarga_wompi`); `DECLINED`/`ERROR` → `rechazada` (sigue acreditable); `VOIDED` de la aprobada con ese id → `anulada` + `anulacion_wompi`; `PENDING` guarda el id para la periódica. **PND-328 (2026-10-15): los eventos llegan en desorden.** Un `VOIDED` de una recarga todavía acreditable (`pendiente`, `rechazada`, `expirada`) la deja `anulada` con esa transacción en `pasarela_ref` y SIN movimiento (no entró plata; resultado `anulada_sin_acreditar`, aviso `anulacion_wompi` al admin); el `APPROVED` de esa misma transacción que llegue después, aunque traiga todo firmado y no se relea, mira esa anulación y no acredita (`ya_anulada`); el de OTRA transacción es `otro_pago` (al admin, que la acredita a mano si corresponde: la recarga ya está cerrada). Antes el `VOIDED` de una pendiente se ignoraba y la aprobación tardía acreditaba un pago anulado. Dos pestañas (guardian-gasto 2026-10-15): X se aprueba y Wompi la anula, Y (otra pestaña, o una de Nequi que estaba PENDING y cuya `pasarela_ref` pisó X) se aprueba y su evento se pierde: el rescate sigue buscando por referencia durante `HORAS_VIGENTE` las `anulada` que nunca se acreditaron (sin movimiento `recarga`) y Y sale como `otro_pago` al admin. Acreditar Y sola en ese caso queda para Daniel. Lo visto aprobado en la vuelta de una recarga que terminó `anulada` no dispara `wompi_sin_evento`. La vuelta de una anulada que nunca se sumó dice «antes de que lo sumáramos: tu saldo no cambió» (`recargas.fue_acreditada`, el movimiento `recarga` del libro), no «lo descontamos». Lo que no cuadra no toca nada y avisa al admin (`wompi_no_cuadra`, una vez por recarga y transacción en el proceso: el sondeo no manda un correo cada 3 s).
 - **La vuelta** sin `?id=` y sin transacción guardada dice «Si pagaste, lo acreditamos apenas Wompi lo confirme» (sin sondeo eterno). Un correo que Wompi no aceptaría se omite del checkout (`wompi.correo_valido`), no frena la recarga.
 - **La vuelta** trae `?id=<transacción>` (`wompi.id_valido`): la vuelta, el sondeo `/estado?id=` y «Verificar» consultan `wompi.transaccion` bajo el mismo semáforo, la consulta en vuelo y los 3 s de Bold, con `wompi.TIEMPO_INTERACTIVO`. **El `id` del navegador solo se consulta para MOSTRAR** (`recargas.consultar`, revisión final 2026-10-10): «Wompi aprobó tu pago; lo sumamos apenas Wompi nos lo confirme». Nunca acredita, ni guarda `pasarela_ref`, ni cambia el estado: podría ser una transacción de OTRA cuenta de Wompi con nuestra referencia y monto. Acreditan el evento firmado, `verificar`/la periódica con la `pasarela_ref` guardada (que solo escribe un evento) y el admin. Si Wompi trae el comercio (`merchant.public_key` → `tx["comercio"]`), `wompi.de_otro_comercio` lo compara en `_cuadra` y en `planes.aplicar_transaccion`.
 - **Eventos** `POST /pagos/wompi/eventos` (exento por nombre exacto, `cobros.wompi_eventos`, en `ENDPOINTS_OTRO_ORIGEN` y `ENDPOINTS_SIN_GUARD_SESION`): 413 / 400 (JSON inválido o anidado sin fin) / 401 (`wompi.evento_valido` con `X-Event-Checksum`; cupo sin firma propio, `wompi:sinfirma`, filas sin cuerpo) / 200 sin cuerpo a todo evento firmado, también los ajenos y los repetidos. `pago_evento(proveedor="wompi", evento_id=sha256(cuerpo crudo))`, cuerpo en lista blanca (`CAMPOS_WOMPI`, sin correo). `transaction.updated` `cv-` → recarga; `pl-` → `planes.aplicar_transaccion(tx)` si existe (planes 5/8), si no `ignorada`; otro tipo o referencia → `ignorada`. **Se relee la transacción** en Wompi (`recargas._releer`, fuera de toda transacción de la base) si el evento no cuadra con lo guardado o si no van firmados id, status, referencia, monto y moneda (`_FIRMADO_PARA_CREER`; Wompi firma por defecto solo id, status y monto), sea cual sea el status: un evento verdadero con la referencia cambiada no rompe la firma y acreditaría la recarga de otro del mismo monto, o le pegaría a otra recarga el id de la transacción (un rechazo o un pendiente guardan `pasarela_ref`). Lo mismo para `pl-` antes de llamar a `planes` (sin `aplicar_transaccion` no se relee nada). Solo vale lo releído; si difiere del evento, aviso al admin. **Solo «la transacción no existe» (id inválido o 404) es definitivo** (`no_cuadra`, 200); cualquier otro error al releer (caída, 429, 401/403 de una llave mal puesta o rotada, 3xx, respuesta rara), o un error de la base o de `planes` → 500 sin anotar el evento (Wompi reintenta a los 30 min, 3 h y 24 h): tomarlo por «no cuadra» dejaba una recarga pagada sin acreditar (fix 1 de la revisión, 2026-10-09). Una transacción ya guardada en OTRA recarga es `no_cuadra` y avisa al admin.
 - **Periódica**: `verificar_pendientes` consulta también las de Wompi pendientes con transacción conocida (y rechazadas/vencidas de < 26 h con transacción); una pendiente sin transacción solo se vence pasadas 26 h (un evento tardío la acredita desde `expirada`). Para a la primera caída o 429.
-- Pruebas: `tests/test_recargas_wompi.py`.
+- Pruebas: `tests/test_recargas_wompi.py` y, para las anuladas (PND-328 y PND-304 b), `tests/test_recargas_wompi_anuladas.py`.
 
 ## Suscripciones: alta, renovación, gracia y cancelación (planes 5/8, 2026-10-09)
 
@@ -271,6 +272,19 @@ vulnerabilidades»). Explicación en llano y riesgos aceptados: `docs/pagos/segu
   `BUSQUEDAS_POR_VUELTA` (30) y el tiempo que le quede a la vuelta, con un piso de 15 s para que el rescate avance
   aunque las consultas por id se hayan llevado la vuelta; para con caída, 429, 401 o 403. Otra APPROVED de la
   misma referencia también se aplica, para que salga `otro_pago` al admin. Al acreditar así, aviso `wompi_rescatada`.
+- **Aprobadas que Wompi anula después** (`recargas.revisar_aprobadas`, PND-304 b, 2026-10-15; la última pasada de
+  `verificar_pendientes`, con un piso de 10 s): antes solo se sabía por el evento firmado, y si se perdía el saldo
+  quedaba acreditado. Relee POR ID (`pasarela_ref`, que trae el comercio; la búsqueda por referencia no) las recargas de
+  Wompi `aprobada` creadas en los últimos `DIAS_REVISAR_APROBADAS` (30) días, espaciadas por edad (`_espera_revision`:
+  cada 2 h los dos primeros días, después una vez al día; ≈ 52 consultas por recarga) contando desde la última
+  revisión (`kv` `wompi:revision:<id>`, que se limpia sola) o, si no hubo, desde la aprobación (`actualizada_en`: una
+  recién acreditada no se relee en la misma vuelta); la que lleva más tiempo sin mirarse primero, a lo más
+  `REVISIONES_POR_VUELTA` (20); para con caída, 429, 401 o 403. Solo un `VOIDED` escribe: `_aplicar_wompi` bajo el
+  candado tomado antes de leer → `anulada` + `anulacion_wompi` (el reverso del saldo; el saldo puede quedar negativo)
+  y aviso al admin que dice que el evento no llegó. Ningún reverso dos veces: el `UPDATE … WHERE estado = 'aprobada'
+  AND pasarela_ref = <id>` y `UNIQUE(tipo, recarga_id)` del libro (el evento tardío queda `ignorada`). Una anulación
+  que no cuadra (otro comercio) no descuenta y avisa `wompi_no_cuadra`. Los pagos de PLAN no tienen esta revisión:
+  su anulación sigue llegando solo por el evento firmado.
 - **Cobros de plan inciertos** (`planes._buscar_en_wompi`): antes de un «reintentar», tras un 422 de referencia usada
   y en una cancelada con el cobro en el aire, se busca la referencia; solo vale si la transacción salió de la fuente de
   pago de ESA suscripción (`payment_source_id`), por sus centavos exactos, en COP y de nuestro comercio (con ids
@@ -293,9 +307,41 @@ vulnerabilidades»). Explicación en llano y riesgos aceptados: `docs/pagos/segu
   `recargas.manual`**: crea otra fila y un evento tardío o el rescate acreditan también la original.
 - **Página de la tarjeta** (`plan_alta.html`, por `rutas._formulario`): `CSP_TARJETA` (scripts propios, los en línea con
   el nonce de la petición —`dashboard._nonce_csp`, `csp_nonce` en `base.html`— y `checkout.wompi.co`; marcos solo de
-  Wompi; `form-action 'self'`). Arranca en **«solo reporte»** (`CSP_TARJETA_SOLO_REPORTE = True`): pasarlo a False cuando
-  la consola se vea limpia con el widget de verdad. `dashboard._cabeceras_seguridad` SUMA una CSP propia a la de base.
-  Sin manejadores en línea en esa página (el chip de Gasto usa `data-ir-config`, atendido en `base.html`).
+  Wompi; `form-action 'self'`). Arranca en **«solo reporte»** (`CSP_TARJETA_SOLO_REPORTE = True`).
+  `dashboard._cabeceras_seguridad` SUMA una CSP propia a la de base. Sin manejadores en línea en esa página (el chip de
+  Gasto usa `data-ir-config`, atendido en `base.html`).
+- **Lo que esa política bloquearía, anotado en el servidor** (PND-304 a, 2026-10-15; decisión 2026-10-13: «un
+  `report-uri` que anote las violaciones, sin depender de que alguien mire la consola»). La política lleva
+  `; report-uri /pagos/csp/tarjeta` (en los dos modos) y `cobros.csp.procesar` anota cada violación: directiva (lista
+  blanca: `script-src`, `-elem`, `-attr`, `worker-src`, `frame-src`, `child-src`, `form-action`), lo bloqueado reducido
+  a su origen o su palabra (`inline`, `eval`, `data`, `chrome-extension`…; una parte del host con 5 dígitos seguidos se
+  tapa con `*`: un skimmer podría meter un número de tarjeta en un subdominio), qué página (`alta` o `tarjeta`, por la
+  ruta del documento, y solo si el host del documento es el de PLATAFORMA_URL, uno de PLATAFORMA_HOSTS_EXTRA o local:
+  `_host_nuestro`), `report`/`enforce`/`desconocida` (sin `disposition`), veces, primera y última. Nunca la URL
+  completa, la consulta, el `script-sample`, el archivo fuente ni el proyecto. Exenta de la barrera CSRF y de la sesión
+  por nombre (`cobros.csp_tarjeta` en `ENDPOINTS_OTRO_ORIGEN` y `ENDPOINTS_SIN_GUARD_SESION`): es la ÚNICA excepción
+  sin firma (un reporte no se puede firmar). Marcado de otro sitio solo pasa con `Sec-Fetch-Dest: report` (si no, 403:
+  un `fetch` de otra página haría que sus visitantes mandaran reportes falsos desde IP reales). Topes: 16 KB (413), 10
+  reportes por envío, `TOPE_IP_HORA` (10) por IP (una IPv6 por su /64) y `TOPE_HORA` (60) entre todos (memoria +
+  `cuentas.limite_ok("csp_tarjeta")`), a lo más `MAX_DISTINTAS` (20) violaciones guardadas (con la lista llena, lo nuestro
+  o de Wompi —`inline`, `eval`, `self`, `data`, `blob`, `*.wompi.co`, el host de la plataforma— desplaza a la ajena más
+  vieja), y las que no se repiten en `DIAS` (30) se olvidan. **Lo que un tope descarta deja la lista marcada como
+  incompleta** (`kv` `cobros:csp_incompleta`, una escritura por hora y proceso; `#aviso-csp-incompleta` en /admin/cobros):
+  quien gaste el cupo con basura no la deja con cara de limpia (auditoría de seguridad 2026-10-15). Una violación nueva
+  avisa al admin una vez (`csp_tarjeta`, en «Avisos de plata»), diciendo que los reportes no van firmados y que un origen
+  se reproduce en la consola y se compara letra por letra con `https://checkout.wompi.co` antes de permitirlo (uno como
+  `checkout.wompi.co.otro.example` es un engaño). /admin/cobros lo muestra en `#cobros-csp-tarjeta` con el modo
+  actual. **Sin `report-to`** a propósito: en Chromium reemplaza a `report-uri` y manda por la Reporting API en
+  tandas; con el navegador integrado no llegó ningún reporte en 90 s, y con solo `report-uri` llegaron al instante las
+  tres violaciones de prueba (inline, un script de otro CDN, un marco ajeno), con `Sec-Fetch-Site: same-origin` y la
+  cookie (2026-10-15). El parser igual lee el formato de la Reporting API.
+- **Cuándo pasarla a «bloquear»** (`CSP_TARJETA_SOLO_REPORTE = False` en `cobros/rutas.py`, un despliegue): cuando,
+  después de al menos un alta y un cambio de tarjeta REALES con el widget desde que existe el registro (no en local:
+  el widget de pruebas y el de producción pueden cargar cosas distintas), `#cobros-csp-tarjeta` esté vacía o solo tenga
+  cosas que no son ni de Creatv ni de Wompi (extensiones del navegador: `chrome-extension`, `moz-extension`) y NO diga
+  «puede estar incompleta». Si aparece un origen de Wompi (`*.wompi.co`) o nuestro (`inline`, `eval`, un `/static/`),
+  se reproduce primero en la consola de la página real (los reportes no van firmados), se agrega a `CSP_TARJETA` y se
+  vuelve a mirar. Ya en «bloquear», la misma lista dice `bloqueado`: un renglón nuevo de Wompi ahí es un pago roto.
 - **Checkout que vence** (`HORAS_CHECKOUT` = 24, `wompi.url_checkout(..., vence=)`, `expiration-time` en UTC con
   milisegundos y firmado): visto en producción el 2026-10-12 (uno vigente muestra «Este pago vence en…»; uno vencido,
   «Ha terminado el plazo para realizar este pago»). Antes un link abierto hoy se pagaba días después a la TRM vieja.
@@ -308,7 +354,8 @@ vulnerabilidades»). Explicación en llano y riesgos aceptados: `docs/pagos/segu
   reconoce español e inglés); las referencias de planes llevan el id de la suscripción y Wompi las recuerda entre
   corridas (el script numera desde un punto al azar; con ids repetidos el sistema se niega, bien, a aplicar el cobro
   viejo de otra tarjeta); los números de Nequi de prueba deciden el cobro, no la inscripción; una recarga APROBADA que
-  Wompi anula solo se entera por el aviso firmado (PND-304 b). Correrlo de nuevo: `venv/bin/python3
+  Wompi anula solo se enteraba por el aviso firmado (PND-304 b; desde 2026-10-15 también la periódica, «Aprobadas que
+  Wompi anula después»). Correrlo de nuevo: `venv/bin/python3
   deploy/prueba_wompi_sandbox.py` (sin argumentos: la guarda del repo frena un comando que nombre el archivo de llaves).
 
 ## Bold: llaves, link, webhook, verificación
@@ -342,7 +389,7 @@ El modelo de una tarea de Claude que cobra con precio a la vista (`meta_rend_eva
 
 ## Qué prueba qué
 
-`tests/test_cobros_db.py` (tablas y únicos), `_libro.py` (precio, reservas, cobro, corrección, reverso, candado), `_gastos.py` (`registrar` cobra, savepoint, `entregado`), `_worker.py` (reversión por cadena, respaldo, ContextVar entre hilos, clasificación de tipos), `_freno.py` (`encolar` y rutas sin saldo, 402, encoladores del worker), `_precios.py` (margen en botones, el filtro no se congela, el costo no llega al navegador), `_vista.py` (lo cobrado, chip, panel, falla cerrado), `_bold.py`, `_recargas.py` (firma, idempotencia, webhook exento solo él, cupo sin firma, vuelta que no acredita, consulta de rechazadas, BOLD_PRUEBAS solo en local), `_alertas.py`, `_admin.py`, `tests/test_planes*.py` (bolsa, Wompi falso, alta, renovación y gracia, pantallas, admin, alertas: `test_planes_alertas.py`), `tests/test_recargas_wompi.py`, `_sincronicas.py` (las rutas y funciones que llaman al proveedor en la petición y cuyo `exigir` es el único freno: Leer referente, pasos del pipeline de Flow Plus, muestra de voz propia, caption orgánico y «Escribir con IA», regla de fidelidad del importador). `tests/js/cobros.test.mjs` (el 402 y `urlSegura`). `tests/test_cobros_pedidos.py` (las reservas por pedido de PND-300). `tests/test_cobros_*` entero son la red; una regla nueva lleva su prueba aquí.
+`tests/test_cobros_db.py` (tablas y únicos), `_libro.py` (precio, reservas, cobro, corrección, reverso, candado), `_gastos.py` (`registrar` cobra, savepoint, `entregado`), `_worker.py` (reversión por cadena, respaldo, ContextVar entre hilos, clasificación de tipos), `_freno.py` (`encolar` y rutas sin saldo, 402, encoladores del worker), `_precios.py` (margen en botones, el filtro no se congela, el costo no llega al navegador), `_vista.py` (lo cobrado, chip, panel, falla cerrado), `_bold.py`, `_recargas.py` (firma, idempotencia, webhook exento solo él, cupo sin firma, vuelta que no acredita, consulta de rechazadas, BOLD_PRUEBAS solo en local), `_alertas.py`, `_admin.py`, `tests/test_planes*.py` (bolsa, Wompi falso, alta, renovación y gracia, pantallas, admin, alertas: `test_planes_alertas.py`), `tests/test_recargas_wompi.py`, `_sincronicas.py` (las rutas y funciones que llaman al proveedor en la petición y cuyo `exigir` es el único freno: Leer referente, pasos del pipeline de Flow Plus, muestra de voz propia, caption orgánico y «Escribir con IA», regla de fidelidad del importador). `tests/js/cobros.test.mjs` (el 402 y `urlSegura`). `tests/test_csp_tarjeta.py` (los reportes de la página de la tarjeta). `tests/test_cobros_*` entero son la red; una regla nueva lleva su prueba aquí. Además: `tests/test_recargas_wompi.py`, `_sincronicas.py` (las rutas y funciones que llaman al proveedor en la petición y cuyo `exigir` es el único freno: Leer referente, pasos del pipeline de Flow Plus, muestra de voz propia, caption orgánico y «Escribir con IA», regla de fidelidad del importador). `tests/js/cobros.test.mjs` (el 402 y `urlSegura`). `tests/test_cobros_pedidos.py` (las reservas por pedido de PND-300). `tests/test_cobros_*` entero son la red; una regla nueva lleva su prueba aquí.
 
 ## Trampas (2026-10-08, cada una nos costó una ronda de revisión)
 
