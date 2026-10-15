@@ -55,12 +55,29 @@ def test_un_video_con_la_cabecera_que_miente_se_mide_entero(app, tmp_path):  # n
 
 # --- Crear: lo que se muestra, se reserva y se cobra -------------------------------------------
 
-def test_crear_vuelve_a_medir_el_video_de_la_bandeja(app, monkeypatch, tmp_path):  # noqa: F811
-    """Una referencia subida antes del arreglo guardó la duración de la cabecera: al crear se vuelve a medir el
-    archivo, y la sesión (de la que salen la reserva, el «Reintentar» y el gasto) lleva la medida real."""
-    import flowplus_lanzar
+def test_si_la_medida_cambia_no_cobra_un_precio_que_no_se_vio(app, monkeypatch, tmp_path):  # noqa: F811
+    """Una referencia subida antes del arreglo guardó la duración de la cabecera (2 s) y la pantalla mostró ese
+    precio. Al crear se vuelve a medir (12 s): no se genera ni se cobra; la bandeja queda con la medida nueva para que
+    el precio a la vista sea el que se cobrará (revisión del guardián de gasto)."""
+    import referencias_flowplus
     d = app["dashboard"]
     _bandeja_con_video(monkeypatch, tmp_path, duracion_guardada=2.0)
+    monkeypatch.setattr(d, "_duracion_video", lambda ruta: 12.0)
+    monkeypatch.setattr(d.libro_cobros, "exigir", lambda *a, **k: pytest.fail("no se pide saldo"))
+    fijadas = []
+    monkeypatch.setattr(referencias_flowplus, "fijar_duracion", lambda c, rid, s: fijadas.append((c, rid, s)))
+    assert _crear(app) == {} and app["lanzadas"] == []
+    assert fijadas == [("acme", "ref_v", 12.0)]
+    with app["c"].session_transaction() as s:
+        avisos = [m for _, m in s.get("_flashes", [])]
+    assert any("@Video 1" in m and "12" in m and "no se cobró nada" in m for m in avisos)
+
+
+def test_con_la_medida_al_dia_cobra_lo_que_se_ve(app, monkeypatch, tmp_path):  # noqa: F811
+    """La sesión (de la que salen la reserva, el «Reintentar» y el gasto) lleva la medida real."""
+    import flowplus_lanzar
+    d = app["dashboard"]
+    _bandeja_con_video(monkeypatch, tmp_path, duracion_guardada=12.0)
     monkeypatch.setattr(d, "_duracion_video", lambda ruta: 12.0)
     exigidos = []
     monkeypatch.setattr(d.libro_cobros, "exigir", lambda cliente, costo, *a, **k: exigidos.append(costo) or 0)
@@ -108,6 +125,16 @@ def test_subir_un_video_a_la_bandeja_guarda_la_medida_por_paquetes(app, monkeypa
                       data={"referencias": (io.BytesIO(b"video"), "clip.mp4")}, content_type="multipart/form-data")
     assert r.status_code == 302
     assert agregados and agregados[0]["duracion_s"] == 12.0
+
+
+def test_fijar_duracion_cambia_solo_esa_referencia(base_temporal, monkeypatch, tmp_path):
+    import referencias_flowplus
+    monkeypatch.setattr(referencias_flowplus, "_path", lambda c: str(tmp_path / f"{c}.json"))
+    a = referencias_flowplus.agregar("acme", "video", "https://r2/a.mp4", duracion_s=2.0)
+    b = referencias_flowplus.agregar("acme", "video", "https://r2/b.mp4", duracion_s=5.0)
+    referencias_flowplus.fijar_duracion("acme", a, 12.0)
+    referencias_flowplus.fijar_duracion("acme", "ref_que_no_existe", 1.0)
+    assert [(r["id"], r["duracion_s"]) for r in referencias_flowplus.listar("acme")] == [(a, 12.0), (b, 5.0)]
 
 
 # --- el worker: la última barrera ------------------------------------------------------------

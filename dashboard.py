@@ -110,7 +110,7 @@ from cobros import vista as vista_cobros
 from conectores import ErrorConector
 from conectores import csv_excel as conector_csv
 from conectores import meli as conector_meli
-from tareas.flowplus import ETAPAS_CREATIVE_FLOW
+from tareas.flowplus import ETAPAS_CREATIVE_FLOW, lanzamiento_pendiente
 from tareas import final_edition as tareas_fe
 from tareas import director as tareas_director
 from tareas import experimentos as tareas_exp
@@ -3027,6 +3027,8 @@ def _armar_item_cf(cliente, cf_id, entry, data, ctx, ligero=False):
     if "hijas_b" not in ctx:
         ctx["hijas_b"] = _hijas_b(data)
     item["tiene_hija_b"] = cf_id in ctx["hijas_b"]
+    # PND-214: el pedido salió sin respuesta y pudo cobrarse: «Recuperar», nunca «Reintentar».
+    item["lanzamiento_pendiente"] = lanzamiento_pendiente(entry)
     # Estimado real vía wan3_client.estimate_video() en vez de un número
     # calculado a mano en la plantilla (duracion * 0.10) — usa la misma
     # tabla de precios (COSTO_USD_POR_SEGUNDO) que generar_video() real,
@@ -8117,6 +8119,7 @@ def cf_crear_video(cliente):
             return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
         bandeja = [r for r in bandeja if r["id"] in set(usadas)]
     referencias = []
+    remedidos = {}     # etiqueta -> (id en la bandeja, segundos medidos ahora) si no es lo que se vio
     for r in bandeja:
         ref = {"tipo": r["tipo"], "url": r["url"], "frame_url": r.get("frame_url") or r["url"],
                "etiqueta": r["etiqueta"], "origen": r.get("origen")}
@@ -8131,6 +8134,8 @@ def cf_crear_video(cliente):
                 dur = _duracion_video(r["ruta_local"])
             if dur is None:
                 dur = r.get("duracion_s")
+            elif r.get("duracion_s") is None or abs(float(r["duracion_s"]) - dur) > 0.05:
+                remedidos[r["etiqueta"]] = (r.get("id"), dur)
             ref["duracion_s"] = dur
         referencias.append(ref)
     n_img = sum(1 for r in referencias if r["tipo"] == "imagen")
@@ -8216,6 +8221,20 @@ def cf_crear_video(cliente):
     # no se pudo medir dejaría el precio visto (y lo anotado) por debajo de lo
     # que cobra WaveSpeed. Se avisa y no se genera: nada se cobra.
     sin_medida = flowplus_modelos.videos_sin_duracion(modelo, referencias) if tipo == "video" else []
+    # La pantalla mostró el precio con la duración guardada en la bandeja: si al volver
+    # a medir cambió, no se cobra un precio que no se vio (revisión del guardián de gasto).
+    cambiados = [r["etiqueta"] for r in flowplus_modelos.videos_facturados(modelo, referencias)
+                 if r["etiqueta"] in remedidos] if tipo == "video" else []
+    if cambiados:
+        for etiqueta in cambiados:
+            rid, segundos = remedidos[etiqueta]
+            if rid:
+                referencias_flowplus.fijar_duracion(cliente, rid, segundos)
+        flash(gettext("Volví a medir %(videos)s y la duración no era la que usó el precio de la pantalla. Revisa el "
+                      "precio nuevo y vuelve a generar — no se cobró nada.",
+                      videos=", ".join(f"{e} ({format_decimal(remedidos[e][1], format='#,##0.#')} s)" for e in cambiados)),
+              "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
     if sin_medida:
         flash(gettext("No pude medir cuánto dura %(videos)s, y %(modelo)s cobra cada segundo de un video de "
                       "referencia. Vuelve a intentarlo en un momento o súbelo otra vez — no se cobró nada.",
@@ -8393,6 +8412,11 @@ def cf_rearmar(cliente, cf_id):
     if not puede_rearmar:
         flash(gettext("Esa sesión no se puede rearmar ahora."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+    if lanzamiento_pendiente(entry):
+        # PND-214: rearmar la sacaría de «error», donde se ofrece «Recuperar el video».
+        flash(gettext("El pedido anterior de esta pieza pudo crearse y cobrarse aunque WaveSpeed no respondió: usa "
+                      "«Recuperar el video (sin pagar de nuevo)» en vez de generarla otra vez."), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
     creative_flow.actualizar(cliente, cf_id, estado="prompt_pendiente", error=None)
     if _encolar_director(cliente, cf_id):
         flash(gettext("Rearmando el prompt con IA…"), "ok")
@@ -8409,7 +8433,10 @@ def cf_recuperar(cliente, cf_id):
     terminó, cierra la pieza. No genera ni paga de nuevo (max_intentos=1)."""
     entry = creative_flow.cargar(cliente).get(cf_id)
     pred = (entry or {}).get("prediccion") or {}
-    if not entry or entry.get("estado") != "error" or not pred.get("id") or (entry.get("tipo") or "video") == "imagen":
+    # PND-214: también un lanzamiento incierto (el pedido salió sin respuesta):
+    # la tarea lo busca en el historial de WaveSpeed.
+    recuperable = pred.get("id") or lanzamiento_pendiente(entry)
+    if not entry or entry.get("estado") != "error" or not recuperable or (entry.get("tipo") or "video") == "imagen":
         flash(gettext("Esa pieza no tiene nada que recuperar."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
     # Mismo orden que flowplus_lanzar.lanzar: el estado va ANTES de encolar.
@@ -8464,6 +8491,11 @@ def cf_generar_video(cliente, cf_id):
     # video que ya se generó o se está generando.
     if entry.get("estado") not in ("prompt_listo", "error"):
         flash(gettext("Este video ya se generó o se está generando — no se puede volver a disparar."), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+    if lanzamiento_pendiente(entry):
+        # PND-214: el pedido anterior salió sin respuesta y pudo cobrarse.
+        flash(gettext("El pedido anterior de esta pieza pudo crearse y cobrarse aunque WaveSpeed no respondió: usa "
+                      "«Recuperar el video (sin pagar de nuevo)» en vez de generarla otra vez."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
     if not (entry.get("referencias_urls") or []) and entry.get("enfoque") != "libre":
         flash(gettext("Esta sesión no tiene imágenes de referencia — descártala y crea una nueva."), "error")

@@ -342,17 +342,22 @@ def segundos_videos(modelo_id, referencias):
     return [float(r["duracion_s"]) for r in videos if r.get("duracion_s") is not None]
 
 
-def videos_sin_duracion(modelo_id, referencias):
-    """Etiquetas de los videos de referencia que el modelo recibe COMO VIDEO
-    (y factura por sus segundos: Wan 3.0, hasta `max_videos`) sin `duracion_s`
-    medida. PND-319: sin la medida el precio visto y lo anotado quedarían por
-    debajo de lo que cobra el proveedor; Crear avisa y no genera."""
+def videos_facturados(modelo_id, referencias):
+    """Los videos de referencia que el modelo recibe COMO VIDEO y factura por
+    sus segundos (Wan 3.0, hasta `max_videos`); los demás usan su fotograma."""
     info = VIDEO.get(modelo_id) or {}
     max_videos = int(info.get("max_videos") or 0)
     if not max_videos:
         return []
-    videos = [r for r in (referencias or []) if r.get("tipo") == "video"][:max_videos]
-    return [r.get("etiqueta") or "@Video" for r in videos if r.get("duracion_s") is None]
+    return [r for r in (referencias or []) if r.get("tipo") == "video"][:max_videos]
+
+
+def videos_sin_duracion(modelo_id, referencias):
+    """Etiquetas de los videos que el modelo factura (`videos_facturados`) sin
+    `duracion_s` medida. PND-319: sin la medida el precio visto y lo anotado
+    quedarían por debajo de lo que cobra el proveedor; Crear avisa y no genera."""
+    return [r.get("etiqueta") or "@Video" for r in videos_facturados(modelo_id, referencias)
+            if r.get("duracion_s") is None]
 
 
 def problema_duracion(modelo_id, referencias, duracion):
@@ -426,15 +431,9 @@ def estimate_hablado(modelo_id, segundos, resolucion=RESOLUCION_HABLADO):
 
 
 def _lanzar(path, payload, nombre, timeout_seconds=1200, on_progreso=None):
-    resp = requests.post(
-        f"{wavespeed_common.BASE_URL}/{path}", json=payload,
-        headers=wavespeed_common.headers(), timeout=60,
-    )
-    if not resp.ok:
-        raise wavespeed_common.error_de_respuesta(resp, path)
-    prediction_id = (resp.json().get("data") or {}).get("id")
-    if not prediction_id:
-        raise RuntimeError(f"WaveSpeed no devolvió un id de predicción: {resp.text[:500]}")
+    # PND-214: si el pedido salió y la respuesta no llegó, `LanzamientoIncierto`
+    # (pudo cobrarse; se busca en el historial, nunca se vuelve a mandar).
+    prediction_id = wavespeed_common.lanzar_prediccion(path, payload)
     wavespeed_common.avisar_lanzada(on_progreso, prediction_id)
     resultado = wavespeed_common.poll_hasta_listo(
         prediction_id, nombre, timeout_seconds=timeout_seconds, on_progreso=on_progreso,

@@ -11,7 +11,7 @@ import gastos
 import trabajos
 from cobros import SaldoInsuficiente
 from providers import flowplus_modelos
-from tareas.flowplus import ETAPAS_CREATIVE_FLOW
+from tareas.flowplus import ETAPAS_CREATIVE_FLOW, lanzamiento_pendiente
 
 PRIORIDAD_NORMAL = 5
 
@@ -45,7 +45,8 @@ def costo_estimado(entry):
 
 
 def lanzar(cliente, cf_id, entry, prioridad=PRIORIDAD_NORMAL):
-    """Devuelve True si encoló, False si ya había una tarea viva para esa sesión.
+    """Devuelve True si encoló, False si ya había una tarea viva para esa sesión
+    o si su lanzamiento anterior quedó incierto (PND-214: pudo cobrarse).
     Escribe estado="video_generando" ANTES de encolar: si el worker fallara
     instantáneo, podría escribir "error" y el principal pisarlo. max_intentos=1:
     si la generación falla ya pudo haberse cobrado el crédito; la persona
@@ -56,6 +57,10 @@ def lanzar(cliente, cf_id, entry, prioridad=PRIORIDAD_NORMAL):
     idioma del proyecto), así no se queda «generando» para siempre; después se
     relanza SaldoInsuficiente para que la ruta lo muestre o el encolador del
     worker lo anote."""
+    if lanzamiento_pendiente(entry):
+        # PND-214: el pedido anterior salió sin respuesta y pudo cobrarse; hasta
+        # saber qué pasó («Recuperar el video») no se vuelve a pagar.
+        return False
     tipo = entry.get("tipo") or "video"
     previo = entry.get("estado")
     creative_flow.actualizar(cliente, cf_id, estado="video_generando")

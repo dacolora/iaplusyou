@@ -172,8 +172,10 @@ def test_video_wan3_quita_fotograma_del_video_de_referencia(base_temporal, monke
     import tareas.flowplus as fp
     monkeypatch.setattr(fp, "BASE_DIR", str(tmp_path))
     cid = cf.crear("acme", [], [], [], "camina", 5, "", "A", referencias_urls=["https://x/1.png", "https://x/frame.jpg"])
+    # Con su duración medida: sin ella Wan no se lanza (PND-319, revisión del guardián de gasto).
     cf.actualizar("acme", cid, estado="video_generando", tipo="video", modelo="wan3",
-                  referencias=[{"tipo": "video", "url": "https://x/v.mp4", "frame_url": "https://x/frame.jpg"}])
+                  referencias=[{"tipo": "video", "url": "https://x/v.mp4", "frame_url": "https://x/frame.jpg",
+                                "duracion_s": 5.0}])
 
     visto = {}
 
@@ -181,7 +183,7 @@ def test_video_wan3_quita_fotograma_del_video_de_referencia(base_temporal, monke
         visto.update(refs=referencias, videos=videos, ar=aspect_ratio)
         return "https://prov/v.mp4"
     monkeypatch.setattr(fp.flowplus_modelos, "generar_video", _gen)
-    monkeypatch.setattr(fp.flowplus_modelos, "estimate_video", lambda m, d, con_sonido=True, calidad="final": {})
+    monkeypatch.setattr(fp.flowplus_modelos, "estimate_video", lambda m, d, con_sonido=True, calidad="final", **k: {})
     monkeypatch.setattr(fp.requests, "get", lambda *a, **k: _Resp())
     monkeypatch.setattr(fp.r2_uploader, "upload_video", lambda local, key: "https://r2/" + key)
     monkeypatch.setattr(fp.bitacora, "registrar", lambda *a, **k: None)

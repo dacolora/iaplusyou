@@ -105,7 +105,10 @@ archivos del disco; los mismos dos turnos de ffprobe que «Cambiar producto»), 
 archivo de la bandeja si sigue en disco (una referencia subida antes guardó la medida de la cabecera) y, si un video que
 Wan recibe como video queda sin medida (`flowplus_modelos.videos_sin_duracion`), avisa y no genera; el worker
 (`tareas/flowplus._medir_url`) baja a un temporal lo que una sesión vieja no traía y lo mide igual (tope
-`MAX_BYTES_VIDEO_REFERENCIA`). Kling y Seedance usan el fotograma y no miran la duración. Queda fuera una referencia
+`MAX_BYTES_VIDEO_REFERENCIA`) y, si tampoco puede, no lanza (revisión del guardián de gasto). Si la medida nueva no es
+la que guardaba la bandeja (la que usó el precio de la pantalla), `cf_crear_video` no genera: la guarda
+(`referencias_flowplus.fijar_duracion`) y avisa, así el precio a la vista es el que se cobra. Kling y Seedance usan el
+fotograma y no miran la duración. Queda fuera una referencia
 reusada con «Editar y crear otra» de una pieza de antes del arreglo: conserva la medida que guardó. Pruebas:
 `tests/test_crear_duracion_referencia.py`.
 Desde el carril de Crear (2026-09-28) eso pasa solo: la primera espera dura `ESPERA_PRIMERA` (10 min,
@@ -179,6 +182,35 @@ fal de la prueba real y de un 4:3 o un solo texto (PND-211, dentro de la auditor
 video (PND-212), el audio de fal no marca el saldo (PND-215).
 
 **Pedido rechazado al lanzar (2026-10-02, PND-107):** toda respuesta no-ok de WaveSpeed que no es de saldo es `wavespeed_common.PedidoRechazado` (RuntimeError, mismo `str(e)` técnico de siempre para la bitácora y `tarea.error`, más `status` y `mensaje` del proveedor); `tareas/flowplus._mensaje_error` la cuenta en palabras: «<proveedor> no aceptó el pedido y no se cobró nada: <motivo>…» (WaveSpeed o fal.ai, `saldo.nombre_proveedor`) (o, sin mensaje legible, con el código de respuesta). Antes la tarjeta mostraba el JSON crudo. Cada tipo tiene su frase: 401/403 «rechazó la llave de Creatv», 429 «demasiados pedidos», 5xx «falla de su lado» SIN prometer que no se cobró (WaveSpeed pudo crear la predicción sin devolver su id), y un 4xx con o sin el motivo del proveedor. Un `PedidoRechazado`, como `SinSaldo`, no persigue la `prediccion` que haya en la sesión: es de un intento anterior, no de este video.
+
+**Lanzamiento incierto (PND-214, decisión 2026-10-13, lote 1):** una lectura agotada o una conexión cortada al LANZAR
+salía cruda («HTTPSConnectionPool… Read timed out») y «Reintentar» pagaba otra vez, aunque WaveSpeed pudo crear y cobrar
+la predicción sin devolver su id. `wavespeed_common.lanzar_prediccion` (lo usan `flowplus_modelos._lanzar` y
+`wan3_client.generar_video`) distingue: no se pudo ni conectar (`requests.ConnectTimeout`, `NewConnectionError`) →
+`SinConexion` («el pedido no salió y no se cobró nada»); salió y no hubo respuesta, un 2xx sin id o un 502/504/52x de
+la pasarela (`PASARELA_SIN_RESPUESTA`) → `LanzamientoIncierto` con la ventana (`desde`/`hasta`, UTC). Un 500, 503 o 4xx
+sigue siendo `PedidoRechazado` (PND-107). `tareas/flowplus._lanzamiento_incierto` guarda `lanzamiento_incierto` {path,
+modelo, desde, hasta, causa, estado, en, referencia_gasto} en la sesión (y suelta una `prediccion` vieja: no es este
+video) y sigue `flowplus_recuperar` cuando cerró la ventana tardía (`TARDANZA_MAX_S`, 300 s tras el corte: WaveSpeed
+lento puede crear la predicción después) más `ESPERA_LISTADO_S` (60 s). La recuperación (`_buscar_lanzamiento`) pide
+el historial de la cuenta (`wavespeed_common.buscar_lanzada` → `POST /predictions` con `created_after/before`; trae id,
+model, status y created_at, sin el prompt) y decide: **una sola** predicción de esa ruta en la ventana, sin video
+fallido y de nadie más → la toma con `creative_flow.reclamar_prediccion` (`BEGIN IMMEDIATE` antes de mirar que ninguna
+otra sesión de ningún proyecto la nombre: `prediccion` en curso, `prediccion_entregada` que `_terminar_video` guarda al
+cerrar, o el `kv` `crear:prediccion:<id>` que `creative_flow.eliminar` deja al descartar) y sigue el camino de siempre
+(`_terminar_video`, «recuperado», gasto con la `referencia_gasto` del intento, como PND-109); **ninguna** (y el
+historial filtró bien y se entiende) → «no se creó ni se cobró», `estado: no_creado` y vuelve «Reintentar»; **dudosa**
+(dos o más, un `model` que no es la ruta completa, un id raro, un historial que no filtró, u otra sesión incierta del
+mismo modelo cuya ventana se cruza: `creative_flow.lanzamientos_inciertos`) → en palabras que pudo cobrarse y no se sabe
+cuál es, el estimado en Gasto con `entregado=False` (nada al cliente) y aviso al admin UNA vez (`lanzamiento_dudoso`);
+nunca se trae nada; historial caído → en palabras + «Recuperar el video». Mientras `estado` es `buscando` o `dudoso`
+(`lanzamiento_pendiente`), el detalle ofrece «Recuperar el video» y no «Reintentar» ni «Rearmar», `cf_generar_video` y
+`cf_rearmar` lo dicen y no cobran, `flowplus_lanzar.lanzar` devuelve False (Sprints «Reintentar», cadena, director) y
+`cf_recuperar` lo acepta sin `prediccion`. `duplicar` no copia `prediccion`, `prediccion_entregada` ni
+`lanzamiento_incierto`. Una imagen (sin «Recuperar») solo lo dice en palabras; fal sigue contándolo como su 5xx. No
+verificado en vivo: el formato real del campo `model` del historial (si no es la ruta, todo sale «dudosa» y avisa: nunca
+cobra dos veces ni trae lo ajeno); una predicción hecha con la misma llave fuera de esta base (web de WaveSpeed, pruebas
+locales, los CLI de comparación) a esa hora no se distingue de la nuestra. Pruebas: `tests/test_lanzamiento_incierto.py`.
 
 **Gasto y duplicación (2026-10-02, PND-004/014/109):** `duplicar(..., variante="B")` toma `BEGIN IMMEDIATE` antes de buscar y crear; dos clics obtienen la misma hija. El director cuenta `usage` con caché y conserva el costo en `DirectorError`; la ayuda gratis se anota bajo `_creatv` con el proyecto en `extra`, antes de guardar la sesión. Sus tareas van con `max_intentos=1`. La predicción conserva `referencia_gasto`: recuperar una descarga pagada mantiene la referencia del intento original, y una música nueva se registra aparte con la tarea de recuperación.
 

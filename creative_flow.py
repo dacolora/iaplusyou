@@ -6,6 +6,7 @@ clon_limpio (el video/imagen generado). Los campos legado sin columna propia
 viven en `extra` de cada tabla. El JSON creative_flow_pendientes.json ya no se
 escribe: queda como respaldo de solo lectura (ver migrar_json_a_db.py).
 """
+import re
 from datetime import datetime
 
 import sqlalchemy as sa
@@ -172,6 +173,77 @@ def marcar_favorito(cliente, cf_id, favorito):
     return True
 
 
+# PND-214: lo que puede ser el id de una predicción (WaveSpeed: hex; fal: uuid).
+# Un id con otra forma nunca se reclama (además así no trae comodines de LIKE).
+_ID_PREDICCION = re.compile(r"^[A-Za-z0-9-]{6,80}$")
+
+
+def _clave_usada(pred_id):
+    return f"crear:prediccion:{pred_id}"
+
+
+def _ids_de_prediccion(extra):
+    e = extra or {}
+    return [i for i in ((e.get("prediccion") or {}).get("id"), e.get("prediccion_entregada"))
+            if i and _ID_PREDICCION.match(str(i))]
+
+
+def _otras_con_prediccion(con, pred_id, cliente, cf_id):
+    """¿Alguna OTRA sesión (de cualquier proyecto) nombra ese id en su extra
+    (`prediccion` en curso, `prediccion_entregada` de un video ya bajado), o
+    lo dejó anotado al descartarse (`kv` crear:prediccion:<id>)?"""
+    if con.execute(sa.select(db.kv.c.clave).where(db.kv.c.clave == _clave_usada(pred_id))).first():
+        return True
+    texto = sa.cast(db.concepto.c.extra, sa.Text)
+    fila = con.execute(sa.select(db.concepto.c.id).where(
+        texto.like(f'%"{pred_id}"%'),
+        sa.not_(sa.and_(db.concepto.c.cliente == cliente, db.concepto.c.legado_id == cf_id))).limit(1)).first()
+    return fila is not None
+
+
+def prediccion_en_uso(pred_id, cliente, cf_id):
+    """True si la predicción ya es de otra pieza (de este u otro proyecto), o
+    si el id no tiene forma de id: «Recuperar el video» de un lanzamiento
+    incierto nunca la toma (PND-214: traer el video de otra pieza sería cobrar
+    lo ajeno y mostrarle a un proyecto el video de otro)."""
+    if not _ID_PREDICCION.match(str(pred_id or "")):
+        return True
+    with db.conectar() as con:
+        return _otras_con_prediccion(con, pred_id, cliente, cf_id)
+
+
+def reclamar_prediccion(cliente, cf_id, prediccion, lanzamiento):
+    """Toma la predicción encontrada en el historial para esta sesión, solo si
+    ninguna otra la tiene: `BEGIN IMMEDIATE` antes de mirar, así dos búsquedas
+    a la vez no se quedan con la misma. Guarda `prediccion` y el
+    `lanzamiento_incierto` ya resuelto. False si otra la tenía o la sesión no
+    existe."""
+    if not _ID_PREDICCION.match(str((prediccion or {}).get("id") or "")):
+        return False
+    with db.conectar() as con:
+        con.exec_driver_sql("BEGIN IMMEDIATE")
+        f = _ids(con, cliente, cf_id)
+        if not f or _otras_con_prediccion(con, prediccion["id"], cliente, cf_id):
+            return False
+        extra = dict(f[2] or {})
+        extra.update(prediccion=dict(prediccion), lanzamiento_incierto=dict(lanzamiento))
+        con.execute(db.concepto.update().where(db.concepto.c.id == f[0]).values(actualizado_en=db.ahora(), extra=extra))
+    return True
+
+
+def lanzamientos_inciertos():
+    """[(cliente, cf_id, lanzamiento_incierto)] de todas las sesiones de todos
+    los proyectos que alguna vez quedaron con un lanzamiento incierto (PND-214):
+    dos que se cruzan en la hora con el mismo modelo no se pueden distinguir en
+    el historial del proveedor."""
+    texto = sa.cast(db.concepto.c.extra, sa.Text)
+    with db.conectar() as con:
+        filas = con.execute(sa.select(db.concepto.c.cliente, db.concepto.c.legado_id, db.concepto.c.extra)
+                            .where(texto.like('%"lanzamiento_incierto"%'))).fetchall()
+    return [(c, cf, (e or {}).get("lanzamiento_incierto")) for c, cf, e in filas
+            if isinstance((e or {}).get("lanzamiento_incierto"), dict)]
+
+
 def guardar_guion_base(cliente, cf_id, guion):
     """Guarda el guion y su fecha de cambio bajo el candado de escritura."""
     co = db.concepto
@@ -208,11 +280,20 @@ def guiones_base(cliente):
 
 
 def eliminar(cliente, cf_id):
+    """Borra la sesión. El id de su predicción queda anotado en `kv`
+    (crear:prediccion:<id>, único escritor este módulo): sin él, un
+    lanzamiento incierto de otra pieza podía quedarse con ese video (PND-214,
+    revisión del guardián de gasto)."""
+    from sqlalchemy.dialects.sqlite import insert  # noqa: PLC0415
     with db.conectar() as con:
         f = _ids(con, cliente, cf_id)
         if not f:
             return False
         cid, pid = f[0], f[1]
+        for pred_id in _ids_de_prediccion(f[2]):
+            con.execute(insert(db.kv).values(clave=_clave_usada(pred_id), valor=f"{cliente}:{cf_id}",
+                                             actualizado_en=db.ahora())
+                        .on_conflict_do_nothing(index_elements=[db.kv.c.clave]))
         # Las piezas finales cuelgan de la clon (FK padre_pieza_id): van primero.
         con.execute(db.pieza.delete().where(db.pieza.c.padre_pieza_id == pid, db.pieza.c.tipo == "final"))
         con.execute(db.pieza.delete().where(db.pieza.c.id == pid))
@@ -354,8 +435,11 @@ def duplicar(cliente, cf_id, modelo=None, enfoque=None, prompt_relleno=None, var
         extra = dict(extra_c or {})
         # Lo que pertenece al video generado, no a la idea, no viaja
         # (`capas` es columna de la pieza nueva: nace vacía).
+        # Tampoco el pedido al proveedor (PND-214): la copia es un pedido nuevo; con la
+        # predicción o el lanzamiento incierto de la original nacería bloqueada.
         for k in ("credits", "sonido", "video_url_crudo", "video_local_crudo", "revision_doctrina",
-                  "revision_doctrina_error", "favorito"):
+                  "revision_doctrina_error", "favorito", "prediccion", "prediccion_entregada",
+                  "lanzamiento_incierto"):
             extra.pop(k, None)
         extra.pop("director", None)
         extra.pop("variante", None)
