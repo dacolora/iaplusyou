@@ -49,22 +49,38 @@ def _anuncio(alc, ad_id, canal="facebook-ads"):
     return a
 
 
+def _costo(alc, a):
+    """El costo del botón de la tarjeta de `a` (lo que la ruta recibe de vuelta, ya pasado a costo)."""
+    return pedidos.costos_de("acme", alc, [(a["canal"], a["ad_id"])])[(a["canal"], a["ad_id"])]
+
+
+def _pedir(alc, ad_id, usuario="daniel"):
+    """«Cómo mejorarlo» con el precio que mostró su tarjeta, como desde la ruta."""
+    a = _anuncio(alc, ad_id)
+    return pedidos.pedir_analisis("acme", alc, a, usuario, costo_visto=_costo(alc, a))
+
+
+def _lote(alc, claves, usuario="daniel", **k):
+    return pedidos.pedir_lote("acme", alc, claves, usuario, costos_vistos=pedidos.costos_de("acme", alc, claves), **k)
+
+
 # --- Humo: importan, firmas, y el módulo no toca la sesión ni los avisos -------------------------------------------
 
 def test_las_funciones_movidas_importan_con_su_firma():
     firmas = {nombre: list(inspect.signature(getattr(pedidos, nombre)).parameters) for nombre in (
         "anuncio_del_alcance", "pedir_analisis", "claves_confirmadas", "pedir_lote", "pedir_evaluacion")}
     assert firmas == {"anuncio_del_alcance": ["alc", "canal", "ad_id"],
-                      "pedir_analisis": ["cliente", "alc", "a", "usuario"],
+                      "pedir_analisis": ["cliente", "alc", "a", "usuario", "costo_visto"],
                       "claves_confirmadas": ["valores", "tope"],
-                      "pedir_lote": ["cliente", "alc", "claves", "usuario", "veredicto"],
+                      "pedir_lote": ["cliente", "alc", "claves", "usuario", "veredicto", "costos_vistos"],
                       "pedir_evaluacion": ["cliente", "alc_eval", "usuario", "n_visto", "precio_visto"]}
     assert inspect.signature(pedidos.claves_confirmadas).parameters["tope"].default is None
     assert inspect.signature(pedidos.pedir_lote).parameters["veredicto"].default == ""
-    # G3: lo que mostró el botón es obligatorio y por nombre (nadie puede olvidarlo ni pasarlo en otro orden).
-    for nombre in ("n_visto", "precio_visto"):
-        p = inspect.signature(pedidos.pedir_evaluacion).parameters[nombre]
-        assert p.kind is inspect.Parameter.KEYWORD_ONLY and p.default is inspect.Parameter.empty
+    # G3 y PND-236: lo que mostró el botón es obligatorio y por nombre (nadie puede olvidarlo ni pasarlo en otro orden).
+    for funcion, nombre in ((pedidos.pedir_evaluacion, "n_visto"), (pedidos.pedir_evaluacion, "precio_visto"),
+                            (pedidos.pedir_analisis, "costo_visto"), (pedidos.pedir_lote, "costos_vistos")):
+        p = inspect.signature(funcion).parameters[nombre]
+        assert p.kind is inspect.Parameter.KEYWORD_ONLY and p.default is inspect.Parameter.empty, nombre
 
 
 def test_el_dominio_no_lee_la_sesion_ni_avisa_y_las_rutas_ya_no_tienen_la_copia():
@@ -115,17 +131,17 @@ def test_pedir_analisis_no_cobra_sin_datos_ni_vivo_ni_fresco_y_guarda_quien_lo_p
     _conectar()
     _sembrar()
     alc = panel.alcance("acme", 30)
-    ok, mensaje = pedidos.pedir_analisis("acme", alc, _anuncio(alc, "n1"), "daniel")
+    ok, mensaje = _pedir(alc, "n1")
     assert ok is False and "muy pocos datos" in mensaje and _jobs() == [] and _filas_analisis() == 0
 
-    ok, mensaje = pedidos.pedir_analisis("acme", alc, _anuncio(alc, "p1"), "daniel")
+    ok, mensaje = _pedir(alc, "p1")
     assert ok is True and "Anuncio p1" in mensaje
     [fila] = datos.ultimos_analisis("acme", [("facebook-ads", "p1")]).values()
     assert fila["pedido_por"] == "daniel" and fila["estado"] == "en_cola" and fila["foto"]["alcance_canal"] is None
     [t] = _tareas("tw_analizar_anuncio")
     assert t["job_id"] == "acme__tw_anuncio__facebook-ads__p1" and t["max_intentos"] == 1
 
-    ok, mensaje = pedidos.pedir_analisis("acme", alc, _anuncio(alc, "p1"), "daniel")     # su tarea sigue viva
+    ok, mensaje = _pedir(alc, "p1")     # su tarea sigue viva
     assert ok is False and "ya se está analizando" in mensaje and len(_jobs()) == 1 and _filas_analisis() == 1
 
     # Termina con un análisis listo de este alcance: otra vez no se paga (A1), aunque la pestaña muestre el botón.
@@ -134,7 +150,7 @@ def test_pedir_analisis_no_cobra_sin_datos_ni_vivo_ni_fresco_y_guarda_quien_lo_p
     with db.conectar() as con:
         con.execute(db.tarea.update().values(estado="hecha"))
     alc = panel.alcance("acme", 30)
-    ok, mensaje = pedidos.pedir_analisis("acme", alc, _anuncio(alc, "p1"), "daniel")
+    ok, mensaje = _pedir(alc, "p1")
     assert ok is False and "ya tiene un análisis con estos datos" in mensaje
     assert len(_jobs()) == 1 and _filas_analisis() == 1
 
@@ -146,7 +162,7 @@ def test_pedir_analisis_sin_saldo_no_guarda_nada(peticion):
     libro.configurar("acme", usuario="admin", cobrar=True)
     alc = panel.alcance("acme", 30)
     with pytest.raises(SaldoInsuficiente):
-        pedidos.pedir_analisis("acme", alc, _anuncio(alc, "p1"), "daniel")
+        _pedir(alc, "p1")
     assert _jobs() == [] and _filas_analisis() == 0
 
 
@@ -156,11 +172,11 @@ def test_pedir_lote_cobra_solo_lo_confirmado_y_elegible_y_un_segundo_envio_no_co
     alc = panel.alcance("acme", 30)
     confirmadas = [("facebook-ads", "p1"), ("facebook-ads", "n1"), ("facebook-ads", "no-existe"),
                    ("facebook-ads", "p2")]
-    assert pedidos.pedir_lote("acme", alc, confirmadas, "daniel") == (2, 0)      # n1 sin datos, el otro no está
+    assert _lote(alc, confirmadas) == (2, 0)      # n1 sin datos, el otro no está
     assert _jobs() == ["acme__tw_anuncio__facebook-ads__p1", "acme__tw_anuncio__facebook-ads__p2"]
     assert {f["pedido_por"] for f in datos.ultimos_analisis("acme", confirmadas).values()} == {"daniel"}
     alc = panel.alcance("acme", 30)
-    assert pedidos.pedir_lote("acme", alc, confirmadas, "daniel") == (0, 0)      # el mismo formulario otra vez
+    assert _lote(alc, confirmadas) == (0, 0)      # el mismo formulario otra vez
     assert len(_jobs()) == 2 and _filas_analisis() == 2
 
 
@@ -171,9 +187,9 @@ def test_pedir_lote_respeta_el_filtro_que_mostro_las_claves(peticion):
     alc = panel.alcance("acme", 30)
     perdedor = _anuncio(alc, "p1")["veredicto"]
     otro = next(v for v in panel.FILTROS_GALERIA if v and v != perdedor and v != "cansando")
-    assert pedidos.pedir_lote("acme", alc, [("facebook-ads", "p1")], "daniel", veredicto=otro) == (0, 0)
+    assert _lote(alc, [("facebook-ads", "p1")], veredicto=otro) == (0, 0)
     assert _jobs() == []
-    assert pedidos.pedir_lote("acme", alc, [("facebook-ads", "p1")], "daniel", veredicto=perdedor) == (1, 0)
+    assert _lote(alc, [("facebook-ads", "p1")], veredicto=perdedor) == (1, 0)
 
 
 def test_pedir_lote_para_en_el_primero_sin_saldo_y_dice_cuantos_encolo(peticion):
@@ -188,7 +204,7 @@ def test_pedir_lote_para_en_el_primero_sin_saldo_y_dice_cuantos_encolo(peticion)
                         usuario="admin", detalle="prueba")
     alc = panel.alcance("acme", 30)
     with pytest.raises(SaldoInsuficiente) as e:
-        pedidos.pedir_lote("acme", alc, [clave, ("facebook-ads", "p2"), ("facebook-ads", "g1")], "daniel")
+        _lote(alc, [clave, ("facebook-ads", "p2"), ("facebook-ads", "g1")])
     assert e.value.lote == (1, 0)
     assert _jobs() == ["acme__tw_anuncio__facebook-ads__p1"] and _filas_analisis() == 1
 
@@ -206,9 +222,41 @@ def test_pedir_lote_una_que_falla_no_tumba_las_demas(peticion, monkeypatch, capl
     monkeypatch.setattr(tareas_tw, "encolar_analisis", a_veces)
     alc = panel.alcance("acme", 30)
     with caplog.at_level("WARNING"):
-        assert pedidos.pedir_lote("acme", alc, [("facebook-ads", "p1"), ("facebook-ads", "p2")], "daniel") == (1, 1)
+        assert _lote(alc, [("facebook-ads", "p1"), ("facebook-ads", "p2")]) == (1, 1)
     assert _jobs() == ["acme__tw_anuncio__facebook-ads__p2"] and _filas_analisis() == 1
     assert "RuntimeError" in caplog.text and "token=abc" not in caplog.text
+
+
+def test_pedir_analisis_con_otro_precio_que_el_visto_no_guarda_ni_reserva_nada(peticion):
+    """PND-236: el precio que vio la persona manda. Sin él, o si no coincide (±0,005) con el de ahora, no se crea fila,
+    no se pide saldo ni se encola: el aviso dice el precio de ahora. Va DESPUÉS de lo que no cobra (sin datos, en curso,
+    fresco), que sigue diciendo lo suyo."""
+    from cobros import libro
+    _conectar()
+    _sembrar()
+    libro.configurar("acme", usuario="admin", cobrar=True)            # sin saldo: si llegara a exigir, lanzaría
+    alc = panel.alcance("acme", 30)
+    a = _anuncio(alc, "p1")
+    usd = _costo(alc, a)
+    texto = panel.precio_analisis(datos.creativos("acme", [("facebook-ads", "p1")]).get(("facebook-ads", "p1")))["texto"]
+    for visto in (None, usd - 0.01, usd + 0.0051, 0.0):
+        ok, mensaje = pedidos.pedir_analisis("acme", alc, a, "daniel", costo_visto=visto)
+        assert ok is False and "El precio cambió" in mensaje and texto in mensaje, visto
+    assert _jobs() == [] and _filas_analisis() == 0
+    ok, mensaje = pedidos.pedir_analisis("acme", alc, _anuncio(alc, "n1"), "daniel", costo_visto=None)
+    assert ok is False and "muy pocos datos" in mensaje
+
+
+def test_costos_de_solo_trae_los_del_alcance_y_coincide_con_la_tarjeta(peticion):
+    _conectar()
+    _sembrar()
+    alc = panel.alcance("acme", 30)
+    claves = [("facebook-ads", "p1"), ("facebook-ads", "no-existe"), ("tiktok-ads", "t1")]
+    costos = pedidos.costos_de("acme", alc, claves)
+    assert set(costos) == {("facebook-ads", "p1"), ("tiktok-ads", "t1")}
+    creativos = datos.creativos("acme", claves)
+    for clave, usd in costos.items():
+        assert usd == pytest.approx(panel.precio_analisis(creativos.get(clave))["usd"])
 
 
 def _alc_eval(cliente="acme"):

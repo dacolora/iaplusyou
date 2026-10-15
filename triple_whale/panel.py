@@ -679,7 +679,7 @@ def contexto(cliente, dias=PERIODO_DEFECTO, canal=None, tienda_id=None, hoy=None
         "mas_anuncios": max(0, len(ev["anuncios"]) - MAX_FILAS),
         "tienda": tienda, "rastreo": rastreo, "resultados": resultados_ctx,
         "alertas": evaluacion.alertas(ev, tienda_alertas, rastreo),
-        "muestra_ia": muestra, "estimado_ia": gastos.estimar("evaluacion_tw", n=len(muestra)) if muestra else None,
+        "muestra_ia": muestra, "estimado_ia": analisis.estimado(cliente, muestra) if muestra else None,
         "evaluaciones": evaluaciones, "ultima_lista": ultima_lista,
         "job_evaluar": (tareas_tw.job_id_evaluar(cliente)
                         if trabajos.en_curso(tareas_tw.job_id_evaluar(cliente)) else None),

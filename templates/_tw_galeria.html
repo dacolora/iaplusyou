@@ -125,13 +125,17 @@
       {% endif %}
       {#- `ofrecer_analisis` (panel.elegir_analisis) es la misma regla que decide el lote: sin tarea viva, con datos, sin
           uno fresco de este alcance ni uno listo de otro. -#}
+      {#- PND-236: cada formulario manda el precio que muestra (`usd_precio`, con el margen; nunca el costo) y la ruta no
+          cobra si ya no es el de ahora. Sin precio (el margen no se pudo leer) el botón queda apagado. -#}
+      {% set precio_visto = a.precio_analisis.usd_precio if a.precio_analisis else none %}
       {% if a.ofrecer_analisis %}
       {% set precio = a.precio_analisis.texto if a.precio_analisis else _('precio no disponible') %}
       {% set etiqueta = _('Intentar otra vez') if fila and fila.estado == 'error' else (_('Analizar otra vez') if fila else _('Cómo mejorarlo')) %}
       <form method="post" class="tw-analizar" data-tw-async action="{{ url_analizar }}"
             data-confirmar="{{ _('¿Analizar «%(nombre)s» con IA? Costo: %(precio)s', nombre=a.nombre or a.ad_id, precio=precio) }}">
         {{ campos_alcance(params) }}
-        <button type="submit" class="btn-generar btn-sm">{{ etiqueta }} · {{ precio }}</button>
+        <input type="hidden" name="precio_visto" value="{{ '' if precio_visto is none else precio_visto }}">
+        <button type="submit" class="btn-generar btn-sm"{% if precio_visto is none %} disabled{% endif %}>{{ etiqueta }} · {{ precio }}</button>
       </form>
       {% endif %}
       {#- Un análisis de otra tienda u otro periodo no se da por viejo (§6.6): se ofrece, discreto, volver a pagarlo con los datos de ahora. -#}
@@ -140,7 +144,8 @@
       <form method="post" class="tw-analizar" data-tw-async action="{{ url_analizar }}"
             data-confirmar="{{ _('¿Analizar «%(nombre)s» con IA? Costo: %(precio)s', nombre=a.nombre or a.ad_id, precio=precio_otro) }}">
         {{ campos_alcance(params) }}
-        <button type="submit" class="btn-xs">{{ _('Analizar con estos datos') }} · {{ precio_otro }}</button>
+        <input type="hidden" name="precio_visto" value="{{ '' if precio_visto is none else precio_visto }}">
+        <button type="submit" class="btn-xs"{% if precio_visto is none %} disabled{% endif %}>{{ _('Analizar con estos datos') }} · {{ precio_otro }}</button>
       </form>
       {% endif %}
       {#- «Guardar en Referentes» sigue en triple_whale/rutas.py con el alcance de Triple Whale; para Meta, PND-284. -#}
@@ -180,7 +185,9 @@
     <input type="hidden" name="veredicto" value="{{ g.veredicto }}">
     {#- Lo que se confirmó: el servidor cobra solo estos (y solo si siguen elegibles), no «los próximos N». -#}
     {% for clave in g.lote.claves %}<input type="hidden" name="clave" value="{{ clave }}">{% endfor %}
-    <button type="submit" class="btn-sm">{{ _('Analizar los %(n)s que más gastaron · %(precio)s', n=g.lote.n, precio=g.lote.precio.texto) }}</button>
+    {#- PND-236: el total que muestra (con el margen); la ruta no cobra ninguno si ya no es el de ahora. -#}
+    <input type="hidden" name="precio_visto" value="{{ '' if g.lote.precio.usd_precio is none else g.lote.precio.usd_precio }}">
+    <button type="submit" class="btn-sm"{% if g.lote.precio.usd_precio is none %} disabled{% endif %}>{{ _('Analizar los %(n)s que más gastaron · %(precio)s', n=g.lote.n, precio=g.lote.precio.texto) }}</button>
   </form>
   {% endif %}
 </div>

@@ -33,8 +33,36 @@ def anuncio_del_alcance(alc, canal, ad_id):
     return next((x for x in alc["ev"]["anuncios"] if x["canal"] == canal and x["ad_id"] == ad_id), None)
 
 
-def pedir_analisis(cliente, alc, a, usuario):
-    """Crea la fila con la foto y encola la tarea (spec §6.2). (ok, mensaje). `usuario` queda como `pedido_por`."""
+# Lo que puede moverse el precio visto al volver del navegador: el de siempre (G3, ganchos, swap).
+TOLERANCIA_PRECIO = 0.005
+
+
+def coincide(costo_visto, usd):
+    """True si el costo que vio la persona (ya pasado de precio a costo UNA vez, en la ruta, con
+    `gastos.costo_de_precio`) es el de ahora. Sin uno de los dos, no: nunca se cobra un precio que no se mostró."""
+    return costo_visto is not None and usd is not None and abs(float(costo_visto) - float(usd)) <= TOLERANCIA_PRECIO
+
+
+def costos_de(cliente, alc, claves):
+    """{(canal, ad_id): costo o None} del botón «Cómo mejorarlo» de cada clave que está en el alcance (las demás no
+    salen): la MISMA cuenta que la tarjeta y el cobro (`panel.precio_analisis`, con las filas de análisis para la
+    duración de un anuncio de Meta, G2). Dos lecturas, crezcan o no las claves. La usa el lote para comparar el total
+    que vio la persona (PND-236)."""
+    claves = [tuple(k) for k in claves if anuncio_del_alcance(alc, *k) is not None]
+    if not claves:
+        return {}
+    creativos = datos.creativos(cliente, claves)
+    filas = datos.analisis_de_anuncios(cliente, claves)
+    return {k: panel.precio_analisis(creativos.get(k), filas.get(k, []), alc.get("fuente"))["usd"] for k in claves}
+
+
+def pedir_analisis(cliente, alc, a, usuario, *, costo_visto):
+    """Crea la fila con la foto y encola la tarea (spec §6.2). (ok, mensaje). `usuario` queda como `pedido_por`.
+
+    `costo_visto`: el precio que mostró el botón, ya pasado a costo en la ruta (`gastos.costo_de_precio`). Obligatorio
+    y por nombre (PND-236, decisión del lote 1, 2026-10-13, como G3 en «Evaluar con IA»): si falta o no es el de ahora
+    (una pestaña abierta antes de un cambio de tarifa, el video que trajo su duración), no se crea ni se reserva nada y
+    el aviso dice el precio de ahora; la tarjeta que devuelve la ruta ya lo muestra."""
     if a["veredicto"] == "sin_datos":
         return False, gettext("Todavía tiene muy pocos datos: espera a que gaste más.")
     # «En curso» es la TAREA viva, no la fila: una fila en_cola/analizando cuya tarea ya no existe (murió antes de su
@@ -55,7 +83,12 @@ def pedir_analisis(cliente, alc, a, usuario):
     # manejador común (402 al fetch de la tarjeta, aviso con «Recargar saldo» al formulario). `usd` es el COSTO, el
     # mismo del botón (`panel.precio_analisis`, con las filas ya leídas: para un anuncio de Meta, la duración que guardó
     # un análisis anterior, G2); la reserva la hace el encolado.
-    usd = panel.precio_analisis(creativos.get(clave), filas, alc.get("fuente"))["usd"]
+    precio = panel.precio_analisis(creativos.get(clave), filas, alc.get("fuente"))
+    usd = precio["usd"]
+    # Primero el precio que vio la persona (PND-236): después de lo que no cobra (sin datos, en curso, fresco), que dice
+    # lo suyo, y antes de pedir saldo o guardar nada.
+    if not coincide(costo_visto, usd):
+        return False, gettext("El precio cambió (ahora: %(precio)s). Revisa y vuelve a confirmar.", precio=precio["texto"])
     libro.exigir(cliente, usd, tipo="evaluacion")      # `tipo`: lo incluido en un plan (main, planes 2026-10-10)
     if any(f["estado"] in panel.EN_CURSO for f in filas):
         with idiomas.en_idioma(idiomas.de_proyecto(cliente)):        # lo que se guarda, en el idioma del proyecto
@@ -117,11 +150,15 @@ def claves_confirmadas(valores, tope=None):
     return claves
 
 
-def pedir_lote(cliente, alc, claves, usuario, veredicto=""):
+def pedir_lote(cliente, alc, claves, usuario, veredicto="", *, costos_vistos):
     """«Analizar los N que más gastaron» (spec §6.4): (encolados, fallos). `claves` son las que confirmó la persona
     (`claves_confirmadas` del formulario, que ya para en N_LOTE) y `veredicto` el filtro de la galería que las mostró:
     lo elegible se calcula con ese filtro, como cuando esto vivía en la ruta. Cobra solo confirmadas ∩ elegibles,
     nunca «los próximos N»: un segundo envío del mismo formulario no cobra nada (reglas 1 y 4).
+
+    `costos_vistos` = {(canal, ad_id): costo} de cada clave, que quien llama ya comparó con el total que vio la persona
+    (`pestana_rendimiento.galeria.pedir_lote`, PND-236): cada análisis se pide con el suyo, así entre esa comparación y
+    el cobro tampoco cambia nada sin mostrarse.
 
     Sin saldo para el siguiente, para y re-lanza `SaldoInsuficiente` con `.lote = (encolados, fallos)`, para que quien
     llama diga cuántos sí salieron antes de que el manejador común diga el resto."""
@@ -135,7 +172,7 @@ def pedir_lote(cliente, alc, claves, usuario, veredicto=""):
         if a is None:
             continue
         try:
-            if pedir_analisis(cliente, alc, a, usuario)[0]:
+            if pedir_analisis(cliente, alc, a, usuario, costo_visto=costos_vistos.get((canal, ad_id)))[0]:
                 n += 1
         except SaldoInsuficiente as e:
             # Sin saldo para el siguiente (cobros §5.4): los ya encolados siguen con su reserva, los demás no se piden y
@@ -169,7 +206,7 @@ def pedir_evaluacion(cliente, alc_eval, usuario, *, n_visto, precio_visto):
     muestra = analisis.muestra(ev)
     if not muestra:
         return None, gettext("Todavía no hay anuncios con datos suficientes para evaluar con IA.")
-    precio = gastos.estimar("evaluacion_tw", n=len(muestra))
+    precio = analisis.estimado(cliente, muestra)        # la misma cuenta que el botón (con los fotogramas de Creatv)
     usd = precio["usd"]
     # Primero el precio, después el cobro (G3): si falta el número o el precio que vio la persona, o la muestra o el
     # precio (el margen) cambiaron desde que lo vio, no se crea ni se reserva nada y se dice el precio de ahora. El precio

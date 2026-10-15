@@ -128,17 +128,18 @@ def _anuncio_muestra(ref, visitantes, nuevos):
             "veredicto": "ganador", "motivo": "ROAS alto", "problemas": [], "fortalezas": [], "m": m}
 
 
-def test_evaluar_con_ia_guarda_los_visitantes_pero_su_prompt_no_cambia_hasta_pnd_217(base_temporal):
-    """El NVP en el prompt de «Evaluar con IA» pide subir su tope y eso cambia lo que cuesta: espera a Daniel
-    (eval 2026-10-09, PND-217). Las cifras sí viajan en la muestra guardada."""
+def test_evaluar_con_ia_lleva_el_nvp_en_su_prompt_desde_pnd_217(base_temporal):
+    """Daniel decidió el 2026-10-13 subir el tope a 32 000 y volver a meter el NVP en el prompt de «Evaluar con IA»
+    (PND-217; con él Claude acertó la etapa en 10 de 10 anuncios reales, sin él en 4 de 10). Las cifras viajan en la
+    muestra guardada y llegan al prompt con su regla."""
     import dashboard
     from triple_whale import analisis
     assert {"visitantes", "visitantes_nuevos", "nvp"} <= set(analisis.CAMPOS_M)
     with dashboard.app.test_request_context("/"):
         texto, _ = analisis.armar("Acme", {"desde": "2026-10-01", "hasta": "2026-10-07"},
                                   [_anuncio_muestra("A1", 1000, 800), _anuncio_muestra("A2", 0, 0)], {}, bloques={})
-    assert "NVP" not in texto and vis.REGLA_PROMPT not in texto
-    assert analisis.MAX_TOKENS == 16000
+    assert vis.REGLA_PROMPT in texto and "NVP 80 % → TOF (medido)" in texto and "sin datos del Pixel" in texto
+    assert analisis.MAX_TOKENS == 32000
 
 
 def test_como_mejorarlo_le_pasa_a_claude_el_nvp_del_anuncio_y_de_los_ganadores(base_temporal):
@@ -166,7 +167,7 @@ def test_evaluar_con_ia_llama_sin_reintentos_del_cliente(monkeypatch):
     monkeypatch.setattr(sprints_analisis, "_llamar_contando",
                         lambda content, **kw: recibido.update(kw) or ("{}", 1, 1))
     analisis._llamar([{"type": "text", "text": "x"}], "SYSTEM")
-    assert recibido == {"max_tokens": 16000, "system": "SYSTEM", "max_retries": 0}
+    assert recibido == {"max_tokens": 32000, "system": "SYSTEM", "timeout": 900, "max_retries": 0}
 
 
 # ------------------------------------------- el NVP no decide (revisión) ---

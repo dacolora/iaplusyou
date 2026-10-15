@@ -6765,6 +6765,13 @@ msgid "El precio anual"
 msgstr "The yearly price"
 
 #, python-format
+msgid "El precio cambió (ahora: %(precio)s). Revisa y vuelve a confirmar."
+msgstr "The price changed (now: %(precio)s). Check it and confirm again."
+
+msgid "El precio cambió desde que lo viste: revisa el nuevo y vuelve a confirmar."
+msgstr "The price changed since you saw it: check the new one and confirm again."
+
+#, python-format
 msgid "El precio cambió: ahora es %(precio)s. Revisa y vuelve a pedirlo."
 msgstr "The price changed: it's now %(precio)s. Check it and ask again."
 
@@ -21834,6 +21841,9 @@ msgstr "this model returns {segundos} s of video"
 #, python-brace-format
 msgid "este modelo procesa hasta {max} s de cada video: lo demás se corta"
 msgstr "this model processes up to {max} s of each video: the rest is cut"
+
+msgid "estimado: se interrumpió durante el análisis"
+msgstr "estimated: interrupted during the analysis"
 
 msgid "estimado: sin respuesta de Claude"
 msgstr "estimated: no response from Claude"
