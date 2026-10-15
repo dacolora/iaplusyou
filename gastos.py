@@ -141,14 +141,18 @@ TARIFAS = {
     "evaluacion_meta_por_anuncio": 0.005,
 }
 
-# Evaluación de anuncios de Triple Whale con IA (spec 2026-09-28 §6): una
-# llamada con visión (una miniatura por anuncio), la doctrina de clasificar,
-# ángulo, gancho y video en el system (caché) y hasta ~10k tokens de salida con
-# pensamiento. Cálculo a la tarifa de claude-sonnet-5: entrada ~6k de doctrina +
-# ~900 por anuncio (datos + miniatura) ≈ US$ 0,03 con 10 anuncios; salida ≈
-# US$ 0,10. Redondeado hacia arriba; el real se registra con los tokens medidos.
-EVALUACION_TW_BASE_USD = 0.08
-EVALUACION_TW_POR_ANUNCIO_USD = 0.012
+# Evaluación de anuncios de Triple Whale con IA (spec 2026-09-28 §6): una llamada con visión (una miniatura por
+# anuncio), la doctrina de clasificar, ángulo, gancho y video en el system (caché), hasta 32 000 tokens de salida con
+# pensamiento y UNA corrección si la respuesta no sirve (`triple_whale.analisis`). El precio a la vista es el del PEOR
+# caso (PND-217, decisión del lote 1, 2026-10-13): las dos llamadas agotando el tope de salida (2 × 32 000 × US$ 10 por
+# millón = 0,64) más la entrada de las dos con la caché fría (doctrina ≈ 7 000 tokens escritos a 1,25×, el prompt y, por
+# anuncio, su bloque y su miniatura ≈ 1 000 tokens por llamada a US$ 2 por millón): 0,67 de base + 0,005 por anuncio,
+# 0,72 con 10. Lo que no crece con N va en la base. Lo medido de verdad (una sola llamada que termina sola) sale entre
+# US$ 0,12 y 0,23 (evals 2026-10-09, 2026-10-12 y docs/superpowers/evals/2026-10-15-tw-evaluar-32000-nvp.md): Cobros
+# cobra el costo real × margen; esto es solo el precio visto antes, que nunca queda por debajo de lo que puede costar.
+# Hasta el 2026-10-15 eran 0,08 + 0,012 por anuncio (0,20 con 10), por debajo de lo medido con corrección (0,30).
+EVALUACION_TW_BASE_USD = 0.67
+EVALUACION_TW_POR_ANUNCIO_USD = 0.005
 
 # «Proponer ideas» de Sprints (entrega 2 del tablero): una llamada a Claude con
 # la doctrina en el system (caché) y hasta ~1 200 tokens de salida por idea

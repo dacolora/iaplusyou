@@ -647,11 +647,16 @@ anuncio es TOF, MOF o BOF. Siempre con el chip `cx.nvp(nuevos, visitantes)` (ski
   la regla `visitantes.REGLA_PROMPT`; el NVP no le cambió el tope ni el costo (los de «Ganchos y copy»: 20 000 y 0,17).
   La regla es una instrucción y no entra en `mejorar.datos_verificables` (sus cortes no son cifras del anuncio; al
   mezclar main en tw-ganchos el 2026-10-10). «Evaluar con IA» guarda los visitantes en
-  la muestra (`analisis.CAMPOS_M`) pero su PROMPT todavía no los lleva: medido el 2026-10-09
-  (`docs/superpowers/evals/2026-10-09-nvp-en-la-ia.md`), su tope de 16 000 ya corta la primera respuesta con 10 anuncios,
-  y con el NVP una corrida falló en las dos llamadas. Con 32 000 acertaba la etapa de 10 de 10 (sin NVP, 4 de 10), pero
-  subir el tope cambia lo que cuesta: decide Daniel (PND-217). Desde la revisión, `analisis._llamar` va con
-  `max_retries=0`, como «Cómo mejorarlo» (un reintento del SDK podía cobrarse sin anotarse).
+  la muestra (`analisis.CAMPOS_M`) y, desde PND-217 (2026-10-15, decisión de Daniel del 2026-10-13: «con precios por
+  debajo de 1 USD no debe ser un estoper de nada»), también su PROMPT: `{regla_nvp}` (`visitantes.REGLA_PROMPT`) bajo
+  las medianas, una línea `visitantes.texto_prompt(...)` por anuncio en `_bloque` y la regla de que «etapa» es la medida.
+  Con eso Claude acertó la etapa en 10 de 10 (sin NVP, 4 de 10; `docs/superpowers/evals/2026-10-09-nvp-en-la-ia.md`). El
+  tope de 16 000 ya cortaba la primera respuesta con 10 anuncios y con el NVP una corrida falló en las dos llamadas: va
+  con `MAX_TOKENS` = 32 000 y `TIMEOUT_CLAUDE_S` = 900 (sin tope de tiempo explícito el SDK exige streaming), siempre
+  `max_retries=0` como «Cómo mejorarlo» (un reintento del SDK podía cobrarse sin anotarse). El precio a la vista
+  (`gastos.EVALUACION_TW_BASE_USD` 0,67 + `_POR_ANUNCIO_USD` 0,005, US$ 0,72 con 10) es el del peor caso: las dos
+  llamadas agotando 32 000 de salida más su entrada; lo medido sale muy por debajo y se cobra lo real × margen.
+  Medición del cambio: `docs/superpowers/evals/2026-10-15-tw-evaluar-32000-nvp.md`.
 - La copia de 90 días del NVP deja la marca `backfill_visitantes` solo si trajo visitantes en todo el rango, o tras
   `sync.MAX_INTENTOS_VISITANTES` (3) copias sin lograrlo (`intentos_visitantes`); un error de red o de límite en
   `web_analytics_table` deja la tienda sin su NVP (`fallos.visitantes`) pero no corta la copia (llave y tienda sí).

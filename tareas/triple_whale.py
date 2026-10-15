@@ -98,10 +98,15 @@ def syncs_en_curso(cliente):
     return sorted(cola.job_ids_vivos(cliente, TIPO_SYNC))
 
 
+# Lo que la barra cree que tarda «Evaluar con IA»: con el tope de 32 000 y el NVP (PND-217) la respuesta entera
+# (pensamiento + JSON) tardó 152–170 s con 10 anuncios (docs/superpowers/evals/2026-10-15-tw-evaluar-32000-nvp.md).
+DURACION_EVALUAR = 180
+
+
 def encolar_evaluacion(cliente, evaluacion_id, costo_estimado=None):
     """max_intentos=1: paga a Claude. False si ya había una viva."""
     return trabajos.encolar(job_id_evaluar(cliente), TIPO_EVALUAR, {"cliente": cliente, "evaluacion_id": evaluacion_id},
-                            cliente=cliente, duracion_estimada=120, etapas=ETAPAS_EVALUAR, max_intentos=1,
+                            cliente=cliente, duracion_estimada=DURACION_EVALUAR, etapas=ETAPAS_EVALUAR, max_intentos=1,
                             costo_estimado=costo_estimado)
 
 
