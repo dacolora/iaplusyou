@@ -126,7 +126,8 @@ from final_edition import ETAPAS_FINAL, cortes as fe_cortes, mezcla as fe_mezcla
 from final_edition import tablero as fe_tablero
 from providers import fal_audio
 from providers import wavespeed_imagen as wavespeed_imagen_prov
-from tareas.swap import ETAPAS_SWAP_VIDEO, ETAPAS_SWAP_FOTO, ETAPAS_SWAP_FOTO_MEJORADA
+from tareas.swap import ETAPAS_SWAP_VIDEO, ETAPAS_SWAP_FOTO, ETAPAS_SWAP_FOTO_MEJORADA, ETAPAS_SWAP_RECUPERAR
+from tareas.swap import MODELOS_WAVESPEED as SWAP_RECUPERABLES
 from publicador import publicar_brief
 
 from storage import r2_uploader
@@ -3542,6 +3543,31 @@ def imagen_swap_original(cliente, swap_id):
     if tipo is None:
         return send_file(ruta, mimetype="application/octet-stream", as_attachment=True)
     return send_file(ruta, mimetype=tipo)
+
+
+@app.route("/cliente/<cliente>/swap/<swap_id>/recuperar", methods=["POST"])
+def recuperar_swap(cliente, swap_id):
+    """«Recuperar el resultado» (PND-318, como `cf_recuperar` de Crear): el swap quedó en error porque el worker
+    dejó de esperar a WaveSpeed, pero guardó el id de la predicción; el worker vuelve a preguntar por ese id y,
+    si terminó, lo entrega. No genera ni paga de nuevo (max_intentos=1, sin costo): lo anotado al agotarse la
+    espera se cobra recién cuando llega."""
+    entry = swaps_mod.cargar(cliente).get(swap_id)
+    pred = (entry or {}).get("prediccion") or {}
+    if (not entry or entry.get("estado") != "error" or not pred.get("id")
+            or (pred.get("proveedor") or entry.get("proveedor")) not in SWAP_RECUPERABLES):
+        flash(gettext("Ese swap no tiene nada que recuperar."), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
+    # El estado va ANTES de encolar (como cf_recuperar): la tarjeta muestra la barra del mismo job_id.
+    swaps_mod.actualizar(cliente, swap_id, estado="generando", error=None)
+    encolado = trabajos.encolar(f"{cliente}__{swap_id}__swap", "swap_recuperar",
+                                {"cliente": cliente, "swap_id": swap_id}, cliente=cliente, duracion_estimada=150,
+                                etapas=ETAPAS_SWAP_RECUPERAR, max_intentos=1)
+    if encolado:
+        flash(gettext("Preguntando a WaveSpeed por el resultado… si ya terminó, aparece aquí sin pagar de nuevo."),
+              "ok")
+    else:
+        flash(gettext("Ya se estaba recuperando — espera a que termine."), "warn")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
 
 @app.route("/cliente/<cliente>/swap/<swap_id>/eliminar", methods=["POST"])

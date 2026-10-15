@@ -40,6 +40,8 @@ TIPOS_QUE_COBRAN = frozenset({
 
 TIPOS_EXENTOS_DE_COBRO = {
     "flowplus_recuperar": "recupera un video ya pagado; no paga de nuevo",
+    "swap_recuperar": "recupera un swap ya pagado por su predicción de WaveSpeed; no paga de nuevo. Lo anotado "
+                      "al agotarse la espera pasa a la entrega y ahí se cobra (gastos.registrar_trasladando)",
     "flowplus_director": "el director lo paga Creatv (_creatv); el video que lanza pasa por su propio freno",
     "cadena_vigilar": "periódica: avanza las cadenas; cada escena la cobra flowplus_video",
     "cadena_unir": "une con ffmpeg escenas ya pagadas",

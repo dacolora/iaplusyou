@@ -216,3 +216,20 @@ al parsear esa sección, antes de los módulos posteriores y del selector de mod
 Crear en modo imagen con la imagen del anuncio como la ÚNICA referencia de la bandeja (se reemplaza, como «Editar y
 crear otra» y la escena de Flow Plus) y un prompt para editarla; nada se genera hasta «Generar» con su precio. El
 detalle vive en la skill `triple-whale` («Cómo mejorarlo» de un anuncio de imagen fija).
+
+**Cambiar producto: la espera agotada y «Recuperar el resultado» (PND-318, decisión 2026-10-13, lote 1).** Un swap cuya
+espera de WaveSpeed se agotaba (`poll_hasta_listo`, 900 s) no anotaba nada aunque WaveSpeed lo terminara y cobrara (un
+Seedance de 30 s son US$ 13,20) y no había cómo traer el resultado. Ahora los editores de WaveSpeed avisan el id apenas
+lo reciben (`wavespeed_common.avisar_lanzada` en `wavespeed_client`, `wavespeed_video_edit` y `wavespeed_imagen`) y el
+swap lo guarda en `swaps.json` (`prediccion = {id, proveedor, referencia_gasto, en}`; solo el modelo principal, no la
+mejora de calidad). Al agotarse la espera, `tareas/swap._al_agotarse` pregunta UNA vez (`wavespeed_common.consultar`):
+terminado → se entrega como siempre; fallido → `ErrorProveedor` sin gasto; en curso o sin poder preguntar →
+`SwapEnEspera`: el costo previsto (calculado ANTES de llamar) se anota con `entregado=False` (no se le cobra al
+cliente) y la tarjeta ofrece «Recuperar el resultado (sin pagar de nuevo)» → `recuperar_swap` → tarea
+`swap_recuperar` (exenta, `max_intentos=1`, mismo job_id que el swap para que la tarjeta muestre su barra): pregunta
+por ese id (`TIEMPO_RECUPERAR` 120 s), y si llegó, lo baja, lo sube, evalúa la marca y anota con
+`gastos.registrar_trasladando`: el costo pasa de la fila del intento agotado a `swap:<id>:t<tarea>` y AHÍ se cobra
+(sin contarlo dos veces). Si WaveSpeed lo dio por fallido, lo anotado vuelve a 0 (no cobró). Un swap de fal (Kling
+O1, comparador) que se agota se anota si fal lo va a cobrar (`EsperaAgotadaFal.cobrado`, PND-313) pero no se
+recupera. La mejora de calidad pagada que no llega (falla al bajar o se agota su espera) se anota aparte en
+`swap:<id>:t<tarea>:mejora`, sin cobrarla (PND-315). Pruebas: `tests/test_swap_recuperar.py`, `tests/test_tareas_swap.py`.

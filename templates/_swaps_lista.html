@@ -158,6 +158,13 @@
     <p class="vacio" style="font-size:.78rem;">{{ _('Evaluando cumplimiento de marca…') }}</p>
     {% endif %}
 
+    {% if s.estado == "error" and s.prediccion and s.prediccion.id and not s.trabajo %}
+    {# PND-318: el worker dejó de esperar pero WaveSpeed sigue con el pedido; se recupera sin pagar de nuevo. #}
+    <form method="post" action="{{ url_for('recuperar_swap', cliente=cliente, swap_id=s.id) }}" style="display:inline;">
+      <button type="submit" class="btn-generar btn-sm">{{ _('Recuperar el resultado (sin pagar de nuevo)') }}</button>
+    </form>
+    {% endif %}
+
     {% if s.resultado_url %}
     <form method="post" action="{{ url_for('enviar_swap_a_publicidad', cliente=cliente, swap_id=s.id) }}" style="display:inline;">
       <button type="submit" class="btn-guardar btn-sm">{{ _('Enviar a Publicidad') }}</button>

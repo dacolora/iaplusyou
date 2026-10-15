@@ -189,6 +189,15 @@ def avisar_lanzada(on_progreso, prediction_id):
         pass
 
 
+def consultar(prediction_id):
+    """Una sola consulta del estado de una predicción, sin esperar: el `data` de WaveSpeed ({"status",
+    "outputs", "error", ...}). Lanza si la red o WaveSpeed fallan. La usa quien se rindió esperando y
+    necesita saber si WaveSpeed ya terminó (y cobró) antes de anotar el gasto (PND-318)."""
+    resp = requests.get(f"{BASE_URL}/predictions/{prediction_id}/result", headers=headers(), timeout=30)
+    resp.raise_for_status()
+    return resp.json().get("data") or {}
+
+
 def poll_hasta_listo(prediction_id, nombre_modelo, interval_seconds=5, timeout_seconds=900,
                      on_progreso=None):
     """on_progreso (opcional): se llama en cada vuelta con {"fase": <status crudo>,
