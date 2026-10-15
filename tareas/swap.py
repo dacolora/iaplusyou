@@ -670,7 +670,9 @@ def recuperar(tarea):
         [{"referencia": ref_original}] if ref_original else [], proveedor=proveedor,
         detalle=" · ".join([proveedor, gettext("video") if es_video else gettext("foto"),
                             gettext("recuperado sin pagar de nuevo")]))
-    pagado = (gastos.por_referencia(cliente, f"swap:{swap_id}{ref_sufijo(tarea)}") or {}).get("usd")
+    # Lo que costó: la fila de esta entrega si el costo se movió (proyecto que cobra), o la del intento agotado.
+    pagado = ((gastos.por_referencia(cliente, f"swap:{swap_id}{ref_sufijo(tarea)}")
+               or (gastos.por_referencia(cliente, ref_original) if ref_original else None) or {}).get("usd"))
     swaps_mod.actualizar(cliente, swap_id, estado="listo", resultado_url=url, resultado_local=local_path,
                          error=None, error_storage=error_storage, prediccion=None,
                          **({"usd": pagado} if pagado else {}))

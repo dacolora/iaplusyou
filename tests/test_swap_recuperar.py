@@ -269,3 +269,16 @@ def test_un_swap_de_fal_que_se_agota_se_anota_si_fal_lo_cobra_pero_no_se_recuper
         assert g["usd"] == pytest.approx(sw.kling_o1_client.estimate_video(10, 30)["usd"])
     else:
         assert g is None
+
+
+def test_recuperar_en_un_proyecto_que_no_cobra_deja_el_costo_donde_estaba(swap_video, monkeypatch):
+    from cobros import libro
+    sw, s = swap_video["sw"], swap_video
+    libro.configurar("acme", usuario="admin", cobrar=False)
+    _agotado(swap_video, monkeypatch)
+    monkeypatch.setattr(sw.wavespeed_common, "poll_hasta_listo",
+                        lambda pid, nombre, **kw: {"status": "completed", "outputs": ["https://prov/v.mp4"]})
+    monkeypatch.setattr(sw.requests, "get", lambda *a, **k: _Resp(b"video"))
+    sw.recuperar({"id": 9, "job_id": f"acme__{s['id']}__swap", "payload": {"cliente": "acme", "swap_id": s["id"]}})
+    assert _gasto(f"swap:{s['id']}:t7")["usd"] == pytest.approx(s["costo"]) and _gasto(f"swap:{s['id']}:t9") is None
+    assert s["swaps"].cargar("acme")[s["id"]]["usd"] == pytest.approx(s["costo"])
