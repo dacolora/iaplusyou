@@ -17015,8 +17015,8 @@ msgid "Se vuelve a publicar en %(plataforma)s. Revisa antes que no haya salido y
 msgstr "It will be published again on %(plataforma)s. Check first that it hasn't already gone out there. Retry?"
 
 #, python-format
-msgid "Se vuelven a generar la escena %(n)s y las siguientes por ≈ US$ %(precio)s. Las anteriores se quedan como están. ¿Rehacer?"
-msgstr "Scene %(n)s and the ones after it will be generated again for ≈ US$ %(precio)s. The earlier ones stay as they are. Redo?"
+msgid "Se vuelven a generar la escena %(n)s y las siguientes con %(modelo)s por ≈ US$ %(precio)s. Las anteriores se quedan como están. ¿Rehacer?"
+msgstr "Scene %(n)s and the following ones are generated again with %(modelo)s for ≈ US$ %(precio)s. The earlier ones stay as they are. Redo?"
 
 msgid "Secciones de Sprints"
 msgstr "Sprints sections"

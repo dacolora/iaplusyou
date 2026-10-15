@@ -72,7 +72,7 @@
       {% if f.rehacer_precio is not none %}
       <button type="button" class="btn-xs" data-gpg-accion="/videos/{{ video.id }}/cadena"
               data-gpg-cuerpo='{{ {"desde": f.indice, "total_visto": f.rehacer_precio|precio}|tojson }}'
-              data-gpg-confirmar="{{ _('Se vuelven a generar la escena %(n)s y las siguientes por ≈ US$ %(precio)s. Las anteriores se quedan como están. ¿Rehacer?', n=f.indice, precio='%.2f' % (f.rehacer_precio | precio)) }}">{{ _('Rehacer desde aquí') }} · ≈ US$ {{ '%.2f' % (f.rehacer_precio | precio) }}</button>
+              data-gpg-confirmar="{{ _('Se vuelven a generar la escena %(n)s y las siguientes con %(modelo)s por ≈ US$ %(precio)s. Las anteriores se quedan como están. ¿Rehacer?', n=f.indice, modelo=C.modelo_nombre|traducir, precio='%.2f' % (f.rehacer_precio | precio)) }}">{{ _('Rehacer desde aquí') }} · ≈ US$ {{ '%.2f' % (f.rehacer_precio | precio) }}</button>
       {% endif %}
     </li>
     {% endfor %}
