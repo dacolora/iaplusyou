@@ -18,8 +18,8 @@ AL_INTERRUMPIR = {}
 # de una cadena). Todo tipo de tareas/ está aquí o en los exentos, con su motivo:
 # tests/test_cobros_worker.py falla si uno nuevo no está en ninguno.
 TIPOS_QUE_COBRAN = frozenset({
-    # Crear y Flow Plus (WaveSpeed)
-    "flowplus_video", "flowplus_imagen", "cadena_elementos", "swap_generar",
+    # Crear y Flow Plus (WaveSpeed; el director con Claude desde PND-299: antes lo pagaba Creatv)
+    "flowplus_video", "flowplus_imagen", "cadena_elementos", "swap_generar", "flowplus_director",
     # Voz y música (fal: MiniMax, ElevenLabs, Whisper)
     "audio_generar", "hablado_voz", "voz_propia_crear", "musica_generar", "editor_voz", "material_transcribir",
     # Final edition (Claude escribe el guion; voz y música por fal)
@@ -40,7 +40,6 @@ TIPOS_QUE_COBRAN = frozenset({
 
 TIPOS_EXENTOS_DE_COBRO = {
     "flowplus_recuperar": "recupera un video ya pagado; no paga de nuevo",
-    "flowplus_director": "el director lo paga Creatv (_creatv); el video que lanza pasa por su propio freno",
     "cadena_vigilar": "periódica: avanza las cadenas; cada escena la cobra flowplus_video",
     "cadena_unir": "une con ffmpeg escenas ya pagadas",
     "edicion_producir": "renderiza con ffmpeg materiales que ya existen",

@@ -147,7 +147,7 @@
                 <input type="text" name="sonido" id="fp-sonido" maxlength="200" placeholder="{{ _('ej. risas de niños, pasos sobre baldosa, respiración agitada al final') }}">
                 <button type="button" class="btn-sm" id="fp-sugerir-sonido" data-url="{{ url_for('fp_sugerir_sonido', cliente=cliente) }}">{{ _('Sugerir') }}</button>
               </div>
-              <p class="crear-nota">{{ _('Vacío = ambiente natural de la escena.') }}</p>
+              <p class="crear-nota">{{ _('Vacío = ambiente natural de la escena.') }} {{ _('«Sugerir»: %(precio)s.', precio=precio_de('sugerir_sonido').texto) }}</p>
             </div>
           </div>
 
@@ -188,10 +188,11 @@
       {% set n_logos = logos | length %}
       <span id="fp-ayuda-boton">{{ _('Tu texto va tal cual al modelo') }}<span id="fp-pie-logos" hidden> · {% if n_logos > 1 %}{{ _('se adjuntan tus %(n)s logos oficiales', n=n_logos) }}{% elif n_logos == 1 %}{{ _('se adjunta tu logo oficial') }}{% else %}{{ _('sin logo oficial: súbelo en FlowSettings › Logos') }}{% endif %}</span> · {{ _('se cobra al generar.') }}</span>
       {# Dos caminos (2026-09-21): «Generar» manda el texto de la persona tal cual y
-         cobra al generar; «Crear super prompt» (director, gratis) es la ayuda para
-         quien tiene una idea pero quiere que la IA arme los planos. Nunca obligatorio. #}
+         cobra al generar; «Crear super prompt» (director) es la ayuda para quien tiene
+         una idea pero quiere que la IA arme los planos. Nunca obligatorio. Desde PND-299
+         (2026-10-15) el director lo paga el proyecto: su precio va en el botón. #}
       <div class="crear-super" data-solo-video>
-        <button type="submit" class="crear-enlace" id="fp-armar" name="modo_prompt" value="director" data-solo-video title="{{ _('La IA arma el prompt por planos desde tu idea y las referencias. Revisas, editas y puedes regenerar antes de generar. No cuesta nada.') }}">{{ _('¿No sabes qué escribir?') }} <strong>{{ _('Crear super prompt con IA (gratis)') }}</strong></button>
+        <button type="submit" class="crear-enlace" id="fp-armar" name="modo_prompt" value="director" data-solo-video title="{{ _('La IA arma el prompt por planos desde tu idea y las referencias. Revisas, editas y puedes regenerar antes de generar. Armarlo cuesta %(precio)s; el video se cobra aparte, al generar.', precio=precio_de('director').texto) }}">{{ _('¿No sabes qué escribir?') }} <strong>{{ _('Crear super prompt con IA') }}</strong> · {{ precio_de('director').texto }}</button>
         {# Receta de tomas (Etapa 3 del director, 2026-09-30): solo la usa «Crear
            super prompt»; «Generar video» manda el texto tal cual. #}
         <label class="crear-receta"><span>{{ _('Receta de tomas') }}</span>

@@ -820,3 +820,46 @@ def test_s2_bloqueo_usuario_viejo_y_claves_ajenas(app, monkeypatch):
     for clave in ['limite:recuperar:x', 'limite:login:', 'limite:login:ana', 'limite:login:u:', 'limite:login:u:' + 'a' * 201]:
         assert cuentas._limite_login(clave) is None
         assert admin.post('/admin/cuentas/desbloquear', data={'clave': clave}).status_code == 400
+
+
+# --- PND-299: el saldo de bienvenida al verificar el correo ---------------------------------------
+
+def test_pnd299_verificar_el_correo_da_la_bienvenida_una_sola_vez(app):
+    """El proyecto nace cobrando y sin saldo (PND-298); al quedar verificado el correo recibe US$ 2 (lo editable en
+    /admin/cobros), una sola vez: confirmar otro correo después no lo repite."""
+    from cobros import libro
+    c = app["dashboard"].app.test_client()
+    c.post("/proyectos/nuevo", data=REGISTRO)
+    assert libro.saldo("acme_store") == 0
+    c.get(_enlace(app["correos"][0], "verificar"))
+    assert libro.saldo("acme_store") == 2_000
+    assert any("US$ 2,00" in m and "saldo" in m for m in _flashes(c))
+    app["usuarios"].actualizar("acme", correo_verificado=False)
+    token = app["cuentas"].emitir("verificacion", "acme", "otro@acme.com")
+    c.get(f"/verificar/{token}")
+    assert app["usuarios"].obtener("acme")["correo_verificado"] is True and libro.saldo("acme_store") == 2_000
+
+
+def test_pnd299_el_admin_marca_verificado_y_el_proyecto_recibe_la_bienvenida(app, monkeypatch):
+    """El VPS no manda correos (PND-048): marcar a mano desde el panel también deja la cuenta verificada."""
+    from cobros import libro
+    monkeypatch.setattr(app["dashboard"].estado_mod, "listar_clientes", lambda: [])
+    app["usuarios"].crear("ana", "secreta123", "cliente", cliente="acme", correo="ana@ejemplo.com")
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    admin = _cliente_admin(app["dashboard"])
+    admin.post("/admin/usuarios/ana/verificar")
+    assert libro.saldo("acme") == 2_000
+    assert any("bienvenida" in m for m in _flashes(admin))
+    admin.post("/admin/usuarios/ana/verificar")
+    assert libro.saldo("acme") == 2_000
+
+
+def test_pnd299_restablecer_la_clave_desde_su_correo_tambien_regala(app):
+    from cobros import libro
+    _ana(app)
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    app["dashboard"].app.test_client().post("/recuperar", data={"correo": "ana@ejemplo.com"})
+    enlace = _enlace(app["correos"][0], "restablecer")
+    b = app["dashboard"].app.test_client()
+    b.post(enlace, data={"password": "nueva12345", "confirmacion": "nueva12345"})
+    assert app["usuarios"].obtener("ana")["correo_verificado"] is True and libro.saldo("acme") == 2_000

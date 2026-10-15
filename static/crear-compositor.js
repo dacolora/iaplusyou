@@ -499,7 +499,9 @@
       var btnDescribir = document.getElementById('fp-describir');
       var estadoDescribir = document.getElementById('fp-describir-estado');
       btnDescribir.disabled = true; estadoDescribir.textContent = T.m26;
-      fetch(D.urlDescribir, { method: 'POST' })
+      // Con «X-Requested-With» el «sin saldo» llega como 402 en JSON (con «Recargar saldo», cobros.js): desde
+      // PND-299 describir lo paga el proyecto.
+      fetch(D.urlDescribir, { method: 'POST', headers: { 'X-Requested-With': 'fetch' } })
         .then(function (r) { return r.json(); })
         .then(function (d) {
           if (d.ok) { texto.value = d.texto; texto.focus(); estadoDescribir.textContent = T.m27; }

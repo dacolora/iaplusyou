@@ -31,6 +31,13 @@ CLAVE_CANDADO = "cobros:candado"
 # VIDA_PEDIDO_MIN minutos (lo mismo que espera `limpiar_reservas_muertas`), por si el proceso muere a mitad.
 PREFIJO_PEDIDO = "pedido:"
 VIDA_PEDIDO_MIN = 10
+# PND-299 (Daniel 2026-10-13: «podríamos darle hasta 2 o 3 dólares gratis para la generación»): el saldo de
+# bienvenida de un proyecto nuevo, una sola vez, al quedar verificado el correo de una cuenta suya. Editable en
+# /admin/cobros (kv, como el margen global); 0 lo apaga. El tope evita un error de tipeo (200 en vez de 2,00).
+CLAVE_BIENVENIDA = "cobros:bienvenida_usd"
+BIENVENIDA_DEFECTO = 2.0
+BIENVENIDA_MAX = 20.0
+CONCEPTO_BIENVENIDA = "bienvenida"
 
 # (tarea_id, job_id) del trabajo del worker que corre en este hilo. Cada hilo
 # empieza con el valor por defecto: dos hilos del carril de Crear no se cruzan.
@@ -120,6 +127,75 @@ def guardar_margen_global(valor, usuario):
         else:
             con.execute(db.kv.insert().values(clave=CLAVE_MARGEN, **fila))
     log.info("margen global → %s (por %s)", valor, usuario)
+
+
+# ------------------------------------------------------- saldo de bienvenida ---
+
+def _bienvenida_usd(con):
+    valor = con.execute(sa.select(db.kv.c.valor).where(db.kv.c.clave == CLAVE_BIENVENIDA)).scalar()
+    try:
+        v = float(valor) if valor is not None else BIENVENIDA_DEFECTO
+    except (TypeError, ValueError):
+        return BIENVENIDA_DEFECTO
+    return v if math.isfinite(v) and 0 <= v <= BIENVENIDA_MAX else BIENVENIDA_DEFECTO
+
+
+def bienvenida_usd():
+    """El saldo de bienvenida vigente, en dólares (US$ 2 si nadie lo cambió)."""
+    with db.conectar() as con:
+        return _bienvenida_usd(con)
+
+
+def guardar_bienvenida(valor, usuario):
+    """Lo cambia el admin en /admin/cobros: de 0 (apagado) a BIENVENIDA_MAX, con 2 decimales. Vale para lo que se
+    regale desde ahora; lo ya regalado no cambia."""
+    try:
+        valor = round(float(valor), 2)
+    except (TypeError, ValueError):
+        valor = float("nan")
+    if not math.isfinite(valor) or not 0 <= valor <= BIENVENIDA_MAX:
+        import gastos  # noqa: PLC0415 — gastos importa este módulo dentro de registrar
+        raise ValueError(gettext("El saldo de bienvenida va de %(min)s a %(max)s.", min=gastos.formatear(0),
+                                 max=gastos.formatear(BIENVENIDA_MAX)))
+    with db.conectar() as con:
+        _candado(con)
+        fila = {"valor": str(valor), "actualizado_en": db.ahora()}
+        if con.execute(sa.select(db.kv.c.clave).where(db.kv.c.clave == CLAVE_BIENVENIDA)).first():
+            con.execute(db.kv.update().where(db.kv.c.clave == CLAVE_BIENVENIDA).values(**fila))
+        else:
+            con.execute(db.kv.insert().values(clave=CLAVE_BIENVENIDA, **fila))
+    log.info("saldo de bienvenida → %s (por %s)", valor, usuario)
+    return valor
+
+
+def dar_bienvenida(cliente, usuario=None):
+    """Acredita el saldo de bienvenida a `cliente` (PND-299) y devuelve las milésimas (0 si no tocaba). Una sola vez por
+    proyecto: con el candado tomado antes de leer, si ya hay un movimiento `bienvenida` no escribe nada (también si
+    otra cuenta del mismo proyecto confirma su correo, o la misma confirma otro). Solo a un proyecto con «Cobrar»
+    prendido y en prepago: uno que no cobra no lo usaría, y en pospago pagaría deuda. Es un `ajuste` positivo con
+    concepto `bienvenida` («Saldo de bienvenida» en sus movimientos): no es una recarga (no entró plata) y no cuenta
+    en lo recargado del admin."""
+    if not cliente:
+        return 0
+    m = db.movimiento_saldo
+    with db.conectar() as con:
+        if not _cobra(con, cliente):
+            return 0   # sin «Cobrar» ni siquiera toma el candado
+        _candado(con)
+        fila = con.execute(sa.select(db.cuenta_saldo.c.cobrar, db.cuenta_saldo.c.pospago)
+                           .where(db.cuenta_saldo.c.cliente == cliente)).first()
+        if fila is None or not fila.cobrar or fila.pospago:
+            return 0
+        if con.execute(sa.select(m.c.id).where(m.c.cliente == cliente,
+                                               m.c.concepto == CONCEPTO_BIENVENIDA).limit(1)).first():
+            return 0
+        milesimas = int(round(_bienvenida_usd(con) * 1000))
+        if milesimas <= 0:
+            return 0
+        _insertar(con, cliente=cliente, tipo="ajuste", milesimas=milesimas, concepto=CONCEPTO_BIENVENIDA,
+                  usuario=usuario, detalle="", extra={"bienvenida": True})
+    log.info("saldo de bienvenida a %s: %s milésimas (cuenta %s)", cliente, milesimas, usuario)
+    return milesimas
 
 
 def _cuenta_y_periodo(con, cliente, por_cerrar=None):

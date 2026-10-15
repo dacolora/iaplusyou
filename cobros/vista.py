@@ -42,6 +42,7 @@ CONCEPTOS = {
     "anulacion_wompi": N_("Pago anulado por Wompi"),
     "plan": N_("Saldo del plan del mes"),
     "vencimiento": N_("Saldo del plan sin usar que venció"),
+    "bienvenida": N_("Saldo de bienvenida"),     # PND-299: libro.dar_bienvenida
 }
 ESTADOS_RECARGA = {
     "pendiente": N_("Pendiente"), "aprobada": N_("Aprobada"), "rechazada": N_("Rechazada"),

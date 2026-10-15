@@ -174,6 +174,23 @@ DESCRIPCION_PROMPT = """Eres director creativo de anuncios cortos para redes. Va
 No inventes marcas ni textos. No menciones "fotograma" ni "imagen": describe la escena directamente. Si son varias referencias, nómbralas como @Video 1, @Imagen 1, etc. en el orden dado."""
 
 
+MAX_IMAGENES_DESCRIBIR = 16
+
+
+def imagenes_a_describir(referencias):
+    """Cuántas imágenes le manda `describir` a Claude con esta bandeja (las mismas reglas: 4 fotogramas por un video
+    con archivo, 1 por cada referencia con URL, y para al llegar a 16). Es lo que cobra su precio (PND-299)."""
+    total = 0
+    for r in referencias or ():
+        if r.get("tipo") == "video" and r.get("ruta_local") and os.path.exists(r["ruta_local"]):
+            total += 4
+        elif r.get("url"):
+            total += 1
+        if total >= MAX_IMAGENES_DESCRIBIR:
+            break
+    return total
+
+
 def describir(referencias, cliente_hint="", idioma="es", on_usage=None):
     """referencias: [{etiqueta, tipo, ruta_local?, url?}]. Usa Claude con visión
     sobre fotogramas/imágenes. Devuelve el texto en el idioma pedido (el del
@@ -195,7 +212,7 @@ def describir(referencias, cliente_hint="", idioma="es", on_usage=None):
         elif r.get("url"):
             content.append({"type": "image", "source": {"type": "url", "url": r["url"]}})
             total += 1
-        if total >= 16:
+        if total >= MAX_IMAGENES_DESCRIBIR:
             break
     if total == 0:
         raise LinkError(gettext("No hay imágenes ni videos que describir."))

@@ -455,8 +455,10 @@ def test_estimado_del_lote_incluye_el_qa_solo_si_el_proyecto_cobra(libro, escena
     _cobra(libro)
     con = produccion.estimar("acme", escenario["sid"])
     assert con["qa_usd"] == pytest.approx(2 * gastos.TARIFAS["revision_pieza"])
-    assert con["usd"] == pytest.approx(sin["usd"] + con["qa_usd"])
-    assert "control de calidad" in con["texto"]
+    # PND-299: el video del lote pasa por el director, que también cobra (solo si el proyecto cobra, como el QA).
+    assert sin["director_usd"] == 0.0 and con["director_usd"] == pytest.approx(gastos.TARIFAS["director"])
+    assert con["usd"] == pytest.approx(sin["usd"] + con["qa_usd"] + con["director_usd"])
+    assert "control de calidad" in con["texto"] and "prompt armado con IA" in con["texto"]
 
 
 # --- revisión final: cada paso de la investigación y del barrido reserva su precio -----------

@@ -124,10 +124,13 @@ def estimar(cliente, sprint_id, campana_id=None, modelo_video=None, modelo_image
     # automático (Claude con visión, `sprint_qa_pendientes`). En un proyecto
     # que cobra ese QA se descuenta del saldo, así que entra en el precio que
     # se aprueba. En uno que no cobra el estimado no cambia.
-    qa_usd = 0.0
+    qa_usd = director_usd = 0.0
     if (videos or imagenes) and libro.cobra(cliente):
         qa_usd = round(gastos.TARIFAS["revision_pieza"] * (videos + imagenes), 4)
         usd += qa_usd
+        # PND-299: cada video del lote pasa por el director, que desde el 2026-10-15 lo paga el proyecto.
+        director_usd = round((tareas_director.costo_estimado() or 0.0) * videos, 4)
+        usd += director_usd
     segundos = videos * SEGUNDOS_VIDEO + imagenes * SEGUNDOS_IMAGEN
     acumulado = float((sp.get("extra") or {}).get("costo_estimado_usd") or 0.0)
     # Los nombres son N_ del registro: van por el catálogo (PND-243, «Seedance 2.5 · varias referencias»).
@@ -140,7 +143,11 @@ def estimar(cliente, sprint_id, campana_id=None, modelo_video=None, modelo_image
     if qa_usd:
         texto += " · " + gettext("incluye el control de calidad automático de cada pieza (USD %(qa)s)",
                                  qa=f"{gastos.precio(qa_usd):.2f}")
-    return {"videos": videos, "imagenes": imagenes, "usd": round(usd, 4), "qa_usd": qa_usd, "segundos": segundos,
+    if director_usd:
+        texto += " · " + gettext("y el prompt armado con IA de cada video (USD %(director)s)",
+                                 director=f"{gastos.precio(director_usd):.2f}")
+    return {"videos": videos, "imagenes": imagenes, "usd": round(usd, 4), "qa_usd": qa_usd,
+            "director_usd": director_usd, "segundos": segundos,
             "modelo_video": mv,
             "modelo_imagen": mi, "modelo_video_nombre": nombre_v, "modelo_imagen_nombre": nombre_i,
             "acumulado_usd": round(acumulado, 4), "texto": texto}
@@ -292,7 +299,12 @@ def encolar_director(cliente, cf_id, prioridad=PRIORIDAD_LOTE):
     con el prompt determinista que ya tiene guardado en vez de quedar colgada
     en prompt_pendiente."""
     creative_flow.actualizar(cliente, cf_id, estado="prompt_pendiente")
-    ok = tareas_director.encolar(cliente, cf_id, auto_lanzar=True, prioridad=prioridad)
+    try:
+        ok = tareas_director.encolar(cliente, cf_id, auto_lanzar=True, prioridad=prioridad)
+    except SaldoInsuficiente as e:
+        # PND-299: el director cobra; sin saldo la sesión no queda en `prompt_pendiente` sin trabajo detrás.
+        creative_flow.actualizar(cliente, cf_id, estado="error", error=e.frase_proyecto())
+        raise
     if not ok:
         creative_flow.actualizar(cliente, cf_id, estado="error", error="No se pudo encolar la compilación del prompt.")
     return ok
@@ -324,8 +336,9 @@ def lanzar_lote(cliente, sprint_id, campana_id=None, modelo_video=None, modelo_i
     mv, mi = modelos(cliente, modelo_video, modelo_imagen)
     est = estimar(cliente, sprint_id, campana_id, mv, mi)
     # Cobros (spec 2026-10-08 §5): el lote entero se pide antes de reservar la
-    # primera idea. Los videos pasan por el director (gratis) y su generación
-    # vuelve a pedir y reservar al lanzarse; las imágenes reservan al encolar.
+    # primera idea. Los videos pasan por el director (que reserva lo suyo al
+    # encolarse, PND-299) y su generación vuelve a pedir y reservar al lanzarse;
+    # las imágenes reservan al encolar.
     if est["videos"] or est["imagenes"]:
         libro.exigir(cliente, est["usd"])
     encoladas, omitidas, cf_ids = 0, 0, []
@@ -416,7 +429,11 @@ def regenerar(cliente, cp_id):
     i = _idea_con_sesion(cliente, cp_id)
     # Cobros (spec 2026-10-08 §5): sin saldo no se duplica la sesión ni se
     # borra el QA; el manejador común responde.
-    libro.exigir(cliente, flowplus_lanzar.costo_estimado(creative_flow.cargar(cliente).get(i["cf_id"])))
+    anterior = creative_flow.cargar(cliente).get(i["cf_id"]) or {}
+    costo = flowplus_lanzar.costo_estimado(anterior)
+    if costo is not None and (anterior.get("tipo") or "video") == "video":
+        costo += tareas_director.costo_estimado() or 0.0      # PND-299: el video vuelve a pasar por el director
+    libro.exigir(cliente, costo)
     nuevo = creative_flow.duplicar(cliente, i["cf_id"])
     if not datos.reclamar_cf(cliente, cp_id, nuevo, esperado=i["cf_id"]):
         creative_flow.archivar_concepto(cliente, nuevo, "regeneración duplicada")

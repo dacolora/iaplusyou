@@ -126,7 +126,7 @@ def test_idioma_viene_del_idioma_del_proyecto(base_temporal, monkeypatch, tmp_pa
     assert cf.cargar("acme")[cid]["idioma_prompt"] == "en"
 
 
-def test_director_registra_gasto_interno_aunque_falle_guardar(base_temporal, monkeypatch):
+def test_director_registra_su_gasto_al_proyecto_aunque_falle_guardar(base_temporal, monkeypatch):
     import pytest
     import gastos
     import creative_flow as cf
@@ -136,9 +136,9 @@ def test_director_registra_gasto_interno_aunque_falle_guardar(base_temporal, mon
     monkeypatch.setattr(cf, "actualizar", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("disco")))
     with pytest.raises(RuntimeError, match="disco"):
         td.ejecutar({"id": 88, "payload": {"cliente": "acme", "cf_id": cid}})
-    g, = gastos.historial("_creatv")
-    assert g["usd"] == 0.01 and g["referencia"].endswith(":t88")
-    assert g["extra"]["cliente"] == "acme"
+    g, = gastos.historial("acme")                  # PND-299: lo paga el proyecto (antes `_creatv`)
+    assert g["usd"] == 0.01 and g["referencia"].endswith(":t88") and g["tipo"] == "director"
+    assert gastos.historial("_creatv") == []
 
 
 def test_director_fallback_registra_costo_pagado(base_temporal, monkeypatch):
@@ -150,7 +150,30 @@ def test_director_fallback_registra_costo_pagado(base_temporal, monkeypatch):
         raise td.director.DirectorError("inválido", costo_usd=0.035)
     monkeypatch.setattr(td.director, "compilar", fallar)
     td.ejecutar({"id": 89, "payload": {"cliente": "acme", "cf_id": cid}})
-    assert gastos.historial("_creatv")[0]["usd"] == 0.035
+    assert gastos.historial("acme")[0]["usd"] == 0.035
+
+
+def test_pnd299_el_director_cobra_al_proyecto_y_no_cobra_si_quedo_el_prompt_basico(base_temporal, monkeypatch):
+    """Con «Cobrar»: los planos entregados se cobran del saldo; si la IA falló y quedó el prompt básico, Claude
+    cobró pero la persona no recibió la ayuda: `no_cobrado`, sin descontarle nada."""
+    import db
+    import creative_flow as cf
+    import sqlalchemy as sa
+    import tareas.director as td
+    from cobros import libro
+    libro.configurar("acme", usuario="admin", cobrar=True, margen=1.5)
+    ok, falla = _sesion(cf), _sesion(cf)
+    monkeypatch.setattr(td.director, "compilar", lambda *a, **k: _resultado())
+    td.ejecutar({"id": 90, "payload": {"cliente": "acme", "cf_id": ok}})
+
+    def fallar(*a, **k):
+        raise td.director.DirectorError("inválido", costo_usd=0.02)
+    monkeypatch.setattr(td.director, "compilar", fallar)
+    td.ejecutar({"id": 91, "payload": {"cliente": "acme", "cf_id": falla}})
+    m = db.movimiento_saldo
+    with db.conectar() as con:
+        movs = [(x.tipo, x.milesimas) for x in con.execute(sa.select(m).where(m.c.cliente == "acme").order_by(m.c.id))]
+    assert movs == [("cobro", -15), ("no_cobrado", 0)]                  # 0,01 × 1,5; el fallback no se cobra
 
 
 def test_pnd034_interrumpida_no_relanza_y_respeta_clic(base_temporal, monkeypatch):

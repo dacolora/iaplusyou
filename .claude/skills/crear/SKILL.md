@@ -23,7 +23,7 @@ sound) — no brand guide, no EVITAR/«Recordatorio», no FIDELIDAD/catalog rule
 logos. Never add anything in the background unless the person asks for it; `armar` is
 still what the director fallback, Sprints and derivations use. `_lanzar_video_cf` launches
 right away with the cost shown on the «Generar video» button. **Optional** «Armar prompt
-con IA (gratis)» (`modo_prompt=director`, for people who don't know what to write):
+con IA» (`modo_prompt=director`, for people who don't know what to write; not free since PND-299, see below):
 sesión en `prompt_pendiente` -> worker
 `tareas/director.py` (`director.compilar`: Claude escribe los planos por familia de
 modelo, valida y compone A/B con `flowplus_prompt.armar(..., planos=)`; fallback al
@@ -168,13 +168,13 @@ y `aviso_saldo_fal`/`modelos_fal`; Alertas suma `saldo:fal`/`saldo:fal_recarga`.
 
 **Pedido rechazado al lanzar (2026-10-02, PND-107):** toda respuesta no-ok de WaveSpeed que no es de saldo es `wavespeed_common.PedidoRechazado` (RuntimeError, mismo `str(e)` técnico de siempre para la bitácora y `tarea.error`, más `status` y `mensaje` del proveedor); `tareas/flowplus._mensaje_error` la cuenta en palabras: «<proveedor> no aceptó el pedido y no se cobró nada: <motivo>…» (WaveSpeed o fal.ai, `saldo.nombre_proveedor`) (o, sin mensaje legible, con el código de respuesta). Antes la tarjeta mostraba el JSON crudo. Cada tipo tiene su frase: 401/403 «rechazó la llave de Creatv», 429 «demasiados pedidos», 5xx «falla de su lado» SIN prometer que no se cobró (WaveSpeed pudo crear la predicción sin devolver su id), y un 4xx con o sin el motivo del proveedor. Un `PedidoRechazado`, como `SinSaldo`, no persigue la `prediccion` que haya en la sesión: es de un intento anterior, no de este video.
 
-**Gasto y duplicación (2026-10-02, PND-004/014/109):** `duplicar(..., variante="B")` toma `BEGIN IMMEDIATE` antes de buscar y crear; dos clics obtienen la misma hija. El director cuenta `usage` con caché y conserva el costo en `DirectorError`; la ayuda gratis se anota bajo `_creatv` con el proyecto en `extra`, antes de guardar la sesión. Sus tareas van con `max_intentos=1`. La predicción conserva `referencia_gasto`: recuperar una descarga pagada mantiene la referencia del intento original, y una música nueva se registra aparte con la tarea de recuperación.
+**Gasto y duplicación (2026-10-02, PND-004/014/109):** `duplicar(..., variante="B")` toma `BEGIN IMMEDIATE` antes de buscar y crear; dos clics obtienen la misma hija. El director cuenta `usage` con caché y conserva el costo en `DirectorError`; su gasto se anota antes de guardar la sesión (desde PND-299, al proyecto: ver abajo). Sus tareas van con `max_intentos=1`. La predicción conserva `referencia_gasto`: recuperar una descarga pagada mantiene la referencia del intento original, y una música nueva se registra aparte con la tarea de recuperación.
 
 Director (revisión 2026-10-02, PND-014): Anthropic usa max_retries=0; un 529 cae al prompt básico sin reintentar y sin cobrar dos veces. PND-109: una generación normal persiste la referencia de su propia tarea; solo una recuperación reutiliza referencia_gasto. Guardar esa referencia está dentro del try de descarga y el gasto se registra antes de persistir un error.
 
 PND-028/034 (2026-10-03): el rótulo A usa tiene_hija_b. El gancho interrumpida del director continúa la generación solo con auto_lanzar ya aprobado, también si alcanzó prompt_listo antes de cortarse; respeta prioridad y max_intentos=1. No vuelve a lanzar sesiones que ya salieron de esos estados.
 
-PND-014/125 (2026-10-05): describir referencias y sugerir sonido anotan usage bajo _creatv antes de leer el texto, sin retries del SDK; no cambia el botón de sugerencia. extra.cliente identifica al proyecto que pidió la ayuda. El gasto del video se registra apenas se descarga y el de la pista antes de mezclar, conservando un cobro mayor cuando recuperar usa caché.
+PND-014/125 (2026-10-05): describir referencias y sugerir sonido anotan usage antes de leer el texto, sin retries del SDK (bajo _creatv hasta PND-299; ahora al proyecto). El gasto del video se registra apenas se descarga y el de la pista antes de mezclar, conservando un cobro mayor cuando recuperar usa caché.
 
 PND-144/145 (Codex, 2026-10-07): falla de descarga/R2 de pista conserva costo y URL en la capa fallida y gasto idempotente; imagen anota cobro antes de persistir el error o su bitácora. Pruebas locales en test_lote5_gasto; las revisiones del lote corresponden a Claude.
 
@@ -217,3 +217,17 @@ al parsear esa sección, antes de los módulos posteriores y del selector de mod
 Crear en modo imagen con la imagen del anuncio como la ÚNICA referencia de la bandeja (se reemplaza, como «Editar y
 crear otra» y la escena de Flow Plus) y un prompt para editarla; nada se genera hasta «Generar» con su precio. El
 detalle vive en la skill `triple-whale` («Cómo mejorarlo» de un anuncio de imagen fija).
+
+**Las ayudas con IA las paga el proyecto (PND-299, decisión 2026-10-13, lote 1; Daniel: «de resto todo de cuenta del
+cliente»).** El director («Crear super prompt» y «Rearmar»), «Describir con IA», «Sugerir» sonido y «Analizar
+referencias» de la marca ya no van a `_creatv` ni son gratis: cada botón dice su precio (`precio_de('director')`,
+`precio_describir(refs)` según las imágenes que se mandan, `gastos.TARIFAS` `director` 0,05, `describir_referencias`
+0,004 + 0,0015 por imagen, `sugerir_sonido` 0,002, `analizar_marca` 0,025, de lo medido) y el gasto va al proyecto con su
+tipo (`director`, `describir_referencias`, `sugerir_sonido`, `analizar_marca`). `flowplus_director` está en
+`TIPOS_QUE_COBRAN`: `cf_crear_video` (modo director) y `cf_rearmar` exigen antes de tocar la sesión y
+`tareas.director.encolar` reserva `costo_estimado()`; si la reserva falla tras crear la sesión, queda en `error` con la
+frase (la bandeja no se consume). El director que cae al prompt básico se anota con `entregado=False` (no se cobra).
+Describir y sugerir corren con `libro.pedido` en la petición; «Analizar marca» con `trabajos.iniciar_con_pedido`
+(`generador_prompts.analizar_marca(on_usage=)` avisa el uso apenas Claude responde: antes no se anotaba). Los lotes de
+Sprints suman el director de cada video al precio del lote si el proyecto cobra (`director_usd`, como el QA). Un plan
+no las incluye (no están en `planes.TIPOS_INCLUIDOS`). Pruebas: `tests/test_cobros_ayudas_ia.py`.

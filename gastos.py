@@ -38,7 +38,9 @@ from idiomas import N_
 
 log = logging.getLogger(__name__)
 
-TIPOS = ("video", "imagen", "swap", "guion", "final", "regla_producto", "caption_organico", "musica", "avatares", "recoleccion", "investigacion", "adaptar_referente", "sugerir_ia", "clasificacion", "refinar_prompt", "guion_clips", "ideas", "pedidos", "revision", "evaluacion", "locucion", "voz_propia", "transcripcion", "otro")
+TIPOS = ("video", "imagen", "swap", "guion", "final", "regla_producto", "caption_organico", "musica", "avatares", "recoleccion", "investigacion", "adaptar_referente", "sugerir_ia", "clasificacion", "refinar_prompt", "guion_clips", "ideas", "pedidos", "revision", "evaluacion", "locucion", "voz_propia", "transcripcion",
+         # PND-299: las ayudas con IA que pagaba Creatv (`_creatv`, tipo «otro») y ahora paga el proyecto.
+         "director", "describir_referencias", "sugerir_sonido", "analizar_marca", "otro")
 
 # Tarifas fijas (USD) de lo que no tiene `estimate_*` propio. Fuentes:
 #  - Anthropic (claude-sonnet-5, US$ 2/M tokens de entrada y US$ 10/M de
@@ -139,6 +141,20 @@ TARIFAS = {
     # llamada. Informe: docs/superpowers/evals/2026-10-10-meta-evaluacion.md («Segunda medición»).
     "evaluacion_meta": 0.25,
     "evaluacion_meta_por_anuncio": 0.005,
+    # Las ayudas con IA de Crear y de la marca, que pagaba Creatv (`_creatv`) y desde PND-299 (decisión 2026-10-13,
+    # lote 1) cobran del saldo del proyecto como todo lo demás. Costo de proveedor; el real se anota con los tokens.
+    # Director («Crear super prompt», `director.compilar`): una llamada con la doctrina de video; con corrección, dos.
+    # Medido el 2026-10-09 (docs/superpowers/evals/2026-10-09-director-seedance-ref.md): 0,015–0,026 una llamada y
+    # 0,035–0,050 con la corrección. Se muestra lo más caro medido.
+    "director": 0.05,
+    # Describir referencias (`referencias_link.describir`, visión): medido el 2026-10-10 (PND-141) 0,004 con una imagen
+    # y 0,010 con seis; base + lo de cada imagen, redondeado hacia arriba (hasta 16 imágenes ≈ 0,028).
+    "describir_referencias": 0.004,
+    "describir_referencias_por_imagen": 0.0015,
+    # Sugerir sonido (`final_edition.sonido.sugerir_descripcion`): medido 0,0013 (PND-141).
+    "sugerir_sonido": 0.002,
+    # Analizar marca (`generador_prompts.analizar_marca`): hasta 5 imágenes (~1 600 tokens c/u) y 400 de salida.
+    "analizar_marca": 0.025,
 }
 
 # Evaluación de anuncios de Triple Whale con IA (spec 2026-09-28 §6): una
@@ -173,6 +189,9 @@ NOMBRES_TIPO = {
     "clasificacion": N_("Clasificación de referentes (IA)"), "adaptar_referente": N_("Recrear referentes (IA)"),
     "sugerir_ia": N_("Sugerencias de referentes (IA)"), "recoleccion": N_("Recolección de comentarios"),
     "investigacion": N_("Investigación de nicho (IA)"), "avatares": N_("Avatares (IA)"),
+    # Las ayudas con IA que pagaba Creatv y desde PND-299 paga el proyecto.
+    "director": N_("Prompts armados con IA"), "describir_referencias": N_("Referencias descritas con IA"),
+    "sugerir_sonido": N_("Sonidos sugeridos con IA"), "analizar_marca": N_("Guía de marca con IA"),
     "otro": N_("Otros"),
 }
 
@@ -530,6 +549,12 @@ _ESTIMADORES = {
     "analisis_anuncio_tw": _estimar_analisis_anuncio_tw,
     "proponer_ideas": lambda n=1, **_: (IDEAS_BASE_USD + IDEAS_POR_IDEA_USD * max(1, int(n or 0)),
                                         f"{max(1, int(n or 0))} idea(s) con Claude"),
+    "director": lambda **_: (TARIFAS["director"], "una o dos llamadas a Claude"),
+    "describir_referencias": lambda imagenes=1, **_: (
+        TARIFAS["describir_referencias"] + TARIFAS["describir_referencias_por_imagen"] * max(1, int(imagenes or 0)),
+        f"{max(1, int(imagenes or 0))} imagen(es) con Claude"),
+    "sugerir_sonido": lambda **_: (TARIFAS["sugerir_sonido"], "una llamada corta a Claude"),
+    "analizar_marca": lambda **_: (TARIFAS["analizar_marca"], "una llamada a Claude con visión"),
 }
 
 

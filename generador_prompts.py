@@ -95,10 +95,12 @@ prompts de video — no menciones nombres propios, marcas, ni texto en pantalla.
 Responde solo con la guía, sin encabezados ni explicaciones adicionales."""
 
 
-def analizar_marca(image_urls, idioma="es"):
+def analizar_marca(image_urls, idioma="es", on_usage=None):
     """Le pide a Claude que mire hasta 5 imágenes de referencia de marca (URLs
     públicas) y devuelva una guía de estilo en texto para usar en cada prompt
-    futuro. `idioma`: idioma del proyecto (spec 2026-09-26 §B4)."""
+    futuro. `idioma`: idioma del proyecto (spec 2026-09-26 §B4). `on_usage`
+    recibe el `usage` apenas Claude responde, antes de leer el texto: lo que
+    cobró se anota aunque la respuesta no sirva (PND-299: antes no se anotaba)."""
     urls = [u for u in image_urls if u][:5]
     if not urls:
         raise RuntimeError("No hay imágenes de referencia para analizar.")
@@ -113,6 +115,8 @@ def analizar_marca(image_urls, idioma="es"):
         max_tokens=400,
         messages=[{"role": "user", "content": content}],
     )
+    if on_usage:
+        on_usage(getattr(resp, "usage", None))
     return "".join(block.text for block in resp.content if block.type == "text").strip()
 
 

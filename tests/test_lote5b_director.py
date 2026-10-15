@@ -53,5 +53,7 @@ def test_pnd072_encolado_compartido_preserva_contrato(base_temporal, monkeypatch
     args, kwargs = cola[0]
     assert args == (f'acme__{cid}__director', 'flowplus_director',
                     {'cliente': 'acme', 'cf_id': cid, 'auto_lanzar': True, 'prioridad': 3})
+    # PND-299: el director lo paga el proyecto; el encolado lleva su precio para exigir y reservar.
     assert kwargs == {'cliente': 'acme', 'duracion_estimada': td.DURACION_ESTIMADA,
-                      'etapas': td.ETAPAS_DIRECTOR, 'max_intentos': 1, 'prioridad': 3}
+                      'etapas': td.ETAPAS_DIRECTOR, 'max_intentos': 1, 'prioridad': 3,
+                      'costo_estimado': td.costo_estimado()}

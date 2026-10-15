@@ -1052,15 +1052,21 @@ def analizar_marca(cliente):
         return redirect(url_for("ver_cliente", cliente=cliente))
 
     job_id = _job_id_marca(cliente)
+    idioma = idiomas.de_proyecto(cliente)
+    detalle = _detalle_imagenes(cliente, min(len(urls), 5))
+    # PND-299: la paga el proyecto (antes nadie la anotaba): precio a la vista en el botón, freno y una reserva propia
+    # hasta que el hilo termina (PND-300). Sin saldo, el aviso con «Recargar saldo» y nada se lanza.
+    pedido = libro_cobros.reservar_pedido(cliente, gastos.estimar("analizar_marca")["usd"])
 
     def trabajo():
-        guia = generador_prompts.analizar_marca(urls, idioma=idiomas.de_proyecto(cliente))
+        guia = generador_prompts.analizar_marca(
+            urls, idioma=idioma, on_usage=lambda uso: _registrar_usage_ayuda(cliente, "analizar_marca", uso, detalle))
         data = marca_mod.cargar(cliente)
         data["guia_estilo"] = guia
         marca_mod.guardar(cliente, data)
         return idiomas.N_("Guía de estilo generada.")
 
-    if trabajos.iniciar(job_id, trabajo, duracion_estimada=15, cliente=cliente):
+    if trabajos.iniciar_con_pedido(job_id, trabajo, cliente, pedido, duracion_estimada=15):
         flash(gettext("Analizando referencias de marca…"), "ok")
     else:
         flash(gettext("Ya se está analizando — espera a que termine."), "warn")
@@ -1698,14 +1704,22 @@ def verificar_correo(token):
         return _volver_cuenta() if sesion else redirect(url_for("login"))
     usuario = resultado["usuario"]
     try:
-        usuarios.actualizar(usuario, correo=resultado["correo"], correo_verificado=True)
+        _entry, regalo = cuentas.confirmar_correo(usuario, correo=resultado["correo"])
     except ValueError as e:
         flash(gettext("No pude confirmar el correo: %(error)s", error=str(e)), "error")
         return _volver_cuenta() if sesion else redirect(url_for("login"))
     flash(gettext("Correo confirmado. ¡Gracias!"), "ok")
+    _avisar_bienvenida(regalo)
     # Con sesión abierta (la suya o la de otro usuario en este navegador) se
     # vuelve a su cuenta; sin sesión, al login.
     return _volver_cuenta() if sesion else redirect(url_for("login"))
+
+
+def _avisar_bienvenida(milesimas):
+    """El aviso de quien confirma su correo y estrena el saldo de bienvenida (PND-299)."""
+    if milesimas:
+        flash(gettext("Te regalamos %(monto)s de saldo para que empieces a crear.",
+                      monto=gastos.formatear(milesimas / 1000)), "ok")
 
 
 @app.route("/reenviar-verificacion", methods=["POST"])
@@ -1782,10 +1796,12 @@ def restablecer(token):
     # Abrir el enlace que llegó a ese correo demuestra que es suyo: si sigue
     # siendo el correo de la cuenta, queda confirmado de paso.
     entry = usuarios.obtener(usuario) or {}
+    regalo = 0
     if entry.get("correo") == resultado["correo"] and not entry.get("correo_verificado"):
-        usuarios.actualizar(usuario, correo_verificado=True)
+        regalo = cuentas.confirmar_correo(usuario)[1]
     session.clear()
     flash(gettext("Contraseña cambiada. Entra con la nueva."), "ok")
+    _avisar_bienvenida(regalo)
     return redirect(url_for("login"))
 
 
@@ -1916,11 +1932,14 @@ def admin_usuario_verificar(usuario):
     if not _mismo_origen():
         abort(403)
     try:
-        usuarios.actualizar(usuario, correo_verificado=True)
+        entry, regalo = cuentas.confirmar_correo(usuario)
     except ValueError as e:
         flash(str(e), "error")
         return redirect(url_for("panel"))
     flash(gettext("Usuario '%(usuario)s' marcado como verificado.", usuario=usuario), "ok")
+    if regalo:
+        flash(gettext("El proyecto %(proyecto)s recibió %(monto)s de saldo de bienvenida.",
+                      proyecto=entry.get("cliente"), monto=gastos.formatear(regalo / 1000)), "ok")
     return redirect(url_for("panel"))
 
 
@@ -4991,6 +5010,11 @@ def _filtro_usd(valor):
 
 # `{% if margen_precio() == 1 %}`: el margen de la petición (1.0 si el proyecto no cobra).
 app.jinja_env.globals["margen_precio"] = gastos.margen_vigente
+# `{{ precio_de('director').texto }}`: el estimado (con el margen de la petición) de un botón que cobra; las ayudas con
+# IA lo muestran desde PND-299. `precio_describir(refs)`: el de «Describir con IA» según lo que hay en la bandeja.
+app.jinja_env.globals["precio_de"] = lambda tipo, **params: gastos.estimar(tipo, **params)
+app.jinja_env.globals["precio_describir"] = lambda refs: gastos.estimar(
+    "describir_referencias", imagenes=referencias_link.imagenes_a_describir(refs))
 
 
 @app.template_filter("cobrado")
@@ -8029,19 +8053,29 @@ def _prefill_para(cliente):
     return pre
 
 
-def _registrar_usage_claude_interno(cliente, origen, uso):
-    """Las ayudas inmediatas de Claude las paga el proyecto interno de Creatv."""
+def _registrar_usage_ayuda(cliente, tipo, uso, detalle=""):
+    """Lo que cobró Claude por una ayuda con IA (describir referencias, sugerir sonido, analizar marca) va al gasto
+    del PROYECTO con su tipo (PND-299, decisión 2026-10-13: antes lo pagaba Creatv en `_creatv`). Con «Cobrar», sale
+    de su saldo al precio de la reserva del pedido (`libro.pedido`/`en_pedido`). Claude respondió: se anota como
+    entregado (spec cobros §3.5). Nunca lanza: anotar no convierte una sugerencia que sirvió en un error."""
     if not uso:
         return
     try:
         from nicho.avatares import costo_real
-        usd = costo_real(getattr(uso, "input_tokens", 0) or 0, getattr(uso, "output_tokens", 0) or 0)
-        gastos.registrar_seguro("_creatv", "otro", usd, f"claude:{origen}:{secrets.token_hex(6)}",
-                                detalle=gettext("Claude · %(origen)s", origen=origen), proveedor="anthropic",
-                                extra={"cliente": cliente})
+        entrada = int(getattr(uso, "input_tokens", 0) or 0)
+        salida = int(getattr(uso, "output_tokens", 0) or 0)
+        gastos.registrar_seguro(cliente, tipo, costo_real(entrada, salida), f"{tipo}:{secrets.token_hex(6)}",
+                                detalle=detalle, proveedor="anthropic",
+                                extra={"tokens_entrada": entrada, "tokens_salida": salida})
     except Exception:
         # El registro nunca debe convertir una sugerencia utilizable en error.
-        logging.getLogger(__name__).warning("No pude registrar el gasto interno de Claude (%s)", origen)
+        logging.getLogger(__name__).warning("No pude registrar el gasto de Claude (%s)", tipo)
+
+
+def _detalle_imagenes(cliente, n):
+    """«3 imágenes» en el idioma del proyecto: el detalle de un gasto se GUARDA (spec 2026-09-26 §B8)."""
+    with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+        return ngettext("%(num)s imagen", "%(num)s imágenes", n)
 
 
 @app.route("/cliente/<cliente>/flowplus/describir", methods=["POST"])
@@ -8051,13 +8085,20 @@ def fp_describir(cliente):
     refs = referencias_flowplus.listar(cliente)
     if not refs:
         return jsonify({"ok": False, "error": gettext("Agrega primero una imagen, un video o un link.")}), 400
-    try:
-        texto = referencias_link.describir(refs, cliente_hint=proyectos.nombre_visible(cliente),
-                                           idioma=idiomas.de_proyecto(cliente),
-                                           on_usage=lambda uso: _registrar_usage_claude_interno(cliente, "describir_referencias", uso))
-    except Exception as e:
-        bitacora.registrar(cliente, "flowplus", "describir", "error", str(e))
-        return jsonify({"ok": False, "error": gettext("No pude describir las referencias (%(tipo)s).", tipo=type(e).__name__)}), 502
+    n = referencias_link.imagenes_a_describir(refs)
+    detalle = _detalle_imagenes(cliente, n)
+    # PND-299: la paga el proyecto (antes Creatv), con el precio del botón, el freno y una reserva propia mientras
+    # Claude mira (PND-300). Sin saldo, 402 y Claude no se llama.
+    with libro_cobros.pedido(cliente, gastos.estimar("describir_referencias", imagenes=n)["usd"]):
+        try:
+            texto = referencias_link.describir(refs, cliente_hint=proyectos.nombre_visible(cliente),
+                                               idioma=idiomas.de_proyecto(cliente),
+                                               on_usage=lambda uso: _registrar_usage_ayuda(
+                                                   cliente, "describir_referencias", uso, detalle))
+        except Exception as e:
+            bitacora.registrar(cliente, "flowplus", "describir", "error", str(e))
+            return jsonify({"ok": False, "error": gettext("No pude describir las referencias (%(tipo)s).",
+                                                          tipo=type(e).__name__)}), 502
     bitacora.registrar(cliente, "flowplus", "describir", "ok", texto[:120])
     return jsonify({"ok": True, "texto": texto})
 
@@ -8271,11 +8312,14 @@ def cf_crear_video(cliente):
     if tipo == "imagen" or request.form.get("modo_prompt") != "director":
         # Cobros (spec 2026-10-08 §5): sin saldo no se crea la sesión ni se toca
         # la bandeja; el manejador de SaldoInsuficiente responde. La reserva la
-        # hace flowplus_lanzar al encolar. El director es gratis: su freno es
-        # el del botón «Generar» de la tarjeta.
+        # hace flowplus_lanzar al encolar.
         libro_cobros.exigir(cliente, flowplus_lanzar.costo_estimado(dict(
             tipo=tipo, modelo=modelo, duracion_objetivo=duracion_objetivo, referencias=referencias,
             referencias_urls=referencias_urls, con_sonido=con_sonido, musica_estilo=musica_estilo, calidad=calidad)))
+    else:
+        # PND-299: el director lo paga el proyecto (antes Creatv): su precio va en el botón y se pide aquí, antes de
+        # crear la sesión; la reserva la hace el encolado. El video se cobra aparte, con «Generar» en la tarjeta.
+        libro_cobros.exigir(cliente, tareas_director.costo_estimado())
     cf_id = creative_flow.crear(
         cliente, [], productos_sel, [],
         accion_central, duracion_objetivo, "", "A",
@@ -8340,7 +8384,13 @@ def cf_crear_video(cliente):
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
     creative_flow.actualizar(cliente, cf_id, estado="prompt_pendiente", **campos)
-    encolado = _encolar_director(cliente, cf_id)
+    try:
+        encolado = _encolar_director(cliente, cf_id)
+    except SaldoInsuficiente as e:
+        # Otro clic se llevó el saldo entre el freno y el encolado: la sesión no queda en `prompt_pendiente` sin
+        # trabajo; queda en error con la frase (en el idioma del proyecto: se guarda) y la bandeja sigue intacta.
+        creative_flow.actualizar(cliente, cf_id, estado="error", error=e.frase_proyecto())
+        raise
     _consumir_bandeja(cliente, usadas)
     if encolado:
         flash(gettext("Armando el prompt con IA… en unos segundos aparece aquí para que lo revises y generes."), "ok")
@@ -8353,7 +8403,8 @@ def cf_crear_video(cliente):
 
 
 def _encolar_director(cliente, cf_id, auto_lanzar=False, prioridad=flowplus_lanzar.PRIORIDAD_NORMAL):
-    """Encola la compilación del prompt (gratis, idempotente: max_intentos=1)."""
+    """Encola la compilación del prompt (idempotente: max_intentos=1). Desde PND-299 la paga el proyecto: reserva su
+    precio y, sin saldo, SaldoInsuficiente sin encolar nada."""
     return tareas_director.encolar(cliente, cf_id, auto_lanzar=auto_lanzar, prioridad=prioridad)
 
 
@@ -8403,8 +8454,15 @@ def cf_rearmar(cliente, cf_id):
     if not puede_rearmar:
         flash(gettext("Esa sesión no se puede rearmar ahora."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+    # PND-299: rearmar es otra llamada al director y la paga el proyecto: sin saldo no se toca la sesión.
+    libro_cobros.exigir(cliente, tareas_director.costo_estimado())
     creative_flow.actualizar(cliente, cf_id, estado="prompt_pendiente", error=None)
-    if _encolar_director(cliente, cf_id):
+    try:
+        encolado = _encolar_director(cliente, cf_id)
+    except SaldoInsuficiente:
+        creative_flow.actualizar(cliente, cf_id, estado=estado, error=entry.get("error"))
+        raise
+    if encolado:
         flash(gettext("Rearmando el prompt con IA…"), "ok")
     else:
         flash(gettext("Ya se estaba rearmando."), "warn")
@@ -8451,12 +8509,14 @@ def fp_sugerir_sonido(cliente):
         return jsonify({"error": gettext("Escribe primero qué tiene que pasar en el video.")}), 400
     e = cuerpo.get("enfoque")
     enfoque = e if isinstance(e, str) and e in flowplus_prompt.ENFOQUES else "producto"
-    try:
-        texto = sonido_mod.sugerir_descripcion(
-            escena, enfoque, idioma=idiomas.de_proyecto(cliente),
-            on_usage=lambda uso: _registrar_usage_claude_interno(cliente, "sugerir_sonido", uso))
-    except Exception as e:
-        return jsonify({"error": gettext("No se pudo sugerir (%(tipo)s).", tipo=type(e).__name__)}), 502
+    # PND-299: la paga el proyecto (antes Creatv), con freno y reserva propia mientras Claude responde (PND-300).
+    with libro_cobros.pedido(cliente, gastos.estimar("sugerir_sonido")["usd"]):
+        try:
+            texto = sonido_mod.sugerir_descripcion(
+                escena, enfoque, idioma=idiomas.de_proyecto(cliente),
+                on_usage=lambda uso: _registrar_usage_ayuda(cliente, "sugerir_sonido", uso))
+        except Exception as e:
+            return jsonify({"error": gettext("No se pudo sugerir (%(tipo)s).", tipo=type(e).__name__)}), 502
     return jsonify({"sonido": texto})
 
 

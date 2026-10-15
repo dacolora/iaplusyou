@@ -270,7 +270,8 @@ def test_formulario_trae_armar_prompt_borrador_y_duracion_de_la_preferencia(app)
     proyectos.guardar_preferencias_flowplus("acme", "wan3", "seedream_v5_pro", duracion_defecto=8)
     html = app["c"].get("/cliente/acme").get_data(as_text=True)
     # Desde 2026-09-21 el botón principal genera; «Armar prompt con IA» es la ayuda opcional.
-    assert "Generar video" in html and "Crear super prompt con IA (gratis)" in html     # texto del botón desde a8b1c9b
+    # PND-299 (2026-10-15): ya no es gratis; el botón dice su precio.
+    assert "Generar video" in html and "Crear super prompt con IA</strong> · US$" in html
     assert 'id="fp-calidad"' in html and 'name="calidad" value="borrador"' in html
     assert '<option value="8" selected>8 s</option>' in html and 'id="fp-duracion-larga"' in html
     assert "exactamente lo que recibe el modelo" not in html
