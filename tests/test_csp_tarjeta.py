@@ -1,5 +1,5 @@
 """PND-304 (a), 2026-10-15: la política de scripts de la página de la tarjeta manda sus violaciones a una ruta propia
-(`report-uri` y `report-to`), que anota lo justo (la directiva, el origen bloqueado, qué página y si fue reporte o
+(`report-uri`), que anota lo justo (la directiva, el origen bloqueado, qué página y si fue reporte o
 bloqueo; nunca la URL completa, el proyecto ni un fragmento de código) con tope de tamaño y de cantidad, y avisa al
 admin una vez por violación nueva. Así se puede pasar la política a «bloquear» sin depender de que alguien mire la
 consola del navegador. Base temporal; nada sale a la red."""
@@ -19,7 +19,9 @@ DOC = "https://app.creatvmachine.com/cliente/acme/plan/alta?plan=1&ciclo=mensual
 def csp(base, monkeypatch):  # noqa: F811
     from cobros import csp as modulo
     avisos = []
-    monkeypatch.setattr(modulo, "_CUPO", {"desde": None, "n": 0, "ips": {}})
+    monkeypatch.delenv("PLATAFORMA_URL", raising=False)
+    monkeypatch.delenv("PLATAFORMA_HOSTS_EXTRA", raising=False)
+    monkeypatch.setattr(modulo, "_CUPO", {"desde": None, "n": 0, "ips": {}, "marcada": False})
     monkeypatch.setattr(modulo, "_en_segundo_plano", lambda fn: fn())
     monkeypatch.setattr(modulo.avisos, "admin", lambda tipo, asunto, cuerpo, cliente="": avisos.append(
         (tipo, asunto() if callable(asunto) else asunto, cuerpo() if callable(cuerpo) else cuerpo)))
@@ -138,8 +140,20 @@ def test_la_pagina_de_cambiar_la_tarjeta_tambien_cuenta(http, csp):  # noqa: F81
 def test_la_ruta_acepta_un_post_de_otro_sitio_y_sin_sesion(http, csp):  # noqa: F811
     # La manda el navegador (sin cookie y a veces marcada de otro sitio): exenta de la barrera CSRF y de la sesión
     # por nombre exacto de endpoint. No mueve plata: anota lo justo, con tope.
-    r = _enviar(http, _reporte(), **{"Sec-Fetch-Site": "cross-site"})
+    r = _enviar(http, _reporte(), **{"Sec-Fetch-Site": "cross-site", "Sec-Fetch-Dest": "report"})
     assert r.status_code == 204 and len(csp.resumen()) == 1
+
+
+def test_un_post_de_otro_sitio_que_no_es_un_reporte_se_rechaza(http, csp):  # noqa: F811
+    # Auditoría 2026-10-15: un `fetch` de otra página (con text/plain no pide permiso) haría que sus visitantes
+    # mandaran reportes falsos desde IP reales. Un reporte de verdad lleva Sec-Fetch-Dest: report, que una página no
+    # puede poner; los del mismo sitio (los de nuestra página) pasan siempre.
+    for dest in ("empty", None):
+        cabeceras = {"Sec-Fetch-Site": "cross-site", **({"Sec-Fetch-Dest": dest} if dest else {})}
+        assert _enviar(http, _reporte(), tipo="text/plain", **cabeceras).status_code == 403
+    assert csp.resumen() == []
+    assert _enviar(http, _reporte(), **{"Sec-Fetch-Site": "same-origin", "Sec-Fetch-Dest": "report"}).status_code == 204
+    assert len(csp.resumen()) == 1
 
 
 def test_una_sesion_vieja_no_convierte_el_reporte_en_redireccion(http, csp):  # noqa: F811
@@ -242,3 +256,87 @@ def test_admin_cobros_muestra_la_politica_y_lo_anotado(http, base, csp, monkeypa
     _enviar(c, _reporte())
     html = c.get("/admin/cobros").get_data(as_text=True)
     assert "https://cdn.otro.example" in html and "script-src-elem" in html
+
+
+# --- revisión de seguridad (auditor, 2026-10-15) -------------------------------------------------------------------
+
+def test_un_reporte_sin_disposition_se_anota_como_desconocida(http, csp):  # noqa: F811
+    # Un navegador que no manda `disposition`: antes «desconocida» se cortaba a 10 letras y el reporte se tiraba.
+    cuerpo = json.loads(_reporte())
+    del cuerpo["csp-report"]["disposition"]
+    assert _enviar(http, json.dumps(cuerpo).encode()).status_code == 204
+    (fila,) = csp.resumen()
+    assert fila["disposicion"] == "desconocida"
+
+
+def test_solo_cuentan_los_reportes_de_nuestra_pagina(http, csp, monkeypatch):  # noqa: F811
+    monkeypatch.setenv("PLATAFORMA_URL", "https://app.creatvmachine.com")
+    monkeypatch.setenv("PLATAFORMA_HOSTS_EXTRA", "galadsy.com")
+    for documento in ("https://evil.example/cliente/acme/plan/alta", "/cliente/acme/plan/alta",
+                      "https://app.creatvmachine.com.evil.example/cliente/acme/plan/alta"):
+        _enviar(http, _reporte(**{"document-uri": documento}))
+    assert csp.resumen() == []
+    for i, documento in enumerate(("https://app.creatvmachine.com/cliente/acme/plan/alta",
+                                   "https://galadsy.com/cliente/acme/plan/alta",
+                                   "http://localhost:5050/cliente/acme/plan/alta")):
+        _enviar(http, _reporte(**{"document-uri": documento, "blocked-uri": f"https://h{i}.example/x"}))
+    assert len(csp.resumen()) == 3
+
+
+def test_un_numero_largo_en_el_host_no_se_guarda(http, base, csp):  # noqa: F811
+    # Un skimmer que cargue https://<número>.evil.tld/x.js dejaría el número en la base y en el correo.
+    _enviar(http, _reporte(**{"blocked-uri": "https://4111111111111111.cdn.evil.example/x.js"}))
+    (fila,) = csp.resumen()
+    assert fila["bloqueado"] == "https://*.cdn.evil.example"
+    assert "4111" not in json.dumps(_filas(base)) and "4111" not in json.dumps(csp.avisos_enviados)
+
+
+def test_lo_descartado_por_tope_marca_la_lista_como_incompleta(http, csp, monkeypatch):  # noqa: F811
+    # Con el cupo gastado (60 reportes de basura desde 6 IP) un reporte real no se anota: la lista se vería limpia.
+    # Ahora queda dicho que está incompleta, y /admin/cobros lo muestra.
+    monkeypatch.setattr(csp, "TOPE_HORA", 2)
+    assert csp.incompleta() is None
+    for i in range(3):
+        _enviar(http, _reporte(**{"blocked-uri": f"https://h{i}.example/x"}))
+    assert len(csp.resumen()) == 2 and csp.incompleta() is not None
+
+
+def test_con_la_lista_llena_lo_nuestro_o_de_wompi_desplaza_lo_ajeno(http, csp, monkeypatch):  # noqa: F811
+    monkeypatch.setattr(csp, "MAX_DISTINTAS", 2)
+    monkeypatch.setattr(csp, "TOPE_IP_HORA", 100)
+    for i in range(2):
+        _enviar(http, _reporte(**{"blocked-uri": f"https://basura{i}.example/x.js"}))
+    _enviar(http, _reporte(**{"blocked-uri": "https://otro.example/x.js"}))       # ajeno: no cabe
+    assert {f["bloqueado"] for f in csp.resumen()} == {"https://basura0.example", "https://basura1.example"}
+    assert csp.incompleta() is not None
+    _enviar(http, _reporte(**{"blocked-uri": "https://api.wompi.co/w.js"}))       # de Wompi: desplaza
+    _enviar(http, _reporte(**{"blocked-uri": "inline", "effective-directive": "script-src-attr"}))
+    assert {f["bloqueado"] for f in csp.resumen()} == {"https://api.wompi.co", "inline"}
+
+
+def test_ipv6_cuenta_por_su_64():
+    from cobros import csp
+    assert csp._clave_ip("2001:db8:1:2::1") == csp._clave_ip("2001:db8:1:2:ffff::9")
+    assert csp._clave_ip("2001:db8:1:2::1") != csp._clave_ip("2001:db8:1:3::1")
+    assert csp._clave_ip("10.0.0.1") == "10.0.0.1" and csp._clave_ip(None) == "desconocida"
+
+
+def test_el_aviso_dice_que_los_reportes_no_van_firmados(http, csp):  # noqa: F811
+    _enviar(http, _reporte(**{"blocked-uri": "https://checkout.wompi.co.pagos-seguros.example/x.js",
+                              "disposition": "enforce"}))
+    (_tipo, _asunto, cuerpo) = csp.avisos_enviados[0]
+    assert "no van firmados" in cuerpo and "https://checkout.wompi.co" in cuerpo
+
+
+def test_admin_cobros_avisa_cuando_la_lista_esta_incompleta(http, base, csp, monkeypatch, tmp_path):  # noqa: F811
+    import bitacora
+    import estado
+    monkeypatch.setattr(bitacora, "LOG_FILE", str(tmp_path / "registro.csv"))
+    monkeypatch.setattr(estado, "listar_clientes", lambda: ["acme"])
+    monkeypatch.setattr(csp, "TOPE_HORA", 1)
+    _enviar(http, _reporte())
+    _enviar(http, _reporte(**{"blocked-uri": "https://h9.example/x"}))
+    with http.session_transaction() as s:
+        s["usuario"] = "admin"; s["rol"] = "admin"; s["cliente"] = None; s["sv"] = 1
+    html = http.get("/admin/cobros").get_data(as_text=True)
+    assert 'id="aviso-csp-incompleta"' in html

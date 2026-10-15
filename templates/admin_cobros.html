@@ -123,7 +123,11 @@
     <h2>{{ _('Política de scripts de la página de la tarjeta') }}</h2>
     <span class="vacio">{% if csp_solo_reporte %}{{ _('en «solo reporte»: no bloquea nada') }}{% else %}{{ _('en «bloquear»') }}{% endif %}</span>
   </div>
-  <p class="vacio">{{ _('El navegador anota aquí lo que la política de la página donde se guarda la tarjeta bloquearía (los últimos 30 días). Se pasa a «bloquear» cuando, después de al menos un alta y un cambio de tarjeta reales, esta lista está vacía o solo tiene extensiones del navegador; si aparece algo de Creatv o de Wompi, primero hay que permitirlo en la política.') }}</p>
+  <p class="vacio">{{ _('El navegador anota aquí lo que la política de la página donde se guarda la tarjeta bloquearía (los últimos 30 días). Se pasa a «bloquear» cuando, después de al menos un alta y un cambio de tarjeta reales, esta lista está vacía o solo tiene extensiones del navegador; si aparece algo de Creatv o de Wompi, primero hay que permitirlo en la política.') }}
+    {{ _('Estos reportes no van firmados: cualquiera puede mandar uno. Antes de permitir un origen en la política, reprodúcelo en la consola de la página real y compáralo letra por letra con https://checkout.wompi.co.') }}</p>
+  {% if csp_incompleta %}
+  <div class="flash warn" id="aviso-csp-incompleta">{{ _('Desde el %(fecha)s se descartaron reportes por los topes: esta lista puede estar incompleta. No pases la política a «bloquear» sin revisar la página real con la consola abierta.', fecha=csp_incompleta) }}</div>
+  {% endif %}
   {% if csp_tarjeta is none %}
   <p class="estado-vacio">{{ _('No se pudo leer lo anotado.') }}</p>
   {% elif csp_tarjeta %}

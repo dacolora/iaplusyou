@@ -298,23 +298,33 @@ vulnerabilidades»). Explicación en llano y riesgos aceptados: `docs/pagos/segu
   `report-uri` que anote las violaciones, sin depender de que alguien mire la consola»). La política lleva
   `; report-uri /pagos/csp/tarjeta` (en los dos modos) y `cobros.csp.procesar` anota cada violación: directiva (lista
   blanca: `script-src`, `-elem`, `-attr`, `worker-src`, `frame-src`, `child-src`, `form-action`), lo bloqueado reducido
-  a su origen o su palabra (`inline`, `eval`, `data`, `chrome-extension`…), qué página (`alta` o `tarjeta`, por la ruta
-  del documento; un reporte de otra página no se anota), `report`/`enforce`/`desconocida`, veces, primera y última. Nunca
-  la URL completa, la consulta, el `script-sample`, el archivo fuente ni el proyecto. Exenta de la barrera CSRF y de la
-  sesión por nombre (`cobros.csp_tarjeta` en `ENDPOINTS_OTRO_ORIGEN` y `ENDPOINTS_SIN_GUARD_SESION`): es la ÚNICA
-  excepción sin firma (un reporte no se puede firmar) y la protegen sus topes: 16 KB (413), 10 reportes por envío,
-  `TOPE_IP_HORA` (10) por IP y `TOPE_HORA` (60) entre todos (memoria + `cuentas.limite_ok("csp_tarjeta")`), a lo más
-  `MAX_DISTINTAS` (20) violaciones guardadas, y las que no se repiten en `DIAS` (30) se olvidan. Una violación nueva
-  avisa al admin una vez (`csp_tarjeta`, en «Avisos de plata»). /admin/cobros la muestra en `#cobros-csp-tarjeta` con el
-  modo actual. **Sin `report-to`** a propósito: en Chromium reemplaza a `report-uri` y manda por la Reporting API en
+  a su origen o su palabra (`inline`, `eval`, `data`, `chrome-extension`…; una parte del host con 5 dígitos seguidos se
+  tapa con `*`: un skimmer podría meter un número de tarjeta en un subdominio), qué página (`alta` o `tarjeta`, por la
+  ruta del documento, y solo si el host del documento es el de PLATAFORMA_URL, uno de PLATAFORMA_HOSTS_EXTRA o local:
+  `_host_nuestro`), `report`/`enforce`/`desconocida` (sin `disposition`), veces, primera y última. Nunca la URL
+  completa, la consulta, el `script-sample`, el archivo fuente ni el proyecto. Exenta de la barrera CSRF y de la sesión
+  por nombre (`cobros.csp_tarjeta` en `ENDPOINTS_OTRO_ORIGEN` y `ENDPOINTS_SIN_GUARD_SESION`): es la ÚNICA excepción
+  sin firma (un reporte no se puede firmar). Marcado de otro sitio solo pasa con `Sec-Fetch-Dest: report` (si no, 403:
+  un `fetch` de otra página haría que sus visitantes mandaran reportes falsos desde IP reales). Topes: 16 KB (413), 10
+  reportes por envío, `TOPE_IP_HORA` (10) por IP (una IPv6 por su /64) y `TOPE_HORA` (60) entre todos (memoria +
+  `cuentas.limite_ok("csp_tarjeta")`), a lo más `MAX_DISTINTAS` (20) violaciones guardadas (con la lista llena, lo nuestro
+  o de Wompi —`inline`, `eval`, `self`, `data`, `blob`, `*.wompi.co`, el host de la plataforma— desplaza a la ajena más
+  vieja), y las que no se repiten en `DIAS` (30) se olvidan. **Lo que un tope descarta deja la lista marcada como
+  incompleta** (`kv` `cobros:csp_incompleta`, una escritura por hora y proceso; `#aviso-csp-incompleta` en /admin/cobros):
+  quien gaste el cupo con basura no la deja con cara de limpia (auditoría de seguridad 2026-10-15). Una violación nueva
+  avisa al admin una vez (`csp_tarjeta`, en «Avisos de plata»), diciendo que los reportes no van firmados y que un origen
+  se reproduce en la consola y se compara letra por letra con `https://checkout.wompi.co` antes de permitirlo (uno como
+  `checkout.wompi.co.otro.example` es un engaño). /admin/cobros lo muestra en `#cobros-csp-tarjeta` con el modo
+  actual. **Sin `report-to`** a propósito: en Chromium reemplaza a `report-uri` y manda por la Reporting API en
   tandas; con el navegador integrado no llegó ningún reporte en 90 s, y con solo `report-uri` llegaron al instante las
   tres violaciones de prueba (inline, un script de otro CDN, un marco ajeno), con `Sec-Fetch-Site: same-origin` y la
   cookie (2026-10-15). El parser igual lee el formato de la Reporting API.
 - **Cuándo pasarla a «bloquear»** (`CSP_TARJETA_SOLO_REPORTE = False` en `cobros/rutas.py`, un despliegue): cuando,
   después de al menos un alta y un cambio de tarjeta REALES con el widget desde que existe el registro (no en local:
   el widget de pruebas y el de producción pueden cargar cosas distintas), `#cobros-csp-tarjeta` esté vacía o solo tenga
-  cosas que no son ni de Creatv ni de Wompi (extensiones del navegador: `chrome-extension`, `moz-extension`). Si aparece
-  un origen de Wompi (`*.wompi.co`) o nuestro (`inline`, `eval`, un `/static/`), primero se agrega a `CSP_TARJETA` y se
+  cosas que no son ni de Creatv ni de Wompi (extensiones del navegador: `chrome-extension`, `moz-extension`) y NO diga
+  «puede estar incompleta». Si aparece un origen de Wompi (`*.wompi.co`) o nuestro (`inline`, `eval`, un `/static/`),
+  se reproduce primero en la consola de la página real (los reportes no van firmados), se agrega a `CSP_TARJETA` y se
   vuelve a mirar. Ya en «bloquear», la misma lista dice `bloqueado`: un renglón nuevo de Wompi ahí es un pago roto.
 - **Checkout que vence** (`HORAS_CHECKOUT` = 24, `wompi.url_checkout(..., vence=)`, `expiration-time` en UTC con
   milisegundos y firmado): visto en producción el 2026-10-12 (uno vigente muestra «Este pago vence en…»; uno vencido,

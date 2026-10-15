@@ -5834,6 +5834,10 @@ msgid "Desde el %(desde)s las generaciones de Crear y de Cambiar producto fallan
 msgstr "Since %(desde)s, generations in Create and Change product fail (without charging). Top up the account; this notice goes away on its own with the next generation that works."
 
 #, python-format
+msgid "Desde el %(fecha)s se descartaron reportes por los topes: esta lista puede estar incompleta. No pases la política a «bloquear» sin revisar la página real con la consola abierta."
+msgstr "Since %(fecha)s some reports were dropped by the limits: this list may be incomplete. Do not switch the policy to «block» without checking the real page with the console open."
+
+#, python-format
 msgid "Desde el %(fecha)s, cuando empiezan los datos de todas tus fuentes."
 msgstr "Since %(fecha)s, when data from all your sources begins."
 
@@ -8811,6 +8815,9 @@ msgstr ""
 "3. Charge approx. %(precio)s from Claude\n"
 "\n"
 "Shall we go ahead?"
+
+msgid "Estos reportes no van firmados: cualquiera puede mandar uno. Antes de permitir un origen en la política, reprodúcelo en la consola de la página real y compáralo letra por letra con https://checkout.wompi.co."
+msgstr "These reports are not signed: anyone can send one. Before allowing an origin in the policy, reproduce it in the console of the real page and compare it letter by letter with https://checkout.wompi.co."
 
 msgid "Estos subtítulos vienen del borrador automático y no siguen los cortes. Genéralos de nuevo para poder corregirlos."
 msgstr "These subtitles come from the automatic draft and don't follow the cuts. Generate them again to be able to correct them."

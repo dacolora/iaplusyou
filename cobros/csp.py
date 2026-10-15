@@ -12,14 +12,19 @@ bloqueado reducido a su origen (`https://host[:puerto]`) o a su palabra (`inline
 consulta, el `script-sample`, el archivo fuente ni el proyecto de la ruta. La ruta la llama el navegador sin cookie
 (y a veces marcada de otro sitio): está exenta de la barrera CSRF y de la sesión por nombre exacto de endpoint
 (`dashboard.ENDPOINTS_OTRO_ORIGEN`), y como no se puede firmar, la protegen los topes: 16 KB por envío,
-TOPE_IP_HORA por IP y TOPE_HORA entre todos (en memoria y en `kv`), y a lo más MAX_DISTINTAS violaciones distintas
-guardadas (las de más de DIAS días sin repetirse se olvidan). Una violación nueva avisa al admin una vez
-(`csp_tarjeta`, en «Avisos de plata»).
+TOPE_IP_HORA por IP (una IPv6 por su /64) y TOPE_HORA entre todos (en memoria y en `kv`), y a lo más MAX_DISTINTAS
+violaciones distintas guardadas (las de más de DIAS días sin repetirse se olvidan; con la lista llena, lo nuestro o de
+Wompi desplaza a lo ajeno). Solo cuentan los reportes de un documento de Creatv (`_host_nuestro`). Lo que se descarta
+por un tope deja la lista marcada como incompleta (`kv` `cobros:csp_incompleta`, /admin/cobros lo avisa): quien gaste
+el cupo con basura no puede dejarla con cara de limpia. Una violación nueva avisa al admin una vez (`csp_tarjeta`, en
+«Avisos de plata»), diciendo que los reportes no van firmados (auditoría de seguridad 2026-10-15).
 
-ÚNICO escritor de `kv` `cobros:csp:<huella>`."""
+ÚNICO escritor de `kv` `cobros:csp:<huella>` y `cobros:csp_incompleta`."""
 import hashlib
+import ipaddress
 import json
 import logging
+import os
 import re
 import threading
 import time
@@ -31,7 +36,7 @@ from flask_babel import gettext
 
 import cuentas
 import db
-from cobros import avisos
+from cobros import _entorno, avisos
 
 log = logging.getLogger(__name__)
 
@@ -42,6 +47,11 @@ TOPE_IP_HORA = 10                # reportes anotados por hora desde una misma IP
 MAX_DISTINTAS = 20               # violaciones distintas guardadas a la vez
 DIAS = 30                        # una violación que no se repite en estos días se olvida
 PREFIJO = "cobros:csp:"
+# Cuándo se descartó por última vez un reporte de la página por los topes (auditoría 2026-10-15): sin esto, quien
+# gastara el cupo con basura dejaba la lista con cara de limpia. Fuera de PREFIJO a propósito (no es una violación).
+CLAVE_INCOMPLETA = "cobros:csp_incompleta"
+# Lo que importa para decidir el cambio a «bloquear»: lo nuestro y lo de Wompi. Con la lista llena desplaza a lo ajeno.
+PRIORITARIAS = frozenset(("inline", "eval", "wasm-eval", "self", "data", "blob"))
 # Las directivas de CSP_TARJETA y las que caen en ellas (los navegadores reportan la «efectiva»).
 DIRECTIVAS = frozenset(("script-src", "script-src-elem", "script-src-attr", "worker-src", "frame-src", "child-src",
                         "form-action"))
@@ -51,7 +61,7 @@ DISPOSICIONES = frozenset(("report", "enforce", "desconocida"))   # sin `disposi
 _PAGINA = re.compile(r"/cliente/[^/?#]{1,120}/plan/(alta|tarjeta)")
 _ESQUEMA = re.compile(r"[a-z][a-z0-9+.-]{0,30}")
 _HOST = re.compile(r"[a-z0-9.-]{1,253}")
-_CUPO = {"desde": None, "n": 0, "ips": {}}
+_CUPO = {"desde": None, "n": 0, "ips": {}, "marcada": False}
 _CANDADO = threading.Lock()
 
 
@@ -91,18 +101,35 @@ def _origen(valor):
         return esquema
     if not _HOST.fullmatch(host):
         return "otro"
+    # Una parte del host con 5 dígitos seguidos o más se tapa: un skimmer podría cargar https://<número>.evil.tld/x.js
+    # y el número quedaría en la base y en el correo (auditoría 2026-10-15).
+    host = ".".join("*" if re.search(r"\d{5,}", parte) else parte for parte in host.split("."))
     estandar = {"http": 80, "https": 443, "ws": 80, "wss": 443}[esquema]
     return f"{esquema}://{host}" + (f":{puerto}" if puerto and puerto != estandar else "")
 
 
+def _host_nuestro(host):
+    """¿El host del documento es de Creatv? Sin PLATAFORMA_URL (pruebas, local), cualquiera; con ella, el suyo, los
+    de PLATAFORMA_HOSTS_EXTRA o uno local (la misma regla que `dashboard._verificar_host`)."""
+    fijo = (os.environ.get("PLATAFORMA_URL") or "").strip()
+    if not fijo:
+        return True
+    host = (host or "").lower().rstrip(".")
+    extra = {h.strip().lower() for h in (os.environ.get("PLATAFORMA_HOSTS_EXTRA") or "").split(",") if h.strip()}
+    return bool(host) and (host == (urlsplit(fijo).hostname or "").lower() or host in extra
+                           or _entorno.host_local(f"//{host}"))
+
+
 def _pagina(documento):
-    """`alta` o `tarjeta` si el reporte es de la página de la tarjeta; None si es de otra."""
+    """`alta` o `tarjeta` si el reporte es de la página de la tarjeta de Creatv; None si es de otra página o de otro
+    sitio (auditoría 2026-10-15: un reporte inventado de https://evil.example/cliente/x/plan/alta no cuenta)."""
     try:
-        ruta = urlsplit(_texto(documento, 2000)).path
+        partes = urlsplit(_texto(documento, 2000))
+        ruta, host = partes.path, partes.hostname
     except ValueError:
         return None
     m = _PAGINA.fullmatch(ruta or "")
-    return m.group(1) if m else None
+    return m.group(1) if m and _host_nuestro(host) else None
 
 
 def _crudos(ev):
@@ -129,7 +156,7 @@ def _limpio(documento, directiva, bloqueado, disposicion):
     """El reporte con solo lo que se guarda, o None si no es de la página de la tarjeta o de una directiva suya."""
     pagina = _pagina(documento)
     directiva = _texto(directiva, 40).lower()
-    disposicion = _texto(disposicion, 10).lower()
+    disposicion = _texto(disposicion, 20).lower()
     if pagina is None or directiva not in DIRECTIVAS or disposicion not in DISPOSICIONES:
         return None
     return {"directiva": directiva, "bloqueado": _origen(bloqueado), "pagina": pagina, "disposicion": disposicion}
@@ -137,25 +164,72 @@ def _limpio(documento, directiva, bloqueado, disposicion):
 
 # ------------------------------------------------------------------ topes ---
 
+def _clave_ip(ip):
+    """La IP para el tope por IP: una IPv6 cuenta por su /64 (quien tiene una /64 tiene 2^64 direcciones)."""
+    if not ip:
+        return "desconocida"
+    try:
+        dir_ = ipaddress.ip_address(str(ip).strip())
+    except ValueError:
+        return str(ip)[:64]
+    if dir_.version == 4:
+        return str(dir_)
+    if dir_.ipv4_mapped is not None:
+        return str(dir_.ipv4_mapped)
+    return str(ipaddress.ip_network(f"{dir_}/64", strict=False))
+
+
 def _cupo(ip):
     """¿Cabe otro reporte? Primero en la memoria del proceso (sin tocar la base: pasado el cupo, ni el candado),
-    por IP y entre todos; después el global en kv (`cuentas.limite_ok`), que cuenta todos los procesos."""
+    por IP (una IPv6 por su /64) y entre todos; después el global en kv (`cuentas.limite_ok`), que cuenta todos los
+    procesos. Un reporte que no cabe deja la lista marcada como incompleta (`_marcar_incompleta`)."""
     ahora = time.monotonic()
-    ip = str(ip or "desconocida")[:64]
+    ip = _clave_ip(ip)
     with _CANDADO:
         if _CUPO["desde"] is None or ahora - _CUPO["desde"] >= 3600:
-            _CUPO.update(desde=ahora, n=0, ips={})
-        if _CUPO["n"] >= TOPE_HORA or _CUPO["ips"].get(ip, 0) >= TOPE_IP_HORA:
-            return False
-        if len(_CUPO["ips"]) > 5000:
-            return False   # demasiadas IP en una hora: algo raro, no se anota más
-        _CUPO["n"] += 1
-        _CUPO["ips"][ip] = _CUPO["ips"].get(ip, 0) + 1
+            _CUPO.update(desde=ahora, n=0, ips={}, marcada=False)
+        lleno = (_CUPO["n"] >= TOPE_HORA or _CUPO["ips"].get(ip, 0) >= TOPE_IP_HORA
+                 or len(_CUPO["ips"]) > 5000)   # demasiadas IP en una hora: algo raro, no se anota más
+        if not lleno:
+            _CUPO["n"] += 1
+            _CUPO["ips"][ip] = _CUPO["ips"].get(ip, 0) + 1
+    if lleno:
+        _marcar_incompleta()
+        return False
     try:
-        return cuentas.limite_ok("csp_tarjeta", TOPE_HORA, 3600)
+        if cuentas.limite_ok("csp_tarjeta", TOPE_HORA, 3600):
+            return True
     except Exception:  # noqa: BLE001 — sin contador no se anota; la respuesta sigue siendo 204
         log.exception("no se pudo contar un reporte de la política de la tarjeta")
-        return False
+    _marcar_incompleta()
+    return False
+
+
+def _marcar_incompleta():
+    """Anota en kv que desde ahora la lista puede estar incompleta: a lo más una escritura por hora y proceso (bajo
+    una inundación no compite por el candado con los cobros). Nunca lanza."""
+    with _CANDADO:
+        if _CUPO.get("marcada"):
+            return
+        _CUPO["marcada"] = True
+    ahora = db.ahora()
+    try:
+        with db.conectar() as con:
+            if not con.execute(db.kv.update().where(db.kv.c.clave == CLAVE_INCOMPLETA)
+                               .values(valor=ahora, actualizado_en=ahora)).rowcount:
+                con.execute(db.kv.insert().values(clave=CLAVE_INCOMPLETA, valor=ahora, actualizado_en=ahora))
+    except Exception:  # noqa: BLE001 — sin la marca, el log dice lo mismo
+        log.exception("no se pudo marcar la lista de la política de la tarjeta como incompleta")
+    log.warning("reportes de la política de la tarjeta descartados por los topes: la lista puede estar incompleta")
+
+
+def incompleta():
+    """Cuándo se descartó por última vez un reporte por los topes (ISO), si fue en los últimos DIAS días; si no, None.
+    Para /admin/cobros: con esto la lista no se puede leer como «limpia». Solo lee."""
+    with db.conectar() as con:
+        valor = con.execute(sa.select(db.kv.c.valor).where(db.kv.c.clave == CLAVE_INCOMPLETA)).scalar()
+    viejas = (datetime.now() - timedelta(days=DIAS)).isoformat(timespec="seconds")
+    return str(valor) if valor and str(valor) >= viejas else None
 
 
 # ---------------------------------------------------------------- anotar ---
@@ -165,9 +239,21 @@ def _huella(rep):
     return hashlib.sha256(texto.encode("utf-8")).hexdigest()[:24]
 
 
+def _prioritaria(rep):
+    """¿Es algo nuestro o de Wompi? Lo que decide si se puede pasar a «bloquear»: `inline`, `eval`, `self`, `data`,
+    `blob`, el host de la plataforma o uno de `wompi.co`."""
+    bloqueado = str(rep.get("bloqueado") or "")
+    if bloqueado in PRIORITARIAS:
+        return True
+    host = (urlsplit(bloqueado).hostname or "") if "://" in bloqueado else ""
+    plataforma = (urlsplit((os.environ.get("PLATAFORMA_URL") or "").strip()).hostname or "").lower()
+    return bool(host) and (host == "wompi.co" or host.endswith(".wompi.co") or (bool(plataforma) and host == plataforma))
+
+
 def _anotar(rep):
-    """Suma una vez a la violación (o la crea si cabe). Toma el candado de escritura ANTES de leer. Devuelve True si
-    es una violación nueva (para avisar), False si ya estaba o no cupo."""
+    """Suma una vez a la violación (o la crea si cabe). Toma el candado de escritura ANTES de leer. Devuelve `nueva`
+    (para avisar), `repetida` o `llena` (no cupo: quien llama marca la lista como incompleta, fuera de esta
+    transacción)."""
     kv = db.kv
     clave, ahora = PREFIJO + _huella(rep), db.ahora()
     viejas = (datetime.now() - timedelta(days=DIAS)).isoformat(timespec="seconds")
@@ -181,17 +267,23 @@ def _anotar(rep):
         if actual is not None and str(actual.get("ultima") or "") >= viejas:
             actual.update(veces=int(actual.get("veces") or 0) + 1, ultima=ahora)
             con.execute(kv.update().where(kv.c.clave == clave).values(valor=json.dumps(actual), actualizado_en=ahora))
-            return False
-        if len(filas) - len(olvidar) - (1 if clave in filas else 0) >= MAX_DISTINTAS:
-            log.warning("la política de la tarjeta ya tiene %s violaciones distintas anotadas: no se anota otra",
-                        MAX_DISTINTAS)
-            return False
+            return "repetida"
+        vivas = {c: _leer(v) for c, v in filas.items() if c not in olvidar and c != clave}
+        if len(vivas) >= MAX_DISTINTAS:
+            # Llena. Lo nuestro o de Wompi desplaza a la ajena que lleva más tiempo sin repetirse; si no, se descarta
+            # y la lista queda marcada como incompleta (auditoría 2026-10-15).
+            ajenas = sorted((str(d.get("ultima") or ""), c) for c, d in vivas.items() if not _prioritaria(d))
+            if not _prioritaria(rep) or not ajenas:
+                log.warning("la política de la tarjeta ya tiene %s violaciones distintas anotadas: no se anota otra",
+                            MAX_DISTINTAS)
+                return "llena"
+            con.execute(kv.delete().where(kv.c.clave == ajenas[0][1]))
         valor = json.dumps({**rep, "veces": 1, "primera": ahora, "ultima": ahora})
         if clave in filas:
             con.execute(kv.update().where(kv.c.clave == clave).values(valor=valor, actualizado_en=ahora))
         else:
             con.execute(kv.insert().values(clave=clave, valor=valor, actualizado_en=ahora))
-    return True
+    return "nueva"
 
 
 def _leer(valor):
@@ -211,14 +303,21 @@ def _avisar(rep):
 
     def cuerpo():
         nombre = gettext("Cambio de tarjeta") if pagina == "tarjeta" else gettext("Alta del plan")
+        # Auditoría 2026-10-15: los reportes no van firmados. Un origen parecido al de Wompi
+        # (checkout.wompi.co.otro.example) no se permite en la política por un correo: se reproduce antes.
+        cuidado = gettext("Estos reportes no van firmados: cualquiera puede mandar uno. Antes de permitir un origen en "
+                          "la política, reprodúcelo en la consola de la página real y compáralo letra por letra con "
+                          "https://checkout.wompi.co.")
         if bloqueo:
-            return gettext("En la página de la tarjeta (%(pagina)s) el navegador BLOQUEÓ «%(bloqueado)s» por la "
-                           "directiva %(directiva)s. Si es de Creatv o de Wompi, el pago puede estar roto: revísalo "
-                           "en /admin/cobros.", pagina=nombre, bloqueado=bloqueado, directiva=directiva)
-        return gettext("En la página de la tarjeta (%(pagina)s) el navegador reportó «%(bloqueado)s» por la "
-                       "directiva %(directiva)s. La política está en «solo reporte» y no se bloqueó nada; antes de "
-                       "pasarla a «bloquear», revísalo en /admin/cobros.", pagina=nombre, bloqueado=bloqueado,
-                       directiva=directiva)
+            texto = gettext("En la página de la tarjeta (%(pagina)s) el navegador BLOQUEÓ «%(bloqueado)s» por la "
+                            "directiva %(directiva)s. Si es de Creatv o de Wompi, el pago puede estar roto: revísalo "
+                            "en /admin/cobros.", pagina=nombre, bloqueado=bloqueado, directiva=directiva)
+        else:
+            texto = gettext("En la página de la tarjeta (%(pagina)s) el navegador reportó «%(bloqueado)s» por la "
+                            "directiva %(directiva)s. La política está en «solo reporte» y no se bloqueó nada; antes "
+                            "de pasarla a «bloquear», revísalo en /admin/cobros.", pagina=nombre,
+                            bloqueado=bloqueado, directiva=directiva)
+        return f"{texto} {cuidado}"
     _en_segundo_plano(lambda: avisos.admin("csp_tarjeta", asunto, cuerpo))
 
 
@@ -238,12 +337,14 @@ def procesar(cuerpo, ip=None):
         if rep is None or not _cupo(ip):
             continue
         try:
-            nueva = _anotar(rep)
+            resultado = _anotar(rep)
         except Exception:  # noqa: BLE001 — un reporte que no se anota no es un error de quien lo manda
             log.exception("no se pudo anotar un reporte de la política de la tarjeta")
             continue
-        if nueva:
+        if resultado == "nueva":
             _avisar(rep)
+        elif resultado == "llena":
+            _marcar_incompleta()
     return 204
 
 

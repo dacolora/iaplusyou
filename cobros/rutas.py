@@ -346,6 +346,12 @@ def csp_tarjeta():
     cookie y a veces marcadas de otro sitio, así que va exenta de la barrera CSRF y de la sesión por nombre exacto
     (`dashboard.ENDPOINTS_OTRO_ORIGEN`). No se puede firmar: la protegen los topes de `cobros.csp` (16 KB, por IP,
     por hora y violaciones distintas) y que solo anota lo justo. Responde sin cuerpo."""
+    sitio = (request.headers.get("Sec-Fetch-Site") or "").strip().lower()
+    if sitio not in ("", "same-origin", "none") and (request.headers.get("Sec-Fetch-Dest") or "").lower() != "report":
+        # Marcado de otro sitio y no es un reporte del navegador (auditoría 2026-10-15): un `fetch` de otra página haría
+        # que sus visitantes mandaran reportes falsos desde IP reales. `Sec-Fetch-Dest: report` no lo puede poner una
+        # página; los reportes de nuestra página llegan como same-origin (visto en Chromium, 2026-10-15).
+        return "", 403
     if (request.content_length or 0) > csp.MAX_CUERPO:
         return "", 413
     cuerpo = request.stream.read(csp.MAX_CUERPO + 1)
@@ -429,7 +435,7 @@ def _correo_sugerido(sus=None):
 CSP_TARJETA = ("script-src 'self' 'nonce-{nonce}' https://checkout.wompi.co; frame-src https://checkout.wompi.co; "
                "form-action 'self'")
 # Primero «solo reporte»: nada se bloquea y el navegador manda cada violación a `POST /pagos/csp/tarjeta`
-# (`report-uri` y `report-to`; PND-304 a, 2026-10-15), que la anota (`cobros.csp`) y la muestra en /admin/cobros.
+# (`report-uri`; PND-304 a, 2026-10-15), que la anota (`cobros.csp`) y la muestra en /admin/cobros.
 # Se pasa a False (bloquear) cuando, después de al menos un alta y un cambio de tarjeta reales con el widget, esa lista
 # está vacía o solo tiene cosas que no son ni de Creatv ni de Wompi (extensiones del navegador). Si aparece algo de
 # Wompi o nuestro, primero se agrega a CSP_TARJETA. Ver la skill `cobros` y docs/pagos/seguridad-pagos.md.
@@ -890,13 +896,14 @@ def admin_cobros():
     for rw in recargas_wompi:
         rw["nombre"] = proyectos.nombre_visible(rw["cliente"])
     try:
-        csp_tarjeta = csp.resumen()
+        csp_tarjeta, csp_incompleta = csp.resumen(), csp.incompleta()
     except Exception:  # noqa: BLE001 — la sección dice que no se pudo leer; el resto de la página sigue
         log.exception("no se pudieron leer los reportes de la política de la tarjeta")
-        csp_tarjeta = None
+        csp_tarjeta, csp_incompleta = None, None
     return render_template("admin_cobros.html", filas=filas, margen_global=margen, planes=datos_planes["planes"],
                            recargas_wompi=recargas_wompi, avisos_plata=vista.avisos_plata(),
                            csp_tarjeta=csp_tarjeta, csp_solo_reporte=CSP_TARJETA_SOLO_REPORTE,
+                           csp_incompleta=(csp_incompleta or "")[:16].replace("T", " ") or None,
                            sin_correo=not cuentas.smtp_configurado(),
                            eventos=eventos, webhook_callado=vista.webhook_callado(), avisos_bold=_avisos_bold(),
                            avisos_wompi=_avisos_wompi(), trm_rechazada=_trm_rechazada(),

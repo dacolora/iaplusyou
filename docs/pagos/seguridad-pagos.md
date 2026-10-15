@@ -48,7 +48,11 @@ debían) y la prueba real con plata de ese día.
 - **La política de scripts de la página de la tarjeta ahora se anota sola (PND-304 a):** el navegador manda cada cosa que
   esa política bloquearía a `POST /pagos/csp/tarjeta`, que guarda solo la directiva, el origen y la página (nunca la
   dirección completa ni el proyecto), con topes de tamaño y cantidad. Se ve en /admin/cobros, «Política de scripts de la
-  página de la tarjeta», y una nueva llega a «Avisos de plata». Sigue en «solo reporte».
+  página de la tarjeta», y una nueva llega a «Avisos de plata». Sigue en «solo reporte». Como esos reportes no van
+  firmados, la auditoría del mismo día pidió: que solo cuenten los de nuestra página, que un `fetch` de otro sitio no
+  pueda mandarlos, que lo descartado por los topes deje la lista marcada como «puede estar incompleta» (para que nadie
+  la llene de basura y la haga parecer limpia) y que, antes de permitir un origen, se reproduzca en la consola de la
+  página real.
 
 ## Riesgos aceptados o pendientes
 
