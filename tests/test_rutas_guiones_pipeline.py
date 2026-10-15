@@ -531,7 +531,7 @@ def test_pnd094_selector_agrupa_colores_sin_cambiar_valores_ni_seleccion(app):
                  {"id": "otro", "nombre": "Otro"}]
     cfg = {"referencias": [{"tipo": "producto", "activo_id": "original/beige"}], "casting": {}, "duracion_objetivo": 10}
     with dashboard.app.test_request_context():
-        html = render_template_string("{% from '_gpg_macros.html' import form_config %}{{ form_config('id','/x',cfg,lectura,activos,formatos,'OK') }}",\
+        html = render_template_string("{% from '_gpg_macros.html' import form_config %}{{ form_config('id','/x',cfg,lectura,activos,formatos,'OK',{}) }}",\
             cfg=cfg, lectura={"lineas": [], "hooks": []}, activos={"producto": productos, "personaje": [], "entorno": []}, formatos={})
     assert 'label="Productos · Original"' in html
     assert html.count('value="original/pink"') == 7 and html.count('value="original/beige"') == 7
@@ -570,3 +570,27 @@ def test_armar_frena_si_un_hook_alternativo_no_cabe(app, catalogo_vacio):
     assert r.status_code == 409
     error = r.get_json()["error"]
     assert "hook_2 (29,2 s)" in error and "Parte cada una en dos" in error and "Sube el ritmo" not in error
+
+
+def test_idioma_del_dialogo_en_la_config_y_en_una_version_gratis(app, catalogo_vacio):
+    """2026-10-15: el idioma en que se habla se elige en la configuración y se
+    puede cambiar con «Crear versión con este bloque» sin volver a pagar el armado."""
+    from guiones import datos
+    gid = _confirmado(app)
+    form = dict(FORM_VIDEO, duracion_objetivo="")
+    assert app["c"].post(f"{BASE}/guiones/{gid}/videos", json=dict(form, idioma_dialogo="xx")).status_code == 400
+    vid = app["c"].post(f"{BASE}/guiones/{gid}/videos", json=dict(form, idioma_dialogo="de")).get_json()["video_id"]
+    assert datos.video("acme", vid)["config"]["idioma_dialogo"] == "de"
+    gid, vid = _video_armado(app)
+    assert datos.video("acme", vid)["config"]["idioma_dialogo"] == "es"  # sin elegir: el del proyecto
+    html = app["c"].get(f"{BASE}/panel?guion={gid}&video={vid}").get_data(as_text=True)
+    assert 'name="idioma_dialogo"' in html and '<option value="nl" >Nederlands</option>' in html
+    cuerpo = {"tipo": "bloque", "idioma_dialogo": "nl", **{f"bloque_{k}": "" for k in
+                                                          ("conteo_objetos", "disposicion_inicial", "props", "quien_sostiene", "voz")}}
+    r = app["c"].post(f"{BASE}/videos/{vid}/nueva-version", json=cuerpo)
+    assert r.status_code == 201
+    nuevo = datos.video("acme", r.get_json()["video_id"])
+    assert nuevo["estado"] == "armado" and nuevo["config"]["idioma_dialogo"] == "nl"
+    clip = next(p for p in datos.prompts_de_video(nuevo["id"]) if p["tipo"] == "clip")
+    assert "All dialogue is spoken in Dutch" in clip["texto_vigente"]
+    assert app["c"].post(f"{BASE}/videos/{vid}/nueva-version", json=dict(cuerpo, idioma_dialogo="xx")).status_code == 400

@@ -105,3 +105,11 @@ clips y cada «Volver a armar» se cobraba igual (guion «Podcast» de HappyCozy
 palabras/s = 15,8 s). `clips.lineas_que_no_caben` (con `duracion.lineas_largas` y `duracion.ritmo_minimo`, puros) lo
 detecta gratis: el panel muestra el aviso con el ritmo que alcanza y apaga el botón, y `POST /videos/<id>/armar`
 responde 409 antes de `_exigir`. Salida: subir el ritmo o duplicar el guion y partir la línea.
+
+Idioma y ritmo del diálogo (2026-10-15, pedido de Daniel tras el video del guion «Podcast» en neerlandés): el audio salió
+en un idioma incomprensible mezclado con inglés y las tomas lentas. (1) `config.idioma_dialogo` (los once de Audios,
+`config.IDIOMAS_DIALOGO`; por defecto el del proyecto) y `plantillas.bloque_video` agrega en VOICE & AUDIO «All dialogue
+is spoken in <idioma>, word for word…» (una versión vieja sin el campo sigue igual). Se elige en la configuración o, gratis
+y con el mismo plan, en «Crear versión con este bloque» (`clips.version_con_bloque(..., idioma_dialogo)`). (2)
+`ENCABEZADO_DIALOGO` decía «natural unhurried pace»: ahora pide ritmo conversacional ágil a las palabras/s de la versión,
+las mismas con que se calculó cada clip.

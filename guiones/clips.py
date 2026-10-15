@@ -13,7 +13,7 @@ from flask_babel import gettext
 import doctrina
 import idiomas
 from guiones import claude, config, datos, duracion, plantillas, refinador
-from guiones.refinador import Conflicto, NoExiste, _normalizar
+from guiones.refinador import Conflicto, DatoInvalido, NoExiste, _normalizar
 
 log = logging.getLogger(__name__)
 
@@ -422,14 +422,20 @@ def armar(video_id, llamar=None):
             log.exception("guiones: tampoco se pudo marcar el error del video %s", video_id)
 
 
-def version_con_bloque(cliente, video_id, bloque):
-    """Versión nueva con el mismo plan y otro bloque del video: re-escribe y re-valida sin llamar a Claude."""
+def version_con_bloque(cliente, video_id, bloque, idioma_dialogo=None):
+    """Versión nueva con el mismo plan y otro bloque del video (y, si llega, otro
+    idioma del diálogo, que no cambia el plan): re-escribe y re-valida sin llamar a Claude."""
     v = datos.video(cliente, video_id)
     if v is None:
         raise NoExiste(gettext("Esa versión no existe."))
     if not v.get("plan"):
         raise Conflicto(gettext("Esta versión todavía no tiene clips armados."))
     plan = dict(v["plan"], bloque_video={k: (_str(bloque.get(k)) or d) for k, d in DEFECTOS_BLOQUE.items()})
-    nuevo = datos.nueva_version(cliente, video_id, plan=plan)
+    cfg = None
+    if idioma_dialogo:
+        if idioma_dialogo not in config.IDIOMAS_DIALOGO:
+            raise DatoInvalido(gettext("Ese idioma del diálogo no está disponible."))
+        cfg = dict(v["config"], idioma_dialogo=idioma_dialogo)
+    nuevo = datos.nueva_version(cliente, video_id, config=cfg, plan=plan)
     _guardar(datos.video_para_trabajo(nuevo), plan, 0.0)
     return nuevo

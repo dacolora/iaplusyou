@@ -23,13 +23,21 @@ MAX_REFERENCIAS = 7
 ESTILO_DEFECTO = ("Photorealistic live-action commercial, natural soft light, shallow depth of field, "
                   "true-to-life colors.")
 WPS_MIN, WPS_MAX = 1.5, 4.0
+# Idioma en que se HABLA el diálogo (2026-10-15, pedido de Daniel): el prompt va
+# en inglés y el diálogo entre comillas, y sin decir el idioma el modelo mezcló
+# un idioma incomprensible con inglés (guion «Podcast» en neerlandés). Los mismos
+# once de Audios; cada uno en su propia lengua para elegir y en inglés para el prompt.
+IDIOMAS_DIALOGO = {"es": "Español", "en": "English", "pt": "Português", "de": "Deutsch", "fr": "Français",
+                   "it": "Italiano", "fi": "Suomi", "sv": "Svenska", "no": "Norsk", "cs": "Čeština", "nl": "Nederlands"}
+IDIOMA_EN_INGLES = {"es": "Spanish", "en": "English", "pt": "Portuguese", "de": "German", "fr": "French",
+                    "it": "Italian", "fi": "Finnish", "sv": "Swedish", "no": "Norwegian", "cs": "Czech", "nl": "Dutch"}
 
 
 def defecto(cliente):
     guia = (marca.guia_efectiva(cliente) or "").strip()
     return {"modo": "lipsync", "duracion_objetivo": None, "formato": flowplus_modelos.FORMATO_DEFECTO,
             "palabras_por_segundo": 2.4, "aire_por_linea": 0.6, "hook": "original", "referencias": [],
-            "estilo": guia[:2000] or ESTILO_DEFECTO, "voz": ""}
+            "estilo": guia[:2000] or ESTILO_DEFECTO, "voz": "", "idioma_dialogo": idiomas.de_proyecto(cliente)}
 
 
 def _texto(form, clave, maximo=600):
@@ -99,9 +107,12 @@ def desde_formulario(cliente, form, lectura):
     hook = form.get("hook") or "original"
     if hook != "original" and hook not in {h["id"] for h in lectura.get("hooks", [])}:
         raise DatoInvalido(gettext("Ese hook no existe en el guion."))
+    idioma = form.get("idioma_dialogo") or idiomas.de_proyecto(cliente)
+    if idioma not in IDIOMAS_DIALOGO:
+        raise DatoInvalido(gettext("Ese idioma del diálogo no está disponible."))
     estilo = _texto(form, "estilo", 2000)
     if not estilo:
         raise DatoInvalido(gettext("Describe el estilo visual del video."))
     return {"modo": modo, "duracion_objetivo": duracion, "formato": formato, "palabras_por_segundo": wps,
             "aire_por_linea": 0.6, "hook": hook, "referencias": _referencias(cliente, form), "estilo": estilo,
-            "voz": _texto(form, "voz", 300)}
+            "voz": _texto(form, "voz", 300), "idioma_dialogo": idioma}

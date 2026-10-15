@@ -73,6 +73,12 @@
       <label class="campo-label" for="gpg-bv-{{ campo }}">{{ etiqueta }}</label>
       <textarea id="gpg-bv-{{ campo }}" name="bloque_{{ campo }}" rows="2">{{ bv[campo] }}</textarea>
       {% endfor %}
+      {% if video.config.modo != 'voiceover' %}
+      <label class="campo-label" for="gpg-bv-idioma">{{ _('Idioma del diálogo') }}</label>
+      <select id="gpg-bv-idioma" name="idioma_dialogo">
+        {% for k, n in idiomas_dialogo.items() %}<option value="{{ k }}" {% if video.config.idioma_dialogo == k %}selected{% endif %}>{{ n }}</option>{% endfor %}
+      </select>
+      {% endif %}
       <div class="gpg-error flash error" hidden></div>
       <div class="gp-botones"><button type="submit" class="btn-guardar btn-sm">{{ _('Crear versión con este bloque') }}</button></div>
     </form>
@@ -82,6 +88,6 @@
 {% if video.estado in ('armado', 'invalido', 'error') %}
   <details id="gpg-det-version-{{ video.id }}">
     <summary>{{ _('Nueva versión con otra configuración') }}</summary>
-    {{ form_config("gpg-form-version", "/videos/" ~ video.id ~ "/nueva-version", video.config, guion.lectura, activos, formatos, _("Crear versión nueva")) }}
+    {{ form_config("gpg-form-version", "/videos/" ~ video.id ~ "/nueva-version", video.config, guion.lectura, activos, formatos, _("Crear versión nueva"), idiomas_dialogo) }}
   </details>
 {% endif %}

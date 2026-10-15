@@ -13,6 +13,7 @@ from flask_babel import gettext
 import catalogo_productos
 import db
 import gastos
+import idiomas
 import proyectos
 import referencias_flowplus
 import tiendas
@@ -75,7 +76,11 @@ def _contexto(cliente, guion_id=None, video_id=None):
             x["etiqueta"] = datos.etiqueta_version(x.get("config"), x["version_n"])
     if v is not None:
         v["etiqueta"] = datos.etiqueta_version(v["config"], v["version_n"])
+        # Versiones de antes del 2026-10-15 no guardan el idioma del diálogo: los
+        # selectores proponen el del proyecto (solo para pintar; no se guarda).
+        v["config"].setdefault("idioma_dialogo", idiomas.de_proyecto(cliente))
     ctx = {"cliente": cliente, "lotes": datos.lotes(cliente), "guion": g, "video": v,
+           "idiomas_dialogo": config.IDIOMAS_DIALOGO,
            "notion_conectado": notion.conectado(cliente),
            "costos": {"leer": _costo("leer", 750), "recorte": _costo("recorte")}}
     catalogo = {}
@@ -391,7 +396,7 @@ def video_nueva_version(cliente, vid):
         v = _video_o_404(cliente, vid)
         if cuerpo.get("tipo") == "bloque":
             bloque = {k: cuerpo.get(f"bloque_{k}") for k in clips.DEFECTOS_BLOQUE}
-            nuevo = clips.version_con_bloque(cliente, vid, bloque)
+            nuevo = clips.version_con_bloque(cliente, vid, bloque, cuerpo.get("idioma_dialogo"))
         else:
             nuevo = datos.nueva_version(cliente, vid, config=config.desde_formulario(cliente, cuerpo, v["guion"]["lectura"]))
     except ErrorRefinador as e:

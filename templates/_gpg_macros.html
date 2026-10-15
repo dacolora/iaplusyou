@@ -1,5 +1,5 @@
 {# Macros del panel de guiones de Flow Plus. #}
-{% macro form_config(id, ruta, cfg, lectura, activos, formatos, boton) %}
+{% macro form_config(id, ruta, cfg, lectura, activos, formatos, boton, idiomas_dialogo) %}
 <form class="gpg-form" id="{{ id }}" data-gpg-post="{{ ruta }}">
   <fieldset>
     <legend>{{ _('Modo') }}</legend>
@@ -13,6 +13,10 @@
   <label class="campo-label" for="{{ id }}-formato">{{ _('Formato') }}</label>
   <select id="{{ id }}-formato" name="formato">
     {% for k, n in formatos.items() %}<option value="{{ k }}" {% if cfg.formato == k %}selected{% endif %}>{{ n|traducir }}</option>{% endfor %}
+  </select>
+  <label class="campo-label" for="{{ id }}-idioma">{{ _('Idioma del diálogo (en el que hablan los personajes)') }}</label>
+  <select id="{{ id }}-idioma" name="idioma_dialogo">
+    {% for k, n in idiomas_dialogo.items() %}<option value="{{ k }}" {% if cfg.idioma_dialogo == k %}selected{% endif %}>{{ n }}</option>{% endfor %}
   </select>
   <label class="campo-label" for="{{ id }}-wps">{{ _('Ritmo de lectura (palabras por segundo; 2,4 es natural)') }}</label>
   <input type="number" id="{{ id }}-wps" name="palabras_por_segundo" min="1.5" max="4" step="0.1" value="{{ cfg.palabras_por_segundo }}">

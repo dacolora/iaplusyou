@@ -8177,6 +8177,9 @@ msgstr "That script doesn't exist."
 msgid "Ese hook no existe en el guion."
 msgstr "That hook doesn't exist in the script."
 
+msgid "Ese idioma del diálogo no está disponible."
+msgstr "That dialogue language isn't available."
+
 msgid "Ese idioma no está disponible."
 msgstr "That language isn't available."
 
@@ -10255,6 +10258,12 @@ msgstr "Base language"
 
 msgid "Idioma de lo que se dice"
 msgstr "Language being spoken"
+
+msgid "Idioma del diálogo"
+msgstr "Dialogue language"
+
+msgid "Idioma del diálogo (en el que hablan los personajes)"
+msgstr "Dialogue language (the one the characters speak)"
 
 msgid "Idioma del proyecto"
 msgstr "Project language"
