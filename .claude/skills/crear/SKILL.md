@@ -224,20 +224,28 @@ lo reciben (`wavespeed_common.avisar_lanzada` en `wavespeed_client`, `wavespeed_
 swap lo guarda en `swaps.json` (`prediccion = {id, proveedor, referencia_gasto, en}`; solo el modelo principal, no la
 mejora de calidad). Al agotarse la espera, `tareas/swap._al_agotarse` pregunta UNA vez (`wavespeed_common.consultar`):
 terminado → se entrega como siempre; fallido → `ErrorProveedor` sin gasto; en curso o sin poder preguntar →
-`SwapEnEspera`: el costo previsto (calculado ANTES de llamar) se anota con `entregado=False` (no se le cobra al
-cliente) y la tarjeta ofrece «Recuperar el resultado (sin pagar de nuevo)» → `recuperar_swap` → tarea
-`swap_recuperar` (exenta, `max_intentos=1`, mismo job_id que el swap para que la tarjeta muestre su barra): pregunta
-por ese id (`TIEMPO_RECUPERAR` 120 s), y si llegó, lo baja, lo sube, evalúa la marca y anota con
-`gastos.registrar_trasladando`: el costo pasa de la fila del intento agotado a `swap:<id>:t<tarea>` y AHÍ se cobra
-(sin contarlo dos veces). Si WaveSpeed lo dio por fallido, lo anotado vuelve a 0 (no cobró). Un swap de fal (Kling
-O1, comparador) que se agota se anota si fal lo va a cobrar (`EsperaAgotadaFal.cobrado`, PND-313) pero no se
-recupera. La mejora de calidad pagada que no llega (falla al bajar o se agota su espera) se anota aparte en
-`swap:<id>:t<tarea>:mejora`, sin cobrarla (PND-315). Pruebas: `tests/test_swap_recuperar.py`, `tests/test_tareas_swap.py`.
+`SwapEnEspera`: el costo previsto (calculado ANTES de llamar, y guardado en `prediccion.usd`) se anota con
+`entregado=False` (no se le cobra al cliente) y la clave `pred:<id>` en `extra.cache`. Si el worker se reinicia con
+el pedido lanzado, el gancho `interrumpida` anota lo mismo. La tarjeta ofrece «Recuperar el resultado (se cobra ≈ X)»
+(decisión de quien orquesta, 2026-10-15: todo se cobra, con el precio a la vista) → `recuperar_swap`, que pasa por
+el freno de saldo (`exigir` y `encolar(..., costo_estimado=)`; `swap_recuperar` está en TIPOS_QUE_COBRAN,
+`max_intentos=1`, mismo job_id que el swap para que la tarjeta muestre su barra): pregunta por ese id
+(`TIEMPO_RECUPERAR` 120 s) sin lanzar otro pedido (WaveSpeed no cobra de nuevo), y si llegó, lo baja, lo sube, evalúa
+la marca y anota con `gastos.registrar_trasladando` (por la clave `pred:<id>`): el costo pasa de la fila del intento
+agotado a `swap:<id>:t<tarea>` y AHÍ se cobra (sin contarlo dos veces). Solo un pedido «failed» pone lo anotado en 0
+(no cobró); uno cancelado, borrado o vencido de su lado pudo cobrarse y no se toca, ni al agotarse la espera (se
+anota sin «Recuperar») ni al recuperar (como `tareas/flowplus`). Un swap de fal (Kling O1, comparador) que se agota
+se anota si fal lo va a cobrar (`EsperaAgotadaFal.cobrado`, PND-313) pero no se recupera. La mejora de calidad
+pagada que no llega (falla al bajar o se agota su espera) se anota aparte en `swap:<id>:t<tarea>:mejora`, sin
+cobrarla (PND-315). Pruebas: `tests/test_swap_recuperar.py`, `tests/test_tareas_swap.py`.
 
 **Lo que de verdad cobró cada llamada de Cambiar producto (PND-315).** La revisión de marca de cada swap
 (`generador_prompts.evaluar_contra_matriz`) anota lo que cobró Claude en `revision_marca:<swap>:t<tarea>` (tipo
 `revision`; sin cobrarla si la respuesta no se pudo leer) con `generador_prompts.contar_uso()`, que junta el `usage`
-de las llamadas del módulo sin cambiar sus firmas (`usd_de(usos)`). Gemini (`nano_banana_client._llamar`,
-`on_cobro`) avisa lo que cobra cada intento: la imagen, un `ReadTimeout` (Google pudo generarla y cobrarla) y una
-respuesta sin imagen (su `usageMetadata`); el swap suma todo, también cuando falla después. Pendiente propuesto:
-el precio que ve la persona antes de generar no incluye la revisión de marca (≈ US$ 0,01).
+de las llamadas del módulo sin cambiar sus firmas (`usd_de(usos)`), y va en el precio que se ve antes: con reglas
+de marca en el proyecto (`dashboard._revision_marca_swap`), `gastos.estimar("swap", ..., con_revision=True)` suma
+`TARIFAS["revision_marca"]` (0,02, el peor caso con su tope) y `_precios_swap` manda `revision` para que
+`static/swap-precio.js` la sume por archivo. Gemini (`nano_banana_client._llamar`, `on_cobro(usd, entregado)`) avisa
+lo que cobra cada intento: la imagen (entregado), un `ReadTimeout` (Google pudo generarla y cobrarla) y una
+respuesta sin imagen (su `usageMetadata`). Al cliente solo se le cobra el intento que entregó; los otros van en
+`swap:<id>:t<tarea>:intentos` con `entregado=False`, también cuando el swap falla.

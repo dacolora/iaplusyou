@@ -131,3 +131,44 @@ def test_la_version_segura_anota_la_entrega_si_el_traslado_falla(base_temporal, 
     monkeypatch.setattr(gastos, "registrar_trasladando", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("x")))
     gid, movido = gastos.registrar_trasladando_seguro("acme", "final", 0.2, "final:x:t2", [{"referencia": "y"}])
     assert gid and movido == 0.0 and _fila(base_temporal, "final:x:t2").usd == 0.2
+
+
+def test_dos_claves_de_la_misma_fila_se_cobran_una_vez_cada_una(base_temporal):
+    """Revisión de guardian-gasto (2026-10-15): con dos claves de una misma fila, el segundo traslado leía la fila
+    vieja y el borrador se cobraba dos veces. Borrador 0,30 y destino 0,10: lo cobrado suma 0,40 y no más."""
+    import gastos
+    from cobros import libro
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    gastos.registrar("acme", "final", 0.40, "final:cf1__en_US:t1", entregado=False,
+                     extra={"cache": {"borrador:7": 0.30, "destino:7:en_US": 0.10}})
+    traslados = gastos.pendientes_por_clave("acme", ("final:cf1__",), {"borrador:7", "destino:7:en_US"})
+    _, movido = gastos.registrar_trasladando("acme", "final", 0, "final:cf1__en_US:t2", traslados)
+    assert movido == pytest.approx(0.40)
+    assert _fila(base_temporal, "final:cf1__en_US:t1").usd == 0
+    assert _fila(base_temporal, "final:cf1__en_US:t1").extra["cache"] == {}
+    assert gastos.pendientes_por_clave("acme", ("final:cf1__",), {"borrador:7", "destino:7:en_US"}) == []
+    _, otra_vez = gastos.registrar_trasladando("acme", "final", 0, "final:cf1__en_US:t3", traslados)
+    assert otra_vez == 0
+    assert -sum(m.milesimas for m in _movs(base_temporal)) == libro.precio_milesimas(0.40, 1.5)
+    assert _total(base_temporal) == pytest.approx(0.40)
+
+
+def test_si_la_entrega_falla_despues_lo_movido_queda_pendiente(base_temporal):
+    """Revisión de guardian-gasto: la tarea que entrega falla después del traslado (el worker le devuelve el
+    cobro): lo movido no se pierde, queda pendiente en la entrega con sus mismas claves."""
+    import gastos
+    from cobros import libro
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    gastos.registrar("acme", "final", 0.30, "final:cf1__es_CO:t1", entregado=False,
+                     extra={"cache": {"borrador:7": 0.30}})
+    with libro.en_trabajo(2, "job-2"):
+        gastos.registrar_trasladando("acme", "final", 0, "final:cf1__es_CO:t2",
+                                     gastos.pendientes_por_clave("acme", ("final:cf1__",), {"borrador:7"}))
+    libro.revertir_trabajo("acme", "job-2", "falló", desde_tarea=2)
+    pend = gastos.pendientes_por_clave("acme", ("final:cf1__",), {"borrador:7"})
+    assert [(p["referencia"], p["usd"]) for p in pend] == [("final:cf1__es_CO:t2", 0.30)]
+    with libro.en_trabajo(3, "job-3"):
+        gastos.registrar_trasladando("acme", "final", 0, "final:cf1__es_CO:t3", pend)
+    assert _fila(base_temporal, "final:cf1__es_CO:t3").usd == pytest.approx(0.30)
+    assert -sum(m.milesimas for m in _movs(base_temporal)) == libro.precio_milesimas(0.30, 1.5)
+    assert _total(base_temporal) == pytest.approx(0.30)

@@ -146,7 +146,6 @@ def analizar_marca(image_urls, idioma="es"):
         max_tokens=400,
         messages=[{"role": "user", "content": content}],
     )
-    _anotar_uso(resp)
     return "".join(block.text for block in resp.content if block.type == "text").strip()
 
 

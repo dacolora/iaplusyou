@@ -26,6 +26,7 @@ Orquestador de las capas (`guion` -> `cortes` -> `sonido` -> `voz` -> `musica`
 Las capas se invocan siempre como atributo de su módulo (`voz.sintetizar`,
 `render.componer`, ...) para que las pruebas puedan sustituirlas una a una.
 """
+import json
 import os
 import shutil
 
@@ -453,14 +454,14 @@ def preparar_guion(cliente, cf_id, opciones=None, ref_sufijo=""):
         extra={"usd_guion": round(float(costo_guion or 0.0), 4), "usd_whisper": round(costo_whisper, 4)})
     creative_flow.guardar_guion_base(cliente, cf_id, guion_base)
     # PND-314: ya guardado, el guion base queda para reusarse; si esta tarea falla después y se le devuelve el
-    # cobro, la próxima producción que lo reuse lo cobra (`guion_base:<cf_id>`).
+    # cobro, la próxima producción que reuse ESTA versión lo cobra (`clave_guion_base`).
     if costo > 0:
         gastos.registrar_seguro(
             cliente, "guion", round(costo, 4), f"guion:{cf_id}{ref_sufijo}", proveedor="anthropic",
             detalle=(gettext("guion base %(idioma)s + transcripción de la referencia", idioma=idioma_base)
                      if costo_whisper else gettext("guion base %(idioma)s", idioma=idioma_base)),
             extra={"usd_guion": round(float(costo_guion or 0.0), 4), "usd_whisper": round(costo_whisper, 4),
-                   "cache": {f"guion_base:{cf_id}": round(costo, 4)}})
+                   "cache": {clave_guion_base(cf_id, guion_base): round(costo, 4)}})
     # F: el ángulo se guarda AL FINAL — si esto falla, el guion (ya pagado) y
     # su gasto ya quedaron a salvo; una tarea nueva no vuelve a pagar por él.
     # Solo uno con promesa y gancho: si Claude lo omitió en las dos vueltas,
@@ -888,6 +889,14 @@ def _registrar_gasto_final(cliente, final_id, idioma, pais, usd, capas, fallo=Fa
         return
     gastos.registrar_seguro(cliente, "final", usd, referencia, detalle=detalle,
                             proveedor="fal/anthropic", extra=extra, entregado=not fallo)
+
+
+def clave_guion_base(cf_id, guion):
+    """La clave de caché de UNA versión del guion base (PND-314): si el guion se reescribe (a mano o con IA), la
+    versión vieja que nadie reusa no se cobra (revisión de guardian-gasto, 2026-10-15)."""
+    import hashlib  # noqa: PLC0415
+    huella = hashlib.sha256(json.dumps(guion, sort_keys=True, ensure_ascii=False, default=str).encode()).hexdigest()
+    return f"guion_base:{cf_id}:{huella[:12]}"
 
 
 def claves_reusables(cf_id):

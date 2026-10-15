@@ -87,6 +87,14 @@ MODELOS_WAVESPEED = {
     "seedream_v5_pro": "Seedream V5.0 Pro Edit",
 }
 ESTADOS_FALLIDOS = ("failed", "cancelled", "timeout", "deleted")
+# Solo «failed» dice que WaveSpeed no lo terminó (y no lo cobró). Un pedido cancelado, borrado o vencido de su lado
+# pudo terminarse y cobrarse antes: lo anotado no se toca (revisión de guardian-gasto, 2026-10-15).
+FALLO_SIN_COBRO = "failed"
+
+
+def clave_pedido(prediction_id):
+    """La clave de caché de lo que cobró el pedido de un swap (`extra.cache`): «Recuperar» la busca para cobrarla."""
+    return f"pred:{prediction_id}"
 
 
 class SwapEnEspera(RuntimeError):
@@ -99,8 +107,8 @@ class SwapEnEspera(RuntimeError):
                                                                                 costo, recuperable)
         if recuperable:
             texto = gettext("%(modelo)s sigue trabajando en este swap y lo cobra igual. Toca «Recuperar el "
-                            "resultado» en unos minutos: no se paga de nuevo y no se te cobra hasta que llegue.",
-                            modelo=nombre_modelo)
+                            "resultado» en unos minutos: %(modelo)s no lo cobra otra vez y a ti se te cobra solo "
+                            "cuando llegue.", modelo=nombre_modelo)
         else:
             texto = gettext("%(modelo)s siguió trabajando en este swap después de que dejamos de esperar. No se "
                             "puede recuperar desde aquí y no se te cobró.", modelo=nombre_modelo)
@@ -121,9 +129,12 @@ def _al_agotarse(e, proveedor, costo_previsto):
         if estado == "completed" and data.get("outputs"):
             return data["outputs"][0]
         if estado in ESTADOS_FALLIDOS:
-            raise wavespeed_common.ErrorProveedor(e.nombre_modelo, estado, detalle=data.get("error") or None,
-                                                  codigo=data.get("code"), prediction_id=e.prediction_id,
-                                                  datos=data) from e
+            error = wavespeed_common.ErrorProveedor(e.nombre_modelo, estado, detalle=data.get("error") or None,
+                                                    codigo=data.get("code"), prediction_id=e.prediction_id,
+                                                    datos=data)
+            # Cancelado, borrado o vencido de su lado pudo cobrarse: se anota (sin cobrarlo); no hay qué recuperar.
+            error.costo_cobrado = None if estado == FALLO_SIN_COBRO else costo_previsto
+            raise error from e
         raise SwapEnEspera(e.nombre_modelo, e.prediction_id, costo_previsto,
                            recuperable=proveedor in MODELOS_WAVESPEED) from e
     if getattr(e, "cobrado", False):
@@ -247,8 +258,20 @@ def _evaluar_swap_contra_matriz(cliente, swap_id, image_url, ref_sufijo=""):
 @al_interrumpir("swap_generar")
 def interrumpida(tarea, mensaje):
     """El worker murió a mitad del swap: sin esto la tarjeta queda en
-    `generando` para siempre. En error, con motivo, se puede volver a lanzar."""
+    `generando` para siempre. En error, con motivo, se puede volver a lanzar.
+    Si WaveSpeed ya tenía el pedido (`prediccion`), lo termina y lo cobra igual: se anota su costo previsto sin
+    cobrárselo al cliente, con la clave del pedido, para que «Recuperar el resultado» tenga qué cobrar al
+    entregarlo (revisión de guardian-gasto, 2026-10-15)."""
     cliente, swap_id = tarea["payload"]["cliente"], tarea["payload"]["swap_id"]
+    pred = (swaps_mod.cargar(cliente).get(swap_id) or {}).get("prediccion") or {}
+    if pred.get("id") and pred.get("usd") and pred.get("referencia_gasto"):
+        nombre = MODELOS_WAVESPEED.get(pred.get("proveedor"), pred.get("proveedor") or "WaveSpeed")
+        gastos.registrar_seguro(cliente, "swap", float(pred["usd"]), pred["referencia_gasto"], entregado=False,
+                                proveedor=pred.get("proveedor"),
+                                detalle=" · ".join([str(pred.get("proveedor") or ""),
+                                                    gettext("se cortó al reiniciar; el proveedor lo cobra igual")]),
+                                extra={"cache": {clave_pedido(pred["id"]): float(pred["usd"])}})
+        mensaje = str(SwapEnEspera(nombre, pred["id"], {"usd": pred["usd"]}))
     swaps_mod.actualizar(cliente, swap_id, estado="error", error=mensaje)
 
 
@@ -290,9 +313,11 @@ def ejecutar(tarea):
     # deje de ser un número inventado: el usuario ve en qué paso real va.
     avisar_fase = _avisar_fase_de(job_id)
 
+    previsto_actual = {"usd": None}
+
     def _guardar_prediccion(pid):
-        swaps_mod.actualizar(cliente, swap_id, prediccion={"id": pid, "proveedor": proveedor,
-                                                           "referencia_gasto": ref, "en": _ahora()})
+        swaps_mod.actualizar(cliente, swap_id, prediccion={"id": pid, "proveedor": proveedor, "referencia_gasto": ref,
+                                                           "usd": previsto_actual["usd"], "en": _ahora()})
     # Solo el modelo principal guarda su id (la mejora de calidad es otra predicción).
     avisar_modelo = _avisar_fase_de(job_id, guardar_prediccion=_guardar_prediccion)
     # None hasta que el proveedor cobró: si algo falla después, el gasto se
@@ -375,6 +400,7 @@ def ejecutar(tarea):
                     proveedor, video_url, producto["descripcion"], referencia_imagen_url=referencia,
                     on_progreso=avisar_modelo, tipo=tipo_producto, mapa=mapa_producto,
                 )
+            previsto_actual["usd"] = (previsto or {}).get("usd")
             try:
                 resultado_url = llamar()
             except _esperas() as e:
@@ -400,19 +426,24 @@ def ejecutar(tarea):
             trabajos.reportar(job_id, etapa=ETAPA_PREPARAR_FOTO)
             if proveedor == "nano_banana":
                 trabajos.reportar(job_id, etapa=ETAPA_MODELO)
-                # PND-315: Gemini reintenta; se anota lo que cobró cada intento (no uno solo), y si falla
-                # después de cobrar, el `except` de abajo lo anota igual.
-                cobrado_gemini = []
+                # PND-315: Gemini reintenta; se anota lo que cobró cada intento. Al cliente solo se le cobra el
+                # que entregó la imagen; los que pudieron cobrar sin entregar van en su propia fila, sin cobrarlos.
+                entregados, sin_entregar = [], []
                 try:
                     img_bytes = nano_banana_client.swap_producto(
                         foto_local, producto["referencias"], negative_prompt=negative_prompt,
-                        tipo=tipo_producto, mapa=mapa_producto, on_cobro=cobrado_gemini.append,
+                        tipo=tipo_producto, mapa=mapa_producto,
+                        on_cobro=lambda usd, entregado: (entregados if entregado else sin_entregar).append(usd),
                     )
                 finally:
-                    if cobrado_gemini:
-                        costo = {"credits": None, "usd": round(sum(cobrado_gemini), 4)}
-                if not cobrado_gemini:
-                    costo = nano_banana_client.estimate_image()
+                    if sin_entregar:
+                        gastos.registrar_seguro(
+                            cliente, "swap", round(sum(sin_entregar), 4), f"{ref}:intentos", proveedor="nano_banana",
+                            entregado=False,
+                            detalle=gettext("nano_banana · %(n)s intento(s) que Google pudo cobrar sin entregar",
+                                            n=len(sin_entregar)))
+                costo = ({"credits": None, "usd": round(sum(entregados), 4)} if entregados
+                         else nano_banana_client.estimate_image())
                 with open(local_path, "wb") as f:
                     f.write(img_bytes)
             else:  # nano_banana_fal, qwen_edit, nano_banana_pro_ultra
@@ -461,6 +492,7 @@ def ejecutar(tarea):
                         foto_local_path=foto_local, on_progreso=avisar_modelo, tipo=tipo_producto,
                         mapa=mapa_producto,
                     )
+                previsto_actual["usd"] = (previsto or {}).get("usd")
                 try:
                     resultado_url = llamar()
                 except _esperas() as e:
@@ -547,7 +579,7 @@ def ejecutar(tarea):
     except Exception as e:
         mensaje_error = str(e)
         sufijo = " · " + gettext("falló después de generar; el proveedor ya cobró")
-        campos = {}
+        campos, cache = {}, None
         if isinstance(e, wavespeed_common.SinSaldo):
             # Incidente 2026-09-30: en palabras, y el administrador se entera.
             saldo.marcar(e.proveedor, e.detalle, cliente=cliente)
@@ -560,13 +592,20 @@ def ejecutar(tarea):
             sufijo = " · " + gettext("se agotó la espera; el proveedor lo cobra igual")
             if e.recuperable and e.prediction_id:
                 campos["prediccion"] = {"id": e.prediction_id, "proveedor": proveedor, "referencia_gasto": ref,
-                                        "en": _ahora()}
+                                        "usd": (costo or {}).get("usd"), "en": _ahora()}
+                cache = {clave_pedido(e.prediction_id): (costo or {}).get("usd")}
             else:
                 campos["prediccion"] = None
+        elif getattr(e, "costo_cobrado", None):
+            # WaveSpeed lo dio por cancelado, borrado o vencido: pudo cobrarlo; se anota y no hay qué recuperar.
+            costo = e.costo_cobrado
+            sufijo = " · " + gettext("el proveedor lo cerró sin entregarlo; pudo cobrarlo")
+            campos["prediccion"] = None
         swaps_mod.actualizar(cliente, swap_id, estado="error", error=mensaje_error, **campos)
         bitacora.registrar(cliente, swap_id, "swap", "error", str(e))
         if costo is not None:
-            _registrar_gasto(cliente, ref, proveedor, tipo, costo, mejora_ok, sufijo=sufijo, entregado=False)
+            _registrar_gasto(cliente, ref, proveedor, tipo, costo, mejora_ok, sufijo=sufijo, entregado=False,
+                             cache=cache)
         raise
 
 
@@ -575,7 +614,7 @@ def _ahora():
     return datetime.now().isoformat(timespec="seconds")
 
 
-def _registrar_gasto(cliente, referencia, proveedor, tipo, costo, mejora_ok, sufijo="", entregado=True):
+def _registrar_gasto(cliente, referencia, proveedor, tipo, costo, mejora_ok, sufijo="", entregado=True, cache=None):
     """`swap:<swap_id><ref_sufijo>` con el `usd` del estimate del proveedor
     (ya incluye la mejora de calidad si de verdad corrió). Un proveedor sin
     tarifa (usd None) se registra en 0 con "sin tarifa" para que quede
@@ -589,7 +628,8 @@ def _registrar_gasto(cliente, referencia, proveedor, tipo, costo, mejora_ok, suf
     detalle = " · ".join(partes)
     gastos.registrar_seguro(cliente, "swap", usd, referencia, detalle=detalle + sufijo, proveedor=proveedor,
                             entregado=entregado,
-                            extra={"credits": (costo or {}).get("credits"), "sin_tarifa": usd is None})
+                            extra={"credits": (costo or {}).get("credits"), "sin_tarifa": usd is None,
+                                   **({"cache": cache} if cache and usd else {})})
 
 
 # ------------------------------------------------------------- recuperar ---
@@ -604,9 +644,10 @@ def recuperar_interrumpida(tarea, mensaje):
 @registrar("swap_recuperar")
 def recuperar(tarea):
     """«Recuperar el resultado» (PND-318, como «Recuperar el video» de Crear): vuelve a preguntar a WaveSpeed
-    por la predicción que el swap ya pagó y, si terminó, lo entrega. Nunca lanza otra (no paga de nuevo).
-    Lo que se anotó al agotarse la espera pasa a la fila de esta entrega y ahí se le cobra al cliente
-    (`gastos.registrar_trasladando`). Si WaveSpeed no lo terminó, no cobró: lo anotado vuelve a 0."""
+    por la predicción que el swap ya pagó y, si terminó, lo entrega. Nunca lanza otra (WaveSpeed no cobra de
+    nuevo). Lo que se anotó al agotarse la espera (clave `pred:<id>`) pasa a la fila de esta entrega y ahí se le
+    cobra al cliente, con el precio que vio en el botón (`gastos.registrar_trasladando`). Solo si WaveSpeed lo da
+    por fallido («failed») no cobró y lo anotado vuelve a 0; cancelado, borrado o vencido no lo toca."""
     p = tarea["payload"]
     cliente, swap_id = p["cliente"], p["swap_id"]
     job_id = tarea.get("job_id")
@@ -624,8 +665,9 @@ def recuperar(tarea):
         data = wavespeed_common.poll_hasta_listo(pred["id"], nombre, timeout_seconds=TIEMPO_RECUPERAR,
                                                  on_progreso=_avisar_fase_de(job_id))
     except wavespeed_common.ErrorProveedor as e:
-        # No lo terminó: WaveSpeed no cobra un pedido fallido. Lo anotado al agotarse la espera vuelve a 0.
-        if ref_original:
+        # Solo «failed» dice que no lo terminó: WaveSpeed no cobra un pedido fallido y lo anotado vuelve a 0. Uno
+        # cancelado, borrado o vencido pudo cobrarse antes: lo anotado se queda (como `tareas/flowplus`).
+        if ref_original and e.estado == FALLO_SIN_COBRO:
             gastos.registrar_seguro(cliente, "swap", 0, ref_original, proveedor=proveedor, entregado=False,
                                     detalle=gettext("%(modelo)s no terminó el swap; no cobró", modelo=nombre))
         swaps_mod.actualizar(cliente, swap_id, estado="error", error=str(e), prediccion=None)
@@ -667,7 +709,7 @@ def recuperar(tarea):
         bitacora.registrar(cliente, swap_id, "storage", "error", str(e))
     gastos.registrar_trasladando_seguro(
         cliente, "swap", 0, f"swap:{swap_id}{ref_sufijo(tarea)}",
-        [{"referencia": ref_original}] if ref_original else [], proveedor=proveedor,
+        gastos.pendientes_por_clave(cliente, (f"swap:{swap_id}",), {clave_pedido(pred["id"])}), proveedor=proveedor,
         detalle=" · ".join([proveedor, gettext("video") if es_video else gettext("foto"),
                             gettext("recuperado sin pagar de nuevo")]))
     # Lo que costó: la fila de esta entrega si el costo se movió (proyecto que cobra), o la del intento agotado.
@@ -688,4 +730,4 @@ def recuperar(tarea):
                 bitacora.registrar(cliente, swap_id, "evaluacion", "error", str(e))
         else:
             _evaluar_swap_contra_matriz(cliente, swap_id, url, ref_sufijo(tarea))
-    return gettext("Swap recuperado sin pagar de nuevo.")
+    return gettext("Swap recuperado: WaveSpeed no lo cobró otra vez.")

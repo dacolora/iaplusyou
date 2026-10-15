@@ -83,7 +83,11 @@ TIPOS = ("video", "imagen", "swap", "guion", "final", "regla_producto", "caption
 TARIFAS = {
     "guion": 0.13,
     "regla_producto": 0.01,
-    "caption_organico": 0.01,
+    # Texto orgánico («Escribir con IA», la publicación de una ganadora): la doctrina en el system y hasta 4 000
+    # tokens de salida con el pensamiento. Peor caso con ese tope: 4 000 × US$ 10/M + ≈ 6 000 de entrada (la
+    # doctrina escrita en caché, 1,25×) × US$ 2/M ≈ 0,055. Era 0,01 fijo y se anotaba eso (PND-315: ahora se anota
+    # lo real; revisión de guardian-gasto, 2026-10-15: el botón tiene que mostrar un precio que no se quede corto).
+    "caption_organico": 0.06,
     "adaptar_referente": 0.01,
     # «Recrear» fiel (spec 2026-09-30): una llamada de visión que describe la
     # composición y lee los textos de la referencia, una vez por referente.
@@ -139,6 +143,11 @@ TARIFAS = {
     # llamada. Informe: docs/superpowers/evals/2026-10-10-meta-evaluacion.md («Segunda medición»).
     "evaluacion_meta": 0.25,
     "evaluacion_meta_por_anuncio": 0.005,
+    # La revisión de marca de cada swap (`generador_prompts.evaluar_contra_matriz`): una llamada con visión y hasta
+    # 1 500 tokens de salida. Peor caso con ese tope: 1 500 × US$ 10/M + ≈ 3 000 de entrada (imagen y reglas) ×
+    # US$ 2/M ≈ 0,021; se anota lo real (PND-315) y este es el precio que se ve antes (revisión de guardian-gasto,
+    # 2026-10-15: se cobraba sin estar en el precio del swap).
+    "revision_marca": 0.02,
 }
 
 # Evaluación de anuncios de Triple Whale con IA (spec 2026-09-28 §6): una
@@ -327,11 +336,20 @@ def _estimar_imagen(modelo=None, n_referencias=1, **_):
     return r.get("usd"), f"{modelo} · {max(1, int(n_referencias or 1))} referencia(s)"
 
 
-def _estimar_swap(proveedor=None, formato="foto", mejorar_calidad=False, duracion=5, n_referencias=1, fps=None, **_):
+def _estimar_swap(proveedor=None, formato="foto", mejorar_calidad=False, duracion=5, n_referencias=1, fps=None,
+                  con_revision=False, **_):
     """Misma tabla que usa `tareas/swap.py` al cobrar: cada proveedor tiene
     su `estimate_*`; el que no esté aquí no tiene tarifa (None). `formato`
     es "foto" | "video" (el `tipo` del swap). En video, `duracion` y `fps` son
-    los del video que se sube (`providers.swap_video_precio`, PND-312)."""
+    los del video que se sube (`providers.swap_video_precio`, PND-312). `con_revision`: el proyecto tiene reglas
+    de marca y cada swap pasa por la revisión de marca con Claude, que se cobra (`TARIFAS["revision_marca"]`)."""
+    usd, detalle = _estimar_swap_proveedor(proveedor, formato, mejorar_calidad, duracion, n_referencias, fps)
+    if usd is not None and con_revision:
+        usd, detalle = float(usd) + TARIFAS["revision_marca"], f"{detalle} · revisión de marca"
+    return usd, detalle
+
+
+def _estimar_swap_proveedor(proveedor, formato, mejorar_calidad, duracion, n_referencias, fps):
     from providers import (comparador_modelos, kling_o1_client, nano_banana_client, wavespeed_client,
                            wavespeed_imagen, wavespeed_video_edit)
     if not proveedor:
@@ -726,41 +744,58 @@ def registrar_trasladando(cliente, tipo, usd, referencia, traslados, detalle="",
     ahora = db.ahora()
     with db.conectar() as con:
         con.execute(db.kv.update().where(db.kv.c.clave == "gastos:candado").values(valor=db.kv.c.valor))
-        movido, hechos, correcciones = 0.0, [], []
+        movido, hechos = 0.0, []
+        # Una fila de origen puede traer varias claves (el borrador y el destino de la misma final fallida): se
+        # lee UNA vez y se le descuentan todas, para que cada clave salga y se cobre una sola vez.
+        origenes = {}
         for t in traslados or ():
-            origen = con.execute(sa.select(g).where(g.c.cliente == cliente,
-                                                    g.c.referencia == str(t.get("referencia") or ""))).first()
-            if origen is None or origen.referencia == referencia_n or not _pendiente_de_cobro(con, origen.id):
+            ref_origen = str(t.get("referencia") or "")
+            if ref_origen not in origenes:
+                fila = con.execute(sa.select(g).where(g.c.cliente == cliente, g.c.referencia == ref_origen)).first()
+                if fila is None or fila.referencia == referencia_n or not _pendiente_de_cobro(con, fila.id):
+                    origenes[ref_origen] = None
+                    continue
+                origenes[ref_origen] = {"fila": fila, "usd": float(fila.usd or 0.0), "extra": dict(fila.extra or {})}
+            o = origenes[ref_origen]
+            if o is None:
                 continue
-            extra_origen = dict(origen.extra or {})
             clave = t.get("clave")
             if clave:
-                cache = dict(extra_origen.get("cache") or {})
+                cache = dict(o["extra"].get("cache") or {})
                 if clave not in cache:
                     continue
-                parte = min(float(cache.pop(clave) or 0.0), float(origen.usd or 0.0))
-                extra_origen["cache"] = cache
+                parte = min(float(cache.pop(clave) or 0.0), o["usd"])
+                o["extra"]["cache"] = cache
             else:
-                parte = float(origen.usd or 0.0)
+                parte = o["usd"]
             parte = round(max(0.0, parte), 4)
             if parte <= 0:
                 continue
-            extra_origen["trasladado"] = list(extra_origen.get("trasladado") or []) + [
+            o["usd"] = round(o["usd"] - parte, 4)
+            o["extra"]["trasladado"] = list(o["extra"].get("trasladado") or []) + [
                 {"a": referencia_n, "clave": clave, "usd": parte, "en": ahora}]
-            correcciones.append((origen, round(float(origen.usd or 0.0) - parte, 4), extra_origen))
-            hechos.append({"de": origen.referencia, "clave": clave, "usd": parte})
+            o["movido"] = True
+            hechos.append({"de": ref_origen, "clave": clave or f"traslado:{ref_origen}", "usd": parte})
             movido += parte
+        correcciones = [o for o in origenes.values() if o and o.get("movido")]
         movido = round(movido, 4)
         if not movido and not monto:
             return None, 0.0
-        for origen, usd_nuevo, extra_origen in correcciones:
+        for o in correcciones:
             # Una corrección (nuevo=False): un `no_cobrado` sigue igual; un cobro con su reverso baja en par.
-            _escribir(con, cliente, origen.tipo, usd_nuevo, origen.referencia, origen.detalle or "", origen.proveedor,
-                      extra=extra_origen, entregado=False)
+            f = o["fila"]
+            _escribir(con, cliente, f.tipo, o["usd"], f.referencia, f.detalle or "", f.proveedor, extra=o["extra"],
+                      entregado=False)
         extra_destino = dict(extra or {})
         if hechos:
             extra_destino["traslados"] = list(extra_destino.get("traslados") or []) + hechos
             extra_destino["usd_trasladado"] = movido
+            # Si la entrega falla después y se le devuelve el cobro, lo movido queda pendiente aquí con sus mismas
+            # claves: la próxima que lo reuse lo encuentra (revisión de guardian-gasto, 2026-10-15).
+            cache = dict(extra_destino.get("cache") or {})
+            for h in hechos:
+                cache[h["clave"]] = round(float(cache.get(h["clave"]) or 0.0) + h["usd"], 4)
+            extra_destino["cache"] = cache
         gasto_id, resultado, usd_final = _escribir(con, cliente, tipo_n, round(monto + movido, 4), referencia_n,
                                                    detalle_n, proveedor_n, extra=extra_destino, entregado=entregado)
     _despues_del_cobro(cliente, resultado, gasto_id, usd_final, tipo_n, referencia_n)

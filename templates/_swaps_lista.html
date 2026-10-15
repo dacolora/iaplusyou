@@ -161,7 +161,9 @@
     {% if s.estado == "error" and s.prediccion and s.prediccion.id and not s.trabajo %}
     {# PND-318: el worker dejó de esperar pero WaveSpeed sigue con el pedido; se recupera sin pagar de nuevo. #}
     <form method="post" action="{{ url_for('recuperar_swap', cliente=cliente, swap_id=s.id) }}" style="display:inline;">
-      <button type="submit" class="btn-generar btn-sm">{{ _('Recuperar el resultado (sin pagar de nuevo)') }}</button>
+      {# El precio a la vista antes del cobro (decisión de quien orquesta, 2026-10-15): WaveSpeed no cobra otra
+         vez, pero lo que ya cobró se le cobra al proyecto cuando llega. #}
+      <button type="submit" class="btn-generar btn-sm">{% if s.prediccion.usd %}{{ _('Recuperar el resultado (se cobra ≈ %(precio)s)', precio=(s.prediccion.usd|precio)|usd) }}{% else %}{{ _('Recuperar el resultado') }}{% endif %}</button>
     </form>
     {% endif %}
 

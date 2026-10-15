@@ -104,6 +104,7 @@ def test_el_swap_guarda_el_id_y_al_agotarse_anota_lo_cobrado_sin_cobrarlo(swap_v
     assert entry["estado"] == "error" and "Recuperar" in entry["error"]
     assert entry["prediccion"]["id"] == "pred-9"
     assert entry["prediccion"]["referencia_gasto"] == f"swap:{s['id']}:t7"
+    assert entry["prediccion"]["usd"] == pytest.approx(s["costo"])
     g = _gasto(f"swap:{s['id']}:t7")
     assert g["usd"] == pytest.approx(s["costo"]) and s["costo"] > 0
     import db
@@ -195,9 +196,10 @@ def test_recuperar_cuando_todavia_no_termina_deja_el_boton(swap_video, monkeypat
     assert _gasto(f"swap:{s['id']}:t7")["usd"] == pytest.approx(s["costo"])
 
 
-def test_swap_recuperar_esta_clasificado_como_exento():
+def test_swap_recuperar_cobra_con_el_freno_de_saldo():
+    """Decisión de quien orquesta (2026-10-15): lo que se recupera se cobra, con el precio a la vista y el freno."""
     import tareas
-    assert "swap_recuperar" in tareas.TIPOS_EXENTOS_DE_COBRO
+    assert "swap_recuperar" in tareas.TIPOS_QUE_COBRAN and "swap_recuperar" not in tareas.TIPOS_EXENTOS_DE_COBRO
 
 
 # ------------------------------------------------------------------ ruta y tarjeta ---
@@ -214,16 +216,19 @@ def app(swap_video, monkeypatch):
     return {"c": _cliente_admin(dashboard), "encolados": encolados}
 
 
-def test_la_ruta_encola_la_recuperacion_sin_cobrar(swap_video, app, monkeypatch):
+def test_la_ruta_encola_la_recuperacion_con_su_precio(swap_video, app, monkeypatch):
+    from cobros import libro
+    libro.configurar("acme", usuario="admin", cobrar=True, pospago=True)   # pospago: el freno no corta
     s = swap_video
     s["swaps"].actualizar("acme", s["id"], estado="error", error="se agotó",
-                          prediccion={"id": "pred-9", "proveedor": "seedance25_edit", "referencia_gasto": "swap:x:t7"})
+                          prediccion={"id": "pred-9", "proveedor": "seedance25_edit", "referencia_gasto": "swap:x:t7",
+                                      "usd": 2.2})
     r = app["c"].post(f"/cliente/acme/swap/{s['id']}/recuperar")
     assert r.status_code == 302
     (t,) = app["encolados"]
     assert t["tipo"] == "swap_recuperar" and t["job_id"] == f"acme__{s['id']}__swap"
     assert t["payload"] == {"cliente": "acme", "swap_id": s["id"]} and t["max_intentos"] == 1
-    assert not t.get("costo_estimado")
+    assert t["costo_estimado"] == 2.2
     assert s["swaps"].cargar("acme")[s["id"]]["estado"] == "generando"
 
 
@@ -240,9 +245,9 @@ def test_la_ruta_no_encola_sin_prediccion_o_sin_error(swap_video, app):
 def test_la_tarjeta_ofrece_recuperar_solo_con_prediccion(swap_video, app):
     s = swap_video
     s["swaps"].actualizar("acme", s["id"], estado="error", error="se agotó",
-                          prediccion={"id": "pred-9", "proveedor": "seedance25_edit"})
+                          prediccion={"id": "pred-9", "proveedor": "seedance25_edit", "usd": 2.0})
     html = app["c"].get("/cliente/acme/swaps/lista").get_data(as_text=True)
-    assert f"/swap/{s['id']}/recuperar" in html and "Recuperar el resultado" in html
+    assert f"/swap/{s['id']}/recuperar" in html and "Recuperar el resultado (se cobra ≈ US$ 3,00)" in html
     s["swaps"].actualizar("acme", s["id"], prediccion=None)
     html = app["c"].get("/cliente/acme/swaps/lista").get_data(as_text=True)
     assert "/recuperar" not in html
@@ -282,3 +287,68 @@ def test_recuperar_en_un_proyecto_que_no_cobra_deja_el_costo_donde_estaba(swap_v
     sw.recuperar({"id": 9, "job_id": f"acme__{s['id']}__swap", "payload": {"cliente": "acme", "swap_id": s["id"]}})
     assert _gasto(f"swap:{s['id']}:t7")["usd"] == pytest.approx(s["costo"]) and _gasto(f"swap:{s['id']}:t9") is None
     assert s["swaps"].cargar("acme")[s["id"]]["usd"] == pytest.approx(s["costo"])
+
+
+def test_sin_saldo_la_ruta_no_toca_el_swap(swap_video, app, monkeypatch):
+    """El freno de saldo antes de tocar nada: la tarjeta queda en error con su botón."""
+    from cobros import SaldoInsuficiente
+    import dashboard
+    s = swap_video
+    s["swaps"].actualizar("acme", s["id"], estado="error", error="se agotó",
+                          prediccion={"id": "pred-9", "proveedor": "seedance25_edit", "usd": 2.2})
+    monkeypatch.setattr(dashboard.libro_cobros, "exigir",
+                        lambda c, usd, *a, **k: (_ for _ in ()).throw(SaldoInsuficiente(c, 3300, 0)))
+    app["c"].post(f"/cliente/acme/swap/{s['id']}/recuperar")
+    assert app["encolados"] == [] and s["swaps"].cargar("acme")[s["id"]]["estado"] == "error"
+
+
+@pytest.mark.parametrize("estado", ["cancelled", "deleted"])
+def test_recuperar_un_pedido_cancelado_o_borrado_no_pone_el_costo_en_cero(swap_video, monkeypatch, estado):
+    """Revisión de guardian-gasto: solo «failed» dice que WaveSpeed no lo cobró. Cancelado o borrado pudo
+    terminarse y cobrarse: lo anotado se queda (como tareas/flowplus)."""
+    from providers import wavespeed_common as wc
+    sw, s = swap_video["sw"], swap_video
+    _agotado(swap_video, monkeypatch)
+    monkeypatch.setattr(sw.wavespeed_common, "poll_hasta_listo", lambda pid, nombre, **kw: (_ for _ in ()).throw(
+        wc.ErrorProveedor("Seedance 2.5 Video Edit", estado, prediction_id=pid)))
+    with pytest.raises(RuntimeError):
+        sw.recuperar({"id": 9, "job_id": f"acme__{s['id']}__swap", "payload": {"cliente": "acme", "swap_id": s["id"]}})
+    assert _gasto(f"swap:{s['id']}:t7")["usd"] == pytest.approx(s["costo"])
+
+
+def test_al_agotarse_un_pedido_cancelado_se_anota_sin_recuperar(swap_video, monkeypatch):
+    import db
+    sw, s = swap_video["sw"], swap_video
+    _se_agota(sw, monkeypatch, {"status": "cancelled"})
+    with pytest.raises(RuntimeError):
+        sw.ejecutar({"id": 7, "job_id": f"acme__{s['id']}__swap", "payload": s["payload"]})
+    assert _gasto(f"swap:{s['id']}:t7")["usd"] == pytest.approx(s["costo"])
+    assert _movs(db, f"swap:{s['id']}:t7") == ["no_cobrado"]
+    assert not (s["swaps"].cargar("acme")[s["id"]].get("prediccion") or {}).get("id")
+
+
+def test_si_el_worker_se_reinicia_con_el_pedido_lanzado_recuperar_lo_cobra(swap_video, monkeypatch):
+    """Revisión de guardian-gasto: el gancho `interrumpida` anota el costo previsto (sin cobrarlo) cuando ya hay
+    `prediccion`, para que «Recuperar» tenga qué trasladar y cobrar al entregarlo."""
+    import db
+    sw, s = swap_video["sw"], swap_video
+    s["swaps"].actualizar("acme", s["id"], prediccion={"id": "pred-5", "proveedor": "seedance25_edit",
+                                                       "referencia_gasto": f"swap:{s['id']}:t7", "usd": s["costo"]})
+    sw.interrumpida({"id": 7, "payload": {"cliente": "acme", "swap_id": s["id"]}}, "Se interrumpió")
+    entry = s["swaps"].cargar("acme")[s["id"]]
+    assert entry["estado"] == "error" and "Recuperar" in entry["error"]
+    assert _gasto(f"swap:{s['id']}:t7")["usd"] == pytest.approx(s["costo"])
+    assert _movs(db, f"swap:{s['id']}:t7") == ["no_cobrado"]
+    monkeypatch.setattr(sw.wavespeed_common, "poll_hasta_listo",
+                        lambda pid, nombre, **kw: {"status": "completed", "outputs": ["https://prov/v.mp4"]})
+    monkeypatch.setattr(sw.requests, "get", lambda *a, **k: _Resp(b"video"))
+    sw.recuperar({"id": 9, "job_id": f"acme__{s['id']}__swap", "payload": {"cliente": "acme", "swap_id": s["id"]}})
+    assert _gasto(f"swap:{s['id']}:t9")["usd"] == pytest.approx(s["costo"])
+    assert _movs(db, f"swap:{s['id']}:t9") == ["cobro"]
+
+
+def test_sin_prediccion_el_gancho_no_anota_nada(swap_video):
+    sw, s = swap_video["sw"], swap_video
+    sw.interrumpida({"id": 7, "payload": {"cliente": "acme", "swap_id": s["id"]}}, "Se interrumpió")
+    assert _gasto(f"swap:{s['id']}:t7") is None
+    assert s["swaps"].cargar("acme")[s["id"]]["error"] == "Se interrumpió"

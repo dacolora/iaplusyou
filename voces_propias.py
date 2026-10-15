@@ -92,7 +92,7 @@ def listar(cliente):
 
 
 
-def _guardar_ficha(cliente, cobro):
+def _guardar_ficha(cliente, cobro, cobrar=False):
     ficha = (cobro.get("extra") or {}).get("ficha") or {}
     if not (ficha.get("extra") or {}).get("voice_id"):
         raise ValueError(gettext("La voz todavía no tiene una respuesta del proveedor; no se vuelve a cobrar."))
@@ -105,11 +105,14 @@ def _guardar_ficha(cliente, cobro):
     gastos.registrar_seguro(cliente, cobro["tipo"], cobro["usd"], cobro["referencia"],
                             detalle=cobro["detalle"], proveedor=cobro["proveedor"],
                             extra={**cobro["extra"], "ficha_guardada": True})
-    # Auditoría de PND-013: si la tarea que la pagó falló después y se le devolvió el cobro, la voz que ahora sí se
-    # entrega se cobra aquí (sin contar dos veces el costo; un proyecto que no cobra no cambia).
-    gastos.registrar_trasladando_seguro(cliente, cobro["tipo"], 0, f"{cobro['referencia']}:recuperada",
-                                        [{"referencia": cobro["referencia"]}], proveedor=cobro["proveedor"],
-                                        detalle=cobro["detalle"])
+    if cobrar:
+        # Auditoría de PND-013: si la tarea que la pagó falló después y se le devolvió el cobro, la voz que ahora sí
+        # se entrega se cobra aquí, DENTRO de la tarea que la persona lanzó con su precio a la vista (nunca en el GET
+        # de Mis voces; decisión de quien orquesta, 2026-10-15). Sin contar dos veces el costo; un proyecto que no
+        # cobra no cambia.
+        gastos.registrar_trasladando_seguro(cliente, cobro["tipo"], 0, f"{cobro['referencia']}:recuperada",
+                                            [{"referencia": cobro["referencia"]}], proveedor=cobro["proveedor"],
+                                            detalle=cobro["detalle"])
     return _como_voz(mat)
 
 
@@ -328,7 +331,7 @@ def crear(cliente, payload, ref_sufijo="", reportar=None):
     ref = f"voz_propia:{forma}{ref_sufijo}"
     anterior = gastos.por_referencia(cliente, ref)
     if anterior and (anterior.get("extra") or {}).get("ficha"):
-        recuperada = _guardar_ficha(cliente, anterior)
+        recuperada = _guardar_ficha(cliente, anterior, cobrar=True)
         return recuperada, recuperada["estrenada"]
     extra = {"nombre": nombre, "forma": "clonada" if forma == "clonar" else "disenada", "proveedor": "minimax",
              "voice_id": "", "idioma_muestra": idioma, "estrenada": False}

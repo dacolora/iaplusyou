@@ -110,7 +110,7 @@
           usd = precioFoto(tFoto, nRefs);
         }
         if (usd == null) return mostrar(T.sinPrecio, null);
-        total += usd;
+        total += usd + (P.revision || 0);   // la revisión de marca de cada archivo, si el proyecto tiene reglas
       }
       var texto = T.aprox + ' ' + fmtUsd(total);
       if (segundos) texto += ' · ' + T.detalleVideos.replace('{segundos}', fmtNum(segundos));

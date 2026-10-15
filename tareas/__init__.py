@@ -20,6 +20,9 @@ AL_INTERRUMPIR = {}
 TIPOS_QUE_COBRAN = frozenset({
     # Crear y Flow Plus (WaveSpeed)
     "flowplus_video", "flowplus_imagen", "cadena_elementos", "swap_generar",
+    # «Recuperar el resultado» de un swap: WaveSpeed no cobra de nuevo, pero lo que cobró se le cobra al cliente al
+    # entregarlo, con el precio en el botón y el freno de saldo (decisión de quien orquesta, 2026-10-15)
+    "swap_recuperar",
     # Voz y música (fal: MiniMax, ElevenLabs, Whisper)
     "audio_generar", "hablado_voz", "voz_propia_crear", "musica_generar", "editor_voz", "material_transcribir",
     # Final edition (Claude escribe el guion; voz y música por fal)
@@ -40,8 +43,6 @@ TIPOS_QUE_COBRAN = frozenset({
 
 TIPOS_EXENTOS_DE_COBRO = {
     "flowplus_recuperar": "recupera un video ya pagado; no paga de nuevo",
-    "swap_recuperar": "recupera un swap ya pagado por su predicción de WaveSpeed; no paga de nuevo. Lo anotado "
-                      "al agotarse la espera pasa a la entrega y ahí se cobra (gastos.registrar_trasladando)",
     "flowplus_director": "el director lo paga Creatv (_creatv); el video que lanza pasa por su propio freno",
     "cadena_vigilar": "periódica: avanza las cadenas; cada escena la cobra flowplus_video",
     "cadena_unir": "une con ffmpeg escenas ya pagadas",

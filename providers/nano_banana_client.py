@@ -55,11 +55,11 @@ def _mime_type(url):
     return "image/jpeg"
 
 
-def _cobrar(on_cobro, usd):
-    """Avisa lo que Google cobró (PND-315). Nunca tumba la llamada."""
+def _cobrar(on_cobro, usd, entregado=False):
+    """Avisa lo que Google cobró (PND-315): `entregado` solo para la imagen que vuelve. Nunca tumba la llamada."""
     if on_cobro and usd:
         try:
-            on_cobro(usd)
+            on_cobro(usd, entregado)
         except Exception:  # noqa: BLE001
             pass
 
@@ -73,10 +73,10 @@ def _llamar(parts, timeout=150, intentos=3, aspect_ratio=None, on_cobro=None):
     arregla, pero al menos ahora el mensaje de error trae el detalle real de
     Google en vez de solo "400 Bad Request".
 
-    `on_cobro(usd)` (PND-315, decisión 2026-10-13: Gemini reintenta hasta 3 veces y se anotaba una): se llama
-    por cada respuesta que Google cobra o pudo cobrar: la imagen que vuelve, un intento que se cortó leyendo la
-    respuesta (`ReadTimeout`: Google pudo generarla y cobrarla) y una respuesta 200 sin imagen (su `usageMetadata`).
-    Un error de conexión o un 4xx/5xx no se cobran."""
+    `on_cobro(usd, entregado)` (PND-315, decisión 2026-10-13: Gemini reintenta hasta 3 veces y se anotaba una):
+    se llama por cada respuesta que Google cobra o pudo cobrar: la imagen que vuelve (`entregado=True`), un intento
+    que se cortó leyendo la respuesta (`ReadTimeout`: Google pudo generarla y cobrarla) y una respuesta 200 sin
+    imagen (su `usageMetadata`). Un error de conexión o un 4xx/5xx no se cobran."""
     url = f"{BASE_URL}/{MODEL}:generateContent?key={_api_key()}"
     payload = {
         "contents": [{"parts": parts}],
@@ -120,7 +120,7 @@ def _llamar(parts, timeout=150, intentos=3, aspect_ratio=None, on_cobro=None):
     for part in (candidatos[0].get("content", {}).get("parts", []) if candidatos else []):
         inline = part.get("inlineData") or part.get("inline_data")
         if inline and inline.get("data"):
-            _cobrar(on_cobro, COSTO_USD_POR_IMAGEN)
+            _cobrar(on_cobro, COSTO_USD_POR_IMAGEN, entregado=True)
             return base64.b64decode(inline["data"])
     # Sin imagen (bloqueada, solo texto): Google igual cobra lo que leyó y escribió.
     uso = data.get("usageMetadata") or {}

@@ -254,6 +254,7 @@ def voz_cruda(cliente, texto, voz, idioma, velocidad, ref_sufijo, carpeta=None):
     h_voz = hash_voz(texto, voz, idioma, velocidad)
     referencia = f"locucion:{h_voz[:12]}{ref_sufijo}"
     clave_cache = f"voz:{h_voz}"
+    anotado = {}
 
     def _producir():
         try:
@@ -266,12 +267,12 @@ def voz_cruda(cliente, texto, voz, idioma, velocidad, ref_sufijo, carpeta=None):
                                         proveedor="fal")
             raise
         usd = float(r.get("costo_usd") or 0.0)
-        # El proveedor ya cobró: el gasto queda aunque lo que sigue falle. `cache` (PND-314): si esta tarea falla
-        # después (la mezcla de Audios) y se le devuelve el cobro, quien reuse esta voz desde la caché lo cobra.
-        gastos.registrar_seguro(cliente, "locucion", usd, referencia,
-                                detalle=gettext("%(motor)s · %(n)s caracteres · %(voz)s", motor=r["etiqueta"],
-                                                n=len(texto), voz=r["voz_nombre"]),
-                                proveedor=r["proveedor"], extra={"cache": {clave_cache: round(usd, 4)}})
+        # El proveedor ya cobró: el gasto queda aunque lo que sigue falle.
+        anotado.update(usd=usd, proveedor=r["proveedor"],
+                       detalle=gettext("%(motor)s · %(n)s caracteres · %(voz)s", motor=r["etiqueta"], n=len(texto),
+                                       voz=r["voz_nombre"]))
+        gastos.registrar_seguro(cliente, "locucion", usd, referencia, detalle=anotado["detalle"],
+                                proveedor=r["proveedor"])
         destino = carpeta or tempfile.mkdtemp(prefix="voz_cruda_")
         try:
             local = descargar_url(r["url"], os.path.join(destino, f"voz_{h_voz[:16]}.mp3"))
@@ -286,6 +287,13 @@ def voz_cruda(cliente, texto, voz, idioma, velocidad, ref_sufijo, carpeta=None):
             if not carpeta:
                 shutil.rmtree(destino, ignore_errors=True)
     material, creado = materiales.obtener_o_crear(cliente, h_voz, _producir)
+    if creado and anotado:
+        # `cache` (PND-314) solo con la voz ya bajada, subida y guardada: si esta tarea falla después (la mezcla de
+        # Audios) y se le devuelve el cobro, quien reuse esta voz desde la caché la cobra. Antes de eso no hay nada
+        # que reusar.
+        gastos.registrar_seguro(cliente, "locucion", anotado["usd"], referencia, detalle=anotado["detalle"],
+                                proveedor=anotado["proveedor"],
+                                extra={"cache": {clave_cache: round(anotado["usd"], 4)}})
     if not creado:
         # PND-314: una voz pagada por un trabajo que falló (cobro devuelto) se cobra ahora, que sí se usa.
         pendientes = gastos.pendientes_por_clave(cliente, (f"locucion:{h_voz[:12]}",), {clave_cache})

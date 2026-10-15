@@ -477,8 +477,8 @@ msgid "%(modelo)s rechazó el contenido por sensible (el texto o las imágenes):
 msgstr "%(modelo)s rejected the content as sensitive (the text or the images): change the scene and generate again. Nothing was charged. Detail: %(detalle)s"
 
 #, python-format
-msgid "%(modelo)s sigue trabajando en este swap y lo cobra igual. Toca «Recuperar el resultado» en unos minutos: no se paga de nuevo y no se te cobra hasta que llegue."
-msgstr "%(modelo)s is still working on this swap and charges for it anyway. Tap “Recover the result” in a few minutes: you don't pay again and you aren't charged until it arrives."
+msgid "%(modelo)s sigue trabajando en este swap y lo cobra igual. Toca «Recuperar el resultado» en unos minutos: %(modelo)s no lo cobra otra vez y a ti se te cobra solo cuando llegue."
+msgstr "%(modelo)s is still working on this swap and charges for it anyway. Tap “Recover the result” in a few minutes: %(modelo)s won't charge for it again, and you're only charged when it arrives."
 
 #, python-format
 msgid "%(modelo)s siguió trabajando en este swap después de que dejamos de esperar. No se puede recuperar desde aquí y no se te cobró."
@@ -15252,8 +15252,8 @@ msgstr "Sound preferences saved."
 msgid "Preguntando a %(proveedor)s por el video… si ya terminó, aparece aquí sin pagar de nuevo."
 msgstr "Asking %(proveedor)s for the video… if it already finished, it shows up here without paying again."
 
-msgid "Preguntando a WaveSpeed por el resultado… si ya terminó, aparece aquí sin pagar de nuevo."
-msgstr "Asking WaveSpeed for the result… if it's done, it shows up here without paying again."
+msgid "Preguntando a WaveSpeed por el resultado… si ya terminó, aparece aquí y se cobra al llegar."
+msgstr "Asking WaveSpeed for the result… if it's done, it shows up here and is charged when it arrives."
 
 msgid "Prenda de vestir (saco, camiseta, chaqueta)"
 msgstr "Clothing (sweater, t-shirt, jacket)"
@@ -16293,8 +16293,12 @@ msgstr "Restore"
 msgid "Recuperar contraseña"
 msgstr "Recover password"
 
-msgid "Recuperar el resultado (sin pagar de nuevo)"
-msgstr "Recover the result (without paying again)"
+msgid "Recuperar el resultado"
+msgstr "Recover the result"
+
+#, python-format
+msgid "Recuperar el resultado (se cobra ≈ %(precio)s)"
+msgstr "Recover the result (charged ≈ %(precio)s)"
 
 msgid "Recuperar el video (sin pagar de nuevo)"
 msgstr "Recover the video (without paying again)"
@@ -18162,8 +18166,8 @@ msgstr "Active subscriptions"
 msgid "Swap listo."
 msgstr "Swap ready."
 
-msgid "Swap recuperado sin pagar de nuevo."
-msgstr "Swap recovered without paying again."
+msgid "Swap recuperado: WaveSpeed no lo cobró otra vez."
+msgstr "Swap recovered: WaveSpeed didn't charge for it again."
 
 msgid "Swipe file de copycoders"
 msgstr "Copycoders swipe file"
@@ -21711,6 +21715,9 @@ msgstr "the product has no downloadable photos."
 msgid "el producto solo se le puede describir en texto, no mostrárselo"
 msgstr "the product can only be described to it in text, not shown to it"
 
+msgid "el proveedor lo cerró sin entregarlo; pudo cobrarlo"
+msgstr "the provider closed it without delivering it; it may have charged for it"
+
 msgid "el que usa todo proyecto sin margen propio ni plan (a la carta); no cambia lo ya cobrado. Cada plan tiene su margen de miembro, abajo."
 msgstr "the one every project without its own markup or a plan uses (pay-as-you-go); it does not change what was already charged. Each plan has its member markup, below."
 
@@ -22577,6 +22584,10 @@ msgstr "nothing charged"
 msgid "nada por aprobar"
 msgstr "nothing to approve"
 
+#, python-format
+msgid "nano_banana · %(n)s intento(s) que Google pudo cobrar sin entregar"
+msgstr "nano_banana · %(n)s attempt(s) Google may have charged for without delivering"
+
 msgid "natural, australiana"
 msgstr "natural, Australian"
 
@@ -23233,6 +23244,9 @@ msgstr "charged when you generate."
 
 msgid "se cobra en tu cuenta de Meta"
 msgstr "charged on your Meta account"
+
+msgid "se cortó al reiniciar; el proveedor lo cobra igual"
+msgstr "cut off by a restart; the provider charges for it anyway"
 
 msgid "se detuvo antes de terminar"
 msgstr "it stopped before finishing"

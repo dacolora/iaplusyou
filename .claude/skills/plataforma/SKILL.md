@@ -194,6 +194,10 @@ pendiente; cuando por fin se entrega (un swap recuperado) o se reusa desde la ca
 de leer) baja cada fila de origen en lo movido (con `clave`, solo `extra.cache[clave]`; sin clave, toda la fila) y
 anota a dónde fue (`extra.trasladado`), y registra la entrega con su costo + lo movido (`extra.traslados`). La suma de
 la tabla no cambia: el proveedor cobró una vez y se anota una vez. Un origen ya cobrado, de otro proyecto o de un
-proyecto sin «Cobrar» no se toca. `pendientes_por_clave(cliente, prefijos, claves)` lista lo pendiente por clave;
+proyecto sin «Cobrar» no se toca. Varias claves de una misma fila (el borrador y el destino de una final fallida) se
+descuentan sobre UNA lectura de la fila: cada clave se cobra una vez (revisión de guardian-gasto, 2026-10-15: el
+segundo traslado leía la fila vieja y el borrador se cobraba dos veces). La entrega guarda en su `extra.cache` las
+mismas claves que se llevó: si su tarea falla después y se le devuelve el cobro, lo movido queda pendiente ahí y la
+próxima que lo reuse lo encuentra. `pendientes_por_clave(cliente, prefijos, claves)` lista lo pendiente por clave;
 `registrar_trasladando_seguro` nunca lanza (si falla, anota la entrega sola). `registrar` se partió en `_normalizar` +
 `_escribir(con, …)` para poder escribir varias filas en una transacción. Pruebas: `tests/test_gastos_traslado.py`.

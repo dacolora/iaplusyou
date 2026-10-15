@@ -115,9 +115,17 @@ curso o sin respuesta → `fal_client.EsperaAgotadaFal` (un `TimeoutError`) con 
 de `fal_audio` (`tts`, `tts_minimax`, clonar, diseñar, `musica`, `musica_elevenlabs`, `transcribir_palabras`) le pegan
 `costo_usd` a esa excepción (`_llamar_cobrando`) y también a la de una respuesta sin lo pedido (sin `custom_voice_id`,
 sin URL: `_cobrado_sin_resultado`). Quien llama lo anota con `entregado=False`: `voces_propias.crear` (clonar y
-diseñar, `_anotar_cobrado_sin_voz`, sin `ficha` en el extra porque no hay voice_id que recuperar; el estreno),
+diseñar, `_anotar_cobrado_sin_voz`, sin `ficha` en el extra porque no hay voice_id que recuperar; el estreno; la
+muestra de voz propia que no se pudo subir se devuelve: no llegó),
 `tareas/musica.py`, `audios.voz_cruda`; las finales ya lo sumaban (`insumos.voz_bloque` lee `e.costo_usd`). Whisper
 cobra por la duración del audio: con `duracion_ms` se anota eso aunque no haya palabras (PND-186 (1): un audio sin voz
 costaba 0), y su fallo pagado se anota en la referencia del guion (`final_edition._referencia`), en los subtítulos del
 editor (`transcripcion.transcribir`) y en «Cómo mejorarlo» (`tareas/triple_whale`, que también anota un costo 0 como
 constancia). Pruebas: `tests/test_fal_espera_agotada.py`.
+
+**Voz propia recuperada desde su ficha (auditoría de PND-013, decisión de quien orquesta 2026-10-15).** Si la tarea
+que pagó la voz falló después (el worker devolvió el cobro), Mis voces la recupera gratis al abrirse
+(`recuperar_pendientes`, como siempre) y ese GET nunca cobra. Solo cuando la recupera su propia tarea
+(`voces_propias.crear` con la ficha de la misma referencia), con el precio que la persona vio al lanzarla, se cobra con
+`gastos.registrar_trasladando` (`_guardar_ficha(..., cobrar=True)`). Pendiente propuesto: un botón con su precio para
+cobrar la recuperada por el GET.

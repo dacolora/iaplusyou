@@ -135,3 +135,69 @@ def test_la_voz_de_audios_que_quedo_de_un_audio_fallido_se_cobra_al_reusarla(bas
     (ref2,) = [r for r in f if r.endswith(":t2")]
     assert f[ref1]["usd"] == 0 and f[ref2]["usd"] == pytest.approx(0.012)
     assert _cobrado_de(ref2) == libro.precio_milesimas(0.012, 1.5)
+
+
+def test_un_guion_reescrito_no_cobra_la_version_vieja(entorno, monkeypatch):
+    """Revisión de guardian-gasto: la clave del guion base va por versión. Si el guion se reescribió después de la
+    final fallida, la que se entrega no cobra el viejo que nadie reusó."""
+    import copy
+
+    import creative_flow as cf
+    from cobros import libro
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    cf_id = entorno["cf_id"]
+    _render_que_falla(monkeypatch)
+    with pytest.raises(RuntimeError):
+        _producir(1, cf_id, "es", "CO", {})
+    nuevo = copy.deepcopy(cf.guion_base("acme", cf_id))
+    nuevo["bloques"][0]["texto_voz"] = "Otro arranque"
+    cf.guardar_guion_base("acme", cf_id, nuevo)
+    _render_que_anda(monkeypatch)
+    _producir(2, cf_id, "es", "CO", {})
+    f = _filas()
+    assert f[f"guion:{cf_id}:t1"]["usd"] == pytest.approx(0.01)      # el viejo no se movió ni se cobró
+    nueva = f[f"final:{cf_id}__es_CO:t2"]
+    # Guion nuevo, borrador nuevo: solo paga la voz del bloque que cambió y no se lleva nada del intento fallido.
+    assert nueva["usd"] == pytest.approx(0.05) and not (nueva["extra"] or {}).get("traslados")
+    assert f[f"final:{cf_id}__es_CO:t1"]["usd"] == pytest.approx(0.27)
+
+
+def test_una_final_fallida_con_borrador_y_destino_se_cobra_una_sola_vez(entorno, monkeypatch):
+    """Revisión de guardian-gasto: la primera final de un destino que no es el del guion base crea el borrador Y
+    traduce el destino; si falla, su fila trae las dos claves. La que se entrega cobra las dos, una sola vez."""
+    from cobros import libro
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    cf_id = entorno["cf_id"]
+    _render_que_falla(monkeypatch)
+    with pytest.raises(RuntimeError):
+        _producir(1, cf_id, "en", "US", {"precios": {"en_US": 24.99}})
+    fallida = _filas()[f"final:{cf_id}__en_US:t1"]
+    assert fallida["usd"] == pytest.approx(0.54) and len(fallida["extra"]["cache"]) == 2
+    total = _total_gasto()
+    _render_que_anda(monkeypatch)
+    _producir(2, cf_id, "en", "US", {"precios": {"en_US": 24.99}})
+    f = _filas()
+    assert f[f"final:{cf_id}__en_US:t2"]["usd"] == pytest.approx(0.54 + 0.01)
+    assert f[f"final:{cf_id}__en_US:t1"]["usd"] == 0
+    with db.conectar() as con:
+        neto = -con.execute(sa.select(sa.func.sum(db.movimiento_saldo.c.milesimas))).scalar()
+    assert neto == libro.precio_milesimas(0.55, 1.5) and _total_gasto() == total
+
+
+def test_la_voz_que_no_se_pudo_subir_no_queda_marcada_para_cobrarse(base_temporal, monkeypatch):
+    """Revisión de guardian-gasto: la marca de caché de la voz va DESPUÉS de bajarla y subirla; si eso falla, no hay
+    nada que reusar y otra tarea que la vuelva a pagar no carga con el intento fallido."""
+    import audios
+    import gastos
+    from cobros import libro
+    libro.configurar("acme", usuario="admin", cobrar=True)
+    monkeypatch.setattr(audios, "sintetizar", lambda c, voz, texto, idioma, vel: {
+        "url": "https://fal/v.mp3", "costo_usd": 0.012, "proveedor": "fal/elevenlabs", "etiqueta": "x",
+        "voz_nombre": voz})
+    monkeypatch.setattr(audios, "descargar_url", lambda url, destino: (_ for _ in ()).throw(RuntimeError("red")))
+    with libro.en_trabajo(1, "job-a1"), pytest.raises(RuntimeError):
+        audios.voz_cruda("acme", "Hola a todos", "Rachel", "es", "normal", ":t1")
+    libro.revertir_trabajo("acme", "job-a1", "falló", desde_tarea=1)
+    (fila,) = _filas().values()
+    assert not (fila["extra"] or {}).get("cache")
+    assert gastos.pendientes_por_clave("acme", ("locucion:",), {k for k in ["voz:x"]}) == []

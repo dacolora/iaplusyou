@@ -373,7 +373,12 @@ Inventario de cada llamada que le paga a un proveedor, con dónde se anota y có
 propuestos: `docs/superpowers/auditorias/2026-10-15-cobros.md`. Lo que salió de ahí y vale para todo lo nuevo:
 - **Lo pagado y no cobrado se cobra cuando se entrega o se reusa**, moviendo el costo con
   `gastos.registrar_trasladando` (skill `plataforma`): el swap recuperado, lo que deja una final fallida en caché, la voz
-  cruda reusada, la voz propia recuperada desde su ficha. Nunca una fila nueva con el mismo costo: duplicaría el gasto.
+  cruda reusada, la voz propia recuperada por su tarea. Nunca una fila nueva con el mismo costo: duplicaría el gasto.
+  Y siempre con el precio a la vista antes (decisión de quien orquesta, 2026-10-15): «Recuperar el resultado (se
+  cobra ≈ X)» pasa por el freno de saldo (`swap_recuperar` está en TIPOS_QUE_COBRAN); un GET nunca cobra.
+- **El precio visto incluye lo que se cobra de más**: la revisión de marca del swap (`con_revision`,
+  `TARIFAS["revision_marca"]`) y el texto orgánico a su peor caso con el pensamiento (`TARIFAS["caption_organico"]`
+  0,06, era 0,01).
 - **Una espera agotada se pregunta antes de rendirse**: WaveSpeed (`wavespeed_common.consultar`) y fal
   (`fal_client.EsperaAgotadaFal.cobrado`). Lo que el proveedor va a cobrar se anota con `entregado=False`.
 - **Lo real, no una tarifa**: las llamadas de `generador_prompts` se miden con `contar_uso()`; la caché de la doctrina

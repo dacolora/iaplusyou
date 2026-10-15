@@ -1,5 +1,5 @@
 """PND-315 (decisión 2026-10-13, lote 1): cada llamada anota lo que de verdad cobró el proveedor: la revisión de
-marca de cada swap y «Analizar marca» (no anotaban nada), la regla de fidelidad que vuelve vacía y la palabra
+marca de cada swap (no anotaba nada; «Analizar marca» la pasa a cobrarse la rama l1-cobros, PND-299), la regla de fidelidad que vuelve vacía y la palabra
 que no se pudo traducir (tampoco), Gemini con sus reintentos (anotaba uno), `caption_organico` (0,01 fijo) y
 Nicho con Apify (un estimado sin conciliar con `usageTotalUsd`). El upscaler está en test_tareas_swap."""
 import json
@@ -47,11 +47,11 @@ def _movs(gasto_id):
 
 
 def test_contar_uso_junta_lo_de_cada_llamada(monkeypatch):
-    _claude(monkeypatch, "Guía de estilo.", _Uso(3000, 400))
+    _claude(monkeypatch, "Mismo azul.", _Uso(3000, 400))
     with gp.contar_uso() as usos:
-        gp.analizar_marca(["https://x/1.png"])
+        gp.regla_fidelidad("Cojín", "lino", "Hogar")
     assert gp.usd_de(usos) == costo_real(3000, 400) > 0
-    gp.analizar_marca(["https://x/1.png"])             # fuera del bloque no junta nada (ni falla)
+    gp.regla_fidelidad("Cojín", "lino", "Hogar")       # fuera del bloque no junta nada (ni falla)
 
 
 # ------------------------------------------------- revisión de marca del swap ---
@@ -80,23 +80,6 @@ def test_la_revision_de_marca_que_no_se_pudo_leer_se_anota_sin_cobrarla(base_tem
     sw._evaluar_swap_contra_matriz("acme", "swap_1", "https://r2/x.png", ref_sufijo=":t4")
     g = _gastos()["revision_marca:swap_1:t4"]
     assert g["usd"] == costo_real(2500, 300) and _movs(g["id"]) == ["no_cobrado"]
-
-
-# ------------------------------------------------------------- Analizar marca ---
-
-def test_analizar_marca_anota_lo_que_cobro_claude(base_temporal, monkeypatch, tmp_path):
-    import dashboard
-    import marca as marca_mod
-    from tests.test_rutas_experimentos import _cliente_admin
-    _claude(monkeypatch, "Paleta cálida.", _Uso(4000, 200))
-    monkeypatch.setattr(dashboard, "_marca_referencias", lambda c: [{"url": "https://r2/m.png"}])
-    monkeypatch.setattr(marca_mod, "cargar", lambda c: {})
-    monkeypatch.setattr(marca_mod, "guardar", lambda c, d: None)
-    monkeypatch.setattr(dashboard.trabajos, "iniciar", lambda job_id, fn, **kw: fn() or True)
-    _cliente_admin(dashboard).post("/cliente/acme/marca/analizar")
-    (g,) = [g for g in list(_gastos("_creatv").values()) + list(_gastos("acme").values())
-            if "analizar_marca" in g["referencia"]]
-    assert g["usd"] == costo_real(4000, 200) and (g["extra"] or {}).get("cliente", "acme") == "acme"
 
 
 # --------------------------------------------------- regla de fidelidad vacía ---
@@ -179,8 +162,8 @@ def test_gemini_anota_cada_intento_que_pudo_cobrar(monkeypatch):
         return r
     monkeypatch.setattr(nb.requests, "post", post)
     cobrado = []
-    assert nb._llamar([{"text": "x"}], on_cobro=cobrado.append) == b"png"
-    assert sum(cobrado) == pytest.approx(2 * nb.COSTO_USD_POR_IMAGEN)
+    assert nb._llamar([{"text": "x"}], on_cobro=lambda usd, entregado: cobrado.append((usd, entregado))) == b"png"
+    assert cobrado == [(nb.COSTO_USD_POR_IMAGEN, False), (nb.COSTO_USD_POR_IMAGEN, True)]
 
 
 def test_gemini_sin_imagen_cobra_lo_que_leyo(monkeypatch):
@@ -191,24 +174,47 @@ def test_gemini_sin_imagen_cobra_lo_que_leyo(monkeypatch):
         "usageMetadata": {"promptTokenCount": 3000, "candidatesTokenCount": 10}}))
     cobrado = []
     with pytest.raises(RuntimeError):
-        nb._llamar([{"text": "x"}], on_cobro=cobrado.append)
-    assert sum(cobrado) == pytest.approx(nb.costo_tokens(3000, 10)) and sum(cobrado) > 0
+        nb._llamar([{"text": "x"}], on_cobro=lambda usd, entregado: cobrado.append((usd, entregado)))
+    assert cobrado == [(pytest.approx(nb.costo_tokens(3000, 10)), False)] and cobrado[0][0] > 0
 
 
-def test_el_swap_de_gemini_anota_lo_cobrado_aunque_falle(base_temporal, monkeypatch, tmp_path):
+def test_el_swap_de_gemini_cobra_solo_el_intento_que_entrego(base_temporal, monkeypatch, tmp_path):
+    """Revisión de guardian-gasto: los intentos que pudieron cobrar sin entregar van en su propia fila, sin
+    cobrarlos; al cliente solo se le cobra el que entregó la imagen."""
     from tests.test_tareas_swap import _swap_foto_listo
     import tareas.swap as sw
+    from cobros import libro
+    libro.configurar("acme", usuario="admin", cobrar=True)
     payload = _swap_foto_listo(sw, monkeypatch, tmp_path, swap_id="swap_g")
 
     def swap_producto(*a, on_cobro=None, **k):
-        on_cobro(0.039)
-        on_cobro(0.039)
-        raise RuntimeError("Nano Banana no devolvió ninguna imagen")
+        on_cobro(0.039, False)
+        on_cobro(0.039, True)
+        return b"png"
+    monkeypatch.setattr(sw.nano_banana_client, "swap_producto", swap_producto)
+    monkeypatch.setattr(sw.swaps_mod, "actualizar", lambda *a, **k: True)
+    sw.ejecutar({"id": 2, "job_id": "acme__swap_g__swap", "payload": payload})
+    g = _gastos()
+    assert g["swap:swap_g:t2"]["usd"] == pytest.approx(0.039) and _movs(g["swap:swap_g:t2"]["id"]) == ["cobro"]
+    assert g["swap:swap_g:t2:intentos"]["usd"] == pytest.approx(0.039)
+    assert _movs(g["swap:swap_g:t2:intentos"]["id"]) == ["no_cobrado"]
+
+
+def test_el_swap_de_gemini_que_falla_anota_los_intentos_sin_cobrarlos(base_temporal, monkeypatch, tmp_path):
+    from tests.test_tareas_swap import _swap_foto_listo
+    import tareas.swap as sw
+    payload = _swap_foto_listo(sw, monkeypatch, tmp_path, swap_id="swap_h")
+
+    def swap_producto(*a, on_cobro=None, **k):
+        on_cobro(0.039, False)
+        on_cobro(0.039, False)
+        raise RuntimeError("Nano Banana no respondió después de 3 intentos")
     monkeypatch.setattr(sw.nano_banana_client, "swap_producto", swap_producto)
     monkeypatch.setattr(sw.swaps_mod, "actualizar", lambda *a, **k: True)
     with pytest.raises(RuntimeError):
-        sw.ejecutar({"id": 2, "job_id": "acme__swap_g__swap", "payload": payload})
-    assert _gastos()["swap:swap_g:t2"]["usd"] == pytest.approx(0.078)
+        sw.ejecutar({"id": 2, "job_id": "acme__swap_h__swap", "payload": payload})
+    g = _gastos()
+    assert g["swap:swap_h:t2:intentos"]["usd"] == pytest.approx(0.078) and "swap:swap_h:t2" not in g
 
 
 # ---------------------------------------------------------- Nicho con Apify ---

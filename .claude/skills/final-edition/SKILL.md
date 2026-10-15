@@ -121,12 +121,15 @@ borrador (voces y música) y la traducción del destino quedan guardados y la si
 US$ 0: esa parte nunca se cobraba (≈ US$ 0,10–0,40 por final). Ahora `produccion.producir` anota en el gasto de la
 final fallida qué parte de lo pagado quedó guardada (`extra.cache`: `borrador:<edición>` con lo del borrador y la
 variante, `destino:<edición>:<idioma>_<país>` con lo de la traducción) y `preparar_guion`, ya guardado el guion,
-`guion_base:<cf_id>` en el suyo. La final que SÍ se entrega y reusa alguna de esas claves (el guion que ya existía,
+`guion_base:<cf_id>:<huella>` en el suyo. La final que SÍ se entrega y reusa alguna de esas claves (el guion que ya existía,
 un borrador que no creó, un destino que ya estaba) se lleva ese costo con `gastos.pendientes_por_clave` +
 `registrar_gasto_final(..., traslados=)` → `gastos.registrar_trasladando`: la fila vieja baja, la nueva lo suma y lo
-cobra; el detalle dice «incluye lo que dejó un intento fallido». Lo de un destino no se le carga a otro. Lo mismo con
-la voz cruda de Audios y del anuncio hablado (`audios.voz_cruda`, clave `voz:<hash>`): una voz pagada por un
-`audio_generar` que falló en la mezcla se cobra cuando otra tarea la reusa. Fuera: el camino legado
+cobra; el detalle dice «incluye lo que dejó un intento fallido». Lo de un destino no se le carga a otro. La clave del
+guion va por VERSIÓN (`clave_guion_base(cf_id, guion)`, una huella del JSON): si el guion se reescribió, el viejo que
+nadie reusa no se cobra. Lo mismo con
+la voz cruda de Audios y del anuncio hablado (`audios.voz_cruda`, clave `voz:<hash>`, puesta solo después de bajar,
+subir y guardar la voz): una voz pagada por un `audio_generar` que falló en la mezcla se cobra cuando otra tarea la
+reusa. Fuera: el camino legado
 (`FINAL_EDITION_LEGADO=1`) y una voz que quedó en caché sin que se guardara su destino (un Conflicto tras dos
 reintentos). Pruebas: `tests/test_fe_cobro_al_reusar.py`.
 

@@ -630,8 +630,10 @@ def test_preparar_guion_registra_el_gasto(entorno):
     assert g["referencia"] == f"guion:{entorno['cf_id']}" and g["tipo"] == "guion"
     assert g["usd"] == pytest.approx(0.011) and g["proveedor"] == "anthropic"
     # PND-314: ya guardado, queda marcado para cobrarse si se reusa tras una final que falló.
-    assert g["extra"] == {"usd_guion": 0.01, "usd_whisper": 0.001,
-                          "cache": {f"guion_base:{entorno['cf_id']}": 0.011}}
+    import creative_flow
+    clave = final_edition.clave_guion_base(entorno["cf_id"], creative_flow.guion_base("acme", entorno["cf_id"]))
+    assert clave.startswith(f"guion_base:{entorno['cf_id']}:")
+    assert g["extra"] == {"usd_guion": 0.01, "usd_whisper": 0.001, "cache": {clave: 0.011}}
     assert "transcripción" in g["detalle"]
     # volver a preparar (misma llamada directa, sin tarea): misma fila
     final_edition.preparar_guion("acme", entorno["cf_id"], {"precio": 89900})

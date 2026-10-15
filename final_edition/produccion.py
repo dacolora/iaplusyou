@@ -367,7 +367,7 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_suf
             guion_base, costo_base = final_edition.preparar_guion(cliente, cf_id, o, ref_sufijo=ref_sufijo)
             costo += costo_base
         else:
-            reusadas.add(f"guion_base:{cf_id}")
+            reusadas.add(final_edition.clave_guion_base(cf_id, guion_base))
         # Voz y estilo concretos ANTES de la receta (la receta los incluye).
         lista_voces = fal_audio.VOCES.get(guion_base.get("idioma") or "es") or fal_audio.VOCES["es"]
         if not o.get("voz"):
