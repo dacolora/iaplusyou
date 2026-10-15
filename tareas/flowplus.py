@@ -396,7 +396,13 @@ def ejecutar_imagen(tarea):
             f.write(resp.content)
         bitacora.registrar(cliente, cf_id, "generacion", "ok", out_path)
     except Exception as e:
-        if costo is not None:
+        if costo is None and isinstance(e, wavespeed_common.EsperaAgotada):
+            # Auditoría de PND-013: WaveSpeed sigue con la imagen y la cobra igual; se anota, sin cobrarla.
+            costo = flowplus_modelos.estimate_imagen(modelo, n_referencias=len(referencias))
+            _registrar_gasto(cliente, "imagen", costo, ref, modelo,
+                             gettext("%(modelo)s · %(n)s referencia(s) · se agotó la espera; el modelo la cobra igual",
+                                     modelo=modelo, n=len(referencias)), entregado=False)
+        elif costo is not None:
             # El modelo ya cobró aunque la descarga fallara: queda registrado.
             _registrar_gasto(cliente, "imagen", costo, ref, modelo,
                              gettext("%(modelo)s · %(n)s referencia(s) · falló al descargar; el modelo ya cobró",

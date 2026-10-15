@@ -129,3 +129,10 @@ la voz cruda de Audios y del anuncio hablado (`audios.voz_cruda`, clave `voz:<ha
 `audio_generar` que falló en la mezcla se cobra cuando otra tarea la reusa. Fuera: el camino legado
 (`FINAL_EDITION_LEGADO=1`) y una voz que quedó en caché sin que se guardara su destino (un Conflicto tras dos
 reintentos). Pruebas: `tests/test_fe_cobro_al_reusar.py`.
+
+**La negativa de Claude no paga la corrección (PND-241, decisión 2026-10-13, lote 1).** Visto con
+cf_20261007_221411_960598 (colorado_forja, 2026-10-10): una respuesta sin JSON pagaba la vuelta de corrección y la
+final decía «JSON inválido». `guion._generar_con_correccion` (guion base, localización y variante) trata una primera
+respuesta sin ningún `{` (o `stop_reason="refusal"`, en `_llamar`) como negativa: `GuionNegado`, un `GuionInvalido` con
+lo pagado en `costo_usd` y el mensaje en palabras, sin segunda llamada. Un JSON roto (con llaves) sigue yendo a la
+corrección. Pruebas: `tests/test_fe_guion.py`.

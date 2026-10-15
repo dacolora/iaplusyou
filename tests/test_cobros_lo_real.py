@@ -239,3 +239,31 @@ def test_correr_lote_toma_lo_que_cobro_cada_corrida_del_ultimo_sondeo(monkeypatc
                  "/datasets/d1/items": _Resp(200, [{"x": 1}])})
     res = apify.correr_lote(s, "tok", "actor", [{"entrada": {}, "max_items": 5, "max_usd": 1, "etiqueta": "e"}], "etapa")
     assert res["corridas"][0]["usd_real"] == 0.12
+
+
+# ----------------------------------------------- la caché de la doctrina también se cobra ---
+
+@pytest.mark.parametrize("modulo", ["referentes.clasificar", "referentes.recrear", "nicho.avatares"])
+def test_la_cache_de_la_doctrina_cuenta_en_los_tokens_de_entrada(monkeypatch, modulo):
+    """Auditoría de PND-013: clasificar, recrear, sugerir y avatares mandan la doctrina con caché y solo contaban
+    `input_tokens`: escribirla cuesta 1,25× y leerla 0,1× (como `guiones.claude`), y se anotaba de menos."""
+    import importlib
+    mod = importlib.import_module(modulo)
+    uso = types.SimpleNamespace(input_tokens=1000, output_tokens=100, cache_creation_input_tokens=4000,
+                                cache_read_input_tokens=10000)
+    resp = types.SimpleNamespace(content=[types.SimpleNamespace(type="text", text="{}")], usage=uso,
+                                 stop_reason="end_turn")
+
+    class _Cliente:
+        def __init__(self, *a, **k):
+            self.messages = self
+
+        def create(self, **kw):
+            return resp
+    import anthropic
+    monkeypatch.setattr(anthropic, "Anthropic", _Cliente)
+    monkeypatch.setattr(gp, "_api_key", lambda: "sk-test")
+    if hasattr(mod, "_api_key"):
+        monkeypatch.setattr(mod, "_api_key", lambda: "sk-test")
+    _, entrada, salida = mod._llamar("hola", 100) if modulo != "referentes.clasificar" else mod._llamar("hola")
+    assert (entrada, salida) == (1000 + 5000 + 1000, 100)

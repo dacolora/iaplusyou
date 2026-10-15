@@ -366,3 +366,17 @@ páginas siguientes y `cobrado_por_gasto` consulta solo los ids de esa página. 
 `tests/test_pagina_por_partes.py` verifica precios, columnas, páginas sucesivas y aislamiento con SQLite temporal.
 
 Enmiendas PND-062, entrega 1 (2026-10-10, pedido de Daniel tras revisar la entrega): Si cobrado_por_gasto falla para el admin en modo doble, _pagina_gasto conserva las filas y pasa a modo costo sin la columna Cobrado. El contexto respeta ese modo. Las pruebas de la segunda página comparan cada costo/cobro con importes distintos y las del total grande exigen todas las páginas; las mutaciones corren en una copia.
+
+## Auditoría de cobros (PND-013, 2026-10-15)
+
+Inventario de cada llamada que le paga a un proveedor, con dónde se anota y cómo se cobra, más los pendientes
+propuestos: `docs/superpowers/auditorias/2026-10-15-cobros.md`. Lo que salió de ahí y vale para todo lo nuevo:
+- **Lo pagado y no cobrado se cobra cuando se entrega o se reusa**, moviendo el costo con
+  `gastos.registrar_trasladando` (skill `plataforma`): el swap recuperado, lo que deja una final fallida en caché, la voz
+  cruda reusada, la voz propia recuperada desde su ficha. Nunca una fila nueva con el mismo costo: duplicaría el gasto.
+- **Una espera agotada se pregunta antes de rendirse**: WaveSpeed (`wavespeed_common.consultar`) y fal
+  (`fal_client.EsperaAgotadaFal.cobrado`). Lo que el proveedor va a cobrar se anota con `entregado=False`.
+- **Lo real, no una tarifa**: las llamadas de `generador_prompts` se miden con `contar_uso()`; la caché de la doctrina
+  cuenta en la entrada (`guiones.claude.tokens_entrada_equivalentes`); Apify se concilia con `usageTotalUsd`.
+- **Para cuadrar con las facturas**: `venv/bin/python3 deploy/conciliar_gastos.py [--desde AAAA-MM] [--hasta AAAA-MM]
+  [--proyecto X] [--csv]` (solo lee; suma por empresa y mes; parte las finales en Anthropic y fal).

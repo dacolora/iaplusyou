@@ -71,7 +71,8 @@ def _llamar(content, max_tokens=MAX_TOKENS, system=None):
     extra = {"system": system} if system else {}
     resp = client.messages.create(model=MODEL, max_tokens=max_tokens,
                                   messages=[{"role": "user", "content": content}], **extra)
-    entrada, salida = resp.usage.input_tokens, resp.usage.output_tokens
+    from guiones.claude import tokens_entrada_equivalentes  # noqa: PLC0415 — la caché de la doctrina también se cobra
+    entrada, salida = tokens_entrada_equivalentes(resp.usage), resp.usage.output_tokens
     motivo = {"refusal": gettext("Claude rechazó la solicitud."),
               "max_tokens": gettext("La respuesta de Claude se cortó por largo (max_tokens).")}.get(getattr(resp, "stop_reason", None))
     if motivo:

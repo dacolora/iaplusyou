@@ -1112,3 +1112,25 @@ def test_pnd125_recuperar_cache_no_reduce_el_cobro_original(base_temporal, monke
     assert fila['usd'] == pytest.approx(.82)
     assert fila['extra']['usd_musica'] == .02
     assert cf.cargar('acme')[cid]['capas']['musica']['url'] == 'https://r2/m.mp3'
+
+
+def test_imagen_cuya_espera_se_agota_anota_lo_que_cobra_wavespeed(base_temporal, monkeypatch, tmp_path):
+    """Auditoría de PND-013: WaveSpeed sigue con la imagen después de que el worker dejó de esperar y la cobra
+    igual; se anotaba nada. Ahora se anota el estimado, sin cobrárselo al cliente."""
+    import creative_flow as cf
+    import gastos
+    import tareas.flowplus as fp
+    from providers import wavespeed_common as wc
+    monkeypatch.setattr(fp, "BASE_DIR", str(tmp_path))
+    cid = cf.crear("acme", [], [], [], "posa", 5, "", "A", referencias_urls=["https://x/1.png"])
+    cf.actualizar("acme", cid, estado="video_generando", tipo="imagen", modelo="seedream_v5_pro", prompt_relleno="P")
+    monkeypatch.setattr(fp.bitacora, "registrar", lambda *a, **k: None)
+    monkeypatch.setattr(fp.flowplus_modelos, "estimate_imagen", lambda m, n_referencias=1: {"credits": None, "usd": 0.09})
+
+    def _agotada(*a, **k):
+        raise wc.EsperaAgotada("Seedream V5.0 Pro Edit", "pred-i", 900)
+    monkeypatch.setattr(fp.flowplus_modelos, "generar_imagen", _agotada)
+    with pytest.raises(TimeoutError):
+        fp.ejecutar_imagen({"id": 23, "payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j"})
+    (g,) = gastos.historial("acme")
+    assert g["referencia"] == f"imagen:{cid}:t23" and g["usd"] == 0.09 and "se agotó la espera" in g["detalle"]

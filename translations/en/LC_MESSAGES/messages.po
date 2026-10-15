@@ -509,6 +509,10 @@ msgid "%(modelo)s · %(n)s referencia(s) · falló al descargar; el modelo ya co
 msgstr "%(modelo)s · %(n)s reference(s) · download failed; the model already charged"
 
 #, python-format
+msgid "%(modelo)s · %(n)s referencia(s) · se agotó la espera; el modelo la cobra igual"
+msgstr "%(modelo)s · %(n)s reference(s) · the wait ran out; the model charges for it anyway"
+
+#, python-format
 msgid "%(modelos)s está en pausa"
 msgstr "%(modelos)s is paused"
 

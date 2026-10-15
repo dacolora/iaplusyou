@@ -105,6 +105,11 @@ def _guardar_ficha(cliente, cobro):
     gastos.registrar_seguro(cliente, cobro["tipo"], cobro["usd"], cobro["referencia"],
                             detalle=cobro["detalle"], proveedor=cobro["proveedor"],
                             extra={**cobro["extra"], "ficha_guardada": True})
+    # Auditoría de PND-013: si la tarea que la pagó falló después y se le devolvió el cobro, la voz que ahora sí se
+    # entrega se cobra aquí (sin contar dos veces el costo; un proyecto que no cobra no cambia).
+    gastos.registrar_trasladando_seguro(cliente, cobro["tipo"], 0, f"{cobro['referencia']}:recuperada",
+                                        [{"referencia": cobro["referencia"]}], proveedor=cobro["proveedor"],
+                                        detalle=cobro["detalle"])
     return _como_voz(mat)
 
 
@@ -448,10 +453,16 @@ def muestra(cliente, valor, idioma):
         # el idioma del proyecto (spec 2026-09-26 §B8).
         with idiomas.en_idioma(idiomas.de_tarea({"cliente": cliente})):
             detalle = gettext("muestra de voz propia · %(nombre)s · %(idioma)s", nombre=vp["nombre"], idioma=idioma)
-        gastos.registrar_seguro(cliente, "locucion", usd,
-                                f"muestra_propia:{vp['id']}:{idioma}:{int(time.time() * 1000)}",
-                                detalle=detalle, proveedor=PROVEEDOR)
-        url, bytes_, dur = _subir_mp3(cliente, t["url"], f"clientes/{cliente}/materiales/muestra_propia_{h[:16]}.mp3")
+        referencia = f"muestra_propia:{vp['id']}:{idioma}:{int(time.time() * 1000)}"
+        gastos.registrar_seguro(cliente, "locucion", usd, referencia, detalle=detalle, proveedor=PROVEEDOR)
+        try:
+            url, bytes_, dur = _subir_mp3(cliente, t["url"], f"clientes/{cliente}/materiales/muestra_propia_{h[:16]}.mp3")
+        except Exception:
+            # Auditoría de PND-013: fal cobró pero la muestra no llegó (y el próximo clic la vuelve a pagar): el
+            # costo queda, al cliente no se le cobra.
+            gastos.registrar_seguro(cliente, "locucion", usd, referencia, detalle=detalle, proveedor=PROVEEDOR,
+                                    entregado=False)
+            raise
         return {"tipo": "audio", "origen": audios.ORIGEN_VOZ, "url": url, "bytes": bytes_, "duracion_ms": dur,
                 "costo_usd": usd, "extra": {"texto": frase, "voz": vp["valor"], "idioma": idioma, "muestra": True,
                                             "voz_propia_id": vp["id"]}}
