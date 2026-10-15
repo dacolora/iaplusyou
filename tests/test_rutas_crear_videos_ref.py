@@ -26,12 +26,20 @@ def app(base_temporal, monkeypatch, tmp_path):
     monkeypatch.setattr(dashboard.trabajos, "en_curso", lambda job_id: False)
     lanzadas = []
     monkeypatch.setattr(dashboard, "_lanzar_video_cf", lambda c, cf_id, entry: lanzadas.append(cf_id) or True)
+    # Sin archivo en disco, Crear mide el video bajándolo de R2 (PND-319, R7): aquí R2 guarda lo que mide cada uno.
+    _MEDIDAS.clear()
+    monkeypatch.setattr(dashboard, "_duracion_video_url", lambda url: _MEDIDAS.get(url))
     return {"dashboard": dashboard, "c": _cliente_admin(dashboard), "lanzadas": lanzadas}
+
+
+_MEDIDAS = {}
 
 
 def _video_en_bandeja(s=14.9):
     import referencias_flowplus
-    return referencias_flowplus.agregar("acme", "video", "https://r2/v.mp4", frame_url="https://r2/v.jpg", duracion_s=s)
+    url = f"https://r2/v{len(_MEDIDAS) + 1}.mp4"
+    _MEDIDAS[url] = s
+    return referencias_flowplus.agregar("acme", "video", url, frame_url="https://r2/v.jpg", duracion_s=s)
 
 
 def _crear(app, ref_ids, **extra):
@@ -105,13 +113,15 @@ def test_una_duracion_que_no_se_puede_medir_no_rompe_la_subida(app, monkeypatch)
     assert item["tipo"] == "video" and item.get("duracion_s") is None
 
 
-def test_reusar_conserva_la_duracion_del_video(app):
+def test_reusar_vuelve_a_medir_la_duracion_del_video(app):
+    """R7 (PND-319): el video reusado no está en disco; «Editar y crear otra» lo mide bajándolo de R2."""
     import creative_flow as cf
     import referencias_flowplus
+    _MEDIDAS["https://r2/v.mp4"] = 9.5
     cid = cf.crear("acme", [], [], [], "camina", 10, "", "A", referencias_urls=["https://r2/v.jpg"])
     cf.actualizar("acme", cid, estado="video_listo", tipo="video", modelo="wan3", video_url="https://r2/out.mp4",
                   referencias=[{"tipo": "video", "url": "https://r2/v.mp4", "frame_url": "https://r2/v.jpg",
-                                "etiqueta": "@Video 1", "duracion_s": 9.5}])
+                                "etiqueta": "@Video 1", "duracion_s": 2.0}])
     app["c"].post(f"/cliente/acme/flowplus/reusar/{cid}")
     (item,) = referencias_flowplus.listar("acme")
     assert item["duracion_s"] == 9.5

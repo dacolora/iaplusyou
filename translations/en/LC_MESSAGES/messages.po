@@ -481,6 +481,10 @@ msgid "%(modelo)s · %(n)s s · posible cobro: WaveSpeed no respondió al lanzar
 msgstr "%(modelo)s · %(n)s s · possible charge: WaveSpeed didn't respond at launch and it couldn't be confirmed"
 
 #, python-format
+msgid "%(modelo)s · posible cobro: WaveSpeed no respondió al lanzar y no se pudo confirmar"
+msgstr "%(modelo)s · possible charge: WaveSpeed didn't respond at launch and it couldn't be confirmed"
+
+#, python-format
 msgid "%(modelos)s está en pausa"
 msgstr "%(modelos)s is paused"
 
@@ -8585,6 +8589,9 @@ msgstr "United States"
 msgid "Estallido"
 msgstr "Burst"
 
+msgid "Estamos buscando en WaveSpeed un pedido de esta pieza que pudo cobrarse: espera a que termine la búsqueda antes de descartarla."
+msgstr "We're looking in WaveSpeed for a request from this piece that may have been charged: wait for the search to finish before discarding it."
+
 msgid "Estas reglas valen para todos los experimentos del proyecto; cada experimento puede cambiar una en su propio panel. «Sin umbral» apaga esa comparación."
 msgstr "These rules apply to every experiment in the project; each experiment can change one in its own panel. “No threshold” turns that comparison off."
 
@@ -11116,6 +11123,14 @@ msgstr "The idea already has a generated piece; it wasn't rewritten."
 msgid "La imagen %(nombre)s pesa más de %(mb)s MB."
 msgstr "The image %(nombre)s is larger than %(mb)s MB."
 
+#, python-format
+msgid "La imagen anterior pudo cobrarse aunque WaveSpeed no respondió. Generarla otra vez cuesta %(precio)s más. ¿Seguir?"
+msgstr "The previous image may have been charged even though WaveSpeed didn't respond. Generating it again costs %(precio)s more. Continue?"
+
+#, python-format
+msgid "La imagen anterior pudo cobrarse aunque WaveSpeed no respondió. Generarla otra vez cuesta %(precio)s más: confírmalo en «Reintentar»."
+msgstr "The previous image may have been charged even though WaveSpeed didn't respond. Generating it again costs %(precio)s more: confirm it in “Retry”."
+
 msgid "La imagen es chica: quedó lo más grande posible, pero no llega a llenar toda la pantalla."
 msgstr "The image is small: it's as large as possible, but it doesn't fill the whole screen."
 
@@ -11194,8 +11209,8 @@ msgstr "The piece has no video."
 msgid "La pieza se descartó antes de generar; no se cobró nada."
 msgstr "The piece was discarded before generating; nothing was charged."
 
-msgid "La pieza se descartó antes de recuperar; no se cobró nada."
-msgstr "The piece was discarded before recovering; nothing was charged."
+msgid "La pieza se descartó antes de recuperar; lo que pudo cobrarse quedó anotado en Gasto."
+msgstr "The piece was discarded before recovering; whatever may have been charged was recorded in Spend."
 
 msgid "La pieza ya no existe."
 msgstr "The piece no longer exists."
@@ -20316,6 +20331,9 @@ msgstr "Wan-2.2 Animate Replace"
 
 msgid "WaveSpeed (videos e imágenes de Crear)"
 msgstr "WaveSpeed (videos and images in Create)"
+
+msgid "WaveSpeed no creó el pedido: no se cobró"
+msgstr "WaveSpeed didn't create the request: nothing was charged"
 
 msgid "WaveSpeed no respondió al lanzar el video: el pedido pudo crearse y cobrarse. Lo estamos buscando para traerlo sin pagar de nuevo."
 msgstr "WaveSpeed didn't respond when the video was launched: the request may have been created and charged. We're looking for it to bring it in without paying again."

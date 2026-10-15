@@ -11,8 +11,12 @@ VIDEO = {"tipo": "video", "url": "https://x/v.mp4", "frame_url": "https://x/v.pn
 
 
 def _bandeja(monkeypatch, refs):
+    import dashboard
     import referencias_flowplus
     monkeypatch.setattr(referencias_flowplus, "listar", lambda c: list(refs))
+    # Sin archivo en disco, Crear mide el video bajándolo de R2 (PND-319, R7): aquí R2 tiene lo que dice la bandeja.
+    monkeypatch.setattr(dashboard, "_duracion_video_url",
+                        lambda url: next((r.get("duracion_s") for r in refs if r["url"] == url), None))
 
 
 def _unica():

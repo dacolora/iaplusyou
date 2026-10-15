@@ -6,6 +6,7 @@ clon_limpio (el video/imagen generado). Los campos legado sin columna propia
 viven en `extra` de cada tabla. El JSON creative_flow_pendientes.json ya no se
 escribe: queda como respaldo de solo lectura (ver migrar_json_a_db.py).
 """
+import json
 import re
 from datetime import datetime
 
@@ -231,17 +232,31 @@ def reclamar_prediccion(cliente, cf_id, prediccion, lanzamiento):
     return True
 
 
+_PREFIJO_LANZAMIENTO = "crear:lanzamiento:"
+
+
 def lanzamientos_inciertos():
     """[(cliente, cf_id, lanzamiento_incierto)] de todas las sesiones de todos
-    los proyectos que alguna vez quedaron con un lanzamiento incierto (PND-214):
-    dos que se cruzan en la hora con el mismo modelo no se pueden distinguir en
-    el historial del proveedor."""
+    los proyectos que alguna vez quedaron con un lanzamiento incierto (PND-214),
+    también las ya descartadas (`kv` crear:lanzamiento:<cliente>:<cf_id>, que
+    deja `eliminar`): dos que se cruzan en la hora no se pueden distinguir en el
+    historial del proveedor."""
     texto = sa.cast(db.concepto.c.extra, sa.Text)
     with db.conectar() as con:
         filas = con.execute(sa.select(db.concepto.c.cliente, db.concepto.c.legado_id, db.concepto.c.extra)
                             .where(texto.like('%"lanzamiento_incierto"%'))).fetchall()
-    return [(c, cf, (e or {}).get("lanzamiento_incierto")) for c, cf, e in filas
-            if isinstance((e or {}).get("lanzamiento_incierto"), dict)]
+        guardados = con.execute(sa.select(db.kv.c.clave, db.kv.c.valor)
+                                .where(db.kv.c.clave.like(_PREFIJO_LANZAMIENTO + "%"))).fetchall()
+    salida = [(c, cf, (e or {}).get("lanzamiento_incierto")) for c, cf, e in filas
+              if isinstance((e or {}).get("lanzamiento_incierto"), dict)]
+    for clave, valor in guardados:
+        try:
+            datos = json.loads(valor or "{}")
+        except ValueError:
+            continue
+        if isinstance(datos.get("lanzamiento_incierto"), dict):
+            salida.append((datos.get("cliente"), datos.get("cf_id"), datos["lanzamiento_incierto"]))
+    return salida
 
 
 def guardar_guion_base(cliente, cf_id, guion):
@@ -281,9 +296,10 @@ def guiones_base(cliente):
 
 def eliminar(cliente, cf_id):
     """Borra la sesión. El id de su predicción queda anotado en `kv`
-    (crear:prediccion:<id>, único escritor este módulo): sin él, un
-    lanzamiento incierto de otra pieza podía quedarse con ese video (PND-214,
-    revisión del guardián de gasto)."""
+    (crear:prediccion:<id>) y su lanzamiento incierto, si tuvo uno, también
+    (crear:lanzamiento:<cliente>:<cf_id>); único escritor de esas claves este
+    módulo. Sin ellos, un lanzamiento incierto de otra pieza podía quedarse con
+    ese video (PND-214, revisión del guardián de gasto)."""
     from sqlalchemy.dialects.sqlite import insert  # noqa: PLC0415
     with db.conectar() as con:
         f = _ids(con, cliente, cf_id)
@@ -294,6 +310,12 @@ def eliminar(cliente, cf_id):
             con.execute(insert(db.kv).values(clave=_clave_usada(pred_id), valor=f"{cliente}:{cf_id}",
                                              actualizado_en=db.ahora())
                         .on_conflict_do_nothing(index_elements=[db.kv.c.clave]))
+        lanzamiento = (f[2] or {}).get("lanzamiento_incierto")
+        if isinstance(lanzamiento, dict):
+            con.execute(insert(db.kv).values(
+                clave=f"{_PREFIJO_LANZAMIENTO}{cliente}:{cf_id}"[:120], actualizado_en=db.ahora(),
+                valor=json.dumps({"cliente": cliente, "cf_id": cf_id, "lanzamiento_incierto": lanzamiento}))
+                .on_conflict_do_nothing(index_elements=[db.kv.c.clave]))
         # Las piezas finales cuelgan de la clon (FK padre_pieza_id): van primero.
         con.execute(db.pieza.delete().where(db.pieza.c.padre_pieza_id == pid, db.pieza.c.tipo == "final"))
         con.execute(db.pieza.delete().where(db.pieza.c.id == pid))

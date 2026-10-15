@@ -110,7 +110,8 @@ from cobros import vista as vista_cobros
 from conectores import ErrorConector
 from conectores import csv_excel as conector_csv
 from conectores import meli as conector_meli
-from tareas.flowplus import ETAPAS_CREATIVE_FLOW, lanzamiento_pendiente
+from tareas.flowplus import ETAPAS_CREATIVE_FLOW, anotar_posible_cobro_al_descartar, lanzamiento_pendiente, \
+    medir_video_url
 from tareas import final_edition as tareas_fe
 from tareas import director as tareas_director
 from tareas import experimentos as tareas_exp
@@ -7149,6 +7150,18 @@ def fe_detalle_final(cliente, cf_id, final_id):
 
 @app.route("/cliente/<cliente>/creative_flow/<cf_id>/descartar", methods=["POST"])
 def cf_descartar(cliente, cf_id):
+    entry = creative_flow.cargar(cliente).get(cf_id)
+    if entry and ((entry.get("lanzamiento_incierto") or {}).get("estado") == "buscando"
+                  and not (entry.get("prediccion") or {}).get("id")):
+        # R4 (revisión del guardián de gasto): mientras se busca un pedido que pudo
+        # cobrarse, la pieza no se descarta.
+        flash(gettext("Estamos buscando en WaveSpeed un pedido de esta pieza que pudo cobrarse: espera a que termine "
+                      "la búsqueda antes de descartarla."), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+    if entry:
+        # Lo que pudo cobrarse sin llegar (dudoso, imagen incierta, predicción sin traer)
+        # queda anotado; `eliminar` conserva la predicción y el lanzamiento en `kv`.
+        anotar_posible_cobro_al_descartar(cliente, cf_id, entry)
     creative_flow.eliminar(cliente, cf_id)
     flash(gettext("Sesión de CreativeFlowPlus descartada."), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
@@ -7534,6 +7547,21 @@ def _duracion_video(ruta):
     finally:
         _MEDIR_VIDEO_TURNOS.release()
     return round(duracion, 2) if duracion else None
+
+
+def _duracion_video_url(url):
+    """Como `_duracion_video`, para una referencia que no está en disco (una
+    reusada con «Editar y crear otra», R7): se baja de R2 a un temporal y se
+    mide por sus paquetes (`tareas.flowplus.medir_video_url`), con los mismos
+    turnos de ffprobe. None si no se pudo."""
+    if not _MEDIR_VIDEO_TURNOS.acquire(timeout=60):
+        return None
+    try:
+        return medir_video_url(url)
+    except Exception:  # noqa: BLE001 — medir_video_url ya no lanza; defensa extra
+        return None
+    finally:
+        _MEDIR_VIDEO_TURNOS.release()
 
 
 def _quiere_json():
@@ -7963,10 +7991,14 @@ def fp_reusar(cliente, cf_id):
     for r in entry.get("referencias") or []:
         if r.get("logo") or r.get("url") in ya:
             continue
+        # R7 (PND-319): un video reusado no tiene archivo en disco; se mide bajándolo de
+        # R2 para que el precio a la vista sea el que se cobrará (None si no se pudo:
+        # Crear lo vuelve a intentar y, con Wan, no genera sin medida).
+        duracion = _duracion_video_url(r["url"]) if r.get("tipo") == "video" else None
         referencias_flowplus.agregar(
             cliente, r.get("tipo") or "imagen", r["url"], frame_url=r.get("frame_url"),
             origen="reutilizada", titulo=r.get("activo") or r.get("etiqueta"), producto=r.get("producto"),
-            duracion_s=r.get("duracion_s"),
+            duracion_s=duracion,
         )
         ya.add(r["url"])
     if request.form.get("incluir_resultado") == "si" and entry.get("tipo") == "imagen" and entry.get("video_url") not in ya:
@@ -8120,20 +8152,25 @@ def cf_crear_video(cliente):
         bandeja = [r for r in bandeja if r["id"] in set(usadas)]
     referencias = []
     remedidos = {}     # etiqueta -> (id en la bandeja, segundos medidos ahora) si no es lo que se vio
+    # Solo Wan 3.0 factura los segundos de sus videos de referencia: con los demás modelos no se baja nada.
+    factura_videos = tipo == "video" and bool((flowplus_modelos.VIDEO.get(modelo) or {}).get("max_videos"))
     for r in bandeja:
         ref = {"tipo": r["tipo"], "url": r["url"], "frame_url": r.get("frame_url") or r["url"],
                "etiqueta": r["etiqueta"], "origen": r.get("origen")}
         if r["tipo"] == "video":
-            # Lo que dura el video (2026-09-30), que Wan 3.0 factura: si el
-            # archivo sigue en disco se vuelve a medir por sus paquetes (PND-319:
-            # una referencia subida antes guardó la duración de la cabecera, que
-            # se falsifica); si no, lo medido al subirlo. Sin tocar la red en la
-            # petición: sin ninguna de las dos, Wan no genera (abajo).
+            # Lo que dura el video (2026-09-30), que Wan 3.0 factura, se vuelve a
+            # medir por sus paquetes (PND-319: una referencia subida antes guardó la
+            # duración de la cabecera, que se falsifica): el archivo si sigue en
+            # disco; si no (una referencia reusada, R7), bajándolo de R2. Si el
+            # modelo la factura y no se pudo medir, no se genera (abajo).
             dur = None
-            if r.get("ruta_local") and os.path.exists(r["ruta_local"]):
+            en_disco = bool(r.get("ruta_local") and os.path.exists(r["ruta_local"]))
+            if en_disco:
                 dur = _duracion_video(r["ruta_local"])
+            elif factura_videos:
+                dur = _duracion_video_url(r["url"])
             if dur is None:
-                dur = r.get("duracion_s")
+                dur = r.get("duracion_s") if (en_disco or not factura_videos) else None
             elif r.get("duracion_s") is None or abs(float(r["duracion_s"]) - dur) > 0.05:
                 remedidos[r["etiqueta"]] = (r.get("id"), dur)
             ref["duracion_s"] = dur
@@ -8497,6 +8534,14 @@ def cf_generar_video(cliente, cf_id):
         flash(gettext("El pedido anterior de esta pieza pudo crearse y cobrarse aunque WaveSpeed no respondió: usa "
                       "«Recuperar el video (sin pagar de nuevo)» en vez de generarla otra vez."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+    incierto_imagen = (entry.get("lanzamiento_incierto") or {}).get("estado") == "imagen"
+    if incierto_imagen and request.form.get("confirmo_posible_cobro") != "1":
+        # R5 (revisión del guardián de gasto): una imagen no se recupera; reintentar
+        # paga otra vez, y se dice con el precio antes de hacerlo.
+        precio = gastos.texto_precio(flowplus_lanzar.costo_estimado(entry))
+        flash(gettext("La imagen anterior pudo cobrarse aunque WaveSpeed no respondió. Generarla otra vez cuesta "
+                      "%(precio)s más: confírmalo en «Reintentar».", precio=precio), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
     if not (entry.get("referencias_urls") or []) and entry.get("enfoque") != "libre":
         flash(gettext("Esta sesión no tiene imágenes de referencia — descártala y crea una nueva."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
@@ -8529,6 +8574,10 @@ def cf_generar_video(cliente, cf_id):
     if not _lanzar_video_cf(cliente, cf_id, entry):
         flash(gettext("Ya se está generando %(que)s — espera a que termine.", que=que), "warn")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+    if incierto_imagen:
+        # Ya se avisó y se aceptó el precio: el aviso no se repite en un fallo siguiente.
+        creative_flow.actualizar(cliente, cf_id, lanzamiento_incierto=dict(
+            entry["lanzamiento_incierto"], estado="imagen_reintentada"))
     if hija:
         _lanzar_video_cf(cliente, hija, creative_flow.cargar(cliente)[hija])
         flash(gettext("Generando las versiones A y B con %(modelo)s…", modelo=nombre_modelo), "ok")

@@ -192,15 +192,16 @@ def _falta_para_buscar(hasta):
             - datetime.now(timezone.utc))
 
 
-def _lanzamiento_incierto(cliente, cf_id, modelo, e, ref):
+def _lanzamiento_incierto(cliente, cf_id, modelo, e, ref, prompt):
     """El pedido salió y la respuesta no llegó (PND-214): la sesión guarda la
-    ventana del lanzamiento y la referencia de gasto de este intento (`ref`,
-    la que usará el video si se recupera) y sigue `flowplus_recuperar`, que la
-    busca en el historial cuando ya debería aparecer. Una predicción vieja de
-    un intento anterior se suelta: no es este video."""
+    ventana del lanzamiento, la referencia de gasto de este intento (`ref`, la
+    que usará el video o el posible cobro) y la huella del prompt enviado, y
+    sigue `flowplus_recuperar`, que la busca en el historial cuando ya debería
+    aparecer. Una predicción vieja de un intento anterior se suelta: no es este
+    video."""
     lanzamiento = {"path": e.path, "modelo": modelo, "desde": e.desde.isoformat(), "hasta": e.hasta.isoformat(),
                    "causa": e.causa, "estado": "buscando", "en": datetime.now().isoformat(timespec="seconds"),
-                   "referencia_gasto": ref}
+                   "referencia_gasto": ref, "prompt_sha": wavespeed_common.huella_prompt(prompt)}
     creative_flow.actualizar(cliente, cf_id, estado="video_generando", error=None, prediccion=None,
                              lanzamiento_incierto=lanzamiento)
     falta = _falta_para_buscar(e.hasta)
@@ -209,17 +210,30 @@ def _lanzamiento_incierto(cliente, cf_id, modelo, e, ref):
                      mensaje=MENSAJE_BUSCANDO)
 
 
-def _hay_otro_incierto(cliente, cf_id, lanzamiento):
-    """¿Otra sesión (de cualquier proyecto) quedó incierta con el mismo modelo
-    en una ventana que se cruza con esta? Entonces una predicción del historial
-    no dice de cuál de las dos es."""
+def _ventana_busqueda(lanzamiento):
+    """La ventana entera en que la búsqueda acepta predicciones de ese
+    lanzamiento (la misma de `wavespeed_common.predicciones_en_ventana`), o
+    None si sus fechas no se leen."""
     desde, hasta = _fecha_utc(lanzamiento.get("desde")), _fecha_utc(lanzamiento.get("hasta"))
-    holgura = timedelta(seconds=2 * wavespeed_common.HOLGURA_VENTANA_S)
+    if not (desde and hasta):
+        return None
+    holgura = wavespeed_common.HOLGURA_VENTANA_S
+    return (desde - timedelta(seconds=holgura),
+            hasta + timedelta(seconds=wavespeed_common.TARDANZA_MAX_S + holgura))
+
+
+def _hay_otro_incierto(cliente, cf_id, lanzamiento):
+    """¿Otro lanzamiento incierto (de cualquier proyecto, de cualquier modelo,
+    también de una pieza ya descartada) cuya ventana de búsqueda se cruza con
+    la de este? Entonces lo que haya en el historial no dice de cuál es: la
+    búsqueda es dudosa (revisión del guardián de gasto: con 40 s de cruce, una
+    pieza podía recibir el video de otro proyecto)."""
+    propia = _ventana_busqueda(lanzamiento)
     for otro_cliente, otro_cf, otro in creative_flow.lanzamientos_inciertos():
-        if (otro_cliente, otro_cf) == (cliente, cf_id) or otro.get("path") != lanzamiento.get("path"):
+        if (otro_cliente, otro_cf) == (cliente, cf_id):
             continue
-        o_desde, o_hasta = _fecha_utc(otro.get("desde")), _fecha_utc(otro.get("hasta"))
-        if None in (desde, hasta, o_desde, o_hasta) or (o_desde <= hasta + holgura and desde <= o_hasta + holgura):
+        ajena = _ventana_busqueda(otro)
+        if propia is None or ajena is None or (ajena[0] <= propia[1] and propia[0] <= ajena[1]):
             return True
     return False
 
@@ -240,22 +254,67 @@ def _avisar_dudoso(cliente, cf_id, lanzamiento, ids):
     notificaciones.avisar_admin("lanzamiento_dudoso", _asunto, _cuerpo, cliente=cliente)
 
 
-def _anotar_posible_cobro(cliente, cf_id, entry, lanzamiento, duracion, calidad):
-    """Un lanzamiento dudoso pudo cobrarse: su estimado queda en Gasto con
-    `entregado=False` (el costo a la vista del admin, nada cobrado al cliente),
-    con la referencia del intento, como hace «Evaluar con IA» cuando Claude no
-    responde (revisión del guardián de gasto). Si después se recupera, el video
-    corrige esa misma línea."""
+def _anotar_posible_cobro(cliente, cf_id, entry, lanzamiento, duracion, calidad, tipo="video"):
+    """Un pedido que pudo cobrarse sin que sepamos qué entregó: su estimado
+    queda en Gasto con `entregado=False` (el costo a la vista del admin, nada
+    cobrado al cliente), con la referencia del intento, como hace «Evaluar con
+    IA» cuando Claude no responde (revisión del guardián de gasto). Si después
+    se recupera, el video corrige esa misma línea."""
     modelo = lanzamiento.get("modelo") or entry.get("modelo")
     try:
-        costo = flowplus_modelos.estimate_video(modelo, duracion, con_sonido=entry.get("con_sonido", True) is not False,
-                                                calidad=calidad, **_kw_videos(modelo, entry))
+        if tipo == "imagen":
+            costo = flowplus_modelos.estimate_imagen(modelo, n_referencias=len(entry.get("referencias_urls") or []))
+        else:
+            costo = flowplus_modelos.estimate_video(modelo, duracion,
+                                                    con_sonido=entry.get("con_sonido", True) is not False,
+                                                    calidad=calidad, **_kw_videos(modelo, entry))
     except Exception:  # noqa: BLE001 — sin estimado no hay línea; el aviso al admin igual sale
         return
-    ref = lanzamiento.get("referencia_gasto") or f"video:{cf_id}:incierto"
-    _registrar_gasto(cliente, "video", costo, ref, modelo,
-                     gettext("%(modelo)s · %(n)s s · posible cobro: WaveSpeed no respondió al lanzar y no se pudo "
-                             "confirmar", modelo=modelo, n=int(duracion or 0)), entregado=False)
+    ref = lanzamiento.get("referencia_gasto") or f"{tipo}:{cf_id}:incierto"
+    if tipo == "imagen":
+        detalle = gettext("%(modelo)s · posible cobro: WaveSpeed no respondió al lanzar y no se pudo confirmar",
+                          modelo=modelo)
+    else:
+        detalle = gettext("%(modelo)s · %(n)s s · posible cobro: WaveSpeed no respondió al lanzar y no se pudo "
+                          "confirmar", modelo=modelo, n=int(duracion or 0))
+    _registrar_gasto(cliente, tipo, costo, ref, modelo, detalle, entregado=False)
+
+
+def _sin_posible_cobro(cliente, lanzamiento):
+    """El historial dijo que el pedido no se creó: la línea de posible cobro
+    que se anotó antes (historial caído) vuelve a 0."""
+    ref = lanzamiento.get("referencia_gasto")
+    if lanzamiento.get("avisado") and ref:
+        gastos.registrar_seguro(cliente, "video", 0.0, ref, entregado=False,
+                                detalle=gettext("WaveSpeed no creó el pedido: no se cobró"))
+
+
+def anotar_posible_cobro_al_descartar(cliente, cf_id, entry):
+    """«Descartar» una pieza cuyo pedido pudo cobrarse sin que llegara el video
+    (lanzamiento incierto sin resolver, o una predicción conocida que no se
+    trajo): queda la línea de posible cobro (R4, revisión del guardián de
+    gasto). La predicción no queda huérfana: `creative_flow.eliminar` la
+    conserva en `kv`."""
+    e = entry or {}
+    tipo = "imagen" if (e.get("tipo") or "video") == "imagen" else "video"
+    lanzamiento = e.get("lanzamiento_incierto") if isinstance(e.get("lanzamiento_incierto"), dict) else {}
+    pendiente = lanzamiento_pendiente(e) or (tipo == "imagen" and lanzamiento.get("estado") == "imagen")
+    pred = e.get("prediccion") or {}
+    if not pendiente and not (pred.get("id") and e.get("estado") != "video_listo"):
+        return
+    if not pendiente:
+        lanzamiento = {"modelo": pred.get("modelo") or e.get("modelo"),
+                       "referencia_gasto": pred.get("referencia_gasto") or f"{tipo}:{cf_id}:descartada"}
+    modelo = lanzamiento.get("modelo") or e.get("modelo") or (
+        flowplus_modelos.IMAGEN_POR_DEFECTO if tipo == "imagen" else flowplus_modelos.VIDEO_POR_DEFECTO)
+    lanzamiento = dict(lanzamiento, modelo=modelo)
+    try:
+        duracion = flowplus_modelos.ajustar_duracion(modelo, e.get("duracion_objetivo")) if tipo == "video" else 0
+    except KeyError:
+        duracion = e.get("duracion_objetivo") or 0
+    calidad = e.get("calidad") if e.get("calidad") in flowplus_modelos.CALIDADES else "final"
+    with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+        _anotar_posible_cobro(cliente, cf_id, e, lanzamiento, duracion, calidad, tipo=tipo)
 
 
 def _buscar_lanzamiento(cliente, cf_id, entry, duracion, calidad):
@@ -263,8 +322,9 @@ def _buscar_lanzamiento(cliente, cf_id, entry, duracion, calidad):
     predicción en el historial de WaveSpeed. Devuelve (prediccion, None) si la
     encontró y la tomó para esta sesión, o (None, resultado de la tarea) si
     hay que esperar, no se creó, es dudosa o no se pudo preguntar. Nunca lanza
-    otro pedido. `duracion`/`calidad` (las de `_preparar`) dan el estimado que
-    se anota si queda dudoso."""
+    otro pedido. Ante cualquier duda nadie recibe un video: queda el posible
+    cobro (`entregado=False`) y el aviso al admin, una sola vez. `duracion` y
+    `calidad` (las de `_preparar`) dan el estimado de esa línea."""
     lanzamiento = dict(entry["lanzamiento_incierto"])
     proveedor = saldo.nombre_proveedor("wavespeed")
     nombre_crudo = flowplus_modelos.nombre_modelo(lanzamiento.get("modelo")) or lanzamiento.get("path")
@@ -288,16 +348,26 @@ def _buscar_lanzamiento(cliente, cf_id, entry, duracion, calidad):
                          "partir de esta».", proveedor=proveedor, modelo=nombre)
         no_creado = gettext("%(proveedor)s no recibió el pedido de %(modelo)s: no se creó ni se cobró nada. Ya puedes "
                             "volver a generarlo.", proveedor=proveedor, modelo=nombre)
+
+    def _con_aviso(estado, error, ids):
+        # Posible cobro anotado y admin avisado UNA vez por lanzamiento (dudoso o historial caído).
+        if not lanzamiento.get("avisado"):
+            _anotar_posible_cobro(cliente, cf_id, entry, lanzamiento, duracion, calidad)
+            _avisar_dudoso(cliente, cf_id, lanzamiento, ids)
+        creative_flow.actualizar(cliente, cf_id, estado="error", error=error,
+                                 lanzamiento_incierto=dict(lanzamiento, estado=estado, avisado=True))
+
     if not (desde and hasta) or _hay_otro_incierto(cliente, cf_id, lanzamiento):
         resultado = {"resultado": "dudosa", "ids": []}
     else:
         try:
             resultado = wavespeed_common.buscar_lanzada(
                 lanzamiento["path"], desde, hasta,
-                en_uso=lambda pid: creative_flow.prediccion_en_uso(pid, cliente, cf_id))
+                en_uso=lambda pid: creative_flow.prediccion_en_uso(pid, cliente, cf_id),
+                conocidas=flowplus_modelos.rutas_wavespeed(), prompt_sha=lanzamiento.get("prompt_sha"))
         except Exception as e:  # noqa: BLE001 — sin historial no se concluye nada; la pieza sigue sin repetirse
             bitacora.registrar(cliente, cf_id, "generacion", "historial", str(e)[:300])
-            creative_flow.actualizar(cliente, cf_id, estado="error", error=incierto)
+            _con_aviso("buscando", incierto, [])
             return None, gettext("No se pudo preguntar a %(proveedor)s por el pedido; queda «Recuperar el video».",
                                  proveedor=proveedor)
     if resultado["resultado"] == "encontrada":
@@ -312,15 +382,11 @@ def _buscar_lanzamiento(cliente, cf_id, entry, duracion, calidad):
             return pred, None
         resultado = {"resultado": "dudosa", "ids": [pred["id"]]}
     if resultado["resultado"] == "ninguna":
+        _sin_posible_cobro(cliente, lanzamiento)
         creative_flow.actualizar(cliente, cf_id, estado="error", error=no_creado,
                                  lanzamiento_incierto=dict(lanzamiento, estado="no_creado"))
         return None, gettext("%(proveedor)s no tiene ese pedido: no se cobró.", proveedor=proveedor)
-    ya_avisado = lanzamiento.get("estado") == "dudoso"
-    creative_flow.actualizar(cliente, cf_id, estado="error", error=dudoso,
-                             lanzamiento_incierto=dict(lanzamiento, estado="dudoso"))
-    if not ya_avisado:
-        _anotar_posible_cobro(cliente, cf_id, entry, lanzamiento, duracion, calidad)
-        _avisar_dudoso(cliente, cf_id, lanzamiento, resultado.get("ids") or [])
+    _con_aviso("dudoso", dudoso, resultado.get("ids") or [])
     return None, gettext("No se puede saber cuál pedido de %(proveedor)s es el de esta pieza; avisamos al "
                          "administrador.", proveedor=proveedor)
 
@@ -535,13 +601,19 @@ def _preparar(cliente, cf_id):
 MAX_BYTES_VIDEO_REFERENCIA = 200 * 1024 * 1024
 
 
-def _medir_url(url):
+def medir_video_url(url):
     """Segundos (a centésimas) del video de `url`, medidos como al subirlo:
     se baja a un temporal y `swap_video_precio.medir` lee sus paquetes (PND-319:
-    ffprobe sobre la URL leía solo la cabecera, que se falsifica). None si no se
-    pudo bajar o medir, o si pesa más de MAX_BYTES_VIDEO_REFERENCIA."""
+    ffprobe sobre la URL leía solo la cabecera, que se falsifica). Solo baja de
+    nuestro R2 (`R2_PUBLIC_BASE_URL`): las referencias siempre viven ahí y así
+    nunca se pide una dirección ajena. None si no es de R2, no se pudo bajar o
+    medir, o pesa más de MAX_BYTES_VIDEO_REFERENCIA. La usan el worker y Crear
+    (una referencia reusada sin archivo en disco, R7)."""
     import tempfile  # noqa: PLC0415
     from providers import swap_video_precio  # noqa: PLC0415
+    base = (os.environ.get("R2_PUBLIC_BASE_URL") or "").strip().rstrip("/")
+    if not base or not str(url or "").startswith(base + "/"):
+        return None
     resp = None
     try:
         resp = requests.get(url, stream=True, timeout=60)
@@ -568,13 +640,13 @@ def _medir_url(url):
 
 def _con_duraciones(referencias):
     """Copia de las referencias con `duracion_s` en cada video (medida por sus
-    paquetes, `_medir_url`, cuando la sesión no la traía: sesiones de antes del
+    paquetes, `medir_video_url`, cuando la sesión no la traía: sesiones de antes del
     2026-09-30; si no se puede medir queda None y ese video no cuenta para el
     límite ni para el precio)."""
     salida = []
     for r in referencias:
         if r.get("tipo") == "video" and r.get("duracion_s") is None and r.get("url"):
-            r = dict(r, duracion_s=_medir_url(r["url"]))
+            r = dict(r, duracion_s=medir_video_url(r["url"]))
         salida.append(r)
     return salida
 
@@ -625,7 +697,16 @@ def ejecutar_imagen(tarea):
         bitacora.registrar(cliente, cf_id, "generacion", "error", str(e))
         if isinstance(e, wavespeed_common.SinSaldo):
             saldo.marcar(e.proveedor, e.detalle, cliente=cliente)
-        creative_flow.actualizar(cliente, cf_id, estado="error", error=_mensaje_error(e, cliente))
+        campos = {"estado": "error", "error": _mensaje_error(e, cliente)}
+        if isinstance(e, wavespeed_common.LanzamientoIncierto):
+            # R5 (revisión del guardián de gasto): la imagen pudo cobrarse. Queda el posible
+            # cobro y «Reintentar» lo avisa con el precio antes de pagar otra vez.
+            lanzamiento = {"path": e.path, "modelo": modelo, "desde": e.desde.isoformat(), "hasta": e.hasta.isoformat(),
+                           "causa": e.causa, "estado": "imagen", "referencia_gasto": ref,
+                           "en": datetime.now().isoformat(timespec="seconds")}
+            _anotar_posible_cobro(cliente, cf_id, entry, lanzamiento, 0, "final", tipo="imagen")
+            campos["lanzamiento_incierto"] = lanzamiento
+        creative_flow.actualizar(cliente, cf_id, **campos)
         raise
     _registrar_gasto(cliente, "imagen", costo, ref, modelo,
                      gettext("%(modelo)s · %(n)s referencia(s)", modelo=modelo, n=len(referencias)))
@@ -724,7 +805,7 @@ def ejecutar_video(tarea):
         # PND-214: el pedido salió y la respuesta no llegó; pudo cobrarse. Se busca
         # en el historial de WaveSpeed, nunca se vuelve a mandar.
         bitacora.registrar(cliente, cf_id, "generacion", "incierto", str(e))
-        return _lanzamiento_incierto(cliente, cf_id, modelo, e, ref)
+        return _lanzamiento_incierto(cliente, cf_id, modelo, e, ref, prompt_texto)
     except Exception as e:
         bitacora.registrar(cliente, cf_id, "generacion", "error", str(e))
         actual = _sesion_o_vacia(cliente, cf_id)
@@ -767,7 +848,8 @@ def recuperar_video(tarea):
     try:
         entry, referencias, _videos_ref, duracion, prompt_texto, platforms, _ar, modelo, calidad = _preparar(cliente, cf_id)
     except SesionDescartada:
-        return gettext("La pieza se descartó antes de recuperar; no se cobró nada.")
+        # R4: lo que pudo cobrarse ya quedó anotado al descartar (`anotar_posible_cobro_al_descartar`).
+        return gettext("La pieza se descartó antes de recuperar; lo que pudo cobrarse quedó anotado en Gasto.")
     pred = entry.get("prediccion") or {}
     if not pred.get("id") and lanzamiento_pendiente(entry):
         # PND-214: el lanzamiento quedó incierto; la predicción se busca en el historial.
