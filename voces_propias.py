@@ -295,6 +295,17 @@ def _subir_mp3(cliente, url_fuente, key):
         return url, os.path.getsize(local), int(round(cortes.duracion(local) * 1000))
 
 
+def _anotar_cobrado_sin_voz(cliente, e, ref, detalle):
+    """PND-313: clonar o diseñar que se agotó esperando (o volvió sin `voice_id`) y fal cobró igual: se anota lo
+    cobrado con `entregado=False` (al cliente no se le cobra una voz que no recibió). Sin `ficha` en el extra:
+    no hay voice_id que recuperar. Nunca lanza."""
+    usd = float(getattr(e, "costo_usd", 0) or 0)
+    if usd > 0:
+        gastos.registrar_seguro(cliente, "voz_propia", usd, ref, proveedor=PROVEEDOR, entregado=False,
+                                detalle=gettext("%(detalle)s · fal cobró y no devolvió la voz", detalle=detalle),
+                                extra={"voice_id": "", "sin_voz": True, "request_id": getattr(e, "request_id", None)})
+
+
 def crear(cliente, payload, ref_sufijo="", reportar=None):
     """Lo corre la tarea `voz_propia_crear`. Crea la voz en MiniMax (clonar o
     diseñar), registra ese gasto apenas fal responde, la estrena leyendo su
@@ -342,14 +353,19 @@ def crear(cliente, payload, ref_sufijo="", reportar=None):
         reservar()
         try:
             r = fal_audio.clonar_voz_minimax(grabacion["url"], frase)
-        except Exception:
-            # fal no devolvió una voz (nada que registrar): la grabación de la
-            # persona no se queda en R2 sin una voz que la use.
+        except Exception as e:
+            # fal no devolvió una voz: la grabación de la persona no se queda en R2
+            # sin una voz que la use. Si fal igual cobró, se anota (PND-313).
+            _anotar_cobrado_sin_voz(cliente, e, ref, detalle)
             _borrar_grabacion_si_huerfana(cliente, grabacion["id"])
             raise
     else:
         reservar()
-        r = fal_audio.disenar_voz_minimax(payload["descripcion"], frase)
+        try:
+            r = fal_audio.disenar_voz_minimax(payload["descripcion"], frase)
+        except Exception as e:
+            _anotar_cobrado_sin_voz(cliente, e, ref, detalle)
+            raise
     usd = float(r["costo_usd"])
     extra["voice_id"] = r["voice_id"]
     ficha.update(url=r.get("url_vista_previa") or "", costo_usd=usd,
@@ -367,9 +383,14 @@ def crear(cliente, payload, ref_sufijo="", reportar=None):
                                 detalle=gettext("MiniMax · estreno · %(nombre)s", nombre=nombre),
                                 proveedor=PROVEEDOR)
         fuente, estrenada = t["url"], True
-    except Exception:
+    except Exception as e:
         log.warning("voz propia %s: no pude estrenarla", r["voice_id"], exc_info=True)
         fuente = r.get("url_vista_previa")
+        if getattr(e, "costo_usd", 0):
+            # El estreno se agotó o volvió sin audio y fal lo cobró igual (PND-313): se anota, sin cobrarlo.
+            gastos.registrar_seguro(cliente, "locucion", float(e.costo_usd), f"voz_propia_estreno{ref_sufijo}",
+                                    detalle=gettext("MiniMax · estreno que no llegó · %(nombre)s", nombre=nombre),
+                                    proveedor=PROVEEDOR, entregado=False)
     extra["estrenada"] = estrenada
     ficha["url"] = fuente or ficha["url"]
     gastos.registrar_seguro(cliente, "voz_propia", usd, ref, detalle=detalle,

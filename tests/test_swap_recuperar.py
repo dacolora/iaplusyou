@@ -246,3 +246,26 @@ def test_la_tarjeta_ofrece_recuperar_solo_con_prediccion(swap_video, app):
     s["swaps"].actualizar("acme", s["id"], prediccion=None)
     html = app["c"].get("/cliente/acme/swaps/lista").get_data(as_text=True)
     assert "/recuperar" not in html
+
+
+@pytest.mark.parametrize("cobrado", [True, False])
+def test_un_swap_de_fal_que_se_agota_se_anota_si_fal_lo_cobra_pero_no_se_recupera(swap_video, monkeypatch, cobrado):
+    """Kling O1 va por fal: con PND-313 su espera agotada dice si fal lo cobra; se anota (sin cobrarlo) y no hay
+    «Recuperar» (solo WaveSpeed se recupera por su id)."""
+    from providers import fal_client
+    sw, s = swap_video["sw"], swap_video
+    payload = dict(s["payload"], proveedor="kling_o1")
+
+    def editar(*a, **k):
+        raise fal_client.EsperaAgotadaFal("fal-ai/kling-video/o1/video-to-video/edit", "req-3", "IN_PROGRESS",
+                                          cobrado)
+    monkeypatch.setattr(sw.kling_o1_client, "editar_video", editar)
+    with pytest.raises((TimeoutError, sw.SwapEnEspera)):
+        sw.ejecutar({"id": 8, "job_id": f"acme__{s['id']}__swap", "payload": payload})
+    entry = s["swaps"].cargar("acme")[s["id"]]
+    assert entry["estado"] == "error" and not (entry.get("prediccion") or {}).get("id")
+    g = _gasto(f"swap:{s['id']}:t8")
+    if cobrado:
+        assert g["usd"] == pytest.approx(sw.kling_o1_client.estimate_video(10, 30)["usd"])
+    else:
+        assert g is None

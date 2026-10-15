@@ -279,6 +279,14 @@ msgid "%(detalle)s (respuesta inutilizable: %(error)s)"
 msgstr "%(detalle)s (unusable response: %(error)s)"
 
 #, python-format
+msgid "%(detalle)s · fal cobró y no devolvió la voz"
+msgstr "%(detalle)s · fal charged and didn't return the voice"
+
+#, python-format
+msgid "%(detalle)s · fal la cobró y no llegó"
+msgstr "%(detalle)s · fal charged for it and it didn't arrive"
+
+#, python-format
 msgid "%(detalle)s · falló al guardar; fal ya cobró"
 msgstr "%(detalle)s · saving failed; fal already charged"
 
@@ -643,6 +651,10 @@ msgstr "%(n)s notice(s): %(muestra)s"
 #, python-format
 msgid "%(n)s campaña(s)"
 msgstr "%(n)s campaign(s)"
+
+#, python-format
+msgid "%(n)s caracteres · fal la cobró y no llegó"
+msgstr "%(n)s characters · fal charged for it and it didn't arrive"
 
 #, python-format
 msgid "%(n)s cobros rechazados"
@@ -12617,6 +12629,10 @@ msgid "MiniMax · diseñar voz · %(nombre)s"
 msgstr "MiniMax · design voice · %(nombre)s"
 
 #, python-format
+msgid "MiniMax · estreno que no llegó · %(nombre)s"
+msgstr "MiniMax · try-out that didn't arrive · %(nombre)s"
+
+#, python-format
 msgid "MiniMax · estreno · %(nombre)s"
 msgstr "MiniMax · try-out · %(nombre)s"
 
@@ -20326,6 +20342,10 @@ msgstr "What does the prospect want to achieve in society?"
 #, python-format
 msgid "Whisper · %(s)s s de audio"
 msgstr "Whisper · %(s)s s of audio"
+
+#, python-format
+msgid "Whisper · %(s)s s de audio · no llegó"
+msgstr "Whisper · %(s)s s of audio · didn't arrive"
 
 msgid "Wompi abre su propia ventana para los datos de la tarjeta: el número nunca pasa por Creatv. Visa, Mastercard o American Express, con código de seguridad."
 msgstr "Wompi opens its own window for the card details: the number never goes through Creatv. Visa, Mastercard or American Express, with a security code."

@@ -233,11 +233,15 @@ def tw_analizar_anuncio(tarea):
                 voz = mejorar.transcribir(foto)
             except Exception as e:  # noqa: BLE001 — sin voz, Claude juzga por lo demás
                 log.info("sin voz para el análisis %s: %s", aid, type(e).__name__)
+                if getattr(e, "costo_usd", 0):
+                    # fal la cobró y no llegó (PND-186 (1)): se anota, sin cobrársela al cliente.
+                    gastos.registrar_seguro(cliente, "transcripcion", float(e.costo_usd), f"{referencia}:voz",
+                                            proveedor="fal", detalle=_detalle_voz(de_meta), entregado=False)
             if voz:
                 usd_voz = float(voz.get("costo_usd") or 0)
-                if usd_voz:
-                    gastos.registrar_seguro(cliente, "transcripcion", usd_voz, f"{referencia}:voz", proveedor="fal",
-                                            detalle=_detalle_voz(de_meta))
+                # También en 0: queda constancia de la llamada (PND-186 (1)).
+                gastos.registrar_seguro(cliente, "transcripcion", usd_voz, f"{referencia}:voz", proveedor="fal",
+                                        detalle=_detalle_voz(de_meta))
                 medios["transcripcion"] = (voz.get("texto") or "")[:mejorar.MAX_TRANSCRIPCION] or None
         trabajos.reportar(job_id, etapa=idiomas.N_("Analizando con Claude"))
         # G4 (revisión final de Rendimiento E2, 2026-10-10): la evaluación de cuenta es del Pixel de Triple Whale; en el

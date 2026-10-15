@@ -127,8 +127,7 @@ def _al_agotarse(e, proveedor, costo_previsto):
         raise SwapEnEspera(e.nombre_modelo, e.prediction_id, costo_previsto,
                            recuperable=proveedor in MODELOS_WAVESPEED) from e
     if getattr(e, "cobrado", False):
-        raise SwapEnEspera(getattr(e, "model_path", proveedor), getattr(e, "request_id", None), costo_previsto,
-                           recuperable=False) from e
+        raise SwapEnEspera("fal.ai", getattr(e, "request_id", None), costo_previsto, recuperable=False) from e
     raise e
 
 

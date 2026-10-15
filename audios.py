@@ -255,7 +255,15 @@ def voz_cruda(cliente, texto, voz, idioma, velocidad, ref_sufijo, carpeta=None):
     referencia = f"locucion:{h_voz[:12]}{ref_sufijo}"
 
     def _producir():
-        r = sintetizar(cliente, voz, texto, idioma, velocidad)
+        try:
+            r = sintetizar(cliente, voz, texto, idioma, velocidad)
+        except Exception as e:
+            # PND-313: la espera se agotó (o volvió sin audio) y fal la cobra igual: se anota, sin cobrarla.
+            if getattr(e, "costo_usd", 0):
+                gastos.registrar_seguro(cliente, "locucion", float(e.costo_usd), referencia, entregado=False,
+                                        detalle=gettext("%(n)s caracteres · fal la cobró y no llegó", n=len(texto)),
+                                        proveedor="fal")
+            raise
         usd = float(r.get("costo_usd") or 0.0)
         # El proveedor ya cobró: el gasto queda aunque lo que sigue falle.
         gastos.registrar_seguro(cliente, "locucion", usd, referencia,

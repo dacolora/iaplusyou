@@ -226,8 +226,10 @@ def _referencia(entry, idioma_base):
                 t = fal_audio.transcribir_palabras(r["url"], idioma_base) or {}
                 transcripcion = t.get("texto") or None
                 costo = float(t.get("costo_usd") or 0.0)
-            except Exception:
+            except Exception as e:
                 transcripcion = None  # la transcripción es un extra: sin ella el guion sale igual
+                # Si fal la cobró igual (espera agotada, sin texto), cuenta en el gasto del guion (PND-186 (1)).
+                costo = float(getattr(e, "costo_usd", 0.0) or 0.0)
             break
     if not frames and not transcripcion:
         return None, costo

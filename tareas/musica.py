@@ -29,9 +29,17 @@ def ejecutar(tarea):
     jid = tarea.get("job_id") or job_id(cliente)
     ref = f"musica_el{ref_sufijo(tarea)}"
     trabajos.reportar(jid, etapa=ETAPAS[0][0])
-    generado = fal_audio.musica_elevenlabs(prompt, DURACION_S, instrumental=instrumental)
-    usd = generado["costo_usd"]
     detalle = f"ElevenLabs · {DURACION_S} s · {prompt[:80]}"
+    try:
+        generado = fal_audio.musica_elevenlabs(prompt, DURACION_S, instrumental=instrumental)
+    except Exception as e:
+        # PND-313: la espera se agotó (o volvió sin audio) y fal la cobra igual: se anota, sin cobrarla.
+        if getattr(e, "costo_usd", 0):
+            gastos.registrar_seguro(cliente, "musica", float(e.costo_usd), ref, proveedor="fal/elevenlabs",
+                                    entregado=False,
+                                    detalle=gettext("%(detalle)s · fal la cobró y no llegó", detalle=detalle))
+        raise
+    usd = generado["costo_usd"]
     try:
         trabajos.reportar(jid, etapa=ETAPAS[1][0])
         with tempfile.TemporaryDirectory() as tmp:

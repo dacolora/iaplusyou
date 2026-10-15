@@ -30,6 +30,19 @@ QUEUE_BASE_URL = "https://queue.fal.run"
 ESTADOS_EN_CURSO = ("IN_QUEUE", "IN_PROGRESS")
 
 
+class EsperaAgotadaFal(TimeoutError):
+    """PND-313 (decisión 2026-10-13, lote 1): dejamos de esperar y fal sigue con el pedido. fal cobra lo que
+    termina, así que `cobrado` dice si lo cobra (o lo cobrará): estaba en curso, terminó sin que pudiéramos
+    traer el resultado, o no se pudo preguntar (una línea de costo algo inexacta es mejor que perder lo
+    pagado). False solo si seguía en cola y fal aceptó cancelarlo. Es un TimeoutError, como antes; quien lo
+    atrapa anota lo cobrado (los de `fal_audio` le pegan `costo_usd`)."""
+
+    def __init__(self, model_path, request_id, estado, cobrado):
+        self.model_path, self.request_id, self.estado, self.cobrado = model_path, request_id, estado, cobrado
+        super().__init__(f"fal.ai ({model_path}) no terminó a tiempo (request_id={request_id}, estado={estado}, "
+                         f"{'lo cobra' if cobrado else 'cancelado en cola, sin cobro'}).")
+
+
 def api_key():
     key = os.environ.get("FAL_KEY")
     if not key:
@@ -69,6 +82,12 @@ def llamar(model_path, payload, timeout=600, poll_interval=3, on_progreso=None):
     response_url = encolado["response_url"]
     _avisar(on_progreso, {"fase": "IN_QUEUE", "queue_position": encolado.get("queue_position")})
 
+    def _resultado():
+        resultado = requests.get(response_url, headers=_headers(), timeout=30)
+        if not resultado.ok:
+            raise RuntimeError(f"fal.ai ({model_path}) respondió {resultado.status_code} al buscar el resultado: {resultado.text[:500]}")
+        return resultado.json()
+
     inicio = time.time()
     while time.time() - inicio < timeout:
         r = requests.get(status_url, headers=_headers(), timeout=30)
@@ -80,12 +99,30 @@ def llamar(model_path, payload, timeout=600, poll_interval=3, on_progreso=None):
         estado = cuerpo.get("status")
         _avisar(on_progreso, {"fase": estado, "queue_position": cuerpo.get("queue_position")})
         if estado == "COMPLETED":
-            resultado = requests.get(response_url, headers=_headers(), timeout=30)
-            if not resultado.ok:
-                raise RuntimeError(f"fal.ai ({model_path}) respondió {resultado.status_code} al buscar el resultado: {resultado.text[:500]}")
-            return resultado.json()
+            return _resultado()
         if estado not in ESTADOS_EN_CURSO:
             raise RuntimeError(f"fal.ai ({model_path}) falló ({estado}): {r.text[:500]}")
         time.sleep(poll_interval)
 
-    raise TimeoutError(f"fal.ai ({model_path}) no terminó en {timeout}s (request_id={encolado.get('request_id')}).")
+    # PND-313: una última pregunta antes de rendirse. Terminado → se entrega; en cola → se intenta cancelar
+    # (nunca empezó, no se cobra); en curso o sin respuesta → fal lo cobra y quien llama lo anota.
+    try:
+        estado = requests.get(status_url, headers=_headers(), timeout=30).json().get("status")
+    except Exception:  # noqa: BLE001 — sin poder preguntar se cuenta como cobrado
+        estado = None
+    if estado == "COMPLETED":
+        return _resultado()
+    cobrado = not (estado == "IN_QUEUE" and _cancelar(status_url))
+    raise EsperaAgotadaFal(model_path, encolado.get("request_id"), estado, cobrado)
+
+
+def _cancelar(status_url):
+    """Pide a fal cancelar un pedido que sigue en cola (`PUT …/requests/<id>/cancel`). True solo si fal lo
+    aceptó (202, CANCELLATION_REQUESTED). Nunca lanza."""
+    if not status_url.endswith("/status"):
+        return False
+    try:
+        r = requests.put(status_url[: -len("/status")] + "/cancel", headers=_headers(), timeout=30)
+        return r.status_code == 202 and (r.json() or {}).get("status") == "CANCELLATION_REQUESTED"
+    except Exception:  # noqa: BLE001
+        return False

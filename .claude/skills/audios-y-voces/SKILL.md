@@ -107,3 +107,17 @@ PND-062, entrega 2 (2026-10-10, pedido de Daniel): el JS de Audios vive en `stat
 para el separador y las mismas tablas de clon/diseño con margen; los data-url y data-usd-caracter permanecen
 en `#au`. Las pruebas anteriores de permiso, sondeo y precio leen ahora el archivo enlazado, con idénticas
 expectativas. Node comprueba la inicialización y los eventos del módulo completo.
+
+**La espera de fal que se agota ya no pierde lo cobrado (PND-313, decisión 2026-10-13, lote 1).** fal cobra lo que
+termina aunque el worker deje de esperar. `fal_client.llamar`, al acabarse la espera, pregunta una última vez:
+terminado → devuelve el resultado; en cola → pide cancelarlo (`PUT …/cancel`) y, si fal acepta, no hay cobro; en
+curso o sin respuesta → `fal_client.EsperaAgotadaFal` (un `TimeoutError`) con `request_id` y `cobrado=True`. Los
+de `fal_audio` (`tts`, `tts_minimax`, clonar, diseñar, `musica`, `musica_elevenlabs`, `transcribir_palabras`) le pegan
+`costo_usd` a esa excepción (`_llamar_cobrando`) y también a la de una respuesta sin lo pedido (sin `custom_voice_id`,
+sin URL: `_cobrado_sin_resultado`). Quien llama lo anota con `entregado=False`: `voces_propias.crear` (clonar y
+diseñar, `_anotar_cobrado_sin_voz`, sin `ficha` en el extra porque no hay voice_id que recuperar; el estreno),
+`tareas/musica.py`, `audios.voz_cruda`; las finales ya lo sumaban (`insumos.voz_bloque` lee `e.costo_usd`). Whisper
+cobra por la duración del audio: con `duracion_ms` se anota eso aunque no haya palabras (PND-186 (1): un audio sin voz
+costaba 0), y su fallo pagado se anota en la referencia del guion (`final_edition._referencia`), en los subtítulos del
+editor (`transcripcion.transcribir`) y en «Cómo mejorarlo» (`tareas/triple_whale`, que también anota un costo 0 como
+constancia). Pruebas: `tests/test_fal_espera_agotada.py`.
