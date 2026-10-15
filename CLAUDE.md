@@ -81,7 +81,8 @@ Cada una apunta a la skill que trae el detalle y el incidente que la originó.
 8. **Pantallas.** El CSS vive en `static/estilos/` (tokens, capas y la «Base visual común»); `static/style.css` se
    genera con `python3 estilos.py construir`, nunca a mano. En el celular nada empuja la página de lado. Los `<video>` de listas nacen `preload="none" data-precarga` y las `<img>` con `loading="lazy"`. Las barras
    de progreso van con `data-poll-job`, nunca con `<script>`. Nada de una consulta por tarjeta. → `ui`
-9. **Producción** (`app.creatvmachine.com`): el VPS tiene datos de happyflops versionados en `clientes/`. Ahí nunca
+9. **Producción** (`galadsy.com` desde el 2026-10-15; `app.creatvmachine.com` redirige allá y sigue sirviendo para el
+   `ssh`): el VPS tiene datos de happyflops versionados en `clientes/`. Ahí nunca
    `git checkout .`, `reset --hard` ni `stash` sin respaldarlos primero. El worker solo se reinicia con la cola vacía
    (`deploy/cola_vacia.py`), comprobada en un `ssh` propio y encadenada con `&&`. → `despliegue` y los hooks
 

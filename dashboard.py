@@ -32,7 +32,7 @@ from PIL import Image
 import jinja2
 from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, send_file, abort, session, Response, stream_with_context, g, got_request_exception, has_request_context
 from flask_babel import Babel, format_decimal, get_locale, gettext, ngettext
-from markupsafe import Markup
+from markupsafe import Markup, escape
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.utils import secure_filename
 from datetime import date, datetime
@@ -429,19 +429,47 @@ def _hosts_extra():
     return frozenset(h.strip().lower() for h in crudo.split(",") if h.strip())
 
 
+def _hosts_alias():
+    """Hosts de PLATAFORMA_ALIAS: otros dominios nuestros que llevan a la app
+    (www, o el dominio viejo mientras dura un cambio de dominio: PND-326,
+    app.creatvmachine.com → galadsy.com, 2026-10-14). Separados por coma, con
+    o sin esquema."""
+    hosts = set()
+    for valor in (os.environ.get("PLATAFORMA_ALIAS") or "").split(","):
+        valor = valor.strip()
+        if valor:
+            host = (urlsplit(valor if "//" in valor else f"//{valor}").hostname or "").lower()
+            if host:
+                hosts.add(host)
+    return hosts
+
+
 @app.before_request
 def _verificar_host():
     """Con PLATAFORMA_URL definida, solo se atiende ese host, los de
     PLATAFORMA_HOSTS_EXTRA y localhost (para probar en la propia máquina): una
     petición con otra cabecera Host —la que un atacante usaría para que un
     enlace por correo apunte a su dominio— es un 404. Va primero que los demás
-    guards. Se salta con app.testing (las pruebas la llaman directo)."""
+    guards. Se salta con app.testing (las pruebas la llaman directo).
+
+    Un host de PLATAFORMA_ALIAS no es un 404: un GET se manda a la misma ruta
+    en PLATAFORMA_URL, y lo demás se atiende ahí mismo, porque los webhooks de
+    Wompi y Bold siguen llegando a la dirección vieja hasta que alguien la
+    cambia en su panel (un POST redirigido no lo reenvía nadie). Con 302 y no
+    301: el navegador no la guarda para siempre y el cambio se puede deshacer."""
     esperado = _host_plataforma()
     if esperado is None or app.testing:
         return None
     host = (urlsplit(f"//{request.host}").hostname or "").lower()
     if host == esperado or host in HOSTS_LOCALES or host in _hosts_extra():
         return None
+    if host in _hosts_alias():
+        if request.method not in ("GET", "HEAD"):
+            return None
+        destino = _plataforma_url() + request.path
+        if request.query_string:
+            destino += "?" + request.query_string.decode("latin-1")
+        return redirect(destino, code=302)
     abort(404)
 
 
@@ -1304,23 +1332,26 @@ def terminos():
 
 @app.route("/eliminar-datos")
 def eliminar_datos():
-    """URL de instrucciones de eliminación de datos que pide Meta."""
+    """URL de instrucciones de eliminación de datos que pide Meta. El sitio sale de
+    PLATAFORMA_URL, porque el dominio pasa de app.creatvmachine.com a galadsy.com (PND-326).
+    Sin ella (solo en local) sale de la cabecera Host, que la manda quien pide: va
+    escapado, porque este cuerpo se pinta como HTML."""
     cuerpo = {
         "es": """<p>Para eliminar los datos que CREATV Galadsy guarda de tu cuenta de Meta:</p>
-<ol><li>Entra a tu proyecto en app.creatvmachine.com › FlowMarketing › <strong>Desconectar</strong>: se borran el token,
+<ol><li>Entra a tu proyecto en {sitio} › FlowMarketing › <strong>Desconectar</strong>: se borran el token,
 los identificadores de tus cuentas publicitarias, Página e Instagram y las métricas copiadas de las cuentas elegidas
 (gasto, compras, nombres de campañas, conjuntos de anuncios y anuncios) al instante.</li>
 <li>Si prefieres, escribe a dacoloradog@gmail.com con el nombre de tu proyecto y lo eliminamos en máximo 7 días,
 con confirmación por correo.</li></ol>
 <p>También puedes revocar el acceso desde Facebook: Configuración › Apps y sitios web › CREATV Galadsy › Eliminar.</p>""",
         "en": """<p>To delete the data CREATV Galadsy stores about your Meta account:</p>
-<ol><li>Go to your project at app.creatvmachine.com › FlowMarketing › <strong>Disconnect</strong>: the token,
+<ol><li>Go to your project at {sitio} › FlowMarketing › <strong>Disconnect</strong>: the token,
 the identifiers of your ad accounts, Page and Instagram, and the metrics copied from the chosen accounts
 (spend, purchases, and the names of campaigns, ad sets and ads) are deleted instantly.</li>
 <li>If you prefer, write to dacoloradog@gmail.com with your project's name and we'll delete it within 7 days,
 confirmed by email.</li></ol>
 <p>You can also revoke access from Facebook: Settings › Apps and Websites › CREATV Galadsy › Remove.</p>""",
-    }[str(get_locale())]
+    }[str(get_locale())].format(sitio=escape(_host_plataforma() or request.host))
     return render_template("legal.html", titulo=gettext("Eliminación de datos"),
                            actualizado=gettext("12 de septiembre de 2026"), cuerpo=cuerpo)
 

@@ -23,7 +23,11 @@ admins exempt); the «sin correo / confirma tu correo» notice (`#cuenta-banner`
 top of Configuración (`_tab_settings.html`), not on every tab (removed from `base.html` 2026-09-26; since 2026-10-02 the same case is also the alert `cuenta:correo:<usuario>` in the Alertas tab, skill `alertas`); admins can mark a user verified from the panel. Rate limits (`cuentas.limite_ok`,
 `kv`, 5/h) per correo and per IP on registration, resend and recovery. Links are built from
 `PLATAFORMA_URL` (never from the `Host` header) and the app 404s requests whose host isn't that
-one (or localhost); `DETRAS_DE_PROXY=1` enables ProxyFix; session cookies are HttpOnly, SameSite
+one (or localhost), except a host listed in `PLATAFORMA_ALIAS` (www, or the old domain during a domain
+change — app.creatvmachine.com → galadsy.com, PND-326, 2026-10-14): its GET/HEAD get a 302 to the same
+path and query on `PLATAFORMA_URL` (302, not 301, so a rollback isn't stuck in browser caches) and any
+other method is served there (the Wompi/Bold webhooks keep posting to the old address until someone
+changes it in their panel, and nobody re-sends a redirected POST); `DETRAS_DE_PROXY=1` enables ProxyFix; session cookies are HttpOnly, SameSite
 Lax, Secure when the platform URL is https. Emails go through `notificaciones.enviar(html=)` —
 if SMTP is missing the flows still work and the admin panel shows the warning.
 
