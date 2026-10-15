@@ -522,6 +522,30 @@ def test_rehacer_desde_una_escena(app, catalogo_vacio, subidas):
     assert app["c"].post(f"{BASE}/videos/{vid}/cadena", json={"desde": 3, "total_visto": 0}).status_code == 400
 
 
+def test_cadena_con_wan_y_rehacer_sigue_con_el_mismo_modelo(app, catalogo_vacio, subidas):
+    """2026-10-15: Wan 3.0 se ofrece primero y más barata; la cadena guarda su
+    modelo y «Rehacer desde» no lo cambia aunque el cuerpo pida otro."""
+    from guiones import cadena, datos
+    gid, vid = _video_armado(app)
+    _con_imagenes(app, vid, subidas)
+    v = datos.video("acme", vid)
+    wan, kling = cadena.precio(v, modelo=cadena.WAN), cadena.precio(v)
+    html = app["c"].get(f"{BASE}/panel?guion={gid}&video={vid}").get_data(as_text=True)
+    assert html.index("con Wan 3.0 · ≈ US$ %.2f" % wan) < html.index("con Kling O3 Pro · ≈ US$ %.2f" % kling)
+    assert app["c"].post(f"{BASE}/videos/{vid}/cadena", json={"total_visto": wan, "modelo": "veo"}).status_code == 400
+    r = app["c"].post(f"{BASE}/videos/{vid}/cadena", json={"total_visto": wan, "modelo": cadena.WAN})
+    assert r.status_code == 202, r.get_json()
+    assert cadena.estado(datos.video("acme", vid))["modelo"] == cadena.WAN
+    html = app["c"].get(f"{BASE}/panel?guion={gid}&video={vid}").get_data(as_text=True)
+    assert "Con Wan 3.0." in html and "Preparando los personajes en Kling" not in html
+    datos.modificar_cadena("acme", vid, lambda e, _v: cadena.fallo(cadena.lista(cadena.lanzada(
+        cadena.preparada(e, {}), 1, "cf_1"), 1, "https://f1.jpg"), 2, "x"))
+    precio = cadena.precio(datos.video("acme", vid), desde=2, modelo=cadena.WAN)
+    r = app["c"].post(f"{BASE}/videos/{vid}/cadena", json={"desde": 2, "total_visto": precio, "modelo": cadena.MODELO})
+    assert r.status_code == 202, r.get_json()
+    assert cadena.estado(datos.video("acme", vid))["modelo"] == cadena.WAN
+
+
 def test_pnd094_selector_agrupa_colores_sin_cambiar_valores_ni_seleccion(app):
     from flask import render_template_string
     import dashboard
@@ -531,8 +555,66 @@ def test_pnd094_selector_agrupa_colores_sin_cambiar_valores_ni_seleccion(app):
                  {"id": "otro", "nombre": "Otro"}]
     cfg = {"referencias": [{"tipo": "producto", "activo_id": "original/beige"}], "casting": {}, "duracion_objetivo": 10}
     with dashboard.app.test_request_context():
-        html = render_template_string("{% from '_gpg_macros.html' import form_config %}{{ form_config('id','/x',cfg,lectura,activos,formatos,'OK') }}",\
+        html = render_template_string("{% from '_gpg_macros.html' import form_config %}{{ form_config('id','/x',cfg,lectura,activos,formatos,'OK',{}) }}",\
             cfg=cfg, lectura={"lineas": [], "hooks": []}, activos={"producto": productos, "personaje": [], "entorno": []}, formatos={})
     assert 'label="Productos · Original"' in html
     assert html.count('value="original/pink"') == 7 and html.count('value="original/beige"') == 7
     assert 'value="original/beige" selected' in html
+
+
+def test_armar_frena_gratis_si_una_linea_no_cabe_en_un_clip(app, catalogo_vacio, monkeypatch):
+    """Incidente 2026-10-14: una línea que sola dura más de 15 s hace imposible
+    cualquier plan; se avisa y se frena antes de cobrar, en vez de pagar a Claude
+    por un armado que V2/V3 siempre rechazan."""
+    from cobros import libro
+    larga = " ".join(["palabra"] * 38)  # 15,8 s a 2,4 palabras/s
+    gid = _leido(app, dict(GUION_CRUDO, lineas=LINEAS[:2] + [larga]))
+    assert app["c"].post(f"{BASE}/guiones/{gid}/confirmar", json={}).status_code == 200
+    vid = app["c"].post(f"{BASE}/guiones/{gid}/videos", json=dict(FORM_VIDEO, duracion_objetivo="")).get_json()["video_id"]
+    cobros = []
+    monkeypatch.setattr(libro, "exigir", lambda *a, **k: cobros.append(a))
+    html = app["c"].get(f"{BASE}/panel?guion={gid}&video={vid}").get_data(as_text=True)
+    assert "línea 3 (15,8 s)" in html and "2,6 palabras/s" in html
+    assert f'data-gpg-accion="/videos/{vid}/armar" disabled' in html
+    r = app["c"].post(f"{BASE}/videos/{vid}/armar", json={})
+    assert r.status_code == 409 and "línea 3" in r.get_json()["error"]
+    assert cobros == [] and not any(j == f"guion_armar_{vid}" for j, _ in app["iniciados"])
+    # Con el ritmo que alcanza, ya se puede armar.
+    assert app["c"].post(f"{BASE}/videos/{vid}/config", json=dict(FORM_VIDEO, duracion_objetivo="",
+                                                                  palabras_por_segundo="2.6")).status_code == 200
+    assert app["c"].post(f"{BASE}/videos/{vid}/armar", json={}).status_code == 202
+
+
+def test_armar_frena_si_un_hook_alternativo_no_cabe(app, catalogo_vacio):
+    largo = " ".join(["gancho"] * 70)  # 29,2 s: ni a 4 palabras/s cabe
+    gid = _leido(app, dict(GUION_CRUDO, hooks=[largo]))
+    assert app["c"].post(f"{BASE}/guiones/{gid}/confirmar", json={}).status_code == 200
+    vid = app["c"].post(f"{BASE}/guiones/{gid}/videos", json=dict(FORM_VIDEO, duracion_objetivo="")).get_json()["video_id"]
+    r = app["c"].post(f"{BASE}/videos/{vid}/armar", json={})
+    assert r.status_code == 409
+    error = r.get_json()["error"]
+    assert "hook_2 (29,2 s)" in error and "Parte cada una en dos" in error and "Sube el ritmo" not in error
+
+
+def test_idioma_del_dialogo_en_la_config_y_en_una_version_gratis(app, catalogo_vacio):
+    """2026-10-15: el idioma en que se habla se elige en la configuración y se
+    puede cambiar con «Crear versión con este bloque» sin volver a pagar el armado."""
+    from guiones import datos
+    gid = _confirmado(app)
+    form = dict(FORM_VIDEO, duracion_objetivo="")
+    assert app["c"].post(f"{BASE}/guiones/{gid}/videos", json=dict(form, idioma_dialogo="xx")).status_code == 400
+    vid = app["c"].post(f"{BASE}/guiones/{gid}/videos", json=dict(form, idioma_dialogo="de")).get_json()["video_id"]
+    assert datos.video("acme", vid)["config"]["idioma_dialogo"] == "de"
+    gid, vid = _video_armado(app)
+    assert datos.video("acme", vid)["config"]["idioma_dialogo"] == "es"  # sin elegir: el del proyecto
+    html = app["c"].get(f"{BASE}/panel?guion={gid}&video={vid}").get_data(as_text=True)
+    assert 'name="idioma_dialogo"' in html and '<option value="nl" >Nederlands</option>' in html
+    cuerpo = {"tipo": "bloque", "idioma_dialogo": "nl", **{f"bloque_{k}": "" for k in
+                                                          ("conteo_objetos", "disposicion_inicial", "props", "quien_sostiene", "voz")}}
+    r = app["c"].post(f"{BASE}/videos/{vid}/nueva-version", json=cuerpo)
+    assert r.status_code == 201
+    nuevo = datos.video("acme", r.get_json()["video_id"])
+    assert nuevo["estado"] == "armado" and nuevo["config"]["idioma_dialogo"] == "nl"
+    clip = next(p for p in datos.prompts_de_video(nuevo["id"]) if p["tipo"] == "clip")
+    assert "All dialogue is spoken in Dutch" in clip["texto_vigente"]
+    assert app["c"].post(f"{BASE}/videos/{vid}/nueva-version", json=dict(cuerpo, idioma_dialogo="xx")).status_code == 400

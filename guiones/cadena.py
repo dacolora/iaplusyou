@@ -1,8 +1,9 @@
 """
 Cadena de escenas de Flow Plus (spec 2026-09-30, «Generar todas las escenas»):
 la escena 1 se genera con sus imágenes de referencia y cada siguiente arranca en
-el último fotograma de la anterior, con Kling O3 Pro imagen a video y sus
-personajes/productos como «elementos» de Kling. Puro: revisión previa, precio,
+el último fotograma de la anterior: con Kling O3 Pro, imagen a video y sus
+personajes/productos como «elementos» de Kling; con Wan 3.0 (desde el
+2026-10-15), referencias con ese fotograma primero. Puro: revisión previa, precio,
 nombres y prompts de cada escena, y los cambios de estado. El estado vive en
 `guion_video.extra["cadena"]`; el único escritor es
 `datos.modificar_cadena`; el worker (`tareas/cadena.py`) lo avanza.
@@ -22,6 +23,16 @@ from guiones.refinador import Conflicto
 from providers import flowplus_modelos
 
 MODELO = "kling_o3_pro"
+# Wan 3.0 (2026-10-15, pedido de Daniel: Kling con sonido cuesta US$ 0,14/s y Wan
+# US$ 0,10/s). Wan no tiene imagen a video ni elementos en WaveSpeed: cada escena
+# va por reference-to-video con el último cuadro de la anterior como primera
+# imagen más las de la escena (hasta 10 en total). Wan va primero: es la que se
+# ofrece arriba. Una cadena guarda su modelo; «Rehacer desde» sigue con el mismo.
+WAN = "wan3"
+MODELOS = (WAN, MODELO)
+ARRANQUE_WAN = ("@Imagen 1 = first frame — the last frame of the previous scene. The video starts exactly on "
+                "this frame and continues the same shot: same people, clothes, objects, place and light.")
+_MENCION_CREAR = re.compile(r"@Imagen (\d+)\b")
 CLAVE = "cadena"
 ESTADOS = ("corriendo", "detenida", "terminada")
 TIPOS_ELEMENTO = ("personaje", "producto", "extra")
@@ -49,6 +60,12 @@ def viva(video):
 
 def indices(video):
     return [c["indice"] for c in video.get("clips") or []]
+
+
+def modelo_de(est):
+    """El modelo de una cadena; las de antes del 2026-10-15 eran todas de Kling."""
+    m = (est or {}).get("modelo")
+    return m if m in MODELOS else MODELO
 
 
 def _primera(video):
@@ -83,9 +100,9 @@ def nombre_elemento(x):
 
 # --------------------------------------------------------------- revisión ---
 
-def revisar(video, prompts, desde=None):
-    """Lo que impide generar, por escena ({"indice", "motivo"}; indice None =
-    toda la versión). Vacío = se puede aprobar."""
+def revisar(video, prompts, desde=None, modelo=MODELO):
+    """Lo que impide generar con `modelo`, por escena ({"indice", "motivo"};
+    indice None = toda la versión). Vacío = se puede aprobar."""
     if video.get("estado") != "armado":
         return [{"indice": None, "motivo": gettext("Primero arma los clips de esta versión.")}]
     problemas = []
@@ -93,7 +110,7 @@ def revisar(video, prompts, desde=None):
         problemas.append({"indice": None, "motivo": gettext("La cadena ya está corriendo.")})
     primera = _primera(video)
     desde = desde or primera
-    info = flowplus_modelos.VIDEO[MODELO]
+    info = flowplus_modelos.VIDEO[modelo]
     for k in indices(video):
         if k < desde:
             continue
@@ -104,7 +121,14 @@ def revisar(video, prompts, desde=None):
         except Conflicto as e:
             problemas.append({"indice": k, "motivo": str(e)})
             continue
-        if k == primera:
+        if modelo == WAN:
+            # Las siguientes llevan además el último cuadro de la anterior.
+            maximo = info["max_referencias"] - (0 if k == primera else 1)
+            if len(imgs) > maximo:
+                problemas.append({"indice": k, "motivo": gettext(
+                    "Lleva %(n)s imágenes; con Wan 3.0 esta escena admite %(max)s: apaga alguna.",
+                    n=len(imgs), max=maximo)})
+        elif k == primera:
             if len(imgs) > info["max_referencias"]:
                 problemas.append({"indice": k, "motivo": gettext(
                     "Lleva %(n)s imágenes; la primera escena admite %(max)s: apaga alguna.",
@@ -119,9 +143,12 @@ def revisar(video, prompts, desde=None):
     return problemas
 
 
-def avisos(video):
-    """No bloquean: una escena siguiente que cambia de lugar (el lugar nuevo
-    solo llega por el texto: imagen a video no recibe entornos)."""
+def avisos(video, modelo=MODELO):
+    """No bloquean: con Kling, una escena siguiente que cambia de lugar (el
+    lugar nuevo solo llega por el texto: imagen a video no recibe entornos).
+    Wan recibe el entorno de la escena como imagen: no hay aviso."""
+    if modelo == WAN:
+        return []
     salida, previo = [], None
     for k in indices(video):
         claves, _ = escenas.claves_de(video, _clip(video, k))
@@ -135,10 +162,12 @@ def avisos(video):
     return salida
 
 
-def elementos_necesarios(video, desde=1):
+def elementos_necesarios(video, desde=1, modelo=MODELO):
     """Personajes, productos y extras de las escenas que van por imagen a
     video (las siguientes a la primera, desde `desde`), sin repetir:
-    [{"id", "nombre", "descripcion", "imagen"}]."""
+    [{"id", "nombre", "descripcion", "imagen"}]. Wan no usa elementos."""
+    if modelo == WAN:
+        return []
     primera = _primera(video)
     vistos, salida = set(), []
     for k in indices(video):
@@ -160,19 +189,38 @@ def elementos_necesarios(video, desde=1):
     return salida
 
 
-def precio(video, desde=1, conocidos=()):
-    """US$ de las escenas desde `desde` (Kling O3 Pro con sonido) más los
-    elementos que todavía no existen."""
+def precio(video, desde=1, conocidos=(), modelo=MODELO):
+    """US$ de las escenas desde `desde` (con sonido) más, con Kling, los
+    elementos que todavía no existen. Mismas reglas que la tarea antes de
+    gastar (`flowplus_lanzar.costo_estimado`: duración dentro del rango)."""
     total = 0.0
     for k in indices(video):
         if k >= desde:
-            dur = flowplus_modelos.ajustar_duracion(MODELO, _clip(video, k)["duracion"])
-            total += flowplus_modelos.estimate_video(MODELO, dur, True)["usd"]
-    nuevos = [e for e in elementos_necesarios(video, desde) if e["id"] not in set(conocidos)]
+            dur = flowplus_modelos.ajustar_duracion(modelo, _clip(video, k)["duracion"])
+            total += flowplus_modelos.estimate_video(modelo, dur, True)["usd"]
+    nuevos = [e for e in elementos_necesarios(video, desde, modelo) if e["id"] not in set(conocidos)]
     return round(total + flowplus_modelos.PRECIO_ELEMENTO * len(nuevos), 2)
 
 
 # ---------------------------------------------------------------- prompts ---
+
+def prompt_escena_wan(texto, video, k, imagenes):
+    """El prompt de la escena k con Wan 3.0, con menciones de Crear
+    (`@Imagen n`) que la tarea cambia por el token de Wan. La primera, igual
+    que «Llevar a Crear». Las siguientes: el último cuadro de la anterior es
+    `@Imagen 1` y las de la escena corren un número."""
+    base = escenas.prompt_para_crear(texto, video, imagenes)
+    if k == _primera(video):
+        return base
+    corrido = _MENCION_CREAR.sub(lambda m: f"@Imagen {int(m.group(1)) + 1}", base)
+    lineas = corrido.splitlines()
+    if "REFERENCE MAP" in lineas:
+        i = lineas.index("REFERENCE MAP")
+        lineas.insert(i + 1, ARRANQUE_WAN)
+    else:
+        lineas = ["REFERENCE MAP", ARRANQUE_WAN, ""] + lineas
+    return "\n".join(["The video starts exactly on @Imagen 1.", ""] + lineas).strip()
+
 
 def prompt_escena(texto, video, k, imagenes):
     """El prompt de la escena k. La primera, igual que «Llevar a Crear»
@@ -212,13 +260,13 @@ def prompt_escena(texto, video, k, imagenes):
 
 # ------------------------------------------------------------ transiciones ---
 
-def aprobar(video, desde, usd, usuario, ahora, previo=None):
-    """Cadena nueva desde `desde`; de una anterior conserva las escenas listas
-    antes de `desde` y los elementos ya creados."""
+def aprobar(video, desde, usd, usuario, ahora, previo=None, modelo=MODELO):
+    """Cadena nueva desde `desde` con `modelo`; de una anterior conserva las
+    escenas listas antes de `desde` y los elementos ya creados."""
     previo = previo if previo is not None else (estado(video) or {})
     antes = {k: dict(v) for k, v in (previo.get("escenas") or {}).items()
              if int(k) < desde and v.get("estado") == "lista"}
-    return {"estado": "corriendo", "desde": desde, "modelo": MODELO, "aprobado_usd": round(float(usd), 2),
+    return {"estado": "corriendo", "desde": desde, "modelo": modelo, "aprobado_usd": round(float(usd), 2),
             "aprobado_por": usuario, "aprobado_en": ahora, "detener": False, "preparando": True, "escenas": antes,
             "elementos": dict(previo.get("elementos") or {}), "edicion_id": None, "error": None}
 

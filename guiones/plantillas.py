@@ -7,9 +7,14 @@ pegadas a la frase: «Never fade to black»).
 """
 import proyectos
 from guiones import duracion
+from guiones.config import IDIOMA_EN_INGLES
 
 ETIQUETA = {"personaje": "character", "entorno": "environment", "producto": "hero object"}
-ENCABEZADO_DIALOGO = "DIALOGUE (exact words, natural unhurried pace, lip-sync exactly):"
+# Hasta el 2026-10-15 decía «natural unhurried pace»: el modelo hablaba lento y rellenaba cada clip con
+# pausas, y el video quedaba largo y pesado (pedido de Daniel, guion «Podcast»). Ahora pide el ritmo con el
+# que se calculó la duración de cada clip.
+ENCABEZADO_DIALOGO = ("DIALOGUE (exact words, brisk natural conversational pace of about {wps} words per second, "
+                      "no slow delivery, no long pauses between lines, lip-sync exactly):")
 ENCABEZADO_VOZ_OFF = "VOICE-OVER: added in post, do NOT generate speech. Exact text for timing reference:"
 CIERRE_FINAL = "FINAL CLIP: end on the held frame described in the last beat. HARD CUT, no logo, no fade."
 
@@ -63,7 +68,11 @@ def bloque_video(config, bv):
         partes.append("AUDIO\nNo speech is generated; the voice-over is added in post. Ambient sound only.")
     else:
         voz = (config.get("voz") or bv.get("voz") or "A natural voice that matches the character").strip().rstrip(".")
-        partes.append(f"VOICE & AUDIO\n{voz}. The SAME voice in every clip, lip-sync exactly.")
+        idioma = IDIOMA_EN_INGLES.get(config.get("idioma_dialogo") or "")
+        lengua = (f" All dialogue is spoken in {idioma}, word for word as written; never translate it, never switch "
+                  f"to another language, never mix in English." if idioma and idioma != "English" else
+                  " All dialogue is spoken in English, word for word as written." if idioma else "")
+        partes.append(f"VOICE & AUDIO\n{voz}. The SAME voice in every clip, lip-sync exactly.{lengua}")
     return "\n\n".join(partes)
 
 
@@ -76,7 +85,8 @@ def bloque_clip(clip, config):
     if clip["indice"] > 1:
         lineas.append(f"Start image = last frame of Clip {clip['indice'] - 1}.")
     lineas.append(f"START STATE: {clip['estado_inicio']}")
-    lineas.append(ENCABEZADO_VOZ_OFF if config["modo"] == "voiceover" else ENCABEZADO_DIALOGO)
+    lineas.append(ENCABEZADO_VOZ_OFF if config["modo"] == "voiceover"
+                  else ENCABEZADO_DIALOGO.format(wps=f"{float(config['palabras_por_segundo']):g}"))
     lineas.append('"' + " ".join(m["texto"] for m in clip["momentos"] if m["texto"]) + '"')
     lineas.append("TIMED SCRIPT")
     for m in clip["momentos"]:

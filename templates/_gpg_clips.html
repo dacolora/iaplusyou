@@ -5,8 +5,9 @@
 {% endif %}
 
 {% if video.estado in ('configurando', 'invalido', 'error') %}
+  {% if no_caben %}<p class="flash warn">{{ no_caben }}</p>{% endif %}
   <div class="gp-botones">
-    <button type="button" class="btn-generar btn-sm" data-gpg-accion="/videos/{{ video.id }}/armar">
+    <button type="button" class="btn-generar btn-sm" data-gpg-accion="/videos/{{ video.id }}/armar"{% if no_caben %} disabled{% endif %}>
       {{ _('Volver a armar') if video.estado != 'configurando' else _('Armar clips') }} · {{ costos.armar }}</button>
   </div>
   {% if video.estado == 'configurando' %}<p class="gp-ayuda">{{ _('Claude agrupa las líneas en clips de 5 a 15 s; el código pega el diálogo exacto, calcula los tiempos y valida todo antes de mostrarte nada.') }}</p>{% endif %}
@@ -72,6 +73,12 @@
       <label class="campo-label" for="gpg-bv-{{ campo }}">{{ etiqueta }}</label>
       <textarea id="gpg-bv-{{ campo }}" name="bloque_{{ campo }}" rows="2">{{ bv[campo] }}</textarea>
       {% endfor %}
+      {% if video.config.modo != 'voiceover' %}
+      <label class="campo-label" for="gpg-bv-idioma">{{ _('Idioma del diálogo') }}</label>
+      <select id="gpg-bv-idioma" name="idioma_dialogo">
+        {% for k, n in idiomas_dialogo.items() %}<option value="{{ k }}" {% if video.config.idioma_dialogo == k %}selected{% endif %}>{{ n }}</option>{% endfor %}
+      </select>
+      {% endif %}
       <div class="gpg-error flash error" hidden></div>
       <div class="gp-botones"><button type="submit" class="btn-guardar btn-sm">{{ _('Crear versión con este bloque') }}</button></div>
     </form>
@@ -81,6 +88,6 @@
 {% if video.estado in ('armado', 'invalido', 'error') %}
   <details id="gpg-det-version-{{ video.id }}">
     <summary>{{ _('Nueva versión con otra configuración') }}</summary>
-    {{ form_config("gpg-form-version", "/videos/" ~ video.id ~ "/nueva-version", video.config, guion.lectura, activos, formatos, _("Crear versión nueva")) }}
+    {{ form_config("gpg-form-version", "/videos/" ~ video.id ~ "/nueva-version", video.config, guion.lectura, activos, formatos, _("Crear versión nueva"), idiomas_dialogo) }}
   </details>
 {% endif %}

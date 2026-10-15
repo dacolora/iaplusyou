@@ -1,6 +1,6 @@
 {# «Generar todas las escenas» (spec 2026-09-30; fragmento dentro de _gpg_escenas.html, versión armada).
-   Una aprobación con el precio total; el worker (tareas/cadena.py) genera escena tras escena con Kling O3 Pro,
-   cada una desde el último cuadro de la anterior, y frena si una falla. Botones por data-gpg-accion +
+   Una aprobación con el precio total; el worker (tareas/cadena.py) genera escena tras escena con Wan 3.0 o
+   Kling O3 Pro (2026-10-15), cada una desde el último cuadro de la anterior, y frena si una falla. Botones por data-gpg-accion +
    data-gpg-cuerpo + data-gpg-confirmar (_crear_flowplus_guiones.html). #}
 {% set C = cadena_vista %}
 {% set est = C.estado %}
@@ -9,12 +9,14 @@
 {%- endmacro %}
 <section class="gpg-cadena" data-gpg-caja aria-label="{{ _('Generar todas las escenas') }}">
   <h5>{{ _('Generar todas las escenas') }}</h5>
-  <p class="gp-ayuda">{{ _('Una tras otra con Kling O3 Pro: la primera con sus imágenes y cada siguiente arranca en el último cuadro de la anterior, con los mismos personajes. Corre sola (unos 5 minutos por escena); puedes cerrar la página. Si una escena falla, la cadena se detiene y no cobra lo que sigue.') }}</p>
+  <p class="gp-ayuda">{{ _('Una tras otra: la primera con sus imágenes y cada siguiente arranca en el último cuadro de la anterior, con los mismos personajes. Corre sola (unos 5 minutos por escena); puedes cerrar la página. Si una escena falla, la cadena se detiene y no cobra lo que sigue.') }}</p>
+  <p class="gp-ayuda">{{ _('Wan 3.0 es la más barata: cada escena recibe el último cuadro de la anterior y sus imágenes como referencias. Kling O3 Pro arranca exactamente en ese cuadro y fija las caras con «elementos», pero cuesta más.') }}</p>
   <div class="gpg-error flash error" hidden></div>
 
   {% if C.corriendo %}
     <p class="gpg-cadena-estado">
-      {% if est.preparando %}{{ _('Preparando los personajes en Kling…') }}
+      {{ _('Con %(modelo)s.', modelo=C.modelo_nombre|traducir) }}
+      {% if est.preparando %}{{ _('Preparando los personajes en Kling…') if C.modelo == 'kling_o3_pro' else _('Preparando…') }}
       {% elif est.detener %}{{ _('Se detiene al terminar la escena en curso.') }}
       {% else %}{{ ngettext('Generando: %(num)s de %(total)s escena lista.', 'Generando: %(num)s de %(total)s escenas listas.',
                            C.filas | selectattr('estado', 'equalto', 'lista') | list | length, total=C.total) }}{% endif %}
@@ -39,22 +41,26 @@
   {% endif %}
 
   {% if not C.corriendo %}
-    {% if C.revision %}
-      <p class="gp-ayuda">{{ _('Antes de generar falta resolver esto:') }}</p>
-      <ul class="gpg-cadena-faltan">
-        {% for p in C.revision %}<li>{% if p.indice %}{{ _('Escena %(n)s: ', n=p.indice) }}{% endif %}{{ p.motivo }}</li>{% endfor %}
-      </ul>
-      <div class="gp-botones"><button type="button" class="btn-generar btn-sm" disabled>{{ ngettext('Generar %(num)s escena', 'Generar las %(num)s escenas', C.total) }}</button></div>
-    {% elif C.precio is not none %}
-      <div class="gp-botones">
-        <button type="button" class="btn-generar btn-sm" data-gpg-accion="/videos/{{ video.id }}/cadena"
-                data-gpg-cuerpo='{{ {"desde": cadena_primera, "total_visto": C.precio|precio}|tojson }}'
-                data-gpg-confirmar="{{ ngettext('Se genera %(num)s escena con Kling O3 Pro por ≈ US$ %(precio)s. Nada más se cobra hasta que la apruebes de nuevo. ¿Generar?', 'Se generan %(num)s escenas con Kling O3 Pro, una tras otra, por ≈ US$ %(precio)s en total. Si una falla, la cadena se detiene y no cobra lo que sigue. ¿Generar?', C.total, precio='%.2f' % (C.precio | precio)) }}">
-          {{ ngettext('Generar %(num)s escena', 'Generar las %(num)s escenas', C.total) }} · ≈ US$ {{ '%.2f' % (C.precio | precio) }}</button>
-      </div>
-    {% endif %}
+    {% for o in C.opciones %}
+    <div class="gpg-cadena-opcion">
+      {% if o.revision %}
+        <p class="gp-ayuda">{{ _('Con %(modelo)s, antes de generar falta resolver esto:', modelo=o.nombre|traducir) }}</p>
+        <ul class="gpg-cadena-faltan">
+          {% for p in o.revision %}<li>{% if p.indice %}{{ _('Escena %(n)s: ', n=p.indice) }}{% endif %}{{ p.motivo }}</li>{% endfor %}
+        </ul>
+        <div class="gp-botones"><button type="button" class="{{ 'btn-generar' if loop.first else 'btn-guardar' }} btn-sm" disabled>{{ _('Generar con %(modelo)s', modelo=o.nombre|traducir) }}</button></div>
+      {% elif o.precio is not none %}
+        <div class="gp-botones">
+          <button type="button" class="{{ 'btn-generar' if loop.first else 'btn-guardar' }} btn-sm" data-gpg-accion="/videos/{{ video.id }}/cadena"
+                  data-gpg-cuerpo='{{ {"desde": cadena_primera, "total_visto": o.precio|precio, "modelo": o.modelo}|tojson }}'
+                  data-gpg-confirmar="{{ ngettext('Se genera %(num)s escena con %(modelo)s por ≈ US$ %(precio)s. Nada más se cobra hasta que la apruebes de nuevo. ¿Generar?', 'Se generan %(num)s escenas con %(modelo)s, una tras otra, por ≈ US$ %(precio)s en total. Si una falla, la cadena se detiene y no cobra lo que sigue. ¿Generar?', C.total, modelo=o.nombre|traducir, precio='%.2f' % (o.precio | precio)) }}">
+            {{ ngettext('Generar %(num)s escena con %(modelo)s', 'Generar las %(num)s escenas con %(modelo)s', C.total, modelo=o.nombre|traducir) }} · ≈ US$ {{ '%.2f' % (o.precio | precio) }}</button>
+        </div>
+      {% endif %}
+      {% for a in o.avisos %}<p class="gp-ayuda gpg-cadena-aviso">{{ o.nombre|traducir }} · {{ _('Escena %(n)s: ', n=a.indice) }}{{ a.motivo }}</p>{% endfor %}
+    </div>
+    {% endfor %}
   {% endif %}
-  {% for a in C.avisos %}<p class="gp-ayuda gpg-cadena-aviso">{{ _('Escena %(n)s: ', n=a.indice) }}{{ a.motivo }}</p>{% endfor %}
 
   {% if est %}
   <ol class="gpg-cadena-escenas">
@@ -66,7 +72,7 @@
       {% if f.rehacer_precio is not none %}
       <button type="button" class="btn-xs" data-gpg-accion="/videos/{{ video.id }}/cadena"
               data-gpg-cuerpo='{{ {"desde": f.indice, "total_visto": f.rehacer_precio|precio}|tojson }}'
-              data-gpg-confirmar="{{ _('Se vuelven a generar la escena %(n)s y las siguientes por ≈ US$ %(precio)s. Las anteriores se quedan como están. ¿Rehacer?', n=f.indice, precio='%.2f' % (f.rehacer_precio | precio)) }}">{{ _('Rehacer desde aquí') }} · ≈ US$ {{ '%.2f' % (f.rehacer_precio | precio) }}</button>
+              data-gpg-confirmar="{{ _('Se vuelven a generar la escena %(n)s y las siguientes con %(modelo)s por ≈ US$ %(precio)s. Las anteriores se quedan como están. ¿Rehacer?', n=f.indice, modelo=C.modelo_nombre|traducir, precio='%.2f' % (f.rehacer_precio | precio)) }}">{{ _('Rehacer desde aquí') }} · ≈ US$ {{ '%.2f' % (f.rehacer_precio | precio) }}</button>
       {% endif %}
     </li>
     {% endfor %}

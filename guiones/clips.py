@@ -12,8 +12,8 @@ from flask_babel import gettext
 
 import doctrina
 import idiomas
-from guiones import claude, datos, duracion, plantillas, refinador
-from guiones.refinador import Conflicto, NoExiste, _normalizar
+from guiones import claude, config, datos, duracion, plantillas, refinador
+from guiones.refinador import Conflicto, DatoInvalido, NoExiste, _normalizar
 
 log = logging.getLogger(__name__)
 
@@ -48,6 +48,34 @@ def _enteros(valor):
 def hooks_esperados(lectura, config):
     todos = ["original"] + [h["id"] for h in lectura.get("hooks", [])]
     return [h for h in todos if h != config.get("hook", "original")]
+
+
+def lineas_que_no_caben(video):
+    """Aviso (en el idioma de quien mira) si alguna línea que se va a decir —o
+    un hook alternativo, que también es un clip 1— dura sola más de 15 s al
+    ritmo de la versión; "" si todas caben. Gratis y antes de cobrar «Armar
+    clips»: con una línea así ningún plan pasa V2/V3 y cada vuelta se paga
+    (incidente 2026-10-14, pedido de Daniel)."""
+    lec, cfg = video["guion"]["lectura"], video["config"]
+    wps = cfg["palabras_por_segundo"]
+    textos = duracion.textos_efectivos(lec, cfg.get("hook", "original"))
+    lineas = duracion.conservadas(textos, video["recorte"].get("quitadas", []))
+    hooks = [(h, duracion.textos_efectivos(lec, h)[1]) for h in hooks_esperados(lec, cfg)]
+    largas = [gettext("línea %(n)s (%(s)s s)", n=n, s=idiomas.numero(s, 1))
+              for n, s in duracion.lineas_largas(lineas, wps)]
+    largas += [gettext("el hook %(hid)s (%(s)s s)", hid=h, s=idiomas.numero(s, 1))
+               for h, s in duracion.lineas_largas(hooks, wps)]
+    if not largas:
+        return ""
+    texto = gettext("A %(wps)s palabras/s estas líneas duran solas más de 15 s, el máximo de un clip, y una línea "
+                    "no se parte entre clips: %(lista)s.", wps=idiomas.numero(wps, 1), lista=", ".join(largas))
+    minimo = duracion.ritmo_minimo(lineas + hooks)
+    if minimo <= config.WPS_MAX:
+        texto += " " + gettext("Sube el ritmo a %(min)s palabras/s o más, o parte cada una en dos (duplica el guion "
+                               "para editar la lectura).", min=idiomas.numero(minimo, 1))
+    else:
+        texto += " " + gettext("Parte cada una en dos: duplica el guion para editar la lectura.")
+    return texto
 
 
 def _clip_forma(c, i):
@@ -394,14 +422,20 @@ def armar(video_id, llamar=None):
             log.exception("guiones: tampoco se pudo marcar el error del video %s", video_id)
 
 
-def version_con_bloque(cliente, video_id, bloque):
-    """Versión nueva con el mismo plan y otro bloque del video: re-escribe y re-valida sin llamar a Claude."""
+def version_con_bloque(cliente, video_id, bloque, idioma_dialogo=None):
+    """Versión nueva con el mismo plan y otro bloque del video (y, si llega, otro
+    idioma del diálogo, que no cambia el plan): re-escribe y re-valida sin llamar a Claude."""
     v = datos.video(cliente, video_id)
     if v is None:
         raise NoExiste(gettext("Esa versión no existe."))
     if not v.get("plan"):
         raise Conflicto(gettext("Esta versión todavía no tiene clips armados."))
     plan = dict(v["plan"], bloque_video={k: (_str(bloque.get(k)) or d) for k, d in DEFECTOS_BLOQUE.items()})
-    nuevo = datos.nueva_version(cliente, video_id, plan=plan)
+    cfg = None
+    if idioma_dialogo:
+        if idioma_dialogo not in config.IDIOMAS_DIALOGO:
+            raise DatoInvalido(gettext("Ese idioma del diálogo no está disponible."))
+        cfg = dict(v["config"], idioma_dialogo=idioma_dialogo)
+    nuevo = datos.nueva_version(cliente, video_id, config=cfg, plan=plan)
     _guardar(datos.video_para_trabajo(nuevo), plan, 0.0)
     return nuevo
