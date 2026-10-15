@@ -76,7 +76,8 @@ PND-036 (2026-10-03): organico.crear rechaza tipo imagen antes de insertar una p
 **Error del legado (2026-10-07, PND-096):** la tarea `meta_publicar` sigue registrada para filas antiguas.
 Su subcódigo 1885183/modo Desarrollo tiene mensaje propio por gettext, separado de permisos (#3), sin prometer
 reutilización que ese camino no implementa. `tests/test_tareas_meta.py` provoca el rechazo con dobles; no cambia
-la publicación ni los reintentos.
+la publicación ni los reintentos. Desde PND-324 (2026-10-15) esa tarea pasa por los frenos de plata del lanzador
+(`comprobar_moneda` y la lectura de vuelta del diario): detalle en la skill `experimentos`, «Plata hacia Meta».
 
 **Conexión «solo métricas» (2026-10-08, Meta rendimiento E1):** en modo propia, `meta_elegir` acepta una cuenta publicitaria
 SIN Página (`page_id` vacío o ausente; la opción «Sin Página (solo métricas)» va al final de la lista, marcada solo si no

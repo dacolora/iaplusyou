@@ -10,9 +10,11 @@ limpiar() para que dos proyectos nunca se mezclen si esto corre en un proceso
 con más de un hilo (gunicorn, tests).
 
 `_miniatura_para_ad`, `_extraer_frame` y MONEDAS_SIN_DECIMALES están copiados
-tal cual de dashboard.py (que conserva los suyos). La ruta sigue validando el
-mínimo diario y guardando moneda/presupuesto en la fila antes de encolar; acá
-se relee la moneda de meta.json solo para convertir el presupuesto a centavos.
+tal cual de dashboard.py (que conserva los suyos). Hoy ninguna ruta encola
+meta_publicar, pero la tarea sigue registrada para los anuncios sueltos viejos y
+pasa por los mismos frenos de plata que el lanzador (PND-324, 2026-10-15):
+`lanzador.comprobar_moneda` antes de crear nada y la lectura de vuelta del
+diario (`lanzador._confirmar_presupuesto`) después de crear el conjunto.
 """
 import os
 import subprocess
@@ -85,7 +87,9 @@ def interrumpida(tarea, mensaje):
 def publicar(tarea):
     """Campaign -> AdSet -> AdCreative -> Ad, todo PAUSED. Se encola con
     max_intentos=1: reintentar automáticamente solo crearía campañas huérfanas
-    en Meta; la persona reintenta con "Volver a intentar"."""
+    en Meta; la persona reintenta con "Volver a intentar". Ningún monto sale sin
+    `lanzador.comprobar_moneda`, y si Meta guarda en el conjunto otro diario que
+    el enviado, el conjunto queda en pausa y no se crea el anuncio (PND-324)."""
     p = tarea["payload"]
     cliente, ad_id = p["cliente"], p["ad_id"]
     objetivo = p["objetivo"]
@@ -109,19 +113,22 @@ def publicar(tarea):
         ads.actualizar(cliente, ad_id, estado="error", error=msg)
         return msg
 
-    # El presupuesto se escribe en la MONEDA DE LA CUENTA (meta.json -> moneda):
-    # Meta interpreta daily_budget en esa divisa. Antes se asumía USD y con una
-    # cuenta en COP "5" terminaba siendo 500 pesos diarios.
-    moneda = (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
+    # El presupuesto se escribe en la MONEDA DE LA CUENTA: Meta interpreta daily_budget en esa divisa. Antes se
+    # asumía USD y con una cuenta en COP "5" terminaba siendo 500 pesos diarios. La de la ficha manda (el diario se
+    # escribió en esa moneda, como al activar en dashboard.cambiar_estado_ad); si no la tiene, la de meta.json.
+    moneda = entry.get("moneda") or (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
+    # Import tardío: lanzador importa este módulo (_LOCK, _miniatura_para_ad).
+    import lanzador  # noqa: PLC0415
 
     # Serializado: meta_auth.configurar() escribe credenciales globales del
     # proceso (meta_ads/auth._CREDENCIALES); el lock cubre configurar ->
     # llamadas a Meta -> limpiar() para que dos proyectos nunca se mezclen.
     with _LOCK:
-        # Meta recibe el presupuesto en la unidad de la divisa según su tabla (centavos para USD o EUR; la moneda
-        # entera para COP, CLP o JPY): `monedas_meta`, que se niega con una moneda fuera de la tabla.
-        centavos = monedas_meta.a_unidad_meta(presupuesto_diario, moneda)
         try:
+            # Meta recibe el presupuesto en la unidad de la divisa según su tabla (centavos para USD o EUR; la moneda
+            # entera para COP, CLP o JPY): `monedas_meta`, que se niega con una moneda fuera de la tabla. Dentro del
+            # try: una moneda fuera de la tabla deja la ficha en error, no en «publicando».
+            centavos = monedas_meta.a_unidad_meta(presupuesto_diario, moneda)
             # Credenciales del proyecto (meta.json), no del .env: cada
             # cliente conectó su propia cuenta desde FlowMarketing.
             creds = meta_conexion.credenciales_ads(cliente)
@@ -129,6 +136,9 @@ def publicar(tarea):
                 # Conexión «solo métricas»: el creative exige Página; se frena antes de crear campaña o conjunto.
                 raise ValueError(meta_conexion.error_solo_metricas(cliente))
             meta_auth.configurar(creds["token"], creds["ad_account_id"], creds["page_id"])
+            # PND-324: los mismos frenos que el lanzador (PND-322). Antes de crear nada, la cuenta factura en esa
+            # moneda y la unidad cuadra con su mínimo diario; después de crear el conjunto, el diario se lee de vuelta.
+            lanzador.comprobar_moneda(lanzador._cuenta_meta(creds), moneda)
             campaign_resp = meta_campaign.crear_campaign(entry["nombre"], objetivo)
             campaign_id = campaign_resp["id"]
             # Se guarda ya: si un paso posterior falla o el proceso muere, el
@@ -142,6 +152,13 @@ def publicar(tarea):
                 f"{entry['nombre']} — adset", campaign_id, objetivo, targeting, centavos, dias,
             )
             adset_id = adset_resp["id"]
+            # El conjunto queda anotado (para revisarlo en Meta si lo de abajo falla) con el diario y la moneda que se
+            # mandaron: «Activar» de un anuncio suelto vuelve a leer ese diario contra Meta antes de encender.
+            ads.actualizar(cliente, ad_id, presupuesto_diario=presupuesto_diario, moneda=moneda, meta_ids={
+                "campaign_id": campaign_id, "adset_id": adset_id, "ad_id": None, "creative_id": None,
+            })
+            # Si Meta guardó otro diario, el conjunto queda en pausa y no se crea nada más (PresupuestoNoCoincide).
+            lanzador._confirmar_presupuesto(adset_id, centavos)
 
             ig_user_id = creds["ig_user_id"]
             # Parámetros de rastreo de Triple Whale si el proyecto lo conectó.

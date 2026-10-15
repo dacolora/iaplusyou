@@ -125,7 +125,12 @@ siga ACTIVA en Meta se vuelve a pausar, salvo que alguien lo esté activando (`e
 lectura deja un solo aviso, no uno cada 10 min. Si una lectura de
 vuelta no coincide y la pausa falla, el país NO se marca «pausado» (el aviso dice «páusalo en Meta ya») para que la
 vigilancia lo siga contando. «Activar» de un anuncio suelto (`dashboard.cambiar_estado_ad`) pasa por los mismos
-frenos y se niega si la ficha no tiene su `presupuesto_diario`.
+frenos y se niega si la ficha no tiene su `presupuesto_diario`. La tarea vieja que los publicaba (`meta_publicar`,
+`tareas/meta.publicar`; ninguna ruta la encola, pero sigue registrada para los anuncios sueltos viejos) también
+(PND-324, 2026-10-15): `comprobar_moneda` antes de crear la campaña, con la moneda de la ficha (si no tiene, la de
+`meta.json`), y `_confirmar_presupuesto` después de crear el conjunto; si Meta guardó otro diario, el conjunto queda en
+pausa, no se crean creative ni anuncio y la ficha queda en error con el conjunto anotado. Al crear el conjunto la ficha
+guarda `presupuesto_diario` y `moneda`, que es lo que «Activar» vuelve a leer contra Meta (`tests/test_tareas_meta.py`).
 
 **Decisor, escalera y modos** (`decisor.py`, `modos.py`, `propuestas.py`, `acciones.py`,
 `derivaciones.py`, `notificaciones.py`): the part of the loop that closes on its own.
