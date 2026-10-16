@@ -19,6 +19,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects.sqlite import insert as insert_sqlite
 
 import db
+from triple_whale import memo
 
 # Columnas de ads_table y de pixel_joined_tvf en tw_anuncio_dia.
 COLUMNAS_DIMENSION = ("cuenta_id", "campana_id", "campana", "conjunto_id", "conjunto", "anuncio", "estado_anuncio",
@@ -176,6 +177,7 @@ def _canales_pagados(cliente, tienda_id):
     return sa.select(t.c.canal).where(*cond).group_by(t.c.canal).having(sa.func.sum(t.c.gasto) > 0)
 
 
+@memo.precalculable
 def totales_por_anuncio(cliente, tienda_id, desde, hasta, canal=None):
     """Una fila por (canal, anuncio) con las medidas sumadas en [desde, hasta]
     y las dimensiones más recientes que no estén vacías. Solo anuncios con
@@ -228,6 +230,7 @@ def totales_anuncio(cliente, tienda_id, canal, ad_id, desde, hasta=None):
 CAMPOS_VISITANTES = ("ad_id", "conjunto_id", "campana_id", "cuenta_id")
 
 
+@memo.precalculable(conjuntos=("ids",))
 def visitantes_por(cliente, campo, ids, desde=None, hasta=None, canal="facebook-ads"):
     """Visitantes únicos y nuevos sumados por anuncio, conjunto, campaña o cuenta (`campo`), para el NVP de
     pantallas que no leen esta copia (pestaña Meta, Experimentos; spec 2026-10-09-nvp-visitantes-nuevos §4).
@@ -261,6 +264,7 @@ def visitantes_por(cliente, campo, ids, desde=None, hasta=None, canal="facebook-
                 for r in con.execute(q) if r.visitantes}
 
 
+@memo.precalculable
 def serie_anuncios(cliente, tienda_id, desde, hasta, canal=None):
     """Por día: gasto de anuncios e ingresos atribuidos por el Pixel (de un canal, si se pide), solo de canales
     con gasto en la copia del alcance (R9)."""
@@ -314,6 +318,7 @@ def _con_primer_dia(d, p):
     return d.join(p, sa.and_(p.c.canal == d.c.canal, p.c.ad_id == d.c.ad_id))
 
 
+@memo.precalculable
 def gasto_por_antiguedad(cliente, tienda_id, desde, hasta, canal=None):
     """{fecha: gasto de los anuncios nuevos ese día}, de los días con algún anuncio con gasto."""
     d, p = _medidas_dia(cliente, tienda_id, desde, hasta, canal), _primeros_dias(cliente, tienda_id)
@@ -324,6 +329,7 @@ def gasto_por_antiguedad(cliente, tienda_id, desde, hasta, canal=None):
         return {f: float(g or 0) for f, g in con.execute(q)}
 
 
+@memo.precalculable
 def gasto_por_canal(cliente, tienda_id, desde, hasta):
     """{fecha: {canal: {"gasto", "ingresos"}}} de los canales con gasto ese día (los ingresos son del Pixel).
     Direct, Klaviyo, orgánico y demás fuentes sin gasto no entran: no son anuncios."""
@@ -363,6 +369,7 @@ def arrancaron_el(cliente, tienda_id, fecha, canal=None):
         return int(con.execute(q).scalar() or 0)
 
 
+@memo.precalculable
 def cohortes(cliente, tienda_id, desde, hasta, canal=None, conocido_desde=None):
     """Creativos por mes de arranque en [desde, hasta] (spec §2.5): por mes, anuncios con gasto en el periodo,
     gasto e ingresos del Pixel; gasto e ingresos de nuevos y de establecidos solo en días con antigüedad
@@ -416,6 +423,7 @@ def _duplicado_por_dia(cliente, desde, hasta, solo_con_fila_tienda=False):
             .group_by(por_anuncio.c.fecha).subquery())
 
 
+@memo.precalculable
 def gasto_duplicado(cliente, desde, hasta, tienda_id=None):
     """Gasto de anuncios que llega repetido por varias tiendas en [desde, hasta]
     (mayor que 0 = hay tiendas que comparten cuenta publicitaria). Sin tienda
@@ -475,6 +483,7 @@ def primer_dia_tienda(cliente, tienda_id=None):
         return con.execute(sa.select(sa.func.min(t.c.fecha)).where(*cond)).scalar()
 
 
+@memo.precalculable
 def serie_tienda(cliente, tienda_id, desde, hasta):
     """La tienda por día. Con todas, suma las tiendas y le quita al `gasto` el
     gasto duplicado de ese día (se lo devuelve a `utilidad_neta`, que lo había
@@ -521,6 +530,7 @@ def por_tienda(cliente, desde, hasta, desde_prev, hasta_prev):
              "previo": {c: f[f"p_{c}"] for c in COLUMNAS_POR_TIENDA}} for f in filas]
 
 
+@memo.precalculable
 def top_productos(cliente, tienda_id, desde, hasta, limite=10):
     """Los productos que más vendieron en [desde, hasta] (por ingresos), con
     el nombre y el sku más recientes que no estén vacíos. Con una tienda, por
@@ -574,14 +584,34 @@ def rango(cliente, tienda_id=None):
     return {"desde": desde, "hasta": hasta, "filas": int(filas or 0), "anuncios": int(anuncios or 0)}
 
 
+def rango_ligero(cliente, tienda_id=None):
+    """{"desde", "hasta", "filas"} de lo copiado para el panel, que solo usa la primera fecha y si hay filas: MIN, MAX y
+    COUNT de las filas crudas sobre el índice (cliente[, tienda], fecha). `filas` cuenta filas por tienda (un anuncio
+    que llega por dos tiendas cuenta dos); para el número deduplicado y los anuncios distintos está `rango`, que agrupa
+    cada (canal, anuncio, día) y en «Todas» con las 5 tiendas de happyflops tardaba 2,2 s por llamada (2026-10-15)."""
+    t = db.tw_anuncio_dia
+    cond = [t.c.cliente == cliente] + ([t.c.tienda_id == tienda_id] if tienda_id is not None else [])
+    q = sa.select(sa.func.min(t.c.fecha), sa.func.max(t.c.fecha), sa.func.count()).where(*cond)
+    with db.conectar() as con:
+        desde, hasta, filas = con.execute(q).one()
+    return {"desde": desde, "hasta": hasta, "filas": int(filas or 0)}
+
+
+@memo.precalculable
 def canales(cliente, tienda_id, desde, hasta):
     """Canales con gasto en el rango, del que más gastó al que menos. Uno con impresiones y sin gasto (o solo con lo
     que atribuye el Pixel) no se ofrece en el filtro «Canal»: R9 deja fuera los canales sin gasto y su galería saldría
     vacía (revisión final de E1, 2026-10-10)."""
-    d = _anuncio_dia(cliente, tienda_id, desde, hasta)
-    q = (sa.select(d.c.canal).group_by(d.c.canal)
-         .having(sa.func.sum(d.c.gasto) > 0)
-         .order_by(sa.func.sum(d.c.gasto).desc()))
+    # Sobre las filas crudas, sin la subconsulta que agrupa cada (canal, anuncio, día) de todas las tiendas (2,3 s en
+    # «Todas» con las 5 tiendas de happyflops, 2026-10-15): un canal tiene gasto si alguna fila lo tiene. El orden suma
+    # el gasto por tienda (un anuncio compartido cuenta en cada una): solo ordena las opciones del filtro.
+    t = db.tw_anuncio_dia
+    cond = [t.c.cliente == cliente, t.c.fecha >= desde, t.c.fecha <= hasta]
+    if tienda_id is not None:
+        cond.append(t.c.tienda_id == tienda_id)
+    q = (sa.select(t.c.canal).where(*cond).group_by(t.c.canal)
+         .having(sa.func.sum(t.c.gasto) > 0)
+         .order_by(sa.func.sum(t.c.gasto).desc(), t.c.canal))
     with db.conectar() as con:
         return [r[0] for r in con.execute(q)]
 
@@ -607,6 +637,7 @@ def cuentas_meta_de_tiendas(cliente):
     return salida
 
 
+@memo.precalculable
 def totales_por_grupo(cliente, tienda_id, desde, hasta, nivel):
     """{campana_id | conjunto_id: {"gasto", "pedidos", "ingresos"}} de los anuncios de Meta en [desde, hasta], para
     poner las ventas de Triple Whale en la tabla de campañas y conjuntos de Meta (spec 2026-10-09 §4). Gasto MAX

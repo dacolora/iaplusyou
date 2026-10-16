@@ -364,8 +364,49 @@ métricas en la pestaña, «desde Triple Whale». Spec `docs/superpowers/specs/2
   «(not set)»/«sag_organic» con ventas y gasto 0).
 - **Tipo**: `tw_creativo.tipo` (`datos.tipos_creativo`, UNA consulta); sin tipo: video con vistas de 3 s, imagen en Meta,
   y en otro canal «—» y fuera de las tarjetas (un anuncio de búsqueda de Google no es una imagen).
+- **Solo Meta por defecto (2026-10-15)**: sin canal elegido y con Meta junto a otros canales, las cuatro listas son
+  solo de Meta (`resumir(solo_canal=)`) y la vara de «iterar» es el ROAS de Meta; una línea lo dice. Motivo: la
+  búsqueda de marca de Google (ROAS ~90×) llenaba las listas e inflaba la vara. «Productos» sigue con todos.
 - **Lecturas fijas**: tipos, Catálogo y los creativos de las ≤ 12 tarjetas
   (`test_las_consultas_del_panel_no_crecen_con_los_anuncios`). No cobra ni llama a nadie.
+
+## Periodos (2026-10-15)
+
+Daniel pidió «15 días, un mes, 3 meses, 6 meses, un año» y dejar 7 días: `triple_whale.panel.PERIODOS = (0, 7, 15, 30, 90,
+180, 365)` es el ÚNICO juego (lo importan `pestana_rendimiento.panel`, `resumen` y `meta_rendimiento.panel`, donde
+`PERIODOS` son los mismos sin el 0). Los nombres salen de la macro `periodo` de `_rend_macros.html` («Último mes»,
+«Últimos 3 meses»…). Un valor que no es del selector (los viejos 14 días, 60…) abre «Desde el inicio». La «Evaluación
+con IA» de Meta (pagada) mira el periodo elegido a lo sumo 90 días (`meta_rendimiento.panel._dias_periodo`,
+`DIAS_ANUNCIOS_MAX`: sus anuncios se guardan 90 días), y «Desde el inicio» o un valor raro, 30; el botón y la ruta que
+cobra usan esa misma función. Alcance y segmentos de Meta toman la ventana copiada más cercana (15 → 14; 6 meses y
+1 año → 90). Pruebas: `tests/test_rendimiento_periodos.py`.
+
+## Sumas precalculadas y un año de historia (2026-10-15)
+
+Por qué: con las 5 tiendas de happyflops «Todas, desde el inicio» tardaba 24 s en el VPS (7 u 8 sumas de 1–2,5 s sobre la
+copia entera) y Daniel pidió un año de historia (4 veces más filas). Spec
+`docs/superpowers/specs/2026-10-15-rendimiento-sumas-precalculadas-design.md`, pruebas `tests/test_tw_memo.py` y
+`tests/test_tw_precalculo.py`.
+
+- Las once sumas pesadas de `triple_whale/datos.py` (`totales_por_anuncio`, `serie_tienda`, `serie_anuncios`,
+  `cohortes`, `gasto_por_antiguedad`, `gasto_por_canal`, `gasto_duplicado`, `canales`, `top_productos` y, desde el
+  2026-10-16, las que usa la parte de Meta: `totales_por_grupo` y `visitantes_por`, con `conjuntos=("ids",)` porque sus ids
+  llegan en el orden de un conjunto y cambian entre procesos) llevan
+  `@memo.precalculable`: con los mismos argumentos y la misma versión de los datos (`memo.version`: cada tienda con su
+  última copia, país y dominio, y moneda, modelo y ventana), devuelven lo grabado en `tw_memo` (migración 0041); si
+  no, consultan como siempre. Se guardan sumas, no la pantalla (veredictos y textos van en el idioma de quien mira).
+- Graba SOLO el worker: `tw_precalcular` (carril de lectura, exenta de Cobros, un intento) corre
+  `pestana_rendimiento.panel.contexto` para «Todas» y cada entrada de fuente "tw" (`claves_con_triple_whale`) con
+  todos los periodos y sin canal, dentro de `memo.grabando`. La pide la última copia del proyecto que termina (donde
+  `reservar_aviso_sync` reserva los avisos). Si una copia termina en medio, no guarda nada. Quitar tiendas borra lo
+  grabado (`_borrar_copias` → `memo.borrar_en`).
+- Medido en producción con un año (2026-10-16): «Todas, desde el inicio» 18,8 s con lo de Triple Whale grabado (14 aciertos,
+  0 faltas); lo que quedaba eran `totales_por_grupo` y `visitantes_por` (12 s), grabadas desde entonces. Lo que sigue en
+  vivo: los veredictos en Python (~4 s en «Todas») y las lecturas de la copia de Meta.
+- Con canal elegido, el detalle de un día y todo lo de Meta: en vivo. Una suma nueva que se agregue a la pestaña
+  necesita su `@memo.precalculable` si es pesada y su resultado sobrevive igual a JSON (la prueba de ida y vuelta).
+- Historia: `tw_sincronizar` acepta `desde` en el pedido (hasta hoy; uno raro, futuro o de hace más de dos años se
+  ignora); `tareas.triple_whale.encolar_historia(cliente, dias=365)` lo pide para cada tienda.
 
 ## Trampas
 

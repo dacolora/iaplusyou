@@ -264,7 +264,7 @@ def test_el_periodo_y_los_params(base_temporal):
     assert inicio["dias"] == 0 and inicio["desde"] == _hace(6) and inicio["hasta"] == hoy.isoformat()
 
 
-@pytest.mark.parametrize("raro", [5, None, "30", True, 1.5, -7, 365])
+@pytest.mark.parametrize("raro", [5, None, "30", True, 1.5, -7, 14, 60])
 def test_un_periodo_raro_cae_en_desde_el_inicio(base_temporal, raro):
     _dos_suecas()
     alc = _alc([SE1], raro)

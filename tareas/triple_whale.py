@@ -55,7 +55,7 @@ from meta_rendimiento import creativo as meta_creativo
 from meta_rendimiento import tasas
 from nicho.avatares import costo_real
 from storage import r2_uploader
-from tareas import al_interrumpir, ref_sufijo, registrar
+from tareas import Continuar, al_interrumpir, ref_sufijo, registrar
 from tareas import edicion as tareas_edicion
 from tareas.cadena import VIVOS_CREAR
 from triple_whale import analisis, avisos, datos, ganchos, mejorar, paises, sync
@@ -65,10 +65,15 @@ log = logging.getLogger("creatv.tareas.triple_whale")
 TIPO_SYNC = "tw_sincronizar"
 TIPO_TODAS = "tw_sincronizar_todas"
 TIPO_EVALUAR = "tw_evaluar"
+TIPO_PRECALCULAR = "tw_precalcular"
+ETAPAS_PRECALCULAR = [(idiomas.N_("Preparando tu rendimiento"), 100)]
 ETAPAS_SYNC = [(idiomas.N_("Trayendo métricas"), 100)]
 ETAPAS_EVALUAR = [(idiomas.N_("Buscando miniaturas"), 10), (idiomas.N_("Sacando fotogramas"), 15),
                   (idiomas.N_("Analizando con Claude"), 75)]
 MAX_INTENTOS_SYNC = 2
+DIAS_HISTORIA_MAX = 730    # un `desde` más viejo que dos años en el pedido de una copia se ignora
+VUELTAS_PRECALCULO = 3     # si una copia termina en medio, el precálculo se repite hasta 3 veces (revisión 2026-10-15)
+ESPERA_PRECALCULO = timedelta(minutes=2)
 
 
 def job_id_sync(cliente, tienda_id):
@@ -77,6 +82,38 @@ def job_id_sync(cliente, tienda_id):
 
 def job_id_evaluar(cliente):
     return f"{cliente}__tw_evaluar"
+
+
+def job_id_precalcular(cliente):
+    return f"{cliente}__tw_precalcular"
+
+
+def _fecha_pasada(valor):
+    """`valor` si es una fecha ISO de hoy o antes (y no de hace más de dos años); si no, None."""
+    try:
+        f = date.fromisoformat(str(valor or ""))
+    except ValueError:
+        return None
+    hoy = date.today()
+    return f.isoformat() if hoy - timedelta(days=DIAS_HISTORIA_MAX) <= f <= hoy else None
+
+
+def encolar_historia(cliente, dias=365):
+    """Pide, para cada tienda del proyecto, una copia de los últimos `dias` días (Daniel, 2026-10-15: un año de
+    historia). Usa el job_id de la copia normal: con una viva, esa tienda no se pide dos veces. Gratis (Triple Whale no
+    cobra la lectura); al terminar la última, la copia pide el precálculo como siempre. Devuelve cuántas encoló."""
+    desde = (date.today() - timedelta(days=max(1, int(dias)) - 1)).isoformat()
+    return sum(1 for tienda in triple_whale_tiendas.tiendas(cliente) if trabajos.encolar(
+        job_id_sync(cliente, tienda["id"]), TIPO_SYNC, {"cliente": cliente, "tienda_id": tienda["id"], "desde": desde},
+        cliente=cliente, duracion_estimada=600, etapas=ETAPAS_SYNC, max_intentos=MAX_INTENTOS_SYNC))
+
+
+def encolar_precalculo(cliente):
+    """Encola el precálculo de las sumas de la pestaña Rendimiento (spec 2026-10-15). Gratis (solo lee la copia), un
+    intento: si falla, la próxima copia lo vuelve a pedir y mientras tanto la pestaña calcula en vivo. Un segundo
+    encolado con uno vivo no lanza otro."""
+    return trabajos.encolar(job_id_precalcular(cliente), TIPO_PRECALCULAR, {"cliente": cliente}, cliente=cliente,
+                            duracion_estimada=300, etapas=ETAPAS_PRECALCULAR, max_intentos=1, prioridad=2)
 
 
 def encolar_sync(cliente, tienda_id=None):
@@ -374,8 +411,12 @@ def tw_sincronizar(tarea):
         trabajos.reportar(job_id, etapa=idiomas.N_("Trayendo métricas"), progreso=i * 100.0 / max(1, n),
                           detalle=f"{desde} → {hasta}")
 
+    # `desde` en el pedido: traer la historia desde esa fecha hasta hoy (Daniel, 2026-10-15: un año; `encolar_historia`).
+    # Uno raro o futuro se ignora y la copia es la de siempre.
+    desde = _fecha_pasada(tarea["payload"].get("desde"))
+    rango = {"desde": desde, "hasta": date.today().isoformat()} if desde else {}
     try:
-        r = sync.sincronizar(cliente, tienda_id, on_progreso=progreso)
+        r = sync.sincronizar(cliente, tienda_id, on_progreso=progreso, **rango)
     except (triple_whale.ErrorTripleWhale, cifrado.ErrorCifrado) as e:
         mensaje = cola.recortar(_sin_llave(cliente, tienda_id, cola.sin_token(str(e) or type(e).__name__)), 500)
         triple_whale_tiendas.actualizar_tienda(cliente, tienda_id, estado="error", error=mensaje)
@@ -392,6 +433,12 @@ def tw_sincronizar(tarea):
     # una vez y con todo al día. Un fallo aquí no tumba la copia.
     if not triple_whale_tiendas.reservar_aviso_sync(cliente, job_id):
         return texto
+    # La última copia del proyecto que termina deja pedidas las sumas de la pestaña Rendimiento (spec 2026-10-15). Un
+    # fallo aquí no tumba la copia: la pestaña calcula en vivo.
+    try:
+        encolar_precalculo(cliente)
+    except Exception as e:  # noqa: BLE001
+        log.warning("precálculo de Rendimiento de %s: %s", cliente, type(e).__name__)
     try:
         c = avisos.revisar_y_avisar(cliente)
     except Exception as e:  # noqa: BLE001
@@ -401,6 +448,36 @@ def tw_sincronizar(tarea):
         texto += " " + gettext("Aviso enviado: %(g)s ganador(es) nuevo(s), %(c)s cansándose, %(p)s perdedor(es) nuevo(s).",
                                g=len(c["ganadores"]), c=len(c["cansados"]), p=len(c["perdedores"]))
     return texto
+
+
+@registrar(TIPO_PRECALCULAR)
+def tw_precalcular(tarea):
+    """Corre la pestaña Rendimiento («Todas» y cada país con Triple Whale, todos los periodos, sin canal) grabando lo
+    que calculan las sumas pesadas (`triple_whale.memo.grabando`): después, esas vistas solo leen. Si una copia termina
+    en medio no se guarda nada (serían sumas de datos a medias) y la próxima copia lo vuelve a pedir."""
+    from pestana_rendimiento import panel as rpanel
+    from triple_whale import memo
+    cliente = tarea["payload"]["cliente"]
+    job_id = tarea.get("job_id") or job_id_precalcular(cliente)
+    if not triple_whale_tiendas.obtener(cliente):
+        return gettext("Sin Triple Whale conectado: no hay nada que preparar.")
+    vistas = [(entrada, dias) for entrada in [""] + rpanel.claves_con_triple_whale(cliente)
+              for dias in rpanel.PERIODOS]
+    with memo.grabando(cliente) as grabacion:
+        for i, (entrada, dias) in enumerate(vistas):
+            trabajos.reportar(job_id, etapa=idiomas.N_("Preparando tu rendimiento"),
+                              progreso=i * 100.0 / max(1, len(vistas)))
+            rpanel.contexto(cliente, dias, entrada=entrada)
+    vueltas = int(tarea["payload"].get("vueltas") or 0)
+    if grabacion["version_cambio"] and vueltas < VUELTAS_PRECALCULO:
+        # Una copia terminó en medio y su propio pedido no entró (esta tarea seguía viva con el mismo job_id): se
+        # repite en un rato con los datos nuevos, en vez de esperar la próxima copia (hasta 2 h; revisión 2026-10-15).
+        return Continuar(TIPO_PRECALCULAR, {"cliente": cliente, "vueltas": vueltas + 1},
+                         mensaje=gettext("Una copia de Triple Whale terminó mientras se preparaba: se repite."),
+                         ejecutar_desde=datetime.now() + ESPERA_PRECALCULO)
+    if not grabacion["guardadas"]:
+        return gettext("Una copia de Triple Whale terminó mientras se preparaba: se prepara en la próxima vuelta.")
+    return gettext("Rendimiento listo: %(n)s vistas preparadas.", n=len(vistas))
 
 
 @registrar(TIPO_TODAS)

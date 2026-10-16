@@ -38,7 +38,10 @@ from triple_whale import analisis, datos, evaluacion, paises, resultados
 
 # 0 = desde el inicio (todo lo copiado), el defecto desde 2026-10-08: Daniel pidió
 # las métricas en su totalidad porque los periodos cortos confundían a sus clientes.
-PERIODOS = (0, 7, 14, 30, 90)
+# Los periodos del selector de Rendimiento (Daniel, 2026-10-15: 15 días, un mes, 3 meses, 6 meses y un año, más 7 días y
+# «Desde el inicio»). UNO para Triple Whale, Meta y la pestaña: `pestana_rendimiento.panel` y `meta_rendimiento.panel`
+# lo importan de aquí.
+PERIODOS = (0, 7, 15, 30, 90, 180, 365)
 PERIODO_DEFECTO = 0
 MAX_FILAS = 200
 MAX_PRODUCTOS_PANEL = 8
@@ -78,9 +81,9 @@ def periodo(dias, hoy, primero=None):
 
 def _primer_dia(cliente, tienda_id=None):
     """El primer día copiado de Triple Whale (anuncios o tienda), o None."""
-    fechas = [f for f in (datos.rango(cliente, tienda_id).get("desde"),
-                          datos.primer_dia_tienda(cliente, tienda_id)) if f]
-    return min(str(f)[:10] for f in fechas) if fechas else None
+    # Dos MIN sobre los índices (`datos.primer_dia_copia`): con `datos.rango` agrupaba la copia entera para una fecha
+    # (2,2 s por llamada en «Todas» con las 5 tiendas de happyflops, 2026-10-15).
+    return datos.primer_dia_copia(cliente, tienda_id)
 
 
 def tienda_elegida(tiendas, valor):
@@ -653,7 +656,7 @@ def contexto(cliente, dias=PERIODO_DEFECTO, canal=None, tienda_id=None, hoy=None
     ocupadas = {j["tienda"]["id"] for j in jobs_sync}
     copias = [t["ultima_sincronizacion"] for t in en_alcance if t.get("ultima_sincronizacion")]
     ultima_copia = (min(copias) if len(copias) == len(en_alcance) else None) if copias else None
-    rango_copia = datos.rango(cliente, tienda_id)
+    rango_copia = datos.rango_ligero(cliente, tienda_id)
     resultados_ctx = (_resultados(cliente, config, tienda_id, canal, dias, desde, hasta, hoy, ev, bool(serie_tienda),
                                   rango_copia, ultima_copia) if con_resultados else None)
     # La alerta «el MER de la tienda cayó» usa la misma variación que la tarjeta «Retorno (MER)» (días completos,

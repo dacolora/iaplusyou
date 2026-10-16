@@ -152,13 +152,17 @@ def _productos(filas):
     return lista
 
 
-def resumir(anuncios, roas_cuenta, indice, tipos):
+def resumir(anuncios, roas_cuenta, indice, tipos, solo_canal=None):
     """Las cinco piezas de la pantalla, sin tocar la base: «iterar», «conversion», «imagenes», «videos» (filas de
-    `_fila`) y «productos» (con «Otros» al final; la suma de su gasto es la de todos los anuncios)."""
+    `_fila`) y «productos» (con «Otros» al final; la suma de su gasto es la de todos los anuncios). Con `solo_canal`
+    las cuatro listas son solo de ese canal y la vara de «iterar» es el ROAS de ese canal (Daniel, 2026-10-15: la
+    búsqueda de marca de Google, a 90×, inflaba el ROAS de todos los anuncios); «productos» sigue con todos."""
     filas = [_fila(a, indice, tipos) for a in anuncios or []]
     # Las listas y las tarjetas son de anuncios con gasto: Google Ads trae filas como «(not set)» o «sag_organic» con
     # ventas atribuidas y gasto 0, que no son anuncios (§9). «Productos» sí las cuenta: su gasto suma el del tile.
-    pagados = [f for f in filas if f["m"]["gasto"] > 0]
+    pagados = [f for f in filas if f["m"]["gasto"] > 0 and (not solo_canal or f["canal"] == solo_canal)]
+    if solo_canal:
+        roas_cuenta = _div(sum(f["m"]["ingresos"] for f in pagados), sum(f["m"]["gasto"] for f in pagados))
     iterar = sorted((f for f in pagados if roas_cuenta and f["m"]["pedidos"] >= PEDIDOS_MIN_ITERAR
                      and (f["m"]["roas"] or 0) >= roas_cuenta), key=_por_ventas)[:MAX_ITERAR]
     conversion = sorted((f for f in pagados if f["m"]["sesiones"] >= SESIONES_MIN_CONVERSION
@@ -170,6 +174,7 @@ def resumir(anuncios, roas_cuenta, indice, tipos):
             por_grupo[f["grupo"]].append(f)
     return {"iterar": iterar, "conversion": conversion[:MAX_CONVERSION], "imagenes": por_grupo["imagen"],
             "videos": por_grupo["video"], "productos": _productos(filas), "roas_cuenta": roas_cuenta,
+            "solo_canal": solo_canal,
             "minimos": {"pedidos_iterar": PEDIDOS_MIN_ITERAR, "sesiones": SESIONES_MIN_CONVERSION,
                         "pedidos_conversion": PEDIDOS_MIN_CONVERSION}}
 
@@ -186,7 +191,10 @@ def armar(cliente, tw):
     anuncios = ev["anuncios"]
     tipos = datos.tipos_creativo(cliente) if anuncios else {}
     catalogo = tiendas.productos(cliente) if anuncios else []
-    r = resumir(anuncios, ev["cuenta"]["m"].get("roas"), catalogo_indice(catalogo), tipos)
+    # Sin canal elegido y con Meta junto a otros canales, las listas son solo de Meta (ver `resumir`).
+    hay_otros = any(a["canal"] != CANAL_META for a in anuncios)
+    solo = CANAL_META if not tw.get("canal") and hay_otros and any(a["canal"] == CANAL_META for a in anuncios) else None
+    r = resumir(anuncios, ev["cuenta"]["m"].get("roas"), catalogo_indice(catalogo), tipos, solo_canal=solo)
     tarjetas = r["imagenes"] + r["videos"]
     creativos = datos.creativos(cliente, [(f["canal"], f["ad_id"]) for f in tarjetas])
     for f in tarjetas:

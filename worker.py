@@ -113,7 +113,7 @@ PRIORIDAD_SUELTA = 5    # flowplus_lanzar.PRIORIDAD_NORMAL: una pieza pedida des
 # varias cuentas siguen una detrás de otra (los límites de uso de Meta son por usuario y app, no por cuenta), pero
 # ya no ocupan el único hilo general. Las periódicas `meta_rend_sincronizar_todas` y `meta_rend_limpiar` son
 # instantáneas y se quedan en el general.
-CARRIL_LECTURA = ("meta_rend_sincronizar",)
+CARRIL_LECTURA = ("meta_rend_sincronizar", "tw_precalcular")   # largas, gratis y de solo lectura
 HILOS_LECTURA = 1
 # PND-322: la vigilancia del gasto en Meta tiene su propio hilo; en el general esperaba detrás de renders y
 # lanzamientos (a veces horas) y es el freno que corta un gasto que se dispara.

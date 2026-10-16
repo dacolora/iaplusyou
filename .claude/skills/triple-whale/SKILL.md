@@ -756,3 +756,9 @@ cobra con `pedidos.pedir_lote(..., *, costos_vistos)`, cada clave con el costo d
 pintado antes no cobra. Pruebas: `tests/test_tw_tarjetas_rutas.py` (`test_si_el_precio_cambio_*`,
 `test_la_tarjeta_manda_el_precio_que_muestra`) y `tests/test_rendimiento_e2_pedidos.py`; las demás piden la tarjeta y
 mandan su precio (`tests/test_rutas_triple_whale.py::precio_visto`, `con_total` para un lote armado a mano).
+
+**Sumas precalculadas e historia (2026-10-15).** `triple_whale/memo.py` es el único escritor de `tw_memo` (0041): las
+sumas pesadas de `datos.py` llevan `@memo.precalculable` y la tarea `tw_precalcular` las graba después de la última
+copia; `tw_sincronizar` acepta `desde` (historia) y `encolar_historia` la pide por tienda. Detalle en la skill
+`rendimiento`, «Sumas precalculadas y un año de historia».
+

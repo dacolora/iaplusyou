@@ -20,3 +20,13 @@
 {% macro fuente(origen) -%}
 {{ _('Triple Whale') if origen == 'tw' else _('Meta') }}
 {%- endmacro %}
+
+{#- El nombre de un periodo del selector (Daniel, 2026-10-15): en palabras, no «Últimos 30 días». -#}
+{% macro periodo(d) -%}
+{%- if not d -%}{{ _('Desde el inicio') }}
+{%- elif d == 30 -%}{{ _('Último mes') }}
+{%- elif d == 90 -%}{{ _('Últimos 3 meses') }}
+{%- elif d == 180 -%}{{ _('Últimos 6 meses') }}
+{%- elif d == 365 -%}{{ _('Último año') }}
+{%- else -%}{{ _('Últimos %(n)s días', n=d) }}{%- endif -%}
+{%- endmacro %}

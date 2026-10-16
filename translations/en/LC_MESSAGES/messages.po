@@ -15886,6 +15886,9 @@ msgstr "Preparing for the editor…"
 msgid "Preparando sus subtítulos"
 msgstr "Preparing its subtitles"
 
+msgid "Preparando tu rendimiento"
+msgstr "Preparing your performance"
+
 #, python-brace-format
 msgid "Preparando {n} archivo(s) para que la vista previa sea más liviana. Es gratis; mientras tanto se usan los originales."
 msgstr "Preparing {n} file(s) so the preview is lighter. It's free; meanwhile the originals are used."
@@ -17193,6 +17196,10 @@ msgstr "Rendering segment %(i)s/%(n)s"
 msgid "Rendimiento"
 msgstr "Performance"
 
+#, python-format
+msgid "Rendimiento listo: %(n)s vistas preparadas."
+msgstr "Performance ready: %(n)s views prepared."
+
 msgid "Renovación apagada"
 msgstr "Renewal turned off"
 
@@ -18040,6 +18047,9 @@ msgstr "Without an assigned Page only metrics are read: ads can't be launched an
 msgid "Sin Página solo se leen métricas: no se pueden lanzar anuncios y la publicación orgánica queda apagada."
 msgstr "Without a Page only metrics are read: ads can't be launched and organic posting stays off."
 
+msgid "Sin Triple Whale conectado: no hay nada que preparar."
+msgstr "Triple Whale is not connected: there is nothing to prepare."
+
 msgid "Sin URL"
 msgstr "No URL"
 
@@ -18359,6 +18369,9 @@ msgstr "I only accept .csv or .xlsx files."
 
 msgid "Solo activos"
 msgstr "Active only"
+
+msgid "Solo anuncios de Meta, aquí y en las tres listas de abajo: elige otro canal en «Canal» para ver los demás."
+msgstr "Meta ads only, here and in the three lists below: pick another channel in «Channel» to see the rest."
 
 msgid "Solo anuncios que siguen activos"
 msgstr "Only ads that are still active"
@@ -20247,6 +20260,12 @@ msgstr "One video fades into the other."
 
 msgid "Una campaña necesita al menos un video o una imagen."
 msgstr "A campaign needs at least one video or image."
+
+msgid "Una copia de Triple Whale terminó mientras se preparaba: se prepara en la próxima vuelta."
+msgstr "A Triple Whale copy finished while preparing: it will be prepared on the next round."
+
+msgid "Una copia de Triple Whale terminó mientras se preparaba: se repite."
+msgstr "A Triple Whale copy finished while preparing: it will run again."
 
 msgid "Una de las cuentas de esta evaluación ya no está en el proyecto: no se evaluó ni se cobró nada."
 msgstr "One of the accounts of this evaluation is no longer in the project: nothing was evaluated or charged."
@@ -25190,6 +25209,9 @@ msgstr "Last seen"
 msgid "Últimas sincronizaciones"
 msgstr "Latest syncs"
 
+msgid "Último año"
+msgstr "Last 12 months"
+
 #, python-format
 msgid "Último cambio: %(fecha)s"
 msgstr "Last changed: %(fecha)s"
@@ -25197,6 +25219,9 @@ msgstr "Last changed: %(fecha)s"
 #, python-format
 msgid "Último error: %(error)s"
 msgstr "Last error: %(error)s"
+
+msgid "Último mes"
+msgstr "Last 30 days"
 
 msgid "Último respaldo"
 msgstr "Last backup"
@@ -25208,6 +25233,12 @@ msgstr "Last %(n)s days"
 #, python-format
 msgid "Últimos %(n)s días vs %(n)s anteriores"
 msgstr "Last %(n)s days vs previous %(n)s"
+
+msgid "Últimos 3 meses"
+msgstr "Last 3 months"
+
+msgid "Últimos 6 meses"
+msgstr "Last 6 months"
 
 msgid "Últimos cobros"
 msgstr "Latest charges"

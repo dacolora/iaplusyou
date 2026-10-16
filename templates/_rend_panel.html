@@ -58,7 +58,7 @@
     {% endif %}
     <label class="campo-label">{{ _('Periodo') }}
       <select data-rend-param="dias">
-        {% for d in r.periodos %}<option value="{{ d }}"{% if d == r.dias %} selected{% endif %}>{{ _('Últimos %(n)s días', n=d) if d else _('Desde el inicio') }}</option>{% endfor %}
+        {% for d in r.periodos %}<option value="{{ d }}"{% if d == r.dias %} selected{% endif %}>{{ rm.periodo(d) }}</option>{% endfor %}
       </select>
     </label>
     {% if r.canales | length > 1 %}

@@ -601,6 +601,22 @@ tw_gancho = Table("tw_gancho", metadata,
     sqlite_autoincrement=True,
 )
 
+# Sumas precalculadas de Triple Whale (spec 2026-10-15-rendimiento-sumas-precalculadas, migración 0041): lo que
+# devuelven las funciones pesadas de triple_whale/datos.py, grabado por el worker después de cada copia (tarea
+# tw_precalcular) y leído por la pestaña Rendimiento si `version` es la de los datos de hoy. `clave` = sha256 de la
+# función y sus argumentos; `datos` = JSON comprimido con zlib. Único escritor: triple_whale/memo.py.
+tw_memo = Table("tw_memo", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("cliente", String(80), nullable=False),
+    Column("clave", String(64), nullable=False),
+    Column("funcion", String(80), nullable=False),
+    Column("version", String(40), nullable=False),
+    Column("datos", sa.LargeBinary, nullable=False),
+    Column("bytes", Integer, nullable=False, default=0),
+    Column("creado_en", String(19), nullable=False),
+    sa.UniqueConstraint("cliente", "clave", name="uq_tw_memo"),
+)
+
 pedido = Table("pedido", metadata,
     Column("id", Integer, primary_key=True),
     Column("cliente", String(80), nullable=False, index=True),

@@ -278,3 +278,64 @@ def test_gasto_duplicado_de_una_tienda_no_pregunta_fila_por_fila(dos):
     with db.conectar() as con:
         plan = " ".join(str(f[-1]) for f in con.exec_driver_sql("EXPLAIN QUERY PLAN " + sql, parametros))
     assert "CORRELATED" not in plan.upper(), plan
+
+
+# --------------------------------------------- velocidad con varias tiendas (2026-10-15, después del incidente) ---
+
+def _plan(fn):
+    """El plan de SQLite de cada consulta a tw_anuncio_dia que hace `fn()`."""
+    import sqlalchemy as sa
+    from sqlalchemy import event
+
+    import db
+    consultas = []
+
+    def guardar(_con, _cursor, sql, parametros, _ctx, _many):
+        if "tw_anuncio_dia" in sql:
+            consultas.append((sql, parametros))
+    event.listen(sa.engine.Engine, "before_cursor_execute", guardar)
+    try:
+        resultado = fn()
+    finally:
+        event.remove(sa.engine.Engine, "before_cursor_execute", guardar)
+    planes = []
+    with db.conectar() as con:
+        for sql, parametros in consultas:
+            planes.append(" ".join(str(f[-1]) for f in con.exec_driver_sql("EXPLAIN QUERY PLAN " + sql, parametros)))
+    return resultado, planes
+
+
+def test_rango_ligero_da_las_fechas_y_si_hay_filas_sin_agrupar(dos):
+    """El panel solo usa de `rango` la primera fecha y si hay filas; `rango` cuenta anuncios distintos agrupando
+    cada (canal, anuncio, día) de todas las tiendas: 2,2 s por llamada en «Todas» con las 5 tiendas de happyflops."""
+    se, no, otro = dos
+    datos.reemplazar_anuncios_canal("acme", se, DIA, DIA, [_canal("A"), _canal("B")])
+    datos.reemplazar_anuncios_canal("acme", no, DIA2, DIA2, [_canal("A", DIA2)])
+    for tienda in (None, se, no):
+        completo = datos.rango("acme", tienda)
+        ligero, planes = _plan(lambda: datos.rango_ligero("acme", tienda))
+        assert (ligero["desde"], ligero["hasta"]) == (completo["desde"], completo["hasta"]), tienda
+        assert ligero["filas"] > 0
+        assert not any("TEMP B-TREE" in p.upper() for p in planes), planes
+    assert datos.rango_ligero("otro") == {"desde": None, "hasta": None, "filas": 0}
+
+
+def test_el_primer_dia_del_panel_no_agrupa_la_copia(dos):
+    from triple_whale import panel
+    se, no, _ = dos
+    datos.reemplazar_anuncios_canal("acme", se, DIA2, DIA2, [_canal("A", DIA2)])
+    datos.reemplazar_tienda("acme", no, DIA, DIA, [{"fecha": DIA, "ingresos": 10}])
+    primero, planes = _plan(lambda: panel._primer_dia("acme"))
+    assert primero == DIA
+    assert not any("TEMP B-TREE" in p.upper() for p in planes), planes
+
+
+def test_los_canales_del_filtro_no_agrupan_por_anuncio_y_dia(dos):
+    se, no, _ = dos
+    datos.reemplazar_anuncios_canal("acme", se, DIA, DIA, [_canal("A", gasto=10), _canal("G", gasto=50, canal="google-ads"),
+                                                          _canal("T", gasto=0, canal="tiktok-ads")])
+    datos.reemplazar_anuncios_canal("acme", no, DIA, DIA, [_canal("A", gasto=10)])
+    canales, planes = _plan(lambda: datos.canales("acme", None, DIA, DIA))
+    assert canales == ["google-ads", "facebook-ads"]           # sin gasto no se ofrece (R9); del que más gastó al que menos
+    assert len(planes) == 1 and planes[0].upper().count("TEMP B-TREE") <= 2, planes
+    assert "CO-ROUTINE" not in planes[0].upper() and "SUBQUERY" not in planes[0].upper(), planes

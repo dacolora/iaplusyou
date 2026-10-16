@@ -181,12 +181,15 @@ def kw_url_tags(cliente):
 # -------------------------------------------------------------- escritura ---
 
 def _borrar_copias(con, cliente, tienda_id=None):
-    """Borra las TRES copias (anuncios, tienda y productos) del proyecto, o solo las de una tienda."""
+    """Borra las TRES copias (anuncios, tienda y productos) del proyecto, o solo las de una tienda, y las sumas
+    precalculadas del proyecto (`triple_whale.memo`, spec 2026-10-15): eran de las copias de antes."""
+    from triple_whale import memo
     for tabla in (db.tw_anuncio_dia, db.tw_tienda_dia, db.tw_producto_dia):
         q = tabla.delete().where(tabla.c.cliente == cliente)
         if tienda_id is not None:
             q = q.where(tabla.c.tienda_id == tienda_id)
         con.execute(q)
+    memo.borrar_en(con, cliente)
 
 
 def _borrar_creativos(con, cliente):

@@ -117,7 +117,7 @@ def _tareas():
 
 # ---------------------------------------------------------------------------------- lo que cobra ---
 
-@pytest.mark.parametrize("entrada,dias", [("", 0), ("", 30), ("", 7), ("", 90), ("SE", 0), ("SE", 14)])
+@pytest.mark.parametrize("entrada,dias", [("", 0), ("", 30), ("", 7), ("", 90), ("SE", 0), ("SE", 15)])
 def test_el_boton_de_meta_cobra_lo_que_muestra(mixto, entrada, dias):
     """E2-R6 en Rendimiento: el N y el precio del botón son los que la ruta vuelve a calcular con `preparar` sobre
     todas las cuentas de Meta de la entrada (PND-290: también la de Noruega, que cubre la tienda), y lo que manda el
@@ -214,7 +214,7 @@ DIAS_VENTANAS = 85
 
 
 def _ads_por_ventana(n, prefijo):
-    """Anuncios que viven en ventanas distintas, para que el N de 7, 14, 30 y 90 días cambie (con los mismos anuncios
+    """Anuncios que viven en ventanas distintas, para que el N de 7, 15, 30 y 90 días cambie (con los mismos anuncios
     todos los días, un error de periodo pasaría inadvertido: revisión de guardian-gasto de PND-290, 2026-10-12)."""
     out = [_ad(_hace(n), f"{prefijo}_gana", 100, 600, compras=3)]
     if prefijo == "o" and n < 12:
@@ -261,7 +261,7 @@ def _sembrar_ventanas(config):
 
 @pytest.mark.parametrize("config,entrada", [("tw_no", ""), ("tw_no", "NO"), ("tw_no", "SE"), ("r4", ""),
                                             ("tw_no_cubre_se", ""), ("tw_no_cubre_se", "SE")])
-@pytest.mark.parametrize("dias", [0, 7, 14, 90])
+@pytest.mark.parametrize("dias", [0, 7, 15, 90])
 def test_el_boton_de_meta_cobra_lo_que_muestra_con_anuncios_por_ventana(mixto, config, entrada, dias):
     """E2-R6 tras PND-290 con anuncios que cambian de periodo a periodo, en entradas con cuentas cubiertas (Noruega, R4
     y una tienda que trae también Suecia): el N y el precio del botón son los que `preparar` recalcula para las cuentas
@@ -293,7 +293,7 @@ def test_el_boton_de_meta_cobra_lo_que_muestra_con_anuncios_por_ventana(mixto, c
 def test_los_anuncios_por_ventana_si_cambian_el_n(mixto):
     """La prueba de arriba solo vigila el periodo si el N cambia de una ventana a otra."""
     _sembrar_ventanas("tw_no")
-    ns = {d: len(analisis.preparar("acme", d, None, ids=[NO])["muestra"]) for d in (7, 14, 30, 90)}
+    ns = {d: len(analisis.preparar("acme", d, None, ids=[NO])["muestra"]) for d in (7, 15, 30, 90)}
     assert len(set(ns.values())) > 1, ns
 
 def test_una_entrada_que_ya_no_existe_no_evalua_nada(mixto):

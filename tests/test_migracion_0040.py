@@ -30,11 +30,11 @@ def test_migracion_0040_sube_sin_cambiar_cuentas_y_baja(tmp_path, monkeypatch):
         db._reset_para_tests()
 
 
-def test_la_0040_es_la_unica_cabeza():
+def test_la_0040_sigue_debajo_de_la_0041():
     import os
     from alembic.config import Config
     from alembic.script import ScriptDirectory
     raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     cfg = Config(os.path.join(raiz, "alembic.ini"))
     cfg.set_main_option("script_location", os.path.join(raiz, "migrations"))
-    assert ScriptDirectory.from_config(cfg).get_heads() == ["0040"]
+    assert ScriptDirectory.from_config(cfg).get_revision("0041").down_revision == "0040"

@@ -77,7 +77,7 @@ from triple_whale import datos as twdatos
 from triple_whale import destacados as tw_destacados
 from triple_whale import panel as tw_panel
 
-PERIODOS = (0, 7, 14, 30, 90)        # 0 = desde el inicio (regla de Daniel del 2026-10-08: métricas en total)
+PERIODOS = tw_panel.PERIODOS        # 0 = desde el inicio (regla de Daniel del 2026-10-08: métricas en total)
 
 
 def periodo_valido(dias):
@@ -274,6 +274,12 @@ def _ia(tw, meta):
 
 
 # --------------------------------------------------------------- contexto ---
+
+def claves_con_triple_whale(cliente):
+    """Las claves de las entradas del selector que leen Triple Whale (fuente "tw"), para que el worker precalcule sus
+    sumas (`tareas.triple_whale.tw_precalcular`); «Todas» («») va aparte."""
+    return [e["clave"] for e in _resolver(cliente)["entradas"] if e["fuente"] == entradas.TW]
+
 
 def contexto(cliente, dias=0, entrada=None, canal=None, hoy=None, pagina_conjuntos=0, tienda=None, cuenta=None):
     """Todo lo que pinta `_rend_panel.html` para la entrada pedida (`entrada`: la clave de una entrada; vacía, ajena
