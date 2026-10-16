@@ -582,7 +582,8 @@ eval `docs/superpowers/evals/2026-10-09-tw-ganchos-y-copy.md`.
   digits of a decimal («4,0» → 40; PND-227, shared with Sprints and Nicho, changing it needs eval-claude), the
   copy can claim urgency or scarcity without a number («Lageret tømmes raskt») and the verifier cannot see it
   (PND-228), and the hook's `por_que` counts toward the check so a guessed figure there blocks a clean hook (PND-233).
-  The scene chain still closes a recoverable clip as an error (PND-229; the hooks no longer do, fix C below). The
+  The scene chain waits for a recoverable clip too since 2026-10-16 (PND-229, skill `flowplus-guiones`; the hooks did
+  first, fix C below). The
   originals count toward the 2 GB quota but «Medios» cannot delete origen `triple_whale` (PND-230). The `|precio` filter
   keeps showing the cost when the margin read fails in ~25 other templates (PND-231). preparar's own failure path does
   not show the Crear session's error (PND-234); small robustness items in PND-235. «Cómo mejorarlo» and its batch

@@ -150,7 +150,9 @@ def _vista_cadena(v, prompts):
         k = c["indice"]
         e = ((est or {}).get("escenas") or {}).get(str(k)) or {}
         fila = {"indice": k, "titulo": c.get("titulo") or "", "estado": e.get("estado") or ("espera" if est else None),
-                "error": e.get("error"), "rehacer_precio": None}
+                "error": e.get("error"), "rehacer_precio": None,
+                # PND-229: la pieza espera que la recuperen en Crear (sin pagar de nuevo); la cadena sigue sola.
+                "recuperable": e.get("estado") == "generando" and bool(e.get("recuperable_desde"))}
         if est and not corriendo and k != ks[0] and cadena.puede_rehacer(est, k, ks[0]) \
                 and not cadena.revisar(v, prompts, desde=k, modelo=modelo_est):
             fila["rehacer_precio"] = cadena.precio(v, k, conocidos, modelo_est)

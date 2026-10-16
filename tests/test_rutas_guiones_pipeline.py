@@ -522,6 +522,19 @@ def test_rehacer_desde_una_escena(app, catalogo_vacio, subidas):
     assert app["c"].post(f"{BASE}/videos/{vid}/cadena", json={"desde": 3, "total_visto": 0}).status_code == 400
 
 
+def test_panel_dice_que_una_escena_espera_que_la_recuperen(app, catalogo_vacio, subidas):
+    """PND-229: una escena cuya pieza se puede recuperar en Crear no sale «Generando…» ni como fallo: dice que ya está
+    pagada y cómo traerla."""
+    from guiones import cadena, datos
+    gid, vid = _video_armado(app)
+    _con_imagenes(app, vid, subidas)
+    v = datos.video("acme", vid)
+    datos.modificar_cadena("acme", vid, lambda e, _v: cadena.esperando_recuperar(cadena.lanzada(
+        cadena.preparada(cadena.aprobar(v, 1, 1.0, "admin", "t"), {}), 1, "cf_1"), 1, "2026-10-15T08:00:00"))
+    html = app["c"].get(f"{BASE}/panel?guion={gid}&video={vid}").get_data(as_text=True)
+    assert "Por recuperar" in html and "toca «Recuperar el video» (no se paga de nuevo)" in html
+
+
 def test_cadena_con_wan_y_rehacer_sigue_con_el_mismo_modelo(app, catalogo_vacio, subidas):
     """2026-10-15: Wan 3.0 se ofrece primero y más barata; la cadena guarda su
     modelo y «Rehacer desde» no lo cambia aunque el cuerpo pida otro."""

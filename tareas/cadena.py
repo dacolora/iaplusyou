@@ -18,6 +18,7 @@ import hashlib
 import logging
 import os
 from contextlib import nullcontext
+from datetime import datetime, timedelta
 
 import sqlalchemy as sa
 from flask_babel import gettext
@@ -46,6 +47,10 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PRIORIDAD_CADENA = 3
 # Estados de una sesión de Crear que todavía pueden terminar en un video.
 VIVOS_CREAR = ("prompt_pendiente", "prompt_listo", "video_generando")
+# Una escena cuya pieza Crear todavía puede recuperar («Recuperar el video», sin pagar de nuevo) ya está pagada: la
+# cadena la espera hasta 24 h desde que la vio así, como los ganchos de Triple Whale (PND-229, decisión 2026-10-13,
+# lote 2; `tareas.triple_whale.ESPERA_RECUPERABLE_S`). Recuperada, sigue sola; vencida la espera, se detiene.
+ESPERA_RECUPERABLE_S = 24 * 3600
 
 
 def job_id(cliente, video_id, que):
@@ -150,6 +155,24 @@ def lanzar_escena(cliente, video_id, k):
     return cf_id
 
 
+def escena_recuperable(entry):
+    """¿Crear ofrece «Recuperar el video» para la pieza de la escena? La MISMA condición que `dashboard.cf_recuperar`:
+    en error, con el id de su predicción guardado o un lanzamiento incierto sin resolver (PND-214), y que no sea una
+    imagen. Ese clip ya está pagado (el proveedor lo termina y lo cobra igual)."""
+    from tareas.flowplus import lanzamiento_pendiente
+    e = entry or {}
+    return (e.get("estado") == "error"
+            and (bool((e.get("prediccion") or {}).get("id")) or lanzamiento_pendiente(e))
+            and (e.get("tipo") or "video") != "imagen")
+
+
+def _espera_vencida(desde):
+    try:
+        return datetime.fromisoformat(str(desde)) <= datetime.now() - timedelta(seconds=ESPERA_RECUPERABLE_S)
+    except (TypeError, ValueError):
+        return True
+
+
 def fallar_cadena(cliente, video_id, k, error):
     """Detiene la cadena en la escena `k` con `error` (lo usan el vigilante y la
     ruta que aprueba la cadena cuando el encolado falla, p. ej. sin saldo)."""
@@ -193,6 +216,14 @@ def vigilar_una(cliente, video_id):
             if entry.get("estado") in VIVOS_CREAR:
                 return
             if entry.get("estado") != "video_listo":
+                desde = (est["escenas"].get(str(k)) or {}).get("recuperable_desde")
+                if escena_recuperable(entry) and not est.get("detener") and not (desde and _espera_vencida(desde)):
+                    # PND-229: el clip ya está pagado y Crear lo puede traer sin pagar de nuevo. La escena espera a la
+                    # persona; recuperado, la sesión vuelve a generar y después queda en video_listo.
+                    if not desde:
+                        datos.modificar_cadena(cliente, video_id,
+                                               lambda e, _v: cadena.esperando_recuperar(e, k, db.ahora()) if e else e)
+                    return
                 _fallar(cliente, video_id, k, entry.get("error") or gettext("La escena no se pudo generar."))
                 return
             frame = _fotograma(cliente, video_id, k, entry)

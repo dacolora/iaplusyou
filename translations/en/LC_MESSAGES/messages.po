@@ -8620,6 +8620,9 @@ msgstr "This scene changes location: since it starts on the last frame of the pr
 msgid "Esta escena todavía no tiene su prompt en el chat."
 msgstr "This scene doesn't have its prompt in the chat yet."
 
+msgid "Esta escena ya está pagada, pero el proveedor tardó en entregarla: ábrela en Crear y toca «Recuperar el video» (no se paga de nuevo). La cadena sigue sola cuando llegue; si en 24 horas no se recupera, se detiene."
+msgstr "This scene is already paid for, but the provider was slow to deliver it: open it in Create and tap “Recover the video” (you don't pay again). The chain continues on its own when it arrives; if it isn't recovered within 24 hours, it stops."
+
 #, python-format
 msgid "Esta evaluación falló: %(error)s"
 msgstr "This evaluation failed: %(error)s"
@@ -15389,6 +15392,9 @@ msgstr "Why they perform this way"
 
 msgid "Por qué:"
 msgstr "Why:"
+
+msgid "Por recuperar"
+msgstr "To recover"
 
 msgid "Por región"
 msgstr "By region"

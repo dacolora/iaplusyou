@@ -11,8 +11,9 @@ nombres y prompts de cada escena, y los cambios de estado. El estado vive en
 Estado: {"estado": corriendo|detenida|terminada, "desde", "modelo", "aprobado_usd",
 "aprobado_por", "aprobado_en", "detener", "preparando" (creando los elementos de
 Kling: todavía no se lanza ninguna escena), "escenas": {"<k>": {"cf_id", "estado":
-generando|lista|fallo, "frame_url", "error"}}, "elementos": {"<id imagen>": element_id},
-"edicion_id", "error"}.
+generando|lista|fallo, "frame_url", "error", "recuperable_desde" (PND-229: desde cuándo la
+pieza de Crear espera que la recuperen sin pagar de nuevo)}}, "elementos": {"<id imagen>":
+element_id}, "edicion_id", "error"}.
 """
 import re
 
@@ -278,11 +279,18 @@ def _con_escena(est, k, **campos):
 
 
 def lanzada(est, k, cf_id):
-    return _con_escena(est, k, cf_id=cf_id, estado="generando", frame_url=None, error=None)
+    return _con_escena(est, k, cf_id=cf_id, estado="generando", frame_url=None, error=None, recuperable_desde=None)
+
+
+def esperando_recuperar(est, k, ahora):
+    """La pieza de la escena k quedó en error pero Crear la puede recuperar sin pagar de nuevo (PND-229): la escena
+    sigue «generando» y la cadena la espera desde `ahora`. Una segunda llamada no mueve la fecha."""
+    previa = ((est.get("escenas") or {}).get(str(k)) or {}).get("recuperable_desde")
+    return _con_escena(est, k, recuperable_desde=previa or ahora)
 
 
 def lista(est, k, frame_url):
-    return _con_escena(est, k, estado="lista", frame_url=frame_url)
+    return _con_escena(est, k, estado="lista", frame_url=frame_url, recuperable_desde=None)
 
 
 def fallo(est, k, error):

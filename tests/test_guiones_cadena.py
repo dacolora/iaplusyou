@@ -103,7 +103,8 @@ def test_fallo_detiene_y_rehacer_conserva_lo_anterior():
                        1, "https://f1.jpg")
     est = cadena.fallo(cadena.lanzada(est, 2, "cf_2"), 2, "Kling 1200")
     assert est["estado"] == "detenida" and est["escenas"]["2"] == {"cf_id": "cf_2", "estado": "fallo",
-                                                                   "frame_url": None, "error": "Kling 1200"}
+                                                                   "frame_url": None, "error": "Kling 1200",
+                                                                   "recuperable_desde": None}
     assert cadena.puede_rehacer(est, 2) and not cadena.puede_rehacer(est, 3)
     est2 = cadena.aprobar(v, 2, 1.0, "admin", "t2", previo=est)
     assert est2["escenas"] == {"1": est["escenas"]["1"]} and est2["desde"] == 2

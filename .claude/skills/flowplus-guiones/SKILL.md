@@ -88,6 +88,14 @@ escena lista → fotograma a R2 → siguiente; falló → `detenida`; al final `
 `edicion_clon.crear_de_piezas`). Rutas `POST /videos/<id>/cadena` `{desde, total_visto}` (409 si el precio recalculado no
 coincide o falta algo) y `/cadena/detener`; UI `_gpg_cadena.html` dentro de `_gpg_escenas.html` (el panel sondea mientras
 corre, con el tope de 12 min de siempre).
+**Un clip que Crear puede recuperar no detiene la cadena (PND-229, decisión 2026-10-13, lote 2).** Antes el vigilante
+cerraba la escena en `fallo` apenas su pieza no estaba en `video_listo`, aunque Crear ofreciera «Recuperar el video» (ya
+pagado). Ahora `tareas.cadena.escena_recuperable` (la MISMA condición de `dashboard.cf_recuperar`: error con
+`prediccion.id` o un lanzamiento incierto sin resolver, y no imagen) deja la escena en «generando» con
+`recuperable_desde` (`cadena.esperando_recuperar`, se escribe una vez) hasta `ESPERA_RECUPERABLE_S` (24 h, como los
+ganchos de Triple Whale); recuperada, la sesión vuelve a generar y la cadena sigue sola; vencida la espera, o con
+«Detener» pedido, se cierra con el error de la pieza como antes. El panel la muestra «Por recuperar» con el paso a seguir
+(`_vista_cadena` → `recuperable`). `lanzada` y `lista` limpian la marca.
 
 PND-027 (2026-10-03): listar ya no trunca por defecto en 200; agrupa manual/pipeline y ordena cada grupo por actividad. El chat muestra «Escritos a mano» y «Del guion», también al incorporar un prompt nuevo. El parámetro limite sigue disponible para lectores que lo pidan. Esta corrección no agrega paginación: una biblioteca muy grande aún se carga completa.
 

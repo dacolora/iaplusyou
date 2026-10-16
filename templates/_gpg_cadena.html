@@ -67,7 +67,8 @@
     {% for f in C.filas %}
     <li class="gpg-cadena-escena {{ f.estado or '' }}">
       <span><strong>{{ _('Escena %(n)s', n=f.indice) }}</strong> · {{ f.titulo }}</span>
-      <span class="tag-estado">{{ etiqueta_estado(f.estado) }}</span>
+      <span class="tag-estado">{% if f.recuperable %}{{ _('Por recuperar') }}{% else %}{{ etiqueta_estado(f.estado) }}{% endif %}</span>
+      {% if f.recuperable %}<span class="gp-ayuda gpg-cadena-aviso">{{ _('Esta escena ya está pagada, pero el proveedor tardó en entregarla: ábrela en Crear y toca «Recuperar el video» (no se paga de nuevo). La cadena sigue sola cuando llegue; si en 24 horas no se recupera, se detiene.') }}</span>{% endif %}
       {% if f.error %}<span class="gpg-cadena-error">{{ f.error }}</span>{% endif %}
       {% if f.rehacer_precio is not none %}
       <button type="button" class="btn-xs" data-gpg-accion="/videos/{{ video.id }}/cadena"
