@@ -449,4 +449,8 @@ propuestos: `docs/superpowers/auditorias/2026-10-15-cobros.md`. Lo que salió de
 - **Lo real, no una tarifa**: las llamadas de `generador_prompts` se miden con `contar_uso()`; la caché de la doctrina
   cuenta en la entrada (`guiones.claude.tokens_entrada_equivalentes`); Apify se concilia con `usageTotalUsd`.
 - **Para cuadrar con las facturas**: `venv/bin/python3 deploy/conciliar_gastos.py [--desde AAAA-MM] [--hasta AAAA-MM]
-  [--proyecto X] [--csv]` (solo lee; suma por empresa y mes; parte las finales en Anthropic y fal).
+  [--proyecto X] [--csv]` (solo lee; suma por empresa y mes; parte las finales en Anthropic y fal). Atria y TrendTrack
+  no están en `gasto` (PND-335, decisión 2026-10-15, lote 3): son cupos de un plan de Creatv para la biblioteca global
+  de referentes (y TrendTrack, además, recargas de créditos), no se prorratean a los barridos y el informe los lista
+  aparte como «Suscripciones fijas» (`SUSCRIPCIONES_FIJAS`; en el CSV, filas `suscripcion_fija;<nombre>`) para que su
+  factura no se lea como un faltante.
