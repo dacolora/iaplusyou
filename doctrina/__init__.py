@@ -10,6 +10,7 @@ Claude decide antes de escribir. Nada aquí toca la red ni la base.
 import functools
 import os
 import re
+import unicodedata
 
 from flask_babel import gettext
 
@@ -27,6 +28,9 @@ CONSCIENCIAS_NOMBRE = {"inconsciente": N_("inconsciente"), "consciente_del_probl
                        "consciente_de_la_solucion": N_("consciente de la solución"),
                        "consciente_del_producto": N_("consciente del producto"), "muy_consciente": N_("muy consciente")}
 LEADS = ("oferta", "promesa", "problema_solucion", "secreto", "proclamacion", "historia")
+# El arranque en inglés (PND-308): con un proyecto en inglés Claude puede traducirlo.
+LEAD_DESDE_INGLES = {"offer": "oferta", "promise": "promesa", "problem_solution": "problema_solucion",
+                     "secret": "secreto", "proclamation": "proclamacion", "story": "historia"}
 LEADS_NOMBRE = {"oferta": N_("oferta"), "promesa": N_("promesa"), "problema_solucion": N_("problema-solución"),
                 "secreto": N_("secreto"), "proclamacion": N_("proclamación"), "historia": N_("historia")}
 SOFISTICACIONES = {1: "primero", 2: "promesa_ampliada", 3: "mecanismo", 4: "mecanismo_ampliado",
@@ -84,16 +88,32 @@ _LEAD_POR_CONSCIENCIA = {
 }
 
 
+def _sin_tildes(texto):
+    """«solución» → «solucion». Claude escribe la consciencia y el arranque como los nombra la rebanada `angulo`, con
+    tildes («problema-solución», «Consciente de la solución»), y la clave no las lleva (PND-308)."""
+    return "".join(c for c in unicodedata.normalize("NFKD", texto) if not unicodedata.combining(c))
+
+
 def normalizar_consciencia(valor):
     """Clave canónica de `CONSCIENCIAS` desde español (con o sin guiones bajos,
-    mayúsculas) o desde el inglés de `referente.consciencia`; None si no se
+    mayúsculas, tildes) o desde el inglés de `referente.consciencia`; None si no se
     reconoce."""
     if not valor:
         return None
-    v = " ".join(str(valor).strip().lower().replace("-", " ").replace("_", " ").split())
+    v = " ".join(_sin_tildes(str(valor)).strip().lower().replace("-", " ").replace("_", " ").split())
     if v.replace(" ", "_") in CONSCIENCIAS:
         return v.replace(" ", "_")
     return CONSCIENCIA_DESDE_INGLES.get(v.replace(" ", "-"))
+
+
+def normalizar_lead(valor):
+    """Clave canónica de `LEADS` desde como la escribe Claude: con tildes, guiones, espacios o mayúsculas
+    («Problema-solución») o en inglés («problem-solution»); None si no se reconoce. Medido el 2026-10-15: 2 de 4
+    respuestas de «Cómo mejorarlo» traían «problema-solución» y se perdía el arranque (PND-308)."""
+    v = "_".join(_sin_tildes(_texto(valor)).lower().replace("-", " ").replace("_", " ").split())
+    if not v:
+        return None
+    return v if v in LEADS else LEAD_DESDE_INGLES.get(v)
 
 
 def lead_por_consciencia(nivel):
@@ -291,10 +311,9 @@ def validar_angulo(angulo, datos_texto=None, fijos=None):
     if limpio["sofisticacion"] is not None and limpio["sofisticacion"] not in SOFISTICACIONES:
         errores.append("valor_invalido:sofisticacion")
         limpio["sofisticacion"] = None
-    lead = _texto(a.get("lead")).lower().replace("-", "_").replace(" ", "_") or None
-    if lead and lead not in LEADS:
+    lead = normalizar_lead(a.get("lead"))
+    if _texto(a.get("lead")) and lead is None:
         errores.append("valor_invalido:lead")
-        lead = None
     limpio["lead"] = lead
     for campo in _OBLIGATORIOS:
         if limpio.get(campo) in (None, ""):
@@ -323,7 +342,7 @@ def validar_angulo(angulo, datos_texto=None, fijos=None):
     for p in pruebas_raw[:MAX_PRUEBAS * 2]:
         if not isinstance(p, dict):
             continue
-        texto_p, fuente = _texto(p.get("texto")), _texto(p.get("fuente")).lower()
+        texto_p, fuente = _texto(p.get("texto")), _sin_tildes(_texto(p.get("fuente"))).lower()   # «Demostración»
         if not texto_p:
             continue
         if fuente not in FUENTES_PRUEBA:
