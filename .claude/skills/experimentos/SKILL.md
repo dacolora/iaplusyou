@@ -81,8 +81,9 @@ proveedor), `validar` (la comprobación del servidor, que no se fía del navegad
 `tests/test_presupuesto_experimentos.py` corre los dos con los mismos casos (prueba de paridad, como el editor). El POST
 no cambió (`presupuesto_<país>`, `tope_total` = el total, `dias`…), y el servidor rechaza un reparto cuya suma × días
 supere el total × 1,01 (el 1 % es el margen por redondeo): así «Máximo que puede gastar» es verdad aunque alguien arme el
-POST a mano. El titular dice **«Máximo que puede gastar» solo cuando Meta recibe `spend_cap`** (total ≥
-`lanzador.minimo_tope_campana(moneda)`); con un total menor dice «Presupuesto planeado» y una línea de que Meta no pone un
+POST a mano. El titular dice **«Máximo que puede gastar» solo cuando Meta recibe `spend_cap`** (total ≥ el mínimo
+real de la cuenta, `lanzador.minimo_tope_de_cuenta`, PND-323 abajo); con un total menor —o sin ese mínimo leído— dice
+«Presupuesto planeado» y una línea de que Meta no pone un
 tope duro y que el límite lo dan los diarios por país y la fecha de cierre (ronda 1 de R4, 2026-10-03: decir «máximo»
 sin tope duro prometía de más). Los días cuentan desde la PRIMERA activación (desde 2026-10-08, la que hace el propio lanzamiento si sale bien; ver PND-039/044/113
 al final). Llegadas a la página: Crear, Final edition, los anuncios sueltos y «Probar en otro experimento» del panel de
@@ -111,8 +112,8 @@ está guardada); sin tasa (el BCE no publica TWD, CRC…, o la última tiene má
 tienen su mínimo propio y no consultan tasas (`tests/test_monedas_meta.py`); (2) cada diario y cada `spend_cap` se lee de vuelta
 (`_confirmar_presupuesto`/`_confirmar_tope`): si Meta guardó otro, se pausa y lanza `PresupuestoNoCoincide`; activar
 (`cambiar_estado`, `activar_pieza`) también lo lee, así un conjunto viejo con ×100 nunca se enciende; (3) el tope va a
-la campaña desde el `min_campaign_group_spend_cap` de la cuenta (Forja: 200 000 COP; `minimo_tope_campana` queda como
-respaldo y para el texto de «Nuevo experimento»); por debajo, los conjuntos se crean con la fecha de fin a la que
+la campaña desde el `min_campaign_group_spend_cap` de la cuenta (Forja: 200 000 COP; `minimo_tope_campana` queda solo como
+respaldo si al lanzar no se pudo leer; el texto de «Nuevo experimento» usa el mínimo real desde PND-323); por debajo, los conjuntos se crean con la fecha de fin a la que
 alcanza el tope (`_dias_que_alcanza`, al menos 1 día) y queda un evento que lo dice; la primera activación
 (`_preparar_fin_primera_activacion`) usa los MISMOS días (antes devolvía los del experimento y deshacía el freno), y
 activar se niega si el gasto en Meta ya llegó al tope; (4) la periódica `exp_vigilar_gasto` (10 min, en su PROPIO
@@ -407,3 +408,17 @@ cuenta: el Tablero, «Mes a mes» (`_cierres_de_mes`), la serie de 30 días, `sn
 `consultado_en`, no `tomado_en`. El escritor legado de `ads.py` (Anuncios sueltos, que `exp_refrescar_todos` no
 refresca) sigue insertando siempre. Pruebas: `tests/test_snapshot_solo_si_cambia.py` (dos proyectos con la misma serie
 cada 2 h, uno guardado fila por fila como antes: Tablero, mes a mes, serie, deltas con base y decisor dan lo mismo).
+
+**El mínimo de tope que dice «Nuevo experimento» es el de la cuenta (PND-323, decisión 2026-10-13; 2026-10-15).** Antes
+decía 400 000 COP (`minimo_tope_campana`, una estimación por moneda) cuando colorado_forja acepta 200 000 COP y happyflops
+1 000 SEK. El `min_campaign_group_spend_cap` (unidad de Meta) se lee una vez y se guarda con la conexión en `meta.json`
+(`meta_conexion.CAMPO_TOPE_MINIMO` = `tope_minimo_meta`): al conectar en modo propia (`listar_activos` lo pide y
+`_guardar_conexion_propia` lo guarda), al asignar en agencia (`meta_agencia.CAMPOS_CUENTA`, `asignar`) y en cada
+lanzamiento (`lanzador._cuenta_meta(creds, cliente)` → `meta_conexion.guardar_tope_minimo`, que solo escribe si
+`meta.json` sigue siendo esa cuenta y el valor cambió, bajo el candado; sin conexión no crea nada). La pantalla lo lee con
+`lanzador.minimo_tope_de_cuenta(datos_meta, moneda)` (pasado a la moneda con `monedas_meta.desde_unidad_meta`). Sin esa
+lectura (conexiones de antes de PND-323 hasta su próximo lanzamiento) `data-tope-campana` va vacío, la nota dice «si llega
+al mínimo de tu cuenta de Meta» sin cifra y el JS dice «Presupuesto planeado» con `AVISO_SIN_TOPE_CUENTA` (nunca promete
+un máximo que no sabe). Lanzar no cambia: `_tope_y_dias_meta` vuelve a leer la cuenta. Pruebas:
+`tests/test_minimo_tope_cuenta.py`, `test_rutas_exp_nuevo_presupuesto.py` (sus arneses de Node toman el tope que pintó el
+servidor) y `test_meta_agencia.py::test_asignar_guarda_el_minimo_de_tope_de_la_cuenta`.

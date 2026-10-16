@@ -2071,7 +2071,8 @@ def _contexto_experimentos(cliente, con_elegibles=False, con_organico=True, gest
             jid = tareas_exp.job_id_refrescar(cliente, e["id"])
             if trabajos.en_curso(jid):
                 trabajos_exp[e["id"]] = {"job_id": jid}
-    moneda_exp = (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
+    datos_meta_exp = meta_conexion.cargar(cliente) or {}
+    moneda_exp = datos_meta_exp.get("moneda") or "USD"
     # Bloque 4: propuestas pendientes por experimento (una consulta por
     # experimento con contador > 0), reglas y modos para los formularios.
     propuestas_exp = {e["id"]: propuestas.pendientes(cliente, e["id"]) for e in gestion if e["propuestas_pendientes"]}
@@ -2091,7 +2092,7 @@ def _contexto_experimentos(cliente, con_elegibles=False, con_organico=True, gest
         "limites_diarios_exp": {e["id"]: {p["pais"]: presupuesto_experimentos.limite_diario(e, p["pais"])
                                            for p in e["paises"]} for e in gestion},
         "minimo_diario_exp": PRESUPUESTO_MINIMO_DIARIO.get(moneda_exp, 1),
-        "tope_campana_min_exp": lanzador.minimo_tope_campana(moneda_exp),
+        "tope_campana_min_exp": lanzador.minimo_tope_de_cuenta(datos_meta_exp, moneda_exp),   # PND-323
         "moneda_exp": moneda_exp,
         "propuestas_exp": propuestas_exp,
         "reglas_defecto_exp": decisor.REGLAS_DEFECTO,
@@ -3901,6 +3902,7 @@ def _guardar_conexion_propia(cliente, pendiente, cuenta, pagina=None):
         "ad_account_id": cuenta["id"],
         "ad_account_nombre": cuenta.get("name"),
         "moneda": cuenta.get("currency"),
+        meta_conexion.CAMPO_TOPE_MINIMO: meta_conexion.tope_minimo_de(cuenta),   # PND-323
         "page_id": pagina.get("id"),
         "page_nombre": pagina.get("name"),
         "page_access_token": pagina.get("access_token"),

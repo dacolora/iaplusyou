@@ -284,6 +284,7 @@ def _cuenta(fila, origen):
     return {
         "id": fila["id"], "name": fila.get("name") or fila["id"],
         "currency": fila.get("currency"), "account_status": fila.get("account_status"),
+        "min_campaign_group_spend_cap": fila.get("min_campaign_group_spend_cap"),
         "activa": fila.get("account_status") == 1,
         "origen": origen,
         "business_id": business_id, "business_nombre": business_nombre,
@@ -301,7 +302,7 @@ def _pagina(fila, origen):
     }
 
 
-CAMPOS_CUENTA = "id,name,currency,account_status,business{id,name}"
+CAMPOS_CUENTA = "id,name,currency,account_status,min_campaign_group_spend_cap,business{id,name}"
 CAMPOS_PAGINA = "id,name,instagram_business_account{id,username},business{id,name}"
 CAMPOS_PAGINA_SIN_DUENO = "id,name,instagram_business_account{id,username}"
 
@@ -483,6 +484,7 @@ def asignar(cliente, ad_account_id, page_id=None, asignado_por=None, portafolio_
         "ad_account_nombre": cuenta.get("name"),
         "ad_account_origen": cuenta.get("origen"),
         "moneda": cuenta.get("currency"),
+        meta_conexion.CAMPO_TOPE_MINIMO: meta_conexion.tope_minimo_de(cuenta),   # PND-323
         "page_id": None, "page_nombre": None, "page_origen": None, "page_access_token": None,
         "ig_user_id": None, "ig_username": None,
         "asignado_en": datetime.now().isoformat(timespec="seconds"),

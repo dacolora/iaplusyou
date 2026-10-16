@@ -346,7 +346,7 @@ def test_listar_activos_origen_paginacion_y_cache(entorno):
     assert graph["llamadas"][1][1]["after"] == "CUR1"
     assert all(p.get("limit") == 100 for _, p in graph["llamadas"])
     assert all("access_token" not in json.dumps(p) for _, p in graph["llamadas"])
-    assert graph["llamadas"][0][1]["fields"] == "id,name,currency,account_status,business{id,name}"
+    assert graph["llamadas"][0][1]["fields"] == "id,name,currency,account_status,min_campaign_group_spend_cap,business{id,name}"  # PND-323
     assert graph["llamadas"][3][1]["fields"] == "id,name,instagram_business_account{id,username},business{id,name}"
     # caché
     n = len(graph["llamadas"])
@@ -415,6 +415,19 @@ def test_asignar_sin_pagina(entorno):
     with pytest.raises(RuntimeError, match="no tiene Meta conectado"):
         from uploaders import meta_uploader
         meta_uploader._credenciales("acme")
+
+
+def test_asignar_guarda_el_minimo_de_tope_de_la_cuenta(entorno):
+    """PND-323: el `min_campaign_group_spend_cap` que Meta da para la cuenta queda guardado con la conexión (en la
+    unidad de Meta); «Nuevo experimento» lo dice en vez de una estimación. Sin el dato, no se guarda ninguna cifra."""
+    ma, graph = entorno["ma"], entorno["graph"]
+    graph["respuestas"] = _respuestas([{"id": "act_1", "name": "Cuenta 1", "currency": "SEK", "account_status": 1,
+                                        "min_campaign_group_spend_cap": "100000"}])
+    ma.conectar(TOKEN, BID)
+    ma.asignar("acme", "act_1")
+    assert _meta_json(entorno, "acme")[mc.CAMPO_TOPE_MINIMO] == 100000
+    ma.asignar("otro", "act_9")                                   # la cuenta del socio no trae el dato
+    assert _meta_json(entorno, "otro")[mc.CAMPO_TOPE_MINIMO] is None
 
 
 def test_asignar_rechaza_activos_que_no_ve_el_business(entorno):
@@ -707,7 +720,7 @@ def test_listar_activos_pide_y_guarda_el_dueno(entorno):
     ma, graph = _conectada_con_socios(entorno)
     activos = ma.listar_activos()
     params = {e: p for e, p in graph["llamadas"]}
-    assert params[f"{BID}/client_ad_accounts"]["fields"] == "id,name,currency,account_status,business{id,name}"
+    assert params[f"{BID}/client_ad_accounts"]["fields"] == "id,name,currency,account_status,min_campaign_group_spend_cap,business{id,name}"  # PND-323
     assert params[f"{BID}/client_pages"]["fields"] == "id,name,instagram_business_account{id,username},business{id,name}"
     por_id = {a["id"]: a for a in activos["ad_accounts"]}
     assert por_id["act_9"]["business_id"] == "777" and por_id["act_9"]["business_nombre"] == "Socio SA"

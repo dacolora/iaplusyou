@@ -3914,8 +3914,11 @@ msgid "Cada marca necesita un nombre."
 msgstr "Each brand needs a name."
 
 #, python-format
-msgid "Cada país tiene su presupuesto diario. Además, el total se manda a Meta como tope de la campaña desde %(minimo)s, el mínimo que Meta acepta para un tope; con un total menor, el límite lo dan el presupuesto diario y la fecha de cierre."
-msgstr "Each country has its own daily budget. The total is also sent to Meta as the campaign cap from %(minimo)s up, the minimum Meta accepts for a cap; with a smaller total, the limit comes from the daily budgets and the end date."
+msgid "Cada país tiene su presupuesto diario. Además, el total se manda a Meta como tope de la campaña desde %(minimo)s, el mínimo que tu cuenta de Meta acepta para un tope; con un total menor, el límite lo dan el presupuesto diario y la fecha de cierre."
+msgstr "Each country has its own daily budget. The total is also sent to Meta as the campaign cap from %(minimo)s up, the minimum your Meta account accepts for a cap; with a smaller total, the limit comes from the daily budgets and the end date."
+
+msgid "Cada país tiene su presupuesto diario. Además, el total se manda a Meta como tope de la campaña si llega al mínimo de tu cuenta de Meta; con un total menor, el límite lo dan el presupuesto diario y la fecha de cierre."
+msgstr "Each country has its own daily budget. The total is also sent to Meta as the campaign cap if it reaches your Meta account's minimum; with a smaller total, the limit comes from the daily budgets and the end date."
 
 #, python-format
 msgid "Cada perdedora se diagnostica sola (%(precio)s) y deja su línea aquí."
@@ -17548,6 +17551,10 @@ msgstr "If you cancel, it will not be charged again. Your plan stays active unti
 
 msgid "Si el botón no funciona, copia este enlace en tu navegador:"
 msgstr "If the button doesn't work, copy this link into your browser:"
+
+#, python-format
+msgid "Si el total no llega al mínimo de tu cuenta de Meta, Meta no pone un tope duro a la campaña: Creatv reparte %(total)s en presupuestos diarios por país (≈ %(dia)s al día)."
+msgstr "If the total doesn't reach your Meta account's minimum, Meta puts no hard cap on the campaign: Creatv splits %(total)s into daily budgets per country (≈ %(dia)s a day)."
 
 msgid "Si es Gmail: en myaccount.google.com › Seguridad activa la «Verificación en dos pasos» y luego, en «Contraseñas de aplicación», crea una para «Creatv»: los 16 caracteres que te da son SMTP_PASS (no la contraseña normal de la cuenta). SMTP_USER es la dirección completa y SMTP_FROM la misma."
 msgstr "If it's Gmail: in myaccount.google.com › Security turn on “2-Step Verification” and then, in “App passwords”, create one for “Creatv”: the 16 characters it gives you are SMTP_PASS (not the account's normal password). SMTP_USER is the full address and SMTP_FROM the same one."
