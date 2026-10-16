@@ -77,7 +77,9 @@ Detalles que ya costaron una duda:
   volver cada 3 horas (sí vuelve si cambia el nivel); en los demás, tipo + cuenta + los ids de sus objetos. El título NO
   se guarda (el spec decía `{tipo, titulo, huella}`): guardado quedaría en el idioma del proyecto y la regla de esta
   skill es traducir al calcular. Un elemento roto (tipo desconocido, huella que no es sha256, algo que no es un dict)
-  se ignora. Cada cliente puede descartarla (es de su cuenta). Una copia que falla deja lo guardado, y las alertas
+  se ignora. **Solo un admin la descarta o la restaura** (PND-270, 2026-10-15, la regla de PND-124: hablan de la plata
+  de la pauta y el descarte es del proyecto): el cliente la ve con `puede_descartar` falso y las rutas le responden 403
+  por el prefijo `PREFIJOS_DESCARTE_ADMIN = ("meta_rendimiento:",)`, también si la alerta ya salió del cálculo. Una copia que falla deja lo guardado, y las alertas
   guardadas no caducan (PND-262); quitar la cuenta borra su fila y con ella sus alertas.
 
 ## Quién ve qué: `solo_admin` (2026-10-02)

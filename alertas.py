@@ -84,10 +84,16 @@ PREFIJOS_SOLO_ADMIN = ("llave:", "worker:", "revision:", "saldo:wavespeed_recarg
 TIPOS_DESCARTE_ADMIN = {"tablero:tope_alcanzado", "tablero:propuestas_pendientes",
                         "tablero:experimento_error", "crear:prompt_listo",
                         "tablero:ganador_sin_publicar", "tablero:anuncios_rechazados"}
+# PND-270 (decisión 2026-10-13, la misma regla que PND-124): las del Diagnóstico de Meta (perdedores gastando, ROAS
+# bajo, aprendizaje limitado, anuncios con problemas, estado de la cuenta) hablan de la plata de la pauta. Las ve el
+# cliente, pero el descarte es del proyecto: si un cliente la descartara, se la escondería al admin. Por prefijo, así
+# vale para todo tipo, también uno que ya no esté en el cálculo.
+PREFIJOS_DESCARTE_ADMIN = ("meta_rendimiento:",)
 
 
 def descarte_solo_admin(clave, calculadas=()):
-    return es_solo_admin(clave, calculadas) or ":".join(clave.split(":")[:2]) in TIPOS_DESCARTE_ADMIN
+    return (es_solo_admin(clave, calculadas) or ":".join(clave.split(":")[:2]) in TIPOS_DESCARTE_ADMIN
+            or clave.startswith(PREFIJOS_DESCARTE_ADMIN))
 
 
 # (nombre, función(cliente, ahora_iso) -> lista de alertas), en el orden en

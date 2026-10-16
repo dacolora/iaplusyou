@@ -1527,7 +1527,10 @@ def test_meta_rendimiento_descartar_vale_mientras_la_huella_sea_la_misma(base_te
     alertas.descartar("acme", clave, H1)
     r = alertas.visibles("acme", AHORA, rol="cliente")
     assert clave not in _claves(r["visibles"]) and clave in _claves(r["descartadas"])
-    assert [a["puede_descartar"] for a in r["descartadas"] if a["clave"] == clave] == [True]
+    # PND-270: el cliente la ve descartada (la descartó un admin) pero no puede restaurarla ni descartarla.
+    assert [a["puede_descartar"] for a in r["descartadas"] if a["clave"] == clave] == [False]
+    r_admin = alertas.visibles("acme", AHORA, rol="admin")
+    assert [a["puede_descartar"] for a in r_admin["descartadas"] if a["clave"] == clave] == [True]
     # La copia siguiente da otra huella (cambió la situación): vuelve sola.
     from meta_rendimiento import cuentas
     cuentas.actualizar_extra("acme", "act_1", {"alertas": [{"tipo": "cuenta_roas_bajo", "huella": H2}]})
