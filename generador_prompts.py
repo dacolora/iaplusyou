@@ -4,6 +4,7 @@ Ayudas de copy, marca y prompts con Anthropic (Claude). Requiere ANTHROPIC_API_K
 import contextvars
 import json
 import os
+import re
 from contextlib import contextmanager
 
 import anthropic
@@ -186,7 +187,7 @@ def regla_fidelidad(nombre, descripcion="", categoria="", idioma="es"):
         if (descripcion or "").strip():
             # Delimitada (y sin la etiqueta de cierre adentro) para que un
             # texto ajeno no pueda "cerrar" el bloque y colarse como instrucción.
-            limpia = descripcion.strip()[:1500].replace("</descripcion>", "")
+            limpia = _sin_cierre(descripcion.strip()[:1500], "descripcion")
             partes.append(f"<descripcion>\n{limpia}\n</descripcion>")
         if (categoria or "").strip():
             partes.append(f"Categoría: {categoria.strip()}")
@@ -332,6 +333,20 @@ class RespuestaInvalida(ValueError):
     (p. ej. `organico.redactar`) atrapa este tipo aparte."""
 
 
+def _sin_cierre(texto, etiqueta):
+    """Texto ajeno (tienda, catálogo, guion, ángulo) que va dentro de <etiqueta>…</etiqueta>: sin NINGÚN cierre de esa
+    etiqueta, sin distinguir mayúsculas ni espacios y repitiendo hasta que no quede ninguno. Auditoría de seguridad de
+    PND-037 (2026-10-16): un solo `replace` sensible a la caja dejaba pasar «</DESCRIPCION>» y
+    «</desc</descripcion>ripcion>» (al quitar el de adentro se rearma el de afuera) y el dato cerraba su bloque."""
+    patron = re.compile(r"<\s*/\s*" + re.escape(etiqueta) + r"\s*>", re.IGNORECASE)
+    t = str(texto or "")
+    while True:
+        nuevo = patron.sub("", t)
+        if nuevo == t:
+            return t
+        t = nuevo
+
+
 def caption_organico(contexto, plataformas):
     """Una llamada a Claude: título + caption de publicación orgánica por
     plataforma. `contexto` = {"nombre_producto", "descripcion", "url_compra",
@@ -356,7 +371,7 @@ def caption_organico(contexto, plataformas):
     def _dato(etiqueta, valor, tope):
         # Todo lo que viene de la tienda/catálogo va delimitado (y sin la
         # etiqueta de cierre adentro): es dato, no instrucción.
-        return f"<{etiqueta}>{str(valor).strip()[:tope].replace(f'</{etiqueta}>', '')}</{etiqueta}>"
+        return f"<{etiqueta}>{_sin_cierre(str(valor).strip()[:tope], etiqueta)}</{etiqueta}>"
     # El nombre del idioma va junto al código: «Idioma: no» se lee como la
     # palabra «no» (spec 2026-10-08 de Noruega y Suecia §4).
     nombre_idioma = idiomas_publicacion.nombre(idioma_pieza)
@@ -364,21 +379,21 @@ def caption_organico(contexto, plataformas):
               f"Idioma: {idioma_pieza}" + (f" — {nombre_idioma}" if nombre_idioma != idioma_pieza else ""),
               "Producto: " + _dato("producto", contexto.get("nombre_producto") or "", 200)]
     if (contexto.get("descripcion") or "").strip():
-        limpia = contexto["descripcion"].strip()[:1500].replace("</descripcion>", "")
+        limpia = _sin_cierre(contexto["descripcion"].strip()[:1500], "descripcion")
         partes.append(f"<descripcion>\n{limpia}\n</descripcion>")
     if contexto.get("url_compra"):
         partes.append("url_compra: " + _dato("url_compra", contexto["url_compra"], 500))
     if (contexto.get("guion_texto") or "").strip():
-        guion = contexto["guion_texto"].strip()[:3000].replace("</guion>", "")
+        guion = _sin_cierre(contexto["guion_texto"].strip()[:3000], "guion")
         partes.append(f"<guion>\n{guion}\n</guion>")
     if contexto.get("hashtags_base"):
         partes.append("Hashtags sugeridos: " + " ".join(contexto["hashtags_base"]))
     pruebas_txt = doctrina_producto.pruebas_texto(contexto.get("pruebas"))
     if pruebas_txt:
-        partes.append("<pruebas_producto>\n" + pruebas_txt.replace("</pruebas_producto>", "") + "\n</pruebas_producto>")
+        partes.append("<pruebas_producto>\n" + _sin_cierre(pruebas_txt, "pruebas_producto") + "\n</pruebas_producto>")
     angulo = contexto.get("angulo")
     if angulo:
-        partes.append("<angulo>\n" + doctrina.angulo_a_texto(angulo).replace("</angulo>", "") + "\n</angulo>")
+        partes.append("<angulo>\n" + _sin_cierre(doctrina.angulo_a_texto(angulo), "angulo") + "\n</angulo>")
         partes.append("El título y el caption usan el mismo gancho y la misma promesa del ángulo; el cierre, con una "
                       "razón para actuar.")
 

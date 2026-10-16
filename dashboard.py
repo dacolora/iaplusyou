@@ -6337,6 +6337,18 @@ def _pieza_del_proyecto(cliente, pieza_id):
                            .where(p.c.id == pieza_id, p.c.cliente == cliente)).first()
 
 
+def _motivo_no_publicable(pieza):
+    """Por qué esa pieza (fila de `_pieza_del_proyecto`) no se puede publicar ni redactar, o None: solo un VIDEO listo
+    (listo o degradada) con su `url_video`. Lo usan org_publicar y org_redactar, este ANTES de reservar saldo
+    (auditoría de seguridad de PND-037, 2026-10-16: redactar para una imagen o un video a medias cobraba un texto
+    que nunca se podría publicar)."""
+    if pieza.tipo == "imagen":
+        return gettext("Solo se pueden publicar videos por este camino.")
+    if pieza.estado not in ("listo", "degradada") or not pieza.url_video:
+        return gettext("Esa pieza todavía no tiene un video listo para publicar.")
+    return None
+
+
 def _pieza_de_ep(cliente, ep_id):
     ep = db.experimento_pieza
     with db.conectar() as con:
@@ -6375,8 +6387,12 @@ def org_redactar(cliente):
     plataformas = [p for p in request.form.getlist("plataformas") if p in organico.PLATAFORMAS]
     if not pieza_id or not plataformas:
         return jsonify({"error": gettext("Elige la pieza y al menos una plataforma.")}), 400
-    if _pieza_del_proyecto(cliente, pieza_id) is None:      # PND-037: antes de reservar saldo
+    pieza = _pieza_del_proyecto(cliente, pieza_id)         # PND-037: antes de reservar saldo
+    if pieza is None:
         return jsonify({"error": gettext("Esa pieza no existe en este proyecto.")}), 404
+    motivo = _motivo_no_publicable(pieza)
+    if motivo:
+        return jsonify({"error": motivo}), 400
     # Cobros (spec 2026-10-08 §5.2): sin saldo, 402 (organico.redactar
     # caería en silencio al texto determinista, y la persona pidió IA).
     # Con plan y tope libre es «incluido» y no pide saldo (spec planes §4): por eso el tipo.
@@ -6413,11 +6429,9 @@ def org_publicar(cliente):
     pieza = _pieza_del_proyecto(cliente, pieza_id)
     if pieza is None:                                       # PND-037: la pieza tiene que ser de este proyecto
         abort(404)
-    if pieza.tipo == "imagen":
-        flash(gettext("Solo se pueden publicar videos por este camino."), "error")
-        return _volver_org(cliente, ep_id)
-    if pieza.estado not in ("listo", "degradada") or not pieza.url_video:
-        flash(gettext("Esa pieza todavía no tiene un video listo para publicar."), "error")
+    motivo = _motivo_no_publicable(pieza)
+    if motivo:
+        flash(motivo, "error")
         return _volver_org(cliente, ep_id)
     pedidas = [p for p in organico.ORDEN if p in request.form.getlist("plataformas")]
     if not pedidas:
