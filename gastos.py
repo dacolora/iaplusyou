@@ -157,8 +157,10 @@ TARIFAS = {
     "describir_referencias_por_imagen": 0.0015,
     # Sugerir sonido (`final_edition.sonido.sugerir_descripcion`): medido 0,0013 (PND-141).
     "sugerir_sonido": 0.002,
-    # Analizar marca (`generador_prompts.analizar_marca`): hasta 5 imágenes (~1 600 tokens c/u) y 400 de salida.
-    "analizar_marca": 0.025,
+    # Analizar marca (`generador_prompts.analizar_marca`): hasta 5 imágenes (hasta ~4 700 tokens c/u) y tope de 4 000 de
+    # salida (PND-342). Medido el 2026-10-15: 0,021 con dos o tres imágenes y 0,0465 con cinco grandes (349 de salida).
+    # Se muestra lo más caro medido, redondeado hacia arriba (antes 0,025: cinco imágenes ya costaban más).
+    "analizar_marca": 0.05,
     # La revisión de marca de cada swap (`generador_prompts.evaluar_contra_matriz`): una llamada con visión y hasta
     # 1 500 tokens de salida. Peor caso con ese tope: 1 500 × US$ 10/M + ≈ 3 000 de entrada (imagen y reglas) ×
     # US$ 2/M ≈ 0,021; se anota lo real (PND-315) y este es el precio que se ve antes (revisión de guardian-gasto,

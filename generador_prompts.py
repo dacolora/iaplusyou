@@ -127,6 +127,11 @@ típicos. Es para que un director creativo la use como referencia constante al e
 prompts de video — no menciones nombres propios, marcas, ni texto en pantalla. \
 Responde solo con la guía, sin encabezados ni explicaciones adicionales."""
 
+# Tope de salida de «Analizar referencias» (PND-342, regla 7 del repo): con 400 el pensamiento adaptativo podía dejar
+# la respuesta vacía o cortada (y cobrada). Se paga solo lo usado: medido el 2026-10-15 con 2 a 5 imágenes, 237 a 311
+# de salida con el tope viejo y 214 a 349 con este, sin cambio de costo (docs/superpowers/evals/2026-10-15-analizar-marca-4000.md).
+MAX_TOKENS_ANALIZAR_MARCA = 4000
+
 
 def analizar_marca(image_urls, idioma="es", on_usage=None):
     """Le pide a Claude que mire hasta 5 imágenes de referencia de marca (URLs
@@ -145,7 +150,7 @@ def analizar_marca(image_urls, idioma="es", on_usage=None):
 
     resp = client.messages.create(
         model=MODEL,
-        max_tokens=400,
+        max_tokens=MAX_TOKENS_ANALIZAR_MARCA,
         messages=[{"role": "user", "content": content}],
     )
     if on_usage:

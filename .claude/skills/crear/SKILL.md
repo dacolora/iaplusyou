@@ -275,7 +275,7 @@ detalle vive en la skill `triple-whale` («Cómo mejorarlo» de un anuncio de im
 cliente»).** El director («Crear super prompt» y «Rearmar»), «Describir con IA», «Sugerir» sonido y «Analizar
 referencias» de la marca ya no van a `_creatv` ni son gratis: cada botón dice su precio (`precio_de('director')`,
 `precio_describir(refs)` según las imágenes que se mandan, `gastos.TARIFAS` `director` 0,05, `describir_referencias`
-0,004 + 0,0015 por imagen, `sugerir_sonido` 0,002, `analizar_marca` 0,025, de lo medido) y el gasto va al proyecto con su
+0,004 + 0,0015 por imagen, `sugerir_sonido` 0,002, `analizar_marca` 0,05 (PND-342, medido el 2026-10-15 con cinco imágenes grandes), de lo medido) y el gasto va al proyecto con su
 tipo (`director`, `describir_referencias`, `sugerir_sonido`, `analizar_marca`). `flowplus_director` está en
 `TIPOS_QUE_COBRAN`: `cf_crear_video` (modo director) y `cf_rearmar` exigen antes de tocar la sesión y
 `tareas.director.encolar` reserva `costo_estimado()`; si la reserva falla tras crear la sesión, queda en `error` con la
@@ -285,7 +285,7 @@ Describir y sugerir corren con `libro.pedido` en la petición; «Analizar marca�
 Sprints suman el director de cada video al precio del lote si el proyecto cobra (`director_usd`, como el QA), y
 «Regenerar» de un video lo suma siempre (`costo_regenerar`; «Reintentar» no pasa por el director: `costo_reintentar`).
 El video que lanza el director con `auto_lanzar` no cuenta la reserva del director (`flowplus_lanzar.lanzar(...,
-excluir_job=)`): ya está cobrada. «Analizar marca» vacía o cortada (`max_tokens` 400) lanza `RespuestaInvalida`: se
+excluir_job=)`): ya está cobrada. «Analizar marca» vacía o cortada lanza `RespuestaInvalida` (su tope subió de 400 a 4 000 el 2026-10-15, PND-342: regla 7): se
 anota con `entregado=False` y no pisa la guía. Un plan no las incluye (no están en `planes.TIPOS_INCLUIDOS`). Pruebas:
 `tests/test_cobros_ayudas_ia.py`.
 
