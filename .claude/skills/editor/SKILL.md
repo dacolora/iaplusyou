@@ -159,8 +159,9 @@ from ONE event list (`motor/subtitulos.eventos`, mirror `subtitulos.js`, table `
 writes one `Dialogue` per event (highlight with `\1c`, no `\k`), `generar_ass(ventana=)` crops per render window, and the
 canvas draws the same events. Paid, always behind a button with the server's price and `max_intentos=1`: task
 `material_transcribir` (`final_edition/transcripcion.py`, Whisper via fal, a video's audio goes to a temp R2 key deleted
-in a `finally`, gasto `transcripcion` registered before saving; price `fal_audio.costo_whisper`, US$0.002/min, an
-ESTIMATE until checked against fal's billing) and task `editor_voz` (`audios.voz_cruda`, the Crear › Audios cache by
+in a `finally`, gasto `transcripcion` registered before saving and annotated `entregado=False` if saving fails; price
+`fal_audio.costo_whisper`, US$0.002/min, an ESTIMATE until checked against fal's billing; if some files fail and others
+arrive it raises `tareas.EntregaParcial`, so the worker keeps the delivered charges, PND-334) and task `editor_voz` (`audios.voz_cruda`, the Crear › Audios cache by
 `hash_voz`, then its Whisper words; errors are sanitized so the text never reaches the unauthenticated job status).
 Free: the mic recording (`biblioteca.guardar_grabacion`: webm/m4a/ogg/wav → mp3, ≤ 5 min with a 2 s margin, duration-less
 webm transcoded with a bound and trimmed). `edicion_proxy` now MERGES `extra`. Automatic drafts write `fuentes = {idioma:

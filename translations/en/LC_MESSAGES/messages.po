@@ -22948,6 +22948,9 @@ msgstr "couldn't create the asset (%(tipo)s)."
 msgid "no se pudo descargar ninguna foto: no se creó el activo del catálogo."
 msgstr "none of the photos could be downloaded: the Catalog asset wasn't created."
 
+msgid "no se pudo guardar"
+msgstr "couldn't be saved"
+
 #, python-format
 msgid "no se pudo guardar (%(tipo)s)."
 msgstr "couldn't be saved (%(tipo)s)."

@@ -40,7 +40,7 @@ from final_edition import documento as documento_mod
 from final_edition.motor import compilador
 from idiomas import N_
 from storage import r2_uploader
-from tareas import al_interrumpir, errores_voz, ref_sufijo, registrar
+from tareas import EntregaParcial, al_interrumpir, errores_voz, ref_sufijo, registrar
 
 log = logging.getLogger(__name__)
 
@@ -418,14 +418,17 @@ def ejecutar_transcribir(tarea):
     """Transcribe cada material de `material_ids` que todavía lo necesite
     (D5): un id de otro proyecto o que ya no exista se ignora sin más, y si
     uno falla se sigue con los demás — lo que sí se transcribió (y su gasto)
-    no se pierde. Al final, si alguno falló, avisa cuántos."""
+    no se pierde. Al final, si alguno falló, avisa cuántos. Si además alguno
+    llegó, el error es `EntregaParcial` (PND-334): el worker no devuelve el
+    cobro de lo entregado; lo que falló ya se anotó sin cobrar en
+    `transcripcion.transcribir`."""
     p = tarea["payload"]
     cliente, edicion_id, idioma = p["cliente"], p["edicion_id"], p["idioma"]
     jid = tarea.get("job_id") or job_id_transcribir(cliente, edicion_id)
     avisar = lambda n: trabajos.reportar(jid, etapa=n)
     carpeta = _carpeta(cliente, f"transcribir_{edicion_id}")
     avisar(ETAPAS_TRANSCRIBIR[0][0])
-    fallos = 0
+    fallos = entregados = 0
     try:
         for mid in p.get("material_ids") or []:
             mat = materiales.obtener(cliente, mid)
@@ -435,13 +438,15 @@ def ejecutar_transcribir(tarea):
             ref = f"transcripcion:{mid}{ref_sufijo(tarea)}"
             try:
                 transcripcion.transcribir(cliente, mat, idioma, carpeta, ref)
+                entregados += 1
             except Exception:  # noqa: BLE001 — sigue con los demás; el gasto de este ya quedó si alcanzó a pagar
                 log.exception("material_transcribir (tarea %s): material %s falló", tarea.get("id"), mid)
                 fallos += 1
         avisar(ETAPAS_TRANSCRIBIR[2][0])
         if fallos:
-            raise RuntimeError(ngettext("No se pudo transcribir %(num)s archivo.",
-                                        "No se pudieron transcribir %(num)s archivos.", fallos))
+            mensaje = ngettext("No se pudo transcribir %(num)s archivo.",
+                               "No se pudieron transcribir %(num)s archivos.", fallos)
+            raise (EntregaParcial if entregados else RuntimeError)(mensaje)
         # Babel 2.18 no extrae bien un gettext(dict[clave]) (confunde el `[`
         # con el paréntesis de la llamada y «ve» la clave como mensaje) — se
         # saca a una variable antes, como ya hace el resto del código con

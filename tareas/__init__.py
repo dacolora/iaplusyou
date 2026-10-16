@@ -108,6 +108,13 @@ def al_interrumpir(tipo):
     return _dec
 
 
+class EntregaParcial(RuntimeError):
+    """La tarea entregó una parte de su trabajo y falló en otra (PND-334, decisión 2026-10-15, lote 2: «se cobra lo
+    entregado y se devuelve solo lo que falló»). Termina en error como cualquier otra, pero el worker NO devuelve los
+    cobros de su cadena: quien la lanza ya anotó con `entregado=False` cada parte que el proveedor cobró y no llegó
+    (así esa parte, y solo esa, no se le cobra al cliente). Hoy la usa `material_transcribir`."""
+
+
 class Continuar:
     """Lo que devuelve una tarea que no terminó su trabajo pero sabe cómo
     seguirlo: el worker la cierra `hecha` con `mensaje` y encola, en la misma
