@@ -342,16 +342,46 @@ def _borrar_crudo(cliente):
         return _borrar(_path(cliente))
 
 
+class Soltado:
+    """Lo que devuelven `borrar` y `meta_agencia.desasignar` (PND-207): es verdadero si había algo que quitar (lo que
+    devolvían antes) y `fallo` es el tipo del error si no se pudo borrar algo de lo copiado de Meta (para que la ruta
+    avise), o None."""
+    __slots__ = ("hecho", "fallo")
+
+    def __init__(self, hecho, fallo=None):
+        self.hecho, self.fallo = bool(hecho), fallo
+
+    def __bool__(self):
+        return self.hecho
+
+    def __repr__(self):
+        return f"Soltado(hecho={self.hecho}, fallo={self.fallo!r})"
+
+
+def soltar_copias(cliente):
+    """Borra lo copiado de Meta del proyecto (métricas, análisis de fuente Meta, evaluaciones y sus copias en R2) y
+    deja libres sus cuentas: `meta_rendimiento.soltar.soltar`. PND-207 (decisión 2026-10-13): lo llaman `borrar` y
+    `meta_agencia.desasignar` por sí solas, así ningún llamador puede quitar la conexión y dejar las copias que
+    /privacidad y /eliminar-datos prometen borrar. Nunca lanza: devuelve el tipo del error, o None."""
+    try:
+        from meta_rendimiento import soltar  # noqa: PLC0415 — meta_rendimiento importa este módulo
+        return soltar.soltar(cliente)
+    except Exception as e:  # noqa: BLE001 — la desconexión ya está hecha; se avisa con el tipo
+        return type(e).__name__
+
+
 def borrar(cliente):
-    """Desconecta el proyecto. En modo agencia esta función NO desasigna:
-    lanza ModoAgenciaError, porque salir del modo agencia es una decisión
-    explícita (meta_agencia.desasignar, gateada a admin en Task 2), no un
-    efecto secundario de un botón "desconectar" pensado para modo propia."""
+    """Desconecta el proyecto y borra lo copiado de Meta (`soltar_copias`, PND-207). Devuelve un `Soltado`: verdadero
+    si había conexión, y con `fallo` si no se pudo borrar algo de lo copiado (la desconexión se queda igual). En modo
+    agencia esta función NO desasigna: lanza ModoAgenciaError, porque salir del modo agencia es una decisión
+    explícita (meta_agencia.desasignar, gateada a admin en Task 2), no un efecto secundario de un botón "desconectar"
+    pensado para modo propia."""
     if modo(cliente) == MODO_AGENCIA:
         raise ModoAgenciaError(gettext(
             "Este proyecto está gestionado por Creatv (modo agencia): no se puede desconectar así. "
             "Un admin tiene que desasignarlo (Volver a modo propia)."))
-    return _borrar_crudo(cliente)
+    hecho = _borrar_crudo(cliente)
+    return Soltado(hecho, soltar_copias(cliente))
 
 
 def cargar_pendiente(cliente):

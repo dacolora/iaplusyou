@@ -326,7 +326,7 @@ def borrar_evaluacion(cliente, evaluacion_id):
 
 def borrar_evaluaciones(cliente):
     """Borra TODAS las evaluaciones de ese proyecto (E2-R2: desconectar Meta borra las métricas copiadas y una
-    evaluación guarda nombres y métricas de anuncios de Meta). Solo la llama `dashboard._soltar_cuentas_meta`: ni
+    evaluación guarda nombres y métricas de anuncios de Meta). Solo la llama `meta_rendimiento.soltar` (desconectar; PND-207): ni
     `borrar_cuenta` ni `cuentas.elegir` la usan, porque también corren al cambiar las cuentas elegidas, y lo que se
     pagó no se pierde por eso. No toca la tabla `gasto`. Devuelve cuántas borró."""
     t = db.meta_evaluacion

@@ -695,7 +695,8 @@ def test_desconectar_meta_borra_las_copias_y_deja_libres_las_cuentas(conectado, 
     mc = conectado["dashboard"].meta_conexion
     llamadas = []
     monkeypatch.setattr(mc, "revocar", lambda c: False)
-    monkeypatch.setattr(mc, "borrar", lambda c: llamadas.append(c) or True)
+    borrar = mc.borrar     # la de verdad (PND-207: ella misma borra lo copiado), sobre la carpeta temporal
+    monkeypatch.setattr(mc, "borrar", lambda c: llamadas.append(c) or borrar(c))
     r = conectado["c"].post("/cliente/acme/meta/desconectar")
     assert r.status_code == 302 and llamadas == ["acme"]
     assert cuentas.ids("acme") == [] and _filas_copiadas() == 0
@@ -714,9 +715,10 @@ def _filas_gasto(cliente):
 
 
 def _desconectar(conectado, monkeypatch):
+    """«Desconectar» con la `meta_conexion.borrar` de verdad sobre la carpeta temporal: desde PND-207 es ella la que
+    borra lo copiado de Meta (no la ruta)."""
     mc = conectado["dashboard"].meta_conexion
     monkeypatch.setattr(mc, "revocar", lambda c: False)
-    monkeypatch.setattr(mc, "borrar", lambda c: True)
     return conectado["c"].post("/cliente/acme/meta/desconectar")
 
 
@@ -780,7 +782,8 @@ def test_si_borrar_las_copias_falla_la_desconexion_se_queda_y_se_avisa(conectado
     mc = conectado["dashboard"].meta_conexion
     llamadas = []
     monkeypatch.setattr(mc, "revocar", lambda c: False)
-    monkeypatch.setattr(mc, "borrar", lambda c: llamadas.append(c) or True)
+    borrar = mc.borrar     # la de verdad (PND-207: ella misma borra lo copiado), sobre la carpeta temporal
+    monkeypatch.setattr(mc, "borrar", lambda c: llamadas.append(c) or borrar(c))
 
     def falla(con, cliente, act):
         raise RuntimeError(f"disco lleno con {TOKEN}")

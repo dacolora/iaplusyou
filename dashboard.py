@@ -361,7 +361,6 @@ app.register_blueprint(triple_whale_rutas.bp)
 
 from meta_rendimiento import rutas as meta_rendimiento_rutas  # noqa: E402  (Meta rendimiento: «Elegir cuentas»)
 from meta_rendimiento import cuentas as meta_rend_cuentas  # noqa: E402  (las cuentas que lee el proyecto)
-from meta_rendimiento import datos as meta_rend_datos  # noqa: E402  (sus copias y evaluaciones)
 from meta_rendimiento import analisis as meta_rend_analisis  # noqa: E402  (una pieza de Crear nacida de su evaluación)
 app.register_blueprint(meta_rendimiento_rutas.bp)
 
@@ -3920,49 +3919,12 @@ def meta_cancelar(cliente):
     return _ir_a_flowmarketing(cliente)
 
 
-def _soltar_cuentas_meta(cliente):
+def _avisar_soltura(cliente, fallo):
     """Quitar la conexión de Meta de un proyecto (Desconectar, volver a modo propia, desasignar, desconectar la
-    agencia) también borra las métricas copiadas de sus cuentas y las deja libres para otro proyecto: /privacidad y
-    /eliminar-datos lo prometen (ruling R21, 2026-10-08). Borra además sus evaluaciones con IA, que guardan nombres
-    y métricas de anuncios de Meta (E2-R2, 2026-10-10; el gasto de esas evaluaciones queda en `gasto`), y las
-    miniaturas que esas evaluaciones copiaron a R2 (`clientes/<c>/meta_rendimiento/…`). Quitar las cuentas
-    (`cuentas.elegir(cliente, [])`) borra también los análisis «Cómo mejorarlo» de sus anuncios de fuente Meta y, después
-    de esas filas, la imagen y el video que copiaron a R2 (`clientes/<c>/rendimiento/a<aid>_<ad>.…`; S1 de la revisión
-    final de Rendimiento E2, 2026-10-10); si R2 falla, el mismo aviso.
-
-    El orden importa: primero se anotan las claves de R2 (salen de las filas), después se borran las filas (lo que
-    guarda los nombres y las métricas) y al final las miniaturas, con un solo cliente de R2: un R2 lento o caído
-    nunca deja nombres ni métricas guardados. Los borrados son independientes: si uno falla, los otros se hacen igual.
-    Si algo falla, la desconexión ya hecha se queda: se anota el tipo del error (nunca su texto) y se avisa una vez;
-    la siguiente vez que alguien desconecte se reintenta (las claves se vuelven a calcular de las filas que queden)."""
-    fallo = None
-    try:
-        quitadas = meta_rend_cuentas.elegir(cliente, [])
-        if quitadas.get("fallos_r2"):          # las filas ya se borraron; quedaron copias en R2 (S1)
-            fallo = quitadas["fallos_r2"][0]
-    except Exception as e:  # noqa: BLE001 — la desconexión no se deshace por esto
-        log.warning("meta rendimiento: no se pudieron borrar las métricas copiadas de %s (%s)", cliente,
-                    type(e).__name__)
-        fallo = type(e).__name__
-    claves = []
-    try:
-        claves = meta_rend_analisis.claves_miniaturas(cliente)
-    except Exception as e:  # noqa: BLE001 — sin las claves no se borran las miniaturas, pero las filas sí
-        log.warning("meta rendimiento: no se pudieron leer las miniaturas de %s (%s)", cliente, type(e).__name__)
-        fallo = fallo or type(e).__name__
-    try:
-        meta_rend_datos.borrar_evaluaciones(cliente)
-    except Exception as e:  # noqa: BLE001 — ídem; el borrado de arriba no depende de este ni este de aquel
-        log.warning("meta rendimiento: no se pudieron borrar las evaluaciones de %s (%s)", cliente, type(e).__name__)
-        fallo = fallo or type(e).__name__
-    try:
-        # Después de las filas y fuera de su camino: lo lento de R2 no retrasa el borrado de lo que guarda los nombres.
-        _, fallos_r2 = meta_rend_analisis.borrar_claves(claves)
-        if fallos_r2:
-            fallo = fallo or fallos_r2[0]
-    except Exception as e:  # noqa: BLE001 — `borrar_claves` no lanza; por si acaso, la desconexión sigue
-        log.warning("meta rendimiento: no se pudieron borrar las miniaturas de %s (%s)", cliente, type(e).__name__)
-        fallo = fallo or type(e).__name__
+    agencia) borra lo copiado de Meta y libera sus cuentas: desde PND-207 (2026-10-15) lo hacen por sí solas
+    `meta_conexion.borrar` y `meta_agencia.desasignar` (`meta_rendimiento.soltar`), y la ruta solo avisa, una vez y
+    con el tipo del error (nunca su texto), si algo no se pudo borrar. La desconexión se queda igual: la siguiente
+    vez que alguien desconecte se reintenta."""
     if fallo:
         flash(gettext("Meta se desconectó en %(proyecto)s, pero no se pudieron borrar sus métricas copiadas (%(tipo)s). "
                       "Avisa al administrador.", proyecto=proyectos.nombre_visible(cliente), tipo=fallo),
@@ -3978,12 +3940,12 @@ def meta_desconectar(cliente):
     # derivan de él); si falla, igual se borra localmente.
     revocado = meta_conexion.revocar(cliente)
     try:
-        meta_conexion.borrar(cliente)
+        soltado = meta_conexion.borrar(cliente)   # también borra lo copiado de Meta (PND-207)
     except meta_conexion.ModoAgenciaError:
         flash(gettext(MENSAJE_MODO_AGENCIA), "error")
         return _ir_a_flowmarketing(cliente)
     meta_conexion.borrar_pendiente(cliente)
-    _soltar_cuentas_meta(cliente)
+    _avisar_soltura(cliente, soltado.fallo)
     bitacora.registrar(cliente, "meta", "conexion", "ok", "desconectado" + (" y revocado en Meta" if revocado else ""))
     if revocado:
         flash(gettext("Meta desconectado de este proyecto y acceso revocado en Meta."), "ok")
@@ -4214,8 +4176,7 @@ def meta_agencia_salir(cliente):
     if motivo:
         flash(motivo, "error")
         return _ir_a_meta(cliente)
-    meta_agencia.desasignar(cliente)
-    _soltar_cuentas_meta(cliente)
+    _avisar_soltura(cliente, meta_agencia.desasignar(cliente).fallo)   # desasignar borra lo copiado (PND-207)
     restaurada = bool((meta_conexion.cargar(cliente) or {}).get("token"))
     proyectos.guardar_meta_forma(cliente, "propia")
     nombre = proyectos.nombre_visible(cliente)
@@ -4325,10 +4286,11 @@ def admin_meta_desconectar():
     if not _mismo_origen():
         abort(403)
     asignados = list(meta_agencia.proyectos_asignados())
-    resultado = meta_agencia.desconectar()
+    resultado = meta_agencia.desconectar()      # desasigna cada proyecto y borra lo copiado de Meta (PND-207)
     for cid in asignados:
-        _soltar_cuentas_meta(cid)
         bitacora.registrar(cid, "meta", "agencia", "ok", "vuelve a modo propia: la agencia se desconectó")
+    for cid, fallo in sorted((resultado.get("fallos") or {}).items()):
+        _avisar_soltura(cid, fallo)
     n = resultado.get("desasignados", 0)
     if not resultado.get("habia") and not n:
         flash(gettext("La agencia no estaba conectada."), "warn")
@@ -4414,10 +4376,11 @@ def admin_meta_desasignar(cliente):
     if not _mismo_origen():
         abort(403)
     _cliente_o_404(cliente)
-    if not meta_agencia.desasignar(cliente):
+    soltado = meta_agencia.desasignar(cliente)    # también borra lo copiado de Meta (PND-207)
+    if not soltado:
         flash(gettext("%(proyecto)s no estaba en modo agencia.", proyecto=proyectos.nombre_visible(cliente)), "warn")
         return _volver_admin_meta()
-    _soltar_cuentas_meta(cliente)
+    _avisar_soltura(cliente, soltado.fallo)
     bitacora.registrar(cliente, "meta", "agencia", "ok", f"vuelve a modo propia (por {session.get('usuario')})")
     flash(gettext("%(proyecto)s volvió a modo propia: si tenía su propia conexión se restauró; "
                   "si no, tendrá que registrar su app y conectar con Meta.", proyecto=proyectos.nombre_visible(cliente)),

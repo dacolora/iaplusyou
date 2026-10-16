@@ -106,7 +106,7 @@ mismo candado, así una reconexión en medio no se pisa con el token viejo y una
 falla no frena a los demás y el registro lleva solo el tipo del error. Alertas avisa 14 días antes (fuente
 `meta_acceso`, skill `alertas`) y la tarjeta conectada de Configuración › Conexiones dice «Acceso a los datos de Meta
 hasta el …» con «Renovar el acceso» (la ruta `meta_conectar`: reconectar reemplaza el token sin pasar por
-`_soltar_cuentas_meta`). Pruebas: `tests/test_meta_acceso_datos.py`. No cubre el modo agencia: el token del usuario
+`meta_conexion.borrar`, que borra las métricas copiadas). Pruebas: `tests/test_meta_acceso_datos.py`. No cubre el modo agencia: el token del usuario
 del sistema de Creatv vive en `kv` y no se revisa aquí.
 
 **Verificación del negocio (2026-10-15, PND-057; Daniel: «dale la alerta al cliente»).** La primera app de Creatv quedó
@@ -121,3 +121,11 @@ leer guardan `verificacion` None: sin dato no se avisa. Solo app propia con toke
 y al admin. Nunca se lee en una página. Pruebas: `tests/test_meta_negocio.py` (con dobles: no se llamó a Meta de
 verdad; la primera corrida real dirá si el token de usuario puede leer `verification_status`, y si no, queda None y no
 avisa).
+
+**Desconectar borra lo copiado, desde la capa de dominio (2026-10-15, PND-207).** `/privacidad` y `/eliminar-datos`
+prometen que quitar la conexión borra las métricas copiadas de Meta. Hasta ahora lo hacía la ruta
+(`dashboard._soltar_cuentas_meta`) y un llamador nuevo de `meta_conexion.borrar` o `meta_agencia.desasignar` lo habría
+saltado. Ahora las dos lo hacen por sí solas (`meta_conexion.soltar_copias` → `meta_rendimiento.soltar.soltar`, que
+nunca lanza) y devuelven un `meta_conexion.Soltado`: verdadero como antes (había conexión / estaba asignado) y con
+`fallo` = el tipo del error si algo no se pudo borrar; `meta_agencia.desconectar` devuelve `fallos` por proyecto. La
+ruta solo avisa (`dashboard._avisar_soltura`). `_borrar_crudo` (el que usa `desasignar` por dentro) no suelta nada.
