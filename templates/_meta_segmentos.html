@@ -3,13 +3,16 @@
    meta_rendimiento.panel.diagnostico: segmentos = {bloques, viejos}, ventana_segmentos) y `actual`. Una tabla por dimensión (edad y
    género, ubicación, país, dispositivo) con gasto, compras, ROAS y costo por compra; en «Todas» las cuentas se suman
    por segmento solo si comparten moneda (si no, una tabla por cuenta). Una fila que la regla `segmento_caro` marcó
-   lleva «Caro». Los desgloses de más de 48 h no se muestran: se avisa con su edad. Sin <script>. #}
+   lleva «Caro». Los desgloses de más de 48 h no se muestran: se avisa con su edad. Sin <script>.
+   La marca «Caro» sale SIEMPRE de la regla de 30 días (`mr.ventana_caro`): con la tabla de 7 días se dice (PND-263,
+   2026-10-15; antes un segmento podía salir «Caro» en 7 días sin verse caro ahí, o al revés). #}
 {% import "_meta_macros.html" as mx %}
 {% set sg = mr.segmentos %}
 <section class="tb-seccion" id="meta-segmentos">
   <div class="tb-seccion-cab">
     <h3>{{ _('Segmentos') }}</h3>
     {% if mr.ventana_segmentos %}<small class="vacio">{{ _('Toda la cuenta en los últimos %(n)s días, por segmento.', n=mr.ventana_segmentos) }}</small>{% endif %}
+    {% if sg.bloques and mr.ventana_caro and mr.ventana_segmentos != mr.ventana_caro %}<small class="vacio">{{ _('La marca «Caro» es de los últimos %(n)s días (la regla del Diagnóstico), no de esta tabla.', n=mr.ventana_caro) }}</small>{% endif %}
   </div>
   {% for v in sg.viejos %}
   <p class="tag-advertencia tw-aviso">{% if v.dias is none %}{{ _('Hay desgloses de %(cuenta)s sin fecha legible: no se muestran ni cuentan en el Diagnóstico hasta que la copia los traiga de nuevo.', cuenta=v.cuenta.nombre or v.cuenta.ad_account_id) }}{% else %}{{ ngettext('Hay desgloses de %(cuenta)s con datos de hace %(num)s día: no se muestran ni cuentan en el Diagnóstico hasta que la copia los traiga de nuevo.', 'Hay desgloses de %(cuenta)s con datos de hace %(num)s días: no se muestran ni cuentan en el Diagnóstico hasta que la copia los traiga de nuevo.', v.dias, cuenta=v.cuenta.nombre or v.cuenta.ad_account_id) }}{% endif %}</p>
@@ -28,7 +31,7 @@
             {% for f in g.filas %}
             <tr{% if f.caro_en %} class="meta-seg-caro"{% endif %}>
               <td class="tw-nombre">
-                <strong>{{ f.nombre }}</strong>{% if f.caro_en %} <span class="tag-estado tag-advertencia" title="{{ _('Gasta mucho con poco retorno: mira el Diagnóstico.') }}">{% if g.cuenta %}{{ _('Caro') }}{% else %}{{ _('Caro en %(cuentas)s', cuentas=f.caro_en | join(', ')) }}{% endif %}</span>{% endif %}
+                <strong>{{ f.nombre }}</strong>{% if f.caro_en %} <span class="tag-estado tag-advertencia" title="{{ _('Gasta mucho con poco retorno en los últimos %(n)s días: mira el Diagnóstico.', n=mr.ventana_caro or 30) }}">{% if g.cuenta %}{{ _('Caro') }}{% else %}{{ _('Caro en %(cuentas)s', cuentas=f.caro_en | join(', ')) }}{% endif %}</span>{% endif %}
                 {% if f.pct is not none %}<small>{{ _('%(pct)s del gasto', pct=f.pct | tw_pct(0)) }}</small>{% endif %}
               </td>
               <td>{{ mx.monto(f.gasto, g.moneda) }}</td>

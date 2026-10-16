@@ -689,6 +689,7 @@ def diagnostico(cliente, en_estructura, ids_evaluacion, dias, hoy, cuentas_por_i
             "conteo_recomendaciones": _conteo_niveles(recs),
             "max_filas": MAX_FILAS_GRUPO, "niveles_recomendacion": recomendaciones.NIVELES,
             "nombres_prioridad": NOMBRES_PRIORIDAD, "ventana_segmentos": ventana_seg,
+            "ventana_caro": DIAS_REGLAS,   # la marca «Caro» sale de la regla de 30 días, sea cual sea la tabla (PND-263)
             "segmentos": segmentos([f for f in desgloses if f["ventana"] == ventana_seg], en_estructura,
                                    _moneda_comun(en_estructura), recs, ahora),
             "evaluacion": ev, "dias": dias_eval, "actual": en_estructura[0] if len(en_estructura) == 1 else None,

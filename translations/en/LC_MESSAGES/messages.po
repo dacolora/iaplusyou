@@ -9797,8 +9797,9 @@ msgstr "Won in Meta: “%(nombre)s”"
 msgid "Ganó en Triple Whale: «%(nombre)s»"
 msgstr "Won in Triple Whale: “%(nombre)s”"
 
-msgid "Gasta mucho con poco retorno: mira el Diagnóstico."
-msgstr "It spends a lot for little return: see the Diagnosis."
+#, python-format
+msgid "Gasta mucho con poco retorno en los últimos %(n)s días: mira el Diagnóstico."
+msgstr "It spent a lot for little return in the last %(n)s days: see the Diagnosis."
 
 #, python-format
 msgid "Gastado %(gastado)s de %(aprobado)s aprobados"
@@ -11365,6 +11366,10 @@ msgstr "The key is stored encrypted and only used to read. We test the connectio
 
 msgid "La línea 1 (el hook) no se puede quitar."
 msgstr "Line 1 (the hook) can't be removed."
+
+#, python-format
+msgid "La marca «Caro» es de los últimos %(n)s días (la regla del Diagnóstico), no de esta tabla."
+msgstr "The “Expensive” mark is from the last %(n)s days (the Diagnosis rule), not from this table."
 
 #, python-format
 msgid "La misma gente ya lo vio %(n)s veces en promedio."

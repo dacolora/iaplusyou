@@ -664,3 +664,19 @@ def test_pnd287_el_diagnostico_ve_los_conjuntos_con_problemas_de_la_copia(base_t
     assert r["cuenta"] == A and r["nivel"] == "alta" and [o["id"] for o in r["objetos"]] == ["s9"]
     assert r["problemas"] == [{"nombre": "Bloqueado", "texto": "Ad set has issues"}]
     assert "conjuntos_con_problemas" in {x["tipo"] for x in panel.recomendaciones_de_cuenta("hf", A, hoy=HOY)}
+
+
+def test_pnd263_la_tabla_de_segmentos_dice_de_que_ventana_es_la_marca_caro(base_temporal, conectado):
+    """PND-263 (decisión 2026-10-13): la marca «Caro» sale de la regla de 30 días también en la tabla de 7 días; la
+    tabla lo dice, y con la de 30 no hace falta."""
+    from flask import render_template
+
+    import dashboard
+    _sembrar_diagnostico()
+    with dashboard.app.test_request_context():
+        treinta = render_template("_meta_segmentos.html", mr=_contexto(30), actual=None)
+        siete = render_template("_meta_segmentos.html", mr=_contexto(7), actual=None)
+    nota = "La marca «Caro» es de los últimos 30 días (la regla del Diagnóstico), no de esta tabla."
+    assert nota in siete and "Toda la cuenta en los últimos 7 días" in siete
+    assert nota not in treinta and "Caro" in treinta
+    assert "Gasta mucho con poco retorno en los últimos 30 días" in treinta
