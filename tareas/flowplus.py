@@ -74,6 +74,9 @@ ESPERA_LISTADO_S = 60
 # Estados de `lanzamiento_incierto` que todavía pueden haber cobrado sin que
 # sepamos qué: mientras tanto la pieza no se vuelve a generar.
 LANZAMIENTO_PENDIENTE = ("buscando", "dudoso")
+# Estados en que el pedido anterior pudo cobrarse y no hay cómo traerlo (una imagen incierta, PND-214; un video de
+# fal, que no tiene historial, PND-346): «Reintentar» paga otra vez y pide confirmarlo con el precio.
+REINTENTO_CON_CONFIRMACION = ("imagen", "sin_historial")
 
 # Los proveedores hablan en sus propios códigos de estado; esto es lo único
 # honesto que se puede mostrar de ellos (ninguno da un porcentaje numérico).
@@ -210,6 +213,21 @@ def _lanzamiento_incierto(cliente, cf_id, modelo, e, ref, prompt):
                      mensaje=MENSAJE_BUSCANDO)
 
 
+def _lanzamiento_incierto_sin_historial(cliente, cf_id, modelo, e, ref, duracion, calidad):
+    """PND-346 (decisión 2026-10-15, lote 2): el pedido a fal salió y la respuesta no llegó. fal no tiene un historial
+    donde buscarlo, así que no hay «Recuperar»: el posible cobro queda anotado sin cobrarlo (como WaveSpeed) y la pieza
+    en error; «Reintentar» pide confirmar con el precio (`REINTENTO_CON_CONFIRMACION`). Una predicción vieja de un
+    intento anterior no es este video: se suelta."""
+    entry = _sesion_o_vacia(cliente, cf_id)
+    lanzamiento = {"path": e.path, "modelo": modelo, "proveedor": getattr(e, "proveedor", None) or "fal",
+                   "desde": e.desde.isoformat(), "hasta": e.hasta.isoformat(), "causa": e.causa,
+                   "estado": "sin_historial", "en": datetime.now().isoformat(timespec="seconds"),
+                   "referencia_gasto": ref}
+    _anotar_posible_cobro(cliente, cf_id, entry, lanzamiento, duracion, calidad)
+    creative_flow.actualizar(cliente, cf_id, estado="error", error=_mensaje_error(e, cliente), prediccion=None,
+                             lanzamiento_incierto=lanzamiento)
+
+
 def _ventana_busqueda(lanzamiento):
     """La ventana entera en que la búsqueda acepta predicciones de ese
     lanzamiento (la misma de `wavespeed_common.predicciones_en_ventana`), o
@@ -232,6 +250,8 @@ def _hay_otro_incierto(cliente, cf_id, lanzamiento):
     for otro_cliente, otro_cf, otro in creative_flow.lanzamientos_inciertos():
         if (otro_cliente, otro_cf) == (cliente, cf_id):
             continue
+        if (otro or {}).get("proveedor") == "fal":
+            continue        # PND-346: un pedido de fal nunca aparece en el historial de WaveSpeed
         ajena = _ventana_busqueda(otro)
         if propia is None or ajena is None or (ajena[0] <= propia[1] and propia[0] <= ajena[1]):
             return True
@@ -271,12 +291,13 @@ def _anotar_posible_cobro(cliente, cf_id, entry, lanzamiento, duracion, calidad,
     except Exception:  # noqa: BLE001 — sin estimado no hay línea; el aviso al admin igual sale
         return
     ref = lanzamiento.get("referencia_gasto") or f"{tipo}:{cf_id}:incierto"
+    proveedor = saldo.nombre_proveedor(lanzamiento.get("proveedor") or "wavespeed")
     if tipo == "imagen":
-        detalle = gettext("%(modelo)s · posible cobro: WaveSpeed no respondió al lanzar y no se pudo confirmar",
-                          modelo=modelo)
+        detalle = gettext("%(modelo)s · posible cobro: %(proveedor)s no respondió al lanzar y no se pudo confirmar",
+                          modelo=modelo, proveedor=proveedor)
     else:
-        detalle = gettext("%(modelo)s · %(n)s s · posible cobro: WaveSpeed no respondió al lanzar y no se pudo "
-                          "confirmar", modelo=modelo, n=int(duracion or 0))
+        detalle = gettext("%(modelo)s · %(n)s s · posible cobro: %(proveedor)s no respondió al lanzar y no se pudo "
+                          "confirmar", modelo=modelo, n=int(duracion or 0), proveedor=proveedor)
     _registrar_gasto(cliente, tipo, costo, ref, modelo, detalle, entregado=False)
 
 
@@ -336,7 +357,7 @@ def anotar_posible_cobro_al_descartar(cliente, cf_id, entry):
     e = entry or {}
     tipo = "imagen" if (e.get("tipo") or "video") == "imagen" else "video"
     lanzamiento = e.get("lanzamiento_incierto") if isinstance(e.get("lanzamiento_incierto"), dict) else {}
-    pendiente = lanzamiento_pendiente(e) or (tipo == "imagen" and lanzamiento.get("estado") == "imagen")
+    pendiente = lanzamiento_pendiente(e) or lanzamiento.get("estado") in REINTENTO_CON_CONFIRMACION
     pred = e.get("prediccion") or {}
     if not pendiente and not (pred.get("id") and e.get("estado") != "video_listo"):
         return
@@ -868,6 +889,10 @@ def ejecutar_video(tarea):
         # PND-214: el pedido salió y la respuesta no llegó; pudo cobrarse. Se busca
         # en el historial de WaveSpeed, nunca se vuelve a mandar.
         bitacora.registrar(cliente, cf_id, "generacion", "incierto", str(e))
+        if getattr(e, "proveedor", "wavespeed") != "wavespeed":
+            # PND-346: fal no tiene historial; queda el posible cobro y «Reintentar» con su precio.
+            _lanzamiento_incierto_sin_historial(cliente, cf_id, modelo, e, ref, duracion, calidad)
+            raise
         return _lanzamiento_incierto(cliente, cf_id, modelo, e, ref, prompt_texto)
     except Exception as e:
         bitacora.registrar(cliente, cf_id, "generacion", "error", str(e))

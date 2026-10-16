@@ -218,7 +218,7 @@ que no filtró, un cruce) o historial caído → en palabras, posible cobro en G
 anota el posible cobro (`anotar_posible_cobro_al_descartar`) y `creative_flow.eliminar` guarda en `kv` la predicción y
 el lanzamiento. `duplicar` no copia `prediccion`, `prediccion_entregada` ni `lanzamiento_incierto`. Imagen con
 lanzamiento incierto (sin id, no se recupera): posible cobro anotado, `lanzamiento_incierto.estado = "imagen"` y «Reintentar» pide confirmar con el precio
-(`confirmo_posible_cobro`); tras confirmar queda `imagen_reintentada`. fal sigue contándolo como su 5xx. Riesgo que
+(`confirmo_posible_cobro`); tras confirmar queda `imagen_reintentada`. fal: ver PND-346 abajo. Riesgo que
 queda: una predicción hecha con la misma llave fuera de esta base (web de WaveSpeed, pruebas locales) con una ruta de la
 app no se distingue; como nunca se entrega sin la entrada, solo puede volver dudosa una búsqueda. Pruebas:
 `tests/test_lanzamiento_incierto.py`.
@@ -342,3 +342,17 @@ lista la pasa a `prediccion_entregada`. `flowplus_recuperar` con una imagen va a
 (`TIEMPO_RECUPERAR`), sin la espera de 2 h del video; si llegó, la baja, la sube y cobra trasladando lo anotado
 (`_trasladar_lo_pendiente(..., tipo="imagen")`). El botón es «Recuperar la imagen (se cobra ≈ X)» y la ruta pasa por el
 mismo freno. Pruebas: `tests/test_crear_recuperar_imagen.py`.
+
+**fal con el mismo trato (PND-346, decisión 2026-10-15, lote 2).** Un tiempo agotado al encolar en fal se contaba como su
+5xx (`PedidoRechazado`): no anotaba el posible cobro ni frenaba «Reintentar». Ahora `fal_video.lanzar` usa la misma regla
+que WaveSpeed (`wavespeed_common._no_salio`): no poder ni conectar es `fal_video.SinConexion`; una lectura agotada, una
+conexión cortada, cualquier 5xx o un 2xx sin `request_id` es `fal_video.LanzamientoIncierto` (`proveedor = "fal"`). fal no
+tiene historial: `ejecutar_video` no busca nada (`_lanzamiento_incierto_sin_historial`), anota el posible cobro con
+`entregado=False` (el detalle nombra al proveedor), suelta una predicción vieja y deja la pieza en error con
+`lanzamiento_incierto.estado = "sin_historial"`; «Reintentar» pide confirmar con el precio como la imagen
+(`REINTENTO_CON_CONFIRMACION = ("imagen", "sin_historial")`, en la ruta y en el detalle) y después queda «reintentada».
+Un incierto de fal no vuelve dudoso a uno de WaveSpeed (`_hay_otro_incierto` lo salta). En `fal_client.llamar` (voces,
+música, subtítulos, swaps de fal) lo mismo es `fal_client.EncoladoIncierto`, una `EsperaAgotadaFal` con `cobrado=True`
+sin `request_id`: quien llama lo anota sin cobrarlo como una espera agotada (PND-313). Riesgo que queda: Sprints y las
+derivaciones relanzan con `flowplus_lanzar.lanzar`, que no pide esa confirmación (como con la imagen incierta). Pruebas:
+`tests/test_lanzamiento_incierto_fal.py`.

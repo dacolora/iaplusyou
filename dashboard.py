@@ -8735,13 +8735,21 @@ def cf_generar_video(cliente, cf_id):
         flash(gettext("El pedido anterior de esta pieza pudo crearse y cobrarse aunque WaveSpeed no respondió: usa "
                       "«Recuperar el video (sin pagar de nuevo)» en vez de generarla otra vez."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
-    incierto_imagen = (entry.get("lanzamiento_incierto") or {}).get("estado") == "imagen"
-    if incierto_imagen and request.form.get("confirmo_posible_cobro") != "1":
+    from tareas.flowplus import REINTENTO_CON_CONFIRMACION  # noqa: PLC0415
+    incierto = entry.get("lanzamiento_incierto") or {}
+    incierto_confirmar = incierto.get("estado") in REINTENTO_CON_CONFIRMACION
+    if incierto_confirmar and request.form.get("confirmo_posible_cobro") != "1":
         # R5 (revisión del guardián de gasto): una imagen no se recupera; reintentar
-        # paga otra vez, y se dice con el precio antes de hacerlo.
+        # paga otra vez, y se dice con el precio antes de hacerlo. PND-346: un video de
+        # fal tampoco (fal no tiene historial donde buscarlo).
         precio = gastos.texto_precio(flowplus_lanzar.costo_estimado(entry))
-        flash(gettext("La imagen anterior pudo cobrarse aunque WaveSpeed no respondió. Generarla otra vez cuesta "
-                      "%(precio)s más: confírmalo en «Reintentar».", precio=precio), "error")
+        if incierto.get("estado") == "imagen":
+            flash(gettext("La imagen anterior pudo cobrarse aunque WaveSpeed no respondió. Generarla otra vez cuesta "
+                          "%(precio)s más: confírmalo en «Reintentar».", precio=precio), "error")
+        else:
+            flash(gettext("El video anterior pudo cobrarse aunque %(proveedor)s no respondió. Generarlo otra vez "
+                          "cuesta %(precio)s más: confírmalo en «Reintentar».", precio=precio,
+                          proveedor=saldo.nombre_proveedor(incierto.get("proveedor") or "fal")), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
     if not (entry.get("referencias_urls") or []) and entry.get("enfoque") != "libre":
         flash(gettext("Esta sesión no tiene imágenes de referencia — descártala y crea una nueva."), "error")
@@ -8776,10 +8784,11 @@ def cf_generar_video(cliente, cf_id):
     if not _lanzar_video_cf(cliente, cf_id, entry):
         flash(gettext("Ya se está generando %(que)s — espera a que termine.", que=que), "warn")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
-    if incierto_imagen:
+    if incierto_confirmar:
         # Ya se avisó y se aceptó el precio: el aviso no se repite en un fallo siguiente.
         creative_flow.actualizar(cliente, cf_id, lanzamiento_incierto=dict(
-            entry["lanzamiento_incierto"], estado="imagen_reintentada"))
+            entry["lanzamiento_incierto"],
+            estado="imagen_reintentada" if incierto.get("estado") == "imagen" else "reintentada"))
     if hija:
         _lanzar_video_cf(cliente, hija, creative_flow.cargar(cliente)[hija])
         flash(gettext("Generando las versiones A y B con %(modelo)s…", modelo=nombre_modelo), "ok")

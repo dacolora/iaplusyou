@@ -386,9 +386,11 @@ def test_sin_respuesta_al_encolar_no_promete_que_no_se_cobro(fal, monkeypatch):
     def _post(*a, **k):
         raise requests.ReadTimeout("Read timed out")
     monkeypatch.setattr(fal_video.requests, "post", _post)
-    with pytest.raises(wavespeed_common.PedidoRechazado) as e:
+    # PND-346: ya no se cuenta como su 5xx sino como un lanzamiento incierto (el posible cobro se anota y
+    # «Reintentar» pide confirmar; tests/test_lanzamiento_incierto_fal.py).
+    with pytest.raises(wavespeed_common.LanzamientoIncierto) as e:
         fal_video.lanzar(RUTA, {}, "Seedance")
-    assert e.value.status >= 500 and e.value.proveedor == "fal"
+    assert e.value.proveedor == "fal" and e.value.causa == "ReadTimeout"
 
 
 def test_una_regeneracion_nunca_va_a_un_modelo_que_deja_referencias_sin_usar():

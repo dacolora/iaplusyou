@@ -529,16 +529,16 @@ msgid "%(modelo)s · %(n)s referencia(s) · se agotó la espera; el modelo la co
 msgstr "%(modelo)s · %(n)s reference(s) · the wait ran out; the model charges for it anyway"
 
 #, python-format
-msgid "%(modelo)s · %(n)s s · posible cobro: WaveSpeed no respondió al lanzar y no se pudo confirmar"
-msgstr "%(modelo)s · %(n)s s · possible charge: WaveSpeed didn't respond at launch and it couldn't be confirmed"
+msgid "%(modelo)s · %(n)s s · posible cobro: %(proveedor)s no respondió al lanzar y no se pudo confirmar"
+msgstr "%(modelo)s · %(n)s s · possible charge: %(proveedor)s didn't respond at launch and it couldn't be confirmed"
 
 #, python-format
 msgid "%(modelo)s · %(n)s s · se dejó de esperar a las 2 h; el proveedor lo cobra igual"
 msgstr "%(modelo)s · %(n)s s · we stopped waiting after 2 h; the provider charges it anyway"
 
 #, python-format
-msgid "%(modelo)s · posible cobro: WaveSpeed no respondió al lanzar y no se pudo confirmar"
-msgstr "%(modelo)s · possible charge: WaveSpeed didn't respond at launch and it couldn't be confirmed"
+msgid "%(modelo)s · posible cobro: %(proveedor)s no respondió al lanzar y no se pudo confirmar"
+msgstr "%(modelo)s · possible charge: %(proveedor)s didn't respond at launch and it couldn't be confirmed"
 
 #, python-format
 msgid "%(modelos)s está en pausa"
@@ -7195,6 +7195,14 @@ msgstr "The video"
 #, python-format
 msgid "El video %(nombre)s se subió, pero no pude extraer su fotograma de referencia (no se puede usar hasta resolver esto): %(error)s"
 msgstr "The video %(nombre)s was uploaded, but I couldn't extract its reference frame (it can't be used until this is fixed): %(error)s"
+
+#, python-format
+msgid "El video anterior pudo cobrarse aunque %(proveedor)s no respondió. Generarlo otra vez cuesta %(precio)s más. ¿Seguir?"
+msgstr "The previous video may have been charged even though %(proveedor)s didn't respond. Generating it again costs %(precio)s more. Continue?"
+
+#, python-format
+msgid "El video anterior pudo cobrarse aunque %(proveedor)s no respondió. Generarlo otra vez cuesta %(precio)s más: confírmalo en «Reintentar»."
+msgstr "The previous video may have been charged even though %(proveedor)s didn't respond. Generating it again costs %(precio)s more: confirm it in “Retry”."
 
 msgid "El video del link pesa demasiado."
 msgstr "The video at that link is too large."

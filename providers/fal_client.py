@@ -43,6 +43,17 @@ class EsperaAgotadaFal(TimeoutError):
                          f"{'lo cobra' if cobrado else 'cancelado en cola, sin cobro'}).")
 
 
+class EncoladoIncierto(EsperaAgotadaFal):
+    """PND-346: el pedido salió y fal no confirmó que lo encoló (lectura agotada, conexión cortada, un 5xx, un 2xx sin
+    las URLs del pedido): pudo encolarlo y lo cobra al terminar. Es una `EsperaAgotadaFal` con `cobrado=True` y sin
+    `request_id`, así que quien llama la anota sin cobrarla como cualquier espera agotada (los de `fal_audio` le pegan
+    `costo_usd`; un swap de fal queda «en espera» sin recuperar)."""
+
+    def __init__(self, model_path, causa):
+        super().__init__(model_path, None, causa, True)
+        self.causa = causa
+
+
 def api_key():
     key = os.environ.get("FAL_KEY")
     if not key:
@@ -74,13 +85,27 @@ def llamar(model_path, payload, timeout=600, poll_interval=3, on_progreso=None):
     "queue_position": int|None} para que la UI pueda decir "en cola (puesto 3)"
     en vez de un porcentaje inventado. fal.ai no entrega ningún porcentaje real.
     Va AL FINAL de la firma para no romper a los llamadores existentes."""
-    resp = requests.post(f"{QUEUE_BASE_URL}/{model_path}", json=payload, headers=_headers(), timeout=30)
+    try:
+        resp = requests.post(f"{QUEUE_BASE_URL}/{model_path}", json=payload, headers=_headers(), timeout=30)
+    except requests.RequestException as e:
+        # PND-346 (como WaveSpeed, PND-214): si el pedido salió y la respuesta no llegó, fal pudo encolarlo y lo
+        # cobra al terminar. Quien llama lo anota sin cobrarlo, como una espera agotada (PND-313). Si no se pudo ni
+        # conectar, no salió: el error de siempre.
+        from providers import wavespeed_common  # noqa: PLC0415
+        if wavespeed_common._no_salio(e):
+            raise
+        raise EncoladoIncierto(model_path, type(e).__name__) from e
     if not resp.ok:
         _sin_saldo(resp, model_path)
+        if resp.status_code >= 500:
+            raise EncoladoIncierto(model_path, f"HTTP {resp.status_code}")
         raise RuntimeError(f"fal.ai ({model_path}) respondió {resp.status_code} al encolar: {resp.text[:500]}")
-    encolado = resp.json()
-    status_url = encolado["status_url"]
-    response_url = encolado["response_url"]
+    try:
+        encolado = resp.json()
+        status_url = encolado["status_url"]
+        response_url = encolado["response_url"]
+    except (ValueError, KeyError, TypeError, AttributeError) as e:
+        raise EncoladoIncierto(model_path, "sin_id") from e
     _avisar(on_progreso, {"fase": "IN_QUEUE", "queue_position": encolado.get("queue_position")})
 
     def _resultado():
