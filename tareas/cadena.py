@@ -18,6 +18,7 @@ import hashlib
 import logging
 import os
 from contextlib import nullcontext
+from datetime import datetime, timedelta
 
 import sqlalchemy as sa
 from flask_babel import gettext
@@ -46,6 +47,10 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PRIORIDAD_CADENA = 3
 # Estados de una sesión de Crear que todavía pueden terminar en un video.
 VIVOS_CREAR = ("prompt_pendiente", "prompt_listo", "video_generando")
+# Una escena cuya pieza Crear todavía puede recuperar («Recuperar el video», sin pagar de nuevo) ya está pagada: la
+# cadena la espera hasta 24 h desde que la vio así, como los ganchos de Triple Whale (PND-229, decisión 2026-10-13,
+# lote 2; `tareas.triple_whale.ESPERA_RECUPERABLE_S`). Recuperada, sigue sola; vencida la espera, se detiene.
+ESPERA_RECUPERABLE_S = 24 * 3600
 
 
 def job_id(cliente, video_id, que):
@@ -95,8 +100,9 @@ def lanzar_escena(cliente, video_id, k):
     imagenes = escenas.imagenes_para_crear(v, k)
     primera = k == cadena.indices(v)[0]
     if modelo == cadena.WAN:
-        # Wan 3.0: todas por referencias; desde la segunda, el último cuadro de
-        # la anterior va primero (`@Imagen 1`) y las de la escena después.
+        # Wan 3.0: todas por referencias. La primera, con el lugar primero; desde la segunda, el último cuadro de la
+        # anterior va primero (`@Imagen 1`) y después la escena sin los retratos (PND-330: se colaban como planos).
+        imagenes = cadena.imagenes_wan(v, k)
         prompt = cadena.prompt_escena_wan(_prompt_vigente(video_id, k), v, k, imagenes)
         urls = [medios.url_publica(cliente, x["imagen"]) for x in imagenes]
         referencias = [{"tipo": "imagen", "url": u, "frame_url": u,
@@ -110,6 +116,7 @@ def lanzar_escena(cliente, video_id, k):
             referencias = [{"tipo": "imagen", "url": frame, "frame_url": frame, "titulo": f"{k - 1} → {k}"}] + referencias
         for i, r in enumerate(referencias, start=1):
             r["etiqueta"] = f"@Imagen {i}"
+        _sin_colgadas(prompt, len(referencias))
         flowplus_prompt.asignar_tokens(referencias, modelo)
         prompt = flowplus_prompt.sustituir_tokens(prompt, referencias)
         campos = {"referencias": referencias}
@@ -121,11 +128,13 @@ def lanzar_escena(cliente, video_id, k):
                        for i, (x, u) in enumerate(zip(imagenes, urls), start=1)]
         # Las menciones `@Imagen n` pasan al token de Kling («Image n»): hasta el
         # 2026-10-15 la primera escena le llegaba a Kling con «@Imagen n» literal.
+        _sin_colgadas(prompt, len(referencias))
         flowplus_prompt.asignar_tokens(referencias, modelo)
         prompt = flowplus_prompt.sustituir_tokens(prompt, referencias)
         campos = {"referencias": referencias}
     else:
         prompt = cadena.prompt_escena(_prompt_vigente(video_id, k), v, k, imagenes)
+        _sin_colgadas(prompt, 1)
         frame = cadena.frame_anterior(est, k)
         if not frame:
             raise ValueError(gettext("Falta el último cuadro de la escena anterior."))
@@ -148,6 +157,32 @@ def lanzar_escena(cliente, video_id, k):
     if not flowplus_lanzar.lanzar(cliente, cf_id, entry, prioridad=PRIORIDAD_CADENA):
         raise RuntimeError(gettext("No se pudo poner la escena en la cola."))
     return cf_id
+
+
+def escena_recuperable(entry):
+    """¿Crear ofrece «Recuperar el video» para la pieza de la escena? La MISMA condición que `dashboard.cf_recuperar`:
+    en error, con el id de su predicción guardado o un lanzamiento incierto sin resolver (PND-214), y que no sea una
+    imagen. Ese clip ya está pagado (el proveedor lo termina y lo cobra igual)."""
+    from tareas.flowplus import lanzamiento_pendiente
+    e = entry or {}
+    return (e.get("estado") == "error"
+            and (bool((e.get("prediccion") or {}).get("id")) or lanzamiento_pendiente(e))
+            and (e.get("tipo") or "video") != "imagen")
+
+
+def _espera_vencida(desde):
+    try:
+        return datetime.fromisoformat(str(desde)) <= datetime.now() - timedelta(seconds=ESPERA_RECUPERABLE_S)
+    except (TypeError, ValueError):
+        return True
+
+
+def _sin_colgadas(prompt, n):
+    """Ninguna mención del prompt apunta a una imagen que la escena no lleva (`cadena.menciones_colgadas`): si alguna
+    lo hace, la escena no se crea ni se cobra (la cadena se detiene con el motivo)."""
+    colgadas = cadena.menciones_colgadas(prompt, n)
+    if colgadas:
+        raise ValueError(cadena.motivo_colgadas(colgadas))
 
 
 def fallar_cadena(cliente, video_id, k, error):
@@ -193,6 +228,14 @@ def vigilar_una(cliente, video_id):
             if entry.get("estado") in VIVOS_CREAR:
                 return
             if entry.get("estado") != "video_listo":
+                desde = (est["escenas"].get(str(k)) or {}).get("recuperable_desde")
+                if escena_recuperable(entry) and not est.get("detener") and not (desde and _espera_vencida(desde)):
+                    # PND-229: el clip ya está pagado y Crear lo puede traer sin pagar de nuevo. La escena espera a la
+                    # persona; recuperado, la sesión vuelve a generar y después queda en video_listo.
+                    if not desde:
+                        datos.modificar_cadena(cliente, video_id,
+                                               lambda e, _v: cadena.esperando_recuperar(e, k, db.ahora()) if e else e)
+                    return
                 _fallar(cliente, video_id, k, entry.get("error") or gettext("La escena no se pudo generar."))
                 return
             frame = _fotograma(cliente, video_id, k, entry)

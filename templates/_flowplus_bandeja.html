@@ -25,3 +25,8 @@
 {% else %}
 <p class="crear-refs-vacio">{{ _('Arrastra aquí imágenes o videos, o toca <strong>+</strong> para sumar referencias o elegir del catálogo. Son opcionales: sin nada, se genera solo con tu texto.') }}</p>
 {% endif %}
+{# PND-242 (prueba real del 2026-10-10): Seedance 2.5 con varias referencias (vía fal) rechaza fotos realistas de
+   personas aunque estén hechas con IA (regla de ByteDance; no se cobra, pero se pierde el intento). Va siempre en el
+   HTML y solo se ve, antes de generar, con ese modelo, un video y alguna referencia en la bandeja o un personaje del
+   catálogo: lo prende pantallas/crear.css con :has(), sin JS. #}
+<p class="crear-nota crear-nota-aviso fp-aviso-seedance-personas">{{ _('Seedance 2.5 con varias referencias no acepta fotos realistas de personas, aunque estén hechas con IA (regla de ByteDance). Si alguna referencia muestra a una persona, elige Kling O3 Pro o Wan 3.0; si la rechaza, no se cobra.') }}</p>

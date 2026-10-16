@@ -114,7 +114,7 @@ def _contexto(cliente, guion_id=None, video_id=None):
         ctx["costos"]["armar"] = _costo("armar", _palabras(v))
         ctx["no_caben"] = clips.lineas_que_no_caben(v)
         ctx["prompts"] = {f"{(p['extra'] or {}).get('variante')}:{(p['extra'] or {}).get('clip_index')}":
-                          {"id": p["id"], "estado": p["estado"]}
+                          {"id": p["id"], "estado": p["estado"], "texto": p["texto_vigente"]}
                           for p in datos.prompts_de_video(v["id"]) if p["tipo"] == "clip"}
         ctx["costos"]["imagenes"] = _costo("imagenes")
         todos = datos.prompts_de_video(v["id"])
@@ -150,7 +150,9 @@ def _vista_cadena(v, prompts):
         k = c["indice"]
         e = ((est or {}).get("escenas") or {}).get(str(k)) or {}
         fila = {"indice": k, "titulo": c.get("titulo") or "", "estado": e.get("estado") or ("espera" if est else None),
-                "error": e.get("error"), "rehacer_precio": None}
+                "error": e.get("error"), "rehacer_precio": None,
+                # PND-229: la pieza espera que la recuperen en Crear (sin pagar de nuevo); la cadena sigue sola.
+                "recuperable": e.get("estado") == "generando" and bool(e.get("recuperable_desde"))}
         if est and not corriendo and k != ks[0] and cadena.puede_rehacer(est, k, ks[0]) \
                 and not cadena.revisar(v, prompts, desde=k, modelo=modelo_est):
             fila["rehacer_precio"] = cadena.precio(v, k, conocidos, modelo_est)
@@ -621,7 +623,8 @@ def escena_a_crear(cliente, vid, indice):
 # (`tareas/cadena.py`) genera escena tras escena y frena si una falla.
 
 def _prompts_clip(vid):
-    return {f"principal:{(p['extra'] or {}).get('clip_index')}": {"id": p["id"], "estado": p["estado"]}
+    return {f"principal:{(p['extra'] or {}).get('clip_index')}": {"id": p["id"], "estado": p["estado"],
+                                                                   "texto": p["texto_vigente"]}
             for p in datos.prompts_de_video(vid)
             if p["tipo"] == "clip" and (p["extra"] or {}).get("variante") == "principal"}
 

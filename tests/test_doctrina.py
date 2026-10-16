@@ -189,6 +189,61 @@ def test_verificar_cifras_reconoce_formatos_en_ingles():
     assert doctrina.verificar_cifras("save 40%", "") == ["40%"]
 
 
+def test_verificar_cifras_lee_los_decimales_como_decimales():
+    """PND-227: «4,0» pasaba a 40 y «5.00» a 500, así que un 40 inventado se verificaba con un 4,0 de los datos (y al
+    revés). Un decimal vale lo que vale; un separador seguido de tres cifras puede ser de miles («89.900»)."""
+    import doctrina
+    assert doctrina.verificar_cifras("un 40 % menos", "Valoración 4,0 de 5") == ["40 %"]
+    assert doctrina.verificar_cifras("Envío de 500 pesos", "Envío 5.00 USD") == ["500"]
+    assert doctrina.verificar_cifras("4,0 de valoración", "valoración 4 de 5") == []
+    assert doctrina.verificar_cifras("4,5 de valoración", "rating 4.5") == []
+    assert doctrina.verificar_cifras("45 % lo repite", "rating 4.5") == ["45 %"]
+    assert doctrina.verificar_cifras("a $89.900", "precio 89900.0") == []           # miles (Colombia) y el float de la tienda
+    assert doctrina.verificar_cifras("a 89900 pesos", "precio 89.900 COP") == []
+    assert doctrina.verificar_cifras("1,5x más agarre", "agarre 1.5 veces") == []
+    assert doctrina.verificar_cifras("15x más agarre", "agarre 1.5 veces") == ["15x"]
+    assert doctrina.verificar_cifras("1.234,56 €", "1,234.56 EUR") == []
+
+
+@pytest.mark.parametrize("texto, visto", [
+    ("Últimas 3 unidades", "Últimas 3"),
+    ("Garantía de 5 años", "Garantía de 5 años"),
+    ("Prøv i 7 dager", "Prøv i 7 dager"),
+    ("llega en 2 días", "llega en 2 días"),
+    ("5 años de garantía", "5 años de garantía"),
+    ("Only 3 pairs left", "3 pairs left"),
+    ("Solo quedan 4", "quedan 4"),
+    ("2 års garanti", "2 års garanti"),
+])
+def test_verificar_cifras_ve_un_digito_con_palabra_de_oferta(texto, visto):
+    """PND-237: un solo dígito con oferta o escasez se verifica («Últimas 3 unidades» pasaba aunque los datos no lo
+    trajeran); con el dígito en los datos, no se marca."""
+    import doctrina
+    assert doctrina.verificar_cifras(texto, "Chancla Rose, suela cosida.") == [visto]
+    assert doctrina.verificar_cifras(texto, "Chancla Rose: 2 años, 3, 4, 5 y 7 días.") == []
+
+
+@pytest.mark.parametrize("texto", ["baja en 3 pasos", "en 3 días lo notas", "los últimos 3 inviernos",
+                                   "the last 2 years", "Paso 2: ábrela", "3 capas de espuma", "las últimas del verano"])
+def test_un_digito_sin_oferta_sigue_sin_verificarse(texto):
+    """Spec §4.3: un dígito suelto no se verifica; una frase de tiempo no es escasez (falso positivo que la heurística
+    de los ganchos sí tiene, PND-237)."""
+    import doctrina
+    assert doctrina.verificar_cifras(texto, "") == []
+
+
+def test_urgencias_sin_dato():
+    """PND-228: «Lageret tømmes raskt denne vinteren» (eval del 2026-10-09) afirma escasez sin un número; los datos
+    no lo muestran. Con la frase en los datos, vale; la temporada sola no es urgencia."""
+    import doctrina
+    assert doctrina.urgencias_sin_dato("Lageret tømmes raskt denne vinteren", "Myke tøfler") == ["tømmes"]
+    assert doctrina.urgencias_sin_dato("Nesten utsolgt!", "") == ["nesten utsolgt"]          # sin «utsolgt» repetido
+    assert doctrina.urgencias_sin_dato("¡Se están agotando! Solo por hoy", "") == ["se están agotando", "solo por hoy"]
+    assert doctrina.urgencias_sin_dato("Limited stock, selling fast", "Copy: LIMITED STOCK") == ["selling fast"]
+    assert doctrina.urgencias_sin_dato("Antes de que llegue el frío, las últimas del verano", "") == []
+    assert doctrina.urgencias_sin_dato(None, None) == []
+
+
 def test_angulo_a_texto_muestra_los_campos_con_nombre_y_omite_vacios():
     import doctrina
     limpio, _ = doctrina.validar_angulo(dict(ANGULO_OK, mecanismo=None, sofisticacion=2, faltantes=[]))

@@ -247,6 +247,31 @@ PND-068 (corrección 2026-10-08): la página del proyecto no carga estado_videos
 
 **Probado en real el 2026-10-10** (`docs/superpowers/evals/2026-10-10-pruebas-reales.md`): Kling O3 Pro respeta «Image N» (no hace falta «@Image1»); `seedance25_ref` rechaza fotos realistas de personas como referencia aunque sean de IA (ByteDance; la app no cobra y lo dice, PND-242); «Que Wan mejore mi prompt» siguió la acción completa en la única muestra, al mismo precio; el director arma el prompt en el idioma del proyecto e inventó detalles (PND-239, PND-240).
 
+**El director escribe el prompt en inglés (PND-239, decisión 2026-10-13, lote 2; regla 3 del repo).** `director.compilar`
+recibe el idioma del proyecto, pero los planos (`plano`, `accion`, `sonido`), las cámaras (`CAMARAS_EN`) y las etiquetas
+del prompt compuesto (`FIDELITY`, `AVOID`, `BRAND STYLE`…) van en `director.IDIOMA_PROMPT` («en»); solo `diferencia_b`,
+que lee la persona, sale en el idioma del proyecto (regla 8 del system y la línea `IDIOMA:` del mensaje). El texto de la
+persona (guía de marca, regla y nombre de cada activo) va tal cual. La sesión guarda `idioma_prompt="en"`; el prompt
+básico de respaldo (`tareas/director._fallback`) sigue con las etiquetas del proyecto, como Sprints y las derivaciones.
+`_PARAMETRO_ESCRITO` también rechaza «8-second video». Medido en `docs/superpowers/evals/2026-10-15-director-ingles-sin-inventos.md`.
+
+**Sin nombres ni logos que no estén en las referencias (PND-240, decisión 2026-10-13, lote 2).** La prueba real del
+2026-10-10 llamó «Ana» a una mujer sin nombre y le puso un «logotipo plateado» a una botella sin logo. La regla 4 del
+system ya no pide «nombre» ni «logotipo tal cual»: un activo con nombre en ACTIVOS se nombra tal cual; uno sin nombre se
+describe por lo que se ve; nada de logos, marcas, etiquetas ni textos que la IDEA o ACTIVOS no traigan. Los ejemplos de
+los tokens dicen «the woman (Image 1)» (`_system` cambia el «Ana» de `_TOKENS_REGLAS` por `_SUJETO_EJEMPLO`, también en
+una familia nueva que copie el ejemplo) y `_sin_logos_inventados` devuelve como corrección un plano que nombra un logo
+sin que la IDEA, un activo (nombre o regla), la guía de marca o un logo oficial de la bandeja lo traigan («without
+logo» siempre vale). Un nombre inventado no tiene validación: solo la regla (medido: 0 de 3 tras el cambio).
+
+**Aviso de Seedance 2.5 con personas antes de generar (PND-242, decisión 2026-10-13, lote 2).** `seedance25_ref` (vía
+fal) rechaza fotos realistas de personas aunque sean de IA (regla de ByteDance; no cobra, prueba real del 2026-10-10).
+La bandeja (`_flowplus_bandeja.html`) trae siempre el párrafo `.fp-aviso-seedance-personas` y `pantallas/crear.css` lo
+prende con `:has()` (sin JS) solo con tipo video, el radio `seedance25_ref` marcado y alguna figura en `#fp-bandeja` o un
+`productos_catalogo` `personaje:` marcado. No frena: la app no sabe si una imagen subida muestra a una persona.
+Prueba: `tests/test_crear_compositor.py::test_aviso_de_seedance_con_personas_antes_de_generar`; visto en el navegador
+el 2026-10-16 (aparece con Seedance y referencias, se va con Wan o con imagen, y con un personaje del catálogo).
+
 Cambiar producto cobra un video por lo que dura (PND-312, 2026-10-13): la tabla es `providers/swap_video_precio.py` y el detalle está en la skill `cobros` («Swap de video por su duración»); el precio se ve antes de generar (`#swap-precio`, `static/swap-precio.js`).
 
 PND-062, entrega 1 (2026-10-10, pedido de Daniel): Del catálogo y Cambiar producto comparten
@@ -274,8 +299,8 @@ detalle vive en la skill `triple-whale` («Cómo mejorarlo» de un anuncio de im
 **Las ayudas con IA las paga el proyecto (PND-299, decisión 2026-10-13, lote 1; Daniel: «de resto todo de cuenta del
 cliente»).** El director («Crear super prompt» y «Rearmar»), «Describir con IA», «Sugerir» sonido y «Analizar
 referencias» de la marca ya no van a `_creatv` ni son gratis: cada botón dice su precio (`precio_de('director')`,
-`precio_describir(refs)` según las imágenes que se mandan, `gastos.TARIFAS` `director` 0,05, `describir_referencias`
-0,004 + 0,0015 por imagen, `sugerir_sonido` 0,002, `analizar_marca` 0,025, de lo medido) y el gasto va al proyecto con su
+`precio_describir(refs)` según las imágenes que se mandan, `gastos.TARIFAS` `director` 0,11 (desde 2026-10-16 el peor caso: dos llamadas al tope, PND-240), `describir_referencias`
+0,004 + 0,0015 por imagen, `sugerir_sonido` 0,002, `analizar_marca` 0,09 (PND-342: cinco imágenes grandes y la salida al tope de 4 000), de lo medido o del peor caso con los topes) y el gasto va al proyecto con su
 tipo (`director`, `describir_referencias`, `sugerir_sonido`, `analizar_marca`). `flowplus_director` está en
 `TIPOS_QUE_COBRAN`: `cf_crear_video` (modo director) y `cf_rearmar` exigen antes de tocar la sesión y
 `tareas.director.encolar` reserva `costo_estimado()`; si la reserva falla tras crear la sesión, queda en `error` con la
@@ -285,7 +310,7 @@ Describir y sugerir corren con `libro.pedido` en la petición; «Analizar marca�
 Sprints suman el director de cada video al precio del lote si el proyecto cobra (`director_usd`, como el QA), y
 «Regenerar» de un video lo suma siempre (`costo_regenerar`; «Reintentar» no pasa por el director: `costo_reintentar`).
 El video que lanza el director con `auto_lanzar` no cuenta la reserva del director (`flowplus_lanzar.lanzar(...,
-excluir_job=)`): ya está cobrada. «Analizar marca» vacía o cortada (`max_tokens` 400) lanza `RespuestaInvalida`: se
+excluir_job=)`): ya está cobrada. «Analizar marca» vacía o cortada lanza `RespuestaInvalida` (su tope subió de 400 a 4 000 el 2026-10-15, PND-342: regla 7): se
 anota con `entregado=False` y no pisa la guía. Un plan no las incluye (no están en `planes.TIPOS_INCLUIDOS`). Pruebas:
 `tests/test_cobros_ayudas_ia.py`.
 

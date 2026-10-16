@@ -3,7 +3,8 @@ Cadena de escenas de Flow Plus (spec 2026-09-30, «Generar todas las escenas»):
 la escena 1 se genera con sus imágenes de referencia y cada siguiente arranca en
 el último fotograma de la anterior: con Kling O3 Pro, imagen a video y sus
 personajes/productos como «elementos» de Kling; con Wan 3.0 (desde el
-2026-10-15), referencias con ese fotograma primero. Puro: revisión previa, precio,
+2026-10-15), referencias con ese fotograma primero y, desde PND-330, solo el
+lugar de la escena (`imagenes_wan`). Puro: revisión previa, precio,
 nombres y prompts de cada escena, y los cambios de estado. El estado vive en
 `guion_video.extra["cadena"]`; el único escritor es
 `datos.modificar_cadena`; el worker (`tareas/cadena.py`) lo avanza.
@@ -11,13 +12,15 @@ nombres y prompts de cada escena, y los cambios de estado. El estado vive en
 Estado: {"estado": corriendo|detenida|terminada, "desde", "modelo", "aprobado_usd",
 "aprobado_por", "aprobado_en", "detener", "preparando" (creando los elementos de
 Kling: todavía no se lanza ninguna escena), "escenas": {"<k>": {"cf_id", "estado":
-generando|lista|fallo, "frame_url", "error"}}, "elementos": {"<id imagen>": element_id},
-"edicion_id", "error"}.
+generando|lista|fallo, "frame_url", "error", "recuperable_desde" (PND-229: desde cuándo la
+pieza de Crear espera que la recuperen sin pagar de nuevo)}}, "elementos": {"<id imagen>":
+element_id}, "edicion_id", "error"}.
 """
 import re
 
 from flask_babel import gettext, ngettext
 
+import flowplus_prompt
 from guiones import escenas
 from guiones.refinador import Conflicto
 from providers import flowplus_modelos
@@ -26,8 +29,9 @@ MODELO = "kling_o3_pro"
 # Wan 3.0 (2026-10-15, pedido de Daniel: Kling con sonido cuesta US$ 0,14/s y Wan
 # US$ 0,10/s). Wan no tiene imagen a video ni elementos en WaveSpeed: cada escena
 # va por reference-to-video con el último cuadro de la anterior como primera
-# imagen más las de la escena (hasta 10 en total). Wan va primero: es la que se
-# ofrece arriba. Una cadena guarda su modelo; «Rehacer desde» sigue con el mismo.
+# imagen más el lugar de la escena (`imagenes_wan`, PND-330; hasta 10 en total).
+# Wan va primero: es la que se ofrece arriba. Una cadena guarda su modelo;
+# «Rehacer desde» sigue con el mismo.
 WAN = "wan3"
 MODELOS = (WAN, MODELO)
 ARRANQUE_WAN = ("@Imagen 1 = first frame — the last frame of the previous scene. The video starts exactly on "
@@ -81,6 +85,50 @@ def _es_elemento(x):
     return x["tipo"] in TIPOS_ELEMENTO
 
 
+def imagenes_wan(video, k):
+    """Las imágenes de la escena k que recibe Wan 3.0 (PND-330, decisión 2026-10-15, lote 2). En la prueba real del
+    2026-10-15 (Podcast de HappyCozy) Wan intercaló los retratos de referencia como planos: abría en el retrato de
+    Anna contra una pared lisa y cortaba a él a mitad de la escena 2. En la primera escena van todas, con el lugar
+    primero (el entorno es Image 1 y los retratos después). En las siguientes no van los retratos de las personas
+    (`personaje`): el último cuadro de la anterior, que la tarea pone delante como Image 1, ya trae las caras; el
+    lugar, el producto y las extra sí van (la decisión solo quitó los retratos; revisión de guardian-gasto del
+    2026-10-16). No se agrega texto al prompt: lo que no va se nombra en palabras (`escenas.prompt_para_crear`).
+    `Conflicto` si falta una imagen."""
+    imgs = escenas.imagenes_para_crear(video, k)
+    lugares = [x for x in imgs if x["tipo"] == "entorno"]
+    resto = [x for x in imgs if x["tipo"] != "entorno"]
+    if k == _primera(video):
+        return lugares + resto
+    return lugares + [x for x in resto if x["tipo"] != "personaje"]
+
+
+_IMAGE_SUELTA = re.compile(r"(?<![\w@])Image \d+\b")
+
+
+def menciones_colgadas(prompt, n):
+    """Lo que el prompt de una escena (con las menciones de Crear, antes de pasarlas al token del modelo) nombra y no
+    va en esa escena: una mención (`@Imagen k` en cualquier forma) más allá de las `n` imágenes que se mandan, un
+    `@Video` o `@Logo` (la cadena no manda videos ni logos) o un «Image N» suelto que quedó sin traducir. Con alguna,
+    el modelo tomaría otra imagen o ninguna (revisión de guardian-gasto, 2026-10-16): la revisión previa no deja
+    aprobar y la tarea no lanza la escena."""
+    salida = flowplus_prompt.menciones_sin_referencia(prompt, [{"etiqueta": f"@Imagen {i}"} for i in range(1, n + 1)])
+    for m in _IMAGE_SUELTA.finditer(prompt or ""):
+        if m.group(0) not in salida:
+            salida.append(m.group(0))
+    return salida
+
+
+def prompt_de_escena(texto, video, k, modelo=MODELO):
+    """(prompt con las menciones de Crear, número de imágenes que se mandan) de la escena k, como lo arma la tarea
+    (`tareas.cadena.lanzar_escena`) antes de pasar las menciones al token del modelo."""
+    primera = k == _primera(video)
+    if modelo == WAN:
+        imgs = imagenes_wan(video, k)
+        return prompt_escena_wan(texto, video, k, imgs), len(imgs) + (0 if primera else 1)
+    imgs = escenas.imagenes_para_crear(video, k)
+    return prompt_escena(texto, video, k, imgs), (len(imgs) if primera else 1)
+
+
 def id_imagen(img):
     """Clave estable de una imagen para cachear su elemento de Kling."""
     if img.get("activo_id"):
@@ -117,12 +165,17 @@ def revisar(video, prompts, desde=None, modelo=MODELO):
         if not prompts.get(f"principal:{k}"):
             problemas.append({"indice": k, "motivo": gettext("Esta escena todavía no tiene su prompt en el chat.")})
         try:
-            imgs = escenas.imagenes_para_crear(video, k)
+            imgs = imagenes_wan(video, k) if modelo == WAN else escenas.imagenes_para_crear(video, k)
         except Conflicto as e:
             problemas.append({"indice": k, "motivo": str(e)})
             continue
+        texto = (prompts.get(f"principal:{k}") or {}).get("texto")
+        if texto:
+            colgadas = menciones_colgadas(*prompt_de_escena(texto, video, k, modelo))
+            if colgadas:
+                problemas.append({"indice": k, "motivo": motivo_colgadas(colgadas)})
         if modelo == WAN:
-            # Las siguientes llevan además el último cuadro de la anterior.
+            # Las siguientes llevan además el último cuadro de la anterior (y solo su lugar: PND-330).
             maximo = info["max_referencias"] - (0 if k == primera else 1)
             if len(imgs) > maximo:
                 problemas.append({"indice": k, "motivo": gettext(
@@ -143,12 +196,19 @@ def revisar(video, prompts, desde=None, modelo=MODELO):
     return problemas
 
 
+def motivo_colgadas(colgadas):
+    return gettext("El prompt de esta escena nombra %(lista)s, que no va en esta escena: corrígelo en el chat antes "
+                   "de generar.", lista=", ".join(colgadas))
+
+
 def avisos(video, modelo=MODELO):
     """No bloquean: con Kling, una escena siguiente que cambia de lugar (el
     lugar nuevo solo llega por el texto: imagen a video no recibe entornos).
-    Wan recibe el entorno de la escena como imagen: no hay aviso."""
+    Wan recibe el entorno de la escena como imagen, pero desde la segunda escena
+    no recibe los retratos (PND-330): una persona que aparece por primera vez en
+    una escena siguiente no lleva su imagen y sale del texto."""
     if modelo == WAN:
-        return []
+        return _avisos_wan(video)
     salida, previo = [], None
     for k in indices(video):
         claves, _ = escenas.claves_de(video, _clip(video, k))
@@ -159,6 +219,23 @@ def avisos(video, modelo=MODELO):
                 "Esta escena cambia de lugar: como arranca en el último cuadro de la anterior, el lugar nuevo "
                 "solo llega por el texto.")})
         previo = lugares
+    return salida
+
+
+def _avisos_wan(video):
+    pool_ = {x["clave"]: x for x in escenas.pool(video)}
+    salida, previas = [], None
+    for k in indices(video):
+        claves, _ = escenas.claves_de(video, _clip(video, k))
+        propias = {c for c in claves if c in pool_ and pool_[c]["tipo"] == "personaje"}
+        nuevas = sorted(propias - previas, key=lambda c: pool_[c]["numero"]) if previas is not None else []
+        if nuevas:
+            salida.append({"indice": k, "motivo": gettext(
+                "Aquí aparece %(lista)s, que no estaba en la escena anterior: con Wan 3.0 las escenas siguientes no "
+                "reciben los retratos de las personas (el último cuadro ya trae las caras), así que sale de lo que "
+                "dice el texto.",
+                lista=", ".join(pool_[c]["nombre"] or f"Image {pool_[c]['numero']}" for c in nuevas))})
+        previas = propias
     return salida
 
 
@@ -278,11 +355,18 @@ def _con_escena(est, k, **campos):
 
 
 def lanzada(est, k, cf_id):
-    return _con_escena(est, k, cf_id=cf_id, estado="generando", frame_url=None, error=None)
+    return _con_escena(est, k, cf_id=cf_id, estado="generando", frame_url=None, error=None, recuperable_desde=None)
+
+
+def esperando_recuperar(est, k, ahora):
+    """La pieza de la escena k quedó en error pero Crear la puede recuperar sin pagar de nuevo (PND-229): la escena
+    sigue «generando» y la cadena la espera desde `ahora`. Una segunda llamada no mueve la fecha."""
+    previa = ((est.get("escenas") or {}).get(str(k)) or {}).get("recuperable_desde")
+    return _con_escena(est, k, recuperable_desde=previa or ahora)
 
 
 def lista(est, k, frame_url):
-    return _con_escena(est, k, estado="lista", frame_url=frame_url)
+    return _con_escena(est, k, estado="lista", frame_url=frame_url, recuperable_desde=None)
 
 
 def fallo(est, k, error):

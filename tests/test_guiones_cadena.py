@@ -103,7 +103,8 @@ def test_fallo_detiene_y_rehacer_conserva_lo_anterior():
                        1, "https://f1.jpg")
     est = cadena.fallo(cadena.lanzada(est, 2, "cf_2"), 2, "Kling 1200")
     assert est["estado"] == "detenida" and est["escenas"]["2"] == {"cf_id": "cf_2", "estado": "fallo",
-                                                                   "frame_url": None, "error": "Kling 1200"}
+                                                                   "frame_url": None, "error": "Kling 1200",
+                                                                   "recuperable_desde": None}
     assert cadena.puede_rehacer(est, 2) and not cadena.puede_rehacer(est, 3)
     est2 = cadena.aprobar(v, 2, 1.0, "admin", "t2", previo=est)
     assert est2["escenas"] == {"1": est["escenas"]["1"]} and est2["desde"] == 2
@@ -151,13 +152,64 @@ def test_wan_revisar_cuenta_el_cuadro_anterior_y_no_tiene_tope_de_elementos():
                                     escena=2)
     assert cadena.revisar(_video(est), PROMPTS, modelo=cadena.WAN) == []      # 4 elementos: a Wan no le importa
     n = 2
-    while len(escenas.imagenes_para_crear(_video(est), 2)) < 10:   # el tope de una escena
+    while len(escenas.imagenes_para_crear(_video(est), 2)) < escenas.MAX_POR_ESCENA:   # el tope de una escena
         est = escenas.agregar_extra(est, _video(est), dict(FOTO, material_id=50 + n, url=f"https://r2/x{n}.jpg"),
                                     escena=2)
         n += 1
-    n2 = len(escenas.imagenes_para_crear(_video(est), 2))
+    # PND-330: las siguientes no llevan los retratos (más el cuadro): 10 elegidas con un retrato son 9 + el cuadro
+    assert len(escenas.imagenes_para_crear(_video(est), 2)) == 10
+    assert [x["clave"] for x in cadena.imagenes_wan(_video(est), 2)][:2] == ["r4", "r1"]
+    assert len(cadena.imagenes_wan(_video(est), 2)) == 9 and cadena.revisar(_video(est), PROMPTS, modelo=cadena.WAN) == []
+    # sin el retrato y con una extra más: 10 + el cuadro pasan del tope
+    est = escenas.usar(est, _video(est), 2, "r2", False)
+    est = escenas.agregar_extra(est, _video(est), dict(FOTO, material_id=99, url="https://r2/x99.jpg"), escena=2)
     motivos = cadena.revisar(_video(est), PROMPTS, modelo=cadena.WAN)
-    assert n2 == 10 and [m["indice"] for m in motivos] == [2] and "9" in motivos[0]["motivo"]  # 10 + el cuadro
+    assert [m["indice"] for m in motivos] == [2] and "10" in motivos[0]["motivo"] and "9" in motivos[0]["motivo"]
+
+
+def test_wan_primera_escena_pone_el_lugar_primero_y_las_siguientes_van_sin_retratos():
+    """PND-330 (prueba real del 2026-10-15: Wan intercaló los retratos como planos): en la primera escena el entorno
+    es Image 1 y los retratos van después; en las siguientes no van los retratos de las personas (el último cuadro ya
+    trae las caras), pero sí el lugar y el producto (revisión de guardian-gasto, 2026-10-16)."""
+    v = _completo()
+    assert [x["clave"] for x in escenas.imagenes_para_crear(v, 1)] == ["r1", "r2", "r3"]
+    assert [x["clave"] for x in cadena.imagenes_wan(v, 1)] == ["r3", "r1", "r2"]
+    assert [x["clave"] for x in cadena.imagenes_wan(v, 2)] == ["r4", "r1"]
+    p1 = cadena.prompt_escena_wan(TEXTO, v, 1, cadena.imagenes_wan(v, 1))
+    # «Image 2 lifts Image 1 near Image 3» con el lugar primero: el lugar es @Imagen 1, el producto 2, el personaje 3
+    assert "0.0–3.0s  @Imagen 3 lifts @Imagen 2 near @Imagen 1." in p1
+    assert p1.index("@Imagen 2 = hero object") < p1.index("@Imagen 3 = character")   # el mapa sale en orden
+    p2 = cadena.prompt_escena_wan(TEXTO, v, 2, cadena.imagenes_wan(v, 2))
+    # el retrato no va: se nombra en palabras; ningún número suelto que el modelo pueda tomar por otra imagen
+    assert "the AI podiatrist, adult British man (~45) lifts @Imagen 3 near modern bright podiatry clinic." in p2
+    assert "@Imagen 3 = hero object" in p2 and "character —" not in p2 and "@Imagen 4" not in p2
+    assert cadena.menciones_colgadas(p2, 3) == [] and cadena.menciones_colgadas(p1, 3) == []
+
+
+def test_wan_avisa_quien_aparece_por_primera_vez_en_una_escena_siguiente():
+    """PND-330: desde la segunda escena Wan no recibe retratos; una persona que no estaba en la anterior sale del texto.
+    Una extra o el producto sí van: no avisan."""
+    v = _completo()
+    est = escenas.usar(escenas.estado(v), v, 1, "r2", False)          # el personaje solo aparece en la escena 2
+    avisos = cadena.avisos(_video(est), cadena.WAN)
+    assert [a["indice"] for a in avisos] == [2] and "the AI podiatrist" in avisos[0]["motivo"]
+    est = escenas.agregar_extra(escenas.estado(v), v, dict(FOTO, material_id=60, url="https://r2/nuevo.jpg",
+                                                          nombre="la vecina"), escena=2)
+    assert cadena.avisos(_video(est), cadena.WAN) == [] == cadena.avisos(v, cadena.WAN)
+
+
+def test_una_mencion_que_apunta_a_otra_imagen_frena_antes_de_cobrar():
+    """Revisión de guardian-gasto (2026-10-16): una mención de una imagen que la escena no manda haría que el modelo
+    tomara otra. `menciones_colgadas` la ve en el prompt que se armaría y la revisión previa no deja aprobar."""
+    assert cadena.menciones_colgadas("@Imagen 1 and @Imagen 3 near Image 4. Move like @Video 1.", 2) == \
+        ["@Imagen 3", "@Video 1", "Image 4"]
+    assert cadena.menciones_colgadas("@Imagen 1 lifts @Imagen 2.", 2) == []
+    v = _completo()
+    texto = TEXTO + " Then @Video 1 plays."
+    prompts = {k: dict(p, texto=texto) for k, p in PROMPTS.items()}
+    motivos = cadena.revisar(v, prompts, modelo=cadena.WAN)
+    assert {m["indice"] for m in motivos} == {1, 2} and all("@Video 1" in m["motivo"] for m in motivos)
+    assert cadena.revisar(v, {k: dict(p, texto=TEXTO) for k, p in PROMPTS.items()}, modelo=cadena.WAN) == []
 
 
 def test_wan_precio_sin_elementos_ni_avisos_de_lugar():

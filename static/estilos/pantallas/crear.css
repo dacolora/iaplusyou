@@ -5,3 +5,8 @@
 .generado-fav.activo { color: var(--error); }
 .generado-fav:focus-visible { outline: 2px solid var(--sobre-media); outline-offset: 2px; }
 .generado-fav-form ~ .generado-tipo { max-width: calc(100% - 3.6rem); } /* que el corazón no tape la etiqueta del formato */
+
+/* PND-242: el aviso de Seedance 2.5 con varias referencias y personas (_flowplus_bandeja.html). Solo con ese modelo,
+   un video y alguna referencia en la bandeja o un personaje del catálogo; sin JS. */
+.fp-aviso-seedance-personas { display: none; }
+#crear-comp:has(input[name="tipo"][value="video"]:checked):has(input[name="modelo_video"][value="seedance25_ref"]:checked):has(#fp-bandeja figure.crear-ref, input[name="productos_catalogo"][value^="personaje:"]:checked) .fp-aviso-seedance-personas { display: block; }

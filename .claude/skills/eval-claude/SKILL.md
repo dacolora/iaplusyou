@@ -32,6 +32,7 @@ Antes de cerrar cualquier cambio en el prompt, la doctrina que recibe, `max_toke
 | Lectura de Recrear / clasificar referentes | `referentes.lectura.leer` (`:125`) / `referentes.clasificar.clasificar` (`:206`) |
 | Revisor, QA, diagnóstico | `doctrina/revisor.py`, `sprints/qa.py`, `doctrina/diagnostico.py` |
 | «Evaluar con IA» de Meta (2026-10-10, medida dos veces: `docs/superpowers/evals/2026-10-10-meta-evaluacion.md`) | `meta_rendimiento.analisis.analizar`, tope `MAX_TOKENS` |
+| «Analizar referencias» de la marca (4 000 desde PND-342: `docs/superpowers/evals/2026-10-15-analizar-marca-4000.md`) | `generador_prompts.analizar_marca`, tope `MAX_TOKENS_ANALIZAR_MARCA`, precio `gastos.TARIFAS["analizar_marca"]` |
 | «Evaluar con IA» de Triple Whale (32 000 y NVP desde PND-217: `docs/superpowers/evals/2026-10-15-tw-evaluar-32000-nvp.md`) | `triple_whale.analisis.analizar`, tope `MAX_TOKENS`, precio `gastos.EVALUACION_TW_*` |
 
 ## Pasos

@@ -20,6 +20,7 @@ import re
 
 from flask_babel import gettext
 
+import flowplus_prompt
 from guiones.refinador import Conflicto, DatoInvalido
 
 MAX_EXTRA = 12
@@ -250,6 +251,21 @@ def texto_por_clip(video, url_de=None):
 _LINEA_MAPA = re.compile(r"^Image (\d+) = ")
 _MENCION_IMAGE = re.compile(r"(?<![\w@])Image (\d+)\b")
 _ARRANQUE = re.compile(r"^Start image = last frame of Clip \d+\.?$")
+_LINEA_MAPA_CREAR = re.compile(r"^\s*@Imagen (\d+) = ")
+# Una mención pegada dentro de una descripción («Woman from @Image 1 sitting at…», el entorno del guion «Podcast»; en
+# cualquier forma que entienda Crear: `flowplus_prompt._MENCION`) también habla de la Image N de la versión, como un
+# «Image N» suelto. Si la escena la lleva, se renumera; si no, pasa a palabras: dejarla tal cual hacía que Crear o la
+# cadena la leyeran como la Image N DE LA ESCENA, otra imagen (revisión de guardian-gasto, 2026-10-16; con el lugar
+# primero de la cadena con Wan, PND-330, «@Image 1» apuntaba al propio lugar en vez de a Anna).
+
+
+def _por_numero(lineas):
+    """Las líneas del REFERENCE MAP en el orden de sus números (`@Imagen k`). Con las imágenes en su orden de siempre
+    no cambia nada; la cadena con Wan pone el lugar primero (PND-330) y así el mapa lo dice en orden."""
+    def clave(linea):
+        m = _LINEA_MAPA_CREAR.match(linea)
+        return int(m.group(1)) if m else 10 ** 6
+    return sorted(lineas, key=clave)
 
 
 def imagenes_para_crear(video, indice):
@@ -282,7 +298,14 @@ def prompt_para_crear(texto, video, imagenes):
         def cambiar(m):
             n = int(m.group(1))
             return f"@Imagen {nuevo[n]}" if n in nuevo else nombres.get(n, m.group(0))
-        return _MENCION_IMAGE.sub(cambiar, linea)
+
+        def cambiar_pegada(m):
+            tipo = (m.group("tipo_b") or m.group("tipo")).lower()
+            if tipo not in ("imagen", "image"):
+                return m.group(0)                     # un @Video o un @Logo no es una Image N de la versión
+            n = int(m.group("n_b") or m.group("n"))
+            return f"@Imagen {nuevo[n]}" if n in nuevo else nombres.get(n) or f"reference {n}"
+        return _MENCION_IMAGE.sub(cambiar, flowplus_prompt._MENCION.sub(cambiar_pegada, linea))
 
     extras = [f"@Imagen {nuevo[x['numero']]} = extra reference — {x['nombre'] or 'image'}."
               for x in imagenes if x["tipo"] == "extra"]
@@ -302,10 +325,10 @@ def prompt_para_crear(texto, video, imagenes):
             en_mapa = False
             mapa += extras
             if mapa:
-                salida += ["REFERENCE MAP"] + mapa
+                salida += ["REFERENCE MAP"] + _por_numero(mapa)
             elif not linea.strip():
                 continue  # sin imágenes: fuera el mapa y su línea en blanco
         salida.append(renumerar(linea))
     if en_mapa and (mapa or extras):
-        salida += ["REFERENCE MAP"] + mapa + extras
+        salida += ["REFERENCE MAP"] + _por_numero(mapa + extras)
     return "\n".join(salida).strip()

@@ -316,6 +316,7 @@ Reglas:
 - "fotograma_s" es el segundo de uno de los fotogramas que viste, uno donde se vea bien el producto: el clip arranca en esa imagen. Elige un fotograma SIN texto quemado (subtítulos, títulos, precios); si todos tienen texto o subtítulos quemados, usa el primero (el del segundo 0,3): su subtítulo es el de la voz que suena debajo del gancho.
 - El "prompt" de cada gancho describe el movimiento y la cámara durante 3 s desde esa imagen; nunca pide textos, subtítulos ni logos (el texto lo pone el editor).
 - "copy_nuevo": usa solo las ofertas, descuentos, precios y plazos que aparecen en el TEXTO DEL ANUNCIO o en los datos de arriba; nunca inventes uno.
+- Ni el "texto" de los ganchos ni "copy_nuevo" afirman escasez, urgencia ni prueba social (que se agota, últimas unidades, solo por hoy, miles de clientes felices) que el TEXTO DEL ANUNCIO, la VOZ o los datos de arriba no muestren.
 - Idiomas: el "texto" de cada gancho y el "titulo" y el "texto" de "copy_nuevo" van en el idioma del TEXTO DEL ANUNCIO (si no hay texto, en el de la voz); "escena" y "por_que" van en el idioma pedido; el "prompt" de cada gancho, en inglés."""
 
 # Lo que cambia en PROMPT según el anuncio (`tipo_version`). El de video es, palabra por palabra, el de antes del
@@ -543,12 +544,7 @@ def cifras_en_imagen(prompt, verificable):
     ENTERO, no solo lo que va entre comillas: con comillas simples, sin comillas o con un `12"` que descuadra el par, una
     oferta inventada se escapaba (revisiones de seguridad y de gasto, 2026-10-13). Un falso positivo solo deja un aviso."""
     texto = _FORMATO.sub(" ", prompt or "")
-    vistas, salida = set(), []
-    for x in doctrina.verificar_cifras(texto, verificable) + ofertas_sin_dato(texto, verificable):
-        if x not in vistas:
-            vistas.add(x)
-            salida.append(x)
-    return salida
+    return _cifras_y_ofertas(doctrina.verificar_cifras(texto, verificable), ofertas_sin_dato(texto, verificable))
 
 
 def _version(v, verificable, tipo="video"):
@@ -738,8 +734,9 @@ def _ofertas_con_numero(texto):
 
 def ofertas_sin_dato(texto, verificable):
     """Lo que `texto` ofrece y `verificable` (los datos que Claude recibió) no: los términos de `TERMINOS_OFERTA` que
-    no están en los datos y las ofertas con número (`_ofertas_con_numero`) cuya oferta no está. Uno que va dentro de
-    otro marcado no se repite («fri frakt» sin «frakt»)."""
+    no están en los datos, las ofertas con número (`_ofertas_con_numero`) cuya oferta no está y la urgencia o escasez
+    sin número (`doctrina.urgencias_sin_dato`, PND-228: «Lageret tømmes raskt»). Uno que va dentro de otro marcado no
+    se repite («fri frakt» sin «frakt»)."""
     texto, verificable = str(texto or ""), str(verificable or "")
     faltan = [t for t, p in _PATRONES_OFERTA if p.search(texto) and not p.search(verificable)]
     faltan = [t for t in faltan if not any(t != otro and t in otro for otro in faltan)]
@@ -748,7 +745,19 @@ def ofertas_sin_dato(texto, verificable):
         if clave not in en_datos:
             en_datos.add(clave)             # la misma oferta escrita dos veces se marca una
             faltan.append(visto)
+    faltan += [u for u in doctrina.urgencias_sin_dato(texto, verificable) if u not in faltan]
     return faltan
+
+
+def _cifras_y_ofertas(cifras, ofertas):
+    """Las cifras sin dato y después las ofertas en palabras, sin repetir: desde PND-237 `doctrina.verificar_cifras`
+    marca también «Garantía de 5 años» o «Prøv i 7 dager», y la oferta que ya va dentro de una cifra marcada
+    («garantía», «prøv i 7 dager») no se dice dos veces."""
+    salida = []
+    for x in list(cifras) + list(ofertas):
+        if x not in salida and not any(x.lower() in c.lower() for c in salida):
+            salida.append(x)
+    return salida
 
 
 def _ganchos(lista, verificable, duracion_s, segundos_vistos=None):
@@ -772,8 +781,8 @@ def _ganchos(lista, verificable, duracion_s, segundos_vistos=None):
                        "fotograma_s": al_segundo_visto(segundo_fotograma(g.get("fotograma_s"), duracion_s),
                                                        segundos_vistos, duracion_s),
                        "por_que": por_que,
-                       "cifras_sin_dato": (doctrina.verificar_cifras(f"{texto} {por_que}", verificable)
-                                           + ofertas_sin_dato(texto, verificable))})
+                       "cifras_sin_dato": _cifras_y_ofertas(doctrina.verificar_cifras(f"{texto} {por_que}", verificable),
+                                                            ofertas_sin_dato(texto, verificable))})
     return salida
 
 
@@ -788,8 +797,8 @@ def _copy_nuevo(d, verificable):
         return None
     titulo, por_que = _limpio(d.get("titulo"), 80), analisis._texto(d.get("por_que"), 300)
     return {"titulo": titulo, "texto": texto, "por_que": por_que,
-            "cifras_sin_dato": (doctrina.verificar_cifras(f"{titulo} {texto} {por_que}", verificable)
-                                + ofertas_sin_dato(f"{titulo} · {texto}", verificable))}
+            "cifras_sin_dato": _cifras_y_ofertas(doctrina.verificar_cifras(f"{titulo} {texto} {por_que}", verificable),
+                                                 ofertas_sin_dato(f"{titulo} · {texto}", verificable))}
 
 
 def parsear(texto, verificable, duracion_s=None, segundos_vistos=None, tipo="video"):

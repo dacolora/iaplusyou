@@ -3305,6 +3305,10 @@ msgstr "Approve or reject each one from the sprint; the approved ones go into th
 msgid "Apruebas una cifra y el sistema busca productos del nicho en las tiendas del país, elige los que son del nicho, trae sus reseñas y arma los avatares. Nadie marca nada a mano."
 msgstr "You approve a figure and the system searches for niche products in the country's stores, picks out the ones that are really in the niche, pulls their reviews and builds the avatars. Nobody marks anything by hand."
 
+#, python-format
+msgid "Aquí aparece %(lista)s, que no estaba en la escena anterior: con Wan 3.0 las escenas siguientes no reciben los retratos de las personas (el último cuadro ya trae las caras), así que sale de lo que dice el texto."
+msgstr "%(lista)s appears here and wasn't in the previous scene: with Wan 3.0 the following scenes don't get the portraits of the people (the last frame already carries the faces), so it comes from what the text says."
+
 msgid "Aquí el ROAS de cada anuncio solo cuenta las ventas de esta tienda."
 msgstr "Here each ad's ROAS only counts this store's sales."
 
@@ -4354,10 +4358,6 @@ msgstr "Five minutes. You don't create anything on Meta."
 
 msgid "Cinta"
 msgstr "Ribbon"
-
-#, python-format
-msgid "Cita cifras que no están en los datos (%(cifras)s): revisa antes de publicar."
-msgstr "It cites figures that aren't in the data (%(cifras)s): check before publishing."
 
 msgid "Citas textuales"
 msgstr "Verbatim quotes"
@@ -6079,6 +6079,10 @@ msgstr "Diagnosis"
 msgid "Diagnóstico: %(causas)s — siguiente: %(que)s"
 msgstr "Diagnosis: %(causas)s — next: %(que)s"
 
+#, python-format
+msgid "Dice cifras, ofertas o urgencias que no están en los datos (%(cifras)s): revisa antes de publicar."
+msgstr "It states figures, offers or urgency that aren't in the data (%(cifras)s): check before publishing."
+
 msgid "Dile a Claude qué está mal, por ejemplo: &quot;el clip 3 dura 16 segundos&quot;"
 msgstr "Tell Claude what’s wrong, for example: &quot;clip 3 is 16 seconds long&quot;"
 
@@ -6985,6 +6989,10 @@ msgstr "The campaign's product is no longer in the catalog."
 msgid "El producto ya no está en el catálogo; no se generó el swap."
 msgstr "The product is no longer in the catalog; the swap wasn't generated."
 
+#, python-format
+msgid "El prompt de esta escena nombra %(lista)s, que no va en esta escena: corrígelo en el chat antes de generar."
+msgstr "This scene's prompt names %(lista)s, which isn't sent in this scene: fix it in the chat before generating."
+
 msgid "El prompt es demasiado largo."
 msgstr "The prompt is too long."
 
@@ -7136,8 +7144,8 @@ msgid "El texto '{rol}' no tiene valor en {idioma}."
 msgstr "The text “{rol}” has no value in {idioma}."
 
 #, python-format
-msgid "El texto de la imagen cita cifras u ofertas que no están en los datos (%(cifras)s): revisa antes de generar."
-msgstr "The text in the image cites figures or offers that aren't in the data (%(cifras)s): check before generating."
+msgid "El texto de la imagen dice cifras, ofertas o urgencias que no están en los datos (%(cifras)s): revisa antes de generar."
+msgstr "The text in the image states figures, offers or urgency that aren't in the data (%(cifras)s): check before generating."
 
 msgid "El texto de la publicación no puede estar vacío."
 msgstr "The post's text can't be empty."
@@ -8639,6 +8647,9 @@ msgstr "This scene changes location: since it starts on the last frame of the pr
 
 msgid "Esta escena todavía no tiene su prompt en el chat."
 msgstr "This scene doesn't have its prompt in the chat yet."
+
+msgid "Esta escena ya está pagada, pero el proveedor tardó en entregarla: ábrela en Crear y toca «Recuperar el video» (no se paga de nuevo). La cadena sigue sola cuando llegue; si en 24 horas no se recupera, se detiene."
+msgstr "This scene is already paid for, but the provider was slow to deliver it: open it in Create and tap “Recover the video” (you don't pay again). The chain continues on its own when it arrives; if it isn't recovered within 24 hours, it stops."
 
 #, python-format
 msgid "Esta evaluación falló: %(error)s"
@@ -13843,8 +13854,8 @@ msgid "No se encontró. Puede que ya no exista."
 msgstr "Not found. It may no longer exist."
 
 #, python-format
-msgid "No se genera: cita cifras que no están en los datos (%(cifras)s)."
-msgstr "Not generated: it cites figures that aren't in the data (%(cifras)s)."
+msgid "No se genera: dice cifras, ofertas o urgencias que no están en los datos (%(cifras)s)."
+msgstr "Not generated: it states figures, offers or urgency that aren't in the data (%(cifras)s)."
 
 #, python-format
 msgid "No se guardó el guion: %(errores)s"
@@ -15409,6 +15420,9 @@ msgstr "Why they perform this way"
 
 msgid "Por qué:"
 msgstr "Why:"
+
+msgid "Por recuperar"
+msgstr "To recover"
 
 msgid "Por región"
 msgstr "By region"
@@ -17462,6 +17476,9 @@ msgstr "Seedance 2.5"
 
 msgid "Seedance 2.5 Video Edit"
 msgstr "Seedance 2.5 Video Edit"
+
+msgid "Seedance 2.5 con varias referencias no acepta fotos realistas de personas, aunque estén hechas con IA (regla de ByteDance). Si alguna referencia muestra a una persona, elige Kling O3 Pro o Wan 3.0; si la rechaza, no se cobra."
+msgstr "Seedance 2.5 with multiple references doesn't accept realistic photos of people, even if they were made with AI (ByteDance's rule). If any reference shows a person, choose Kling O3 Pro or Wan 3.0; if it's rejected, you aren't charged."
 
 msgid "Seedance 2.5 · varias referencias"
 msgstr "Seedance 2.5 · multiple references"
@@ -20601,8 +20618,8 @@ msgstr "Wan 3.0"
 msgid "Wan 3.0 (referencia, no edición)"
 msgstr "Wan 3.0 (reference, no editing)"
 
-msgid "Wan 3.0 es la más barata: cada escena recibe el último cuadro de la anterior y sus imágenes como referencias. Kling O3 Pro arranca exactamente en ese cuadro y fija las caras con «elementos», pero cuesta más."
-msgstr "Wan 3.0 is the cheapest: each scene gets the previous one's last frame and its images as references. Kling O3 Pro starts exactly on that frame and locks faces with “elements”, but costs more."
+msgid "Wan 3.0 es la más barata: la primera escena recibe sus imágenes (el lugar primero) y cada siguiente, el último cuadro de la anterior y sus imágenes menos los retratos de las personas (el cuadro ya trae las caras). Kling O3 Pro arranca exactamente en ese cuadro y fija las caras con «elementos», pero cuesta más."
+msgstr "Wan 3.0 is the cheapest: the first scene gets its images (the setting first) and each following one gets the previous one's last frame and its images minus the portraits of the people (the frame already carries the faces). Kling O3 Pro starts exactly on that frame and locks faces with “elements”, but costs more."
 
 msgid "Wan-2.2 Animate Replace"
 msgstr "Wan-2.2 Animate Replace"

@@ -88,6 +88,14 @@ escena lista → fotograma a R2 → siguiente; falló → `detenida`; al final `
 `edicion_clon.crear_de_piezas`). Rutas `POST /videos/<id>/cadena` `{desde, total_visto}` (409 si el precio recalculado no
 coincide o falta algo) y `/cadena/detener`; UI `_gpg_cadena.html` dentro de `_gpg_escenas.html` (el panel sondea mientras
 corre, con el tope de 12 min de siempre).
+**Un clip que Crear puede recuperar no detiene la cadena (PND-229, decisión 2026-10-13, lote 2).** Antes el vigilante
+cerraba la escena en `fallo` apenas su pieza no estaba en `video_listo`, aunque Crear ofreciera «Recuperar el video» (ya
+pagado). Ahora `tareas.cadena.escena_recuperable` (la MISMA condición de `dashboard.cf_recuperar`: error con
+`prediccion.id` o un lanzamiento incierto sin resolver, y no imagen) deja la escena en «generando» con
+`recuperable_desde` (`cadena.esperando_recuperar`, se escribe una vez) hasta `ESPERA_RECUPERABLE_S` (24 h, como los
+ganchos de Triple Whale); recuperada, la sesión vuelve a generar y la cadena sigue sola; vencida la espera, o con
+«Detener» pedido, se cierra con el error de la pieza como antes. El panel la muestra «Por recuperar» con el paso a seguir
+(`_vista_cadena` → `recuperable`). `lanzada` y `lista` limpian la marca.
 
 PND-027 (2026-10-03): listar ya no trunca por defecto en 200; agrupa manual/pipeline y ordena cada grupo por actividad. El chat muestra «Escritos a mano» y «Del guion», también al incorporar un prompt nuevo. El parámetro limite sigue disponible para lectores que lo pidan. Esta corrección no agrega paginación: una biblioteca muy grande aún se carga completa.
 
@@ -120,7 +128,22 @@ y la cadena lo guarda (`cadena.modelo_de`; una vieja sin modelo es Kling). «Reh
 aunque el cuerpo pida otro. Wan no tiene imagen a video ni elementos en WaveSpeed: cada escena va por
 reference-to-video; desde la segunda, el último cuadro de la anterior es `@Imagen 1` (`cadena.prompt_escena_wan`,
 `ARRANQUE_WAN`) y las de la escena corren un número (máximo 10 en total: `revisar` pide 9 en las siguientes); sin
-elementos ni aviso de cambio de lugar. `tareas.cadena.lanzar_escena` cambia las menciones de Crear por el token del
+elementos ni aviso de cambio de lugar. **Qué imágenes recibe Wan (PND-330, decisión 2026-10-15, lote 2):** en la
+prueba real del 2026-10-15 (Podcast de HappyCozy, 2 escenas, US$ 1,50) Wan intercaló los retratos de referencia como
+planos. `cadena.imagenes_wan`: en la primera escena van todas con el lugar primero (el entorno es Image 1 y los retratos
+después); en las siguientes, el cuadro y la escena SIN los retratos de las personas (`personaje`: el cuadro ya trae las
+caras); el lugar, el producto y las extra sí van (revisión de guardian-gasto del 2026-10-16: la decisión solo quitó
+los retratos). No se agrega texto al prompt: lo que no va se nombra en palabras (`escenas.prompt_para_crear`, que
+también trata una mención pegada en cualquier forma de Crear —el entorno del Podcast dice «Woman from @Image 1»—: la
+renumera si la escena la lleva y la pasa a palabras si no, porque dejarla hacía que apuntara a OTRA imagen de la
+escena; y ordena el REFERENCE MAP por número). Red antes de cobrar: `cadena.menciones_colgadas` sobre el prompt que se
+armaría (`cadena.prompt_de_escena`) — una mención más allá de las imágenes que van, un @Video/@Logo o un «Image N»
+suelto — frena la revisión previa (`revisar`, que ahora recibe el texto de cada clip en `prompts[...]["texto"]`) y
+`tareas.cadena.lanzar_escena` no crea la escena. `avisos` con Wan dice qué persona aparece por primera vez en una
+escena siguiente (sale del texto). Pendiente: la prueba real con una cadena de 2 escenas (≈ US$ 1,50) cuando Daniel la
+apruebe; ojo, en ese guion los «entornos» son una mujer sentada a la mesa (Wan también podría intercalarlos) y los
+personajes no tienen nombre en la versión, así que lo que va en palabras es el principio de su descripción («Woman from
+Photorealistic vertical portrait…»): conviene ponerles nombre (Anna, Maria) en la configuración. `tareas.cadena.lanzar_escena` cambia las menciones de Crear por el token del
 modelo (`flowplus_prompt.asignar_tokens`/`sustituir_tokens`); hasta este cambio la primera escena de Kling le llegaba al
-modelo con «@Imagen n» literal. Pendiente: probar con una cadena real corta que Wan arranca de verdad en el cuadro y
-mantiene las caras (detener después de dos escenas si no).
+modelo con «@Imagen n» literal. Probado en real el 2026-10-15: arranca en el cuadro y mantiene las caras, pero
+intercalaba los retratos (PND-330, arriba).

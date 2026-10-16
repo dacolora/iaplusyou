@@ -99,9 +99,9 @@ def test_compilar_devuelve_prompts_a_y_b_compuestos_con_armar(monkeypatch):
     # 2026-09-28: sin personaje el prompt ya no remata con «solo y sin nadie» ni
     # prohíbe personas/manos; el enfoque llega explicado en el mensaje a Claude.
     assert "Recordatorio final" not in r["prompt_a"] and "personas, pies, manos" not in r["prompt_a"]
-    assert r["prompt_a"].splitlines()[-1].startswith("EVITAR: ")
+    assert r["prompt_a"].splitlines()[-1].startswith("AVOID: ")      # PND-239: el prompt del director va en inglés
     assert "ENFOQUE: producto — el producto es el protagonista" in reg.kwargs[0]["messages"][0]["content"]
-    assert "No dialogue. No background music." in r["prompt_a"] and "ESTILO DE MARCA: Luz natural." in r["prompt_a"]
+    assert "No dialogue. No background music." in r["prompt_a"] and "BRAND STYLE: Luz natural." in r["prompt_a"]
     assert "macro" in r["prompt_b"] and r["prompt_b"] != r["prompt_a"] and r["diferencia_b"].startswith("Arranca")
     assert r["planos"][0]["camara"] == "dolly_in" and r["usd"] == 0.0 and r["version"] == 1
 
@@ -234,14 +234,32 @@ def test_idioma_en_cambia_la_instruccion_de_idioma(monkeypatch):
     import director
     reg = _instalar_fake(monkeypatch, [_respuesta()])
     director.compilar("acme", _sesion(), idioma="en")
-    assert "IDIOMA: en" in reg.kwargs[0]["messages"][0]["content"]
+    assert "IDIOMA: planos en inglés; diferencia_b en inglés" in reg.kwargs[0]["messages"][0]["content"]
+
+
+def test_proyecto_en_espanol_arma_el_prompt_en_ingles(monkeypatch):
+    """PND-239 (regla 3; prueba real del 2026-10-10): el prompt que va al modelo de video sale en inglés aunque el
+    proyecto sea en español —planos, cámaras y etiquetas—; el texto de la persona (guía de marca) va tal cual y lo
+    que ella lee alrededor («diferencia_b») sigue en el idioma del proyecto."""
+    import director
+    reg = _instalar_fake(monkeypatch, [_respuesta()])
+    r = director.compilar("acme", _sesion(), idioma="es")
+    sistema, msg = _sys(reg.kwargs[0]), reg.kwargs[0]["messages"][0]["content"]
+    assert '"plano", "accion" y "sonido" van SIEMPRE en inglés' in sistema and '"diferencia_b" va en español' in sistema
+    assert "IDIOMA: planos en inglés; diferencia_b en español" in msg
+    for prompt in (r["prompt_a"], r["prompt_b"]):
+        assert "the camera moves straight toward the subject" in prompt or "pulls back continuously" in prompt
+        assert "Sound: brisa." in prompt and prompt.splitlines()[-1].startswith("AVOID: ")
+        assert "EVITAR" not in prompt and "Sonido:" not in prompt and "la cámara" not in prompt
+        assert "BRAND STYLE: Luz natural." in prompt
+    assert r["diferencia_b"] == "Arranca en macro y sigue de lado."
 
 
 def test_sesion_muda_no_lleva_sonido(monkeypatch):
     import director
     _instalar_fake(monkeypatch, [_respuesta()])
     r = director.compilar("acme", _sesion(con_sonido=False))
-    assert "Sonido:" not in r["prompt_a"] and "No dialogue" not in r["prompt_a"]
+    assert "Sound:" not in r["prompt_a"] and "Sonido:" not in r["prompt_a"] and "No dialogue" not in r["prompt_a"]
 
 
 def test_modelo_sin_familia_lanza(monkeypatch):
@@ -369,3 +387,67 @@ def test_error_inesperado_del_compositor_conserva_usage(monkeypatch):
         director.compilar('acme', _sesion())
     assert exc.value.costo_usd > 0
     assert len(llamadas.kwargs) == 1
+
+
+# --- PND-240: sin nombres ni logos que no estén en las referencias -------------------------------
+
+def test_ningun_system_trae_un_nombre_propio_de_ejemplo():
+    """Prueba real del 2026-10-10: con el ejemplo «Ana@Image1» el director llamó «Ana» a una mujer sin nombre en
+    ACTIVOS (y «Ana (Image 2)» con Kling en la medición del 2026-10-15). Ninguna familia enseña un nombre propio."""
+    import director
+    for familia in director._FAMILIAS:
+        sistema = director._system(familia, "cierre", 2, 8, "es")
+        assert "Ana" not in sistema, familia
+        assert "nunca le inventes un nombre" in sistema and "no nombres logotipos" in sistema
+    assert '"the woman@Image1"' in director._system("seedance_ref", "c", 2, 8, "es")
+    assert '"the woman (Image 1)"' in director._system("kling", "c", 2, 8, "es")
+
+
+def _con_logo(dur=8):
+    r = json.loads(_respuesta(dur))
+    r["planos"][1]["accion"] = "Image 1 turns to show its silver logo to the camera"
+    return json.dumps(r)
+
+
+def test_un_logo_que_nadie_pidio_vuelve_como_correccion(monkeypatch):
+    """Prueba real del 2026-10-10: «botella negra con logotipo plateado … mostrando el logotipo de frente» en una
+    botella sin logo. Sin logo en la IDEA, en ACTIVOS ni en la bandeja, nombrarlo invalida la respuesta."""
+    import director
+    reg = _instalar_fake(monkeypatch, [_con_logo(), _respuesta()])
+    r = director.compilar("acme", _sesion())
+    assert len(reg.kwargs) == 2
+    assert "nombra un logotipo que ni la IDEA ni ACTIVOS traen" in reg.kwargs[1]["messages"][-1]["content"]
+    assert "logo" not in " ".join(p["accion"] for p in r["planos"])
+
+
+def test_dos_veces_un_logo_inventado_cae_al_prompt_basico(monkeypatch):
+    import director
+    _instalar_fake(monkeypatch, [_con_logo(), _con_logo()])
+    with pytest.raises(director.DirectorError) as e:
+        director.compilar("acme", _sesion())
+    assert "logotipo" in e.value.motivo
+
+
+@pytest.mark.parametrize("cambio", [
+    {"accion_central": "@Imagen 1 gira y se ve su logo bordado"},                         # la IDEA lo pide
+    {"referencias": [{"tipo": "imagen", "etiqueta": "@Imagen 1", "token": "Image 1", "url": "https://x/1.png",
+                      "activo": "Gorra", "categoria": "producto", "regla": "Logo bordado al frente."}]},   # el activo lo trae
+    {"referencias": [{"tipo": "imagen", "etiqueta": "@Imagen 1", "token": "Image 1", "url": "https://x/1.png"},
+                     {"tipo": "imagen", "etiqueta": "@Logo 1", "token": "Image 2", "url": "https://x/l.png",
+                      "logo": True}]},                                                     # logo oficial en la bandeja
+])
+def test_el_logo_vale_cuando_las_referencias_o_la_idea_lo_traen(monkeypatch, cambio):
+    import director
+    reg = _instalar_fake(monkeypatch, [_con_logo()])
+    director.compilar("acme", _sesion(**cambio))
+    assert len(reg.kwargs) == 1
+
+
+def test_decir_que_no_hay_logo_siempre_vale(monkeypatch):
+    import director
+    r = json.loads(_respuesta())
+    r["planos"][0]["accion"] = "Image 1, a plain matte bottle with no visible logo, turns slowly"
+    r["planos_b"][1]["accion"] = "Image 1 sin ningún logotipo gira despacio"
+    reg = _instalar_fake(monkeypatch, [json.dumps(r)])
+    director.compilar("acme", _sesion())
+    assert len(reg.kwargs) == 1

@@ -127,6 +127,29 @@ def test_idioma_viene_del_idioma_del_proyecto(base_temporal, monkeypatch, tmp_pa
     assert cf.cargar("acme")[cid]["idioma_prompt"] == "en"
 
 
+def test_proyecto_en_espanol_guarda_que_el_prompt_del_director_va_en_ingles(base_temporal, monkeypatch, tmp_path):
+    """PND-239: el director recibe el idioma del proyecto (para «diferencia_b») y su prompt queda en inglés; el prompt
+    básico de respaldo sigue con las etiquetas del proyecto."""
+    import creative_flow as cf
+    import idiomas
+    import proyectos
+    import tareas.director as td
+    monkeypatch.setattr(proyectos, "_path", lambda cliente: str(tmp_path / f"{cliente}.json"))
+    idiomas.guardar_de_proyecto("acme", "es")
+    cid = _sesion(cf)
+    visto = {}
+    monkeypatch.setattr(td.director, "compilar", lambda cliente, sesion, idioma="es": visto.update(idioma=idioma) or _resultado())
+    td.ejecutar({"payload": {"cliente": "acme", "cf_id": cid, "auto_lanzar": False}, "job_id": "j"})
+    assert visto["idioma"] == "es" and cf.cargar("acme")[cid]["idioma_prompt"] == "en"
+
+    def falla(*a, **k):
+        raise td.director.DirectorError("roto")
+    monkeypatch.setattr(td.director, "compilar", falla)
+    cid2 = _sesion(cf)
+    td.ejecutar({"payload": {"cliente": "acme", "cf_id": cid2, "auto_lanzar": False}, "job_id": "j2"})
+    assert cf.cargar("acme")[cid2]["idioma_prompt"] == "es"
+
+
 def test_director_registra_su_gasto_al_proyecto_aunque_falle_guardar(base_temporal, monkeypatch):
     import pytest
     import gastos

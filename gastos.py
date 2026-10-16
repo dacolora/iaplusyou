@@ -148,17 +148,24 @@ TARIFAS = {
     # Las ayudas con IA de Crear y de la marca, que pagaba Creatv (`_creatv`) y desde PND-299 (decisión 2026-10-13,
     # lote 1) cobran del saldo del proyecto como todo lo demás. Costo de proveedor; el real se anota con los tokens.
     # Director («Crear super prompt», `director.compilar`): una llamada con la doctrina de video; con corrección, dos.
-    # Medido el 2026-10-09 (docs/superpowers/evals/2026-10-09-director-seedance-ref.md): 0,015–0,026 una llamada y
-    # 0,035–0,050 con la corrección. Se muestra lo más caro medido.
-    "director": 0.05,
+    # Medido el 2026-10-09 y el 2026-10-15: 0,012–0,027 una llamada y 0,035–0,050 con la corrección. Desde PND-240
+    # (2026-10-16) un logo inventado es otra causa de corrección, y el precio a la vista es el PEOR caso con los topes
+    # (criterio del 2026-10-15, como caption_organico y revision_marca): dos llamadas al tope de 4 000 de salida
+    # (0,08) más ≈ 14 600 de entrada equivalente (doctrina en caché, instrucciones, mensaje y la respuesta anterior en la
+    # corrección: ≈ 0,029) = 0,109 → 0,11. Se cobra lo real × margen.
+    "director": 0.11,
     # Describir referencias (`referencias_link.describir`, visión): medido el 2026-10-10 (PND-141) 0,004 con una imagen
     # y 0,010 con seis; base + lo de cada imagen, redondeado hacia arriba (hasta 16 imágenes ≈ 0,028).
     "describir_referencias": 0.004,
     "describir_referencias_por_imagen": 0.0015,
     # Sugerir sonido (`final_edition.sonido.sugerir_descripcion`): medido 0,0013 (PND-141).
     "sugerir_sonido": 0.002,
-    # Analizar marca (`generador_prompts.analizar_marca`): hasta 5 imágenes (~1 600 tokens c/u) y 400 de salida.
-    "analizar_marca": 0.025,
+    # Analizar marca (`generador_prompts.analizar_marca`): hasta 5 imágenes y tope de 4 000 de salida (PND-342). Medido
+    # el 2026-10-15: una imagen grande son ≈ 4 700 tokens; 0,021 con dos o tres imágenes y 0,0465 con cuatro grandes y
+    # una mediana (21 528 de entrada, 349 de salida). El precio a la vista es el PEOR caso con los topes (criterio del
+    # 2026-10-15): cinco imágenes grandes (≈ 24 500 de entrada, 0,049) y la salida al tope (0,04) = 0,089 → 0,09
+    # (antes 0,025: cinco imágenes ya costaban más). Se cobra lo real × margen.
+    "analizar_marca": 0.09,
     # La revisión de marca de cada swap (`generador_prompts.evaluar_contra_matriz`): una llamada con visión y hasta
     # 1 500 tokens de salida. Peor caso con ese tope: 1 500 × US$ 10/M + ≈ 3 000 de entrada (imagen y reglas) ×
     # US$ 2/M ≈ 0,021; se anota lo real (PND-315) y este es el precio que se ve antes (revisión de guardian-gasto,

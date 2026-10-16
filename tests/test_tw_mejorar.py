@@ -633,7 +633,7 @@ def test_las_cifras_se_verifican_contra_los_datos_y_no_contra_las_instrucciones(
     ninguno de esos números está en lo verificable; con el prompt entero, todos."""
     fila = _fila_minima()
     datos_, prompt = mejorar.datos_verificables("Acme", fila), mejorar.armar("Acme", fila)
-    plantilla = {"30", "40", "42", "80", "500", "60", "120", "200", "92", "100"}
+    plantilla = {"30", "40", "4.2", "80", "500", "60", "120", "200", "92", "100"}    # «4.2» es 4,2 (PND-227), no 42
     assert plantilla <= set(doctrina_numeros(prompt)) and not plantilla & set(doctrina_numeros(datos_))
     assert "Tu trabajo" not in datos_ and "percentil 0 a 100" not in datos_ and "Reglas:" not in datos_
     for verificable, esperado in ((prompt, False), (datos_, True)):        # el defecto de antes y el arreglo
@@ -846,8 +846,10 @@ def test_las_ofertas_nuevas_solo_miran_el_gancho_y_el_copy():
                                   copy_nuevo={"titulo": "Tøfler", "texto": "Prøv i 7 dager, pengene tilbake"}),
                         "nada", 20.0)
     assert r["cifras_sin_dato"] == []
-    assert r["ganchos"][0]["cifras_sin_dato"] == ["garantía"]
-    assert r["copy_nuevo"]["cifras_sin_dato"] == ["pengene tilbake", "prøv i 7 dager"]
+    # Desde PND-237 `doctrina.verificar_cifras` marca la cifra de un dígito con su oferta; la oferta que va dentro no se
+    # repite.
+    assert r["ganchos"][0]["cifras_sin_dato"] == ["Garantía de 5 años"]
+    assert r["copy_nuevo"]["cifras_sin_dato"] == ["Prøv i 7 dager", "pengene tilbake"]
 
 
 def test_datos_verificables_no_trae_los_numeros_de_las_etiquetas():
@@ -1057,3 +1059,36 @@ def test_lo_verificable_lleva_las_claves_y_no_deja_pasar_una_oferta_inventada():
         verificable = mejorar.datos_verificables("Acme", _fila(f))
         assert "No spend" in mejorar.armar("Acme", _fila(f))                    # el prompt sí lleva el texto
     assert mejorar.ofertas_sin_dato("Only the last 7 pairs", verificable) == ["last 7"]
+
+
+# ---------------------------------------------- PND-228: urgencia o escasez sin número (2026-10-15) ---
+
+def test_un_gancho_con_urgencia_sin_dato_no_se_genera_y_el_copy_la_avisa():
+    """Eval del 2026-10-09 (caso 1): el copy nuevo decía «Lageret tømmes raskt denne vinteren» —el inventario se acaba
+    rápido— sin que los datos lo mostraran, y `verificar_cifras` solo ve números. El texto de un gancho va directo a un
+    video: con urgencia sin dato no se genera; en el copy queda el aviso de «revisa antes de publicar»."""
+    from triple_whale import ganchos as ganchos_tw
+    gancho = {"texto": "Nesten utsolgt – bestill nå", "prompt": "Push in", "fotograma_s": 4}
+    datos_ = mejorar.datos_verificables("Acme", _fila_real())
+    r = mejorar.parsear(respuesta(ganchos=[gancho, GANCHOS[1]],
+                                  copy_nuevo={"titulo": "Tøfler", "texto": "Lageret tømmes raskt denne vinteren."}),
+                        datos_, 20.0)
+    assert r["ganchos"][0]["cifras_sin_dato"] == ["nesten utsolgt"]
+    assert [g["n"] for g in ganchos_tw.ganchos_generables(r)] == [2]
+    assert r["copy_nuevo"]["cifras_sin_dato"] == ["tømmes"]
+    con = mejorar.parsear(respuesta(ganchos=[gancho]),
+                          mejorar.datos_verificables("Acme", _fila_real(copy="Nesten utsolgt! Bestill i dag")), 20.0)
+    assert con["ganchos"][0]["cifras_sin_dato"] == []                  # el copy del anuncio ya lo decía
+
+
+def test_la_urgencia_de_la_explicacion_no_bloquea_el_gancho():
+    """Solo se mira el texto que sale en el video o se publica; el «por qué» puede hablar de urgencia."""
+    gancho = {"texto": "Aldri kalde føtter igjen", "prompt": "Push in", "fotograma_s": 4,
+              "por_que": "Sin decir que se agota, abre con el dolor"}
+    r = mejorar.parsear(respuesta(ganchos=[gancho]), mejorar.datos_verificables("Acme", _fila_real()), 20.0)
+    assert r["ganchos"][0]["cifras_sin_dato"] == []
+
+
+def test_el_prompt_pide_no_inventar_escasez_urgencia_ni_prueba_social():
+    assert "afirman escasez, urgencia ni prueba social" in mejorar.PROMPT
+    assert "afirman escasez, urgencia ni prueba social" in mejorar.armar("Acme", _fila_real())

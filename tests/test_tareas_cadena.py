@@ -149,3 +149,91 @@ def test_vigilante_tolera_una_cadena_rota(cadena_lista, monkeypatch):
     from tareas import cadena as t
     monkeypatch.setattr(datos, "cadenas_vivas", lambda: [("acme", 999999), ("acme", cadena_lista["vid"])])
     t.ejecutar_vigilar({})  # no lanza aunque el primer video no exista
+
+
+# ------------------------------------------- PND-229: la cadena espera un clip que Crear puede recuperar ---
+
+def _en_error_recuperable(cf, cf_id, **extra):
+    cf.actualizar("acme", cf_id, estado="error", error="WaveSpeed tardó más de 10 min",
+                  prediccion={"id": "pred-123", "modelo": "kling_o3_pro"}, **extra)
+
+
+def test_un_clip_recuperable_no_detiene_la_cadena_y_recuperado_sigue(cadena_lista):
+    """Antes: el vigilante cerraba la escena en error apenas la pieza no estaba en `video_listo`, aunque Crear ofreciera
+    «Recuperar el video» (ya pagado). Ahora la escena espera; recuperada, la cadena sigue sola."""
+    from guiones import cadena, datos
+    from tareas import cadena as t
+    vid, cf = cadena_lista["vid"], cadena_lista["cf"]
+    t.ejecutar_elementos(_tarea(vid))
+    cf1 = cadena.estado(datos.video("acme", vid))["escenas"]["1"]["cf_id"]
+    _en_error_recuperable(cf, cf1)
+    t.ejecutar_vigilar({})
+    est = cadena.estado(datos.video("acme", vid))
+    assert est["estado"] == "corriendo" and est["escenas"]["1"]["estado"] == "generando"
+    desde = est["escenas"]["1"]["recuperable_desde"]
+    assert desde and "2" not in est["escenas"] and datos.cadenas_vivas() == [("acme", vid)]
+    t.ejecutar_vigilar({})                                           # otra vuelta no mueve la fecha
+    assert cadena.estado(datos.video("acme", vid))["escenas"]["1"]["recuperable_desde"] == desde
+    cf.actualizar("acme", cf1, estado="video_generando")             # la persona tocó «Recuperar el video»
+    t.ejecutar_vigilar({})
+    assert cadena.estado(datos.video("acme", vid))["estado"] == "corriendo"
+    _listo(cf, cf1, cadena_lista["tmp"])
+    t.ejecutar_vigilar({})
+    est = cadena.estado(datos.video("acme", vid))
+    assert est["escenas"]["1"]["estado"] == "lista" and est["escenas"]["1"]["recuperable_desde"] is None
+    assert est["escenas"]["2"]["estado"] == "generando"
+
+
+def test_un_lanzamiento_incierto_tambien_se_espera(cadena_lista):
+    """La misma condición que `dashboard.cf_recuperar`: un lanzamiento incierto sin resolver (PND-214) también se
+    recupera en Crear."""
+    from guiones import cadena, datos
+    from tareas import cadena as t
+    vid, cf = cadena_lista["vid"], cadena_lista["cf"]
+    t.ejecutar_elementos(_tarea(vid))
+    cf1 = cadena.estado(datos.video("acme", vid))["escenas"]["1"]["cf_id"]
+    cf.actualizar("acme", cf1, estado="error", error="no se sabe", prediccion=None,
+                  lanzamiento_incierto={"estado": "dudoso", "path": "kwaivgi/kling"})
+    t.ejecutar_vigilar({})
+    assert cadena.estado(datos.video("acme", vid))["estado"] == "corriendo"
+
+
+def test_pasadas_24_horas_sin_recuperar_la_cadena_se_detiene(cadena_lista):
+    from guiones import cadena, datos
+    from tareas import cadena as t
+    vid, cf = cadena_lista["vid"], cadena_lista["cf"]
+    t.ejecutar_elementos(_tarea(vid))
+    cf1 = cadena.estado(datos.video("acme", vid))["escenas"]["1"]["cf_id"]
+    _en_error_recuperable(cf, cf1)
+    datos.modificar_cadena("acme", vid, lambda e, _v: cadena.esperando_recuperar(e, 1, "2026-10-01T08:00:00"))
+    t.ejecutar_vigilar({})
+    est = cadena.estado(datos.video("acme", vid))
+    assert est["estado"] == "detenida" and est["escenas"]["1"]["error"] == "WaveSpeed tardó más de 10 min"
+
+
+@pytest.mark.parametrize("como", ["detener", "imagen", "sin_prediccion"])
+def test_lo_que_no_se_espera_detiene_como_antes(cadena_lista, como):
+    """Con «Detener» pedido, una imagen o un error sin predicción, la escena se cierra con su error como siempre."""
+    from guiones import cadena, datos
+    from tareas import cadena as t
+    vid, cf = cadena_lista["vid"], cadena_lista["cf"]
+    t.ejecutar_elementos(_tarea(vid))
+    cf1 = cadena.estado(datos.video("acme", vid))["escenas"]["1"]["cf_id"]
+    if como == "detener":
+        _en_error_recuperable(cf, cf1)
+        datos.modificar_cadena("acme", vid, lambda e, _v: cadena.pedir_detener(e))
+    elif como == "imagen":
+        _en_error_recuperable(cf, cf1, tipo="imagen")
+    else:
+        cf.actualizar("acme", cf1, estado="error", error="WaveSpeed tardó más de 10 min", prediccion=None)
+    t.ejecutar_vigilar({})
+    assert cadena.estado(datos.video("acme", vid))["estado"] == "detenida"
+
+
+def test_rehacer_una_escena_olvida_la_espera_anterior():
+    from guiones import cadena
+    est = cadena.esperando_recuperar({"escenas": {"2": {"cf_id": "a", "estado": "generando"}}}, 2, "2026-10-01T08:00:00")
+    assert est["escenas"]["2"]["recuperable_desde"] == "2026-10-01T08:00:00"
+    assert cadena.esperando_recuperar(est, 2, "2026-10-02T08:00:00")["escenas"]["2"]["recuperable_desde"] == \
+        "2026-10-01T08:00:00"
+    assert cadena.lanzada(est, 2, "b")["escenas"]["2"]["recuperable_desde"] is None

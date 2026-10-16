@@ -208,6 +208,54 @@ def test_analizar_marca_anota_lo_que_cobro_claude_aunque_la_respuesta_no_sirva(m
     assert usos == [USO]
 
 
+def test_analizar_marca_pide_un_tope_amplio(monkeypatch):
+    """PND-342 (regla 7): con `max_tokens` 400 el pensamiento adaptativo podía dejar la guía vacía o cortada y cobrada.
+    El tope es de 4 000 como mínimo (se paga solo lo usado)."""
+    import generador_prompts
+    pedidos = []
+
+    class _Cliente:
+        def __init__(self, **k):
+            self.messages = self
+
+        def create(self, **k):
+            pedidos.append(k)
+            return SimpleNamespace(usage=USO, stop_reason="end_turn",
+                                   content=[SimpleNamespace(type="text", text="Paleta cálida.")])
+    monkeypatch.setattr(generador_prompts.anthropic, "Anthropic", _Cliente)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-prueba")  # llave-de-prueba
+    assert generador_prompts.analizar_marca(["https://r2/m1.jpg"]) == "Paleta cálida."
+    assert pedidos[0]["max_tokens"] >= 4000
+
+
+def test_el_precio_de_analizar_marca_cubre_el_peor_caso_con_el_tope():
+    """PND-342 (revisión de guardian-gasto, 2026-10-16): el precio que se ve antes es el PEOR caso con los topes, no lo
+    medido. Cinco imágenes grandes (≈ 4 800 tokens c/u, medido ≈ 4 700) más el prompt y la salida al tope. Lo más caro
+    medido (cuatro grandes y una mediana) fue 0,0465 (docs/superpowers/evals/2026-10-15-analizar-marca-4000.md)."""
+    import gastos
+    import generador_prompts
+    from nicho.avatares import PRECIOS_USD_POR_MILLON
+    p = PRECIOS_USD_POR_MILLON[generador_prompts.MODEL]
+    peor = ((5 * 4800 + 500) * p["entrada"] + generador_prompts.MAX_TOKENS_ANALIZAR_MARCA * p["salida"]) / 1e6
+    assert gastos.TARIFAS["analizar_marca"] >= peor > 0.0465
+    assert gastos.estimar("analizar_marca")["usd"] >= peor
+
+
+def test_el_precio_del_director_cubre_dos_llamadas_al_tope():
+    """PND-240 (revisión de guardian-gasto, 2026-10-16): un logo inventado es otra causa de la corrección, la segunda
+    llamada. El precio a la vista cubre dos llamadas al tope de salida, con la doctrina en caché (escribirla 1,25×,
+    leerla 0,1×), ≈ 3 500 de instrucciones y mensaje, y la respuesta anterior en la corrección."""
+    import director
+    import gastos
+    from nicho.avatares import PRECIOS_USD_POR_MILLON
+    p = PRECIOS_USD_POR_MILLON[director.MODEL]
+    doctrina_, propio = 2500, 3500
+    entrada = (propio + doctrina_ * 1.25) + (propio + director.MAX_TOKENS + 200 + doctrina_ * 0.1)
+    peor = (entrada * p["entrada"] + 2 * director.MAX_TOKENS * p["salida"]) / 1e6
+    assert gastos.TARIFAS["director"] >= peor > 0.10
+    assert gastos.estimar("director")["usd"] >= peor
+
+
 def test_analizar_marca_vacia_o_cortada_no_cobra_ni_pisa_la_guia(marca_app, libro, monkeypatch):
     """guardian-gasto 2026-10-15: con `max_tokens` 400, una respuesta cortada se cobraba y pisaba la guía buena."""
     import generador_prompts

@@ -197,6 +197,28 @@ def test_prompt_para_crear_renumera_y_deja_solo_lo_de_la_escena():
     assert "Image 3" not in texto and "@Imagen 5" not in texto
 
 
+def test_prompt_para_crear_renumera_la_mencion_pegada_de_una_descripcion():
+    """El entorno del guion «Podcast» se describe «Woman from @Image 1 sitting at…»: esa mención es de la Image 1 de la
+    versión. Si la escena la lleva, se renumera con las demás (con el lugar primero en la cadena con Wan, PND-330,
+    apuntaba al propio lugar); si no la lleva, pasa a palabras: dejarla tal cual hacía que Crear la leyera como la
+    Image 2 DE LA ESCENA, otra imagen (revisión de guardian-gasto, 2026-10-16)."""
+    v = _video()
+    est = escenas.poner_ref(escenas.estado(v), v, 2, FOTO)
+    v = _video(est)
+    texto = "REFERENCE MAP\nImage 2 = character — doctor.\nImage 4 = environment — Doctor from @Image 2 at the desk.\n\nGo."
+    imgs = [x for x in escenas.imagenes_para_crear(v, 2) if x["clave"] in ("r4", "r2")]
+    lugar_primero = [imgs[1], imgs[0]]
+    mapa = escenas.prompt_para_crear(texto, v, lugar_primero).splitlines()[1:3]
+    assert mapa == ["@Imagen 1 = environment — Doctor from @Imagen 2 at the desk.", "@Imagen 2 = character — doctor."]
+    sin_el = escenas.prompt_para_crear(texto, v, [imgs[1]])
+    assert "@Imagen 1 = environment — Doctor from the AI podiatrist, adult British man (~45) at the desk." in sin_el
+    assert "@Image 2" not in sin_el and "@Imagen 2" not in sin_el
+    # cualquier forma que entienda Crear; un @Video no es una Image N de la versión y queda igual
+    pegado = texto.replace("@Image 2", "@[Image 2](image_2)") + " Move like @Video 1."
+    assert "Doctor from the AI podiatrist" in escenas.prompt_para_crear(pegado, v, [imgs[1]])
+    assert "Move like @Video 1." in escenas.prompt_para_crear(pegado, v, [imgs[1]])
+
+
 def test_prompt_para_crear_sin_imagenes_quita_el_mapa():
     v = _video(clips=[{"indice": 1, "titulo": "A", "duracion": 8, "entornos": []}],
                config=dict(CFG, referencias=[dict(r, tipo="entorno") for r in CFG["referencias"]]))
