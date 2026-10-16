@@ -17,7 +17,9 @@ sitio>)` (bloque con `cache_control`): ideas de sprint (`angulo`+`gancho`+`video
 (`caption`), «Adaptar con IA» (`angulo`+`gancho`), clasificar/sugerir referentes y analizar referencias
 (`clasificar`), avatares y personas sugeridas (`investigar`). El **ángulo** (audiencia, consciencia, sofisticación
 1–5, deseo, promesa única, mecanismo, pruebas con fuente `ficha|comentarios|demostracion`, arranque/`lead`, gancho,
-faltantes) lo decide Claude antes de escribir y `doctrina.validar_angulo` lo limpia (nunca lanza; una corrección —
+faltantes) lo decide Claude antes de escribir y `doctrina.validar_angulo` lo limpia (un campo que llega como dict o
+lista se vuelve texto legible con `_texto`/`_plano`: sus valores separados por «; », sin claves ni corchetes; PND-264,
+2026-10-15, compartido por «Evaluar con IA» de Triple Whale y de Meta, «Cómo mejorarlo» y Sprints; nunca lanza; una corrección —
 en el guion, la misma ronda del guion con errores no bloqueantes—; si la corrección falla por lo que sea, se guarda la
 primera respuesta con `faltantes` «error: …» vía `doctrina.anotar_errores`, que los pone primero para que ninguno se
 corte antes que un faltante de Claude: nunca se pierde lo pagado). Vive en `campana_pieza.extra.angulo`

@@ -221,8 +221,24 @@ def angulo_vacio():
             "promesa": "", "mecanismo": None, "pruebas": [], "lead": None, "gancho": "", "faltantes": []}
 
 
+def _plano(valor):
+    """Un valor que manda Claude como texto legible (PND-264): un dict o una lista llegaban con su `repr`
+    («{'quien': …}», «['a', 'b']») y la idea se pintaba con corchetes. De un dict van sus valores (no sus claves, que
+    pueden venir en inglés o con guiones bajos) y de una lista sus elementos, en orden, separados por «; »; lo vacío
+    no cuenta."""
+    if valor is None:
+        return ""
+    if isinstance(valor, dict):
+        partes = valor.values()
+    elif isinstance(valor, (list, tuple)):
+        partes = valor
+    else:
+        return str(valor)
+    return "; ".join(p for p in (" ".join(_plano(x).split()) for x in partes) if p)
+
+
 def _texto(valor, tope=MAX_CARACTERES_CAMPO):
-    return " ".join(str(valor if valor is not None else "").split())[:tope]
+    return " ".join(_plano(valor).split())[:tope]
 
 
 def validar_angulo(angulo, datos_texto=None, fijos=None):
@@ -286,7 +302,7 @@ def validar_angulo(angulo, datos_texto=None, fijos=None):
     promesa = limpio["promesa"]
     # Spec §4.2: promesa es una sola frase (≤ 200 caracteres, sin punto interno ni «;»)
     # Verificar la longitud del promesa RAW antes de truncación
-    promesa_raw = " ".join(str(a.get("promesa") or "").split())
+    promesa_raw = " ".join(_plano(a.get("promesa")).split())
     if promesa_raw and len(promesa_raw) > MAX_CARACTERES_CAMPO:
         errores.append("promesa_multiple")
     # Dos frases = dos promesas (Regla de Uno). «89.900» no es un punto de
