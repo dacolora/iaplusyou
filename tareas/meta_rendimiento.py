@@ -27,7 +27,7 @@ E2 §10) para la pestaña Alertas."""
 import logging
 from datetime import date, datetime, timedelta
 
-from flask_babel import gettext
+from flask_babel import gettext, ngettext
 
 import cola
 import gastos
@@ -35,6 +35,7 @@ import idiomas
 import meta_conexion
 import trabajos
 from meta_rendimiento import analisis, cuentas, datos, graph, pausa, sync
+from meta_rendimiento import soltar as soltar_mod
 from nicho.avatares import costo_real
 from storage import r2_pendientes
 from tareas import Continuar, al_interrumpir, ref_sufijo, registrar
@@ -210,8 +211,37 @@ def meta_rend_sincronizar_todas(tarea):
     return gettext("%(n)s copia(s) de Meta en cola", n=n)
 
 
+PRIORIDAD_LIMPIEZA = 8      # la limpieza de una cuenta soltada pasa delante en el carril general: es corta
+VUELTAS_LIMPIEZA = 3
+
+
+def job_id_limpieza(cliente):
+    return f"{cliente}__meta_rend_limpiar"
+
+
+def encolar_limpieza(cliente):
+    """Encola la limpieza de las copias de las cuentas que el proyecto acaba de soltar (ronda 2 de PND-206/207,
+    2026-10-15): `cuentas.elegir` ya no las borra dentro de su transacción. Un job_id por proyecto: un segundo clic no
+    encola otra. Gratis (no cobra ni llama a Meta). Devuelve si quedó en cola."""
+    return trabajos.encolar(job_id_limpieza(cliente), TIPO_LIMPIAR, {"cliente": cliente}, cliente=cliente,
+                            duracion_estimada=30, max_intentos=2, prioridad=PRIORIDAD_LIMPIEZA)
+
+
 @registrar(TIPO_LIMPIAR)
 def meta_rend_limpiar(tarea):
+    cliente = (tarea.get("payload") or {}).get("cliente")
+    if cliente:
+        # La de un proyecto que acaba de soltar cuentas: solo su barrido, sin las purgas diarias de todos. Mientras
+        # corre, otra cuenta soltada no encola otra (mismo job_id): se vuelve a mirar al final, hasta
+        # VUELTAS_LIMPIEZA vueltas (auditoría de la ronda 2); lo que quede, la diaria.
+        filas = 0
+        for _ in range(VUELTAS_LIMPIEZA):
+            n, _ = soltar_mod.barrer(cliente)
+            filas += n
+            if not datos.cuentas_huerfanas(cliente):
+                break
+        return ngettext("Copias de cuentas soltadas: %(num)s fila borrada.",
+                        "Copias de cuentas soltadas: %(num)s filas borradas.", filas)
     hoy = date.today()
     n = datos.purgar_anuncios((hoy - timedelta(days=DIAS_ANUNCIO_GUARDADOS)).isoformat())
     m = datos.purgar_cuenta_dias((hoy - timedelta(days=DIAS_CUENTA_GUARDADOS)).isoformat())
@@ -222,11 +252,16 @@ def meta_rend_limpiar(tarea):
     except Exception as e:  # noqa: BLE001 — `reintentar` no lanza; por si acaso, la limpieza de la copia ya se hizo
         log.warning("Meta rendimiento: no se reintentaron los borrados pendientes de R2 (%s)", type(e).__name__)
         borradas_r2 = siguen_r2 = 0
+    # Ronda 2 de PND-206/207 (2026-10-15): lo que quedó de cuentas que ya no están elegidas en su proyecto, de todos
+    # los proyectos (también las copias huérfanas de antes de PND-206). Nunca lanza.
+    barridas, _ = soltar_mod.barrer()
+    extra = (" " + ngettext("Copias de cuentas soltadas: %(num)s fila borrada.",
+                            "Copias de cuentas soltadas: %(num)s filas borradas.", barridas)) if barridas else ""
     if borradas_r2 or siguen_r2:
         return gettext("%(n)s fila(s) viejas de anuncios y %(m)s día(s) viejos de cuentas de Meta borrados; de R2, "
                        "%(borradas)s copia(s) pendientes borradas y %(siguen)s siguen pendientes",
-                       n=n, m=m, borradas=borradas_r2, siguen=siguen_r2)
-    return gettext("%(n)s fila(s) viejas de anuncios y %(m)s día(s) viejos de cuentas de Meta borrados", n=n, m=m)
+                       n=n, m=m, borradas=borradas_r2, siguen=siguen_r2) + extra
+    return gettext("%(n)s fila(s) viejas de anuncios y %(m)s día(s) viejos de cuentas de Meta borrados", n=n, m=m) + extra
 
 
 # ---------------------------------------------------------- «Evaluar con IA» (spec E2 §8) ---

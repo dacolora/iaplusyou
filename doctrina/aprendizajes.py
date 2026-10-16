@@ -155,20 +155,25 @@ def desde_analisis_tw(fila, ahora=None):
             "tipo": ver if ver in ("ganador", "perdedor") else "manual",
             "pais": None, "producto": None, "gancho": None, "lead": None, "consciencia": None,
             "texto": _limpio(texto, MAX_TEXTO_MOTOR), "aprendizaje": aprendizaje,
-            "origen": "meta" if de_meta else "triple_whale", "analisis_id": analisis_id}
+            "origen": "meta" if de_meta else "triple_whale", "analisis_id": analisis_id,
+            # De qué cuenta de Meta es (quitar esa cuenta le quita el nombre del anuncio: ronda 2 de PND-295).
+            "ad_account_id": (str(f.get("ad_account_id") or "") or None) if de_meta else None}
 
 
 _RE_NOMBRE_GUARDADO = re.compile(r"[«“\"]([^»”\"]+)[»”\"]")
 MIN_NOMBRE_A_QUITAR = 4     # un nombre más corto («A1», «v2») aparece dentro de otras palabras: no se reemplaza
 
 
-def sin_nombre_de_meta(item):
+def sin_nombre_de_meta(item, cuentas=None):
     """PND-295 (decisión 2026-10-13): al desconectar Meta, un aprendizaje guardado desde un análisis de un anuncio de
     Meta (`origen` "meta": «Ganó en Meta: «nombre». Diagnóstico: …») conserva la lección pero pierde el nombre del
     anuncio, que es dato copiado de Meta, también dentro de la lección (pasa a «este anuncio»). Devuelve el
     aprendizaje con el texto rehecho (en el idioma activo: quien llama elige el del proyecto) y `sin_nombre` True;
-    cualquier otro, tal cual."""
+    cualquier otro, tal cual. `cuentas` (quitar unas cuentas, no desconectar Meta): solo los de esas cuentas y los que
+    no dicen de qué cuenta son (los guardados antes de que se anotara: más vale de más que de menos)."""
     if not isinstance(item, dict) or item.get("origen") != "meta" or item.get("sin_nombre"):
+        return item
+    if cuentas is not None and item.get("ad_account_id") and item["ad_account_id"] not in cuentas:
         return item
     leccion = _limpio(item.get("aprendizaje"), 220)
     # La lección la escribió Claude mirando el anuncio y puede citar su nombre (auditoría de seguridad, 2026-10-15):
@@ -184,8 +189,9 @@ def sin_nombre_de_meta(item):
     else:
         texto = gettext("Un anuncio analizado en Meta")
     texto += gettext(". Diagnóstico: %(a)s", a=leccion) if leccion else "."
+    # Sin el id de la cuenta publicitaria tampoco (auditoría de la ronda 2): es un identificador copiado de Meta.
     return {**item, "texto": _limpio(texto, MAX_TEXTO_MOTOR), "aprendizaje": leccion or item.get("aprendizaje"),
-            "sin_nombre": True}
+            "ad_account_id": None, "sin_nombre": True}
 
 
 def manual(texto, ahora=None):

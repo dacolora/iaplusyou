@@ -186,3 +186,59 @@ def test_pnd295_eliminar_datos_lo_dice():
         with dashboard.app.test_request_context("/eliminar-datos"), force_locale(idioma):
             html = " ".join(dashboard.eliminar_datos().split())
         assert frase in html.replace("&#39;", "'"), idioma
+
+
+def test_pnd295_ronda2_quitar_una_cuenta_quita_el_nombre_de_sus_aprendizajes_y_de_los_sin_cuenta(
+        tmp_path, monkeypatch, base_temporal):
+    """Quien orquesta, 2026-10-15: un aprendizaje nuevo de un anuncio de Meta guarda su cuenta; quitar ESA cuenta (sin
+    desconectar Meta) le quita el nombre del anuncio, y a los viejos sin cuenta también (más vale de más que de menos).
+    Los de otra cuenta que sigue elegida, no."""
+    import proyectos
+    from doctrina import aprendizajes as ap
+    from meta_rendimiento import cuentas
+    monkeypatch.setattr(proyectos, "_path", lambda cliente: str(tmp_path / f"{cliente}.json"))
+
+    def de(act, nombre, aid):
+        fila = {"id": aid, "foto": {"fuente": "meta", "nombre": nombre, "veredicto": "ganador", "ad_account_id": act},
+                "resultado": {"aprendizaje": "Abrir con el dolor retiene."}}
+        return ap.desde_analisis_tw(fila)
+    quitada, sigue = de("act_1", "Video Noruega", 1), de("act_2", "Video Suecia", 2)
+    assert quitada["ad_account_id"] == "act_1"
+    viejo = {**de("act_1", "Video Viejo", 3)}
+    viejo.pop("ad_account_id")                                  # guardado antes de que se anotara la cuenta
+    for item in (viejo, sigue, quitada):
+        proyectos.agregar_aprendizaje("acme", item)
+    cuentas.elegir("acme", [{"id": "act_1", "name": "NO"}, {"id": "act_2", "name": "SE"}])
+    cuentas.elegir("acme", [{"id": "act_2", "name": "SE"}])
+    textos = {x["id"]: x["texto"] for x in proyectos.aprendizajes("acme")}
+    assert "Noruega" not in textos["tw1"] and "Viejo" not in textos["tw3"]
+    assert "Video Suecia" in textos["tw2"]
+
+
+def test_pnd295_ronda2_la_limpieza_reintenta_y_el_anonimo_no_guarda_la_cuenta(tmp_path, monkeypatch, base_temporal):
+    """Auditoría de la ronda 2: si quitar el nombre falló al quitar la cuenta, la limpieza lo reintenta con los que
+    dicen su cuenta; y el aprendizaje anónimo tampoco guarda el id de la cuenta (es un identificador de Meta)."""
+    import proyectos
+    from doctrina import aprendizajes as ap
+    from meta_rendimiento import cuentas, soltar
+    monkeypatch.setattr(proyectos, "_path", lambda cliente: str(tmp_path / f"{cliente}.json"))
+    fila = {"id": 9, "foto": {"fuente": "meta", "nombre": "Video Noruega", "veredicto": "ganador",
+                              "ad_account_id": "act_1"}, "resultado": {"aprendizaje": "Abrir con el dolor retiene."}}
+    proyectos.agregar_aprendizaje("acme", ap.desde_analisis_tw(fila))
+    cuentas.elegir("acme", [{"id": "act_1", "name": "NO"}])
+    monkeypatch.setattr(cuentas, "_sin_nombre_en_aprendizajes", lambda c, q: (_ for _ in ()).throw(OSError("x")))
+    cuentas.elegir("acme", [])                                  # falla quitar el nombre: la lista cambia igual
+    assert "Noruega" in proyectos.aprendizajes("acme")[0]["texto"]
+    soltar.barrer("acme")
+    item, = proyectos.aprendizajes("acme")
+    assert "Noruega" not in item["texto"] and item["ad_account_id"] is None and item["sin_nombre"] is True
+
+
+def test_pnd207_ronda2_eliminar_datos_dice_cuando_se_borra():
+    from flask_babel import force_locale
+
+    import dashboard
+    for idioma, frase in (("es", "a más tardar en 24 horas"), ("en", "at the latest within 24 hours")):
+        for vista in (dashboard.eliminar_datos, dashboard.privacidad):
+            with dashboard.app.test_request_context("/"), force_locale(idioma):
+                assert frase in " ".join(vista().split()), (idioma, vista.__name__)

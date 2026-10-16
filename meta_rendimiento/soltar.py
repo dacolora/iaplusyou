@@ -10,10 +10,63 @@ import logging
 log = logging.getLogger("creatv.meta_rendimiento.soltar")
 
 
+def barrer(cliente=None):
+    """Borra lo copiado de las cuentas que ya no están elegidas en su proyecto (ronda 2 de PND-206/207, 2026-10-15):
+    sus métricas en `datos.TABLAS_COPIA`, por lotes y cada lote en su transacción (`datos.borrar_huerfanas`), las
+    miniaturas que su copia subió a R2 (leídas ANTES de borrar sus filas y borradas DESPUÉS, solo si la cuenta sigue sin
+    elegir) y los análisis «Cómo mejorarlo» de fuente Meta que hubieran quedado (con sus copias en R2). Lo corre
+    `meta_rend_limpiar`: la del proyecto que acaba de soltar una cuenta (con `cliente`) y la diaria (todos, también las
+    huérfanas de antes de PND-206). Nunca lanza: devuelve (filas borradas, tipos de los errores); lo que falla, lo barre
+    la próxima."""
+    from meta_rendimiento import creativo, cuentas, datos, miniaturas  # noqa: PLC0415
+    from triple_whale import datos as tw_datos  # noqa: PLC0415
+    filas, fallos = 0, []
+    try:
+        huerfanas = sorted(datos.cuentas_huerfanas(cliente))
+    except Exception as e:  # noqa: BLE001
+        log.warning("meta limpieza: no se pudo calcular qué barrer (%s)", type(e).__name__)
+        huerfanas, fallos = [], [type(e).__name__]
+    # Primero los aprendizajes (llegan a los prompts de ideas y guiones): los de una cuenta que ya no está elegida
+    # pierden el nombre del anuncio, por si falló al quitarla (auditoría de la ronda 2).
+    import meta_conexion  # noqa: PLC0415
+    for cli in ([cliente] if cliente else meta_conexion.clientes()):
+        try:
+            cuentas.sin_nombre_de_no_elegidas(cli)
+        except Exception as e:  # noqa: BLE001
+            log.warning("meta limpieza: no se quitaron nombres de aprendizajes (%s)", type(e).__name__)
+            fallos.append(type(e).__name__)
+    for cli, act in huerfanas:
+        try:
+            con_r2 = datos.anuncios_con_miniatura_r2(cli, act)
+            filas += datos.borrar_huerfanas(cli, act)
+            if con_r2 and cuentas.cuenta(cli, act) is None:       # si la volvieron a elegir, sus miniaturas se quedan
+                fallos += miniaturas.borrar(cli, con_r2)
+        except Exception as e:  # noqa: BLE001 — una cuenta que falla no frena a las demás
+            log.warning("meta limpieza: una cuenta soltada no se barrió (%s)", type(e).__name__)
+            fallos.append(type(e).__name__)
+    try:
+        analisis_huerfanos = sorted(tw_datos.cuentas_meta_huerfanas(cliente))
+    except Exception as e:  # noqa: BLE001
+        log.warning("meta limpieza: no se pudieron leer los análisis por barrer (%s)", type(e).__name__)
+        analisis_huerfanos = []
+        fallos.append(type(e).__name__)
+    for cli, act in analisis_huerfanos:
+        try:
+            copiadas = tw_datos.borrar_analisis_meta(cli, [act], solo_no_elegidas=True)
+            filas += len(copiadas)
+            if copiadas:
+                fallos += creativo.borrar_copias(cli, copiadas)[1]
+        except Exception as e:  # noqa: BLE001
+            log.warning("meta limpieza: unos análisis de una cuenta soltada no se borraron (%s)", type(e).__name__)
+            fallos.append(type(e).__name__)
+    return filas, fallos
+
+
 def soltar(cliente):
-    """Borra las métricas copiadas de las cuentas del proyecto y las deja libres para otro proyecto
-    (`cuentas.elegir(cliente, [])`, que se lleva también los análisis «Cómo mejorarlo» de sus anuncios de fuente Meta y,
-    después de esas filas, la imagen y el video que copiaron a R2), sus evaluaciones con IA (guardan nombres y métricas
+    """Suelta las cuentas del proyecto (`cuentas.elegir(cliente, [])`: dejan de mostrarse y quedan libres para otro
+    proyecto al instante, sus análisis «Cómo mejorarlo» de fuente Meta se borran con sus copias en R2 y sus métricas
+    copiadas las borra por lotes la limpieza que encola, en los minutos siguientes), borra sus evaluaciones con IA
+    (guardan nombres y métricas
     de anuncios de Meta; el gasto queda en `gasto`), las miniaturas que esas evaluaciones copiaron a R2 y el nombre del
     anuncio de los aprendizajes guardados desde un análisis de Meta (PND-295: la lección se queda).
 
@@ -26,8 +79,8 @@ def soltar(cliente):
 
     fallo = None
     try:
-        quitadas = cuentas.elegir(cliente, [])
-        if quitadas.get("fallos_r2"):          # las filas ya se borraron; quedaron copias en R2 (S1)
+        quitadas = cuentas.elegir(cliente, [])   # las cuentas al instante; sus métricas, la limpieza que encola
+        if quitadas.get("fallos_r2"):          # los análisis ya se borraron; quedaron copias en R2 (S1)
             fallo = quitadas["fallos_r2"][0]
     except Exception as e:  # noqa: BLE001 — la desconexión no se deshace por esto
         log.warning("meta rendimiento: no se pudieron borrar las métricas copiadas de %s (%s)", cliente,

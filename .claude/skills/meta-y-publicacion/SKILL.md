@@ -128,4 +128,6 @@ prometen que quitar la conexión borra las métricas copiadas de Meta. Hasta aho
 saltado. Ahora las dos lo hacen por sí solas (`meta_conexion.soltar_copias` → `meta_rendimiento.soltar.soltar`, que
 nunca lanza) y devuelven un `meta_conexion.Soltado`: verdadero como antes (había conexión / estaba asignado) y con
 `fallo` = el tipo del error si algo no se pudo borrar; `meta_agencia.desconectar` devuelve `fallos` por proyecto. La
-ruta solo avisa (`dashboard._avisar_soltura`). `_borrar_crudo` (el que usa `desasignar` por dentro) no suelta nada.
+ruta solo avisa (`dashboard._avisar_soltura`). Desde la ronda 2 (2026-10-15) las cuentas se sueltan al instante y las
+métricas copiadas las borra en los minutos siguientes la limpieza que se encola (`meta_rend_limpiar` del proyecto;
+skill `meta-rendimiento`); `/privacidad` y `/eliminar-datos` lo dicen así. `_borrar_crudo` (el que usa `desasignar` por dentro) no suelta nada.

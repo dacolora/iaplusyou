@@ -125,11 +125,14 @@ def test_soltar_la_cuenta_borra_sus_copias_de_r2_despues_de_las_filas(r2):
     analisis.borrar_claves = _borrar
     try:
         r = cuentas.elegir(CLI, [])
+        assert r["quitadas"] == [ACT] and r["fallos_r2"] == [] and r2["borradas"] == []   # la limpieza las borra
+        from meta_rendimiento import soltar
+        filas, fallos = soltar.barrer(CLI)                    # lo que corre `meta_rend_limpiar` del proyecto
     finally:
         analisis.borrar_claves = analisis_borrar
-    assert r["quitadas"] == [ACT] and r["fallos_r2"] == []
+    assert filas > 0 and fallos == []
     assert sorted(r2["borradas"]) == sorted([miniaturas.clave(CLI, "11"), miniaturas.clave(CLI, "22")])
-    assert filas_al_borrar == [0]
+    assert filas_al_borrar == [0]                             # R2 después de las filas
 
 
 def test_la_copia_diaria_las_sube_y_la_tarjeta_muestra_la_de_r2(r2, monkeypatch):

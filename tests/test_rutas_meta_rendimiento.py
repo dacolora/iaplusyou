@@ -323,15 +323,15 @@ def test_guardar_cuentas_si_falla_al_quitar_avisa_y_la_cuenta_sigue(conectado, m
     monkeypatch.setattr(conectado["dashboard"].meta_conexion, "listar_activos",
                         lambda t: _activos((A, "HappyFlops Norway"), (B, "HappyFlops Sweden")))
 
-    def falla(con, cliente, act):
+    def falla(con, act):
         raise RuntimeError("disco lleno")
-    monkeypatch.setattr(cuentas, "_borrar_copias", falla)
+    monkeypatch.setattr(cuentas, "_dueno", falla)        # falla dentro de la transacción de la lista
     r = conectado["c"].post("/cliente/acme/meta-rendimiento/cuentas", data={"cuenta": [A]})
     assert r.status_code == 302
     # PND-206: `elegir` es una sola transacción; si quitar falla, la nueva tampoco entra y nada se encola.
     assert cuentas.ids("acme") == [B]
     assert any("todo sigue como estaba, inténtalo de nuevo" in m for m in _flashes(conectado["c"]))
-    assert _tareas() == []
+    assert _tareas() == [] and _tareas("meta_rend_limpiar") == []
 
 
 def test_error_de_meta_al_listar_sin_token(conectado, monkeypatch):
@@ -699,9 +699,43 @@ def test_desconectar_meta_borra_las_copias_y_deja_libres_las_cuentas(conectado, 
     monkeypatch.setattr(mc, "borrar", lambda c: llamadas.append(c) or borrar(c))
     r = conectado["c"].post("/cliente/acme/meta/desconectar")
     assert r.status_code == 302 and llamadas == ["acme"]
-    assert cuentas.ids("acme") == [] and _filas_copiadas() == 0
+    # Ronda 2 de PND-206/207: las cuentas se sueltan al instante y las métricas las borra la limpieza encolada.
+    assert cuentas.ids("acme") == [] and _filas_copiadas() > 0
+    _limpiar("acme")
+    assert _filas_copiadas() == 0
     # Las cuentas quedaron libres: otro proyecto ya puede leerlas.
     assert cuentas.elegir("otro", [{"id": A, "name": "HappyFlops Norway"}])["agregadas"] == [A]
+
+
+def _limpiar(cliente):
+    """Lo que corre el worker con la limpieza que encoló soltar las cuentas (ronda 2 de PND-206/207)."""
+    from tareas import meta_rendimiento as tareas_mr
+    tarea, = _tareas("meta_rend_limpiar")
+    assert tarea["job_id"] == tareas_mr.job_id_limpieza(cliente) and tarea["cliente"] == cliente
+    tareas_mr.meta_rend_limpiar({"payload": tarea["payload"]})
+
+
+def test_quitar_una_cuenta_la_deja_de_mostrar_al_instante_aunque_sus_copias_sigan(conectado, monkeypatch):
+    """Ronda 2 de PND-206/207 (quien orquesta, 2026-10-15): `elegir` ya no borra copias dentro de su transacción; lo
+    que la persona ve tiene que dejar de mostrar la cuenta quitada en el mismo momento, aunque sus filas sigan en la
+    base hasta que corre la limpieza."""
+    _sembrar()
+    monkeypatch.setattr(conectado["dashboard"].meta_conexion, "listar_activos",
+                        lambda t: _activos((A, "HappyFlops Norway"), (B, "HappyFlops Sweden")))
+    antes = conectado["c"].get("/cliente/acme/rendimiento/panel").get_data(as_text=True)
+    assert "Video gana" in antes and "Campaña Otoño" in antes
+    conectado["c"].post("/cliente/acme/meta-rendimiento/cuentas", data={"cuenta": [B]})
+    assert cuentas.ids("acme") == [B] and _filas_copiadas() > 0           # las copias de A siguen, por ahora
+    despues = conectado["c"].get("/cliente/acme/rendimiento/panel").get_data(as_text=True)
+    for de_a in ("Video gana", "Campaña Otoño", "Conjunto Mujeres", "HappyFlops Norway"):
+        assert de_a not in despues, de_a
+    assert datos.medios_anuncios("acme", ["gana"]) == {}                   # ni la evaluación con IA las usa
+    _limpiar("acme")
+    with db.conectar() as con:
+        assert con.execute(sa.select(sa.func.count()).select_from(db.meta_anuncio_dia).where(
+            db.meta_anuncio_dia.c.ad_account_id == A)).scalar() == 0
+        assert con.execute(sa.select(sa.func.count()).select_from(db.meta_anuncio_dia).where(
+            db.meta_anuncio_dia.c.ad_account_id == B)).scalar() > 0
 
 
 def _evaluar(cliente):
@@ -751,9 +785,9 @@ def test_si_falla_borrar_las_copias_las_evaluaciones_se_borran_igual(conectado, 
     _sembrar()
     e = _evaluar("acme")
 
-    def falla(con, cliente, act):
+    def falla(cliente, elegidas, usuario=None):
         raise RuntimeError(f"disco lleno con {TOKEN}")
-    monkeypatch.setattr(cuentas, "_borrar_copias", falla)
+    monkeypatch.setattr(cuentas, "elegir", falla)
     _desconectar(conectado, monkeypatch)
     assert datos.evaluacion("acme", e) is None
     mensajes = _flashes(conectado["c"])
@@ -770,6 +804,7 @@ def test_si_falla_borrar_las_evaluaciones_las_copias_se_borran_igual_y_se_avisa_
         raise ValueError(f"base bloqueada con {TOKEN}")
     monkeypatch.setattr(datos, "borrar_evaluaciones", falla)
     _desconectar(conectado, monkeypatch)
+    _limpiar("acme")
     assert cuentas.ids("acme") == [] and _filas_copiadas() == 0           # lo de las cuentas no se saltó
     assert datos.evaluacion("acme", e) is not None                         # y la evaluación se reintenta después
     mensajes = _flashes(conectado["c"])
@@ -785,9 +820,9 @@ def test_si_borrar_las_copias_falla_la_desconexion_se_queda_y_se_avisa(conectado
     borrar = mc.borrar     # la de verdad (PND-207: ella misma borra lo copiado), sobre la carpeta temporal
     monkeypatch.setattr(mc, "borrar", lambda c: llamadas.append(c) or borrar(c))
 
-    def falla(con, cliente, act):
+    def falla(cliente, elegidas, usuario=None):
         raise RuntimeError(f"disco lleno con {TOKEN}")
-    monkeypatch.setattr(cuentas, "_borrar_copias", falla)
+    monkeypatch.setattr(cuentas, "elegir", falla)
     r = conectado["c"].post("/cliente/acme/meta/desconectar")
     assert r.status_code == 302 and llamadas == ["acme"]
     mensajes = _flashes(conectado["c"])

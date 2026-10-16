@@ -407,12 +407,16 @@ def test_pnd206_quitar_la_cuenta_a_media_copia_no_deja_copias_huerfanas(cuenta, 
         r = pedir(edge, token, params, *a, **k)
         if not soltada and es_el_momento(edge, params or {}):
             soltada.append(cuentas.elegir(CLI, []))
+            soltada.append(_filas_de_la_cuenta())         # lo copiado hasta que se soltó: lo borra la limpieza
         return r
     monkeypatch.setattr(sync.graph, nombre, y_se_suelta)
     r = sync.sincronizar(CLI, ACT, "tok", hoy=HOY)
     assert soltada and soltada[0]["quitadas"] == [ACT]
     assert r["omitida"] is True
-    assert cuentas.cuenta(CLI, ACT) is None and _filas_de_la_cuenta() == 0
+    assert cuentas.cuenta(CLI, ACT) is None and _filas_de_la_cuenta() == soltada[1]   # después, nada más se escribió
+    from meta_rendimiento import soltar
+    soltar.barrer(CLI)                                     # la limpieza que encoló `elegir`
+    assert _filas_de_la_cuenta() == 0
 
 
 def test_pnd199_una_campana_que_dejo_de_entregar_pierde_su_alcance(cuenta, monkeypatch):

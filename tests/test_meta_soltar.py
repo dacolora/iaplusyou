@@ -41,14 +41,29 @@ def _quedan(cliente):
                    for t in (db.meta_cuenta, db.meta_cuenta_dia, db.tw_analisis, db.meta_evaluacion))
 
 
+def _limpiar(cliente):
+    """Lo que corre el worker con la limpieza que encoló soltar las cuentas (`meta_rend_limpiar` del proyecto)."""
+    import sqlalchemy as sa
+
+    import db
+    from tareas import meta_rendimiento as tareas_mr
+    with db.conectar() as con:
+        payload, = con.execute(sa.select(db.tarea.c.payload).where(
+            db.tarea.c.job_id == tareas_mr.job_id_limpieza(cliente))).scalars()
+    tareas_mr.meta_rend_limpiar({"payload": payload})
+
+
 def test_borrar_la_conexion_propia_borra_lo_copiado_de_ese_proyecto(entorno, r2):  # noqa: F811
     _copias("acme", NORWAY)
     _copias("otro", SWEDEN)
     mc.guardar("acme", {"token": "TOKEN-PROPIO", "ad_account_id": "act_1", "page_id": "9"})
     r = mc.borrar("acme")
     assert r and r.fallo is None and mc.cargar("acme") is None
-    assert _quedan("acme") == 0 and _quedan("otro") == 4
+    # Al instante: la cuenta, sus análisis y sus evaluaciones; sus métricas, con la limpieza encolada (ronda 2).
+    assert _quedan("acme") == 1 and _quedan("otro") == 4
     assert r2                                     # sus copias en R2, después de las filas
+    _limpiar("acme")
+    assert _quedan("acme") == 0 and _quedan("otro") == 4
 
 
 def test_desasignar_borra_lo_copiado_de_ese_proyecto(entorno, r2):  # noqa: F811
@@ -58,6 +73,7 @@ def test_desasignar_borra_lo_copiado_de_ese_proyecto(entorno, r2):  # noqa: F811
     mc.guardar("acme", {"modo": "agencia", "ad_account_id": "act_1", "page_id": "p1"}, permitir_agencia=True)
     r = ma.desasignar("acme")
     assert r and r.fallo is None and mc.modo("acme") == "propia"
+    _limpiar("acme")
     assert _quedan("acme") == 0 and _quedan("otro") == 4
 
 
@@ -74,6 +90,7 @@ def test_desconectar_la_agencia_suelta_cada_proyecto_asignado(entorno, r2):  # n
     _copias("otro", SWEDEN)
     mc.guardar("acme", {"modo": "agencia", "ad_account_id": "act_1", "page_id": "p1"}, permitir_agencia=True)
     assert ma.desconectar() == {"habia": False, "desasignados": 1, "fallos": {}}
+    _limpiar("acme")
     assert _quedan("acme") == 0 and _quedan("otro") == 4
 
 
@@ -81,9 +98,9 @@ def test_si_no_se_puede_borrar_lo_copiado_la_desconexion_se_queda_y_dice_el_tipo
     from meta_rendimiento import cuentas
     _copias("acme", NORWAY)
 
-    def falla(con, cliente, act):
+    def falla(cliente, elegidas, usuario=None):
         raise RuntimeError("disco lleno TOKEN-PROPIO")
-    monkeypatch.setattr(cuentas, "_borrar_copias", falla)
+    monkeypatch.setattr(cuentas, "elegir", falla)
     mc.guardar("acme", {"token": "TOKEN-PROPIO", "ad_account_id": "act_1"})
     r = mc.borrar("acme")
     assert r and r.fallo == "RuntimeError" and mc.cargar("acme") is None
@@ -96,3 +113,26 @@ def test_en_modo_agencia_borrar_rechaza_sin_soltar_nada(entorno, r2):  # noqa: F
     with pytest.raises(mc.ModoAgenciaError):
         mc.borrar("acme")
     assert _quedan("acme") == 4
+
+
+def test_la_limpieza_del_proyecto_vuelve_a_mirar_si_se_solto_otra_cuenta_mientras_barria(entorno, r2, monkeypatch):  # noqa: F811
+    """Auditoría de la ronda 2: mientras la limpieza del proyecto corre, otra cuenta soltada no encola otra (mismo
+    job_id). Al terminar vuelve a mirar y la barre también."""
+    from meta_rendimiento import cuentas, soltar
+    from tareas import meta_rendimiento as tareas_mr
+    _copias("acme", NORWAY)
+    _copias("acme", SWEDEN)
+    cuentas.elegir("acme", [SWEDEN])
+    barrer, vueltas = soltar.barrer, []
+
+    def _y_suelta_otra(cliente=None):
+        r = barrer(cliente)
+        if not vueltas:
+            cuentas.elegir("acme", [])                     # se suelta Suecia mientras la limpieza corría
+        vueltas.append(r)
+        return r
+    monkeypatch.setattr(tareas_mr.soltar_mod, "barrer", _y_suelta_otra)
+    tareas_mr.meta_rend_limpiar({"payload": {"cliente": "acme"}})
+    # Quedan solo las dos evaluaciones (pagadas: quitar cuentas no las borra; desconectar Meta sí).
+    assert len(vueltas) == 2 and _quedan("acme") == 2
+

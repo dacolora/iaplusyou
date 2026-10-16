@@ -484,21 +484,29 @@ def test_dos_guardados_del_mismo_aprendizaje_dejan_uno(app):  # noqa: F811
     assert len(proyectos.aprendizajes("acme")) == 2
 
 
-def test_pnd295_si_meta_se_desconecta_mientras_se_guarda_el_aprendizaje_no_queda_el_nombre(app, monkeypatch):  # noqa: F811
-    """Auditoría de seguridad (2026-10-15): la ruta lee el análisis y después guarda. Si Meta se desconecta en medio
-    (borra el análisis y ya pasó por los aprendizajes), el que entra después no puede quedarse con el nombre."""
+@pytest.mark.parametrize("como", ["analisis_borrado", "cuenta_soltada"])
+def test_pnd295_si_meta_se_desconecta_mientras_se_guarda_el_aprendizaje_no_queda_el_nombre(app, monkeypatch, como):  # noqa: F811
+    """Auditoría de seguridad (2026-10-15): la ruta lee el análisis y después guarda. Si su cuenta se suelta en medio
+    (ya pasó por los aprendizajes), el que entra después no puede quedarse con el nombre: con el análisis ya borrado, o
+    con la cuenta fuera del proyecto y el análisis todavía ahí (ronda 2: se borra justo después de soltarla)."""
+    from meta_rendimiento import cuentas as meta_cuentas
     from triple_whale import rutas as tw_rutas
     _conectar()
     _sembrar()
     aid = _lista(app)
+    meta_cuentas.elegir("acme", [{"id": "act_77", "name": "Norway"}])
     datos.actualizar_analisis(aid, foto={**datos.analisis_anuncio("acme", aid)["foto"], "fuente": "meta",
-                                         "nombre": "Video Noruega Verano"})
+                                         "nombre": "Video Noruega Verano", "ad_account_id": "act_77"})
     armar = tw_rutas._aprendizaje_de
 
     def _y_se_desconecta(cliente, fila):
         item = armar(cliente, fila)
-        with db.conectar() as con:          # lo que hace `soltar`: el análisis de fuente Meta se va
-            con.execute(db.tw_analisis.delete().where(db.tw_analisis.c.id == aid))
+        if como == "analisis_borrado":      # lo que hace `soltar`: el análisis de fuente Meta se va
+            with db.conectar() as con:
+                con.execute(db.tw_analisis.delete().where(db.tw_analisis.c.id == aid))
+        else:                               # la cuenta ya no es del proyecto; su análisis se borra un instante después
+            with db.conectar() as con:
+                con.execute(db.meta_cuenta.delete().where(db.meta_cuenta.c.ad_account_id == "act_77"))
         return item
     monkeypatch.setattr(tw_rutas, "_aprendizaje_de", _y_se_desconecta)
     app["c"].post(f"/cliente/acme/triple-whale/analisis/{aid}/aprendizaje")

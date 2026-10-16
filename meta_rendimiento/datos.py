@@ -49,8 +49,9 @@ class CuentaSoltada(Exception):
 
 def _exigir_cuenta(con, cliente, act):
     """Dentro de la transacción del escritor: toma el candado de escritura y comprueba que la cuenta siga elegida
-    (`cuentas.bloquear_elegida`); si no, CuentaSoltada. `cuentas.elegir` quita la cuenta y sus copias en una sola
-    transacción, así que no puede colarse entre esta comprobación y la escritura."""
+    (`cuentas.bloquear_elegida`); si no, CuentaSoltada. `cuentas.elegir` quita la cuenta en una transacción con el
+    mismo candado, así que no puede colarse entre esta comprobación y la escritura (sus copias las borra después la
+    limpieza, `soltar.barrer`)."""
     from meta_rendimiento import cuentas  # noqa: PLC0415 — cuentas importa este módulo al borrar copias
     if not cuentas.bloquear_elegida(con, cliente, act):
         raise CuentaSoltada(act)
@@ -347,6 +348,54 @@ def borrar_cuenta(cliente, act, con=None):
             return borrar_cuenta(cliente, act, con=con_)
     for t in (db.meta_cuenta_dia, db.meta_anuncio_dia, db.meta_objeto, db.meta_alcance, db.meta_desglose):
         con.execute(t.delete().where(t.c.cliente == cliente, t.c.ad_account_id == act))
+
+
+# Las tablas con copias de una cuenta (PND-206/207, ronda 2): las que la limpieza barre cuando la cuenta ya no está
+# elegida en su proyecto. Las evaluaciones no: son pagadas y solo se van al desconectar Meta (`borrar_evaluaciones`).
+TABLAS_COPIA = ("meta_cuenta_dia", "meta_anuncio_dia", "meta_objeto", "meta_alcance", "meta_desglose")
+LOTE_BARRIDO = 5000     # filas por transacción al barrer: el candado de escritura de SQLite se suelta entre lotes
+
+
+def _no_elegida(t):
+    """La fila es de una cuenta que NO está elegida en su proyecto (`meta_cuenta`, de `cuentas`)."""
+    c = db.meta_cuenta
+    return ~sa.exists().where(c.c.cliente == t.c.cliente, c.c.ad_account_id == t.c.ad_account_id)
+
+
+def cuentas_huerfanas(cliente=None):
+    """{(cliente, ad_account_id)} con copias en alguna de `TABLAS_COPIA` pero sin la cuenta elegida en ese proyecto: lo
+    que dejó quitar una cuenta o desconectar Meta (desde la ronda 2 de PND-206/207 `cuentas.elegir` ya no borra copias
+    dentro de su transacción), una copia vieja que quedó huérfana antes de PND-206 o un barrido a medias. Con `cliente`,
+    solo las de ese proyecto. Una consulta por tabla."""
+    salida = set()
+    with db.conectar() as con:
+        for nombre in TABLAS_COPIA:
+            t = getattr(db, nombre)
+            q = sa.select(t.c.cliente, t.c.ad_account_id).where(_no_elegida(t)).distinct()
+            if cliente is not None:
+                q = q.where(t.c.cliente == cliente)
+            salida |= {(r.cliente, r.ad_account_id) for r in con.execute(q) if r.ad_account_id}
+    return salida
+
+
+def borrar_huerfanas(cliente, act, lote=LOTE_BARRIDO):
+    """Borra las copias de la cuenta `act` del proyecto `cliente` en `TABLAS_COPIA`, de `lote` en `lote` filas, cada lote
+    en su propia transacción (el candado se suelta entre lotes: la copia de 7 cuentas son decenas de miles de filas y un
+    escritor que espera más de 5 s falla). Cada lote vuelve a mirar, en la misma sentencia, que la cuenta siga sin
+    elegir: si alguien la vuelve a elegir a mitad, se deja de borrar (sus copias nuevas no se tocan). Devuelve cuántas
+    filas borró."""
+    n = 0
+    for nombre in TABLAS_COPIA:
+        t = getattr(db, nombre)
+        while True:
+            ids = (sa.select(t.c.id).where(t.c.cliente == cliente, t.c.ad_account_id == act, _no_elegida(t))
+                   .limit(int(lote)).scalar_subquery())
+            with db.conectar() as con:
+                borradas = con.execute(t.delete().where(t.c.id.in_(ids), _no_elegida(t))).rowcount
+            n += borradas
+            if borradas < lote:
+                break
+    return n
 
 
 def purgar_anuncios(antes_de):
@@ -818,8 +867,9 @@ def medios_anuncios(cliente, ad_ids):
     if not ids:
         return {}
     t = db.meta_objeto
+    # Solo de cuentas elegidas: las copias de una cuenta quitada esperan a la limpieza unos minutos y no se usan más.
     q = sa.select(t.c.objeto_id, t.c.miniatura_url, t.c.video_id).where(
-        t.c.cliente == cliente, t.c.nivel == "anuncio", t.c.objeto_id.in_(ids))
+        t.c.cliente == cliente, t.c.nivel == "anuncio", t.c.objeto_id.in_(ids), ~_no_elegida(t))
     with db.conectar() as con:
         return {r.objeto_id: {"miniatura_url": r.miniatura_url, "video_id": r.video_id} for r in con.execute(q)}
 

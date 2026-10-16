@@ -115,10 +115,11 @@ def pedir_analisis(cliente, alc, a, usuario, *, costo_visto):
     aid = datos.crear_analisis(cliente, alc["tienda_id"], a["canal"], a["ad_id"], alc["desde"], alc["hasta"],
                                a.get("moneda") or alc["config"]["moneda"], foto, pedido_por=usuario)
     if alc.get("fuente") == "meta" and meta_cuentas.dueno(a.get("ad_account_id")) != cliente:
-        # PND-295 (2026-10-12): la cuenta se soltó mientras se pedía. Soltarla borra las filas de fuente Meta de esa
-        # cuenta y DESPUÉS la cuenta (y barre otra vez, `cuentas.elegir`); una fila creada después de eso no la
-        # alcanzaría ninguna suelta futura (solo borran las cuentas que sueltan). Se comprueba DESPUÉS de crearla y
-        # ANTES de encolar: si la cuenta ya no es del proyecto, la fila se borra aquí y no se reserva ni se cobra nada.
+        # PND-295 (2026-10-12): la cuenta se soltó mientras se pedía. Desde la ronda 2 de PND-206 soltarla quita
+        # PRIMERO la cuenta y enseguida borra sus filas de fuente Meta (`cuentas._soltar_quitadas`; lo que quede, la
+        # limpieza). Una fila creada después de ese borrado no la alcanzaría hasta la limpieza: se comprueba DESPUÉS de
+        # crearla y ANTES de encolar; si la cuenta ya no es del proyecto, la fila se borra aquí y no se reserva ni se
+        # cobra nada.
         datos.borrar_analisis(cliente, aid)
         return False, gettext("Esa cuenta de Meta ya no está en el proyecto.")
     try:

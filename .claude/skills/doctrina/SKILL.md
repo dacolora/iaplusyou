@@ -105,7 +105,7 @@ nuevos primero): una línea por ganador o perdedor (`desde_veredicto`: «Ganó e
 para P — CTR 2,1 %, ThruPlay 34 %.» / «Perdió en …: … — motivo. Diagnóstico: …»; gettext, así que sale en el idioma
 del proyecto) o escrita a mano (sección «Aprendizajes del proyecto» al final de Experimentos, `_aprendizajes.html`,
 rutas `apr_agregar`/`apr_quitar`). Desde PND-295 (2026-10-15), desconectar Meta reescribe los guardados desde un
-análisis de un anuncio de Meta (`origen` "meta") sin el nombre del anuncio (`sin_nombre_de_meta` vía
+análisis de un anuncio de Meta (`origen` "meta", con su `ad_account_id` desde la ronda 2; quitar UNA cuenta hace lo mismo con los de esa cuenta y los viejos sin cuenta) sin el nombre del anuncio (`sin_nombre_de_meta` vía
 `proyectos.reescribir_aprendizajes`, el único otro escritor de la lista; skill `meta-rendimiento`). `texto_para_prompt(lista, producto=)` (los del mismo producto primero, 10, entre `<aprendizajes>`) entra
 como DATOS en las ideas de sprint (`contexto_campana["aprendizajes"]`; las cifras del ángulo se verifican contra
 los DATOS SIN aprendizajes), en el guion base (`generar_guion_base(aprendizajes=)`) y en las variantes. La línea

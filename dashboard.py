@@ -1227,8 +1227,10 @@ restringidos en nuestro servidor en la Unión Europea (Hetzner, Núremberg). Sol
 puede leerlos; nunca se muestran en pantalla ni se registran en logs.</p>
 <h3>Cuánto tiempo</h3>
 <p>Mientras el proyecto tenga Meta conectado. Al pulsar «Desconectar» en la plataforma se borran de inmediato
-el token, los identificadores y las métricas copiadas de las cuentas elegidas (gasto, compras, nombres de
-campañas, conjuntos de anuncios y anuncios). También puedes revocar el acceso desde Facebook: Configuración ›
+el token y los identificadores de la conexión; las métricas copiadas de las cuentas elegidas (sus identificadores,
+gasto, compras, nombres de campañas, conjuntos de anuncios y anuncios) dejan de mostrarse al instante y se borran
+normalmente en los minutos siguientes, y a más tardar en 24 horas.
+También puedes revocar el acceso desde Facebook: Configuración ›
 Integraciones de negocio, o Configuración › Apps y sitios web.</p>
 <h3>Eliminación de datos</h3>
 <p>Para que eliminemos todos los datos asociados a tu cuenta de Meta escríbenos a dacoloradog@gmail.com
@@ -1270,8 +1272,9 @@ permissions on our server in the European Union (Hetzner, Nuremberg). Only the p
 can read them; they're never shown on screen or logged.</p>
 <h3>How long</h3>
 <p>As long as the project has Meta connected. Clicking “Disconnect” on the platform immediately deletes
-the token, the identifiers and the metrics copied from the chosen accounts (spend, purchases, and the names of
-campaigns, ad sets and ads). You can also revoke access from Facebook: Settings › Business Integrations,
+the token and the identifiers of the connection; the metrics copied from the chosen accounts (their identifiers,
+spend, purchases, and the names of campaigns, ad sets and ads) stop being shown instantly and are deleted
+usually within minutes, and at the latest within 24 hours. You can also revoke access from Facebook: Settings › Business Integrations,
 or Settings › Apps and Websites.</p>
 <h3>Data deletion</h3>
 <p>For us to delete all the data associated with your Meta account, write to us at dacoloradog@gmail.com
@@ -1338,7 +1341,7 @@ third-party platforms.</p>
 def privacidad():
     """Pública. Es la URL que exige Meta (App Review) y que cualquiera puede leer."""
     return render_template("legal.html", titulo=gettext("Política de privacidad"),
-                           actualizado=gettext("12 de septiembre de 2026"),
+                           actualizado=gettext("15 de octubre de 2026"),
                            cuerpo=_PRIVACIDAD_HTML[str(get_locale())])
 
 
@@ -1357,18 +1360,20 @@ def eliminar_datos():
     escapado, porque este cuerpo se pinta como HTML."""
     cuerpo = {
         "es": """<p>Para eliminar los datos que CREATV Galadsy guarda de tu cuenta de Meta:</p>
-<ol><li>Entra a tu proyecto en {sitio} › FlowMarketing › <strong>Desconectar</strong>: se borran el token,
-los identificadores de tus cuentas publicitarias, Página e Instagram y las métricas copiadas de las cuentas elegidas
-(gasto, compras, nombres de campañas, conjuntos de anuncios y anuncios) al instante. Los aprendizajes que guardaste a
-propósito desde el análisis de un anuncio de Meta se conservan, pero sin el nombre del anuncio.</li>
+<ol><li>Entra a tu proyecto en {sitio} › FlowMarketing › <strong>Desconectar</strong>: se borran al instante el
+token y los identificadores de la conexión (cuenta publicitaria, Página e Instagram); las métricas copiadas de las
+cuentas elegidas (sus identificadores, gasto, compras, nombres de campañas, conjuntos de anuncios y anuncios) dejan de
+mostrarse al instante y se borran normalmente en los minutos siguientes, y a más tardar en 24 horas. Los aprendizajes que guardaste a propósito desde el análisis de un anuncio de Meta
+se conservan, pero sin el nombre del anuncio.</li>
 <li>Si prefieres, escribe a dacoloradog@gmail.com con el nombre de tu proyecto y lo eliminamos en máximo 7 días,
 con confirmación por correo.</li></ol>
 <p>También puedes revocar el acceso desde Facebook: Configuración › Apps y sitios web › CREATV Galadsy › Eliminar.</p>""",
         "en": """<p>To delete the data CREATV Galadsy stores about your Meta account:</p>
-<ol><li>Go to your project at {sitio} › FlowMarketing › <strong>Disconnect</strong>: the token,
-the identifiers of your ad accounts, Page and Instagram, and the metrics copied from the chosen accounts
-(spend, purchases, and the names of campaigns, ad sets and ads) are deleted instantly. The learnings you saved on
-purpose from the analysis of a Meta ad are kept, but without the ad's name.</li>
+<ol><li>Go to your project at {sitio} › FlowMarketing › <strong>Disconnect</strong>: the token and
+the identifiers of the connection (ad account, Page and Instagram) are deleted instantly; the metrics copied from the
+chosen accounts (their identifiers, spend, purchases, and the names of campaigns, ad sets and ads) stop being shown
+instantly and are deleted usually within minutes, and at the latest within 24 hours. The learnings you saved on purpose from the analysis of a Meta ad are kept, but without the
+ad's name.</li>
 <li>If you prefer, write to dacoloradog@gmail.com with your project's name and we'll delete it within 7 days,
 confirmed by email.</li></ol>
 <p>You can also revoke access from Facebook: Settings › Apps and Websites › CREATV Galadsy › Remove.</p>""",

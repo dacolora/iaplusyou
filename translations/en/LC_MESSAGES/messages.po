@@ -5265,6 +5265,12 @@ msgstr "Copy the title"
 msgid "Copiar enlaces"
 msgstr "Copy links"
 
+#, python-format
+msgid "Copias de cuentas soltadas: %(num)s fila borrada."
+msgid_plural "Copias de cuentas soltadas: %(num)s filas borradas."
+msgstr[0] "Copies of released accounts: %(num)s row deleted."
+msgstr[1] "Copies of released accounts: %(num)s rows deleted."
+
 msgid "Copy del anuncio"
 msgstr "Ad copy"
 

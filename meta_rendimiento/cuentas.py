@@ -4,6 +4,7 @@ Aparte de la cuenta única de `meta.json` (la que lanza experimentos). Una cuent
 solo puede estar en un proyecto: el índice único `uq_meta_cuenta_act` lo
 garantiza y `elegir` la rechaza antes, así los datos de un cliente nunca
 aparecen en otro."""
+import logging
 import re
 
 import sqlalchemy as sa
@@ -13,6 +14,7 @@ import db
 from triple_whale import datos as tw_datos
 from triple_whale import paises
 
+log = logging.getLogger("creatv.meta_rendimiento.cuentas")
 _C = db.meta_cuenta.c
 MAX_POR_PROYECTO = 20      # tope de cuentas que lee un proyecto (ruling R20): la copia es un hilo y comparte el límite de Meta
 _CAMPOS = {"nombre", "moneda", "zona_horaria", "pais", "estado", "error", "ultima_copia"}
@@ -79,16 +81,6 @@ def dueno(ad_account_id):
         return con.execute(sa.select(_C.cliente).where(_C.ad_account_id == normalizar_id(ad_account_id))).scalar()
 
 
-def _borrar_copias(con, cliente, ad_account_id):
-    """Borra, dentro de la transacción `con` de `elegir`, las copias de la cuenta: sus métricas (`datos.borrar_cuenta`)
-    y, desde S1 (revisión final de Rendimiento E2, 2026-10-10), los análisis «Cómo mejorarlo» de sus anuncios de fuente
-    Meta, que guardan nombres, cifras, título y copy copiados de Meta. Devuelve [(analisis_id, ad_id)] de esos análisis:
-    sus copias en R2 se borran al final de `elegir`, después del commit."""
-    from meta_rendimiento import datos  # noqa: PLC0415 — datos importa cuentas en sus pruebas
-    datos.borrar_cuenta(cliente, ad_account_id, con=con)
-    return tw_datos.borrar_analisis_meta(cliente, [ad_account_id], con=con)
-
-
 def _dueno(con, act):
     return con.execute(sa.select(_C.cliente).where(_C.ad_account_id == act)).scalar()
 
@@ -104,16 +96,24 @@ def bloquear_elegida(con, cliente, ad_account_id):
 def elegir(cliente, elegidas, usuario=None):
     """Deja en el proyecto exactamente `elegidas` (las de otro proyecto se rechazan). Devuelve {"agregadas",
     "quitadas", "rechazadas", "fallos_r2"}: `fallos_r2`, el tipo de cada copia en R2 de un análisis «Cómo mejorarlo»
-    o de una miniatura (PND-194) de una cuenta quitada que no se pudo borrar (S1; quien llama avisa).
+    de una cuenta quitada que no se pudo borrar (S1; quien llama avisa).
 
-    PND-206 (decisión 2026-10-13): todo en UNA transacción que toma el candado de escritura ANTES de leer qué cuentas
-    tiene el proyecto. Agregar, quitar y borrar las copias de las quitadas (métricas y análisis de fuente Meta) pasa
-    entero o no pasa: si algo falla, el proyecto se queda como estaba y la excepción sube (quien llama avisa y la
-    persona reintenta). Mientras dura, una copia que quiere escribir espera, y después ve que su cuenta ya no está
-    (`bloquear_elegida`) y no escribe. Las copias en R2 se borran DESPUÉS del commit: si la transacción no se
-    confirmó, sus filas siguen y sus imágenes también."""
+    PND-206 (decisión 2026-10-13): la LISTA de cuentas cambia en UNA transacción que toma el candado de escritura ANTES
+    de leer qué cuentas tiene el proyecto: agregar y quitar pasan enteros o no pasan (si algo falla, el proyecto se
+    queda como estaba y la excepción sube). Ronda 2 (quien orquesta, 2026-10-15): esa transacción es CORTA y no borra
+    copias: borrar las de 7 cuentas dentro del candado lo tenía segundos y otro escritor falla a los 5. Al quitar una
+    cuenta, en cuanto la transacción se confirma:
+    - nada la muestra: toda lectura de la pestaña sale de las cuentas elegidas (`cuentas.listar`) y una copia en curso
+      deja de escribir (`bloquear_elegida`);
+    - se borran sus análisis «Cómo mejorarlo» de fuente Meta (pocas filas, se ven por id) y después sus copias en R2;
+    - los aprendizajes guardados desde un anuncio de esa cuenta (y los viejos sin cuenta) pierden el nombre del
+      anuncio (`_sin_nombre_en_aprendizajes`);
+    - se encola la limpieza (`meta_rend_limpiar` del proyecto, `tareas.meta_rendimiento.encolar_limpieza`), que borra
+      por lotes sus métricas copiadas y las miniaturas que subió a R2 en los minutos siguientes
+      (`meta_rendimiento.soltar.barrer`). Si algo de esto falla se anota con su tipo: la limpieza vuelve a barrer
+      las copias y los análisis, y a quitar el nombre de los aprendizajes que dicen su cuenta."""
     nuevas = {normalizar_id(c["id"]): c for c in elegidas or [] if c.get("id")}
-    agregadas, rechazadas, copiadas, miniaturas = [], [], [], []
+    agregadas, rechazadas = [], []
     ahora = db.ahora()
     with db.conectar() as con:
         con.execute(db.meta_cuenta.update().where(_C.cliente == cliente).values(actualizado_en=_C.actualizado_en))
@@ -133,21 +133,63 @@ def elegir(cliente, elegidas, usuario=None):
             (agregadas if r.rowcount == 1 else rechazadas).append(act)
         quitadas = sorted(actuales - set(nuevas))
         for act in quitadas:
-            # PND-194: las miniaturas que la copia subió a R2 salen de las filas de sus anuncios: se leen antes.
-            from meta_rendimiento import datos  # noqa: PLC0415 — datos importa cuentas en sus pruebas
-            miniaturas += datos.anuncios_con_miniatura_r2(cliente, act, con=con)
-            copiadas += _borrar_copias(con, cliente, act) or []
             con.execute(db.meta_cuenta.delete().where(_C.cliente == cliente, _C.ad_account_id == act))
-    fallos_r2 = []
-    if copiadas:
-        # S1: las copias en R2 de los análisis ya borrados, con un solo cliente de R2. `borrar_copias` nunca lanza y
-        # anota lo que R2 no borró en `storage.r2_pendientes` para el reintento diario.
-        from meta_rendimiento import creativo  # noqa: PLC0415 — tardío: creativo carga Graph, R2 y triple_whale
-        _, fallos_r2 = creativo.borrar_copias(cliente, copiadas)
-    if miniaturas:
-        from meta_rendimiento import miniaturas as copias_miniaturas  # noqa: PLC0415 — tardío, como creativo
-        fallos_r2 = list(fallos_r2) + copias_miniaturas.borrar(cliente, miniaturas)
+    fallos_r2 = _soltar_quitadas(cliente, quitadas) if quitadas else []
     return {"agregadas": agregadas, "quitadas": quitadas, "rechazadas": rechazadas, "fallos_r2": fallos_r2}
+
+
+def _soltar_quitadas(cliente, quitadas):
+    """Lo que pasa en cuanto se confirma que `quitadas` ya no están en el proyecto (ver `elegir`). Nunca lanza: la
+    lista de cuentas ya cambió y la limpieza vuelve a barrer. Devuelve los `fallos_r2` de los análisis."""
+    fallos_r2 = []
+    try:
+        copiadas = tw_datos.borrar_analisis_meta(cliente, quitadas, solo_no_elegidas=True)
+        if copiadas:
+            from meta_rendimiento import creativo  # noqa: PLC0415 — tardío: creativo carga Graph, R2 y triple_whale
+            _, fallos_r2 = creativo.borrar_copias(cliente, copiadas)    # nunca lanza; lo que falla va a r2_pendientes
+    except Exception as e:  # noqa: BLE001
+        log.warning("meta cuentas %s: no se borraron los análisis de las cuentas quitadas (%s)", cliente,
+                    type(e).__name__)
+    try:
+        _sin_nombre_en_aprendizajes(cliente, quitadas)
+    except Exception as e:  # noqa: BLE001
+        log.warning("meta cuentas %s: no se quitaron los nombres de los aprendizajes (%s)", cliente, type(e).__name__)
+    try:
+        from tareas import meta_rendimiento as tareas_mr  # noqa: PLC0415 — tareas importa este módulo
+        tareas_mr.encolar_limpieza(cliente)
+    except Exception as e:  # noqa: BLE001
+        log.warning("meta cuentas %s: no se encoló la limpieza (%s)", cliente, type(e).__name__)
+    return fallos_r2
+
+
+def sin_nombre_de_no_elegidas(cliente):
+    """Lo que reintenta la limpieza (`soltar.barrer`, auditoría de la ronda 2): los aprendizajes de un anuncio de Meta
+    que dicen de qué cuenta son y esa cuenta ya no está elegida en el proyecto pierden el nombre del anuncio (si al
+    quitarla falló `_sin_nombre_en_aprendizajes`). Los viejos sin cuenta solo se tocan al quitar una cuenta."""
+    import idiomas  # noqa: PLC0415
+    import proyectos  # noqa: PLC0415
+    from doctrina import aprendizajes  # noqa: PLC0415
+    elegidas = set(ids(cliente))
+
+    def cambiar(item):
+        act = item.get("ad_account_id") if isinstance(item, dict) else None
+        return aprendizajes.sin_nombre_de_meta(item) if act and act not in elegidas else item
+    with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+        return proyectos.reescribir_aprendizajes(cliente, cambiar)
+
+
+def _sin_nombre_en_aprendizajes(cliente, quitadas):
+    """Quien orquesta, 2026-10-15 (ronda 2 de PND-295): quitar UNA cuenta también le quita el nombre del anuncio a los
+    aprendizajes guardados desde un análisis de esa cuenta; los viejos que no dicen de qué cuenta son también lo pierden
+    (más vale de más que de menos). En el idioma del proyecto, como se guardan."""
+    import functools  # noqa: PLC0415
+
+    import idiomas  # noqa: PLC0415
+    import proyectos  # noqa: PLC0415
+    from doctrina import aprendizajes  # noqa: PLC0415
+    with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+        proyectos.reescribir_aprendizajes(cliente, functools.partial(aprendizajes.sin_nombre_de_meta,
+                                                                     cuentas=set(quitadas)))
 
 
 def cambiar_pais(cliente, ad_account_id, pais):
