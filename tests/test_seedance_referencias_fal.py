@@ -345,8 +345,8 @@ def test_un_image_n_suelto_se_vuelve_el_token_pegado_y_uno_inventado_sigue_sin_p
     planos = [{"plano": "plano medio", "accion": "Ana (Image 1) toma Image 2 y mira @Image1", "sonido": "Image 2 cruje"}]
     director._a_tokens_pegados(planos)
     assert planos[0]["accion"] == "Ana (@Image1) toma @Image2 y mira @Image1" and planos[0]["sonido"] == "@Image2 cruje"
-    assert '"Ana@Image1"' in director._system("seedance_ref", "X", 2, 8, "es")
-    assert '"Ana (Image 1)"' in director._system("wan", "X", 2, 8, "es")
+    assert '"the woman@Image1"' in director._system("seedance_ref", "X", 2, 8, "es")      # PND-240: sin nombre propio
+    assert '"the woman (Image 1)"' in director._system("wan", "X", 2, 8, "es")
 
 
 # --- Revisión del guardián de gasto (2026-10-09) ------------------------------------

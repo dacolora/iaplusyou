@@ -372,7 +372,7 @@ def test_periodica_decidir_registrada():
                                  ("materiales_limpiar", 86400),
                                  ("salidas_limpiar", 86400), ("cola_limpiar", 86400), ("db_respaldar", 86400),
                                  ("errores_limpiar", 86400), ("meta_rend_limpiar", 86400),
-                                 ("meta_revisar_acceso", 86400), ("cadena_vigilar", 60),
+                                 ("meta_revisar_acceso", 86400), ("apify_revisar_uso", 21600), ("cadena_vigilar", 60),
                                  ("tw_ganchos_vigilar", 60),
                                  ("cobros_verificar_recargas", 600), ("planes_renovar", 1800)]
 

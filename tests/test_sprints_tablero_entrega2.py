@@ -7,6 +7,8 @@ import json
 
 import pytest
 
+import gastos
+
 from tests.test_rutas_sprints import _con_piezas, app, con_ideas  # noqa: F401
 
 
@@ -266,16 +268,16 @@ def test_precio_de_reintentar_y_regenerar_es_el_del_modelo_de_la_pieza(con_ideas
     creative_flow.actualizar("acme", cfs[iv], modelo="kling_o3_pro")
     datos.actualizar_idea("acme", iv, duracion_s=20)
     piezas = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/piezas").data.decode()
-    # PND-299: «Regenerar» un video vuelve a pasar por el director (US$ 0,05) y lo suma; la imagen no.
-    assert "Regenerar (US$ 2.15)" in piezas and "(US$ 2.15). ¿Seguir?" in piezas
+    # PND-299: «Regenerar» un video vuelve a pasar por el director (US$ 0,11 desde PND-240) y lo suma; la imagen no.
+    assert "Regenerar (US$ 2.21)" in piezas and "(US$ 2.21). ¿Seguir?" in piezas
     assert "Regenerar (US$ 0.09)" in piezas              # la imagen: dos decimales, no «0.093»
     revision = c.get(f"/cliente/acme/sprints/{sid}/revision").data.decode()
     # Idioma (Task 4): el onsubmit de revisión va con `_(...)|tojson` (comillas simples
     # en el atributo, como toda la app); tojson escapa el «¿» a ¿, JSON válido que
     # el navegador decodifica igual — el botón en sí (fuera del tojson) no cambia.
-    assert "Regenerar (USD 2.15)" in revision and "(USD 2.15). \\u00bfSeguir?" in revision
+    assert "Regenerar (USD 2.21)" in revision and "(USD 2.21). \\u00bfSeguir?" in revision
     creative_flow.actualizar("acme", cfs[iv], modelo="modelo_que_ya_no_existe")      # cae al del proyecto
-    assert "Regenerar (US$ 2.05)" in c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/piezas").data.decode()
+    assert "Regenerar (US$ 2.11)" in c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/piezas").data.decode()
     monkeypatch.setattr(flowplus_modelos, "estimate_imagen", lambda *a, **k: {})
     piezas = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/piezas").data.decode()
     assert "Regenerar (precio no disponible)" in piezas and "(precio no disponible). ¿Seguir?" in piezas
@@ -386,7 +388,7 @@ def test_precio_de_regenerar_respeta_el_sonido_de_la_sesion(con_ideas, monkeypat
     con = flowplus_modelos.estimate_video("kling_o3_pro", 15, con_sonido=True)["usd"]
     assert sin < con
     piezas = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/piezas").data.decode()
-    director = 0.05                                                   # PND-299: el director de «Regenerar»
+    director = gastos.TARIFAS["director"]                             # PND-299/240: el director de «Regenerar»
     assert "Regenerar (US$ %.2f)" % (sin + director) in piezas and "Regenerar (US$ %.2f)" % (con + director) not in piezas
 
 
@@ -399,7 +401,7 @@ def test_pnd127_precio_de_regenerar_suma_musica_generada(con_ideas, monkeypatch,
     datos.actualizar_idea('acme', iv, duracion_s=15)
     base = flowplus_modelos.estimate_video('kling_o3_pro', 15, con_sonido=True)['usd']
     html = con_ideas['c'].get(f'/cliente/acme/sprints/{sid}/campanas/{cid}/piezas').data.decode()
-    assert 'Regenerar (US$ %.2f)' % (base + .02 + .05) in html          # + el director (PND-299)
+    assert 'Regenerar (US$ %.2f)' % (base + .02 + gastos.TARIFAS["director"]) in html   # + el director (PND-299)
 
 
 def test_contadores_de_piezas_en_singular_y_plural(con_ideas, monkeypatch, tmp_path):

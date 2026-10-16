@@ -47,10 +47,11 @@ def test_el_plazo_corre_desde_que_se_tiene_el_candado(monkeypatch):
     def tarda_en_dar_el_candado(cliente, fn):
         time.sleep(0.3)
         vistos.append(md._PLAZO.get() is None)
-        return fn({})
+        return fn({"ad_account_id": "act_1"})      # PND-148: el detalle pide cada campaña en su cuenta
 
     monkeypatch.setattr(md, "PLAZO_S", 0.2)
     monkeypatch.setattr(lanzador, "_con_credenciales", tarda_en_dar_el_candado)
+    monkeypatch.setattr(lanzador, "_usar_cuenta", lambda creds, act: None)   # sin configurar Meta de verdad
     llamadas = []
     monkeypatch.setattr(md, "pedir_diario", lambda *a: llamadas.append("diario") or [])
     monkeypatch.setattr(md, "pedir_desglose", lambda *a: llamadas.append("desglose") or [])
