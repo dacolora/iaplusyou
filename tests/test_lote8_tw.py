@@ -108,3 +108,27 @@ def test_pnd149_3_refrescar_limpia_aunque_ya_no_falte_ninguna_tienda(entorno, mo
     monkeypatch.setattr(lz,'_sincronizar_triple_whale',lambda *args: True)
     assert lz.refrescar('acme',eid) == 3
     assert ex.obtener('acme',eid)['extra']['aviso_sin_tienda_tw'] == []
+
+
+def test_pnd222_extra_de_tienda_toma_el_candado_antes_de_leer(conectado, escritor_en_medio):
+    """Regla 5: `actualizar_extra_tienda` reserva la escritura ANTES de leer `extra`; si no, otro escritor que
+    confirma entre la lectura y la escritura (la otra copia, el aviso) pierde su cambio sin que nadie lo vea."""
+    from tests.test_triple_whale_sync import _tienda
+    tid = _tienda()
+    tt.actualizar_extra_tienda('acme', tid, {'backfill_desde': DIA})
+    escritor = escritor_en_medio('SELECT tw_tienda.extra',
+                                 "UPDATE tw_tienda SET extra='{\"gasto_7d\": 9}' WHERE cliente='acme'")
+    tt.actualizar_extra_tienda('acme', tid, {'ultimo_resumen': {'anuncios': 1}})
+    assert escritor['hecho'] and escritor['resultado'] == 'bloqueado: database is locked'
+    assert tt.tienda('acme', tid)['extra'] == {'backfill_desde': DIA, 'ultimo_resumen': {'anuncios': 1}}
+
+
+def test_pnd222_cambiar_ajustes_toma_el_candado_antes_de_leer(conectado, escritor_en_medio):
+    """Regla 5: `cambiar_ajustes` reserva la escritura ANTES de leer los ajustes: un cambio de otro escritor entre la
+    lectura y la escritura se pisaba (y la decisión de borrar las copias se tomaba con datos viejos)."""
+    escritor = escritor_en_medio('SELECT triple_whale.id, triple_whale.moneda',
+                                 "UPDATE triple_whale SET ventana_atribucion='1_day' WHERE cliente='acme'")
+    assert tt.cambiar_ajustes('acme', moneda='EUR') is True
+    assert escritor['hecho'] and escritor['resultado'] == 'bloqueado: database is locked'
+    a = tt.ajustes('acme')
+    assert a['moneda'] == 'EUR' and a['ventana_atribucion'] == '7_days'

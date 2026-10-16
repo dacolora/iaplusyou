@@ -586,3 +586,62 @@ def test_un_error_de_red_en_los_visitantes_de_la_tienda_no_tumba_la_copia(conect
     monkeypatch.setattr(triple_whale, "sql_query", revocada)
     with pytest.raises(triple_whale.ErrorLlave):
         sync.sincronizar("acme", _tienda(), "2026-09-28", "2026-09-28", hoy=HOY)
+
+
+# ------------------------------------------------ PND-219: el aviso de las partes ---
+
+def test_las_partes_que_fallaron_se_nombran_en_palabras_y_en_el_idioma():
+    """PND-219: el aviso pintaba las claves internas (`pixel`, `tienda`…), también en inglés."""
+    import idiomas
+    with idiomas.en_idioma("es"):
+        assert triple_whale.nombres_partes({"tienda": "x", "pixel": "y"}) == "ventas atribuidas (Pixel), totales de la tienda"
+        assert triple_whale.nombres_partes(["visitantes", "creativos", "productos", "rara"]) == \
+            "visitantes nuevos (NVP), productos vendidos, creativos de los anuncios, rara"
+    with idiomas.en_idioma("en"):
+        texto = triple_whale.nombres_partes(list(triple_whale.PARTES_COPIA))
+        for clave in triple_whale.PARTES_COPIA:
+            assert clave not in texto.split(", ")
+        assert "Pixel" in texto and "NVP" in texto and "tienda" not in texto
+    assert triple_whale.nombres_partes(None) == ""
+
+
+def test_la_tarea_dice_las_partes_en_palabras(conectado, monkeypatch):
+    from tareas import triple_whale as t
+    tid = _tienda()
+    monkeypatch.setattr(t.trabajos, "reportar", lambda *a, **k: None)
+    monkeypatch.setattr(t.avisos, "revisar_y_avisar", lambda cliente: None)
+    monkeypatch.setattr(triple_whale, "sql_query", TripleWhaleFalso(ads=[_ad("1", "2026-09-28")],
+                                                                    fallar_todo={"productos"}))
+    monkeypatch.setattr(sync, "rango_pendiente", lambda tienda, hoy: ("2026-09-28", "2026-09-28"))
+    texto = t.tw_sincronizar({"payload": _payload(tid), "job_id": t.job_id_sync("acme", tid)})
+    assert "Sin productos vendidos:" in texto and "Sin productos:" not in texto
+
+
+def test_el_aviso_de_los_visitantes_de_la_tienda_sale_una_sola_vez(conectado, monkeypatch):
+    """PND-219: una cuenta sin `web_analytics_table` fallaba en cada copia y el aviso salía cada 2 horas para siempre.
+    Sale en la primera; vuelve a salir solo si una copia trae los visitantes y después fallan otra vez."""
+    tienda = [{"event_date": "2026-09-28", "revenue": 300, "orders": 4}]
+    falso = TripleWhaleFalso(ads=[_ad("1", "2026-09-28")], tienda=tienda, fallar_todo={"web"})
+    monkeypatch.setattr(triple_whale, "sql_query", falso)
+    r = sync.sincronizar("acme", _tienda(), "2026-09-28", "2026-09-28", hoy=HOY)
+    assert "visitantes" in r["fallos"]
+    extra = triple_whale_tiendas.tienda("acme", _tienda())["extra"]
+    assert extra["aviso_visitantes"] == HOY.isoformat() and "visitantes" in extra["ultimo_resumen"]["fallos"]
+    for _ in range(2):                                      # las copias siguientes fallan igual y callan
+        r = sync.sincronizar("acme", _tienda(), "2026-09-28", "2026-09-28", hoy=HOY)
+        assert r["fallos"] == {}
+        assert triple_whale_tiendas.tienda("acme", _tienda())["extra"]["ultimo_resumen"]["fallos"] == {}
+    # Otro fallo nuevo (los productos) sí se avisa: solo calla el de los visitantes ya avisado.
+    falso.fallar_todo = {"web", "productos"}
+    assert set(sync.sincronizar("acme", _tienda(), "2026-09-28", "2026-09-28", hoy=HOY)["fallos"]) == {"productos"}
+    # Si la tienda misma falla no se sabe nada de los visitantes: la marca sigue.
+    falso.fallar_todo = {"web", "tienda"}
+    sync.sincronizar("acme", _tienda(), "2026-09-28", "2026-09-28", hoy=HOY)
+    assert triple_whale_tiendas.tienda("acme", _tienda())["extra"]["aviso_visitantes"] == HOY.isoformat()
+    # Llegan los visitantes: la marca se va, y un fallo después se vuelve a avisar.
+    falso.fallar_todo = set()
+    falso.web = [{"event_date": "2026-09-28", "unique_visitors": 80, "new_visitors": 40}]
+    sync.sincronizar("acme", _tienda(), "2026-09-28", "2026-09-28", hoy=HOY)
+    assert not triple_whale_tiendas.tienda("acme", _tienda())["extra"].get("aviso_visitantes")
+    falso.fallar_todo = {"web"}
+    assert "visitantes" in sync.sincronizar("acme", _tienda(), "2026-09-28", "2026-09-28", hoy=HOY)["fallos"]

@@ -579,6 +579,10 @@ msgid "%(motor)s · %(n)s caracteres · %(voz)s"
 msgstr "%(motor)s · %(n)s characters · %(voz)s"
 
 #, python-format
+msgid "%(n)s %% o más"
+msgstr "%(n)s %% or more"
+
+#, python-format
 msgid "%(n)s acción(es) con error"
 msgstr "%(n)s action(s) with error"
 
@@ -4820,6 +4824,10 @@ msgstr "With an image"
 msgid "Con los datos del %(desde)s al %(hasta)s; desde entonces cambió."
 msgstr "Based on data from %(desde)s to %(hasta)s; it has changed since."
 
+#, python-format
+msgid "Con menos de %(n)s visitantes no se dice la etapa: el porcentaje engaña."
+msgstr "With fewer than %(n)s visitors there is no stage: the percentage would mislead."
+
 msgid "Con mi propia app de Meta"
 msgstr "With my own Meta app"
 
@@ -6878,6 +6886,9 @@ msgstr "The plan needs a name (up to 60 characters)"
 
 msgid "El plan ya se ofrece a los proyectos que cobran."
 msgstr "The plan is now offered to projects that charge usage."
+
+msgid "El porcentaje de visitantes nuevos dice a quién le llega el anuncio:"
+msgstr "The share of new visitors tells you who the ad is reaching:"
 
 msgid "El porqué"
 msgstr "The reason why"
@@ -21629,6 +21640,9 @@ msgstr "created in Sprints"
 msgid "creativos al mes, si los necesitas"
 msgstr "ad creatives a month, if you need them"
 
+msgid "creativos de los anuncios"
+msgstr "ad creatives"
+
 msgid "cta"
 msgstr "CTA"
 
@@ -21685,6 +21699,10 @@ msgstr "of"
 #, python-format
 msgid "de %(antes)s a %(despues)s por día"
 msgstr "from %(antes)s to %(despues)s per day"
+
+#, python-format
+msgid "de %(desde)s %% a %(hasta)s %%"
+msgstr "%(desde)s %% to %(hasta)s %%"
 
 #, python-format
 msgid "de %(monto)s"
@@ -22785,6 +22803,10 @@ msgstr "best: %(nombre)s"
 msgid "mejora de calidad pagada que no llegó (%(error)s)"
 msgstr "quality upscale paid for but not delivered (%(error)s)"
 
+#, python-format
+msgid "menos de %(n)s %%"
+msgstr "under %(n)s %%"
+
 msgid "mensaje_id inválido."
 msgstr "Invalid mensaje_id."
 
@@ -23239,6 +23261,9 @@ msgstr "product %(id)s: doesn't exist."
 
 msgid "productos"
 msgstr "products"
+
+msgid "productos vendidos"
+msgstr "products sold"
 
 msgid "productos:"
 msgstr "products:"
@@ -23929,6 +23954,9 @@ msgstr "cap"
 msgid "tope alcanzado (%(gasto)s de %(tope)s %(moneda)s); %(motivo)s"
 msgstr "cap reached (%(gasto)s of %(tope)s %(moneda)s); %(motivo)s"
 
+msgid "totales de la tienda"
+msgstr "store totals"
+
 msgid "traducción de firmas copycoders"
 msgstr "copycoders “why it works” translation"
 
@@ -24011,6 +24039,9 @@ msgstr "expired"
 msgid "vendió %(valor)s de %(gasto)s gastados"
 msgstr "sold %(valor)s on %(gasto)s spent"
 
+msgid "ventas atribuidas (Pixel)"
+msgstr "attributed sales (Pixel)"
+
 #, python-format
 msgid "ventas por tienda: %(n)s pedido(s)"
 msgstr "sales by store: %(n)s order(s)"
@@ -24058,6 +24089,9 @@ msgstr "videos"
 
 msgid "videos, imágenes y finales listos"
 msgstr "videos, images and final cuts ready"
+
+msgid "visitantes nuevos (NVP)"
+msgstr "new visitors (NVP)"
 
 msgid "voz"
 msgstr "voice"

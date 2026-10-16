@@ -17,7 +17,9 @@ sitio>)` (bloque con `cache_control`): ideas de sprint (`angulo`+`gancho`+`video
 (`caption`), «Adaptar con IA» (`angulo`+`gancho`), clasificar/sugerir referentes y analizar referencias
 (`clasificar`), avatares y personas sugeridas (`investigar`). El **ángulo** (audiencia, consciencia, sofisticación
 1–5, deseo, promesa única, mecanismo, pruebas con fuente `ficha|comentarios|demostracion`, arranque/`lead`, gancho,
-faltantes) lo decide Claude antes de escribir y `doctrina.validar_angulo` lo limpia (nunca lanza; una corrección —
+faltantes) lo decide Claude antes de escribir y `doctrina.validar_angulo` lo limpia (un campo que llega como dict o
+lista se vuelve texto legible con `_texto`/`_plano`: sus valores separados por «; », sin claves ni corchetes; PND-264,
+2026-10-15, compartido por «Evaluar con IA» de Triple Whale y de Meta, «Cómo mejorarlo» y Sprints; nunca lanza; una corrección —
 en el guion, la misma ronda del guion con errores no bloqueantes—; si la corrección falla por lo que sea, se guarda la
 primera respuesta con `faltantes` «error: …» vía `doctrina.anotar_errores`, que los pone primero para que ninguno se
 corte antes que un faltante de Claude: nunca se pierde lo pagado). Vive en `campana_pieza.extra.angulo`
@@ -31,7 +33,11 @@ localizar no verifica cifras (convierte unidades y precio y el base ya se verifi
 `faltantes`. Sin precio escrito, el precio de la tienda solo entra al guion como `precio_base` si su moneda es la del
 país base; si no, el guion no recibe precio. Vocabulario único:
 `doctrina.CONSCIENCIAS` (el de Nicho; `normalizar_consciencia` traduce el inglés de referentes y
-`referentes.sugerir.NIVEL_A_CONSCIENCIA` se deriva de ahí), `LEADS`, `SOFISTICACIONES`. Nada de esto agrega pantallas
+`referentes.sugerir.NIVEL_A_CONSCIENCIA` se deriva de ahí), `LEADS`, `SOFISTICACIONES`. Claude escribe el arranque y la
+consciencia como los nombra la rebanada `angulo` («problema-solución», «Consciente de la solución»): `normalizar_lead` y
+`normalizar_consciencia` quitan tildes, mayúsculas, guiones y espacios, y el arranque también se acepta en inglés
+(`LEAD_DESDE_INGLES`); la `fuente` de una prueba, sin tildes (PND-308, 2026-10-15: en «Cómo mejorarlo», cuyo system no
+lleva `clasificar`, 4 de 6 respuestas perdían el arranque; `docs/superpowers/evals/2026-10-15-mejorar-lead.md`). Nada de esto agrega pantallas
 ni migraciones (bloque 1 de 4; los bloques 2–4 vienen en sus propios párrafos). Los topes de salida de estos sitios son
 amplios (4 000–16 000 tokens): el pensamiento adaptativo de `claude-sonnet-5` los consume y con topes chicos la
 respuesta llega vacía (prueba real del 2026-09-26).

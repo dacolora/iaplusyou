@@ -376,7 +376,7 @@ def _evaluacion_lista(cliente, eid):
     return fila
 
 
-@bp.post("/evaluacion/<int:eid>/idea/<int:indice>/crear")
+@bp.post(f"/evaluacion/<int(max={AID_MAX}):eid>/idea/<int:indice>/crear")   # PND-189: como B7, 404 y no OverflowError
 def idea_crear(cliente, eid, indice):
     ideas = (_evaluacion_lista(cliente, eid)["resultado"] or {}).get("ideas") or []
     if not 0 <= indice < len(ideas):
@@ -390,7 +390,7 @@ def idea_crear(cliente, eid, indice):
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
 
-@bp.post("/evaluacion/<int:eid>/anuncio/<ref>/referente")
+@bp.post(f"/evaluacion/<int(max={AID_MAX}):eid>/anuncio/<ref>/referente")
 def a_referente(cliente, eid, ref):
     fila = _evaluacion_lista(cliente, eid)
     anuncio = next((a for a in fila["anuncios"] or [] if a.get("ref") == ref), None)

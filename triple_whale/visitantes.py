@@ -22,6 +22,8 @@ UMBRAL_BOF = 40.0          # NVP < 40 %: llega sobre todo a gente que ya la visi
 MIN_VISITANTES = 50        # con menos, un % engaña: «pocos datos», sin etapa
 
 ETAPAS = ("TOF", "MOF", "BOF")
+# Los cortes como se escriben en la explicación que abre el chip (PND-221; global Jinja `nvp_cortes`): «70», no «70.0».
+CORTES = {"tof": f"{UMBRAL_TOF:g}", "bof": f"{UMBRAL_BOF:g}", "minimo": MIN_VISITANTES}
 EXPLICACION = {
     "TOF": N_("Arriba del embudo: la mayoría de las visitas son de gente que no conocía la tienda."),
     "MOF": N_("Mitad del embudo: mezcla de gente nueva y gente que ya visitó la tienda."),

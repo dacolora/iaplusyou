@@ -359,7 +359,8 @@ production. It must work for ANY ad, not only Creatv's: in happyflops only 4 pie
   `data-poll-al-terminar="evento"` and dispatches `trabajo-terminado` instead of reloading (ten analyses would be ten
   reloads); the tab JS (`_tab_rendimiento.html`) repaints only that card. The async «Cómo mejorarlo» never re-POSTs on a failure: it repaints the
   card and shows a message, and paying again takes a fresh click and confirm (rule 1). The analisis routes take
-  `<int(max=2**63-1):aid>` (`rutas.AID_MAX`, B7): a bigger id overflowed SQLite and gave a 500, now a 404. Whole sales
+  `<int(max=2**63-1):aid>` (`rutas.AID_MAX`, B7): a bigger id overflowed SQLite and gave a 500, now a 404; the account
+  evaluation's `idea_crear` and `a_referente` take the same `eid` since PND-189 (2026-10-15). Whole sales
   show without a decimal (`tw_ventas`: «10 ventas», not «10,0»; D2) and «Ya se hizo N piezas con esta mejora» ends
   with the Crear state of the latest one (`panel.ETIQUETAS_PIEZA`, spec §7.1; D3).
 - **Which analysis a card shows (final review A2 and A4, 2026-10-08).** `datos.analisis_de_anuncios` reads ALL rows
@@ -583,9 +584,11 @@ eval `docs/superpowers/evals/2026-10-09-tw-ganchos-y-copy.md`.
   copy can claim urgency or scarcity without a number («Lageret tømmes raskt») and the verifier cannot see it
   (PND-228), and the hook's `por_que` counts toward the check so a guessed figure there blocks a clean hook (PND-233).
   The scene chain still closes a recoverable clip as an error (PND-229; the hooks no longer do, fix C below). The
-  originals count toward the 2 GB quota but «Medios» cannot delete origen `triple_whale` (PND-230). The `|precio` filter
-  keeps showing the cost when the margin read fails in ~25 other templates (PND-231). preparar's own failure path does
-  not show the Crear session's error (PND-234); small robustness items in PND-235. «Cómo mejorarlo» and its batch
+  originals count toward the 2 GB quota and, since PND-230 (2026-10-15), «Medios» deletes them like an upload when no
+  edition uses them (armar downloads the original again if its material is gone). The `|precio` filter
+  keeps showing the cost when the margin read fails in ~25 other templates (PND-231). Since PND-234 (2026-10-15) preparar's own
+  failure path, like the vigilante, gives a row whose clip ran and failed its Crear session's error (`_error_ajeno`)
+  instead of «Algo falló al preparar el gancho…»; small robustness items in PND-235. «Cómo mejorarlo» and its batch
   compare the price seen since 2026-10-15 (PND-236, below). `doctrina.verificar_cifras` does not check
   single-digit figures («en 2 días»), shared with Sprints and Nicho (PND-237). When `SaldoInsuficiente` hits a clip, its
   Crear session, already created, stays orphan in error (PND-238; no money). The 20 000 cap was measured in real
@@ -664,8 +667,14 @@ anuncio es TOF, MOF o BOF. Siempre con el chip `cx.nvp(nuevos, visitantes)` (ski
 - La copia de 90 días del NVP deja la marca `backfill_visitantes` solo si trajo visitantes en todo el rango, o tras
   `sync.MAX_INTENTOS_VISITANTES` (3) copias sin lograrlo (`intentos_visitantes`); un error de red o de límite en
   `web_analytics_table` deja la tienda sin su NVP (`fallos.visitantes`) pero no corta la copia (llave y tienda sí).
+- El aviso «Triple Whale no aceptó la consulta de: …» (macro `copias` de `_tw_secciones.html`) y el texto de la tarea
+  nombran las partes en palabras y en el idioma de quien mira (`triple_whale.PARTES_COPIA` + `nombres_partes`, global
+  Jinja `tw_partes_copia`; PND-219, 2026-10-15: pintaba `pixel`, `tienda`… también en inglés). Una cuenta sin
+  `web_analytics_table` falla en cada copia: `sync` deja `extra.aviso_visitantes` en la primera y desde ahí no pone
+  `visitantes` en `ultimo_resumen.fallos` (el aviso sale una sola vez); la marca se va cuando una copia trae la tienda
+  con sus visitantes (si la tienda misma falla, no cambia). Pruebas en `tests/test_triple_whale_sync.py`.
 
-PND-149(2–6) (2026-10-09, decisión del lote 8): serie_tienda solo resta duplicados de anuncios entre tiendas que tienen fila de tienda ese día; gasto_duplicado conserva su diagnóstico de todos los anuncios. Al refrescar un experimento, se limpian las marcas antiguas/nuevas de países cuya tienda ya está conectada, también si ninguna pieza queda sin tienda. uk al final del dominio da GB. agregar guarda los ajustes del formulario si no hay tiendas (aunque exista la fila); con tiendas conserva los ajustes anteriores. reservar_aviso_sync toma UPDATE sin efecto antes de leer extra/cola y marca ids+creada_en aún vivos en syncs_terminadas: la última reserva el aviso una sola vez aunque ambos hilos sigan vivos hasta volver al worker. actualizar_extra toma el mismo candado antes de leer. tests/test_lote8_tw.py cubre cifras, reconexión, dos finales simultáneos y el ciclo siguiente; sin red. Se dejan (1) países repetidos por tarjeta y (7) ajustes durante copia por decisión; (8) sigue para la primera copia real.
+PND-149(2–6) (2026-10-09, decisión del lote 8): serie_tienda solo resta duplicados de anuncios entre tiendas que tienen fila de tienda ese día; gasto_duplicado conserva su diagnóstico de todos los anuncios. Al refrescar un experimento, se limpian las marcas antiguas/nuevas de países cuya tienda ya está conectada, también si ninguna pieza queda sin tienda. uk al final del dominio da GB. agregar guarda los ajustes del formulario si no hay tiendas (aunque exista la fila); con tiendas conserva los ajustes anteriores. reservar_aviso_sync toma UPDATE sin efecto antes de leer extra/cola y marca ids+creada_en aún vivos en syncs_terminadas: la última reserva el aviso una sola vez aunque ambos hilos sigan vivos hasta volver al worker. actualizar_extra toma el mismo candado antes de leer, y desde PND-222 (2026-10-15) también actualizar_extra_tienda y cambiar_ajustes (UPDATE sin efecto antes del SELECT; pruebas `test_pnd222_*` con `escritor_en_medio`). tests/test_lote8_tw.py cubre cifras, reconexión, dos finales simultáneos y el ciclo siguiente; sin red. Se dejan (1) países repetidos por tarjeta y (7) ajustes durante copia por decisión; (8) sigue para la primera copia real.
 
 **«Cómo mejorarlo» de un anuncio de imagen fija, y su idioma (2026-10-13).** Pedido de Daniel: el análisis de un
 estático salía en español en un proyecto en inglés y proponía «pasar el formato a video»; «Llevar a Crear» abría un

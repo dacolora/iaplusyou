@@ -836,3 +836,36 @@ def test_vigilar_lleva_a_lista_una_final_degradada_con_su_video(entorno):
     _vigilar(entorno)
     g1 = datos.gancho("acme", f1["id"])
     assert g1["estado"] == "lista" and g1["url_final"] == "https://r2.test/final_degradada.mp4"
+
+
+# ------------------------------------- PND-234: si preparar falla, la fila dice el error de su sesión de Crear ---
+
+def test_si_preparar_falla_la_fila_cuyo_clip_fallo_muestra_el_error_de_su_sesion(entorno, monkeypatch):
+    """PND-234: la fila con clip cuya sesión de Crear ya falló (no recuperable) quedaba con «Algo falló al preparar
+    el gancho…» aunque la sesión dijera el motivo real; como en el vigilante, ahora lleva el de la sesión (sin tokens
+    y recortado). Las filas sin clip siguen con el motivo de la preparación."""
+    t = entorno["t"]
+    real_lanzar, real_mover = flowplus_lanzar.lanzar, datos.mover
+    veces = []
+
+    def _lanzar(cliente, cf_id, entry, prioridad=5):
+        ok = real_lanzar(cliente, cf_id, entry, prioridad=prioridad)
+        _sin_tarea(flowplus_lanzar.job_id(cliente, cf_id))                   # el clip corrió y falló enseguida
+        creative_flow.actualizar(cliente, cf_id, estado="error",
+                                 error="WaveSpeed rechazó la imagen de arranque: " + TOKEN)
+        return ok
+
+    def _mover(gid, de, a, **campos):
+        if a == "generando" and not veces:
+            veces.append(gid)
+            raise RuntimeError("database is locked")
+        return real_mover(gid, de, a, **campos)
+    monkeypatch.setattr(t.flowplus_lanzar, "lanzar", _lanzar)
+    monkeypatch.setattr(datos, "mover", _mover)
+    with pytest.raises(RuntimeError):
+        _preparar(entorno)
+    g1, g2, g3 = _filas(entorno)
+    assert g1["estado"] == "error" and g1["error"].startswith("WaveSpeed rechazó la imagen de arranque:")
+    assert "sk-secreto-123" not in g1["error"]
+    assert g2["estado"] == g3["estado"] == "error" and g2["cf_id"] is None
+    assert g2["error"] == "Algo falló al preparar el gancho (RuntimeError)."

@@ -331,6 +331,9 @@ def sincronizar(cliente, tienda_id, desde=None, hasta=None, on_progreso=None, ho
 
     # Los textos de `fallos` quedan en `extra.ultimo_resumen` y se pintan en la pestaña: van con la llave
     # tachada (arriba, `tachar_llave`; auditoría de seguridad, 2026-10-08).
+    extra_previo = tienda.get("extra") or {}
+    # PND-219: una cuenta sin `web_analytics_table` falla en cada copia; el aviso sale una sola vez (`aviso_visitantes`).
+    callar = {"visitantes"} if extra_previo.get("aviso_visitantes") else set()
     resumen = {
         "desde": desde, "hasta": hasta, "tramos": len(lista), "anuncios": len(cuenta["anuncios"]),
         "filas_pixel": cuenta["filas_pixel"], "dias_tienda": cuenta["dias_tienda"],
@@ -338,16 +341,26 @@ def sincronizar(cliente, tienda_id, desde=None, hasta=None, on_progreso=None, ho
         "consultas": {k: ("sin_datos" if fallo.get(k)
                           else (NOMBRES_CONSULTA_PIXEL if k == "pixel" else NOMBRES_CONSULTA)[v])
                       for k, v in indice.items()},
-        "fallos": {k: v for k, v in fallo.items() if v},
+        "fallos": {k: v for k, v in fallo.items() if v and k not in callar},
     }
-    extra_previo = tienda.get("extra") or {}
     previo = extra_previo.get("backfill_desde")
     triple_whale_tiendas.actualizar_tienda(cliente, tienda_id, estado="conectada", error=None,
                                            ultima_sincronizacion=db.ahora())
     triple_whale_tiendas.actualizar_extra_tienda(cliente, tienda_id, {
         "backfill_desde": min(filter(None, (previo, desde))), "ultimo_resumen": resumen,
-        **_marca_visitantes(extra_previo, indice, fallo, hoy)})
+        **_marca_visitantes(extra_previo, indice, fallo, hoy), **_aviso_visitantes(extra_previo, fallo, hoy)})
     return resumen
+
+
+def _aviso_visitantes(extra, fallo, hoy):
+    """La marca de que el fallo de los visitantes de la tienda (`web_analytics_table`) ya se avisó (PND-219): queda en
+    la primera copia que falla y se quita cuando una copia trae la tienda con sus visitantes, así un fallo nuevo
+    después vuelve a avisarse. Si la tienda misma falló, no se sabe nada de los visitantes: no cambia."""
+    if fallo["visitantes"]:
+        return {} if extra.get("aviso_visitantes") else {"aviso_visitantes": hoy.isoformat()}
+    if fallo["tienda"] is None and extra.get("aviso_visitantes"):
+        return {"aviso_visitantes": None}
+    return {}
 
 
 def _marca_visitantes(extra, indice, fallo, hoy):

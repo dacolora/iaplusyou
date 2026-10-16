@@ -408,6 +408,19 @@ def test_borrar_quita_una_grabacion_del_microfono(entorno):
     assert materiales.obtener("acme", g["id"]) is None
 
 
+def test_borrar_quita_el_video_original_de_un_gancho_de_triple_whale(entorno):
+    """PND-230: el original que baja un gancho (hasta 60 MB) cuenta para la cuota y «Medios» no lo dejaba borrar.
+    Se borra si ninguna edición lo usa; si una lo usa, dice cuál. Un gancho que lo necesite después lo vuelve a bajar
+    (`tareas.triple_whale`, `materiales.buscar_hash` → `_material_original`)."""
+    import materiales
+    m = materiales.registrar("acme", tipo="video", origen="triple_whale", url="https://r2/tw.mp4", hash="h-tw",
+                             bytes=50_000_000, extra={"nombre": "Anuncio de Meta"})
+    assert "triple_whale" in entorno.ORIGENES_BORRABLES
+    out = entorno.borrar("acme", m["id"])
+    assert out == {"id": m["id"], "bytes": 50_000_000}
+    assert materiales.obtener("acme", m["id"]) is None
+
+
 def _pieza_lista(cliente="acme", nombre="gira sobre la mesa", **extra):
     import creative_flow
     cf = creative_flow.crear(cliente, [], ["Espejo LED"], [], nombre, 8, "", "A")

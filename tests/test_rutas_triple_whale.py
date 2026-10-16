@@ -261,6 +261,17 @@ def test_ganador_a_referentes(app, monkeypatch):  # noqa: F811
     assert app["c"].post(f"/cliente/acme/triple-whale/evaluacion/{eid}/anuncio/A9/referente").status_code == 404
 
 
+def test_un_id_de_evaluacion_enorme_es_404_no_500(app):  # noqa: F811
+    """PND-189: un `eid` más grande que un entero de SQLite daba OverflowError (500) en las rutas de la evaluación de
+    cuenta, como B7 en las de análisis; ahora llevan `<int(max=AID_MAX)>`."""
+    _conectar()
+    _evaluacion_lista()
+    enorme = 10 ** 30
+    assert app["c"].post(f"/cliente/acme/triple-whale/evaluacion/{enorme}/idea/0/crear").status_code == 404
+    assert app["c"].post(f"/cliente/acme/triple-whale/evaluacion/{enorme}/anuncio/A1/referente").status_code == 404
+    assert app["c"].post(f"/cliente/acme/triple-whale/evaluacion/{2 ** 63 - 1}/idea/0/crear").status_code == 404
+
+
 def test_post_de_otro_sitio_se_rechaza(app):  # noqa: F811
     """La copia («Actualizar ahora», hoy en Rendimiento) y lo que cobra (que sigue en este Blueprint, R13)."""
     _conectar()
@@ -776,3 +787,15 @@ def test_alerta_de_mer_no_compara_contra_un_periodo_fuera_de_la_copia(app):  # n
         ctx = panel.contexto("acme", 7)
     assert ctx["resultados"]["datos"]["comparar"] is False
     assert not any("MER de la tienda" in a["texto"] for a in ctx["alertas"])
+
+
+def test_el_aviso_de_consultas_rechazadas_nombra_las_partes_en_palabras(app):  # noqa: F811
+    """PND-219: «Triple Whale no aceptó la consulta de: pixel, tienda» pintaba las claves internas."""
+    _conectar()
+    _sembrar()
+    triple_whale_tiendas.actualizar_extra_tienda("acme", _tienda(), {"ultimo_resumen": {
+        "fallos": {"tienda": "Unknown identifier", "pixel": "x", "visitantes": "web_analytics_table"}}})
+    html = app["c"].get("/cliente/acme/rendimiento/panel").data.decode()
+    assert ("Triple Whale no aceptó la consulta de: ventas atribuidas (Pixel), totales de la tienda, "
+            "visitantes nuevos (NVP).") in html
+    assert "consulta de: pixel" not in html and "consulta de: tienda" not in html

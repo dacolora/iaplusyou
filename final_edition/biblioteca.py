@@ -66,8 +66,10 @@ class SubidaInvalida(ValueError):
 # guion, el logo (marca) ni una canción de Mi música — creada (origen musica)
 # o subida (origen subida con `extra.fuente`, `vista_previa.es_de_mi_musica`):
 # esas se borran en Crear › Mi música. Capa 5a (Task 6): una grabación del
-# micrófono SÍ se borra desde aquí (es solo suya, como una subida).
-ORIGENES_BORRABLES = ("subida", "crear", "grabacion")
+# micrófono SÍ se borra desde aquí (es solo suya, como una subida). PND-230 (2026-10-15): el video original que baja
+# un gancho de Triple Whale también (hasta 60 MB que cuentan para la cuota); un gancho que lo necesite después lo
+# vuelve a bajar (`tareas.triple_whale`: `materiales.buscar_hash` y, si no está, `_material_original`).
+ORIGENES_BORRABLES = ("subida", "crear", "grabacion", "triple_whale")
 
 
 class NoSePuedeBorrar(ValueError):

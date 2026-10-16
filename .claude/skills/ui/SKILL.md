@@ -20,7 +20,14 @@ macro en `templates/_componentes.html` si tiene marcado, sección `data-componen
 de visitantes nuevos dice si un anuncio es TOF, MOF o BOF): `{% import "_componentes.html" as cx %}` y
 `{{ cx.nvp(nuevos, visitantes) }}` con las SUMAS del periodo; la regla (70/40, mínimo 50 visitantes) vive solo en
 `triple_whale/visitantes.py` y llega a Jinja como los globales `resumen_nvp`/`explicacion_nvp`; CSS
-`componentes/nvp.css` (los colores de etapa distinguen, no califican). **`cargando`** (2026-10-13, pedido de
+`componentes/nvp.css` (los colores de etapa distinguen, no califican). Desde PND-221 (2026-10-15) el chip es un
+`<button data-nvp-ayuda>` que abre `#nvp-ayuda` (macro `nvp_ayuda`, un popover que `base.html` pinta UNA vez con sesión:
+la línea del chip, copiada de su `title`, y TOF/MOF/BOF con los cortes de `visitantes.CORTES`, global `nvp_cortes`): el
+`title` no se ve en el celular. El JS delegado de `base.html` lo abre y cierra (no `popovertarget`: tocar otro chip con
+la explicación abierta la cerraba) y, dentro de un `<dialog>` modal, lo muda adentro (afuera quedaría inerte). Dentro
+de un `<a>` va `cx.nvp(..., tocable=false)` (la tarjeta de un experimento). Sin «chip-nvp» en las clases del popover:
+las pruebas lo buscan para saber si una pantalla pinta el chip. Visto a 375 px y 1280 px, es/en
+(`tests/test_nvp_ayuda.py`). **`cargando`** (2026-10-13, pedido de
 Daniel: «Cargando tu rendimiento…» en gris no se notaba y «Ver más» solo se apagaba, sin decir que traía algo):
 `{{ cx.cargando(texto, detalle, esqueleto=true) }}` es el aviso con un círculo que gira (role="status") y, con
 `esqueleto`, la forma del panel debajo; `.cargando-encima` flota arriba de un contenido que se está reemplazando

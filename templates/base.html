@@ -448,6 +448,25 @@
       } catch (err) { /* modo privado / cookies bloqueadas: no es crítico */ }
     }, true);  // en captura: 'toggle' no burbujea
 
+    // NVP (PND-221): el chip es un botón que abre la explicación de TOF, MOF y BOF (#nvp-ayuda, un popover: se ve al
+    // tocarlo, también en el celular, donde el `title` no aparece). Arriba va la línea del chip tocado. Dentro de un
+    // <dialog> modal (el panel de una pieza) el popover se muda adentro: afuera quedaría inerte. Abre y cierra por
+    // aquí y no por popovertarget: tocar otro chip con la explicación abierta la cerraba en vez de mostrar la suya.
+    document.addEventListener('click', function (ev) {
+      var chip = ev.target.closest && ev.target.closest('button[data-nvp-ayuda]');
+      var ayuda = chip && document.getElementById('nvp-ayuda');
+      if (!ayuda || !ayuda.showPopover) return;
+      ev.preventDefault();
+      var abierta = ayuda.matches(':popover-open');
+      if (abierta && ayuda._chip === chip) { ayuda.hidePopover(); return; }
+      if (abierta) ayuda.hidePopover();
+      document.getElementById('nvp-ayuda-dato').textContent = chip.getAttribute('title') || '';
+      var casa = chip.closest('dialog') || document.body;
+      if (ayuda.parentNode !== casa) casa.appendChild(ayuda);
+      ayuda._chip = chip;
+      ayuda.showPopover();
+    });
+
     document.addEventListener('DOMContentLoaded', function () {
       try {
         document.querySelectorAll('details[id]').forEach(function (d) {
@@ -581,6 +600,7 @@
        Configuración desde 2026-09-26: _tab_settings.html. #}
     {% block content %}{% endblock %}
   </main>
+  {% if session.get('usuario') %}{% import "_componentes.html" as cx_base %}{{ cx_base.nvp_ayuda() }}{% endif %}
   {% if request.view_args and request.view_args.cliente %}
   <script nonce="{{ csp_nonce }}">
     // Menú del celular (spec 2026-09-26): ☰ abre la barra lateral encima de la
