@@ -221,6 +221,7 @@ app.config["BABEL_TRANSLATION_DIRECTORIES"] = idiomas.DIR_TRADUCCIONES
 Babel(app, locale_selector=idiomas.de_peticion)
 idiomas.instalar_gettext_rapido(app)  # mismo resultado que el de Flask-Babel, sin su costo por `_()`
 app.jinja_env.filters["traducir"] = idiomas.traducir
+app.jinja_env.filters["detalle_gasto"] = gastos.detalle_visible  # PND-307: filas importadas, traducidas al pintar
 # NVP (spec 2026-10-09-nvp-visitantes-nuevos §4): la macro `nvp` de _componentes.html los usa en todas las pantallas.
 app.jinja_env.globals["resumen_nvp"] = tw_visitantes.resumen
 app.jinja_env.globals["explicacion_nvp"] = tw_visitantes.EXPLICACION

@@ -1122,6 +1122,22 @@ _TIPOS_PIEZA = {"video": "video", "imagen": "imagen", "final": "final"}
 _PROVEEDOR_PIEZA = {"video": "wavespeed", "imagen": "wavespeed", "final": "fal/anthropic"}
 
 
+# PND-307 (decisión 2026-10-13): el detalle de las filas que copió `importar_historico`
+# (2026-09) quedó guardado en español. Se traduce al pintar; la base no se reescribe.
+DETALLE_IMPORTADO_PIEZAS = N_("importado del historial de piezas")
+DETALLE_IMPORTADO_SWAPS = N_("importado del historial de swaps")
+
+
+def detalle_visible(detalle):
+    """El `detalle` de un gasto como lo ve quien mira: los dos prefijos de la
+    importación, en su idioma; cualquier otro detalle, tal cual."""
+    texto = detalle or ""
+    for prefijo in (DETALLE_IMPORTADO_PIEZAS, DETALLE_IMPORTADO_SWAPS):
+        if texto.startswith(prefijo):
+            return gettext(prefijo) + texto[len(prefijo):]
+    return detalle
+
+
 def _ya_registrado(referencias, ref):
     """La tarea registra `ref` o `ref:<tarea_id>` (su ref_sufijo): cualquiera
     de las dos significa que ese cobro ya está en la tabla."""
@@ -1154,7 +1170,7 @@ def importar_historico(cliente, swaps=None):
         ref = f"{tipo}:{p['legado_id']}"
         if _ya_registrado(existentes, ref):
             continue
-        registrar(cliente, tipo, usd, ref, detalle="importado del historial de piezas",
+        registrar(cliente, tipo, usd, ref, detalle=DETALLE_IMPORTADO_PIEZAS,
                   proveedor=_PROVEEDOR_PIEZA.get(tipo), creado_en=p.get("creado_en"),
                   extra={"modelo": p.get("modelo"), "importado": True})
         existentes.append(ref)
@@ -1168,7 +1184,7 @@ def importar_historico(cliente, swaps=None):
         ref = f"swap:{swap_id}"
         if _ya_registrado(existentes, ref):
             continue
-        detalle = " · ".join(x for x in ("importado del historial de swaps", s.get("proveedor"), s.get("tipo")) if x)
+        detalle = " · ".join(x for x in (DETALLE_IMPORTADO_SWAPS, s.get("proveedor"), s.get("tipo")) if x)
         registrar(cliente, "swap", usd, ref, detalle=detalle, proveedor=s.get("proveedor"),
                   creado_en=s.get("creado_en"), extra={"credits": s.get("credits"), "importado": True})
         existentes.append(ref)

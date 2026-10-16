@@ -97,3 +97,36 @@ def test_lo_importado_cae_en_el_mes_de_la_pieza(base_temporal, gastos):
     sept = gastos.resumen_mes("acme", ahora_iso="2026-09-19T00:00:00")
     assert sept["total"] == 1.3 and sept["n"] == 1
     assert gastos.por_proyecto_mes(["acme"], ahora_iso="2026-09-19T00:00:00") == {"acme": 1.3}
+
+
+# ---- PND-307: el detalle de las filas importadas se traduce al pintar ----
+
+def test_pnd307_detalle_visible_traduce_solo_los_dos_prefijos_importados(base_temporal, gastos):
+    import dashboard
+    import idiomas
+    with dashboard.app.test_request_context(), idiomas.en_idioma("en"):
+        assert gastos.detalle_visible("importado del historial de piezas") == "imported from the piece history"
+        assert (gastos.detalle_visible("importado del historial de swaps · higgsfield · face")
+                == "imported from the swap history · higgsfield · face")
+        assert gastos.detalle_visible("MiniMax · clonar voz · Ana") == "MiniMax · clonar voz · Ana"
+        assert gastos.detalle_visible("") == "" and gastos.detalle_visible(None) is None
+    with dashboard.app.test_request_context():
+        assert gastos.detalle_visible("importado del historial de piezas") == "importado del historial de piezas"
+
+
+def test_pnd307_spend_en_ingles_pinta_las_filas_importadas_en_ingles(base_temporal, gastos, tmp_path, monkeypatch):
+    from tests.test_i18n_fugas import _cliente
+    import dashboard
+    import proyectos
+    monkeypatch.setattr(dashboard, "_client_dir", lambda cliente: str(tmp_path / "clientes" / cliente))
+    monkeypatch.setattr(proyectos, "BASE_DIR", str(tmp_path))
+    _pieza(base_temporal, "acme", "video", "cf_1", 1.3)
+    gastos.importar_historico("acme", swaps={"s1": {"estado": "listo", "usd": 0.5, "proveedor": "higgsfield"}})
+    dashboard.app.config["TESTING"] = True
+    c = _cliente(dashboard, "admin", "admin", None)
+    html = c.get("/cliente/acme/gasto/lista").get_data(as_text=True)
+    assert "imported from the piece history" in html and "imported from the swap history · higgsfield" in html
+    assert "importado del historial" not in html
+    # La base no se reescribe: lo guardado sigue siendo el texto de la importación.
+    assert {f["detalle"] for f in gastos.historial("acme")} == {
+        "importado del historial de piezas", "importado del historial de swaps · higgsfield"}

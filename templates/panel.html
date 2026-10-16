@@ -263,7 +263,7 @@
         <td>{{ (nombres or {}).get(c.cliente, c.cliente) }}</td>
         <td>{{ nombres_tipo.get(c.tipo, c.tipo) | traducir }}</td>
         <td class="num">{{ c.usd | usd }}</td>
-        <td class="admin-detalle">{{ c.detalle or c.referencia }}</td>
+        <td class="admin-detalle">{{ (c.detalle|detalle_gasto) or c.referencia }}</td>
       </tr>
       {% endfor %}
       </tbody>

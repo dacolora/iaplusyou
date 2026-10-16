@@ -22508,6 +22508,12 @@ msgstr "image"
 msgid "imita: %(marcas)s"
 msgstr "imitates: %(marcas)s"
 
+msgid "importado del historial de piezas"
+msgstr "imported from the piece history"
+
+msgid "importado del historial de swaps"
+msgstr "imported from the swap history"
+
 msgid "impr."
 msgstr "impr."
 
