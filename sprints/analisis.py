@@ -135,7 +135,9 @@ def _parsear_json(texto):
     data["elementos"] = [str(e) for e in (data.get("elementos") or [])][:8]
     salida = {k: data[k] for k in CLAVES}
     salida["gancho"] = " ".join(str(data.get("gancho") or "").split())[:200]
-    salida["lead"] = data.get("lead") if data.get("lead") in doctrina.LEADS else None
+    # Como lo escribe Claude («problema-solución», «Problem-solution»): PND-308 midió que se perdía el arranque
+    # cuando venía con tildes o guiones (2026-10-15).
+    salida["lead"] = doctrina.normalizar_lead(data.get("lead"))
     salida["prueba"] = data.get("prueba") if data.get("prueba") in PRUEBAS_REFERENCIA else None
     return salida
 

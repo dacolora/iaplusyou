@@ -569,6 +569,15 @@ def test_variar_hook_pide_solo_otro_arranque_y_devuelve_angulo_variante(monkeypa
     assert v["angulo_variante"] == {"lead": "secreto", "gancho": "Lo que nadie te dice de las chanclas"}
 
 
+def test_variar_hook_lee_el_arranque_con_tildes_o_guiones(monkeypatch):
+    """PND-308 (2026-10-15): «Problema-solución» es el arranque problema_solucion, no se pierde."""
+    from final_edition import guion
+    variante = dict(_guion_valido(), angulo_variante={"lead": "Problema-solución", "gancho": "Otro gancho"})
+    _instalar_fake(monkeypatch, [json.dumps(variante)])
+    v, _ = guion.variar_guion(_guion_valido(), "hook", "", angulo=ANG)
+    assert v["angulo_variante"]["lead"] == "problema_solucion"
+
+
 def test_variar_hook_conserva_el_cta_y_pide_no_repetir_el_gancho_anterior(monkeypatch):
     """C: spec §6.3 — la variante "hook" conserva promesa, mecanismo, pruebas
     Y el CTA (solo cambia el bloque 1); el ángulo de la variante reemplaza el

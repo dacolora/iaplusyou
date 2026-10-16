@@ -672,7 +672,8 @@ def variar_guion(guion_base, variante_tipo, marca, angulo=None, contexto=None):
         for bloque, (ini, fin) in zip(g.get("bloques") or [], tiempos):
             bloque["inicio_s"], bloque["fin_s"] = ini, fin
         av = g.get("angulo_variante") if isinstance(g.get("angulo_variante"), dict) else {}
-        g["angulo_variante"] = {"lead": av.get("lead") if av.get("lead") in doctrina.LEADS else None,
+        # El arranque como lo escribe Claude, con tildes o guiones (PND-308, 2026-10-15).
+        g["angulo_variante"] = {"lead": doctrina.normalizar_lead(av.get("lead")),
                                 "gancho": " ".join(str(av.get("gancho") or "").split())[:200]}
         return g
 

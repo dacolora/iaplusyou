@@ -237,3 +237,11 @@ def test_llamar_contando_cobra_tambien_la_cache(monkeypatch):
     monkeypatch.setattr(anthropic, "Anthropic", Falso)
     monkeypatch.setattr(generador_prompts, "_api_key", lambda: "x")
     assert analisis._llamar_contando([{"type": "text", "text": "?"}]) == ("hola", 1000 + 5000 + 200, 300)
+
+
+@pytest.mark.parametrize("escrito, clave", [("problema-solución", "problema_solucion"), ("Problem-solution", "problema_solucion"),
+                                             ("secreto", "secreto"), ("inventado", None)])
+def test_parsear_json_lee_el_arranque_como_lo_escribe_claude(escrito, clave):
+    """PND-308 (2026-10-15): con tildes, guiones o en inglés el arranque se perdía."""
+    from sprints import analisis
+    assert analisis._parsear_json(json.dumps(dict(JSON_OK, lead=escrito)))["lead"] == clave
