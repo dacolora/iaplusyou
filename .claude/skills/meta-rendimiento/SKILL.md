@@ -27,7 +27,8 @@ with `foto["fuente"] == "meta"`, skill `triple-whale`) had nothing to look at. `
 analisis_id)` is called by the task `tw_analizar_anuncio` ONCE, when the foto is from Meta and its `creativo` is empty,
 and returns the `triple_whale.datos.COLUMNAS_CREATIVO` keys. It reads with `meta_conexion.cargar(cliente)["token"]`
 (works without a Page; agency mode as in E1) through `graph.get`: `GET /{ad_id}?fields=creative{…}`, `GET
-/{video_id}?fields=source,length` and, only when the creative has no valid `image_url`, `GET
+/{video_id}?fields=source,length` (the creative's `video_id` or, for a dynamic creative, the first `asset_feed_spec.videos`
+`video_id`: PND-293, 2026-10-15) and, only when the creative has no valid `image_url`, `GET
 /{creative_id}?fields=thumbnail_url&thumbnail_width=600&thumbnail_height=600` (the default thumbnail is 64 px, useless
 to Claude). Ids that are not ASCII digits are never used as an edge. Text: `body`/`title`, else `object_story_spec`
 (`link_data.message`/`name`, `video_data.message`/`title`), else the first of `asset_feed_spec` (`bodies`/`titles`),

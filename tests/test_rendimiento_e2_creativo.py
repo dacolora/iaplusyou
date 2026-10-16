@@ -146,6 +146,25 @@ def test_el_texto_de_un_video_o_de_un_asset_feed(meta):
     assert (c["copy"], c["titulo"]) == ("Copy dinámico", "Título dinámico")
 
 
+def test_pnd293_un_creativo_dinamico_trae_el_primer_video_de_su_asset_feed(meta):
+    """PND-293 (decisión 2026-10-13): un anuncio dinámico (`asset_feed_spec` con varios videos) no trae `video_id` en
+    el creativo: se toma el primero de `asset_feed_spec.videos` con las mismas guardas (solo dígitos como edge, host
+    de Meta, copia a R2) y su duración."""
+    meta["anuncio"] = _anuncio(video_id=None, object_type=None, asset_feed_spec={
+        "videos": [{"thumbnail_url": MINI_META}, {"video_id": "me/accounts"}, {"video_id": VIDEO}, {"video_id": "999"}],
+        "bodies": [{"text": "Copy dinámico"}]})
+    meta["video"] = {"id": VIDEO, "source": VIDEO_META, "length": 19.0}
+    c = creativo.traer("acme", AD, 21)
+    assert c["tipo"] == "video" and c["duracion_s"] == pytest.approx(19.0)
+    assert c["video_url"] == f"https://media.test/clientes/acme/rendimiento/a21_{AD}.mp4"
+    assert (VIDEO, {"fields": "source,length"}) in meta["llamadas"]
+    assert all(edge != "me/accounts" for edge, _ in meta["llamadas"])
+    # El video del creativo, si lo trae, sigue mandando.
+    meta["anuncio"] = _anuncio(asset_feed_spec={"videos": [{"video_id": "999"}]})
+    creativo.traer("acme", AD, 22)
+    assert all(edge != "999" for edge, _ in meta["llamadas"])
+
+
 def test_un_video_de_otro_host_no_se_baja(meta):
     meta["anuncio"] = _anuncio()
     meta["video"] = {"id": VIDEO, "source": "https://evil.example/v.mp4", "length": 12}
