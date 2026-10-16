@@ -264,6 +264,14 @@ una familia nueva que copie el ejemplo) y `_sin_logos_inventados` devuelve como 
 sin que la IDEA, un activo (nombre o regla), la guía de marca o un logo oficial de la bandeja lo traigan («without
 logo» siempre vale). Un nombre inventado no tiene validación: solo la regla (medido: 0 de 3 tras el cambio).
 
+**Aviso de Seedance 2.5 con personas antes de generar (PND-242, decisión 2026-10-13, lote 2).** `seedance25_ref` (vía
+fal) rechaza fotos realistas de personas aunque sean de IA (regla de ByteDance; no cobra, prueba real del 2026-10-10).
+La bandeja (`_flowplus_bandeja.html`) trae siempre el párrafo `.fp-aviso-seedance-personas` y `pantallas/crear.css` lo
+prende con `:has()` (sin JS) solo con tipo video, el radio `seedance25_ref` marcado y alguna figura en `#fp-bandeja` o un
+`productos_catalogo` `personaje:` marcado. No frena: la app no sabe si una imagen subida muestra a una persona.
+Prueba: `tests/test_crear_compositor.py::test_aviso_de_seedance_con_personas_antes_de_generar`; visto en el navegador
+el 2026-10-16 (aparece con Seedance y referencias, se va con Wan o con imagen, y con un personaje del catálogo).
+
 Cambiar producto cobra un video por lo que dura (PND-312, 2026-10-13): la tabla es `providers/swap_video_precio.py` y el detalle está en la skill `cobros` («Swap de video por su duración»); el precio se ve antes de generar (`#swap-precio`, `static/swap-precio.js`).
 
 PND-062, entrega 1 (2026-10-10, pedido de Daniel): Del catálogo y Cambiar producto comparten

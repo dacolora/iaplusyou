@@ -95,3 +95,25 @@ def test_css_del_compositor():
     for sel in (".crear-comp", ".crear-pill", ".crear-menu", ".crear-ficha:disabled", ".crear-interruptor input",
                 "@media (max-width: 760px)", "body.crear-menu-abierto .crear-velo"):
         assert sel in bloque, sel
+
+
+def test_aviso_de_seedance_con_personas_antes_de_generar(app):
+    """PND-242 (prueba real del 2026-10-10): Seedance 2.5 con varias referencias rechaza fotos realistas de personas.
+    El aviso está en la bandeja (dentro de #crear-comp) y el CSS lo prende solo con ese modelo, un video y alguna
+    referencia o un personaje del catálogo; el servidor genera igual (no es un freno: si ByteDance lo rechaza, no se
+    cobra)."""
+    import os
+
+    from providers import flowplus_modelos
+    crear = _crear(_html(app))
+    arriba = crear[crear.index('id="crear-comp"'):crear.index('id="form-flowplus"')]
+    assert 'class="crear-nota crear-nota-aviso fp-aviso-seedance-personas"' in arriba
+    assert "no acepta fotos realistas de personas" in arriba
+    assert flowplus_modelos.VIDEO["seedance25_ref"]["proveedor"] == "fal"          # el modelo que nombra el CSS existe
+    assert 'name="modelo_video" value="seedance25_ref"' in crear
+    hoja = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static", "style.css")).read()
+    regla = next(linea for linea in hoja.splitlines() if "fp-aviso-seedance-personas { display: block" in linea)
+    for parte in ('input[name="modelo_video"][value="seedance25_ref"]:checked', 'input[name="tipo"][value="video"]:checked',
+                  "#fp-bandeja figure.crear-ref", 'input[name="productos_catalogo"][value^="personaje:"]:checked'):
+        assert parte in regla, parte
+    assert ".fp-aviso-seedance-personas { display: none; }" in hoja

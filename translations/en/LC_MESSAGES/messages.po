@@ -17453,6 +17453,9 @@ msgstr "Seedance 2.5"
 msgid "Seedance 2.5 Video Edit"
 msgstr "Seedance 2.5 Video Edit"
 
+msgid "Seedance 2.5 con varias referencias no acepta fotos realistas de personas, aunque estén hechas con IA (regla de ByteDance). Si alguna referencia muestra a una persona, elige Kling O3 Pro o Wan 3.0; si la rechaza, no se cobra."
+msgstr "Seedance 2.5 with multiple references doesn't accept realistic photos of people, even if they were made with AI (ByteDance's rule). If any reference shows a person, choose Kling O3 Pro or Wan 3.0; if it's rejected, you aren't charged."
+
 msgid "Seedance 2.5 · varias referencias"
 msgstr "Seedance 2.5 · multiple references"
 
