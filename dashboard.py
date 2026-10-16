@@ -6298,13 +6298,23 @@ def _trabajos_organico(cliente, publicaciones_por_pieza):
     return out
 
 
+# El id de una sesión de Crear que puede ir en `#creativeflowplus?cf=<id>` (el mismo filtro que el script del modal de
+# `_tab_creativeflowplus.html`): nada que cierre el hash ni le agregue otra clave.
+_RE_CF_VOLVER = re.compile(r"cf_[A-Za-z0-9_-]{1,80}")
+
+
 def _volver_org(cliente, ep_id=None):
     """Vuelve a la pestaña de donde salió el clic (`volver` en el form):
     Final edition (final; desde 2026-09-27 las finales viven ahí), Crear
-    (creativeflowplus: formularios pintados antes de la mudanza) o
+    (creativeflowplus; desde PND-037, 2026-10-16, con el `cf` de la sesión
+    reabre su detalle con la barra de la publicación) o
     Experimentos (por defecto; con la pieza de un experimento (`ep_id`), a ese experimento)."""
     volver = request.form.get("volver")
-    if volver in ("final", "creativeflowplus"):
+    if volver == "creativeflowplus":
+        cf = request.form.get("cf") or ""
+        ancla = f"creativeflowplus?cf={cf}" if _RE_CF_VOLVER.fullmatch(cf) else volver
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor=ancla))
+    if volver == "final":
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor=volver))
     return _volver_exp(cliente, experimentos.experimento_de_pieza(cliente, ep_id)
                        if isinstance(ep_id, int) and 0 < ep_id <= 2 ** 63 - 1 else None)
@@ -6316,6 +6326,15 @@ def _int_form(nombre):
         return valor if 0 < valor <= 2 ** 63 - 1 else None
     except ValueError:
         return None
+
+
+def _pieza_del_proyecto(cliente, pieza_id):
+    """La fila `pieza` (id, tipo, estado, url_video) si es de ESTE proyecto, o None. PND-037 (2026-10-16): una pieza
+    de otro proyecto (o que no existe) en org_publicar/org_redactar es un 404, antes de reservar, crear o encolar."""
+    p = db.pieza
+    with db.conectar() as con:
+        return con.execute(sa.select(p.c.id, p.c.tipo, p.c.estado, p.c.url_video)
+                           .where(p.c.id == pieza_id, p.c.cliente == cliente)).first()
 
 
 def _pieza_de_ep(cliente, ep_id):
@@ -6356,6 +6375,8 @@ def org_redactar(cliente):
     plataformas = [p for p in request.form.getlist("plataformas") if p in organico.PLATAFORMAS]
     if not pieza_id or not plataformas:
         return jsonify({"error": gettext("Elige la pieza y al menos una plataforma.")}), 400
+    if _pieza_del_proyecto(cliente, pieza_id) is None:      # PND-037: antes de reservar saldo
+        return jsonify({"error": gettext("Esa pieza no existe en este proyecto.")}), 404
     # Cobros (spec 2026-10-08 §5.2): sin saldo, 402 (organico.redactar
     # caería en silencio al texto determinista, y la persona pidió IA).
     # Con plan y tope libre es «incluido» y no pide saldo (spec planes §4): por eso el tipo.
@@ -6388,6 +6409,15 @@ def org_publicar(cliente):
     pieza_id = _int_form("pieza_id") or (_pieza_de_ep(cliente, ep_id) if ep_id else None)
     if not pieza_id:
         flash(gettext("No encontré esa pieza."), "error")
+        return _volver_org(cliente, ep_id)
+    pieza = _pieza_del_proyecto(cliente, pieza_id)
+    if pieza is None:                                       # PND-037: la pieza tiene que ser de este proyecto
+        abort(404)
+    if pieza.tipo == "imagen":
+        flash(gettext("Solo se pueden publicar videos por este camino."), "error")
+        return _volver_org(cliente, ep_id)
+    if pieza.estado not in ("listo", "degradada") or not pieza.url_video:
+        flash(gettext("Esa pieza todavía no tiene un video listo para publicar."), "error")
         return _volver_org(cliente, ep_id)
     pedidas = [p for p in organico.ORDEN if p in request.form.getlist("plataformas")]
     if not pedidas:
@@ -7260,7 +7290,13 @@ def cf_detalle(cliente, cf_id):
     item = _creative_flow_item(cliente, cf_id)
     if item is None:
         abort(404)
-    return render_template("_crear_detalle_respuesta.html", cliente=cliente, item=item)
+    # PND-037 (2026-10-16): un video listo de Crear se publica en redes desde aquí, con el mismo bloque que Final
+    # edition. El contexto del bloque (canales, publicaciones, la cola) solo se lee para ese caso.
+    org = {}
+    if (item.get("estado") == "video_listo" and (item.get("tipo") or "video") != "imagen"
+            and item.get("video_url") and item.get("pieza_id")):
+        org = {"org_publicable": True, "precios": _precios_pagina(), **_contexto_organico(cliente)}
+    return render_template("_crear_detalle_respuesta.html", cliente=cliente, item=item, **org)
 
 
 @app.route("/cliente/<cliente>/final/tarjetas")

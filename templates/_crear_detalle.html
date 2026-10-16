@@ -1,5 +1,6 @@
 {% from "_etiquetas_estado.html" import etiqueta_estado with context %}
 {% from "_revision_doctrina.html" import revision_doctrina %}
+{% from "_organico_publicar.html" import bloque_organico with context %}
 {# Detalle de una pieza de Crear: lo que antes iba en el <template> de la
    tarjeta. Lo pide el modal por fetch (/creative_flow/<id>/detalle). #}
 {% macro detalle_crear(item) %}
@@ -122,5 +123,14 @@
             <a class="btn-guardar btn-sm" href="{{ url_for('exp_nuevo', cliente=cliente, piezas=item.pieza_id) }}">{{ _('Probar en Meta') }}</a>
             {% endif %}
           </div>
+          {% if org_publicable %}
+          {# PND-037 (2026-10-16): publicar en redes desde cualquier video listo de Crear, no solo la ganadora de un
+             experimento o una final. Mismo bloque que Final edition (sin ep_id); `dashboard.cf_detalle` solo pone
+             `org_publicable` (y el contexto del bloque) para un video listo con su pieza. #}
+          <section class="fe-seccion">
+            <h4 class="fe-titulo">{{ _('Publicación orgánica') }}</h4>
+            {{ bloque_organico(item.pieza_id, "creativeflowplus", cf_id=item.id, que=(item.accion_central or '')|truncate(80, false, '…', 0)) }}
+          </section>
+          {% endif %}
         </div>
 {% endmacro %}

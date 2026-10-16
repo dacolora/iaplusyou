@@ -346,3 +346,7 @@ de marca en el proyecto (`dashboard._revision_marca_swap`), `gastos.estimar("swa
 lo que cobra cada intento: la imagen (entregado), un `ReadTimeout` (Google pudo generarla y cobrarla) y una
 respuesta sin imagen (su `usageMetadata`). Al cliente solo se le cobra el intento que entregó; los otros van en
 `swap:<id>:t<tarea>:intentos` con `entregado=False`, también cuando el swap falla.
+
+**Publicar en redes desde el detalle (PND-037, 2026-10-16):** un video listo de Crear trae «Publicación orgánica»
+(el `bloque_organico` de Final edition) en su detalle; publicar no cobra, «Escribir texto con IA» sí, con su precio.
+Detalle, aislamiento (404) y la vuelta `#creativeflowplus?cf=<id>` en la skill `meta-y-publicacion`.

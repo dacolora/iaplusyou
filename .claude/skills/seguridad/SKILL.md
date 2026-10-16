@@ -92,3 +92,8 @@ le da al proyecto de la cuenta su saldo de bienvenida una sola vez (`cobros.libr
 camino nuevo que deje una cuenta verificada usa esa función, no `usuarios.actualizar(..., correo_verificado=True)`.
 
 Pruebas: `tests/test_swap_video_precio.py` (cabecera falsa, lista blanca, topes, 403). El precio de los videos de referencia de Wan 3.0 en Crear (`dashboard._duracion_video`, PND-319, 2026-10-13) usa la misma medida: ya no confía en la cabecera (skill `crear`).
+
+**Publicación orgánica: la pieza es del proyecto de la ruta (PND-037, 2026-10-16).** `org_publicar` y `org_redactar`
+buscan la `pieza` con el `cliente` de la URL (`dashboard._pieza_del_proyecto`) y responden 404 si no es suya, antes de
+reservar saldo, crear filas o encolar; la vuelta a Crear solo lleva un `cf` con forma de id (`_RE_CF_VOLVER`). Detalle en
+la skill `meta-y-publicacion`.

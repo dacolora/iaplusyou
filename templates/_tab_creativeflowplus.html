@@ -367,7 +367,13 @@
     });
     document.getElementById('generado-cerrar').addEventListener('click', function () { modal.close(); });
     modal.addEventListener('click', function (e) { if (e.target === modal) modal.close(); });
-    modal.addEventListener('close', function () { cuerpo.innerHTML = ''; });
+    // Como en Final edition: al cerrar, el hash vuelve a «#creativeflowplus». Publicar en redes (PND-037) vuelve a
+    // «#creativeflowplus?cf=<id>» para reabrir el detalle; si quedara, la recarga automática de otra pieza que
+    // termina lo volvería a abrir sin que nadie lo pidiera.
+    modal.addEventListener('close', function () {
+      cuerpo.innerHTML = '';
+      if (/^#creativeflowplus\?cf=/.test(location.hash)) history.replaceState(null, '', '#creativeflowplus');
+    });
   })();
 </script>
 

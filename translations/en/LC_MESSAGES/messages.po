@@ -6233,12 +6233,12 @@ msgid "Dónde"
 msgstr "Where"
 
 msgid ""
-"Dónde sale la ganadora de un experimento (o cualquier final que elijas) como\n"
-"  contenido orgánico, sin pauta: Instagram Reels, Facebook (Página), TikTok y\n"
+"Dónde sale como contenido orgánico, sin pauta, cualquier video listo de Crear,\n"
+"  una final o la ganadora de un experimento: Instagram Reels, Facebook (Página), TikTok y\n"
 "  YouTube Shorts. Solo se ofrecen los canales conectados; publicar siempre\n"
 "  pide tu clic (o la propuesta del motor, con el texto a la vista)."
 msgstr ""
-"Where an experiment's winner (or any final you choose) goes out as\n"
+"Where any finished video from Create, a final cut or an experiment's winner goes out as\n"
 "  organic content, with no ad spend: Instagram Reels, Facebook (Page), TikTok and\n"
 "  YouTube Shorts. Only connected channels are offered; publishing always\n"
 "  asks for your click (or the engine's proposal, with the text in view)."
@@ -8003,6 +8003,9 @@ msgstr "That piece isn't finished yet."
 
 msgid "Esa pieza todavía no tiene anuncio en Meta."
 msgstr "That piece doesn't have an ad on Meta yet."
+
+msgid "Esa pieza todavía no tiene un video listo para publicar."
+msgstr "That piece doesn't have a finished video to publish yet."
 
 msgid "Esa pieza viene de una sesión de imagen: no se puede derivar ni rescatar (no hay video)."
 msgstr "That piece comes from an image session: it can't be derived or rescued (there's no video)."
@@ -17410,6 +17413,10 @@ msgstr "Connection lost; reload the page."
 #, python-format
 msgid "Se publica el video en %(nombres)s. Es público y no se puede deshacer desde aquí. ¿Publicar?"
 msgstr "The video will be published on %(nombres)s. It's public and can't be undone from here. Publish?"
+
+#, python-format
+msgid "Se publica el video «%(video)s» en %(nombres)s. Es público y no se puede deshacer desde aquí. ¿Publicar?"
+msgstr "The video “%(video)s” will be published on %(nombres)s. It's public and can't be undone from here. Publish?"
 
 msgid "Se publicó, pero alguna plataforma falló — revisa la bitácora."
 msgstr "It was published, but some platform failed — check the log."
